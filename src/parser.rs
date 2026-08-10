@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use itertools::Itertools;
 
-use crate::reader::{
+use crate::{
     parser::lexer::{LexerError, Token},
     smt::{
         Reserved, SmtApplication, SmtAttributeValue, SmtFunctionSignature, SmtIdent, SmtIndex,

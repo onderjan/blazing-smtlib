@@ -2,7 +2,7 @@ use std::io;
 
 use num::{BigUint, One, Zero};
 
-use crate::reader::{
+use crate::{
     parser::char_class::{CharClass, U8OrEof, char_class_opt},
     smt::{Decimal, Reserved, String8, Whole},
 };
@@ -398,5 +398,11 @@ impl Lexer {
         };
         self.state = state;
         Ok(tokens)
+    }
+}
+
+impl Default for Lexer {
+    fn default() -> Self {
+        Self::new()
     }
 }
