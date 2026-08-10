@@ -1,7 +1,5 @@
 use std::fmt::Debug;
 
-use itertools::Itertools;
-
 use crate::{
     parser::lexer::{LexerError, Token},
     smt::{
@@ -585,6 +583,7 @@ impl<F: SmtFold> Parser<F> {
 
         let num_consumed = self.processed.len() - start;
         let num_params = (num_consumed - 2) / 2;
+
         let mut iter = self.processed.drain(start..);
 
         let Some(Processed::Symbol(name)) = iter.next() else {
@@ -602,9 +601,13 @@ impl<F: SmtFold> Parser<F> {
             parameters.push((param_name, param_type));
         }
 
-        let Ok(Processed::Sort(result_sort)) = iter.exactly_one() else {
+        let Some(Processed::Sort(result_sort)) = iter.next() else {
             panic!("Function result type should be a sort");
         };
+        if iter.next().is_some() {
+            panic!("Function definition should end after result sort");
+        }
+        std::mem::drop(iter);
 
         let signature = SmtFunctionSignature {
             name,
