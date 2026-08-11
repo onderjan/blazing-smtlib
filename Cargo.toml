@@ -5,3 +5,6 @@ edition = "2024"
 
 [dependencies]
 num = "0.4.3"
+
+[dev-dependencies]
+rayon = "1.12.0"

@@ -180,6 +180,10 @@ impl<F: SmtFold> Parser<F> {
         &mut self.folder
     }
 
+    pub fn into_folder(self) -> F {
+        self.folder
+    }
+
     fn expand_s_expr(&mut self, token: Token) -> Result<(), ParserError<F::Error>> {
         let expr = match token {
             Token::ParenOpen => {
