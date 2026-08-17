@@ -22,11 +22,17 @@ pub trait SmtHandler {
     type Sort;
     type Term;
 
-    fn handle_numeral(value: Str8) -> Result<Self::Numeral, Self::Error>;
-    fn handle_decimal(numerator: Str8, denominator: Str8) -> Result<Self::Decimal, Self::Error>;
-    fn handle_hexadecimal(value: Str8) -> Result<Self::Hexadecimal, Self::Error>;
-    fn handle_binary(value: Str8) -> Result<Self::Binary, Self::Error>;
-    fn handle_string(str: Str8) -> Result<Self::String, Self::Error>;
+    fn handle_numeral(&mut self, value: Str8) -> Result<Self::Numeral, Self::Error>;
+    fn handle_decimal(
+        &mut self,
+        numerator: Str8,
+        denominator: Str8,
+    ) -> Result<Self::Decimal, Self::Error>;
+    fn handle_hexadecimal(&mut self, value: Str8) -> Result<Self::Hexadecimal, Self::Error>;
+    fn handle_binary(&mut self, value: Str8) -> Result<Self::Binary, Self::Error>;
+    fn handle_string(&mut self, str: Str8) -> Result<Self::String, Self::Error>;
+
+    fn handle_symbol(&mut self, str: Str8) -> Result<Self::Symbol, Self::Error>;
 
     fn handle_sort(&mut self, _sort: SmtSort) -> Result<Self::Sort, Self::Error>;
     fn handle_term(&mut self, _term: SmtTerm<Self::Term>) -> Result<Self::Term, Self::Error>;
@@ -48,11 +54,11 @@ pub trait CommandHandler: SmtHandler {
 
     fn command_set_option(&mut self, option: Self::Attribute) -> Result<(), Self::Error>;
 
-    fn command_get_info(&mut self, keyword: Self::String) -> Result<(), Self::Error>;
+    fn command_get_info(&mut self, keyword: Self::Symbol) -> Result<(), Self::Error>;
 
     fn command_set_info(&mut self, attribute: Self::Attribute) -> Result<(), Self::Error>;
 
-    fn command_set_logic(&mut self, logic: Self::String) -> Result<(), Self::Error>;
+    fn command_set_logic(&mut self, logic: Self::Symbol) -> Result<(), Self::Error>;
 
     fn command_declare_const(
         &mut self,
@@ -97,23 +103,31 @@ impl SmtHandler for OnlyCheckSyntax {
     type Sort = ();
     type Term = ();
 
-    fn handle_numeral(_value: Str8) -> Result<Self::Numeral, Self::Error> {
+    fn handle_numeral(&mut self, _value: Str8) -> Result<Self::Numeral, Self::Error> {
         Ok(())
     }
 
-    fn handle_decimal(_numerator: Str8, _denominator: Str8) -> Result<Self::Decimal, Self::Error> {
+    fn handle_decimal(
+        &mut self,
+        _numerator: Str8,
+        _denominator: Str8,
+    ) -> Result<Self::Decimal, Self::Error> {
         Ok(())
     }
 
-    fn handle_hexadecimal(_value: Str8) -> Result<Self::Hexadecimal, Self::Error> {
+    fn handle_hexadecimal(&mut self, _value: Str8) -> Result<Self::Hexadecimal, Self::Error> {
         Ok(())
     }
 
-    fn handle_binary(_value: Str8) -> Result<Self::Binary, Self::Error> {
+    fn handle_binary(&mut self, _value: Str8) -> Result<Self::Binary, Self::Error> {
         Ok(())
     }
 
-    fn handle_string(_str: Str8) -> Result<Self::String, Self::Error> {
+    fn handle_string(&mut self, _str: Str8) -> Result<Self::String, Self::Error> {
+        Ok(())
+    }
+
+    fn handle_symbol(&mut self, _str: Str8) -> Result<Self::Symbol, Self::Error> {
         Ok(())
     }
 

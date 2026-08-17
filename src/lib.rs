@@ -28,7 +28,7 @@ pub enum SmtProcessError<H: SmtHandler> {
     HandlerError(H::Error),
 }
 
-pub fn process_smt_file<H: SmtHandler>(
+pub fn process_smt_file<H: CommandHandler>(
     handler: &mut H,
     path: &Path,
 ) -> Result<(), SmtProcessError<H>> {
@@ -37,7 +37,7 @@ pub fn process_smt_file<H: SmtHandler>(
     process_smt_reader(handler, reader)
 }
 
-pub fn process_smt_reader<H: SmtHandler>(
+pub fn process_smt_reader<H: CommandHandler>(
     handler: &mut H,
     mut reader: impl Read,
 ) -> Result<(), SmtProcessError<H>> {
