@@ -62,7 +62,7 @@ pub trait CommandHandler: SmtHandler {
 
     fn command_declare_const(
         &mut self,
-        name: Self::String,
+        name: Self::Symbol,
         sort: Self::Sort,
     ) -> Result<(), Self::Error>;
 

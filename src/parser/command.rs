@@ -1,6 +1,9 @@
 use crate::{
     CommandHandler, SmtHandler, Str8,
-    parser::{ParserError, ParserOrHandlerError, command::standard::CommandSetLogic},
+    parser::{
+        ParserError, ParserOrHandlerError,
+        command::standard::{CommandDeclareConst, CommandSetLogic},
+    },
     token::Token,
 };
 
@@ -21,9 +24,17 @@ pub type CommandActionSymbol<H> = Box<
     ) -> Result<CommandProgress<H>, <H as SmtHandler>::Error>,
 >;
 
+pub type CommandActionSort<H> = Box<
+    dyn FnOnce(
+        &mut H,
+        <H as SmtHandler>::Sort,
+    ) -> Result<CommandProgress<H>, <H as SmtHandler>::Error>,
+>;
+
 pub enum CommandAction<H: CommandHandler> {
     CloseParen(CommandActionCloseParen<H>),
     Symbol(CommandActionSymbol<H>),
+    Sort(CommandActionSort<H>),
 }
 
 pub trait CommandStage<H: CommandHandler> {
@@ -37,6 +48,7 @@ impl<H: CommandHandler> super::Parser<'_, H> {
     ) -> Result<Box<dyn CommandStage<H>>, ParserOrHandlerError<H>> {
         Ok(match command_name.bytes() {
             b"set-logic" => Box::new(CommandSetLogic::new()),
+            b"declare-const" => Box::new(CommandDeclareConst::new()),
             _ => todo!("Unknown command {:?}", command_name),
         })
     }
@@ -47,6 +59,14 @@ impl<H: CommandHandler> super::Parser<'_, H> {
         token: Token,
     ) -> Result<CommandProgress<H>, ParserOrHandlerError<H>> {
         match stage.action() {
+            CommandAction::CloseParen(callback) => {
+                if !matches!(token, Token::ParenClose) {
+                    return Err(ParserOrHandlerError::ParserError(
+                        ParserError::ExpectedToken(Token::ParenClose),
+                    ));
+                }
+                callback(self.handler)
+            }
             CommandAction::Symbol(callback) => {
                 let Token::Symbol(symbol) = token else {
                     return Err(ParserError::ExpectedSymbol.into());
@@ -57,14 +77,7 @@ impl<H: CommandHandler> super::Parser<'_, H> {
                     .map_err(ParserOrHandlerError::HandlerError)?;
                 callback(self.handler, symbol)
             }
-            CommandAction::CloseParen(callback) => {
-                if !matches!(token, Token::ParenClose) {
-                    return Err(ParserOrHandlerError::ParserError(
-                        ParserError::ExpectedToken(Token::ParenClose),
-                    ));
-                }
-                callback(self.handler)
-            }
+            CommandAction::Sort(callback) => todo!("Parse sort"),
         }
         .map_err(ParserOrHandlerError::HandlerError)
     }
