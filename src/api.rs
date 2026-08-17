@@ -2,8 +2,18 @@ use std::convert::Infallible;
 
 use crate::{
     Str8,
-    old::{SmtAttributeValue, SmtFunctionSignature, SmtSExpr, SmtSort, SmtTerm},
+    old::{SmtAttributeValue, SmtFunctionSignature, SmtSExpr, SmtTerm},
 };
+
+#[derive(Debug, Clone)]
+pub enum SmtIndex<'a> {
+    Numeral(Str8<'a>),
+    Symbol(Str8<'a>),
+}
+
+pub enum SmtSort<H: SmtHandler + ?Sized> {
+    Ident(H::Ident),
+}
 
 pub trait SmtHandler: 'static {
     type Error;
@@ -15,6 +25,7 @@ pub trait SmtHandler: 'static {
     type String;
 
     type Symbol;
+    type Index;
     type Ident;
 
     type SExpr;
@@ -33,8 +44,14 @@ pub trait SmtHandler: 'static {
     fn handle_string(&mut self, str: Str8) -> Result<Self::String, Self::Error>;
 
     fn handle_symbol(&mut self, str: Str8) -> Result<Self::Symbol, Self::Error>;
+    fn handle_index(&mut self, index: SmtIndex) -> Result<Self::Index, Self::Error>;
+    fn handle_ident(
+        &mut self,
+        symbol: Str8,
+        indices: Vec<Self::Index>,
+    ) -> Result<Self::Ident, Self::Error>;
 
-    fn handle_sort(&mut self, _sort: SmtSort) -> Result<Self::Sort, Self::Error>;
+    fn handle_sort(&mut self, _sort: SmtSort<Self>) -> Result<Self::Sort, Self::Error>;
     fn handle_term(&mut self, _term: SmtTerm<Self::Term>) -> Result<Self::Term, Self::Error>;
     fn start_let(&mut self, _bindings: Vec<(Self::String, Self::Term)>) -> Result<(), Self::Error>;
     fn end_let(&mut self, _term: Self::Term) -> Result<Self::Term, Self::Error>;
@@ -96,6 +113,7 @@ impl SmtHandler for OnlyCheckSyntax {
     type String = ();
 
     type Symbol = ();
+    type Index = ();
     type Ident = ();
 
     type SExpr = ();
@@ -131,7 +149,19 @@ impl SmtHandler for OnlyCheckSyntax {
         Ok(())
     }
 
-    fn handle_sort(&mut self, _sort: SmtSort) -> Result<Self::Sort, Self::Error> {
+    fn handle_index(&mut self, _index: SmtIndex) -> Result<Self::Index, Self::Error> {
+        Ok(())
+    }
+
+    fn handle_ident(
+        &mut self,
+        _symbol: Str8,
+        _indices: Vec<Self::Index>,
+    ) -> Result<Self::Ident, Self::Error> {
+        Ok(())
+    }
+
+    fn handle_sort(&mut self, _sort: SmtSort<Self>) -> Result<Self::Sort, Self::Error> {
         Ok(())
     }
 

@@ -1,8 +1,9 @@
 use crate::{
     CommandHandler, SmtHandler, Str8,
     parser::{
-        ParserError, ParserOrHandlerError,
+        ParserError, ParserOrHandlerError, ParserState,
         command::standard::{CommandDeclareConst, CommandSetLogic},
+        progress_state,
     },
     token::Token,
 };
@@ -42,7 +43,7 @@ pub trait CommandStage<H: CommandHandler> {
 }
 
 impl<H: CommandHandler> super::Parser<'_, H> {
-    pub fn start_command(
+    pub(super) fn start_command(
         &mut self,
         command_name: Str8,
     ) -> Result<Box<dyn CommandStage<H>>, ParserOrHandlerError<H>> {
@@ -53,32 +54,27 @@ impl<H: CommandHandler> super::Parser<'_, H> {
         })
     }
 
-    pub fn progress_command(
+    pub(super) fn progress_command(
         &mut self,
         stage: Box<dyn CommandStage<H> + 'static>,
         token: Token,
-    ) -> Result<CommandProgress<H>, ParserOrHandlerError<H>> {
-        match stage.action() {
+    ) -> Result<ParserState<H>, ParserOrHandlerError<H>> {
+        let progress = match stage.action() {
             CommandAction::CloseParen(callback) => {
                 if !matches!(token, Token::ParenClose) {
                     return Err(ParserOrHandlerError::ParserError(
                         ParserError::ExpectedToken(Token::ParenClose),
                     ));
                 }
-                callback(self.handler)
+                callback(self.handler).map_err(ParserOrHandlerError::HandlerError)?
             }
             CommandAction::Symbol(callback) => {
-                let Token::Symbol(symbol) = token else {
-                    return Err(ParserError::ExpectedSymbol.into());
-                };
-                let symbol = self
-                    .handler
-                    .handle_symbol(symbol.as_str())
-                    .map_err(ParserOrHandlerError::HandlerError)?;
-                callback(self.handler, symbol)
+                let symbol = self.parse_symbol(token)?;
+                callback(self.handler, symbol).map_err(ParserOrHandlerError::HandlerError)?
             }
-            CommandAction::Sort(callback) => todo!("Parse sort"),
-        }
-        .map_err(ParserOrHandlerError::HandlerError)
+            CommandAction::Sort(callback) => return self.parse_sort(callback, token),
+        };
+
+        Ok(progress_state(progress))
     }
 }
