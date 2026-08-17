@@ -1,4 +1,4 @@
-use crate::smt::String8;
+use crate::old::smt::String8;
 
 /// Reserved words in SMT-LIB2.
 #[derive(Debug, Clone, PartialEq, Eq)]

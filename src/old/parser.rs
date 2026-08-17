@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::{
+use crate::old::{
     parser::lexer::{LexerError, Token},
     smt::{
         Reserved, SmtApplication, SmtAttributeValue, SmtFunctionSignature, SmtIdent, SmtIndex,

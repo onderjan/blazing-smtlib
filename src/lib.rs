@@ -5,15 +5,11 @@ use std::{
     path::Path,
 };
 
-mod folders;
-mod parser;
-mod smt;
+mod old;
 
-pub use folders::*;
-pub use parser::*;
-pub use smt::*;
+use crate::old::lexer::{Lexer, LexerError};
 
-use crate::parser::lexer::{Lexer, LexerError};
+pub use crate::old::*;
 
 pub enum SmtProcessError<F: Debug> {
     LexerError(LexerError),

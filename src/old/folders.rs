@@ -1,6 +1,6 @@
 use std::convert::Infallible;
 
-use crate::{
+use crate::old::{
     SmtAttributeValue, SmtFold, SmtFunctionSignature, SmtSExpr, SmtSort, SmtTerm, String8,
 };
 

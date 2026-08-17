@@ -2,7 +2,7 @@ use std::io;
 
 use num::{BigUint, One, Zero};
 
-use crate::{
+use crate::old::{
     parser::char_class::{CharClass, U8OrEof, char_class_opt},
     smt::{Decimal, Reserved, String8, Whole},
 };
