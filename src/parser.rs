@@ -4,18 +4,14 @@ use crate::{
     CommandHandler, String8,
     api::SmtHandler,
     parser::{
-        category::CategoryParserState,
+        category::{CategoryParserState, sort::SortParserState},
         command::{CommandProgress, CommandStage},
-        sort::SortParserState,
     },
     token::Token,
 };
 
 mod category;
 mod command;
-mod index;
-mod sort;
-mod term;
 
 #[derive(Debug)]
 pub enum ParserError {
@@ -58,7 +54,7 @@ pub struct Parser<'a, H: CommandHandler> {
     state: ParserState<H>,
 }
 
-enum ParserState<H: SmtHandler> {
+pub(crate) enum ParserState<H: SmtHandler> {
     AwaitingCommand,
     CommandOpen,
     Command(Box<dyn CommandStage<H>>),

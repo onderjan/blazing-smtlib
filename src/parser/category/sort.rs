@@ -3,8 +3,9 @@ use std::ops::ControlFlow;
 use crate::{
     CommandHandler, SmtHandler, SmtSort,
     parser::{
-        CategoryParserState, ParserError, ParserOrHandlerError, ParserState,
-        category::CategoryParser, command::CommandCallback, index::IndexedIdentParserState,
+        CategoryParserState, Parser, ParserError, ParserOrHandlerError, ParserState,
+        category::{CategoryParser, index::IndexedIdentParserState},
+        command::CommandCallback,
         progress_state,
     },
     token::{Reserved, Token},
@@ -51,8 +52,8 @@ impl<H: SmtHandler> CategoryParser<H> for SortParserState<H> {
     }
 }
 
-impl<H: CommandHandler> super::Parser<'_, H> {
-    pub(super) fn parse_sort(
+impl<H: CommandHandler> Parser<'_, H> {
+    pub(crate) fn parse_sort(
         &mut self,
         callback: CommandCallback<H, H::Sort>,
         token: Token,

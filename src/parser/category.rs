@@ -9,6 +9,10 @@ use crate::{
     token::Token,
 };
 
+pub mod index;
+pub mod sort;
+pub mod term;
+
 pub trait CategoryParser<H: SmtHandler>
 where
     Self: std::marker::Sized,

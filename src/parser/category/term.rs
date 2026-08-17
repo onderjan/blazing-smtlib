@@ -1,11 +1,11 @@
 use crate::{
     CommandHandler,
-    parser::{ParserOrHandlerError, ParserState, command::CommandCallback},
+    parser::{Parser, ParserOrHandlerError, ParserState, command::CommandCallback},
     token::Token,
 };
 
-impl<H: CommandHandler> super::Parser<'_, H> {
-    pub(super) fn parse_term(
+impl<H: CommandHandler> Parser<'_, H> {
+    pub(crate) fn parse_term(
         &mut self,
         _callback: CommandCallback<H, H::Term>,
         _token: Token,
