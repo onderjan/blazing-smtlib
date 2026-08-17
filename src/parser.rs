@@ -85,24 +85,29 @@ enum CommandState<H: SmtHandler> {
     Command(Box<dyn CommandStage<H>>),
 }
 
-struct SetLogicStage1;
-
-impl<H: CommandHandler> CommandStage<H> for SetLogicStage1 {
-    fn action(self: Box<Self>) -> CommandAction<H> {
-        CommandAction::Symbol(Box::new(|_handler, symbol| {
-            Ok(ControlFlow::Continue(Box::new(SetLogicStage2(symbol))))
-        }))
-    }
+struct CommandSetLogic<H: SmtHandler> {
+    logic: Option<H::Symbol>,
 }
 
-struct SetLogicStage2<H: SmtHandler>(H::Symbol);
-
-impl<H: CommandHandler> CommandStage<H> for SetLogicStage2<H> {
+impl<H: CommandHandler> CommandStage<H> for CommandSetLogic<H> {
     fn action(self: Box<Self>) -> CommandAction<H> {
-        CommandAction::CloseParen(Box::new(|handler| {
-            handler.command_set_logic(self.0)?;
-            Ok(ControlFlow::Break(()))
-        }))
+        match self.logic {
+            None => {
+                // read logic
+                CommandAction::Symbol(Box::new(|_handler, symbol| {
+                    Ok(ControlFlow::Continue(Box::new(CommandSetLogic {
+                        logic: Some(symbol),
+                    })))
+                }))
+            }
+            Some(logic) => {
+                // done on close paren
+                CommandAction::CloseParen(Box::new(|handler| {
+                    handler.command_set_logic(logic)?;
+                    Ok(ControlFlow::Break(()))
+                }))
+            }
+        }
     }
 }
 
@@ -164,7 +169,9 @@ impl<'a, H: CommandHandler> Parser<'a, H> {
                     return Err(ParserError::ExpectedCommand.into());
                 };
                 match command_name.bytes() {
-                    b"set-logic" => CommandState::Command(Box::new(SetLogicStage1)),
+                    b"set-logic" => {
+                        CommandState::Command(Box::new(CommandSetLogic { logic: None }))
+                    }
                     _ => todo!("Unknown command {:?}", command_name),
                 }
             }
