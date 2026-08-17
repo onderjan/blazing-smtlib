@@ -25,9 +25,9 @@ pub enum ParserError {
 }
 
 #[derive(Debug)]
-pub enum ParserOrHandlerError<E> {
-    ParserError,
-    HandlerError(E),
+pub enum ParserOrHandlerError<H: SmtHandler> {
+    ParserError(ParserError),
+    HandlerError(H::Error),
 }
 
 #[derive(Debug)]
@@ -63,14 +63,14 @@ enum Processed<H: SmtHandler> {
     Term(H::Term),
 }
 
-pub struct Parser<H: SmtHandler> {
-    handler: H,
+pub struct Parser<'a, H: SmtHandler> {
+    handler: &'a mut H,
     unprocessed: Vec<Unprocessed>,
     processed: Vec<Processed<H>>,
 }
 
-impl<H: SmtHandler> Parser<H> {
-    pub fn new(handler: H) -> Self {
+impl<'a, H: SmtHandler> Parser<'a, H> {
+    pub fn new(handler: &'a mut H) -> Self {
         Self {
             handler,
             unprocessed: Vec::new(),
@@ -86,7 +86,7 @@ impl<H: SmtHandler> Parser<H> {
         &mut self.handler
     }
 
-    pub fn into_handler(self) -> H {
-        self.handler
+    pub fn parse_token(&mut self, token: Token) -> Result<(), ParserOrHandlerError<H>> {
+        todo!("Parse token")
     }
 }
