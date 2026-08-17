@@ -13,6 +13,7 @@ use crate::{
 mod command;
 mod index;
 mod sort;
+mod term;
 
 #[derive(Debug)]
 pub enum ParserError {

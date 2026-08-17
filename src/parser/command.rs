@@ -2,7 +2,7 @@ use crate::{
     CommandHandler, SmtHandler, Str8,
     parser::{
         ParserError, ParserOrHandlerError, ParserState,
-        command::standard::{CommandDeclareConst, CommandSetLogic},
+        command::standard::{CommandAssert, CommandDeclareConst, CommandSetLogic},
         progress_state,
     },
     token::Token,
@@ -32,10 +32,18 @@ pub type CommandActionSort<H> = Box<
     ) -> Result<CommandProgress<H>, <H as SmtHandler>::Error>,
 >;
 
+pub type CommandActionTerm<H> = Box<
+    dyn FnOnce(
+        &mut H,
+        <H as SmtHandler>::Term,
+    ) -> Result<CommandProgress<H>, <H as SmtHandler>::Error>,
+>;
+
 pub enum CommandAction<H: CommandHandler> {
     CloseParen(CommandActionCloseParen<H>),
     Symbol(CommandActionSymbol<H>),
     Sort(CommandActionSort<H>),
+    Term(CommandActionTerm<H>),
 }
 
 pub trait CommandStage<H: CommandHandler> {
@@ -50,6 +58,7 @@ impl<H: CommandHandler> super::Parser<'_, H> {
         Ok(match command_name.bytes() {
             b"set-logic" => Box::new(CommandSetLogic::new()),
             b"declare-const" => Box::new(CommandDeclareConst::new()),
+            b"assert" => Box::new(CommandAssert::new()),
             _ => todo!("Unknown command {:?}", command_name),
         })
     }
@@ -73,6 +82,7 @@ impl<H: CommandHandler> super::Parser<'_, H> {
                 callback(self.handler, symbol).map_err(ParserOrHandlerError::HandlerError)?
             }
             CommandAction::Sort(callback) => return self.parse_sort(callback, token),
+            CommandAction::Term(callback) => return self.parse_term(callback, token),
         };
 
         Ok(progress_state(progress))

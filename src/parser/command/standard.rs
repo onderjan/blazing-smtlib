@@ -76,3 +76,36 @@ impl<H: CommandHandler> CommandStage<H> for CommandDeclareConst<H> {
         }
     }
 }
+
+pub enum CommandAssert<H: SmtHandler> {
+    Start,
+    Term(H::Term),
+}
+
+impl<H: SmtHandler> CommandAssert<H> {
+    pub fn new() -> Self {
+        Self::Start
+    }
+}
+
+impl<H: CommandHandler> CommandStage<H> for CommandAssert<H> {
+    fn action(self: Box<Self>) -> CommandAction<H> {
+        match *self {
+            CommandAssert::Start => {
+                // read assert term
+                CommandAction::Term(Box::new(|_handler, term| {
+                    Ok(CommandProgress::Continuation(Box::new(
+                        CommandAssert::Term(term),
+                    )))
+                }))
+            }
+            CommandAssert::Term(term) => {
+                // done on close paren
+                CommandAction::CloseParen(Box::new(|handler| {
+                    handler.command_assert(term)?;
+                    Ok(CommandProgress::End)
+                }))
+            }
+        }
+    }
+}
