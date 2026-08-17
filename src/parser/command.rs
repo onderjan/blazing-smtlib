@@ -15,35 +15,14 @@ pub enum CommandProgress<H> {
     End,
 }
 
-pub type CommandActionCloseParen<H> =
-    Box<dyn FnOnce(&mut H) -> Result<CommandProgress<H>, <H as SmtHandler>::Error>>;
-
-pub type CommandActionSymbol<H> = Box<
-    dyn FnOnce(
-        &mut H,
-        <H as SmtHandler>::Symbol,
-    ) -> Result<CommandProgress<H>, <H as SmtHandler>::Error>,
->;
-
-pub type CommandActionSort<H> = Box<
-    dyn FnOnce(
-        &mut H,
-        <H as SmtHandler>::Sort,
-    ) -> Result<CommandProgress<H>, <H as SmtHandler>::Error>,
->;
-
-pub type CommandActionTerm<H> = Box<
-    dyn FnOnce(
-        &mut H,
-        <H as SmtHandler>::Term,
-    ) -> Result<CommandProgress<H>, <H as SmtHandler>::Error>,
->;
+pub type CommandCallback<H, Y> =
+    Box<dyn FnOnce(&mut H, Y) -> Result<CommandProgress<H>, <H as SmtHandler>::Error>>;
 
 pub enum CommandAction<H: CommandHandler> {
-    CloseParen(CommandActionCloseParen<H>),
-    Symbol(CommandActionSymbol<H>),
-    Sort(CommandActionSort<H>),
-    Term(CommandActionTerm<H>),
+    CloseParen(CommandCallback<H, ()>),
+    Symbol(CommandCallback<H, H::Symbol>),
+    Sort(CommandCallback<H, H::Sort>),
+    Term(CommandCallback<H, H::Term>),
 }
 
 pub trait CommandStage<H: CommandHandler> {
@@ -75,7 +54,7 @@ impl<H: CommandHandler> super::Parser<'_, H> {
                         ParserError::ExpectedToken(Token::ParenClose),
                     ));
                 }
-                callback(self.handler).map_err(ParserOrHandlerError::HandlerError)?
+                callback(self.handler, ()).map_err(ParserOrHandlerError::HandlerError)?
             }
             CommandAction::Symbol(callback) => {
                 let symbol = self.parse_symbol(token)?;

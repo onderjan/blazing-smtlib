@@ -26,7 +26,7 @@ impl<H: CommandHandler> CommandStage<H> for CommandSetLogic<H> {
             }
             Some(logic) => {
                 // done on close paren
-                CommandAction::CloseParen(Box::new(|handler| {
+                CommandAction::CloseParen(Box::new(|handler, ()| {
                     handler.command_set_logic(logic)?;
                     Ok(CommandProgress::End)
                 }))
@@ -68,7 +68,7 @@ impl<H: CommandHandler> CommandStage<H> for CommandDeclareConst<H> {
             }
             CommandDeclareConst::Full(name, sort) => {
                 // done on close paren
-                CommandAction::CloseParen(Box::new(|handler| {
+                CommandAction::CloseParen(Box::new(|handler, ()| {
                     handler.command_declare_const(name, sort)?;
                     Ok(CommandProgress::End)
                 }))
@@ -101,7 +101,7 @@ impl<H: CommandHandler> CommandStage<H> for CommandAssert<H> {
             }
             CommandAssert::Term(term) => {
                 // done on close paren
-                CommandAction::CloseParen(Box::new(|handler| {
+                CommandAction::CloseParen(Box::new(|handler, ()| {
                     handler.command_assert(term)?;
                     Ok(CommandProgress::End)
                 }))

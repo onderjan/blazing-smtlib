@@ -4,8 +4,8 @@ use crate::{
     CommandHandler, String8,
     api::SmtHandler,
     parser::{
-        command::{CommandActionSort, CommandProgress, CommandStage},
-        sort::SortParserState,
+        command::{CommandProgress, CommandStage},
+        sort::SortParser,
     },
     token::Token,
 };
@@ -54,11 +54,6 @@ impl<H: SmtHandler> From<ParserError> for ParserOrHandlerError<H> {
 pub struct Parser<'a, H: CommandHandler> {
     handler: &'a mut H,
     state: ParserState<H>,
-}
-
-struct SortParser<H: SmtHandler> {
-    callback: CommandActionSort<H>,
-    state: SortParserState<H>,
 }
 
 enum ParserState<H: SmtHandler> {

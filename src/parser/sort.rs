@@ -3,11 +3,16 @@ use std::ops::ControlFlow;
 use crate::{
     CommandHandler, SmtHandler, SmtSort,
     parser::{
-        ParserError, ParserOrHandlerError, ParserState, SortParser, command::CommandActionSort,
+        ParserError, ParserOrHandlerError, ParserState, command::CommandCallback,
         index::IndexedIdentParserState, progress_state,
     },
     token::{Reserved, Token},
 };
+
+pub struct SortParser<H: SmtHandler> {
+    pub callback: CommandCallback<H, H::Sort>,
+    pub state: SortParserState<H>,
+}
 
 pub enum SortParserState<H: SmtHandler> {
     Deciding,
@@ -52,7 +57,7 @@ impl<H: SmtHandler> SortParserState<H> {
 impl<H: CommandHandler> super::Parser<'_, H> {
     pub(super) fn parse_sort(
         &mut self,
-        callback: CommandActionSort<H>,
+        callback: CommandCallback<H, H::Sort>,
         token: Token,
     ) -> Result<ParserState<H>, ParserOrHandlerError<H>> {
         match token {
