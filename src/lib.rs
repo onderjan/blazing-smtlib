@@ -5,39 +5,39 @@ use std::{
     path::Path,
 };
 
-mod api;
 mod lexer;
-mod parser;
 mod string;
 mod token;
 
-mod old;
-pub use crate::old::*;
+mod api;
+mod parser;
+
+pub mod old;
 pub use crate::string::*;
 
 use crate::lexer::{Lexer, LexerError};
 
-pub enum SmtProcessError<F: Debug> {
+pub enum SmtProcessErrorOld<F: Debug> {
     LexerError(LexerError),
-    ParserError(ParserError<F>),
+    ParserError(old::ParserError<F>),
     ReadError(std::io::Error),
 }
 
-pub fn process_smt_file<F: SmtFold>(
+pub fn process_smt_file_old<F: old::SmtFold>(
     folder: F,
     path: &Path,
-) -> Result<F, SmtProcessError<<F as SmtFold>::Error>> {
-    let file = File::open(path).map_err(SmtProcessError::ReadError)?;
+) -> Result<F, SmtProcessErrorOld<<F as old::SmtFold>::Error>> {
+    let file = File::open(path).map_err(SmtProcessErrorOld::ReadError)?;
     let reader = BufReader::new(file);
-    process_smt_reader(folder, reader)
+    process_smt_reader_old(folder, reader)
 }
 
-pub fn process_smt_reader<F: SmtFold>(
+pub fn process_smt_reader_old<F: old::SmtFold>(
     folder: F,
     mut reader: impl Read,
-) -> Result<F, SmtProcessError<<F as SmtFold>::Error>> {
+) -> Result<F, SmtProcessErrorOld<<F as old::SmtFold>::Error>> {
     let mut lexer = Lexer::new();
-    let mut parser = Parser::new(folder);
+    let mut parser = old::Parser::new(folder);
 
     loop {
         let mut c = 0;
@@ -52,22 +52,22 @@ pub fn process_smt_reader<F: SmtFold>(
                         for token in tokens {
                             match parser.parse_token(token) {
                                 Ok(()) => {}
-                                Err(err) => return Err(SmtProcessError::ParserError(err)),
+                                Err(err) => return Err(SmtProcessErrorOld::ParserError(err)),
                             }
                         }
                     }
                     Err(err) => {
-                        return Err(SmtProcessError::LexerError(err));
+                        return Err(SmtProcessErrorOld::LexerError(err));
                     }
                 }
             }
             Err(err) => {
-                return Err(SmtProcessError::ReadError(err));
+                return Err(SmtProcessErrorOld::ReadError(err));
             }
         }
     }
     if let Err(err) = lexer.lex_eof() {
-        return Err(SmtProcessError::LexerError(err));
+        return Err(SmtProcessErrorOld::LexerError(err));
     }
 
     Ok(parser.into_folder())

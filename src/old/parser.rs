@@ -3,11 +3,14 @@ use std::fmt::Debug;
 use num::{BigUint, Zero};
 
 use crate::{
-    Decimal, String8, Whole,
+    String8,
     lexer::LexerError,
-    old::smt::{
-        SmtApplication, SmtAttributeValue, SmtFunctionSignature, SmtIdent, SmtIndex,
-        SmtQualifiedIdent, SmtSExpr, SmtSort, SmtSpecialConstant, SmtTerm,
+    old::{
+        Decimal, Whole,
+        smt::{
+            SmtApplication, SmtAttributeValue, SmtFunctionSignature, SmtIdent, SmtIndex,
+            SmtQualifiedIdent, SmtSExpr, SmtSort, SmtSpecialConstant, SmtTerm,
+        },
     },
     token::{Reserved, Token},
 };

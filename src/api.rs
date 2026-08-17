@@ -1,4 +1,7 @@
-use crate::{SmtAttributeValue, SmtFunctionSignature, SmtSExpr, SmtSort, SmtTerm, string::Str8};
+use crate::{
+    Str8,
+    old::{SmtAttributeValue, SmtFunctionSignature, SmtSExpr, SmtSort, SmtTerm},
+};
 
 pub trait SmtHandler {
     type Error;
@@ -8,6 +11,9 @@ pub trait SmtHandler {
     type Hexadecimal;
     type Binary;
     type String;
+
+    type Symbol;
+    type Ident;
 
     type SExpr;
     type Attribute;

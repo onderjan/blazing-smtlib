@@ -1,4 +1,4 @@
-use crate::{SmtIdent, SmtIndex, String8, api::SmtHandler, token::Token};
+use crate::{String8, api::SmtHandler, token::Token};
 
 #[derive(Debug)]
 pub enum ParserError {
@@ -48,34 +48,14 @@ enum UnprocessedCommand {
 }
 
 #[derive(Debug)]
-struct SExprRest {
-    start: usize,
-    attribute: bool,
-}
-
-#[derive(Debug)]
-enum IndexedIdentOuter {
-    None,
-    Sort,
-    Term,
-}
-
-#[derive(Debug)]
-struct IndexedIdentRest {
-    name: String8,
-    indices: Vec<SmtIndex>,
-    outer: IndexedIdentOuter,
-}
-
-#[derive(Debug)]
 enum Unprocessed {}
 
 #[derive(Debug)]
 enum Processed<H: SmtHandler> {
-    Symbol(String8),
-    Keyword(String8),
-    String(String8),
-    Ident(SmtIdent),
+    Symbol(H::Symbol),
+    Keyword(H::Symbol),
+    String(H::String),
+    Ident(H::Ident),
     AttributeName(String8),
     SExpr(H::SExpr),
     Attribute(H::Attribute),
