@@ -1,3 +1,5 @@
+use std::ops::ControlFlow;
+
 use crate::{CommandHandler, String8, api::SmtHandler, token::Token};
 
 #[derive(Debug)]
@@ -56,14 +58,52 @@ enum UnprocessedCommand {
 #[derive(Debug)]
 enum SmtFrame {}
 
-enum CommandFrame<H: SmtHandler> {
-    SetLogic(Option<H::Symbol>),
+type CommandActionResult<H> =
+    Result<ControlFlow<(), Box<dyn CommandStage<H>>>, <H as SmtHandler>::Error>;
+
+type CommandActionCloseParen<H> = Box<dyn FnOnce(&mut H) -> CommandActionResult<H>>;
+
+type CommandActionSymbol<H> = Box<
+    dyn FnOnce(
+        &mut H,
+        <H as SmtHandler>::Symbol,
+    ) -> Result<ControlFlow<(), Box<dyn CommandStage<H>>>, <H as SmtHandler>::Error>,
+>;
+
+enum CommandAction<H: CommandHandler> {
+    CloseParen(CommandActionCloseParen<H>),
+    Symbol(CommandActionSymbol<H>),
+}
+
+trait CommandStage<H: CommandHandler> {
+    fn action(self: Box<Self>) -> CommandAction<H>;
 }
 
 enum CommandState<H: SmtHandler> {
     Closed,
     Open,
-    Frame(CommandFrame<H>),
+    Command(Box<dyn CommandStage<H>>),
+}
+
+struct SetLogicStage1;
+
+impl<H: CommandHandler> CommandStage<H> for SetLogicStage1 {
+    fn action(self: Box<Self>) -> CommandAction<H> {
+        CommandAction::Symbol(Box::new(|_handler, symbol| {
+            Ok(ControlFlow::Continue(Box::new(SetLogicStage2(symbol))))
+        }))
+    }
+}
+
+struct SetLogicStage2<H: SmtHandler>(H::Symbol);
+
+impl<H: CommandHandler> CommandStage<H> for SetLogicStage2<H> {
+    fn action(self: Box<Self>) -> CommandAction<H> {
+        CommandAction::CloseParen(Box::new(|handler| {
+            handler.command_set_logic(self.0)?;
+            Ok(ControlFlow::Break(()))
+        }))
+    }
 }
 
 #[derive(Debug)]
@@ -124,40 +164,40 @@ impl<'a, H: CommandHandler> Parser<'a, H> {
                     return Err(ParserError::ExpectedCommand.into());
                 };
                 match command_name.bytes() {
-                    b"set-logic" => CommandState::Frame(CommandFrame::SetLogic(None)),
+                    b"set-logic" => CommandState::Command(Box::new(SetLogicStage1)),
                     _ => todo!("Unknown command {:?}", command_name),
                 }
             }
-            CommandState::Frame(command_frame) => self.parse_command_token(command_frame, token)?,
+            CommandState::Command(stage) => {
+                let result = match stage.action() {
+                    CommandAction::Symbol(callback) => {
+                        let Token::Symbol(symbol) = token else {
+                            return Err(ParserError::ExpectedSymbol.into());
+                        };
+                        let symbol = self
+                            .handler
+                            .handle_symbol(symbol.as_str())
+                            .map_err(ParserOrHandlerError::HandlerError)?;
+                        callback(self.handler, symbol)
+                    }
+                    CommandAction::CloseParen(callback) => {
+                        if !matches!(token, Token::ParenClose) {
+                            return Err(ParserOrHandlerError::ParserError(
+                                ParserError::ExpectedToken(Token::ParenClose),
+                            ));
+                        }
+                        callback(self.handler)
+                    }
+                }
+                .map_err(ParserOrHandlerError::HandlerError)?;
+
+                match result {
+                    ControlFlow::Continue(stage) => CommandState::Command(stage),
+                    ControlFlow::Break(()) => CommandState::Closed,
+                }
+            }
         };
         self.state = state;
         Ok(())
-    }
-
-    fn parse_command_token(
-        &mut self,
-        command_frame: CommandFrame<H>,
-        token: Token,
-    ) -> Result<CommandState<H>, ParserOrHandlerError<H>> {
-        match command_frame {
-            CommandFrame::SetLogic(logic) => match logic {
-                None => {
-                    let Token::Symbol(logic) = token else {
-                        return Err(ParserError::ExpectedSymbol.into());
-                    };
-                    let logic = self
-                        .handler
-                        .handle_symbol(logic.as_str())
-                        .map_err(ParserOrHandlerError::HandlerError)?;
-                    Ok(CommandState::Frame(CommandFrame::SetLogic(Some(logic))))
-                }
-                Some(logic) => {
-                    self.handler
-                        .command_set_logic(logic)
-                        .map_err(ParserOrHandlerError::HandlerError)?;
-                    Ok(CommandState::Closed)
-                }
-            },
-        }
     }
 }

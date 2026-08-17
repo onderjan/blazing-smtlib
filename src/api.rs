@@ -5,7 +5,7 @@ use crate::{
     old::{SmtAttributeValue, SmtFunctionSignature, SmtSExpr, SmtSort, SmtTerm},
 };
 
-pub trait SmtHandler {
+pub trait SmtHandler: 'static {
     type Error;
 
     type Numeral;
@@ -21,6 +21,8 @@ pub trait SmtHandler {
     type Attribute;
     type Sort;
     type Term;
+
+    type CommandProcessor;
 
     fn handle_numeral(&mut self, value: Str8) -> Result<Self::Numeral, Self::Error>;
     fn handle_decimal(
@@ -102,6 +104,8 @@ impl SmtHandler for OnlyCheckSyntax {
     type Attribute = ();
     type Sort = ();
     type Term = ();
+
+    type CommandProcessor = ();
 
     fn handle_numeral(&mut self, _value: Str8) -> Result<Self::Numeral, Self::Error> {
         Ok(())
