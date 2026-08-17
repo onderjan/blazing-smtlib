@@ -3,8 +3,9 @@ use std::ops::ControlFlow;
 use crate::{
     CommandHandler, SmtHandler, SmtSort,
     parser::{
-        CategoryParser, CategoryParserState, ParserError, ParserOrHandlerError, ParserState,
-        command::CommandCallback, index::IndexedIdentParserState, progress_state,
+        CategoryParserState, ParserError, ParserOrHandlerError, ParserState,
+        category::CategoryParser, command::CommandCallback, index::IndexedIdentParserState,
+        progress_state,
     },
     token::{Reserved, Token},
 };
