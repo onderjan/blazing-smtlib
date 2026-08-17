@@ -63,10 +63,10 @@ where
     type Category;
 
     fn progress(
-        self,
+        &mut self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<Self::Category, Self>, ParserOrHandlerError<H>>;
+    ) -> Result<ControlFlow<Self::Category>, ParserOrHandlerError<H>>;
 }
 
 struct CategoryParserState<H: SmtHandler, C: CategoryParser<H>> {
@@ -80,16 +80,12 @@ impl<H: SmtHandler, C: CategoryParser<H>> CategoryParserState<H, C> {
     }
 
     fn progress(
-        self,
+        mut self,
         handler: &mut H,
         token: Token,
     ) -> Result<ControlFlow<CommandProgress<H>, Self>, ParserOrHandlerError<H>> {
         match self.state.progress(handler, token)? {
-            ControlFlow::Continue(state) => Ok(ControlFlow::Continue(Self {
-                callback: self.callback,
-                state,
-            })),
-
+            ControlFlow::Continue(()) => Ok(std::ops::ControlFlow::Continue(self)),
             ControlFlow::Break(sort) => Ok(ControlFlow::Break(
                 (self.callback)(handler, sort).map_err(ParserOrHandlerError::HandlerError)?,
             )),

@@ -18,10 +18,10 @@ impl<H: SmtHandler> CategoryParser<H> for SortParserState<H> {
     type Category = H::Sort;
 
     fn progress(
-        self,
+        &mut self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<H::Sort, Self>, ParserOrHandlerError<H>> {
+    ) -> Result<ControlFlow<H::Sort, ()>, ParserOrHandlerError<H>> {
         match self {
             SortParserState::Deciding => match token {
                 Token::Symbol(symbol) => {
@@ -30,15 +30,14 @@ impl<H: SmtHandler> CategoryParser<H> for SortParserState<H> {
                         .map_err(ParserOrHandlerError::HandlerError)?;
                     todo!("Indexed sort");
                 }
-                Token::Reserved(Reserved::Underscore) => Ok(ControlFlow::Continue(
-                    SortParserState::IndexedIdent(IndexedIdentParserState::AwaitingSymbol),
-                )),
+                Token::Reserved(Reserved::Underscore) => {
+                    *self = SortParserState::IndexedIdent(IndexedIdentParserState::AwaitingSymbol);
+                    Ok(ControlFlow::Continue(()))
+                }
                 _ => Err(ParserError::ExpectedSortInner.into()),
             },
             SortParserState::IndexedIdent(state) => match state.progress(handler, token)? {
-                ControlFlow::Continue(state) => {
-                    Ok(ControlFlow::Continue(SortParserState::IndexedIdent(state)))
-                }
+                ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
                 ControlFlow::Break(ident) => {
                     let sort = SmtSort::Ident(ident);
                     let sort = handler
