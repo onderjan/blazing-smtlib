@@ -1,33 +1,23 @@
 use std::io;
 
-use num::{BigUint, One, Zero};
+mod char_class;
 
-use crate::old::{
-    parser::char_class::{CharClass, U8OrEof, char_class_opt},
-    smt::{Decimal, Reserved, String8, Whole},
+use char_class::{CharClass, U8OrEof, char_class_opt};
+
+use crate::{
+    String8,
+    token::{Reserved, Token},
 };
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Token {
-    ParenOpen,
-    ParenClose,
-    Numeral(Whole),
-    Decimal(Decimal),
-    Hexadecimal(Whole),
-    Binary(Whole),
-    Symbol(String8),
-    Reserved(Reserved),
-    String(String8),
-    Keyword(String8),
-    End,
-}
 
 pub enum LexerState {
     Normal,
-    Fraction(Decimal),
-    NumeralOrDecimal(Whole),
-    Hexadecimal(Whole),
-    Binary(Whole),
+    Fraction {
+        numerator: String8,
+        denominator: String8,
+    },
+    NumeralOrDecimal(String8),
+    Hexadecimal(String8),
+    Binary(String8),
     HexadecimalOrBinary,
     StringLiteral(String8),
     StringLiteralDoubleQuote(String8),
@@ -104,11 +94,7 @@ impl Lexer {
             CharClass::Digit => {
                 // digit starts a numeral or a decimal
                 // and determines the first digit value
-                let digit = c - b'0';
-                LexerState::NumeralOrDecimal(Whole {
-                    value: digit.into(),
-                    num_digits: BigUint::one(),
-                })
+                LexerState::NumeralOrDecimal(String8(vec![c]))
             }
 
             CharClass::Hash => {
@@ -152,75 +138,74 @@ impl Lexer {
         let mut tokens = Vec::new();
         let state = match state {
             LexerState::Normal => return self.lex_normal(tokens, c),
-            LexerState::Fraction(mut fraction) => {
+            LexerState::Fraction {
+                numerator,
+                mut denominator,
+            } => {
                 match char_class_opt(c) {
                     Some((CharClass::Digit, c)) => {
-                        // compute the new value, add one denominator digit
-                        let digit = c - b'0';
-                        fraction.value *= 10u32;
-                        fraction.value += digit;
-                        fraction.num_denominator_digits += BigUint::one();
-                        LexerState::Fraction(fraction)
+                        // add one denominator digit
+                        denominator.0.push(c);
+
+                        LexerState::Fraction {
+                            numerator,
+                            denominator,
+                        }
                     }
                     _ => {
-                        if fraction.num_denominator_digits.is_zero() {
+                        if denominator.is_empty() {
                             // decimals of the form 7. without any digit in fraction part are disallowed
                             return Err(LexerError::FractionDigitExpected);
                         }
                         // push new token and lex the character normally
-                        tokens.push(Token::Decimal(fraction));
+                        tokens.push(Token::Decimal {
+                            numerator,
+                            denominator,
+                        });
                         return self.lex_normal(tokens, c);
                     }
                 }
             }
-            LexerState::NumeralOrDecimal(mut whole) => {
+            LexerState::NumeralOrDecimal(mut value) => {
                 match char_class_opt(c) {
                     Some((CharClass::Digit, c)) => {
-                        // compute the new value, add one digit
-                        let digit = c - b'0';
-                        whole.value *= 10u32;
-                        whole.value += digit;
-                        whole.num_digits += 1u32;
-                        LexerState::NumeralOrDecimal(whole)
+                        // add one digit
+                        value.0.push(c);
+                        LexerState::NumeralOrDecimal(value)
                     }
 
                     Some((CharClass::Dot, _)) => {
                         // decimal, the next character will start fraction
-                        LexerState::Fraction(Decimal {
-                            value: whole.value,
-                            num_numerator_digits: whole.num_digits,
-                            num_denominator_digits: BigUint::zero(),
-                        })
+                        LexerState::Fraction {
+                            numerator: value,
+                            denominator: String8::new(),
+                        }
                     }
 
                     _ => {
                         // this was a numeral
                         // push new token and lex the character normally
-                        tokens.push(Token::Numeral(whole));
+                        tokens.push(Token::Numeral(value));
                         return self.lex_normal(tokens, c);
                     }
                 }
             }
             LexerState::Hexadecimal(mut whole) => {
-                let digit = if let U8OrEof::U8(c) = c {
+                let hex_digit = if let U8OrEof::U8(c) = c {
                     match c {
-                        b'0'..=b'9' => Some(c - b'0'),
-                        b'a'..=b'f' => Some((c - b'a') + 10),
-                        b'A'..=b'F' => Some((c - b'A') + 10),
+                        b'0'..=b'9' | b'a'..=b'f' | b'A'..=b'F' => Some(c),
                         _ => None,
                     }
                 } else {
                     None
                 };
 
-                if let Some(digit) = digit {
-                    // hexadecimal digit, multiply value by 16 and add it, increment num digits
-                    whole.value *= 16u32;
-                    whole.value += digit;
-                    whole.num_digits += 1u32;
+                if let Some(hex_digit) = hex_digit {
+                    // add hexadecimal digit
+                    whole.0.push(hex_digit);
                     LexerState::Hexadecimal(whole)
                 } else {
-                    if whole.num_digits.is_zero() {
+                    if whole.is_empty() {
                         // had non-digit, zero digits disallowed
                         return Err(LexerError::HexadecimalDigitExpected);
                     }
@@ -231,17 +216,21 @@ impl Lexer {
                 }
             }
             LexerState::Binary(mut whole) => {
-                if let U8OrEof::U8(c) = c
-                    && matches!(c, b'0'..=b'1')
-                {
-                    // binary digit, multiply value by 2 and add it, increment num digits
-                    let digit = c - b'0';
-                    whole.value *= 2u32;
-                    whole.value += digit;
-                    whole.num_digits += 1u32;
+                let binary_digit = if let U8OrEof::U8(c) = c {
+                    match c {
+                        b'0' | b'1' => Some(c),
+                        _ => None,
+                    }
+                } else {
+                    None
+                };
+
+                if let Some(binary_digit) = binary_digit {
+                    // add binary digit
+                    whole.0.push(binary_digit);
                     LexerState::Binary(whole)
                 } else {
-                    if whole.num_digits.is_zero() {
+                    if whole.is_empty() {
                         // had non-digit, zero digits disallowed
                         return Err(LexerError::BinaryDigitExpected);
                     }
@@ -252,17 +241,11 @@ impl Lexer {
                 }
             }
 
-            LexerState::HexadecimalOrBinary => {
-                let empty_whole = Whole {
-                    value: BigUint::zero(),
-                    num_digits: BigUint::zero(),
-                };
-                match c {
-                    U8OrEof::U8(b'x') => LexerState::Hexadecimal(empty_whole),
-                    U8OrEof::U8(b'b') => LexerState::Binary(empty_whole),
-                    _ => return Err(LexerError::BaseSelectionExpected),
-                }
-            }
+            LexerState::HexadecimalOrBinary => match c {
+                U8OrEof::U8(b'x') => LexerState::Hexadecimal(String8::new()),
+                U8OrEof::U8(b'b') => LexerState::Binary(String8::new()),
+                _ => return Err(LexerError::BaseSelectionExpected),
+            },
             LexerState::StringLiteral(mut literal) => {
                 match c {
                     U8OrEof::Eof => {

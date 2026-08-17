@@ -1,27 +1,7 @@
 use num::BigUint;
-use std::fmt::{Debug, Write};
+use std::fmt::Debug;
 
-mod reserved;
-
-pub use reserved::Reserved;
-
-#[derive(Clone, PartialEq, Eq, Hash)]
-pub struct String8(pub Vec<u8>);
-
-impl Debug for String8 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_char('\"')?;
-        for c in self.0.iter().copied() {
-            if c < 128 {
-                f.write_char(c as char)?;
-            } else {
-                write!(f, "\\b{:X}{:X}", c / 16, c % 16)?;
-            }
-        }
-        f.write_char('\"')?;
-        Ok(())
-    }
-}
+use crate::{String8, token::Reserved};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Whole {

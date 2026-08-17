@@ -1,15 +1,16 @@
 use std::fmt::Debug;
 
-use crate::old::{
-    parser::lexer::{LexerError, Token},
-    smt::{
-        Reserved, SmtApplication, SmtAttributeValue, SmtFunctionSignature, SmtIdent, SmtIndex,
-        SmtQualifiedIdent, SmtSExpr, SmtSort, SmtSpecialConstant, SmtTerm, String8,
-    },
-};
+use num::{BigUint, Zero};
 
-mod char_class;
-pub mod lexer;
+use crate::{
+    Decimal, String8, Whole,
+    lexer::LexerError,
+    old::smt::{
+        SmtApplication, SmtAttributeValue, SmtFunctionSignature, SmtIdent, SmtIndex,
+        SmtQualifiedIdent, SmtSExpr, SmtSort, SmtSpecialConstant, SmtTerm,
+    },
+    token::{Reserved, Token},
+};
 
 pub trait SmtFold: Debug {
     type Error: Debug;
@@ -247,9 +248,9 @@ impl<F: SmtFold> Parser<F> {
         token: Token,
     ) -> Result<(), ParserError<F::Error>> {
         match token {
-            Token::Numeral(whole) => {
+            Token::Numeral(value) => {
                 // numeral index
-                rest.indices.push(SmtIndex::Numeral(whole));
+                rest.indices.push(SmtIndex::Numeral(parse_numeral(value)));
             }
             Token::Symbol(symbol) => {
                 rest.indices.push(SmtIndex::Symbol(symbol));
@@ -913,11 +914,72 @@ fn expect_token<F: SmtFold>(token: Token, expected: Token) -> Result<(), ParserE
 
 fn special_constant(token: Token) -> Result<SmtSpecialConstant, Token> {
     Ok(match token {
-        Token::Numeral(whole) => SmtSpecialConstant::Numeral(whole),
-        Token::Decimal(decimal) => SmtSpecialConstant::Decimal(decimal),
-        Token::Hexadecimal(whole) => SmtSpecialConstant::Hexadecimal(whole),
-        Token::Binary(whole) => SmtSpecialConstant::Binary(whole),
+        Token::Numeral(whole) => SmtSpecialConstant::Numeral(parse_numeral(whole)),
+        Token::Decimal {
+            numerator,
+            denominator,
+        } => SmtSpecialConstant::Decimal(parse_decimal(numerator, denominator)),
+        Token::Hexadecimal(whole) => SmtSpecialConstant::Hexadecimal(parse_hexadecimal(whole)),
+        Token::Binary(whole) => SmtSpecialConstant::Binary(parse_binary(whole)),
         Token::String(string8) => SmtSpecialConstant::String(string8),
         _ => return Err(token),
     })
+}
+
+fn parse_numeral(value: String8) -> Whole {
+    let mut whole = Whole {
+        value: BigUint::zero(),
+        num_digits: BigUint::zero(),
+    };
+    for c in value.0 {
+        assert!(c.is_ascii_digit());
+        let digit = c - b'0';
+        whole.value *= 10u32;
+        whole.value += digit;
+        whole.num_digits += 1u32;
+    }
+    whole
+}
+
+fn parse_decimal(_numerator: String8, _denominator: String8) -> Decimal {
+    // TODO: this is wrong, but the value is unused in QF_BV, remove shortly
+    Decimal {
+        value: BigUint::zero(),
+        num_numerator_digits: BigUint::zero(),
+        num_denominator_digits: BigUint::zero(),
+    }
+}
+
+fn parse_hexadecimal(value: String8) -> Whole {
+    let mut whole = Whole {
+        value: BigUint::zero(),
+        num_digits: BigUint::zero(),
+    };
+    for c in value.0 {
+        let digit = match c {
+            b'0'..=b'9' => c - b'0',
+            b'a'..=b'f' => (c - b'a') + 10,
+            b'A'..=b'F' => (c - b'A') + 10,
+            _ => panic!("Bad numeral value"),
+        };
+        whole.value *= 16u32;
+        whole.value += digit;
+        whole.num_digits += 1u32;
+    }
+    whole
+}
+
+fn parse_binary(value: String8) -> Whole {
+    let mut whole = Whole {
+        value: BigUint::zero(),
+        num_digits: BigUint::zero(),
+    };
+    for c in value.0 {
+        assert!((b'0'..=b'1').contains(&c));
+        let digit = c - b'0';
+        whole.value *= 2u32;
+        whole.value += digit;
+        whole.num_digits += 1u32;
+    }
+    whole
 }

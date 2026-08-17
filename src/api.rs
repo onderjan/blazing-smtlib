@@ -1,6 +1,4 @@
-use crate::{SmtAttributeValue, SmtFunctionSignature, SmtSExpr, SmtSort, SmtTerm};
-
-pub struct Str8<'a>(&'a [u8]);
+use crate::{SmtAttributeValue, SmtFunctionSignature, SmtSExpr, SmtSort, SmtTerm, string::Str8};
 
 pub trait CategoryHandler {
     type Error;

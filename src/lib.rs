@@ -6,12 +6,16 @@ use std::{
 };
 
 mod api;
+mod lexer;
 mod parser;
+mod string;
+mod token;
 
 mod old;
 pub use crate::old::*;
+pub use crate::string::*;
 
-use crate::old::lexer::{Lexer, LexerError};
+use crate::lexer::{Lexer, LexerError};
 
 pub enum SmtProcessError<F: Debug> {
     LexerError(LexerError),

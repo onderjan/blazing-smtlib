@@ -1,7 +1,8 @@
 use std::convert::Infallible;
 
-use crate::old::{
-    SmtAttributeValue, SmtFold, SmtFunctionSignature, SmtSExpr, SmtSort, SmtTerm, String8,
+use crate::{
+    String8,
+    old::{SmtAttributeValue, SmtFold, SmtFunctionSignature, SmtSExpr, SmtSort, SmtTerm},
 };
 
 #[derive(Debug)]
