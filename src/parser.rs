@@ -4,8 +4,8 @@ use crate::{
     CommandHandler, String8,
     api::SmtHandler,
     parser::{
-        command::{CommandProgress, CommandStage},
-        sort::SortParser,
+        command::{CommandCallback, CommandProgress, CommandStage},
+        sort::SortParserState,
     },
     token::Token,
 };
@@ -56,11 +56,52 @@ pub struct Parser<'a, H: CommandHandler> {
     state: ParserState<H>,
 }
 
+trait CategoryParser<H: SmtHandler>
+where
+    Self: std::marker::Sized,
+{
+    type Category;
+
+    fn progress(
+        self,
+        handler: &mut H,
+        token: Token,
+    ) -> Result<ControlFlow<Self::Category, Self>, ParserOrHandlerError<H>>;
+}
+
+struct CategoryParserState<H: SmtHandler, C: CategoryParser<H>> {
+    pub callback: CommandCallback<H, C::Category>,
+    pub state: C,
+}
+
+impl<H: SmtHandler, C: CategoryParser<H>> CategoryParserState<H, C> {
+    fn new(callback: CommandCallback<H, C::Category>, state: C) -> Self {
+        Self { callback, state }
+    }
+
+    fn progress(
+        self,
+        handler: &mut H,
+        token: Token,
+    ) -> Result<ControlFlow<CommandProgress<H>, Self>, ParserOrHandlerError<H>> {
+        match self.state.progress(handler, token)? {
+            ControlFlow::Continue(state) => Ok(ControlFlow::Continue(Self {
+                callback: self.callback,
+                state,
+            })),
+
+            ControlFlow::Break(sort) => Ok(ControlFlow::Break(
+                (self.callback)(handler, sort).map_err(ParserOrHandlerError::HandlerError)?,
+            )),
+        }
+    }
+}
+
 enum ParserState<H: SmtHandler> {
     AwaitingCommand,
     CommandOpen,
     Command(Box<dyn CommandStage<H>>),
-    Sort(SortParser<H>),
+    Sort(CategoryParserState<H, SortParserState<H>>),
 }
 
 impl<'a, H: CommandHandler> Parser<'a, H> {
@@ -93,18 +134,10 @@ impl<'a, H: CommandHandler> Parser<'a, H> {
                 ParserState::Command(self.start_command(command_name.as_str())?)
             }
             ParserState::Command(stage) => self.progress_command(stage, token)?,
-            ParserState::Sort(sort_parser) => {
-                match sort_parser.state.progress(self.handler, token)? {
-                    ControlFlow::Continue(state) => ParserState::Sort(SortParser {
-                        callback: sort_parser.callback,
-                        state,
-                    }),
-                    ControlFlow::Break(sort) => progress_state(
-                        (sort_parser.callback)(self.handler, sort)
-                            .map_err(ParserOrHandlerError::HandlerError)?,
-                    ),
-                }
-            }
+            ParserState::Sort(sort_parser) => match sort_parser.progress(self.handler, token)? {
+                ControlFlow::Continue(state) => ParserState::Sort(state),
+                ControlFlow::Break(progress) => progress_state(progress),
+            },
         };
         self.state = state;
         Ok(())

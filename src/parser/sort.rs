@@ -3,24 +3,21 @@ use std::ops::ControlFlow;
 use crate::{
     CommandHandler, SmtHandler, SmtSort,
     parser::{
-        ParserError, ParserOrHandlerError, ParserState, command::CommandCallback,
-        index::IndexedIdentParserState, progress_state,
+        CategoryParser, CategoryParserState, ParserError, ParserOrHandlerError, ParserState,
+        command::CommandCallback, index::IndexedIdentParserState, progress_state,
     },
     token::{Reserved, Token},
 };
-
-pub struct SortParser<H: SmtHandler> {
-    pub callback: CommandCallback<H, H::Sort>,
-    pub state: SortParserState<H>,
-}
 
 pub enum SortParserState<H: SmtHandler> {
     Deciding,
     IndexedIdent(IndexedIdentParserState<H>),
 }
 
-impl<H: SmtHandler> SortParserState<H> {
-    pub fn progress(
+impl<H: SmtHandler> CategoryParser<H> for SortParserState<H> {
+    type Category = H::Sort;
+
+    fn progress(
         self,
         handler: &mut H,
         token: Token,
@@ -76,10 +73,10 @@ impl<H: CommandHandler> super::Parser<'_, H> {
                     callback(self.handler, sort).map_err(ParserOrHandlerError::HandlerError)?,
                 ))
             }
-            Token::ParenOpen => Ok(ParserState::Sort(SortParser {
+            Token::ParenOpen => Ok(ParserState::Sort(CategoryParserState::new(
                 callback,
-                state: SortParserState::Deciding,
-            })),
+                SortParserState::Deciding,
+            ))),
             _ => Err(ParserError::ExpectedSort.into()),
         }
     }
