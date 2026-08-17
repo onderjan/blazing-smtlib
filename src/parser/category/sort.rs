@@ -1,15 +1,42 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    CommandHandler, SmtHandler, SmtSort,
+    SmtHandler, SmtSort,
     parser::{
-        CategoryParserState, Parser, ParserError, ParserOrHandlerError, ParserState,
+        CategoryParserState, ParserError, ParserOrHandlerError, ParserState,
         category::{CategoryParser, index::IndexedIdentParserState},
         command::CommandCallback,
         progress_state,
     },
     token::{Reserved, Token},
 };
+
+pub fn parse_sort<H: SmtHandler>(
+    handler: &mut H,
+    callback: CommandCallback<H, H::Sort>,
+    token: Token,
+) -> Result<ParserState<H>, ParserOrHandlerError<H>> {
+    match token {
+        Token::Symbol(symbol) => {
+            let ident = handler
+                .handle_ident(symbol.as_str(), Vec::new())
+                .map_err(ParserOrHandlerError::HandlerError)?;
+            let sort = SmtSort::Ident(ident);
+            let sort = handler
+                .handle_sort(sort)
+                .map_err(ParserOrHandlerError::HandlerError)?;
+
+            Ok(progress_state(
+                callback(handler, sort).map_err(ParserOrHandlerError::HandlerError)?,
+            ))
+        }
+        Token::ParenOpen => Ok(ParserState::Sort(CategoryParserState::new(
+            callback,
+            SortParserState::Deciding,
+        ))),
+        _ => Err(ParserError::ExpectedSort.into()),
+    }
+}
 
 pub enum SortParserState<H: SmtHandler> {
     Deciding,
@@ -48,37 +75,6 @@ impl<H: SmtHandler> CategoryParser<H> for SortParserState<H> {
                     Ok(ControlFlow::Break(sort))
                 }
             },
-        }
-    }
-}
-
-impl<H: CommandHandler> Parser<'_, H> {
-    pub(crate) fn parse_sort(
-        &mut self,
-        callback: CommandCallback<H, H::Sort>,
-        token: Token,
-    ) -> Result<ParserState<H>, ParserOrHandlerError<H>> {
-        match token {
-            Token::Symbol(symbol) => {
-                let ident = self
-                    .handler
-                    .handle_ident(symbol.as_str(), Vec::new())
-                    .map_err(ParserOrHandlerError::HandlerError)?;
-                let sort = SmtSort::Ident(ident);
-                let sort = self
-                    .handler
-                    .handle_sort(sort)
-                    .map_err(ParserOrHandlerError::HandlerError)?;
-
-                Ok(progress_state(
-                    callback(self.handler, sort).map_err(ParserOrHandlerError::HandlerError)?,
-                ))
-            }
-            Token::ParenOpen => Ok(ParserState::Sort(CategoryParserState::new(
-                callback,
-                SortParserState::Deciding,
-            ))),
-            _ => Err(ParserError::ExpectedSort.into()),
         }
     }
 }

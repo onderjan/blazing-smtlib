@@ -2,6 +2,7 @@ use crate::{
     CommandHandler, SmtHandler, Str8,
     parser::{
         ParserError, ParserOrHandlerError, ParserState,
+        category::{sort::parse_sort, term::parse_term},
         command::standard::{CommandAssert, CommandDeclareConst, CommandSetLogic},
         progress_state,
     },
@@ -60,8 +61,8 @@ impl<H: CommandHandler> super::Parser<'_, H> {
                 let symbol = self.parse_symbol(token)?;
                 callback(self.handler, symbol).map_err(ParserOrHandlerError::HandlerError)?
             }
-            CommandAction::Sort(callback) => return self.parse_sort(callback, token),
-            CommandAction::Term(callback) => return self.parse_term(callback, token),
+            CommandAction::Sort(callback) => return parse_sort(self.handler, callback, token),
+            CommandAction::Term(callback) => return parse_term(self.handler, callback, token),
         };
 
         Ok(progress_state(progress))
