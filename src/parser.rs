@@ -1,6 +1,11 @@
-use std::ops::ControlFlow;
+use crate::{
+    CommandHandler, String8,
+    api::SmtHandler,
+    parser::command::{CommandProgress, CommandStage},
+    token::Token,
+};
 
-use crate::{CommandHandler, String8, api::SmtHandler, token::Token};
+mod command;
 
 #[derive(Debug)]
 pub enum ParserError {
@@ -58,59 +63,6 @@ enum UnprocessedCommand {
 #[derive(Debug)]
 enum SmtFrame {}
 
-type CommandActionResult<H> =
-    Result<ControlFlow<(), Box<dyn CommandStage<H>>>, <H as SmtHandler>::Error>;
-
-type CommandActionCloseParen<H> = Box<dyn FnOnce(&mut H) -> CommandActionResult<H>>;
-
-type CommandActionSymbol<H> = Box<
-    dyn FnOnce(
-        &mut H,
-        <H as SmtHandler>::Symbol,
-    ) -> Result<ControlFlow<(), Box<dyn CommandStage<H>>>, <H as SmtHandler>::Error>,
->;
-
-enum CommandAction<H: CommandHandler> {
-    CloseParen(CommandActionCloseParen<H>),
-    Symbol(CommandActionSymbol<H>),
-}
-
-trait CommandStage<H: CommandHandler> {
-    fn action(self: Box<Self>) -> CommandAction<H>;
-}
-
-enum CommandState<H: SmtHandler> {
-    Closed,
-    Open,
-    Command(Box<dyn CommandStage<H>>),
-}
-
-struct CommandSetLogic<H: SmtHandler> {
-    logic: Option<H::Symbol>,
-}
-
-impl<H: CommandHandler> CommandStage<H> for CommandSetLogic<H> {
-    fn action(self: Box<Self>) -> CommandAction<H> {
-        match self.logic {
-            None => {
-                // read logic
-                CommandAction::Symbol(Box::new(|_handler, symbol| {
-                    Ok(ControlFlow::Continue(Box::new(CommandSetLogic {
-                        logic: Some(symbol),
-                    })))
-                }))
-            }
-            Some(logic) => {
-                // done on close paren
-                CommandAction::CloseParen(Box::new(|handler| {
-                    handler.command_set_logic(logic)?;
-                    Ok(ControlFlow::Break(()))
-                }))
-            }
-        }
-    }
-}
-
 #[derive(Debug)]
 enum Processed<H: SmtHandler> {
     Symbol(H::Symbol),
@@ -126,16 +78,22 @@ enum Processed<H: SmtHandler> {
 
 pub struct Parser<'a, H: CommandHandler> {
     handler: &'a mut H,
-    state: CommandState<H>,
+    state: ParserState<H>,
     frames: Vec<SmtFrame>,
     processed: Vec<Processed<H>>,
+}
+
+pub enum ParserState<H: SmtHandler> {
+    AwaitingCommand,
+    CommandOpen,
+    Command(Box<dyn CommandStage<H>>),
 }
 
 impl<'a, H: CommandHandler> Parser<'a, H> {
     pub fn new(handler: &'a mut H) -> Self {
         Self {
             handler,
-            state: CommandState::Closed,
+            state: ParserState::AwaitingCommand,
             frames: Vec::new(),
             processed: Vec::new(),
         }
@@ -151,58 +109,29 @@ impl<'a, H: CommandHandler> Parser<'a, H> {
 
     pub fn parse_token(&mut self, token: Token) -> Result<(), ParserOrHandlerError<H>> {
         eprintln!("Token: {:?}", token);
-        let mut state = CommandState::Closed;
+        let mut state = ParserState::AwaitingCommand;
         std::mem::swap(&mut self.state, &mut state);
         let state = match state {
-            CommandState::Closed => {
+            ParserState::AwaitingCommand => {
                 // expect open paren
                 if !matches!(token, Token::ParenOpen) {
                     return Err(ParserOrHandlerError::ParserError(
                         ParserError::ExpectedCommand,
                     ));
                 }
-                CommandState::Open
+                ParserState::CommandOpen
             }
-            CommandState::Open => {
+            ParserState::CommandOpen => {
                 // expect a symbol identifying the command
                 let Token::Symbol(command_name) = token else {
                     return Err(ParserError::ExpectedCommand.into());
                 };
-                match command_name.bytes() {
-                    b"set-logic" => {
-                        CommandState::Command(Box::new(CommandSetLogic { logic: None }))
-                    }
-                    _ => todo!("Unknown command {:?}", command_name),
-                }
+                ParserState::Command(self.start_command(command_name.as_str())?)
             }
-            CommandState::Command(stage) => {
-                let result = match stage.action() {
-                    CommandAction::Symbol(callback) => {
-                        let Token::Symbol(symbol) = token else {
-                            return Err(ParserError::ExpectedSymbol.into());
-                        };
-                        let symbol = self
-                            .handler
-                            .handle_symbol(symbol.as_str())
-                            .map_err(ParserOrHandlerError::HandlerError)?;
-                        callback(self.handler, symbol)
-                    }
-                    CommandAction::CloseParen(callback) => {
-                        if !matches!(token, Token::ParenClose) {
-                            return Err(ParserOrHandlerError::ParserError(
-                                ParserError::ExpectedToken(Token::ParenClose),
-                            ));
-                        }
-                        callback(self.handler)
-                    }
-                }
-                .map_err(ParserOrHandlerError::HandlerError)?;
-
-                match result {
-                    ControlFlow::Continue(stage) => CommandState::Command(stage),
-                    ControlFlow::Break(()) => CommandState::Closed,
-                }
-            }
+            ParserState::Command(stage) => match self.progress_command(stage, token)? {
+                CommandProgress::Continuation(stage) => ParserState::Command(stage),
+                CommandProgress::End => ParserState::AwaitingCommand,
+            },
         };
         self.state = state;
         Ok(())

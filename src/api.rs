@@ -22,8 +22,6 @@ pub trait SmtHandler: 'static {
     type Sort;
     type Term;
 
-    type CommandProcessor;
-
     fn handle_numeral(&mut self, value: Str8) -> Result<Self::Numeral, Self::Error>;
     fn handle_decimal(
         &mut self,
@@ -104,8 +102,6 @@ impl SmtHandler for OnlyCheckSyntax {
     type Attribute = ();
     type Sort = ();
     type Term = ();
-
-    type CommandProcessor = ();
 
     fn handle_numeral(&mut self, _value: Str8) -> Result<Self::Numeral, Self::Error> {
         Ok(())

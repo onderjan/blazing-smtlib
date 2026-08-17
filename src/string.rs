@@ -40,6 +40,12 @@ impl Debug for String8 {
     }
 }
 
+impl Str8<'_> {
+    pub fn bytes(&self) -> &[u8] {
+        self.0
+    }
+}
+
 impl Debug for Str8<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_char('\"')?;
