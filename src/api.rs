@@ -1,6 +1,6 @@
 use crate::{SmtAttributeValue, SmtFunctionSignature, SmtSExpr, SmtSort, SmtTerm, string::Str8};
 
-pub trait CategoryHandler {
+pub trait SmtHandler {
     type Error;
 
     type Numeral;
@@ -33,7 +33,7 @@ pub trait CategoryHandler {
     ) -> Result<Self::Attribute, Self::Error>;
 }
 
-pub trait CommandHandler: CategoryHandler {
+pub trait CommandHandler: SmtHandler {
     fn command_echo(&mut self, value: Self::String) -> Result<(), Self::Error>;
 
     fn command_get_option(&mut self, option: Self::String) -> Result<(), Self::Error>;
