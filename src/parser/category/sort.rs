@@ -11,7 +11,6 @@ use crate::{
 /*
 pub fn parse_sort<H: SmtHandler>(
     handler: &mut H,
-    callback: CommandCallback<H, H::Sort>,
     token: Token,
 ) -> Result<ParserState<H>, ParserOrHandlerError<H>> {
     match token {
@@ -30,27 +29,29 @@ pub fn parse_sort<H: SmtHandler>(
         }
         Token::ParenOpen => Ok(ParserState::Sort(CategoryParserState::new(
             callback,
-            SortParserState::Deciding,
+            SortParser::Deciding,
         ))),
         _ => Err(ParserError::ExpectedSort.into()),
     }
-}
+}*/
 
-pub enum SortParserState<H: SmtHandler> {
+pub enum SortParser<H: SmtHandler> {
     Deciding,
     IndexedIdent(IndexedIdentParserState<H>),
 }
 
-impl<H: SmtHandler> CategoryParser<H> for SortParserState<H> {
-    type Category = H::Sort;
+impl<H: SmtHandler> SortParser<H> {
+    pub fn new() -> Self {
+        Self::Deciding
+    }
 
-    fn progress(
+    pub fn progress(
         &mut self,
         handler: &mut H,
         token: Token,
     ) -> Result<ControlFlow<H::Sort, ()>, ParserOrHandlerError<H>> {
         match self {
-            SortParserState::Deciding => match token {
+            SortParser::Deciding => match token {
                 Token::Symbol(symbol) => {
                     let _symbol = handler
                         .handle_symbol(symbol.as_str())
@@ -58,12 +59,12 @@ impl<H: SmtHandler> CategoryParser<H> for SortParserState<H> {
                     todo!("Indexed sort");
                 }
                 Token::Reserved(Reserved::Underscore) => {
-                    *self = SortParserState::IndexedIdent(IndexedIdentParserState::AwaitingSymbol);
+                    *self = SortParser::IndexedIdent(IndexedIdentParserState::AwaitingSymbol);
                     Ok(ControlFlow::Continue(()))
                 }
                 _ => Err(ParserError::ExpectedSortInner.into()),
             },
-            SortParserState::IndexedIdent(state) => match state.progress(handler, token)? {
+            SortParser::IndexedIdent(state) => match state.progress(handler, token)? {
                 ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
                 ControlFlow::Break(ident) => {
                     let sort = SmtSort::Ident(ident);
@@ -76,4 +77,3 @@ impl<H: SmtHandler> CategoryParser<H> for SortParserState<H> {
         }
     }
 }
-*/

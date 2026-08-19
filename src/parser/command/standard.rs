@@ -2,7 +2,7 @@ use std::{marker::PhantomData, ops::ControlFlow};
 
 use crate::{
     CommandHandler, SmtHandler, String8,
-    parser::{ParserError, ParserOrHandlerError},
+    parser::{ParserError, ParserOrHandlerError, category::sort::SortParser},
     token::Token,
 };
 
@@ -18,7 +18,7 @@ pub trait Command<H: CommandHandler> {
 
 pub enum CommandSetLogic<H: SmtHandler> {
     Start(PhantomData<H>),
-    Logic(String8),
+    End(String8),
 }
 
 impl<H: CommandHandler> Command<H> for CommandSetLogic<H> {
@@ -34,13 +34,13 @@ impl<H: CommandHandler> Command<H> for CommandSetLogic<H> {
         match self {
             CommandSetLogic::Start(_) => {
                 if let Token::Symbol(logic) = token {
-                    *self = Self::Logic(logic);
+                    *self = Self::End(logic);
                     Ok(ControlFlow::Continue(()))
                 } else {
                     Err(ParserError::ExpectedSymbol.into())
                 }
             }
-            CommandSetLogic::Logic(logic) => {
+            CommandSetLogic::End(logic) => {
                 if matches!(token, Token::ParenClose) {
                     handler.command_set_logic(logic.as_str());
                     Ok(ControlFlow::Break(()))
@@ -55,7 +55,8 @@ impl<H: CommandHandler> Command<H> for CommandSetLogic<H> {
 pub enum CommandDeclareConst<H: SmtHandler> {
     Start,
     Name(String8),
-    Full(String8, H::Sort),
+    ParsingSort(String8, SortParser<H>),
+    End(String8, H::Sort),
 }
 
 impl<H: CommandHandler> Command<H> for CommandDeclareConst<H> {
@@ -72,15 +73,20 @@ impl<H: CommandHandler> Command<H> for CommandDeclareConst<H> {
             CommandDeclareConst::Start => {
                 if let Token::Symbol(name) = token {
                     *self = Self::Name(name);
-                    Ok(ControlFlow::Continue(()))
                 } else {
-                    Err(ParserError::ExpectedSymbol.into())
+                    return Err(ParserError::ExpectedSymbol.into());
                 }
             }
             CommandDeclareConst::Name(name) => {
-                todo!("Parse sort")
+                *self = CommandDeclareConst::ParsingSort(std::mem::take(name), SortParser::new());
             }
-            CommandDeclareConst::Full(name, sort) => {
+            CommandDeclareConst::ParsingSort(name, sort_parser) => {
+                match sort_parser.progress(handler, token)? {
+                    ControlFlow::Continue(()) => {}
+                    ControlFlow::Break(sort) => *self = Self::End(std::mem::take(name), sort),
+                }
+            }
+            CommandDeclareConst::End(name, sort) => {
                 if matches!(token, Token::ParenClose) {
                     todo!("Handle sort")
                     /*
@@ -88,16 +94,17 @@ impl<H: CommandHandler> Command<H> for CommandDeclareConst<H> {
                     Ok(ControlFlow::Break(()))
                     */
                 } else {
-                    Err(ParserError::ExpectedToken(Token::ParenClose).into())
+                    return Err(ParserError::ExpectedToken(Token::ParenClose).into());
                 }
             }
         }
+        Ok(ControlFlow::Continue(()))
     }
 }
 
 pub enum CommandAssert<H: SmtHandler> {
     Start,
-    Term(H::Term),
+    End(H::Term),
 }
 
 impl<H: CommandHandler> Command<H> for CommandAssert<H> {
@@ -121,7 +128,7 @@ impl<H: CommandHandler> Command<H> for CommandAssert<H> {
                     Err(ParserError::ExpectedSymbol.into())
                 }*/
             }
-            CommandAssert::Term(term) => {
+            CommandAssert::End(term) => {
                 todo!("Handle term")
                 /*if matches!(token, Token::ParenClose) {
                     handler.command_assert(term);
@@ -186,7 +193,7 @@ impl<H: CommandHandler> Command<H> for CommandExit<H> {
 
 pub enum CommandSetInfo<H: SmtHandler> {
     Start,
-    Attribute(H::Attribute),
+    End(H::Attribute),
 }
 
 impl<H: CommandHandler> Command<H> for CommandSetInfo<H> {
@@ -211,7 +218,7 @@ impl<H: CommandHandler> Command<H> for CommandSetInfo<H> {
                 }
                 */
             }
-            CommandSetInfo::Attribute(attribute) => {
+            CommandSetInfo::End(attribute) => {
                 todo!("Handle attribute")
                 /*if matches!(token, Token::ParenClose) {
                     handler.command_set_info(attribute);
