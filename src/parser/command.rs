@@ -3,7 +3,9 @@ use crate::{
     parser::{
         ParserError, ParserOrHandlerError, ParserState,
         category::{sort::parse_sort, term::parse_term},
-        command::standard::{CommandAssert, CommandDeclareConst, CommandSetLogic},
+        command::standard::{
+            CommandAssert, CommandCheckSat, CommandDeclareConst, CommandExit, CommandSetLogic,
+        },
         progress_state,
     },
     token::Token,
@@ -13,7 +15,8 @@ mod standard;
 
 pub enum CommandProgress<H> {
     Continuation(Box<dyn CommandStage<H>>),
-    End,
+    EndCommand,
+    Exit,
 }
 
 pub type CommandCallback<H, Y> =
@@ -39,6 +42,8 @@ impl<H: CommandHandler> super::Parser<'_, H> {
             b"set-logic" => Box::new(CommandSetLogic::new()),
             b"declare-const" => Box::new(CommandDeclareConst::new()),
             b"assert" => Box::new(CommandAssert::new()),
+            b"check-sat" => Box::new(CommandCheckSat),
+            b"exit" => Box::new(CommandExit),
             _ => todo!("Unknown command {:?}", command_name),
         })
     }

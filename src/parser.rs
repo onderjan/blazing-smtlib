@@ -60,6 +60,7 @@ pub(crate) enum ParserState<H: SmtHandler> {
     Command(Box<dyn CommandStage<H>>),
     Sort(CategoryParserState<H, SortParserState<H>>),
     Term(CategoryParserState<H, TermParser<H>>),
+    Exit,
 }
 
 impl<'a, H: CommandHandler> Parser<'a, H> {
@@ -100,6 +101,10 @@ impl<'a, H: CommandHandler> Parser<'a, H> {
                 ControlFlow::Continue(state) => ParserState::Term(state),
                 ControlFlow::Break(progress) => progress_state(progress),
             },
+            ParserState::Exit => {
+                // no operation on fed tokens
+                ParserState::Exit
+            }
         };
         self.state = state;
         Ok(())
@@ -126,6 +131,7 @@ impl<'a, H: CommandHandler> Parser<'a, H> {
 fn progress_state<H: SmtHandler>(progress: CommandProgress<H>) -> ParserState<H> {
     match progress {
         CommandProgress::Continuation(stage) => ParserState::Command(stage),
-        CommandProgress::End => ParserState::AwaitingCommand,
+        CommandProgress::EndCommand => ParserState::AwaitingCommand,
+        CommandProgress::Exit => ParserState::Exit,
     }
 }

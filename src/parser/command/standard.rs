@@ -28,7 +28,7 @@ impl<H: CommandHandler> CommandStage<H> for CommandSetLogic<H> {
                 // done on close paren
                 CommandAction::CloseParen(Box::new(|handler, ()| {
                     handler.command_set_logic(logic)?;
-                    Ok(CommandProgress::End)
+                    Ok(CommandProgress::EndCommand)
                 }))
             }
         }
@@ -70,7 +70,7 @@ impl<H: CommandHandler> CommandStage<H> for CommandDeclareConst<H> {
                 // done on close paren
                 CommandAction::CloseParen(Box::new(|handler, ()| {
                     handler.command_declare_const(name, sort)?;
-                    Ok(CommandProgress::End)
+                    Ok(CommandProgress::EndCommand)
                 }))
             }
         }
@@ -103,9 +103,33 @@ impl<H: CommandHandler> CommandStage<H> for CommandAssert<H> {
                 // done on close paren
                 CommandAction::CloseParen(Box::new(|handler, ()| {
                     handler.command_assert(term)?;
-                    Ok(CommandProgress::End)
+                    Ok(CommandProgress::EndCommand)
                 }))
             }
         }
+    }
+}
+
+pub struct CommandCheckSat;
+
+impl<H: CommandHandler> CommandStage<H> for CommandCheckSat {
+    fn action(self: Box<Self>) -> CommandAction<H> {
+        // done on close paren
+        CommandAction::CloseParen(Box::new(|handler, ()| {
+            handler.command_check_sat()?;
+            Ok(CommandProgress::EndCommand)
+        }))
+    }
+}
+
+pub struct CommandExit;
+
+impl<H: CommandHandler> CommandStage<H> for CommandExit {
+    fn action(self: Box<Self>) -> CommandAction<H> {
+        // done on close paren
+        CommandAction::CloseParen(Box::new(|handler, ()| {
+            handler.command_exit()?;
+            Ok(CommandProgress::Exit)
+        }))
     }
 }
