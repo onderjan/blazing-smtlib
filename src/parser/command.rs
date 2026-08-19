@@ -1,19 +1,74 @@
+use std::ops::ControlFlow;
+
 use crate::{
     CommandHandler, SmtHandler, Str8,
     parser::{
-        ParserError, ParserOrHandlerError, ParserState,
-        category::{attribute::parse_attribute, sort::parse_sort, term::parse_term},
+        ParserOrHandlerError,
         command::standard::{
-            CommandAssert, CommandCheckSat, CommandDeclareConst, CommandExit, CommandSetInfo,
-            CommandSetLogic,
+            Command, CommandAssert, CommandCheckSat, CommandDeclareConst, CommandExit,
+            CommandSetInfo, CommandSetLogic,
         },
-        progress_state,
     },
     token::Token,
 };
 
 mod standard;
 
+pub enum StandardCommand<H: CommandHandler> {
+    SetLogic(CommandSetLogic<H>),
+    DeclareConst(CommandDeclareConst<H>),
+    Assert(CommandAssert<H>),
+    CheckSat(CommandCheckSat<H>),
+    SetInfo(CommandSetInfo<H>),
+    Exit(CommandExit<H>),
+}
+
+pub enum CommandBreak {
+    EndCommand,
+    Exit,
+}
+
+impl<H: CommandHandler> super::Parser<'_, H> {
+    pub(super) fn start_command(
+        &mut self,
+        command_name: Str8,
+    ) -> Result<StandardCommand<H>, ParserOrHandlerError<H>> {
+        Ok(match command_name.bytes() {
+            b"set-logic" => StandardCommand::SetLogic(CommandSetLogic::init()),
+            b"declare-const" => StandardCommand::DeclareConst(CommandDeclareConst::init()),
+            b"assert" => StandardCommand::Assert(CommandAssert::init()),
+            b"check-sat" => StandardCommand::CheckSat(CommandCheckSat::init()),
+            b"exit" => StandardCommand::Exit(CommandExit::init()),
+            b"set-info" => StandardCommand::SetInfo(CommandSetInfo::init()),
+            _ => todo!("Unknown command {:?}", command_name),
+        })
+    }
+}
+
+impl<H: CommandHandler> StandardCommand<H> {
+    pub fn progress(
+        &mut self,
+        handler: &mut H,
+        token: Token,
+    ) -> Result<ControlFlow<CommandBreak>, ParserOrHandlerError<H>> {
+        let result = match self {
+            StandardCommand::SetLogic(command) => command.progress(handler, token),
+            StandardCommand::DeclareConst(command) => command.progress(handler, token),
+            StandardCommand::Assert(command) => command.progress(handler, token),
+            StandardCommand::CheckSat(command) => command.progress(handler, token),
+            StandardCommand::SetInfo(command) => command.progress(handler, token),
+            StandardCommand::Exit(command) => {
+                return Ok(command
+                    .progress(handler, token)?
+                    .map_break(|()| CommandBreak::Exit));
+            }
+        };
+
+        Ok(result?.map_break(|()| CommandBreak::EndCommand))
+    }
+}
+
+/*
 pub enum CommandProgress<H> {
     Continuation(Box<dyn CommandStage<H>>),
     EndCommand,
@@ -79,3 +134,4 @@ impl<H: CommandHandler> super::Parser<'_, H> {
         Ok(progress_state(progress))
     }
 }
+*/

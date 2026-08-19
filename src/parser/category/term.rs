@@ -2,15 +2,11 @@ use std::ops::ControlFlow;
 
 use crate::{
     SmtApplication, SmtHandler, SmtIdent, SmtQualifiedIdent, SmtTerm, String8,
-    parser::{
-        ParserError, ParserOrHandlerError, ParserState,
-        category::{CategoryParser, CategoryParserState},
-        command::CommandCallback,
-        progress_state,
-    },
+    parser::{ParserError, ParserOrHandlerError, ParserState},
     token::{Reserved, Token},
 };
 
+/*
 pub(crate) fn parse_term<H: SmtHandler>(
     handler: &mut H,
     callback: CommandCallback<H, H::Term>,
@@ -159,3 +155,4 @@ impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
         Ok(ControlFlow::Continue(()))
     }
 }
+*/

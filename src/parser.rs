@@ -3,10 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     CommandHandler, String8,
     api::SmtHandler,
-    parser::{
-        category::{CategoryParserState, sort::SortParserState, term::TermParser},
-        command::{CommandProgress, CommandStage},
-    },
+    parser::command::{CommandBreak, StandardCommand},
     token::Token,
 };
 
@@ -54,12 +51,10 @@ pub struct Parser<'a, H: CommandHandler> {
     state: ParserState<H>,
 }
 
-pub(crate) enum ParserState<H: SmtHandler> {
+pub(crate) enum ParserState<H: CommandHandler> {
     AwaitingCommand,
     CommandOpen,
-    Command(Box<dyn CommandStage<H>>),
-    Sort(CategoryParserState<H, SortParserState<H>>),
-    Term(CategoryParserState<H, TermParser<H>>),
+    StandardCommand(StandardCommand<H>),
     Exit,
 }
 
@@ -73,9 +68,7 @@ impl<'a, H: CommandHandler> Parser<'a, H> {
 
     pub fn parse_token(&mut self, token: Token) -> Result<(), ParserOrHandlerError<H>> {
         eprintln!("Token: {:?}", token);
-        let mut state = ParserState::AwaitingCommand;
-        std::mem::swap(&mut self.state, &mut state);
-        let state = match state {
+        let state = match &mut self.state {
             ParserState::AwaitingCommand => {
                 // expect open paren
                 if !matches!(token, Token::ParenOpen) {
@@ -90,16 +83,12 @@ impl<'a, H: CommandHandler> Parser<'a, H> {
                 let Token::Symbol(command_name) = token else {
                     return Err(ParserError::ExpectedCommand.into());
                 };
-                ParserState::Command(self.start_command(command_name.as_str())?)
+                ParserState::StandardCommand(self.start_command(command_name.as_str())?)
             }
-            ParserState::Command(stage) => self.progress_command(stage, token)?,
-            ParserState::Sort(sort_parser) => match sort_parser.progress(self.handler, token)? {
-                ControlFlow::Continue(state) => ParserState::Sort(state),
-                ControlFlow::Break(progress) => progress_state(progress),
-            },
-            ParserState::Term(parser) => match parser.progress(self.handler, token)? {
-                ControlFlow::Continue(state) => ParserState::Term(state),
-                ControlFlow::Break(progress) => progress_state(progress),
+            ParserState::StandardCommand(stage) => match stage.progress(self.handler, token)? {
+                ControlFlow::Continue(()) => return Ok(()),
+                ControlFlow::Break(CommandBreak::EndCommand) => ParserState::AwaitingCommand,
+                ControlFlow::Break(CommandBreak::Exit) => ParserState::Exit,
             },
             ParserState::Exit => {
                 // no operation on fed tokens
@@ -125,13 +114,5 @@ impl<'a, H: CommandHandler> Parser<'a, H> {
         self.handler
             .handle_symbol(symbol.as_str())
             .map_err(ParserOrHandlerError::HandlerError)
-    }
-}
-
-fn progress_state<H: SmtHandler>(progress: CommandProgress<H>) -> ParserState<H> {
-    match progress {
-        CommandProgress::Continuation(stage) => ParserState::Command(stage),
-        CommandProgress::EndCommand => ParserState::AwaitingCommand,
-        CommandProgress::Exit => ParserState::Exit,
     }
 }
