@@ -4,7 +4,7 @@ use crate::{
     CommandHandler, String8,
     api::SmtHandler,
     parser::{
-        category::{CategoryParserState, sort::SortParserState},
+        category::{CategoryParserState, sort::SortParserState, term::TermParser},
         command::{CommandProgress, CommandStage},
     },
     token::Token,
@@ -25,7 +25,7 @@ pub enum ParserError {
     EmptyApplication,
     EmptyLetBindings,
     ExpectedIndexOrCloseParen,
-    ExpectedApplicationOrBinder,
+    ExpectedOperator,
     ExpectedSExpr,
     ExpectedSort,
     ExpectedSortInner,
@@ -59,6 +59,7 @@ pub(crate) enum ParserState<H: SmtHandler> {
     CommandOpen,
     Command(Box<dyn CommandStage<H>>),
     Sort(CategoryParserState<H, SortParserState<H>>),
+    Term(CategoryParserState<H, TermParser<H>>),
 }
 
 impl<'a, H: CommandHandler> Parser<'a, H> {
@@ -93,6 +94,10 @@ impl<'a, H: CommandHandler> Parser<'a, H> {
             ParserState::Command(stage) => self.progress_command(stage, token)?,
             ParserState::Sort(sort_parser) => match sort_parser.progress(self.handler, token)? {
                 ControlFlow::Continue(state) => ParserState::Sort(state),
+                ControlFlow::Break(progress) => progress_state(progress),
+            },
+            ParserState::Term(parser) => match parser.progress(self.handler, token)? {
+                ControlFlow::Continue(state) => ParserState::Term(state),
                 ControlFlow::Break(progress) => progress_state(progress),
             },
         };

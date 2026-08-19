@@ -1,8 +1,8 @@
 use std::convert::Infallible;
 
 use crate::{
-    Str8,
-    old::{SmtAttributeValue, SmtFunctionSignature, SmtSExpr, SmtTerm},
+    Str8, String8,
+    old::{SmtAttributeValue, SmtFunctionSignature, SmtSExpr},
 };
 
 #[derive(Debug, Clone)]
@@ -11,8 +11,47 @@ pub enum SmtIndex<'a> {
     Symbol(Str8<'a>),
 }
 
+#[derive(Debug, Clone)]
+pub struct SmtIdent<'a> {
+    pub name: Str8<'a>,
+    pub indices: Vec<SmtIndex<'a>>,
+}
+
+#[derive(Debug, Clone)]
+
 pub enum SmtSort<H: SmtHandler + ?Sized> {
     Ident(H::Ident),
+}
+
+#[derive(Debug, Clone)]
+pub enum SmtQualifiedIdent<'a> {
+    Ident(SmtIdent<'a>), // 'as' qualified idents not implemented
+}
+
+/// Application. There must be at least one term.
+#[derive(Debug, Clone)]
+pub struct SmtApplication<'a, H: SmtHandler + ?Sized> {
+    pub function: SmtQualifiedIdent<'a>,
+    pub args: Vec<H::Term>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub enum SmtSpecialConstant {
+    Numeral(String8),
+    Decimal {
+        numerator: String8,
+        denominator: String8,
+    },
+    Hexadecimal(String8),
+    Binary(String8),
+    String(String8),
+}
+
+pub enum SmtTerm<'a, H: SmtHandler + ?Sized> {
+    SpecialConstant(SmtSpecialConstant),
+    QualifiedIdent(SmtQualifiedIdent<'a>),
+    Application(SmtApplication<'a, H>),
 }
 
 pub trait SmtHandler: 'static {
@@ -52,7 +91,7 @@ pub trait SmtHandler: 'static {
     ) -> Result<Self::Ident, Self::Error>;
 
     fn handle_sort(&mut self, _sort: SmtSort<Self>) -> Result<Self::Sort, Self::Error>;
-    fn handle_term(&mut self, _term: SmtTerm<Self::Term>) -> Result<Self::Term, Self::Error>;
+    fn handle_term(&mut self, _term: SmtTerm<Self>) -> Result<Self::Term, Self::Error>;
     fn start_let(&mut self, _bindings: Vec<(Self::String, Self::Term)>) -> Result<(), Self::Error>;
     fn end_let(&mut self, _term: Self::Term) -> Result<Self::Term, Self::Error>;
 
@@ -165,7 +204,7 @@ impl SmtHandler for OnlyCheckSyntax {
         Ok(())
     }
 
-    fn handle_term(&mut self, _term: SmtTerm<Self::Term>) -> Result<Self::Term, Self::Error> {
+    fn handle_term(&mut self, _term: SmtTerm<Self>) -> Result<Self::Term, Self::Error> {
         Ok(())
     }
 
