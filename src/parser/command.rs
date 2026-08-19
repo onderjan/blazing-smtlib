@@ -2,9 +2,10 @@ use crate::{
     CommandHandler, SmtHandler, Str8,
     parser::{
         ParserError, ParserOrHandlerError, ParserState,
-        category::{sort::parse_sort, term::parse_term},
+        category::{attribute::parse_attribute, sort::parse_sort, term::parse_term},
         command::standard::{
-            CommandAssert, CommandCheckSat, CommandDeclareConst, CommandExit, CommandSetLogic,
+            CommandAssert, CommandCheckSat, CommandDeclareConst, CommandExit, CommandSetInfo,
+            CommandSetLogic,
         },
         progress_state,
     },
@@ -27,6 +28,7 @@ pub enum CommandAction<H: CommandHandler> {
     Symbol(CommandCallback<H, H::Symbol>),
     Sort(CommandCallback<H, H::Sort>),
     Term(CommandCallback<H, H::Term>),
+    Attribute(CommandCallback<H, H::Attribute>),
 }
 
 pub trait CommandStage<H: CommandHandler> {
@@ -44,6 +46,7 @@ impl<H: CommandHandler> super::Parser<'_, H> {
             b"assert" => Box::new(CommandAssert::new()),
             b"check-sat" => Box::new(CommandCheckSat),
             b"exit" => Box::new(CommandExit),
+            b"set-info" => Box::new(CommandSetInfo::new()),
             _ => todo!("Unknown command {:?}", command_name),
         })
     }
@@ -68,6 +71,9 @@ impl<H: CommandHandler> super::Parser<'_, H> {
             }
             CommandAction::Sort(callback) => return parse_sort(self.handler, callback, token),
             CommandAction::Term(callback) => return parse_term(self.handler, callback, token),
+            CommandAction::Attribute(callback) => {
+                return parse_attribute(self.handler, callback, token);
+            }
         };
 
         Ok(progress_state(progress))

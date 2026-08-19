@@ -98,7 +98,7 @@ pub trait SmtHandler: 'static {
     fn handle_s_expr(&mut self, expr: SmtSExpr<Self::SExpr>) -> Result<Self::SExpr, Self::Error>;
     fn handle_attribute(
         &mut self,
-        name: Self::String,
+        name: Str8,
         value: Option<SmtAttributeValue<Self::SExpr>>,
     ) -> Result<Self::Attribute, Self::Error>;
 }
@@ -222,7 +222,7 @@ impl SmtHandler for OnlyCheckSyntax {
 
     fn handle_attribute(
         &mut self,
-        _name: Self::String,
+        _name: Str8,
         _value: Option<SmtAttributeValue<Self::SExpr>>,
     ) -> Result<Self::Attribute, Self::Error> {
         Ok(())

@@ -133,3 +133,36 @@ impl<H: CommandHandler> CommandStage<H> for CommandExit {
         }))
     }
 }
+
+pub enum CommandSetInfo<H: SmtHandler> {
+    Start,
+    Attribute(H::Attribute),
+}
+
+impl<H: SmtHandler> CommandSetInfo<H> {
+    pub fn new() -> Self {
+        Self::Start
+    }
+}
+
+impl<H: CommandHandler> CommandStage<H> for CommandSetInfo<H> {
+    fn action(self: Box<Self>) -> CommandAction<H> {
+        match *self {
+            CommandSetInfo::Start => {
+                // read assert term
+                CommandAction::Attribute(Box::new(|_handler, term| {
+                    Ok(CommandProgress::Continuation(Box::new(
+                        CommandSetInfo::Attribute(term),
+                    )))
+                }))
+            }
+            CommandSetInfo::Attribute(attribute) => {
+                // done on close paren
+                CommandAction::CloseParen(Box::new(|handler, ()| {
+                    handler.command_set_info(attribute)?;
+                    Ok(CommandProgress::EndCommand)
+                }))
+            }
+        }
+    }
+}
