@@ -39,6 +39,7 @@ fn parse_file(path: &Path) -> Result<(), SmtProcessError<OnlyCheckSyntax>> {
 
 fn try_parse_file(path: &Path) -> Result<(), String> {
     // try to guard from panics and return an error instead
+
     let result = std::panic::catch_unwind(|| parse_file(path));
 
     match result {
@@ -84,6 +85,10 @@ fn parse_benchmarks() {
 
     let start = Instant::now();
 
+    // stop panics from printing by adding a hook, this could be done more elegantly
+    let previous_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {}));
+
     use rayon::prelude::*;
     files
         .par_iter()
@@ -108,6 +113,8 @@ fn parse_benchmarks() {
                 });
             }
         });
+
+    std::panic::set_hook(previous_hook);
 
     let elapsed = start.elapsed();
     let failures = failures.into_inner().unwrap();
