@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtHandler,
+    SmtHandler, String8,
     parser::{ParserError, ParserOrHandlerError},
     token::Token,
 };
@@ -26,6 +26,87 @@ where
     ) -> Result<ControlFlow<Self::Result, Self>, ParserOrHandlerError<H>>;
 }
 
+pub enum PairParser<H: SmtHandler, P1: CategoryParser<H>, P2: CategoryParser<H>> {
+    First(P1),
+    Second(P1::Result, P2),
+}
+
+impl<H: SmtHandler, P1: CategoryParser<H>, P2: CategoryParser<H>> CategoryParser<H>
+    for PairParser<H, P1, P2>
+{
+    type Result = (P1::Result, P2::Result);
+
+    fn init() -> Self {
+        Self::First(P1::init())
+    }
+
+    fn progress(
+        self,
+        handler: &mut H,
+        token: Token,
+    ) -> Result<ControlFlow<Self::Result, Self>, ParserOrHandlerError<H>> {
+        let result = match self {
+            PairParser::First(parser) => match parser.progress(handler, token)? {
+                ControlFlow::Continue(parser) => Self::First(parser),
+                ControlFlow::Break(first) => Self::Second(first, P2::init()),
+            },
+            PairParser::Second(first, parser) => match parser.progress(handler, token)? {
+                ControlFlow::Continue(parser) => Self::Second(first, parser),
+                ControlFlow::Break(second) => return Ok(ControlFlow::Break((first, second))),
+            },
+        };
+        Ok(ControlFlow::Continue(result))
+    }
+}
+
+pub enum EnclosedParser<H: SmtHandler, P: CategoryParser<H>> {
+    BeforeOpen,
+    ParsingEnclosed(P),
+    BeforeClose(P::Result),
+}
+
+impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for EnclosedParser<H, P> {
+    type Result = P::Result;
+
+    fn init() -> Self {
+        Self::BeforeOpen
+    }
+
+    fn progress(
+        self,
+        handler: &mut H,
+        token: Token,
+    ) -> Result<ControlFlow<Self::Result, Self>, ParserOrHandlerError<H>> {
+        let result = match self {
+            EnclosedParser::BeforeOpen => {
+                eprintln!("Enclosed eating open paren");
+                if matches!(token, Token::ParenOpen) {
+                    Self::ParsingEnclosed(P::init())
+                } else {
+                    return Err(ParserError::ExpectedToken(Token::ParenOpen).into());
+                }
+            }
+            EnclosedParser::ParsingEnclosed(parser) => {
+                eprintln!("Parsing enclosed");
+                match parser.progress(handler, token)? {
+                    ControlFlow::Continue(parser) => Self::ParsingEnclosed(parser),
+                    ControlFlow::Break(result) => Self::BeforeClose(result),
+                }
+            }
+            EnclosedParser::BeforeClose(result) => {
+                if matches!(token, Token::ParenClose) {
+                    return Ok(ControlFlow::Break(result));
+                } else {
+                    return Err(ParserError::ExpectedToken(Token::ParenClose).into());
+                }
+            }
+        };
+        Ok(ControlFlow::Continue(result))
+    }
+}
+
+pub type EnclosedPairParser<H, P1, P2> = EnclosedParser<H, PairParser<H, P1, P2>>;
+
 pub enum MultipleParser<H: SmtHandler, P: CategoryParser<H>> {
     BeforeOpen,
     Normal {
@@ -48,6 +129,7 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for MultipleParser<H
     ) -> Result<ControlFlow<Vec<P::Result>, Self>, ParserOrHandlerError<H>> {
         match self {
             MultipleParser::BeforeOpen => {
+                eprintln!("Multiple eating open paren");
                 if matches!(token, Token::ParenOpen) {
                     Ok(ControlFlow::Continue(Self::Normal {
                         results: Vec::new(),
@@ -87,6 +169,37 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for MultipleParser<H
                     }
                 }
             }
+        }
+    }
+}
+
+impl<H: SmtHandler, P: CategoryParser<H>> MultipleParser<H, P> {
+    pub fn after_open_paren() -> Self {
+        Self::Normal {
+            results: Vec::new(),
+            parser: None,
+        }
+    }
+}
+
+pub struct SymbolParser;
+
+impl<H: SmtHandler> CategoryParser<H> for SymbolParser {
+    type Result = String8;
+
+    fn init() -> Self {
+        Self
+    }
+
+    fn progress(
+        self,
+        _handler: &mut H,
+        token: Token,
+    ) -> Result<ControlFlow<Self::Result, Self>, ParserOrHandlerError<H>> {
+        if let Token::Symbol(symbol) = token {
+            Ok(ControlFlow::Break(symbol))
+        } else {
+            Err(ParserError::ExpectedSymbol.into())
         }
     }
 }

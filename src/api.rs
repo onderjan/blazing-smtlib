@@ -100,7 +100,7 @@ pub trait SmtHandler: 'static {
 
     fn handle_sort(&mut self, _sort: SmtSort<Self>) -> Result<Self::Sort, Self::Error>;
     fn handle_term(&mut self, _term: SmtTerm<Self>) -> Result<Self::Term, Self::Error>;
-    fn start_let(&mut self, _bindings: Vec<(Self::String, Self::Term)>) -> Result<(), Self::Error>;
+    fn start_let(&mut self, _bindings: Vec<(String8, Self::Term)>) -> Result<(), Self::Error>;
     fn end_let(&mut self, _term: Self::Term) -> Result<Self::Term, Self::Error>;
 
     fn handle_s_expr(&mut self, expr: SmtSExpr<Self::SExpr>) -> Result<Self::SExpr, Self::Error>;
@@ -215,7 +215,7 @@ impl SmtHandler for OnlyCheckSyntax {
         Ok(())
     }
 
-    fn start_let(&mut self, _bindings: Vec<(Self::String, Self::Term)>) -> Result<(), Self::Error> {
+    fn start_let(&mut self, _bindings: Vec<(String8, Self::Term)>) -> Result<(), Self::Error> {
         Ok(())
     }
 
