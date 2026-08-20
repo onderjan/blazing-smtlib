@@ -4,6 +4,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 
+use rayon::ThreadPoolBuilder;
 use smt_parser_rs::{OnlyCheckSyntax, SmtProcessError, process_smt_file};
 
 fn collect_smt2_files(root: &Path) -> Vec<PathBuf> {
@@ -89,30 +90,37 @@ fn parse_benchmarks() {
     let previous_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(|_| {}));
 
+    let pool = ThreadPoolBuilder::new()
+        .thread_name(|i| format!("processing-thread-{}", i))
+        .build()
+        .unwrap();
+
     use rayon::prelude::*;
-    files
-        .par_iter()
-        .for_each(|path| match try_parse_file(path) {
-            Ok(()) => {
-                let num_processed = processed.fetch_add(1, Ordering::Relaxed) + 1;
-                if num_processed != 0 && num_processed.is_multiple_of(1000) {
-                    let elapsed = start.elapsed();
-                    eprintln!(
-                        "Processed {}/{} files ({:.2}%) in {:.2}s",
-                        num_processed,
-                        num_files,
-                        100.0 * num_processed as f64 / num_files as f64,
-                        elapsed.as_secs_f64()
-                    );
+    pool.in_place_scope(|_scope| {
+        files
+            .par_iter()
+            .for_each(|path| match try_parse_file(path) {
+                Ok(()) => {
+                    let num_processed = processed.fetch_add(1, Ordering::Relaxed) + 1;
+                    if num_processed != 0 && num_processed.is_multiple_of(1000) {
+                        let elapsed = start.elapsed();
+                        eprintln!(
+                            "Processed {}/{} files ({:.2}%) in {:.2}s",
+                            num_processed,
+                            num_files,
+                            100.0 * num_processed as f64 / num_files as f64,
+                            elapsed.as_secs_f64()
+                        );
+                    }
                 }
-            }
-            Err(error) => {
-                failures.lock().unwrap().push(FailureRecord {
-                    path: path.clone(),
-                    error,
-                });
-            }
-        });
+                Err(error) => {
+                    failures.lock().unwrap().push(FailureRecord {
+                        path: path.clone(),
+                        error,
+                    });
+                }
+            });
+    });
 
     std::panic::set_hook(previous_hook);
 
