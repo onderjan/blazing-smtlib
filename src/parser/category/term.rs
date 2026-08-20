@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
 
 use crate::{
     SmtApplication, SmtHandler, SmtIdent, SmtQualifiedIdent, SmtTerm, String8,
-    parser::{ParserError, ParserOrHandlerError},
+    parser::{ParserError, ParserOrHandlerError, category::CategoryParser},
     token::{Reserved, Token},
 };
 
@@ -21,23 +21,27 @@ pub struct TermParser<H: SmtHandler> {
     stack: Vec<TermLevel<H>>,
 }
 
-impl<H: SmtHandler> TermParser<H> {
-    pub fn new() -> Self {
+impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
+    type Result = H::Term;
+
+    fn init() -> Self {
         Self {
             state: TermParserState::Start,
             stack: Vec::new(),
         }
     }
 
-    pub fn progress(
-        &mut self,
+    fn progress(
+        mut self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<H::Term, ()>, ParserOrHandlerError<H>> {
+    ) -> Result<ControlFlow<H::Term, Self>, ParserOrHandlerError<H>> {
         match self.state {
             TermParserState::Start => {
                 // just parse term start
-                self.parse_term_start(handler, token)
+                Ok(self
+                    .parse_term_start(handler, token)?
+                    .map_continue(|()| self))
             }
             TermParserState::Operator => {
                 // find out what kind of an application-like S-term we have
@@ -47,7 +51,7 @@ impl<H: SmtHandler> TermParser<H> {
                         // push application and move to term state
                         self.stack.push(TermLevel::Application(fn_name, Vec::new()));
                         self.state = TermParserState::Term;
-                        Ok(ControlFlow::Continue(()))
+                        Ok(ControlFlow::Continue(self))
                     }
 
                     Token::Reserved(Reserved::Let) => todo!("Let"),
@@ -62,12 +66,14 @@ impl<H: SmtHandler> TermParser<H> {
             TermParserState::Term => self.progress_last_term(handler, token),
         }
     }
+}
 
+impl<H: SmtHandler> TermParser<H> {
     fn progress_last_term(
-        &mut self,
+        mut self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<H::Term, ()>, ParserOrHandlerError<H>> {
+    ) -> Result<ControlFlow<H::Term, Self>, ParserOrHandlerError<H>> {
         let level = self
             .stack
             .pop()
@@ -93,20 +99,20 @@ impl<H: SmtHandler> TermParser<H> {
                                 args.push(term);
                             }
                         }
-                        Ok(ControlFlow::Continue(()))
+                        Ok(ControlFlow::Continue(self))
                     } else {
                         Ok(ControlFlow::Break(term))
                     }
                 } else {
                     match self.parse_term_start(handler, token)? {
-                        ControlFlow::Continue(()) => {}
+                        ControlFlow::Continue(result) => result,
                         ControlFlow::Break(term) => {
                             args.push(term);
                         }
-                    }
+                    };
                     // put the level back
                     self.stack.push(TermLevel::Application(fn_name, args));
-                    Ok(ControlFlow::Continue(()))
+                    Ok(ControlFlow::Continue(self))
                 }
             }
         }

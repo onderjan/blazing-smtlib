@@ -4,7 +4,9 @@ use crate::{
     CommandHandler, SmtHandler, String8,
     parser::{
         ParserError, ParserOrHandlerError,
-        category::{attribute::AttributeParser, sort::SortParser, term::TermParser},
+        category::{
+            CategoryParser, attribute::AttributeParser, sort::SortParser, term::TermParser,
+        },
     },
     token::Token,
 };
@@ -85,7 +87,7 @@ impl<H: CommandHandler> Command<H> for CommandDeclareConst<H> {
                 }
             }
             CommandDeclareConst::Name(name) => {
-                CommandDeclareConst::ParsingSort(name, SortParser::new())
+                CommandDeclareConst::ParsingSort(name, SortParser::init())
             }
 
             CommandDeclareConst::ParsingSort(name, sort_parser) => {
@@ -130,18 +132,16 @@ impl<H: CommandHandler> Command<H> for CommandAssert<H> {
     ) -> Result<ControlFlow<(), Self>, ParserOrHandlerError<H>> {
         match self {
             CommandAssert::Start => {
-                let mut term_parser = TermParser::new();
-                let result = term_parser.progress(handler, token)?;
-                let result = match result {
-                    ControlFlow::Continue(()) => CommandAssert::ParsingTerm(term_parser),
+                let term_parser = TermParser::init();
+                let result = match term_parser.progress(handler, token)? {
+                    ControlFlow::Continue(term_parser) => CommandAssert::ParsingTerm(term_parser),
                     ControlFlow::Break(term) => CommandAssert::End(term),
                 };
                 Ok(ControlFlow::Continue(result))
             }
-            CommandAssert::ParsingTerm(mut term_parser) => {
-                let result = term_parser.progress(handler, token)?;
-                let result = match result {
-                    ControlFlow::Continue(()) => CommandAssert::ParsingTerm(term_parser),
+            CommandAssert::ParsingTerm(term_parser) => {
+                let result = match term_parser.progress(handler, token)? {
+                    ControlFlow::Continue(term_parser) => CommandAssert::ParsingTerm(term_parser),
                     ControlFlow::Break(term) => CommandAssert::End(term),
                 };
                 Ok(ControlFlow::Continue(result))
@@ -236,10 +236,7 @@ impl<H: CommandHandler> Command<H> for CommandSetInfo<H> {
         }
 
         let progress = match self {
-            CommandSetInfo::Start => {
-                let attribute_parser = AttributeParser::new();
-                Progress::Parser(attribute_parser)
-            }
+            CommandSetInfo::Start => Progress::Parser(AttributeParser::init()),
             CommandSetInfo::ParsingAttribute(attribute_parser) => {
                 Progress::Parser(attribute_parser)
             }

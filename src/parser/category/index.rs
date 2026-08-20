@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
 
 use crate::{
     SmtHandler, SmtIndex, String8,
-    parser::{ParserError, ParserOrHandlerError},
+    parser::{ParserError, ParserOrHandlerError, category::CategoryParser},
     token::Token,
 };
 
@@ -14,8 +14,14 @@ pub enum IndexedIdentParserState<H: SmtHandler> {
     },
 }
 
-impl<H: SmtHandler> IndexedIdentParserState<H> {
-    pub fn progress(
+impl<H: SmtHandler> CategoryParser<H> for IndexedIdentParserState<H> {
+    type Result = H::Ident;
+
+    fn init() -> Self {
+        Self::AwaitingSymbol
+    }
+
+    fn progress(
         self,
         handler: &mut H,
         token: Token,

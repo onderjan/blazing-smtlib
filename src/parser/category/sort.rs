@@ -2,7 +2,10 @@ use std::ops::ControlFlow;
 
 use crate::{
     SmtHandler, SmtSort,
-    parser::{ParserError, ParserOrHandlerError, category::index::IndexedIdentParserState},
+    parser::{
+        ParserError, ParserOrHandlerError,
+        category::{CategoryParser, index::IndexedIdentParserState},
+    },
     token::{Reserved, Token},
 };
 
@@ -11,12 +14,14 @@ pub enum SortParser<H: SmtHandler> {
     IndexedIdent(IndexedIdentParserState<H>),
 }
 
-impl<H: SmtHandler> SortParser<H> {
-    pub fn new() -> Self {
+impl<H: SmtHandler> CategoryParser<H> for SortParser<H> {
+    type Result = H::Sort;
+
+    fn init() -> Self {
         Self::Start
     }
 
-    pub fn progress(
+    fn progress(
         self,
         handler: &mut H,
         token: Token,

@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
 
 use crate::{
     SmtAttributeValue, SmtHandler, SmtSpecialConstant, String8,
-    parser::{ParserError, ParserOrHandlerError},
+    parser::{ParserError, ParserOrHandlerError, category::CategoryParser},
     token::Token,
 };
 
@@ -17,12 +17,14 @@ pub struct AttributeParserResult<H: SmtHandler> {
     pub returned_token: Option<Token>,
 }
 
-impl<H: SmtHandler> AttributeParser<H> {
-    pub fn new() -> Self {
+impl<H: SmtHandler> CategoryParser<H> for AttributeParser<H> {
+    type Result = AttributeParserResult<H>;
+
+    fn init() -> Self {
         Self::Key
     }
 
-    pub fn progress(
+    fn progress(
         self,
         handler: &mut H,
         token: Token,
