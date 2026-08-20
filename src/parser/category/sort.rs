@@ -4,14 +4,15 @@ use crate::{
     SmtHandler, SmtSort,
     parser::{
         ParserError, ParserOrHandlerError,
-        category::{CategoryParser, index::IndexedIdentParserState},
+        category::{CategoryParser, ident::IdentParser},
     },
     token::{Reserved, Token},
 };
 
 pub enum SortParser<H: SmtHandler> {
     Start,
-    IndexedIdent(IndexedIdentParserState<H>),
+    Open,
+    Ident(IdentParser<H>),
 }
 
 impl<H: SmtHandler> CategoryParser<H> for SortParser<H> {
@@ -34,15 +35,18 @@ impl<H: SmtHandler> CategoryParser<H> for SortParser<H> {
                         .map_err(ParserOrHandlerError::HandlerError)?;
                     todo!("Indexed sort");
                 }
+                Token::ParenOpen => Ok(ControlFlow::Continue(Self::Open)),
+                _ => Err(ParserError::ExpectedSort.into()),
+            },
+            SortParser::Open => match token {
                 Token::Reserved(Reserved::Underscore) => Ok(ControlFlow::Continue(
-                    SortParser::IndexedIdent(IndexedIdentParserState::AwaitingSymbol),
+                    SortParser::Ident(IdentParser::after_underscore()),
                 )),
                 _ => Err(ParserError::ExpectedSortInner.into()),
             },
-            SortParser::IndexedIdent(state) => match state.progress(handler, token)? {
-                ControlFlow::Continue(state) => {
-                    Ok(ControlFlow::Continue(SortParser::IndexedIdent(state)))
-                }
+
+            SortParser::Ident(state) => match state.progress(handler, token)? {
+                ControlFlow::Continue(state) => Ok(ControlFlow::Continue(SortParser::Ident(state))),
                 ControlFlow::Break(ident) => {
                     let sort = SmtSort::Ident(ident);
                     let sort = handler

@@ -115,16 +115,19 @@ pub trait CommandHandler: SmtHandler {
     fn command_echo(&mut self, value: Self::String) -> Result<(), Self::Error>;
 
     fn command_get_option(&mut self, option: Self::String) -> Result<(), Self::Error>;
-
     fn command_set_option(&mut self, option: Self::Attribute) -> Result<(), Self::Error>;
-
     fn command_get_info(&mut self, keyword: Self::Symbol) -> Result<(), Self::Error>;
-
     fn command_set_info(&mut self, attribute: Self::Attribute) -> Result<(), Self::Error>;
 
     fn command_set_logic(&mut self, logic: Str8) -> Result<(), Self::Error>;
 
     fn command_declare_const(&mut self, name: Str8, sort: Self::Sort) -> Result<(), Self::Error>;
+    fn command_declare_fun(
+        &mut self,
+        name: Str8,
+        param_sorts: Vec<Self::Sort>,
+        result_sort: Self::Sort,
+    ) -> Result<(), Self::Error>;
 
     fn command_assert(&mut self, term: Self::Term) -> Result<(), Self::Error>;
 
@@ -259,6 +262,15 @@ impl CommandHandler for OnlyCheckSyntax {
     }
 
     fn command_declare_const(&mut self, _name: Str8, _sort: Self::Sort) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn command_declare_fun(
+        &mut self,
+        _name: Str8,
+        _param_sorts: Vec<Self::Sort>,
+        _result_sort: Self::Sort,
+    ) -> Result<(), Self::Error> {
         Ok(())
     }
 

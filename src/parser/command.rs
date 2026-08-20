@@ -5,8 +5,8 @@ use crate::{
     parser::{
         ParserOrHandlerError,
         command::standard::{
-            Command, CommandAssert, CommandCheckSat, CommandDeclareConst, CommandExit,
-            CommandSetInfo, CommandSetLogic,
+            Command, CommandAssert, CommandCheckSat, CommandDeclareConst, CommandDeclareFun,
+            CommandExit, CommandSetInfo, CommandSetLogic,
         },
     },
     token::Token,
@@ -17,6 +17,7 @@ mod standard;
 pub enum StandardCommand<H: CommandHandler> {
     SetLogic(CommandSetLogic<H>),
     DeclareConst(CommandDeclareConst<H>),
+    DeclareFun(CommandDeclareFun<H>),
     Assert(CommandAssert<H>),
     CheckSat(CommandCheckSat<H>),
     SetInfo(CommandSetInfo<H>),
@@ -36,6 +37,7 @@ impl<H: CommandHandler> super::Parser<'_, H> {
         Ok(match command_name.bytes() {
             b"set-logic" => StandardCommand::SetLogic(CommandSetLogic::init()),
             b"declare-const" => StandardCommand::DeclareConst(CommandDeclareConst::init()),
+            b"declare-fun" => StandardCommand::DeclareFun(CommandDeclareFun::init()),
             b"assert" => StandardCommand::Assert(CommandAssert::init()),
             b"check-sat" => StandardCommand::CheckSat(CommandCheckSat::init()),
             b"exit" => StandardCommand::Exit(CommandExit::init()),
@@ -58,6 +60,9 @@ impl<H: CommandHandler> StandardCommand<H> {
             StandardCommand::DeclareConst(command) => command
                 .progress(handler, token)?
                 .map_continue(StandardCommand::DeclareConst),
+            StandardCommand::DeclareFun(command) => command
+                .progress(handler, token)?
+                .map_continue(StandardCommand::DeclareFun),
             StandardCommand::Assert(command) => command
                 .progress(handler, token)?
                 .map_continue(StandardCommand::Assert),

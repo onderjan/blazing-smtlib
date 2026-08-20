@@ -24,6 +24,7 @@ pub enum ParserError {
     ExpectedIndexOrCloseParen,
     ExpectedOperator,
     ExpectedSExpr,
+    ExpectedIdent,
     ExpectedSort,
     ExpectedSortInner,
     ExpectedTerm,
