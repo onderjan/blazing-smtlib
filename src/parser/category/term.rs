@@ -2,27 +2,9 @@ use std::ops::ControlFlow;
 
 use crate::{
     SmtApplication, SmtHandler, SmtIdent, SmtQualifiedIdent, SmtTerm, String8,
-    parser::{ParserError, ParserOrHandlerError, ParserState},
+    parser::{ParserError, ParserOrHandlerError},
     token::{Reserved, Token},
 };
-
-/*
-pub(crate) fn parse_term<H: SmtHandler>(
-    handler: &mut H,
-    callback: CommandCallback<H, H::Term>,
-    token: Token,
-) -> Result<ParserState<H>, ParserOrHandlerError<H>> {
-    match parse_term_start(handler, token)? {
-        ControlFlow::Continue(level) => Ok(ParserState::Term(CategoryParserState::new(
-            callback,
-            TermParser { stack: vec![level] },
-        ))),
-        ControlFlow::Break(term) => Ok(progress_state(
-            callback(handler, term).map_err(ParserOrHandlerError::HandlerError)?,
-        )),
-    }
-}
-*/
 
 enum TermLevel<H: SmtHandler> {
     Application(String8, Vec<H::Term>),

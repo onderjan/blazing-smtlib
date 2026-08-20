@@ -6,26 +6,6 @@ use crate::{
     token::Token,
 };
 
-/*
-pub fn parse_attribute<H: SmtHandler>(
-    handler: &mut H,
-    token: Token,
-) -> Result<<H>, ParserOrHandlerError<H>> {
-    let Token::Keyword(keyword) = token else {
-        return Err(ParserOrHandlerError::ParserError(
-            ParserError::ExpectedKeyword,
-        ));
-    };
-
-    // TODO: name-value attributes
-    let attribute = handler
-        .handle_attribute(keyword.as_str(), None)
-        .map_err(ParserOrHandlerError::HandlerError)?;
-    Ok(progress_state(
-        callback(handler, attribute).map_err(ParserOrHandlerError::HandlerError)?,
-    ))
-}*/
-
 pub enum AttributeParser<H: SmtHandler> {
     Key,
     Value(String8),
@@ -43,17 +23,16 @@ impl<H: SmtHandler> AttributeParser<H> {
     }
 
     pub fn progress(
-        &mut self,
+        self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<AttributeParserResult<H>, ()>, ParserOrHandlerError<H>> {
+    ) -> Result<ControlFlow<AttributeParserResult<H>, Self>, ParserOrHandlerError<H>> {
         match self {
             AttributeParser::Key => {
                 let Token::Keyword(keyword) = token else {
                     return Err(ParserError::ExpectedKeyword.into());
                 };
-                *self = AttributeParser::Value(keyword);
-                Ok(ControlFlow::Continue(()))
+                Ok(ControlFlow::Continue(AttributeParser::Value(keyword)))
             }
 
             AttributeParser::Value(keyword) => {

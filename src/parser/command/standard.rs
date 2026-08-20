@@ -88,9 +88,9 @@ impl<H: CommandHandler> Command<H> for CommandDeclareConst<H> {
                 CommandDeclareConst::ParsingSort(name, SortParser::new())
             }
 
-            CommandDeclareConst::ParsingSort(name, mut sort_parser) => {
+            CommandDeclareConst::ParsingSort(name, sort_parser) => {
                 match sort_parser.progress(handler, token)? {
-                    ControlFlow::Continue(()) => {
+                    ControlFlow::Continue(sort_parser) => {
                         CommandDeclareConst::ParsingSort(name, sort_parser)
                     }
 
@@ -247,8 +247,8 @@ impl<H: CommandHandler> Command<H> for CommandSetInfo<H> {
         };
 
         let (token, attribute) = match progress {
-            Progress::Parser(mut parser) => match parser.progress(handler, token)? {
-                ControlFlow::Continue(()) => {
+            Progress::Parser(parser) => match parser.progress(handler, token)? {
+                ControlFlow::Continue(parser) => {
                     return Ok(ControlFlow::Continue(Self::ParsingAttribute(parser)));
                 }
                 ControlFlow::Break(parser_result) => match parser_result.returned_token {

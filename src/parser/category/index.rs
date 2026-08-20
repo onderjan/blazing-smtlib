@@ -16,30 +16,32 @@ pub enum IndexedIdentParserState<H: SmtHandler> {
 
 impl<H: SmtHandler> IndexedIdentParserState<H> {
     pub fn progress(
-        &mut self,
+        self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<H::Ident>, ParserOrHandlerError<H>> {
+    ) -> Result<ControlFlow<H::Ident, Self>, ParserOrHandlerError<H>> {
         match self {
             IndexedIdentParserState::AwaitingSymbol => {
                 let Token::Symbol(symbol) = token else {
                     return Err(ParserError::ExpectedSymbol.into());
                 };
-                *self = IndexedIdentParserState::ProcessingIndices {
-                    symbol,
-                    indices: Vec::new(),
-                };
-                Ok(ControlFlow::Continue(()))
+                Ok(ControlFlow::Continue(
+                    IndexedIdentParserState::ProcessingIndices {
+                        symbol,
+                        indices: Vec::new(),
+                    },
+                ))
             }
-            IndexedIdentParserState::ProcessingIndices { symbol, indices } => match token {
+            IndexedIdentParserState::ProcessingIndices {
+                symbol,
+                mut indices,
+            } => match token {
                 Token::ParenOpen => {
                     todo!("Multiply-indexed token");
                 }
                 Token::ParenClose => {
-                    let mut final_indices = Vec::new();
-                    std::mem::swap(indices, &mut final_indices);
                     let ident = handler
-                        .handle_ident(symbol.as_str(), final_indices)
+                        .handle_ident(symbol.as_str(), indices)
                         .map_err(ParserOrHandlerError::HandlerError)?;
                     Ok(ControlFlow::Break(ident))
                 }
@@ -49,7 +51,10 @@ impl<H: SmtHandler> IndexedIdentParserState<H> {
                         .handle_index(SmtIndex::Numeral(value.as_str()))
                         .map_err(ParserOrHandlerError::HandlerError)?;
                     indices.push(index);
-                    Ok(ControlFlow::Continue(()))
+                    Ok(ControlFlow::Continue(Self::ProcessingIndices {
+                        symbol,
+                        indices,
+                    }))
                 }
                 Token::Symbol(symbol) => {
                     // symbol index
@@ -57,7 +62,10 @@ impl<H: SmtHandler> IndexedIdentParserState<H> {
                         .handle_index(SmtIndex::Symbol(symbol.as_str()))
                         .map_err(ParserOrHandlerError::HandlerError)?;
                     indices.push(index);
-                    Ok(ControlFlow::Continue(()))
+                    Ok(ControlFlow::Continue(Self::ProcessingIndices {
+                        symbol,
+                        indices,
+                    }))
                 }
                 _ => Err(ParserError::ExpectedIndexOrCloseParen.into()),
             },

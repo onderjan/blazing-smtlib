@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    CommandHandler, String8,
+    CommandHandler,
     api::SmtHandler,
     parser::command::{CommandBreak, StandardCommand},
     token::Token,
@@ -98,22 +98,5 @@ impl<'a, H: CommandHandler> Parser<'a, H> {
         };
         self.state = state;
         Ok(())
-    }
-
-    fn parse_symbol(&mut self, token: Token) -> Result<H::Symbol, ParserOrHandlerError<H>> {
-        if let Token::Symbol(symbol) = token {
-            self.parse_symbol_string(symbol)
-        } else {
-            Err(ParserError::ExpectedSymbol.into())
-        }
-    }
-
-    fn parse_symbol_string(
-        &mut self,
-        symbol: String8,
-    ) -> Result<H::Symbol, ParserOrHandlerError<H>> {
-        self.handler
-            .handle_symbol(symbol.as_str())
-            .map_err(ParserOrHandlerError::HandlerError)
     }
 }

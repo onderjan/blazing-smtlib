@@ -2,38 +2,9 @@ use std::ops::ControlFlow;
 
 use crate::{
     SmtHandler, SmtSort,
-    parser::{
-        ParserError, ParserOrHandlerError, ParserState, category::index::IndexedIdentParserState,
-    },
+    parser::{ParserError, ParserOrHandlerError, category::index::IndexedIdentParserState},
     token::{Reserved, Token},
 };
-
-/*
-pub fn parse_sort<H: SmtHandler>(
-    handler: &mut H,
-    token: Token,
-) -> Result<ParserState<H>, ParserOrHandlerError<H>> {
-    match token {
-        Token::Symbol(symbol) => {
-            let ident = handler
-                .handle_ident(symbol.as_str(), Vec::new())
-                .map_err(ParserOrHandlerError::HandlerError)?;
-            let sort = SmtSort::Ident(ident);
-            let sort = handler
-                .handle_sort(sort)
-                .map_err(ParserOrHandlerError::HandlerError)?;
-
-            Ok(progress_state(
-                callback(handler, sort).map_err(ParserOrHandlerError::HandlerError)?,
-            ))
-        }
-        Token::ParenOpen => Ok(ParserState::Sort(CategoryParserState::new(
-            callback,
-            SortParser::Deciding,
-        ))),
-        _ => Err(ParserError::ExpectedSort.into()),
-    }
-}*/
 
 pub enum SortParser<H: SmtHandler> {
     Start,
@@ -46,10 +17,10 @@ impl<H: SmtHandler> SortParser<H> {
     }
 
     pub fn progress(
-        &mut self,
+        self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<H::Sort, ()>, ParserOrHandlerError<H>> {
+    ) -> Result<ControlFlow<H::Sort, Self>, ParserOrHandlerError<H>> {
         match self {
             SortParser::Start => match token {
                 Token::Symbol(symbol) => {
@@ -58,14 +29,15 @@ impl<H: SmtHandler> SortParser<H> {
                         .map_err(ParserOrHandlerError::HandlerError)?;
                     todo!("Indexed sort");
                 }
-                Token::Reserved(Reserved::Underscore) => {
-                    *self = SortParser::IndexedIdent(IndexedIdentParserState::AwaitingSymbol);
-                    Ok(ControlFlow::Continue(()))
-                }
+                Token::Reserved(Reserved::Underscore) => Ok(ControlFlow::Continue(
+                    SortParser::IndexedIdent(IndexedIdentParserState::AwaitingSymbol),
+                )),
                 _ => Err(ParserError::ExpectedSortInner.into()),
             },
             SortParser::IndexedIdent(state) => match state.progress(handler, token)? {
-                ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
+                ControlFlow::Continue(state) => {
+                    Ok(ControlFlow::Continue(SortParser::IndexedIdent(state)))
+                }
                 ControlFlow::Break(ident) => {
                     let sort = SmtSort::Ident(ident);
                     let sort = handler
