@@ -16,6 +16,7 @@ pub enum TermLevel<H: SmtHandler> {
     Application(SmtIdent, MultipleParser<H, TermParser<H>>),
     LetBindings(MultipleParser<H, EnclosedPairParser<H, SymbolParser, TermParser<H>>>),
     LetBound(TermParser<H>),
+    LetClose(H::Term),
     IndexedIdent(IdentParser),
 }
 
@@ -128,22 +129,19 @@ impl<H: SmtHandler> TermParser<H> {
                     TermLevel::Application(fn_ident, MultipleParser::after_open_paren())
                 }
             },
-            TermLevel::Application(fn_ident, parser) => {
-                eprintln!("Progressing application {:?}", fn_ident);
-                match parser.progress(handler, token)? {
-                    ControlFlow::Continue(parser) => TermLevel::Application(fn_ident, parser),
-                    ControlFlow::Break(args) => {
-                        let term = SmtTerm::Application(SmtApplication {
-                            function: SmtQualifiedIdent::Ident(fn_ident),
-                            args,
-                        });
-                        let term = handler
-                            .handle_term(term)
-                            .map_err(ParserOrHandlerError::HandlerError)?;
-                        return Ok(ControlFlow::Break(term));
-                    }
+            TermLevel::Application(fn_ident, parser) => match parser.progress(handler, token)? {
+                ControlFlow::Continue(parser) => TermLevel::Application(fn_ident, parser),
+                ControlFlow::Break(args) => {
+                    let term = SmtTerm::Application(SmtApplication {
+                        function: SmtQualifiedIdent::Ident(fn_ident),
+                        args,
+                    });
+                    let term = handler
+                        .handle_term(term)
+                        .map_err(ParserOrHandlerError::HandlerError)?;
+                    return Ok(ControlFlow::Break(term));
                 }
-            }
+            },
             TermLevel::LetBindings(parser) => match parser.progress(handler, token)? {
                 ControlFlow::Continue(parser) => TermLevel::LetBindings(parser),
                 ControlFlow::Break(bindings) => {
@@ -153,15 +151,25 @@ impl<H: SmtHandler> TermParser<H> {
                     TermLevel::LetBound(TermParser::init())
                 }
             },
-            TermLevel::LetBound(parser) => match parser.progress(handler, token)? {
-                ControlFlow::Continue(parser) => TermLevel::LetBound(parser),
-                ControlFlow::Break(bound_term) => {
-                    let term = handler
-                        .end_let(bound_term)
-                        .map_err(ParserOrHandlerError::HandlerError)?;
-                    return Ok(ControlFlow::Break(term));
+            TermLevel::LetBound(parser) => {
+                match parser.progress(handler, token)? {
+                    ControlFlow::Continue(parser) => TermLevel::LetBound(parser),
+                    ControlFlow::Break(bound_term) => {
+                        let term = handler
+                            .end_let(bound_term)
+                            .map_err(ParserOrHandlerError::HandlerError)?;
+                        // there is still a closing paren remaining
+                        TermLevel::LetClose(term)
+                    }
                 }
-            },
+            }
+            TermLevel::LetClose(term) => {
+                if matches!(token, Token::ParenClose) {
+                    return Ok(ControlFlow::Break(term));
+                } else {
+                    return Err(ParserError::ExpectedToken(Token::ParenClose).into());
+                }
+            }
             TermLevel::IndexedIdent(parser) => match parser.progress(handler, token)? {
                 ControlFlow::Continue(parser) => TermLevel::IndexedIdent(parser),
                 ControlFlow::Break(ident) => {

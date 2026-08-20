@@ -79,20 +79,16 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for EnclosedParser<H
     ) -> Result<ControlFlow<Self::Result, Self>, ParserOrHandlerError<H>> {
         let result = match self {
             EnclosedParser::BeforeOpen => {
-                eprintln!("Enclosed eating open paren");
                 if matches!(token, Token::ParenOpen) {
                     Self::ParsingEnclosed(P::init())
                 } else {
                     return Err(ParserError::ExpectedToken(Token::ParenOpen).into());
                 }
             }
-            EnclosedParser::ParsingEnclosed(parser) => {
-                eprintln!("Parsing enclosed");
-                match parser.progress(handler, token)? {
-                    ControlFlow::Continue(parser) => Self::ParsingEnclosed(parser),
-                    ControlFlow::Break(result) => Self::BeforeClose(result),
-                }
-            }
+            EnclosedParser::ParsingEnclosed(parser) => match parser.progress(handler, token)? {
+                ControlFlow::Continue(parser) => Self::ParsingEnclosed(parser),
+                ControlFlow::Break(result) => Self::BeforeClose(result),
+            },
             EnclosedParser::BeforeClose(result) => {
                 if matches!(token, Token::ParenClose) {
                     return Ok(ControlFlow::Break(result));
@@ -129,7 +125,6 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for MultipleParser<H
     ) -> Result<ControlFlow<Vec<P::Result>, Self>, ParserOrHandlerError<H>> {
         match self {
             MultipleParser::BeforeOpen => {
-                eprintln!("Multiple eating open paren");
                 if matches!(token, Token::ParenOpen) {
                     Ok(ControlFlow::Continue(Self::Normal {
                         results: Vec::new(),
