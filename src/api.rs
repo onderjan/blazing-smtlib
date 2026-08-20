@@ -2,7 +2,7 @@ use std::convert::Infallible;
 
 use crate::{
     Str8, String8,
-    old::{SmtAttributeValue, SmtFunctionSignature, SmtSExpr},
+    old::{SmtFunctionSignature, SmtSExpr},
 };
 
 #[derive(Debug, Clone)]
@@ -54,6 +54,14 @@ pub enum SmtTerm<'a, H: SmtHandler + ?Sized> {
     Application(SmtApplication<'a, H>),
 }
 
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub enum SmtAttributeValue<H: SmtHandler + ?Sized> {
+    SpecialConstant(SmtSpecialConstant),
+    Symbol(String8),
+    Exprs(Vec<H::SExpr>),
+}
+
 pub trait SmtHandler: 'static {
     type Error;
 
@@ -99,7 +107,7 @@ pub trait SmtHandler: 'static {
     fn handle_attribute(
         &mut self,
         name: Str8,
-        value: Option<SmtAttributeValue<Self::SExpr>>,
+        value: Option<SmtAttributeValue<Self>>,
     ) -> Result<Self::Attribute, Self::Error>;
 }
 
@@ -219,7 +227,7 @@ impl SmtHandler for OnlyCheckSyntax {
     fn handle_attribute(
         &mut self,
         _name: Str8,
-        _value: Option<SmtAttributeValue<Self::SExpr>>,
+        _value: Option<SmtAttributeValue<Self>>,
     ) -> Result<Self::Attribute, Self::Error> {
         Ok(())
     }

@@ -4,7 +4,7 @@ use crate::{
     CommandHandler, SmtHandler, String8,
     parser::{
         ParserError, ParserOrHandlerError,
-        category::{sort::SortParser, term::TermParser},
+        category::{attribute::AttributeParser, sort::SortParser, term::TermParser},
     },
     token::Token,
 };
@@ -216,6 +216,7 @@ impl<H: CommandHandler> Command<H> for CommandExit<H> {
 
 pub enum CommandSetInfo<H: SmtHandler> {
     Start,
+    ParsingAttribute(AttributeParser<H>),
     End(H::Attribute),
 }
 
@@ -229,19 +230,50 @@ impl<H: CommandHandler> Command<H> for CommandSetInfo<H> {
         handler: &mut H,
         token: Token,
     ) -> Result<ControlFlow<(), Self>, ParserOrHandlerError<H>> {
-        match self {
-            CommandSetInfo::Start => {
-                todo!("Parse attribute")
-            }
-            CommandSetInfo::End(attribute) => {
-                todo!("Handle attribute")
-                /*if matches!(token, Token::ParenClose) {
-                    handler.command_set_info(attribute);
-                    Ok(ControlFlow::Break(()))
-                } else {
-                    Err(ParserError::ExpectedToken(Token::ParenClose).into())
-                }*/
-            }
+        enum Progress<H: SmtHandler> {
+            Parser(AttributeParser<H>),
+            CloseParen(H::Attribute),
         }
+
+        let progress = match self {
+            CommandSetInfo::Start => {
+                let attribute_parser = AttributeParser::new();
+                Progress::Parser(attribute_parser)
+            }
+            CommandSetInfo::ParsingAttribute(attribute_parser) => {
+                Progress::Parser(attribute_parser)
+            }
+            CommandSetInfo::End(attribute) => Progress::CloseParen(attribute),
+        };
+
+        let (token, attribute) = match progress {
+            Progress::Parser(mut parser) => match parser.progress(handler, token)? {
+                ControlFlow::Continue(()) => {
+                    return Ok(ControlFlow::Continue(Self::ParsingAttribute(parser)));
+                }
+                ControlFlow::Break(parser_result) => match parser_result.returned_token {
+                    Some(token) => (token, parser_result.attribute),
+                    None => {
+                        return Ok(ControlFlow::Continue(Self::End(parser_result.attribute)));
+                    }
+                },
+            },
+            Progress::CloseParen(attribute) => (token, attribute),
+        };
+
+        // process close parenthesis
+        expect_close_parenthesis::<H>(token)?;
+        handler
+            .command_set_info(attribute)
+            .map_err(ParserOrHandlerError::HandlerError)?;
+        Ok(ControlFlow::Break(()))
+    }
+}
+
+fn expect_close_parenthesis<H: SmtHandler>(token: Token) -> Result<(), ParserOrHandlerError<H>> {
+    if matches!(token, Token::ParenClose) {
+        Ok(())
+    } else {
+        Err(ParserError::ExpectedToken(Token::ParenClose).into())
     }
 }
