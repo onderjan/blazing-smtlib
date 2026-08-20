@@ -1,23 +1,23 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtHandler, SmtIndex, String8,
+    SmtHandler, SmtIdent, SmtIndex, String8,
     parser::{ParserError, ParserOrHandlerError, category::CategoryParser},
     token::{Reserved, Token},
 };
 
-pub enum IdentParser<H: SmtHandler> {
+pub enum IdentParser {
     Start,
     Open,
     AfterUnderscore,
     Indices {
         name: String8,
-        indices: Vec<H::Index>,
+        indices: Vec<SmtIndex>,
     },
 }
 
-impl<H: SmtHandler> CategoryParser<H> for IdentParser<H> {
-    type Result = H::Ident;
+impl<H: SmtHandler> CategoryParser<H> for IdentParser {
+    type Result = SmtIdent;
 
     fn init() -> Self {
         Self::Start
@@ -25,17 +25,15 @@ impl<H: SmtHandler> CategoryParser<H> for IdentParser<H> {
 
     fn progress(
         self,
-        handler: &mut H,
+        _handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<H::Ident, Self>, ParserOrHandlerError<H>> {
+    ) -> Result<ControlFlow<SmtIdent, Self>, ParserOrHandlerError<H>> {
         match self {
             IdentParser::Start => match token {
-                Token::Symbol(symbol) => {
-                    let symbol = handler
-                        .handle_ident(symbol, vec![])
-                        .map_err(ParserOrHandlerError::HandlerError)?;
-                    Ok(ControlFlow::Break(symbol))
-                }
+                Token::Symbol(name) => Ok(ControlFlow::Break(SmtIdent {
+                    name,
+                    indices: Vec::new(),
+                })),
                 Token::ParenOpen => Ok(ControlFlow::Continue(Self::Open)),
                 _ => Err(ParserError::ExpectedIdent.into()),
             },
@@ -59,25 +57,17 @@ impl<H: SmtHandler> CategoryParser<H> for IdentParser<H> {
             }
             IdentParser::Indices { name, mut indices } => match token {
                 Token::ParenClose => {
-                    let ident = handler
-                        .handle_ident(name, indices)
-                        .map_err(ParserOrHandlerError::HandlerError)?;
-                    Ok(ControlFlow::Break(ident))
+                    if indices.is_empty() {
+                        return Err(ParserError::RequiredIndices.into());
+                    }
+                    Ok(ControlFlow::Break(SmtIdent { name, indices }))
                 }
                 Token::Numeral(index_value) => {
-                    // numeral index
-                    let index = handler
-                        .handle_index(SmtIndex::Numeral(index_value))
-                        .map_err(ParserOrHandlerError::HandlerError)?;
-                    indices.push(index);
+                    indices.push(SmtIndex::Numeral(index_value));
                     Ok(ControlFlow::Continue(Self::Indices { name, indices }))
                 }
                 Token::Symbol(index_symbol) => {
-                    // symbol index
-                    let index = handler
-                        .handle_index(SmtIndex::Symbol(index_symbol))
-                        .map_err(ParserOrHandlerError::HandlerError)?;
-                    indices.push(index);
+                    indices.push(SmtIndex::Symbol(index_symbol));
                     Ok(ControlFlow::Continue(Self::Indices { name, indices }))
                 }
                 _ => Err(ParserError::ExpectedIndexOrCloseParen.into()),
@@ -86,7 +76,11 @@ impl<H: SmtHandler> CategoryParser<H> for IdentParser<H> {
     }
 }
 
-impl<H: SmtHandler> IdentParser<H> {
+impl IdentParser {
+    pub fn after_open_paren() -> Self {
+        Self::Open
+    }
+
     pub fn after_underscore() -> Self {
         Self::AfterUnderscore
     }

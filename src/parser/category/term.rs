@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtApplication, SmtHandler, SmtIdent, SmtQualifiedIdent, SmtTerm, String8,
+    SmtApplication, SmtHandler, SmtIdent, SmtQualifiedIdent, SmtTerm,
     parser::{
         ParserError, ParserOrHandlerError,
         category::{
@@ -12,10 +12,11 @@ use crate::{
 };
 
 pub enum TermLevel<H: SmtHandler> {
-    Application(String8, MultipleParser<H, TermParser<H>>),
+    ApplicationIdent(IdentParser),
+    Application(SmtIdent, MultipleParser<H, TermParser<H>>),
     LetBindings(MultipleParser<H, EnclosedPairParser<H, SymbolParser, TermParser<H>>>),
     LetBound(TermParser<H>),
-    IndexedIdent(IdentParser<H>),
+    IndexedIdent(IdentParser),
 }
 
 pub enum TermParser<H: SmtHandler> {
@@ -45,9 +46,12 @@ impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
                 // find out what kind of an application-like S-term we have
                 let level = match token {
                     Token::Symbol(fn_name) => {
-                        // TODO: functions should be quaified idents
-                        // push application and move to term state
-                        TermLevel::Application(fn_name, MultipleParser::after_open_paren())
+                        // this is an application where the function identifier is just a symbol
+                        let fn_ident = SmtIdent {
+                            name: fn_name,
+                            indices: Vec::new(),
+                        };
+                        TermLevel::Application(fn_ident, MultipleParser::after_open_paren())
                     }
                     Token::Reserved(Reserved::Let) => {
                         TermLevel::LetBindings(MultipleParser::init())
@@ -60,6 +64,10 @@ impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
                     Token::Reserved(Reserved::Underscore) => {
                         // this is actually a term composed of an indexed identifier
                         TermLevel::IndexedIdent(IdentParser::after_underscore())
+                    }
+                    Token::ParenOpen => {
+                        // this is an application where the function identifier is qualified or indexed
+                        TermLevel::ApplicationIdent(IdentParser::after_open_paren())
                     }
                     _ => return Err(ParserError::ExpectedOperator.into()),
                 };
@@ -104,14 +112,17 @@ impl<H: SmtHandler> TermParser<H> {
         token: Token,
     ) -> Result<ControlFlow<H::Term, Self>, ParserOrHandlerError<H>> {
         let result = match level {
-            TermLevel::Application(fn_name, parser) => match parser.progress(handler, token)? {
-                ControlFlow::Continue(parser) => TermLevel::Application(fn_name, parser),
+            TermLevel::ApplicationIdent(parser) => match parser.progress(handler, token)? {
+                ControlFlow::Continue(parser) => TermLevel::ApplicationIdent(parser),
+                ControlFlow::Break(fn_ident) => {
+                    TermLevel::Application(fn_ident, MultipleParser::after_open_paren())
+                }
+            },
+            TermLevel::Application(fn_ident, parser) => match parser.progress(handler, token)? {
+                ControlFlow::Continue(parser) => TermLevel::Application(fn_ident, parser),
                 ControlFlow::Break(args) => {
                     let term = SmtTerm::Application(SmtApplication {
-                        function: SmtQualifiedIdent::Ident(SmtIdent {
-                            name: fn_name,
-                            indices: vec![],
-                        }),
+                        function: SmtQualifiedIdent::Ident(fn_ident),
                         args,
                     });
                     let term = handler
@@ -141,13 +152,12 @@ impl<H: SmtHandler> TermParser<H> {
             TermLevel::IndexedIdent(parser) => match parser.progress(handler, token)? {
                 ControlFlow::Continue(parser) => TermLevel::IndexedIdent(parser),
                 ControlFlow::Break(ident) => {
-                    todo!("Handle ident term")
                     // TODO: qualified identifiers are accepted here
-                    /*let term = SmtTerm::QualifiedIdent(SmtQualifiedIdent::Ident(ident));
+                    let term = SmtTerm::QualifiedIdent(SmtQualifiedIdent::Ident(ident));
                     let term = handler
-                        .handle_term()
+                        .handle_term(term)
                         .map_err(ParserOrHandlerError::HandlerError)?;
-                    return Ok(ControlFlow::Break(term));*/
+                    return Ok(ControlFlow::Break(term));
                 }
             },
         };

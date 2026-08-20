@@ -64,7 +64,7 @@ impl<H: CommandHandler> Command<H> for CommandSetLogic<H> {
 
 pub enum CommandDeclareConst<H: SmtHandler> {
     Start,
-    ParsingSort(String8, SortParser<H>),
+    ParsingSort(String8, SortParser),
     End(String8, H::Sort),
 }
 
@@ -81,7 +81,7 @@ impl<H: CommandHandler> Command<H> for CommandDeclareConst<H> {
         let result = match self {
             CommandDeclareConst::Start => {
                 if let Token::Symbol(name) = token {
-                    Self::ParsingSort(name, SortParser::init())
+                    Self::ParsingSort(name, CategoryParser::<H>::init())
                 } else {
                     return Err(ParserError::ExpectedSymbol.into());
                 }
@@ -112,8 +112,8 @@ impl<H: CommandHandler> Command<H> for CommandDeclareConst<H> {
 
 pub enum CommandDeclareFun<H: SmtHandler> {
     Start,
-    ParsingParamSorts(String8, MultipleParser<H, SortParser<H>>),
-    ParsingResultSort(String8, Vec<H::Sort>, SortParser<H>),
+    ParsingParamSorts(String8, MultipleParser<H, SortParser>),
+    ParsingResultSort(String8, Vec<H::Sort>, SortParser),
     End(String8, Vec<H::Sort>, H::Sort),
 }
 
@@ -139,7 +139,7 @@ impl<H: CommandHandler> Command<H> for CommandDeclareFun<H> {
                 match parser.progress(handler, token)? {
                     ControlFlow::Continue(parser) => Self::ParsingParamSorts(name, parser),
                     ControlFlow::Break(param_sorts) => {
-                        Self::ParsingResultSort(name, param_sorts, SortParser::init())
+                        Self::ParsingResultSort(name, param_sorts, CategoryParser::<H>::init())
                     }
                 }
             }

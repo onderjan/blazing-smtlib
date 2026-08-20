@@ -9,13 +9,13 @@ use crate::{
     token::{Reserved, Token},
 };
 
-pub enum SortParser<H: SmtHandler> {
+pub enum SortParser {
     Start,
     Open,
-    Ident(IdentParser<H>),
+    Ident(IdentParser),
 }
 
-impl<H: SmtHandler> CategoryParser<H> for SortParser<H> {
+impl<H: SmtHandler> CategoryParser<H> for SortParser {
     type Result = H::Sort;
 
     fn init() -> Self {
@@ -29,10 +29,7 @@ impl<H: SmtHandler> CategoryParser<H> for SortParser<H> {
     ) -> Result<ControlFlow<H::Sort, Self>, ParserOrHandlerError<H>> {
         match self {
             SortParser::Start => match token {
-                Token::Symbol(symbol) => {
-                    let _symbol = handler
-                        .handle_symbol(symbol)
-                        .map_err(ParserOrHandlerError::HandlerError)?;
+                Token::Symbol(_symbol) => {
                     todo!("Indexed sort");
                 }
                 Token::ParenOpen => Ok(ControlFlow::Continue(Self::Open)),

@@ -33,6 +33,7 @@ pub enum ParserError {
     UnsupportedCommand,
     SortApplicationNotSupported,
     ExpectedLetBinding,
+    RequiredIndices,
 }
 
 #[derive(Debug)]
