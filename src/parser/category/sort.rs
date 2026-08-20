@@ -36,13 +36,13 @@ pub fn parse_sort<H: SmtHandler>(
 }*/
 
 pub enum SortParser<H: SmtHandler> {
-    Deciding,
+    Start,
     IndexedIdent(IndexedIdentParserState<H>),
 }
 
 impl<H: SmtHandler> SortParser<H> {
     pub fn new() -> Self {
-        Self::Deciding
+        Self::Start
     }
 
     pub fn progress(
@@ -51,7 +51,7 @@ impl<H: SmtHandler> SortParser<H> {
         token: Token,
     ) -> Result<ControlFlow<H::Sort, ()>, ParserOrHandlerError<H>> {
         match self {
-            SortParser::Deciding => match token {
+            SortParser::Start => match token {
                 Token::Symbol(symbol) => {
                     let _symbol = handler
                         .handle_symbol(symbol.as_str())

@@ -2,7 +2,10 @@ use std::{marker::PhantomData, ops::ControlFlow};
 
 use crate::{
     CommandHandler, SmtHandler, String8,
-    parser::{ParserError, ParserOrHandlerError, category::sort::SortParser},
+    parser::{
+        ParserError, ParserOrHandlerError,
+        category::{sort::SortParser, term::TermParser},
+    },
     token::Token,
 };
 
@@ -44,7 +47,9 @@ impl<H: CommandHandler> Command<H> for CommandSetLogic<H> {
             }
             CommandSetLogic::End(logic) => {
                 if matches!(token, Token::ParenClose) {
-                    handler.command_set_logic(logic.as_str());
+                    handler
+                        .command_set_logic(logic.as_str())
+                        .map_err(ParserOrHandlerError::HandlerError)?;
                     Ok(ControlFlow::Break(()))
                 } else {
                     Err(ParserError::ExpectedToken(Token::ParenClose).into())
@@ -94,7 +99,9 @@ impl<H: CommandHandler> Command<H> for CommandDeclareConst<H> {
             }
             CommandDeclareConst::End(name, sort) => {
                 if matches!(token, Token::ParenClose) {
-                    handler.command_declare_const(name.as_str(), sort);
+                    handler
+                        .command_declare_const(name.as_str(), sort)
+                        .map_err(ParserOrHandlerError::HandlerError)?;
                     return Ok(ControlFlow::Break(()));
                 } else {
                     return Err(ParserError::ExpectedToken(Token::ParenClose).into());
@@ -107,6 +114,7 @@ impl<H: CommandHandler> Command<H> for CommandDeclareConst<H> {
 
 pub enum CommandAssert<H: SmtHandler> {
     Start,
+    ParsingTerm(TermParser<H>),
     End(H::Term),
 }
 
@@ -122,16 +130,31 @@ impl<H: CommandHandler> Command<H> for CommandAssert<H> {
     ) -> Result<ControlFlow<(), Self>, ParserOrHandlerError<H>> {
         match self {
             CommandAssert::Start => {
-                todo!("Parse term")
+                let mut term_parser = TermParser::new();
+                let result = term_parser.progress(handler, token)?;
+                let result = match result {
+                    ControlFlow::Continue(()) => CommandAssert::ParsingTerm(term_parser),
+                    ControlFlow::Break(term) => CommandAssert::End(term),
+                };
+                Ok(ControlFlow::Continue(result))
+            }
+            CommandAssert::ParsingTerm(mut term_parser) => {
+                let result = term_parser.progress(handler, token)?;
+                let result = match result {
+                    ControlFlow::Continue(()) => CommandAssert::ParsingTerm(term_parser),
+                    ControlFlow::Break(term) => CommandAssert::End(term),
+                };
+                Ok(ControlFlow::Continue(result))
             }
             CommandAssert::End(term) => {
-                todo!("Handle term")
-                /*if matches!(token, Token::ParenClose) {
-                    handler.command_assert(term);
+                if matches!(token, Token::ParenClose) {
+                    handler
+                        .command_assert(term)
+                        .map_err(ParserOrHandlerError::HandlerError)?;
                     Ok(ControlFlow::Break(()))
                 } else {
                     Err(ParserError::ExpectedToken(Token::ParenClose).into())
-                }*/
+                }
             }
         }
     }
@@ -154,7 +177,9 @@ impl<H: CommandHandler> Command<H> for CommandCheckSat<H> {
         token: Token,
     ) -> Result<ControlFlow<(), Self>, ParserOrHandlerError<H>> {
         if matches!(token, Token::ParenClose) {
-            handler.command_check_sat();
+            handler
+                .command_check_sat()
+                .map_err(ParserOrHandlerError::HandlerError)?;
             Ok(ControlFlow::Break(()))
         } else {
             Err(ParserError::ExpectedToken(Token::ParenClose).into())
@@ -179,7 +204,9 @@ impl<H: CommandHandler> Command<H> for CommandExit<H> {
         token: Token,
     ) -> Result<ControlFlow<(), Self>, ParserOrHandlerError<H>> {
         if matches!(token, Token::ParenClose) {
-            handler.command_exit();
+            handler
+                .command_exit()
+                .map_err(ParserOrHandlerError::HandlerError)?;
             Ok(ControlFlow::Break(()))
         } else {
             Err(ParserError::ExpectedToken(Token::ParenClose).into())
