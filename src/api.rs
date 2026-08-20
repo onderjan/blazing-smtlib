@@ -1,20 +1,20 @@
 use std::convert::Infallible;
 
 use crate::{
-    Str8, String8,
+    String8,
     old::{SmtFunctionSignature, SmtSExpr},
 };
 
 #[derive(Debug, Clone)]
-pub enum SmtIndex<'a> {
-    Numeral(Str8<'a>),
-    Symbol(Str8<'a>),
+pub enum SmtIndex {
+    Numeral(String8),
+    Symbol(String8),
 }
 
 #[derive(Debug, Clone)]
-pub struct SmtIdent<'a> {
-    pub name: Str8<'a>,
-    pub indices: Vec<SmtIndex<'a>>,
+pub struct SmtIdent {
+    pub name: String8,
+    pub indices: Vec<SmtIndex>,
 }
 
 #[derive(Debug, Clone)]
@@ -24,14 +24,14 @@ pub enum SmtSort<H: SmtHandler + ?Sized> {
 }
 
 #[derive(Debug, Clone)]
-pub enum SmtQualifiedIdent<'a> {
-    Ident(SmtIdent<'a>), // 'as' qualified idents not implemented
+pub enum SmtQualifiedIdent {
+    Ident(SmtIdent), // 'as' qualified idents not implemented
 }
 
 /// Application. There must be at least one term.
 #[derive(Debug, Clone)]
-pub struct SmtApplication<'a, H: SmtHandler + ?Sized> {
-    pub function: SmtQualifiedIdent<'a>,
+pub struct SmtApplication<H: SmtHandler + ?Sized> {
+    pub function: SmtQualifiedIdent,
     pub args: Vec<H::Term>,
 }
 
@@ -48,10 +48,10 @@ pub enum SmtSpecialConstant {
     String(String8),
 }
 
-pub enum SmtTerm<'a, H: SmtHandler + ?Sized> {
+pub enum SmtTerm<H: SmtHandler + ?Sized> {
     SpecialConstant(SmtSpecialConstant),
-    QualifiedIdent(SmtQualifiedIdent<'a>),
-    Application(SmtApplication<'a, H>),
+    QualifiedIdent(SmtQualifiedIdent),
+    Application(SmtApplication<H>),
 }
 
 #[allow(dead_code)]
@@ -80,21 +80,21 @@ pub trait SmtHandler: 'static {
     type Sort;
     type Term;
 
-    fn handle_numeral(&mut self, value: Str8) -> Result<Self::Numeral, Self::Error>;
+    fn handle_numeral(&mut self, value: String8) -> Result<Self::Numeral, Self::Error>;
     fn handle_decimal(
         &mut self,
-        numerator: Str8,
-        denominator: Str8,
+        numerator: String8,
+        denominator: String8,
     ) -> Result<Self::Decimal, Self::Error>;
-    fn handle_hexadecimal(&mut self, value: Str8) -> Result<Self::Hexadecimal, Self::Error>;
-    fn handle_binary(&mut self, value: Str8) -> Result<Self::Binary, Self::Error>;
-    fn handle_string(&mut self, str: Str8) -> Result<Self::String, Self::Error>;
+    fn handle_hexadecimal(&mut self, value: String8) -> Result<Self::Hexadecimal, Self::Error>;
+    fn handle_binary(&mut self, value: String8) -> Result<Self::Binary, Self::Error>;
+    fn handle_string(&mut self, str: String8) -> Result<Self::String, Self::Error>;
 
-    fn handle_symbol(&mut self, str: Str8) -> Result<Self::Symbol, Self::Error>;
+    fn handle_symbol(&mut self, str: String8) -> Result<Self::Symbol, Self::Error>;
     fn handle_index(&mut self, index: SmtIndex) -> Result<Self::Index, Self::Error>;
     fn handle_ident(
         &mut self,
-        symbol: Str8,
+        symbol: String8,
         indices: Vec<Self::Index>,
     ) -> Result<Self::Ident, Self::Error>;
 
@@ -106,7 +106,7 @@ pub trait SmtHandler: 'static {
     fn handle_s_expr(&mut self, expr: SmtSExpr<Self::SExpr>) -> Result<Self::SExpr, Self::Error>;
     fn handle_attribute(
         &mut self,
-        name: Str8,
+        name: String8,
         value: Option<SmtAttributeValue<Self>>,
     ) -> Result<Self::Attribute, Self::Error>;
 }
@@ -119,12 +119,13 @@ pub trait CommandHandler: SmtHandler {
     fn command_get_info(&mut self, keyword: Self::Symbol) -> Result<(), Self::Error>;
     fn command_set_info(&mut self, attribute: Self::Attribute) -> Result<(), Self::Error>;
 
-    fn command_set_logic(&mut self, logic: Str8) -> Result<(), Self::Error>;
+    fn command_set_logic(&mut self, logic: String8) -> Result<(), Self::Error>;
 
-    fn command_declare_const(&mut self, name: Str8, sort: Self::Sort) -> Result<(), Self::Error>;
+    fn command_declare_const(&mut self, name: String8, sort: Self::Sort)
+    -> Result<(), Self::Error>;
     fn command_declare_fun(
         &mut self,
-        name: Str8,
+        name: String8,
         param_sorts: Vec<Self::Sort>,
         result_sort: Self::Sort,
     ) -> Result<(), Self::Error>;
@@ -167,31 +168,31 @@ impl SmtHandler for OnlyCheckSyntax {
     type Sort = ();
     type Term = ();
 
-    fn handle_numeral(&mut self, _value: Str8) -> Result<Self::Numeral, Self::Error> {
+    fn handle_numeral(&mut self, _value: String8) -> Result<Self::Numeral, Self::Error> {
         Ok(())
     }
 
     fn handle_decimal(
         &mut self,
-        _numerator: Str8,
-        _denominator: Str8,
+        _numerator: String8,
+        _denominator: String8,
     ) -> Result<Self::Decimal, Self::Error> {
         Ok(())
     }
 
-    fn handle_hexadecimal(&mut self, _value: Str8) -> Result<Self::Hexadecimal, Self::Error> {
+    fn handle_hexadecimal(&mut self, _value: String8) -> Result<Self::Hexadecimal, Self::Error> {
         Ok(())
     }
 
-    fn handle_binary(&mut self, _value: Str8) -> Result<Self::Binary, Self::Error> {
+    fn handle_binary(&mut self, _value: String8) -> Result<Self::Binary, Self::Error> {
         Ok(())
     }
 
-    fn handle_string(&mut self, _str: Str8) -> Result<Self::String, Self::Error> {
+    fn handle_string(&mut self, _str: String8) -> Result<Self::String, Self::Error> {
         Ok(())
     }
 
-    fn handle_symbol(&mut self, _str: Str8) -> Result<Self::Symbol, Self::Error> {
+    fn handle_symbol(&mut self, _str: String8) -> Result<Self::Symbol, Self::Error> {
         Ok(())
     }
 
@@ -201,7 +202,7 @@ impl SmtHandler for OnlyCheckSyntax {
 
     fn handle_ident(
         &mut self,
-        _symbol: Str8,
+        _symbol: String8,
         _indices: Vec<Self::Index>,
     ) -> Result<Self::Ident, Self::Error> {
         Ok(())
@@ -229,7 +230,7 @@ impl SmtHandler for OnlyCheckSyntax {
 
     fn handle_attribute(
         &mut self,
-        _name: Str8,
+        _name: String8,
         _value: Option<SmtAttributeValue<Self>>,
     ) -> Result<Self::Attribute, Self::Error> {
         Ok(())
@@ -257,17 +258,21 @@ impl CommandHandler for OnlyCheckSyntax {
         Ok(())
     }
 
-    fn command_set_logic(&mut self, _logic: Str8) -> Result<(), Self::Error> {
+    fn command_set_logic(&mut self, _logic: String8) -> Result<(), Self::Error> {
         Ok(())
     }
 
-    fn command_declare_const(&mut self, _name: Str8, _sort: Self::Sort) -> Result<(), Self::Error> {
+    fn command_declare_const(
+        &mut self,
+        _name: String8,
+        _sort: Self::Sort,
+    ) -> Result<(), Self::Error> {
         Ok(())
     }
 
     fn command_declare_fun(
         &mut self,
-        _name: Str8,
+        _name: String8,
         _param_sorts: Vec<Self::Sort>,
         _result_sort: Self::Sort,
     ) -> Result<(), Self::Error> {

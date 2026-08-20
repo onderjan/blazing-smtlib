@@ -85,7 +85,7 @@ impl<H: SmtHandler> TermParser<H> {
             Token::Symbol(symbol) => {
                 // TODO: support qualified idents instead of just symbols
                 let qualified_ident = SmtQualifiedIdent::Ident(SmtIdent {
-                    name: symbol.as_str(),
+                    name: symbol,
                     indices: Vec::new(),
                 });
                 let term = handler
@@ -109,7 +109,7 @@ impl<H: SmtHandler> TermParser<H> {
                 ControlFlow::Break(args) => {
                     let term = SmtTerm::Application(SmtApplication {
                         function: SmtQualifiedIdent::Ident(SmtIdent {
-                            name: fn_name.as_str(),
+                            name: fn_name,
                             indices: vec![],
                         }),
                         args,

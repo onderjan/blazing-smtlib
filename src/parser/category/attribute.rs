@@ -65,7 +65,7 @@ impl<H: SmtHandler> CategoryParser<H> for AttributeParser<H> {
                     _ => {
                         // just an attribute name, return token after handling
                         let attribute = handler
-                            .handle_attribute(keyword.as_str(), None)
+                            .handle_attribute(keyword, None)
                             .map_err(ParserOrHandlerError::HandlerError)?;
                         return Ok(ControlFlow::Break(AttributeParserResult {
                             attribute,
@@ -75,7 +75,7 @@ impl<H: SmtHandler> CategoryParser<H> for AttributeParser<H> {
                 };
 
                 let attribute = handler
-                    .handle_attribute(keyword.as_str(), Some(value))
+                    .handle_attribute(keyword, Some(value))
                     .map_err(ParserOrHandlerError::HandlerError)?;
 
                 Ok(ControlFlow::Break(AttributeParserResult {

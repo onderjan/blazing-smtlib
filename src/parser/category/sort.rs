@@ -31,7 +31,7 @@ impl<H: SmtHandler> CategoryParser<H> for SortParser<H> {
             SortParser::Start => match token {
                 Token::Symbol(symbol) => {
                     let _symbol = handler
-                        .handle_symbol(symbol.as_str())
+                        .handle_symbol(symbol)
                         .map_err(ParserOrHandlerError::HandlerError)?;
                     todo!("Indexed sort");
                 }

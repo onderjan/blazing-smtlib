@@ -11,7 +11,7 @@ pub enum IdentParser<H: SmtHandler> {
     Open,
     AfterUnderscore,
     Indices {
-        symbol: String8,
+        name: String8,
         indices: Vec<H::Index>,
     },
 }
@@ -32,7 +32,7 @@ impl<H: SmtHandler> CategoryParser<H> for IdentParser<H> {
             IdentParser::Start => match token {
                 Token::Symbol(symbol) => {
                     let symbol = handler
-                        .handle_ident(symbol.as_str(), vec![])
+                        .handle_ident(symbol, vec![])
                         .map_err(ParserOrHandlerError::HandlerError)?;
                     Ok(ControlFlow::Break(symbol))
                 }
@@ -48,40 +48,37 @@ impl<H: SmtHandler> CategoryParser<H> for IdentParser<H> {
                 }
             }
             IdentParser::AfterUnderscore => {
-                if let Token::Symbol(symbol) = token {
+                if let Token::Symbol(name) = token {
                     Ok(ControlFlow::Continue(IdentParser::Indices {
-                        symbol,
+                        name,
                         indices: Vec::new(),
                     }))
                 } else {
                     Err(ParserError::ExpectedSymbol.into())
                 }
             }
-            IdentParser::Indices {
-                symbol,
-                mut indices,
-            } => match token {
+            IdentParser::Indices { name, mut indices } => match token {
                 Token::ParenClose => {
                     let ident = handler
-                        .handle_ident(symbol.as_str(), indices)
+                        .handle_ident(name, indices)
                         .map_err(ParserOrHandlerError::HandlerError)?;
                     Ok(ControlFlow::Break(ident))
                 }
-                Token::Numeral(value) => {
+                Token::Numeral(index_value) => {
                     // numeral index
                     let index = handler
-                        .handle_index(SmtIndex::Numeral(value.as_str()))
+                        .handle_index(SmtIndex::Numeral(index_value))
                         .map_err(ParserOrHandlerError::HandlerError)?;
                     indices.push(index);
-                    Ok(ControlFlow::Continue(Self::Indices { symbol, indices }))
+                    Ok(ControlFlow::Continue(Self::Indices { name, indices }))
                 }
-                Token::Symbol(symbol) => {
+                Token::Symbol(index_symbol) => {
                     // symbol index
                     let index = handler
-                        .handle_index(SmtIndex::Symbol(symbol.as_str()))
+                        .handle_index(SmtIndex::Symbol(index_symbol))
                         .map_err(ParserOrHandlerError::HandlerError)?;
                     indices.push(index);
-                    Ok(ControlFlow::Continue(Self::Indices { symbol, indices }))
+                    Ok(ControlFlow::Continue(Self::Indices { name, indices }))
                 }
                 _ => Err(ParserError::ExpectedIndexOrCloseParen.into()),
             },

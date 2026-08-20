@@ -51,7 +51,7 @@ impl<H: CommandHandler> Command<H> for CommandSetLogic<H> {
             CommandSetLogic::End(logic) => {
                 if matches!(token, Token::ParenClose) {
                     handler
-                        .command_set_logic(logic.as_str())
+                        .command_set_logic(logic)
                         .map_err(ParserOrHandlerError::HandlerError)?;
                     Ok(ControlFlow::Break(()))
                 } else {
@@ -98,7 +98,7 @@ impl<H: CommandHandler> Command<H> for CommandDeclareConst<H> {
             CommandDeclareConst::End(name, sort) => {
                 if matches!(token, Token::ParenClose) {
                     handler
-                        .command_declare_const(name.as_str(), sort)
+                        .command_declare_const(name, sort)
                         .map_err(ParserOrHandlerError::HandlerError)?;
                     return Ok(ControlFlow::Break(()));
                 } else {
@@ -156,7 +156,7 @@ impl<H: CommandHandler> Command<H> for CommandDeclareFun<H> {
             CommandDeclareFun::End(name, param_sorts, result_sort) => {
                 if matches!(token, Token::ParenClose) {
                     handler
-                        .command_declare_fun(name.as_str(), param_sorts, result_sort)
+                        .command_declare_fun(name, param_sorts, result_sort)
                         .map_err(ParserOrHandlerError::HandlerError)?;
                     return Ok(ControlFlow::Break(()));
                 } else {
