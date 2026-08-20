@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtApplication, SmtHandler, SmtIdent, SmtQualifiedIdent, SmtTerm,
+    SmtApplication, SmtHandler, SmtIdent, SmtQualifiedIdent, SmtSpecialConstant, SmtTerm,
     parser::{
         ParserError, ParserOrHandlerError,
         category::{
@@ -43,7 +43,6 @@ impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
                 Ok(self.parse_term_start(handler, token)?)
             }
             TermParser::Operator => {
-                // find out what kind of an application-like S-term we have
                 let level = match token {
                     Token::Symbol(fn_name) => {
                         // this is an application where the function identifier is just a symbol
@@ -102,7 +101,18 @@ impl<H: SmtHandler> TermParser<H> {
 
                 Ok(ControlFlow::Break(term))
             }
-            _ => Err(ParserError::ExpectedTerm.into()),
+            token => {
+                // handle special constants
+                match parse_special_constant(token) {
+                    Ok(special_constant) => {
+                        let term = handler
+                            .handle_term(SmtTerm::SpecialConstant(special_constant))
+                            .map_err(ParserOrHandlerError::HandlerError)?;
+                        Ok(ControlFlow::Break(term))
+                    }
+                    Err(_token) => Err(ParserError::ExpectedTerm.into()),
+                }
+            }
         }
     }
 
@@ -118,19 +128,22 @@ impl<H: SmtHandler> TermParser<H> {
                     TermLevel::Application(fn_ident, MultipleParser::after_open_paren())
                 }
             },
-            TermLevel::Application(fn_ident, parser) => match parser.progress(handler, token)? {
-                ControlFlow::Continue(parser) => TermLevel::Application(fn_ident, parser),
-                ControlFlow::Break(args) => {
-                    let term = SmtTerm::Application(SmtApplication {
-                        function: SmtQualifiedIdent::Ident(fn_ident),
-                        args,
-                    });
-                    let term = handler
-                        .handle_term(term)
-                        .map_err(ParserOrHandlerError::HandlerError)?;
-                    return Ok(ControlFlow::Break(term));
+            TermLevel::Application(fn_ident, parser) => {
+                eprintln!("Progressing application {:?}", fn_ident);
+                match parser.progress(handler, token)? {
+                    ControlFlow::Continue(parser) => TermLevel::Application(fn_ident, parser),
+                    ControlFlow::Break(args) => {
+                        let term = SmtTerm::Application(SmtApplication {
+                            function: SmtQualifiedIdent::Ident(fn_ident),
+                            args,
+                        });
+                        let term = handler
+                            .handle_term(term)
+                            .map_err(ParserOrHandlerError::HandlerError)?;
+                        return Ok(ControlFlow::Break(term));
+                    }
                 }
-            },
+            }
             TermLevel::LetBindings(parser) => match parser.progress(handler, token)? {
                 ControlFlow::Continue(parser) => TermLevel::LetBindings(parser),
                 ControlFlow::Break(bindings) => {
@@ -164,4 +177,22 @@ impl<H: SmtHandler> TermParser<H> {
 
         Ok(ControlFlow::Continue(Self::Selected(Box::new(result))))
     }
+}
+
+fn parse_special_constant(token: Token) -> Result<SmtSpecialConstant, Token> {
+    let constant = match token {
+        Token::Numeral(value) => SmtSpecialConstant::Numeral(value),
+        Token::Decimal {
+            numerator,
+            denominator,
+        } => SmtSpecialConstant::Decimal {
+            numerator,
+            denominator,
+        },
+        Token::Hexadecimal(value) => SmtSpecialConstant::Hexadecimal(value),
+        Token::Binary(value) => SmtSpecialConstant::Binary(value),
+        Token::String(string) => SmtSpecialConstant::String(string),
+        _ => return Err(token),
+    };
+    Ok(constant)
 }
