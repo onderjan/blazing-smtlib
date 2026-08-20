@@ -919,9 +919,9 @@ fn special_constant(token: Token) -> Result<SmtSpecialConstant, Token> {
     Ok(match token {
         Token::Numeral(whole) => SmtSpecialConstant::Numeral(parse_numeral(whole)),
         Token::Decimal {
-            numerator,
-            denominator,
-        } => SmtSpecialConstant::Decimal(parse_decimal(numerator, denominator)),
+            whole_part,
+            fractional_part,
+        } => SmtSpecialConstant::Decimal(parse_decimal(whole_part, fractional_part)),
         Token::Hexadecimal(whole) => SmtSpecialConstant::Hexadecimal(parse_hexadecimal(whole)),
         Token::Binary(whole) => SmtSpecialConstant::Binary(parse_binary(whole)),
         Token::String(string8) => SmtSpecialConstant::String(string8),
@@ -944,7 +944,7 @@ fn parse_numeral(value: String8) -> Whole {
     whole
 }
 
-fn parse_decimal(_numerator: String8, _denominator: String8) -> Decimal {
+fn parse_decimal(_whole_part: String8, _fractional_part: String8) -> Decimal {
     // TODO: this is wrong, but the value is unused in QF_BV, remove shortly
     Decimal {
         value: BigUint::zero(),

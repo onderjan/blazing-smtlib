@@ -191,11 +191,11 @@ fn parse_special_constant(token: Token) -> Result<SmtSpecialConstant, Token> {
     let constant = match token {
         Token::Numeral(value) => SmtSpecialConstant::Numeral(value),
         Token::Decimal {
-            numerator,
-            denominator,
+            whole_part,
+            fractional_part,
         } => SmtSpecialConstant::Decimal {
-            numerator,
-            denominator,
+            whole_part,
+            fractional_part,
         },
         Token::Hexadecimal(value) => SmtSpecialConstant::Hexadecimal(value),
         Token::Binary(value) => SmtSpecialConstant::Binary(value),

@@ -12,8 +12,8 @@ use crate::{
 pub enum LexerState {
     Normal,
     Fraction {
-        numerator: String8,
-        denominator: String8,
+        whole_part: String8,
+        fractional_part: String8,
     },
     NumeralOrDecimal(String8),
     Hexadecimal(String8),
@@ -139,28 +139,28 @@ impl Lexer {
         let state = match state {
             LexerState::Normal => return self.lex_normal(tokens, c),
             LexerState::Fraction {
-                numerator,
-                mut denominator,
+                whole_part,
+                mut fractional_part,
             } => {
                 match char_class_opt(c) {
                     Some((CharClass::Digit, c)) => {
-                        // add one denominator digit
-                        denominator.0.push(c);
+                        // add one digit to the fractional part
+                        fractional_part.0.push(c);
 
                         LexerState::Fraction {
-                            numerator,
-                            denominator,
+                            whole_part,
+                            fractional_part,
                         }
                     }
                     _ => {
-                        if denominator.is_empty() {
-                            // decimals of the form 7. without any digit in fraction part are disallowed
+                        if fractional_part.is_empty() {
+                            // decimals of the form 7. without any digit in fractional part are disallowed
                             return Err(LexerError::FractionDigitExpected);
                         }
                         // push new token and lex the character normally
                         tokens.push(Token::Decimal {
-                            numerator,
-                            denominator,
+                            whole_part,
+                            fractional_part,
                         });
                         return self.lex_normal(tokens, c);
                     }
@@ -177,8 +177,8 @@ impl Lexer {
                     Some((CharClass::Dot, _)) => {
                         // decimal, the next character will start fraction
                         LexerState::Fraction {
-                            numerator: value,
-                            denominator: String8::new(),
+                            whole_part: value,
+                            fractional_part: String8::new(),
                         }
                     }
 

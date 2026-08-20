@@ -6,8 +6,8 @@ pub enum Token {
     ParenClose,
     Numeral(String8),
     Decimal {
-        numerator: String8,
-        denominator: String8,
+        whole_part: String8,
+        fractional_part: String8,
     },
     Hexadecimal(String8),
     Binary(String8),

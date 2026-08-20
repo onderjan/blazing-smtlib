@@ -43,11 +43,11 @@ impl<H: SmtHandler> CategoryParser<H> for AttributeParser<H> {
                         SmtAttributeValue::SpecialConstant(SmtSpecialConstant::Numeral(value))
                     }
                     Token::Decimal {
-                        numerator,
-                        denominator,
+                        whole_part,
+                        fractional_part,
                     } => SmtAttributeValue::SpecialConstant(SmtSpecialConstant::Decimal {
-                        numerator,
-                        denominator,
+                        whole_part,
+                        fractional_part,
                     }),
                     Token::Hexadecimal(value) => {
                         SmtAttributeValue::SpecialConstant(SmtSpecialConstant::Hexadecimal(value))
