@@ -47,24 +47,35 @@ impl<H: CommandHandler> super::Parser<'_, H> {
 
 impl<H: CommandHandler> StandardCommand<H> {
     pub fn progress(
-        &mut self,
+        self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<CommandBreak>, ParserOrHandlerError<H>> {
+    ) -> Result<ControlFlow<CommandBreak, Self>, ParserOrHandlerError<H>> {
         let result = match self {
-            StandardCommand::SetLogic(command) => command.progress(handler, token),
-            StandardCommand::DeclareConst(command) => command.progress(handler, token),
-            StandardCommand::Assert(command) => command.progress(handler, token),
-            StandardCommand::CheckSat(command) => command.progress(handler, token),
-            StandardCommand::SetInfo(command) => command.progress(handler, token),
+            StandardCommand::SetLogic(command) => command
+                .progress(handler, token)?
+                .map_continue(StandardCommand::SetLogic),
+            StandardCommand::DeclareConst(command) => command
+                .progress(handler, token)?
+                .map_continue(StandardCommand::DeclareConst),
+            StandardCommand::Assert(command) => command
+                .progress(handler, token)?
+                .map_continue(StandardCommand::Assert),
+            StandardCommand::CheckSat(command) => command
+                .progress(handler, token)?
+                .map_continue(StandardCommand::CheckSat),
+            StandardCommand::SetInfo(command) => command
+                .progress(handler, token)?
+                .map_continue(StandardCommand::SetInfo),
             StandardCommand::Exit(command) => {
                 return Ok(command
                     .progress(handler, token)?
+                    .map_continue(StandardCommand::Exit)
                     .map_break(|()| CommandBreak::Exit));
             }
         };
 
-        Ok(result?.map_break(|()| CommandBreak::EndCommand))
+        Ok(result.map_break(|()| CommandBreak::EndCommand))
     }
 }
 

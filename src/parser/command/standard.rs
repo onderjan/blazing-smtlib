@@ -6,14 +6,17 @@ use crate::{
     token::Token,
 };
 
-pub trait Command<H: CommandHandler> {
+pub trait Command<H: CommandHandler>
+where
+    Self: std::marker::Sized,
+{
     fn init() -> Self;
 
     fn progress(
-        &mut self,
+        self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<()>, ParserOrHandlerError<H>>;
+    ) -> Result<ControlFlow<(), Self>, ParserOrHandlerError<H>>;
 }
 
 pub enum CommandSetLogic<H: SmtHandler> {
@@ -27,15 +30,14 @@ impl<H: CommandHandler> Command<H> for CommandSetLogic<H> {
     }
 
     fn progress(
-        &mut self,
+        self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<()>, ParserOrHandlerError<H>> {
+    ) -> Result<ControlFlow<(), Self>, ParserOrHandlerError<H>> {
         match self {
             CommandSetLogic::Start(_) => {
                 if let Token::Symbol(logic) = token {
-                    *self = Self::End(logic);
-                    Ok(ControlFlow::Continue(()))
+                    Ok(ControlFlow::Continue(Self::End(logic)))
                 } else {
                     Err(ParserError::ExpectedSymbol.into())
                 }
@@ -65,40 +67,41 @@ impl<H: CommandHandler> Command<H> for CommandDeclareConst<H> {
     }
 
     fn progress(
-        &mut self,
+        self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<()>, ParserOrHandlerError<H>> {
-        match self {
+    ) -> Result<ControlFlow<(), Self>, ParserOrHandlerError<H>> {
+        let result = match self {
             CommandDeclareConst::Start => {
                 if let Token::Symbol(name) = token {
-                    *self = Self::Name(name);
+                    Self::Name(name)
                 } else {
                     return Err(ParserError::ExpectedSymbol.into());
                 }
             }
             CommandDeclareConst::Name(name) => {
-                *self = CommandDeclareConst::ParsingSort(std::mem::take(name), SortParser::new());
+                CommandDeclareConst::ParsingSort(name, SortParser::new())
             }
-            CommandDeclareConst::ParsingSort(name, sort_parser) => {
+
+            CommandDeclareConst::ParsingSort(name, mut sort_parser) => {
                 match sort_parser.progress(handler, token)? {
-                    ControlFlow::Continue(()) => {}
-                    ControlFlow::Break(sort) => *self = Self::End(std::mem::take(name), sort),
+                    ControlFlow::Continue(()) => {
+                        CommandDeclareConst::ParsingSort(name, sort_parser)
+                    }
+
+                    ControlFlow::Break(sort) => CommandDeclareConst::End(name, sort),
                 }
             }
             CommandDeclareConst::End(name, sort) => {
                 if matches!(token, Token::ParenClose) {
-                    todo!("Handle sort")
-                    /*
                     handler.command_declare_const(name.as_str(), sort);
-                    Ok(ControlFlow::Break(()))
-                    */
+                    return Ok(ControlFlow::Break(()));
                 } else {
                     return Err(ParserError::ExpectedToken(Token::ParenClose).into());
                 }
             }
-        }
-        Ok(ControlFlow::Continue(()))
+        };
+        Ok(ControlFlow::Continue(result))
     }
 }
 
@@ -113,20 +116,13 @@ impl<H: CommandHandler> Command<H> for CommandAssert<H> {
     }
 
     fn progress(
-        &mut self,
+        self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<()>, ParserOrHandlerError<H>> {
+    ) -> Result<ControlFlow<(), Self>, ParserOrHandlerError<H>> {
         match self {
             CommandAssert::Start => {
-                todo!("Parse sort")
-                /*
-                if let Token::Symbol(logic) = token {
-                    *self = Self::Term(term);
-                    Ok(ControlFlow::Continue(()))
-                } else {
-                    Err(ParserError::ExpectedSymbol.into())
-                }*/
+                todo!("Parse term")
             }
             CommandAssert::End(term) => {
                 todo!("Handle term")
@@ -153,10 +149,10 @@ impl<H: CommandHandler> Command<H> for CommandCheckSat<H> {
     }
 
     fn progress(
-        &mut self,
+        self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<()>, ParserOrHandlerError<H>> {
+    ) -> Result<ControlFlow<(), Self>, ParserOrHandlerError<H>> {
         if matches!(token, Token::ParenClose) {
             handler.command_check_sat();
             Ok(ControlFlow::Break(()))
@@ -178,10 +174,10 @@ impl<H: CommandHandler> Command<H> for CommandExit<H> {
     }
 
     fn progress(
-        &mut self,
+        self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<()>, ParserOrHandlerError<H>> {
+    ) -> Result<ControlFlow<(), Self>, ParserOrHandlerError<H>> {
         if matches!(token, Token::ParenClose) {
             handler.command_exit();
             Ok(ControlFlow::Break(()))
@@ -202,21 +198,13 @@ impl<H: CommandHandler> Command<H> for CommandSetInfo<H> {
     }
 
     fn progress(
-        &mut self,
+        self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<()>, ParserOrHandlerError<H>> {
+    ) -> Result<ControlFlow<(), Self>, ParserOrHandlerError<H>> {
         match self {
             CommandSetInfo::Start => {
                 todo!("Parse attribute")
-                /*
-                  if let Token::Symbol(logic) = token {
-                    *self = Self::Logic(logic);
-                    Ok(ControlFlow::Continue(()))
-                } else {
-                    Err(ParserError::ExpectedSymbol.into())
-                }
-                */
             }
             CommandSetInfo::End(attribute) => {
                 todo!("Handle attribute")

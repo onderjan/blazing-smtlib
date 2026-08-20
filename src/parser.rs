@@ -68,7 +68,8 @@ impl<'a, H: CommandHandler> Parser<'a, H> {
 
     pub fn parse_token(&mut self, token: Token) -> Result<(), ParserOrHandlerError<H>> {
         eprintln!("Token: {:?}", token);
-        let state = match &mut self.state {
+        let state = std::mem::replace(&mut self.state, ParserState::AwaitingCommand);
+        let state = match state {
             ParserState::AwaitingCommand => {
                 // expect open paren
                 if !matches!(token, Token::ParenOpen) {
@@ -86,7 +87,7 @@ impl<'a, H: CommandHandler> Parser<'a, H> {
                 ParserState::StandardCommand(self.start_command(command_name.as_str())?)
             }
             ParserState::StandardCommand(stage) => match stage.progress(self.handler, token)? {
-                ControlFlow::Continue(()) => return Ok(()),
+                ControlFlow::Continue(command) => ParserState::StandardCommand(command),
                 ControlFlow::Break(CommandBreak::EndCommand) => ParserState::AwaitingCommand,
                 ControlFlow::Break(CommandBreak::Exit) => ParserState::Exit,
             },
