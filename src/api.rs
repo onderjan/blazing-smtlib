@@ -101,6 +101,13 @@ pub trait CommandHandler: SmtHandler {
         param_sorts: Vec<Self::Sort>,
         result_sort: Self::Sort,
     ) -> Result<(), Self::Error>;
+    fn command_define_fun(
+        &mut self,
+        name: String8,
+        params: Vec<(String8, Self::Sort)>,
+        result_sort: Self::Sort,
+        definition: Self::Term,
+    ) -> Result<(), Self::Error>;
 
     fn command_assert(&mut self, term: Self::Term) -> Result<(), Self::Error>;
 
@@ -198,6 +205,16 @@ impl CommandHandler for OnlyCheckSyntax {
         _name: String8,
         _param_sorts: Vec<Self::Sort>,
         _result_sort: Self::Sort,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn command_define_fun(
+        &mut self,
+        _name: String8,
+        _params: Vec<(String8, Self::Sort)>,
+        _result_sort: Self::Sort,
+        _definition: Self::Term,
     ) -> Result<(), Self::Error> {
         Ok(())
     }

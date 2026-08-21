@@ -5,8 +5,8 @@ use crate::{
     parser::{
         ParserOrHandlerError,
         command::standard::{
-            CommandAssert, CommandCheckSat, CommandDeclareConst, CommandDeclareFun, CommandExit,
-            CommandParser, CommandSetInfo, CommandSetLogic,
+            CommandAssert, CommandCheckSat, CommandDeclareConst, CommandDeclareFun,
+            CommandDefineFun, CommandExit, CommandParser, CommandSetInfo, CommandSetLogic,
         },
     },
     token::Token,
@@ -18,6 +18,7 @@ pub enum StandardCommand<H: CommandHandler> {
     SetLogic(CommandParser<H, CommandSetLogic>),
     DeclareConst(CommandParser<H, CommandDeclareConst>),
     DeclareFun(CommandParser<H, CommandDeclareFun>),
+    DefineFun(CommandParser<H, CommandDefineFun>),
     Assert(CommandParser<H, CommandAssert>),
     CheckSat(CommandParser<H, CommandCheckSat>),
     SetInfo(CommandParser<H, CommandSetInfo>),
@@ -38,6 +39,7 @@ impl<H: CommandHandler> super::Parser<'_, H> {
             b"set-logic" => StandardCommand::SetLogic(CommandParser::new()),
             b"declare-const" => StandardCommand::DeclareConst(CommandParser::new()),
             b"declare-fun" => StandardCommand::DeclareFun(CommandParser::new()),
+            b"define-fun" => StandardCommand::DefineFun(CommandParser::new()),
             b"assert" => StandardCommand::Assert(CommandParser::new()),
             b"check-sat" => StandardCommand::CheckSat(CommandParser::new()),
             b"exit" => StandardCommand::Exit(CommandParser::new()),
@@ -63,6 +65,9 @@ impl<H: CommandHandler> StandardCommand<H> {
             StandardCommand::DeclareFun(command) => command
                 .progress(handler, token)?
                 .map_continue(StandardCommand::DeclareFun),
+            StandardCommand::DefineFun(command) => command
+                .progress(handler, token)?
+                .map_continue(StandardCommand::DefineFun),
             StandardCommand::Assert(command) => command
                 .progress(handler, token)?
                 .map_continue(StandardCommand::Assert),

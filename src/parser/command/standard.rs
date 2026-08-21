@@ -5,8 +5,9 @@ use crate::{
     parser::{
         ParserOrHandlerError,
         category::{
-            CategoryParser, CloseParenParser, ClosedParser, MultipleParser, PairParser,
-            SymbolParser, attribute::ClosedAttributeParser, sort::SortParser, term::TermParser,
+            CategoryParser, CloseParenParser, ClosedParser, MultipleParser, OpenClosedParser,
+            PairParser, SymbolParser, attribute::ClosedAttributeParser, sort::SortParser,
+            term::TermParser,
         },
     },
     token::Token,
@@ -78,6 +79,27 @@ impl<H: CommandHandler> Command<H> for CommandDeclareFun {
     ) -> Result<(), <H>::Error> {
         let (name, (param_sorts, result_sort)) = result;
         handler.command_declare_fun(name, param_sorts, result_sort)
+    }
+}
+
+pub struct CommandDefineFun;
+
+pub type SortedVarParser<H> = OpenClosedParser<H, PairParser<H, SymbolParser, SortParser>>;
+pub type FunctionDefParser<H> = PairParser<
+    H,
+    SymbolParser,
+    PairParser<H, MultipleParser<H, SortedVarParser<H>>, PairParser<H, SortParser, TermParser<H>>>,
+>;
+
+impl<H: CommandHandler> Command<H> for CommandDefineFun {
+    type Parser = ClosedParser<H, FunctionDefParser<H>>;
+
+    fn handle(
+        handler: &mut H,
+        result: (String8, (Vec<(String8, H::Sort)>, (H::Sort, H::Term))),
+    ) -> Result<(), <H>::Error> {
+        let (name, (param_sorts, (result_sort, definition))) = result;
+        handler.command_define_fun(name, param_sorts, result_sort, definition)
     }
 }
 

@@ -93,7 +93,6 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for ClosedParser<H, 
     }
 }
 
-/*
 pub enum OpenClosedParser<H: SmtHandler, P: CategoryParser<H>> {
     BeforeOpen,
     AfterOpen(ClosedParser<H, P>),
@@ -126,7 +125,7 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for OpenClosedParser
         };
         Ok(ControlFlow::Continue(result))
     }
-}*/
+}
 
 pub enum MultipleParser<H: SmtHandler, P: CategoryParser<H>> {
     BeforeOpen,
