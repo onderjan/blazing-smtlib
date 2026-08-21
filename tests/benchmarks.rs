@@ -104,12 +104,14 @@ fn parse_benchmarks() {
                     let num_processed = processed.fetch_add(1, Ordering::Relaxed) + 1;
                     if num_processed != 0 && num_processed.is_multiple_of(1000) {
                         let elapsed = start.elapsed();
+                        let num_failures = failures.lock().unwrap().len();
                         eprintln!(
-                            "Processed {}/{} files ({:.2}%) in {:.2}s",
+                            "Processed {}/{} files ({:.2}%) in {:.2}s, num failures: {}",
                             num_processed,
                             num_files,
                             100.0 * num_processed as f64 / num_files as f64,
-                            elapsed.as_secs_f64()
+                            elapsed.as_secs_f64(),
+                            num_failures
                         );
                     }
                 }
