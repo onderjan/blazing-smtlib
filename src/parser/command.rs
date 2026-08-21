@@ -6,7 +6,7 @@ use crate::{
         ParserOrHandlerError,
         command::standard::{
             Command, CommandAssert, CommandCheckSat, CommandDeclareConst, CommandDeclareFun,
-            CommandExit, CommandSetInfo, CommandSetLogic,
+            CommandExit, CommandParser, CommandSetInfo, CommandSetLogic,
         },
     },
     token::Token,
@@ -15,7 +15,7 @@ use crate::{
 mod standard;
 
 pub enum StandardCommand<H: CommandHandler> {
-    SetLogic(CommandSetLogic<H>),
+    SetLogic(CommandParser<H, CommandSetLogic>),
     DeclareConst(CommandDeclareConst<H>),
     DeclareFun(CommandDeclareFun<H>),
     Assert(CommandAssert<H>),
@@ -35,7 +35,7 @@ impl<H: CommandHandler> super::Parser<'_, H> {
         command_name: Str8,
     ) -> Result<StandardCommand<H>, ParserOrHandlerError<H>> {
         Ok(match command_name.bytes() {
-            b"set-logic" => StandardCommand::SetLogic(CommandSetLogic::init()),
+            b"set-logic" => StandardCommand::SetLogic(CommandParser::new()),
             b"declare-const" => StandardCommand::DeclareConst(CommandDeclareConst::init()),
             b"declare-fun" => StandardCommand::DeclareFun(CommandDeclareFun::init()),
             b"assert" => StandardCommand::Assert(CommandAssert::init()),

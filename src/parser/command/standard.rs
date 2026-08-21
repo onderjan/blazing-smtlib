@@ -1,7 +1,7 @@
 use std::{marker::PhantomData, ops::ControlFlow};
 
 use crate::{
-    CommandHandler, SmtHandler,
+    CommandHandler, SmtHandler, String8,
     parser::{
         ParserError, ParserOrHandlerError,
         category::{
@@ -23,8 +23,50 @@ where
     ) -> Result<ControlFlow<(), Self>, ParserOrHandlerError<H>>;
 }
 
-pub struct CommandSetLogic<H: SmtHandler>(ClosedParser<H, SymbolParser>);
+pub trait SimpleCommand<H: CommandHandler> {
+    type Parser: CategoryParser<H>;
 
+    fn handle(
+        handler: &mut H,
+        result: <Self::Parser as CategoryParser<H>>::Result,
+    ) -> Result<(), H::Error>;
+}
+
+pub struct CommandParser<H: CommandHandler, C: SimpleCommand<H>>(ClosedParser<H, C::Parser>);
+
+impl<H: CommandHandler, C: SimpleCommand<H>> CommandParser<H, C> {
+    pub fn new() -> Self {
+        Self(ClosedParser::init())
+    }
+}
+
+impl<H: CommandHandler, C: SimpleCommand<H>> Command<H> for CommandParser<H, C> {
+    fn progress(
+        self,
+        handler: &mut H,
+        token: Token,
+    ) -> Result<ControlFlow<(), Self>, ParserOrHandlerError<H>> {
+        match self.0.progress(handler, token)? {
+            ControlFlow::Continue(parser) => Ok(ControlFlow::Continue(Self(parser))),
+            ControlFlow::Break(result) => {
+                C::handle(handler, result).map_err(ParserOrHandlerError::HandlerError)?;
+                Ok(ControlFlow::Break(()))
+            }
+        }
+    }
+}
+
+pub struct CommandSetLogic;
+
+impl<H: CommandHandler> SimpleCommand<H> for CommandSetLogic {
+    type Parser = SymbolParser;
+
+    fn handle(handler: &mut H, logic: String8) -> Result<(), <H>::Error> {
+        handler.command_set_logic(logic)
+    }
+}
+
+/*
 impl<H: CommandHandler> CommandSetLogic<H> {
     pub fn init() -> Self {
         Self(ClosedParser::init())
@@ -45,6 +87,7 @@ impl<H: CommandHandler> Command<H> for CommandSetLogic<H> {
             .map_continue(Self))
     }
 }
+    */
 
 pub struct CommandDeclareConst<H: SmtHandler>(
     ClosedParser<H, PairParser<H, SymbolParser, SortParser>>,
