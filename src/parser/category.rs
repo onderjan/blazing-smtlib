@@ -93,22 +93,7 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for ClosedParser<H, 
     }
 }
 
-impl<H: SmtHandler, P: CategoryParser<H>> ClosedParser<H, P> {
-    pub fn progress_with_callback(
-        self,
-        handler: &mut H,
-        token: Token,
-        callback: impl Fn(&mut H, P::Result) -> Result<(), H::Error>,
-    ) -> Result<ControlFlow<(), Self>, ParserOrHandlerError<H>> {
-        match self.progress(handler, token)? {
-            ControlFlow::Continue(parser) => Ok(ControlFlow::Continue(parser)),
-            ControlFlow::Break(result) => Ok(ControlFlow::Break(
-                callback(handler, result).map_err(ParserOrHandlerError::HandlerError)?,
-            )),
-        }
-    }
-}
-
+/*
 pub enum OpenClosedParser<H: SmtHandler, P: CategoryParser<H>> {
     BeforeOpen,
     AfterOpen(ClosedParser<H, P>),
@@ -141,9 +126,7 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for OpenClosedParser
         };
         Ok(ControlFlow::Continue(result))
     }
-}
-
-pub type OpenClosedPairParser<H, P1, P2> = OpenClosedParser<H, PairParser<H, P1, P2>>;
+}*/
 
 pub enum MultipleParser<H: SmtHandler, P: CategoryParser<H>> {
     BeforeOpen,
@@ -210,6 +193,7 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for MultipleParser<H
     }
 }
 
+/*
 impl<H: SmtHandler, P: CategoryParser<H>> MultipleParser<H, P> {
     pub fn after_open_paren() -> Self {
         Self::Normal {
@@ -217,7 +201,7 @@ impl<H: SmtHandler, P: CategoryParser<H>> MultipleParser<H, P> {
             parser: None,
         }
     }
-}
+}*/
 
 pub struct SymbolParser;
 
@@ -238,5 +222,35 @@ impl<H: SmtHandler> CategoryParser<H> for SymbolParser {
         } else {
             Err(ParserError::ExpectedSymbol.into())
         }
+    }
+}
+
+pub struct CloseParenParser;
+
+impl<H: SmtHandler> CategoryParser<H> for CloseParenParser {
+    type Result = ();
+
+    fn init() -> Self {
+        Self
+    }
+
+    fn progress(
+        self,
+        _handler: &mut H,
+        token: Token,
+    ) -> Result<ControlFlow<(), Self>, ParserOrHandlerError<H>> {
+        if matches!(token, Token::ParenClose) {
+            Ok(ControlFlow::Break(()))
+        } else {
+            Err(ParserError::ExpectedSymbol.into())
+        }
+    }
+}
+
+fn expect_close_parenthesis<H: SmtHandler>(token: Token) -> Result<(), ParserOrHandlerError<H>> {
+    if matches!(token, Token::ParenClose) {
+        Ok(())
+    } else {
+        Err(ParserError::ExpectedToken(Token::ParenClose).into())
     }
 }

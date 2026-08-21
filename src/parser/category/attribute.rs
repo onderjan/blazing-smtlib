@@ -2,42 +2,40 @@ use std::ops::ControlFlow;
 
 use crate::{
     SmtAttributeValue, SmtHandler, SmtSpecialConstant, String8,
-    parser::{ParserError, ParserOrHandlerError, category::CategoryParser},
+    parser::{
+        ParserError, ParserOrHandlerError,
+        category::{CategoryParser, expect_close_parenthesis},
+    },
     token::Token,
 };
 
-pub enum AttributeParser<H: SmtHandler> {
-    Key,
-    Value(String8),
-    ValueSExprs(String8, Vec<H::Attribute>),
+pub enum ClosedAttributeParser<H: SmtHandler> {
+    Start,
+    Key(String8),
+    BeforeClose(H::Attribute),
 }
 
-pub struct AttributeParserResult<H: SmtHandler> {
-    pub attribute: H::Attribute,
-    pub returned_token: Option<Token>,
-}
-
-impl<H: SmtHandler> CategoryParser<H> for AttributeParser<H> {
-    type Result = AttributeParserResult<H>;
+impl<H: SmtHandler> CategoryParser<H> for ClosedAttributeParser<H> {
+    type Result = H::Attribute;
 
     fn init() -> Self {
-        Self::Key
+        Self::Start
     }
 
     fn progress(
         self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<AttributeParserResult<H>, Self>, ParserOrHandlerError<H>> {
+    ) -> Result<ControlFlow<H::Attribute, Self>, ParserOrHandlerError<H>> {
         match self {
-            AttributeParser::Key => {
+            ClosedAttributeParser::Start => {
                 let Token::Keyword(keyword) = token else {
                     return Err(ParserError::ExpectedKeyword.into());
                 };
-                Ok(ControlFlow::Continue(AttributeParser::Value(keyword)))
+                Ok(ControlFlow::Continue(ClosedAttributeParser::Key(keyword)))
             }
 
-            AttributeParser::Value(keyword) => {
+            ClosedAttributeParser::Key(keyword) => {
                 let value = match token {
                     Token::Numeral(value) => {
                         SmtAttributeValue::SpecialConstant(SmtSpecialConstant::Numeral(value))
@@ -62,29 +60,25 @@ impl<H: SmtHandler> CategoryParser<H> for AttributeParser<H> {
                     Token::ParenOpen => {
                         todo!("Attribute value SExpr")
                     }
-                    _ => {
+                    Token::ParenClose => {
                         // just an attribute name, return token after handling
                         let attribute = handler
                             .handle_attribute(keyword, None)
                             .map_err(ParserOrHandlerError::HandlerError)?;
-                        return Ok(ControlFlow::Break(AttributeParserResult {
-                            attribute,
-                            returned_token: Some(token),
-                        }));
+                        return Ok(ControlFlow::Break(attribute));
                     }
+                    _ => return Err(ParserError::ExpectedAttribute.into()),
                 };
 
                 let attribute = handler
                     .handle_attribute(keyword, Some(value))
                     .map_err(ParserOrHandlerError::HandlerError)?;
 
-                Ok(ControlFlow::Break(AttributeParserResult {
-                    attribute,
-                    returned_token: None,
-                }))
+                Ok(ControlFlow::Continue(Self::BeforeClose(attribute)))
             }
-            AttributeParser::ValueSExprs(string8, items) => {
-                todo!("Parse attribute value SExprs")
+            ClosedAttributeParser::BeforeClose(attribute) => {
+                expect_close_parenthesis(token)?;
+                Ok(ControlFlow::Break(attribute))
             }
         }
     }

@@ -29,6 +29,7 @@ pub enum ParserError {
     ExpectedSort,
     ExpectedSortInner,
     ExpectedTerm,
+    ExpectedAttribute,
     ExpectedCommand,
     ExpectedCommandName,
     UnsupportedCommand,

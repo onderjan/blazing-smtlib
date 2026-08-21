@@ -5,8 +5,8 @@ use crate::{
     parser::{
         ParserOrHandlerError,
         command::standard::{
-            Command, CommandAssert, CommandCheckSat, CommandDeclareConst, CommandDeclareFun,
-            CommandExit, CommandParser, CommandSetInfo, CommandSetLogic,
+            CommandAssert, CommandCheckSat, CommandDeclareConst, CommandDeclareFun, CommandExit,
+            CommandParser, CommandSetInfo, CommandSetLogic,
         },
     },
     token::Token,
@@ -16,12 +16,12 @@ mod standard;
 
 pub enum StandardCommand<H: CommandHandler> {
     SetLogic(CommandParser<H, CommandSetLogic>),
-    DeclareConst(CommandDeclareConst<H>),
-    DeclareFun(CommandDeclareFun<H>),
-    Assert(CommandAssert<H>),
-    CheckSat(CommandCheckSat<H>),
-    SetInfo(CommandSetInfo<H>),
-    Exit(CommandExit<H>),
+    DeclareConst(CommandParser<H, CommandDeclareConst>),
+    DeclareFun(CommandParser<H, CommandDeclareFun>),
+    Assert(CommandParser<H, CommandAssert>),
+    CheckSat(CommandParser<H, CommandCheckSat>),
+    SetInfo(CommandParser<H, CommandSetInfo>),
+    Exit(CommandParser<H, CommandExit>),
 }
 
 pub enum CommandBreak {
@@ -36,12 +36,12 @@ impl<H: CommandHandler> super::Parser<'_, H> {
     ) -> Result<StandardCommand<H>, ParserOrHandlerError<H>> {
         Ok(match command_name.bytes() {
             b"set-logic" => StandardCommand::SetLogic(CommandParser::new()),
-            b"declare-const" => StandardCommand::DeclareConst(CommandDeclareConst::init()),
-            b"declare-fun" => StandardCommand::DeclareFun(CommandDeclareFun::init()),
-            b"assert" => StandardCommand::Assert(CommandAssert::init()),
-            b"check-sat" => StandardCommand::CheckSat(CommandCheckSat::init()),
-            b"exit" => StandardCommand::Exit(CommandExit::init()),
-            b"set-info" => StandardCommand::SetInfo(CommandSetInfo::init()),
+            b"declare-const" => StandardCommand::DeclareConst(CommandParser::new()),
+            b"declare-fun" => StandardCommand::DeclareFun(CommandParser::new()),
+            b"assert" => StandardCommand::Assert(CommandParser::new()),
+            b"check-sat" => StandardCommand::CheckSat(CommandParser::new()),
+            b"exit" => StandardCommand::Exit(CommandParser::new()),
+            b"set-info" => StandardCommand::SetInfo(CommandParser::new()),
             _ => todo!("Unknown command {:?}", command_name),
         })
     }
