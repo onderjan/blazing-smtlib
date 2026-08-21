@@ -4,9 +4,10 @@ use crate::{
     CommandHandler, Str8,
     parser::{
         ParserOrHandlerError,
+        category::CategoryParser,
         command::standard::{
-            Command, CommandAssert, CommandCheckSat, CommandDeclareConst, CommandDeclareFun,
-            CommandDefineFun, CommandExit, CommandParser, CommandSetInfo, CommandSetLogic,
+            CommandAssert, CommandCheckSat, CommandDeclareConst, CommandDeclareFun,
+            CommandDefineFun, CommandExit, CommandSetInfo, CommandSetLogic,
         },
     },
     token::Token,
@@ -14,18 +15,81 @@ use crate::{
 
 mod standard;
 
-pub enum StandardCommand<H: CommandHandler> {
-    SetLogic(CommandParser<H, CommandSetLogic>),
-    DeclareConst(CommandParser<H, CommandDeclareConst>),
-    DeclareFun(CommandParser<H, CommandDeclareFun>),
-    DefineFun(CommandParser<H, CommandDefineFun>),
-    Assert(CommandParser<H, CommandAssert>),
-    CheckSat(CommandParser<H, CommandCheckSat>),
-    SetInfo(CommandParser<H, CommandSetInfo>),
-    Exit(CommandParser<H, CommandExit>),
+pub trait Command<H: CommandHandler> {
+    type Parser: CategoryParser<H>;
+
+    fn handle(
+        handler: &mut H,
+        result: <Self::Parser as CategoryParser<H>>::Result,
+    ) -> Result<(), H::Error>;
+
+    fn is_exit() -> bool {
+        false
+    }
 }
 
-pub enum CommandBreak {
+pub trait ParseCommand<H: CommandHandler> {
+    fn progress(
+        &mut self,
+        handler: &mut H,
+        token: Token,
+    ) -> Result<ControlFlow<CommandResult, ()>, ParserOrHandlerError<H>>;
+}
+
+pub struct StaticCommandParser<H: CommandHandler, C: Command<H>>(Option<C::Parser>);
+
+impl<H: CommandHandler, C: Command<H>> StaticCommandParser<H, C> {
+    pub fn new() -> Self {
+        Self(Some(C::Parser::init()))
+    }
+}
+
+impl<H: CommandHandler, C: Command<H>> ParseCommand<H> for StaticCommandParser<H, C> {
+    fn progress(
+        &mut self,
+        handler: &mut H,
+        token: Token,
+    ) -> Result<ControlFlow<CommandResult, ()>, ParserOrHandlerError<H>> {
+        match self.0.take() {
+            Some(parser) => match parser.progress(handler, token)? {
+                ControlFlow::Continue(parser) => {
+                    self.0 = Some(parser);
+                    Ok(ControlFlow::Continue(()))
+                }
+                ControlFlow::Break(result) => {
+                    C::handle(handler, result).map_err(ParserOrHandlerError::HandlerError)?;
+                    let command_result = if C::is_exit() {
+                        CommandResult::Exit
+                    } else {
+                        CommandResult::EndCommand
+                    };
+                    Ok(ControlFlow::Break(command_result))
+                }
+            },
+            None => panic!("Parser already consumed"),
+        }
+    }
+}
+
+pub struct DynamicCommandParser<H: CommandHandler>(Box<dyn ParseCommand<H>>);
+
+impl<H: CommandHandler> DynamicCommandParser<H> {
+    pub fn new<C: Command<H> + 'static>() -> Self {
+        Self(Box::new(StaticCommandParser::<H, C>::new()))
+    }
+}
+
+impl<H: CommandHandler> ParseCommand<H> for DynamicCommandParser<H> {
+    fn progress(
+        &mut self,
+        handler: &mut H,
+        token: Token,
+    ) -> Result<ControlFlow<CommandResult, ()>, ParserOrHandlerError<H>> {
+        self.0.progress(handler, token)
+    }
+}
+
+pub enum CommandResult {
     EndCommand,
     Exit,
 }
@@ -34,65 +98,17 @@ impl<H: CommandHandler> super::Parser<'_, H> {
     pub(super) fn start_command(
         &mut self,
         command_name: Str8,
-    ) -> Result<StandardCommand<H>, ParserOrHandlerError<H>> {
+    ) -> Result<DynamicCommandParser<H>, ParserOrHandlerError<H>> {
         Ok(match command_name.bytes() {
-            b"set-logic" => StandardCommand::SetLogic(CommandParser::new()),
-            b"declare-const" => StandardCommand::DeclareConst(CommandParser::new()),
-            b"declare-fun" => StandardCommand::DeclareFun(CommandParser::new()),
-            b"define-fun" => StandardCommand::DefineFun(CommandParser::new()),
-            b"assert" => StandardCommand::Assert(CommandParser::new()),
-            b"check-sat" => StandardCommand::CheckSat(CommandParser::new()),
-            b"exit" => StandardCommand::Exit(CommandParser::new()),
-            b"set-info" => StandardCommand::SetInfo(CommandParser::new()),
+            b"set-logic" => DynamicCommandParser::new::<CommandSetLogic>(),
+            b"declare-const" => DynamicCommandParser::new::<CommandDeclareConst>(),
+            b"declare-fun" => DynamicCommandParser::new::<CommandDeclareFun>(),
+            b"define-fun" => DynamicCommandParser::new::<CommandDefineFun>(),
+            b"assert" => DynamicCommandParser::new::<CommandAssert>(),
+            b"check-sat" => DynamicCommandParser::new::<CommandCheckSat>(),
+            b"exit" => DynamicCommandParser::new::<CommandExit>(),
+            b"set-info" => DynamicCommandParser::new::<CommandSetInfo>(),
             _ => todo!("Unknown command {:?}", command_name),
         })
     }
-}
-
-impl<H: CommandHandler> StandardCommand<H> {
-    pub fn progress(
-        self,
-        handler: &mut H,
-        token: Token,
-    ) -> Result<ControlFlow<CommandBreak, Self>, ParserOrHandlerError<H>> {
-        match self {
-            StandardCommand::SetLogic(command) => {
-                progress(command, handler, token, StandardCommand::SetLogic)
-            }
-            StandardCommand::DeclareConst(command) => {
-                progress(command, handler, token, StandardCommand::DeclareConst)
-            }
-            StandardCommand::DeclareFun(command) => {
-                progress(command, handler, token, StandardCommand::DeclareFun)
-            }
-            StandardCommand::DefineFun(command) => {
-                progress(command, handler, token, StandardCommand::DefineFun)
-            }
-            StandardCommand::Assert(command) => {
-                progress(command, handler, token, StandardCommand::Assert)
-            }
-            StandardCommand::CheckSat(command) => {
-                progress(command, handler, token, StandardCommand::CheckSat)
-            }
-            StandardCommand::SetInfo(command) => {
-                progress(command, handler, token, StandardCommand::SetInfo)
-            }
-            StandardCommand::Exit(command) => {
-                Ok(progress(command, handler, token, StandardCommand::Exit)?
-                    .map_break(|_| CommandBreak::Exit))
-            }
-        }
-    }
-}
-
-fn progress<H: CommandHandler, C: Command<H>>(
-    command: CommandParser<H, C>,
-    handler: &mut H,
-    token: Token,
-    map: fn(CommandParser<H, C>) -> StandardCommand<H>,
-) -> Result<ControlFlow<CommandBreak, StandardCommand<H>>, ParserOrHandlerError<H>> {
-    Ok(command
-        .progress(handler, token)?
-        .map_continue(map)
-        .map_break(|()| CommandBreak::EndCommand))
 }

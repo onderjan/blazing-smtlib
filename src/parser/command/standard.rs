@@ -1,48 +1,13 @@
-use std::ops::ControlFlow;
-
 use crate::{
     CommandHandler, String8,
     parser::{
-        ParserOrHandlerError,
         category::{
-            CategoryParser, CloseParenParser, ClosedParser, MultipleParser, OpenClosedParser,
-            PairParser, SymbolParser, attribute::ClosedAttributeParser, sort::SortParser,
-            term::TermParser,
+            CloseParenParser, ClosedParser, MultipleParser, OpenClosedParser, PairParser,
+            SymbolParser, attribute::ClosedAttributeParser, sort::SortParser, term::TermParser,
         },
+        command::Command,
     },
-    token::Token,
 };
-
-pub trait Command<H: CommandHandler> {
-    type Parser: CategoryParser<H>;
-
-    fn handle(
-        handler: &mut H,
-        result: <Self::Parser as CategoryParser<H>>::Result,
-    ) -> Result<(), H::Error>;
-}
-
-pub struct CommandParser<H: CommandHandler, C: Command<H>>(C::Parser);
-
-impl<H: CommandHandler, C: Command<H>> CommandParser<H, C> {
-    pub fn new() -> Self {
-        Self(C::Parser::init())
-    }
-
-    pub fn progress(
-        self,
-        handler: &mut H,
-        token: Token,
-    ) -> Result<ControlFlow<(), Self>, ParserOrHandlerError<H>> {
-        match self.0.progress(handler, token)? {
-            ControlFlow::Continue(parser) => Ok(ControlFlow::Continue(Self(parser))),
-            ControlFlow::Break(result) => {
-                C::handle(handler, result).map_err(ParserOrHandlerError::HandlerError)?;
-                Ok(ControlFlow::Break(()))
-            }
-        }
-    }
-}
 
 pub struct CommandSetLogic;
 
@@ -131,6 +96,10 @@ impl<H: CommandHandler> Command<H> for CommandExit {
     fn handle(_handler: &mut H, _unit: ()) -> Result<(), <H>::Error> {
         // do not call anything, exit is handled within parsing
         Ok(())
+    }
+
+    fn is_exit() -> bool {
+        true
     }
 }
 

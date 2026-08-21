@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     CommandHandler,
     api::SmtHandler,
-    parser::command::{CommandBreak, StandardCommand},
+    parser::command::{CommandResult, DynamicCommandParser, ParseCommand},
     token::Token,
 };
 
@@ -58,7 +58,7 @@ pub struct Parser<'a, H: CommandHandler> {
 pub(crate) enum ParserState<H: CommandHandler> {
     AwaitingCommand,
     CommandOpen,
-    StandardCommand(StandardCommand<H>),
+    StandardCommand(DynamicCommandParser<H>),
     Exit,
 }
 
@@ -90,10 +90,10 @@ impl<'a, H: CommandHandler> Parser<'a, H> {
                 };
                 ParserState::StandardCommand(self.start_command(command_name.as_str())?)
             }
-            ParserState::StandardCommand(stage) => match stage.progress(self.handler, token)? {
-                ControlFlow::Continue(command) => ParserState::StandardCommand(command),
-                ControlFlow::Break(CommandBreak::EndCommand) => ParserState::AwaitingCommand,
-                ControlFlow::Break(CommandBreak::Exit) => ParserState::Exit,
+            ParserState::StandardCommand(mut stage) => match stage.progress(self.handler, token)? {
+                ControlFlow::Continue(()) => ParserState::StandardCommand(stage),
+                ControlFlow::Break(CommandResult::EndCommand) => ParserState::AwaitingCommand,
+                ControlFlow::Break(CommandResult::Exit) => ParserState::Exit,
             },
             ParserState::Exit => {
                 // no operation on fed tokens
