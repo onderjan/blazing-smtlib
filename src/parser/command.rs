@@ -5,7 +5,7 @@ use crate::{
     parser::{
         ParserOrHandlerError,
         command::standard::{
-            CommandAssert, CommandCheckSat, CommandDeclareConst, CommandDeclareFun,
+            Command, CommandAssert, CommandCheckSat, CommandDeclareConst, CommandDeclareFun,
             CommandDefineFun, CommandExit, CommandParser, CommandSetInfo, CommandSetLogic,
         },
     },
@@ -55,36 +55,44 @@ impl<H: CommandHandler> StandardCommand<H> {
         handler: &mut H,
         token: Token,
     ) -> Result<ControlFlow<CommandBreak, Self>, ParserOrHandlerError<H>> {
-        let result = match self {
-            StandardCommand::SetLogic(command) => command
-                .progress(handler, token)?
-                .map_continue(StandardCommand::SetLogic),
-            StandardCommand::DeclareConst(command) => command
-                .progress(handler, token)?
-                .map_continue(StandardCommand::DeclareConst),
-            StandardCommand::DeclareFun(command) => command
-                .progress(handler, token)?
-                .map_continue(StandardCommand::DeclareFun),
-            StandardCommand::DefineFun(command) => command
-                .progress(handler, token)?
-                .map_continue(StandardCommand::DefineFun),
-            StandardCommand::Assert(command) => command
-                .progress(handler, token)?
-                .map_continue(StandardCommand::Assert),
-            StandardCommand::CheckSat(command) => command
-                .progress(handler, token)?
-                .map_continue(StandardCommand::CheckSat),
-            StandardCommand::SetInfo(command) => command
-                .progress(handler, token)?
-                .map_continue(StandardCommand::SetInfo),
-            StandardCommand::Exit(command) => {
-                return Ok(command
-                    .progress(handler, token)?
-                    .map_continue(StandardCommand::Exit)
-                    .map_break(|()| CommandBreak::Exit));
+        match self {
+            StandardCommand::SetLogic(command) => {
+                progress(command, handler, token, StandardCommand::SetLogic)
             }
-        };
-
-        Ok(result.map_break(|()| CommandBreak::EndCommand))
+            StandardCommand::DeclareConst(command) => {
+                progress(command, handler, token, StandardCommand::DeclareConst)
+            }
+            StandardCommand::DeclareFun(command) => {
+                progress(command, handler, token, StandardCommand::DeclareFun)
+            }
+            StandardCommand::DefineFun(command) => {
+                progress(command, handler, token, StandardCommand::DefineFun)
+            }
+            StandardCommand::Assert(command) => {
+                progress(command, handler, token, StandardCommand::Assert)
+            }
+            StandardCommand::CheckSat(command) => {
+                progress(command, handler, token, StandardCommand::CheckSat)
+            }
+            StandardCommand::SetInfo(command) => {
+                progress(command, handler, token, StandardCommand::SetInfo)
+            }
+            StandardCommand::Exit(command) => {
+                Ok(progress(command, handler, token, StandardCommand::Exit)?
+                    .map_break(|_| CommandBreak::Exit))
+            }
+        }
     }
+}
+
+fn progress<H: CommandHandler, C: Command<H>>(
+    command: CommandParser<H, C>,
+    handler: &mut H,
+    token: Token,
+    map: fn(CommandParser<H, C>) -> StandardCommand<H>,
+) -> Result<ControlFlow<CommandBreak, StandardCommand<H>>, ParserOrHandlerError<H>> {
+    Ok(command
+        .progress(handler, token)?
+        .map_continue(map)
+        .map_break(|()| CommandBreak::EndCommand))
 }
