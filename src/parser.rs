@@ -16,6 +16,7 @@ pub enum ParserError {
     ExpectedUnderscore,
     ExpectedSymbol,
     ExpectedKeyword,
+    ExpectedOpenOrCloseParen,
     EmptyIdentIndices,
     InvalidIdent,
     InvalidAttributeValue,
@@ -69,7 +70,7 @@ impl<'a, H: CommandHandler> Parser<'a, H> {
     }
 
     pub fn parse_token(&mut self, token: Token) -> Result<(), ParserOrHandlerError<H>> {
-        eprintln!("Token: {:?}", token);
+        //eprintln!("Token: {:?}", token);
         let state = std::mem::replace(&mut self.state, ParserState::AwaitingCommand);
         let state = match state {
             ParserState::AwaitingCommand => {

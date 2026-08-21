@@ -1,97 +1,198 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtApplication, SmtHandler, SmtIdent, SmtQualifiedIdent, SmtSpecialConstant, SmtTerm,
+    SmtApplication, SmtHandler, SmtIdent, SmtQualifiedIdent, SmtSpecialConstant, SmtTerm, String8,
     parser::{
         ParserError, ParserOrHandlerError,
-        category::{
-            CategoryParser, EnclosedPairParser, MultipleParser, SymbolParser, ident::IdentParser,
-        },
+        category::{CategoryParser, ident::IdentParser},
     },
     token::{Reserved, Token},
 };
 
 pub enum TermLevel<H: SmtHandler> {
-    ApplicationIdent(IdentParser),
-    Application(SmtIdent, MultipleParser<H, TermParser<H>>),
-    LetBindings(MultipleParser<H, EnclosedPairParser<H, SymbolParser, TermParser<H>>>),
-    LetBound(TermParser<H>),
-    LetClose(H::Term),
-    IndexedIdent(IdentParser),
+    Application(SmtQualifiedIdent, Vec<H::Term>),
+    LetBinding(Vec<(String8, H::Term)>, String8),
+    LetInner,
 }
 
-pub enum TermParser<H: SmtHandler> {
+pub enum TermParserState<H: SmtHandler> {
     Start,
-    Operator,
-    Selected(Box<TermLevel<H>>),
+    Open,
+    IndexedIdent(IdentParser),
+    ApplicationIdent(IdentParser),
+    ApplicationTerm(SmtQualifiedIdent, Vec<H::Term>),
+    LetBeforeBindingsOpen,
+    LetBeforeBindingOpen(Vec<(String8, H::Term)>),
+    LetBeforeBindingSymbol(Vec<(String8, H::Term)>),
+    LetBeforeBindingClose(Vec<(String8, H::Term)>),
+    LetAfterInnerTerm(H::Term),
+}
+
+pub struct TermParser<H: SmtHandler> {
+    state: TermParserState<H>,
+    levels: Vec<TermLevel<H>>,
 }
 
 impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
     type Result = H::Term;
 
     fn init() -> Self {
-        TermParser::Start
+        TermParser {
+            state: TermParserState::Start,
+            levels: Vec::new(),
+        }
     }
 
     fn progress(
-        mut self,
+        self,
         handler: &mut H,
         token: Token,
     ) -> Result<ControlFlow<H::Term, Self>, ParserOrHandlerError<H>> {
-        match self {
-            TermParser::Start => {
-                // just parse term start
-                Ok(self.parse_term_start(handler, token)?)
+        let (mut levels, term) = match self.progress_last_level(handler, token)? {
+            ControlFlow::Continue(parser) => return Ok(ControlFlow::Continue(parser)),
+            ControlFlow::Break((levels, term)) => (levels, term),
+        };
+        let Some(last_level) = levels.pop() else {
+            // this is the root term level, we are done
+            return Ok(ControlFlow::Break(term));
+        };
+
+        // we need to progress the last level
+        let state = match last_level {
+            TermLevel::Application(function, mut args) => {
+                // add argument and go back to term state
+                args.push(term);
+                TermParserState::ApplicationTerm(function, args)
             }
-            TermParser::Operator => {
-                let level = match token {
-                    Token::Symbol(fn_name) => {
-                        // this is an application where the function identifier is just a symbol
-                        let fn_ident = SmtIdent {
-                            name: fn_name,
-                            indices: Vec::new(),
-                        };
-                        TermLevel::Application(fn_ident, MultipleParser::after_open_paren())
-                    }
-                    Token::Reserved(Reserved::Let) => {
-                        TermLevel::LetBindings(MultipleParser::init())
-                    }
-                    Token::Reserved(Reserved::Lambda) => todo!("Lambda"),
-                    Token::Reserved(Reserved::Forall) => todo!("Forall"),
-                    Token::Reserved(Reserved::Exists) => todo!("Exists"),
-                    Token::Reserved(Reserved::Match) => todo!("Match"),
-                    Token::Reserved(Reserved::ExclamationMark) => todo!("Annotation"),
-                    Token::Reserved(Reserved::Underscore) => {
-                        // this is actually a term composed of an indexed identifier
-                        TermLevel::IndexedIdent(IdentParser::after_underscore())
-                    }
-                    Token::ParenOpen => {
-                        // this is an application where the function identifier is qualified or indexed
-                        TermLevel::ApplicationIdent(IdentParser::after_open_paren())
-                    }
-                    _ => return Err(ParserError::ExpectedOperator.into()),
-                };
-                Ok(ControlFlow::Continue(Self::Selected(Box::new(level))))
+            TermLevel::LetBinding(mut bindings, binding_name) => {
+                // add binding, should be followed by parenthesis closing the bindings
+                bindings.push((binding_name, term));
+                TermParserState::LetBeforeBindingClose(bindings)
             }
-            TermParser::Selected(level) => Self::progress_selected(*level, handler, token),
-        }
+            TermLevel::LetInner => {
+                // end let, should be followed by closing parenthesis
+                let term = handler
+                    .end_let(term)
+                    .map_err(ParserOrHandlerError::HandlerError)?;
+                TermParserState::LetAfterInnerTerm(term)
+            }
+        };
+
+        Ok(ControlFlow::Continue(Self { state, levels }))
     }
 }
 
+type TermProgressOk<H, P> = ControlFlow<(Vec<TermLevel<H>>, <H as SmtHandler>::Term), P>;
+
 impl<H: SmtHandler> TermParser<H> {
-    fn parse_term_start(
-        &mut self,
+    fn progress_last_level(
+        self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<H::Term, Self>, ParserOrHandlerError<H>> {
+    ) -> Result<TermProgressOk<H, Self>, ParserOrHandlerError<H>> {
+        let mut levels = self.levels;
+        let state = match self.state {
+            TermParserState::Start => return Self::parse_term_start(levels, handler, token),
+            TermParserState::Open => {
+                return Ok(ControlFlow::Continue(Self::parse_term_open(levels, token)?));
+            }
+            TermParserState::IndexedIdent(parser) => {
+                match parser.progress(handler, token)? {
+                    ControlFlow::Continue(parser) => TermParserState::IndexedIdent(parser),
+                    ControlFlow::Break(ident) => {
+                        // TODO: actual qualified ident
+                        let term = SmtTerm::QualifiedIdent(SmtQualifiedIdent::Ident(ident));
+                        let term = handler
+                            .handle_term(term)
+                            .map_err(ParserOrHandlerError::HandlerError)?;
+                        return Ok(ControlFlow::Break((levels, term)));
+                    }
+                }
+            }
+            TermParserState::ApplicationIdent(parser) => {
+                match parser.progress(handler, token)? {
+                    ControlFlow::Continue(parser) => TermParserState::ApplicationIdent(parser),
+                    ControlFlow::Break(ident) => {
+                        // TODO: actual qualified ident
+                        let ident = SmtQualifiedIdent::Ident(ident);
+                        TermParserState::ApplicationTerm(ident, Vec::new())
+                    }
+                }
+            }
+            TermParserState::ApplicationTerm(function, args) => {
+                if matches!(token, Token::ParenClose) {
+                    // this ends the application term
+                    let term = SmtTerm::Application(SmtApplication { function, args });
+                    let term = handler
+                        .handle_term(term)
+                        .map_err(ParserOrHandlerError::HandlerError)?;
+                    return Ok(ControlFlow::Break((levels, term)));
+                } else {
+                    // add the application to the level stack and parse the argument
+                    levels.push(TermLevel::Application(function, args));
+                    return Self::parse_term_start(levels, handler, token);
+                }
+            }
+            TermParserState::LetBeforeBindingsOpen => {
+                expect_open_paren(token)?;
+                TermParserState::LetBeforeBindingOpen(Vec::new())
+            }
+            TermParserState::LetBeforeBindingOpen(bindings) => {
+                match token {
+                    Token::ParenOpen => {
+                        // new binding
+                        TermParserState::LetBeforeBindingSymbol(bindings)
+                    }
+                    Token::ParenClose => {
+                        // bindings are closed, inner term will be next
+                        // check that there is at least one binding
+                        if bindings.is_empty() {
+                            return Err(ParserError::EmptyLetBindings.into());
+                        }
+
+                        handler
+                            .start_let(bindings)
+                            .map_err(ParserOrHandlerError::HandlerError)?;
+
+                        levels.push(TermLevel::LetInner);
+                        TermParserState::Start
+                    }
+                    _ => return Err(ParserError::ExpectedOpenOrCloseParen.into()),
+                }
+            }
+            TermParserState::LetBeforeBindingSymbol(bindings) => {
+                let symbol = expect_symbol(token)?;
+                levels.push(TermLevel::LetBinding(bindings, symbol));
+                TermParserState::Start
+            }
+            TermParserState::LetBeforeBindingClose(bindings) => {
+                expect_close_paren(token)?;
+                TermParserState::LetBeforeBindingOpen(bindings)
+            }
+            TermParserState::LetAfterInnerTerm(term) => {
+                expect_close_paren(token)?;
+                return Ok(ControlFlow::Break((levels, term)));
+            }
+        };
+        Ok(ControlFlow::Continue(Self { state, levels }))
+    }
+
+    fn parse_term_start(
+        levels: Vec<TermLevel<H>>,
+        handler: &mut H,
+        token: Token,
+    ) -> Result<TermProgressOk<H, Self>, ParserOrHandlerError<H>> {
         match token {
             Token::ParenOpen => {
                 // application, binder, or annotation
                 // move to operator parsing
-                Ok(ControlFlow::Continue(TermParser::Operator))
+                Ok(ControlFlow::Continue(Self {
+                    state: TermParserState::Open,
+                    levels,
+                }))
             }
             Token::Symbol(symbol) => {
-                // TODO: support qualified idents instead of just symbols
+                // a qualified identifier that is just a symbol
                 let qualified_ident = SmtQualifiedIdent::Ident(SmtIdent {
                     name: symbol,
                     indices: Vec::new(),
@@ -100,8 +201,9 @@ impl<H: SmtHandler> TermParser<H> {
                     .handle_term(SmtTerm::QualifiedIdent(qualified_ident))
                     .map_err(ParserOrHandlerError::HandlerError)?;
 
-                Ok(ControlFlow::Break(term))
+                Ok(ControlFlow::Break((levels, term)))
             }
+
             token => {
                 // handle special constants
                 match parse_special_constant(token) {
@@ -109,7 +211,7 @@ impl<H: SmtHandler> TermParser<H> {
                         let term = handler
                             .handle_term(SmtTerm::SpecialConstant(special_constant))
                             .map_err(ParserOrHandlerError::HandlerError)?;
-                        Ok(ControlFlow::Break(term))
+                        Ok(ControlFlow::Break((levels, term)))
                     }
                     Err(_token) => Err(ParserError::ExpectedTerm.into()),
                 }
@@ -117,73 +219,40 @@ impl<H: SmtHandler> TermParser<H> {
         }
     }
 
-    fn progress_selected(
-        level: TermLevel<H>,
-        handler: &mut H,
+    fn parse_term_open(
+        levels: Vec<TermLevel<H>>,
         token: Token,
-    ) -> Result<ControlFlow<H::Term, Self>, ParserOrHandlerError<H>> {
-        let result = match level {
-            TermLevel::ApplicationIdent(parser) => match parser.progress(handler, token)? {
-                ControlFlow::Continue(parser) => TermLevel::ApplicationIdent(parser),
-                ControlFlow::Break(fn_ident) => {
-                    TermLevel::Application(fn_ident, MultipleParser::after_open_paren())
-                }
-            },
-            TermLevel::Application(fn_ident, parser) => match parser.progress(handler, token)? {
-                ControlFlow::Continue(parser) => TermLevel::Application(fn_ident, parser),
-                ControlFlow::Break(args) => {
-                    let term = SmtTerm::Application(SmtApplication {
-                        function: SmtQualifiedIdent::Ident(fn_ident),
-                        args,
-                    });
-                    let term = handler
-                        .handle_term(term)
-                        .map_err(ParserOrHandlerError::HandlerError)?;
-                    return Ok(ControlFlow::Break(term));
-                }
-            },
-            TermLevel::LetBindings(parser) => match parser.progress(handler, token)? {
-                ControlFlow::Continue(parser) => TermLevel::LetBindings(parser),
-                ControlFlow::Break(bindings) => {
-                    handler
-                        .start_let(bindings)
-                        .map_err(ParserOrHandlerError::HandlerError)?;
-                    TermLevel::LetBound(TermParser::init())
-                }
-            },
-            TermLevel::LetBound(parser) => {
-                match parser.progress(handler, token)? {
-                    ControlFlow::Continue(parser) => TermLevel::LetBound(parser),
-                    ControlFlow::Break(bound_term) => {
-                        let term = handler
-                            .end_let(bound_term)
-                            .map_err(ParserOrHandlerError::HandlerError)?;
-                        // there is still a closing paren remaining
-                        TermLevel::LetClose(term)
-                    }
-                }
+    ) -> Result<Self, ParserOrHandlerError<H>> {
+        let state = match token {
+            Token::Symbol(fn_name) => {
+                // this is an application where the function identifier is just a symbol
+                let fn_ident = SmtQualifiedIdent::Ident(SmtIdent {
+                    name: fn_name,
+                    indices: Vec::new(),
+                });
+                TermParserState::ApplicationTerm(fn_ident, Vec::new())
             }
-            TermLevel::LetClose(term) => {
-                if matches!(token, Token::ParenClose) {
-                    return Ok(ControlFlow::Break(term));
-                } else {
-                    return Err(ParserError::ExpectedToken(Token::ParenClose).into());
-                }
+            Token::Reserved(Reserved::Let) => TermParserState::LetBeforeBindingsOpen,
+            Token::Reserved(Reserved::Lambda) => todo!("Lambda"),
+            Token::Reserved(Reserved::Forall) => todo!("Forall"),
+            Token::Reserved(Reserved::Exists) => todo!("Exists"),
+            Token::Reserved(Reserved::Match) => todo!("Match"),
+            Token::Reserved(Reserved::ExclamationMark) => todo!("Annotation"),
+            Token::Reserved(Reserved::Underscore) => {
+                // this is actually a term composed of an indexed identifier
+                // start an indexed ident parser after the undescore
+                let parser = IdentParser::after_underscore();
+                TermParserState::IndexedIdent(parser)
             }
-            TermLevel::IndexedIdent(parser) => match parser.progress(handler, token)? {
-                ControlFlow::Continue(parser) => TermLevel::IndexedIdent(parser),
-                ControlFlow::Break(ident) => {
-                    // TODO: qualified identifiers are accepted here
-                    let term = SmtTerm::QualifiedIdent(SmtQualifiedIdent::Ident(ident));
-                    let term = handler
-                        .handle_term(term)
-                        .map_err(ParserOrHandlerError::HandlerError)?;
-                    return Ok(ControlFlow::Break(term));
-                }
-            },
+            Token::ParenOpen => {
+                // this is an application where the function identifier is qualified or indexed
+                // start a qualified ident parser after the parenthesis open
+                let parser = IdentParser::after_open_paren();
+                TermParserState::ApplicationIdent(parser)
+            }
+            _ => return Err(ParserError::ExpectedOperator.into()),
         };
-
-        Ok(ControlFlow::Continue(Self::Selected(Box::new(result))))
+        Ok(Self { state, levels })
     }
 }
 
@@ -203,4 +272,28 @@ fn parse_special_constant(token: Token) -> Result<SmtSpecialConstant, Token> {
         _ => return Err(token),
     };
     Ok(constant)
+}
+
+fn expect_open_paren<H: SmtHandler>(token: Token) -> Result<(), ParserOrHandlerError<H>> {
+    if matches!(token, Token::ParenOpen) {
+        Ok(())
+    } else {
+        Err(ParserError::ExpectedToken(Token::ParenOpen).into())
+    }
+}
+
+fn expect_close_paren<H: SmtHandler>(token: Token) -> Result<(), ParserOrHandlerError<H>> {
+    if matches!(token, Token::ParenClose) {
+        Ok(())
+    } else {
+        Err(ParserError::ExpectedToken(Token::ParenClose).into())
+    }
+}
+
+fn expect_symbol<H: SmtHandler>(token: Token) -> Result<String8, ParserOrHandlerError<H>> {
+    if let Token::Symbol(symbol) = token {
+        Ok(symbol)
+    } else {
+        Err(ParserError::ExpectedSymbol.into())
+    }
 }
