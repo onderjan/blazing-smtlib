@@ -16,8 +16,6 @@ pub trait Command<H: CommandHandler>
 where
     Self: std::marker::Sized,
 {
-    fn init() -> Self;
-
     fn progress(
         self,
         handler: &mut H,
@@ -27,11 +25,13 @@ where
 
 pub struct CommandSetLogic<H: SmtHandler>(ClosedParser<H, SymbolParser>);
 
-impl<H: CommandHandler> Command<H> for CommandSetLogic<H> {
-    fn init() -> Self {
+impl<H: CommandHandler> CommandSetLogic<H> {
+    pub fn init() -> Self {
         Self(ClosedParser::init())
     }
+}
 
+impl<H: CommandHandler> Command<H> for CommandSetLogic<H> {
     fn progress(
         self,
         handler: &mut H,
@@ -50,11 +50,13 @@ pub struct CommandDeclareConst<H: SmtHandler>(
     ClosedParser<H, PairParser<H, SymbolParser, SortParser>>,
 );
 
-impl<H: CommandHandler> Command<H> for CommandDeclareConst<H> {
-    fn init() -> Self {
+impl<H: CommandHandler> CommandDeclareConst<H> {
+    pub fn init() -> Self {
         Self(ClosedParser::init())
     }
+}
 
+impl<H: CommandHandler> Command<H> for CommandDeclareConst<H> {
     fn progress(
         self,
         handler: &mut H,
@@ -77,11 +79,13 @@ pub struct CommandDeclareFun<H: SmtHandler>(
     >,
 );
 
-impl<H: CommandHandler> Command<H> for CommandDeclareFun<H> {
-    fn init() -> Self {
+impl<H: CommandHandler> CommandDeclareFun<H> {
+    pub fn init() -> Self {
         Self(ClosedParser::init())
     }
+}
 
+impl<H: CommandHandler> Command<H> for CommandDeclareFun<H> {
     fn progress(
         self,
         handler: &mut H,
@@ -106,11 +110,12 @@ pub enum CommandAssert<H: SmtHandler> {
     End(H::Term),
 }
 
-impl<H: CommandHandler> Command<H> for CommandAssert<H> {
-    fn init() -> Self {
+impl<H: CommandHandler> CommandAssert<H> {
+    pub fn init() -> Self {
         Self::Start
     }
-
+}
+impl<H: CommandHandler> Command<H> for CommandAssert<H> {
     fn progress(
         self,
         handler: &mut H,
@@ -150,13 +155,15 @@ pub struct CommandCheckSat<H: SmtHandler> {
     phantom: PhantomData<H>,
 }
 
-impl<H: CommandHandler> Command<H> for CommandCheckSat<H> {
-    fn init() -> Self {
+impl<H: CommandHandler> CommandCheckSat<H> {
+    pub fn init() -> Self {
         Self {
             phantom: PhantomData,
         }
     }
+}
 
+impl<H: CommandHandler> Command<H> for CommandCheckSat<H> {
     fn progress(
         self,
         handler: &mut H,
@@ -177,13 +184,15 @@ pub struct CommandExit<H: SmtHandler> {
     phantom: PhantomData<H>,
 }
 
-impl<H: CommandHandler> Command<H> for CommandExit<H> {
-    fn init() -> Self {
+impl<H: CommandHandler> CommandExit<H> {
+    pub fn init() -> Self {
         Self {
             phantom: PhantomData,
         }
     }
+}
 
+impl<H: CommandHandler> Command<H> for CommandExit<H> {
     fn progress(
         self,
         handler: &mut H,
@@ -206,11 +215,13 @@ pub enum CommandSetInfo<H: SmtHandler> {
     End(H::Attribute),
 }
 
-impl<H: CommandHandler> Command<H> for CommandSetInfo<H> {
-    fn init() -> Self {
+impl<H: CommandHandler> CommandSetInfo<H> {
+    pub fn init() -> Self {
         Self::Start
     }
+}
 
+impl<H: CommandHandler> Command<H> for CommandSetInfo<H> {
     fn progress(
         self,
         handler: &mut H,
