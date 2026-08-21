@@ -93,6 +93,22 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for ClosedParser<H, 
     }
 }
 
+impl<H: SmtHandler, P: CategoryParser<H>> ClosedParser<H, P> {
+    pub fn progress_with_callback(
+        self,
+        handler: &mut H,
+        token: Token,
+        callback: impl Fn(&mut H, P::Result) -> Result<(), H::Error>,
+    ) -> Result<ControlFlow<(), Self>, ParserOrHandlerError<H>> {
+        match self.progress(handler, token)? {
+            ControlFlow::Continue(parser) => Ok(ControlFlow::Continue(parser)),
+            ControlFlow::Break(result) => Ok(ControlFlow::Break(
+                callback(handler, result).map_err(ParserOrHandlerError::HandlerError)?,
+            )),
+        }
+    }
+}
+
 pub enum OpenClosedParser<H: SmtHandler, P: CategoryParser<H>> {
     BeforeOpen,
     AfterOpen(ClosedParser<H, P>),

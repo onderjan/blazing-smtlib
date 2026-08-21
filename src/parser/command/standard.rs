@@ -1,12 +1,12 @@
 use std::{marker::PhantomData, ops::ControlFlow};
 
 use crate::{
-    CommandHandler, SmtHandler, String8,
+    CommandHandler, SmtHandler,
     parser::{
         ParserError, ParserOrHandlerError,
         category::{
-            CategoryParser, ClosedParser, MultipleParser, SymbolParser, attribute::AttributeParser,
-            sort::SortParser, term::TermParser,
+            CategoryParser, ClosedParser, MultipleParser, PairParser, SymbolParser,
+            attribute::AttributeParser, sort::SortParser, term::TermParser,
         },
     },
     token::Token,
@@ -37,27 +37,22 @@ impl<H: CommandHandler> Command<H> for CommandSetLogic<H> {
         handler: &mut H,
         token: Token,
     ) -> Result<ControlFlow<(), Self>, ParserOrHandlerError<H>> {
-        match self.0.progress(handler, token)? {
-            ControlFlow::Continue(parser) => Ok(ControlFlow::Continue(Self(parser))),
-            ControlFlow::Break(logic) => {
-                handler
-                    .command_set_logic(logic)
-                    .map_err(ParserOrHandlerError::HandlerError)?;
-                Ok(ControlFlow::Break(()))
-            }
-        }
+        Ok(self
+            .0
+            .progress_with_callback(handler, token, |handler, logic| {
+                handler.command_set_logic(logic)
+            })?
+            .map_continue(Self))
     }
 }
 
-pub enum CommandDeclareConst<H: SmtHandler> {
-    Start,
-    ParsingSort(String8, SortParser),
-    End(String8, H::Sort),
-}
+pub struct CommandDeclareConst<H: SmtHandler>(
+    ClosedParser<H, PairParser<H, SymbolParser, SortParser>>,
+);
 
 impl<H: CommandHandler> Command<H> for CommandDeclareConst<H> {
     fn init() -> Self {
-        Self::Start
+        Self(ClosedParser::init())
     }
 
     fn progress(
@@ -65,48 +60,26 @@ impl<H: CommandHandler> Command<H> for CommandDeclareConst<H> {
         handler: &mut H,
         token: Token,
     ) -> Result<ControlFlow<(), Self>, ParserOrHandlerError<H>> {
-        let result = match self {
-            CommandDeclareConst::Start => {
-                if let Token::Symbol(name) = token {
-                    Self::ParsingSort(name, CategoryParser::<H>::init())
-                } else {
-                    return Err(ParserError::ExpectedSymbol.into());
-                }
-            }
-            CommandDeclareConst::ParsingSort(name, sort_parser) => {
-                match sort_parser.progress(handler, token)? {
-                    ControlFlow::Continue(sort_parser) => {
-                        CommandDeclareConst::ParsingSort(name, sort_parser)
-                    }
-
-                    ControlFlow::Break(sort) => CommandDeclareConst::End(name, sort),
-                }
-            }
-            CommandDeclareConst::End(name, sort) => {
-                if matches!(token, Token::ParenClose) {
-                    handler
-                        .command_declare_const(name, sort)
-                        .map_err(ParserOrHandlerError::HandlerError)?;
-                    return Ok(ControlFlow::Break(()));
-                } else {
-                    return Err(ParserError::ExpectedToken(Token::ParenClose).into());
-                }
-            }
-        };
-        Ok(ControlFlow::Continue(result))
+        Ok(self
+            .0
+            .progress_with_callback(handler, token, |handler, (name, sort)| {
+                handler.command_declare_const(name, sort)
+            })?
+            .map_continue(Self))
     }
 }
 
-pub enum CommandDeclareFun<H: SmtHandler> {
-    Start,
-    ParsingParamSorts(String8, MultipleParser<H, SortParser>),
-    ParsingResultSort(String8, Vec<H::Sort>, SortParser),
-    End(String8, Vec<H::Sort>, H::Sort),
-}
+#[allow(clippy::type_complexity)]
+pub struct CommandDeclareFun<H: SmtHandler>(
+    ClosedParser<
+        H,
+        PairParser<H, SymbolParser, PairParser<H, MultipleParser<H, SortParser>, SortParser>>,
+    >,
+);
 
 impl<H: CommandHandler> Command<H> for CommandDeclareFun<H> {
     fn init() -> Self {
-        Self::Start
+        Self(ClosedParser::init())
     }
 
     fn progress(
@@ -114,44 +87,16 @@ impl<H: CommandHandler> Command<H> for CommandDeclareFun<H> {
         handler: &mut H,
         token: Token,
     ) -> Result<ControlFlow<(), Self>, ParserOrHandlerError<H>> {
-        let result = match self {
-            CommandDeclareFun::Start => {
-                if let Token::Symbol(name) = token {
-                    Self::ParsingParamSorts(name, MultipleParser::init())
-                } else {
-                    return Err(ParserError::ExpectedSymbol.into());
-                }
-            }
-            CommandDeclareFun::ParsingParamSorts(name, parser) => {
-                match parser.progress(handler, token)? {
-                    ControlFlow::Continue(parser) => Self::ParsingParamSorts(name, parser),
-                    ControlFlow::Break(param_sorts) => {
-                        Self::ParsingResultSort(name, param_sorts, CategoryParser::<H>::init())
-                    }
-                }
-            }
-
-            CommandDeclareFun::ParsingResultSort(name, param_sorts, parser) => {
-                match parser.progress(handler, token)? {
-                    ControlFlow::Continue(parser) => {
-                        Self::ParsingResultSort(name, param_sorts, parser)
-                    }
-
-                    ControlFlow::Break(result_sort) => Self::End(name, param_sorts, result_sort),
-                }
-            }
-            CommandDeclareFun::End(name, param_sorts, result_sort) => {
-                if matches!(token, Token::ParenClose) {
-                    handler
-                        .command_declare_fun(name, param_sorts, result_sort)
-                        .map_err(ParserOrHandlerError::HandlerError)?;
-                    return Ok(ControlFlow::Break(()));
-                } else {
-                    return Err(ParserError::ExpectedToken(Token::ParenClose).into());
-                }
-            }
-        };
-        Ok(ControlFlow::Continue(result))
+        Ok(self
+            .0
+            .progress_with_callback(
+                handler,
+                token,
+                |handler, (name, (param_sorts, result_sort))| {
+                    handler.command_declare_fun(name, param_sorts, result_sort)
+                },
+            )?
+            .map_continue(Self))
     }
 }
 
