@@ -5,8 +5,8 @@ use crate::{
     parser::{
         ParserError, ParserOrHandlerError,
         category::{
-            CategoryParser, MultipleParser, attribute::AttributeParser, sort::SortParser,
-            term::TermParser,
+            CategoryParser, ClosedParser, MultipleParser, SymbolParser, attribute::AttributeParser,
+            sort::SortParser, term::TermParser,
         },
     },
     token::Token,
@@ -25,14 +25,11 @@ where
     ) -> Result<ControlFlow<(), Self>, ParserOrHandlerError<H>>;
 }
 
-pub enum CommandSetLogic<H: SmtHandler> {
-    Start(PhantomData<H>),
-    End(String8),
-}
+pub struct CommandSetLogic<H: SmtHandler>(ClosedParser<H, SymbolParser>);
 
 impl<H: CommandHandler> Command<H> for CommandSetLogic<H> {
     fn init() -> Self {
-        Self::Start(PhantomData)
+        Self(ClosedParser::init())
     }
 
     fn progress(
@@ -40,23 +37,13 @@ impl<H: CommandHandler> Command<H> for CommandSetLogic<H> {
         handler: &mut H,
         token: Token,
     ) -> Result<ControlFlow<(), Self>, ParserOrHandlerError<H>> {
-        match self {
-            CommandSetLogic::Start(_) => {
-                if let Token::Symbol(logic) = token {
-                    Ok(ControlFlow::Continue(Self::End(logic)))
-                } else {
-                    Err(ParserError::ExpectedSymbol.into())
-                }
-            }
-            CommandSetLogic::End(logic) => {
-                if matches!(token, Token::ParenClose) {
-                    handler
-                        .command_set_logic(logic)
-                        .map_err(ParserOrHandlerError::HandlerError)?;
-                    Ok(ControlFlow::Break(()))
-                } else {
-                    Err(ParserError::ExpectedToken(Token::ParenClose).into())
-                }
+        match self.0.progress(handler, token)? {
+            ControlFlow::Continue(parser) => Ok(ControlFlow::Continue(Self(parser))),
+            ControlFlow::Break(logic) => {
+                handler
+                    .command_set_logic(logic)
+                    .map_err(ParserOrHandlerError::HandlerError)?;
+                Ok(ControlFlow::Break(()))
             }
         }
     }

@@ -59,13 +59,46 @@ impl<H: SmtHandler, P1: CategoryParser<H>, P2: CategoryParser<H>> CategoryParser
     }
 }
 
-pub enum EnclosedParser<H: SmtHandler, P: CategoryParser<H>> {
-    BeforeOpen,
-    ParsingEnclosed(P),
+pub enum ClosedParser<H: SmtHandler, P: CategoryParser<H>> {
+    Inner(P),
     BeforeClose(P::Result),
 }
 
-impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for EnclosedParser<H, P> {
+impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for ClosedParser<H, P> {
+    type Result = P::Result;
+
+    fn init() -> Self {
+        Self::Inner(P::init())
+    }
+
+    fn progress(
+        self,
+        handler: &mut H,
+        token: Token,
+    ) -> Result<ControlFlow<Self::Result, Self>, ParserOrHandlerError<H>> {
+        let result = match self {
+            Self::Inner(parser) => match parser.progress(handler, token)? {
+                ControlFlow::Continue(parser) => Self::Inner(parser),
+                ControlFlow::Break(result) => Self::BeforeClose(result),
+            },
+            Self::BeforeClose(result) => {
+                if matches!(token, Token::ParenClose) {
+                    return Ok(ControlFlow::Break(result));
+                } else {
+                    return Err(ParserError::ExpectedToken(Token::ParenClose).into());
+                }
+            }
+        };
+        Ok(ControlFlow::Continue(result))
+    }
+}
+
+pub enum OpenClosedParser<H: SmtHandler, P: CategoryParser<H>> {
+    BeforeOpen,
+    AfterOpen(ClosedParser<H, P>),
+}
+
+impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for OpenClosedParser<H, P> {
     type Result = P::Result;
 
     fn init() -> Self {
@@ -78,30 +111,23 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for EnclosedParser<H
         token: Token,
     ) -> Result<ControlFlow<Self::Result, Self>, ParserOrHandlerError<H>> {
         let result = match self {
-            EnclosedParser::BeforeOpen => {
+            OpenClosedParser::BeforeOpen => {
                 if matches!(token, Token::ParenOpen) {
-                    Self::ParsingEnclosed(P::init())
+                    Self::AfterOpen(ClosedParser::init())
                 } else {
                     return Err(ParserError::ExpectedToken(Token::ParenOpen).into());
                 }
             }
-            EnclosedParser::ParsingEnclosed(parser) => match parser.progress(handler, token)? {
-                ControlFlow::Continue(parser) => Self::ParsingEnclosed(parser),
-                ControlFlow::Break(result) => Self::BeforeClose(result),
+            OpenClosedParser::AfterOpen(parser) => match parser.progress(handler, token)? {
+                ControlFlow::Continue(parser) => Self::AfterOpen(parser),
+                ControlFlow::Break(result) => return Ok(ControlFlow::Break(result)),
             },
-            EnclosedParser::BeforeClose(result) => {
-                if matches!(token, Token::ParenClose) {
-                    return Ok(ControlFlow::Break(result));
-                } else {
-                    return Err(ParserError::ExpectedToken(Token::ParenClose).into());
-                }
-            }
         };
         Ok(ControlFlow::Continue(result))
     }
 }
 
-pub type EnclosedPairParser<H, P1, P2> = EnclosedParser<H, PairParser<H, P1, P2>>;
+pub type OpenClosedPairParser<H, P1, P2> = OpenClosedParser<H, PairParser<H, P1, P2>>;
 
 pub enum MultipleParser<H: SmtHandler, P: CategoryParser<H>> {
     BeforeOpen,
