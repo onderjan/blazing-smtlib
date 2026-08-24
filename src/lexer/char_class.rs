@@ -17,7 +17,7 @@ pub enum CharClass {
     ParenOpen,
     /// ')' (41)
     ParenClose,
-    /// '.' (45), this is also allowed in symbols
+    /// '.' (46), this is also allowed in symbols
     Dot,
     /// ':' (58)
     Colon,
