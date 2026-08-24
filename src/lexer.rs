@@ -1,5 +1,3 @@
-use std::io;
-
 mod char_class;
 
 use char_class::{CharClass, U8OrEof, char_class_opt};
@@ -32,9 +30,8 @@ pub struct Lexer {
 }
 
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LexerError {
-    ReadError(io::Error),
     UnexpectedCharacter,
     FractionDigitExpected,
     HexadecimalDigitExpected,
