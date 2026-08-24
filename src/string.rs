@@ -53,7 +53,8 @@ impl Debug for Str8<'_> {
             if c < 128 {
                 f.write_char(c as char)?;
             } else {
-                write!(f, "\\b{:X}{:X}", c / 16, c % 16)?;
+                // escape non-ASCII byte
+                write!(f, "\\x{:X}{:X}", c / 16, c % 16)?;
             }
         }
         f.write_char('\"')?;
