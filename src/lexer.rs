@@ -376,9 +376,14 @@ impl Lexer {
                         // end comment, ready for next token
                         LexerState::Normal
                     }
-                    _ => {
-                        // continue comment, no problem ending file on a comment
+                    Some(_) => {
+                        // continue comment
                         LexerState::Comment
+                    }
+                    None => {
+                        // end without problems on EOF
+                        tokens.push(Token::EndOfFile);
+                        return Ok(tokens);
                     }
                 }
             }
