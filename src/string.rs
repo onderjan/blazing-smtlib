@@ -4,7 +4,7 @@ use std::fmt::{Debug, Write};
 pub struct String8(pub Vec<u8>);
 
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct Str8<'a>(pub &'a [u8]);
+pub struct String8View<'a>(pub &'a [u8]);
 
 impl String8 {
     pub fn new() -> String8 {
@@ -15,8 +15,8 @@ impl String8 {
         &self.0
     }
 
-    pub fn as_str<'a>(&'a self) -> Str8<'a> {
-        Str8(&self.0)
+    pub fn as_view<'a>(&'a self) -> String8View<'a> {
+        String8View(&self.0)
     }
 
     pub fn len(&self) -> usize {
@@ -36,17 +36,17 @@ impl Default for String8 {
 
 impl Debug for String8 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Debug::fmt(&self.as_str(), f)
+        Debug::fmt(&self.as_view(), f)
     }
 }
 
-impl Str8<'_> {
+impl String8View<'_> {
     pub fn bytes(&self) -> &[u8] {
         self.0
     }
 }
 
-impl Debug for Str8<'_> {
+impl Debug for String8View<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // print in the manner of Rust str/String,
         // use byte escapes instead of Unicode escapes

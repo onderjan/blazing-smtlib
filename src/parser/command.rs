@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    CommandHandler, Str8,
+    CommandHandler, String8View,
     parser::{
         ParserOrHandlerError,
         category::CategoryParser,
@@ -97,7 +97,7 @@ pub enum CommandResult {
 impl<H: CommandHandler> super::Parser<'_, H> {
     pub(super) fn start_command(
         &mut self,
-        command_name: Str8,
+        command_name: String8View,
     ) -> Result<DynamicCommandParser<H>, ParserOrHandlerError<H>> {
         Ok(match command_name.bytes() {
             b"set-logic" => DynamicCommandParser::new::<CommandSetLogic>(),

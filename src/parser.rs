@@ -88,7 +88,7 @@ impl<'a, H: CommandHandler> Parser<'a, H> {
                 let Token::Symbol(command_name) = token else {
                     return Err(ParserError::ExpectedCommand.into());
                 };
-                ParserState::StandardCommand(self.start_command(command_name.as_str())?)
+                ParserState::StandardCommand(self.start_command(command_name.as_view())?)
             }
             ParserState::StandardCommand(mut stage) => match stage.progress(self.handler, token)? {
                 ControlFlow::Continue(()) => ParserState::StandardCommand(stage),
