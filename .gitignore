@@ -1,2 +1,5 @@
 /target
 Cargo.lock
+
+# Claude is used for reviewing only
+.Claude
