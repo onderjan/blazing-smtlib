@@ -99,7 +99,7 @@ impl<H: CommandHandler> super::Parser<'_, H> {
         &mut self,
         command_name: String8View,
     ) -> Result<DynamicCommandParser<H>, ParserOrHandlerError<H>> {
-        Ok(match command_name.bytes() {
+        Ok(match command_name.as_slice() {
             b"set-logic" => DynamicCommandParser::new::<CommandSetLogic>(),
             b"declare-const" => DynamicCommandParser::new::<CommandDeclareConst>(),
             b"declare-fun" => DynamicCommandParser::new::<CommandDeclareFun>(),

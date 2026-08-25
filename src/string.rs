@@ -1,22 +1,31 @@
 use std::fmt::{Debug, Write};
 
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct String8(pub Vec<u8>);
-
-#[derive(Clone, PartialEq, Eq, Hash)]
-pub struct String8View<'a>(pub &'a [u8]);
+pub struct String8(Vec<u8>);
 
 impl String8 {
     pub fn new() -> String8 {
         String8(Vec::new())
     }
 
-    pub fn bytes(&self) -> &[u8] {
+    pub fn from_vec(vec: Vec<u8>) -> Self {
+        Self(vec)
+    }
+
+    pub fn from_byte(byte: u8) -> Self {
+        Self::from_vec(vec![byte])
+    }
+
+    pub fn as_slice(&self) -> &[u8] {
         &self.0
     }
 
     pub fn as_view<'a>(&'a self) -> String8View<'a> {
         String8View(&self.0)
+    }
+
+    pub fn into_vec(self) -> Vec<u8> {
+        self.0
     }
 
     pub fn len(&self) -> usize {
@@ -25,6 +34,14 @@ impl String8 {
 
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    pub fn clear(&mut self) {
+        self.0.clear();
+    }
+
+    pub fn push(&mut self, byte: u8) {
+        self.0.push(byte);
     }
 }
 
@@ -40,8 +57,11 @@ impl Debug for String8 {
     }
 }
 
-impl String8View<'_> {
-    pub fn bytes(&self) -> &[u8] {
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct String8View<'a>(&'a [u8]);
+
+impl<'a> String8View<'a> {
+    pub fn as_slice(self) -> &'a [u8] {
         self.0
     }
 }

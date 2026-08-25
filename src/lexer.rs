@@ -91,7 +91,7 @@ impl Lexer {
             CharClass::Digit => {
                 // digit starts a numeral or a decimal
                 // and determines the first digit value
-                LexerState::NumeralOrDecimal(String8(vec![c]))
+                LexerState::NumeralOrDecimal(String8::from_byte(c))
             }
 
             CharClass::Hash => {
@@ -101,23 +101,23 @@ impl Lexer {
 
             CharClass::DoubleQuote => {
                 // double quote starts a string literal
-                LexerState::StringLiteral(String8(Vec::new()))
+                LexerState::StringLiteral(String8::new())
             }
 
             CharClass::Colon => {
                 // colon starts a keyword, which continues with a simple symbol string
-                LexerState::Keyword(String8(Vec::new()))
+                LexerState::Keyword(String8::new())
             }
 
             CharClass::Letter | CharClass::Special | CharClass::Dot => {
                 // starts a simple symbol or a reserved word
                 // the reserved words will be handled after the name is fully known
-                LexerState::SimpleSymbol(String8(vec![c]))
+                LexerState::SimpleSymbol(String8::from_byte(c))
             }
 
             CharClass::Pipe => {
                 // quoted symbol
-                LexerState::QuotedSymbol(String8(Vec::new()))
+                LexerState::QuotedSymbol(String8::new())
             }
 
             _ => {
@@ -142,7 +142,7 @@ impl Lexer {
                 match char_class_opt(c) {
                     Some((CharClass::Digit, c)) => {
                         // add one digit to the fractional part
-                        fractional_part.0.push(c);
+                        fractional_part.push(c);
 
                         LexerState::Fraction {
                             whole_part,
@@ -167,7 +167,7 @@ impl Lexer {
                 match char_class_opt(c) {
                     Some((CharClass::Digit, c)) => {
                         // add one digit
-                        value.0.push(c);
+                        value.push(c);
                         LexerState::NumeralOrDecimal(value)
                     }
 
@@ -199,7 +199,7 @@ impl Lexer {
 
                 if let Some(hex_digit) = hex_digit {
                     // add hexadecimal digit
-                    whole.0.push(hex_digit);
+                    whole.push(hex_digit);
                     LexerState::Hexadecimal(whole)
                 } else {
                     if whole.is_empty() {
@@ -224,7 +224,7 @@ impl Lexer {
 
                 if let Some(binary_digit) = binary_digit {
                     // add binary digit
-                    whole.0.push(binary_digit);
+                    whole.push(binary_digit);
                     LexerState::Binary(whole)
                 } else {
                     if whole.is_empty() {
@@ -259,7 +259,7 @@ impl Lexer {
                     U8OrEof::U8(c) => {
                         if CharClass::from(c).is_printable_or_whitespace() {
                             // add to literal
-                            literal.0.push(c);
+                            literal.push(c);
                             LexerState::StringLiteral(literal)
                         } else {
                             // forbidden as not printable or whitespace
@@ -273,7 +273,7 @@ impl Lexer {
                     U8OrEof::U8(b'\"') => {
                         // this has been a double-quote escape
                         // push a double-quote and continue lexing the string literal
-                        literal.0.push(b'\"');
+                        literal.push(b'\"');
                         LexerState::StringLiteral(literal)
                     }
                     _ => {
@@ -291,7 +291,7 @@ impl Lexer {
                         c,
                     )) => {
                         // add character
-                        symbol.0.push(c);
+                        symbol.push(c);
                         LexerState::SimpleSymbol(symbol)
                     }
                     _ => {
@@ -315,12 +315,12 @@ impl Lexer {
                     c,
                 )) => {
                     // add character
-                    keyword.0.push(c);
+                    keyword.push(c);
                     LexerState::Keyword(keyword)
                 }
                 _ => {
                     // simple symbol ended with previous character
-                    if keyword.0.is_empty() {
+                    if keyword.is_empty() {
                         return Err(LexerError::KeywordNameExpected);
                     }
 
@@ -348,7 +348,7 @@ impl Lexer {
                     U8OrEof::U8(c) => {
                         if CharClass::from(c).is_printable_or_whitespace() {
                             // add the character to the quoted symbol and continue it
-                            symbol.0.push(c);
+                            symbol.push(c);
                             LexerState::QuotedSymbol(symbol)
                         } else {
                             // character forbidden as not printable or whitespace

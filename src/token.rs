@@ -39,7 +39,7 @@ pub enum Reserved {
 
 impl Reserved {
     pub fn from_symbol_opt(symbol: &String8) -> Option<Reserved> {
-        Some(match symbol.0.as_slice() {
+        Some(match symbol.as_slice() {
             b"BINARY" => Reserved::Binary,
             b"DECIMAL" => Reserved::Decimal,
             b"HEXADECIMAL" => Reserved::Hexadecimal,
