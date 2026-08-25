@@ -75,13 +75,21 @@ impl<'a, H: CommandHandler> Parser<'a, H> {
         let state = std::mem::replace(&mut self.state, ParserState::AwaitingCommand);
         let state = match state {
             ParserState::AwaitingCommand => {
-                // expect open paren
-                if !matches!(token, Token::ParenOpen) {
-                    return Err(ParserOrHandlerError::ParserError(
-                        ParserError::ExpectedCommand,
-                    ));
+                match token {
+                    Token::ParenOpen => {
+                        // open the command
+                        ParserState::CommandOpen
+                    }
+                    Token::EndOfFile => {
+                        // end of file here is fine, do not change the state
+                        ParserState::AwaitingCommand
+                    }
+                    _ => {
+                        return Err(ParserOrHandlerError::ParserError(
+                            ParserError::ExpectedCommand,
+                        ));
+                    }
                 }
-                ParserState::CommandOpen
             }
             ParserState::CommandOpen => {
                 // expect a symbol identifying the command

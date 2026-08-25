@@ -46,6 +46,21 @@ pub fn process_smt_reader<H: CommandHandler>(
     let mut lexer = Lexer::new();
     let mut parser = Parser::new(handler);
 
+    let mut parse_tokens = |tokens| -> Result<(), SmtProcessError<H>> {
+        for token in tokens {
+            match parser.parse_token(token) {
+                Ok(()) => {}
+                Err(ParserOrHandlerError::ParserError(err)) => {
+                    return Err(SmtProcessError::ParserError(err));
+                }
+                Err(ParserOrHandlerError::HandlerError(err)) => {
+                    return Err(SmtProcessError::HandlerError(err));
+                }
+            }
+        }
+        Ok(())
+    };
+
     loop {
         let mut c = 0;
         match reader.read(std::slice::from_mut(&mut c)) {
@@ -55,19 +70,7 @@ pub fn process_smt_reader<H: CommandHandler>(
                 }
                 assert_eq!(num_bytes, 1);
                 match lexer.lex_next(c) {
-                    Ok(tokens) => {
-                        for token in tokens {
-                            match parser.parse_token(token) {
-                                Ok(()) => {}
-                                Err(ParserOrHandlerError::ParserError(err)) => {
-                                    return Err(SmtProcessError::ParserError(err));
-                                }
-                                Err(ParserOrHandlerError::HandlerError(err)) => {
-                                    return Err(SmtProcessError::HandlerError(err));
-                                }
-                            }
-                        }
-                    }
+                    Ok(tokens) => parse_tokens(tokens)?,
                     Err(err) => {
                         return Err(SmtProcessError::LexerError(err));
                     }
@@ -78,9 +81,9 @@ pub fn process_smt_reader<H: CommandHandler>(
             }
         }
     }
-    if let Err(err) = lexer.lex_eof() {
-        return Err(SmtProcessError::LexerError(err));
-    }
 
-    Ok(())
+    match lexer.lex_eof() {
+        Ok(tokens) => parse_tokens(tokens),
+        Err(err) => Err(SmtProcessError::LexerError(err)),
+    }
 }
