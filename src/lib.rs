@@ -6,6 +6,7 @@ use std::{
 };
 
 mod plain;
+mod span;
 mod string;
 
 mod lexer;
@@ -16,6 +17,7 @@ mod parser;
 
 pub use crate::api::*;
 pub use crate::plain::*;
+pub use crate::span::*;
 pub use crate::string::*;
 
 use crate::{
