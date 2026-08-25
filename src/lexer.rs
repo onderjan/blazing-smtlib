@@ -1,6 +1,8 @@
 mod char_class;
 
-use char_class::{CharClass, U8OrEof, char_class_opt};
+use char_class::{U8OrEof, char_class_opt};
+
+pub use char_class::CharClass;
 
 use crate::{
     String8,
@@ -285,28 +287,24 @@ impl Lexer {
                 }
             }
             LexerState::SimpleSymbol(mut symbol) => {
-                match char_class_opt(c) {
-                    Some((
-                        CharClass::Letter | CharClass::Digit | CharClass::Special | CharClass::Dot,
-                        c,
-                    )) => {
-                        // add character
-                        symbol.push(c);
-                        LexerState::SimpleSymbol(symbol)
-                    }
-                    _ => {
-                        // simple symbol ended with previous character
-                        // process reserved words
-                        let token = if let Some(reserved) = Reserved::from_symbol_opt(&symbol) {
-                            Token::Reserved(reserved)
-                        } else {
-                            Token::Symbol(symbol)
-                        };
+                if let Some((class, c)) = char_class_opt(c)
+                    && class.is_allowed_in_simple_symbol()
+                {
+                    // add character
+                    symbol.push(c);
+                    LexerState::SimpleSymbol(symbol)
+                } else {
+                    // simple symbol ended with previous character
+                    // process reserved words
+                    let token = if let Some(reserved) = Reserved::from_symbol_opt(&symbol) {
+                        Token::Reserved(reserved)
+                    } else {
+                        Token::Symbol(symbol)
+                    };
 
-                        // push new token and lex the character normally
-                        tokens.push(token);
-                        return self.lex_normal(tokens, c);
-                    }
+                    // push new token and lex the character normally
+                    tokens.push(token);
+                    return self.lex_normal(tokens, c);
                 }
             }
             LexerState::Keyword(mut keyword) => match char_class_opt(c) {

@@ -5,14 +5,17 @@ use std::{
     path::Path,
 };
 
-mod lexer;
+mod plain;
 mod string;
+
+mod lexer;
 mod token;
 
 mod api;
 mod parser;
 
 pub use crate::api::*;
+pub use crate::plain::*;
 pub use crate::string::*;
 
 use crate::{

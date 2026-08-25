@@ -113,4 +113,17 @@ impl CharClass {
         // everything except other non-printable and DEL
         !matches!(self, CharClass::OtherNonPrintable | CharClass::Del)
     }
+
+    pub fn is_allowed_in_simple_symbol(self) -> bool {
+        // letters, digits, special, dot
+        matches!(
+            self,
+            CharClass::Letter | CharClass::Digit | CharClass::Special | CharClass::Dot
+        )
+    }
+
+    /*pub fn can_start_simple_symbol(self) -> bool {
+        // everything that is allowed in simple symbol except for digits
+        self.is_allowed_in_simple_symbol() && !matches!(self, CharClass::Digit)
+    }*/
 }

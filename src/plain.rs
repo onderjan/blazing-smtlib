@@ -1,0 +1,287 @@
+use crate::{String8, String8View, lexer::CharClass};
+
+/// SMT-LIB string content.
+///
+///
+/// May be empty.
+/// Must contain only SMT-LIB printable or whitespace bytes.
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct SmtStringContent(String8);
+
+impl SmtStringContent {
+    pub fn is_allowed(value: &[u8]) -> bool {
+        value
+            .iter()
+            .copied()
+            .all(|c| CharClass::from(c).is_printable_or_whitespace())
+    }
+}
+
+/// SMT-LIB symbol.
+///
+/// May be empty.
+/// Must contain only SMT-LIB printable or whitespace bytes except for pipe (|) and backslash (\).
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct SmtSymbol(String8);
+
+impl SmtSymbol {
+    pub fn is_allowed(value: &[u8]) -> bool {
+        value
+            .iter()
+            .copied()
+            .all(|c| CharClass::from(c).is_printable_or_whitespace() && c != b'|' && c != b'\\')
+    }
+}
+
+/// SMT-LIB keyword.
+///
+/// Cannot be empty.
+/// Must contain only SMT-LIB simple-symbol-class bytes.
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct SmtKeyword(String8);
+
+impl SmtKeyword {
+    pub fn is_allowed(value: &[u8]) -> bool {
+        !value.is_empty()
+            && value
+                .iter()
+                .copied()
+                .all(|c| CharClass::from(c).is_allowed_in_simple_symbol())
+    }
+}
+
+/// SMT-LIB numeral (base 10).
+///
+/// Cannot be empty.
+/// Must contain only digits.
+/// Cannot contain any leading zeros except for the constant "0" itself.
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct SmtNumeral(String8);
+
+impl SmtNumeral {
+    pub fn is_allowed(value: &[u8]) -> bool {
+        if value.is_empty() {
+            return false;
+        }
+        // if the length is not 1, leading zeros must be rejected
+        let mut zero_allowed = value.len() == 1;
+        for c in value.iter().copied() {
+            if !c.is_ascii_digit() {
+                return false;
+            }
+            if !zero_allowed && c == b'0' {
+                return false;
+            }
+            // leading non-zero, allow zeros in next positions
+            zero_allowed = true;
+        }
+        true
+    }
+}
+
+/// SMT-LIB digits (base 10).
+///
+/// Cannot be empty.
+/// Must contain only digits.
+///
+/// Unlike `SmtNumeral`, there is no restriction on leading zeros.
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct SmtDigits(String8);
+
+impl SmtDigits {
+    pub fn is_allowed(value: &[u8]) -> bool {
+        !value.is_empty() && value.iter().all(|c| c.is_ascii_digit())
+    }
+}
+
+/// SMT-LIB hexadecimal digits (base 16).
+///
+/// Cannot be empty.
+/// Must contain only digits, lower-case letters a-f or upper-case letters A-F.
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct SmtHexDigits(String8);
+
+impl SmtHexDigits {
+    pub fn is_allowed(value: &[u8]) -> bool {
+        !value.is_empty() && value.iter().all(|c| c.is_ascii_hexdigit())
+    }
+}
+
+/// SMT-LIB binary digits (base 2).
+///
+/// Cannot be empty.
+/// Must contain only the digits 0, 1.
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct SmtBinDigits(String8);
+
+impl SmtBinDigits {
+    pub fn is_allowed(value: &[u8]) -> bool {
+        !value.is_empty() && value.iter().copied().all(|c| c == b'0' || c == b'1')
+    }
+}
+
+#[derive(Debug)]
+pub struct SmtDisallowedByteVecError(String8);
+
+impl SmtDisallowedByteVecError {
+    pub fn into_vec(self) -> Vec<u8> {
+        self.0.into_vec()
+    }
+}
+
+macro_rules! string8_newtype {
+    ($name:ident) => {
+        impl $name {
+            pub fn new(value: Vec<u8>) -> Result<Self, SmtDisallowedByteVecError> {
+                let value = String8::from_vec(value);
+                if Self::is_allowed(value.as_slice()) {
+                    Ok(Self(value))
+                } else {
+                    Err(SmtDisallowedByteVecError(value))
+                }
+            }
+
+            pub(crate) fn new_unchecked(value: String8) -> Self {
+                debug_assert!(
+                    Self::is_allowed(value.as_slice()),
+                    concat!("invalid ", stringify!($name), ": {:?}"),
+                    value
+                );
+                Self(value)
+            }
+
+            pub fn as_slice(&self) -> &[u8] {
+                self.0.as_slice()
+            }
+            pub fn as_view(&self) -> String8View<'_> {
+                self.0.as_view()
+            }
+            pub fn into_string8(self) -> String8 {
+                self.0
+            }
+            pub fn into_vec(self) -> Vec<u8> {
+                self.0.into_vec()
+            }
+            pub fn len(&self) -> usize {
+                self.0.len()
+            }
+            pub fn is_empty(&self) -> bool {
+                self.0.is_empty()
+            }
+            pub fn iter(&self) -> impl Iterator<Item = u8> {
+                self.0.iter()
+            }
+        }
+
+        impl std::fmt::Debug for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                std::fmt::Debug::fmt(&self.0, f)
+            }
+        }
+    };
+}
+
+string8_newtype!(SmtStringContent);
+string8_newtype!(SmtSymbol);
+string8_newtype!(SmtKeyword);
+string8_newtype!(SmtNumeral);
+string8_newtype!(SmtDigits);
+string8_newtype!(SmtHexDigits);
+string8_newtype!(SmtBinDigits);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_stringlike_newtypes() {
+        // TODO: clarify whether this is allowed by the standard
+        assert!(SmtKeyword::is_allowed(b"0"));
+        assert!(SmtKeyword::is_allowed(b"let"));
+
+        // The difference between SmtStringContent and SmtSymbol is
+        // whether they accept backslashes and pipes.
+        assert!(SmtStringContent::is_allowed(b"a|b"));
+        assert!(SmtStringContent::is_allowed(b"a\\b"));
+        assert!(!SmtSymbol::is_allowed(b"a|b"));
+        assert!(!SmtSymbol::is_allowed(b"a\\b"));
+
+        // Test acceptance of empty string.
+        // String literals and symbols accept it, keywords reject.
+        assert!(SmtStringContent::is_allowed(b""));
+        assert!(SmtSymbol::is_allowed(b""));
+        assert!(!SmtKeyword::is_allowed(b""));
+
+        // ASCII / UTF-8 / non-UTF-8 acceptance tests.
+        // Keywords do not accept UTF-8 / non-UTF-8, even without spaces.
+        let simple = b"a-simple-symbol~!@$%^&*_-+=<>.?/";
+        let quick = b"A quick brown fox jumps over a lazy dog.";
+        let quick_utf8 = "Příšerně žluťoučký kůň úpěl ďábelské ódy.".as_bytes();
+        let non_utf8 = b"\xFF";
+        assert!(SmtStringContent::is_allowed(simple));
+        assert!(SmtStringContent::is_allowed(quick));
+        assert!(SmtStringContent::is_allowed(quick_utf8));
+        assert!(SmtStringContent::is_allowed(non_utf8));
+
+        assert!(SmtSymbol::is_allowed(simple));
+        assert!(SmtSymbol::is_allowed(quick));
+        assert!(SmtSymbol::is_allowed(quick_utf8));
+        assert!(SmtSymbol::is_allowed(non_utf8));
+
+        assert!(SmtKeyword::is_allowed(simple));
+        assert!(SmtKeyword::is_allowed(b"quick"));
+        assert!(!SmtKeyword::is_allowed(quick));
+        assert!(!SmtKeyword::is_allowed(quick_utf8));
+        assert!(!SmtKeyword::is_allowed("žluťoučký".as_bytes()));
+        assert!(!SmtKeyword::is_allowed(non_utf8));
+
+        // DEL should never be accepted.
+        assert!(!SmtStringContent::is_allowed(b"a\x7Fb"));
+        assert!(!SmtSymbol::is_allowed(b"a\x7Fb"));
+        assert!(!SmtKeyword::is_allowed(b"a\x7Fb"));
+    }
+
+    #[test]
+    fn test_digitlike_newtypes() {
+        // All should reject empty string.
+        assert!(!SmtNumeral::is_allowed(b""));
+        assert!(!SmtDigits::is_allowed(b""));
+        assert!(!SmtHexDigits::is_allowed(b""));
+        assert!(!SmtBinDigits::is_allowed(b""));
+
+        // All should accept zero.
+        assert!(SmtNumeral::is_allowed(b"0"));
+        assert!(SmtDigits::is_allowed(b"0"));
+        assert!(SmtHexDigits::is_allowed(b"0"));
+        assert!(SmtBinDigits::is_allowed(b"0"));
+
+        // All except numeral should accept leading zeros.
+        assert!(!SmtNumeral::is_allowed(b"00"));
+        assert!(!SmtNumeral::is_allowed(b"01"));
+        assert!(SmtDigits::is_allowed(b"00"));
+        assert!(SmtDigits::is_allowed(b"01"));
+        assert!(SmtHexDigits::is_allowed(b"00"));
+        assert!(SmtHexDigits::is_allowed(b"01"));
+        assert!(SmtBinDigits::is_allowed(b"00"));
+        assert!(SmtBinDigits::is_allowed(b"01"));
+
+        // Other tests.
+        assert!(SmtNumeral::is_allowed(b"10"));
+        assert!(SmtNumeral::is_allowed(b"1024"));
+        assert!(SmtNumeral::is_allowed(b"70"));
+
+        assert!(SmtDigits::is_allowed(b"1024"));
+        assert!(SmtDigits::is_allowed(b"077"));
+        assert!(!SmtDigits::is_allowed(b"aF"));
+
+        assert!(SmtHexDigits::is_allowed(b"1024"));
+        assert!(SmtHexDigits::is_allowed(b"077"));
+        assert!(SmtHexDigits::is_allowed(b"aF"));
+        assert!(!SmtHexDigits::is_allowed(b"g"));
+        assert!(!SmtHexDigits::is_allowed(b"G"));
+
+        assert!(SmtBinDigits::is_allowed(b"01101"));
+        assert!(!SmtBinDigits::is_allowed(b"077"));
+        assert!(!SmtBinDigits::is_allowed(b"aF"));
+    }
+}

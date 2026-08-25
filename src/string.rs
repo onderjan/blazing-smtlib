@@ -43,6 +43,10 @@ impl String8 {
     pub fn push(&mut self, byte: u8) {
         self.0.push(byte);
     }
+
+    pub fn iter(&self) -> impl Iterator<Item = u8> {
+        self.0.iter().copied()
+    }
 }
 
 impl Default for String8 {
