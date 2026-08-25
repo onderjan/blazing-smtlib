@@ -1,9 +1,6 @@
 use std::convert::Infallible;
 
-use crate::{
-    String8,
-    old::{SmtFunctionSignature, SmtSExpr},
-};
+use crate::{String8, token::Reserved};
 
 #[derive(Debug, Clone)]
 pub enum SmtIndex {
@@ -60,6 +57,24 @@ pub enum SmtAttributeValue<H: SmtHandler + ?Sized> {
     SpecialConstant(SmtSpecialConstant),
     Symbol(String8),
     Exprs(Vec<H::SExpr>),
+}
+
+#[allow(dead_code)]
+#[derive(Debug)]
+pub struct SmtFunctionSignature<S> {
+    pub name: String8,
+    pub parameters: Vec<(String8, S)>,
+    pub result_sort: S,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub enum SmtSExpr<E> {
+    SpecialConstant(SmtSpecialConstant),
+    Symbol(String8),
+    Reserved(Reserved),
+    Keyword(String8),
+    Exprs(Vec<E>),
 }
 
 pub trait SmtHandler: 'static {
