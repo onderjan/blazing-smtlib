@@ -48,12 +48,30 @@ impl Str8<'_> {
 
 impl Debug for Str8<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // print in the manner of Rust str/String,
+        // use byte escapes instead of Unicode escapes
+        // as we store bytes, not UTF-8
         f.write_char('\"')?;
         for c in self.0.iter().copied() {
-            if c < 128 {
+            // specially escape the same characters Rust does
+            let escape = match c {
+                b'\n' => Some("\\n"),
+                b'\r' => Some("\\r"),
+                b'\t' => Some("\\t"),
+                b'\\' => Some("\\\\"),
+                b'\0' => Some("\\0"),
+                b'\"' => Some("\\\""),
+                _ => None,
+            };
+            if let Some(escape) = escape {
+                f.write_str(escape)?;
+            } else if (32..127).contains(&c) {
+                // not a control byte, DEL, nor non-ASCII
+                // print as itself
                 f.write_char(c as char)?;
             } else {
-                // escape non-ASCII byte
+                // control byte, DEL, or non-ASCII
+                // escape byte
                 write!(f, "\\x{:X}{:X}", c / 16, c % 16)?;
             }
         }
