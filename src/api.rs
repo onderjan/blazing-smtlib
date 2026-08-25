@@ -1,16 +1,19 @@
 use std::convert::Infallible;
 
-use crate::{String8, token::Reserved};
+use crate::{
+    SmtBinDigits, SmtDecimal, SmtHexDigits, SmtKeyword, SmtNumeral, SmtStringContent, SmtSymbol,
+    token::Reserved,
+};
 
 #[derive(Debug, Clone)]
 pub enum SmtIndex {
-    Numeral(String8),
-    Symbol(String8),
+    Numeral(SmtNumeral),
+    Symbol(SmtSymbol),
 }
 
 #[derive(Debug, Clone)]
 pub struct SmtIdent {
-    pub name: String8,
+    pub name: SmtSymbol,
     pub indices: Vec<SmtIndex>,
 }
 
@@ -35,14 +38,11 @@ pub struct SmtApplication<H: SmtHandler + ?Sized> {
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum SmtSpecialConstant {
-    Numeral(String8),
-    Decimal {
-        whole_part: String8,
-        fractional_part: String8,
-    },
-    Hexadecimal(String8),
-    Binary(String8),
-    String(String8),
+    Numeral(SmtNumeral),
+    Decimal(SmtDecimal),
+    Hexadecimal(SmtHexDigits),
+    Binary(SmtBinDigits),
+    String(SmtStringContent),
 }
 
 pub enum SmtTerm<H: SmtHandler + ?Sized> {
@@ -55,15 +55,15 @@ pub enum SmtTerm<H: SmtHandler + ?Sized> {
 #[derive(Debug, Clone)]
 pub enum SmtAttributeValue<H: SmtHandler + ?Sized> {
     SpecialConstant(SmtSpecialConstant),
-    Symbol(String8),
+    Symbol(SmtSymbol),
     Exprs(Vec<H::SExpr>),
 }
 
 #[allow(dead_code)]
 #[derive(Debug)]
 pub struct SmtFunctionSignature<S> {
-    pub name: String8,
-    pub parameters: Vec<(String8, S)>,
+    pub name: SmtSymbol,
+    pub parameters: Vec<(SmtSymbol, S)>,
     pub result_sort: S,
 }
 
@@ -71,9 +71,9 @@ pub struct SmtFunctionSignature<S> {
 #[derive(Debug, Clone)]
 pub enum SmtSExpr<E> {
     SpecialConstant(SmtSpecialConstant),
-    Symbol(String8),
+    Symbol(SmtSymbol),
     Reserved(Reserved),
-    Keyword(String8),
+    Keyword(SmtKeyword),
     Exprs(Vec<E>),
 }
 
@@ -87,39 +87,42 @@ pub trait SmtHandler: 'static {
 
     fn handle_sort(&mut self, _sort: SmtSort) -> Result<Self::Sort, Self::Error>;
     fn handle_term(&mut self, _term: SmtTerm<Self>) -> Result<Self::Term, Self::Error>;
-    fn start_let(&mut self, _bindings: Vec<(String8, Self::Term)>) -> Result<(), Self::Error>;
+    fn start_let(&mut self, _bindings: Vec<(SmtSymbol, Self::Term)>) -> Result<(), Self::Error>;
     fn end_let(&mut self, _term: Self::Term) -> Result<Self::Term, Self::Error>;
 
     fn handle_s_expr(&mut self, expr: SmtSExpr<Self::SExpr>) -> Result<Self::SExpr, Self::Error>;
     fn handle_attribute(
         &mut self,
-        name: String8,
+        name: SmtKeyword,
         value: Option<SmtAttributeValue<Self>>,
     ) -> Result<Self::Attribute, Self::Error>;
 }
 
 pub trait CommandHandler: SmtHandler {
-    fn command_echo(&mut self, value: String8) -> Result<(), Self::Error>;
+    fn command_echo(&mut self, value: SmtStringContent) -> Result<(), Self::Error>;
 
-    fn command_get_option(&mut self, option: String8) -> Result<(), Self::Error>;
+    fn command_get_option(&mut self, option: SmtKeyword) -> Result<(), Self::Error>;
     fn command_set_option(&mut self, option: Self::Attribute) -> Result<(), Self::Error>;
-    fn command_get_info(&mut self, keyword: String8) -> Result<(), Self::Error>;
+    fn command_get_info(&mut self, keyword: SmtKeyword) -> Result<(), Self::Error>;
     fn command_set_info(&mut self, attribute: Self::Attribute) -> Result<(), Self::Error>;
 
-    fn command_set_logic(&mut self, logic: String8) -> Result<(), Self::Error>;
+    fn command_set_logic(&mut self, logic: SmtSymbol) -> Result<(), Self::Error>;
 
-    fn command_declare_const(&mut self, name: String8, sort: Self::Sort)
-    -> Result<(), Self::Error>;
+    fn command_declare_const(
+        &mut self,
+        name: SmtSymbol,
+        sort: Self::Sort,
+    ) -> Result<(), Self::Error>;
     fn command_declare_fun(
         &mut self,
-        name: String8,
+        name: SmtSymbol,
         param_sorts: Vec<Self::Sort>,
         result_sort: Self::Sort,
     ) -> Result<(), Self::Error>;
     fn command_define_fun(
         &mut self,
-        name: String8,
-        params: Vec<(String8, Self::Sort)>,
+        name: SmtSymbol,
+        params: Vec<(SmtSymbol, Self::Sort)>,
         result_sort: Self::Sort,
         definition: Self::Term,
     ) -> Result<(), Self::Error>;
@@ -161,7 +164,7 @@ impl SmtHandler for OnlyCheckSyntax {
         Ok(())
     }
 
-    fn start_let(&mut self, _bindings: Vec<(String8, Self::Term)>) -> Result<(), Self::Error> {
+    fn start_let(&mut self, _bindings: Vec<(SmtSymbol, Self::Term)>) -> Result<(), Self::Error> {
         Ok(())
     }
 
@@ -175,7 +178,7 @@ impl SmtHandler for OnlyCheckSyntax {
 
     fn handle_attribute(
         &mut self,
-        _name: String8,
+        _name: SmtKeyword,
         _value: Option<SmtAttributeValue<Self>>,
     ) -> Result<Self::Attribute, Self::Error> {
         Ok(())
@@ -183,11 +186,11 @@ impl SmtHandler for OnlyCheckSyntax {
 }
 
 impl CommandHandler for OnlyCheckSyntax {
-    fn command_echo(&mut self, _value: String8) -> Result<(), Self::Error> {
+    fn command_echo(&mut self, _value: SmtStringContent) -> Result<(), Self::Error> {
         Ok(())
     }
 
-    fn command_get_option(&mut self, _option: String8) -> Result<(), Self::Error> {
+    fn command_get_option(&mut self, _option: SmtKeyword) -> Result<(), Self::Error> {
         Ok(())
     }
 
@@ -195,7 +198,7 @@ impl CommandHandler for OnlyCheckSyntax {
         Ok(())
     }
 
-    fn command_get_info(&mut self, _keyword: String8) -> Result<(), Self::Error> {
+    fn command_get_info(&mut self, _keyword: SmtKeyword) -> Result<(), Self::Error> {
         Ok(())
     }
 
@@ -203,13 +206,13 @@ impl CommandHandler for OnlyCheckSyntax {
         Ok(())
     }
 
-    fn command_set_logic(&mut self, _logic: String8) -> Result<(), Self::Error> {
+    fn command_set_logic(&mut self, _logic: SmtSymbol) -> Result<(), Self::Error> {
         Ok(())
     }
 
     fn command_declare_const(
         &mut self,
-        _name: String8,
+        _name: SmtSymbol,
         _sort: Self::Sort,
     ) -> Result<(), Self::Error> {
         Ok(())
@@ -217,7 +220,7 @@ impl CommandHandler for OnlyCheckSyntax {
 
     fn command_declare_fun(
         &mut self,
-        _name: String8,
+        _name: SmtSymbol,
         _param_sorts: Vec<Self::Sort>,
         _result_sort: Self::Sort,
     ) -> Result<(), Self::Error> {
@@ -226,8 +229,8 @@ impl CommandHandler for OnlyCheckSyntax {
 
     fn command_define_fun(
         &mut self,
-        _name: String8,
-        _params: Vec<(String8, Self::Sort)>,
+        _name: SmtSymbol,
+        _params: Vec<(SmtSymbol, Self::Sort)>,
         _result_sort: Self::Sort,
         _definition: Self::Term,
     ) -> Result<(), Self::Error> {

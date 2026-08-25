@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtAttributeValue, SmtHandler, SmtSpecialConstant, String8,
+    SmtAttributeValue, SmtHandler, SmtKeyword, SmtSpecialConstant,
     parser::{
         ParserError, ParserOrHandlerError,
         category::{CategoryParser, expect_close_parenthesis},
@@ -11,7 +11,7 @@ use crate::{
 
 pub enum ClosedAttributeParser<H: SmtHandler> {
     Start,
-    Key(String8),
+    Key(SmtKeyword),
     BeforeClose(H::Attribute),
 }
 
@@ -40,13 +40,9 @@ impl<H: SmtHandler> CategoryParser<H> for ClosedAttributeParser<H> {
                     Token::Numeral(value) => {
                         SmtAttributeValue::SpecialConstant(SmtSpecialConstant::Numeral(value))
                     }
-                    Token::Decimal {
-                        whole_part,
-                        fractional_part,
-                    } => SmtAttributeValue::SpecialConstant(SmtSpecialConstant::Decimal {
-                        whole_part,
-                        fractional_part,
-                    }),
+                    Token::Decimal(decimal) => {
+                        SmtAttributeValue::SpecialConstant(SmtSpecialConstant::Decimal(decimal))
+                    }
                     Token::Hexadecimal(value) => {
                         SmtAttributeValue::SpecialConstant(SmtSpecialConstant::Hexadecimal(value))
                     }

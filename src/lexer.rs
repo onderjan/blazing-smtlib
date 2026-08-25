@@ -5,7 +5,8 @@ use char_class::{U8OrEof, char_class_opt};
 pub use char_class::CharClass;
 
 use crate::{
-    String8,
+    SmtBinDigits, SmtDecimal, SmtDigits, SmtHexDigits, SmtKeyword, SmtNumeral, SmtStringContent,
+    SmtSymbol, String8,
     token::{Reserved, Token},
 };
 
@@ -68,7 +69,7 @@ impl Lexer {
             U8OrEof::U8(c) => c,
             U8OrEof::Eof => {
                 // end without problems on EOF
-                tokens.push(Token::End);
+                tokens.push(Token::EndOfFile);
                 return Ok(tokens);
             }
         };
@@ -157,10 +158,10 @@ impl Lexer {
                             return Err(LexerError::FractionDigitExpected);
                         }
                         // push new token and lex the character normally
-                        tokens.push(Token::Decimal {
-                            whole_part,
-                            fractional_part,
-                        });
+                        tokens.push(Token::Decimal(SmtDecimal {
+                            whole_part: SmtNumeral::new_unchecked(whole_part),
+                            fractional_part: SmtDigits::new_unchecked(fractional_part),
+                        }));
                         return self.lex_normal(tokens, c);
                     }
                 }
@@ -184,7 +185,7 @@ impl Lexer {
                     _ => {
                         // this was a numeral
                         // push new token and lex the character normally
-                        tokens.push(Token::Numeral(value));
+                        tokens.push(Token::Numeral(SmtNumeral::new_unchecked(value)));
                         return self.lex_normal(tokens, c);
                     }
                 }
@@ -210,7 +211,7 @@ impl Lexer {
                     }
                     // had non-digit, nonzero digits
                     // push new token and lex the character normally
-                    tokens.push(Token::Hexadecimal(whole));
+                    tokens.push(Token::Hexadecimal(SmtHexDigits::new_unchecked(whole)));
                     return self.lex_normal(tokens, c);
                 }
             }
@@ -235,7 +236,7 @@ impl Lexer {
                     }
                     // had non-digit, nonzero digits
                     // push new token and lex the character normally
-                    tokens.push(Token::Binary(whole));
+                    tokens.push(Token::Binary(SmtBinDigits::new_unchecked(whole)));
                     return self.lex_normal(tokens, c);
                 }
             }
@@ -281,7 +282,7 @@ impl Lexer {
                     _ => {
                         // literal has ended by the previous character
                         // push new token and lex the character normally
-                        tokens.push(Token::String(literal));
+                        tokens.push(Token::String(SmtStringContent::new_unchecked(literal)));
                         return self.lex_normal(tokens, c);
                     }
                 }
@@ -299,7 +300,7 @@ impl Lexer {
                     let token = if let Some(reserved) = Reserved::from_symbol_opt(&symbol) {
                         Token::Reserved(reserved)
                     } else {
-                        Token::Symbol(symbol)
+                        Token::Symbol(SmtSymbol::new_unchecked(symbol))
                     };
 
                     // push new token and lex the character normally
@@ -328,7 +329,7 @@ impl Lexer {
                     }
 
                     // push new token and lex the character normally
-                    tokens.push(Token::Keyword(keyword));
+                    tokens.push(Token::Keyword(SmtKeyword::new_unchecked(keyword)));
                     return self.lex_normal(tokens, c);
                 }
             },
@@ -340,7 +341,7 @@ impl Lexer {
                     }
                     U8OrEof::U8(b'|') => {
                         // end of quoted symbol, push its token, continue normally with next character
-                        tokens.push(Token::Symbol(symbol));
+                        tokens.push(Token::Symbol(SmtSymbol::new_unchecked(symbol)));
                         LexerState::Normal
                     }
                     U8OrEof::U8(c) => {

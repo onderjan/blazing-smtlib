@@ -1,7 +1,8 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtApplication, SmtHandler, SmtIdent, SmtQualifiedIdent, SmtSpecialConstant, SmtTerm, String8,
+    SmtApplication, SmtHandler, SmtIdent, SmtQualifiedIdent, SmtSpecialConstant, SmtSymbol,
+    SmtTerm,
     parser::{
         ParserError, ParserOrHandlerError,
         category::{CategoryParser, ident::IdentParser},
@@ -11,7 +12,7 @@ use crate::{
 
 pub enum TermLevel<H: SmtHandler> {
     Application(SmtQualifiedIdent, Vec<H::Term>),
-    LetBinding(Vec<(String8, H::Term)>, String8),
+    LetBinding(Vec<(SmtSymbol, H::Term)>, SmtSymbol),
     LetInner,
 }
 
@@ -22,9 +23,9 @@ pub enum TermParserState<H: SmtHandler> {
     ApplicationIdent(IdentParser),
     ApplicationTerm(SmtQualifiedIdent, Vec<H::Term>),
     LetBeforeBindingsOpen,
-    LetBeforeBindingOpen(Vec<(String8, H::Term)>),
-    LetBeforeBindingSymbol(Vec<(String8, H::Term)>),
-    LetBeforeBindingClose(Vec<(String8, H::Term)>),
+    LetBeforeBindingOpen(Vec<(SmtSymbol, H::Term)>),
+    LetBeforeBindingSymbol(Vec<(SmtSymbol, H::Term)>),
+    LetBeforeBindingClose(Vec<(SmtSymbol, H::Term)>),
     LetAfterInnerTerm(H::Term),
 }
 
@@ -259,13 +260,7 @@ impl<H: SmtHandler> TermParser<H> {
 fn parse_special_constant(token: Token) -> Result<SmtSpecialConstant, Token> {
     let constant = match token {
         Token::Numeral(value) => SmtSpecialConstant::Numeral(value),
-        Token::Decimal {
-            whole_part,
-            fractional_part,
-        } => SmtSpecialConstant::Decimal {
-            whole_part,
-            fractional_part,
-        },
+        Token::Decimal(decimal) => SmtSpecialConstant::Decimal(decimal),
         Token::Hexadecimal(value) => SmtSpecialConstant::Hexadecimal(value),
         Token::Binary(value) => SmtSpecialConstant::Binary(value),
         Token::String(string) => SmtSpecialConstant::String(string),
@@ -290,7 +285,7 @@ fn expect_close_paren<H: SmtHandler>(token: Token) -> Result<(), ParserOrHandler
     }
 }
 
-fn expect_symbol<H: SmtHandler>(token: Token) -> Result<String8, ParserOrHandlerError<H>> {
+fn expect_symbol<H: SmtHandler>(token: Token) -> Result<SmtSymbol, ParserOrHandlerError<H>> {
     if let Token::Symbol(symbol) = token {
         Ok(symbol)
     } else {

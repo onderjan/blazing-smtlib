@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtHandler, String8,
+    SmtHandler, SmtSymbol,
     parser::{ParserError, ParserOrHandlerError},
     token::Token,
 };
@@ -205,7 +205,7 @@ impl<H: SmtHandler, P: CategoryParser<H>> MultipleParser<H, P> {
 pub struct SymbolParser;
 
 impl<H: SmtHandler> CategoryParser<H> for SymbolParser {
-    type Result = String8;
+    type Result = SmtSymbol;
 
     fn init() -> Self {
         Self

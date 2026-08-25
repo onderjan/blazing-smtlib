@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtHandler, SmtIdent, SmtIndex, String8,
+    SmtHandler, SmtIdent, SmtIndex, SmtSymbol,
     parser::{ParserError, ParserOrHandlerError, category::CategoryParser},
     token::{Reserved, Token},
 };
@@ -11,7 +11,7 @@ pub enum IdentParser {
     Open,
     AfterUnderscore,
     Indices {
-        name: String8,
+        name: SmtSymbol,
         indices: Vec<SmtIndex>,
     },
 }

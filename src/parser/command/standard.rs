@@ -1,5 +1,5 @@
 use crate::{
-    CommandHandler, String8,
+    CommandHandler, SmtSymbol,
     parser::{
         category::{
             CloseParenParser, ClosedParser, MultipleParser, OpenClosedParser, PairParser,
@@ -14,7 +14,7 @@ pub struct CommandSetLogic;
 impl<H: CommandHandler> Command<H> for CommandSetLogic {
     type Parser = ClosedParser<H, SymbolParser>;
 
-    fn handle(handler: &mut H, logic: String8) -> Result<(), <H>::Error> {
+    fn handle(handler: &mut H, logic: SmtSymbol) -> Result<(), <H>::Error> {
         handler.command_set_logic(logic)
     }
 }
@@ -24,7 +24,7 @@ pub struct CommandDeclareConst;
 impl<H: CommandHandler> Command<H> for CommandDeclareConst {
     type Parser = ClosedParser<H, PairParser<H, SymbolParser, SortParser>>;
 
-    fn handle(handler: &mut H, result: (String8, H::Sort)) -> Result<(), <H>::Error> {
+    fn handle(handler: &mut H, result: (SmtSymbol, H::Sort)) -> Result<(), <H>::Error> {
         let (name, sort) = result;
         handler.command_declare_const(name, sort)
     }
@@ -40,7 +40,7 @@ impl<H: CommandHandler> Command<H> for CommandDeclareFun {
 
     fn handle(
         handler: &mut H,
-        result: (String8, (Vec<H::Sort>, H::Sort)),
+        result: (SmtSymbol, (Vec<H::Sort>, H::Sort)),
     ) -> Result<(), <H>::Error> {
         let (name, (param_sorts, result_sort)) = result;
         handler.command_declare_fun(name, param_sorts, result_sort)
@@ -61,7 +61,7 @@ impl<H: CommandHandler> Command<H> for CommandDefineFun {
 
     fn handle(
         handler: &mut H,
-        result: (String8, (Vec<(String8, H::Sort)>, (H::Sort, H::Term))),
+        result: (SmtSymbol, (Vec<(SmtSymbol, H::Sort)>, (H::Sort, H::Term))),
     ) -> Result<(), <H>::Error> {
         let (name, (param_sorts, (result_sort, definition))) = result;
         handler.command_define_fun(name, param_sorts, result_sort, definition)

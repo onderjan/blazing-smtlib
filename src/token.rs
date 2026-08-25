@@ -1,21 +1,21 @@
-use crate::string::String8;
+use crate::{
+    SmtBinDigits, SmtDecimal, SmtHexDigits, SmtKeyword, SmtNumeral, SmtStringContent, SmtSymbol,
+    string::String8,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Token {
     ParenOpen,
     ParenClose,
-    Numeral(String8),
-    Decimal {
-        whole_part: String8,
-        fractional_part: String8,
-    },
-    Hexadecimal(String8),
-    Binary(String8),
-    Symbol(String8),
+    Numeral(SmtNumeral),
+    Decimal(SmtDecimal),
+    Hexadecimal(SmtHexDigits),
+    Binary(SmtBinDigits),
+    Symbol(SmtSymbol),
     Reserved(Reserved),
-    String(String8),
-    Keyword(String8),
-    End,
+    String(SmtStringContent),
+    Keyword(SmtKeyword),
+    EndOfFile,
 }
 
 /// Reserved words in SMT-LIB2.

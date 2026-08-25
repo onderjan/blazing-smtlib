@@ -1,3 +1,5 @@
+use std::fmt::{Debug, Write};
+
 use crate::{String8, String8View, lexer::CharClass};
 
 /// SMT-LIB string content.
@@ -189,6 +191,29 @@ string8_newtype!(SmtDigits);
 string8_newtype!(SmtHexDigits);
 string8_newtype!(SmtBinDigits);
 
+/// SMT-LIB decimal (a decimal number with whole part + fractional part)
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct SmtDecimal {
+    pub whole_part: SmtNumeral,
+    pub fractional_part: SmtDigits,
+}
+
+impl Debug for SmtDecimal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // format manually to avoid extraneous quotes
+        // all characters are digits, no escaping needed
+        f.write_char('"')?;
+        for c in self.whole_part.iter() {
+            f.write_char(c as char)?;
+        }
+        f.write_char('.')?;
+        for c in self.fractional_part.iter() {
+            f.write_char(c as char)?;
+        }
+        f.write_char('"')
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -283,5 +308,22 @@ mod tests {
         assert!(SmtBinDigits::is_allowed(b"01101"));
         assert!(!SmtBinDigits::is_allowed(b"077"));
         assert!(!SmtBinDigits::is_allowed(b"aF"));
+    }
+
+    #[test]
+    fn test_decimal() {
+        fn dec(whole_part: &[u8], fractional_part: &[u8]) -> SmtDecimal {
+            SmtDecimal {
+                whole_part: SmtNumeral::new(whole_part.to_vec())
+                    .expect("Whole part should succeed"),
+                fractional_part: SmtDigits::new(fractional_part.to_vec())
+                    .expect("Fractional part should succeed"),
+            }
+        }
+
+        // SMT-LIB does not consider '3.50' an overlong encoding of '3.5',
+        // but as two separate things syntactically
+        assert_ne!(dec(b"1", b"0"), dec(b"1", b"0000"));
+        assert_ne!(dec(b"3", b"5"), dec(b"3", b"50"));
     }
 }
