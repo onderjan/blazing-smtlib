@@ -47,6 +47,7 @@ pub enum LexerError {
     BackslashInQuotedSymbol,
     ForbiddenCharInQuotedSymbol,
     UnclosedQuotedSymbol,
+    NumeralLeadingZero,
 }
 
 impl Lexer {
@@ -169,6 +170,13 @@ impl Lexer {
             LexerState::NumeralOrDecimal(mut value) => {
                 match char_class_opt(c) {
                     Some((CharClass::Digit, c)) => {
+                        // check that we are not in a leading zero condition
+                        // this could not have been done when starting the numeral/decimal
+                        // since just a single '0' is allowed
+                        if value.as_slice() == b"0" {
+                            return Err(LexerError::NumeralLeadingZero);
+                        }
+
                         // add one digit
                         value.push(c);
                         LexerState::NumeralOrDecimal(value)
