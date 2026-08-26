@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
 
 use crate::{
     SmtHandler, SmtIdent, SmtSort,
-    parser::{
+    reader::parser::{
         ParserError, ParserOrHandlerError,
         category::{CategoryParser, ident::IdentParser},
     },

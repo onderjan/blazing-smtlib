@@ -3,12 +3,13 @@ use std::ops::ControlFlow;
 use crate::{
     CommandHandler,
     api::SmtHandler,
-    parser::command::{CommandResult, DynamicCommandParser, ParseCommand},
     token::{Token, TokenKind},
 };
 
 mod category;
 mod command;
+
+pub use command::{CommandResult, DynamicCommandParser, ParseCommand};
 
 #[derive(Debug)]
 pub enum ParserError {

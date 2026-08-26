@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use smt_parser_rs::{OnlyCheckSyntax, SmtProcessError, process_smt_file};
+use smt_parser_rs::{OnlyCheckSyntax, SmtReadError, read_smt_file};
 fn main() -> Result<(), u32> {
     let mut args = std::env::args();
     if args.len() != 2 {
@@ -11,16 +11,16 @@ fn main() -> Result<(), u32> {
     let _executable_name = args.next().unwrap();
     let file_path = args.next().unwrap();
 
-    match process_smt_file(&mut OnlyCheckSyntax, &PathBuf::from(file_path)) {
-        Err(SmtProcessError::ReadError(err)) => {
+    match read_smt_file(&mut OnlyCheckSyntax, &PathBuf::from(file_path)) {
+        Err(SmtReadError::ReadError(err)) => {
             eprintln!("Error reading file: {}", err);
             Err(2)
         }
-        Err(SmtProcessError::LexerError(err)) => {
+        Err(SmtReadError::LexerError(err)) => {
             eprintln!("Error lexing file: {:?}", err);
             Err(3)
         }
-        Err(SmtProcessError::ParserError(err)) => {
+        Err(SmtReadError::ParserError(err)) => {
             eprintln!("Error parsing file: {:?}", err);
             Err(4)
         }

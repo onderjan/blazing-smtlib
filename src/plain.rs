@@ -1,6 +1,6 @@
 use std::fmt::{Debug, Write};
 
-use crate::{String8, String8View, lexer::CharClass};
+use crate::{String8, String8View, reader::lexer::CharClass};
 
 /// SMT-LIB string content.
 ///

@@ -37,7 +37,7 @@ impl Token {
         self.kind
     }
 
-    pub fn span(&self) -> TokenSpan {
+    pub(crate) fn span(&self) -> TokenSpan {
         self.span
     }
 }
