@@ -1,6 +1,6 @@
 use crate::{
-    SmtBinDigits, SmtDecimal, SmtHexDigits, SmtKeyword, SmtNumeral, SmtSpan, SmtStringContent,
-    SmtSymbol, string::String8,
+    SmtBinDigits, SmtDecimal, SmtHexDigits, SmtKeyword, SmtNumeral, SmtStringContent, SmtSymbol,
+    TokenSpan, string::String8,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,11 +21,11 @@ pub enum TokenKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Token {
     kind: TokenKind,
-    span: SmtSpan,
+    span: TokenSpan,
 }
 
 impl Token {
-    pub(crate) fn new(kind: TokenKind, span: SmtSpan) -> Token {
+    pub(crate) fn new(kind: TokenKind, span: TokenSpan) -> Token {
         Self { kind, span }
     }
 
@@ -37,7 +37,7 @@ impl Token {
         self.kind
     }
 
-    pub fn span(&self) -> SmtSpan {
+    pub fn span(&self) -> TokenSpan {
         self.span
     }
 }

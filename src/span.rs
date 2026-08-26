@@ -2,7 +2,7 @@
 ///
 /// The offset starts at zero.
 /// Line and column start at one as usual.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct SmtLocation {
     /// Zero-based byte offset.
     offset: u64,
@@ -27,24 +27,73 @@ impl SmtLocation {
     pub fn column(&self) -> u64 {
         self.column
     }
+
+    pub(crate) fn min(self, other: Self) -> Self {
+        if self.offset <= other.offset {
+            self
+        } else {
+            other
+        }
+    }
+
+    pub(crate) fn max(self, other: Self) -> Self {
+        if self.offset >= other.offset {
+            self
+        } else {
+            other
+        }
+    }
 }
 
-/// Span of an SMT-LIB element, measured in bytes.
+/// Span of an SMT-LIB element.
+///
+/// The span is a half-open range `[start, end)` between locations.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct SmtSpan {
+    start: SmtLocation,
+    end: SmtLocation,
+}
+
+impl SmtSpan {
+    pub(crate) fn new_unchecked(start: SmtLocation, end: SmtLocation) -> Self {
+        debug_assert!(
+            start.offset <= end.offset,
+            "span start {start:?} is after end {end:?}"
+        );
+        Self { start, end }
+    }
+
+    pub(crate) fn new_empty(location: SmtLocation) -> Self {
+        Self {
+            start: location,
+            end: location,
+        }
+    }
+
+    pub fn start(self) -> SmtLocation {
+        self.start
+    }
+    pub fn end(self) -> SmtLocation {
+        self.end
+    }
+}
+
+/// Span of an SMT-LIB token, measured in bytes.
 ///
 /// The span is a half-open byte range `[start, end)`.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub(crate) struct SmtSpan {
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub(crate) struct TokenSpan {
     start: u64,
     end: u64,
 }
 
-impl SmtSpan {
+impl TokenSpan {
     pub(crate) fn new_unchecked(start: u64, end: u64) -> Self {
         debug_assert!(start <= end, "span start {start} is after end {end}");
         Self { start, end }
     }
 
-    pub(crate) fn new_exact(offset: u64) -> Self {
+    pub(crate) fn new_empty(offset: u64) -> Self {
         Self {
             start: offset,
             end: offset,
@@ -72,12 +121,12 @@ impl SmtSpan {
     }
 }
 
-pub(crate) struct LineIndex {
+pub(crate) struct LinePositions {
     // Offsets where lines start, must be sorted.
     line_starts: Vec<u64>,
 }
 
-impl LineIndex {
+impl LinePositions {
     pub fn new() -> Self {
         Self {
             line_starts: vec![0],

@@ -5,8 +5,8 @@ use char_class::{U8OrEof, char_class_opt};
 pub use char_class::CharClass;
 
 use crate::{
-    SmtBinDigits, SmtDecimal, SmtDigits, SmtHexDigits, SmtKeyword, SmtNumeral, SmtSpan,
-    SmtStringContent, SmtSymbol, String8,
+    LinePositions, SmtBinDigits, SmtDecimal, SmtDigits, SmtHexDigits, SmtKeyword, SmtNumeral,
+    SmtSpan, SmtStringContent, SmtSymbol, String8, TokenSpan,
     token::{Reserved, Token, TokenKind},
 };
 
@@ -37,6 +37,8 @@ pub struct Lexer {
     offset: u64,
     // Byte offset of the start of the token being currently read.
     token_start: u64,
+    // Line positions, used to add line and column offsets to internal spans.
+    line_positions: LinePositions,
 }
 
 #[allow(dead_code)]
@@ -63,17 +65,27 @@ impl Lexer {
             state: LexerState::Normal,
             token_start: 0,
             offset: 0,
+            line_positions: LinePositions::new(),
         }
     }
 
     pub fn lex_next(&mut self, c: u8) -> Result<Vec<Token>, LexerError> {
         let tokens = self.lex_char(U8OrEof::U8(c))?;
+        if c == b'\n' {
+            self.line_positions.add_newline(self.offset);
+        }
         self.offset += 1;
         Ok(tokens)
     }
 
     pub fn lex_eof(&mut self) -> Result<Vec<Token>, LexerError> {
         self.lex_char(U8OrEof::Eof)
+    }
+
+    pub(crate) fn resolve_span(&self, span: TokenSpan) -> SmtSpan {
+        let start = self.line_positions.resolve(span.start());
+        let end = self.line_positions.resolve(span.end());
+        SmtSpan::new_unchecked(start, end)
     }
 
     fn lex_normal(&mut self, mut tokens: Vec<Token>, c: U8OrEof) -> Result<Vec<Token>, LexerError> {
@@ -430,7 +442,7 @@ impl Lexer {
         // Therefore, we need to add 1 to the current offset
         Token::new(
             kind,
-            SmtSpan::new_unchecked(self.token_start, self.offset + 1),
+            TokenSpan::new_unchecked(self.token_start, self.offset + 1),
         )
     }
 
@@ -439,7 +451,10 @@ impl Lexer {
         // The span includes start, but not the end
         // Therefore, if the token actually ended with the previous character,
         // we do not need to add anything.
-        Token::new(kind, SmtSpan::new_unchecked(self.token_start, self.offset))
+        Token::new(
+            kind,
+            TokenSpan::new_unchecked(self.token_start, self.offset),
+        )
     }
 
     fn create_single_byte_token(&mut self, kind: TokenKind) -> Token {
