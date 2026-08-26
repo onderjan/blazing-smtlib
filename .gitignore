@@ -3,3 +3,7 @@ Cargo.lock
 
 # Claude is used for reviewing only
 .Claude
+
+# misc untracked folders
+/output
+/untracked
