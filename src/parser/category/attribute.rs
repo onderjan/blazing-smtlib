@@ -6,7 +6,7 @@ use crate::{
         ParserError, ParserOrHandlerError,
         category::{CategoryParser, expect_close_parenthesis},
     },
-    token::Token,
+    token::{Token, TokenKind},
 };
 
 pub enum ClosedAttributeParser<H: SmtHandler> {
@@ -29,34 +29,34 @@ impl<H: SmtHandler> CategoryParser<H> for ClosedAttributeParser<H> {
     ) -> Result<ControlFlow<H::Attribute, Self>, ParserOrHandlerError<H>> {
         match self {
             ClosedAttributeParser::Start => {
-                let Token::Keyword(keyword) = token else {
+                let TokenKind::Keyword(keyword) = token.into_kind() else {
                     return Err(ParserError::ExpectedKeyword.into());
                 };
                 Ok(ControlFlow::Continue(ClosedAttributeParser::Key(keyword)))
             }
 
             ClosedAttributeParser::Key(keyword) => {
-                let value = match token {
-                    Token::Numeral(value) => {
+                let value = match token.into_kind() {
+                    TokenKind::Numeral(value) => {
                         SmtAttributeValue::SpecialConstant(SmtSpecialConstant::Numeral(value))
                     }
-                    Token::Decimal(decimal) => {
+                    TokenKind::Decimal(decimal) => {
                         SmtAttributeValue::SpecialConstant(SmtSpecialConstant::Decimal(decimal))
                     }
-                    Token::Hexadecimal(value) => {
+                    TokenKind::Hexadecimal(value) => {
                         SmtAttributeValue::SpecialConstant(SmtSpecialConstant::Hexadecimal(value))
                     }
-                    Token::Binary(value) => {
+                    TokenKind::Binary(value) => {
                         SmtAttributeValue::SpecialConstant(SmtSpecialConstant::Binary(value))
                     }
-                    Token::String(string) => {
+                    TokenKind::String(string) => {
                         SmtAttributeValue::SpecialConstant(SmtSpecialConstant::String(string))
                     }
-                    Token::Symbol(symbol) => SmtAttributeValue::Symbol(symbol),
-                    Token::ParenOpen => {
+                    TokenKind::Symbol(symbol) => SmtAttributeValue::Symbol(symbol),
+                    TokenKind::ParenOpen => {
                         todo!("Attribute value SExpr")
                     }
-                    Token::ParenClose => {
+                    TokenKind::ParenClose => {
                         // just an attribute name, return token after handling
                         let attribute = handler
                             .handle_attribute(keyword, None)

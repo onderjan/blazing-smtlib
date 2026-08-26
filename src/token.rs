@@ -1,10 +1,10 @@
 use crate::{
-    SmtBinDigits, SmtDecimal, SmtHexDigits, SmtKeyword, SmtNumeral, SmtStringContent, SmtSymbol,
-    string::String8,
+    SmtBinDigits, SmtDecimal, SmtHexDigits, SmtKeyword, SmtNumeral, SmtSpan, SmtStringContent,
+    SmtSymbol, string::String8,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Token {
+pub enum TokenKind {
     ParenOpen,
     ParenClose,
     Numeral(SmtNumeral),
@@ -16,6 +16,30 @@ pub enum Token {
     String(SmtStringContent),
     Keyword(SmtKeyword),
     EndOfFile,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Token {
+    kind: TokenKind,
+    span: SmtSpan,
+}
+
+impl Token {
+    pub(crate) fn new(kind: TokenKind, span: SmtSpan) -> Token {
+        Self { kind, span }
+    }
+
+    pub fn kind(&self) -> &TokenKind {
+        &self.kind
+    }
+
+    pub fn into_kind(self) -> TokenKind {
+        self.kind
+    }
+
+    pub fn span(&self) -> SmtSpan {
+        self.span
+    }
 }
 
 /// Reserved words in SMT-LIB2.

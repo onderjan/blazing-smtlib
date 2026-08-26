@@ -4,7 +4,7 @@ use crate::{
     CommandHandler,
     api::SmtHandler,
     parser::command::{CommandResult, DynamicCommandParser, ParseCommand},
-    token::Token,
+    token::{Token, TokenKind},
 };
 
 mod category;
@@ -12,7 +12,7 @@ mod command;
 
 #[derive(Debug)]
 pub enum ParserError {
-    ExpectedToken(Token),
+    ExpectedToken(TokenKind),
     ExpectedUnderscore,
     ExpectedSymbol,
     ExpectedKeyword,
@@ -75,12 +75,12 @@ impl<'a, H: CommandHandler> Parser<'a, H> {
         let state = std::mem::replace(&mut self.state, ParserState::AwaitingCommand);
         let state = match state {
             ParserState::AwaitingCommand => {
-                match token {
-                    Token::ParenOpen => {
+                match token.kind() {
+                    TokenKind::ParenOpen => {
                         // open the command
                         ParserState::CommandOpen
                     }
-                    Token::EndOfFile => {
+                    TokenKind::EndOfFile => {
                         // end of file here is fine, do not change the state
                         ParserState::AwaitingCommand
                     }
@@ -93,7 +93,7 @@ impl<'a, H: CommandHandler> Parser<'a, H> {
             }
             ParserState::CommandOpen => {
                 // expect a symbol identifying the command
-                let Token::Symbol(command_name) = token else {
+                let TokenKind::Symbol(command_name) = token.into_kind() else {
                     return Err(ParserError::ExpectedCommand.into());
                 };
                 ParserState::StandardCommand(self.start_command(command_name.as_view())?)

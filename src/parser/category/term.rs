@@ -7,7 +7,7 @@ use crate::{
         ParserError, ParserOrHandlerError,
         category::{CategoryParser, ident::IdentParser},
     },
-    token::{Reserved, Token},
+    token::{Reserved, Token, TokenKind},
 };
 
 pub enum TermLevel<H: SmtHandler> {
@@ -121,7 +121,7 @@ impl<H: SmtHandler> TermParser<H> {
                 }
             }
             TermParserState::ApplicationTerm(function, args) => {
-                if matches!(token, Token::ParenClose) {
+                if matches!(token.kind(), TokenKind::ParenClose) {
                     // this ends the application term
                     let term = SmtTerm::Application(SmtApplication { function, args });
                     let term = handler
@@ -139,12 +139,12 @@ impl<H: SmtHandler> TermParser<H> {
                 TermParserState::LetBeforeBindingOpen(Vec::new())
             }
             TermParserState::LetBeforeBindingOpen(bindings) => {
-                match token {
-                    Token::ParenOpen => {
+                match token.kind() {
+                    TokenKind::ParenOpen => {
                         // new binding
                         TermParserState::LetBeforeBindingSymbol(bindings)
                     }
-                    Token::ParenClose => {
+                    TokenKind::ParenClose => {
                         // bindings are closed, inner term will be next
                         // check that there is at least one binding
                         if bindings.is_empty() {
@@ -183,8 +183,9 @@ impl<H: SmtHandler> TermParser<H> {
         handler: &mut H,
         token: Token,
     ) -> Result<TermProgressOk<H, Self>, ParserOrHandlerError<H>> {
-        match token {
-            Token::ParenOpen => {
+        let span = token.span();
+        match token.into_kind() {
+            TokenKind::ParenOpen => {
                 // application, binder, or annotation
                 // move to operator parsing
                 Ok(ControlFlow::Continue(Self {
@@ -192,7 +193,7 @@ impl<H: SmtHandler> TermParser<H> {
                     levels,
                 }))
             }
-            Token::Symbol(symbol) => {
+            TokenKind::Symbol(symbol) => {
                 // a qualified identifier that is just a symbol
                 let qualified_ident = SmtQualifiedIdent::Ident(SmtIdent {
                     name: symbol,
@@ -205,9 +206,9 @@ impl<H: SmtHandler> TermParser<H> {
                 Ok(ControlFlow::Break((levels, term)))
             }
 
-            token => {
+            kind => {
                 // handle special constants
-                match parse_special_constant(token) {
+                match parse_special_constant(Token::new(kind, span)) {
                     Ok(special_constant) => {
                         let term = handler
                             .handle_term(SmtTerm::SpecialConstant(special_constant))
@@ -224,8 +225,8 @@ impl<H: SmtHandler> TermParser<H> {
         levels: Vec<TermLevel<H>>,
         token: Token,
     ) -> Result<Self, ParserOrHandlerError<H>> {
-        let state = match token {
-            Token::Symbol(fn_name) => {
+        let state = match token.into_kind() {
+            TokenKind::Symbol(fn_name) => {
                 // this is an application where the function identifier is just a symbol
                 let fn_ident = SmtQualifiedIdent::Ident(SmtIdent {
                     name: fn_name,
@@ -233,19 +234,19 @@ impl<H: SmtHandler> TermParser<H> {
                 });
                 TermParserState::ApplicationTerm(fn_ident, Vec::new())
             }
-            Token::Reserved(Reserved::Let) => TermParserState::LetBeforeBindingsOpen,
-            Token::Reserved(Reserved::Lambda) => todo!("Lambda"),
-            Token::Reserved(Reserved::Forall) => todo!("Forall"),
-            Token::Reserved(Reserved::Exists) => todo!("Exists"),
-            Token::Reserved(Reserved::Match) => todo!("Match"),
-            Token::Reserved(Reserved::ExclamationMark) => todo!("Annotation"),
-            Token::Reserved(Reserved::Underscore) => {
+            TokenKind::Reserved(Reserved::Let) => TermParserState::LetBeforeBindingsOpen,
+            TokenKind::Reserved(Reserved::Lambda) => todo!("Lambda"),
+            TokenKind::Reserved(Reserved::Forall) => todo!("Forall"),
+            TokenKind::Reserved(Reserved::Exists) => todo!("Exists"),
+            TokenKind::Reserved(Reserved::Match) => todo!("Match"),
+            TokenKind::Reserved(Reserved::ExclamationMark) => todo!("Annotation"),
+            TokenKind::Reserved(Reserved::Underscore) => {
                 // this is actually a term composed of an indexed identifier
                 // start an indexed ident parser after the undescore
                 let parser = IdentParser::after_underscore();
                 TermParserState::IndexedIdent(parser)
             }
-            Token::ParenOpen => {
+            TokenKind::ParenOpen => {
                 // this is an application where the function identifier is qualified or indexed
                 // start a qualified ident parser after the parenthesis open
                 let parser = IdentParser::after_open_paren();
@@ -258,35 +259,36 @@ impl<H: SmtHandler> TermParser<H> {
 }
 
 fn parse_special_constant(token: Token) -> Result<SmtSpecialConstant, Token> {
-    let constant = match token {
-        Token::Numeral(value) => SmtSpecialConstant::Numeral(value),
-        Token::Decimal(decimal) => SmtSpecialConstant::Decimal(decimal),
-        Token::Hexadecimal(value) => SmtSpecialConstant::Hexadecimal(value),
-        Token::Binary(value) => SmtSpecialConstant::Binary(value),
-        Token::String(string) => SmtSpecialConstant::String(string),
-        _ => return Err(token),
+    let span = token.span();
+    let constant = match token.into_kind() {
+        TokenKind::Numeral(value) => SmtSpecialConstant::Numeral(value),
+        TokenKind::Decimal(decimal) => SmtSpecialConstant::Decimal(decimal),
+        TokenKind::Hexadecimal(value) => SmtSpecialConstant::Hexadecimal(value),
+        TokenKind::Binary(value) => SmtSpecialConstant::Binary(value),
+        TokenKind::String(string) => SmtSpecialConstant::String(string),
+        kind => return Err(Token::new(kind, span)),
     };
     Ok(constant)
 }
 
 fn expect_open_paren<H: SmtHandler>(token: Token) -> Result<(), ParserOrHandlerError<H>> {
-    if matches!(token, Token::ParenOpen) {
+    if matches!(token.kind(), TokenKind::ParenOpen) {
         Ok(())
     } else {
-        Err(ParserError::ExpectedToken(Token::ParenOpen).into())
+        Err(ParserError::ExpectedToken(TokenKind::ParenOpen).into())
     }
 }
 
 fn expect_close_paren<H: SmtHandler>(token: Token) -> Result<(), ParserOrHandlerError<H>> {
-    if matches!(token, Token::ParenClose) {
+    if matches!(token.kind(), TokenKind::ParenClose) {
         Ok(())
     } else {
-        Err(ParserError::ExpectedToken(Token::ParenClose).into())
+        Err(ParserError::ExpectedToken(TokenKind::ParenClose).into())
     }
 }
 
 fn expect_symbol<H: SmtHandler>(token: Token) -> Result<SmtSymbol, ParserOrHandlerError<H>> {
-    if let Token::Symbol(symbol) = token {
+    if let TokenKind::Symbol(symbol) = token.into_kind() {
         Ok(symbol)
     } else {
         Err(ParserError::ExpectedSymbol.into())

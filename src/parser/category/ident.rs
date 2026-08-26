@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler, SmtIdent, SmtIndex, SmtSymbol,
     parser::{ParserError, ParserOrHandlerError, category::CategoryParser},
-    token::{Reserved, Token},
+    token::{Reserved, Token, TokenKind},
 };
 
 pub enum IdentParser {
@@ -29,24 +29,27 @@ impl<H: SmtHandler> CategoryParser<H> for IdentParser {
         token: Token,
     ) -> Result<ControlFlow<SmtIdent, Self>, ParserOrHandlerError<H>> {
         match self {
-            IdentParser::Start => match token {
-                Token::Symbol(name) => Ok(ControlFlow::Break(SmtIdent {
+            IdentParser::Start => match token.into_kind() {
+                TokenKind::Symbol(name) => Ok(ControlFlow::Break(SmtIdent {
                     name,
                     indices: Vec::new(),
                 })),
-                Token::ParenOpen => Ok(ControlFlow::Continue(Self::Open)),
+                TokenKind::ParenOpen => Ok(ControlFlow::Continue(Self::Open)),
                 _ => Err(ParserError::ExpectedIdent.into()),
             },
             IdentParser::Open => {
                 // this must be an underscore
-                if matches!(token, Token::Reserved(Reserved::Underscore)) {
+                if matches!(token.kind(), TokenKind::Reserved(Reserved::Underscore)) {
                     Ok(ControlFlow::Continue(Self::AfterUnderscore))
                 } else {
-                    Err(ParserError::ExpectedToken(Token::Reserved(Reserved::Underscore)).into())
+                    Err(
+                        ParserError::ExpectedToken(TokenKind::Reserved(Reserved::Underscore))
+                            .into(),
+                    )
                 }
             }
             IdentParser::AfterUnderscore => {
-                if let Token::Symbol(name) = token {
+                if let TokenKind::Symbol(name) = token.into_kind() {
                     Ok(ControlFlow::Continue(IdentParser::Indices {
                         name,
                         indices: Vec::new(),
@@ -55,18 +58,18 @@ impl<H: SmtHandler> CategoryParser<H> for IdentParser {
                     Err(ParserError::ExpectedSymbol.into())
                 }
             }
-            IdentParser::Indices { name, mut indices } => match token {
-                Token::ParenClose => {
+            IdentParser::Indices { name, mut indices } => match token.into_kind() {
+                TokenKind::ParenClose => {
                     if indices.is_empty() {
                         return Err(ParserError::RequiredIndices.into());
                     }
                     Ok(ControlFlow::Break(SmtIdent { name, indices }))
                 }
-                Token::Numeral(index_value) => {
+                TokenKind::Numeral(index_value) => {
                     indices.push(SmtIndex::Numeral(index_value));
                     Ok(ControlFlow::Continue(Self::Indices { name, indices }))
                 }
-                Token::Symbol(index_symbol) => {
+                TokenKind::Symbol(index_symbol) => {
                     indices.push(SmtIndex::Symbol(index_symbol));
                     Ok(ControlFlow::Continue(Self::Indices { name, indices }))
                 }

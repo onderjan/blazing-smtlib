@@ -6,7 +6,7 @@ use crate::{
         ParserError, ParserOrHandlerError,
         category::{CategoryParser, ident::IdentParser},
     },
-    token::{Reserved, Token},
+    token::{Reserved, Token, TokenKind},
 };
 
 pub enum SortParser {
@@ -28,8 +28,8 @@ impl<H: SmtHandler> CategoryParser<H> for SortParser {
         token: Token,
     ) -> Result<ControlFlow<H::Sort, Self>, ParserOrHandlerError<H>> {
         let sort = match self {
-            SortParser::Start => match token {
-                Token::Symbol(name) => {
+            SortParser::Start => match token.into_kind() {
+                TokenKind::Symbol(name) => {
                     // the sort consists just of a non-indexed ident
                     let ident = SmtIdent {
                         name,
@@ -37,11 +37,11 @@ impl<H: SmtHandler> CategoryParser<H> for SortParser {
                     };
                     SmtSort::Ident(ident)
                 }
-                Token::ParenOpen => return Ok(ControlFlow::Continue(Self::Open)),
+                TokenKind::ParenOpen => return Ok(ControlFlow::Continue(Self::Open)),
                 _ => return Err(ParserError::ExpectedSort.into()),
             },
-            SortParser::Open => match token {
-                Token::Reserved(Reserved::Underscore) => {
+            SortParser::Open => match token.into_kind() {
+                TokenKind::Reserved(Reserved::Underscore) => {
                     return Ok(ControlFlow::Continue(SortParser::Ident(
                         IdentParser::after_underscore(),
                     )));

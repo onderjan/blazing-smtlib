@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler, SmtSymbol,
     parser::{ParserError, ParserOrHandlerError},
-    token::Token,
+    token::{Token, TokenKind},
 };
 
 pub mod attribute;
@@ -82,10 +82,10 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for ClosedParser<H, 
                 ControlFlow::Break(result) => Self::BeforeClose(result),
             },
             Self::BeforeClose(result) => {
-                if matches!(token, Token::ParenClose) {
+                if matches!(token.kind(), TokenKind::ParenClose) {
                     return Ok(ControlFlow::Break(result));
                 } else {
-                    return Err(ParserError::ExpectedToken(Token::ParenClose).into());
+                    return Err(ParserError::ExpectedToken(TokenKind::ParenClose).into());
                 }
             }
         };
@@ -112,10 +112,10 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for OpenClosedParser
     ) -> Result<ControlFlow<Self::Result, Self>, ParserOrHandlerError<H>> {
         let result = match self {
             OpenClosedParser::BeforeOpen => {
-                if matches!(token, Token::ParenOpen) {
+                if matches!(token.kind(), TokenKind::ParenOpen) {
                     Self::AfterOpen(ClosedParser::init())
                 } else {
-                    return Err(ParserError::ExpectedToken(Token::ParenOpen).into());
+                    return Err(ParserError::ExpectedToken(TokenKind::ParenOpen).into());
                 }
             }
             OpenClosedParser::AfterOpen(parser) => match parser.progress(handler, token)? {
@@ -149,13 +149,13 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for MultipleParser<H
     ) -> Result<ControlFlow<Vec<P::Result>, Self>, ParserOrHandlerError<H>> {
         match self {
             MultipleParser::BeforeOpen => {
-                if matches!(token, Token::ParenOpen) {
+                if matches!(token.kind(), TokenKind::ParenOpen) {
                     Ok(ControlFlow::Continue(Self::Normal {
                         results: Vec::new(),
                         parser: None,
                     }))
                 } else {
-                    Err(ParserError::ExpectedToken(Token::ParenOpen).into())
+                    Err(ParserError::ExpectedToken(TokenKind::ParenOpen).into())
                 }
             }
             MultipleParser::Normal {
@@ -166,7 +166,7 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for MultipleParser<H
                     Some(parser) => parser,
                     None => {
                         // close parenthesis ends processing
-                        if matches!(token, Token::ParenClose) {
+                        if matches!(token.kind(), TokenKind::ParenClose) {
                             return Ok(ControlFlow::Break(results));
                         } else {
                             P::init()
@@ -216,7 +216,7 @@ impl<H: SmtHandler> CategoryParser<H> for SymbolParser {
         _handler: &mut H,
         token: Token,
     ) -> Result<ControlFlow<Self::Result, Self>, ParserOrHandlerError<H>> {
-        if let Token::Symbol(symbol) = token {
+        if let TokenKind::Symbol(symbol) = token.into_kind() {
             Ok(ControlFlow::Break(symbol))
         } else {
             Err(ParserError::ExpectedSymbol.into())
@@ -238,7 +238,7 @@ impl<H: SmtHandler> CategoryParser<H> for CloseParenParser {
         _handler: &mut H,
         token: Token,
     ) -> Result<ControlFlow<(), Self>, ParserOrHandlerError<H>> {
-        if matches!(token, Token::ParenClose) {
+        if matches!(token.kind(), TokenKind::ParenClose) {
             Ok(ControlFlow::Break(()))
         } else {
             Err(ParserError::ExpectedSymbol.into())
@@ -247,9 +247,9 @@ impl<H: SmtHandler> CategoryParser<H> for CloseParenParser {
 }
 
 fn expect_close_parenthesis<H: SmtHandler>(token: Token) -> Result<(), ParserOrHandlerError<H>> {
-    if matches!(token, Token::ParenClose) {
+    if matches!(token.kind(), TokenKind::ParenClose) {
         Ok(())
     } else {
-        Err(ParserError::ExpectedToken(Token::ParenClose).into())
+        Err(ParserError::ExpectedToken(TokenKind::ParenClose).into())
     }
 }
