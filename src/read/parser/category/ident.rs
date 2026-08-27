@@ -102,9 +102,7 @@ impl IdentParser {
 #[cfg(test)]
 mod tests {
     use super::*;
-    // TODO: fix tests
-    /*
-    use crate::read::parser::category::tests::{parse_all, run};
+    use crate::read::parser::category::tests::{assert_error, parse_all, run};
 
     fn indices(ident: &SmtIdent) -> Vec<String> {
         ident
@@ -166,17 +164,25 @@ mod tests {
     #[test]
     fn errors() {
         let err = assert_error::<IdentParser>(b"1", 0, 1);
-        assert!(matches!(err, CategoryParserError::ExpectedIdent), "{err:?}");
+        assert!(
+            matches!(err, CategoryParserErrorKind::ExpectedIdent),
+            "{err:?}"
+        );
 
         let err = assert_error::<IdentParser>(b")", 0, 1);
-        assert!(matches!(err, CategoryParserError::ExpectedIdent), "{err:?}");
+        assert!(
+            matches!(err, CategoryParserErrorKind::ExpectedIdent),
+            "{err:?}"
+        );
 
         // after `(` only an underscore may follow
         let err = assert_error::<IdentParser>(b"(f 1)", 1, 2);
         assert!(
             matches!(
                 err,
-                CategoryParserError::ExpectedToken(&[TokenType::Reserved(Reserved::Underscore)])
+                CategoryParserErrorKind::ExpectedToken(&[TokenType::Reserved(
+                    Reserved::Underscore
+                )])
             ),
             "{err:?}"
         );
@@ -186,7 +192,7 @@ mod tests {
         assert!(
             matches!(
                 err,
-                CategoryParserError::ExpectedToken(&[TokenType::Symbol])
+                CategoryParserErrorKind::ExpectedToken(&[TokenType::Symbol])
             ),
             "{err:?}"
         );
@@ -194,27 +200,27 @@ mod tests {
         // at least one index is required
         let err = assert_error::<IdentParser>(b"(_ f)", 4, 5);
         assert!(
-            matches!(err, CategoryParserError::RequiredIndices),
+            matches!(err, CategoryParserErrorKind::RequiredIndices),
             "{err:?}"
         );
 
         // indices are numerals or symbols only
         let err = assert_error::<IdentParser>(b"(_ f \"s\")", 5, 8);
         assert!(
-            matches!(err, CategoryParserError::ExpectedIndexOrCloseParen),
+            matches!(err, CategoryParserErrorKind::ExpectedIndexOrCloseParen),
             "{err:?}"
         );
         let err = assert_error::<IdentParser>(b"(_ f (a))", 5, 6);
         assert!(
-            matches!(err, CategoryParserError::ExpectedIndexOrCloseParen),
+            matches!(err, CategoryParserErrorKind::ExpectedIndexOrCloseParen),
             "{err:?}"
         );
 
         // EOF inside the indexed identifier
         let err = assert_error::<IdentParser>(b"(_ f 1", 6, 6);
         assert!(
-            matches!(err, CategoryParserError::ExpectedIndexOrCloseParen),
+            matches!(err, CategoryParserErrorKind::ExpectedIndexOrCloseParen),
             "{err:?}"
         );
-    }*/
+    }
 }

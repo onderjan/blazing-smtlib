@@ -151,8 +151,6 @@ mod tests {
     use std::io::Read;
 
     use super::*;
-    // TODO: fix tests
-    /*
     use crate::{CheckStandardSyntax, SmtLocation};
 
     /// Expected location as `(offset, line, column)`.
@@ -200,7 +198,7 @@ mod tests {
         let err = read(b"(check-sat)\n(assert )").expect_err("expected a parser error, got Ok");
         assert!(matches!(
             err.kind(),
-            SmtReadErrorKind::Parser(CategoryParserError::ExpectedTerm)
+            SmtReadErrorKind::Parser(CategoryParserErrorKind::ExpectedTerm)
         ));
         assert_span(&err, (20, 2, 9), (21, 2, 10));
     }
@@ -247,5 +245,4 @@ mod tests {
         assert!(matches!(err.kind(), SmtReadErrorKind::Io(_)));
         assert_span(&err, (0, 1, 1), (0, 1, 1));
     }
-    */
 }

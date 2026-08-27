@@ -88,9 +88,7 @@ impl<H: SmtHandler> CategoryParser<H> for ClosedAttributeParser<H> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    // TODO: fix tests
-    /*
-    use crate::read::parser::category::tests::{Printing, parse_all};
+    use crate::read::parser::category::tests::{Printing, assert_error, parse_all, run};
 
     type P = ClosedAttributeParser<Printing>;
 
@@ -123,7 +121,7 @@ mod tests {
         assert!(
             matches!(
                 err,
-                CategoryParserError::ExpectedToken(&[TokenType::Keyword])
+                CategoryParserErrorKind::ExpectedToken(&[TokenType::Keyword])
             ),
             "{err:?}"
         );
@@ -132,7 +130,7 @@ mod tests {
         assert!(
             matches!(
                 err,
-                CategoryParserError::ExpectedToken(&[TokenType::Keyword])
+                CategoryParserErrorKind::ExpectedToken(&[TokenType::Keyword])
             ),
             "{err:?}"
         );
@@ -140,7 +138,7 @@ mod tests {
         // a keyword is not a valid value
         let err = assert_error::<P>(b":a :b)", 3, 5);
         assert!(
-            matches!(err, CategoryParserError::ExpectedAttribute),
+            matches!(err, CategoryParserErrorKind::ExpectedAttribute),
             "{err:?}"
         );
 
@@ -149,7 +147,7 @@ mod tests {
         assert!(
             matches!(
                 err,
-                CategoryParserError::ExpectedToken(&[TokenType::ParenClose])
+                CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
             ),
             "{err:?}"
         );
@@ -159,10 +157,9 @@ mod tests {
         assert!(
             matches!(
                 err,
-                CategoryParserError::ExpectedToken(&[TokenType::ParenClose])
+                CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
             ),
             "{err:?}"
         );
-
-    }*/
+    }
 }

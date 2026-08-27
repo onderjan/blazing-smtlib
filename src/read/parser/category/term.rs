@@ -345,13 +345,14 @@ mod tests {
     use std::convert::Infallible;
 
     use super::*;
-    // TODO: fix tests
-    /*
     use crate::{
         SmtAttributeValue, SmtKeyword, SmtSExpr, SmtSort,
         read::{
             lexer::Lexer,
-            parser::category::tests::{Printing, assert_error, parse_all, run},
+            parser::{
+                ParserErrorKind,
+                category::tests::{Printing, assert_error, parse_all, run},
+            },
         },
     };
 
@@ -417,7 +418,7 @@ mod tests {
         // an application must have at least one argument
         let err = assert_error::<TermParser<Printing>>(b"(f)", 2, 3);
         assert!(
-            matches!(err, CategoryParserError::EmptyApplication),
+            matches!(err, CategoryParserErrorKind::EmptyApplication),
             "{err:?}"
         );
     }
@@ -448,7 +449,7 @@ mod tests {
     fn let_errors() {
         let err = assert_error::<TermParser<Printing>>(b"(let () x)", 6, 7);
         assert!(
-            matches!(err, CategoryParserError::EmptyLetBindings),
+            matches!(err, CategoryParserErrorKind::EmptyLetBindings),
             "{err:?}"
         );
 
@@ -456,7 +457,7 @@ mod tests {
         assert!(
             matches!(
                 err,
-                CategoryParserError::ExpectedToken(&[TokenType::ParenOpen])
+                CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenOpen])
             ),
             "{err:?}"
         );
@@ -465,7 +466,10 @@ mod tests {
         assert!(
             matches!(
                 err,
-                CategoryParserError::ExpectedToken(&[TokenType::ParenOpen, TokenType::ParenClose])
+                CategoryParserErrorKind::ExpectedToken(&[
+                    TokenType::ParenOpen,
+                    TokenType::ParenClose
+                ])
             ),
             "{err:?}"
         );
@@ -474,7 +478,7 @@ mod tests {
         assert!(
             matches!(
                 err,
-                CategoryParserError::ExpectedToken(&[TokenType::Symbol])
+                CategoryParserErrorKind::ExpectedToken(&[TokenType::Symbol])
             ),
             "{err:?}"
         );
@@ -483,7 +487,7 @@ mod tests {
         assert!(
             matches!(
                 err,
-                CategoryParserError::ExpectedToken(&[TokenType::ParenClose])
+                CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
             ),
             "{err:?}"
         );
@@ -492,49 +496,63 @@ mod tests {
         assert!(
             matches!(
                 err,
-                CategoryParserError::ExpectedToken(&[TokenType::ParenClose])
+                CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
             ),
             "{err:?}"
         );
     }
 
-
     #[test]
     fn errors() {
         let err = assert_error::<TermParser<Printing>>(b")", 0, 1);
-        assert!(matches!(err, CategoryParserError::ExpectedTerm), "{err:?}");
+        assert!(
+            matches!(err, CategoryParserErrorKind::ExpectedTerm),
+            "{err:?}"
+        );
 
         let err = assert_error::<TermParser<Printing>>(b":kw", 0, 3);
-        assert!(matches!(err, CategoryParserError::ExpectedTerm), "{err:?}");
+        assert!(
+            matches!(err, CategoryParserErrorKind::ExpectedTerm),
+            "{err:?}"
+        );
 
         let err = assert_error::<TermParser<Printing>>(b"", 0, 0);
-        assert!(matches!(err, CategoryParserError::ExpectedTerm), "{err:?}");
+        assert!(
+            matches!(err, CategoryParserErrorKind::ExpectedTerm),
+            "{err:?}"
+        );
 
         // the operator position takes a symbol, a reserved binder, `_` or `(`
         let err = assert_error::<TermParser<Printing>>(b"(1 x)", 1, 2);
         assert!(
-            matches!(err, CategoryParserError::ExpectedOperator),
+            matches!(err, CategoryParserErrorKind::ExpectedOperator),
             "{err:?}"
         );
 
         let err = assert_error::<TermParser<Printing>>(b"()", 1, 2);
         assert!(
-            matches!(err, CategoryParserError::ExpectedOperator),
+            matches!(err, CategoryParserErrorKind::ExpectedOperator),
             "{err:?}"
         );
 
         // bad argument
         let err = assert_error::<TermParser<Printing>>(b"(f x :kw)", 5, 8);
-        assert!(matches!(err, CategoryParserError::ExpectedTerm), "{err:?}");
+        assert!(
+            matches!(err, CategoryParserErrorKind::ExpectedTerm),
+            "{err:?}"
+        );
 
         // EOF inside an application is a missing term
         let err = assert_error::<TermParser<Printing>>(b"(f x", 4, 4);
-        assert!(matches!(err, CategoryParserError::ExpectedTerm), "{err:?}");
+        assert!(
+            matches!(err, CategoryParserErrorKind::ExpectedTerm),
+            "{err:?}"
+        );
 
         // bad indexed identifier in a term
         let err = assert_error::<TermParser<Printing>>(b"(_ f)", 4, 5);
         assert!(
-            matches!(err, CategoryParserError::RequiredIndices),
+            matches!(err, CategoryParserErrorKind::RequiredIndices),
             "{err:?}"
         );
     }
@@ -598,12 +616,18 @@ mod tests {
                     finished = true;
                     break;
                 }
-                Err(ParserError::ParserError(err)) => panic!("{err:?}"),
-                Err(ParserError::HandlerError(err)) => match err {},
+                Err(err) => {
+                    let span = err.span();
+                    match err.into_kind() {
+                        ParserErrorKind::ParserError(kind) => panic!("{kind:?} at {span:?}"),
+                        // the `Counting` handler never fails
+                        ParserErrorKind::HandlerError(err) => match err {},
+                    }
+                }
             }
         }
         assert!(finished);
         // every application plus the innermost x
         assert_eq!(handler.terms, DEPTH + 1);
-    }*/
+    }
 }

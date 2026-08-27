@@ -49,6 +49,7 @@ pub enum CategoryParserErrorKind {
     RequiredIndices,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CategoryParserError {
     kind: CategoryParserErrorKind,
     span: TokenSpan,
@@ -329,11 +330,9 @@ pub(super) mod tests {
     use super::*;
     use crate::{
         SmtAttributeValue, SmtIdent, SmtIndex, SmtKeyword, SmtQualifiedIdent, SmtSExpr, SmtSort,
-        SmtSpecialConstant, SmtTerm, TokenSpan, read::lexer::Lexer,
+        SmtSpecialConstant, SmtTerm,
+        read::{lexer::Lexer, parser::ParserErrorKind},
     };
-
-    // TODO: fix tests
-    /*
 
     // --- Test handler rendering everything it receives back into text ---
 
@@ -455,9 +454,6 @@ pub(super) mod tests {
 
     // --- Driver ---
 
-    /// Error returned by `run`: the parser error and the byte span of the token it was raised on.
-    pub(in crate::read::parser::category) type RunError = (CategoryParserError, TokenSpan);
-
     /// Lexes the input and feeds it to a fresh parser `P` over a `Printing` handler.
     ///
     /// Returns the parser result and the number of tokens left unconsumed
@@ -465,20 +461,19 @@ pub(super) mod tests {
     /// Panics if the parser did not finish before the end of the input.
     pub(in crate::read::parser::category) fn run<P: CategoryParser<Printing>>(
         input: &[u8],
-    ) -> Result<(P::Result, usize), RunError> {
+    ) -> Result<(P::Result, usize), CategoryParserError> {
         run_with::<P>(&mut Printing::default(), input)
     }
 
     pub(in crate::read::parser::category) fn run_with<P: CategoryParser<Printing>>(
         handler: &mut Printing,
         input: &[u8],
-    ) -> Result<(P::Result, usize), RunError> {
+    ) -> Result<(P::Result, usize), CategoryParserError> {
         let mut tokens = Lexer::lex_all(input)
             .expect("test input must lex")
             .into_iter();
         let mut parser = P::init();
         for token in tokens.by_ref() {
-            let span = token.span();
             match parser.progress(handler, token) {
                 Ok(ControlFlow::Continue(next)) => parser = next,
                 Ok(ControlFlow::Break(result)) => {
@@ -487,8 +482,14 @@ pub(super) mod tests {
                         .count();
                     return Ok((result, left));
                 }
-                Err(ParserError::ParserError(err)) => return Err((err, span)),
-                Err(ParserError::HandlerError(err)) => match err {},
+                Err(err) => {
+                    let span = err.span();
+                    return Err(match err.into_kind() {
+                        ParserErrorKind::ParserError(kind) => CategoryParserError::new(kind, span),
+                        // the `Printing` handler never fails
+                        ParserErrorKind::HandlerError(err) => match err {},
+                    });
+                }
             }
         }
         panic!(
@@ -505,28 +506,29 @@ pub(super) mod tests {
         match run::<P>(input) {
             Ok((result, 0)) => result,
             Ok((_, left)) => panic!("{left} tokens left unconsumed in {:?}", text(input)),
-            Err((err, span)) => panic!("unexpected error {err:?} at {span:?} in {:?}", text(input)),
+            Err(err) => panic!("unexpected error {err:?} in {:?}", text(input)),
         }
     }
 
-    /// Runs the parser, requires a parser error, checks the byte span of the offending token,
-    /// and returns the error so that the caller can inspect the variant.
+    /// Runs the parser, requires a parser error, checks the byte span the error carries,
+    /// and returns its kind so that the caller can inspect the variant.
     #[track_caller]
     pub(in crate::read::parser::category) fn assert_error<P: CategoryParser<Printing>>(
         input: &[u8],
         start: u64,
         end: u64,
-    ) -> CategoryParserError {
+    ) -> CategoryParserErrorKind {
         match run::<P>(input) {
             Ok(_) => panic!("expected a parser error in {:?}, got Ok", text(input)),
-            Err((err, span)) => {
+            Err(err) => {
+                let span = err.span();
                 assert_eq!(
                     (span.start(), span.end()),
                     (start, end),
-                    "token span mismatch (start, end) as byte offsets for {err:?} in {:?}",
+                    "error span mismatch (start, end) as byte offsets for {err:?} in {:?}",
                     text(input)
                 );
-                err
+                err.into_kind()
             }
         }
     }
@@ -541,7 +543,7 @@ pub(super) mod tests {
         assert_eq!(symbol.as_slice(), b"quoted symbol");
 
         let err = assert_error::<SymbolParser>(b"1", 0, 1);
-        let expected_symbol = CategoryParserError::ExpectedToken(&[TokenType::Symbol]);
+        let expected_symbol = CategoryParserErrorKind::ExpectedToken(&[TokenType::Symbol]);
         assert_eq!(err, expected_symbol, "{err:?}");
         let err = assert_error::<SymbolParser>(b"(", 0, 1);
         assert_eq!(err, expected_symbol, "{err:?}");
@@ -565,7 +567,7 @@ pub(super) mod tests {
         assert!(
             matches!(
                 err,
-                CategoryParserError::ExpectedToken(&[TokenType::ParenClose])
+                CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
             ),
             "{err:?}"
         );
@@ -582,7 +584,7 @@ pub(super) mod tests {
         assert!(
             matches!(
                 err,
-                CategoryParserError::ExpectedToken(&[TokenType::Symbol])
+                CategoryParserErrorKind::ExpectedToken(&[TokenType::Symbol])
             ),
             "{err:?}"
         );
@@ -597,7 +599,7 @@ pub(super) mod tests {
         assert!(
             matches!(
                 err,
-                CategoryParserError::ExpectedToken(&[TokenType::ParenClose])
+                CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
             ),
             "{err:?}"
         );
@@ -606,7 +608,7 @@ pub(super) mod tests {
         assert!(
             matches!(
                 err,
-                CategoryParserError::ExpectedToken(&[TokenType::ParenClose])
+                CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
             ),
             "{err:?}"
         );
@@ -621,7 +623,7 @@ pub(super) mod tests {
         assert!(
             matches!(
                 err,
-                CategoryParserError::ExpectedToken(&[TokenType::ParenOpen])
+                CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenOpen])
             ),
             "{err:?}"
         );
@@ -629,7 +631,7 @@ pub(super) mod tests {
         assert!(
             matches!(
                 err,
-                CategoryParserError::ExpectedToken(&[TokenType::ParenClose])
+                CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
             ),
             "{err:?}"
         );
@@ -649,7 +651,7 @@ pub(super) mod tests {
         assert!(
             matches!(
                 err,
-                CategoryParserError::ExpectedToken(&[TokenType::ParenOpen])
+                CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenOpen])
             ),
             "{err:?}"
         );
@@ -658,7 +660,7 @@ pub(super) mod tests {
         assert!(
             matches!(
                 err,
-                CategoryParserError::ExpectedToken(&[TokenType::Symbol])
+                CategoryParserErrorKind::ExpectedToken(&[TokenType::Symbol])
             ),
             "{err:?}"
         );
@@ -667,7 +669,7 @@ pub(super) mod tests {
         assert!(
             matches!(
                 err,
-                CategoryParserError::ExpectedToken(&[TokenType::Symbol])
+                CategoryParserErrorKind::ExpectedToken(&[TokenType::Symbol])
             ),
             "{err:?}"
         );
@@ -691,10 +693,9 @@ pub(super) mod tests {
         assert!(
             matches!(
                 err,
-                CategoryParserError::ExpectedToken(&[TokenType::Symbol])
+                CategoryParserErrorKind::ExpectedToken(&[TokenType::Symbol])
             ),
             "{err:?}"
         );
     }
-    */
 }

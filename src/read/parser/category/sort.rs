@@ -76,8 +76,6 @@ impl<H: SmtHandler> CategoryParser<H> for SortParser {
 #[cfg(test)]
 mod tests {
     use super::*;
-    // TODO: fix tests
-    /*
     use crate::read::parser::category::tests::{assert_error, parse_all, run};
 
     #[test]
@@ -101,22 +99,23 @@ mod tests {
 
     #[test]
     fn errors() {
-        let err = assert_error::<SortParser>(b"1", 0, 1);
-        assert!(matches!(err, CategoryParserError::ExpectedSort), "{err:?}");
-
-        let err = assert_error::<SortParser>(b")", 0, 1);
-        assert!(matches!(err, CategoryParserError::ExpectedSort), "{err:?}");
-
-        let err = assert_error::<SortParser>(b"", 0, 0);
-        assert!(matches!(err, CategoryParserError::ExpectedSort), "{err:?}");
+        let expected_sort = CategoryParserErrorKind::ExpectedSort;
+        assert_eq!(assert_error::<SortParser>(b"1", 0, 1), expected_sort);
+        assert_eq!(assert_error::<SortParser>(b")", 0, 1), expected_sort);
+        assert_eq!(assert_error::<SortParser>(b"", 0, 0), expected_sort);
 
         // sort applications like (Array Int Int) are not supported yet
         let err = assert_error::<SortParser>(b"(Array Int Int)", 1, 6);
-        assert!(matches!(err, CategoryParserError::ExpectedSortInner), "{err:?}");
+        assert!(
+            matches!(err, CategoryParserErrorKind::ExpectedSortInner),
+            "{err:?}"
+        );
 
         // errors inside the indexed identifier are reported by the identifier parser
         let err = assert_error::<SortParser>(b"(_ BitVec)", 9, 10);
-        assert!(matches!(err, CategoryParserError::RequiredIndices), "{err:?}");
+        assert!(
+            matches!(err, CategoryParserErrorKind::RequiredIndices),
+            "{err:?}"
+        );
     }
-    */
 }
