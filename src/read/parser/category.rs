@@ -241,7 +241,7 @@ impl<H: SmtHandler> CategoryParser<H> for CloseParenParser {
         if matches!(token.kind(), TokenKind::ParenClose) {
             Ok(ControlFlow::Break(()))
         } else {
-            Err(ParserError::ExpectedSymbol.into())
+            Err(ParserError::ExpectedToken(TokenKind::ParenClose).into())
         }
     }
 }
