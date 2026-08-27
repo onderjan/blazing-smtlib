@@ -123,17 +123,10 @@ mod tests {
     ///
     /// On a parser error, returns it together with the span of the offending token.
     fn parse(input: &[u8]) -> Result<(), (ParserError, TokenSpan)> {
-        let mut lexer = Lexer::new();
         let mut handler = OnlyCheckSyntax;
         let mut parser = Parser::new(&mut handler);
 
-        let mut tokens = Vec::new();
-        for &c in input {
-            tokens.extend(lexer.lex_next(c).expect("test input must lex"));
-        }
-        tokens.extend(lexer.lex_eof().expect("test input must lex"));
-
-        for token in tokens {
+        for token in Lexer::lex_all(input).expect("test input must lex") {
             let span = token.span();
             match parser.parse_token(token) {
                 Ok(()) => {}

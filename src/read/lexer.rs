@@ -506,6 +506,20 @@ impl Lexer {
         let span = self.resolve_span(span);
         LexerError::new(kind, span)
     }
+
+    /// Lex the whole input including EOF, returning all tokens or the lexer error.
+    ///
+    /// This is a helper function for tests.
+    #[cfg(test)]
+    pub(crate) fn lex_all(input: &[u8]) -> Result<Vec<Token>, LexerError> {
+        let mut lexer = Lexer::new();
+        let mut tokens = Vec::new();
+        for &c in input {
+            tokens.extend(lexer.lex_next(c)?);
+        }
+        tokens.extend(lexer.lex_eof()?);
+        Ok(tokens)
+    }
 }
 
 impl Default for Lexer {
@@ -543,15 +557,8 @@ mod tests {
         (location.offset(), location.line(), location.column())
     }
 
-    /// Lexes the whole input including EOF, returning all tokens or the first error.
     fn lex_all(input: &[u8]) -> Result<Vec<Token>, LexerError> {
-        let mut lexer = Lexer::new();
-        let mut tokens = Vec::new();
-        for &c in input {
-            tokens.extend(lexer.lex_next(c)?);
-        }
-        tokens.extend(lexer.lex_eof()?);
-        Ok(tokens)
+        Lexer::lex_all(input)
     }
 
     /// Lexes the input, requires an error of the given kind, and checks its span.
