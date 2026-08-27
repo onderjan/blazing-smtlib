@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 
 use rayon::ThreadPoolBuilder;
-use smt_parser_rs::{OnlyCheckSyntax, SmtReadError, SmtReadErrorKind, read_smt_file};
+use smt_parser_rs::{CheckStandardSyntax, SmtReadError, SmtReadErrorKind, read_smt_file};
 
 fn collect_smt2_files(root: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();
@@ -33,8 +33,8 @@ struct FailureRecord {
     error: String,
 }
 
-fn parse_file(path: &Path) -> Result<(), SmtReadError<OnlyCheckSyntax>> {
-    read_smt_file(&mut OnlyCheckSyntax, path)?;
+fn parse_file(path: &Path) -> Result<(), SmtReadError<CheckStandardSyntax>> {
+    read_smt_file(&mut CheckStandardSyntax, path)?;
     Ok(())
 }
 
@@ -46,11 +46,10 @@ fn try_parse_file(path: &Path) -> Result<(), String> {
     match result {
         Ok(Ok(_ast)) => Ok(()),
         Ok(Err(e)) => match e.into_kind() {
-            SmtReadErrorKind::Lexer(lexer_error) => Err(format!("Lexer error: {:?}", lexer_error)),
-            SmtReadErrorKind::Parser(parser_error) => {
-                Err(format!("Parser error: {:?}", parser_error))
-            }
-            SmtReadErrorKind::Io(read_error) => Err(format!("Read error: {:?}", read_error)),
+            SmtReadErrorKind::Lexer(err) => Err(format!("Lexer error: {:?}", err)),
+            SmtReadErrorKind::Parser(err) => Err(format!("Parser error: {:?}", err)),
+            SmtReadErrorKind::Io(err) => Err(format!("Read error: {:?}", err)),
+            SmtReadErrorKind::Handler(err) => Err(format!("Nonstandard command: {:?}", err.0)),
         },
         Err(cause) => {
             let msg = match cause.downcast_ref::<&'static str>() {

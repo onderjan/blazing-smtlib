@@ -5,13 +5,13 @@ use crate::{
             CloseParenParser, ClosedParser, MultipleParser, OpenClosedParser, PairParser,
             SymbolParser, attribute::ClosedAttributeParser, sort::SortParser, term::TermParser,
         },
-        command::Command,
+        command::StandardCommand,
     },
 };
 
 pub struct CommandSetLogic;
 
-impl<H: CommandHandler> Command<H> for CommandSetLogic {
+impl<H: CommandHandler> StandardCommand<H> for CommandSetLogic {
     type Parser = ClosedParser<H, SymbolParser>;
 
     fn handle(handler: &mut H, logic: SmtSymbol) -> Result<(), <H>::Error> {
@@ -21,7 +21,7 @@ impl<H: CommandHandler> Command<H> for CommandSetLogic {
 
 pub struct CommandDeclareConst;
 
-impl<H: CommandHandler> Command<H> for CommandDeclareConst {
+impl<H: CommandHandler> StandardCommand<H> for CommandDeclareConst {
     type Parser = ClosedParser<H, PairParser<H, SymbolParser, SortParser>>;
 
     fn handle(handler: &mut H, result: (SmtSymbol, H::Sort)) -> Result<(), <H>::Error> {
@@ -32,7 +32,7 @@ impl<H: CommandHandler> Command<H> for CommandDeclareConst {
 
 pub struct CommandDeclareFun;
 
-impl<H: CommandHandler> Command<H> for CommandDeclareFun {
+impl<H: CommandHandler> StandardCommand<H> for CommandDeclareFun {
     type Parser = ClosedParser<
         H,
         PairParser<H, SymbolParser, PairParser<H, MultipleParser<H, SortParser>, SortParser>>,
@@ -56,7 +56,7 @@ pub type FunctionDefParser<H> = PairParser<
     PairParser<H, MultipleParser<H, SortedVarParser<H>>, PairParser<H, SortParser, TermParser<H>>>,
 >;
 
-impl<H: CommandHandler> Command<H> for CommandDefineFun {
+impl<H: CommandHandler> StandardCommand<H> for CommandDefineFun {
     type Parser = ClosedParser<H, FunctionDefParser<H>>;
 
     fn handle(
@@ -70,7 +70,7 @@ impl<H: CommandHandler> Command<H> for CommandDefineFun {
 
 pub struct CommandAssert;
 
-impl<H: CommandHandler> Command<H> for CommandAssert {
+impl<H: CommandHandler> StandardCommand<H> for CommandAssert {
     type Parser = ClosedParser<H, TermParser<H>>;
 
     fn handle(handler: &mut H, term: H::Term) -> Result<(), <H>::Error> {
@@ -80,7 +80,7 @@ impl<H: CommandHandler> Command<H> for CommandAssert {
 
 pub struct CommandCheckSat;
 
-impl<H: CommandHandler> Command<H> for CommandCheckSat {
+impl<H: CommandHandler> StandardCommand<H> for CommandCheckSat {
     type Parser = CloseParenParser;
 
     fn handle(handler: &mut H, _unit: ()) -> Result<(), <H>::Error> {
@@ -90,7 +90,7 @@ impl<H: CommandHandler> Command<H> for CommandCheckSat {
 
 pub struct CommandExit;
 
-impl<H: CommandHandler> Command<H> for CommandExit {
+impl<H: CommandHandler> StandardCommand<H> for CommandExit {
     type Parser = CloseParenParser;
 
     fn handle(_handler: &mut H, _unit: ()) -> Result<(), <H>::Error> {
@@ -105,7 +105,7 @@ impl<H: CommandHandler> Command<H> for CommandExit {
 
 pub struct CommandSetInfo;
 
-impl<H: CommandHandler> Command<H> for CommandSetInfo {
+impl<H: CommandHandler> StandardCommand<H> for CommandSetInfo {
     type Parser = ClosedAttributeParser<H>;
 
     fn handle(handler: &mut H, attribute: H::Attribute) -> Result<(), <H>::Error> {

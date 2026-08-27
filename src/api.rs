@@ -1,7 +1,6 @@
-use std::convert::Infallible;
-
 use crate::{
     SmtBinDigits, SmtDecimal, SmtHexDigits, SmtKeyword, SmtNumeral, SmtStringContent, SmtSymbol,
+    parser::{NoCommandParser, ParseCommand},
     token::Reserved,
 };
 
@@ -99,6 +98,13 @@ pub trait SmtHandler: 'static {
 }
 
 pub trait CommandHandler: SmtHandler {
+    type NonstandardParser: ParseCommand<Self>;
+
+    fn nonstandard_command(
+        &mut self,
+        name: SmtSymbol,
+    ) -> Result<Self::NonstandardParser, Self::Error>;
+
     fn command_echo(&mut self, value: SmtStringContent) -> Result<(), Self::Error>;
 
     fn command_get_option(&mut self, option: SmtKeyword) -> Result<(), Self::Error>;
@@ -146,10 +152,13 @@ pub trait CommandHandler: SmtHandler {
 }
 
 #[derive(Debug)]
-pub struct OnlyCheckSyntax;
+pub struct CheckStandardSyntax;
 
-impl SmtHandler for OnlyCheckSyntax {
-    type Error = Infallible;
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NonstandardCommandError(pub SmtSymbol);
+
+impl SmtHandler for CheckStandardSyntax {
+    type Error = NonstandardCommandError;
 
     type SExpr = ();
     type Attribute = ();
@@ -185,7 +194,17 @@ impl SmtHandler for OnlyCheckSyntax {
     }
 }
 
-impl CommandHandler for OnlyCheckSyntax {
+impl CommandHandler for CheckStandardSyntax {
+    type NonstandardParser = NoCommandParser;
+
+    fn nonstandard_command(
+        &mut self,
+        name: SmtSymbol,
+    ) -> Result<Self::NonstandardParser, Self::Error> {
+        // reject nonstandard command
+        Err(NonstandardCommandError(name))
+    }
+
     fn command_echo(&mut self, _value: SmtStringContent) -> Result<(), Self::Error> {
         Ok(())
     }

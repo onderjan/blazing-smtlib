@@ -154,7 +154,7 @@ mod tests {
     use std::io::Read;
 
     use super::*;
-    use crate::{OnlyCheckSyntax, SmtLocation};
+    use crate::{CheckStandardSyntax, SmtLocation};
 
     /// Expected location as `(offset, line, column)`.
     type Loc = (u64, u64, u64);
@@ -163,12 +163,12 @@ mod tests {
         (location.offset(), location.line(), location.column())
     }
 
-    fn read(input: &[u8]) -> Result<(), SmtReadError<OnlyCheckSyntax>> {
-        read_smt(&mut OnlyCheckSyntax, input)
+    fn read(input: &[u8]) -> Result<(), SmtReadError<CheckStandardSyntax>> {
+        read_smt(&mut CheckStandardSyntax, input)
     }
 
     #[track_caller]
-    fn assert_span(err: &SmtReadError<OnlyCheckSyntax>, start: Loc, end: Loc) {
+    fn assert_span(err: &SmtReadError<CheckStandardSyntax>, start: Loc, end: Loc) {
         let span = err.span();
         assert_eq!(
             (loc(span.start()), loc(span.end())),
@@ -234,7 +234,7 @@ mod tests {
             data: b"(check-sat)\n(",
         };
         let err =
-            read_smt(&mut OnlyCheckSyntax, reader).expect_err("expected an I/O error, got Ok");
+            read_smt(&mut CheckStandardSyntax, reader).expect_err("expected an I/O error, got Ok");
         assert!(matches!(err.kind(), SmtReadErrorKind::Io(_)));
         // 13 bytes were consumed, so the location is line 2, column 2
         assert_span(&err, (13, 2, 2), (13, 2, 2));
@@ -243,8 +243,8 @@ mod tests {
     #[test]
     fn file_open_error_has_zero_span() {
         let path = std::path::Path::new("/nonexistent/smt-parser-test/does-not-exist.smt2");
-        let err =
-            read_smt_file(&mut OnlyCheckSyntax, path).expect_err("expected an I/O error, got Ok");
+        let err = read_smt_file(&mut CheckStandardSyntax, path)
+            .expect_err("expected an I/O error, got Ok");
         assert!(matches!(err.kind(), SmtReadErrorKind::Io(_)));
         assert_span(&err, (0, 1, 1), (0, 1, 1));
     }

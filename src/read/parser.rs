@@ -9,7 +9,7 @@ use crate::{
 mod category;
 mod command;
 
-pub use command::{CommandResult, DynamicCommandParser, ParseCommand};
+pub use command::*;
 
 #[derive(Debug)]
 pub enum ParserError {
@@ -33,14 +33,13 @@ pub enum ParserError {
     ExpectedAttribute,
     ExpectedCommand,
     ExpectedCommandName,
-    UnsupportedCommand,
     SortApplicationNotSupported,
     ExpectedLetBinding,
     RequiredIndices,
 }
 
 #[derive(Debug)]
-pub enum ParserOrHandlerError<H: SmtHandler> {
+pub enum ParserOrHandlerError<H: SmtHandler + ?Sized> {
     ParserError(ParserError),
     HandlerError(H::Error),
 }
@@ -59,7 +58,7 @@ pub struct Parser<'a, H: CommandHandler> {
 pub(crate) enum ParserState<H: CommandHandler> {
     AwaitingCommand,
     CommandOpen,
-    StandardCommand(DynamicCommandParser<H>),
+    Command(CommandParser<H>),
     Exit,
 }
 
@@ -97,10 +96,10 @@ impl<'a, H: CommandHandler> Parser<'a, H> {
                 let TokenKind::Symbol(command_name) = token.into_kind() else {
                     return Err(ParserError::ExpectedCommand.into());
                 };
-                ParserState::StandardCommand(self.start_command(command_name.as_view())?)
+                ParserState::Command(self.start_command(command_name)?)
             }
-            ParserState::StandardCommand(mut stage) => match stage.progress(self.handler, token)? {
-                ControlFlow::Continue(()) => ParserState::StandardCommand(stage),
+            ParserState::Command(mut stage) => match stage.progress(self.handler, token)? {
+                ControlFlow::Continue(()) => ParserState::Command(stage),
                 ControlFlow::Break(CommandResult::EndCommand) => ParserState::AwaitingCommand,
                 ControlFlow::Break(CommandResult::Exit) => ParserState::Exit,
             },
@@ -117,37 +116,58 @@ impl<'a, H: CommandHandler> Parser<'a, H> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{OnlyCheckSyntax, TokenSpan, read::lexer::Lexer};
+    use crate::{
+        CheckStandardSyntax, NonstandardCommandError, SmtAttributeValue, SmtFunctionSignature,
+        SmtKeyword, SmtSExpr, SmtSort, SmtStringContent, SmtSymbol, SmtTerm, TokenSpan,
+        read::{
+            lexer::Lexer,
+            parser::{
+                category::{ClosedParser, term::TermParser},
+                command::{StandardCommand, StaticCommandParser},
+            },
+        },
+    };
 
-    /// Lexes the input and feeds the tokens to a fresh parser.
+    /// Lexes the input and feeds the tokens to a fresh parser over the given handler.
     ///
-    /// On a parser error, returns it together with the span of the offending token.
-    fn parse(input: &[u8]) -> Result<(), (ParserError, TokenSpan)> {
-        let mut handler = OnlyCheckSyntax;
-        let mut parser = Parser::new(&mut handler);
-
+    /// On an error, returns it together with the span of the offending token.
+    fn parse_with<H: CommandHandler>(
+        handler: &mut H,
+        input: &[u8],
+    ) -> Result<(), (ParserOrHandlerError<H>, TokenSpan)> {
+        let mut parser = Parser::new(handler);
         for token in Lexer::lex_all(input).expect("test input must lex") {
             let span = token.span();
-            match parser.parse_token(token) {
-                Ok(()) => {}
-                Err(ParserOrHandlerError::ParserError(err)) => return Err((err, span)),
-                Err(ParserOrHandlerError::HandlerError(err)) => match err {},
-            }
+            parser.parse_token(token).map_err(|err| (err, span))?;
         }
         Ok(())
     }
 
-    /// Parses the input, requires a parser error, checks the byte span of the offending token,
-    /// and returns the error so that the caller can inspect the variant.
+    fn parse(input: &[u8]) -> Result<(), (ParserOrHandlerError<CheckStandardSyntax>, TokenSpan)> {
+        parse_with(&mut CheckStandardSyntax, input)
+    }
+
     #[track_caller]
-    fn assert_error(input: &[u8], start: u64, end: u64) -> ParserError {
-        let (err, span) = parse(input).expect_err("expected a parser error, got Ok");
+    fn assert_token_span(span: TokenSpan, start: u64, end: u64) {
         assert_eq!(
             (span.start(), span.end()),
             (start, end),
             "token span mismatch (start, end) as byte offsets"
         );
-        err
+    }
+
+    /// Parses the input, requires a parser error, checks the byte span of the offending token,
+    /// and returns the error so that the caller can inspect the variant.
+    #[track_caller]
+    fn assert_parser_error(input: &[u8], start: u64, end: u64) -> ParserError {
+        let (err, span) = parse(input).expect_err("expected a parser error, got Ok");
+        assert_token_span(span, start, end);
+        match err {
+            ParserOrHandlerError::ParserError(err) => err,
+            ParserOrHandlerError::HandlerError(err) => {
+                panic!("expected parser error, got handler error on {:?}", err.0)
+            }
+        }
     }
 
     #[test]
@@ -160,32 +180,231 @@ mod tests {
     #[test]
     fn bare_symbol_is_whole_token() {
         // a command must be parenthesized; the whole symbol token is the span
-        let err = assert_error(b"check-sat", 0, 9);
+        let err = assert_parser_error(b"check-sat", 0, 9);
         assert!(matches!(err, ParserError::ExpectedCommand), "{err:?}");
     }
 
     #[test]
     fn missing_term_points_at_close_paren() {
-        let err = assert_error(b"(check-sat)\n(assert )", 20, 21);
+        let err = assert_parser_error(b"(check-sat)\n(assert )", 20, 21);
         assert!(matches!(err, ParserError::ExpectedTerm), "{err:?}");
     }
 
     #[test]
     fn numeral_as_command_name() {
-        let err = assert_error(b"(set-logic QF_UF)\n(1)", 19, 20);
+        let err = assert_parser_error(b"(set-logic QF_UF)\n(1)", 19, 20);
         assert!(matches!(err, ParserError::ExpectedCommand), "{err:?}");
     }
 
     #[test]
     fn unclosed_command_points_at_eof() {
         // the error is on the zero-width EOF token
-        let _ = assert_error(b"(check-sat", 10, 10);
-        let _ = assert_error(b"(check-sat\n", 11, 11);
+        let _ = assert_parser_error(b"(check-sat", 10, 10);
+        let _ = assert_parser_error(b"(check-sat\n", 11, 11);
+    }
+
+    // --- Nonstandard commands ---
+
+    #[test]
+    fn nonstandard_command_is_rejected_by_standard_syntax() {
+        // the handler rejects the command by name; the span is that of the name symbol
+        let (err, span) = parse(b"(frobnicate 1)").expect_err("expected a handler error");
+        assert_token_span(span, 1, 11);
+        match err {
+            ParserOrHandlerError::HandlerError(NonstandardCommandError(name)) => {
+                assert_eq!(name.as_slice(), b"frobnicate");
+            }
+            ParserOrHandlerError::ParserError(err) => panic!("expected handler error, got {err:?}"),
+        }
+    }
+
+    /// Handler accepting the nonstandard command `(my-assert <term>)`
+    /// and recording every command it sees.
+    #[derive(Default)]
+    struct Recording {
+        commands: Vec<&'static str>,
+    }
+
+    struct MyAssert;
+
+    impl StandardCommand<Recording> for MyAssert {
+        type Parser = ClosedParser<Recording, TermParser<Recording>>;
+
+        fn handle(handler: &mut Recording, _term: ()) -> Result<(), NonstandardCommandError> {
+            handler.commands.push("my-assert");
+            Ok(())
+        }
+    }
+
+    impl SmtHandler for Recording {
+        type Error = NonstandardCommandError;
+        type SExpr = ();
+        type Attribute = ();
+        type Sort = ();
+        type Term = ();
+
+        fn handle_sort(&mut self, _sort: SmtSort) -> Result<(), Self::Error> {
+            Ok(())
+        }
+        fn handle_term(&mut self, _term: SmtTerm<Self>) -> Result<(), Self::Error> {
+            Ok(())
+        }
+        fn start_let(&mut self, _bindings: Vec<(SmtSymbol, ())>) -> Result<(), Self::Error> {
+            Ok(())
+        }
+        fn end_let(&mut self, _term: ()) -> Result<(), Self::Error> {
+            Ok(())
+        }
+        fn handle_s_expr(&mut self, _expr: SmtSExpr<()>) -> Result<(), Self::Error> {
+            Ok(())
+        }
+        fn handle_attribute(
+            &mut self,
+            _name: SmtKeyword,
+            _value: Option<SmtAttributeValue<Self>>,
+        ) -> Result<(), Self::Error> {
+            Ok(())
+        }
+    }
+
+    impl CommandHandler for Recording {
+        type NonstandardParser = StaticCommandParser<Self, MyAssert>;
+
+        fn nonstandard_command(
+            &mut self,
+            name: SmtSymbol,
+        ) -> Result<Self::NonstandardParser, Self::Error> {
+            match name.as_slice() {
+                b"my-assert" => Ok(StaticCommandParser::new()),
+                _ => Err(NonstandardCommandError(name)),
+            }
+        }
+
+        fn command_echo(&mut self, _value: SmtStringContent) -> Result<(), Self::Error> {
+            self.commands.push("echo");
+            Ok(())
+        }
+        fn command_get_option(&mut self, _option: SmtKeyword) -> Result<(), Self::Error> {
+            self.commands.push("get-option");
+            Ok(())
+        }
+        fn command_set_option(&mut self, _option: ()) -> Result<(), Self::Error> {
+            self.commands.push("set-option");
+            Ok(())
+        }
+        fn command_get_info(&mut self, _keyword: SmtKeyword) -> Result<(), Self::Error> {
+            self.commands.push("get-info");
+            Ok(())
+        }
+        fn command_set_info(&mut self, _attribute: ()) -> Result<(), Self::Error> {
+            self.commands.push("set-info");
+            Ok(())
+        }
+        fn command_set_logic(&mut self, _logic: SmtSymbol) -> Result<(), Self::Error> {
+            self.commands.push("set-logic");
+            Ok(())
+        }
+        fn command_declare_const(
+            &mut self,
+            _name: SmtSymbol,
+            _sort: (),
+        ) -> Result<(), Self::Error> {
+            self.commands.push("declare-const");
+            Ok(())
+        }
+        fn command_declare_fun(
+            &mut self,
+            _name: SmtSymbol,
+            _param_sorts: Vec<()>,
+            _result_sort: (),
+        ) -> Result<(), Self::Error> {
+            self.commands.push("declare-fun");
+            Ok(())
+        }
+        fn command_define_fun(
+            &mut self,
+            _name: SmtSymbol,
+            _params: Vec<(SmtSymbol, ())>,
+            _result_sort: (),
+            _definition: (),
+        ) -> Result<(), Self::Error> {
+            self.commands.push("define-fun");
+            Ok(())
+        }
+        fn command_assert(&mut self, _term: ()) -> Result<(), Self::Error> {
+            self.commands.push("assert");
+            Ok(())
+        }
+        fn command_check_sat(&mut self) -> Result<(), Self::Error> {
+            self.commands.push("check-sat");
+            Ok(())
+        }
+        fn command_reset(&mut self) -> Result<(), Self::Error> {
+            self.commands.push("reset");
+            Ok(())
+        }
+        fn command_reset_assertions(&mut self) -> Result<(), Self::Error> {
+            self.commands.push("reset-assertions");
+            Ok(())
+        }
+        fn command_exit(&mut self) -> Result<(), Self::Error> {
+            self.commands.push("exit");
+            Ok(())
+        }
+        fn start_define_fun(
+            &mut self,
+            _signature: SmtFunctionSignature<()>,
+        ) -> Result<(), Self::Error> {
+            Ok(())
+        }
+        fn end_define_fun(&mut self, _term: ()) -> Result<(), Self::Error> {
+            Ok(())
+        }
     }
 
     #[test]
-    fn unknown_command() {
-        let err = assert_error(b"(frobnicate)", 1, 11);
-        assert!(matches!(err, ParserError::UnsupportedCommand), "{err:?}");
+    fn nonstandard_command_is_parsed_by_handler_parser() {
+        let mut handler = Recording::default();
+        // the nonstandard command body is parsed with a library term parser,
+        // and standard commands keep working after it
+        parse_with(
+            &mut handler,
+            b"(declare-const x Bool) (my-assert (f x (g 1))) (check-sat)",
+        )
+        .unwrap_or_else(|(_, span)| panic!("unexpected error at {span:?}"));
+        assert_eq!(
+            handler.commands,
+            ["declare-const", "my-assert", "check-sat"]
+        );
+    }
+
+    #[test]
+    fn nonstandard_command_body_is_checked() {
+        // a malformed body is a parser error on the offending token
+        let mut handler = Recording::default();
+        let (err, span) =
+            parse_with(&mut handler, b"(my-assert )").expect_err("expected a parser error");
+        assert_token_span(span, 11, 12);
+        match err {
+            ParserOrHandlerError::ParserError(ParserError::ExpectedTerm) => {}
+            ParserOrHandlerError::ParserError(err) => panic!("unexpected parser error {err:?}"),
+            ParserOrHandlerError::HandlerError(_) => panic!("unexpected handler error"),
+        }
+        assert!(handler.commands.is_empty());
+    }
+
+    #[test]
+    fn nonstandard_command_unknown_to_handler_is_rejected() {
+        let mut handler = Recording::default();
+        let (err, span) = parse_with(&mut handler, b"(my-assert x) (other)")
+            .expect_err("expected a handler error");
+        assert_token_span(span, 15, 20);
+        match err {
+            ParserOrHandlerError::HandlerError(NonstandardCommandError(name)) => {
+                assert_eq!(name.as_slice(), b"other");
+            }
+            ParserOrHandlerError::ParserError(err) => panic!("unexpected parser error {err:?}"),
+        }
+        assert_eq!(handler.commands, ["my-assert"]);
     }
 }

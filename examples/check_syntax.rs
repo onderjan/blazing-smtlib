@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use smt_parser_rs::{OnlyCheckSyntax, SmtReadErrorKind, read_smt_file};
+use smt_parser_rs::{CheckStandardSyntax, SmtReadErrorKind, read_smt_file};
 fn main() -> Result<(), u32> {
     let mut args = std::env::args();
     if args.len() != 2 {
@@ -11,7 +11,7 @@ fn main() -> Result<(), u32> {
     let _executable_name = args.next().unwrap();
     let file_path = args.next().unwrap();
 
-    match read_smt_file(&mut OnlyCheckSyntax, &PathBuf::from(file_path)) {
+    match read_smt_file(&mut CheckStandardSyntax, &PathBuf::from(file_path)) {
         Err(err) => match err.into_kind() {
             SmtReadErrorKind::Io(err) => {
                 eprintln!("Error reading file: {}", err);
@@ -24,6 +24,10 @@ fn main() -> Result<(), u32> {
             SmtReadErrorKind::Parser(err) => {
                 eprintln!("Error parsing file: {:?}", err);
                 Err(4)
+            }
+            SmtReadErrorKind::Handler(err) => {
+                eprintln!("Nonstandard command: {:?}", err.0);
+                Err(5)
             }
         },
 
