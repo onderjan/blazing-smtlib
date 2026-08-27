@@ -66,3 +66,48 @@ impl<H: SmtHandler> CategoryParser<H> for SortParser {
         Ok(ControlFlow::Break(sort))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::read::parser::category::tests::{assert_error, parse_all, run};
+
+    #[test]
+    fn simple_sort() {
+        assert_eq!(parse_all::<SortParser>(b"Bool"), "Bool");
+        assert_eq!(parse_all::<SortParser>(b"|my sort|"), "my sort");
+
+        let (sort, left) = run::<SortParser>(b"Int Bool").expect("valid");
+        assert_eq!(sort, "Int");
+        assert_eq!(left, 1);
+    }
+
+    #[test]
+    fn indexed_sort() {
+        assert_eq!(parse_all::<SortParser>(b"(_ BitVec 8)"), "(_ BitVec 8)");
+        assert_eq!(
+            parse_all::<SortParser>(b"(_ FloatingPoint 8 24)"),
+            "(_ FloatingPoint 8 24)"
+        );
+    }
+
+    #[test]
+    fn errors() {
+        let err = assert_error::<SortParser>(b"1", 0, 1);
+        assert!(matches!(err, ParserError::ExpectedSort), "{err:?}");
+
+        let err = assert_error::<SortParser>(b")", 0, 1);
+        assert!(matches!(err, ParserError::ExpectedSort), "{err:?}");
+
+        let err = assert_error::<SortParser>(b"", 0, 0);
+        assert!(matches!(err, ParserError::ExpectedSort), "{err:?}");
+
+        // sort applications like (Array Int Int) are not supported yet
+        let err = assert_error::<SortParser>(b"(Array Int Int)", 1, 6);
+        assert!(matches!(err, ParserError::ExpectedSortInner), "{err:?}");
+
+        // errors inside the indexed identifier are reported by the identifier parser
+        let err = assert_error::<SortParser>(b"(_ BitVec)", 9, 10);
+        assert!(matches!(err, ParserError::RequiredIndices), "{err:?}");
+    }
+}
