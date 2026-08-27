@@ -531,3 +531,301 @@ impl LexerError {
         self.kind
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Expected location as `(offset, line, column)`.
+    type Loc = (u64, u64, u64);
+
+    fn loc(location: SmtLocation) -> Loc {
+        (location.offset(), location.line(), location.column())
+    }
+
+    /// Lexes the whole input including EOF, returning all tokens or the first error.
+    fn lex_all(input: &[u8]) -> Result<Vec<Token>, LexerError> {
+        let mut lexer = Lexer::new();
+        let mut tokens = Vec::new();
+        for &c in input {
+            tokens.extend(lexer.lex_next(c)?);
+        }
+        tokens.extend(lexer.lex_eof()?);
+        Ok(tokens)
+    }
+
+    /// Lexes the input, requires an error of the given kind, and checks its span.
+    #[track_caller]
+    fn assert_error(input: &[u8], kind: LexerErrorKind, start: Loc, end: Loc) {
+        let err = lex_all(input).expect_err("expected a lexer error, got tokens");
+        assert_eq!(*err.kind(), kind);
+        let span = err.span();
+        assert_eq!(
+            (loc(span.start()), loc(span.end())),
+            (start, end),
+            "span mismatch (start, end) as (offset, line, column)"
+        );
+    }
+
+    #[test]
+    fn valid_input_has_no_error() {
+        assert!(lex_all(b"").is_ok());
+        assert!(lex_all(b"(set-logic QF_UF)\n(check-sat)\n").is_ok());
+        assert!(lex_all(b"; comment only").is_ok());
+        assert!(lex_all(b"7 7.0 #x1F #b10 \"s\" :kw |q s| sym").is_ok());
+    }
+
+    // --- Errors detected on a byte: span covers the token so far and the offending byte ---
+
+    #[test]
+    fn unexpected_character_is_single_byte() {
+        // backslash is not allowed outside of string literals
+        assert_error(
+            b"\\",
+            LexerErrorKind::UnexpectedCharacter,
+            (0, 1, 1),
+            (1, 1, 2),
+        );
+        // after other tokens, still just the one byte
+        assert_error(
+            b"(check-sat) \\",
+            LexerErrorKind::UnexpectedCharacter,
+            (12, 1, 13),
+            (13, 1, 14),
+        );
+    }
+
+    #[test]
+    fn fraction_digit_expected_on_byte() {
+        // "7." followed by a space: the space is the byte where the error is detected
+        assert_error(
+            b"7. ",
+            LexerErrorKind::FractionDigitExpected,
+            (0, 1, 1),
+            (3, 1, 4),
+        );
+    }
+
+    #[test]
+    fn base_selection_expected() {
+        assert_error(
+            b"#q",
+            LexerErrorKind::BaseSelectionExpected,
+            (0, 1, 1),
+            (2, 1, 3),
+        );
+    }
+
+    #[test]
+    fn hexadecimal_digit_expected() {
+        assert_error(
+            b"#x ",
+            LexerErrorKind::HexadecimalDigitExpected,
+            (0, 1, 1),
+            (3, 1, 4),
+        );
+    }
+
+    #[test]
+    fn binary_digit_expected() {
+        assert_error(
+            b"#b)",
+            LexerErrorKind::BinaryDigitExpected,
+            (0, 1, 1),
+            (3, 1, 4),
+        );
+    }
+
+    #[test]
+    fn numeral_leading_zero() {
+        assert_error(
+            b"01",
+            LexerErrorKind::NumeralLeadingZero,
+            (0, 1, 1),
+            (2, 1, 3),
+        );
+    }
+
+    #[test]
+    fn keyword_name_expected() {
+        assert_error(
+            b": ",
+            LexerErrorKind::KeywordNameExpected,
+            (0, 1, 1),
+            (2, 1, 3),
+        );
+    }
+
+    #[test]
+    fn keyword_reserved() {
+        assert_error(
+            b":let ",
+            LexerErrorKind::KeywordReserved,
+            (0, 1, 1),
+            (5, 1, 6),
+        );
+    }
+
+    #[test]
+    fn backslash_in_quoted_symbol() {
+        assert_error(
+            b"|a\\b|",
+            LexerErrorKind::BackslashInQuotedSymbol,
+            (0, 1, 1),
+            (3, 1, 4),
+        );
+    }
+
+    #[test]
+    fn forbidden_char_in_string() {
+        assert_error(
+            b"\"a\x01b\"",
+            LexerErrorKind::ForbiddenCharInString,
+            (0, 1, 1),
+            (3, 1, 4),
+        );
+    }
+
+    #[test]
+    fn forbidden_char_in_quoted_symbol() {
+        assert_error(
+            b"|a\x7fb|",
+            LexerErrorKind::ForbiddenCharInQuotedSymbol,
+            (0, 1, 1),
+            (3, 1, 4),
+        );
+    }
+
+    // --- Errors detected at EOF: span must end exactly at the input length, not past it ---
+
+    #[test]
+    fn fraction_digit_expected_at_eof() {
+        assert_error(
+            b"7.",
+            LexerErrorKind::FractionDigitExpected,
+            (0, 1, 1),
+            (2, 1, 3),
+        );
+    }
+
+    #[test]
+    fn hexadecimal_digit_expected_at_eof() {
+        assert_error(
+            b"#x",
+            LexerErrorKind::HexadecimalDigitExpected,
+            (0, 1, 1),
+            (2, 1, 3),
+        );
+    }
+
+    #[test]
+    fn base_selection_expected_at_eof() {
+        assert_error(
+            b"#",
+            LexerErrorKind::BaseSelectionExpected,
+            (0, 1, 1),
+            (1, 1, 2),
+        );
+    }
+
+    #[test]
+    fn keyword_name_expected_at_eof() {
+        assert_error(
+            b":",
+            LexerErrorKind::KeywordNameExpected,
+            (0, 1, 1),
+            (1, 1, 2),
+        );
+    }
+
+    #[test]
+    fn unclosed_string_literal_at_eof() {
+        assert_error(
+            b"\"abc",
+            LexerErrorKind::UnclosedStringLiteral,
+            (0, 1, 1),
+            (4, 1, 5),
+        );
+    }
+
+    #[test]
+    fn unclosed_quoted_symbol_at_eof() {
+        assert_error(
+            b"|abc",
+            LexerErrorKind::UnclosedQuotedSymbol,
+            (0, 1, 1),
+            (4, 1, 5),
+        );
+    }
+
+    // --- Line and column tracking ---
+
+    #[test]
+    fn error_on_later_line() {
+        // the string literal starts on line 3, column 3 (offset 15) and is unclosed at EOF
+        assert_error(
+            b"(check-sat)\n\n  \"abc",
+            LexerErrorKind::UnclosedStringLiteral,
+            (15, 3, 3),
+            (19, 3, 7),
+        );
+    }
+
+    #[test]
+    fn error_spanning_lines() {
+        // an unclosed quoted symbol may contain newlines; the end is on a later line
+        assert_error(
+            b"|ab\ncd",
+            LexerErrorKind::UnclosedQuotedSymbol,
+            (0, 1, 1),
+            (6, 2, 3),
+        );
+    }
+
+    #[test]
+    fn crlf_counts_as_one_line() {
+        // CR must not start a new line, so "01" is on line 2, column 1
+        assert_error(
+            b"(check-sat)\r\n01",
+            LexerErrorKind::NumeralLeadingZero,
+            (13, 2, 1),
+            (15, 2, 3),
+        );
+    }
+
+    #[test]
+    fn error_after_comment_line() {
+        assert_error(
+            b"; a comment\n\\",
+            LexerErrorKind::UnexpectedCharacter,
+            (12, 2, 1),
+            (13, 2, 2),
+        );
+    }
+
+    // --- Token spans and current location ---
+
+    #[test]
+    fn token_spans_are_byte_ranges() {
+        let tokens = lex_all(b"(a 12)\n|q|").expect("valid input");
+        let spans: Vec<(u64, u64)> = tokens
+            .iter()
+            .map(|token| (token.span().start(), token.span().end()))
+            .collect();
+        // `(`, `a`, `12`, `)`, `|q|`, and the zero-width EOF token
+        assert_eq!(
+            spans,
+            vec![(0, 1), (1, 2), (3, 5), (5, 6), (7, 10), (10, 10)]
+        );
+    }
+
+    #[test]
+    fn current_location_follows_consumed_bytes() {
+        let mut lexer = Lexer::new();
+        assert_eq!(loc(lexer.current_location()), (0, 1, 1));
+        for &c in b"ab\nc" {
+            lexer.lex_next(c).expect("valid input");
+        }
+        assert_eq!(loc(lexer.current_location()), (4, 2, 2));
+    }
+}
