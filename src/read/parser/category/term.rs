@@ -123,6 +123,10 @@ impl<H: SmtHandler> TermParser<H> {
             TermParserState::ApplicationTerm(function, args) => {
                 if matches!(token.kind(), TokenKind::ParenClose) {
                     // this ends the application term
+                    // it must have at least one argument
+                    if args.is_empty() {
+                        return Err(ParserError::EmptyApplication.into());
+                    }
                     let term = SmtTerm::Application(SmtApplication { function, args });
                     let term = handler
                         .handle_term(term)
