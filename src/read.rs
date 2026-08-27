@@ -10,7 +10,7 @@ use crate::{
     lexer::{LexerError, LexerErrorKind},
     read::{
         lexer::Lexer,
-        parser::{Parser, ParserError, ParserOrHandlerError},
+        parser::{CategoryParserError, Parser, ParserError},
     },
     token::Token,
 };
@@ -27,7 +27,7 @@ pub enum SmtReadErrorKind<H: SmtHandler> {
     /// The error occured when lexing.
     Lexer(LexerErrorKind),
     /// The error occured when parsing.
-    Parser(ParserError),
+    Parser(CategoryParserError),
 
     // TODO: proper span of user-handler error
     /// The error occured in the user handler.
@@ -127,8 +127,8 @@ impl<'a, H: CommandHandler, R: Read> SmtReader<'a, H, R> {
                 Err(err) => {
                     let span = self.lexer.resolve_span(span);
                     let kind = match err {
-                        ParserOrHandlerError::ParserError(err) => SmtReadErrorKind::Parser(err),
-                        ParserOrHandlerError::HandlerError(err) => SmtReadErrorKind::Handler(err),
+                        ParserError::ParserError(err) => SmtReadErrorKind::Parser(err),
+                        ParserError::HandlerError(err) => SmtReadErrorKind::Handler(err),
                     };
                     return Err(SmtReadError::new(kind, span));
                 }
@@ -201,7 +201,7 @@ mod tests {
         let err = read(b"(check-sat)\n(assert )").expect_err("expected a parser error, got Ok");
         assert!(matches!(
             err.kind(),
-            SmtReadErrorKind::Parser(ParserError::ExpectedTerm)
+            SmtReadErrorKind::Parser(CategoryParserError::ExpectedTerm)
         ));
         assert_span(&err, (20, 2, 9), (21, 2, 10));
     }

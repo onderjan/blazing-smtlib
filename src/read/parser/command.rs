@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     CommandHandler, SmtSymbol,
     read::parser::{
-        ParserOrHandlerError,
+        ParserError,
         category::CategoryParser,
         command::standard::{
             CommandAssert, CommandCheckSat, CommandDeclareConst, CommandDeclareFun,
@@ -20,7 +20,7 @@ pub trait ParseCommand<H: CommandHandler + ?Sized> {
         &mut self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<CommandResult, ()>, ParserOrHandlerError<H>>;
+    ) -> Result<ControlFlow<CommandResult, ()>, ParserError<H>>;
 }
 
 pub enum NoCommandParser {}
@@ -30,7 +30,7 @@ impl<H: CommandHandler> ParseCommand<H> for NoCommandParser {
         &mut self,
         _handler: &mut H,
         _token: Token,
-    ) -> Result<ControlFlow<CommandResult, ()>, ParserOrHandlerError<H>> {
+    ) -> Result<ControlFlow<CommandResult, ()>, ParserError<H>> {
         match *self {}
     }
 }
@@ -65,7 +65,7 @@ impl<H: CommandHandler> ParseCommand<H> for CommandParser<H> {
         &mut self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<CommandResult, ()>, ParserOrHandlerError<H>> {
+    ) -> Result<ControlFlow<CommandResult, ()>, ParserError<H>> {
         match self {
             Self::SetLogic(p) => p.progress(handler, token),
             Self::DeclareConst(p) => p.progress(handler, token),
@@ -93,7 +93,7 @@ impl<H: CommandHandler, C: StandardCommand<H>> ParseCommand<H> for StaticCommand
         &mut self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<CommandResult, ()>, ParserOrHandlerError<H>> {
+    ) -> Result<ControlFlow<CommandResult, ()>, ParserError<H>> {
         match self.0.take() {
             Some(parser) => match parser.progress(handler, token)? {
                 ControlFlow::Continue(parser) => {
@@ -101,7 +101,7 @@ impl<H: CommandHandler, C: StandardCommand<H>> ParseCommand<H> for StaticCommand
                     Ok(ControlFlow::Continue(()))
                 }
                 ControlFlow::Break(result) => {
-                    C::handle(handler, result).map_err(ParserOrHandlerError::HandlerError)?;
+                    C::handle(handler, result).map_err(ParserError::HandlerError)?;
                     let command_result = if C::is_exit() {
                         CommandResult::Exit
                     } else {
@@ -124,7 +124,7 @@ impl<H: CommandHandler> super::Parser<'_, H> {
     pub(super) fn start_command(
         &mut self,
         name: SmtSymbol,
-    ) -> Result<CommandParser<H>, ParserOrHandlerError<H>> {
+    ) -> Result<CommandParser<H>, ParserError<H>> {
         Ok(match name.as_slice() {
             b"set-logic" => CommandParser::SetLogic(StaticCommandParser::new()),
             b"declare-const" => CommandParser::DeclareConst(StaticCommandParser::new()),
@@ -137,7 +137,7 @@ impl<H: CommandHandler> super::Parser<'_, H> {
             _ => CommandParser::Nonstandard(
                 self.handler
                     .nonstandard_command(name)
-                    .map_err(ParserOrHandlerError::HandlerError)?,
+                    .map_err(ParserError::HandlerError)?,
             ),
         })
     }

@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler, SmtIdent, SmtSort,
     read::parser::{
-        ParserError, ParserOrHandlerError,
+        CategoryParserError, ParserError,
         category::{CategoryParser, ident::IdentParser},
     },
     token::{Reserved, Token, TokenKind},
@@ -26,7 +26,7 @@ impl<H: SmtHandler> CategoryParser<H> for SortParser {
         self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<H::Sort, Self>, ParserOrHandlerError<H>> {
+    ) -> Result<ControlFlow<H::Sort, Self>, ParserError<H>> {
         let sort = match self {
             SortParser::Start => match token.into_kind() {
                 TokenKind::Symbol(name) => {
@@ -38,7 +38,7 @@ impl<H: SmtHandler> CategoryParser<H> for SortParser {
                     SmtSort::Ident(ident)
                 }
                 TokenKind::ParenOpen => return Ok(ControlFlow::Continue(Self::Open)),
-                _ => return Err(ParserError::ExpectedSort.into()),
+                _ => return Err(CategoryParserError::ExpectedSort.into()),
             },
             SortParser::Open => match token.into_kind() {
                 TokenKind::Reserved(Reserved::Underscore) => {
@@ -48,7 +48,7 @@ impl<H: SmtHandler> CategoryParser<H> for SortParser {
                 }
                 _ => {
                     // TODO: should parse sort ident here
-                    return Err(ParserError::ExpectedSortInner.into());
+                    return Err(CategoryParserError::ExpectedSortInner.into());
                 }
             },
 
@@ -62,7 +62,7 @@ impl<H: SmtHandler> CategoryParser<H> for SortParser {
 
         let sort = handler
             .handle_sort(sort)
-            .map_err(ParserOrHandlerError::HandlerError)?;
+            .map_err(ParserError::HandlerError)?;
         Ok(ControlFlow::Break(sort))
     }
 }
@@ -94,20 +94,20 @@ mod tests {
     #[test]
     fn errors() {
         let err = assert_error::<SortParser>(b"1", 0, 1);
-        assert!(matches!(err, ParserError::ExpectedSort), "{err:?}");
+        assert!(matches!(err, CategoryParserError::ExpectedSort), "{err:?}");
 
         let err = assert_error::<SortParser>(b")", 0, 1);
-        assert!(matches!(err, ParserError::ExpectedSort), "{err:?}");
+        assert!(matches!(err, CategoryParserError::ExpectedSort), "{err:?}");
 
         let err = assert_error::<SortParser>(b"", 0, 0);
-        assert!(matches!(err, ParserError::ExpectedSort), "{err:?}");
+        assert!(matches!(err, CategoryParserError::ExpectedSort), "{err:?}");
 
         // sort applications like (Array Int Int) are not supported yet
         let err = assert_error::<SortParser>(b"(Array Int Int)", 1, 6);
-        assert!(matches!(err, ParserError::ExpectedSortInner), "{err:?}");
+        assert!(matches!(err, CategoryParserError::ExpectedSortInner), "{err:?}");
 
         // errors inside the indexed identifier are reported by the identifier parser
         let err = assert_error::<SortParser>(b"(_ BitVec)", 9, 10);
-        assert!(matches!(err, ParserError::RequiredIndices), "{err:?}");
+        assert!(matches!(err, CategoryParserError::RequiredIndices), "{err:?}");
     }
 }

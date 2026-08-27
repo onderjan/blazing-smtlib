@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
 
 use crate::{
     SmtHandler, SmtSymbol,
-    read::parser::{ParserError, ParserOrHandlerError},
+    read::parser::{CategoryParserError, ParserError},
     token::{Token, TokenKind},
 };
 
@@ -23,7 +23,7 @@ where
         self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<Self::Result, Self>, ParserOrHandlerError<H>>;
+    ) -> Result<ControlFlow<Self::Result, Self>, ParserError<H>>;
 }
 
 pub enum PairParser<H: SmtHandler, P1: CategoryParser<H>, P2: CategoryParser<H>> {
@@ -44,7 +44,7 @@ impl<H: SmtHandler, P1: CategoryParser<H>, P2: CategoryParser<H>> CategoryParser
         self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<Self::Result, Self>, ParserOrHandlerError<H>> {
+    ) -> Result<ControlFlow<Self::Result, Self>, ParserError<H>> {
         let result = match self {
             PairParser::First(parser) => match parser.progress(handler, token)? {
                 ControlFlow::Continue(parser) => Self::First(parser),
@@ -75,7 +75,7 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for ClosedParser<H, 
         self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<Self::Result, Self>, ParserOrHandlerError<H>> {
+    ) -> Result<ControlFlow<Self::Result, Self>, ParserError<H>> {
         let result = match self {
             Self::Inner(parser) => match parser.progress(handler, token)? {
                 ControlFlow::Continue(parser) => Self::Inner(parser),
@@ -85,7 +85,7 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for ClosedParser<H, 
                 if matches!(token.kind(), TokenKind::ParenClose) {
                     return Ok(ControlFlow::Break(result));
                 } else {
-                    return Err(ParserError::ExpectedToken(TokenKind::ParenClose).into());
+                    return Err(CategoryParserError::ExpectedToken(TokenKind::ParenClose).into());
                 }
             }
         };
@@ -109,13 +109,13 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for OpenClosedParser
         self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<Self::Result, Self>, ParserOrHandlerError<H>> {
+    ) -> Result<ControlFlow<Self::Result, Self>, ParserError<H>> {
         let result = match self {
             OpenClosedParser::BeforeOpen => {
                 if matches!(token.kind(), TokenKind::ParenOpen) {
                     Self::AfterOpen(ClosedParser::init())
                 } else {
-                    return Err(ParserError::ExpectedToken(TokenKind::ParenOpen).into());
+                    return Err(CategoryParserError::ExpectedToken(TokenKind::ParenOpen).into());
                 }
             }
             OpenClosedParser::AfterOpen(parser) => match parser.progress(handler, token)? {
@@ -146,7 +146,7 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for MultipleParser<H
         self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<Vec<P::Result>, Self>, ParserOrHandlerError<H>> {
+    ) -> Result<ControlFlow<Vec<P::Result>, Self>, ParserError<H>> {
         match self {
             MultipleParser::BeforeOpen => {
                 if matches!(token.kind(), TokenKind::ParenOpen) {
@@ -155,7 +155,7 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for MultipleParser<H
                         parser: None,
                     }))
                 } else {
-                    Err(ParserError::ExpectedToken(TokenKind::ParenOpen).into())
+                    Err(CategoryParserError::ExpectedToken(TokenKind::ParenOpen).into())
                 }
             }
             MultipleParser::Normal {
@@ -215,11 +215,11 @@ impl<H: SmtHandler> CategoryParser<H> for SymbolParser {
         self,
         _handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<Self::Result, Self>, ParserOrHandlerError<H>> {
+    ) -> Result<ControlFlow<Self::Result, Self>, ParserError<H>> {
         if let TokenKind::Symbol(symbol) = token.into_kind() {
             Ok(ControlFlow::Break(symbol))
         } else {
-            Err(ParserError::ExpectedSymbol.into())
+            Err(CategoryParserError::ExpectedSymbol.into())
         }
     }
 }
@@ -237,20 +237,20 @@ impl<H: SmtHandler> CategoryParser<H> for CloseParenParser {
         self,
         _handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<(), Self>, ParserOrHandlerError<H>> {
+    ) -> Result<ControlFlow<(), Self>, ParserError<H>> {
         if matches!(token.kind(), TokenKind::ParenClose) {
             Ok(ControlFlow::Break(()))
         } else {
-            Err(ParserError::ExpectedToken(TokenKind::ParenClose).into())
+            Err(CategoryParserError::ExpectedToken(TokenKind::ParenClose).into())
         }
     }
 }
 
-fn expect_close_parenthesis<H: SmtHandler>(token: Token) -> Result<(), ParserOrHandlerError<H>> {
+fn expect_close_parenthesis<H: SmtHandler>(token: Token) -> Result<(), ParserError<H>> {
     if matches!(token.kind(), TokenKind::ParenClose) {
         Ok(())
     } else {
-        Err(ParserError::ExpectedToken(TokenKind::ParenClose).into())
+        Err(CategoryParserError::ExpectedToken(TokenKind::ParenClose).into())
     }
 }
 
@@ -385,7 +385,7 @@ pub(super) mod tests {
     // --- Driver ---
 
     /// Error returned by `run`: the parser error and the byte span of the token it was raised on.
-    pub(in crate::read::parser::category) type RunError = (ParserError, TokenSpan);
+    pub(in crate::read::parser::category) type RunError = (CategoryParserError, TokenSpan);
 
     /// Lexes the input and feeds it to a fresh parser `P` over a `Printing` handler.
     ///
@@ -416,8 +416,8 @@ pub(super) mod tests {
                         .count();
                     return Ok((result, left));
                 }
-                Err(ParserOrHandlerError::ParserError(err)) => return Err((err, span)),
-                Err(ParserOrHandlerError::HandlerError(err)) => match err {},
+                Err(ParserError::ParserError(err)) => return Err((err, span)),
+                Err(ParserError::HandlerError(err)) => match err {},
             }
         }
         panic!(
@@ -445,7 +445,7 @@ pub(super) mod tests {
         input: &[u8],
         start: u64,
         end: u64,
-    ) -> ParserError {
+    ) -> CategoryParserError {
         match run::<P>(input) {
             Ok(_) => panic!("expected a parser error in {:?}, got Ok", text(input)),
             Err((err, span)) => {
@@ -470,12 +470,21 @@ pub(super) mod tests {
         assert_eq!(symbol.as_slice(), b"quoted symbol");
 
         let err = assert_error::<SymbolParser>(b"1", 0, 1);
-        assert!(matches!(err, ParserError::ExpectedSymbol), "{err:?}");
+        assert!(
+            matches!(err, CategoryParserError::ExpectedSymbol),
+            "{err:?}"
+        );
         let err = assert_error::<SymbolParser>(b"(", 0, 1);
-        assert!(matches!(err, ParserError::ExpectedSymbol), "{err:?}");
+        assert!(
+            matches!(err, CategoryParserError::ExpectedSymbol),
+            "{err:?}"
+        );
         // reserved words are not symbols
         let err = assert_error::<SymbolParser>(b"let", 0, 3);
-        assert!(matches!(err, ParserError::ExpectedSymbol), "{err:?}");
+        assert!(
+            matches!(err, CategoryParserError::ExpectedSymbol),
+            "{err:?}"
+        );
     }
 
     #[test]
@@ -491,7 +500,10 @@ pub(super) mod tests {
 
         let err = assert_error::<CloseParenParser>(b"x", 0, 1);
         assert!(
-            matches!(err, ParserError::ExpectedToken(TokenKind::ParenClose)),
+            matches!(
+                err,
+                CategoryParserError::ExpectedToken(TokenKind::ParenClose)
+            ),
             "{err:?}"
         );
     }
@@ -504,7 +516,10 @@ pub(super) mod tests {
 
         // the error of the second element points at its token
         let err = assert_error::<PairParser<Printing, SymbolParser, SymbolParser>>(b"a 1", 2, 3);
-        assert!(matches!(err, ParserError::ExpectedSymbol), "{err:?}");
+        assert!(
+            matches!(err, CategoryParserError::ExpectedSymbol),
+            "{err:?}"
+        );
     }
 
     #[test]
@@ -514,13 +529,19 @@ pub(super) mod tests {
 
         let err = assert_error::<ClosedParser<Printing, SymbolParser>>(b"a b", 2, 3);
         assert!(
-            matches!(err, ParserError::ExpectedToken(TokenKind::ParenClose)),
+            matches!(
+                err,
+                CategoryParserError::ExpectedToken(TokenKind::ParenClose)
+            ),
             "{err:?}"
         );
         // EOF instead of the closing parenthesis
         let err = assert_error::<ClosedParser<Printing, SymbolParser>>(b"a", 1, 1);
         assert!(
-            matches!(err, ParserError::ExpectedToken(TokenKind::ParenClose)),
+            matches!(
+                err,
+                CategoryParserError::ExpectedToken(TokenKind::ParenClose)
+            ),
             "{err:?}"
         );
     }
@@ -532,12 +553,18 @@ pub(super) mod tests {
 
         let err = assert_error::<OpenClosedParser<Printing, SymbolParser>>(b"a)", 0, 1);
         assert!(
-            matches!(err, ParserError::ExpectedToken(TokenKind::ParenOpen)),
+            matches!(
+                err,
+                CategoryParserError::ExpectedToken(TokenKind::ParenOpen)
+            ),
             "{err:?}"
         );
         let err = assert_error::<OpenClosedParser<Printing, SymbolParser>>(b"(a", 2, 2);
         assert!(
-            matches!(err, ParserError::ExpectedToken(TokenKind::ParenClose)),
+            matches!(
+                err,
+                CategoryParserError::ExpectedToken(TokenKind::ParenClose)
+            ),
             "{err:?}"
         );
     }
@@ -554,15 +581,24 @@ pub(super) mod tests {
 
         let err = assert_error::<MultipleParser<Printing, SymbolParser>>(b"a", 0, 1);
         assert!(
-            matches!(err, ParserError::ExpectedToken(TokenKind::ParenOpen)),
+            matches!(
+                err,
+                CategoryParserError::ExpectedToken(TokenKind::ParenOpen)
+            ),
             "{err:?}"
         );
         // the element parser's error is reported for a bad element
         let err = assert_error::<MultipleParser<Printing, SymbolParser>>(b"(a 1)", 3, 4);
-        assert!(matches!(err, ParserError::ExpectedSymbol), "{err:?}");
+        assert!(
+            matches!(err, CategoryParserError::ExpectedSymbol),
+            "{err:?}"
+        );
         // unclosed list ends at EOF inside the element parser
         let err = assert_error::<MultipleParser<Printing, SymbolParser>>(b"(a", 2, 2);
-        assert!(matches!(err, ParserError::ExpectedSymbol), "{err:?}");
+        assert!(
+            matches!(err, CategoryParserError::ExpectedSymbol),
+            "{err:?}"
+        );
     }
 
     #[test]
@@ -580,6 +616,9 @@ pub(super) mod tests {
         assert_eq!(params, [(b"x" as &[u8], b"Int" as &[u8]), (b"y", b"Bool")]);
 
         let err = assert_error::<Params>(b"((x Int) (y))", 11, 12);
-        assert!(matches!(err, ParserError::ExpectedSymbol), "{err:?}");
+        assert!(
+            matches!(err, CategoryParserError::ExpectedSymbol),
+            "{err:?}"
+        );
     }
 }

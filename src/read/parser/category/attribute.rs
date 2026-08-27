@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtAttributeValue, SmtHandler, SmtKeyword, SmtSpecialConstant,
     read::parser::{
-        ParserError, ParserOrHandlerError,
+        CategoryParserError, ParserError,
         category::{CategoryParser, expect_close_parenthesis},
     },
     token::{Token, TokenKind},
@@ -26,11 +26,11 @@ impl<H: SmtHandler> CategoryParser<H> for ClosedAttributeParser<H> {
         self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<H::Attribute, Self>, ParserOrHandlerError<H>> {
+    ) -> Result<ControlFlow<H::Attribute, Self>, ParserError<H>> {
         match self {
             ClosedAttributeParser::Start => {
                 let TokenKind::Keyword(keyword) = token.into_kind() else {
-                    return Err(ParserError::ExpectedKeyword.into());
+                    return Err(CategoryParserError::ExpectedKeyword.into());
                 };
                 Ok(ControlFlow::Continue(ClosedAttributeParser::Key(keyword)))
             }
@@ -60,15 +60,15 @@ impl<H: SmtHandler> CategoryParser<H> for ClosedAttributeParser<H> {
                         // just an attribute name, return token after handling
                         let attribute = handler
                             .handle_attribute(keyword, None)
-                            .map_err(ParserOrHandlerError::HandlerError)?;
+                            .map_err(ParserError::HandlerError)?;
                         return Ok(ControlFlow::Break(attribute));
                     }
-                    _ => return Err(ParserError::ExpectedAttribute.into()),
+                    _ => return Err(CategoryParserError::ExpectedAttribute.into()),
                 };
 
                 let attribute = handler
                     .handle_attribute(keyword, Some(value))
-                    .map_err(ParserOrHandlerError::HandlerError)?;
+                    .map_err(ParserError::HandlerError)?;
 
                 Ok(ControlFlow::Continue(Self::BeforeClose(attribute)))
             }
@@ -113,26 +113,26 @@ mod tests {
     #[test]
     fn errors() {
         let err = assert_error::<P>(b"status sat)", 0, 6);
-        assert!(matches!(err, ParserError::ExpectedKeyword), "{err:?}");
+        assert!(matches!(err, CategoryParserError::ExpectedKeyword), "{err:?}");
 
         let err = assert_error::<P>(b"", 0, 0);
-        assert!(matches!(err, ParserError::ExpectedKeyword), "{err:?}");
+        assert!(matches!(err, CategoryParserError::ExpectedKeyword), "{err:?}");
 
         // a keyword is not a valid value
         let err = assert_error::<P>(b":a :b)", 3, 5);
-        assert!(matches!(err, ParserError::ExpectedAttribute), "{err:?}");
+        assert!(matches!(err, CategoryParserError::ExpectedAttribute), "{err:?}");
 
         // only one value
         let err = assert_error::<P>(b":a 1 2)", 5, 6);
         assert!(
-            matches!(err, ParserError::ExpectedToken(TokenKind::ParenClose)),
+            matches!(err, CategoryParserError::ExpectedToken(TokenKind::ParenClose)),
             "{err:?}"
         );
 
         // EOF after the value
         let err = assert_error::<P>(b":a 1", 4, 4);
         assert!(
-            matches!(err, ParserError::ExpectedToken(TokenKind::ParenClose)),
+            matches!(err, CategoryParserError::ExpectedToken(TokenKind::ParenClose)),
             "{err:?}"
         );
     }

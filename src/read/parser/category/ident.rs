@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
 
 use crate::{
     SmtHandler, SmtIdent, SmtIndex, SmtSymbol,
-    read::parser::{ParserError, ParserOrHandlerError, category::CategoryParser},
+    read::parser::{CategoryParserError, ParserError, category::CategoryParser},
     token::{Reserved, Token, TokenKind},
 };
 
@@ -27,7 +27,7 @@ impl<H: SmtHandler> CategoryParser<H> for IdentParser {
         self,
         _handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<SmtIdent, Self>, ParserOrHandlerError<H>> {
+    ) -> Result<ControlFlow<SmtIdent, Self>, ParserError<H>> {
         match self {
             IdentParser::Start => match token.into_kind() {
                 TokenKind::Symbol(name) => Ok(ControlFlow::Break(SmtIdent {
@@ -35,7 +35,7 @@ impl<H: SmtHandler> CategoryParser<H> for IdentParser {
                     indices: Vec::new(),
                 })),
                 TokenKind::ParenOpen => Ok(ControlFlow::Continue(Self::Open)),
-                _ => Err(ParserError::ExpectedIdent.into()),
+                _ => Err(CategoryParserError::ExpectedIdent.into()),
             },
             IdentParser::Open => {
                 // this must be an underscore
@@ -43,7 +43,7 @@ impl<H: SmtHandler> CategoryParser<H> for IdentParser {
                     Ok(ControlFlow::Continue(Self::AfterUnderscore))
                 } else {
                     Err(
-                        ParserError::ExpectedToken(TokenKind::Reserved(Reserved::Underscore))
+                        CategoryParserError::ExpectedToken(TokenKind::Reserved(Reserved::Underscore))
                             .into(),
                     )
                 }
@@ -55,13 +55,13 @@ impl<H: SmtHandler> CategoryParser<H> for IdentParser {
                         indices: Vec::new(),
                     }))
                 } else {
-                    Err(ParserError::ExpectedSymbol.into())
+                    Err(CategoryParserError::ExpectedSymbol.into())
                 }
             }
             IdentParser::Indices { name, mut indices } => match token.into_kind() {
                 TokenKind::ParenClose => {
                     if indices.is_empty() {
-                        return Err(ParserError::RequiredIndices.into());
+                        return Err(CategoryParserError::RequiredIndices.into());
                     }
                     Ok(ControlFlow::Break(SmtIdent { name, indices }))
                 }
@@ -73,7 +73,7 @@ impl<H: SmtHandler> CategoryParser<H> for IdentParser {
                     indices.push(SmtIndex::Symbol(index_symbol));
                     Ok(ControlFlow::Continue(Self::Indices { name, indices }))
                 }
-                _ => Err(ParserError::ExpectedIndexOrCloseParen.into()),
+                _ => Err(CategoryParserError::ExpectedIndexOrCloseParen.into()),
             },
         }
     }
@@ -154,45 +154,45 @@ mod tests {
     #[test]
     fn errors() {
         let err = assert_error::<IdentParser>(b"1", 0, 1);
-        assert!(matches!(err, ParserError::ExpectedIdent), "{err:?}");
+        assert!(matches!(err, CategoryParserError::ExpectedIdent), "{err:?}");
 
         let err = assert_error::<IdentParser>(b")", 0, 1);
-        assert!(matches!(err, ParserError::ExpectedIdent), "{err:?}");
+        assert!(matches!(err, CategoryParserError::ExpectedIdent), "{err:?}");
 
         // after `(` only an underscore may follow
         let err = assert_error::<IdentParser>(b"(f 1)", 1, 2);
         assert!(
             matches!(
                 err,
-                ParserError::ExpectedToken(TokenKind::Reserved(Reserved::Underscore))
+                CategoryParserError::ExpectedToken(TokenKind::Reserved(Reserved::Underscore))
             ),
             "{err:?}"
         );
 
         // the name must be a symbol
         let err = assert_error::<IdentParser>(b"(_ 1 2)", 3, 4);
-        assert!(matches!(err, ParserError::ExpectedSymbol), "{err:?}");
+        assert!(matches!(err, CategoryParserError::ExpectedSymbol), "{err:?}");
 
         // at least one index is required
         let err = assert_error::<IdentParser>(b"(_ f)", 4, 5);
-        assert!(matches!(err, ParserError::RequiredIndices), "{err:?}");
+        assert!(matches!(err, CategoryParserError::RequiredIndices), "{err:?}");
 
         // indices are numerals or symbols only
         let err = assert_error::<IdentParser>(b"(_ f \"s\")", 5, 8);
         assert!(
-            matches!(err, ParserError::ExpectedIndexOrCloseParen),
+            matches!(err, CategoryParserError::ExpectedIndexOrCloseParen),
             "{err:?}"
         );
         let err = assert_error::<IdentParser>(b"(_ f (a))", 5, 6);
         assert!(
-            matches!(err, ParserError::ExpectedIndexOrCloseParen),
+            matches!(err, CategoryParserError::ExpectedIndexOrCloseParen),
             "{err:?}"
         );
 
         // EOF inside the indexed identifier
         let err = assert_error::<IdentParser>(b"(_ f 1", 6, 6);
         assert!(
-            matches!(err, ParserError::ExpectedIndexOrCloseParen),
+            matches!(err, CategoryParserError::ExpectedIndexOrCloseParen),
             "{err:?}"
         );
     }

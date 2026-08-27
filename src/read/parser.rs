@@ -12,7 +12,7 @@ mod command;
 pub use command::*;
 
 #[derive(Debug)]
-pub enum ParserError {
+pub enum CategoryParserError {
     ExpectedToken(TokenKind),
     ExpectedUnderscore,
     ExpectedSymbol,
@@ -39,14 +39,14 @@ pub enum ParserError {
 }
 
 #[derive(Debug)]
-pub enum ParserOrHandlerError<H: SmtHandler + ?Sized> {
-    ParserError(ParserError),
+pub enum ParserError<H: SmtHandler + ?Sized> {
+    ParserError(CategoryParserError),
     HandlerError(H::Error),
 }
 
-impl<H: SmtHandler> From<ParserError> for ParserOrHandlerError<H> {
-    fn from(value: ParserError) -> Self {
-        ParserOrHandlerError::ParserError(value)
+impl<H: SmtHandler> From<CategoryParserError> for ParserError<H> {
+    fn from(value: CategoryParserError) -> Self {
+        ParserError::ParserError(value)
     }
 }
 
@@ -70,7 +70,7 @@ impl<'a, H: CommandHandler> Parser<'a, H> {
         }
     }
 
-    pub fn parse_token(&mut self, token: Token) -> Result<(), ParserOrHandlerError<H>> {
+    pub fn parse_token(&mut self, token: Token) -> Result<(), ParserError<H>> {
         //eprintln!("Token: {:?}", token);
         let state = std::mem::replace(&mut self.state, ParserState::AwaitingCommand);
         let state = match state {
@@ -85,8 +85,8 @@ impl<'a, H: CommandHandler> Parser<'a, H> {
                         ParserState::AwaitingCommand
                     }
                     _ => {
-                        return Err(ParserOrHandlerError::ParserError(
-                            ParserError::ExpectedCommand,
+                        return Err(ParserError::ParserError(
+                            CategoryParserError::ExpectedCommand,
                         ));
                     }
                 }
@@ -94,7 +94,7 @@ impl<'a, H: CommandHandler> Parser<'a, H> {
             ParserState::CommandOpen => {
                 // expect a symbol identifying the command
                 let TokenKind::Symbol(command_name) = token.into_kind() else {
-                    return Err(ParserError::ExpectedCommand.into());
+                    return Err(CategoryParserError::ExpectedCommand.into());
                 };
                 ParserState::Command(self.start_command(command_name)?)
             }
@@ -134,7 +134,7 @@ mod tests {
     fn parse_with<H: CommandHandler>(
         handler: &mut H,
         input: &[u8],
-    ) -> Result<(), (ParserOrHandlerError<H>, TokenSpan)> {
+    ) -> Result<(), (ParserError<H>, TokenSpan)> {
         let mut parser = Parser::new(handler);
         for token in Lexer::lex_all(input).expect("test input must lex") {
             let span = token.span();
@@ -143,7 +143,7 @@ mod tests {
         Ok(())
     }
 
-    fn parse(input: &[u8]) -> Result<(), (ParserOrHandlerError<CheckStandardSyntax>, TokenSpan)> {
+    fn parse(input: &[u8]) -> Result<(), (ParserError<CheckStandardSyntax>, TokenSpan)> {
         parse_with(&mut CheckStandardSyntax, input)
     }
 
@@ -159,12 +159,12 @@ mod tests {
     /// Parses the input, requires a parser error, checks the byte span of the offending token,
     /// and returns the error so that the caller can inspect the variant.
     #[track_caller]
-    fn assert_parser_error(input: &[u8], start: u64, end: u64) -> ParserError {
+    fn assert_parser_error(input: &[u8], start: u64, end: u64) -> CategoryParserError {
         let (err, span) = parse(input).expect_err("expected a parser error, got Ok");
         assert_token_span(span, start, end);
         match err {
-            ParserOrHandlerError::ParserError(err) => err,
-            ParserOrHandlerError::HandlerError(err) => {
+            ParserError::ParserError(err) => err,
+            ParserError::HandlerError(err) => {
                 panic!("expected parser error, got handler error on {:?}", err.0)
             }
         }
@@ -181,19 +181,25 @@ mod tests {
     fn bare_symbol_is_whole_token() {
         // a command must be parenthesized; the whole symbol token is the span
         let err = assert_parser_error(b"check-sat", 0, 9);
-        assert!(matches!(err, ParserError::ExpectedCommand), "{err:?}");
+        assert!(
+            matches!(err, CategoryParserError::ExpectedCommand),
+            "{err:?}"
+        );
     }
 
     #[test]
     fn missing_term_points_at_close_paren() {
         let err = assert_parser_error(b"(check-sat)\n(assert )", 20, 21);
-        assert!(matches!(err, ParserError::ExpectedTerm), "{err:?}");
+        assert!(matches!(err, CategoryParserError::ExpectedTerm), "{err:?}");
     }
 
     #[test]
     fn numeral_as_command_name() {
         let err = assert_parser_error(b"(set-logic QF_UF)\n(1)", 19, 20);
-        assert!(matches!(err, ParserError::ExpectedCommand), "{err:?}");
+        assert!(
+            matches!(err, CategoryParserError::ExpectedCommand),
+            "{err:?}"
+        );
     }
 
     #[test]
@@ -211,10 +217,10 @@ mod tests {
         let (err, span) = parse(b"(frobnicate 1)").expect_err("expected a handler error");
         assert_token_span(span, 1, 11);
         match err {
-            ParserOrHandlerError::HandlerError(NonstandardCommandError(name)) => {
+            ParserError::HandlerError(NonstandardCommandError(name)) => {
                 assert_eq!(name.as_slice(), b"frobnicate");
             }
-            ParserOrHandlerError::ParserError(err) => panic!("expected handler error, got {err:?}"),
+            ParserError::ParserError(err) => panic!("expected handler error, got {err:?}"),
         }
     }
 
@@ -386,9 +392,9 @@ mod tests {
             parse_with(&mut handler, b"(my-assert )").expect_err("expected a parser error");
         assert_token_span(span, 11, 12);
         match err {
-            ParserOrHandlerError::ParserError(ParserError::ExpectedTerm) => {}
-            ParserOrHandlerError::ParserError(err) => panic!("unexpected parser error {err:?}"),
-            ParserOrHandlerError::HandlerError(_) => panic!("unexpected handler error"),
+            ParserError::ParserError(CategoryParserError::ExpectedTerm) => {}
+            ParserError::ParserError(err) => panic!("unexpected parser error {err:?}"),
+            ParserError::HandlerError(_) => panic!("unexpected handler error"),
         }
         assert!(handler.commands.is_empty());
     }
@@ -400,10 +406,10 @@ mod tests {
             .expect_err("expected a handler error");
         assert_token_span(span, 15, 20);
         match err {
-            ParserOrHandlerError::HandlerError(NonstandardCommandError(name)) => {
+            ParserError::HandlerError(NonstandardCommandError(name)) => {
                 assert_eq!(name.as_slice(), b"other");
             }
-            ParserOrHandlerError::ParserError(err) => panic!("unexpected parser error {err:?}"),
+            ParserError::ParserError(err) => panic!("unexpected parser error {err:?}"),
         }
         assert_eq!(handler.commands, ["my-assert"]);
     }

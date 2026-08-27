@@ -4,7 +4,7 @@ use crate::{
     SmtApplication, SmtHandler, SmtIdent, SmtQualifiedIdent, SmtSpecialConstant, SmtSymbol,
     SmtTerm,
     read::parser::{
-        ParserError, ParserOrHandlerError,
+        CategoryParserError, ParserError,
         category::{CategoryParser, ident::IdentParser},
     },
     token::{Reserved, Token, TokenKind},
@@ -48,7 +48,7 @@ impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
         self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<H::Term, Self>, ParserOrHandlerError<H>> {
+    ) -> Result<ControlFlow<H::Term, Self>, ParserError<H>> {
         let (mut levels, term) = match self.progress_last_level(handler, token)? {
             ControlFlow::Continue(parser) => return Ok(ControlFlow::Continue(parser)),
             ControlFlow::Break((levels, term)) => (levels, term),
@@ -74,7 +74,7 @@ impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
                 // end let, should be followed by closing parenthesis
                 let term = handler
                     .end_let(term)
-                    .map_err(ParserOrHandlerError::HandlerError)?;
+                    .map_err(ParserError::HandlerError)?;
                 TermParserState::LetAfterInnerTerm(term)
             }
         };
@@ -90,7 +90,7 @@ impl<H: SmtHandler> TermParser<H> {
         self,
         handler: &mut H,
         token: Token,
-    ) -> Result<TermProgressOk<H, Self>, ParserOrHandlerError<H>> {
+    ) -> Result<TermProgressOk<H, Self>, ParserError<H>> {
         let mut levels = self.levels;
         let state = match self.state {
             TermParserState::Start => return Self::parse_term_start(levels, handler, token),
@@ -105,7 +105,7 @@ impl<H: SmtHandler> TermParser<H> {
                         let term = SmtTerm::QualifiedIdent(SmtQualifiedIdent::Ident(ident));
                         let term = handler
                             .handle_term(term)
-                            .map_err(ParserOrHandlerError::HandlerError)?;
+                            .map_err(ParserError::HandlerError)?;
                         return Ok(ControlFlow::Break((levels, term)));
                     }
                 }
@@ -125,12 +125,12 @@ impl<H: SmtHandler> TermParser<H> {
                     // this ends the application term
                     // it must have at least one argument
                     if args.is_empty() {
-                        return Err(ParserError::EmptyApplication.into());
+                        return Err(CategoryParserError::EmptyApplication.into());
                     }
                     let term = SmtTerm::Application(SmtApplication { function, args });
                     let term = handler
                         .handle_term(term)
-                        .map_err(ParserOrHandlerError::HandlerError)?;
+                        .map_err(ParserError::HandlerError)?;
                     return Ok(ControlFlow::Break((levels, term)));
                 } else {
                     // add the application to the level stack and parse the argument
@@ -152,17 +152,17 @@ impl<H: SmtHandler> TermParser<H> {
                         // bindings are closed, inner term will be next
                         // check that there is at least one binding
                         if bindings.is_empty() {
-                            return Err(ParserError::EmptyLetBindings.into());
+                            return Err(CategoryParserError::EmptyLetBindings.into());
                         }
 
                         handler
                             .start_let(bindings)
-                            .map_err(ParserOrHandlerError::HandlerError)?;
+                            .map_err(ParserError::HandlerError)?;
 
                         levels.push(TermLevel::LetInner);
                         TermParserState::Start
                     }
-                    _ => return Err(ParserError::ExpectedOpenOrCloseParen.into()),
+                    _ => return Err(CategoryParserError::ExpectedOpenOrCloseParen.into()),
                 }
             }
             TermParserState::LetBeforeBindingSymbol(bindings) => {
@@ -186,7 +186,7 @@ impl<H: SmtHandler> TermParser<H> {
         levels: Vec<TermLevel<H>>,
         handler: &mut H,
         token: Token,
-    ) -> Result<TermProgressOk<H, Self>, ParserOrHandlerError<H>> {
+    ) -> Result<TermProgressOk<H, Self>, ParserError<H>> {
         let span = token.span();
         match token.into_kind() {
             TokenKind::ParenOpen => {
@@ -205,7 +205,7 @@ impl<H: SmtHandler> TermParser<H> {
                 });
                 let term = handler
                     .handle_term(SmtTerm::QualifiedIdent(qualified_ident))
-                    .map_err(ParserOrHandlerError::HandlerError)?;
+                    .map_err(ParserError::HandlerError)?;
 
                 Ok(ControlFlow::Break((levels, term)))
             }
@@ -216,10 +216,10 @@ impl<H: SmtHandler> TermParser<H> {
                     Ok(special_constant) => {
                         let term = handler
                             .handle_term(SmtTerm::SpecialConstant(special_constant))
-                            .map_err(ParserOrHandlerError::HandlerError)?;
+                            .map_err(ParserError::HandlerError)?;
                         Ok(ControlFlow::Break((levels, term)))
                     }
-                    Err(_token) => Err(ParserError::ExpectedTerm.into()),
+                    Err(_token) => Err(CategoryParserError::ExpectedTerm.into()),
                 }
             }
         }
@@ -228,7 +228,7 @@ impl<H: SmtHandler> TermParser<H> {
     fn parse_term_open(
         levels: Vec<TermLevel<H>>,
         token: Token,
-    ) -> Result<Self, ParserOrHandlerError<H>> {
+    ) -> Result<Self, ParserError<H>> {
         let state = match token.into_kind() {
             TokenKind::Symbol(fn_name) => {
                 // this is an application where the function identifier is just a symbol
@@ -256,7 +256,7 @@ impl<H: SmtHandler> TermParser<H> {
                 let parser = IdentParser::after_open_paren();
                 TermParserState::ApplicationIdent(parser)
             }
-            _ => return Err(ParserError::ExpectedOperator.into()),
+            _ => return Err(CategoryParserError::ExpectedOperator.into()),
         };
         Ok(Self { state, levels })
     }
@@ -275,27 +275,27 @@ fn parse_special_constant(token: Token) -> Result<SmtSpecialConstant, Token> {
     Ok(constant)
 }
 
-fn expect_open_paren<H: SmtHandler>(token: Token) -> Result<(), ParserOrHandlerError<H>> {
+fn expect_open_paren<H: SmtHandler>(token: Token) -> Result<(), ParserError<H>> {
     if matches!(token.kind(), TokenKind::ParenOpen) {
         Ok(())
     } else {
-        Err(ParserError::ExpectedToken(TokenKind::ParenOpen).into())
+        Err(CategoryParserError::ExpectedToken(TokenKind::ParenOpen).into())
     }
 }
 
-fn expect_close_paren<H: SmtHandler>(token: Token) -> Result<(), ParserOrHandlerError<H>> {
+fn expect_close_paren<H: SmtHandler>(token: Token) -> Result<(), ParserError<H>> {
     if matches!(token.kind(), TokenKind::ParenClose) {
         Ok(())
     } else {
-        Err(ParserError::ExpectedToken(TokenKind::ParenClose).into())
+        Err(CategoryParserError::ExpectedToken(TokenKind::ParenClose).into())
     }
 }
 
-fn expect_symbol<H: SmtHandler>(token: Token) -> Result<SmtSymbol, ParserOrHandlerError<H>> {
+fn expect_symbol<H: SmtHandler>(token: Token) -> Result<SmtSymbol, ParserError<H>> {
     if let TokenKind::Symbol(symbol) = token.into_kind() {
         Ok(symbol)
     } else {
-        Err(ParserError::ExpectedSymbol.into())
+        Err(CategoryParserError::ExpectedSymbol.into())
     }
 }
 
@@ -373,7 +373,7 @@ mod tests {
     fn empty_application_is_rejected() {
         // an application must have at least one argument
         let err = assert_error::<TermParser<Printing>>(b"(f)", 2, 3);
-        assert!(matches!(err, ParserError::EmptyApplication), "{err:?}");
+        assert!(matches!(err, CategoryParserError::EmptyApplication), "{err:?}");
     }
 
     #[test]
@@ -401,32 +401,32 @@ mod tests {
     #[test]
     fn let_errors() {
         let err = assert_error::<TermParser<Printing>>(b"(let () x)", 6, 7);
-        assert!(matches!(err, ParserError::EmptyLetBindings), "{err:?}");
+        assert!(matches!(err, CategoryParserError::EmptyLetBindings), "{err:?}");
 
         let err = assert_error::<TermParser<Printing>>(b"(let x x)", 5, 6);
         assert!(
-            matches!(err, ParserError::ExpectedToken(TokenKind::ParenOpen)),
+            matches!(err, CategoryParserError::ExpectedToken(TokenKind::ParenOpen)),
             "{err:?}"
         );
 
         let err = assert_error::<TermParser<Printing>>(b"(let (x) x)", 6, 7);
         assert!(
-            matches!(err, ParserError::ExpectedOpenOrCloseParen),
+            matches!(err, CategoryParserError::ExpectedOpenOrCloseParen),
             "{err:?}"
         );
 
         let err = assert_error::<TermParser<Printing>>(b"(let ((1 x)) x)", 7, 8);
-        assert!(matches!(err, ParserError::ExpectedSymbol), "{err:?}");
+        assert!(matches!(err, CategoryParserError::ExpectedSymbol), "{err:?}");
 
         let err = assert_error::<TermParser<Printing>>(b"(let ((x 1 2)) x)", 11, 12);
         assert!(
-            matches!(err, ParserError::ExpectedToken(TokenKind::ParenClose)),
+            matches!(err, CategoryParserError::ExpectedToken(TokenKind::ParenClose)),
             "{err:?}"
         );
 
         let err = assert_error::<TermParser<Printing>>(b"(let ((x 1)) x y)", 15, 16);
         assert!(
-            matches!(err, ParserError::ExpectedToken(TokenKind::ParenClose)),
+            matches!(err, CategoryParserError::ExpectedToken(TokenKind::ParenClose)),
             "{err:?}"
         );
     }
@@ -434,32 +434,32 @@ mod tests {
     #[test]
     fn errors() {
         let err = assert_error::<TermParser<Printing>>(b")", 0, 1);
-        assert!(matches!(err, ParserError::ExpectedTerm), "{err:?}");
+        assert!(matches!(err, CategoryParserError::ExpectedTerm), "{err:?}");
 
         let err = assert_error::<TermParser<Printing>>(b":kw", 0, 3);
-        assert!(matches!(err, ParserError::ExpectedTerm), "{err:?}");
+        assert!(matches!(err, CategoryParserError::ExpectedTerm), "{err:?}");
 
         let err = assert_error::<TermParser<Printing>>(b"", 0, 0);
-        assert!(matches!(err, ParserError::ExpectedTerm), "{err:?}");
+        assert!(matches!(err, CategoryParserError::ExpectedTerm), "{err:?}");
 
         // the operator position takes a symbol, a reserved binder, `_` or `(`
         let err = assert_error::<TermParser<Printing>>(b"(1 x)", 1, 2);
-        assert!(matches!(err, ParserError::ExpectedOperator), "{err:?}");
+        assert!(matches!(err, CategoryParserError::ExpectedOperator), "{err:?}");
 
         let err = assert_error::<TermParser<Printing>>(b"()", 1, 2);
-        assert!(matches!(err, ParserError::ExpectedOperator), "{err:?}");
+        assert!(matches!(err, CategoryParserError::ExpectedOperator), "{err:?}");
 
         // bad argument
         let err = assert_error::<TermParser<Printing>>(b"(f x :kw)", 5, 8);
-        assert!(matches!(err, ParserError::ExpectedTerm), "{err:?}");
+        assert!(matches!(err, CategoryParserError::ExpectedTerm), "{err:?}");
 
         // EOF inside an application is a missing term
         let err = assert_error::<TermParser<Printing>>(b"(f x", 4, 4);
-        assert!(matches!(err, ParserError::ExpectedTerm), "{err:?}");
+        assert!(matches!(err, CategoryParserError::ExpectedTerm), "{err:?}");
 
         // bad indexed identifier in a term
         let err = assert_error::<TermParser<Printing>>(b"(_ f)", 4, 5);
-        assert!(matches!(err, ParserError::RequiredIndices), "{err:?}");
+        assert!(matches!(err, CategoryParserError::RequiredIndices), "{err:?}");
     }
 
     /// Handler that only counts terms, so deep nesting does not build huge strings.
@@ -521,8 +521,8 @@ mod tests {
                     finished = true;
                     break;
                 }
-                Err(ParserOrHandlerError::ParserError(err)) => panic!("{err:?}"),
-                Err(ParserOrHandlerError::HandlerError(err)) => match err {},
+                Err(ParserError::ParserError(err)) => panic!("{err:?}"),
+                Err(ParserError::HandlerError(err)) => match err {},
             }
         }
         assert!(finished);
