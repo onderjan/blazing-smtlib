@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtHandler, SmtSymbol, TokenSpan,
+    SmtHandler, SmtSpan, SmtSymbol,
     read::parser::ParserError,
     token::{Token, TokenKind, TokenType},
 };
@@ -52,11 +52,11 @@ pub enum CategoryParserErrorKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CategoryParserError {
     kind: CategoryParserErrorKind,
-    span: TokenSpan,
+    span: SmtSpan,
 }
 
 impl CategoryParserError {
-    pub(crate) fn new(kind: CategoryParserErrorKind, span: TokenSpan) -> Self {
+    pub(crate) fn new(kind: CategoryParserErrorKind, span: SmtSpan) -> Self {
         Self { kind, span }
     }
 
@@ -64,7 +64,7 @@ impl CategoryParserError {
         &self.kind
     }
 
-    pub fn span(&self) -> TokenSpan {
+    pub fn span(&self) -> SmtSpan {
         self.span
     }
 
@@ -209,10 +209,10 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for MultipleParser<H
                         parser: None,
                     }))
                 } else {
-                    return Err(ParserError::category_error(
+                    Err(ParserError::category_error(
                         CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenOpen]),
                         span,
-                    ));
+                    ))
                 }
             }
             MultipleParser::Normal {
@@ -523,7 +523,7 @@ pub(super) mod tests {
             Err(err) => {
                 let span = err.span();
                 assert_eq!(
-                    (span.start(), span.end()),
+                    (span.start().offset(), span.end().offset()),
                     (start, end),
                     "error span mismatch (start, end) as byte offsets for {err:?} in {:?}",
                     text(input)

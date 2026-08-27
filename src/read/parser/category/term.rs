@@ -1,11 +1,11 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtApplication, SmtHandler, SmtIdent, SmtQualifiedIdent, SmtSpecialConstant, SmtSymbol,
-    SmtTerm, TokenSpan,
+    SmtApplication, SmtHandler, SmtIdent, SmtQualifiedIdent, SmtSpan, SmtSpecialConstant,
+    SmtSymbol, SmtTerm,
     parser::category::CategoryParserErrorKind,
     read::parser::{
-        CategoryParserError, ParserError,
+        ParserError,
         category::{CategoryParser, ident::IdentParser},
     },
     token::{Reserved, Token, TokenKind, TokenType},
@@ -127,7 +127,7 @@ impl<H: SmtHandler> TermParser<H> {
                     // it must have at least one argument
                     if args.is_empty() {
                         return Err(ParserError::category_error(
-                            CategoryParserErrorKind::EmptyApplication.into(),
+                            CategoryParserErrorKind::EmptyApplication,
                             span,
                         ));
                     }
@@ -156,7 +156,7 @@ impl<H: SmtHandler> TermParser<H> {
                         // check that there is at least one binding
                         if bindings.is_empty() {
                             return Err(ParserError::category_error(
-                                CategoryParserErrorKind::EmptyLetBindings.into(),
+                                CategoryParserErrorKind::EmptyLetBindings,
                                 span,
                             ));
                         }
@@ -332,7 +332,7 @@ fn expect_symbol<H: SmtHandler>(token: Token) -> Result<SmtSymbol, ParserError<H
 
 fn handle_err<O, H: SmtHandler>(
     handled: Result<O, H::Error>,
-    span: TokenSpan,
+    span: SmtSpan,
 ) -> Result<O, ParserError<H>> {
     match handled {
         Ok(ok) => Ok(ok),

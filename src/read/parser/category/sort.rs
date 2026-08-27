@@ -4,7 +4,7 @@ use crate::{
     SmtHandler, SmtIdent, SmtSort,
     parser::category::CategoryParserErrorKind,
     read::parser::{
-        CategoryParserError, ParserError,
+        ParserError,
         category::{CategoryParser, ident::IdentParser},
     },
     token::{Reserved, Token, TokenKind},
@@ -41,7 +41,7 @@ impl<H: SmtHandler> CategoryParser<H> for SortParser {
                 }
                 TokenKind::ParenOpen => return Ok(ControlFlow::Continue(Self::Open)),
                 _ => {
-                    let kind = CategoryParserErrorKind::ExpectedSort.into();
+                    let kind = CategoryParserErrorKind::ExpectedSort;
                     return Err(ParserError::category_error(kind, span));
                 }
             },
@@ -53,7 +53,7 @@ impl<H: SmtHandler> CategoryParser<H> for SortParser {
                 }
                 _ => {
                     // TODO: should parse sort ident here
-                    let kind = CategoryParserErrorKind::ExpectedSortInner.into();
+                    let kind = CategoryParserErrorKind::ExpectedSortInner;
                     return Err(ParserError::category_error(kind, span));
                 }
             },

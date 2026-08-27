@@ -122,8 +122,8 @@ impl<'a, H: CommandHandler, R: Read> SmtReader<'a, H, R> {
             match self.parser.parse_token(token) {
                 Ok(()) => {}
                 Err(err) => {
-                    let span = self.lexer.resolve_span(err.span());
-                    let kind = match err.into_kind() {
+                    let span = err.span();
+                    let kind: SmtReadErrorKind<H> = match err.into_kind() {
                         ParserErrorKind::ParserError(err) => SmtReadErrorKind::Parser(err),
                         ParserErrorKind::HandlerError(err) => SmtReadErrorKind::Handler(err),
                     };

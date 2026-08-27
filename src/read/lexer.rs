@@ -5,8 +5,8 @@ use char_class::{U8OrEof, char_class_opt};
 pub use char_class::CharClass;
 
 use crate::{
-    LinePositions, SmtBinDigits, SmtDecimal, SmtDigits, SmtHexDigits, SmtKeyword, SmtLocation,
-    SmtNumeral, SmtSpan, SmtStringContent, SmtSymbol, String8, TokenSpan,
+    SmtBinDigits, SmtDecimal, SmtDigits, SmtHexDigits, SmtKeyword, SmtLocation, SmtNumeral,
+    SmtSpan, SmtStringContent, SmtSymbol, String8,
     token::{Reserved, Token, TokenKind},
 };
 
@@ -30,15 +30,14 @@ pub enum LexerState {
 
 pub struct Lexer {
     state: LexerState,
-    // Current byte offset since start of reading.
+    // Location of the currently processed byte.
     //
-    // Increments after lexing, i.e. when lexing, points at the
+    // Updates after lexing, i.e. when lexing, points at the
     // "start" of the currently read character.
-    offset: u64,
-    // Byte offset of the start of the token being currently read.
-    token_start: u64,
-    // Line positions, used to add line and column offsets to internal spans.
-    line_positions: LinePositions,
+    current_location: SmtLocation,
+
+    // Location of the start of the currently processed token.
+    token_start: SmtLocation,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -68,33 +67,23 @@ impl Lexer {
     pub fn new() -> Self {
         Lexer {
             state: LexerState::Normal,
-            token_start: 0,
-            offset: 0,
-            line_positions: LinePositions::new(),
+            current_location: SmtLocation::initial(),
+            token_start: SmtLocation::initial(),
         }
+    }
+
+    pub fn current_location(&self) -> SmtLocation {
+        self.current_location
     }
 
     pub fn lex_next(&mut self, c: u8) -> Result<Vec<Token>, LexerError> {
         let tokens = self.lex_char(U8OrEof::U8(c))?;
-        if c == b'\n' {
-            self.line_positions.add_newline(self.offset);
-        }
-        self.offset += 1;
+        self.current_location = self.current_location.after_byte(c);
         Ok(tokens)
     }
 
     pub fn lex_eof(&mut self) -> Result<Vec<Token>, LexerError> {
         self.lex_char(U8OrEof::Eof)
-    }
-
-    pub fn current_location(&self) -> SmtLocation {
-        self.line_positions.resolve(self.offset)
-    }
-
-    pub(crate) fn resolve_span(&self, span: TokenSpan) -> SmtSpan {
-        let start = self.line_positions.resolve(span.start());
-        let end = self.line_positions.resolve(span.end());
-        SmtSpan::new_unchecked(start, end)
     }
 
     fn lex_normal(&mut self, mut tokens: Vec<Token>, c: U8OrEof) -> Result<Vec<Token>, LexerError> {
@@ -461,7 +450,7 @@ impl Lexer {
     }
 
     fn start_token_span(&mut self) {
-        self.token_start = self.offset;
+        self.token_start = self.current_location;
     }
 
     fn create_token_ending_now(&self, kind: TokenKind) -> Token {
@@ -470,7 +459,7 @@ impl Lexer {
         // Therefore, we need to add 1 to the current offset
         Token::new(
             kind,
-            TokenSpan::new_unchecked(self.token_start, self.offset + 1),
+            SmtSpan::new_unchecked(self.token_start, self.current_location.after_column()),
         )
     }
 
@@ -481,7 +470,7 @@ impl Lexer {
         // we do not need to add anything.
         Token::new(
             kind,
-            TokenSpan::new_unchecked(self.token_start, self.offset),
+            SmtSpan::new_unchecked(self.token_start, self.current_location),
         )
     }
 
@@ -498,12 +487,11 @@ impl Lexer {
         // since the span is a half-open range containing the start, but not end
         // if what we are parsing is EOF, do not add anything
         let end_offset = match c {
-            U8OrEof::U8(_) => self.offset + 1,
-            U8OrEof::Eof => self.offset,
+            U8OrEof::U8(_) => self.current_location.after_column(),
+            U8OrEof::Eof => self.current_location,
         };
 
-        let span = TokenSpan::new_unchecked(self.token_start, end_offset);
-        let span = self.resolve_span(span);
+        let span = SmtSpan::new_unchecked(self.token_start, end_offset);
         LexerError::new(kind, span)
     }
 
@@ -818,7 +806,7 @@ mod tests {
         let tokens = lex_all(b"(a 12)\n|q|").expect("valid input");
         let spans: Vec<(u64, u64)> = tokens
             .iter()
-            .map(|token| (token.span().start(), token.span().end()))
+            .map(|token| (token.span().start().offset(), token.span().end().offset()))
             .collect();
         // `(`, `a`, `12`, `)`, `|q|`, and the zero-width EOF token
         assert_eq!(
@@ -858,7 +846,7 @@ mod tests {
         tokens
             .iter()
             .map(|token| {
-                let span = lexer.resolve_span(token.span());
+                let span = token.span();
                 (token.kind().ty(), loc(span.start()), loc(span.end()))
             })
             .collect()
@@ -1025,24 +1013,21 @@ mod tests {
             let mut tokens = Vec::new();
             let mut resolved_immediately = Vec::new();
 
-            let mut collect = |lexer: &Lexer, produced: Vec<Token>| {
+            let mut collect = |produced: Vec<Token>| {
                 for token in produced {
-                    resolved_immediately.push(lexer.resolve_span(token.span()));
+                    resolved_immediately.push(token.span());
                     tokens.push(token);
                 }
             };
 
             for &c in input {
                 let produced = lexer.lex_next(c).expect("test input must lex");
-                collect(&lexer, produced);
+                collect(produced);
             }
             let produced = lexer.lex_eof().expect("test input must lex");
-            collect(&lexer, produced);
+            collect(produced);
 
-            let resolved_at_end: Vec<SmtSpan> = tokens
-                .iter()
-                .map(|token| lexer.resolve_span(token.span()))
-                .collect();
+            let resolved_at_end: Vec<SmtSpan> = tokens.iter().map(|token| token.span()).collect();
 
             assert_eq!(
                 resolved_immediately,

@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    CommandHandler, TokenSpan,
+    CommandHandler, SmtSpan,
     api::SmtHandler,
     token::{Token, TokenKind},
 };
@@ -19,19 +19,19 @@ pub enum ParserErrorKind<H: SmtHandler + ?Sized> {
 
 pub struct ParserError<H: SmtHandler + ?Sized> {
     kind: ParserErrorKind<H>,
-    span: TokenSpan,
+    span: SmtSpan,
 }
 
 impl<H: SmtHandler> ParserError<H> {
-    pub(crate) fn new(kind: ParserErrorKind<H>, span: TokenSpan) -> Self {
+    pub(crate) fn new(kind: ParserErrorKind<H>, span: SmtSpan) -> Self {
         Self { kind, span }
     }
 
-    pub(crate) fn handler_error(err: H::Error, span: TokenSpan) -> Self {
+    pub(crate) fn handler_error(err: H::Error, span: SmtSpan) -> Self {
         Self::new(ParserErrorKind::HandlerError(err), span)
     }
 
-    pub(crate) fn category_error(err: CategoryParserErrorKind, span: TokenSpan) -> Self {
+    pub(crate) fn category_error(err: CategoryParserErrorKind, span: SmtSpan) -> Self {
         Self::new(ParserErrorKind::ParserError(err), span)
     }
 
@@ -39,7 +39,7 @@ impl<H: SmtHandler> ParserError<H> {
         &self.kind
     }
 
-    pub fn span(&self) -> TokenSpan {
+    pub fn span(&self) -> SmtSpan {
         self.span
     }
 
@@ -157,7 +157,7 @@ mod tests {
     fn assert_error_span<H: SmtHandler>(err: &ParserError<H>, start: u64, end: u64) {
         let span = err.span();
         assert_eq!(
-            (span.start(), span.end()),
+            (span.start().offset(), span.end().offset()),
             (start, end),
             "error span mismatch (start, end) as byte offsets"
         );

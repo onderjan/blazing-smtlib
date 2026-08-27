@@ -67,7 +67,7 @@ impl<H: SmtHandler> CategoryParser<H> for IdentParser {
             IdentParser::Indices { name, mut indices } => match token.into_kind() {
                 TokenKind::ParenClose => {
                     if indices.is_empty() {
-                        let kind = CategoryParserErrorKind::RequiredIndices.into();
+                        let kind = CategoryParserErrorKind::RequiredIndices;
                         return Err(CategoryParserError::new(kind, span).into());
                     }
                     Ok(ControlFlow::Break(SmtIdent { name, indices }))
@@ -81,8 +81,8 @@ impl<H: SmtHandler> CategoryParser<H> for IdentParser {
                     Ok(ControlFlow::Continue(Self::Indices { name, indices }))
                 }
                 _ => {
-                    let kind = CategoryParserErrorKind::ExpectedIndexOrCloseParen.into();
-                    return Err(CategoryParserError::new(kind, span).into());
+                    let kind = CategoryParserErrorKind::ExpectedIndexOrCloseParen;
+                    Err(CategoryParserError::new(kind, span).into())
                 }
             },
         }

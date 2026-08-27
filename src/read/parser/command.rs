@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    CommandHandler, SmtSpan, SmtSymbol, TokenSpan,
+    CommandHandler, SmtSpan, SmtSymbol,
     read::parser::{
         ParserError,
         category::CategoryParser,
@@ -128,7 +128,7 @@ impl<H: CommandHandler> super::Parser<'_, H> {
     pub(super) fn start_command(
         &mut self,
         name: SmtSymbol,
-        span: TokenSpan,
+        span: SmtSpan,
     ) -> Result<CommandParser<H>, ParserError<H>> {
         Ok(match name.as_slice() {
             b"set-logic" => CommandParser::SetLogic(StaticCommandParser::new()),
