@@ -549,6 +549,7 @@ impl LexerError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::token::TokenType;
 
     /// Expected location as `(offset, line, column)`.
     type Loc = (u64, u64, u64);
@@ -834,5 +835,221 @@ mod tests {
             lexer.lex_next(c).expect("valid input");
         }
         assert_eq!(loc(lexer.current_location()), (4, 2, 2));
+    }
+
+    // --- Resolved token spans: offset, line and column ---
+
+    /// Expected token as `(type, start, end)`, with the locations as `(offset, line, column)`.
+    type TokenLoc = (TokenType, Loc, Loc);
+
+    /// Lexes the whole input and resolves the span of every token to lines and columns.
+    ///
+    /// The resolution goes through the lexer's line positions, which is what reading does
+    /// with parser error spans. Should a token ever carry an already resolved span instead,
+    /// only this helper has to change; the expectations of the tests below describe the
+    /// locations themselves and stay as they are.
+    fn resolved_token_spans(input: &[u8]) -> Vec<TokenLoc> {
+        let mut lexer = Lexer::new();
+        let mut tokens = Vec::new();
+        for &c in input {
+            tokens.extend(lexer.lex_next(c).expect("test input must lex"));
+        }
+        tokens.extend(lexer.lex_eof().expect("test input must lex"));
+        tokens
+            .iter()
+            .map(|token| {
+                let span = lexer.resolve_span(token.span());
+                (token.kind().ty(), loc(span.start()), loc(span.end()))
+            })
+            .collect()
+    }
+
+    #[test]
+    fn spans_on_a_single_line() {
+        // columns are one-based and counted in bytes
+        assert_eq!(
+            resolved_token_spans(b"(a 12)"),
+            vec![
+                (TokenType::ParenOpen, (0, 1, 1), (1, 1, 2)),
+                (TokenType::Symbol, (1, 1, 2), (2, 1, 3)),
+                (TokenType::Numeral, (3, 1, 4), (5, 1, 6)),
+                (TokenType::ParenClose, (5, 1, 6), (6, 1, 7)),
+                (TokenType::EndOfFile, (6, 1, 7), (6, 1, 7)),
+            ]
+        );
+    }
+
+    #[test]
+    fn spans_restart_the_column_on_every_line() {
+        assert_eq!(
+            resolved_token_spans(b"(a)\n(b)"),
+            vec![
+                (TokenType::ParenOpen, (0, 1, 1), (1, 1, 2)),
+                (TokenType::Symbol, (1, 1, 2), (2, 1, 3)),
+                (TokenType::ParenClose, (2, 1, 3), (3, 1, 4)),
+                (TokenType::ParenOpen, (4, 2, 1), (5, 2, 2)),
+                (TokenType::Symbol, (5, 2, 2), (6, 2, 3)),
+                (TokenType::ParenClose, (6, 2, 3), (7, 2, 4)),
+                (TokenType::EndOfFile, (7, 2, 4), (7, 2, 4)),
+            ]
+        );
+    }
+
+    #[test]
+    fn span_end_is_one_past_the_last_byte_of_the_token() {
+        // `ab` is terminated by the line break, but its end stays on the first line,
+        // one column past the `b`, rather than moving to the start of the second line
+        assert_eq!(
+            resolved_token_spans(b"ab\ncd"),
+            vec![
+                (TokenType::Symbol, (0, 1, 1), (2, 1, 3)),
+                (TokenType::Symbol, (3, 2, 1), (5, 2, 3)),
+                (TokenType::EndOfFile, (5, 2, 3), (5, 2, 3)),
+            ]
+        );
+    }
+
+    #[test]
+    fn quoted_symbol_may_span_a_line_break() {
+        // the token starts on the first line and ends on the second one,
+        // and the line break inside it still counts for the tokens that follow
+        assert_eq!(
+            resolved_token_spans(b"|a\nb| c"),
+            vec![
+                (TokenType::Symbol, (0, 1, 1), (5, 2, 3)),
+                (TokenType::Symbol, (6, 2, 4), (7, 2, 5)),
+                (TokenType::EndOfFile, (7, 2, 5), (7, 2, 5)),
+            ]
+        );
+    }
+
+    #[test]
+    fn string_literal_may_span_a_line_break() {
+        assert_eq!(
+            resolved_token_spans(b"\"a\nb\""),
+            vec![
+                (TokenType::String, (0, 1, 1), (5, 2, 3)),
+                (TokenType::EndOfFile, (5, 2, 3), (5, 2, 3)),
+            ]
+        );
+    }
+
+    #[test]
+    fn end_of_file_token_after_a_trailing_line_break() {
+        // without a trailing line break, the end-of-file token is just past the last token
+        assert_eq!(
+            resolved_token_spans(b"(a)"),
+            vec![
+                (TokenType::ParenOpen, (0, 1, 1), (1, 1, 2)),
+                (TokenType::Symbol, (1, 1, 2), (2, 1, 3)),
+                (TokenType::ParenClose, (2, 1, 3), (3, 1, 4)),
+                (TokenType::EndOfFile, (3, 1, 4), (3, 1, 4)),
+            ]
+        );
+        // with one, its offset is exactly the start of the next line,
+        // so it is reported at the first column of that line rather than past the end
+        // of the previous one
+        assert_eq!(
+            resolved_token_spans(b"(a)\n"),
+            vec![
+                (TokenType::ParenOpen, (0, 1, 1), (1, 1, 2)),
+                (TokenType::Symbol, (1, 1, 2), (2, 1, 3)),
+                (TokenType::ParenClose, (2, 1, 3), (3, 1, 4)),
+                (TokenType::EndOfFile, (4, 2, 1), (4, 2, 1)),
+            ]
+        );
+    }
+
+    #[test]
+    fn crlf_is_a_single_line_break_in_token_spans() {
+        // CR terminates the symbol but must not start a line of its own
+        assert_eq!(
+            resolved_token_spans(b"a\r\nb"),
+            vec![
+                (TokenType::Symbol, (0, 1, 1), (1, 1, 2)),
+                (TokenType::Symbol, (3, 2, 1), (4, 2, 2)),
+                (TokenType::EndOfFile, (4, 2, 2), (4, 2, 2)),
+            ]
+        );
+    }
+
+    #[test]
+    fn comments_produce_no_tokens_but_still_count_lines() {
+        assert_eq!(
+            resolved_token_spans(b"; c\nx"),
+            vec![
+                (TokenType::Symbol, (4, 2, 1), (5, 2, 2)),
+                (TokenType::EndOfFile, (5, 2, 2), (5, 2, 2)),
+            ]
+        );
+    }
+
+    #[test]
+    fn spans_of_every_token_type() {
+        // the hash of a hexadecimal or binary literal belongs to its token,
+        // and a reserved word spans the same bytes an ordinary symbol would
+        assert_eq!(
+            resolved_token_spans(b":kw #xAB #b01 1.5 \"s\" let"),
+            vec![
+                (TokenType::Keyword, (0, 1, 1), (3, 1, 4)),
+                (TokenType::Hexadecimal, (4, 1, 5), (8, 1, 9)),
+                (TokenType::Binary, (9, 1, 10), (13, 1, 14)),
+                (TokenType::Decimal, (14, 1, 15), (17, 1, 18)),
+                (TokenType::String, (18, 1, 19), (21, 1, 22)),
+                (TokenType::Reserved(Reserved::Let), (22, 1, 23), (25, 1, 26)),
+                (TokenType::EndOfFile, (25, 1, 26), (25, 1, 26)),
+            ]
+        );
+    }
+
+    /// Resolving a token span never needs input that comes after the token.
+    ///
+    /// This is the property that a lexer resolving spans eagerly has to keep, and the one
+    /// that makes keeping a history of line positions unnecessary: if a span resolves the
+    /// same way at the moment its token is produced as it does once the whole input has
+    /// been read, then nothing that follows a token can change where it is reported.
+    #[test]
+    fn token_spans_resolve_the_same_immediately_and_at_the_end() {
+        for input in [
+            b"(a 12)" as &[u8],
+            b"(a)\n(b)",
+            b"ab\ncd",
+            b"|a\nb| c",
+            b"\"a\nb\"",
+            b"; c\nx",
+            b"a\r\nb",
+            b"(a)\n",
+            b"(assert\n  (f\n    x))\n",
+        ] {
+            let mut lexer = Lexer::new();
+            let mut tokens = Vec::new();
+            let mut resolved_immediately = Vec::new();
+
+            let mut collect = |lexer: &Lexer, produced: Vec<Token>| {
+                for token in produced {
+                    resolved_immediately.push(lexer.resolve_span(token.span()));
+                    tokens.push(token);
+                }
+            };
+
+            for &c in input {
+                let produced = lexer.lex_next(c).expect("test input must lex");
+                collect(&lexer, produced);
+            }
+            let produced = lexer.lex_eof().expect("test input must lex");
+            collect(&lexer, produced);
+
+            let resolved_at_end: Vec<SmtSpan> = tokens
+                .iter()
+                .map(|token| lexer.resolve_span(token.span()))
+                .collect();
+
+            assert_eq!(
+                resolved_immediately,
+                resolved_at_end,
+                "span resolution depends on later input in {:?}",
+                String8::from_vec(input.to_vec())
+            );
+        }
     }
 }

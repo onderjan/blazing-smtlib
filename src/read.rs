@@ -204,6 +204,37 @@ mod tests {
     }
 
     #[test]
+    fn parser_error_deep_in_the_input_is_resolved_to_lines() {
+        // the empty application `(f )` is rejected on its closing parenthesis,
+        // which is the ninth byte of the third line
+        let input = b"(set-logic QF_UF)\n(declare-const x Bool)\n(assert (f ))\n";
+        let err = read(input).expect_err("expected a parser error, got Ok");
+        assert!(matches!(
+            err.kind(),
+            SmtReadErrorKind::Parser(CategoryParserErrorKind::EmptyApplication)
+        ));
+        assert_span(&err, (52, 3, 12), (53, 3, 13));
+    }
+
+    #[test]
+    fn handler_error_span_is_resolved_to_lines() {
+        // the handler rejects the command by name, and the reported span is that
+        // of the name symbol on the second line rather than of the whole command
+        let err = read(b"(check-sat)\n(frobnicate 1)").expect_err("expected a handler error");
+        assert!(matches!(err.kind(), SmtReadErrorKind::Handler(_)));
+        assert_span(&err, (13, 2, 2), (23, 2, 12));
+    }
+
+    #[test]
+    fn span_after_a_token_containing_a_line_break() {
+        // the quoted symbol carries the line break, so the offending `x` after it
+        // must be reported on the second line
+        let err = read(b"(assert |a\nb| x)").expect_err("expected a parser error, got Ok");
+        assert!(matches!(err.kind(), SmtReadErrorKind::Parser(_)));
+        assert_span(&err, (14, 2, 4), (15, 2, 5));
+    }
+
+    #[test]
     fn parser_error_at_eof_is_empty_span() {
         // unclosed command: the error is on the zero-width EOF token after a newline
         let err = read(b"(check-sat\n").expect_err("expected a parser error, got Ok");
