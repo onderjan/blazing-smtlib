@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    CommandHandler, SmtSymbol,
+    CommandHandler, SmtSpan, SmtSymbol, TokenSpan,
     read::parser::{
         ParserError,
         category::CategoryParser,
@@ -94,6 +94,7 @@ impl<H: CommandHandler, C: StandardCommand<H>> ParseCommand<H> for StaticCommand
         handler: &mut H,
         token: Token,
     ) -> Result<ControlFlow<CommandResult, ()>, ParserError<H>> {
+        let span = token.span();
         match self.0.take() {
             Some(parser) => match parser.progress(handler, token)? {
                 ControlFlow::Continue(parser) => {
@@ -101,7 +102,10 @@ impl<H: CommandHandler, C: StandardCommand<H>> ParseCommand<H> for StaticCommand
                     Ok(ControlFlow::Continue(()))
                 }
                 ControlFlow::Break(result) => {
-                    C::handle(handler, result).map_err(ParserError::HandlerError)?;
+                    match C::handle(handler, result) {
+                        Ok(()) => {}
+                        Err(err) => return Err(ParserError::handler_error(err, span)),
+                    }
                     let command_result = if C::is_exit() {
                         CommandResult::Exit
                     } else {
@@ -124,6 +128,7 @@ impl<H: CommandHandler> super::Parser<'_, H> {
     pub(super) fn start_command(
         &mut self,
         name: SmtSymbol,
+        span: TokenSpan,
     ) -> Result<CommandParser<H>, ParserError<H>> {
         Ok(match name.as_slice() {
             b"set-logic" => CommandParser::SetLogic(StaticCommandParser::new()),
@@ -134,11 +139,10 @@ impl<H: CommandHandler> super::Parser<'_, H> {
             b"check-sat" => CommandParser::CheckSat(StaticCommandParser::new()),
             b"exit" => CommandParser::Exit(StaticCommandParser::new()),
             b"set-info" => CommandParser::SetInfo(StaticCommandParser::new()),
-            _ => CommandParser::Nonstandard(
-                self.handler
-                    .nonstandard_command(name)
-                    .map_err(ParserError::HandlerError)?,
-            ),
+            _ => match self.handler.nonstandard_command(name) {
+                Ok(parser) => CommandParser::Nonstandard(parser),
+                Err(err) => return Err(ParserError::handler_error(err, span)),
+            },
         })
     }
 }
