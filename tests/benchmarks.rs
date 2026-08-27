@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 
 use rayon::ThreadPoolBuilder;
-use smt_parser_rs::{OnlyCheckSyntax, SmtReadError, read_smt_file};
+use smt_parser_rs::{OnlyCheckSyntax, SmtReadError, SmtReadErrorKind, read_smt_file};
 
 fn collect_smt2_files(root: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();
@@ -45,12 +45,12 @@ fn try_parse_file(path: &Path) -> Result<(), String> {
 
     match result {
         Ok(Ok(_ast)) => Ok(()),
-        Ok(Err(e)) => match e {
-            SmtReadError::LexerError(lexer_error) => Err(format!("Lexer error: {:?}", lexer_error)),
-            SmtReadError::ParserError(parser_error) => {
+        Ok(Err(e)) => match e.into_kind() {
+            SmtReadErrorKind::Lexer(lexer_error) => Err(format!("Lexer error: {:?}", lexer_error)),
+            SmtReadErrorKind::Parser(parser_error) => {
                 Err(format!("Parser error: {:?}", parser_error))
             }
-            SmtReadError::ReadError(read_error) => Err(format!("Read error: {:?}", read_error)),
+            SmtReadErrorKind::Io(read_error) => Err(format!("Read error: {:?}", read_error)),
         },
         Err(cause) => {
             let msg = match cause.downcast_ref::<&'static str>() {

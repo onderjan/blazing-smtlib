@@ -43,6 +43,15 @@ impl SmtLocation {
             other
         }
     }
+
+    /// Location directly at the byte stream start.
+    pub(crate) fn new_zero() -> Self {
+        Self {
+            offset: 0,
+            line: 1,
+            column: 1,
+        }
+    }
 }
 
 /// Span of an SMT-LIB element.
@@ -68,6 +77,10 @@ impl SmtSpan {
             start: location,
             end: location,
         }
+    }
+
+    pub(crate) fn new_zero() -> Self {
+        Self::new_empty(SmtLocation::new_zero())
     }
 
     pub fn start(self) -> SmtLocation {

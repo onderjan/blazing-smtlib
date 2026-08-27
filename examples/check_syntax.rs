@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use smt_parser_rs::{OnlyCheckSyntax, SmtReadError, read_smt_file};
+use smt_parser_rs::{OnlyCheckSyntax, SmtReadErrorKind, read_smt_file};
 fn main() -> Result<(), u32> {
     let mut args = std::env::args();
     if args.len() != 2 {
@@ -12,18 +12,21 @@ fn main() -> Result<(), u32> {
     let file_path = args.next().unwrap();
 
     match read_smt_file(&mut OnlyCheckSyntax, &PathBuf::from(file_path)) {
-        Err(SmtReadError::ReadError(err)) => {
-            eprintln!("Error reading file: {}", err);
-            Err(2)
-        }
-        Err(SmtReadError::LexerError(err)) => {
-            eprintln!("Error lexing file: {:?}", err);
-            Err(3)
-        }
-        Err(SmtReadError::ParserError(err)) => {
-            eprintln!("Error parsing file: {:?}", err);
-            Err(4)
-        }
+        Err(err) => match err.into_kind() {
+            SmtReadErrorKind::Io(err) => {
+                eprintln!("Error reading file: {}", err);
+                Err(2)
+            }
+            SmtReadErrorKind::Lexer(err) => {
+                eprintln!("Error lexing file: {:?}", err);
+                Err(3)
+            }
+            SmtReadErrorKind::Parser(err) => {
+                eprintln!("Error parsing file: {:?}", err);
+                Err(4)
+            }
+        },
+
         Ok(()) => {
             eprintln!("Successfully read SMT-LIB file");
             Ok(())
