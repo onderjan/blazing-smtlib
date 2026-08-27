@@ -6,7 +6,7 @@ use std::{
 
 use crate::{
     CommandHandler, SmtHandler,
-    reader::{
+    read::{
         lexer::{Lexer, LexerError},
         parser::{Parser, ParserError, ParserOrHandlerError},
     },

@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtApplication, SmtHandler, SmtIdent, SmtQualifiedIdent, SmtSpecialConstant, SmtSymbol,
     SmtTerm,
-    reader::parser::{
+    read::parser::{
         ParserError, ParserOrHandlerError,
         category::{CategoryParser, ident::IdentParser},
     },

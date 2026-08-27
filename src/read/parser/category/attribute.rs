@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
 
 use crate::{
     SmtAttributeValue, SmtHandler, SmtKeyword, SmtSpecialConstant,
-    reader::parser::{
+    read::parser::{
         ParserError, ParserOrHandlerError,
         category::{CategoryParser, expect_close_parenthesis},
     },

@@ -1,6 +1,6 @@
 use crate::{
     CommandHandler, SmtSymbol,
-    reader::parser::{
+    read::parser::{
         category::{
             CloseParenParser, ClosedParser, MultipleParser, OpenClosedParser, PairParser,
             SymbolParser, attribute::ClosedAttributeParser, sort::SortParser, term::TermParser,

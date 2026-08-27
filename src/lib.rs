@@ -6,11 +6,11 @@ mod span;
 mod string;
 mod token;
 
-mod reader;
+mod read;
 
 pub use crate::api::*;
 pub use crate::plain::*;
 pub use crate::span::*;
 pub use crate::string::*;
 
-pub use crate::reader::*;
+pub use crate::read::*;

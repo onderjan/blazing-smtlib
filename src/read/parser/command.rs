@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
 
 use crate::{
     CommandHandler, String8View,
-    reader::parser::{
+    read::parser::{
         ParserOrHandlerError,
         category::CategoryParser,
         command::standard::{
