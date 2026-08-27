@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler, SmtIdent, SmtIndex, SmtSymbol,
     read::parser::{CategoryParserError, ParserError, category::CategoryParser},
-    token::{Reserved, Token, TokenKind},
+    token::{Reserved, Token, TokenKind, TokenType},
 };
 
 pub enum IdentParser {
@@ -42,10 +42,10 @@ impl<H: SmtHandler> CategoryParser<H> for IdentParser {
                 if matches!(token.kind(), TokenKind::Reserved(Reserved::Underscore)) {
                     Ok(ControlFlow::Continue(Self::AfterUnderscore))
                 } else {
-                    Err(
-                        CategoryParserError::ExpectedToken(TokenKind::Reserved(Reserved::Underscore))
-                            .into(),
-                    )
+                    Err(CategoryParserError::ExpectedToken(&[TokenType::Reserved(
+                        Reserved::Underscore,
+                    )])
+                    .into())
                 }
             }
             IdentParser::AfterUnderscore => {
@@ -55,7 +55,7 @@ impl<H: SmtHandler> CategoryParser<H> for IdentParser {
                         indices: Vec::new(),
                     }))
                 } else {
-                    Err(CategoryParserError::ExpectedSymbol.into())
+                    Err(CategoryParserError::ExpectedToken(&[TokenType::Symbol]).into())
                 }
             }
             IdentParser::Indices { name, mut indices } => match token.into_kind() {
@@ -164,18 +164,27 @@ mod tests {
         assert!(
             matches!(
                 err,
-                CategoryParserError::ExpectedToken(TokenKind::Reserved(Reserved::Underscore))
+                CategoryParserError::ExpectedToken(&[TokenType::Reserved(Reserved::Underscore)])
             ),
             "{err:?}"
         );
 
         // the name must be a symbol
         let err = assert_error::<IdentParser>(b"(_ 1 2)", 3, 4);
-        assert!(matches!(err, CategoryParserError::ExpectedSymbol), "{err:?}");
+        assert!(
+            matches!(
+                err,
+                CategoryParserError::ExpectedToken(&[TokenType::Symbol])
+            ),
+            "{err:?}"
+        );
 
         // at least one index is required
         let err = assert_error::<IdentParser>(b"(_ f)", 4, 5);
-        assert!(matches!(err, CategoryParserError::RequiredIndices), "{err:?}");
+        assert!(
+            matches!(err, CategoryParserError::RequiredIndices),
+            "{err:?}"
+        );
 
         // indices are numerals or symbols only
         let err = assert_error::<IdentParser>(b"(_ f \"s\")", 5, 8);

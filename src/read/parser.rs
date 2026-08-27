@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     CommandHandler,
     api::SmtHandler,
-    token::{Token, TokenKind},
+    token::{Token, TokenKind, TokenType},
 };
 
 mod category;
@@ -11,13 +11,9 @@ mod command;
 
 pub use command::*;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CategoryParserError {
-    ExpectedToken(TokenKind),
-    ExpectedUnderscore,
-    ExpectedSymbol,
-    ExpectedKeyword,
-    ExpectedOpenOrCloseParen,
+    ExpectedToken(&'static [TokenType]),
     EmptyIdentIndices,
     InvalidIdent,
     InvalidAttributeValue,

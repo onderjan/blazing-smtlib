@@ -6,7 +6,7 @@ use crate::{
         CategoryParserError, ParserError,
         category::{CategoryParser, expect_close_parenthesis},
     },
-    token::{Token, TokenKind},
+    token::{Token, TokenKind, TokenType},
 };
 
 pub enum ClosedAttributeParser<H: SmtHandler> {
@@ -30,7 +30,7 @@ impl<H: SmtHandler> CategoryParser<H> for ClosedAttributeParser<H> {
         match self {
             ClosedAttributeParser::Start => {
                 let TokenKind::Keyword(keyword) = token.into_kind() else {
-                    return Err(CategoryParserError::ExpectedKeyword.into());
+                    return Err(CategoryParserError::ExpectedToken(&[TokenType::Keyword]).into());
                 };
                 Ok(ControlFlow::Continue(ClosedAttributeParser::Key(keyword)))
             }
@@ -83,7 +83,10 @@ impl<H: SmtHandler> CategoryParser<H> for ClosedAttributeParser<H> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::read::parser::category::tests::{Printing, assert_error, parse_all, run};
+    use crate::{
+        read::parser::category::tests::{Printing, assert_error, parse_all, run},
+        token::TokenType,
+    };
 
     type P = ClosedAttributeParser<Printing>;
 
@@ -113,26 +116,47 @@ mod tests {
     #[test]
     fn errors() {
         let err = assert_error::<P>(b"status sat)", 0, 6);
-        assert!(matches!(err, CategoryParserError::ExpectedKeyword), "{err:?}");
+        assert!(
+            matches!(
+                err,
+                CategoryParserError::ExpectedToken(&[TokenType::Keyword])
+            ),
+            "{err:?}"
+        );
 
         let err = assert_error::<P>(b"", 0, 0);
-        assert!(matches!(err, CategoryParserError::ExpectedKeyword), "{err:?}");
+        assert!(
+            matches!(
+                err,
+                CategoryParserError::ExpectedToken(&[TokenType::Keyword])
+            ),
+            "{err:?}"
+        );
 
         // a keyword is not a valid value
         let err = assert_error::<P>(b":a :b)", 3, 5);
-        assert!(matches!(err, CategoryParserError::ExpectedAttribute), "{err:?}");
+        assert!(
+            matches!(err, CategoryParserError::ExpectedAttribute),
+            "{err:?}"
+        );
 
         // only one value
         let err = assert_error::<P>(b":a 1 2)", 5, 6);
         assert!(
-            matches!(err, CategoryParserError::ExpectedToken(TokenKind::ParenClose)),
+            matches!(
+                err,
+                CategoryParserError::ExpectedToken(&[TokenType::ParenClose])
+            ),
             "{err:?}"
         );
 
         // EOF after the value
         let err = assert_error::<P>(b":a 1", 4, 4);
         assert!(
-            matches!(err, CategoryParserError::ExpectedToken(TokenKind::ParenClose)),
+            matches!(
+                err,
+                CategoryParserError::ExpectedToken(&[TokenType::ParenClose])
+            ),
             "{err:?}"
         );
     }

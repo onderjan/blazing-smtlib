@@ -3,6 +3,21 @@ use crate::{
     TokenSpan, string::String8,
 };
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TokenType {
+    ParenOpen,
+    ParenClose,
+    Numeral,
+    Decimal,
+    Hexadecimal,
+    Binary,
+    Symbol,
+    Reserved(Reserved),
+    String,
+    Keyword,
+    EndOfFile,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TokenKind {
     ParenOpen,
@@ -16,6 +31,24 @@ pub enum TokenKind {
     String(SmtStringContent),
     Keyword(SmtKeyword),
     EndOfFile,
+}
+
+impl TokenKind {
+    pub fn ty(&self) -> TokenType {
+        match self {
+            TokenKind::ParenOpen => TokenType::ParenOpen,
+            TokenKind::ParenClose => TokenType::ParenClose,
+            TokenKind::Numeral(_) => TokenType::Numeral,
+            TokenKind::Decimal(_) => TokenType::Decimal,
+            TokenKind::Hexadecimal(_) => TokenType::Hexadecimal,
+            TokenKind::Binary(_) => TokenType::Binary,
+            TokenKind::Symbol(_) => TokenType::Symbol,
+            TokenKind::Reserved(reserved) => TokenType::Reserved(*reserved),
+            TokenKind::String(_) => TokenType::String,
+            TokenKind::Keyword(_) => TokenType::Keyword,
+            TokenKind::EndOfFile => TokenType::EndOfFile,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -43,7 +76,7 @@ impl Token {
 }
 
 /// Reserved words in SMT-LIB2.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Reserved {
     Binary,
     Decimal,

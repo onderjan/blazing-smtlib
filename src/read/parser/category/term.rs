@@ -7,7 +7,7 @@ use crate::{
         CategoryParserError, ParserError,
         category::{CategoryParser, ident::IdentParser},
     },
-    token::{Reserved, Token, TokenKind},
+    token::{Reserved, Token, TokenKind, TokenType},
 };
 
 pub enum TermLevel<H: SmtHandler> {
@@ -72,9 +72,7 @@ impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
             }
             TermLevel::LetInner => {
                 // end let, should be followed by closing parenthesis
-                let term = handler
-                    .end_let(term)
-                    .map_err(ParserError::HandlerError)?;
+                let term = handler.end_let(term).map_err(ParserError::HandlerError)?;
                 TermParserState::LetAfterInnerTerm(term)
             }
         };
@@ -162,7 +160,14 @@ impl<H: SmtHandler> TermParser<H> {
                         levels.push(TermLevel::LetInner);
                         TermParserState::Start
                     }
-                    _ => return Err(CategoryParserError::ExpectedOpenOrCloseParen.into()),
+                    _ => {
+                        // expected open or close parenthesis
+                        return Err(CategoryParserError::ExpectedToken(&[
+                            TokenType::ParenOpen,
+                            TokenType::ParenClose,
+                        ])
+                        .into());
+                    }
                 }
             }
             TermParserState::LetBeforeBindingSymbol(bindings) => {
@@ -225,10 +230,7 @@ impl<H: SmtHandler> TermParser<H> {
         }
     }
 
-    fn parse_term_open(
-        levels: Vec<TermLevel<H>>,
-        token: Token,
-    ) -> Result<Self, ParserError<H>> {
+    fn parse_term_open(levels: Vec<TermLevel<H>>, token: Token) -> Result<Self, ParserError<H>> {
         let state = match token.into_kind() {
             TokenKind::Symbol(fn_name) => {
                 // this is an application where the function identifier is just a symbol
@@ -279,7 +281,7 @@ fn expect_open_paren<H: SmtHandler>(token: Token) -> Result<(), ParserError<H>> 
     if matches!(token.kind(), TokenKind::ParenOpen) {
         Ok(())
     } else {
-        Err(CategoryParserError::ExpectedToken(TokenKind::ParenOpen).into())
+        Err(CategoryParserError::ExpectedToken(&[TokenType::ParenOpen]).into())
     }
 }
 
@@ -287,7 +289,7 @@ fn expect_close_paren<H: SmtHandler>(token: Token) -> Result<(), ParserError<H>>
     if matches!(token.kind(), TokenKind::ParenClose) {
         Ok(())
     } else {
-        Err(CategoryParserError::ExpectedToken(TokenKind::ParenClose).into())
+        Err(CategoryParserError::ExpectedToken(&[TokenType::ParenClose]).into())
     }
 }
 
@@ -295,7 +297,7 @@ fn expect_symbol<H: SmtHandler>(token: Token) -> Result<SmtSymbol, ParserError<H
     if let TokenKind::Symbol(symbol) = token.into_kind() {
         Ok(symbol)
     } else {
-        Err(CategoryParserError::ExpectedSymbol.into())
+        Err(CategoryParserError::ExpectedToken(&[TokenType::Symbol]).into())
     }
 }
 
@@ -373,7 +375,10 @@ mod tests {
     fn empty_application_is_rejected() {
         // an application must have at least one argument
         let err = assert_error::<TermParser<Printing>>(b"(f)", 2, 3);
-        assert!(matches!(err, CategoryParserError::EmptyApplication), "{err:?}");
+        assert!(
+            matches!(err, CategoryParserError::EmptyApplication),
+            "{err:?}"
+        );
     }
 
     #[test]
@@ -401,32 +406,53 @@ mod tests {
     #[test]
     fn let_errors() {
         let err = assert_error::<TermParser<Printing>>(b"(let () x)", 6, 7);
-        assert!(matches!(err, CategoryParserError::EmptyLetBindings), "{err:?}");
+        assert!(
+            matches!(err, CategoryParserError::EmptyLetBindings),
+            "{err:?}"
+        );
 
         let err = assert_error::<TermParser<Printing>>(b"(let x x)", 5, 6);
         assert!(
-            matches!(err, CategoryParserError::ExpectedToken(TokenKind::ParenOpen)),
+            matches!(
+                err,
+                CategoryParserError::ExpectedToken(&[TokenType::ParenOpen])
+            ),
             "{err:?}"
         );
 
         let err = assert_error::<TermParser<Printing>>(b"(let (x) x)", 6, 7);
         assert!(
-            matches!(err, CategoryParserError::ExpectedOpenOrCloseParen),
+            matches!(
+                err,
+                CategoryParserError::ExpectedToken(&[TokenType::ParenOpen, TokenType::ParenClose])
+            ),
             "{err:?}"
         );
 
         let err = assert_error::<TermParser<Printing>>(b"(let ((1 x)) x)", 7, 8);
-        assert!(matches!(err, CategoryParserError::ExpectedSymbol), "{err:?}");
+        assert!(
+            matches!(
+                err,
+                CategoryParserError::ExpectedToken(&[TokenType::Symbol])
+            ),
+            "{err:?}"
+        );
 
         let err = assert_error::<TermParser<Printing>>(b"(let ((x 1 2)) x)", 11, 12);
         assert!(
-            matches!(err, CategoryParserError::ExpectedToken(TokenKind::ParenClose)),
+            matches!(
+                err,
+                CategoryParserError::ExpectedToken(&[TokenType::ParenClose])
+            ),
             "{err:?}"
         );
 
         let err = assert_error::<TermParser<Printing>>(b"(let ((x 1)) x y)", 15, 16);
         assert!(
-            matches!(err, CategoryParserError::ExpectedToken(TokenKind::ParenClose)),
+            matches!(
+                err,
+                CategoryParserError::ExpectedToken(&[TokenType::ParenClose])
+            ),
             "{err:?}"
         );
     }
@@ -444,10 +470,16 @@ mod tests {
 
         // the operator position takes a symbol, a reserved binder, `_` or `(`
         let err = assert_error::<TermParser<Printing>>(b"(1 x)", 1, 2);
-        assert!(matches!(err, CategoryParserError::ExpectedOperator), "{err:?}");
+        assert!(
+            matches!(err, CategoryParserError::ExpectedOperator),
+            "{err:?}"
+        );
 
         let err = assert_error::<TermParser<Printing>>(b"()", 1, 2);
-        assert!(matches!(err, CategoryParserError::ExpectedOperator), "{err:?}");
+        assert!(
+            matches!(err, CategoryParserError::ExpectedOperator),
+            "{err:?}"
+        );
 
         // bad argument
         let err = assert_error::<TermParser<Printing>>(b"(f x :kw)", 5, 8);
@@ -459,7 +491,10 @@ mod tests {
 
         // bad indexed identifier in a term
         let err = assert_error::<TermParser<Printing>>(b"(_ f)", 4, 5);
-        assert!(matches!(err, CategoryParserError::RequiredIndices), "{err:?}");
+        assert!(
+            matches!(err, CategoryParserError::RequiredIndices),
+            "{err:?}"
+        );
     }
 
     /// Handler that only counts terms, so deep nesting does not build huge strings.
