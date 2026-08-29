@@ -30,13 +30,12 @@ pub enum LexerState {
 
 pub struct Lexer {
     state: LexerState,
-    // Location of the currently processed byte.
+    // Location of the byte being processed during lexing.
     //
-    // Updates after lexing, i.e. when lexing, points at the
-    // "start" of the currently read character.
+    // It advances once that byte is consumed.
     current_location: SmtLocation,
 
-    // Location of the start of the currently processed token.
+    // Location of the start of the token that is currently being processed.
     token_start: SmtLocation,
 }
 
@@ -96,8 +95,8 @@ impl Lexer {
             }
         };
 
-        // start token span as we are in the normal state
-        self.start_token_span();
+        // mark token start as we are in the normal state
+        self.mark_token_start();
 
         let state = match CharClass::from(byte) {
             // whitespace, just continue lexing
@@ -449,7 +448,7 @@ impl Lexer {
         Ok(tokens)
     }
 
-    fn start_token_span(&mut self) {
+    fn mark_token_start(&mut self) {
         self.token_start = self.current_location;
     }
 
@@ -475,7 +474,7 @@ impl Lexer {
     }
 
     fn create_zero_byte_token(&mut self, kind: TokenKind) -> Token {
-        self.start_token_span();
+        self.mark_token_start();
         self.create_token_ending_before(kind)
     }
 

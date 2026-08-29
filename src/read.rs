@@ -18,16 +18,11 @@ pub mod parser;
 
 pub enum SmtReadErrorKind<H: SmtHandler> {
     /// The error occurred when reading.
-    ///
-    /// The returned span is empty,
-    /// indicating the position where the reading failed.
     Io(std::io::Error),
     /// The error occured when lexing.
     Lexer(LexerErrorKind),
     /// The error occured when parsing.
     Parser(CategoryParserErrorKind),
-
-    // TODO: proper span of user-handler error
     /// The error occured in the user handler.
     Handler(H::Error),
 }
@@ -46,6 +41,10 @@ impl<H: SmtHandler> SmtReadError<H> {
         &self.kind
     }
 
+    /// Span where the error occured.
+    ///
+    /// For I/O errors, the returned span is empty,
+    /// indicating the position where the reading failed.
     pub fn span(&self) -> SmtSpan {
         self.span
     }
@@ -124,8 +123,8 @@ impl<'a, H: CommandHandler, R: Read> SmtReader<'a, H, R> {
                 Err(err) => {
                     let span = err.span();
                     let kind: SmtReadErrorKind<H> = match err.into_kind() {
-                        ParserErrorKind::ParserError(err) => SmtReadErrorKind::Parser(err),
-                        ParserErrorKind::HandlerError(err) => SmtReadErrorKind::Handler(err),
+                        ParserErrorKind::Category(err) => SmtReadErrorKind::Parser(err),
+                        ParserErrorKind::Handler(err) => SmtReadErrorKind::Handler(err),
                     };
                     return Err(SmtReadError::new(kind, span));
                 }

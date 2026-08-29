@@ -248,17 +248,6 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for MultipleParser<H
         }
     }
 }
-
-/*
-impl<H: SmtHandler, P: CategoryParser<H>> MultipleParser<H, P> {
-    pub fn after_open_paren() -> Self {
-        Self::Normal {
-            results: Vec::new(),
-            parser: None,
-        }
-    }
-}*/
-
 pub struct SymbolParser;
 
 impl<H: SmtHandler> CategoryParser<H> for SymbolParser {
@@ -485,9 +474,9 @@ pub(super) mod tests {
                 Err(err) => {
                     let span = err.span();
                     return Err(match err.into_kind() {
-                        ParserErrorKind::ParserError(kind) => CategoryParserError::new(kind, span),
+                        ParserErrorKind::Category(kind) => CategoryParserError::new(kind, span),
                         // the `Printing` handler never fails
-                        ParserErrorKind::HandlerError(err) => match err {},
+                        ParserErrorKind::Handler(err) => match err {},
                     });
                 }
             }

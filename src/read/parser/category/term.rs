@@ -619,9 +619,9 @@ mod tests {
                 Err(err) => {
                     let span = err.span();
                     match err.into_kind() {
-                        ParserErrorKind::ParserError(kind) => panic!("{kind:?} at {span:?}"),
+                        ParserErrorKind::Category(kind) => panic!("{kind:?} at {span:?}"),
                         // the `Counting` handler never fails
-                        ParserErrorKind::HandlerError(err) => match err {},
+                        ParserErrorKind::Handler(err) => match err {},
                     }
                 }
             }

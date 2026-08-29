@@ -121,9 +121,4 @@ impl CharClass {
             CharClass::Letter | CharClass::Digit | CharClass::Special | CharClass::Dot
         )
     }
-
-    /*pub fn can_start_simple_symbol(self) -> bool {
-        // everything that is allowed in simple symbol except for digits
-        self.is_allowed_in_simple_symbol() && !matches!(self, CharClass::Digit)
-    }*/
 }

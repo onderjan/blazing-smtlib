@@ -13,8 +13,8 @@ pub use category::*;
 pub use command::*;
 
 pub enum ParserErrorKind<H: SmtHandler + ?Sized> {
-    ParserError(CategoryParserErrorKind),
-    HandlerError(H::Error),
+    Category(CategoryParserErrorKind),
+    Handler(H::Error),
 }
 
 pub struct ParserError<H: SmtHandler + ?Sized> {
@@ -28,11 +28,11 @@ impl<H: SmtHandler> ParserError<H> {
     }
 
     pub(crate) fn handler_error(err: H::Error, span: SmtSpan) -> Self {
-        Self::new(ParserErrorKind::HandlerError(err), span)
+        Self::new(ParserErrorKind::Handler(err), span)
     }
 
     pub(crate) fn category_error(err: CategoryParserErrorKind, span: SmtSpan) -> Self {
-        Self::new(ParserErrorKind::ParserError(err), span)
+        Self::new(ParserErrorKind::Category(err), span)
     }
 
     pub fn kind(&self) -> &ParserErrorKind<H> {
@@ -51,7 +51,7 @@ impl<H: SmtHandler> ParserError<H> {
 impl<H: SmtHandler> From<CategoryParserError> for ParserError<H> {
     fn from(value: CategoryParserError) -> Self {
         let span = value.span();
-        Self::new(ParserErrorKind::ParserError(value.into_kind()), span)
+        Self::new(ParserErrorKind::Category(value.into_kind()), span)
     }
 }
 
@@ -170,8 +170,8 @@ mod tests {
         let err = parse(input).expect_err("expected a parser error, got Ok");
         assert_error_span(&err, start, end);
         match err.into_kind() {
-            ParserErrorKind::ParserError(kind) => kind,
-            ParserErrorKind::HandlerError(err) => {
+            ParserErrorKind::Category(kind) => kind,
+            ParserErrorKind::Handler(err) => {
                 panic!("expected parser error, got handler error on {:?}", err.0)
             }
         }
@@ -227,10 +227,10 @@ mod tests {
         let err = parse(b"(frobnicate 1)").expect_err("expected a handler error");
         assert_error_span(&err, 1, 11);
         match err.into_kind() {
-            ParserErrorKind::HandlerError(NonstandardCommandError(name)) => {
+            ParserErrorKind::Handler(NonstandardCommandError(name)) => {
                 assert_eq!(name.as_slice(), b"frobnicate");
             }
-            ParserErrorKind::ParserError(kind) => {
+            ParserErrorKind::Category(kind) => {
                 panic!("expected handler error, got {kind:?}")
             }
         }
@@ -403,9 +403,9 @@ mod tests {
         let err = parse_with(&mut handler, b"(my-assert )").expect_err("expected a parser error");
         assert_error_span(&err, 11, 12);
         match err.into_kind() {
-            ParserErrorKind::ParserError(CategoryParserErrorKind::ExpectedTerm) => {}
-            ParserErrorKind::ParserError(kind) => panic!("unexpected parser error {kind:?}"),
-            ParserErrorKind::HandlerError(_) => panic!("unexpected handler error"),
+            ParserErrorKind::Category(CategoryParserErrorKind::ExpectedTerm) => {}
+            ParserErrorKind::Category(kind) => panic!("unexpected parser error {kind:?}"),
+            ParserErrorKind::Handler(_) => panic!("unexpected handler error"),
         }
         assert!(handler.commands.is_empty());
     }
@@ -417,10 +417,10 @@ mod tests {
             .expect_err("expected a handler error");
         assert_error_span(&err, 15, 20);
         match err.into_kind() {
-            ParserErrorKind::HandlerError(NonstandardCommandError(name)) => {
+            ParserErrorKind::Handler(NonstandardCommandError(name)) => {
                 assert_eq!(name.as_slice(), b"other");
             }
-            ParserErrorKind::ParserError(kind) => panic!("unexpected parser error {kind:?}"),
+            ParserErrorKind::Category(kind) => panic!("unexpected parser error {kind:?}"),
         }
         assert_eq!(handler.commands, ["my-assert"]);
     }
