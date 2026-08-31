@@ -48,7 +48,7 @@ pub enum LexerErrorKind {
     BaseSelectionExpected,
     UnclosedStringLiteral,
     ForbiddenCharInString,
-    KeywordNameExpected,
+    ForbiddenKeywordName,
     KeywordReserved,
     BackslashInQuotedSymbol,
     ForbiddenCharInQuotedSymbol,
@@ -364,6 +364,14 @@ impl Lexer {
                     CharClass::Letter | CharClass::Digit | CharClass::Special | CharClass::Dot,
                     byte,
                 )) => {
+                    // make sure the keyword doesn't start with a digit
+                    if keyword.is_empty()
+                        && matches!(char_class_opt(c), Some((CharClass::Digit, _)))
+                    {
+                        return Err(
+                            self.current_token_error(LexerErrorKind::ForbiddenKeywordName, c)
+                        );
+                    }
                     // add character
                     keyword.push(byte);
                     LexerState::Keyword(keyword)
@@ -372,7 +380,7 @@ impl Lexer {
                     // simple symbol ended with previous character
                     if keyword.is_empty() {
                         return Err(
-                            self.current_token_error(LexerErrorKind::KeywordNameExpected, c)
+                            self.current_token_error(LexerErrorKind::ForbiddenKeywordName, c)
                         );
                     }
 
@@ -645,7 +653,7 @@ mod tests {
     fn keyword_name_expected() {
         assert_error(
             b": ",
-            LexerErrorKind::KeywordNameExpected,
+            LexerErrorKind::ForbiddenKeywordName,
             (0, 1, 1),
             (2, 1, 3),
         );
@@ -727,7 +735,7 @@ mod tests {
     fn keyword_name_expected_at_eof() {
         assert_error(
             b":",
-            LexerErrorKind::KeywordNameExpected,
+            LexerErrorKind::ForbiddenKeywordName,
             (0, 1, 1),
             (1, 1, 2),
         );

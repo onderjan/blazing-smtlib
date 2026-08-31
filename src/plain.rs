@@ -37,17 +37,23 @@ impl SmtSymbol {
 /// SMT-LIB keyword.
 ///
 /// Cannot be empty.
-/// Must contain only SMT-LIB simple-symbol-class bytes.
+/// Must contain only SMT-LIB simple-symbol-class bytes, starting with a non-digit.
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct SmtKeyword(String8);
 
 impl SmtKeyword {
     pub fn is_allowed(value: &[u8]) -> bool {
-        !value.is_empty()
-            && value
-                .iter()
-                .copied()
-                .all(|c| CharClass::from(c).is_allowed_in_simple_symbol())
+        let Some(first) = value.first() else {
+            return false;
+        };
+        if first.is_ascii_digit() {
+            return false;
+        }
+
+        value
+            .iter()
+            .copied()
+            .all(|c| CharClass::from(c).is_allowed_in_simple_symbol())
     }
 }
 
@@ -253,13 +259,12 @@ mod tests {
     }
 
     #[test]
-    fn keyword_accepts_only_nonempty_simple_symbol_bytes() {
+    fn keyword_accepts_only_nonempty_simple_symbol_bytes_not_starting_with_digit() {
         assert!(SmtKeyword::is_allowed(b"a-simple-symbol~!@$%^&*_-+=<>.?/"));
         assert!(SmtKeyword::is_allowed(b"quick"));
         assert!(SmtKeyword::is_allowed(b"let"));
-        // TODO: clarify whether this is allowed by the standard
-        assert!(SmtKeyword::is_allowed(b"0"));
 
+        assert!(!SmtKeyword::is_allowed(b"0"));
         assert!(!SmtKeyword::is_allowed(b""));
         // no whitespace, UTF-8, or non-UTF-8 bytes, unlike strings and symbols
         assert!(!SmtKeyword::is_allowed(
