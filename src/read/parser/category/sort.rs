@@ -91,7 +91,7 @@ impl<H: SmtHandler> SortParser<H> {
                     if matches!(kind, TokenKind::ParenClose) {
                         // closes the last level if it exists
                         if let Some(last_level) = levels.pop() {
-                            // if the sort comitted to having applications,
+                            // if the sort committed to having applications,
                             // there must be at least one of them
                             if last_level.applied.is_empty() {
                                 return Err(ParserError::category_error(

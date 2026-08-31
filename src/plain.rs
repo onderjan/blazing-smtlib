@@ -4,7 +4,6 @@ use crate::{String8, String8View, read::lexer::CharClass};
 
 /// SMT-LIB string content.
 ///
-///
 /// May be empty.
 /// Must contain only SMT-LIB printable or whitespace bytes.
 #[derive(Clone, PartialEq, Eq, Hash)]

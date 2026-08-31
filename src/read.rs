@@ -19,11 +19,11 @@ pub mod parser;
 pub enum SmtReadErrorKind<H: SmtHandler> {
     /// The error occurred when reading.
     Io(std::io::Error),
-    /// The error occured when lexing.
+    /// The error occurred when lexing.
     Lexer(LexerErrorKind),
-    /// The error occured when parsing.
+    /// The error occurred when parsing.
     Parser(CategoryParserErrorKind),
-    /// The error occured in the user handler.
+    /// The error occurred in the user handler.
     Handler(H::Error),
 }
 
@@ -41,7 +41,7 @@ impl<H: SmtHandler> SmtReadError<H> {
         &self.kind
     }
 
-    /// Span where the error occured.
+    /// Span where the error occurred.
     ///
     /// For I/O errors, the returned span is empty,
     /// indicating the position where the reading failed.
