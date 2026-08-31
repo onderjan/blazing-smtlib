@@ -660,6 +660,23 @@ mod tests {
     }
 
     #[test]
+    fn keyword_leading_digit() {
+        assert_error(
+            b":0",
+            LexerErrorKind::ForbiddenKeywordName,
+            (0, 1, 1),
+            (2, 1, 3),
+        );
+        // the leading digit is rejected even when more characters would follow
+        assert_error(
+            b":0abc",
+            LexerErrorKind::ForbiddenKeywordName,
+            (0, 1, 1),
+            (2, 1, 3),
+        );
+    }
+
+    #[test]
     fn keyword_reserved() {
         assert_error(
             b":let ",
@@ -954,6 +971,19 @@ mod tests {
             vec![
                 (TokenType::Symbol, (4, 2, 1), (5, 2, 2)),
                 (TokenType::EndOfFile, (5, 2, 2), (5, 2, 2)),
+            ]
+        );
+    }
+
+    #[test]
+    fn keyword_may_contain_digits_after_the_first_character() {
+        // only the leading digit is forbidden; later ones are ordinary keyword characters
+        assert_eq!(
+            token_spans(b":a0 :x1y2"),
+            vec![
+                (TokenType::Keyword, (0, 1, 1), (3, 1, 4)),
+                (TokenType::Keyword, (4, 1, 5), (9, 1, 10)),
+                (TokenType::EndOfFile, (9, 1, 10), (9, 1, 10)),
             ]
         );
     }
