@@ -220,8 +220,12 @@ mod tests {
     #[test]
     fn string_content_accepts_any_printable_or_whitespace_bytes() {
         assert!(SmtStringContent::is_allowed(b""));
-        assert!(SmtStringContent::is_allowed(b"a-simple-symbol~!@$%^&*_-+=<>.?/"));
-        assert!(SmtStringContent::is_allowed(b"A quick brown fox jumps over a lazy dog."));
+        assert!(SmtStringContent::is_allowed(
+            b"a-simple-symbol~!@$%^&*_-+=<>.?/"
+        ));
+        assert!(SmtStringContent::is_allowed(
+            b"A quick brown fox jumps over a lazy dog."
+        ));
         // any non-ASCII bytes are allowed, whether or not they form UTF-8
         assert!(SmtStringContent::is_allowed(
             "Příšerně žluťoučký kůň úpěl ďábelské ódy.".as_bytes()
@@ -236,7 +240,9 @@ mod tests {
     fn symbol_accepts_everything_a_string_does_except_pipe_and_backslash() {
         assert!(SmtSymbol::is_allowed(b""));
         assert!(SmtSymbol::is_allowed(b"a-simple-symbol~!@$%^&*_-+=<>.?/"));
-        assert!(SmtSymbol::is_allowed(b"A quick brown fox jumps over a lazy dog."));
+        assert!(SmtSymbol::is_allowed(
+            b"A quick brown fox jumps over a lazy dog."
+        ));
         assert!(SmtSymbol::is_allowed(
             "Příšerně žluťoučký kůň úpěl ďábelské ódy.".as_bytes()
         ));
@@ -256,7 +262,9 @@ mod tests {
 
         assert!(!SmtKeyword::is_allowed(b""));
         // no whitespace, UTF-8, or non-UTF-8 bytes, unlike strings and symbols
-        assert!(!SmtKeyword::is_allowed(b"A quick brown fox jumps over a lazy dog."));
+        assert!(!SmtKeyword::is_allowed(
+            b"A quick brown fox jumps over a lazy dog."
+        ));
         assert!(!SmtKeyword::is_allowed(
             "Příšerně žluťoučký kůň úpěl ďábelské ódy.".as_bytes()
         ));

@@ -14,4 +14,3 @@ pub use crate::plain::*;
 pub use crate::span::*;
 pub use crate::string::*;
 pub use crate::traits::*;
-
