@@ -237,8 +237,6 @@ mod tests {
         assert_span(&err, (11, 2, 1), (11, 2, 1));
     }
 
-    // TODO: fix tests
-    /*
     /// Reader that yields the given bytes and then fails.
     struct FailingReader<'a> {
         data: &'a [u8],
@@ -250,6 +248,19 @@ mod tests {
                 return Err(std::io::Error::other("simulated failure"));
             }
             self.data.read(buf)
+        }
+    }
+
+    impl BufRead for FailingReader<'_> {
+        fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
+            if self.data.is_empty() {
+                return Err(std::io::Error::other("simulated failure"));
+            }
+            Ok(self.data)
+        }
+
+        fn consume(&mut self, amt: usize) {
+            self.data = &self.data[amt..];
         }
     }
 
@@ -273,5 +284,4 @@ mod tests {
         assert!(matches!(err.kind(), SmtReadErrorKind::Io(_)));
         assert_span(&err, (0, 1, 1), (0, 1, 1));
     }
-    */
 }
