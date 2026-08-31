@@ -40,10 +40,6 @@ impl Default for IdentParser {
 impl<H: SmtHandler> CategoryParser<H> for IdentParser {
     type Result = SmtIdent;
 
-    fn init() -> Self {
-        Self::new()
-    }
-
     fn progress(
         self,
         _handler: &mut H,

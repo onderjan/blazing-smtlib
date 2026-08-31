@@ -47,10 +47,6 @@ impl<H: SmtHandler> Default for QualifiedIdentParser<H> {
 impl<H: SmtHandler> CategoryParser<H> for QualifiedIdentParser<H> {
     type Result = SmtQualifiedIdent<H>;
 
-    fn init() -> Self {
-        Self::new()
-    }
-
     fn progress(
         self,
         handler: &mut H,

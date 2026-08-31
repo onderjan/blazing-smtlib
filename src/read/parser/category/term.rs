@@ -38,7 +38,7 @@ pub struct TermParser<H: SmtHandler> {
 }
 
 impl<H: SmtHandler> TermParser<H> {
-    fn new() -> Self {
+    pub fn new() -> Self {
         TermParser {
             state: TermParserState::Start,
             levels: Vec::new(),
@@ -54,10 +54,6 @@ impl<H: SmtHandler> Default for TermParser<H> {
 
 impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
     type Result = H::Term;
-
-    fn init() -> Self {
-        Self::new()
-    }
 
     fn progress(
         self,
@@ -589,7 +585,7 @@ mod tests {
         input.extend(std::iter::repeat_n(b')', DEPTH));
 
         let mut handler = Counting::default();
-        let mut parser = TermParser::<Counting>::init();
+        let mut parser = TermParser::<Counting>::default();
         let mut finished = false;
         for token in Lexer::lex_all(&input).expect("valid input") {
             match parser.progress(&mut handler, token) {

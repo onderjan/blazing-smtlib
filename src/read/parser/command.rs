@@ -84,7 +84,7 @@ pub(crate) struct StaticCommandParser<H: CommandHandler, C: StandardCommand<H>>(
 
 impl<H: CommandHandler, C: StandardCommand<H>> StaticCommandParser<H, C> {
     pub fn new() -> Self {
-        Self(Some(C::Parser::init()))
+        Self(Some(C::Parser::default()))
     }
 }
 

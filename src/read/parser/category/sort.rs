@@ -45,10 +45,6 @@ impl<H: SmtHandler> Default for SortParser<H> {
 impl<H: SmtHandler> CategoryParser<H> for SortParser<H> {
     type Result = H::Sort;
 
-    fn init() -> Self {
-        Self::new()
-    }
-
     fn progress(
         self,
         handler: &mut H,
@@ -369,7 +365,7 @@ mod tests {
         }
 
         let mut handler = Counting::default();
-        let mut parser = SortParser::<Counting>::init();
+        let mut parser = SortParser::<Counting>::default();
         let mut finished = false;
         for token in Lexer::lex_all(&input).expect("valid input") {
             match parser.progress(&mut handler, token) {

@@ -30,10 +30,6 @@ impl<H: SmtHandler> Default for SExprParser<H> {
 impl<H: SmtHandler> CategoryParser<H> for SExprParser<H> {
     type Result = H::SExpr;
 
-    fn init() -> Self {
-        Self::new()
-    }
-
     fn progress(
         self,
         handler: &mut H,
@@ -252,7 +248,7 @@ mod tests {
         input.extend(std::iter::repeat_n(b')', DEPTH));
 
         let mut handler = Counting::default();
-        let mut parser = SExprParser::<Counting>::init();
+        let mut parser = SExprParser::<Counting>::default();
         let mut finished = false;
         for token in Lexer::lex_all(&input).expect("valid input") {
             match parser.progress(&mut handler, token) {

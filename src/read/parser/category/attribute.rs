@@ -21,12 +21,20 @@ pub enum ClosedAttributeParser<H: SmtHandler> {
     BeforeClose(H::Attribute),
 }
 
-impl<H: SmtHandler> CategoryParser<H> for ClosedAttributeParser<H> {
-    type Result = H::Attribute;
-
-    fn init() -> Self {
+impl<H: SmtHandler> ClosedAttributeParser<H> {
+    pub fn new() -> Self {
         Self::Start
     }
+}
+
+impl<H: SmtHandler> Default for ClosedAttributeParser<H> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<H: SmtHandler> CategoryParser<H> for ClosedAttributeParser<H> {
+    type Result = H::Attribute;
 
     fn progress(
         self,

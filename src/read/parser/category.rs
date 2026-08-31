@@ -13,13 +13,8 @@ pub mod s_expr;
 pub mod sort;
 pub mod term;
 
-pub trait CategoryParser<H: SmtHandler>
-where
-    Self: std::marker::Sized,
-{
+pub trait CategoryParser<H: SmtHandler>: Default {
     type Result;
-
-    fn init() -> Self;
 
     fn progress(
         self,
@@ -76,14 +71,24 @@ pub enum PairParser<H: SmtHandler, P1: CategoryParser<H>, P2: CategoryParser<H>>
     Second(P1::Result, P2),
 }
 
+impl<H: SmtHandler, P1: CategoryParser<H>, P2: CategoryParser<H>> PairParser<H, P1, P2> {
+    pub fn new() -> Self {
+        Self::First(P1::default())
+    }
+}
+
+impl<H: SmtHandler, P1: CategoryParser<H>, P2: CategoryParser<H>> Default
+    for PairParser<H, P1, P2>
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<H: SmtHandler, P1: CategoryParser<H>, P2: CategoryParser<H>> CategoryParser<H>
     for PairParser<H, P1, P2>
 {
     type Result = (P1::Result, P2::Result);
-
-    fn init() -> Self {
-        Self::First(P1::init())
-    }
 
     fn progress(
         self,
@@ -93,7 +98,7 @@ impl<H: SmtHandler, P1: CategoryParser<H>, P2: CategoryParser<H>> CategoryParser
         let result = match self {
             PairParser::First(parser) => match parser.progress(handler, token)? {
                 ControlFlow::Continue(parser) => Self::First(parser),
-                ControlFlow::Break(first) => Self::Second(first, P2::init()),
+                ControlFlow::Break(first) => Self::Second(first, P2::default()),
             },
             PairParser::Second(first, parser) => match parser.progress(handler, token)? {
                 ControlFlow::Continue(parser) => Self::Second(first, parser),
@@ -109,12 +114,20 @@ pub enum ClosedParser<H: SmtHandler, P: CategoryParser<H>> {
     BeforeClose(P::Result),
 }
 
+impl<H: SmtHandler, P: CategoryParser<H>> ClosedParser<H, P> {
+    pub fn new() -> Self {
+        Self::Inner(P::default())
+    }
+}
+
+impl<H: SmtHandler, P: CategoryParser<H>> Default for ClosedParser<H, P> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for ClosedParser<H, P> {
     type Result = P::Result;
-
-    fn init() -> Self {
-        Self::Inner(P::init())
-    }
 
     fn progress(
         self,
@@ -145,12 +158,20 @@ pub enum OpenClosedParser<H: SmtHandler, P: CategoryParser<H>> {
     AfterOpen(ClosedParser<H, P>),
 }
 
-impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for OpenClosedParser<H, P> {
-    type Result = P::Result;
-
-    fn init() -> Self {
+impl<H: SmtHandler, P: CategoryParser<H>> OpenClosedParser<H, P> {
+    pub fn new() -> Self {
         Self::BeforeOpen
     }
+}
+
+impl<H: SmtHandler, P: CategoryParser<H>> Default for OpenClosedParser<H, P> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for OpenClosedParser<H, P> {
+    type Result = P::Result;
 
     fn progress(
         self,
@@ -161,7 +182,7 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for OpenClosedParser
         let result = match self {
             OpenClosedParser::BeforeOpen => {
                 if matches!(token.kind(), TokenKind::ParenOpen) {
-                    Self::AfterOpen(ClosedParser::init())
+                    Self::AfterOpen(ClosedParser::default())
                 } else {
                     return Err(ParserError::category_error(
                         CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenOpen]),
@@ -208,10 +229,6 @@ impl<H: SmtHandler, P: CategoryParser<H>> Default for MultipleParser<H, P> {
 impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for MultipleParser<H, P> {
     type Result = Vec<P::Result>;
 
-    fn init() -> Self {
-        Self::BeforeOpen
-    }
-
     fn progress(
         self,
         handler: &mut H,
@@ -243,7 +260,7 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for MultipleParser<H
                         if matches!(token.kind(), TokenKind::ParenClose) {
                             return Ok(ControlFlow::Break(results));
                         } else {
-                            P::init()
+                            P::default()
                         }
                     }
                 };
@@ -268,12 +285,20 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for MultipleParser<H
 
 pub struct SymbolParser;
 
-impl<H: SmtHandler> CategoryParser<H> for SymbolParser {
-    type Result = SmtSymbol;
-
-    fn init() -> Self {
+impl SymbolParser {
+    pub fn new() -> Self {
         Self
     }
+}
+
+impl Default for SymbolParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<H: SmtHandler> CategoryParser<H> for SymbolParser {
+    type Result = SmtSymbol;
 
     fn progress(
         self,
@@ -294,12 +319,20 @@ impl<H: SmtHandler> CategoryParser<H> for SymbolParser {
 
 pub struct CloseParenParser;
 
-impl<H: SmtHandler> CategoryParser<H> for CloseParenParser {
-    type Result = ();
-
-    fn init() -> Self {
+impl CloseParenParser {
+    pub fn new() -> Self {
         Self
     }
+}
+
+impl Default for CloseParenParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<H: SmtHandler> CategoryParser<H> for CloseParenParser {
+    type Result = ();
 
     fn progress(
         self,
@@ -538,7 +571,7 @@ pub(super) mod tests {
         let mut tokens = Lexer::lex_all(input)
             .expect("test input must lex")
             .into_iter();
-        let mut parser = P::init();
+        let mut parser = P::default();
         for token in tokens.by_ref() {
             match parser.progress(handler, token) {
                 Ok(ControlFlow::Continue(next)) => parser = next,
