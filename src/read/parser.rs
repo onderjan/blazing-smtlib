@@ -429,4 +429,22 @@ mod tests {
         // both closing parentheses are consumed; the next command still parses
         assert!(parse(b"(set-info :pattern ((f x))) (check-sat)").is_ok());
     }
+    // --- Behavior after (exit) ---
+
+    #[test]
+    fn everything_after_exit_is_discarded() {
+        // after (exit), the parser ignores all further tokens, even non-command
+        // garbage and unbalanced parentheses: callers may keep feeding tokens
+        assert!(parse(b"(exit) x ) ( 1 (check-sat").is_ok());
+    }
+
+    #[test]
+    fn commands_after_exit_are_not_handled() {
+        let mut handler = Recording::default();
+        // `(other)` would be rejected by the handler before the exit,
+        // but after it, the handler must not even be consulted
+        parse_with(&mut handler, b"(my-assert x) (exit) (other)")
+            .unwrap_or_else(|err| panic!("unexpected error at {:?}", err.span()));
+        assert_eq!(handler.commands, ["my-assert"]);
+    }
 }

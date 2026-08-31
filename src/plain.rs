@@ -218,68 +218,74 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_stringlike_newtypes() {
-        // TODO: clarify whether this is allowed by the standard
-        assert!(SmtKeyword::is_allowed(b"0"));
-        assert!(SmtKeyword::is_allowed(b"let"));
-
-        // The difference between SmtStringContent and SmtSymbol is
-        // whether they accept backslashes and pipes.
+    fn string_content_accepts_any_printable_or_whitespace_bytes() {
+        assert!(SmtStringContent::is_allowed(b""));
+        assert!(SmtStringContent::is_allowed(b"a-simple-symbol~!@$%^&*_-+=<>.?/"));
+        assert!(SmtStringContent::is_allowed(b"A quick brown fox jumps over a lazy dog."));
+        // any non-ASCII bytes are allowed, whether or not they form UTF-8
+        assert!(SmtStringContent::is_allowed(
+            "Příšerně žluťoučký kůň úpěl ďábelské ódy.".as_bytes()
+        ));
+        assert!(SmtStringContent::is_allowed(b"\xFF"));
+        // unlike symbols, string content may contain pipes and backslashes
         assert!(SmtStringContent::is_allowed(b"a|b"));
         assert!(SmtStringContent::is_allowed(b"a\\b"));
+    }
+
+    #[test]
+    fn symbol_accepts_everything_a_string_does_except_pipe_and_backslash() {
+        assert!(SmtSymbol::is_allowed(b""));
+        assert!(SmtSymbol::is_allowed(b"a-simple-symbol~!@$%^&*_-+=<>.?/"));
+        assert!(SmtSymbol::is_allowed(b"A quick brown fox jumps over a lazy dog."));
+        assert!(SmtSymbol::is_allowed(
+            "Příšerně žluťoučký kůň úpěl ďábelské ódy.".as_bytes()
+        ));
+        assert!(SmtSymbol::is_allowed(b"\xFF"));
+
         assert!(!SmtSymbol::is_allowed(b"a|b"));
         assert!(!SmtSymbol::is_allowed(b"a\\b"));
+    }
 
-        // Test acceptance of empty string.
-        // String literals and symbols accept it, keywords reject.
-        assert!(SmtStringContent::is_allowed(b""));
-        assert!(SmtSymbol::is_allowed(b""));
-        assert!(!SmtKeyword::is_allowed(b""));
-
-        // ASCII / UTF-8 / non-UTF-8 acceptance tests.
-        // Keywords do not accept UTF-8 / non-UTF-8, even without spaces.
-        let simple = b"a-simple-symbol~!@$%^&*_-+=<>.?/";
-        let quick = b"A quick brown fox jumps over a lazy dog.";
-        let quick_utf8 = "Příšerně žluťoučký kůň úpěl ďábelské ódy.".as_bytes();
-        let non_utf8 = b"\xFF";
-        assert!(SmtStringContent::is_allowed(simple));
-        assert!(SmtStringContent::is_allowed(quick));
-        assert!(SmtStringContent::is_allowed(quick_utf8));
-        assert!(SmtStringContent::is_allowed(non_utf8));
-
-        assert!(SmtSymbol::is_allowed(simple));
-        assert!(SmtSymbol::is_allowed(quick));
-        assert!(SmtSymbol::is_allowed(quick_utf8));
-        assert!(SmtSymbol::is_allowed(non_utf8));
-
-        assert!(SmtKeyword::is_allowed(simple));
+    #[test]
+    fn keyword_accepts_only_nonempty_simple_symbol_bytes() {
+        assert!(SmtKeyword::is_allowed(b"a-simple-symbol~!@$%^&*_-+=<>.?/"));
         assert!(SmtKeyword::is_allowed(b"quick"));
-        assert!(!SmtKeyword::is_allowed(quick));
-        assert!(!SmtKeyword::is_allowed(quick_utf8));
-        assert!(!SmtKeyword::is_allowed("žluťoučký".as_bytes()));
-        assert!(!SmtKeyword::is_allowed(non_utf8));
+        assert!(SmtKeyword::is_allowed(b"let"));
+        // TODO: clarify whether this is allowed by the standard
+        assert!(SmtKeyword::is_allowed(b"0"));
 
-        // DEL should never be accepted.
+        assert!(!SmtKeyword::is_allowed(b""));
+        // no whitespace, UTF-8, or non-UTF-8 bytes, unlike strings and symbols
+        assert!(!SmtKeyword::is_allowed(b"A quick brown fox jumps over a lazy dog."));
+        assert!(!SmtKeyword::is_allowed(
+            "Příšerně žluťoučký kůň úpěl ďábelské ódy.".as_bytes()
+        ));
+        assert!(!SmtKeyword::is_allowed("žluťoučký".as_bytes()));
+        assert!(!SmtKeyword::is_allowed(b"\xFF"));
+    }
+
+    #[test]
+    fn del_is_rejected_everywhere() {
         assert!(!SmtStringContent::is_allowed(b"a\x7Fb"));
         assert!(!SmtSymbol::is_allowed(b"a\x7Fb"));
         assert!(!SmtKeyword::is_allowed(b"a\x7Fb"));
     }
 
     #[test]
-    fn test_digitlike_newtypes() {
-        // All should reject empty string.
+    fn digit_kinds_reject_the_empty_string_and_accept_zero() {
         assert!(!SmtNumeral::is_allowed(b""));
         assert!(!SmtDigits::is_allowed(b""));
         assert!(!SmtHexDigits::is_allowed(b""));
         assert!(!SmtBinDigits::is_allowed(b""));
 
-        // All should accept zero.
         assert!(SmtNumeral::is_allowed(b"0"));
         assert!(SmtDigits::is_allowed(b"0"));
         assert!(SmtHexDigits::is_allowed(b"0"));
         assert!(SmtBinDigits::is_allowed(b"0"));
+    }
 
-        // All except numeral should accept leading zeros.
+    #[test]
+    fn only_numeral_rejects_leading_zeros() {
         assert!(!SmtNumeral::is_allowed(b"00"));
         assert!(!SmtNumeral::is_allowed(b"01"));
         assert!(SmtDigits::is_allowed(b"00"));
@@ -288,12 +294,17 @@ mod tests {
         assert!(SmtHexDigits::is_allowed(b"01"));
         assert!(SmtBinDigits::is_allowed(b"00"));
         assert!(SmtBinDigits::is_allowed(b"01"));
+    }
 
-        // Other tests.
+    #[test]
+    fn numeral_accepts_numbers_without_leading_zeros() {
         assert!(SmtNumeral::is_allowed(b"10"));
         assert!(SmtNumeral::is_allowed(b"1024"));
         assert!(SmtNumeral::is_allowed(b"70"));
+    }
 
+    #[test]
+    fn digit_kinds_accept_only_their_own_digits() {
         assert!(SmtDigits::is_allowed(b"1024"));
         assert!(SmtDigits::is_allowed(b"077"));
         assert!(!SmtDigits::is_allowed(b"aF"));
@@ -310,7 +321,7 @@ mod tests {
     }
 
     #[test]
-    fn test_decimal() {
+    fn decimals_with_trailing_fractional_zeros_are_distinct() {
         fn dec(whole_part: &[u8], fractional_part: &[u8]) -> SmtDecimal {
             SmtDecimal {
                 whole_part: SmtNumeral::new(whole_part.to_vec())
