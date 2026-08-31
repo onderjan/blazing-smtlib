@@ -74,6 +74,16 @@ impl<'a, H: CommandHandler> Parser<'a, H> {
         }
     }
 
+    pub fn parse_tokens(&mut self, tokens: Vec<Token>) -> Result<(), ParserError<H>> {
+        for token in tokens {
+            match self.parse_token(token) {
+                Ok(()) => {}
+                Err(err) => return Err(err),
+            }
+        }
+        Ok(())
+    }
+
     pub fn parse_token(&mut self, token: Token) -> Result<(), ParserError<H>> {
         let span = token.span();
         let state = std::mem::replace(&mut self.state, ParserState::AwaitingCommand);
