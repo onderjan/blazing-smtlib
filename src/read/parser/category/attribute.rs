@@ -9,7 +9,7 @@ use crate::{
     },
     read::parser::{
         CategoryParserError, ParserError,
-        category::{CategoryParser, expect_close_parenthesis},
+        category::{CategoryParser, expect_close_paren},
     },
     token::{Token, TokenKind, TokenType},
 };
@@ -103,7 +103,7 @@ impl<H: SmtHandler> CategoryParser<H> for ClosedAttributeParser<H> {
                 }
             }
             ClosedAttributeParser::BeforeClose(attribute) => {
-                expect_close_parenthesis(token)?;
+                expect_close_paren(token)?;
                 Ok(ControlFlow::Break(attribute))
             }
         }

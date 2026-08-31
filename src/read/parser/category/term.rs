@@ -3,7 +3,10 @@ use std::ops::ControlFlow;
 use crate::{
     SmtApplication, SmtHandler, SmtQualifiedIdent, SmtSymbol, SmtTerm,
     parser::{
-        category::{CategoryParserErrorKind, handle_err, parse_special_constant},
+        category::{
+            CategoryParserErrorKind, expect_close_paren, expect_open_paren, expect_symbol,
+            handle_err, parse_special_constant,
+        },
         qualified_ident::QualifiedIdentParser,
     },
     read::parser::{ParserError, category::CategoryParser},
@@ -287,40 +290,6 @@ impl<H: SmtHandler> TermParser<H> {
             }
         };
         Ok(Self { state, levels })
-    }
-}
-
-fn expect_open_paren<H: SmtHandler>(token: Token) -> Result<(), ParserError<H>> {
-    if matches!(token.kind(), TokenKind::ParenOpen) {
-        Ok(())
-    } else {
-        Err(ParserError::category_error(
-            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenOpen]),
-            token.span(),
-        ))
-    }
-}
-
-fn expect_close_paren<H: SmtHandler>(token: Token) -> Result<(), ParserError<H>> {
-    if matches!(token.kind(), TokenKind::ParenClose) {
-        Ok(())
-    } else {
-        Err(ParserError::category_error(
-            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose]),
-            token.span(),
-        ))
-    }
-}
-
-fn expect_symbol<H: SmtHandler>(token: Token) -> Result<SmtSymbol, ParserError<H>> {
-    let span = token.span();
-    if let TokenKind::Symbol(symbol) = token.into_kind() {
-        Ok(symbol)
-    } else {
-        Err(ParserError::category_error(
-            CategoryParserErrorKind::ExpectedToken(&[TokenType::Symbol]),
-            span,
-        ))
     }
 }
 
