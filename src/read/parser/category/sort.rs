@@ -343,7 +343,7 @@ mod tests {
         fn end_let(&mut self, _term: ()) -> Result<(), Infallible> {
             Ok(())
         }
-        fn handle_s_expr(&mut self, _expr: SmtSExpr<()>) -> Result<(), Infallible> {
+        fn handle_s_expr(&mut self, _expr: SmtSExpr<Self>) -> Result<(), Infallible> {
             Ok(())
         }
         fn handle_attribute(

@@ -1,9 +1,9 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtApplication, SmtHandler, SmtQualifiedIdent, SmtSpecialConstant, SmtSymbol, SmtTerm,
+    SmtApplication, SmtHandler, SmtQualifiedIdent, SmtSymbol, SmtTerm,
     parser::{
-        category::{CategoryParserErrorKind, handle_err},
+        category::{CategoryParserErrorKind, handle_err, parse_special_constant},
         qualified_ident::QualifiedIdentParser,
     },
     read::parser::{ParserError, category::CategoryParser},
@@ -288,19 +288,6 @@ impl<H: SmtHandler> TermParser<H> {
         };
         Ok(Self { state, levels })
     }
-}
-
-fn parse_special_constant(token: Token) -> Result<SmtSpecialConstant, Token> {
-    let span = token.span();
-    let constant = match token.into_kind() {
-        TokenKind::Numeral(value) => SmtSpecialConstant::Numeral(value),
-        TokenKind::Decimal(decimal) => SmtSpecialConstant::Decimal(decimal),
-        TokenKind::Hexadecimal(value) => SmtSpecialConstant::Hexadecimal(value),
-        TokenKind::Binary(value) => SmtSpecialConstant::Binary(value),
-        TokenKind::String(string) => SmtSpecialConstant::String(string),
-        kind => return Err(Token::new(kind, span)),
-    };
-    Ok(constant)
 }
 
 fn expect_open_paren<H: SmtHandler>(token: Token) -> Result<(), ParserError<H>> {
@@ -609,7 +596,7 @@ mod tests {
         fn end_let(&mut self, _term: ()) -> Result<(), Infallible> {
             Ok(())
         }
-        fn handle_s_expr(&mut self, _expr: SmtSExpr<()>) -> Result<(), Infallible> {
+        fn handle_s_expr(&mut self, _expr: SmtSExpr<Self>) -> Result<(), Infallible> {
             Ok(())
         }
         fn handle_attribute(

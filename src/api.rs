@@ -178,12 +178,12 @@ pub struct SmtFunctionSignature<S> {
 
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
-pub enum SmtSExpr<E> {
+pub enum SmtSExpr<H: SmtHandler + ?Sized> {
     SpecialConstant(SmtSpecialConstant),
     Symbol(SmtSymbol),
     Reserved(Reserved),
     Keyword(SmtKeyword),
-    Exprs(Vec<E>),
+    SExprs(Vec<H::SExpr>),
 }
 
 pub trait SmtHandler: 'static {
@@ -199,7 +199,7 @@ pub trait SmtHandler: 'static {
     fn start_let(&mut self, _bindings: Vec<(SmtSymbol, Self::Term)>) -> Result<(), Self::Error>;
     fn end_let(&mut self, _term: Self::Term) -> Result<Self::Term, Self::Error>;
 
-    fn handle_s_expr(&mut self, expr: SmtSExpr<Self::SExpr>) -> Result<Self::SExpr, Self::Error>;
+    fn handle_s_expr(&mut self, expr: SmtSExpr<Self>) -> Result<Self::SExpr, Self::Error>;
     fn handle_attribute(
         &mut self,
         name: SmtKeyword,
@@ -291,7 +291,7 @@ impl SmtHandler for CheckStandardSyntax {
         Ok(())
     }
 
-    fn handle_s_expr(&mut self, _expr: SmtSExpr<Self::SExpr>) -> Result<Self::SExpr, Self::Error> {
+    fn handle_s_expr(&mut self, _expr: SmtSExpr<Self>) -> Result<Self::SExpr, Self::Error> {
         Ok(())
     }
 

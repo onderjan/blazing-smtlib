@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtHandler, SmtSpan, SmtSymbol,
+    SmtHandler, SmtSpan, SmtSpecialConstant, SmtSymbol,
     read::parser::ParserError,
     token::{Token, TokenKind, TokenType},
 };
@@ -9,6 +9,7 @@ use crate::{
 pub mod attribute;
 pub mod ident;
 pub mod qualified_ident;
+pub mod s_expr;
 pub mod sort;
 pub mod term;
 
@@ -190,6 +191,25 @@ pub enum MultipleParser<H: SmtHandler, P: CategoryParser<H>> {
     },
 }
 
+impl<H: SmtHandler, P: CategoryParser<H>> MultipleParser<H, P> {
+    pub fn new() -> Self {
+        Self::BeforeOpen
+    }
+
+    pub fn after_open_paren() -> Self {
+        Self::Normal {
+            results: Vec::new(),
+            parser: None,
+        }
+    }
+}
+
+impl<H: SmtHandler, P: CategoryParser<H>> Default for MultipleParser<H, P> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for MultipleParser<H, P> {
     type Result = Vec<P::Result>;
 
@@ -250,6 +270,7 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for MultipleParser<H
         }
     }
 }
+
 pub struct SymbolParser;
 
 impl<H: SmtHandler> CategoryParser<H> for SymbolParser {
@@ -322,6 +343,19 @@ fn handle_err<O, H: SmtHandler>(
         Ok(ok) => Ok(ok),
         Err(err) => Err(ParserError::handler_error(err, span)),
     }
+}
+
+fn parse_special_constant(token: Token) -> Result<SmtSpecialConstant, Token> {
+    let span = token.span();
+    let constant = match token.into_kind() {
+        TokenKind::Numeral(value) => SmtSpecialConstant::Numeral(value),
+        TokenKind::Decimal(decimal) => SmtSpecialConstant::Decimal(decimal),
+        TokenKind::Hexadecimal(value) => SmtSpecialConstant::Hexadecimal(value),
+        TokenKind::Binary(value) => SmtSpecialConstant::Binary(value),
+        TokenKind::String(string) => SmtSpecialConstant::String(string),
+        kind => return Err(Token::new(kind, span)),
+    };
+    Ok(constant)
 }
 
 #[cfg(test)]
@@ -438,13 +472,13 @@ pub(super) mod tests {
             Ok(format!("(let {bindings} {term})"))
         }
 
-        fn handle_s_expr(&mut self, expr: SmtSExpr<String>) -> Result<String, Infallible> {
+        fn handle_s_expr(&mut self, expr: SmtSExpr<Self>) -> Result<String, Infallible> {
             Ok(match expr {
                 SmtSExpr::SpecialConstant(constant) => render_constant(&constant),
                 SmtSExpr::Symbol(symbol) => text(symbol.as_slice()),
                 SmtSExpr::Reserved(reserved) => format!("{reserved:?}"),
                 SmtSExpr::Keyword(keyword) => format!(":{}", text(keyword.as_slice())),
-                SmtSExpr::Exprs(exprs) => render_list(&exprs),
+                SmtSExpr::SExprs(exprs) => render_list(&exprs),
             })
         }
 

@@ -273,7 +273,7 @@ mod tests {
         fn end_let(&mut self, _term: ()) -> Result<(), Self::Error> {
             Ok(())
         }
-        fn handle_s_expr(&mut self, _expr: SmtSExpr<()>) -> Result<(), Self::Error> {
+        fn handle_s_expr(&mut self, _expr: SmtSExpr<Self>) -> Result<(), Self::Error> {
             Ok(())
         }
         fn handle_attribute(

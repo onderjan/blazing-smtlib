@@ -2,7 +2,11 @@ use std::ops::ControlFlow;
 
 use crate::{
     SmtAttributeValue, SmtHandler, SmtKeyword, SmtSpecialConstant,
-    parser::category::CategoryParserErrorKind,
+    parser::{
+        MultipleParser,
+        category::{CategoryParserErrorKind, handle_err},
+        s_expr::SExprParser,
+    },
     read::parser::{
         CategoryParserError, ParserError,
         category::{CategoryParser, expect_close_parenthesis},
@@ -12,7 +16,8 @@ use crate::{
 
 pub enum ClosedAttributeParser<H: SmtHandler> {
     Start,
-    Key(SmtKeyword),
+    Name(SmtKeyword),
+    SExprsValue(SmtKeyword, MultipleParser<H, SExprParser<H>>),
     BeforeClose(H::Attribute),
 }
 
@@ -35,10 +40,9 @@ impl<H: SmtHandler> CategoryParser<H> for ClosedAttributeParser<H> {
                     let kind = CategoryParserErrorKind::ExpectedToken(&[TokenType::Keyword]);
                     return Err(CategoryParserError::new(kind, token_span).into());
                 };
-                Ok(ControlFlow::Continue(ClosedAttributeParser::Key(keyword)))
+                Ok(ControlFlow::Continue(ClosedAttributeParser::Name(keyword)))
             }
-
-            ClosedAttributeParser::Key(keyword) => {
+            ClosedAttributeParser::Name(name) => {
                 let value = match token.into_kind() {
                     TokenKind::Numeral(value) => {
                         SmtAttributeValue::SpecialConstant(SmtSpecialConstant::Numeral(value))
@@ -57,14 +61,18 @@ impl<H: SmtHandler> CategoryParser<H> for ClosedAttributeParser<H> {
                     }
                     TokenKind::Symbol(symbol) => SmtAttributeValue::Symbol(symbol),
                     TokenKind::ParenOpen => {
-                        todo!("Attribute value SExpr")
+                        // starts a list of sexprs ending with closing parenthesis
+                        let parser = MultipleParser::after_open_paren();
+                        return Ok(ControlFlow::Continue(ClosedAttributeParser::SExprsValue(
+                            name, parser,
+                        )));
                     }
                     TokenKind::ParenClose => {
-                        // just an attribute name, return token after handling
-                        return match handler.handle_attribute(keyword, None) {
-                            Ok(attribute) => Ok(ControlFlow::Break(attribute)),
-                            Err(err) => Err(ParserError::handler_error(err, token_span)),
-                        };
+                        // just an attribute name, return after handling
+                        return Ok(ControlFlow::Break(handle_err(
+                            handler.handle_attribute(name, None),
+                            token_span,
+                        )?));
                     }
                     _ => {
                         let kind = CategoryParserErrorKind::ExpectedAttribute;
@@ -72,9 +80,26 @@ impl<H: SmtHandler> CategoryParser<H> for ClosedAttributeParser<H> {
                     }
                 };
 
-                match handler.handle_attribute(keyword, Some(value)) {
+                match handler.handle_attribute(name, Some(value)) {
                     Ok(attribute) => Ok(ControlFlow::Continue(Self::BeforeClose(attribute))),
                     Err(err) => Err(ParserError::handler_error(err, token_span)),
+                }
+            }
+            ClosedAttributeParser::SExprsValue(name, parser) => {
+                match parser.progress(handler, token)? {
+                    ControlFlow::Continue(parser) => Ok(ControlFlow::Continue(
+                        ClosedAttributeParser::SExprsValue(name, parser),
+                    )),
+                    ControlFlow::Break(s_exprs) => {
+                        // the s-expr closing parenthesis was consumed
+                        // but the attribute closing parenthesis still waits to be consumed
+                        let value = SmtAttributeValue::Exprs(s_exprs);
+                        let attribute =
+                            handle_err(handler.handle_attribute(name, Some(value)), token_span)?;
+                        Ok(ControlFlow::Continue(ClosedAttributeParser::BeforeClose(
+                            attribute,
+                        )))
+                    }
                 }
             }
             ClosedAttributeParser::BeforeClose(attribute) => {
