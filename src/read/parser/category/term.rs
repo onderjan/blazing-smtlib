@@ -234,7 +234,7 @@ impl<H: SmtHandler> TermParser<H> {
 
             kind => {
                 // handle special constants
-                match parse_special_constant(Token::new(kind, span)) {
+                match parse_special_constant(kind) {
                     Ok(special_constant) => {
                         let term = handle_err(
                             handler.handle_term(SmtTerm::SpecialConstant(special_constant)),

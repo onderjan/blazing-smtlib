@@ -363,15 +363,14 @@ fn handle_err<O, H: SmtHandler>(
     }
 }
 
-fn parse_special_constant(token: Token) -> Result<SmtSpecialConstant, Token> {
-    let span = token.span();
-    let constant = match token.into_kind() {
+fn parse_special_constant(kind: TokenKind) -> Result<SmtSpecialConstant, TokenKind> {
+    let constant = match kind {
         TokenKind::Numeral(value) => SmtSpecialConstant::Numeral(value),
         TokenKind::Decimal(decimal) => SmtSpecialConstant::Decimal(decimal),
         TokenKind::Hexadecimal(value) => SmtSpecialConstant::Hexadecimal(value),
         TokenKind::Binary(value) => SmtSpecialConstant::Binary(value),
         TokenKind::String(string) => SmtSpecialConstant::String(string),
-        kind => return Err(Token::new(kind, span)),
+        kind => return Err(kind),
     };
     Ok(constant)
 }

@@ -1,10 +1,10 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtAttributeValue, SmtHandler, SmtKeyword, SmtSpecialConstant,
+    SmtAttributeValue, SmtHandler, SmtKeyword,
     parser::{
         MultipleParser,
-        category::{CategoryParserErrorKind, handle_err},
+        category::{CategoryParserErrorKind, handle_err, parse_special_constant},
         s_expr::SExprParser,
     },
     read::parser::{
@@ -44,21 +44,6 @@ impl<H: SmtHandler> CategoryParser<H> for ClosedAttributeParser<H> {
             }
             ClosedAttributeParser::Name(name) => {
                 let value = match token.into_kind() {
-                    TokenKind::Numeral(value) => {
-                        SmtAttributeValue::SpecialConstant(SmtSpecialConstant::Numeral(value))
-                    }
-                    TokenKind::Decimal(decimal) => {
-                        SmtAttributeValue::SpecialConstant(SmtSpecialConstant::Decimal(decimal))
-                    }
-                    TokenKind::Hexadecimal(value) => {
-                        SmtAttributeValue::SpecialConstant(SmtSpecialConstant::Hexadecimal(value))
-                    }
-                    TokenKind::Binary(value) => {
-                        SmtAttributeValue::SpecialConstant(SmtSpecialConstant::Binary(value))
-                    }
-                    TokenKind::String(string) => {
-                        SmtAttributeValue::SpecialConstant(SmtSpecialConstant::String(string))
-                    }
                     TokenKind::Symbol(symbol) => SmtAttributeValue::Symbol(symbol),
                     TokenKind::ParenOpen => {
                         // starts a list of sexprs ending with closing parenthesis
@@ -74,9 +59,13 @@ impl<H: SmtHandler> CategoryParser<H> for ClosedAttributeParser<H> {
                             token_span,
                         )?));
                     }
-                    _ => {
-                        let kind = CategoryParserErrorKind::ExpectedAttribute;
-                        return Err(CategoryParserError::new(kind, token_span).into());
+                    kind => {
+                        if let Ok(special_constant) = parse_special_constant(kind) {
+                            SmtAttributeValue::SpecialConstant(special_constant)
+                        } else {
+                            let kind = CategoryParserErrorKind::ExpectedAttribute;
+                            return Err(CategoryParserError::new(kind, token_span).into());
+                        }
                     }
                 };
 

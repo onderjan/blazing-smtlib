@@ -62,18 +62,19 @@ impl<H: SmtHandler> SExprParser<H> {
         handler: &mut H,
         token: Token,
     ) -> Result<SExprProgressOk<H, Self>, ParserError<H>> {
-        let span = token.span();
         let mut levels = self.levels;
 
-        let token = match parse_special_constant(token) {
+        let span = token.span();
+        let kind = token.into_kind();
+        let kind = match parse_special_constant(kind) {
             Ok(special_constant) => {
                 let s_expr = SmtSExpr::SpecialConstant(special_constant);
                 return Self::break_with(handler, levels, s_expr, span);
             }
-            Err(token) => token,
+            Err(kind) => kind,
         };
 
-        match token.into_kind() {
+        match kind {
             TokenKind::Symbol(symbol) => {
                 let s_expr = SmtSExpr::Symbol(symbol);
                 Self::break_with(handler, levels, s_expr, span)
@@ -167,7 +168,10 @@ mod tests {
         assert_eq!(parse_all::<P>(b"((a) (b c) () 1)"), "((a) (b c) () 1)");
         // reserved words and keywords need no special treatment inside lists
         assert_eq!(parse_all::<P>(b"(let ((x 1)) x)"), "(let ((x 1)) x)");
-        assert_eq!(parse_all::<P>(b"(as x (_ BitVec 8))"), "(as x (_ BitVec 8))");
+        assert_eq!(
+            parse_all::<P>(b"(as x (_ BitVec 8))"),
+            "(as x (_ BitVec 8))"
+        );
         assert_eq!(parse_all::<P>(b"(:status sat)"), "(:status sat)");
     }
 
