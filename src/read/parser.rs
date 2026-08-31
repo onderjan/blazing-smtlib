@@ -394,6 +394,28 @@ mod tests {
     }
 
     #[test]
+    fn trivial_commands_reach_their_handler_methods() {
+        let mut handler = Recording::default();
+        parse_with(
+            &mut handler,
+            b"(echo \"hi\") (get-option :opt) (set-option :produce-models true) \
+              (get-info :name) (reset) (reset-assertions)",
+        )
+        .unwrap_or_else(|err| panic!("unexpected error at {:?}", err.span()));
+        assert_eq!(
+            handler.commands,
+            [
+                "echo",
+                "get-option",
+                "set-option",
+                "get-info",
+                "reset",
+                "reset-assertions"
+            ]
+        );
+    }
+
+    #[test]
     fn define_fun_start_and_end_surround_the_body() {
         let mut handler = Recording::default();
         parse_with(&mut handler, b"(define-fun f ((x Int)) Int x) (check-sat)")

@@ -431,4 +431,69 @@ mod tests {
         let handler = assert_handler_error(b"(define-fun f () Int boom)", "exploding body", 21, 25);
         assert_eq!(handler.events, ["start f () Int"]);
     }
+
+    #[test]
+    fn trivial_command_errors_point_at_offending_token() {
+        // echo takes a string literal
+        let err = assert_parser_error(b"(echo 1)", 6, 7);
+        assert!(
+            matches!(
+                err,
+                CategoryParserErrorKind::ExpectedToken(&[TokenType::String])
+            ),
+            "{err:?}"
+        );
+        // exactly one string literal
+        let err = assert_parser_error(b"(echo \"hi\" \"there\")", 11, 18);
+        assert!(
+            matches!(
+                err,
+                CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
+            ),
+            "{err:?}"
+        );
+        // get-option and get-info take a keyword, not a symbol or string
+        let err = assert_parser_error(b"(get-option opt)", 12, 15);
+        assert!(
+            matches!(
+                err,
+                CategoryParserErrorKind::ExpectedToken(&[TokenType::Keyword])
+            ),
+            "{err:?}"
+        );
+        let err = assert_parser_error(b"(get-info \"x\")", 10, 13);
+        assert!(
+            matches!(
+                err,
+                CategoryParserErrorKind::ExpectedToken(&[TokenType::Keyword])
+            ),
+            "{err:?}"
+        );
+        // set-option requires an attribute, which starts with a keyword
+        let err = assert_parser_error(b"(set-option)", 11, 12);
+        assert!(
+            matches!(
+                err,
+                CategoryParserErrorKind::ExpectedToken(&[TokenType::Keyword])
+            ),
+            "{err:?}"
+        );
+        // reset and reset-assertions take no arguments
+        let err = assert_parser_error(b"(reset x)", 7, 8);
+        assert!(
+            matches!(
+                err,
+                CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
+            ),
+            "{err:?}"
+        );
+        let err = assert_parser_error(b"(reset-assertions x)", 18, 19);
+        assert!(
+            matches!(
+                err,
+                CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
+            ),
+            "{err:?}"
+        );
+    }
 }
