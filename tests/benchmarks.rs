@@ -5,7 +5,10 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 
 use rayon::ThreadPoolBuilder;
-use smt_parser_rs::{CheckStandardSyntax, SmtReadError, SmtReadErrorKind, read_smt_file};
+use smt_parser_rs::{
+    CheckStandardSyntax,
+    read::{SmtReadError, SmtReadErrorKind, read_smt_file},
+};
 
 fn collect_smt2_files(root: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();

@@ -7,9 +7,10 @@ use std::{
 
 use crate::{
     CommandHandler, SmtHandler, SmtSpan,
-    lexer::{LexerError, LexerErrorKind},
-    parser::{CategoryParserErrorKind, ParserErrorKind},
-    read::{lexer::Lexer, parser::Parser},
+    read::{
+        lexer::{Lexer, LexerError, LexerErrorKind},
+        parser::{CategoryParserErrorKind, Parser, ParserErrorKind},
+    },
     token::Token,
 };
 

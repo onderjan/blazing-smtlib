@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use crate::{
     SmtAttributeValue, SmtFunctionSignature, SmtKeyword, SmtSExpr, SmtSort, SmtStringContent,
     SmtSymbol, SmtTerm,
-    parser::{NoCommandParser, ParseCommand},
+    read::parser::{NoCommandParser, ParseCommand},
 };
 
 pub trait SmtHandler {

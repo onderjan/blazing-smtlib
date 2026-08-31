@@ -2,14 +2,11 @@ use std::ops::ControlFlow;
 
 use crate::{
     SmtAttributeValue, SmtHandler, SmtKeyword,
-    parser::{
-        MultipleParser,
+    read::parser::{
+        CategoryParserError, MultipleParser, ParserError,
+        category::{CategoryParser, expect_close_paren},
         category::{CategoryParserErrorKind, handle_err, parse_special_constant},
         s_expr::SExprParser,
-    },
-    read::parser::{
-        CategoryParserError, ParserError,
-        category::{CategoryParser, expect_close_paren},
     },
     token::{Token, TokenKind, TokenType},
 };

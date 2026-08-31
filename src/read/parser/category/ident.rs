@@ -2,8 +2,10 @@ use std::ops::ControlFlow;
 
 use crate::{
     SmtHandler, SmtIdent, SmtIndex, SmtSymbol,
-    parser::category::CategoryParserErrorKind,
-    read::parser::{CategoryParserError, ParserError, category::CategoryParser},
+    read::parser::{
+        CategoryParserError, ParserError,
+        category::{CategoryParser, CategoryParserErrorKind},
+    },
     token::{Reserved, Token, TokenKind, TokenType},
 };
 

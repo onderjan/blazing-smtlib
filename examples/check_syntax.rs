@@ -1,6 +1,9 @@
 use std::path::PathBuf;
 
-use smt_parser_rs::{CheckStandardSyntax, SmtReadErrorKind, read_smt_file};
+use smt_parser_rs::{
+    CheckStandardSyntax,
+    read::{SmtReadErrorKind, read_smt_file},
+};
 fn main() -> Result<(), u32> {
     let mut args = std::env::args();
     if args.len() != 2 {
