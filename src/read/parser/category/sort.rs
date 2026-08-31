@@ -56,15 +56,15 @@ impl<H: SmtHandler> CategoryParser<H> for SortParser<H> {
     ) -> Result<ControlFlow<H::Sort, Self>, ParserError<H>> {
         let (mut levels, sort) = match self.progress_last_level(handler, token)? {
             ControlFlow::Continue(parser) => return Ok(ControlFlow::Continue(parser)),
-            ControlFlow::Break((levels, term)) => (levels, term),
+            ControlFlow::Break((levels, sort)) => (levels, sort),
         };
         if let Some(last_level) = levels.last_mut() {
-            // we need to progress the last level
+            // we need to append to the last level
             last_level.applied.push(sort);
             let state = SortState::Start;
             Ok(ControlFlow::Continue(Self { state, levels }))
         } else {
-            // this is the root term level, we are done
+            // this is the root level, we are done
             Ok(ControlFlow::Break(sort))
         }
     }

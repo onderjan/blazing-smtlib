@@ -71,11 +71,11 @@ impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
             ControlFlow::Break((levels, term)) => (levels, term),
         };
         let Some(last_level) = levels.pop() else {
-            // this is the root term level, we are done
+            // this is the root level, we are done
             return Ok(ControlFlow::Break(term));
         };
 
-        // we need to progress the last level
+        // we need to append the newly created term to the last level
         let state = match last_level {
             TermLevel::Application(function, mut args) => {
                 // add argument and go back to term state

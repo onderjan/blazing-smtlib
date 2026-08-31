@@ -41,14 +41,14 @@ impl<H: SmtHandler> CategoryParser<H> for SExprParser<H> {
     ) -> Result<ControlFlow<H::SExpr, Self>, ParserError<H>> {
         let (mut levels, s_expr) = match self.progress_last_level(handler, token)? {
             ControlFlow::Continue(parser) => return Ok(ControlFlow::Continue(parser)),
-            ControlFlow::Break((levels, term)) => (levels, term),
+            ControlFlow::Break((levels, s_expr)) => (levels, s_expr),
         };
         if let Some(last_level) = levels.last_mut() {
-            // we need to progress the last level
+            // we need to append to the last level
             last_level.s_exprs.push(s_expr);
             Ok(ControlFlow::Continue(Self { levels }))
         } else {
-            // this is the root term level, we are done
+            // this is the root level, we are done
             Ok(ControlFlow::Break(s_expr))
         }
     }
