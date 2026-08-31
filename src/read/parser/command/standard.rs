@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    CommandHandler, SmtFunctionSignature, SmtSymbol,
+    CommandHandler, SmtFunctionSignature,
     read::parser::{
         CategoryParser, ParserError,
         category::{
@@ -14,43 +14,49 @@ use crate::{
     token::Token,
 };
 
-pub struct CommandSetLogic;
+macro_rules! standard_command {
+    ($command:ident, $parser:ty, |$handler:ident, $result:pat_param| $handle:expr) => {
+        pub struct $command;
 
-impl<H: CommandHandler> StandardCommand<H> for CommandSetLogic {
-    type Parser = ClosedParser<H, SymbolParser>;
+        impl<H: CommandHandler> StandardCommand<H> for $command {
+            type Parser = $parser;
 
-    fn handle(handler: &mut H, logic: SmtSymbol) -> Result<(), <H>::Error> {
-        handler.command_set_logic(logic)
-    }
+            fn handle(
+                $handler: &mut H,
+                $result: <$parser as CategoryParser<H>>::Result,
+            ) -> Result<(), H::Error> {
+                $handle
+            }
+        }
+    };
 }
 
-pub struct CommandDeclareConst;
+// standard parsers used, handler called at the end
+standard_command!(CommandSetLogic, ClosedParser<H, SymbolParser>,
+    |handler, logic| handler.command_set_logic(logic));
+standard_command!(CommandDeclareConst,
+    ClosedParser<H, PairParser<H, SymbolParser, SortParser<H>>>,
+    |handler, (name,sort)| handler.command_declare_const(name, sort)
+);
+standard_command!(CommandDeclareFun,
+    ClosedParser<H, PairParser<H, SymbolParser,
+        PairParser<H, MultipleParser<H, SortParser<H>>, SortParser<H>>>>,
+    |handler, (name, (param_sorts, result_sort))|
+        handler.command_declare_fun(name, param_sorts, result_sort));
+standard_command!(CommandAssert, ClosedParser<H, TermParser<H>>,
+    |handler, term| handler.command_assert(term)
+);
+standard_command!(CommandCheckSat, CloseParenParser, |handler, ()| handler
+    .command_check_sat());
+standard_command!(
+    CommandSetInfo,
+    ClosedAttributeParser<H>,
+    |handler, attribute| handler.command_set_info(attribute)
+);
 
-impl<H: CommandHandler> StandardCommand<H> for CommandDeclareConst {
-    type Parser = ClosedParser<H, PairParser<H, SymbolParser, SortParser<H>>>;
-
-    fn handle(handler: &mut H, result: (SmtSymbol, H::Sort)) -> Result<(), <H>::Error> {
-        let (name, sort) = result;
-        handler.command_declare_const(name, sort)
-    }
-}
-
-pub struct CommandDeclareFun;
-
-impl<H: CommandHandler> StandardCommand<H> for CommandDeclareFun {
-    type Parser = ClosedParser<
-        H,
-        PairParser<H, SymbolParser, PairParser<H, MultipleParser<H, SortParser<H>>, SortParser<H>>>,
-    >;
-
-    fn handle(
-        handler: &mut H,
-        result: (SmtSymbol, (Vec<H::Sort>, H::Sort)),
-    ) -> Result<(), <H>::Error> {
-        let (name, (param_sorts, result_sort)) = result;
-        handler.command_declare_fun(name, param_sorts, result_sort)
-    }
-}
+// the handler is called by the custom parser
+standard_command!(CommandDefineFun, ClosedParser<H, DefineFunParser<H>>,
+    |_handler, ()| Ok(()));
 
 type SortedVarParser<H> = OpenClosedParser<H, PairParser<H, SymbolParser, SortParser<H>>>;
 type DefineFunSignatureParser<H> = PairParser<
@@ -111,37 +117,6 @@ impl<H: CommandHandler> CategoryParser<H> for DefineFunParser<H> {
     }
 }
 
-pub struct CommandDefineFun;
-
-impl<H: CommandHandler> StandardCommand<H> for CommandDefineFun {
-    type Parser = ClosedParser<H, DefineFunParser<H>>;
-
-    fn handle(_handler: &mut H, _result: ()) -> Result<(), <H>::Error> {
-        // already handled by the parser
-        Ok(())
-    }
-}
-
-pub struct CommandAssert;
-
-impl<H: CommandHandler> StandardCommand<H> for CommandAssert {
-    type Parser = ClosedParser<H, TermParser<H>>;
-
-    fn handle(handler: &mut H, term: H::Term) -> Result<(), <H>::Error> {
-        handler.command_assert(term)
-    }
-}
-
-pub struct CommandCheckSat;
-
-impl<H: CommandHandler> StandardCommand<H> for CommandCheckSat {
-    type Parser = CloseParenParser;
-
-    fn handle(handler: &mut H, _unit: ()) -> Result<(), <H>::Error> {
-        handler.command_check_sat()
-    }
-}
-
 pub struct CommandExit;
 
 impl<H: CommandHandler> StandardCommand<H> for CommandExit {
@@ -154,16 +129,6 @@ impl<H: CommandHandler> StandardCommand<H> for CommandExit {
 
     fn is_exit() -> bool {
         true
-    }
-}
-
-pub struct CommandSetInfo;
-
-impl<H: CommandHandler> StandardCommand<H> for CommandSetInfo {
-    type Parser = ClosedAttributeParser<H>;
-
-    fn handle(handler: &mut H, attribute: H::Attribute) -> Result<(), <H>::Error> {
-        handler.command_set_info(attribute)
     }
 }
 
