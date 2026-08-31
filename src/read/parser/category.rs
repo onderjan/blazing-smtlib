@@ -8,6 +8,7 @@ use crate::{
 
 pub mod attribute;
 pub mod ident;
+pub mod qualified_ident;
 pub mod sort;
 pub mod term;
 
@@ -386,9 +387,11 @@ pub(super) mod tests {
         }
 
         fn handle_term(&mut self, term: SmtTerm<Self>) -> Result<String, Infallible> {
+            todo!("Fix term handling printing");
+            /*
             Ok(match term {
                 SmtTerm::SpecialConstant(constant) => render_constant(&constant),
-                SmtTerm::QualifiedIdent(SmtQualifiedIdent::Ident(ident)) => render_ident(&ident),
+                SmtTerm::QualifiedIdent(qualified_ident) => render_ident(&qualified_ident),
                 SmtTerm::Application(application) => {
                     let SmtQualifiedIdent::Ident(function) = application.function;
                     let mut items = vec![render_ident(&function)];
@@ -396,6 +399,7 @@ pub(super) mod tests {
                     render_list(&items)
                 }
             })
+            */
         }
 
         fn start_let(&mut self, bindings: Vec<(SmtSymbol, String)>) -> Result<(), Infallible> {

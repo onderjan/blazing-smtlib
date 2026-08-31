@@ -1,18 +1,14 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtApplication, SmtHandler, SmtIdent, SmtQualifiedIdent, SmtSpan, SmtSpecialConstant,
-    SmtSymbol, SmtTerm,
-    parser::category::CategoryParserErrorKind,
-    read::parser::{
-        ParserError,
-        category::{CategoryParser, ident::IdentParser},
-    },
+    SmtApplication, SmtHandler, SmtQualifiedIdent, SmtSpan, SmtSpecialConstant, SmtSymbol, SmtTerm,
+    parser::{category::CategoryParserErrorKind, qualified_ident::QualifiedIdentParser},
+    read::parser::{ParserError, category::CategoryParser},
     token::{Reserved, Token, TokenKind, TokenType},
 };
 
 pub enum TermLevel<H: SmtHandler> {
-    Application(SmtQualifiedIdent, Vec<H::Term>),
+    Application(SmtQualifiedIdent<H>, Vec<H::Term>),
     LetBinding(Vec<(SmtSymbol, H::Term)>, SmtSymbol),
     LetInner,
 }
@@ -20,9 +16,9 @@ pub enum TermLevel<H: SmtHandler> {
 pub enum TermParserState<H: SmtHandler> {
     Start,
     Open,
-    IndexedIdent(IdentParser),
-    ApplicationIdent(IdentParser),
-    ApplicationTerm(SmtQualifiedIdent, Vec<H::Term>),
+    QualifiedIdent(QualifiedIdentParser<H>),
+    ApplicationQualifiedIdent(QualifiedIdentParser<H>),
+    ApplicationTerm(SmtQualifiedIdent<H>, Vec<H::Term>),
     LetBeforeBindingsOpen,
     LetBeforeBindingOpen(Vec<(SmtSymbol, H::Term)>),
     LetBeforeBindingSymbol(Vec<(SmtSymbol, H::Term)>),
@@ -35,14 +31,26 @@ pub struct TermParser<H: SmtHandler> {
     levels: Vec<TermLevel<H>>,
 }
 
-impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
-    type Result = H::Term;
-
-    fn init() -> Self {
+impl<H: SmtHandler> TermParser<H> {
+    fn new() -> Self {
         TermParser {
             state: TermParserState::Start,
             levels: Vec::new(),
         }
+    }
+}
+
+impl<H: SmtHandler> Default for TermParser<H> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
+    type Result = H::Term;
+
+    fn init() -> Self {
+        Self::new()
     }
 
     fn progress(
@@ -99,24 +107,21 @@ impl<H: SmtHandler> TermParser<H> {
             TermParserState::Open => {
                 return Ok(ControlFlow::Continue(Self::parse_term_open(levels, token)?));
             }
-            TermParserState::IndexedIdent(parser) => {
-                match parser.progress(handler, token)? {
-                    ControlFlow::Continue(parser) => TermParserState::IndexedIdent(parser),
-                    ControlFlow::Break(ident) => {
-                        // TODO: actual qualified ident
-                        let term = SmtTerm::QualifiedIdent(SmtQualifiedIdent::Ident(ident));
+            TermParserState::QualifiedIdent(parser) => match parser.progress(handler, token)? {
+                ControlFlow::Continue(parser) => TermParserState::QualifiedIdent(parser),
+                ControlFlow::Break(qualified_ident) => {
+                    let term = SmtTerm::QualifiedIdent(qualified_ident);
 
-                        let term = handle_err(handler.handle_term(term), span)?;
-                        return Ok(ControlFlow::Break((levels, term)));
-                    }
+                    let term = handle_err(handler.handle_term(term), span)?;
+                    return Ok(ControlFlow::Break((levels, term)));
                 }
-            }
-            TermParserState::ApplicationIdent(parser) => {
+            },
+            TermParserState::ApplicationQualifiedIdent(parser) => {
                 match parser.progress(handler, token)? {
-                    ControlFlow::Continue(parser) => TermParserState::ApplicationIdent(parser),
+                    ControlFlow::Continue(parser) => {
+                        TermParserState::ApplicationQualifiedIdent(parser)
+                    }
                     ControlFlow::Break(ident) => {
-                        // TODO: actual qualified ident
-                        let ident = SmtQualifiedIdent::Ident(ident);
                         TermParserState::ApplicationTerm(ident, Vec::new())
                     }
                 }
@@ -210,12 +215,9 @@ impl<H: SmtHandler> TermParser<H> {
                     levels,
                 }))
             }
-            TokenKind::Symbol(symbol) => {
+            TokenKind::Symbol(name) => {
                 // a qualified identifier that is just a symbol
-                let qualified_ident = SmtQualifiedIdent::Ident(SmtIdent {
-                    name: symbol,
-                    indices: Vec::new(),
-                });
+                let qualified_ident = SmtQualifiedIdent::new_simple(name);
                 let term = handle_err(
                     handler.handle_term(SmtTerm::QualifiedIdent(qualified_ident)),
                     span,
@@ -248,10 +250,7 @@ impl<H: SmtHandler> TermParser<H> {
         let state = match token.into_kind() {
             TokenKind::Symbol(fn_name) => {
                 // this is an application where the function identifier is just a symbol
-                let fn_ident = SmtQualifiedIdent::Ident(SmtIdent {
-                    name: fn_name,
-                    indices: Vec::new(),
-                });
+                let fn_ident = SmtQualifiedIdent::new_simple(fn_name);
                 TermParserState::ApplicationTerm(fn_ident, Vec::new())
             }
             TokenKind::Reserved(Reserved::Let) => TermParserState::LetBeforeBindingsOpen,
@@ -262,15 +261,20 @@ impl<H: SmtHandler> TermParser<H> {
             TokenKind::Reserved(Reserved::ExclamationMark) => todo!("Annotation"),
             TokenKind::Reserved(Reserved::Underscore) => {
                 // this is actually a term composed of an indexed identifier
-                // start an indexed ident parser after the undescore
-                let parser = IdentParser::after_underscore();
-                TermParserState::IndexedIdent(parser)
+                // start a qualified ident parser after the underscore
+                // (meaning the ident will be unqualified but indexed)
+                TermParserState::QualifiedIdent(QualifiedIdentParser::after_underscore())
+            }
+            TokenKind::Reserved(Reserved::As) => {
+                // this is actually a term composed of a qualified identifier
+                // start a qualified ident parser after the 'as' reserved word
+                // (meaning the ident will be qualified)
+                TermParserState::QualifiedIdent(QualifiedIdentParser::after_as())
             }
             TokenKind::ParenOpen => {
                 // this is an application where the function identifier is qualified or indexed
                 // start a qualified ident parser after the parenthesis open
-                let parser = IdentParser::after_open_paren();
-                TermParserState::ApplicationIdent(parser)
+                TermParserState::ApplicationQualifiedIdent(QualifiedIdentParser::after_open_paren())
             }
             _ => {
                 return Err(ParserError::category_error(

@@ -16,11 +16,23 @@ pub enum SortParser {
     Ident(IdentParser),
 }
 
+impl SortParser {
+    pub fn new() -> Self {
+        Self::Start
+    }
+}
+
+impl Default for SortParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<H: SmtHandler> CategoryParser<H> for SortParser {
     type Result = H::Sort;
 
     fn init() -> Self {
-        Self::Start
+        Self::new()
     }
 
     fn progress(

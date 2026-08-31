@@ -17,11 +17,31 @@ pub enum IdentParser {
     },
 }
 
+impl IdentParser {
+    pub fn new() -> Self {
+        Self::Start
+    }
+
+    pub fn after_open_paren() -> Self {
+        Self::Open
+    }
+
+    pub fn after_underscore() -> Self {
+        Self::AfterUnderscore
+    }
+}
+
+impl Default for IdentParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<H: SmtHandler> CategoryParser<H> for IdentParser {
     type Result = SmtIdent;
 
     fn init() -> Self {
-        Self::Start
+        Self::new()
     }
 
     fn progress(
@@ -86,16 +106,6 @@ impl<H: SmtHandler> CategoryParser<H> for IdentParser {
                 }
             },
         }
-    }
-}
-
-impl IdentParser {
-    pub fn after_open_paren() -> Self {
-        Self::Open
-    }
-
-    pub fn after_underscore() -> Self {
-        Self::AfterUnderscore
     }
 }
 

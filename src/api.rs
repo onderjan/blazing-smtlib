@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use crate::{
     SmtBinDigits, SmtDecimal, SmtHexDigits, SmtKeyword, SmtNumeral, SmtStringContent, SmtSymbol,
     parser::{NoCommandParser, ParseCommand},
@@ -16,22 +18,97 @@ pub struct SmtIdent {
     pub indices: Vec<SmtIndex>,
 }
 
+impl SmtIdent {
+    pub fn new_simple(name: SmtSymbol) -> SmtIdent {
+        SmtIdent {
+            name,
+            indices: Vec::new(),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 
 pub enum SmtSort {
     Ident(SmtIdent),
 }
 
-#[derive(Debug, Clone)]
-pub enum SmtQualifiedIdent {
-    Ident(SmtIdent), // 'as' qualified idents not implemented
+pub struct SmtQualifiedIdent<H: SmtHandler + ?Sized> {
+    pub ident: SmtIdent,
+    pub sort: Option<H::Sort>,
+}
+
+impl<H: SmtHandler> SmtQualifiedIdent<H> {
+    pub fn new_simple(name: SmtSymbol) -> Self {
+        Self::new_unqualified(SmtIdent::new_simple(name))
+    }
+
+    pub fn new_unqualified(ident: SmtIdent) -> Self {
+        Self { ident, sort: None }
+    }
+
+    pub fn new_qualified(ident: SmtIdent, sort: H::Sort) -> Self {
+        Self {
+            ident,
+            sort: Some(sort),
+        }
+    }
+}
+
+impl<H: SmtHandler + ?Sized> Debug for SmtQualifiedIdent<H>
+where
+    H::Sort: Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SmtQualifiedIdent")
+            .field("ident", &self.ident)
+            .field("sort", &self.sort)
+            .finish()
+    }
+}
+
+impl<H: SmtHandler + ?Sized> Clone for SmtQualifiedIdent<H>
+where
+    H::Sort: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            ident: self.ident.clone(),
+            sort: self.sort.clone(),
+        }
+    }
 }
 
 /// Application. There must be at least one term.
-#[derive(Debug, Clone)]
 pub struct SmtApplication<H: SmtHandler + ?Sized> {
-    pub function: SmtQualifiedIdent,
+    pub function: SmtQualifiedIdent<H>,
     pub args: Vec<H::Term>,
+}
+
+impl<H: SmtHandler + ?Sized> Debug for SmtApplication<H>
+where
+    H::Sort: Debug,
+    H::Term: Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SmtApplication")
+            .field("function", &self.function)
+            .field("args", &self.args)
+            .finish()
+    }
+}
+
+impl<H: SmtHandler + ?Sized> Clone for SmtApplication<H>
+where
+    H::Sort: Clone,
+    H::Term: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            function: self.function.clone(),
+            args: self.args.clone(),
+        }
+    }
 }
 
 #[allow(dead_code)]
@@ -46,7 +123,7 @@ pub enum SmtSpecialConstant {
 
 pub enum SmtTerm<H: SmtHandler + ?Sized> {
     SpecialConstant(SmtSpecialConstant),
-    QualifiedIdent(SmtQualifiedIdent),
+    QualifiedIdent(SmtQualifiedIdent<H>),
     Application(SmtApplication<H>),
 }
 
