@@ -7,3 +7,4 @@ Cargo.lock
 # misc untracked folders
 /output
 /untracked
+/benchmarks
