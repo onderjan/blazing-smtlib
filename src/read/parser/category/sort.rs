@@ -123,6 +123,13 @@ mod tests {
             "{err:?}"
         );
 
+        // qualified identifiers are not sorts
+        let err = assert_error::<SortParser>(b"(as x Bool)", 1, 3);
+        assert!(
+            matches!(err, CategoryParserErrorKind::ExpectedSortInner),
+            "{err:?}"
+        );
+
         // errors inside the indexed identifier are reported by the identifier parser
         let err = assert_error::<SortParser>(b"(_ BitVec)", 9, 10);
         assert!(

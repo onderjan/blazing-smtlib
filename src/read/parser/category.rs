@@ -355,6 +355,14 @@ pub(super) mod tests {
         out
     }
 
+    fn render_qualified_ident(qualified_ident: &SmtQualifiedIdent<Printing>) -> String {
+        let ident = render_ident(&qualified_ident.ident);
+        match &qualified_ident.sort {
+            Some(sort) => format!("(as {ident} {sort})"),
+            None => ident,
+        }
+    }
+
     fn render_constant(constant: &SmtSpecialConstant) -> String {
         match constant {
             SmtSpecialConstant::Numeral(n) => text(n.as_slice()),
@@ -387,19 +395,17 @@ pub(super) mod tests {
         }
 
         fn handle_term(&mut self, term: SmtTerm<Self>) -> Result<String, Infallible> {
-            todo!("Fix term handling printing");
-            /*
             Ok(match term {
                 SmtTerm::SpecialConstant(constant) => render_constant(&constant),
-                SmtTerm::QualifiedIdent(qualified_ident) => render_ident(&qualified_ident),
+                SmtTerm::QualifiedIdent(qualified_ident) => {
+                    render_qualified_ident(&qualified_ident)
+                }
                 SmtTerm::Application(application) => {
-                    let SmtQualifiedIdent::Ident(function) = application.function;
-                    let mut items = vec![render_ident(&function)];
+                    let mut items = vec![render_qualified_ident(&application.function)];
                     items.extend(application.args);
                     render_list(&items)
                 }
             })
-            */
         }
 
         fn start_let(&mut self, bindings: Vec<(SmtSymbol, String)>) -> Result<(), Infallible> {

@@ -418,6 +418,35 @@ mod tests {
     }
 
     #[test]
+    fn qualified_identifiers() {
+        assert_eq!(
+            parse_all::<TermParser<Printing>>(b"(as x Bool)"),
+            "(as x Bool)"
+        );
+        assert_eq!(
+            parse_all::<TermParser<Printing>>(b"(as (_ bv5 8) (_ BitVec 8))"),
+            "(as (_ bv5 8) (_ BitVec 8))"
+        );
+        // qualified identifier as an application argument
+        assert_eq!(
+            parse_all::<TermParser<Printing>>(b"(f (as x Bool) 1)"),
+            "(f (as x Bool) 1)"
+        );
+    }
+
+    #[test]
+    fn application_of_qualified_function() {
+        assert_eq!(
+            parse_all::<TermParser<Printing>>(b"((as f Bool) x)"),
+            "((as f Bool) x)"
+        );
+        assert_eq!(
+            parse_all::<TermParser<Printing>>(b"((as (_ f 2) (_ BitVec 8)) x y)"),
+            "((as (_ f 2) (_ BitVec 8)) x y)"
+        );
+    }
+
+    #[test]
     fn empty_application_is_rejected() {
         // an application must have at least one argument
         let err = assert_error::<TermParser<Printing>>(b"(f)", 2, 3);
