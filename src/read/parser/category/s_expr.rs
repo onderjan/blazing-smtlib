@@ -9,7 +9,7 @@ use crate::{
     token::{Token, TokenKind},
 };
 
-pub struct SExprLevel<H: SmtHandler> {
+struct SExprLevel<H: SmtHandler> {
     s_exprs: Vec<H::SExpr>,
 }
 

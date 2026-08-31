@@ -6,9 +6,8 @@ use crate::{
         ParserError,
         category::{
             CategoryParser, CategoryParserError, CategoryParserErrorKind, expect_close_paren,
+            ident::IdentParser, sort::SortParser,
         },
-        ident::IdentParser,
-        sort::SortParser,
     },
     token::{Reserved, Token, TokenKind, TokenType},
 };

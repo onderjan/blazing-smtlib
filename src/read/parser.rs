@@ -133,7 +133,7 @@ mod tests {
         read::{
             lexer::Lexer,
             parser::{
-                category::{ClosedParser, term::TermParser},
+                category::{ClosedParser, TermParser},
                 command::{StandardCommand, StaticCommandParser},
             },
         },

@@ -2,7 +2,7 @@ mod char_class;
 
 use char_class::{U8OrEof, char_class_opt};
 
-pub use char_class::CharClass;
+pub(crate) use char_class::CharClass;
 
 use crate::{
     SmtBinDigits, SmtDecimal, SmtDigits, SmtHexDigits, SmtKeyword, SmtLocation, SmtNumeral,
@@ -10,7 +10,7 @@ use crate::{
     token::{Reserved, Token, TokenKind},
 };
 
-pub enum LexerState {
+enum LexerState {
     Normal,
     Fraction {
         whole_part: String8,

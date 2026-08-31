@@ -4,9 +4,10 @@ use crate::{
     SmtAttributeValue, SmtHandler, SmtKeyword,
     read::parser::{
         CategoryParserError, MultipleParser, ParserError,
-        category::{CategoryParser, expect_close_paren},
-        category::{CategoryParserErrorKind, handle_err, parse_special_constant},
-        s_expr::SExprParser,
+        category::{
+            CategoryParser, CategoryParserErrorKind, expect_close_paren, handle_err,
+            parse_special_constant, s_expr::SExprParser,
+        },
     },
     token::{Token, TokenKind, TokenType},
 };

@@ -6,12 +6,17 @@ use crate::{
     token::{Token, TokenKind, TokenType},
 };
 
-pub mod attribute;
-pub mod ident;
-pub mod qualified_ident;
-pub mod s_expr;
-pub mod sort;
-pub mod term;
+mod attribute;
+mod ident;
+mod qualified_ident;
+mod s_expr;
+mod sort;
+mod term;
+
+pub use {
+    attribute::ClosedAttributeParser, ident::IdentParser, qualified_ident::QualifiedIdentParser,
+    s_expr::SExprParser, sort::SortParser, term::TermParser,
+};
 
 pub trait CategoryParser<H: SmtHandler>: Default {
     type Result;

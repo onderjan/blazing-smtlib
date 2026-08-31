@@ -4,23 +4,22 @@ use crate::{
     SmtApplication, SmtHandler, SmtQualifiedIdent, SmtSymbol, SmtTerm,
     read::parser::{
         ParserError,
-        category::CategoryParser,
         category::{
-            CategoryParserErrorKind, expect_close_paren, expect_open_paren, expect_symbol,
-            handle_err, parse_special_constant,
+            CategoryParser, CategoryParserErrorKind, expect_close_paren, expect_open_paren,
+            expect_symbol, handle_err, parse_special_constant,
+            qualified_ident::QualifiedIdentParser,
         },
-        qualified_ident::QualifiedIdentParser,
     },
     token::{Reserved, Token, TokenKind, TokenType},
 };
 
-pub enum TermLevel<H: SmtHandler> {
+enum TermLevel<H: SmtHandler> {
     Application(SmtQualifiedIdent<H>, Vec<H::Term>),
     LetBinding(Vec<(SmtSymbol, H::Term)>, SmtSymbol),
     LetInner,
 }
 
-pub enum TermParserState<H: SmtHandler> {
+enum TermState<H: SmtHandler> {
     Start,
     Open,
     QualifiedIdent(QualifiedIdentParser<H>),
@@ -34,14 +33,14 @@ pub enum TermParserState<H: SmtHandler> {
 }
 
 pub struct TermParser<H: SmtHandler> {
-    state: TermParserState<H>,
+    state: TermState<H>,
     levels: Vec<TermLevel<H>>,
 }
 
 impl<H: SmtHandler> TermParser<H> {
     pub fn new() -> Self {
         TermParser {
-            state: TermParserState::Start,
+            state: TermState::Start,
             levels: Vec::new(),
         }
     }
@@ -77,17 +76,17 @@ impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
             TermLevel::Application(function, mut args) => {
                 // add argument and go back to term state
                 args.push(term);
-                TermParserState::ApplicationTerm(function, args)
+                TermState::ApplicationTerm(function, args)
             }
             TermLevel::LetBinding(mut bindings, binding_name) => {
                 // add binding, should be followed by parenthesis closing the bindings
                 bindings.push((binding_name, term));
-                TermParserState::LetBeforeBindingClose(bindings)
+                TermState::LetBeforeBindingClose(bindings)
             }
             TermLevel::LetInner => {
                 // end let, should be followed by closing parenthesis
                 let term = handle_err(handler.end_let(term), span)?;
-                TermParserState::LetAfterInnerTerm(term)
+                TermState::LetAfterInnerTerm(term)
             }
         };
 
@@ -106,12 +105,12 @@ impl<H: SmtHandler> TermParser<H> {
         let span = token.span();
         let mut levels = self.levels;
         let state = match self.state {
-            TermParserState::Start => return Self::parse_term_start(levels, handler, token),
-            TermParserState::Open => {
+            TermState::Start => return Self::parse_term_start(levels, handler, token),
+            TermState::Open => {
                 return Ok(ControlFlow::Continue(Self::parse_term_open(levels, token)?));
             }
-            TermParserState::QualifiedIdent(parser) => match parser.progress(handler, token)? {
-                ControlFlow::Continue(parser) => TermParserState::QualifiedIdent(parser),
+            TermState::QualifiedIdent(parser) => match parser.progress(handler, token)? {
+                ControlFlow::Continue(parser) => TermState::QualifiedIdent(parser),
                 ControlFlow::Break(qualified_ident) => {
                     let term = SmtTerm::QualifiedIdent(qualified_ident);
 
@@ -119,17 +118,13 @@ impl<H: SmtHandler> TermParser<H> {
                     return Ok(ControlFlow::Break((levels, term)));
                 }
             },
-            TermParserState::ApplicationQualifiedIdent(parser) => {
+            TermState::ApplicationQualifiedIdent(parser) => {
                 match parser.progress(handler, token)? {
-                    ControlFlow::Continue(parser) => {
-                        TermParserState::ApplicationQualifiedIdent(parser)
-                    }
-                    ControlFlow::Break(ident) => {
-                        TermParserState::ApplicationTerm(ident, Vec::new())
-                    }
+                    ControlFlow::Continue(parser) => TermState::ApplicationQualifiedIdent(parser),
+                    ControlFlow::Break(ident) => TermState::ApplicationTerm(ident, Vec::new()),
                 }
             }
-            TermParserState::ApplicationTerm(function, args) => {
+            TermState::ApplicationTerm(function, args) => {
                 if matches!(token.kind(), TokenKind::ParenClose) {
                     // this ends the application term
                     // it must have at least one argument
@@ -149,15 +144,15 @@ impl<H: SmtHandler> TermParser<H> {
                     return Self::parse_term_start(levels, handler, token);
                 }
             }
-            TermParserState::LetBeforeBindingsOpen => {
+            TermState::LetBeforeBindingsOpen => {
                 expect_open_paren(token)?;
-                TermParserState::LetBeforeBindingOpen(Vec::new())
+                TermState::LetBeforeBindingOpen(Vec::new())
             }
-            TermParserState::LetBeforeBindingOpen(bindings) => {
+            TermState::LetBeforeBindingOpen(bindings) => {
                 match token.kind() {
                     TokenKind::ParenOpen => {
                         // new binding
-                        TermParserState::LetBeforeBindingSymbol(bindings)
+                        TermState::LetBeforeBindingSymbol(bindings)
                     }
                     TokenKind::ParenClose => {
                         // bindings are closed, inner term will be next
@@ -172,7 +167,7 @@ impl<H: SmtHandler> TermParser<H> {
                         handle_err(handler.start_let(bindings), span)?;
 
                         levels.push(TermLevel::LetInner);
-                        TermParserState::Start
+                        TermState::Start
                     }
                     _ => {
                         // expected open or close parenthesis
@@ -186,16 +181,16 @@ impl<H: SmtHandler> TermParser<H> {
                     }
                 }
             }
-            TermParserState::LetBeforeBindingSymbol(bindings) => {
+            TermState::LetBeforeBindingSymbol(bindings) => {
                 let symbol = expect_symbol(token)?;
                 levels.push(TermLevel::LetBinding(bindings, symbol));
-                TermParserState::Start
+                TermState::Start
             }
-            TermParserState::LetBeforeBindingClose(bindings) => {
+            TermState::LetBeforeBindingClose(bindings) => {
                 expect_close_paren(token)?;
-                TermParserState::LetBeforeBindingOpen(bindings)
+                TermState::LetBeforeBindingOpen(bindings)
             }
-            TermParserState::LetAfterInnerTerm(term) => {
+            TermState::LetAfterInnerTerm(term) => {
                 expect_close_paren(token)?;
                 return Ok(ControlFlow::Break((levels, term)));
             }
@@ -214,7 +209,7 @@ impl<H: SmtHandler> TermParser<H> {
                 // application, binder, or annotation
                 // move to operator parsing
                 Ok(ControlFlow::Continue(Self {
-                    state: TermParserState::Open,
+                    state: TermState::Open,
                     levels,
                 }))
             }
@@ -254,9 +249,9 @@ impl<H: SmtHandler> TermParser<H> {
             TokenKind::Symbol(fn_name) => {
                 // this is an application where the function identifier is just a symbol
                 let fn_ident = SmtQualifiedIdent::new_simple(fn_name);
-                TermParserState::ApplicationTerm(fn_ident, Vec::new())
+                TermState::ApplicationTerm(fn_ident, Vec::new())
             }
-            TokenKind::Reserved(Reserved::Let) => TermParserState::LetBeforeBindingsOpen,
+            TokenKind::Reserved(Reserved::Let) => TermState::LetBeforeBindingsOpen,
             TokenKind::Reserved(Reserved::Lambda) => todo!("Lambda"),
             TokenKind::Reserved(Reserved::Forall) => todo!("Forall"),
             TokenKind::Reserved(Reserved::Exists) => todo!("Exists"),
@@ -266,18 +261,18 @@ impl<H: SmtHandler> TermParser<H> {
                 // this is actually a term composed of an indexed identifier
                 // start a qualified ident parser after the underscore
                 // (meaning the ident will be unqualified but indexed)
-                TermParserState::QualifiedIdent(QualifiedIdentParser::after_underscore())
+                TermState::QualifiedIdent(QualifiedIdentParser::after_underscore())
             }
             TokenKind::Reserved(Reserved::As) => {
                 // this is actually a term composed of a qualified identifier
                 // start a qualified ident parser after the 'as' reserved word
                 // (meaning the ident will be qualified)
-                TermParserState::QualifiedIdent(QualifiedIdentParser::after_as())
+                TermState::QualifiedIdent(QualifiedIdentParser::after_as())
             }
             TokenKind::ParenOpen => {
                 // this is an application where the function identifier is qualified or indexed
                 // start a qualified ident parser after the parenthesis open
-                TermParserState::ApplicationQualifiedIdent(QualifiedIdentParser::after_open_paren())
+                TermState::ApplicationQualifiedIdent(QualifiedIdentParser::after_open_paren())
             }
             _ => {
                 return Err(ParserError::category_error(

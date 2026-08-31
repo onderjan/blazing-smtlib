@@ -2,8 +2,8 @@ use crate::{
     CommandHandler, SmtSymbol,
     read::parser::{
         category::{
-            CloseParenParser, ClosedParser, MultipleParser, OpenClosedParser, PairParser,
-            SymbolParser, attribute::ClosedAttributeParser, sort::SortParser, term::TermParser,
+            CloseParenParser, ClosedAttributeParser, ClosedParser, MultipleParser,
+            OpenClosedParser, PairParser, SortParser, SymbolParser, TermParser,
         },
         command::StandardCommand,
     },

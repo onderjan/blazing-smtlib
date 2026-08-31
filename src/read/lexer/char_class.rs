@@ -15,7 +15,7 @@
 /// Specially, 32 (SPACE) is both printable and whitespace.
 /// 0..=31 except (9, 10, 13) and 127 (DEL) are neither printable nor whitespace.
 #[derive(Clone, Copy)]
-pub enum CharClass {
+pub(crate) enum CharClass {
     /// any non-printable character except for TAB, LF, CR, and DEL
     /// meaning 0..=31 except (9, 10, 13)
     OtherNonPrintable,
@@ -96,12 +96,12 @@ impl From<u8> for CharClass {
 }
 
 #[derive(Clone, Copy)]
-pub enum U8OrEof {
+pub(super) enum U8OrEof {
     U8(u8),
     Eof,
 }
 
-pub fn char_class_opt(c: U8OrEof) -> Option<(CharClass, u8)> {
+pub(super) fn char_class_opt(c: U8OrEof) -> Option<(CharClass, u8)> {
     match c {
         U8OrEof::U8(c) => Some((CharClass::from(c), c)),
         U8OrEof::Eof => None,
