@@ -114,4 +114,23 @@ impl Reserved {
             _ => return None,
         })
     }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Reserved::Binary => "BINARY",
+            Reserved::Decimal => "DECIMAL",
+            Reserved::Hexadecimal => "HEXADECIMAL",
+            Reserved::Numeral => "NUMERAL",
+            Reserved::String => "STRING",
+            Reserved::Underscore => "_",
+            Reserved::ExclamationMark => "!",
+            Reserved::As => "as",
+            Reserved::Lambda => "lambda",
+            Reserved::Let => "let",
+            Reserved::Exists => "exists",
+            Reserved::Forall => "forall",
+            Reserved::Match => "match",
+            Reserved::Par => "par",
+        }
+    }
 }
