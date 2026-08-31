@@ -133,8 +133,6 @@ fn handle_err<O, H: SmtHandler>(
     }
 }
 
-// TODO: fix tests
-/*
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -152,7 +150,10 @@ mod tests {
     };
 
     /// Lexes the input and feeds the tokens to a fresh parser over the given handler.
-    fn parse_with<H: CommandHandler>(handler: &mut H, input: &[u8]) -> Result<(), ParserError<H>> {
+    pub(in crate::read::parser) fn parse_with<H: CommandHandler>(
+        handler: &mut H,
+        input: &[u8],
+    ) -> Result<(), ParserError<H>> {
         let mut parser = Parser::new(handler);
         for token in Lexer::lex_all(input).expect("test input must lex") {
             parser.parse_token(token)?;
@@ -165,7 +166,11 @@ mod tests {
     }
 
     #[track_caller]
-    fn assert_error_span<H: SmtHandler>(err: &ParserError<H>, start: u64, end: u64) {
+    pub(in crate::read::parser) fn assert_error_span<H: SmtHandler>(
+        err: &ParserError<H>,
+        start: u64,
+        end: u64,
+    ) {
         let span = err.span();
         assert_eq!(
             (span.start().offset(), span.end().offset()),
@@ -177,7 +182,11 @@ mod tests {
     /// Parses the input, requires a parser error, checks the byte span the error carries,
     /// and returns its kind so that the caller can inspect the variant.
     #[track_caller]
-    fn assert_parser_error(input: &[u8], start: u64, end: u64) -> CategoryParserErrorKind {
+    pub(in crate::read::parser) fn assert_parser_error(
+        input: &[u8],
+        start: u64,
+        end: u64,
+    ) -> CategoryParserErrorKind {
         let err = parse(input).expect_err("expected a parser error, got Ok");
         assert_error_span(&err, start, end);
         match err.into_kind() {
@@ -193,6 +202,7 @@ mod tests {
         assert!(parse(b"").is_ok());
         assert!(parse(b"(set-logic QF_UF)\n(check-sat)\n").is_ok());
         assert!(parse(b"(declare-const x Bool) (assert x) (check-sat) (exit)").is_ok());
+        assert!(parse(b"(define-fun inc ((x Int)) Int (+ x 1)) (check-sat)").is_ok());
     }
 
     #[test]
@@ -350,16 +360,6 @@ mod tests {
             self.commands.push("declare-fun");
             Ok(())
         }
-        fn command_define_fun(
-            &mut self,
-            _name: SmtSymbol,
-            _params: Vec<(SmtSymbol, ())>,
-            _result_sort: (),
-            _definition: (),
-        ) -> Result<(), Self::Error> {
-            self.commands.push("define-fun");
-            Ok(())
-        }
         fn command_assert(&mut self, _term: ()) -> Result<(), Self::Error> {
             self.commands.push("assert");
             Ok(())
@@ -382,13 +382,26 @@ mod tests {
         }
         fn start_define_fun(
             &mut self,
-            _signature: SmtFunctionSignature<()>,
+            _signature: SmtFunctionSignature<Self>,
         ) -> Result<(), Self::Error> {
+            self.commands.push("start-define-fun");
             Ok(())
         }
         fn end_define_fun(&mut self, _term: ()) -> Result<(), Self::Error> {
+            self.commands.push("end-define-fun");
             Ok(())
         }
+    }
+
+    #[test]
+    fn define_fun_start_and_end_surround_the_body() {
+        let mut handler = Recording::default();
+        parse_with(&mut handler, b"(define-fun f ((x Int)) Int x) (check-sat)")
+            .unwrap_or_else(|err| panic!("unexpected error at {:?}", err.span()));
+        assert_eq!(
+            handler.commands,
+            ["start-define-fun", "end-define-fun", "check-sat"]
+        );
     }
 
     #[test]
@@ -460,4 +473,3 @@ mod tests {
         assert_eq!(handler.commands, ["my-assert"]);
     }
 }
-*/
