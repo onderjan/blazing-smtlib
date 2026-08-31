@@ -158,11 +158,64 @@ pub enum SmtTerm<H: SmtHandler + ?Sized> {
     Application(SmtApplication<H>),
 }
 
-#[derive(Debug, Clone)]
+impl<H: SmtHandler + ?Sized> Debug for SmtTerm<H>
+where
+    H::Sort: Debug,
+    H::Term: Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::SpecialConstant(arg0) => f.debug_tuple("SpecialConstant").field(arg0).finish(),
+            Self::QualifiedIdent(arg0) => f.debug_tuple("QualifiedIdent").field(arg0).finish(),
+            Self::Application(arg0) => f.debug_tuple("Application").field(arg0).finish(),
+        }
+    }
+}
+
+impl<H: SmtHandler + ?Sized> Clone for SmtTerm<H>
+where
+    H::Sort: Clone,
+    H::Term: Clone,
+{
+    fn clone(&self) -> Self {
+        match self {
+            Self::SpecialConstant(arg0) => Self::SpecialConstant(arg0.clone()),
+            Self::QualifiedIdent(arg0) => Self::QualifiedIdent(arg0.clone()),
+            Self::Application(arg0) => Self::Application(arg0.clone()),
+        }
+    }
+}
+
 pub enum SmtAttributeValue<H: SmtHandler + ?Sized> {
     SpecialConstant(SmtSpecialConstant),
     Symbol(SmtSymbol),
     SExprs(Vec<H::SExpr>),
+}
+
+impl<H: SmtHandler + ?Sized> Debug for SmtAttributeValue<H>
+where
+    H::SExpr: Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::SpecialConstant(arg0) => f.debug_tuple("SpecialConstant").field(arg0).finish(),
+            Self::Symbol(arg0) => f.debug_tuple("Symbol").field(arg0).finish(),
+            Self::SExprs(arg0) => f.debug_tuple("SExprs").field(arg0).finish(),
+        }
+    }
+}
+
+impl<H: SmtHandler + ?Sized> Clone for SmtAttributeValue<H>
+where
+    H::SExpr: Clone,
+{
+    fn clone(&self) -> Self {
+        match self {
+            Self::SpecialConstant(arg0) => Self::SpecialConstant(arg0.clone()),
+            Self::Symbol(arg0) => Self::Symbol(arg0.clone()),
+            Self::SExprs(arg0) => Self::SExprs(arg0.clone()),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -172,11 +225,40 @@ pub struct SmtFunctionSignature<S> {
     pub result_sort: S,
 }
 
-#[derive(Debug, Clone)]
 pub enum SmtSExpr<H: SmtHandler + ?Sized> {
     SpecialConstant(SmtSpecialConstant),
     Symbol(SmtSymbol),
     Reserved(Reserved),
     Keyword(SmtKeyword),
     SExprs(Vec<H::SExpr>),
+}
+
+impl<H: SmtHandler + ?Sized> Debug for SmtSExpr<H>
+where
+    H::SExpr: Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::SpecialConstant(arg0) => f.debug_tuple("SpecialConstant").field(arg0).finish(),
+            Self::Symbol(arg0) => f.debug_tuple("Symbol").field(arg0).finish(),
+            Self::Reserved(arg0) => f.debug_tuple("Reserved").field(arg0).finish(),
+            Self::Keyword(arg0) => f.debug_tuple("Keyword").field(arg0).finish(),
+            Self::SExprs(arg0) => f.debug_tuple("SExprs").field(arg0).finish(),
+        }
+    }
+}
+
+impl<H: SmtHandler + ?Sized> Clone for SmtSExpr<H>
+where
+    H::SExpr: Clone,
+{
+    fn clone(&self) -> Self {
+        match self {
+            Self::SpecialConstant(arg0) => Self::SpecialConstant(arg0.clone()),
+            Self::Symbol(arg0) => Self::Symbol(arg0.clone()),
+            Self::Reserved(arg0) => Self::Reserved(*arg0),
+            Self::Keyword(arg0) => Self::Keyword(arg0.clone()),
+            Self::SExprs(arg0) => Self::SExprs(arg0.clone()),
+        }
+    }
 }
