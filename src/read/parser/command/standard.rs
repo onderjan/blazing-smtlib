@@ -3,10 +3,10 @@ use std::ops::ControlFlow;
 use crate::{
     CommandHandler, SmtFunctionSignature,
     read::parser::{
-        CategoryParser, ParserError,
+        CategoryParser, CloseParenParser, ParserError, SymbolParser,
         category::{
-            CloseParenParser, ClosedAttributeParser, ClosedParser, MultipleParser,
-            OpenClosedParser, PairParser, SortParser, SymbolParser, TermParser,
+            ClosedAttributeParser, ClosedParser, MultipleParser, OpenClosedParser, PairParser,
+            SortParser, TermParser,
         },
         command::StandardCommand,
         handle_err,
