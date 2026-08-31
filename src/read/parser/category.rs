@@ -400,10 +400,14 @@ pub(super) mod tests {
         type Term = String;
 
         fn handle_sort(&mut self, sort: SmtSort<Self>) -> Result<String, Infallible> {
-            todo!("Handle sort for printing");
-            /*Ok(match sort {
-                SmtSort::Ident(ident) => render_ident(&ident),
-            })*/
+            let ident = render_ident(&sort.ident);
+            Ok(if sort.applied.is_empty() {
+                ident
+            } else {
+                let mut items = vec![ident];
+                items.extend(sort.applied);
+                render_list(&items)
+            })
         }
 
         fn handle_term(&mut self, term: SmtTerm<Self>) -> Result<String, Infallible> {

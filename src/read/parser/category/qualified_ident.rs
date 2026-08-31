@@ -201,6 +201,14 @@ mod tests {
     }
 
     #[test]
+    fn qualified_applied_sort() {
+        // the sort parser handles applied sorts inside `as` as well
+        let qi = parse_all::<QualifiedIdentParser<Printing>>(b"(as x (Array Int Int))");
+        assert_eq!(name(&qi), b"x");
+        assert_eq!(qi.sort.as_deref(), Some("(Array Int Int)"));
+    }
+
+    #[test]
     fn entry_points() {
         // the callers that already consumed `(`, `( _` or `( as`
         // start in the corresponding state
