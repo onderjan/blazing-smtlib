@@ -424,4 +424,10 @@ mod tests {
         }
         assert_eq!(handler.commands, ["my-assert"]);
     }
+    #[test]
+    fn set_info_with_s_expr_attribute_value() {
+        assert!(parse(b"(set-info :notes (a (nested :list) 42 \"str\" let ()))").is_ok());
+        // both closing parentheses are consumed; the next command still parses
+        assert!(parse(b"(set-info :pattern ((f x))) (check-sat)").is_ok());
+    }
 }

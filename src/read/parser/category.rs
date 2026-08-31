@@ -476,7 +476,7 @@ pub(super) mod tests {
             Ok(match expr {
                 SmtSExpr::SpecialConstant(constant) => render_constant(&constant),
                 SmtSExpr::Symbol(symbol) => text(symbol.as_slice()),
-                SmtSExpr::Reserved(reserved) => format!("{reserved:?}"),
+                SmtSExpr::Reserved(reserved) => reserved.as_str().to_string(),
                 SmtSExpr::Keyword(keyword) => format!(":{}", text(keyword.as_slice())),
                 SmtSExpr::SExprs(exprs) => render_list(&exprs),
             })
