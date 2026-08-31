@@ -531,50 +531,7 @@ pub(super) mod tests {
     }
 
     // --- Tests of the generic combinators ---
-
-    // TODO: fix tests
-    /*
-
-    #[test]
-    fn symbol_parser() {
-        let symbol = parse_all::<SymbolParser>(b"abc");
-        assert_eq!(symbol.as_slice(), b"abc");
-        let symbol = parse_all::<SymbolParser>(b"|quoted symbol|");
-        assert_eq!(symbol.as_slice(), b"quoted symbol");
-
-        let err = assert_error::<SymbolParser>(b"1", 0, 1);
-        let expected_symbol = CategoryParserErrorKind::ExpectedToken(&[TokenType::Symbol]);
-        assert_eq!(err, expected_symbol, "{err:?}");
-        let err = assert_error::<SymbolParser>(b"(", 0, 1);
-        assert_eq!(err, expected_symbol, "{err:?}");
-        // reserved words are not symbols
-        let err = assert_error::<SymbolParser>(b"let", 0, 3);
-        assert_eq!(err, expected_symbol, "{err:?}");
-    }
-
-    #[test]
-    fn symbol_parser_consumes_one_token() {
-        let (symbol, left) = run::<SymbolParser>(b"a b c").expect("valid");
-        assert_eq!(symbol.as_slice(), b"a");
-        assert_eq!(left, 2);
-    }
-
-    // TODO: replace test
-    /*
-    #[test]
-    fn close_paren_parser() {
-        parse_all::<CloseParenParser>(b")");
-
-        let err = assert_error::<CloseParenParser>(b"x", 0, 1);
-        assert!(
-            matches!(
-                err,
-                CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
-            ),
-            "{err:?}"
-        );
-    }
-    */
+    // (tests of the single-token parsers live in token.rs)
 
     #[test]
     fn pair_parser() {
@@ -701,5 +658,4 @@ pub(super) mod tests {
             "{err:?}"
         );
     }
-    */
 }
