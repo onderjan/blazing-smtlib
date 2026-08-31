@@ -565,7 +565,7 @@ mod tests {
         // bad indexed identifier in a term
         let err = assert_error::<TermParser<Printing>>(b"(_ f)", 4, 5);
         assert!(
-            matches!(err, CategoryParserErrorKind::RequiredIndices),
+            matches!(err, CategoryParserErrorKind::EmptyIdentIndices),
             "{err:?}"
         );
     }

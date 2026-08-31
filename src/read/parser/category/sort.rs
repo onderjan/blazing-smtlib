@@ -312,7 +312,7 @@ mod tests {
         // errors inside the indexed identifier are reported by the identifier parser
         let err = assert_error::<SortParser<Printing>>(b"(_ BitVec)", 9, 10);
         assert!(
-            matches!(err, CategoryParserErrorKind::RequiredIndices),
+            matches!(err, CategoryParserErrorKind::EmptyIdentIndices),
             "{err:?}"
         );
     }

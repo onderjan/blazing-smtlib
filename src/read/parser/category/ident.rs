@@ -87,7 +87,7 @@ impl<H: SmtHandler> CategoryParser<H> for IdentParser {
             IdentParser::Indices { name, mut indices } => match token.into_kind() {
                 TokenKind::ParenClose => {
                     if indices.is_empty() {
-                        let kind = CategoryParserErrorKind::RequiredIndices;
+                        let kind = CategoryParserErrorKind::EmptyIdentIndices;
                         return Err(CategoryParserError::new(kind, span).into());
                     }
                     Ok(ControlFlow::Break(SmtIdent { name, indices }))
@@ -210,7 +210,7 @@ mod tests {
         // at least one index is required
         let err = assert_error::<IdentParser>(b"(_ f)", 4, 5);
         assert!(
-            matches!(err, CategoryParserErrorKind::RequiredIndices),
+            matches!(err, CategoryParserErrorKind::EmptyIdentIndices),
             "{err:?}"
         );
 

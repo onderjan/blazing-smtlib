@@ -32,8 +32,6 @@ where
 pub enum CategoryParserErrorKind {
     ExpectedToken(&'static [TokenType]),
     EmptyIdentIndices,
-    InvalidIdent,
-    InvalidAttributeValue,
     EmptySortApplication,
     EmptyTermApplication,
     EmptyLetBindings,
@@ -47,9 +45,6 @@ pub enum CategoryParserErrorKind {
     ExpectedAttribute,
     ExpectedCommand,
     ExpectedCommandName,
-    SortApplicationNotSupported,
-    ExpectedLetBinding,
-    RequiredIndices,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
