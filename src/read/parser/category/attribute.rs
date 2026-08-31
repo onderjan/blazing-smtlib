@@ -3,10 +3,9 @@ use std::ops::ControlFlow;
 use crate::{
     SmtAttributeValue, SmtHandler, SmtKeyword,
     read::parser::{
-        CategoryParserError, MultipleParser, ParserError,
+        CategoryParserError, CloseParenParser, MultipleParser, ParserError,
         category::{
-            CategoryParser, CategoryParserErrorKind, expect_close_paren, parse_special_constant,
-            s_expr::SExprParser,
+            CategoryParser, CategoryParserErrorKind, parse_special_constant, s_expr::SExprParser,
         },
         handle_err,
     },
@@ -99,7 +98,7 @@ impl<H: SmtHandler> CategoryParser<H> for ClosedAttributeParser<H> {
                 }
             }
             ClosedAttributeParser::BeforeClose(attribute) => {
-                expect_close_paren(token)?;
+                CloseParenParser::expect(token)?;
                 Ok(ControlFlow::Break(attribute))
             }
         }

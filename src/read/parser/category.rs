@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtHandler, SmtSpan, SmtSpecialConstant, SmtSymbol,
+    SmtHandler, SmtSpan, SmtSpecialConstant,
     read::parser::ParserError,
     token::{Token, TokenKind, TokenType},
 };
@@ -294,41 +294,6 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for MultipleParser<H
     }
 }
 
-fn expect_close_paren<H: SmtHandler>(token: Token) -> Result<(), ParserError<H>> {
-    let span = token.span();
-    if matches!(token.kind(), TokenKind::ParenClose) {
-        Ok(())
-    } else {
-        Err(ParserError::category_error(
-            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose]),
-            span,
-        ))
-    }
-}
-
-fn expect_open_paren<H: SmtHandler>(token: Token) -> Result<(), ParserError<H>> {
-    if matches!(token.kind(), TokenKind::ParenOpen) {
-        Ok(())
-    } else {
-        Err(ParserError::category_error(
-            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenOpen]),
-            token.span(),
-        ))
-    }
-}
-
-fn expect_symbol<H: SmtHandler>(token: Token) -> Result<SmtSymbol, ParserError<H>> {
-    let span = token.span();
-    if let TokenKind::Symbol(symbol) = token.into_kind() {
-        Ok(symbol)
-    } else {
-        Err(ParserError::category_error(
-            CategoryParserErrorKind::ExpectedToken(&[TokenType::Symbol]),
-            span,
-        ))
-    }
-}
-
 fn parse_special_constant(kind: TokenKind) -> Result<SmtSpecialConstant, TokenKind> {
     let constant = match kind {
         TokenKind::Numeral(value) => SmtSpecialConstant::Numeral(value),
@@ -348,7 +313,7 @@ pub(super) mod tests {
     use super::*;
     use crate::{
         SmtAttributeValue, SmtIdent, SmtIndex, SmtKeyword, SmtQualifiedIdent, SmtSExpr, SmtSort,
-        SmtSpecialConstant, SmtTerm,
+        SmtSpecialConstant, SmtSymbol, SmtTerm,
         read::{lexer::Lexer, parser::ParserErrorKind},
     };
 

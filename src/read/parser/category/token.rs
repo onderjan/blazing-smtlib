@@ -22,6 +22,20 @@ macro_rules! token_parser {
             }
         }
 
+        impl $parser {
+            /// Consumes exactly one token, which must match.
+            pub(crate) fn expect<H: SmtHandler>(token: Token) -> Result<$result, ParserError<H>> {
+                let span = token.span();
+                match token.into_kind() {
+                    $pattern => Ok($value),
+                    _ => Err(ParserError::category_error(
+                        CategoryParserErrorKind::ExpectedToken($expected),
+                        span,
+                    )),
+                }
+            }
+        }
+
         impl<H: SmtHandler> CategoryParser<H> for $parser {
             type Result = $result;
 
@@ -30,14 +44,7 @@ macro_rules! token_parser {
                 _handler: &mut H,
                 token: Token,
             ) -> Result<ControlFlow<Self::Result, Self>, ParserError<H>> {
-                let span = token.span();
-                match token.into_kind() {
-                    $pattern => Ok(ControlFlow::Break($value)),
-                    _ => Err(ParserError::category_error(
-                        CategoryParserErrorKind::ExpectedToken($expected),
-                        span,
-                    )),
-                }
+                Ok(ControlFlow::Break(Self::expect(token)?))
             }
         }
     };

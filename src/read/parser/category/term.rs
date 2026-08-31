@@ -3,10 +3,10 @@ use std::ops::ControlFlow;
 use crate::{
     SmtApplication, SmtHandler, SmtQualifiedIdent, SmtSymbol, SmtTerm,
     read::parser::{
-        ParserError,
+        CloseParenParser, OpenParenParser, ParserError, SymbolParser,
         category::{
-            CategoryParser, CategoryParserErrorKind, expect_close_paren, expect_open_paren,
-            expect_symbol, parse_special_constant, qualified_ident::QualifiedIdentParser,
+            CategoryParser, CategoryParserErrorKind, parse_special_constant,
+            qualified_ident::QualifiedIdentParser,
         },
         handle_err,
     },
@@ -145,7 +145,7 @@ impl<H: SmtHandler> TermParser<H> {
                 }
             }
             TermState::LetBeforeBindingsOpen => {
-                expect_open_paren(token)?;
+                OpenParenParser::expect(token)?;
                 TermState::LetBeforeBindingOpen(Vec::new())
             }
             TermState::LetBeforeBindingOpen(bindings) => {
@@ -182,16 +182,16 @@ impl<H: SmtHandler> TermParser<H> {
                 }
             }
             TermState::LetBeforeBindingSymbol(bindings) => {
-                let symbol = expect_symbol(token)?;
+                let symbol = SymbolParser::expect(token)?;
                 levels.push(TermLevel::LetBinding(bindings, symbol));
                 TermState::Start
             }
             TermState::LetBeforeBindingClose(bindings) => {
-                expect_close_paren(token)?;
+                CloseParenParser::expect(token)?;
                 TermState::LetBeforeBindingOpen(bindings)
             }
             TermState::LetAfterInnerTerm(term) => {
-                expect_close_paren(token)?;
+                CloseParenParser::expect(token)?;
                 return Ok(ControlFlow::Break((levels, term)));
             }
         };

@@ -3,10 +3,10 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler, SmtIdent, SmtQualifiedIdent,
     read::parser::{
-        ParserError,
+        CloseParenParser, ParserError,
         category::{
-            CategoryParser, CategoryParserError, CategoryParserErrorKind, expect_close_paren,
-            ident::IdentParser, sort::SortParser,
+            CategoryParser, CategoryParserError, CategoryParserErrorKind, ident::IdentParser,
+            sort::SortParser,
         },
     },
     token::{Reserved, Token, TokenKind, TokenType},
@@ -128,7 +128,7 @@ impl<H: SmtHandler> CategoryParser<H> for QualifiedIdentParser<H> {
                 }
             }
             QualifiedIdentParser::QualifiedClose(ident, sort) => {
-                expect_close_paren(token)?;
+                CloseParenParser::expect(token)?;
                 Ok(ControlFlow::Break(SmtQualifiedIdent::new_qualified(
                     ident, sort,
                 )))
