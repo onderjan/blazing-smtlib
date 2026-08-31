@@ -218,11 +218,36 @@ where
     }
 }
 
-#[derive(Debug)]
-pub struct SmtFunctionSignature<S> {
+pub struct SmtFunctionSignature<H: SmtHandler + ?Sized> {
     pub name: SmtSymbol,
-    pub parameters: Vec<(SmtSymbol, S)>,
-    pub result_sort: S,
+    pub params: Vec<(SmtSymbol, H::Sort)>,
+    pub result_sort: H::Sort,
+}
+
+impl<H: SmtHandler + ?Sized> Debug for SmtFunctionSignature<H>
+where
+    H::Sort: Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SmtFunctionSignature")
+            .field("name", &self.name)
+            .field("params", &self.params)
+            .field("result_sort", &self.result_sort)
+            .finish()
+    }
+}
+
+impl<H: SmtHandler + ?Sized> Clone for SmtFunctionSignature<H>
+where
+    H::Sort: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            name: self.name.clone(),
+            params: self.params.clone(),
+            result_sort: self.result_sort.clone(),
+        }
+    }
 }
 
 pub enum SmtSExpr<H: SmtHandler + ?Sized> {
@@ -307,7 +332,6 @@ mod tests {
     }
 
     fn assert_debug_and_clone<T: Debug + Clone>() {}
-    fn assert_debug<T: Debug>() {}
 
     /// The `H`-generic nodes must be `Debug` and `Clone` whenever the handler's
     /// associated types are, regardless of the handler type itself.
@@ -326,7 +350,6 @@ mod tests {
         assert_debug_and_clone::<SmtTerm<OpaqueHandler>>();
         assert_debug_and_clone::<SmtAttributeValue<OpaqueHandler>>();
         assert_debug_and_clone::<SmtSExpr<OpaqueHandler>>();
-        // the signature is generic over the sort directly and is only `Debug`
-        assert_debug::<SmtFunctionSignature<String>>();
+        assert_debug_and_clone::<SmtFunctionSignature<OpaqueHandler>>();
     }
 }

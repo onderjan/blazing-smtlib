@@ -5,9 +5,10 @@ use crate::{
     read::parser::{
         CategoryParserError, MultipleParser, ParserError,
         category::{
-            CategoryParser, CategoryParserErrorKind, expect_close_paren, handle_err,
-            parse_special_constant, s_expr::SExprParser,
+            CategoryParser, CategoryParserErrorKind, expect_close_paren, parse_special_constant,
+            s_expr::SExprParser,
         },
+        handle_err,
     },
     token::{Token, TokenKind, TokenType},
 };

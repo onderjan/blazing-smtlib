@@ -391,16 +391,6 @@ fn expect_symbol<H: SmtHandler>(token: Token) -> Result<SmtSymbol, ParserError<H
     }
 }
 
-fn handle_err<O, H: SmtHandler>(
-    handled: Result<O, H::Error>,
-    span: SmtSpan,
-) -> Result<O, ParserError<H>> {
-    match handled {
-        Ok(ok) => Ok(ok),
-        Err(err) => Err(ParserError::handler_error(err, span)),
-    }
-}
-
 fn parse_special_constant(kind: TokenKind) -> Result<SmtSpecialConstant, TokenKind> {
     let constant = match kind {
         TokenKind::Numeral(value) => SmtSpecialConstant::Numeral(value),

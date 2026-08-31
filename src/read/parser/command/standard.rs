@@ -1,12 +1,17 @@
+use std::ops::ControlFlow;
+
 use crate::{
-    CommandHandler, SmtSymbol,
+    CommandHandler, SmtFunctionSignature, SmtSymbol,
     read::parser::{
+        CategoryParser, ParserError,
         category::{
             CloseParenParser, ClosedAttributeParser, ClosedParser, MultipleParser,
             OpenClosedParser, PairParser, SortParser, SymbolParser, TermParser,
         },
         command::StandardCommand,
+        handle_err,
     },
+    token::Token,
 };
 
 pub struct CommandSetLogic;
@@ -47,28 +52,73 @@ impl<H: CommandHandler> StandardCommand<H> for CommandDeclareFun {
     }
 }
 
-pub struct CommandDefineFun;
-
-pub type SortedVarParser<H> = OpenClosedParser<H, PairParser<H, SymbolParser, SortParser<H>>>;
-pub type FunctionDefParser<H> = PairParser<
+type SortedVarParser<H> = OpenClosedParser<H, PairParser<H, SymbolParser, SortParser<H>>>;
+type DefineFunSignatureParser<H> = PairParser<
     H,
     SymbolParser,
-    PairParser<
-        H,
-        MultipleParser<H, SortedVarParser<H>>,
-        PairParser<H, SortParser<H>, TermParser<H>>,
-    >,
+    PairParser<H, MultipleParser<H, SortedVarParser<H>>, SortParser<H>>,
 >;
 
-impl<H: CommandHandler> StandardCommand<H> for CommandDefineFun {
-    type Parser = ClosedParser<H, FunctionDefParser<H>>;
+pub enum DefineFunParser<H: CommandHandler> {
+    Signature(DefineFunSignatureParser<H>),
+    Body(TermParser<H>),
+}
 
-    fn handle(
+impl<H: CommandHandler> DefineFunParser<H> {
+    pub fn new() -> Self {
+        Self::Signature(DefineFunSignatureParser::new())
+    }
+}
+
+impl<H: CommandHandler> Default for DefineFunParser<H> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<H: CommandHandler> CategoryParser<H> for DefineFunParser<H> {
+    type Result = ();
+
+    fn progress(
+        self,
         handler: &mut H,
-        result: (SmtSymbol, (Vec<(SmtSymbol, H::Sort)>, (H::Sort, H::Term))),
-    ) -> Result<(), <H>::Error> {
-        let (name, (param_sorts, (result_sort, definition))) = result;
-        handler.command_define_fun(name, param_sorts, result_sort, definition)
+        token: Token,
+    ) -> Result<ControlFlow<Self::Result, Self>, ParserError<H>> {
+        let span = token.span();
+        let result = match self {
+            DefineFunParser::Signature(parser) => match parser.progress(handler, token)? {
+                ControlFlow::Continue(parser) => DefineFunParser::Signature(parser),
+                ControlFlow::Break((name, (params, result_sort))) => {
+                    let signature = SmtFunctionSignature {
+                        name,
+                        params,
+                        result_sort,
+                    };
+
+                    handle_err(handler.start_define_fun(signature), span)?;
+                    DefineFunParser::Body(TermParser::new())
+                }
+            },
+            DefineFunParser::Body(parser) => match parser.progress(handler, token)? {
+                ControlFlow::Continue(parser) => DefineFunParser::Body(parser),
+                ControlFlow::Break(term) => {
+                    handle_err(handler.end_define_fun(term), span)?;
+                    return Ok(ControlFlow::Break(()));
+                }
+            },
+        };
+        Ok(ControlFlow::Continue(result))
+    }
+}
+
+pub struct CommandDefineFun;
+
+impl<H: CommandHandler> StandardCommand<H> for CommandDefineFun {
+    type Parser = ClosedParser<H, DefineFunParser<H>>;
+
+    fn handle(_handler: &mut H, _result: ()) -> Result<(), <H>::Error> {
+        // already handled by the parser
+        Ok(())
     }
 }
 

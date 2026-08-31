@@ -55,13 +55,6 @@ pub trait CommandHandler: SmtHandler {
         param_sorts: Vec<Self::Sort>,
         result_sort: Self::Sort,
     ) -> Result<(), Self::Error>;
-    fn command_define_fun(
-        &mut self,
-        name: SmtSymbol,
-        params: Vec<(SmtSymbol, Self::Sort)>,
-        result_sort: Self::Sort,
-        definition: Self::Term,
-    ) -> Result<(), Self::Error>;
 
     fn command_assert(&mut self, term: Self::Term) -> Result<(), Self::Error>;
 
@@ -75,7 +68,7 @@ pub trait CommandHandler: SmtHandler {
 
     fn start_define_fun(
         &mut self,
-        signature: SmtFunctionSignature<Self::Sort>,
+        signature: SmtFunctionSignature<Self>,
     ) -> Result<(), Self::Error>;
 
     fn end_define_fun(&mut self, term: Self::Term) -> Result<(), Self::Error>;
@@ -176,16 +169,6 @@ impl CommandHandler for CheckStandardSyntax {
         Ok(())
     }
 
-    fn command_define_fun(
-        &mut self,
-        _name: SmtSymbol,
-        _params: Vec<(SmtSymbol, Self::Sort)>,
-        _result_sort: Self::Sort,
-        _definition: Self::Term,
-    ) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
     fn command_assert(&mut self, _term: Self::Term) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -208,7 +191,7 @@ impl CommandHandler for CheckStandardSyntax {
 
     fn start_define_fun(
         &mut self,
-        _signature: SmtFunctionSignature<Self::Sort>,
+        _signature: SmtFunctionSignature<Self>,
     ) -> Result<(), Self::Error> {
         Ok(())
     }

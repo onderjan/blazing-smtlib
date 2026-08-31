@@ -4,7 +4,8 @@ use crate::{
     SmtHandler, SmtSExpr, SmtSpan,
     read::parser::{
         ParserError,
-        category::{CategoryParser, CategoryParserErrorKind, handle_err, parse_special_constant},
+        category::{CategoryParser, CategoryParserErrorKind, parse_special_constant},
+        handle_err,
     },
     token::{Token, TokenKind},
 };

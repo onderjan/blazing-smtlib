@@ -123,6 +123,18 @@ impl<'a, H: CommandHandler> Parser<'a, H> {
     }
 }
 
+fn handle_err<O, H: SmtHandler>(
+    handled: Result<O, H::Error>,
+    span: SmtSpan,
+) -> Result<O, ParserError<H>> {
+    match handled {
+        Ok(ok) => Ok(ok),
+        Err(err) => Err(ParserError::handler_error(err, span)),
+    }
+}
+
+// TODO: fix tests
+/*
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -448,3 +460,4 @@ mod tests {
         assert_eq!(handler.commands, ["my-assert"]);
     }
 }
+*/

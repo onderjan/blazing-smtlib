@@ -4,7 +4,8 @@ use crate::{
     SmtHandler, SmtIdent, SmtSort,
     read::parser::{
         ParserError,
-        category::{CategoryParser, CategoryParserErrorKind, handle_err, ident::IdentParser},
+        category::{CategoryParser, CategoryParserErrorKind, ident::IdentParser},
+        handle_err,
     },
     token::{Reserved, Token, TokenKind},
 };
