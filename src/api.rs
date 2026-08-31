@@ -144,7 +144,6 @@ where
     }
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum SmtSpecialConstant {
     Numeral(SmtNumeral),
@@ -160,15 +159,13 @@ pub enum SmtTerm<H: SmtHandler + ?Sized> {
     Application(SmtApplication<H>),
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum SmtAttributeValue<H: SmtHandler + ?Sized> {
     SpecialConstant(SmtSpecialConstant),
     Symbol(SmtSymbol),
-    Exprs(Vec<H::SExpr>),
+    SExprs(Vec<H::SExpr>),
 }
 
-#[allow(dead_code)]
 #[derive(Debug)]
 pub struct SmtFunctionSignature<S> {
     pub name: SmtSymbol,
@@ -176,7 +173,6 @@ pub struct SmtFunctionSignature<S> {
     pub result_sort: S,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum SmtSExpr<H: SmtHandler + ?Sized> {
     SpecialConstant(SmtSpecialConstant),
@@ -186,7 +182,7 @@ pub enum SmtSExpr<H: SmtHandler + ?Sized> {
     SExprs(Vec<H::SExpr>),
 }
 
-pub trait SmtHandler: 'static {
+pub trait SmtHandler {
     type Error;
 
     type SExpr;
@@ -194,10 +190,10 @@ pub trait SmtHandler: 'static {
     type Sort;
     type Term;
 
-    fn handle_sort(&mut self, _sort: SmtSort<Self>) -> Result<Self::Sort, Self::Error>;
-    fn handle_term(&mut self, _term: SmtTerm<Self>) -> Result<Self::Term, Self::Error>;
-    fn start_let(&mut self, _bindings: Vec<(SmtSymbol, Self::Term)>) -> Result<(), Self::Error>;
-    fn end_let(&mut self, _term: Self::Term) -> Result<Self::Term, Self::Error>;
+    fn handle_sort(&mut self, sort: SmtSort<Self>) -> Result<Self::Sort, Self::Error>;
+    fn handle_term(&mut self, term: SmtTerm<Self>) -> Result<Self::Term, Self::Error>;
+    fn start_let(&mut self, bindings: Vec<(SmtSymbol, Self::Term)>) -> Result<(), Self::Error>;
+    fn end_let(&mut self, term: Self::Term) -> Result<Self::Term, Self::Error>;
 
     fn handle_s_expr(&mut self, expr: SmtSExpr<Self>) -> Result<Self::SExpr, Self::Error>;
     fn handle_attribute(

@@ -93,7 +93,7 @@ impl<H: SmtHandler> CategoryParser<H> for ClosedAttributeParser<H> {
                     ControlFlow::Break(s_exprs) => {
                         // the s-expr closing parenthesis was consumed
                         // but the attribute closing parenthesis still waits to be consumed
-                        let value = SmtAttributeValue::Exprs(s_exprs);
+                        let value = SmtAttributeValue::SExprs(s_exprs);
                         let attribute =
                             handle_err(handler.handle_attribute(name, Some(value)), token_span)?;
                         Ok(ControlFlow::Continue(ClosedAttributeParser::BeforeClose(

@@ -496,7 +496,7 @@ pub(super) mod tests {
                 Some(SmtAttributeValue::Symbol(symbol)) => {
                     format!("{name} {}", text(symbol.as_slice()))
                 }
-                Some(SmtAttributeValue::Exprs(exprs)) => format!("{name} {}", render_list(&exprs)),
+                Some(SmtAttributeValue::SExprs(exprs)) => format!("{name} {}", render_list(&exprs)),
             })
         }
     }
