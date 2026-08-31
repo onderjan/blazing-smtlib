@@ -210,7 +210,7 @@ mod tests {
         let err = read(input).expect_err("expected a parser error, got Ok");
         assert!(matches!(
             err.kind(),
-            SmtReadErrorKind::Parser(CategoryParserErrorKind::EmptyApplication)
+            SmtReadErrorKind::Parser(CategoryParserErrorKind::EmptyTermApplication)
         ));
         assert_span(&err, (52, 3, 12), (53, 3, 13));
     }

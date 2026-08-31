@@ -261,7 +261,7 @@ mod tests {
         type Sort = ();
         type Term = ();
 
-        fn handle_sort(&mut self, _sort: SmtSort) -> Result<(), Self::Error> {
+        fn handle_sort(&mut self, _sort: SmtSort<Self>) -> Result<(), Self::Error> {
             Ok(())
         }
         fn handle_term(&mut self, _term: SmtTerm<Self>) -> Result<(), Self::Error> {

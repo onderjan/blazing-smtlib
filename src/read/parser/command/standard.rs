@@ -22,7 +22,7 @@ impl<H: CommandHandler> StandardCommand<H> for CommandSetLogic {
 pub struct CommandDeclareConst;
 
 impl<H: CommandHandler> StandardCommand<H> for CommandDeclareConst {
-    type Parser = ClosedParser<H, PairParser<H, SymbolParser, SortParser>>;
+    type Parser = ClosedParser<H, PairParser<H, SymbolParser, SortParser<H>>>;
 
     fn handle(handler: &mut H, result: (SmtSymbol, H::Sort)) -> Result<(), <H>::Error> {
         let (name, sort) = result;
@@ -35,7 +35,7 @@ pub struct CommandDeclareFun;
 impl<H: CommandHandler> StandardCommand<H> for CommandDeclareFun {
     type Parser = ClosedParser<
         H,
-        PairParser<H, SymbolParser, PairParser<H, MultipleParser<H, SortParser>, SortParser>>,
+        PairParser<H, SymbolParser, PairParser<H, MultipleParser<H, SortParser<H>>, SortParser<H>>>,
     >;
 
     fn handle(
@@ -49,11 +49,15 @@ impl<H: CommandHandler> StandardCommand<H> for CommandDeclareFun {
 
 pub struct CommandDefineFun;
 
-pub type SortedVarParser<H> = OpenClosedParser<H, PairParser<H, SymbolParser, SortParser>>;
+pub type SortedVarParser<H> = OpenClosedParser<H, PairParser<H, SymbolParser, SortParser<H>>>;
 pub type FunctionDefParser<H> = PairParser<
     H,
     SymbolParser,
-    PairParser<H, MultipleParser<H, SortedVarParser<H>>, PairParser<H, SortParser, TermParser<H>>>,
+    PairParser<
+        H,
+        MultipleParser<H, SortedVarParser<H>>,
+        PairParser<H, SortParser<H>, TermParser<H>>,
+    >,
 >;
 
 impl<H: CommandHandler> StandardCommand<H> for CommandDefineFun {

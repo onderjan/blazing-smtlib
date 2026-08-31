@@ -1,8 +1,11 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtApplication, SmtHandler, SmtQualifiedIdent, SmtSpan, SmtSpecialConstant, SmtSymbol, SmtTerm,
-    parser::{category::CategoryParserErrorKind, qualified_ident::QualifiedIdentParser},
+    SmtApplication, SmtHandler, SmtQualifiedIdent, SmtSpecialConstant, SmtSymbol, SmtTerm,
+    parser::{
+        category::{CategoryParserErrorKind, handle_err},
+        qualified_ident::QualifiedIdentParser,
+    },
     read::parser::{ParserError, category::CategoryParser},
     token::{Reserved, Token, TokenKind, TokenType},
 };
@@ -132,7 +135,7 @@ impl<H: SmtHandler> TermParser<H> {
                     // it must have at least one argument
                     if args.is_empty() {
                         return Err(ParserError::category_error(
-                            CategoryParserErrorKind::EmptyApplication,
+                            CategoryParserErrorKind::EmptyTermApplication,
                             span,
                         ));
                     }
@@ -334,16 +337,6 @@ fn expect_symbol<H: SmtHandler>(token: Token) -> Result<SmtSymbol, ParserError<H
     }
 }
 
-fn handle_err<O, H: SmtHandler>(
-    handled: Result<O, H::Error>,
-    span: SmtSpan,
-) -> Result<O, ParserError<H>> {
-    match handled {
-        Ok(ok) => Ok(ok),
-        Err(err) => Err(ParserError::handler_error(err, span)),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::convert::Infallible;
@@ -451,7 +444,7 @@ mod tests {
         // an application must have at least one argument
         let err = assert_error::<TermParser<Printing>>(b"(f)", 2, 3);
         assert!(
-            matches!(err, CategoryParserErrorKind::EmptyApplication),
+            matches!(err, CategoryParserErrorKind::EmptyTermApplication),
             "{err:?}"
         );
     }
@@ -603,7 +596,7 @@ mod tests {
         type Sort = ();
         type Term = ();
 
-        fn handle_sort(&mut self, _sort: SmtSort) -> Result<(), Infallible> {
+        fn handle_sort(&mut self, _sort: SmtSort<Self>) -> Result<(), Infallible> {
             Ok(())
         }
         fn handle_term(&mut self, _term: SmtTerm<Self>) -> Result<(), Infallible> {

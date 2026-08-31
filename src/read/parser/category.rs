@@ -33,7 +33,8 @@ pub enum CategoryParserErrorKind {
     EmptyIdentIndices,
     InvalidIdent,
     InvalidAttributeValue,
-    EmptyApplication,
+    EmptySortApplication,
+    EmptyTermApplication,
     EmptyLetBindings,
     ExpectedIndexOrCloseParen,
     ExpectedOperator,
@@ -313,6 +314,16 @@ fn expect_close_parenthesis<H: SmtHandler>(token: Token) -> Result<(), ParserErr
     }
 }
 
+fn handle_err<O, H: SmtHandler>(
+    handled: Result<O, H::Error>,
+    span: SmtSpan,
+) -> Result<O, ParserError<H>> {
+    match handled {
+        Ok(ok) => Ok(ok),
+        Err(err) => Err(ParserError::handler_error(err, span)),
+    }
+}
+
 #[cfg(test)]
 pub(super) mod tests {
     use std::convert::Infallible;
@@ -388,10 +399,11 @@ pub(super) mod tests {
         type Sort = String;
         type Term = String;
 
-        fn handle_sort(&mut self, sort: SmtSort) -> Result<String, Infallible> {
-            Ok(match sort {
+        fn handle_sort(&mut self, sort: SmtSort<Self>) -> Result<String, Infallible> {
+            todo!("Handle sort for printing");
+            /*Ok(match sort {
                 SmtSort::Ident(ident) => render_ident(&ident),
-            })
+            })*/
         }
 
         fn handle_term(&mut self, term: SmtTerm<Self>) -> Result<String, Infallible> {

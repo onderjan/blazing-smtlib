@@ -16,7 +16,7 @@ pub enum QualifiedIdentParser<H: SmtHandler> {
     Open,
     UnqualifiedIndexed(IdentParser),
     QualifiedIdent(IdentParser),
-    QualifiedSort(SmtIdent, SortParser),
+    QualifiedSort(SmtIdent, SortParser<H>),
     QualifiedClose(SmtIdent, H::Sort),
 }
 

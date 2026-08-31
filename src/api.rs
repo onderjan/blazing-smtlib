@@ -27,12 +27,6 @@ impl SmtIdent {
     }
 }
 
-#[derive(Debug, Clone)]
-
-pub enum SmtSort {
-    Ident(SmtIdent),
-}
-
 pub struct SmtQualifiedIdent<H: SmtHandler + ?Sized> {
     pub ident: SmtIdent,
     pub sort: Option<H::Sort>,
@@ -75,6 +69,45 @@ where
         Self {
             ident: self.ident.clone(),
             sort: self.sort.clone(),
+        }
+    }
+}
+
+pub struct SmtSort<H: SmtHandler + ?Sized> {
+    pub ident: SmtIdent,
+    pub applied: Vec<H::Sort>,
+}
+
+impl<H: SmtHandler> SmtSort<H> {
+    pub fn new(ident: SmtIdent, applied: Vec<H::Sort>) -> Self {
+        Self { ident, applied }
+    }
+
+    pub fn new_simple(ident: SmtIdent) -> Self {
+        Self::new(ident, Vec::new())
+    }
+}
+
+impl<H: SmtHandler + ?Sized> Debug for SmtSort<H>
+where
+    H::Sort: Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SmtSort")
+            .field("ident", &self.ident)
+            .field("applied", &self.applied)
+            .finish()
+    }
+}
+
+impl<H: SmtHandler + ?Sized> Clone for SmtSort<H>
+where
+    H::Sort: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            ident: self.ident.clone(),
+            applied: self.applied.clone(),
         }
     }
 }
@@ -161,7 +194,7 @@ pub trait SmtHandler: 'static {
     type Sort;
     type Term;
 
-    fn handle_sort(&mut self, _sort: SmtSort) -> Result<Self::Sort, Self::Error>;
+    fn handle_sort(&mut self, _sort: SmtSort<Self>) -> Result<Self::Sort, Self::Error>;
     fn handle_term(&mut self, _term: SmtTerm<Self>) -> Result<Self::Term, Self::Error>;
     fn start_let(&mut self, _bindings: Vec<(SmtSymbol, Self::Term)>) -> Result<(), Self::Error>;
     fn end_let(&mut self, _term: Self::Term) -> Result<Self::Term, Self::Error>;
@@ -242,7 +275,7 @@ impl SmtHandler for CheckStandardSyntax {
     type Sort = ();
     type Term = ();
 
-    fn handle_sort(&mut self, _sort: SmtSort) -> Result<Self::Sort, Self::Error> {
+    fn handle_sort(&mut self, _sort: SmtSort<Self>) -> Result<Self::Sort, Self::Error> {
         Ok(())
     }
 
