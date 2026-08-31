@@ -7,7 +7,9 @@ use crate::{
         category::CategoryParser,
         command::standard::{
             CommandAssert, CommandCheckSat, CommandDeclareConst, CommandDeclareFun,
-            CommandDefineFun, CommandExit, CommandSetInfo, CommandSetLogic,
+            CommandDefineFun, CommandEcho, CommandExit, CommandGetInfo, CommandGetOption,
+            CommandReset, CommandResetAssertions, CommandSetInfo, CommandSetLogic,
+            CommandSetOption,
         },
     },
     token::Token,
@@ -57,6 +59,12 @@ pub(crate) enum CommandParser<H: CommandHandler> {
     CheckSat(StaticCommandParser<H, CommandCheckSat>),
     Exit(StaticCommandParser<H, CommandExit>),
     SetInfo(StaticCommandParser<H, CommandSetInfo>),
+    Echo(StaticCommandParser<H, CommandEcho>),
+    GetOption(StaticCommandParser<H, CommandGetOption>),
+    SetOption(StaticCommandParser<H, CommandSetOption>),
+    GetInfo(StaticCommandParser<H, CommandGetInfo>),
+    Reset(StaticCommandParser<H, CommandReset>),
+    ResetAssertions(StaticCommandParser<H, CommandResetAssertions>),
     Nonstandard(H::NonstandardParser),
 }
 
@@ -76,6 +84,12 @@ impl<H: CommandHandler> ParseCommand<H> for CommandParser<H> {
             Self::Exit(p) => p.progress(handler, token),
             Self::SetInfo(p) => p.progress(handler, token),
             Self::Nonstandard(p) => p.progress(handler, token),
+            Self::Echo(p) => p.progress(handler, token),
+            Self::GetOption(p) => p.progress(handler, token),
+            Self::SetOption(p) => p.progress(handler, token),
+            Self::GetInfo(p) => p.progress(handler, token),
+            Self::Reset(p) => p.progress(handler, token),
+            Self::ResetAssertions(p) => p.progress(handler, token),
         }
     }
 }
@@ -139,6 +153,12 @@ impl<H: CommandHandler> super::Parser<'_, H> {
             b"check-sat" => CommandParser::CheckSat(StaticCommandParser::new()),
             b"exit" => CommandParser::Exit(StaticCommandParser::new()),
             b"set-info" => CommandParser::SetInfo(StaticCommandParser::new()),
+            b"echo" => CommandParser::Echo(StaticCommandParser::new()),
+            b"get-option" => CommandParser::GetOption(StaticCommandParser::new()),
+            b"set-option" => CommandParser::SetOption(StaticCommandParser::new()),
+            b"get-info" => CommandParser::GetInfo(StaticCommandParser::new()),
+            b"reset" => CommandParser::Reset(StaticCommandParser::new()),
+            b"reset-assertions" => CommandParser::ResetAssertions(StaticCommandParser::new()),
             _ => match self.handler.nonstandard_command(name) {
                 Ok(parser) => CommandParser::Nonstandard(parser),
                 Err(err) => return Err(ParserError::handler_error(err, span)),

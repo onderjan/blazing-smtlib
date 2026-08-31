@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     CommandHandler, SmtFunctionSignature,
     read::parser::{
-        CategoryParser, CloseParenParser, ParserError, SymbolParser,
+        CategoryParser, CloseParenParser, KeywordParser, ParserError, StringParser, SymbolParser,
         category::{
             ClosedAttributeParser, ClosedParser, MultipleParser, OpenClosedParser, PairParser,
             SortParser, TermParser,
@@ -53,6 +53,22 @@ standard_command!(
     ClosedAttributeParser<H>,
     |handler, attribute| handler.command_set_info(attribute)
 );
+standard_command!(CommandEcho, ClosedParser<H, StringParser>,
+    |handler, value| handler.command_echo(value));
+standard_command!(CommandGetOption, ClosedParser<H, KeywordParser>,
+    |handler, option| handler.command_get_option(option));
+standard_command!(
+    CommandSetOption,
+    ClosedAttributeParser<H>,
+    |handler, option| handler.command_set_option(option)
+);
+standard_command!(CommandGetInfo, ClosedParser<H, KeywordParser>,
+    |handler, keyword| handler.command_get_info(keyword));
+standard_command!(CommandReset, CloseParenParser, |handler, ()| handler
+    .command_reset());
+standard_command!(CommandResetAssertions, CloseParenParser, |handler, ()| {
+    handler.command_reset_assertions()
+});
 
 // the handler is called by the custom parser
 standard_command!(CommandDefineFun, ClosedParser<H, DefineFunParser<H>>,
