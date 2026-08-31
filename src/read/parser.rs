@@ -1,8 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    CommandHandler, SmtSpan,
-    api::SmtHandler,
+    CommandHandler, SmtHandler, SmtSpan,
     token::{Token, TokenKind},
 };
 
