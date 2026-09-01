@@ -6,7 +6,7 @@ use std::{
 };
 
 use crate::{
-    CommandHandler, SmtHandler, SmtSpan,
+    CommandHandler, SmtSpan,
     read::{
         lexer::{LexError, Lexer, LexerError, LexerErrorKind},
         parser::{CategoryParserErrorKind, Parser, ParserError, ParserErrorKind},
@@ -16,7 +16,8 @@ use crate::{
 pub mod lexer;
 pub mod parser;
 
-pub enum SmtReadErrorKind<H: SmtHandler> {
+#[derive(Debug)]
+pub enum SmtReadErrorKind<E> {
     /// The error occurred when reading.
     Io(std::io::Error),
     /// The error occurred when lexing.
@@ -24,20 +25,21 @@ pub enum SmtReadErrorKind<H: SmtHandler> {
     /// The error occurred when parsing.
     Parser(CategoryParserErrorKind),
     /// The error occurred in the user handler.
-    Handler(H::Error),
+    Handler(E),
 }
 
-pub struct SmtReadError<H: SmtHandler> {
-    kind: SmtReadErrorKind<H>,
+#[derive(Debug)]
+pub struct SmtReadError<E> {
+    kind: SmtReadErrorKind<E>,
     span: SmtSpan,
 }
 
-impl<H: SmtHandler> SmtReadError<H> {
-    pub(crate) fn new(kind: SmtReadErrorKind<H>, span: SmtSpan) -> Self {
+impl<E> SmtReadError<E> {
+    pub(crate) fn new(kind: SmtReadErrorKind<E>, span: SmtSpan) -> Self {
         Self { kind, span }
     }
 
-    pub fn kind(&self) -> &SmtReadErrorKind<H> {
+    pub fn kind(&self) -> &SmtReadErrorKind<E> {
         &self.kind
     }
 
@@ -49,13 +51,13 @@ impl<H: SmtHandler> SmtReadError<H> {
         self.span
     }
 
-    pub fn into_kind(self) -> SmtReadErrorKind<H> {
+    pub fn into_kind(self) -> SmtReadErrorKind<E> {
         self.kind
     }
 }
 
-impl<H: SmtHandler> From<LexError<ParserError<H::Error>>> for SmtReadError<H> {
-    fn from(err: LexError<ParserError<H::Error>>) -> Self {
+impl<E> From<LexError<ParserError<E>>> for SmtReadError<E> {
+    fn from(err: LexError<ParserError<E>>) -> Self {
         match err {
             LexError::Lexer(err) => err.into(),
             LexError::Handler(err) => err.into(),
@@ -63,17 +65,17 @@ impl<H: SmtHandler> From<LexError<ParserError<H::Error>>> for SmtReadError<H> {
     }
 }
 
-impl<H: SmtHandler> From<LexerError> for SmtReadError<H> {
+impl<E> From<LexerError> for SmtReadError<E> {
     fn from(err: LexerError) -> Self {
         let span = err.span();
         SmtReadError::new(SmtReadErrorKind::Lexer(err.into_kind()), span)
     }
 }
 
-impl<H: SmtHandler> From<ParserError<H::Error>> for SmtReadError<H> {
-    fn from(err: ParserError<H::Error>) -> Self {
+impl<E> From<ParserError<E>> for SmtReadError<E> {
+    fn from(err: ParserError<E>) -> Self {
         let span = err.span();
-        let kind: SmtReadErrorKind<H> = match err.into_kind() {
+        let kind = match err.into_kind() {
             ParserErrorKind::Category(err) => SmtReadErrorKind::Parser(err),
             ParserErrorKind::Handler(err) => SmtReadErrorKind::Handler(err),
         };
@@ -84,7 +86,7 @@ impl<H: SmtHandler> From<ParserError<H::Error>> for SmtReadError<H> {
 pub fn read_smt_file<H: CommandHandler>(
     handler: &mut H,
     path: &Path,
-) -> Result<(), SmtReadError<H>> {
+) -> Result<(), SmtReadError<H::Error>> {
     let file = File::open(path)
         .map_err(|err| SmtReadError::new(SmtReadErrorKind::Io(err), SmtSpan::new_zero()))?;
     let reader = BufReader::new(file);
@@ -94,7 +96,7 @@ pub fn read_smt_file<H: CommandHandler>(
 pub fn read_smt<H: CommandHandler>(
     handler: &mut H,
     buf_reader: impl BufRead,
-) -> Result<(), SmtReadError<H>> {
+) -> Result<(), SmtReadError<H::Error>> {
     let mut parser = Parser::new(handler);
     SmtReader::new(&mut parser, buf_reader).run()
 }
@@ -110,12 +112,12 @@ impl<'a, H: CommandHandler, R: BufRead> SmtReader<'a, H, R> {
         Self { buf_reader, lexer }
     }
 
-    fn run(mut self) -> Result<(), SmtReadError<H>> {
+    fn run(mut self) -> Result<(), SmtReadError<H::Error>> {
         while let ControlFlow::Continue(()) = self.read_buf()? {}
         self.finish_eof()
     }
 
-    fn read_buf(&mut self) -> Result<ControlFlow<()>, SmtReadError<H>> {
+    fn read_buf(&mut self) -> Result<ControlFlow<()>, SmtReadError<H::Error>> {
         match self.buf_reader.fill_buf() {
             Ok(buffer) => {
                 if buffer.is_empty() {
@@ -139,7 +141,7 @@ impl<'a, H: CommandHandler, R: BufRead> SmtReader<'a, H, R> {
         }
     }
 
-    fn finish_eof(mut self) -> Result<(), SmtReadError<H>> {
-        self.lexer.lex_eof().map_err(|err| err.into())
+    fn finish_eof(mut self) -> Result<(), SmtReadError<H::Error>> {
+        Ok(self.lexer.lex_eof()?)
     }
 }
