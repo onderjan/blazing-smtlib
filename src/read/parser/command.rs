@@ -130,9 +130,9 @@ mod tests {
 
     #[test]
     fn finished_command_parser_parses_the_next_command() {
-        todo!("Fix test")
-        /*let mut handler = CheckStandardSyntax;
-        let mut parser: CommandParser<CheckStandardSyntax, CommandCheckSat> = CommandParser::new();
+        let mut handler = CheckStandardSyntax;
+        let mut parser: CommandParser<CheckStandardSyntax, standard::CheckSat> =
+            CommandParser::new();
 
         // a check-sat command body is just the closing parenthesis,
         // so one token finishes the command; the parser is self-restarting
@@ -146,6 +146,6 @@ mod tests {
                 flow,
                 ControlFlow::Break(CommandResult::EndCommand)
             ));
-        }*/
+        }
     }
 }

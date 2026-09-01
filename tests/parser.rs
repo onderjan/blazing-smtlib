@@ -318,9 +318,10 @@ fn everything_after_exit_is_discarded() {
 #[test]
 fn commands_after_exit_are_not_handled() {
     let mut handler = Recording::default();
-    // `(other)` would be rejected by the handler before the exit,
-    // but after it, the handler must not even be consulted
+    // the exit command itself is delivered to the handler, but `(other)`,
+    // which the handler would reject before the exit, must not even be
+    // consulted after it
     parse_with(&mut handler, b"(my-assert x) (exit) (other)")
         .unwrap_or_else(|err| panic!("unexpected error at {:?}", err.span()));
-    assert_eq!(handler.commands, ["my-assert"]);
+    assert_eq!(handler.commands, ["my-assert", "exit"]);
 }
