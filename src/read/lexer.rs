@@ -1,7 +1,5 @@
 mod char_class;
 
-use std::ops::ControlFlow;
-
 use char_class::{U8OrEof, char_class_opt};
 
 pub(crate) use char_class::CharClass;
@@ -73,53 +71,6 @@ pub enum LexError<E> {
     Sink(E),
 }
 
-/*
-/// Returned lexer tokens.
-///
-/// All of the returned tokens must be consumed before the next time
-/// the lexer is called.
-pub struct LexerTokens {
-    /// Two slots are sufficient for a return after lexing one byte:
-    /// at worst, we will determine one token ended in the previous byte
-    /// and an additional one in the current byte
-    slots: [Option<Token>; 2],
-}
-
-impl Iterator for LexerTokens {
-    type Item = Token;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        for slot in self.slots.iter_mut() {
-            if let Some(token) = slot.take() {
-                return Some(token);
-            }
-        }
-        None
-    }
-}
-
-impl LexerTokens {
-    fn new() -> Self {
-        Self {
-            slots: [None, None],
-        }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.slots.iter().all(|slot| slot.is_none())
-    }
-
-    fn push(&mut self, token: Token) {
-        for slot in self.slots.iter_mut() {
-            if slot.is_none() {
-                *slot = Some(token);
-                return;
-            }
-        }
-        panic!("cannot push token to lexer tokens");
-    }
-}*/
-
 impl Lexer {
     /// Constructs the lexer.
     pub fn new() -> Self {
@@ -143,9 +94,9 @@ impl Lexer {
         c: u8,
         sink: impl FnMut(Token) -> Result<(), E>,
     ) -> Result<(), LexError<E>> {
-        let result = self.lex_char(U8OrEof::U8(c), sink)?;
+        self.lex_char(U8OrEof::U8(c), sink)?;
         self.byte_start = self.byte_start.after_byte(c);
-        Ok(result)
+        Ok(())
     }
 
     /// Lexes one byte, sending the lexed tokens to the sink.
@@ -158,96 +109,12 @@ impl Lexer {
         self.lex_char(U8OrEof::Eof, sink)
     }
 
-    fn lex_normal<E>(
-        &mut self,
-        c: U8OrEof,
-        mut sink: impl FnMut(Token) -> Result<(), E>,
-    ) -> Result<(), LexError<E>> {
-        let byte = match c {
-            U8OrEof::U8(c) => c,
-            U8OrEof::Eof => {
-                // end without problems on EOF
-                let token = self.create_zero_byte_token(TokenKind::EndOfFile);
-                return sink(token).map_err(LexError::Sink);
-            }
-        };
-
-        // start the token as we are in the normal state
-        self.start_token();
-
-        let state = match CharClass::from(byte) {
-            // whitespace, just continue lexing
-            CharClass::Tab | CharClass::Space | CharClass::LineBreak => LexerState::Normal,
-
-            // parentheses are tokens of their own
-            CharClass::ParenOpen => {
-                let token = self.create_token_ending_now(TokenKind::ParenOpen);
-                sink(token).map_err(LexError::Sink)?;
-                LexerState::Normal
-            }
-            CharClass::ParenClose => {
-                let token = self.create_token_ending_now(TokenKind::ParenClose);
-                sink(token).map_err(LexError::Sink)?;
-                LexerState::Normal
-            }
-
-            // semicolon starts a comment
-            CharClass::Semicolon => LexerState::Comment,
-
-            CharClass::Digit => {
-                // digit starts a numeral or a decimal
-                // and determines the first digit value
-                self.token_content.push(byte);
-                LexerState::NumeralOrDecimal
-            }
-
-            CharClass::Hash => {
-                // hash starts a hexadecimal or a binary
-                // the token location includes the hash
-                LexerState::HexadecimalOrBinary
-            }
-
-            CharClass::DoubleQuote => {
-                // double quote starts a string literal
-                // the content remains empty here (the quote is outside)
-                LexerState::StringLiteral
-            }
-
-            CharClass::Colon => {
-                // colon starts a keyword, which continues with a simple symbol string
-                // the content remains empty here (the colon only marks the keyword)
-                LexerState::Keyword
-            }
-
-            CharClass::Letter | CharClass::Special | CharClass::Dot => {
-                // starts a simple symbol or a reserved word
-                // the reserved words will be handled after the name is fully known
-                self.token_content.push(byte);
-                LexerState::SimpleSymbol
-            }
-
-            CharClass::Pipe => {
-                // pipe starts a quoted symbol
-                // the content remains empty here (the pipe is outside)
-                LexerState::QuotedSymbol
-            }
-
-            _ => {
-                // class disallowed here
-                return Err(self.current_token_error(LexerErrorKind::UnexpectedCharacter, c));
-            }
-        };
-        self.state = state;
-        Ok(())
-    }
-
     fn lex_char<E>(
         &mut self,
         c: U8OrEof,
         sink: impl FnMut(Token) -> Result<(), E>,
     ) -> Result<(), LexError<E>> {
         // when a lexer error is raised, set lexer state to failed
-
         self.lex_char_inner(c, sink).inspect_err(|_err| {
             self.state = LexerState::Failed;
         })
@@ -552,6 +419,89 @@ impl Lexer {
                 }
             }
             LexerState::Failed => panic!("cannot lex after a lexer error"),
+        };
+        self.state = state;
+        Ok(())
+    }
+
+    fn lex_normal<E>(
+        &mut self,
+        c: U8OrEof,
+        mut sink: impl FnMut(Token) -> Result<(), E>,
+    ) -> Result<(), LexError<E>> {
+        let byte = match c {
+            U8OrEof::U8(c) => c,
+            U8OrEof::Eof => {
+                // end without problems on EOF
+                let token = self.create_zero_byte_token(TokenKind::EndOfFile);
+                return sink(token).map_err(LexError::Sink);
+            }
+        };
+
+        // start the token as we are in the normal state
+        self.start_token();
+
+        let state = match CharClass::from(byte) {
+            // whitespace, just continue lexing
+            CharClass::Tab | CharClass::Space | CharClass::LineBreak => LexerState::Normal,
+
+            // parentheses are tokens of their own
+            CharClass::ParenOpen => {
+                let token = self.create_token_ending_now(TokenKind::ParenOpen);
+                sink(token).map_err(LexError::Sink)?;
+                LexerState::Normal
+            }
+            CharClass::ParenClose => {
+                let token = self.create_token_ending_now(TokenKind::ParenClose);
+                sink(token).map_err(LexError::Sink)?;
+                LexerState::Normal
+            }
+
+            // semicolon starts a comment
+            CharClass::Semicolon => LexerState::Comment,
+
+            CharClass::Digit => {
+                // digit starts a numeral or a decimal
+                // and determines the first digit value
+                self.token_content.push(byte);
+                LexerState::NumeralOrDecimal
+            }
+
+            CharClass::Hash => {
+                // hash starts a hexadecimal or a binary
+                // the token location includes the hash
+                LexerState::HexadecimalOrBinary
+            }
+
+            CharClass::DoubleQuote => {
+                // double quote starts a string literal
+                // the content remains empty here (the quote is outside)
+                LexerState::StringLiteral
+            }
+
+            CharClass::Colon => {
+                // colon starts a keyword, which continues with a simple symbol string
+                // the content remains empty here (the colon only marks the keyword)
+                LexerState::Keyword
+            }
+
+            CharClass::Letter | CharClass::Special | CharClass::Dot => {
+                // starts a simple symbol or a reserved word
+                // the reserved words will be handled after the name is fully known
+                self.token_content.push(byte);
+                LexerState::SimpleSymbol
+            }
+
+            CharClass::Pipe => {
+                // pipe starts a quoted symbol
+                // the content remains empty here (the pipe is outside)
+                LexerState::QuotedSymbol
+            }
+
+            _ => {
+                // class disallowed here
+                return Err(self.current_token_error(LexerErrorKind::UnexpectedCharacter, c));
+            }
         };
         self.state = state;
         Ok(())
