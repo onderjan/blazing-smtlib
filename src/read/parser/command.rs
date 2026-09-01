@@ -2,20 +2,13 @@ use std::ops::ControlFlow;
 
 use crate::{
     CommandHandler, SmtSpan, SmtSymbolView,
-    read::parser::{
-        ParserError, ParserState,
-        category::CategoryParser,
-        command::standard::{
-            CommandAssert, CommandCheckSat, CommandDeclareConst, CommandDeclareFun,
-            CommandDefineFun, CommandEcho, CommandExit, CommandGetInfo, CommandGetOption,
-            CommandReset, CommandResetAssertions, CommandSetInfo, CommandSetLogic,
-            CommandSetOption,
-        },
-    },
+    read::parser::{ParserError, ParserState, category::CategoryParser},
     token::Token,
 };
 
 mod standard;
+
+pub(super) use standard::{CommandParsers, StandardCommandKind};
 
 pub trait ParseCommand<H: CommandHandler + ?Sized> {
     fn progress(
@@ -119,7 +112,7 @@ impl<H: CommandHandler> super::Parser<'_, H> {
     ) -> Result<ParserState<H>, ParserError<H::Error>> {
         match StandardCommandKind::from_name(name.as_slice()) {
             Some(kind) => {
-                self.command_parsers.start(kind);
+                self.command_parsers.restart(kind);
                 Ok(ParserState::Command(kind))
             }
             None => match self.handler.nonstandard_command(name) {
@@ -130,74 +123,6 @@ impl<H: CommandHandler> super::Parser<'_, H> {
     }
 }
 
-macro_rules! standard_commands {
-    ($($name:literal => $field:ident: $kind:ident($command:ty)),* $(,)?) => {
-        #[derive(Clone, Copy)]
-        pub(crate) enum StandardCommandKind {
-            $($kind,)*
-        }
-
-        impl StandardCommandKind {
-            pub fn from_name(name: &[u8]) -> Option<Self> {
-                match name {
-                    $($name => Some(Self::$kind),)*
-                    _ => None,
-                }
-            }
-        }
-
-        pub(crate) struct CommandParsers<H: CommandHandler> {
-            $($field: CommandParser<H, $command>,)*
-        }
-
-        impl<H: CommandHandler> CommandParsers<H> {
-            pub fn new() -> Self {
-                Self {
-                    $($field: CommandParser::new(),)*
-                }
-            }
-            pub fn start(&mut self, kind: StandardCommandKind) {
-                match kind {
-                    $(StandardCommandKind::$kind => self.$field.restart(),)*
-                }
-            }
-            pub fn progress(
-                &mut self,
-                kind: StandardCommandKind,
-                handler: &mut H,
-                token: Token,
-            ) -> Result<ControlFlow<CommandResult, ()>, ParserError<H::Error>> {
-                match kind {
-                    $(StandardCommandKind::$kind => self.$field.progress(handler, token),)*
-                }
-            }
-        }
-
-        impl<H: CommandHandler> Default for CommandParsers<H> {
-            fn default() -> Self {
-                Self::new()
-            }
-        }
-    };
-}
-
-standard_commands! {
-    b"set-logic" => set_logic: SetLogic(CommandSetLogic),
-    b"declare-const" => declare_const: DeclareConst(CommandDeclareConst),
-    b"declare-fun" => declare_fun: DeclareFun(CommandDeclareFun),
-    b"define-fun" => define_fun: DefineFun(CommandDefineFun),
-    b"assert" => assert: Assert(CommandAssert),
-    b"check-sat" => check_sat: CheckSat(CommandCheckSat),
-    b"exit" => exit: Exit(CommandExit),
-    b"set-info" => set_info: SetInfo(CommandSetInfo),
-    b"echo" => echo: Echo(CommandEcho),
-    b"get-option" => get_option: GetOption(CommandGetOption),
-    b"set-option" => set_option: SetOption(CommandSetOption),
-    b"get-info" => get_info: GetInfo(CommandGetInfo),
-    b"reset" => reset: Reset(CommandReset),
-    b"reset-assertions" => reset_assertions: ResetAssertions(CommandResetAssertions),
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -205,7 +130,8 @@ mod tests {
 
     #[test]
     fn finished_command_parser_parses_the_next_command() {
-        let mut handler = CheckStandardSyntax;
+        todo!("Fix test")
+        /*let mut handler = CheckStandardSyntax;
         let mut parser: CommandParser<CheckStandardSyntax, CommandCheckSat> = CommandParser::new();
 
         // a check-sat command body is just the closing parenthesis,
@@ -220,6 +146,6 @@ mod tests {
                 flow,
                 ControlFlow::Break(CommandResult::EndCommand)
             ));
-        }
+        }*/
     }
 }
