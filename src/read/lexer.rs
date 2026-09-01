@@ -1073,6 +1073,29 @@ mod tests {
         );
     }
 
+    #[test]
+    fn decimal_token_payload_is_the_verbatim_source() {
+        // the payload keeps the source bytes including the dot,
+        // fractional leading zeros, and trailing zeros
+        let tokens = lex_all(b"7.5 1.05 3.500 0.0").expect("valid input");
+        let decimals: Vec<&[u8]> = tokens
+            .iter()
+            .filter_map(|token| match token.kind() {
+                TokenKind::Decimal(decimal) => Some(decimal.as_slice()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            decimals,
+            vec![
+                b"7.5".as_slice(),
+                b"1.05".as_slice(),
+                b"3.500".as_slice(),
+                b"0.0".as_slice(),
+            ]
+        );
+    }
+
     // --- Lexer misuse panics ---
 
     #[test]

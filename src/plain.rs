@@ -327,23 +327,47 @@ mod tests {
         assert!(!SmtBinDigits::is_allowed(b"aF"));
     }
 
-    // TODO: fix decimal test, remember to add cases with empty / no dots / multiple dots
-    /*
+    #[test]
+    fn decimals_require_one_dot_between_digit_parts() {
+        assert!(SmtDecimal::is_allowed(b"0.0"));
+        assert!(SmtDecimal::is_allowed(b"7.5"));
+        assert!(SmtDecimal::is_allowed(b"10.25"));
+
+        // the leading-zero restriction applies only to the whole part
+        assert!(!SmtDecimal::is_allowed(b"01.5"));
+        assert!(SmtDecimal::is_allowed(b"0.5"));
+        assert!(SmtDecimal::is_allowed(b"1.05"));
+        assert!(SmtDecimal::is_allowed(b"1.00"));
+        assert!(SmtDecimal::is_allowed(b"1.500"));
+
+        // both parts and the dot must be present
+        assert!(!SmtDecimal::is_allowed(b""));
+        assert!(!SmtDecimal::is_allowed(b"1"));
+        assert!(!SmtDecimal::is_allowed(b"1."));
+        assert!(!SmtDecimal::is_allowed(b".5"));
+        assert!(!SmtDecimal::is_allowed(b"."));
+
+        // only a single dot is allowed
+        assert!(!SmtDecimal::is_allowed(b"1.2.3"));
+        assert!(!SmtDecimal::is_allowed(b"1..2"));
+
+        // nothing but digits around the dot
+        assert!(!SmtDecimal::is_allowed(b"a.5"));
+        assert!(!SmtDecimal::is_allowed(b"1.5a"));
+        assert!(!SmtDecimal::is_allowed(b"-1.5"));
+        assert!(!SmtDecimal::is_allowed(b"1. 5"));
+    }
+
     #[test]
     fn decimals_with_trailing_fractional_zeros_are_distinct() {
-        fn dec(whole_part: &[u8], fractional_part: &[u8]) -> SmtDecimal {
-            SmtDecimal {
-                whole_part: SmtNumeral::new(whole_part.to_vec())
-                    .expect("whole part should succeed"),
-                fractional_part: SmtDigits::new(fractional_part.to_vec())
-                    .expect("fractional part should succeed"),
-            }
+        fn dec(value: &[u8]) -> SmtDecimal {
+            SmtDecimal::new(value.to_vec()).expect("test decimal should be allowed")
         }
 
         // SMT-LIB does not consider '3.50' an overlong encoding of '3.5',
         // but as two separate things syntactically
-        assert_ne!(dec(b"1", b"0"), dec(b"1", b"0000"));
-        assert_ne!(dec(b"3", b"5"), dec(b"3", b"50"));
+        assert_ne!(dec(b"1.0"), dec(b"1.0000"));
+        assert_ne!(dec(b"3.5"), dec(b"3.50"));
+        assert_eq!(dec(b"3.50"), dec(b"3.50"));
     }
-    */
 }
