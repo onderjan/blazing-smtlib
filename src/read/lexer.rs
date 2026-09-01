@@ -26,6 +26,7 @@ enum LexerState {
     Keyword(String8),
     QuotedSymbol(String8),
     Comment,
+    Failed,
 }
 
 pub struct Lexer {
@@ -108,7 +109,7 @@ impl LexerTokens {
                 return;
             }
         }
-        panic!("Cannot push token to lexer tokens");
+        panic!("cannot push token to lexer tokens");
     }
 }
 
@@ -129,7 +130,8 @@ impl Lexer {
 
     /// Lexes one byte and returns lexed tokens.
     ///
-    /// Panics if previously returned tokens were not fully consumed.
+    /// Panics if previously returned tokens were not fully consumed
+    /// or if a previous call returned an error.
     pub fn lex_next(&mut self, c: u8) -> Result<&mut LexerTokens, LexerError> {
         self.lex_char(U8OrEof::U8(c))?;
         self.current_location = self.current_location.after_byte(c);
@@ -138,7 +140,8 @@ impl Lexer {
 
     /// Lexes one byte and returns lexed tokens.
     ///
-    /// Panics if previously returned tokens were not fully consumed.
+    /// Panics if previously returned tokens were not fully consumed
+    /// or if a previous call returned an error.
     pub fn lex_eof(&mut self) -> Result<&mut LexerTokens, LexerError> {
         self.lex_char(U8OrEof::Eof)?;
         Ok(&mut self.tokens)
@@ -220,8 +223,22 @@ impl Lexer {
     }
 
     fn lex_char(&mut self, c: U8OrEof) -> Result<(), LexerError> {
-        // TODO: decide what the behaviour on leftover tokens should be
-        assert!(self.tokens.is_empty());
+        // when a lexer error is raised,
+        // set lexer state to failed and remove any produced tokens
+        // so that the panic on leftover tokens is not raised first
+
+        self.lex_char_inner(c).inspect_err(|_err| {
+            self.state = LexerState::Failed;
+            self.tokens = LexerTokens::new();
+        })
+    }
+
+    fn lex_char_inner(&mut self, c: U8OrEof) -> Result<(), LexerError> {
+        // panic if there are some leftover non-consumed tokens
+        assert!(
+            self.tokens.is_empty(),
+            "tokens returned by lexer must be consumed before further lexing"
+        );
 
         let mut state = LexerState::Normal;
         std::mem::swap(&mut self.state, &mut state);
@@ -513,6 +530,7 @@ impl Lexer {
                     }
                 }
             }
+            LexerState::Failed => panic!("cannot lex after a lexer error"),
         };
         self.state = state;
         Ok(())
