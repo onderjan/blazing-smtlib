@@ -5,17 +5,14 @@ use char_class::{U8OrEof, char_class_opt};
 pub(crate) use char_class::CharClass;
 
 use crate::{
-    SmtBinDigits, SmtDecimal, SmtDigits, SmtHexDigits, SmtKeyword, SmtLocation, SmtNumeral,
-    SmtSpan, SmtStringContent, SmtSymbol, String8,
+    SmtBinDigits, SmtDecimal, SmtHexDigits, SmtKeyword, SmtLocation, SmtNumeral, SmtSpan,
+    SmtStringContent, SmtSymbol, String8,
     token::{Reserved, Token, TokenKind},
 };
 
 enum LexerState {
     Normal,
-    Fraction {
-        whole_part: String8,
-        fractional_part: String8,
-    },
+    Fraction(String8),
     NumeralOrDecimal(String8),
     Hexadecimal(String8),
     Binary(String8),
@@ -244,32 +241,22 @@ impl Lexer {
         std::mem::swap(&mut self.state, &mut state);
         let state = match state {
             LexerState::Normal => return self.lex_normal(c),
-            LexerState::Fraction {
-                whole_part,
-                mut fractional_part,
-            } => {
+            LexerState::Fraction(mut value) => {
                 match char_class_opt(c) {
                     Some((CharClass::Digit, c)) => {
-                        // add one digit to the fractional part
-                        fractional_part.push(c);
-
-                        LexerState::Fraction {
-                            whole_part,
-                            fractional_part,
-                        }
+                        // add one digit, this will be to the fractional part (after the dot)
+                        value.push(c);
+                        LexerState::Fraction(value)
                     }
                     _ => {
-                        if fractional_part.is_empty() {
+                        if value.as_slice().last().is_none_or(|c| *c == b'.') {
                             // decimals of the form 7. without any digit in fractional part are disallowed
                             return Err(
                                 self.current_token_error(LexerErrorKind::FractionDigitExpected, c)
                             );
                         }
                         // push new token and lex the character normally
-                        let kind = TokenKind::Decimal(SmtDecimal {
-                            whole_part: SmtNumeral::new_unchecked(whole_part),
-                            fractional_part: SmtDigits::new_unchecked(fractional_part),
-                        });
+                        let kind = TokenKind::Decimal(SmtDecimal::new_unchecked(value));
                         self.tokens.push(self.create_token_ending_before(kind));
                         return self.lex_normal(c);
                     }
@@ -294,10 +281,9 @@ impl Lexer {
 
                     Some((CharClass::Dot, _)) => {
                         // decimal, the next character will start fraction
-                        LexerState::Fraction {
-                            whole_part: value,
-                            fractional_part: String8::new(),
-                        }
+                        // add the dot to the value
+                        value.push(b'.');
+                        LexerState::Fraction(value)
                     }
 
                     _ => {

@@ -359,11 +359,7 @@ pub(super) mod tests {
     fn render_constant(constant: &SmtSpecialConstant) -> String {
         match constant {
             SmtSpecialConstant::Numeral(n) => text(n.as_slice()),
-            SmtSpecialConstant::Decimal(d) => format!(
-                "{}.{}",
-                text(d.whole_part.as_slice()),
-                text(d.fractional_part.as_slice())
-            ),
+            SmtSpecialConstant::Decimal(d) => text(d.as_slice()),
             SmtSpecialConstant::Hexadecimal(h) => format!("#x{}", text(h.as_slice())),
             SmtSpecialConstant::Binary(b) => format!("#b{}", text(b.as_slice())),
             SmtSpecialConstant::String(s) => format!("\"{}\"", text(s.as_slice())),
