@@ -10,35 +10,40 @@ use crate::{
     token::{Reserved, Token, TokenKind},
 };
 
+#[derive(Clone, Copy)]
 enum LexerState {
     Normal,
-    Fraction(String8),
-    NumeralOrDecimal(String8),
-    Hexadecimal(String8),
-    Binary(String8),
+    Fraction,
+    NumeralOrDecimal,
+    Hexadecimal,
+    Binary,
     HexadecimalOrBinary,
-    StringLiteral(String8),
-    StringLiteralDoubleQuote(String8),
-    SimpleSymbol(String8),
-    Keyword(String8),
-    QuotedSymbol(String8),
+    StringLiteral,
+    StringLiteralDoubleQuote,
+    SimpleSymbol,
+    Keyword,
+    QuotedSymbol,
     Comment,
     Failed,
 }
 
 pub struct Lexer {
-    // Current lexer state.
+    /// Current lexer state.
     state: LexerState,
-    // Location of the byte being processed during lexing.
-    //
-    // It advances once that byte is consumed.
-    current_location: SmtLocation,
 
-    // Location of the start of the token that is currently being processed.
+    /// Finished tokens that are waiting to be consumed.
+    finished_tokens: LexerTokens,
+
+    /// Location of the start of the currently-processed token.
     token_start: SmtLocation,
 
-    /// Current lexer tokens.
-    tokens: LexerTokens,
+    /// The currently-built string content of the currently-processed token.
+    token_content: String8,
+
+    /// Location of the start of the byte being processed during lexing.
+    ///
+    /// It advances once that byte is consumed.
+    byte_start: SmtLocation,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -115,14 +120,15 @@ impl Lexer {
     pub fn new() -> Self {
         Lexer {
             state: LexerState::Normal,
-            current_location: SmtLocation::initial(),
+            finished_tokens: LexerTokens::new(),
             token_start: SmtLocation::initial(),
-            tokens: LexerTokens::new(),
+            token_content: String8::new(),
+            byte_start: SmtLocation::initial(),
         }
     }
 
     pub fn current_location(&self) -> SmtLocation {
-        self.current_location
+        self.byte_start
     }
 
     /// Lexes one byte and returns lexed tokens.
@@ -131,8 +137,8 @@ impl Lexer {
     /// or if a previous call returned an error.
     pub fn lex_next(&mut self, c: u8) -> Result<&mut LexerTokens, LexerError> {
         self.lex_char(U8OrEof::U8(c))?;
-        self.current_location = self.current_location.after_byte(c);
-        Ok(&mut self.tokens)
+        self.byte_start = self.byte_start.after_byte(c);
+        Ok(&mut self.finished_tokens)
     }
 
     /// Lexes one byte and returns lexed tokens.
@@ -141,7 +147,7 @@ impl Lexer {
     /// or if a previous call returned an error.
     pub fn lex_eof(&mut self) -> Result<&mut LexerTokens, LexerError> {
         self.lex_char(U8OrEof::Eof)?;
-        Ok(&mut self.tokens)
+        Ok(&mut self.finished_tokens)
     }
 
     fn lex_normal(&mut self, c: U8OrEof) -> Result<(), LexerError> {
@@ -150,13 +156,13 @@ impl Lexer {
             U8OrEof::Eof => {
                 // end without problems on EOF
                 let token = self.create_zero_byte_token(TokenKind::EndOfFile);
-                self.tokens.push(token);
+                self.finished_tokens.push(token);
                 return Ok(());
             }
         };
 
-        // mark token start as we are in the normal state
-        self.mark_token_start();
+        // start the token as we are in the normal state
+        self.start_token();
 
         let state = match CharClass::from(byte) {
             // whitespace, just continue lexing
@@ -165,12 +171,12 @@ impl Lexer {
             // parentheses are tokens of their own
             CharClass::ParenOpen => {
                 let token = self.create_token_ending_now(TokenKind::ParenOpen);
-                self.tokens.push(token);
+                self.finished_tokens.push(token);
                 LexerState::Normal
             }
             CharClass::ParenClose => {
                 let token = self.create_token_ending_now(TokenKind::ParenClose);
-                self.tokens.push(token);
+                self.finished_tokens.push(token);
                 LexerState::Normal
             }
 
@@ -180,7 +186,8 @@ impl Lexer {
             CharClass::Digit => {
                 // digit starts a numeral or a decimal
                 // and determines the first digit value
-                LexerState::NumeralOrDecimal(String8::from_byte(byte))
+                self.token_content.push(byte);
+                LexerState::NumeralOrDecimal
             }
 
             CharClass::Hash => {
@@ -191,23 +198,27 @@ impl Lexer {
 
             CharClass::DoubleQuote => {
                 // double quote starts a string literal
-                LexerState::StringLiteral(String8::new())
+                // the content remains empty here (the quote is outside)
+                LexerState::StringLiteral
             }
 
             CharClass::Colon => {
                 // colon starts a keyword, which continues with a simple symbol string
-                LexerState::Keyword(String8::new())
+                // the content remains empty here (the colon only marks the keyword)
+                LexerState::Keyword
             }
 
             CharClass::Letter | CharClass::Special | CharClass::Dot => {
                 // starts a simple symbol or a reserved word
                 // the reserved words will be handled after the name is fully known
-                LexerState::SimpleSymbol(String8::from_byte(byte))
+                self.token_content.push(byte);
+                LexerState::SimpleSymbol
             }
 
             CharClass::Pipe => {
-                //  pipe starts a quoted symbol
-                LexerState::QuotedSymbol(String8::new())
+                // pipe starts a quoted symbol
+                // the content remains empty here (the pipe is outside)
+                LexerState::QuotedSymbol
             }
 
             _ => {
@@ -226,76 +237,85 @@ impl Lexer {
 
         self.lex_char_inner(c).inspect_err(|_err| {
             self.state = LexerState::Failed;
-            self.tokens = LexerTokens::new();
+            self.finished_tokens = LexerTokens::new();
         })
     }
 
     fn lex_char_inner(&mut self, c: U8OrEof) -> Result<(), LexerError> {
         // panic if there are some leftover non-consumed tokens
         assert!(
-            self.tokens.is_empty(),
+            self.finished_tokens.is_empty(),
             "tokens returned by lexer must be consumed before further lexing"
         );
 
-        let mut state = LexerState::Normal;
-        std::mem::swap(&mut self.state, &mut state);
-        let state = match state {
+        let state = match self.state {
             LexerState::Normal => return self.lex_normal(c),
-            LexerState::Fraction(mut value) => {
+            LexerState::Fraction => {
                 match char_class_opt(c) {
                     Some((CharClass::Digit, c)) => {
                         // add one digit, this will be to the fractional part (after the dot)
-                        value.push(c);
-                        LexerState::Fraction(value)
+                        self.token_content.push(c);
+                        LexerState::Fraction
                     }
                     _ => {
-                        if value.as_slice().last().is_none_or(|c| *c == b'.') {
+                        let last_is_none_or_dot = self
+                            .token_content
+                            .as_slice()
+                            .last()
+                            .is_none_or(|c| *c == b'.');
+                        if last_is_none_or_dot {
                             // decimals of the form 7. without any digit in fractional part are disallowed
                             return Err(
                                 self.current_token_error(LexerErrorKind::FractionDigitExpected, c)
                             );
                         }
                         // push new token and lex the character normally
-                        let kind = TokenKind::Decimal(SmtDecimal::new_unchecked(value));
-                        self.tokens.push(self.create_token_ending_before(kind));
+                        let kind = TokenKind::Decimal(SmtDecimal::new_unchecked(
+                            self.token_content.clone(),
+                        ));
+                        self.finished_tokens
+                            .push(self.create_token_ending_before(kind));
                         return self.lex_normal(c);
                     }
                 }
             }
-            LexerState::NumeralOrDecimal(mut value) => {
+            LexerState::NumeralOrDecimal => {
                 match char_class_opt(c) {
                     Some((CharClass::Digit, byte)) => {
                         // check that we are not in a leading zero condition
                         // this could not have been done when starting the numeral/decimal
                         // since just a single '0' is allowed
-                        if value.as_slice() == b"0" {
+                        if self.token_content.as_slice() == b"0" {
                             return Err(
                                 self.current_token_error(LexerErrorKind::NumeralLeadingZero, c)
                             );
                         }
 
                         // add one digit
-                        value.push(byte);
-                        LexerState::NumeralOrDecimal(value)
+                        self.token_content.push(byte);
+                        LexerState::NumeralOrDecimal
                     }
 
                     Some((CharClass::Dot, _)) => {
                         // decimal, the next character will start fraction
                         // add the dot to the value
-                        value.push(b'.');
-                        LexerState::Fraction(value)
+                        self.token_content.push(b'.');
+                        LexerState::Fraction
                     }
 
                     _ => {
                         // this was a numeral
                         // push new token and lex the character normally
-                        let kind = TokenKind::Numeral(SmtNumeral::new_unchecked(value));
-                        self.tokens.push(self.create_token_ending_before(kind));
+                        let kind = TokenKind::Numeral(SmtNumeral::new_unchecked(
+                            self.token_content.clone(),
+                        ));
+                        self.finished_tokens
+                            .push(self.create_token_ending_before(kind));
                         return self.lex_normal(c);
                     }
                 }
             }
-            LexerState::Hexadecimal(mut whole) => {
+            LexerState::Hexadecimal => {
                 let hex_digit = if let U8OrEof::U8(c) = c {
                     match c {
                         b'0'..=b'9' | b'a'..=b'f' | b'A'..=b'F' => Some(c),
@@ -307,10 +327,10 @@ impl Lexer {
 
                 if let Some(hex_digit) = hex_digit {
                     // add hexadecimal digit
-                    whole.push(hex_digit);
-                    LexerState::Hexadecimal(whole)
+                    self.token_content.push(hex_digit);
+                    LexerState::Hexadecimal
                 } else {
-                    if whole.is_empty() {
+                    if self.token_content.is_empty() {
                         // had non-digit, zero digits disallowed
                         return Err(
                             self.current_token_error(LexerErrorKind::HexadecimalDigitExpected, c)
@@ -318,12 +338,15 @@ impl Lexer {
                     }
                     // had non-digit, nonzero digits
                     // push new token and lex the character normally
-                    let kind = TokenKind::Hexadecimal(SmtHexDigits::new_unchecked(whole));
-                    self.tokens.push(self.create_token_ending_before(kind));
+                    let kind = TokenKind::Hexadecimal(SmtHexDigits::new_unchecked(
+                        self.token_content.clone(),
+                    ));
+                    self.finished_tokens
+                        .push(self.create_token_ending_before(kind));
                     return self.lex_normal(c);
                 }
             }
-            LexerState::Binary(mut whole) => {
+            LexerState::Binary => {
                 let binary_digit = if let U8OrEof::U8(c) = c {
                     match c {
                         b'0' | b'1' => Some(c),
@@ -335,10 +358,10 @@ impl Lexer {
 
                 if let Some(binary_digit) = binary_digit {
                     // add binary digit
-                    whole.push(binary_digit);
-                    LexerState::Binary(whole)
+                    self.token_content.push(binary_digit);
+                    LexerState::Binary
                 } else {
-                    if whole.is_empty() {
+                    if self.token_content.is_empty() {
                         // had non-digit, zero digits disallowed
                         return Err(
                             self.current_token_error(LexerErrorKind::BinaryDigitExpected, c)
@@ -346,18 +369,20 @@ impl Lexer {
                     }
                     // had non-digit, nonzero digits
                     // push new token and lex the character normally
-                    let kind = TokenKind::Binary(SmtBinDigits::new_unchecked(whole));
-                    self.tokens.push(self.create_token_ending_before(kind));
+                    let kind =
+                        TokenKind::Binary(SmtBinDigits::new_unchecked(self.token_content.clone()));
+                    self.finished_tokens
+                        .push(self.create_token_ending_before(kind));
                     return self.lex_normal(c);
                 }
             }
 
             LexerState::HexadecimalOrBinary => match c {
-                U8OrEof::U8(b'x') => LexerState::Hexadecimal(String8::new()),
-                U8OrEof::U8(b'b') => LexerState::Binary(String8::new()),
+                U8OrEof::U8(b'x') => LexerState::Hexadecimal,
+                U8OrEof::U8(b'b') => LexerState::Binary,
                 _ => return Err(self.current_token_error(LexerErrorKind::BaseSelectionExpected, c)),
             },
-            LexerState::StringLiteral(mut literal) => {
+            LexerState::StringLiteral => {
                 match c {
                     U8OrEof::Eof => {
                         // forbidden as the literal must be totally enclosed by double quotes
@@ -370,13 +395,13 @@ impl Lexer {
                         // it may be followed by another double quote for escaping
                         // otherwise, it will end the string literal
                         // put the lexer in a special state to handle the next character
-                        LexerState::StringLiteralDoubleQuote(literal)
+                        LexerState::StringLiteralDoubleQuote
                     }
                     U8OrEof::U8(byte) => {
                         if CharClass::from(byte).is_printable_or_whitespace() {
                             // add to literal
-                            literal.push(byte);
-                            LexerState::StringLiteral(literal)
+                            self.token_content.push(byte);
+                            LexerState::StringLiteral
                         } else {
                             // forbidden as not printable or whitespace
                             return Err(
@@ -386,51 +411,56 @@ impl Lexer {
                     }
                 }
             }
-            LexerState::StringLiteralDoubleQuote(mut literal) => {
+            LexerState::StringLiteralDoubleQuote => {
                 match c {
                     U8OrEof::U8(b'\"') => {
                         // this has been a double-quote escape
                         // push a double-quote and continue lexing the string literal
-                        literal.push(b'\"');
-                        LexerState::StringLiteral(literal)
+                        self.token_content.push(b'\"');
+                        LexerState::StringLiteral
                     }
                     _ => {
                         // literal has ended by the previous character
                         // push new token and lex the character normally
-                        let kind = TokenKind::String(SmtStringContent::new_unchecked(literal));
-                        self.tokens.push(self.create_token_ending_before(kind));
+                        let kind = TokenKind::String(SmtStringContent::new_unchecked(
+                            self.token_content.clone(),
+                        ));
+                        self.finished_tokens
+                            .push(self.create_token_ending_before(kind));
                         return self.lex_normal(c);
                     }
                 }
             }
-            LexerState::SimpleSymbol(mut symbol) => {
+            LexerState::SimpleSymbol => {
                 if let Some((class, c)) = char_class_opt(c)
                     && class.is_allowed_in_simple_symbol()
                 {
                     // add character
-                    symbol.push(c);
-                    LexerState::SimpleSymbol(symbol)
+                    self.token_content.push(c);
+                    LexerState::SimpleSymbol
                 } else {
                     // simple symbol ended with previous character
                     // process reserved words
-                    let kind = if let Some(reserved) = Reserved::from_symbol_opt(&symbol) {
-                        TokenKind::Reserved(reserved)
-                    } else {
-                        TokenKind::Symbol(SmtSymbol::new_unchecked(symbol))
-                    };
+                    let kind =
+                        if let Some(reserved) = Reserved::from_symbol_opt(&self.token_content) {
+                            TokenKind::Reserved(reserved)
+                        } else {
+                            TokenKind::Symbol(SmtSymbol::new_unchecked(self.token_content.clone()))
+                        };
 
                     // push new token and lex the character normally
-                    self.tokens.push(self.create_token_ending_before(kind));
+                    self.finished_tokens
+                        .push(self.create_token_ending_before(kind));
                     return self.lex_normal(c);
                 }
             }
-            LexerState::Keyword(mut keyword) => match char_class_opt(c) {
+            LexerState::Keyword => match char_class_opt(c) {
                 Some((
                     CharClass::Letter | CharClass::Digit | CharClass::Special | CharClass::Dot,
                     byte,
                 )) => {
                     // make sure the keyword doesn't start with a digit
-                    if keyword.is_empty()
+                    if self.token_content.is_empty()
                         && matches!(char_class_opt(c), Some((CharClass::Digit, _)))
                     {
                         return Err(
@@ -438,29 +468,31 @@ impl Lexer {
                         );
                     }
                     // add character
-                    keyword.push(byte);
-                    LexerState::Keyword(keyword)
+                    self.token_content.push(byte);
+                    LexerState::Keyword
                 }
                 _ => {
                     // simple symbol ended with previous character
-                    if keyword.is_empty() {
+                    if self.token_content.is_empty() {
                         return Err(
                             self.current_token_error(LexerErrorKind::ForbiddenKeywordName, c)
                         );
                     }
 
                     // reserved words as keywords are prohibited
-                    if Reserved::from_symbol_opt(&keyword).is_some() {
+                    if Reserved::from_symbol_opt(&self.token_content).is_some() {
                         return Err(self.current_token_error(LexerErrorKind::KeywordReserved, c));
                     }
 
                     // push new token and lex the character normally
-                    let kind = TokenKind::Keyword(SmtKeyword::new_unchecked(keyword));
-                    self.tokens.push(self.create_token_ending_before(kind));
+                    let kind =
+                        TokenKind::Keyword(SmtKeyword::new_unchecked(self.token_content.clone()));
+                    self.finished_tokens
+                        .push(self.create_token_ending_before(kind));
                     return self.lex_normal(c);
                 }
             },
-            LexerState::QuotedSymbol(mut symbol) => {
+            LexerState::QuotedSymbol => {
                 match c {
                     U8OrEof::U8(b'\\') => {
                         // backslash forbidden in quoted symbols
@@ -471,15 +503,17 @@ impl Lexer {
                     U8OrEof::U8(b'|') => {
                         // end of quoted symbol, push its token, continue normally with next character
 
-                        let kind = TokenKind::Symbol(SmtSymbol::new_unchecked(symbol));
-                        self.tokens.push(self.create_token_ending_now(kind));
+                        let kind =
+                            TokenKind::Symbol(SmtSymbol::new_unchecked(self.token_content.clone()));
+                        self.finished_tokens
+                            .push(self.create_token_ending_now(kind));
                         LexerState::Normal
                     }
                     U8OrEof::U8(byte) => {
                         if CharClass::from(byte).is_printable_or_whitespace() {
                             // add the character to the quoted symbol and continue it
-                            symbol.push(byte);
-                            LexerState::QuotedSymbol(symbol)
+                            self.token_content.push(byte);
+                            LexerState::QuotedSymbol
                         } else {
                             // character forbidden as not printable or whitespace
 
@@ -511,7 +545,7 @@ impl Lexer {
                     None => {
                         // end without problems on EOF
                         let token = self.create_zero_byte_token(TokenKind::EndOfFile);
-                        self.tokens.push(token);
+                        self.finished_tokens.push(token);
                         return Ok(());
                     }
                 }
@@ -522,8 +556,10 @@ impl Lexer {
         Ok(())
     }
 
-    fn mark_token_start(&mut self) {
-        self.token_start = self.current_location;
+    fn start_token(&mut self) {
+        // update the token start and clear the token string
+        self.token_start = self.byte_start;
+        self.token_content.clear();
     }
 
     fn create_token_ending_now(&self, kind: TokenKind) -> Token {
@@ -532,7 +568,7 @@ impl Lexer {
         // Therefore, we need to add 1 to the current offset
         Token::new(
             kind,
-            SmtSpan::new_unchecked(self.token_start, self.current_location.after_column()),
+            SmtSpan::new_unchecked(self.token_start, self.byte_start.after_column()),
         )
     }
 
@@ -543,12 +579,12 @@ impl Lexer {
         // we do not need to add anything.
         Token::new(
             kind,
-            SmtSpan::new_unchecked(self.token_start, self.current_location),
+            SmtSpan::new_unchecked(self.token_start, self.byte_start),
         )
     }
 
     fn create_zero_byte_token(&mut self, kind: TokenKind) -> Token {
-        self.mark_token_start();
+        self.start_token();
         self.create_token_ending_before(kind)
     }
 
@@ -560,8 +596,8 @@ impl Lexer {
         // since the span is a half-open range containing the start, but not end
         // if what we are parsing is EOF, do not add anything
         let end_offset = match c {
-            U8OrEof::U8(_) => self.current_location.after_column(),
-            U8OrEof::Eof => self.current_location,
+            U8OrEof::U8(_) => self.byte_start.after_column(),
+            U8OrEof::Eof => self.byte_start,
         };
 
         let span = SmtSpan::new_unchecked(self.token_start, end_offset);
