@@ -5,15 +5,24 @@
 //! an SMT-LIB QF_BV checkout). Each file is loaded into memory first, so the
 //! numbers measure lexing and parsing only, not disk I/O.
 //!
-//! Run with `cargo bench`.
+//! Run with `cargo bench`. Each file is measured in two modes: lexing only
+//! (tokens are discarded by a counting handler) and the full lex-and-parse
+//! pipeline. Set the environment variable `SMT_BENCH_MODE` to `lex` or `full`
+//! to run just one mode, e.g. to attribute a profile to a single mode.
 
+use std::convert::Infallible;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Instant;
 
 use smt_parser_rs::{
     CheckStandardSyntax,
-    read::{SmtReadErrorKind, read_smt},
+    read::{
+        SmtReadErrorKind,
+        lexer::{Lexer, TokenHandler},
+        read_smt,
+    },
+    token::Token,
 };
 
 /// Benchmarked files, relative to the `benchmarks` directory.
@@ -35,8 +44,37 @@ const FILES: &[&str] = &[
     "QF_BV/uclid/catchconv/catchconv-15803.smt2",
 ];
 
-/// Timed parses per file; the first (warm-up) parse is discarded.
+/// Timed runs per file and mode; an additional first (warm-up) run is discarded.
 const ITERATIONS: usize = 5;
+
+/// Token handler that only counts tokens, so timed lexing includes no parsing.
+struct DiscardTokens {
+    tokens: usize,
+}
+
+impl TokenHandler for DiscardTokens {
+    type Error = Infallible;
+
+    fn handle_token(&mut self, _token: Token) -> Result<(), Self::Error> {
+        self.tokens += 1;
+        Ok(())
+    }
+}
+
+/// Lexes the in-memory file, discarding tokens, and returns the token count.
+fn lex_from_memory(data: &[u8], path: &Path) -> usize {
+    let mut handler = DiscardTokens { tokens: 0 };
+    let mut lexer = Lexer::new(&mut handler);
+    for &c in data {
+        if let Err(err) = lexer.lex_next(c) {
+            panic!("benchmark file {} must lex, got {:?}", path.display(), err);
+        }
+    }
+    if let Err(err) = lexer.lex_eof() {
+        panic!("benchmark file {} must lex, got {:?}", path.display(), err);
+    }
+    handler.tokens
+}
 
 fn parse_from_memory(data: &[u8], path: &Path) {
     if let Err(err) = read_smt(&mut CheckStandardSyntax, data) {
@@ -56,6 +94,20 @@ fn parse_from_memory(data: &[u8], path: &Path) {
     }
 }
 
+/// Times the closure over a discarded warm-up run and [`ITERATIONS`] timed
+/// runs, returning the minimum and median times in seconds.
+fn time_runs(mut run: impl FnMut()) -> (f64, f64) {
+    run();
+    let mut times = Vec::with_capacity(ITERATIONS);
+    for _ in 0..ITERATIONS {
+        let start = Instant::now();
+        run();
+        times.push(start.elapsed().as_secs_f64());
+    }
+    times.sort_by(|a, b| a.partial_cmp(b).expect("times must not be NaN"));
+    (times[0], times[times.len() / 2])
+}
+
 fn main() -> ExitCode {
     let benchmarks_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("benchmarks");
     if !benchmarks_dir.exists() {
@@ -66,6 +118,17 @@ fn main() -> ExitCode {
         );
         return ExitCode::FAILURE;
     }
+
+    let mode = std::env::var("SMT_BENCH_MODE").unwrap_or_default();
+    let (run_lex, run_full) = match mode.as_str() {
+        "" | "both" => (true, true),
+        "lex" => (true, false),
+        "full" => (false, true),
+        other => {
+            eprintln!("Unknown SMT_BENCH_MODE {:?}; use \"lex\" or \"full\"", other);
+            return ExitCode::FAILURE;
+        }
+    };
 
     let name_width = FILES
         .iter()
@@ -84,27 +147,24 @@ fn main() -> ExitCode {
         };
         let megabytes = data.len() as f64 / 1_000_000.0;
 
-        // warm-up parse, not timed
-        parse_from_memory(&data, &path);
+        print!("{:<name_width$}  {:>7.2} MB", relative, megabytes);
 
-        let mut times = Vec::with_capacity(ITERATIONS);
-        for _ in 0..ITERATIONS {
-            let start = Instant::now();
-            parse_from_memory(&data, &path);
-            times.push(start.elapsed().as_secs_f64());
+        if run_lex {
+            let (min, median) = time_runs(|| {
+                lex_from_memory(&data, &path);
+            });
+            print!("  lex {:>6.1}/{:>6.1} MB/s", megabytes / min, megabytes / median);
         }
-        times.sort_by(|a, b| a.partial_cmp(b).expect("times must not be NaN"));
-        let min = times[0];
-        let median = times[times.len() / 2];
 
-        println!(
-            "{:<name_width$}  {:>7.2} MB  min {:>6.1} MB/s  median {:>6.1} MB/s",
-            relative,
-            megabytes,
-            megabytes / min,
-            megabytes / median,
-        );
+        if run_full {
+            let (min, median) = time_runs(|| parse_from_memory(&data, &path));
+            print!("  full {:>6.1}/{:>6.1} MB/s", megabytes / min, megabytes / median);
+        }
+
+        println!();
     }
+
+    println!("(throughput as min/median over {ITERATIONS} runs)");
 
     ExitCode::SUCCESS
 }
