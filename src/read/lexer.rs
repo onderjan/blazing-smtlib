@@ -892,7 +892,8 @@ mod tests {
         let mut lexer = Lexer::new();
         assert_eq!(loc(lexer.current_location()), (0, 1, 1));
         for &c in b"ab\nc" {
-            lexer.lex_next(c).expect("valid input");
+            // the returned tokens must be drained before lexing the next byte
+            lexer.lex_next(c).expect("valid input").for_each(drop);
         }
         assert_eq!(loc(lexer.current_location()), (4, 2, 2));
     }
