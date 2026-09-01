@@ -4,10 +4,10 @@ mod nodes;
 mod plain;
 mod span;
 mod string;
-mod token;
 mod traits;
 
 pub mod read;
+pub mod token;
 
 pub use crate::nodes::*;
 pub use crate::plain::*;
