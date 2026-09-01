@@ -1,22 +1,25 @@
 //! Shared helpers driving full command streams through the public reader.
 
 use smt_parser_rs::{
-    CheckStandardSyntax, CommandHandler, SmtHandler,
+    CheckStandardSyntax, CommandHandler, NonstandardCommandError,
     read::{SmtReadError, SmtReadErrorKind, parser::CategoryParserErrorKind, read_smt},
 };
 
 /// Parses the whole input, feeding the commands to the given handler.
-pub fn parse_with<H: CommandHandler>(handler: &mut H, input: &[u8]) -> Result<(), SmtReadError<H>> {
+pub fn parse_with<H: CommandHandler>(
+    handler: &mut H,
+    input: &[u8],
+) -> Result<(), SmtReadError<H::Error>> {
     read_smt(handler, input)
 }
 
 /// Parses the whole input with the standard syntax checker.
-pub fn parse(input: &[u8]) -> Result<(), SmtReadError<CheckStandardSyntax>> {
+pub fn parse(input: &[u8]) -> Result<(), SmtReadError<NonstandardCommandError>> {
     parse_with(&mut CheckStandardSyntax, input)
 }
 
 #[track_caller]
-pub fn assert_error_span<H: SmtHandler>(err: &SmtReadError<H>, start: u64, end: u64) {
+pub fn assert_error_span<E>(err: &SmtReadError<E>, start: u64, end: u64) {
     let span = err.span();
     assert_eq!(
         (span.start().offset(), span.end().offset()),

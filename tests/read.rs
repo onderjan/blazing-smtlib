@@ -3,7 +3,7 @@
 use std::io::{BufRead, Read};
 
 use smt_parser_rs::{
-    CheckStandardSyntax, SmtLocation,
+    CheckStandardSyntax, NonstandardCommandError, SmtLocation,
     read::{
         SmtReadError, SmtReadErrorKind, lexer::LexerErrorKind, parser::CategoryParserErrorKind,
         read_smt, read_smt_file,
@@ -17,12 +17,12 @@ fn loc(location: SmtLocation) -> Loc {
     (location.offset(), location.line(), location.column())
 }
 
-fn read(input: &[u8]) -> Result<(), SmtReadError<CheckStandardSyntax>> {
+fn read(input: &[u8]) -> Result<(), SmtReadError<NonstandardCommandError>> {
     read_smt(&mut CheckStandardSyntax, input)
 }
 
 #[track_caller]
-fn assert_span(err: &SmtReadError<CheckStandardSyntax>, start: Loc, end: Loc) {
+fn assert_span(err: &SmtReadError<NonstandardCommandError>, start: Loc, end: Loc) {
     let span = err.span();
     assert_eq!(
         (loc(span.start()), loc(span.end())),

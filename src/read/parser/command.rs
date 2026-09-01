@@ -193,10 +193,9 @@ mod tests {
         // a check-sat command body is just the closing parenthesis,
         // so one token finishes the command
         let close = Token::new(TokenKind::ParenClose, SmtSpan::new_zero());
-        // ParserError does not implement Debug, so unwrap manually
-        let Ok(flow) = parser.progress(&mut handler, close) else {
-            panic!("check-sat closing parenthesis must parse")
-        };
+        let flow = parser
+            .progress(&mut handler, close)
+            .expect("check-sat closing parenthesis must parse");
         assert!(matches!(
             flow,
             ControlFlow::Break(CommandResult::EndCommand)

@@ -6,7 +6,7 @@ use std::time::Instant;
 
 use rayon::ThreadPoolBuilder;
 use smt_parser_rs::{
-    CheckStandardSyntax,
+    CheckStandardSyntax, NonstandardCommandError,
     read::{SmtReadError, SmtReadErrorKind, read_smt_file},
 };
 
@@ -36,7 +36,7 @@ struct FailureRecord {
     error: String,
 }
 
-fn parse_file(path: &Path) -> Result<(), SmtReadError<CheckStandardSyntax>> {
+fn parse_file(path: &Path) -> Result<(), SmtReadError<NonstandardCommandError>> {
     read_smt_file(&mut CheckStandardSyntax, path)?;
     Ok(())
 }
