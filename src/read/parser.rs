@@ -2,6 +2,7 @@ use std::ops::ControlFlow;
 
 use crate::{
     CommandHandler, SmtHandler, SmtSpan,
+    read::lexer::TokenHandler,
     token::{Token, TokenKind},
 };
 
@@ -73,8 +74,12 @@ impl<'a, H: CommandHandler> Parser<'a, H> {
             state: ParserState::AwaitingCommand,
         }
     }
+}
 
-    pub fn parse_token(&mut self, token: Token) -> Result<(), ParserError<H>> {
+impl<'a, H: CommandHandler> TokenHandler for Parser<'a, H> {
+    type Error = ParserError<H>;
+
+    fn handle_token(&mut self, token: Token) -> Result<(), ParserError<H>> {
         let span = token.span();
         let state = std::mem::replace(&mut self.state, ParserState::AwaitingCommand);
         let state = match state {

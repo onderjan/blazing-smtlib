@@ -10,6 +10,23 @@ use crate::{
     token::{Reserved, Token, TokenKind},
 };
 
+/// A sequential handler of tokens.
+pub trait TokenHandler {
+    type Error;
+
+    /// Sequentially handles one token.
+    fn handle_token(&mut self, token: Token) -> Result<(), Self::Error>;
+}
+
+/// Mutable references over token handlers are token handlers.
+impl<T: TokenHandler + ?Sized> TokenHandler for &mut T {
+    type Error = T::Error;
+
+    fn handle_token(&mut self, token: Token) -> Result<(), Self::Error> {
+        (**self).handle_token(token)
+    }
+}
+
 #[derive(Clone, Copy)]
 enum LexerState {
     Normal,
@@ -27,7 +44,10 @@ enum LexerState {
     Failed,
 }
 
-pub struct Lexer {
+pub struct Lexer<H: TokenHandler> {
+    /// Handler of produced tokens.
+    handler: H,
+
     /// Current lexer state.
     state: LexerState,
 
@@ -66,15 +86,17 @@ pub struct LexerError {
     span: SmtSpan,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LexError<E> {
     Lexer(LexerError),
-    Sink(E),
+    Handler(E),
 }
 
-impl Lexer {
+impl<H: TokenHandler> Lexer<H> {
     /// Constructs the lexer.
-    pub fn new() -> Self {
+    pub fn new(handler: H) -> Self {
         Lexer {
+            handler,
             state: LexerState::Normal,
             token_start: SmtLocation::initial(),
             token_content: String8::new(),
@@ -86,47 +108,32 @@ impl Lexer {
         self.byte_start
     }
 
-    /// Lexes one byte, sending the lexed tokens to the sink.
+    /// Lexes one byte, sending the lexed tokens to the handler.
     ///
     /// Panics if a previous call returned an error.
-    pub fn lex_next<E>(
-        &mut self,
-        c: u8,
-        sink: impl FnMut(Token) -> Result<(), E>,
-    ) -> Result<(), LexError<E>> {
-        self.lex_char(U8OrEof::U8(c), sink)?;
+    pub fn lex_next(&mut self, c: u8) -> Result<(), LexError<H::Error>> {
+        self.lex_char(U8OrEof::U8(c))?;
         self.byte_start = self.byte_start.after_byte(c);
         Ok(())
     }
 
-    /// Lexes one byte, sending the lexed tokens to the sink.
+    /// Lexes end-of-file, sending the lexed tokens to the handler.
     ///
     /// Panics if a previous call returned an error.
-    pub fn lex_eof<E>(
-        &mut self,
-        sink: impl FnMut(Token) -> Result<(), E>,
-    ) -> Result<(), LexError<E>> {
-        self.lex_char(U8OrEof::Eof, sink)
+    pub fn lex_eof(&mut self) -> Result<(), LexError<H::Error>> {
+        self.lex_char(U8OrEof::Eof)
     }
 
-    fn lex_char<E>(
-        &mut self,
-        c: U8OrEof,
-        sink: impl FnMut(Token) -> Result<(), E>,
-    ) -> Result<(), LexError<E>> {
+    fn lex_char(&mut self, c: U8OrEof) -> Result<(), LexError<H::Error>> {
         // when a lexer error is raised, set lexer state to failed
-        self.lex_char_inner(c, sink).inspect_err(|_err| {
+        self.lex_char_inner(c).inspect_err(|_err| {
             self.state = LexerState::Failed;
         })
     }
 
-    fn lex_char_inner<E>(
-        &mut self,
-        c: U8OrEof,
-        mut sink: impl FnMut(Token) -> Result<(), E>,
-    ) -> Result<(), LexError<E>> {
+    fn lex_char_inner(&mut self, c: U8OrEof) -> Result<(), LexError<H::Error>> {
         let state = match self.state {
-            LexerState::Normal => return self.lex_normal(c, sink),
+            LexerState::Normal => return self.lex_normal(c),
             LexerState::Fraction => {
                 match char_class_opt(c) {
                     Some((CharClass::Digit, c)) => {
@@ -150,9 +157,7 @@ impl Lexer {
                         let kind = TokenKind::Decimal(SmtDecimal::new_unchecked(
                             self.token_content.clone(),
                         ));
-                        let token = self.create_token_ending_before(kind);
-                        sink(token).map_err(LexError::Sink)?;
-                        return self.lex_normal(c, sink);
+                        return self.sink_and_lex_normal(kind, c);
                     }
                 }
             }
@@ -186,9 +191,7 @@ impl Lexer {
                         let kind = TokenKind::Numeral(SmtNumeral::new_unchecked(
                             self.token_content.clone(),
                         ));
-                        let token = self.create_token_ending_before(kind);
-                        sink(token).map_err(LexError::Sink)?;
-                        return self.lex_normal(c, sink);
+                        return self.sink_and_lex_normal(kind, c);
                     }
                 }
             }
@@ -218,7 +221,7 @@ impl Lexer {
                     let kind = TokenKind::Hexadecimal(SmtHexDigits::new_unchecked(
                         self.token_content.clone(),
                     ));
-                    return self.sink_and_lex_next(c, sink, kind);
+                    return self.sink_and_lex_normal(kind, c);
                 }
             }
             LexerState::Binary => {
@@ -246,7 +249,7 @@ impl Lexer {
                     // sink new token and lex the character normally
                     let kind =
                         TokenKind::Binary(SmtBinDigits::new_unchecked(self.token_content.clone()));
-                    return self.sink_and_lex_next(c, sink, kind);
+                    return self.sink_and_lex_normal(kind, c);
                 }
             }
 
@@ -298,9 +301,7 @@ impl Lexer {
                         let kind = TokenKind::String(SmtStringContent::new_unchecked(
                             self.token_content.clone(),
                         ));
-                        let token = self.create_token_ending_before(kind);
-                        sink(token).map_err(LexError::Sink)?;
-                        return self.lex_normal(c, sink);
+                        return self.sink_and_lex_normal(kind, c);
                     }
                 }
             }
@@ -322,7 +323,7 @@ impl Lexer {
                         };
 
                     // sink new token and lex the character normally
-                    return self.sink_and_lex_next(c, sink, kind);
+                    return self.sink_and_lex_normal(kind, c);
                 }
             }
             LexerState::Keyword => match char_class_opt(c) {
@@ -358,7 +359,7 @@ impl Lexer {
                     // sink new token and lex the character normally
                     let kind =
                         TokenKind::Keyword(SmtKeyword::new_unchecked(self.token_content.clone()));
-                    return self.sink_and_lex_next(c, sink, kind);
+                    return self.sink_and_lex_normal(kind, c);
                 }
             },
             LexerState::QuotedSymbol => {
@@ -370,11 +371,11 @@ impl Lexer {
                         );
                     }
                     U8OrEof::U8(b'|') => {
-                        // end of quoted symbol, push its token, this character is consumed
+                        // end of quoted symbol, sink its token, this character is consumed
                         let kind =
                             TokenKind::Symbol(SmtSymbol::new_unchecked(self.token_content.clone()));
                         let token = self.create_token_ending_now(kind);
-                        sink(token).map_err(LexError::Sink)?;
+                        self.sink(token)?;
                         LexerState::Normal
                     }
                     U8OrEof::U8(byte) => {
@@ -413,8 +414,7 @@ impl Lexer {
                     None => {
                         // end without problems on EOF
                         let token = self.create_zero_byte_token(TokenKind::EndOfFile);
-                        sink(token).map_err(LexError::Sink)?;
-                        return Ok(());
+                        return self.sink(token);
                     }
                 }
             }
@@ -424,17 +424,13 @@ impl Lexer {
         Ok(())
     }
 
-    fn lex_normal<E>(
-        &mut self,
-        c: U8OrEof,
-        mut sink: impl FnMut(Token) -> Result<(), E>,
-    ) -> Result<(), LexError<E>> {
+    fn lex_normal(&mut self, c: U8OrEof) -> Result<(), LexError<H::Error>> {
         let byte = match c {
             U8OrEof::U8(c) => c,
             U8OrEof::Eof => {
                 // end without problems on EOF
                 let token = self.create_zero_byte_token(TokenKind::EndOfFile);
-                return sink(token).map_err(LexError::Sink);
+                return self.sink(token);
             }
         };
 
@@ -448,12 +444,12 @@ impl Lexer {
             // parentheses are tokens of their own
             CharClass::ParenOpen => {
                 let token = self.create_token_ending_now(TokenKind::ParenOpen);
-                sink(token).map_err(LexError::Sink)?;
+                self.sink(token)?;
                 LexerState::Normal
             }
             CharClass::ParenClose => {
                 let token = self.create_token_ending_now(TokenKind::ParenClose);
-                sink(token).map_err(LexError::Sink)?;
+                self.sink(token)?;
                 LexerState::Normal
             }
 
@@ -507,15 +503,18 @@ impl Lexer {
         Ok(())
     }
 
-    fn sink_and_lex_next<E>(
+    fn sink(&mut self, token: Token) -> Result<(), LexError<H::Error>> {
+        self.handler.handle_token(token).map_err(LexError::Handler)
+    }
+
+    fn sink_and_lex_normal(
         &mut self,
-        c: U8OrEof,
-        mut sink: impl FnMut(Token) -> Result<(), E>,
         kind: TokenKind,
-    ) -> Result<(), LexError<E>> {
+        c: U8OrEof,
+    ) -> Result<(), LexError<H::Error>> {
         let token = self.create_token_ending_before(kind);
-        sink(token).map_err(LexError::Sink)?;
-        self.lex_normal(c, sink)
+        self.sink(token)?;
+        self.lex_normal(c)
     }
 
     fn start_token(&mut self) {
@@ -570,21 +569,12 @@ impl Lexer {
     ///
     /// This is a helper function for tests.
     #[cfg(test)]
-    pub(crate) fn lex_all<E>(
-        input: &[u8],
-        mut sink: impl FnMut(Token) -> Result<(), E>,
-    ) -> Result<(), LexError<E>> {
-        let mut lexer = Lexer::new();
+    pub(crate) fn lex_all(input: &[u8], handler: H) -> Result<(), LexError<H::Error>> {
+        let mut lexer = Lexer::new(handler);
         for &c in input {
-            lexer.lex_next(c, &mut sink)?;
+            lexer.lex_next(c)?;
         }
-        Ok(())
-    }
-}
-
-impl Default for Lexer {
-    fn default() -> Self {
-        Self::new()
+        lexer.lex_eof()
     }
 }
 

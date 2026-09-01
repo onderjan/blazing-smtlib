@@ -58,7 +58,7 @@ impl<H: SmtHandler> From<LexError<ParserError<H>>> for SmtReadError<H> {
     fn from(err: LexError<ParserError<H>>) -> Self {
         match err {
             LexError::Lexer(err) => err.into(),
-            LexError::Sink(err) => err.into(),
+            LexError::Handler(err) => err.into(),
         }
     }
 }
@@ -91,36 +91,42 @@ pub fn read_smt_file<H: CommandHandler>(
     read_smt(handler, reader)
 }
 
+pub fn read_smt<H: CommandHandler>(
+    handler: &mut H,
+    buf_reader: impl BufRead,
+) -> Result<(), SmtReadError<H>> {
+    let mut parser = Parser::new(handler);
+    SmtReader::new(&mut parser, buf_reader).run()
+}
+
 struct SmtReader<'a, H: CommandHandler, R: BufRead> {
-    reader: R,
-    lexer: Lexer,
-    parser: Parser<'a, H>,
+    buf_reader: R,
+    lexer: Lexer<&'a mut Parser<'a, H>>,
 }
 
 impl<'a, H: CommandHandler, R: BufRead> SmtReader<'a, H, R> {
-    fn new(handler: &'a mut H, reader: R) -> Self {
-        let lexer = Lexer::new();
-        let parser = Parser::new(handler);
-        Self {
-            reader,
-            lexer,
-            parser,
-        }
+    fn new(parser: &'a mut Parser<'a, H>, buf_reader: R) -> Self {
+        let lexer = Lexer::new(parser);
+        Self { buf_reader, lexer }
+    }
+
+    fn run(mut self) -> Result<(), SmtReadError<H>> {
+        while let ControlFlow::Continue(()) = self.read_buf()? {}
+        self.finish_eof()
     }
 
     fn read_buf(&mut self) -> Result<ControlFlow<()>, SmtReadError<H>> {
-        match self.reader.fill_buf() {
+        match self.buf_reader.fill_buf() {
             Ok(buffer) => {
                 if buffer.is_empty() {
                     // end of stream
                     return Ok(ControlFlow::Break(()));
                 }
                 for c in buffer.iter().copied() {
-                    self.lexer
-                        .lex_next(c, |token| self.parser.parse_token(token))?;
+                    self.lexer.lex_next(c)?;
                 }
                 let num_consumed = buffer.len();
-                self.reader.consume(num_consumed);
+                self.buf_reader.consume(num_consumed);
                 Ok(ControlFlow::Continue(()))
             }
             Err(err) => {
@@ -134,19 +140,8 @@ impl<'a, H: CommandHandler, R: BufRead> SmtReader<'a, H, R> {
     }
 
     fn finish_eof(mut self) -> Result<(), SmtReadError<H>> {
-        self.lexer.lex_eof(|token| self.parser.parse_token(token)).map_err(|err| err.into())
+        self.lexer.lex_eof().map_err(|err| err.into())
     }
-}
-
-pub fn read_smt<H: CommandHandler>(
-    handler: &mut H,
-    reader: impl BufRead,
-) -> Result<(), SmtReadError<H>> {
-    let mut reader = SmtReader::new(handler, reader);
-
-    while let ControlFlow::Continue(()) = reader.read_buf()? {}
-
-    reader.finish_eof()
 }
 
 #[cfg(test)]
