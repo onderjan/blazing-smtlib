@@ -211,7 +211,7 @@ impl<H: SmtHandler> TermParser<H> {
             }
             State::LetBindingOpen => self.parse_let_binding_open(handler, token),
             State::LetBindingSymbol => {
-                // except a symbol that will be the binding name
+                // expect a symbol that will be the binding name
                 let mut symbol = SymbolParser::expect(token)?;
                 // mutably take the let bindings on the last level and add the name
                 // for performance, we do not switch bindings between level and state,

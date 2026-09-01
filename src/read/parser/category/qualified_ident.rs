@@ -110,7 +110,6 @@ impl<H: SmtHandler> CategoryParser<H> for QualifiedIdentParser<H> {
                     }
                     TokenKind::Reserved(Reserved::As) => {
                         // qualified ident, parse identifier next
-                        self.ident_parser = IdentParser::new();
                         self.state = State::Qualified;
                     }
                     _ => {
@@ -145,7 +144,7 @@ impl<H: SmtHandler> CategoryParser<H> for QualifiedIdentParser<H> {
                     // the ident parser is untouched, the qualified parser was reset
                     self.state = State::Start;
 
-                    // return an unqualified but indexed ident
+                    // return a qualified ident
                     return Ok(ControlFlow::Break(SmtQualifiedIdent::new_qualified(
                         ident, sort,
                     )));
