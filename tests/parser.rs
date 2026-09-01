@@ -10,10 +10,7 @@ use smt_parser_rs::{
     SmtKeyword, SmtSExpr, SmtSort, SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm,
     read::{
         SmtReadErrorKind,
-        parser::{
-            CategoryParserErrorKind, ClosedParser, StandardCommand, StaticCommandParser,
-            TermParser,
-        },
+        parser::{CategoryParserErrorKind, ClosedParser, CommandAction, CommandParser, TermParser},
     },
 };
 
@@ -87,7 +84,7 @@ struct Recording {
 
 struct MyAssert;
 
-impl StandardCommand<Recording> for MyAssert {
+impl CommandAction<Recording> for MyAssert {
     type Parser = ClosedParser<Recording, TermParser<Recording>>;
 
     fn handle(handler: &mut Recording, _term: ()) -> Result<(), NonstandardCommandError> {
@@ -128,14 +125,14 @@ impl SmtHandler for Recording {
 }
 
 impl CommandHandler for Recording {
-    type NonstandardParser = StaticCommandParser<Self, MyAssert>;
+    type NonstandardParser = CommandParser<Self, MyAssert>;
 
     fn nonstandard_command(
         &mut self,
         name: SmtSymbolView<'_>,
     ) -> Result<Self::NonstandardParser, Self::Error> {
         match name.as_slice() {
-            b"my-assert" => Ok(StaticCommandParser::new()),
+            b"my-assert" => Ok(CommandParser::new()),
             _ => Err(NonstandardCommandError(name.into_owned())),
         }
     }
@@ -253,7 +250,10 @@ fn nonstandard_command_is_parsed_by_handler_parser() {
         b"(declare-const x Bool) (my-assert (f x (g 1))) (check-sat)",
     )
     .unwrap_or_else(|err| panic!("unexpected error at {:?}", err.span()));
-    assert_eq!(handler.commands, ["declare-const", "my-assert", "check-sat"]);
+    assert_eq!(
+        handler.commands,
+        ["declare-const", "my-assert", "check-sat"]
+    );
 }
 
 #[test]

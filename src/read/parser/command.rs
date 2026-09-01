@@ -38,7 +38,7 @@ impl<H: CommandHandler> ParseCommand<H> for NoCommandParser {
 }
 
 /// Determines how a single command should be handled by a command handler.
-pub trait StandardCommand<H: CommandHandler> {
+pub trait CommandAction<H: CommandHandler> {
     type Parser: CategoryParser<H>;
 
     /// Handles the result of a command.
@@ -59,11 +59,11 @@ pub trait StandardCommand<H: CommandHandler> {
 ///
 /// Preserves self-reset: if the inner parser is self-resetting,
 /// moves back into the default state before returning Break.
-pub struct StaticCommandParser<H: CommandHandler, C: StandardCommand<H>> {
+pub struct CommandParser<H: CommandHandler, C: CommandAction<H>> {
     parser: C::Parser,
 }
 
-impl<H: CommandHandler, C: StandardCommand<H>> StaticCommandParser<H, C> {
+impl<H: CommandHandler, C: CommandAction<H>> CommandParser<H, C> {
     pub fn new() -> Self {
         Self {
             parser: C::Parser::default(),
@@ -75,13 +75,13 @@ impl<H: CommandHandler, C: StandardCommand<H>> StaticCommandParser<H, C> {
     }
 }
 
-impl<H: CommandHandler, C: StandardCommand<H>> Default for StaticCommandParser<H, C> {
+impl<H: CommandHandler, C: CommandAction<H>> Default for CommandParser<H, C> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<H: CommandHandler, C: StandardCommand<H>> ParseCommand<H> for StaticCommandParser<H, C> {
+impl<H: CommandHandler, C: CommandAction<H>> ParseCommand<H> for CommandParser<H, C> {
     fn progress(
         &mut self,
         handler: &mut H,
@@ -147,13 +147,13 @@ macro_rules! standard_commands {
         }
 
         pub(crate) struct CommandParsers<H: CommandHandler> {
-            $($field: StaticCommandParser<H, $command>,)*
+            $($field: CommandParser<H, $command>,)*
         }
 
         impl<H: CommandHandler> CommandParsers<H> {
             pub fn new() -> Self {
                 Self {
-                    $($field: StaticCommandParser::new(),)*
+                    $($field: CommandParser::new(),)*
                 }
             }
             pub fn start(&mut self, kind: StandardCommandKind) {
@@ -206,8 +206,7 @@ mod tests {
     #[test]
     fn finished_command_parser_parses_the_next_command() {
         let mut handler = CheckStandardSyntax;
-        let mut parser: StaticCommandParser<CheckStandardSyntax, CommandCheckSat> =
-            StaticCommandParser::new();
+        let mut parser: CommandParser<CheckStandardSyntax, CommandCheckSat> = CommandParser::new();
 
         // a check-sat command body is just the closing parenthesis,
         // so one token finishes the command; the parser is self-restarting

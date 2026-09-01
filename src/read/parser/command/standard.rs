@@ -8,7 +8,7 @@ use crate::{
         category::{
             ClosedAttributeParser, ClosedParser, PairParser, ParenParser, SortParser, TermParser,
         },
-        command::StandardCommand,
+        command::CommandAction,
         handle_err,
     },
     token::Token,
@@ -18,7 +18,7 @@ macro_rules! standard_command {
     ($command:ident, $parser:ty, |$handler:ident, $result:pat_param| $handle:expr) => {
         pub struct $command;
 
-        impl<H: CommandHandler> StandardCommand<H> for $command {
+        impl<H: CommandHandler> CommandAction<H> for $command {
             type Parser = $parser;
 
             fn handle(
@@ -148,7 +148,7 @@ impl<H: CommandHandler> CategoryParser<H> for DefineFunParser<H> {
 
 pub struct CommandExit;
 
-impl<H: CommandHandler> StandardCommand<H> for CommandExit {
+impl<H: CommandHandler> CommandAction<H> for CommandExit {
     type Parser = CloseParenParser;
 
     fn handle(_handler: &mut H, _unit: ()) -> Result<(), <H>::Error> {
