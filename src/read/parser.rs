@@ -2,6 +2,7 @@ use std::ops::ControlFlow;
 
 use crate::{
     CommandHandler, SmtHandler, SmtSpan,
+    read::lexer::LexerTokens,
     token::{Token, TokenKind},
 };
 
@@ -74,7 +75,7 @@ impl<'a, H: CommandHandler> Parser<'a, H> {
         }
     }
 
-    pub fn parse_tokens(&mut self, tokens: Vec<Token>) -> Result<(), ParserError<H>> {
+    pub fn parse_tokens(&mut self, tokens: &mut LexerTokens) -> Result<(), ParserError<H>> {
         for token in tokens {
             match self.parse_token(token) {
                 Ok(()) => {}
