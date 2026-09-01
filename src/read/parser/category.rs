@@ -465,11 +465,11 @@ pub(super) mod tests {
         let mut tokens = lex_all(input).expect("test input must lex").into_iter();
         let mut parser = P::default();
         for token in tokens.by_ref() {
-            match parser.progress(handler, token) {
+            match parser.progress(handler, token.as_token()) {
                 Ok(ControlFlow::Continue(next)) => parser = next,
                 Ok(ControlFlow::Break(result)) => {
                     let left = tokens
-                        .filter(|token| !matches!(token.kind(), TokenKind::EndOfFile))
+                        .filter(|token| token.ty != TokenType::EndOfFile)
                         .count();
                     return Ok((result, left));
                 }

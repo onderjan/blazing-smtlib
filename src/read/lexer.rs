@@ -607,20 +607,65 @@ pub(crate) mod tests {
     use super::*;
     use crate::token::TokenType;
 
-    /*
+    /// An owned copy of a produced token, collected by [`CollectTokens`].
+    ///
+    /// Borrowed tokens cannot outlive the lexer's buffer, so tests collect
+    /// these instead and reconstruct borrowed tokens with [`Self::as_token`].
+    #[derive(Debug)]
+    pub(crate) struct OwnedToken {
+        pub(crate) ty: TokenType,
+        pub(crate) content: String8,
+        pub(crate) span: SmtSpan,
+    }
 
-    /// A token handler that collects all tokens for later inspection.
-    pub(crate) struct CollectTokens(pub(crate) Vec<Token>);
+    impl OwnedToken {
+        /// Reconstructs a borrowed token equivalent to the collected one.
+        pub(crate) fn as_token(&self) -> Token<'_> {
+            let value = self.content.as_view();
+            let kind = match self.ty {
+                TokenType::ParenOpen => TokenKind::ParenOpen,
+                TokenType::ParenClose => TokenKind::ParenClose,
+                TokenType::Numeral => TokenKind::Numeral(SmtNumeralView::new_unchecked(value)),
+                TokenType::Decimal => TokenKind::Decimal(SmtDecimalView::new_unchecked(value)),
+                TokenType::Hexadecimal => {
+                    TokenKind::Hexadecimal(SmtHexDigitsView::new_unchecked(value))
+                }
+                TokenType::Binary => TokenKind::Binary(SmtBinDigitsView::new_unchecked(value)),
+                TokenType::Symbol => TokenKind::Symbol(SmtSymbolView::new_unchecked(value)),
+                TokenType::Reserved(reserved) => TokenKind::Reserved(reserved),
+                TokenType::String => TokenKind::String(SmtStringContentView::new_unchecked(value)),
+                TokenType::Keyword => TokenKind::Keyword(SmtKeywordView::new_unchecked(value)),
+                TokenType::EndOfFile => TokenKind::EndOfFile,
+            };
+            Token::new(kind, self.span)
+        }
+    }
+
+    /// A token handler that collects owned copies of all tokens for later inspection.
+    pub(crate) struct CollectTokens(pub(crate) Vec<OwnedToken>);
 
     impl TokenHandler for CollectTokens {
         type Error = Infallible;
 
         fn handle_token(&mut self, token: Token) -> Result<(), Self::Error> {
-            self.0.push(token);
+            let content = match token.kind() {
+                TokenKind::Symbol(s) => s.as_slice(),
+                TokenKind::Keyword(k) => k.as_slice(),
+                TokenKind::Numeral(n) => n.as_slice(),
+                TokenKind::Decimal(d) => d.as_slice(),
+                TokenKind::Hexadecimal(h) => h.as_slice(),
+                TokenKind::Binary(b) => b.as_slice(),
+                TokenKind::String(s) => s.as_slice(),
+                _ => b"".as_slice(),
+            };
+            self.0.push(OwnedToken {
+                ty: token.kind().ty(),
+                content: String8::from_vec(content.to_vec()),
+                span: token.span(),
+            });
             Ok(())
         }
     }
-    */
 
     /// Extracts the lexer error from a lex error whose handler cannot fail.
     pub(crate) fn into_lexer_error(err: LexError<Infallible>) -> LexerError {
@@ -631,11 +676,10 @@ pub(crate) mod tests {
     }
 
     /// Lexes the whole input including EOF and returns all produced tokens.
-    pub(crate) fn lex_all(input: &[u8]) -> Result<Vec<Token>, LexerError> {
-        todo!("lex all")
-        /*        let mut collected = CollectTokens(Vec::new());
+    pub(crate) fn lex_all(input: &[u8]) -> Result<Vec<OwnedToken>, LexerError> {
+        let mut collected = CollectTokens(Vec::new());
         Lexer::lex_all(input, &mut collected).map_err(into_lexer_error)?;
-        Ok(collected.0)*/
+        Ok(collected.0)
     }
 
     /// Expected location as `(offset, line, column)`.
@@ -915,8 +959,7 @@ pub(crate) mod tests {
 
     #[test]
     fn current_location_follows_consumed_bytes() {
-        todo!("collect tokens")
-        /*let mut collected = CollectTokens(Vec::new());
+        let mut collected = CollectTokens(Vec::new());
         let mut lexer = Lexer::new(&mut collected);
         assert_eq!(loc(lexer.current_location()), (0, 1, 1));
         for &c in b"ab\nc" {
@@ -925,7 +968,7 @@ pub(crate) mod tests {
                 .map_err(into_lexer_error)
                 .expect("valid input");
         }
-        assert_eq!(loc(lexer.current_location()), (4, 2, 2));*/
+        assert_eq!(loc(lexer.current_location()), (4, 2, 2));
     }
 
     /// Expected token as `(type, start, end)`, with the locations as `(offset, line, column)`.
@@ -936,10 +979,7 @@ pub(crate) mod tests {
         lex_all(input)
             .expect("test input must lex")
             .iter()
-            .map(|token| {
-                let span = token.span();
-                (token.kind().ty(), loc(span.start()), loc(span.end()))
-            })
+            .map(|token| (token.ty, loc(token.span.start()), loc(token.span.end())))
             .collect()
     }
 
@@ -1106,10 +1146,8 @@ pub(crate) mod tests {
         let tokens = lex_all(b"7.5 1.05 3.500 0.0").expect("valid input");
         let decimals: Vec<Vec<u8>> = tokens
             .iter()
-            .filter_map(|token| match token.kind() {
-                TokenKind::Decimal(decimal) => Some(decimal.as_slice().to_vec()),
-                _ => None,
-            })
+            .filter(|token| token.ty == TokenType::Decimal)
+            .map(|token| token.content.as_slice().to_vec())
             .collect();
         assert_eq!(
             decimals,
@@ -1128,19 +1166,7 @@ pub(crate) mod tests {
         lex_all(input)
             .expect("test input must lex")
             .iter()
-            .map(|token| {
-                let payload = match token.kind() {
-                    TokenKind::Symbol(s) => s.as_slice().to_vec(),
-                    TokenKind::Keyword(k) => k.as_slice().to_vec(),
-                    TokenKind::Numeral(n) => n.as_slice().to_vec(),
-                    TokenKind::Decimal(d) => d.as_slice().to_vec(),
-                    TokenKind::Hexadecimal(h) => h.as_slice().to_vec(),
-                    TokenKind::Binary(b) => b.as_slice().to_vec(),
-                    TokenKind::String(s) => s.as_slice().to_vec(),
-                    _ => b"".as_slice().to_vec(),
-                };
-                (token.kind().ty(), payload.to_vec())
-            })
+            .map(|token| (token.ty, token.content.as_slice().to_vec()))
             .collect()
     }
 
@@ -1221,8 +1247,6 @@ pub(crate) mod tests {
 
     // --- Lexer misuse panics ---
 
-    // TODO: fix test
-    /*
     #[test]
     #[should_panic(expected = "cannot lex after a lexer error")]
     fn lexing_after_an_error_panics() {
@@ -1236,7 +1260,6 @@ pub(crate) mod tests {
         assert!(lexer.lex_next(b'\\').is_err(), "expected a lexer error");
         let _ = lexer.lex_next(b' ');
     }
-    */
 
     #[test]
     #[should_panic(expected = "cannot lex after a lexer error")]

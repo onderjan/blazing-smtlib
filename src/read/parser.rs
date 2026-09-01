@@ -144,7 +144,7 @@ mod tests {
 
     use crate::{
         CheckStandardSyntax, NonstandardCommandError, SmtAttributeValue, SmtFunctionSignature,
-        SmtKeyword, SmtSExpr, SmtSort, SmtStringContent, SmtSymbol, SmtTerm,
+        SmtKeyword, SmtSExpr, SmtSort, SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm,
         read::{
             lexer::tests::lex_all,
             parser::{
@@ -161,7 +161,7 @@ mod tests {
     ) -> Result<(), ParserError<H>> {
         let mut parser = Parser::new(handler);
         for token in lex_all(input).expect("test input must lex") {
-            parser.handle_token(token)?;
+            parser.handle_token(token.as_token())?;
         }
         Ok(())
     }
@@ -271,9 +271,7 @@ mod tests {
 
     struct MyAssert;
 
-    // TODO: fix tests
-    /*
-        impl StandardCommand<Recording> for MyAssert {
+    impl StandardCommand<Recording> for MyAssert {
         type Parser = ClosedParser<Recording, TermParser<Recording>>;
 
         fn handle(handler: &mut Recording, _term: ()) -> Result<(), NonstandardCommandError> {
@@ -319,11 +317,11 @@ mod tests {
 
         fn nonstandard_command(
             &mut self,
-            name: SmtSymbol,
+            name: SmtSymbolView<'_>,
         ) -> Result<Self::NonstandardParser, Self::Error> {
             match name.as_slice() {
                 b"my-assert" => Ok(StaticCommandParser::new()),
-                _ => Err(NonstandardCommandError(name)),
+                _ => Err(NonstandardCommandError(name.into_owned())),
             }
         }
 
@@ -501,5 +499,5 @@ mod tests {
         parse_with(&mut handler, b"(my-assert x) (exit) (other)")
             .unwrap_or_else(|err| panic!("unexpected error at {:?}", err.span()));
         assert_eq!(handler.commands, ["my-assert"]);
-    }*/
+    }
 }

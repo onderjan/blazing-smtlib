@@ -368,7 +368,7 @@ mod tests {
         let mut parser = SortParser::<Counting>::default();
         let mut finished = false;
         for token in lex_all(&input).expect("valid input") {
-            match parser.progress(&mut handler, token) {
+            match parser.progress(&mut handler, token.as_token()) {
                 Ok(ControlFlow::Continue(next)) => parser = next,
                 Ok(ControlFlow::Break(())) => {
                     finished = true;
