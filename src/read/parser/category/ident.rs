@@ -107,8 +107,6 @@ impl<H: SmtHandler> CategoryParser<H> for IdentParser {
     }
 }
 
-// TODO: fix tests
-/*
 
 #[cfg(test)]
 mod tests {
@@ -235,4 +233,3 @@ mod tests {
         );
     }
 }
-*/

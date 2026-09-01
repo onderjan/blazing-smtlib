@@ -105,8 +105,6 @@ impl<H: SmtHandler> CategoryParser<H> for ClosedAttributeParser<H> {
     }
 }
 
-// TODO: fix tests
-/*
 
 #[cfg(test)]
 mod tests {
@@ -239,4 +237,3 @@ mod tests {
         );
     }
 }
-*/

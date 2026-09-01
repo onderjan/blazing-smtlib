@@ -306,8 +306,6 @@ fn parse_special_constant(kind: TokenKind) -> Result<SmtSpecialConstant, TokenKi
     Ok(constant)
 }
 
-// TODO: fix tests
-/*
 #[cfg(test)]
 pub(super) mod tests {
     use std::convert::Infallible;
@@ -316,7 +314,7 @@ pub(super) mod tests {
     use crate::{
         SmtAttributeValue, SmtIdent, SmtIndex, SmtKeyword, SmtQualifiedIdent, SmtSExpr, SmtSort,
         SmtSpecialConstant, SmtSymbol, SmtTerm,
-        read::{lexer::Lexer, parser::ParserErrorKind},
+        read::{lexer::tests::lex_all, parser::ParserErrorKind},
     };
 
     // --- Test handler rendering everything it receives back into text ---
@@ -464,7 +462,7 @@ pub(super) mod tests {
         handler: &mut Printing,
         input: &[u8],
     ) -> Result<(P::Result, usize), CategoryParserError> {
-        let mut tokens = Lexer::lex_all(input)
+        let mut tokens = lex_all(input)
             .expect("test input must lex")
             .into_iter();
         let mut parser = P::default();
@@ -657,4 +655,3 @@ pub(super) mod tests {
         );
     }
 }
-*/

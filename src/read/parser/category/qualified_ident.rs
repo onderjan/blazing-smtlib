@@ -137,8 +137,6 @@ impl<H: SmtHandler> CategoryParser<H> for QualifiedIdentParser<H> {
     }
 }
 
-// TODO: fix tests
-/*
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -290,4 +288,3 @@ mod tests {
         );
     }
 }
-*/

@@ -285,8 +285,6 @@ impl<H: SmtHandler> TermParser<H> {
     }
 }
 
-// TODO: fix tests
-/*
 #[cfg(test)]
 mod tests {
     use std::convert::Infallible;
@@ -295,7 +293,7 @@ mod tests {
     use crate::{
         SmtAttributeValue, SmtKeyword, SmtSExpr, SmtSort,
         read::{
-            lexer::Lexer,
+            lexer::tests::lex_all,
             parser::{
                 ParserErrorKind,
                 category::tests::{Printing, assert_error, parse_all, run},
@@ -585,7 +583,7 @@ mod tests {
         let mut handler = Counting::default();
         let mut parser = TermParser::<Counting>::default();
         let mut finished = false;
-        for token in Lexer::lex_all(&input).expect("valid input") {
+        for token in lex_all(&input).expect("valid input") {
             match parser.progress(&mut handler, token) {
                 Ok(ControlFlow::Continue(next)) => parser = next,
                 Ok(ControlFlow::Break(())) => {
@@ -607,4 +605,3 @@ mod tests {
         assert_eq!(handler.terms, DEPTH + 1);
     }
 }
-*/

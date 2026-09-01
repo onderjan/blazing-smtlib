@@ -138,8 +138,6 @@ fn handle_err<O, H: SmtHandler>(
     }
 }
 
-// TODO: fix tests
-/*
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -148,7 +146,7 @@ mod tests {
         CheckStandardSyntax, NonstandardCommandError, SmtAttributeValue, SmtFunctionSignature,
         SmtKeyword, SmtSExpr, SmtSort, SmtStringContent, SmtSymbol, SmtTerm,
         read::{
-            lexer::Lexer,
+            lexer::tests::lex_all,
             parser::{
                 category::{ClosedParser, TermParser},
                 command::{StandardCommand, StaticCommandParser},
@@ -162,8 +160,8 @@ mod tests {
         input: &[u8],
     ) -> Result<(), ParserError<H>> {
         let mut parser = Parser::new(handler);
-        for token in Lexer::lex_all(input).expect("test input must lex") {
-            parser.parse_token(token)?;
+        for token in lex_all(input).expect("test input must lex") {
+            parser.handle_token(token)?;
         }
         Ok(())
     }
@@ -502,4 +500,3 @@ mod tests {
         assert_eq!(handler.commands, ["my-assert"]);
     }
 }
-*/

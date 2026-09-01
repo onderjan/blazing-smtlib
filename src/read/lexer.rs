@@ -596,21 +596,45 @@ impl LexerError {
     }
 }
 
-/*
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
+    use std::convert::Infallible;
+
     use super::*;
     use crate::token::TokenType;
+
+    /// A token handler that collects all tokens for later inspection.
+    pub(crate) struct CollectTokens(pub(crate) Vec<Token>);
+
+    impl TokenHandler for CollectTokens {
+        type Error = Infallible;
+
+        fn handle_token(&mut self, token: Token) -> Result<(), Self::Error> {
+            self.0.push(token);
+            Ok(())
+        }
+    }
+
+    /// Extracts the lexer error from a lex error whose handler cannot fail.
+    pub(crate) fn into_lexer_error(err: LexError<Infallible>) -> LexerError {
+        match err {
+            LexError::Lexer(err) => err,
+            LexError::Handler(never) => match never {},
+        }
+    }
+
+    /// Lexes the whole input including EOF and returns all produced tokens.
+    pub(crate) fn lex_all(input: &[u8]) -> Result<Vec<Token>, LexerError> {
+        let mut collected = CollectTokens(Vec::new());
+        Lexer::lex_all(input, &mut collected).map_err(into_lexer_error)?;
+        Ok(collected.0)
+    }
 
     /// Expected location as `(offset, line, column)`.
     type Loc = (u64, u64, u64);
 
     fn loc(location: SmtLocation) -> Loc {
         (location.offset(), location.line(), location.column())
-    }
-
-    fn lex_all(input: &[u8]) -> Result<Vec<Token>, LexerError> {
-        Lexer::lex_all(input)
     }
 
     /// Lexes the input, requires an error of the given kind, and checks its span.
@@ -883,11 +907,14 @@ mod tests {
 
     #[test]
     fn current_location_follows_consumed_bytes() {
-        let mut lexer = Lexer::new();
+        let mut collected = CollectTokens(Vec::new());
+        let mut lexer = Lexer::new(&mut collected);
         assert_eq!(loc(lexer.current_location()), (0, 1, 1));
         for &c in b"ab\nc" {
-            // the returned tokens must be drained before lexing the next byte
-            lexer.lex_next(c).expect("valid input").for_each(drop);
+            lexer
+                .lex_next(c)
+                .map_err(into_lexer_error)
+                .expect("valid input");
         }
         assert_eq!(loc(lexer.current_location()), (4, 2, 2));
     }
@@ -1160,26 +1187,51 @@ mod tests {
         );
     }
 
+    // --- Handler errors ---
+
+    /// A token handler that rejects every token, returning its span.
+    struct RejectTokens;
+
+    impl TokenHandler for RejectTokens {
+        type Error = SmtSpan;
+
+        fn handle_token(&mut self, token: Token) -> Result<(), Self::Error> {
+            Err(token.span())
+        }
+    }
+
+    #[test]
+    fn handler_error_is_returned_with_the_handled_token() {
+        let mut lexer = Lexer::new(RejectTokens);
+        // the parenthesis token is produced and handed to the handler immediately
+        let Err(LexError::Handler(span)) = lexer.lex_next(b'(') else {
+            panic!("expected a handler error");
+        };
+        assert_eq!((loc(span.start()), loc(span.end())), ((0, 1, 1), (1, 1, 2)));
+    }
+
     // --- Lexer misuse panics ---
 
     #[test]
     #[should_panic(expected = "cannot lex after a lexer error")]
     fn lexing_after_an_error_panics() {
-        let mut lexer = Lexer::new();
-        lexer.lex_next(b'7').expect("valid input").for_each(drop);
-        // the backslash raises an error just after the numeral token was produced;
-        // the discarded numeral must not obscure the after-error panic below
+        let mut collected = CollectTokens(Vec::new());
+        let mut lexer = Lexer::new(&mut collected);
+        lexer
+            .lex_next(b'7')
+            .map_err(into_lexer_error)
+            .expect("valid input");
+        // the backslash raises an error just after the numeral token was produced
         assert!(lexer.lex_next(b'\\').is_err(), "expected a lexer error");
         let _ = lexer.lex_next(b' ');
     }
 
     #[test]
-    #[should_panic(expected = "tokens returned by lexer must be consumed before further lexing")]
-    fn lexing_with_unconsumed_tokens_panics() {
-        let mut lexer = Lexer::new();
-        // the open parenthesis produces a token, which is deliberately not consumed
-        lexer.lex_next(b'(').expect("valid input");
+    #[should_panic(expected = "cannot lex after a lexer error")]
+    fn lexing_after_a_handler_error_panics() {
+        // a handler error also makes the lexer unusable
+        let mut lexer = Lexer::new(RejectTokens);
+        assert!(lexer.lex_next(b'(').is_err(), "expected a handler error");
         let _ = lexer.lex_next(b'a');
     }
 }
-*/
