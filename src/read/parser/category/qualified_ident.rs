@@ -55,10 +55,12 @@ impl<H: SmtHandler> CategoryParser<H> for QualifiedIdentParser<H> {
     ) -> Result<ControlFlow<SmtQualifiedIdent<H>, Self>, ParserError<H>> {
         let span = token.span();
         match self {
-            QualifiedIdentParser::Start => match token.into_kind() {
+            QualifiedIdentParser::Start => match token.kind() {
                 TokenKind::Symbol(name) => {
                     // simple ident
-                    Ok(ControlFlow::Break(SmtQualifiedIdent::new_simple(name)))
+                    Ok(ControlFlow::Break(SmtQualifiedIdent::new_simple(
+                        name.into_owned(),
+                    )))
                 }
                 TokenKind::ParenOpen => Ok(ControlFlow::Continue(Self::Open)),
                 _ => {

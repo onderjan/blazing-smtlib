@@ -65,8 +65,24 @@ impl Debug for String8 {
 pub struct String8View<'a>(&'a [u8]);
 
 impl<'a> String8View<'a> {
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub fn as_slice(self) -> &'a [u8] {
         self.0
+    }
+
+    pub fn into_owned(self) -> String8 {
+        String8::from_vec(self.as_slice().to_vec())
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = u8> {
+        self.0.iter().copied()
     }
 }
 

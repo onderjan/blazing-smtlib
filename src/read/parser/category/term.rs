@@ -204,7 +204,7 @@ impl<H: SmtHandler> TermParser<H> {
         token: Token,
     ) -> Result<TermProgressOk<H, Self>, ParserError<H>> {
         let span = token.span();
-        match token.into_kind() {
+        match token.kind() {
             TokenKind::ParenOpen => {
                 // application, binder, or annotation
                 // move to operator parsing
@@ -215,7 +215,7 @@ impl<H: SmtHandler> TermParser<H> {
             }
             TokenKind::Symbol(name) => {
                 // a qualified identifier that is just a symbol
-                let qualified_ident = SmtQualifiedIdent::new_simple(name);
+                let qualified_ident = SmtQualifiedIdent::new_simple(name.into_owned());
                 let term = handle_err(
                     handler.handle_term(SmtTerm::QualifiedIdent(qualified_ident)),
                     span,
@@ -245,10 +245,10 @@ impl<H: SmtHandler> TermParser<H> {
 
     fn parse_term_open(levels: Vec<TermLevel<H>>, token: Token) -> Result<Self, ParserError<H>> {
         let span = token.span();
-        let state = match token.into_kind() {
+        let state = match token.kind() {
             TokenKind::Symbol(fn_name) => {
                 // this is an application where the function identifier is just a symbol
-                let fn_ident = SmtQualifiedIdent::new_simple(fn_name);
+                let fn_ident = SmtQualifiedIdent::new_simple(fn_name.into_owned());
                 TermState::ApplicationTerm(fn_ident, Vec::new())
             }
             TokenKind::Reserved(Reserved::Let) => TermState::LetBeforeBindingsOpen,

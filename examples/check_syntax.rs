@@ -15,7 +15,7 @@ fn main() -> Result<(), u32> {
     let file_path = args.next().unwrap();
 
     match read_smt_file(&mut CheckStandardSyntax, &PathBuf::from(file_path)) {
-        Err(err) => match err.into_kind() {
+        Err(err) => match err.kind() {
             SmtReadErrorKind::Io(err) => {
                 eprintln!("Error reading file: {}", err);
                 Err(2)

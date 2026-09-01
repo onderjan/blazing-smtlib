@@ -48,7 +48,7 @@ fn try_parse_file(path: &Path) -> Result<(), String> {
 
     match result {
         Ok(Ok(_ast)) => Ok(()),
-        Ok(Err(e)) => match e.into_kind() {
+        Ok(Err(e)) => match e.kind() {
             SmtReadErrorKind::Lexer(err) => Err(format!("Lexer error: {:?}", err)),
             SmtReadErrorKind::Parser(err) => Err(format!("Parser error: {:?}", err)),
             SmtReadErrorKind::Io(err) => Err(format!("Read error: {:?}", err)),

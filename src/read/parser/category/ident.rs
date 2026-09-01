@@ -49,11 +49,10 @@ impl<H: SmtHandler> CategoryParser<H> for IdentParser {
     ) -> Result<ControlFlow<SmtIdent, Self>, ParserError<H>> {
         let span = token.span();
         match self {
-            IdentParser::Start => match token.into_kind() {
-                TokenKind::Symbol(name) => Ok(ControlFlow::Break(SmtIdent {
-                    name,
-                    indices: Vec::new(),
-                })),
+            IdentParser::Start => match token.kind() {
+                TokenKind::Symbol(name) => {
+                    Ok(ControlFlow::Break(SmtIdent::new_simple(name.into_owned())))
+                }
                 TokenKind::ParenOpen => Ok(ControlFlow::Continue(Self::Open)),
                 _ => {
                     let kind = CategoryParserErrorKind::ExpectedIdent;
@@ -72,9 +71,9 @@ impl<H: SmtHandler> CategoryParser<H> for IdentParser {
                 }
             }
             IdentParser::AfterUnderscore => {
-                if let TokenKind::Symbol(name) = token.into_kind() {
+                if let TokenKind::Symbol(name) = token.kind() {
                     Ok(ControlFlow::Continue(IdentParser::Indices {
-                        name,
+                        name: name.into_owned(),
                         indices: Vec::new(),
                     }))
                 } else {
@@ -82,7 +81,7 @@ impl<H: SmtHandler> CategoryParser<H> for IdentParser {
                     Err(CategoryParserError::new(kind, span).into())
                 }
             }
-            IdentParser::Indices { name, mut indices } => match token.into_kind() {
+            IdentParser::Indices { name, mut indices } => match token.kind() {
                 TokenKind::ParenClose => {
                     if indices.is_empty() {
                         let kind = CategoryParserErrorKind::EmptyIdentIndices;
@@ -91,11 +90,11 @@ impl<H: SmtHandler> CategoryParser<H> for IdentParser {
                     Ok(ControlFlow::Break(SmtIdent { name, indices }))
                 }
                 TokenKind::Numeral(index_value) => {
-                    indices.push(SmtIndex::Numeral(index_value));
+                    indices.push(SmtIndex::Numeral(index_value.into_owned()));
                     Ok(ControlFlow::Continue(Self::Indices { name, indices }))
                 }
                 TokenKind::Symbol(index_symbol) => {
-                    indices.push(SmtIndex::Symbol(index_symbol));
+                    indices.push(SmtIndex::Symbol(index_symbol.into_owned()));
                     Ok(ControlFlow::Continue(Self::Indices { name, indices }))
                 }
                 _ => {
@@ -106,7 +105,6 @@ impl<H: SmtHandler> CategoryParser<H> for IdentParser {
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {

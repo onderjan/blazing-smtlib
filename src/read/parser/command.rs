@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    CommandHandler, SmtSpan, SmtSymbol,
+    CommandHandler, SmtSpan, SmtSymbolView,
     read::parser::{
         ParserError,
         category::CategoryParser,
@@ -141,7 +141,7 @@ pub enum CommandResult {
 impl<H: CommandHandler> super::Parser<'_, H> {
     pub(super) fn start_command(
         &mut self,
-        name: SmtSymbol,
+        name: SmtSymbolView<'_>,
         span: SmtSpan,
     ) -> Result<CommandParser<H>, ParserError<H>> {
         Ok(match name.as_slice() {

@@ -1,6 +1,6 @@
 use crate::{
-    SmtBinDigits, SmtDecimal, SmtHexDigits, SmtKeyword, SmtNumeral, SmtSpan, SmtStringContent,
-    SmtSymbol, string::String8,
+    SmtBinDigitsView, SmtDecimalView, SmtHexDigitsView, SmtKeywordView, SmtNumeralView, SmtSpan,
+    SmtStringContentView, SmtSymbolView, string::String8,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -18,22 +18,22 @@ pub enum TokenType {
     EndOfFile,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TokenKind {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TokenKind<'a> {
     ParenOpen,
     ParenClose,
-    Numeral(SmtNumeral),
-    Decimal(SmtDecimal),
-    Hexadecimal(SmtHexDigits),
-    Binary(SmtBinDigits),
-    Symbol(SmtSymbol),
+    Numeral(SmtNumeralView<'a>),
+    Decimal(SmtDecimalView<'a>),
+    Hexadecimal(SmtHexDigitsView<'a>),
+    Binary(SmtBinDigitsView<'a>),
+    Symbol(SmtSymbolView<'a>),
     Reserved(Reserved),
-    String(SmtStringContent),
-    Keyword(SmtKeyword),
+    String(SmtStringContentView<'a>),
+    Keyword(SmtKeywordView<'a>),
     EndOfFile,
 }
 
-impl TokenKind {
+impl TokenKind<'_> {
     pub fn ty(&self) -> TokenType {
         match self {
             TokenKind::ParenOpen => TokenType::ParenOpen,
@@ -52,21 +52,17 @@ impl TokenKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Token {
-    kind: TokenKind,
+pub struct Token<'a> {
+    kind: TokenKind<'a>,
     span: SmtSpan,
 }
 
-impl Token {
-    pub(crate) fn new(kind: TokenKind, span: SmtSpan) -> Token {
+impl<'a> Token<'a> {
+    pub(crate) fn new(kind: TokenKind<'a>, span: SmtSpan) -> Token<'a> {
         Self { kind, span }
     }
 
-    pub fn kind(&self) -> &TokenKind {
-        &self.kind
-    }
-
-    pub fn into_kind(self) -> TokenKind {
+    pub fn kind(&self) -> TokenKind<'a> {
         self.kind
     }
 

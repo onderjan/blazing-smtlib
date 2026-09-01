@@ -42,15 +42,17 @@ impl<H: SmtHandler> CategoryParser<H> for ClosedAttributeParser<H> {
         let token_span = token.span();
         match self {
             ClosedAttributeParser::Start => {
-                let TokenKind::Keyword(keyword) = token.into_kind() else {
+                let TokenKind::Keyword(keyword) = token.kind() else {
                     let kind = CategoryParserErrorKind::ExpectedToken(&[TokenType::Keyword]);
                     return Err(CategoryParserError::new(kind, token_span).into());
                 };
-                Ok(ControlFlow::Continue(ClosedAttributeParser::Name(keyword)))
+                Ok(ControlFlow::Continue(ClosedAttributeParser::Name(
+                    keyword.into_owned(),
+                )))
             }
             ClosedAttributeParser::Name(name) => {
-                let value = match token.into_kind() {
-                    TokenKind::Symbol(symbol) => SmtAttributeValue::Symbol(symbol),
+                let value = match token.kind() {
+                    TokenKind::Symbol(symbol) => SmtAttributeValue::Symbol(symbol.into_owned()),
                     TokenKind::ParenOpen => {
                         // starts a list of sexprs ending with closing parenthesis
                         let parser = MultipleParser::after_open_paren();
@@ -104,7 +106,6 @@ impl<H: SmtHandler> CategoryParser<H> for ClosedAttributeParser<H> {
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {

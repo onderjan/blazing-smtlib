@@ -296,11 +296,11 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for MultipleParser<H
 
 fn parse_special_constant(kind: TokenKind) -> Result<SmtSpecialConstant, TokenKind> {
     let constant = match kind {
-        TokenKind::Numeral(value) => SmtSpecialConstant::Numeral(value),
-        TokenKind::Decimal(decimal) => SmtSpecialConstant::Decimal(decimal),
-        TokenKind::Hexadecimal(value) => SmtSpecialConstant::Hexadecimal(value),
-        TokenKind::Binary(value) => SmtSpecialConstant::Binary(value),
-        TokenKind::String(string) => SmtSpecialConstant::String(string),
+        TokenKind::Numeral(value) => SmtSpecialConstant::Numeral(value.into_owned()),
+        TokenKind::Decimal(decimal) => SmtSpecialConstant::Decimal(decimal.into_owned()),
+        TokenKind::Hexadecimal(value) => SmtSpecialConstant::Hexadecimal(value.into_owned()),
+        TokenKind::Binary(value) => SmtSpecialConstant::Binary(value.into_owned()),
+        TokenKind::String(string) => SmtSpecialConstant::String(string.into_owned()),
         kind => return Err(kind),
     };
     Ok(constant)
@@ -462,9 +462,7 @@ pub(super) mod tests {
         handler: &mut Printing,
         input: &[u8],
     ) -> Result<(P::Result, usize), CategoryParserError> {
-        let mut tokens = lex_all(input)
-            .expect("test input must lex")
-            .into_iter();
+        let mut tokens = lex_all(input).expect("test input must lex").into_iter();
         let mut parser = P::default();
         for token in tokens.by_ref() {
             match parser.progress(handler, token) {

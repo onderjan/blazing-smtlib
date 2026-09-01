@@ -78,10 +78,10 @@ impl<H: SmtHandler> SortParser<H> {
         let mut levels = self.levels;
 
         let state = match self.state {
-            SortState::Start => match token.into_kind() {
+            SortState::Start => match token.kind() {
                 TokenKind::Symbol(name) => {
                     // the sort consists just of a single-symbol ident
-                    let ident = SmtIdent::new_simple(name);
+                    let ident = SmtIdent::new_simple(name.into_owned());
                     let sort = handle_err(handler.handle_sort(SmtSort::new_simple(ident)), span)?;
 
                     return Ok(ControlFlow::Break((levels, sort)));
@@ -110,14 +110,14 @@ impl<H: SmtHandler> SortParser<H> {
                     return Err(ParserError::category_error(kind, span));
                 }
             },
-            SortState::Open => match token.into_kind() {
+            SortState::Open => match token.kind() {
                 TokenKind::Reserved(Reserved::Underscore) => {
                     // this is a sort consisting just of an indexed identifier
                     SortState::IdentOnly(IdentParser::after_underscore())
                 }
                 TokenKind::Symbol(name) => {
                     // non-indexed ident starting sort
-                    let ident = SmtIdent::new_simple(name);
+                    let ident = SmtIdent::new_simple(name.into_owned());
                     levels.push(SortLevel {
                         ident,
                         applied: Vec::new(),

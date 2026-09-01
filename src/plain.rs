@@ -162,7 +162,7 @@ impl SmtDisallowedByteVecError {
 }
 
 macro_rules! string8_newtype {
-    ($name:ident) => {
+    ($name:ident, $view:ident) => {
         impl $name {
             pub fn new(value: Vec<u8>) -> Result<Self, SmtDisallowedByteVecError> {
                 let value = String8::from_vec(value);
@@ -173,20 +173,11 @@ macro_rules! string8_newtype {
                 }
             }
 
-            pub(crate) fn new_unchecked(value: String8) -> Self {
-                debug_assert!(
-                    Self::is_allowed(value.as_slice()),
-                    concat!("invalid ", stringify!($name), ": {:?}"),
-                    value
-                );
-                Self(value)
-            }
-
             pub fn as_slice(&self) -> &[u8] {
                 self.0.as_slice()
             }
-            pub fn as_view(&self) -> String8View<'_> {
-                self.0.as_view()
+            pub fn as_view(&self) -> $view<'_> {
+                $view(self.0.as_view())
             }
             pub fn into_string8(self) -> String8 {
                 self.0
@@ -210,16 +201,52 @@ macro_rules! string8_newtype {
                 std::fmt::Debug::fmt(&self.0, f)
             }
         }
+
+        #[derive(Clone, Copy, PartialEq, Eq, Hash)]
+        pub struct $view<'a>(String8View<'a>);
+
+        impl<'a> $view<'a> {
+            pub(crate) fn new_unchecked(value: String8View<'a>) -> Self {
+                debug_assert!(
+                    $name::is_allowed(value.as_slice()),
+                    concat!("invalid ", stringify!($view), ": {:?}"),
+                    value
+                );
+                Self(value)
+            }
+
+            pub fn as_slice(&self) -> &'a [u8] {
+                self.0.as_slice()
+            }
+            pub fn into_owned(self) -> $name {
+                $name(self.0.into_owned())
+            }
+            pub fn len(&self) -> usize {
+                self.0.len()
+            }
+            pub fn is_empty(&self) -> bool {
+                self.0.is_empty()
+            }
+            pub fn iter(&self) -> impl Iterator<Item = u8> {
+                self.0.iter()
+            }
+        }
+
+        impl std::fmt::Debug for $view<'_> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                std::fmt::Debug::fmt(&self.0, f)
+            }
+        }
     };
 }
 
-string8_newtype!(SmtStringContent);
-string8_newtype!(SmtSymbol);
-string8_newtype!(SmtKeyword);
-string8_newtype!(SmtNumeral);
-string8_newtype!(SmtHexDigits);
-string8_newtype!(SmtBinDigits);
-string8_newtype!(SmtDecimal);
+string8_newtype!(SmtStringContent, SmtStringContentView);
+string8_newtype!(SmtSymbol, SmtSymbolView);
+string8_newtype!(SmtKeyword, SmtKeywordView);
+string8_newtype!(SmtNumeral, SmtNumeralView);
+string8_newtype!(SmtHexDigits, SmtHexDigitsView);
+string8_newtype!(SmtBinDigits, SmtBinDigitsView);
+string8_newtype!(SmtDecimal, SmtDecimalView);
 
 #[cfg(test)]
 mod tests {

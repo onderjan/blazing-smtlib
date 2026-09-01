@@ -64,7 +64,7 @@ impl<H: SmtHandler> SExprParser<H> {
         let mut levels = self.levels;
 
         let span = token.span();
-        let kind = token.into_kind();
+        let kind = token.kind();
         let kind = match parse_special_constant(kind) {
             Ok(special_constant) => {
                 let s_expr = SmtSExpr::SpecialConstant(special_constant);
@@ -75,7 +75,7 @@ impl<H: SmtHandler> SExprParser<H> {
 
         match kind {
             TokenKind::Symbol(symbol) => {
-                let s_expr = SmtSExpr::Symbol(symbol);
+                let s_expr = SmtSExpr::Symbol(symbol.into_owned());
                 Self::break_with(handler, levels, s_expr, span)
             }
             TokenKind::Reserved(reserved) => {
@@ -83,7 +83,7 @@ impl<H: SmtHandler> SExprParser<H> {
                 Self::break_with(handler, levels, s_expr, span)
             }
             TokenKind::Keyword(keyword) => {
-                let s_expr = SmtSExpr::Keyword(keyword);
+                let s_expr = SmtSExpr::Keyword(keyword.into_owned());
                 Self::break_with(handler, levels, s_expr, span)
             }
             TokenKind::ParenOpen => {

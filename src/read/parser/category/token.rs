@@ -26,7 +26,7 @@ macro_rules! token_parser {
             /// Consumes exactly one token, which must match.
             pub(crate) fn expect<H: SmtHandler>(token: Token) -> Result<$result, ParserError<H>> {
                 let span = token.span();
-                match token.into_kind() {
+                match token.kind() {
                     $pattern => Ok($value),
                     _ => Err(ParserError::category_error(
                         CategoryParserErrorKind::ExpectedToken($expected),
@@ -51,16 +51,15 @@ macro_rules! token_parser {
 }
 
 token_parser!(SymbolParser, SmtSymbol, &[TokenType::Symbol],
-    TokenKind::Symbol(symbol) => symbol);
+    TokenKind::Symbol(symbol) => symbol.into_owned());
 token_parser!(OpenParenParser, (), &[TokenType::ParenOpen],
     TokenKind::ParenOpen => ());
 token_parser!(CloseParenParser, (), &[TokenType::ParenClose],
     TokenKind::ParenClose => ());
 token_parser!(KeywordParser, SmtKeyword, &[TokenType::Keyword],
-    TokenKind::Keyword(keyword) => keyword);
+    TokenKind::Keyword(keyword) => keyword.into_owned());
 token_parser!(StringParser, SmtStringContent, &[TokenType::String],
-    TokenKind::String(string) => string);
-
+    TokenKind::String(string) => string.into_owned());
 
 #[cfg(test)]
 mod tests {

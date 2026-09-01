@@ -152,7 +152,7 @@ impl<H: CommandHandler> StandardCommand<H> for CommandExit {
 mod tests {
     use crate::{
         SmtAttributeValue, SmtFunctionSignature, SmtHandler, SmtKeyword, SmtSExpr, SmtSort,
-        SmtSpecialConstant, SmtStringContent, SmtSymbol, SmtTerm,
+        SmtSpecialConstant, SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm,
         read::parser::{
             CategoryParserErrorKind, NoCommandParser, ParserErrorKind,
             tests::{assert_error_span, assert_parser_error, parse_with},
@@ -241,7 +241,7 @@ mod tests {
 
         fn nonstandard_command(
             &mut self,
-            name: SmtSymbol,
+            name: SmtSymbolView<'_>,
         ) -> Result<Self::NonstandardParser, String> {
             Err(format!("nonstandard command {:?}", text(name.as_slice())))
         }
@@ -408,7 +408,7 @@ mod tests {
         let mut handler = Resolving::default();
         let err = parse_with(&mut handler, input).expect_err("expected a handler error");
         assert_error_span(&err, start, end);
-        match err.into_kind() {
+        match err.kind() {
             ParserErrorKind::Handler(handler_message) => assert_eq!(handler_message, message),
             ParserErrorKind::Category(kind) => panic!("expected handler error, got {kind:?}"),
         }

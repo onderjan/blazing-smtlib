@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use crate::{
     SmtAttributeValue, SmtFunctionSignature, SmtKeyword, SmtSExpr, SmtSort, SmtStringContent,
-    SmtSymbol, SmtTerm,
+    SmtSymbol, SmtSymbolView, SmtTerm,
     read::parser::{NoCommandParser, ParseCommand},
 };
 
@@ -32,7 +32,7 @@ pub trait CommandHandler: SmtHandler {
 
     fn nonstandard_command(
         &mut self,
-        name: SmtSymbol,
+        name: SmtSymbolView<'_>,
     ) -> Result<Self::NonstandardParser, Self::Error>;
 
     fn command_echo(&mut self, value: SmtStringContent) -> Result<(), Self::Error>;
@@ -122,10 +122,10 @@ impl CommandHandler for CheckStandardSyntax {
 
     fn nonstandard_command(
         &mut self,
-        name: SmtSymbol,
+        name: SmtSymbolView<'_>,
     ) -> Result<Self::NonstandardParser, Self::Error> {
         // reject nonstandard command
-        Err(NonstandardCommandError(name))
+        Err(NonstandardCommandError(name.into_owned()))
     }
 
     fn command_echo(&mut self, _value: SmtStringContent) -> Result<(), Self::Error> {
