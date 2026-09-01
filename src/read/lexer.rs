@@ -1086,4 +1086,26 @@ mod tests {
             ]
         );
     }
+
+    // --- Lexer misuse panics ---
+
+    #[test]
+    #[should_panic(expected = "cannot lex after a lexer error")]
+    fn lexing_after_an_error_panics() {
+        let mut lexer = Lexer::new();
+        lexer.lex_next(b'7').expect("valid input").for_each(drop);
+        // the backslash raises an error just after the numeral token was produced;
+        // the discarded numeral must not obscure the after-error panic below
+        assert!(lexer.lex_next(b'\\').is_err(), "expected a lexer error");
+        let _ = lexer.lex_next(b' ');
+    }
+
+    #[test]
+    #[should_panic(expected = "tokens returned by lexer must be consumed before further lexing")]
+    fn lexing_with_unconsumed_tokens_panics() {
+        let mut lexer = Lexer::new();
+        // the open parenthesis produces a token, which is deliberately not consumed
+        lexer.lex_next(b'(').expect("valid input");
+        let _ = lexer.lex_next(b'a');
+    }
 }
