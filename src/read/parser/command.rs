@@ -37,7 +37,7 @@ impl<H: CommandHandler> ParseCommand<H> for NoCommandParser {
     }
 }
 
-pub(crate) trait StandardCommand<H: CommandHandler> {
+pub trait StandardCommand<H: CommandHandler> {
     type Parser: CategoryParser<H>;
 
     fn handle(
@@ -50,7 +50,7 @@ pub(crate) trait StandardCommand<H: CommandHandler> {
     }
 }
 
-pub(crate) enum CommandParser<H: CommandHandler> {
+pub enum CommandParser<H: CommandHandler> {
     SetLogic(StaticCommandParser<H, CommandSetLogic>),
     DeclareConst(StaticCommandParser<H, CommandDeclareConst>),
     DeclareFun(StaticCommandParser<H, CommandDeclareFun>),
@@ -94,11 +94,17 @@ impl<H: CommandHandler> ParseCommand<H> for CommandParser<H> {
     }
 }
 
-pub(crate) struct StaticCommandParser<H: CommandHandler, C: StandardCommand<H>>(Option<C::Parser>);
+pub struct StaticCommandParser<H: CommandHandler, C: StandardCommand<H>>(Option<C::Parser>);
 
 impl<H: CommandHandler, C: StandardCommand<H>> StaticCommandParser<H, C> {
     pub fn new() -> Self {
         Self(Some(C::Parser::default()))
+    }
+}
+
+impl<H: CommandHandler, C: StandardCommand<H>> Default for StaticCommandParser<H, C> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
