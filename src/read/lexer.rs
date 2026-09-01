@@ -7,7 +7,7 @@ pub(crate) use char_class::CharClass;
 use crate::{
     SmtBinDigits, SmtDecimal, SmtHexDigits, SmtKeyword, SmtLocation, SmtNumeral, SmtSpan,
     SmtStringContent, SmtSymbol, String8,
-    token::{Reserved, Token, TokenKind},
+    token::{Reserved, Token, TokenKind, TokenType},
 };
 
 /// A sequential handler of tokens.
@@ -154,10 +154,7 @@ impl<H: TokenHandler> Lexer<H> {
                             );
                         }
                         // sink new token and lex the character normally
-                        let kind = TokenKind::Decimal(SmtDecimal::new_unchecked(
-                            self.token_content.clone(),
-                        ));
-                        return self.sink_and_lex_normal(kind, c);
+                        return self.sink_and_lex_normal(TokenType::Decimal, c);
                     }
                 }
             }
@@ -188,10 +185,7 @@ impl<H: TokenHandler> Lexer<H> {
                     _ => {
                         // this was a numeral
                         // sink new token and lex the character normally
-                        let kind = TokenKind::Numeral(SmtNumeral::new_unchecked(
-                            self.token_content.clone(),
-                        ));
-                        return self.sink_and_lex_normal(kind, c);
+                        return self.sink_and_lex_normal(TokenType::Numeral, c);
                     }
                 }
             }
@@ -218,10 +212,7 @@ impl<H: TokenHandler> Lexer<H> {
                     }
                     // had non-digit, nonzero digits
                     // sink new token and lex the character normally
-                    let kind = TokenKind::Hexadecimal(SmtHexDigits::new_unchecked(
-                        self.token_content.clone(),
-                    ));
-                    return self.sink_and_lex_normal(kind, c);
+                    return self.sink_and_lex_normal(TokenType::Hexadecimal, c);
                 }
             }
             LexerState::Binary => {
@@ -247,9 +238,7 @@ impl<H: TokenHandler> Lexer<H> {
                     }
                     // had non-digit, nonzero digits
                     // sink new token and lex the character normally
-                    let kind =
-                        TokenKind::Binary(SmtBinDigits::new_unchecked(self.token_content.clone()));
-                    return self.sink_and_lex_normal(kind, c);
+                    return self.sink_and_lex_normal(TokenType::Binary, c);
                 }
             }
 
@@ -298,10 +287,7 @@ impl<H: TokenHandler> Lexer<H> {
                     _ => {
                         // literal has ended by the previous character
                         // sink new token and lex the character normally
-                        let kind = TokenKind::String(SmtStringContent::new_unchecked(
-                            self.token_content.clone(),
-                        ));
-                        return self.sink_and_lex_normal(kind, c);
+                        return self.sink_and_lex_normal(TokenType::String, c);
                     }
                 }
             }
@@ -315,15 +301,15 @@ impl<H: TokenHandler> Lexer<H> {
                 } else {
                     // simple symbol ended with previous character
                     // process reserved words
-                    let kind =
+                    let token_type =
                         if let Some(reserved) = Reserved::from_symbol_opt(&self.token_content) {
-                            TokenKind::Reserved(reserved)
+                            TokenType::Reserved(reserved)
                         } else {
-                            TokenKind::Symbol(SmtSymbol::new_unchecked(self.token_content.clone()))
+                            TokenType::Symbol
                         };
 
                     // sink new token and lex the character normally
-                    return self.sink_and_lex_normal(kind, c);
+                    return self.sink_and_lex_normal(token_type, c);
                 }
             }
             LexerState::Keyword => match char_class_opt(c) {
@@ -357,9 +343,7 @@ impl<H: TokenHandler> Lexer<H> {
                     }
 
                     // sink new token and lex the character normally
-                    let kind =
-                        TokenKind::Keyword(SmtKeyword::new_unchecked(self.token_content.clone()));
-                    return self.sink_and_lex_normal(kind, c);
+                    return self.sink_and_lex_normal(TokenType::Keyword, c);
                 }
             },
             LexerState::QuotedSymbol => {
@@ -372,10 +356,7 @@ impl<H: TokenHandler> Lexer<H> {
                     }
                     U8OrEof::U8(b'|') => {
                         // end of quoted symbol, sink its token, this character is consumed
-                        let kind =
-                            TokenKind::Symbol(SmtSymbol::new_unchecked(self.token_content.clone()));
-                        let token = self.create_token_ending_now(kind);
-                        self.sink(token)?;
+                        self.sink_current(TokenType::Symbol)?;
                         LexerState::Normal
                     }
                     U8OrEof::U8(byte) => {
@@ -413,8 +394,7 @@ impl<H: TokenHandler> Lexer<H> {
                     }
                     None => {
                         // end without problems on EOF
-                        let token = self.create_zero_byte_token(TokenKind::EndOfFile);
-                        return self.sink(token);
+                        return self.sink_empty(TokenType::EndOfFile);
                     }
                 }
             }
@@ -429,8 +409,7 @@ impl<H: TokenHandler> Lexer<H> {
             U8OrEof::U8(c) => c,
             U8OrEof::Eof => {
                 // end without problems on EOF
-                let token = self.create_zero_byte_token(TokenKind::EndOfFile);
-                return self.sink(token);
+                return self.sink_empty(TokenType::EndOfFile);
             }
         };
 
@@ -443,13 +422,11 @@ impl<H: TokenHandler> Lexer<H> {
 
             // parentheses are tokens of their own
             CharClass::ParenOpen => {
-                let token = self.create_token_ending_now(TokenKind::ParenOpen);
-                self.sink(token)?;
+                self.sink_current(TokenType::ParenOpen)?;
                 LexerState::Normal
             }
             CharClass::ParenClose => {
-                let token = self.create_token_ending_now(TokenKind::ParenClose);
-                self.sink(token)?;
+                self.sink_current(TokenType::ParenClose)?;
                 LexerState::Normal
             }
 
@@ -503,18 +480,53 @@ impl<H: TokenHandler> Lexer<H> {
         Ok(())
     }
 
-    fn sink(&mut self, token: Token) -> Result<(), LexError<H::Error>> {
-        self.handler.handle_token(token).map_err(LexError::Handler)
+    fn sink_current(&mut self, token_type: TokenType) -> Result<(), LexError<H::Error>> {
+        self.sink_with_span(token_type, self.span_ending_now())
+    }
+
+    fn sink_empty(&mut self, token_type: TokenType) -> Result<(), LexError<H::Error>> {
+        self.start_token();
+        self.sink_with_span(token_type, self.span_ending_before())
     }
 
     fn sink_and_lex_normal(
         &mut self,
-        kind: TokenKind,
+        token_type: TokenType,
         c: U8OrEof,
     ) -> Result<(), LexError<H::Error>> {
-        let token = self.create_token_ending_before(kind);
-        self.sink(token)?;
+        // the token to be sunk actually ended with the last character
+        // we just needed this character to decide that
+        // sink it and lex the character normally
+        self.sink_with_span(token_type, self.span_ending_before())?;
         self.lex_normal(c)
+    }
+
+    fn sink_with_span(
+        &mut self,
+        token_type: TokenType,
+        span: SmtSpan,
+    ) -> Result<(), LexError<H::Error>> {
+        // TODO: pass the content by reference
+        let value = self.token_content.clone();
+
+        // the caller is responsible for ensuring that the constructed token kind is valid
+        let kind = match token_type {
+            TokenType::ParenOpen => TokenKind::ParenOpen,
+            TokenType::ParenClose => TokenKind::ParenClose,
+            TokenType::Numeral => TokenKind::Numeral(SmtNumeral::new_unchecked(value)),
+            TokenType::Decimal => TokenKind::Decimal(SmtDecimal::new_unchecked(value)),
+            TokenType::Hexadecimal => TokenKind::Hexadecimal(SmtHexDigits::new_unchecked(value)),
+            TokenType::Binary => TokenKind::Binary(SmtBinDigits::new_unchecked(value)),
+            TokenType::Symbol => TokenKind::Symbol(SmtSymbol::new_unchecked(value)),
+            TokenType::Reserved(reserved) => TokenKind::Reserved(reserved),
+            TokenType::String => TokenKind::String(SmtStringContent::new_unchecked(value)),
+            TokenType::Keyword => TokenKind::Keyword(SmtKeyword::new_unchecked(value)),
+            TokenType::EndOfFile => TokenKind::EndOfFile,
+        };
+
+        self.handler
+            .handle_token(Token::new(kind, span))
+            .map_err(LexError::Handler)
     }
 
     fn start_token(&mut self) {
@@ -523,30 +535,19 @@ impl<H: TokenHandler> Lexer<H> {
         self.token_content.clear();
     }
 
-    fn create_token_ending_now(&self, kind: TokenKind) -> Token {
+    fn span_ending_now(&self) -> SmtSpan {
         // The current offset is at the start of the current character
         // The span includes start, but not the end
         // Therefore, we need to add 1 to the current offset
-        Token::new(
-            kind,
-            SmtSpan::new_unchecked(self.token_start, self.byte_start.after_column()),
-        )
+        SmtSpan::new_unchecked(self.token_start, self.byte_start.after_column())
     }
 
-    fn create_token_ending_before(&self, kind: TokenKind) -> Token {
+    fn span_ending_before(&self) -> SmtSpan {
         // The current offset is at the start of the current character
         // The span includes start, but not the end
         // Therefore, if the token actually ended with the previous character,
         // we do not need to add anything.
-        Token::new(
-            kind,
-            SmtSpan::new_unchecked(self.token_start, self.byte_start),
-        )
-    }
-
-    fn create_zero_byte_token(&mut self, kind: TokenKind) -> Token {
-        self.start_token();
-        self.create_token_ending_before(kind)
+        SmtSpan::new_unchecked(self.token_start, self.byte_start)
     }
 
     fn current_token_error<E>(&self, kind: LexerErrorKind, c: U8OrEof) -> LexError<E> {
