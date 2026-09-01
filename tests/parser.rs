@@ -257,6 +257,16 @@ fn nonstandard_command_is_parsed_by_handler_parser() {
 }
 
 #[test]
+fn repeated_nonstandard_commands_each_get_a_fresh_parser() {
+    let mut handler = Recording::default();
+    // unlike the persistent standard command parsers, nonstandard parsers
+    // are requested from the handler for every command
+    parse_with(&mut handler, b"(my-assert x) (my-assert (f y)) (check-sat)")
+        .unwrap_or_else(|err| panic!("unexpected error at {:?}", err.span()));
+    assert_eq!(handler.commands, ["my-assert", "my-assert", "check-sat"]);
+}
+
+#[test]
 fn nonstandard_command_body_is_checked() {
     // a malformed body is a parser error on the offending token
     let mut handler = Recording::default();

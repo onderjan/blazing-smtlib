@@ -204,25 +204,23 @@ mod tests {
     use crate::{CheckStandardSyntax, SmtSpan, token::TokenKind};
 
     #[test]
-    #[should_panic(expected = "cannot progress command parser that already finished")]
-    fn progressing_a_finished_command_parser_panics() {
+    fn finished_command_parser_parses_the_next_command() {
         let mut handler = CheckStandardSyntax;
         let mut parser: StaticCommandParser<CheckStandardSyntax, CommandCheckSat> =
             StaticCommandParser::new();
 
         // a check-sat command body is just the closing parenthesis,
-        // so one token finishes the command
-        let close = Token::new(TokenKind::ParenClose, SmtSpan::new_zero());
-        let flow = parser
-            .progress(&mut handler, close)
-            .expect("check-sat closing parenthesis must parse");
-        assert!(matches!(
-            flow,
-            ControlFlow::Break(CommandResult::EndCommand)
-        ));
-
-        // the command has finished; progressing the parser again is a usage error
-        let close = Token::new(TokenKind::ParenClose, SmtSpan::new_zero());
-        let _ = parser.progress(&mut handler, close);
+        // so one token finishes the command; the parser is self-restarting
+        // after the break, so the next command body parses without a restart
+        for _ in 0..2 {
+            let close = Token::new(TokenKind::ParenClose, SmtSpan::new_zero());
+            let flow = parser
+                .progress(&mut handler, close)
+                .expect("check-sat closing parenthesis must parse");
+            assert!(matches!(
+                flow,
+                ControlFlow::Break(CommandResult::EndCommand)
+            ));
+        }
     }
 }

@@ -6,8 +6,9 @@ mod common;
 use common::{assert_error_span, assert_parser_error, parse_with};
 
 use smt_parser_rs::{
-    CommandHandler, SmtAttributeValue, SmtFunctionSignature, SmtHandler, SmtKeyword, SmtSExpr,
-    SmtSort, SmtSpecialConstant, SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm,
+    CommandHandler, SmtAttributeValue, SmtFunctionSignature, SmtHandler, SmtIdent, SmtIndex,
+    SmtKeyword, SmtSExpr, SmtSort, SmtSpecialConstant, SmtStringContent, SmtSymbol, SmtSymbolView,
+    SmtTerm,
     read::{
         SmtReadErrorKind,
         parser::{CategoryParserErrorKind, NoCommandParser},
@@ -31,6 +32,24 @@ fn text(bytes: &[u8]) -> String {
     String::from_utf8(bytes.to_vec()).expect("test inputs are ASCII")
 }
 
+/// Renders an identifier including its indices, so that stale indices
+/// leaking from a previously parsed command would show up in the events.
+fn ident_text(ident: &SmtIdent) -> String {
+    let name = text(ident.name.as_slice());
+    if ident.indices.is_empty() {
+        return name;
+    }
+    let indices: Vec<String> = ident
+        .indices
+        .iter()
+        .map(|index| match index {
+            SmtIndex::Numeral(numeral) => text(numeral.as_slice()),
+            SmtIndex::Symbol(symbol) => text(symbol.as_slice()),
+        })
+        .collect();
+    format!("(_ {} {})", name, indices.join(" "))
+}
+
 impl SmtHandler for Resolving {
     type Error = String;
     type SExpr = ();
@@ -39,7 +58,7 @@ impl SmtHandler for Resolving {
     type Term = String;
 
     fn handle_sort(&mut self, sort: SmtSort<Self>) -> Result<String, String> {
-        let name = text(sort.ident.name.as_slice());
+        let name = ident_text(&sort.ident);
         Ok(if sort.applied.is_empty() {
             name
         } else {
@@ -54,7 +73,7 @@ impl SmtHandler for Resolving {
                 _ => "<constant>".into(),
             },
             SmtTerm::QualifiedIdent(qualified_ident) => {
-                let name = text(qualified_ident.ident.name.as_slice());
+                let name = ident_text(&qualified_ident.ident);
                 if self.params.contains(&name) {
                     format!("[{name}]")
                 } else {
@@ -62,7 +81,7 @@ impl SmtHandler for Resolving {
                 }
             }
             SmtTerm::Application(application) => {
-                let function = text(application.function.ident.name.as_slice());
+                let function = ident_text(&application.function.ident);
                 format!("({} {})", function, application.args.join(" "))
             }
         })
@@ -236,6 +255,79 @@ fn declare_fun_parameter_list() {
             "declare-fun f (A (Array Int Int)) Bool",
             "declare-fun g () Int",
         ]
+    );
+}
+
+// --- Parser persistence across commands ---
+//
+// The command parsers are persistent inside the reader and restarted per
+// command, so consecutive commands of the same kind reuse the same parser
+// instance (including its category parsers and their buffers). These tests
+// record full term and sort content: state leaking from a previous command
+// would corrupt the rendered events.
+
+#[test]
+fn repeated_asserts_reuse_the_persistent_parser() {
+    let mut handler = Resolving::default();
+    parse_resolving(
+        &mut handler,
+        b"(assert ((_ extract 3 0) x)) (assert y) (assert ((_ extract 7 4) (f 1)))",
+    );
+    assert_eq!(
+        handler.events,
+        [
+            "assert ((_ extract 3 0) x)",
+            "assert y",
+            "assert ((_ extract 7 4) (f 1))",
+        ]
+    );
+}
+
+#[test]
+fn repeated_declare_funs_reuse_the_persistent_parser() {
+    let mut handler = Resolving::default();
+    parse_resolving(
+        &mut handler,
+        b"(declare-fun f (Bool (_ BitVec 8)) Int) \
+          (declare-fun g ((Array Int Int)) (_ BitVec 4))",
+    );
+    assert_eq!(
+        handler.events,
+        [
+            "declare-fun f (Bool (_ BitVec 8)) Int",
+            "declare-fun g ((Array Int Int)) (_ BitVec 4)",
+        ]
+    );
+}
+
+#[test]
+fn repeated_define_funs_reset_signature_and_scope() {
+    let mut handler = Resolving::default();
+    parse_resolving(
+        &mut handler,
+        b"(define-fun a ((x Int)) Int (+ x 1)) (define-fun b ((y Bool)) Bool y)",
+    );
+    assert_eq!(
+        handler.events,
+        [
+            "start a ((x Int)) Int",
+            "end (+ [x] 1)",
+            "start b ((y Bool)) Bool",
+            "end [y]",
+        ]
+    );
+}
+
+#[test]
+fn alternating_commands_reuse_their_parsers() {
+    let mut handler = Resolving::default();
+    parse_resolving(
+        &mut handler,
+        b"(assert (f 1)) (check-sat) (assert (g 2)) (check-sat)",
+    );
+    assert_eq!(
+        handler.events,
+        ["assert (f 1)", "check-sat", "assert (g 2)", "check-sat"]
     );
 }
 
