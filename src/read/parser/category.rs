@@ -31,7 +31,7 @@ pub trait CategoryParser<H: SmtHandler>: Default {
         &mut self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<Self::Result>, ParserError<H>>;
+    ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -114,7 +114,7 @@ impl<H: SmtHandler, P1: CategoryParser<H>, P2: CategoryParser<H>> CategoryParser
         &mut self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<Self::Result>, ParserError<H>> {
+    ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         match self.first_result.take() {
             None => {
                 // progress the first parser, emplace the first result if it breaks
@@ -165,7 +165,7 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for ClosedParser<H, 
         &mut self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<Self::Result>, ParserError<H>> {
+    ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         Ok(self
             .inner
             .progress(handler, token)?
@@ -202,7 +202,7 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for OpenedParser<H, 
         &mut self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<Self::Result>, ParserError<H>> {
+    ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         Ok(self
             .inner
             .progress(handler, token)?
@@ -254,7 +254,7 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for ClosedMultiplePa
         &mut self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<Vec<P::Result>>, ParserError<H>> {
+    ) -> Result<ControlFlow<Vec<P::Result>>, ParserError<H::Error>> {
         // if we are outside, closing parenthesis ends processing
         if self.outside && matches!(token.kind(), TokenKind::ParenClose) {
             let results = self.results.drain(..).collect();

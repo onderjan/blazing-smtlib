@@ -60,7 +60,7 @@ impl<H: SmtHandler> CategoryParser<H> for ClosedAttributeParser<H> {
         &mut self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<H::Attribute>, ParserError<H>> {
+    ) -> Result<ControlFlow<H::Attribute>, ParserError<H::Error>> {
         if let Some(attribute) = self.attribute.take() {
             // we already have an attribute, just expect closing parenthesis
             CloseParenParser::expect(token)?;

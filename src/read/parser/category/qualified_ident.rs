@@ -76,7 +76,7 @@ impl<H: SmtHandler> CategoryParser<H> for QualifiedIdentParser<H> {
         &mut self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<SmtQualifiedIdent<H>>, ParserError<H>> {
+    ) -> Result<ControlFlow<SmtQualifiedIdent<H>>, ParserError<H::Error>> {
         let span = token.span();
         match self.state {
             State::Start => match token.kind() {

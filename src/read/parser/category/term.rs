@@ -111,7 +111,7 @@ impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
         &mut self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<H::Term>, ParserError<H>> {
+    ) -> Result<ControlFlow<H::Term>, ParserError<H::Error>> {
         let span = token.span();
         let term = match self.pending_term.take() {
             Some(term) => {
@@ -171,7 +171,7 @@ impl<H: SmtHandler> TermParser<H> {
         &mut self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<SmtTerm<H>>, ParserError<H>> {
+    ) -> Result<ControlFlow<SmtTerm<H>>, ParserError<H::Error>> {
         match self.state {
             State::Start => self.parse_term_start(token),
             State::Open => {
@@ -230,7 +230,7 @@ impl<H: SmtHandler> TermParser<H> {
     fn parse_term_start(
         &mut self,
         token: Token,
-    ) -> Result<ControlFlow<SmtTerm<H>>, ParserError<H>> {
+    ) -> Result<ControlFlow<SmtTerm<H>>, ParserError<H::Error>> {
         match token.kind() {
             TokenKind::ParenOpen => {
                 // application, binder, or annotation
@@ -286,7 +286,7 @@ impl<H: SmtHandler> TermParser<H> {
         }
     }
 
-    fn parse_term_open(&mut self, token: Token) -> Result<(), ParserError<H>> {
+    fn parse_term_open(&mut self, token: Token) -> Result<(), ParserError<H::Error>> {
         let span = token.span();
         let state = match token.kind() {
             TokenKind::Symbol(fn_name) => {
@@ -347,7 +347,7 @@ impl<H: SmtHandler> TermParser<H> {
         &mut self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<SmtTerm<H>>, ParserError<H>> {
+    ) -> Result<ControlFlow<SmtTerm<H>>, ParserError<H::Error>> {
         let span = token.span();
         match token.kind() {
             TokenKind::ParenOpen => {

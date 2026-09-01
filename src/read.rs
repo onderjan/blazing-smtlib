@@ -54,8 +54,8 @@ impl<H: SmtHandler> SmtReadError<H> {
     }
 }
 
-impl<H: SmtHandler> From<LexError<ParserError<H>>> for SmtReadError<H> {
-    fn from(err: LexError<ParserError<H>>) -> Self {
+impl<H: SmtHandler> From<LexError<ParserError<H::Error>>> for SmtReadError<H> {
+    fn from(err: LexError<ParserError<H::Error>>) -> Self {
         match err {
             LexError::Lexer(err) => err.into(),
             LexError::Handler(err) => err.into(),
@@ -70,8 +70,8 @@ impl<H: SmtHandler> From<LexerError> for SmtReadError<H> {
     }
 }
 
-impl<H: SmtHandler> From<ParserError<H>> for SmtReadError<H> {
-    fn from(err: ParserError<H>) -> Self {
+impl<H: SmtHandler> From<ParserError<H::Error>> for SmtReadError<H> {
+    fn from(err: ParserError<H::Error>) -> Self {
         let span = err.span();
         let kind: SmtReadErrorKind<H> = match err.into_kind() {
             ParserErrorKind::Category(err) => SmtReadErrorKind::Parser(err),

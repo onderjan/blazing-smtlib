@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    CommandHandler, SmtHandler, SmtSpan,
+    CommandHandler, SmtSpan,
     read::lexer::TokenHandler,
     token::{Token, TokenKind},
 };
@@ -12,22 +12,24 @@ mod command;
 pub use category::*;
 pub use command::*;
 
-pub enum ParserErrorKind<H: SmtHandler + ?Sized> {
+#[derive(Debug)]
+pub enum ParserErrorKind<E> {
     Category(CategoryParserErrorKind),
-    Handler(H::Error),
+    Handler(E),
 }
 
-pub struct ParserError<H: SmtHandler + ?Sized> {
-    kind: ParserErrorKind<H>,
+#[derive(Debug)]
+pub struct ParserError<E> {
+    kind: ParserErrorKind<E>,
     span: SmtSpan,
 }
 
-impl<H: SmtHandler> ParserError<H> {
-    pub(crate) fn new(kind: ParserErrorKind<H>, span: SmtSpan) -> Self {
+impl<E> ParserError<E> {
+    pub(crate) fn new(kind: ParserErrorKind<E>, span: SmtSpan) -> Self {
         Self { kind, span }
     }
 
-    pub(crate) fn handler_error(err: H::Error, span: SmtSpan) -> Self {
+    pub(crate) fn handler_error(err: E, span: SmtSpan) -> Self {
         Self::new(ParserErrorKind::Handler(err), span)
     }
 
@@ -35,7 +37,7 @@ impl<H: SmtHandler> ParserError<H> {
         Self::new(ParserErrorKind::Category(err), span)
     }
 
-    pub fn kind(&self) -> &ParserErrorKind<H> {
+    pub fn kind(&self) -> &ParserErrorKind<E> {
         &self.kind
     }
 
@@ -43,12 +45,12 @@ impl<H: SmtHandler> ParserError<H> {
         self.span
     }
 
-    pub fn into_kind(self) -> ParserErrorKind<H> {
+    pub fn into_kind(self) -> ParserErrorKind<E> {
         self.kind
     }
 }
 
-impl<H: SmtHandler> From<CategoryParserError> for ParserError<H> {
+impl<E> From<CategoryParserError> for ParserError<E> {
     fn from(value: CategoryParserError) -> Self {
         let span = value.span();
         Self::new(ParserErrorKind::Category(value.into_kind()), span)
@@ -77,9 +79,9 @@ impl<'a, H: CommandHandler> Parser<'a, H> {
 }
 
 impl<'a, H: CommandHandler> TokenHandler for Parser<'a, H> {
-    type Error = ParserError<H>;
+    type Error = ParserError<H::Error>;
 
-    fn handle_token(&mut self, token: Token) -> Result<(), ParserError<H>> {
+    fn handle_token(&mut self, token: Token) -> Result<(), ParserError<H::Error>> {
         let span = token.span();
         match &mut self.state {
             ParserState::AwaitingCommand => {
@@ -129,10 +131,7 @@ impl<'a, H: CommandHandler> TokenHandler for Parser<'a, H> {
     }
 }
 
-fn handle_err<O, H: SmtHandler>(
-    handled: Result<O, H::Error>,
-    span: SmtSpan,
-) -> Result<O, ParserError<H>> {
+fn handle_err<O, E>(handled: Result<O, E>, span: SmtSpan) -> Result<O, ParserError<E>> {
     match handled {
         Ok(ok) => Ok(ok),
         Err(err) => Err(ParserError::handler_error(err, span)),

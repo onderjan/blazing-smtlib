@@ -71,7 +71,7 @@ impl<H: SmtHandler> CategoryParser<H> for SortParser<H> {
         &mut self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<H::Sort>, ParserError<H>> {
+    ) -> Result<ControlFlow<H::Sort>, ParserError<H::Error>> {
         let span = token.span();
         let flow = match self.state {
             State::Start => match token.kind() {

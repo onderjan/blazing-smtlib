@@ -22,7 +22,7 @@ pub trait ParseCommand<H: CommandHandler + ?Sized> {
         &mut self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<CommandResult, ()>, ParserError<H>>;
+    ) -> Result<ControlFlow<CommandResult, ()>, ParserError<H::Error>>;
 }
 
 pub enum NoCommandParser {}
@@ -32,7 +32,7 @@ impl<H: CommandHandler> ParseCommand<H> for NoCommandParser {
         &mut self,
         _handler: &mut H,
         _token: Token,
-    ) -> Result<ControlFlow<CommandResult, ()>, ParserError<H>> {
+    ) -> Result<ControlFlow<CommandResult, ()>, ParserError<H::Error>> {
         match *self {}
     }
 }
@@ -73,7 +73,7 @@ impl<H: CommandHandler> ParseCommand<H> for CommandParser<H> {
         &mut self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<CommandResult, ()>, ParserError<H>> {
+    ) -> Result<ControlFlow<CommandResult, ()>, ParserError<H::Error>> {
         match self {
             Self::SetLogic(p) => p.progress(handler, token),
             Self::DeclareConst(p) => p.progress(handler, token),
@@ -119,7 +119,7 @@ impl<H: CommandHandler, C: StandardCommand<H>> ParseCommand<H> for StaticCommand
         &mut self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<CommandResult, ()>, ParserError<H>> {
+    ) -> Result<ControlFlow<CommandResult, ()>, ParserError<H::Error>> {
         if self.finished {
             panic!("cannot progress command parser that already finished");
         }
@@ -154,7 +154,7 @@ impl<H: CommandHandler> super::Parser<'_, H> {
         &mut self,
         name: SmtSymbolView<'_>,
         span: SmtSpan,
-    ) -> Result<CommandParser<H>, ParserError<H>> {
+    ) -> Result<CommandParser<H>, ParserError<H::Error>> {
         Ok(match name.as_slice() {
             b"set-logic" => CommandParser::SetLogic(StaticCommandParser::new()),
             b"declare-const" => CommandParser::DeclareConst(StaticCommandParser::new()),
@@ -197,7 +197,10 @@ mod tests {
         let Ok(flow) = parser.progress(&mut handler, close) else {
             panic!("check-sat closing parenthesis must parse")
         };
-        assert!(matches!(flow, ControlFlow::Break(CommandResult::EndCommand)));
+        assert!(matches!(
+            flow,
+            ControlFlow::Break(CommandResult::EndCommand)
+        ));
 
         // the command has finished; progressing the parser again is a usage error
         let close = Token::new(TokenKind::ParenClose, SmtSpan::new_zero());

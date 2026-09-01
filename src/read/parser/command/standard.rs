@@ -110,7 +110,7 @@ impl<H: CommandHandler> CategoryParser<H> for DefineFunParser<H> {
         &mut self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<Self::Result>, ParserError<H>> {
+    ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         let span = token.span();
         if self.parse_signature {
             if let ControlFlow::Break((name, (params, result_sort))) =

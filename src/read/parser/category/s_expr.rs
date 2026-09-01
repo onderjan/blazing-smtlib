@@ -42,7 +42,7 @@ impl<H: SmtHandler> CategoryParser<H> for SExprParser<H> {
         &mut self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<H::SExpr>, ParserError<H>> {
+    ) -> Result<ControlFlow<H::SExpr>, ParserError<H::Error>> {
         let s_expr = match token.kind() {
             TokenKind::Symbol(symbol) => SmtSExpr::Symbol(symbol.into_owned()),
             TokenKind::Reserved(reserved) => SmtSExpr::Reserved(reserved),
