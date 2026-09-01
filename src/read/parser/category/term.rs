@@ -107,6 +107,14 @@ impl<H: SmtHandler> Default for TermParser<H> {
 impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
     type Result = H::Term;
 
+    fn restart(&mut self) {
+        self.state = State::Start;
+        self.levels.clear();
+        self.pending_term = None;
+
+        self.qualified_ident_parser.restart();
+    }
+
     fn progress(
         &mut self,
         handler: &mut H,
@@ -314,22 +322,22 @@ impl<H: SmtHandler> TermParser<H> {
             TokenKind::Reserved(Reserved::ExclamationMark) => todo!("Annotation"),
             TokenKind::Reserved(Reserved::Underscore) => {
                 // this is actually a term composed of an indexed identifier
-                // start a qualified ident parser after the underscore
+                // move the qualified ident parser after the underscore
                 // (meaning the ident will be unqualified but indexed)
-                self.qualified_ident_parser = QualifiedIdentParser::after_underscore();
+                self.qualified_ident_parser.move_after_underscore();
                 State::QualifiedIdent
             }
             TokenKind::Reserved(Reserved::As) => {
                 // this is actually a term composed of a qualified identifier
-                // start a qualified ident parser after the 'as' reserved word
+                // move the qualified ident parser after the 'as' reserved word
                 // (meaning the ident will be qualified)
-                self.qualified_ident_parser = QualifiedIdentParser::after_as();
+                self.qualified_ident_parser.move_after_as();
                 State::QualifiedIdent
             }
             TokenKind::ParenOpen => {
                 // this is an application where the function identifier is qualified or indexed
-                // start a qualified ident parser after the parenthesis open
-                self.qualified_ident_parser = QualifiedIdentParser::after_open_paren();
+                // move the qualified ident parser after the parenthesis open
+                self.qualified_ident_parser.move_after_open_paren();
                 State::ApplicationIdent
             }
             _ => {

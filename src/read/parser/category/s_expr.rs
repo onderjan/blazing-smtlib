@@ -38,6 +38,10 @@ impl<H: SmtHandler> Default for SExprParser<H> {
 impl<H: SmtHandler> CategoryParser<H> for SExprParser<H> {
     type Result = H::SExpr;
 
+    fn restart(&mut self) {
+        self.levels.clear();
+    }
+
     fn progress(
         &mut self,
         handler: &mut H,

@@ -36,30 +36,30 @@ pub struct QualifiedIdentParser<H: SmtHandler> {
 
 impl<H: SmtHandler> QualifiedIdentParser<H> {
     pub fn new() -> Self {
-        Self::new_with(State::Start)
-    }
-
-    pub fn after_open_paren() -> Self {
-        Self::new_with(State::Open)
-    }
-
-    pub fn after_underscore() -> Self {
-        // the ident parser must be after underscore as well
-        let mut result = Self::new_with(State::UnqualifiedIndexed);
-        result.ident_parser = IdentParser::after_underscore();
-        result
-    }
-
-    pub fn after_as() -> Self {
-        Self::new_with(State::Qualified)
-    }
-
-    fn new_with(state: State) -> Self {
         Self {
-            state,
+            state: State::Start,
             ident_parser: IdentParser::new(),
             qualified_parser: PairParser::new(),
         }
+    }
+
+    pub fn move_after_open_paren(&mut self) {
+        self.ident_parser.restart();
+        self.qualified_parser.restart();
+        self.state = State::Open;
+    }
+
+    pub fn move_after_underscore(&mut self) {
+        // the ident parser must be after underscore as well
+        self.ident_parser.move_after_underscore();
+        self.qualified_parser.restart();
+        self.state = State::UnqualifiedIndexed;
+    }
+
+    pub fn move_after_as(&mut self) {
+        self.ident_parser.restart();
+        self.qualified_parser.restart();
+        self.state = State::Qualified;
     }
 }
 
@@ -71,6 +71,12 @@ impl<H: SmtHandler> Default for QualifiedIdentParser<H> {
 
 impl<H: SmtHandler> CategoryParser<H> for QualifiedIdentParser<H> {
     type Result = SmtQualifiedIdent<H>;
+
+    fn restart(&mut self) {
+        self.state = State::Start;
+        self.ident_parser.restart();
+        self.qualified_parser.restart();
+    }
 
     fn progress(
         &mut self,
@@ -98,8 +104,8 @@ impl<H: SmtHandler> CategoryParser<H> for QualifiedIdentParser<H> {
                 match token.kind() {
                     TokenKind::Reserved(Reserved::Underscore) => {
                         // unqualified indexed ident
-                        // move the ident parser after underscore
-                        self.ident_parser = IdentParser::after_underscore();
+                        // move after underscore
+                        self.ident_parser.move_after_underscore();
                         self.state = State::UnqualifiedIndexed;
                     }
                     TokenKind::Reserved(Reserved::As) => {

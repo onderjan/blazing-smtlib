@@ -39,16 +39,18 @@ impl IdentParser {
         }
     }
 
-    pub fn after_open_paren() -> Self {
-        let mut result = Self::new();
-        result.state = State::Open;
-        result
+    pub fn move_after_open_paren(&mut self) {
+        self.state = State::Open;
     }
 
-    pub fn after_underscore() -> Self {
-        let mut result = Self::new();
-        result.state = State::AfterUnderscore;
-        result
+    pub fn move_after_underscore(&mut self) {
+        self.state = State::AfterUnderscore;
+    }
+
+    pub fn restart(&mut self) {
+        self.state = State::Start;
+        self.name = None;
+        self.indices.clear();
     }
 }
 
@@ -60,6 +62,12 @@ impl Default for IdentParser {
 
 impl<H: SmtHandler> CategoryParser<H> for IdentParser {
     type Result = SmtIdent;
+
+    fn restart(&mut self) {
+        // call the inherent implementation
+        // it exists to avoid needing to specify <H>
+        self.restart();
+    }
 
     fn progress(
         &mut self,

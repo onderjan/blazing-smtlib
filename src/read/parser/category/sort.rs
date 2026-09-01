@@ -67,6 +67,12 @@ impl<H: SmtHandler> Default for SortParser<H> {
 impl<H: SmtHandler> CategoryParser<H> for SortParser<H> {
     type Result = H::Sort;
 
+    fn restart(&mut self) {
+        self.state = State::Start;
+        self.levels.clear();
+        self.ident_parser.restart();
+    }
+
     fn progress(
         &mut self,
         handler: &mut H,
@@ -119,8 +125,8 @@ impl<H: SmtHandler> CategoryParser<H> for SortParser<H> {
                 let state = match token.kind() {
                     TokenKind::Reserved(Reserved::Underscore) => {
                         // this is a sort consisting just of an indexed identifier
-                        // start the ident parser after underscore
-                        self.ident_parser = IdentParser::after_underscore();
+                        // move the ident parser after underscore
+                        self.ident_parser.move_after_underscore();
                         State::IdentOnly
                     }
                     TokenKind::Symbol(name) => {
@@ -134,8 +140,8 @@ impl<H: SmtHandler> CategoryParser<H> for SortParser<H> {
                     }
                     TokenKind::ParenOpen => {
                         // indexed ident starting sort
-                        // start the ident parser after opening parenthesis
-                        self.ident_parser = IdentParser::after_open_paren();
+                        // move the ident parser after opening parenthesis
+                        self.ident_parser.move_after_open_paren();
                         State::StartingIdent
                     }
                     _ => {

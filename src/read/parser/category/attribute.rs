@@ -56,6 +56,12 @@ impl<H: SmtHandler> Default for ClosedAttributeParser<H> {
 impl<H: SmtHandler> CategoryParser<H> for ClosedAttributeParser<H> {
     type Result = H::Attribute;
 
+    fn restart(&mut self) {
+        self.state = State::Start;
+        self.attribute = None;
+        self.closed_s_exprs_parser.restart();
+    }
+
     fn progress(
         &mut self,
         handler: &mut H,

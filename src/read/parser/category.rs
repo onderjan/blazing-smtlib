@@ -32,6 +32,14 @@ pub trait CategoryParser<H: SmtHandler>: Default {
         handler: &mut H,
         token: Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>>;
+
+    /// Restart the parser to default state.
+    ///
+    /// The default implementation can be overriden for a performance benefit
+    /// to avoid dropping and reconstructing the parser.
+    fn restart(&mut self) {
+        *self = Self::default();
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -110,6 +118,12 @@ impl<H: SmtHandler, P1: CategoryParser<H>, P2: CategoryParser<H>> CategoryParser
 {
     type Result = (P1::Result, P2::Result);
 
+    fn restart(&mut self) {
+        self.first.restart();
+        self.second.restart();
+        self.first_result = None;
+    }
+
     fn progress(
         &mut self,
         handler: &mut H,
@@ -161,6 +175,10 @@ impl<H: SmtHandler, P: CategoryParser<H>> Default for ClosedParser<H, P> {
 impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for ClosedParser<H, P> {
     type Result = P::Result;
 
+    fn restart(&mut self) {
+        self.inner.restart();
+    }
+
     fn progress(
         &mut self,
         handler: &mut H,
@@ -197,6 +215,10 @@ impl<H: SmtHandler, P: CategoryParser<H>> Default for OpenedParser<H, P> {
 
 impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for OpenedParser<H, P> {
     type Result = P::Result;
+
+    fn restart(&mut self) {
+        self.inner.restart();
+    }
 
     fn progress(
         &mut self,
@@ -249,6 +271,12 @@ impl<H: SmtHandler, P: CategoryParser<H>> Default for ClosedMultipleParser<H, P>
 
 impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for ClosedMultipleParser<H, P> {
     type Result = Vec<P::Result>;
+
+    fn restart(&mut self) {
+        self.outside = true;
+        self.inner.restart();
+        self.results.clear();
+    }
 
     fn progress(
         &mut self,
