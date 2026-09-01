@@ -82,17 +82,19 @@ type DefineFunSignatureParser<H> = PairParser<
 >;
 
 pub struct DefineFunParser<H: CommandHandler> {
+    parse_signature: bool,
+
     signature_parser: DefineFunSignatureParser<H>,
     body_parser: TermParser<H>,
-    parse_signature: bool,
 }
 
 impl<H: CommandHandler> DefineFunParser<H> {
     pub fn new() -> Self {
         Self {
+            parse_signature: true,
+
             signature_parser: DefineFunSignatureParser::new(),
             body_parser: TermParser::new(),
-            parse_signature: true,
         }
     }
 }
@@ -105,6 +107,13 @@ impl<H: CommandHandler> Default for DefineFunParser<H> {
 
 impl<H: CommandHandler> CategoryParser<H> for DefineFunParser<H> {
     type Result = ();
+
+    fn restart(&mut self) {
+        self.parse_signature = true;
+
+        self.signature_parser.restart();
+        self.body_parser.restart();
+    }
 
     fn progress(
         &mut self,
