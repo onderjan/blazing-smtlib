@@ -81,17 +81,16 @@ impl<'a, H: CommandHandler> TokenHandler for Parser<'a, H> {
 
     fn handle_token(&mut self, token: Token) -> Result<(), ParserError<H>> {
         let span = token.span();
-        let state = std::mem::replace(&mut self.state, ParserState::AwaitingCommand);
-        let state = match state {
+        match &mut self.state {
             ParserState::AwaitingCommand => {
                 match token.kind() {
                     TokenKind::ParenOpen => {
                         // open the command
-                        ParserState::CommandOpen
+                        self.state = ParserState::CommandOpen;
                     }
                     TokenKind::EndOfFile => {
                         // end of file here is fine, do not change the state
-                        ParserState::AwaitingCommand
+                        self.state = ParserState::AwaitingCommand;
                     }
                     _ => {
                         return Err(CategoryParserError::new(
@@ -111,19 +110,21 @@ impl<'a, H: CommandHandler> TokenHandler for Parser<'a, H> {
                     )
                     .into());
                 };
-                ParserState::Command(self.start_command(command_name, span)?)
+                self.state = ParserState::Command(self.start_command(command_name, span)?);
             }
-            ParserState::Command(mut stage) => match stage.progress(self.handler, token)? {
-                ControlFlow::Continue(()) => ParserState::Command(stage),
-                ControlFlow::Break(CommandResult::EndCommand) => ParserState::AwaitingCommand,
-                ControlFlow::Break(CommandResult::Exit) => ParserState::Exit,
+            ParserState::Command(stage) => match stage.progress(self.handler, token)? {
+                ControlFlow::Continue(()) => {}
+                ControlFlow::Break(CommandResult::EndCommand) => {
+                    self.state = ParserState::AwaitingCommand;
+                }
+                ControlFlow::Break(CommandResult::Exit) => {
+                    self.state = ParserState::Exit;
+                }
             },
             ParserState::Exit => {
                 // no operation on fed tokens
-                ParserState::Exit
             }
-        };
-        self.state = state;
+        }
         Ok(())
     }
 }
