@@ -45,10 +45,10 @@ fn closed_parser() {
 
 #[test]
 fn open_closed_parser() {
-    let symbol = parse_all::<OpenClosedParser<Printing, SymbolParser>>(b"(a)");
+    let symbol = parse_all::<ParenParser<Printing, SymbolParser>>(b"(a)");
     assert_eq!(symbol.as_slice(), b"a");
 
-    let err = assert_error::<OpenClosedParser<Printing, SymbolParser>>(b"a)", 0, 1);
+    let err = assert_error::<ParenParser<Printing, SymbolParser>>(b"a)", 0, 1);
     assert!(
         matches!(
             err,
@@ -56,7 +56,7 @@ fn open_closed_parser() {
         ),
         "{err:?}"
     );
-    let err = assert_error::<OpenClosedParser<Printing, SymbolParser>>(b"(a", 2, 2);
+    let err = assert_error::<ParenParser<Printing, SymbolParser>>(b"(a", 2, 2);
     assert!(
         matches!(
             err,
@@ -67,25 +67,19 @@ fn open_closed_parser() {
 }
 
 #[test]
-fn multiple_parser() {
-    let symbols = parse_all::<MultipleParser<Printing, SymbolParser>>(b"(a b c)");
+fn closed_multiple_parser() {
+    // the closed multiple parser starts inside the list:
+    // its opening parenthesis was already consumed by the caller
+    let symbols = parse_all::<ClosedMultipleParser<Printing, SymbolParser>>(b"a b c)");
     let symbols: Vec<&[u8]> = symbols.iter().map(|s| s.as_slice()).collect();
     assert_eq!(symbols, [b"a" as &[u8], b"b", b"c"]);
 
     // zero elements are allowed
-    let symbols = parse_all::<MultipleParser<Printing, SymbolParser>>(b"()");
+    let symbols = parse_all::<ClosedMultipleParser<Printing, SymbolParser>>(b")");
     assert!(symbols.is_empty());
 
-    let err = assert_error::<MultipleParser<Printing, SymbolParser>>(b"a", 0, 1);
-    assert!(
-        matches!(
-            err,
-            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenOpen])
-        ),
-        "{err:?}"
-    );
     // the element parser's error is reported for a bad element
-    let err = assert_error::<MultipleParser<Printing, SymbolParser>>(b"(a 1)", 3, 4);
+    let err = assert_error::<ClosedMultipleParser<Printing, SymbolParser>>(b"a 1)", 2, 3);
     assert!(
         matches!(
             err,
@@ -94,7 +88,47 @@ fn multiple_parser() {
         "{err:?}"
     );
     // unclosed list ends at EOF inside the element parser
-    let err = assert_error::<MultipleParser<Printing, SymbolParser>>(b"(a", 2, 2);
+    let err = assert_error::<ClosedMultipleParser<Printing, SymbolParser>>(b"a", 1, 1);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::Symbol])
+        ),
+        "{err:?}"
+    );
+}
+
+#[test]
+fn paren_multiple_parser() {
+    // the parenthesized variant consumes the opening parenthesis itself
+    let symbols = parse_all::<ParenMultipleParser<Printing, SymbolParser>>(b"(a b c)");
+    let symbols: Vec<&[u8]> = symbols.iter().map(|s| s.as_slice()).collect();
+    assert_eq!(symbols, [b"a" as &[u8], b"b", b"c"]);
+
+    // zero elements are allowed
+    let symbols = parse_all::<ParenMultipleParser<Printing, SymbolParser>>(b"()");
+    assert!(symbols.is_empty());
+
+    // the opening parenthesis is required
+    let err = assert_error::<ParenMultipleParser<Printing, SymbolParser>>(b"a", 0, 1);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenOpen])
+        ),
+        "{err:?}"
+    );
+    // the element parser's error is reported for a bad element
+    let err = assert_error::<ParenMultipleParser<Printing, SymbolParser>>(b"(a 1)", 3, 4);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::Symbol])
+        ),
+        "{err:?}"
+    );
+    // unclosed list ends at EOF inside the element parser
+    let err = assert_error::<ParenMultipleParser<Printing, SymbolParser>>(b"(a", 2, 2);
     assert!(
         matches!(
             err,
@@ -107,9 +141,9 @@ fn multiple_parser() {
 #[test]
 fn nested_combinators() {
     // the shape used for define-fun parameters: ((x S) (y T))
-    type Params = MultipleParser<
+    type Params = ParenMultipleParser<
         Printing,
-        OpenClosedParser<Printing, PairParser<Printing, SymbolParser, SymbolParser>>,
+        ParenParser<Printing, PairParser<Printing, SymbolParser, SymbolParser>>,
     >;
     let params = parse_all::<Params>(b"((x Int) (y Bool))");
     let params: Vec<(&[u8], &[u8])> = params

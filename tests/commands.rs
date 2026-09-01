@@ -122,10 +122,16 @@ impl CommandHandler for Resolving {
     }
     fn command_declare_fun(
         &mut self,
-        _name: SmtSymbol,
-        _param_sorts: Vec<String>,
-        _result_sort: String,
+        name: SmtSymbol,
+        param_sorts: Vec<String>,
+        result_sort: String,
     ) -> Result<(), String> {
+        self.events.push(format!(
+            "declare-fun {} ({}) {}",
+            text(name.as_slice()),
+            param_sorts.join(" "),
+            result_sort
+        ));
         Ok(())
     }
 
@@ -213,6 +219,24 @@ fn zero_params_and_applied_result_sort() {
     let mut handler = Resolving::default();
     parse_resolving(&mut handler, b"(define-fun c () (Array Int Bool) zero)");
     assert_eq!(handler.events, ["start c () (Array Int Bool)", "end zero"]);
+}
+
+#[test]
+fn declare_fun_parameter_list() {
+    // regression: the parameter list's opening parenthesis must be consumed
+    // by the list parser itself, not leak into the first parameter sort
+    let mut handler = Resolving::default();
+    parse_resolving(
+        &mut handler,
+        b"(declare-fun f (A (Array Int Int)) Bool) (declare-fun g () Int)",
+    );
+    assert_eq!(
+        handler.events,
+        [
+            "declare-fun f (A (Array Int Int)) Bool",
+            "declare-fun g () Int",
+        ]
+    );
 }
 
 #[test]

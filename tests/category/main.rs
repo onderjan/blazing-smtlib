@@ -13,6 +13,7 @@ mod attribute;
 mod combinator;
 mod ident;
 mod qualified_ident;
+mod reuse;
 mod s_expr;
 mod single_token;
 mod sort;
@@ -28,9 +29,9 @@ use smt_parser_rs::{
         lexer::{LexError, Lexer, TokenHandler},
         parser::{
             CategoryParser, CategoryParserErrorKind, CloseParenParser, ClosedAttributeParser,
-            ClosedParser, IdentParser, KeywordParser, MultipleParser, OpenClosedParser,
-            OpenParenParser, PairParser, ParserError, ParserErrorKind, QualifiedIdentParser,
-            SExprParser, SortParser, StringParser, SymbolParser, TermParser,
+            ClosedMultipleParser, ClosedParser, IdentParser, KeywordParser, OpenParenParser,
+            PairParser, ParenMultipleParser, ParenParser, ParserError, ParserErrorKind,
+            QualifiedIdentParser, SExprParser, SortParser, StringParser, SymbolParser, TermParser,
         },
     },
     token::{Reserved, Token, TokenType},
@@ -164,52 +165,64 @@ impl SmtHandler for Printing {
 
 // --- Driver ---
 
-/// Token handler that advances a category parser with each lexed token
-/// and counts the tokens left over after the parser finishes.
+/// A parse failure, as the error kind and the span it carries.
+type ParseFailure = (CategoryParserErrorKind, SmtSpan);
+
+/// Token handler that advances a category parser with each lexed token,
+/// collecting a wanted number of consecutive parser results, and counts
+/// the tokens left over after the last one.
+///
+/// The parser instance is reused for every result in turn, so driving with
+/// a wanted count above one exercises the self-reset contract.
 struct Drive<'h, H: SmtHandler, P: CategoryParser<H>> {
     handler: &'h mut H,
-    /// The parser under test; `None` once it has finished.
-    parser: Option<P>,
-    /// The parser result and the number of unconsumed tokens after it.
-    finished: Option<(P::Result, usize)>,
+    /// The parser under test, reused across parses.
+    parser: P,
+    /// How many more results to parse before tokens count as unconsumed.
+    remaining: usize,
+    /// The results of the finished parses.
+    results: Vec<P::Result>,
+    /// The number of unconsumed tokens after the last wanted result.
+    unconsumed: usize,
 }
 
 impl<H: SmtHandler, P: CategoryParser<H>> TokenHandler for Drive<'_, H, P> {
     type Error = ParserError<H>;
 
     fn handle_token(&mut self, token: Token) -> Result<(), Self::Error> {
-        if let Some((_, unconsumed)) = &mut self.finished {
+        if self.remaining == 0 {
             if token.kind().ty() != TokenType::EndOfFile {
-                *unconsumed += 1;
+                self.unconsumed += 1;
             }
             return Ok(());
         }
-        let parser = self
-            .parser
-            .take()
-            .expect("the parser must be present until it finishes");
-        match parser.progress(self.handler, token)? {
-            ControlFlow::Continue(next) => self.parser = Some(next),
-            ControlFlow::Break(result) => self.finished = Some((result, 0)),
+        if let ControlFlow::Break(result) = self.parser.progress(self.handler, token)? {
+            self.results.push(result);
+            self.remaining -= 1;
         }
         Ok(())
     }
 }
 
-/// Lexes the input and feeds the tokens to a fresh parser `P` over the given handler.
+/// Lexes the input and feeds the tokens to the given parser over the given handler,
+/// driving the same parser instance through `count` consecutive parses.
 ///
-/// Returns the parser result and the number of tokens left unconsumed
+/// Returns the parser results and the number of tokens left unconsumed
 /// (not counting the end-of-file token), so tests can check where the parser stopped;
 /// a parser error is returned as its kind and span.
-/// Panics if the parser did not finish before the end of the input.
-fn run_with<H: SmtHandler<Error = Infallible>, P: CategoryParser<H>>(
+/// Panics if the parser did not finish `count` times before the end of the input.
+fn run_count_from<H: SmtHandler<Error = Infallible>, P: CategoryParser<H>>(
+    parser: P,
     handler: &mut H,
     input: &[u8],
-) -> Result<(P::Result, usize), (CategoryParserErrorKind, SmtSpan)> {
+    count: usize,
+) -> Result<(Vec<P::Result>, usize), ParseFailure> {
     let mut drive = Drive {
         handler,
-        parser: Some(P::default()),
-        finished: None,
+        parser,
+        remaining: count,
+        results: Vec::new(),
+        unconsumed: 0,
     };
     let mut lexer = Lexer::new(&mut drive);
     match lexer.lex_all(input) {
@@ -231,19 +244,76 @@ fn run_with<H: SmtHandler<Error = Infallible>, P: CategoryParser<H>>(
         }
     }
     drop(lexer);
-    Ok(drive.finished.unwrap_or_else(|| {
-        panic!(
-            "parser did not finish before the end of input {:?}",
-            text(input)
-        )
-    }))
+    assert!(
+        drive.results.len() == count,
+        "parser finished {} of {count} times before the end of input {:?}",
+        drive.results.len(),
+        text(input)
+    );
+    Ok((drive.results, drive.unconsumed))
+}
+
+/// Lexes the input and feeds the tokens to a fresh parser `P` over the given handler.
+///
+/// Returns the parser result and the number of tokens left unconsumed
+/// (not counting the end-of-file token), so tests can check where the parser stopped;
+/// a parser error is returned as its kind and span.
+/// Panics if the parser did not finish before the end of the input.
+fn run_with<H: SmtHandler<Error = Infallible>, P: CategoryParser<H>>(
+    handler: &mut H,
+    input: &[u8],
+) -> Result<(P::Result, usize), ParseFailure> {
+    let (results, unconsumed) = run_count_from(P::default(), handler, input, 1)?;
+    let result = results
+        .into_iter()
+        .next()
+        .expect("a successful single-parse run has one result");
+    Ok((result, unconsumed))
 }
 
 /// Runs the parser over a fresh `Printing` handler.
-fn run<P: CategoryParser<Printing>>(
-    input: &[u8],
-) -> Result<(P::Result, usize), (CategoryParserErrorKind, SmtSpan)> {
+fn run<P: CategoryParser<Printing>>(input: &[u8]) -> Result<(P::Result, usize), ParseFailure> {
     run_with::<Printing, P>(&mut Printing::default(), input)
+}
+
+/// Runs one parser instance through two consecutive elements of its category,
+/// requires success with no unconsumed tokens, and returns both results.
+///
+/// This exercises the self-reset contract: after `progress` returns Break,
+/// the parser instance must be back in the default state.
+#[track_caller]
+fn parse_two<P: CategoryParser<Printing>>(input: &[u8]) -> (P::Result, P::Result) {
+    match run_count_from(P::default(), &mut Printing::default(), input, 2) {
+        Ok((results, 0)) => {
+            let mut results = results.into_iter();
+            let first = results.next().expect("a two-parse run has two results");
+            let second = results.next().expect("a two-parse run has two results");
+            (first, second)
+        }
+        Ok((_, left)) => panic!("{left} tokens left unconsumed in {:?}", text(input)),
+        Err((kind, span)) => {
+            panic!("unexpected error {kind:?} at {span:?} in {:?}", text(input))
+        }
+    }
+}
+
+/// Runs the given parser instance over a fresh `Printing` handler,
+/// requires success with no unconsumed tokens, and returns the result.
+///
+/// This is the entry point for testing parsers constructed by
+/// their `after_*` constructors instead of `Default`.
+#[track_caller]
+fn parse_all_from<P: CategoryParser<Printing>>(parser: P, input: &[u8]) -> P::Result {
+    match run_count_from(parser, &mut Printing::default(), input, 1) {
+        Ok((results, 0)) => results
+            .into_iter()
+            .next()
+            .expect("a successful single-parse run has one result"),
+        Ok((_, left)) => panic!("{left} tokens left unconsumed in {:?}", text(input)),
+        Err((kind, span)) => {
+            panic!("unexpected error {kind:?} at {span:?} in {:?}", text(input))
+        }
+    }
 }
 
 /// Runs the parser, requires success with no unconsumed tokens, and returns the result.

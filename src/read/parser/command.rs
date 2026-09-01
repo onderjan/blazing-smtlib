@@ -177,3 +177,30 @@ impl<H: CommandHandler> super::Parser<'_, H> {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{CheckStandardSyntax, SmtSpan, token::TokenKind};
+
+    #[test]
+    #[should_panic(expected = "cannot progress command parser that already finished")]
+    fn progressing_a_finished_command_parser_panics() {
+        let mut handler = CheckStandardSyntax;
+        let mut parser: StaticCommandParser<CheckStandardSyntax, CommandCheckSat> =
+            StaticCommandParser::new();
+
+        // a check-sat command body is just the closing parenthesis,
+        // so one token finishes the command
+        let close = Token::new(TokenKind::ParenClose, SmtSpan::new_zero());
+        // ParserError does not implement Debug, so unwrap manually
+        let Ok(flow) = parser.progress(&mut handler, close) else {
+            panic!("check-sat closing parenthesis must parse")
+        };
+        assert!(matches!(flow, ControlFlow::Break(CommandResult::EndCommand)));
+
+        // the command has finished; progressing the parser again is a usage error
+        let close = Token::new(TokenKind::ParenClose, SmtSpan::new_zero());
+        let _ = parser.progress(&mut handler, close);
+    }
+}
