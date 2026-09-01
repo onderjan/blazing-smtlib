@@ -8,7 +8,7 @@ use std::{
 use crate::{
     CommandHandler, SmtHandler, SmtSpan,
     read::{
-        lexer::{Lexer, LexerError, LexerErrorKind},
+        lexer::{LexError, Lexer, LexerError, LexerErrorKind},
         parser::{CategoryParserErrorKind, Parser, ParserError, ParserErrorKind},
     },
 };
@@ -51,6 +51,15 @@ impl<H: SmtHandler> SmtReadError<H> {
 
     pub fn into_kind(self) -> SmtReadErrorKind<H> {
         self.kind
+    }
+}
+
+impl<H: SmtHandler> From<LexError<ParserError<H>>> for SmtReadError<H> {
+    fn from(err: LexError<ParserError<H>>) -> Self {
+        match err {
+            LexError::Lexer(err) => err.into(),
+            LexError::Sink(err) => err.into(),
+        }
     }
 }
 
@@ -107,8 +116,8 @@ impl<'a, H: CommandHandler, R: BufRead> SmtReader<'a, H, R> {
                     return Ok(ControlFlow::Break(()));
                 }
                 for c in buffer.iter().copied() {
-                    let tokens = self.lexer.lex_next(c)?;
-                    self.parser.parse_tokens(tokens)?;
+                    self.lexer
+                        .lex_next(c, |token| self.parser.parse_token(token))?;
                 }
                 let num_consumed = buffer.len();
                 self.reader.consume(num_consumed);
@@ -125,8 +134,7 @@ impl<'a, H: CommandHandler, R: BufRead> SmtReader<'a, H, R> {
     }
 
     fn finish_eof(mut self) -> Result<(), SmtReadError<H>> {
-        let tokens = self.lexer.lex_eof()?;
-        self.parser.parse_tokens(tokens).map_err(|err| err.into())
+        self.lexer.lex_eof(|token| self.parser.parse_token(token)).map_err(|err| err.into())
     }
 }
 

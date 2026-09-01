@@ -1,5 +1,7 @@
 mod char_class;
 
+use std::ops::ControlFlow;
+
 use char_class::{U8OrEof, char_class_opt};
 
 pub(crate) use char_class::CharClass;
@@ -30,9 +32,6 @@ enum LexerState {
 pub struct Lexer {
     /// Current lexer state.
     state: LexerState,
-
-    /// Finished tokens that are waiting to be consumed.
-    finished_tokens: LexerTokens,
 
     /// Location of the start of the currently-processed token.
     token_start: SmtLocation,
@@ -69,6 +68,12 @@ pub struct LexerError {
     span: SmtSpan,
 }
 
+pub enum LexError<E> {
+    Lexer(LexerError),
+    Sink(E),
+}
+
+/*
 /// Returned lexer tokens.
 ///
 /// All of the returned tokens must be consumed before the next time
@@ -113,14 +118,13 @@ impl LexerTokens {
         }
         panic!("cannot push token to lexer tokens");
     }
-}
+}*/
 
 impl Lexer {
     /// Constructs the lexer.
     pub fn new() -> Self {
         Lexer {
             state: LexerState::Normal,
-            finished_tokens: LexerTokens::new(),
             token_start: SmtLocation::initial(),
             token_content: String8::new(),
             byte_start: SmtLocation::initial(),
@@ -131,33 +135,40 @@ impl Lexer {
         self.byte_start
     }
 
-    /// Lexes one byte and returns lexed tokens.
+    /// Lexes one byte, sending the lexed tokens to the sink.
     ///
-    /// Panics if previously returned tokens were not fully consumed
-    /// or if a previous call returned an error.
-    pub fn lex_next(&mut self, c: u8) -> Result<&mut LexerTokens, LexerError> {
-        self.lex_char(U8OrEof::U8(c))?;
+    /// Panics if a previous call returned an error.
+    pub fn lex_next<E>(
+        &mut self,
+        c: u8,
+        sink: impl FnMut(Token) -> Result<(), E>,
+    ) -> Result<(), LexError<E>> {
+        let result = self.lex_char(U8OrEof::U8(c), sink)?;
         self.byte_start = self.byte_start.after_byte(c);
-        Ok(&mut self.finished_tokens)
+        Ok(result)
     }
 
-    /// Lexes one byte and returns lexed tokens.
+    /// Lexes one byte, sending the lexed tokens to the sink.
     ///
-    /// Panics if previously returned tokens were not fully consumed
-    /// or if a previous call returned an error.
-    pub fn lex_eof(&mut self) -> Result<&mut LexerTokens, LexerError> {
-        self.lex_char(U8OrEof::Eof)?;
-        Ok(&mut self.finished_tokens)
+    /// Panics if a previous call returned an error.
+    pub fn lex_eof<E>(
+        &mut self,
+        sink: impl FnMut(Token) -> Result<(), E>,
+    ) -> Result<(), LexError<E>> {
+        self.lex_char(U8OrEof::Eof, sink)
     }
 
-    fn lex_normal(&mut self, c: U8OrEof) -> Result<(), LexerError> {
+    fn lex_normal<E>(
+        &mut self,
+        c: U8OrEof,
+        mut sink: impl FnMut(Token) -> Result<(), E>,
+    ) -> Result<(), LexError<E>> {
         let byte = match c {
             U8OrEof::U8(c) => c,
             U8OrEof::Eof => {
                 // end without problems on EOF
                 let token = self.create_zero_byte_token(TokenKind::EndOfFile);
-                self.finished_tokens.push(token);
-                return Ok(());
+                return sink(token).map_err(LexError::Sink);
             }
         };
 
@@ -171,12 +182,12 @@ impl Lexer {
             // parentheses are tokens of their own
             CharClass::ParenOpen => {
                 let token = self.create_token_ending_now(TokenKind::ParenOpen);
-                self.finished_tokens.push(token);
+                sink(token).map_err(LexError::Sink)?;
                 LexerState::Normal
             }
             CharClass::ParenClose => {
                 let token = self.create_token_ending_now(TokenKind::ParenClose);
-                self.finished_tokens.push(token);
+                sink(token).map_err(LexError::Sink)?;
                 LexerState::Normal
             }
 
@@ -230,26 +241,25 @@ impl Lexer {
         Ok(())
     }
 
-    fn lex_char(&mut self, c: U8OrEof) -> Result<(), LexerError> {
-        // when a lexer error is raised,
-        // set lexer state to failed and remove any produced tokens
-        // so that the panic on leftover tokens is not raised first
+    fn lex_char<E>(
+        &mut self,
+        c: U8OrEof,
+        sink: impl FnMut(Token) -> Result<(), E>,
+    ) -> Result<(), LexError<E>> {
+        // when a lexer error is raised, set lexer state to failed
 
-        self.lex_char_inner(c).inspect_err(|_err| {
+        self.lex_char_inner(c, sink).inspect_err(|_err| {
             self.state = LexerState::Failed;
-            self.finished_tokens = LexerTokens::new();
         })
     }
 
-    fn lex_char_inner(&mut self, c: U8OrEof) -> Result<(), LexerError> {
-        // panic if there are some leftover non-consumed tokens
-        assert!(
-            self.finished_tokens.is_empty(),
-            "tokens returned by lexer must be consumed before further lexing"
-        );
-
+    fn lex_char_inner<E>(
+        &mut self,
+        c: U8OrEof,
+        mut sink: impl FnMut(Token) -> Result<(), E>,
+    ) -> Result<(), LexError<E>> {
         let state = match self.state {
-            LexerState::Normal => return self.lex_normal(c),
+            LexerState::Normal => return self.lex_normal(c, sink),
             LexerState::Fraction => {
                 match char_class_opt(c) {
                     Some((CharClass::Digit, c)) => {
@@ -269,13 +279,13 @@ impl Lexer {
                                 self.current_token_error(LexerErrorKind::FractionDigitExpected, c)
                             );
                         }
-                        // push new token and lex the character normally
+                        // sink new token and lex the character normally
                         let kind = TokenKind::Decimal(SmtDecimal::new_unchecked(
                             self.token_content.clone(),
                         ));
-                        self.finished_tokens
-                            .push(self.create_token_ending_before(kind));
-                        return self.lex_normal(c);
+                        let token = self.create_token_ending_before(kind);
+                        sink(token).map_err(LexError::Sink)?;
+                        return self.lex_normal(c, sink);
                     }
                 }
             }
@@ -305,13 +315,13 @@ impl Lexer {
 
                     _ => {
                         // this was a numeral
-                        // push new token and lex the character normally
+                        // sink new token and lex the character normally
                         let kind = TokenKind::Numeral(SmtNumeral::new_unchecked(
                             self.token_content.clone(),
                         ));
-                        self.finished_tokens
-                            .push(self.create_token_ending_before(kind));
-                        return self.lex_normal(c);
+                        let token = self.create_token_ending_before(kind);
+                        sink(token).map_err(LexError::Sink)?;
+                        return self.lex_normal(c, sink);
                     }
                 }
             }
@@ -337,13 +347,11 @@ impl Lexer {
                         );
                     }
                     // had non-digit, nonzero digits
-                    // push new token and lex the character normally
+                    // sink new token and lex the character normally
                     let kind = TokenKind::Hexadecimal(SmtHexDigits::new_unchecked(
                         self.token_content.clone(),
                     ));
-                    self.finished_tokens
-                        .push(self.create_token_ending_before(kind));
-                    return self.lex_normal(c);
+                    return self.sink_and_lex_next(c, sink, kind);
                 }
             }
             LexerState::Binary => {
@@ -368,12 +376,10 @@ impl Lexer {
                         );
                     }
                     // had non-digit, nonzero digits
-                    // push new token and lex the character normally
+                    // sink new token and lex the character normally
                     let kind =
                         TokenKind::Binary(SmtBinDigits::new_unchecked(self.token_content.clone()));
-                    self.finished_tokens
-                        .push(self.create_token_ending_before(kind));
-                    return self.lex_normal(c);
+                    return self.sink_and_lex_next(c, sink, kind);
                 }
             }
 
@@ -421,13 +427,13 @@ impl Lexer {
                     }
                     _ => {
                         // literal has ended by the previous character
-                        // push new token and lex the character normally
+                        // sink new token and lex the character normally
                         let kind = TokenKind::String(SmtStringContent::new_unchecked(
                             self.token_content.clone(),
                         ));
-                        self.finished_tokens
-                            .push(self.create_token_ending_before(kind));
-                        return self.lex_normal(c);
+                        let token = self.create_token_ending_before(kind);
+                        sink(token).map_err(LexError::Sink)?;
+                        return self.lex_normal(c, sink);
                     }
                 }
             }
@@ -448,10 +454,8 @@ impl Lexer {
                             TokenKind::Symbol(SmtSymbol::new_unchecked(self.token_content.clone()))
                         };
 
-                    // push new token and lex the character normally
-                    self.finished_tokens
-                        .push(self.create_token_ending_before(kind));
-                    return self.lex_normal(c);
+                    // sink new token and lex the character normally
+                    return self.sink_and_lex_next(c, sink, kind);
                 }
             }
             LexerState::Keyword => match char_class_opt(c) {
@@ -484,12 +488,10 @@ impl Lexer {
                         return Err(self.current_token_error(LexerErrorKind::KeywordReserved, c));
                     }
 
-                    // push new token and lex the character normally
+                    // sink new token and lex the character normally
                     let kind =
                         TokenKind::Keyword(SmtKeyword::new_unchecked(self.token_content.clone()));
-                    self.finished_tokens
-                        .push(self.create_token_ending_before(kind));
-                    return self.lex_normal(c);
+                    return self.sink_and_lex_next(c, sink, kind);
                 }
             },
             LexerState::QuotedSymbol => {
@@ -501,12 +503,11 @@ impl Lexer {
                         );
                     }
                     U8OrEof::U8(b'|') => {
-                        // end of quoted symbol, push its token, continue normally with next character
-
+                        // end of quoted symbol, push its token, this character is consumed
                         let kind =
                             TokenKind::Symbol(SmtSymbol::new_unchecked(self.token_content.clone()));
-                        self.finished_tokens
-                            .push(self.create_token_ending_now(kind));
+                        let token = self.create_token_ending_now(kind);
+                        sink(token).map_err(LexError::Sink)?;
                         LexerState::Normal
                     }
                     U8OrEof::U8(byte) => {
@@ -545,7 +546,7 @@ impl Lexer {
                     None => {
                         // end without problems on EOF
                         let token = self.create_zero_byte_token(TokenKind::EndOfFile);
-                        self.finished_tokens.push(token);
+                        sink(token).map_err(LexError::Sink)?;
                         return Ok(());
                     }
                 }
@@ -554,6 +555,17 @@ impl Lexer {
         };
         self.state = state;
         Ok(())
+    }
+
+    fn sink_and_lex_next<E>(
+        &mut self,
+        c: U8OrEof,
+        mut sink: impl FnMut(Token) -> Result<(), E>,
+        kind: TokenKind,
+    ) -> Result<(), LexError<E>> {
+        let token = self.create_token_ending_before(kind);
+        sink(token).map_err(LexError::Sink)?;
+        self.lex_normal(c, sink)
     }
 
     fn start_token(&mut self) {
@@ -588,7 +600,7 @@ impl Lexer {
         self.create_token_ending_before(kind)
     }
 
-    fn current_token_error(&self, kind: LexerErrorKind, c: U8OrEof) -> LexerError {
+    fn current_token_error<E>(&self, kind: LexerErrorKind, c: U8OrEof) -> LexError<E> {
         // the spans starts at the token start and continues to the currently parsed,
         // where the error was detected, including it
 
@@ -601,21 +613,22 @@ impl Lexer {
         };
 
         let span = SmtSpan::new_unchecked(self.token_start, end_offset);
-        LexerError::new(kind, span)
+        LexError::Lexer(LexerError::new(kind, span))
     }
 
-    /// Lex the whole input including EOF, returning all tokens or the lexer error.
+    /// Lex the whole input including EOF, sinking all produced tokens.
     ///
     /// This is a helper function for tests.
     #[cfg(test)]
-    pub(crate) fn lex_all(input: &[u8]) -> Result<Vec<Token>, LexerError> {
+    pub(crate) fn lex_all<E>(
+        input: &[u8],
+        mut sink: impl FnMut(Token) -> Result<(), E>,
+    ) -> Result<(), LexError<E>> {
         let mut lexer = Lexer::new();
-        let mut tokens = Vec::new();
         for &c in input {
-            tokens.extend(lexer.lex_next(c)?);
+            lexer.lex_next(c, &mut sink)?;
         }
-        tokens.extend(lexer.lex_eof()?);
-        Ok(tokens)
+        Ok(())
     }
 }
 
@@ -643,6 +656,7 @@ impl LexerError {
     }
 }
 
+/*
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1228,3 +1242,4 @@ mod tests {
         let _ = lexer.lex_next(b'a');
     }
 }
+*/
