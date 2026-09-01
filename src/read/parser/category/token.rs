@@ -40,10 +40,10 @@ macro_rules! token_parser {
             type Result = $result;
 
             fn progress(
-                self,
+                &mut self,
                 _handler: &mut H,
                 token: Token,
-            ) -> Result<ControlFlow<Self::Result, Self>, ParserError<H>> {
+            ) -> Result<ControlFlow<Self::Result, ()>, ParserError<H>> {
                 Ok(ControlFlow::Break(Self::expect(token)?))
             }
         }

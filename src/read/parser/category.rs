@@ -28,10 +28,10 @@ pub trait CategoryParser<H: SmtHandler>: Default {
     type Result;
 
     fn progress(
-        self,
+        &mut self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<Self::Result, Self>, ParserError<H>>;
+    ) -> Result<ControlFlow<Self::Result>, ParserError<H>>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -77,14 +77,23 @@ impl CategoryParserError {
     }
 }
 
-pub enum PairParser<H: SmtHandler, P1: CategoryParser<H>, P2: CategoryParser<H>> {
-    First(P1),
-    Second(P1::Result, P2),
+/// Parses using the first parser, then the second, then returns the result tuple.
+///
+/// Preserves self-reset: if the inner parsers are self-resetting,
+/// moves back into the default state before returning Break.
+pub struct PairParser<H: SmtHandler, P1: CategoryParser<H>, P2: CategoryParser<H>> {
+    first: P1,
+    second: P2,
+    first_result: Option<P1::Result>,
 }
 
 impl<H: SmtHandler, P1: CategoryParser<H>, P2: CategoryParser<H>> PairParser<H, P1, P2> {
     pub fn new() -> Self {
-        Self::First(P1::default())
+        Self {
+            first: P1::default(),
+            second: P2::default(),
+            first_result: None,
+        }
     }
 }
 
@@ -102,32 +111,44 @@ impl<H: SmtHandler, P1: CategoryParser<H>, P2: CategoryParser<H>> CategoryParser
     type Result = (P1::Result, P2::Result);
 
     fn progress(
-        self,
+        &mut self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<Self::Result, Self>, ParserError<H>> {
-        let result = match self {
-            PairParser::First(parser) => match parser.progress(handler, token)? {
-                ControlFlow::Continue(parser) => Self::First(parser),
-                ControlFlow::Break(first) => Self::Second(first, P2::default()),
-            },
-            PairParser::Second(first, parser) => match parser.progress(handler, token)? {
-                ControlFlow::Continue(parser) => Self::Second(first, parser),
-                ControlFlow::Break(second) => return Ok(ControlFlow::Break((first, second))),
-            },
-        };
-        Ok(ControlFlow::Continue(result))
+    ) -> Result<ControlFlow<Self::Result>, ParserError<H>> {
+        match self.first_result.take() {
+            None => {
+                // progress the first parser, emplace the first result if it breaks
+                if let ControlFlow::Break(first) = self.first.progress(handler, token)? {
+                    self.first_result = Some(first);
+                }
+            }
+            Some(first) => {
+                // progress the second parser
+                // put the first result back if it continues
+                // break with the result tuple if it breaks
+                match self.second.progress(handler, token)? {
+                    ControlFlow::Continue(()) => self.first_result = Some(first),
+                    ControlFlow::Break(second) => return Ok(ControlFlow::Break((first, second))),
+                }
+            }
+        }
+        Ok(ControlFlow::Continue(()))
     }
 }
 
-pub enum ClosedParser<H: SmtHandler, P: CategoryParser<H>> {
-    Inner(P),
-    BeforeClose(P::Result),
+/// Parses using the inner parser, then parses a closing parenthesis, then returns the inner result.
+///
+/// Preserves self-reset: if the inner parser is self-resetting,
+/// moves back into the default state before returning Break.
+pub struct ClosedParser<H: SmtHandler, P: CategoryParser<H>> {
+    inner: PairParser<H, P, CloseParenParser>,
 }
 
 impl<H: SmtHandler, P: CategoryParser<H>> ClosedParser<H, P> {
     pub fn new() -> Self {
-        Self::Inner(P::default())
+        Self {
+            inner: PairParser::default(),
+        }
     }
 }
 
@@ -141,158 +162,123 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for ClosedParser<H, 
     type Result = P::Result;
 
     fn progress(
-        self,
+        &mut self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<Self::Result, Self>, ParserError<H>> {
-        let span = token.span();
-        let result = match self {
-            Self::Inner(parser) => match parser.progress(handler, token)? {
-                ControlFlow::Continue(parser) => Self::Inner(parser),
-                ControlFlow::Break(result) => Self::BeforeClose(result),
-            },
-            Self::BeforeClose(result) => {
-                if matches!(token.kind(), TokenKind::ParenClose) {
-                    return Ok(ControlFlow::Break(result));
-                } else {
-                    let kind = CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose]);
-                    return Err(CategoryParserError::new(kind, span).into());
-                }
-            }
-        };
-        Ok(ControlFlow::Continue(result))
+    ) -> Result<ControlFlow<Self::Result>, ParserError<H>> {
+        Ok(self
+            .inner
+            .progress(handler, token)?
+            .map_break(|(result, ())| result))
     }
 }
 
-pub enum OpenClosedParser<H: SmtHandler, P: CategoryParser<H>> {
-    BeforeOpen,
-    AfterOpen(ClosedParser<H, P>),
+/// Parses an opening parenthesis, then parses using the inner parser.
+///
+/// Preserves self-reset: if the inner parser is self-resetting,
+/// moves back into the default state before returning Break.
+pub struct OpenedParser<H: SmtHandler, P: CategoryParser<H>> {
+    inner: PairParser<H, OpenParenParser, P>,
 }
 
-impl<H: SmtHandler, P: CategoryParser<H>> OpenClosedParser<H, P> {
+impl<H: SmtHandler, P: CategoryParser<H>> OpenedParser<H, P> {
     pub fn new() -> Self {
-        Self::BeforeOpen
+        Self {
+            inner: PairParser::default(),
+        }
     }
 }
 
-impl<H: SmtHandler, P: CategoryParser<H>> Default for OpenClosedParser<H, P> {
+impl<H: SmtHandler, P: CategoryParser<H>> Default for OpenedParser<H, P> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for OpenClosedParser<H, P> {
+impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for OpenedParser<H, P> {
     type Result = P::Result;
 
     fn progress(
-        self,
+        &mut self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<Self::Result, Self>, ParserError<H>> {
-        let span = token.span();
-        let result = match self {
-            OpenClosedParser::BeforeOpen => {
-                if matches!(token.kind(), TokenKind::ParenOpen) {
-                    Self::AfterOpen(ClosedParser::default())
-                } else {
-                    return Err(ParserError::category_error(
-                        CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenOpen]),
-                        span,
-                    ));
-                }
-            }
-            OpenClosedParser::AfterOpen(parser) => match parser.progress(handler, token)? {
-                ControlFlow::Continue(parser) => Self::AfterOpen(parser),
-                ControlFlow::Break(result) => return Ok(ControlFlow::Break(result)),
-            },
-        };
-        Ok(ControlFlow::Continue(result))
+    ) -> Result<ControlFlow<Self::Result>, ParserError<H>> {
+        Ok(self
+            .inner
+            .progress(handler, token)?
+            .map_break(|((), result)| result))
     }
 }
 
-pub enum MultipleParser<H: SmtHandler, P: CategoryParser<H>> {
-    BeforeOpen,
-    Normal {
-        results: Vec<P::Result>,
-        parser: Option<P>,
-    },
+/// Parses tokens enclosed by parentheses using the inner parser, returning the inner result.
+///
+/// Preserves self-reset: if the inner parser is self-resetting,
+/// moves back into the default state before returning Break.
+pub type ParenParser<H, P> = OpenedParser<H, ClosedParser<H, P>>;
+
+/// Parses multiple items followed by a closing parenthesis, returning the results as a vector.
+///
+/// Note that this parser does not consume the opening parenthesis the closing would belong to,
+/// for that, use `ParenMultipleParser`.
+///
+/// Keeps the state of the inner parser after break for parsing a next element.
+///
+/// Preserves self-reset: if the inner parser is self-resetting,
+/// moves back into the default state before returning Break.
+pub struct ClosedMultipleParser<H: SmtHandler, P: CategoryParser<H>> {
+    outside: bool,
+    inner: P,
+    results: Vec<P::Result>,
 }
 
-impl<H: SmtHandler, P: CategoryParser<H>> MultipleParser<H, P> {
+impl<H: SmtHandler, P: CategoryParser<H>> ClosedMultipleParser<H, P> {
     pub fn new() -> Self {
-        Self::BeforeOpen
-    }
-
-    pub fn after_open_paren() -> Self {
-        Self::Normal {
+        Self {
+            outside: true,
+            inner: P::default(),
             results: Vec::new(),
-            parser: None,
         }
     }
 }
 
-impl<H: SmtHandler, P: CategoryParser<H>> Default for MultipleParser<H, P> {
+impl<H: SmtHandler, P: CategoryParser<H>> Default for ClosedMultipleParser<H, P> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for MultipleParser<H, P> {
+impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for ClosedMultipleParser<H, P> {
     type Result = Vec<P::Result>;
 
     fn progress(
-        self,
+        &mut self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<Vec<P::Result>, Self>, ParserError<H>> {
-        let span = token.span();
-        match self {
-            MultipleParser::BeforeOpen => {
-                if matches!(token.kind(), TokenKind::ParenOpen) {
-                    Ok(ControlFlow::Continue(Self::Normal {
-                        results: Vec::new(),
-                        parser: None,
-                    }))
-                } else {
-                    Err(ParserError::category_error(
-                        CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenOpen]),
-                        span,
-                    ))
-                }
-            }
-            MultipleParser::Normal {
-                mut results,
-                parser,
-            } => {
-                let parser = match parser {
-                    Some(parser) => parser,
-                    None => {
-                        // close parenthesis ends processing
-                        if matches!(token.kind(), TokenKind::ParenClose) {
-                            return Ok(ControlFlow::Break(results));
-                        } else {
-                            P::default()
-                        }
-                    }
-                };
-
-                match parser.progress(handler, token)? {
-                    ControlFlow::Continue(parser) => Ok(ControlFlow::Continue(Self::Normal {
-                        results,
-                        parser: Some(parser),
-                    })),
-                    ControlFlow::Break(result) => {
-                        results.push(result);
-                        Ok(ControlFlow::Continue(Self::Normal {
-                            results,
-                            parser: None,
-                        }))
-                    }
-                }
-            }
+    ) -> Result<ControlFlow<Vec<P::Result>>, ParserError<H>> {
+        // if we are outside, closing parenthesis ends processing
+        if self.outside && matches!(token.kind(), TokenKind::ParenClose) {
+            let results = self.results.drain(..).collect();
+            return Ok(ControlFlow::Break(results));
         }
+
+        // we are no longer outside and should parse normally
+        self.outside = false;
+        if let ControlFlow::Break(element) = self.inner.progress(handler, token)? {
+            // add element, we are now outside (if a closing parenthesis arrives, we will break)
+            self.results.push(element);
+            self.outside = true;
+        }
+        Ok(ControlFlow::Continue(()))
     }
 }
+
+/// Parses multiple items enclosed by parentheses, returning the results as a vector.
+///
+/// Keeps the state of the inner parser after break for parsing a next element.
+///
+/// Preserves self-reset: if the inner parser is self-resetting,
+/// moves back into the default state before returning Break.
+pub type ParenMultipleParser<H, P> = OpenedParser<H, ClosedMultipleParser<H, P>>;
 
 fn parse_special_constant(kind: TokenKind) -> Result<SmtSpecialConstant, TokenKind> {
     let constant = match kind {

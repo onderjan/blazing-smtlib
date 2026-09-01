@@ -1,9 +1,9 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtHandler, SmtIdent, SmtQualifiedIdent,
+    SmtHandler, SmtQualifiedIdent,
     read::parser::{
-        CloseParenParser, ParserError,
+        ClosedParser, PairParser, ParserError,
         category::{
             CategoryParser, CategoryParserError, CategoryParserErrorKind, ident::IdentParser,
             sort::SortParser,
@@ -12,30 +12,54 @@ use crate::{
     token::{Reserved, Token, TokenKind, TokenType},
 };
 
-pub enum QualifiedIdentParser<H: SmtHandler> {
+#[derive(Clone, Copy)]
+enum State {
     Start,
+    /// After "(".
     Open,
-    UnqualifiedIndexed(IdentParser),
-    QualifiedIdent(IdentParser),
-    QualifiedSort(SmtIdent, SortParser<H>),
-    QualifiedClose(SmtIdent, H::Sort),
+    /// After "(_".
+    UnqualifiedIndexed,
+    /// After "(as": reads ident, then sort.
+    Qualified,
+}
+
+/// A parser that reads an SMT-LIB qualified identifier.
+///
+/// This parser is self-restarting: after returning Break,
+/// it is in the default state.
+pub struct QualifiedIdentParser<H: SmtHandler> {
+    state: State,
+
+    ident_parser: IdentParser,
+    qualified_parser: PairParser<H, IdentParser, ClosedParser<H, SortParser<H>>>,
 }
 
 impl<H: SmtHandler> QualifiedIdentParser<H> {
     pub fn new() -> Self {
-        Self::Start
+        Self::new_with(State::Start)
     }
 
     pub fn after_open_paren() -> Self {
-        Self::Open
+        Self::new_with(State::Open)
     }
 
     pub fn after_underscore() -> Self {
-        Self::UnqualifiedIndexed(IdentParser::after_underscore())
+        // the ident parser must be after underscore as well
+        let mut result = Self::new_with(State::UnqualifiedIndexed);
+        result.ident_parser = IdentParser::after_underscore();
+        result
     }
 
     pub fn after_as() -> Self {
-        Self::QualifiedIdent(IdentParser::new())
+        Self::new_with(State::Qualified)
+    }
+
+    fn new_with(state: State) -> Self {
+        Self {
+            state,
+            ident_parser: IdentParser::new(),
+            qualified_parser: PairParser::new(),
+        }
     }
 }
 
@@ -49,92 +73,79 @@ impl<H: SmtHandler> CategoryParser<H> for QualifiedIdentParser<H> {
     type Result = SmtQualifiedIdent<H>;
 
     fn progress(
-        self,
+        &mut self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<SmtQualifiedIdent<H>, Self>, ParserError<H>> {
+    ) -> Result<ControlFlow<SmtQualifiedIdent<H>>, ParserError<H>> {
         let span = token.span();
-        match self {
-            QualifiedIdentParser::Start => match token.kind() {
+        match self.state {
+            State::Start => match token.kind() {
                 TokenKind::Symbol(name) => {
-                    // simple ident
-                    Ok(ControlFlow::Break(SmtQualifiedIdent::new_simple(
+                    // we are in a start state, no need to reset anything
+
+                    // return a simple ident
+                    return Ok(ControlFlow::Break(SmtQualifiedIdent::new_simple(
                         name.into_owned(),
-                    )))
+                    )));
                 }
-                TokenKind::ParenOpen => Ok(ControlFlow::Continue(Self::Open)),
+                TokenKind::ParenOpen => self.state = State::Open,
                 _ => {
                     let kind = CategoryParserErrorKind::ExpectedIdent;
-                    Err(CategoryParserError::new(kind, span).into())
+                    return Err(CategoryParserError::new(kind, span).into());
                 }
             },
-            QualifiedIdentParser::Open => {
+            State::Open => {
                 match token.kind() {
                     TokenKind::Reserved(Reserved::Underscore) => {
                         // unqualified indexed ident
-                        Ok(ControlFlow::Continue(Self::UnqualifiedIndexed(
-                            IdentParser::after_underscore(),
-                        )))
+                        // move the ident parser after underscore
+                        self.ident_parser = IdentParser::after_underscore();
+                        self.state = State::UnqualifiedIndexed;
                     }
                     TokenKind::Reserved(Reserved::As) => {
                         // qualified ident, parse identifier next
-                        Ok(ControlFlow::Continue(Self::QualifiedIdent(
-                            IdentParser::new(),
-                        )))
+                        self.ident_parser = IdentParser::new();
+                        self.state = State::Qualified;
                     }
                     _ => {
                         let kind = CategoryParserErrorKind::ExpectedToken(&[
                             TokenType::Reserved(Reserved::Underscore),
                             TokenType::Reserved(Reserved::As),
                         ]);
-                        Err(CategoryParserError::new(kind, span).into())
+                        return Err(CategoryParserError::new(kind, span).into());
                     }
                 }
             }
-            QualifiedIdentParser::UnqualifiedIndexed(parser) => {
-                match parser.progress(handler, token)? {
-                    ControlFlow::Continue(parser) => Ok(ControlFlow::Continue(
-                        QualifiedIdentParser::UnqualifiedIndexed(parser),
-                    )),
-                    ControlFlow::Break(ident) => {
-                        // the closing parenthesis was already consumed by the IdentParser
-                        Ok(ControlFlow::Break(SmtQualifiedIdent::new_unqualified(
-                            ident,
-                        )))
-                    }
+            State::UnqualifiedIndexed => {
+                if let ControlFlow::Break(ident) = self.ident_parser.progress(handler, token)? {
+                    // the closing parenthesis was already consumed by the IdentParser
+
+                    // we only need to reset the state:
+                    // the ident parser was reset, the qualified parser is untouched
+                    self.state = State::Start;
+
+                    // return an unqualified but indexed ident
+                    return Ok(ControlFlow::Break(SmtQualifiedIdent::new_unqualified(
+                        ident,
+                    )));
                 }
             }
-            QualifiedIdentParser::QualifiedIdent(parser) => {
-                match parser.progress(handler, token)? {
-                    ControlFlow::Continue(parser) => Ok(ControlFlow::Continue(
-                        QualifiedIdentParser::QualifiedIdent(parser),
-                    )),
-                    ControlFlow::Break(ident) => {
-                        // we still need to parse the sort and closing parenthesis
-                        Ok(ControlFlow::Continue(Self::QualifiedSort(
-                            ident,
-                            SortParser::new(),
-                        )))
-                    }
+
+            State::Qualified => {
+                if let ControlFlow::Break((ident, sort)) =
+                    self.qualified_parser.progress(handler, token)?
+                {
+                    // we only need to reset the state:
+                    // the ident parser is untouched, the qualified parser was reset
+                    self.state = State::Start;
+
+                    // return an unqualified but indexed ident
+                    return Ok(ControlFlow::Break(SmtQualifiedIdent::new_qualified(
+                        ident, sort,
+                    )));
                 }
-            }
-            QualifiedIdentParser::QualifiedSort(ident, parser) => {
-                match parser.progress(handler, token)? {
-                    ControlFlow::Continue(parser) => Ok(ControlFlow::Continue(
-                        QualifiedIdentParser::QualifiedSort(ident, parser),
-                    )),
-                    ControlFlow::Break(sort) => {
-                        // we still need to parse the closing parenthesis
-                        Ok(ControlFlow::Continue(Self::QualifiedClose(ident, sort)))
-                    }
-                }
-            }
-            QualifiedIdentParser::QualifiedClose(ident, sort) => {
-                CloseParenParser::expect(token)?;
-                Ok(ControlFlow::Break(SmtQualifiedIdent::new_qualified(
-                    ident, sort,
-                )))
             }
         }
+        Ok(ControlFlow::Continue(()))
     }
 }

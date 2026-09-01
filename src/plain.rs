@@ -32,6 +32,11 @@ impl SmtSymbol {
             .copied()
             .all(|c| CharClass::from(c).is_printable_or_whitespace() && c != b'|' && c != b'\\')
     }
+
+    pub(crate) fn new_empty() -> Self {
+        // an empty symbol is allowed
+        Self(String8::new())
+    }
 }
 
 /// SMT-LIB keyword.

@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtHandler, SmtSExpr, SmtSpan,
+    SmtHandler, SmtSExpr,
     read::parser::{
         ParserError,
         category::{CategoryParser, CategoryParserErrorKind, parse_special_constant},
@@ -10,12 +10,17 @@ use crate::{
     token::{Token, TokenKind},
 };
 
-struct SExprLevel<H: SmtHandler> {
-    s_exprs: Vec<H::SExpr>,
+/// A parser that reads an SMT-LIB S-expression.
+///
+/// This parser is self-restarting: after returning Break,
+/// it is in the default state.
+pub struct SExprParser<H: SmtHandler> {
+    levels: Vec<Level<H>>,
 }
 
-pub struct SExprParser<H: SmtHandler> {
-    levels: Vec<SExprLevel<H>>,
+/// An S-expression waiting for additional inner S-expressions.
+struct Level<H: SmtHandler> {
+    s_exprs: Vec<H::SExpr>,
 }
 
 impl<H: SmtHandler> SExprParser<H> {
@@ -34,88 +39,56 @@ impl<H: SmtHandler> CategoryParser<H> for SExprParser<H> {
     type Result = H::SExpr;
 
     fn progress(
-        self,
+        &mut self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<H::SExpr, Self>, ParserError<H>> {
-        let (mut levels, s_expr) = match self.progress_last_level(handler, token)? {
-            ControlFlow::Continue(parser) => return Ok(ControlFlow::Continue(parser)),
-            ControlFlow::Break((levels, s_expr)) => (levels, s_expr),
+    ) -> Result<ControlFlow<H::SExpr>, ParserError<H>> {
+        let s_expr = match token.kind() {
+            TokenKind::Symbol(symbol) => SmtSExpr::Symbol(symbol.into_owned()),
+            TokenKind::Reserved(reserved) => SmtSExpr::Reserved(reserved),
+            TokenKind::Keyword(keyword) => SmtSExpr::Keyword(keyword.into_owned()),
+            TokenKind::ParenOpen => {
+                // add a new level
+                self.levels.push(Level {
+                    s_exprs: Vec::new(),
+                });
+                return Ok(ControlFlow::Continue(()));
+            }
+            TokenKind::ParenClose => {
+                // try to pop the last level
+                if let Some(last_level) = self.levels.pop() {
+                    // the last level exists, we can close it
+                    // empty s_expr is allowed
+                    SmtSExpr::SExprs(last_level.s_exprs)
+                } else {
+                    // no last level, all that we received was ")"
+                    return Err(ParserError::category_error(
+                        CategoryParserErrorKind::ExpectedSExpr,
+                        token.span(),
+                    ));
+                }
+            }
+            kind => {
+                if let Ok(special_constant) = parse_special_constant(kind) {
+                    SmtSExpr::SpecialConstant(special_constant)
+                } else {
+                    return Err(ParserError::category_error(
+                        CategoryParserErrorKind::ExpectedSExpr,
+                        token.span(),
+                    ));
+                }
+            }
         };
-        if let Some(last_level) = levels.last_mut() {
+
+        let s_expr = handle_err(handler.handle_s_expr(s_expr), token.span())?;
+
+        if let Some(last_level) = self.levels.last_mut() {
             // we need to append to the last level
             last_level.s_exprs.push(s_expr);
-            Ok(ControlFlow::Continue(Self { levels }))
+            Ok(ControlFlow::Continue(()))
         } else {
             // this is the root level, we are done
             Ok(ControlFlow::Break(s_expr))
         }
-    }
-}
-
-type SExprProgressOk<H, P> = ControlFlow<(Vec<SExprLevel<H>>, <H as SmtHandler>::SExpr), P>;
-
-impl<H: SmtHandler> SExprParser<H> {
-    fn progress_last_level(
-        self,
-        handler: &mut H,
-        token: Token,
-    ) -> Result<SExprProgressOk<H, Self>, ParserError<H>> {
-        let mut levels = self.levels;
-
-        let span = token.span();
-        let kind = token.kind();
-        let kind = match parse_special_constant(kind) {
-            Ok(special_constant) => {
-                let s_expr = SmtSExpr::SpecialConstant(special_constant);
-                return Self::break_with(handler, levels, s_expr, span);
-            }
-            Err(kind) => kind,
-        };
-
-        match kind {
-            TokenKind::Symbol(symbol) => {
-                let s_expr = SmtSExpr::Symbol(symbol.into_owned());
-                Self::break_with(handler, levels, s_expr, span)
-            }
-            TokenKind::Reserved(reserved) => {
-                let s_expr = SmtSExpr::Reserved(reserved);
-                Self::break_with(handler, levels, s_expr, span)
-            }
-            TokenKind::Keyword(keyword) => {
-                let s_expr = SmtSExpr::Keyword(keyword.into_owned());
-                Self::break_with(handler, levels, s_expr, span)
-            }
-            TokenKind::ParenOpen => {
-                // add new level
-                levels.push(SExprLevel {
-                    s_exprs: Vec::new(),
-                });
-                Ok(ControlFlow::Continue(Self { levels }))
-            }
-            kind => {
-                if matches!(kind, TokenKind::ParenClose) {
-                    // closes the last level if it exists
-                    if let Some(last_level) = levels.pop() {
-                        // empty s_expr is allowed
-                        let s_expr = SmtSExpr::SExprs(last_level.s_exprs);
-                        return Self::break_with(handler, levels, s_expr, span);
-                    }
-                }
-
-                let kind = CategoryParserErrorKind::ExpectedSExpr;
-                Err(ParserError::category_error(kind, span))
-            }
-        }
-    }
-
-    fn break_with(
-        handler: &mut H,
-        levels: Vec<SExprLevel<H>>,
-        s_expr: SmtSExpr<H>,
-        span: SmtSpan,
-    ) -> Result<SExprProgressOk<H, Self>, ParserError<H>> {
-        let s_expr = handle_err(handler.handle_s_expr(s_expr), span)?;
-        Ok(ControlFlow::Break((levels, s_expr)))
     }
 }

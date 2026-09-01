@@ -9,27 +9,46 @@ use crate::{
     token::{Reserved, Token, TokenKind, TokenType},
 };
 
-pub enum IdentParser {
+/// A parser that reads an SMT-LIB identifier.
+///
+/// This parser is self-restarting: after returning Break,
+/// it is in the default state.
+pub struct IdentParser {
+    state: State,
+    name: Option<SmtSymbol>,
+    indices: Vec<SmtIndex>,
+}
+
+/// Identifier-parsing state.
+#[derive(Clone, Copy)]
+enum State {
+    /// Waiting for a token.
     Start,
+    /// After "(", expecting underscore.
     Open,
+    /// Reading name and indices.
     AfterUnderscore,
-    Indices {
-        name: SmtSymbol,
-        indices: Vec<SmtIndex>,
-    },
 }
 
 impl IdentParser {
     pub fn new() -> Self {
-        Self::Start
+        Self {
+            state: State::Start,
+            name: None,
+            indices: Vec::new(),
+        }
     }
 
     pub fn after_open_paren() -> Self {
-        Self::Open
+        let mut result = Self::new();
+        result.state = State::Open;
+        result
     }
 
     pub fn after_underscore() -> Self {
-        Self::AfterUnderscore
+        let mut result = Self::new();
+        result.state = State::AfterUnderscore;
+        result
     }
 }
 
@@ -43,65 +62,82 @@ impl<H: SmtHandler> CategoryParser<H> for IdentParser {
     type Result = SmtIdent;
 
     fn progress(
-        self,
+        &mut self,
         _handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<SmtIdent, Self>, ParserError<H>> {
+    ) -> Result<ControlFlow<SmtIdent, ()>, ParserError<H>> {
         let span = token.span();
-        match self {
-            IdentParser::Start => match token.kind() {
+
+        match self.state {
+            State::Start => match token.kind() {
                 TokenKind::Symbol(name) => {
-                    Ok(ControlFlow::Break(SmtIdent::new_simple(name.into_owned())))
+                    return Ok(ControlFlow::Break(SmtIdent::new_simple(name.into_owned())));
                 }
-                TokenKind::ParenOpen => Ok(ControlFlow::Continue(Self::Open)),
+                TokenKind::ParenOpen => {
+                    self.state = State::Open;
+                }
                 _ => {
                     let kind = CategoryParserErrorKind::ExpectedIdent;
-                    Err(CategoryParserError::new(kind, span).into())
+                    return Err(CategoryParserError::new(kind, span).into());
                 }
             },
-            IdentParser::Open => {
+            State::Open => {
                 // this must be an underscore
                 if matches!(token.kind(), TokenKind::Reserved(Reserved::Underscore)) {
-                    Ok(ControlFlow::Continue(Self::AfterUnderscore))
+                    self.state = State::AfterUnderscore;
                 } else {
                     let kind = CategoryParserErrorKind::ExpectedToken(&[TokenType::Reserved(
                         Reserved::Underscore,
                     )]);
-                    Err(CategoryParserError::new(kind, span).into())
+                    return Err(CategoryParserError::new(kind, span).into());
                 }
             }
-            IdentParser::AfterUnderscore => {
-                if let TokenKind::Symbol(name) = token.kind() {
-                    Ok(ControlFlow::Continue(IdentParser::Indices {
-                        name: name.into_owned(),
-                        indices: Vec::new(),
-                    }))
-                } else {
-                    let kind = CategoryParserErrorKind::ExpectedToken(&[TokenType::Symbol]);
-                    Err(CategoryParserError::new(kind, span).into())
-                }
-            }
-            IdentParser::Indices { name, mut indices } => match token.kind() {
-                TokenKind::ParenClose => {
-                    if indices.is_empty() {
-                        let kind = CategoryParserErrorKind::EmptyIdentIndices;
-                        return Err(CategoryParserError::new(kind, span).into());
+            State::AfterUnderscore => {
+                let name = match self.name.take() {
+                    None => {
+                        // we need to read the name
+                        if let TokenKind::Symbol(name) = token.kind() {
+                            Some(name.into_owned())
+                        } else {
+                            let kind = CategoryParserErrorKind::ExpectedToken(&[TokenType::Symbol]);
+                            return Err(CategoryParserError::new(kind, span).into());
+                        }
                     }
-                    Ok(ControlFlow::Break(SmtIdent { name, indices }))
-                }
-                TokenKind::Numeral(index_value) => {
-                    indices.push(SmtIndex::Numeral(index_value.into_owned()));
-                    Ok(ControlFlow::Continue(Self::Indices { name, indices }))
-                }
-                TokenKind::Symbol(index_symbol) => {
-                    indices.push(SmtIndex::Symbol(index_symbol.into_owned()));
-                    Ok(ControlFlow::Continue(Self::Indices { name, indices }))
-                }
-                _ => {
-                    let kind = CategoryParserErrorKind::ExpectedIndexOrCloseParen;
-                    Err(CategoryParserError::new(kind, span).into())
-                }
-            },
+                    Some(name) => {
+                        // we have already read the name, so we will be reading an index
+                        // and ending with closing parenthesis
+                        match token.kind() {
+                            TokenKind::ParenClose => {
+                                if self.indices.is_empty() {
+                                    let kind = CategoryParserErrorKind::EmptyIdentIndices;
+                                    return Err(CategoryParserError::new(kind, span).into());
+                                }
+                                let indices = self.indices.drain(..).collect();
+                                // reset to the starting state: both our name and indices are now empty
+                                self.state = State::Start;
+                                return Ok(ControlFlow::Break(SmtIdent { name, indices }));
+                            }
+                            TokenKind::Numeral(index_value) => {
+                                self.indices
+                                    .push(SmtIndex::Numeral(index_value.into_owned()));
+                            }
+                            TokenKind::Symbol(index_symbol) => {
+                                self.indices
+                                    .push(SmtIndex::Symbol(index_symbol.into_owned()));
+                            }
+                            _ => {
+                                let kind = CategoryParserErrorKind::ExpectedIndexOrCloseParen;
+                                return Err(CategoryParserError::new(kind, span).into());
+                            }
+                        }
+                        // put the name back
+                        Some(name)
+                    }
+                };
+                self.name = name;
+            }
         }
+
+        Ok(ControlFlow::Continue(()))
     }
 }

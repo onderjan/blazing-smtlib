@@ -3,10 +3,10 @@ use std::ops::ControlFlow;
 use crate::{
     CommandHandler, SmtFunctionSignature,
     read::parser::{
-        CategoryParser, CloseParenParser, KeywordParser, ParserError, StringParser, SymbolParser,
+        CategoryParser, CloseParenParser, KeywordParser, ParenMultipleParser, ParserError,
+        StringParser, SymbolParser,
         category::{
-            ClosedAttributeParser, ClosedParser, MultipleParser, OpenClosedParser, PairParser,
-            SortParser, TermParser,
+            ClosedAttributeParser, ClosedParser, PairParser, ParenParser, SortParser, TermParser,
         },
         command::StandardCommand,
         handle_err,
@@ -40,7 +40,7 @@ standard_command!(CommandDeclareConst,
 );
 standard_command!(CommandDeclareFun,
     ClosedParser<H, PairParser<H, SymbolParser,
-        PairParser<H, MultipleParser<H, SortParser<H>>, SortParser<H>>>>,
+        PairParser<H, ParenMultipleParser<H, SortParser<H>>, SortParser<H>>>>,
     |handler, (name, (param_sorts, result_sort))|
         handler.command_declare_fun(name, param_sorts, result_sort));
 standard_command!(CommandAssert, ClosedParser<H, TermParser<H>>,
@@ -74,21 +74,26 @@ standard_command!(CommandResetAssertions, CloseParenParser, |handler, ()| {
 standard_command!(CommandDefineFun, ClosedParser<H, DefineFunParser<H>>,
     |_handler, ()| Ok(()));
 
-type SortedVarParser<H> = OpenClosedParser<H, PairParser<H, SymbolParser, SortParser<H>>>;
+type SortedVarParser<H> = ParenParser<H, PairParser<H, SymbolParser, SortParser<H>>>;
 type DefineFunSignatureParser<H> = PairParser<
     H,
     SymbolParser,
-    PairParser<H, MultipleParser<H, SortedVarParser<H>>, SortParser<H>>,
+    PairParser<H, ParenMultipleParser<H, SortedVarParser<H>>, SortParser<H>>,
 >;
 
-pub enum DefineFunParser<H: CommandHandler> {
-    Signature(DefineFunSignatureParser<H>),
-    Body(TermParser<H>),
+pub struct DefineFunParser<H: CommandHandler> {
+    signature_parser: DefineFunSignatureParser<H>,
+    body_parser: TermParser<H>,
+    parse_signature: bool,
 }
 
 impl<H: CommandHandler> DefineFunParser<H> {
     pub fn new() -> Self {
-        Self::Signature(DefineFunSignatureParser::new())
+        Self {
+            signature_parser: DefineFunSignatureParser::new(),
+            body_parser: TermParser::new(),
+            parse_signature: true,
+        }
     }
 }
 
@@ -102,34 +107,33 @@ impl<H: CommandHandler> CategoryParser<H> for DefineFunParser<H> {
     type Result = ();
 
     fn progress(
-        self,
+        &mut self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<Self::Result, Self>, ParserError<H>> {
+    ) -> Result<ControlFlow<Self::Result>, ParserError<H>> {
         let span = token.span();
-        let result = match self {
-            DefineFunParser::Signature(parser) => match parser.progress(handler, token)? {
-                ControlFlow::Continue(parser) => DefineFunParser::Signature(parser),
-                ControlFlow::Break((name, (params, result_sort))) => {
-                    let signature = SmtFunctionSignature {
-                        name,
-                        params,
-                        result_sort,
-                    };
+        if self.parse_signature {
+            if let ControlFlow::Break((name, (params, result_sort))) =
+                self.signature_parser.progress(handler, token)?
+            {
+                let signature = SmtFunctionSignature {
+                    name,
+                    params,
+                    result_sort,
+                };
 
-                    handle_err(handler.start_define_fun(signature), span)?;
-                    DefineFunParser::Body(TermParser::new())
-                }
-            },
-            DefineFunParser::Body(parser) => match parser.progress(handler, token)? {
-                ControlFlow::Continue(parser) => DefineFunParser::Body(parser),
-                ControlFlow::Break(term) => {
-                    handle_err(handler.end_define_fun(term), span)?;
-                    return Ok(ControlFlow::Break(()));
-                }
-            },
-        };
-        Ok(ControlFlow::Continue(result))
+                handle_err(handler.start_define_fun(signature), span)?;
+                self.parse_signature = false;
+            }
+        } else {
+            if let ControlFlow::Break(term) = self.body_parser.progress(handler, token)? {
+                handle_err(handler.end_define_fun(term), span)?;
+                self.parse_signature = true;
+
+                return Ok(ControlFlow::Break(()));
+            }
+        }
+        Ok(ControlFlow::Continue(()))
     }
 }
 

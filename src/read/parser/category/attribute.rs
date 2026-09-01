@@ -3,25 +3,47 @@ use std::ops::ControlFlow;
 use crate::{
     SmtAttributeValue, SmtHandler, SmtKeyword,
     read::parser::{
-        CategoryParserError, CloseParenParser, MultipleParser, ParserError,
+        CategoryParserError, CloseParenParser, ClosedMultipleParser, KeywordParser, ParserError,
         category::{
             CategoryParser, CategoryParserErrorKind, parse_special_constant, s_expr::SExprParser,
         },
         handle_err,
     },
-    token::{Token, TokenKind, TokenType},
+    token::{Token, TokenKind},
 };
 
-pub enum ClosedAttributeParser<H: SmtHandler> {
+/// A parser that reads an SMT-LIB attribute followed by a closing parenthesis.
+///
+/// This parser is self-restarting: after returning Break,
+/// it is in the default state.
+pub struct ClosedAttributeParser<H: SmtHandler> {
+    /// Current state.
+    state: State,
+    /// An attribute that is only waiting for a closing parenthesis.
+    ///
+    /// An emplaced attribute overrides the state.
+    attribute: Option<H::Attribute>,
+
+    closed_s_exprs_parser: ClosedMultipleParser<H, SExprParser<H>>,
+}
+
+/// Attribute-parsing state.
+enum State {
+    /// Waiting for the keyword that will name the attribute.
     Start,
-    Name(SmtKeyword),
-    SExprsValue(SmtKeyword, MultipleParser<H, SExprParser<H>>),
-    BeforeClose(H::Attribute),
+    /// Waiting for a value or a closing parenthesis.
+    AfterName(SmtKeyword),
+    /// Parsing S-expressions that will end with a closing parenthesis.
+    InsideSExpr(SmtKeyword),
 }
 
 impl<H: SmtHandler> ClosedAttributeParser<H> {
     pub fn new() -> Self {
-        Self::Start
+        Self {
+            state: State::Start,
+            attribute: None,
+            closed_s_exprs_parser: ClosedMultipleParser::new(),
+        }
     }
 }
 
@@ -35,74 +57,79 @@ impl<H: SmtHandler> CategoryParser<H> for ClosedAttributeParser<H> {
     type Result = H::Attribute;
 
     fn progress(
-        self,
+        &mut self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<H::Attribute, Self>, ParserError<H>> {
-        let token_span = token.span();
-        match self {
-            ClosedAttributeParser::Start => {
-                let TokenKind::Keyword(keyword) = token.kind() else {
-                    let kind = CategoryParserErrorKind::ExpectedToken(&[TokenType::Keyword]);
-                    return Err(CategoryParserError::new(kind, token_span).into());
-                };
-                Ok(ControlFlow::Continue(ClosedAttributeParser::Name(
-                    keyword.into_owned(),
-                )))
+    ) -> Result<ControlFlow<H::Attribute>, ParserError<H>> {
+        if let Some(attribute) = self.attribute.take() {
+            // we already have an attribute, just expect closing parenthesis
+            CloseParenParser::expect(token)?;
+            return Ok(ControlFlow::Break(attribute));
+        }
+
+        let span = token.span();
+        let mut state = State::Start;
+        std::mem::swap(&mut state, &mut self.state);
+
+        match state {
+            State::Start => {
+                // parse the keyword that forms the attribute name and continue
+                let name = KeywordParser::expect(token)?;
+                self.state = State::AfterName(name);
             }
-            ClosedAttributeParser::Name(name) => {
+            State::AfterName(name) => {
                 let value = match token.kind() {
                     TokenKind::Symbol(symbol) => SmtAttributeValue::Symbol(symbol.into_owned()),
                     TokenKind::ParenOpen => {
-                        // starts a list of sexprs ending with closing parenthesis
-                        let parser = MultipleParser::after_open_paren();
-                        return Ok(ControlFlow::Continue(ClosedAttributeParser::SExprsValue(
-                            name, parser,
-                        )));
+                        // start a list of sexprs ending with closing parenthesis
+                        self.state = State::InsideSExpr(name);
+                        return Ok(ControlFlow::Continue(()));
                     }
                     TokenKind::ParenClose => {
-                        // just an attribute name, return after handling
-                        return Ok(ControlFlow::Break(handle_err(
-                            handler.handle_attribute(name, None),
-                            token_span,
-                        )?));
+                        // just an attribute name
+                        // since we already have a closing parenthesis here, we need to immediately break
+                        let result = handle_err(handler.handle_attribute(name, None), span)?;
+                        // no additional reset steps necessary, as the state has already been replaced
+                        // by Start and the SExpr parser is untouched
+                        return Ok(ControlFlow::Break(result));
                     }
                     kind => {
                         if let Ok(special_constant) = parse_special_constant(kind) {
                             SmtAttributeValue::SpecialConstant(special_constant)
                         } else {
                             let kind = CategoryParserErrorKind::ExpectedAttribute;
-                            return Err(CategoryParserError::new(kind, token_span).into());
+                            return Err(CategoryParserError::new(kind, span).into());
                         }
                     }
                 };
 
-                match handler.handle_attribute(name, Some(value)) {
-                    Ok(attribute) => Ok(ControlFlow::Continue(Self::BeforeClose(attribute))),
-                    Err(err) => Err(ParserError::handler_error(err, token_span)),
-                }
+                // the attribute closing parenthesis was not consumed yet, we must keep the attribute for now
+                let result = handle_err(handler.handle_attribute(name, Some(value)), span)?;
+                // no additional reset steps necessary, as the state has already been replaced
+                // by Start and the SExpr parser is untouched
+                self.attribute = Some(result);
             }
-            ClosedAttributeParser::SExprsValue(name, parser) => {
-                match parser.progress(handler, token)? {
-                    ControlFlow::Continue(parser) => Ok(ControlFlow::Continue(
-                        ClosedAttributeParser::SExprsValue(name, parser),
-                    )),
+            State::InsideSExpr(name) => {
+                match self.closed_s_exprs_parser.progress(handler, token)? {
+                    ControlFlow::Continue(()) => {
+                        // put the state back
+                        self.state = State::InsideSExpr(name);
+                    }
                     ControlFlow::Break(s_exprs) => {
-                        // the s-expr closing parenthesis was consumed
-                        // but the attribute closing parenthesis still waits to be consumed
+                        // the s-expr closing parenthesis was consumed,
+                        // the attribute closing parenthesis was not consumed yet
+                        // we must keep the attribute for now
                         let value = SmtAttributeValue::SExprs(s_exprs);
                         let attribute =
-                            handle_err(handler.handle_attribute(name, Some(value)), token_span)?;
-                        Ok(ControlFlow::Continue(ClosedAttributeParser::BeforeClose(
-                            attribute,
-                        )))
+                            handle_err(handler.handle_attribute(name, Some(value)), span)?;
+                        // no additional reset steps necessary, as the state has already been replaced
+                        // by Start and the SExpr parser is untouched
+                        self.attribute = Some(attribute);
                     }
                 }
             }
-            ClosedAttributeParser::BeforeClose(attribute) => {
-                CloseParenParser::expect(token)?;
-                Ok(ControlFlow::Break(attribute))
-            }
         }
+
+        Ok(ControlFlow::Continue(()))
     }
 }

@@ -94,11 +94,17 @@ impl<H: CommandHandler> ParseCommand<H> for CommandParser<H> {
     }
 }
 
-pub struct StaticCommandParser<H: CommandHandler, C: StandardCommand<H>>(Option<C::Parser>);
+pub struct StaticCommandParser<H: CommandHandler, C: StandardCommand<H>> {
+    parser: C::Parser,
+    finished: bool,
+}
 
 impl<H: CommandHandler, C: StandardCommand<H>> StaticCommandParser<H, C> {
     pub fn new() -> Self {
-        Self(Some(C::Parser::default()))
+        Self {
+            parser: C::Parser::default(),
+            finished: false,
+        }
     }
 }
 
@@ -114,27 +120,26 @@ impl<H: CommandHandler, C: StandardCommand<H>> ParseCommand<H> for StaticCommand
         handler: &mut H,
         token: Token,
     ) -> Result<ControlFlow<CommandResult, ()>, ParserError<H>> {
+        if self.finished {
+            panic!("cannot progress command parser that already finished");
+        }
+
         let span = token.span();
-        match self.0.take() {
-            Some(parser) => match parser.progress(handler, token)? {
-                ControlFlow::Continue(parser) => {
-                    self.0 = Some(parser);
-                    Ok(ControlFlow::Continue(()))
-                }
-                ControlFlow::Break(result) => {
-                    match C::handle(handler, result) {
-                        Ok(()) => {}
-                        Err(err) => return Err(ParserError::handler_error(err, span)),
-                    }
-                    let command_result = if C::is_exit() {
-                        CommandResult::Exit
-                    } else {
-                        CommandResult::EndCommand
-                    };
-                    Ok(ControlFlow::Break(command_result))
-                }
-            },
-            None => panic!("cannot progress command parser that already finished"),
+        let ControlFlow::Break(result) = self.parser.progress(handler, token)? else {
+            return Ok(ControlFlow::Continue(()));
+        };
+
+        match C::handle(handler, result) {
+            Ok(()) => {
+                self.finished = true;
+                let command_result = if C::is_exit() {
+                    CommandResult::Exit
+                } else {
+                    CommandResult::EndCommand
+                };
+                Ok(ControlFlow::Break(command_result))
+            }
+            Err(err) => Err(ParserError::handler_error(err, span)),
         }
     }
 }

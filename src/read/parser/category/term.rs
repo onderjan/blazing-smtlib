@@ -13,35 +13,87 @@ use crate::{
     token::{Reserved, Token, TokenKind, TokenType},
 };
 
-enum TermLevel<H: SmtHandler> {
-    Application(SmtQualifiedIdent<H>, Vec<H::Term>),
-    LetBinding(Vec<(SmtSymbol, H::Term)>, SmtSymbol),
-    LetInner,
-}
-
-enum TermState<H: SmtHandler> {
-    Start,
-    Open,
-    QualifiedIdent(QualifiedIdentParser<H>),
-    ApplicationQualifiedIdent(QualifiedIdentParser<H>),
-    ApplicationTerm(SmtQualifiedIdent<H>, Vec<H::Term>),
-    LetBeforeBindingsOpen,
-    LetBeforeBindingOpen(Vec<(SmtSymbol, H::Term)>),
-    LetBeforeBindingSymbol(Vec<(SmtSymbol, H::Term)>),
-    LetBeforeBindingClose(Vec<(SmtSymbol, H::Term)>),
-    LetAfterInnerTerm(H::Term),
-}
-
+/// A parser that reads an SMT-LIB term.
+///
+/// This parser is self-restarting: after returning Break,
+/// it is in the default state.
 pub struct TermParser<H: SmtHandler> {
-    state: TermState<H>,
-    levels: Vec<TermLevel<H>>,
+    /// Current parser state.
+    state: State,
+    /// Levels of terms waiting for inner terms.
+    levels: Vec<Level<H>>,
+    /// A term that is already processed, but waiting for a closing parenthesis.
+    pending_term: Option<H::Term>,
+
+    qualified_ident_parser: QualifiedIdentParser<H>,
+}
+
+/// State of the term parser.
+///
+/// There are no ApplicationTerm or LetBinding states:
+/// these are handled by opening a new term level.
+enum State {
+    /// Waiting for the first token.
+    Start,
+    /// After opening parenthesis "(".
+    Open,
+    /// This term is a qualified ident, after "(_" or "(as").
+    ///
+    /// Parsing delegated to the qualified-ident parser.
+    QualifiedIdent,
+    /// This term is an application, and we are parsing its ident.
+    ///
+    /// Parsing delegated to the qualified-ident parser.
+    ApplicationIdent,
+    /// This term is a let: "(let", we are positioned before the bindings open.
+    ///
+    /// We expect an opening parenthesis (opening the bindings) next.
+    LetAllBindingsOpen,
+    /// This term is a let, we are positioned before a binding parenthesis starts.
+    ///
+    /// We expect either an opening parenthesis (new binding),
+    /// or a closing one (ending the bindings).
+    LetBindingOpen,
+    /// The term is a let, we are positioned before a binding symbol starts.
+    ///
+    /// We expect a symbol next.
+    LetBindingSymbol,
+    /// The term is a let, we are positioned after a binding term.
+    ///
+    /// We expect a closing parenthesis (closing the binding) next.
+    LetBindingClose,
+}
+
+/// A term waiting for an inner term.
+enum Level<H: SmtHandler> {
+    /// An application waiting for an inner term.
+    ///
+    /// It is closed by a closing parenthesis instead of the inner term.
+    Application {
+        ident: SmtQualifiedIdent<H>,
+        args: Vec<H::Term>,
+    },
+    /// A let waiting for a binding term.
+    ///
+    /// It is closed by a closing parenthesis instead of the inner term.
+    LetBinding {
+        bindings: Vec<(SmtSymbol, H::Term)>,
+        binding_name: SmtSymbol,
+    },
+    /// A let waiting for the inner term.
+    ///
+    /// After consuming the term, we must also consume a closing parenthesis.
+    LetInner,
 }
 
 impl<H: SmtHandler> TermParser<H> {
     pub fn new() -> Self {
         TermParser {
-            state: TermState::Start,
+            state: State::Start,
             levels: Vec::new(),
+            pending_term: None,
+
+            qualified_ident_parser: QualifiedIdentParser::new(),
         }
     }
 }
@@ -56,185 +108,176 @@ impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
     type Result = H::Term;
 
     fn progress(
-        self,
+        &mut self,
         handler: &mut H,
         token: Token,
-    ) -> Result<ControlFlow<H::Term, Self>, ParserError<H>> {
+    ) -> Result<ControlFlow<H::Term>, ParserError<H>> {
         let span = token.span();
-
-        let (mut levels, term) = match self.progress_last_level(handler, token)? {
-            ControlFlow::Continue(parser) => return Ok(ControlFlow::Continue(parser)),
-            ControlFlow::Break((levels, term)) => (levels, term),
+        let term = match self.pending_term.take() {
+            Some(term) => {
+                // we have a pending term and are waiting for a closing parenthesis
+                CloseParenParser::expect(token)?;
+                term
+            }
+            None => {
+                // no pending term, try to get one
+                let ControlFlow::Break(term) = self.progress_inner(handler, token)? else {
+                    return Ok(ControlFlow::Continue(()));
+                };
+                self.state = State::Start;
+                handle_err(handler.handle_term(term), span)?
+            }
         };
-        let Some(last_level) = levels.pop() else {
-            // this is the root level, we are done
-            return Ok(ControlFlow::Break(term));
-        };
 
-        // we need to append the newly created term to the last level
-        let state = match last_level {
-            TermLevel::Application(function, mut args) => {
-                // add argument and go back to term state
+        // we have parsed a term, set state to start
+        self.state = State::Start;
+
+        // either update the last level with the term or return it if there is none
+        // PERFORMANCE: take the last level as mutable instead of wholly consuming it
+        match self.levels.last_mut() {
+            Some(Level::Application { args, .. }) => {
+                // add term as the next argument
                 args.push(term);
-                TermState::ApplicationTerm(function, args)
+                Ok(ControlFlow::Continue(()))
             }
-            TermLevel::LetBinding(mut bindings, binding_name) => {
-                // add binding, should be followed by parenthesis closing the bindings
-                bindings.push((binding_name, term));
-                TermState::LetBeforeBindingClose(bindings)
+            Some(Level::LetBinding {
+                bindings,
+                binding_name,
+            }) => {
+                // we need to swap to a new symbol here
+                let mut name = SmtSymbol::new_empty();
+                std::mem::swap(binding_name, &mut name);
+                bindings.push((name, term));
+                self.state = State::LetBindingClose;
+                Ok(ControlFlow::Continue(()))
             }
-            TermLevel::LetInner => {
-                // end let, should be followed by closing parenthesis
+            Some(Level::LetInner) => {
+                // end the let and wait for the closing parenthesis
+                self.levels.pop();
                 let term = handle_err(handler.end_let(term), span)?;
-                TermState::LetAfterInnerTerm(term)
+                self.pending_term = Some(term);
+                Ok(ControlFlow::Continue(()))
             }
-        };
-
-        Ok(ControlFlow::Continue(Self { state, levels }))
+            None => {
+                // root level, return the term
+                Ok(ControlFlow::Break(term))
+            }
+        }
     }
 }
 
-type TermProgressOk<H, P> = ControlFlow<(Vec<TermLevel<H>>, <H as SmtHandler>::Term), P>;
-
 impl<H: SmtHandler> TermParser<H> {
-    fn progress_last_level(
-        self,
+    fn progress_inner(
+        &mut self,
         handler: &mut H,
         token: Token,
-    ) -> Result<TermProgressOk<H, Self>, ParserError<H>> {
-        let span = token.span();
-        let mut levels = self.levels;
-        let state = match self.state {
-            TermState::Start => return Self::parse_term_start(levels, handler, token),
-            TermState::Open => {
-                return Ok(ControlFlow::Continue(Self::parse_term_open(levels, token)?));
+    ) -> Result<ControlFlow<SmtTerm<H>>, ParserError<H>> {
+        match self.state {
+            State::Start => self.parse_term_start(token),
+            State::Open => {
+                self.parse_term_open(token)?;
+                Ok(ControlFlow::Continue(()))
             }
-            TermState::QualifiedIdent(parser) => match parser.progress(handler, token)? {
-                ControlFlow::Continue(parser) => TermState::QualifiedIdent(parser),
-                ControlFlow::Break(qualified_ident) => {
-                    let term = SmtTerm::QualifiedIdent(qualified_ident);
-
-                    let term = handle_err(handler.handle_term(term), span)?;
-                    return Ok(ControlFlow::Break((levels, term)));
-                }
-            },
-            TermState::ApplicationQualifiedIdent(parser) => {
-                match parser.progress(handler, token)? {
-                    ControlFlow::Continue(parser) => TermState::ApplicationQualifiedIdent(parser),
-                    ControlFlow::Break(ident) => TermState::ApplicationTerm(ident, Vec::new()),
-                }
-            }
-            TermState::ApplicationTerm(function, args) => {
-                if matches!(token.kind(), TokenKind::ParenClose) {
-                    // this ends the application term
-                    // it must have at least one argument
-                    if args.is_empty() {
-                        return Err(ParserError::category_error(
-                            CategoryParserErrorKind::EmptyTermApplication,
-                            span,
-                        ));
+            State::QualifiedIdent => Ok(self
+                .qualified_ident_parser
+                .progress(handler, token)?
+                .map_break(SmtTerm::QualifiedIdent)),
+            State::ApplicationIdent => {
+                match self.qualified_ident_parser.progress(handler, token)? {
+                    ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
+                    ControlFlow::Break(ident) => {
+                        // start a new level
+                        self.start_level(Level::Application {
+                            ident,
+                            args: Vec::new(),
+                        });
+                        Ok(ControlFlow::Continue(()))
                     }
-                    let term = SmtTerm::Application(SmtApplication { function, args });
-
-                    let term = handle_err(handler.handle_term(term), span)?;
-                    return Ok(ControlFlow::Break((levels, term)));
-                } else {
-                    // add the application to the level stack and parse the argument
-                    levels.push(TermLevel::Application(function, args));
-                    return Self::parse_term_start(levels, handler, token);
                 }
             }
-            TermState::LetBeforeBindingsOpen => {
+            State::LetAllBindingsOpen => {
+                // expect an opening parenthesis and move to the single binding
                 OpenParenParser::expect(token)?;
-                TermState::LetBeforeBindingOpen(Vec::new())
+                self.state = State::LetBindingOpen;
+                Ok(ControlFlow::Continue(()))
             }
-            TermState::LetBeforeBindingOpen(bindings) => {
-                match token.kind() {
-                    TokenKind::ParenOpen => {
-                        // new binding
-                        TermState::LetBeforeBindingSymbol(bindings)
-                    }
-                    TokenKind::ParenClose => {
-                        // bindings are closed, inner term will be next
-                        // check that there is at least one binding
-                        if bindings.is_empty() {
-                            return Err(ParserError::category_error(
-                                CategoryParserErrorKind::EmptyLetBindings,
-                                span,
-                            ));
-                        }
-
-                        handle_err(handler.start_let(bindings), span)?;
-
-                        levels.push(TermLevel::LetInner);
-                        TermState::Start
-                    }
-                    _ => {
-                        // expected open or close parenthesis
-                        return Err(ParserError::category_error(
-                            CategoryParserErrorKind::ExpectedToken(&[
-                                TokenType::ParenOpen,
-                                TokenType::ParenClose,
-                            ]),
-                            span,
-                        ));
-                    }
-                }
+            State::LetBindingOpen => self.parse_let_binding_open(handler, token),
+            State::LetBindingSymbol => {
+                // except a symbol that will be the binding name
+                let mut symbol = SymbolParser::expect(token)?;
+                // mutably take the let bindings on the last level and add the name
+                // for performance, we do not switch bindings between level and state,
+                // so we need to unwrap
+                let Some(Level::LetBinding { binding_name, .. }) = self.levels.last_mut() else {
+                    panic!("last level should be a let binding when adding a binding symbol")
+                };
+                // set the binding name
+                std::mem::swap(binding_name, &mut symbol);
+                // go to the start state to parse the binding term
+                self.state = State::Start;
+                Ok(ControlFlow::Continue(()))
             }
-            TermState::LetBeforeBindingSymbol(bindings) => {
-                let symbol = SymbolParser::expect(token)?;
-                levels.push(TermLevel::LetBinding(bindings, symbol));
-                TermState::Start
-            }
-            TermState::LetBeforeBindingClose(bindings) => {
+            State::LetBindingClose => {
+                // expect a close parenthesis
                 CloseParenParser::expect(token)?;
-                TermState::LetBeforeBindingOpen(bindings)
+                // move to before binding open, a next binding can be opened
+                self.state = State::LetBindingOpen;
+                Ok(ControlFlow::Continue(()))
             }
-            TermState::LetAfterInnerTerm(term) => {
-                CloseParenParser::expect(token)?;
-                return Ok(ControlFlow::Break((levels, term)));
-            }
-        };
-        Ok(ControlFlow::Continue(Self { state, levels }))
+        }
     }
 
     fn parse_term_start(
-        levels: Vec<TermLevel<H>>,
-        handler: &mut H,
+        &mut self,
         token: Token,
-    ) -> Result<TermProgressOk<H, Self>, ParserError<H>> {
-        let span = token.span();
+    ) -> Result<ControlFlow<SmtTerm<H>>, ParserError<H>> {
         match token.kind() {
             TokenKind::ParenOpen => {
                 // application, binder, or annotation
                 // move to operator parsing
-                Ok(ControlFlow::Continue(Self {
-                    state: TermState::Open,
-                    levels,
-                }))
+                self.state = State::Open;
+                Ok(ControlFlow::Continue(()))
+            }
+            TokenKind::ParenClose => {
+                // this is only permitted when we are ending an application
+                // pop the level and construct it
+                if let Some(Level::Application { ident, args }) = self.levels.pop() {
+                    // an application must contain at least one argument
+                    if args.is_empty() {
+                        return Err(ParserError::category_error(
+                            CategoryParserErrorKind::EmptyTermApplication,
+                            token.span(),
+                        ));
+                    }
+                    // construct the term and break with it
+                    let term = SmtTerm::Application(SmtApplication {
+                        function: ident,
+                        args,
+                    });
+                    Ok(ControlFlow::Break(term))
+                } else {
+                    Err(ParserError::category_error(
+                        CategoryParserErrorKind::ExpectedTerm,
+                        token.span(),
+                    ))
+                }
             }
             TokenKind::Symbol(name) => {
-                // a qualified identifier that is just a symbol
-                let qualified_ident = SmtQualifiedIdent::new_simple(name.into_owned());
-                let term = handle_err(
-                    handler.handle_term(SmtTerm::QualifiedIdent(qualified_ident)),
-                    span,
-                )?;
-
-                Ok(ControlFlow::Break((levels, term)))
+                // a term that is a qualified identifier that is just a symbol
+                let term =
+                    SmtTerm::QualifiedIdent(SmtQualifiedIdent::new_simple(name.into_owned()));
+                Ok(ControlFlow::Break(term))
             }
-
             kind => {
                 // handle special constants
+                let span = token.span();
                 match parse_special_constant(kind) {
                     Ok(special_constant) => {
-                        let term = handle_err(
-                            handler.handle_term(SmtTerm::SpecialConstant(special_constant)),
-                            span,
-                        )?;
-                        Ok(ControlFlow::Break((levels, term)))
+                        // a term that is just a special constant
+                        let term = SmtTerm::SpecialConstant(special_constant);
+                        Ok(ControlFlow::Break(term))
                     }
-                    Err(_token) => Err(ParserError::category_error(
+                    Err(_) => Err(ParserError::category_error(
                         CategoryParserErrorKind::ExpectedTerm,
                         span,
                     )),
@@ -243,15 +286,27 @@ impl<H: SmtHandler> TermParser<H> {
         }
     }
 
-    fn parse_term_open(levels: Vec<TermLevel<H>>, token: Token) -> Result<Self, ParserError<H>> {
+    fn parse_term_open(&mut self, token: Token) -> Result<(), ParserError<H>> {
         let span = token.span();
         let state = match token.kind() {
             TokenKind::Symbol(fn_name) => {
                 // this is an application where the function identifier is just a symbol
+                // start a new level
                 let fn_ident = SmtQualifiedIdent::new_simple(fn_name.into_owned());
-                TermState::ApplicationTerm(fn_ident, Vec::new())
+                self.start_level(Level::Application {
+                    ident: fn_ident,
+                    args: Vec::new(),
+                });
+                return Ok(());
             }
-            TokenKind::Reserved(Reserved::Let) => TermState::LetBeforeBindingsOpen,
+            TokenKind::Reserved(Reserved::Let) => {
+                // add a level for let bindings and move before the bindings opening
+                self.levels.push(Level::LetBinding {
+                    bindings: Vec::new(),
+                    binding_name: SmtSymbol::new_empty(),
+                });
+                State::LetAllBindingsOpen
+            }
             TokenKind::Reserved(Reserved::Lambda) => todo!("Lambda"),
             TokenKind::Reserved(Reserved::Forall) => todo!("Forall"),
             TokenKind::Reserved(Reserved::Exists) => todo!("Exists"),
@@ -261,18 +316,21 @@ impl<H: SmtHandler> TermParser<H> {
                 // this is actually a term composed of an indexed identifier
                 // start a qualified ident parser after the underscore
                 // (meaning the ident will be unqualified but indexed)
-                TermState::QualifiedIdent(QualifiedIdentParser::after_underscore())
+                self.qualified_ident_parser = QualifiedIdentParser::after_underscore();
+                State::QualifiedIdent
             }
             TokenKind::Reserved(Reserved::As) => {
                 // this is actually a term composed of a qualified identifier
                 // start a qualified ident parser after the 'as' reserved word
                 // (meaning the ident will be qualified)
-                TermState::QualifiedIdent(QualifiedIdentParser::after_as())
+                self.qualified_ident_parser = QualifiedIdentParser::after_as();
+                State::QualifiedIdent
             }
             TokenKind::ParenOpen => {
                 // this is an application where the function identifier is qualified or indexed
                 // start a qualified ident parser after the parenthesis open
-                TermState::ApplicationQualifiedIdent(QualifiedIdentParser::after_open_paren())
+                self.qualified_ident_parser = QualifiedIdentParser::after_open_paren();
+                State::ApplicationIdent
             }
             _ => {
                 return Err(ParserError::category_error(
@@ -281,6 +339,70 @@ impl<H: SmtHandler> TermParser<H> {
                 ));
             }
         };
-        Ok(Self { state, levels })
+        self.state = state;
+        Ok(())
+    }
+
+    fn parse_let_binding_open(
+        &mut self,
+        handler: &mut H,
+        token: Token,
+    ) -> Result<ControlFlow<SmtTerm<H>>, ParserError<H>> {
+        let span = token.span();
+        match token.kind() {
+            TokenKind::ParenOpen => {
+                // opening a new binding, we will parse the symbol next
+                self.state = State::LetBindingSymbol;
+            }
+            TokenKind::ParenClose => {
+                // bindings are closed, inner term will be next
+
+                // retrieve the bindings
+                // for performance, we do not switch bindings between level and state,
+                // so we need to unwrap
+                let Some(Level::LetBinding {
+                    bindings,
+                    binding_name,
+                }) = self.levels.pop()
+                else {
+                    panic!("last level should be a let binding when closing bindings")
+                };
+                assert!(
+                    binding_name.is_empty(),
+                    "additional binding name should be empty when closing bindings"
+                );
+
+                // there must be at least one binding
+                if bindings.is_empty() {
+                    return Err(ParserError::category_error(
+                        CategoryParserErrorKind::EmptyLetBindings,
+                        span,
+                    ));
+                }
+
+                // tell the handler we are starting a let
+                handle_err(handler.start_let(bindings), span)?;
+
+                // add a new level for the inner term in the let
+                self.start_level(Level::LetInner);
+            }
+            _ => {
+                // expected open or close parenthesis
+                return Err(ParserError::category_error(
+                    CategoryParserErrorKind::ExpectedToken(&[
+                        TokenType::ParenOpen,
+                        TokenType::ParenClose,
+                    ]),
+                    span,
+                ));
+            }
+        }
+        Ok(ControlFlow::Continue(()))
+    }
+
+    fn start_level(&mut self, level: Level<H>) {
+        // push the level and move to the start state
+        self.levels.push(level);
+        self.state = State::Start;
     }
 }
