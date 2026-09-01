@@ -60,12 +60,15 @@ impl<E> From<CategoryParserError> for ParserError<E> {
 pub struct Parser<'a, H: CommandHandler> {
     handler: &'a mut H,
     state: ParserState<H>,
+
+    command_parsers: CommandParsers<H>,
 }
 
 pub(crate) enum ParserState<H: CommandHandler> {
     AwaitingCommand,
     CommandOpen,
-    Command(CommandParser<H>),
+    Command(StandardCommandKind),
+    NonstandardCommand(H::NonstandardParser),
     Exit,
 }
 
@@ -74,6 +77,19 @@ impl<'a, H: CommandHandler> Parser<'a, H> {
         Self {
             handler,
             state: ParserState::AwaitingCommand,
+            command_parsers: CommandParsers::new(),
+        }
+    }
+
+    fn handle_command_progress(&mut self, flow: ControlFlow<CommandResult>) {
+        match flow {
+            ControlFlow::Continue(()) => {}
+            ControlFlow::Break(CommandResult::EndCommand) => {
+                self.state = ParserState::AwaitingCommand;
+            }
+            ControlFlow::Break(CommandResult::Exit) => {
+                self.state = ParserState::Exit;
+            }
         }
     }
 }
@@ -112,17 +128,16 @@ impl<'a, H: CommandHandler> TokenHandler for Parser<'a, H> {
                     )
                     .into());
                 };
-                self.state = ParserState::Command(self.start_command(command_name, span)?);
+                self.state = self.start_command(command_name, span)?;
             }
-            ParserState::Command(stage) => match stage.progress(self.handler, token)? {
-                ControlFlow::Continue(()) => {}
-                ControlFlow::Break(CommandResult::EndCommand) => {
-                    self.state = ParserState::AwaitingCommand;
-                }
-                ControlFlow::Break(CommandResult::Exit) => {
-                    self.state = ParserState::Exit;
-                }
-            },
+            ParserState::Command(kind) => {
+                let flow = self.command_parsers.progress(*kind, self.handler, token)?;
+                self.handle_command_progress(flow);
+            }
+            ParserState::NonstandardCommand(parser) => {
+                let flow = parser.progress(self.handler, token)?;
+                self.handle_command_progress(flow);
+            }
             ParserState::Exit => {
                 // no operation on fed tokens
             }

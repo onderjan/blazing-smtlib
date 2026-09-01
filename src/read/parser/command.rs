@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     CommandHandler, SmtSpan, SmtSymbolView,
     read::parser::{
-        ParserError,
+        ParserError, ParserState,
         category::CategoryParser,
         command::standard::{
             CommandAssert, CommandCheckSat, CommandDeclareConst, CommandDeclareFun,
@@ -50,50 +50,6 @@ pub trait StandardCommand<H: CommandHandler> {
     }
 }
 
-pub enum CommandParser<H: CommandHandler> {
-    SetLogic(StaticCommandParser<H, CommandSetLogic>),
-    DeclareConst(StaticCommandParser<H, CommandDeclareConst>),
-    DeclareFun(StaticCommandParser<H, CommandDeclareFun>),
-    DefineFun(StaticCommandParser<H, CommandDefineFun>),
-    Assert(StaticCommandParser<H, CommandAssert>),
-    CheckSat(StaticCommandParser<H, CommandCheckSat>),
-    Exit(StaticCommandParser<H, CommandExit>),
-    SetInfo(StaticCommandParser<H, CommandSetInfo>),
-    Echo(StaticCommandParser<H, CommandEcho>),
-    GetOption(StaticCommandParser<H, CommandGetOption>),
-    SetOption(StaticCommandParser<H, CommandSetOption>),
-    GetInfo(StaticCommandParser<H, CommandGetInfo>),
-    Reset(StaticCommandParser<H, CommandReset>),
-    ResetAssertions(StaticCommandParser<H, CommandResetAssertions>),
-    Nonstandard(H::NonstandardParser),
-}
-
-impl<H: CommandHandler> ParseCommand<H> for CommandParser<H> {
-    fn progress(
-        &mut self,
-        handler: &mut H,
-        token: Token,
-    ) -> Result<ControlFlow<CommandResult, ()>, ParserError<H::Error>> {
-        match self {
-            Self::SetLogic(p) => p.progress(handler, token),
-            Self::DeclareConst(p) => p.progress(handler, token),
-            Self::DeclareFun(p) => p.progress(handler, token),
-            Self::DefineFun(p) => p.progress(handler, token),
-            Self::Assert(p) => p.progress(handler, token),
-            Self::CheckSat(p) => p.progress(handler, token),
-            Self::Exit(p) => p.progress(handler, token),
-            Self::SetInfo(p) => p.progress(handler, token),
-            Self::Nonstandard(p) => p.progress(handler, token),
-            Self::Echo(p) => p.progress(handler, token),
-            Self::GetOption(p) => p.progress(handler, token),
-            Self::SetOption(p) => p.progress(handler, token),
-            Self::GetInfo(p) => p.progress(handler, token),
-            Self::Reset(p) => p.progress(handler, token),
-            Self::ResetAssertions(p) => p.progress(handler, token),
-        }
-    }
-}
-
 pub struct StaticCommandParser<H: CommandHandler, C: StandardCommand<H>> {
     parser: C::Parser,
     finished: bool,
@@ -105,6 +61,11 @@ impl<H: CommandHandler, C: StandardCommand<H>> StaticCommandParser<H, C> {
             parser: C::Parser::default(),
             finished: false,
         }
+    }
+
+    pub fn restart(&mut self) {
+        self.parser.restart();
+        self.finished = false;
     }
 }
 
@@ -154,28 +115,86 @@ impl<H: CommandHandler> super::Parser<'_, H> {
         &mut self,
         name: SmtSymbolView<'_>,
         span: SmtSpan,
-    ) -> Result<CommandParser<H>, ParserError<H::Error>> {
-        Ok(match name.as_slice() {
-            b"set-logic" => CommandParser::SetLogic(StaticCommandParser::new()),
-            b"declare-const" => CommandParser::DeclareConst(StaticCommandParser::new()),
-            b"declare-fun" => CommandParser::DeclareFun(StaticCommandParser::new()),
-            b"define-fun" => CommandParser::DefineFun(StaticCommandParser::new()),
-            b"assert" => CommandParser::Assert(StaticCommandParser::new()),
-            b"check-sat" => CommandParser::CheckSat(StaticCommandParser::new()),
-            b"exit" => CommandParser::Exit(StaticCommandParser::new()),
-            b"set-info" => CommandParser::SetInfo(StaticCommandParser::new()),
-            b"echo" => CommandParser::Echo(StaticCommandParser::new()),
-            b"get-option" => CommandParser::GetOption(StaticCommandParser::new()),
-            b"set-option" => CommandParser::SetOption(StaticCommandParser::new()),
-            b"get-info" => CommandParser::GetInfo(StaticCommandParser::new()),
-            b"reset" => CommandParser::Reset(StaticCommandParser::new()),
-            b"reset-assertions" => CommandParser::ResetAssertions(StaticCommandParser::new()),
-            _ => match self.handler.nonstandard_command(name) {
-                Ok(parser) => CommandParser::Nonstandard(parser),
-                Err(err) => return Err(ParserError::handler_error(err, span)),
+    ) -> Result<ParserState<H>, ParserError<H::Error>> {
+        match StandardCommandKind::from_name(name.as_slice()) {
+            Some(kind) => {
+                self.command_parsers.start(kind);
+                Ok(ParserState::Command(kind))
+            }
+            None => match self.handler.nonstandard_command(name) {
+                Ok(parser) => Ok(ParserState::NonstandardCommand(parser)),
+                Err(err) => Err(ParserError::handler_error(err, span)),
             },
-        })
+        }
     }
+}
+
+macro_rules! standard_commands {
+    ($($name:literal => $field:ident: $kind:ident($command:ty)),* $(,)?) => {
+        #[derive(Clone, Copy)]
+        pub(crate) enum StandardCommandKind {
+            $($kind,)*
+        }
+
+        impl StandardCommandKind {
+            pub fn from_name(name: &[u8]) -> Option<Self> {
+                match name {
+                    $($name => Some(Self::$kind),)*
+                    _ => None,
+                }
+            }
+        }
+
+        pub(crate) struct CommandParsers<H: CommandHandler> {
+            $($field: StaticCommandParser<H, $command>,)*
+        }
+
+        impl<H: CommandHandler> CommandParsers<H> {
+            pub fn new() -> Self {
+                Self {
+                    $($field: StaticCommandParser::new(),)*
+                }
+            }
+            pub fn start(&mut self, kind: StandardCommandKind) {
+                match kind {
+                    $(StandardCommandKind::$kind => self.$field.restart(),)*
+                }
+            }
+            pub fn progress(
+                &mut self,
+                kind: StandardCommandKind,
+                handler: &mut H,
+                token: Token,
+            ) -> Result<ControlFlow<CommandResult, ()>, ParserError<H::Error>> {
+                match kind {
+                    $(StandardCommandKind::$kind => self.$field.progress(handler, token),)*
+                }
+            }
+        }
+
+        impl<H: CommandHandler> Default for CommandParsers<H> {
+            fn default() -> Self {
+                Self::new()
+            }
+        }
+    };
+}
+
+standard_commands! {
+    b"set-logic" => set_logic: SetLogic(CommandSetLogic),
+    b"declare-const" => declare_const: DeclareConst(CommandDeclareConst),
+    b"declare-fun" => declare_fun: DeclareFun(CommandDeclareFun),
+    b"define-fun" => define_fun: DefineFun(CommandDefineFun),
+    b"assert" => assert: Assert(CommandAssert),
+    b"check-sat" => check_sat: CheckSat(CommandCheckSat),
+    b"exit" => exit: Exit(CommandExit),
+    b"set-info" => set_info: SetInfo(CommandSetInfo),
+    b"echo" => echo: Echo(CommandEcho),
+    b"get-option" => get_option: GetOption(CommandGetOption),
+    b"set-option" => set_option: SetOption(CommandSetOption),
+    b"get-info" => get_info: GetInfo(CommandGetInfo),
+    b"reset" => reset: Reset(CommandReset),
+    b"reset-assertions" => reset_assertions: ResetAssertions(CommandResetAssertions),
 }
 
 #[cfg(test)]
