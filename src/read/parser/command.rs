@@ -37,35 +37,41 @@ impl<H: CommandHandler> ParseCommand<H> for NoCommandParser {
     }
 }
 
+/// Determines how a single command should be handled by a command handler.
 pub trait StandardCommand<H: CommandHandler> {
     type Parser: CategoryParser<H>;
 
+    /// Handles the result of a command.
     fn handle(
         handler: &mut H,
         result: <Self::Parser as CategoryParser<H>>::Result,
     ) -> Result<(), H::Error>;
 
+    /// Determines whether this should lead to an exit.
+    ///
+    /// This is overridden by the SMT-LIB (exit) command.
     fn is_exit() -> bool {
         false
     }
 }
 
+/// A parser that processes a single command (starting after its name).
+///
+/// Preserves self-reset: if the inner parser is self-resetting,
+/// moves back into the default state before returning Break.
 pub struct StaticCommandParser<H: CommandHandler, C: StandardCommand<H>> {
     parser: C::Parser,
-    finished: bool,
 }
 
 impl<H: CommandHandler, C: StandardCommand<H>> StaticCommandParser<H, C> {
     pub fn new() -> Self {
         Self {
             parser: C::Parser::default(),
-            finished: false,
         }
     }
 
     pub fn restart(&mut self) {
         self.parser.restart();
-        self.finished = false;
     }
 }
 
@@ -81,10 +87,6 @@ impl<H: CommandHandler, C: StandardCommand<H>> ParseCommand<H> for StaticCommand
         handler: &mut H,
         token: Token,
     ) -> Result<ControlFlow<CommandResult, ()>, ParserError<H::Error>> {
-        if self.finished {
-            panic!("cannot progress command parser that already finished");
-        }
-
         let span = token.span();
         let ControlFlow::Break(result) = self.parser.progress(handler, token)? else {
             return Ok(ControlFlow::Continue(()));
@@ -92,7 +94,6 @@ impl<H: CommandHandler, C: StandardCommand<H>> ParseCommand<H> for StaticCommand
 
         match C::handle(handler, result) {
             Ok(()) => {
-                self.finished = true;
                 let command_result = if C::is_exit() {
                     CommandResult::Exit
                 } else {
