@@ -1132,6 +1132,80 @@ mod tests {
         );
     }
 
+    /// Lexes the whole input and describes every token by its type and payload,
+    /// with an empty payload for the token types that have none.
+    fn token_payloads(input: &[u8]) -> Vec<(TokenType, Vec<u8>)> {
+        lex_all(input)
+            .expect("test input must lex")
+            .iter()
+            .map(|token| {
+                let payload = match token.kind() {
+                    TokenKind::Symbol(s) => s.as_slice(),
+                    TokenKind::Keyword(k) => k.as_slice(),
+                    TokenKind::Numeral(n) => n.as_slice(),
+                    TokenKind::Decimal(d) => d.as_slice(),
+                    TokenKind::Hexadecimal(h) => h.as_slice(),
+                    TokenKind::Binary(b) => b.as_slice(),
+                    TokenKind::String(s) => s.as_slice(),
+                    _ => b"".as_slice(),
+                };
+                (token.kind().ty(), payload.to_vec())
+            })
+            .collect()
+    }
+
+    #[test]
+    fn token_payloads_are_not_contaminated_by_previous_tokens() {
+        // every payload-carrying kind in a row; each token is shorter than
+        // the one before it, so any missed buffer clear shows up as leftover
+        // bytes, and the reserved word fills the buffer without emitting it
+        assert_eq!(
+            token_payloads(b"abcd let e :k1 \"s\" |q| 12 3.4 #xA #b0"),
+            vec![
+                (TokenType::Symbol, b"abcd".to_vec()),
+                (TokenType::Reserved(Reserved::Let), vec![]),
+                (TokenType::Symbol, b"e".to_vec()),
+                (TokenType::Keyword, b"k1".to_vec()),
+                (TokenType::String, b"s".to_vec()),
+                (TokenType::Symbol, b"q".to_vec()),
+                (TokenType::Numeral, b"12".to_vec()),
+                (TokenType::Decimal, b"3.4".to_vec()),
+                (TokenType::Hexadecimal, b"A".to_vec()),
+                (TokenType::Binary, b"0".to_vec()),
+                (TokenType::EndOfFile, vec![]),
+            ]
+        );
+    }
+
+    #[test]
+    fn empty_payloads_follow_nonempty_ones() {
+        // the empty quoted symbol and string literal must not inherit
+        // the content of the tokens lexed before them
+        assert_eq!(
+            token_payloads(b"|abc| || \"xy\" \"\" :a"),
+            vec![
+                (TokenType::Symbol, b"abc".to_vec()),
+                (TokenType::Symbol, vec![]),
+                (TokenType::String, b"xy".to_vec()),
+                (TokenType::String, vec![]),
+                (TokenType::Keyword, b"a".to_vec()),
+                (TokenType::EndOfFile, vec![]),
+            ]
+        );
+    }
+
+    #[test]
+    fn string_double_quote_escape_is_a_single_quote_in_the_payload() {
+        assert_eq!(
+            token_payloads(b"\"a\"\"b\" \"\"\"\""),
+            vec![
+                (TokenType::String, b"a\"b".to_vec()),
+                (TokenType::String, b"\"".to_vec()),
+                (TokenType::EndOfFile, vec![]),
+            ]
+        );
+    }
+
     // --- Lexer misuse panics ---
 
     #[test]
