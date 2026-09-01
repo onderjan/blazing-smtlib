@@ -338,9 +338,9 @@ mod tests {
         fn dec(whole_part: &[u8], fractional_part: &[u8]) -> SmtDecimal {
             SmtDecimal {
                 whole_part: SmtNumeral::new(whole_part.to_vec())
-                    .expect("Whole part should succeed"),
+                    .expect("whole part should succeed"),
                 fractional_part: SmtDigits::new(fractional_part.to_vec())
-                    .expect("Fractional part should succeed"),
+                    .expect("fractional part should succeed"),
             }
         }
 

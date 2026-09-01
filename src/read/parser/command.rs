@@ -128,7 +128,7 @@ impl<H: CommandHandler, C: StandardCommand<H>> ParseCommand<H> for StaticCommand
                     Ok(ControlFlow::Break(command_result))
                 }
             },
-            None => panic!("Parser already consumed"),
+            None => panic!("cannot progress command parser that already finished"),
         }
     }
 }

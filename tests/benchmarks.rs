@@ -71,12 +71,12 @@ fn try_parse_file(path: &Path) -> Result<(), String> {
 #[ignore]
 fn parse_benchmarks() {
     let benchmarks = std::env::var("SMT_BENCHMARKS_DIR")
-        .expect("Set SMT_BENCHMARKS_DIR to point at a directory of .smt2 files");
+        .expect("set SMT_BENCHMARKS_DIR to point at a directory of .smt2 files");
     let benchmarks = PathBuf::from(benchmarks);
 
     let files = collect_smt2_files(&benchmarks);
     let num_files = files.len();
-    assert!(num_files > 0, "Expected .smt2 files under {:?}", benchmarks);
+    assert!(num_files > 0, "expected .smt2 files under {:?}", benchmarks);
     eprintln!("Found {} .smt2 files", num_files);
 
     let processed = AtomicUsize::new(0);
