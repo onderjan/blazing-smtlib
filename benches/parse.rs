@@ -66,12 +66,7 @@ impl TokenHandler for DiscardTokens {
 fn lex_from_memory(data: &[u8], path: &Path) -> usize {
     let mut handler = DiscardTokens { tokens: 0 };
     let mut lexer = Lexer::new(&mut handler);
-    for &c in data {
-        if let Err(err) = lexer.lex_next(c) {
-            panic!("benchmark file {} must lex, got {:?}", path.display(), err);
-        }
-    }
-    if let Err(err) = lexer.lex_eof() {
+    if let Err(err) = lexer.lex_all(data) {
         panic!("benchmark file {} must lex, got {:?}", path.display(), err);
     }
     handler.tokens
