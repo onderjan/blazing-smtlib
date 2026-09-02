@@ -41,6 +41,13 @@ impl SmtHandler for OpaqueHandler {
     ) -> Result<String, Infallible> {
         Ok(String::new())
     }
+    fn annotate_term(
+        &mut self,
+        term: String,
+        _attributes: Vec<String>,
+    ) -> Result<String, Infallible> {
+        Ok(term)
+    }
 }
 
 fn assert_debug_and_clone<T: Debug + Clone>() {}

@@ -106,6 +106,10 @@ impl SmtHandler for Resolving {
     ) -> Result<(), String> {
         Ok(())
     }
+
+    fn annotate_term(&mut self, term: String, _attributes: Vec<()>) -> Result<String, String> {
+        Ok(term)
+    }
 }
 
 impl CommandHandler for Resolving {
@@ -435,13 +439,10 @@ fn trivial_command_errors_point_at_offending_token() {
         ),
         "{err:?}"
     );
-    // set-option requires an attribute, which starts with a keyword
+    // set-option requires an attribute
     let err = assert_parser_error(b"(set-option)", 11, 12);
     assert!(
-        matches!(
-            err,
-            CategoryParserErrorKind::ExpectedToken(&[TokenType::Keyword])
-        ),
+        matches!(err, CategoryParserErrorKind::ExpectedAttribute),
         "{err:?}"
     );
     // reset and reset-assertions take no arguments

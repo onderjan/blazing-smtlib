@@ -105,6 +105,9 @@ impl SmtHandler for Counting {
     ) -> Result<(), Infallible> {
         Ok(())
     }
+    fn annotate_term(&mut self, _term: (), _attributes: Vec<()>) -> Result<(), Infallible> {
+        Ok(())
+    }
 }
 
 #[test]

@@ -29,7 +29,8 @@ use smt_parser_rs::{
         lexer::{LexError, Lexer, TokenHandler},
         parser::{
             CategoryParser, CategoryParserErrorKind, CloseParenParser, ClosedAttributeParser,
-            ClosedMultipleParser, ClosedParser, IdentParser, KeywordParser, OpenParenParser,
+            ClosedMultipleAttributeParser, ClosedMultipleParser, ClosedParser, IdentParser,
+            KeywordParser, OpenParenParser,
             PairParser, ParenMultipleParser, ParenParser, ParserError, ParserErrorKind,
             QualifiedIdentParser, SExprParser, SortParser, StringParser, SymbolParser, TermParser,
         },
@@ -160,6 +161,14 @@ impl SmtHandler for Printing {
             }
             Some(SmtAttributeValue::SExprs(exprs)) => format!("{name} {}", render_list(&exprs)),
         })
+    }
+
+    fn annotate_term(
+        &mut self,
+        term: String,
+        attributes: Vec<String>,
+    ) -> Result<String, Infallible> {
+        Ok(format!("(! {term} {})", attributes.join(" ")))
     }
 }
 

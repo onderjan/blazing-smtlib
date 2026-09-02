@@ -122,6 +122,9 @@ impl SmtHandler for Recording {
     ) -> Result<(), Self::Error> {
         Ok(())
     }
+    fn annotate_term(&mut self, _term: (), _attributes: Vec<()>) -> Result<(), Self::Error> {
+        Ok(())
+    }
 }
 
 impl CommandHandler for Recording {

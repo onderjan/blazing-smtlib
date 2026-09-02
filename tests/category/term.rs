@@ -229,6 +229,75 @@ fn errors() {
     );
 }
 
+#[test]
+fn annotations() {
+    assert_eq!(
+        parse_all::<TermParser<Printing>>(b"(! x :named foo)"),
+        "(! x :named foo)"
+    );
+    assert_eq!(
+        parse_all::<TermParser<Printing>>(b"(! (f x 1) :a)"),
+        "(! (f x 1) :a)"
+    );
+    // multiple attributes, name-only and valued
+    assert_eq!(
+        parse_all::<TermParser<Printing>>(b"(! x :a :b 2 :c)"),
+        "(! x :a :b 2 :c)"
+    );
+    // keywords inside an s-expression value do not start a new attribute
+    assert_eq!(
+        parse_all::<TermParser<Printing>>(b"(! x :a (p :k q) :b)"),
+        "(! x :a (p :k q) :b)"
+    );
+}
+
+#[test]
+fn annotations_nest_and_compose() {
+    assert_eq!(
+        parse_all::<TermParser<Printing>>(b"(! (! x :a) :b)"),
+        "(! (! x :a) :b)"
+    );
+    assert_eq!(
+        parse_all::<TermParser<Printing>>(b"(f (! x :a) y)"),
+        "(f (! x :a) y)"
+    );
+    assert_eq!(
+        parse_all::<TermParser<Printing>>(b"(let ((a (! 1 :k))) (! a :l))"),
+        "(let ((a (! 1 :k))) (! a :l))"
+    );
+}
+
+#[test]
+fn annotation_consumes_exactly_one_term() {
+    let (term, left) = run::<TermParser<Printing>>(b"(! x :a) y").expect("valid");
+    assert_eq!(term, "(! x :a)");
+    assert_eq!(left, 1);
+}
+
+#[test]
+fn annotated_term_parser_is_reusable() {
+    let (first, second) = parse_two::<TermParser<Printing>>(b"(! x :a) (! y :b 2)");
+    assert_eq!(first, "(! x :a)");
+    assert_eq!(second, "(! y :b 2)");
+}
+
+#[test]
+fn annotation_errors() {
+    // an annotation must contain at least one attribute
+    let err = assert_error::<TermParser<Printing>>(b"(! x)", 4, 5);
+    assert!(
+        matches!(err, CategoryParserErrorKind::EmptyAnnotation),
+        "{err:?}"
+    );
+
+    // an annotation must contain a term
+    let err = assert_error::<TermParser<Printing>>(b"(!)", 2, 3);
+    assert!(
+        matches!(err, CategoryParserErrorKind::ExpectedTerm),
+        "{err:?}"
+    );
+}
+
 /// Handler that only counts terms, so deep nesting does not build huge strings.
 #[derive(Default)]
 struct Counting {
@@ -265,6 +334,9 @@ impl SmtHandler for Counting {
     ) -> Result<(), Infallible> {
         Ok(())
     }
+    fn annotate_term(&mut self, _term: (), _attributes: Vec<()>) -> Result<(), Infallible> {
+        Ok(())
+    }
 }
 
 #[test]
@@ -284,4 +356,25 @@ fn deep_nesting_does_not_overflow_the_stack() {
     assert_eq!(left, 0);
     // every application plus the innermost x
     assert_eq!(handler.terms, DEPTH + 1);
+}
+
+#[test]
+fn deep_annotation_nesting_does_not_overflow_the_stack() {
+    // (! (! ... x ... :a) :a) with a depth far beyond what recursion would survive
+    const DEPTH: usize = 200_000;
+    let mut input = Vec::with_capacity(DEPTH * 7 + 1);
+    for _ in 0..DEPTH {
+        input.extend_from_slice(b"(! ");
+    }
+    input.push(b'x');
+    for _ in 0..DEPTH {
+        input.extend_from_slice(b" :a)");
+    }
+
+    let mut handler = Counting::default();
+    let ((), left) = run_with::<Counting, TermParser<Counting>>(&mut handler, &input)
+        .unwrap_or_else(|(kind, span)| panic!("{kind:?} at {span:?}"));
+    assert_eq!(left, 0);
+    // annotations produce no terms of their own, only the innermost x does
+    assert_eq!(handler.terms, 1);
 }
