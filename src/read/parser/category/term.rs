@@ -5,8 +5,8 @@ use crate::{
     read::parser::{
         CloseParenParser, OpenParenParser, ParserError, SymbolParser,
         category::{
-            CategoryParser, CategoryParserErrorKind, parse_special_constant,
-            qualified_ident::QualifiedIdentParser,
+            CategoryParser, CategoryParserErrorKind, attribute::ClosedMultipleAttributeParser,
+            parse_special_constant, qualified_ident::QualifiedIdentParser,
         },
         handle_err,
     },
@@ -22,10 +22,13 @@ pub struct TermParser<H: SmtHandler> {
     state: State,
     /// Levels of terms waiting for inner terms.
     levels: Vec<Level<H>>,
-    /// A term that is already processed, but waiting for a closing parenthesis.
-    pending_term: Option<H::Term>,
+    /// A pending, already processed, term.
+    ///
+    /// This takes priority over the state and levels.
+    pending: Option<Pending<H>>,
 
     qualified_ident_parser: QualifiedIdentParser<H>,
+    attributes_parser: ClosedMultipleAttributeParser<H>,
 }
 
 /// State of the term parser.
@@ -84,6 +87,24 @@ enum Level<H: SmtHandler> {
     ///
     /// After consuming the term, we must also consume a closing parenthesis.
     LetInner,
+
+    /// An annotation waiting for the inner term.
+    ///
+    /// After consuming the term, we consume attributes (at least one),
+    /// then a closing parenthesis.
+    Annotation,
+}
+
+/// A pending term has been processed.
+///
+/// This has priority over the state and levels.
+struct Pending<H: SmtHandler> {
+    term: H::Term,
+    /// Determines if the term we are creating is an annotation.
+    ///
+    /// True: we are parsing attributes after the inner term.
+    /// False: we are just waiting for a closing parenthesis.
+    is_annotation: bool,
 }
 
 impl<H: SmtHandler> TermParser<H> {
@@ -91,9 +112,10 @@ impl<H: SmtHandler> TermParser<H> {
         TermParser {
             state: State::Start,
             levels: Vec::new(),
-            pending_term: None,
+            pending: None,
 
             qualified_ident_parser: QualifiedIdentParser::new(),
+            attributes_parser: ClosedMultipleAttributeParser::new(),
         }
     }
 }
@@ -110,9 +132,10 @@ impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
     fn restart(&mut self) {
         self.state = State::Start;
         self.levels.clear();
-        self.pending_term = None;
+        self.pending = None;
 
         self.qualified_ident_parser.restart();
+        self.attributes_parser.restart();
     }
 
     fn progress(
@@ -121,11 +144,34 @@ impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
         token: Token,
     ) -> Result<ControlFlow<H::Term>, ParserError<H::Error>> {
         let span = token.span();
-        let term = match self.pending_term.take() {
-            Some(term) => {
-                // we have a pending term and are waiting for a closing parenthesis
-                CloseParenParser::expect(token)?;
-                term
+        let term = match self.pending.take() {
+            Some(pending) => {
+                if pending.is_annotation {
+                    // we are parsing attributes
+                    match self.attributes_parser.progress(handler, token)? {
+                        ControlFlow::Continue(()) => {
+                            // put the pending term back
+                            self.pending = Some(pending);
+                            return Ok(ControlFlow::Continue(()));
+                        }
+                        ControlFlow::Break(attributes) => {
+                            // check that there is at least one attribute
+                            if attributes.is_empty() {
+                                return Err(ParserError::category_error(
+                                    CategoryParserErrorKind::EmptyAnnotation,
+                                    span,
+                                ));
+                            }
+                            // produce the annotated term
+                            handle_err(handler.annotate_term(pending.term, attributes), span)?
+                        }
+                    }
+                } else {
+                    // we are waiting for a closing parenthesis
+                    CloseParenParser::expect(token)?;
+                    // produce the term
+                    pending.term
+                }
             }
             None => {
                 // no pending term, try to get one
@@ -140,37 +186,48 @@ impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
         // we have parsed a term, set state to start
         self.state = State::Start;
 
-        // either update the last level with the term or return it if there is none
+        // return the term if there is no last level
         // PERFORMANCE: take the last level as mutable instead of wholly consuming it
-        match self.levels.last_mut() {
-            Some(Level::Application { args, .. }) => {
+        let Some(last_level) = self.levels.last_mut() else {
+            // root level, return the term
+            return Ok(ControlFlow::Break(term));
+        };
+
+        // update the last level with the term
+        match last_level {
+            Level::Application { args, .. } => {
                 // add term as the next argument
                 args.push(term);
-                Ok(ControlFlow::Continue(()))
             }
-            Some(Level::LetBinding {
+            Level::LetBinding {
                 bindings,
                 binding_name,
-            }) => {
+            } => {
                 // we need to swap to a new symbol here
                 let mut name = SmtSymbol::new_empty();
                 std::mem::swap(binding_name, &mut name);
                 bindings.push((name, term));
                 self.state = State::LetBindingClose;
-                Ok(ControlFlow::Continue(()))
             }
-            Some(Level::LetInner) => {
+            Level::LetInner => {
                 // end the let and wait for the closing parenthesis
                 self.levels.pop();
                 let term = handle_err(handler.end_let(term), span)?;
-                self.pending_term = Some(term);
-                Ok(ControlFlow::Continue(()))
+                self.pending = Some(Pending {
+                    term,
+                    is_annotation: false,
+                });
             }
-            None => {
-                // root level, return the term
-                Ok(ControlFlow::Break(term))
+            Level::Annotation => {
+                // put the term into pending and start parsing attributes
+                self.levels.pop();
+                self.pending = Some(Pending {
+                    term,
+                    is_annotation: true,
+                });
             }
         }
+        Ok(ControlFlow::Continue(()))
     }
 }
 
@@ -319,7 +376,12 @@ impl<H: SmtHandler> TermParser<H> {
             TokenKind::Reserved(Reserved::Forall) => todo!("Forall"),
             TokenKind::Reserved(Reserved::Exists) => todo!("Exists"),
             TokenKind::Reserved(Reserved::Match) => todo!("Match"),
-            TokenKind::Reserved(Reserved::ExclamationMark) => todo!("Annotation"),
+            TokenKind::Reserved(Reserved::ExclamationMark) => {
+                // this is an annotation
+                // we are parsing its annotated term next, add a level for it
+                self.start_level(Level::Annotation);
+                return Ok(());
+            }
             TokenKind::Reserved(Reserved::Underscore) => {
                 // this is actually a term composed of an indexed identifier
                 // move the qualified ident parser after the underscore

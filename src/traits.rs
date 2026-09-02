@@ -16,15 +16,21 @@ pub trait SmtHandler {
 
     fn handle_sort(&mut self, sort: SmtSort<Self>) -> Result<Self::Sort, Self::Error>;
     fn handle_term(&mut self, term: SmtTerm<Self>) -> Result<Self::Term, Self::Error>;
-    fn start_let(&mut self, bindings: Vec<(SmtSymbol, Self::Term)>) -> Result<(), Self::Error>;
-    fn end_let(&mut self, term: Self::Term) -> Result<Self::Term, Self::Error>;
-
     fn handle_s_expr(&mut self, expr: SmtSExpr<Self>) -> Result<Self::SExpr, Self::Error>;
     fn handle_attribute(
         &mut self,
         name: SmtKeyword,
         value: Option<SmtAttributeValue<Self>>,
     ) -> Result<Self::Attribute, Self::Error>;
+
+    fn annotate_term(
+        &mut self,
+        term: Self::Term,
+        attributes: Vec<Self::Attribute>,
+    ) -> Result<Self::Term, Self::Error>;
+
+    fn start_let(&mut self, bindings: Vec<(SmtSymbol, Self::Term)>) -> Result<(), Self::Error>;
+    fn end_let(&mut self, term: Self::Term) -> Result<Self::Term, Self::Error>;
 }
 
 pub trait CommandHandler: SmtHandler {
@@ -113,6 +119,14 @@ impl SmtHandler for CheckStandardSyntax {
         _name: SmtKeyword,
         _value: Option<SmtAttributeValue<Self>>,
     ) -> Result<Self::Attribute, Self::Error> {
+        Ok(())
+    }
+
+    fn annotate_term(
+        &mut self,
+        _term: Self::Term,
+        _attributes: Vec<Self::Attribute>,
+    ) -> Result<Self::Term, Self::Error> {
         Ok(())
     }
 }

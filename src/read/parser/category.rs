@@ -16,7 +16,7 @@ mod term;
 mod token;
 
 pub use {
-    attribute::ClosedAttributeParser,
+    attribute::{ClosedAttributeParser, ClosedMultipleAttributeParser},
     combinator::{
         ClosedMultipleParser, ClosedParser, OpenedParser, PairParser, ParenMultipleParser,
         ParenParser,
@@ -54,6 +54,7 @@ pub enum CategoryParserErrorKind {
     EmptySortApplication,
     EmptyTermApplication,
     EmptyLetBindings,
+    EmptyAnnotation,
     ExpectedIndexOrCloseParen,
     ExpectedOperator,
     ExpectedSExpr,
