@@ -1,10 +1,9 @@
-use std::ops::ControlFlow;
+use std::{marker::PhantomData, ops::ControlFlow};
 
 use crate::{
-    SmtApplication, SmtHandler, SmtQualifiedIdent, SmtQuantifierKind, SmtSymbol, SmtTerm,
+    SmtApplication, SmtHandler, SmtQualifiedIdent, SmtQuantifierKind, SmtSpan, SmtSymbol, SmtTerm,
     read::parser::{
-        CloseParenParser, OpenParenParser, ParenMultipleParser, ParserError, SortedVarParser,
-        SymbolParser,
+        CloseParenParser, OpenParenParser, ParserError, SortedVarParser, SymbolParser,
         category::{
             CategoryParser, CategoryParserErrorKind, attribute::ClosedMultipleAttributeParser,
             parse_special_constant, qualified_ident::QualifiedIdentParser,
@@ -30,7 +29,10 @@ pub struct TermParser<H: SmtHandler> {
 
     qualified_ident_parser: QualifiedIdentParser<H>,
     attributes_parser: ClosedMultipleAttributeParser<H>,
-    sorted_vars_parser: ParenMultipleParser<H, SortedVarParser<H>>,
+
+    exists_parser: SortedBindingsParser<H, ExistsStart>,
+    forall_parser: SortedBindingsParser<H, ForallStart>,
+    lambda_parser: SortedBindingsParser<H, LambdaStart>,
 }
 
 #[derive(Clone, Copy)]
@@ -139,7 +141,10 @@ impl<H: SmtHandler> TermParser<H> {
 
             qualified_ident_parser: QualifiedIdentParser::new(),
             attributes_parser: ClosedMultipleAttributeParser::new(),
-            sorted_vars_parser: ParenMultipleParser::new(),
+
+            exists_parser: SortedBindingsParser::default(),
+            forall_parser: SortedBindingsParser::default(),
+            lambda_parser: SortedBindingsParser::default(),
         }
     }
 }
@@ -160,7 +165,10 @@ impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
 
         self.qualified_ident_parser.restart();
         self.attributes_parser.restart();
-        self.sorted_vars_parser.restart();
+
+        self.exists_parser.restart();
+        self.forall_parser.restart();
+        self.lambda_parser.restart();
     }
 
     fn progress(
@@ -331,12 +339,19 @@ impl<H: SmtHandler> TermParser<H> {
             }
             State::SortedBinderVars(binder_kind) => {
                 let span = token.span();
-                match self.sorted_vars_parser.progress(handler, token)? {
+
+                let flow = match binder_kind {
+                    SortedBinderKind::Exists => self.exists_parser.progress(handler, token),
+                    SortedBinderKind::Forall => self.forall_parser.progress(handler, token),
+                    SortedBinderKind::Lambda => self.lambda_parser.progress(handler, token),
+                }?;
+
+                match flow {
                     ControlFlow::Continue(()) => {}
-                    ControlFlow::Break(sorted_vars) => {
+                    ControlFlow::Break(num_opened) => {
                         // there must be at least one sorted variable in the binder
-                        if sorted_vars.is_empty() {
-                            let err_kind = match binder_kind {
+                        if num_opened == 0 {
+                            let err_kind: CategoryParserErrorKind = match binder_kind {
                                 SortedBinderKind::Exists | SortedBinderKind::Forall => {
                                     CategoryParserErrorKind::EmptyQuantifierBindings
                                 }
@@ -347,32 +362,16 @@ impl<H: SmtHandler> TermParser<H> {
                             return Err(ParserError::category_error(err_kind, span));
                         }
 
-                        // TODO: rewrite by streaming binders
-                        // desugar the sorted binder into multiple nested binders
-                        let num_desugared_binders = sorted_vars.len();
-                        for (name, sort) in sorted_vars {
-                            let handled = match binder_kind {
-                                SortedBinderKind::Exists => {
-                                    handler.start_quantifier(SmtQuantifierKind::Exists, name, sort)
-                                }
-                                SortedBinderKind::Forall => {
-                                    handler.start_quantifier(SmtQuantifierKind::Forall, name, sort)
-                                }
-                                SortedBinderKind::Lambda => handler.start_lambda(name, sort),
-                            };
-                            handle_err(handled, span)?;
-                        }
-
                         let end_kind = match binder_kind {
                             SortedBinderKind::Exists => BinderEndKind::Quantifier,
                             SortedBinderKind::Forall => BinderEndKind::Quantifier,
                             SortedBinderKind::Lambda => BinderEndKind::Lambda,
                         };
 
-                        // push a level to handle the inner term and then properly close the binder
+                        // push a level to handle the inner term and then properly close all opened binders
                         self.start_level(Level::BinderInner {
                             end_kind,
-                            num_close: num_desugared_binders as u64,
+                            num_close: num_opened,
                         });
                     }
                 }
@@ -576,5 +575,133 @@ impl<H: SmtHandler> TermParser<H> {
         // push the level and move to the start state
         self.levels.push(level);
         self.state = State::Start;
+    }
+}
+
+enum SortedBindingsParserState {
+    Start,
+    AwaitingBinder,
+    ParsingBinder,
+}
+
+struct SortedBindingsParser<H: SmtHandler, S: SortedBindingStart<H>> {
+    state: SortedBindingsParserState,
+    num_opened: u64,
+
+    sorted_var_parser: SortedVarParser<H>,
+    binding_kind: PhantomData<S>,
+}
+
+impl<H: SmtHandler, S: SortedBindingStart<H>> Default for SortedBindingsParser<H, S> {
+    fn default() -> Self {
+        Self {
+            state: SortedBindingsParserState::Start,
+            num_opened: 0,
+
+            sorted_var_parser: Default::default(),
+            binding_kind: PhantomData,
+        }
+    }
+}
+
+impl<H: SmtHandler, S: SortedBindingStart<H>> CategoryParser<H> for SortedBindingsParser<H, S> {
+    type Result = u64;
+
+    fn progress(
+        &mut self,
+        handler: &mut H,
+        token: Token,
+    ) -> Result<ControlFlow<Self::Result>, ParserError<<H as SmtHandler>::Error>> {
+        let token = match self.state {
+            SortedBindingsParserState::Start => {
+                // expect an opening parenthesis
+                OpenParenParser::expect(token)?;
+                self.state = SortedBindingsParserState::AwaitingBinder;
+                return Ok(ControlFlow::Continue(()));
+            }
+            SortedBindingsParserState::AwaitingBinder => {
+                // either a new sorted variable
+                // or a closing parenthesis ending binders
+                if matches!(token.kind(), TokenKind::ParenClose) {
+                    let num_opened = self.num_opened;
+                    // reset before break
+                    self.state = SortedBindingsParserState::Start;
+                    self.num_opened = 0;
+                    return Ok(ControlFlow::Break(num_opened));
+                }
+                // parse the binder
+                self.state = SortedBindingsParserState::ParsingBinder;
+                token
+            }
+            SortedBindingsParserState::ParsingBinder => token,
+        };
+
+        // parse the sorted variable
+        let span = token.span();
+        match self.sorted_var_parser.progress(handler, token)? {
+            ControlFlow::Continue(()) => {}
+            ControlFlow::Break((name, sort)) => {
+                // start the binder and increment opened
+                S::start(handler, name, sort, span)?;
+                self.num_opened += 1;
+                // go back to awaiting a binder
+                self.state = SortedBindingsParserState::AwaitingBinder;
+            }
+        }
+        Ok(ControlFlow::Continue(()))
+    }
+}
+
+trait SortedBindingStart<H: SmtHandler> {
+    fn start(
+        handler: &mut H,
+        name: SmtSymbol,
+        sort: H::Sort,
+        span: SmtSpan,
+    ) -> Result<(), ParserError<H::Error>>;
+}
+
+struct ExistsStart;
+
+impl<H: SmtHandler> SortedBindingStart<H> for ExistsStart {
+    fn start(
+        handler: &mut H,
+        name: SmtSymbol,
+        sort: H::Sort,
+        span: SmtSpan,
+    ) -> Result<(), ParserError<H::Error>> {
+        handle_err(
+            handler.start_quantifier(SmtQuantifierKind::Exists, name, sort),
+            span,
+        )
+    }
+}
+
+struct ForallStart;
+
+impl<H: SmtHandler> SortedBindingStart<H> for ForallStart {
+    fn start(
+        handler: &mut H,
+        name: SmtSymbol,
+        sort: H::Sort,
+        span: SmtSpan,
+    ) -> Result<(), ParserError<H::Error>> {
+        handle_err(
+            handler.start_quantifier(SmtQuantifierKind::Forall, name, sort),
+            span,
+        )
+    }
+}
+
+struct LambdaStart;
+
+impl<H: SmtHandler> SortedBindingStart<H> for LambdaStart {
+    fn start(
+        handler: &mut H,
+        name: SmtSymbol,
+        sort: H::Sort,
+        span: SmtSpan,
+    ) -> Result<(), ParserError<H::Error>> {
+        handle_err(handler.start_lambda(name, sort), span)
     }
 }

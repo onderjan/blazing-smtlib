@@ -379,6 +379,13 @@ fn binder_term_parser_is_reusable() {
         parse_two::<TermParser<Printing>>(b"(forall ((x Int)) x) (lambda ((y Bool)) y)");
     assert_eq!(first, "(forall ((x Int)) x)");
     assert_eq!(second, "(lambda ((y Bool)) y)");
+
+    // reuse with the same binder kind exercises the self-reset contract
+    // of the variable-list machinery
+    let (first, second) =
+        parse_two::<TermParser<Printing>>(b"(forall ((x Int)) x) (forall ((y Bool) (z Real)) y)");
+    assert_eq!(first, "(forall ((x Int)) x)");
+    assert_eq!(second, "(forall ((y Bool)) (forall ((z Real)) y))");
 }
 
 #[test]
