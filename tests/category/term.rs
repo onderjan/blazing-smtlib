@@ -282,6 +282,152 @@ fn annotated_term_parser_is_reusable() {
 }
 
 #[test]
+fn quantifiers() {
+    assert_eq!(
+        parse_all::<TermParser<Printing>>(b"(forall ((x Int)) x)"),
+        "(forall ((x Int)) x)"
+    );
+    assert_eq!(
+        parse_all::<TermParser<Printing>>(b"(exists ((x Int)) (f x 1))"),
+        "(exists ((x Int)) (f x 1))"
+    );
+    // multiple variables desugar into nested single-variable binders
+    assert_eq!(
+        parse_all::<TermParser<Printing>>(b"(forall ((x Int) (y Bool)) (f x y))"),
+        "(forall ((x Int)) (forall ((y Bool)) (f x y)))"
+    );
+    // complex sorts flow through the sort parser
+    assert_eq!(
+        parse_all::<TermParser<Printing>>(b"(forall ((a (Array Int Int))) (select a 0))"),
+        "(forall ((a (Array Int Int))) (select a 0))"
+    );
+}
+
+#[test]
+fn multi_variable_binder_is_equivalent_to_nested_binders() {
+    // the handler cannot distinguish the sugared multi-variable form
+    // from the explicitly nested form; this is the contract a streaming
+    // rewrite of the variable handling must preserve
+    let sugared = parse_all::<TermParser<Printing>>(b"(exists ((x Int) (y Bool) (z Real)) x)");
+    let nested = parse_all::<TermParser<Printing>>(
+        b"(exists ((x Int)) (exists ((y Bool)) (exists ((z Real)) x)))",
+    );
+    assert_eq!(sugared, nested);
+    assert_eq!(sugared, "(exists ((x Int)) (exists ((y Bool)) (exists ((z Real)) x)))");
+}
+
+#[test]
+fn lambdas() {
+    assert_eq!(
+        parse_all::<TermParser<Printing>>(b"(lambda ((x Int)) x)"),
+        "(lambda ((x Int)) x)"
+    );
+    // multiple variables desugar by currying
+    assert_eq!(
+        parse_all::<TermParser<Printing>>(b"(lambda ((x Int) (y Int)) (+ x y))"),
+        "(lambda ((x Int)) (lambda ((y Int)) (+ x y)))"
+    );
+}
+
+#[test]
+fn binders_nest_and_compose() {
+    // quantifiers of both kinds and lambda nested within each other
+    assert_eq!(
+        parse_all::<TermParser<Printing>>(b"(forall ((x Int)) (exists ((y Int)) (f x y)))"),
+        "(forall ((x Int)) (exists ((y Int)) (f x y)))"
+    );
+    assert_eq!(
+        parse_all::<TermParser<Printing>>(b"(forall ((x Int)) (lambda ((y Int)) y))"),
+        "(forall ((x Int)) (lambda ((y Int)) y))"
+    );
+    // binder as an application argument
+    assert_eq!(
+        parse_all::<TermParser<Printing>>(b"(f (forall ((x Int)) x) y)"),
+        "(f (forall ((x Int)) x) y)"
+    );
+    // let inside a binder and binder inside a let
+    assert_eq!(
+        parse_all::<TermParser<Printing>>(b"(forall ((x Int)) (let ((a x)) a))"),
+        "(forall ((x Int)) (let ((a x)) a))"
+    );
+    assert_eq!(
+        parse_all::<TermParser<Printing>>(b"(let ((a 1)) (exists ((x Int)) (f a x)))"),
+        "(let ((a 1)) (exists ((x Int)) (f a x)))"
+    );
+    // annotated binder body
+    assert_eq!(
+        parse_all::<TermParser<Printing>>(b"(forall ((x Int)) (! x :qid q))"),
+        "(forall ((x Int)) (! x :qid q))"
+    );
+    // annotated binder term
+    assert_eq!(
+        parse_all::<TermParser<Printing>>(b"(! (forall ((x Int)) x) :named n)"),
+        "(! (forall ((x Int)) x) :named n)"
+    );
+}
+
+#[test]
+fn binder_consumes_exactly_one_term() {
+    let (term, left) = run::<TermParser<Printing>>(b"(forall ((x Int)) x) y").expect("valid");
+    assert_eq!(term, "(forall ((x Int)) x)");
+    assert_eq!(left, 1);
+}
+
+#[test]
+fn binder_term_parser_is_reusable() {
+    let (first, second) =
+        parse_two::<TermParser<Printing>>(b"(forall ((x Int)) x) (lambda ((y Bool)) y)");
+    assert_eq!(first, "(forall ((x Int)) x)");
+    assert_eq!(second, "(lambda ((y Bool)) y)");
+}
+
+#[test]
+fn binder_errors() {
+    // a quantifier must bind at least one variable
+    let err = assert_error::<TermParser<Printing>>(b"(forall () x)", 9, 10);
+    assert!(
+        matches!(err, CategoryParserErrorKind::EmptyQuantifierBindings),
+        "{err:?}"
+    );
+    let err = assert_error::<TermParser<Printing>>(b"(exists () x)", 9, 10);
+    assert!(
+        matches!(err, CategoryParserErrorKind::EmptyQuantifierBindings),
+        "{err:?}"
+    );
+
+    // so must a lambda, with its own error kind
+    let err = assert_error::<TermParser<Printing>>(b"(lambda () x)", 9, 10);
+    assert!(
+        matches!(err, CategoryParserErrorKind::EmptyLambdaBindings),
+        "{err:?}"
+    );
+
+    // the variable list must be parenthesized
+    let err = assert_error::<TermParser<Printing>>(b"(forall x x)", 8, 9);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenOpen])
+        ),
+        "{err:?}"
+    );
+
+    // a variable must have a sort
+    let err = assert_error::<TermParser<Printing>>(b"(forall ((x)) x)", 11, 12);
+    assert!(
+        matches!(err, CategoryParserErrorKind::ExpectedSort),
+        "{err:?}"
+    );
+
+    // EOF before the body is a missing term
+    let err = assert_error::<TermParser<Printing>>(b"(forall ((x Int))", 17, 17);
+    assert!(
+        matches!(err, CategoryParserErrorKind::ExpectedTerm),
+        "{err:?}"
+    );
+}
+
+#[test]
 fn annotation_errors() {
     // an annotation must contain at least one attribute
     let err = assert_error::<TermParser<Printing>>(b"(! x)", 4, 5);
@@ -337,6 +483,23 @@ impl SmtHandler for Counting {
     fn annotate_term(&mut self, _term: (), _attributes: Vec<()>) -> Result<(), Infallible> {
         Ok(())
     }
+    fn start_quantifier(
+        &mut self,
+        _kind: SmtQuantifierKind,
+        _name: SmtSymbol,
+        _sort: (),
+    ) -> Result<(), Infallible> {
+        Ok(())
+    }
+    fn end_quantifier(&mut self, _term: ()) -> Result<(), Infallible> {
+        Ok(())
+    }
+    fn start_lambda(&mut self, _name: SmtSymbol, _sort: ()) -> Result<(), Infallible> {
+        Ok(())
+    }
+    fn end_lambda(&mut self, _term: ()) -> Result<(), Infallible> {
+        Ok(())
+    }
 }
 
 #[test]
@@ -376,5 +539,44 @@ fn deep_annotation_nesting_does_not_overflow_the_stack() {
         .unwrap_or_else(|(kind, span)| panic!("{kind:?} at {span:?}"));
     assert_eq!(left, 0);
     // annotations produce no terms of their own, only the innermost x does
+    assert_eq!(handler.terms, 1);
+}
+
+#[test]
+fn deep_binder_nesting_does_not_overflow_the_stack() {
+    // (forall ((x Int)) (forall ((x Int)) ... x ...)) with a depth
+    // far beyond what recursion would survive
+    const DEPTH: usize = 200_000;
+    let mut input = Vec::with_capacity(DEPTH * 19 + 1);
+    for _ in 0..DEPTH {
+        input.extend_from_slice(b"(forall ((x Int)) ");
+    }
+    input.push(b'x');
+    input.extend(std::iter::repeat_n(b')', DEPTH));
+
+    let mut handler = Counting::default();
+    let ((), left) = run_with::<Counting, TermParser<Counting>>(&mut handler, &input)
+        .unwrap_or_else(|(kind, span)| panic!("{kind:?} at {span:?}"));
+    assert_eq!(left, 0);
+    // binders produce no terms of their own, only the innermost x does
+    assert_eq!(handler.terms, 1);
+}
+
+#[test]
+fn binder_with_many_variables_does_not_overflow_the_stack() {
+    // a single binder with a huge variable list exercises the desugared
+    // start/end calls: one pair per variable, iteratively
+    const VARIABLES: usize = 100_000;
+    let mut input = Vec::with_capacity(VARIABLES * 8 + 12);
+    input.extend_from_slice(b"(exists (");
+    for _ in 0..VARIABLES {
+        input.extend_from_slice(b"(x Int)");
+    }
+    input.extend_from_slice(b") x)");
+
+    let mut handler = Counting::default();
+    let ((), left) = run_with::<Counting, TermParser<Counting>>(&mut handler, &input)
+        .unwrap_or_else(|(kind, span)| panic!("{kind:?} at {span:?}"));
+    assert_eq!(left, 0);
     assert_eq!(handler.terms, 1);
 }

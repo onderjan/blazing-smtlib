@@ -5,7 +5,8 @@ use std::fmt::Debug;
 
 use smt_parser_rs::{
     SmtApplication, SmtAttributeValue, SmtFunctionSignature, SmtHandler, SmtIdent, SmtIndex,
-    SmtKeyword, SmtQualifiedIdent, SmtSExpr, SmtSort, SmtSpecialConstant, SmtSymbol, SmtTerm,
+    SmtKeyword, SmtQualifiedIdent, SmtQuantifierKind, SmtSExpr, SmtSort, SmtSpecialConstant,
+    SmtSymbol, SmtTerm,
 };
 
 /// Handler that is deliberately neither `Debug` nor `Clone`,
@@ -46,6 +47,23 @@ impl SmtHandler for OpaqueHandler {
         term: String,
         _attributes: Vec<String>,
     ) -> Result<String, Infallible> {
+        Ok(term)
+    }
+    fn start_quantifier(
+        &mut self,
+        _kind: SmtQuantifierKind,
+        _name: SmtSymbol,
+        _sort: String,
+    ) -> Result<(), Infallible> {
+        Ok(())
+    }
+    fn end_quantifier(&mut self, term: String) -> Result<String, Infallible> {
+        Ok(term)
+    }
+    fn start_lambda(&mut self, _name: SmtSymbol, _sort: String) -> Result<(), Infallible> {
+        Ok(())
+    }
+    fn end_lambda(&mut self, term: String) -> Result<String, Infallible> {
         Ok(term)
     }
 }

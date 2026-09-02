@@ -177,6 +177,23 @@ impl SmtHandler for Counting {
     fn annotate_term(&mut self, _term: (), _attributes: Vec<()>) -> Result<(), Infallible> {
         Ok(())
     }
+    fn start_quantifier(
+        &mut self,
+        _kind: SmtQuantifierKind,
+        _name: SmtSymbol,
+        _sort: (),
+    ) -> Result<(), Infallible> {
+        Ok(())
+    }
+    fn end_quantifier(&mut self, _term: ()) -> Result<(), Infallible> {
+        Ok(())
+    }
+    fn start_lambda(&mut self, _name: SmtSymbol, _sort: ()) -> Result<(), Infallible> {
+        Ok(())
+    }
+    fn end_lambda(&mut self, _term: ()) -> Result<(), Infallible> {
+        Ok(())
+    }
 }
 
 #[test]

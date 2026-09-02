@@ -23,8 +23,8 @@ use std::convert::Infallible;
 use std::ops::ControlFlow;
 
 use smt_parser_rs::{
-    SmtAttributeValue, SmtHandler, SmtIdent, SmtIndex, SmtKeyword, SmtQualifiedIdent, SmtSExpr,
-    SmtSort, SmtSpan, SmtSpecialConstant, SmtSymbol, SmtTerm,
+    SmtAttributeValue, SmtHandler, SmtIdent, SmtIndex, SmtKeyword, SmtQualifiedIdent,
+    SmtQuantifierKind, SmtSExpr, SmtSort, SmtSpan, SmtSpecialConstant, SmtSymbol, SmtTerm,
     read::{
         lexer::{LexError, Lexer, TokenHandler},
         parser::{
@@ -46,6 +46,10 @@ use smt_parser_rs::{
 struct Printing {
     /// Rendered binding lists of the lets currently being parsed, innermost last.
     let_bindings: Vec<String>,
+    /// Rendered prefixes of the quantifiers currently open, innermost last.
+    quantifier_binders: Vec<String>,
+    /// Rendered prefixes of the lambdas currently open, innermost last.
+    lambda_binders: Vec<String>,
 }
 
 fn text(bytes: &[u8]) -> String {
@@ -133,6 +137,43 @@ impl SmtHandler for Printing {
     fn end_let(&mut self, term: String) -> Result<String, Infallible> {
         let bindings = self.let_bindings.pop().expect("end_let without start_let");
         Ok(format!("(let {bindings} {term})"))
+    }
+
+    fn start_quantifier(
+        &mut self,
+        kind: SmtQuantifierKind,
+        name: SmtSymbol,
+        sort: String,
+    ) -> Result<(), Infallible> {
+        let keyword = match kind {
+            SmtQuantifierKind::Forall => "forall",
+            SmtQuantifierKind::Exists => "exists",
+        };
+        self.quantifier_binders
+            .push(format!("({} (({} {}))", keyword, text(name.as_slice()), sort));
+        Ok(())
+    }
+
+    fn end_quantifier(&mut self, term: String) -> Result<String, Infallible> {
+        let prefix = self
+            .quantifier_binders
+            .pop()
+            .expect("end_quantifier without matching start_quantifier");
+        Ok(format!("{prefix} {term})"))
+    }
+
+    fn start_lambda(&mut self, name: SmtSymbol, sort: String) -> Result<(), Infallible> {
+        self.lambda_binders
+            .push(format!("(lambda (({} {}))", text(name.as_slice()), sort));
+        Ok(())
+    }
+
+    fn end_lambda(&mut self, term: String) -> Result<String, Infallible> {
+        let prefix = self
+            .lambda_binders
+            .pop()
+            .expect("end_lambda without matching start_lambda");
+        Ok(format!("{prefix} {term})"))
     }
 
     fn handle_s_expr(&mut self, expr: SmtSExpr<Self>) -> Result<String, Infallible> {

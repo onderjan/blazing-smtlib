@@ -7,7 +7,8 @@ use common::{assert_error_span, assert_parser_error, parse, parse_with};
 
 use smt_parser_rs::{
     CommandHandler, NonstandardCommandError, SmtAttributeValue, SmtFunctionSignature, SmtHandler,
-    SmtKeyword, SmtSExpr, SmtSort, SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm,
+    SmtKeyword, SmtQuantifierKind, SmtSExpr, SmtSort, SmtStringContent, SmtSymbol, SmtSymbolView,
+    SmtTerm,
     read::{
         SmtReadErrorKind,
         parser::{CategoryParserErrorKind, ClosedParser, CommandAction, CommandParser, TermParser},
@@ -123,6 +124,23 @@ impl SmtHandler for Recording {
         Ok(())
     }
     fn annotate_term(&mut self, _term: (), _attributes: Vec<()>) -> Result<(), Self::Error> {
+        Ok(())
+    }
+    fn start_quantifier(
+        &mut self,
+        _kind: SmtQuantifierKind,
+        _name: SmtSymbol,
+        _sort: (),
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+    fn end_quantifier(&mut self, _term: ()) -> Result<(), Self::Error> {
+        Ok(())
+    }
+    fn start_lambda(&mut self, _name: SmtSymbol, _sort: ()) -> Result<(), Self::Error> {
+        Ok(())
+    }
+    fn end_lambda(&mut self, _term: ()) -> Result<(), Self::Error> {
         Ok(())
     }
 }
