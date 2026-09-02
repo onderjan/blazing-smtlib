@@ -35,11 +35,12 @@ pub trait SmtHandler {
     fn start_quantifier(
         &mut self,
         kind: SmtQuantifierKind,
-        bindings: Vec<(SmtSymbol, Self::Sort)>,
+        name: SmtSymbol,
+        sort: Self::Sort,
     ) -> Result<(), Self::Error>;
     fn end_quantifier(&mut self, term: Self::Term) -> Result<Self::Term, Self::Error>;
 
-    fn start_lambda(&mut self, bindings: Vec<(SmtSymbol, Self::Sort)>) -> Result<(), Self::Error>;
+    fn start_lambda(&mut self, name: SmtSymbol, sort: Self::Sort) -> Result<(), Self::Error>;
     fn end_lambda(&mut self, term: Self::Term) -> Result<Self::Term, Self::Error>;
 }
 
@@ -143,7 +144,8 @@ impl SmtHandler for CheckStandardSyntax {
     fn start_quantifier(
         &mut self,
         _kind: SmtQuantifierKind,
-        _bindings: Vec<(SmtSymbol, Self::Sort)>,
+        _name: SmtSymbol,
+        _sort: Self::Sort,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -152,7 +154,7 @@ impl SmtHandler for CheckStandardSyntax {
         Ok(())
     }
 
-    fn start_lambda(&mut self, _bindings: Vec<(SmtSymbol, Self::Sort)>) -> Result<(), Self::Error> {
+    fn start_lambda(&mut self, _name: SmtSymbol, _sort: Self::Sort) -> Result<(), Self::Error> {
         Ok(())
     }
 

@@ -104,9 +104,12 @@ enum Level<H: SmtHandler> {
     },
     /// A binder (lambda/let/forall/exists) waiting for the inner term.
     ///
-    /// After consuming the term, we end the binder.
+    /// After consuming the term, we close all desugared binders.
     /// Then, we must also consume a closing parenthesis.
-    BinderInner(BinderEndKind),
+    BinderInner {
+        end_kind: BinderEndKind,
+        num_close: u64,
+    },
 
     /// An annotation waiting for the inner term.
     ///
@@ -231,16 +234,25 @@ impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
                 bindings.push((name, term));
                 self.state = State::LetBindingClose;
             }
-            Level::BinderInner(end_kind) => {
-                let end_kind = *end_kind;
-                // end the let and wait for the closing parenthesis
+            Level::BinderInner {
+                end_kind,
+                num_close,
+            } => {
+                // end the binder
+                let (end_kind, num_close) = (*end_kind, *num_close);
                 self.levels.pop();
-                let handled = match end_kind {
-                    BinderEndKind::Quantifier => handler.end_quantifier(term),
-                    BinderEndKind::Lambda => handler.end_lambda(term),
-                    BinderEndKind::Let => handler.end_let(term),
-                };
-                let term = handle_err(handled, span)?;
+
+                // call the handler repeatedly to close all desugared binders
+                let mut term = term;
+                for _ in 0..num_close {
+                    let handled = match end_kind {
+                        BinderEndKind::Quantifier => handler.end_quantifier(term),
+                        BinderEndKind::Lambda => handler.end_lambda(term),
+                        BinderEndKind::Let => handler.end_let(term),
+                    };
+                    term = handle_err(handled, span)?;
+                }
+                // wait for the closing parenthesis
                 self.pending = Some(Pending {
                     term,
                     is_annotation: false,
@@ -335,23 +347,33 @@ impl<H: SmtHandler> TermParser<H> {
                             return Err(ParserError::category_error(err_kind, span));
                         }
 
-                        // start the sorted binder
-                        let (handled, end_kind) = match binder_kind {
-                            SortedBinderKind::Exists => (
-                                handler.start_quantifier(SmtQuantifierKind::Exists, sorted_vars),
-                                BinderEndKind::Quantifier,
-                            ),
-                            SortedBinderKind::Forall => (
-                                handler.start_quantifier(SmtQuantifierKind::Forall, sorted_vars),
-                                BinderEndKind::Quantifier,
-                            ),
-                            SortedBinderKind::Lambda => {
-                                (handler.start_lambda(sorted_vars), BinderEndKind::Lambda)
-                            }
+                        // TODO: rewrite by streaming binders
+                        // desugar the sorted binder into multiple nested binders
+                        let num_desugared_binders = sorted_vars.len();
+                        for (name, sort) in sorted_vars {
+                            let handled = match binder_kind {
+                                SortedBinderKind::Exists => {
+                                    handler.start_quantifier(SmtQuantifierKind::Exists, name, sort)
+                                }
+                                SortedBinderKind::Forall => {
+                                    handler.start_quantifier(SmtQuantifierKind::Forall, name, sort)
+                                }
+                                SortedBinderKind::Lambda => handler.start_lambda(name, sort),
+                            };
+                            handle_err(handled, span)?;
+                        }
+
+                        let end_kind = match binder_kind {
+                            SortedBinderKind::Exists => BinderEndKind::Quantifier,
+                            SortedBinderKind::Forall => BinderEndKind::Quantifier,
+                            SortedBinderKind::Lambda => BinderEndKind::Lambda,
                         };
-                        handle_err(handled, span)?;
+
                         // push a level to handle the inner term and then properly close the binder
-                        self.start_level(Level::BinderInner(end_kind));
+                        self.start_level(Level::BinderInner {
+                            end_kind,
+                            num_close: num_desugared_binders as u64,
+                        });
                     }
                 }
                 Ok(ControlFlow::Continue(()))
@@ -530,7 +552,11 @@ impl<H: SmtHandler> TermParser<H> {
                 handle_err(handler.start_let(bindings), span)?;
 
                 // add a new level for the inner term in the let
-                self.start_level(Level::BinderInner(BinderEndKind::Let));
+                // we open it once, so we also need to close it once
+                self.start_level(Level::BinderInner {
+                    end_kind: BinderEndKind::Let,
+                    num_close: 1,
+                });
             }
             _ => {
                 // expected open or close parenthesis
