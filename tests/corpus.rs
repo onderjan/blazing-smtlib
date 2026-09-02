@@ -1,3 +1,11 @@
+//! Corpus-wide parse sweep: parses every `.smt2` file under the corpus root
+//! in parallel and reports the failures.
+//!
+//! Expects the SMT-LIB corpus under `benchmarks/2025` in the repository root;
+//! set the environment variable `SMT_BENCHMARKS_DIR` to use a corpus root
+//! elsewhere. Ignored by default; run with
+//! `cargo test --release parse_corpus -- --ignored`.
+
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -69,10 +77,17 @@ fn try_parse_file(path: &Path) -> Result<(), String> {
 
 #[test]
 #[ignore]
-fn parse_benchmarks() {
-    let benchmarks = std::env::var("SMT_BENCHMARKS_DIR")
-        .expect("set SMT_BENCHMARKS_DIR to point at a directory of .smt2 files");
-    let benchmarks = PathBuf::from(benchmarks);
+fn parse_corpus() {
+    let benchmarks = match std::env::var_os("SMT_BENCHMARKS_DIR") {
+        Some(dir) => PathBuf::from(dir),
+        None => Path::new(env!("CARGO_MANIFEST_DIR")).join("benchmarks/2025"),
+    };
+    assert!(
+        benchmarks.exists(),
+        "benchmark corpus not found at {}; unpack the SMT-LIB corpus there \
+         or set SMT_BENCHMARKS_DIR to its root",
+        benchmarks.display()
+    );
 
     let files = collect_smt2_files(&benchmarks);
     let num_files = files.len();

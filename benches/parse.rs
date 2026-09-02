@@ -1,9 +1,10 @@
 //! Parse-throughput benchmark over pinned SMT-LIB benchmark files.
 //!
-//! Expects the benchmark corpus to be reachable through the `benchmarks`
-//! directory in the repository root (e.g. `benchmarks/QF_BV` as a symlink to
-//! an SMT-LIB QF_BV checkout). Each file is loaded into memory first, so the
-//! numbers measure lexing and parsing only, not disk I/O.
+//! Expects the SMT-LIB corpus under `benchmarks/2025` in the repository root
+//! (tracks unpacked as `non-incremental/<LOGIC>/...`); set the environment
+//! variable `SMT_BENCHMARKS_DIR` to use a corpus root elsewhere. Each file is
+//! loaded into memory first, so the numbers measure lexing and parsing only,
+//! not disk I/O.
 //!
 //! Run with `cargo bench`. Each file is measured in two modes: lexing only
 //! (tokens are discarded by a counting handler) and the full lex-and-parse
@@ -25,7 +26,7 @@ use smt_parser_rs::{
     token::Token,
 };
 
-/// Benchmarked files, relative to the `benchmarks` directory.
+/// Benchmarked files, relative to the corpus root.
 ///
 /// Chosen to span different QF_BV families (and thus different mixes of
 /// symbols, literals, and term shapes) at sizes big enough for stable timing
@@ -33,15 +34,15 @@ use smt_parser_rs::{
 /// be independent of file size, so mid-size files stand in for the giant ones.
 const FILES: &[&str] = &[
     // small file: dominated by per-command and small-term overhead
-    "QF_BV/bmc-bv-svcomp14/modulus_true.c.21.smt2",
+    "non-incremental/QF_BV/bmc-bv-svcomp14/modulus_true.c.21.smt2",
     // BMC software unrolling
-    "QF_BV/bmc-bv-svcomp14/soft_float_1_true.c.cil.c.17.smt2",
+    "non-incremental/QF_BV/bmc-bv-svcomp14/soft_float_1_true.c.cil.c.17.smt2",
     // multiple constant multiplication encodings
-    "QF_BV/mcm/186.smt2",
+    "non-incremental/QF_BV/mcm/186.smt2",
     // answer set programming translations
-    "QF_BV/asp/Labyrinth/laby_18_18_13.lp.smt2",
+    "non-incremental/QF_BV/asp/Labyrinth/laby_18_18_13.lp.smt2",
     // symbolic execution queries
-    "QF_BV/uclid/catchconv/catchconv-15803.smt2",
+    "non-incremental/QF_BV/uclid/catchconv/catchconv-15803.smt2",
 ];
 
 /// Timed runs per file and mode; an additional first (warm-up) run is discarded.
@@ -109,11 +110,14 @@ fn time_runs(mut run: impl FnMut()) -> (f64, f64) {
 }
 
 fn main() -> ExitCode {
-    let benchmarks_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("benchmarks");
+    let benchmarks_dir = match std::env::var_os("SMT_BENCHMARKS_DIR") {
+        Some(dir) => PathBuf::from(dir),
+        None => Path::new(env!("CARGO_MANIFEST_DIR")).join("benchmarks/2025"),
+    };
     if !benchmarks_dir.exists() {
         eprintln!(
-            "Benchmark corpus not found at {}; make it available there, \
-             e.g. as a symlink: benchmarks/QF_BV -> <SMT-LIB QF_BV directory>",
+            "Benchmark corpus not found at {}; unpack the SMT-LIB corpus there \
+             or set SMT_BENCHMARKS_DIR to its root",
             benchmarks_dir.display()
         );
         return ExitCode::FAILURE;
