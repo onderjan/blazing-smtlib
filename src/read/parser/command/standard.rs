@@ -4,10 +4,8 @@ use crate::{
     CommandHandler, SmtFunctionSignature,
     read::parser::{
         CategoryParser, CloseParenParser, CommandParser, CommandResult, KeywordParser,
-        ParenMultipleParser, ParserError, StringParser, SymbolParser,
-        category::{
-            ClosedAttributeParser, ClosedParser, PairParser, ParenParser, SortParser, TermParser,
-        },
+        ParenMultipleParser, ParserError, SortedVarParser, StringParser, SymbolParser,
+        category::{ClosedAttributeParser, ClosedParser, PairParser, SortParser, TermParser},
         command::{CommandAction, ParseCommand},
         handle_err,
     },
@@ -139,7 +137,6 @@ standard_commands! {
         |handler, ()| handler.command_reset_assertions()),
 }
 
-type SortedVarParser<H> = ParenParser<H, PairParser<H, SymbolParser, SortParser<H>>>;
 type DefineFunSignatureParser<H> = PairParser<
     H,
     SymbolParser,

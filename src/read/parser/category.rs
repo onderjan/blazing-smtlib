@@ -29,6 +29,8 @@ pub use {
     token::{CloseParenParser, KeywordParser, OpenParenParser, StringParser, SymbolParser},
 };
 
+pub type SortedVarParser<H> = ParenParser<H, PairParser<H, SymbolParser, SortParser<H>>>;
+
 pub trait CategoryParser<H: SmtHandler>: Default {
     type Result;
 
@@ -55,6 +57,8 @@ pub enum CategoryParserErrorKind {
     EmptyTermApplication,
     EmptyLetBindings,
     EmptyAnnotation,
+    EmptyQuantifierBindings,
+    EmptyLambdaBindings,
     ExpectedIndexOrCloseParen,
     ExpectedOperator,
     ExpectedSExpr,

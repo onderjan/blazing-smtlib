@@ -1,9 +1,10 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtApplication, SmtHandler, SmtQualifiedIdent, SmtSymbol, SmtTerm,
+    SmtApplication, SmtHandler, SmtQualifiedIdent, SmtQuantifierKind, SmtSymbol, SmtTerm,
     read::parser::{
-        CloseParenParser, OpenParenParser, ParserError, SymbolParser,
+        CloseParenParser, OpenParenParser, ParenMultipleParser, ParserError, SortedVarParser,
+        SymbolParser,
         category::{
             CategoryParser, CategoryParserErrorKind, attribute::ClosedMultipleAttributeParser,
             parse_special_constant, qualified_ident::QualifiedIdentParser,
@@ -29,6 +30,21 @@ pub struct TermParser<H: SmtHandler> {
 
     qualified_ident_parser: QualifiedIdentParser<H>,
     attributes_parser: ClosedMultipleAttributeParser<H>,
+    sorted_vars_parser: ParenMultipleParser<H, SortedVarParser<H>>,
+}
+
+#[derive(Clone, Copy)]
+enum SortedBinderKind {
+    Exists,
+    Forall,
+    Lambda,
+}
+
+#[derive(Clone, Copy)]
+enum BinderEndKind {
+    Quantifier,
+    Lambda,
+    Let,
 }
 
 /// State of the term parser.
@@ -65,6 +81,9 @@ enum State {
     ///
     /// We expect a closing parenthesis (closing the binding) next.
     LetBindingClose,
+
+    /// The term is a forall/exists/lambda binder, we are parsing its bound variables.
+    SortedBinderVars(SortedBinderKind),
 }
 
 /// A term waiting for an inner term.
@@ -83,10 +102,11 @@ enum Level<H: SmtHandler> {
         bindings: Vec<(SmtSymbol, H::Term)>,
         binding_name: SmtSymbol,
     },
-    /// A let waiting for the inner term.
+    /// A binder (lambda/let/forall/exists) waiting for the inner term.
     ///
-    /// After consuming the term, we must also consume a closing parenthesis.
-    LetInner,
+    /// After consuming the term, we end the binder.
+    /// Then, we must also consume a closing parenthesis.
+    BinderInner(BinderEndKind),
 
     /// An annotation waiting for the inner term.
     ///
@@ -116,6 +136,7 @@ impl<H: SmtHandler> TermParser<H> {
 
             qualified_ident_parser: QualifiedIdentParser::new(),
             attributes_parser: ClosedMultipleAttributeParser::new(),
+            sorted_vars_parser: ParenMultipleParser::new(),
         }
     }
 }
@@ -136,6 +157,7 @@ impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
 
         self.qualified_ident_parser.restart();
         self.attributes_parser.restart();
+        self.sorted_vars_parser.restart();
     }
 
     fn progress(
@@ -209,10 +231,16 @@ impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
                 bindings.push((name, term));
                 self.state = State::LetBindingClose;
             }
-            Level::LetInner => {
+            Level::BinderInner(end_kind) => {
+                let end_kind = *end_kind;
                 // end the let and wait for the closing parenthesis
                 self.levels.pop();
-                let term = handle_err(handler.end_let(term), span)?;
+                let handled = match end_kind {
+                    BinderEndKind::Quantifier => handler.end_quantifier(term),
+                    BinderEndKind::Lambda => handler.end_lambda(term),
+                    BinderEndKind::Let => handler.end_let(term),
+                };
+                let term = handle_err(handled, span)?;
                 self.pending = Some(Pending {
                     term,
                     is_annotation: false,
@@ -287,6 +315,45 @@ impl<H: SmtHandler> TermParser<H> {
                 CloseParenParser::expect(token)?;
                 // move to before binding open, a next binding can be opened
                 self.state = State::LetBindingOpen;
+                Ok(ControlFlow::Continue(()))
+            }
+            State::SortedBinderVars(binder_kind) => {
+                let span = token.span();
+                match self.sorted_vars_parser.progress(handler, token)? {
+                    ControlFlow::Continue(()) => {}
+                    ControlFlow::Break(sorted_vars) => {
+                        // there must be at least one sorted variable in the binder
+                        if sorted_vars.is_empty() {
+                            let err_kind = match binder_kind {
+                                SortedBinderKind::Exists | SortedBinderKind::Forall => {
+                                    CategoryParserErrorKind::EmptyQuantifierBindings
+                                }
+                                SortedBinderKind::Lambda => {
+                                    CategoryParserErrorKind::EmptyLambdaBindings
+                                }
+                            };
+                            return Err(ParserError::category_error(err_kind, span));
+                        }
+
+                        // start the sorted binder
+                        let (handled, end_kind) = match binder_kind {
+                            SortedBinderKind::Exists => (
+                                handler.start_quantifier(SmtQuantifierKind::Exists, sorted_vars),
+                                BinderEndKind::Quantifier,
+                            ),
+                            SortedBinderKind::Forall => (
+                                handler.start_quantifier(SmtQuantifierKind::Forall, sorted_vars),
+                                BinderEndKind::Quantifier,
+                            ),
+                            SortedBinderKind::Lambda => {
+                                (handler.start_lambda(sorted_vars), BinderEndKind::Lambda)
+                            }
+                        };
+                        handle_err(handled, span)?;
+                        // push a level to handle the inner term and then properly close the binder
+                        self.start_level(Level::BinderInner(end_kind));
+                    }
+                }
                 Ok(ControlFlow::Continue(()))
             }
         }
@@ -372,9 +439,18 @@ impl<H: SmtHandler> TermParser<H> {
                 });
                 State::LetAllBindingsOpen
             }
-            TokenKind::Reserved(Reserved::Lambda) => todo!("Lambda"),
-            TokenKind::Reserved(Reserved::Forall) => todo!("Forall"),
-            TokenKind::Reserved(Reserved::Exists) => todo!("Exists"),
+            TokenKind::Reserved(Reserved::Lambda) => {
+                // this is a lambda, move to parsing its variables
+                State::SortedBinderVars(SortedBinderKind::Lambda)
+            }
+            TokenKind::Reserved(Reserved::Forall) => {
+                // this is a universal binder, move to parsing its variables
+                State::SortedBinderVars(SortedBinderKind::Forall)
+            }
+            TokenKind::Reserved(Reserved::Exists) => {
+                // this is an existential binder, move to parsing its variables
+                State::SortedBinderVars(SortedBinderKind::Exists)
+            }
             TokenKind::Reserved(Reserved::Match) => todo!("Match"),
             TokenKind::Reserved(Reserved::ExclamationMark) => {
                 // this is an annotation
@@ -454,7 +530,7 @@ impl<H: SmtHandler> TermParser<H> {
                 handle_err(handler.start_let(bindings), span)?;
 
                 // add a new level for the inner term in the let
-                self.start_level(Level::LetInner);
+                self.start_level(Level::BinderInner(BinderEndKind::Let));
             }
             _ => {
                 // expected open or close parenthesis

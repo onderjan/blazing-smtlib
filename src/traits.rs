@@ -1,8 +1,8 @@
 use std::fmt::Debug;
 
 use crate::{
-    SmtAttributeValue, SmtFunctionSignature, SmtKeyword, SmtSExpr, SmtSort, SmtStringContent,
-    SmtSymbol, SmtSymbolView, SmtTerm,
+    SmtAttributeValue, SmtFunctionSignature, SmtKeyword, SmtQuantifierKind, SmtSExpr, SmtSort,
+    SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm,
     read::parser::{NoCommandParser, ParseCommand},
 };
 
@@ -31,6 +31,16 @@ pub trait SmtHandler {
 
     fn start_let(&mut self, bindings: Vec<(SmtSymbol, Self::Term)>) -> Result<(), Self::Error>;
     fn end_let(&mut self, term: Self::Term) -> Result<Self::Term, Self::Error>;
+
+    fn start_quantifier(
+        &mut self,
+        kind: SmtQuantifierKind,
+        bindings: Vec<(SmtSymbol, Self::Sort)>,
+    ) -> Result<(), Self::Error>;
+    fn end_quantifier(&mut self, term: Self::Term) -> Result<Self::Term, Self::Error>;
+
+    fn start_lambda(&mut self, bindings: Vec<(SmtSymbol, Self::Sort)>) -> Result<(), Self::Error>;
+    fn end_lambda(&mut self, term: Self::Term) -> Result<Self::Term, Self::Error>;
 }
 
 pub trait CommandHandler: SmtHandler {
@@ -102,14 +112,6 @@ impl SmtHandler for CheckStandardSyntax {
         Ok(())
     }
 
-    fn start_let(&mut self, _bindings: Vec<(SmtSymbol, Self::Term)>) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
-    fn end_let(&mut self, _term: Self::Term) -> Result<Self::Term, Self::Error> {
-        Ok(())
-    }
-
     fn handle_s_expr(&mut self, _expr: SmtSExpr<Self>) -> Result<Self::SExpr, Self::Error> {
         Ok(())
     }
@@ -127,6 +129,34 @@ impl SmtHandler for CheckStandardSyntax {
         _term: Self::Term,
         _attributes: Vec<Self::Attribute>,
     ) -> Result<Self::Term, Self::Error> {
+        Ok(())
+    }
+
+    fn start_let(&mut self, _bindings: Vec<(SmtSymbol, Self::Term)>) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn end_let(&mut self, _term: Self::Term) -> Result<Self::Term, Self::Error> {
+        Ok(())
+    }
+
+    fn start_quantifier(
+        &mut self,
+        _kind: SmtQuantifierKind,
+        _bindings: Vec<(SmtSymbol, Self::Sort)>,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn end_quantifier(&mut self, _term: Self::Term) -> Result<Self::Term, Self::Error> {
+        Ok(())
+    }
+
+    fn start_lambda(&mut self, _bindings: Vec<(SmtSymbol, Self::Sort)>) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn end_lambda(&mut self, _term: Self::Term) -> Result<Self::Term, Self::Error> {
         Ok(())
     }
 }

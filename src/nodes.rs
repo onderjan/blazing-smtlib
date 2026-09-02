@@ -158,6 +158,12 @@ pub enum SmtTerm<H: SmtHandler + ?Sized> {
     Application(SmtApplication<H>),
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum SmtQuantifierKind {
+    Exists,
+    Forall,
+}
+
 impl<H: SmtHandler + ?Sized> Debug for SmtTerm<H>
 where
     H::Sort: Debug,
