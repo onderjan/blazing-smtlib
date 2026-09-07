@@ -18,15 +18,18 @@ use smt_parser_rs::{
 };
 
 /// Handler that resolves body identifiers against the parameters of the
-/// define-fun currently in progress, marking resolved ones as `[name]`.
-/// The resolution succeeding proves that `start_define_fun` delivers the
-/// signature before the body terms are constructed.
+/// define-fun currently in progress, marking resolved ones as `[name]`,
+/// and body sorts against the parameters of the define-sort in progress
+/// in the same way. The resolution succeeding proves that the start
+/// callbacks deliver the signature before the body is constructed.
 #[derive(Default)]
 struct Resolving {
     /// Callbacks received, in order.
     events: Vec<String>,
     /// Parameter names of the define-fun in progress, empty outside one.
     params: Vec<String>,
+    /// Parameter names of the define-sort in progress, empty outside one.
+    sort_params: Vec<String>,
 }
 
 fn text(bytes: &[u8]) -> String {
@@ -60,10 +63,12 @@ impl SmtHandler for Resolving {
 
     fn handle_sort(&mut self, sort: SmtSort<Self>) -> Result<String, String> {
         let name = ident_text(&sort.ident);
-        Ok(if sort.applied.is_empty() {
-            name
-        } else {
+        Ok(if !sort.applied.is_empty() {
             format!("({} {})", name, sort.applied.join(" "))
+        } else if self.sort_params.contains(&name) {
+            format!("[{name}]")
+        } else {
+            name
         })
     }
 
@@ -213,6 +218,27 @@ impl CommandHandler for Resolving {
         Ok(())
     }
 
+    fn start_define_sort(&mut self, name: SmtSymbol, params: Vec<SmtSymbol>) -> Result<(), String> {
+        let name = text(name.as_slice());
+        if name == "forbidden" {
+            return Err("forbidden sort name".into());
+        }
+        let params: Vec<String> = params.iter().map(|param| text(param.as_slice())).collect();
+        self.events
+            .push(format!("start-sort {name} ({})", params.join(" ")));
+        self.sort_params = params;
+        Ok(())
+    }
+
+    fn end_define_sort(&mut self, sort: String) -> Result<(), String> {
+        if sort == "Boom" {
+            return Err("exploding sort".into());
+        }
+        self.events.push(format!("end-sort {sort}"));
+        self.sort_params.clear();
+        Ok(())
+    }
+
     fn start_define_fun(&mut self, signature: SmtFunctionSignature<Self>) -> Result<(), String> {
         let name = text(signature.name.as_slice());
         if name == "forbidden" {
@@ -277,6 +303,131 @@ fn zero_params_and_applied_result_sort() {
     let mut handler = Resolving::default();
     parse_resolving(&mut handler, b"(define-fun c () (Array Int Bool) zero)");
     assert_eq!(handler.events, ["start c () (Array Int Bool)", "end zero"]);
+}
+
+#[test]
+fn sort_params_resolve_while_body_is_parsed() {
+    let mut handler = Resolving::default();
+    parse_resolving(
+        &mut handler,
+        b"(define-sort Pair (X Y) (Tuple X (Array Y Int))) (declare-fun f (X) Y)",
+    );
+    assert_eq!(
+        handler.events,
+        [
+            // the signature arrives before any body sort
+            "start-sort Pair (X Y)",
+            // `X` and `Y` were resolved as parameters while the body was constructed
+            "end-sort (Tuple [X] (Array [Y] Int))",
+            // the parameter scope ended with the define-sort
+            "declare-fun f (X) Y",
+        ]
+    );
+}
+
+#[test]
+fn define_sort_with_zero_params() {
+    let mut handler = Resolving::default();
+    parse_resolving(&mut handler, b"(define-sort S () (Array Int Bool))");
+    assert_eq!(
+        handler.events,
+        ["start-sort S ()", "end-sort (Array Int Bool)"]
+    );
+}
+
+#[test]
+fn define_sort_and_define_fun_scopes_are_independent() {
+    // the same name is a sort parameter in one command and a term
+    // parameter in the next; each must resolve only in its own body
+    let mut handler = Resolving::default();
+    parse_resolving(
+        &mut handler,
+        b"(define-sort S (X) X) (define-fun f ((X Int)) X X) (define-sort T (Y) (Array Y X))",
+    );
+    assert_eq!(
+        handler.events,
+        [
+            "start-sort S (X)",
+            "end-sort [X]",
+            // the sort `X` in the signature and body is no longer a sort parameter
+            "start f ((X Int)) X",
+            // but the term `X` is a function parameter
+            "end [X]",
+            "start-sort T (Y)",
+            "end-sort (Array [Y] X)",
+        ]
+    );
+}
+
+#[test]
+fn start_define_sort_error_points_at_last_signature_token() {
+    let handler = assert_handler_error(
+        b"(define-sort forbidden () Int)",
+        "forbidden sort name",
+        24,
+        25,
+    );
+    assert!(handler.events.is_empty());
+}
+
+#[test]
+fn end_define_sort_error_points_at_last_body_token() {
+    let handler = assert_handler_error(b"(define-sort S () Boom)", "exploding sort", 18, 22);
+    assert_eq!(handler.events, ["start-sort S ()"]);
+}
+
+#[test]
+fn define_sort_errors_point_at_offending_token() {
+    // the sort name must be a symbol
+    let err = assert_parser_error(b"(define-sort 1 () Int)", 13, 14);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::Symbol])
+        ),
+        "{err:?}"
+    );
+    // the parameter list is required, even when empty
+    let err = assert_parser_error(b"(define-sort S Int)", 15, 18);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenOpen])
+        ),
+        "{err:?}"
+    );
+    // the parameters are bare symbols, not sorted vars or numerals
+    let err = assert_parser_error(b"(define-sort S ((X)) Int)", 16, 17);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::Symbol])
+        ),
+        "{err:?}"
+    );
+    let err = assert_parser_error(b"(define-sort S (X 1) Int)", 18, 19);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::Symbol])
+        ),
+        "{err:?}"
+    );
+    // the body sort is required
+    let err = assert_parser_error(b"(define-sort S ())", 17, 18);
+    assert!(
+        matches!(err, CategoryParserErrorKind::ExpectedSort),
+        "{err:?}"
+    );
+    // exactly one body sort is allowed
+    let err = assert_parser_error(b"(define-sort S () Int Bool)", 22, 26);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
+        ),
+        "{err:?}"
+    );
 }
 
 #[test]

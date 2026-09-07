@@ -228,6 +228,18 @@ impl CommandHandler for Recording {
         self.commands.push("exit");
         Ok(())
     }
+    fn start_define_sort(
+        &mut self,
+        _name: SmtSymbol,
+        _params: Vec<SmtSymbol>,
+    ) -> Result<(), Self::Error> {
+        self.commands.push("start-define-sort");
+        Ok(())
+    }
+    fn end_define_sort(&mut self, _sort: ()) -> Result<(), Self::Error> {
+        self.commands.push("end-define-sort");
+        Ok(())
+    }
     fn start_define_fun(
         &mut self,
         _signature: SmtFunctionSignature<Self>,
@@ -274,6 +286,20 @@ fn define_fun_start_and_end_surround_the_body() {
     assert_eq!(
         handler.commands,
         ["start-define-fun", "end-define-fun", "check-sat"]
+    );
+}
+
+#[test]
+fn define_sort_start_and_end_surround_the_body() {
+    let mut handler = Recording::default();
+    parse_with(
+        &mut handler,
+        b"(define-sort S (X) (Array X Int)) (check-sat)",
+    )
+    .unwrap_or_else(|err| panic!("unexpected error at {:?}", err.span()));
+    assert_eq!(
+        handler.commands,
+        ["start-define-sort", "end-define-sort", "check-sat"]
     );
 }
 
