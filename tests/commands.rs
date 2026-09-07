@@ -6,9 +6,9 @@ mod common;
 use common::{assert_error_span, assert_parser_error, parse_with};
 
 use smt_parser_rs::{
-    CommandHandler, SmtAttributeValue, SmtFunctionSignature, SmtHandler, SmtIdent, SmtIndex,
-    SmtKeyword, SmtNumeral, SmtQuantifierKind, SmtSExpr, SmtSort, SmtSpecialConstant,
-    SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm,
+    CommandHandler, SmtAttributeValue, SmtDatatypeConstructor, SmtFunctionSignature, SmtHandler,
+    SmtIdent, SmtIndex, SmtKeyword, SmtNumeral, SmtQuantifierKind, SmtSExpr, SmtSort,
+    SmtSpecialConstant, SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm,
     read::{
         SmtReadErrorKind,
         lexer::LexerErrorKind,
@@ -19,17 +19,25 @@ use smt_parser_rs::{
 
 /// Handler that resolves body identifiers against the parameters of the
 /// define-fun currently in progress, marking resolved ones as `[name]`,
-/// and body sorts against the parameters of the define-sort in progress
-/// in the same way. The resolution succeeding proves that the start
-/// callbacks deliver the signature before the body is constructed.
+/// and body sorts against the parameters of the define-sort or datatype
+/// in progress in the same way. Sorts declared by the declare-datatypes
+/// in progress are marked as `<name>`. The resolution succeeding proves
+/// that the start callbacks deliver the signature before the body is
+/// constructed.
 #[derive(Default)]
 struct Resolving {
     /// Callbacks received, in order.
     events: Vec<String>,
     /// Parameter names of the define-fun in progress, empty outside one.
     params: Vec<String>,
-    /// Parameter names of the define-sort in progress, empty outside one.
+    /// Parameter names of the define-sort or datatype in progress,
+    /// empty outside one.
     sort_params: Vec<String>,
+    /// Sort names declared by the declare-datatypes in progress,
+    /// in declaration order, empty outside one.
+    datatype_sorts: Vec<String>,
+    /// Index into `datatype_sorts` of the datatype in progress.
+    datatype_index: usize,
 }
 
 fn text(bytes: &[u8]) -> String {
@@ -63,12 +71,17 @@ impl SmtHandler for Resolving {
 
     fn handle_sort(&mut self, sort: SmtSort<Self>) -> Result<String, String> {
         let name = ident_text(&sort.ident);
-        Ok(if !sort.applied.is_empty() {
-            format!("({} {})", name, sort.applied.join(" "))
-        } else if self.sort_params.contains(&name) {
+        let name = if self.sort_params.contains(&name) {
             format!("[{name}]")
+        } else if self.datatype_sorts.contains(&name) {
+            format!("<{name}>")
         } else {
             name
+        };
+        Ok(if sort.applied.is_empty() {
+            name
+        } else {
+            format!("({} {})", name, sort.applied.join(" "))
         })
     }
 
@@ -277,6 +290,84 @@ impl CommandHandler for Resolving {
         }
         self.events.push(format!("end {term}"));
         self.params.clear();
+        Ok(())
+    }
+
+    fn start_declare_datatypes(
+        &mut self,
+        sort_declarations: Vec<(SmtSymbol, SmtNumeral)>,
+    ) -> Result<(), String> {
+        let mut rendered = Vec::new();
+        self.datatype_sorts.clear();
+        self.datatype_index = 0;
+        for (name, arity) in &sort_declarations {
+            let name = text(name.as_slice());
+            if name == "Forbidden" {
+                return Err("forbidden datatype name".into());
+            }
+            rendered.push(format!("({} {})", name, text(arity.as_slice())));
+            self.datatype_sorts.push(name);
+        }
+        self.events
+            .push(format!("start-datatypes ({})", rendered.join(" ")));
+        Ok(())
+    }
+
+    fn start_datatype(&mut self, params: Vec<SmtSymbol>) -> Result<(), String> {
+        // the datatypes arrive in sort-declaration order, so the handler
+        // knows which sort is being started by counting
+        let name = self
+            .datatype_sorts
+            .get(self.datatype_index)
+            .cloned()
+            .unwrap_or_else(|| panic!("datatype {} started without a sort", self.datatype_index));
+        if name == "Unstartable" {
+            return Err("unstartable datatype".into());
+        }
+        let params: Vec<String> = params.iter().map(|param| text(param.as_slice())).collect();
+        self.events
+            .push(format!("start-datatype ({})", params.join(" ")));
+        self.sort_params = params;
+        Ok(())
+    }
+
+    fn end_datatype(
+        &mut self,
+        constructors: Vec<SmtDatatypeConstructor<Self>>,
+    ) -> Result<(), String> {
+        let mut rendered = Vec::new();
+        for constructor in &constructors {
+            let name = text(constructor.name.as_slice());
+            if name == "boom" {
+                return Err("exploding constructor".into());
+            }
+            let selectors: Vec<String> = constructor
+                .selectors
+                .iter()
+                .map(|(selector, sort)| format!("({} {})", text(selector.as_slice()), sort))
+                .collect();
+            rendered.push(if selectors.is_empty() {
+                format!("({name})")
+            } else {
+                format!("({name} {})", selectors.join(" "))
+            });
+        }
+        self.events
+            .push(format!("end-datatype ({})", rendered.join(" ")));
+        self.sort_params.clear();
+        self.datatype_index += 1;
+        Ok(())
+    }
+
+    fn end_declare_datatypes(&mut self) -> Result<(), String> {
+        if self.datatype_sorts.iter().any(|name| name == "Unendable") {
+            return Err("unendable datatypes".into());
+        }
+        self.events.push("end-datatypes".into());
+        // a real handler keeps the sorts; forgetting them here makes
+        // the end of the command observable in later events
+        self.datatype_sorts.clear();
+        self.datatype_index = 0;
         Ok(())
     }
 }
@@ -1046,6 +1137,560 @@ fn trivial_command_errors_point_at_offending_token() {
             err,
             CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
         ),
+        "{err:?}"
+    );
+}
+
+// --- declare-datatypes ---
+//
+// The command streams: the sort declarations arrive first, so that the
+// handler knows the declared sort symbols before any selector sort is
+// constructed (the recursive references below resolve as `<name>`), and
+// each datatype's parameters arrive before its constructors (parameters
+// resolve as `[name]` inside the selector sorts of that datatype only).
+
+#[test]
+fn datatype_callbacks_deliver_sorts_and_params_before_selector_sorts() {
+    // the spec's mutually recursive Tree / TreeList example
+    let mut handler = Resolving::default();
+    parse_resolving(
+        &mut handler,
+        b"(declare-datatypes ((Tree 1) (TreeList 1)) \
+            ((par (X) ((node (value X) (children (TreeList X))))) \
+             (par (Y) ((empty) (insert (head (Tree Y)) (tail (TreeList Y)))))))",
+    );
+    assert_eq!(
+        handler.events,
+        [
+            "start-datatypes ((Tree 1) (TreeList 1))",
+            "start-datatype (X)",
+            // `TreeList` was declared before this selector sort was constructed,
+            // and `X` is the parameter of this datatype
+            "end-datatype ((node (value [X]) (children (<TreeList> [X]))))",
+            "start-datatype (Y)",
+            "end-datatype ((empty) (insert (head (<Tree> [Y])) (tail (<TreeList> [Y]))))",
+            "end-datatypes",
+        ]
+    );
+}
+
+#[test]
+fn enumeration_datatype_has_nullary_constructors() {
+    let mut handler = Resolving::default();
+    parse_resolving(
+        &mut handler,
+        b"(declare-datatypes ((Color 0)) (((red) (green) (blue))))",
+    );
+    assert_eq!(
+        handler.events,
+        [
+            "start-datatypes ((Color 0))",
+            // the simple form has no parameters
+            "start-datatype ()",
+            "end-datatype ((red) (green) (blue))",
+            "end-datatypes",
+        ]
+    );
+}
+
+#[test]
+fn recursive_datatype_resolves_its_own_sort_in_selectors() {
+    let mut handler = Resolving::default();
+    parse_resolving(
+        &mut handler,
+        b"(declare-datatypes ((Lst 0)) (((nil) (cons (hd Int) (tl Lst)))))",
+    );
+    assert_eq!(
+        handler.events,
+        [
+            "start-datatypes ((Lst 0))",
+            "start-datatype ()",
+            "end-datatype ((nil) (cons (hd Int) (tl <Lst>)))",
+            "end-datatypes",
+        ]
+    );
+}
+
+#[test]
+fn corpus_datatype_with_indexed_selector_sorts() {
+    // shape taken from the UFBVDT corpus: a record-like datatype whose
+    // selectors mix the datatype itself and indexed bit-vector sorts
+    let mut handler = Resolving::default();
+    parse_resolving(
+        &mut handler,
+        b"(declare-datatypes ((x254 0)) \
+            (((x304 (x379 x254) (x127 (_ BitVec 256))) \
+              (x269 (x222 x254) (x221 x254) (x534 (_ BitVec 256))) \
+              (x409 (x99 (_ BitVec 256))))))",
+    );
+    assert_eq!(
+        handler.events,
+        [
+            "start-datatypes ((x254 0))",
+            "start-datatype ()",
+            "end-datatype (\
+                (x304 (x379 <x254>) (x127 (_ BitVec 256))) \
+                (x269 (x222 <x254>) (x221 <x254>) (x534 (_ BitVec 256))) \
+                (x409 (x99 (_ BitVec 256))))",
+            "end-datatypes",
+        ]
+    );
+}
+
+#[test]
+fn simple_and_parametric_datatypes_mix_in_one_command() {
+    let mut handler = Resolving::default();
+    parse_resolving(
+        &mut handler,
+        b"(declare-datatypes ((Unit 0) (Box 1) (Pair 2)) \
+            (((unit)) \
+             (par (X) ((box (unbox X)))) \
+             (par (X Y) ((pair (first X) (second Y))))))",
+    );
+    assert_eq!(
+        handler.events,
+        [
+            "start-datatypes ((Unit 0) (Box 1) (Pair 2))",
+            "start-datatype ()",
+            "end-datatype ((unit))",
+            "start-datatype (X)",
+            "end-datatype ((box (unbox [X])))",
+            "start-datatype (X Y)",
+            "end-datatype ((pair (first [X]) (second [Y])))",
+            "end-datatypes",
+        ]
+    );
+}
+
+#[test]
+fn datatype_params_are_scoped_to_their_datatype() {
+    // `X` is a parameter of the first datatype only; in the second
+    // datatype and in the following command it is an ordinary sort
+    let mut handler = Resolving::default();
+    parse_resolving(
+        &mut handler,
+        b"(declare-datatypes ((A 1) (B 0)) ((par (X) ((a (v X)))) ((b (w X))))) \
+          (declare-fun f (X A) B)",
+    );
+    assert_eq!(
+        handler.events,
+        [
+            "start-datatypes ((A 1) (B 0))",
+            "start-datatype (X)",
+            "end-datatype ((a (v [X])))",
+            "start-datatype ()",
+            "end-datatype ((b (w X)))",
+            "end-datatypes",
+            // the command has ended: this handler forgets the sorts on end
+            "declare-fun f (X A) B",
+        ]
+    );
+}
+
+#[test]
+fn quoted_par_is_an_ordinary_constructor_name() {
+    // `par` is a reserved word only when unquoted
+    let mut handler = Resolving::default();
+    parse_resolving(&mut handler, b"(declare-datatypes ((A 0)) (((|par|))))");
+    assert_eq!(
+        handler.events,
+        [
+            "start-datatypes ((A 0))",
+            "start-datatype ()",
+            "end-datatype ((par))",
+            "end-datatypes",
+        ]
+    );
+    // unquoted, it cannot name a constructor
+    let err = assert_parser_error(b"(declare-datatypes ((A 0)) (((par))))", 30, 33);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::Symbol])
+        ),
+        "{err:?}"
+    );
+}
+
+#[test]
+fn repeated_declare_datatypes_reuse_the_persistent_parser() {
+    // a parametric declaration followed by simple ones: the parameter list,
+    // the constructor buffers, and the declaration count must all reset
+    let mut handler = Resolving::default();
+    parse_resolving(
+        &mut handler,
+        b"(declare-datatypes ((T 1)) ((par (X) ((t (v X) (w (T X))))))) \
+          (declare-datatypes ((B 0) (C 0)) (((b (f C))) ((c)))) \
+          (declare-datatypes ((D 0)) (((d))))",
+    );
+    assert_eq!(
+        handler.events,
+        [
+            "start-datatypes ((T 1))",
+            "start-datatype (X)",
+            "end-datatype ((t (v [X]) (w (<T> [X]))))",
+            "end-datatypes",
+            "start-datatypes ((B 0) (C 0))",
+            "start-datatype ()",
+            "end-datatype ((b (f <C>)))",
+            "start-datatype ()",
+            "end-datatype ((c))",
+            "end-datatypes",
+            "start-datatypes ((D 0))",
+            "start-datatype ()",
+            "end-datatype ((d))",
+            "end-datatypes",
+        ]
+    );
+}
+
+#[test]
+fn declare_datatypes_handler_errors_point_at_the_triggering_token() {
+    // start_declare_datatypes: the closing parenthesis of the sort declarations
+    let handler = assert_handler_error(
+        b"(declare-datatypes ((Forbidden 0)) (((a))))",
+        "forbidden datatype name",
+        33,
+        34,
+    );
+    assert!(handler.events.is_empty());
+
+    // start_datatype, simple form: the opening parenthesis of the first
+    // constructor, which is the token revealing that there are no parameters
+    let handler = assert_handler_error(
+        b"(declare-datatypes ((Unstartable 0)) (((a))))",
+        "unstartable datatype",
+        39,
+        40,
+    );
+    assert_eq!(handler.events, ["start-datatypes ((Unstartable 0))"]);
+
+    // start_datatype, parametric form: the closing parenthesis of the parameters
+    let handler = assert_handler_error(
+        b"(declare-datatypes ((Unstartable 1)) ((par (X) ((a)))))",
+        "unstartable datatype",
+        45,
+        46,
+    );
+    assert_eq!(handler.events, ["start-datatypes ((Unstartable 1))"]);
+
+    // end_datatype, simple form: the closing parenthesis of the constructors,
+    // which also closes the declaration
+    let handler = assert_handler_error(
+        b"(declare-datatypes ((A 0)) (((boom))))",
+        "exploding constructor",
+        35,
+        36,
+    );
+    assert_eq!(
+        handler.events,
+        ["start-datatypes ((A 0))", "start-datatype ()"]
+    );
+
+    // end_datatype, parametric form: the closing parenthesis of the constructors,
+    // one before the parenthesis closing the declaration
+    let handler = assert_handler_error(
+        b"(declare-datatypes ((A 1)) ((par (X) ((boom)))))",
+        "exploding constructor",
+        44,
+        45,
+    );
+    assert_eq!(
+        handler.events,
+        ["start-datatypes ((A 1))", "start-datatype (X)"]
+    );
+
+    // end_declare_datatypes: the closing parenthesis of the declaration list
+    let handler = assert_handler_error(
+        b"(declare-datatypes ((Unendable 0)) (((a))))",
+        "unendable datatypes",
+        41,
+        42,
+    );
+    assert_eq!(
+        handler.events,
+        [
+            "start-datatypes ((Unendable 0))",
+            "start-datatype ()",
+            "end-datatype ((a))",
+        ]
+    );
+}
+
+#[test]
+fn declare_datatypes_errors_point_at_offending_token() {
+    // at least one sort must be declared
+    let err = assert_parser_error(b"(declare-datatypes () ())", 20, 21);
+    assert!(
+        matches!(err, CategoryParserErrorKind::EmptyDatatypeSortDeclarations),
+        "{err:?}"
+    );
+    // each sort declaration is parenthesized
+    let err = assert_parser_error(b"(declare-datatypes (A 0) (((a))))", 20, 21);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenOpen])
+        ),
+        "{err:?}"
+    );
+    // the arity is required
+    let err = assert_parser_error(b"(declare-datatypes ((A)) (((a))))", 22, 23);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::Numeral])
+        ),
+        "{err:?}"
+    );
+    // the declaration list is required
+    let err = assert_parser_error(b"(declare-datatypes ((A 0)))", 26, 27);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenOpen])
+        ),
+        "{err:?}"
+    );
+    // fewer declarations than sorts: the list closes where a declaration should start
+    let err = assert_parser_error(b"(declare-datatypes ((A 0) (B 0)) (((a))))", 39, 40);
+    assert!(
+        matches!(err, CategoryParserErrorKind::ExpectedDatatype),
+        "{err:?}"
+    );
+    // more declarations than sorts: only the list end is allowed after the last one
+    let err = assert_parser_error(b"(declare-datatypes ((A 0)) (((a)) ((b))))", 34, 35);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
+        ),
+        "{err:?}"
+    );
+    // a declaration starts with `par` or a constructor, not a symbol
+    let err = assert_parser_error(b"(declare-datatypes ((A 0)) ((foo)))", 29, 32);
+    assert!(
+        matches!(err, CategoryParserErrorKind::ExpectedDatatypeKind),
+        "{err:?}"
+    );
+    // nor may it be empty
+    let err = assert_parser_error(b"(declare-datatypes ((A 0)) (()))", 29, 30);
+    assert!(
+        matches!(err, CategoryParserErrorKind::ExpectedDatatypeKind),
+        "{err:?}"
+    );
+    // a parametric declaration needs at least one parameter
+    let err = assert_parser_error(b"(declare-datatypes ((A 0)) ((par () ((a)))))", 34, 35);
+    assert!(
+        matches!(err, CategoryParserErrorKind::EmptyDatatypeParameters),
+        "{err:?}"
+    );
+    // and at least one constructor
+    let err = assert_parser_error(b"(declare-datatypes ((A 1)) ((par (X) ())))", 38, 39);
+    assert!(
+        matches!(err, CategoryParserErrorKind::EmptyDatatypeConstructors),
+        "{err:?}"
+    );
+    // a parametric declaration is closed by its own parenthesis
+    let err = assert_parser_error(b"(declare-datatypes ((A 1)) ((par (X) ((a))))", 44, 44);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
+        ),
+        "{err:?}"
+    );
+    // a constructor name is a symbol
+    let err = assert_parser_error(b"(declare-datatypes ((A 0)) (((1))))", 30, 31);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::Symbol])
+        ),
+        "{err:?}"
+    );
+    // a selector is a parenthesized pair
+    let err = assert_parser_error(b"(declare-datatypes ((A 0)) (((a x))))", 32, 33);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenOpen])
+        ),
+        "{err:?}"
+    );
+    // with a sort
+    let err = assert_parser_error(b"(declare-datatypes ((A 0)) (((a (x)))))", 34, 35);
+    assert!(
+        matches!(err, CategoryParserErrorKind::ExpectedSort),
+        "{err:?}"
+    );
+    // nothing may follow the declaration list
+    let err = assert_parser_error(b"(declare-datatypes ((A 0)) (((a))) extra)", 35, 40);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
+        ),
+        "{err:?}"
+    );
+}
+
+// --- declare-datatype (syntax sugar) ---
+//
+// `(declare-datatype D dec)` abbreviates `(declare-datatypes ((D k)) (dec))`
+// with `k` the number of parameters of `dec` (zero for the simple form),
+// so the handler observes exactly the events of the desugared command.
+
+#[test]
+fn declare_datatype_is_declare_datatypes_with_one_sort() {
+    let mut handler = Resolving::default();
+    parse_resolving(
+        &mut handler,
+        b"(declare-datatype Lst ((nil) (cons (hd Int) (tl Lst))))",
+    );
+    assert_eq!(
+        handler.events,
+        [
+            // the arity of the simple form is zero
+            "start-datatypes ((Lst 0))",
+            "start-datatype ()",
+            "end-datatype ((nil) (cons (hd Int) (tl <Lst>)))",
+            "end-datatypes",
+        ]
+    );
+}
+
+#[test]
+fn parametric_declare_datatype_derives_arity_from_params() {
+    let mut handler = Resolving::default();
+    parse_resolving(
+        &mut handler,
+        b"(declare-datatype Tree (par (X) ((leaf) (node (l (Tree X)) (v X) (r (Tree X)))))) \
+          (declare-datatype Pair (par (X Y) ((pair (first X) (second Y)))))",
+    );
+    assert_eq!(
+        handler.events,
+        [
+            "start-datatypes ((Tree 1))",
+            "start-datatype (X)",
+            "end-datatype ((leaf) (node (l (<Tree> [X])) (v [X]) (r (<Tree> [X]))))",
+            "end-datatypes",
+            "start-datatypes ((Pair 2))",
+            "start-datatype (X Y)",
+            "end-datatype ((pair (first [X]) (second [Y])))",
+            "end-datatypes",
+        ]
+    );
+}
+
+#[test]
+fn declare_datatype_and_declare_datatypes_produce_identical_events() {
+    let mut sugar = Resolving::default();
+    parse_resolving(
+        &mut sugar,
+        b"(declare-datatype Opt (par (X) ((none) (some (val X)))))",
+    );
+    let mut plain = Resolving::default();
+    parse_resolving(
+        &mut plain,
+        b"(declare-datatypes ((Opt 1)) ((par (X) ((none) (some (val X))))))",
+    );
+    assert_eq!(sugar.events, plain.events);
+}
+
+#[test]
+fn declare_datatype_handler_errors_point_at_the_triggering_token() {
+    // start_declare_datatypes is deferred until the arity is known,
+    // but the error is about the name, so it points at the name
+    let handler = assert_handler_error(
+        b"(declare-datatype Forbidden ((a)))",
+        "forbidden datatype name",
+        18,
+        27,
+    );
+    assert!(handler.events.is_empty());
+
+    // start_datatype: the opening parenthesis of the first constructor
+    let handler = assert_handler_error(
+        b"(declare-datatype Unstartable ((a)))",
+        "unstartable datatype",
+        31,
+        32,
+    );
+    assert_eq!(handler.events, ["start-datatypes ((Unstartable 0))"]);
+
+    // end_datatype: the closing parenthesis of the constructors
+    let handler = assert_handler_error(
+        b"(declare-datatype A ((boom)))",
+        "exploding constructor",
+        27,
+        28,
+    );
+    assert_eq!(
+        handler.events,
+        ["start-datatypes ((A 0))", "start-datatype ()"]
+    );
+
+    // end_declare_datatypes: the same token, as the single declaration ends the list
+    let handler = assert_handler_error(
+        b"(declare-datatype Unendable ((a)))",
+        "unendable datatypes",
+        32,
+        33,
+    );
+    assert_eq!(
+        handler.events,
+        [
+            "start-datatypes ((Unendable 0))",
+            "start-datatype ()",
+            "end-datatype ((a))",
+        ]
+    );
+}
+
+#[test]
+fn declare_datatype_errors_point_at_offending_token() {
+    // the name is a symbol
+    let err = assert_parser_error(b"(declare-datatype 1 ((a)))", 18, 19);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::Symbol])
+        ),
+        "{err:?}"
+    );
+    // the declaration is required
+    let err = assert_parser_error(b"(declare-datatype A)", 19, 20);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenOpen])
+        ),
+        "{err:?}"
+    );
+    // the declaration has the same shape as in declare-datatypes
+    let err = assert_parser_error(b"(declare-datatype A (()))", 21, 22);
+    assert!(
+        matches!(err, CategoryParserErrorKind::ExpectedDatatypeKind),
+        "{err:?}"
+    );
+    let err = assert_parser_error(b"(declare-datatype A (par () ((a))))", 26, 27);
+    assert!(
+        matches!(err, CategoryParserErrorKind::EmptyDatatypeParameters),
+        "{err:?}"
+    );
+    // exactly one declaration, without a surrounding list
+    let err = assert_parser_error(b"(declare-datatype A ((a)) ((b)))", 26, 27);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
+        ),
+        "{err:?}"
+    );
+    let err = assert_parser_error(b"(declare-datatype A (((a))))", 21, 22);
+    assert!(
+        matches!(err, CategoryParserErrorKind::ExpectedDatatypeKind),
         "{err:?}"
     );
 }

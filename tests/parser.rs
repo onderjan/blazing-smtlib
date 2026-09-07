@@ -6,9 +6,9 @@ mod common;
 use common::{assert_error_span, assert_parser_error, parse, parse_with};
 
 use smt_parser_rs::{
-    CommandHandler, NonstandardCommandError, SmtAttributeValue, SmtFunctionSignature, SmtHandler,
-    SmtKeyword, SmtNumeral, SmtQuantifierKind, SmtSExpr, SmtSort, SmtStringContent, SmtSymbol,
-    SmtSymbolView, SmtTerm,
+    CommandHandler, NonstandardCommandError, SmtAttributeValue, SmtDatatypeConstructor,
+    SmtFunctionSignature, SmtHandler, SmtKeyword, SmtNumeral, SmtQuantifierKind, SmtSExpr, SmtSort,
+    SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm,
     read::{
         SmtReadErrorKind,
         parser::{CategoryParserErrorKind, ClosedParser, CommandAction, CommandParser, TermParser},
@@ -259,6 +259,28 @@ impl CommandHandler for Recording {
         self.commands.push("end-define-fun");
         Ok(())
     }
+    fn start_declare_datatypes(
+        &mut self,
+        _sort_declarations: Vec<(SmtSymbol, SmtNumeral)>,
+    ) -> Result<(), Self::Error> {
+        self.commands.push("start-declare-datatypes");
+        Ok(())
+    }
+    fn start_datatype(&mut self, _params: Vec<SmtSymbol>) -> Result<(), Self::Error> {
+        self.commands.push("start-datatype");
+        Ok(())
+    }
+    fn end_datatype(
+        &mut self,
+        _constructors: Vec<SmtDatatypeConstructor<Self>>,
+    ) -> Result<(), Self::Error> {
+        self.commands.push("end-datatype");
+        Ok(())
+    }
+    fn end_declare_datatypes(&mut self) -> Result<(), Self::Error> {
+        self.commands.push("end-declare-datatypes");
+        Ok(())
+    }
 }
 
 #[test]
@@ -310,6 +332,46 @@ fn define_sort_start_and_end_surround_the_body() {
     assert_eq!(
         handler.commands,
         ["start-define-sort", "end-define-sort", "check-sat"]
+    );
+}
+
+#[test]
+fn declare_datatypes_callbacks_surround_each_datatype() {
+    let mut handler = Recording::default();
+    parse_with(
+        &mut handler,
+        b"(declare-datatypes ((A 0) (B 1)) (((a)) (par (X) ((b (v X)))))) (check-sat)",
+    )
+    .unwrap_or_else(|err| panic!("unexpected error at {:?}", err.span()));
+    assert_eq!(
+        handler.commands,
+        [
+            "start-declare-datatypes",
+            "start-datatype",
+            "end-datatype",
+            "start-datatype",
+            "end-datatype",
+            "end-declare-datatypes",
+            "check-sat",
+        ]
+    );
+}
+
+#[test]
+fn declare_datatype_produces_the_desugared_callbacks() {
+    // the sugar form is handled as declare-datatypes with one sort
+    let mut handler = Recording::default();
+    parse_with(&mut handler, b"(declare-datatype A ((a))) (check-sat)")
+        .unwrap_or_else(|err| panic!("unexpected error at {:?}", err.span()));
+    assert_eq!(
+        handler.commands,
+        [
+            "start-declare-datatypes",
+            "start-datatype",
+            "end-datatype",
+            "end-declare-datatypes",
+            "check-sat",
+        ]
     );
 }
 
