@@ -61,11 +61,10 @@ pub trait CommandHandler: SmtHandler {
 
     fn command_set_logic(&mut self, logic: SmtSymbol) -> Result<(), Self::Error>;
 
-    fn command_declare_const(
-        &mut self,
-        name: SmtSymbol,
-        sort: Self::Sort,
-    ) -> Result<(), Self::Error>;
+    /// Performs function declaration (`declare-fun` / `declare-const`).
+    ///
+    /// The command `declare-const` is just syntax sugar for
+    /// `declare-fun` without parameters.
     fn command_declare_fun(
         &mut self,
         name: SmtSymbol,
@@ -75,7 +74,15 @@ pub trait CommandHandler: SmtHandler {
 
     fn command_assert(&mut self, term: Self::Term) -> Result<(), Self::Error>;
 
-    fn command_check_sat(&mut self) -> Result<(), Self::Error>;
+    /// Checks satisfiability (`check-sat` / `check-sat-assuming`).
+    ///
+    /// The command `check-sat-assuming` triggers checking satisfiability
+    /// of the conjunction of the assertions in the current context
+    /// and additional assumptions given within the command.
+    ///
+    /// The command `check-sat` is just syntax sugar for
+    /// `check-sat-assuming` without additional assumptions.
+    fn command_check_sat(&mut self, assumptions: Vec<Self::Term>) -> Result<(), Self::Error>;
 
     fn command_reset(&mut self) -> Result<(), Self::Error>;
 
@@ -83,11 +90,19 @@ pub trait CommandHandler: SmtHandler {
 
     fn command_exit(&mut self) -> Result<(), Self::Error>;
 
+    /// Starts function definition body (in `define-fun` / `define-const`).
+    ///
+    /// The command `define-const` is just syntax sugar for
+    /// `define-fun` without parameters.
     fn start_define_fun(
         &mut self,
         signature: SmtFunctionSignature<Self>,
     ) -> Result<(), Self::Error>;
 
+    /// Ends function definition body (in `define-fun` / `define-const`).
+    ///
+    /// The command `define-const` is just syntax sugar for
+    /// `define-fun` without parameters.
     fn end_define_fun(&mut self, term: Self::Term) -> Result<(), Self::Error>;
 }
 
@@ -198,14 +213,6 @@ impl CommandHandler for CheckStandardSyntax {
         Ok(())
     }
 
-    fn command_declare_const(
-        &mut self,
-        _name: SmtSymbol,
-        _sort: Self::Sort,
-    ) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
     fn command_declare_fun(
         &mut self,
         _name: SmtSymbol,
@@ -219,7 +226,7 @@ impl CommandHandler for CheckStandardSyntax {
         Ok(())
     }
 
-    fn command_check_sat(&mut self) -> Result<(), Self::Error> {
+    fn command_check_sat(&mut self, _assumptions: Vec<Self::Term>) -> Result<(), Self::Error> {
         Ok(())
     }
 

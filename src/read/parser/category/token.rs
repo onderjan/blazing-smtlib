@@ -14,6 +14,10 @@ macro_rules! token_parser {
             pub fn new() -> Self {
                 Self
             }
+
+            pub fn restart(&mut self) {
+                // nothing to restart
+            }
         }
 
         impl Default for $parser {
