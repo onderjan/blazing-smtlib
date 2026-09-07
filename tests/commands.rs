@@ -158,9 +158,6 @@ impl CommandHandler for Resolving {
     fn command_set_logic(&mut self, _logic: SmtSymbol) -> Result<(), String> {
         Ok(())
     }
-    fn command_declare_const(&mut self, _name: SmtSymbol, _sort: String) -> Result<(), String> {
-        Ok(())
-    }
     fn command_declare_fun(
         &mut self,
         name: SmtSymbol,
@@ -181,8 +178,14 @@ impl CommandHandler for Resolving {
         Ok(())
     }
 
-    fn command_check_sat(&mut self) -> Result<(), String> {
-        self.events.push("check-sat".into());
+    fn command_check_sat(&mut self, assumptions: Vec<String>) -> Result<(), String> {
+        // rendered as plain `check-sat` without assumptions, so that
+        // `check-sat` and `(check-sat-assuming ())` are indistinguishable
+        self.events.push(if assumptions.is_empty() {
+            "check-sat".into()
+        } else {
+            format!("check-sat ({})", assumptions.join(" "))
+        });
         Ok(())
     }
 
@@ -277,6 +280,208 @@ fn declare_fun_parameter_list() {
             "declare-fun f (A (Array Int Int)) Bool",
             "declare-fun g () Int",
         ]
+    );
+}
+
+// --- Syntax-sugar commands ---
+//
+// `declare-const`, `define-const` and `check-sat` are abbreviations of
+// `declare-fun`, `define-fun` and `check-sat-assuming` respectively, and
+// share their handler callbacks. These tests check that the sugar form is
+// observationally identical to the spelled-out one, including callback order.
+
+#[test]
+fn declare_const_is_declare_fun_without_params() {
+    let mut handler = Resolving::default();
+    parse_resolving(
+        &mut handler,
+        b"(declare-const x Int) (declare-fun y () Int) (declare-const a (Array Int Bool))",
+    );
+    assert_eq!(
+        handler.events,
+        [
+            "declare-fun x () Int",
+            "declare-fun y () Int",
+            "declare-fun a () (Array Int Bool)",
+        ]
+    );
+}
+
+#[test]
+fn define_const_is_define_fun_without_params() {
+    let mut handler = Resolving::default();
+    parse_resolving(
+        &mut handler,
+        b"(define-const c Int (+ x 1)) (define-fun d () Int (+ x 1))",
+    );
+    assert_eq!(
+        handler.events,
+        [
+            "start c () Int",
+            "end (+ x 1)",
+            "start d () Int",
+            "end (+ x 1)",
+        ]
+    );
+}
+
+#[test]
+fn define_const_signature_arrives_before_body() {
+    // a handler error raised from start_define_fun must prevent the body
+    // from being handled at all, exactly as for define-fun
+    let handler = assert_handler_error(
+        b"(define-const forbidden Int 5)",
+        "forbidden function name",
+        24,
+        27,
+    );
+    assert!(handler.events.is_empty());
+}
+
+#[test]
+fn define_const_body_error_points_at_last_body_token() {
+    let handler = assert_handler_error(b"(define-const c Int boom)", "exploding body", 20, 24);
+    assert_eq!(handler.events, ["start c () Int"]);
+}
+
+#[test]
+fn define_const_does_not_inherit_previous_scope() {
+    // the parameter scope of a preceding define-fun must be closed before
+    // the define-const body is constructed
+    let mut handler = Resolving::default();
+    parse_resolving(
+        &mut handler,
+        b"(define-fun a ((x Int)) Int x) (define-const c Int x) (define-fun b ((x Int)) Int x)",
+    );
+    assert_eq!(
+        handler.events,
+        [
+            "start a ((x Int)) Int",
+            "end [x]",
+            "start c () Int",
+            "end x",
+            "start b ((x Int)) Int",
+            "end [x]",
+        ]
+    );
+}
+
+#[test]
+fn define_const_errors_point_at_offending_token() {
+    // the constant name must be a symbol
+    let err = assert_parser_error(b"(define-const 1 Int 5)", 14, 15);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::Symbol])
+        ),
+        "{err:?}"
+    );
+    // define-const has no parameter list, an empty one is not a sort
+    let err = assert_parser_error(b"(define-const c () Int 5)", 17, 18);
+    assert!(
+        matches!(err, CategoryParserErrorKind::ExpectedSortInner),
+        "{err:?}"
+    );
+    // the body term is required
+    let err = assert_parser_error(b"(define-const c Int)", 19, 20);
+    assert!(
+        matches!(err, CategoryParserErrorKind::ExpectedTerm),
+        "{err:?}"
+    );
+    // exactly one body term is allowed
+    let err = assert_parser_error(b"(define-const c Int 5 6)", 22, 23);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
+        ),
+        "{err:?}"
+    );
+}
+
+#[test]
+fn check_sat_assuming_passes_assumption_terms() {
+    let mut handler = Resolving::default();
+    parse_resolving(
+        &mut handler,
+        b"(check-sat-assuming (a b)) (check-sat-assuming ((not a) (f 1 x)))",
+    );
+    assert_eq!(
+        handler.events,
+        ["check-sat (a b)", "check-sat ((not a) (f 1 x))"]
+    );
+}
+
+#[test]
+fn check_sat_is_check_sat_assuming_without_assumptions() {
+    let mut handler = Resolving::default();
+    parse_resolving(&mut handler, b"(check-sat) (check-sat-assuming ())");
+    assert_eq!(handler.events, ["check-sat", "check-sat"]);
+}
+
+#[test]
+fn repeated_check_sat_assumings_reuse_the_persistent_parser() {
+    // assumptions of a previous command must not leak into the next one
+    let mut handler = Resolving::default();
+    parse_resolving(
+        &mut handler,
+        b"(check-sat-assuming (a b c)) (check-sat) (check-sat-assuming (d)) (check-sat-assuming ())",
+    );
+    assert_eq!(
+        handler.events,
+        [
+            "check-sat (a b c)",
+            "check-sat",
+            "check-sat (d)",
+            "check-sat"
+        ]
+    );
+}
+
+#[test]
+fn check_sat_errors_point_at_offending_token() {
+    // check-sat takes no arguments, assumptions need check-sat-assuming
+    let err = assert_parser_error(b"(check-sat x)", 11, 12);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
+        ),
+        "{err:?}"
+    );
+    // the assumption list is required, even when empty
+    let err = assert_parser_error(b"(check-sat-assuming)", 19, 20);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenOpen])
+        ),
+        "{err:?}"
+    );
+    // the assumptions must be parenthesized as a list
+    let err = assert_parser_error(b"(check-sat-assuming a)", 20, 21);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenOpen])
+        ),
+        "{err:?}"
+    );
+    // nothing may follow the assumption list
+    let err = assert_parser_error(b"(check-sat-assuming (a b) extra)", 26, 31);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
+        ),
+        "{err:?}"
+    );
+    // each assumption must be a term
+    let err = assert_parser_error(b"(check-sat-assuming (a :kw))", 23, 26);
+    assert!(
+        matches!(err, CategoryParserErrorKind::ExpectedTerm),
+        "{err:?}"
     );
 }
 

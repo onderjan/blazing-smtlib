@@ -21,6 +21,7 @@ fn valid_input_has_no_error() {
     assert!(parse(b"(set-logic QF_UF)\n(check-sat)\n").is_ok());
     assert!(parse(b"(declare-const x Bool) (assert x) (check-sat) (exit)").is_ok());
     assert!(parse(b"(define-fun inc ((x Int)) Int (+ x 1)) (check-sat)").is_ok());
+    assert!(parse(b"(define-const c Int 5) (check-sat-assuming ((= c 5)))").is_ok());
 }
 
 #[test]
@@ -182,10 +183,6 @@ impl CommandHandler for Recording {
         self.commands.push("set-logic");
         Ok(())
     }
-    fn command_declare_const(&mut self, _name: SmtSymbol, _sort: ()) -> Result<(), Self::Error> {
-        self.commands.push("declare-const");
-        Ok(())
-    }
     fn command_declare_fun(
         &mut self,
         _name: SmtSymbol,
@@ -199,8 +196,12 @@ impl CommandHandler for Recording {
         self.commands.push("assert");
         Ok(())
     }
-    fn command_check_sat(&mut self) -> Result<(), Self::Error> {
-        self.commands.push("check-sat");
+    fn command_check_sat(&mut self, assumptions: Vec<()>) -> Result<(), Self::Error> {
+        self.commands.push(if assumptions.is_empty() {
+            "check-sat"
+        } else {
+            "check-sat-assuming"
+        });
         Ok(())
     }
     fn command_reset(&mut self) -> Result<(), Self::Error> {
@@ -273,7 +274,8 @@ fn nonstandard_command_is_parsed_by_handler_parser() {
     .unwrap_or_else(|err| panic!("unexpected error at {:?}", err.span()));
     assert_eq!(
         handler.commands,
-        ["declare-const", "my-assert", "check-sat"]
+        // declare-const is syntax sugar for declare-fun and shares its callback
+        ["declare-fun", "my-assert", "check-sat"]
     );
 }
 
