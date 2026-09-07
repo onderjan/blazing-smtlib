@@ -266,11 +266,11 @@ impl CommandHandler for Recording {
         self.commands.push("start-declare-datatypes");
         Ok(())
     }
-    fn start_datatype(&mut self, _params: Vec<SmtSymbol>) -> Result<(), Self::Error> {
+    fn start_datatype_declaration(&mut self, _params: Vec<SmtSymbol>) -> Result<(), Self::Error> {
         self.commands.push("start-datatype");
         Ok(())
     }
-    fn end_datatype(
+    fn end_datatype_declaration(
         &mut self,
         _constructors: Vec<SmtDatatypeConstructor<Self>>,
     ) -> Result<(), Self::Error> {

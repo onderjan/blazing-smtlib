@@ -75,7 +75,7 @@ pub enum CategoryParserErrorKind {
     ExpectedCommandName,
     ExpectedDatatype,
     ExpectedDatatypeKind,
-    EmptyDatatypeSortDeclarations,
+    EmptyDatatypeIntroductions,
     EmptyDatatypeParameters,
     EmptyDatatypeConstructors,
 }

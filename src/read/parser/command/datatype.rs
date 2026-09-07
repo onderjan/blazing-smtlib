@@ -10,11 +10,12 @@ use crate::{
     token::{Reserved, Token, TokenKind},
 };
 
+/// Parser for a single datatype introduction (name and arity in parentheses).
+type IntroductionParser<H> = ParenParser<H, PairParser<H, SymbolParser, NumeralParser>>;
+
 /// Parser for a single datatype constructor.
 type ConstructorParser<H> =
     OpenedParser<H, PairParser<H, SymbolParser, ClosedMultipleParser<H, SortedVarParser<H>>>>;
-
-type SortDeclarationParser<H> = ParenParser<H, PairParser<H, SymbolParser, NumeralParser>>;
 
 #[derive(Clone, Copy)]
 enum DatatypeState {
@@ -43,7 +44,7 @@ enum DatatypeState {
 /// Parser for a datatype.
 struct DatatypeParser<H: CommandHandler> {
     state: DatatypeState,
-    single_sort: Option<(SmtSymbol, SmtSpan)>,
+    single_introduction: Option<(SmtSymbol, SmtSpan)>,
 
     symbols_parser: ParenMultipleParser<H, SymbolParser>,
     constructors_parser: ClosedMultipleParser<H, ConstructorParser<H>>,
@@ -53,7 +54,7 @@ impl<H: CommandHandler> DatatypeParser<H> {
     fn new() -> Self {
         Self {
             state: DatatypeState::Start,
-            single_sort: None,
+            single_introduction: None,
             symbols_parser: ParenMultipleParser::new(),
             constructors_parser: ClosedMultipleParser::new(),
         }
@@ -64,7 +65,7 @@ impl<H: CommandHandler> DatatypeParser<H> {
     /// This mode calls `start_declare_datatypes` as per the definition of
     /// `declare-datatype`, which depends on the form of the single datatype.
     fn set_single_datatype_mode(&mut self, name: SmtSymbol, span: SmtSpan) {
-        self.single_sort = Some((name, span))
+        self.single_introduction = Some((name, span))
     }
 
     /// Starts a datatype, taking into account the "single datatype mode".
@@ -74,7 +75,7 @@ impl<H: CommandHandler> DatatypeParser<H> {
         params: Vec<SmtSymbol>,
         span: SmtSpan,
     ) -> Result<(), ParserError<H::Error>> {
-        if let Some((name, name_span)) = self.single_sort.take() {
+        if let Some((name, name_span)) = self.single_introduction.take() {
             // start declare datatypes with the arity equal to the number of parameters
             let arity = SmtNumeral::from_usize(params.len());
             handle_err(
@@ -82,7 +83,7 @@ impl<H: CommandHandler> DatatypeParser<H> {
                 name_span,
             )?;
         }
-        handle_err(handler.start_datatype(params), span)
+        handle_err(handler.start_datatype_declaration(params), span)
     }
 }
 
@@ -97,7 +98,7 @@ impl<H: CommandHandler> CategoryParser<H> for DatatypeParser<H> {
 
     fn restart(&mut self) {
         self.state = DatatypeState::Start;
-        self.single_sort = None;
+        self.single_introduction = None;
         self.symbols_parser.restart();
         self.constructors_parser.restart();
     }
@@ -199,7 +200,7 @@ impl<H: CommandHandler> CategoryParser<H> for DatatypeParser<H> {
                 .map(|(name, selectors)| SmtDatatypeConstructor { name, selectors })
                 .collect();
             // end the datatype
-            handle_err(handler.end_datatype(constructors), span)?;
+            handle_err(handler.end_datatype_declaration(constructors), span)?;
             if matches!(self.state, DatatypeState::SimpleConstructors) {
                 // we have already parsed the closing parenthesis
                 // reset and break
@@ -216,10 +217,10 @@ impl<H: CommandHandler> CategoryParser<H> for DatatypeParser<H> {
 
 #[derive(Clone, Copy)]
 enum DeclareDatatypesState {
-    /// Parsing the sort declarations.
-    SortDeclarations,
+    /// Parsing the datatype introductions.
+    Introductions,
     /// Parsing the datatype declarations.
-    DatatypeDeclarations,
+    Declarations,
 }
 
 /// Parser for the command `declare-datatypes`.
@@ -227,17 +228,17 @@ pub(super) struct DeclareDatatypesParser<H: CommandHandler> {
     state: DeclareDatatypesState,
     num_expected_declarations: usize,
 
-    sort_declarations_parser: ParenMultipleParser<H, SortDeclarationParser<H>>,
+    introductions_parser: ParenMultipleParser<H, IntroductionParser<H>>,
     datatypes_parser: ParenMaximumParser<H, DatatypeParser<H>>,
 }
 
 impl<H: CommandHandler> Default for DeclareDatatypesParser<H> {
     fn default() -> Self {
         Self {
-            state: DeclareDatatypesState::SortDeclarations,
+            state: DeclareDatatypesState::Introductions,
             num_expected_declarations: 0,
 
-            sort_declarations_parser: ParenMultipleParser::new(),
+            introductions_parser: ParenMultipleParser::new(),
             datatypes_parser: ParenMaximumParser::new(),
         }
     }
@@ -247,9 +248,9 @@ impl<H: CommandHandler> CategoryParser<H> for DeclareDatatypesParser<H> {
     type Result = ();
 
     fn restart(&mut self) {
-        self.state = DeclareDatatypesState::SortDeclarations;
+        self.state = DeclareDatatypesState::Introductions;
         self.num_expected_declarations = 0;
-        self.sort_declarations_parser.restart();
+        self.introductions_parser.restart();
         self.datatypes_parser.start(0);
     }
 
@@ -260,27 +261,27 @@ impl<H: CommandHandler> CategoryParser<H> for DeclareDatatypesParser<H> {
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         let span = token.span();
         match self.state {
-            DeclareDatatypesState::SortDeclarations => {
-                // parse sort declarations
-                if let ControlFlow::Break(sort_declarations) =
-                    self.sort_declarations_parser.progress(handler, token)?
+            DeclareDatatypesState::Introductions => {
+                // parse datatype introductions
+                if let ControlFlow::Break(introductions) =
+                    self.introductions_parser.progress(handler, token)?
                 {
-                    // sort declarations must not be empty
-                    if sort_declarations.is_empty() {
+                    // introductions must not be empty
+                    if introductions.is_empty() {
                         return Err(ParserError::category_error(
-                            CategoryParserErrorKind::EmptyDatatypeSortDeclarations,
+                            CategoryParserErrorKind::EmptyDatatypeIntroductions,
                             span,
                         ));
                     }
                     // ensure we and the datatypes parser are expecting the correct number of elements
-                    self.num_expected_declarations = sort_declarations.len();
+                    self.num_expected_declarations = introductions.len();
                     self.datatypes_parser.start(self.num_expected_declarations);
                     // start datatype declarations
-                    handle_err(handler.start_declare_datatypes(sort_declarations), span)?;
-                    self.state = DeclareDatatypesState::DatatypeDeclarations;
+                    handle_err(handler.start_declare_datatypes(introductions), span)?;
+                    self.state = DeclareDatatypesState::Declarations;
                 }
             }
-            DeclareDatatypesState::DatatypeDeclarations => {
+            DeclareDatatypesState::Declarations => {
                 // parse datatypes
                 if let ControlFlow::Break(datatypes) =
                     self.datatypes_parser.progress(handler, token)?
@@ -297,7 +298,7 @@ impl<H: CommandHandler> CategoryParser<H> for DeclareDatatypesParser<H> {
                     // end datatypes declarations, reset, and break
                     handle_err(handler.end_declare_datatypes(), span)?;
                     self.num_expected_declarations = 0;
-                    self.state = DeclareDatatypesState::SortDeclarations;
+                    self.state = DeclareDatatypesState::Introductions;
                     return Ok(ControlFlow::Break(()));
                 }
             }

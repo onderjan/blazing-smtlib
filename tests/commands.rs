@@ -313,7 +313,7 @@ impl CommandHandler for Resolving {
         Ok(())
     }
 
-    fn start_datatype(&mut self, params: Vec<SmtSymbol>) -> Result<(), String> {
+    fn start_datatype_declaration(&mut self, params: Vec<SmtSymbol>) -> Result<(), String> {
         // the datatypes arrive in sort-declaration order, so the handler
         // knows which sort is being started by counting
         let name = self
@@ -331,7 +331,7 @@ impl CommandHandler for Resolving {
         Ok(())
     }
 
-    fn end_datatype(
+    fn end_datatype_declaration(
         &mut self,
         constructors: Vec<SmtDatatypeConstructor<Self>>,
     ) -> Result<(), String> {
@@ -1422,7 +1422,7 @@ fn declare_datatypes_errors_point_at_offending_token() {
     // at least one sort must be declared
     let err = assert_parser_error(b"(declare-datatypes () ())", 20, 21);
     assert!(
-        matches!(err, CategoryParserErrorKind::EmptyDatatypeSortDeclarations),
+        matches!(err, CategoryParserErrorKind::EmptyDatatypeIntroductions),
         "{err:?}"
     );
     // each sort declaration is parenthesized

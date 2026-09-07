@@ -147,7 +147,7 @@ pub trait CommandHandler: SmtHandler {
     /// Starts function definition body (in `define-fun` / `define-const`).
     ///
     /// The command `define-const` is just syntax sugar for
-    /// `define-fun` without parameters.
+    /// `define-fun` without parameters. It is desugared before being handled.
     fn start_define_fun(
         &mut self,
         signature: SmtFunctionSignature<Self>,
@@ -156,21 +156,75 @@ pub trait CommandHandler: SmtHandler {
     /// Ends function definition body (in `define-fun` / `define-const`).
     ///
     /// The command `define-const` is just syntax sugar for
-    /// `define-fun` without parameters.
+    /// `define-fun` without parameters. It is desugared before being handled.
     fn end_define_fun(&mut self, term: Self::Term) -> Result<(), Self::Error>;
 
+    /// Starts datatype declarations (in `declare-datatypes` / `declare-datatype`).
+    ///
+    /// The parameter `introductions` contains ordered introductions of
+    /// the name and arity of datatypes. The parser calls this method before any
+    /// datatype declaration is started, as the sorts can be referenced by selector
+    /// sorts of the datatypes.
+    ///
+    /// The parser guarantees:
+    /// 1. This method is never nested before the corresponding `end_declare_datatypes`.
+    /// 2. There is at least one datatype introduction, i.e. `introductions` is nonempty.
+    /// 3. There is exactly one datatype per introduction,
+    ///    arriving in the same order as the introductions.
+    ///
+    /// There are no other guarantees, including on arities.
+    ///
+    /// The command `declare-datatype` is just syntax sugar for
+    /// `declare-datatypes` with a single introduction where the
+    /// arity is the number of parameters of the datatype (zero if there are none).
+    /// The command is desugared before being handled.
+    ///
+    /// Consult the standard for proper handling.
     fn start_declare_datatypes(
         &mut self,
-        sort_declarations: Vec<(SmtSymbol, SmtNumeral)>,
+        introductions: Vec<(SmtSymbol, SmtNumeral)>,
     ) -> Result<(), Self::Error>;
 
-    fn start_datatype(&mut self, params: Vec<SmtSymbol>) -> Result<(), Self::Error>;
+    /// Starts a datatype declaration (in `declare-datatypes` / `declare-datatype`).
+    ///
+    /// The parser guarantees:
+    /// 1. This method is only called between `start_declare_datatypes` and `end_declare_datatypes`.
+    /// 2. This method is never nested before the corresponding `end_datatype_declaration`.
+    /// 3. This declaration corresponds to the introduction at the same index in `start_declare_datatypes`.
+    /// 4. The sort parameters (`sort_params`) are nonempty exactly when the datatype is parametric.
+    /// 5. The selector sorts of the datatype declaration are handled after this method is called
+    ///    and before the respective `end_datatype_declaration` is called.
+    ///
+    /// There are no other guarantees, including on arities.
+    ///
+    /// Consult the standard for proper handling.
+    fn start_datatype_declaration(
+        &mut self,
+        sort_params: Vec<SmtSymbol>,
+    ) -> Result<(), Self::Error>;
 
-    fn end_datatype(
+    /// Ends a datatype declaration (in `declare-datatypes` / `declare-datatype`).
+    ///
+    /// The parser guarantees:
+    /// 1. This method is only called between `start_declare_datatypes` and `end_declare_datatypes`.
+    /// 2. There is a pending unended `start_datatype_declaration`.
+    /// 3. There is at least one datatype constructor, i.e. `constructors` is nonempty.
+    ///
+    /// There are no other guarantees, including on arities.
+    ///
+    /// Consult the standard for proper handling.
+    fn end_datatype_declaration(
         &mut self,
         constructors: Vec<SmtDatatypeConstructor<Self>>,
     ) -> Result<(), Self::Error>;
 
+    /// Ends datatype declarations (in `declare-datatypes` / `declare-datatype`).
+    ///
+    /// The parser guarantees:
+    /// 1. There is a pending unended `start_declare_datatypes`.
+    /// 2. There is no pending unended `start_datatype_declaration`.
+    ///
+    /// Consult the standard for proper handling.
     fn end_declare_datatypes(&mut self) -> Result<(), Self::Error>;
 }
 
@@ -360,11 +414,14 @@ impl CommandHandler for CheckStandardSyntax {
         Ok(())
     }
 
-    fn start_datatype(&mut self, _params: Vec<SmtSymbol>) -> Result<(), Self::Error> {
+    fn start_datatype_declaration(
+        &mut self,
+        _sort_params: Vec<SmtSymbol>,
+    ) -> Result<(), Self::Error> {
         Ok(())
     }
 
-    fn end_datatype(
+    fn end_datatype_declaration(
         &mut self,
         _constructors: Vec<SmtDatatypeConstructor<Self>>,
     ) -> Result<(), Self::Error> {
