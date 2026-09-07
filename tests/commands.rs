@@ -7,10 +7,11 @@ use common::{assert_error_span, assert_parser_error, parse_with};
 
 use smt_parser_rs::{
     CommandHandler, SmtAttributeValue, SmtFunctionSignature, SmtHandler, SmtIdent, SmtIndex,
-    SmtKeyword, SmtQuantifierKind, SmtSExpr, SmtSort, SmtSpecialConstant, SmtStringContent,
-    SmtSymbol, SmtSymbolView, SmtTerm,
+    SmtKeyword, SmtNumeral, SmtQuantifierKind, SmtSExpr, SmtSort, SmtSpecialConstant,
+    SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm,
     read::{
         SmtReadErrorKind,
+        lexer::LexerErrorKind,
         parser::{CategoryParserErrorKind, NoCommandParser},
     },
     token::TokenType,
@@ -158,6 +159,19 @@ impl CommandHandler for Resolving {
     fn command_set_logic(&mut self, _logic: SmtSymbol) -> Result<(), String> {
         Ok(())
     }
+    fn command_declare_sort(&mut self, name: SmtSymbol, arity: SmtNumeral) -> Result<(), String> {
+        self.events.push(format!(
+            "declare-sort {} {}",
+            text(name.as_slice()),
+            text(arity.as_slice())
+        ));
+        Ok(())
+    }
+    fn command_declare_sort_parameter(&mut self, name: SmtSymbol) -> Result<(), String> {
+        self.events
+            .push(format!("declare-sort-parameter {}", text(name.as_slice())));
+        Ok(())
+    }
     fn command_declare_fun(
         &mut self,
         name: SmtSymbol,
@@ -263,6 +277,118 @@ fn zero_params_and_applied_result_sort() {
     let mut handler = Resolving::default();
     parse_resolving(&mut handler, b"(define-fun c () (Array Int Bool) zero)");
     assert_eq!(handler.events, ["start c () (Array Int Bool)", "end zero"]);
+}
+
+#[test]
+fn declare_sort_delivers_name_and_unconverted_arity() {
+    let mut handler = Resolving::default();
+    parse_resolving(
+        &mut handler,
+        b"(declare-sort U 0) (declare-sort |Quoted Sort| 12) \
+          (declare-sort-parameter T) (declare-fun f (U) T)",
+    );
+    assert_eq!(
+        handler.events,
+        [
+            "declare-sort U 0",
+            // the arity is passed through as the numeral text
+            "declare-sort Quoted Sort 12",
+            "declare-sort-parameter T",
+            "declare-fun f (U) T",
+        ]
+    );
+}
+
+#[test]
+fn declare_sort_errors_point_at_offending_token() {
+    // the sort name must be a symbol
+    let err = assert_parser_error(b"(declare-sort 1 0)", 14, 15);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::Symbol])
+        ),
+        "{err:?}"
+    );
+    // the arity is required
+    let err = assert_parser_error(b"(declare-sort U)", 15, 16);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::Numeral])
+        ),
+        "{err:?}"
+    );
+    // the arity must be a numeral, not a decimal or another constant
+    let err = assert_parser_error(b"(declare-sort U 1.5)", 16, 19);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::Numeral])
+        ),
+        "{err:?}"
+    );
+    let err = assert_parser_error(b"(declare-sort U #x0)", 16, 19);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::Numeral])
+        ),
+        "{err:?}"
+    );
+    // exactly one arity
+    let err = assert_parser_error(b"(declare-sort U 0 0)", 18, 19);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
+        ),
+        "{err:?}"
+    );
+}
+
+#[test]
+fn declare_sort_leading_zero_arity_is_rejected_by_lexer() {
+    // a numeral with leading zeros is not a numeral at all,
+    // so this never reaches the command parser
+    let err = parse_with(&mut Resolving::default(), b"(declare-sort U 007)")
+        .expect_err("expected a lexer error");
+    // the lexer reports the error as soon as a digit follows the leading zero
+    assert_error_span(&err, 16, 18);
+    match err.kind() {
+        SmtReadErrorKind::Lexer(LexerErrorKind::NumeralLeadingZero) => {}
+        kind => panic!("expected a leading zero lexer error, got {kind:?}"),
+    }
+}
+
+#[test]
+fn declare_sort_parameter_errors_point_at_offending_token() {
+    // the parameter name is required and must be a symbol
+    let err = assert_parser_error(b"(declare-sort-parameter)", 23, 24);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::Symbol])
+        ),
+        "{err:?}"
+    );
+    let err = assert_parser_error(b"(declare-sort-parameter 1)", 24, 25);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::Symbol])
+        ),
+        "{err:?}"
+    );
+    // exactly one parameter per command
+    let err = assert_parser_error(b"(declare-sort-parameter T U)", 26, 27);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
+        ),
+        "{err:?}"
+    );
 }
 
 #[test]

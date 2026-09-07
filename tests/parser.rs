@@ -7,8 +7,8 @@ use common::{assert_error_span, assert_parser_error, parse, parse_with};
 
 use smt_parser_rs::{
     CommandHandler, NonstandardCommandError, SmtAttributeValue, SmtFunctionSignature, SmtHandler,
-    SmtKeyword, SmtQuantifierKind, SmtSExpr, SmtSort, SmtStringContent, SmtSymbol, SmtSymbolView,
-    SmtTerm,
+    SmtKeyword, SmtNumeral, SmtQuantifierKind, SmtSExpr, SmtSort, SmtStringContent, SmtSymbol,
+    SmtSymbolView, SmtTerm,
     read::{
         SmtReadErrorKind,
         parser::{CategoryParserErrorKind, ClosedParser, CommandAction, CommandParser, TermParser},
@@ -183,6 +183,18 @@ impl CommandHandler for Recording {
         self.commands.push("set-logic");
         Ok(())
     }
+    fn command_declare_sort(
+        &mut self,
+        _name: SmtSymbol,
+        _arity: SmtNumeral,
+    ) -> Result<(), Self::Error> {
+        self.commands.push("declare-sort");
+        Ok(())
+    }
+    fn command_declare_sort_parameter(&mut self, _name: SmtSymbol) -> Result<(), Self::Error> {
+        self.commands.push("declare-sort-parameter");
+        Ok(())
+    }
     fn command_declare_fun(
         &mut self,
         _name: SmtSymbol,
@@ -235,7 +247,8 @@ fn trivial_commands_reach_their_handler_methods() {
     parse_with(
         &mut handler,
         b"(echo \"hi\") (get-option :opt) (set-option :produce-models true) \
-          (get-info :name) (reset) (reset-assertions)",
+          (get-info :name) (declare-sort U 1) (declare-sort-parameter T) \
+          (reset) (reset-assertions)",
     )
     .unwrap_or_else(|err| panic!("unexpected error at {:?}", err.span()));
     assert_eq!(
@@ -245,6 +258,8 @@ fn trivial_commands_reach_their_handler_methods() {
             "get-option",
             "set-option",
             "get-info",
+            "declare-sort",
+            "declare-sort-parameter",
             "reset",
             "reset-assertions"
         ]
