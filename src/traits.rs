@@ -107,6 +107,20 @@ pub trait CommandHandler: SmtHandler {
 
     fn command_exit(&mut self) -> Result<(), Self::Error>;
 
+    /// Pushes `amount` of empty assertion levels onto the assertion stack.
+    ///
+    /// If `amount` is 0, no levels are pushed (i.e. successful no-op).
+    fn command_push(&mut self, amount: SmtNumeral) -> Result<(), Self::Error>;
+
+    /// Pops `amount` of assertion levels from the assertion stack.
+    ///
+    /// If `amount` is 0, no levels are popped (i.e. successful no-op).
+    ///
+    /// As per the standard, the handler should return an error
+    /// when popping more than the amount of remaining assertion levels
+    /// beyond the inherent first assertion level.
+    fn command_pop(&mut self, amount: SmtNumeral) -> Result<(), Self::Error>;
+
     /// Starts sort definition (in `define-sort`).
     ///
     /// The handler should bring `params` into scope as local sort parameters
@@ -114,7 +128,7 @@ pub trait CommandHandler: SmtHandler {
     /// previously user-declared sort symbols and parameters of the same name,
     /// but not theory sort symbols.
     ///
-    /// As per the standard, the handler should report an error
+    /// As per the standard, the handler should return an error
     /// 1. if `name` is a sort symbol or parameter already present in the current signature,
     /// 2. if a theory sort symbol is used as a sort parameter.
     fn start_define_sort(
@@ -125,7 +139,7 @@ pub trait CommandHandler: SmtHandler {
 
     /// Ends sort definition (in `define-sort`).
     ///
-    /// As per the standard, the handler should report an error
+    /// As per the standard, the handler should return an error
     /// if `sort` is not a well-defined (polymorphic) sort with respect to the
     /// current signature extended with the sort parameters.
     fn end_define_sort(&mut self, sort: Self::Sort) -> Result<(), Self::Error>;
@@ -291,6 +305,14 @@ impl CommandHandler for CheckStandardSyntax {
     }
 
     fn command_exit(&mut self) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn command_push(&mut self, _amount: SmtNumeral) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn command_pop(&mut self, _amount: SmtNumeral) -> Result<(), Self::Error> {
         Ok(())
     }
 

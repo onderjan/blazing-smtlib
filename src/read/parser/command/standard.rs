@@ -130,6 +130,12 @@ standard_commands! {
     b"exit" => exit: Exit(
         CloseParenParser,
         |handler, ()| handler.command_exit(), is_exit),
+    b"push" => push: Push(
+        ClosedParser<H,NumeralParser>,
+        |handler, amount| handler.command_push(amount)),
+    b"pop" => pop: Pop(
+        ClosedParser<H,NumeralParser>,
+        |handler, amount| handler.command_pop(amount)),
     b"set-info" => set_info: SetInfo(
         ClosedAttributeParser<H>,
         |handler, attribute| handler.command_set_info(attribute)),
