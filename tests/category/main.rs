@@ -30,9 +30,9 @@ use smt_parser_rs::{
         parser::{
             CategoryParser, CategoryParserErrorKind, CloseParenParser, ClosedAttributeParser,
             ClosedMultipleAttributeParser, ClosedMultipleParser, ClosedParser, IdentParser,
-            KeywordParser, OpenParenParser,
-            PairParser, ParenMultipleParser, ParenParser, ParserError, ParserErrorKind,
-            QualifiedIdentParser, SExprParser, SortParser, StringParser, SymbolParser, TermParser,
+            KeywordParser, OpenParenParser, PairParser, ParenMultipleParser, ParenParser,
+            ParserError, ParserErrorKind, QualifiedIdentParser, SExprParser, SortParser,
+            StringParser, SymbolParser, TermParser,
         },
     },
     token::{Reserved, Token, TokenType},
@@ -149,8 +149,12 @@ impl SmtHandler for Printing {
             SmtQuantifierKind::Forall => "forall",
             SmtQuantifierKind::Exists => "exists",
         };
-        self.quantifier_binders
-            .push(format!("({} (({} {}))", keyword, text(name.as_slice()), sort));
+        self.quantifier_binders.push(format!(
+            "({} (({} {}))",
+            keyword,
+            text(name.as_slice()),
+            sort
+        ));
         Ok(())
     }
 

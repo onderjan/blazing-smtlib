@@ -313,7 +313,10 @@ fn multi_variable_binder_is_equivalent_to_nested_binders() {
         b"(exists ((x Int)) (exists ((y Bool)) (exists ((z Real)) x)))",
     );
     assert_eq!(sugared, nested);
-    assert_eq!(sugared, "(exists ((x Int)) (exists ((y Bool)) (exists ((z Real)) x)))");
+    assert_eq!(
+        sugared,
+        "(exists ((x Int)) (exists ((y Bool)) (exists ((z Real)) x)))"
+    );
 }
 
 #[test]

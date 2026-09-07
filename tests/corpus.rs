@@ -116,7 +116,10 @@ fn parse_corpus() {
     );
     // paths are reported relative to the corpus root for readability
     let relative = |path: &'_ Path| -> String {
-        path.strip_prefix(&benchmarks).unwrap_or(path).display().to_string()
+        path.strip_prefix(&benchmarks)
+            .unwrap_or(path)
+            .display()
+            .to_string()
     };
 
     let (files, total_bytes) = collect_smt2_files(&benchmarks);
@@ -181,8 +184,7 @@ fn parse_corpus() {
                 );
 
                 let in_flight = in_flight.lock().unwrap();
-                if let Some((path, started)) =
-                    in_flight.iter().min_by_key(|(_, started)| **started)
+                if let Some((path, started)) = in_flight.iter().min_by_key(|(_, started)| **started)
                     && started.elapsed() >= TICK
                 {
                     eprintln!(

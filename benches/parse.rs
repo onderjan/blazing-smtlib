@@ -124,7 +124,10 @@ fn main() -> ExitCode {
         "lex" => (true, false),
         "full" => (false, true),
         other => {
-            eprintln!("Unknown SMT_BENCH_MODE {:?}; use \"lex\" or \"full\"", other);
+            eprintln!(
+                "Unknown SMT_BENCH_MODE {:?}; use \"lex\" or \"full\"",
+                other
+            );
             return ExitCode::FAILURE;
         }
     };
@@ -152,12 +155,20 @@ fn main() -> ExitCode {
             let (min, median) = time_runs(|| {
                 lex_from_memory(&data, &path);
             });
-            print!("  lex {:>6.1}/{:>6.1} MB/s", megabytes / min, megabytes / median);
+            print!(
+                "  lex {:>6.1}/{:>6.1} MB/s",
+                megabytes / min,
+                megabytes / median
+            );
         }
 
         if run_full {
             let (min, median) = time_runs(|| parse_from_memory(&data, &path));
-            print!("  full {:>6.1}/{:>6.1} MB/s", megabytes / min, megabytes / median);
+            print!(
+                "  full {:>6.1}/{:>6.1} MB/s",
+                megabytes / min,
+                megabytes / median
+            );
         }
 
         println!();
