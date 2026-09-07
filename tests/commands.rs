@@ -217,6 +217,15 @@ impl CommandHandler for Resolving {
     fn command_exit(&mut self) -> Result<(), String> {
         Ok(())
     }
+    fn command_push(&mut self, amount: SmtNumeral) -> Result<(), String> {
+        self.events
+            .push(format!("push {}", text(amount.as_slice())));
+        Ok(())
+    }
+    fn command_pop(&mut self, amount: SmtNumeral) -> Result<(), String> {
+        self.events.push(format!("pop {}", text(amount.as_slice())));
+        Ok(())
+    }
 
     fn start_define_sort(&mut self, name: SmtSymbol, params: Vec<SmtSymbol>) -> Result<(), String> {
         let name = text(name.as_slice());
@@ -421,6 +430,83 @@ fn define_sort_errors_point_at_offending_token() {
     );
     // exactly one body sort is allowed
     let err = assert_parser_error(b"(define-sort S () Int Bool)", 22, 26);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
+        ),
+        "{err:?}"
+    );
+}
+
+#[test]
+fn push_and_pop_deliver_unconverted_amounts() {
+    let mut handler = Resolving::default();
+    parse_resolving(
+        &mut handler,
+        b"(push 1) (assert x) (pop 1) (push 0) (pop 0) (push 99999999999999999999999)",
+    );
+    assert_eq!(
+        handler.events,
+        [
+            "push 1",
+            "assert x",
+            "pop 1",
+            // zero is a valid amount
+            "push 0",
+            "pop 0",
+            // the amount is passed through as the numeral text, however large
+            "push 99999999999999999999999",
+        ]
+    );
+}
+
+#[test]
+fn push_and_pop_errors_point_at_offending_token() {
+    // the amount is required
+    let err = assert_parser_error(b"(push)", 5, 6);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::Numeral])
+        ),
+        "{err:?}"
+    );
+    let err = assert_parser_error(b"(pop)", 4, 5);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::Numeral])
+        ),
+        "{err:?}"
+    );
+    // the amount must be a numeral
+    let err = assert_parser_error(b"(push x)", 6, 7);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::Numeral])
+        ),
+        "{err:?}"
+    );
+    let err = assert_parser_error(b"(pop 1.0)", 5, 8);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::Numeral])
+        ),
+        "{err:?}"
+    );
+    // exactly one amount
+    let err = assert_parser_error(b"(push 1 2)", 8, 9);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
+        ),
+        "{err:?}"
+    );
+    let err = assert_parser_error(b"(pop 1 2)", 7, 8);
     assert!(
         matches!(
             err,

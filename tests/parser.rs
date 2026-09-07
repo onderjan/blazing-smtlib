@@ -228,6 +228,14 @@ impl CommandHandler for Recording {
         self.commands.push("exit");
         Ok(())
     }
+    fn command_push(&mut self, _amount: SmtNumeral) -> Result<(), Self::Error> {
+        self.commands.push("push");
+        Ok(())
+    }
+    fn command_pop(&mut self, _amount: SmtNumeral) -> Result<(), Self::Error> {
+        self.commands.push("pop");
+        Ok(())
+    }
     fn start_define_sort(
         &mut self,
         _name: SmtSymbol,
@@ -260,7 +268,7 @@ fn trivial_commands_reach_their_handler_methods() {
         &mut handler,
         b"(echo \"hi\") (get-option :opt) (set-option :produce-models true) \
           (get-info :name) (declare-sort U 1) (declare-sort-parameter T) \
-          (reset) (reset-assertions)",
+          (push 1) (pop 1) (reset) (reset-assertions)",
     )
     .unwrap_or_else(|err| panic!("unexpected error at {:?}", err.span()));
     assert_eq!(
@@ -272,6 +280,8 @@ fn trivial_commands_reach_their_handler_methods() {
             "get-info",
             "declare-sort",
             "declare-sort-parameter",
+            "push",
+            "pop",
             "reset",
             "reset-assertions"
         ]
