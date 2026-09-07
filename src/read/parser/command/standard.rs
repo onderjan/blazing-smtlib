@@ -109,6 +109,9 @@ standard_commands! {
             PairParser<H, ParenMultipleParser<H, SortParser<H>>, SortParser<H>>>>,
         |handler, (name, (param_sorts, result_sort))|
             handler.command_declare_fun(name, param_sorts, result_sort)),
+    b"define-sort" => define_sort: DefineSort(
+        ClosedParser<H, DefinitionParser<H, DefineSort>>,
+        |_handler, ()| Ok(())),
     b"define-const" => define_const: DefineConst(
         ClosedParser<H, DefinitionParser<H, DefineConst>>,
         |_handler, ()| Ok(())),
@@ -215,6 +218,20 @@ impl<H: CommandHandler> Definition<H> for DefineFun {
 
     fn end(handler: &mut H, term: H::Term) -> Result<(), H::Error> {
         handler.end_define_fun(term)
+    }
+}
+
+impl<H: CommandHandler> Definition<H> for DefineSort {
+    type Signature = PairParser<H, SymbolParser, ParenMultipleParser<H, SymbolParser>>;
+    type Body = SortParser<H>;
+
+    fn start(handler: &mut H, signature: (SmtSymbol, Vec<SmtSymbol>)) -> Result<(), H::Error> {
+        let (name, params) = signature;
+        handler.start_define_sort(name, params)
+    }
+
+    fn end(handler: &mut H, sort: H::Sort) -> Result<(), H::Error> {
+        handler.end_define_sort(sort)
     }
 }
 

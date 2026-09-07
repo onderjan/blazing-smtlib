@@ -107,6 +107,29 @@ pub trait CommandHandler: SmtHandler {
 
     fn command_exit(&mut self) -> Result<(), Self::Error>;
 
+    /// Starts sort definition (in `define-sort`).
+    ///
+    /// The handler should bring `params` into scope as local sort parameters
+    /// before the body sort is handled. As per the standard, they shadow
+    /// previously user-declared sort symbols and parameters of the same name,
+    /// but not theory sort symbols.
+    ///
+    /// As per the standard, the handler should report an error
+    /// 1. if `name` is a sort symbol or parameter already present in the current signature,
+    /// 2. if a theory sort symbol is used as a sort parameter.
+    fn start_define_sort(
+        &mut self,
+        name: SmtSymbol,
+        params: Vec<SmtSymbol>,
+    ) -> Result<(), Self::Error>;
+
+    /// Ends sort definition (in `define-sort`).
+    ///
+    /// As per the standard, the handler should report an error
+    /// if `sort` is not a well-defined (polymorphic) sort with respect to the
+    /// current signature extended with the sort parameters.
+    fn end_define_sort(&mut self, sort: Self::Sort) -> Result<(), Self::Error>;
+
     /// Starts function definition body (in `define-fun` / `define-const`).
     ///
     /// The command `define-const` is just syntax sugar for
@@ -268,6 +291,18 @@ impl CommandHandler for CheckStandardSyntax {
     }
 
     fn command_exit(&mut self) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn start_define_sort(
+        &mut self,
+        _name: SmtSymbol,
+        _params: Vec<SmtSymbol>,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn end_define_sort(&mut self, _sort: Self::Sort) -> Result<(), Self::Error> {
         Ok(())
     }
 
