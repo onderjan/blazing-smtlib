@@ -6,6 +6,7 @@ use crate::{
     token::Token,
 };
 
+mod definition;
 mod standard;
 
 pub(super) use standard::{CommandParsers, StandardCommandKind};
