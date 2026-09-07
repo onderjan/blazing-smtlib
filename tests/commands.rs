@@ -1669,7 +1669,7 @@ fn declare_datatype_errors_point_at_offending_token() {
         "{err:?}"
     );
     // the declaration has the same shape as in declare-datatypes
-    let err = assert_parser_error(b"(declare-datatype A (()))", 21, 22);
+    let err = assert_parser_error(b"(declare-datatype A ())", 21, 22);
     assert!(
         matches!(err, CategoryParserErrorKind::ExpectedDatatypeKind),
         "{err:?}"
@@ -1688,9 +1688,14 @@ fn declare_datatype_errors_point_at_offending_token() {
         ),
         "{err:?}"
     );
-    let err = assert_parser_error(b"(declare-datatype A (((a))))", 21, 22);
+    // a list around the declaration is read as a simple declaration whose
+    // first constructor starts with a parenthesis instead of a name
+    let err = assert_parser_error(b"(declare-datatype A (((a))))", 22, 23);
     assert!(
-        matches!(err, CategoryParserErrorKind::ExpectedDatatypeKind),
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::Symbol])
+        ),
         "{err:?}"
     );
 }

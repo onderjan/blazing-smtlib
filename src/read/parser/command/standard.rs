@@ -9,7 +9,7 @@ use crate::{
         category::{ClosedAttributeParser, ClosedParser, PairParser, SortParser, TermParser},
         command::{
             CommandAction, ParseCommand,
-            datatype::DeclareDatatypesParser,
+            datatype::{DeclareDatatypeParser, DeclareDatatypesParser},
             definition::{Definition, DefinitionParser},
         },
     },
@@ -112,8 +112,11 @@ standard_commands! {
             PairParser<H, ParenMultipleParser<H, SortParser<H>>, SortParser<H>>>>,
         |handler, (name, (param_sorts, result_sort))|
             handler.command_declare_fun(name, param_sorts, result_sort)),
+    b"declare-datatype" => declare_datatype: DeclareDatatype(
+        ClosedParser<H, DeclareDatatypeParser<H>>,
+        |_handler, ()| Ok(())),
     b"declare-datatypes" => declare_datatypes: DeclareDatatypes(
-        ClosedParser<H, DeclareDatatypesParser<H, false>>,
+        ClosedParser<H, DeclareDatatypesParser<H>>,
         |_handler, ()| Ok(())),
     b"define-sort" => define_sort: DefineSort(
         ClosedParser<H, DefinitionParser<H, DefineSort>>,

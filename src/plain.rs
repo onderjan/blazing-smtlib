@@ -89,6 +89,14 @@ impl SmtNumeral {
         }
         true
     }
+
+    /// Construct from `usize`.
+    pub fn from_usize(value: usize) -> Self {
+        // convert the value into a string and get its bytes
+        // this is allowed since it produces digits without leading zeros
+        // or the allowed special case of constant "0"
+        Self(String8::from_vec(value.to_string().into_bytes()))
+    }
 }
 
 /// SMT-LIB hexadecimal digits (base 16).
