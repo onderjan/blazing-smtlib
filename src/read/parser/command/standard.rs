@@ -110,17 +110,11 @@ standard_commands! {
         |handler, (name, (param_sorts, result_sort))|
             handler.command_declare_fun(name, param_sorts, result_sort)),
     b"define-const" => define_const: DefineConst(
-        ClosedParser<H, DefineFunParser<H, true>>,
-        |_handler, ()| {
-            // handler calls are done by the DefineFunParser
-            Ok(())
-        }),
+        ClosedParser<H, DefinitionParser<H, DefineConst>>,
+        |_handler, ()| Ok(())),
     b"define-fun" => define_fun: DefineFun(
-        ClosedParser<H, DefineFunParser<H, false>>,
-        |_handler, ()| {
-            // handler calls are done by the DefineFunParser
-            Ok(())
-        }),
+        ClosedParser<H, DefinitionParser<H, DefineFun>>,
+        |_handler, ()| Ok(())),
     b"assert" => assert: Assert(
         ClosedParser<H, TermParser<H>>,
         |handler, term| handler.command_assert(term)),
@@ -156,55 +150,111 @@ standard_commands! {
         |handler, ()| handler.command_reset_assertions()),
 }
 
-enum DefineFunParserState<H: CommandHandler> {
-    Name,
-    Params {
-        name: SmtSymbol,
-    },
-    ResultSort {
-        name: SmtSymbol,
-        params: Vec<(SmtSymbol, H::Sort)>,
-    },
+/// A definition where a signature is followed by a body.
+///
+/// The handler must know the signature before starting the body.
+///
+/// The commands using a definition parser do not call the
+/// handler after ending, as everything is handled by the parser.
+pub(super) trait Definition<H: CommandHandler> {
+    type Signature: CategoryParser<H>;
+    type Body: CategoryParser<H>;
+
+    /// Start is invoked before the first definition body token.
+    fn start(
+        handler: &mut H,
+        signature: <Self::Signature as CategoryParser<H>>::Result,
+    ) -> Result<(), H::Error>;
+
+    /// End is invoked when the last definition body token is processed.
+    fn end(
+        handler: &mut H,
+        body: <Self::Body as CategoryParser<H>>::Result,
+    ) -> Result<(), H::Error>;
+}
+
+impl<H: CommandHandler> Definition<H> for DefineConst {
+    type Signature = PairParser<H, SymbolParser, SortParser<H>>;
+    type Body = TermParser<H>;
+
+    fn start(handler: &mut H, signature: (SmtSymbol, H::Sort)) -> Result<(), H::Error> {
+        let (name, result_sort) = signature;
+        let signature = SmtFunctionSignature {
+            name,
+            params: Vec::new(),
+            result_sort,
+        };
+        handler.start_define_fun(signature)
+    }
+
+    fn end(handler: &mut H, term: H::Term) -> Result<(), H::Error> {
+        handler.end_define_fun(term)
+    }
+}
+
+impl<H: CommandHandler> Definition<H> for DefineFun {
+    type Signature = PairParser<
+        H,
+        SymbolParser,
+        PairParser<H, ParenMultipleParser<H, SortedVarParser<H>>, SortParser<H>>,
+    >;
+    type Body = TermParser<H>;
+
+    fn start(
+        handler: &mut H,
+        signature: (SmtSymbol, (Vec<(SmtSymbol, H::Sort)>, H::Sort)),
+    ) -> Result<(), H::Error> {
+        let (name, (params, result_sort)) = signature;
+        let signature = SmtFunctionSignature {
+            name,
+            params,
+            result_sort,
+        };
+        handler.start_define_fun(signature)
+    }
+
+    fn end(handler: &mut H, term: H::Term) -> Result<(), H::Error> {
+        handler.end_define_fun(term)
+    }
+}
+
+enum DefinitionParserState {
+    Signature,
     Body,
 }
 
-pub(super) struct DefineFunParser<H: CommandHandler, const IS_CONST: bool> {
-    state: DefineFunParserState<H>,
-
-    name_parser: SymbolParser,
-    param_sorts_parser: ParenMultipleParser<H, SortedVarParser<H>>,
-    result_sort_parser: SortParser<H>,
-    body_parser: TermParser<H>,
+/// Parser of a definition that has a signature followed by a body.
+///
+/// The commands using this parser do not call the
+/// handler after ending, as everything is handled by the parser.
+pub(super) struct DefinitionParser<H: CommandHandler, D: Definition<H>> {
+    state: DefinitionParserState,
+    signature_parser: D::Signature,
+    body_parser: D::Body,
 }
 
-impl<H: CommandHandler, const IS_CONST: bool> DefineFunParser<H, IS_CONST> {
+impl<H: CommandHandler, D: Definition<H>> DefinitionParser<H, D> {
     pub fn new() -> Self {
         Self {
-            state: DefineFunParserState::Name,
-
-            name_parser: SymbolParser::new(),
-            param_sorts_parser: ParenMultipleParser::new(),
-            result_sort_parser: SortParser::new(),
-            body_parser: TermParser::new(),
+            state: DefinitionParserState::Signature,
+            signature_parser: D::Signature::default(),
+            body_parser: D::Body::default(),
         }
     }
 }
 
-impl<H: CommandHandler, const IS_CONST: bool> Default for DefineFunParser<H, IS_CONST> {
+impl<H: CommandHandler, D: Definition<H>> Default for DefinitionParser<H, D> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<H: CommandHandler, const IS_CONST: bool> CategoryParser<H> for DefineFunParser<H, IS_CONST> {
+impl<H: CommandHandler, D: Definition<H>> CategoryParser<H> for DefinitionParser<H, D> {
     type Result = ();
 
     fn restart(&mut self) {
-        self.state = DefineFunParserState::Name;
-
-        self.name_parser.restart();
-        self.param_sorts_parser.restart();
-        self.result_sort_parser.restart();
+        self.state = DefinitionParserState::Signature;
+        self.signature_parser.restart();
         self.body_parser.restart();
     }
 
@@ -214,71 +264,28 @@ impl<H: CommandHandler, const IS_CONST: bool> CategoryParser<H> for DefineFunPar
         token: Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         let span = token.span();
-        let state = std::mem::replace(&mut self.state, DefineFunParserState::Name);
-        let state = match state {
-            DefineFunParserState::Name => {
-                // parse name
-                match self.name_parser.progress(handler, token)? {
-                    ControlFlow::Continue(()) => DefineFunParserState::Name,
-                    ControlFlow::Break(name) => {
-                        if IS_CONST {
-                            // this is `define-const`, has no params
-                            // move straight to result sort parsing
-                            let params = Vec::new();
-                            DefineFunParserState::ResultSort { name, params }
-                        } else {
-                            // this is `define-fun`
-                            // move to params parsing
-                            DefineFunParserState::Params { name }
-                        }
-                    }
+        match self.state {
+            DefinitionParserState::Signature => {
+                // parse the signature
+                if let ControlFlow::Break(signature) =
+                    self.signature_parser.progress(handler, token)?
+                {
+                    // start the body in the handler and move to parsing the body
+                    handle_err(D::start(handler, signature), span)?;
+                    self.state = DefinitionParserState::Body;
                 }
             }
-            DefineFunParserState::Params { name } => {
-                // parse param sorts
-                match self.param_sorts_parser.progress(handler, token)? {
-                    ControlFlow::Continue(()) => DefineFunParserState::Params { name },
-                    ControlFlow::Break(params) => {
-                        // move to result sort parsing
-                        DefineFunParserState::ResultSort { name, params }
-                    }
+            DefinitionParserState::Body => {
+                // parse the body
+                if let ControlFlow::Break(body) = self.body_parser.progress(handler, token)? {
+                    // end the body in the handler, reset, and break
+                    handle_err(D::end(handler, body), span)?;
+                    self.state = DefinitionParserState::Signature;
+                    return Ok(ControlFlow::Break(()));
                 }
             }
-            DefineFunParserState::ResultSort { name, params } => {
-                // parse result sort
-                match self.result_sort_parser.progress(handler, token)? {
-                    ControlFlow::Continue(()) => DefineFunParserState::ResultSort { name, params },
-                    ControlFlow::Break(result_sort) => {
-                        // start the function definition body
-                        let signature = SmtFunctionSignature {
-                            name,
-                            params,
-                            result_sort,
-                        };
+        }
 
-                        handle_err(handler.start_define_fun(signature), span)?;
-
-                        // move to body parsing
-                        DefineFunParserState::Body
-                    }
-                }
-            }
-            DefineFunParserState::Body => {
-                // parse body term
-                match self.body_parser.progress(handler, token)? {
-                    ControlFlow::Continue(()) => DefineFunParserState::Body,
-                    ControlFlow::Break(term) => {
-                        // end the function definition body
-                        handle_err(handler.end_define_fun(term), span)?;
-
-                        // reset to initial state and return
-                        self.state = DefineFunParserState::Name;
-                        return Ok(ControlFlow::Break(()));
-                    }
-                }
-            }
-        };
-        self.state = state;
         Ok(ControlFlow::Continue(()))
     }
 }
