@@ -1,8 +1,8 @@
 use std::fmt::Debug;
 
 use crate::{
-    SmtAttributeValue, SmtFunctionSignature, SmtKeyword, SmtNumeral, SmtQuantifierKind, SmtSExpr,
-    SmtSort, SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm,
+    SmtAttributeValue, SmtDatatypeConstructor, SmtFunctionSignature, SmtKeyword, SmtNumeral,
+    SmtQuantifierKind, SmtSExpr, SmtSort, SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm,
     read::parser::{NoCommandParser, ParseCommand},
 };
 
@@ -158,6 +158,20 @@ pub trait CommandHandler: SmtHandler {
     /// The command `define-const` is just syntax sugar for
     /// `define-fun` without parameters.
     fn end_define_fun(&mut self, term: Self::Term) -> Result<(), Self::Error>;
+
+    fn start_declare_datatypes(
+        &mut self,
+        sort_declarations: Vec<(SmtSymbol, SmtNumeral)>,
+    ) -> Result<(), Self::Error>;
+
+    fn start_datatype(&mut self, params: Vec<SmtSymbol>) -> Result<(), Self::Error>;
+
+    fn end_datatype(
+        &mut self,
+        constructors: Vec<SmtDatatypeConstructor<Self>>,
+    ) -> Result<(), Self::Error>;
+
+    fn end_declare_datatypes(&mut self) -> Result<(), Self::Error>;
 }
 
 #[derive(Debug)]
@@ -336,6 +350,28 @@ impl CommandHandler for CheckStandardSyntax {
     }
 
     fn end_define_fun(&mut self, _term: Self::Term) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn start_declare_datatypes(
+        &mut self,
+        _sorts: Vec<(SmtSymbol, SmtNumeral)>,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn start_datatype(&mut self, _params: Vec<SmtSymbol>) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn end_datatype(
+        &mut self,
+        _constructors: Vec<SmtDatatypeConstructor<Self>>,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn end_declare_datatypes(&mut self) -> Result<(), Self::Error> {
         Ok(())
     }
 }

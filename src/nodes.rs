@@ -256,6 +256,11 @@ where
     }
 }
 
+pub struct SmtDatatypeConstructor<H: SmtHandler + ?Sized> {
+    pub name: SmtSymbol,
+    pub selectors: Vec<(SmtSymbol, H::Sort)>,
+}
+
 pub enum SmtSExpr<H: SmtHandler + ?Sized> {
     SpecialConstant(SmtSpecialConstant),
     Symbol(SmtSymbol),

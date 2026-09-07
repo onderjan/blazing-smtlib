@@ -6,6 +6,7 @@ use crate::{
     token::Token,
 };
 
+mod datatype;
 mod definition;
 mod standard;
 

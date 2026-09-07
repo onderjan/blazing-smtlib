@@ -2,8 +2,10 @@ use std::ops::ControlFlow;
 
 use crate::{
     SmtHandler,
-    read::parser::{CategoryParser, CloseParenParser, OpenParenParser, ParserError},
-    token::{Token, TokenKind},
+    read::parser::{
+        CategoryParser, CategoryParserErrorKind, CloseParenParser, OpenParenParser, ParserError,
+    },
+    token::{Token, TokenKind, TokenType},
 };
 
 /// Parses using the first parser, then the second, then returns the result tuple.
@@ -204,16 +206,18 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for ClosedMultiplePa
         handler: &mut H,
         token: Token,
     ) -> Result<ControlFlow<Vec<P::Result>>, ParserError<H::Error>> {
-        // if we are outside, closing parenthesis ends processing
-        if self.outside && matches!(token.kind(), TokenKind::ParenClose) {
-            let results = self.results.drain(..).collect();
-            return Ok(ControlFlow::Break(results));
+        if self.outside {
+            // we are outside, a closing parenthesis ends processing
+            if matches!(token.kind(), TokenKind::ParenClose) {
+                let results = self.results.drain(..).collect();
+                return Ok(ControlFlow::Break(results));
+            }
+            // we are no longer outside
+            self.outside = false;
         }
-
-        // we are no longer outside and should parse normally
-        self.outside = false;
+        // we are inside, parse the element using the inner parser
         if let ControlFlow::Break(element) = self.inner.progress(handler, token)? {
-            // add element, we are now outside (if a closing parenthesis arrives, we will break)
+            // add element, we are back outside
             self.results.push(element);
             self.outside = true;
         }
@@ -228,3 +232,108 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for ClosedMultiplePa
 /// Preserves self-reset: if the inner parser is self-resetting,
 /// moves back into the default state before returning Break.
 pub type ParenMultipleParser<H, P> = OpenedParser<H, ClosedMultipleParser<H, P>>;
+
+/// Parser that parses a number of items up to some maximum.
+///
+/// Unlike most parsers, does not implement `CategoryParser`
+/// and is not self-restarting, as it is intended especially for situations
+/// where the number of items changes for each parsing pass.
+/// Instead, the maximum is zero after returning Break.
+pub(crate) struct ClosedMaximumParser<H: SmtHandler, P: CategoryParser<H>> {
+    outside: bool,
+    max_elements: usize,
+    results: Vec<P::Result>,
+    inner: P,
+}
+
+impl<H: SmtHandler, P: CategoryParser<H>> ClosedMaximumParser<H, P> {
+    pub fn new() -> Self {
+        Self {
+            outside: true,
+            max_elements: 0,
+            results: Vec::new(),
+            inner: P::default(),
+        }
+    }
+
+    pub fn start(&mut self, max_elements: usize) {
+        self.outside = true;
+        self.max_elements = max_elements;
+        self.results.clear();
+        self.inner.restart();
+    }
+
+    pub fn progress(
+        &mut self,
+        handler: &mut H,
+        token: Token,
+    ) -> Result<ControlFlow<Vec<P::Result>>, ParserError<H::Error>> {
+        if self.outside {
+            // we are outside, a closing parenthesis ends processing
+            if matches!(token.kind(), TokenKind::ParenClose) {
+                // we will break
+                // set maximum to zero before returning the results
+                self.max_elements = 0;
+                let results = self.results.drain(..).collect();
+                return Ok(ControlFlow::Break(results));
+            }
+
+            if self.results.len() >= self.max_elements {
+                // we cannot allow this element
+                // so the closing parenthesis was the only allowed choice here
+                return Err(ParserError::category_error(
+                    CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose]),
+                    token.span(),
+                ));
+            }
+
+            // we are no longer outside
+            self.outside = false;
+        }
+        // we are inside, parse the element using the inner parser
+        if let ControlFlow::Break(element) = self.inner.progress(handler, token)? {
+            // add element, we are back outside
+            self.results.push(element);
+            self.outside = true;
+        }
+        Ok(ControlFlow::Continue(()))
+    }
+}
+
+pub(crate) struct ParenMaximumParser<H: SmtHandler, P: CategoryParser<H>> {
+    is_opened: bool,
+    inner: ClosedMaximumParser<H, P>,
+}
+
+impl<H: SmtHandler, P: CategoryParser<H>> ParenMaximumParser<H, P> {
+    pub fn new() -> Self {
+        Self {
+            is_opened: false,
+            inner: ClosedMaximumParser::new(),
+        }
+    }
+
+    pub fn start(&mut self, max_elements: usize) {
+        self.is_opened = false;
+        self.inner.start(max_elements);
+    }
+
+    pub fn progress(
+        &mut self,
+        handler: &mut H,
+        token: Token,
+    ) -> Result<ControlFlow<Vec<P::Result>>, ParserError<H::Error>> {
+        if self.is_opened {
+            if let ControlFlow::Break(result) = self.inner.progress(handler, token)? {
+                // we are done, reset open and break
+                self.is_opened = false;
+                return Ok(ControlFlow::Break(result));
+            }
+        } else {
+            // expect opening parenthesis
+            OpenParenParser::expect(token)?;
+            self.is_opened = true;
+        }
+        Ok(ControlFlow::Continue(()))
+    }
+}
