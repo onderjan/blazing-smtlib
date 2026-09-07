@@ -4,7 +4,8 @@ use crate::{
     CommandHandler, SmtFunctionSignature, SmtSymbol,
     read::parser::{
         CategoryParser, CloseParenParser, CommandParser, CommandResult, KeywordParser,
-        ParenMultipleParser, ParserError, SortedVarParser, StringParser, SymbolParser,
+        NumeralParser, ParenMultipleParser, ParserError, SortedVarParser, StringParser,
+        SymbolParser,
         category::{ClosedAttributeParser, ClosedParser, PairParser, SortParser, TermParser},
         command::{CommandAction, ParseCommand},
         handle_err,
@@ -94,6 +95,12 @@ standard_commands! {
     b"set-logic" => set_logic: SetLogic(
         ClosedParser<H, SymbolParser>,
         |handler, logic| handler.command_set_logic(logic)),
+    b"declare-sort" => declare_sort: DeclareSort(
+        ClosedParser<H, PairParser<H, SymbolParser, NumeralParser>>,
+        |handler, (name, arity)| handler.command_declare_sort(name, arity)),
+    b"declare-sort-parameter" => declare_sort_parameter: DeclareSortParameter(
+        ClosedParser<H, SymbolParser>,
+        |handler, name| handler.command_declare_sort_parameter(name)),
     b"declare-const" => declare_const: DeclareConst(
         ClosedParser<H, PairParser<H, SymbolParser, SortParser<H>>>,
         |handler, (name, sort)| handler.command_declare_fun(name, Vec::new(), sort)),

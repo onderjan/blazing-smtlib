@@ -26,7 +26,9 @@ pub use {
     s_expr::SExprParser,
     sort::SortParser,
     term::TermParser,
-    token::{CloseParenParser, KeywordParser, OpenParenParser, StringParser, SymbolParser},
+    token::{
+        CloseParenParser, KeywordParser, NumeralParser, OpenParenParser, StringParser, SymbolParser,
+    },
 };
 
 pub type SortedVarParser<H> = ParenParser<H, PairParser<H, SymbolParser, SortParser<H>>>;

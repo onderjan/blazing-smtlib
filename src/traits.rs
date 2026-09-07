@@ -1,8 +1,8 @@
 use std::fmt::Debug;
 
 use crate::{
-    SmtAttributeValue, SmtFunctionSignature, SmtKeyword, SmtQuantifierKind, SmtSExpr, SmtSort,
-    SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm,
+    SmtAttributeValue, SmtFunctionSignature, SmtKeyword, SmtNumeral, SmtQuantifierKind, SmtSExpr,
+    SmtSort, SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm,
     read::parser::{NoCommandParser, ParseCommand},
 };
 
@@ -60,6 +60,23 @@ pub trait CommandHandler: SmtHandler {
     fn command_set_info(&mut self, attribute: Self::Attribute) -> Result<(), Self::Error>;
 
     fn command_set_logic(&mut self, logic: SmtSymbol) -> Result<(), Self::Error>;
+
+    /// Adds a sort symbol with an associated arity.
+    ///
+    /// As per the standard, the handler should return an error if `name`
+    /// is a sort symbol or parameter that is already present in the current signature.
+    fn command_declare_sort(
+        &mut self,
+        name: SmtSymbol,
+        arity: SmtNumeral,
+    ) -> Result<(), Self::Error>;
+
+    /// Adds a global sort parameter `name` to the current signature.
+    ///
+    /// As per the standard, the handler should return an error
+    /// if `name` is a sort symbol, sort parameter, or theory symbol
+    /// that is already present in the current signature.
+    fn command_declare_sort_parameter(&mut self, name: SmtSymbol) -> Result<(), Self::Error>;
 
     /// Performs function declaration (`declare-fun` / `declare-const`).
     ///
@@ -210,6 +227,18 @@ impl CommandHandler for CheckStandardSyntax {
     }
 
     fn command_set_logic(&mut self, _logic: SmtSymbol) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn command_declare_sort(
+        &mut self,
+        _name: SmtSymbol,
+        _arity: SmtNumeral,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn command_declare_sort_parameter(&mut self, _name: SmtSymbol) -> Result<(), Self::Error> {
         Ok(())
     }
 

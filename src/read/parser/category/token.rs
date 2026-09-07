@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtHandler, SmtKeyword, SmtStringContent, SmtSymbol,
+    SmtHandler, SmtKeyword, SmtNumeral, SmtStringContent, SmtSymbol,
     read::parser::{CategoryParser, CategoryParserErrorKind, ParserError},
     token::{Token, TokenKind, TokenType},
 };
@@ -56,10 +56,14 @@ macro_rules! token_parser {
 
 token_parser!(SymbolParser, SmtSymbol, &[TokenType::Symbol],
     TokenKind::Symbol(symbol) => symbol.into_owned());
+token_parser!(NumeralParser, SmtNumeral, &[TokenType::Numeral],
+    TokenKind::Numeral(numeral) => numeral.into_owned());
+
 token_parser!(OpenParenParser, (), &[TokenType::ParenOpen],
     TokenKind::ParenOpen => ());
 token_parser!(CloseParenParser, (), &[TokenType::ParenClose],
     TokenKind::ParenClose => ());
+
 token_parser!(KeywordParser, SmtKeyword, &[TokenType::Keyword],
     TokenKind::Keyword(keyword) => keyword.into_owned());
 token_parser!(StringParser, SmtStringContent, &[TokenType::String],
