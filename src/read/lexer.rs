@@ -5,7 +5,7 @@ pub(crate) use char_class::CharClass;
 use crate::{
     SmtBinDigitsView, SmtDecimalView, SmtHexDigitsView, SmtKeywordView, SmtLocation,
     SmtNumeralView, SmtSpan, SmtStringContentView, SmtSymbolView, String8,
-    read::lexer::char_class::{COMMENT_PLAIN, FLAGS, QUOTED_PLAIN, SIMPLE_SYMBOL},
+    read::lexer::char_class::{COMMENT_PLAIN, FLAGS, QUOTED_PLAIN, SIMPLE_SYMBOL, STRING_PLAIN},
     token::{Reserved, Token, TokenKind, TokenType},
 };
 
@@ -180,7 +180,7 @@ impl<H: TokenHandler> Lexer<H> {
             LexerState::StringLiteralDoubleQuote => {
                 // string literal has ended by the previous character,
                 // a quote directly before the end of the file
-                self.finish_string_literal()
+                self.finish_string_literal(self.end_before_byte())
             }
             LexerState::SimpleSymbol => self.finish_simple_symbol(self.end_before_byte()),
             LexerState::Keyword => self.finish_keyword(false),
@@ -220,8 +220,9 @@ impl<H: TokenHandler> Lexer<H> {
                 LexerState::HexadecimalOrBinary => self.lex_hexadecimal_or_binary(rest)?,
                 LexerState::Hexadecimal => self.lex_hexadecimal(rest)?,
                 LexerState::Binary => self.lex_binary(rest)?,
-                LexerState::StringLiteral => self.lex_string_literal(rest, false)?,
-                LexerState::StringLiteralDoubleQuote => self.lex_string_literal(rest, true)?,
+                LexerState::StringLiteral | LexerState::StringLiteralDoubleQuote => {
+                    self.lex_string_literal(rest)?
+                }
                 LexerState::SimpleSymbol => self.lex_simple_symbol(rest)?,
                 LexerState::QuotedSymbol => self.lex_quoted_symbol(rest)?,
                 LexerState::Keyword => self.lex_keyword(rest)?,
@@ -420,48 +421,73 @@ impl<H: TokenHandler> Lexer<H> {
         Ok(1)
     }
 
-    fn lex_string_literal(
-        &mut self,
-        slice: &[u8],
-        being_closed: bool,
-    ) -> Result<usize, LexError<H::Error>> {
-        let c = slice[0];
-
-        if being_closed {
-            if c == b'\"' {
-                // this has been a double-quote escape
-                // push a double-quote and continue lexing the string literal
-                self.token_content.push(b'\"');
-                self.state = LexerState::StringLiteral;
-            } else {
-                // the previous character was really a quote ending the string literal
-                // finish previously ended token
-                self.finish_string_literal()?;
-                // force the byte to be processed normally
-                self.state = LexerState::Normal;
-                return Ok(0);
-            }
-        } else {
-            if c == b'\"' {
-                // we have a double quote in string literal
-                // it may be followed by another double quote for escaping
-                // otherwise, it will end the string literal
-                // put the lexer in a special state to handle the next character
-                self.state = LexerState::StringLiteralDoubleQuote;
-            } else if CharClass::from(c).is_printable_or_whitespace() {
-                // TODO: rework newlines once lexing string literals with runs
-                if c == b'\n' {
-                    self.mark_line_feed_at(0);
+    fn lex_string_literal(&mut self, mut rest: &[u8]) -> Result<usize, LexError<H::Error>> {
+        let mut consumed = 0;
+        while !rest.is_empty() {
+            if matches!(self.state, LexerState::StringLiteralDoubleQuote) {
+                // we need to react to the literal being closed by a previous double-quote
+                // look at the first byte
+                if rest[0] != b'\"' {
+                    // the previous character was really a quote ending the string literal
+                    // finish the previously ended token
+                    self.finish_string_literal(self.current_line_location(consumed))?;
+                    // set lexer to normal state and return, not consuming the current byte
+                    self.state = LexerState::Normal;
+                    return Ok(consumed);
+                } else {
+                    // this has been a double-quote escape
+                    // consume the first byte
+                    rest = &rest[1..];
+                    consumed += 1;
+                    // push a double-quote byte (just one, we encountered two)
+                    self.token_content.push(b'\"');
+                    // return to string-literal state and continue parsing
+                    self.state = LexerState::StringLiteral;
                 }
-                // add to literal
-                self.token_content.push(c);
-            } else {
-                // forbidden as not printable or whitespace
-                return Err(self.current_token_error(LexerErrorKind::ForbiddenCharInString, true));
+            }
+
+            // find the first byte that is not a plain string byte
+            let index = Self::run_end(rest, STRING_PLAIN);
+
+            match rest.get(index) {
+                Some(b'\n') => {
+                    // mark the line feed
+                    self.mark_line_feed_at(consumed + index);
+                    // extend with & consume the run including the line feed
+                    self.token_content.extend_from_slice(&rest[..=index]);
+                    rest = &rest[index + 1..];
+                    consumed += index + 1;
+                    // continue parsing
+                }
+                Some(b'\"') => {
+                    // we have a double quote in string literal
+                    // only extend the content with bytes before it
+                    self.token_content.extend_from_slice(&rest[..index]);
+                    // consume the quote and everything before it
+                    rest = &rest[index + 1..];
+                    consumed += index + 1;
+                    // the quote may be followed by another double quote for escaping
+                    // otherwise, it will end the string literal
+                    // put the lexer in a special state to handle the next character
+                    self.state = LexerState::StringLiteralDoubleQuote;
+                    // continue parsing
+                }
+                Some(_) => {
+                    // forbidden, not printable or whitespace
+                    return Err(self.error_ending_at(
+                        LexerErrorKind::ForbiddenCharInString,
+                        consumed + index + 1,
+                    ));
+                }
+                None => {
+                    // extend the content with the rest
+                    self.token_content.extend_from_slice(rest);
+                    // we have nothing more to consume, return
+                    return Ok(consumed + rest.len());
+                }
             }
         }
-
-        Ok(1)
+        Ok(consumed)
     }
 
     fn lex_simple_symbol(&mut self, slice: &[u8]) -> Result<usize, LexError<H::Error>> {
@@ -653,10 +679,10 @@ impl<H: TokenHandler> Lexer<H> {
         self.sink(TokenType::Keyword, self.end_before_byte())
     }
 
-    fn finish_string_literal(&mut self) -> Result<(), LexError<H::Error>> {
+    fn finish_string_literal(&mut self, end: SmtLocation) -> Result<(), LexError<H::Error>> {
         // literal has ended at the previous character
         // sink new token
-        self.sink(TokenType::String, self.end_before_byte())
+        self.sink(TokenType::String, end)
     }
 
     fn sink(&mut self, token_type: TokenType, end: SmtLocation) -> Result<(), LexError<H::Error>> {
