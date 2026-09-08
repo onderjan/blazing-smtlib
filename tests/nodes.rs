@@ -4,9 +4,9 @@ use std::convert::Infallible;
 use std::fmt::Debug;
 
 use smt_parser_rs::{
-    SmtApplication, SmtAttributeValue, SmtFunctionSignature, SmtHandler, SmtIdent, SmtIndex,
-    SmtKeyword, SmtQualifiedIdent, SmtQuantifierKind, SmtSExpr, SmtSort, SmtSpecialConstant,
-    SmtSymbol, SmtTerm,
+    SmtApplication, SmtAttributeValue, SmtDatatypeConstructor, SmtFunctionSignature, SmtHandler,
+    SmtIdent, SmtIndex, SmtKeyword, SmtQualifiedIdent, SmtQuantifierKind, SmtSExpr, SmtSort,
+    SmtSpecialConstant, SmtSymbol, SmtTerm,
 };
 
 /// Handler that is deliberately neither `Debug` nor `Clone`,
@@ -88,4 +88,5 @@ fn nodes_are_debug_and_clone_with_an_opaque_handler() {
     assert_debug_and_clone::<SmtAttributeValue<OpaqueHandler>>();
     assert_debug_and_clone::<SmtSExpr<OpaqueHandler>>();
     assert_debug_and_clone::<SmtFunctionSignature<OpaqueHandler>>();
+    assert_debug_and_clone::<SmtDatatypeConstructor<OpaqueHandler>>();
 }
