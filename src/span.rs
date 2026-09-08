@@ -5,15 +5,14 @@
 /// we consider only LF to start a new line for location purposes
 /// as that is compatible with both LF and CRLF conventions.
 ///
-/// The offset starts at zero.
-/// Line and column start at one as usual.
+/// The offset, line, and column all start at zero.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct SmtLocation {
     /// Zero-based byte offset from the start of the stream.
     offset: u64,
-    /// One-based line number, measured in bytes.
+    /// Zero-based line number.
     line: u64,
-    /// One-based column number, measured in bytes.
+    /// Zero-based column number, measured in bytes.
     column: u64,
 }
 
@@ -23,12 +22,12 @@ impl SmtLocation {
         self.offset
     }
 
-    /// One-based line number.
+    /// Zero-based line number.
     pub fn line(&self) -> u64 {
         self.line
     }
 
-    /// One-based column number, measured in bytes.
+    /// Zero-based column number, measured in bytes.
     pub fn column(&self) -> u64 {
         self.column
     }
@@ -53,8 +52,8 @@ impl SmtLocation {
     pub(crate) fn initial() -> Self {
         Self {
             offset: 0,
-            line: 1,
-            column: 1,
+            line: 0,
+            column: 0,
         }
     }
 
@@ -63,7 +62,7 @@ impl SmtLocation {
             Self {
                 offset: self.offset + 1,
                 line: self.line + 1,
-                column: 1,
+                column: 0,
             }
         } else {
             self.after_column()
