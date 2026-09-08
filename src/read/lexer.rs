@@ -6,7 +6,8 @@ use crate::{
     SmtBinDigitsView, SmtDecimalView, SmtHexDigitsView, SmtKeywordView, SmtLocation,
     SmtNumeralView, SmtSpan, SmtStringContentView, SmtSymbolView, String8,
     read::lexer::char_class::{
-        BINARY_DIGIT, COMMENT_PLAIN, FLAGS, HEX_DIGIT, QUOTED_PLAIN, SIMPLE_SYMBOL, STRING_PLAIN,
+        BINARY_DIGIT, COMMENT_PLAIN, DIGIT, FLAGS, HEX_DIGIT, QUOTED_PLAIN, SIMPLE_SYMBOL,
+        STRING_PLAIN,
     },
     token::{Reserved, Token, TokenKind, TokenType},
 };
@@ -166,8 +167,8 @@ impl<H: TokenHandler> Lexer<H> {
                 // nothing to do, we accept EOF even in comments
                 Ok(())
             }
-            LexerState::Fraction => self.finish_decimal(false),
-            LexerState::NumeralOrDecimal => self.finish_numeral(),
+            LexerState::Fraction => self.finish_decimal(0, false),
+            LexerState::NumeralOrDecimal => self.finish_numeral(self.end_before_byte()),
             LexerState::Hexadecimal => self.finish_hexadecimal(0, false),
             LexerState::Binary => self.finish_binary(0, false),
             LexerState::HexadecimalOrBinary => {
@@ -317,56 +318,63 @@ impl<H: TokenHandler> Lexer<H> {
     }
 
     fn lex_numeral_or_decimal(&mut self, slice: &[u8]) -> Result<usize, LexError<H::Error>> {
-        let c = slice[0];
+        // find the first byte that is not a digit
+        let index = Self::run_end(slice, DIGIT);
 
-        match CharClass::from(c) {
-            CharClass::Digit => {
-                // check that we are not in a leading zero condition
-                // this could not have been done when starting the numeral/decimal
-                // since just a single '0' is allowed
-                if self.token_content.as_slice() == b"0" {
-                    return Err(self.current_token_error(LexerErrorKind::NumeralLeadingZero, true));
-                }
+        // check that we are not in a leading zero condition
+        // this could not have been done when starting the numeral/decimal
+        // since just a single '0' is allowed
 
-                // add one digit
-                self.token_content.push(c);
-            }
-            CharClass::Dot => {
+        // as we emplace the first digit in the normal state,
+        // it suffices for the leading zero condition that
+        // 1. at least one additional digit has been consumed
+        // 2. the content parsed previously is exactly "0"
+        if index > 0 && self.token_content.as_slice() == b"0" {
+            return Err(self.current_token_error(LexerErrorKind::NumeralLeadingZero, true));
+        }
+
+        // extend the token from slice
+        self.token_content.extend_from_slice(&slice[..index]);
+
+        match slice.get(index) {
+            Some(b'.') => {
                 // decimal, the next character will start fraction
                 // add the dot to the value
                 self.token_content.push(b'.');
+                // move to fraction parsing, consuming the dot
                 self.state = LexerState::Fraction;
+                Ok(index + 1)
             }
-            _ => {
-                // finish previously ended token
-                self.finish_numeral()?;
-                // force the byte to be processed normally
+            Some(_) => {
+                // we have successfully consumed the numeral, finish it
+                // compute the end location, no line feeds are allowed in simple symbols
+                self.finish_numeral(self.current_line_location(index))?;
+                // move back to normal lexer state, not consuming the current byte
                 self.state = LexerState::Normal;
-                return Ok(0);
+                Ok(index)
+            }
+            None => {
+                // we have run out of bytes for now
+                Ok(index)
             }
         }
-
-        Ok(1)
     }
 
     fn lex_fraction(&mut self, slice: &[u8]) -> Result<usize, LexError<H::Error>> {
-        let c = slice[0];
+        // find the first byte that is not a digit
+        let index = Self::run_end(slice, HEX_DIGIT);
 
-        match CharClass::from(c) {
-            CharClass::Digit => {
-                // add one digit, this will be to the fractional part (after the dot)
-                self.token_content.push(c);
-            }
-            _ => {
-                // finish previously ended token
-                self.finish_decimal(true)?;
-                // force the byte to be processed normally
-                self.state = LexerState::Normal;
-                return Ok(0);
-            }
+        // extend the token from slice
+        self.token_content.extend_from_slice(&slice[..index]);
+
+        if index < slice.len() {
+            // we have successfully consumed the fraction, finish the decimal
+            // compute the end location, no line feeds are allowed in simple symbols
+            self.finish_decimal(index, true)?;
+            self.state = LexerState::Normal;
         }
 
-        Ok(1)
+        Ok(index)
     }
 
     fn lex_hexadecimal_or_binary(&mut self, slice: &[u8]) -> Result<usize, LexError<H::Error>> {
@@ -602,26 +610,39 @@ impl<H: TokenHandler> Lexer<H> {
         Ok(index + 1)
     }
 
-    fn finish_decimal(&mut self, ended_by_byte: bool) -> Result<(), LexError<H::Error>> {
+    fn finish_decimal(
+        &mut self,
+        position: usize,
+        ended_by_byte: bool,
+    ) -> Result<(), LexError<H::Error>> {
+        // compute the token end location
+        // we do not advance the line as LF is not allowed within this token
+        let end = self.current_line_location(position);
+
+        // decimals of the form 7. without any digit in fractional part are disallowed
         let last_is_none_or_dot = self
             .token_content
             .as_slice()
             .last()
             .is_none_or(|c| *c == b'.');
         if last_is_none_or_dot {
-            // decimals of the form 7. without any digit in fractional part are disallowed
-            return Err(
-                self.current_token_error(LexerErrorKind::FractionDigitExpected, ended_by_byte)
-            );
+            // the error end location must be one bigger
+            // if the keyword has ended due to another byte
+            let error_end = if ended_by_byte {
+                self.current_line_location(position + 1)
+            } else {
+                end
+            };
+            return Err(self.error_with_end(LexerErrorKind::FractionDigitExpected, error_end));
         }
         // sink new token
-        self.sink(TokenType::Decimal, self.end_before_byte())
+        self.sink(TokenType::Decimal, end)
     }
 
-    fn finish_numeral(&mut self) -> Result<(), LexError<H::Error>> {
+    fn finish_numeral(&mut self, end: SmtLocation) -> Result<(), LexError<H::Error>> {
         // this was a numeral, we have no further checks
         // sink new token
-        self.sink(TokenType::Numeral, self.end_before_byte())
+        self.sink(TokenType::Numeral, end)
     }
 
     fn finish_hexadecimal(
