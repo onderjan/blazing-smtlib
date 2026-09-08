@@ -247,6 +247,14 @@ const VALID_INPUTS: &[&[u8]] = &[
     b"\"a\"\"b\" \"\"\"\"",
     b"\"line1\nline2\" |sym\nbol| x",
     b"\"\"\"\n\"\"\" |\n|",
+    // several line breaks inside one token: every line feed position must be
+    // taken from the start of the slice, not from the previous line feed
+    b"|a\nb\nc| d",
+    b"|a\n\n\nb| d\n\n\ne",
+    b"\"a\nb\nc\" d",
+    b"\"a\n\"\"\nb\" c",
+    b"|\n\n\n| x\n\n\ny",
+    b"; c\n\n\n(x)\n; d\n\n",
     b"; comment\r\n(a)\r\n; trailing comment",
     b"; comment only",
     b"; comment\n",
@@ -548,8 +556,15 @@ fn long_token_input(length: usize) -> (Vec<u8>, Vec<(TokenType, Vec<u8>)>) {
         .collect();
     let binary: Vec<u8> = (0..length).map(|i| b"01"[i % 2]).collect();
     let keyword: Vec<u8> = (0..length).map(|i| b"kw-name"[i % 7]).collect();
-    // the escaped quote counts as one payload byte
+    // the string gets line breaks at a quarter and three quarters of its
+    // length and an escaped quote in the middle, which counts as one payload
+    // byte; the quoted symbol gets line breaks at the same three positions,
+    // so that both tokens contain several line feeds
     let mut string_source: Vec<u8> = (0..length).map(|i| b"str ing"[i % 7]).collect();
+    if length > 4 {
+        string_source[length / 4] = b'\n';
+        string_source[3 * length / 4] = b'\n';
+    }
     let mut string_payload = string_source.clone();
     if length > 2 {
         string_source[length / 2] = b'"';
@@ -559,6 +574,10 @@ fn long_token_input(length: usize) -> (Vec<u8>, Vec<(TokenType, Vec<u8>)>) {
     let mut quoted: Vec<u8> = (0..length).map(|i| b"quo ted"[i % 7]).collect();
     if length > 2 {
         quoted[length / 2] = b'\n';
+    }
+    if length > 4 {
+        quoted[length / 4] = b'\n';
+        quoted[3 * length / 4] = b'\n';
     }
     let comment: Vec<u8> = (0..length).map(|i| b"comment "[i % 8]).collect();
     let whitespace: Vec<u8> = (0..length).map(|i| b" \t\n "[i % 4]).collect();

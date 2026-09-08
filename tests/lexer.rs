@@ -968,3 +968,82 @@ fn eof_twice_after_whitespace_produces_two_eof_tokens() {
         ]
     );
 }
+
+// --- Several line breaks inside one token or run ---
+//
+// A scanner that handles a run per call has to compute every line feed's
+// position from the start of the slice it was given, not from the start of
+// the run that follows an earlier line feed. One line break per token does
+// not catch that; two or more do.
+
+#[test]
+fn quoted_symbol_may_span_several_line_breaks() {
+    assert_eq!(
+        token_spans(b"|a\nb\nc| d"),
+        vec![
+            (TokenType::Symbol, (0, 0, 0), (7, 2, 2)),
+            (TokenType::Symbol, (8, 2, 3), (9, 2, 4)),
+            (TokenType::EndOfFile, (9, 2, 4), (9, 2, 4)),
+        ]
+    );
+    // consecutive line breaks each start a line of their own
+    assert_eq!(
+        token_spans(b"|a\n\n\nb| d"),
+        vec![
+            (TokenType::Symbol, (0, 0, 0), (7, 3, 2)),
+            (TokenType::Symbol, (8, 3, 3), (9, 3, 4)),
+            (TokenType::EndOfFile, (9, 3, 4), (9, 3, 4)),
+        ]
+    );
+}
+
+#[test]
+fn string_literal_may_span_several_line_breaks() {
+    assert_eq!(
+        token_spans(b"\"a\nb\nc\" d"),
+        vec![
+            (TokenType::String, (0, 0, 0), (7, 2, 2)),
+            (TokenType::Symbol, (8, 2, 3), (9, 2, 4)),
+            (TokenType::EndOfFile, (9, 2, 4), (9, 2, 4)),
+        ]
+    );
+    // an escaped quote between the line breaks is one payload byte
+    assert_eq!(
+        token_payloads(b"\"a\n\"\"\nb\" c"),
+        vec![
+            (TokenType::String, b"a\n\"\nb".to_vec()),
+            (TokenType::Symbol, b"c".to_vec()),
+            (TokenType::EndOfFile, vec![]),
+        ]
+    );
+    assert_eq!(
+        token_spans(b"\"a\n\"\"\nb\" c"),
+        vec![
+            (TokenType::String, (0, 0, 0), (8, 2, 2)),
+            (TokenType::Symbol, (9, 2, 3), (10, 2, 4)),
+            (TokenType::EndOfFile, (10, 2, 4), (10, 2, 4)),
+        ]
+    );
+}
+
+#[test]
+fn whitespace_and_comments_with_several_line_breaks() {
+    assert_eq!(
+        token_spans(b"a\n\n\n  b"),
+        vec![
+            (TokenType::Symbol, (0, 0, 0), (1, 0, 1)),
+            (TokenType::Symbol, (6, 3, 2), (7, 3, 3)),
+            (TokenType::EndOfFile, (7, 3, 3), (7, 3, 3)),
+        ]
+    );
+    // a comment ends at the first line break; the blank lines after it are whitespace
+    assert_eq!(
+        token_spans(b"; c\n\n\n(x)"),
+        vec![
+            (TokenType::ParenOpen, (6, 3, 0), (7, 3, 1)),
+            (TokenType::Symbol, (7, 3, 1), (8, 3, 2)),
+            (TokenType::ParenClose, (8, 3, 2), (9, 3, 3)),
+            (TokenType::EndOfFile, (9, 3, 3), (9, 3, 3)),
+        ]
+    );
+}
