@@ -303,13 +303,19 @@ mod tests {
         }
     }
 
-    /// The one-line reference `run_end` is checked against.
+    /// The one-line reference the run-end functions are checked against.
     fn reference_run_end(slice: &[u8], mask: u8) -> usize {
         slice
             .iter()
             .position(|c| FLAGS[*c as usize] & mask == 0)
             .unwrap_or(slice.len())
     }
+
+    type RunEnd = fn(&[u8], u8) -> usize;
+
+    /// The run-end functions under test; both must behave exactly like the reference.
+    const RUN_END_FUNCTIONS: [(&str, RunEnd); 2] =
+        [("run_end", run_end), ("run_end_short", run_end_short)];
 
     /// A byte that continues the run for the flag, and one that ends it
     /// while carrying as many other flags as possible.
@@ -329,32 +335,35 @@ mod tests {
     fn run_end_matches_the_reference_for_every_length_prefix_and_terminator() {
         // lengths around 16- and 32-byte scanning windows, with the run
         // starting at every alignment within a window, so that a chunked
-        // scan has to get every boundary right
-        for (name, flag) in ALL_FLAGS {
-            let (run_byte, terminators) = run_and_terminator_bytes(flag);
-            for prefix in 0..4usize {
-                for run_length in 0..=70usize {
-                    let mut data = vec![b'('; prefix];
-                    data.extend(std::iter::repeat_n(run_byte, run_length));
-                    // no terminator: the run reaches the end of the slice
-                    assert_eq!(
-                        run_end(&data[prefix..], flag),
-                        run_length,
-                        "{name}: prefix {prefix}, run {run_length}, no terminator"
-                    );
-                    // every possible terminator, followed by more run bytes
-                    // that must not be reached
-                    for &terminator in &terminators {
-                        let mut with_terminator = data.clone();
-                        with_terminator.push(terminator);
-                        with_terminator.extend(std::iter::repeat_n(run_byte, 40));
-                        let slice = &with_terminator[prefix..];
+        // scan has to get every boundary right; the short lengths also
+        // cover every arm of `run_end_short` and its hand-off to `run_end`
+        for (function_name, run_end) in RUN_END_FUNCTIONS {
+            for (name, flag) in ALL_FLAGS {
+                let (run_byte, terminators) = run_and_terminator_bytes(flag);
+                for prefix in 0..4usize {
+                    for run_length in 0..=70usize {
+                        let mut data = vec![b'('; prefix];
+                        data.extend(std::iter::repeat_n(run_byte, run_length));
+                        // no terminator: the run reaches the end of the slice
                         assert_eq!(
-                            run_end(slice, flag),
+                            run_end(&data[prefix..], flag),
                             run_length,
-                            "{name}: prefix {prefix}, run {run_length}, terminator {terminator:#04x}"
+                            "{function_name} {name}: prefix {prefix}, run {run_length}, no terminator"
                         );
-                        assert_eq!(run_end(slice, flag), reference_run_end(slice, flag));
+                        // every possible terminator, followed by more run bytes
+                        // that must not be reached
+                        for &terminator in &terminators {
+                            let mut with_terminator = data.clone();
+                            with_terminator.push(terminator);
+                            with_terminator.extend(std::iter::repeat_n(run_byte, 40));
+                            let slice = &with_terminator[prefix..];
+                            assert_eq!(
+                                run_end(slice, flag),
+                                run_length,
+                                "{function_name} {name}: prefix {prefix}, run {run_length}, terminator {terminator:#04x}"
+                            );
+                            assert_eq!(run_end(slice, flag), reference_run_end(slice, flag));
+                        }
                     }
                 }
             }
@@ -363,8 +372,10 @@ mod tests {
 
     #[test]
     fn run_end_on_an_empty_slice_is_zero() {
-        for (_, flag) in ALL_FLAGS {
-            assert_eq!(run_end(&[], flag), 0);
+        for (function_name, run_end) in RUN_END_FUNCTIONS {
+            for (name, flag) in ALL_FLAGS {
+                assert_eq!(run_end(&[], flag), 0, "{function_name} {name}");
+            }
         }
     }
 
@@ -372,27 +383,28 @@ mod tests {
     fn run_end_stops_at_the_slice_end_not_at_the_allocation_end() {
         // the bytes after the slice would continue or end the run differently;
         // scanning must never look at them
-        for (name, flag) in ALL_FLAGS {
-            let (run_byte, terminators) = run_and_terminator_bytes(flag);
-            let terminator = terminators[0];
-            for run_length in 0..=70usize {
-                let mut buffer = vec![run_byte; run_length];
-                // beyond the slice: first a terminator, then run bytes
-                buffer.push(terminator);
-                buffer.extend(std::iter::repeat_n(run_byte, 64));
-                assert_eq!(
-                    run_end(&buffer[..run_length], flag),
-                    run_length,
-                    "{name}: run {run_length} followed by a terminator outside the slice"
-                );
-                // beyond the slice: run bytes only
-                let mut buffer = vec![run_byte; run_length + 64];
-                buffer[run_length] = run_byte;
-                assert_eq!(
-                    run_end(&buffer[..run_length], flag),
-                    run_length,
-                    "{name}: run {run_length} followed by run bytes outside the slice"
-                );
+        for (function_name, run_end) in RUN_END_FUNCTIONS {
+            for (name, flag) in ALL_FLAGS {
+                let (run_byte, terminators) = run_and_terminator_bytes(flag);
+                let terminator = terminators[0];
+                for run_length in 0..=70usize {
+                    let mut buffer = vec![run_byte; run_length];
+                    // beyond the slice: first a terminator, then run bytes
+                    buffer.push(terminator);
+                    buffer.extend(std::iter::repeat_n(run_byte, 64));
+                    assert_eq!(
+                        run_end(&buffer[..run_length], flag),
+                        run_length,
+                        "{function_name} {name}: run {run_length} followed by a terminator outside the slice"
+                    );
+                    // beyond the slice: run bytes only
+                    let buffer = vec![run_byte; run_length + 64];
+                    assert_eq!(
+                        run_end(&buffer[..run_length], flag),
+                        run_length,
+                        "{function_name} {name}: run {run_length} followed by run bytes outside the slice"
+                    );
+                }
             }
         }
     }
