@@ -244,64 +244,73 @@ impl<H: TokenHandler> Lexer<H> {
     fn lex_normal(&mut self, slice: &[u8]) -> Result<usize, LexError<H::Error>> {
         let mut index = 0;
 
-        // skip whitespace except for line feeds
-        // those must be processed for line offsets
-        let c = loop {
+        loop {
+            // skip whitespace except for line feeds
+            // those must be processed for line offsets
             index += Self::run_end(&slice[index..], NON_LF_WHITESPACE);
-            match slice.get(index) {
+            let c = match slice.get(index) {
                 Some(b'\n') => {
-                    // mark the line feed
+                    // mark the line feed, continue skipping whitespace
                     self.mark_line_feed_at(index);
                     index += 1;
+                    continue;
                 }
                 Some(c) => {
                     // an interesting character, break
-                    break *c;
+                    *c
                 }
                 None => {
                     // we have consumed every byte
                     return Ok(slice.len());
                 }
-            }
-        };
+            };
 
-        // start the token as we are in the normal state
-        self.start_token_at_current_line(index);
-        let state = match c {
-            b'(' => {
-                // parentheses are tokens of their own
-                self.sink(TokenType::ParenOpen, self.current_line_location(index + 1))?;
-                LexerState::Normal
-            }
-            b')' => {
-                // parentheses are tokens of their own
-                self.sink(TokenType::ParenClose, self.current_line_location(index + 1))?;
-                LexerState::Normal
-            }
-            b';' => LexerState::Comment,
-            b'#' => LexerState::HexadecimalOrBinary,
-            b'"' => LexerState::StringLiteral,
-            b':' => LexerState::Keyword,
-            b'|' => LexerState::QuotedSymbol,
-            _ => {
-                // digits start numerals/decimals
-                // the remaining simple-symbol-allowed bytes start simple symbols
-                let flags = FLAGS[c as usize];
-                if flags & DIGIT != 0 {
-                    self.token_content.push(c);
-                    LexerState::NumeralOrDecimal
-                } else if flags & SIMPLE_SYMBOL != 0 {
-                    self.token_content.push(c);
-                    LexerState::SimpleSymbol
-                } else {
-                    return Err(
-                        self.error_ending_at(LexerErrorKind::UnexpectedCharacter, index + 1)
-                    );
+            // start the token as we are in the normal state
+            self.start_token_at_current_line(index);
+            let state = match c {
+                b'(' => {
+                    // parentheses are tokens of their own
+                    // sink the token
+                    self.sink(TokenType::ParenOpen, self.current_line_location(index + 1))?;
+                    // since we are back in the normal state, just increment the index and continue the loop
+                    index += 1;
+                    continue;
                 }
-            }
-        };
-        self.state = state;
-        Ok(index + 1)
+                b')' => {
+                    // parentheses are tokens of their own
+                    // sink the token
+                    self.sink(TokenType::ParenClose, self.current_line_location(index + 1))?;
+                    // since we are back in the normal state, just increment the index and continue the loop
+                    index += 1;
+                    continue;
+                }
+                b';' => LexerState::Comment,
+                b'#' => LexerState::HexadecimalOrBinary,
+                b'"' => LexerState::StringLiteral,
+                b':' => LexerState::Keyword,
+                b'|' => LexerState::QuotedSymbol,
+                _ => {
+                    // digits start numerals/decimals
+                    // the remaining simple-symbol-allowed bytes start simple symbols
+                    let flags = FLAGS[c as usize];
+                    if flags & DIGIT != 0 {
+                        self.token_content.push(c);
+                        LexerState::NumeralOrDecimal
+                    } else if flags & SIMPLE_SYMBOL != 0 {
+                        self.token_content.push(c);
+                        LexerState::SimpleSymbol
+                    } else {
+                        return Err(
+                            self.error_ending_at(LexerErrorKind::UnexpectedCharacter, index + 1)
+                        );
+                    }
+                }
+            };
+            // change the state and end normal parsing
+            // having consumed bytes up to and including to the current one
+            self.state = state;
+            return Ok(index + 1);
+        }
     }
 
     fn lex_numeral_or_decimal(&mut self, slice: &[u8]) -> Result<usize, LexError<H::Error>> {
