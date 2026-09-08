@@ -124,9 +124,7 @@ impl<'a, H: CommandHandler, R: BufRead> SmtReader<'a, H, R> {
                     // end of stream
                     return Ok(ControlFlow::Break(()));
                 }
-                for c in buffer.iter().copied() {
-                    self.lexer.lex_next(c)?;
-                }
+                self.lexer.lex_slice(buffer)?;
                 let num_consumed = buffer.len();
                 self.buf_reader.consume(num_consumed);
                 Ok(ControlFlow::Continue(()))

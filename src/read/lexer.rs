@@ -108,13 +108,25 @@ impl<H: TokenHandler> Lexer<H> {
         self.byte_start
     }
 
+    /// Lexes the given slice, sending the lexed tokens to the handler.
+    ///
+    /// Panics if a previous call returned an error.
+    pub fn lex_slice(&mut self, slice: &[u8]) -> Result<(), LexError<H::Error>> {
+        for c in slice.iter().copied() {
+            self.lex_char(U8OrEof::U8(c))?;
+            self.byte_start = self.byte_start.after_byte(c);
+        }
+        Ok(())
+    }
+
     /// Lexes one byte, sending the lexed tokens to the handler.
+    ///
+    /// This is a slow convenience function, use `lex_slice` for speed
+    /// if a slice is available.
     ///
     /// Panics if a previous call returned an error.
     pub fn lex_next(&mut self, c: u8) -> Result<(), LexError<H::Error>> {
-        self.lex_char(U8OrEof::U8(c))?;
-        self.byte_start = self.byte_start.after_byte(c);
-        Ok(())
+        self.lex_slice(&[c])
     }
 
     /// Lexes end-of-file, sending the lexed tokens to the handler.
@@ -129,9 +141,7 @@ impl<H: TokenHandler> Lexer<H> {
     /// Sends the lexed tokens to the handler progressively.
     /// Returns on the first error.
     pub fn lex_all(&mut self, input: &[u8]) -> Result<(), LexError<H::Error>> {
-        for &c in input {
-            self.lex_next(c)?;
-        }
+        self.lex_slice(input)?;
         self.lex_eof()
     }
 
