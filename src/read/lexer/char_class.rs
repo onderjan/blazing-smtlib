@@ -95,12 +95,6 @@ impl From<u8> for CharClass {
     }
 }
 
-#[derive(Clone, Copy)]
-pub(super) enum U8OrEof {
-    U8(u8),
-    Eof,
-}
-
 impl CharClass {
     pub fn is_printable_or_whitespace(self) -> bool {
         // everything except other non-printable and DEL

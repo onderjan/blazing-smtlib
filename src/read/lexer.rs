@@ -1,7 +1,5 @@
 mod char_class;
 
-use char_class::U8OrEof;
-
 pub(crate) use char_class::CharClass;
 
 use crate::{
@@ -152,37 +150,38 @@ impl<H: TokenHandler> Lexer<H> {
                 // nothing to do, we accept EOF even in comments
                 Ok(())
             }
-            LexerState::Fraction => self.finish_decimal(U8OrEof::Eof),
-            LexerState::NumeralOrDecimal => self.finish_numeral(U8OrEof::Eof),
-            LexerState::Hexadecimal => self.finish_hexadecimal(U8OrEof::Eof),
-            LexerState::Binary => self.finish_binary(U8OrEof::Eof),
+            LexerState::Fraction => self.finish_decimal(false),
+            LexerState::NumeralOrDecimal => self.finish_numeral(),
+            LexerState::Hexadecimal => self.finish_hexadecimal(false),
+            LexerState::Binary => self.finish_binary(false),
             LexerState::HexadecimalOrBinary => {
                 // hash without selection following it
-                Err(self.current_token_error(LexerErrorKind::BaseSelectionExpected, U8OrEof::Eof))
+                Err(self.current_token_error(LexerErrorKind::BaseSelectionExpected, false))
             }
             LexerState::StringLiteral => {
                 // we are still within the string literal
                 // forbidden as the literal must be totally enclosed by double quotes
-                Err(self.current_token_error(LexerErrorKind::UnclosedStringLiteral, U8OrEof::Eof))
+                Err(self.current_token_error(LexerErrorKind::UnclosedStringLiteral, false))
             }
             LexerState::StringLiteralDoubleQuote => {
                 // string literal has ended by the previous character,
                 // a quote directly before the end of the file
-                self.finish_string_literal(U8OrEof::Eof)
+                self.finish_string_literal()
             }
-            LexerState::SimpleSymbol => self.finish_simple_symbol(U8OrEof::Eof),
-            LexerState::Keyword => self.finish_keyword(U8OrEof::Eof),
+            LexerState::SimpleSymbol => self.finish_simple_symbol(),
+            LexerState::Keyword => self.finish_keyword(false),
             LexerState::QuotedSymbol => {
                 // EOF forbidden as the symbol must be totally enclosed by pipes
-                Err(self.current_token_error(LexerErrorKind::UnclosedQuotedSymbol, U8OrEof::Eof))
+                Err(self.current_token_error(LexerErrorKind::UnclosedQuotedSymbol, false))
             }
             LexerState::Failed => {
                 panic!("cannot lex after a lexer error")
             }
         };
 
-        // everything processed, finish by sinking the EOF token
-        let result = result.and_then(|()| self.sink_empty(TokenType::EndOfFile));
+        // everything processed, start the EOF token and sink it
+        self.start_token();
+        let result = result.and_then(|()| self.sink(TokenType::EndOfFile, self.end_before_byte()));
 
         match result {
             Ok(()) => Ok(()),
@@ -204,7 +203,11 @@ impl<H: TokenHandler> Lexer<H> {
                         self.token_content.push(c);
                         LexerState::Fraction
                     }
-                    _ => return self.finish_decimal(U8OrEof::U8(c)),
+                    _ => {
+                        // finish previously ended token and process current normally
+                        self.finish_decimal(true)?;
+                        return self.lex_normal(c);
+                    }
                 }
             }
             LexerState::NumeralOrDecimal => {
@@ -214,10 +217,9 @@ impl<H: TokenHandler> Lexer<H> {
                         // this could not have been done when starting the numeral/decimal
                         // since just a single '0' is allowed
                         if self.token_content.as_slice() == b"0" {
-                            return Err(self.current_token_error(
-                                LexerErrorKind::NumeralLeadingZero,
-                                U8OrEof::U8(c),
-                            ));
+                            return Err(
+                                self.current_token_error(LexerErrorKind::NumeralLeadingZero, true)
+                            );
                         }
 
                         // add one digit
@@ -231,7 +233,9 @@ impl<H: TokenHandler> Lexer<H> {
                         LexerState::Fraction
                     }
                     _ => {
-                        return self.finish_numeral(U8OrEof::U8(c));
+                        // finish previously ended token and process current normally
+                        self.finish_numeral()?;
+                        return self.lex_normal(c);
                     }
                 }
             }
@@ -243,7 +247,9 @@ impl<H: TokenHandler> Lexer<H> {
                         LexerState::Hexadecimal
                     }
                     _ => {
-                        return self.finish_hexadecimal(U8OrEof::U8(c));
+                        // finish previously ended token and process current normally
+                        self.finish_hexadecimal(true)?;
+                        return self.lex_normal(c);
                     }
                 }
             }
@@ -255,7 +261,9 @@ impl<H: TokenHandler> Lexer<H> {
                         LexerState::Binary
                     }
                     _ => {
-                        return self.finish_binary(U8OrEof::U8(c));
+                        // finish previously ended token and process current normally
+                        self.finish_binary(true)?;
+                        return self.lex_normal(c);
                     }
                 }
             }
@@ -264,10 +272,9 @@ impl<H: TokenHandler> Lexer<H> {
                 b'x' => LexerState::Hexadecimal,
                 b'b' => LexerState::Binary,
                 _ => {
-                    return Err(self.current_token_error(
-                        LexerErrorKind::BaseSelectionExpected,
-                        U8OrEof::U8(c),
-                    ));
+                    return Err(
+                        self.current_token_error(LexerErrorKind::BaseSelectionExpected, true)
+                    );
                 }
             },
             LexerState::StringLiteral => {
@@ -283,10 +290,9 @@ impl<H: TokenHandler> Lexer<H> {
                     LexerState::StringLiteral
                 } else {
                     // forbidden as not printable or whitespace
-                    return Err(self.current_token_error(
-                        LexerErrorKind::ForbiddenCharInString,
-                        U8OrEof::U8(c),
-                    ));
+                    return Err(
+                        self.current_token_error(LexerErrorKind::ForbiddenCharInString, true)
+                    );
                 }
             }
             LexerState::StringLiteralDoubleQuote => {
@@ -296,7 +302,10 @@ impl<H: TokenHandler> Lexer<H> {
                     self.token_content.push(b'\"');
                     LexerState::StringLiteral
                 } else {
-                    return self.finish_string_literal(U8OrEof::U8(c));
+                    // the previous character was really a quote ending the string literal
+                    // finish previously ended token and process current normally
+                    self.finish_string_literal()?;
+                    return self.lex_normal(c);
                 }
             }
             LexerState::SimpleSymbol => {
@@ -307,7 +316,9 @@ impl<H: TokenHandler> Lexer<H> {
                     LexerState::SimpleSymbol
                 } else {
                     // simple symbol ended at the previous character
-                    return self.finish_simple_symbol(U8OrEof::U8(c));
+                    // finish previously ended token and process current normally
+                    self.finish_simple_symbol()?;
+                    return self.lex_normal(c);
                 }
             }
             LexerState::Keyword => {
@@ -315,31 +326,31 @@ impl<H: TokenHandler> Lexer<H> {
                 if class.is_allowed_in_simple_symbol() {
                     // make sure the keyword doesn't start with a digit
                     if self.token_content.is_empty() && matches!(class, CharClass::Digit) {
-                        return Err(self.current_token_error(
-                            LexerErrorKind::ForbiddenKeywordName,
-                            U8OrEof::U8(c),
-                        ));
+                        return Err(
+                            self.current_token_error(LexerErrorKind::ForbiddenKeywordName, true)
+                        );
                     }
                     // add character
                     self.token_content.push(c);
                     LexerState::Keyword
                 } else {
                     // keyword ended at the previous character
-                    return self.finish_keyword(U8OrEof::U8(c));
+                    // finish previously ended token and process current normally
+                    self.finish_keyword(true)?;
+                    return self.lex_normal(c);
                 }
             }
             LexerState::QuotedSymbol => {
                 match c {
                     b'\\' => {
                         // backslash forbidden in quoted symbols
-                        return Err(self.current_token_error(
-                            LexerErrorKind::BackslashInQuotedSymbol,
-                            U8OrEof::U8(c),
-                        ));
+                        return Err(
+                            self.current_token_error(LexerErrorKind::BackslashInQuotedSymbol, true)
+                        );
                     }
                     b'|' => {
                         // end of quoted symbol, sink its token, this character is consumed
-                        self.sink_current(TokenType::Symbol)?;
+                        self.sink(TokenType::Symbol, self.end_after_byte())?;
                         LexerState::Normal
                     }
                     c => {
@@ -349,10 +360,9 @@ impl<H: TokenHandler> Lexer<H> {
                             LexerState::QuotedSymbol
                         } else {
                             // character forbidden as not printable or whitespace
-
                             return Err(self.current_token_error(
                                 LexerErrorKind::ForbiddenCharInQuotedSymbol,
-                                U8OrEof::U8(c),
+                                true,
                             ));
                         }
                     }
@@ -383,11 +393,11 @@ impl<H: TokenHandler> Lexer<H> {
 
             // parentheses are tokens of their own
             CharClass::ParenOpen => {
-                self.sink_current(TokenType::ParenOpen)?;
+                self.sink(TokenType::ParenOpen, self.end_after_byte())?;
                 LexerState::Normal
             }
             CharClass::ParenClose => {
-                self.sink_current(TokenType::ParenClose)?;
+                self.sink(TokenType::ParenClose, self.end_after_byte())?;
                 LexerState::Normal
             }
 
@@ -434,16 +444,14 @@ impl<H: TokenHandler> Lexer<H> {
 
             _ => {
                 // class disallowed here
-                return Err(
-                    self.current_token_error(LexerErrorKind::UnexpectedCharacter, U8OrEof::U8(c))
-                );
+                return Err(self.current_token_error(LexerErrorKind::UnexpectedCharacter, true));
             }
         };
         self.state = state;
         Ok(())
     }
 
-    fn finish_decimal(&mut self, c: U8OrEof) -> Result<(), LexError<H::Error>> {
+    fn finish_decimal(&mut self, ended_by_byte: bool) -> Result<(), LexError<H::Error>> {
         let last_is_none_or_dot = self
             .token_content
             .as_slice()
@@ -451,99 +459,80 @@ impl<H: TokenHandler> Lexer<H> {
             .is_none_or(|c| *c == b'.');
         if last_is_none_or_dot {
             // decimals of the form 7. without any digit in fractional part are disallowed
-            return Err(self.current_token_error(LexerErrorKind::FractionDigitExpected, c));
+            return Err(
+                self.current_token_error(LexerErrorKind::FractionDigitExpected, ended_by_byte)
+            );
         }
-        // sink new token and lex the character normally
-        self.sink_and_lex_normal(TokenType::Decimal, c)
+        // sink new token
+        self.sink(TokenType::Decimal, self.end_before_byte())
     }
 
-    fn finish_numeral(&mut self, c: U8OrEof) -> Result<(), LexError<H::Error>> {
+    fn finish_numeral(&mut self) -> Result<(), LexError<H::Error>> {
         // this was a numeral, we have no further checks
-        // sink new token and lex the character normally
-        self.sink_and_lex_normal(TokenType::Numeral, c)
+        // sink new token
+        self.sink(TokenType::Numeral, self.end_before_byte())
     }
 
-    fn finish_hexadecimal(&mut self, c: U8OrEof) -> Result<(), LexError<H::Error>> {
+    fn finish_hexadecimal(&mut self, ended_by_byte: bool) -> Result<(), LexError<H::Error>> {
         if self.token_content.is_empty() {
             // had non-digit, zero digits disallowed
-            return Err(self.current_token_error(LexerErrorKind::HexadecimalDigitExpected, c));
+            return Err(
+                self.current_token_error(LexerErrorKind::HexadecimalDigitExpected, ended_by_byte)
+            );
         }
         // had non-digit, nonzero digits
-        // sink new token and lex the character normally
-        self.sink_and_lex_normal(TokenType::Hexadecimal, c)
+        // sink new token
+        self.sink(TokenType::Hexadecimal, self.end_before_byte())
     }
 
-    fn finish_binary(&mut self, c: U8OrEof) -> Result<(), LexError<H::Error>> {
+    fn finish_binary(&mut self, ended_by_byte: bool) -> Result<(), LexError<H::Error>> {
         if self.token_content.is_empty() {
             // had non-digit, zero digits disallowed
-            return Err(self.current_token_error(LexerErrorKind::BinaryDigitExpected, c));
+            return Err(
+                self.current_token_error(LexerErrorKind::BinaryDigitExpected, ended_by_byte)
+            );
         }
         // had non-digit, nonzero digits
-        // sink new token and lex the character normally
-        self.sink_and_lex_normal(TokenType::Binary, c)
+        // sink new token
+        self.sink(TokenType::Binary, self.end_before_byte())
     }
 
-    fn finish_simple_symbol(&mut self, c: U8OrEof) -> Result<(), LexError<H::Error>> {
+    fn finish_simple_symbol(&mut self) -> Result<(), LexError<H::Error>> {
         // process reserved words
         let token_type = if let Some(reserved) = Reserved::from_symbol_opt(&self.token_content) {
             TokenType::Reserved(reserved)
         } else {
             TokenType::Symbol
         };
-
-        // sink new token and lex the character normally
-        self.sink_and_lex_normal(token_type, c)
+        // sink new token
+        self.sink(token_type, self.end_before_byte())
     }
 
-    fn finish_keyword(&mut self, c: U8OrEof) -> Result<(), LexError<H::Error>> {
+    fn finish_keyword(&mut self, ended_by_byte: bool) -> Result<(), LexError<H::Error>> {
         // ensure the keyword is not empty
         if self.token_content.is_empty() {
-            return Err(self.current_token_error(LexerErrorKind::ForbiddenKeywordName, c));
+            return Err(
+                self.current_token_error(LexerErrorKind::ForbiddenKeywordName, ended_by_byte)
+            );
         }
         // reserved words as keywords are prohibited
         if Reserved::from_symbol_opt(&self.token_content).is_some() {
-            return Err(self.current_token_error(LexerErrorKind::KeywordReserved, c));
+            return Err(self.current_token_error(LexerErrorKind::KeywordReserved, ended_by_byte));
         }
-        // sink new token and lex the character normally
-        self.sink_and_lex_normal(TokenType::Keyword, c)
+        // sink new token
+        self.sink(TokenType::Keyword, self.end_before_byte())
     }
 
-    fn finish_string_literal(&mut self, c: U8OrEof) -> Result<(), LexError<H::Error>> {
+    fn finish_string_literal(&mut self) -> Result<(), LexError<H::Error>> {
         // literal has ended at the previous character
-        // sink new token and lex the character normally
-        self.sink_and_lex_normal(TokenType::String, c)
+        // sink new token
+        self.sink(TokenType::String, self.end_before_byte())
     }
 
-    fn sink_current(&mut self, token_type: TokenType) -> Result<(), LexError<H::Error>> {
-        self.sink_with_span(token_type, self.span_ending_now())
-    }
+    fn sink(&mut self, token_type: TokenType, end: SmtLocation) -> Result<(), LexError<H::Error>> {
+        // construct the span
+        let span = SmtSpan::new_unchecked(self.token_start, end);
 
-    fn sink_empty(&mut self, token_type: TokenType) -> Result<(), LexError<H::Error>> {
-        self.start_token();
-        self.sink_with_span(token_type, self.span_ending_before())
-    }
-
-    fn sink_and_lex_normal(
-        &mut self,
-        token_type: TokenType,
-        c: U8OrEof,
-    ) -> Result<(), LexError<H::Error>> {
-        // the token to be sunk actually ended with the last character
-        // we just needed this character to decide that
-        // sink the token
-        self.sink_with_span(token_type, self.span_ending_before())?;
-        // if the character is not EOF, lex it normally
-        if let U8OrEof::U8(c) = c {
-            self.lex_normal(c)?;
-        }
-        Ok(())
-    }
-
-    fn sink_with_span(
-        &mut self,
-        token_type: TokenType,
-        span: SmtSpan,
-    ) -> Result<(), LexError<H::Error>> {
         // pass the content by reference
         let value = self.token_content.as_view();
 
@@ -576,34 +565,28 @@ impl<H: TokenHandler> Lexer<H> {
         self.token_content.clear();
     }
 
-    fn span_ending_now(&self) -> SmtSpan {
-        // The current offset is at the start of the current character
-        // The span includes start, but not the end
-        // Therefore, we need to add 1 to the current offset
-        SmtSpan::new_unchecked(self.token_start, self.byte_start.after_column())
+    fn end_before_byte(&self) -> SmtLocation {
+        self.byte_start
     }
 
-    fn span_ending_before(&self) -> SmtSpan {
-        // The current offset is at the start of the current character
-        // The span includes start, but not the end
-        // Therefore, if the token actually ended with the previous character,
-        // we do not need to add anything.
-        SmtSpan::new_unchecked(self.token_start, self.byte_start)
+    fn end_after_byte(&self) -> SmtLocation {
+        self.byte_start.after_column()
     }
 
-    fn current_token_error<E>(&self, kind: LexerErrorKind, c: U8OrEof) -> LexError<E> {
-        // the spans starts at the token start and continues to the currently parsed,
-        // where the error was detected, including it
+    fn error_end(&self, ended_by_byte: bool) -> SmtLocation {
+        // the span starts at the token start
+        // if we have a pending byte, it includes it at the end
+        // if not, it ends before it
+        if ended_by_byte {
+            self.end_after_byte()
+        } else {
+            self.end_before_byte()
+        }
+    }
 
-        // if what we are parsing is a byte, add one to the end offset
-        // since the span is a half-open range containing the start, but not end
-        // if what we are parsing is EOF, do not add anything
-        let end_offset = match c {
-            U8OrEof::U8(_) => self.byte_start.after_column(),
-            U8OrEof::Eof => self.byte_start,
-        };
-
-        let span = SmtSpan::new_unchecked(self.token_start, end_offset);
+    fn current_token_error<E>(&self, kind: LexerErrorKind, ended_by_byte: bool) -> LexError<E> {
+        let end = self.error_end(ended_by_byte);
+        let span = SmtSpan::new_unchecked(self.token_start, end);
         LexError::Lexer(LexerError::new(kind, span))
     }
 }
