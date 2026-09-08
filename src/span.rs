@@ -151,34 +151,34 @@ mod tests {
 
     #[test]
     fn initial_location_is_the_stream_start() {
-        assert_eq!(loc(SmtLocation::initial()), (0, 1, 1));
-        assert_eq!(loc(location_after(b"")), (0, 1, 1));
+        assert_eq!(loc(SmtLocation::initial()), (0, 0, 0));
+        assert_eq!(loc(location_after(b"")), (0, 0, 0));
     }
 
     #[test]
     fn a_line_feed_starts_a_new_line_and_other_bytes_advance_the_column() {
-        assert_eq!(loc(location_after(b"a")), (1, 1, 2));
-        assert_eq!(loc(location_after(b"abc")), (3, 1, 4));
+        assert_eq!(loc(location_after(b"a")), (1, 0, 1));
+        assert_eq!(loc(location_after(b"abc")), (3, 0, 3));
         // the line feed itself is the last byte of the line it ends
-        assert_eq!(loc(location_after(b"abc\n")), (4, 2, 1));
-        assert_eq!(loc(location_after(b"abc\nde")), (6, 2, 3));
+        assert_eq!(loc(location_after(b"abc\n")), (4, 1, 0));
+        assert_eq!(loc(location_after(b"abc\nde")), (6, 1, 2));
         // consecutive line feeds each start a line of their own
-        assert_eq!(loc(location_after(b"\n\n")), (2, 3, 1));
+        assert_eq!(loc(location_after(b"\n\n")), (2, 2, 0));
     }
 
     #[test]
     fn only_a_line_feed_starts_a_new_line() {
         // a carriage return is an ordinary byte, so CRLF counts as one line break
-        assert_eq!(loc(location_after(b"a\r")), (2, 1, 3));
-        assert_eq!(loc(location_after(b"a\r\n")), (3, 2, 1));
+        assert_eq!(loc(location_after(b"a\r")), (2, 0, 2));
+        assert_eq!(loc(location_after(b"a\r\n")), (3, 1, 0));
         // so is a tab, even though it is whitespace
-        assert_eq!(loc(location_after(b"a\tb")), (3, 1, 4));
+        assert_eq!(loc(location_after(b"a\tb")), (3, 0, 3));
     }
 
     #[test]
     fn after_column_advances_without_ending_the_line() {
         let location = location_after(b"abc\nd").after_column();
-        assert_eq!(loc(location), (6, 2, 3));
+        assert_eq!(loc(location), (6, 1, 2));
     }
 
     #[test]
@@ -187,8 +187,8 @@ mod tests {
         let second = span_between(b"ab\nc", b"ab\ncde");
         let joined = first.join(second);
 
-        assert_eq!(loc(joined.start()), (0, 1, 1));
-        assert_eq!(loc(joined.end()), (6, 2, 4));
+        assert_eq!(loc(joined.start()), (0, 0, 0));
+        assert_eq!(loc(joined.end()), (6, 1, 3));
         // the order of the operands does not matter
         assert_eq!(second.join(first), joined);
         // joining a span with itself changes nothing
@@ -207,7 +207,7 @@ mod tests {
     fn is_empty_holds_exactly_for_zero_width_spans() {
         assert!(SmtSpan::new_empty(location_after(b"ab")).is_empty());
         assert!(SmtSpan::new_zero().is_empty());
-        assert_eq!(loc(SmtSpan::new_zero().start()), (0, 1, 1));
+        assert_eq!(loc(SmtSpan::new_zero().start()), (0, 0, 0));
         // a span of a single byte is not empty
         assert!(!span_between(b"a", b"ab").is_empty());
     }

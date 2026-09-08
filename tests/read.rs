@@ -40,13 +40,13 @@ fn valid_input_has_no_error() {
 
 #[test]
 fn lexer_error_kind_and_span_are_passed_through() {
-    // the string literal starts on line 3, column 3 (offset 15) and is unclosed at EOF
+    // the string literal starts at offset 15, zero-based line 2, column 2, and is unclosed at EOF
     let err = read(b"(check-sat)\n\n  \"abc").expect_err("expected a lexer error, got Ok");
     assert!(matches!(
         err.kind(),
         SmtReadErrorKind::Lexer(LexerErrorKind::UnclosedStringLiteral)
     ));
-    assert_span(&err, (15, 3, 3), (19, 3, 7));
+    assert_span(&err, (15, 2, 2), (19, 2, 6));
 }
 
 #[test]
@@ -57,7 +57,7 @@ fn parser_error_span_is_resolved_to_lines() {
         err.kind(),
         SmtReadErrorKind::Parser(CategoryParserErrorKind::ExpectedTerm)
     ));
-    assert_span(&err, (20, 2, 9), (21, 2, 10));
+    assert_span(&err, (20, 1, 8), (21, 1, 9));
 }
 
 #[test]
@@ -70,7 +70,7 @@ fn parser_error_deep_in_the_input_is_resolved_to_lines() {
         err.kind(),
         SmtReadErrorKind::Parser(CategoryParserErrorKind::EmptyTermApplication)
     ));
-    assert_span(&err, (52, 3, 12), (53, 3, 13));
+    assert_span(&err, (52, 2, 11), (53, 2, 12));
 }
 
 #[test]
@@ -79,7 +79,7 @@ fn handler_error_span_is_resolved_to_lines() {
     // of the name symbol on the second line rather than of the whole command
     let err = read(b"(check-sat)\n(frobnicate 1)").expect_err("expected a handler error");
     assert!(matches!(err.kind(), SmtReadErrorKind::Handler(_)));
-    assert_span(&err, (13, 2, 2), (23, 2, 12));
+    assert_span(&err, (13, 1, 1), (23, 1, 11));
 }
 
 #[test]
@@ -88,7 +88,7 @@ fn span_after_a_token_containing_a_line_break() {
     // must be reported on the second line
     let err = read(b"(assert |a\nb| x)").expect_err("expected a parser error, got Ok");
     assert!(matches!(err.kind(), SmtReadErrorKind::Parser(_)));
-    assert_span(&err, (14, 2, 4), (15, 2, 5));
+    assert_span(&err, (14, 1, 3), (15, 1, 4));
 }
 
 #[test]
@@ -96,7 +96,7 @@ fn parser_error_at_eof_is_empty_span() {
     // unclosed command: the error is on the zero-width EOF token after a newline
     let err = read(b"(check-sat\n").expect_err("expected a parser error, got Ok");
     assert!(matches!(err.kind(), SmtReadErrorKind::Parser(_)));
-    assert_span(&err, (11, 2, 1), (11, 2, 1));
+    assert_span(&err, (11, 1, 0), (11, 1, 0));
 }
 
 /// Reader that yields the given bytes and then fails.
@@ -134,8 +134,8 @@ fn io_error_has_empty_span_at_current_location() {
     let err =
         read_smt(&mut CheckStandardSyntax, reader).expect_err("expected an I/O error, got Ok");
     assert!(matches!(err.kind(), SmtReadErrorKind::Io(_)));
-    // 13 bytes were consumed, so the location is line 2, column 2
-    assert_span(&err, (13, 2, 2), (13, 2, 2));
+    // 13 bytes were consumed, so the location is zero-based line 1, column 1
+    assert_span(&err, (13, 1, 1), (13, 1, 1));
 }
 
 #[test]
@@ -144,5 +144,5 @@ fn file_open_error_has_zero_span() {
     let err =
         read_smt_file(&mut CheckStandardSyntax, path).expect_err("expected an I/O error, got Ok");
     assert!(matches!(err.kind(), SmtReadErrorKind::Io(_)));
-    assert_span(&err, (0, 1, 1), (0, 1, 1));
+    assert_span(&err, (0, 0, 0), (0, 0, 0));
 }

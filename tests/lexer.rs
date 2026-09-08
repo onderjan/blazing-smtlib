@@ -98,15 +98,15 @@ fn unexpected_character_is_single_byte() {
     assert_error(
         b"\\",
         LexerErrorKind::UnexpectedCharacter,
-        (0, 1, 1),
-        (1, 1, 2),
+        (0, 0, 0),
+        (1, 0, 1),
     );
     // after other tokens, still just the one byte
     assert_error(
         b"(check-sat) \\",
         LexerErrorKind::UnexpectedCharacter,
-        (12, 1, 13),
-        (13, 1, 14),
+        (12, 0, 12),
+        (13, 0, 13),
     );
 }
 
@@ -116,8 +116,8 @@ fn fraction_digit_expected_on_byte() {
     assert_error(
         b"7. ",
         LexerErrorKind::FractionDigitExpected,
-        (0, 1, 1),
-        (3, 1, 4),
+        (0, 0, 0),
+        (3, 0, 3),
     );
 }
 
@@ -126,8 +126,8 @@ fn base_selection_expected() {
     assert_error(
         b"#q",
         LexerErrorKind::BaseSelectionExpected,
-        (0, 1, 1),
-        (2, 1, 3),
+        (0, 0, 0),
+        (2, 0, 2),
     );
 }
 
@@ -136,8 +136,8 @@ fn hexadecimal_digit_expected() {
     assert_error(
         b"#x ",
         LexerErrorKind::HexadecimalDigitExpected,
-        (0, 1, 1),
-        (3, 1, 4),
+        (0, 0, 0),
+        (3, 0, 3),
     );
 }
 
@@ -146,8 +146,8 @@ fn binary_digit_expected() {
     assert_error(
         b"#b)",
         LexerErrorKind::BinaryDigitExpected,
-        (0, 1, 1),
-        (3, 1, 4),
+        (0, 0, 0),
+        (3, 0, 3),
     );
 }
 
@@ -156,8 +156,8 @@ fn numeral_leading_zero() {
     assert_error(
         b"01",
         LexerErrorKind::NumeralLeadingZero,
-        (0, 1, 1),
-        (2, 1, 3),
+        (0, 0, 0),
+        (2, 0, 2),
     );
 }
 
@@ -166,8 +166,8 @@ fn keyword_name_expected() {
     assert_error(
         b": ",
         LexerErrorKind::ForbiddenKeywordName,
-        (0, 1, 1),
-        (2, 1, 3),
+        (0, 0, 0),
+        (2, 0, 2),
     );
 }
 
@@ -176,15 +176,15 @@ fn keyword_leading_digit() {
     assert_error(
         b":0",
         LexerErrorKind::ForbiddenKeywordName,
-        (0, 1, 1),
-        (2, 1, 3),
+        (0, 0, 0),
+        (2, 0, 2),
     );
     // the leading digit is rejected even when more characters would follow
     assert_error(
         b":0abc",
         LexerErrorKind::ForbiddenKeywordName,
-        (0, 1, 1),
-        (2, 1, 3),
+        (0, 0, 0),
+        (2, 0, 2),
     );
 }
 
@@ -193,8 +193,8 @@ fn keyword_reserved() {
     assert_error(
         b":let ",
         LexerErrorKind::KeywordReserved,
-        (0, 1, 1),
-        (5, 1, 6),
+        (0, 0, 0),
+        (5, 0, 5),
     );
 }
 
@@ -203,8 +203,8 @@ fn backslash_in_quoted_symbol() {
     assert_error(
         b"|a\\b|",
         LexerErrorKind::BackslashInQuotedSymbol,
-        (0, 1, 1),
-        (3, 1, 4),
+        (0, 0, 0),
+        (3, 0, 3),
     );
 }
 
@@ -213,8 +213,8 @@ fn forbidden_char_in_string() {
     assert_error(
         b"\"a\x01b\"",
         LexerErrorKind::ForbiddenCharInString,
-        (0, 1, 1),
-        (3, 1, 4),
+        (0, 0, 0),
+        (3, 0, 3),
     );
 }
 
@@ -223,8 +223,8 @@ fn forbidden_char_in_quoted_symbol() {
     assert_error(
         b"|a\x7fb|",
         LexerErrorKind::ForbiddenCharInQuotedSymbol,
-        (0, 1, 1),
-        (3, 1, 4),
+        (0, 0, 0),
+        (3, 0, 3),
     );
 }
 
@@ -235,8 +235,8 @@ fn fraction_digit_expected_at_eof() {
     assert_error(
         b"7.",
         LexerErrorKind::FractionDigitExpected,
-        (0, 1, 1),
-        (2, 1, 3),
+        (0, 0, 0),
+        (2, 0, 2),
     );
 }
 
@@ -245,8 +245,8 @@ fn hexadecimal_digit_expected_at_eof() {
     assert_error(
         b"#x",
         LexerErrorKind::HexadecimalDigitExpected,
-        (0, 1, 1),
-        (2, 1, 3),
+        (0, 0, 0),
+        (2, 0, 2),
     );
 }
 
@@ -255,8 +255,8 @@ fn base_selection_expected_at_eof() {
     assert_error(
         b"#",
         LexerErrorKind::BaseSelectionExpected,
-        (0, 1, 1),
-        (1, 1, 2),
+        (0, 0, 0),
+        (1, 0, 1),
     );
 }
 
@@ -265,8 +265,8 @@ fn keyword_name_expected_at_eof() {
     assert_error(
         b":",
         LexerErrorKind::ForbiddenKeywordName,
-        (0, 1, 1),
-        (1, 1, 2),
+        (0, 0, 0),
+        (1, 0, 1),
     );
 }
 
@@ -275,8 +275,8 @@ fn unclosed_string_literal_at_eof() {
     assert_error(
         b"\"abc",
         LexerErrorKind::UnclosedStringLiteral,
-        (0, 1, 1),
-        (4, 1, 5),
+        (0, 0, 0),
+        (4, 0, 4),
     );
 }
 
@@ -285,8 +285,8 @@ fn unclosed_quoted_symbol_at_eof() {
     assert_error(
         b"|abc",
         LexerErrorKind::UnclosedQuotedSymbol,
-        (0, 1, 1),
-        (4, 1, 5),
+        (0, 0, 0),
+        (4, 0, 4),
     );
 }
 
@@ -294,12 +294,12 @@ fn unclosed_quoted_symbol_at_eof() {
 
 #[test]
 fn error_on_later_line() {
-    // the string literal starts on line 3, column 3 (offset 15) and is unclosed at EOF
+    // the string literal starts at offset 15, zero-based line 2, column 2, and is unclosed at EOF
     assert_error(
         b"(check-sat)\n\n  \"abc",
         LexerErrorKind::UnclosedStringLiteral,
-        (15, 3, 3),
-        (19, 3, 7),
+        (15, 2, 2),
+        (19, 2, 6),
     );
 }
 
@@ -309,19 +309,19 @@ fn error_spanning_lines() {
     assert_error(
         b"|ab\ncd",
         LexerErrorKind::UnclosedQuotedSymbol,
-        (0, 1, 1),
-        (6, 2, 3),
+        (0, 0, 0),
+        (6, 1, 2),
     );
 }
 
 #[test]
 fn crlf_counts_as_one_line() {
-    // CR must not start a new line, so "01" is on line 2, column 1
+    // CR must not start a new line, so "01" is on zero-based line 1, column 0
     assert_error(
         b"(check-sat)\r\n01",
         LexerErrorKind::NumeralLeadingZero,
-        (13, 2, 1),
-        (15, 2, 3),
+        (13, 1, 0),
+        (15, 1, 2),
     );
 }
 
@@ -330,8 +330,8 @@ fn error_after_comment_line() {
     assert_error(
         b"; a comment\n\\",
         LexerErrorKind::UnexpectedCharacter,
-        (12, 2, 1),
-        (13, 2, 2),
+        (12, 1, 0),
+        (13, 1, 1),
     );
 }
 
@@ -341,14 +341,14 @@ fn error_after_comment_line() {
 fn current_location_follows_consumed_bytes() {
     let mut collected = CollectTokens(Vec::new());
     let mut lexer = Lexer::new(&mut collected);
-    assert_eq!(loc(lexer.current_location()), (0, 1, 1));
+    assert_eq!(loc(lexer.current_location()), (0, 0, 0));
     for &c in b"ab\nc" {
         lexer
             .lex_next(c)
             .map_err(into_lexer_error)
             .expect("valid input");
     }
-    assert_eq!(loc(lexer.current_location()), (4, 2, 2));
+    assert_eq!(loc(lexer.current_location()), (4, 1, 1));
 }
 
 /// Expected token as `(type, start, end)`, with the locations as `(offset, line, column)`.
@@ -365,15 +365,15 @@ fn token_spans(input: &[u8]) -> Vec<TokenLoc> {
 
 #[test]
 fn spans_on_a_single_line() {
-    // columns are one-based and counted in bytes
+    // lines and columns are zero-based, columns counted in bytes
     assert_eq!(
         token_spans(b"(a 12)"),
         vec![
-            (TokenType::ParenOpen, (0, 1, 1), (1, 1, 2)),
-            (TokenType::Symbol, (1, 1, 2), (2, 1, 3)),
-            (TokenType::Numeral, (3, 1, 4), (5, 1, 6)),
-            (TokenType::ParenClose, (5, 1, 6), (6, 1, 7)),
-            (TokenType::EndOfFile, (6, 1, 7), (6, 1, 7)),
+            (TokenType::ParenOpen, (0, 0, 0), (1, 0, 1)),
+            (TokenType::Symbol, (1, 0, 1), (2, 0, 2)),
+            (TokenType::Numeral, (3, 0, 3), (5, 0, 5)),
+            (TokenType::ParenClose, (5, 0, 5), (6, 0, 6)),
+            (TokenType::EndOfFile, (6, 0, 6), (6, 0, 6)),
         ]
     );
 }
@@ -383,13 +383,13 @@ fn spans_restart_the_column_on_every_line() {
     assert_eq!(
         token_spans(b"(a)\n(b)"),
         vec![
-            (TokenType::ParenOpen, (0, 1, 1), (1, 1, 2)),
-            (TokenType::Symbol, (1, 1, 2), (2, 1, 3)),
-            (TokenType::ParenClose, (2, 1, 3), (3, 1, 4)),
-            (TokenType::ParenOpen, (4, 2, 1), (5, 2, 2)),
-            (TokenType::Symbol, (5, 2, 2), (6, 2, 3)),
-            (TokenType::ParenClose, (6, 2, 3), (7, 2, 4)),
-            (TokenType::EndOfFile, (7, 2, 4), (7, 2, 4)),
+            (TokenType::ParenOpen, (0, 0, 0), (1, 0, 1)),
+            (TokenType::Symbol, (1, 0, 1), (2, 0, 2)),
+            (TokenType::ParenClose, (2, 0, 2), (3, 0, 3)),
+            (TokenType::ParenOpen, (4, 1, 0), (5, 1, 1)),
+            (TokenType::Symbol, (5, 1, 1), (6, 1, 2)),
+            (TokenType::ParenClose, (6, 1, 2), (7, 1, 3)),
+            (TokenType::EndOfFile, (7, 1, 3), (7, 1, 3)),
         ]
     );
 }
@@ -401,9 +401,9 @@ fn span_end_is_one_past_the_last_byte_of_the_token() {
     assert_eq!(
         token_spans(b"ab\ncd"),
         vec![
-            (TokenType::Symbol, (0, 1, 1), (2, 1, 3)),
-            (TokenType::Symbol, (3, 2, 1), (5, 2, 3)),
-            (TokenType::EndOfFile, (5, 2, 3), (5, 2, 3)),
+            (TokenType::Symbol, (0, 0, 0), (2, 0, 2)),
+            (TokenType::Symbol, (3, 1, 0), (5, 1, 2)),
+            (TokenType::EndOfFile, (5, 1, 2), (5, 1, 2)),
         ]
     );
 }
@@ -415,9 +415,9 @@ fn quoted_symbol_may_span_a_line_break() {
     assert_eq!(
         token_spans(b"|a\nb| c"),
         vec![
-            (TokenType::Symbol, (0, 1, 1), (5, 2, 3)),
-            (TokenType::Symbol, (6, 2, 4), (7, 2, 5)),
-            (TokenType::EndOfFile, (7, 2, 5), (7, 2, 5)),
+            (TokenType::Symbol, (0, 0, 0), (5, 1, 2)),
+            (TokenType::Symbol, (6, 1, 3), (7, 1, 4)),
+            (TokenType::EndOfFile, (7, 1, 4), (7, 1, 4)),
         ]
     );
 }
@@ -427,8 +427,8 @@ fn string_literal_may_span_a_line_break() {
     assert_eq!(
         token_spans(b"\"a\nb\""),
         vec![
-            (TokenType::String, (0, 1, 1), (5, 2, 3)),
-            (TokenType::EndOfFile, (5, 2, 3), (5, 2, 3)),
+            (TokenType::String, (0, 0, 0), (5, 1, 2)),
+            (TokenType::EndOfFile, (5, 1, 2), (5, 1, 2)),
         ]
     );
 }
@@ -438,16 +438,16 @@ fn end_of_file_token_location() {
     // an empty input consists of the end-of-file token alone, at the stream start
     assert_eq!(
         token_spans(b""),
-        vec![(TokenType::EndOfFile, (0, 1, 1), (0, 1, 1))]
+        vec![(TokenType::EndOfFile, (0, 0, 0), (0, 0, 0))]
     );
     // without a trailing line break, the end-of-file token is just past the last token
     assert_eq!(
         token_spans(b"(a)"),
         vec![
-            (TokenType::ParenOpen, (0, 1, 1), (1, 1, 2)),
-            (TokenType::Symbol, (1, 1, 2), (2, 1, 3)),
-            (TokenType::ParenClose, (2, 1, 3), (3, 1, 4)),
-            (TokenType::EndOfFile, (3, 1, 4), (3, 1, 4)),
+            (TokenType::ParenOpen, (0, 0, 0), (1, 0, 1)),
+            (TokenType::Symbol, (1, 0, 1), (2, 0, 2)),
+            (TokenType::ParenClose, (2, 0, 2), (3, 0, 3)),
+            (TokenType::EndOfFile, (3, 0, 3), (3, 0, 3)),
         ]
     );
     // with one, its offset is exactly the start of the next line,
@@ -456,10 +456,10 @@ fn end_of_file_token_location() {
     assert_eq!(
         token_spans(b"(a)\n"),
         vec![
-            (TokenType::ParenOpen, (0, 1, 1), (1, 1, 2)),
-            (TokenType::Symbol, (1, 1, 2), (2, 1, 3)),
-            (TokenType::ParenClose, (2, 1, 3), (3, 1, 4)),
-            (TokenType::EndOfFile, (4, 2, 1), (4, 2, 1)),
+            (TokenType::ParenOpen, (0, 0, 0), (1, 0, 1)),
+            (TokenType::Symbol, (1, 0, 1), (2, 0, 2)),
+            (TokenType::ParenClose, (2, 0, 2), (3, 0, 3)),
+            (TokenType::EndOfFile, (4, 1, 0), (4, 1, 0)),
         ]
     );
 }
@@ -470,9 +470,9 @@ fn crlf_is_a_single_line_break_in_token_spans() {
     assert_eq!(
         token_spans(b"a\r\nb"),
         vec![
-            (TokenType::Symbol, (0, 1, 1), (1, 1, 2)),
-            (TokenType::Symbol, (3, 2, 1), (4, 2, 2)),
-            (TokenType::EndOfFile, (4, 2, 2), (4, 2, 2)),
+            (TokenType::Symbol, (0, 0, 0), (1, 0, 1)),
+            (TokenType::Symbol, (3, 1, 0), (4, 1, 1)),
+            (TokenType::EndOfFile, (4, 1, 1), (4, 1, 1)),
         ]
     );
 }
@@ -482,8 +482,8 @@ fn comments_produce_no_tokens_but_still_count_lines() {
     assert_eq!(
         token_spans(b"; c\nx"),
         vec![
-            (TokenType::Symbol, (4, 2, 1), (5, 2, 2)),
-            (TokenType::EndOfFile, (5, 2, 2), (5, 2, 2)),
+            (TokenType::Symbol, (4, 1, 0), (5, 1, 1)),
+            (TokenType::EndOfFile, (5, 1, 1), (5, 1, 1)),
         ]
     );
 }
@@ -494,9 +494,9 @@ fn keyword_may_contain_digits_after_the_first_character() {
     assert_eq!(
         token_spans(b":a0 :x1y2"),
         vec![
-            (TokenType::Keyword, (0, 1, 1), (3, 1, 4)),
-            (TokenType::Keyword, (4, 1, 5), (9, 1, 10)),
-            (TokenType::EndOfFile, (9, 1, 10), (9, 1, 10)),
+            (TokenType::Keyword, (0, 0, 0), (3, 0, 3)),
+            (TokenType::Keyword, (4, 0, 4), (9, 0, 9)),
+            (TokenType::EndOfFile, (9, 0, 9), (9, 0, 9)),
         ]
     );
 }
@@ -508,13 +508,13 @@ fn spans_of_every_token_type() {
     assert_eq!(
         token_spans(b":kw #xAB #b01 1.5 \"s\" let"),
         vec![
-            (TokenType::Keyword, (0, 1, 1), (3, 1, 4)),
-            (TokenType::Hexadecimal, (4, 1, 5), (8, 1, 9)),
-            (TokenType::Binary, (9, 1, 10), (13, 1, 14)),
-            (TokenType::Decimal, (14, 1, 15), (17, 1, 18)),
-            (TokenType::String, (18, 1, 19), (21, 1, 22)),
-            (TokenType::Reserved(Reserved::Let), (22, 1, 23), (25, 1, 26)),
-            (TokenType::EndOfFile, (25, 1, 26), (25, 1, 26)),
+            (TokenType::Keyword, (0, 0, 0), (3, 0, 3)),
+            (TokenType::Hexadecimal, (4, 0, 4), (8, 0, 8)),
+            (TokenType::Binary, (9, 0, 9), (13, 0, 13)),
+            (TokenType::Decimal, (14, 0, 14), (17, 0, 17)),
+            (TokenType::String, (18, 0, 18), (21, 0, 21)),
+            (TokenType::Reserved(Reserved::Let), (22, 0, 22), (25, 0, 25)),
+            (TokenType::EndOfFile, (25, 0, 25), (25, 0, 25)),
         ]
     );
 }
@@ -622,7 +622,7 @@ fn handler_error_is_returned_with_the_handled_token() {
     let Err(LexError::Handler(span)) = lexer.lex_next(b'(') else {
         panic!("expected a handler error");
     };
-    assert_eq!((loc(span.start()), loc(span.end())), ((0, 1, 1), (1, 1, 2)));
+    assert_eq!((loc(span.start()), loc(span.end())), ((0, 0, 0), (1, 0, 1)));
 }
 
 // --- Lexer misuse panics ---
