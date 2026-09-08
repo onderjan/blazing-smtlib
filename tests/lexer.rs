@@ -846,7 +846,7 @@ fn records(tokens: &[OwnedToken]) -> Vec<TokenRecord> {
 }
 
 #[test]
-fn eof_twice_after_a_pending_symbol_finishes_an_empty_symbol_too() {
+fn eof_twice_after_a_pending_symbol_produces_two_eof_tokens() {
     let mut collected = CollectTokens(Vec::new());
     let mut lexer = Lexer::new(&mut collected);
     lexer
@@ -857,9 +857,9 @@ fn eof_twice_after_a_pending_symbol_finishes_an_empty_symbol_too() {
         .lex_eof()
         .map_err(into_lexer_error)
         .expect("first EOF");
-    // currently, a second EOF is not rejected; finishing the symbol at the
-    // first EOF left the lexer in the symbol state, so the second EOF first
-    // finishes an empty symbol token and then repeats the EOF token
+    // currently, a second EOF is not rejected: finishing the symbol at the
+    // first EOF returns the lexer to the normal state, so the second EOF
+    // only repeats the EOF token (a full reset of the lexer is still undecided)
     lexer
         .lex_eof()
         .map_err(into_lexer_error)
@@ -871,7 +871,6 @@ fn eof_twice_after_a_pending_symbol_finishes_an_empty_symbol_too() {
         vec![
             (TokenType::Symbol, b"a".to_vec(), (0, 0, 0), (1, 0, 1)),
             (TokenType::EndOfFile, vec![], (1, 0, 1), (1, 0, 1)),
-            (TokenType::Symbol, vec![], (1, 0, 1), (1, 0, 1)),
             (TokenType::EndOfFile, vec![], (1, 0, 1), (1, 0, 1)),
         ]
     );
