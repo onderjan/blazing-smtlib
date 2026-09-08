@@ -8,6 +8,7 @@ use crate::{
 
 mod datatype;
 mod definition;
+mod function;
 mod standard;
 
 pub(super) use standard::{CommandParsers, StandardCommandKind};

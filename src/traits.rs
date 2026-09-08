@@ -159,6 +159,72 @@ pub trait CommandHandler: SmtHandler {
     /// `define-fun` without parameters. It is desugared before being handled.
     fn end_define_fun(&mut self, term: Self::Term) -> Result<(), Self::Error>;
 
+    /// Starts recursive function definitions (in `define-funs-rec` / `define-fun-rec`).
+    ///
+    /// The parser guarantees:
+    /// 1. This method is never nested before the corresponding `end_define_funs_rec`.
+    /// 2. The parameter `signatures` is nonempty and contains all signatures
+    ///    of functions to be defined.
+    /// 3. Exactly one body per signature, in the same order, is delivered
+    ///    between `start_recursive_body` and `end_recursive_body` before
+    ///    the corresponding `end_define_funs_rec`.
+    ///
+    /// All signatures arrive before any body is started, as every body may
+    /// refer to every defined function within the recursive function definitions.
+    /// The function names in `signatures` are in scope from this method call onwards,
+    /// while the function parameters are only in scope between the corresponding
+    /// `start_recursive_body` and `end_recursive_body`.
+    ///
+    /// The command `define-fun-rec` is just syntax sugar for
+    /// `define-funs-rec` with a single function. It is desugared before being handled.
+    ///
+    /// Consult the standard for proper handling.
+    fn start_define_funs_rec(
+        &mut self,
+        signatures: Vec<SmtFunctionSignature<Self>>,
+    ) -> Result<(), Self::Error>;
+
+    /// Starts the body of a recursive function (in `define-funs-rec` / `define-fun-rec`).
+    ///
+    /// The parser guarantees:
+    /// 1. This method is only called between `start_define_funs_rec` and `end_define_funs_rec`.
+    /// 2. This method is never nested before the corresponding `end_recursive_body`.
+    /// 3. This body corresponds to the signature at the same index in `start_define_funs_rec`.
+    /// 4. The body of this function definition is handled after this method is called
+    ///    and before the respective `end_recursive_body` is called.
+    ///
+    /// The command `define-fun-rec` is just syntax sugar for
+    /// `define-funs-rec` with a single function. It is desugared before being handled.
+    ///
+    /// Consult the standard for proper handling.
+    fn start_recursive_body(&mut self) -> Result<(), Self::Error>;
+
+    /// Ends the body of a recursive function (in `define-funs-rec` / `define-fun-rec`).
+    ///
+    /// The parameter `term` is the result term of the function definition body.
+    ///
+    /// The parser guarantees:
+    /// 1. This method is only called between `start_define_funs_rec` and `end_define_funs_rec`.
+    /// 2. There is a pending unended `start_recursive_body`.
+    ///
+    /// The command `define-fun-rec` is just syntax sugar for
+    /// `define-funs-rec` with a single function. It is desugared before being handled.
+    ///
+    /// Consult the standard for proper handling.
+    fn end_recursive_body(&mut self, term: Self::Term) -> Result<(), Self::Error>;
+
+    /// Ends recursive function definitions (in `define-funs-rec` / `define-fun-rec`).
+    ///
+    /// The parser guarantees:
+    /// 1. There is a pending unended `start_define_funs_rec`.
+    /// 2. There is no pending unended `start_recursive_body`.
+    ///
+    /// The command `define-fun-rec` is just syntax sugar for
+    /// `define-funs-rec` with a single function. It is desugared before being handled.
+    ///
+    /// Consult the standard for proper handling.
+    fn end_define_funs_rec(&mut self) -> Result<(), Self::Error>;
+
     /// Starts datatype declarations (in `declare-datatypes` / `declare-datatype`).
     ///
     /// The parameter `introductions` contains ordered introductions of
@@ -404,6 +470,25 @@ impl CommandHandler for CheckStandardSyntax {
     }
 
     fn end_define_fun(&mut self, _term: Self::Term) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn start_define_funs_rec(
+        &mut self,
+        _signatures: Vec<SmtFunctionSignature<Self>>,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn start_recursive_body(&mut self) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn end_recursive_body(&mut self, _term: Self::Term) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn end_define_funs_rec(&mut self) -> Result<(), Self::Error> {
         Ok(())
     }
 

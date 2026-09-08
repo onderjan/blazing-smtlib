@@ -35,6 +35,8 @@ pub(crate) use combinator::ParenMaximumParser;
 
 pub type SortedVarParser<H> = ParenParser<H, PairParser<H, SymbolParser, SortParser<H>>>;
 
+pub type ParenSortedVarsParser<H> = ParenMultipleParser<H, SortedVarParser<H>>;
+
 pub trait CategoryParser<H: SmtHandler>: Default {
     type Result;
 
@@ -75,6 +77,8 @@ pub enum CategoryParserErrorKind {
     ExpectedCommandName,
     ExpectedDatatype,
     ExpectedDatatypeKind,
+    ExpectedFunctionBody,
+    EmptyFunctionSignatures,
     EmptyDatatypeIntroductions,
     EmptyDatatypeParameters,
     EmptyDatatypeConstructors,
