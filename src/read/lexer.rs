@@ -222,7 +222,13 @@ impl<H: TokenHandler> Lexer<H> {
                 LexerState::StringLiteral => self.lex_string_literal(rest, false)?,
                 LexerState::StringLiteralDoubleQuote => self.lex_string_literal(rest, true)?,
                 LexerState::SimpleSymbol => self.lex_simple_symbol(rest)?,
-                LexerState::QuotedSymbol => self.lex_quoted_symbol(rest)?,
+                LexerState::QuotedSymbol => {
+                    let consumed = self.lex_quoted_symbol(rest)?;
+                    // the newlines are already marked, just advance the offset
+                    self.offset += consumed as u64;
+                    rest = &rest[consumed..];
+                    continue;
+                }
                 LexerState::Keyword => self.lex_keyword(rest)?,
                 LexerState::Comment => self.lex_comment(rest)?,
                 LexerState::Failed => panic!("cannot lex after a lexer error"),
@@ -472,32 +478,43 @@ impl<H: TokenHandler> Lexer<H> {
     }
 
     fn lex_quoted_symbol(&mut self, slice: &[u8]) -> Result<usize, LexError<H::Error>> {
-        let c = slice[0];
-
-        match c {
-            b'\\' => {
-                // backslash forbidden in quoted symbols
-                return Err(self.current_token_error(LexerErrorKind::BackslashInQuotedSymbol, true));
-            }
-            b'|' => {
-                // end of quoted symbol, sink its token, this character is consumed
-                self.sink(TokenType::Symbol, self.end_after_byte())?;
-                self.state = LexerState::Normal;
-            }
-            c => {
-                if CharClass::from(c).is_printable_or_whitespace() {
-                    // add the character to the quoted symbol and continue it
-                    self.token_content.push(c);
-                } else {
-                    // character forbidden as not printable or whitespace
+        let mut i = 0;
+        while let Some(&c) = slice.get(i) {
+            match c {
+                b'|' => {
+                    // end of quoted symbol, extend and sink its token
+                    self.token_content.extend_from_slice(&slice[..i]);
+                    self.sink(TokenType::Symbol, self.current_line_location(i + 1))?;
+                    // return to normal, the closing pipe is consumed but not part of the token contents
+                    self.state = LexerState::Normal;
+                    return Ok(i + 1);
+                }
+                b'\\' => {
+                    // backslash is forbidden in quoted symbols
                     return Err(
-                        self.current_token_error(LexerErrorKind::ForbiddenCharInQuotedSymbol, true)
+                        self.error_ending_at(LexerErrorKind::BackslashInQuotedSymbol, i + 1)
                     );
                 }
+                b'\n' => {
+                    // mark the line feed
+                    self.mark_line_feed_at(i)
+                }
+                _ => {
+                    if CharClass::from(c).is_printable_or_whitespace() {
+                        // part of the quoted symbol
+                    } else {
+                        // forbidden character
+                        return Err(self
+                            .error_ending_at(LexerErrorKind::ForbiddenCharInQuotedSymbol, i + 1));
+                    }
+                }
             }
+            i += 1;
         }
-
-        Ok(1)
+        // we ran out of bytes before the token ended
+        // extend content and keep the quoted symbol state
+        self.token_content.extend_from_slice(slice);
+        Ok(slice.len())
     }
 
     fn lex_keyword(&mut self, slice: &[u8]) -> Result<usize, LexError<H::Error>> {
@@ -695,6 +712,19 @@ impl<H: TokenHandler> Lexer<H> {
         let end = self.error_end(ended_by_byte);
         let span = SmtSpan::new_unchecked(self.token_start, end);
         LexError::Lexer(LexerError::new(kind, span))
+    }
+
+    fn error_ending_at<E>(&self, kind: LexerErrorKind, position: usize) -> LexError<E> {
+        let end = self.current_line_location(position);
+        let span = SmtSpan::new_unchecked(self.token_start, end);
+        LexError::Lexer(LexerError::new(kind, span))
+    }
+
+    fn mark_line_feed_at(&mut self, position: usize) {
+        // when parsing a run, this is used to mark a line feed
+        // the locations must only refer to positions after it afterwards
+        self.line += 1;
+        self.line_start = self.offset + position as u64 + 1;
     }
 }
 
