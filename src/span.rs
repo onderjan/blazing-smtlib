@@ -17,6 +17,14 @@ pub struct SmtLocation {
 }
 
 impl SmtLocation {
+    pub(crate) fn new(offset: u64, line: u64, column: u64) -> Self {
+        Self {
+            offset,
+            line,
+            column,
+        }
+    }
+
     /// Zero-based byte offset.
     pub fn offset(&self) -> u64 {
         self.offset
@@ -49,7 +57,7 @@ impl SmtLocation {
     }
 
     /// Location directly at the byte stream start.
-    pub(crate) fn initial() -> Self {
+    pub fn initial() -> Self {
         Self {
             offset: 0,
             line: 0,
@@ -57,7 +65,7 @@ impl SmtLocation {
         }
     }
 
-    pub(crate) fn after_byte(self, c: u8) -> Self {
+    pub fn after_byte(self, c: u8) -> Self {
         if c == b'\n' {
             Self {
                 offset: self.offset + 1,
@@ -69,7 +77,7 @@ impl SmtLocation {
         }
     }
 
-    pub(crate) fn after_column(self) -> Self {
+    pub fn after_column(self) -> Self {
         Self {
             offset: self.offset + 1,
             line: self.line,

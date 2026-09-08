@@ -55,10 +55,20 @@ pub struct Lexer<H: TokenHandler> {
     /// The currently-built string content of the currently-processed token.
     token_content: String8,
 
-    /// Location of the start of the byte being processed during lexing.
+    /// Offset of the start of the byte being processed during lexing.
     ///
-    /// It advances once that byte is consumed.
-    byte_start: SmtLocation,
+    /// It only advances after byte consumption.
+    offset: u64,
+
+    /// Number of the latest line (zero-based).
+    ///
+    /// It only advances after consumption of LF.
+    line: u64,
+
+    /// Offset of the start of the current line (after line break, zero-based)
+    ///
+    /// It only advances after consumption of LF.
+    line_start: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -98,12 +108,16 @@ impl<H: TokenHandler> Lexer<H> {
             state: LexerState::Normal,
             token_start: SmtLocation::initial(),
             token_content: String8::new(),
-            byte_start: SmtLocation::initial(),
+            offset: 0,
+            line: 0,
+            line_start: 0,
         }
     }
 
     pub fn current_location(&self) -> SmtLocation {
-        self.byte_start
+        // the column is computed by subtracting the line start offset from current offset
+        let column = self.offset - self.line_start;
+        SmtLocation::new(self.offset, self.line, column)
     }
 
     /// Lexes the whole input including EOF at the end.
@@ -520,7 +534,13 @@ impl<H: TokenHandler> Lexer<H> {
 
     fn advance(&mut self, slice: &[u8], consumed: usize) {
         for c in slice[..consumed].iter().copied() {
-            self.byte_start = self.byte_start.after_byte(c);
+            self.offset += 1;
+            if c == b'\n' {
+                // increment line number
+                self.line += 1;
+                // the line starts after the newline character
+                self.line_start = self.offset;
+            }
         }
     }
 
@@ -634,16 +654,16 @@ impl<H: TokenHandler> Lexer<H> {
 
     fn start_token(&mut self) {
         // update the token start and clear the token string
-        self.token_start = self.byte_start;
+        self.token_start = self.end_before_byte();
         self.token_content.clear();
     }
 
     fn end_before_byte(&self) -> SmtLocation {
-        self.byte_start
+        self.current_location()
     }
 
     fn end_after_byte(&self) -> SmtLocation {
-        self.byte_start.after_column()
+        self.current_location().after_column()
     }
 
     fn error_end(&self, ended_by_byte: bool) -> SmtLocation {
