@@ -128,8 +128,9 @@ impl CharClass {
         if matches!(
             class,
             CharClass::Tab | CharClass::Space | CharClass::LineBreak
-        ) {
-            flags |= WHITESPACE;
+        ) && c != b'\n'
+        {
+            flags |= NON_LF_WHITESPACE;
         }
         // LineBreak covers CR too, and CR is plain inside strings and quoted symbols;
         // only LF ends the run (it has to be marked before the scan continues)
@@ -158,7 +159,7 @@ pub(super) const SIMPLE_SYMBOL: u8 = 1u8 << 0;
 pub(super) const DIGIT: u8 = 1u8 << 1;
 pub(super) const HEX_DIGIT: u8 = 1u8 << 2;
 pub(super) const BINARY_DIGIT: u8 = 1u8 << 3;
-pub(super) const WHITESPACE: u8 = 1u8 << 4;
+pub(super) const NON_LF_WHITESPACE: u8 = 1u8 << 4;
 pub(super) const QUOTED_PLAIN: u8 = 1u8 << 5;
 pub(super) const STRING_PLAIN: u8 = 1u8 << 6;
 pub(super) const COMMENT_PLAIN: u8 = 1u8 << 7;

@@ -6,8 +6,8 @@ use crate::{
     SmtBinDigitsView, SmtDecimalView, SmtHexDigitsView, SmtKeywordView, SmtLocation,
     SmtNumeralView, SmtSpan, SmtStringContentView, SmtSymbolView, String8,
     read::lexer::char_class::{
-        BINARY_DIGIT, COMMENT_PLAIN, DIGIT, FLAGS, HEX_DIGIT, QUOTED_PLAIN, SIMPLE_SYMBOL,
-        STRING_PLAIN,
+        BINARY_DIGIT, COMMENT_PLAIN, DIGIT, FLAGS, HEX_DIGIT, NON_LF_WHITESPACE, QUOTED_PLAIN,
+        SIMPLE_SYMBOL, STRING_PLAIN,
     },
     token::{Reserved, Token, TokenKind, TokenType},
 };
@@ -242,79 +242,66 @@ impl<H: TokenHandler> Lexer<H> {
     }
 
     fn lex_normal(&mut self, slice: &[u8]) -> Result<usize, LexError<H::Error>> {
-        let c = slice[0];
+        let mut index = 0;
+
+        // skip whitespace except for line feeds
+        // those must be processed for line offsets
+        let c = loop {
+            index += Self::run_end(&slice[index..], NON_LF_WHITESPACE);
+            match slice.get(index) {
+                Some(b'\n') => {
+                    // mark the line feed
+                    self.mark_line_feed_at(index);
+                    index += 1;
+                }
+                Some(c) => {
+                    // an interesting character, break
+                    break *c;
+                }
+                None => {
+                    // we have consumed every byte
+                    return Ok(slice.len());
+                }
+            }
+        };
 
         // start the token as we are in the normal state
-        self.start_token();
-
-        let state = match CharClass::from(c) {
-            // whitespace, just continue lexing
-            CharClass::Tab | CharClass::Space | CharClass::LineBreak => {
-                // TODO: rework newlines once lexing normal with runs
-                if c == b'\n' {
-                    self.mark_line_feed_at(0);
-                }
+        self.start_token_at_current_line(index);
+        let state = match c {
+            b'(' => {
+                // parentheses are tokens of their own
+                self.sink(TokenType::ParenOpen, self.current_line_location(index + 1))?;
                 LexerState::Normal
             }
-
-            // parentheses are tokens of their own
-            CharClass::ParenOpen => {
-                self.sink(TokenType::ParenOpen, self.end_after_byte())?;
+            b')' => {
+                // parentheses are tokens of their own
+                self.sink(TokenType::ParenClose, self.current_line_location(index + 1))?;
                 LexerState::Normal
             }
-            CharClass::ParenClose => {
-                self.sink(TokenType::ParenClose, self.end_after_byte())?;
-                LexerState::Normal
-            }
-
-            // semicolon starts a comment
-            CharClass::Semicolon => LexerState::Comment,
-
-            CharClass::Digit => {
-                // digit starts a numeral or a decimal
-                // and determines the first digit value
-                self.token_content.push(c);
-                LexerState::NumeralOrDecimal
-            }
-
-            CharClass::Hash => {
-                // hash starts a hexadecimal or a binary
-                // the token location includes the hash
-                LexerState::HexadecimalOrBinary
-            }
-
-            CharClass::DoubleQuote => {
-                // double quote starts a string literal
-                // the content remains empty here (the quote is outside)
-                LexerState::StringLiteral
-            }
-
-            CharClass::Colon => {
-                // colon starts a keyword, which continues with a simple symbol string
-                // the content remains empty here (the colon only marks the keyword)
-                LexerState::Keyword
-            }
-
-            CharClass::Letter | CharClass::Special | CharClass::Dot => {
-                // starts a simple symbol or a reserved word
-                // the reserved words will be handled after the name is fully known
-                self.token_content.push(c);
-                LexerState::SimpleSymbol
-            }
-
-            CharClass::Pipe => {
-                // pipe starts a quoted symbol
-                // the content remains empty here (the pipe is outside)
-                LexerState::QuotedSymbol
-            }
-
+            b';' => LexerState::Comment,
+            b'#' => LexerState::HexadecimalOrBinary,
+            b'"' => LexerState::StringLiteral,
+            b':' => LexerState::Keyword,
+            b'|' => LexerState::QuotedSymbol,
             _ => {
-                // class disallowed here
-                return Err(self.current_token_error(LexerErrorKind::UnexpectedCharacter, true));
+                // digits start numerals/decimals
+                // the remaining simple-symbol-allowed bytes start simple symbols
+                let flags = FLAGS[c as usize];
+                if flags & DIGIT != 0 {
+                    self.token_content.push(c);
+                    LexerState::NumeralOrDecimal
+                } else if flags & SIMPLE_SYMBOL != 0 {
+                    self.token_content.push(c);
+                    LexerState::SimpleSymbol
+                } else {
+                    return Err(
+                        self.error_ending_at(LexerErrorKind::UnexpectedCharacter, index + 1)
+                    );
+                }
             }
         };
         self.state = state;
-        Ok(1)
+        Ok(index + 1)
     }
 
     fn lex_numeral_or_decimal(&mut self, slice: &[u8]) -> Result<usize, LexError<H::Error>> {
@@ -768,6 +755,13 @@ impl<H: TokenHandler> Lexer<H> {
     fn start_token(&mut self) {
         // update the token start and clear the token string
         self.token_start = self.end_before_byte();
+        self.token_content.clear();
+    }
+
+    fn start_token_at_current_line(&mut self, position: usize) {
+        // update the token start to the computed location
+        self.token_start = self.current_line_location(position);
+        // clear the token string
         self.token_content.clear();
     }
 
