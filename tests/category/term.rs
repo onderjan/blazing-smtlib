@@ -510,6 +510,18 @@ impl SmtHandler for Counting {
     fn end_lambda(&mut self, _term: ()) -> Result<(), Infallible> {
         Ok(())
     }
+    fn start_match(&mut self, _scrutinee: Self::Term) -> Result<(), Self::Error> {
+        Ok(())
+    }
+    fn start_match_case(&mut self, _pattern: SmtPattern) -> Result<(), Self::Error> {
+        Ok(())
+    }
+    fn end_match_case(&mut self, _term: Self::Term) -> Result<(), Self::Error> {
+        Ok(())
+    }
+    fn end_match(&mut self) -> Result<Self::Term, Self::Error> {
+        Ok(())
+    }
 }
 
 #[test]
@@ -589,4 +601,242 @@ fn binder_with_many_variables_does_not_overflow_the_stack() {
         .unwrap_or_else(|(kind, span)| panic!("{kind:?} at {span:?}"));
     assert_eq!(left, 0);
     assert_eq!(handler.terms, 1);
+}
+
+#[test]
+fn matches() {
+    // the standard's list append and length examples
+    assert_eq!(
+        parse_all::<TermParser<Printing>>(
+            b"(match l ((nil l2) ((cons h t) (cons h (append t l2)))))"
+        ),
+        "(match l ((nil l2) ((cons h t) (cons h (append t l2)))))"
+    );
+    assert_eq!(
+        parse_all::<TermParser<Printing>>(
+            b"(match l (((cons h t) (cons h (append t l2))) (_ l2)))"
+        ),
+        "(match l (((cons h t) (cons h (append t l2))) (_ l2)))"
+    );
+    assert_eq!(
+        parse_all::<TermParser<Printing>>(b"(match l ((nil 0) ((cons _ t) (+ 1 (length t)))))"),
+        "(match l ((nil 0) ((cons _ t) (+ 1 (length t)))))"
+    );
+    // a single case with a symbol pattern
+    assert_eq!(
+        parse_all::<TermParser<Printing>>(b"(match x ((y y)))"),
+        "(match x ((y y)))"
+    );
+    // wildcards in every position
+    assert_eq!(
+        parse_all::<TermParser<Printing>>(b"(match x (((c _ _) 1) (_ 2)))"),
+        "(match x (((c _ _) 1) (_ 2)))"
+    );
+    // a compound scrutinee
+    assert_eq!(
+        parse_all::<TermParser<Printing>>(b"(match (f x y) ((z z)))"),
+        "(match (f x y) ((z z)))"
+    );
+}
+
+#[test]
+fn matches_nest_and_compose() {
+    // match in the scrutinee and in a case body
+    assert_eq!(
+        parse_all::<TermParser<Printing>>(b"(match (match x ((a 1))) ((b 2)))"),
+        "(match (match x ((a 1))) ((b 2)))"
+    );
+    assert_eq!(
+        parse_all::<TermParser<Printing>>(b"(match x ((a (match y ((b 1))))))"),
+        "(match x ((a (match y ((b 1))))))"
+    );
+    // match as an application argument
+    assert_eq!(
+        parse_all::<TermParser<Printing>>(b"(f (match x ((a 1))) 2)"),
+        "(f (match x ((a 1))) 2)"
+    );
+    // match inside a let and let inside a match
+    assert_eq!(
+        parse_all::<TermParser<Printing>>(b"(let ((v (match x ((a 1))))) v)"),
+        "(let ((v (match x ((a 1))))) v)"
+    );
+    assert_eq!(
+        parse_all::<TermParser<Printing>>(b"(match x ((a (let ((v 1)) v))))"),
+        "(match x ((a (let ((v 1)) v))))"
+    );
+    // match inside a binder
+    assert_eq!(
+        parse_all::<TermParser<Printing>>(b"(forall ((x Int)) (match x ((a 1))))"),
+        "(forall ((x Int)) (match x ((a 1))))"
+    );
+    // annotated match and annotated case body
+    assert_eq!(
+        parse_all::<TermParser<Printing>>(b"(! (match x ((a 1))) :named n)"),
+        "(! (match x ((a 1))) :named n)"
+    );
+    assert_eq!(
+        parse_all::<TermParser<Printing>>(b"(match x ((a (! 1 :named n))))"),
+        "(match x ((a (! 1 :named n))))"
+    );
+}
+
+#[test]
+fn match_consumes_exactly_one_term() {
+    let (term, left) = run::<TermParser<Printing>>(b"(match x ((a 1))) y").expect("valid");
+    assert_eq!(term, "(match x ((a 1)))");
+    assert_eq!(left, 1);
+}
+
+#[test]
+fn match_term_parser_is_reusable() {
+    let (first, second) =
+        parse_two::<TermParser<Printing>>(b"(match x ((a 1))) (match y (((c v) v) (_ 0)))");
+    assert_eq!(first, "(match x ((a 1)))");
+    assert_eq!(second, "(match y (((c v) v) (_ 0)))");
+
+    // a constructor pattern followed by a simple one exercises
+    // the self-reset contract of the pattern machinery
+    let (first, second) =
+        parse_two::<TermParser<Printing>>(b"(match x (((c v) v))) (match y ((_ 0)))");
+    assert_eq!(first, "(match x (((c v) v)))");
+    assert_eq!(second, "(match y ((_ 0)))");
+}
+
+#[test]
+fn match_errors() {
+    // the scrutinee is required
+    let err = assert_error::<TermParser<Printing>>(b"(match)", 6, 7);
+    assert!(
+        matches!(err, CategoryParserErrorKind::ExpectedTerm),
+        "{err:?}"
+    );
+    // the case list is required
+    let err = assert_error::<TermParser<Printing>>(b"(match x)", 8, 9);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenOpen])
+        ),
+        "{err:?}"
+    );
+    // at least one case is required
+    let err = assert_error::<TermParser<Printing>>(b"(match x ())", 10, 11);
+    assert!(
+        matches!(err, CategoryParserErrorKind::EmptyMatchCases),
+        "{err:?}"
+    );
+    // each case is parenthesized
+    let err = assert_error::<TermParser<Printing>>(b"(match x (x))", 10, 11);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenOpen, TokenType::ParenClose])
+        ),
+        "{err:?}"
+    );
+    // a pattern starts with a symbol, a wildcard, or a constructor application
+    let err = assert_error::<TermParser<Printing>>(b"(match x ((1 y)))", 11, 12);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[
+                TokenType::Symbol,
+                TokenType::Reserved(Reserved::Underscore),
+                TokenType::ParenOpen
+            ])
+        ),
+        "{err:?}"
+    );
+    // a constructor application has at least one argument
+    let err = assert_error::<TermParser<Printing>>(b"(match x (((c) y)))", 13, 14);
+    assert!(
+        matches!(err, CategoryParserErrorKind::EmptyPatternArguments),
+        "{err:?}"
+    );
+    // the constructor is a symbol, not a wildcard or a constant
+    let err = assert_error::<TermParser<Printing>>(b"(match x (((1 y) z)))", 12, 13);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::Symbol])
+        ),
+        "{err:?}"
+    );
+    let err = assert_error::<TermParser<Printing>>(b"(match x (((_ y) z)))", 12, 13);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::Symbol])
+        ),
+        "{err:?}"
+    );
+    // the arguments are symbols or wildcards, not nested patterns or constants
+    let err = assert_error::<TermParser<Printing>>(b"(match x (((c 1) z)))", 14, 15);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[
+                TokenType::Symbol,
+                TokenType::Reserved(Reserved::Underscore)
+            ])
+        ),
+        "{err:?}"
+    );
+    let err = assert_error::<TermParser<Printing>>(b"(match x (((c (d y)) z)))", 14, 15);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[
+                TokenType::Symbol,
+                TokenType::Reserved(Reserved::Underscore)
+            ])
+        ),
+        "{err:?}"
+    );
+    // the case body is required
+    let err = assert_error::<TermParser<Printing>>(b"(match x ((y)))", 12, 13);
+    assert!(
+        matches!(err, CategoryParserErrorKind::ExpectedTerm),
+        "{err:?}"
+    );
+    // exactly one case body
+    let err = assert_error::<TermParser<Printing>>(b"(match x ((y 1 2)))", 15, 16);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
+        ),
+        "{err:?}"
+    );
+    // nothing follows the case list
+    let err = assert_error::<TermParser<Printing>>(b"(match x ((y 1)) z)", 17, 18);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
+        ),
+        "{err:?}"
+    );
+}
+
+#[test]
+fn deep_match_nesting_does_not_overflow_the_stack() {
+    // (match x ((_ (match x ((_ ... y ...)))))) with a depth far beyond
+    // what recursion would survive
+    const DEPTH: usize = 200_000;
+    let mut input = Vec::with_capacity(DEPTH * 16);
+    for _ in 0..DEPTH {
+        input.extend_from_slice(b"(match x ((_ ");
+    }
+    input.push(b'y');
+    for _ in 0..DEPTH {
+        input.extend_from_slice(b")))");
+    }
+
+    let mut handler = Counting::default();
+    let ((), left) = run_with::<Counting, TermParser<Counting>>(&mut handler, &input)
+        .unwrap_or_else(|(kind, span)| panic!("{kind:?} at {span:?}"));
+    assert_eq!(left, 0);
+    // every scrutinee plus the innermost y
+    assert_eq!(handler.terms, DEPTH + 1);
 }

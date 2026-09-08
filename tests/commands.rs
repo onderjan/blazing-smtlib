@@ -7,8 +7,9 @@ use common::{assert_error_span, assert_parser_error, parse_with};
 
 use smt_parser_rs::{
     CommandHandler, SmtAttributeValue, SmtDatatypeConstructor, SmtFunctionSignature, SmtHandler,
-    SmtIdent, SmtIndex, SmtKeyword, SmtNumeral, SmtQuantifierKind, SmtSExpr, SmtSort,
-    SmtSpecialConstant, SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm,
+    SmtIdent, SmtIndex, SmtKeyword, SmtNumeral, SmtPattern, SmtQuantifierKind, SmtSExpr,
+    SmtSimplePattern, SmtSort, SmtSpecialConstant, SmtStringContent, SmtSymbol, SmtSymbolView,
+    SmtTerm,
     read::{
         SmtReadErrorKind,
         lexer::LexerErrorKind,
@@ -21,8 +22,9 @@ use smt_parser_rs::{
 /// define-fun or recursive function body currently in progress, marking
 /// resolved ones as `[name]`, and body sorts against the parameters of the
 /// define-sort or datatype in progress in the same way. Sorts declared by
-/// the declare-datatypes in progress are marked as `<name>`, and functions
-/// of the define-funs-rec in progress as `{name}`. The resolution succeeding
+/// the declare-datatypes in progress are marked as `<name>`, functions
+/// of the define-funs-rec in progress as `{name}`, and variables of the
+/// match case in progress as `$name`. The resolution succeeding
 /// proves that the start callbacks deliver the signature before the body is
 /// constructed.
 #[derive(Default)]
@@ -48,15 +50,50 @@ struct Resolving {
     rec_params: Vec<Vec<String>>,
     /// Index into `rec_functions` and `rec_params` of the body in progress.
     rec_index: usize,
+    /// Matches in progress, innermost last, empty outside one.
+    matches: Vec<ResolvingMatch>,
+}
+
+/// A match in progress: its scrutinee and the variables bound by the
+/// pattern of the case in progress, `None` between cases.
+struct ResolvingMatch {
+    scrutinee: String,
+    case_vars: Option<Vec<String>>,
+}
+
+fn simple_pattern_text(pattern: &SmtSimplePattern) -> String {
+    match pattern {
+        SmtSimplePattern::Symbol(symbol) => text(symbol.as_slice()),
+        SmtSimplePattern::Wildcard => "_".into(),
+    }
+}
+
+/// Renders a pattern as written, so that the events show it unclassified.
+fn pattern_text(pattern: &SmtPattern) -> String {
+    match pattern {
+        SmtPattern::Simple(simple) => simple_pattern_text(simple),
+        SmtPattern::Application { constructor, args } => {
+            let args: Vec<String> = args.iter().map(simple_pattern_text).collect();
+            format!("({} {})", text(constructor.as_slice()), args.join(" "))
+        }
+    }
 }
 
 impl Resolving {
-    /// Resolves a term identifier against the parameters of the body in
-    /// progress, marked as `[name]`, and otherwise against the functions
-    /// of the define-funs-rec in progress, marked as `{name}`.
+    /// Resolves a term identifier against the variables of the match cases
+    /// in progress, marked as `$name`, then against the parameters of the
+    /// body in progress, marked as `[name]`, and otherwise against the
+    /// functions of the define-funs-rec in progress, marked as `{name}`.
     fn resolve_term_ident(&self, ident: &SmtIdent) -> String {
         let name = ident_text(ident);
-        if self.params.contains(&name) {
+        let is_case_var = self
+            .matches
+            .iter()
+            .filter_map(|m| m.case_vars.as_ref())
+            .any(|vars| vars.contains(&name));
+        if is_case_var {
+            format!("${name}")
+        } else if self.params.contains(&name) {
             format!("[{name}]")
         } else if self.rec_functions.contains(&name) {
             format!("{{{name}}}")
@@ -167,6 +204,83 @@ impl SmtHandler for Resolving {
     }
     fn end_lambda(&mut self, term: String) -> Result<String, String> {
         Ok(term)
+    }
+
+    fn start_match(&mut self, scrutinee: String) -> Result<(), String> {
+        if scrutinee == "forbidden" {
+            return Err("forbidden scrutinee".into());
+        }
+        self.events.push(format!("start-match {scrutinee}"));
+        self.matches.push(ResolvingMatch {
+            scrutinee,
+            case_vars: None,
+        });
+        Ok(())
+    }
+
+    fn start_match_case(&mut self, pattern: SmtPattern) -> Result<(), String> {
+        let current = self
+            .matches
+            .last_mut()
+            .expect("start_match_case without start_match");
+        assert!(
+            current.case_vars.is_none(),
+            "start_match_case while a case is still open"
+        );
+        // a bare symbol is taken as a variable; a real handler would
+        // first check whether it names a nullary constructor
+        let vars: Vec<String> = match &pattern {
+            SmtPattern::Simple(SmtSimplePattern::Symbol(symbol)) => vec![text(symbol.as_slice())],
+            SmtPattern::Simple(SmtSimplePattern::Wildcard) => Vec::new(),
+            SmtPattern::Application { constructor, args } => {
+                if constructor.as_slice() == b"unstartable" {
+                    return Err("unstartable case".into());
+                }
+                args.iter()
+                    .filter_map(|arg| match arg {
+                        SmtSimplePattern::Symbol(symbol) => Some(text(symbol.as_slice())),
+                        SmtSimplePattern::Wildcard => None,
+                    })
+                    .collect()
+            }
+        };
+        if vars.iter().any(|var| var == "unstartable") {
+            return Err("unstartable case".into());
+        }
+        self.events
+            .push(format!("start-case {}", pattern_text(&pattern)));
+        current.case_vars = Some(vars);
+        Ok(())
+    }
+
+    fn end_match_case(&mut self, term: String) -> Result<(), String> {
+        if term == "boom" {
+            return Err("exploding case".into());
+        }
+        let current = self
+            .matches
+            .last_mut()
+            .expect("end_match_case without start_match");
+        assert!(
+            current.case_vars.is_some(),
+            "end_match_case without start_match_case"
+        );
+        self.events.push(format!("end-case {term}"));
+        current.case_vars = None;
+        Ok(())
+    }
+
+    fn end_match(&mut self) -> Result<String, String> {
+        let current = self.matches.pop().expect("end_match without start_match");
+        assert!(
+            current.case_vars.is_none(),
+            "end_match while a case is still open"
+        );
+        if current.scrutinee == "unendable" {
+            return Err("unendable match".into());
+        }
+        self.events.push("end-match".into());
+        Ok(format!("(match {})", current.scrutinee))
     }
 }
 
@@ -2240,4 +2354,196 @@ fn missing_recursive_body_is_started_only_in_the_sugar_form() {
         err.kind()
     );
     assert_eq!(handler.events, ["start-funs-rec ((f () Int))"]);
+}
+
+// --- Match terms ---
+
+#[test]
+fn match_case_variables_resolve_while_the_body_is_parsed() {
+    // the standard's list append example; `nil` arrives as a bare symbol
+    // and is taken as a variable by this handler, a real one would consult
+    // the datatype of `l` first
+    let mut handler = Resolving::default();
+    parse_resolving(
+        &mut handler,
+        b"(assert (match l ((nil l2) ((cons h t) (cons h (append t l2))))))",
+    );
+    assert_eq!(
+        handler.events,
+        [
+            "start-match l",
+            "start-case nil",
+            "end-case l2",
+            "start-case (cons h t)",
+            "end-case (cons $h (append $t l2))",
+            "end-match",
+            "assert (match l)",
+        ]
+    );
+}
+
+#[test]
+fn wildcards_bind_nothing() {
+    let mut handler = Resolving::default();
+    parse_resolving(
+        &mut handler,
+        b"(assert (match l (((cons _ t) (+ 1 (length t))) (_ 0))))",
+    );
+    assert_eq!(
+        handler.events,
+        [
+            "start-match l",
+            "start-case (cons _ t)",
+            "end-case (+ 1 (length $t))",
+            "start-case _",
+            "end-case 0",
+            "end-match",
+            "assert (match l)",
+        ]
+    );
+}
+
+#[test]
+fn match_case_variables_are_scoped_to_their_case() {
+    // `x` is bound in the first case only, `y` in the second only
+    let mut handler = Resolving::default();
+    parse_resolving(
+        &mut handler,
+        b"(assert (match a ((x (f x y)) (y (f x y)))))",
+    );
+    assert_eq!(
+        handler.events,
+        [
+            "start-match a",
+            "start-case x",
+            "end-case (f $x y)",
+            "start-case y",
+            "end-case (f x $y)",
+            "end-match",
+            "assert (match a)",
+        ]
+    );
+}
+
+#[test]
+fn nested_match_in_a_case_body_sees_the_outer_case_variables() {
+    let mut handler = Resolving::default();
+    parse_resolving(
+        &mut handler,
+        b"(assert (match a ((x (match b ((y (f x y))))) (y (f x y)))))",
+    );
+    assert_eq!(
+        handler.events,
+        [
+            "start-match a",
+            "start-case x",
+            "start-match b",
+            "start-case y",
+            // both the outer and the inner case variable are in scope
+            "end-case (f $x $y)",
+            "end-match",
+            "end-case (match b)",
+            "start-case y",
+            // the first case has ended, so `x` is no longer bound
+            "end-case (f x $y)",
+            "end-match",
+            "assert (match a)",
+        ]
+    );
+}
+
+#[test]
+fn nested_match_in_the_scrutinee_completes_first() {
+    let mut handler = Resolving::default();
+    parse_resolving(&mut handler, b"(assert (match (match a ((x x))) ((y y))))");
+    assert_eq!(
+        handler.events,
+        [
+            "start-match a",
+            "start-case x",
+            "end-case $x",
+            "end-match",
+            "start-match (match a)",
+            "start-case y",
+            "end-case $y",
+            "end-match",
+            "assert (match (match a))",
+        ]
+    );
+}
+
+#[test]
+fn match_inside_a_function_body_sees_the_parameters() {
+    let mut handler = Resolving::default();
+    parse_resolving(
+        &mut handler,
+        b"(define-fun f ((p Int)) Int (match p ((z (+ z p)) (p p))))",
+    );
+    assert_eq!(
+        handler.events,
+        [
+            "start f ((p Int)) Int",
+            "start-match [p]",
+            "start-case z",
+            "end-case (+ $z [p])",
+            "start-case p",
+            // the case variable shadows the parameter
+            "end-case $p",
+            "end-match",
+            "end (match [p])",
+        ]
+    );
+}
+
+#[test]
+fn match_handler_errors_point_at_the_triggering_token() {
+    // start_match: the last token of the scrutinee
+    let handler = assert_handler_error(
+        b"(assert (match forbidden ((x 1))))",
+        "forbidden scrutinee",
+        15,
+        24,
+    );
+    assert!(handler.events.is_empty());
+
+    // start_match_case: the last token of the pattern, whether the
+    // symbol itself or the closing parenthesis of the application
+    let handler = assert_handler_error(
+        b"(assert (match s ((unstartable 1))))",
+        "unstartable case",
+        19,
+        30,
+    );
+    assert_eq!(handler.events, ["start-match s"]);
+    let handler = assert_handler_error(
+        b"(assert (match s (((unstartable a) 1))))",
+        "unstartable case",
+        33,
+        34,
+    );
+    assert_eq!(handler.events, ["start-match s"]);
+
+    // end_match_case: the last token of the case body, whether a symbol
+    // or the closing parenthesis of a compound term
+    let handler = assert_handler_error(b"(assert (match s ((x boom))))", "exploding case", 21, 25);
+    assert_eq!(handler.events, ["start-match s", "start-case x"]);
+    let handler = assert_handler_error(
+        b"(assert (match s ((x (let ((y 1)) boom)))))",
+        "exploding case",
+        38,
+        39,
+    );
+    assert_eq!(handler.events, ["start-match s", "start-case x"]);
+
+    // end_match: the closing parenthesis of the case list
+    let handler = assert_handler_error(
+        b"(assert (match unendable ((x 1))))",
+        "unendable match",
+        31,
+        32,
+    );
+    assert_eq!(
+        handler.events,
+        ["start-match unendable", "start-case x", "end-case 1"]
+    );
 }

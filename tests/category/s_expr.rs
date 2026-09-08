@@ -125,6 +125,18 @@ impl SmtHandler for Counting {
     fn end_lambda(&mut self, _term: ()) -> Result<(), Infallible> {
         Ok(())
     }
+    fn start_match(&mut self, _scrutinee: Self::Term) -> Result<(), Self::Error> {
+        Ok(())
+    }
+    fn start_match_case(&mut self, _pattern: SmtPattern) -> Result<(), Self::Error> {
+        Ok(())
+    }
+    fn end_match_case(&mut self, _term: Self::Term) -> Result<(), Self::Error> {
+        Ok(())
+    }
+    fn end_match(&mut self) -> Result<Self::Term, Self::Error> {
+        Ok(())
+    }
 }
 
 #[test]

@@ -23,8 +23,9 @@ use std::convert::Infallible;
 use std::ops::ControlFlow;
 
 use smt_parser_rs::{
-    SmtAttributeValue, SmtHandler, SmtIdent, SmtIndex, SmtKeyword, SmtQualifiedIdent,
-    SmtQuantifierKind, SmtSExpr, SmtSort, SmtSpan, SmtSpecialConstant, SmtSymbol, SmtTerm,
+    SmtAttributeValue, SmtHandler, SmtIdent, SmtIndex, SmtKeyword, SmtPattern, SmtQualifiedIdent,
+    SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSort, SmtSpan, SmtSpecialConstant, SmtSymbol,
+    SmtTerm,
     read::{
         lexer::{LexError, Lexer, TokenHandler},
         parser::{
@@ -50,6 +51,34 @@ struct Printing {
     quantifier_binders: Vec<String>,
     /// Rendered prefixes of the lambdas currently open, innermost last.
     lambda_binders: Vec<String>,
+    /// Matches currently open, innermost last.
+    matches: Vec<PrintingMatch>,
+}
+
+/// A match being rendered: its scrutinee, the finished cases,
+/// and the pattern of the case in progress.
+struct PrintingMatch {
+    scrutinee: String,
+    cases: Vec<String>,
+    pattern: Option<String>,
+}
+
+fn render_simple_pattern(pattern: &SmtSimplePattern) -> String {
+    match pattern {
+        SmtSimplePattern::Symbol(symbol) => text(symbol.as_slice()),
+        SmtSimplePattern::Wildcard => "_".into(),
+    }
+}
+
+fn render_pattern(pattern: &SmtPattern) -> String {
+    match pattern {
+        SmtPattern::Simple(simple) => render_simple_pattern(simple),
+        SmtPattern::Application { constructor, args } => {
+            let mut items = vec![text(constructor.as_slice())];
+            items.extend(args.iter().map(render_simple_pattern));
+            render_list(&items)
+        }
+    }
 }
 
 fn text(bytes: &[u8]) -> String {
@@ -178,6 +207,54 @@ impl SmtHandler for Printing {
             .pop()
             .expect("end_lambda without matching start_lambda");
         Ok(format!("{prefix} {term})"))
+    }
+
+    fn start_match(&mut self, scrutinee: String) -> Result<(), Infallible> {
+        self.matches.push(PrintingMatch {
+            scrutinee,
+            cases: Vec::new(),
+            pattern: None,
+        });
+        Ok(())
+    }
+
+    fn start_match_case(&mut self, pattern: SmtPattern) -> Result<(), Infallible> {
+        let current = self
+            .matches
+            .last_mut()
+            .expect("start_match_case without start_match");
+        assert!(
+            current.pattern.is_none(),
+            "start_match_case while a case is still open"
+        );
+        current.pattern = Some(render_pattern(&pattern));
+        Ok(())
+    }
+
+    fn end_match_case(&mut self, term: String) -> Result<(), Infallible> {
+        let current = self
+            .matches
+            .last_mut()
+            .expect("end_match_case without start_match");
+        let pattern = current
+            .pattern
+            .take()
+            .expect("end_match_case without start_match_case");
+        current.cases.push(format!("({pattern} {term})"));
+        Ok(())
+    }
+
+    fn end_match(&mut self) -> Result<String, Infallible> {
+        let current = self.matches.pop().expect("end_match without start_match");
+        assert!(
+            current.pattern.is_none(),
+            "end_match while a case is still open"
+        );
+        Ok(format!(
+            "(match {} {})",
+            current.scrutinee,
+            render_list(&current.cases)
+        ))
     }
 
     fn handle_s_expr(&mut self, expr: SmtSExpr<Self>) -> Result<String, Infallible> {
