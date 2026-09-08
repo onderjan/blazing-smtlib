@@ -259,6 +259,25 @@ impl CommandHandler for Recording {
         self.commands.push("end-define-fun");
         Ok(())
     }
+    fn start_define_funs_rec(
+        &mut self,
+        _signatures: Vec<SmtFunctionSignature<Self>>,
+    ) -> Result<(), Self::Error> {
+        self.commands.push("start-define-funs-rec");
+        Ok(())
+    }
+    fn start_recursive_body(&mut self) -> Result<(), Self::Error> {
+        self.commands.push("start-recursive-body");
+        Ok(())
+    }
+    fn end_recursive_body(&mut self, _term: ()) -> Result<(), Self::Error> {
+        self.commands.push("end-recursive-body");
+        Ok(())
+    }
+    fn end_define_funs_rec(&mut self) -> Result<(), Self::Error> {
+        self.commands.push("end-define-funs-rec");
+        Ok(())
+    }
     fn start_declare_datatypes(
         &mut self,
         _sort_declarations: Vec<(SmtSymbol, SmtNumeral)>,
@@ -460,4 +479,47 @@ fn commands_after_exit_are_not_handled() {
     parse_with(&mut handler, b"(my-assert x) (exit) (other)")
         .unwrap_or_else(|err| panic!("unexpected error at {:?}", err.span()));
     assert_eq!(handler.commands, ["my-assert", "exit"]);
+}
+
+#[test]
+fn define_funs_rec_callbacks_surround_each_body() {
+    let mut handler = Recording::default();
+    parse_with(
+        &mut handler,
+        b"(define-funs-rec ((f ((x Int)) Int) (g () Bool)) (x (f 1))) (check-sat)",
+    )
+    .unwrap_or_else(|err| panic!("unexpected error at {:?}", err.span()));
+    assert_eq!(
+        handler.commands,
+        [
+            "start-define-funs-rec",
+            "start-recursive-body",
+            "end-recursive-body",
+            "start-recursive-body",
+            "end-recursive-body",
+            "end-define-funs-rec",
+            "check-sat",
+        ]
+    );
+}
+
+#[test]
+fn define_fun_rec_produces_the_desugared_callbacks() {
+    // the sugar form is handled as define-funs-rec with one function
+    let mut handler = Recording::default();
+    parse_with(
+        &mut handler,
+        b"(define-fun-rec f ((x Int)) Int (f x)) (check-sat)",
+    )
+    .unwrap_or_else(|err| panic!("unexpected error at {:?}", err.span()));
+    assert_eq!(
+        handler.commands,
+        [
+            "start-define-funs-rec",
+            "start-recursive-body",
+            "end-recursive-body",
+            "end-define-funs-rec",
+            "check-sat",
+        ]
+    );
 }

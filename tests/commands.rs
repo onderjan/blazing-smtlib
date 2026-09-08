@@ -18,17 +18,19 @@ use smt_parser_rs::{
 };
 
 /// Handler that resolves body identifiers against the parameters of the
-/// define-fun currently in progress, marking resolved ones as `[name]`,
-/// and body sorts against the parameters of the define-sort or datatype
-/// in progress in the same way. Sorts declared by the declare-datatypes
-/// in progress are marked as `<name>`. The resolution succeeding proves
-/// that the start callbacks deliver the signature before the body is
+/// define-fun or recursive function body currently in progress, marking
+/// resolved ones as `[name]`, and body sorts against the parameters of the
+/// define-sort or datatype in progress in the same way. Sorts declared by
+/// the declare-datatypes in progress are marked as `<name>`, and functions
+/// of the define-funs-rec in progress as `{name}`. The resolution succeeding
+/// proves that the start callbacks deliver the signature before the body is
 /// constructed.
 #[derive(Default)]
 struct Resolving {
     /// Callbacks received, in order.
     events: Vec<String>,
-    /// Parameter names of the define-fun in progress, empty outside one.
+    /// Parameter names of the define-fun or recursive function body
+    /// in progress, empty outside one.
     params: Vec<String>,
     /// Parameter names of the define-sort or datatype in progress,
     /// empty outside one.
@@ -38,6 +40,30 @@ struct Resolving {
     datatype_sorts: Vec<String>,
     /// Index into `datatype_sorts` of the datatype in progress.
     datatype_index: usize,
+    /// Function names of the define-funs-rec in progress,
+    /// in signature order, empty outside one.
+    rec_functions: Vec<String>,
+    /// Parameter names of each function of the define-funs-rec
+    /// in progress, in signature order, empty outside one.
+    rec_params: Vec<Vec<String>>,
+    /// Index into `rec_functions` and `rec_params` of the body in progress.
+    rec_index: usize,
+}
+
+impl Resolving {
+    /// Resolves a term identifier against the parameters of the body in
+    /// progress, marked as `[name]`, and otherwise against the functions
+    /// of the define-funs-rec in progress, marked as `{name}`.
+    fn resolve_term_ident(&self, ident: &SmtIdent) -> String {
+        let name = ident_text(ident);
+        if self.params.contains(&name) {
+            format!("[{name}]")
+        } else if self.rec_functions.contains(&name) {
+            format!("{{{name}}}")
+        } else {
+            name
+        }
+    }
 }
 
 fn text(bytes: &[u8]) -> String {
@@ -92,15 +118,10 @@ impl SmtHandler for Resolving {
                 _ => "<constant>".into(),
             },
             SmtTerm::QualifiedIdent(qualified_ident) => {
-                let name = ident_text(&qualified_ident.ident);
-                if self.params.contains(&name) {
-                    format!("[{name}]")
-                } else {
-                    name
-                }
+                self.resolve_term_ident(&qualified_ident.ident)
             }
             SmtTerm::Application(application) => {
-                let function = ident_text(&application.function.ident);
+                let function = self.resolve_term_ident(&application.function.ident);
                 format!("({} {})", function, application.args.join(" "))
             }
         })
@@ -290,6 +311,82 @@ impl CommandHandler for Resolving {
         }
         self.events.push(format!("end {term}"));
         self.params.clear();
+        Ok(())
+    }
+
+    fn start_define_funs_rec(
+        &mut self,
+        signatures: Vec<SmtFunctionSignature<Self>>,
+    ) -> Result<(), String> {
+        let mut rendered = Vec::new();
+        self.rec_functions.clear();
+        self.rec_params.clear();
+        self.rec_index = 0;
+        for signature in &signatures {
+            let name = text(signature.name.as_slice());
+            if name == "forbidden" {
+                return Err("forbidden recursive function name".into());
+            }
+            let params: Vec<String> = signature
+                .params
+                .iter()
+                .map(|(param, sort)| format!("({} {})", text(param.as_slice()), sort))
+                .collect();
+            rendered.push(format!(
+                "({name} ({}) {})",
+                params.join(" "),
+                signature.result_sort
+            ));
+            self.rec_functions.push(name);
+            self.rec_params.push(
+                signature
+                    .params
+                    .iter()
+                    .map(|(param, _)| text(param.as_slice()))
+                    .collect(),
+            );
+        }
+        self.events
+            .push(format!("start-funs-rec ({})", rendered.join(" ")));
+        Ok(())
+    }
+
+    fn start_recursive_body(&mut self) -> Result<(), String> {
+        // the bodies arrive in signature order, so the handler
+        // knows which function is being started by counting
+        let name = self
+            .rec_functions
+            .get(self.rec_index)
+            .cloned()
+            .unwrap_or_else(|| panic!("body {} started without a signature", self.rec_index));
+        if name == "unstartable" {
+            return Err("unstartable function".into());
+        }
+        self.events.push("start-body".into());
+        self.params = self.rec_params[self.rec_index].clone();
+        Ok(())
+    }
+
+    fn end_recursive_body(&mut self, term: String) -> Result<(), String> {
+        if term == "boom" {
+            return Err("exploding recursive body".into());
+        }
+        self.events.push(format!("end-body {term}"));
+        self.params.clear();
+        self.rec_index += 1;
+        Ok(())
+    }
+
+    fn end_define_funs_rec(&mut self) -> Result<(), String> {
+        if self.rec_functions.iter().any(|name| name == "unendable") {
+            return Err("unendable functions".into());
+        }
+        self.events.push("end-funs-rec".into());
+        // a real handler keeps the functions; forgetting them here makes
+        // the end of the command observable in later events
+        self.rec_functions.clear();
+        self.rec_params.clear();
+        self.rec_index = 0;
         Ok(())
     }
 
@@ -1698,4 +1795,449 @@ fn declare_datatype_errors_point_at_offending_token() {
         ),
         "{err:?}"
     );
+}
+
+// --- Recursive function definitions ---
+
+#[test]
+fn define_funs_rec_delivers_all_signatures_before_any_body() {
+    // the standard's mutually recursive even / odd example
+    let mut handler = Resolving::default();
+    parse_resolving(
+        &mut handler,
+        b"(define-funs-rec ((even ((n Int)) Bool) (odd ((n Int)) Bool)) \
+            ((ite (= n 0) true (odd (- n 1))) (ite (= n 0) false (even (- n 1)))))",
+    );
+    assert_eq!(
+        handler.events,
+        [
+            "start-funs-rec ((even ((n Int)) Bool) (odd ((n Int)) Bool))",
+            "start-body",
+            // `odd` is already known while the body of `even` is constructed
+            "end-body (ite (= [n] 0) true ({odd} (- [n] 1)))",
+            "start-body",
+            "end-body (ite (= [n] 0) false ({even} (- [n] 1)))",
+            "end-funs-rec",
+        ]
+    );
+}
+
+#[test]
+fn recursive_body_params_are_scoped_to_their_body() {
+    let mut handler = Resolving::default();
+    parse_resolving(
+        &mut handler,
+        b"(define-funs-rec ((f ((x Int)) Int) (g ((y Int)) Int)) ((+ x y) (+ x y)))",
+    );
+    assert_eq!(
+        handler.events,
+        [
+            "start-funs-rec ((f ((x Int)) Int) (g ((y Int)) Int))",
+            "start-body",
+            "end-body (+ [x] y)",
+            "start-body",
+            "end-body (+ x [y])",
+            "end-funs-rec",
+        ]
+    );
+}
+
+#[test]
+fn recursive_constant_refers_to_itself() {
+    // a function without parameters is a bare identifier in its own body
+    let mut handler = Resolving::default();
+    parse_resolving(&mut handler, b"(define-funs-rec ((c () Int)) (c))");
+    assert_eq!(
+        handler.events,
+        [
+            "start-funs-rec ((c () Int))",
+            "start-body",
+            "end-body {c}",
+            "end-funs-rec",
+        ]
+    );
+}
+
+#[test]
+fn define_fun_rec_is_define_funs_rec_with_one_function() {
+    let mut handler = Resolving::default();
+    parse_resolving(
+        &mut handler,
+        b"(define-fun-rec fact ((n Int)) Int (ite (<= n 1) 1 (* n (fact (- n 1)))))",
+    );
+    assert_eq!(
+        handler.events,
+        [
+            "start-funs-rec ((fact ((n Int)) Int))",
+            "start-body",
+            "end-body (ite (<= [n] 1) 1 (* [n] ({fact} (- [n] 1))))",
+            "end-funs-rec",
+        ]
+    );
+}
+
+#[test]
+fn define_fun_rec_and_define_funs_rec_produce_identical_events() {
+    let mut sugar = Resolving::default();
+    parse_resolving(
+        &mut sugar,
+        b"(define-fun-rec sum ((n Int)) Int (ite (= n 0) 0 (+ n (sum (- n 1)))))",
+    );
+    let mut plain = Resolving::default();
+    parse_resolving(
+        &mut plain,
+        b"(define-funs-rec ((sum ((n Int)) Int)) ((ite (= n 0) 0 (+ n (sum (- n 1))))))",
+    );
+    assert_eq!(sugar.events, plain.events);
+}
+
+#[test]
+fn repeated_recursive_definitions_reset_count_functions_and_scope() {
+    // two functions, then one, then the sugar, then a plain define-fun:
+    // the signature count, the function names, and the parameters must all reset
+    let mut handler = Resolving::default();
+    parse_resolving(
+        &mut handler,
+        b"(define-funs-rec ((f ((x Int)) Int) (g ((y Int)) Int)) ((g x) (f y))) \
+          (define-funs-rec ((h ((z Int)) Int)) ((h (f x)))) \
+          (define-fun-rec k ((x Int)) Int (k (h z))) \
+          (define-fun m ((y Int)) Int (k (g y)))",
+    );
+    assert_eq!(
+        handler.events,
+        [
+            "start-funs-rec ((f ((x Int)) Int) (g ((y Int)) Int))",
+            "start-body",
+            "end-body ({g} [x])",
+            "start-body",
+            "end-body ({f} [y])",
+            "end-funs-rec",
+            // `f` and `x` were forgotten with the previous command
+            "start-funs-rec ((h ((z Int)) Int))",
+            "start-body",
+            "end-body ({h} (f x))",
+            "end-funs-rec",
+            "start-funs-rec ((k ((x Int)) Int))",
+            "start-body",
+            "end-body ({k} (h z))",
+            "end-funs-rec",
+            // a define-fun body sees neither the functions nor the parameters
+            "start m ((y Int)) Int",
+            "end (k (g [y]))",
+        ]
+    );
+}
+
+#[test]
+fn define_funs_rec_handler_errors_point_at_the_triggering_token() {
+    // start_define_funs_rec: the closing parenthesis of the signature list
+    let handler = assert_handler_error(
+        b"(define-funs-rec ((forbidden () Int)) (1))",
+        "forbidden recursive function name",
+        36,
+        37,
+    );
+    assert!(handler.events.is_empty());
+
+    // start_recursive_body: the first token of the body, whether it is
+    // a constant or the opening parenthesis of an application
+    let handler = assert_handler_error(
+        b"(define-funs-rec ((unstartable () Int)) (1))",
+        "unstartable function",
+        41,
+        42,
+    );
+    assert_eq!(handler.events, ["start-funs-rec ((unstartable () Int))"]);
+    let handler = assert_handler_error(
+        b"(define-funs-rec ((unstartable () Int)) ((+ 1 2)))",
+        "unstartable function",
+        41,
+        42,
+    );
+    assert_eq!(handler.events, ["start-funs-rec ((unstartable () Int))"]);
+
+    // start_recursive_body of the second function: the first token of the second body
+    let handler = assert_handler_error(
+        b"(define-funs-rec ((f () Int) (unstartable () Int)) (1 2))",
+        "unstartable function",
+        54,
+        55,
+    );
+    assert_eq!(
+        handler.events,
+        [
+            "start-funs-rec ((f () Int) (unstartable () Int))",
+            "start-body",
+            "end-body 1",
+        ]
+    );
+
+    // end_recursive_body: the last token of the body, whether it is
+    // a constant or the closing parenthesis of a compound term
+    let handler = assert_handler_error(
+        b"(define-funs-rec ((f () Int)) (boom))",
+        "exploding recursive body",
+        31,
+        35,
+    );
+    assert_eq!(
+        handler.events,
+        ["start-funs-rec ((f () Int))", "start-body"]
+    );
+    let handler = assert_handler_error(
+        b"(define-funs-rec ((f () Int)) ((let ((x 1)) boom)))",
+        "exploding recursive body",
+        48,
+        49,
+    );
+    assert_eq!(
+        handler.events,
+        ["start-funs-rec ((f () Int))", "start-body"]
+    );
+
+    // end_define_funs_rec: the closing parenthesis of the body list
+    let handler = assert_handler_error(
+        b"(define-funs-rec ((unendable () Int)) (1))",
+        "unendable functions",
+        40,
+        41,
+    );
+    assert_eq!(
+        handler.events,
+        [
+            "start-funs-rec ((unendable () Int))",
+            "start-body",
+            "end-body 1",
+        ]
+    );
+}
+
+#[test]
+fn define_fun_rec_handler_errors_point_at_the_triggering_token() {
+    // start_define_funs_rec: the last token of the signature
+    let handler = assert_handler_error(
+        b"(define-fun-rec forbidden () Int 1)",
+        "forbidden recursive function name",
+        29,
+        32,
+    );
+    assert!(handler.events.is_empty());
+
+    // start_recursive_body: the first token of the body
+    let handler = assert_handler_error(
+        b"(define-fun-rec unstartable () Int 1)",
+        "unstartable function",
+        35,
+        36,
+    );
+    assert_eq!(handler.events, ["start-funs-rec ((unstartable () Int))"]);
+
+    // end_recursive_body: the last token of the body
+    let handler = assert_handler_error(
+        b"(define-fun-rec f () Int boom)",
+        "exploding recursive body",
+        25,
+        29,
+    );
+    assert_eq!(
+        handler.events,
+        ["start-funs-rec ((f () Int))", "start-body"]
+    );
+
+    // end_define_funs_rec: also the last token of the body,
+    // as the single body ends the definitions
+    let handler = assert_handler_error(
+        b"(define-fun-rec unendable () Int 1)",
+        "unendable functions",
+        33,
+        34,
+    );
+    assert_eq!(
+        handler.events,
+        [
+            "start-funs-rec ((unendable () Int))",
+            "start-body",
+            "end-body 1",
+        ]
+    );
+}
+
+#[test]
+fn define_funs_rec_errors_point_at_offending_token() {
+    // at least one function must be defined
+    let err = assert_parser_error(b"(define-funs-rec () ())", 18, 19);
+    assert!(
+        matches!(err, CategoryParserErrorKind::EmptyFunctionSignatures),
+        "{err:?}"
+    );
+    // each signature is parenthesized
+    let err = assert_parser_error(b"(define-funs-rec (f () Int) (1))", 18, 19);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenOpen])
+        ),
+        "{err:?}"
+    );
+    // the function name must be a symbol
+    let err = assert_parser_error(b"(define-funs-rec ((1 () Int)) (1))", 19, 20);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::Symbol])
+        ),
+        "{err:?}"
+    );
+    // each sorted var is parenthesized
+    let err = assert_parser_error(b"(define-funs-rec ((f (x Int) Int)) (1))", 22, 23);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenOpen])
+        ),
+        "{err:?}"
+    );
+    // the result sort is required
+    let err = assert_parser_error(b"(define-funs-rec ((f ())) (1))", 23, 24);
+    assert!(
+        matches!(err, CategoryParserErrorKind::ExpectedSort),
+        "{err:?}"
+    );
+    // the body list is required
+    let err = assert_parser_error(b"(define-funs-rec ((f () Int)))", 29, 30);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenOpen])
+        ),
+        "{err:?}"
+    );
+    // one body per function: the shortfall is detected at the end of the body list
+    let err = assert_parser_error(b"(define-funs-rec ((f () Int) (g () Int)) (1))", 43, 44);
+    assert!(
+        matches!(err, CategoryParserErrorKind::ExpectedFunctionBody),
+        "{err:?}"
+    );
+    let err = assert_parser_error(b"(define-funs-rec ((f () Int)) ())", 31, 32);
+    assert!(
+        matches!(err, CategoryParserErrorKind::ExpectedFunctionBody),
+        "{err:?}"
+    );
+    // one body per function: the excess is detected at the excess body
+    let err = assert_parser_error(b"(define-funs-rec ((f () Int)) (1 2))", 33, 34);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
+        ),
+        "{err:?}"
+    );
+    // nothing follows the body list
+    let err = assert_parser_error(b"(define-funs-rec ((f () Int)) (1) 2)", 34, 35);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
+        ),
+        "{err:?}"
+    );
+    // the number of allowed bodies does not leak into the next command
+    let err = assert_parser_error(
+        b"(define-funs-rec ((f () Int) (g () Int)) (1 2)) (define-funs-rec ((h () Int)) (1 2))",
+        81,
+        82,
+    );
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
+        ),
+        "{err:?}"
+    );
+}
+
+#[test]
+fn define_fun_rec_errors_point_at_offending_token() {
+    // the function name must be a symbol
+    let err = assert_parser_error(b"(define-fun-rec 1 () Int 1)", 16, 17);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::Symbol])
+        ),
+        "{err:?}"
+    );
+    // the signature is not listed as in define-funs-rec
+    let err = assert_parser_error(b"(define-fun-rec ((f () Int)) (1))", 16, 17);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::Symbol])
+        ),
+        "{err:?}"
+    );
+    // each sorted var is parenthesized
+    let err = assert_parser_error(b"(define-fun-rec f (x Int) Int x)", 19, 20);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenOpen])
+        ),
+        "{err:?}"
+    );
+    // the body term is required
+    let err = assert_parser_error(b"(define-fun-rec f () Int)", 24, 25);
+    assert!(
+        matches!(err, CategoryParserErrorKind::ExpectedTerm),
+        "{err:?}"
+    );
+    // exactly one body term is allowed
+    let err = assert_parser_error(b"(define-fun-rec f () Int 1 2)", 27, 28);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
+        ),
+        "{err:?}"
+    );
+}
+
+#[test]
+fn missing_recursive_body_is_started_only_in_the_sugar_form() {
+    // the callbacks received before a parser error are an expectation of
+    // the current implementation, not a contract: the sugar form has no
+    // body list, so the closing parenthesis reaches the body parser and
+    // starts the body before the missing term is detected
+    let mut handler = Resolving::default();
+    let err = parse_with(&mut handler, b"(define-fun-rec f () Int)")
+        .expect_err("expected a parser error");
+    assert_error_span(&err, 24, 25);
+    assert!(
+        matches!(
+            err.kind(),
+            SmtReadErrorKind::Parser(CategoryParserErrorKind::ExpectedTerm)
+        ),
+        "{:?}",
+        err.kind()
+    );
+    assert_eq!(
+        handler.events,
+        ["start-funs-rec ((f () Int))", "start-body"]
+    );
+
+    // in the full form, the body list filters out the closing parenthesis
+    // before any body is started
+    let mut handler = Resolving::default();
+    let err = parse_with(&mut handler, b"(define-funs-rec ((f () Int)) ())")
+        .expect_err("expected a parser error");
+    assert_error_span(&err, 31, 32);
+    assert!(
+        matches!(
+            err.kind(),
+            SmtReadErrorKind::Parser(CategoryParserErrorKind::ExpectedFunctionBody)
+        ),
+        "{:?}",
+        err.kind()
+    );
+    assert_eq!(handler.events, ["start-funs-rec ((f () Int))"]);
 }
