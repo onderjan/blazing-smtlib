@@ -125,6 +125,12 @@ pub trait CommandHandler: SmtHandler {
     fn command_set_logic(&mut self, logic: SmtSymbol) -> Result<(), Self::Error>;
 
     fn command_get_value(&mut self, terms: Vec<Self::Term>) -> Result<(), Self::Error>;
+    fn command_get_assertions(&mut self) -> Result<(), Self::Error>;
+    fn command_get_assignment(&mut self) -> Result<(), Self::Error>;
+    fn command_get_model(&mut self) -> Result<(), Self::Error>;
+    fn command_get_proof(&mut self) -> Result<(), Self::Error>;
+    fn command_get_unsat_assumptions(&mut self) -> Result<(), Self::Error>;
+    fn command_get_unsat_core(&mut self) -> Result<(), Self::Error>;
 
     /// Adds a sort symbol with an associated arity.
     ///
@@ -483,6 +489,30 @@ impl CommandHandler for CheckStandardSyntax {
     }
 
     fn command_get_value(&mut self, _terms: Vec<Self::Term>) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn command_get_assertions(&mut self) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn command_get_assignment(&mut self) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn command_get_model(&mut self) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn command_get_proof(&mut self) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn command_get_unsat_assumptions(&mut self) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn command_get_unsat_core(&mut self) -> Result<(), Self::Error> {
         Ok(())
     }
 

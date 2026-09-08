@@ -175,6 +175,24 @@ standard_commands! {
     b"reset-assertions" => reset_assertions: ResetAssertions(
         CloseParenParser,
         |handler, ()| handler.command_reset_assertions()),
+    b"get-assertions" => get_assertions: GetAssertions(
+        CloseParenParser,
+        |handler, ()| handler.command_get_assertions()),
+    b"get-assignment" => get_assignment: GetAssignment(
+        CloseParenParser,
+        |handler, ()| handler.command_get_assignment()),
+    b"get-model" => get_model: GetModel(
+        CloseParenParser,
+        |handler, ()| handler.command_get_model()),
+    b"get-proof" => get_proof: GetProof(
+        CloseParenParser,
+        |handler, ()| handler.command_get_proof()),
+    b"get-unsat-assumptions" => get_unsat_assumptions: GetUnsatAssumptions(
+        CloseParenParser,
+        |handler, ()| handler.command_get_unsat_assumptions()),
+    b"get-unsat-core" => get_unsat_core: GetUnsatCore(
+        CloseParenParser,
+        |handler, ()| handler.command_get_unsat_core()),
 }
 
 impl<H: CommandHandler> Definition<H> for DefineConst {
