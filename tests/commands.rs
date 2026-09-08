@@ -312,6 +312,13 @@ impl CommandHandler for Resolving {
     fn command_set_logic(&mut self, _logic: SmtSymbol) -> Result<(), String> {
         Ok(())
     }
+    fn command_get_value(&mut self, terms: Vec<String>) -> Result<(), String> {
+        if terms.iter().any(|term| term == "boom") {
+            return Err("exploding get-value".into());
+        }
+        self.events.push(format!("get-value ({})", terms.join(" ")));
+        Ok(())
+    }
     fn command_declare_sort(&mut self, name: SmtSymbol, arity: SmtNumeral) -> Result<(), String> {
         self.events.push(format!(
             "declare-sort {} {}",
@@ -2545,5 +2552,89 @@ fn match_handler_errors_point_at_the_triggering_token() {
     assert_eq!(
         handler.events,
         ["start-match unendable", "start-case x", "end-case 1"]
+    );
+}
+
+// --- get-value ---
+
+#[test]
+fn get_value_delivers_terms_in_order() {
+    let mut handler = Resolving::default();
+    parse_resolving(&mut handler, b"(get-value (x (f 1 y) (let ((z 2)) z)))");
+    assert_eq!(handler.events, ["get-value (x (f 1 y) z)"]);
+}
+
+#[test]
+fn repeated_get_values_reuse_the_persistent_parser() {
+    let mut handler = Resolving::default();
+    parse_resolving(
+        &mut handler,
+        b"(get-value (a b)) (get-value (c)) (get-value ((g a)))",
+    );
+    assert_eq!(
+        handler.events,
+        ["get-value (a b)", "get-value (c)", "get-value ((g a))"]
+    );
+}
+
+#[test]
+fn get_value_terms_do_not_see_the_previous_definition_scope() {
+    let mut handler = Resolving::default();
+    parse_resolving(
+        &mut handler,
+        b"(define-fun g ((x Int)) Int x) (get-value (x (g x)))",
+    );
+    assert_eq!(
+        handler.events,
+        ["start g ((x Int)) Int", "end [x]", "get-value (x (g x))"]
+    );
+}
+
+#[test]
+fn get_value_handler_error_points_at_the_closing_parenthesis_of_the_command() {
+    // the handler is called once the whole command is parsed
+    let handler = assert_handler_error(b"(get-value (x boom))", "exploding get-value", 19, 20);
+    assert!(handler.events.is_empty());
+}
+
+#[test]
+fn get_value_errors_point_at_offending_token() {
+    // at least one term is required
+    let err = assert_parser_error(b"(get-value ())", 12, 13);
+    assert!(
+        matches!(err, CategoryParserErrorKind::EmptyGetValueTerms),
+        "{err:?}"
+    );
+    // the term list is required and parenthesized
+    let err = assert_parser_error(b"(get-value)", 10, 11);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenOpen])
+        ),
+        "{err:?}"
+    );
+    let err = assert_parser_error(b"(get-value x)", 11, 12);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenOpen])
+        ),
+        "{err:?}"
+    );
+    // the list holds terms, which are checked as terms
+    let err = assert_parser_error(b"(get-value ((f)))", 14, 15);
+    assert!(
+        matches!(err, CategoryParserErrorKind::EmptyTermApplication),
+        "{err:?}"
+    );
+    // nothing follows the term list
+    let err = assert_parser_error(b"(get-value (x) 1)", 15, 16);
+    assert!(
+        matches!(
+            err,
+            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
+        ),
+        "{err:?}"
     );
 }

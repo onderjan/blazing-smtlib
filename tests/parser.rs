@@ -195,6 +195,10 @@ impl CommandHandler for Recording {
         self.commands.push("set-logic");
         Ok(())
     }
+    fn command_get_value(&mut self, _terms: Vec<()>) -> Result<(), Self::Error> {
+        self.commands.push("get-value");
+        Ok(())
+    }
     fn command_declare_sort(
         &mut self,
         _name: SmtSymbol,
@@ -534,4 +538,12 @@ fn define_fun_rec_produces_the_desugared_callbacks() {
             "check-sat",
         ]
     );
+}
+
+#[test]
+fn get_value_reaches_its_handler_method() {
+    let mut handler = Recording::default();
+    parse_with(&mut handler, b"(get-value (x (f y))) (check-sat)")
+        .unwrap_or_else(|err| panic!("unexpected error at {:?}", err.span()));
+    assert_eq!(handler.commands, ["get-value", "check-sat"]);
 }
