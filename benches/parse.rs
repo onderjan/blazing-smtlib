@@ -22,14 +22,20 @@
 //! - `SMT_BENCH_FORMAT`: `table` (default) prints the human-readable table,
 //!   `raw` prints one tab-separated line per file and mode with the label,
 //!   mode, byte size, and every timed run in seconds, and `list` prints the
-//!   selected labels one per line without measuring anything. The `raw` and
-//!   `list` formats are the protocol used by the `compare` bench driver.
+//!   selected labels one per line without measuring anything, and `census`
+//!   measures nothing either but prints what each file consists of: token
+//!   counts by type, reserved words, top-level command names, and nesting
+//!   depth. The `raw` and `list` formats are the protocol used by the
+//!   `compare` bench driver. In the `census` format, command-line arguments
+//!   name additional files to describe, relative to the corpus root, which
+//!   helps when choosing files to add to [`FILES`].
 //!
 //! Measured throughput is not the same between runs: expect a few percent of
 //! run-to-run drift between two invocations of identical code. To compare
 //! two revisions, use `cargo bench --bench compare`, which interleaves the
 //! two builds file by file.
 
+use std::collections::BTreeMap;
 use std::convert::Infallible;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -42,7 +48,7 @@ use smt_parser_rs::{
         lexer::{Lexer, TokenHandler},
         read_smt,
     },
-    token::Token,
+    token::{Token, TokenKind},
 };
 
 /// A benchmarked file: a short label used in output and for selection,
@@ -143,6 +149,113 @@ impl TokenHandler for DiscardTokens {
     }
 }
 
+/// Token handler that tallies what a file consists of.
+#[derive(Default)]
+struct Census {
+    tokens: u64,
+    /// Token counts by type name.
+    types: BTreeMap<&'static str, u64>,
+    /// Reserved word counts by spelling.
+    reserved: BTreeMap<&'static str, u64>,
+    /// Top-level command counts by name.
+    commands: BTreeMap<String, u64>,
+    depth: u64,
+    max_depth: u64,
+    /// The previous token opened a top-level command, so a symbol names it.
+    expecting_command_name: bool,
+}
+
+impl TokenHandler for Census {
+    type Error = Infallible;
+
+    fn handle_token(&mut self, token: Token) -> Result<(), Self::Error> {
+        self.tokens += 1;
+        let expecting_command_name = self.expecting_command_name;
+        self.expecting_command_name = false;
+        let type_name = match token.kind() {
+            TokenKind::ParenOpen => {
+                self.expecting_command_name = self.depth == 0;
+                self.depth += 1;
+                self.max_depth = self.max_depth.max(self.depth);
+                "("
+            }
+            TokenKind::ParenClose => {
+                self.depth = self.depth.saturating_sub(1);
+                ")"
+            }
+            TokenKind::Numeral(_) => "numeral",
+            TokenKind::Decimal(_) => "decimal",
+            TokenKind::Hexadecimal(_) => "hexadecimal",
+            TokenKind::Binary(_) => "binary",
+            TokenKind::Symbol(name) => {
+                if expecting_command_name {
+                    let name = String::from_utf8_lossy(name.as_slice()).into_owned();
+                    *self.commands.entry(name).or_default() += 1;
+                }
+                "symbol"
+            }
+            TokenKind::Reserved(reserved) => {
+                *self.reserved.entry(reserved.as_str()).or_default() += 1;
+                "reserved"
+            }
+            TokenKind::String(_) => "string",
+            TokenKind::Keyword(_) => "keyword",
+            TokenKind::EndOfFile => return Ok(()),
+        };
+        *self.types.entry(type_name).or_default() += 1;
+        Ok(())
+    }
+}
+
+/// Prints the census of the in-memory file.
+fn print_census(label: &str, data: &[u8], path: &Path) {
+    let mut census = Census::default();
+    let mut lexer = Lexer::new(&mut census);
+    if let Err(err) = lexer.lex_all(data) {
+        panic!("benchmark file {} must lex, got {:?}", path.display(), err);
+    }
+    println!(
+        "{label}  {:.2} MB  {} tokens  {:.1} B/token  max depth {}",
+        data.len() as f64 / 1_000_000.0,
+        census.tokens,
+        data.len() as f64 / census.tokens.max(1) as f64,
+        census.max_depth
+    );
+    let sections: [(&str, Vec<(String, u64)>); 3] = [
+        (
+            "tokens",
+            census
+                .types
+                .iter()
+                .map(|(name, count)| (name.to_string(), *count))
+                .collect(),
+        ),
+        (
+            "reserved",
+            census
+                .reserved
+                .iter()
+                .map(|(name, count)| (name.to_string(), *count))
+                .collect(),
+        ),
+        (
+            "commands",
+            census
+                .commands
+                .iter()
+                .map(|(name, count)| (name.clone(), *count))
+                .collect(),
+        ),
+    ];
+    for (title, counts) in sections {
+        print!("  {title}:");
+        for (name, count) in counts {
+            print!("  {name} {count}");
+        }
+        println!();
+    }
+}
+
 /// Lexes the in-memory file, discarding tokens, and returns the token count.
 fn lex_from_memory(data: &[u8], path: &Path) -> usize {
     let mut handler = DiscardTokens { tokens: 0 };
@@ -224,6 +337,7 @@ enum Format {
     Table,
     Raw,
     List,
+    Census,
 }
 
 fn main() -> ExitCode {
@@ -254,9 +368,10 @@ fn main() -> ExitCode {
         "" | "table" => Format::Table,
         "raw" => Format::Raw,
         "list" => Format::List,
+        "census" => Format::Census,
         other => {
             eprintln!(
-                "Unknown SMT_BENCH_FORMAT {:?}; use \"table\", \"raw\", or \"list\"",
+                "Unknown SMT_BENCH_FORMAT {:?}; use \"table\", \"raw\", \"list\", or \"census\"",
                 other
             );
             return ExitCode::FAILURE;
@@ -277,12 +392,12 @@ fn main() -> ExitCode {
         Err(_) => DEFAULT_ITERATIONS,
     };
 
-    let files: Vec<&BenchFile> = match std::env::var("SMT_BENCH_FILES") {
+    let mut files: Vec<(String, PathBuf)> = match std::env::var("SMT_BENCH_FILES") {
         Ok(labels) => {
             let mut files = Vec::new();
             for label in labels.split(',').map(str::trim).filter(|s| !s.is_empty()) {
                 match FILES.iter().find(|file| file.label == label) {
-                    Some(file) => files.push(file),
+                    Some(file) => files.push((file.label.to_string(), PathBuf::from(file.path))),
                     None => {
                         eprintln!(
                             "Unknown benchmark file label {:?} in SMT_BENCH_FILES",
@@ -294,12 +409,21 @@ fn main() -> ExitCode {
             }
             files
         }
-        Err(_) => FILES.iter().collect(),
+        Err(_) => FILES
+            .iter()
+            .map(|file| (file.label.to_string(), PathBuf::from(file.path)))
+            .collect(),
     };
+    if let Format::Census = format {
+        // cargo bench appends --bench to the arguments of a harness-less bench
+        for argument in std::env::args().skip(1).filter(|arg| arg != "--bench") {
+            files.push((argument.clone(), PathBuf::from(argument)));
+        }
+    }
 
     if let Format::List = format {
-        for file in &files {
-            println!("{}", file.label);
+        for (label, _) in &files {
+            println!("{label}");
         }
         return ExitCode::SUCCESS;
     }
@@ -313,10 +437,14 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    let label_width = files.iter().map(|file| file.label.len()).max().unwrap_or(0);
+    let label_width = files
+        .iter()
+        .map(|(label, _)| label.len())
+        .max()
+        .unwrap_or(0);
 
-    for file in &files {
-        let path: PathBuf = benchmarks_dir.join(file.path);
+    for (label, relative) in &files {
+        let path: PathBuf = benchmarks_dir.join(relative);
         let data = match std::fs::read(&path) {
             Ok(data) => data,
             Err(err) => {
@@ -326,8 +454,13 @@ fn main() -> ExitCode {
         };
         let megabytes = data.len() as f64 / 1_000_000.0;
 
+        if let Format::Census = format {
+            print_census(label, &data, &path);
+            continue;
+        }
+
         if let Format::Table = format {
-            print!("{:<label_width$}  {:>7.2} MB", file.label, megabytes);
+            print!("{:<label_width$}  {:>7.2} MB", label, megabytes);
         }
 
         for &mode in modes {
@@ -349,7 +482,7 @@ fn main() -> ExitCode {
                     );
                 }
                 Format::Raw => {
-                    print!("{}\t{}\t{}\t", file.label, mode.name(), data.len());
+                    print!("{}\t{}\t{}\t", label, mode.name(), data.len());
                     for (i, time) in times.iter().enumerate() {
                         if i > 0 {
                             print!(" ");
@@ -358,7 +491,9 @@ fn main() -> ExitCode {
                     }
                     println!();
                 }
-                Format::List => unreachable!("list format returns before measuring"),
+                Format::List | Format::Census => {
+                    unreachable!("list and census formats do not measure")
+                }
             }
         }
 
