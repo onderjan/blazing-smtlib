@@ -4,6 +4,7 @@ use std::fmt::{Debug, Write};
 pub struct String8(Vec<u8>);
 
 impl String8 {
+    #[inline]
     pub fn new() -> String8 {
         String8(Vec::new())
     }
@@ -16,10 +17,12 @@ impl String8 {
         Self::from_vec(vec![byte])
     }
 
+    #[inline]
     pub fn as_slice(&self) -> &[u8] {
         &self.0
     }
 
+    #[inline]
     pub fn as_view<'a>(&'a self) -> String8View<'a> {
         String8View(&self.0)
     }
@@ -28,22 +31,27 @@ impl String8 {
         self.0
     }
 
+    #[inline]
     pub fn len(&self) -> usize {
         self.0.len()
     }
 
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
+    #[inline]
     pub fn clear(&mut self) {
         self.0.clear();
     }
 
+    #[inline]
     pub fn extend_from_slice(&mut self, slice: &[u8]) {
         self.0.extend_from_slice(slice);
     }
 
+    #[inline]
     pub fn push(&mut self, byte: u8) {
         self.0.push(byte);
     }
@@ -69,14 +77,17 @@ impl Debug for String8 {
 pub struct String8View<'a>(&'a [u8]);
 
 impl<'a> String8View<'a> {
+    #[inline]
     pub fn len(&self) -> usize {
         self.0.len()
     }
 
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
+    #[inline]
     pub fn as_slice(self) -> &'a [u8] {
         self.0
     }

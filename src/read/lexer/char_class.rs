@@ -58,6 +58,7 @@ pub(crate) enum CharClass {
 }
 
 impl From<u8> for CharClass {
+    #[inline]
     fn from(c: u8) -> Self {
         if c.is_ascii_alphabetic() {
             CharClass::Letter
@@ -96,11 +97,13 @@ impl From<u8> for CharClass {
 }
 
 impl CharClass {
+    #[inline]
     pub fn is_printable_or_whitespace(self) -> bool {
         // everything except other non-printable and DEL
         !matches!(self, CharClass::OtherNonPrintable | CharClass::Del)
     }
 
+    #[inline]
     pub fn is_allowed_in_simple_symbol(self) -> bool {
         // letters, digits, special, dot
         matches!(

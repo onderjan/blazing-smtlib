@@ -219,6 +219,7 @@ macro_rules! string8_newtype {
         pub struct $view<'a>(String8View<'a>);
 
         impl<'a> $view<'a> {
+            #[inline]
             pub(crate) fn new_unchecked(value: String8View<'a>) -> Self {
                 debug_assert!(
                     $name::is_allowed(value.as_slice()),
@@ -228,6 +229,7 @@ macro_rules! string8_newtype {
                 Self(value)
             }
 
+            #[inline]
             pub fn as_slice(&self) -> &'a [u8] {
                 self.0.as_slice()
             }

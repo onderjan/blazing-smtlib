@@ -34,6 +34,7 @@ pub enum TokenKind<'a> {
 }
 
 impl TokenKind<'_> {
+    #[inline]
     pub fn ty(&self) -> TokenType {
         match self {
             TokenKind::ParenOpen => TokenType::ParenOpen,
@@ -58,14 +59,17 @@ pub struct Token<'a> {
 }
 
 impl<'a> Token<'a> {
+    #[inline]
     pub(crate) fn new(kind: TokenKind<'a>, span: SmtSpan) -> Token<'a> {
         Self { kind, span }
     }
 
+    #[inline]
     pub fn kind(&self) -> TokenKind<'a> {
         self.kind
     }
 
+    #[inline]
     pub fn span(&self) -> SmtSpan {
         self.span
     }
@@ -91,6 +95,7 @@ pub enum Reserved {
 }
 
 impl Reserved {
+    #[inline]
     pub fn from_symbol_opt(symbol: &String8) -> Option<Reserved> {
         Some(match symbol.as_slice() {
             b"BINARY" => Reserved::Binary,
