@@ -2,7 +2,8 @@ use std::fmt::Debug;
 
 use crate::{
     SmtAttributeValue, SmtDatatypeConstructor, SmtFunctionSignature, SmtKeyword, SmtNumeral,
-    SmtQuantifierKind, SmtSExpr, SmtSort, SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm,
+    SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSort, SmtStringContent, SmtSymbol, SmtSymbolView,
+    SmtTerm,
     read::parser::{NoCommandParser, ParseCommand},
 };
 
@@ -42,6 +43,68 @@ pub trait SmtHandler {
 
     fn start_lambda(&mut self, name: SmtSymbol, sort: Self::Sort) -> Result<(), Self::Error>;
     fn end_lambda(&mut self, term: Self::Term) -> Result<Self::Term, Self::Error>;
+
+    /// Starts a match term.
+    ///
+    /// The parameter `scrutinee` is the term being matched.
+    /// The parser calls this method before any match case is started,
+    /// as the patterns can only be interpreted knowing the scrutinee.
+    ///
+    /// The parser guarantees:
+    /// 1. If this method is nested, i.e. called again before the corresponding
+    ///    `end_match`, from within a match case body, the nesting is proper:
+    ///    the inner match ends before the outer match continues.
+    /// 2. There is at least one match case, its body handled between
+    ///    `start_match_case` and `end_match_case`, before the corresponding `end_match`.
+    ///
+    /// There are no other guarantees, including on the sort of the scrutinee.
+    ///
+    /// Consult the standard for proper handling.
+    fn start_match(&mut self, scrutinee: Self::Term) -> Result<(), Self::Error>;
+
+    /// Starts a match case.
+    ///
+    /// The parameter `pattern` is the case pattern.
+    ///
+    /// The parser guarantees:
+    /// 1. This method is only called between `start_match` and `end_match`,
+    ///    and the case semantically belongs to the innermost match.
+    /// 2. This method is never nested before the corresponding `end_match_case`.
+    /// 3. The case body is handled after this method is called
+    ///    and before the respective `end_match_case` is called.
+    /// 4. If `pattern` is a constructor application pattern,
+    ///    it has at least one argument.
+    ///
+    /// There are no other guarantees, including on constructor names, arities,
+    /// or distinctness of pattern variables.
+    ///
+    /// Consult the standard for proper handling.
+    fn start_match_case(&mut self, pattern: SmtPattern) -> Result<(), Self::Error>;
+
+    /// Ends a match case.
+    ///
+    /// The parameter `term` is the case body result.
+    ///
+    /// The parser guarantees:
+    /// 1. This method is only called between `start_match` and `end_match`.
+    /// 2. There is a pending unended `start_match_case`,
+    ///    to which this method semantically belongs.
+    ///
+    /// Consult the standard for proper handling.
+    fn end_match_case(&mut self, term: Self::Term) -> Result<(), Self::Error>;
+
+    /// Ends a match term.
+    ///
+    /// The parser guarantees:
+    /// 1. There is a pending unended `start_match`,
+    ///    to which this method semantically belongs.
+    /// 2. There is no pending unended `start_match_case`.
+    /// 3. At least one match case was ended since the corresponding `start_match`.
+    ///
+    /// The result of this method should be the handled match term.
+    ///
+    /// Consult the standard for proper handling.
+    fn end_match(&mut self) -> Result<Self::Term, Self::Error>;
 }
 
 pub trait CommandHandler: SmtHandler {
@@ -362,6 +425,22 @@ impl SmtHandler for CheckStandardSyntax {
     }
 
     fn end_lambda(&mut self, _term: Self::Term) -> Result<Self::Term, Self::Error> {
+        Ok(())
+    }
+
+    fn start_match(&mut self, _scrutinee: Self::Term) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn start_match_case(&mut self, _pattern: SmtPattern) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn end_match_case(&mut self, _term: Self::Term) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn end_match(&mut self) -> Result<Self::Term, Self::Error> {
         Ok(())
     }
 }

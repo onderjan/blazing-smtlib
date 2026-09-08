@@ -6,7 +6,7 @@ use crate::{
         CloseParenParser, OpenParenParser, ParserError, SortedVarParser, SymbolParser,
         category::{
             CategoryParser, CategoryParserErrorKind, attribute::ClosedMultipleAttributeParser,
-            parse_special_constant, qualified_ident::QualifiedIdentParser,
+            parse_special_constant, pattern::PatternParser, qualified_ident::QualifiedIdentParser,
         },
         handle_err,
     },
@@ -30,6 +30,7 @@ pub struct TermParser<H: SmtHandler> {
     qualified_ident_parser: QualifiedIdentParser<H>,
     attributes_parser: ClosedMultipleAttributeParser<H>,
     sorted_bindings_parser: SortedBindingsParser<H>,
+    pattern_parser: PatternParser<H>,
 }
 
 #[derive(Clone, Copy)]
@@ -83,6 +84,25 @@ enum State {
 
     /// The term is a forall/exists/lambda binder, we are parsing its bound variables.
     SortedBinderVars(SortedBinderKind),
+
+    /// The term is a match, we are positioned before the cases open.
+    ///
+    /// The scrutinee was already handled.
+    /// We expect an opening parenthesis (opening the cases) next.
+    MatchCasesOpen,
+    /// The term is a match, we are positioned before a case parenthesis starts.
+    ///
+    /// We expect either an opening parenthesis (new case),
+    /// or a closing one (ending the cases).
+    MatchCaseOpen,
+    /// The term is a match, we are parsing a case pattern.
+    ///
+    /// Parsing delegated to the pattern parser.
+    MatchPattern,
+    /// The term is a match, we are positioned after a case term.
+    ///
+    /// We expect a closing parenthesis (closing the case) next.
+    MatchCaseClose,
 }
 
 /// A term waiting for an inner term.
@@ -115,6 +135,15 @@ enum Level<H: SmtHandler> {
     /// After consuming the term, we consume attributes (at least one),
     /// then a closing parenthesis.
     Annotation,
+
+    /// A match waiting for the scrutinee term.
+    ///
+    /// The cases will follow after we consume the term.
+    MatchScrutinee,
+    /// A match waiting for a case term.
+    ///
+    /// It is closed by a closing parenthesis instead of the inner term.
+    MatchCase { num_cases: u64 },
 }
 
 /// A pending term has been processed.
@@ -138,8 +167,8 @@ impl<H: SmtHandler> TermParser<H> {
 
             qualified_ident_parser: QualifiedIdentParser::new(),
             attributes_parser: ClosedMultipleAttributeParser::new(),
-
             sorted_bindings_parser: SortedBindingsParser::new(),
+            pattern_parser: PatternParser::new(),
         }
     }
 }
@@ -161,6 +190,7 @@ impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
         self.qualified_ident_parser.restart();
         self.attributes_parser.restart();
         self.sorted_bindings_parser.restart();
+        self.pattern_parser.restart();
     }
 
     fn progress(
@@ -265,6 +295,22 @@ impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
                     term,
                     is_annotation: true,
                 });
+            }
+            Level::MatchScrutinee => {
+                // the scrutinee has been parsed, start the match in the handler
+                self.levels.pop();
+                handle_err(handler.start_match(term), span)?;
+                // the case terms will be processed on a new level
+                self.levels.push(Level::MatchCase { num_cases: 0 });
+                self.state = State::MatchCasesOpen;
+            }
+            Level::MatchCase { num_cases } => {
+                // a case term has been parsed, end the case in the handler
+                handle_err(handler.end_match_case(term), span)?;
+                // increment the number of cases and move to expect
+                // the closing match case parenthesis
+                *num_cases += 1;
+                self.state = State::MatchCaseClose;
             }
         }
         Ok(ControlFlow::Continue(()))
@@ -377,6 +423,32 @@ impl<H: SmtHandler> TermParser<H> {
                 }
                 Ok(ControlFlow::Continue(()))
             }
+            State::MatchCasesOpen => {
+                // expect an opening parenthesis
+                OpenParenParser::expect(token)?;
+                // move to awaiting a match case or a closing parenthesis
+                self.state = State::MatchCaseOpen;
+                Ok(ControlFlow::Continue(()))
+            }
+            State::MatchCaseOpen => self.parse_match_case_open(handler, token),
+            State::MatchPattern => {
+                // parse the match pattern
+                let span = token.span();
+                if let ControlFlow::Break(pattern) = self.pattern_parser.progress(handler, token)? {
+                    // a match case is starting, call the handler
+                    handle_err(handler.start_match_case(pattern), span)?;
+                    // move the start state to parse the case term
+                    self.state = State::Start;
+                }
+                Ok(ControlFlow::Continue(()))
+            }
+            State::MatchCaseClose => {
+                // expect a closing parenthesis
+                CloseParenParser::expect(token)?;
+                // move to await a match case or a closing parenthesis
+                self.state = State::MatchCaseOpen;
+                Ok(ControlFlow::Continue(()))
+            }
         }
     }
 
@@ -472,7 +544,12 @@ impl<H: SmtHandler> TermParser<H> {
                 // this is an existential binder, move to parsing its variables
                 State::SortedBinderVars(SortedBinderKind::Exists)
             }
-            TokenKind::Reserved(Reserved::Match) => todo!("Match"),
+            TokenKind::Reserved(Reserved::Match) => {
+                // this is a match
+                // we are parsing its scrutinee next, add a level for it
+                self.start_level(Level::MatchScrutinee);
+                return Ok(());
+            }
             TokenKind::Reserved(Reserved::ExclamationMark) => {
                 // this is an annotation
                 // we are parsing its annotated term next, add a level for it
@@ -559,6 +636,51 @@ impl<H: SmtHandler> TermParser<H> {
             }
             _ => {
                 // expected open or close parenthesis
+                return Err(ParserError::category_error(
+                    CategoryParserErrorKind::ExpectedToken(&[
+                        TokenType::ParenOpen,
+                        TokenType::ParenClose,
+                    ]),
+                    span,
+                ));
+            }
+        }
+        Ok(ControlFlow::Continue(()))
+    }
+
+    fn parse_match_case_open(
+        &mut self,
+        handler: &mut H,
+        token: Token,
+    ) -> Result<ControlFlow<SmtTerm<H>>, ParserError<H::Error>> {
+        let span = token.span();
+        match token.kind() {
+            TokenKind::ParenOpen => {
+                // a new case is being opened, we will parse the pattern next
+                self.state = State::MatchPattern;
+            }
+            TokenKind::ParenClose => {
+                // the match cases are done
+                let Some(Level::MatchCase { num_cases }) = self.levels.pop() else {
+                    panic!("last level should be a match case when closing cases")
+                };
+                // there must be at least one case
+                if num_cases == 0 {
+                    return Err(ParserError::category_error(
+                        CategoryParserErrorKind::EmptyMatchCases,
+                        span,
+                    ));
+                }
+
+                // call the handler to signal the end of the match
+                let term = handle_err(handler.end_match(), span)?;
+                // wait for the closing parenthesis of the match, we will break after that
+                self.pending = Some(Pending {
+                    term,
+                    is_annotation: false,
+                });
+            }
+            _ => {
                 return Err(ParserError::category_error(
                     CategoryParserErrorKind::ExpectedToken(&[
                         TokenType::ParenOpen,

@@ -285,6 +285,33 @@ where
     }
 }
 
+/// Simple match pattern: a symbol or a wildcard.
+#[derive(Debug, Clone)]
+pub enum SmtSimplePattern {
+    /// A symbol as a pattern.
+    ///
+    /// In the match pattern position, the symbol should be
+    /// either a variable or a nullary constructor, and
+    /// it is not possible to determine syntactically which one it is.
+    /// In the constructor application argument position,
+    /// it should be a variable.
+    Symbol(SmtSymbol),
+    /// A wildcard (reserved word underscore `_`) as a pattern.
+    Wildcard,
+}
+
+/// Match pattern: a symbol, a wildcard, or a constructor application.
+#[derive(Debug, Clone)]
+pub enum SmtPattern {
+    /// A simple match pattern, either a symbol or a wildcard.
+    Simple(SmtSimplePattern),
+    /// A constructor applied to at least one variable or wildcard.
+    Application {
+        constructor: SmtSymbol,
+        args: Vec<SmtSimplePattern>,
+    },
+}
+
 pub enum SmtSExpr<H: SmtHandler + ?Sized> {
     SpecialConstant(SmtSpecialConstant),
     Symbol(SmtSymbol),

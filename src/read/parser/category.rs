@@ -9,6 +9,7 @@ use crate::{
 mod attribute;
 mod combinator;
 mod ident;
+mod pattern;
 mod qualified_ident;
 mod s_expr;
 mod sort;
@@ -82,6 +83,8 @@ pub enum CategoryParserErrorKind {
     EmptyDatatypeIntroductions,
     EmptyDatatypeParameters,
     EmptyDatatypeConstructors,
+    EmptyPatternArguments,
+    EmptyMatchCases,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
