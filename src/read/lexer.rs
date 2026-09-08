@@ -197,7 +197,11 @@ impl<H: TokenHandler> Lexer<H> {
         let result = result.and_then(|()| self.sink(TokenType::EndOfFile, self.end_before_byte()));
 
         match result {
-            Ok(()) => Ok(()),
+            Ok(()) => {
+                // everything good, move to normal state
+                self.state = LexerState::Normal;
+                Ok(())
+            }
             Err(err) => {
                 // switch to the failed state and propagate
                 self.state = LexerState::Failed;
