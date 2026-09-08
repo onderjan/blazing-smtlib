@@ -101,13 +101,6 @@ pub(super) enum U8OrEof {
     Eof,
 }
 
-pub(super) fn char_class_opt(c: U8OrEof) -> Option<(CharClass, u8)> {
-    match c {
-        U8OrEof::U8(c) => Some((CharClass::from(c), c)),
-        U8OrEof::Eof => None,
-    }
-}
-
 impl CharClass {
     pub fn is_printable_or_whitespace(self) -> bool {
         // everything except other non-printable and DEL
