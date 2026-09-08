@@ -236,7 +236,7 @@ impl<H: TokenHandler> Lexer<H> {
             let consumed = match self.state {
                 LexerState::Normal => self.lex_normal(rest)?,
                 LexerState::NumeralOrDecimal => self.lex_numeral_or_decimal(rest)?,
-                LexerState::Fraction => self.lex_fraction(rest)?,
+                LexerState::Fraction => self.lex_fraction_from(rest, 0)?,
                 LexerState::BaseSelection => self.lex_base_selection(rest)?,
                 LexerState::Hexadecimal => self.lex_digit_run(rest, HEXADECIMAL_RUN)?,
                 LexerState::Binary => self.lex_digit_run(rest, BINARY_RUN)?,
@@ -352,11 +352,9 @@ impl<H: TokenHandler> Lexer<H> {
         match slice.get(index) {
             Some(b'.') => {
                 // decimal, the next character will start fraction
-                // add the dot to the value
+                // add the dot and immediately start parsing the fraction after it
                 self.token_content.push(b'.');
-                // move to fraction parsing, consuming the dot
-                self.state = LexerState::Fraction;
-                Ok(index + 1)
+                self.lex_fraction_from(slice, index + 1)
             }
             Some(_) => {
                 // we have successfully consumed the numeral, finish it
@@ -373,21 +371,25 @@ impl<H: TokenHandler> Lexer<H> {
         }
     }
 
-    fn lex_fraction(&mut self, slice: &[u8]) -> Result<usize, LexError<H::Error>> {
-        // find the first byte that is not a digit
-        let index = Self::run_end(slice, DIGIT);
-
+    fn lex_fraction_from(
+        &mut self,
+        slice: &[u8],
+        start: usize,
+    ) -> Result<usize, LexError<H::Error>> {
+        // find the first byte in the remainder that is not a digit
+        let end = start + Self::run_end(&slice[start..], DIGIT);
         // extend the token from slice
-        self.token_content.extend_from_slice(&slice[..index]);
-
-        if index < slice.len() {
+        self.token_content.extend_from_slice(&slice[start..end]);
+        if end < slice.len() {
             // we have successfully consumed the fraction, finish the decimal
             // compute the end location, no line feeds are allowed in simple symbols
-            self.finish_decimal(index, true)?;
+            self.finish_decimal(end, true)?;
             self.state = LexerState::Normal;
+        } else {
+            // we ran out of bytes for now
+            self.state = LexerState::Fraction;
         }
-
-        Ok(index)
+        Ok(end)
     }
 
     fn lex_base_selection(&mut self, slice: &[u8]) -> Result<usize, LexError<H::Error>> {
