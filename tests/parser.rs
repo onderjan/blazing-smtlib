@@ -199,6 +199,30 @@ impl CommandHandler for Recording {
         self.commands.push("get-value");
         Ok(())
     }
+    fn command_get_assertions(&mut self) -> Result<(), Self::Error> {
+        self.commands.push("get-assertions");
+        Ok(())
+    }
+    fn command_get_assignment(&mut self) -> Result<(), Self::Error> {
+        self.commands.push("get-assignment");
+        Ok(())
+    }
+    fn command_get_model(&mut self) -> Result<(), Self::Error> {
+        self.commands.push("get-model");
+        Ok(())
+    }
+    fn command_get_proof(&mut self) -> Result<(), Self::Error> {
+        self.commands.push("get-proof");
+        Ok(())
+    }
+    fn command_get_unsat_assumptions(&mut self) -> Result<(), Self::Error> {
+        self.commands.push("get-unsat-assumptions");
+        Ok(())
+    }
+    fn command_get_unsat_core(&mut self) -> Result<(), Self::Error> {
+        self.commands.push("get-unsat-core");
+        Ok(())
+    }
     fn command_declare_sort(
         &mut self,
         _name: SmtSymbol,
@@ -546,4 +570,27 @@ fn get_value_reaches_its_handler_method() {
     parse_with(&mut handler, b"(get-value (x (f y))) (check-sat)")
         .unwrap_or_else(|err| panic!("unexpected error at {:?}", err.span()));
     assert_eq!(handler.commands, ["get-value", "check-sat"]);
+}
+
+#[test]
+fn argument_free_queries_reach_their_handler_methods() {
+    let mut handler = Recording::default();
+    parse_with(
+        &mut handler,
+        b"(get-assertions) (get-assignment) (get-model) (get-proof) \
+          (get-unsat-assumptions) (get-unsat-core) (check-sat)",
+    )
+    .unwrap_or_else(|err| panic!("unexpected error at {:?}", err.span()));
+    assert_eq!(
+        handler.commands,
+        [
+            "get-assertions",
+            "get-assignment",
+            "get-model",
+            "get-proof",
+            "get-unsat-assumptions",
+            "get-unsat-core",
+            "check-sat",
+        ]
+    );
 }

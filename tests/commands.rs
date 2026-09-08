@@ -319,6 +319,30 @@ impl CommandHandler for Resolving {
         self.events.push(format!("get-value ({})", terms.join(" ")));
         Ok(())
     }
+    fn command_get_assertions(&mut self) -> Result<(), String> {
+        self.events.push("get-assertions".into());
+        Ok(())
+    }
+    fn command_get_assignment(&mut self) -> Result<(), String> {
+        self.events.push("get-assignment".into());
+        Ok(())
+    }
+    fn command_get_model(&mut self) -> Result<(), String> {
+        self.events.push("get-model".into());
+        Ok(())
+    }
+    fn command_get_proof(&mut self) -> Result<(), String> {
+        self.events.push("get-proof".into());
+        Ok(())
+    }
+    fn command_get_unsat_assumptions(&mut self) -> Result<(), String> {
+        self.events.push("get-unsat-assumptions".into());
+        Ok(())
+    }
+    fn command_get_unsat_core(&mut self) -> Result<(), String> {
+        self.events.push("get-unsat-core".into());
+        Ok(())
+    }
     fn command_declare_sort(&mut self, name: SmtSymbol, arity: SmtNumeral) -> Result<(), String> {
         self.events.push(format!(
             "declare-sort {} {}",
@@ -1357,6 +1381,25 @@ fn trivial_command_errors_point_at_offending_token() {
         ),
         "{err:?}"
     );
+    // the queries without arguments take none
+    for (input, start, end) in [
+        (&b"(get-assertions x)"[..], 16, 17),
+        (b"(get-assignment x)", 16, 17),
+        (b"(get-model x)", 11, 12),
+        (b"(get-proof x)", 11, 12),
+        (b"(get-unsat-assumptions x)", 23, 24),
+        (b"(get-unsat-core x)", 16, 17),
+    ] {
+        let err = assert_parser_error(input, start, end);
+        assert!(
+            matches!(
+                err,
+                CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
+            ),
+            "{err:?} for {:?}",
+            text(input)
+        );
+    }
 }
 
 // --- declare-datatypes ---
@@ -2636,5 +2679,31 @@ fn get_value_errors_point_at_offending_token() {
             CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
         ),
         "{err:?}"
+    );
+}
+
+// --- Argument-free queries ---
+
+#[test]
+fn argument_free_queries_are_dispatched_by_name() {
+    // each query, repeated, to exercise dispatch and parser reuse
+    let mut handler = Resolving::default();
+    parse_resolving(
+        &mut handler,
+        b"(get-model) (get-unsat-core) (get-model) (get-proof) (get-assertions) \
+          (get-assignment) (get-unsat-assumptions) (get-unsat-core)",
+    );
+    assert_eq!(
+        handler.events,
+        [
+            "get-model",
+            "get-unsat-core",
+            "get-model",
+            "get-proof",
+            "get-assertions",
+            "get-assignment",
+            "get-unsat-assumptions",
+            "get-unsat-core",
+        ]
     );
 }
