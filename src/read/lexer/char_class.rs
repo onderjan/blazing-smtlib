@@ -57,9 +57,8 @@ pub(crate) enum CharClass {
     NonAscii,
 }
 
-impl From<u8> for CharClass {
-    #[inline]
-    fn from(c: u8) -> Self {
+impl CharClass {
+    const fn classify(c: u8) -> Self {
         if c.is_ascii_alphabetic() {
             CharClass::Letter
         } else if c.is_ascii_digit() {
@@ -94,21 +93,82 @@ impl From<u8> for CharClass {
             }
         }
     }
-}
 
-impl CharClass {
     #[inline]
-    pub fn is_printable_or_whitespace(self) -> bool {
+    pub const fn is_printable_or_whitespace(self) -> bool {
         // everything except other non-printable and DEL
         !matches!(self, CharClass::OtherNonPrintable | CharClass::Del)
     }
 
     #[inline]
-    pub fn is_allowed_in_simple_symbol(self) -> bool {
+    pub const fn is_allowed_in_simple_symbol(self) -> bool {
         // letters, digits, special, dot
         matches!(
             self,
             CharClass::Letter | CharClass::Digit | CharClass::Special | CharClass::Dot
         )
     }
+
+    const fn flags(c: u8) -> u8 {
+        let class = Self::classify(c);
+        let mut flags = 0;
+        if class.is_allowed_in_simple_symbol() {
+            flags |= SIMPLE_SYMBOL;
+        }
+        if matches!(class, CharClass::Digit) {
+            flags |= DIGIT;
+        }
+        // Letter does not separate a-f from the rest
+        if matches!(class, CharClass::Digit) || matches!(c, b'a'..=b'f' | b'A'..=b'F') {
+            flags |= HEX_DIGIT;
+        }
+        if matches!(c, b'0' | b'1') {
+            flags |= BINARY_DIGIT;
+        }
+        if matches!(
+            class,
+            CharClass::Tab | CharClass::Space | CharClass::LineBreak
+        ) {
+            flags |= WHITESPACE;
+        }
+        // LineBreak covers CR too, and CR is plain inside strings and quoted symbols;
+        // only LF ends the run (it has to be marked before the scan continues)
+        let plain_text = class.is_printable_or_whitespace() && c != b'\n';
+        if plain_text && !matches!(class, CharClass::Pipe | CharClass::Backslash) {
+            flags |= QUOTED_PLAIN;
+        }
+        if plain_text && !matches!(class, CharClass::DoubleQuote) {
+            flags |= STRING_PLAIN;
+        }
+        if !matches!(class, CharClass::LineBreak) {
+            flags |= COMMENT_PLAIN;
+        }
+        flags
+    }
 }
+
+impl From<u8> for CharClass {
+    #[inline]
+    fn from(c: u8) -> Self {
+        Self::classify(c)
+    }
+}
+
+pub(super) const SIMPLE_SYMBOL: u8 = 1u8 << 0;
+pub(super) const DIGIT: u8 = 1u8 << 1;
+pub(super) const HEX_DIGIT: u8 = 1u8 << 2;
+pub(super) const BINARY_DIGIT: u8 = 1u8 << 3;
+pub(super) const WHITESPACE: u8 = 1u8 << 4;
+pub(super) const QUOTED_PLAIN: u8 = 1u8 << 5;
+pub(super) const STRING_PLAIN: u8 = 1u8 << 6;
+pub(super) const COMMENT_PLAIN: u8 = 1u8 << 7;
+
+pub(super) static FLAGS: [u8; 256] = {
+    let mut table = [0u8; 256];
+    let mut i = 0;
+    while i < 256 {
+        table[i] = CharClass::flags(i as u8);
+        i += 1;
+    }
+    table
+};

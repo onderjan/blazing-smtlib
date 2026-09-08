@@ -5,6 +5,7 @@ pub(crate) use char_class::CharClass;
 use crate::{
     SmtBinDigitsView, SmtDecimalView, SmtHexDigitsView, SmtKeywordView, SmtLocation,
     SmtNumeralView, SmtSpan, SmtStringContentView, SmtSymbolView, String8,
+    read::lexer::char_class::{FLAGS, QUOTED_PLAIN, SIMPLE_SYMBOL},
     token::{Reserved, Token, TokenKind, TokenType},
 };
 
@@ -459,62 +460,74 @@ impl<H: TokenHandler> Lexer<H> {
 
     fn lex_simple_symbol(&mut self, slice: &[u8]) -> Result<usize, LexError<H::Error>> {
         // find the first byte that is not a simple symbol
-        let after_end = slice
-            .iter()
-            .position(|c| !CharClass::from(*c).is_allowed_in_simple_symbol())
-            .unwrap_or(slice.len());
+        let index = Self::run_end(slice, SIMPLE_SYMBOL);
 
         // extend the token from slice
-        self.token_content.extend_from_slice(&slice[..after_end]);
+        self.token_content.extend_from_slice(&slice[..index]);
 
-        if after_end < slice.len() {
+        if index < slice.len() {
             // we have successfully consumed the symbol, finish it
             // compute the end location, no line feeds are allowed in simple symbols
-            self.finish_simple_symbol(self.current_line_location(after_end))?;
+            self.finish_simple_symbol(self.current_line_location(index))?;
             self.state = LexerState::Normal;
         }
 
-        Ok(after_end)
+        Ok(index)
     }
 
-    fn lex_quoted_symbol(&mut self, slice: &[u8]) -> Result<usize, LexError<H::Error>> {
-        let mut i = 0;
-        while let Some(&c) = slice.get(i) {
-            match c {
-                b'|' => {
+    fn lex_quoted_symbol(&mut self, mut rest: &[u8]) -> Result<usize, LexError<H::Error>> {
+        let mut consumed = 0;
+        loop {
+            // find the first byte that is not a quoted symbol
+            let index = Self::run_end(rest, QUOTED_PLAIN);
+            let after_slice_position = consumed + index + 1;
+
+            // inspect the problematic byte
+            match rest.get(index) {
+                Some(b'|') => {
                     // end of quoted symbol, extend and sink its token
-                    self.token_content.extend_from_slice(&slice[..i]);
-                    self.sink(TokenType::Symbol, self.current_line_location(i + 1))?;
-                    // return to normal, the closing pipe is consumed but not part of the token contents
+                    // the closing pipe is not consumed but delimits the token
+                    self.token_content.extend_from_slice(&rest[..index]);
+                    self.sink(
+                        TokenType::Symbol,
+                        self.current_line_location(after_slice_position),
+                    )?;
+                    // return to normal, consuming bytes including the pipe
                     self.state = LexerState::Normal;
-                    return Ok(i + 1);
+                    return Ok(after_slice_position);
                 }
-                b'\\' => {
+                Some(b'\\') => {
                     // backslash is forbidden in quoted symbols
-                    return Err(
-                        self.error_ending_at(LexerErrorKind::BackslashInQuotedSymbol, i + 1)
-                    );
+                    return Err(self.error_ending_at(
+                        LexerErrorKind::BackslashInQuotedSymbol,
+                        after_slice_position,
+                    ));
                 }
-                b'\n' => {
-                    // mark the line feed
-                    self.mark_line_feed_at(i)
+                Some(b'\n') => {
+                    // mark the line feed at the given position
+                    self.mark_line_feed_at(consumed + index);
+                    // prepare for the next run
+                    // move everything including this LF to token content
+                    self.token_content.extend_from_slice(&rest[..index + 1]);
+                    // take it out of this slice and remember it is consumed
+                    rest = &rest[index + 1..];
+                    consumed += index + 1;
                 }
-                _ => {
-                    if CharClass::from(c).is_printable_or_whitespace() {
-                        // part of the quoted symbol
-                    } else {
-                        // forbidden character
-                        return Err(self
-                            .error_ending_at(LexerErrorKind::ForbiddenCharInQuotedSymbol, i + 1));
-                    }
+                Some(_) => {
+                    // forbidden character
+                    return Err(self.error_ending_at(
+                        LexerErrorKind::ForbiddenCharInQuotedSymbol,
+                        after_slice_position,
+                    ));
+                }
+                None => {
+                    // we ran out of bytes before the token ended
+                    // extend content and keep the quoted symbol state
+                    self.token_content.extend_from_slice(rest);
+                    return Ok(consumed + rest.len());
                 }
             }
-            i += 1;
         }
-        // we ran out of bytes before the token ended
-        // extend content and keep the quoted symbol state
-        self.token_content.extend_from_slice(slice);
-        Ok(slice.len())
     }
 
     fn lex_keyword(&mut self, slice: &[u8]) -> Result<usize, LexError<H::Error>> {
@@ -725,6 +738,16 @@ impl<H: TokenHandler> Lexer<H> {
         // the locations must only refer to positions after it afterwards
         self.line += 1;
         self.line_start = self.offset + position as u64 + 1;
+    }
+
+    #[inline]
+    fn run_end(slice: &[u8], mask: u8) -> usize {
+        // the run is over bytes which have at least one mask flag set
+        // return the byte that ends the run or slice length if there is none
+        slice
+            .iter()
+            .position(|c| FLAGS[*c as usize] & mask == 0)
+            .unwrap_or(slice.len())
     }
 }
 
