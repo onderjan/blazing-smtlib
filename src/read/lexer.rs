@@ -181,7 +181,7 @@ impl<H: TokenHandler> Lexer<H> {
                 // a quote directly before the end of the file
                 self.finish_string_literal()
             }
-            LexerState::SimpleSymbol => self.finish_simple_symbol(),
+            LexerState::SimpleSymbol => self.finish_simple_symbol(self.end_before_byte()),
             LexerState::Keyword => self.finish_keyword(false),
             LexerState::QuotedSymbol => {
                 // EOF forbidden as the symbol must be totally enclosed by pipes
@@ -452,22 +452,23 @@ impl<H: TokenHandler> Lexer<H> {
     }
 
     fn lex_simple_symbol(&mut self, slice: &[u8]) -> Result<usize, LexError<H::Error>> {
-        let c = slice[0];
+        // find the first byte that is not a simple symbol
+        let after_end = slice
+            .iter()
+            .position(|c| !CharClass::from(*c).is_allowed_in_simple_symbol())
+            .unwrap_or(slice.len());
 
-        let class = CharClass::from(c);
-        if class.is_allowed_in_simple_symbol() {
-            // add character
-            self.token_content.push(c);
-        } else {
-            // simple symbol ended at the previous character
-            // finish previously ended token
-            self.finish_simple_symbol()?;
-            // force the byte to be processed normally
+        // extend the token from slice
+        self.token_content.extend_from_slice(&slice[..after_end]);
+
+        if after_end < slice.len() {
+            // we have successfully consumed the symbol, finish it
+            // compute the end location, no line feeds are allowed in simple symbols
+            self.finish_simple_symbol(self.current_line_location(after_end))?;
             self.state = LexerState::Normal;
-            return Ok(0);
         }
 
-        Ok(1)
+        Ok(after_end)
     }
 
     fn lex_quoted_symbol(&mut self, slice: &[u8]) -> Result<usize, LexError<H::Error>> {
@@ -594,7 +595,7 @@ impl<H: TokenHandler> Lexer<H> {
         self.sink(TokenType::Binary, self.end_before_byte())
     }
 
-    fn finish_simple_symbol(&mut self) -> Result<(), LexError<H::Error>> {
+    fn finish_simple_symbol(&mut self, end: SmtLocation) -> Result<(), LexError<H::Error>> {
         // process reserved words
         let token_type = if let Some(reserved) = Reserved::from_symbol_opt(&self.token_content) {
             TokenType::Reserved(reserved)
@@ -602,7 +603,7 @@ impl<H: TokenHandler> Lexer<H> {
             TokenType::Symbol
         };
         // sink new token
-        self.sink(token_type, self.end_before_byte())
+        self.sink(token_type, end)
     }
 
     fn finish_keyword(&mut self, ended_by_byte: bool) -> Result<(), LexError<H::Error>> {
@@ -668,6 +669,15 @@ impl<H: TokenHandler> Lexer<H> {
 
     fn end_after_byte(&self) -> SmtLocation {
         self.current_location().after_column()
+    }
+
+    fn current_line_location(&self, position: usize) -> SmtLocation {
+        // valid if there are no line feeds before the given position
+        //
+        // scanners that can pass a line feed must update line and line_start
+        // before calling this
+        let offset = self.offset + position as u64;
+        SmtLocation::new(offset, self.line, offset - self.line_start)
     }
 
     fn error_end(&self, ended_by_byte: bool) -> SmtLocation {

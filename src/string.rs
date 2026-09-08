@@ -40,6 +40,10 @@ impl String8 {
         self.0.clear();
     }
 
+    pub fn extend_from_slice(&mut self, slice: &[u8]) {
+        self.0.extend_from_slice(slice);
+    }
+
     pub fn push(&mut self, byte: u8) {
         self.0.push(byte);
     }
