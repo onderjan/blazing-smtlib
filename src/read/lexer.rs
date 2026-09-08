@@ -5,7 +5,7 @@ pub(crate) use char_class::CharClass;
 use crate::{
     SmtBinDigitsView, SmtDecimalView, SmtHexDigitsView, SmtKeywordView, SmtLocation,
     SmtNumeralView, SmtSpan, SmtStringContentView, SmtSymbolView, String8,
-    read::lexer::char_class::{FLAGS, QUOTED_PLAIN, SIMPLE_SYMBOL},
+    read::lexer::char_class::{COMMENT_PLAIN, FLAGS, QUOTED_PLAIN, SIMPLE_SYMBOL},
     token::{Reserved, Token, TokenKind, TokenType},
 };
 
@@ -223,19 +223,15 @@ impl<H: TokenHandler> Lexer<H> {
                 LexerState::StringLiteral => self.lex_string_literal(rest, false)?,
                 LexerState::StringLiteralDoubleQuote => self.lex_string_literal(rest, true)?,
                 LexerState::SimpleSymbol => self.lex_simple_symbol(rest)?,
-                LexerState::QuotedSymbol => {
-                    let consumed = self.lex_quoted_symbol(rest)?;
-                    // the newlines are already marked, just advance the offset
-                    self.offset += consumed as u64;
-                    rest = &rest[consumed..];
-                    continue;
-                }
+                LexerState::QuotedSymbol => self.lex_quoted_symbol(rest)?,
                 LexerState::Keyword => self.lex_keyword(rest)?,
                 LexerState::Comment => self.lex_comment(rest)?,
                 LexerState::Failed => panic!("cannot lex after a lexer error"),
             };
-            // advance the position and continue with the rest
-            self.advance(rest, consumed);
+            // advance the offset by the number of consumed bytes
+            // the line positions are updated by the arm functions above
+            self.offset += consumed as u64;
+            // move after consumed bytes
             rest = &rest[consumed..];
         }
         Ok(())
@@ -249,7 +245,13 @@ impl<H: TokenHandler> Lexer<H> {
 
         let state = match CharClass::from(c) {
             // whitespace, just continue lexing
-            CharClass::Tab | CharClass::Space | CharClass::LineBreak => LexerState::Normal,
+            CharClass::Tab | CharClass::Space | CharClass::LineBreak => {
+                // TODO: rework newlines once lexing normal with runs
+                if c == b'\n' {
+                    self.mark_line_feed_at(0);
+                }
+                LexerState::Normal
+            }
 
             // parentheses are tokens of their own
             CharClass::ParenOpen => {
@@ -447,6 +449,10 @@ impl<H: TokenHandler> Lexer<H> {
                 // put the lexer in a special state to handle the next character
                 self.state = LexerState::StringLiteralDoubleQuote;
             } else if CharClass::from(c).is_printable_or_whitespace() {
+                // TODO: rework newlines once lexing string literals with runs
+                if c == b'\n' {
+                    self.mark_line_feed_at(0);
+                }
                 // add to literal
                 self.token_content.push(c);
             } else {
@@ -554,29 +560,25 @@ impl<H: TokenHandler> Lexer<H> {
     }
 
     fn lex_comment(&mut self, slice: &[u8]) -> Result<usize, LexError<H::Error>> {
-        let c = slice[0];
-
-        self.state = if matches!(CharClass::from(c), CharClass::LineBreak) {
-            // end comment, ready for next token
-            LexerState::Normal
-        } else {
-            // continue comment
-            LexerState::Comment
+        // run until comment end
+        let index = Self::run_end(slice, COMMENT_PLAIN);
+        let Some(c) = slice.get(index) else {
+            // the comment continues, just consume the whole slice
+            // and remain in comment state
+            return Ok(slice.len());
         };
 
-        Ok(1)
-    }
-
-    fn advance(&mut self, slice: &[u8], consumed: usize) {
-        for c in slice[..consumed].iter().copied() {
-            self.offset += 1;
-            if c == b'\n' {
-                // increment line number
-                self.line += 1;
-                // the line starts after the newline character
-                self.line_start = self.offset;
-            }
+        // the comment has ended, either by CR or LF
+        // if it ended by LF, we must mark it
+        if *c == b'\n' {
+            self.mark_line_feed_at(index);
         }
+
+        // move back to the normal state
+        self.state = LexerState::Normal;
+
+        // return, consuming up to comment end including it
+        Ok(index + 1)
     }
 
     fn finish_decimal(&mut self, ended_by_byte: bool) -> Result<(), LexError<H::Error>> {
