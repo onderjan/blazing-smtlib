@@ -7,7 +7,7 @@ use crate::{
     SmtNumeralView, SmtSpan, SmtStringContentView, SmtSymbolView, String8,
     read::lexer::char_class::{
         BINARY_DIGIT, COMMENT_PLAIN, DIGIT, FLAGS, HEX_DIGIT, NON_LF_WHITESPACE, QUOTED_PLAIN,
-        SIMPLE_SYMBOL, STRING_PLAIN, run_end,
+        SIMPLE_SYMBOL, STRING_PLAIN, run_end, run_end_short,
     },
     token::{Reserved, Token, TokenKind, TokenType},
 };
@@ -284,7 +284,8 @@ impl<H: TokenHandler> Lexer<H> {
         loop {
             // skip whitespace except for line feeds
             // those must be processed for line offsets
-            index += run_end(&slice[index..], NON_LF_WHITESPACE);
+            // PERFORMANCE: use `run_end_short` as whitespace tends to be extremely short
+            index += run_end_short(&slice[index..], NON_LF_WHITESPACE);
             let c = match slice.get(index) {
                 Some(b'\n') => {
                     // mark the line feed, continue skipping whitespace

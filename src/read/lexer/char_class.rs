@@ -174,14 +174,57 @@ pub(super) static FLAGS: [u8; 256] = {
     table
 };
 
-#[inline]
+/// Whether the byte ends a run as it carries no flags from the mask.
+#[inline(always)]
+fn ends_run(c: u8, mask: u8) -> bool {
+    FLAGS[c as usize] & mask == 0
+}
+
+/// Position of the first byte carrying no flags from the mask, slice length if none.
+///
+/// In other words, the longest prefix where all bytes carry
+/// at least one flag from the mask.
+#[inline(always)]
 pub(super) fn run_end(slice: &[u8], mask: u8) -> usize {
-    // the run is over bytes which have at least one mask flag set
-    // return the byte that ends the run or slice length if there is none
-    slice
-        .iter()
-        .position(|c| FLAGS[*c as usize] & mask == 0)
-        .unwrap_or(slice.len())
+    // PERFORMANCE: Measured as superior to iter().position(), chunks, and SWAR.
+    let mut index = 0;
+    // Consider 4-byte slices until the run end is found or out of bounds.
+    while let Some(&[a, b, c, d]) = slice.get(index..index + 4) {
+        if ends_run(a, mask) {
+            return index;
+        }
+        if ends_run(b, mask) {
+            return index + 1;
+        }
+        if ends_run(c, mask) {
+            return index + 2;
+        }
+        if ends_run(d, mask) {
+            return index + 3;
+        }
+        index += 4;
+    }
+    // Evaluate the rest (at most 3 bytes, so the shape does not matter).
+    let tail = &slice[index..];
+    index
+        + tail
+            .iter()
+            .position(|&c| ends_run(c, mask))
+            .unwrap_or(tail.len())
+}
+
+/// Optimisation of `run_end` for runs that are almost always extremely short.
+#[inline(always)]
+pub(super) fn run_end_short(slice: &[u8], mask: u8) -> usize {
+    // PERFORMANCE: superior for runs that are almost always 0-1 bytes long.
+    // This is especially useful for discarding whitespace.
+    match slice {
+        [] => 0,
+        [a, ..] if ends_run(*a, mask) => 0,
+        [_] => 1,
+        [_, b, ..] if ends_run(*b, mask) => 1,
+        _ => 2 + run_end(&slice[2..], mask),
+    }
 }
 
 #[cfg(test)]
