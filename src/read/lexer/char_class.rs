@@ -173,3 +173,13 @@ pub(super) static FLAGS: [u8; 256] = {
     }
     table
 };
+
+#[inline]
+pub(super) fn run_end(slice: &[u8], mask: u8) -> usize {
+    // the run is over bytes which have at least one mask flag set
+    // return the byte that ends the run or slice length if there is none
+    slice
+        .iter()
+        .position(|c| FLAGS[*c as usize] & mask == 0)
+        .unwrap_or(slice.len())
+}

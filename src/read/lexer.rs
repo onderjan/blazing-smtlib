@@ -7,7 +7,7 @@ use crate::{
     SmtNumeralView, SmtSpan, SmtStringContentView, SmtSymbolView, String8,
     read::lexer::char_class::{
         BINARY_DIGIT, COMMENT_PLAIN, DIGIT, FLAGS, HEX_DIGIT, NON_LF_WHITESPACE, QUOTED_PLAIN,
-        SIMPLE_SYMBOL, STRING_PLAIN,
+        SIMPLE_SYMBOL, STRING_PLAIN, run_end,
     },
     token::{Reserved, Token, TokenKind, TokenType},
 };
@@ -284,7 +284,7 @@ impl<H: TokenHandler> Lexer<H> {
         loop {
             // skip whitespace except for line feeds
             // those must be processed for line offsets
-            index += Self::run_end(&slice[index..], NON_LF_WHITESPACE);
+            index += run_end(&slice[index..], NON_LF_WHITESPACE);
             let c = match slice.get(index) {
                 Some(b'\n') => {
                     // mark the line feed, continue skipping whitespace
@@ -350,7 +350,7 @@ impl<H: TokenHandler> Lexer<H> {
 
     fn lex_numeral_or_decimal(&mut self, slice: &[u8]) -> Result<usize, LexError<H::Error>> {
         // find the first byte that is not a digit
-        let index = Self::run_end(slice, DIGIT);
+        let index = run_end(slice, DIGIT);
 
         // check that we are not in a leading zero condition
         // this could not have been done when starting the numeral/decimal
@@ -395,7 +395,7 @@ impl<H: TokenHandler> Lexer<H> {
         start: usize,
     ) -> Result<usize, LexError<H::Error>> {
         // find the first byte in the remainder that is not a digit
-        let end = start + Self::run_end(&slice[start..], DIGIT);
+        let end = start + run_end(&slice[start..], DIGIT);
         // extend the token from slice
         self.token_content.extend_from_slice(&slice[start..end]);
         if end < slice.len() {
@@ -425,7 +425,7 @@ impl<H: TokenHandler> Lexer<H> {
     /// Lexes a digit run, either hexadecimal or binary.
     fn lex_digit_run(&mut self, slice: &[u8], run: DigitRun) -> Result<usize, LexError<H::Error>> {
         // find the first byte that is not allowed in the run
-        let index = Self::run_end(slice, run.flag);
+        let index = run_end(slice, run.flag);
         // extend the token from slice
         self.token_content.extend_from_slice(&slice[..index]);
         if index < slice.len() {
@@ -463,7 +463,7 @@ impl<H: TokenHandler> Lexer<H> {
             }
 
             // find the first byte that is not a plain string byte
-            let index = Self::run_end(rest, STRING_PLAIN);
+            let index = run_end(rest, STRING_PLAIN);
 
             match rest.get(index) {
                 Some(b'\n') => {
@@ -507,7 +507,7 @@ impl<H: TokenHandler> Lexer<H> {
 
     fn lex_simple_symbol(&mut self, slice: &[u8]) -> Result<usize, LexError<H::Error>> {
         // find the first byte that is not a simple symbol
-        let index = Self::run_end(slice, SIMPLE_SYMBOL);
+        let index = run_end(slice, SIMPLE_SYMBOL);
 
         // extend the token from slice
         self.token_content.extend_from_slice(&slice[..index]);
@@ -526,7 +526,7 @@ impl<H: TokenHandler> Lexer<H> {
         let mut consumed = 0;
         loop {
             // find the first byte that is not a quoted symbol
-            let index = Self::run_end(rest, QUOTED_PLAIN);
+            let index = run_end(rest, QUOTED_PLAIN);
             let after_slice_position = consumed + index + 1;
 
             // inspect the problematic byte
@@ -581,7 +581,7 @@ impl<H: TokenHandler> Lexer<H> {
         }
 
         // find the first byte that is not simple-symbol-like
-        let index = Self::run_end(slice, SIMPLE_SYMBOL);
+        let index = run_end(slice, SIMPLE_SYMBOL);
 
         // extend the token from slice
         self.token_content.extend_from_slice(&slice[..index]);
@@ -598,7 +598,7 @@ impl<H: TokenHandler> Lexer<H> {
 
     fn lex_comment(&mut self, slice: &[u8]) -> Result<usize, LexError<H::Error>> {
         // run until comment end
-        let index = Self::run_end(slice, COMMENT_PLAIN);
+        let index = run_end(slice, COMMENT_PLAIN);
         let Some(c) = slice.get(index) else {
             // the comment continues, just consume the whole slice
             // and remain in comment state
@@ -721,16 +721,6 @@ impl<H: TokenHandler> Lexer<H> {
         // the locations must only refer to positions after it afterwards
         self.line += 1;
         self.line_start = self.offset + position as u64 + 1;
-    }
-
-    #[inline]
-    fn run_end(slice: &[u8], mask: u8) -> usize {
-        // the run is over bytes which have at least one mask flag set
-        // return the byte that ends the run or slice length if there is none
-        slice
-            .iter()
-            .position(|c| FLAGS[*c as usize] & mask == 0)
-            .unwrap_or(slice.len())
     }
 
     /// Location of `position` in the current slice.
