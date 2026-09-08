@@ -813,3 +813,282 @@ fn handler_errors_are_raised_where_the_token_is_produced_in_every_chunking() {
         }
     }
 }
+
+// --- Every run length at every alignment ---
+//
+// A scanner that works in 16- or 32-byte windows can fail at any run length
+// relative to a window and at any alignment of the run within the slice.
+// The long-token tests sample lengths; these try every length up to 70 and
+// every start position up to 3, for every kind of run the lexer scans.
+
+/// Builds the token source of a given run length and says what token and
+/// payload to expect, or `None` if the length is not valid for the kind.
+type BuildRun = fn(usize) -> Option<(Vec<u8>, TokenType, Vec<u8>)>;
+
+/// One kind of run the lexer scans.
+struct RunKind {
+    name: &'static str,
+    build: BuildRun,
+}
+
+const RUN_KINDS: &[RunKind] = &[
+    RunKind {
+        name: "simple symbol",
+        build: |n| (n > 0).then(|| (vec![b'a'; n], TokenType::Symbol, vec![b'a'; n])),
+    },
+    RunKind {
+        name: "quoted symbol",
+        build: |n| {
+            let source = [b"|".as_slice(), &vec![b'q'; n], b"|"].concat();
+            Some((source, TokenType::Symbol, vec![b'q'; n]))
+        },
+    },
+    RunKind {
+        name: "string literal",
+        build: |n| {
+            let source = [b"\"".as_slice(), &vec![b's'; n], b"\""].concat();
+            Some((source, TokenType::String, vec![b's'; n]))
+        },
+    },
+    RunKind {
+        name: "keyword",
+        build: |n| {
+            (n > 0).then(|| {
+                let source = [b":".as_slice(), &vec![b'k'; n]].concat();
+                (source, TokenType::Keyword, vec![b'k'; n])
+            })
+        },
+    },
+    RunKind {
+        name: "numeral",
+        build: |n| (n > 0).then(|| (vec![b'7'; n], TokenType::Numeral, vec![b'7'; n])),
+    },
+    RunKind {
+        name: "decimal fraction",
+        build: |n| {
+            (n > 0).then(|| {
+                let source = [b"1.".as_slice(), &vec![b'5'; n]].concat();
+                (source.clone(), TokenType::Decimal, source)
+            })
+        },
+    },
+    RunKind {
+        name: "hexadecimal",
+        build: |n| {
+            (n > 0).then(|| {
+                let source = [b"#x".as_slice(), &vec![b'A'; n]].concat();
+                (source, TokenType::Hexadecimal, vec![b'A'; n])
+            })
+        },
+    },
+    RunKind {
+        name: "binary",
+        build: |n| {
+            (n > 0).then(|| {
+                let source = [b"#b".as_slice(), &vec![b'1'; n]].concat();
+                (source, TokenType::Binary, vec![b'1'; n])
+            })
+        },
+    },
+];
+
+#[test]
+fn every_run_length_at_every_alignment_lexes_correctly() {
+    for kind in RUN_KINDS {
+        for prefix in 0..4usize {
+            for run_length in 0..=70usize {
+                let Some((source, ty, payload)) = (kind.build)(run_length) else {
+                    continue;
+                };
+                // the token starts at `prefix`, ends at a parenthesis, and
+                // is followed by another token so that its end is inside the slice
+                let mut input = vec![b' '; prefix];
+                input.extend_from_slice(&source);
+                input.extend_from_slice(b")x");
+
+                let reference = lex_whole(&input);
+                assert!(
+                    reference.error.is_none(),
+                    "{}: {:?}",
+                    kind.name,
+                    reference.error
+                );
+                let token = &reference.tokens[0];
+                let describe = format!("{} of length {run_length} at {prefix}", kind.name);
+                assert_eq!(token.ty, ty, "{describe}");
+                assert_eq!(token.content, payload, "{describe}");
+                assert_eq!(
+                    (
+                        token.span.start().offset() as usize,
+                        token.span.end().offset() as usize
+                    ),
+                    (prefix, prefix + source.len()),
+                    "{describe}: span"
+                );
+                assert_eq!(reference.tokens[1].ty, TokenType::ParenClose, "{describe}");
+
+                for chunk_length in [1usize, 3, 16, 17, 32, 33] {
+                    let chunks = split_by_lengths(&input, &[chunk_length]);
+                    assert_same_outcome(&input, &reference, &chunks);
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn every_comment_and_whitespace_run_length_at_every_alignment() {
+    for prefix in 0..4usize {
+        for run_length in 0..=70usize {
+            // a comment of the given length, then a symbol on the next line
+            let mut input = vec![b' '; prefix];
+            input.push(b';');
+            input.extend(std::iter::repeat_n(b'c', run_length));
+            input.extend_from_slice(b"\nx");
+            let reference = lex_whole(&input);
+            let x_start = (prefix + 1 + run_length + 1) as u64;
+            assert_eq!(
+                (
+                    reference.tokens[0].ty,
+                    loc(reference.tokens[0].span.start()),
+                    loc(reference.tokens[0].span.end())
+                ),
+                (TokenType::Symbol, (x_start, 1, 0), (x_start + 1, 1, 1)),
+                "comment of length {run_length} at {prefix}"
+            );
+            for chunk_length in [1usize, 3, 16, 17, 32, 33] {
+                let chunks = split_by_lengths(&input, &[chunk_length]);
+                assert_same_outcome(&input, &reference, &chunks);
+            }
+
+            // a whitespace run of the given length between two symbols, with a
+            // line feed in it when there is room, so the line changes too
+            // (without whitespace the two symbols would be one)
+            if run_length == 0 {
+                continue;
+            }
+            let mut whitespace = vec![b' '; run_length];
+            if run_length > 2 {
+                whitespace[run_length / 2] = b'\n';
+            }
+            let mut input = vec![b'\t'; prefix];
+            input.push(b'a');
+            input.extend_from_slice(&whitespace);
+            input.push(b'b');
+            let reference = lex_whole(&input);
+            let b_start = (prefix + 1 + run_length) as u64;
+            let (line, column) = if run_length > 2 {
+                (1, (run_length - run_length / 2 - 1) as u64)
+            } else {
+                (0, b_start)
+            };
+            assert_eq!(
+                (
+                    reference.tokens[1].ty,
+                    loc(reference.tokens[1].span.start())
+                ),
+                (TokenType::Symbol, (b_start, line, column)),
+                "whitespace run of length {run_length} at {prefix}"
+            );
+            for chunk_length in [1usize, 3, 16, 17, 32, 33] {
+                let chunks = split_by_lengths(&input, &[chunk_length]);
+                assert_same_outcome(&input, &reference, &chunks);
+            }
+        }
+    }
+}
+
+// --- Slices inside a larger buffer ---
+//
+// Scanning must look only at the slice it was given. The bytes after a slice
+// in the same buffer are chosen so that reading them would change the
+// outcome: they continue the last run, or terminate it differently.
+
+#[test]
+fn a_slice_inside_a_larger_buffer_lexes_like_a_copy_of_itself() {
+    // what follows the slice in memory: run continuations of every kind,
+    // terminators, delimiters, and line feeds
+    let trailers: &[&[u8]] = &[
+        b"abc",
+        b"123",
+        b"fff",
+        b")",
+        b"\"\"",
+        b"|",
+        b"\n\n",
+        b" ; comment\n",
+        b"\\",
+        b"\x01",
+    ];
+    let leaders: &[&[u8]] = &[b"", b"xyz", b"\"", b"|", b"\n"];
+    for input in all_inputs() {
+        let reference = lex_whole(input);
+        for leader in leaders {
+            for trailer in trailers {
+                let buffer = [leader, input, trailer].concat();
+                let inner = &buffer[leader.len()..leader.len() + input.len()];
+                // as one slice
+                assert_same_outcome(inner, &reference, &[inner]);
+                // and cut in two inside the buffer, so both chunks have
+                // foreign bytes right after them
+                for split in [1usize, input.len() / 2, input.len().saturating_sub(1)] {
+                    if split <= inner.len() {
+                        let (first, second) = inner.split_at(split);
+                        assert_same_outcome(inner, &reference, &[first, second]);
+                    }
+                }
+            }
+        }
+    }
+}
+
+// --- Payloads from different sources in one slice ---
+//
+// Once token contents borrow from the input where they can, a slice may hand
+// out payloads that live in the input (tokens fully inside the slice), in the
+// lexer's own buffer (tokens cut by the previous boundary, strings with
+// escapes), and in the input again, in any order. Every payload must be the
+// token's own bytes regardless of where it came from and what came before.
+
+#[test]
+fn payloads_from_cut_tokens_escaped_strings_and_plain_tokens_alternate_correctly() {
+    let chunks: &[&[u8]] = &[
+        b"ab",                     // symbol cut here
+        b"cd \"x\"\"y\" \"z\" |q", // continued symbol, escaped string, plain string, quoted cut here
+        b"r| s #x1",               // continued quoted, plain symbol, hex cut here
+        b"F 12",                   // continued hex, numeral cut here (at slice end)
+        b"3.5 |\n| :k",            // continued decimal, quoted with line feed, keyword cut
+        b"w\"\"\"\"",              // continued keyword, string of one escaped quote
+    ];
+    let input: Vec<u8> = chunks.concat();
+    let outcome = lex_chunks(&input, chunks);
+    assert!(outcome.error.is_none(), "{:?}", outcome.error);
+    let payloads: Vec<(TokenType, Vec<u8>)> = outcome
+        .tokens
+        .iter()
+        .map(|token| (token.ty, token.content.clone()))
+        .collect();
+    assert_eq!(
+        payloads,
+        vec![
+            (TokenType::Symbol, b"abcd".to_vec()),
+            (TokenType::String, b"x\"y".to_vec()),
+            (TokenType::String, b"z".to_vec()),
+            (TokenType::Symbol, b"qr".to_vec()),
+            (TokenType::Symbol, b"s".to_vec()),
+            (TokenType::Hexadecimal, b"1F".to_vec()),
+            (TokenType::Decimal, b"123.5".to_vec()),
+            (TokenType::Symbol, b"\n".to_vec()),
+            (TokenType::Keyword, b"kw".to_vec()),
+            (TokenType::String, b"\"".to_vec()),
+            (TokenType::EndOfFile, vec![]),
+        ]
+    );
+    // and the same input in every other chunking agrees
+    let reference = lex_whole(&input);
+    assert_same_outcome(&input, &reference, chunks);
+    for chunk_length in 1..=input.len() {
+        let chunks = split_by_lengths(&input, &[chunk_length]);
+        assert_same_outcome(&input, &reference, &chunks);
+    }
+}
