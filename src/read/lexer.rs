@@ -358,7 +358,7 @@ impl<H: TokenHandler> Lexer<H> {
 
     fn lex_fraction(&mut self, slice: &[u8]) -> Result<usize, LexError<H::Error>> {
         // find the first byte that is not a digit
-        let index = Self::run_end(slice, HEX_DIGIT);
+        let index = Self::run_end(slice, DIGIT);
 
         // extend the token from slice
         self.token_content.extend_from_slice(&slice[..index]);

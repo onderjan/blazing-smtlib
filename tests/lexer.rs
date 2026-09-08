@@ -1047,3 +1047,49 @@ fn whitespace_and_comments_with_several_line_breaks() {
         ]
     );
 }
+
+// --- Fraction digits are decimal digits only ---
+
+#[test]
+fn decimal_fraction_ends_at_a_letter() {
+    // hexadecimal letters are not fraction digits: the decimal ends before
+    // them and the letters start a symbol
+    assert_eq!(
+        token_payloads(b"1.5a 2.0e 3.25fed)"),
+        vec![
+            (TokenType::Decimal, b"1.5".to_vec()),
+            (TokenType::Symbol, b"a".to_vec()),
+            (TokenType::Decimal, b"2.0".to_vec()),
+            (TokenType::Symbol, b"e".to_vec()),
+            (TokenType::Decimal, b"3.25".to_vec()),
+            (TokenType::Symbol, b"fed".to_vec()),
+            (TokenType::ParenClose, vec![]),
+            (TokenType::EndOfFile, vec![]),
+        ]
+    );
+    assert_eq!(
+        token_spans(b"1.5a"),
+        vec![
+            (TokenType::Decimal, (0, 0, 0), (3, 0, 3)),
+            (TokenType::Symbol, (3, 0, 3), (4, 0, 4)),
+            (TokenType::EndOfFile, (4, 0, 4), (4, 0, 4)),
+        ]
+    );
+}
+
+#[test]
+fn fraction_digit_expected_before_a_letter() {
+    // a letter right after the dot is not a fraction digit either
+    assert_error(
+        b"1.a",
+        LexerErrorKind::FractionDigitExpected,
+        (0, 0, 0),
+        (3, 0, 3),
+    );
+    assert_error(
+        b"7.F",
+        LexerErrorKind::FractionDigitExpected,
+        (0, 0, 0),
+        (3, 0, 3),
+    );
+}

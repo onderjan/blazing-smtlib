@@ -261,6 +261,8 @@ const VALID_INPUTS: &[&[u8]] = &[
     b"(a b)\n\n\n  \t (c)",
     b"forall exists let ! _ as match par lambda BINARY DECIMAL HEXADECIMAL NUMERAL STRING",
     b"0 0.5 10.25 123456789 9.0",
+    // letters directly after decimals: hexadecimal letters are not fraction digits
+    b"1.5a 2.0e 3.25fed)",
     b"#xDEADbeef #b0101 #x0 #b1",
     b":named :pattern :a1 :_x :+",
     b"\"\xC3\xA9\" |\xFF|",
@@ -277,6 +279,8 @@ const ERROR_INPUTS: &[&[u8]] = &[
     b"1.",
     b"1.)",
     b"(assert 1.)",
+    b"1.a",
+    b"7.F",
     b"#",
     b"# ",
     b"#x",
