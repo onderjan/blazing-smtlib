@@ -64,39 +64,32 @@ const fn file(label: &'static str, path: &'static str) -> BenchFile {
 
 /// Benchmarked files.
 ///
-/// The QF_BV files span different families (and thus different mixes of
-/// symbols, literals, and term shapes) at sizes big enough for stable timing
-/// yet small enough to keep a full run in seconds. Throughput was measured to
-/// be independent of file size, so mid-size files stand in for the giant
-/// ones. The remaining files each cover a syntactic path the QF_BV files do
-/// not exercise: quantifiers and datatypes, string literals, many tiny
-/// commands, incremental scripts, and let-heavy terms.
+/// Each file was chosen for a syntactic path it exercises more than the
+/// others do (see the comments; `SMT_BENCH_FORMAT=census` prints the actual
+/// counts), at a size big enough for stable timing yet small enough to keep
+/// a full run around ten seconds. Throughput was measured to be independent
+/// of file size, so mid-size files stand in for the giant ones. Constructs
+/// that the corpus hardly contains at all in files of usable size (`as`,
+/// `match`, `par`, `lambda`, `check-sat-assuming`, `get-value`,
+/// `define-sort`, `define-funs-rec`, and more than a handful of datatype
+/// declarations per file) are left to the tests.
 const FILES: &[BenchFile] = &[
-    // small file: dominated by per-command and small-term overhead
-    file(
-        "qf_bv/modulus_true.21",
-        "non-incremental/QF_BV/bmc-bv-svcomp14/modulus_true.c.21.smt2",
-    ),
-    // BMC software unrolling
+    // BMC software unrolling: long symbols, the deepest QF_BV terms
     file(
         "qf_bv/soft_float_1.17",
         "non-incremental/QF_BV/bmc-bv-svcomp14/soft_float_1_true.c.cil.c.17.smt2",
     ),
     // multiple constant multiplication encodings: deep bit-vector arithmetic,
-    // very short tokens, the highest per-application cost in the set
+    // three bytes per token, the highest per-application cost in the set
     file("qf_bv/mcm-186", "non-incremental/QF_BV/mcm/186.smt2"),
-    // answer set programming translations
-    file(
-        "qf_bv/laby_18_18_13",
-        "non-incremental/QF_BV/asp/Labyrinth/laby_18_18_13.lp.smt2",
-    ),
-    // symbolic execution queries
+    // symbolic execution queries: over 200 thousand indexed identifiers,
+    // 150 thousand small assertions and declarations
     file(
         "qf_bv/catchconv-15803",
         "non-incremental/QF_BV/uclid/catchconv/catchconv-15803.smt2",
     ),
     // Verus verification conditions: thousands of quantified assertions
-    // with patterns, let terms, and datatype declarations
+    // with pattern annotations, let terms, and datatype declarations
     file(
         "ufdtlia/verus-zookeeper-7",
         "non-incremental/UFDTLIA/20241211-verus/anvil/\
@@ -115,19 +108,49 @@ const FILES: &[BenchFile] = &[
         "qf_ufdt/vlsat3_k44",
         "non-incremental/QF_UFDT/20210312-Bouvier/vlsat3_k44.smt2",
     ),
-    // k-induction software verification: incremental script of over
-    // 200 thousand small define-fun commands with push and pop
+    // hybrid automata encoding: the densest decimals in the corpus, in let
+    // terms nested almost nine thousand levels deep
     file(
-        "inc-qf_abv/cpachecker-rtl8192e",
-        "incremental/QF_ABV/20190307-CPAchecker_kInduction-SoSy_Lab/\
-         32_7a_cilled_linux-3.8-rc1-32_7a-drivers--staging--rtl8192e--rtl8192e--\
-         r8192e_pci.ko-ldv_main7_sequence_infinite_withcheck_stateful.cil.out_smt-query.0.smt2",
+        "qf_nra/hycomp-etcs_braking",
+        "non-incremental/QF_NRA/hycomp/etcs_braking_2.01.seq_lazy_lemmas_global_15.smt2",
+    ),
+    // temporal planning: a single assertion of let terms nested almost nine
+    // thousand levels deep
+    file(
+        "qf_rdl/tempo-width-6",
+        "non-incremental/QF_RDL/SMT-Temporal-Planning-Benchmarks/tempo-width-6.smt2",
+    ),
+    // k-induction software verification: incremental script of 60 thousand
+    // small define-fun commands with push
+    file(
+        "inc-qf_bv/cpachecker-problem12",
+        "incremental/QF_BV/20190307-CPAchecker_kInduction-SoSy_Lab/\
+         Problem12_label08_smt-query.0.smt2",
+    ),
+    // bounded model checking of weak memory models: over 200 thousand quoted
+    // symbols, hexadecimal literals, over a hundred check-sat rounds
+    file(
+        "inc-qf_bv/dartagnan-3631839658",
+        "incremental/QF_BV/20250315-BMC_WMM/dartagnan-3631839658.ll.smt2",
+    ),
+    // embedded floating-point code: tens of thousands of hexadecimal and
+    // hundreds of binary literals in fp terms, let terms, push and pop
+    file(
+        "inc-qf_abvfp/vector-automotive-33c13c0e",
+        "incremental/QF_ABVFP/20210211-Vector/Automotive_C/33c13c0e.smt2",
     ),
     // Kind model checker: incremental script whose assertions are dominated
     // by let bindings
     file(
         "inc-qf_uflia/kind-microwave11",
         "incremental/QF_UFLIA/kind/microwave11.ec.smt2",
+    ),
+    // access control policies: thousands of existential quantifiers, and a
+    // set-info with attributes before each of almost eight thousand
+    // check-sat rounds
+    file(
+        "inc-uflra/asasp-2_2_19",
+        "incremental/UFLRA/asasp/hierarchy_explicit/bench_2_2_19_random10.smt2",
     ),
 ];
 
