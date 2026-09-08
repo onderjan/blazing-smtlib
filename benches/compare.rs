@@ -10,21 +10,23 @@
 //! Usage (arguments after `--` go to this driver):
 //!
 //! ```text
-//! cargo bench --bench compare -- <baseline-rev> [<head-rev>] [options]
+//! cargo bench --bench compare -- <baseline> [<head>] [options]
 //! ```
 //!
-//! Revisions are anything `git rev-parse` accepts. The baseline (and the head,
-//! if given) is checked out into a detached worktree under
-//! `target/compare/<commit>` and built there; worktrees are reused between
-//! invocations and can be removed with `git worktree remove` (after a
-//! `cargo clean` has deleted them, `git worktree prune` drops the stale
-//! registrations). Without a head revision the head is the current working
-//! tree, uncommitted changes included, so the usual workflow is
-//! `cargo bench --bench compare -- HEAD` after editing. The untracked
-//! `Cargo.lock` and the current `benches/parse.rs` are copied into each
-//! worktree, so both sides run the same measurement code against their own
-//! library; this requires the baseline to still offer the small API the bench
-//! uses.
+//! Each side is either a git revision or the path of an already built `parse`
+//! bench binary (anything that is an existing file is taken as a binary),
+//! which allows measuring experimental builds made outside the repository.
+//! Revisions are anything `git rev-parse` accepts. A revision is checked out
+//! into a detached worktree under `target/compare/<commit>` and built there;
+//! worktrees are reused between invocations and can be removed with
+//! `git worktree remove` (after a `cargo clean` has deleted them,
+//! `git worktree prune` drops the stale registrations). Without a head the
+//! head is the current working tree, uncommitted changes included, so the
+//! usual workflow is `cargo bench --bench compare -- HEAD` after editing. The
+//! untracked `Cargo.lock` and the current `benches/parse.rs` are copied into
+//! each worktree, so both sides run the same measurement code against their
+//! own library; this requires the baseline to still offer the small API the
+//! bench uses.
 //!
 //! Options:
 //!
@@ -57,7 +59,7 @@ struct Options {
 }
 
 fn usage() -> String {
-    "usage: cargo bench --bench compare -- <baseline-rev> [<head-rev>] \
+    "usage: cargo bench --bench compare -- <baseline> [<head>] \
      [--rounds N] [--iterations N] [--files a,b,...] [--mode lex|full|both]"
         .to_string()
 }
@@ -151,6 +153,19 @@ fn git(root: &Path, args: &[&str]) -> Result<String, String> {
 struct Side {
     name: String,
     binary: PathBuf,
+}
+
+/// Resolves a side given on the command line: the path of an existing file is
+/// taken as a built `parse` bench binary, anything else as a git revision.
+fn resolve_side(root: &Path, side: &str) -> Result<Side, String> {
+    let path = Path::new(side);
+    if path.is_file() {
+        return Ok(Side {
+            name: format!("binary {side}"),
+            binary: path.to_path_buf(),
+        });
+    }
+    build_revision(root, side)
 }
 
 /// Resolves the revision to a commit, checks it out into a worktree under
@@ -346,9 +361,9 @@ fn main_inner() -> Result<(), String> {
         None => root.join("benchmarks/2025"),
     };
 
-    let baseline = build_revision(root, &options.baseline)?;
+    let baseline = resolve_side(root, &options.baseline)?;
     let head = match &options.head {
-        Some(revision) => build_revision(root, revision)?,
+        Some(side) => resolve_side(root, side)?,
         None => build_working_tree(root)?,
     };
 
