@@ -121,6 +121,28 @@ const BINARY_RUN: DigitRun = DigitRun {
     empty_error: LexerErrorKind::BinaryDigitExpected,
 };
 
+/// Helper struct for where a token ended.
+#[derive(Clone, Copy)]
+struct TokenEnd {
+    /// The position after `Lexer.offset` where the token ended.
+    position: usize,
+    /// Whether the token end was detected at a byte that is not a part of the token.
+    at_byte: bool,
+}
+
+impl TokenEnd {
+    const EOF: TokenEnd = TokenEnd {
+        position: 0,
+        at_byte: false,
+    };
+    fn at_byte(position: usize) -> Self {
+        TokenEnd {
+            position,
+            at_byte: true,
+        }
+    }
+}
+
 impl<H: TokenHandler> Lexer<H> {
     /// Constructs the lexer.
     pub fn new(handler: H) -> Self {
@@ -136,9 +158,7 @@ impl<H: TokenHandler> Lexer<H> {
     }
 
     pub fn current_location(&self) -> SmtLocation {
-        // the column is computed by subtracting the line start offset from current offset
-        let column = self.offset - self.line_start;
-        SmtLocation::new(self.offset, self.line, column)
+        self.location_at(0)
     }
 
     /// Lexes the whole input including EOF at the end.
@@ -184,29 +204,29 @@ impl<H: TokenHandler> Lexer<H> {
                 // nothing to do, we accept EOF even in comments
                 Ok(())
             }
-            LexerState::Fraction => self.finish_decimal(0, false),
-            LexerState::NumeralOrDecimal => self.finish_numeral(self.end_before_byte()),
-            LexerState::Hexadecimal => self.finish_digit_run(HEXADECIMAL_RUN, 0, false),
-            LexerState::Binary => self.finish_digit_run(BINARY_RUN, 0, false),
+            LexerState::Fraction => self.finish_decimal(TokenEnd::EOF),
+            LexerState::NumeralOrDecimal => self.finish_numeral(TokenEnd::EOF),
+            LexerState::Hexadecimal => self.finish_digit_run(HEXADECIMAL_RUN, TokenEnd::EOF),
+            LexerState::Binary => self.finish_digit_run(BINARY_RUN, TokenEnd::EOF),
             LexerState::BaseSelection => {
                 // hash without selection following it
-                Err(self.current_token_error(LexerErrorKind::BaseSelectionExpected, false))
+                Err(self.error(LexerErrorKind::BaseSelectionExpected, TokenEnd::EOF))
             }
             LexerState::StringLiteral => {
                 // we are still within the string literal
                 // forbidden as the literal must be totally enclosed by double quotes
-                Err(self.current_token_error(LexerErrorKind::UnclosedStringLiteral, false))
+                Err(self.error(LexerErrorKind::UnclosedStringLiteral, TokenEnd::EOF))
             }
             LexerState::StringLiteralDoubleQuote => {
                 // string literal has ended by the previous character,
                 // a quote directly before the end of the file
-                self.finish_string_literal(self.end_before_byte())
+                self.finish_string_literal(TokenEnd::EOF)
             }
-            LexerState::SimpleSymbol => self.finish_simple_symbol(self.end_before_byte()),
-            LexerState::Keyword => self.finish_keyword(0, false),
+            LexerState::SimpleSymbol => self.finish_simple_symbol(TokenEnd::EOF),
+            LexerState::Keyword => self.finish_keyword(TokenEnd::EOF),
             LexerState::QuotedSymbol => {
                 // EOF forbidden as the symbol must be totally enclosed by pipes
-                Err(self.current_token_error(LexerErrorKind::UnclosedQuotedSymbol, false))
+                Err(self.error(LexerErrorKind::UnclosedQuotedSymbol, TokenEnd::EOF))
             }
             LexerState::Failed => {
                 panic!("cannot lex after a lexer error")
@@ -214,8 +234,8 @@ impl<H: TokenHandler> Lexer<H> {
         };
 
         // everything processed, start the EOF token and sink it
-        self.start_token();
-        let result = result.and_then(|()| self.sink(TokenType::EndOfFile, self.end_before_byte()));
+        self.start_token(0);
+        let result = result.and_then(|()| self.sink(TokenType::EndOfFile, TokenEnd::EOF));
 
         match result {
             Ok(()) => {
@@ -283,12 +303,12 @@ impl<H: TokenHandler> Lexer<H> {
             };
 
             // start the token as we are in the normal state
-            self.start_token_at_current_line(index);
+            self.start_token(index);
             let state = match c {
                 b'(' => {
                     // parentheses are tokens of their own
                     // sink the token
-                    self.sink(TokenType::ParenOpen, self.current_line_location(index + 1))?;
+                    self.sink(TokenType::ParenOpen, TokenEnd::at_byte(index + 1))?;
                     // since we are back in the normal state, just increment the index and continue the loop
                     index += 1;
                     continue;
@@ -296,7 +316,7 @@ impl<H: TokenHandler> Lexer<H> {
                 b')' => {
                     // parentheses are tokens of their own
                     // sink the token
-                    self.sink(TokenType::ParenClose, self.current_line_location(index + 1))?;
+                    self.sink(TokenType::ParenClose, TokenEnd::at_byte(index + 1))?;
                     // since we are back in the normal state, just increment the index and continue the loop
                     index += 1;
                     continue;
@@ -317,9 +337,7 @@ impl<H: TokenHandler> Lexer<H> {
                         self.token_content.push(c);
                         LexerState::SimpleSymbol
                     } else {
-                        return Err(
-                            self.error_ending_at(LexerErrorKind::UnexpectedCharacter, index + 1)
-                        );
+                        return Err(self.error_at(LexerErrorKind::UnexpectedCharacter, index + 1));
                     }
                 }
             };
@@ -343,7 +361,7 @@ impl<H: TokenHandler> Lexer<H> {
         // 1. at least one additional digit has been consumed
         // 2. the content parsed previously is exactly "0"
         if index > 0 && self.token_content.as_slice() == b"0" {
-            return Err(self.current_token_error(LexerErrorKind::NumeralLeadingZero, true));
+            return Err(self.error_at(LexerErrorKind::NumeralLeadingZero, 1));
         }
 
         // extend the token from slice
@@ -359,7 +377,7 @@ impl<H: TokenHandler> Lexer<H> {
             Some(_) => {
                 // we have successfully consumed the numeral, finish it
                 // compute the end location, no line feeds are allowed in simple symbols
-                self.finish_numeral(self.current_line_location(index))?;
+                self.finish_numeral(TokenEnd::at_byte(index))?;
                 // move back to normal lexer state, not consuming the current byte
                 self.state = LexerState::Normal;
                 Ok(index)
@@ -383,7 +401,7 @@ impl<H: TokenHandler> Lexer<H> {
         if end < slice.len() {
             // we have successfully consumed the fraction, finish the decimal
             // compute the end location, no line feeds are allowed in simple symbols
-            self.finish_decimal(end, true)?;
+            self.finish_decimal(TokenEnd::at_byte(end))?;
             self.state = LexerState::Normal;
         } else {
             // we ran out of bytes for now
@@ -398,7 +416,7 @@ impl<H: TokenHandler> Lexer<H> {
             b'x' => LexerState::Hexadecimal,
             b'b' => LexerState::Binary,
             _ => {
-                return Err(self.current_token_error(LexerErrorKind::BaseSelectionExpected, true));
+                return Err(self.error_at(LexerErrorKind::BaseSelectionExpected, 1));
             }
         };
         Ok(1)
@@ -413,7 +431,7 @@ impl<H: TokenHandler> Lexer<H> {
         if index < slice.len() {
             // we have successfully consumed the digit run, finish it
             // compute the end location, no line feeds are allowed in simple symbols
-            self.finish_digit_run(run, index, true)?;
+            self.finish_digit_run(run, TokenEnd::at_byte(index))?;
             self.state = LexerState::Normal;
         }
         Ok(index)
@@ -428,7 +446,7 @@ impl<H: TokenHandler> Lexer<H> {
                 if rest[0] != b'\"' {
                     // the previous character was really a quote ending the string literal
                     // finish the previously ended token
-                    self.finish_string_literal(self.current_line_location(consumed))?;
+                    self.finish_string_literal(TokenEnd::at_byte(consumed))?;
                     // set lexer to normal state and return, not consuming the current byte
                     self.state = LexerState::Normal;
                     return Ok(consumed);
@@ -472,10 +490,9 @@ impl<H: TokenHandler> Lexer<H> {
                 }
                 Some(_) => {
                     // forbidden, not printable or whitespace
-                    return Err(self.error_ending_at(
-                        LexerErrorKind::ForbiddenCharInString,
-                        consumed + index + 1,
-                    ));
+                    return Err(
+                        self.error_at(LexerErrorKind::ForbiddenCharInString, consumed + index + 1)
+                    );
                 }
                 None => {
                     // extend the content with the rest
@@ -498,7 +515,7 @@ impl<H: TokenHandler> Lexer<H> {
         if index < slice.len() {
             // we have successfully consumed the symbol, finish it
             // compute the end location, no line feeds are allowed in simple symbols
-            self.finish_simple_symbol(self.current_line_location(index))?;
+            self.finish_simple_symbol(TokenEnd::at_byte(index))?;
             self.state = LexerState::Normal;
         }
 
@@ -518,17 +535,14 @@ impl<H: TokenHandler> Lexer<H> {
                     // end of quoted symbol, extend and sink its token
                     // the closing pipe is not consumed but delimits the token
                     self.token_content.extend_from_slice(&rest[..index]);
-                    self.sink(
-                        TokenType::Symbol,
-                        self.current_line_location(after_slice_position),
-                    )?;
+                    self.sink(TokenType::Symbol, TokenEnd::at_byte(after_slice_position))?;
                     // return to normal, consuming bytes including the pipe
                     self.state = LexerState::Normal;
                     return Ok(after_slice_position);
                 }
                 Some(b'\\') => {
                     // backslash is forbidden in quoted symbols
-                    return Err(self.error_ending_at(
+                    return Err(self.error_at(
                         LexerErrorKind::BackslashInQuotedSymbol,
                         after_slice_position,
                     ));
@@ -545,7 +559,7 @@ impl<H: TokenHandler> Lexer<H> {
                 }
                 Some(_) => {
                     // forbidden character
-                    return Err(self.error_ending_at(
+                    return Err(self.error_at(
                         LexerErrorKind::ForbiddenCharInQuotedSymbol,
                         after_slice_position,
                     ));
@@ -563,7 +577,7 @@ impl<H: TokenHandler> Lexer<H> {
     fn lex_keyword(&mut self, slice: &[u8]) -> Result<usize, LexError<H::Error>> {
         // test that the keyword does not start with a digit
         if self.token_content.is_empty() && slice[0].is_ascii_digit() {
-            return Err(self.current_token_error(LexerErrorKind::ForbiddenKeywordName, true));
+            return Err(self.error_at(LexerErrorKind::ForbiddenKeywordName, 1));
         }
 
         // find the first byte that is not simple-symbol-like
@@ -575,7 +589,7 @@ impl<H: TokenHandler> Lexer<H> {
         if index < slice.len() {
             // we have successfully consumed the keyword, finish it
             // compute the end locations, no line feeds are allowed in keywords
-            self.finish_keyword(index, true)?;
+            self.finish_keyword(TokenEnd::at_byte(index))?;
             self.state = LexerState::Normal;
         }
 
@@ -604,15 +618,7 @@ impl<H: TokenHandler> Lexer<H> {
         Ok(index + 1)
     }
 
-    fn finish_decimal(
-        &mut self,
-        position: usize,
-        ended_by_byte: bool,
-    ) -> Result<(), LexError<H::Error>> {
-        // compute the token end location
-        // we do not advance the line as LF is not allowed within this token
-        let end = self.current_line_location(position);
-
+    fn finish_decimal(&mut self, end: TokenEnd) -> Result<(), LexError<H::Error>> {
         // decimals of the form 7. without any digit in fractional part are disallowed
         let last_is_none_or_dot = self
             .token_content
@@ -620,42 +626,28 @@ impl<H: TokenHandler> Lexer<H> {
             .last()
             .is_none_or(|c| *c == b'.');
         if last_is_none_or_dot {
-            // the error end location must be one bigger
-            // if the keyword has ended due to another byte
-            let error_end = if ended_by_byte {
-                self.current_line_location(position + 1)
-            } else {
-                end
-            };
-            return Err(self.error_with_end(LexerErrorKind::FractionDigitExpected, error_end));
+            return Err(self.error(LexerErrorKind::FractionDigitExpected, end));
         }
         // sink new token
         self.sink(TokenType::Decimal, end)
     }
 
-    fn finish_numeral(&mut self, end: SmtLocation) -> Result<(), LexError<H::Error>> {
+    fn finish_numeral(&mut self, end: TokenEnd) -> Result<(), LexError<H::Error>> {
         // this was a numeral, we have no further checks
         // sink new token
         self.sink(TokenType::Numeral, end)
     }
 
-    fn finish_digit_run(
-        &mut self,
-        run: DigitRun,
-        position: usize,
-        ended_by_byte: bool,
-    ) -> Result<(), LexError<H::Error>> {
+    fn finish_digit_run(&mut self, run: DigitRun, end: TokenEnd) -> Result<(), LexError<H::Error>> {
+        // digit runs must not be empty
         if self.token_content.is_empty() {
-            // the error end location must be one bigger than the position
-            // if the digit run has ended due to another byte
-            let error_end = self.current_line_location(position + ended_by_byte as usize);
-            return Err(self.error_with_end(run.empty_error, error_end));
+            return Err(self.error(run.empty_error, end));
         }
         // sink new token
-        self.sink(run.token_type, self.current_line_location(position))
+        self.sink(run.token_type, end)
     }
 
-    fn finish_simple_symbol(&mut self, end: SmtLocation) -> Result<(), LexError<H::Error>> {
+    fn finish_simple_symbol(&mut self, end: TokenEnd) -> Result<(), LexError<H::Error>> {
         // process reserved words
         let token_type = if let Some(reserved) = Reserved::from_symbol_opt(&self.token_content) {
             TokenType::Reserved(reserved)
@@ -666,41 +658,29 @@ impl<H: TokenHandler> Lexer<H> {
         self.sink(token_type, end)
     }
 
-    fn finish_keyword(
-        &mut self,
-        position: usize,
-        ended_by_byte: bool,
-    ) -> Result<(), LexError<H::Error>> {
-        // compute the token end location
-        // we do not advance the line as LF is not allowed within keywords
-        let end = self.current_line_location(position);
-        // the error end location must be one bigger
-        // if the keyword has ended due to another byte
-        let error_end = if ended_by_byte {
-            self.current_line_location(position + 1)
-        } else {
-            end
-        };
+    fn finish_keyword(&mut self, end: TokenEnd) -> Result<(), LexError<H::Error>> {
         // ensure the keyword is not empty
         if self.token_content.is_empty() {
-            return Err(self.error_with_end(LexerErrorKind::ForbiddenKeywordName, error_end));
+            return Err(self.error(LexerErrorKind::ForbiddenKeywordName, end));
         }
         // reserved words as keywords are prohibited
         if Reserved::from_symbol_opt(&self.token_content).is_some() {
-            return Err(self.error_with_end(LexerErrorKind::KeywordReserved, error_end));
+            return Err(self.error(LexerErrorKind::KeywordReserved, end));
         }
         // sink new token
         self.sink(TokenType::Keyword, end)
     }
 
-    fn finish_string_literal(&mut self, end: SmtLocation) -> Result<(), LexError<H::Error>> {
+    fn finish_string_literal(&mut self, end: TokenEnd) -> Result<(), LexError<H::Error>> {
         // literal has ended at the previous character
         // sink new token
         self.sink(TokenType::String, end)
     }
 
-    fn sink(&mut self, token_type: TokenType, end: SmtLocation) -> Result<(), LexError<H::Error>> {
+    /// Sinks the current token, ending at `position`.
+    fn sink(&mut self, token_type: TokenType, end: TokenEnd) -> Result<(), LexError<H::Error>> {
         // construct the span
+        let end = self.location_at(end.position);
         let span = SmtSpan::new_unchecked(self.token_start, end);
 
         // pass the content by reference
@@ -729,60 +709,11 @@ impl<H: TokenHandler> Lexer<H> {
             .map_err(LexError::Handler)
     }
 
-    fn start_token(&mut self) {
-        // update the token start and clear the token string
-        self.token_start = self.end_before_byte();
-        self.token_content.clear();
-    }
-
-    fn start_token_at_current_line(&mut self, position: usize) {
+    fn start_token(&mut self, position: usize) {
         // update the token start to the computed location
-        self.token_start = self.current_line_location(position);
+        self.token_start = self.location_at(position);
         // clear the token string
         self.token_content.clear();
-    }
-
-    fn end_before_byte(&self) -> SmtLocation {
-        self.current_location()
-    }
-
-    fn end_after_byte(&self) -> SmtLocation {
-        self.current_location().after_column()
-    }
-
-    fn current_line_location(&self, position: usize) -> SmtLocation {
-        // valid if there are no line feeds before the given position
-        //
-        // scanners that can pass a line feed must update line and line_start
-        // before calling this
-        let offset = self.offset + position as u64;
-        SmtLocation::new(offset, self.line, offset - self.line_start)
-    }
-
-    fn error_end(&self, ended_by_byte: bool) -> SmtLocation {
-        // the span starts at the token start
-        // if we have a pending byte, it includes it at the end
-        // if not, it ends before it
-        if ended_by_byte {
-            self.end_after_byte()
-        } else {
-            self.end_before_byte()
-        }
-    }
-
-    fn error_with_end<E>(&self, kind: LexerErrorKind, end: SmtLocation) -> LexError<E> {
-        let span = SmtSpan::new_unchecked(self.token_start, end);
-        LexError::Lexer(LexerError::new(kind, span))
-    }
-
-    fn current_token_error<E>(&self, kind: LexerErrorKind, ended_by_byte: bool) -> LexError<E> {
-        let end = self.error_end(ended_by_byte);
-        self.error_with_end(kind, end)
-    }
-
-    fn error_ending_at<E>(&self, kind: LexerErrorKind, position: usize) -> LexError<E> {
-        let end = self.current_line_location(position);
-        self.error_with_end(kind, end)
     }
 
     fn mark_line_feed_at(&mut self, position: usize) {
@@ -800,6 +731,29 @@ impl<H: TokenHandler> Lexer<H> {
             .iter()
             .position(|c| FLAGS[*c as usize] & mask == 0)
             .unwrap_or(slice.len())
+    }
+
+    /// Location of `position` in the current slice.
+    ///
+    /// Every line feed before `position` must be marked before calling this.
+    fn location_at(&self, position: usize) -> SmtLocation {
+        let offset = self.offset + position as u64;
+        SmtLocation::new(offset, self.line, offset - self.line_start)
+    }
+
+    /// Error spanning the token so far and, if it ended at a byte, that byte.
+    fn error<E>(&self, kind: LexerErrorKind, end: TokenEnd) -> LexError<E> {
+        self.error_at(kind, end.position + end.at_byte as usize)
+    }
+
+    /// Error spanning the token up to `position`.
+    ///
+    /// Used for errors detected mid-run, e.g. forbidden byte in a string
+    /// or a backslash in a quoted symbol.
+    fn error_at<E>(&self, kind: LexerErrorKind, position: usize) -> LexError<E> {
+        let end = self.location_at(position);
+        let span = SmtSpan::new_unchecked(self.token_start, end);
+        LexError::Lexer(LexerError::new(kind, span))
     }
 }
 
