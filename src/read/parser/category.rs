@@ -85,6 +85,7 @@ pub enum CategoryParserErrorKind {
     EmptyDatatypeConstructors,
     EmptyPatternArguments,
     EmptyMatchCases,
+    EmptyGetValueTerms,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

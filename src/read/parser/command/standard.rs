@@ -3,8 +3,8 @@ use std::ops::ControlFlow;
 use crate::{
     CommandHandler, SmtFunctionSignature, SmtSymbol,
     read::parser::{
-        CategoryParser, CloseParenParser, CommandParser, CommandResult, KeywordParser,
-        NumeralParser, ParenMultipleParser, ParserError, StringParser, SymbolParser,
+        CategoryParser, CategoryParserErrorKind, CloseParenParser, CommandParser, CommandResult,
+        KeywordParser, NumeralParser, ParenMultipleParser, ParserError, StringParser, SymbolParser,
         category::{ClosedAttributeParser, ClosedParser, PairParser, SortParser, TermParser},
         command::{
             CommandAction, ParseCommand,
@@ -166,6 +166,9 @@ standard_commands! {
     b"get-info" => get_info: GetInfo(
         ClosedParser<H, KeywordParser>,
         |handler, keyword| handler.command_get_info(keyword)),
+    b"get-value" => get_value: GetValue(
+        ClosedParser<H,GetValueParser<H>>,
+        |handler, terms| handler.command_get_value(terms)),
     b"reset" => reset: Reset(
         CloseParenParser,
         |handler, ()| handler.command_reset()),
@@ -230,5 +233,53 @@ impl<H: CommandHandler> Definition<H> for DefineFunRec {
 
     fn end(handler: &mut H, _: ()) -> Result<(), H::Error> {
         handler.end_define_funs_rec()
+    }
+}
+
+/// A parser for parameters of `get-value`: a non-empty list of terms.
+pub(super) struct GetValueParser<H: CommandHandler> {
+    inner: ParenMultipleParser<H, TermParser<H>>,
+}
+
+impl<H: CommandHandler> GetValueParser<H> {
+    fn new() -> Self {
+        Self {
+            inner: ParenMultipleParser::new(),
+        }
+    }
+}
+
+impl<H: CommandHandler> Default for GetValueParser<H> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<H: CommandHandler> CategoryParser<H> for GetValueParser<H> {
+    type Result = Vec<H::Term>;
+
+    fn restart(&mut self) {
+        self.inner.restart();
+    }
+
+    fn progress(
+        &mut self,
+        handler: &mut H,
+        token: Token,
+    ) -> Result<ControlFlow<Vec<H::Term>, ()>, ParserError<H::Error>> {
+        let span = token.span();
+        match self.inner.progress(handler, token)? {
+            ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
+            ControlFlow::Break(terms) => {
+                // ensure there is at least one term
+                if terms.is_empty() {
+                    return Err(ParserError::category_error(
+                        CategoryParserErrorKind::EmptyGetValueTerms,
+                        span,
+                    ));
+                }
+                Ok(ControlFlow::Break(terms))
+            }
+        }
     }
 }

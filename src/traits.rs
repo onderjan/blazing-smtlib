@@ -124,6 +124,8 @@ pub trait CommandHandler: SmtHandler {
 
     fn command_set_logic(&mut self, logic: SmtSymbol) -> Result<(), Self::Error>;
 
+    fn command_get_value(&mut self, terms: Vec<Self::Term>) -> Result<(), Self::Error>;
+
     /// Adds a sort symbol with an associated arity.
     ///
     /// As per the standard, the handler should return an error if `name`
@@ -477,6 +479,10 @@ impl CommandHandler for CheckStandardSyntax {
     }
 
     fn command_set_logic(&mut self, _logic: SmtSymbol) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn command_get_value(&mut self, _terms: Vec<Self::Term>) -> Result<(), Self::Error> {
         Ok(())
     }
 
