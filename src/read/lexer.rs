@@ -34,7 +34,7 @@ enum LexerState {
     Normal,
     NumeralOrDecimal,
     Fraction,
-    HexadecimalOrBinary,
+    BaseSelection,
     Hexadecimal,
     Binary,
     StringLiteral,
@@ -75,7 +75,7 @@ pub struct Lexer<H: TokenHandler> {
     line_start: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LexerErrorKind {
     UnexpectedCharacter,
     FractionDigitExpected,
@@ -103,6 +103,23 @@ pub enum LexError<E> {
     Lexer(LexerError),
     Handler(E),
 }
+
+#[derive(Clone, Copy)]
+struct DigitRun {
+    flag: u8,
+    token_type: TokenType,
+    empty_error: LexerErrorKind,
+}
+const HEXADECIMAL_RUN: DigitRun = DigitRun {
+    flag: HEX_DIGIT,
+    token_type: TokenType::Hexadecimal,
+    empty_error: LexerErrorKind::HexadecimalDigitExpected,
+};
+const BINARY_RUN: DigitRun = DigitRun {
+    flag: BINARY_DIGIT,
+    token_type: TokenType::Binary,
+    empty_error: LexerErrorKind::BinaryDigitExpected,
+};
 
 impl<H: TokenHandler> Lexer<H> {
     /// Constructs the lexer.
@@ -169,9 +186,9 @@ impl<H: TokenHandler> Lexer<H> {
             }
             LexerState::Fraction => self.finish_decimal(0, false),
             LexerState::NumeralOrDecimal => self.finish_numeral(self.end_before_byte()),
-            LexerState::Hexadecimal => self.finish_hexadecimal(0, false),
-            LexerState::Binary => self.finish_binary(0, false),
-            LexerState::HexadecimalOrBinary => {
+            LexerState::Hexadecimal => self.finish_digit_run(HEXADECIMAL_RUN, 0, false),
+            LexerState::Binary => self.finish_digit_run(BINARY_RUN, 0, false),
+            LexerState::BaseSelection => {
                 // hash without selection following it
                 Err(self.current_token_error(LexerErrorKind::BaseSelectionExpected, false))
             }
@@ -220,9 +237,9 @@ impl<H: TokenHandler> Lexer<H> {
                 LexerState::Normal => self.lex_normal(rest)?,
                 LexerState::NumeralOrDecimal => self.lex_numeral_or_decimal(rest)?,
                 LexerState::Fraction => self.lex_fraction(rest)?,
-                LexerState::HexadecimalOrBinary => self.lex_hexadecimal_or_binary(rest)?,
-                LexerState::Hexadecimal => self.lex_hexadecimal(rest)?,
-                LexerState::Binary => self.lex_binary(rest)?,
+                LexerState::BaseSelection => self.lex_base_selection(rest)?,
+                LexerState::Hexadecimal => self.lex_digit_run(rest, HEXADECIMAL_RUN)?,
+                LexerState::Binary => self.lex_digit_run(rest, BINARY_RUN)?,
                 LexerState::StringLiteral | LexerState::StringLiteralDoubleQuote => {
                     self.lex_string_literal(rest)?
                 }
@@ -285,7 +302,7 @@ impl<H: TokenHandler> Lexer<H> {
                     continue;
                 }
                 b';' => LexerState::Comment,
-                b'#' => LexerState::HexadecimalOrBinary,
+                b'#' => LexerState::BaseSelection,
                 b'"' => LexerState::StringLiteral,
                 b':' => LexerState::Keyword,
                 b'|' => LexerState::QuotedSymbol,
@@ -373,9 +390,8 @@ impl<H: TokenHandler> Lexer<H> {
         Ok(index)
     }
 
-    fn lex_hexadecimal_or_binary(&mut self, slice: &[u8]) -> Result<usize, LexError<H::Error>> {
+    fn lex_base_selection(&mut self, slice: &[u8]) -> Result<usize, LexError<H::Error>> {
         let c = slice[0];
-
         self.state = match c {
             b'x' => LexerState::Hexadecimal,
             b'b' => LexerState::Binary,
@@ -383,41 +399,21 @@ impl<H: TokenHandler> Lexer<H> {
                 return Err(self.current_token_error(LexerErrorKind::BaseSelectionExpected, true));
             }
         };
-
         Ok(1)
     }
 
-    fn lex_hexadecimal(&mut self, slice: &[u8]) -> Result<usize, LexError<H::Error>> {
-        // find the first byte that is not hexadecimal
-        let index = Self::run_end(slice, HEX_DIGIT);
-
+    /// Lexes a digit run, either hexadecimal or binary.
+    fn lex_digit_run(&mut self, slice: &[u8], run: DigitRun) -> Result<usize, LexError<H::Error>> {
+        // find the first byte that is not allowed in the run
+        let index = Self::run_end(slice, run.flag);
         // extend the token from slice
         self.token_content.extend_from_slice(&slice[..index]);
-
         if index < slice.len() {
-            // we have successfully consumed the hexadecimal number, finish it
+            // we have successfully consumed the digit run, finish it
             // compute the end location, no line feeds are allowed in simple symbols
-            self.finish_hexadecimal(index, true)?;
+            self.finish_digit_run(run, index, true)?;
             self.state = LexerState::Normal;
         }
-
-        Ok(index)
-    }
-
-    fn lex_binary(&mut self, slice: &[u8]) -> Result<usize, LexError<H::Error>> {
-        // find the first byte that is not hexadecimal
-        let index = Self::run_end(slice, BINARY_DIGIT);
-
-        // extend the token from slice
-        self.token_content.extend_from_slice(&slice[..index]);
-
-        if index < slice.len() {
-            // we have successfully consumed the binary number, finish it
-            // compute the end location, no line feeds are allowed in simple symbols
-            self.finish_binary(index, true)?;
-            self.state = LexerState::Normal;
-        }
-
         Ok(index)
     }
 
@@ -641,50 +637,20 @@ impl<H: TokenHandler> Lexer<H> {
         self.sink(TokenType::Numeral, end)
     }
 
-    fn finish_hexadecimal(
+    fn finish_digit_run(
         &mut self,
+        run: DigitRun,
         position: usize,
         ended_by_byte: bool,
     ) -> Result<(), LexError<H::Error>> {
-        // compute the token end location
-        // we do not advance the line as LF is not allowed within this token
-        let end = self.current_line_location(position);
         if self.token_content.is_empty() {
-            // zero digits are disallowed
-            // the error end location must be one bigger
-            // if the keyword has ended due to another byte
-            let error_end = if ended_by_byte {
-                self.current_line_location(position + 1)
-            } else {
-                end
-            };
-            return Err(self.error_with_end(LexerErrorKind::HexadecimalDigitExpected, error_end));
+            // the error end location must be one bigger than the position
+            // if the digit run has ended due to another byte
+            let error_end = self.current_line_location(position + ended_by_byte as usize);
+            return Err(self.error_with_end(run.empty_error, error_end));
         }
         // sink new token
-        self.sink(TokenType::Hexadecimal, end)
-    }
-
-    fn finish_binary(
-        &mut self,
-        position: usize,
-        ended_by_byte: bool,
-    ) -> Result<(), LexError<H::Error>> {
-        // compute the token end location
-        // we do not advance the line as LF is not allowed within this token
-        let end = self.current_line_location(position);
-        if self.token_content.is_empty() {
-            // zero digits disallowed
-            // the error end location must be one bigger
-            // if the keyword has ended due to another byte
-            let error_end = if ended_by_byte {
-                self.current_line_location(position + 1)
-            } else {
-                end
-            };
-            return Err(self.error_with_end(LexerErrorKind::BinaryDigitExpected, error_end));
-        }
-        // sink new token
-        self.sink(TokenType::Binary, end)
+        self.sink(run.token_type, self.current_line_location(position))
     }
 
     fn finish_simple_symbol(&mut self, end: SmtLocation) -> Result<(), LexError<H::Error>> {

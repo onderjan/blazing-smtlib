@@ -355,7 +355,7 @@ fn inputs_cover_every_token_type_and_error_kind() {
         if let Some(kind) = outcome.error_kind()
             && !error_kinds.contains(kind)
         {
-            error_kinds.push(kind.clone());
+            error_kinds.push(*kind);
         }
     }
 
