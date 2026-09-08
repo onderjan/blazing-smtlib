@@ -146,3 +146,97 @@ fn file_open_error_has_zero_span() {
     assert!(matches!(err.kind(), SmtReadErrorKind::Io(_)));
     assert_span(&err, (0, 0, 0), (0, 0, 0));
 }
+
+// --- Buffer refills: every refill size must read the same ---
+
+/// A reader that hands out the input in a repeating pattern of read sizes,
+/// so that `fill_buf` returns slices of varying lengths regardless of the
+/// buffer capacity.
+struct TrickleReader<'a> {
+    data: &'a [u8],
+    sizes: &'a [usize],
+    index: usize,
+}
+
+impl Read for TrickleReader<'_> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let size = self.sizes[self.index % self.sizes.len()];
+        self.index += 1;
+        let n = size.min(self.data.len()).min(buf.len());
+        buf[..n].copy_from_slice(&self.data[..n]);
+        self.data = &self.data[n..];
+        Ok(n)
+    }
+}
+
+/// The outcome of a read as comparable text: `Ok`, or the error kind and span.
+fn outcome_text(result: Result<(), SmtReadError<NonstandardCommandError>>) -> String {
+    match result {
+        Ok(()) => "ok".to_string(),
+        Err(err) => format!(
+            "{:?} at {:?}..{:?}",
+            err.kind(),
+            loc(err.span().start()),
+            loc(err.span().end())
+        ),
+    }
+}
+
+const REFILL_INPUTS: &[&[u8]] = &[
+    // valid script touching every token type over several lines
+    b"(set-info :source |multi\nline|)\n(set-logic QF_BV)\n(declare-fun x () (_ BitVec 8))\n\
+      (assert (= x #x2A))\n(assert (= ((_ extract 3 0) x) #b1010))\n(assert (! (= 1.5 1.5) :named a))\n\
+      (assert (= \"a\"\"b\" \"a\"\"b\"))\n(check-sat)\n(exit)\n",
+    // lexer error deep in the input, detected on a byte
+    b"(set-logic QF_UF)\n(assert (= 01 x))\n",
+    // lexer error at EOF
+    b"(set-logic QF_UF)\n(assert |unclosed",
+    // parser error deep in the input
+    b"(set-logic QF_UF)\n(declare-fun f () Bool)\n(assert )\n",
+    // parser error at EOF
+    b"(set-logic QF_UF)\n(assert (f x)",
+    // handler error on a nonstandard command
+    b"(set-logic QF_UF)\n(check-sat)\n(frobnicate 1)\n",
+];
+
+#[test]
+fn every_buffer_capacity_reads_the_same() {
+    for input in REFILL_INPUTS {
+        let expected = outcome_text(read(input));
+        for capacity in (1..=70).chain([4096]) {
+            let reader = std::io::BufReader::with_capacity(capacity, std::io::Cursor::new(*input));
+            let actual = outcome_text(read_smt(&mut CheckStandardSyntax, reader));
+            assert_eq!(
+                actual,
+                expected,
+                "capacity {capacity} on {:?}",
+                String::from_utf8_lossy(input)
+            );
+        }
+    }
+}
+
+#[test]
+fn every_refill_pattern_reads_the_same() {
+    let patterns: &[&[usize]] = &[&[1], &[2, 1], &[3, 1, 7], &[16, 1], &[5, 64, 1, 1, 2]];
+    for input in REFILL_INPUTS {
+        let expected = outcome_text(read(input));
+        for sizes in patterns {
+            let reader = std::io::BufReader::with_capacity(
+                64,
+                TrickleReader {
+                    data: input,
+                    sizes,
+                    index: 0,
+                },
+            );
+            let actual = outcome_text(read_smt(&mut CheckStandardSyntax, reader));
+            assert_eq!(
+                actual,
+                expected,
+                "read sizes {sizes:?} on {:?}",
+                String::from_utf8_lossy(input)
+            );
+        }
+    }
+}

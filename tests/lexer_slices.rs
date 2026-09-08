@@ -1,0 +1,792 @@
+//! Slice-boundary tests of the lexer: feeding the same input through
+//! `lex_slice` in every chunking must produce the same tokens, spans,
+//! payloads, errors, and locations as feeding it as one slice.
+//!
+//! The lexer keeps the state of a token cut off at the end of a slice and
+//! continues it in the next one, so every position in every kind of token
+//! is a boundary that has to work. The inputs below are small, so the tests
+//! can afford to try every fixed chunk length and every two-piece split of
+//! each of them.
+
+use std::convert::Infallible;
+
+use smt_parser_rs::{
+    SmtLocation, SmtSpan,
+    read::lexer::{LexError, Lexer, LexerError, LexerErrorKind, TokenHandler},
+    token::{Token, TokenKind, TokenType},
+};
+
+/// An owned copy of a produced token, comparable between lexer runs.
+#[derive(Debug, PartialEq, Eq)]
+struct OwnedToken {
+    ty: TokenType,
+    content: Vec<u8>,
+    span: SmtSpan,
+}
+
+/// A token handler that collects owned copies of all tokens.
+struct CollectTokens(Vec<OwnedToken>);
+
+impl TokenHandler for CollectTokens {
+    type Error = Infallible;
+
+    fn handle_token(&mut self, token: Token) -> Result<(), Self::Error> {
+        let content = match token.kind() {
+            TokenKind::Symbol(s) => s.as_slice(),
+            TokenKind::Keyword(k) => k.as_slice(),
+            TokenKind::Numeral(n) => n.as_slice(),
+            TokenKind::Decimal(d) => d.as_slice(),
+            TokenKind::Hexadecimal(h) => h.as_slice(),
+            TokenKind::Binary(b) => b.as_slice(),
+            TokenKind::String(s) => s.as_slice(),
+            _ => b"".as_slice(),
+        };
+        self.0.push(OwnedToken {
+            ty: token.kind().ty(),
+            content: content.to_vec(),
+            span: token.span(),
+        });
+        Ok(())
+    }
+}
+
+/// Extracts the lexer error from a lex error whose handler cannot fail.
+fn into_lexer_error(err: LexError<Infallible>) -> LexerError {
+    match err {
+        LexError::Lexer(err) => err,
+        LexError::Handler(never) => match never {},
+    }
+}
+
+/// Where a lexer error was raised.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ErrorSite {
+    /// By `lex_slice` on the chunk covering the given byte offsets.
+    Slice { start: u64, end: u64 },
+    /// By `lex_eof`.
+    Eof,
+}
+
+/// Everything observable about one lexer run.
+#[derive(Debug)]
+struct Outcome {
+    tokens: Vec<OwnedToken>,
+    error: Option<(LexerError, ErrorSite)>,
+}
+
+impl Outcome {
+    fn error_kind(&self) -> Option<&LexerErrorKind> {
+        self.error.as_ref().map(|(err, _)| err.kind())
+    }
+}
+
+/// The location reached after consuming the given bytes from the given
+/// location, computed independently of the lexer.
+fn location_after(from: SmtLocation, bytes: &[u8]) -> SmtLocation {
+    bytes
+        .iter()
+        .fold(from, |location, &c| location.after_byte(c))
+}
+
+fn loc(location: SmtLocation) -> (u64, u64, u64) {
+    (location.offset(), location.line(), location.column())
+}
+
+/// Lexes the input as the given sequence of chunks, then EOF.
+///
+/// The chunks must concatenate to the input. After every successfully lexed
+/// chunk, the lexer's current location is checked against the independently
+/// computed location. Lexing stops at the first error.
+#[track_caller]
+fn lex_chunks(input: &[u8], chunks: &[&[u8]]) -> Outcome {
+    let concatenated: Vec<u8> = chunks.concat();
+    assert_eq!(
+        concatenated, input,
+        "test bug: chunks must concatenate to the input"
+    );
+
+    let mut collected = CollectTokens(Vec::new());
+    let mut lexer = Lexer::new(&mut collected);
+    let mut consumed = 0usize;
+    let mut expected_location = SmtLocation::initial();
+    let mut error = None;
+
+    for chunk in chunks {
+        if let Err(err) = lexer.lex_slice(chunk) {
+            let site = ErrorSite::Slice {
+                start: consumed as u64,
+                end: (consumed + chunk.len()) as u64,
+            };
+            error = Some((into_lexer_error(err), site));
+            break;
+        }
+        consumed += chunk.len();
+        expected_location = location_after(expected_location, chunk);
+        assert_eq!(
+            loc(lexer.current_location()),
+            loc(expected_location),
+            "current location after {consumed} bytes of {:?} fed as {} chunks",
+            String::from_utf8_lossy(input),
+            chunks.len()
+        );
+    }
+
+    if error.is_none()
+        && let Err(err) = lexer.lex_eof()
+    {
+        error = Some((into_lexer_error(err), ErrorSite::Eof));
+    }
+
+    drop(lexer);
+    Outcome {
+        tokens: collected.0,
+        error,
+    }
+}
+
+/// Lexes the input as a single slice followed by EOF: the reference.
+fn lex_whole(input: &[u8]) -> Outcome {
+    lex_chunks(input, &[input])
+}
+
+/// Splits the input into consecutive chunks of the given lengths.
+///
+/// The lengths are used cyclically until the input is exhausted; the last
+/// chunk is cut short as needed. Zero lengths produce empty chunks.
+fn split_by_lengths<'a>(input: &'a [u8], lengths: &[usize]) -> Vec<&'a [u8]> {
+    assert!(
+        lengths.iter().any(|&length| length > 0),
+        "test bug: chunk lengths must make progress"
+    );
+    let mut chunks = Vec::new();
+    let mut position = 0;
+    let mut index = 0;
+    while position < input.len() {
+        let length = lengths[index % lengths.len()].min(input.len() - position);
+        chunks.push(&input[position..position + length]);
+        position += length;
+        index += 1;
+    }
+    if input.is_empty() {
+        // an empty input still has to be fed as something, so that
+        // lex_slice sees an empty slice at least once
+        chunks.push(input);
+    }
+    chunks
+}
+
+/// Checks that a chunked run agrees with the reference run in every
+/// observable way, and that an error is raised by the chunk holding the
+/// offending byte (or by EOF, exactly when the reference raises it there).
+#[track_caller]
+fn assert_same_outcome(input: &[u8], reference: &Outcome, chunks: &[&[u8]]) {
+    let chunked = lex_chunks(input, chunks);
+    let describe = || {
+        format!(
+            "input {:?} fed as chunks of lengths {:?}",
+            String::from_utf8_lossy(input),
+            chunks.iter().map(|chunk| chunk.len()).collect::<Vec<_>>()
+        )
+    };
+
+    assert_eq!(
+        chunked.tokens,
+        reference.tokens,
+        "tokens differ: {}",
+        describe()
+    );
+
+    match (&reference.error, &chunked.error) {
+        (None, None) => {}
+        (Some((expected, expected_site)), Some((actual, actual_site))) => {
+            assert_eq!(actual, expected, "error differs: {}", describe());
+            match (expected_site, actual_site) {
+                (ErrorSite::Eof, ErrorSite::Eof) => {}
+                (ErrorSite::Slice { .. }, ErrorSite::Slice { start, end }) => {
+                    // an error detected on a byte is raised by the call that
+                    // fed that byte, which is the last byte of the error span
+                    let offending = expected
+                        .span()
+                        .end()
+                        .offset()
+                        .checked_sub(1)
+                        .expect("an error detected on a byte has a nonempty span");
+                    assert!(
+                        (*start..*end).contains(&offending),
+                        "error on byte {offending} raised by chunk {start}..{end}: {}",
+                        describe()
+                    );
+                }
+                _ => panic!(
+                    "error site differs: expected {expected_site:?}, got {actual_site:?}: {}",
+                    describe()
+                ),
+            }
+        }
+        _ => panic!(
+            "error presence differs: expected {:?}, got {:?}: {}",
+            reference.error,
+            chunked.error,
+            describe()
+        ),
+    }
+}
+
+/// Inputs that lex without error, covering every token type, multi-line
+/// tokens, escapes, comments, CRLF, and reserved words.
+const VALID_INPUTS: &[&[u8]] = &[
+    b"",
+    b" ",
+    b"\n",
+    b"(",
+    b"a",
+    b"(set-logic QF_UF)\n(declare-fun f (Int) Bool)\n(assert (f 12))\n(check-sat)\n",
+    b"7 7.0 #x1F #b10 \"s\" :kw |q s| sym",
+    b"abcd let e :k1 \"s\" |q| 12 3.4 #xA #b0",
+    b"|abc| || \"xy\" \"\" :a",
+    b"\"a\"\"b\" \"\"\"\"",
+    b"\"line1\nline2\" |sym\nbol| x",
+    b"\"\"\"\n\"\"\" |\n|",
+    b"; comment\r\n(a)\r\n; trailing comment",
+    b"; comment only",
+    b"; comment\n",
+    b"(a b)\n\n\n  \t (c)",
+    b"forall exists let ! _ as match par lambda BINARY DECIMAL HEXADECIMAL NUMERAL STRING",
+    b"0 0.5 10.25 123456789 9.0",
+    b"#xDEADbeef #b0101 #x0 #b1",
+    b":named :pattern :a1 :_x :+",
+    b"\"\xC3\xA9\" |\xFF|",
+    b"(((((x)))))",
+    b"a(b)c\"d\"e|f|g;h\ni",
+    b"1.5(2.5)#x1#b1:k|q|\"s\"",
+    b"~!@$%^&*_-+=<>.?/ a.b -1 +2",
+];
+
+/// Inputs that raise every lexer error kind, detected on a byte and at EOF.
+const ERROR_INPUTS: &[&[u8]] = &[
+    b"\\",
+    b"ab \\ cd",
+    b"1.",
+    b"1.)",
+    b"(assert 1.)",
+    b"#",
+    b"# ",
+    b"#x",
+    b"#x)",
+    b"#b",
+    b"#b)",
+    b"01",
+    b"007",
+    b"(a\n  01)",
+    b":",
+    b": ",
+    b":1",
+    b":let ",
+    b":let",
+    b"|a\\b|",
+    b"\"a\x01\"",
+    b"|a\x01|",
+    b"\"unclosed",
+    b"|unclosed",
+    b"abc \"a\nb",
+    b"|a\nb",
+    b"\"a\"\"",
+    b"; comment\n\\",
+    b"\xC3\xA9",
+    b"|\x7F|",
+    b"\"\x7F\"",
+];
+
+fn all_inputs() -> impl Iterator<Item = &'static [u8]> {
+    VALID_INPUTS.iter().chain(ERROR_INPUTS).copied()
+}
+
+#[test]
+fn valid_inputs_lex_and_error_inputs_do_not() {
+    for input in VALID_INPUTS {
+        let outcome = lex_whole(input);
+        assert!(
+            outcome.error.is_none(),
+            "test bug: valid input {:?} raised {:?}",
+            String::from_utf8_lossy(input),
+            outcome.error
+        );
+    }
+    for input in ERROR_INPUTS {
+        let outcome = lex_whole(input);
+        assert!(
+            outcome.error.is_some(),
+            "test bug: error input {:?} lexed without error",
+            String::from_utf8_lossy(input)
+        );
+    }
+}
+
+#[test]
+fn inputs_cover_every_token_type_and_error_kind() {
+    // keep the input sets expansive: every token type and every error kind
+    // must be exercised, so that a boundary inside any of them is tested
+    let mut token_types: Vec<TokenType> = Vec::new();
+    let mut error_kinds: Vec<LexerErrorKind> = Vec::new();
+    for input in all_inputs() {
+        let outcome = lex_whole(input);
+        for token in &outcome.tokens {
+            // reserved words are one type for this purpose
+            let ty = match token.ty {
+                TokenType::Reserved(_) => TokenType::Reserved(smt_parser_rs::token::Reserved::Let),
+                ty => ty,
+            };
+            if !token_types.contains(&ty) {
+                token_types.push(ty);
+            }
+        }
+        if let Some(kind) = outcome.error_kind()
+            && !error_kinds.contains(kind)
+        {
+            error_kinds.push(kind.clone());
+        }
+    }
+
+    let expected_types = [
+        TokenType::ParenOpen,
+        TokenType::ParenClose,
+        TokenType::Numeral,
+        TokenType::Decimal,
+        TokenType::Hexadecimal,
+        TokenType::Binary,
+        TokenType::Symbol,
+        TokenType::Reserved(smt_parser_rs::token::Reserved::Let),
+        TokenType::String,
+        TokenType::Keyword,
+        TokenType::EndOfFile,
+    ];
+    for ty in expected_types {
+        assert!(token_types.contains(&ty), "no input produces {ty:?}");
+    }
+
+    let expected_kinds = [
+        LexerErrorKind::UnexpectedCharacter,
+        LexerErrorKind::FractionDigitExpected,
+        LexerErrorKind::HexadecimalDigitExpected,
+        LexerErrorKind::BinaryDigitExpected,
+        LexerErrorKind::BaseSelectionExpected,
+        LexerErrorKind::UnclosedStringLiteral,
+        LexerErrorKind::ForbiddenCharInString,
+        LexerErrorKind::ForbiddenKeywordName,
+        LexerErrorKind::KeywordReserved,
+        LexerErrorKind::BackslashInQuotedSymbol,
+        LexerErrorKind::ForbiddenCharInQuotedSymbol,
+        LexerErrorKind::UnclosedQuotedSymbol,
+        LexerErrorKind::NumeralLeadingZero,
+    ];
+    for kind in expected_kinds {
+        assert!(error_kinds.contains(&kind), "no input raises {kind:?}");
+    }
+
+    // both error sites must occur, otherwise the site check tests nothing
+    let sites: Vec<ErrorSite> = ERROR_INPUTS
+        .iter()
+        .filter_map(|input| lex_whole(input).error.map(|(_, site)| site))
+        .collect();
+    assert!(sites.contains(&ErrorSite::Eof), "no error is raised at EOF");
+    assert!(
+        sites
+            .iter()
+            .any(|site| matches!(site, ErrorSite::Slice { .. })),
+        "no error is raised on a byte"
+    );
+}
+
+#[test]
+fn every_fixed_chunk_length_matches_the_whole_slice() {
+    for input in all_inputs() {
+        let reference = lex_whole(input);
+        for length in 1..=input.len().max(1) {
+            let chunks = split_by_lengths(input, &[length]);
+            assert_same_outcome(input, &reference, &chunks);
+        }
+    }
+}
+
+#[test]
+fn every_two_piece_split_matches_the_whole_slice() {
+    for input in all_inputs() {
+        let reference = lex_whole(input);
+        for split in 0..=input.len() {
+            let (first, second) = input.split_at(split);
+            assert_same_outcome(input, &reference, &[first, second]);
+        }
+    }
+}
+
+#[test]
+fn every_three_piece_split_matches_the_whole_slice() {
+    // two boundaries can fall inside the same token, or bracket a single byte
+    for input in all_inputs() {
+        let reference = lex_whole(input);
+        for first_split in 0..=input.len() {
+            for second_split in first_split..=input.len() {
+                let (first, rest) = input.split_at(first_split);
+                let (second, third) = rest.split_at(second_split - first_split);
+                assert_same_outcome(input, &reference, &[first, second, third]);
+            }
+        }
+    }
+}
+
+#[test]
+fn byte_by_byte_through_lex_next_matches_the_whole_slice() {
+    for input in all_inputs() {
+        let reference = lex_whole(input);
+
+        let mut collected = CollectTokens(Vec::new());
+        let mut lexer = Lexer::new(&mut collected);
+        let mut error = None;
+        for (index, &c) in input.iter().enumerate() {
+            if let Err(err) = lexer.lex_next(c) {
+                let site = ErrorSite::Slice {
+                    start: index as u64,
+                    end: index as u64 + 1,
+                };
+                error = Some((into_lexer_error(err), site));
+                break;
+            }
+        }
+        if error.is_none()
+            && let Err(err) = lexer.lex_eof()
+        {
+            error = Some((into_lexer_error(err), ErrorSite::Eof));
+        }
+        drop(lexer);
+
+        assert_eq!(
+            collected.0,
+            reference.tokens,
+            "tokens differ for {:?} fed byte by byte",
+            String::from_utf8_lossy(input)
+        );
+        assert_eq!(
+            error.as_ref().map(|(err, _)| err),
+            reference.error.as_ref().map(|(err, _)| err),
+            "error differs for {:?} fed byte by byte",
+            String::from_utf8_lossy(input)
+        );
+    }
+}
+
+#[test]
+fn irregular_chunk_lengths_match_the_whole_slice() {
+    // a few fixed patterns of mixed lengths, including one-byte chunks
+    // right after longer ones and vice versa
+    let patterns: &[&[usize]] = &[
+        &[1, 2],
+        &[2, 1],
+        &[3, 1, 1],
+        &[1, 4, 2, 1, 3],
+        &[5, 1],
+        &[1, 7],
+        &[2, 3, 5, 7, 11],
+    ];
+    for input in all_inputs() {
+        let reference = lex_whole(input);
+        for pattern in patterns {
+            let chunks = split_by_lengths(input, pattern);
+            assert_same_outcome(input, &reference, &chunks);
+        }
+    }
+}
+
+#[test]
+fn empty_slices_between_chunks_change_nothing() {
+    // an empty slice must be a no-op anywhere: before the first byte,
+    // between any two bytes, inside any token, and after the last byte
+    for input in all_inputs() {
+        let reference = lex_whole(input);
+        for length in [1usize, 2, 3, 5] {
+            let mut chunks: Vec<&[u8]> = vec![b""];
+            for chunk in split_by_lengths(input, &[length]) {
+                chunks.push(chunk);
+                chunks.push(b"");
+            }
+            assert_same_outcome(input, &reference, &chunks);
+        }
+    }
+}
+
+#[test]
+fn whole_slice_agrees_with_lex_all() {
+    // lex_all is the convenience the other tests in this crate use, so the
+    // reference here must be the same thing
+    for input in all_inputs() {
+        let reference = lex_whole(input);
+
+        let mut collected = CollectTokens(Vec::new());
+        let mut lexer = Lexer::new(&mut collected);
+        let error = lexer.lex_all(input).err().map(into_lexer_error);
+        drop(lexer);
+
+        assert_eq!(collected.0, reference.tokens);
+        assert_eq!(error.as_ref(), reference.error.as_ref().map(|(err, _)| err));
+    }
+}
+
+// --- Long tokens: runs longer than any scanning chunk, cut at every boundary ---
+
+/// Token lengths around the powers of two a chunked scanner might use,
+/// plus one far beyond any of them.
+const LONG_LENGTHS: &[usize] = &[1, 15, 16, 17, 31, 32, 33, 63, 64, 65, 127, 128, 129, 1000];
+
+/// Builds an input whose tokens of every content-carrying type are `length`
+/// bytes long, separated by whitespace runs of the same length, with the
+/// string containing an escaped quote and the quoted symbol a line break
+/// in the middle. Returns the input and the expected payloads in order.
+fn long_token_input(length: usize) -> (Vec<u8>, Vec<(TokenType, Vec<u8>)>) {
+    let symbol: Vec<u8> = (0..length).map(|i| b"abcxyz_-+.?"[i % 11]).collect();
+    let numeral: Vec<u8> = (0..length).map(|i| b"1234567890"[i % 10]).collect();
+    let hex: Vec<u8> = (0..length)
+        .map(|i| b"0123456789abcdefABCDEF"[i % 22])
+        .collect();
+    let binary: Vec<u8> = (0..length).map(|i| b"01"[i % 2]).collect();
+    let keyword: Vec<u8> = (0..length).map(|i| b"kw-name"[i % 7]).collect();
+    // the escaped quote counts as one payload byte
+    let mut string_source: Vec<u8> = (0..length).map(|i| b"str ing"[i % 7]).collect();
+    let mut string_payload = string_source.clone();
+    if length > 2 {
+        string_source[length / 2] = b'"';
+        string_source.insert(length / 2, b'"');
+        string_payload[length / 2] = b'"';
+    }
+    let mut quoted: Vec<u8> = (0..length).map(|i| b"quo ted"[i % 7]).collect();
+    if length > 2 {
+        quoted[length / 2] = b'\n';
+    }
+    let comment: Vec<u8> = (0..length).map(|i| b"comment "[i % 8]).collect();
+    let whitespace: Vec<u8> = (0..length).map(|i| b" \t\n "[i % 4]).collect();
+
+    let mut input = Vec::new();
+    let mut expected = Vec::new();
+    let mut push = |input: &mut Vec<u8>, source: &[u8], ty: TokenType, payload: &[u8]| {
+        input.extend_from_slice(source);
+        input.extend_from_slice(&whitespace);
+        expected.push((ty, payload.to_vec()));
+    };
+    push(&mut input, &symbol, TokenType::Symbol, &symbol);
+    push(&mut input, &numeral, TokenType::Numeral, &numeral);
+    let mut decimal = numeral.clone();
+    decimal.push(b'.');
+    decimal.extend_from_slice(&numeral);
+    push(&mut input, &decimal, TokenType::Decimal, &decimal);
+    push(
+        &mut input,
+        &[b"#x", hex.as_slice()].concat(),
+        TokenType::Hexadecimal,
+        &hex,
+    );
+    push(
+        &mut input,
+        &[b"#b", binary.as_slice()].concat(),
+        TokenType::Binary,
+        &binary,
+    );
+    push(
+        &mut input,
+        &[b":", keyword.as_slice()].concat(),
+        TokenType::Keyword,
+        &keyword,
+    );
+    push(
+        &mut input,
+        &[b"\"", string_source.as_slice(), b"\""].concat(),
+        TokenType::String,
+        &string_payload,
+    );
+    push(
+        &mut input,
+        &[b"|", quoted.as_slice(), b"|"].concat(),
+        TokenType::Symbol,
+        &quoted,
+    );
+    // the comment produces no token; the parenthesis after it does
+    input.extend_from_slice(b";");
+    input.extend_from_slice(&comment);
+    input.extend_from_slice(b"\n(");
+    expected.push((TokenType::ParenOpen, Vec::new()));
+    expected.push((TokenType::EndOfFile, Vec::new()));
+    (input, expected)
+}
+
+#[test]
+fn long_tokens_have_the_expected_payloads() {
+    for &length in LONG_LENGTHS {
+        let (input, expected) = long_token_input(length);
+        let outcome = lex_whole(&input);
+        assert!(
+            outcome.error.is_none(),
+            "length {length}: {:?}",
+            outcome.error
+        );
+        let payloads: Vec<(TokenType, Vec<u8>)> = outcome
+            .tokens
+            .iter()
+            .map(|token| (token.ty, token.content.clone()))
+            .collect();
+        assert_eq!(payloads, expected, "payloads for token length {length}");
+    }
+}
+
+#[test]
+fn long_tokens_match_across_chunk_lengths() {
+    for &length in LONG_LENGTHS {
+        let (input, _) = long_token_input(length);
+        let reference = lex_whole(&input);
+        for chunk_length in [1usize, 2, 3, 7, 15, 16, 17, 64, 1000] {
+            let chunks = split_by_lengths(&input, &[chunk_length]);
+            assert_same_outcome(&input, &reference, &chunks);
+        }
+        // and with boundaries just before and just after every token start
+        for split in [length - 1, length, length + 1, 2 * length, 3 * length + 1] {
+            if split <= input.len() {
+                let (first, second) = input.split_at(split);
+                assert_same_outcome(&input, &reference, &[first, second]);
+            }
+        }
+    }
+}
+
+// --- Contents against spans: the payload is what the span selects, for every token ---
+
+/// The payload the span of a token selects in the input, independent of the
+/// lexer's own content buffer.
+fn payload_from_span(input: &[u8], token: &OwnedToken) -> Vec<u8> {
+    let start = token.span.start().offset() as usize;
+    let end = token.span.end().offset() as usize;
+    let text = &input[start..end];
+    match token.ty {
+        TokenType::Symbol if text.first() == Some(&b'|') => text[1..text.len() - 1].to_vec(),
+        TokenType::Symbol | TokenType::Numeral | TokenType::Decimal => text.to_vec(),
+        TokenType::Keyword => text[1..].to_vec(),
+        TokenType::Hexadecimal | TokenType::Binary => text[2..].to_vec(),
+        TokenType::String => {
+            let mut payload = Vec::new();
+            let mut rest = &text[1..text.len() - 1];
+            while let Some(&c) = rest.first() {
+                payload.push(c);
+                // an escaped quote is two quote bytes in the source
+                rest = if c == b'"' { &rest[2..] } else { &rest[1..] };
+            }
+            payload
+        }
+        TokenType::Reserved(reserved) => {
+            assert_eq!(text, reserved.as_str().as_bytes(), "reserved word text");
+            Vec::new()
+        }
+        TokenType::ParenOpen => {
+            assert_eq!(text, b"(");
+            Vec::new()
+        }
+        TokenType::ParenClose => {
+            assert_eq!(text, b")");
+            Vec::new()
+        }
+        TokenType::EndOfFile => {
+            assert_eq!((start, end), (input.len(), input.len()), "EOF span");
+            Vec::new()
+        }
+    }
+}
+
+#[test]
+fn token_contents_match_their_spans() {
+    let long_inputs: Vec<Vec<u8>> = LONG_LENGTHS
+        .iter()
+        .map(|&length| long_token_input(length).0)
+        .collect();
+    let inputs = VALID_INPUTS
+        .iter()
+        .map(|input| input.to_vec())
+        .chain(long_inputs);
+    for input in inputs {
+        let outcome = lex_whole(&input);
+        for token in &outcome.tokens {
+            assert_eq!(
+                token.content,
+                payload_from_span(&input, token),
+                "{:?} token at {:?} in {:?}",
+                token.ty,
+                loc(token.span.start()),
+                String::from_utf8_lossy(&input)
+            );
+        }
+    }
+}
+
+// --- Handler errors under chunking ---
+
+/// A token handler that accepts the first `n` tokens and rejects the next.
+struct RejectNth {
+    remaining: usize,
+}
+
+impl TokenHandler for RejectNth {
+    type Error = ();
+
+    fn handle_token(&mut self, _token: Token) -> Result<(), Self::Error> {
+        if self.remaining == 0 {
+            return Err(());
+        }
+        self.remaining -= 1;
+        Ok(())
+    }
+}
+
+#[test]
+fn handler_errors_are_raised_where_the_token_is_produced_in_every_chunking() {
+    for input in VALID_INPUTS {
+        let reference = lex_whole(input);
+        for (n, rejected) in reference.tokens.iter().enumerate() {
+            for chunk_length in [1usize, 2, 3, 5, input.len().max(1)] {
+                let chunks = split_by_lengths(input, &[chunk_length]);
+                let mut lexer = Lexer::new(RejectNth { remaining: n });
+                let mut consumed = 0;
+                let mut site = None;
+                for chunk in &chunks {
+                    if lexer.lex_slice(chunk).is_err() {
+                        site = Some(ErrorSite::Slice {
+                            start: consumed as u64,
+                            end: (consumed + chunk.len()) as u64,
+                        });
+                        break;
+                    }
+                    consumed += chunk.len();
+                }
+                if site.is_none() {
+                    assert!(
+                        lexer.lex_eof().is_err(),
+                        "the rejected token must be produced"
+                    );
+                    site = Some(ErrorSite::Eof);
+                }
+
+                // a token is produced when its last byte or the byte after it
+                // is fed, or at EOF when nothing follows it
+                let end = rejected.span.end().offset();
+                let describe = format!(
+                    "token {n} ({:?}) of {:?} with chunks of {chunk_length}",
+                    rejected.ty,
+                    String::from_utf8_lossy(input)
+                );
+                match site.expect("site is set") {
+                    ErrorSite::Eof => assert_eq!(end as usize, input.len(), "{describe}"),
+                    ErrorSite::Slice {
+                        start,
+                        end: chunk_end,
+                    } => assert!(
+                        (start..chunk_end).contains(&end.saturating_sub(1))
+                            || (start..chunk_end).contains(&end),
+                        "raised by chunk {start}..{chunk_end}, token ends at {end}: {describe}"
+                    ),
+                }
+            }
+        }
+    }
+}

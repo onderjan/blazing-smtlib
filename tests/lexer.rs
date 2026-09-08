@@ -649,3 +649,323 @@ fn lexing_after_a_handler_error_panics() {
     assert!(lexer.lex_next(b'(').is_err(), "expected a handler error");
     let _ = lexer.lex_next(b'a');
 }
+
+// --- Reserved words against similar symbols ---
+
+/// Every token type of the input, in order.
+fn token_types(input: &[u8]) -> Vec<TokenType> {
+    lex_all(input)
+        .expect("test input must lex")
+        .iter()
+        .map(|token| token.ty)
+        .collect()
+}
+
+#[test]
+fn reserved_words_are_recognized_exactly() {
+    // reserved word lookup may be gated on the first byte or the length;
+    // symbols that share a prefix, differ in case, or extend a reserved word
+    // must stay symbols, and the exact spellings must not
+    let lookalikes: &[&[u8]] = &[
+        b"le",
+        b"let1",
+        b"letx",
+        b"Let",
+        b"LET",
+        b"_a",
+        b"__",
+        b"!x",
+        b"!!",
+        b"a",
+        b"ass",
+        b"as_",
+        b"As",
+        b"forall_",
+        b"foral",
+        b"exist",
+        b"existsx",
+        b"matcher",
+        b"mat",
+        b"pa",
+        b"par1",
+        b"lambdas",
+        b"lambd",
+        b"HEXADECIMALS",
+        b"HEXADECIMA",
+        b"hexadecimal",
+        b"BINARYx",
+        b"DECIMAL1",
+        b"NUMERALS",
+        b"STRINGS",
+        b"string",
+    ];
+    for symbol in lookalikes {
+        assert_eq!(
+            token_types(symbol),
+            vec![TokenType::Symbol, TokenType::EndOfFile],
+            "{:?} must be a plain symbol",
+            String::from_utf8_lossy(symbol)
+        );
+    }
+    let reserved: &[(&[u8], Reserved)] = &[
+        (b"BINARY", Reserved::Binary),
+        (b"DECIMAL", Reserved::Decimal),
+        (b"HEXADECIMAL", Reserved::Hexadecimal),
+        (b"NUMERAL", Reserved::Numeral),
+        (b"STRING", Reserved::String),
+        (b"_", Reserved::Underscore),
+        (b"!", Reserved::ExclamationMark),
+        (b"as", Reserved::As),
+        (b"lambda", Reserved::Lambda),
+        (b"let", Reserved::Let),
+        (b"exists", Reserved::Exists),
+        (b"forall", Reserved::Forall),
+        (b"match", Reserved::Match),
+        (b"par", Reserved::Par),
+    ];
+    for (word, expected) in reserved {
+        assert_eq!(
+            token_types(word),
+            vec![TokenType::Reserved(*expected), TokenType::EndOfFile],
+            "{:?} must be reserved",
+            String::from_utf8_lossy(word)
+        );
+    }
+}
+
+#[test]
+fn quoted_reserved_words_are_symbols() {
+    // quoting makes any spelling an ordinary symbol, with the bare spelling as payload
+    assert_eq!(
+        token_payloads(b"|let| |_| |forall| |!|"),
+        vec![
+            (TokenType::Symbol, b"let".to_vec()),
+            (TokenType::Symbol, b"_".to_vec()),
+            (TokenType::Symbol, b"forall".to_vec()),
+            (TokenType::Symbol, b"!".to_vec()),
+            (TokenType::EndOfFile, vec![]),
+        ]
+    );
+}
+
+#[test]
+fn reserved_word_followed_by_a_symbol_byte_is_a_longer_symbol() {
+    // the reserved check must happen on the complete symbol, not on a prefix
+    assert_eq!(
+        token_payloads(b"let(letx)"),
+        vec![
+            (TokenType::Reserved(Reserved::Let), vec![]),
+            (TokenType::ParenOpen, vec![]),
+            (TokenType::Symbol, b"letx".to_vec()),
+            (TokenType::ParenClose, vec![]),
+            (TokenType::EndOfFile, vec![]),
+        ]
+    );
+}
+
+// --- Carriage return alone ---
+
+#[test]
+fn cr_alone_ends_a_comment_but_not_a_line() {
+    // a comment ends at CR as well as LF, but only LF starts a new line,
+    // so the symbol after a CR-terminated comment stays on line zero
+    assert_eq!(
+        token_spans(b"; c\rx"),
+        vec![
+            (TokenType::Symbol, (4, 0, 4), (5, 0, 5)),
+            (TokenType::EndOfFile, (5, 0, 5), (5, 0, 5)),
+        ]
+    );
+}
+
+// --- Failed state after errors raised at EOF ---
+
+/// A token handler that rejects only the end-of-file token.
+struct RejectEof;
+
+impl TokenHandler for RejectEof {
+    type Error = ();
+
+    fn handle_token(&mut self, token: Token) -> Result<(), Self::Error> {
+        if token.kind().ty() == TokenType::EndOfFile {
+            Err(())
+        } else {
+            Ok(())
+        }
+    }
+}
+
+#[test]
+#[should_panic(expected = "cannot lex after a lexer error")]
+fn lexing_after_a_handler_error_on_the_eof_token_panics() {
+    // the EOF token is the last thing lex_eof does; a handler error there
+    // must still leave the lexer failed like every other error
+    let mut lexer = Lexer::new(RejectEof);
+    lexer.lex_slice(b"a").expect("valid input");
+    assert!(lexer.lex_eof().is_err(), "expected a handler error");
+    let _ = lexer.lex_next(b'b');
+}
+
+#[test]
+#[should_panic(expected = "cannot lex after a lexer error")]
+fn lexing_after_a_lexer_error_at_eof_panics() {
+    let mut collected = CollectTokens(Vec::new());
+    let mut lexer = Lexer::new(&mut collected);
+    lexer
+        .lex_slice(b"\"unclosed")
+        .map_err(into_lexer_error)
+        .expect("valid so far");
+    assert!(
+        lexer.lex_eof().is_err(),
+        "expected an unclosed string error"
+    );
+    let _ = lexer.lex_next(b'"');
+}
+
+// --- Lexing after a successful end of file ---
+//
+// The behaviour after `lex_eof` has succeeded is not decided yet. These tests
+// pin what the lexer does today so that a change is noticed; if another
+// behaviour is chosen later, they are to be changed deliberately along with it.
+
+/// Every token as `(type, payload, start, end)`.
+type TokenRecord = (TokenType, Vec<u8>, Loc, Loc);
+
+fn records(tokens: &[OwnedToken]) -> Vec<TokenRecord> {
+    tokens
+        .iter()
+        .map(|token| {
+            (
+                token.ty,
+                token.content.clone(),
+                loc(token.span.start()),
+                loc(token.span.end()),
+            )
+        })
+        .collect()
+}
+
+#[test]
+fn eof_twice_after_a_pending_symbol_finishes_an_empty_symbol_too() {
+    let mut collected = CollectTokens(Vec::new());
+    let mut lexer = Lexer::new(&mut collected);
+    lexer
+        .lex_slice(b"a")
+        .map_err(into_lexer_error)
+        .expect("valid input");
+    lexer
+        .lex_eof()
+        .map_err(into_lexer_error)
+        .expect("first EOF");
+    // currently, a second EOF is not rejected; finishing the symbol at the
+    // first EOF left the lexer in the symbol state, so the second EOF first
+    // finishes an empty symbol token and then repeats the EOF token
+    lexer
+        .lex_eof()
+        .map_err(into_lexer_error)
+        .expect("second EOF");
+    assert_eq!(loc(lexer.current_location()), (1, 0, 1));
+    drop(lexer);
+    assert_eq!(
+        records(&collected.0),
+        vec![
+            (TokenType::Symbol, b"a".to_vec(), (0, 0, 0), (1, 0, 1)),
+            (TokenType::EndOfFile, vec![], (1, 0, 1), (1, 0, 1)),
+            (TokenType::Symbol, vec![], (1, 0, 1), (1, 0, 1)),
+            (TokenType::EndOfFile, vec![], (1, 0, 1), (1, 0, 1)),
+        ]
+    );
+}
+
+#[test]
+fn lexing_continues_after_eof_as_if_the_input_went_on() {
+    let mut collected = CollectTokens(Vec::new());
+    let mut lexer = Lexer::new(&mut collected);
+    lexer
+        .lex_slice(b"a\n")
+        .map_err(into_lexer_error)
+        .expect("valid input");
+    lexer
+        .lex_eof()
+        .map_err(into_lexer_error)
+        .expect("first EOF");
+    // currently, more input after EOF is lexed normally, with locations
+    // continuing from where the first EOF was reported
+    lexer
+        .lex_slice(b"|b\nc| ")
+        .map_err(into_lexer_error)
+        .expect("input after EOF");
+    lexer
+        .lex_eof()
+        .map_err(into_lexer_error)
+        .expect("second EOF");
+    drop(lexer);
+    assert_eq!(
+        records(&collected.0),
+        vec![
+            (TokenType::Symbol, b"a".to_vec(), (0, 0, 0), (1, 0, 1)),
+            (TokenType::EndOfFile, vec![], (2, 1, 0), (2, 1, 0)),
+            (TokenType::Symbol, b"b\nc".to_vec(), (2, 1, 0), (7, 2, 2)),
+            (TokenType::EndOfFile, vec![], (8, 2, 3), (8, 2, 3)),
+        ]
+    );
+}
+
+#[test]
+fn a_token_cut_by_eof_is_finished_and_not_resumed() {
+    let mut collected = CollectTokens(Vec::new());
+    let mut lexer = Lexer::new(&mut collected);
+    lexer
+        .lex_slice(b"ab")
+        .map_err(into_lexer_error)
+        .expect("valid input");
+    // EOF finishes the pending symbol; bytes fed afterwards start a new one
+    lexer.lex_eof().map_err(into_lexer_error).expect("EOF");
+    lexer
+        .lex_slice(b"cd")
+        .map_err(into_lexer_error)
+        .expect("input after EOF");
+    lexer
+        .lex_eof()
+        .map_err(into_lexer_error)
+        .expect("second EOF");
+    drop(lexer);
+    assert_eq!(
+        records(&collected.0),
+        vec![
+            (TokenType::Symbol, b"ab".to_vec(), (0, 0, 0), (2, 0, 2)),
+            (TokenType::EndOfFile, vec![], (2, 0, 2), (2, 0, 2)),
+            (TokenType::Symbol, b"cd".to_vec(), (2, 0, 2), (4, 0, 4)),
+            (TokenType::EndOfFile, vec![], (4, 0, 4), (4, 0, 4)),
+        ]
+    );
+}
+
+#[test]
+fn eof_twice_after_whitespace_produces_two_eof_tokens() {
+    // with no token pending at the first EOF, the state is already normal
+    // and the second EOF only repeats the EOF token
+    let mut collected = CollectTokens(Vec::new());
+    let mut lexer = Lexer::new(&mut collected);
+    lexer
+        .lex_slice(b"a ")
+        .map_err(into_lexer_error)
+        .expect("valid input");
+    lexer
+        .lex_eof()
+        .map_err(into_lexer_error)
+        .expect("first EOF");
+    lexer
+        .lex_eof()
+        .map_err(into_lexer_error)
+        .expect("second EOF");
+    drop(lexer);
+    assert_eq!(
+        records(&collected.0),
+        vec![
+            (TokenType::Symbol, b"a".to_vec(), (0, 0, 0), (1, 0, 1)),
+            (TokenType::EndOfFile, vec![], (2, 0, 2), (2, 0, 2)),
+            (TokenType::EndOfFile, vec![], (2, 0, 2), (2, 0, 2)),
+        ]
+    );
+}
