@@ -5,8 +5,8 @@ use std::convert::Infallible;
 
 use smt_parser_rs::{
     SmtLocation, SmtSpan,
-    read::lexer::{LexError, Lexer, LexerError, LexerErrorKind, TokenHandler},
-    token::{Reserved, Token, TokenKind, TokenType},
+    read::lexer::{LexError, Lexer, LexerError, LexerErrorKind},
+    token::{Reserved, Token, TokenHandler, TokenKind, TokenType},
 };
 
 /// An owned copy of a produced token, collected by [`CollectTokens`].

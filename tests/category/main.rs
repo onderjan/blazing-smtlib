@@ -27,7 +27,7 @@ use smt_parser_rs::{
     SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSort, SmtSpan, SmtSpecialConstant, SmtSymbol,
     SmtTerm,
     read::{
-        lexer::{LexError, Lexer, TokenHandler},
+        lexer::{LexError, Lexer},
         parser::{
             CategoryParser, CategoryParserErrorKind, CloseParenParser, ClosedAttributeParser,
             ClosedMultipleAttributeParser, ClosedMultipleParser, ClosedParser, IdentParser,
@@ -36,7 +36,7 @@ use smt_parser_rs::{
             StringParser, SymbolParser, TermParser,
         },
     },
-    token::{Reserved, Token, TokenType},
+    token::{Reserved, Token, TokenHandler, TokenType},
 };
 
 // --- Test handler rendering everything it receives back into text ---

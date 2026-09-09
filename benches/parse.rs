@@ -43,12 +43,8 @@ use std::time::Instant;
 
 use smt_parser_rs::{
     CheckStandardSyntax,
-    read::{
-        SmtReadErrorKind,
-        lexer::{Lexer, TokenHandler},
-        read_smt,
-    },
-    token::{Token, TokenKind},
+    read::{SmtReadErrorKind, lexer::Lexer, read_smt},
+    token::{Token, TokenHandler, TokenKind},
 };
 
 /// A benchmarked file: a short label used in output and for selection,

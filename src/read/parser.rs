@@ -2,8 +2,7 @@ use std::ops::ControlFlow;
 
 use crate::{
     CommandHandler, SmtSpan,
-    read::lexer::TokenHandler,
-    token::{Token, TokenKind},
+    token::{Token, TokenHandler, TokenKind},
 };
 
 mod category;

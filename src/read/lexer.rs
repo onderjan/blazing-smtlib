@@ -1,51 +1,23 @@
 mod char_class;
+mod error;
+mod helpers;
+
+pub use error::{LexError, LexerError, LexerErrorKind};
 
 pub(crate) use char_class::CharClass;
 
 use crate::{
     SmtBinDigitsView, SmtDecimalView, SmtHexDigitsView, SmtKeywordView, SmtLocation,
     SmtNumeralView, SmtSpan, SmtStringContentView, SmtSymbolView, String8,
-    read::lexer::char_class::{
-        BINARY_DIGIT, COMMENT_PLAIN, DIGIT, FLAGS, HEX_DIGIT, NON_LF_WHITESPACE, QUOTED_PLAIN,
-        SIMPLE_SYMBOL, STRING_PLAIN, run_end, run_end_short,
+    read::lexer::{
+        char_class::{
+            COMMENT_PLAIN, DIGIT, FLAGS, NON_LF_WHITESPACE, QUOTED_PLAIN, SIMPLE_SYMBOL,
+            STRING_PLAIN, run_end, run_end_short,
+        },
+        helpers::{BINARY_RUN, DigitRun, HEXADECIMAL_RUN, TokenEnd},
     },
-    token::{Reserved, Token, TokenKind, TokenType},
+    token::{Reserved, Token, TokenHandler, TokenKind, TokenType},
 };
-
-/// A sequential handler of tokens.
-pub trait TokenHandler {
-    type Error;
-
-    /// Sequentially handles one token.
-    fn handle_token(&mut self, token: Token) -> Result<(), Self::Error>;
-}
-
-/// Mutable references over token handlers are token handlers.
-impl<T: TokenHandler + ?Sized> TokenHandler for &mut T {
-    type Error = T::Error;
-
-    fn handle_token(&mut self, token: Token) -> Result<(), Self::Error> {
-        (**self).handle_token(token)
-    }
-}
-
-#[derive(Clone, Copy)]
-enum LexerState {
-    Normal,
-    NumeralOrDecimal,
-    Fraction,
-    BaseSelection,
-    Hexadecimal,
-    Binary,
-    StringLiteral,
-    StringLiteralDoubleQuote,
-    SimpleSymbol,
-    QuotedSymbol,
-    Keyword,
-    Comment,
-    Failed,
-}
-
 pub struct Lexer<H: TokenHandler> {
     /// Handler of produced tokens.
     handler: H,
@@ -75,72 +47,21 @@ pub struct Lexer<H: TokenHandler> {
     line_start: u64,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LexerErrorKind {
-    UnexpectedCharacter,
-    FractionDigitExpected,
-    HexadecimalDigitExpected,
-    BinaryDigitExpected,
-    BaseSelectionExpected,
-    UnclosedStringLiteral,
-    ForbiddenCharInString,
-    ForbiddenKeywordName,
-    KeywordReserved,
-    BackslashInQuotedSymbol,
-    ForbiddenCharInQuotedSymbol,
-    UnclosedQuotedSymbol,
-    NumeralLeadingZero,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LexerError {
-    kind: LexerErrorKind,
-    span: SmtSpan,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum LexError<E> {
-    Lexer(LexerError),
-    Handler(E),
-}
-
 #[derive(Clone, Copy)]
-struct DigitRun {
-    flag: u8,
-    token_type: TokenType,
-    empty_error: LexerErrorKind,
-}
-const HEXADECIMAL_RUN: DigitRun = DigitRun {
-    flag: HEX_DIGIT,
-    token_type: TokenType::Hexadecimal,
-    empty_error: LexerErrorKind::HexadecimalDigitExpected,
-};
-const BINARY_RUN: DigitRun = DigitRun {
-    flag: BINARY_DIGIT,
-    token_type: TokenType::Binary,
-    empty_error: LexerErrorKind::BinaryDigitExpected,
-};
-
-/// Helper struct for where a token ended.
-#[derive(Clone, Copy)]
-struct TokenEnd {
-    /// The position after `Lexer.offset` where the token ended.
-    position: usize,
-    /// Whether the token end was detected at a byte that is not a part of the token.
-    at_byte: bool,
-}
-
-impl TokenEnd {
-    const EOF: TokenEnd = TokenEnd {
-        position: 0,
-        at_byte: false,
-    };
-    fn at_byte(position: usize) -> Self {
-        TokenEnd {
-            position,
-            at_byte: true,
-        }
-    }
+enum LexerState {
+    Normal,
+    NumeralOrDecimal,
+    Fraction,
+    BaseSelection,
+    Hexadecimal,
+    Binary,
+    StringLiteral,
+    StringLiteralDoubleQuote,
+    SimpleSymbol,
+    QuotedSymbol,
+    Keyword,
+    Comment,
+    Failed,
 }
 
 impl<H: TokenHandler> Lexer<H> {
@@ -745,23 +666,5 @@ impl<H: TokenHandler> Lexer<H> {
         let end = self.location_at(position);
         let span = SmtSpan::new_unchecked(self.token_start, end);
         LexError::Lexer(LexerError::new(kind, span))
-    }
-}
-
-impl LexerError {
-    fn new(kind: LexerErrorKind, span: SmtSpan) -> Self {
-        Self { kind, span }
-    }
-
-    pub fn kind(&self) -> &LexerErrorKind {
-        &self.kind
-    }
-
-    pub fn span(&self) -> SmtSpan {
-        self.span
-    }
-
-    pub fn into_kind(self) -> LexerErrorKind {
-        self.kind
     }
 }

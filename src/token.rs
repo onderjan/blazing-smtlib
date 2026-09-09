@@ -135,3 +135,20 @@ impl Reserved {
         }
     }
 }
+
+/// A sequential handler of tokens.
+pub trait TokenHandler {
+    type Error;
+
+    /// Sequentially handles one token.
+    fn handle_token(&mut self, token: Token) -> Result<(), Self::Error>;
+}
+
+/// Mutable references over token handlers are token handlers.
+impl<T: TokenHandler + ?Sized> TokenHandler for &mut T {
+    type Error = T::Error;
+
+    fn handle_token(&mut self, token: Token) -> Result<(), Self::Error> {
+        (**self).handle_token(token)
+    }
+}
