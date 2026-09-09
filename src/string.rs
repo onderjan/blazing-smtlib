@@ -78,6 +78,11 @@ pub struct String8View<'a>(&'a [u8]);
 
 impl<'a> String8View<'a> {
     #[inline]
+    pub(crate) fn new(slice: &'a [u8]) -> Self {
+        Self(slice)
+    }
+
+    #[inline]
     pub fn len(&self) -> usize {
         self.0.len()
     }

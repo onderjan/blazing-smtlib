@@ -97,7 +97,11 @@ pub enum Reserved {
 impl Reserved {
     #[inline]
     pub fn from_symbol_opt(symbol: &String8) -> Option<Reserved> {
-        Some(match symbol.as_slice() {
+        Self::from_bytes_opt(symbol.as_slice())
+    }
+
+    pub fn from_bytes_opt(symbol: &[u8]) -> Option<Reserved> {
+        Some(match symbol {
             b"BINARY" => Reserved::Binary,
             b"DECIMAL" => Reserved::Decimal,
             b"HEXADECIMAL" => Reserved::Hexadecimal,

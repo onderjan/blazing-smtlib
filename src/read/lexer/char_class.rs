@@ -109,7 +109,7 @@ impl CharClass {
         )
     }
 
-    const fn flags(c: u8) -> u8 {
+    pub(super) const fn flags(c: u8) -> u8 {
         let class = Self::classify(c);
         let mut flags = 0;
         if class.is_allowed_in_simple_symbol() {
@@ -213,20 +213,6 @@ pub(super) fn run_end(slice: &[u8], mask: u8) -> usize {
             .unwrap_or(tail.len())
 }
 
-/// Optimisation of `run_end` for runs that are almost always extremely short.
-#[inline(always)]
-pub(super) fn run_end_short(slice: &[u8], mask: u8) -> usize {
-    // PERFORMANCE: superior for runs that are almost always 0-1 bytes long.
-    // This is especially useful for discarding whitespace.
-    match slice {
-        [] => 0,
-        [a, ..] if ends_run(*a, mask) => 0,
-        [_] => 1,
-        [_, b, ..] if ends_run(*b, mask) => 1,
-        _ => 2 + run_end(&slice[2..], mask),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -313,9 +299,8 @@ mod tests {
 
     type RunEnd = fn(&[u8], u8) -> usize;
 
-    /// The run-end functions under test; both must behave exactly like the reference.
-    const RUN_END_FUNCTIONS: [(&str, RunEnd); 2] =
-        [("run_end", run_end), ("run_end_short", run_end_short)];
+    /// The run-end functions under test; each must behave exactly like the reference.
+    const RUN_END_FUNCTIONS: [(&str, RunEnd); 1] = [("run_end", run_end)];
 
     /// A byte that continues the run for the flag, and one that ends it
     /// while carrying as many other flags as possible.
@@ -335,8 +320,7 @@ mod tests {
     fn run_end_matches_the_reference_for_every_length_prefix_and_terminator() {
         // lengths around 16- and 32-byte scanning windows, with the run
         // starting at every alignment within a window, so that a chunked
-        // scan has to get every boundary right; the short lengths also
-        // cover every arm of `run_end_short` and its hand-off to `run_end`
+        // scan has to get every boundary right
         for (function_name, run_end) in RUN_END_FUNCTIONS {
             for (name, flag) in ALL_FLAGS {
                 let (run_byte, terminators) = run_and_terminator_bytes(flag);

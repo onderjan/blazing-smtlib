@@ -8,16 +8,14 @@ pub(crate) use char_class::CharClass;
 
 use crate::{
     SmtBinDigitsView, SmtDecimalView, SmtHexDigitsView, SmtKeywordView, SmtLocation,
-    SmtNumeralView, SmtSpan, SmtStringContentView, SmtSymbolView, String8,
+    SmtNumeralView, SmtSpan, SmtStringContentView, SmtSymbolView, String8, String8View,
     read::lexer::{
-        char_class::{
-            COMMENT_PLAIN, DIGIT, FLAGS, NON_LF_WHITESPACE, QUOTED_PLAIN, SIMPLE_SYMBOL,
-            STRING_PLAIN, run_end, run_end_short,
-        },
-        helpers::{BINARY_RUN, DigitRun, HEXADECIMAL_RUN, TokenEnd},
+        char_class::{COMMENT_PLAIN, DIGIT, QUOTED_PLAIN, SIMPLE_SYMBOL, STRING_PLAIN, run_end},
+        helpers::{BINARY_RUN, Content, DigitRun, HEXADECIMAL_RUN, START, Start, TokenEnd},
     },
     token::{Reserved, Token, TokenHandler, TokenKind, TokenType},
 };
+
 pub struct Lexer<H: TokenHandler> {
     /// Handler of produced tokens.
     handler: H,
@@ -95,15 +93,8 @@ impl<H: TokenHandler> Lexer<H> {
     ///
     /// Panics if a previous call returned an error.
     pub fn lex_slice(&mut self, slice: &[u8]) -> Result<(), LexError<H::Error>> {
-        // lex the slice
-        match self.lex_slice_inner(slice) {
-            Ok(()) => Ok(()),
-            Err(err) => {
-                // when a lexer error is raised, set lexer state to failed before propagating
-                self.state = LexerState::Failed;
-                Err(err)
-            }
-        }
+        // call inner lexing and fail on error
+        self.fail_on_error(|lexer| lexer.lex_slice_inner(slice))
     }
 
     /// Lexes one byte, sending the lexed tokens to the handler.
@@ -120,15 +111,22 @@ impl<H: TokenHandler> Lexer<H> {
     ///
     /// Panics if a previous call returned an error.
     pub fn lex_eof(&mut self) -> Result<(), LexError<H::Error>> {
-        let result = match self.state {
+        // call inner EOF lexing and fail on error
+        self.fail_on_error(|lexer| lexer.lex_eof_inner())
+    }
+
+    fn lex_eof_inner(&mut self) -> Result<(), LexError<H::Error>> {
+        match self.state {
             LexerState::Normal | LexerState::Comment => {
                 // nothing to do, we accept EOF even in comments
                 Ok(())
             }
-            LexerState::Fraction => self.finish_decimal(TokenEnd::EOF),
-            LexerState::NumeralOrDecimal => self.finish_numeral(TokenEnd::EOF),
-            LexerState::Hexadecimal => self.finish_digit_run(HEXADECIMAL_RUN, TokenEnd::EOF),
-            LexerState::Binary => self.finish_digit_run(BINARY_RUN, TokenEnd::EOF),
+            LexerState::Fraction => self.finish_decimal(TokenEnd::EOF, Content::Stored),
+            LexerState::NumeralOrDecimal => self.finish_numeral(TokenEnd::EOF, Content::Stored),
+            LexerState::Hexadecimal => {
+                self.finish_digit_run(HEXADECIMAL_RUN, TokenEnd::EOF, Content::Stored)
+            }
+            LexerState::Binary => self.finish_digit_run(BINARY_RUN, TokenEnd::EOF, Content::Stored),
             LexerState::BaseSelection => {
                 // hash without selection following it
                 Err(self.error(LexerErrorKind::BaseSelectionExpected, TokenEnd::EOF))
@@ -141,10 +139,10 @@ impl<H: TokenHandler> Lexer<H> {
             LexerState::StringLiteralDoubleQuote => {
                 // string literal has ended by the previous character,
                 // a quote directly before the end of the file
-                self.finish_string_literal(TokenEnd::EOF)
+                self.finish_string_literal(TokenEnd::EOF, Content::Stored)
             }
-            LexerState::SimpleSymbol => self.finish_simple_symbol(TokenEnd::EOF),
-            LexerState::Keyword => self.finish_keyword(TokenEnd::EOF),
+            LexerState::SimpleSymbol => self.finish_simple_symbol(TokenEnd::EOF, Content::Stored),
+            LexerState::Keyword => self.finish_keyword(TokenEnd::EOF, Content::Stored),
             LexerState::QuotedSymbol => {
                 // EOF forbidden as the symbol must be totally enclosed by pipes
                 Err(self.error(LexerErrorKind::UnclosedQuotedSymbol, TokenEnd::EOF))
@@ -152,24 +150,14 @@ impl<H: TokenHandler> Lexer<H> {
             LexerState::Failed => {
                 panic!("cannot lex after a lexer error")
             }
-        };
+        }?;
 
         // everything processed, start the EOF token and sink it
         self.start_token(0);
-        let result = result.and_then(|()| self.sink(TokenType::EndOfFile, TokenEnd::EOF));
-
-        match result {
-            Ok(()) => {
-                // everything good, move to normal state
-                self.state = LexerState::Normal;
-                Ok(())
-            }
-            Err(err) => {
-                // switch to the failed state and propagate
-                self.state = LexerState::Failed;
-                Err(err)
-            }
-        }
+        self.sink_slice(TokenType::EndOfFile, TokenEnd::EOF, Content::Stored)?;
+        // reset the lexer to normal
+        self.state = LexerState::Normal;
+        Ok(())
     }
 
     fn lex_slice_inner(&mut self, mut rest: &[u8]) -> Result<(), LexError<H::Error>> {
@@ -202,72 +190,282 @@ impl<H: TokenHandler> Lexer<H> {
     fn lex_normal(&mut self, slice: &[u8]) -> Result<usize, LexError<H::Error>> {
         let mut index = 0;
 
-        loop {
-            // skip whitespace except for line feeds
-            // those must be processed for line offsets
-            // PERFORMANCE: use `run_end_short` as whitespace tends to be extremely short
-            index += run_end_short(&slice[index..], NON_LF_WHITESPACE);
-            let c = match slice.get(index) {
-                Some(b'\n') => {
-                    // mark the line feed, continue skipping whitespace
+        while let Some(&c) = slice.get(index) {
+            // PERFORMANCE: One table lookup decides the arm. Arms eagerly
+            // try to complete the token with the whole content borrowed from the slice,
+            // which resets the lexer back to the normal state, so the loop can continue.
+            //
+            // Lexing only returns early if eager dispatch is not possible,
+            // typically due to running out of bytes in the slice.
+            //
+            // This loop is VERY HOT and even small changes can drastically affect
+            // performance. This especially applies to unintentional panic paths
+            // introduced by maybe-panicking bounds checks.
+            let after = index + 1;
+            match START[c as usize] {
+                Start::Whitespace => {
+                    index = after;
+                }
+                Start::LineFeed => {
+                    // line feeds must be marked for line offsets
+                    // mark it and update the index
                     self.mark_line_feed_at(index);
-                    index += 1;
-                    continue;
+                    index = after;
                 }
-                Some(c) => {
-                    // an interesting character, break
-                    *c
+                Start::ParenOpen => {
+                    // parentheses are tokens by themselves
+                    // dispatch the token, it has no content
+                    self.start_token(index);
+                    self.sink_slice(
+                        TokenType::ParenOpen,
+                        TokenEnd::at_byte(after),
+                        Content::Borrowed(&[]),
+                    )?;
+                    // update the index and continue the loop
+                    index = after;
                 }
-                None => {
-                    // we have consumed every byte
-                    return Ok(slice.len());
+                Start::ParenClose => {
+                    // parentheses are tokens by themselves
+                    // dispatch the token, it has no content
+                    self.start_token(index);
+                    self.sink_slice(
+                        TokenType::ParenClose,
+                        TokenEnd::at_byte(after),
+                        Content::Borrowed(&[]),
+                    )?;
+                    // update the index and continue the loop
+                    index = after;
                 }
-            };
+                Start::Comment => {
+                    // a comment has been started
+                    // process the run eagerly
+                    self.start_token(index);
+                    let end = after + run_end(&slice[after..], COMMENT_PLAIN);
+                    match slice.get(end) {
+                        Some(b'\n') => {
+                            // line feed, we need to mark it
+                            self.mark_line_feed_at(end);
+                            // ends the comment
+                        }
+                        Some(_) => {
+                            // non-line-feed comment end
+                            // must be a carriage return (CR)
+                            // also ends the comment
+                        }
+                        None => {
+                            // we ran out of bytes
+                            // update the state and return
+                            self.state = LexerState::Comment;
+                            return Ok(end);
+                        }
+                    }
+                    // we have reached the end of the comment
+                    // update the index and continue the loop
+                    index = end + 1;
+                }
+                Start::Hash => {
+                    // base selection
+                    self.start_token(index);
+                    let run = match slice.get(after) {
+                        Some(b'x') => HEXADECIMAL_RUN,
+                        Some(b'b') => BINARY_RUN,
+                        _ => {
+                            // we either encountered a wrong base selection
+                            // or ran out of bytes
+                            // update the state and return
+                            // if the base selection is wrong,
+                            // the error will be produced in its function
+                            self.state = LexerState::BaseSelection;
+                            return Ok(after);
+                        }
+                    };
+                    // the base has been selected, get a run of its digits
+                    let start = after + 1;
+                    let after_end = start + run_end(&slice[start..], run.flag);
+                    if after_end == slice.len() {
+                        // we ran out of bytes
+                        // update the content and the state and return
+                        self.token_content
+                            .extend_from_slice(&slice[start..after_end]);
+                        self.state = run.state;
+                        return Ok(after_end);
+                    }
+                    // dispatch a token with borrowed content
+                    self.finish_digit_run(
+                        run,
+                        TokenEnd::at_byte(after_end),
+                        Content::Borrowed(&slice[start..after_end]),
+                    )?;
+                    // update the index and continue the loop
+                    index = after_end;
+                }
+                Start::Quote => {
+                    // starts a string literal
+                    self.start_token(index);
+                    // determine the run of content bytes
+                    let after_content_end = after + run_end(&slice[after..], STRING_PLAIN);
+                    // we can only eagerly borrow if the content is ended by a closing quote
+                    // that is definitely not followed by another closing quote
+                    // (we cannot borrow a string containing an escape)
 
-            // start the token as we are in the normal state
-            self.start_token(index);
-            let state = match c {
-                b'(' => {
-                    // parentheses are tokens of their own
-                    // sink the token
-                    self.sink(TokenType::ParenOpen, TokenEnd::at_byte(index + 1))?;
-                    // since we are back in the normal state, just increment the index and continue the loop
-                    index += 1;
-                    continue;
-                }
-                b')' => {
-                    // parentheses are tokens of their own
-                    // sink the token
-                    self.sink(TokenType::ParenClose, TokenEnd::at_byte(index + 1))?;
-                    // since we are back in the normal state, just increment the index and continue the loop
-                    index += 1;
-                    continue;
-                }
-                b';' => LexerState::Comment,
-                b'#' => LexerState::BaseSelection,
-                b'"' => LexerState::StringLiteral,
-                b':' => LexerState::Keyword,
-                b'|' => LexerState::QuotedSymbol,
-                _ => {
-                    // digits start numerals/decimals
-                    // the remaining simple-symbol-allowed bytes start simple symbols
-                    let flags = FLAGS[c as usize];
-                    if flags & DIGIT != 0 {
-                        self.token_content.push(c);
-                        LexerState::NumeralOrDecimal
-                    } else if flags & SIMPLE_SYMBOL != 0 {
-                        self.token_content.push(c);
-                        LexerState::SimpleSymbol
-                    } else {
-                        return Err(self.error_at(LexerErrorKind::UnexpectedCharacter, index + 1));
+                    // PERFORMANCE: a fixed two-byte window through `get`; both `&slice[x..]`
+                    // (a panic path) and an open range (unknown tail length) can
+                    // deeply change the codegen of the whole function.
+                    match slice.get(after_content_end..after_content_end + 2) {
+                        Some([b'"', next]) if *next != b'"' => {
+                            // definitely closed by a quote not followed by another quote
+                            // borrow the string literal content and produce a token
+                            self.finish_string_literal(
+                                TokenEnd::at_byte(after_content_end + 1),
+                                Content::Borrowed(&slice[after..after_content_end]),
+                            )?;
+                            // the closing quote is not part of the content,
+                            // but was also processed
+                            index = after_content_end + 1;
+                        }
+                        _ => {
+                            // we cannot borrow the content
+                            // update the content and state and return
+                            self.token_content
+                                .extend_from_slice(&slice[after..after_content_end]);
+                            self.state = LexerState::StringLiteral;
+                            return Ok(after_content_end);
+                        }
                     }
                 }
-            };
-            // change the state and end normal parsing
-            // having consumed bytes up to and including to the current one
-            self.state = state;
-            return Ok(index + 1);
+                Start::Colon => {
+                    // starts a keyword
+                    self.start_token(index);
+                    // we require that the keyword does not start with a digit
+                    // (also non-empty, but that is checked after finishing)
+                    if slice.get(after).is_some_and(u8::is_ascii_digit) {
+                        return Err(self.error_at(LexerErrorKind::ForbiddenKeywordName, after + 1));
+                    }
+                    // get a run of simple-symbol bytes
+                    let after_end = after + run_end(&slice[after..], SIMPLE_SYMBOL);
+                    if after_end == slice.len() {
+                        // we ran out of bytes
+                        // update the content and state and return
+                        self.token_content
+                            .extend_from_slice(&slice[after..after_end]);
+                        self.state = LexerState::Keyword;
+                        return Ok(after_end);
+                    }
+                    // dispatch a token with borrowed content
+                    self.finish_keyword(
+                        TokenEnd::at_byte(after_end),
+                        Content::Borrowed(&slice[after..after_end]),
+                    )?;
+                    // update the index and continue the loop
+                    index = after_end;
+                }
+                Start::Pipe => {
+                    self.start_token(index);
+                    // determine the run of content bytes
+                    let after_content_end = after + run_end(&slice[after..], QUOTED_PLAIN);
+                    if slice.get(after_content_end) == Some(&b'|') {
+                        // closed by another pipe
+                        // dispatch the token with borrowed content
+                        self.sink_slice(
+                            TokenType::Symbol,
+                            TokenEnd::at_byte(after_content_end + 1),
+                            Content::Borrowed(&slice[after..after_content_end]),
+                        )?;
+                        // update the index and continue the loop
+                        // the closing pipe is not a part of the content but was processed
+                        index = after_content_end + 1;
+                    } else {
+                        // we encountered a line feed, an error, or ran out of bytes
+                        // update the content and state and return
+                        self.token_content
+                            .extend_from_slice(&slice[after..after_content_end]);
+                        self.state = LexerState::QuotedSymbol;
+                        return Ok(after_content_end);
+                    }
+                }
+                Start::Digit => {
+                    self.start_token(index);
+                    // determine the run of digits
+                    let after_end = after + run_end(&slice[after..], DIGIT);
+                    // check that we are not in a leading zero condition,
+                    // which is only possible if the first character was zero
+                    // and there is a subsequent digit;
+                    // it is possible we will not be able to decide it here
+                    // if the slice ends with a single zero, so we need to handle that
+                    // when parsing digit in the state `NumeralOrDecimal`
+                    if c == b'0' && after_end > after {
+                        return Err(self.error_at(LexerErrorKind::NumeralLeadingZero, after + 1));
+                    }
+                    match slice.get(after_end) {
+                        Some(b'.') => {
+                            // a dot starts a fraction, try to do a subsequent run of fraction digits
+                            let after_fraction_end =
+                                after_end + 1 + run_end(&slice[after_end + 1..], DIGIT);
+                            if after_fraction_end == slice.len() {
+                                // we ran out of bytes
+                                // update the content and state and return
+                                self.token_content
+                                    .extend_from_slice(&slice[index..after_fraction_end]);
+                                self.state = LexerState::Fraction;
+                                return Ok(after_fraction_end);
+                            }
+                            // dispatch a decimal token with borrowed content
+                            self.finish_decimal(
+                                TokenEnd::at_byte(after_fraction_end),
+                                Content::Borrowed(&slice[index..after_fraction_end]),
+                            )?;
+                            // update the index and continue the loop
+                            index = after_fraction_end;
+                        }
+                        Some(_) => {
+                            // the numeral is not actually a decimal and ends
+                            // dispatch a numeral token with borrowed content
+                            self.finish_numeral(
+                                TokenEnd::at_byte(after_end),
+                                Content::Borrowed(&slice[index..after_end]),
+                            )?;
+                            // update the index and continue the loop
+                            index = after_end;
+                        }
+                        None => {
+                            // we ran out of bytes
+                            // update the content and state and return
+                            self.token_content
+                                .extend_from_slice(&slice[index..after_end]);
+                            self.state = LexerState::NumeralOrDecimal;
+                            return Ok(after_end);
+                        }
+                    }
+                }
+                Start::Symbol => {
+                    self.start_token(index);
+                    // get a run of simple-symbol bytes
+                    let after_end = after + run_end(&slice[after..], SIMPLE_SYMBOL);
+                    if after_end == slice.len() {
+                        // we ran out of bytes
+                        // update the content and state and return
+                        self.token_content
+                            .extend_from_slice(&slice[index..after_end]);
+                        self.state = LexerState::SimpleSymbol;
+                        return Ok(after_end);
+                    }
+                    // dispatch a token with borrowed content
+                    self.finish_simple_symbol(
+                        TokenEnd::at_byte(after_end),
+                        Content::Borrowed(&slice[index..after_end]),
+                    )?;
+                    // update the index and continue the loop
+                    index = after_end;
+                }
+                Start::Other => {
+                    self.start_token(index);
+                    // unexpected character
+                    return Err(self.error_at(LexerErrorKind::UnexpectedCharacter, after));
+                }
+            }
         }
+        // we have consumed every byte
+        Ok(slice.len())
     }
 
     fn lex_numeral_or_decimal(&mut self, slice: &[u8]) -> Result<usize, LexError<H::Error>> {
@@ -299,7 +497,7 @@ impl<H: TokenHandler> Lexer<H> {
             Some(_) => {
                 // we have successfully consumed the numeral, finish it
                 // compute the end location, no line feeds are allowed in simple symbols
-                self.finish_numeral(TokenEnd::at_byte(index))?;
+                self.finish_numeral(TokenEnd::at_byte(index), Content::Stored)?;
                 // move back to normal lexer state, not consuming the current byte
                 self.state = LexerState::Normal;
                 Ok(index)
@@ -323,7 +521,7 @@ impl<H: TokenHandler> Lexer<H> {
         if end < slice.len() {
             // we have successfully consumed the fraction, finish the decimal
             // compute the end location, no line feeds are allowed in simple symbols
-            self.finish_decimal(TokenEnd::at_byte(end))?;
+            self.finish_decimal(TokenEnd::at_byte(end), Content::Stored)?;
             self.state = LexerState::Normal;
         } else {
             // we ran out of bytes for now
@@ -353,7 +551,7 @@ impl<H: TokenHandler> Lexer<H> {
         if index < slice.len() {
             // we have successfully consumed the digit run, finish it
             // compute the end location, no line feeds are allowed in simple symbols
-            self.finish_digit_run(run, TokenEnd::at_byte(index))?;
+            self.finish_digit_run(run, TokenEnd::at_byte(index), Content::Stored)?;
             self.state = LexerState::Normal;
         }
         Ok(index)
@@ -368,7 +566,7 @@ impl<H: TokenHandler> Lexer<H> {
                 if rest[0] != b'\"' {
                     // the previous character was really a quote ending the string literal
                     // finish the previously ended token
-                    self.finish_string_literal(TokenEnd::at_byte(consumed))?;
+                    self.finish_string_literal(TokenEnd::at_byte(consumed), Content::Stored)?;
                     // set lexer to normal state and return, not consuming the current byte
                     self.state = LexerState::Normal;
                     return Ok(consumed);
@@ -437,7 +635,7 @@ impl<H: TokenHandler> Lexer<H> {
         if index < slice.len() {
             // we have successfully consumed the symbol, finish it
             // compute the end location, no line feeds are allowed in simple symbols
-            self.finish_simple_symbol(TokenEnd::at_byte(index))?;
+            self.finish_simple_symbol(TokenEnd::at_byte(index), Content::Stored)?;
             self.state = LexerState::Normal;
         }
 
@@ -457,7 +655,11 @@ impl<H: TokenHandler> Lexer<H> {
                     // end of quoted symbol, extend and sink its token
                     // the closing pipe is not consumed but delimits the token
                     self.token_content.extend_from_slice(&rest[..index]);
-                    self.sink(TokenType::Symbol, TokenEnd::at_byte(after_slice_position))?;
+                    self.sink_slice(
+                        TokenType::Symbol,
+                        TokenEnd::at_byte(after_slice_position),
+                        Content::Stored,
+                    )?;
                     // return to normal, consuming bytes including the pipe
                     self.state = LexerState::Normal;
                     return Ok(after_slice_position);
@@ -511,7 +713,7 @@ impl<H: TokenHandler> Lexer<H> {
         if index < slice.len() {
             // we have successfully consumed the keyword, finish it
             // compute the end locations, no line feeds are allowed in keywords
-            self.finish_keyword(TokenEnd::at_byte(index))?;
+            self.finish_keyword(TokenEnd::at_byte(index), Content::Stored)?;
             self.state = LexerState::Normal;
         }
 
@@ -540,73 +742,95 @@ impl<H: TokenHandler> Lexer<H> {
         Ok(index + 1)
     }
 
-    fn finish_decimal(&mut self, end: TokenEnd) -> Result<(), LexError<H::Error>> {
+    /// Sinks the current token, ending at `position`.
+    fn finish_decimal(
+        &mut self,
+        end: TokenEnd,
+        content: Content,
+    ) -> Result<(), LexError<H::Error>> {
         // decimals of the form 7. without any digit in fractional part are disallowed
-        let last_is_none_or_dot = self
-            .token_content
-            .as_slice()
-            .last()
-            .is_none_or(|c| *c == b'.');
-        if last_is_none_or_dot {
+        let value = content.bytes(&self.token_content);
+        if value.last().is_none_or(|c| *c == b'.') {
             return Err(self.error(LexerErrorKind::FractionDigitExpected, end));
         }
-        // sink new token
-        self.sink(TokenType::Decimal, end)
+        self.sink_slice(TokenType::Decimal, end, content)
     }
 
-    fn finish_numeral(&mut self, end: TokenEnd) -> Result<(), LexError<H::Error>> {
-        // this was a numeral, we have no further checks
-        // sink new token
-        self.sink(TokenType::Numeral, end)
+    fn finish_numeral(
+        &mut self,
+        end: TokenEnd,
+        content: Content,
+    ) -> Result<(), LexError<H::Error>> {
+        self.sink_slice(TokenType::Numeral, end, content)
     }
 
-    fn finish_digit_run(&mut self, run: DigitRun, end: TokenEnd) -> Result<(), LexError<H::Error>> {
+    fn finish_digit_run(
+        &mut self,
+        run: DigitRun,
+        end: TokenEnd,
+        content: Content,
+    ) -> Result<(), LexError<H::Error>> {
         // digit runs must not be empty
-        if self.token_content.is_empty() {
+        let value = content.bytes(&self.token_content);
+        if value.is_empty() {
             return Err(self.error(run.empty_error, end));
         }
-        // sink new token
-        self.sink(run.token_type, end)
+        self.sink_slice(run.token_type, end, content)
     }
 
-    fn finish_simple_symbol(&mut self, end: TokenEnd) -> Result<(), LexError<H::Error>> {
+    fn finish_simple_symbol(
+        &mut self,
+        end: TokenEnd,
+        content: Content,
+    ) -> Result<(), LexError<H::Error>> {
         // process reserved words
-        let token_type = if let Some(reserved) = Reserved::from_symbol_opt(&self.token_content) {
+        let value = content.bytes(&self.token_content);
+        let token_type = if let Some(reserved) = Reserved::from_bytes_opt(value) {
             TokenType::Reserved(reserved)
         } else {
             TokenType::Symbol
         };
-        // sink new token
-        self.sink(token_type, end)
+        self.sink_slice(token_type, end, content)
     }
 
-    fn finish_keyword(&mut self, end: TokenEnd) -> Result<(), LexError<H::Error>> {
+    fn finish_keyword(
+        &mut self,
+        end: TokenEnd,
+        content: Content,
+    ) -> Result<(), LexError<H::Error>> {
+        let value = content.bytes(&self.token_content);
         // ensure the keyword is not empty
-        if self.token_content.is_empty() {
+        if value.is_empty() {
             return Err(self.error(LexerErrorKind::ForbiddenKeywordName, end));
         }
         // reserved words as keywords are prohibited
-        if Reserved::from_symbol_opt(&self.token_content).is_some() {
+        if Reserved::from_bytes_opt(value).is_some() {
             return Err(self.error(LexerErrorKind::KeywordReserved, end));
         }
-        // sink new token
-        self.sink(TokenType::Keyword, end)
+        self.sink_slice(TokenType::Keyword, end, content)
     }
 
-    fn finish_string_literal(&mut self, end: TokenEnd) -> Result<(), LexError<H::Error>> {
-        // literal has ended at the previous character
-        // sink new token
-        self.sink(TokenType::String, end)
+    fn finish_string_literal(
+        &mut self,
+        end: TokenEnd,
+        content: Content,
+    ) -> Result<(), LexError<H::Error>> {
+        self.sink_slice(TokenType::String, end, content)
     }
 
-    /// Sinks the current token, ending at `position`.
-    fn sink(&mut self, token_type: TokenType, end: TokenEnd) -> Result<(), LexError<H::Error>> {
+    /// Sinks a token with the given content, ending at `end`.
+    fn sink_slice(
+        &mut self,
+        token_type: TokenType,
+        end: TokenEnd,
+        content: Content,
+    ) -> Result<(), LexError<H::Error>> {
         // construct the span
         let end = self.location_at(end.position);
         let span = SmtSpan::new_unchecked(self.token_start, end);
 
         // pass the content by reference
-        let value = self.token_content.as_view();
+        let value = String8View::new(content.bytes(&self.token_content));
 
         // the caller of this function is responsible
         // for ensuring that the constructed token kind is valid
@@ -666,5 +890,19 @@ impl<H: TokenHandler> Lexer<H> {
         let end = self.location_at(position);
         let span = SmtSpan::new_unchecked(self.token_start, end);
         LexError::Lexer(LexerError::new(kind, span))
+    }
+
+    /// Sets state to failed when an error propagates from the inner function.
+    ///
+    /// Called from the outer public functions.
+    fn fail_on_error(
+        &mut self,
+        step: impl FnOnce(&mut Self) -> Result<(), LexError<H::Error>>,
+    ) -> Result<(), LexError<H::Error>> {
+        let result = step(self);
+        if result.is_err() {
+            self.state = LexerState::Failed;
+        }
+        result
     }
 }
