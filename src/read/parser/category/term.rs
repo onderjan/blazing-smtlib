@@ -182,6 +182,7 @@ impl<H: SmtHandler> Default for TermParser<H> {
 impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
     type Result = H::Term;
 
+    #[inline]
     fn restart(&mut self) {
         self.state = State::Start;
         self.levels.clear();
@@ -193,6 +194,7 @@ impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
         self.pattern_parser.restart();
     }
 
+    #[inline]
     fn progress(
         &mut self,
         handler: &mut H,
@@ -318,6 +320,7 @@ impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
 }
 
 impl<H: SmtHandler> TermParser<H> {
+    #[inline]
     fn progress_inner(
         &mut self,
         handler: &mut H,
@@ -452,6 +455,7 @@ impl<H: SmtHandler> TermParser<H> {
         }
     }
 
+    #[inline]
     fn parse_term_start(
         &mut self,
         token: Token,
@@ -511,6 +515,7 @@ impl<H: SmtHandler> TermParser<H> {
         }
     }
 
+    #[inline]
     fn parse_term_open(&mut self, token: Token) -> Result<(), ParserError<H::Error>> {
         let span = token.span();
         let state = match token.kind() {
@@ -693,6 +698,7 @@ impl<H: SmtHandler> TermParser<H> {
         Ok(ControlFlow::Continue(()))
     }
 
+    #[inline]
     fn start_level(&mut self, level: Level<H>) {
         // push the level and move to the start state
         self.levels.push(level);
@@ -723,6 +729,7 @@ impl<H: SmtHandler> SortedBindingsParser<H> {
 }
 
 impl<H: SmtHandler> SortedBindingsParser<H> {
+    #[inline]
     fn restart(&mut self) {
         self.state = SortedBindingsParserState::Start;
         self.num_opened = 0;

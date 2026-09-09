@@ -280,6 +280,7 @@ impl<H: CommandHandler> CategoryParser<H> for GetValueParser<H> {
         self.inner.restart();
     }
 
+    #[inline]
     fn progress(
         &mut self,
         handler: &mut H,

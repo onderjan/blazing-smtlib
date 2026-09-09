@@ -96,6 +96,7 @@ impl<'a, H: CommandHandler> Parser<'a, H> {
 impl<'a, H: CommandHandler> TokenHandler for Parser<'a, H> {
     type Error = ParserError<H::Error>;
 
+    #[inline]
     fn handle_token(&mut self, token: Token) -> Result<(), ParserError<H::Error>> {
         let span = token.span();
         match &mut self.state {

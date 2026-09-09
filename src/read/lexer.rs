@@ -819,6 +819,7 @@ impl<H: TokenHandler> Lexer<H> {
     }
 
     /// Sinks a token with the given content, ending at `end`.
+    #[inline]
     fn sink_slice(
         &mut self,
         token_type: TokenType,

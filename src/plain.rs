@@ -233,6 +233,7 @@ macro_rules! string8_newtype {
             pub fn as_slice(&self) -> &'a [u8] {
                 self.0.as_slice()
             }
+            #[inline]
             pub fn into_owned(self) -> $name {
                 $name(self.0.into_owned())
             }

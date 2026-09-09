@@ -63,12 +63,14 @@ impl Default for IdentParser {
 impl<H: SmtHandler> CategoryParser<H> for IdentParser {
     type Result = SmtIdent;
 
+    #[inline]
     fn restart(&mut self) {
         // call the inherent implementation
         // it exists to avoid needing to specify <H>
         self.restart();
     }
 
+    #[inline]
     fn progress(
         &mut self,
         _handler: &mut H,

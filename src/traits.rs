@@ -383,6 +383,7 @@ impl SmtHandler for CheckStandardSyntax {
         Ok(())
     }
 
+    #[inline]
     fn handle_term(&mut self, _term: SmtTerm<Self>) -> Result<Self::Term, Self::Error> {
         Ok(())
     }

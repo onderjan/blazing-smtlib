@@ -63,12 +63,14 @@ impl<H: CommandHandler, D: Definition<H>> Default for DefinitionParser<H, D> {
 impl<H: CommandHandler, D: Definition<H>> CategoryParser<H> for DefinitionParser<H, D> {
     type Result = ();
 
+    #[inline]
     fn restart(&mut self) {
         self.state = DefinitionParserState::Signature;
         self.signature_parser.restart();
         self.body_parser.restart();
     }
 
+    #[inline]
     fn progress(
         &mut self,
         handler: &mut H,

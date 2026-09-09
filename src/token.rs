@@ -100,6 +100,7 @@ impl Reserved {
         Self::from_bytes_opt(symbol.as_slice())
     }
 
+    #[inline]
     pub fn from_bytes_opt(symbol: &[u8]) -> Option<Reserved> {
         Some(match symbol {
             b"BINARY" => Reserved::Binary,
@@ -152,6 +153,7 @@ pub trait TokenHandler {
 impl<T: TokenHandler + ?Sized> TokenHandler for &mut T {
     type Error = T::Error;
 
+    #[inline]
     fn handle_token(&mut self, token: Token) -> Result<(), Self::Error> {
         (**self).handle_token(token)
     }

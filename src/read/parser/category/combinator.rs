@@ -47,6 +47,7 @@ impl<H: SmtHandler, P1: CategoryParser<H>, P2: CategoryParser<H>> CategoryParser
         self.first_result = None;
     }
 
+    #[inline]
     fn progress(
         &mut self,
         handler: &mut H,
@@ -102,6 +103,7 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for ClosedParser<H, 
         self.inner.restart();
     }
 
+    #[inline]
     fn progress(
         &mut self,
         handler: &mut H,
@@ -143,6 +145,7 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for OpenedParser<H, 
         self.inner.restart();
     }
 
+    #[inline]
     fn progress(
         &mut self,
         handler: &mut H,
@@ -201,6 +204,7 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for ClosedMultiplePa
         self.results.clear();
     }
 
+    #[inline]
     fn progress(
         &mut self,
         handler: &mut H,

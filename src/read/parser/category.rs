@@ -112,6 +112,7 @@ impl CategoryParserError {
     }
 }
 
+#[inline]
 fn parse_special_constant(kind: TokenKind) -> Result<SmtSpecialConstant, TokenKind> {
     let constant = match kind {
         TokenKind::Numeral(value) => SmtSpecialConstant::Numeral(value.into_owned()),

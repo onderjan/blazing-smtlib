@@ -24,6 +24,7 @@ pub trait ParseCommand<H: CommandHandler + ?Sized> {
 pub enum NoCommandParser {}
 
 impl<H: CommandHandler> ParseCommand<H> for NoCommandParser {
+    #[inline]
     fn progress(
         &mut self,
         _handler: &mut H,
@@ -78,6 +79,7 @@ impl<H: CommandHandler, C: CommandAction<H>> Default for CommandParser<H, C> {
 }
 
 impl<H: CommandHandler, C: CommandAction<H>> ParseCommand<H> for CommandParser<H, C> {
+    #[inline]
     fn progress(
         &mut self,
         handler: &mut H,
