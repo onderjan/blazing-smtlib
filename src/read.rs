@@ -1,14 +1,18 @@
-//! SMT-LIB reading (lexing + parsing).
+//! Reading SMT-LIB input: lexing and parsing.
 //!
-//! Reading composes lexing (turning bytes into tokens)
-//! and parsing (turning tokens into categories and commands
-//! that are handled by `CommandHandler`).
+//! Reading turns bytes into tokens (the [`lexer`] module) and tokens into
+//! the syntactic categories and commands of SMT-LIB (the [`parser`] module),
+//! which are delivered to a [`CommandHandler`] in streaming fashion:
+//! the input is processed piece by piece and every category or command
+//! to be handled reaches the handler before the next one is read.
 //!
-//! Use `read_smt` or `read_smt_file` for simple reading purposes.
-//! For more advanced usage, consider using `SmtReader`.
+//! For simple usage, use [`read_smt`] and [`read_smt_file`].
 //!
-//! The submodules `lexer` and `parser` contain specific
-//! lexing and parsing constructs that can be used independently.
+//! [`SmtReader`] reads the same way from any sequence of buffers and keeps
+//! the parser's resources under the caller's control, so it is the entry
+//! point when the input does not arrive as one buffered reader or when the
+//! resources should serve several reads. The [`lexer`] and [`parser`]
+//! modules can also be used on their own.
 
 use std::{
     fs::File,
@@ -27,20 +31,24 @@ use crate::{
 pub mod lexer;
 pub mod parser;
 
-/// The kind of error that occured while reading.
+/// Determines why reading has failed.
 #[derive(Debug)]
 pub enum SmtReadErrorKind<E> {
-    /// An I/O error occurred when reading from a file or a buffered reader.
+    /// Reading from a file or a buffered reader failed.
     Io(std::io::Error),
-    /// The error occurred when lexing.
+    /// The input is not a valid sequence of SMT-LIB tokens.
     Lexer(LexerErrorKind),
-    /// The error occurred when parsing.
+    /// The tokens do not form valid SMT-LIB syntactic categories or commands.
+    ///
+    /// Commands with non-standard names are routed to the handler for
+    /// processing, so they are rejected with a [`SmtReadErrorKind::Handler`]
+    /// error kind instead.
     Parser(CategoryErrorKind),
-    /// The error occurred in the user handler.
+    /// The handler rejected a command or a syntactic category.
     Handler(E),
 }
 
-/// Error that occured while reading.
+/// An error that ended reading, including its span.
 #[derive(Debug)]
 pub struct SmtReadError<E> {
     kind: SmtReadErrorKind<E>,
@@ -52,6 +60,7 @@ impl<E> SmtReadError<E> {
         Self { kind, span }
     }
 
+    /// Determines why reading has failed.
     pub fn kind(&self) -> &SmtReadErrorKind<E> {
         &self.kind
     }
@@ -64,6 +73,7 @@ impl<E> SmtReadError<E> {
         self.span
     }
 
+    /// Convert into the enumeration that determines why reading has failed.
     pub fn into_kind(self) -> SmtReadErrorKind<E> {
         self.kind
     }
@@ -96,15 +106,16 @@ impl<E> From<ParserError<E>> for SmtReadError<E> {
     }
 }
 
-/// Reads an SMT-LIB file from a given path.
+/// Reads the SMT-LIB file at `path`, delivering its content to `handler`.
 ///
-/// Syntactic categories and commands are processed with `handler`.
+/// This is a convenience function over [`SmtReader`] for handlers where
+/// their resources implement [`Default`]: parser and handler resources
+/// are built for this call and dropped afterwards, so their buffers cannot
+/// be preserved for future use. Use [`SmtReader`] directly to keep the
+/// resources across reads or to feed the input in pieces.
 ///
-/// This is a simple convenience function for handlers where resources have
-/// a default constructor and it does not matter that the allocated parser structures
-/// are dropped and cannot be reused afterwards for increased performance.
-///
-/// Use `SmtReader` directly if more control is needed.
+/// A failure to open the file is reported as an I/O error with an empty
+/// span at the start of the input.
 pub fn read_smt_file<H: CommandHandler<Resources: Default>>(
     handler: &mut H,
     path: &Path,
@@ -112,18 +123,17 @@ pub fn read_smt_file<H: CommandHandler<Resources: Default>>(
     SmtReader::new(handler, &mut Default::default()).read_file(path)
 }
 
-/// Reads a buffered reader containing SMT-LIB commands.
+/// Reads SMT-LIB input from `buf_reader` to its end, delivering its content
+/// to `handler`.
 ///
-/// The buffered reader is read fully, considering a zero-length read buffer
-/// to be an End of File.
+/// The input is considered to end when the buffered reader returns
+/// a zero-length buffer.
 ///
-/// Syntactic categories and commands are processed with `handler`.
-///
-/// This is a simple convenience function for handlers that do not keep any custom resources
-/// when it does not matter that the allocated parser structures are dropped
-/// and cannot be reused afterwards for increased performance.
-///
-/// Use `SmtReader` directly if more control is needed.
+/// This is a convenience function over [`SmtReader`] for handlers where
+/// their resources implement [`Default`]: parser and handler resources
+/// are built for this call and dropped afterwards, so their buffers cannot
+/// be preserved for future use. Use [`SmtReader`] directly to keep the
+/// resources across reads or to feed the input in pieces.
 pub fn read_smt<H: CommandHandler<Resources: Default>>(
     handler: &mut H,
     buf_reader: impl BufRead,
@@ -131,21 +141,40 @@ pub fn read_smt<H: CommandHandler<Resources: Default>>(
     SmtReader::new(handler, &mut Default::default()).read_all(buf_reader)
 }
 
-/// SMT-LIB reader that processes bytestream data and streams the processed content to `CommandHandler`.
+/// Streams SMT-LIB input from bytes to a [`CommandHandler`].
 ///
-/// For simple usage scenarios, consider using `read_smt_file` or `read_smt`.
+/// A reader owns its lexer and parser and borrows the handler and its resources.
+///
+/// The input is read either whole, through [`read_file`](Self::read_file)
+/// or [`read_all`](Self::read_all), or in pieces, using
+/// [`read_slice`](Self::read_slice) sequentially, followed by [`read_eof`](Self::read_eof)
+/// once the input has ended. A piece may end anywhere, even inside a token.
+///
+/// For whole inputs, consider [`read_smt_file`] and [`read_smt`].
 pub struct SmtReader<'a, H: CommandHandler> {
     lexer: Lexer<Parser<'a, H>>,
 }
 
 impl<'a, H: CommandHandler> SmtReader<'a, H> {
+    /// Creates a reader that calls `handler` sequentially.
+    ///
+    /// The parser resources together with custom handler `resources`
+    /// are provided to the handler for parsing non-standard commands,
+    /// useful for de-duplicating allocated resources.
     pub fn new(handler: &'a mut H, resources: &'a mut H::Resources) -> Self {
         let parser = Parser::new(handler, resources);
         let lexer = Lexer::new(parser);
         Self { lexer }
     }
 
-    /// Opens and reads a file, treating the ending zero-byte read as End of File.
+    /// Opens the file at `path` and reads it to its end, including the end
+    /// of the input.
+    ///
+    /// A failure to open the file is reported as an I/O error with an empty
+    /// span at the start of the input. An I/O read error is reported as
+    /// an empty span at the respective position.
+    ///
+    /// Panics if a previous call on this reader returned an error.
     pub fn read_file(&mut self, path: &Path) -> Result<(), SmtReadError<H::Error>> {
         let file = File::open(path)
             .map_err(|err| SmtReadError::new(SmtReadErrorKind::Io(err), SmtSpan::new_zero()))?;
@@ -153,7 +182,13 @@ impl<'a, H: CommandHandler> SmtReader<'a, H> {
         self.read_all(buf_reader)
     }
 
-    /// Reads a buffered reader fully, treating the ending zero-byte read as End of File.
+    /// Reads `buf_reader` to its end, including the end of the input.
+    ///
+    /// The input is considered to end when the buffered reader returns
+    /// a zero-length buffer. A failure while reading is reported as
+    /// an I/O error with an empty span at the position reached.
+    ///
+    /// Panics if a previous call on this reader returned an error.
     pub fn read_all<R: BufRead>(
         &mut self,
         mut buf_reader: R,
@@ -164,7 +199,7 @@ impl<'a, H: CommandHandler> SmtReader<'a, H> {
                     if !buffer.is_empty() {
                         // process the buffer and mark it consumed
                         let num_consumed = buffer.len();
-                        self.read_buf(buffer)?;
+                        self.read_slice(buffer)?;
                         buf_reader.consume(num_consumed)
                     } else {
                         // end of stream, process End of File and return
@@ -182,20 +217,28 @@ impl<'a, H: CommandHandler> SmtReader<'a, H> {
         }
     }
 
-    /// Processes a single buffer.
+    /// Processes a byte slice as one piece of the input.
     ///
-    /// This function never triggers processing of the End of File condition.
-    /// Call `SmtReader::read_eof()` to process the End of File when appropriate.
-    pub fn read_buf(&mut self, buffer: &[u8]) -> Result<(), SmtReadError<H::Error>> {
+    /// The piece may end anywhere, even inside a token: whatever is
+    /// unfinished carries over to the next call.
+    ///
+    /// After processing the whole input using this function,
+    /// call [`read_eof`](Self::read_eof) so the whole input
+    /// is fully processed.
+    ///
+    /// Panics if a previous call on this reader returned an error.
+    pub fn read_slice(&mut self, slice: &[u8]) -> Result<(), SmtReadError<H::Error>> {
         // parsing goes through lexing, so just call the lexer
-        Ok(self.lexer.lex_slice(buffer)?)
+        Ok(self.lexer.lex_slice(slice)?)
     }
 
-    /// Processes an End of File condition.
+    /// Processes the end of the input.
     ///
-    /// If using `SmtReader::read_buf` to read, this must be called
-    /// after the logical SMT-LIB command file ends to prevent
-    /// leaving the ending unprocessed.
+    /// Call this once after the last [`read_slice`](Self::read_slice);
+    /// [`read_file`](Self::read_file) and [`read_all`](Self::read_all) call
+    /// it themselves.
+    ///
+    /// Panics if a previous call on this reader returned an error.
     pub fn read_eof(&mut self) -> Result<(), SmtReadError<H::Error>> {
         Ok(self.lexer.lex_eof()?)
     }
