@@ -236,7 +236,6 @@ impl TraceHash {
 
 impl SmtHandler for TraceHash {
     type Error = NonstandardCommandError;
-    type Resources = ();
 
     type SExpr = u64;
     type Attribute = u64;

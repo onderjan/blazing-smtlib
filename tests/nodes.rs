@@ -15,7 +15,6 @@ struct OpaqueHandler;
 
 impl SmtHandler for OpaqueHandler {
     type Error = Infallible;
-    type Resources = ();
     type SExpr = String;
     type Attribute = String;
     type Sort = String;
