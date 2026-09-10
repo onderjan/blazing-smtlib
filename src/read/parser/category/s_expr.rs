@@ -15,17 +15,14 @@ use crate::{
 /// This parser is self-restarting: after returning Break,
 /// it is in the default state.
 pub struct SExprParser<H: SmtHandler> {
-    levels: Vec<Level<H>>,
-}
-
-/// An S-expression waiting for additional inner S-expressions.
-struct Level<H: SmtHandler> {
-    s_exprs: Vec<H::SExpr>,
+    _priv: std::marker::PhantomData<H>,
 }
 
 impl<H: SmtHandler> SExprParser<H> {
     pub fn new() -> Self {
-        Self { levels: Vec::new() }
+        Self {
+            _priv: std::marker::PhantomData,
+        }
     }
 }
 
@@ -38,12 +35,52 @@ impl<H: SmtHandler> Default for SExprParser<H> {
 impl<H: SmtHandler> CategoryParser<H> for SExprParser<H> {
     type Result = H::SExpr;
 
+    #[inline]
     fn progress(
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
         token: &Token,
     ) -> Result<ControlFlow<H::SExpr>, ParserError<H::Error>> {
+        // progress the slot
+        resources.s_expr_slot.progress(handler, token)
+    }
+}
+
+/// An S-expression waiting for additional inner S-expressions.
+struct Level<H: SmtHandler + ?Sized> {
+    s_exprs: Vec<H::SExpr>,
+}
+
+pub(crate) struct SExprSlot<H: SmtHandler + ?Sized> {
+    levels: Vec<Level<H>>,
+}
+
+impl<H: SmtHandler + ?Sized> SExprSlot<H> {
+    pub(crate) fn new() -> Self {
+        Self { levels: Vec::new() }
+    }
+
+    pub(crate) fn is_pristine(&self) -> bool {
+        self.levels.is_empty()
+    }
+
+    pub(crate) fn clear(&mut self) {
+        self.levels.clear();
+    }
+
+    #[inline]
+    pub(crate) fn progress(
+        &mut self,
+        handler: &mut H,
+        token: &Token,
+    ) -> Result<ControlFlow<H::SExpr>, ParserError<H::Error>> {
+        // there is no state besides the levels, so an empty level stack
+        // means the category is being entered
+        if self.levels.is_empty() {
+            debug_assert!(self.is_pristine(), "must be pristine when starting");
+        }
+
         let s_expr = match token.kind() {
             TokenKind::Symbol(symbol) => SmtSExpr::Symbol(symbol.into_owned()),
             TokenKind::Reserved(reserved) => SmtSExpr::Reserved(reserved),
@@ -90,6 +127,27 @@ impl<H: SmtHandler> CategoryParser<H> for SExprParser<H> {
         } else {
             // this is the root level, we are done
             Ok(ControlFlow::Break(s_expr))
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{CheckStandardSyntax, read::parser::category::tests::parse_all_with};
+
+    #[test]
+    fn slot_is_pristine_after_every_s_expr() {
+        // atoms, empty lists, and nested lists all use the level stack of the
+        // slot, which must be empty again afterwards
+        for input in [&b"x"[..], b"()", b"(a (b c) :kw 1)", b"((()))"] {
+            let mut resources = ParserResources::new();
+            parse_all_with(
+                SExprParser::<CheckStandardSyntax>::new(),
+                &mut resources,
+                input,
+            );
+            assert!(resources.are_pristine(), "after {input:?}");
         }
     }
 }

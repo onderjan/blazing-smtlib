@@ -33,6 +33,7 @@ pub use {
 };
 
 pub(crate) use ident::IdentSlot;
+pub(crate) use s_expr::SExprSlot;
 pub(crate) use sort::SortSlot;
 
 pub type SortedVarParser<H> = ParenParser<H, PairParser<H, SymbolParser, SortParser<H>>>;

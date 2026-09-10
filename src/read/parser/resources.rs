@@ -1,6 +1,6 @@
 use crate::{
     SmtHandler,
-    read::parser::{IdentSlot, SortSlot},
+    read::parser::{IdentSlot, SExprSlot, SortSlot},
 };
 
 /// Contains non-duplicated parser resources.
@@ -13,6 +13,7 @@ use crate::{
 pub struct ParserResources<H: SmtHandler + ?Sized> {
     pub(crate) ident_slot: IdentSlot,
     pub(crate) sort_slot: SortSlot<H>,
+    pub(crate) s_expr_slot: SExprSlot<H>,
 }
 
 impl<H: SmtHandler + ?Sized> ParserResources<H> {
@@ -20,16 +21,20 @@ impl<H: SmtHandler + ?Sized> ParserResources<H> {
         Self {
             ident_slot: IdentSlot::new(),
             sort_slot: SortSlot::new(),
+            s_expr_slot: SExprSlot::new(),
         }
     }
 
     pub(crate) fn are_pristine(&self) -> bool {
-        self.ident_slot.is_pristine() && self.sort_slot.is_pristine()
+        self.ident_slot.is_pristine()
+            && self.sort_slot.is_pristine()
+            && self.s_expr_slot.is_pristine()
     }
 
     pub(crate) fn clear(&mut self) {
         self.ident_slot.clear();
         self.sort_slot.clear();
+        self.s_expr_slot.clear();
     }
 }
 
