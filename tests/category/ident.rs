@@ -49,23 +49,6 @@ fn indexed_over_lines() {
 }
 
 #[test]
-fn continuations_after_open_paren_and_underscore() {
-    // the callers that already consumed `(` or `( _` start in the corresponding state,
-    // so the parser accepts the rest of the indexed identifier
-    let mut parser = IdentParser::new();
-    parser.move_after_open_paren();
-    let ident = parse_all_from(parser, b"_ f 1)");
-    assert_eq!(ident.name.as_slice(), b"f");
-    assert_eq!(indices(&ident), ["1"]);
-
-    let mut parser = IdentParser::new();
-    parser.move_after_underscore();
-    let ident = parse_all_from(parser, b"f 1)");
-    assert_eq!(ident.name.as_slice(), b"f");
-    assert_eq!(indices(&ident), ["1"]);
-}
-
-#[test]
 fn errors() {
     let err = assert_error::<IdentParser>(b"1", 0, 1);
     assert!(

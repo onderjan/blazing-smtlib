@@ -321,7 +321,7 @@ impl<H: SmtHandler> TermParser<H> {
         match self.state {
             State::Start => self.parse_term_start(token),
             State::Open => {
-                self.parse_term_open(token)?;
+                self.parse_term_open(resources, token)?;
                 Ok(ControlFlow::Continue(()))
             }
             State::QualifiedIdent => Ok(self
@@ -512,7 +512,11 @@ impl<H: SmtHandler> TermParser<H> {
     }
 
     #[inline]
-    fn parse_term_open(&mut self, token: &Token) -> Result<(), ParserError<H::Error>> {
+    fn parse_term_open(
+        &mut self,
+        resources: &mut ParserResources,
+        token: &Token,
+    ) -> Result<(), ParserError<H::Error>> {
         let span = token.span();
         let state = match token.kind() {
             TokenKind::Symbol(fn_name) => {
@@ -561,7 +565,7 @@ impl<H: SmtHandler> TermParser<H> {
                 // this is actually a term composed of an indexed identifier
                 // move the qualified ident parser after the underscore
                 // (meaning the ident will be unqualified but indexed)
-                self.qualified_ident_parser.move_after_underscore();
+                self.qualified_ident_parser.move_after_underscore(resources);
                 State::QualifiedIdent
             }
             TokenKind::Reserved(Reserved::As) => {

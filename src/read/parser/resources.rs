@@ -1,3 +1,5 @@
+use crate::read::parser::IdentSlot;
+
 /// Contains non-duplicated parser resources.
 ///
 /// Parsers that are constructed multiple times in locations
@@ -6,21 +8,22 @@
 /// is only constructed once for the root parser and
 /// propagated to smaller parsers.
 pub struct ParserResources {
-    _priv: (),
+    pub(crate) ident_slot: IdentSlot,
 }
 
 impl ParserResources {
     pub fn new() -> Self {
-        Self { _priv: () }
+        Self {
+            ident_slot: IdentSlot::new(),
+        }
     }
 
     pub(crate) fn are_pristine(&self) -> bool {
-        // TODO: add resources
-        true
+        self.ident_slot.is_pristine()
     }
 
     pub(crate) fn clear(&mut self) {
-        // TODO: add resources
+        self.ident_slot.clear();
     }
 }
 

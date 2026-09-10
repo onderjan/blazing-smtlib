@@ -436,25 +436,6 @@ fn parse_two<P: CategoryParser<Printing> + Default>(input: &[u8]) -> (P::Result,
     }
 }
 
-/// Runs the given parser instance over a fresh `Printing` handler,
-/// requires success with no unconsumed tokens, and returns the result.
-///
-/// This is the entry point for testing parsers constructed by
-/// their `after_*` constructors instead of `Default`.
-#[track_caller]
-fn parse_all_from<P: CategoryParser<Printing>>(parser: P, input: &[u8]) -> P::Result {
-    match run_count_from(parser, &mut Printing::default(), input, 1) {
-        Ok((results, 0)) => results
-            .into_iter()
-            .next()
-            .expect("a successful single-parse run has one result"),
-        Ok((_, left)) => panic!("{left} tokens left unconsumed in {:?}", text(input)),
-        Err((kind, span)) => {
-            panic!("unexpected error {kind:?} at {span:?} in {:?}", text(input))
-        }
-    }
-}
-
 /// Runs the parser, requires success with no unconsumed tokens, and returns the result.
 #[track_caller]
 fn parse_all<P: CategoryParser<Printing> + Default>(input: &[u8]) -> P::Result {

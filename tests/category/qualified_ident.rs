@@ -66,34 +66,6 @@ fn qualified_applied_sort() {
 }
 
 #[test]
-fn entry_points() {
-    // the callers that already consumed `(`, `( _` or `( as`
-    // start in the corresponding state, so the parser accepts
-    // the rest of the qualified identifier
-    let mut parser = QualifiedIdentParser::<Printing>::new();
-    parser.move_after_open_paren();
-    let qi = parse_all_from(parser, b"_ f 1)");
-    assert_eq!(name(&qi), b"f");
-    assert_eq!(qi.ident.indices.len(), 1);
-    assert_eq!(qi.sort, None);
-
-    // regression: the entry point must put the inner ident parser after
-    // the underscore as well, or `f` alone would finish the identifier
-    let mut parser = QualifiedIdentParser::<Printing>::new();
-    parser.move_after_underscore();
-    let qi = parse_all_from(parser, b"f 1)");
-    assert_eq!(name(&qi), b"f");
-    assert_eq!(qi.ident.indices.len(), 1);
-    assert_eq!(qi.sort, None);
-
-    let mut parser = QualifiedIdentParser::<Printing>::new();
-    parser.move_after_as();
-    let qi = parse_all_from(parser, b"x Bool)");
-    assert_eq!(name(&qi), b"x");
-    assert_eq!(qi.sort.as_deref(), Some("Bool"));
-}
-
-#[test]
 fn errors() {
     let err = assert_error::<QualifiedIdentParser<Printing>>(b"1", 0, 1);
     assert!(matches!(err, CategoryErrorKind::ExpectedIdent), "{err:?}");

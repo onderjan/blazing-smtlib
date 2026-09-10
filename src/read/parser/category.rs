@@ -32,6 +32,8 @@ pub use {
     },
 };
 
+pub(crate) use ident::IdentSlot;
+
 pub type SortedVarParser<H> = ParenParser<H, PairParser<H, SymbolParser, SortParser<H>>>;
 
 pub type ParenSortedVarsParser<H> = ParenMultipleParser<H, SortedVarParser<H>>;
@@ -107,4 +109,74 @@ fn parse_special_constant(kind: TokenKind) -> Result<SmtSpecialConstant, TokenKi
         kind => return Err(kind),
     };
     Ok(constant)
+}
+
+#[cfg(test)]
+pub(crate) mod tests {
+    use std::ops::ControlFlow;
+
+    use crate::{
+        CheckStandardSyntax, NonstandardCommandError,
+        read::{
+            lexer::Lexer,
+            parser::{CategoryParser, ParserError, ParserResources},
+        },
+        token::{Token, TokenHandler, TokenKind},
+    };
+
+    /// Drives `parser` over `resources` through the whole input with the
+    /// standard syntax checker as the handler, requiring that it finishes
+    /// exactly at the end of the input, and returns its result.
+    ///
+    /// Lets unit tests enter a category through its crate-private entry
+    /// points before driving it.
+    pub(crate) fn parse_all_with<P: CategoryParser<CheckStandardSyntax>>(
+        parser: P,
+        resources: &mut ParserResources,
+        input: &[u8],
+    ) -> P::Result {
+        struct Drive<'r, P: CategoryParser<CheckStandardSyntax>> {
+            parser: P,
+            resources: &'r mut ParserResources,
+            result: Option<P::Result>,
+            unconsumed: usize,
+        }
+
+        impl<P: CategoryParser<CheckStandardSyntax>> TokenHandler for Drive<'_, P> {
+            type Error = ParserError<NonstandardCommandError>;
+
+            fn handle_token(&mut self, token: &Token) -> Result<(), Self::Error> {
+                if self.result.is_some() {
+                    if !matches!(token.kind(), TokenKind::EndOfFile) {
+                        self.unconsumed += 1;
+                    }
+                    return Ok(());
+                }
+                if let ControlFlow::Break(result) =
+                    self.parser
+                        .progress(&mut CheckStandardSyntax, self.resources, token)?
+                {
+                    self.result = Some(result);
+                }
+                Ok(())
+            }
+        }
+
+        let mut drive = Drive {
+            parser,
+            resources,
+            result: None,
+            unconsumed: 0,
+        };
+        Lexer::new(&mut drive)
+            .lex_all(input)
+            .expect("test input must lex and parse");
+        assert_eq!(
+            drive.unconsumed, 0,
+            "tokens left unconsumed after the result"
+        );
+        drive
+            .result
+            .expect("the parser must finish before the end of the input")
+    }
 }

@@ -27,7 +27,6 @@ enum State {
 pub struct QualifiedIdentParser<H: SmtHandler> {
     state: State,
 
-    ident_parser: IdentParser,
     qualified_parser: PairParser<H, IdentParser, ClosedParser<H, SortParser<H>>>,
 }
 
@@ -35,7 +34,6 @@ impl<H: SmtHandler> QualifiedIdentParser<H> {
     pub fn new() -> Self {
         Self {
             state: State::Start,
-            ident_parser: IdentParser::new(),
             qualified_parser: PairParser::default(),
         }
     }
@@ -44,9 +42,9 @@ impl<H: SmtHandler> QualifiedIdentParser<H> {
         self.state = State::Open;
     }
 
-    pub fn move_after_underscore(&mut self) {
+    pub fn move_after_underscore(&mut self, resources: &mut ParserResources) {
         // the ident parser must be after underscore as well
-        self.ident_parser.move_after_underscore();
+        resources.ident_slot.move_after_underscore();
         self.state = State::UnqualifiedIndexed;
     }
 
@@ -94,7 +92,7 @@ impl<H: SmtHandler> CategoryParser<H> for QualifiedIdentParser<H> {
                     TokenKind::Reserved(Reserved::Underscore) => {
                         // unqualified indexed ident
                         // move after underscore
-                        self.ident_parser.move_after_underscore();
+                        resources.ident_slot.move_after_underscore();
                         self.state = State::UnqualifiedIndexed;
                     }
                     TokenKind::Reserved(Reserved::As) => {
@@ -111,9 +109,7 @@ impl<H: SmtHandler> CategoryParser<H> for QualifiedIdentParser<H> {
                 }
             }
             State::UnqualifiedIndexed => {
-                if let ControlFlow::Break(ident) =
-                    self.ident_parser.progress(handler, resources, token)?
-                {
+                if let ControlFlow::Break(ident) = resources.ident_slot.progress(token)? {
                     // the closing parenthesis was already consumed by the IdentParser
 
                     // we only need to reset the state:
@@ -143,5 +139,45 @@ impl<H: SmtHandler> CategoryParser<H> for QualifiedIdentParser<H> {
             }
         }
         Ok(ControlFlow::Continue(()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{CheckStandardSyntax, read::parser::category::tests::parse_all_with};
+
+    #[test]
+    fn entry_points() {
+        // the callers that already consumed `(`, `( _` or `( as` enter the
+        // parser in the corresponding state, so it accepts the rest of the
+        // qualified identifier
+        let mut resources = ParserResources::new();
+        let mut parser = QualifiedIdentParser::<CheckStandardSyntax>::new();
+        parser.move_after_open_paren();
+        let qi = parse_all_with(parser, &mut resources, b"_ f 1)");
+        assert_eq!(qi.ident.name.as_slice(), b"f");
+        assert_eq!(qi.ident.indices.len(), 1);
+        assert!(qi.sort.is_none());
+        assert!(resources.are_pristine());
+
+        // regression: the entry point must put the ident slot after the
+        // underscore as well, or `f` alone would finish the identifier
+        let mut resources = ParserResources::new();
+        let mut parser = QualifiedIdentParser::<CheckStandardSyntax>::new();
+        parser.move_after_underscore(&mut resources);
+        let qi = parse_all_with(parser, &mut resources, b"f 1)");
+        assert_eq!(qi.ident.name.as_slice(), b"f");
+        assert_eq!(qi.ident.indices.len(), 1);
+        assert!(qi.sort.is_none());
+        assert!(resources.are_pristine());
+
+        let mut resources = ParserResources::new();
+        let mut parser = QualifiedIdentParser::<CheckStandardSyntax>::new();
+        parser.move_after_as();
+        let qi = parse_all_with(parser, &mut resources, b"x Bool)");
+        assert_eq!(qi.ident.name.as_slice(), b"x");
+        assert!(qi.sort.is_some());
+        assert!(resources.are_pristine());
     }
 }

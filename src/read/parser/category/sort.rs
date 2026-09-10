@@ -4,7 +4,7 @@ use crate::{
     SmtHandler, SmtIdent, SmtSort,
     read::parser::{
         ParserError, ParserResources,
-        category::{CategoryErrorKind, CategoryParser, ident::IdentParser},
+        category::{CategoryErrorKind, CategoryParser},
         handle_err,
     },
     token::{Reserved, Token, TokenKind},
@@ -17,8 +17,6 @@ use crate::{
 pub struct SortParser<H: SmtHandler> {
     state: State,
     levels: Vec<Level<H>>,
-
-    ident_parser: IdentParser,
 }
 
 /// Current sort parser state.
@@ -52,8 +50,6 @@ impl<H: SmtHandler> SortParser<H> {
         Self {
             state: State::Start,
             levels: Vec::new(),
-
-            ident_parser: IdentParser::new(),
         }
     }
 }
@@ -121,7 +117,7 @@ impl<H: SmtHandler> CategoryParser<H> for SortParser<H> {
                     TokenKind::Reserved(Reserved::Underscore) => {
                         // this is a sort consisting just of an indexed identifier
                         // move the ident parser after underscore
-                        self.ident_parser.move_after_underscore();
+                        resources.ident_slot.move_after_underscore();
                         State::IdentOnly
                     }
                     TokenKind::Symbol(name) => {
@@ -136,7 +132,7 @@ impl<H: SmtHandler> CategoryParser<H> for SortParser<H> {
                     TokenKind::ParenOpen => {
                         // indexed ident starting sort
                         // move the ident parser after opening parenthesis
-                        self.ident_parser.move_after_open_paren();
+                        resources.ident_slot.move_after_open_paren();
                         State::StartingIdent
                     }
                     _ => {
@@ -149,22 +145,24 @@ impl<H: SmtHandler> CategoryParser<H> for SortParser<H> {
                 self.state = state;
                 ControlFlow::Continue(())
             }
-            State::IdentOnly => self
-                .ident_parser
-                .progress(handler, resources, token)?
+            State::IdentOnly => resources
+                .ident_slot
+                .progress(token)?
                 .map_break(SmtSort::new_simple),
-            State::StartingIdent => match self.ident_parser.progress(handler, resources, token)? {
-                ControlFlow::Continue(()) => ControlFlow::Continue(()),
-                ControlFlow::Break(ident) => {
-                    // add a new level and start parsing the new sort
-                    self.levels.push(Level {
-                        ident,
-                        applied: Vec::new(),
-                    });
-                    self.state = State::Start;
-                    ControlFlow::Continue(())
+            State::StartingIdent => {
+                match resources.ident_slot.progress(token)? {
+                    ControlFlow::Continue(()) => ControlFlow::Continue(()),
+                    ControlFlow::Break(ident) => {
+                        // add a new level and start parsing the new sort
+                        self.levels.push(Level {
+                            ident,
+                            applied: Vec::new(),
+                        });
+                        self.state = State::Start;
+                        ControlFlow::Continue(())
+                    }
                 }
-            },
+            }
         };
 
         let ControlFlow::Break(sort) = flow else {
