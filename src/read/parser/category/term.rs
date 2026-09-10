@@ -18,16 +18,7 @@ use crate::{
 /// This parser is self-restarting: after returning Break,
 /// it is in the default state.
 pub struct TermParser<H: SmtHandler> {
-    /// Current parser state.
-    state: State,
-    /// Levels of terms waiting for inner terms.
-    levels: Vec<Level<H>>,
-    /// A pending, already processed, term.
-    ///
-    /// This takes priority over the state and levels.
-    pending: Option<Pending<H>>,
-
-    sorted_bindings_parser: SortedBindingsParser,
+    slot: TermSlot<H>,
 }
 
 #[derive(Clone, Copy)]
@@ -103,7 +94,7 @@ enum State {
 }
 
 /// A term waiting for an inner term.
-enum Level<H: SmtHandler> {
+enum Level<H: SmtHandler + ?Sized> {
     /// An application waiting for an inner term.
     ///
     /// It is closed by a closing parenthesis instead of the inner term.
@@ -146,7 +137,7 @@ enum Level<H: SmtHandler> {
 /// A pending term has been processed.
 ///
 /// This has priority over the state and levels.
-struct Pending<H: SmtHandler> {
+struct Pending<H: SmtHandler + ?Sized> {
     term: H::Term,
     /// Determines if the term we are creating is an annotation.
     ///
@@ -158,11 +149,7 @@ struct Pending<H: SmtHandler> {
 impl<H: SmtHandler> TermParser<H> {
     pub fn new() -> Self {
         TermParser {
-            state: State::Start,
-            levels: Vec::new(),
-            pending: None,
-
-            sorted_bindings_parser: SortedBindingsParser::new(),
+            slot: TermSlot::new(),
         }
     }
 }
@@ -176,8 +163,60 @@ impl<H: SmtHandler> Default for TermParser<H> {
 impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
     type Result = H::Term;
 
-    #[inline]
+    #[inline(always)]
     fn progress(
+        &mut self,
+        handler: &mut H,
+        resources: &mut ParserResources<H>,
+        token: &Token,
+    ) -> Result<ControlFlow<H::Term>, ParserError<H::Error>> {
+        // progress the slot
+        self.slot.progress(handler, resources, token)
+    }
+}
+
+pub(crate) struct TermSlot<H: SmtHandler + ?Sized> {
+    /// Current parser state.
+    state: State,
+    /// Levels of terms waiting for inner terms.
+    levels: Vec<Level<H>>,
+    /// A pending, already processed, term.
+    ///
+    /// This takes priority over the state and levels.
+    pending: Option<Pending<H>>,
+
+    sorted_bindings_parser: SortedBindingsParser,
+}
+
+impl<H: SmtHandler + ?Sized> TermSlot<H> {
+    pub(crate) fn new() -> Self {
+        Self {
+            state: State::Start,
+            levels: Vec::new(),
+            pending: None,
+
+            sorted_bindings_parser: SortedBindingsParser::new(),
+        }
+    }
+
+    pub(crate) fn is_pristine(&self) -> bool {
+        matches!(self.state, State::Start)
+            && self.levels.is_empty()
+            && self.pending.is_none()
+            && self.sorted_bindings_parser.is_pristine()
+    }
+
+    pub(crate) fn clear(&mut self) {
+        self.state = State::Start;
+        self.levels.clear();
+        self.pending = None;
+        self.sorted_bindings_parser.clear();
+    }
+}
+
+impl<H: SmtHandler> TermSlot<H> {
+    #[inline]
+    pub(crate) fn progress(
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
@@ -307,7 +346,7 @@ impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
     }
 }
 
-impl<H: SmtHandler> TermParser<H> {
+impl<H: SmtHandler> TermSlot<H> {
     #[inline]
     fn progress_inner(
         &mut self,
@@ -316,7 +355,14 @@ impl<H: SmtHandler> TermParser<H> {
         token: &Token,
     ) -> Result<ControlFlow<SmtTerm<H>>, ParserError<H::Error>> {
         match self.state {
-            State::Start => self.parse_term_start(token),
+            State::Start => {
+                // the start state is also reached before every inner term, so only
+                // an empty level stack means the category is being entered
+                if self.levels.is_empty() {
+                    debug_assert!(self.is_pristine(), "must be pristine when starting");
+                }
+                self.parse_term_start(token)
+            }
             State::Open => {
                 self.parse_term_open(resources, token)?;
                 Ok(ControlFlow::Continue(()))
@@ -734,6 +780,15 @@ impl SortedBindingsParser {
             num_opened: 0,
         }
     }
+
+    fn is_pristine(&self) -> bool {
+        matches!(self.state, SortedBindingsParserState::Start) && self.num_opened == 0
+    }
+
+    fn clear(&mut self) {
+        self.state = SortedBindingsParserState::Start;
+        self.num_opened = 0;
+    }
 }
 
 impl SortedBindingsParser {
@@ -787,5 +842,38 @@ impl SortedBindingsParser {
             }
         }
         Ok(ControlFlow::Continue(()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{CheckStandardSyntax, read::parser::category::tests::parse_all_with};
+
+    #[test]
+    fn slots_are_pristine_after_every_term() {
+        // every term shape enters the term slot and, through it, the slots
+        // of the categories a term contains; all must be back in their
+        // initial state afterwards
+        for input in [
+            &b"x"[..],
+            b"(f x 1)",
+            b"((_ extract 3 0) x)",
+            b"(as nil (List Int))",
+            b"(let ((a x) (b y)) (g a b))",
+            b"(let ((a x)) (let ((b a)) b))",
+            b"(forall ((x Int) (y (_ BitVec 8))) (p x y))",
+            b"(lambda ((x Int)) (f x))",
+            b"(! (f x) :named n :pattern ((f x)))",
+            b"(match l ((nil l2) ((cons h t) (cons h (append t l2)))))",
+        ] {
+            let mut resources = ParserResources::new();
+            parse_all_with(
+                TermParser::<CheckStandardSyntax>::new(),
+                &mut resources,
+                input,
+            );
+            assert!(resources.are_pristine(), "after {input:?}");
+        }
     }
 }
