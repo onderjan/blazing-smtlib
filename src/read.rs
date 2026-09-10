@@ -1,7 +1,6 @@
 use std::{
     fs::File,
     io::{BufRead, BufReader},
-    ops::ControlFlow,
     path::Path,
 };
 
@@ -83,65 +82,100 @@ impl<E> From<ParserError<E>> for SmtReadError<E> {
     }
 }
 
-pub fn read_smt_file<H: CommandHandler>(
+/// Reads an SMT-LIB file from a given path, processing commands with `handler`.
+///
+/// This is a simple convenience function for handlers where resources have
+/// a default constructor and it does not matter that the allocated parser structures
+/// are dropped and cannot be reused afterwards for increased performance.
+///
+/// Use `SmtReader` directly if more control is needed.
+pub fn read_smt_file<H: CommandHandler<Resources: Default>>(
     handler: &mut H,
-    resources: &mut H::Resources,
     path: &Path,
 ) -> Result<(), SmtReadError<H::Error>> {
-    let file = File::open(path)
-        .map_err(|err| SmtReadError::new(SmtReadErrorKind::Io(err), SmtSpan::new_zero()))?;
-    let reader = BufReader::new(file);
-    read_smt(handler, resources, reader)
+    SmtReader::new(handler, &mut Default::default()).read_file(path)
 }
 
-pub fn read_smt<H: CommandHandler>(
+/// Reads a buffered reader containing an SMT-LIB file fully, processing commands with `handler`.
+///
+/// This is a simple convenience function for handlers that do not keep any custom resources
+/// when it does not matter that the allocated parser structures are dropped
+/// and cannot be reused afterwards for increased performance.
+///
+/// Use `SmtReader` directly if more control is needed.
+pub fn read_smt<H: CommandHandler<Resources: Default>>(
     handler: &mut H,
-    resources: &mut H::Resources,
     buf_reader: impl BufRead,
 ) -> Result<(), SmtReadError<H::Error>> {
-    let mut parser = Parser::new(handler, resources);
-    SmtReader::new(&mut parser, buf_reader).run()
+    SmtReader::new(handler, &mut Default::default()).read_all(buf_reader)
 }
 
-struct SmtReader<'a, H: CommandHandler, R: BufRead> {
-    buf_reader: R,
-    lexer: Lexer<&'a mut Parser<'a, H>>,
+/// SMT-LIB reader that processes bytestream data and streams the processed content to `CommandHandler`.
+///
+/// For simple usage scenarios, consider using `read_smt_file` or `read_smt`.
+struct SmtReader<'a, H: CommandHandler> {
+    lexer: Lexer<Parser<'a, H>>,
 }
 
-impl<'a, H: CommandHandler, R: BufRead> SmtReader<'a, H, R> {
-    fn new(parser: &'a mut Parser<'a, H>, buf_reader: R) -> Self {
+impl<'a, H: CommandHandler> SmtReader<'a, H> {
+    fn new(handler: &'a mut H, resources: &'a mut H::Resources) -> Self {
+        let parser = Parser::new(handler, resources);
         let lexer = Lexer::new(parser);
-        Self { buf_reader, lexer }
+        Self { lexer }
     }
 
-    fn run(mut self) -> Result<(), SmtReadError<H::Error>> {
-        while let ControlFlow::Continue(()) = self.read_buf()? {}
-        self.finish_eof()
+    /// Opens and reads a file, treating the ending zero-byte read as End of File.
+    pub fn read_file(&mut self, path: &Path) -> Result<(), SmtReadError<H::Error>> {
+        let file = File::open(path)
+            .map_err(|err| SmtReadError::new(SmtReadErrorKind::Io(err), SmtSpan::new_zero()))?;
+        let buf_reader = BufReader::new(file);
+        self.read_all(buf_reader)
     }
 
-    fn read_buf(&mut self) -> Result<ControlFlow<()>, SmtReadError<H::Error>> {
-        match self.buf_reader.fill_buf() {
-            Ok(buffer) => {
-                if buffer.is_empty() {
-                    // end of stream
-                    return Ok(ControlFlow::Break(()));
+    /// Reads a buffered reader fully, treating the ending zero-byte read as End of File.
+    pub fn read_all<R: BufRead>(
+        &mut self,
+        mut buf_reader: R,
+    ) -> Result<(), SmtReadError<H::Error>> {
+        loop {
+            match buf_reader.fill_buf() {
+                Ok(buffer) => {
+                    if !buffer.is_empty() {
+                        // process the buffer and mark it consumed
+                        let num_consumed = buffer.len();
+                        self.read_buf(buffer)?;
+                        buf_reader.consume(num_consumed)
+                    } else {
+                        // end of stream, process End of File and return
+                        return self.read_eof();
+                    }
                 }
-                self.lexer.lex_slice(buffer)?;
-                let num_consumed = buffer.len();
-                self.buf_reader.consume(num_consumed);
-                Ok(ControlFlow::Continue(()))
-            }
-            Err(err) => {
-                // return an empty span on the current lexer location
-                let location = self.lexer.current_location();
-                let span = SmtSpan::new_empty(location);
-                let kind = SmtReadErrorKind::Io(err);
-                Err(SmtReadError::new(kind, span))
+                Err(err) => {
+                    // return an empty span on the current lexer location
+                    let location = self.lexer.current_location();
+                    let span = SmtSpan::new_empty(location);
+                    let kind = SmtReadErrorKind::Io(err);
+                    return Err(SmtReadError::new(kind, span));
+                }
             }
         }
     }
 
-    fn finish_eof(mut self) -> Result<(), SmtReadError<H::Error>> {
+    /// Processes a single buffer.
+    ///
+    /// This function never triggers processing of the End of File condition.
+    /// Call `SmtReader::read_eof()` to process the End of File when appropriate.
+    pub fn read_buf(&mut self, buffer: &[u8]) -> Result<(), SmtReadError<H::Error>> {
+        // parsing goes through lexing, so just call the lexer
+        Ok(self.lexer.lex_slice(buffer)?)
+    }
+
+    /// Processes an End of File condition.
+    ///
+    /// If using `SmtReader::read_buf` to read, this must be called
+    /// after the logical SMT-LIB command file ends to prevent
+    /// leaving the ending unprocessed.
+    fn read_eof(&mut self) -> Result<(), SmtReadError<H::Error>> {
         Ok(self.lexer.lex_eof()?)
     }
 }
