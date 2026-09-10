@@ -37,6 +37,7 @@ pub use {
 };
 
 pub(crate) use ident::IdentSlot;
+pub(crate) use qualified_ident::QualifiedIdentSlot;
 pub(crate) use s_expr::SExprSlot;
 pub(crate) use sort::SortSlot;
 pub(crate) use sorted_var::SortedVarSlot;

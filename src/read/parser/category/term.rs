@@ -565,20 +565,25 @@ impl<H: SmtHandler> TermParser<H> {
                 // this is actually a term composed of an indexed identifier
                 // move the qualified ident parser after the underscore
                 // (meaning the ident will be unqualified but indexed)
-                self.qualified_ident_parser.move_after_underscore(resources);
+                let ParserResources {
+                    ident_slot,
+                    qualified_ident_slot,
+                    ..
+                } = resources;
+                qualified_ident_slot.move_after_underscore(ident_slot);
                 State::QualifiedIdent
             }
             TokenKind::Reserved(Reserved::As) => {
                 // this is actually a term composed of a qualified identifier
                 // move the qualified ident parser after the 'as' reserved word
                 // (meaning the ident will be qualified)
-                self.qualified_ident_parser.move_after_as();
+                resources.qualified_ident_slot.move_after_as();
                 State::QualifiedIdent
             }
             TokenKind::ParenOpen => {
                 // this is an application where the function identifier is qualified or indexed
                 // move the qualified ident parser after the parenthesis open
-                self.qualified_ident_parser.move_after_open_paren();
+                resources.qualified_ident_slot.move_after_open_paren();
                 State::ApplicationIdent
             }
             _ => {

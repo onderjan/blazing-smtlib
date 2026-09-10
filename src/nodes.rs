@@ -31,7 +31,7 @@ pub struct SmtQualifiedIdent<H: SmtHandler + ?Sized> {
     pub sort: Option<H::Sort>,
 }
 
-impl<H: SmtHandler> SmtQualifiedIdent<H> {
+impl<H: SmtHandler + ?Sized> SmtQualifiedIdent<H> {
     pub fn new_simple(name: SmtSymbol) -> Self {
         Self::new_unqualified(SmtIdent::new_simple(name))
     }

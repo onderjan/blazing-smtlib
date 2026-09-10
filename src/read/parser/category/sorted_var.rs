@@ -98,8 +98,8 @@ impl<H: SmtHandler + ?Sized> SortedVarSlot<H> {
         // 2. Open, expect a symbol serving as the name.
         // 3. Parsing the sort (name is stored).
         // 4. Expecting a closing parenthesis (sorted variable is stored).
-        // The function handles this in reverse order so that there are no
-        // unnecessary takes / unwraps whenever possible.
+        // The function handles this in reverse order
+        // so that nothing is taken and put back unnecessarily.
 
         if let Some(sorted_var) = self.sorted_var.take() {
             // after the sort, waiting for ")"
