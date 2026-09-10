@@ -42,7 +42,7 @@ impl<H: SmtHandler> QualifiedIdentParser<H> {
         self.state = State::Open;
     }
 
-    pub fn move_after_underscore(&mut self, resources: &mut ParserResources) {
+    pub fn move_after_underscore(&mut self, resources: &mut ParserResources<H>) {
         // the ident parser must be after underscore as well
         resources.ident_slot.move_after_underscore();
         self.state = State::UnqualifiedIndexed;
@@ -65,7 +65,7 @@ impl<H: SmtHandler> CategoryParser<H> for QualifiedIdentParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources,
+        resources: &mut ParserResources<H>,
         token: &Token,
     ) -> Result<ControlFlow<SmtQualifiedIdent<H>>, ParserError<H::Error>> {
         let span = token.span();

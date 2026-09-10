@@ -36,7 +36,7 @@ impl<H: SmtHandler> CategoryParser<H> for IdentParser {
     fn progress(
         &mut self,
         _handler: &mut H,
-        resources: &mut ParserResources,
+        resources: &mut ParserResources<H>,
         token: &Token,
     ) -> Result<ControlFlow<SmtIdent, ()>, ParserError<H::Error>> {
         // progress the slot
@@ -183,7 +183,7 @@ impl IdentSlot {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::read::parser::category::tests::parse_all_with;
+    use crate::{CheckStandardSyntax, read::parser::category::tests::parse_all_with};
 
     fn index_texts(ident: &SmtIdent) -> Vec<String> {
         ident
@@ -223,7 +223,7 @@ mod tests {
     #[should_panic(expected = "must be pristine")]
     fn entering_a_busy_slot_is_rejected() {
         // an entry point may only be used on a pristine slot
-        let mut resources = ParserResources::new();
+        let mut resources = ParserResources::<CheckStandardSyntax>::new();
         resources.ident_slot.move_after_underscore();
         resources.ident_slot.move_after_open_paren();
     }

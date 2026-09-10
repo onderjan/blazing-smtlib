@@ -35,7 +35,7 @@ impl<H: CommandHandler> CategoryParser<H> for FunctionSignatureParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources,
+        resources: &mut ParserResources<H>,
         token: &Token,
     ) -> Result<ControlFlow<SmtFunctionSignature<H>>, ParserError<H::Error>> {
         Ok(self.inner.progress(handler, resources, token)?.map_break(
@@ -75,7 +75,7 @@ impl<H: CommandHandler> CategoryParser<H> for RecursiveBodyParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources,
+        resources: &mut ParserResources<H>,
         token: &Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         let span = token.span();
@@ -138,7 +138,7 @@ impl<H: CommandHandler> CategoryParser<H> for DefineFunsRecParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources,
+        resources: &mut ParserResources<H>,
         token: &Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         let span = token.span();

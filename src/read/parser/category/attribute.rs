@@ -73,7 +73,7 @@ impl<H: SmtHandler, C: AttributeCollection<H>> CategoryParser<H> for CollectingP
     fn progress(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources,
+        resources: &mut ParserResources<H>,
         token: &Token,
     ) -> Result<ControlFlow<C::Output>, ParserError<H::Error>> {
         let span = token.span();
@@ -282,7 +282,7 @@ impl<H: SmtHandler> CategoryParser<H> for ClosedAttributeParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources,
+        resources: &mut ParserResources<H>,
         token: &Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<<H as SmtHandler>::Error>> {
         self.0.progress(handler, resources, token)
@@ -307,7 +307,7 @@ impl<H: SmtHandler> CategoryParser<H> for ClosedMultipleAttributeParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources,
+        resources: &mut ParserResources<H>,
         token: &Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<<H as SmtHandler>::Error>> {
         self.0.progress(handler, resources, token)

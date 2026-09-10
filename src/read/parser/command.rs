@@ -24,7 +24,7 @@ impl<H: CommandHandler> CategoryParser<H> for NoCommandParser {
     fn progress(
         &mut self,
         _handler: &mut H,
-        _resources: &mut ParserResources,
+        _resources: &mut ParserResources<H>,
         _token: &Token,
     ) -> Result<ControlFlow<()>, ParserError<H::Error>> {
         match *self {}
@@ -79,7 +79,7 @@ impl<H: CommandHandler, C: CommandAction<H>> CategoryParser<H> for CommandParser
     fn progress(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources,
+        resources: &mut ParserResources<H>,
         token: &Token,
     ) -> Result<ControlFlow<()>, ParserError<H::Error>> {
         let span = token.span();

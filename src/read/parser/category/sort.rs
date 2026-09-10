@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler, SmtIdent, SmtSort,
     read::parser::{
-        ParserError, ParserResources,
+        IdentSlot, ParserError, ParserResources,
         category::{CategoryErrorKind, CategoryParser},
         handle_err,
     },
@@ -15,8 +15,41 @@ use crate::{
 /// This parser is self-restarting: after returning Break,
 /// it is in the default state.
 pub struct SortParser<H: SmtHandler> {
-    state: State,
-    levels: Vec<Level<H>>,
+    _priv: std::marker::PhantomData<H>,
+}
+
+impl<H: SmtHandler> SortParser<H> {
+    pub fn new() -> Self {
+        Self {
+            _priv: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<H: SmtHandler> Default for SortParser<H> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<H: SmtHandler> CategoryParser<H> for SortParser<H> {
+    type Result = H::Sort;
+
+    #[inline]
+    fn progress(
+        &mut self,
+        handler: &mut H,
+        resources: &mut ParserResources<H>,
+        token: &Token,
+    ) -> Result<ControlFlow<H::Sort>, ParserError<H::Error>> {
+        // progress the slot, giving it the ident slot it delegates to
+        let ParserResources {
+            ident_slot,
+            sort_slot,
+            ..
+        } = resources;
+        sort_slot.progress(handler, ident_slot, token)
+    }
 }
 
 /// Current sort parser state.
@@ -40,84 +73,101 @@ enum State {
 ///
 /// Sorts here are waiting for a next applied sort
 /// or a closing parenthesis.
-struct Level<H: SmtHandler> {
+struct Level<H: SmtHandler + ?Sized> {
     ident: SmtIdent,
     applied: Vec<H::Sort>,
 }
 
-impl<H: SmtHandler> SortParser<H> {
-    pub fn new() -> Self {
+pub(crate) struct SortSlot<H: SmtHandler + ?Sized> {
+    state: State,
+    levels: Vec<Level<H>>,
+}
+
+impl<H: SmtHandler + ?Sized> SortSlot<H> {
+    pub(crate) fn new() -> Self {
         Self {
             state: State::Start,
             levels: Vec::new(),
         }
     }
-}
 
-impl<H: SmtHandler> Default for SortParser<H> {
-    fn default() -> Self {
-        Self::new()
+    pub(crate) fn is_pristine(&self) -> bool {
+        matches!(self.state, State::Start) && self.levels.is_empty()
     }
-}
 
-impl<H: SmtHandler> CategoryParser<H> for SortParser<H> {
-    type Result = H::Sort;
+    pub(crate) fn clear(&mut self) {
+        self.state = State::Start;
+        self.levels.clear();
+    }
 
-    fn progress(
+    #[inline]
+    pub(crate) fn progress(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources,
+        ident_slot: &mut IdentSlot,
         token: &Token,
     ) -> Result<ControlFlow<H::Sort>, ParserError<H::Error>> {
         let span = token.span();
         let flow = match self.state {
-            State::Start => match token.kind() {
-                TokenKind::Symbol(name) => {
-                    // the sort consists just of a single-symbol ident
-                    ControlFlow::Break(SmtSort::new_simple(SmtIdent::new_simple(name.into_owned())))
+            State::Start => {
+                // the start state is also reached between applied sorts, so only
+                // an empty level stack means the category is being entered
+                if self.levels.is_empty() {
+                    debug_assert!(self.is_pristine(), "must be pristine when starting");
                 }
-                TokenKind::ParenOpen => {
-                    // move the state to open
-                    self.state = State::Open;
-                    ControlFlow::Continue(())
-                }
-                TokenKind::ParenClose => {
-                    match self.levels.pop() {
-                        Some(last_level) => {
-                            // close the last level
-                            // if the sort committed to having applications,
-                            // there must be at least one of them
-                            if last_level.applied.is_empty() {
+                match token.kind() {
+                    TokenKind::Symbol(name) => {
+                        // the sort consists just of a single-symbol ident
+                        ControlFlow::Break(SmtSort::new_simple(SmtIdent::new_simple(
+                            name.into_owned(),
+                        )))
+                    }
+                    TokenKind::ParenOpen => {
+                        // move the state to open
+                        self.state = State::Open;
+                        ControlFlow::Continue(())
+                    }
+                    TokenKind::ParenClose => {
+                        match self.levels.pop() {
+                            Some(last_level) => {
+                                // close the last level
+                                // if the sort committed to having applications,
+                                // there must be at least one of them
+                                if last_level.applied.is_empty() {
+                                    return Err(ParserError::category_error(
+                                        CategoryErrorKind::EmptySortApplication,
+                                        span,
+                                    ));
+                                }
+                                ControlFlow::Break(SmtSort::new(
+                                    last_level.ident,
+                                    last_level.applied,
+                                ))
+                            }
+                            None => {
+                                // we just received ")"
                                 return Err(ParserError::category_error(
-                                    CategoryErrorKind::EmptySortApplication,
+                                    CategoryErrorKind::ExpectedSort,
                                     span,
                                 ));
                             }
-                            ControlFlow::Break(SmtSort::new(last_level.ident, last_level.applied))
-                        }
-                        None => {
-                            // we just received ")"
-                            return Err(ParserError::category_error(
-                                CategoryErrorKind::ExpectedSort,
-                                span,
-                            ));
                         }
                     }
+                    _ => {
+                        return Err(ParserError::category_error(
+                            CategoryErrorKind::ExpectedSort,
+                            span,
+                        ));
+                    }
                 }
-                _ => {
-                    return Err(ParserError::category_error(
-                        CategoryErrorKind::ExpectedSort,
-                        span,
-                    ));
-                }
-            },
+            }
             State::Open => {
                 // decide how to continue
                 let state = match token.kind() {
                     TokenKind::Reserved(Reserved::Underscore) => {
                         // this is a sort consisting just of an indexed identifier
-                        // move the ident parser after underscore
-                        resources.ident_slot.move_after_underscore();
+                        // move the ident slot after underscore
+                        ident_slot.move_after_underscore();
                         State::IdentOnly
                     }
                     TokenKind::Symbol(name) => {
@@ -131,8 +181,8 @@ impl<H: SmtHandler> CategoryParser<H> for SortParser<H> {
                     }
                     TokenKind::ParenOpen => {
                         // indexed ident starting sort
-                        // move the ident parser after opening parenthesis
-                        resources.ident_slot.move_after_open_paren();
+                        // move the ident slot after opening parenthesis
+                        ident_slot.move_after_open_paren();
                         State::StartingIdent
                     }
                     _ => {
@@ -145,12 +195,9 @@ impl<H: SmtHandler> CategoryParser<H> for SortParser<H> {
                 self.state = state;
                 ControlFlow::Continue(())
             }
-            State::IdentOnly => resources
-                .ident_slot
-                .progress(token)?
-                .map_break(SmtSort::new_simple),
+            State::IdentOnly => ident_slot.progress(token)?.map_break(SmtSort::new_simple),
             State::StartingIdent => {
-                match resources.ident_slot.progress(token)? {
+                match ident_slot.progress(token)? {
                     ControlFlow::Continue(()) => ControlFlow::Continue(()),
                     ControlFlow::Break(ident) => {
                         // add a new level and start parsing the new sort
@@ -180,6 +227,32 @@ impl<H: SmtHandler> CategoryParser<H> for SortParser<H> {
         } else {
             // this is the root level, we are done
             Ok(ControlFlow::Break(sort))
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{CheckStandardSyntax, read::parser::category::tests::parse_all_with};
+
+    #[test]
+    fn slots_are_pristine_after_every_sort() {
+        // nested applied sorts and indexed identifiers use the sort and
+        // ident slots; both must be back in their initial state afterwards
+        for input in [
+            &b"Bool"[..],
+            b"(_ BitVec 8)",
+            b"(Array (_ BitVec 8) Int)",
+            b"((_ Tuple 2) (_ BitVec 8) (Set Int))",
+        ] {
+            let mut resources = ParserResources::new();
+            parse_all_with(
+                SortParser::<CheckStandardSyntax>::new(),
+                &mut resources,
+                input,
+            );
+            assert!(resources.are_pristine(), "after {input:?}");
         }
     }
 }

@@ -1,4 +1,7 @@
-use crate::read::parser::IdentSlot;
+use crate::{
+    SmtHandler,
+    read::parser::{IdentSlot, SortSlot},
+};
 
 /// Contains non-duplicated parser resources.
 ///
@@ -7,27 +10,30 @@ use crate::read::parser::IdentSlot;
 /// duplicated resources (e.g. collections). This structure
 /// is only constructed once for the root parser and
 /// propagated to smaller parsers.
-pub struct ParserResources {
+pub struct ParserResources<H: SmtHandler + ?Sized> {
     pub(crate) ident_slot: IdentSlot,
+    pub(crate) sort_slot: SortSlot<H>,
 }
 
-impl ParserResources {
+impl<H: SmtHandler + ?Sized> ParserResources<H> {
     pub fn new() -> Self {
         Self {
             ident_slot: IdentSlot::new(),
+            sort_slot: SortSlot::new(),
         }
     }
 
     pub(crate) fn are_pristine(&self) -> bool {
-        self.ident_slot.is_pristine()
+        self.ident_slot.is_pristine() && self.sort_slot.is_pristine()
     }
 
     pub(crate) fn clear(&mut self) {
         self.ident_slot.clear();
+        self.sort_slot.clear();
     }
 }
 
-impl Default for ParserResources {
+impl<H: SmtHandler + ?Sized> Default for ParserResources<H> {
     fn default() -> Self {
         Self::new()
     }

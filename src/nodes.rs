@@ -77,7 +77,7 @@ pub struct SmtSort<H: SmtHandler + ?Sized> {
     pub applied: Vec<H::Sort>,
 }
 
-impl<H: SmtHandler> SmtSort<H> {
+impl<H: SmtHandler + ?Sized> SmtSort<H> {
     pub fn new(ident: SmtIdent, applied: Vec<H::Sort>) -> Self {
         Self { ident, applied }
     }

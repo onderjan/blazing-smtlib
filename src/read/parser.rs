@@ -64,7 +64,7 @@ impl<E> ParserError<E> {
 pub struct Parser<'a, H: CommandHandler> {
     handler: &'a mut H,
     state: ParserState<H>,
-    resources: ParserResources,
+    resources: ParserResources<H>,
 
     command_parsers: CommandParsers<H>,
 }

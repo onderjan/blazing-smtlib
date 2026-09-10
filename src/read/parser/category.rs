@@ -33,6 +33,7 @@ pub use {
 };
 
 pub(crate) use ident::IdentSlot;
+pub(crate) use sort::SortSlot;
 
 pub type SortedVarParser<H> = ParenParser<H, PairParser<H, SymbolParser, SortParser<H>>>;
 
@@ -61,7 +62,7 @@ pub trait CategoryParser<H: SmtHandler + ?Sized> {
     fn progress(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources,
+        resources: &mut ParserResources<H>,
         token: &Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>>;
 }
@@ -132,12 +133,12 @@ pub(crate) mod tests {
     /// points before driving it.
     pub(crate) fn parse_all_with<P: CategoryParser<CheckStandardSyntax>>(
         parser: P,
-        resources: &mut ParserResources,
+        resources: &mut ParserResources<CheckStandardSyntax>,
         input: &[u8],
     ) -> P::Result {
         struct Drive<'r, P: CategoryParser<CheckStandardSyntax>> {
             parser: P,
-            resources: &'r mut ParserResources,
+            resources: &'r mut ParserResources<CheckStandardSyntax>,
             result: Option<P::Result>,
             unconsumed: usize,
         }

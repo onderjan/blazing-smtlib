@@ -308,7 +308,7 @@ type ParseFailure = (CategoryErrorKind, SmtSpan);
 struct Drive<'h, H: SmtHandler, P: CategoryParser<H>> {
     handler: &'h mut H,
     /// The parser resources, shared by every parser in a run.
-    resources: ParserResources,
+    resources: ParserResources<H>,
     /// The parser under test, reused across parses.
     parser: P,
     /// How many more results to parse before tokens count as unconsumed.
