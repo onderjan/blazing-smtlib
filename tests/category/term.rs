@@ -840,3 +840,136 @@ fn deep_match_nesting_does_not_overflow_the_stack() {
     // every scrutinee plus the innermost y
     assert_eq!(handler.terms, DEPTH + 1);
 }
+
+/// How a handler consumes the arguments handed over with an application.
+#[derive(Clone, Copy, Debug)]
+enum Consumption {
+    /// Only inspects the arguments in place.
+    Inspect,
+    /// Moves the first argument out and leaves the rest.
+    TakeFirst,
+    /// Moves every argument out.
+    TakeAll,
+}
+
+/// Handler that records every application with the arguments it was handed,
+/// consuming them in the given way, so the arguments of an enclosing
+/// application must not depend on how the inner ones were consumed.
+struct Consuming {
+    consumption: Consumption,
+    applications: Vec<(String, Vec<String>)>,
+}
+
+impl SmtHandler for Consuming {
+    type Error = Infallible;
+    type SExpr = ();
+    type Attribute = ();
+    type Sort = ();
+    type Term = String;
+
+    fn handle_sort(&mut self, _sort: SmtSort<Self>) -> Result<(), Infallible> {
+        Ok(())
+    }
+    fn handle_term(&mut self, term: SmtTerm<'_, Self>) -> Result<String, Infallible> {
+        Ok(match term {
+            SmtTerm::SpecialConstant(constant) => render_constant(&constant),
+            SmtTerm::QualifiedIdent(qualified_ident) => render_ident(&qualified_ident.ident),
+            SmtTerm::Application(application) => {
+                let function = render_ident(&application.function.ident);
+                let args: Vec<String> = application.args.iter().cloned().collect();
+                let rendered = format!("({} {})", function, args.join(" "));
+                self.applications.push((function, args));
+                match self.consumption {
+                    Consumption::Inspect => {}
+                    Consumption::TakeFirst => {
+                        application.args.into_iter().next();
+                    }
+                    Consumption::TakeAll => {
+                        application.args.into_iter().for_each(drop);
+                    }
+                }
+                rendered
+            }
+        })
+    }
+    fn start_let(&mut self, _bindings: Vec<(SmtSymbol, String)>) -> Result<(), Infallible> {
+        Ok(())
+    }
+    fn end_let(&mut self, term: String) -> Result<String, Infallible> {
+        Ok(term)
+    }
+    fn handle_s_expr(&mut self, _expr: SmtSExpr<Self>) -> Result<(), Infallible> {
+        Ok(())
+    }
+    fn handle_attribute(
+        &mut self,
+        _name: SmtKeyword,
+        _value: Option<SmtAttributeValue<Self>>,
+    ) -> Result<(), Infallible> {
+        Ok(())
+    }
+    fn annotate_term(&mut self, term: String, _attributes: Vec<()>) -> Result<String, Infallible> {
+        Ok(term)
+    }
+    fn start_quantifier(
+        &mut self,
+        _kind: SmtQuantifierKind,
+        _name: SmtSymbol,
+        _sort: (),
+    ) -> Result<(), Infallible> {
+        Ok(())
+    }
+    fn end_quantifier(&mut self, term: String) -> Result<String, Infallible> {
+        Ok(term)
+    }
+    fn start_lambda(&mut self, _name: SmtSymbol, _sort: ()) -> Result<(), Infallible> {
+        Ok(())
+    }
+    fn end_lambda(&mut self, term: String) -> Result<String, Infallible> {
+        Ok(term)
+    }
+    fn start_match(&mut self, _scrutinee: String) -> Result<(), Infallible> {
+        Ok(())
+    }
+    fn start_match_case(&mut self, _pattern: SmtPattern) -> Result<(), Infallible> {
+        Ok(())
+    }
+    fn end_match_case(&mut self, _term: String) -> Result<(), Infallible> {
+        Ok(())
+    }
+    fn end_match(&mut self) -> Result<String, Infallible> {
+        Ok(String::from("<match>"))
+    }
+}
+
+#[test]
+fn application_arguments_are_handed_over_regardless_of_consumption() {
+    // the arguments handed over with an inner application must not leak
+    // into the enclosing one, whether the handler moved them out or not
+    for consumption in [
+        Consumption::Inspect,
+        Consumption::TakeFirst,
+        Consumption::TakeAll,
+    ] {
+        let mut handler = Consuming {
+            consumption,
+            applications: Vec::new(),
+        };
+        let (term, left) = run_with::<Consuming, TermParser<Consuming>>(
+            &mut handler,
+            b"(f (g x) (h a b c) y)",
+        )
+        .unwrap_or_else(|(kind, span)| panic!("{kind:?} at {span:?} with {consumption:?}"));
+        assert_eq!(left, 0, "with {consumption:?}");
+        assert_eq!(term, "(f (g x) (h a b c) y)", "with {consumption:?}");
+        let expected: Vec<(String, Vec<String>)> = vec![
+            ("g".into(), vec!["x".into()]),
+            ("h".into(), vec!["a".into(), "b".into(), "c".into()]),
+            (
+                "f".into(),
+                vec!["(g x)".into(), "(h a b c)".into(), "y".into()],
+            ),
+        ];
+        assert_eq!(handler.applications, expected, "with {consumption:?}");
+    }
+}

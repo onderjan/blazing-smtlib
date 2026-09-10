@@ -1,8 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtApplication, SmtHandler, SmtMultiple, SmtQualifiedIdent, SmtQuantifierKind, SmtSymbol,
-    SmtTerm,
+    SmtApplication, SmtHandler, SmtQualifiedIdent, SmtQuantifierKind, SmtSymbol, SmtTerm,
     read::parser::{
         CloseParenParser, IdentSlot, OpenParenParser, ParserError, ParserResources, SortSlot,
         SortedVarSlot, SymbolParser,
@@ -556,15 +555,14 @@ impl<H: SmtHandler> TermSlot<H> {
                         span,
                     ));
                 }
-                // construct and handle the term
-                let term = SmtTerm::Application(SmtApplication {
-                    function: ident,
-                    args: SmtMultiple::new(&mut store.terms, arena_args_start),
-                });
-                let term = handle_err(handler.handle_term(term), span)?;
-                // the term arguments are consumed, ensure they are removed from the arena
-                store.terms.truncate(arena_args_start);
-                term
+                // construct and handle the term, the arguments are consumed
+                store.hand_over_terms(arena_args_start, |args| {
+                    let term = SmtTerm::Application(SmtApplication {
+                        function: ident,
+                        args,
+                    });
+                    handle_err(handler.handle_term(term), span)
+                })?
             }
             TokenKind::Symbol(name) => {
                 // a term that is a qualified identifier that is just a symbol

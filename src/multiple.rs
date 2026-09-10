@@ -4,6 +4,8 @@ use std::{
     slice, vec,
 };
 
+use crate::read::parser::ArenaAccess;
+
 /// Multiple values to be handled.
 ///
 /// The values can be inspected and modified in place, and [`IntoIterator`]
@@ -20,7 +22,7 @@ impl<'a, T> SmtMultiple<'a, T> {
     /// The caller must ensure that the vector is truncated
     /// after the handling returns.
     #[inline]
-    pub(crate) fn new(stack: &'a mut Vec<T>, start: usize) -> Self {
+    pub(crate) fn new(_access: ArenaAccess, stack: &'a mut Vec<T>, start: usize) -> Self {
         debug_assert!(
             start <= stack.len(),
             "start of multiple values must not exceed stack length"

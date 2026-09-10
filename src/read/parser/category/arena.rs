@@ -1,4 +1,4 @@
-use crate::SmtHandler;
+use crate::{SmtHandler, SmtMultiple};
 
 /// An arena of bytes and handled values.
 ///
@@ -26,4 +26,27 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
     pub(crate) fn clear(&mut self) {
         self.terms.clear();
     }
+
+    /// Hands the terms from `start` onward to `f`, removing them afterwards.
+    ///
+    /// The handling may or may not remove the terms by itself,
+    /// so the arena is truncated after `f` returns regardless.
+    #[inline]
+    pub(crate) fn hand_over_terms<R>(
+        &mut self,
+        start: usize,
+        f: impl FnOnce(SmtMultiple<'_, H::Term>) -> R,
+    ) -> R {
+        let access = ArenaAccess { _priv: () };
+        let result = f(SmtMultiple::new(access, &mut self.terms, start));
+        self.terms.truncate(start);
+        result
+    }
+}
+
+/// Proof that a hand-over comes from the arena.
+///
+/// Only the arena can construct it, so only the arena can create an [`SmtMultiple`].
+pub(crate) struct ArenaAccess {
+    _priv: (),
 }
