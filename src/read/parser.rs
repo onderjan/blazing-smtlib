@@ -18,14 +18,20 @@ pub enum ParserErrorKind<E> {
 }
 
 #[derive(Debug)]
-pub struct ParserError<E> {
+struct ParserErrorInner<E> {
     kind: ParserErrorKind<E>,
     span: SmtSpan,
 }
 
+/// Error emitted by a parser, including the error span.
+#[derive(Debug)]
+pub struct ParserError<E>(Box<ParserErrorInner<E>>);
+
 impl<E> ParserError<E> {
     pub(crate) fn new(kind: ParserErrorKind<E>, span: SmtSpan) -> Self {
-        Self { kind, span }
+        // PERFORMANCE: error kind and span are boxed
+        // so that parser results are not unnecessarily large
+        Self(Box::new(ParserErrorInner { kind, span }))
     }
 
     pub(crate) fn handler_error(err: E, span: SmtSpan) -> Self {
@@ -37,15 +43,15 @@ impl<E> ParserError<E> {
     }
 
     pub fn kind(&self) -> &ParserErrorKind<E> {
-        &self.kind
+        &self.0.kind
     }
 
     pub fn span(&self) -> SmtSpan {
-        self.span
+        self.0.span
     }
 
     pub fn into_kind(self) -> ParserErrorKind<E> {
-        self.kind
+        self.0.kind
     }
 }
 
