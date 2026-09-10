@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
 
 use crate::{
     SmtHandler, SmtSpecialConstant,
-    read::parser::{ParserError, ParserResources},
+    read::parser::ParserError,
     token::{Token, TokenKind, TokenType},
 };
 
@@ -11,6 +11,7 @@ mod combinator;
 mod ident;
 mod pattern;
 mod qualified_ident;
+mod resources;
 mod s_expr;
 mod sort;
 mod term;
@@ -24,6 +25,7 @@ pub use {
     },
     ident::IdentParser,
     qualified_ident::QualifiedIdentParser,
+    resources::ParserResources,
     s_expr::SExprParser,
     sort::SortParser,
     term::TermParser,

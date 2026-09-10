@@ -7,11 +7,9 @@ use crate::{
 
 mod category;
 mod command;
-mod resources;
 
 pub use category::*;
 pub use command::*;
-pub use resources::*;
 
 #[derive(Debug)]
 pub enum ParserErrorKind<E> {
