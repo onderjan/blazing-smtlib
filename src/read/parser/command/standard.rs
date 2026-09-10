@@ -3,12 +3,12 @@ use std::ops::ControlFlow;
 use crate::{
     CommandHandler, SmtFunctionSignature, SmtSymbol,
     read::parser::{
-        CategoryErrorKind, CategoryParser, CloseParenParser, CommandParser, CommandResult,
-        KeywordParser, NumeralParser, ParenMultipleParser, ParserError, ParserResources,
-        StringParser, SymbolParser,
+        CategoryErrorKind, CategoryParser, CloseParenParser, CommandParser, KeywordParser,
+        NumeralParser, ParenMultipleParser, ParserError, ParserResources, StringParser,
+        SymbolParser,
         category::{ClosedAttributeParser, ClosedParser, PairParser, SortParser, TermParser},
         command::{
-            CommandAction, ParseCommand,
+            CommandAction,
             datatype::{DeclareDatatypeParser, DeclareDatatypesParser},
             definition::{Definition, DefinitionParser},
             function::{DefineFunsRecParser, FunctionSignatureParser, RecursiveBodyParser},
@@ -17,11 +17,15 @@ use crate::{
     token::Token,
 };
 
+pub enum StandardCommandResult {
+    EndCommand,
+    Exit,
+}
+
 macro_rules! standard_commands {
     ($($name:literal => $field:ident: $kind:ident(
         $parser:ty,
         |$handler:ident, $result:pat_param| $handle:expr
-        $(, $is_exit:ident)?
     )),* $(,)?) => {
         $(
             pub(super) struct $kind;
@@ -35,10 +39,6 @@ macro_rules! standard_commands {
                 ) -> Result<(), H::Error> {
                     $handle
                 }
-
-                $(fn $is_exit() -> bool {
-                    true
-                })?
             }
         )*
 
@@ -81,10 +81,15 @@ macro_rules! standard_commands {
                 handler: &mut H,
                 resources: &mut ParserResources,
                 token: &Token,
-            ) -> Result<ControlFlow<CommandResult, ()>, ParserError<H::Error>> {
-                match kind {
-                    $(StandardCommandKind::$kind => self.$field.progress(handler, resources, token),)*
-                }
+            ) -> Result<ControlFlow<StandardCommandResult, ()>, ParserError<H::Error>> {
+                let flow = match kind {
+                    $(StandardCommandKind::$kind => self.$field.progress(handler, resources, token)?,)*
+                };
+                // only the exit command ends reading
+                Ok(flow.map_break(|()| match kind {
+                    StandardCommandKind::Exit => StandardCommandResult::Exit,
+                    _ => StandardCommandResult::EndCommand,
+                }))
             }
         }
 
@@ -146,7 +151,7 @@ standard_commands! {
         |handler, assuming| handler.command_check_sat(assuming)),
     b"exit" => exit: Exit(
         CloseParenParser,
-        |handler, ()| handler.command_exit(), is_exit),
+        |handler, ()| handler.command_exit()),
     b"push" => push: Push(
         ClosedParser<H,NumeralParser>,
         |handler, amount| handler.command_push(amount)),

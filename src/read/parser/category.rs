@@ -38,7 +38,7 @@ pub type SortedVarParser<H> = ParenParser<H, PairParser<H, SymbolParser, SortPar
 
 pub type ParenSortedVarsParser<H> = ParenMultipleParser<H, SortedVarParser<H>>;
 
-pub trait CategoryParser<H: SmtHandler> {
+pub trait CategoryParser<H: SmtHandler + ?Sized> {
     type Result;
 
     /// Parses a single token, progressing the parser.

@@ -4,7 +4,7 @@ use crate::{
     SmtAttributeValue, SmtDatatypeConstructor, SmtFunctionSignature, SmtKeyword, SmtNumeral,
     SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSort, SmtStringContent, SmtSymbol, SmtSymbolView,
     SmtTerm,
-    read::parser::{NoCommandParser, ParseCommand},
+    read::parser::{CategoryParser, NoCommandParser},
 };
 
 pub trait SmtHandler {
@@ -108,7 +108,7 @@ pub trait SmtHandler {
 }
 
 pub trait CommandHandler: SmtHandler {
-    type NonstandardParser: ParseCommand<Self>;
+    type NonstandardParser: CategoryParser<Self, Result = ()>;
 
     /// Returns a parser that parses a non-standard command with the given name.
     fn nonstandard_command(

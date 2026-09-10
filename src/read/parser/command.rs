@@ -2,7 +2,9 @@ use std::ops::ControlFlow;
 
 use crate::{
     CommandHandler, SmtSpan, SmtSymbolView,
-    read::parser::{ParserError, ParserResources, ParserState, category::CategoryParser},
+    read::parser::{
+        ParserError, ParserResources, ParserState, category::CategoryParser, handle_err,
+    },
     token::Token,
 };
 
@@ -11,41 +13,24 @@ mod definition;
 mod function;
 mod standard;
 
-pub(super) use standard::{CommandParsers, StandardCommandKind};
-
-pub trait ParseCommand<H: CommandHandler + ?Sized> {
-    /// Parses a single token, progressing the parser.
-    ///
-    /// If a non-error result is returned, it either signals that the
-    /// parser is finished ([`ControlFlow::Break`] with the result value),
-    /// or that it is not finished yet ([`ControlFlow::Continue`]).
-    ///
-    /// The `resources` are shared resources of standard category parsers.
-    /// To keep resources valid, each [`CategoryParser`] must progress
-    /// until completion once started, i.e. if [`CategoryParser::progress()`]
-    /// returns `Ok(Continue(()))`, the subsequent outer progress call
-    /// must call [`CategoryParser::progress()`] on the same parser, and
-    /// is forbidden from progressing any other parsers.
-    /// Failure to heed this contract may lead to silently wrong parsing
-    /// or panics, but never unsafe behaviour.
-    fn progress(
-        &mut self,
-        handler: &mut H,
-        resources: &mut ParserResources,
-        token: &Token,
-    ) -> Result<ControlFlow<CommandResult, ()>, ParserError<H::Error>>;
-}
+pub(super) use standard::{CommandParsers, StandardCommandKind, StandardCommandResult};
 
 pub enum NoCommandParser {}
 
-impl<H: CommandHandler> ParseCommand<H> for NoCommandParser {
+impl<H: CommandHandler> CategoryParser<H> for NoCommandParser {
+    type Result = ();
+
     #[inline]
     fn progress(
         &mut self,
         _handler: &mut H,
         _resources: &mut ParserResources,
         _token: &Token,
-    ) -> Result<ControlFlow<CommandResult, ()>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<()>, ParserError<H::Error>> {
+        match *self {}
+    }
+
+    fn restart(&mut self) {
         match *self {}
     }
 }
@@ -95,36 +80,27 @@ where
     }
 }
 
-impl<H: CommandHandler, C: CommandAction<H>> ParseCommand<H> for CommandParser<H, C> {
+impl<H: CommandHandler, C: CommandAction<H>> CategoryParser<H> for CommandParser<H, C> {
+    type Result = ();
+
     #[inline]
     fn progress(
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources,
         token: &Token,
-    ) -> Result<ControlFlow<CommandResult, ()>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<()>, ParserError<H::Error>> {
         let span = token.span();
         let ControlFlow::Break(result) = self.parser.progress(handler, resources, token)? else {
             return Ok(ControlFlow::Continue(()));
         };
-
-        match C::handle(handler, result) {
-            Ok(()) => {
-                let command_result = if C::is_exit() {
-                    CommandResult::Exit
-                } else {
-                    CommandResult::EndCommand
-                };
-                Ok(ControlFlow::Break(command_result))
-            }
-            Err(err) => Err(ParserError::handler_error(err, span)),
-        }
+        handle_err(C::handle(handler, result), span)?;
+        Ok(ControlFlow::Break(()))
     }
-}
 
-pub enum CommandResult {
-    EndCommand,
-    Exit,
+    fn restart(&mut self) {
+        self.parser.restart();
+    }
 }
 
 impl<H: CommandHandler> super::Parser<'_, H> {
@@ -165,10 +141,7 @@ mod tests {
             let flow = parser
                 .progress(&mut handler, &mut ParserResources::new(), &close)
                 .expect("check-sat closing parenthesis must parse");
-            assert!(matches!(
-                flow,
-                ControlFlow::Break(CommandResult::EndCommand)
-            ));
+            assert!(matches!(flow, ControlFlow::Break(())));
         }
     }
 }

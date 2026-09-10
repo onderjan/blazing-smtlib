@@ -87,14 +87,14 @@ impl<'a, H: CommandHandler> Parser<'a, H> {
         }
     }
 
-    fn handle_command_progress(
+    fn handle_command_progress<R>(
         &mut self,
-        flow: ControlFlow<CommandResult>,
+        flow: ControlFlow<R>,
         standard_kind: Option<StandardCommandKind>,
-    ) {
+    ) -> Option<R> {
         let ControlFlow::Break(result) = flow else {
             // still progressing
-            return;
+            return None;
         };
 
         // the command has ended, resources should be back in pristine state
@@ -114,11 +114,7 @@ impl<'a, H: CommandHandler> Parser<'a, H> {
             self.resources.clear();
         }
 
-        // update the state
-        self.state = match result {
-            CommandResult::EndCommand => ParserState::AwaitingCommand,
-            CommandResult::Exit => ParserState::Exit,
-        }
+        Some(result)
     }
 }
 
@@ -165,14 +161,19 @@ impl<'a, H: CommandHandler> TokenHandler for Parser<'a, H> {
                     &mut self.resources,
                     token,
                 )?;
-                if flow.is_break() {
-                    // a command has ended, resources should be back in pristine state
+                if let Some(result) = self.handle_command_progress(flow, Some(kind)) {
+                    self.state = match result {
+                        StandardCommandResult::EndCommand => ParserState::AwaitingCommand,
+                        StandardCommandResult::Exit => ParserState::Exit,
+                    }
                 }
-                self.handle_command_progress(flow, Some(kind));
             }
             ParserState::NonstandardCommand(parser) => {
                 let flow = parser.progress(self.handler, &mut self.resources, token)?;
-                self.handle_command_progress(flow, None);
+                if let Some(()) = self.handle_command_progress(flow, None) {
+                    // update the state; a non-standard command cannot force an early exit
+                    self.state = ParserState::AwaitingCommand;
+                }
             }
             ParserState::Exit => {
                 // no operation on fed tokens
