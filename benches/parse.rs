@@ -9,7 +9,10 @@
 //!
 //! Run with `cargo bench --bench parse`. Each file is measured in two modes:
 //! lexing only (tokens are discarded by a counting handler) and the full
-//! lex-and-parse pipeline.
+//! lex-and-parse pipeline. The table reports each mode as throughput in
+//! MB/s and as nanoseconds per token: the parser's cost is per token, and
+//! bytes per token varies fivefold between files, so MB/s alone hides
+//! per-token changes.
 //!
 //! Environment variables:
 //!
@@ -24,8 +27,11 @@
 //!   mode, byte size, and every timed run in seconds, and `list` prints the
 //!   selected labels one per line without measuring anything, and `census`
 //!   measures nothing either but prints what each file consists of: token
-//!   counts by type, reserved words, top-level command names, and nesting
-//!   depth. The `raw` and `list` formats are the protocol used by the
+//!   counts by type, reserved words, top-level command names, nesting
+//!   depth, and what a full parse allocates (allocation count, allocations
+//!   per token, and peak live heap, counted by a global allocator that is
+//!   only switched on during the census parse, so the timed modes are not
+//!   affected). The `raw` and `list` formats are the protocol used by the
 //!   `compare` bench driver. In the `census` format, command-line arguments
 //!   name additional files to describe, relative to the corpus root, which
 //!   helps when choosing files to add to [`FILES`].
@@ -35,10 +41,12 @@
 //! two revisions, use `cargo bench --bench compare`, which interleaves the
 //! two builds file by file.
 
+use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::BTreeMap;
 use std::convert::Infallible;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Instant;
 
 use smt_parser_rs::{
@@ -157,6 +165,75 @@ const FILES: &[BenchFile] = &[
 /// Default timed runs per file and mode; an additional first (warm-up) run
 /// is discarded.
 const DEFAULT_ITERATIONS: usize = 5;
+
+/// Global allocator that counts allocations and tracks the live heap while
+/// switched on; while switched off, each allocation costs one predictable
+/// branch, so the timed modes are not affected.
+struct CountingAllocator;
+
+static COUNTING: AtomicBool = AtomicBool::new(false);
+static ALLOCATIONS: AtomicU64 = AtomicU64::new(0);
+static LIVE_BYTES: AtomicU64 = AtomicU64::new(0);
+static PEAK_BYTES: AtomicU64 = AtomicU64::new(0);
+
+impl CountingAllocator {
+    #[cold]
+    #[inline(never)]
+    fn record(allocated: u64, freed: u64) {
+        ALLOCATIONS.fetch_add(u64::from(allocated > 0), Ordering::Relaxed);
+        let live = LIVE_BYTES.fetch_add(allocated, Ordering::Relaxed) + allocated;
+        PEAK_BYTES.fetch_max(live, Ordering::Relaxed);
+        LIVE_BYTES.fetch_sub(freed, Ordering::Relaxed);
+    }
+}
+
+// SAFETY: every method forwards to the system allocator with the same
+// arguments and only updates counters on the side
+unsafe impl GlobalAlloc for CountingAllocator {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        if COUNTING.load(Ordering::Relaxed) {
+            Self::record(layout.size() as u64, 0);
+        }
+        unsafe { System.alloc(layout) }
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        if COUNTING.load(Ordering::Relaxed) {
+            Self::record(0, layout.size() as u64);
+        }
+        unsafe { System.dealloc(ptr, layout) }
+    }
+
+    unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+        if COUNTING.load(Ordering::Relaxed) {
+            Self::record(new_size as u64, layout.size() as u64);
+        }
+        unsafe { System.realloc(ptr, layout, new_size) }
+    }
+}
+
+#[global_allocator]
+static GLOBAL: CountingAllocator = CountingAllocator;
+
+/// What a full parse of the in-memory file allocated.
+struct Allocations {
+    count: u64,
+    peak_bytes: u64,
+}
+
+/// Parses the in-memory file with allocation counting switched on.
+fn count_allocations(data: &[u8], path: &Path) -> Allocations {
+    ALLOCATIONS.store(0, Ordering::Relaxed);
+    LIVE_BYTES.store(0, Ordering::Relaxed);
+    PEAK_BYTES.store(0, Ordering::Relaxed);
+    COUNTING.store(true, Ordering::Relaxed);
+    parse_from_memory(data, path);
+    COUNTING.store(false, Ordering::Relaxed);
+    Allocations {
+        count: ALLOCATIONS.load(Ordering::Relaxed),
+        peak_bytes: PEAK_BYTES.load(Ordering::Relaxed),
+    }
+}
 
 /// Token handler that only counts tokens, so timed lexing includes no parsing.
 struct DiscardTokens {
@@ -277,6 +354,13 @@ fn print_census(label: &str, data: &[u8], path: &Path) {
         }
         println!();
     }
+    let allocations = count_allocations(data, path);
+    println!(
+        "  allocations:  {} total  {:.2} per token  peak live heap {} bytes",
+        allocations.count,
+        allocations.count as f64 / census.tokens.max(1) as f64,
+        allocations.peak_bytes
+    );
 }
 
 /// Lexes the in-memory file, discarding tokens, and returns the token count.
@@ -482,6 +566,9 @@ fn main() -> ExitCode {
             continue;
         }
 
+        // the token count turns run times into nanoseconds per token
+        let tokens = lex_from_memory(&data, &path).max(1) as f64;
+
         if let Format::Table = format {
             print!("{:<label_width$}  {:>7.2} MB", label, megabytes);
         }
@@ -498,10 +585,11 @@ fn main() -> ExitCode {
                 Format::Table => {
                     let (min, median) = min_and_median(&times);
                     print!(
-                        "  {} {:>6.1}/{:>6.1} MB/s",
+                        "  {} {:>6.1}/{:>6.1} MB/s {:>5.2} ns/tok",
                         mode.name(),
                         megabytes / min,
-                        megabytes / median
+                        megabytes / median,
+                        min * 1e9 / tokens
                     );
                 }
                 Format::Raw => {
@@ -526,7 +614,7 @@ fn main() -> ExitCode {
     }
 
     if let Format::Table = format {
-        println!("(throughput as min/median over {iterations} runs)");
+        println!("(throughput as min/median over {iterations} runs; ns/tok from the min)");
     }
 
     ExitCode::SUCCESS
