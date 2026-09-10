@@ -3,9 +3,10 @@ use std::ops::ControlFlow;
 use crate::{
     SmtAttributeValue, SmtHandler, SmtKeyword, SmtSpan,
     read::parser::{
-        CloseParenParser, ClosedMultipleParser, ParserError, ParserResources,
+        CloseParenParser, ParserError, ParserResources, SExprSlot,
         category::{
-            CategoryErrorKind, CategoryParser, parse_special_constant, s_expr::SExprParser,
+            CategoryErrorKind, CategoryParser, parse_special_constant,
+            resources::ClosedMultipleResource,
         },
         handle_err,
     },
@@ -16,29 +17,89 @@ use crate::{
 ///
 /// This parser is self-restarting: after returning Break,
 /// it is in the default state.
-pub struct ClosedAttributeParser<H: SmtHandler>(CollectingParser<H, SingleAttribute<H>>);
+pub struct ClosedAttributeParser<H: SmtHandler> {
+    _priv: std::marker::PhantomData<H>,
+}
+
+impl<H: SmtHandler> ClosedAttributeParser<H> {
+    pub fn new() -> Self {
+        Self {
+            _priv: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<H: SmtHandler> Default for ClosedAttributeParser<H> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<H: SmtHandler> CategoryParser<H> for ClosedAttributeParser<H> {
+    type Result = H::Attribute;
+
+    fn progress(
+        &mut self,
+        handler: &mut H,
+        resources: &mut ParserResources<H>,
+        token: &Token,
+    ) -> Result<ControlFlow<Self::Result>, ParserError<<H as SmtHandler>::Error>> {
+        resources.attribute_slot.progress::<SingleAttribute>(
+            handler,
+            &mut resources.s_expr_slot,
+            token,
+        )
+    }
+}
 
 /// A parser that reads multiple SMT-LIB attributes followed by a closing parenthesis.
 ///
 /// This parser is self-restarting: after returning Break,
 /// it is in the default state.
-pub struct ClosedMultipleAttributeParser<H: SmtHandler>(CollectingParser<H, MultipleAttributes<H>>);
-
-struct CollectingParser<H: SmtHandler, C: AttributeCollection<H>> {
-    /// Current state.
-    state: State,
-
-    /// Collection of processed attributes.
-    collection: C,
-
-    closed_s_exprs_parser: ClosedMultipleParser<H, SExprParser<H>>,
+pub struct ClosedMultipleAttributeParser<H: SmtHandler> {
+    _priv: std::marker::PhantomData<H>,
 }
 
-trait AttributeCollection<H: SmtHandler>: Default {
+impl<H: SmtHandler> ClosedMultipleAttributeParser<H> {
+    pub fn new() -> Self {
+        Self {
+            _priv: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<H: SmtHandler> Default for ClosedMultipleAttributeParser<H> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<H: SmtHandler> CategoryParser<H> for ClosedMultipleAttributeParser<H> {
+    type Result = Vec<H::Attribute>;
+
+    fn progress(
+        &mut self,
+        handler: &mut H,
+        resources: &mut ParserResources<H>,
+        token: &Token,
+    ) -> Result<ControlFlow<Self::Result>, ParserError<<H as SmtHandler>::Error>> {
+        resources.attribute_slot.progress::<MultipleAttributes>(
+            handler,
+            &mut resources.s_expr_slot,
+            token,
+        )
+    }
+}
+
+trait AttributeCollection<H: SmtHandler> {
     type Output;
-    fn next_allowed(&self) -> bool;
-    fn push(&mut self, attribute: H::Attribute);
-    fn finish(&mut self, span: SmtSpan) -> Result<Self::Output, ParserError<H::Error>>;
+
+    fn next_allowed(num_elements: usize) -> bool;
+
+    fn finish(
+        attributes: &mut Vec<H::Attribute>,
+        span: SmtSpan,
+    ) -> Result<Self::Output, ParserError<H::Error>>;
 }
 
 /// Attribute-parsing state.
@@ -51,36 +112,46 @@ enum State {
     InsideSExpr(SmtKeyword),
 }
 
-impl<H: SmtHandler, C: AttributeCollection<H>> CollectingParser<H, C> {
-    pub fn new() -> Self {
+pub(crate) struct AttributeSlot<H: SmtHandler + ?Sized> {
+    state: State,
+    attributes: Vec<H::Attribute>,
+    s_exprs: ClosedMultipleResource<H::SExpr>,
+}
+
+impl<H: SmtHandler + ?Sized> AttributeSlot<H> {
+    pub(crate) fn new() -> Self {
         Self {
             state: State::Start,
-            collection: C::default(),
-            closed_s_exprs_parser: ClosedMultipleParser::default(),
+            attributes: Vec::new(),
+            s_exprs: ClosedMultipleResource::new(),
         }
     }
-}
 
-impl<H: SmtHandler, C: AttributeCollection<H>> Default for CollectingParser<H, C> {
-    fn default() -> Self {
-        Self::new()
+    pub(crate) fn is_pristine(&self) -> bool {
+        matches!(self.state, State::Start)
+            && self.attributes.is_empty()
+            && self.s_exprs.is_pristine()
+    }
+
+    pub(crate) fn clear(&mut self) {
+        self.state = State::Start;
+        self.attributes.clear();
+        self.s_exprs.clear();
     }
 }
 
-impl<H: SmtHandler, C: AttributeCollection<H>> CategoryParser<H> for CollectingParser<H, C> {
-    type Result = C::Output;
-
-    fn progress(
+impl<H: SmtHandler> AttributeSlot<H> {
+    fn progress<C: AttributeCollection<H>>(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H>,
+        s_expr_slot: &mut SExprSlot<H>,
         token: &Token,
     ) -> Result<ControlFlow<C::Output>, ParserError<H::Error>> {
         let span = token.span();
-        if !self.collection.next_allowed() {
+        if !C::next_allowed(self.attributes.len()) {
             // no more attributes are allowed, just expect a closing parenthesis
             CloseParenParser::expect(token)?;
-            return Ok(ControlFlow::Break(self.collection.finish(span)?));
+            return Ok(ControlFlow::Break(C::finish(&mut self.attributes, span)?));
         }
 
         let mut state = State::Start;
@@ -88,10 +159,13 @@ impl<H: SmtHandler, C: AttributeCollection<H>> CategoryParser<H> for CollectingP
 
         match state {
             State::Start => {
+                if self.attributes.is_empty() {
+                    debug_assert!(self.is_pristine(), "must be pristine when starting");
+                }
                 match token.kind() {
                     TokenKind::ParenClose => {
                         // finish the attribute
-                        return Ok(ControlFlow::Break(self.collection.finish(span)?));
+                        return Ok(ControlFlow::Break(C::finish(&mut self.attributes, span)?));
                     }
                     TokenKind::Keyword(keyword) => {
                         // we received an attribute name, handle it
@@ -152,7 +226,7 @@ impl<H: SmtHandler, C: AttributeCollection<H>> CategoryParser<H> for CollectingP
 
                 // handle the attribute and push to the collection
                 let result = handle_err(handler.handle_attribute(name, value), span)?;
-                self.collection.push(result);
+                self.attributes.push(result);
                 // if we received a closing parenthesis, we need to finish immediately
                 match decision {
                     Decision::FinishAttribute => {
@@ -160,11 +234,11 @@ impl<H: SmtHandler, C: AttributeCollection<H>> CategoryParser<H> for CollectingP
                     }
                     Decision::Break => {
                         // break
-                        return Ok(ControlFlow::Break(self.collection.finish(span)?));
+                        return Ok(ControlFlow::Break(C::finish(&mut self.attributes, span)?));
                     }
                     Decision::StartNextAttribute(keyword) => {
                         // check if we actually can start a next keyword
-                        if !self.collection.next_allowed() {
+                        if !C::next_allowed(self.attributes.len()) {
                             // it turns out that we actually expected a closing parenthesis
                             return Err(ParserError::category_error(
                                 CategoryErrorKind::ExpectedToken(&[TokenType::ParenClose]),
@@ -177,9 +251,10 @@ impl<H: SmtHandler, C: AttributeCollection<H>> CategoryParser<H> for CollectingP
                 }
             }
             State::InsideSExpr(name) => {
+                // progress s_exprs, which progress SExpr as an element
                 match self
-                    .closed_s_exprs_parser
-                    .progress(handler, resources, token)?
+                    .s_exprs
+                    .progress(token, |token| s_expr_slot.progress(handler, token))?
                 {
                     ControlFlow::Continue(()) => {
                         // put the state back
@@ -194,7 +269,7 @@ impl<H: SmtHandler, C: AttributeCollection<H>> CategoryParser<H> for CollectingP
                             handle_err(handler.handle_attribute(name, Some(value)), span)?;
                         // no additional reset steps necessary, as the state has already been replaced
                         // by Start and the SExpr parser is untouched
-                        self.collection.push(attribute);
+                        self.attributes.push(attribute);
                     }
                 }
             }
@@ -204,29 +279,25 @@ impl<H: SmtHandler, C: AttributeCollection<H>> CategoryParser<H> for CollectingP
     }
 }
 
-struct SingleAttribute<H: SmtHandler>(Option<H::Attribute>);
+struct SingleAttribute;
 
-impl<H: SmtHandler> Default for SingleAttribute<H> {
-    fn default() -> Self {
-        Self(None)
-    }
-}
-
-impl<H: SmtHandler> AttributeCollection<H> for SingleAttribute<H> {
+impl<H: SmtHandler> AttributeCollection<H> for SingleAttribute {
     type Output = H::Attribute;
 
-    fn next_allowed(&self) -> bool {
-        self.0.is_none()
+    fn next_allowed(num_elements: usize) -> bool {
+        num_elements == 0
     }
 
-    fn push(&mut self, attribute: H::Attribute) {
-        // the progress function is responsible for ensuring
-        // this is not called when next_allowed() is false
-        self.0 = Some(attribute);
-    }
+    fn finish(
+        attributes: &mut Vec<H::Attribute>,
+        span: SmtSpan,
+    ) -> Result<Self::Output, ParserError<H::Error>> {
+        debug_assert!(
+            attributes.len() <= 1,
+            "at most one attribute should be parsed"
+        );
 
-    fn finish(&mut self, span: SmtSpan) -> Result<Self::Output, ParserError<H::Error>> {
-        match self.0.take() {
+        match attributes.drain(..).next() {
             Some(attribute) => Ok(attribute),
             None => Err(ParserError::category_error(
                 CategoryErrorKind::ExpectedAttribute,
@@ -236,80 +307,59 @@ impl<H: SmtHandler> AttributeCollection<H> for SingleAttribute<H> {
     }
 }
 
-struct MultipleAttributes<H: SmtHandler>(Vec<H::Attribute>);
+struct MultipleAttributes;
 
-impl<H: SmtHandler> Default for MultipleAttributes<H> {
-    fn default() -> Self {
-        Self(Vec::new())
-    }
-}
-
-impl<H: SmtHandler> AttributeCollection<H> for MultipleAttributes<H> {
+impl<H: SmtHandler> AttributeCollection<H> for MultipleAttributes {
     type Output = Vec<H::Attribute>;
 
-    fn next_allowed(&self) -> bool {
+    fn next_allowed(_num_elements: usize) -> bool {
         true
     }
 
-    fn push(&mut self, attribute: H::Attribute) {
-        self.0.push(attribute);
-    }
-
-    fn finish(&mut self, _span: SmtSpan) -> Result<Self::Output, ParserError<H::Error>> {
-        let mut result = Vec::new();
-        std::mem::swap(&mut self.0, &mut result);
-        Ok(result)
+    fn finish(
+        attributes: &mut Vec<H::Attribute>,
+        _span: SmtSpan,
+    ) -> Result<Self::Output, ParserError<H::Error>> {
+        Ok(std::mem::take(attributes))
     }
 }
 
-// mechanical newtype impls
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{CheckStandardSyntax, read::parser::category::tests::parse_all_with};
 
-impl<H: SmtHandler> ClosedAttributeParser<H> {
-    pub fn new() -> Self {
-        Self(CollectingParser::new())
-    }
-}
-
-impl<H: SmtHandler> Default for ClosedAttributeParser<H> {
-    fn default() -> Self {
-        Self(Default::default())
-    }
-}
-
-impl<H: SmtHandler> CategoryParser<H> for ClosedAttributeParser<H> {
-    type Result = H::Attribute;
-
-    fn progress(
-        &mut self,
-        handler: &mut H,
-        resources: &mut ParserResources<H>,
-        token: &Token,
-    ) -> Result<ControlFlow<Self::Result>, ParserError<<H as SmtHandler>::Error>> {
-        self.0.progress(handler, resources, token)
-    }
-}
-
-impl<H: SmtHandler> ClosedMultipleAttributeParser<H> {
-    pub fn new() -> Self {
-        Self(CollectingParser::new())
-    }
-}
-
-impl<H: SmtHandler> Default for ClosedMultipleAttributeParser<H> {
-    fn default() -> Self {
-        Self(Default::default())
-    }
-}
-
-impl<H: SmtHandler> CategoryParser<H> for ClosedMultipleAttributeParser<H> {
-    type Result = Vec<H::Attribute>;
-
-    fn progress(
-        &mut self,
-        handler: &mut H,
-        resources: &mut ParserResources<H>,
-        token: &Token,
-    ) -> Result<ControlFlow<Self::Result>, ParserError<<H as SmtHandler>::Error>> {
-        self.0.progress(handler, resources, token)
+    #[test]
+    fn slot_is_pristine_after_every_attribute_list() {
+        // every value shape (none, symbol, constant, s-expression list) uses the
+        // attribute slot and the s-expression list it owns; the slot must be back
+        // in its initial state after a single attribute and after several
+        for input in [
+            &b":flag)"[..],
+            b":named x)",
+            b":weight 3)",
+            b":pattern ((f x) y))",
+        ] {
+            let mut resources = ParserResources::new();
+            parse_all_with(
+                ClosedAttributeParser::<CheckStandardSyntax>::new(),
+                &mut resources,
+                input,
+            );
+            assert!(resources.are_pristine(), "after {input:?}");
+        }
+        for input in [
+            &b":a x :b (1 (2 3)) :c)"[..],
+            b":pattern ((f x)) :qid q)",
+            b")",
+        ] {
+            let mut resources = ParserResources::new();
+            parse_all_with(
+                ClosedMultipleAttributeParser::<CheckStandardSyntax>::new(),
+                &mut resources,
+                input,
+            );
+            assert!(resources.are_pristine(), "after {input:?}");
+        }
     }
 }

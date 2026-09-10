@@ -2,7 +2,9 @@ use std::ops::ControlFlow;
 
 use crate::{
     SmtHandler,
-    read::parser::{IdentSlot, ParserError, SExprSlot, SortSlot},
+    read::parser::{
+        IdentSlot, ParserError, SExprSlot, SortSlot, category::attribute::AttributeSlot,
+    },
     token::{Token, TokenKind},
 };
 
@@ -17,6 +19,7 @@ pub struct ParserResources<H: SmtHandler + ?Sized> {
     pub(crate) ident_slot: IdentSlot,
     pub(crate) sort_slot: SortSlot<H>,
     pub(crate) s_expr_slot: SExprSlot<H>,
+    pub(crate) attribute_slot: AttributeSlot<H>,
 }
 
 impl<H: SmtHandler + ?Sized> ParserResources<H> {
@@ -25,6 +28,7 @@ impl<H: SmtHandler + ?Sized> ParserResources<H> {
             ident_slot: IdentSlot::new(),
             sort_slot: SortSlot::new(),
             s_expr_slot: SExprSlot::new(),
+            attribute_slot: AttributeSlot::new(),
         }
     }
 
@@ -32,12 +36,14 @@ impl<H: SmtHandler + ?Sized> ParserResources<H> {
         self.ident_slot.is_pristine()
             && self.sort_slot.is_pristine()
             && self.s_expr_slot.is_pristine()
+            && self.attribute_slot.is_pristine()
     }
 
     pub(crate) fn clear(&mut self) {
         self.ident_slot.clear();
         self.sort_slot.clear();
         self.s_expr_slot.clear();
+        self.attribute_slot.clear();
     }
 }
 
@@ -81,5 +87,14 @@ impl<T> ClosedMultipleResource<T> {
             self.outside = true;
         }
         Ok(ControlFlow::Continue(()))
+    }
+
+    pub(crate) fn is_pristine(&self) -> bool {
+        self.outside && self.items.is_empty()
+    }
+
+    pub(crate) fn clear(&mut self) {
+        self.outside = true;
+        self.items.clear();
     }
 }
