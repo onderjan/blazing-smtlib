@@ -18,7 +18,7 @@ pub(super) struct FunctionSignatureParser<H: CommandHandler> {
 impl<H: CommandHandler> FunctionSignatureParser<H> {
     fn new() -> Self {
         Self {
-            inner: PairParser::new(),
+            inner: PairParser::default(),
         }
     }
 }
@@ -113,7 +113,6 @@ impl<H: CommandHandler> CategoryParser<H> for RecursiveBodyParser<H> {
 /// handler after ending, as everything is handled by the parser.
 pub(super) struct DefineFunsRecParser<H: CommandHandler> {
     state: DefineFunsRecState,
-    num_signatures: usize,
 
     signatures_parser: ParenMultipleParser<H, ParenParser<H, FunctionSignatureParser<H>>>,
     bodies_parser: ParenMaximumParser<H, RecursiveBodyParser<H>>,
@@ -126,11 +125,12 @@ enum DefineFunsRecState {
 
 impl<H: CommandHandler> DefineFunsRecParser<H> {
     pub fn new() -> Self {
+        // the number of maximum elements for bodies parser will be
+        // resized before each parse, it does not matter in the initial state
         Self {
             state: DefineFunsRecState::Signatures,
-            num_signatures: 0,
-            signatures_parser: ParenMultipleParser::new(),
-            bodies_parser: ParenMaximumParser::new(),
+            signatures_parser: ParenMultipleParser::default(),
+            bodies_parser: ParenMaximumParser::new(RecursiveBodyParser::new(), 0),
         }
     }
 }
@@ -146,9 +146,10 @@ impl<H: CommandHandler> CategoryParser<H> for DefineFunsRecParser<H> {
 
     fn restart(&mut self) {
         self.state = DefineFunsRecState::Signatures;
-        self.num_signatures = 0;
         self.signatures_parser.restart();
-        self.bodies_parser.start(0);
+        // the bodies parser can have a changed number of maximum elements,
+        // but it will be changed before it is used next time
+        self.bodies_parser.restart();
     }
 
     fn progress(
@@ -173,8 +174,7 @@ impl<H: CommandHandler> CategoryParser<H> for DefineFunsRecParser<H> {
                     }
 
                     // remember how many signatures we have and set it as a maximum for bodies
-                    self.num_signatures = signatures.len();
-                    self.bodies_parser.start(self.num_signatures);
+                    self.bodies_parser.restart_with(signatures.len());
 
                     // start recursive function bodies in the handler, passing the signatures
                     handle_err(handler.start_define_funs_rec(signatures), span)?;
@@ -189,7 +189,7 @@ impl<H: CommandHandler> CategoryParser<H> for DefineFunsRecParser<H> {
                 {
                     // the parser returned a vector of units corresponding to the number of bodies
                     // bounded by the maximum which is the number of signatures
-                    if bodies.len() != self.num_signatures {
+                    if bodies.len() != self.bodies_parser.max_elements() {
                         // not enough bodies processed
                         return Err(ParserError::category_error(
                             CategoryErrorKind::ExpectedFunctionBody,
@@ -198,9 +198,10 @@ impl<H: CommandHandler> CategoryParser<H> for DefineFunsRecParser<H> {
                     }
 
                     // end the recursive function definitions in the handler, reset, and break
+                    // the bodies parser can have a changed number of maximum elements,
+                    // but it will be changed before it is used next time
                     handle_err(handler.end_define_funs_rec(), span)?;
                     self.state = DefineFunsRecState::Signatures;
-                    self.num_signatures = 0;
                     return Ok(ControlFlow::Break(()));
                 }
             }

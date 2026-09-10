@@ -28,19 +28,13 @@ fn valid_input_has_no_error() {
 fn bare_symbol_is_whole_token() {
     // a command must be parenthesized; the whole symbol token is the span
     let err = assert_parser_error(b"check-sat", 0, 9);
-    assert!(
-        matches!(err, CategoryErrorKind::ExpectedCommand),
-        "{err:?}"
-    );
+    assert!(matches!(err, CategoryErrorKind::ExpectedCommand), "{err:?}");
 }
 
 #[test]
 fn missing_term_points_at_close_paren() {
     let err = assert_parser_error(b"(check-sat)\n(assert )", 20, 21);
-    assert!(
-        matches!(err, CategoryErrorKind::ExpectedTerm),
-        "{err:?}"
-    );
+    assert!(matches!(err, CategoryErrorKind::ExpectedTerm), "{err:?}");
 }
 
 #[test]
@@ -166,7 +160,7 @@ impl CommandHandler for Recording {
         name: SmtSymbolView<'_>,
     ) -> Result<Self::NonstandardParser, Self::Error> {
         match name.as_slice() {
-            b"my-assert" => Ok(CommandParser::new()),
+            b"my-assert" => Ok(CommandParser::default()),
             _ => Err(NonstandardCommandError(name.into_owned())),
         }
     }

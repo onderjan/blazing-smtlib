@@ -57,7 +57,7 @@ impl<H: SmtHandler, C: AttributeCollection<H>> CollectingParser<H, C> {
         Self {
             state: State::Start,
             collection: C::default(),
-            closed_s_exprs_parser: ClosedMultipleParser::new(),
+            closed_s_exprs_parser: ClosedMultipleParser::default(),
         }
     }
 }

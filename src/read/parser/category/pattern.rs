@@ -29,7 +29,7 @@ impl<H: SmtHandler> CategoryParser<H> for SimplePatternParser {
     fn progress(
         &mut self,
         _handler: &mut H,
-        resources: &mut ParserResources,
+        _resources: &mut ParserResources,
         token: &Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         let result = match token.kind() {
@@ -47,6 +47,10 @@ impl<H: SmtHandler> CategoryParser<H> for SimplePatternParser {
         };
         Ok(ControlFlow::Break(result))
     }
+
+    fn restart(&mut self) {
+        // no state, do nothing
+    }
 }
 
 /// A parser that reads an SMT-LIB match pattern.
@@ -62,7 +66,7 @@ impl<H: SmtHandler> PatternParser<H> {
     pub fn new() -> Self {
         Self {
             is_constructor: false,
-            constructor_parser: PairParser::new(),
+            constructor_parser: PairParser::default(),
         }
     }
 }

@@ -396,7 +396,7 @@ fn run_count_from<H: SmtHandler<Error = Infallible>, P: CategoryParser<H>>(
 /// (not counting the end-of-file token), so tests can check where the parser stopped;
 /// a parser error is returned as its kind and span.
 /// Panics if the parser did not finish before the end of the input.
-fn run_with<H: SmtHandler<Error = Infallible>, P: CategoryParser<H>>(
+fn run_with<H: SmtHandler<Error = Infallible>, P: CategoryParser<H> + Default>(
     handler: &mut H,
     input: &[u8],
 ) -> Result<(P::Result, usize), ParseFailure> {
@@ -409,7 +409,9 @@ fn run_with<H: SmtHandler<Error = Infallible>, P: CategoryParser<H>>(
 }
 
 /// Runs the parser over a fresh `Printing` handler.
-fn run<P: CategoryParser<Printing>>(input: &[u8]) -> Result<(P::Result, usize), ParseFailure> {
+fn run<P: CategoryParser<Printing> + Default>(
+    input: &[u8],
+) -> Result<(P::Result, usize), ParseFailure> {
     run_with::<Printing, P>(&mut Printing::default(), input)
 }
 
@@ -419,7 +421,7 @@ fn run<P: CategoryParser<Printing>>(input: &[u8]) -> Result<(P::Result, usize), 
 /// This exercises the self-reset contract: after `progress` returns Break,
 /// the parser instance must be back in the default state.
 #[track_caller]
-fn parse_two<P: CategoryParser<Printing>>(input: &[u8]) -> (P::Result, P::Result) {
+fn parse_two<P: CategoryParser<Printing> + Default>(input: &[u8]) -> (P::Result, P::Result) {
     match run_count_from(P::default(), &mut Printing::default(), input, 2) {
         Ok((results, 0)) => {
             let mut results = results.into_iter();
@@ -455,7 +457,7 @@ fn parse_all_from<P: CategoryParser<Printing>>(parser: P, input: &[u8]) -> P::Re
 
 /// Runs the parser, requires success with no unconsumed tokens, and returns the result.
 #[track_caller]
-fn parse_all<P: CategoryParser<Printing>>(input: &[u8]) -> P::Result {
+fn parse_all<P: CategoryParser<Printing> + Default>(input: &[u8]) -> P::Result {
     match run::<P>(input) {
         Ok((result, 0)) => result,
         Ok((_, left)) => panic!("{left} tokens left unconsumed in {:?}", text(input)),
@@ -468,7 +470,7 @@ fn parse_all<P: CategoryParser<Printing>>(input: &[u8]) -> P::Result {
 /// Runs the parser, requires a parser error, checks the byte span the error carries,
 /// and returns its kind so that the caller can inspect the variant.
 #[track_caller]
-fn assert_error<P: CategoryParser<Printing>>(
+fn assert_error<P: CategoryParser<Printing> + Default>(
     input: &[u8],
     start: u64,
     end: u64,

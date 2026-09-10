@@ -13,8 +13,8 @@ use crate::{
 /// The commands using a definition parser do not call the
 /// handler after ending, as everything is handled by the parser.
 pub(super) trait Definition<H: CommandHandler> {
-    type Signature: CategoryParser<H>;
-    type Body: CategoryParser<H>;
+    type Signature: CategoryParser<H> + Default;
+    type Body: CategoryParser<H> + Default;
 
     /// Start is invoked before the first definition body token.
     fn start(

@@ -56,8 +56,8 @@ impl<H: CommandHandler> DatatypeParser<H> {
         Self {
             state: DatatypeState::Start,
             single_introduction: None,
-            symbols_parser: ParenMultipleParser::new(),
-            constructors_parser: ClosedMultipleParser::new(),
+            symbols_parser: ParenMultipleParser::default(),
+            constructors_parser: ClosedMultipleParser::default(),
         }
     }
 
@@ -232,20 +232,19 @@ enum DeclareDatatypesState {
 /// Parser for the command `declare-datatypes`.
 pub(super) struct DeclareDatatypesParser<H: CommandHandler> {
     state: DeclareDatatypesState,
-    num_expected_declarations: usize,
 
     introductions_parser: ParenMultipleParser<H, IntroductionParser<H>>,
     datatypes_parser: ParenMaximumParser<H, DatatypeParser<H>>,
 }
 
-impl<H: CommandHandler> Default for DeclareDatatypesParser<H> {
-    fn default() -> Self {
+impl<H: CommandHandler> DeclareDatatypesParser<H> {
+    pub fn new() -> Self {
+        // the number of maximum elements for datatypes parser will be
+        // resized before each parse, it does not matter in the initial state
         Self {
             state: DeclareDatatypesState::Introductions,
-            num_expected_declarations: 0,
-
-            introductions_parser: ParenMultipleParser::new(),
-            datatypes_parser: ParenMaximumParser::new(),
+            introductions_parser: ParenMultipleParser::default(),
+            datatypes_parser: ParenMaximumParser::new(DatatypeParser::new(), 0),
         }
     }
 }
@@ -255,9 +254,10 @@ impl<H: CommandHandler> CategoryParser<H> for DeclareDatatypesParser<H> {
 
     fn restart(&mut self) {
         self.state = DeclareDatatypesState::Introductions;
-        self.num_expected_declarations = 0;
         self.introductions_parser.restart();
-        self.datatypes_parser.start(0);
+        // the datatypes parser can have a changed number of maximum elements,
+        // but it will be changed before it is used next time
+        self.datatypes_parser.restart();
     }
 
     fn progress(
@@ -281,9 +281,8 @@ impl<H: CommandHandler> CategoryParser<H> for DeclareDatatypesParser<H> {
                             span,
                         ));
                     }
-                    // ensure we and the datatypes parser are expecting the correct number of elements
-                    self.num_expected_declarations = introductions.len();
-                    self.datatypes_parser.start(self.num_expected_declarations);
+                    // ensure the datatypes parser is expecting the correct number of elements
+                    self.datatypes_parser.restart_with(introductions.len());
                     // start datatype declarations
                     handle_err(handler.start_declare_datatypes(introductions), span)?;
                     self.state = DeclareDatatypesState::Declarations;
@@ -296,7 +295,7 @@ impl<H: CommandHandler> CategoryParser<H> for DeclareDatatypesParser<H> {
                 {
                     // there cannot be more datatypes than sort declarations due to the maximum parser
                     // ensure there are not more sort declarations than datatypes
-                    if datatypes.len() != self.num_expected_declarations {
+                    if datatypes.len() != self.datatypes_parser.max_elements() {
                         return Err(ParserError::category_error(
                             CategoryErrorKind::ExpectedDatatype,
                             span,
@@ -304,14 +303,21 @@ impl<H: CommandHandler> CategoryParser<H> for DeclareDatatypesParser<H> {
                     }
 
                     // end datatypes declarations, reset, and break
+                    // the datatypes parser can have a changed number of maximum elements,
+                    // but it will be changed before it is used next time
                     handle_err(handler.end_declare_datatypes(), span)?;
-                    self.num_expected_declarations = 0;
                     self.state = DeclareDatatypesState::Introductions;
                     return Ok(ControlFlow::Break(()));
                 }
             }
         }
         Ok(ControlFlow::Continue(()))
+    }
+}
+
+impl<H: CommandHandler> Default for DeclareDatatypesParser<H> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

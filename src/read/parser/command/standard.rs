@@ -67,7 +67,7 @@ macro_rules! standard_commands {
         impl<H: CommandHandler> CommandParsers<H> {
             pub fn new() -> Self {
                 Self {
-                    $($field: CommandParser::new(),)*
+                    $($field: CommandParser::default(),)*
                 }
             }
             pub fn restart(&mut self, kind: StandardCommandKind) {
@@ -264,7 +264,7 @@ pub(super) struct GetValueParser<H: CommandHandler> {
 impl<H: CommandHandler> GetValueParser<H> {
     fn new() -> Self {
         Self {
-            inner: ParenMultipleParser::new(),
+            inner: ParenMultipleParser::default(),
         }
     }
 }

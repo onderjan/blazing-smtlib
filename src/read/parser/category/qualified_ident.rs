@@ -36,7 +36,7 @@ impl<H: SmtHandler> QualifiedIdentParser<H> {
         Self {
             state: State::Start,
             ident_parser: IdentParser::new(),
-            qualified_parser: PairParser::new(),
+            qualified_parser: PairParser::default(),
         }
     }
 

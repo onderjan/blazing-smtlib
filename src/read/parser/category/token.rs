@@ -14,10 +14,6 @@ macro_rules! token_parser {
             pub fn new() -> Self {
                 Self
             }
-
-            pub fn restart(&mut self) {
-                // nothing to restart
-            }
         }
 
         impl Default for $parser {
@@ -50,6 +46,10 @@ macro_rules! token_parser {
                 token: &Token,
             ) -> Result<ControlFlow<Self::Result, ()>, ParserError<H::Error>> {
                 Ok(ControlFlow::Break(Self::expect(token)?))
+            }
+
+            fn restart(&mut self) {
+                // nothing to restart
             }
         }
     };

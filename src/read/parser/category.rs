@@ -38,7 +38,7 @@ pub type SortedVarParser<H> = ParenParser<H, PairParser<H, SymbolParser, SortPar
 
 pub type ParenSortedVarsParser<H> = ParenMultipleParser<H, SortedVarParser<H>>;
 
-pub trait CategoryParser<H: SmtHandler>: Default {
+pub trait CategoryParser<H: SmtHandler> {
     type Result;
 
     /// Parses a single token, progressing the parser.
@@ -66,12 +66,7 @@ pub trait CategoryParser<H: SmtHandler>: Default {
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>>;
 
     /// Restarts the parser to its default state.
-    ///
-    /// The default implementation can be overridden for a performance benefit
-    /// to avoid dropping and reconstructing the parser.
-    fn restart(&mut self) {
-        *self = Self::default();
-    }
+    fn restart(&mut self);
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

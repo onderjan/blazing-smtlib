@@ -77,10 +77,8 @@ pub struct CommandParser<H: CommandHandler, C: CommandAction<H>> {
 }
 
 impl<H: CommandHandler, C: CommandAction<H>> CommandParser<H, C> {
-    pub fn new() -> Self {
-        Self {
-            parser: C::Parser::default(),
-        }
+    pub fn new(parser: C::Parser) -> Self {
+        Self { parser }
     }
 
     pub fn restart(&mut self) {
@@ -88,9 +86,12 @@ impl<H: CommandHandler, C: CommandAction<H>> CommandParser<H, C> {
     }
 }
 
-impl<H: CommandHandler, C: CommandAction<H>> Default for CommandParser<H, C> {
+impl<H: CommandHandler, C: CommandAction<H>> Default for CommandParser<H, C>
+where
+    C::Parser: Default,
+{
     fn default() -> Self {
-        Self::new()
+        Self::new(C::Parser::default())
     }
 }
 
@@ -154,7 +155,7 @@ mod tests {
     fn finished_command_parser_parses_the_next_command() {
         let mut handler = CheckStandardSyntax;
         let mut parser: CommandParser<CheckStandardSyntax, standard::CheckSat> =
-            CommandParser::new();
+            CommandParser::default();
 
         // a check-sat command body is just the closing parenthesis,
         // so one token finishes the command; the parser is self-restarting
