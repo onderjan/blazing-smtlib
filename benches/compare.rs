@@ -23,7 +23,8 @@
 //! `git worktree prune` drops the stale registrations). Without a head the
 //! head is the current working tree, uncommitted changes included, so the
 //! usual workflow is `cargo bench --bench compare -- HEAD` after editing. The
-//! untracked `Cargo.lock` and the current `benches/parse.rs` are copied into
+//! untracked `Cargo.lock` and the current `benches/parse.rs` (with the
+//! `benches/common` module it shares with the census bench) are copied into
 //! each worktree, so both sides run the same measurement code against their
 //! own library; this requires the baseline to still offer the small API the
 //! bench uses.
@@ -204,11 +205,16 @@ fn build_revision(root: &Path, revision: &str) -> Result<Side, String> {
     }
 
     // the lockfile is untracked, and the bench source must be the one whose
-    // protocol this driver speaks
-    for relative in ["Cargo.lock", "benches/parse.rs"] {
+    // protocol this driver speaks, together with the module it shares with
+    // the census bench (which a baseline may predate, hence the directory)
+    for relative in ["Cargo.lock", "benches/parse.rs", "benches/common/mod.rs"] {
         let source = root.join(relative);
         if source.exists() {
             let destination = worktree.join(relative);
+            if let Some(parent) = destination.parent() {
+                std::fs::create_dir_all(parent)
+                    .map_err(|err| format!("cannot create {}: {err}", parent.display()))?;
+            }
             std::fs::copy(&source, &destination).map_err(|err| {
                 format!(
                     "cannot copy {} to {}: {err}",

@@ -12,6 +12,10 @@ rayon = "1.11.0"
 name = "parse"
 harness = false
 
+[[bench]]
+name = "census"
+harness = false
+
 [profile.bench]
 debug = true
 [[bench]]
