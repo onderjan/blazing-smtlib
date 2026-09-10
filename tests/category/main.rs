@@ -32,8 +32,8 @@ use smt_parser_rs::{
             CategoryErrorKind, CategoryParser, CloseParenParser, ClosedAttributeParser,
             ClosedMultipleAttributeParser, ClosedMultipleParser, ClosedParser, IdentParser,
             KeywordParser, OpenParenParser, PairParser, ParenMultipleParser, ParenParser,
-            ParserError, ParserErrorKind, QualifiedIdentParser, SExprParser, SortParser,
-            StringParser, SymbolParser, TermParser,
+            ParserError, ParserErrorKind, ParserResources, QualifiedIdentParser, SExprParser,
+            SortParser, StringParser, SymbolParser, TermParser,
         },
     },
     token::{Reserved, Token, TokenHandler, TokenType},
@@ -126,6 +126,7 @@ fn render_list(items: &[String]) -> String {
 
 impl SmtHandler for Printing {
     type Error = Infallible;
+    type Resources = ();
     type SExpr = String;
     type Attribute = String;
     type Sort = String;
@@ -305,8 +306,10 @@ type ParseFailure = (CategoryErrorKind, SmtSpan);
 ///
 /// The parser instance is reused for every result in turn, so driving with
 /// a wanted count above one exercises the self-reset contract.
-struct Drive<'h, H: SmtHandler, P: CategoryParser<H>> {
+struct Drive<'h, 'r, H: SmtHandler<Resources = ()>, P: CategoryParser<H>> {
     handler: &'h mut H,
+    /// The parser resources, shared by every parser in a run.
+    resources: ParserResources<'r, ()>,
     /// The parser under test, reused across parses.
     parser: P,
     /// How many more results to parse before tokens count as unconsumed.
@@ -317,7 +320,7 @@ struct Drive<'h, H: SmtHandler, P: CategoryParser<H>> {
     unconsumed: usize,
 }
 
-impl<H: SmtHandler, P: CategoryParser<H>> TokenHandler for Drive<'_, H, P> {
+impl<H: SmtHandler<Resources = ()>, P: CategoryParser<H>> TokenHandler for Drive<'_, '_, H, P> {
     type Error = ParserError<H::Error>;
 
     fn handle_token(&mut self, token: &Token) -> Result<(), Self::Error> {
@@ -327,7 +330,10 @@ impl<H: SmtHandler, P: CategoryParser<H>> TokenHandler for Drive<'_, H, P> {
             }
             return Ok(());
         }
-        if let ControlFlow::Break(result) = self.parser.progress(self.handler, token)? {
+        if let ControlFlow::Break(result) =
+            self.parser
+                .progress(self.handler, &mut self.resources, token)?
+        {
             self.results.push(result);
             self.remaining -= 1;
         }
@@ -342,14 +348,16 @@ impl<H: SmtHandler, P: CategoryParser<H>> TokenHandler for Drive<'_, H, P> {
 /// (not counting the end-of-file token), so tests can check where the parser stopped;
 /// a parser error is returned as its kind and span.
 /// Panics if the parser did not finish `count` times before the end of the input.
-fn run_count_from<H: SmtHandler<Error = Infallible>, P: CategoryParser<H>>(
+fn run_count_from<H: SmtHandler<Error = Infallible, Resources = ()>, P: CategoryParser<H>>(
     parser: P,
     handler: &mut H,
     input: &[u8],
     count: usize,
 ) -> Result<(Vec<P::Result>, usize), ParseFailure> {
+    let mut custom = ();
     let mut drive = Drive {
         handler,
+        resources: ParserResources::new(&mut custom),
         parser,
         remaining: count,
         results: Vec::new(),
@@ -390,7 +398,7 @@ fn run_count_from<H: SmtHandler<Error = Infallible>, P: CategoryParser<H>>(
 /// (not counting the end-of-file token), so tests can check where the parser stopped;
 /// a parser error is returned as its kind and span.
 /// Panics if the parser did not finish before the end of the input.
-fn run_with<H: SmtHandler<Error = Infallible>, P: CategoryParser<H>>(
+fn run_with<H: SmtHandler<Error = Infallible, Resources = ()>, P: CategoryParser<H>>(
     handler: &mut H,
     input: &[u8],
 ) -> Result<(P::Result, usize), ParseFailure> {

@@ -97,6 +97,7 @@ impl CommandAction<Recording> for MyAssert {
 
 impl SmtHandler for Recording {
     type Error = NonstandardCommandError;
+    type Resources = ();
     type SExpr = ();
     type Attribute = ();
     type Sort = ();

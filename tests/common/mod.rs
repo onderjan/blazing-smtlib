@@ -6,7 +6,7 @@ use smt_parser_rs::{
 };
 
 /// Parses the whole input, feeding the commands to the given handler.
-pub fn parse_with<H: CommandHandler>(
+pub fn parse_with<H: CommandHandler<Resources: Default>>(
     handler: &mut H,
     input: &[u8],
 ) -> Result<(), SmtReadError<H::Error>> {

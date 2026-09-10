@@ -146,6 +146,7 @@ struct Counting {
 
 impl SmtHandler for Counting {
     type Error = Infallible;
+    type Resources = ();
     type SExpr = ();
     type Attribute = ();
     type Sort = ();

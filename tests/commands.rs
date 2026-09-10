@@ -127,6 +127,7 @@ fn ident_text(ident: &SmtIdent) -> String {
 
 impl SmtHandler for Resolving {
     type Error = String;
+    type Resources = ();
     type SExpr = ();
     type Attribute = ();
     type Sort = String;
