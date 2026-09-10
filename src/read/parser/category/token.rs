@@ -47,10 +47,6 @@ macro_rules! token_parser {
             ) -> Result<ControlFlow<Self::Result, ()>, ParserError<H::Error>> {
                 Ok(ControlFlow::Break(Self::expect(token)?))
             }
-
-            fn restart(&mut self) {
-                // nothing to restart
-            }
         }
     };
 }

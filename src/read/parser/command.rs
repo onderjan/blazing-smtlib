@@ -29,10 +29,6 @@ impl<H: CommandHandler> CategoryParser<H> for NoCommandParser {
     ) -> Result<ControlFlow<()>, ParserError<H::Error>> {
         match *self {}
     }
-
-    fn restart(&mut self) {
-        match *self {}
-    }
 }
 
 /// Determines how a single command should be handled by a command handler.
@@ -65,10 +61,6 @@ impl<H: CommandHandler, C: CommandAction<H>> CommandParser<H, C> {
     pub fn new(parser: C::Parser) -> Self {
         Self { parser }
     }
-
-    pub fn restart(&mut self) {
-        self.parser.restart();
-    }
 }
 
 impl<H: CommandHandler, C: CommandAction<H>> Default for CommandParser<H, C>
@@ -97,10 +89,6 @@ impl<H: CommandHandler, C: CommandAction<H>> CategoryParser<H> for CommandParser
         handle_err(C::handle(handler, result), span)?;
         Ok(ControlFlow::Break(()))
     }
-
-    fn restart(&mut self) {
-        self.parser.restart();
-    }
 }
 
 impl<H: CommandHandler> super::Parser<'_, H> {
@@ -110,10 +98,7 @@ impl<H: CommandHandler> super::Parser<'_, H> {
         span: SmtSpan,
     ) -> Result<ParserState<H>, ParserError<H::Error>> {
         match StandardCommandKind::from_name(name.as_slice()) {
-            Some(kind) => {
-                self.command_parsers.restart(kind);
-                Ok(ParserState::Command(kind))
-            }
+            Some(kind) => Ok(ParserState::Command(kind)),
             None => match self.handler.nonstandard_command(name) {
                 Ok(parser) => Ok(ParserState::NonstandardCommand(parser)),
                 Err(err) => Err(ParserError::handler_error(err, span)),

@@ -47,10 +47,6 @@ impl<H: SmtHandler> CategoryParser<H> for SimplePatternParser {
         };
         Ok(ControlFlow::Break(result))
     }
-
-    fn restart(&mut self) {
-        // no state, do nothing
-    }
 }
 
 /// A parser that reads an SMT-LIB match pattern.
@@ -79,11 +75,6 @@ impl<H: SmtHandler> Default for PatternParser<H> {
 
 impl<H: SmtHandler> CategoryParser<H> for PatternParser<H> {
     type Result = SmtPattern;
-
-    fn restart(&mut self) {
-        self.is_constructor = false;
-        self.constructor_parser.restart();
-    }
 
     fn progress(
         &mut self,

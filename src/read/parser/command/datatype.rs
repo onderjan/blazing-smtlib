@@ -97,13 +97,6 @@ impl<H: CommandHandler> Default for DatatypeParser<H> {
 impl<H: CommandHandler> CategoryParser<H> for DatatypeParser<H> {
     type Result = ();
 
-    fn restart(&mut self) {
-        self.state = DatatypeState::Start;
-        self.single_introduction = None;
-        self.symbols_parser.restart();
-        self.constructors_parser.restart();
-    }
-
     fn progress(
         &mut self,
         handler: &mut H,
@@ -252,14 +245,6 @@ impl<H: CommandHandler> DeclareDatatypesParser<H> {
 impl<H: CommandHandler> CategoryParser<H> for DeclareDatatypesParser<H> {
     type Result = ();
 
-    fn restart(&mut self) {
-        self.state = DeclareDatatypesState::Introductions;
-        self.introductions_parser.restart();
-        // the datatypes parser can have a changed number of maximum elements,
-        // but it will be changed before it is used next time
-        self.datatypes_parser.restart();
-    }
-
     fn progress(
         &mut self,
         handler: &mut H,
@@ -282,7 +267,7 @@ impl<H: CommandHandler> CategoryParser<H> for DeclareDatatypesParser<H> {
                         ));
                     }
                     // ensure the datatypes parser is expecting the correct number of elements
-                    self.datatypes_parser.restart_with(introductions.len());
+                    self.datatypes_parser.set_maximum(introductions.len());
                     // start datatype declarations
                     handle_err(handler.start_declare_datatypes(introductions), span)?;
                     self.state = DeclareDatatypesState::Declarations;
@@ -347,11 +332,6 @@ impl<H: CommandHandler> Default for DeclareDatatypeParser<H> {
 impl<H: CommandHandler> CategoryParser<H> for DeclareDatatypeParser<H> {
     type Result = ();
 
-    fn restart(&mut self) {
-        self.state = DeclareDatatypeState::Name;
-        self.datatype_parser.restart();
-    }
-
     fn progress(
         &mut self,
         handler: &mut H,
@@ -372,7 +352,7 @@ impl<H: CommandHandler> CategoryParser<H> for DeclareDatatypeParser<H> {
                 {
                     // the single declaration ends the command
                     handle_err(handler.end_declare_datatypes(), span)?;
-                    self.restart();
+                    self.state = DeclareDatatypeState::Name;
                     return Ok(ControlFlow::Break(()));
                 }
             }

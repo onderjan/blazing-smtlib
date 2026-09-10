@@ -42,12 +42,6 @@ impl<H: SmtHandler, P1: CategoryParser<H>, P2: CategoryParser<H>> CategoryParser
 {
     type Result = (P1::Result, P2::Result);
 
-    fn restart(&mut self) {
-        self.first.restart();
-        self.second.restart();
-        self.first_result = None;
-    }
-
     #[inline]
     fn progress(
         &mut self,
@@ -101,10 +95,6 @@ impl<H: SmtHandler, P: CategoryParser<H> + Default> Default for ClosedParser<H, 
 impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for ClosedParser<H, P> {
     type Result = P::Result;
 
-    fn restart(&mut self) {
-        self.inner.restart();
-    }
-
     #[inline]
     fn progress(
         &mut self,
@@ -143,10 +133,6 @@ impl<H: SmtHandler, P: CategoryParser<H> + Default> Default for OpenedParser<H, 
 
 impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for OpenedParser<H, P> {
     type Result = P::Result;
-
-    fn restart(&mut self) {
-        self.inner.restart();
-    }
 
     #[inline]
     fn progress(
@@ -202,12 +188,6 @@ impl<H: SmtHandler, P: CategoryParser<H> + Default> Default for ClosedMultiplePa
 impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for ClosedMultipleParser<H, P> {
     type Result = Vec<P::Result>;
 
-    fn restart(&mut self) {
-        self.outside = true;
-        self.inner.restart();
-        self.results.clear();
-    }
-
     #[inline]
     fn progress(
         &mut self,
@@ -242,11 +222,10 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for ClosedMultiplePa
 /// moves back into the default state before returning Break.
 pub type ParenMultipleParser<H, P> = OpenedParser<H, ClosedMultipleParser<H, P>>;
 
-/// Parser that parses a number of items up to some maximum.
+/// Parser that parses a number of items ending with a closing parenthesis up to some maximum.
 ///
-/// The maximum does not change on restart. It can only be changed
-/// by using [`ClosedMaximumParser::restart_with`].
-pub(crate) struct ClosedMaximumParser<H: SmtHandler, P: CategoryParser<H>> {
+/// The maximum can be changed by [`ClosedMaximumParser::set_maximum`].
+pub struct ClosedMaximumParser<H: SmtHandler, P: CategoryParser<H>> {
     max_elements: usize,
 
     outside: bool,
@@ -265,9 +244,16 @@ impl<H: SmtHandler, P: CategoryParser<H>> ClosedMaximumParser<H, P> {
         }
     }
 
-    pub fn restart_with(&mut self, max_elements: usize) {
+    /// Sets the maximum number of items to be parsed.
+    ///
+    /// The maximum is only applied when deciding whether
+    /// parsing a next element is allowed and does not affect
+    /// previously parsed elements or the currently parsed element,
+    /// meaning the parser may return more elements than
+    /// the currently set maximum if this function is called
+    /// in the middle of parsing elements.
+    pub fn set_maximum(&mut self, max_elements: usize) {
         self.max_elements = max_elements;
-        self.restart();
     }
 
     pub fn max_elements(&self) -> usize {
@@ -312,16 +298,12 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for ClosedMaximumPar
         }
         Ok(ControlFlow::Continue(()))
     }
-
-    fn restart(&mut self) {
-        // restart does not change the maximum number of elements
-        self.outside = true;
-        self.results.clear();
-        self.inner.restart();
-    }
 }
 
-pub(crate) struct ParenMaximumParser<H: SmtHandler, P: CategoryParser<H>> {
+/// Parser that parses a number of items enclosed in parentheses up to some maximum.
+///
+/// The maximum can be changed by [`ParenMaximumParser::set_maximum`].
+pub struct ParenMaximumParser<H: SmtHandler, P: CategoryParser<H>> {
     is_opened: bool,
     inner: ClosedMaximumParser<H, P>,
 }
@@ -334,9 +316,16 @@ impl<H: SmtHandler, P: CategoryParser<H>> ParenMaximumParser<H, P> {
         }
     }
 
-    pub fn restart_with(&mut self, max_elements: usize) {
-        self.is_opened = false;
-        self.inner.restart_with(max_elements);
+    /// Sets the maximum number of items to be parsed.
+    ///
+    /// The maximum is only applied when deciding whether
+    /// parsing a next element is allowed and does not affect
+    /// previously parsed elements or the currently parsed element,
+    /// meaning the parser may return more elements than
+    /// the currently set maximum if this function is called
+    /// in the middle of parsing elements.
+    pub fn set_maximum(&mut self, max_elements: usize) {
+        self.inner.set_maximum(max_elements);
     }
 
     pub fn max_elements(&self) -> usize {
@@ -365,10 +354,5 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for ParenMaximumPars
             self.is_opened = true;
         }
         Ok(ControlFlow::Continue(()))
-    }
-
-    fn restart(&mut self) {
-        self.is_opened = false;
-        self.inner.restart();
     }
 }

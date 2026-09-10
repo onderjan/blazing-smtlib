@@ -32,10 +32,6 @@ impl<H: CommandHandler> Default for FunctionSignatureParser<H> {
 impl<H: CommandHandler> CategoryParser<H> for FunctionSignatureParser<H> {
     type Result = SmtFunctionSignature<H>;
 
-    fn restart(&mut self) {
-        self.inner.restart();
-    }
-
     fn progress(
         &mut self,
         handler: &mut H,
@@ -75,11 +71,6 @@ impl<H: CommandHandler> Default for RecursiveBodyParser<H> {
 
 impl<H: CommandHandler> CategoryParser<H> for RecursiveBodyParser<H> {
     type Result = ();
-
-    fn restart(&mut self) {
-        self.is_inner = false;
-        self.term_parser.restart();
-    }
 
     fn progress(
         &mut self,
@@ -144,14 +135,6 @@ impl<H: CommandHandler> Default for DefineFunsRecParser<H> {
 impl<H: CommandHandler> CategoryParser<H> for DefineFunsRecParser<H> {
     type Result = ();
 
-    fn restart(&mut self) {
-        self.state = DefineFunsRecState::Signatures;
-        self.signatures_parser.restart();
-        // the bodies parser can have a changed number of maximum elements,
-        // but it will be changed before it is used next time
-        self.bodies_parser.restart();
-    }
-
     fn progress(
         &mut self,
         handler: &mut H,
@@ -174,7 +157,7 @@ impl<H: CommandHandler> CategoryParser<H> for DefineFunsRecParser<H> {
                     }
 
                     // remember how many signatures we have and set it as a maximum for bodies
-                    self.bodies_parser.restart_with(signatures.len());
+                    self.bodies_parser.set_maximum(signatures.len());
 
                     // start recursive function bodies in the handler, passing the signatures
                     handle_err(handler.start_define_funs_rec(signatures), span)?;

@@ -46,12 +46,6 @@ impl IdentParser {
     pub fn move_after_underscore(&mut self) {
         self.state = State::AfterUnderscore;
     }
-
-    pub fn restart(&mut self) {
-        self.state = State::Start;
-        self.name = None;
-        self.indices.clear();
-    }
 }
 
 impl Default for IdentParser {
@@ -62,13 +56,6 @@ impl Default for IdentParser {
 
 impl<H: SmtHandler> CategoryParser<H> for IdentParser {
     type Result = SmtIdent;
-
-    #[inline]
-    fn restart(&mut self) {
-        // call the inherent implementation
-        // it exists to avoid needing to specify <H>
-        self.restart();
-    }
 
     #[inline]
     fn progress(

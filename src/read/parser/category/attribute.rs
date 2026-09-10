@@ -37,7 +37,6 @@ struct CollectingParser<H: SmtHandler, C: AttributeCollection<H>> {
 trait AttributeCollection<H: SmtHandler>: Default {
     type Output;
     fn next_allowed(&self) -> bool;
-    fn reset(&mut self);
     fn push(&mut self, attribute: H::Attribute);
     fn finish(&mut self, span: SmtSpan) -> Result<Self::Output, ParserError<H::Error>>;
 }
@@ -70,12 +69,6 @@ impl<H: SmtHandler, C: AttributeCollection<H>> Default for CollectingParser<H, C
 
 impl<H: SmtHandler, C: AttributeCollection<H>> CategoryParser<H> for CollectingParser<H, C> {
     type Result = C::Output;
-
-    fn restart(&mut self) {
-        self.state = State::Start;
-        self.collection.reset();
-        self.closed_s_exprs_parser.restart();
-    }
 
     fn progress(
         &mut self,
@@ -226,10 +219,6 @@ impl<H: SmtHandler> AttributeCollection<H> for SingleAttribute<H> {
         self.0.is_none()
     }
 
-    fn reset(&mut self) {
-        self.0 = None;
-    }
-
     fn push(&mut self, attribute: H::Attribute) {
         // the progress function is responsible for ensuring
         // this is not called when next_allowed() is false
@@ -262,10 +251,6 @@ impl<H: SmtHandler> AttributeCollection<H> for MultipleAttributes<H> {
         true
     }
 
-    fn reset(&mut self) {
-        self.0.clear();
-    }
-
     fn push(&mut self, attribute: H::Attribute) {
         self.0.push(attribute);
     }
@@ -294,10 +279,6 @@ impl<H: SmtHandler> Default for ClosedAttributeParser<H> {
 impl<H: SmtHandler> CategoryParser<H> for ClosedAttributeParser<H> {
     type Result = H::Attribute;
 
-    fn restart(&mut self) {
-        self.0.restart();
-    }
-
     fn progress(
         &mut self,
         handler: &mut H,
@@ -322,10 +303,6 @@ impl<H: SmtHandler> Default for ClosedMultipleAttributeParser<H> {
 
 impl<H: SmtHandler> CategoryParser<H> for ClosedMultipleAttributeParser<H> {
     type Result = Vec<H::Attribute>;
-
-    fn restart(&mut self) {
-        self.0.restart();
-    }
 
     fn progress(
         &mut self,

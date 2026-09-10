@@ -70,11 +70,6 @@ macro_rules! standard_commands {
                     $($field: CommandParser::default(),)*
                 }
             }
-            pub fn restart(&mut self, kind: StandardCommandKind) {
-                match kind {
-                    $(StandardCommandKind::$kind => self.$field.restart(),)*
-                }
-            }
             pub fn progress(
                 &mut self,
                 kind: StandardCommandKind,
@@ -282,10 +277,6 @@ impl<H: CommandHandler> Default for GetValueParser<H> {
 
 impl<H: CommandHandler> CategoryParser<H> for GetValueParser<H> {
     type Result = Vec<H::Term>;
-
-    fn restart(&mut self) {
-        self.inner.restart();
-    }
 
     #[inline]
     fn progress(

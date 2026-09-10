@@ -19,8 +19,8 @@ mod token;
 pub use {
     attribute::{ClosedAttributeParser, ClosedMultipleAttributeParser},
     combinator::{
-        ClosedMultipleParser, ClosedParser, OpenedParser, PairParser, ParenMultipleParser,
-        ParenParser,
+        ClosedMaximumParser, ClosedMultipleParser, ClosedParser, OpenedParser, PairParser,
+        ParenMaximumParser, ParenMultipleParser, ParenParser,
     },
     ident::IdentParser,
     qualified_ident::QualifiedIdentParser,
@@ -31,8 +31,6 @@ pub use {
         CloseParenParser, KeywordParser, NumeralParser, OpenParenParser, StringParser, SymbolParser,
     },
 };
-
-pub(crate) use combinator::ParenMaximumParser;
 
 pub type SortedVarParser<H> = ParenParser<H, PairParser<H, SymbolParser, SortParser<H>>>;
 
@@ -64,9 +62,6 @@ pub trait CategoryParser<H: SmtHandler + ?Sized> {
         resources: &mut ParserResources,
         token: &Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>>;
-
-    /// Restarts the parser to its default state.
-    fn restart(&mut self);
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

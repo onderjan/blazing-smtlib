@@ -67,12 +67,6 @@ impl<H: SmtHandler> Default for SortParser<H> {
 impl<H: SmtHandler> CategoryParser<H> for SortParser<H> {
     type Result = H::Sort;
 
-    fn restart(&mut self) {
-        self.state = State::Start;
-        self.levels.clear();
-        self.ident_parser.restart();
-    }
-
     fn progress(
         &mut self,
         handler: &mut H,

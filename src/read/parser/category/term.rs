@@ -184,18 +184,6 @@ impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
     type Result = H::Term;
 
     #[inline]
-    fn restart(&mut self) {
-        self.state = State::Start;
-        self.levels.clear();
-        self.pending = None;
-
-        self.qualified_ident_parser.restart();
-        self.attributes_parser.restart();
-        self.sorted_bindings_parser.restart();
-        self.pattern_parser.restart();
-    }
-
-    #[inline]
     fn progress(
         &mut self,
         handler: &mut H,
@@ -737,13 +725,6 @@ impl<H: SmtHandler> SortedBindingsParser<H> {
 }
 
 impl<H: SmtHandler> SortedBindingsParser<H> {
-    #[inline]
-    fn restart(&mut self) {
-        self.state = SortedBindingsParserState::Start;
-        self.num_opened = 0;
-        self.sorted_var_parser.restart();
-    }
-
     fn progress_and_open(
         &mut self,
         handler: &mut H,

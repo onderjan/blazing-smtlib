@@ -41,21 +41,16 @@ impl<H: SmtHandler> QualifiedIdentParser<H> {
     }
 
     pub fn move_after_open_paren(&mut self) {
-        self.ident_parser.restart();
-        self.qualified_parser.restart();
         self.state = State::Open;
     }
 
     pub fn move_after_underscore(&mut self) {
         // the ident parser must be after underscore as well
         self.ident_parser.move_after_underscore();
-        self.qualified_parser.restart();
         self.state = State::UnqualifiedIndexed;
     }
 
     pub fn move_after_as(&mut self) {
-        self.ident_parser.restart();
-        self.qualified_parser.restart();
         self.state = State::Qualified;
     }
 }
@@ -68,12 +63,6 @@ impl<H: SmtHandler> Default for QualifiedIdentParser<H> {
 
 impl<H: SmtHandler> CategoryParser<H> for QualifiedIdentParser<H> {
     type Result = SmtQualifiedIdent<H>;
-
-    fn restart(&mut self) {
-        self.state = State::Start;
-        self.ident_parser.restart();
-        self.qualified_parser.restart();
-    }
 
     fn progress(
         &mut self,
