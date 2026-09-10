@@ -3,7 +3,8 @@ use std::ops::ControlFlow;
 use crate::{
     SmtApplication, SmtHandler, SmtQualifiedIdent, SmtQuantifierKind, SmtSymbol, SmtTerm,
     read::parser::{
-        CloseParenParser, OpenParenParser, ParserError, ParserResources, SymbolParser,
+        CloseParenParser, IdentSlot, OpenParenParser, ParserError, ParserResources, SortSlot,
+        SortedVarSlot, SymbolParser,
         category::{
             CategoryErrorKind, CategoryParser, attribute::MultipleAttributes,
             parse_special_constant,
@@ -18,7 +19,7 @@ use crate::{
 /// This parser is self-restarting: after returning Break,
 /// it is in the default state.
 pub struct TermParser<H: SmtHandler> {
-    slot: TermSlot<H>,
+    _priv: std::marker::PhantomData<H>,
 }
 
 #[derive(Clone, Copy)]
@@ -149,7 +150,7 @@ struct Pending<H: SmtHandler + ?Sized> {
 impl<H: SmtHandler> TermParser<H> {
     pub fn new() -> Self {
         TermParser {
-            slot: TermSlot::new(),
+            _priv: std::marker::PhantomData,
         }
     }
 }
@@ -170,8 +171,8 @@ impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
         resources: &mut ParserResources<H>,
         token: &Token,
     ) -> Result<ControlFlow<H::Term>, ParserError<H::Error>> {
-        // progress the slot
-        self.slot.progress(handler, resources, token)
+        // progress the slot inside the resources
+        TermSlot::progress(handler, resources, token)
     }
 }
 
@@ -217,13 +218,12 @@ impl<H: SmtHandler + ?Sized> TermSlot<H> {
 impl<H: SmtHandler> TermSlot<H> {
     #[inline]
     pub(crate) fn progress(
-        &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
         token: &Token,
     ) -> Result<ControlFlow<H::Term>, ParserError<H::Error>> {
         let span = token.span();
-        let term = match self.pending.take() {
+        let term = match resources.term_slot.pending.take() {
             Some(pending) => {
                 if pending.is_annotation {
                     // we are parsing attributes
@@ -234,7 +234,7 @@ impl<H: SmtHandler> TermSlot<H> {
                     )? {
                         ControlFlow::Continue(()) => {
                             // put the pending term back
-                            self.pending = Some(pending);
+                            resources.term_slot.pending = Some(pending);
                             return Ok(ControlFlow::Continue(()));
                         }
                         ControlFlow::Break(attributes) => {
@@ -258,21 +258,22 @@ impl<H: SmtHandler> TermSlot<H> {
             }
             None => {
                 // no pending term, try to get one
-                let ControlFlow::Break(term) = self.progress_inner(handler, resources, token)?
+                let ControlFlow::Break(term) = Self::progress_inner(handler, resources, token)?
                 else {
                     return Ok(ControlFlow::Continue(()));
                 };
-                self.state = State::Start;
+                resources.term_slot.state = State::Start;
                 handle_err(handler.handle_term(term), span)?
             }
         };
 
         // we have parsed a term, set state to start
-        self.state = State::Start;
+        let slot = &mut resources.term_slot;
+        slot.state = State::Start;
 
         // return the term if there is no last level
         // PERFORMANCE: take the last level as mutable instead of wholly consuming it
-        let Some(last_level) = self.levels.last_mut() else {
+        let Some(last_level) = slot.levels.last_mut() else {
             // root level, return the term
             return Ok(ControlFlow::Break(term));
         };
@@ -291,7 +292,7 @@ impl<H: SmtHandler> TermSlot<H> {
                 let mut name = SmtSymbol::new_empty();
                 std::mem::swap(binding_name, &mut name);
                 bindings.push((name, term));
-                self.state = State::LetBindingClose;
+                slot.state = State::LetBindingClose;
             }
             Level::BinderInner {
                 end_kind,
@@ -299,7 +300,7 @@ impl<H: SmtHandler> TermSlot<H> {
             } => {
                 // end the binder
                 let (end_kind, num_close) = (*end_kind, *num_close);
-                self.levels.pop();
+                slot.levels.pop();
 
                 // call the handler repeatedly to close all desugared binders
                 let mut term = term;
@@ -312,26 +313,26 @@ impl<H: SmtHandler> TermSlot<H> {
                     term = handle_err(handled, span)?;
                 }
                 // wait for the closing parenthesis
-                self.pending = Some(Pending {
+                slot.pending = Some(Pending {
                     term,
                     is_annotation: false,
                 });
             }
             Level::Annotation => {
                 // put the term into pending and start parsing attributes
-                self.levels.pop();
-                self.pending = Some(Pending {
+                slot.levels.pop();
+                slot.pending = Some(Pending {
                     term,
                     is_annotation: true,
                 });
             }
             Level::MatchScrutinee => {
                 // the scrutinee has been parsed, start the match in the handler
-                self.levels.pop();
+                slot.levels.pop();
                 handle_err(handler.start_match(term), span)?;
                 // the case terms will be processed on a new level
-                self.levels.push(Level::MatchCase { num_cases: 0 });
-                self.state = State::MatchCasesOpen;
+                slot.levels.push(Level::MatchCase { num_cases: 0 });
+                slot.state = State::MatchCasesOpen;
             }
             Level::MatchCase { num_cases } => {
                 // a case term has been parsed, end the case in the handler
@@ -339,7 +340,7 @@ impl<H: SmtHandler> TermSlot<H> {
                 // increment the number of cases and move to expect
                 // the closing match case parenthesis
                 *num_cases += 1;
-                self.state = State::MatchCaseClose;
+                slot.state = State::MatchCaseClose;
             }
         }
         Ok(ControlFlow::Continue(()))
@@ -349,47 +350,45 @@ impl<H: SmtHandler> TermSlot<H> {
 impl<H: SmtHandler> TermSlot<H> {
     #[inline]
     fn progress_inner(
-        &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
         token: &Token,
     ) -> Result<ControlFlow<SmtTerm<H>>, ParserError<H::Error>> {
-        match self.state {
+        let slot = &mut resources.term_slot;
+
+        match slot.state {
             State::Start => {
                 // the start state is also reached before every inner term, so only
                 // an empty level stack means the category is being entered
-                if self.levels.is_empty() {
-                    debug_assert!(self.is_pristine(), "must be pristine when starting");
+                if slot.levels.is_empty() {
+                    debug_assert!(slot.is_pristine(), "must be pristine when starting");
                 }
-                self.parse_term_start(token)
+                slot.parse_term_start(token)
             }
             State::Open => {
-                self.parse_term_open(resources, token)?;
+                Self::parse_term_open(resources, token)?;
                 Ok(ControlFlow::Continue(()))
             }
-            State::QualifiedIdent => {
-                let ParserResources {
-                    ident_slot,
-                    sort_slot,
-                    qualified_ident_slot,
-                    ..
-                } = resources;
-                Ok(qualified_ident_slot
-                    .progress(handler, sort_slot, ident_slot, token)?
-                    .map_break(SmtTerm::QualifiedIdent))
-            }
+            State::QualifiedIdent => Ok(resources
+                .qualified_ident_slot
+                .progress(
+                    handler,
+                    &mut resources.sort_slot,
+                    &mut resources.ident_slot,
+                    token,
+                )?
+                .map_break(SmtTerm::QualifiedIdent)),
             State::ApplicationIdent => {
-                let ParserResources {
-                    ident_slot,
-                    sort_slot,
-                    qualified_ident_slot,
-                    ..
-                } = resources;
-                match qualified_ident_slot.progress(handler, sort_slot, ident_slot, token)? {
+                match resources.qualified_ident_slot.progress(
+                    handler,
+                    &mut resources.sort_slot,
+                    &mut resources.ident_slot,
+                    token,
+                )? {
                     ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
                     ControlFlow::Break(ident) => {
                         // start a new level
-                        self.start_level(Level::Application {
+                        slot.start_level(Level::Application {
                             ident,
                             args: Vec::new(),
                         });
@@ -400,38 +399,40 @@ impl<H: SmtHandler> TermSlot<H> {
             State::LetAllBindingsOpen => {
                 // expect an opening parenthesis and move to the single binding
                 OpenParenParser::expect(token)?;
-                self.state = State::LetBindingOpen;
+                slot.state = State::LetBindingOpen;
                 Ok(ControlFlow::Continue(()))
             }
-            State::LetBindingOpen => self.parse_let_binding_open(handler, token),
+            State::LetBindingOpen => slot.parse_let_binding_open(handler, token),
             State::LetBindingSymbol => {
                 // expect a symbol that will be the binding name
                 let mut symbol = SymbolParser::expect(token)?;
                 // mutably take the let bindings on the last level and add the name
                 // for performance, we do not switch bindings between level and state,
                 // so we need to unwrap
-                let Some(Level::LetBinding { binding_name, .. }) = self.levels.last_mut() else {
+                let Some(Level::LetBinding { binding_name, .. }) = slot.levels.last_mut() else {
                     panic!("last level should be a let binding when adding a binding symbol")
                 };
                 // set the binding name
                 std::mem::swap(binding_name, &mut symbol);
                 // go to the start state to parse the binding term
-                self.state = State::Start;
+                slot.state = State::Start;
                 Ok(ControlFlow::Continue(()))
             }
             State::LetBindingClose => {
                 // expect a close parenthesis
                 CloseParenParser::expect(token)?;
                 // move to before binding open, a next binding can be opened
-                self.state = State::LetBindingOpen;
+                slot.state = State::LetBindingOpen;
                 Ok(ControlFlow::Continue(()))
             }
             State::SortedBinderVars(binder_kind) => {
                 let span = token.span();
 
-                let flow = self.sorted_bindings_parser.progress_and_open(
+                let flow = slot.sorted_bindings_parser.progress_and_open(
                     handler,
-                    resources,
+                    &mut resources.sorted_var_slot,
+                    &mut resources.sort_slot,
+                    &mut resources.ident_slot,
                     token,
                     |handler, name, sort| match binder_kind {
                         SortedBinderKind::Exists => {
@@ -465,7 +466,7 @@ impl<H: SmtHandler> TermSlot<H> {
                         };
 
                         // push a level to handle the inner term and then properly close all opened binders
-                        self.start_level(Level::BinderInner {
+                        slot.start_level(Level::BinderInner {
                             end_kind,
                             num_close: num_opened,
                         });
@@ -477,10 +478,10 @@ impl<H: SmtHandler> TermSlot<H> {
                 // expect an opening parenthesis
                 OpenParenParser::expect(token)?;
                 // move to awaiting a match case or a closing parenthesis
-                self.state = State::MatchCaseOpen;
+                slot.state = State::MatchCaseOpen;
                 Ok(ControlFlow::Continue(()))
             }
-            State::MatchCaseOpen => self.parse_match_case_open(handler, token),
+            State::MatchCaseOpen => slot.parse_match_case_open(handler, token),
             State::MatchPattern => {
                 // parse the match pattern
                 let span = token.span();
@@ -488,7 +489,7 @@ impl<H: SmtHandler> TermSlot<H> {
                     // a match case is starting, call the handler
                     handle_err(handler.start_match_case(pattern), span)?;
                     // move the start state to parse the case term
-                    self.state = State::Start;
+                    slot.state = State::Start;
                 }
                 Ok(ControlFlow::Continue(()))
             }
@@ -496,7 +497,7 @@ impl<H: SmtHandler> TermSlot<H> {
                 // expect a closing parenthesis
                 CloseParenParser::expect(token)?;
                 // move to await a match case or a closing parenthesis
-                self.state = State::MatchCaseOpen;
+                slot.state = State::MatchCaseOpen;
                 Ok(ControlFlow::Continue(()))
             }
         }
@@ -564,17 +565,18 @@ impl<H: SmtHandler> TermSlot<H> {
 
     #[inline]
     fn parse_term_open(
-        &mut self,
         resources: &mut ParserResources<H>,
         token: &Token,
     ) -> Result<(), ParserError<H::Error>> {
         let span = token.span();
+        let slot = &mut resources.term_slot;
+
         let state = match token.kind() {
             TokenKind::Symbol(fn_name) => {
                 // this is an application where the function identifier is just a symbol
                 // start a new level
                 let fn_ident = SmtQualifiedIdent::new_simple(fn_name.into_owned());
-                self.start_level(Level::Application {
+                slot.start_level(Level::Application {
                     ident: fn_ident,
                     args: Vec::new(),
                 });
@@ -582,7 +584,7 @@ impl<H: SmtHandler> TermSlot<H> {
             }
             TokenKind::Reserved(Reserved::Let) => {
                 // add a level for let bindings and move before the bindings opening
-                self.levels.push(Level::LetBinding {
+                slot.levels.push(Level::LetBinding {
                     bindings: Vec::new(),
                     binding_name: SmtSymbol::new_empty(),
                 });
@@ -603,25 +605,22 @@ impl<H: SmtHandler> TermSlot<H> {
             TokenKind::Reserved(Reserved::Match) => {
                 // this is a match
                 // we are parsing its scrutinee next, add a level for it
-                self.start_level(Level::MatchScrutinee);
+                slot.start_level(Level::MatchScrutinee);
                 return Ok(());
             }
             TokenKind::Reserved(Reserved::ExclamationMark) => {
                 // this is an annotation
                 // we are parsing its annotated term next, add a level for it
-                self.start_level(Level::Annotation);
+                slot.start_level(Level::Annotation);
                 return Ok(());
             }
             TokenKind::Reserved(Reserved::Underscore) => {
                 // this is actually a term composed of an indexed identifier
                 // move the qualified ident parser after the underscore
                 // (meaning the ident will be unqualified but indexed)
-                let ParserResources {
-                    ident_slot,
-                    qualified_ident_slot,
-                    ..
-                } = resources;
-                qualified_ident_slot.move_after_underscore(ident_slot);
+                resources
+                    .qualified_ident_slot
+                    .move_after_underscore(&mut resources.ident_slot);
                 State::QualifiedIdent
             }
             TokenKind::Reserved(Reserved::As) => {
@@ -644,7 +643,7 @@ impl<H: SmtHandler> TermSlot<H> {
                 ));
             }
         };
-        self.state = state;
+        slot.state = state;
         Ok(())
     }
 
@@ -795,7 +794,9 @@ impl SortedBindingsParser {
     fn progress_and_open<H: SmtHandler>(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H>,
+        sorted_var_slot: &mut SortedVarSlot<H>,
+        sort_slot: &mut SortSlot<H>,
+        ident_slot: &mut IdentSlot,
         token: &Token,
         open_fn: impl Fn(&mut H, SmtSymbol, H::Sort) -> Result<(), H::Error>,
     ) -> Result<ControlFlow<u64>, ParserError<H::Error>> {
@@ -825,12 +826,6 @@ impl SortedBindingsParser {
 
         // parse the sorted variable
         let span = token.span();
-        let ParserResources {
-            ident_slot,
-            sort_slot,
-            sorted_var_slot,
-            ..
-        } = resources;
         match sorted_var_slot.progress(handler, sort_slot, ident_slot, token)? {
             ControlFlow::Continue(()) => {}
             ControlFlow::Break((name, sort)) => {

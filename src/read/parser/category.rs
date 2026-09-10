@@ -43,6 +43,7 @@ pub(crate) use qualified_ident::QualifiedIdentSlot;
 pub(crate) use s_expr::SExprSlot;
 pub(crate) use sort::SortSlot;
 pub(crate) use sorted_var::SortedVarSlot;
+pub(crate) use term::TermSlot;
 
 pub type ParenSortedVarsParser<H> = ParenMultipleParser<H, SortedVarParser<H>>;
 

@@ -4,7 +4,7 @@ use crate::{
     SmtHandler,
     read::parser::{
         IdentSlot, ParserError, PatternSlot, QualifiedIdentSlot, SExprSlot, SortSlot,
-        SortedVarSlot, category::attribute::AttributeSlot,
+        SortedVarSlot, TermSlot, category::attribute::AttributeSlot,
     },
     token::{Token, TokenKind},
 };
@@ -24,6 +24,7 @@ pub struct ParserResources<H: SmtHandler + ?Sized> {
     pub(crate) s_expr_slot: SExprSlot<H>,
     pub(crate) attribute_slot: AttributeSlot<H>,
     pub(crate) pattern_slot: PatternSlot,
+    pub(crate) term_slot: TermSlot<H>,
 }
 
 impl<H: SmtHandler + ?Sized> ParserResources<H> {
@@ -36,6 +37,7 @@ impl<H: SmtHandler + ?Sized> ParserResources<H> {
             s_expr_slot: SExprSlot::new(),
             attribute_slot: AttributeSlot::new(),
             pattern_slot: PatternSlot::new(),
+            term_slot: TermSlot::new(),
         }
     }
 
@@ -47,6 +49,7 @@ impl<H: SmtHandler + ?Sized> ParserResources<H> {
             && self.s_expr_slot.is_pristine()
             && self.attribute_slot.is_pristine()
             && self.pattern_slot.is_pristine()
+            && self.term_slot.is_pristine()
     }
 
     pub(crate) fn clear(&mut self) {
@@ -57,6 +60,7 @@ impl<H: SmtHandler + ?Sized> ParserResources<H> {
         self.s_expr_slot.clear();
         self.attribute_slot.clear();
         self.pattern_slot.clear();
+        self.term_slot.clear();
     }
 }
 
