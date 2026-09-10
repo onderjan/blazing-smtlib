@@ -14,6 +14,7 @@ mod qualified_ident;
 mod resources;
 mod s_expr;
 mod sort;
+mod sorted_var;
 mod term;
 mod token;
 
@@ -28,6 +29,7 @@ pub use {
     resources::ParserResources,
     s_expr::SExprParser,
     sort::SortParser,
+    sorted_var::SortedVarParser,
     term::TermParser,
     token::{
         CloseParenParser, KeywordParser, NumeralParser, OpenParenParser, StringParser, SymbolParser,
@@ -37,8 +39,7 @@ pub use {
 pub(crate) use ident::IdentSlot;
 pub(crate) use s_expr::SExprSlot;
 pub(crate) use sort::SortSlot;
-
-pub type SortedVarParser<H> = ParenParser<H, PairParser<H, SymbolParser, SortParser<H>>>;
+pub(crate) use sorted_var::SortedVarSlot;
 
 pub type ParenSortedVarsParser<H> = ParenMultipleParser<H, SortedVarParser<H>>;
 

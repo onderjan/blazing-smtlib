@@ -3,7 +3,8 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler,
     read::parser::{
-        IdentSlot, ParserError, SExprSlot, SortSlot, category::attribute::AttributeSlot,
+        IdentSlot, ParserError, SExprSlot, SortSlot, SortedVarSlot,
+        category::attribute::AttributeSlot,
     },
     token::{Token, TokenKind},
 };
@@ -18,6 +19,7 @@ use crate::{
 pub struct ParserResources<H: SmtHandler + ?Sized> {
     pub(crate) ident_slot: IdentSlot,
     pub(crate) sort_slot: SortSlot<H>,
+    pub(crate) sorted_var_slot: SortedVarSlot<H>,
     pub(crate) s_expr_slot: SExprSlot<H>,
     pub(crate) attribute_slot: AttributeSlot<H>,
 }
@@ -27,6 +29,7 @@ impl<H: SmtHandler + ?Sized> ParserResources<H> {
         Self {
             ident_slot: IdentSlot::new(),
             sort_slot: SortSlot::new(),
+            sorted_var_slot: SortedVarSlot::new(),
             s_expr_slot: SExprSlot::new(),
             attribute_slot: AttributeSlot::new(),
         }
@@ -35,6 +38,7 @@ impl<H: SmtHandler + ?Sized> ParserResources<H> {
     pub(crate) fn are_pristine(&self) -> bool {
         self.ident_slot.is_pristine()
             && self.sort_slot.is_pristine()
+            && self.sorted_var_slot.is_pristine()
             && self.s_expr_slot.is_pristine()
             && self.attribute_slot.is_pristine()
     }
@@ -42,6 +46,7 @@ impl<H: SmtHandler + ?Sized> ParserResources<H> {
     pub(crate) fn clear(&mut self) {
         self.ident_slot.clear();
         self.sort_slot.clear();
+        self.sorted_var_slot.clear();
         self.s_expr_slot.clear();
         self.attribute_slot.clear();
     }
