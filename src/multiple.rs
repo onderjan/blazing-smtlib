@@ -1,10 +1,14 @@
 use std::{
     fmt::Debug,
+    iter::FusedIterator,
     ops::{Index, IndexMut},
     slice, vec,
 };
 
-use crate::read::parser::ArenaAccess;
+use crate::{
+    SmtHandler, SmtSymbolView,
+    read::parser::{ArenaAccess, TextHandle},
+};
 
 /// Multiple values to be handled.
 ///
@@ -89,14 +93,35 @@ impl<T> IndexMut<usize> for SmtMultiple<'_, T> {
 
 impl<'a, T> IntoIterator for SmtMultiple<'a, T> {
     type Item = T;
-    type IntoIter = vec::Drain<'a, T>;
+    type IntoIter = SmtMultipleIntoIter<'a, T>;
 
     /// Moves the values out in order.
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
-        self.stack.drain(self.start..)
+        SmtMultipleIntoIter(self.stack.drain(self.start..))
     }
 }
+
+/// Iterator over multiple values.
+pub struct SmtMultipleIntoIter<'a, T>(vec::Drain<'a, T>);
+
+impl<T> Iterator for SmtMultipleIntoIter<'_, T> {
+    type Item = T;
+
+    #[inline]
+    fn next(&mut self) -> Option<T> {
+        self.0.next()
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.0.size_hint()
+    }
+}
+
+impl<T> ExactSizeIterator for SmtMultipleIntoIter<'_, T> {}
+
+impl<T> FusedIterator for SmtMultipleIntoIter<'_, T> {}
 
 impl<'b, T> IntoIterator for &'b SmtMultiple<'_, T> {
     type Item = &'b T;
@@ -119,6 +144,114 @@ impl<'b, T> IntoIterator for &'b mut SmtMultiple<'_, T> {
 }
 
 impl<T: Debug> Debug for SmtMultiple<'_, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_list().entries(self.iter()).finish()
+    }
+}
+
+/// Let bindings to be handled.
+///
+/// The values can be inspected and modified in place, and [`IntoIterator`]
+/// moves them out in order.
+pub struct SmtBindings<'a, H: SmtHandler + ?Sized> {
+    text: &'a [u8],
+    names: SmtMultiple<'a, TextHandle>,
+    terms: SmtMultiple<'a, H::Term>,
+}
+
+impl<'a, H: SmtHandler + ?Sized> SmtBindings<'a, H> {
+    pub(crate) fn new(
+        _access: ArenaAccess,
+        text: &'a [u8],
+        names: SmtMultiple<'a, TextHandle>,
+        terms: SmtMultiple<'a, H::Term>,
+    ) -> Self {
+        debug_assert!(
+            names.len() == terms.len(),
+            "binding names and terms must be aligned"
+        );
+        Self { text, names, terms }
+    }
+
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.terms.len()
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.terms.is_empty()
+    }
+
+    #[inline]
+    pub fn get(&self, index: usize) -> Option<(SmtSymbolView<'a>, &H::Term)> {
+        let name = self.names.get(index)?.symbol_view(self.text);
+        Some((name, &self.terms[index]))
+    }
+
+    #[inline]
+    pub fn get_mut(&mut self, index: usize) -> Option<(SmtSymbolView<'a>, &mut H::Term)> {
+        let name = self.names.get(index)?.symbol_view(self.text);
+        Some((name, &mut self.terms[index]))
+    }
+
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = (SmtSymbolView<'a>, &H::Term)> {
+        let text = self.text;
+        self.names
+            .iter()
+            .map(move |name| name.symbol_view(text))
+            .zip(self.terms.iter())
+    }
+
+    pub fn iter_mut(&mut self) -> impl ExactSizeIterator<Item = (SmtSymbolView<'a>, &mut H::Term)> {
+        let text = self.text;
+        self.names
+            .iter()
+            .map(move |name| name.symbol_view(text))
+            .zip(self.terms.iter_mut())
+    }
+}
+
+impl<'a, H: SmtHandler + ?Sized> IntoIterator for SmtBindings<'a, H> {
+    type Item = (SmtSymbolView<'a>, H::Term);
+    type IntoIter = SmtBindingsIntoIter<'a, H>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        SmtBindingsIntoIter {
+            text: self.text,
+            names: self.names.into_iter(),
+            terms: self.terms.into_iter(),
+        }
+    }
+}
+
+/// Iterator over let bindings.
+pub struct SmtBindingsIntoIter<'a, H: SmtHandler + ?Sized> {
+    text: &'a [u8],
+    names: SmtMultipleIntoIter<'a, TextHandle>,
+    terms: SmtMultipleIntoIter<'a, H::Term>,
+}
+
+impl<'a, H: SmtHandler + ?Sized> Iterator for SmtBindingsIntoIter<'a, H> {
+    type Item = (SmtSymbolView<'a>, H::Term);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let name = self.names.next()?.symbol_view(self.text);
+        let term = self.terms.next()?;
+        Some((name, term))
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.terms.size_hint()
+    }
+}
+
+impl<H: SmtHandler + ?Sized> ExactSizeIterator for SmtBindingsIntoIter<'_, H> {}
+
+impl<H: SmtHandler + ?Sized> Debug for SmtBindings<'_, H>
+where
+    H::Term: Debug,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_list().entries(self.iter()).finish()
     }

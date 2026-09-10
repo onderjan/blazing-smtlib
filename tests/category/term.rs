@@ -474,7 +474,7 @@ impl SmtHandler for Counting {
         self.terms += 1;
         Ok(())
     }
-    fn start_let(&mut self, _bindings: Vec<(SmtSymbol, ())>) -> Result<(), Infallible> {
+    fn start_let(&mut self, _bindings: SmtBindings<'_, Self>) -> Result<(), Infallible> {
         Ok(())
     }
     fn end_let(&mut self, _term: ()) -> Result<(), Infallible> {
@@ -892,7 +892,7 @@ impl SmtHandler for Consuming {
             }
         })
     }
-    fn start_let(&mut self, _bindings: Vec<(SmtSymbol, String)>) -> Result<(), Infallible> {
+    fn start_let(&mut self, _bindings: SmtBindings<'_, Self>) -> Result<(), Infallible> {
         Ok(())
     }
     fn end_let(&mut self, term: String) -> Result<String, Infallible> {

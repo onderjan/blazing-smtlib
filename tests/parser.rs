@@ -6,9 +6,9 @@ mod common;
 use common::{assert_error_span, assert_parser_error, parse, parse_with};
 
 use smt_parser_rs::{
-    CommandHandler, NonstandardCommandError, SmtAttributeValue, SmtDatatypeConstructor,
-    SmtFunctionSignature, SmtHandler, SmtKeyword, SmtNumeral, SmtPattern, SmtQuantifierKind,
-    SmtSExpr, SmtSort, SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm,
+    CommandHandler, NonstandardCommandError, SmtAttributeValue, SmtBindings,
+    SmtDatatypeConstructor, SmtFunctionSignature, SmtHandler, SmtKeyword, SmtNumeral, SmtPattern,
+    SmtQuantifierKind, SmtSExpr, SmtSort, SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm,
     read::{
         SmtReadErrorKind,
         parser::{CategoryErrorKind, ClosedParser, CommandAction, CommandParser, TermParser},
@@ -102,7 +102,7 @@ impl SmtHandler for Recording {
     fn handle_term(&mut self, _term: SmtTerm<'_, Self>) -> Result<(), Self::Error> {
         Ok(())
     }
-    fn start_let(&mut self, _bindings: Vec<(SmtSymbol, ())>) -> Result<(), Self::Error> {
+    fn start_let(&mut self, _bindings: SmtBindings<'_, Self>) -> Result<(), Self::Error> {
         Ok(())
     }
     fn end_let(&mut self, _term: ()) -> Result<(), Self::Error> {

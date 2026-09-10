@@ -38,7 +38,7 @@ pub use {
     },
 };
 
-pub(crate) use arena::{Arena, ArenaAccess};
+pub(crate) use arena::{Arena, ArenaAccess, TextHandle};
 pub(crate) use ident::IdentSlot;
 pub(crate) use pattern::PatternSlot;
 pub(crate) use qualified_ident::QualifiedIdentSlot;

@@ -88,7 +88,7 @@ impl SmtHandler for Counting {
     fn handle_term(&mut self, _term: SmtTerm<'_, Self>) -> Result<(), Infallible> {
         Ok(())
     }
-    fn start_let(&mut self, _bindings: Vec<(SmtSymbol, ())>) -> Result<(), Infallible> {
+    fn start_let(&mut self, _bindings: SmtBindings<'_, Self>) -> Result<(), Infallible> {
         Ok(())
     }
     fn end_let(&mut self, _term: ()) -> Result<(), Infallible> {

@@ -4,9 +4,9 @@ use std::convert::Infallible;
 use std::fmt::Debug;
 
 use smt_parser_rs::{
-    SmtApplication, SmtAttributeValue, SmtDatatypeConstructor, SmtFunctionSignature, SmtHandler,
-    SmtIdent, SmtIndex, SmtKeyword, SmtPattern, SmtQualifiedIdent, SmtQuantifierKind, SmtSExpr,
-    SmtSimplePattern, SmtSort, SmtSpecialConstant, SmtSymbol, SmtTerm,
+    SmtApplication, SmtAttributeValue, SmtBindings, SmtDatatypeConstructor, SmtFunctionSignature,
+    SmtHandler, SmtIdent, SmtIndex, SmtKeyword, SmtPattern, SmtQualifiedIdent, SmtQuantifierKind,
+    SmtSExpr, SmtSimplePattern, SmtSort, SmtSpecialConstant, SmtSymbol, SmtTerm,
 };
 
 /// Handler that is deliberately neither `Debug` nor `Clone`,
@@ -26,7 +26,7 @@ impl SmtHandler for OpaqueHandler {
     fn handle_term(&mut self, _term: SmtTerm<'_, Self>) -> Result<String, Infallible> {
         Ok(String::new())
     }
-    fn start_let(&mut self, _bindings: Vec<(SmtSymbol, String)>) -> Result<(), Infallible> {
+    fn start_let(&mut self, _bindings: SmtBindings<'_, Self>) -> Result<(), Infallible> {
         Ok(())
     }
     fn end_let(&mut self, term: String) -> Result<String, Infallible> {
@@ -100,6 +100,7 @@ fn nodes_are_debug_and_clone_with_an_opaque_handler() {
     // the nodes handing values over cannot be cloned, but must still be debuggable
     assert_debug::<SmtApplication<'static, OpaqueHandler>>();
     assert_debug::<SmtTerm<'static, OpaqueHandler>>();
+    assert_debug::<SmtBindings<'static, OpaqueHandler>>();
     assert_debug_and_clone::<SmtAttributeValue<OpaqueHandler>>();
     assert_debug_and_clone::<SmtSExpr<OpaqueHandler>>();
     assert_debug_and_clone::<SmtFunctionSignature<OpaqueHandler>>();

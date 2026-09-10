@@ -6,7 +6,8 @@ mod common;
 use common::{assert_error_span, assert_parser_error, parse_with};
 
 use smt_parser_rs::{
-    CommandHandler, SmtAttributeValue, SmtDatatypeConstructor, SmtFunctionSignature, SmtHandler,
+    CommandHandler, SmtAttributeValue, SmtBindings, SmtDatatypeConstructor, SmtFunctionSignature,
+    SmtHandler,
     SmtIdent, SmtIndex, SmtKeyword, SmtNumeral, SmtPattern, SmtQuantifierKind, SmtSExpr,
     SmtSimplePattern, SmtSort, SmtSpecialConstant, SmtStringContent, SmtSymbol, SmtSymbolView,
     SmtTerm,
@@ -164,7 +165,7 @@ impl SmtHandler for Resolving {
         })
     }
 
-    fn start_let(&mut self, _bindings: Vec<(SmtSymbol, String)>) -> Result<(), String> {
+    fn start_let(&mut self, _bindings: SmtBindings<'_, Self>) -> Result<(), String> {
         Ok(())
     }
 

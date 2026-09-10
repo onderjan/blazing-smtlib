@@ -15,10 +15,11 @@
 //! and every handled value is written as eight bytes.
 
 use smt_parser_rs::{
-    CommandHandler, NonstandardCommandError, SmtAttributeValue, SmtDatatypeConstructor,
-    SmtFunctionSignature, SmtHandler, SmtIdent, SmtIndex, SmtKeyword, SmtNumeral, SmtPattern,
-    SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSort, SmtSpecialConstant, SmtStringContent,
-    SmtSymbol, SmtSymbolView, SmtTerm, read::parser::NoCommandParser,
+    CommandHandler, NonstandardCommandError, SmtAttributeValue, SmtBindings,
+    SmtDatatypeConstructor, SmtFunctionSignature, SmtHandler, SmtIdent, SmtIndex, SmtKeyword,
+    SmtNumeral, SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSort,
+    SmtSpecialConstant, SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm,
+    read::parser::NoCommandParser,
 };
 
 const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
@@ -330,11 +331,11 @@ impl SmtHandler for TraceHash {
         Ok(self.produce())
     }
 
-    fn start_let(&mut self, bindings: Vec<(SmtSymbol, u64)>) -> Result<(), Self::Error> {
+    fn start_let(&mut self, bindings: SmtBindings<'_, Self>) -> Result<(), Self::Error> {
         self.byte(tag::START_LET);
         self.count(bindings.len());
-        for (name, term) in &bindings {
-            self.symbol(name);
+        for (name, term) in bindings.iter() {
+            self.bytes(name.as_slice());
             self.u64(*term);
         }
         Ok(())

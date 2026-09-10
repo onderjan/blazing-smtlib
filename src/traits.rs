@@ -1,9 +1,9 @@
 use std::fmt::Debug;
 
 use crate::{
-    SmtAttributeValue, SmtDatatypeConstructor, SmtFunctionSignature, SmtKeyword, SmtNumeral,
-    SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSort, SmtStringContent, SmtSymbol, SmtSymbolView,
-    SmtTerm,
+    SmtAttributeValue, SmtBindings, SmtDatatypeConstructor, SmtFunctionSignature, SmtKeyword,
+    SmtNumeral, SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSort, SmtStringContent, SmtSymbol,
+    SmtSymbolView, SmtTerm,
     read::parser::{CategoryParser, NoCommandParser},
 };
 
@@ -30,7 +30,7 @@ pub trait SmtHandler {
         attributes: Vec<Self::Attribute>,
     ) -> Result<Self::Term, Self::Error>;
 
-    fn start_let(&mut self, bindings: Vec<(SmtSymbol, Self::Term)>) -> Result<(), Self::Error>;
+    fn start_let(&mut self, bindings: SmtBindings<'_, Self>) -> Result<(), Self::Error>;
     fn end_let(&mut self, term: Self::Term) -> Result<Self::Term, Self::Error>;
 
     fn start_quantifier(
@@ -409,7 +409,7 @@ impl SmtHandler for CheckStandardSyntax {
         Ok(())
     }
 
-    fn start_let(&mut self, _bindings: Vec<(SmtSymbol, Self::Term)>) -> Result<(), Self::Error> {
+    fn start_let(&mut self, _bindings: SmtBindings<'_, Self>) -> Result<(), Self::Error> {
         Ok(())
     }
 

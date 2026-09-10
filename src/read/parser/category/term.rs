@@ -4,7 +4,7 @@ use crate::{
     SmtApplication, SmtHandler, SmtQualifiedIdent, SmtQuantifierKind, SmtSymbol, SmtTerm,
     read::parser::{
         CloseParenParser, IdentSlot, OpenParenParser, ParserError, ParserResources, SortSlot,
-        SortedVarSlot, SymbolParser,
+        SortedVarSlot,
         category::{
             CategoryErrorKind, CategoryParser, attribute::MultipleAttributes,
             parse_special_constant,
@@ -107,9 +107,14 @@ enum Level<H: SmtHandler + ?Sized> {
     /// A let waiting for a binding term.
     ///
     /// It is closed by a closing parenthesis instead of the inner term.
+    ///
+    /// The binding names are stored in the arena symbols starting at the names
+    /// position, with their text starting at the text position, and the binding
+    /// terms are stored in the arena terms starting at the terms position.
     LetBinding {
-        bindings: Vec<(SmtSymbol, H::Term)>,
-        binding_name: SmtSymbol,
+        arena_text_start: usize,
+        arena_names_start: usize,
+        arena_terms_start: usize,
     },
     /// A binder (lambda/let/forall/exists) waiting for the inner term.
     ///
@@ -285,14 +290,10 @@ impl<H: SmtHandler> TermSlot<H> {
                 // remember where their arguments start im the arena
                 resources.store.terms.push(term);
             }
-            Level::LetBinding {
-                bindings,
-                binding_name,
-            } => {
-                // we need to swap to a new symbol here
-                let mut name = SmtSymbol::new_empty();
-                std::mem::swap(binding_name, &mut name);
-                bindings.push((name, term));
+            Level::LetBinding { .. } => {
+                // push the produced term into the term arena
+                // its name is already in the arena symbols
+                resources.store.terms.push(term);
                 slot.state = State::LetBindingClose;
             }
             Level::BinderInner {
@@ -412,20 +413,22 @@ impl<H: SmtHandler> TermSlot<H> {
             }
             State::LetBindingOpen => {
                 // parse the let binding and continue
-                slot.parse_let_binding_open(handler, token)?;
+                Self::parse_let_binding_open(handler, resources, token)?;
                 Ok(ControlFlow::Continue(()))
             }
             State::LetBindingSymbol => {
                 // expect a symbol that will be the binding name
-                let mut symbol = SymbolParser::expect(token)?;
-                // mutably take the let bindings on the last level and add the name
-                // for performance, we do not switch bindings between level and state,
-                // so we need to unwrap
-                let Some(Level::LetBinding { binding_name, .. }) = slot.levels.last_mut() else {
-                    panic!("last level should be a let binding when adding a binding symbol")
+                let TokenKind::Symbol(name) = token.kind() else {
+                    return Err(ParserError::category_error(
+                        CategoryErrorKind::ExpectedToken(&[TokenType::Symbol]),
+                        token.span(),
+                    ));
                 };
-                // set the binding name
-                std::mem::swap(binding_name, &mut symbol);
+                // push the name into the arena
+                // the binding term knows where the binding names start
+                let store = &mut resources.store;
+                let name = store.push_text(name.as_slice());
+                store.symbols.push(name);
                 // go to the start state to parse the binding term
                 slot.state = State::Start;
                 Ok(ControlFlow::Continue(()))
@@ -611,9 +614,12 @@ impl<H: SmtHandler> TermSlot<H> {
             }
             TokenKind::Reserved(Reserved::Let) => {
                 // add a level for let bindings and move before the bindings opening
+                // remember where the bindings start in the arena
+                let store = &resources.store;
                 slot.levels.push(Level::LetBinding {
-                    bindings: Vec::new(),
-                    binding_name: SmtSymbol::new_empty(),
+                    arena_text_start: store.text.len(),
+                    arena_names_start: store.symbols.len(),
+                    arena_terms_start: store.terms.len(),
                 });
                 State::LetAllBindingsOpen
             }
@@ -679,49 +685,51 @@ impl<H: SmtHandler> TermSlot<H> {
     /// This cannot produce a term as we still need the parenthesis
     /// that closes the bindings followed by the rest of the term.
     fn parse_let_binding_open(
-        &mut self,
         handler: &mut H,
+        resources: &mut ParserResources<H>,
         token: &Token,
     ) -> Result<(), ParserError<H::Error>> {
         let span = token.span();
+        let slot = &mut resources.term_slot;
         match token.kind() {
             TokenKind::ParenOpen => {
                 // opening a new binding, we will parse the symbol next
-                self.state = State::LetBindingSymbol;
+                slot.state = State::LetBindingSymbol;
                 Ok(())
             }
             TokenKind::ParenClose => {
                 // bindings are closed, inner term will be next
 
-                // retrieve the bindings
-                // for performance, we do not switch bindings between level and state,
-                // so we need to unwrap
+                // retrieve where the bindings start in the arena
                 let Some(Level::LetBinding {
-                    bindings,
-                    binding_name,
-                }) = self.levels.pop()
+                    arena_text_start,
+                    arena_names_start,
+                    arena_terms_start,
+                }) = slot.levels.pop()
                 else {
                     panic!("last level should be a let binding when closing bindings")
                 };
-                assert!(
-                    binding_name.is_empty(),
-                    "additional binding name should be empty when closing bindings"
-                );
 
+                let store = &mut resources.store;
                 // there must be at least one binding
-                if bindings.is_empty() {
+                if store.symbols.len() == arena_names_start {
                     return Err(ParserError::category_error(
                         CategoryErrorKind::EmptyLetBindings,
                         span,
                     ));
                 }
 
-                // tell the handler we are starting a let
-                handle_err(handler.start_let(bindings), span)?;
+                // tell the handler we are starting a let, the bindings are consumed
+                store.hand_over_bindings(
+                    arena_text_start,
+                    arena_names_start,
+                    arena_terms_start,
+                    |bindings| handle_err(handler.start_let(bindings), span),
+                )?;
 
                 // add a new level for the inner term in the let
                 // we open it once, so we also need to close it once
-                self.start_level(Level::BinderInner {
+                slot.start_level(Level::BinderInner {
                     end_kind: BinderEndKind::Let,
                     num_close: 1,
                 });

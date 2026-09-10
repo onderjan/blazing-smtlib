@@ -23,7 +23,8 @@ use std::convert::Infallible;
 use std::ops::ControlFlow;
 
 use smt_parser_rs::{
-    SmtAttributeValue, SmtHandler, SmtIdent, SmtIndex, SmtKeyword, SmtPattern, SmtQualifiedIdent,
+    SmtAttributeValue, SmtBindings, SmtHandler, SmtIdent, SmtIndex, SmtKeyword, SmtPattern,
+    SmtQualifiedIdent,
     SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSort, SmtSpan, SmtSpecialConstant, SmtSymbol,
     SmtTerm,
     read::{
@@ -154,7 +155,7 @@ impl SmtHandler for Printing {
         })
     }
 
-    fn start_let(&mut self, bindings: Vec<(SmtSymbol, String)>) -> Result<(), Infallible> {
+    fn start_let(&mut self, bindings: SmtBindings<'_, Self>) -> Result<(), Infallible> {
         let bindings: Vec<String> = bindings
             .into_iter()
             .map(|(name, term)| format!("({} {})", text(name.as_slice()), term))
