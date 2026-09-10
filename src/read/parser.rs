@@ -28,9 +28,13 @@ struct ParserErrorInner<E> {
 pub struct ParserError<E>(Box<ParserErrorInner<E>>);
 
 impl<E> ParserError<E> {
+    #[cold]
+    #[inline(never)]
     pub(crate) fn new(kind: ParserErrorKind<E>, span: SmtSpan) -> Self {
         // PERFORMANCE: error kind and span are boxed
         // so that parser results are not unnecessarily large
+        // this method boxes them, which forces an allocation
+        // so it is is marked cold and never-inline
         Self(Box::new(ParserErrorInner { kind, span }))
     }
 
