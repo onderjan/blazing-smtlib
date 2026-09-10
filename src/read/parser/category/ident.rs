@@ -3,8 +3,8 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler, SmtIdent, SmtIndex, SmtSymbol,
     read::parser::{
-        CategoryParserError, ParserError,
-        category::{CategoryParser, CategoryErrorKind},
+        ParserError,
+        category::{CategoryErrorKind, CategoryParser},
     },
     token::{Reserved, Token, TokenKind, TokenType},
 };
@@ -88,7 +88,7 @@ impl<H: SmtHandler> CategoryParser<H> for IdentParser {
                 }
                 _ => {
                     let kind = CategoryErrorKind::ExpectedIdent;
-                    return Err(CategoryParserError::new(kind, span).into());
+                    return Err(ParserError::category_error(kind, span));
                 }
             },
             State::Open => {
@@ -99,7 +99,7 @@ impl<H: SmtHandler> CategoryParser<H> for IdentParser {
                     let kind = CategoryErrorKind::ExpectedToken(&[TokenType::Reserved(
                         Reserved::Underscore,
                     )]);
-                    return Err(CategoryParserError::new(kind, span).into());
+                    return Err(ParserError::category_error(kind, span));
                 }
             }
             State::AfterUnderscore => {
@@ -110,7 +110,7 @@ impl<H: SmtHandler> CategoryParser<H> for IdentParser {
                             Some(name.into_owned())
                         } else {
                             let kind = CategoryErrorKind::ExpectedToken(&[TokenType::Symbol]);
-                            return Err(CategoryParserError::new(kind, span).into());
+                            return Err(ParserError::category_error(kind, span));
                         }
                     }
                     Some(name) => {
@@ -120,7 +120,7 @@ impl<H: SmtHandler> CategoryParser<H> for IdentParser {
                             TokenKind::ParenClose => {
                                 if self.indices.is_empty() {
                                     let kind = CategoryErrorKind::EmptyIdentIndices;
-                                    return Err(CategoryParserError::new(kind, span).into());
+                                    return Err(ParserError::category_error(kind, span));
                                 }
                                 let indices = self.indices.drain(..).collect();
                                 // reset to the starting state: both our name and indices are now empty
@@ -137,7 +137,7 @@ impl<H: SmtHandler> CategoryParser<H> for IdentParser {
                             }
                             _ => {
                                 let kind = CategoryErrorKind::ExpectedIndexOrCloseParen;
-                                return Err(CategoryParserError::new(kind, span).into());
+                                return Err(ParserError::category_error(kind, span));
                             }
                         }
                         // put the name back

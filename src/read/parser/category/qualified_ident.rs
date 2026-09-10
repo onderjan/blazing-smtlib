@@ -4,10 +4,7 @@ use crate::{
     SmtHandler, SmtQualifiedIdent,
     read::parser::{
         ClosedParser, PairParser, ParserError,
-        category::{
-            CategoryParser, CategoryParserError, CategoryErrorKind, ident::IdentParser,
-            sort::SortParser,
-        },
+        category::{CategoryErrorKind, CategoryParser, ident::IdentParser, sort::SortParser},
     },
     token::{Reserved, Token, TokenKind, TokenType},
 };
@@ -96,8 +93,10 @@ impl<H: SmtHandler> CategoryParser<H> for QualifiedIdentParser<H> {
                 }
                 TokenKind::ParenOpen => self.state = State::Open,
                 _ => {
-                    let kind = CategoryErrorKind::ExpectedIdent;
-                    return Err(CategoryParserError::new(kind, span).into());
+                    return Err(ParserError::category_error(
+                        CategoryErrorKind::ExpectedIdent,
+                        span,
+                    ));
                 }
             },
             State::Open => {
@@ -117,7 +116,7 @@ impl<H: SmtHandler> CategoryParser<H> for QualifiedIdentParser<H> {
                             TokenType::Reserved(Reserved::Underscore),
                             TokenType::Reserved(Reserved::As),
                         ]);
-                        return Err(CategoryParserError::new(kind, span).into());
+                        return Err(ParserError::category_error(kind, span));
                     }
                 }
             }

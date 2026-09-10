@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtHandler, SmtSpan, SmtSpecialConstant,
+    SmtHandler, SmtSpecialConstant,
     read::parser::ParserError,
     token::{Token, TokenKind, TokenType},
 };
@@ -86,30 +86,6 @@ pub enum CategoryErrorKind {
     EmptyPatternArguments,
     EmptyMatchCases,
     EmptyGetValueTerms,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CategoryParserError {
-    kind: CategoryErrorKind,
-    span: SmtSpan,
-}
-
-impl CategoryParserError {
-    pub(crate) fn new(kind: CategoryErrorKind, span: SmtSpan) -> Self {
-        Self { kind, span }
-    }
-
-    pub fn kind(&self) -> &CategoryErrorKind {
-        &self.kind
-    }
-
-    pub fn span(&self) -> SmtSpan {
-        self.span
-    }
-
-    pub fn into_kind(self) -> CategoryErrorKind {
-        self.kind
-    }
 }
 
 #[inline]

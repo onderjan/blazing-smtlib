@@ -49,13 +49,6 @@ impl<E> ParserError<E> {
     }
 }
 
-impl<E> From<CategoryParserError> for ParserError<E> {
-    fn from(value: CategoryParserError) -> Self {
-        let span = value.span();
-        Self::new(ParserErrorKind::Category(value.into_kind()), span)
-    }
-}
-
 pub struct Parser<'a, H: CommandHandler> {
     handler: &'a mut H,
     state: ParserState<H>,
@@ -111,22 +104,20 @@ impl<'a, H: CommandHandler> TokenHandler for Parser<'a, H> {
                         self.state = ParserState::AwaitingCommand;
                     }
                     _ => {
-                        return Err(CategoryParserError::new(
+                        return Err(ParserError::category_error(
                             CategoryErrorKind::ExpectedCommand,
                             span,
-                        )
-                        .into());
+                        ));
                     }
                 }
             }
             ParserState::CommandOpen => {
                 // expect a symbol identifying the command
                 let TokenKind::Symbol(command_name) = token.kind() else {
-                    return Err(CategoryParserError::new(
+                    return Err(ParserError::category_error(
                         CategoryErrorKind::ExpectedCommandName,
                         span,
-                    )
-                    .into());
+                    ));
                 };
                 self.state = self.start_command(command_name, span)?;
             }
