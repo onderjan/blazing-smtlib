@@ -258,12 +258,10 @@ impl<H: SmtHandler> TermSlot<H> {
             }
             None => {
                 // no pending term, try to get one
-                let ControlFlow::Break(term) = Self::progress_inner(handler, resources, token)?
-                else {
-                    return Ok(ControlFlow::Continue(()));
-                };
-                resources.term_slot.state = State::Start;
-                handle_err(handler.handle_term(term), span)?
+                match Self::progress_inner(handler, resources, token)? {
+                    ControlFlow::Continue(()) => return Ok(ControlFlow::Continue(())),
+                    ControlFlow::Break(term) => term,
+                }
             }
         };
 
@@ -353,7 +351,7 @@ impl<H: SmtHandler> TermSlot<H> {
         handler: &mut H,
         resources: &mut ParserResources<H>,
         token: &Token,
-    ) -> Result<ControlFlow<SmtTerm<H>>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<H::Term>, ParserError<H::Error>> {
         let slot = &mut resources.term_slot;
 
         match slot.state {
@@ -363,21 +361,28 @@ impl<H: SmtHandler> TermSlot<H> {
                 if slot.levels.is_empty() {
                     debug_assert!(slot.is_pristine(), "must be pristine when starting");
                 }
-                slot.parse_term_start(token)
+                slot.parse_term_start(handler, token)
             }
             State::Open => {
                 Self::parse_term_open(resources, token)?;
                 Ok(ControlFlow::Continue(()))
             }
-            State::QualifiedIdent => Ok(resources
-                .qualified_ident_slot
-                .progress(
+            State::QualifiedIdent => {
+                match resources.qualified_ident_slot.progress(
                     handler,
                     &mut resources.sort_slot,
                     &mut resources.ident_slot,
                     token,
-                )?
-                .map_break(SmtTerm::QualifiedIdent)),
+                )? {
+                    ControlFlow::Break(qualified_ident) => {
+                        // a term that is a qualified identifier, handle it and break
+                        let term = SmtTerm::QualifiedIdent(qualified_ident);
+                        let term = handle_err(handler.handle_term(term), token.span())?;
+                        Ok(ControlFlow::Break(term))
+                    }
+                    ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
+                }
+            }
             State::ApplicationIdent => {
                 match resources.qualified_ident_slot.progress(
                     handler,
@@ -402,7 +407,11 @@ impl<H: SmtHandler> TermSlot<H> {
                 slot.state = State::LetBindingOpen;
                 Ok(ControlFlow::Continue(()))
             }
-            State::LetBindingOpen => slot.parse_let_binding_open(handler, token),
+            State::LetBindingOpen => {
+                // parse the let binding and continue
+                slot.parse_let_binding_open(handler, token)?;
+                Ok(ControlFlow::Continue(()))
+            }
             State::LetBindingSymbol => {
                 // expect a symbol that will be the binding name
                 let mut symbol = SymbolParser::expect(token)?;
@@ -481,7 +490,11 @@ impl<H: SmtHandler> TermSlot<H> {
                 slot.state = State::MatchCaseOpen;
                 Ok(ControlFlow::Continue(()))
             }
-            State::MatchCaseOpen => slot.parse_match_case_open(handler, token),
+            State::MatchCaseOpen => {
+                // parse the match case and continue
+                slot.parse_match_case_open(handler, token)?;
+                Ok(ControlFlow::Continue(()))
+            }
             State::MatchPattern => {
                 // parse the match pattern
                 let span = token.span();
@@ -506,61 +519,59 @@ impl<H: SmtHandler> TermSlot<H> {
     #[inline]
     fn parse_term_start(
         &mut self,
+        handler: &mut H,
         token: &Token,
-    ) -> Result<ControlFlow<SmtTerm<H>>, ParserError<H::Error>> {
-        match token.kind() {
+    ) -> Result<ControlFlow<H::Term>, ParserError<H::Error>> {
+        let span = token.span();
+        let term = match token.kind() {
             TokenKind::ParenOpen => {
                 // application, binder, or annotation
                 // move to operator parsing
                 self.state = State::Open;
-                Ok(ControlFlow::Continue(()))
+                return Ok(ControlFlow::Continue(()));
             }
             TokenKind::ParenClose => {
                 // this is only permitted when we are ending an application
                 // pop the level and construct it
-                if let Some(Level::Application { ident, args }) = self.levels.pop() {
-                    // an application must contain at least one argument
-                    if args.is_empty() {
-                        return Err(ParserError::category_error(
-                            CategoryErrorKind::EmptyTermApplication,
-                            token.span(),
-                        ));
-                    }
-                    // construct the term and break with it
-                    let term = SmtTerm::Application(SmtApplication {
-                        function: ident,
-                        args,
-                    });
-                    Ok(ControlFlow::Break(term))
-                } else {
-                    Err(ParserError::category_error(
+                let Some(Level::Application { ident, args }) = self.levels.pop() else {
+                    return Err(ParserError::category_error(
                         CategoryErrorKind::ExpectedTerm,
-                        token.span(),
-                    ))
+                        span,
+                    ));
+                };
+                // an application must contain at least one argument
+                if args.is_empty() {
+                    return Err(ParserError::category_error(
+                        CategoryErrorKind::EmptyTermApplication,
+                        span,
+                    ));
                 }
+                SmtTerm::Application(SmtApplication {
+                    function: ident,
+                    args,
+                })
             }
             TokenKind::Symbol(name) => {
                 // a term that is a qualified identifier that is just a symbol
-                let term =
-                    SmtTerm::QualifiedIdent(SmtQualifiedIdent::new_simple(name.into_owned()));
-                Ok(ControlFlow::Break(term))
+                SmtTerm::QualifiedIdent(SmtQualifiedIdent::new_simple(name.into_owned()))
             }
             kind => {
                 // handle special constants
-                let span = token.span();
                 match parse_special_constant(kind) {
-                    Ok(special_constant) => {
-                        // a term that is just a special constant
-                        let term = SmtTerm::SpecialConstant(special_constant);
-                        Ok(ControlFlow::Break(term))
+                    // a term that is just a special constant
+                    Ok(special_constant) => SmtTerm::SpecialConstant(special_constant),
+                    Err(_) => {
+                        return Err(ParserError::category_error(
+                            CategoryErrorKind::ExpectedTerm,
+                            span,
+                        ));
                     }
-                    Err(_) => Err(ParserError::category_error(
-                        CategoryErrorKind::ExpectedTerm,
-                        span,
-                    )),
                 }
             }
-        }
+        };
+        // handle the the term and hand it over
+        let term = handle_err(handler.handle_term(term), span)?;
+        Ok(ControlFlow::Break(term))
     }
 
     #[inline]
@@ -647,16 +658,21 @@ impl<H: SmtHandler> TermSlot<H> {
         Ok(())
     }
 
+    /// Parses an opening of a let binding.
+    ///
+    /// This cannot produce a term as we still need the parenthesis
+    /// that closes the bindings followed by the rest of the term.
     fn parse_let_binding_open(
         &mut self,
         handler: &mut H,
         token: &Token,
-    ) -> Result<ControlFlow<SmtTerm<H>>, ParserError<H::Error>> {
+    ) -> Result<(), ParserError<H::Error>> {
         let span = token.span();
         match token.kind() {
             TokenKind::ParenOpen => {
                 // opening a new binding, we will parse the symbol next
                 self.state = State::LetBindingSymbol;
+                Ok(())
             }
             TokenKind::ParenClose => {
                 // bindings are closed, inner term will be next
@@ -693,31 +709,36 @@ impl<H: SmtHandler> TermSlot<H> {
                     end_kind: BinderEndKind::Let,
                     num_close: 1,
                 });
+                Ok(())
             }
             _ => {
                 // expected open or close parenthesis
-                return Err(ParserError::category_error(
+                Err(ParserError::category_error(
                     CategoryErrorKind::ExpectedToken(&[
                         TokenType::ParenOpen,
                         TokenType::ParenClose,
                     ]),
                     span,
-                ));
+                ))
             }
         }
-        Ok(ControlFlow::Continue(()))
     }
 
+    /// Parses an opening of a let binding.
+    ///
+    /// This cannot prodcue a term as we still need the parenthesis
+    /// that closes the match cases followed by the rest of the term.
     fn parse_match_case_open(
         &mut self,
         handler: &mut H,
         token: &Token,
-    ) -> Result<ControlFlow<SmtTerm<H>>, ParserError<H::Error>> {
+    ) -> Result<(), ParserError<H::Error>> {
         let span = token.span();
         match token.kind() {
             TokenKind::ParenOpen => {
                 // a new case is being opened, we will parse the pattern next
                 self.state = State::MatchPattern;
+                Ok(())
             }
             TokenKind::ParenClose => {
                 // the match cases are done
@@ -739,18 +760,13 @@ impl<H: SmtHandler> TermSlot<H> {
                     term,
                     is_annotation: false,
                 });
+                Ok(())
             }
-            _ => {
-                return Err(ParserError::category_error(
-                    CategoryErrorKind::ExpectedToken(&[
-                        TokenType::ParenOpen,
-                        TokenType::ParenClose,
-                    ]),
-                    span,
-                ));
-            }
+            _ => Err(ParserError::category_error(
+                CategoryErrorKind::ExpectedToken(&[TokenType::ParenOpen, TokenType::ParenClose]),
+                span,
+            )),
         }
-        Ok(ControlFlow::Continue(()))
     }
 
     #[inline]
