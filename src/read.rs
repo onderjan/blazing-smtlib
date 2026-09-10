@@ -1,3 +1,15 @@
+//! SMT-LIB reading (lexing + parsing).
+//!
+//! Reading composes lexing (turning bytes into tokens)
+//! and parsing (turning tokens into categories and commands
+//! that are handled by `CommandHandler`).
+//!
+//! Use `read_smt` or `read_smt_file` for simple reading purposes.
+//! For more advanced usage, consider using `SmtReader`.
+//!
+//! The submodules `lexer` and `parser` contain specific
+//! lexing and parsing constructs that can be used independently.
+
 use std::{
     fs::File,
     io::{BufRead, BufReader},
@@ -15,9 +27,10 @@ use crate::{
 pub mod lexer;
 pub mod parser;
 
+/// The kind of error that occured while reading.
 #[derive(Debug)]
 pub enum SmtReadErrorKind<E> {
-    /// The error occurred when reading.
+    /// An I/O error occurred when reading from a file or a buffered reader.
     Io(std::io::Error),
     /// The error occurred when lexing.
     Lexer(LexerErrorKind),
@@ -27,6 +40,7 @@ pub enum SmtReadErrorKind<E> {
     Handler(E),
 }
 
+/// Error that occured while reading.
 #[derive(Debug)]
 pub struct SmtReadError<E> {
     kind: SmtReadErrorKind<E>,
@@ -82,7 +96,9 @@ impl<E> From<ParserError<E>> for SmtReadError<E> {
     }
 }
 
-/// Reads an SMT-LIB file from a given path, processing commands with `handler`.
+/// Reads an SMT-LIB file from a given path.
+///
+/// Syntactic categories and commands are processed with `handler`.
 ///
 /// This is a simple convenience function for handlers where resources have
 /// a default constructor and it does not matter that the allocated parser structures
@@ -96,7 +112,12 @@ pub fn read_smt_file<H: CommandHandler<Resources: Default>>(
     SmtReader::new(handler, &mut Default::default()).read_file(path)
 }
 
-/// Reads a buffered reader containing an SMT-LIB file fully, processing commands with `handler`.
+/// Reads a buffered reader containing SMT-LIB commands.
+///
+/// The buffered reader is read fully, considering a zero-length read buffer
+/// to be an End of File.
+///
+/// Syntactic categories and commands are processed with `handler`.
 ///
 /// This is a simple convenience function for handlers that do not keep any custom resources
 /// when it does not matter that the allocated parser structures are dropped
@@ -113,12 +134,12 @@ pub fn read_smt<H: CommandHandler<Resources: Default>>(
 /// SMT-LIB reader that processes bytestream data and streams the processed content to `CommandHandler`.
 ///
 /// For simple usage scenarios, consider using `read_smt_file` or `read_smt`.
-struct SmtReader<'a, H: CommandHandler> {
+pub struct SmtReader<'a, H: CommandHandler> {
     lexer: Lexer<Parser<'a, H>>,
 }
 
 impl<'a, H: CommandHandler> SmtReader<'a, H> {
-    fn new(handler: &'a mut H, resources: &'a mut H::Resources) -> Self {
+    pub fn new(handler: &'a mut H, resources: &'a mut H::Resources) -> Self {
         let parser = Parser::new(handler, resources);
         let lexer = Lexer::new(parser);
         Self { lexer }
@@ -175,7 +196,7 @@ impl<'a, H: CommandHandler> SmtReader<'a, H> {
     /// If using `SmtReader::read_buf` to read, this must be called
     /// after the logical SMT-LIB command file ends to prevent
     /// leaving the ending unprocessed.
-    fn read_eof(&mut self) -> Result<(), SmtReadError<H::Error>> {
+    pub fn read_eof(&mut self) -> Result<(), SmtReadError<H::Error>> {
         Ok(self.lexer.lex_eof()?)
     }
 }
