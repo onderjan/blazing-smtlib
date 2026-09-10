@@ -91,7 +91,7 @@ impl<H: SmtHandler> CategoryParser<H> for ClosedMultipleAttributeParser<H> {
     }
 }
 
-trait AttributeCollection<H: SmtHandler> {
+pub(crate) trait AttributeCollection<H: SmtHandler> {
     type Output;
 
     fn next_allowed(num_elements: usize) -> bool;
@@ -141,7 +141,7 @@ impl<H: SmtHandler + ?Sized> AttributeSlot<H> {
 }
 
 impl<H: SmtHandler> AttributeSlot<H> {
-    fn progress<C: AttributeCollection<H>>(
+    pub(crate) fn progress<C: AttributeCollection<H>>(
         &mut self,
         handler: &mut H,
         s_expr_slot: &mut SExprSlot<H>,
@@ -307,7 +307,7 @@ impl<H: SmtHandler> AttributeCollection<H> for SingleAttribute {
     }
 }
 
-struct MultipleAttributes;
+pub(crate) struct MultipleAttributes;
 
 impl<H: SmtHandler> AttributeCollection<H> for MultipleAttributes {
     type Output = Vec<H::Attribute>;

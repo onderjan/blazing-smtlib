@@ -25,6 +25,7 @@ pub use {
         ParenMaximumParser, ParenMultipleParser, ParenParser,
     },
     ident::IdentParser,
+    pattern::PatternParser,
     qualified_ident::QualifiedIdentParser,
     resources::ParserResources,
     s_expr::SExprParser,
