@@ -78,7 +78,7 @@ impl<H: SmtHandler> CategoryParser<H> for QualifiedIdentParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H::Resources>,
+        resources: &mut ParserResources,
         token: &Token,
     ) -> Result<ControlFlow<SmtQualifiedIdent<H>>, ParserError<H::Error>> {
         let span = token.span();

@@ -45,7 +45,7 @@ impl<H: SmtHandler> CategoryParser<H> for SExprParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H::Resources>,
+        resources: &mut ParserResources,
         token: &Token,
     ) -> Result<ControlFlow<H::SExpr>, ParserError<H::Error>> {
         let s_expr = match token.kind() {

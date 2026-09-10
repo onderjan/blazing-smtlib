@@ -29,7 +29,7 @@ impl<H: SmtHandler> CategoryParser<H> for SimplePatternParser {
     fn progress(
         &mut self,
         _handler: &mut H,
-        resources: &mut ParserResources<H::Resources>,
+        resources: &mut ParserResources,
         token: &Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         let result = match token.kind() {
@@ -84,7 +84,7 @@ impl<H: SmtHandler> CategoryParser<H> for PatternParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H::Resources>,
+        resources: &mut ParserResources,
         token: &Token,
     ) -> Result<ControlFlow<SmtPattern, ()>, ParserError<H::Error>> {
         let span = token.span();

@@ -107,7 +107,7 @@ impl<H: CommandHandler> CategoryParser<H> for DatatypeParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H::Resources>,
+        resources: &mut ParserResources,
         token: &Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         let span = token.span();
@@ -263,7 +263,7 @@ impl<H: CommandHandler> CategoryParser<H> for DeclareDatatypesParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H::Resources>,
+        resources: &mut ParserResources,
         token: &Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         let span = token.span();
@@ -349,7 +349,7 @@ impl<H: CommandHandler> CategoryParser<H> for DeclareDatatypeParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H::Resources>,
+        resources: &mut ParserResources,
         token: &Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         let span = token.span();

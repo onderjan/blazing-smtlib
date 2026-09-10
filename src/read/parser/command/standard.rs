@@ -43,7 +43,7 @@ macro_rules! standard_commands {
         )*
 
         /// Identifies a standard command.
-        #[derive(Clone, Copy)]
+        #[derive(Clone, Copy, Debug)]
         pub(crate) enum StandardCommandKind {
             $($kind,)*
         }
@@ -79,7 +79,7 @@ macro_rules! standard_commands {
                 &mut self,
                 kind: StandardCommandKind,
                 handler: &mut H,
-                resources: &mut ParserResources<H::Resources>,
+                resources: &mut ParserResources,
                 token: &Token,
             ) -> Result<ControlFlow<CommandResult, ()>, ParserError<H::Error>> {
                 match kind {
@@ -286,7 +286,7 @@ impl<H: CommandHandler> CategoryParser<H> for GetValueParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H::Resources>,
+        resources: &mut ParserResources,
         token: &Token,
     ) -> Result<ControlFlow<Vec<H::Term>, ()>, ParserError<H::Error>> {
         let span = token.span();

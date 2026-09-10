@@ -46,7 +46,7 @@ macro_rules! token_parser {
             fn progress(
                 &mut self,
                 _handler: &mut H,
-                _resources: &mut ParserResources<H::Resources>,
+                _resources: &mut ParserResources,
                 token: &Token,
             ) -> Result<ControlFlow<Self::Result, ()>, ParserError<H::Error>> {
                 Ok(ControlFlow::Break(Self::expect(token)?))

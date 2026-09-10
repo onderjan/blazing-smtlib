@@ -76,7 +76,7 @@ impl<H: SmtHandler> CategoryParser<H> for SortParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H::Resources>,
+        resources: &mut ParserResources,
         token: &Token,
     ) -> Result<ControlFlow<H::Sort>, ParserError<H::Error>> {
         let span = token.span();

@@ -9,7 +9,6 @@ use crate::{
 
 pub trait SmtHandler {
     type Error;
-    type Resources;
 
     type SExpr;
     type Attribute;
@@ -111,6 +110,7 @@ pub trait SmtHandler {
 pub trait CommandHandler: SmtHandler {
     type NonstandardParser: ParseCommand<Self>;
 
+    /// Returns a parser that parses a non-standard command with the given name.
     fn nonstandard_command(
         &mut self,
         name: SmtSymbolView<'_>,
@@ -374,7 +374,6 @@ pub struct NonstandardCommandError(pub SmtSymbol);
 
 impl SmtHandler for CheckStandardSyntax {
     type Error = NonstandardCommandError;
-    type Resources = ();
 
     type SExpr = ();
     type Attribute = ();

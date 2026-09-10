@@ -5,24 +5,27 @@
 /// duplicated resources (e.g. collections). This structure
 /// is only constructed once for the root parser and
 /// propagated to smaller parsers.
-///
-/// The resources are generic to allow the library user
-/// to use additional resources in the custom parsers.
-pub struct ParserResources<'a, C> {
+pub struct ParserResources {
     _priv: (),
-    custom: &'a mut C,
 }
 
-impl<'a, C> ParserResources<'a, C> {
-    pub fn new(custom: &'a mut C) -> Self {
-        Self { _priv: (), custom }
+impl ParserResources {
+    pub fn new() -> Self {
+        Self { _priv: () }
     }
 
-    pub fn custom(&self) -> &C {
-        self.custom
+    pub(crate) fn are_pristine(&self) -> bool {
+        // TODO: add resources
+        true
     }
 
-    pub fn custom_mut(&mut self) -> &mut C {
-        self.custom
+    pub(crate) fn clear(&mut self) {
+        // TODO: add resources
+    }
+}
+
+impl Default for ParserResources {
+    fn default() -> Self {
+        Self::new()
     }
 }

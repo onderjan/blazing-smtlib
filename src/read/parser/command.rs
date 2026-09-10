@@ -14,10 +14,24 @@ mod standard;
 pub(super) use standard::{CommandParsers, StandardCommandKind};
 
 pub trait ParseCommand<H: CommandHandler + ?Sized> {
+    /// Parses a single token, progressing the parser.
+    ///
+    /// If a non-error result is returned, it either signals that the
+    /// parser is finished ([`ControlFlow::Break`] with the result value),
+    /// or that it is not finished yet ([`ControlFlow::Continue`]).
+    ///
+    /// The `resources` are shared resources of standard category parsers.
+    /// To keep resources valid, each [`CategoryParser`] must progress
+    /// until completion once started, i.e. if [`CategoryParser::progress()`]
+    /// returns `Ok(Continue(()))`, the subsequent outer progress call
+    /// must call [`CategoryParser::progress()`] on the same parser, and
+    /// is forbidden from progressing any other parsers.
+    /// Failure to heed this contract may lead to silently wrong parsing
+    /// or panics, but never unsafe behaviour.
     fn progress(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H::Resources>,
+        resources: &mut ParserResources,
         token: &Token,
     ) -> Result<ControlFlow<CommandResult, ()>, ParserError<H::Error>>;
 }
@@ -29,7 +43,7 @@ impl<H: CommandHandler> ParseCommand<H> for NoCommandParser {
     fn progress(
         &mut self,
         _handler: &mut H,
-        _resources: &mut ParserResources<H::Resources>,
+        _resources: &mut ParserResources,
         _token: &Token,
     ) -> Result<ControlFlow<CommandResult, ()>, ParserError<H::Error>> {
         match *self {}
@@ -85,7 +99,7 @@ impl<H: CommandHandler, C: CommandAction<H>> ParseCommand<H> for CommandParser<H
     fn progress(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H::Resources>,
+        resources: &mut ParserResources,
         token: &Token,
     ) -> Result<ControlFlow<CommandResult, ()>, ParserError<H::Error>> {
         let span = token.span();
@@ -148,7 +162,7 @@ mod tests {
         for _ in 0..2 {
             let close = Token::new(TokenKind::ParenClose, SmtSpan::new_zero());
             let flow = parser
-                .progress(&mut handler, &mut ParserResources::new(&mut ()), &close)
+                .progress(&mut handler, &mut ParserResources::new(), &close)
                 .expect("check-sat closing parenthesis must parse");
             assert!(matches!(
                 flow,

@@ -41,14 +41,31 @@ pub type ParenSortedVarsParser<H> = ParenMultipleParser<H, SortedVarParser<H>>;
 pub trait CategoryParser<H: SmtHandler>: Default {
     type Result;
 
+    /// Parses a single token, progressing the parser.
+    ///
+    /// If a non-error result is returned, it either signals that the
+    /// parser is finished ([`ControlFlow::Break`] with the result value),
+    /// or that it is not finished yet ([`ControlFlow::Continue`]).
+    ///
+    /// All standard parsers implementing [`CategoryParser`] are self-resetting:
+    /// after returning [`ControlFlow::Break`], they are back in their initial state.
+    ///
+    /// The `resources` are shared resources of standard category parsers.
+    /// To keep resources valid, each [`CategoryParser`] must progress
+    /// until completion once started, i.e. if [`CategoryParser::progress()`]
+    /// returns `Ok(Continue(()))`, the subsequent outer progress call
+    /// must call [`CategoryParser::progress()`] on the same parser, and
+    /// is forbidden from progressing any other parsers.
+    /// Failure to heed this contract may lead to silently wrong parsing
+    /// or panics, but never unsafe behaviour.
     fn progress(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H::Resources>,
+        resources: &mut ParserResources,
         token: &Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>>;
 
-    /// Restart the parser to default state.
+    /// Restarts the parser to its default state.
     ///
     /// The default implementation can be overridden for a performance benefit
     /// to avoid dropping and reconstructing the parser.

@@ -108,19 +108,18 @@ impl<E> From<ParserError<E>> for SmtReadError<E> {
 
 /// Reads the SMT-LIB file at `path`, delivering its content to `handler`.
 ///
-/// This is a convenience function over [`SmtReader`] for handlers where
-/// their resources implement [`Default`]: parser and handler resources
-/// are built for this call and dropped afterwards, so their buffers cannot
-/// be preserved for future use. Use [`SmtReader`] directly to keep the
+/// This is a convenience function over [`SmtReader`]: the parser
+/// is dropped after reading, so its resources cannot be preserved
+/// for future use. Use [`SmtReader`] directly to keep the
 /// resources across reads or to feed the input in pieces.
 ///
 /// A failure to open the file is reported as an I/O error with an empty
 /// span at the start of the input.
-pub fn read_smt_file<H: CommandHandler<Resources: Default>>(
+pub fn read_smt_file<H: CommandHandler>(
     handler: &mut H,
     path: &Path,
 ) -> Result<(), SmtReadError<H::Error>> {
-    SmtReader::new(handler, &mut Default::default()).read_file(path)
+    SmtReader::new(handler).read_file(path)
 }
 
 /// Reads SMT-LIB input from `buf_reader` to its end, delivering its content
@@ -129,16 +128,15 @@ pub fn read_smt_file<H: CommandHandler<Resources: Default>>(
 /// The input is considered to end when the buffered reader returns
 /// a zero-length buffer.
 ///
-/// This is a convenience function over [`SmtReader`] for handlers where
-/// their resources implement [`Default`]: parser and handler resources
-/// are built for this call and dropped afterwards, so their buffers cannot
-/// be preserved for future use. Use [`SmtReader`] directly to keep the
+/// This is a convenience function over [`SmtReader`]: the parser
+/// is dropped after reading, so its resources cannot be preserved
+/// for future use. Use [`SmtReader`] directly to keep the
 /// resources across reads or to feed the input in pieces.
-pub fn read_smt<H: CommandHandler<Resources: Default>>(
+pub fn read_smt<H: CommandHandler>(
     handler: &mut H,
     buf_reader: impl BufRead,
 ) -> Result<(), SmtReadError<H::Error>> {
-    SmtReader::new(handler, &mut Default::default()).read_all(buf_reader)
+    SmtReader::new(handler).read_all(buf_reader)
 }
 
 /// Streams SMT-LIB input from bytes to a [`CommandHandler`].
@@ -156,13 +154,9 @@ pub struct SmtReader<'a, H: CommandHandler> {
 }
 
 impl<'a, H: CommandHandler> SmtReader<'a, H> {
-    /// Creates a reader that calls `handler` sequentially.
-    ///
-    /// The parser resources together with custom handler `resources`
-    /// are provided to the handler for parsing non-standard commands,
-    /// useful for de-duplicating allocated resources.
-    pub fn new(handler: &'a mut H, resources: &'a mut H::Resources) -> Self {
-        let parser = Parser::new(handler, resources);
+    /// Creates a reader that calls `handler` sequentially when reading.
+    pub fn new(handler: &'a mut H) -> Self {
+        let parser = Parser::new(handler);
         let lexer = Lexer::new(parser);
         Self { lexer }
     }

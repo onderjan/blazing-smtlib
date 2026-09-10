@@ -199,7 +199,7 @@ impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H::Resources>,
+        resources: &mut ParserResources,
         token: &Token,
     ) -> Result<ControlFlow<H::Term>, ParserError<H::Error>> {
         let span = token.span();
@@ -327,7 +327,7 @@ impl<H: SmtHandler> TermParser<H> {
     fn progress_inner(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H::Resources>,
+        resources: &mut ParserResources,
         token: &Token,
     ) -> Result<ControlFlow<SmtTerm<H>>, ParserError<H::Error>> {
         match self.state {
@@ -747,7 +747,7 @@ impl<H: SmtHandler> SortedBindingsParser<H> {
     fn progress_and_open(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H::Resources>,
+        resources: &mut ParserResources,
         token: &Token,
         open_fn: impl Fn(&mut H, SmtSymbol, H::Sort) -> Result<(), H::Error>,
     ) -> Result<ControlFlow<u64>, ParserError<H::Error>> {

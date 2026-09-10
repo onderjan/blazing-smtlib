@@ -64,7 +64,7 @@ impl<E> ParserError<E> {
 pub struct Parser<'a, H: CommandHandler> {
     handler: &'a mut H,
     state: ParserState<H>,
-    resources: ParserResources<'a, H::Resources>,
+    resources: ParserResources,
 
     command_parsers: CommandParsers<H>,
 }
@@ -78,24 +78,46 @@ pub(crate) enum ParserState<H: CommandHandler> {
 }
 
 impl<'a, H: CommandHandler> Parser<'a, H> {
-    pub fn new(handler: &'a mut H, resources: &'a mut H::Resources) -> Self {
+    pub fn new(handler: &'a mut H) -> Self {
         Self {
             handler,
             state: ParserState::AwaitingCommand,
-            resources: ParserResources::new(resources),
+            resources: ParserResources::new(),
             command_parsers: CommandParsers::new(),
         }
     }
 
-    fn handle_command_progress(&mut self, flow: ControlFlow<CommandResult>) {
-        match flow {
-            ControlFlow::Continue(()) => {}
-            ControlFlow::Break(CommandResult::EndCommand) => {
-                self.state = ParserState::AwaitingCommand;
-            }
-            ControlFlow::Break(CommandResult::Exit) => {
-                self.state = ParserState::Exit;
-            }
+    fn handle_command_progress(
+        &mut self,
+        flow: ControlFlow<CommandResult>,
+        standard_kind: Option<StandardCommandKind>,
+    ) {
+        let ControlFlow::Break(result) = flow else {
+            // still progressing
+            return;
+        };
+
+        // the command has ended, resources should be back in pristine state
+        if let Some(standard_kind) = standard_kind {
+            // we trust ourselves enough to only assert this in debug mode
+            // and we will not without clear in release
+            debug_assert!(
+                self.resources.are_pristine(),
+                "resources should be pristine after end of standard command {standard_kind:?}"
+            );
+        } else {
+            // we do not trust the library users: assert this in debug mode, always clear
+            debug_assert!(
+                self.resources.are_pristine(),
+                "resources should be pristine after end of non-standard command"
+            );
+            self.resources.clear();
+        }
+
+        // update the state
+        self.state = match result {
+            CommandResult::EndCommand => ParserState::AwaitingCommand,
+            CommandResult::Exit => ParserState::Exit,
         }
     }
 }
@@ -136,17 +158,21 @@ impl<'a, H: CommandHandler> TokenHandler for Parser<'a, H> {
                 self.state = self.start_command(command_name, span)?;
             }
             ParserState::Command(kind) => {
+                let kind = *kind;
                 let flow = self.command_parsers.progress(
-                    *kind,
+                    kind,
                     self.handler,
                     &mut self.resources,
                     token,
                 )?;
-                self.handle_command_progress(flow);
+                if flow.is_break() {
+                    // a command has ended, resources should be back in pristine state
+                }
+                self.handle_command_progress(flow, Some(kind));
             }
             ParserState::NonstandardCommand(parser) => {
                 let flow = parser.progress(self.handler, &mut self.resources, token)?;
-                self.handle_command_progress(flow);
+                self.handle_command_progress(flow, None);
             }
             ParserState::Exit => {
                 // no operation on fed tokens
