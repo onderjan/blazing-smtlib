@@ -4,7 +4,7 @@ use crate::{
     SmtHandler, SmtSExpr,
     read::parser::{
         ParserError,
-        category::{CategoryParser, CategoryErrorKind, parse_special_constant},
+        category::{CategoryErrorKind, CategoryParser, parse_special_constant},
         handle_err,
     },
     token::{Token, TokenKind},
@@ -45,7 +45,7 @@ impl<H: SmtHandler> CategoryParser<H> for SExprParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
-        token: Token,
+        token: &Token,
     ) -> Result<ControlFlow<H::SExpr>, ParserError<H::Error>> {
         let s_expr = match token.kind() {
             TokenKind::Symbol(symbol) => SmtSExpr::Symbol(symbol.into_owned()),

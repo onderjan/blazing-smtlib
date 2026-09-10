@@ -3,9 +3,9 @@ use std::ops::ControlFlow;
 use crate::{
     CommandHandler, SmtDatatypeConstructor, SmtNumeral, SmtSpan, SmtSymbol,
     read::parser::{
-        CategoryParser, CategoryErrorKind, CloseParenParser, ClosedMultipleParser,
-        NumeralParser, OpenParenParser, OpenedParser, ParenMaximumParser, ParenMultipleParser,
-        ParenParser, ParserError, SortedVarParser, SymbolParser, category::PairParser, handle_err,
+        CategoryErrorKind, CategoryParser, CloseParenParser, ClosedMultipleParser, NumeralParser,
+        OpenParenParser, OpenedParser, ParenMaximumParser, ParenMultipleParser, ParenParser,
+        ParserError, SortedVarParser, SymbolParser, category::PairParser, handle_err,
     },
     token::{Reserved, Token, TokenKind},
 };
@@ -106,7 +106,7 @@ impl<H: CommandHandler> CategoryParser<H> for DatatypeParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
-        token: Token,
+        token: &Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         let span = token.span();
         let constructors = match self.state {
@@ -257,7 +257,7 @@ impl<H: CommandHandler> CategoryParser<H> for DeclareDatatypesParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
-        token: Token,
+        token: &Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         let span = token.span();
         match self.state {
@@ -341,7 +341,7 @@ impl<H: CommandHandler> CategoryParser<H> for DeclareDatatypeParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
-        token: Token,
+        token: &Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         let span = token.span();
         match self.state {

@@ -852,7 +852,7 @@ impl<H: TokenHandler> Lexer<H> {
         };
 
         self.handler
-            .handle_token(Token::new(kind, span))
+            .handle_token(&Token::new(kind, span))
             .map_err(LexError::Handler)
     }
 

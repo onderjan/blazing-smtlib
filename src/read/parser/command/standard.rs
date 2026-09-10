@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     CommandHandler, SmtFunctionSignature, SmtSymbol,
     read::parser::{
-        CategoryParser, CategoryErrorKind, CloseParenParser, CommandParser, CommandResult,
+        CategoryErrorKind, CategoryParser, CloseParenParser, CommandParser, CommandResult,
         KeywordParser, NumeralParser, ParenMultipleParser, ParserError, StringParser, SymbolParser,
         category::{ClosedAttributeParser, ClosedParser, PairParser, SortParser, TermParser},
         command::{
@@ -78,7 +78,7 @@ macro_rules! standard_commands {
                 &mut self,
                 kind: StandardCommandKind,
                 handler: &mut H,
-                token: Token,
+                token: &Token,
             ) -> Result<ControlFlow<CommandResult, ()>, ParserError<H::Error>> {
                 match kind {
                     $(StandardCommandKind::$kind => self.$field.progress(handler, token),)*
@@ -284,7 +284,7 @@ impl<H: CommandHandler> CategoryParser<H> for GetValueParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
-        token: Token,
+        token: &Token,
     ) -> Result<ControlFlow<Vec<H::Term>, ()>, ParserError<H::Error>> {
         let span = token.span();
         match self.inner.progress(handler, token)? {

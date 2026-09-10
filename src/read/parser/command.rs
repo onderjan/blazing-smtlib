@@ -17,7 +17,7 @@ pub trait ParseCommand<H: CommandHandler + ?Sized> {
     fn progress(
         &mut self,
         handler: &mut H,
-        token: Token,
+        token: &Token,
     ) -> Result<ControlFlow<CommandResult, ()>, ParserError<H::Error>>;
 }
 
@@ -28,7 +28,7 @@ impl<H: CommandHandler> ParseCommand<H> for NoCommandParser {
     fn progress(
         &mut self,
         _handler: &mut H,
-        _token: Token,
+        _token: &Token,
     ) -> Result<ControlFlow<CommandResult, ()>, ParserError<H::Error>> {
         match *self {}
     }
@@ -83,7 +83,7 @@ impl<H: CommandHandler, C: CommandAction<H>> ParseCommand<H> for CommandParser<H
     fn progress(
         &mut self,
         handler: &mut H,
-        token: Token,
+        token: &Token,
     ) -> Result<ControlFlow<CommandResult, ()>, ParserError<H::Error>> {
         let span = token.span();
         let ControlFlow::Break(result) = self.parser.progress(handler, token)? else {
@@ -145,7 +145,7 @@ mod tests {
         for _ in 0..2 {
             let close = Token::new(TokenKind::ParenClose, SmtSpan::new_zero());
             let flow = parser
-                .progress(&mut handler, close)
+                .progress(&mut handler, &close)
                 .expect("check-sat closing parenthesis must parse");
             assert!(matches!(
                 flow,

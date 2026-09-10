@@ -30,7 +30,7 @@ struct CollectTokens(Vec<OwnedToken>);
 impl TokenHandler for CollectTokens {
     type Error = Infallible;
 
-    fn handle_token(&mut self, token: Token) -> Result<(), Self::Error> {
+    fn handle_token(&mut self, token: &Token) -> Result<(), Self::Error> {
         let content = match token.kind() {
             TokenKind::Symbol(s) => s.as_slice(),
             TokenKind::Keyword(k) => k.as_slice(),
@@ -753,7 +753,7 @@ struct RejectNth {
 impl TokenHandler for RejectNth {
     type Error = ();
 
-    fn handle_token(&mut self, _token: Token) -> Result<(), Self::Error> {
+    fn handle_token(&mut self, _token: &Token) -> Result<(), Self::Error> {
         if self.remaining == 0 {
             return Err(());
         }

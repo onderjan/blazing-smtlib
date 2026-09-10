@@ -44,7 +44,7 @@ pub trait CategoryParser<H: SmtHandler>: Default {
     fn progress(
         &mut self,
         handler: &mut H,
-        token: Token,
+        token: &Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>>;
 
     /// Restart the parser to default state.

@@ -29,7 +29,7 @@ use smt_parser_rs::{
     read::{
         lexer::{LexError, Lexer},
         parser::{
-            CategoryParser, CategoryErrorKind, CloseParenParser, ClosedAttributeParser,
+            CategoryErrorKind, CategoryParser, CloseParenParser, ClosedAttributeParser,
             ClosedMultipleAttributeParser, ClosedMultipleParser, ClosedParser, IdentParser,
             KeywordParser, OpenParenParser, PairParser, ParenMultipleParser, ParenParser,
             ParserError, ParserErrorKind, QualifiedIdentParser, SExprParser, SortParser,
@@ -320,7 +320,7 @@ struct Drive<'h, H: SmtHandler, P: CategoryParser<H>> {
 impl<H: SmtHandler, P: CategoryParser<H>> TokenHandler for Drive<'_, H, P> {
     type Error = ParserError<H::Error>;
 
-    fn handle_token(&mut self, token: Token) -> Result<(), Self::Error> {
+    fn handle_token(&mut self, token: &Token) -> Result<(), Self::Error> {
         if self.remaining == 0 {
             if token.kind().ty() != TokenType::EndOfFile {
                 self.unconsumed += 1;

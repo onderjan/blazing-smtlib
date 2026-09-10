@@ -28,7 +28,7 @@ macro_rules! token_parser {
 
         impl $parser {
             /// Consumes exactly one token, which must match.
-            pub(crate) fn expect<E>(token: Token) -> Result<$result, ParserError<E>> {
+            pub(crate) fn expect<E>(token: &Token) -> Result<$result, ParserError<E>> {
                 let span = token.span();
                 match token.kind() {
                     $pattern => Ok($value),
@@ -46,7 +46,7 @@ macro_rules! token_parser {
             fn progress(
                 &mut self,
                 _handler: &mut H,
-                token: Token,
+                token: &Token,
             ) -> Result<ControlFlow<Self::Result, ()>, ParserError<H::Error>> {
                 Ok(ControlFlow::Break(Self::expect(token)?))
             }

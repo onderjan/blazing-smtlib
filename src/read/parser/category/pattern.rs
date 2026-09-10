@@ -4,7 +4,7 @@ use crate::{
     SmtHandler, SmtPattern, SmtSimplePattern,
     read::parser::{
         ClosedMultipleParser, PairParser, ParserError, SymbolParser,
-        category::{CategoryParser, CategoryErrorKind},
+        category::{CategoryErrorKind, CategoryParser},
     },
     token::{Reserved, Token, TokenKind, TokenType},
 };
@@ -29,7 +29,7 @@ impl<H: SmtHandler> CategoryParser<H> for SimplePatternParser {
     fn progress(
         &mut self,
         _handler: &mut H,
-        token: Token,
+        token: &Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         let result = match token.kind() {
             TokenKind::Symbol(symbol) => SmtSimplePattern::Symbol(symbol.into_owned()),
@@ -83,7 +83,7 @@ impl<H: SmtHandler> CategoryParser<H> for PatternParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
-        token: Token,
+        token: &Token,
     ) -> Result<ControlFlow<SmtPattern, ()>, ParserError<H::Error>> {
         let span = token.span();
         if !self.is_constructor {

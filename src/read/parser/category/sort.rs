@@ -4,7 +4,7 @@ use crate::{
     SmtHandler, SmtIdent, SmtSort,
     read::parser::{
         ParserError,
-        category::{CategoryParser, CategoryErrorKind, ident::IdentParser},
+        category::{CategoryErrorKind, CategoryParser, ident::IdentParser},
         handle_err,
     },
     token::{Reserved, Token, TokenKind},
@@ -76,7 +76,7 @@ impl<H: SmtHandler> CategoryParser<H> for SortParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
-        token: Token,
+        token: &Token,
     ) -> Result<ControlFlow<H::Sort>, ParserError<H::Error>> {
         let span = token.span();
         let flow = match self.state {

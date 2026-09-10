@@ -5,7 +5,7 @@ use crate::{
     read::parser::{
         CloseParenParser, OpenParenParser, ParserError, SortedVarParser, SymbolParser,
         category::{
-            CategoryParser, CategoryErrorKind, attribute::ClosedMultipleAttributeParser,
+            CategoryErrorKind, CategoryParser, attribute::ClosedMultipleAttributeParser,
             parse_special_constant, pattern::PatternParser, qualified_ident::QualifiedIdentParser,
         },
         handle_err,
@@ -198,7 +198,7 @@ impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
-        token: Token,
+        token: &Token,
     ) -> Result<ControlFlow<H::Term>, ParserError<H::Error>> {
         let span = token.span();
         let term = match self.pending.take() {
@@ -324,7 +324,7 @@ impl<H: SmtHandler> TermParser<H> {
     fn progress_inner(
         &mut self,
         handler: &mut H,
-        token: Token,
+        token: &Token,
     ) -> Result<ControlFlow<SmtTerm<H>>, ParserError<H::Error>> {
         match self.state {
             State::Start => self.parse_term_start(token),
@@ -404,9 +404,7 @@ impl<H: SmtHandler> TermParser<H> {
                                 SortedBinderKind::Exists | SortedBinderKind::Forall => {
                                     CategoryErrorKind::EmptyQuantifierBindings
                                 }
-                                SortedBinderKind::Lambda => {
-                                    CategoryErrorKind::EmptyLambdaBindings
-                                }
+                                SortedBinderKind::Lambda => CategoryErrorKind::EmptyLambdaBindings,
                             };
                             return Err(ParserError::category_error(err_kind, span));
                         }
@@ -458,7 +456,7 @@ impl<H: SmtHandler> TermParser<H> {
     #[inline]
     fn parse_term_start(
         &mut self,
-        token: Token,
+        token: &Token,
     ) -> Result<ControlFlow<SmtTerm<H>>, ParserError<H::Error>> {
         match token.kind() {
             TokenKind::ParenOpen => {
@@ -516,7 +514,7 @@ impl<H: SmtHandler> TermParser<H> {
     }
 
     #[inline]
-    fn parse_term_open(&mut self, token: Token) -> Result<(), ParserError<H::Error>> {
+    fn parse_term_open(&mut self, token: &Token) -> Result<(), ParserError<H::Error>> {
         let span = token.span();
         let state = match token.kind() {
             TokenKind::Symbol(fn_name) => {
@@ -595,7 +593,7 @@ impl<H: SmtHandler> TermParser<H> {
     fn parse_let_binding_open(
         &mut self,
         handler: &mut H,
-        token: Token,
+        token: &Token,
     ) -> Result<ControlFlow<SmtTerm<H>>, ParserError<H::Error>> {
         let span = token.span();
         match token.kind() {
@@ -656,7 +654,7 @@ impl<H: SmtHandler> TermParser<H> {
     fn parse_match_case_open(
         &mut self,
         handler: &mut H,
-        token: Token,
+        token: &Token,
     ) -> Result<ControlFlow<SmtTerm<H>>, ParserError<H::Error>> {
         let span = token.span();
         match token.kind() {
@@ -739,7 +737,7 @@ impl<H: SmtHandler> SortedBindingsParser<H> {
     fn progress_and_open(
         &mut self,
         handler: &mut H,
-        token: Token,
+        token: &Token,
         open_fn: impl Fn(&mut H, SmtSymbol, H::Sort) -> Result<(), H::Error>,
     ) -> Result<ControlFlow<u64>, ParserError<H::Error>> {
         let token = match self.state {

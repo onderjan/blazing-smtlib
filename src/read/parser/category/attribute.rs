@@ -5,7 +5,7 @@ use crate::{
     read::parser::{
         CloseParenParser, ClosedMultipleParser, ParserError,
         category::{
-            CategoryParser, CategoryErrorKind, parse_special_constant, s_expr::SExprParser,
+            CategoryErrorKind, CategoryParser, parse_special_constant, s_expr::SExprParser,
         },
         handle_err,
     },
@@ -80,7 +80,7 @@ impl<H: SmtHandler, C: AttributeCollection<H>> CategoryParser<H> for CollectingP
     fn progress(
         &mut self,
         handler: &mut H,
-        token: Token,
+        token: &Token,
     ) -> Result<ControlFlow<C::Output>, ParserError<H::Error>> {
         let span = token.span();
         if !self.collection.next_allowed() {
@@ -297,7 +297,7 @@ impl<H: SmtHandler> CategoryParser<H> for ClosedAttributeParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
-        token: Token,
+        token: &Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<<H as SmtHandler>::Error>> {
         self.0.progress(handler, token)
     }
@@ -325,7 +325,7 @@ impl<H: SmtHandler> CategoryParser<H> for ClosedMultipleAttributeParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
-        token: Token,
+        token: &Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<<H as SmtHandler>::Error>> {
         self.0.progress(handler, token)
     }
