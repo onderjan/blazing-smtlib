@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     CommandHandler, SmtDatatypeConstructor, SmtNumeral, SmtSpan, SmtSymbol,
     read::parser::{
-        CategoryParser, CategoryParserErrorKind, CloseParenParser, ClosedMultipleParser,
+        CategoryParser, CategoryErrorKind, CloseParenParser, ClosedMultipleParser,
         NumeralParser, OpenParenParser, OpenedParser, ParenMaximumParser, ParenMultipleParser,
         ParenParser, ParserError, SortedVarParser, SymbolParser, category::PairParser, handle_err,
     },
@@ -137,7 +137,7 @@ impl<H: CommandHandler> CategoryParser<H> for DatatypeParser<H> {
                 }
                 _ => {
                     return Err(ParserError::category_error(
-                        CategoryParserErrorKind::ExpectedDatatypeKind,
+                        CategoryErrorKind::ExpectedDatatypeKind,
                         span,
                     ));
                 }
@@ -154,7 +154,7 @@ impl<H: CommandHandler> CategoryParser<H> for DatatypeParser<H> {
                     // there must be at least one parameter
                     if params.is_empty() {
                         return Err(ParserError::category_error(
-                            CategoryParserErrorKind::EmptyDatatypeParameters,
+                            CategoryErrorKind::EmptyDatatypeParameters,
                             span,
                         ));
                     }
@@ -189,7 +189,7 @@ impl<H: CommandHandler> CategoryParser<H> for DatatypeParser<H> {
             // there must be at least one constructor
             if constructors.is_empty() {
                 return Err(ParserError::category_error(
-                    CategoryParserErrorKind::EmptyDatatypeConstructors,
+                    CategoryErrorKind::EmptyDatatypeConstructors,
                     span,
                 ));
             }
@@ -269,7 +269,7 @@ impl<H: CommandHandler> CategoryParser<H> for DeclareDatatypesParser<H> {
                     // introductions must not be empty
                     if introductions.is_empty() {
                         return Err(ParserError::category_error(
-                            CategoryParserErrorKind::EmptyDatatypeIntroductions,
+                            CategoryErrorKind::EmptyDatatypeIntroductions,
                             span,
                         ));
                     }
@@ -290,7 +290,7 @@ impl<H: CommandHandler> CategoryParser<H> for DeclareDatatypesParser<H> {
                     // ensure there are not more sort declarations than datatypes
                     if datatypes.len() != self.num_expected_declarations {
                         return Err(ParserError::category_error(
-                            CategoryParserErrorKind::ExpectedDatatype,
+                            CategoryErrorKind::ExpectedDatatype,
                             span,
                         ));
                     }

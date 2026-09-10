@@ -13,7 +13,7 @@ fn pair_parser() {
     assert!(
         matches!(
             err,
-            CategoryParserErrorKind::ExpectedToken(&[TokenType::Symbol])
+            CategoryErrorKind::ExpectedToken(&[TokenType::Symbol])
         ),
         "{err:?}"
     );
@@ -28,7 +28,7 @@ fn closed_parser() {
     assert!(
         matches!(
             err,
-            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
+            CategoryErrorKind::ExpectedToken(&[TokenType::ParenClose])
         ),
         "{err:?}"
     );
@@ -37,7 +37,7 @@ fn closed_parser() {
     assert!(
         matches!(
             err,
-            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
+            CategoryErrorKind::ExpectedToken(&[TokenType::ParenClose])
         ),
         "{err:?}"
     );
@@ -52,7 +52,7 @@ fn open_closed_parser() {
     assert!(
         matches!(
             err,
-            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenOpen])
+            CategoryErrorKind::ExpectedToken(&[TokenType::ParenOpen])
         ),
         "{err:?}"
     );
@@ -60,7 +60,7 @@ fn open_closed_parser() {
     assert!(
         matches!(
             err,
-            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
+            CategoryErrorKind::ExpectedToken(&[TokenType::ParenClose])
         ),
         "{err:?}"
     );
@@ -83,7 +83,7 @@ fn closed_multiple_parser() {
     assert!(
         matches!(
             err,
-            CategoryParserErrorKind::ExpectedToken(&[TokenType::Symbol])
+            CategoryErrorKind::ExpectedToken(&[TokenType::Symbol])
         ),
         "{err:?}"
     );
@@ -92,7 +92,7 @@ fn closed_multiple_parser() {
     assert!(
         matches!(
             err,
-            CategoryParserErrorKind::ExpectedToken(&[TokenType::Symbol])
+            CategoryErrorKind::ExpectedToken(&[TokenType::Symbol])
         ),
         "{err:?}"
     );
@@ -114,7 +114,7 @@ fn paren_multiple_parser() {
     assert!(
         matches!(
             err,
-            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenOpen])
+            CategoryErrorKind::ExpectedToken(&[TokenType::ParenOpen])
         ),
         "{err:?}"
     );
@@ -123,7 +123,7 @@ fn paren_multiple_parser() {
     assert!(
         matches!(
             err,
-            CategoryParserErrorKind::ExpectedToken(&[TokenType::Symbol])
+            CategoryErrorKind::ExpectedToken(&[TokenType::Symbol])
         ),
         "{err:?}"
     );
@@ -132,7 +132,7 @@ fn paren_multiple_parser() {
     assert!(
         matches!(
             err,
-            CategoryParserErrorKind::ExpectedToken(&[TokenType::Symbol])
+            CategoryErrorKind::ExpectedToken(&[TokenType::Symbol])
         ),
         "{err:?}"
     );
@@ -156,7 +156,7 @@ fn nested_combinators() {
     assert!(
         matches!(
             err,
-            CategoryParserErrorKind::ExpectedToken(&[TokenType::Symbol])
+            CategoryErrorKind::ExpectedToken(&[TokenType::Symbol])
         ),
         "{err:?}"
     );

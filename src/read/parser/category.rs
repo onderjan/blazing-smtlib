@@ -57,7 +57,7 @@ pub trait CategoryParser<H: SmtHandler>: Default {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CategoryParserErrorKind {
+pub enum CategoryErrorKind {
     ExpectedToken(&'static [TokenType]),
     EmptyIdentIndices,
     EmptySortApplication,
@@ -90,16 +90,16 @@ pub enum CategoryParserErrorKind {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CategoryParserError {
-    kind: CategoryParserErrorKind,
+    kind: CategoryErrorKind,
     span: SmtSpan,
 }
 
 impl CategoryParserError {
-    pub(crate) fn new(kind: CategoryParserErrorKind, span: SmtSpan) -> Self {
+    pub(crate) fn new(kind: CategoryErrorKind, span: SmtSpan) -> Self {
         Self { kind, span }
     }
 
-    pub fn kind(&self) -> &CategoryParserErrorKind {
+    pub fn kind(&self) -> &CategoryErrorKind {
         &self.kind
     }
 
@@ -107,7 +107,7 @@ impl CategoryParserError {
         self.span
     }
 
-    pub fn into_kind(self) -> CategoryParserErrorKind {
+    pub fn into_kind(self) -> CategoryErrorKind {
         self.kind
     }
 }

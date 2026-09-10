@@ -5,7 +5,7 @@ use std::io::{BufRead, Read};
 use smt_parser_rs::{
     CheckStandardSyntax, NonstandardCommandError, SmtLocation,
     read::{
-        SmtReadError, SmtReadErrorKind, lexer::LexerErrorKind, parser::CategoryParserErrorKind,
+        SmtReadError, SmtReadErrorKind, lexer::LexerErrorKind, parser::CategoryErrorKind,
         read_smt, read_smt_file,
     },
 };
@@ -55,7 +55,7 @@ fn parser_error_span_is_resolved_to_lines() {
     let err = read(b"(check-sat)\n(assert )").expect_err("expected a parser error, got Ok");
     assert!(matches!(
         err.kind(),
-        SmtReadErrorKind::Parser(CategoryParserErrorKind::ExpectedTerm)
+        SmtReadErrorKind::Parser(CategoryErrorKind::ExpectedTerm)
     ));
     assert_span(&err, (20, 1, 8), (21, 1, 9));
 }
@@ -68,7 +68,7 @@ fn parser_error_deep_in_the_input_is_resolved_to_lines() {
     let err = read(input).expect_err("expected a parser error, got Ok");
     assert!(matches!(
         err.kind(),
-        SmtReadErrorKind::Parser(CategoryParserErrorKind::EmptyTermApplication)
+        SmtReadErrorKind::Parser(CategoryErrorKind::EmptyTermApplication)
     ));
     assert_span(&err, (52, 2, 11), (53, 2, 12));
 }

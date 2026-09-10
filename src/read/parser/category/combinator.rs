@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler,
     read::parser::{
-        CategoryParser, CategoryParserErrorKind, CloseParenParser, OpenParenParser, ParserError,
+        CategoryParser, CategoryErrorKind, CloseParenParser, OpenParenParser, ParserError,
     },
     token::{Token, TokenKind, TokenType},
 };
@@ -286,7 +286,7 @@ impl<H: SmtHandler, P: CategoryParser<H>> ClosedMaximumParser<H, P> {
                 // we cannot allow this element
                 // so the closing parenthesis was the only allowed choice here
                 return Err(ParserError::category_error(
-                    CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose]),
+                    CategoryErrorKind::ExpectedToken(&[TokenType::ParenClose]),
                     token.span(),
                 ));
             }

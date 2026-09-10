@@ -4,7 +4,7 @@ use crate::{
     SmtHandler, SmtSExpr,
     read::parser::{
         ParserError,
-        category::{CategoryParser, CategoryParserErrorKind, parse_special_constant},
+        category::{CategoryParser, CategoryErrorKind, parse_special_constant},
         handle_err,
     },
     token::{Token, TokenKind},
@@ -67,7 +67,7 @@ impl<H: SmtHandler> CategoryParser<H> for SExprParser<H> {
                 } else {
                     // no last level, all that we received was ")"
                     return Err(ParserError::category_error(
-                        CategoryParserErrorKind::ExpectedSExpr,
+                        CategoryErrorKind::ExpectedSExpr,
                         token.span(),
                     ));
                 }
@@ -77,7 +77,7 @@ impl<H: SmtHandler> CategoryParser<H> for SExprParser<H> {
                     SmtSExpr::SpecialConstant(special_constant)
                 } else {
                     return Err(ParserError::category_error(
-                        CategoryParserErrorKind::ExpectedSExpr,
+                        CategoryErrorKind::ExpectedSExpr,
                         token.span(),
                     ));
                 }

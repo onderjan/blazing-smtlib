@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     CommandHandler, SmtFunctionSignature, SmtSymbol,
     read::parser::{
-        CategoryParser, CategoryParserErrorKind, CloseParenParser, CommandParser, CommandResult,
+        CategoryParser, CategoryErrorKind, CloseParenParser, CommandParser, CommandResult,
         KeywordParser, NumeralParser, ParenMultipleParser, ParserError, StringParser, SymbolParser,
         category::{ClosedAttributeParser, ClosedParser, PairParser, SortParser, TermParser},
         command::{
@@ -293,7 +293,7 @@ impl<H: CommandHandler> CategoryParser<H> for GetValueParser<H> {
                 // ensure there is at least one term
                 if terms.is_empty() {
                     return Err(ParserError::category_error(
-                        CategoryParserErrorKind::EmptyGetValueTerms,
+                        CategoryErrorKind::EmptyGetValueTerms,
                         span,
                     ));
                 }

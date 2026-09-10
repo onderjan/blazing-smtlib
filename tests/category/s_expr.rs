@@ -58,7 +58,7 @@ fn stops_after_root_s_expr() {
 
 #[test]
 fn errors() {
-    let expected_s_expr = CategoryParserErrorKind::ExpectedSExpr;
+    let expected_s_expr = CategoryErrorKind::ExpectedSExpr;
 
     // the only invalid tokens are the end of input...
     assert_eq!(assert_error::<P>(b"", 0, 0), expected_s_expr);

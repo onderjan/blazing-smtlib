@@ -2,7 +2,7 @@
 
 use smt_parser_rs::{
     CheckStandardSyntax, CommandHandler, NonstandardCommandError,
-    read::{SmtReadError, SmtReadErrorKind, parser::CategoryParserErrorKind, read_smt},
+    read::{SmtReadError, SmtReadErrorKind, parser::CategoryErrorKind, read_smt},
 };
 
 /// Parses the whole input, feeding the commands to the given handler.
@@ -31,7 +31,7 @@ pub fn assert_error_span<E>(err: &SmtReadError<E>, start: u64, end: u64) {
 /// Parses the input, requires a parser error, checks the byte span the error carries,
 /// and returns its kind so that the caller can inspect the variant.
 #[track_caller]
-pub fn assert_parser_error(input: &[u8], start: u64, end: u64) -> CategoryParserErrorKind {
+pub fn assert_parser_error(input: &[u8], start: u64, end: u64) -> CategoryErrorKind {
     let err = parse(input).expect_err("expected a parser error, got Ok");
     assert_error_span(&err, start, end);
     match err.into_kind() {

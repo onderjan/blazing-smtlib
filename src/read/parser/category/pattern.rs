@@ -4,7 +4,7 @@ use crate::{
     SmtHandler, SmtPattern, SmtSimplePattern,
     read::parser::{
         ClosedMultipleParser, PairParser, ParserError, SymbolParser,
-        category::{CategoryParser, CategoryParserErrorKind},
+        category::{CategoryParser, CategoryErrorKind},
     },
     token::{Reserved, Token, TokenKind, TokenType},
 };
@@ -36,7 +36,7 @@ impl<H: SmtHandler> CategoryParser<H> for SimplePatternParser {
             TokenKind::Reserved(Reserved::Underscore) => SmtSimplePattern::Wildcard,
             _ => {
                 return Err(ParserError::category_error(
-                    CategoryParserErrorKind::ExpectedToken(&[
+                    CategoryErrorKind::ExpectedToken(&[
                         TokenType::Symbol,
                         TokenType::Reserved(Reserved::Underscore),
                     ]),
@@ -98,7 +98,7 @@ impl<H: SmtHandler> CategoryParser<H> for PatternParser<H> {
                 }
                 _ => {
                     return Err(ParserError::category_error(
-                        CategoryParserErrorKind::ExpectedToken(&[
+                        CategoryErrorKind::ExpectedToken(&[
                             TokenType::Symbol,
                             TokenType::Reserved(Reserved::Underscore),
                             TokenType::ParenOpen,
@@ -118,7 +118,7 @@ impl<H: SmtHandler> CategoryParser<H> for PatternParser<H> {
             // there must be at least one argument to the constructor
             if args.is_empty() {
                 return Err(ParserError::category_error(
-                    CategoryParserErrorKind::EmptyPatternArguments,
+                    CategoryErrorKind::EmptyPatternArguments,
                     span,
                 ));
             }

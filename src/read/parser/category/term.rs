@@ -5,7 +5,7 @@ use crate::{
     read::parser::{
         CloseParenParser, OpenParenParser, ParserError, SortedVarParser, SymbolParser,
         category::{
-            CategoryParser, CategoryParserErrorKind, attribute::ClosedMultipleAttributeParser,
+            CategoryParser, CategoryErrorKind, attribute::ClosedMultipleAttributeParser,
             parse_special_constant, pattern::PatternParser, qualified_ident::QualifiedIdentParser,
         },
         handle_err,
@@ -215,7 +215,7 @@ impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
                             // check that there is at least one attribute
                             if attributes.is_empty() {
                                 return Err(ParserError::category_error(
-                                    CategoryParserErrorKind::EmptyAnnotation,
+                                    CategoryErrorKind::EmptyAnnotation,
                                     span,
                                 ));
                             }
@@ -400,12 +400,12 @@ impl<H: SmtHandler> TermParser<H> {
                     ControlFlow::Break(num_opened) => {
                         // there must be at least one sorted variable in the binder
                         if num_opened == 0 {
-                            let err_kind: CategoryParserErrorKind = match binder_kind {
+                            let err_kind: CategoryErrorKind = match binder_kind {
                                 SortedBinderKind::Exists | SortedBinderKind::Forall => {
-                                    CategoryParserErrorKind::EmptyQuantifierBindings
+                                    CategoryErrorKind::EmptyQuantifierBindings
                                 }
                                 SortedBinderKind::Lambda => {
-                                    CategoryParserErrorKind::EmptyLambdaBindings
+                                    CategoryErrorKind::EmptyLambdaBindings
                                 }
                             };
                             return Err(ParserError::category_error(err_kind, span));
@@ -474,7 +474,7 @@ impl<H: SmtHandler> TermParser<H> {
                     // an application must contain at least one argument
                     if args.is_empty() {
                         return Err(ParserError::category_error(
-                            CategoryParserErrorKind::EmptyTermApplication,
+                            CategoryErrorKind::EmptyTermApplication,
                             token.span(),
                         ));
                     }
@@ -486,7 +486,7 @@ impl<H: SmtHandler> TermParser<H> {
                     Ok(ControlFlow::Break(term))
                 } else {
                     Err(ParserError::category_error(
-                        CategoryParserErrorKind::ExpectedTerm,
+                        CategoryErrorKind::ExpectedTerm,
                         token.span(),
                     ))
                 }
@@ -507,7 +507,7 @@ impl<H: SmtHandler> TermParser<H> {
                         Ok(ControlFlow::Break(term))
                     }
                     Err(_) => Err(ParserError::category_error(
-                        CategoryParserErrorKind::ExpectedTerm,
+                        CategoryErrorKind::ExpectedTerm,
                         span,
                     )),
                 }
@@ -583,7 +583,7 @@ impl<H: SmtHandler> TermParser<H> {
             }
             _ => {
                 return Err(ParserError::category_error(
-                    CategoryParserErrorKind::ExpectedOperator,
+                    CategoryErrorKind::ExpectedOperator,
                     span,
                 ));
             }
@@ -624,7 +624,7 @@ impl<H: SmtHandler> TermParser<H> {
                 // there must be at least one binding
                 if bindings.is_empty() {
                     return Err(ParserError::category_error(
-                        CategoryParserErrorKind::EmptyLetBindings,
+                        CategoryErrorKind::EmptyLetBindings,
                         span,
                     ));
                 }
@@ -642,7 +642,7 @@ impl<H: SmtHandler> TermParser<H> {
             _ => {
                 // expected open or close parenthesis
                 return Err(ParserError::category_error(
-                    CategoryParserErrorKind::ExpectedToken(&[
+                    CategoryErrorKind::ExpectedToken(&[
                         TokenType::ParenOpen,
                         TokenType::ParenClose,
                     ]),
@@ -672,7 +672,7 @@ impl<H: SmtHandler> TermParser<H> {
                 // there must be at least one case
                 if num_cases == 0 {
                     return Err(ParserError::category_error(
-                        CategoryParserErrorKind::EmptyMatchCases,
+                        CategoryErrorKind::EmptyMatchCases,
                         span,
                     ));
                 }
@@ -687,7 +687,7 @@ impl<H: SmtHandler> TermParser<H> {
             }
             _ => {
                 return Err(ParserError::category_error(
-                    CategoryParserErrorKind::ExpectedToken(&[
+                    CategoryErrorKind::ExpectedToken(&[
                         TokenType::ParenOpen,
                         TokenType::ParenClose,
                     ]),

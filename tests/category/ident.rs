@@ -69,13 +69,13 @@ fn continuations_after_open_paren_and_underscore() {
 fn errors() {
     let err = assert_error::<IdentParser>(b"1", 0, 1);
     assert!(
-        matches!(err, CategoryParserErrorKind::ExpectedIdent),
+        matches!(err, CategoryErrorKind::ExpectedIdent),
         "{err:?}"
     );
 
     let err = assert_error::<IdentParser>(b")", 0, 1);
     assert!(
-        matches!(err, CategoryParserErrorKind::ExpectedIdent),
+        matches!(err, CategoryErrorKind::ExpectedIdent),
         "{err:?}"
     );
 
@@ -84,7 +84,7 @@ fn errors() {
     assert!(
         matches!(
             err,
-            CategoryParserErrorKind::ExpectedToken(&[TokenType::Reserved(Reserved::Underscore)])
+            CategoryErrorKind::ExpectedToken(&[TokenType::Reserved(Reserved::Underscore)])
         ),
         "{err:?}"
     );
@@ -94,7 +94,7 @@ fn errors() {
     assert!(
         matches!(
             err,
-            CategoryParserErrorKind::ExpectedToken(&[TokenType::Symbol])
+            CategoryErrorKind::ExpectedToken(&[TokenType::Symbol])
         ),
         "{err:?}"
     );
@@ -102,26 +102,26 @@ fn errors() {
     // at least one index is required
     let err = assert_error::<IdentParser>(b"(_ f)", 4, 5);
     assert!(
-        matches!(err, CategoryParserErrorKind::EmptyIdentIndices),
+        matches!(err, CategoryErrorKind::EmptyIdentIndices),
         "{err:?}"
     );
 
     // indices are numerals or symbols only
     let err = assert_error::<IdentParser>(b"(_ f \"s\")", 5, 8);
     assert!(
-        matches!(err, CategoryParserErrorKind::ExpectedIndexOrCloseParen),
+        matches!(err, CategoryErrorKind::ExpectedIndexOrCloseParen),
         "{err:?}"
     );
     let err = assert_error::<IdentParser>(b"(_ f (a))", 5, 6);
     assert!(
-        matches!(err, CategoryParserErrorKind::ExpectedIndexOrCloseParen),
+        matches!(err, CategoryErrorKind::ExpectedIndexOrCloseParen),
         "{err:?}"
     );
 
     // EOF inside the indexed identifier
     let err = assert_error::<IdentParser>(b"(_ f 1", 6, 6);
     assert!(
-        matches!(err, CategoryParserErrorKind::ExpectedIndexOrCloseParen),
+        matches!(err, CategoryErrorKind::ExpectedIndexOrCloseParen),
         "{err:?}"
     );
 }

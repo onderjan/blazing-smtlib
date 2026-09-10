@@ -29,7 +29,7 @@ use smt_parser_rs::{
     read::{
         lexer::{LexError, Lexer},
         parser::{
-            CategoryParser, CategoryParserErrorKind, CloseParenParser, ClosedAttributeParser,
+            CategoryParser, CategoryErrorKind, CloseParenParser, ClosedAttributeParser,
             ClosedMultipleAttributeParser, ClosedMultipleParser, ClosedParser, IdentParser,
             KeywordParser, OpenParenParser, PairParser, ParenMultipleParser, ParenParser,
             ParserError, ParserErrorKind, QualifiedIdentParser, SExprParser, SortParser,
@@ -297,7 +297,7 @@ impl SmtHandler for Printing {
 // --- Driver ---
 
 /// A parse failure, as the error kind and the span it carries.
-type ParseFailure = (CategoryParserErrorKind, SmtSpan);
+type ParseFailure = (CategoryErrorKind, SmtSpan);
 
 /// Token handler that advances a category parser with each lexed token,
 /// collecting a wanted number of consecutive parser results, and counts
@@ -466,7 +466,7 @@ fn assert_error<P: CategoryParser<Printing>>(
     input: &[u8],
     start: u64,
     end: u64,
-) -> CategoryParserErrorKind {
+) -> CategoryErrorKind {
     match run::<P>(input) {
         Ok(_) => panic!("expected a parser error in {:?}, got Ok", text(input)),
         Err((kind, span)) => {

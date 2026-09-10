@@ -4,7 +4,7 @@ use crate::{
     SmtHandler, SmtIdent, SmtIndex, SmtSymbol,
     read::parser::{
         CategoryParserError, ParserError,
-        category::{CategoryParser, CategoryParserErrorKind},
+        category::{CategoryParser, CategoryErrorKind},
     },
     token::{Reserved, Token, TokenKind, TokenType},
 };
@@ -87,7 +87,7 @@ impl<H: SmtHandler> CategoryParser<H> for IdentParser {
                     self.state = State::Open;
                 }
                 _ => {
-                    let kind = CategoryParserErrorKind::ExpectedIdent;
+                    let kind = CategoryErrorKind::ExpectedIdent;
                     return Err(CategoryParserError::new(kind, span).into());
                 }
             },
@@ -96,7 +96,7 @@ impl<H: SmtHandler> CategoryParser<H> for IdentParser {
                 if matches!(token.kind(), TokenKind::Reserved(Reserved::Underscore)) {
                     self.state = State::AfterUnderscore;
                 } else {
-                    let kind = CategoryParserErrorKind::ExpectedToken(&[TokenType::Reserved(
+                    let kind = CategoryErrorKind::ExpectedToken(&[TokenType::Reserved(
                         Reserved::Underscore,
                     )]);
                     return Err(CategoryParserError::new(kind, span).into());
@@ -109,7 +109,7 @@ impl<H: SmtHandler> CategoryParser<H> for IdentParser {
                         if let TokenKind::Symbol(name) = token.kind() {
                             Some(name.into_owned())
                         } else {
-                            let kind = CategoryParserErrorKind::ExpectedToken(&[TokenType::Symbol]);
+                            let kind = CategoryErrorKind::ExpectedToken(&[TokenType::Symbol]);
                             return Err(CategoryParserError::new(kind, span).into());
                         }
                     }
@@ -119,7 +119,7 @@ impl<H: SmtHandler> CategoryParser<H> for IdentParser {
                         match token.kind() {
                             TokenKind::ParenClose => {
                                 if self.indices.is_empty() {
-                                    let kind = CategoryParserErrorKind::EmptyIdentIndices;
+                                    let kind = CategoryErrorKind::EmptyIdentIndices;
                                     return Err(CategoryParserError::new(kind, span).into());
                                 }
                                 let indices = self.indices.drain(..).collect();
@@ -136,7 +136,7 @@ impl<H: SmtHandler> CategoryParser<H> for IdentParser {
                                     .push(SmtIndex::Symbol(index_symbol.into_owned()));
                             }
                             _ => {
-                                let kind = CategoryParserErrorKind::ExpectedIndexOrCloseParen;
+                                let kind = CategoryErrorKind::ExpectedIndexOrCloseParen;
                                 return Err(CategoryParserError::new(kind, span).into());
                             }
                         }

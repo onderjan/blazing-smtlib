@@ -96,17 +96,14 @@ fn entry_points() {
 #[test]
 fn errors() {
     let err = assert_error::<QualifiedIdentParser<Printing>>(b"1", 0, 1);
-    assert!(
-        matches!(err, CategoryParserErrorKind::ExpectedIdent),
-        "{err:?}"
-    );
+    assert!(matches!(err, CategoryErrorKind::ExpectedIdent), "{err:?}");
 
     // after `(` only `_` or `as` may follow
     let err = assert_error::<QualifiedIdentParser<Printing>>(b"(f 1)", 1, 2);
     assert!(
         matches!(
             err,
-            CategoryParserErrorKind::ExpectedToken(&[
+            CategoryErrorKind::ExpectedToken(&[
                 TokenType::Reserved(Reserved::Underscore),
                 TokenType::Reserved(Reserved::As)
             ])
@@ -116,29 +113,20 @@ fn errors() {
 
     // `as` must be followed by an identifier
     let err = assert_error::<QualifiedIdentParser<Printing>>(b"(as)", 3, 4);
-    assert!(
-        matches!(err, CategoryParserErrorKind::ExpectedIdent),
-        "{err:?}"
-    );
+    assert!(matches!(err, CategoryErrorKind::ExpectedIdent), "{err:?}");
     let err = assert_error::<QualifiedIdentParser<Printing>>(b"(as 1 Bool)", 4, 5);
-    assert!(
-        matches!(err, CategoryParserErrorKind::ExpectedIdent),
-        "{err:?}"
-    );
+    assert!(matches!(err, CategoryErrorKind::ExpectedIdent), "{err:?}");
 
     // ... and a sort
     let err = assert_error::<QualifiedIdentParser<Printing>>(b"(as x)", 5, 6);
-    assert!(
-        matches!(err, CategoryParserErrorKind::ExpectedSort),
-        "{err:?}"
-    );
+    assert!(matches!(err, CategoryErrorKind::ExpectedSort), "{err:?}");
 
     // ... and the closing parenthesis
     let err = assert_error::<QualifiedIdentParser<Printing>>(b"(as x Bool z)", 11, 12);
     assert!(
         matches!(
             err,
-            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
+            CategoryErrorKind::ExpectedToken(&[TokenType::ParenClose])
         ),
         "{err:?}"
     );
@@ -148,7 +136,7 @@ fn errors() {
     assert!(
         matches!(
             err,
-            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
+            CategoryErrorKind::ExpectedToken(&[TokenType::ParenClose])
         ),
         "{err:?}"
     );

@@ -9,7 +9,7 @@ use crate::{
     CommandHandler, SmtSpan,
     read::{
         lexer::{LexError, Lexer, LexerError, LexerErrorKind},
-        parser::{CategoryParserErrorKind, Parser, ParserError, ParserErrorKind},
+        parser::{CategoryErrorKind, Parser, ParserError, ParserErrorKind},
     },
 };
 
@@ -23,7 +23,7 @@ pub enum SmtReadErrorKind<E> {
     /// The error occurred when lexing.
     Lexer(LexerErrorKind),
     /// The error occurred when parsing.
-    Parser(CategoryParserErrorKind),
+    Parser(CategoryErrorKind),
     /// The error occurred in the user handler.
     Handler(E),
 }

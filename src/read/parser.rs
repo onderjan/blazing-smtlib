@@ -13,7 +13,7 @@ pub use command::*;
 
 #[derive(Debug)]
 pub enum ParserErrorKind<E> {
-    Category(CategoryParserErrorKind),
+    Category(CategoryErrorKind),
     Handler(E),
 }
 
@@ -32,7 +32,7 @@ impl<E> ParserError<E> {
         Self::new(ParserErrorKind::Handler(err), span)
     }
 
-    pub(crate) fn category_error(err: CategoryParserErrorKind, span: SmtSpan) -> Self {
+    pub(crate) fn category_error(err: CategoryErrorKind, span: SmtSpan) -> Self {
         Self::new(ParserErrorKind::Category(err), span)
     }
 
@@ -112,7 +112,7 @@ impl<'a, H: CommandHandler> TokenHandler for Parser<'a, H> {
                     }
                     _ => {
                         return Err(CategoryParserError::new(
-                            CategoryParserErrorKind::ExpectedCommand,
+                            CategoryErrorKind::ExpectedCommand,
                             span,
                         )
                         .into());
@@ -123,7 +123,7 @@ impl<'a, H: CommandHandler> TokenHandler for Parser<'a, H> {
                 // expect a symbol identifying the command
                 let TokenKind::Symbol(command_name) = token.kind() else {
                     return Err(CategoryParserError::new(
-                        CategoryParserErrorKind::ExpectedCommandName,
+                        CategoryErrorKind::ExpectedCommandName,
                         span,
                     )
                     .into());

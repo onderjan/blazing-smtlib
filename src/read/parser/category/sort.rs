@@ -4,7 +4,7 @@ use crate::{
     SmtHandler, SmtIdent, SmtSort,
     read::parser::{
         ParserError,
-        category::{CategoryParser, CategoryParserErrorKind, ident::IdentParser},
+        category::{CategoryParser, CategoryErrorKind, ident::IdentParser},
         handle_err,
     },
     token::{Reserved, Token, TokenKind},
@@ -98,7 +98,7 @@ impl<H: SmtHandler> CategoryParser<H> for SortParser<H> {
                             // there must be at least one of them
                             if last_level.applied.is_empty() {
                                 return Err(ParserError::category_error(
-                                    CategoryParserErrorKind::EmptySortApplication,
+                                    CategoryErrorKind::EmptySortApplication,
                                     span,
                                 ));
                             }
@@ -107,7 +107,7 @@ impl<H: SmtHandler> CategoryParser<H> for SortParser<H> {
                         None => {
                             // we just received ")"
                             return Err(ParserError::category_error(
-                                CategoryParserErrorKind::ExpectedSort,
+                                CategoryErrorKind::ExpectedSort,
                                 span,
                             ));
                         }
@@ -115,7 +115,7 @@ impl<H: SmtHandler> CategoryParser<H> for SortParser<H> {
                 }
                 _ => {
                     return Err(ParserError::category_error(
-                        CategoryParserErrorKind::ExpectedSort,
+                        CategoryErrorKind::ExpectedSort,
                         span,
                     ));
                 }
@@ -146,7 +146,7 @@ impl<H: SmtHandler> CategoryParser<H> for SortParser<H> {
                     }
                     _ => {
                         return Err(ParserError::category_error(
-                            CategoryParserErrorKind::ExpectedSortInner,
+                            CategoryErrorKind::ExpectedSortInner,
                             span,
                         ));
                     }

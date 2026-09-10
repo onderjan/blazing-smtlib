@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     CommandHandler, SmtFunctionSignature,
     read::parser::{
-        CategoryParser, CategoryParserErrorKind, PairParser, ParenMaximumParser,
+        CategoryParser, CategoryErrorKind, PairParser, ParenMaximumParser,
         ParenMultipleParser, ParenParser, ParenSortedVarsParser, ParserError, SortParser,
         SymbolParser, TermParser, handle_err,
     },
@@ -165,7 +165,7 @@ impl<H: CommandHandler> CategoryParser<H> for DefineFunsRecParser<H> {
                     // there must be at least one signature
                     if signatures.is_empty() {
                         return Err(ParserError::category_error(
-                            CategoryParserErrorKind::EmptyFunctionSignatures,
+                            CategoryErrorKind::EmptyFunctionSignatures,
                             span,
                         ));
                     }
@@ -188,7 +188,7 @@ impl<H: CommandHandler> CategoryParser<H> for DefineFunsRecParser<H> {
                     if bodies.len() != self.num_signatures {
                         // not enough bodies processed
                         return Err(ParserError::category_error(
-                            CategoryParserErrorKind::ExpectedFunctionBody,
+                            CategoryErrorKind::ExpectedFunctionBody,
                             span,
                         ));
                     }

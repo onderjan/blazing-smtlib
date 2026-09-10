@@ -5,7 +5,7 @@ use crate::{
     read::parser::{
         ClosedParser, PairParser, ParserError,
         category::{
-            CategoryParser, CategoryParserError, CategoryParserErrorKind, ident::IdentParser,
+            CategoryParser, CategoryParserError, CategoryErrorKind, ident::IdentParser,
             sort::SortParser,
         },
     },
@@ -96,7 +96,7 @@ impl<H: SmtHandler> CategoryParser<H> for QualifiedIdentParser<H> {
                 }
                 TokenKind::ParenOpen => self.state = State::Open,
                 _ => {
-                    let kind = CategoryParserErrorKind::ExpectedIdent;
+                    let kind = CategoryErrorKind::ExpectedIdent;
                     return Err(CategoryParserError::new(kind, span).into());
                 }
             },
@@ -113,7 +113,7 @@ impl<H: SmtHandler> CategoryParser<H> for QualifiedIdentParser<H> {
                         self.state = State::Qualified;
                     }
                     _ => {
-                        let kind = CategoryParserErrorKind::ExpectedToken(&[
+                        let kind = CategoryErrorKind::ExpectedToken(&[
                             TokenType::Reserved(Reserved::Underscore),
                             TokenType::Reserved(Reserved::As),
                         ]);

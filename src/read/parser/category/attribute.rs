@@ -5,7 +5,7 @@ use crate::{
     read::parser::{
         CloseParenParser, ClosedMultipleParser, ParserError,
         category::{
-            CategoryParser, CategoryParserErrorKind, parse_special_constant, s_expr::SExprParser,
+            CategoryParser, CategoryErrorKind, parse_special_constant, s_expr::SExprParser,
         },
         handle_err,
     },
@@ -105,7 +105,7 @@ impl<H: SmtHandler, C: AttributeCollection<H>> CategoryParser<H> for CollectingP
                     }
                     _ => {
                         return Err(ParserError::category_error(
-                            CategoryParserErrorKind::ExpectedAttribute,
+                            CategoryErrorKind::ExpectedAttribute,
                             span,
                         ));
                     }
@@ -149,7 +149,7 @@ impl<H: SmtHandler, C: AttributeCollection<H>> CategoryParser<H> for CollectingP
                             )
                         } else {
                             return Err(ParserError::category_error(
-                                CategoryParserErrorKind::ExpectedAttribute,
+                                CategoryErrorKind::ExpectedAttribute,
                                 span,
                             ));
                         }
@@ -173,7 +173,7 @@ impl<H: SmtHandler, C: AttributeCollection<H>> CategoryParser<H> for CollectingP
                         if !self.collection.next_allowed() {
                             // it turns out that we actually expected a closing parenthesis
                             return Err(ParserError::category_error(
-                                CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose]),
+                                CategoryErrorKind::ExpectedToken(&[TokenType::ParenClose]),
                                 span,
                             ));
                         }
@@ -236,7 +236,7 @@ impl<H: SmtHandler> AttributeCollection<H> for SingleAttribute<H> {
         match self.0.take() {
             Some(attribute) => Ok(attribute),
             None => Err(ParserError::category_error(
-                CategoryParserErrorKind::ExpectedAttribute,
+                CategoryErrorKind::ExpectedAttribute,
                 span,
             )),
         }

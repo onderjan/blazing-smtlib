@@ -93,7 +93,7 @@ fn empty_application_is_rejected() {
     // an application must have at least one argument
     let err = assert_error::<TermParser<Printing>>(b"(f)", 2, 3);
     assert!(
-        matches!(err, CategoryParserErrorKind::EmptyTermApplication),
+        matches!(err, CategoryErrorKind::EmptyTermApplication),
         "{err:?}"
     );
 }
@@ -124,7 +124,7 @@ fn lets() {
 fn let_errors() {
     let err = assert_error::<TermParser<Printing>>(b"(let () x)", 6, 7);
     assert!(
-        matches!(err, CategoryParserErrorKind::EmptyLetBindings),
+        matches!(err, CategoryErrorKind::EmptyLetBindings),
         "{err:?}"
     );
 
@@ -132,7 +132,7 @@ fn let_errors() {
     assert!(
         matches!(
             err,
-            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenOpen])
+            CategoryErrorKind::ExpectedToken(&[TokenType::ParenOpen])
         ),
         "{err:?}"
     );
@@ -141,7 +141,7 @@ fn let_errors() {
     assert!(
         matches!(
             err,
-            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenOpen, TokenType::ParenClose])
+            CategoryErrorKind::ExpectedToken(&[TokenType::ParenOpen, TokenType::ParenClose])
         ),
         "{err:?}"
     );
@@ -150,7 +150,7 @@ fn let_errors() {
     assert!(
         matches!(
             err,
-            CategoryParserErrorKind::ExpectedToken(&[TokenType::Symbol])
+            CategoryErrorKind::ExpectedToken(&[TokenType::Symbol])
         ),
         "{err:?}"
     );
@@ -159,7 +159,7 @@ fn let_errors() {
     assert!(
         matches!(
             err,
-            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
+            CategoryErrorKind::ExpectedToken(&[TokenType::ParenClose])
         ),
         "{err:?}"
     );
@@ -168,7 +168,7 @@ fn let_errors() {
     assert!(
         matches!(
             err,
-            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
+            CategoryErrorKind::ExpectedToken(&[TokenType::ParenClose])
         ),
         "{err:?}"
     );
@@ -178,53 +178,53 @@ fn let_errors() {
 fn errors() {
     let err = assert_error::<TermParser<Printing>>(b")", 0, 1);
     assert!(
-        matches!(err, CategoryParserErrorKind::ExpectedTerm),
+        matches!(err, CategoryErrorKind::ExpectedTerm),
         "{err:?}"
     );
 
     let err = assert_error::<TermParser<Printing>>(b":kw", 0, 3);
     assert!(
-        matches!(err, CategoryParserErrorKind::ExpectedTerm),
+        matches!(err, CategoryErrorKind::ExpectedTerm),
         "{err:?}"
     );
 
     let err = assert_error::<TermParser<Printing>>(b"", 0, 0);
     assert!(
-        matches!(err, CategoryParserErrorKind::ExpectedTerm),
+        matches!(err, CategoryErrorKind::ExpectedTerm),
         "{err:?}"
     );
 
     // the operator position takes a symbol, a reserved binder, `_` or `(`
     let err = assert_error::<TermParser<Printing>>(b"(1 x)", 1, 2);
     assert!(
-        matches!(err, CategoryParserErrorKind::ExpectedOperator),
+        matches!(err, CategoryErrorKind::ExpectedOperator),
         "{err:?}"
     );
 
     let err = assert_error::<TermParser<Printing>>(b"()", 1, 2);
     assert!(
-        matches!(err, CategoryParserErrorKind::ExpectedOperator),
+        matches!(err, CategoryErrorKind::ExpectedOperator),
         "{err:?}"
     );
 
     // bad argument
     let err = assert_error::<TermParser<Printing>>(b"(f x :kw)", 5, 8);
     assert!(
-        matches!(err, CategoryParserErrorKind::ExpectedTerm),
+        matches!(err, CategoryErrorKind::ExpectedTerm),
         "{err:?}"
     );
 
     // EOF inside an application is a missing term
     let err = assert_error::<TermParser<Printing>>(b"(f x", 4, 4);
     assert!(
-        matches!(err, CategoryParserErrorKind::ExpectedTerm),
+        matches!(err, CategoryErrorKind::ExpectedTerm),
         "{err:?}"
     );
 
     // bad indexed identifier in a term
     let err = assert_error::<TermParser<Printing>>(b"(_ f)", 4, 5);
     assert!(
-        matches!(err, CategoryParserErrorKind::EmptyIdentIndices),
+        matches!(err, CategoryErrorKind::EmptyIdentIndices),
         "{err:?}"
     );
 }
@@ -396,19 +396,19 @@ fn binder_errors() {
     // a quantifier must bind at least one variable
     let err = assert_error::<TermParser<Printing>>(b"(forall () x)", 9, 10);
     assert!(
-        matches!(err, CategoryParserErrorKind::EmptyQuantifierBindings),
+        matches!(err, CategoryErrorKind::EmptyQuantifierBindings),
         "{err:?}"
     );
     let err = assert_error::<TermParser<Printing>>(b"(exists () x)", 9, 10);
     assert!(
-        matches!(err, CategoryParserErrorKind::EmptyQuantifierBindings),
+        matches!(err, CategoryErrorKind::EmptyQuantifierBindings),
         "{err:?}"
     );
 
     // so must a lambda, with its own error kind
     let err = assert_error::<TermParser<Printing>>(b"(lambda () x)", 9, 10);
     assert!(
-        matches!(err, CategoryParserErrorKind::EmptyLambdaBindings),
+        matches!(err, CategoryErrorKind::EmptyLambdaBindings),
         "{err:?}"
     );
 
@@ -417,7 +417,7 @@ fn binder_errors() {
     assert!(
         matches!(
             err,
-            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenOpen])
+            CategoryErrorKind::ExpectedToken(&[TokenType::ParenOpen])
         ),
         "{err:?}"
     );
@@ -425,14 +425,14 @@ fn binder_errors() {
     // a variable must have a sort
     let err = assert_error::<TermParser<Printing>>(b"(forall ((x)) x)", 11, 12);
     assert!(
-        matches!(err, CategoryParserErrorKind::ExpectedSort),
+        matches!(err, CategoryErrorKind::ExpectedSort),
         "{err:?}"
     );
 
     // EOF before the body is a missing term
     let err = assert_error::<TermParser<Printing>>(b"(forall ((x Int))", 17, 17);
     assert!(
-        matches!(err, CategoryParserErrorKind::ExpectedTerm),
+        matches!(err, CategoryErrorKind::ExpectedTerm),
         "{err:?}"
     );
 }
@@ -442,14 +442,14 @@ fn annotation_errors() {
     // an annotation must contain at least one attribute
     let err = assert_error::<TermParser<Printing>>(b"(! x)", 4, 5);
     assert!(
-        matches!(err, CategoryParserErrorKind::EmptyAnnotation),
+        matches!(err, CategoryErrorKind::EmptyAnnotation),
         "{err:?}"
     );
 
     // an annotation must contain a term
     let err = assert_error::<TermParser<Printing>>(b"(!)", 2, 3);
     assert!(
-        matches!(err, CategoryParserErrorKind::ExpectedTerm),
+        matches!(err, CategoryErrorKind::ExpectedTerm),
         "{err:?}"
     );
 }
@@ -707,7 +707,7 @@ fn match_errors() {
     // the scrutinee is required
     let err = assert_error::<TermParser<Printing>>(b"(match)", 6, 7);
     assert!(
-        matches!(err, CategoryParserErrorKind::ExpectedTerm),
+        matches!(err, CategoryErrorKind::ExpectedTerm),
         "{err:?}"
     );
     // the case list is required
@@ -715,14 +715,14 @@ fn match_errors() {
     assert!(
         matches!(
             err,
-            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenOpen])
+            CategoryErrorKind::ExpectedToken(&[TokenType::ParenOpen])
         ),
         "{err:?}"
     );
     // at least one case is required
     let err = assert_error::<TermParser<Printing>>(b"(match x ())", 10, 11);
     assert!(
-        matches!(err, CategoryParserErrorKind::EmptyMatchCases),
+        matches!(err, CategoryErrorKind::EmptyMatchCases),
         "{err:?}"
     );
     // each case is parenthesized
@@ -730,7 +730,7 @@ fn match_errors() {
     assert!(
         matches!(
             err,
-            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenOpen, TokenType::ParenClose])
+            CategoryErrorKind::ExpectedToken(&[TokenType::ParenOpen, TokenType::ParenClose])
         ),
         "{err:?}"
     );
@@ -739,7 +739,7 @@ fn match_errors() {
     assert!(
         matches!(
             err,
-            CategoryParserErrorKind::ExpectedToken(&[
+            CategoryErrorKind::ExpectedToken(&[
                 TokenType::Symbol,
                 TokenType::Reserved(Reserved::Underscore),
                 TokenType::ParenOpen
@@ -750,7 +750,7 @@ fn match_errors() {
     // a constructor application has at least one argument
     let err = assert_error::<TermParser<Printing>>(b"(match x (((c) y)))", 13, 14);
     assert!(
-        matches!(err, CategoryParserErrorKind::EmptyPatternArguments),
+        matches!(err, CategoryErrorKind::EmptyPatternArguments),
         "{err:?}"
     );
     // the constructor is a symbol, not a wildcard or a constant
@@ -758,7 +758,7 @@ fn match_errors() {
     assert!(
         matches!(
             err,
-            CategoryParserErrorKind::ExpectedToken(&[TokenType::Symbol])
+            CategoryErrorKind::ExpectedToken(&[TokenType::Symbol])
         ),
         "{err:?}"
     );
@@ -766,7 +766,7 @@ fn match_errors() {
     assert!(
         matches!(
             err,
-            CategoryParserErrorKind::ExpectedToken(&[TokenType::Symbol])
+            CategoryErrorKind::ExpectedToken(&[TokenType::Symbol])
         ),
         "{err:?}"
     );
@@ -775,7 +775,7 @@ fn match_errors() {
     assert!(
         matches!(
             err,
-            CategoryParserErrorKind::ExpectedToken(&[
+            CategoryErrorKind::ExpectedToken(&[
                 TokenType::Symbol,
                 TokenType::Reserved(Reserved::Underscore)
             ])
@@ -786,7 +786,7 @@ fn match_errors() {
     assert!(
         matches!(
             err,
-            CategoryParserErrorKind::ExpectedToken(&[
+            CategoryErrorKind::ExpectedToken(&[
                 TokenType::Symbol,
                 TokenType::Reserved(Reserved::Underscore)
             ])
@@ -796,7 +796,7 @@ fn match_errors() {
     // the case body is required
     let err = assert_error::<TermParser<Printing>>(b"(match x ((y)))", 12, 13);
     assert!(
-        matches!(err, CategoryParserErrorKind::ExpectedTerm),
+        matches!(err, CategoryErrorKind::ExpectedTerm),
         "{err:?}"
     );
     // exactly one case body
@@ -804,7 +804,7 @@ fn match_errors() {
     assert!(
         matches!(
             err,
-            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
+            CategoryErrorKind::ExpectedToken(&[TokenType::ParenClose])
         ),
         "{err:?}"
     );
@@ -813,7 +813,7 @@ fn match_errors() {
     assert!(
         matches!(
             err,
-            CategoryParserErrorKind::ExpectedToken(&[TokenType::ParenClose])
+            CategoryErrorKind::ExpectedToken(&[TokenType::ParenClose])
         ),
         "{err:?}"
     );

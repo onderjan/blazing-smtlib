@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
 
 use crate::{
     SmtHandler, SmtKeyword, SmtNumeral, SmtStringContent, SmtSymbol,
-    read::parser::{CategoryParser, CategoryParserErrorKind, ParserError},
+    read::parser::{CategoryErrorKind, CategoryParser, ParserError},
     token::{Token, TokenKind, TokenType},
 };
 
@@ -33,7 +33,7 @@ macro_rules! token_parser {
                 match token.kind() {
                     $pattern => Ok($value),
                     _ => Err(ParserError::category_error(
-                        CategoryParserErrorKind::ExpectedToken($expected),
+                        CategoryErrorKind::ExpectedToken($expected),
                         span,
                     )),
                 }

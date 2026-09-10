@@ -11,7 +11,7 @@ use smt_parser_rs::{
     SmtSExpr, SmtSort, SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm,
     read::{
         SmtReadErrorKind,
-        parser::{CategoryParserErrorKind, ClosedParser, CommandAction, CommandParser, TermParser},
+        parser::{CategoryErrorKind, ClosedParser, CommandAction, CommandParser, TermParser},
     },
 };
 
@@ -29,7 +29,7 @@ fn bare_symbol_is_whole_token() {
     // a command must be parenthesized; the whole symbol token is the span
     let err = assert_parser_error(b"check-sat", 0, 9);
     assert!(
-        matches!(err, CategoryParserErrorKind::ExpectedCommand),
+        matches!(err, CategoryErrorKind::ExpectedCommand),
         "{err:?}"
     );
 }
@@ -38,7 +38,7 @@ fn bare_symbol_is_whole_token() {
 fn missing_term_points_at_close_paren() {
     let err = assert_parser_error(b"(check-sat)\n(assert )", 20, 21);
     assert!(
-        matches!(err, CategoryParserErrorKind::ExpectedTerm),
+        matches!(err, CategoryErrorKind::ExpectedTerm),
         "{err:?}"
     );
 }
@@ -47,7 +47,7 @@ fn missing_term_points_at_close_paren() {
 fn numeral_as_command_name() {
     let err = assert_parser_error(b"(set-logic QF_UF)\n(1)", 19, 20);
     assert!(
-        matches!(err, CategoryParserErrorKind::ExpectedCommandName),
+        matches!(err, CategoryErrorKind::ExpectedCommandName),
         "{err:?}"
     );
 }
@@ -468,7 +468,7 @@ fn nonstandard_command_body_is_checked() {
     let err = parse_with(&mut handler, b"(my-assert )").expect_err("expected a parser error");
     assert_error_span(&err, 11, 12);
     match err.kind() {
-        SmtReadErrorKind::Parser(CategoryParserErrorKind::ExpectedTerm) => {}
+        SmtReadErrorKind::Parser(CategoryErrorKind::ExpectedTerm) => {}
         SmtReadErrorKind::Parser(kind) => panic!("unexpected parser error {kind:?}"),
         SmtReadErrorKind::Handler(_) => panic!("unexpected handler error"),
         _ => panic!("unexpected error kind"),
