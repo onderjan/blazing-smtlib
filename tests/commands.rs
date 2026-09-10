@@ -148,7 +148,7 @@ impl SmtHandler for Resolving {
         })
     }
 
-    fn handle_term(&mut self, term: SmtTerm<Self>) -> Result<String, String> {
+    fn handle_term(&mut self, term: SmtTerm<'_, Self>) -> Result<String, String> {
         Ok(match term {
             SmtTerm::SpecialConstant(constant) => match constant {
                 SmtSpecialConstant::Numeral(numeral) => text(numeral.as_slice()),
@@ -159,7 +159,7 @@ impl SmtHandler for Resolving {
             }
             SmtTerm::Application(application) => {
                 let function = self.resolve_term_ident(&application.function.ident);
-                format!("({} {})", function, application.args.join(" "))
+                format!("({} {})", function, application.args.as_slice().join(" "))
             }
         })
     }

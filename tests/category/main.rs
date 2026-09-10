@@ -142,7 +142,7 @@ impl SmtHandler for Printing {
         })
     }
 
-    fn handle_term(&mut self, term: SmtTerm<Self>) -> Result<String, Infallible> {
+    fn handle_term(&mut self, term: SmtTerm<'_, Self>) -> Result<String, Infallible> {
         Ok(match term {
             SmtTerm::SpecialConstant(constant) => render_constant(&constant),
             SmtTerm::QualifiedIdent(qualified_ident) => render_qualified_ident(&qualified_ident),

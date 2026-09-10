@@ -16,7 +16,7 @@ pub trait SmtHandler {
     type Term;
 
     fn handle_sort(&mut self, sort: SmtSort<Self>) -> Result<Self::Sort, Self::Error>;
-    fn handle_term(&mut self, term: SmtTerm<Self>) -> Result<Self::Term, Self::Error>;
+    fn handle_term(&mut self, term: SmtTerm<'_, Self>) -> Result<Self::Term, Self::Error>;
     fn handle_s_expr(&mut self, expr: SmtSExpr<Self>) -> Result<Self::SExpr, Self::Error>;
     fn handle_attribute(
         &mut self,
@@ -385,7 +385,7 @@ impl SmtHandler for CheckStandardSyntax {
     }
 
     #[inline]
-    fn handle_term(&mut self, _term: SmtTerm<Self>) -> Result<Self::Term, Self::Error> {
+    fn handle_term(&mut self, _term: SmtTerm<'_, Self>) -> Result<Self::Term, Self::Error> {
         Ok(())
     }
 

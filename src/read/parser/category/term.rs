@@ -1,7 +1,8 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtApplication, SmtHandler, SmtQualifiedIdent, SmtQuantifierKind, SmtSymbol, SmtTerm,
+    SmtApplication, SmtHandler, SmtMultiple, SmtQualifiedIdent, SmtQuantifierKind, SmtSymbol,
+    SmtTerm,
     read::parser::{
         CloseParenParser, IdentSlot, OpenParenParser, ParserError, ParserResources, SortSlot,
         SortedVarSlot, SymbolParser,
@@ -101,7 +102,8 @@ enum Level<H: SmtHandler + ?Sized> {
     /// It is closed by a closing parenthesis instead of the inner term.
     Application {
         ident: SmtQualifiedIdent<H>,
-        args: Vec<H::Term>,
+        /// The arguments are terms stored in the arena starting at this position.
+        arena_args_start: usize,
     },
     /// A let waiting for a binding term.
     ///
@@ -278,9 +280,11 @@ impl<H: SmtHandler> TermSlot<H> {
 
         // update the last level with the term
         match last_level {
-            Level::Application { args, .. } => {
-                // add term as the next argument
-                args.push(term);
+            Level::Application { .. } => {
+                // push the produced term into the term arena
+                // there no need to update anything else as lower-level terms
+                // remember where their arguments start im the arena
+                resources.store.terms.push(term);
             }
             Level::LetBinding {
                 bindings,
@@ -361,7 +365,7 @@ impl<H: SmtHandler> TermSlot<H> {
                 if slot.levels.is_empty() {
                     debug_assert!(slot.is_pristine(), "must be pristine when starting");
                 }
-                slot.parse_term_start(handler, token)
+                Self::parse_term_start(handler, resources, token)
             }
             State::Open => {
                 Self::parse_term_open(resources, token)?;
@@ -395,7 +399,7 @@ impl<H: SmtHandler> TermSlot<H> {
                         // start a new level
                         slot.start_level(Level::Application {
                             ident,
-                            args: Vec::new(),
+                            arena_args_start: resources.store.terms.len(),
                         });
                         Ok(ControlFlow::Continue(()))
                     }
@@ -518,48 +522,64 @@ impl<H: SmtHandler> TermSlot<H> {
 
     #[inline]
     fn parse_term_start(
-        &mut self,
         handler: &mut H,
+        resources: &mut ParserResources<H>,
         token: &Token,
     ) -> Result<ControlFlow<H::Term>, ParserError<H::Error>> {
         let span = token.span();
+        let slot = &mut resources.term_slot;
         let term = match token.kind() {
             TokenKind::ParenOpen => {
                 // application, binder, or annotation
                 // move to operator parsing
-                self.state = State::Open;
+                slot.state = State::Open;
                 return Ok(ControlFlow::Continue(()));
             }
             TokenKind::ParenClose => {
                 // this is only permitted when we are ending an application
-                // pop the level and construct it
-                let Some(Level::Application { ident, args }) = self.levels.pop() else {
+                // pop the level
+                let Some(Level::Application {
+                    ident,
+                    arena_args_start,
+                }) = slot.levels.pop()
+                else {
                     return Err(ParserError::category_error(
                         CategoryErrorKind::ExpectedTerm,
                         span,
                     ));
                 };
-                // an application must contain at least one argument
-                if args.is_empty() {
+                let store = &mut resources.store;
+                // the application must contain at least one argument
+                if store.terms.len() == arena_args_start {
                     return Err(ParserError::category_error(
                         CategoryErrorKind::EmptyTermApplication,
                         span,
                     ));
                 }
-                SmtTerm::Application(SmtApplication {
+                // construct and handle the term
+                let term = SmtTerm::Application(SmtApplication {
                     function: ident,
-                    args,
-                })
+                    args: SmtMultiple::new(&mut store.terms, arena_args_start),
+                });
+                let term = handle_err(handler.handle_term(term), span)?;
+                // the term arguments are consumed, ensure they are removed from the arena
+                store.terms.truncate(arena_args_start);
+                term
             }
             TokenKind::Symbol(name) => {
                 // a term that is a qualified identifier that is just a symbol
-                SmtTerm::QualifiedIdent(SmtQualifiedIdent::new_simple(name.into_owned()))
+                let term =
+                    SmtTerm::QualifiedIdent(SmtQualifiedIdent::new_simple(name.into_owned()));
+                handle_err(handler.handle_term(term), span)?
             }
             kind => {
                 // handle special constants
                 match parse_special_constant(kind) {
-                    // a term that is just a special constant
-                    Ok(special_constant) => SmtTerm::SpecialConstant(special_constant),
+                    Ok(special_constant) => {
+                        // a term that is just a special constant
+                        let term = SmtTerm::SpecialConstant(special_constant);
+                        handle_err(handler.handle_term(term), span)?
+                    }
                     Err(_) => {
                         return Err(ParserError::category_error(
                             CategoryErrorKind::ExpectedTerm,
@@ -569,8 +589,6 @@ impl<H: SmtHandler> TermSlot<H> {
                 }
             }
         };
-        // handle the the term and hand it over
-        let term = handle_err(handler.handle_term(term), span)?;
         Ok(ControlFlow::Break(term))
     }
 
@@ -585,11 +603,11 @@ impl<H: SmtHandler> TermSlot<H> {
         let state = match token.kind() {
             TokenKind::Symbol(fn_name) => {
                 // this is an application where the function identifier is just a symbol
-                // start a new level
+                // start a new level, remember where its arguments will start in the arena
                 let fn_ident = SmtQualifiedIdent::new_simple(fn_name.into_owned());
                 slot.start_level(Level::Application {
                     ident: fn_ident,
-                    args: Vec::new(),
+                    arena_args_start: resources.store.terms.len(),
                 });
                 return Ok(());
             }
@@ -726,7 +744,7 @@ impl<H: SmtHandler> TermSlot<H> {
 
     /// Parses an opening of a let binding.
     ///
-    /// This cannot prodcue a term as we still need the parenthesis
+    /// This cannot produce a term as we still need the parenthesis
     /// that closes the match cases followed by the rest of the term.
     fn parse_match_case_open(
         &mut self,

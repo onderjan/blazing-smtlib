@@ -1,8 +1,8 @@
 use std::fmt::Debug;
 
 use crate::{
-    SmtBinDigits, SmtDecimal, SmtHandler, SmtHexDigits, SmtKeyword, SmtNumeral, SmtStringContent,
-    SmtSymbol, token::Reserved,
+    SmtBinDigits, SmtDecimal, SmtHandler, SmtHexDigits, SmtKeyword, SmtMultiple, SmtNumeral,
+    SmtStringContent, SmtSymbol, token::Reserved,
 };
 
 #[derive(Debug, Clone)]
@@ -111,13 +111,18 @@ where
     }
 }
 
-/// Application. There must be at least one term.
-pub struct SmtApplication<H: SmtHandler + ?Sized> {
+/// Terms to be handled.
+pub type SmtTerms<'a, H> = SmtMultiple<'a, <H as SmtHandler>::Term>;
+
+/// A term that is an application.
+///
+/// It is guaranteed that `args` are nonempty.
+pub struct SmtApplication<'a, H: SmtHandler + ?Sized> {
     pub function: SmtQualifiedIdent<H>,
-    pub args: Vec<H::Term>,
+    pub args: SmtTerms<'a, H>,
 }
 
-impl<H: SmtHandler + ?Sized> Debug for SmtApplication<H>
+impl<H: SmtHandler + ?Sized> Debug for SmtApplication<'_, H>
 where
     H::Sort: Debug,
     H::Term: Debug,
@@ -130,19 +135,6 @@ where
     }
 }
 
-impl<H: SmtHandler + ?Sized> Clone for SmtApplication<H>
-where
-    H::Sort: Clone,
-    H::Term: Clone,
-{
-    fn clone(&self) -> Self {
-        Self {
-            function: self.function.clone(),
-            args: self.args.clone(),
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub enum SmtSpecialConstant {
     Numeral(SmtNumeral),
@@ -152,10 +144,11 @@ pub enum SmtSpecialConstant {
     String(SmtStringContent),
 }
 
-pub enum SmtTerm<H: SmtHandler + ?Sized> {
+/// A term to be handled.
+pub enum SmtTerm<'a, H: SmtHandler + ?Sized> {
     SpecialConstant(SmtSpecialConstant),
     QualifiedIdent(SmtQualifiedIdent<H>),
-    Application(SmtApplication<H>),
+    Application(SmtApplication<'a, H>),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -164,7 +157,7 @@ pub enum SmtQuantifierKind {
     Forall,
 }
 
-impl<H: SmtHandler + ?Sized> Debug for SmtTerm<H>
+impl<H: SmtHandler + ?Sized> Debug for SmtTerm<'_, H>
 where
     H::Sort: Debug,
     H::Term: Debug,
@@ -174,20 +167,6 @@ where
             Self::SpecialConstant(arg0) => f.debug_tuple("SpecialConstant").field(arg0).finish(),
             Self::QualifiedIdent(arg0) => f.debug_tuple("QualifiedIdent").field(arg0).finish(),
             Self::Application(arg0) => f.debug_tuple("Application").field(arg0).finish(),
-        }
-    }
-}
-
-impl<H: SmtHandler + ?Sized> Clone for SmtTerm<H>
-where
-    H::Sort: Clone,
-    H::Term: Clone,
-{
-    fn clone(&self) -> Self {
-        match self {
-            Self::SpecialConstant(arg0) => Self::SpecialConstant(arg0.clone()),
-            Self::QualifiedIdent(arg0) => Self::QualifiedIdent(arg0.clone()),
-            Self::Application(arg0) => Self::Application(arg0.clone()),
         }
     }
 }

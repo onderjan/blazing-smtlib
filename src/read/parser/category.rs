@@ -6,6 +6,7 @@ use crate::{
     token::{Token, TokenKind, TokenType},
 };
 
+mod arena;
 mod attribute;
 mod combinator;
 mod ident;
@@ -37,6 +38,7 @@ pub use {
     },
 };
 
+pub(crate) use arena::Arena;
 pub(crate) use ident::IdentSlot;
 pub(crate) use pattern::PatternSlot;
 pub(crate) use qualified_ident::QualifiedIdentSlot;

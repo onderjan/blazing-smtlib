@@ -17,8 +17,8 @@
 use smt_parser_rs::{
     CommandHandler, NonstandardCommandError, SmtAttributeValue, SmtDatatypeConstructor,
     SmtFunctionSignature, SmtHandler, SmtIdent, SmtIndex, SmtKeyword, SmtNumeral, SmtPattern,
-    SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSort, SmtSpecialConstant,
-    SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm, read::parser::NoCommandParser,
+    SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSort, SmtSpecialConstant, SmtStringContent,
+    SmtSymbol, SmtSymbolView, SmtTerm, read::parser::NoCommandParser,
 };
 
 const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
@@ -249,7 +249,7 @@ impl SmtHandler for TraceHash {
         Ok(self.produce())
     }
 
-    fn handle_term(&mut self, term: SmtTerm<Self>) -> Result<u64, Self::Error> {
+    fn handle_term(&mut self, term: SmtTerm<'_, Self>) -> Result<u64, Self::Error> {
         self.byte(tag::TERM);
         match &term {
             SmtTerm::SpecialConstant(constant) => {
@@ -265,7 +265,7 @@ impl SmtHandler for TraceHash {
                 self.byte(3);
                 self.ident(&application.function.ident);
                 self.optional_value(application.function.sort);
-                self.values(&application.args);
+                self.values(application.args.as_slice());
             }
         }
         Ok(self.produce())

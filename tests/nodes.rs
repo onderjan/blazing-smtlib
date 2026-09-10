@@ -23,7 +23,7 @@ impl SmtHandler for OpaqueHandler {
     fn handle_sort(&mut self, _sort: SmtSort<Self>) -> Result<String, Infallible> {
         Ok(String::new())
     }
-    fn handle_term(&mut self, _term: SmtTerm<Self>) -> Result<String, Infallible> {
+    fn handle_term(&mut self, _term: SmtTerm<'_, Self>) -> Result<String, Infallible> {
         Ok(String::new())
     }
     fn start_let(&mut self, _bindings: Vec<(SmtSymbol, String)>) -> Result<(), Infallible> {
@@ -82,6 +82,8 @@ impl SmtHandler for OpaqueHandler {
 
 fn assert_debug_and_clone<T: Debug + Clone>() {}
 
+fn assert_debug<T: Debug>() {}
+
 /// The `H`-generic nodes must be `Debug` and `Clone` whenever the handler's
 /// associated types are, regardless of the handler type itself.
 ///
@@ -95,8 +97,9 @@ fn nodes_are_debug_and_clone_with_an_opaque_handler() {
     assert_debug_and_clone::<SmtSpecialConstant>();
     assert_debug_and_clone::<SmtQualifiedIdent<OpaqueHandler>>();
     assert_debug_and_clone::<SmtSort<OpaqueHandler>>();
-    assert_debug_and_clone::<SmtApplication<OpaqueHandler>>();
-    assert_debug_and_clone::<SmtTerm<OpaqueHandler>>();
+    // the nodes handing values over cannot be cloned, but must still be debuggable
+    assert_debug::<SmtApplication<'static, OpaqueHandler>>();
+    assert_debug::<SmtTerm<'static, OpaqueHandler>>();
     assert_debug_and_clone::<SmtAttributeValue<OpaqueHandler>>();
     assert_debug_and_clone::<SmtSExpr<OpaqueHandler>>();
     assert_debug_and_clone::<SmtFunctionSignature<OpaqueHandler>>();

@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler,
     read::parser::{
-        IdentSlot, ParserError, PatternSlot, QualifiedIdentSlot, SExprSlot, SortSlot,
+        Arena, IdentSlot, ParserError, PatternSlot, QualifiedIdentSlot, SExprSlot, SortSlot,
         SortedVarSlot, TermSlot, category::attribute::AttributeSlot,
     },
     token::{Token, TokenKind},
@@ -17,6 +17,7 @@ use crate::{
 /// is only constructed once for the root parser and
 /// propagated to smaller parsers.
 pub struct ParserResources<H: SmtHandler + ?Sized> {
+    pub(crate) store: Arena<H>,
     pub(crate) ident_slot: IdentSlot,
     pub(crate) qualified_ident_slot: QualifiedIdentSlot<H>,
     pub(crate) sort_slot: SortSlot<H>,
@@ -30,6 +31,7 @@ pub struct ParserResources<H: SmtHandler + ?Sized> {
 impl<H: SmtHandler + ?Sized> ParserResources<H> {
     pub fn new() -> Self {
         Self {
+            store: Arena::new(),
             ident_slot: IdentSlot::new(),
             qualified_ident_slot: QualifiedIdentSlot::new(),
             sort_slot: SortSlot::new(),
@@ -42,7 +44,8 @@ impl<H: SmtHandler + ?Sized> ParserResources<H> {
     }
 
     pub(crate) fn are_pristine(&self) -> bool {
-        self.ident_slot.is_pristine()
+        self.store.is_pristine()
+            && self.ident_slot.is_pristine()
             && self.qualified_ident_slot.is_pristine()
             && self.sort_slot.is_pristine()
             && self.sorted_var_slot.is_pristine()
@@ -53,6 +56,7 @@ impl<H: SmtHandler + ?Sized> ParserResources<H> {
     }
 
     pub(crate) fn clear(&mut self) {
+        self.store.clear();
         self.ident_slot.clear();
         self.qualified_ident_slot.clear();
         self.sort_slot.clear();

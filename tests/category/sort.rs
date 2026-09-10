@@ -155,7 +155,7 @@ impl SmtHandler for Counting {
         self.sorts += 1;
         Ok(())
     }
-    fn handle_term(&mut self, _term: SmtTerm<Self>) -> Result<(), Infallible> {
+    fn handle_term(&mut self, _term: SmtTerm<'_, Self>) -> Result<(), Infallible> {
         Ok(())
     }
     fn start_let(&mut self, _bindings: Vec<(SmtSymbol, ())>) -> Result<(), Infallible> {

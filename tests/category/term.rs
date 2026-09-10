@@ -470,7 +470,7 @@ impl SmtHandler for Counting {
     fn handle_sort(&mut self, _sort: SmtSort<Self>) -> Result<(), Infallible> {
         Ok(())
     }
-    fn handle_term(&mut self, _term: SmtTerm<Self>) -> Result<(), Infallible> {
+    fn handle_term(&mut self, _term: SmtTerm<'_, Self>) -> Result<(), Infallible> {
         self.terms += 1;
         Ok(())
     }

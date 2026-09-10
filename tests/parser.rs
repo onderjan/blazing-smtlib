@@ -99,7 +99,7 @@ impl SmtHandler for Recording {
     fn handle_sort(&mut self, _sort: SmtSort<Self>) -> Result<(), Self::Error> {
         Ok(())
     }
-    fn handle_term(&mut self, _term: SmtTerm<Self>) -> Result<(), Self::Error> {
+    fn handle_term(&mut self, _term: SmtTerm<'_, Self>) -> Result<(), Self::Error> {
         Ok(())
     }
     fn start_let(&mut self, _bindings: Vec<(SmtSymbol, ())>) -> Result<(), Self::Error> {
