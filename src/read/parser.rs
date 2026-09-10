@@ -7,9 +7,11 @@ use crate::{
 
 mod category;
 mod command;
+mod resources;
 
 pub use category::*;
 pub use command::*;
+pub use resources::*;
 
 #[derive(Debug)]
 pub enum ParserErrorKind<E> {
@@ -62,6 +64,7 @@ impl<E> ParserError<E> {
 pub struct Parser<'a, H: CommandHandler> {
     handler: &'a mut H,
     state: ParserState<H>,
+    resources: ParserResources<'a, H::Resources>,
 
     command_parsers: CommandParsers<H>,
 }
@@ -75,10 +78,11 @@ pub(crate) enum ParserState<H: CommandHandler> {
 }
 
 impl<'a, H: CommandHandler> Parser<'a, H> {
-    pub fn new(handler: &'a mut H) -> Self {
+    pub fn new(handler: &'a mut H, resources: &'a mut H::Resources) -> Self {
         Self {
             handler,
             state: ParserState::AwaitingCommand,
+            resources: ParserResources::new(resources),
             command_parsers: CommandParsers::new(),
         }
     }
@@ -132,11 +136,16 @@ impl<'a, H: CommandHandler> TokenHandler for Parser<'a, H> {
                 self.state = self.start_command(command_name, span)?;
             }
             ParserState::Command(kind) => {
-                let flow = self.command_parsers.progress(*kind, self.handler, token)?;
+                let flow = self.command_parsers.progress(
+                    *kind,
+                    self.handler,
+                    &mut self.resources,
+                    token,
+                )?;
                 self.handle_command_progress(flow);
             }
             ParserState::NonstandardCommand(parser) => {
-                let flow = parser.progress(self.handler, token)?;
+                let flow = parser.progress(self.handler, &mut self.resources, token)?;
                 self.handle_command_progress(flow);
             }
             ParserState::Exit => {

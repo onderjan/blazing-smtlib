@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler, SmtPattern, SmtSimplePattern,
     read::parser::{
-        ClosedMultipleParser, PairParser, ParserError, SymbolParser,
+        ClosedMultipleParser, PairParser, ParserError, ParserResources, SymbolParser,
         category::{CategoryErrorKind, CategoryParser},
     },
     token::{Reserved, Token, TokenKind, TokenType},
@@ -29,6 +29,7 @@ impl<H: SmtHandler> CategoryParser<H> for SimplePatternParser {
     fn progress(
         &mut self,
         _handler: &mut H,
+        resources: &mut ParserResources<H::Resources>,
         token: &Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         let result = match token.kind() {
@@ -83,6 +84,7 @@ impl<H: SmtHandler> CategoryParser<H> for PatternParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
+        resources: &mut ParserResources<H::Resources>,
         token: &Token,
     ) -> Result<ControlFlow<SmtPattern, ()>, ParserError<H::Error>> {
         let span = token.span();
@@ -112,8 +114,9 @@ impl<H: SmtHandler> CategoryParser<H> for PatternParser<H> {
             return Ok(ControlFlow::Break(SmtPattern::Simple(result)));
         }
 
-        if let ControlFlow::Break((constructor, args)) =
-            self.constructor_parser.progress(handler, token)?
+        if let ControlFlow::Break((constructor, args)) = self
+            .constructor_parser
+            .progress(handler, resources, token)?
         {
             // there must be at least one argument to the constructor
             if args.is_empty() {

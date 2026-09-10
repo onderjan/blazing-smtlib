@@ -9,6 +9,7 @@ use crate::{
 
 pub trait SmtHandler {
     type Error;
+    type Resources;
 
     type SExpr;
     type Attribute;
@@ -373,6 +374,7 @@ pub struct NonstandardCommandError(pub SmtSymbol);
 
 impl SmtHandler for CheckStandardSyntax {
     type Error = NonstandardCommandError;
+    type Resources = ();
 
     type SExpr = ();
     type Attribute = ();

@@ -3,7 +3,8 @@ use std::ops::ControlFlow;
 use crate::{
     SmtApplication, SmtHandler, SmtQualifiedIdent, SmtQuantifierKind, SmtSymbol, SmtTerm,
     read::parser::{
-        CloseParenParser, OpenParenParser, ParserError, SortedVarParser, SymbolParser,
+        CloseParenParser, OpenParenParser, ParserError, ParserResources, SortedVarParser,
+        SymbolParser,
         category::{
             CategoryErrorKind, CategoryParser, attribute::ClosedMultipleAttributeParser,
             parse_special_constant, pattern::PatternParser, qualified_ident::QualifiedIdentParser,
@@ -198,6 +199,7 @@ impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
+        resources: &mut ParserResources<H::Resources>,
         token: &Token,
     ) -> Result<ControlFlow<H::Term>, ParserError<H::Error>> {
         let span = token.span();
@@ -205,7 +207,7 @@ impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
             Some(pending) => {
                 if pending.is_annotation {
                     // we are parsing attributes
-                    match self.attributes_parser.progress(handler, token)? {
+                    match self.attributes_parser.progress(handler, resources, token)? {
                         ControlFlow::Continue(()) => {
                             // put the pending term back
                             self.pending = Some(pending);
@@ -232,7 +234,8 @@ impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
             }
             None => {
                 // no pending term, try to get one
-                let ControlFlow::Break(term) = self.progress_inner(handler, token)? else {
+                let ControlFlow::Break(term) = self.progress_inner(handler, resources, token)?
+                else {
                     return Ok(ControlFlow::Continue(()));
                 };
                 self.state = State::Start;
@@ -324,6 +327,7 @@ impl<H: SmtHandler> TermParser<H> {
     fn progress_inner(
         &mut self,
         handler: &mut H,
+        resources: &mut ParserResources<H::Resources>,
         token: &Token,
     ) -> Result<ControlFlow<SmtTerm<H>>, ParserError<H::Error>> {
         match self.state {
@@ -334,10 +338,13 @@ impl<H: SmtHandler> TermParser<H> {
             }
             State::QualifiedIdent => Ok(self
                 .qualified_ident_parser
-                .progress(handler, token)?
+                .progress(handler, resources, token)?
                 .map_break(SmtTerm::QualifiedIdent)),
             State::ApplicationIdent => {
-                match self.qualified_ident_parser.progress(handler, token)? {
+                match self
+                    .qualified_ident_parser
+                    .progress(handler, resources, token)?
+                {
                     ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
                     ControlFlow::Break(ident) => {
                         // start a new level
@@ -383,6 +390,7 @@ impl<H: SmtHandler> TermParser<H> {
 
                 let flow = self.sorted_bindings_parser.progress_and_open(
                     handler,
+                    resources,
                     token,
                     |handler, name, sort| match binder_kind {
                         SortedBinderKind::Exists => {
@@ -435,7 +443,9 @@ impl<H: SmtHandler> TermParser<H> {
             State::MatchPattern => {
                 // parse the match pattern
                 let span = token.span();
-                if let ControlFlow::Break(pattern) = self.pattern_parser.progress(handler, token)? {
+                if let ControlFlow::Break(pattern) =
+                    self.pattern_parser.progress(handler, resources, token)?
+                {
                     // a match case is starting, call the handler
                     handle_err(handler.start_match_case(pattern), span)?;
                     // move the start state to parse the case term
@@ -737,6 +747,7 @@ impl<H: SmtHandler> SortedBindingsParser<H> {
     fn progress_and_open(
         &mut self,
         handler: &mut H,
+        resources: &mut ParserResources<H::Resources>,
         token: &Token,
         open_fn: impl Fn(&mut H, SmtSymbol, H::Sort) -> Result<(), H::Error>,
     ) -> Result<ControlFlow<u64>, ParserError<H::Error>> {
@@ -766,7 +777,7 @@ impl<H: SmtHandler> SortedBindingsParser<H> {
 
         // parse the sorted variable
         let span = token.span();
-        match self.sorted_var_parser.progress(handler, token)? {
+        match self.sorted_var_parser.progress(handler, resources, token)? {
             ControlFlow::Continue(()) => {}
             ControlFlow::Break((name, sort)) => {
                 // start the binder and increment opened

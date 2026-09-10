@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler, SmtIdent, SmtSort,
     read::parser::{
-        ParserError,
+        ParserError, ParserResources,
         category::{CategoryErrorKind, CategoryParser, ident::IdentParser},
         handle_err,
     },
@@ -76,6 +76,7 @@ impl<H: SmtHandler> CategoryParser<H> for SortParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
+        resources: &mut ParserResources<H::Resources>,
         token: &Token,
     ) -> Result<ControlFlow<H::Sort>, ParserError<H::Error>> {
         let span = token.span();
@@ -156,9 +157,9 @@ impl<H: SmtHandler> CategoryParser<H> for SortParser<H> {
             }
             State::IdentOnly => self
                 .ident_parser
-                .progress(handler, token)?
+                .progress(handler, resources, token)?
                 .map_break(SmtSort::new_simple),
-            State::StartingIdent => match self.ident_parser.progress(handler, token)? {
+            State::StartingIdent => match self.ident_parser.progress(handler, resources, token)? {
                 ControlFlow::Continue(()) => ControlFlow::Continue(()),
                 ControlFlow::Break(ident) => {
                     // add a new level and start parsing the new sort

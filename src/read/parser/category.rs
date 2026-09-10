@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
 
 use crate::{
     SmtHandler, SmtSpecialConstant,
-    read::parser::ParserError,
+    read::parser::{ParserError, ParserResources},
     token::{Token, TokenKind, TokenType},
 };
 
@@ -44,6 +44,7 @@ pub trait CategoryParser<H: SmtHandler>: Default {
     fn progress(
         &mut self,
         handler: &mut H,
+        resources: &mut ParserResources<H::Resources>,
         token: &Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>>;
 

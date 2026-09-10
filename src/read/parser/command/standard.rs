@@ -4,7 +4,8 @@ use crate::{
     CommandHandler, SmtFunctionSignature, SmtSymbol,
     read::parser::{
         CategoryErrorKind, CategoryParser, CloseParenParser, CommandParser, CommandResult,
-        KeywordParser, NumeralParser, ParenMultipleParser, ParserError, StringParser, SymbolParser,
+        KeywordParser, NumeralParser, ParenMultipleParser, ParserError, ParserResources,
+        StringParser, SymbolParser,
         category::{ClosedAttributeParser, ClosedParser, PairParser, SortParser, TermParser},
         command::{
             CommandAction, ParseCommand,
@@ -78,10 +79,11 @@ macro_rules! standard_commands {
                 &mut self,
                 kind: StandardCommandKind,
                 handler: &mut H,
+                resources: &mut ParserResources<H::Resources>,
                 token: &Token,
             ) -> Result<ControlFlow<CommandResult, ()>, ParserError<H::Error>> {
                 match kind {
-                    $(StandardCommandKind::$kind => self.$field.progress(handler, token),)*
+                    $(StandardCommandKind::$kind => self.$field.progress(handler, resources, token),)*
                 }
             }
         }
@@ -284,10 +286,11 @@ impl<H: CommandHandler> CategoryParser<H> for GetValueParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
+        resources: &mut ParserResources<H::Resources>,
         token: &Token,
     ) -> Result<ControlFlow<Vec<H::Term>, ()>, ParserError<H::Error>> {
         let span = token.span();
-        match self.inner.progress(handler, token)? {
+        match self.inner.progress(handler, resources, token)? {
             ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
             ControlFlow::Break(terms) => {
                 // ensure there is at least one term

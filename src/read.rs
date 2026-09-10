@@ -85,19 +85,21 @@ impl<E> From<ParserError<E>> for SmtReadError<E> {
 
 pub fn read_smt_file<H: CommandHandler>(
     handler: &mut H,
+    resources: &mut H::Resources,
     path: &Path,
 ) -> Result<(), SmtReadError<H::Error>> {
     let file = File::open(path)
         .map_err(|err| SmtReadError::new(SmtReadErrorKind::Io(err), SmtSpan::new_zero()))?;
     let reader = BufReader::new(file);
-    read_smt(handler, reader)
+    read_smt(handler, resources, reader)
 }
 
 pub fn read_smt<H: CommandHandler>(
     handler: &mut H,
+    resources: &mut H::Resources,
     buf_reader: impl BufRead,
 ) -> Result<(), SmtReadError<H::Error>> {
-    let mut parser = Parser::new(handler);
+    let mut parser = Parser::new(handler, resources);
     SmtReader::new(&mut parser, buf_reader).run()
 }
 

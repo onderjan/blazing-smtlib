@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtAttributeValue, SmtHandler, SmtKeyword, SmtSpan,
     read::parser::{
-        CloseParenParser, ClosedMultipleParser, ParserError,
+        CloseParenParser, ClosedMultipleParser, ParserError, ParserResources,
         category::{
             CategoryErrorKind, CategoryParser, parse_special_constant, s_expr::SExprParser,
         },
@@ -80,6 +80,7 @@ impl<H: SmtHandler, C: AttributeCollection<H>> CategoryParser<H> for CollectingP
     fn progress(
         &mut self,
         handler: &mut H,
+        resources: &mut ParserResources<H::Resources>,
         token: &Token,
     ) -> Result<ControlFlow<C::Output>, ParserError<H::Error>> {
         let span = token.span();
@@ -183,7 +184,10 @@ impl<H: SmtHandler, C: AttributeCollection<H>> CategoryParser<H> for CollectingP
                 }
             }
             State::InsideSExpr(name) => {
-                match self.closed_s_exprs_parser.progress(handler, token)? {
+                match self
+                    .closed_s_exprs_parser
+                    .progress(handler, resources, token)?
+                {
                     ControlFlow::Continue(()) => {
                         // put the state back
                         self.state = State::InsideSExpr(name);
@@ -297,9 +301,10 @@ impl<H: SmtHandler> CategoryParser<H> for ClosedAttributeParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
+        resources: &mut ParserResources<H::Resources>,
         token: &Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<<H as SmtHandler>::Error>> {
-        self.0.progress(handler, token)
+        self.0.progress(handler, resources, token)
     }
 }
 
@@ -325,8 +330,9 @@ impl<H: SmtHandler> CategoryParser<H> for ClosedMultipleAttributeParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
+        resources: &mut ParserResources<H::Resources>,
         token: &Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<<H as SmtHandler>::Error>> {
-        self.0.progress(handler, token)
+        self.0.progress(handler, resources, token)
     }
 }

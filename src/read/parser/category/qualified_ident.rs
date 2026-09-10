@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler, SmtQualifiedIdent,
     read::parser::{
-        ClosedParser, PairParser, ParserError,
+        ClosedParser, PairParser, ParserError, ParserResources,
         category::{CategoryErrorKind, CategoryParser, ident::IdentParser, sort::SortParser},
     },
     token::{Reserved, Token, TokenKind, TokenType},
@@ -78,6 +78,7 @@ impl<H: SmtHandler> CategoryParser<H> for QualifiedIdentParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
+        resources: &mut ParserResources<H::Resources>,
         token: &Token,
     ) -> Result<ControlFlow<SmtQualifiedIdent<H>>, ParserError<H::Error>> {
         let span = token.span();
@@ -121,7 +122,9 @@ impl<H: SmtHandler> CategoryParser<H> for QualifiedIdentParser<H> {
                 }
             }
             State::UnqualifiedIndexed => {
-                if let ControlFlow::Break(ident) = self.ident_parser.progress(handler, token)? {
+                if let ControlFlow::Break(ident) =
+                    self.ident_parser.progress(handler, resources, token)?
+                {
                     // the closing parenthesis was already consumed by the IdentParser
 
                     // we only need to reset the state:
@@ -137,7 +140,7 @@ impl<H: SmtHandler> CategoryParser<H> for QualifiedIdentParser<H> {
 
             State::Qualified => {
                 if let ControlFlow::Break((ident, sort)) =
-                    self.qualified_parser.progress(handler, token)?
+                    self.qualified_parser.progress(handler, resources, token)?
                 {
                     // we only need to reset the state:
                     // the ident parser is untouched, the qualified parser was reset

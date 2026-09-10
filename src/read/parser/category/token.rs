@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
 
 use crate::{
     SmtHandler, SmtKeyword, SmtNumeral, SmtStringContent, SmtSymbol,
-    read::parser::{CategoryErrorKind, CategoryParser, ParserError},
+    read::parser::{CategoryErrorKind, CategoryParser, ParserError, ParserResources},
     token::{Token, TokenKind, TokenType},
 };
 
@@ -46,6 +46,7 @@ macro_rules! token_parser {
             fn progress(
                 &mut self,
                 _handler: &mut H,
+                _resources: &mut ParserResources<H::Resources>,
                 token: &Token,
             ) -> Result<ControlFlow<Self::Result, ()>, ParserError<H::Error>> {
                 Ok(ControlFlow::Break(Self::expect(token)?))

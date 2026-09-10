@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler, SmtSExpr,
     read::parser::{
-        ParserError,
+        ParserError, ParserResources,
         category::{CategoryErrorKind, CategoryParser, parse_special_constant},
         handle_err,
     },
@@ -45,6 +45,7 @@ impl<H: SmtHandler> CategoryParser<H> for SExprParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
+        resources: &mut ParserResources<H::Resources>,
         token: &Token,
     ) -> Result<ControlFlow<H::SExpr>, ParserError<H::Error>> {
         let s_expr = match token.kind() {

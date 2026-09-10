@@ -4,8 +4,8 @@ use crate::{
     CommandHandler, SmtFunctionSignature,
     read::parser::{
         CategoryErrorKind, CategoryParser, PairParser, ParenMaximumParser, ParenMultipleParser,
-        ParenParser, ParenSortedVarsParser, ParserError, SortParser, SymbolParser, TermParser,
-        handle_err,
+        ParenParser, ParenSortedVarsParser, ParserError, ParserResources, SortParser, SymbolParser,
+        TermParser, handle_err,
     },
     token::Token,
 };
@@ -39,16 +39,16 @@ impl<H: CommandHandler> CategoryParser<H> for FunctionSignatureParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
+        resources: &mut ParserResources<H::Resources>,
         token: &Token,
     ) -> Result<ControlFlow<SmtFunctionSignature<H>>, ParserError<H::Error>> {
-        Ok(self
-            .inner
-            .progress(handler, token)?
-            .map_break(|(name, (params, result_sort))| SmtFunctionSignature {
+        Ok(self.inner.progress(handler, resources, token)?.map_break(
+            |(name, (params, result_sort))| SmtFunctionSignature {
                 name,
                 params,
                 result_sort,
-            }))
+            },
+        ))
     }
 }
 
@@ -84,6 +84,7 @@ impl<H: CommandHandler> CategoryParser<H> for RecursiveBodyParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
+        resources: &mut ParserResources<H::Resources>,
         token: &Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         let span = token.span();
@@ -93,7 +94,7 @@ impl<H: CommandHandler> CategoryParser<H> for RecursiveBodyParser<H> {
             self.is_inner = true;
         }
 
-        match self.term_parser.progress(handler, token)? {
+        match self.term_parser.progress(handler, resources, token)? {
             ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
             ControlFlow::Break(term) => {
                 // signal the handler that the body term has ended
@@ -153,6 +154,7 @@ impl<H: CommandHandler> CategoryParser<H> for DefineFunsRecParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
+        resources: &mut ParserResources<H::Resources>,
         token: &Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         let span = token.span();
@@ -160,7 +162,7 @@ impl<H: CommandHandler> CategoryParser<H> for DefineFunsRecParser<H> {
             DefineFunsRecState::Signatures => {
                 // parse the signatures
                 if let ControlFlow::Break(signatures) =
-                    self.signatures_parser.progress(handler, token)?
+                    self.signatures_parser.progress(handler, resources, token)?
                 {
                     // there must be at least one signature
                     if signatures.is_empty() {
@@ -182,7 +184,9 @@ impl<H: CommandHandler> CategoryParser<H> for DefineFunsRecParser<H> {
             }
             DefineFunsRecState::Bodies => {
                 // parse bodies
-                if let ControlFlow::Break(bodies) = self.bodies_parser.progress(handler, token)? {
+                if let ControlFlow::Break(bodies) =
+                    self.bodies_parser.progress(handler, resources, token)?
+                {
                     // the parser returned a vector of units corresponding to the number of bodies
                     // bounded by the maximum which is the number of signatures
                     if bodies.len() != self.num_signatures {

@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler, SmtIdent, SmtIndex, SmtSymbol,
     read::parser::{
-        ParserError,
+        ParserError, ParserResources,
         category::{CategoryErrorKind, CategoryParser},
     },
     token::{Reserved, Token, TokenKind, TokenType},
@@ -74,6 +74,7 @@ impl<H: SmtHandler> CategoryParser<H> for IdentParser {
     fn progress(
         &mut self,
         _handler: &mut H,
+        resources: &mut ParserResources<H::Resources>,
         token: &Token,
     ) -> Result<ControlFlow<SmtIdent, ()>, ParserError<H::Error>> {
         let span = token.span();

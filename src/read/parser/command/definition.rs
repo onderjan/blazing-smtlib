@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
 
 use crate::{
     CommandHandler,
-    read::parser::{CategoryParser, ParserError, handle_err},
+    read::parser::{CategoryParser, ParserError, ParserResources, handle_err},
     token::Token,
 };
 
@@ -74,6 +74,7 @@ impl<H: CommandHandler, D: Definition<H>> CategoryParser<H> for DefinitionParser
     fn progress(
         &mut self,
         handler: &mut H,
+        resources: &mut ParserResources<H::Resources>,
         token: &Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         let span = token.span();
@@ -81,7 +82,7 @@ impl<H: CommandHandler, D: Definition<H>> CategoryParser<H> for DefinitionParser
             DefinitionParserState::Signature => {
                 // parse the signature
                 if let ControlFlow::Break(signature) =
-                    self.signature_parser.progress(handler, token)?
+                    self.signature_parser.progress(handler, resources, token)?
                 {
                     // start the body in the handler and move to parsing the body
                     handle_err(D::start(handler, signature), span)?;
@@ -90,7 +91,9 @@ impl<H: CommandHandler, D: Definition<H>> CategoryParser<H> for DefinitionParser
             }
             DefinitionParserState::Body => {
                 // parse the body
-                if let ControlFlow::Break(body) = self.body_parser.progress(handler, token)? {
+                if let ControlFlow::Break(body) =
+                    self.body_parser.progress(handler, resources, token)?
+                {
                     // end the body in the handler, reset, and break
                     handle_err(D::end(handler, body), span)?;
                     self.state = DefinitionParserState::Signature;
