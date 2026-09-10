@@ -1,6 +1,9 @@
+use std::ops::ControlFlow;
+
 use crate::{
     SmtHandler,
-    read::parser::{IdentSlot, SExprSlot, SortSlot},
+    read::parser::{IdentSlot, ParserError, SExprSlot, SortSlot},
+    token::{Token, TokenKind},
 };
 
 /// Contains non-duplicated parser resources.
@@ -41,5 +44,42 @@ impl<H: SmtHandler + ?Sized> ParserResources<H> {
 impl<H: SmtHandler + ?Sized> Default for ParserResources<H> {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// A resource that stores multiple elements closed by a parenthesis.
+pub(crate) struct ClosedMultipleResource<T> {
+    outside: bool,
+    items: Vec<T>,
+}
+
+impl<T> ClosedMultipleResource<T> {
+    pub(crate) fn new() -> Self {
+        Self {
+            outside: true,
+            items: Vec::new(),
+        }
+    }
+
+    pub(crate) fn progress<E>(
+        &mut self,
+        token: &Token,
+        element: impl FnOnce(&Token) -> Result<ControlFlow<T>, ParserError<E>>,
+    ) -> Result<ControlFlow<Vec<T>>, ParserError<E>> {
+        if self.outside {
+            // we are outside, a closing parenthesis ends processing
+            if matches!(token.kind(), TokenKind::ParenClose) {
+                return Ok(ControlFlow::Break(self.items.drain(..).collect()));
+            }
+            // we are no longer outside
+            self.outside = false;
+        }
+        // we are inside, parse the element using the inner parser
+        if let ControlFlow::Break(item) = element(token)? {
+            // add element, we are back outside
+            self.items.push(item);
+            self.outside = true;
+        }
+        Ok(ControlFlow::Continue(()))
     }
 }

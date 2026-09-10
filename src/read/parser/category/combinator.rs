@@ -3,8 +3,8 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler,
     read::parser::{
-        CategoryErrorKind, CategoryParser, CloseParenParser, OpenParenParser, ParserError,
-        ParserResources,
+        CategoryErrorKind, CategoryParser, CloseParenParser, ClosedMultipleResource,
+        OpenParenParser, ParserError, ParserResources,
     },
     token::{Token, TokenKind, TokenType},
 };
@@ -164,17 +164,15 @@ pub type ParenParser<H, P> = OpenedParser<H, ClosedParser<H, P>>;
 /// Preserves self-reset: if the inner parser is self-resetting,
 /// moves back into the default state before returning Break.
 pub struct ClosedMultipleParser<H: SmtHandler, P: CategoryParser<H>> {
-    outside: bool,
     inner: P,
-    results: Vec<P::Result>,
+    resource: ClosedMultipleResource<P::Result>,
 }
 
 impl<H: SmtHandler, P: CategoryParser<H>> ClosedMultipleParser<H, P> {
     pub fn new(inner: P) -> Self {
         Self {
-            outside: true,
             inner,
-            results: Vec::new(),
+            resource: ClosedMultipleResource::new(),
         }
     }
 }
@@ -195,22 +193,9 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for ClosedMultiplePa
         resources: &mut ParserResources<H>,
         token: &Token,
     ) -> Result<ControlFlow<Vec<P::Result>>, ParserError<H::Error>> {
-        if self.outside {
-            // we are outside, a closing parenthesis ends processing
-            if matches!(token.kind(), TokenKind::ParenClose) {
-                let results = self.results.drain(..).collect();
-                return Ok(ControlFlow::Break(results));
-            }
-            // we are no longer outside
-            self.outside = false;
-        }
-        // we are inside, parse the element using the inner parser
-        if let ControlFlow::Break(element) = self.inner.progress(handler, resources, token)? {
-            // add element, we are back outside
-            self.results.push(element);
-            self.outside = true;
-        }
-        Ok(ControlFlow::Continue(()))
+        self.resource.progress(token, |token| {
+            self.inner.progress(handler, resources, token)
+        })
     }
 }
 
