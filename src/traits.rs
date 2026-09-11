@@ -36,12 +36,16 @@ pub trait SmtHandler {
     fn start_quantifier(
         &mut self,
         kind: SmtQuantifierKind,
-        name: SmtSymbol,
+        name: SmtSymbolView<'_>,
         sort: Self::Sort,
     ) -> Result<(), Self::Error>;
     fn end_quantifier(&mut self, term: Self::Term) -> Result<Self::Term, Self::Error>;
 
-    fn start_lambda(&mut self, name: SmtSymbol, sort: Self::Sort) -> Result<(), Self::Error>;
+    fn start_lambda(
+        &mut self,
+        name: SmtSymbolView<'_>,
+        sort: Self::Sort,
+    ) -> Result<(), Self::Error>;
     fn end_lambda(&mut self, term: Self::Term) -> Result<Self::Term, Self::Error>;
 
     /// Starts a match term.
@@ -420,7 +424,7 @@ impl SmtHandler for CheckStandardSyntax {
     fn start_quantifier(
         &mut self,
         _kind: SmtQuantifierKind,
-        _name: SmtSymbol,
+        _name: SmtSymbolView<'_>,
         _sort: Self::Sort,
     ) -> Result<(), Self::Error> {
         Ok(())
@@ -430,7 +434,11 @@ impl SmtHandler for CheckStandardSyntax {
         Ok(())
     }
 
-    fn start_lambda(&mut self, _name: SmtSymbol, _sort: Self::Sort) -> Result<(), Self::Error> {
+    fn start_lambda(
+        &mut self,
+        _name: SmtSymbolView<'_>,
+        _sort: Self::Sort,
+    ) -> Result<(), Self::Error> {
         Ok(())
     }
 

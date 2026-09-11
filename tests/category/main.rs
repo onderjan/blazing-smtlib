@@ -24,10 +24,8 @@ use std::ops::ControlFlow;
 
 use smt_parser_rs::{
     SmtAttributeValue, SmtBindings, SmtHandler, SmtIdent, SmtIdentView, SmtIndex, SmtIndexView,
-    SmtKeyword, SmtPattern,
-    SmtQualifiedIdent,
-    SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSort, SmtSpan, SmtSpecialConstant, SmtSymbol,
-    SmtTerm,
+    SmtKeyword, SmtPattern, SmtQualifiedIdent, SmtQuantifierKind, SmtSExpr, SmtSimplePattern,
+    SmtSort, SmtSpan, SmtSpecialConstant, SmtSymbolView, SmtTerm,
     read::{
         lexer::{LexError, Lexer},
         parser::{
@@ -190,7 +188,7 @@ impl SmtHandler for Printing {
     fn start_quantifier(
         &mut self,
         kind: SmtQuantifierKind,
-        name: SmtSymbol,
+        name: SmtSymbolView<'_>,
         sort: String,
     ) -> Result<(), Infallible> {
         let keyword = match kind {
@@ -214,7 +212,7 @@ impl SmtHandler for Printing {
         Ok(format!("{prefix} {term})"))
     }
 
-    fn start_lambda(&mut self, name: SmtSymbol, sort: String) -> Result<(), Infallible> {
+    fn start_lambda(&mut self, name: SmtSymbolView<'_>, sort: String) -> Result<(), Infallible> {
         self.lambda_binders
             .push(format!("(lambda (({} {}))", text(name.as_slice()), sort));
         Ok(())

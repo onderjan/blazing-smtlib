@@ -367,7 +367,7 @@ impl SmtHandler for TraceHash {
     fn start_quantifier(
         &mut self,
         kind: SmtQuantifierKind,
-        name: SmtSymbol,
+        name: SmtSymbolView<'_>,
         sort: u64,
     ) -> Result<(), Self::Error> {
         self.byte(tag::START_QUANTIFIER);
@@ -375,7 +375,7 @@ impl SmtHandler for TraceHash {
             SmtQuantifierKind::Exists => 1,
             SmtQuantifierKind::Forall => 2,
         });
-        self.symbol(&name);
+        self.bytes(name.as_slice());
         self.u64(sort);
         Ok(())
     }
@@ -386,9 +386,9 @@ impl SmtHandler for TraceHash {
         Ok(self.produce())
     }
 
-    fn start_lambda(&mut self, name: SmtSymbol, sort: u64) -> Result<(), Self::Error> {
+    fn start_lambda(&mut self, name: SmtSymbolView<'_>, sort: u64) -> Result<(), Self::Error> {
         self.byte(tag::START_LAMBDA);
-        self.symbol(&name);
+        self.bytes(name.as_slice());
         self.u64(sort);
         Ok(())
     }

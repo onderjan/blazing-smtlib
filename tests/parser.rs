@@ -124,7 +124,7 @@ impl SmtHandler for Recording {
     fn start_quantifier(
         &mut self,
         _kind: SmtQuantifierKind,
-        _name: SmtSymbol,
+        _name: SmtSymbolView<'_>,
         _sort: (),
     ) -> Result<(), Self::Error> {
         Ok(())
@@ -132,7 +132,7 @@ impl SmtHandler for Recording {
     fn end_quantifier(&mut self, _term: ()) -> Result<(), Self::Error> {
         Ok(())
     }
-    fn start_lambda(&mut self, _name: SmtSymbol, _sort: ()) -> Result<(), Self::Error> {
+    fn start_lambda(&mut self, _name: SmtSymbolView<'_>, _sort: ()) -> Result<(), Self::Error> {
         Ok(())
     }
     fn end_lambda(&mut self, _term: ()) -> Result<(), Self::Error> {

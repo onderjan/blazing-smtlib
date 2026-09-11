@@ -207,7 +207,7 @@ impl SmtHandler for Resolving {
     fn start_quantifier(
         &mut self,
         _kind: SmtQuantifierKind,
-        _name: SmtSymbol,
+        _name: SmtSymbolView<'_>,
         _sort: String,
     ) -> Result<(), String> {
         Ok(())
@@ -215,7 +215,7 @@ impl SmtHandler for Resolving {
     fn end_quantifier(&mut self, term: String) -> Result<String, String> {
         Ok(term)
     }
-    fn start_lambda(&mut self, _name: SmtSymbol, _sort: String) -> Result<(), String> {
+    fn start_lambda(&mut self, _name: SmtSymbolView<'_>, _sort: String) -> Result<(), String> {
         Ok(())
     }
     fn end_lambda(&mut self, term: String) -> Result<String, String> {

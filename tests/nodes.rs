@@ -7,7 +7,7 @@ use smt_parser_rs::{
     SmtApplication, SmtAttributeValue, SmtBindings, SmtDatatypeConstructor, SmtFunctionSignature,
     SmtHandler, SmtIdent, SmtIdentView, SmtIndex, SmtIndexView, SmtIndices, SmtKeyword, SmtPattern,
     SmtQualifiedIdent, SmtQualifiedIdentView, SmtQuantifierKind, SmtSExpr, SmtSimplePattern,
-    SmtSort, SmtSpecialConstant, SmtSymbol, SmtTerm,
+    SmtSort, SmtSpecialConstant, SmtSymbolView, SmtTerm,
 };
 
 /// Handler that is deliberately neither `Debug` nor `Clone`,
@@ -53,7 +53,7 @@ impl SmtHandler for OpaqueHandler {
     fn start_quantifier(
         &mut self,
         _kind: SmtQuantifierKind,
-        _name: SmtSymbol,
+        _name: SmtSymbolView<'_>,
         _sort: String,
     ) -> Result<(), Infallible> {
         Ok(())
@@ -61,7 +61,7 @@ impl SmtHandler for OpaqueHandler {
     fn end_quantifier(&mut self, term: String) -> Result<String, Infallible> {
         Ok(term)
     }
-    fn start_lambda(&mut self, _name: SmtSymbol, _sort: String) -> Result<(), Infallible> {
+    fn start_lambda(&mut self, _name: SmtSymbolView<'_>, _sort: String) -> Result<(), Infallible> {
         Ok(())
     }
     fn end_lambda(&mut self, term: String) -> Result<String, Infallible> {

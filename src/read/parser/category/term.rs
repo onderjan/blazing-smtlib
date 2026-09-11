@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtApplication, SmtHandler, SmtQualifiedIdent, SmtQuantifierKind, SmtSymbol, SmtTerm,
+    SmtApplication, SmtHandler, SmtQualifiedIdent, SmtQuantifierKind, SmtSymbolView, SmtTerm,
     read::parser::{
         CloseParenParser, OpenParenParser, ParserError, ParserResources,
         category::{
@@ -840,7 +840,7 @@ impl SortedBindingsParser {
         handler: &mut H,
         resources: &mut ParserResources<H>,
         token: &Token,
-        open_fn: impl Fn(&mut H, SmtSymbol, H::Sort) -> Result<(), H::Error>,
+        open_fn: impl Fn(&mut H, SmtSymbolView<'_>, H::Sort) -> Result<(), H::Error>,
     ) -> Result<ControlFlow<u64>, ParserError<H::Error>> {
         let this = &mut resources.term_slot.sorted_bindings_parser;
         let token = match this.state {
@@ -878,8 +878,12 @@ impl SortedBindingsParser {
         )? {
             ControlFlow::Continue(()) => {}
             ControlFlow::Break((name, sort)) => {
-                // start the binder and increment opened
-                handle_err(open_fn(handler, name, sort), span)?;
+                // start the binder with the name handed over, and increment opened
+                resources
+                    .store
+                    .hand_over_sorted_var(name, sort, |name, sort| {
+                        handle_err(open_fn(handler, name, sort), span)
+                    })?;
                 this.num_opened += 1;
                 // go back to awaiting a binder
                 this.state = SortedBindingsParserState::AwaitingBinder;

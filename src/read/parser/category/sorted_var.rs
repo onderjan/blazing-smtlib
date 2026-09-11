@@ -4,9 +4,10 @@ use crate::{
     SmtHandler, SmtSymbol,
     read::parser::{
         Arena, CloseParenParser, IdentSlot, OpenParenParser, ParserError, ParserResources,
-        SortSlot, SymbolParser, category::CategoryParser,
+        SortSlot, TextHandle,
+        category::{CategoryErrorKind, CategoryParser},
     },
-    token::Token,
+    token::{Token, TokenKind, TokenType},
 };
 
 /// Parses a sorted variable: parentheses-enclosed pair of a symbol and a sort.
@@ -49,22 +50,30 @@ impl<H: SmtHandler> CategoryParser<H> for SortedVarParser<H> {
             store,
             ..
         } = resources;
-        sorted_var_slot.progress(handler, store, sort_slot, ident_slot, token)
+        match sorted_var_slot.progress(handler, store, sort_slot, ident_slot, token)? {
+            ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
+            ControlFlow::Break((name, sort)) => Ok(ControlFlow::Break(store.hand_over_sorted_var(
+                name,
+                sort,
+                |name, sort| (name.into_owned(), sort),
+            ))),
+        }
     }
 }
 
 /// A parsed sorted variable: the variable name and its sort.
-type SortedVar<H> = (SmtSymbol, <H as SmtHandler>::Sort);
+/// A parsed sorted variable: the name in the arena text and its handled sort.
+type SortedVarHandle<H> = (TextHandle, <H as SmtHandler>::Sort);
 
 pub(crate) struct SortedVarSlot<H: SmtHandler + ?Sized> {
     /// Whether "(" has been read.
     ///
     /// This only matters if not storing anything yet.
     is_open: bool,
-    /// The name, stored while its sort is being parsed.
-    name: Option<SmtSymbol>,
+    /// The name, stored in the arena text while its sort is being parsed.
+    name: Option<TextHandle>,
     /// The sorted variable, stored while waiting for ")".
-    sorted_var: Option<SortedVar<H>>,
+    sorted_var: Option<SortedVarHandle<H>>,
 }
 
 impl<H: SmtHandler + ?Sized> SortedVarSlot<H> {
@@ -94,7 +103,7 @@ impl<H: SmtHandler + ?Sized> SortedVarSlot<H> {
         sort_slot: &mut SortSlot<H>,
         ident_slot: &mut IdentSlot,
         token: &Token,
-    ) -> Result<ControlFlow<SortedVar<H>>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<SortedVarHandle<H>>, ParserError<H::Error>> {
         // The sequential progress is as follows:
         // 1. Not open, expect an opening parenthesis.
         // 2. Open, expect a symbol serving as the name.
@@ -120,8 +129,14 @@ impl<H: SmtHandler + ?Sized> SortedVarSlot<H> {
         }
 
         if self.is_open {
-            // after "(", waiting for the name
-            self.name = Some(SymbolParser::expect(token)?);
+            // after "(", waiting for the name, which goes to the arena text
+            let TokenKind::Symbol(name) = token.kind() else {
+                return Err(ParserError::category_error(
+                    CategoryErrorKind::ExpectedToken(&[TokenType::Symbol]),
+                    token.span(),
+                ));
+            };
+            self.name = Some(arena.push_text(name.as_slice()));
             self.is_open = false;
         } else {
             // waiting for "("

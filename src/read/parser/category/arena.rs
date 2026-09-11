@@ -134,6 +134,19 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
         result
     }
 
+    /// Hands a sorted variable to `f`, removing its name afterwards.
+    #[inline]
+    pub(crate) fn hand_over_sorted_var<R>(
+        &mut self,
+        name: TextHandle,
+        sort: H::Sort,
+        f: impl FnOnce(SmtSymbolView<'_>, H::Sort) -> R,
+    ) -> R {
+        let result = f(name.symbol_view(&self.text), sort);
+        self.text.truncate(name.start);
+        result
+    }
+
     /// Hands a sort to `f`, removing it afterwards.
     #[inline]
     pub(crate) fn hand_over_sort<R>(
