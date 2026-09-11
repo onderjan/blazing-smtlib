@@ -17,11 +17,11 @@ pub trait SmtHandler {
 
     fn handle_sort(&mut self, sort: SmtSort<'_, Self>) -> Result<Self::Sort, Self::Error>;
     fn handle_term(&mut self, term: SmtTerm<'_, Self>) -> Result<Self::Term, Self::Error>;
-    fn handle_s_expr(&mut self, expr: SmtSExpr<Self>) -> Result<Self::SExpr, Self::Error>;
+    fn handle_s_expr(&mut self, expr: SmtSExpr<'_, Self>) -> Result<Self::SExpr, Self::Error>;
     fn handle_attribute(
         &mut self,
         name: SmtKeyword,
-        value: Option<SmtAttributeValue<Self>>,
+        value: Option<SmtAttributeValue<'_, Self>>,
     ) -> Result<Self::Attribute, Self::Error>;
 
     fn annotate_term(
@@ -393,14 +393,14 @@ impl SmtHandler for CheckStandardSyntax {
         Ok(())
     }
 
-    fn handle_s_expr(&mut self, _expr: SmtSExpr<Self>) -> Result<Self::SExpr, Self::Error> {
+    fn handle_s_expr(&mut self, _expr: SmtSExpr<'_, Self>) -> Result<Self::SExpr, Self::Error> {
         Ok(())
     }
 
     fn handle_attribute(
         &mut self,
         _name: SmtKeyword,
-        _value: Option<SmtAttributeValue<Self>>,
+        _value: Option<SmtAttributeValue<'_, Self>>,
     ) -> Result<Self::Attribute, Self::Error> {
         Ok(())
     }

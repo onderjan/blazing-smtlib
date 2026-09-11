@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtHandler, SmtSpecialConstant,
+    SmtHandler, SmtSpecialConstantView,
     read::parser::ParserError,
     token::{Token, TokenKind, TokenType},
 };
@@ -112,13 +112,15 @@ pub enum CategoryErrorKind {
 }
 
 #[inline]
-fn parse_special_constant(kind: TokenKind) -> Result<SmtSpecialConstant, TokenKind> {
+fn parse_special_constant<'a>(
+    kind: TokenKind<'a>,
+) -> Result<SmtSpecialConstantView<'a>, TokenKind<'a>> {
     let constant = match kind {
-        TokenKind::Numeral(value) => SmtSpecialConstant::Numeral(value.into_owned()),
-        TokenKind::Decimal(decimal) => SmtSpecialConstant::Decimal(decimal.into_owned()),
-        TokenKind::Hexadecimal(value) => SmtSpecialConstant::Hexadecimal(value.into_owned()),
-        TokenKind::Binary(value) => SmtSpecialConstant::Binary(value.into_owned()),
-        TokenKind::String(string) => SmtSpecialConstant::String(string.into_owned()),
+        TokenKind::Numeral(value) => SmtSpecialConstantView::Numeral(value),
+        TokenKind::Decimal(decimal) => SmtSpecialConstantView::Decimal(decimal),
+        TokenKind::Hexadecimal(value) => SmtSpecialConstantView::Hexadecimal(value),
+        TokenKind::Binary(value) => SmtSpecialConstantView::Binary(value),
+        TokenKind::String(string) => SmtSpecialConstantView::String(string),
         kind => return Err(kind),
     };
     Ok(constant)

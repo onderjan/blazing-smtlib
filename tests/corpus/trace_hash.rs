@@ -18,7 +18,7 @@ use smt_parser_rs::{
     CommandHandler, NonstandardCommandError, SmtAttributeValue, SmtBindings,
     SmtDatatypeConstructor, SmtFunctionSignature, SmtHandler, SmtIdentView, SmtIndexView,
     SmtKeyword, SmtNumeral, SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSort,
-    SmtSpecialConstant, SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm,
+    SmtSpecialConstantView, SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm,
     read::parser::NoCommandParser,
 };
 
@@ -153,25 +153,25 @@ impl TraceHash {
         }
     }
 
-    fn special_constant(&mut self, constant: &SmtSpecialConstant) {
+    fn special_constant(&mut self, constant: SmtSpecialConstantView<'_>) {
         match constant {
-            SmtSpecialConstant::Numeral(value) => {
+            SmtSpecialConstantView::Numeral(value) => {
                 self.byte(1);
                 self.bytes(value.as_slice());
             }
-            SmtSpecialConstant::Decimal(value) => {
+            SmtSpecialConstantView::Decimal(value) => {
                 self.byte(2);
                 self.bytes(value.as_slice());
             }
-            SmtSpecialConstant::Hexadecimal(value) => {
+            SmtSpecialConstantView::Hexadecimal(value) => {
                 self.byte(3);
                 self.bytes(value.as_slice());
             }
-            SmtSpecialConstant::Binary(value) => {
+            SmtSpecialConstantView::Binary(value) => {
                 self.byte(4);
                 self.bytes(value.as_slice());
             }
-            SmtSpecialConstant::String(value) => {
+            SmtSpecialConstantView::String(value) => {
                 self.byte(5);
                 self.bytes(value.as_slice());
             }
@@ -255,7 +255,7 @@ impl SmtHandler for TraceHash {
         match &term {
             SmtTerm::SpecialConstant(constant) => {
                 self.byte(1);
-                self.special_constant(constant);
+                self.special_constant(*constant);
             }
             SmtTerm::QualifiedIdent(ident) => {
                 self.byte(2);
@@ -272,12 +272,12 @@ impl SmtHandler for TraceHash {
         Ok(self.produce())
     }
 
-    fn handle_s_expr(&mut self, expr: SmtSExpr<Self>) -> Result<u64, Self::Error> {
+    fn handle_s_expr(&mut self, expr: SmtSExpr<'_, Self>) -> Result<u64, Self::Error> {
         self.byte(tag::S_EXPR);
         match &expr {
             SmtSExpr::SpecialConstant(constant) => {
                 self.byte(1);
-                self.special_constant(constant);
+                self.special_constant(*constant);
             }
             SmtSExpr::Symbol(symbol) => {
                 self.byte(2);
@@ -302,7 +302,7 @@ impl SmtHandler for TraceHash {
     fn handle_attribute(
         &mut self,
         name: SmtKeyword,
-        value: Option<SmtAttributeValue<Self>>,
+        value: Option<SmtAttributeValue<'_, Self>>,
     ) -> Result<u64, Self::Error> {
         self.byte(tag::ATTRIBUTE);
         self.keyword(&name);
@@ -310,7 +310,7 @@ impl SmtHandler for TraceHash {
             None => self.byte(0),
             Some(SmtAttributeValue::SpecialConstant(constant)) => {
                 self.byte(1);
-                self.special_constant(constant);
+                self.special_constant(*constant);
             }
             Some(SmtAttributeValue::Symbol(symbol)) => {
                 self.byte(2);

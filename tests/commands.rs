@@ -8,7 +8,7 @@ use common::{assert_error_span, assert_parser_error, parse_with};
 use smt_parser_rs::{
     CommandHandler, SmtAttributeValue, SmtBindings, SmtDatatypeConstructor, SmtFunctionSignature,
     SmtHandler, SmtIdentView, SmtIndexView, SmtKeyword, SmtNumeral, SmtPattern, SmtQuantifierKind,
-    SmtSExpr, SmtSimplePattern, SmtSort, SmtSpecialConstant, SmtStringContent, SmtSymbol,
+    SmtSExpr, SmtSimplePattern, SmtSort, SmtSpecialConstantView, SmtStringContent, SmtSymbol,
     SmtSymbolView, SmtTerm,
     read::{
         SmtReadErrorKind,
@@ -151,7 +151,7 @@ impl SmtHandler for Resolving {
     fn handle_term(&mut self, term: SmtTerm<'_, Self>) -> Result<String, String> {
         Ok(match term {
             SmtTerm::SpecialConstant(constant) => match constant {
-                SmtSpecialConstant::Numeral(numeral) => text(numeral.as_slice()),
+                SmtSpecialConstantView::Numeral(numeral) => text(numeral.as_slice()),
                 _ => "<constant>".into(),
             },
             SmtTerm::QualifiedIdent(qualified_ident) => {
@@ -172,14 +172,14 @@ impl SmtHandler for Resolving {
         Ok(term)
     }
 
-    fn handle_s_expr(&mut self, _expr: SmtSExpr<Self>) -> Result<(), String> {
+    fn handle_s_expr(&mut self, _expr: SmtSExpr<'_, Self>) -> Result<(), String> {
         Ok(())
     }
 
     fn handle_attribute(
         &mut self,
         _name: SmtKeyword,
-        _value: Option<SmtAttributeValue<Self>>,
+        _value: Option<SmtAttributeValue<'_, Self>>,
     ) -> Result<(), String> {
         Ok(())
     }

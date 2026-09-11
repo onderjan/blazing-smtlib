@@ -1,8 +1,9 @@
 use std::fmt::Debug;
 
 use crate::{
-    SmtBinDigits, SmtDecimal, SmtHandler, SmtHexDigits, SmtKeyword, SmtMultiple, SmtNumeral,
-    SmtNumeralView, SmtStringContent, SmtSymbol, SmtSymbolView,
+    SmtBinDigits, SmtBinDigitsView, SmtDecimal, SmtDecimalView, SmtHandler, SmtHexDigits,
+    SmtHexDigitsView, SmtKeyword, SmtMultiple, SmtNumeral, SmtNumeralView, SmtStringContent,
+    SmtStringContentView, SmtSymbol, SmtSymbolView,
     read::parser::{ArenaAccess, IndexHandle},
     token::Reserved,
 };
@@ -238,9 +239,31 @@ pub enum SmtSpecialConstant {
     String(SmtStringContent),
 }
 
+/// A special constant to be handled.
+#[derive(Debug, Clone, Copy)]
+pub enum SmtSpecialConstantView<'a> {
+    Numeral(SmtNumeralView<'a>),
+    Decimal(SmtDecimalView<'a>),
+    Hexadecimal(SmtHexDigitsView<'a>),
+    Binary(SmtBinDigitsView<'a>),
+    String(SmtStringContentView<'a>),
+}
+
+impl SmtSpecialConstantView<'_> {
+    pub fn into_owned(self) -> SmtSpecialConstant {
+        match self {
+            Self::Numeral(value) => SmtSpecialConstant::Numeral(value.into_owned()),
+            Self::Decimal(value) => SmtSpecialConstant::Decimal(value.into_owned()),
+            Self::Hexadecimal(value) => SmtSpecialConstant::Hexadecimal(value.into_owned()),
+            Self::Binary(value) => SmtSpecialConstant::Binary(value.into_owned()),
+            Self::String(value) => SmtSpecialConstant::String(value.into_owned()),
+        }
+    }
+}
+
 /// A term to be handled.
 pub enum SmtTerm<'a, H: SmtHandler + ?Sized> {
-    SpecialConstant(SmtSpecialConstant),
+    SpecialConstant(SmtSpecialConstantView<'a>),
     QualifiedIdent(SmtQualifiedIdentView<'a, H>),
     Application(SmtApplication<'a, H>),
 }
@@ -265,13 +288,13 @@ where
     }
 }
 
-pub enum SmtAttributeValue<H: SmtHandler + ?Sized> {
-    SpecialConstant(SmtSpecialConstant),
+pub enum SmtAttributeValue<'a, H: SmtHandler + ?Sized> {
+    SpecialConstant(SmtSpecialConstantView<'a>),
     Symbol(SmtSymbol),
     SExprs(Vec<H::SExpr>),
 }
 
-impl<H: SmtHandler + ?Sized> Debug for SmtAttributeValue<H>
+impl<H: SmtHandler + ?Sized> Debug for SmtAttributeValue<'_, H>
 where
     H::SExpr: Debug,
 {
@@ -284,13 +307,13 @@ where
     }
 }
 
-impl<H: SmtHandler + ?Sized> Clone for SmtAttributeValue<H>
+impl<H: SmtHandler + ?Sized> Clone for SmtAttributeValue<'_, H>
 where
     H::SExpr: Clone,
 {
     fn clone(&self) -> Self {
         match self {
-            Self::SpecialConstant(arg0) => Self::SpecialConstant(arg0.clone()),
+            Self::SpecialConstant(arg0) => Self::SpecialConstant(*arg0),
             Self::Symbol(arg0) => Self::Symbol(arg0.clone()),
             Self::SExprs(arg0) => Self::SExprs(arg0.clone()),
         }
@@ -385,15 +408,15 @@ pub enum SmtPattern {
     },
 }
 
-pub enum SmtSExpr<H: SmtHandler + ?Sized> {
-    SpecialConstant(SmtSpecialConstant),
+pub enum SmtSExpr<'a, H: SmtHandler + ?Sized> {
+    SpecialConstant(SmtSpecialConstantView<'a>),
     Symbol(SmtSymbol),
     Reserved(Reserved),
     Keyword(SmtKeyword),
     SExprs(Vec<H::SExpr>),
 }
 
-impl<H: SmtHandler + ?Sized> Debug for SmtSExpr<H>
+impl<H: SmtHandler + ?Sized> Debug for SmtSExpr<'_, H>
 where
     H::SExpr: Debug,
 {
@@ -408,13 +431,13 @@ where
     }
 }
 
-impl<H: SmtHandler + ?Sized> Clone for SmtSExpr<H>
+impl<H: SmtHandler + ?Sized> Clone for SmtSExpr<'_, H>
 where
     H::SExpr: Clone,
 {
     fn clone(&self) -> Self {
         match self {
-            Self::SpecialConstant(arg0) => Self::SpecialConstant(arg0.clone()),
+            Self::SpecialConstant(arg0) => Self::SpecialConstant(*arg0),
             Self::Symbol(arg0) => Self::Symbol(arg0.clone()),
             Self::Reserved(arg0) => Self::Reserved(*arg0),
             Self::Keyword(arg0) => Self::Keyword(arg0.clone()),

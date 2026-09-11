@@ -480,13 +480,13 @@ impl SmtHandler for Counting {
     fn end_let(&mut self, _term: ()) -> Result<(), Infallible> {
         Ok(())
     }
-    fn handle_s_expr(&mut self, _expr: SmtSExpr<Self>) -> Result<(), Infallible> {
+    fn handle_s_expr(&mut self, _expr: SmtSExpr<'_, Self>) -> Result<(), Infallible> {
         Ok(())
     }
     fn handle_attribute(
         &mut self,
         _name: SmtKeyword,
-        _value: Option<SmtAttributeValue<Self>>,
+        _value: Option<SmtAttributeValue<'_, Self>>,
     ) -> Result<(), Infallible> {
         Ok(())
     }
@@ -872,7 +872,7 @@ impl SmtHandler for Consuming {
     }
     fn handle_term(&mut self, term: SmtTerm<'_, Self>) -> Result<String, Infallible> {
         Ok(match term {
-            SmtTerm::SpecialConstant(constant) => render_constant(&constant),
+            SmtTerm::SpecialConstant(constant) => render_constant(constant),
             SmtTerm::QualifiedIdent(qualified_ident) => render_ident_view(&qualified_ident.ident),
             SmtTerm::Application(application) => {
                 let function = render_ident_view(&application.function.ident);
@@ -898,13 +898,13 @@ impl SmtHandler for Consuming {
     fn end_let(&mut self, term: String) -> Result<String, Infallible> {
         Ok(term)
     }
-    fn handle_s_expr(&mut self, _expr: SmtSExpr<Self>) -> Result<(), Infallible> {
+    fn handle_s_expr(&mut self, _expr: SmtSExpr<'_, Self>) -> Result<(), Infallible> {
         Ok(())
     }
     fn handle_attribute(
         &mut self,
         _name: SmtKeyword,
-        _value: Option<SmtAttributeValue<Self>>,
+        _value: Option<SmtAttributeValue<'_, Self>>,
     ) -> Result<(), Infallible> {
         Ok(())
     }

@@ -164,13 +164,13 @@ impl SmtHandler for Counting {
     fn end_let(&mut self, _term: ()) -> Result<(), Infallible> {
         Ok(())
     }
-    fn handle_s_expr(&mut self, _expr: SmtSExpr<Self>) -> Result<(), Infallible> {
+    fn handle_s_expr(&mut self, _expr: SmtSExpr<'_, Self>) -> Result<(), Infallible> {
         Ok(())
     }
     fn handle_attribute(
         &mut self,
         _name: SmtKeyword,
-        _value: Option<SmtAttributeValue<Self>>,
+        _value: Option<SmtAttributeValue<'_, Self>>,
     ) -> Result<(), Infallible> {
         Ok(())
     }

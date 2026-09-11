@@ -25,7 +25,7 @@ use std::ops::ControlFlow;
 use smt_parser_rs::{
     SmtAttributeValue, SmtBindings, SmtHandler, SmtIdent, SmtIdentView, SmtIndex, SmtIndexView,
     SmtKeyword, SmtPattern, SmtQualifiedIdent, SmtQualifiedIdentView, SmtQuantifierKind, SmtSExpr,
-    SmtSimplePattern, SmtSort, SmtSpan, SmtSpecialConstant, SmtSymbolView, SmtTerm,
+    SmtSimplePattern, SmtSort, SmtSpan, SmtSpecialConstantView, SmtSymbolView, SmtTerm,
     read::{
         lexer::{LexError, Lexer},
         parser::{
@@ -135,13 +135,13 @@ fn render_qualified_ident(qualified_ident: &SmtQualifiedIdent<Printing>) -> Stri
     }
 }
 
-fn render_constant(constant: &SmtSpecialConstant) -> String {
+fn render_constant(constant: SmtSpecialConstantView<'_>) -> String {
     match constant {
-        SmtSpecialConstant::Numeral(n) => text(n.as_slice()),
-        SmtSpecialConstant::Decimal(d) => text(d.as_slice()),
-        SmtSpecialConstant::Hexadecimal(h) => format!("#x{}", text(h.as_slice())),
-        SmtSpecialConstant::Binary(b) => format!("#b{}", text(b.as_slice())),
-        SmtSpecialConstant::String(s) => format!("\"{}\"", text(s.as_slice())),
+        SmtSpecialConstantView::Numeral(n) => text(n.as_slice()),
+        SmtSpecialConstantView::Decimal(d) => text(d.as_slice()),
+        SmtSpecialConstantView::Hexadecimal(h) => format!("#x{}", text(h.as_slice())),
+        SmtSpecialConstantView::Binary(b) => format!("#b{}", text(b.as_slice())),
+        SmtSpecialConstantView::String(s) => format!("\"{}\"", text(s.as_slice())),
     }
 }
 
@@ -169,7 +169,7 @@ impl SmtHandler for Printing {
 
     fn handle_term(&mut self, term: SmtTerm<'_, Self>) -> Result<String, Infallible> {
         Ok(match term {
-            SmtTerm::SpecialConstant(constant) => render_constant(&constant),
+            SmtTerm::SpecialConstant(constant) => render_constant(constant),
             SmtTerm::QualifiedIdent(qualified_ident) => {
                 render_qualified_ident_view(&qualified_ident)
             }
@@ -284,9 +284,9 @@ impl SmtHandler for Printing {
         ))
     }
 
-    fn handle_s_expr(&mut self, expr: SmtSExpr<Self>) -> Result<String, Infallible> {
+    fn handle_s_expr(&mut self, expr: SmtSExpr<'_, Self>) -> Result<String, Infallible> {
         Ok(match expr {
-            SmtSExpr::SpecialConstant(constant) => render_constant(&constant),
+            SmtSExpr::SpecialConstant(constant) => render_constant(constant),
             SmtSExpr::Symbol(symbol) => text(symbol.as_slice()),
             SmtSExpr::Reserved(reserved) => reserved.as_str().to_string(),
             SmtSExpr::Keyword(keyword) => format!(":{}", text(keyword.as_slice())),
@@ -297,13 +297,13 @@ impl SmtHandler for Printing {
     fn handle_attribute(
         &mut self,
         name: SmtKeyword,
-        value: Option<SmtAttributeValue<Self>>,
+        value: Option<SmtAttributeValue<'_, Self>>,
     ) -> Result<String, Infallible> {
         let name = format!(":{}", text(name.as_slice()));
         Ok(match value {
             None => name,
             Some(SmtAttributeValue::SpecialConstant(constant)) => {
-                format!("{name} {}", render_constant(&constant))
+                format!("{name} {}", render_constant(constant))
             }
             Some(SmtAttributeValue::Symbol(symbol)) => {
                 format!("{name} {}", text(symbol.as_slice()))

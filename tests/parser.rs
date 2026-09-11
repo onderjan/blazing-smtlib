@@ -108,13 +108,13 @@ impl SmtHandler for Recording {
     fn end_let(&mut self, _term: ()) -> Result<(), Self::Error> {
         Ok(())
     }
-    fn handle_s_expr(&mut self, _expr: SmtSExpr<Self>) -> Result<(), Self::Error> {
+    fn handle_s_expr(&mut self, _expr: SmtSExpr<'_, Self>) -> Result<(), Self::Error> {
         Ok(())
     }
     fn handle_attribute(
         &mut self,
         _name: SmtKeyword,
-        _value: Option<SmtAttributeValue<Self>>,
+        _value: Option<SmtAttributeValue<'_, Self>>,
     ) -> Result<(), Self::Error> {
         Ok(())
     }

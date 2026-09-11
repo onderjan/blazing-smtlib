@@ -7,7 +7,7 @@ use smt_parser_rs::{
     SmtApplication, SmtAttributeValue, SmtBindings, SmtDatatypeConstructor, SmtFunctionSignature,
     SmtHandler, SmtIdent, SmtIdentView, SmtIndex, SmtIndexView, SmtIndices, SmtKeyword, SmtPattern,
     SmtQualifiedIdent, SmtQualifiedIdentView, SmtQuantifierKind, SmtSExpr, SmtSimplePattern,
-    SmtSort, SmtSpecialConstant, SmtSymbolView, SmtTerm,
+    SmtSort, SmtSpecialConstant, SmtSpecialConstantView, SmtSymbolView, SmtTerm,
 };
 
 /// Handler that is deliberately neither `Debug` nor `Clone`,
@@ -33,13 +33,13 @@ impl SmtHandler for OpaqueHandler {
     fn end_let(&mut self, term: String) -> Result<String, Infallible> {
         Ok(term)
     }
-    fn handle_s_expr(&mut self, _expr: SmtSExpr<Self>) -> Result<String, Infallible> {
+    fn handle_s_expr(&mut self, _expr: SmtSExpr<'_, Self>) -> Result<String, Infallible> {
         Ok(String::new())
     }
     fn handle_attribute(
         &mut self,
         _name: SmtKeyword,
-        _value: Option<SmtAttributeValue<Self>>,
+        _value: Option<SmtAttributeValue<'_, Self>>,
     ) -> Result<String, Infallible> {
         Ok(String::new())
     }
@@ -96,6 +96,7 @@ fn nodes_are_debug_and_clone_with_an_opaque_handler() {
     assert_debug_and_clone::<SmtIndex>();
     assert_debug_and_clone::<SmtIdent>();
     assert_debug_and_clone::<SmtSpecialConstant>();
+    assert_debug_and_clone::<SmtSpecialConstantView<'static>>();
     assert_debug_and_clone::<SmtQualifiedIdent<OpaqueHandler>>();
     assert_debug_and_clone::<SmtIndexView<'static>>();
     assert_debug_and_clone::<SmtIndices<'static>>();
@@ -107,8 +108,8 @@ fn nodes_are_debug_and_clone_with_an_opaque_handler() {
     assert_debug::<SmtApplication<'static, OpaqueHandler>>();
     assert_debug::<SmtTerm<'static, OpaqueHandler>>();
     assert_debug::<SmtBindings<'static, OpaqueHandler>>();
-    assert_debug_and_clone::<SmtAttributeValue<OpaqueHandler>>();
-    assert_debug_and_clone::<SmtSExpr<OpaqueHandler>>();
+    assert_debug_and_clone::<SmtAttributeValue<'static, OpaqueHandler>>();
+    assert_debug_and_clone::<SmtSExpr<'static, OpaqueHandler>>();
     assert_debug_and_clone::<SmtFunctionSignature<OpaqueHandler>>();
     assert_debug_and_clone::<SmtDatatypeConstructor<OpaqueHandler>>();
     assert_debug_and_clone::<SmtSimplePattern>();
