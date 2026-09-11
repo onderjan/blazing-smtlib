@@ -7,9 +7,9 @@ use common::{assert_error_span, assert_parser_error, parse_with};
 
 use smt_parser_rs::{
     CommandHandler, SmtAttributeValue, SmtBindings, SmtDatatypeConstructor, SmtFunctionSignature,
-    SmtHandler, SmtIdent, SmtIdentView, SmtIndex, SmtIndexView, SmtKeyword, SmtNumeral, SmtPattern, SmtQuantifierKind, SmtSExpr,
-    SmtSimplePattern, SmtSort, SmtSpecialConstant, SmtStringContent, SmtSymbol, SmtSymbolView,
-    SmtTerm,
+    SmtHandler, SmtIdentView, SmtIndexView, SmtKeyword, SmtNumeral, SmtPattern, SmtQuantifierKind,
+    SmtSExpr, SmtSimplePattern, SmtSort, SmtSpecialConstant, SmtStringContent, SmtSymbol,
+    SmtSymbolView, SmtTerm,
     read::{
         SmtReadErrorKind,
         lexer::LexerErrorKind,
@@ -84,8 +84,8 @@ impl Resolving {
     /// in progress, marked as `$name`, then against the parameters of the
     /// body in progress, marked as `[name]`, and otherwise against the
     /// functions of the define-funs-rec in progress, marked as `{name}`.
-    fn resolve_term_ident(&self, ident: &SmtIdent) -> String {
-        let name = ident_text(ident);
+    fn resolve_term_ident(&self, ident: SmtIdentView<'_>) -> String {
+        let name = ident_view_text(ident);
         let is_case_var = self
             .matches
             .iter()
@@ -125,22 +125,6 @@ fn ident_view_text(ident: SmtIdentView<'_>) -> String {
     format!("(_ {} {})", name, indices.join(" "))
 }
 
-fn ident_text(ident: &SmtIdent) -> String {
-    let name = text(ident.name.as_slice());
-    if ident.indices.is_empty() {
-        return name;
-    }
-    let indices: Vec<String> = ident
-        .indices
-        .iter()
-        .map(|index| match index {
-            SmtIndex::Numeral(numeral) => text(numeral.as_slice()),
-            SmtIndex::Symbol(symbol) => text(symbol.as_slice()),
-        })
-        .collect();
-    format!("(_ {} {})", name, indices.join(" "))
-}
-
 impl SmtHandler for Resolving {
     type Error = String;
     type SExpr = ();
@@ -171,10 +155,10 @@ impl SmtHandler for Resolving {
                 _ => "<constant>".into(),
             },
             SmtTerm::QualifiedIdent(qualified_ident) => {
-                self.resolve_term_ident(&qualified_ident.ident)
+                self.resolve_term_ident(qualified_ident.ident)
             }
             SmtTerm::Application(application) => {
-                let function = self.resolve_term_ident(&application.function.ident);
+                let function = self.resolve_term_ident(application.function.ident);
                 format!("({} {})", function, application.args.as_slice().join(" "))
             }
         })

@@ -16,10 +16,10 @@
 
 use smt_parser_rs::{
     CommandHandler, NonstandardCommandError, SmtAttributeValue, SmtBindings,
-    SmtDatatypeConstructor, SmtFunctionSignature, SmtHandler, SmtIdent, SmtIdentView, SmtIndex,
-    SmtIndexView, SmtKeyword, SmtNumeral, SmtPattern, SmtQuantifierKind, SmtSExpr,
-    SmtSimplePattern, SmtSort, SmtSpecialConstant, SmtStringContent, SmtSymbol, SmtSymbolView,
-    SmtTerm, read::parser::NoCommandParser,
+    SmtDatatypeConstructor, SmtFunctionSignature, SmtHandler, SmtIdentView, SmtIndexView,
+    SmtKeyword, SmtNumeral, SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSort,
+    SmtSpecialConstant, SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm,
+    read::parser::NoCommandParser,
 };
 
 const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
@@ -178,23 +178,6 @@ impl TraceHash {
         }
     }
 
-    fn ident(&mut self, ident: &SmtIdent) {
-        self.symbol(&ident.name);
-        self.count(ident.indices.len());
-        for index in &ident.indices {
-            match index {
-                SmtIndex::Numeral(value) => {
-                    self.byte(1);
-                    self.numeral(value);
-                }
-                SmtIndex::Symbol(value) => {
-                    self.byte(2);
-                    self.symbol(value);
-                }
-            }
-        }
-    }
-
     fn ident_view(&mut self, ident: SmtIdentView<'_>) {
         self.bytes(ident.name.as_slice());
         self.count(ident.indices.len());
@@ -276,12 +259,12 @@ impl SmtHandler for TraceHash {
             }
             SmtTerm::QualifiedIdent(ident) => {
                 self.byte(2);
-                self.ident(&ident.ident);
+                self.ident_view(ident.ident);
                 self.optional_value(ident.sort);
             }
             SmtTerm::Application(application) => {
                 self.byte(3);
-                self.ident(&application.function.ident);
+                self.ident_view(application.function.ident);
                 self.optional_value(application.function.sort);
                 self.values(application.args.as_slice());
             }

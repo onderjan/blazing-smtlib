@@ -64,20 +64,38 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
         }
     }
 
-    /// Hands the terms from `start` onward to `f`, removing them afterwards.
+    /// Hands an application to `f`, removing it afterwards: its function
+    /// identifier and the arguments from `args_start` onward.
     ///
-    /// The handling may or may not remove the terms by itself,
+    /// The handling may or may not remove the arguments by itself,
     /// so the arena is truncated after `f` returns regardless.
     #[inline]
-    pub(crate) fn hand_over_terms<R>(
+    pub(crate) fn hand_over_application<R>(
         &mut self,
-        start: usize,
-        f: impl FnOnce(SmtMultiple<'_, H::Term>) -> R,
+        function: QualifiedIdentHandle<H>,
+        args_start: usize,
+        f: impl FnOnce(SmtQualifiedIdentView<'_, H>, SmtMultiple<'_, H::Term>) -> R,
     ) -> R {
-        let access = ArenaAccess { _priv: () };
-        let result = f(SmtMultiple::new(access, &mut self.terms, start));
-        self.terms.truncate(start);
+        let QualifiedIdentHandle { ident, sort } = function;
+        let function = SmtQualifiedIdentView {
+            ident: ident_view(&self.text, &self.indices, ident),
+            sort,
+        };
+        let args = SmtMultiple::new(ArenaAccess { _priv: () }, &mut self.terms, args_start);
+        let result = f(function, args);
+        self.terms.truncate(args_start);
+        self.indices.truncate(ident.indices_start);
+        self.text.truncate(ident.name.start);
         result
+    }
+
+    /// Views a simple identifier: a name with no indices.
+    #[inline]
+    pub(crate) fn simple_ident_view<'a>(&'a self, name: SmtSymbolView<'a>) -> SmtIdentView<'a> {
+        SmtIdentView {
+            name,
+            indices: SmtIndices::new(ArenaAccess { _priv: () }, &self.text, &[]),
+        }
     }
 
     /// Hands the let bindings to `f`, removing them afterwards: the names

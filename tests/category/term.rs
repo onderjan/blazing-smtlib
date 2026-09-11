@@ -873,9 +873,9 @@ impl SmtHandler for Consuming {
     fn handle_term(&mut self, term: SmtTerm<'_, Self>) -> Result<String, Infallible> {
         Ok(match term {
             SmtTerm::SpecialConstant(constant) => render_constant(&constant),
-            SmtTerm::QualifiedIdent(qualified_ident) => render_ident(&qualified_ident.ident),
+            SmtTerm::QualifiedIdent(qualified_ident) => render_ident_view(&qualified_ident.ident),
             SmtTerm::Application(application) => {
-                let function = render_ident(&application.function.ident);
+                let function = render_ident_view(&application.function.ident);
                 let args: Vec<String> = application.args.iter().cloned().collect();
                 let rendered = format!("({} {})", function, args.join(" "));
                 self.applications.push((function, args));

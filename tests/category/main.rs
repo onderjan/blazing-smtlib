@@ -24,8 +24,8 @@ use std::ops::ControlFlow;
 
 use smt_parser_rs::{
     SmtAttributeValue, SmtBindings, SmtHandler, SmtIdent, SmtIdentView, SmtIndex, SmtIndexView,
-    SmtKeyword, SmtPattern, SmtQualifiedIdent, SmtQuantifierKind, SmtSExpr, SmtSimplePattern,
-    SmtSort, SmtSpan, SmtSpecialConstant, SmtSymbolView, SmtTerm,
+    SmtKeyword, SmtPattern, SmtQualifiedIdent, SmtQualifiedIdentView, SmtQuantifierKind, SmtSExpr,
+    SmtSimplePattern, SmtSort, SmtSpan, SmtSpecialConstant, SmtSymbolView, SmtTerm,
     read::{
         lexer::{LexError, Lexer},
         parser::{
@@ -119,6 +119,14 @@ fn render_ident_view(ident: &SmtIdentView) -> String {
     out
 }
 
+fn render_qualified_ident_view(qualified_ident: &SmtQualifiedIdentView<Printing>) -> String {
+    let ident = render_ident_view(&qualified_ident.ident);
+    match &qualified_ident.sort {
+        Some(sort) => format!("(as {ident} {sort})"),
+        None => ident,
+    }
+}
+
 fn render_qualified_ident(qualified_ident: &SmtQualifiedIdent<Printing>) -> String {
     let ident = render_ident(&qualified_ident.ident);
     match &qualified_ident.sort {
@@ -162,9 +170,11 @@ impl SmtHandler for Printing {
     fn handle_term(&mut self, term: SmtTerm<'_, Self>) -> Result<String, Infallible> {
         Ok(match term {
             SmtTerm::SpecialConstant(constant) => render_constant(&constant),
-            SmtTerm::QualifiedIdent(qualified_ident) => render_qualified_ident(&qualified_ident),
+            SmtTerm::QualifiedIdent(qualified_ident) => {
+                render_qualified_ident_view(&qualified_ident)
+            }
             SmtTerm::Application(application) => {
-                let mut items = vec![render_qualified_ident(&application.function)];
+                let mut items = vec![render_qualified_ident_view(&application.function)];
                 items.extend(application.args);
                 render_list(&items)
             }

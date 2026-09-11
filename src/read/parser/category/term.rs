@@ -1,9 +1,10 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtApplication, SmtHandler, SmtQualifiedIdent, SmtQuantifierKind, SmtSymbolView, SmtTerm,
+    SmtApplication, SmtHandler, SmtQualifiedIdentView, SmtQuantifierKind, SmtSymbolView, SmtTerm,
     read::parser::{
-        CloseParenParser, OpenParenParser, ParserError, ParserResources,
+        CloseParenParser, IdentHandle, OpenParenParser, ParserError, ParserResources,
+        QualifiedIdentHandle,
         category::{
             CategoryErrorKind, CategoryParser, attribute::MultipleAttributes,
             parse_special_constant,
@@ -99,7 +100,8 @@ enum Level<H: SmtHandler + ?Sized> {
     ///
     /// It is closed by a closing parenthesis instead of the inner term.
     Application {
-        ident: SmtQualifiedIdent<H>,
+        /// The function identifier, stored in the arena.
+        function: QualifiedIdentHandle<H>,
         /// The arguments are terms stored in the arena starting at this position.
         arena_args_start: usize,
     },
@@ -380,11 +382,14 @@ impl<H: SmtHandler> TermSlot<H> {
                 )? {
                     ControlFlow::Break(qualified_ident) => {
                         // a term that is a qualified identifier, handle it and break
-                        let qualified_ident = resources
-                            .store
-                            .hand_over_qualified_ident(qualified_ident, |view| view.into_owned());
-                        let term = SmtTerm::QualifiedIdent(qualified_ident);
-                        let term = handle_err(handler.handle_term(term), token.span())?;
+                        let span = token.span();
+                        let term = resources.store.hand_over_qualified_ident(
+                            qualified_ident,
+                            |qualified_ident| {
+                                let term = SmtTerm::QualifiedIdent(qualified_ident);
+                                handle_err(handler.handle_term(term), span)
+                            },
+                        )?;
                         Ok(ControlFlow::Break(term))
                     }
                     ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
@@ -400,12 +405,10 @@ impl<H: SmtHandler> TermSlot<H> {
                 )? {
                     ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
                     ControlFlow::Break(qualified_ident) => {
-                        // start a new level
-                        let ident = resources
-                            .store
-                            .hand_over_qualified_ident(qualified_ident, |view| view.into_owned());
+                        // start a new level, the head stays in the arena,
+                        // remember where its arguments will start in the arena
                         slot.start_level(Level::Application {
-                            ident,
+                            function: qualified_ident,
                             arena_args_start: resources.store.terms.len(),
                         });
                         Ok(ControlFlow::Continue(()))
@@ -546,7 +549,7 @@ impl<H: SmtHandler> TermSlot<H> {
                 // this is only permitted when we are ending an application
                 // pop the level
                 let Some(Level::Application {
-                    ident,
+                    function,
                     arena_args_start,
                 }) = slot.levels.pop()
                 else {
@@ -563,19 +566,19 @@ impl<H: SmtHandler> TermSlot<H> {
                         span,
                     ));
                 }
-                // construct and handle the term, the arguments are consumed
-                store.hand_over_terms(arena_args_start, |args| {
-                    let term = SmtTerm::Application(SmtApplication {
-                        function: ident,
-                        args,
-                    });
+                // construct and handle the term, the head and the arguments are consumed
+                store.hand_over_application(function, arena_args_start, |function, args| {
+                    let term = SmtTerm::Application(SmtApplication { function, args });
                     handle_err(handler.handle_term(term), span)
                 })?
             }
             TokenKind::Symbol(name) => {
-                // a term that is a qualified identifier that is just a symbol
-                let term =
-                    SmtTerm::QualifiedIdent(SmtQualifiedIdent::new_simple(name.into_owned()));
+                // a term that is a qualified identifier that is just a symbol,
+                // handed over straight from the token
+                let term = SmtTerm::QualifiedIdent(SmtQualifiedIdentView {
+                    ident: resources.store.simple_ident_view(name),
+                    sort: None,
+                });
                 handle_err(handler.handle_term(term), span)?
             }
             kind => {
@@ -609,11 +612,19 @@ impl<H: SmtHandler> TermSlot<H> {
         let state = match token.kind() {
             TokenKind::Symbol(fn_name) => {
                 // this is an application where the function identifier is just a symbol
-                // start a new level, remember where its arguments will start in the arena
-                let fn_ident = SmtQualifiedIdent::new_simple(fn_name.into_owned());
+                // start a new level with the head name in the arena text,
+                // remember where its arguments will start in the arena
+                let store = &mut resources.store;
+                let name = store.push_text(fn_name.as_slice());
                 slot.start_level(Level::Application {
-                    ident: fn_ident,
-                    arena_args_start: resources.store.terms.len(),
+                    function: QualifiedIdentHandle {
+                        ident: IdentHandle {
+                            name,
+                            indices_start: store.indices.len(),
+                        },
+                        sort: None,
+                    },
+                    arena_args_start: store.terms.len(),
                 });
                 return Ok(());
             }

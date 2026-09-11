@@ -212,7 +212,7 @@ pub type SmtTerms<'a, H> = SmtMultiple<'a, <H as SmtHandler>::Term>;
 ///
 /// It is guaranteed that `args` are nonempty.
 pub struct SmtApplication<'a, H: SmtHandler + ?Sized> {
-    pub function: SmtQualifiedIdent<H>,
+    pub function: SmtQualifiedIdentView<'a, H>,
     pub args: SmtTerms<'a, H>,
 }
 
@@ -241,7 +241,7 @@ pub enum SmtSpecialConstant {
 /// A term to be handled.
 pub enum SmtTerm<'a, H: SmtHandler + ?Sized> {
     SpecialConstant(SmtSpecialConstant),
-    QualifiedIdent(SmtQualifiedIdent<H>),
+    QualifiedIdent(SmtQualifiedIdentView<'a, H>),
     Application(SmtApplication<'a, H>),
 }
 
