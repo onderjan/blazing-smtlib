@@ -5,8 +5,8 @@ use std::io::{BufRead, Read};
 use smt_parser_rs::{
     CheckStandardSyntax, NonstandardCommandError, SmtLocation,
     read::{
-        SmtReadError, SmtReadErrorKind, lexer::LexerErrorKind, parser::CategoryErrorKind,
-        read_smt, read_smt_file,
+        SmtReadError, SmtReadErrorKind, lexer::LexerErrorKind, parser::CategoryErrorKind, read_smt,
+        read_smt_file,
     },
 };
 

@@ -104,7 +104,10 @@ pub const FILES: &[BenchFile] = &[
     // symbolic execution in SSA form: over 300 thousand single-binding let
     // terms, each binding one application, chained 2500 levels deep; the
     // dominant let shape in the corpus, and the shape of its largest files
-    file("qf_bv/sage2-14918", "non-incremental/QF_BV/Sage2/bench_14918.smt2"),
+    file(
+        "qf_bv/sage2-14918",
+        "non-incremental/QF_BV/Sage2/bench_14918.smt2",
+    ),
     // k-induction software verification: incremental script of 60 thousand
     // small define-fun commands with push
     file(

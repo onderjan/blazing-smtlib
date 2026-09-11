@@ -51,16 +51,10 @@ fn indexed_over_lines() {
 #[test]
 fn errors() {
     let err = assert_error::<IdentParser>(b"1", 0, 1);
-    assert!(
-        matches!(err, CategoryErrorKind::ExpectedIdent),
-        "{err:?}"
-    );
+    assert!(matches!(err, CategoryErrorKind::ExpectedIdent), "{err:?}");
 
     let err = assert_error::<IdentParser>(b")", 0, 1);
-    assert!(
-        matches!(err, CategoryErrorKind::ExpectedIdent),
-        "{err:?}"
-    );
+    assert!(matches!(err, CategoryErrorKind::ExpectedIdent), "{err:?}");
 
     // after `(` only an underscore may follow
     let err = assert_error::<IdentParser>(b"(f 1)", 1, 2);
@@ -75,10 +69,7 @@ fn errors() {
     // the name must be a symbol
     let err = assert_error::<IdentParser>(b"(_ 1 2)", 3, 4);
     assert!(
-        matches!(
-            err,
-            CategoryErrorKind::ExpectedToken(&[TokenType::Symbol])
-        ),
+        matches!(err, CategoryErrorKind::ExpectedToken(&[TokenType::Symbol])),
         "{err:?}"
     );
 

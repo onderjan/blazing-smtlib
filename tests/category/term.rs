@@ -148,10 +148,7 @@ fn let_errors() {
 
     let err = assert_error::<TermParser<Printing>>(b"(let ((1 x)) x)", 7, 8);
     assert!(
-        matches!(
-            err,
-            CategoryErrorKind::ExpectedToken(&[TokenType::Symbol])
-        ),
+        matches!(err, CategoryErrorKind::ExpectedToken(&[TokenType::Symbol])),
         "{err:?}"
     );
 
@@ -177,22 +174,13 @@ fn let_errors() {
 #[test]
 fn errors() {
     let err = assert_error::<TermParser<Printing>>(b")", 0, 1);
-    assert!(
-        matches!(err, CategoryErrorKind::ExpectedTerm),
-        "{err:?}"
-    );
+    assert!(matches!(err, CategoryErrorKind::ExpectedTerm), "{err:?}");
 
     let err = assert_error::<TermParser<Printing>>(b":kw", 0, 3);
-    assert!(
-        matches!(err, CategoryErrorKind::ExpectedTerm),
-        "{err:?}"
-    );
+    assert!(matches!(err, CategoryErrorKind::ExpectedTerm), "{err:?}");
 
     let err = assert_error::<TermParser<Printing>>(b"", 0, 0);
-    assert!(
-        matches!(err, CategoryErrorKind::ExpectedTerm),
-        "{err:?}"
-    );
+    assert!(matches!(err, CategoryErrorKind::ExpectedTerm), "{err:?}");
 
     // the operator position takes a symbol, a reserved binder, `_` or `(`
     let err = assert_error::<TermParser<Printing>>(b"(1 x)", 1, 2);
@@ -209,17 +197,11 @@ fn errors() {
 
     // bad argument
     let err = assert_error::<TermParser<Printing>>(b"(f x :kw)", 5, 8);
-    assert!(
-        matches!(err, CategoryErrorKind::ExpectedTerm),
-        "{err:?}"
-    );
+    assert!(matches!(err, CategoryErrorKind::ExpectedTerm), "{err:?}");
 
     // EOF inside an application is a missing term
     let err = assert_error::<TermParser<Printing>>(b"(f x", 4, 4);
-    assert!(
-        matches!(err, CategoryErrorKind::ExpectedTerm),
-        "{err:?}"
-    );
+    assert!(matches!(err, CategoryErrorKind::ExpectedTerm), "{err:?}");
 
     // bad indexed identifier in a term
     let err = assert_error::<TermParser<Printing>>(b"(_ f)", 4, 5);
@@ -424,34 +406,22 @@ fn binder_errors() {
 
     // a variable must have a sort
     let err = assert_error::<TermParser<Printing>>(b"(forall ((x)) x)", 11, 12);
-    assert!(
-        matches!(err, CategoryErrorKind::ExpectedSort),
-        "{err:?}"
-    );
+    assert!(matches!(err, CategoryErrorKind::ExpectedSort), "{err:?}");
 
     // EOF before the body is a missing term
     let err = assert_error::<TermParser<Printing>>(b"(forall ((x Int))", 17, 17);
-    assert!(
-        matches!(err, CategoryErrorKind::ExpectedTerm),
-        "{err:?}"
-    );
+    assert!(matches!(err, CategoryErrorKind::ExpectedTerm), "{err:?}");
 }
 
 #[test]
 fn annotation_errors() {
     // an annotation must contain at least one attribute
     let err = assert_error::<TermParser<Printing>>(b"(! x)", 4, 5);
-    assert!(
-        matches!(err, CategoryErrorKind::EmptyAnnotation),
-        "{err:?}"
-    );
+    assert!(matches!(err, CategoryErrorKind::EmptyAnnotation), "{err:?}");
 
     // an annotation must contain a term
     let err = assert_error::<TermParser<Printing>>(b"(!)", 2, 3);
-    assert!(
-        matches!(err, CategoryErrorKind::ExpectedTerm),
-        "{err:?}"
-    );
+    assert!(matches!(err, CategoryErrorKind::ExpectedTerm), "{err:?}");
 }
 
 /// Handler that only counts terms, so deep nesting does not build huge strings.
@@ -710,10 +680,7 @@ fn match_term_parser_is_reusable() {
 fn match_errors() {
     // the scrutinee is required
     let err = assert_error::<TermParser<Printing>>(b"(match)", 6, 7);
-    assert!(
-        matches!(err, CategoryErrorKind::ExpectedTerm),
-        "{err:?}"
-    );
+    assert!(matches!(err, CategoryErrorKind::ExpectedTerm), "{err:?}");
     // the case list is required
     let err = assert_error::<TermParser<Printing>>(b"(match x)", 8, 9);
     assert!(
@@ -725,10 +692,7 @@ fn match_errors() {
     );
     // at least one case is required
     let err = assert_error::<TermParser<Printing>>(b"(match x ())", 10, 11);
-    assert!(
-        matches!(err, CategoryErrorKind::EmptyMatchCases),
-        "{err:?}"
-    );
+    assert!(matches!(err, CategoryErrorKind::EmptyMatchCases), "{err:?}");
     // each case is parenthesized
     let err = assert_error::<TermParser<Printing>>(b"(match x (x))", 10, 11);
     assert!(
@@ -760,18 +724,12 @@ fn match_errors() {
     // the constructor is a symbol, not a wildcard or a constant
     let err = assert_error::<TermParser<Printing>>(b"(match x (((1 y) z)))", 12, 13);
     assert!(
-        matches!(
-            err,
-            CategoryErrorKind::ExpectedToken(&[TokenType::Symbol])
-        ),
+        matches!(err, CategoryErrorKind::ExpectedToken(&[TokenType::Symbol])),
         "{err:?}"
     );
     let err = assert_error::<TermParser<Printing>>(b"(match x (((_ y) z)))", 12, 13);
     assert!(
-        matches!(
-            err,
-            CategoryErrorKind::ExpectedToken(&[TokenType::Symbol])
-        ),
+        matches!(err, CategoryErrorKind::ExpectedToken(&[TokenType::Symbol])),
         "{err:?}"
     );
     // the arguments are symbols or wildcards, not nested patterns or constants
@@ -799,10 +757,7 @@ fn match_errors() {
     );
     // the case body is required
     let err = assert_error::<TermParser<Printing>>(b"(match x ((y)))", 12, 13);
-    assert!(
-        matches!(err, CategoryErrorKind::ExpectedTerm),
-        "{err:?}"
-    );
+    assert!(matches!(err, CategoryErrorKind::ExpectedTerm), "{err:?}");
     // exactly one case body
     let err = assert_error::<TermParser<Printing>>(b"(match x ((y 1 2)))", 15, 16);
     assert!(
@@ -963,11 +918,9 @@ fn application_arguments_are_handed_over_regardless_of_consumption() {
             consumption,
             applications: Vec::new(),
         };
-        let (term, left) = run_with::<Consuming, TermParser<Consuming>>(
-            &mut handler,
-            b"(f (g x) (h a b c) y)",
-        )
-        .unwrap_or_else(|(kind, span)| panic!("{kind:?} at {span:?} with {consumption:?}"));
+        let (term, left) =
+            run_with::<Consuming, TermParser<Consuming>>(&mut handler, b"(f (g x) (h a b c) y)")
+                .unwrap_or_else(|(kind, span)| panic!("{kind:?} at {span:?} with {consumption:?}"));
         assert_eq!(left, 0, "with {consumption:?}");
         assert_eq!(term, "(f (g x) (h a b c) y)", "with {consumption:?}");
         let expected: Vec<(String, Vec<String>)> = vec![
