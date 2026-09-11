@@ -2,7 +2,9 @@ use std::fmt::Debug;
 
 use crate::{
     SmtBinDigits, SmtDecimal, SmtHandler, SmtHexDigits, SmtKeyword, SmtMultiple, SmtNumeral,
-    SmtStringContent, SmtSymbol, token::Reserved,
+    SmtNumeralView, SmtStringContent, SmtSymbol, SmtSymbolView,
+    read::parser::{ArenaAccess, IndexHandle},
+    token::Reserved,
 };
 
 #[derive(Debug, Clone)]
@@ -72,22 +74,84 @@ where
     }
 }
 
-pub struct SmtSort<H: SmtHandler + ?Sized> {
-    pub ident: SmtIdent,
+/// Index of an identifier to be handled.
+#[derive(Debug, Clone, Copy)]
+pub enum SmtIndexView<'a> {
+    Numeral(SmtNumeralView<'a>),
+    Symbol(SmtSymbolView<'a>),
+}
+
+impl SmtIndexView<'_> {
+    pub fn into_owned(self) -> SmtIndex {
+        match self {
+            SmtIndexView::Numeral(numeral) => SmtIndex::Numeral(numeral.into_owned()),
+            SmtIndexView::Symbol(symbol) => SmtIndex::Symbol(symbol.into_owned()),
+        }
+    }
+}
+
+/// The indices of an identifier that is to be handled.
+#[derive(Clone, Copy)]
+pub struct SmtIndices<'a> {
+    text: &'a [u8],
+    handles: &'a [IndexHandle],
+}
+
+impl<'a> SmtIndices<'a> {
+    pub(crate) fn new(_access: ArenaAccess, text: &'a [u8], handles: &'a [IndexHandle]) -> Self {
+        Self { text, handles }
+    }
+
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.handles.len()
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.handles.is_empty()
+    }
+
+    #[inline]
+    pub fn get(&self, index: usize) -> Option<SmtIndexView<'a>> {
+        Some(self.handles.get(index)?.view(self.text))
+    }
+
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = SmtIndexView<'a>> {
+        let text = self.text;
+        self.handles.iter().map(move |handle| handle.view(text))
+    }
+}
+
+impl Debug for SmtIndices<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_list().entries(self.iter()).finish()
+    }
+}
+
+/// Identifier to be handled.
+#[derive(Debug, Clone, Copy)]
+pub struct SmtIdentView<'a> {
+    pub name: SmtSymbolView<'a>,
+    pub indices: SmtIndices<'a>,
+}
+
+impl SmtIdentView<'_> {
+    pub fn into_owned(self) -> SmtIdent {
+        SmtIdent {
+            name: self.name.into_owned(),
+            indices: self.indices.iter().map(SmtIndexView::into_owned).collect(),
+        }
+    }
+}
+
+/// Sort to be handled.
+pub struct SmtSort<'a, H: SmtHandler + ?Sized> {
+    pub ident: SmtIdentView<'a>,
     pub applied: Vec<H::Sort>,
 }
 
-impl<H: SmtHandler + ?Sized> SmtSort<H> {
-    pub fn new(ident: SmtIdent, applied: Vec<H::Sort>) -> Self {
-        Self { ident, applied }
-    }
-
-    pub fn new_simple(ident: SmtIdent) -> Self {
-        Self::new(ident, Vec::new())
-    }
-}
-
-impl<H: SmtHandler + ?Sized> Debug for SmtSort<H>
+impl<H: SmtHandler + ?Sized> Debug for SmtSort<'_, H>
 where
     H::Sort: Debug,
 {
@@ -99,13 +163,13 @@ where
     }
 }
 
-impl<H: SmtHandler + ?Sized> Clone for SmtSort<H>
+impl<H: SmtHandler + ?Sized> Clone for SmtSort<'_, H>
 where
     H::Sort: Clone,
 {
     fn clone(&self) -> Self {
         Self {
-            ident: self.ident.clone(),
+            ident: self.ident,
             applied: self.applied.clone(),
         }
     }

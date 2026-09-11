@@ -96,7 +96,7 @@ impl SmtHandler for Recording {
     type Sort = ();
     type Term = ();
 
-    fn handle_sort(&mut self, _sort: SmtSort<Self>) -> Result<(), Self::Error> {
+    fn handle_sort(&mut self, _sort: SmtSort<'_, Self>) -> Result<(), Self::Error> {
         Ok(())
     }
     fn handle_term(&mut self, _term: SmtTerm<'_, Self>) -> Result<(), Self::Error> {

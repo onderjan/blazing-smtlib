@@ -1,9 +1,9 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtHandler, SmtIdent, SmtSort,
+    SmtHandler,
     read::parser::{
-        IdentSlot, ParserError, ParserResources,
+        Arena, IdentHandle, IdentSlot, ParserError, ParserResources,
         category::{CategoryErrorKind, CategoryParser},
         handle_err,
     },
@@ -46,9 +46,10 @@ impl<H: SmtHandler> CategoryParser<H> for SortParser<H> {
         let ParserResources {
             ident_slot,
             sort_slot,
+            store,
             ..
         } = resources;
-        sort_slot.progress(handler, ident_slot, token)
+        sort_slot.progress(handler, store, ident_slot, token)
     }
 }
 
@@ -74,7 +75,8 @@ enum State {
 /// Sorts here are waiting for a next applied sort
 /// or a closing parenthesis.
 struct Level<H: SmtHandler + ?Sized> {
-    ident: SmtIdent,
+    /// The identifier, stored in the arena.
+    ident: IdentHandle,
     applied: Vec<H::Sort>,
 }
 
@@ -104,6 +106,7 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
     pub(crate) fn progress(
         &mut self,
         handler: &mut H,
+        arena: &mut Arena<H>,
         ident_slot: &mut IdentSlot,
         token: &Token,
     ) -> Result<ControlFlow<H::Sort>, ParserError<H::Error>> {
@@ -118,9 +121,12 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
                 match token.kind() {
                     TokenKind::Symbol(name) => {
                         // the sort consists just of a single-symbol ident
-                        ControlFlow::Break(SmtSort::new_simple(SmtIdent::new_simple(
-                            name.into_owned(),
-                        )))
+                        let name = arena.push_text(name.as_slice());
+                        let ident = IdentHandle {
+                            name,
+                            indices_start: arena.indices.len(),
+                        };
+                        ControlFlow::Break((ident, Vec::new()))
                     }
                     TokenKind::ParenOpen => {
                         // move the state to open
@@ -139,10 +145,7 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
                                         span,
                                     ));
                                 }
-                                ControlFlow::Break(SmtSort::new(
-                                    last_level.ident,
-                                    last_level.applied,
-                                ))
+                                ControlFlow::Break((last_level.ident, last_level.applied))
                             }
                             None => {
                                 // we just received ")"
@@ -172,7 +175,11 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
                     }
                     TokenKind::Symbol(name) => {
                         // non-indexed ident starting sort
-                        let ident = SmtIdent::new_simple(name.into_owned());
+                        let name = arena.push_text(name.as_slice());
+                        let ident = IdentHandle {
+                            name,
+                            indices_start: arena.indices.len(),
+                        };
                         self.levels.push(Level {
                             ident,
                             applied: Vec::new(),
@@ -195,9 +202,11 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
                 self.state = state;
                 ControlFlow::Continue(())
             }
-            State::IdentOnly => ident_slot.progress(token)?.map_break(SmtSort::new_simple),
+            State::IdentOnly => ident_slot
+                .progress(arena, token)?
+                .map_break(|ident| (ident, Vec::new())),
             State::StartingIdent => {
-                match ident_slot.progress(token)? {
+                match ident_slot.progress(arena, token)? {
                     ControlFlow::Continue(()) => ControlFlow::Continue(()),
                     ControlFlow::Break(ident) => {
                         // add a new level and start parsing the new sort
@@ -212,13 +221,15 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
             }
         };
 
-        let ControlFlow::Break(sort) = flow else {
+        let ControlFlow::Break((ident, applied)) = flow else {
             return Ok(ControlFlow::Continue(()));
         };
 
-        // we have parsed a sort, reset the state
+        // we have parsed a sort, reset the state and hand the sort over
         self.state = State::Start;
-        let sort = handle_err(handler.handle_sort(sort), span)?;
+        let sort = arena.hand_over_sort(ident, applied, |sort| {
+            handle_err(handler.handle_sort(sort), span)
+        })?;
 
         if let Some(last_level) = self.levels.last_mut() {
             // we need to append to the last level

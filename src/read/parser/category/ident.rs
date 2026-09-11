@@ -1,9 +1,9 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtHandler, SmtIdent, SmtIndex, SmtSymbol,
+    SmtHandler, SmtIdent,
     read::parser::{
-        ParserError, ParserResources,
+        Arena, IdentHandle, IndexHandle, ParserError, ParserResources, TextHandle,
         category::{CategoryErrorKind, CategoryParser},
     },
     token::{Reserved, Token, TokenKind, TokenType},
@@ -39,8 +39,16 @@ impl<H: SmtHandler> CategoryParser<H> for IdentParser {
         resources: &mut ParserResources<H>,
         token: &Token,
     ) -> Result<ControlFlow<SmtIdent, ()>, ParserError<H::Error>> {
-        // progress the slot
-        resources.ident_slot.progress(token)
+        // progress the slot over the arena, returning an owned identifier
+        let ParserResources {
+            ident_slot, store, ..
+        } = resources;
+        match ident_slot.progress(store, token)? {
+            ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
+            ControlFlow::Break(ident) => Ok(ControlFlow::Break(
+                store.hand_over_ident(ident, |ident| ident.into_owned()),
+            )),
+        }
     }
 }
 
@@ -57,8 +65,10 @@ enum State {
 
 pub(crate) struct IdentSlot {
     state: State,
-    name: Option<SmtSymbol>,
-    indices: Vec<SmtIndex>,
+    /// The name, stored in the arena text while the indices are read.
+    name: Option<TextHandle>,
+    /// Where the indices of the currently-read identifier start in the arena.
+    arena_indices_start: usize,
 }
 
 impl IdentSlot {
@@ -66,18 +76,17 @@ impl IdentSlot {
         Self {
             state: State::Start,
             name: None,
-            indices: Vec::new(),
+            arena_indices_start: 0,
         }
     }
 
     pub(crate) fn is_pristine(&self) -> bool {
-        matches!(self.state, State::Start) && self.name.is_none() && self.indices.is_empty()
+        matches!(self.state, State::Start) && self.name.is_none()
     }
 
     pub(crate) fn clear(&mut self) {
         self.state = State::Start;
         self.name = None;
-        self.indices.clear();
     }
 
     pub(crate) fn move_after_open_paren(&mut self) {
@@ -97,10 +106,11 @@ impl IdentSlot {
     }
 
     #[inline]
-    pub(crate) fn progress<E>(
+    pub(crate) fn progress<H: SmtHandler + ?Sized, E>(
         &mut self,
+        arena: &mut Arena<H>,
         token: &Token,
-    ) -> Result<ControlFlow<SmtIdent, ()>, ParserError<E>> {
+    ) -> Result<ControlFlow<IdentHandle, ()>, ParserError<E>> {
         let span = token.span();
 
         match self.state {
@@ -108,7 +118,12 @@ impl IdentSlot {
                 debug_assert!(self.is_pristine(), "must be pristine when starting");
                 match token.kind() {
                     TokenKind::Symbol(name) => {
-                        return Ok(ControlFlow::Break(SmtIdent::new_simple(name.into_owned())));
+                        // a simple identifier: its name goes to the arena text, no indices
+                        let name = arena.push_text(name.as_slice());
+                        return Ok(ControlFlow::Break(IdentHandle {
+                            name,
+                            indices_start: arena.indices.len(),
+                        }));
                     }
                     TokenKind::ParenOpen => {
                         self.state = State::Open;
@@ -133,9 +148,10 @@ impl IdentSlot {
             State::AfterUnderscore => {
                 let name = match self.name.take() {
                     None => {
-                        // we need to read the name
+                        // we need to read the name, its indices will follow in the arena
                         if let TokenKind::Symbol(name) = token.kind() {
-                            Some(name.into_owned())
+                            self.arena_indices_start = arena.indices.len();
+                            Some(arena.push_text(name.as_slice()))
                         } else {
                             let kind = CategoryErrorKind::ExpectedToken(&[TokenType::Symbol]);
                             return Err(ParserError::category_error(kind, span));
@@ -146,22 +162,27 @@ impl IdentSlot {
                         // and ending with closing parenthesis
                         match token.kind() {
                             TokenKind::ParenClose => {
-                                if self.indices.is_empty() {
+                                let indices_start = self.arena_indices_start;
+                                if arena.indices.len() == indices_start {
                                     let kind = CategoryErrorKind::EmptyIdentIndices;
                                     return Err(ParserError::category_error(kind, span));
                                 }
-                                let indices = self.indices.drain(..).collect();
-                                // reset to the starting state: both our name and indices are now empty
+                                // reset to the starting state
+                                // we already took the name
+                                // the identifier is in the arena
                                 self.state = State::Start;
-                                return Ok(ControlFlow::Break(SmtIdent { name, indices }));
+                                return Ok(ControlFlow::Break(IdentHandle {
+                                    name,
+                                    indices_start,
+                                }));
                             }
                             TokenKind::Numeral(index_value) => {
-                                self.indices
-                                    .push(SmtIndex::Numeral(index_value.into_owned()));
+                                let index = arena.push_text(index_value.as_slice());
+                                arena.indices.push(IndexHandle::Numeral(index));
                             }
                             TokenKind::Symbol(index_symbol) => {
-                                self.indices
-                                    .push(SmtIndex::Symbol(index_symbol.into_owned()));
+                                let index = arena.push_text(index_symbol.as_slice());
+                                arena.indices.push(IndexHandle::Symbol(index));
                             }
                             _ => {
                                 let kind = CategoryErrorKind::ExpectedIndexOrCloseParen;
@@ -183,7 +204,7 @@ impl IdentSlot {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{CheckStandardSyntax, read::parser::category::tests::parse_all_with};
+    use crate::{CheckStandardSyntax, SmtIndex, read::parser::category::tests::parse_all_with};
 
     fn index_texts(ident: &SmtIdent) -> Vec<String> {
         ident

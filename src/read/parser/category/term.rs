@@ -3,8 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtApplication, SmtHandler, SmtQualifiedIdent, SmtQuantifierKind, SmtSymbol, SmtTerm,
     read::parser::{
-        CloseParenParser, IdentSlot, OpenParenParser, ParserError, ParserResources, SortSlot,
-        SortedVarSlot,
+        CloseParenParser, OpenParenParser, ParserError, ParserResources,
         category::{
             CategoryErrorKind, CategoryParser, attribute::MultipleAttributes,
             parse_special_constant,
@@ -374,6 +373,7 @@ impl<H: SmtHandler> TermSlot<H> {
             State::QualifiedIdent => {
                 match resources.qualified_ident_slot.progress(
                     handler,
+                    &mut resources.store,
                     &mut resources.sort_slot,
                     &mut resources.ident_slot,
                     token,
@@ -390,6 +390,7 @@ impl<H: SmtHandler> TermSlot<H> {
             State::ApplicationIdent => {
                 match resources.qualified_ident_slot.progress(
                     handler,
+                    &mut resources.store,
                     &mut resources.sort_slot,
                     &mut resources.ident_slot,
                     token,
@@ -443,11 +444,9 @@ impl<H: SmtHandler> TermSlot<H> {
             State::SortedBinderVars(binder_kind) => {
                 let span = token.span();
 
-                let flow = slot.sorted_bindings_parser.progress_and_open(
+                let flow = SortedBindingsParser::progress_and_open(
                     handler,
-                    &mut resources.sorted_var_slot,
-                    &mut resources.sort_slot,
-                    &mut resources.ident_slot,
+                    resources,
                     token,
                     |handler, name, sort| match binder_kind {
                         SortedBinderKind::Exists => {
@@ -481,7 +480,7 @@ impl<H: SmtHandler> TermSlot<H> {
                         };
 
                         // push a level to handle the inner term and then properly close all opened binders
-                        slot.start_level(Level::BinderInner {
+                        resources.term_slot.start_level(Level::BinderInner {
                             end_kind,
                             num_close: num_opened,
                         });
@@ -832,33 +831,31 @@ impl SortedBindingsParser {
 
 impl SortedBindingsParser {
     fn progress_and_open<H: SmtHandler>(
-        &mut self,
         handler: &mut H,
-        sorted_var_slot: &mut SortedVarSlot<H>,
-        sort_slot: &mut SortSlot<H>,
-        ident_slot: &mut IdentSlot,
+        resources: &mut ParserResources<H>,
         token: &Token,
         open_fn: impl Fn(&mut H, SmtSymbol, H::Sort) -> Result<(), H::Error>,
     ) -> Result<ControlFlow<u64>, ParserError<H::Error>> {
-        let token = match self.state {
+        let this = &mut resources.term_slot.sorted_bindings_parser;
+        let token = match this.state {
             SortedBindingsParserState::Start => {
                 // expect an opening parenthesis
                 OpenParenParser::expect(token)?;
-                self.state = SortedBindingsParserState::AwaitingBinder;
+                this.state = SortedBindingsParserState::AwaitingBinder;
                 return Ok(ControlFlow::Continue(()));
             }
             SortedBindingsParserState::AwaitingBinder => {
                 // either a new sorted variable
                 // or a closing parenthesis ending binders
                 if matches!(token.kind(), TokenKind::ParenClose) {
-                    let num_opened = self.num_opened;
+                    let num_opened = this.num_opened;
                     // reset before break
-                    self.state = SortedBindingsParserState::Start;
-                    self.num_opened = 0;
+                    this.state = SortedBindingsParserState::Start;
+                    this.num_opened = 0;
                     return Ok(ControlFlow::Break(num_opened));
                 }
                 // parse the binder
-                self.state = SortedBindingsParserState::ParsingBinder;
+                this.state = SortedBindingsParserState::ParsingBinder;
                 token
             }
             SortedBindingsParserState::ParsingBinder => token,
@@ -866,14 +863,20 @@ impl SortedBindingsParser {
 
         // parse the sorted variable
         let span = token.span();
-        match sorted_var_slot.progress(handler, sort_slot, ident_slot, token)? {
+        match resources.sorted_var_slot.progress(
+            handler,
+            &mut resources.store,
+            &mut resources.sort_slot,
+            &mut resources.ident_slot,
+            token,
+        )? {
             ControlFlow::Continue(()) => {}
             ControlFlow::Break((name, sort)) => {
                 // start the binder and increment opened
                 handle_err(open_fn(handler, name, sort), span)?;
-                self.num_opened += 1;
+                this.num_opened += 1;
                 // go back to awaiting a binder
-                self.state = SortedBindingsParserState::AwaitingBinder;
+                this.state = SortedBindingsParserState::AwaitingBinder;
             }
         }
         Ok(ControlFlow::Continue(()))

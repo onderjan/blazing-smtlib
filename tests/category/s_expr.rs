@@ -82,7 +82,7 @@ impl SmtHandler for Counting {
     type Sort = ();
     type Term = ();
 
-    fn handle_sort(&mut self, _sort: SmtSort<Self>) -> Result<(), Infallible> {
+    fn handle_sort(&mut self, _sort: SmtSort<'_, Self>) -> Result<(), Infallible> {
         Ok(())
     }
     fn handle_term(&mut self, _term: SmtTerm<'_, Self>) -> Result<(), Infallible> {

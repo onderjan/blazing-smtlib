@@ -5,8 +5,9 @@ use std::fmt::Debug;
 
 use smt_parser_rs::{
     SmtApplication, SmtAttributeValue, SmtBindings, SmtDatatypeConstructor, SmtFunctionSignature,
-    SmtHandler, SmtIdent, SmtIndex, SmtKeyword, SmtPattern, SmtQualifiedIdent, SmtQuantifierKind,
-    SmtSExpr, SmtSimplePattern, SmtSort, SmtSpecialConstant, SmtSymbol, SmtTerm,
+    SmtHandler, SmtIdent, SmtIdentView, SmtIndex, SmtIndexView, SmtIndices, SmtKeyword, SmtPattern,
+    SmtQualifiedIdent, SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSort, SmtSpecialConstant,
+    SmtSymbol, SmtTerm,
 };
 
 /// Handler that is deliberately neither `Debug` nor `Clone`,
@@ -20,7 +21,7 @@ impl SmtHandler for OpaqueHandler {
     type Sort = String;
     type Term = String;
 
-    fn handle_sort(&mut self, _sort: SmtSort<Self>) -> Result<String, Infallible> {
+    fn handle_sort(&mut self, _sort: SmtSort<'_, Self>) -> Result<String, Infallible> {
         Ok(String::new())
     }
     fn handle_term(&mut self, _term: SmtTerm<'_, Self>) -> Result<String, Infallible> {
@@ -96,7 +97,10 @@ fn nodes_are_debug_and_clone_with_an_opaque_handler() {
     assert_debug_and_clone::<SmtIdent>();
     assert_debug_and_clone::<SmtSpecialConstant>();
     assert_debug_and_clone::<SmtQualifiedIdent<OpaqueHandler>>();
-    assert_debug_and_clone::<SmtSort<OpaqueHandler>>();
+    assert_debug_and_clone::<SmtIndexView<'static>>();
+    assert_debug_and_clone::<SmtIndices<'static>>();
+    assert_debug_and_clone::<SmtIdentView<'static>>();
+    assert_debug_and_clone::<SmtSort<'static, OpaqueHandler>>();
     // the nodes handing values over cannot be cloned, but must still be debuggable
     assert_debug::<SmtApplication<'static, OpaqueHandler>>();
     assert_debug::<SmtTerm<'static, OpaqueHandler>>();

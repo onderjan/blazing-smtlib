@@ -3,8 +3,8 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler, SmtSymbol,
     read::parser::{
-        CloseParenParser, IdentSlot, OpenParenParser, ParserError, ParserResources, SortSlot,
-        SymbolParser, category::CategoryParser,
+        Arena, CloseParenParser, IdentSlot, OpenParenParser, ParserError, ParserResources,
+        SortSlot, SymbolParser, category::CategoryParser,
     },
     token::Token,
 };
@@ -46,9 +46,10 @@ impl<H: SmtHandler> CategoryParser<H> for SortedVarParser<H> {
             ident_slot,
             sort_slot,
             sorted_var_slot,
+            store,
             ..
         } = resources;
-        sorted_var_slot.progress(handler, sort_slot, ident_slot, token)
+        sorted_var_slot.progress(handler, store, sort_slot, ident_slot, token)
     }
 }
 
@@ -89,6 +90,7 @@ impl<H: SmtHandler + ?Sized> SortedVarSlot<H> {
     pub(crate) fn progress(
         &mut self,
         handler: &mut H,
+        arena: &mut Arena<H>,
         sort_slot: &mut SortSlot<H>,
         ident_slot: &mut IdentSlot,
         token: &Token,
@@ -110,7 +112,7 @@ impl<H: SmtHandler + ?Sized> SortedVarSlot<H> {
 
         if let Some(name) = self.name.take() {
             // after the name, parsing the sort
-            match sort_slot.progress(handler, ident_slot, token)? {
+            match sort_slot.progress(handler, arena, ident_slot, token)? {
                 ControlFlow::Continue(()) => self.name = Some(name),
                 ControlFlow::Break(sort) => self.sorted_var = Some((name, sort)),
             }

@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler, SmtIdent, SmtQualifiedIdent,
     read::parser::{
-        CloseParenParser, IdentSlot, ParserError, ParserResources, SortSlot,
+        Arena, CloseParenParser, IdentSlot, ParserError, ParserResources, SortSlot,
         category::{CategoryErrorKind, CategoryParser},
     },
     token::{Reserved, Token, TokenKind, TokenType},
@@ -46,9 +46,10 @@ impl<H: SmtHandler> CategoryParser<H> for QualifiedIdentParser<H> {
             ident_slot,
             sort_slot,
             qualified_ident_slot,
+            store,
             ..
         } = resources;
-        qualified_ident_slot.progress(handler, sort_slot, ident_slot, token)
+        qualified_ident_slot.progress(handler, store, sort_slot, ident_slot, token)
     }
 }
 
@@ -119,6 +120,7 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
     pub(crate) fn progress(
         &mut self,
         handler: &mut H,
+        arena: &mut Arena<H>,
         sort_slot: &mut SortSlot<H>,
         ident_slot: &mut IdentSlot,
         token: &Token,
@@ -154,7 +156,7 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
 
         if let Some(ident) = self.ident.take() {
             // step 5: after the identifier of "(as", parsing the sort
-            match sort_slot.progress(handler, ident_slot, token)? {
+            match sort_slot.progress(handler, arena, ident_slot, token)? {
                 ControlFlow::Continue(()) => self.ident = Some(ident),
                 ControlFlow::Break(sort) => {
                     self.qualified_ident = Some(SmtQualifiedIdent::new_qualified(ident, sort))
@@ -205,7 +207,8 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
             },
             // step 3: parsing an unqualified indexed identifier
             State::UnqualifiedIndexed => {
-                if let ControlFlow::Break(ident) = ident_slot.progress(token)? {
+                if let ControlFlow::Break(ident) = ident_slot.progress(arena, token)? {
+                    let ident = arena.hand_over_ident(ident, |ident| ident.into_owned());
                     // the closing parenthesis was already consumed by the ident slot
                     // reset and return an unqualified but indexed ident
                     self.state = State::Start;
@@ -216,7 +219,8 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
             }
             // step 4: parsing the identifier of a qualified identifier
             State::QualifiedIdent => {
-                if let ControlFlow::Break(ident) = ident_slot.progress(token)? {
+                if let ControlFlow::Break(ident) = ident_slot.progress(arena, token)? {
+                    let ident = arena.hand_over_ident(ident, |ident| ident.into_owned());
                     // store the identifier
                     // this moves us to step 5 where its sort is parsed next
                     self.ident = Some(ident);

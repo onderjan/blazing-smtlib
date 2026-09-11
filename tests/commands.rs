@@ -7,8 +7,7 @@ use common::{assert_error_span, assert_parser_error, parse_with};
 
 use smt_parser_rs::{
     CommandHandler, SmtAttributeValue, SmtBindings, SmtDatatypeConstructor, SmtFunctionSignature,
-    SmtHandler,
-    SmtIdent, SmtIndex, SmtKeyword, SmtNumeral, SmtPattern, SmtQuantifierKind, SmtSExpr,
+    SmtHandler, SmtIdent, SmtIdentView, SmtIndex, SmtIndexView, SmtKeyword, SmtNumeral, SmtPattern, SmtQuantifierKind, SmtSExpr,
     SmtSimplePattern, SmtSort, SmtSpecialConstant, SmtStringContent, SmtSymbol, SmtSymbolView,
     SmtTerm,
     read::{
@@ -110,6 +109,22 @@ fn text(bytes: &[u8]) -> String {
 
 /// Renders an identifier including its indices, so that stale indices
 /// leaking from a previously parsed command would show up in the events.
+fn ident_view_text(ident: SmtIdentView<'_>) -> String {
+    let name = text(ident.name.as_slice());
+    if ident.indices.is_empty() {
+        return name;
+    }
+    let indices: Vec<String> = ident
+        .indices
+        .iter()
+        .map(|index| match index {
+            SmtIndexView::Numeral(numeral) => text(numeral.as_slice()),
+            SmtIndexView::Symbol(symbol) => text(symbol.as_slice()),
+        })
+        .collect();
+    format!("(_ {} {})", name, indices.join(" "))
+}
+
 fn ident_text(ident: &SmtIdent) -> String {
     let name = text(ident.name.as_slice());
     if ident.indices.is_empty() {
@@ -133,8 +148,8 @@ impl SmtHandler for Resolving {
     type Sort = String;
     type Term = String;
 
-    fn handle_sort(&mut self, sort: SmtSort<Self>) -> Result<String, String> {
-        let name = ident_text(&sort.ident);
+    fn handle_sort(&mut self, sort: SmtSort<'_, Self>) -> Result<String, String> {
+        let name = ident_view_text(sort.ident);
         let name = if self.sort_params.contains(&name) {
             format!("[{name}]")
         } else if self.datatype_sorts.contains(&name) {

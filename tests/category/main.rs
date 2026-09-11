@@ -23,7 +23,8 @@ use std::convert::Infallible;
 use std::ops::ControlFlow;
 
 use smt_parser_rs::{
-    SmtAttributeValue, SmtBindings, SmtHandler, SmtIdent, SmtIndex, SmtKeyword, SmtPattern,
+    SmtAttributeValue, SmtBindings, SmtHandler, SmtIdent, SmtIdentView, SmtIndex, SmtIndexView,
+    SmtKeyword, SmtPattern,
     SmtQualifiedIdent,
     SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSort, SmtSpan, SmtSpecialConstant, SmtSymbol,
     SmtTerm,
@@ -103,6 +104,23 @@ fn render_ident(ident: &SmtIdent) -> String {
     out
 }
 
+fn render_ident_view(ident: &SmtIdentView) -> String {
+    let name = text(ident.name.as_slice());
+    if ident.indices.is_empty() {
+        return name;
+    }
+    let mut out = format!("(_ {name}");
+    for index in ident.indices.iter() {
+        out.push(' ');
+        match index {
+            SmtIndexView::Numeral(numeral) => out.push_str(&text(numeral.as_slice())),
+            SmtIndexView::Symbol(symbol) => out.push_str(&text(symbol.as_slice())),
+        }
+    }
+    out.push(')');
+    out
+}
+
 fn render_qualified_ident(qualified_ident: &SmtQualifiedIdent<Printing>) -> String {
     let ident = render_ident(&qualified_ident.ident);
     match &qualified_ident.sort {
@@ -132,8 +150,8 @@ impl SmtHandler for Printing {
     type Sort = String;
     type Term = String;
 
-    fn handle_sort(&mut self, sort: SmtSort<Self>) -> Result<String, Infallible> {
-        let ident = render_ident(&sort.ident);
+    fn handle_sort(&mut self, sort: SmtSort<'_, Self>) -> Result<String, Infallible> {
+        let ident = render_ident_view(&sort.ident);
         Ok(if sort.applied.is_empty() {
             ident
         } else {

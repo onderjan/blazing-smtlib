@@ -16,10 +16,10 @@
 
 use smt_parser_rs::{
     CommandHandler, NonstandardCommandError, SmtAttributeValue, SmtBindings,
-    SmtDatatypeConstructor, SmtFunctionSignature, SmtHandler, SmtIdent, SmtIndex, SmtKeyword,
-    SmtNumeral, SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSort,
-    SmtSpecialConstant, SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm,
-    read::parser::NoCommandParser,
+    SmtDatatypeConstructor, SmtFunctionSignature, SmtHandler, SmtIdent, SmtIdentView, SmtIndex,
+    SmtIndexView, SmtKeyword, SmtNumeral, SmtPattern, SmtQuantifierKind, SmtSExpr,
+    SmtSimplePattern, SmtSort, SmtSpecialConstant, SmtStringContent, SmtSymbol, SmtSymbolView,
+    SmtTerm, read::parser::NoCommandParser,
 };
 
 const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
@@ -195,6 +195,23 @@ impl TraceHash {
         }
     }
 
+    fn ident_view(&mut self, ident: SmtIdentView<'_>) {
+        self.bytes(ident.name.as_slice());
+        self.count(ident.indices.len());
+        for index in ident.indices.iter() {
+            match index {
+                SmtIndexView::Numeral(value) => {
+                    self.byte(1);
+                    self.bytes(value.as_slice());
+                }
+                SmtIndexView::Symbol(value) => {
+                    self.byte(2);
+                    self.bytes(value.as_slice());
+                }
+            }
+        }
+    }
+
     fn optional_value(&mut self, value: Option<u64>) {
         match value {
             None => self.byte(0),
@@ -243,9 +260,9 @@ impl SmtHandler for TraceHash {
     type Sort = u64;
     type Term = u64;
 
-    fn handle_sort(&mut self, sort: SmtSort<Self>) -> Result<u64, Self::Error> {
+    fn handle_sort(&mut self, sort: SmtSort<'_, Self>) -> Result<u64, Self::Error> {
         self.byte(tag::SORT);
-        self.ident(&sort.ident);
+        self.ident_view(sort.ident);
         self.values(&sort.applied);
         Ok(self.produce())
     }
