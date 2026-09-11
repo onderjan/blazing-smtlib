@@ -380,6 +380,9 @@ impl<H: SmtHandler> TermSlot<H> {
                 )? {
                     ControlFlow::Break(qualified_ident) => {
                         // a term that is a qualified identifier, handle it and break
+                        let qualified_ident = resources
+                            .store
+                            .hand_over_qualified_ident(qualified_ident, |view| view.into_owned());
                         let term = SmtTerm::QualifiedIdent(qualified_ident);
                         let term = handle_err(handler.handle_term(term), token.span())?;
                         Ok(ControlFlow::Break(term))
@@ -396,8 +399,11 @@ impl<H: SmtHandler> TermSlot<H> {
                     token,
                 )? {
                     ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
-                    ControlFlow::Break(ident) => {
+                    ControlFlow::Break(qualified_ident) => {
                         // start a new level
+                        let ident = resources
+                            .store
+                            .hand_over_qualified_ident(qualified_ident, |view| view.into_owned());
                         slot.start_level(Level::Application {
                             ident,
                             arena_args_start: resources.store.terms.len(),

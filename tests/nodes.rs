@@ -6,8 +6,8 @@ use std::fmt::Debug;
 use smt_parser_rs::{
     SmtApplication, SmtAttributeValue, SmtBindings, SmtDatatypeConstructor, SmtFunctionSignature,
     SmtHandler, SmtIdent, SmtIdentView, SmtIndex, SmtIndexView, SmtIndices, SmtKeyword, SmtPattern,
-    SmtQualifiedIdent, SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSort, SmtSpecialConstant,
-    SmtSymbol, SmtTerm,
+    SmtQualifiedIdent, SmtQualifiedIdentView, SmtQuantifierKind, SmtSExpr, SmtSimplePattern,
+    SmtSort, SmtSpecialConstant, SmtSymbol, SmtTerm,
 };
 
 /// Handler that is deliberately neither `Debug` nor `Clone`,
@@ -100,7 +100,9 @@ fn nodes_are_debug_and_clone_with_an_opaque_handler() {
     assert_debug_and_clone::<SmtIndexView<'static>>();
     assert_debug_and_clone::<SmtIndices<'static>>();
     assert_debug_and_clone::<SmtIdentView<'static>>();
-    assert_debug_and_clone::<SmtSort<'static, OpaqueHandler>>();
+    assert_debug_and_clone::<SmtQualifiedIdentView<'static, OpaqueHandler>>();
+    // the nodes handing values over cannot be cloned, but must still be debuggable
+    assert_debug::<SmtSort<'static, OpaqueHandler>>();
     // the nodes handing values over cannot be cloned, but must still be debuggable
     assert_debug::<SmtApplication<'static, OpaqueHandler>>();
     assert_debug::<SmtTerm<'static, OpaqueHandler>>();

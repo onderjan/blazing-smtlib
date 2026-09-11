@@ -1,6 +1,6 @@
 use crate::{
     SmtBindings, SmtHandler, SmtIdentView, SmtIndexView, SmtIndices, SmtMultiple, SmtNumeralView,
-    SmtSort, SmtSymbolView, String8View,
+    SmtQualifiedIdentView, SmtSort, SmtSymbolView, String8View,
 };
 
 /// An arena of bytes and handled values.
@@ -20,6 +20,8 @@ pub(crate) struct Arena<H: SmtHandler + ?Sized> {
     pub(crate) indices: Vec<IndexHandle>,
     /// Let binding names waiting to be consumed, as handles into the text.
     pub(crate) symbols: Vec<TextHandle>,
+    /// Handled sorts waiting to be consumed.
+    pub(crate) sorts: Vec<H::Sort>,
     /// Handled terms, waiting to be consumed.
     pub(crate) terms: Vec<H::Term>,
 }
@@ -30,6 +32,7 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
             text: Vec::new(),
             indices: Vec::new(),
             symbols: Vec::new(),
+            sorts: Vec::new(),
             terms: Vec::new(),
         }
     }
@@ -38,6 +41,7 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
         self.text.is_empty()
             && self.indices.is_empty()
             && self.symbols.is_empty()
+            && self.sorts.is_empty()
             && self.terms.is_empty()
     }
 
@@ -45,6 +49,7 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
         self.text.clear();
         self.indices.clear();
         self.symbols.clear();
+        self.sorts.clear();
         self.terms.clear();
     }
 
@@ -98,19 +103,6 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
         result
     }
 
-    /// Views the identifier.
-    #[inline]
-    pub(crate) fn ident_view(&self, ident: IdentHandle) -> SmtIdentView<'_> {
-        SmtIdentView {
-            name: ident.name.symbol_view(&self.text),
-            indices: SmtIndices::new(
-                ArenaAccess { _priv: () },
-                &self.text,
-                &self.indices[ident.indices_start..],
-            ),
-        }
-    }
-
     /// Hands the identifier to `f`, removing it afterwards.
     #[inline]
     pub(crate) fn hand_over_ident<R>(
@@ -118,28 +110,64 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
         ident: IdentHandle,
         f: impl FnOnce(SmtIdentView<'_>) -> R,
     ) -> R {
-        let result = f(self.ident_view(ident));
+        let result = f(ident_view(&self.text, &self.indices, ident));
         self.indices.truncate(ident.indices_start);
         self.text.truncate(ident.name.start);
         result
     }
 
-    /// Hands a sort to `f`, removing its identifier afterwards.
+    /// Hands the qualified identifier to `f`, removing it afterwards.
+    #[inline]
+    pub(crate) fn hand_over_qualified_ident<R>(
+        &mut self,
+        qualified_ident: QualifiedIdentHandle<H>,
+        f: impl FnOnce(SmtQualifiedIdentView<'_, H>) -> R,
+    ) -> R {
+        let QualifiedIdentHandle { ident, sort } = qualified_ident;
+        let view = SmtQualifiedIdentView {
+            ident: ident_view(&self.text, &self.indices, ident),
+            sort,
+        };
+        let result = f(view);
+        self.indices.truncate(ident.indices_start);
+        self.text.truncate(ident.name.start);
+        result
+    }
+
+    /// Hands a sort to `f`, removing it afterwards.
     #[inline]
     pub(crate) fn hand_over_sort<R>(
         &mut self,
         ident: IdentHandle,
-        applied: Vec<H::Sort>,
+        applied_start: usize,
         f: impl FnOnce(SmtSort<'_, H>) -> R,
     ) -> R {
         let sort = SmtSort {
-            ident: self.ident_view(ident),
-            applied,
+            ident: ident_view(&self.text, &self.indices, ident),
+            applied: SmtMultiple::new(ArenaAccess { _priv: () }, &mut self.sorts, applied_start),
         };
         let result = f(sort);
+        self.sorts.truncate(applied_start);
         self.indices.truncate(ident.indices_start);
         self.text.truncate(ident.name.start);
         result
+    }
+}
+
+/// Views the identifier in the arena text and indices.
+#[inline]
+fn ident_view<'a>(
+    text: &'a [u8],
+    indices: &'a [IndexHandle],
+    ident: IdentHandle,
+) -> SmtIdentView<'a> {
+    SmtIdentView {
+        name: ident.name.symbol_view(text),
+        indices: SmtIndices::new(
+            ArenaAccess { _priv: () },
+            text,
+            &indices[ident.indices_start..],
+        ),
     }
 }
 
@@ -196,4 +224,10 @@ impl IndexHandle {
 pub(crate) struct IdentHandle {
     pub(crate) name: TextHandle,
     pub(crate) indices_start: usize,
+}
+
+/// A qualified identifier: an identifier in the arena and its handled sort, if any.
+pub(crate) struct QualifiedIdentHandle<H: SmtHandler + ?Sized> {
+    pub(crate) ident: IdentHandle,
+    pub(crate) sort: Option<H::Sort>,
 }

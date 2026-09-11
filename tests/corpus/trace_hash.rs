@@ -263,7 +263,7 @@ impl SmtHandler for TraceHash {
     fn handle_sort(&mut self, sort: SmtSort<'_, Self>) -> Result<u64, Self::Error> {
         self.byte(tag::SORT);
         self.ident_view(sort.ident);
-        self.values(&sort.applied);
+        self.values(sort.applied.as_slice());
         Ok(self.produce())
     }
 

@@ -74,15 +74,17 @@ enum State {
 ///
 /// Sorts here are waiting for a next applied sort
 /// or a closing parenthesis.
-struct Level<H: SmtHandler + ?Sized> {
+struct Level {
     /// The identifier, stored in the arena.
     ident: IdentHandle,
-    applied: Vec<H::Sort>,
+    /// The applied sorts are stored in the arena starting at this position.
+    arena_applied_start: usize,
 }
 
 pub(crate) struct SortSlot<H: SmtHandler + ?Sized> {
     state: State,
-    levels: Vec<Level<H>>,
+    levels: Vec<Level>,
+    _priv: std::marker::PhantomData<H>,
 }
 
 impl<H: SmtHandler + ?Sized> SortSlot<H> {
@@ -90,6 +92,7 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
         Self {
             state: State::Start,
             levels: Vec::new(),
+            _priv: std::marker::PhantomData,
         }
     }
 
@@ -126,7 +129,7 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
                             name,
                             indices_start: arena.indices.len(),
                         };
-                        ControlFlow::Break((ident, Vec::new()))
+                        ControlFlow::Break((ident, arena.sorts.len()))
                     }
                     TokenKind::ParenOpen => {
                         // move the state to open
@@ -139,13 +142,16 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
                                 // close the last level
                                 // if the sort committed to having applications,
                                 // there must be at least one of them
-                                if last_level.applied.is_empty() {
+                                if arena.sorts.len() == last_level.arena_applied_start {
                                     return Err(ParserError::category_error(
                                         CategoryErrorKind::EmptySortApplication,
                                         span,
                                     ));
                                 }
-                                ControlFlow::Break((last_level.ident, last_level.applied))
+                                ControlFlow::Break((
+                                    last_level.ident,
+                                    last_level.arena_applied_start,
+                                ))
                             }
                             None => {
                                 // we just received ")"
@@ -182,7 +188,7 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
                         };
                         self.levels.push(Level {
                             ident,
-                            applied: Vec::new(),
+                            arena_applied_start: arena.sorts.len(),
                         });
                         State::Start
                     }
@@ -204,7 +210,7 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
             }
             State::IdentOnly => ident_slot
                 .progress(arena, token)?
-                .map_break(|ident| (ident, Vec::new())),
+                .map_break(|ident| (ident, arena.sorts.len())),
             State::StartingIdent => {
                 match ident_slot.progress(arena, token)? {
                     ControlFlow::Continue(()) => ControlFlow::Continue(()),
@@ -212,7 +218,7 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
                         // add a new level and start parsing the new sort
                         self.levels.push(Level {
                             ident,
-                            applied: Vec::new(),
+                            arena_applied_start: arena.sorts.len(),
                         });
                         self.state = State::Start;
                         ControlFlow::Continue(())
@@ -221,19 +227,20 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
             }
         };
 
-        let ControlFlow::Break((ident, applied)) = flow else {
+        let ControlFlow::Break((ident, arena_applied_start)) = flow else {
             return Ok(ControlFlow::Continue(()));
         };
 
         // we have parsed a sort, reset the state and hand the sort over
         self.state = State::Start;
-        let sort = arena.hand_over_sort(ident, applied, |sort| {
+        let sort = arena.hand_over_sort(ident, arena_applied_start, |sort| {
             handle_err(handler.handle_sort(sort), span)
         })?;
 
-        if let Some(last_level) = self.levels.last_mut() {
-            // we need to append to the last level
-            last_level.applied.push(sort);
+        if !self.levels.is_empty() {
+            // we need to append to the applied sorts
+            // this will implicitly belong to the last level
+            arena.sorts.push(sort);
             Ok(ControlFlow::Continue(()))
         } else {
             // this is the root level, we are done

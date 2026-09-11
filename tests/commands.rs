@@ -160,7 +160,7 @@ impl SmtHandler for Resolving {
         Ok(if sort.applied.is_empty() {
             name
         } else {
-            format!("({} {})", name, sort.applied.join(" "))
+            format!("({} {})", name, sort.applied.as_slice().join(" "))
         })
     }
 

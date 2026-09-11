@@ -145,10 +145,52 @@ impl SmtIdentView<'_> {
     }
 }
 
-/// Sort to be handled.
+/// A qualified identifier to be handled.
+pub struct SmtQualifiedIdentView<'a, H: SmtHandler + ?Sized> {
+    pub ident: SmtIdentView<'a>,
+    pub sort: Option<H::Sort>,
+}
+
+impl<H: SmtHandler + ?Sized> SmtQualifiedIdentView<'_, H> {
+    pub fn into_owned(self) -> SmtQualifiedIdent<H> {
+        SmtQualifiedIdent {
+            ident: self.ident.into_owned(),
+            sort: self.sort,
+        }
+    }
+}
+
+impl<H: SmtHandler + ?Sized> Debug for SmtQualifiedIdentView<'_, H>
+where
+    H::Sort: Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SmtQualifiedIdentView")
+            .field("ident", &self.ident)
+            .field("sort", &self.sort)
+            .finish()
+    }
+}
+
+impl<H: SmtHandler + ?Sized> Clone for SmtQualifiedIdentView<'_, H>
+where
+    H::Sort: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            ident: self.ident,
+            sort: self.sort.clone(),
+        }
+    }
+}
+
+/// Sorts to be handled.
+pub type SmtSorts<'a, H> = SmtMultiple<'a, <H as SmtHandler>::Sort>;
+
+/// A sort to be handled.
 pub struct SmtSort<'a, H: SmtHandler + ?Sized> {
     pub ident: SmtIdentView<'a>,
-    pub applied: Vec<H::Sort>,
+    pub applied: SmtSorts<'a, H>,
 }
 
 impl<H: SmtHandler + ?Sized> Debug for SmtSort<'_, H>
@@ -160,18 +202,6 @@ where
             .field("ident", &self.ident)
             .field("applied", &self.applied)
             .finish()
-    }
-}
-
-impl<H: SmtHandler + ?Sized> Clone for SmtSort<'_, H>
-where
-    H::Sort: Clone,
-{
-    fn clone(&self) -> Self {
-        Self {
-            ident: self.ident,
-            applied: self.applied.clone(),
-        }
     }
 }
 
