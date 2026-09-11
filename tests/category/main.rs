@@ -23,9 +23,10 @@ use std::convert::Infallible;
 use std::ops::ControlFlow;
 
 use smt_parser_rs::{
-    SmtAttributeValue, SmtBindings, SmtHandler, SmtIdent, SmtIdentView, SmtIndex, SmtIndexView,
-    SmtKeyword, SmtPattern, SmtQualifiedIdent, SmtQualifiedIdentView, SmtQuantifierKind, SmtSExpr,
-    SmtSimplePattern, SmtSort, SmtSpan, SmtSpecialConstantView, SmtSymbolView, SmtTerm,
+    SmtAttributeValue, SmtAttributes, SmtBindings, SmtHandler, SmtIdent, SmtIdentView, SmtIndex,
+    SmtIndexView, SmtKeywordView, SmtPattern, SmtQualifiedIdent, SmtQualifiedIdentView,
+    SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSort, SmtSpan, SmtSpecialConstantView,
+    SmtSymbolView, SmtTerm,
     read::{
         lexer::{LexError, Lexer},
         parser::{
@@ -290,13 +291,13 @@ impl SmtHandler for Printing {
             SmtSExpr::Symbol(symbol) => text(symbol.as_slice()),
             SmtSExpr::Reserved(reserved) => reserved.as_str().to_string(),
             SmtSExpr::Keyword(keyword) => format!(":{}", text(keyword.as_slice())),
-            SmtSExpr::SExprs(exprs) => render_list(&exprs),
+            SmtSExpr::SExprs(exprs) => render_list(exprs.as_slice()),
         })
     }
 
     fn handle_attribute(
         &mut self,
-        name: SmtKeyword,
+        name: SmtKeywordView<'_>,
         value: Option<SmtAttributeValue<'_, Self>>,
     ) -> Result<String, Infallible> {
         let name = format!(":{}", text(name.as_slice()));
@@ -308,16 +309,18 @@ impl SmtHandler for Printing {
             Some(SmtAttributeValue::Symbol(symbol)) => {
                 format!("{name} {}", text(symbol.as_slice()))
             }
-            Some(SmtAttributeValue::SExprs(exprs)) => format!("{name} {}", render_list(&exprs)),
+            Some(SmtAttributeValue::SExprs(exprs)) => {
+                format!("{name} {}", render_list(exprs.as_slice()))
+            }
         })
     }
 
     fn annotate_term(
         &mut self,
         term: String,
-        attributes: Vec<String>,
+        attributes: SmtAttributes<'_, Self>,
     ) -> Result<String, Infallible> {
-        Ok(format!("(! {term} {})", attributes.join(" ")))
+        Ok(format!("(! {term} {})", attributes.as_slice().join(" ")))
     }
 }
 

@@ -1,6 +1,6 @@
 use crate::{
-    SmtBindings, SmtHandler, SmtIdentView, SmtIndexView, SmtIndices, SmtMultiple, SmtNumeralView,
-    SmtQualifiedIdentView, SmtSort, SmtSymbolView, String8View,
+    SmtBindings, SmtHandler, SmtIdentView, SmtIndexView, SmtIndices, SmtKeywordView, SmtMultiple,
+    SmtNumeralView, SmtQualifiedIdentView, SmtSort, SmtSymbolView, String8View,
 };
 
 /// An arena of bytes and handled values.
@@ -20,6 +20,10 @@ pub(crate) struct Arena<H: SmtHandler + ?Sized> {
     pub(crate) indices: Vec<IndexHandle>,
     /// Let binding names waiting to be consumed, as handles into the text.
     pub(crate) symbols: Vec<TextHandle>,
+    /// Handled S-expressions waiting to be consumed, inside S-expression lists.
+    pub(crate) s_exprs: Vec<H::SExpr>,
+    /// Handled attributes waiting to be consumed, inside attribute lists.
+    pub(crate) attributes: Vec<H::Attribute>,
     /// Handled sorts waiting to be consumed.
     pub(crate) sorts: Vec<H::Sort>,
     /// Handled terms, waiting to be consumed.
@@ -32,6 +36,8 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
             text: Vec::new(),
             indices: Vec::new(),
             symbols: Vec::new(),
+            s_exprs: Vec::new(),
+            attributes: Vec::new(),
             sorts: Vec::new(),
             terms: Vec::new(),
         }
@@ -41,6 +47,8 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
         self.text.is_empty()
             && self.indices.is_empty()
             && self.symbols.is_empty()
+            && self.s_exprs.is_empty()
+            && self.attributes.is_empty()
             && self.sorts.is_empty()
             && self.terms.is_empty()
     }
@@ -49,6 +57,8 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
         self.text.clear();
         self.indices.clear();
         self.symbols.clear();
+        self.s_exprs.clear();
+        self.attributes.clear();
         self.sorts.clear();
         self.terms.clear();
     }
@@ -66,9 +76,6 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
 
     /// Hands an application to `f`, removing it afterwards: its function
     /// identifier and the arguments from `args_start` onward.
-    ///
-    /// The handling may or may not remove the arguments by itself,
-    /// so the arena is truncated after `f` returns regardless.
     #[inline]
     pub(crate) fn hand_over_application<R>(
         &mut self,
@@ -101,9 +108,6 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
     /// Hands the let bindings to `f`, removing them afterwards: the names
     /// from `names_start` onward with their text from `text_start` onward,
     /// and the terms from `terms_start` onward.
-    ///
-    /// The handling may or may not remove the terms by itself,
-    /// so the arena is truncated after `f` returns regardless.
     pub(crate) fn hand_over_bindings<R>(
         &mut self,
         text_start: usize,
@@ -183,6 +187,59 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
         self.text.truncate(ident.name.start);
         result
     }
+
+    /// Hands the S-expressions from `start` onward to `f`, removing them afterwards.
+    #[inline]
+    pub(crate) fn hand_over_s_exprs<R>(
+        &mut self,
+        start: usize,
+        f: impl FnOnce(SmtMultiple<'_, H::SExpr>) -> R,
+    ) -> R {
+        let s_exprs = SmtMultiple::new(ArenaAccess { _priv: () }, &mut self.s_exprs, start);
+        let result = f(s_exprs);
+        self.s_exprs.truncate(start);
+        result
+    }
+
+    /// Hands an attribute name to `f`, removing it afterwards.
+    #[inline]
+    pub(crate) fn hand_over_keyword<R>(
+        &mut self,
+        name: TextHandle,
+        f: impl FnOnce(SmtKeywordView<'_>) -> R,
+    ) -> R {
+        let result = f(name.keyword_view(&self.text));
+        self.text.truncate(name.start);
+        result
+    }
+
+    /// Hands an attribute name with its S-expression value to `f`, removing them afterwards.
+    #[inline]
+    pub(crate) fn hand_over_keyword_s_exprs<R>(
+        &mut self,
+        name: TextHandle,
+        start: usize,
+        f: impl FnOnce(SmtKeywordView<'_>, SmtMultiple<'_, H::SExpr>) -> R,
+    ) -> R {
+        let s_exprs = SmtMultiple::new(ArenaAccess { _priv: () }, &mut self.s_exprs, start);
+        let result = f(name.keyword_view(&self.text), s_exprs);
+        self.s_exprs.truncate(start);
+        self.text.truncate(name.start);
+        result
+    }
+
+    /// Hands the attributes from `start` onward to `f`, removing them afterwards.
+    #[inline]
+    pub(crate) fn hand_over_attributes<R>(
+        &mut self,
+        start: usize,
+        f: impl FnOnce(SmtMultiple<'_, H::Attribute>) -> R,
+    ) -> R {
+        let attributes = SmtMultiple::new(ArenaAccess { _priv: () }, &mut self.attributes, start);
+        let result = f(attributes);
+        self.attributes.truncate(start);
+        result
+    }
 }
 
 /// Views the identifier in the arena text and indices.
@@ -222,6 +279,12 @@ impl TextHandle {
     #[inline]
     pub(crate) fn symbol_view(self, text: &[u8]) -> SmtSymbolView<'_> {
         SmtSymbolView::new_unchecked(String8View::new(&text[self.start..self.start + self.len]))
+    }
+
+    /// Views the bytes as a keyword.
+    #[inline]
+    pub(crate) fn keyword_view(self, text: &[u8]) -> SmtKeywordView<'_> {
+        SmtKeywordView::new_unchecked(String8View::new(&text[self.start..self.start + self.len]))
     }
 
     /// Views the bytes as a numeral.

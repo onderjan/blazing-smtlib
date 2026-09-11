@@ -4,10 +4,11 @@ use std::convert::Infallible;
 use std::fmt::Debug;
 
 use smt_parser_rs::{
-    SmtApplication, SmtAttributeValue, SmtBindings, SmtDatatypeConstructor, SmtFunctionSignature,
-    SmtHandler, SmtIdent, SmtIdentView, SmtIndex, SmtIndexView, SmtIndices, SmtKeyword, SmtPattern,
-    SmtQualifiedIdent, SmtQualifiedIdentView, SmtQuantifierKind, SmtSExpr, SmtSimplePattern,
-    SmtSort, SmtSpecialConstant, SmtSpecialConstantView, SmtSymbolView, SmtTerm,
+    SmtApplication, SmtAttributeValue, SmtAttributes, SmtBindings, SmtDatatypeConstructor,
+    SmtFunctionSignature, SmtHandler, SmtIdent, SmtIdentView, SmtIndex, SmtIndexView, SmtIndices,
+    SmtKeywordView, SmtPattern, SmtQualifiedIdent, SmtQualifiedIdentView, SmtQuantifierKind,
+    SmtSExpr, SmtSimplePattern, SmtSort, SmtSpecialConstant, SmtSpecialConstantView, SmtSymbolView,
+    SmtTerm,
 };
 
 /// Handler that is deliberately neither `Debug` nor `Clone`,
@@ -38,7 +39,7 @@ impl SmtHandler for OpaqueHandler {
     }
     fn handle_attribute(
         &mut self,
-        _name: SmtKeyword,
+        _name: SmtKeywordView<'_>,
         _value: Option<SmtAttributeValue<'_, Self>>,
     ) -> Result<String, Infallible> {
         Ok(String::new())
@@ -46,7 +47,7 @@ impl SmtHandler for OpaqueHandler {
     fn annotate_term(
         &mut self,
         term: String,
-        _attributes: Vec<String>,
+        _attributes: SmtAttributes<'_, Self>,
     ) -> Result<String, Infallible> {
         Ok(term)
     }
@@ -108,8 +109,8 @@ fn nodes_are_debug_and_clone_with_an_opaque_handler() {
     assert_debug::<SmtApplication<'static, OpaqueHandler>>();
     assert_debug::<SmtTerm<'static, OpaqueHandler>>();
     assert_debug::<SmtBindings<'static, OpaqueHandler>>();
-    assert_debug_and_clone::<SmtAttributeValue<'static, OpaqueHandler>>();
-    assert_debug_and_clone::<SmtSExpr<'static, OpaqueHandler>>();
+    assert_debug::<SmtAttributeValue<'static, OpaqueHandler>>();
+    assert_debug::<SmtSExpr<'static, OpaqueHandler>>();
     assert_debug_and_clone::<SmtFunctionSignature<OpaqueHandler>>();
     assert_debug_and_clone::<SmtDatatypeConstructor<OpaqueHandler>>();
     assert_debug_and_clone::<SmtSimplePattern>();

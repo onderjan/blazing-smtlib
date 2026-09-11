@@ -6,9 +6,10 @@ mod common;
 use common::{assert_error_span, assert_parser_error, parse, parse_with};
 
 use smt_parser_rs::{
-    CommandHandler, NonstandardCommandError, SmtAttributeValue, SmtBindings,
-    SmtDatatypeConstructor, SmtFunctionSignature, SmtHandler, SmtKeyword, SmtNumeral, SmtPattern,
-    SmtQuantifierKind, SmtSExpr, SmtSort, SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm,
+    CommandHandler, NonstandardCommandError, SmtAttributeValue, SmtAttributes, SmtBindings,
+    SmtDatatypeConstructor, SmtFunctionSignature, SmtHandler, SmtKeyword, SmtKeywordView,
+    SmtNumeral, SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSort, SmtStringContent, SmtSymbol,
+    SmtSymbolView, SmtTerm,
     read::{
         SmtReadErrorKind,
         parser::{CategoryErrorKind, ClosedParser, CommandAction, CommandParser, TermParser},
@@ -113,12 +114,16 @@ impl SmtHandler for Recording {
     }
     fn handle_attribute(
         &mut self,
-        _name: SmtKeyword,
+        _name: SmtKeywordView<'_>,
         _value: Option<SmtAttributeValue<'_, Self>>,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
-    fn annotate_term(&mut self, _term: (), _attributes: Vec<()>) -> Result<(), Self::Error> {
+    fn annotate_term(
+        &mut self,
+        _term: (),
+        _attributes: SmtAttributes<'_, Self>,
+    ) -> Result<(), Self::Error> {
         Ok(())
     }
     fn start_quantifier(

@@ -22,8 +22,8 @@ pub struct ParserResources<H: SmtHandler + ?Sized> {
     pub(crate) qualified_ident_slot: QualifiedIdentSlot<H>,
     pub(crate) sort_slot: SortSlot<H>,
     pub(crate) sorted_var_slot: SortedVarSlot<H>,
-    pub(crate) s_expr_slot: SExprSlot<H>,
-    pub(crate) attribute_slot: AttributeSlot<H>,
+    pub(crate) s_expr_slot: SExprSlot,
+    pub(crate) attribute_slot: AttributeSlot,
     pub(crate) pattern_slot: PatternSlot,
     pub(crate) term_slot: TermSlot<H>,
 }

@@ -6,10 +6,10 @@ mod common;
 use common::{assert_error_span, assert_parser_error, parse_with};
 
 use smt_parser_rs::{
-    CommandHandler, SmtAttributeValue, SmtBindings, SmtDatatypeConstructor, SmtFunctionSignature,
-    SmtHandler, SmtIdentView, SmtIndexView, SmtKeyword, SmtNumeral, SmtPattern, SmtQuantifierKind,
-    SmtSExpr, SmtSimplePattern, SmtSort, SmtSpecialConstantView, SmtStringContent, SmtSymbol,
-    SmtSymbolView, SmtTerm,
+    CommandHandler, SmtAttributeValue, SmtAttributes, SmtBindings, SmtDatatypeConstructor,
+    SmtFunctionSignature, SmtHandler, SmtIdentView, SmtIndexView, SmtKeyword, SmtKeywordView,
+    SmtNumeral, SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSort,
+    SmtSpecialConstantView, SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm,
     read::{
         SmtReadErrorKind,
         lexer::LexerErrorKind,
@@ -178,13 +178,17 @@ impl SmtHandler for Resolving {
 
     fn handle_attribute(
         &mut self,
-        _name: SmtKeyword,
+        _name: SmtKeywordView<'_>,
         _value: Option<SmtAttributeValue<'_, Self>>,
     ) -> Result<(), String> {
         Ok(())
     }
 
-    fn annotate_term(&mut self, term: String, _attributes: Vec<()>) -> Result<String, String> {
+    fn annotate_term(
+        &mut self,
+        term: String,
+        _attributes: SmtAttributes<'_, Self>,
+    ) -> Result<String, String> {
         Ok(term)
     }
 

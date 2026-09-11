@@ -1,13 +1,10 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtAttributeValue, SmtHandler, SmtKeyword, SmtSpan,
+    SmtAttributeValue, SmtHandler, SmtKeywordView, SmtSpan,
     read::parser::{
-        CloseParenParser, ParserError, ParserResources, SExprSlot,
-        category::{
-            CategoryErrorKind, CategoryParser, parse_special_constant,
-            resources::ClosedMultipleResource,
-        },
+        Arena, CloseParenParser, ParserError, ParserResources, SExprSlot, TextHandle,
+        category::{CategoryErrorKind, CategoryParser, parse_special_constant},
         handle_err,
     },
     token::{Token, TokenKind, TokenType},
@@ -44,8 +41,9 @@ impl<H: SmtHandler> CategoryParser<H> for ClosedAttributeParser<H> {
         resources: &mut ParserResources<H>,
         token: &Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<<H as SmtHandler>::Error>> {
-        resources.attribute_slot.progress::<SingleAttribute>(
+        resources.attribute_slot.progress::<H, SingleAttribute>(
             handler,
+            &mut resources.store,
             &mut resources.s_expr_slot,
             token,
         )
@@ -83,21 +81,35 @@ impl<H: SmtHandler> CategoryParser<H> for ClosedMultipleAttributeParser<H> {
         resources: &mut ParserResources<H>,
         token: &Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<<H as SmtHandler>::Error>> {
-        resources.attribute_slot.progress::<MultipleAttributes>(
+        match resources.attribute_slot.progress::<H, MultipleAttributes>(
             handler,
+            &mut resources.store,
             &mut resources.s_expr_slot,
             token,
-        )
+        )? {
+            ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
+            ControlFlow::Break(start) => {
+                // the attributes are at the end of the arena, hand them over
+                Ok(ControlFlow::Break(
+                    resources
+                        .store
+                        .hand_over_attributes(start, |attributes| attributes.into_iter().collect()),
+                ))
+            }
+        }
     }
 }
 
-pub(crate) trait AttributeCollection<H: SmtHandler> {
+pub(crate) trait AttributeCollection<H: SmtHandler + ?Sized> {
     type Output;
 
+    /// Determines if it is allowed to add another element.
     fn next_allowed(num_elements: usize) -> bool;
 
+    /// Finishes the collection of the attributes stored in the arena from `start` onward.
     fn finish(
-        attributes: &mut Vec<H::Attribute>,
+        arena: &mut Arena<H>,
+        start: usize,
         span: SmtSpan,
     ) -> Result<Self::Output, ParserError<H::Error>>;
 }
@@ -107,51 +119,58 @@ enum State {
     /// Waiting for the keyword that will name the next attribute.
     Start,
     /// Waiting for a value or a closing parenthesis.
-    AfterName(SmtKeyword),
+    ///
+    /// The name is stored in the arena text.
+    AfterName(TextHandle),
     /// Parsing S-expressions that will end with a closing parenthesis.
-    InsideSExpr(SmtKeyword),
+    InsideSExpr {
+        /// The name, stored in the arena text.
+        name: TextHandle,
+        /// The S-expressions are stored in the arena starting at this position.
+        arena_s_exprs_start: usize,
+        /// Whether we are between S-expressions, where a closing parenthesis ends them.
+        outside: bool,
+    },
 }
 
-pub(crate) struct AttributeSlot<H: SmtHandler + ?Sized> {
+pub(crate) struct AttributeSlot {
     state: State,
-    attributes: Vec<H::Attribute>,
-    s_exprs: ClosedMultipleResource<H::SExpr>,
+    /// The number of attributes handled so far.
+    num_attributes: usize,
+    /// The handled attributes are stored in the arena starting at this position.
+    arena_attributes_start: usize,
 }
 
-impl<H: SmtHandler + ?Sized> AttributeSlot<H> {
+impl AttributeSlot {
     pub(crate) fn new() -> Self {
         Self {
             state: State::Start,
-            attributes: Vec::new(),
-            s_exprs: ClosedMultipleResource::new(),
+            num_attributes: 0,
+            arena_attributes_start: 0,
         }
     }
 
     pub(crate) fn is_pristine(&self) -> bool {
-        matches!(self.state, State::Start)
-            && self.attributes.is_empty()
-            && self.s_exprs.is_pristine()
+        matches!(self.state, State::Start) && self.num_attributes == 0
     }
 
     pub(crate) fn clear(&mut self) {
         self.state = State::Start;
-        self.attributes.clear();
-        self.s_exprs.clear();
+        self.num_attributes = 0;
     }
-}
 
-impl<H: SmtHandler> AttributeSlot<H> {
-    pub(crate) fn progress<C: AttributeCollection<H>>(
+    pub(crate) fn progress<H: SmtHandler + ?Sized, C: AttributeCollection<H>>(
         &mut self,
         handler: &mut H,
-        s_expr_slot: &mut SExprSlot<H>,
+        arena: &mut Arena<H>,
+        s_expr_slot: &mut SExprSlot,
         token: &Token,
     ) -> Result<ControlFlow<C::Output>, ParserError<H::Error>> {
         let span = token.span();
-        if !C::next_allowed(self.attributes.len()) {
+        if !C::next_allowed(self.num_attributes) {
             // no more attributes are allowed, just expect a closing parenthesis
             CloseParenParser::expect(token)?;
-            return Ok(ControlFlow::Break(C::finish(&mut self.attributes, span)?));
+            return Ok(ControlFlow::Break(self.finish::<H, C>(arena, span)?));
         }
 
         let mut state = State::Start;
@@ -159,17 +178,19 @@ impl<H: SmtHandler> AttributeSlot<H> {
 
         match state {
             State::Start => {
-                if self.attributes.is_empty() {
+                if self.num_attributes == 0 {
+                    // the category is being entered, its attributes will start here
                     debug_assert!(self.is_pristine(), "must be pristine when starting");
+                    self.arena_attributes_start = arena.attributes.len();
                 }
                 match token.kind() {
                     TokenKind::ParenClose => {
                         // finish the attribute
-                        return Ok(ControlFlow::Break(C::finish(&mut self.attributes, span)?));
+                        return Ok(ControlFlow::Break(self.finish::<H, C>(arena, span)?));
                     }
                     TokenKind::Keyword(keyword) => {
-                        // we received an attribute name, handle it
-                        self.state = State::AfterName(keyword.into_owned());
+                        // we received an attribute name, store it in the arena text
+                        self.state = State::AfterName(arena.push_text(keyword.as_slice()));
                     }
                     _ => {
                         return Err(ParserError::category_error(
@@ -180,20 +201,24 @@ impl<H: SmtHandler> AttributeSlot<H> {
                 }
             }
             State::AfterName(name) => {
-                enum Decision {
+                enum Decision<'a> {
                     FinishAttribute,
-                    StartNextAttribute(SmtKeyword),
+                    StartNextAttribute(SmtKeywordView<'a>),
                     Break,
                 }
 
                 let (value, decision) = match token.kind() {
                     TokenKind::Symbol(symbol) => (
-                        Some(SmtAttributeValue::Symbol(symbol.into_owned())),
+                        Some(SmtAttributeValue::Symbol(symbol)),
                         Decision::FinishAttribute,
                     ),
                     TokenKind::ParenOpen => {
                         // start a list of sexprs ending with closing parenthesis
-                        self.state = State::InsideSExpr(name);
+                        self.state = State::InsideSExpr {
+                            name,
+                            arena_s_exprs_start: arena.s_exprs.len(),
+                            outside: true,
+                        };
                         return Ok(ControlFlow::Continue(()));
                     }
                     TokenKind::ParenClose => {
@@ -206,8 +231,7 @@ impl<H: SmtHandler> AttributeSlot<H> {
                         // the current attribute was just a name
                         // the new state will be after the new name given by the keyword
                         // push the previous attribute to the collection,
-
-                        (None, Decision::StartNextAttribute(keyword.into_owned()))
+                        (None, Decision::StartNextAttribute(keyword))
                     }
                     kind => {
                         if let Ok(special_constant) = parse_special_constant(kind) {
@@ -224,9 +248,13 @@ impl<H: SmtHandler> AttributeSlot<H> {
                     }
                 };
 
-                // handle the attribute and push to the collection
-                let result = handle_err(handler.handle_attribute(name, value), span)?;
-                self.attributes.push(result);
+                // handle the attribute with its name handed over
+                let attribute = arena.hand_over_keyword(name, |name| {
+                    handle_err(handler.handle_attribute(name, value), span)
+                })?;
+                // push the handled attribute to the arena
+                arena.attributes.push(attribute);
+                self.num_attributes += 1;
                 // if we received a closing parenthesis, we need to finish immediately
                 match decision {
                     Decision::FinishAttribute => {
@@ -234,54 +262,80 @@ impl<H: SmtHandler> AttributeSlot<H> {
                     }
                     Decision::Break => {
                         // break
-                        return Ok(ControlFlow::Break(C::finish(&mut self.attributes, span)?));
+                        return Ok(ControlFlow::Break(self.finish::<H, C>(arena, span)?));
                     }
                     Decision::StartNextAttribute(keyword) => {
                         // check if we actually can start a next keyword
-                        if !C::next_allowed(self.attributes.len()) {
+                        if !C::next_allowed(self.num_attributes) {
                             // it turns out that we actually expected a closing parenthesis
                             return Err(ParserError::category_error(
                                 CategoryErrorKind::ExpectedToken(&[TokenType::ParenClose]),
                                 span,
                             ));
                         }
-                        // move after name
-                        self.state = State::AfterName(keyword);
+                        // move after name, stored in the arena text
+                        self.state = State::AfterName(arena.push_text(keyword.as_slice()));
                     }
                 }
             }
-            State::InsideSExpr(name) => {
-                // progress s_exprs, which progress SExpr as an element
-                match self
-                    .s_exprs
-                    .progress(token, |token| s_expr_slot.progress(handler, token))?
-                {
-                    ControlFlow::Continue(()) => {
-                        // put the state back
-                        self.state = State::InsideSExpr(name);
-                    }
-                    ControlFlow::Break(s_exprs) => {
-                        // the s-expr closing parenthesis was consumed,
-                        // the attribute closing parenthesis was not consumed yet
-                        // we must keep the attribute for now
-                        let value = SmtAttributeValue::SExprs(s_exprs);
-                        let attribute =
-                            handle_err(handler.handle_attribute(name, Some(value)), span)?;
-                        // no additional reset steps necessary, as the state has already been replaced
-                        // by Start and the SExpr parser is untouched
-                        self.attributes.push(attribute);
-                    }
+            State::InsideSExpr {
+                name,
+                arena_s_exprs_start,
+                outside,
+            } => {
+                if outside && matches!(token.kind(), TokenKind::ParenClose) {
+                    // the s-expr closing parenthesis was consumed,
+                    // the attribute closing parenthesis was not consumed yet
+                    // handle the attribute with its name and S-expressions handed over
+                    let attribute = arena.hand_over_keyword_s_exprs(
+                        name,
+                        arena_s_exprs_start,
+                        |name, s_exprs| {
+                            let value = SmtAttributeValue::SExprs(s_exprs);
+                            handle_err(handler.handle_attribute(name, Some(value)), span)
+                        },
+                    )?;
+                    // no additional reset steps necessary, as the state has already been
+                    // replaced by Start and the S-expression slot is untouched
+                    arena.attributes.push(attribute);
+                    self.num_attributes += 1;
+                } else {
+                    // inside an S-expression, progress it
+                    let outside = match s_expr_slot.progress(handler, arena, token)? {
+                        ControlFlow::Continue(()) => false,
+                        ControlFlow::Break(s_expr) => {
+                            // push the finished S-expression to its arena
+                            arena.s_exprs.push(s_expr);
+                            true
+                        }
+                    };
+                    // put the state back
+                    self.state = State::InsideSExpr {
+                        name,
+                        arena_s_exprs_start,
+                        outside,
+                    };
                 }
             }
         }
 
         Ok(ControlFlow::Continue(()))
     }
+
+    /// Finishes the attribute list, resetting the slot.
+    fn finish<H: SmtHandler + ?Sized, C: AttributeCollection<H>>(
+        &mut self,
+        arena: &mut Arena<H>,
+        span: SmtSpan,
+    ) -> Result<C::Output, ParserError<H::Error>> {
+        self.num_attributes = 0;
+        C::finish(arena, self.arena_attributes_start, span)
+    }
 }
 
 struct SingleAttribute;
 
-impl<H: SmtHandler> AttributeCollection<H> for SingleAttribute {
+impl<H: SmtHandler + ?Sized> AttributeCollection<H> for SingleAttribute {
     type Output = H::Attribute;
 
     fn next_allowed(num_elements: usize) -> bool {
@@ -289,38 +343,44 @@ impl<H: SmtHandler> AttributeCollection<H> for SingleAttribute {
     }
 
     fn finish(
-        attributes: &mut Vec<H::Attribute>,
+        arena: &mut Arena<H>,
+        start: usize,
         span: SmtSpan,
     ) -> Result<Self::Output, ParserError<H::Error>> {
         debug_assert!(
-            attributes.len() <= 1,
+            arena.attributes.len() <= start + 1,
             "at most one attribute should be parsed"
         );
 
-        match attributes.drain(..).next() {
-            Some(attribute) => Ok(attribute),
-            None => Err(ParserError::category_error(
+        if arena.attributes.len() == start {
+            return Err(ParserError::category_error(
                 CategoryErrorKind::ExpectedAttribute,
                 span,
-            )),
+            ));
         }
+        Ok(arena
+            .attributes
+            .pop()
+            .expect("the single attribute should be in the arena"))
     }
 }
 
 pub(crate) struct MultipleAttributes;
 
-impl<H: SmtHandler> AttributeCollection<H> for MultipleAttributes {
-    type Output = Vec<H::Attribute>;
+impl<H: SmtHandler + ?Sized> AttributeCollection<H> for MultipleAttributes {
+    /// Where the attributes start in the arena.
+    type Output = usize;
 
     fn next_allowed(_num_elements: usize) -> bool {
         true
     }
 
     fn finish(
-        attributes: &mut Vec<H::Attribute>,
+        _arena: &mut Arena<H>,
+        start: usize,
         _span: SmtSpan,
     ) -> Result<Self::Output, ParserError<H::Error>> {
-        Ok(std::mem::take(attributes))
+        Ok(start)
     }
 }
 
@@ -332,8 +392,8 @@ mod tests {
     #[test]
     fn slot_is_pristine_after_every_attribute_list() {
         // every value shape (none, symbol, constant, s-expression list) uses the
-        // attribute slot and the s-expression list it owns; the slot must be back
-        // in its initial state after a single attribute and after several
+        // attribute slot and the arena; the slot must be back in its initial
+        // state after a single attribute and after several
         for input in [
             &b":flag)"[..],
             b":named x)",

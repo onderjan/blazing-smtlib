@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use crate::{
     SmtBinDigits, SmtBinDigitsView, SmtDecimal, SmtDecimalView, SmtHandler, SmtHexDigits,
-    SmtHexDigitsView, SmtKeyword, SmtMultiple, SmtNumeral, SmtNumeralView, SmtStringContent,
+    SmtHexDigitsView, SmtKeywordView, SmtMultiple, SmtNumeral, SmtNumeralView, SmtStringContent,
     SmtStringContentView, SmtSymbol, SmtSymbolView,
     read::parser::{ArenaAccess, IndexHandle},
     token::Reserved,
@@ -288,10 +288,16 @@ where
     }
 }
 
+/// S-expressions to be handled.
+pub type SmtSExprs<'a, H> = SmtMultiple<'a, <H as SmtHandler>::SExpr>;
+
+/// Attributes to be handled.
+pub type SmtAttributes<'a, H> = SmtMultiple<'a, <H as SmtHandler>::Attribute>;
+
 pub enum SmtAttributeValue<'a, H: SmtHandler + ?Sized> {
     SpecialConstant(SmtSpecialConstantView<'a>),
-    Symbol(SmtSymbol),
-    SExprs(Vec<H::SExpr>),
+    Symbol(SmtSymbolView<'a>),
+    SExprs(SmtSExprs<'a, H>),
 }
 
 impl<H: SmtHandler + ?Sized> Debug for SmtAttributeValue<'_, H>
@@ -303,19 +309,6 @@ where
             Self::SpecialConstant(arg0) => f.debug_tuple("SpecialConstant").field(arg0).finish(),
             Self::Symbol(arg0) => f.debug_tuple("Symbol").field(arg0).finish(),
             Self::SExprs(arg0) => f.debug_tuple("SExprs").field(arg0).finish(),
-        }
-    }
-}
-
-impl<H: SmtHandler + ?Sized> Clone for SmtAttributeValue<'_, H>
-where
-    H::SExpr: Clone,
-{
-    fn clone(&self) -> Self {
-        match self {
-            Self::SpecialConstant(arg0) => Self::SpecialConstant(*arg0),
-            Self::Symbol(arg0) => Self::Symbol(arg0.clone()),
-            Self::SExprs(arg0) => Self::SExprs(arg0.clone()),
         }
     }
 }
@@ -410,10 +403,10 @@ pub enum SmtPattern {
 
 pub enum SmtSExpr<'a, H: SmtHandler + ?Sized> {
     SpecialConstant(SmtSpecialConstantView<'a>),
-    Symbol(SmtSymbol),
+    Symbol(SmtSymbolView<'a>),
     Reserved(Reserved),
-    Keyword(SmtKeyword),
-    SExprs(Vec<H::SExpr>),
+    Keyword(SmtKeywordView<'a>),
+    SExprs(SmtSExprs<'a, H>),
 }
 
 impl<H: SmtHandler + ?Sized> Debug for SmtSExpr<'_, H>
@@ -427,21 +420,6 @@ where
             Self::Reserved(arg0) => f.debug_tuple("Reserved").field(arg0).finish(),
             Self::Keyword(arg0) => f.debug_tuple("Keyword").field(arg0).finish(),
             Self::SExprs(arg0) => f.debug_tuple("SExprs").field(arg0).finish(),
-        }
-    }
-}
-
-impl<H: SmtHandler + ?Sized> Clone for SmtSExpr<'_, H>
-where
-    H::SExpr: Clone,
-{
-    fn clone(&self) -> Self {
-        match self {
-            Self::SpecialConstant(arg0) => Self::SpecialConstant(*arg0),
-            Self::Symbol(arg0) => Self::Symbol(arg0.clone()),
-            Self::Reserved(arg0) => Self::Reserved(*arg0),
-            Self::Keyword(arg0) => Self::Keyword(arg0.clone()),
-            Self::SExprs(arg0) => Self::SExprs(arg0.clone()),
         }
     }
 }

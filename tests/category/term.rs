@@ -485,12 +485,16 @@ impl SmtHandler for Counting {
     }
     fn handle_attribute(
         &mut self,
-        _name: SmtKeyword,
+        _name: SmtKeywordView<'_>,
         _value: Option<SmtAttributeValue<'_, Self>>,
     ) -> Result<(), Infallible> {
         Ok(())
     }
-    fn annotate_term(&mut self, _term: (), _attributes: Vec<()>) -> Result<(), Infallible> {
+    fn annotate_term(
+        &mut self,
+        _term: (),
+        _attributes: SmtAttributes<'_, Self>,
+    ) -> Result<(), Infallible> {
         Ok(())
     }
     fn start_quantifier(
@@ -903,12 +907,16 @@ impl SmtHandler for Consuming {
     }
     fn handle_attribute(
         &mut self,
-        _name: SmtKeyword,
+        _name: SmtKeywordView<'_>,
         _value: Option<SmtAttributeValue<'_, Self>>,
     ) -> Result<(), Infallible> {
         Ok(())
     }
-    fn annotate_term(&mut self, term: String, _attributes: Vec<()>) -> Result<String, Infallible> {
+    fn annotate_term(
+        &mut self,
+        term: String,
+        _attributes: SmtAttributes<'_, Self>,
+    ) -> Result<String, Infallible> {
         Ok(term)
     }
     fn start_quantifier(

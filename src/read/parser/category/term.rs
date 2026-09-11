@@ -234,8 +234,9 @@ impl<H: SmtHandler> TermSlot<H> {
             Some(pending) => {
                 if pending.is_annotation {
                     // we are parsing attributes
-                    match resources.attribute_slot.progress::<MultipleAttributes>(
+                    match resources.attribute_slot.progress::<H, MultipleAttributes>(
                         handler,
+                        &mut resources.store,
                         &mut resources.s_expr_slot,
                         token,
                     )? {
@@ -244,16 +245,19 @@ impl<H: SmtHandler> TermSlot<H> {
                             resources.term_slot.pending = Some(pending);
                             return Ok(ControlFlow::Continue(()));
                         }
-                        ControlFlow::Break(attributes) => {
+                        ControlFlow::Break(arena_attributes_start) => {
+                            let store = &mut resources.store;
                             // check that there is at least one attribute
-                            if attributes.is_empty() {
+                            if store.attributes.len() == arena_attributes_start {
                                 return Err(ParserError::category_error(
                                     CategoryErrorKind::EmptyAnnotation,
                                     span,
                                 ));
                             }
-                            // produce the annotated term
-                            handle_err(handler.annotate_term(pending.term, attributes), span)?
+                            // produce the annotated term, the attributes are consumed
+                            store.hand_over_attributes(arena_attributes_start, |attributes| {
+                                handle_err(handler.annotate_term(pending.term, attributes), span)
+                            })?
                         }
                     }
                 } else {

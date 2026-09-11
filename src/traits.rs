@@ -1,9 +1,9 @@
 use std::fmt::Debug;
 
 use crate::{
-    SmtAttributeValue, SmtBindings, SmtDatatypeConstructor, SmtFunctionSignature, SmtKeyword,
-    SmtNumeral, SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSort, SmtStringContent, SmtSymbol,
-    SmtSymbolView, SmtTerm,
+    SmtAttributeValue, SmtAttributes, SmtBindings, SmtDatatypeConstructor, SmtFunctionSignature,
+    SmtKeyword, SmtKeywordView, SmtNumeral, SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSort,
+    SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm,
     read::parser::{CategoryParser, NoCommandParser},
 };
 
@@ -20,14 +20,14 @@ pub trait SmtHandler {
     fn handle_s_expr(&mut self, expr: SmtSExpr<'_, Self>) -> Result<Self::SExpr, Self::Error>;
     fn handle_attribute(
         &mut self,
-        name: SmtKeyword,
+        name: SmtKeywordView<'_>,
         value: Option<SmtAttributeValue<'_, Self>>,
     ) -> Result<Self::Attribute, Self::Error>;
 
     fn annotate_term(
         &mut self,
         term: Self::Term,
-        attributes: Vec<Self::Attribute>,
+        attributes: SmtAttributes<'_, Self>,
     ) -> Result<Self::Term, Self::Error>;
 
     fn start_let(&mut self, bindings: SmtBindings<'_, Self>) -> Result<(), Self::Error>;
@@ -399,7 +399,7 @@ impl SmtHandler for CheckStandardSyntax {
 
     fn handle_attribute(
         &mut self,
-        _name: SmtKeyword,
+        _name: SmtKeywordView<'_>,
         _value: Option<SmtAttributeValue<'_, Self>>,
     ) -> Result<Self::Attribute, Self::Error> {
         Ok(())
@@ -408,7 +408,7 @@ impl SmtHandler for CheckStandardSyntax {
     fn annotate_term(
         &mut self,
         _term: Self::Term,
-        _attributes: Vec<Self::Attribute>,
+        _attributes: SmtAttributes<'_, Self>,
     ) -> Result<Self::Term, Self::Error> {
         Ok(())
     }

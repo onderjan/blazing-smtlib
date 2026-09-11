@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler, SmtSExpr,
     read::parser::{
-        ParserError, ParserResources,
+        Arena, ParserError, ParserResources,
         category::{CategoryErrorKind, CategoryParser, parse_special_constant},
         handle_err,
     },
@@ -42,21 +42,24 @@ impl<H: SmtHandler> CategoryParser<H> for SExprParser<H> {
         resources: &mut ParserResources<H>,
         token: &Token,
     ) -> Result<ControlFlow<H::SExpr>, ParserError<H::Error>> {
-        // progress the slot
-        resources.s_expr_slot.progress(handler, token)
+        // progress the slot over the arena
+        resources
+            .s_expr_slot
+            .progress(handler, &mut resources.store, token)
     }
 }
 
-/// An S-expression waiting for additional inner S-expressions.
-struct Level<H: SmtHandler + ?Sized> {
-    s_exprs: Vec<H::SExpr>,
+/// An S-expression list waiting for additional inner S-expressions.
+struct Level {
+    /// The inner S-expressions are stored in the arena starting at this position.
+    arena_s_exprs_start: usize,
 }
 
-pub(crate) struct SExprSlot<H: SmtHandler + ?Sized> {
-    levels: Vec<Level<H>>,
+pub(crate) struct SExprSlot {
+    levels: Vec<Level>,
 }
 
-impl<H: SmtHandler + ?Sized> SExprSlot<H> {
+impl SExprSlot {
     pub(crate) fn new() -> Self {
         Self { levels: Vec::new() }
     }
@@ -70,9 +73,10 @@ impl<H: SmtHandler + ?Sized> SExprSlot<H> {
     }
 
     #[inline]
-    pub(crate) fn progress(
+    pub(crate) fn progress<H: SmtHandler + ?Sized>(
         &mut self,
         handler: &mut H,
+        arena: &mut Arena<H>,
         token: &Token,
     ) -> Result<ControlFlow<H::SExpr>, ParserError<H::Error>> {
         // there is no state besides the levels, so an empty level stack
@@ -81,30 +85,34 @@ impl<H: SmtHandler + ?Sized> SExprSlot<H> {
             debug_assert!(self.is_pristine(), "must be pristine when starting");
         }
 
+        let span = token.span();
         let s_expr = match token.kind() {
-            TokenKind::Symbol(symbol) => SmtSExpr::Symbol(symbol.into_owned()),
+            TokenKind::Symbol(symbol) => SmtSExpr::Symbol(symbol),
             TokenKind::Reserved(reserved) => SmtSExpr::Reserved(reserved),
-            TokenKind::Keyword(keyword) => SmtSExpr::Keyword(keyword.into_owned()),
+            TokenKind::Keyword(keyword) => SmtSExpr::Keyword(keyword),
             TokenKind::ParenOpen => {
-                // add a new level
+                // add a new level, remember where its S-expressions will start in the arena
                 self.levels.push(Level {
-                    s_exprs: Vec::new(),
+                    arena_s_exprs_start: arena.s_exprs.len(),
                 });
                 return Ok(ControlFlow::Continue(()));
             }
             TokenKind::ParenClose => {
                 // try to pop the last level
-                if let Some(last_level) = self.levels.pop() {
-                    // the last level exists, we can close it
-                    // empty s_expr is allowed
-                    SmtSExpr::SExprs(last_level.s_exprs)
-                } else {
+                let Some(last_level) = self.levels.pop() else {
                     // no last level, all that we received was ")"
                     return Err(ParserError::category_error(
                         CategoryErrorKind::ExpectedSExpr,
-                        token.span(),
+                        span,
                     ));
-                }
+                };
+                // the last level exists, we can close it, handing its S-expressions over
+                // (an empty list is allowed)
+                let s_expr = arena
+                    .hand_over_s_exprs(last_level.arena_s_exprs_start, |s_exprs| {
+                        handle_err(handler.handle_s_expr(SmtSExpr::SExprs(s_exprs)), span)
+                    })?;
+                return Ok(self.finish(arena, s_expr));
             }
             kind => {
                 if let Ok(special_constant) = parse_special_constant(kind) {
@@ -112,21 +120,30 @@ impl<H: SmtHandler + ?Sized> SExprSlot<H> {
                 } else {
                     return Err(ParserError::category_error(
                         CategoryErrorKind::ExpectedSExpr,
-                        token.span(),
+                        span,
                     ));
                 }
             }
         };
 
-        let s_expr = handle_err(handler.handle_s_expr(s_expr), token.span())?;
+        // an atom, handed over straight from the token
+        let s_expr = handle_err(handler.handle_s_expr(s_expr), span)?;
+        Ok(self.finish(arena, s_expr))
+    }
 
-        if let Some(last_level) = self.levels.last_mut() {
-            // we need to append to the last level
-            last_level.s_exprs.push(s_expr);
-            Ok(ControlFlow::Continue(()))
-        } else {
+    #[inline]
+    fn finish<H: SmtHandler + ?Sized>(
+        &mut self,
+        arena: &mut Arena<H>,
+        s_expr: H::SExpr,
+    ) -> ControlFlow<H::SExpr> {
+        if self.levels.is_empty() {
             // this is the root level, we are done
-            Ok(ControlFlow::Break(s_expr))
+            ControlFlow::Break(s_expr)
+        } else {
+            // we need to append to the last level
+            arena.s_exprs.push(s_expr);
+            ControlFlow::Continue(())
         }
     }
 }
@@ -139,7 +156,7 @@ mod tests {
     #[test]
     fn slot_is_pristine_after_every_s_expr() {
         // atoms, empty lists, and nested lists all use the level stack of the
-        // slot, which must be empty again afterwards
+        // slot and the arena, which must be empty again afterwards
         for input in [&b"x"[..], b"()", b"(a (b c) :kw 1)", b"((()))"] {
             let mut resources = ParserResources::new();
             parse_all_with(

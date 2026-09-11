@@ -15,11 +15,11 @@
 //! and every handled value is written as eight bytes.
 
 use smt_parser_rs::{
-    CommandHandler, NonstandardCommandError, SmtAttributeValue, SmtBindings,
+    CommandHandler, NonstandardCommandError, SmtAttributeValue, SmtAttributes, SmtBindings,
     SmtDatatypeConstructor, SmtFunctionSignature, SmtHandler, SmtIdentView, SmtIndexView,
-    SmtKeyword, SmtNumeral, SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSort,
-    SmtSpecialConstantView, SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm,
-    read::parser::NoCommandParser,
+    SmtKeyword, SmtKeywordView, SmtNumeral, SmtPattern, SmtQuantifierKind, SmtSExpr,
+    SmtSimplePattern, SmtSort, SmtSpecialConstantView, SmtStringContent, SmtSymbol, SmtSymbolView,
+    SmtTerm, read::parser::NoCommandParser,
 };
 
 const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
@@ -149,7 +149,7 @@ impl TraceHash {
     fn symbols(&mut self, symbols: &[SmtSymbol]) {
         self.count(symbols.len());
         for symbol in symbols {
-            self.symbol(symbol);
+            self.bytes(symbol.as_slice());
         }
     }
 
@@ -223,7 +223,7 @@ impl TraceHash {
         match pattern {
             SmtSimplePattern::Symbol(symbol) => {
                 self.byte(1);
-                self.symbol(symbol);
+                self.bytes(symbol.as_slice());
             }
             SmtSimplePattern::Wildcard => self.byte(2),
         }
@@ -281,7 +281,7 @@ impl SmtHandler for TraceHash {
             }
             SmtSExpr::Symbol(symbol) => {
                 self.byte(2);
-                self.symbol(symbol);
+                self.bytes(symbol.as_slice());
             }
             SmtSExpr::Reserved(reserved) => {
                 self.byte(3);
@@ -289,11 +289,11 @@ impl SmtHandler for TraceHash {
             }
             SmtSExpr::Keyword(keyword) => {
                 self.byte(4);
-                self.keyword(keyword);
+                self.bytes(keyword.as_slice());
             }
             SmtSExpr::SExprs(exprs) => {
                 self.byte(5);
-                self.values(exprs);
+                self.values(exprs.as_slice());
             }
         }
         Ok(self.produce())
@@ -301,11 +301,11 @@ impl SmtHandler for TraceHash {
 
     fn handle_attribute(
         &mut self,
-        name: SmtKeyword,
+        name: SmtKeywordView<'_>,
         value: Option<SmtAttributeValue<'_, Self>>,
     ) -> Result<u64, Self::Error> {
         self.byte(tag::ATTRIBUTE);
-        self.keyword(&name);
+        self.bytes(name.as_slice());
         match &value {
             None => self.byte(0),
             Some(SmtAttributeValue::SpecialConstant(constant)) => {
@@ -314,20 +314,24 @@ impl SmtHandler for TraceHash {
             }
             Some(SmtAttributeValue::Symbol(symbol)) => {
                 self.byte(2);
-                self.symbol(symbol);
+                self.bytes(symbol.as_slice());
             }
             Some(SmtAttributeValue::SExprs(exprs)) => {
                 self.byte(3);
-                self.values(exprs);
+                self.values(exprs.as_slice());
             }
         }
         Ok(self.produce())
     }
 
-    fn annotate_term(&mut self, term: u64, attributes: Vec<u64>) -> Result<u64, Self::Error> {
+    fn annotate_term(
+        &mut self,
+        term: u64,
+        attributes: SmtAttributes<'_, Self>,
+    ) -> Result<u64, Self::Error> {
         self.byte(tag::ANNOTATE_TERM);
         self.u64(term);
-        self.values(&attributes);
+        self.values(attributes.as_slice());
         Ok(self.produce())
     }
 
