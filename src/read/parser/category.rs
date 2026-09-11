@@ -39,7 +39,8 @@ pub use {
 };
 
 pub(crate) use arena::{
-    Arena, ArenaAccess, IdentHandle, IndexHandle, QualifiedIdentHandle, TextHandle,
+    Arena, ArenaAccess, IdentHandle, IndexHandle, PatternHandle, QualifiedIdentHandle,
+    SimplePatternHandle, TextHandle,
 };
 pub(crate) use ident::IdentSlot;
 pub(crate) use pattern::PatternSlot;

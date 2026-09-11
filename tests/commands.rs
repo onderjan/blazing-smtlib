@@ -8,7 +8,7 @@ use common::{assert_error_span, assert_parser_error, parse_with};
 use smt_parser_rs::{
     CommandHandler, SmtAttributeValue, SmtAttributes, SmtBindings, SmtDatatypeConstructor,
     SmtFunctionSignature, SmtHandler, SmtIdentView, SmtIndexView, SmtKeyword, SmtKeywordView,
-    SmtNumeral, SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSort,
+    SmtNumeral, SmtPatternView, SmtQuantifierKind, SmtSExpr, SmtSimplePatternView, SmtSort,
     SmtSpecialConstantView, SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm,
     read::{
         SmtReadErrorKind,
@@ -61,18 +61,18 @@ struct ResolvingMatch {
     case_vars: Option<Vec<String>>,
 }
 
-fn simple_pattern_text(pattern: &SmtSimplePattern) -> String {
+fn simple_pattern_text(pattern: SmtSimplePatternView<'_>) -> String {
     match pattern {
-        SmtSimplePattern::Symbol(symbol) => text(symbol.as_slice()),
-        SmtSimplePattern::Wildcard => "_".into(),
+        SmtSimplePatternView::Symbol(symbol) => text(symbol.as_slice()),
+        SmtSimplePatternView::Wildcard => "_".into(),
     }
 }
 
 /// Renders a pattern as written, so that the events show it unclassified.
-fn pattern_text(pattern: &SmtPattern) -> String {
+fn pattern_text(pattern: SmtPatternView<'_>) -> String {
     match pattern {
-        SmtPattern::Simple(simple) => simple_pattern_text(simple),
-        SmtPattern::Application { constructor, args } => {
+        SmtPatternView::Simple(simple) => simple_pattern_text(simple),
+        SmtPatternView::Application { constructor, args } => {
             let args: Vec<String> = args.iter().map(simple_pattern_text).collect();
             format!("({} {})", text(constructor.as_slice()), args.join(" "))
         }
@@ -222,7 +222,7 @@ impl SmtHandler for Resolving {
         Ok(())
     }
 
-    fn start_match_case(&mut self, pattern: SmtPattern) -> Result<(), String> {
+    fn start_match_case(&mut self, pattern: SmtPatternView<'_>) -> Result<(), String> {
         let current = self
             .matches
             .last_mut()
@@ -233,17 +233,19 @@ impl SmtHandler for Resolving {
         );
         // a bare symbol is taken as a variable; a real handler would
         // first check whether it names a nullary constructor
-        let vars: Vec<String> = match &pattern {
-            SmtPattern::Simple(SmtSimplePattern::Symbol(symbol)) => vec![text(symbol.as_slice())],
-            SmtPattern::Simple(SmtSimplePattern::Wildcard) => Vec::new(),
-            SmtPattern::Application { constructor, args } => {
+        let vars: Vec<String> = match pattern {
+            SmtPatternView::Simple(SmtSimplePatternView::Symbol(symbol)) => {
+                vec![text(symbol.as_slice())]
+            }
+            SmtPatternView::Simple(SmtSimplePatternView::Wildcard) => Vec::new(),
+            SmtPatternView::Application { constructor, args } => {
                 if constructor.as_slice() == b"unstartable" {
                     return Err("unstartable case".into());
                 }
                 args.iter()
                     .filter_map(|arg| match arg {
-                        SmtSimplePattern::Symbol(symbol) => Some(text(symbol.as_slice())),
-                        SmtSimplePattern::Wildcard => None,
+                        SmtSimplePatternView::Symbol(symbol) => Some(text(symbol.as_slice())),
+                        SmtSimplePatternView::Wildcard => None,
                     })
                     .collect()
             }
@@ -252,7 +254,7 @@ impl SmtHandler for Resolving {
             return Err("unstartable case".into());
         }
         self.events
-            .push(format!("start-case {}", pattern_text(&pattern)));
+            .push(format!("start-case {}", pattern_text(pattern)));
         current.case_vars = Some(vars);
         Ok(())
     }

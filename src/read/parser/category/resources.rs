@@ -109,13 +109,4 @@ impl<T> ClosedMultipleResource<T> {
         }
         Ok(ControlFlow::Continue(()))
     }
-
-    pub(crate) fn is_pristine(&self) -> bool {
-        self.outside && self.items.is_empty()
-    }
-
-    pub(crate) fn clear(&mut self) {
-        self.outside = true;
-        self.items.clear();
-    }
 }

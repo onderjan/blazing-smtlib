@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use crate::{
     SmtAttributeValue, SmtAttributes, SmtBindings, SmtDatatypeConstructor, SmtFunctionSignature,
-    SmtKeyword, SmtKeywordView, SmtNumeral, SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSort,
+    SmtKeyword, SmtKeywordView, SmtNumeral, SmtPatternView, SmtQuantifierKind, SmtSExpr, SmtSort,
     SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm,
     read::parser::{CategoryParser, NoCommandParser},
 };
@@ -83,7 +83,7 @@ pub trait SmtHandler {
     /// or distinctness of pattern variables.
     ///
     /// Consult the standard for proper handling.
-    fn start_match_case(&mut self, pattern: SmtPattern) -> Result<(), Self::Error>;
+    fn start_match_case(&mut self, pattern: SmtPatternView<'_>) -> Result<(), Self::Error>;
 
     /// Ends a match case.
     ///
@@ -450,7 +450,7 @@ impl SmtHandler for CheckStandardSyntax {
         Ok(())
     }
 
-    fn start_match_case(&mut self, _pattern: SmtPattern) -> Result<(), Self::Error> {
+    fn start_match_case(&mut self, _pattern: SmtPatternView<'_>) -> Result<(), Self::Error> {
         Ok(())
     }
 

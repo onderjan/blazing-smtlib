@@ -516,9 +516,14 @@ impl<H: SmtHandler> TermSlot<H> {
             State::MatchPattern => {
                 // parse the match pattern
                 let span = token.span();
-                if let ControlFlow::Break(pattern) = resources.pattern_slot.progress(token)? {
-                    // a match case is starting, call the handler
-                    handle_err(handler.start_match_case(pattern), span)?;
+                if let ControlFlow::Break(pattern) = resources
+                    .pattern_slot
+                    .progress(&mut resources.store, token)?
+                {
+                    // a match case is starting, call the handler with the pattern handed over
+                    resources.store.hand_over_pattern(pattern, |pattern| {
+                        handle_err(handler.start_match_case(pattern), span)
+                    })?;
                     // move the start state to parse the case term
                     slot.state = State::Start;
                 }

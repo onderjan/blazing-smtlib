@@ -1,6 +1,7 @@
 use crate::{
     SmtBindings, SmtHandler, SmtIdentView, SmtIndexView, SmtIndices, SmtKeywordView, SmtMultiple,
-    SmtNumeralView, SmtQualifiedIdentView, SmtSort, SmtSymbolView, String8View,
+    SmtNumeralView, SmtPatternView, SmtQualifiedIdentView, SmtSimplePatternView, SmtSimplePatterns,
+    SmtSort, SmtSymbolView, String8View,
 };
 
 /// An arena of bytes and handled values.
@@ -24,6 +25,8 @@ pub(crate) struct Arena<H: SmtHandler + ?Sized> {
     pub(crate) s_exprs: Vec<H::SExpr>,
     /// Handled attributes waiting to be consumed, inside attribute lists.
     pub(crate) attributes: Vec<H::Attribute>,
+    /// Simple patterns waiting to be consumed, as constructor pattern arguments.
+    pub(crate) simple_patterns: Vec<SimplePatternHandle>,
     /// Handled sorts waiting to be consumed.
     pub(crate) sorts: Vec<H::Sort>,
     /// Handled terms, waiting to be consumed.
@@ -38,6 +41,7 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
             symbols: Vec::new(),
             s_exprs: Vec::new(),
             attributes: Vec::new(),
+            simple_patterns: Vec::new(),
             sorts: Vec::new(),
             terms: Vec::new(),
         }
@@ -49,6 +53,7 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
             && self.symbols.is_empty()
             && self.s_exprs.is_empty()
             && self.attributes.is_empty()
+            && self.simple_patterns.is_empty()
             && self.sorts.is_empty()
             && self.terms.is_empty()
     }
@@ -59,6 +64,7 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
         self.symbols.clear();
         self.s_exprs.clear();
         self.attributes.clear();
+        self.simple_patterns.clear();
         self.sorts.clear();
         self.terms.clear();
     }
@@ -240,6 +246,35 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
         self.attributes.truncate(start);
         result
     }
+
+    /// Hands a match pattern to `f`, removing it afterwards.
+    #[inline]
+    pub(crate) fn hand_over_pattern<R>(
+        &mut self,
+        pattern: PatternHandle<'_>,
+        f: impl FnOnce(SmtPatternView<'_>) -> R,
+    ) -> R {
+        match pattern {
+            PatternHandle::Simple(simple) => f(SmtPatternView::Simple(simple)),
+            PatternHandle::Application {
+                constructor,
+                args_start,
+            } => {
+                let pattern = SmtPatternView::Application {
+                    constructor: constructor.symbol_view(&self.text),
+                    args: SmtSimplePatterns::new(
+                        ArenaAccess { _priv: () },
+                        &self.text,
+                        &self.simple_patterns[args_start..],
+                    ),
+                };
+                let result = f(pattern);
+                self.simple_patterns.truncate(args_start);
+                self.text.truncate(constructor.start);
+                result
+            }
+        }
+    }
 }
 
 /// Views the identifier in the arena text and indices.
@@ -324,4 +359,35 @@ pub(crate) struct IdentHandle {
 pub(crate) struct QualifiedIdentHandle<H: SmtHandler + ?Sized> {
     pub(crate) ident: IdentHandle,
     pub(crate) sort: Option<H::Sort>,
+}
+
+/// A simple pattern: a symbol in the arena text, or a wildcard.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum SimplePatternHandle {
+    Symbol(TextHandle),
+    Wildcard,
+}
+
+impl SimplePatternHandle {
+    /// Views the simple pattern.
+    #[inline]
+    pub(crate) fn view(self, text: &[u8]) -> SmtSimplePatternView<'_> {
+        match self {
+            SimplePatternHandle::Symbol(handle) => {
+                SmtSimplePatternView::Symbol(handle.symbol_view(text))
+            }
+            SimplePatternHandle::Wildcard => SmtSimplePatternView::Wildcard,
+        }
+    }
+}
+
+/// A parsed match pattern: a simple pattern from its token, or a constructor
+/// application with the constructor in the arena text and the arguments in the
+/// arena simple patterns from the given position onward.
+pub(crate) enum PatternHandle<'t> {
+    Simple(SmtSimplePatternView<'t>),
+    Application {
+        constructor: TextHandle,
+        args_start: usize,
+    },
 }

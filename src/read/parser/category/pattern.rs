@@ -1,10 +1,10 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtHandler, SmtPattern, SmtSimplePattern, SmtSymbol,
+    SmtHandler, SmtPattern, SmtSimplePattern, SmtSimplePatternView,
     read::parser::{
-        ParserError, ParserResources, SymbolParser,
-        category::{CategoryErrorKind, CategoryParser, resources::ClosedMultipleResource},
+        Arena, ParserError, ParserResources, PatternHandle, SimplePatternHandle, TextHandle,
+        category::{CategoryErrorKind, CategoryParser},
     },
     token::{Reserved, Token, TokenKind, TokenType},
 };
@@ -18,9 +18,16 @@ impl SimplePatternParser {
 
     /// Consumes exactly one token, which must be a simple pattern.
     pub(crate) fn expect<E>(token: &Token) -> Result<SmtSimplePattern, ParserError<E>> {
+        Ok(Self::expect_view(token)?.into_owned())
+    }
+
+    /// Consumes exactly one token, which must be a simple pattern, viewing it.
+    pub(crate) fn expect_view<'t, E>(
+        token: &Token<'t>,
+    ) -> Result<SmtSimplePatternView<'t>, ParserError<E>> {
         let result = match token.kind() {
-            TokenKind::Symbol(symbol) => SmtSimplePattern::Symbol(symbol.into_owned()),
-            TokenKind::Reserved(Reserved::Underscore) => SmtSimplePattern::Wildcard,
+            TokenKind::Symbol(symbol) => SmtSimplePatternView::Symbol(symbol),
+            TokenKind::Reserved(Reserved::Underscore) => SmtSimplePatternView::Wildcard,
             _ => {
                 return Err(ParserError::category_error(
                     CategoryErrorKind::ExpectedToken(&[
@@ -87,7 +94,20 @@ impl<H: SmtHandler> CategoryParser<H> for PatternParser<H> {
         token: &Token,
     ) -> Result<ControlFlow<SmtPattern, ()>, ParserError<H::Error>> {
         // progress the slot
-        resources.pattern_slot.progress(token)
+        let ParserResources {
+            pattern_slot,
+            store,
+            ..
+        } = resources;
+        match pattern_slot.progress(store, token)? {
+            ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
+            ControlFlow::Break(pattern) => {
+                // break with the owned pattern
+                Ok(ControlFlow::Break(
+                    store.hand_over_pattern(pattern, |pattern| pattern.into_owned()),
+                ))
+            }
+        }
     }
 }
 
@@ -96,10 +116,10 @@ pub(crate) struct PatternSlot {
     ///
     /// This only matters if not storing anything yet.
     is_open: bool,
-    /// The constructor, stored while its arguments are being parsed.
-    constructor: Option<SmtSymbol>,
-    /// The constructor arguments.
-    args: ClosedMultipleResource<SmtSimplePattern>,
+    /// The constructor, stored in the arena text while its arguments are being parsed.
+    constructor: Option<TextHandle>,
+    /// The constructor arguments are stored in the arena starting at this position.
+    arena_args_start: usize,
 }
 
 impl PatternSlot {
@@ -107,34 +127,34 @@ impl PatternSlot {
         Self {
             is_open: false,
             constructor: None,
-            args: ClosedMultipleResource::new(),
+            arena_args_start: 0,
         }
     }
 
     pub(crate) fn is_pristine(&self) -> bool {
-        !self.is_open && self.constructor.is_none() && self.args.is_pristine()
+        !self.is_open && self.constructor.is_none()
     }
 
     pub(crate) fn clear(&mut self) {
         self.is_open = false;
         self.constructor = None;
-        self.args.clear();
     }
 
     #[inline]
-    pub(crate) fn progress<E>(
+    pub(crate) fn progress<'t, H: SmtHandler + ?Sized, E>(
         &mut self,
-        token: &Token,
-    ) -> Result<ControlFlow<SmtPattern>, ParserError<E>> {
+        arena: &mut Arena<H>,
+        token: &Token<'t>,
+    ) -> Result<ControlFlow<PatternHandle<'t>>, ParserError<E>> {
         // The sequential progress is as follows:
         // 1. Not open, expect one of:
         //    - A symbol or "_", immediately break with a simple pattern.
         //    - "(", move to (2).
         // 2. Open, expect a symbol serving as the constructor.
-        //    After it is read, move to (3) by storing it.
+        //    After it is read, move to (3) by storing it in the arena.
         // 3. The constructor has been stored,
-        //    parse its arguments (simple patterns) until the closing
-        //    parenthesis, then break with the constructor application.
+        //    parse its arguments (simple patterns) into the arena until the
+        //    closing parenthesis, then break with the constructor application.
         //    The constructor application must have at least one argument.
         // The function handles this in reverse order so that nothing
         // is taken and put back unnecessarily.
@@ -143,31 +163,43 @@ impl PatternSlot {
 
         if let Some(constructor) = self.constructor.take() {
             // step 3: parsing the arguments
-            match self.args.progress(token, |token| {
-                Ok(ControlFlow::Break(SimplePatternParser::expect(token)?))
-            })? {
-                ControlFlow::Continue(()) => self.constructor = Some(constructor),
-                ControlFlow::Break(args) => {
-                    // there must be at least one argument to the constructor
-                    if args.is_empty() {
-                        return Err(ParserError::category_error(
-                            CategoryErrorKind::EmptyPatternArguments,
-                            span,
-                        ));
-                    }
-                    // the slot is back in its initial state
-                    return Ok(ControlFlow::Break(SmtPattern::Application {
-                        constructor,
-                        args,
-                    }));
+            if matches!(token.kind(), TokenKind::ParenClose) {
+                // there must be at least one argument to the constructor
+                if arena.simple_patterns.len() == self.arena_args_start {
+                    return Err(ParserError::category_error(
+                        CategoryErrorKind::EmptyPatternArguments,
+                        span,
+                    ));
                 }
+                // the slot is back in its initial state, the pattern is in the arena
+                return Ok(ControlFlow::Break(PatternHandle::Application {
+                    constructor,
+                    args_start: self.arena_args_start,
+                }));
             }
+            // an argument is starting here, it will be stored in the arena
+            let argument = match SimplePatternParser::expect_view(token)? {
+                SmtSimplePatternView::Symbol(symbol) => {
+                    SimplePatternHandle::Symbol(arena.push_text(symbol.as_slice()))
+                }
+                SmtSimplePatternView::Wildcard => SimplePatternHandle::Wildcard,
+            };
+            arena.simple_patterns.push(argument);
+            self.constructor = Some(constructor);
             return Ok(ControlFlow::Continue(()));
         }
 
         if self.is_open {
-            // step 2: expecting the constructor
-            self.constructor = Some(SymbolParser::expect(token)?);
+            // step 2: expecting the constructor, which goes to the arena text
+            let TokenKind::Symbol(constructor) = token.kind() else {
+                return Err(ParserError::category_error(
+                    CategoryErrorKind::ExpectedToken(&[TokenType::Symbol]),
+                    span,
+                ));
+            };
+            // push the constructor to the arena text and start parsing arguments
+            self.constructor = Some(arena.push_text(constructor.as_slice()));
+            self.arena_args_start = arena.simple_patterns.len();
             self.is_open = false;
             return Ok(ControlFlow::Continue(()));
         }
@@ -175,8 +207,8 @@ impl PatternSlot {
         // step 1: expecting a simple pattern or an opening parenthesis
         debug_assert!(self.is_pristine(), "must be pristine when starting");
         let result = match token.kind() {
-            TokenKind::Symbol(symbol) => SmtSimplePattern::Symbol(symbol.into_owned()),
-            TokenKind::Reserved(Reserved::Underscore) => SmtSimplePattern::Wildcard,
+            TokenKind::Symbol(symbol) => SmtSimplePatternView::Symbol(symbol),
+            TokenKind::Reserved(Reserved::Underscore) => SmtSimplePatternView::Wildcard,
             TokenKind::ParenOpen => {
                 // move to constructor parsing
                 self.is_open = true;
@@ -194,7 +226,7 @@ impl PatternSlot {
             }
         };
         // this was just a simple pattern, the slot is in its initial state
-        Ok(ControlFlow::Break(SmtPattern::Simple(result)))
+        Ok(ControlFlow::Break(PatternHandle::Simple(result)))
     }
 }
 
@@ -206,8 +238,8 @@ mod tests {
     #[test]
     fn slot_is_pristine_after_every_pattern() {
         // simple patterns break immediately, constructor applications use
-        // the stored constructor and the argument list; the slot must be
-        // back in its initial state after each
+        // the stored constructor and the arguments in the arena; the slot and
+        // the arena must be back in their initial state after each
         for input in [&b"x"[..], b"_", b"(cons x xs)", b"(node _ l r)"] {
             let mut resources = ParserResources::new();
             parse_all_with(

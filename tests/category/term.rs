@@ -517,7 +517,7 @@ impl SmtHandler for Counting {
     fn start_match(&mut self, _scrutinee: Self::Term) -> Result<(), Self::Error> {
         Ok(())
     }
-    fn start_match_case(&mut self, _pattern: SmtPattern) -> Result<(), Self::Error> {
+    fn start_match_case(&mut self, _pattern: SmtPatternView<'_>) -> Result<(), Self::Error> {
         Ok(())
     }
     fn end_match_case(&mut self, _term: Self::Term) -> Result<(), Self::Error> {
@@ -939,7 +939,7 @@ impl SmtHandler for Consuming {
     fn start_match(&mut self, _scrutinee: String) -> Result<(), Infallible> {
         Ok(())
     }
-    fn start_match_case(&mut self, _pattern: SmtPattern) -> Result<(), Infallible> {
+    fn start_match_case(&mut self, _pattern: SmtPatternView<'_>) -> Result<(), Infallible> {
         Ok(())
     }
     fn end_match_case(&mut self, _term: String) -> Result<(), Infallible> {

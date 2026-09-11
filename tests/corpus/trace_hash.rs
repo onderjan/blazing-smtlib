@@ -17,9 +17,9 @@
 use smt_parser_rs::{
     CommandHandler, NonstandardCommandError, SmtAttributeValue, SmtAttributes, SmtBindings,
     SmtDatatypeConstructor, SmtFunctionSignature, SmtHandler, SmtIdentView, SmtIndexView,
-    SmtKeyword, SmtKeywordView, SmtNumeral, SmtPattern, SmtQuantifierKind, SmtSExpr,
-    SmtSimplePattern, SmtSort, SmtSpecialConstantView, SmtStringContent, SmtSymbol, SmtSymbolView,
-    SmtTerm, read::parser::NoCommandParser,
+    SmtKeyword, SmtKeywordView, SmtNumeral, SmtPatternView, SmtQuantifierKind, SmtSExpr,
+    SmtSimplePatternView, SmtSort, SmtSpecialConstantView, SmtStringContent, SmtSymbol,
+    SmtSymbolView, SmtTerm, read::parser::NoCommandParser,
 };
 
 const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
@@ -219,13 +219,13 @@ impl TraceHash {
         self.u64(signature.result_sort);
     }
 
-    fn simple_pattern(&mut self, pattern: &SmtSimplePattern) {
+    fn simple_pattern(&mut self, pattern: SmtSimplePatternView<'_>) {
         match pattern {
-            SmtSimplePattern::Symbol(symbol) => {
+            SmtSimplePatternView::Symbol(symbol) => {
                 self.byte(1);
                 self.bytes(symbol.as_slice());
             }
-            SmtSimplePattern::Wildcard => self.byte(2),
+            SmtSimplePatternView::Wildcard => self.byte(2),
         }
     }
 
@@ -392,18 +392,18 @@ impl SmtHandler for TraceHash {
         Ok(())
     }
 
-    fn start_match_case(&mut self, pattern: SmtPattern) -> Result<(), Self::Error> {
+    fn start_match_case(&mut self, pattern: SmtPatternView<'_>) -> Result<(), Self::Error> {
         self.byte(tag::START_MATCH_CASE);
-        match &pattern {
-            SmtPattern::Simple(simple) => {
+        match pattern {
+            SmtPatternView::Simple(simple) => {
                 self.byte(1);
                 self.simple_pattern(simple);
             }
-            SmtPattern::Application { constructor, args } => {
+            SmtPatternView::Application { constructor, args } => {
                 self.byte(2);
-                self.symbol(constructor);
+                self.bytes(constructor.as_slice());
                 self.count(args.len());
-                for arg in args {
+                for arg in args.iter() {
                     self.simple_pattern(arg);
                 }
             }

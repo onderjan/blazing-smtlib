@@ -24,8 +24,8 @@ use std::ops::ControlFlow;
 
 use smt_parser_rs::{
     SmtAttributeValue, SmtAttributes, SmtBindings, SmtHandler, SmtIdent, SmtIdentView, SmtIndex,
-    SmtIndexView, SmtKeywordView, SmtPattern, SmtQualifiedIdent, SmtQualifiedIdentView,
-    SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSort, SmtSpan, SmtSpecialConstantView,
+    SmtIndexView, SmtKeywordView, SmtPatternView, SmtQualifiedIdent, SmtQualifiedIdentView,
+    SmtQuantifierKind, SmtSExpr, SmtSimplePatternView, SmtSort, SmtSpan, SmtSpecialConstantView,
     SmtSymbolView, SmtTerm,
     read::{
         lexer::{LexError, Lexer},
@@ -64,17 +64,17 @@ struct PrintingMatch {
     pattern: Option<String>,
 }
 
-fn render_simple_pattern(pattern: &SmtSimplePattern) -> String {
+fn render_simple_pattern(pattern: SmtSimplePatternView<'_>) -> String {
     match pattern {
-        SmtSimplePattern::Symbol(symbol) => text(symbol.as_slice()),
-        SmtSimplePattern::Wildcard => "_".into(),
+        SmtSimplePatternView::Symbol(symbol) => text(symbol.as_slice()),
+        SmtSimplePatternView::Wildcard => "_".into(),
     }
 }
 
-fn render_pattern(pattern: &SmtPattern) -> String {
+fn render_pattern(pattern: SmtPatternView<'_>) -> String {
     match pattern {
-        SmtPattern::Simple(simple) => render_simple_pattern(simple),
-        SmtPattern::Application { constructor, args } => {
+        SmtPatternView::Simple(simple) => render_simple_pattern(simple),
+        SmtPatternView::Application { constructor, args } => {
             let mut items = vec![text(constructor.as_slice())];
             items.extend(args.iter().map(render_simple_pattern));
             render_list(&items)
@@ -246,7 +246,7 @@ impl SmtHandler for Printing {
         Ok(())
     }
 
-    fn start_match_case(&mut self, pattern: SmtPattern) -> Result<(), Infallible> {
+    fn start_match_case(&mut self, pattern: SmtPatternView<'_>) -> Result<(), Infallible> {
         let current = self
             .matches
             .last_mut()
@@ -255,7 +255,7 @@ impl SmtHandler for Printing {
             current.pattern.is_none(),
             "start_match_case while a case is still open"
         );
-        current.pattern = Some(render_pattern(&pattern));
+        current.pattern = Some(render_pattern(pattern));
         Ok(())
     }
 

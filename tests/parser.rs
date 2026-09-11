@@ -8,7 +8,7 @@ use common::{assert_error_span, assert_parser_error, parse, parse_with};
 use smt_parser_rs::{
     CommandHandler, NonstandardCommandError, SmtAttributeValue, SmtAttributes, SmtBindings,
     SmtDatatypeConstructor, SmtFunctionSignature, SmtHandler, SmtKeyword, SmtKeywordView,
-    SmtNumeral, SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSort, SmtStringContent, SmtSymbol,
+    SmtNumeral, SmtPatternView, SmtQuantifierKind, SmtSExpr, SmtSort, SmtStringContent, SmtSymbol,
     SmtSymbolView, SmtTerm,
     read::{
         SmtReadErrorKind,
@@ -146,7 +146,7 @@ impl SmtHandler for Recording {
     fn start_match(&mut self, _scrutinee: Self::Term) -> Result<(), Self::Error> {
         Ok(())
     }
-    fn start_match_case(&mut self, _pattern: SmtPattern) -> Result<(), Self::Error> {
+    fn start_match_case(&mut self, _pattern: SmtPatternView<'_>) -> Result<(), Self::Error> {
         Ok(())
     }
     fn end_match_case(&mut self, _term: Self::Term) -> Result<(), Self::Error> {

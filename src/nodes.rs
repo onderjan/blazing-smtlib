@@ -4,7 +4,7 @@ use crate::{
     SmtBinDigits, SmtBinDigitsView, SmtDecimal, SmtDecimalView, SmtHandler, SmtHexDigits,
     SmtHexDigitsView, SmtKeywordView, SmtMultiple, SmtNumeral, SmtNumeralView, SmtStringContent,
     SmtStringContentView, SmtSymbol, SmtSymbolView,
-    read::parser::{ArenaAccess, IndexHandle},
+    read::parser::{ArenaAccess, IndexHandle, SimplePatternHandle},
     token::Reserved,
 };
 
@@ -420,6 +420,89 @@ where
             Self::Reserved(arg0) => f.debug_tuple("Reserved").field(arg0).finish(),
             Self::Keyword(arg0) => f.debug_tuple("Keyword").field(arg0).finish(),
             Self::SExprs(arg0) => f.debug_tuple("SExprs").field(arg0).finish(),
+        }
+    }
+}
+
+/// Simple match pattern to be handled: a symbol or a wildcard.
+#[derive(Debug, Clone, Copy)]
+pub enum SmtSimplePatternView<'a> {
+    Symbol(SmtSymbolView<'a>),
+    Wildcard,
+}
+
+impl SmtSimplePatternView<'_> {
+    pub fn into_owned(self) -> SmtSimplePattern {
+        match self {
+            Self::Symbol(symbol) => SmtSimplePattern::Symbol(symbol.into_owned()),
+            Self::Wildcard => SmtSimplePattern::Wildcard,
+        }
+    }
+}
+
+/// The arguments of a constructor pattern to be handled.
+#[derive(Clone, Copy)]
+pub struct SmtSimplePatterns<'a> {
+    text: &'a [u8],
+    handles: &'a [SimplePatternHandle],
+}
+
+impl<'a> SmtSimplePatterns<'a> {
+    pub(crate) fn new(
+        _access: ArenaAccess,
+        text: &'a [u8],
+        handles: &'a [SimplePatternHandle],
+    ) -> Self {
+        Self { text, handles }
+    }
+
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.handles.len()
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.handles.is_empty()
+    }
+
+    #[inline]
+    pub fn get(&self, index: usize) -> Option<SmtSimplePatternView<'a>> {
+        Some(self.handles.get(index)?.view(self.text))
+    }
+
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = SmtSimplePatternView<'a>> {
+        let text = self.text;
+        self.handles.iter().map(move |handle| handle.view(text))
+    }
+}
+
+impl Debug for SmtSimplePatterns<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_list().entries(self.iter()).finish()
+    }
+}
+
+/// Match pattern to be handled: a symbol, a wildcard, or a constructor application.
+#[derive(Debug, Clone, Copy)]
+pub enum SmtPatternView<'a> {
+    /// A simple match pattern, either a symbol or a wildcard.
+    Simple(SmtSimplePatternView<'a>),
+    /// A constructor applied to at least one variable or wildcard.
+    Application {
+        constructor: SmtSymbolView<'a>,
+        args: SmtSimplePatterns<'a>,
+    },
+}
+
+impl SmtPatternView<'_> {
+    pub fn into_owned(self) -> SmtPattern {
+        match self {
+            Self::Simple(simple) => SmtPattern::Simple(simple.into_owned()),
+            Self::Application { constructor, args } => SmtPattern::Application {
+                constructor: constructor.into_owned(),
+                args: args.iter().map(SmtSimplePatternView::into_owned).collect(),
+            },
         }
     }
 }

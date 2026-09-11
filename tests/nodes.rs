@@ -6,9 +6,9 @@ use std::fmt::Debug;
 use smt_parser_rs::{
     SmtApplication, SmtAttributeValue, SmtAttributes, SmtBindings, SmtDatatypeConstructor,
     SmtFunctionSignature, SmtHandler, SmtIdent, SmtIdentView, SmtIndex, SmtIndexView, SmtIndices,
-    SmtKeywordView, SmtPattern, SmtQualifiedIdent, SmtQualifiedIdentView, SmtQuantifierKind,
-    SmtSExpr, SmtSimplePattern, SmtSort, SmtSpecialConstant, SmtSpecialConstantView, SmtSymbolView,
-    SmtTerm,
+    SmtKeywordView, SmtPattern, SmtPatternView, SmtQualifiedIdent, SmtQualifiedIdentView,
+    SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSimplePatternView, SmtSimplePatterns,
+    SmtSort, SmtSpecialConstant, SmtSpecialConstantView, SmtSymbolView, SmtTerm,
 };
 
 /// Handler that is deliberately neither `Debug` nor `Clone`,
@@ -71,7 +71,7 @@ impl SmtHandler for OpaqueHandler {
     fn start_match(&mut self, _scrutinee: Self::Term) -> Result<(), Self::Error> {
         Ok(())
     }
-    fn start_match_case(&mut self, _pattern: SmtPattern) -> Result<(), Self::Error> {
+    fn start_match_case(&mut self, _pattern: SmtPatternView<'_>) -> Result<(), Self::Error> {
         Ok(())
     }
     fn end_match_case(&mut self, _term: Self::Term) -> Result<(), Self::Error> {
@@ -115,4 +115,7 @@ fn nodes_are_debug_and_clone_with_an_opaque_handler() {
     assert_debug_and_clone::<SmtDatatypeConstructor<OpaqueHandler>>();
     assert_debug_and_clone::<SmtSimplePattern>();
     assert_debug_and_clone::<SmtPattern>();
+    assert_debug_and_clone::<SmtSimplePatternView<'static>>();
+    assert_debug_and_clone::<SmtSimplePatterns<'static>>();
+    assert_debug_and_clone::<SmtPatternView<'static>>();
 }
