@@ -61,6 +61,24 @@ impl String8 {
     }
 }
 
+impl std::borrow::Borrow<[u8]> for String8 {
+    fn borrow(&self) -> &[u8] {
+        self.as_slice()
+    }
+}
+
+impl PartialEq<[u8]> for String8 {
+    fn eq(&self, other: &[u8]) -> bool {
+        self.as_slice() == other
+    }
+}
+
+impl PartialEq<String8View<'_>> for String8 {
+    fn eq(&self, other: &String8View<'_>) -> bool {
+        self.as_slice() == other.as_slice()
+    }
+}
+
 impl Default for String8 {
     fn default() -> Self {
         Self::new()
@@ -103,6 +121,24 @@ impl<'a> String8View<'a> {
 
     pub fn iter(&self) -> impl Iterator<Item = u8> {
         self.0.iter().copied()
+    }
+}
+
+impl std::borrow::Borrow<[u8]> for String8View<'_> {
+    fn borrow(&self) -> &[u8] {
+        self.as_slice()
+    }
+}
+
+impl PartialEq<[u8]> for String8View<'_> {
+    fn eq(&self, other: &[u8]) -> bool {
+        self.as_slice() == other
+    }
+}
+
+impl PartialEq<String8> for String8View<'_> {
+    fn eq(&self, other: &String8) -> bool {
+        self.as_slice() == other.as_slice()
     }
 }
 

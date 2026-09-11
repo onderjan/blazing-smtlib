@@ -210,6 +210,42 @@ macro_rules! string8_newtype {
             }
         }
 
+        impl std::borrow::Borrow<[u8]> for $name {
+            fn borrow(&self) -> &[u8] {
+                self.as_slice()
+            }
+        }
+
+        impl PartialEq<[u8]> for $name {
+            fn eq(&self, other: &[u8]) -> bool {
+                self.as_slice() == other
+            }
+        }
+
+        impl PartialEq<&[u8]> for $name {
+            fn eq(&self, other: &&[u8]) -> bool {
+                self.as_slice() == *other
+            }
+        }
+
+        impl PartialEq<str> for $name {
+            fn eq(&self, other: &str) -> bool {
+                self.as_slice() == other.as_bytes()
+            }
+        }
+
+        impl PartialEq<&str> for $name {
+            fn eq(&self, other: &&str) -> bool {
+                self.as_slice() == other.as_bytes()
+            }
+        }
+
+        impl PartialEq<$view<'_>> for $name {
+            fn eq(&self, other: &$view<'_>) -> bool {
+                self.as_slice() == other.as_slice()
+            }
+        }
+
         #[derive(Clone, Copy, PartialEq, Eq, Hash)]
         pub struct $view<'a>(String8View<'a>);
 
@@ -246,6 +282,42 @@ macro_rules! string8_newtype {
         impl std::fmt::Debug for $view<'_> {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 std::fmt::Debug::fmt(&self.0, f)
+            }
+        }
+
+        impl std::borrow::Borrow<[u8]> for $view<'_> {
+            fn borrow(&self) -> &[u8] {
+                self.as_slice()
+            }
+        }
+
+        impl PartialEq<[u8]> for $view<'_> {
+            fn eq(&self, other: &[u8]) -> bool {
+                self.as_slice() == other
+            }
+        }
+
+        impl PartialEq<&[u8]> for $view<'_> {
+            fn eq(&self, other: &&[u8]) -> bool {
+                self.as_slice() == *other
+            }
+        }
+
+        impl PartialEq<str> for $view<'_> {
+            fn eq(&self, other: &str) -> bool {
+                self.as_slice() == other.as_bytes()
+            }
+        }
+
+        impl PartialEq<&str> for $view<'_> {
+            fn eq(&self, other: &&str) -> bool {
+                self.as_slice() == other.as_bytes()
+            }
+        }
+
+        impl PartialEq<$name> for $view<'_> {
+            fn eq(&self, other: &$name) -> bool {
+                self.as_slice() == other.as_slice()
             }
         }
     };

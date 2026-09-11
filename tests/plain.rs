@@ -149,3 +149,31 @@ fn decimals_with_trailing_fractional_zeros_are_distinct() {
     assert_ne!(dec(b"3.5"), dec(b"3.50"));
     assert_eq!(dec(b"3.50"), dec(b"3.50"));
 }
+
+#[test]
+fn owned_newtypes_key_maps_looked_up_by_bytes() {
+    use std::collections::HashMap;
+
+    let mut map: HashMap<SmtSymbol, u32> = HashMap::new();
+    map.insert(SmtSymbol::new(b"x".to_vec()).expect("a symbol"), 1);
+    map.insert(
+        SmtSymbol::new(b"quoted name".to_vec()).expect("a symbol"),
+        2,
+    );
+    assert_eq!(map.get(b"x".as_slice()), Some(&1));
+    assert_eq!(map.get(b"quoted name".as_slice()), Some(&2));
+    assert_eq!(map.get(b"y".as_slice()), None);
+}
+
+#[test]
+fn newtypes_compare_with_bytes_strings_and_each_other() {
+    let owned = SmtSymbol::new(b"bvadd".to_vec()).expect("a symbol");
+    let view = owned.as_view();
+    assert!(owned == "bvadd" && owned == b"bvadd"[..] && owned == b"bvadd".as_slice());
+    assert!(view == "bvadd" && view == b"bvadd"[..] && view == b"bvadd".as_slice());
+    assert!(owned == view);
+    assert!(view == owned);
+    assert!(owned != "bvsub" && view != "bvsub");
+    let numeral = SmtNumeral::new(b"32".to_vec()).expect("a numeral");
+    assert!(numeral == "32" && numeral.as_view() == "32" && numeral != "3");
+}
