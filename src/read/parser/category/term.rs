@@ -11,7 +11,7 @@ use crate::{
         },
         handle_err,
     },
-    token::{Reserved, Token, TokenKind, TokenType},
+    token::{GeneralReserved, Reserved, Token, TokenKind, TokenType},
 };
 
 /// A parser that reads an SMT-LIB term.
@@ -637,7 +637,7 @@ impl<H: SmtHandler> TermSlot<H> {
                 });
                 return Ok(());
             }
-            TokenKind::Reserved(Reserved::Let) => {
+            TokenKind::Reserved(Reserved::General(GeneralReserved::Let)) => {
                 // add a level for let bindings and move before the bindings opening
                 // remember where the bindings start in the arena
                 let store = &resources.store;
@@ -648,31 +648,31 @@ impl<H: SmtHandler> TermSlot<H> {
                 });
                 State::LetAllBindingsOpen
             }
-            TokenKind::Reserved(Reserved::Lambda) => {
+            TokenKind::Reserved(Reserved::General(GeneralReserved::Lambda)) => {
                 // this is a lambda, move to parsing its variables
                 State::SortedBinderVars(SortedBinderKind::Lambda)
             }
-            TokenKind::Reserved(Reserved::Forall) => {
+            TokenKind::Reserved(Reserved::General(GeneralReserved::Forall)) => {
                 // this is a universal binder, move to parsing its variables
                 State::SortedBinderVars(SortedBinderKind::Forall)
             }
-            TokenKind::Reserved(Reserved::Exists) => {
+            TokenKind::Reserved(Reserved::General(GeneralReserved::Exists)) => {
                 // this is an existential binder, move to parsing its variables
                 State::SortedBinderVars(SortedBinderKind::Exists)
             }
-            TokenKind::Reserved(Reserved::Match) => {
+            TokenKind::Reserved(Reserved::General(GeneralReserved::Match)) => {
                 // this is a match
                 // we are parsing its scrutinee next, add a level for it
                 slot.start_level(Level::MatchScrutinee);
                 return Ok(());
             }
-            TokenKind::Reserved(Reserved::ExclamationMark) => {
+            TokenKind::Reserved(Reserved::General(GeneralReserved::ExclamationMark)) => {
                 // this is an annotation
                 // we are parsing its annotated term next, add a level for it
                 slot.start_level(Level::Annotation);
                 return Ok(());
             }
-            TokenKind::Reserved(Reserved::Underscore) => {
+            TokenKind::Reserved(Reserved::General(GeneralReserved::Underscore)) => {
                 // this is actually a term composed of an indexed identifier
                 // move the qualified ident parser after the underscore
                 // (meaning the ident will be unqualified but indexed)
@@ -681,7 +681,7 @@ impl<H: SmtHandler> TermSlot<H> {
                     .move_after_underscore(&mut resources.ident_slot);
                 State::QualifiedIdent
             }
-            TokenKind::Reserved(Reserved::As) => {
+            TokenKind::Reserved(Reserved::General(GeneralReserved::As)) => {
                 // this is actually a term composed of a qualified identifier
                 // move the qualified ident parser after the 'as' reserved word
                 // (meaning the ident will be qualified)

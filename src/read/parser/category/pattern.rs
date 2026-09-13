@@ -6,7 +6,7 @@ use crate::{
         Arena, ParserError, ParserResources, PatternHandle, SimplePatternHandle, TextHandle,
         category::{CategoryErrorKind, CategoryParser},
     },
-    token::{Reserved, Token, TokenKind, TokenType},
+    token::{GeneralReserved, Reserved, Token, TokenKind, TokenType},
 };
 
 pub struct SimplePatternParser;
@@ -31,7 +31,9 @@ impl SimplePatternParser {
     ) -> Result<SmtSimplePatternView<'t>, ParserError<H::Error>> {
         let result = match arena.token_kind(token) {
             TokenKind::Symbol(symbol) => SmtSimplePatternView::Symbol(symbol),
-            TokenKind::Reserved(Reserved::Underscore) => SmtSimplePatternView::Wildcard,
+            TokenKind::Reserved(Reserved::General(GeneralReserved::Underscore)) => {
+                SmtSimplePatternView::Wildcard
+            }
             _ => {
                 return Err(ParserError::category_error(
                     CategoryErrorKind::ExpectedSymbolOrUnderscore,
@@ -209,7 +211,9 @@ impl PatternSlot {
         debug_assert!(self.is_pristine(), "must be pristine when starting");
         let result = match arena.token_kind(token) {
             TokenKind::Symbol(symbol) => SmtSimplePatternView::Symbol(symbol),
-            TokenKind::Reserved(Reserved::Underscore) => SmtSimplePatternView::Wildcard,
+            TokenKind::Reserved(Reserved::General(GeneralReserved::Underscore)) => {
+                SmtSimplePatternView::Wildcard
+            }
             TokenKind::ParenOpen => {
                 // move to constructor parsing
                 self.is_open = true;

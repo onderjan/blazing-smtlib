@@ -3,33 +3,83 @@
 mod reserved_words;
 
 use smt_parser_rs::String8;
-use smt_parser_rs::token::Reserved;
+use smt_parser_rs::token::{CommandNameReserved, GeneralReserved, Reserved};
 
-/// Returns every `Reserved` variant, in declaration order.
+/// Returns every `GeneralReserved` variant, in declaration order.
 ///
 /// Built from an exhaustive successor match, so adding a variant
 /// fails compilation here instead of leaving the list stale.
-fn all_reserved() -> Vec<Reserved> {
-    let mut all = vec![Reserved::Binary];
+fn all_general() -> Vec<GeneralReserved> {
+    let mut all = vec![GeneralReserved::Binary];
     loop {
         let next = match all.last().expect("the list starts non-empty") {
-            Reserved::Binary => Reserved::Decimal,
-            Reserved::Decimal => Reserved::Hexadecimal,
-            Reserved::Hexadecimal => Reserved::Numeral,
-            Reserved::Numeral => Reserved::String,
-            Reserved::String => Reserved::Underscore,
-            Reserved::Underscore => Reserved::ExclamationMark,
-            Reserved::ExclamationMark => Reserved::As,
-            Reserved::As => Reserved::Lambda,
-            Reserved::Lambda => Reserved::Let,
-            Reserved::Let => Reserved::Exists,
-            Reserved::Exists => Reserved::Forall,
-            Reserved::Forall => Reserved::Match,
-            Reserved::Match => Reserved::Par,
-            Reserved::Par => return all,
+            GeneralReserved::Binary => GeneralReserved::Decimal,
+            GeneralReserved::Decimal => GeneralReserved::Hexadecimal,
+            GeneralReserved::Hexadecimal => GeneralReserved::Numeral,
+            GeneralReserved::Numeral => GeneralReserved::String,
+            GeneralReserved::String => GeneralReserved::Underscore,
+            GeneralReserved::Underscore => GeneralReserved::ExclamationMark,
+            GeneralReserved::ExclamationMark => GeneralReserved::As,
+            GeneralReserved::As => GeneralReserved::Lambda,
+            GeneralReserved::Lambda => GeneralReserved::Let,
+            GeneralReserved::Let => GeneralReserved::Exists,
+            GeneralReserved::Exists => GeneralReserved::Forall,
+            GeneralReserved::Forall => GeneralReserved::Match,
+            GeneralReserved::Match => GeneralReserved::Par,
+            GeneralReserved::Par => return all,
         };
         all.push(next);
     }
+}
+
+/// Returns every `CommandNameReserved` variant, in declaration order,
+/// built like [`all_general`].
+fn all_command_names() -> Vec<CommandNameReserved> {
+    let mut all = vec![CommandNameReserved::Assert];
+    loop {
+        let next = match all.last().expect("the list starts non-empty") {
+            CommandNameReserved::Assert => CommandNameReserved::CheckSat,
+            CommandNameReserved::CheckSat => CommandNameReserved::CheckSatAssuming,
+            CommandNameReserved::CheckSatAssuming => CommandNameReserved::DeclareConst,
+            CommandNameReserved::DeclareConst => CommandNameReserved::DeclareDatatype,
+            CommandNameReserved::DeclareDatatype => CommandNameReserved::DeclareDatatypes,
+            CommandNameReserved::DeclareDatatypes => CommandNameReserved::DeclareFun,
+            CommandNameReserved::DeclareFun => CommandNameReserved::DeclareSort,
+            CommandNameReserved::DeclareSort => CommandNameReserved::DeclareSortParameter,
+            CommandNameReserved::DeclareSortParameter => CommandNameReserved::DefineConst,
+            CommandNameReserved::DefineConst => CommandNameReserved::DefineFun,
+            CommandNameReserved::DefineFun => CommandNameReserved::DefineFunRec,
+            CommandNameReserved::DefineFunRec => CommandNameReserved::DefineFunsRec,
+            CommandNameReserved::DefineFunsRec => CommandNameReserved::DefineSort,
+            CommandNameReserved::DefineSort => CommandNameReserved::Echo,
+            CommandNameReserved::Echo => CommandNameReserved::Exit,
+            CommandNameReserved::Exit => CommandNameReserved::GetAssertions,
+            CommandNameReserved::GetAssertions => CommandNameReserved::GetAssignment,
+            CommandNameReserved::GetAssignment => CommandNameReserved::GetInfo,
+            CommandNameReserved::GetInfo => CommandNameReserved::GetModel,
+            CommandNameReserved::GetModel => CommandNameReserved::GetOption,
+            CommandNameReserved::GetOption => CommandNameReserved::GetProof,
+            CommandNameReserved::GetProof => CommandNameReserved::GetUnsatAssumptions,
+            CommandNameReserved::GetUnsatAssumptions => CommandNameReserved::GetUnsatCore,
+            CommandNameReserved::GetUnsatCore => CommandNameReserved::GetValue,
+            CommandNameReserved::GetValue => CommandNameReserved::Pop,
+            CommandNameReserved::Pop => CommandNameReserved::Push,
+            CommandNameReserved::Push => CommandNameReserved::Reset,
+            CommandNameReserved::Reset => CommandNameReserved::ResetAssertions,
+            CommandNameReserved::ResetAssertions => CommandNameReserved::SetInfo,
+            CommandNameReserved::SetInfo => CommandNameReserved::SetLogic,
+            CommandNameReserved::SetLogic => CommandNameReserved::SetOption,
+            CommandNameReserved::SetOption => return all,
+        };
+        all.push(next);
+    }
+}
+
+/// Returns every `Reserved` word: the general ones, then the command names.
+fn all_reserved() -> Vec<Reserved> {
+    let general = all_general().into_iter().map(Reserved::General);
+    let command_names = all_command_names().into_iter().map(Reserved::CommandName);
+    general.chain(command_names).collect()
 }
 
 /// `as_str` and `from_symbol_opt` are inverse hand-written matches;
@@ -178,5 +228,29 @@ fn non_reserved_command_like_symbols_are_rejected() {
             "{:?} should not be a reserved word",
             text.escape_ascii().to_string()
         );
+    }
+}
+
+/// The two kinds of reserved words are told apart by `is_command_name`,
+/// and each kind recognizes only its own spellings.
+#[test]
+fn reserved_words_are_general_or_command_names() {
+    for general in all_general() {
+        let reserved = Reserved::General(general);
+        assert!(!reserved.is_command_name(), "{reserved:?}");
+        assert_eq!(
+            CommandNameReserved::from_bytes_opt(general.as_str().as_bytes()),
+            None
+        );
+        assert_eq!(reserved.as_str(), general.as_str());
+    }
+    for command_name in all_command_names() {
+        let reserved = Reserved::CommandName(command_name);
+        assert!(reserved.is_command_name(), "{reserved:?}");
+        assert_eq!(
+            GeneralReserved::from_bytes_opt(command_name.as_str().as_bytes()),
+            None
+        );
+        assert_eq!(reserved.as_str(), command_name.as_str());
     }
 }

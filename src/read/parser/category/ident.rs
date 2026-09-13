@@ -6,7 +6,7 @@ use crate::{
         Arena, IdentHandle, IndexHandle, ParserError, ParserResources, TextHandle,
         category::{CategoryErrorKind, CategoryParser},
     },
-    token::{Reserved, Token, TokenKind},
+    token::{GeneralReserved, Reserved, Token, TokenKind},
 };
 
 /// A parser that reads an SMT-LIB identifier.
@@ -138,7 +138,7 @@ impl IdentSlot {
                 // this must be an underscore
                 if matches!(
                     arena.token_kind(token),
-                    TokenKind::Reserved(Reserved::Underscore)
+                    TokenKind::Reserved(Reserved::General(GeneralReserved::Underscore))
                 ) {
                     self.state = State::AfterUnderscore;
                 } else {

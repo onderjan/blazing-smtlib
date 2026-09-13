@@ -6,7 +6,7 @@ use std::convert::Infallible;
 use smt_parser_rs::{
     SmtLocation, SmtSpan,
     read::lexer::{LexError, Lexer, LexerError, LexerErrorKind},
-    token::{Reserved, SmtVersion, Token, TokenHandler, TokenKind, TokenType},
+    token::{GeneralReserved, Reserved, SmtVersion, Token, TokenHandler, TokenKind, TokenType},
 };
 
 /// An owned copy of a produced token, collected by [`CollectTokens`].
@@ -712,20 +712,23 @@ fn reserved_words_are_recognized_exactly() {
         );
     }
     let reserved: &[(&[u8], Reserved)] = &[
-        (b"BINARY", Reserved::Binary),
-        (b"DECIMAL", Reserved::Decimal),
-        (b"HEXADECIMAL", Reserved::Hexadecimal),
-        (b"NUMERAL", Reserved::Numeral),
-        (b"STRING", Reserved::String),
-        (b"_", Reserved::Underscore),
-        (b"!", Reserved::ExclamationMark),
-        (b"as", Reserved::As),
-        (b"lambda", Reserved::Lambda),
-        (b"let", Reserved::Let),
-        (b"exists", Reserved::Exists),
-        (b"forall", Reserved::Forall),
-        (b"match", Reserved::Match),
-        (b"par", Reserved::Par),
+        (b"BINARY", Reserved::General(GeneralReserved::Binary)),
+        (b"DECIMAL", Reserved::General(GeneralReserved::Decimal)),
+        (
+            b"HEXADECIMAL",
+            Reserved::General(GeneralReserved::Hexadecimal),
+        ),
+        (b"NUMERAL", Reserved::General(GeneralReserved::Numeral)),
+        (b"STRING", Reserved::General(GeneralReserved::String)),
+        (b"_", Reserved::General(GeneralReserved::Underscore)),
+        (b"!", Reserved::General(GeneralReserved::ExclamationMark)),
+        (b"as", Reserved::General(GeneralReserved::As)),
+        (b"lambda", Reserved::General(GeneralReserved::Lambda)),
+        (b"let", Reserved::General(GeneralReserved::Let)),
+        (b"exists", Reserved::General(GeneralReserved::Exists)),
+        (b"forall", Reserved::General(GeneralReserved::Forall)),
+        (b"match", Reserved::General(GeneralReserved::Match)),
+        (b"par", Reserved::General(GeneralReserved::Par)),
     ];
     for (word, expected) in reserved {
         assert_eq!(
@@ -782,7 +785,10 @@ fn reserved_word_followed_by_a_symbol_byte_is_a_longer_symbol() {
     assert_eq!(
         token_classes(b"let(letx)"),
         vec![
-            (TokenType::UnquotedSymbol, Some(Reserved::Let)),
+            (
+                TokenType::UnquotedSymbol,
+                Some(Reserved::General(GeneralReserved::Let))
+            ),
             (TokenType::ParenOpen, None),
             (TokenType::UnquotedSymbol, None),
             (TokenType::ParenClose, None),

@@ -25,7 +25,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use smt_parser_rs::{
     read::lexer::Lexer,
-    token::{Token, TokenHandler, TokenKind},
+    token::{SmtVersion, Token, TokenHandler, TokenKind},
 };
 
 /// Global allocator that counts allocations and tracks the live heap.
@@ -107,7 +107,7 @@ impl TokenHandler for Census {
         self.tokens += 1;
         let expecting_command_name = self.expecting_command_name;
         self.expecting_command_name = false;
-        let type_name = match token.kind() {
+        let type_name = match TokenKind::from_token(token, SmtVersion::V2_7) {
             TokenKind::ParenOpen => {
                 self.expecting_command_name = self.depth == 0;
                 self.depth += 1;
@@ -130,7 +130,16 @@ impl TokenHandler for Census {
                 "symbol"
             }
             TokenKind::Reserved(reserved) => {
-                *self.reserved.entry(reserved.as_str()).or_default() += 1;
+                // the standard command names are reserved words, so a command
+                // is named by one; it is tallied as a command, not as a word
+                if expecting_command_name && reserved.is_command_name() {
+                    *self
+                        .commands
+                        .entry(reserved.as_str().to_owned())
+                        .or_default() += 1;
+                } else {
+                    *self.reserved.entry(reserved.as_str()).or_default() += 1;
+                }
                 "reserved"
             }
             TokenKind::String(_) => "string",

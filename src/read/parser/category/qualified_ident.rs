@@ -7,7 +7,7 @@ use crate::{
         QualifiedIdentHandle, SortSlot,
         category::{CategoryErrorKind, CategoryParser},
     },
-    token::{Reserved, Token, TokenKind},
+    token::{GeneralReserved, Reserved, Token, TokenKind},
 };
 
 /// A parser that reads an SMT-LIB qualified identifier.
@@ -202,13 +202,13 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
             }
             // step 2: expecting an underscore or 'as'
             State::Open => match arena.token_kind(token) {
-                TokenKind::Reserved(Reserved::Underscore) => {
+                TokenKind::Reserved(Reserved::General(GeneralReserved::Underscore)) => {
                     // unqualified indexed ident
                     // move the ident slot after underscore
                     ident_slot.move_after_underscore();
                     self.state = State::UnqualifiedIndexed;
                 }
-                TokenKind::Reserved(Reserved::As) => {
+                TokenKind::Reserved(Reserved::General(GeneralReserved::As)) => {
                     // qualified ident, parse identifier next
                     self.state = State::QualifiedIdent;
                 }

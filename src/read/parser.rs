@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
 
 use crate::{
     CommandHandler, SmtSpan,
-    token::{Token, TokenHandler, TokenKind, TokenType},
+    token::{Reserved, Token, TokenHandler, TokenKind, TokenType},
 };
 
 mod category;
@@ -142,14 +142,22 @@ impl<'a, H: CommandHandler> TokenHandler for Parser<'a, H> {
                 }
             }
             ParserState::CommandOpen => {
-                // expect a symbol identifying the command
-                let TokenKind::Symbol(command_name) = self.resources.store.token_kind(token) else {
-                    return Err(ParserError::category_error(
-                        CategoryErrorKind::ExpectedCommandName,
-                        span,
-                    ));
+                // expect the command name
+                self.state = match self.resources.store.token_kind(token) {
+                    TokenKind::Reserved(Reserved::CommandName(name)) => {
+                        //a command-name reserved word names a standard command
+                        ParserState::Command(StandardCommandKind::from_reserved(name))
+                    }
+                    TokenKind::Symbol(name) => self.start_nonstandard_command(name, span)?,
+                    _ => {
+                        // a symbol (even a quoted one spelled like a standard command)
+                        // can only name a nonstandard command
+                        return Err(ParserError::category_error(
+                            CategoryErrorKind::ExpectedCommandName,
+                            span,
+                        ));
+                    }
                 };
-                self.state = self.start_command(command_name, span)?;
             }
             ParserState::Command(kind) => {
                 let kind = *kind;

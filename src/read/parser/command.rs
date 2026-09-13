@@ -92,17 +92,18 @@ impl<H: CommandHandler, C: CommandAction<H>> CategoryParser<H> for CommandParser
 }
 
 impl<H: CommandHandler> super::Parser<'_, H> {
-    pub(super) fn start_command(
+    /// Starts a non-standard command named by a symbol.
+    ///
+    /// A command identified a symbol is never standard,
+    /// as standard command names are reserved words.
+    pub(super) fn start_nonstandard_command(
         &mut self,
         name: SmtSymbolView<'_>,
         span: SmtSpan,
     ) -> Result<ParserState<H>, ParserError<H::Error>> {
-        match StandardCommandKind::from_name(name.as_slice()) {
-            Some(kind) => Ok(ParserState::Command(kind)),
-            None => match self.handler.nonstandard_command(name) {
-                Ok(parser) => Ok(ParserState::NonstandardCommand(parser)),
-                Err(err) => Err(ParserError::handler_error(err, span)),
-            },
+        match self.handler.nonstandard_command(name) {
+            Ok(parser) => Ok(ParserState::NonstandardCommand(parser)),
+            Err(err) => Err(ParserError::handler_error(err, span)),
         }
     }
 }

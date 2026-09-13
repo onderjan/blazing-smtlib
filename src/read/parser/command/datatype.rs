@@ -8,7 +8,7 @@ use crate::{
         ParserError, ParserResources, SortedVarParser, SymbolParser, category::PairParser,
         handle_err,
     },
-    token::{Reserved, Token, TokenKind},
+    token::{GeneralReserved, Reserved, Token, TokenKind},
 };
 
 /// Parser for a single datatype introduction (name and arity in parentheses).
@@ -127,7 +127,7 @@ impl<H: CommandHandler> CategoryParser<H> for DatatypeParser<H> {
                     );
                     None
                 }
-                TokenKind::Reserved(Reserved::Par) => {
+                TokenKind::Reserved(Reserved::General(GeneralReserved::Par)) => {
                     // parametric constructors, we need to parse the parameters first
                     self.state = DatatypeState::Parameters;
                     None

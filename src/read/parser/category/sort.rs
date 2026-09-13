@@ -7,7 +7,7 @@ use crate::{
         category::{CategoryErrorKind, CategoryParser},
         handle_err,
     },
-    token::{Reserved, Token, TokenKind},
+    token::{GeneralReserved, Reserved, Token, TokenKind},
 };
 
 /// A parser that reads an SMT-LIB sort.
@@ -173,7 +173,7 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
             State::Open => {
                 // decide how to continue
                 let state = match arena.token_kind(token) {
-                    TokenKind::Reserved(Reserved::Underscore) => {
+                    TokenKind::Reserved(Reserved::General(GeneralReserved::Underscore)) => {
                         // this is a sort consisting just of an indexed identifier
                         // move the ident slot after underscore
                         ident_slot.move_after_underscore();

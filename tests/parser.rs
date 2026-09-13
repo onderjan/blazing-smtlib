@@ -72,6 +72,32 @@ fn nonstandard_command_is_rejected_by_standard_syntax() {
     }
 }
 
+#[test]
+fn quoted_standard_command_name_names_a_nonstandard_command() {
+    // the standard command names are reserved words; quoted, the name is
+    // a symbol, so it is handed to the handler as a nonstandard command
+    let err = parse(b"(|check-sat|)").expect_err("expected a handler error");
+    assert_error_span(&err, 1, 12);
+    match err.kind() {
+        SmtReadErrorKind::Handler(NonstandardCommandError(name)) => {
+            assert_eq!(name.as_slice(), b"check-sat");
+        }
+        SmtReadErrorKind::Parser(kind) => {
+            panic!("expected handler error, got parser error {kind:?}")
+        }
+        _ => panic!("expected handler error"),
+    }
+}
+
+#[test]
+fn reserved_word_other_than_a_command_name_is_no_command_name() {
+    let err = assert_parser_error(b"(let ((x 1)) x)", 1, 4);
+    assert!(
+        matches!(err, CategoryErrorKind::ExpectedCommandName),
+        "{err:?}"
+    );
+}
+
 /// Handler accepting the nonstandard command `(my-assert <term>)`
 /// and recording every command it sees.
 #[derive(Default)]
