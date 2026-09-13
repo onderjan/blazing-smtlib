@@ -183,7 +183,7 @@ impl AttributeSlot {
                     debug_assert!(self.is_pristine(), "must be pristine when starting");
                     self.arena_attributes_start = arena.attributes.len();
                 }
-                match token.kind() {
+                match arena.token_kind(token) {
                     TokenKind::ParenClose => {
                         // finish the attribute
                         return Ok(ControlFlow::Break(self.finish::<H, C>(arena, span)?));
@@ -207,7 +207,7 @@ impl AttributeSlot {
                     Break,
                 }
 
-                let (value, decision) = match token.kind() {
+                let (value, decision) = match arena.token_kind(token) {
                     TokenKind::Symbol(symbol) => (
                         Some(SmtAttributeValue::Symbol(symbol)),
                         Decision::FinishAttribute,
@@ -283,7 +283,7 @@ impl AttributeSlot {
                 arena_s_exprs_start,
                 outside,
             } => {
-                if outside && matches!(token.kind(), TokenKind::ParenClose) {
+                if outside && matches!(token.ty(), TokenType::ParenClose) {
                     // the s-expr closing parenthesis was consumed,
                     // the attribute closing parenthesis was not consumed yet
                     // handle the attribute with its name and S-expressions handed over

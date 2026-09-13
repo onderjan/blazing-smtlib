@@ -6,7 +6,7 @@ use crate::{
         Arena, IdentHandle, IndexHandle, ParserError, ParserResources, TextHandle,
         category::{CategoryErrorKind, CategoryParser},
     },
-    token::{Reserved, Token, TokenKind, TokenType},
+    token::{Reserved, Token, TokenKind},
 };
 
 /// A parser that reads an SMT-LIB identifier.
@@ -116,7 +116,7 @@ impl IdentSlot {
         match self.state {
             State::Start => {
                 debug_assert!(self.is_pristine(), "must be pristine when starting");
-                match token.kind() {
+                match arena.token_kind(token) {
                     TokenKind::Symbol(name) => {
                         // a simple identifier: its name goes to the arena text, no indices
                         let name = arena.push_text(name.as_slice());
@@ -136,31 +136,36 @@ impl IdentSlot {
             }
             State::Open => {
                 // this must be an underscore
-                if matches!(token.kind(), TokenKind::Reserved(Reserved::Underscore)) {
+                if matches!(
+                    arena.token_kind(token),
+                    TokenKind::Reserved(Reserved::Underscore)
+                ) {
                     self.state = State::AfterUnderscore;
                 } else {
-                    let kind = CategoryErrorKind::ExpectedToken(&[TokenType::Reserved(
-                        Reserved::Underscore,
-                    )]);
-                    return Err(ParserError::category_error(kind, span));
+                    return Err(ParserError::category_error(
+                        CategoryErrorKind::ExpectedUnderscore,
+                        span,
+                    ));
                 }
             }
             State::AfterUnderscore => {
                 let name = match self.name.take() {
                     None => {
                         // we need to read the name, its indices will follow in the arena
-                        if let TokenKind::Symbol(name) = token.kind() {
+                        if let TokenKind::Symbol(name) = arena.token_kind(token) {
                             self.arena_indices_start = arena.indices.len();
                             Some(arena.push_text(name.as_slice()))
                         } else {
-                            let kind = CategoryErrorKind::ExpectedToken(&[TokenType::Symbol]);
-                            return Err(ParserError::category_error(kind, span));
+                            return Err(ParserError::category_error(
+                                CategoryErrorKind::ExpectedSymbol,
+                                span,
+                            ));
                         }
                     }
                     Some(name) => {
                         // we have already read the name, so we will be reading an index
                         // and ending with closing parenthesis
-                        match token.kind() {
+                        match arena.token_kind(token) {
                             TokenKind::ParenClose => {
                                 let indices_start = self.arena_indices_start;
                                 if arena.indices.len() == indices_start {

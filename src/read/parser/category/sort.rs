@@ -121,7 +121,7 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
                 if self.levels.is_empty() {
                     debug_assert!(self.is_pristine(), "must be pristine when starting");
                 }
-                match token.kind() {
+                match arena.token_kind(token) {
                     TokenKind::Symbol(name) => {
                         // the sort consists just of a single-symbol ident
                         let name = arena.push_text(name.as_slice());
@@ -172,7 +172,7 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
             }
             State::Open => {
                 // decide how to continue
-                let state = match token.kind() {
+                let state = match arena.token_kind(token) {
                     TokenKind::Reserved(Reserved::Underscore) => {
                         // this is a sort consisting just of an indexed identifier
                         // move the ident slot after underscore

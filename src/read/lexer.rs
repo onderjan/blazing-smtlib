@@ -7,13 +7,12 @@ pub use error::{LexError, LexerError, LexerErrorKind};
 pub(crate) use char_class::CharClass;
 
 use crate::{
-    SmtBinDigitsView, SmtDecimalView, SmtHexDigitsView, SmtKeywordView, SmtLocation,
-    SmtNumeralView, SmtSpan, SmtStringContentView, SmtSymbolView, String8, String8View,
+    SmtLocation, SmtSpan, String8,
     read::lexer::{
         char_class::{COMMENT_PLAIN, DIGIT, QUOTED_PLAIN, SIMPLE_SYMBOL, STRING_PLAIN, run_end},
         helpers::{BINARY_RUN, Content, DigitRun, HEXADECIMAL_RUN, START, Start, TokenEnd},
     },
-    token::{Reserved, Token, TokenHandler, TokenKind, TokenType},
+    token::{Token, TokenHandler, TokenType},
 };
 
 pub struct Lexer<H: TokenHandler> {
@@ -367,7 +366,7 @@ impl<H: TokenHandler> Lexer<H> {
                         // closed by another pipe
                         // dispatch the token with borrowed content
                         self.sink_slice(
-                            TokenType::Symbol,
+                            TokenType::QuotedSymbol,
                             TokenEnd::at_byte(after_content_end + 1),
                             Content::Borrowed(&slice[after..after_content_end]),
                         )?;
@@ -656,7 +655,7 @@ impl<H: TokenHandler> Lexer<H> {
                     // the closing pipe is not consumed but delimits the token
                     self.token_content.extend_from_slice(&rest[..index]);
                     self.sink_slice(
-                        TokenType::Symbol,
+                        TokenType::QuotedSymbol,
                         TokenEnd::at_byte(after_slice_position),
                         Content::Stored,
                     )?;
@@ -783,14 +782,7 @@ impl<H: TokenHandler> Lexer<H> {
         end: TokenEnd,
         content: Content,
     ) -> Result<(), LexError<H::Error>> {
-        // process reserved words
-        let value = content.bytes(&self.token_content);
-        let token_type = if let Some(reserved) = Reserved::from_bytes_opt(value) {
-            TokenType::Reserved(reserved)
-        } else {
-            TokenType::Symbol
-        };
-        self.sink_slice(token_type, end, content)
+        self.sink_slice(TokenType::UnquotedSymbol, end, content)
     }
 
     fn finish_keyword(
@@ -802,10 +794,6 @@ impl<H: TokenHandler> Lexer<H> {
         // ensure the keyword is not empty
         if value.is_empty() {
             return Err(self.error(LexerErrorKind::ForbiddenKeywordName, end));
-        }
-        // reserved words as keywords are prohibited
-        if Reserved::from_bytes_opt(value).is_some() {
-            return Err(self.error(LexerErrorKind::KeywordReserved, end));
         }
         self.sink_slice(TokenType::Keyword, end, content)
     }
@@ -831,28 +819,12 @@ impl<H: TokenHandler> Lexer<H> {
         let span = SmtSpan::new_unchecked(self.token_start, end);
 
         // pass the content by reference
-        let value = String8View::new(content.bytes(&self.token_content));
+        let content = content.bytes(&self.token_content);
 
         // the caller of this function is responsible
         // for ensuring that the constructed token kind is valid
-        let kind = match token_type {
-            TokenType::ParenOpen => TokenKind::ParenOpen,
-            TokenType::ParenClose => TokenKind::ParenClose,
-            TokenType::Numeral => TokenKind::Numeral(SmtNumeralView::new_unchecked(value)),
-            TokenType::Decimal => TokenKind::Decimal(SmtDecimalView::new_unchecked(value)),
-            TokenType::Hexadecimal => {
-                TokenKind::Hexadecimal(SmtHexDigitsView::new_unchecked(value))
-            }
-            TokenType::Binary => TokenKind::Binary(SmtBinDigitsView::new_unchecked(value)),
-            TokenType::Symbol => TokenKind::Symbol(SmtSymbolView::new_unchecked(value)),
-            TokenType::Reserved(reserved) => TokenKind::Reserved(reserved),
-            TokenType::String => TokenKind::String(SmtStringContentView::new_unchecked(value)),
-            TokenType::Keyword => TokenKind::Keyword(SmtKeywordView::new_unchecked(value)),
-            TokenType::EndOfFile => TokenKind::EndOfFile,
-        };
-
         self.handler
-            .handle_token(&Token::new(kind, span))
+            .handle_token(&Token::new(token_type, content, span))
             .map_err(LexError::Handler)
     }
 

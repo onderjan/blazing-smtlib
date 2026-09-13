@@ -86,7 +86,7 @@ impl SExprSlot {
         }
 
         let span = token.span();
-        let s_expr = match token.kind() {
+        let s_expr = match arena.token_kind(token) {
             TokenKind::Symbol(symbol) => SmtSExpr::Symbol(symbol),
             TokenKind::Reserved(reserved) => SmtSExpr::Reserved(reserved),
             TokenKind::Keyword(keyword) => SmtSExpr::Keyword(keyword),

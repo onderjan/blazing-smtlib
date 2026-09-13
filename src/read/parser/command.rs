@@ -110,7 +110,7 @@ impl<H: CommandHandler> super::Parser<'_, H> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{CheckStandardSyntax, SmtSpan, token::TokenKind};
+    use crate::{CheckStandardSyntax, SmtSpan, token::TokenType};
 
     #[test]
     fn finished_command_parser_parses_the_next_command() {
@@ -122,7 +122,7 @@ mod tests {
         // so one token finishes the command; the parser is self-restarting
         // after the break, so the next command body parses without a restart
         for _ in 0..2 {
-            let close = Token::new(TokenKind::ParenClose, SmtSpan::new_zero());
+            let close = Token::new(TokenType::ParenClose, &[], SmtSpan::new_zero());
             let flow = parser
                 .progress(&mut handler, &mut ParserResources::new(), &close)
                 .expect("check-sat closing parenthesis must parse");

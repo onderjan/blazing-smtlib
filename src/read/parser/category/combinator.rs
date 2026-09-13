@@ -6,7 +6,7 @@ use crate::{
         CategoryErrorKind, CategoryParser, CloseParenParser, OpenParenParser, ParserError,
         ParserResources, category::resources::ClosedMultipleResource,
     },
-    token::{Token, TokenKind, TokenType},
+    token::{Token, TokenType},
 };
 
 /// Parses using the first parser, then the second, then returns the result tuple.
@@ -257,7 +257,7 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for ClosedMaximumPar
     ) -> Result<ControlFlow<Vec<P::Result>>, ParserError<H::Error>> {
         if self.outside {
             // we are outside, a closing parenthesis ends processing
-            if matches!(token.kind(), TokenKind::ParenClose) {
+            if matches!(token.ty(), TokenType::ParenClose) {
                 // we will break, return the results
                 let results = self.results.drain(..).collect();
                 return Ok(ControlFlow::Break(results));

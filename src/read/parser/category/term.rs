@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtApplication, SmtHandler, SmtQualifiedIdentView, SmtQuantifierKind, SmtSymbolView, SmtTerm,
     read::parser::{
-        CloseParenParser, IdentHandle, OpenParenParser, ParserError, ParserResources,
+        Arena, CloseParenParser, IdentHandle, OpenParenParser, ParserError, ParserResources,
         QualifiedIdentHandle,
         category::{
             CategoryErrorKind, CategoryParser, attribute::MultipleAttributes,
@@ -432,9 +432,9 @@ impl<H: SmtHandler> TermSlot<H> {
             }
             State::LetBindingSymbol => {
                 // expect a symbol that will be the binding name
-                let TokenKind::Symbol(name) = token.kind() else {
+                let TokenKind::Symbol(name) = resources.store.token_kind(token) else {
                     return Err(ParserError::category_error(
-                        CategoryErrorKind::ExpectedToken(&[TokenType::Symbol]),
+                        CategoryErrorKind::ExpectedSymbol,
                         token.span(),
                     ));
                 };
@@ -510,7 +510,7 @@ impl<H: SmtHandler> TermSlot<H> {
             }
             State::MatchCaseOpen => {
                 // parse the match case and continue
-                slot.parse_match_case_open(handler, token)?;
+                slot.parse_match_case_open(handler, &resources.store, token)?;
                 Ok(ControlFlow::Continue(()))
             }
             State::MatchPattern => {
@@ -547,7 +547,7 @@ impl<H: SmtHandler> TermSlot<H> {
     ) -> Result<ControlFlow<H::Term>, ParserError<H::Error>> {
         let span = token.span();
         let slot = &mut resources.term_slot;
-        let term = match token.kind() {
+        let term = match resources.store.token_kind(token) {
             TokenKind::ParenOpen => {
                 // application, binder, or annotation
                 // move to operator parsing
@@ -618,7 +618,7 @@ impl<H: SmtHandler> TermSlot<H> {
         let span = token.span();
         let slot = &mut resources.term_slot;
 
-        let state = match token.kind() {
+        let state = match resources.store.token_kind(token) {
             TokenKind::Symbol(fn_name) => {
                 // this is an application where the function identifier is just a symbol
                 // start a new level with the head name in the arena text,
@@ -716,7 +716,7 @@ impl<H: SmtHandler> TermSlot<H> {
     ) -> Result<(), ParserError<H::Error>> {
         let span = token.span();
         let slot = &mut resources.term_slot;
-        match token.kind() {
+        match resources.store.token_kind(token) {
             TokenKind::ParenOpen => {
                 // opening a new binding, we will parse the symbol next
                 slot.state = State::LetBindingSymbol;
@@ -780,10 +780,11 @@ impl<H: SmtHandler> TermSlot<H> {
     fn parse_match_case_open(
         &mut self,
         handler: &mut H,
+        arena: &Arena<H>,
         token: &Token,
     ) -> Result<(), ParserError<H::Error>> {
         let span = token.span();
-        match token.kind() {
+        match arena.token_kind(token) {
             TokenKind::ParenOpen => {
                 // a new case is being opened, we will parse the pattern next
                 self.state = State::MatchPattern;
@@ -873,7 +874,7 @@ impl SortedBindingsParser {
             SortedBindingsParserState::AwaitingBinder => {
                 // either a new sorted variable
                 // or a closing parenthesis ending binders
-                if matches!(token.kind(), TokenKind::ParenClose) {
+                if matches!(token.ty(), TokenType::ParenClose) {
                     let num_opened = this.num_opened;
                     // reset before break
                     this.state = SortedBindingsParserState::Start;

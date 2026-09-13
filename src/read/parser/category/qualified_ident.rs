@@ -7,7 +7,7 @@ use crate::{
         QualifiedIdentHandle, SortSlot,
         category::{CategoryErrorKind, CategoryParser},
     },
-    token::{Reserved, Token, TokenKind, TokenType},
+    token::{Reserved, Token, TokenKind},
 };
 
 /// A parser that reads an SMT-LIB qualified identifier.
@@ -178,7 +178,7 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
             // step 1: expecting a symbol or an opening parenthesis
             State::Start => {
                 debug_assert!(self.is_pristine(), "must be pristine when starting");
-                match token.kind() {
+                match arena.token_kind(token) {
                     TokenKind::Symbol(name) => {
                         // return a simple ident, the slot is in its initial state
                         // its name goes to the arena text, there are no indices
@@ -201,7 +201,7 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
                 }
             }
             // step 2: expecting an underscore or 'as'
-            State::Open => match token.kind() {
+            State::Open => match arena.token_kind(token) {
                 TokenKind::Reserved(Reserved::Underscore) => {
                     // unqualified indexed ident
                     // move the ident slot after underscore
@@ -213,11 +213,10 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
                     self.state = State::QualifiedIdent;
                 }
                 _ => {
-                    let kind = CategoryErrorKind::ExpectedToken(&[
-                        TokenType::Reserved(Reserved::Underscore),
-                        TokenType::Reserved(Reserved::As),
-                    ]);
-                    return Err(ParserError::category_error(kind, span));
+                    return Err(ParserError::category_error(
+                        CategoryErrorKind::ExpectedUnderscoreOrAs,
+                        span,
+                    ));
                 }
             },
             // step 3: parsing an unqualified indexed identifier

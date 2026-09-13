@@ -1,13 +1,63 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtHandler, SmtKeyword, SmtNumeral, SmtStringContent, SmtSymbol,
-    read::parser::{CategoryErrorKind, CategoryParser, ParserError, ParserResources},
+    SmtHandler, SmtKeyword, SmtKeywordView, SmtNumeral, SmtNumeralView, SmtStringContent,
+    SmtStringContentView, SmtSymbol,
+    read::parser::{Arena, CategoryErrorKind, CategoryParser, ParserError, ParserResources},
     token::{Token, TokenKind, TokenType},
 };
 
+pub struct SymbolParser;
+
+impl SymbolParser {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for SymbolParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SymbolParser {
+    /// Consumes exactly one token, which must match.
+    pub(crate) fn expect<H: SmtHandler + ?Sized>(
+        arena: &Arena<H>,
+        token: &Token,
+    ) -> Result<SmtSymbol, ParserError<H::Error>> {
+        let span = token.span();
+        match arena.token_kind(token) {
+            TokenKind::Symbol(symbol) => Ok(symbol.into_owned()),
+            _ => Err(ParserError::category_error(
+                CategoryErrorKind::ExpectedSymbol,
+                span,
+            )),
+        }
+    }
+}
+
+impl<H: SmtHandler> CategoryParser<H> for SymbolParser {
+    type Result = SmtSymbol;
+
+    fn progress(
+        &mut self,
+        _handler: &mut H,
+        resources: &mut ParserResources<H>,
+        token: &Token,
+    ) -> Result<ControlFlow<Self::Result, ()>, ParserError<H::Error>> {
+        Ok(ControlFlow::Break(Self::expect(&resources.store, token)?))
+    }
+}
+
+/// Defines a parser of one token of the given type, whose result is
+/// computed from the token's content.
+///
+/// The type alone decides whether the token matches, so these parsers need
+/// neither the resources nor the token kind.
 macro_rules! token_parser {
-    ($parser:ident, $result:ty, $expected:expr, $pattern:pat => $value:expr) => {
+    ($parser:ident, $result:ty, $ty:ident, |$content:pat_param| $value:expr) => {
         pub struct $parser;
 
         impl $parser {
@@ -23,15 +73,16 @@ macro_rules! token_parser {
         }
 
         impl $parser {
-            /// Consumes exactly one token, which must match.
+            /// Consumes exactly one token, which must be of the parser's type.
             pub(crate) fn expect<E>(token: &Token) -> Result<$result, ParserError<E>> {
-                let span = token.span();
-                match token.kind() {
-                    $pattern => Ok($value),
-                    _ => Err(ParserError::category_error(
-                        CategoryErrorKind::ExpectedToken($expected),
-                        span,
-                    )),
+                if token.ty() == TokenType::$ty {
+                    let $content = token.content();
+                    Ok($value)
+                } else {
+                    Err(ParserError::category_error(
+                        CategoryErrorKind::ExpectedToken(&[TokenType::$ty]),
+                        token.span(),
+                    ))
                 }
             }
         }
@@ -51,17 +102,16 @@ macro_rules! token_parser {
     };
 }
 
-token_parser!(SymbolParser, SmtSymbol, &[TokenType::Symbol],
-    TokenKind::Symbol(symbol) => symbol.into_owned());
-token_parser!(NumeralParser, SmtNumeral, &[TokenType::Numeral],
-    TokenKind::Numeral(numeral) => numeral.into_owned());
+token_parser!(NumeralParser, SmtNumeral, Numeral, |content| {
+    SmtNumeralView::new_unchecked(content).into_owned()
+});
 
-token_parser!(OpenParenParser, (), &[TokenType::ParenOpen],
-    TokenKind::ParenOpen => ());
-token_parser!(CloseParenParser, (), &[TokenType::ParenClose],
-    TokenKind::ParenClose => ());
+token_parser!(OpenParenParser, (), ParenOpen, |_| ());
+token_parser!(CloseParenParser, (), ParenClose, |_| ());
 
-token_parser!(KeywordParser, SmtKeyword, &[TokenType::Keyword],
-    TokenKind::Keyword(keyword) => keyword.into_owned());
-token_parser!(StringParser, SmtStringContent, &[TokenType::String],
-    TokenKind::String(string) => string.into_owned());
+token_parser!(KeywordParser, SmtKeyword, Keyword, |content| {
+    SmtKeywordView::new_unchecked(content).into_owned()
+});
+token_parser!(StringParser, SmtStringContent, String, |content| {
+    SmtStringContentView::new_unchecked(content).into_owned()
+});

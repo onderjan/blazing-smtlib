@@ -18,7 +18,7 @@ impl SmtStringContent {
     }
 }
 
-/// SMT-LIB symbol.
+/// SMT-LIB symbol, quoted or unquoted.
 ///
 /// May be empty.
 /// Must contain only SMT-LIB printable or whitespace bytes except for pipe (|) and backslash (\).
@@ -185,7 +185,7 @@ macro_rules! string8_newtype {
                 self.0.as_slice()
             }
             pub fn as_view(&self) -> $view<'_> {
-                $view(self.0.as_view())
+                $view(self.0.as_slice())
             }
             pub fn into_string8(self) -> String8 {
                 self.0
@@ -247,13 +247,13 @@ macro_rules! string8_newtype {
         }
 
         #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-        pub struct $view<'a>(String8View<'a>);
+        pub struct $view<'a>(&'a [u8]);
 
         impl<'a> $view<'a> {
             #[inline]
-            pub(crate) fn new_unchecked(value: String8View<'a>) -> Self {
+            pub(crate) fn new_unchecked(value: &'a [u8]) -> Self {
                 debug_assert!(
-                    $name::is_allowed(value.as_slice()),
+                    $name::is_allowed(value),
                     concat!("invalid ", stringify!($view), ": {:?}"),
                     value
                 );
@@ -262,11 +262,11 @@ macro_rules! string8_newtype {
 
             #[inline]
             pub fn as_slice(&self) -> &'a [u8] {
-                self.0.as_slice()
+                self.0
             }
             #[inline]
             pub fn into_owned(self) -> $name {
-                $name(self.0.into_owned())
+                $name(String8View::new(self.0).into_owned())
             }
             pub fn len(&self) -> usize {
                 self.0.len()
@@ -275,7 +275,7 @@ macro_rules! string8_newtype {
                 self.0.is_empty()
             }
             pub fn iter(&self) -> impl Iterator<Item = u8> {
-                self.0.iter()
+                self.0.iter().copied()
             }
         }
 

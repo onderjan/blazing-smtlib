@@ -83,6 +83,12 @@ pub trait CategoryParser<H: SmtHandler + ?Sized> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CategoryErrorKind {
     ExpectedToken(&'static [TokenType]),
+    ExpectedSymbol,
+    ExpectedUnderscore,
+    ExpectedSymbolOrUnderscore,
+    ExpectedSymbolUnderscoreOrParenOpen,
+    ExpectedUnderscoreOrAs,
+
     EmptyIdentIndices,
     EmptySortApplication,
     EmptyTermApplication,
@@ -137,7 +143,7 @@ pub(crate) mod tests {
             lexer::Lexer,
             parser::{CategoryParser, ParserError, ParserResources},
         },
-        token::{Token, TokenHandler, TokenKind},
+        token::{Token, TokenHandler, TokenType},
     };
 
     /// Drives `parser` over `resources` through the whole input with the
@@ -163,7 +169,7 @@ pub(crate) mod tests {
 
             fn handle_token(&mut self, token: &Token) -> Result<(), Self::Error> {
                 if self.result.is_some() {
-                    if !matches!(token.kind(), TokenKind::EndOfFile) {
+                    if !matches!(token.ty(), TokenType::EndOfFile) {
                         self.unconsumed += 1;
                     }
                     return Ok(());

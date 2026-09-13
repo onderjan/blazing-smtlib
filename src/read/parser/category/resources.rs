@@ -6,7 +6,7 @@ use crate::{
         Arena, IdentSlot, ParserError, PatternSlot, QualifiedIdentSlot, SExprSlot, SortSlot,
         SortedVarSlot, TermSlot, category::attribute::AttributeSlot,
     },
-    token::{Token, TokenKind},
+    token::{Token, TokenType},
 };
 
 /// Contains non-duplicated parser resources.
@@ -95,7 +95,7 @@ impl<T> ClosedMultipleResource<T> {
     ) -> Result<ControlFlow<Vec<T>>, ParserError<E>> {
         if self.outside {
             // we are outside, a closing parenthesis ends processing
-            if matches!(token.kind(), TokenKind::ParenClose) {
+            if matches!(token.ty(), TokenType::ParenClose) {
                 return Ok(ControlFlow::Break(self.items.drain(..).collect()));
             }
             // we are no longer outside

@@ -7,7 +7,7 @@ use crate::{
         SortSlot, TextHandle,
         category::{CategoryErrorKind, CategoryParser},
     },
-    token::{Token, TokenKind, TokenType},
+    token::{Token, TokenKind},
 };
 
 /// Parses a sorted variable: parentheses-enclosed pair of a symbol and a sort.
@@ -130,9 +130,9 @@ impl<H: SmtHandler + ?Sized> SortedVarSlot<H> {
 
         if self.is_open {
             // after "(", waiting for the name, which goes to the arena text
-            let TokenKind::Symbol(name) = token.kind() else {
+            let TokenKind::Symbol(name) = arena.token_kind(token) else {
                 return Err(ParserError::category_error(
-                    CategoryErrorKind::ExpectedToken(&[TokenType::Symbol]),
+                    CategoryErrorKind::ExpectedSymbol,
                     token.span(),
                 ));
             };

@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
 
 use crate::{
     CommandHandler, SmtSpan,
-    token::{Token, TokenHandler, TokenKind},
+    token::{Token, TokenHandler, TokenKind, TokenType},
 };
 
 mod category;
@@ -124,12 +124,12 @@ impl<'a, H: CommandHandler> TokenHandler for Parser<'a, H> {
         let span = token.span();
         match &mut self.state {
             ParserState::AwaitingCommand => {
-                match token.kind() {
-                    TokenKind::ParenOpen => {
+                match token.ty() {
+                    TokenType::ParenOpen => {
                         // open the command
                         self.state = ParserState::CommandOpen;
                     }
-                    TokenKind::EndOfFile => {
+                    TokenType::EndOfFile => {
                         // end of file here is fine, do not change the state
                         self.state = ParserState::AwaitingCommand;
                     }
@@ -143,7 +143,7 @@ impl<'a, H: CommandHandler> TokenHandler for Parser<'a, H> {
             }
             ParserState::CommandOpen => {
                 // expect a symbol identifying the command
-                let TokenKind::Symbol(command_name) = token.kind() else {
+                let TokenKind::Symbol(command_name) = self.resources.store.token_kind(token) else {
                     return Err(ParserError::category_error(
                         CategoryErrorKind::ExpectedCommandName,
                         span,

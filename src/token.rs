@@ -11,10 +11,12 @@ pub enum TokenType {
     Decimal,
     Hexadecimal,
     Binary,
-    Symbol,
-    Reserved(Reserved),
     String,
     Keyword,
+    UnquotedSymbol,
+    QuotedSymbol,
+    // PERFORMANCE: leave EOF last for easy construction
+    // from a similar enum without EOF in the lexer
     EndOfFile,
 }
 
@@ -26,47 +28,77 @@ pub enum TokenKind<'a> {
     Decimal(SmtDecimalView<'a>),
     Hexadecimal(SmtHexDigitsView<'a>),
     Binary(SmtBinDigitsView<'a>),
-    Symbol(SmtSymbolView<'a>),
-    Reserved(Reserved),
     String(SmtStringContentView<'a>),
     Keyword(SmtKeywordView<'a>),
+    Symbol(SmtSymbolView<'a>),
+    Reserved(Reserved),
     EndOfFile,
 }
 
-impl TokenKind<'_> {
+/// Version of the SMT-LIB standard.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SmtVersion {
+    V2_7,
+}
+
+impl<'a> TokenKind<'a> {
+    /// Construct the token kind from the token and version.
     #[inline]
-    pub fn ty(&self) -> TokenType {
-        match self {
-            TokenKind::ParenOpen => TokenType::ParenOpen,
-            TokenKind::ParenClose => TokenType::ParenClose,
-            TokenKind::Numeral(_) => TokenType::Numeral,
-            TokenKind::Decimal(_) => TokenType::Decimal,
-            TokenKind::Hexadecimal(_) => TokenType::Hexadecimal,
-            TokenKind::Binary(_) => TokenType::Binary,
-            TokenKind::Symbol(_) => TokenType::Symbol,
-            TokenKind::Reserved(reserved) => TokenType::Reserved(*reserved),
-            TokenKind::String(_) => TokenType::String,
-            TokenKind::Keyword(_) => TokenType::Keyword,
-            TokenKind::EndOfFile => TokenType::EndOfFile,
+    pub fn from_token(token: &Token<'a>, version: SmtVersion) -> Self {
+        let content = token.content();
+        match token.ty() {
+            TokenType::ParenOpen => TokenKind::ParenOpen,
+            TokenType::ParenClose => TokenKind::ParenClose,
+            TokenType::Numeral => TokenKind::Numeral(SmtNumeralView::new_unchecked(content)),
+            TokenType::Decimal => TokenKind::Decimal(SmtDecimalView::new_unchecked(content)),
+            TokenType::Hexadecimal => {
+                TokenKind::Hexadecimal(SmtHexDigitsView::new_unchecked(content))
+            }
+            TokenType::Binary => TokenKind::Binary(SmtBinDigitsView::new_unchecked(content)),
+            TokenType::UnquotedSymbol => {
+                // process reserved words
+                // TODO: multiple versions
+                match version {
+                    SmtVersion::V2_7 => {
+                        match Reserved::from_bytes_opt(content) {
+                            Some(reserved) => {
+                                // reserved word, not a symbol
+                                TokenKind::Reserved(reserved)
+                            }
+                            None => TokenKind::Symbol(SmtSymbolView::new_unchecked(content)),
+                        }
+                    }
+                }
+            }
+            TokenType::QuotedSymbol => TokenKind::Symbol(SmtSymbolView::new_unchecked(content)),
+            TokenType::String => TokenKind::String(SmtStringContentView::new_unchecked(content)),
+            TokenType::Keyword => TokenKind::Keyword(SmtKeywordView::new_unchecked(content)),
+            TokenType::EndOfFile => TokenKind::EndOfFile,
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Token<'a> {
-    kind: TokenKind<'a>,
+    ty: TokenType,
+    content: &'a [u8],
     span: SmtSpan,
 }
 
 impl<'a> Token<'a> {
     #[inline]
-    pub(crate) fn new(kind: TokenKind<'a>, span: SmtSpan) -> Token<'a> {
-        Self { kind, span }
+    pub(crate) fn new(ty: TokenType, content: &'a [u8], span: SmtSpan) -> Token<'a> {
+        Self { ty, content, span }
     }
 
     #[inline]
-    pub fn kind(&self) -> TokenKind<'a> {
-        self.kind
+    pub fn ty(&self) -> TokenType {
+        self.ty
+    }
+
+    #[inline]
+    pub fn content(&self) -> &'a [u8] {
+        self.content
     }
 
     #[inline]
