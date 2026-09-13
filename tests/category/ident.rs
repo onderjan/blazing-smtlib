@@ -59,19 +59,13 @@ fn errors() {
     // after `(` only an underscore may follow
     let err = assert_error::<IdentParser>(b"(f 1)", 1, 2);
     assert!(
-        matches!(
-            err,
-            CategoryErrorKind::ExpectedToken(&[TokenType::Reserved(Reserved::Underscore)])
-        ),
+        matches!(err, CategoryErrorKind::ExpectedUnderscore),
         "{err:?}"
     );
 
     // the name must be a symbol
     let err = assert_error::<IdentParser>(b"(_ 1 2)", 3, 4);
-    assert!(
-        matches!(err, CategoryErrorKind::ExpectedToken(&[TokenType::Symbol])),
-        "{err:?}"
-    );
+    assert!(matches!(err, CategoryErrorKind::ExpectedSymbol), "{err:?}");
 
     // at least one index is required
     let err = assert_error::<IdentParser>(b"(_ f)", 4, 5);

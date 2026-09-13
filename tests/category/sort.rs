@@ -123,10 +123,7 @@ fn errors() {
     // a parenthesized applied head must be an indexed identifier
     let err = assert_error::<SortParser<Printing>>(b"((Array) Int)", 2, 7);
     assert!(
-        matches!(
-            err,
-            CategoryErrorKind::ExpectedToken(&[TokenType::Reserved(Reserved::Underscore)])
-        ),
+        matches!(err, CategoryErrorKind::ExpectedUnderscore),
         "{err:?}"
     );
 

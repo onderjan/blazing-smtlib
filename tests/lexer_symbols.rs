@@ -1,7 +1,7 @@
 //! Public-API tests of symbol tokens: the lexer produces unquoted and quoted
 //! symbols alike, whatever they spell, with the content of a quoted symbol
-//! excluding its pipes; `Token::kind` classifies an unquoted symbol spelled
-//! like a reserved word as that reserved word, and a quoted one never.
+//! excluding its pipes; `TokenKind::from_token` classifies an unquoted symbol
+//! spelled like a reserved word as that reserved word, and a quoted one never.
 //! The same holds wherever the input is cut into slices.
 
 mod reserved_words;
@@ -10,12 +10,12 @@ use std::convert::Infallible;
 
 use smt_parser_rs::{
     read::lexer::Lexer,
-    token::{Reserved, Token, TokenHandler, TokenKind, TokenType},
+    token::{Reserved, SmtVersion, Token, TokenHandler, TokenKind, TokenType},
 };
 
 use reserved_words::reserved_words;
 
-/// What `Token::kind` says about a token, owned.
+/// What `TokenKind::from_token` says about a token, owned.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Kind {
     Symbol(Vec<u8>),
@@ -42,7 +42,7 @@ impl TokenHandler for CollectTokens {
     type Error = Infallible;
 
     fn handle_token(&mut self, token: &Token) -> Result<(), Self::Error> {
-        let kind = match token.kind() {
+        let kind = match TokenKind::from_token(token, SmtVersion::V2_7) {
             TokenKind::Symbol(symbol) => Kind::Symbol(symbol.as_slice().to_vec()),
             TokenKind::Reserved(reserved) => Kind::Reserved(reserved),
             TokenKind::Keyword(keyword) => Kind::Keyword(keyword.as_slice().to_vec()),

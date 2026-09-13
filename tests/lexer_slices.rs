@@ -13,7 +13,7 @@ use std::convert::Infallible;
 use smt_parser_rs::{
     SmtLocation, SmtSpan,
     read::lexer::{LexError, Lexer, LexerError, LexerErrorKind},
-    token::{Token, TokenHandler, TokenKind, TokenType},
+    token::{Token, TokenHandler, TokenType},
 };
 
 /// An owned copy of a produced token, comparable between lexer runs.
@@ -31,19 +31,9 @@ impl TokenHandler for CollectTokens {
     type Error = Infallible;
 
     fn handle_token(&mut self, token: &Token) -> Result<(), Self::Error> {
-        let content = match token.kind() {
-            TokenKind::Symbol(s) => s.as_slice(),
-            TokenKind::Keyword(k) => k.as_slice(),
-            TokenKind::Numeral(n) => n.as_slice(),
-            TokenKind::Decimal(d) => d.as_slice(),
-            TokenKind::Hexadecimal(h) => h.as_slice(),
-            TokenKind::Binary(b) => b.as_slice(),
-            TokenKind::String(s) => s.as_slice(),
-            _ => b"".as_slice(),
-        };
         self.0.push(OwnedToken {
-            ty: token.kind().ty(),
-            content: content.to_vec(),
+            ty: token.ty(),
+            content: token.content().to_vec(),
             span: token.span(),
         });
         Ok(())
@@ -260,6 +250,8 @@ const VALID_INPUTS: &[&[u8]] = &[
     b"; comment\n",
     b"(a b)\n\n\n  \t (c)",
     b"forall exists let ! _ as match par lambda BINARY DECIMAL HEXADECIMAL NUMERAL STRING",
+    // keywords spelled like reserved words, and quoted reserved words
+    b":let :_ :par :STRING |let| |_| |assert|",
     b"0 0.5 10.25 123456789 9.0",
     // letters directly after decimals: hexadecimal letters are not fraction digits
     b"1.5a 2.0e 3.25fed)",
@@ -293,8 +285,6 @@ const ERROR_INPUTS: &[&[u8]] = &[
     b":",
     b": ",
     b":1",
-    b":let ",
-    b":let",
     b"|a\\b|",
     b"\"a\x01\"",
     b"|a\x01|",
@@ -343,13 +333,8 @@ fn inputs_cover_every_token_type_and_error_kind() {
     for input in all_inputs() {
         let outcome = lex_whole(input);
         for token in &outcome.tokens {
-            // reserved words are one type for this purpose
-            let ty = match token.ty {
-                TokenType::Reserved(_) => TokenType::Reserved(smt_parser_rs::token::Reserved::Let),
-                ty => ty,
-            };
-            if !token_types.contains(&ty) {
-                token_types.push(ty);
+            if !token_types.contains(&token.ty) {
+                token_types.push(token.ty);
             }
         }
         if let Some(kind) = outcome.error_kind()
@@ -366,8 +351,8 @@ fn inputs_cover_every_token_type_and_error_kind() {
         TokenType::Decimal,
         TokenType::Hexadecimal,
         TokenType::Binary,
-        TokenType::Symbol,
-        TokenType::Reserved(smt_parser_rs::token::Reserved::Let),
+        TokenType::UnquotedSymbol,
+        TokenType::QuotedSymbol,
         TokenType::String,
         TokenType::Keyword,
         TokenType::EndOfFile,
@@ -385,7 +370,6 @@ fn inputs_cover_every_token_type_and_error_kind() {
         LexerErrorKind::UnclosedStringLiteral,
         LexerErrorKind::ForbiddenCharInString,
         LexerErrorKind::ForbiddenKeywordName,
-        LexerErrorKind::KeywordReserved,
         LexerErrorKind::BackslashInQuotedSymbol,
         LexerErrorKind::ForbiddenCharInQuotedSymbol,
         LexerErrorKind::UnclosedQuotedSymbol,
@@ -593,7 +577,7 @@ fn long_token_input(length: usize) -> (Vec<u8>, Vec<(TokenType, Vec<u8>)>) {
         input.extend_from_slice(&whitespace);
         expected.push((ty, payload.to_vec()));
     };
-    push(&mut input, &symbol, TokenType::Symbol, &symbol);
+    push(&mut input, &symbol, TokenType::UnquotedSymbol, &symbol);
     push(&mut input, &numeral, TokenType::Numeral, &numeral);
     let mut decimal = numeral.clone();
     decimal.push(b'.');
@@ -626,7 +610,7 @@ fn long_token_input(length: usize) -> (Vec<u8>, Vec<(TokenType, Vec<u8>)>) {
     push(
         &mut input,
         &[b"|", quoted.as_slice(), b"|"].concat(),
-        TokenType::Symbol,
+        TokenType::QuotedSymbol,
         &quoted,
     );
     // the comment produces no token; the parenthesis after it does
@@ -685,8 +669,8 @@ fn payload_from_span(input: &[u8], token: &OwnedToken) -> Vec<u8> {
     let end = token.span.end().offset() as usize;
     let text = &input[start..end];
     match token.ty {
-        TokenType::Symbol if text.first() == Some(&b'|') => text[1..text.len() - 1].to_vec(),
-        TokenType::Symbol | TokenType::Numeral | TokenType::Decimal => text.to_vec(),
+        TokenType::QuotedSymbol => text[1..text.len() - 1].to_vec(),
+        TokenType::UnquotedSymbol | TokenType::Numeral | TokenType::Decimal => text.to_vec(),
         TokenType::Keyword => text[1..].to_vec(),
         TokenType::Hexadecimal | TokenType::Binary => text[2..].to_vec(),
         TokenType::String => {
@@ -698,10 +682,6 @@ fn payload_from_span(input: &[u8], token: &OwnedToken) -> Vec<u8> {
                 rest = if c == b'"' { &rest[2..] } else { &rest[1..] };
             }
             payload
-        }
-        TokenType::Reserved(reserved) => {
-            assert_eq!(text, reserved.as_str().as_bytes(), "reserved word text");
-            Vec::new()
         }
         TokenType::ParenOpen => {
             assert_eq!(text, b"(");
@@ -834,13 +814,13 @@ struct RunKind {
 const RUN_KINDS: &[RunKind] = &[
     RunKind {
         name: "simple symbol",
-        build: |n| (n > 0).then(|| (vec![b'a'; n], TokenType::Symbol, vec![b'a'; n])),
+        build: |n| (n > 0).then(|| (vec![b'a'; n], TokenType::UnquotedSymbol, vec![b'a'; n])),
     },
     RunKind {
         name: "quoted symbol",
         build: |n| {
             let source = [b"|".as_slice(), &vec![b'q'; n], b"|"].concat();
-            Some((source, TokenType::Symbol, vec![b'q'; n]))
+            Some((source, TokenType::QuotedSymbol, vec![b'q'; n]))
         },
     },
     RunKind {
@@ -953,7 +933,11 @@ fn every_comment_and_whitespace_run_length_at_every_alignment() {
                     loc(reference.tokens[0].span.start()),
                     loc(reference.tokens[0].span.end())
                 ),
-                (TokenType::Symbol, (x_start, 1, 0), (x_start + 1, 1, 1)),
+                (
+                    TokenType::UnquotedSymbol,
+                    (x_start, 1, 0),
+                    (x_start + 1, 1, 1)
+                ),
                 "comment of length {run_length} at {prefix}"
             );
             for chunk_length in [1usize, 3, 16, 17, 32, 33] {
@@ -987,7 +971,7 @@ fn every_comment_and_whitespace_run_length_at_every_alignment() {
                     reference.tokens[1].ty,
                     loc(reference.tokens[1].span.start())
                 ),
-                (TokenType::Symbol, (b_start, line, column)),
+                (TokenType::UnquotedSymbol, (b_start, line, column)),
                 "whitespace run of length {run_length} at {prefix}"
             );
             for chunk_length in [1usize, 3, 16, 17, 32, 33] {
@@ -1071,14 +1055,14 @@ fn payloads_from_cut_tokens_escaped_strings_and_plain_tokens_alternate_correctly
     assert_eq!(
         payloads,
         vec![
-            (TokenType::Symbol, b"abcd".to_vec()),
+            (TokenType::UnquotedSymbol, b"abcd".to_vec()),
             (TokenType::String, b"x\"y".to_vec()),
             (TokenType::String, b"z".to_vec()),
-            (TokenType::Symbol, b"qr".to_vec()),
-            (TokenType::Symbol, b"s".to_vec()),
+            (TokenType::QuotedSymbol, b"qr".to_vec()),
+            (TokenType::UnquotedSymbol, b"s".to_vec()),
             (TokenType::Hexadecimal, b"1F".to_vec()),
             (TokenType::Decimal, b"123.5".to_vec()),
-            (TokenType::Symbol, b"\n".to_vec()),
+            (TokenType::QuotedSymbol, b"\n".to_vec()),
             (TokenType::Keyword, b"kw".to_vec()),
             (TokenType::String, b"\"".to_vec()),
             (TokenType::EndOfFile, vec![]),

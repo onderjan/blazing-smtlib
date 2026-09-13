@@ -10,7 +10,7 @@ fn symbol_parser() {
     assert_eq!(symbol.as_slice(), b"quoted symbol");
 
     let err = assert_error::<SymbolParser>(b"1", 0, 1);
-    let expected_symbol = CategoryErrorKind::ExpectedToken(&[TokenType::Symbol]);
+    let expected_symbol = CategoryErrorKind::ExpectedSymbol;
     assert_eq!(err, expected_symbol, "{err:?}");
     let err = assert_error::<SymbolParser>(b"(", 0, 1);
     assert_eq!(err, expected_symbol, "{err:?}");

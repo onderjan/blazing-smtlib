@@ -6,7 +6,7 @@ use std::convert::Infallible;
 use smt_parser_rs::{
     SmtLocation, SmtSpan,
     read::lexer::{LexError, Lexer, LexerError, LexerErrorKind},
-    token::{Reserved, Token, TokenHandler, TokenKind, TokenType},
+    token::{Reserved, SmtVersion, Token, TokenHandler, TokenKind, TokenType},
 };
 
 /// An owned copy of a produced token, collected by [`CollectTokens`].
@@ -17,6 +17,8 @@ struct OwnedToken {
     ty: TokenType,
     content: Vec<u8>,
     span: SmtSpan,
+    /// The reserved word the token is classified as, if any.
+    reserved: Option<Reserved>,
 }
 
 /// A token handler that collects owned copies of all tokens for later inspection.
@@ -26,20 +28,15 @@ impl TokenHandler for CollectTokens {
     type Error = Infallible;
 
     fn handle_token(&mut self, token: &Token) -> Result<(), Self::Error> {
-        let content = match token.kind() {
-            TokenKind::Symbol(s) => s.as_slice(),
-            TokenKind::Keyword(k) => k.as_slice(),
-            TokenKind::Numeral(n) => n.as_slice(),
-            TokenKind::Decimal(d) => d.as_slice(),
-            TokenKind::Hexadecimal(h) => h.as_slice(),
-            TokenKind::Binary(b) => b.as_slice(),
-            TokenKind::String(s) => s.as_slice(),
-            _ => b"".as_slice(),
+        let reserved = match TokenKind::from_token(token, SmtVersion::V2_7) {
+            TokenKind::Reserved(reserved) => Some(reserved),
+            _ => None,
         };
         self.0.push(OwnedToken {
-            ty: token.kind().ty(),
-            content: content.to_vec(),
+            ty: token.ty(),
+            content: token.content().to_vec(),
             span: token.span(),
+            reserved,
         });
         Ok(())
     }
@@ -189,13 +186,12 @@ fn keyword_leading_digit() {
 }
 
 #[test]
-fn keyword_reserved() {
-    assert_error(
-        b":let ",
-        LexerErrorKind::KeywordReserved,
-        (0, 0, 0),
-        (5, 0, 5),
-    );
+fn keyword_spelled_like_a_reserved_word_is_a_keyword() {
+    // reserved words are only recognized in symbols, so this is no error
+    let tokens = lex_all(b":let ").expect("a keyword spelled like a reserved word must lex");
+    assert_eq!(tokens[0].ty, TokenType::Keyword);
+    assert_eq!(tokens[0].content, b"let");
+    assert_eq!(tokens[0].reserved, None);
 }
 
 #[test]
@@ -370,7 +366,7 @@ fn spans_on_a_single_line() {
         token_spans(b"(a 12)"),
         vec![
             (TokenType::ParenOpen, (0, 0, 0), (1, 0, 1)),
-            (TokenType::Symbol, (1, 0, 1), (2, 0, 2)),
+            (TokenType::UnquotedSymbol, (1, 0, 1), (2, 0, 2)),
             (TokenType::Numeral, (3, 0, 3), (5, 0, 5)),
             (TokenType::ParenClose, (5, 0, 5), (6, 0, 6)),
             (TokenType::EndOfFile, (6, 0, 6), (6, 0, 6)),
@@ -384,10 +380,10 @@ fn spans_restart_the_column_on_every_line() {
         token_spans(b"(a)\n(b)"),
         vec![
             (TokenType::ParenOpen, (0, 0, 0), (1, 0, 1)),
-            (TokenType::Symbol, (1, 0, 1), (2, 0, 2)),
+            (TokenType::UnquotedSymbol, (1, 0, 1), (2, 0, 2)),
             (TokenType::ParenClose, (2, 0, 2), (3, 0, 3)),
             (TokenType::ParenOpen, (4, 1, 0), (5, 1, 1)),
-            (TokenType::Symbol, (5, 1, 1), (6, 1, 2)),
+            (TokenType::UnquotedSymbol, (5, 1, 1), (6, 1, 2)),
             (TokenType::ParenClose, (6, 1, 2), (7, 1, 3)),
             (TokenType::EndOfFile, (7, 1, 3), (7, 1, 3)),
         ]
@@ -401,8 +397,8 @@ fn span_end_is_one_past_the_last_byte_of_the_token() {
     assert_eq!(
         token_spans(b"ab\ncd"),
         vec![
-            (TokenType::Symbol, (0, 0, 0), (2, 0, 2)),
-            (TokenType::Symbol, (3, 1, 0), (5, 1, 2)),
+            (TokenType::UnquotedSymbol, (0, 0, 0), (2, 0, 2)),
+            (TokenType::UnquotedSymbol, (3, 1, 0), (5, 1, 2)),
             (TokenType::EndOfFile, (5, 1, 2), (5, 1, 2)),
         ]
     );
@@ -415,8 +411,8 @@ fn quoted_symbol_may_span_a_line_break() {
     assert_eq!(
         token_spans(b"|a\nb| c"),
         vec![
-            (TokenType::Symbol, (0, 0, 0), (5, 1, 2)),
-            (TokenType::Symbol, (6, 1, 3), (7, 1, 4)),
+            (TokenType::QuotedSymbol, (0, 0, 0), (5, 1, 2)),
+            (TokenType::UnquotedSymbol, (6, 1, 3), (7, 1, 4)),
             (TokenType::EndOfFile, (7, 1, 4), (7, 1, 4)),
         ]
     );
@@ -445,7 +441,7 @@ fn end_of_file_token_location() {
         token_spans(b"(a)"),
         vec![
             (TokenType::ParenOpen, (0, 0, 0), (1, 0, 1)),
-            (TokenType::Symbol, (1, 0, 1), (2, 0, 2)),
+            (TokenType::UnquotedSymbol, (1, 0, 1), (2, 0, 2)),
             (TokenType::ParenClose, (2, 0, 2), (3, 0, 3)),
             (TokenType::EndOfFile, (3, 0, 3), (3, 0, 3)),
         ]
@@ -457,7 +453,7 @@ fn end_of_file_token_location() {
         token_spans(b"(a)\n"),
         vec![
             (TokenType::ParenOpen, (0, 0, 0), (1, 0, 1)),
-            (TokenType::Symbol, (1, 0, 1), (2, 0, 2)),
+            (TokenType::UnquotedSymbol, (1, 0, 1), (2, 0, 2)),
             (TokenType::ParenClose, (2, 0, 2), (3, 0, 3)),
             (TokenType::EndOfFile, (4, 1, 0), (4, 1, 0)),
         ]
@@ -470,8 +466,8 @@ fn crlf_is_a_single_line_break_in_token_spans() {
     assert_eq!(
         token_spans(b"a\r\nb"),
         vec![
-            (TokenType::Symbol, (0, 0, 0), (1, 0, 1)),
-            (TokenType::Symbol, (3, 1, 0), (4, 1, 1)),
+            (TokenType::UnquotedSymbol, (0, 0, 0), (1, 0, 1)),
+            (TokenType::UnquotedSymbol, (3, 1, 0), (4, 1, 1)),
             (TokenType::EndOfFile, (4, 1, 1), (4, 1, 1)),
         ]
     );
@@ -482,7 +478,7 @@ fn comments_produce_no_tokens_but_still_count_lines() {
     assert_eq!(
         token_spans(b"; c\nx"),
         vec![
-            (TokenType::Symbol, (4, 1, 0), (5, 1, 1)),
+            (TokenType::UnquotedSymbol, (4, 1, 0), (5, 1, 1)),
             (TokenType::EndOfFile, (5, 1, 1), (5, 1, 1)),
         ]
     );
@@ -504,17 +500,19 @@ fn keyword_may_contain_digits_after_the_first_character() {
 #[test]
 fn spans_of_every_token_type() {
     // the hash of a hexadecimal or binary literal belongs to its token,
-    // and a reserved word spans the same bytes an ordinary symbol would
+    // a reserved word spans the same bytes an ordinary symbol would,
+    // and the pipes of a quoted symbol belong to its token
     assert_eq!(
-        token_spans(b":kw #xAB #b01 1.5 \"s\" let"),
+        token_spans(b":kw #xAB #b01 1.5 \"s\" let |q|"),
         vec![
             (TokenType::Keyword, (0, 0, 0), (3, 0, 3)),
             (TokenType::Hexadecimal, (4, 0, 4), (8, 0, 8)),
             (TokenType::Binary, (9, 0, 9), (13, 0, 13)),
             (TokenType::Decimal, (14, 0, 14), (17, 0, 17)),
             (TokenType::String, (18, 0, 18), (21, 0, 21)),
-            (TokenType::Reserved(Reserved::Let), (22, 0, 22), (25, 0, 25)),
-            (TokenType::EndOfFile, (25, 0, 25), (25, 0, 25)),
+            (TokenType::UnquotedSymbol, (22, 0, 22), (25, 0, 25)),
+            (TokenType::QuotedSymbol, (26, 0, 26), (29, 0, 29)),
+            (TokenType::EndOfFile, (29, 0, 29), (29, 0, 29)),
         ]
     );
 }
@@ -553,17 +551,16 @@ fn token_payloads(input: &[u8]) -> Vec<(TokenType, Vec<u8>)> {
 #[test]
 fn token_payloads_are_not_contaminated_by_previous_tokens() {
     // every payload-carrying kind in a row; each token is shorter than
-    // the one before it, so any missed buffer clear shows up as leftover
-    // bytes, and the reserved word fills the buffer without emitting it
+    // the one before it, so any missed buffer clear shows up as leftover bytes
     assert_eq!(
         token_payloads(b"abcd let e :k1 \"s\" |q| 12 3.4 #xA #b0"),
         vec![
-            (TokenType::Symbol, b"abcd".to_vec()),
-            (TokenType::Reserved(Reserved::Let), vec![]),
-            (TokenType::Symbol, b"e".to_vec()),
+            (TokenType::UnquotedSymbol, b"abcd".to_vec()),
+            (TokenType::UnquotedSymbol, b"let".to_vec()),
+            (TokenType::UnquotedSymbol, b"e".to_vec()),
             (TokenType::Keyword, b"k1".to_vec()),
             (TokenType::String, b"s".to_vec()),
-            (TokenType::Symbol, b"q".to_vec()),
+            (TokenType::QuotedSymbol, b"q".to_vec()),
             (TokenType::Numeral, b"12".to_vec()),
             (TokenType::Decimal, b"3.4".to_vec()),
             (TokenType::Hexadecimal, b"A".to_vec()),
@@ -580,8 +577,8 @@ fn empty_payloads_follow_nonempty_ones() {
     assert_eq!(
         token_payloads(b"|abc| || \"xy\" \"\" :a"),
         vec![
-            (TokenType::Symbol, b"abc".to_vec()),
-            (TokenType::Symbol, vec![]),
+            (TokenType::QuotedSymbol, b"abc".to_vec()),
+            (TokenType::QuotedSymbol, vec![]),
             (TokenType::String, b"xy".to_vec()),
             (TokenType::String, vec![]),
             (TokenType::Keyword, b"a".to_vec()),
@@ -651,13 +648,17 @@ fn lexing_after_a_handler_error_panics() {
 }
 
 // --- Reserved words against similar symbols ---
+//
+// The lexer produces every symbol alike; the reserved words are recognized
+// when the token is classified, from its content.
 
-/// Every token type of the input, in order.
-fn token_types(input: &[u8]) -> Vec<TokenType> {
+/// Every token of the input as its type and the reserved word it is
+/// classified as, in order.
+fn token_classes(input: &[u8]) -> Vec<(TokenType, Option<Reserved>)> {
     lex_all(input)
         .expect("test input must lex")
         .iter()
-        .map(|token| token.ty)
+        .map(|token| (token.ty, token.reserved))
         .collect()
 }
 
@@ -701,8 +702,11 @@ fn reserved_words_are_recognized_exactly() {
     ];
     for symbol in lookalikes {
         assert_eq!(
-            token_types(symbol),
-            vec![TokenType::Symbol, TokenType::EndOfFile],
+            token_classes(symbol),
+            vec![
+                (TokenType::UnquotedSymbol, None),
+                (TokenType::EndOfFile, None)
+            ],
             "{:?} must be a plain symbol",
             String::from_utf8_lossy(symbol)
         );
@@ -725,8 +729,11 @@ fn reserved_words_are_recognized_exactly() {
     ];
     for (word, expected) in reserved {
         assert_eq!(
-            token_types(word),
-            vec![TokenType::Reserved(*expected), TokenType::EndOfFile],
+            token_classes(word),
+            vec![
+                (TokenType::UnquotedSymbol, Some(*expected)),
+                (TokenType::EndOfFile, None)
+            ],
             "{:?} must be reserved",
             String::from_utf8_lossy(word)
         );
@@ -739,26 +746,47 @@ fn quoted_reserved_words_are_symbols() {
     assert_eq!(
         token_payloads(b"|let| |_| |forall| |!|"),
         vec![
-            (TokenType::Symbol, b"let".to_vec()),
-            (TokenType::Symbol, b"_".to_vec()),
-            (TokenType::Symbol, b"forall".to_vec()),
-            (TokenType::Symbol, b"!".to_vec()),
+            (TokenType::QuotedSymbol, b"let".to_vec()),
+            (TokenType::QuotedSymbol, b"_".to_vec()),
+            (TokenType::QuotedSymbol, b"forall".to_vec()),
+            (TokenType::QuotedSymbol, b"!".to_vec()),
             (TokenType::EndOfFile, vec![]),
+        ]
+    );
+    assert_eq!(
+        token_classes(b"|let| |_| |forall| |!|"),
+        vec![
+            (TokenType::QuotedSymbol, None),
+            (TokenType::QuotedSymbol, None),
+            (TokenType::QuotedSymbol, None),
+            (TokenType::QuotedSymbol, None),
+            (TokenType::EndOfFile, None),
         ]
     );
 }
 
 #[test]
 fn reserved_word_followed_by_a_symbol_byte_is_a_longer_symbol() {
-    // the reserved check must happen on the complete symbol, not on a prefix
+    // the symbol ends at the first byte that cannot continue it, so the
+    // reserved check sees the complete symbol, not a prefix
     assert_eq!(
         token_payloads(b"let(letx)"),
         vec![
-            (TokenType::Reserved(Reserved::Let), vec![]),
+            (TokenType::UnquotedSymbol, b"let".to_vec()),
             (TokenType::ParenOpen, vec![]),
-            (TokenType::Symbol, b"letx".to_vec()),
+            (TokenType::UnquotedSymbol, b"letx".to_vec()),
             (TokenType::ParenClose, vec![]),
             (TokenType::EndOfFile, vec![]),
+        ]
+    );
+    assert_eq!(
+        token_classes(b"let(letx)"),
+        vec![
+            (TokenType::UnquotedSymbol, Some(Reserved::Let)),
+            (TokenType::ParenOpen, None),
+            (TokenType::UnquotedSymbol, None),
+            (TokenType::ParenClose, None),
+            (TokenType::EndOfFile, None),
         ]
     );
 }
@@ -772,7 +800,7 @@ fn cr_alone_ends_a_comment_but_not_a_line() {
     assert_eq!(
         token_spans(b"; c\rx"),
         vec![
-            (TokenType::Symbol, (4, 0, 4), (5, 0, 5)),
+            (TokenType::UnquotedSymbol, (4, 0, 4), (5, 0, 5)),
             (TokenType::EndOfFile, (5, 0, 5), (5, 0, 5)),
         ]
     );
@@ -787,7 +815,7 @@ impl TokenHandler for RejectEof {
     type Error = ();
 
     fn handle_token(&mut self, token: &Token) -> Result<(), Self::Error> {
-        if token.kind().ty() == TokenType::EndOfFile {
+        if token.ty() == TokenType::EndOfFile {
             Err(())
         } else {
             Ok(())
@@ -869,7 +897,12 @@ fn eof_twice_after_a_pending_symbol_produces_two_eof_tokens() {
     assert_eq!(
         records(&collected.0),
         vec![
-            (TokenType::Symbol, b"a".to_vec(), (0, 0, 0), (1, 0, 1)),
+            (
+                TokenType::UnquotedSymbol,
+                b"a".to_vec(),
+                (0, 0, 0),
+                (1, 0, 1)
+            ),
             (TokenType::EndOfFile, vec![], (1, 0, 1), (1, 0, 1)),
             (TokenType::EndOfFile, vec![], (1, 0, 1), (1, 0, 1)),
         ]
@@ -902,9 +935,19 @@ fn lexing_continues_after_eof_as_if_the_input_went_on() {
     assert_eq!(
         records(&collected.0),
         vec![
-            (TokenType::Symbol, b"a".to_vec(), (0, 0, 0), (1, 0, 1)),
+            (
+                TokenType::UnquotedSymbol,
+                b"a".to_vec(),
+                (0, 0, 0),
+                (1, 0, 1)
+            ),
             (TokenType::EndOfFile, vec![], (2, 1, 0), (2, 1, 0)),
-            (TokenType::Symbol, b"b\nc".to_vec(), (2, 1, 0), (7, 2, 2)),
+            (
+                TokenType::QuotedSymbol,
+                b"b\nc".to_vec(),
+                (2, 1, 0),
+                (7, 2, 2)
+            ),
             (TokenType::EndOfFile, vec![], (8, 2, 3), (8, 2, 3)),
         ]
     );
@@ -932,9 +975,19 @@ fn a_token_cut_by_eof_is_finished_and_not_resumed() {
     assert_eq!(
         records(&collected.0),
         vec![
-            (TokenType::Symbol, b"ab".to_vec(), (0, 0, 0), (2, 0, 2)),
+            (
+                TokenType::UnquotedSymbol,
+                b"ab".to_vec(),
+                (0, 0, 0),
+                (2, 0, 2)
+            ),
             (TokenType::EndOfFile, vec![], (2, 0, 2), (2, 0, 2)),
-            (TokenType::Symbol, b"cd".to_vec(), (2, 0, 2), (4, 0, 4)),
+            (
+                TokenType::UnquotedSymbol,
+                b"cd".to_vec(),
+                (2, 0, 2),
+                (4, 0, 4)
+            ),
             (TokenType::EndOfFile, vec![], (4, 0, 4), (4, 0, 4)),
         ]
     );
@@ -962,7 +1015,12 @@ fn eof_twice_after_whitespace_produces_two_eof_tokens() {
     assert_eq!(
         records(&collected.0),
         vec![
-            (TokenType::Symbol, b"a".to_vec(), (0, 0, 0), (1, 0, 1)),
+            (
+                TokenType::UnquotedSymbol,
+                b"a".to_vec(),
+                (0, 0, 0),
+                (1, 0, 1)
+            ),
             (TokenType::EndOfFile, vec![], (2, 0, 2), (2, 0, 2)),
             (TokenType::EndOfFile, vec![], (2, 0, 2), (2, 0, 2)),
         ]
@@ -981,8 +1039,8 @@ fn quoted_symbol_may_span_several_line_breaks() {
     assert_eq!(
         token_spans(b"|a\nb\nc| d"),
         vec![
-            (TokenType::Symbol, (0, 0, 0), (7, 2, 2)),
-            (TokenType::Symbol, (8, 2, 3), (9, 2, 4)),
+            (TokenType::QuotedSymbol, (0, 0, 0), (7, 2, 2)),
+            (TokenType::UnquotedSymbol, (8, 2, 3), (9, 2, 4)),
             (TokenType::EndOfFile, (9, 2, 4), (9, 2, 4)),
         ]
     );
@@ -990,8 +1048,8 @@ fn quoted_symbol_may_span_several_line_breaks() {
     assert_eq!(
         token_spans(b"|a\n\n\nb| d"),
         vec![
-            (TokenType::Symbol, (0, 0, 0), (7, 3, 2)),
-            (TokenType::Symbol, (8, 3, 3), (9, 3, 4)),
+            (TokenType::QuotedSymbol, (0, 0, 0), (7, 3, 2)),
+            (TokenType::UnquotedSymbol, (8, 3, 3), (9, 3, 4)),
             (TokenType::EndOfFile, (9, 3, 4), (9, 3, 4)),
         ]
     );
@@ -1003,7 +1061,7 @@ fn string_literal_may_span_several_line_breaks() {
         token_spans(b"\"a\nb\nc\" d"),
         vec![
             (TokenType::String, (0, 0, 0), (7, 2, 2)),
-            (TokenType::Symbol, (8, 2, 3), (9, 2, 4)),
+            (TokenType::UnquotedSymbol, (8, 2, 3), (9, 2, 4)),
             (TokenType::EndOfFile, (9, 2, 4), (9, 2, 4)),
         ]
     );
@@ -1012,7 +1070,7 @@ fn string_literal_may_span_several_line_breaks() {
         token_payloads(b"\"a\n\"\"\nb\" c"),
         vec![
             (TokenType::String, b"a\n\"\nb".to_vec()),
-            (TokenType::Symbol, b"c".to_vec()),
+            (TokenType::UnquotedSymbol, b"c".to_vec()),
             (TokenType::EndOfFile, vec![]),
         ]
     );
@@ -1020,7 +1078,7 @@ fn string_literal_may_span_several_line_breaks() {
         token_spans(b"\"a\n\"\"\nb\" c"),
         vec![
             (TokenType::String, (0, 0, 0), (8, 2, 2)),
-            (TokenType::Symbol, (9, 2, 3), (10, 2, 4)),
+            (TokenType::UnquotedSymbol, (9, 2, 3), (10, 2, 4)),
             (TokenType::EndOfFile, (10, 2, 4), (10, 2, 4)),
         ]
     );
@@ -1031,8 +1089,8 @@ fn whitespace_and_comments_with_several_line_breaks() {
     assert_eq!(
         token_spans(b"a\n\n\n  b"),
         vec![
-            (TokenType::Symbol, (0, 0, 0), (1, 0, 1)),
-            (TokenType::Symbol, (6, 3, 2), (7, 3, 3)),
+            (TokenType::UnquotedSymbol, (0, 0, 0), (1, 0, 1)),
+            (TokenType::UnquotedSymbol, (6, 3, 2), (7, 3, 3)),
             (TokenType::EndOfFile, (7, 3, 3), (7, 3, 3)),
         ]
     );
@@ -1041,7 +1099,7 @@ fn whitespace_and_comments_with_several_line_breaks() {
         token_spans(b"; c\n\n\n(x)"),
         vec![
             (TokenType::ParenOpen, (6, 3, 0), (7, 3, 1)),
-            (TokenType::Symbol, (7, 3, 1), (8, 3, 2)),
+            (TokenType::UnquotedSymbol, (7, 3, 1), (8, 3, 2)),
             (TokenType::ParenClose, (8, 3, 2), (9, 3, 3)),
             (TokenType::EndOfFile, (9, 3, 3), (9, 3, 3)),
         ]
@@ -1058,11 +1116,11 @@ fn decimal_fraction_ends_at_a_letter() {
         token_payloads(b"1.5a 2.0e 3.25fed)"),
         vec![
             (TokenType::Decimal, b"1.5".to_vec()),
-            (TokenType::Symbol, b"a".to_vec()),
+            (TokenType::UnquotedSymbol, b"a".to_vec()),
             (TokenType::Decimal, b"2.0".to_vec()),
-            (TokenType::Symbol, b"e".to_vec()),
+            (TokenType::UnquotedSymbol, b"e".to_vec()),
             (TokenType::Decimal, b"3.25".to_vec()),
-            (TokenType::Symbol, b"fed".to_vec()),
+            (TokenType::UnquotedSymbol, b"fed".to_vec()),
             (TokenType::ParenClose, vec![]),
             (TokenType::EndOfFile, vec![]),
         ]
@@ -1071,7 +1129,7 @@ fn decimal_fraction_ends_at_a_letter() {
         token_spans(b"1.5a"),
         vec![
             (TokenType::Decimal, (0, 0, 0), (3, 0, 3)),
-            (TokenType::Symbol, (3, 0, 3), (4, 0, 4)),
+            (TokenType::UnquotedSymbol, (3, 0, 3), (4, 0, 4)),
             (TokenType::EndOfFile, (4, 0, 4), (4, 0, 4)),
         ]
     );

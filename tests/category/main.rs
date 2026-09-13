@@ -368,7 +368,7 @@ impl<H: SmtHandler, P: CategoryParser<H>> TokenHandler for Drive<'_, H, P> {
 
     fn handle_token(&mut self, token: &Token) -> Result<(), Self::Error> {
         if self.remaining == 0 {
-            if token.kind().ty() != TokenType::EndOfFile {
+            if token.ty() != TokenType::EndOfFile {
                 self.unconsumed += 1;
             }
             return Ok(());

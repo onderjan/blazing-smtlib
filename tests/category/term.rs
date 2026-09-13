@@ -147,10 +147,7 @@ fn let_errors() {
     );
 
     let err = assert_error::<TermParser<Printing>>(b"(let ((1 x)) x)", 7, 8);
-    assert!(
-        matches!(err, CategoryErrorKind::ExpectedToken(&[TokenType::Symbol])),
-        "{err:?}"
-    );
+    assert!(matches!(err, CategoryErrorKind::ExpectedSymbol), "{err:?}");
 
     let err = assert_error::<TermParser<Printing>>(b"(let ((x 1 2)) x)", 11, 12);
     assert!(
@@ -705,14 +702,7 @@ fn match_errors() {
     // a pattern starts with a symbol, a wildcard, or a constructor application
     let err = assert_error::<TermParser<Printing>>(b"(match x ((1 y)))", 11, 12);
     assert!(
-        matches!(
-            err,
-            CategoryErrorKind::ExpectedToken(&[
-                TokenType::Symbol,
-                TokenType::Reserved(Reserved::Underscore),
-                TokenType::ParenOpen
-            ])
-        ),
+        matches!(err, CategoryErrorKind::ExpectedSymbolUnderscoreOrParenOpen),
         "{err:?}"
     );
     // a constructor application has at least one argument
@@ -723,36 +713,18 @@ fn match_errors() {
     );
     // the constructor is a symbol, not a wildcard or a constant
     let err = assert_error::<TermParser<Printing>>(b"(match x (((1 y) z)))", 12, 13);
-    assert!(
-        matches!(err, CategoryErrorKind::ExpectedToken(&[TokenType::Symbol])),
-        "{err:?}"
-    );
+    assert!(matches!(err, CategoryErrorKind::ExpectedSymbol), "{err:?}");
     let err = assert_error::<TermParser<Printing>>(b"(match x (((_ y) z)))", 12, 13);
-    assert!(
-        matches!(err, CategoryErrorKind::ExpectedToken(&[TokenType::Symbol])),
-        "{err:?}"
-    );
+    assert!(matches!(err, CategoryErrorKind::ExpectedSymbol), "{err:?}");
     // the arguments are symbols or wildcards, not nested patterns or constants
     let err = assert_error::<TermParser<Printing>>(b"(match x (((c 1) z)))", 14, 15);
     assert!(
-        matches!(
-            err,
-            CategoryErrorKind::ExpectedToken(&[
-                TokenType::Symbol,
-                TokenType::Reserved(Reserved::Underscore)
-            ])
-        ),
+        matches!(err, CategoryErrorKind::ExpectedSymbolOrUnderscore),
         "{err:?}"
     );
     let err = assert_error::<TermParser<Printing>>(b"(match x (((c (d y)) z)))", 14, 15);
     assert!(
-        matches!(
-            err,
-            CategoryErrorKind::ExpectedToken(&[
-                TokenType::Symbol,
-                TokenType::Reserved(Reserved::Underscore)
-            ])
-        ),
+        matches!(err, CategoryErrorKind::ExpectedSymbolOrUnderscore),
         "{err:?}"
     );
     // the case body is required

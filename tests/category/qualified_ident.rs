@@ -73,13 +73,7 @@ fn errors() {
     // after `(` only `_` or `as` may follow
     let err = assert_error::<QualifiedIdentParser<Printing>>(b"(f 1)", 1, 2);
     assert!(
-        matches!(
-            err,
-            CategoryErrorKind::ExpectedToken(&[
-                TokenType::Reserved(Reserved::Underscore),
-                TokenType::Reserved(Reserved::As)
-            ])
-        ),
+        matches!(err, CategoryErrorKind::ExpectedUnderscoreOrAs),
         "{err:?}"
     );
 
