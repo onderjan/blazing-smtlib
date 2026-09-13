@@ -16,8 +16,40 @@ pub enum TokenType {
     UnquotedSymbol,
     QuotedSymbol,
     // PERFORMANCE: leave EOF last for easy construction
-    // from a similar enum without EOF in the lexer
+    // from InnerType in the lexer
     EndOfFile,
+}
+
+/// TokenType but without End of File.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum InnerType {
+    ParenOpen,
+    ParenClose,
+    Numeral,
+    Decimal,
+    Hexadecimal,
+    Binary,
+    String,
+    Keyword,
+    UnquotedSymbol,
+    QuotedSymbol,
+}
+
+impl InnerType {
+    fn into_type(self) -> TokenType {
+        match self {
+            InnerType::ParenOpen => TokenType::ParenOpen,
+            InnerType::ParenClose => TokenType::ParenClose,
+            InnerType::Numeral => TokenType::Numeral,
+            InnerType::Decimal => TokenType::Decimal,
+            InnerType::Hexadecimal => TokenType::Hexadecimal,
+            InnerType::Binary => TokenType::Binary,
+            InnerType::String => TokenType::String,
+            InnerType::Keyword => TokenType::Keyword,
+            InnerType::UnquotedSymbol => TokenType::UnquotedSymbol,
+            InnerType::QuotedSymbol => TokenType::QuotedSymbol,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -80,30 +112,41 @@ impl<'a> TokenKind<'a> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Token<'a> {
-    ty: TokenType,
-    content: &'a [u8],
-    span: SmtSpan,
+    /// Entry where End of File is kept as None.
+    ///
+    /// This is for performance reasons: instead of having to
+    /// overwrite the whole token when the referenced buffer
+    /// is no longer available, we have to only overwrite
+    /// the Option variant byte to None.
+    entry: &'a Option<(InnerType, &'a [u8])>,
+    span: &'a SmtSpan,
 }
 
 impl<'a> Token<'a> {
     #[inline]
-    pub(crate) fn new(ty: TokenType, content: &'a [u8], span: SmtSpan) -> Token<'a> {
-        Self { ty, content, span }
+    pub(crate) fn new(entry: &'a Option<(InnerType, &'a [u8])>, span: &'a SmtSpan) -> Token<'a> {
+        Self { entry, span }
     }
 
     #[inline]
     pub fn ty(&self) -> TokenType {
-        self.ty
+        match self.entry {
+            Some((ty, _)) => ty.into_type(),
+            None => TokenType::EndOfFile,
+        }
     }
 
     #[inline]
     pub fn content(&self) -> &'a [u8] {
-        self.content
+        match self.entry {
+            Some((_, content)) => content,
+            None => &[],
+        }
     }
 
     #[inline]
     pub fn span(&self) -> SmtSpan {
-        self.span
+        *self.span
     }
 }
 

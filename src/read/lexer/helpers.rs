@@ -4,7 +4,7 @@ use crate::{
         LexerErrorKind, LexerState,
         char_class::{BINARY_DIGIT, CharClass, DIGIT, HEX_DIGIT, SIMPLE_SYMBOL},
     },
-    token::TokenType,
+    token::InnerType,
 };
 
 /// What a byte does in the normal state.
@@ -59,19 +59,19 @@ pub(super) static START: [Start; 256] = {
 pub(super) struct DigitRun {
     pub flag: u8,
     pub state: LexerState,
-    pub token_type: TokenType,
+    pub token_type: InnerType,
     pub empty_error: LexerErrorKind,
 }
 pub(super) const HEXADECIMAL_RUN: DigitRun = DigitRun {
     flag: HEX_DIGIT,
     state: LexerState::Hexadecimal,
-    token_type: TokenType::Hexadecimal,
+    token_type: InnerType::Hexadecimal,
     empty_error: LexerErrorKind::HexadecimalDigitExpected,
 };
 pub(super) const BINARY_RUN: DigitRun = DigitRun {
     flag: BINARY_DIGIT,
     state: LexerState::Binary,
-    token_type: TokenType::Binary,
+    token_type: InnerType::Binary,
     empty_error: LexerErrorKind::BinaryDigitExpected,
 };
 

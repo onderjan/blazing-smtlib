@@ -12,7 +12,7 @@ use crate::{
         char_class::{COMMENT_PLAIN, DIGIT, QUOTED_PLAIN, SIMPLE_SYMBOL, STRING_PLAIN, run_end},
         helpers::{BINARY_RUN, Content, DigitRun, HEXADECIMAL_RUN, START, Start, TokenEnd},
     },
-    token::{Token, TokenHandler, TokenType},
+    token::{InnerType, Token, TokenHandler},
 };
 
 pub struct Lexer<H: TokenHandler> {
@@ -153,7 +153,7 @@ impl<H: TokenHandler> Lexer<H> {
 
         // everything processed, start the EOF token and sink it
         self.start_token(0);
-        self.sink_slice(TokenType::EndOfFile, TokenEnd::EOF, Content::Stored)?;
+        self.sink_eof()?;
         // reset the lexer to normal
         self.state = LexerState::Normal;
         Ok(())
@@ -216,7 +216,7 @@ impl<H: TokenHandler> Lexer<H> {
                     // dispatch the token, it has no content
                     self.start_token(index);
                     self.sink_slice(
-                        TokenType::ParenOpen,
+                        InnerType::ParenOpen,
                         TokenEnd::at_byte(after),
                         Content::Borrowed(&[]),
                     )?;
@@ -228,7 +228,7 @@ impl<H: TokenHandler> Lexer<H> {
                     // dispatch the token, it has no content
                     self.start_token(index);
                     self.sink_slice(
-                        TokenType::ParenClose,
+                        InnerType::ParenClose,
                         TokenEnd::at_byte(after),
                         Content::Borrowed(&[]),
                     )?;
@@ -366,7 +366,7 @@ impl<H: TokenHandler> Lexer<H> {
                         // closed by another pipe
                         // dispatch the token with borrowed content
                         self.sink_slice(
-                            TokenType::QuotedSymbol,
+                            InnerType::QuotedSymbol,
                             TokenEnd::at_byte(after_content_end + 1),
                             Content::Borrowed(&slice[after..after_content_end]),
                         )?;
@@ -655,7 +655,7 @@ impl<H: TokenHandler> Lexer<H> {
                     // the closing pipe is not consumed but delimits the token
                     self.token_content.extend_from_slice(&rest[..index]);
                     self.sink_slice(
-                        TokenType::QuotedSymbol,
+                        InnerType::QuotedSymbol,
                         TokenEnd::at_byte(after_slice_position),
                         Content::Stored,
                     )?;
@@ -752,7 +752,7 @@ impl<H: TokenHandler> Lexer<H> {
         if value.last().is_none_or(|c| *c == b'.') {
             return Err(self.error(LexerErrorKind::FractionDigitExpected, end));
         }
-        self.sink_slice(TokenType::Decimal, end, content)
+        self.sink_slice(InnerType::Decimal, end, content)
     }
 
     fn finish_numeral(
@@ -760,7 +760,7 @@ impl<H: TokenHandler> Lexer<H> {
         end: TokenEnd,
         content: Content,
     ) -> Result<(), LexError<H::Error>> {
-        self.sink_slice(TokenType::Numeral, end, content)
+        self.sink_slice(InnerType::Numeral, end, content)
     }
 
     fn finish_digit_run(
@@ -782,7 +782,7 @@ impl<H: TokenHandler> Lexer<H> {
         end: TokenEnd,
         content: Content,
     ) -> Result<(), LexError<H::Error>> {
-        self.sink_slice(TokenType::UnquotedSymbol, end, content)
+        self.sink_slice(InnerType::UnquotedSymbol, end, content)
     }
 
     fn finish_keyword(
@@ -795,7 +795,7 @@ impl<H: TokenHandler> Lexer<H> {
         if value.is_empty() {
             return Err(self.error(LexerErrorKind::ForbiddenKeywordName, end));
         }
-        self.sink_slice(TokenType::Keyword, end, content)
+        self.sink_slice(InnerType::Keyword, end, content)
     }
 
     fn finish_string_literal(
@@ -803,28 +803,40 @@ impl<H: TokenHandler> Lexer<H> {
         end: TokenEnd,
         content: Content,
     ) -> Result<(), LexError<H::Error>> {
-        self.sink_slice(TokenType::String, end, content)
+        self.sink_slice(InnerType::String, end, content)
     }
 
     /// Sinks a token with the given content, ending at `end`.
     #[inline]
     fn sink_slice(
         &mut self,
-        token_type: TokenType,
+        ty: InnerType,
         end: TokenEnd,
         content: Content,
     ) -> Result<(), LexError<H::Error>> {
         // construct the span
         let end = self.location_at(end.position);
         let span = SmtSpan::new_unchecked(self.token_start, end);
-
         // pass the content by reference
         let content = content.bytes(&self.token_content);
 
         // the caller of this function is responsible
-        // for ensuring that the constructed token kind is valid
+        // for ensuring that the constructed token is valid
+
         self.handler
-            .handle_token(Token::new(token_type, content, span))
+            .handle_token(Token::new(&Some((ty, content)), &span))
+            .map_err(LexError::Handler)
+    }
+
+    #[inline]
+    fn sink_eof(&mut self) -> Result<(), LexError<H::Error>> {
+        // construct the span
+        let end = self.location_at(0);
+        let span = SmtSpan::new_unchecked(self.token_start, end);
+
+        // sink EOF
+        self.handler
+            .handle_token(Token::new(&None, &span))
             .map_err(LexError::Handler)
     }
 
