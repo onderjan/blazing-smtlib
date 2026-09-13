@@ -10,7 +10,6 @@ pub enum LexerErrorKind {
     UnclosedStringLiteral,
     ForbiddenCharInString,
     ForbiddenKeywordName,
-    KeywordReserved,
     BackslashInQuotedSymbol,
     ForbiddenCharInQuotedSymbol,
     UnclosedQuotedSymbol,
