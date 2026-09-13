@@ -40,7 +40,7 @@ impl<H: SmtHandler> CategoryParser<H> for SortedVarParser<H> {
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: &Token,
+        token: Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         // progress the slot, giving it the sort and ident slots it delegates to
         let ParserResources {
@@ -102,7 +102,7 @@ impl<H: SmtHandler + ?Sized> SortedVarSlot<H> {
         arena: &mut Arena<H>,
         sort_slot: &mut SortSlot<H>,
         ident_slot: &mut IdentSlot,
-        token: &Token,
+        token: Token,
     ) -> Result<ControlFlow<SortedVarHandle<H>>, ParserError<H::Error>> {
         // The sequential progress is as follows:
         // 1. Not open, expect an opening parenthesis.

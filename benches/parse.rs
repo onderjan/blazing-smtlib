@@ -58,7 +58,7 @@ struct DiscardTokens {
 impl TokenHandler for DiscardTokens {
     type Error = Infallible;
 
-    fn handle_token(&mut self, _token: &Token) -> Result<(), Self::Error> {
+    fn handle_token(&mut self, _token: Token) -> Result<(), Self::Error> {
         self.tokens += 1;
         Ok(())
     }

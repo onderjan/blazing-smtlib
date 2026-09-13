@@ -27,7 +27,7 @@ struct CollectTokens(Vec<OwnedToken>);
 impl TokenHandler for CollectTokens {
     type Error = Infallible;
 
-    fn handle_token(&mut self, token: &Token) -> Result<(), Self::Error> {
+    fn handle_token(&mut self, token: Token) -> Result<(), Self::Error> {
         let reserved = match TokenKind::from_token(token, SmtVersion::V2_7) {
             TokenKind::Reserved(reserved) => Some(reserved),
             _ => None,
@@ -607,7 +607,7 @@ struct RejectTokens;
 impl TokenHandler for RejectTokens {
     type Error = SmtSpan;
 
-    fn handle_token(&mut self, token: &Token) -> Result<(), Self::Error> {
+    fn handle_token(&mut self, token: Token) -> Result<(), Self::Error> {
         Err(token.span())
     }
 }
@@ -820,7 +820,7 @@ struct RejectEof;
 impl TokenHandler for RejectEof {
     type Error = ();
 
-    fn handle_token(&mut self, token: &Token) -> Result<(), Self::Error> {
+    fn handle_token(&mut self, token: Token) -> Result<(), Self::Error> {
         if token.ty() == TokenType::EndOfFile {
             Err(())
         } else {

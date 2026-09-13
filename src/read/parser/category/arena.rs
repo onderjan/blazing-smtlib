@@ -75,7 +75,7 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
     /// This depends on the keyword list and thus the version,
     /// which will be stored in the arena in future.
     #[inline]
-    pub(crate) fn token_kind<'a>(&self, token: &Token<'a>) -> TokenKind<'a> {
+    pub(crate) fn token_kind<'a>(&self, token: Token<'a>) -> TokenKind<'a> {
         // TODO: classify kind by currently set version
         TokenKind::from_token(token, SmtVersion::V2_7)
     }

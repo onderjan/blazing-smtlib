@@ -39,7 +39,7 @@ impl<H: SmtHandler> CategoryParser<H> for ClosedAttributeParser<H> {
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: &Token,
+        token: Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<<H as SmtHandler>::Error>> {
         resources.attribute_slot.progress::<H, SingleAttribute>(
             handler,
@@ -79,7 +79,7 @@ impl<H: SmtHandler> CategoryParser<H> for ClosedMultipleAttributeParser<H> {
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: &Token,
+        token: Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<<H as SmtHandler>::Error>> {
         match resources.attribute_slot.progress::<H, MultipleAttributes>(
             handler,
@@ -164,7 +164,7 @@ impl AttributeSlot {
         handler: &mut H,
         arena: &mut Arena<H>,
         s_expr_slot: &mut SExprSlot,
-        token: &Token,
+        token: Token,
     ) -> Result<ControlFlow<C::Output>, ParserError<H::Error>> {
         let span = token.span();
         if !C::next_allowed(self.num_attributes) {

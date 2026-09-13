@@ -78,7 +78,7 @@ macro_rules! standard_commands {
                 kind: StandardCommandKind,
                 handler: &mut H,
                 resources: &mut ParserResources<H>,
-                token: &Token,
+                token: Token,
             ) -> Result<ControlFlow<StandardCommandResult, ()>, ParserError<H::Error>> {
                 let flow = match kind {
                     $(StandardCommandKind::$kind => self.$field.progress(handler, resources, token)?,)*
@@ -286,7 +286,7 @@ impl<H: CommandHandler> CategoryParser<H> for GetValueParser<H> {
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: &Token,
+        token: Token,
     ) -> Result<ControlFlow<Vec<H::Term>, ()>, ParserError<H::Error>> {
         let span = token.span();
         match self.inner.progress(handler, resources, token)? {

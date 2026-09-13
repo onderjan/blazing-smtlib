@@ -90,8 +90,8 @@ impl<T> ClosedMultipleResource<T> {
 
     pub(crate) fn progress<E>(
         &mut self,
-        token: &Token,
-        element: impl FnOnce(&Token) -> Result<ControlFlow<T>, ParserError<E>>,
+        token: Token,
+        element: impl FnOnce(Token) -> Result<ControlFlow<T>, ParserError<E>>,
     ) -> Result<ControlFlow<Vec<T>>, ParserError<E>> {
         if self.outside {
             // we are outside, a closing parenthesis ends processing

@@ -103,7 +103,7 @@ struct Census {
 impl TokenHandler for Census {
     type Error = Infallible;
 
-    fn handle_token(&mut self, token: &Token) -> Result<(), Self::Error> {
+    fn handle_token(&mut self, token: Token) -> Result<(), Self::Error> {
         self.tokens += 1;
         let expecting_command_name = self.expecting_command_name;
         self.expecting_command_name = false;

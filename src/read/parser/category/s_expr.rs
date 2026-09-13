@@ -40,7 +40,7 @@ impl<H: SmtHandler> CategoryParser<H> for SExprParser<H> {
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: &Token,
+        token: Token,
     ) -> Result<ControlFlow<H::SExpr>, ParserError<H::Error>> {
         // progress the slot over the arena
         resources
@@ -77,7 +77,7 @@ impl SExprSlot {
         &mut self,
         handler: &mut H,
         arena: &mut Arena<H>,
-        token: &Token,
+        token: Token,
     ) -> Result<ControlFlow<H::SExpr>, ParserError<H::Error>> {
         // there is no state besides the levels, so an empty level stack
         // means the category is being entered

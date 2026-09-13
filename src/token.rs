@@ -44,7 +44,7 @@ pub enum SmtVersion {
 impl<'a> TokenKind<'a> {
     /// Construct the token kind from the token and version.
     #[inline]
-    pub fn from_token(token: &Token<'a>, version: SmtVersion) -> Self {
+    pub fn from_token(token: Token<'a>, version: SmtVersion) -> Self {
         let content = token.content();
         match token.ty() {
             TokenType::ParenOpen => TokenKind::ParenOpen,
@@ -325,7 +325,7 @@ pub trait TokenHandler {
     type Error;
 
     /// Sequentially handles one token.
-    fn handle_token(&mut self, token: &Token) -> Result<(), Self::Error>;
+    fn handle_token(&mut self, token: Token) -> Result<(), Self::Error>;
 }
 
 /// Mutable references over token handlers are token handlers.
@@ -333,7 +333,7 @@ impl<T: TokenHandler + ?Sized> TokenHandler for &mut T {
     type Error = T::Error;
 
     #[inline]
-    fn handle_token(&mut self, token: &Token) -> Result<(), Self::Error> {
+    fn handle_token(&mut self, token: Token) -> Result<(), Self::Error> {
         (**self).handle_token(token)
     }
 }

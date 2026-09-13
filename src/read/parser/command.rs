@@ -25,7 +25,7 @@ impl<H: CommandHandler> CategoryParser<H> for NoCommandParser {
         &mut self,
         _handler: &mut H,
         _resources: &mut ParserResources<H>,
-        _token: &Token,
+        _token: Token,
     ) -> Result<ControlFlow<()>, ParserError<H::Error>> {
         match *self {}
     }
@@ -80,7 +80,7 @@ impl<H: CommandHandler, C: CommandAction<H>> CategoryParser<H> for CommandParser
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: &Token,
+        token: Token,
     ) -> Result<ControlFlow<()>, ParserError<H::Error>> {
         let span = token.span();
         let ControlFlow::Break(result) = self.parser.progress(handler, resources, token)? else {
@@ -125,7 +125,7 @@ mod tests {
         for _ in 0..2 {
             let close = Token::new(TokenType::ParenClose, &[], SmtSpan::new_zero());
             let flow = parser
-                .progress(&mut handler, &mut ParserResources::new(), &close)
+                .progress(&mut handler, &mut ParserResources::new(), close)
                 .expect("check-sat closing parenthesis must parse");
             assert!(matches!(flow, ControlFlow::Break(())));
         }

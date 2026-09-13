@@ -19,7 +19,7 @@ impl SimplePatternParser {
     /// Consumes exactly one token, which must be a simple pattern.
     pub(crate) fn expect<H: SmtHandler + ?Sized>(
         arena: &Arena<H>,
-        token: &Token,
+        token: Token,
     ) -> Result<SmtSimplePattern, ParserError<H::Error>> {
         Ok(Self::expect_view(arena, token)?.into_owned())
     }
@@ -27,7 +27,7 @@ impl SimplePatternParser {
     /// Consumes exactly one token, which must be a simple pattern, viewing it.
     pub(crate) fn expect_view<'t, H: SmtHandler + ?Sized>(
         arena: &Arena<H>,
-        token: &Token<'t>,
+        token: Token<'t>,
     ) -> Result<SmtSimplePatternView<'t>, ParserError<H::Error>> {
         let result = match arena.token_kind(token) {
             TokenKind::Symbol(symbol) => SmtSimplePatternView::Symbol(symbol),
@@ -58,7 +58,7 @@ impl<H: SmtHandler> CategoryParser<H> for SimplePatternParser {
         &mut self,
         _handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: &Token,
+        token: Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         Ok(ControlFlow::Break(Self::expect(&resources.store, token)?))
     }
@@ -94,7 +94,7 @@ impl<H: SmtHandler> CategoryParser<H> for PatternParser<H> {
         &mut self,
         _handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: &Token,
+        token: Token,
     ) -> Result<ControlFlow<SmtPattern, ()>, ParserError<H::Error>> {
         // progress the slot
         let ParserResources {
@@ -147,7 +147,7 @@ impl PatternSlot {
     pub(crate) fn progress<'t, H: SmtHandler + ?Sized>(
         &mut self,
         arena: &mut Arena<H>,
-        token: &Token<'t>,
+        token: Token<'t>,
     ) -> Result<ControlFlow<PatternHandle<'t>>, ParserError<H::Error>> {
         // The sequential progress is as follows:
         // 1. Not open, expect one of:

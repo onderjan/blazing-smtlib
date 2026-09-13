@@ -366,7 +366,7 @@ struct Drive<'h, H: SmtHandler, P: CategoryParser<H>> {
 impl<H: SmtHandler, P: CategoryParser<H>> TokenHandler for Drive<'_, H, P> {
     type Error = ParserError<H::Error>;
 
-    fn handle_token(&mut self, token: &Token) -> Result<(), Self::Error> {
+    fn handle_token(&mut self, token: Token) -> Result<(), Self::Error> {
         if self.remaining == 0 {
             if token.ty() != TokenType::EndOfFile {
                 self.unconsumed += 1;

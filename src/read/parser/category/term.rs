@@ -176,7 +176,7 @@ impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: &Token,
+        token: Token,
     ) -> Result<ControlFlow<H::Term>, ParserError<H::Error>> {
         // progress the slot inside the resources
         TermSlot::progress(handler, resources, token)
@@ -227,7 +227,7 @@ impl<H: SmtHandler> TermSlot<H> {
     pub(crate) fn progress(
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: &Token,
+        token: Token,
     ) -> Result<ControlFlow<H::Term>, ParserError<H::Error>> {
         let span = token.span();
         let term = match resources.term_slot.pending.take() {
@@ -359,7 +359,7 @@ impl<H: SmtHandler> TermSlot<H> {
     fn progress_inner(
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: &Token,
+        token: Token,
     ) -> Result<ControlFlow<H::Term>, ParserError<H::Error>> {
         let slot = &mut resources.term_slot;
 
@@ -543,7 +543,7 @@ impl<H: SmtHandler> TermSlot<H> {
     fn parse_term_start(
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: &Token,
+        token: Token,
     ) -> Result<ControlFlow<H::Term>, ParserError<H::Error>> {
         let span = token.span();
         let slot = &mut resources.term_slot;
@@ -613,7 +613,7 @@ impl<H: SmtHandler> TermSlot<H> {
     #[inline]
     fn parse_term_open(
         resources: &mut ParserResources<H>,
-        token: &Token,
+        token: Token,
     ) -> Result<(), ParserError<H::Error>> {
         let span = token.span();
         let slot = &mut resources.term_slot;
@@ -712,7 +712,7 @@ impl<H: SmtHandler> TermSlot<H> {
     fn parse_let_binding_open(
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: &Token,
+        token: Token,
     ) -> Result<(), ParserError<H::Error>> {
         let span = token.span();
         let slot = &mut resources.term_slot;
@@ -781,7 +781,7 @@ impl<H: SmtHandler> TermSlot<H> {
         &mut self,
         handler: &mut H,
         arena: &Arena<H>,
-        token: &Token,
+        token: Token,
     ) -> Result<(), ParserError<H::Error>> {
         let span = token.span();
         match arena.token_kind(token) {
@@ -860,7 +860,7 @@ impl SortedBindingsParser {
     fn progress_and_open<H: SmtHandler>(
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: &Token,
+        token: Token,
         open_fn: impl Fn(&mut H, SmtSymbolView<'_>, H::Sort) -> Result<(), H::Error>,
     ) -> Result<ControlFlow<u64>, ParserError<H::Error>> {
         let this = &mut resources.term_slot.sorted_bindings_parser;

@@ -76,7 +76,7 @@ pub trait CategoryParser<H: SmtHandler + ?Sized> {
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: &Token,
+        token: Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>>;
 }
 
@@ -167,7 +167,7 @@ pub(crate) mod tests {
         impl<P: CategoryParser<CheckStandardSyntax>> TokenHandler for Drive<'_, P> {
             type Error = ParserError<NonstandardCommandError>;
 
-            fn handle_token(&mut self, token: &Token) -> Result<(), Self::Error> {
+            fn handle_token(&mut self, token: Token) -> Result<(), Self::Error> {
                 if self.result.is_some() {
                     if !matches!(token.ty(), TokenType::EndOfFile) {
                         self.unconsumed += 1;

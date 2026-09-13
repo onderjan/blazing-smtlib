@@ -37,7 +37,7 @@ impl<H: SmtHandler> CategoryParser<H> for IdentParser {
         &mut self,
         _handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: &Token,
+        token: Token,
     ) -> Result<ControlFlow<SmtIdent, ()>, ParserError<H::Error>> {
         // progress the slot over the arena, returning an owned identifier
         let ParserResources {
@@ -109,7 +109,7 @@ impl IdentSlot {
     pub(crate) fn progress<H: SmtHandler + ?Sized, E>(
         &mut self,
         arena: &mut Arena<H>,
-        token: &Token,
+        token: Token,
     ) -> Result<ControlFlow<IdentHandle, ()>, ParserError<E>> {
         let span = token.span();
 

@@ -40,7 +40,7 @@ impl<H: SmtHandler> CategoryParser<H> for QualifiedIdentParser<H> {
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: &Token,
+        token: Token,
     ) -> Result<ControlFlow<SmtQualifiedIdent<H>>, ParserError<H::Error>> {
         // progress the slot, giving it the ident and sort slots it delegates to
         let ParserResources {
@@ -129,7 +129,7 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
         arena: &mut Arena<H>,
         sort_slot: &mut SortSlot<H>,
         ident_slot: &mut IdentSlot,
-        token: &Token,
+        token: Token,
     ) -> Result<ControlFlow<QualifiedIdentHandle<H>>, ParserError<H::Error>> {
         // The sequential progress is as follows:
         // 1. Start, expecting one of:

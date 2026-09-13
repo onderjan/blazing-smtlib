@@ -36,7 +36,7 @@ impl<H: CommandHandler> CategoryParser<H> for FunctionSignatureParser<H> {
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: &Token,
+        token: Token,
     ) -> Result<ControlFlow<SmtFunctionSignature<H>>, ParserError<H::Error>> {
         Ok(self.inner.progress(handler, resources, token)?.map_break(
             |(name, (params, result_sort))| SmtFunctionSignature {
@@ -76,7 +76,7 @@ impl<H: CommandHandler> CategoryParser<H> for RecursiveBodyParser<H> {
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: &Token,
+        token: Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         let span = token.span();
         if !self.is_inner {
@@ -139,7 +139,7 @@ impl<H: CommandHandler> CategoryParser<H> for DefineFunsRecParser<H> {
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: &Token,
+        token: Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         let span = token.span();
         match self.state {

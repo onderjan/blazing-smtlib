@@ -47,7 +47,7 @@ impl<H: SmtHandler, P1: CategoryParser<H>, P2: CategoryParser<H>> CategoryParser
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: &Token,
+        token: Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         match self.first_result.take() {
             None => {
@@ -100,7 +100,7 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for ClosedParser<H, 
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: &Token,
+        token: Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         Ok(self
             .inner
@@ -139,7 +139,7 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for OpenedParser<H, 
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: &Token,
+        token: Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         Ok(self
             .inner
@@ -191,7 +191,7 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for ClosedMultiplePa
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: &Token,
+        token: Token,
     ) -> Result<ControlFlow<Vec<P::Result>>, ParserError<H::Error>> {
         self.resource.progress(token, |token| {
             self.inner.progress(handler, resources, token)
@@ -253,7 +253,7 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for ClosedMaximumPar
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: &Token,
+        token: Token,
     ) -> Result<ControlFlow<Vec<P::Result>>, ParserError<H::Error>> {
         if self.outside {
             // we are outside, a closing parenthesis ends processing
@@ -325,7 +325,7 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for ParenMaximumPars
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: &Token,
+        token: Token,
     ) -> Result<ControlFlow<Vec<P::Result>>, ParserError<H::Error>> {
         if self.is_opened {
             if let ControlFlow::Break(result) = self.inner.progress(handler, resources, token)? {

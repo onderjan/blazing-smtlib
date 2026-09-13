@@ -40,7 +40,7 @@ impl<H: SmtHandler> CategoryParser<H> for SortParser<H> {
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: &Token,
+        token: Token,
     ) -> Result<ControlFlow<H::Sort>, ParserError<H::Error>> {
         // progress the slot, giving it the ident slot it delegates to
         let ParserResources {
@@ -111,7 +111,7 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
         handler: &mut H,
         arena: &mut Arena<H>,
         ident_slot: &mut IdentSlot,
-        token: &Token,
+        token: Token,
     ) -> Result<ControlFlow<H::Sort>, ParserError<H::Error>> {
         let span = token.span();
         let flow = match self.state {

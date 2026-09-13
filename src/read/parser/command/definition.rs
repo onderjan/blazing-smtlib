@@ -68,7 +68,7 @@ impl<H: CommandHandler, D: Definition<H>> CategoryParser<H> for DefinitionParser
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: &Token,
+        token: Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         let span = token.span();
         match self.state {

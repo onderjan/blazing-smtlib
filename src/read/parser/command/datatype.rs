@@ -101,7 +101,7 @@ impl<H: CommandHandler> CategoryParser<H> for DatatypeParser<H> {
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: &Token,
+        token: Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         let span = token.span();
         let constructors = match self.state {
@@ -249,7 +249,7 @@ impl<H: CommandHandler> CategoryParser<H> for DeclareDatatypesParser<H> {
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: &Token,
+        token: Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         let span = token.span();
         match self.state {
@@ -336,7 +336,7 @@ impl<H: CommandHandler> CategoryParser<H> for DeclareDatatypeParser<H> {
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: &Token,
+        token: Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         let span = token.span();
         match self.state {

@@ -824,7 +824,7 @@ impl<H: TokenHandler> Lexer<H> {
         // the caller of this function is responsible
         // for ensuring that the constructed token kind is valid
         self.handler
-            .handle_token(&Token::new(token_type, content, span))
+            .handle_token(Token::new(token_type, content, span))
             .map_err(LexError::Handler)
     }
 

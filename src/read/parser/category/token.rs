@@ -25,7 +25,7 @@ impl SymbolParser {
     /// Consumes exactly one token, which must match.
     pub(crate) fn expect<H: SmtHandler + ?Sized>(
         arena: &Arena<H>,
-        token: &Token,
+        token: Token,
     ) -> Result<SmtSymbol, ParserError<H::Error>> {
         let span = token.span();
         match arena.token_kind(token) {
@@ -45,7 +45,7 @@ impl<H: SmtHandler> CategoryParser<H> for SymbolParser {
         &mut self,
         _handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: &Token,
+        token: Token,
     ) -> Result<ControlFlow<Self::Result, ()>, ParserError<H::Error>> {
         Ok(ControlFlow::Break(Self::expect(&resources.store, token)?))
     }
@@ -74,7 +74,7 @@ macro_rules! token_parser {
 
         impl $parser {
             /// Consumes exactly one token, which must be of the parser's type.
-            pub(crate) fn expect<E>(token: &Token) -> Result<$result, ParserError<E>> {
+            pub(crate) fn expect<E>(token: Token) -> Result<$result, ParserError<E>> {
                 if token.ty() == TokenType::$ty {
                     let $content = token.content();
                     Ok($value)
@@ -94,7 +94,7 @@ macro_rules! token_parser {
                 &mut self,
                 _handler: &mut H,
                 _resources: &mut ParserResources<H>,
-                token: &Token,
+                token: Token,
             ) -> Result<ControlFlow<Self::Result, ()>, ParserError<H::Error>> {
                 Ok(ControlFlow::Break(Self::expect(token)?))
             }
