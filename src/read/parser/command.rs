@@ -94,7 +94,7 @@ impl<H: CommandHandler, C: CommandAction<H>> CategoryParser<H> for CommandParser
 impl<H: CommandHandler> super::Parser<'_, H> {
     /// Starts a non-standard command named by a symbol.
     ///
-    /// A command identified a symbol is never standard,
+    /// A command identified by a symbol is never standard,
     /// as standard command names are reserved words.
     pub(super) fn start_nonstandard_command(
         &mut self,

@@ -145,13 +145,15 @@ impl<'a, H: CommandHandler> TokenHandler for Parser<'a, H> {
                 // expect the command name
                 self.state = match self.resources.store.token_kind(token) {
                     TokenKind::Reserved(Reserved::CommandName(name)) => {
-                        //a command-name reserved word names a standard command
+                        // a command-name reserved word names a standard command
                         ParserState::Command(StandardCommandKind::from_reserved(name))
                     }
-                    TokenKind::Symbol(name) => self.start_nonstandard_command(name, span)?,
-                    _ => {
+                    TokenKind::Symbol(name) => {
                         // a symbol (even a quoted one spelled like a standard command)
                         // can only name a nonstandard command
+                        self.start_nonstandard_command(name, span)?
+                    }
+                    _ => {
                         return Err(ParserError::category_error(
                             CategoryErrorKind::ExpectedCommandName,
                             span,
