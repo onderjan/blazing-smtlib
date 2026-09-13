@@ -13,6 +13,7 @@ mod attribute;
 mod combinator;
 mod ident;
 mod qualified_ident;
+mod reserved;
 mod reuse;
 mod s_expr;
 mod single_token;
@@ -66,7 +67,7 @@ struct PrintingMatch {
 
 fn render_simple_pattern(pattern: SmtSimplePatternView<'_>) -> String {
     match pattern {
-        SmtSimplePatternView::Symbol(symbol) => text(symbol.as_slice()),
+        SmtSimplePatternView::Symbol(symbol) => render_symbol(symbol.as_slice()),
         SmtSimplePatternView::Wildcard => "_".into(),
     }
 }
@@ -75,7 +76,7 @@ fn render_pattern(pattern: SmtPatternView<'_>) -> String {
     match pattern {
         SmtPatternView::Simple(simple) => render_simple_pattern(simple),
         SmtPatternView::Application { constructor, args } => {
-            let mut items = vec![text(constructor.as_slice())];
+            let mut items = vec![render_symbol(constructor.as_slice())];
             items.extend(args.iter().map(render_simple_pattern));
             render_list(&items)
         }
@@ -86,8 +87,18 @@ fn text(bytes: &[u8]) -> String {
     String::from_utf8(bytes.to_vec()).expect("test inputs are ASCII")
 }
 
+/// Renders a symbol, quoting it when it is spelled like a reserved word,
+/// so that the rendering tells such a symbol apart from the reserved word.
+fn render_symbol(bytes: &[u8]) -> String {
+    if Reserved::from_bytes_opt(bytes).is_some() {
+        format!("|{}|", text(bytes))
+    } else {
+        text(bytes)
+    }
+}
+
 fn render_ident(ident: &SmtIdent) -> String {
-    let name = text(ident.name.as_slice());
+    let name = render_symbol(ident.name.as_slice());
     if ident.indices.is_empty() {
         return name;
     }
@@ -96,7 +107,7 @@ fn render_ident(ident: &SmtIdent) -> String {
         out.push(' ');
         match index {
             SmtIndex::Numeral(numeral) => out.push_str(&text(numeral.as_slice())),
-            SmtIndex::Symbol(symbol) => out.push_str(&text(symbol.as_slice())),
+            SmtIndex::Symbol(symbol) => out.push_str(&render_symbol(symbol.as_slice())),
         }
     }
     out.push(')');
@@ -104,7 +115,7 @@ fn render_ident(ident: &SmtIdent) -> String {
 }
 
 fn render_ident_view(ident: &SmtIdentView) -> String {
-    let name = text(ident.name.as_slice());
+    let name = render_symbol(ident.name.as_slice());
     if ident.indices.is_empty() {
         return name;
     }
@@ -113,7 +124,7 @@ fn render_ident_view(ident: &SmtIdentView) -> String {
         out.push(' ');
         match index {
             SmtIndexView::Numeral(numeral) => out.push_str(&text(numeral.as_slice())),
-            SmtIndexView::Symbol(symbol) => out.push_str(&text(symbol.as_slice())),
+            SmtIndexView::Symbol(symbol) => out.push_str(&render_symbol(symbol.as_slice())),
         }
     }
     out.push(')');
@@ -185,7 +196,7 @@ impl SmtHandler for Printing {
     fn start_let(&mut self, bindings: SmtBindings<'_, Self>) -> Result<(), Infallible> {
         let bindings: Vec<String> = bindings
             .into_iter()
-            .map(|(name, term)| format!("({} {})", text(name.as_slice()), term))
+            .map(|(name, term)| format!("({} {})", render_symbol(name.as_slice()), term))
             .collect();
         self.let_bindings.push(render_list(&bindings));
         Ok(())
@@ -209,7 +220,7 @@ impl SmtHandler for Printing {
         self.quantifier_binders.push(format!(
             "({} (({} {}))",
             keyword,
-            text(name.as_slice()),
+            render_symbol(name.as_slice()),
             sort
         ));
         Ok(())
@@ -224,8 +235,11 @@ impl SmtHandler for Printing {
     }
 
     fn start_lambda(&mut self, name: SmtSymbolView<'_>, sort: String) -> Result<(), Infallible> {
-        self.lambda_binders
-            .push(format!("(lambda (({} {}))", text(name.as_slice()), sort));
+        self.lambda_binders.push(format!(
+            "(lambda (({} {}))",
+            render_symbol(name.as_slice()),
+            sort
+        ));
         Ok(())
     }
 
@@ -288,7 +302,7 @@ impl SmtHandler for Printing {
     fn handle_s_expr(&mut self, expr: SmtSExpr<'_, Self>) -> Result<String, Infallible> {
         Ok(match expr {
             SmtSExpr::SpecialConstant(constant) => render_constant(constant),
-            SmtSExpr::Symbol(symbol) => text(symbol.as_slice()),
+            SmtSExpr::Symbol(symbol) => render_symbol(symbol.as_slice()),
             SmtSExpr::Reserved(reserved) => reserved.as_str().to_string(),
             SmtSExpr::Keyword(keyword) => format!(":{}", text(keyword.as_slice())),
             SmtSExpr::SExprs(exprs) => render_list(exprs.as_slice()),
@@ -307,7 +321,7 @@ impl SmtHandler for Printing {
                 format!("{name} {}", render_constant(constant))
             }
             Some(SmtAttributeValue::Symbol(symbol)) => {
-                format!("{name} {}", text(symbol.as_slice()))
+                format!("{name} {}", render_symbol(symbol.as_slice()))
             }
             Some(SmtAttributeValue::SExprs(exprs)) => {
                 format!("{name} {}", render_list(exprs.as_slice()))
