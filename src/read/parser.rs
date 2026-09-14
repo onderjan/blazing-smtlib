@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
 
 use crate::{
     CommandHandler, SmtSpan,
-    token::{Reserved, Token, TokenHandler, TokenKind, TokenType},
+    token::{Reserved, Token, TokenHandler, TokenKind, TokenStop, TokenType},
 };
 
 mod category;
@@ -120,7 +120,7 @@ impl<'a, H: CommandHandler> TokenHandler for Parser<'a, H> {
     type Error = ParserError<H::Error>;
 
     #[inline]
-    fn handle_token(&mut self, token: Token) -> Result<(), ParserError<H::Error>> {
+    fn handle_token(&mut self, token: Token) -> Result<(), TokenStop<ParserError<H::Error>>> {
         let span = token.span();
         match &mut self.state {
             ParserState::AwaitingCommand => {
@@ -134,10 +134,10 @@ impl<'a, H: CommandHandler> TokenHandler for Parser<'a, H> {
                         self.state = ParserState::AwaitingCommand;
                     }
                     _ => {
-                        return Err(ParserError::category_error(
+                        return Err(TokenStop::Error(ParserError::category_error(
                             CategoryErrorKind::ExpectedCommand,
                             span,
-                        ));
+                        )));
                     }
                 }
             }
@@ -151,24 +151,23 @@ impl<'a, H: CommandHandler> TokenHandler for Parser<'a, H> {
                     TokenKind::Symbol(name) => {
                         // a symbol (even a quoted one spelled like a standard command)
                         // can only name a nonstandard command
-                        self.start_nonstandard_command(name, span)?
+                        self.start_nonstandard_command(name, span)
+                            .map_err(TokenStop::Error)?
                     }
                     _ => {
-                        return Err(ParserError::category_error(
+                        return Err(TokenStop::Error(ParserError::category_error(
                             CategoryErrorKind::ExpectedCommandName,
                             span,
-                        ));
+                        )));
                     }
                 };
             }
             ParserState::Command(kind) => {
                 let kind = *kind;
-                let flow = self.command_parsers.progress(
-                    kind,
-                    self.handler,
-                    &mut self.resources,
-                    token,
-                )?;
+                let flow = self
+                    .command_parsers
+                    .progress(kind, self.handler, &mut self.resources, token)
+                    .map_err(TokenStop::Error)?;
                 if let Some(result) = self.handle_command_progress(flow, Some(kind)) {
                     self.state = match result {
                         StandardCommandResult::EndCommand => ParserState::AwaitingCommand,
@@ -177,7 +176,9 @@ impl<'a, H: CommandHandler> TokenHandler for Parser<'a, H> {
                 }
             }
             ParserState::NonstandardCommand(parser) => {
-                let flow = parser.progress(self.handler, &mut self.resources, token)?;
+                let flow = parser
+                    .progress(self.handler, &mut self.resources, token)
+                    .map_err(TokenStop::Error)?;
                 if let Some(()) = self.handle_command_progress(flow, None) {
                     // update the state; a non-standard command cannot force an early exit
                     self.state = ParserState::AwaitingCommand;

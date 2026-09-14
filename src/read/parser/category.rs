@@ -143,7 +143,7 @@ pub(crate) mod tests {
             lexer::Lexer,
             parser::{CategoryParser, ParserError, ParserResources},
         },
-        token::{Token, TokenHandler, TokenType},
+        token::{Token, TokenHandler, TokenStop, TokenType},
     };
 
     /// Drives `parser` over `resources` through the whole input with the
@@ -167,16 +167,17 @@ pub(crate) mod tests {
         impl<P: CategoryParser<CheckStandardSyntax>> TokenHandler for Drive<'_, P> {
             type Error = ParserError<NonstandardCommandError>;
 
-            fn handle_token(&mut self, token: Token) -> Result<(), Self::Error> {
+            fn handle_token(&mut self, token: Token) -> Result<(), TokenStop<Self::Error>> {
                 if self.result.is_some() {
                     if !matches!(token.ty(), TokenType::EndOfFile) {
                         self.unconsumed += 1;
                     }
                     return Ok(());
                 }
-                if let ControlFlow::Break(result) =
-                    self.parser
-                        .progress(&mut CheckStandardSyntax, self.resources, token)?
+                if let ControlFlow::Break(result) = self
+                    .parser
+                    .progress(&mut CheckStandardSyntax, self.resources, token)
+                    .map_err(TokenStop::Error)?
                 {
                     self.result = Some(result);
                 }

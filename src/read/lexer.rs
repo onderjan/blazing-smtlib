@@ -12,7 +12,7 @@ use crate::{
         char_class::{COMMENT_PLAIN, DIGIT, QUOTED_PLAIN, SIMPLE_SYMBOL, STRING_PLAIN, run_end},
         helpers::{BINARY_RUN, Content, DigitRun, HEXADECIMAL_RUN, START, Start, TokenEnd},
     },
-    token::{InnerType, Token, TokenHandler},
+    token::{InnerType, Token, TokenHandler, TokenStop},
 };
 
 pub struct Lexer<H: TokenHandler> {
@@ -823,9 +823,11 @@ impl<H: TokenHandler> Lexer<H> {
         // the caller of this function is responsible
         // for ensuring that the constructed token is valid
 
-        self.handler
-            .handle_token(Token::new(&Some((ty, content)), &span))
-            .map_err(LexError::Handler)
+        let result = self
+            .handler
+            .handle_token(Token::new(&Some((ty, content)), &span));
+
+        self.sink_finish(result)
     }
 
     #[inline]
@@ -835,9 +837,24 @@ impl<H: TokenHandler> Lexer<H> {
         let span = SmtSpan::new_unchecked(self.token_start, end);
 
         // sink EOF
-        self.handler
-            .handle_token(Token::new(&None, &span))
-            .map_err(LexError::Handler)
+        let result = self.handler.handle_token(Token::new(&None, &span));
+        self.sink_finish(result)
+    }
+
+    fn sink_finish(
+        &mut self,
+        result: Result<(), TokenStop<H::Error>>,
+    ) -> Result<(), LexError<H::Error>> {
+        let Err(stop) = result else {
+            return Ok(());
+        };
+
+        match stop {
+            TokenStop::Relex => {
+                todo!("Relex");
+            }
+            TokenStop::Error(err) => Err(LexError::Handler(err)),
+        }
     }
 
     fn start_token(&mut self, position: usize) {

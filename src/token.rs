@@ -150,6 +150,67 @@ impl<'a> Token<'a> {
     }
 }
 
+#[derive(Clone, Copy)]
+pub struct TokenBatch<'a> {
+    entries: &'a [Option<(InnerType, &'a [u8])>],
+    spans: &'a [SmtSpan],
+}
+
+impl<'a> TokenBatch<'a> {
+    pub(crate) fn new(entries: &'a [Option<(InnerType, &'a [u8])>], spans: &'a [SmtSpan]) -> Self {
+        debug_assert_eq!(entries.len(), spans.len());
+        Self { entries, spans }
+    }
+
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    pub fn get(&self, index: usize) -> Option<Token<'a>> {
+        if let (Some(entry), Some(span)) = (self.entries.get(index), self.spans.get(index)) {
+            Some(Token::new(entry, span))
+        } else {
+            None
+        }
+    }
+}
+
+impl<'a> IntoIterator for TokenBatch<'a> {
+    type Item = Token<'a>;
+    type IntoIter = TokenBatchIter<'a>;
+
+    fn into_iter(self) -> TokenBatchIter<'a> {
+        TokenBatchIter {
+            batch: self,
+            offset: 0,
+        }
+    }
+}
+
+pub struct TokenBatchIter<'a> {
+    batch: TokenBatch<'a>,
+    offset: usize,
+}
+
+impl<'a> Iterator for TokenBatchIter<'a> {
+    type Item = Token<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.batch.get(self.offset) {
+            Some(token) => {
+                // increment offset before returning
+                self.offset += 1;
+                Some(token)
+            }
+            None => None,
+        }
+    }
+}
+
 /// Reserved words in SMT-LIB2, including standard command names.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Reserved {
@@ -368,7 +429,40 @@ pub trait TokenHandler {
     type Error;
 
     /// Sequentially handles one token.
-    fn handle_token(&mut self, token: Token) -> Result<(), Self::Error>;
+    fn handle_token(&mut self, token: Token) -> Result<(), TokenStop<Self::Error>>;
+
+    /// Handles the tokens in a batch.
+    ///
+    /// Default implementation forwards to [`TokenHandler::handle_token`].
+    /// Implementations that have to be fast should instead implement this
+    /// function and call it from [`TokenHandler::handle_token`].
+    fn handle_tokens(&mut self, batch: TokenBatch<'_>) -> Result<(), TokenBatchStop<Self::Error>> {
+        for (index, token) in batch.into_iter().enumerate() {
+            self.handle_token(token).map_err(|stop| TokenBatchStop {
+                consumed: index,
+                stop,
+            })?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TokenStop<E> {
+    /// Lex again from the end of the last consumed token.
+    Relex,
+    /// The handler failed at the token after the consumed ones.
+    Error(E),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TokenBatchStop<E> {
+    /// The number of tokens consumed.
+    ///
+    /// If the lexer resumes, it will resume after the last consumed token.
+    pub consumed: usize,
+
+    pub stop: TokenStop<E>,
 }
 
 /// Mutable references over token handlers are token handlers.
@@ -376,7 +470,7 @@ impl<T: TokenHandler + ?Sized> TokenHandler for &mut T {
     type Error = T::Error;
 
     #[inline]
-    fn handle_token(&mut self, token: Token) -> Result<(), Self::Error> {
+    fn handle_token(&mut self, token: Token) -> Result<(), TokenStop<Self::Error>> {
         (**self).handle_token(token)
     }
 }
