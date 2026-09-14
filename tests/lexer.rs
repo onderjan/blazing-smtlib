@@ -6,7 +6,9 @@ use std::convert::Infallible;
 use smt_parser_rs::{
     SmtLocation, SmtSpan,
     read::lexer::{LexError, Lexer, LexerError, LexerErrorKind},
-    token::{GeneralReserved, Reserved, SmtVersion, Token, TokenHandler, TokenKind, TokenType},
+    token::{
+        GeneralReserved, Reserved, SmtVersion, Token, TokenHandler, TokenKind, TokenStop, TokenType,
+    },
 };
 
 /// An owned copy of a produced token, collected by [`CollectTokens`].
@@ -27,7 +29,7 @@ struct CollectTokens(Vec<OwnedToken>);
 impl TokenHandler for CollectTokens {
     type Error = Infallible;
 
-    fn handle_token(&mut self, token: Token) -> Result<(), Self::Error> {
+    fn handle_token(&mut self, token: Token) -> Result<(), TokenStop<Self::Error>> {
         let reserved = match TokenKind::from_token(token, SmtVersion::V2_7) {
             TokenKind::Reserved(reserved) => Some(reserved),
             _ => None,
@@ -607,8 +609,8 @@ struct RejectTokens;
 impl TokenHandler for RejectTokens {
     type Error = SmtSpan;
 
-    fn handle_token(&mut self, token: Token) -> Result<(), Self::Error> {
-        Err(token.span())
+    fn handle_token(&mut self, token: Token) -> Result<(), TokenStop<Self::Error>> {
+        Err(TokenStop::Error(token.span()))
     }
 }
 
@@ -820,9 +822,9 @@ struct RejectEof;
 impl TokenHandler for RejectEof {
     type Error = ();
 
-    fn handle_token(&mut self, token: Token) -> Result<(), Self::Error> {
+    fn handle_token(&mut self, token: Token) -> Result<(), TokenStop<Self::Error>> {
         if token.ty() == TokenType::EndOfFile {
-            Err(())
+            Err(TokenStop::Error(()))
         } else {
             Ok(())
         }

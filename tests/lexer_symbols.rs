@@ -10,7 +10,7 @@ use std::convert::Infallible;
 
 use smt_parser_rs::{
     read::lexer::Lexer,
-    token::{Reserved, SmtVersion, Token, TokenHandler, TokenKind, TokenType},
+    token::{Reserved, SmtVersion, Token, TokenHandler, TokenKind, TokenStop, TokenType},
 };
 
 use reserved_words::reserved_words;
@@ -41,7 +41,7 @@ struct CollectTokens(Vec<Lexed>);
 impl TokenHandler for CollectTokens {
     type Error = Infallible;
 
-    fn handle_token(&mut self, token: Token) -> Result<(), Self::Error> {
+    fn handle_token(&mut self, token: Token) -> Result<(), TokenStop<Self::Error>> {
         let kind = match TokenKind::from_token(token, SmtVersion::V2_7) {
             TokenKind::Symbol(symbol) => Kind::Symbol(symbol.as_slice().to_vec()),
             TokenKind::Reserved(reserved) => Kind::Reserved(reserved),
@@ -186,7 +186,7 @@ fn end_of_input_has_no_content_and_an_empty_span_at_the_end() {
         struct Locate<'h>(&'h mut CollectTokens, &'h mut Vec<(u64, u64, u64)>);
         impl TokenHandler for Locate<'_> {
             type Error = Infallible;
-            fn handle_token(&mut self, token: Token) -> Result<(), Self::Error> {
+            fn handle_token(&mut self, token: Token) -> Result<(), TokenStop<Self::Error>> {
                 if token.ty() == TokenType::EndOfFile {
                     let end = token.span().end();
                     self.1.push((end.offset(), end.line(), end.column()));

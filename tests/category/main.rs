@@ -38,7 +38,7 @@ use smt_parser_rs::{
             SortParser, StringParser, SymbolParser, TermParser,
         },
     },
-    token::{Reserved, Token, TokenHandler, TokenType},
+    token::{Reserved, Token, TokenHandler, TokenStop, TokenType},
 };
 
 // --- Test handler rendering everything it receives back into text ---
@@ -366,16 +366,17 @@ struct Drive<'h, H: SmtHandler, P: CategoryParser<H>> {
 impl<H: SmtHandler, P: CategoryParser<H>> TokenHandler for Drive<'_, H, P> {
     type Error = ParserError<H::Error>;
 
-    fn handle_token(&mut self, token: Token) -> Result<(), Self::Error> {
+    fn handle_token(&mut self, token: Token) -> Result<(), TokenStop<Self::Error>> {
         if self.remaining == 0 {
             if token.ty() != TokenType::EndOfFile {
                 self.unconsumed += 1;
             }
             return Ok(());
         }
-        if let ControlFlow::Break(result) =
-            self.parser
-                .progress(self.handler, &mut self.resources, token)?
+        if let ControlFlow::Break(result) = self
+            .parser
+            .progress(self.handler, &mut self.resources, token)
+            .map_err(TokenStop::Error)?
         {
             self.results.push(result);
             self.remaining -= 1;
