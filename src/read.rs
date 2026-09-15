@@ -172,7 +172,11 @@ impl<'a, H: CommandHandler> SmtReader<'a, H> {
     pub fn read_file(&mut self, path: &Path) -> Result<(), SmtReadError<H::Error>> {
         let file = File::open(path)
             .map_err(|err| SmtReadError::new(SmtReadErrorKind::Io(err), SmtSpan::new_zero()))?;
-        let buf_reader = BufReader::new(file);
+
+        // make the bufreader use 1 MiB buffer so that we can
+        // lex/parse more efficiently with larger batches
+        const BUF_READER_CAPACITY: usize = 1024 * 1024 * 1024;
+        let buf_reader = BufReader::with_capacity(BUF_READER_CAPACITY, file);
         self.read_all(buf_reader)
     }
 
