@@ -157,19 +157,23 @@ pub struct TokenBatch<'a> {
 }
 
 impl<'a> TokenBatch<'a> {
+    #[inline]
     pub(crate) fn new(entries: &'a [Option<(InnerType, &'a [u8])>], spans: &'a [SmtSpan]) -> Self {
         debug_assert_eq!(entries.len(), spans.len());
         Self { entries, spans }
     }
 
+    #[inline]
     pub fn len(&self) -> usize {
         self.entries.len()
     }
 
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
+    #[inline]
     pub fn get(&self, index: usize) -> Option<Token<'a>> {
         if let (Some(entry), Some(span)) = (self.entries.get(index), self.spans.get(index)) {
             Some(Token::new(entry, span))
@@ -183,6 +187,7 @@ impl<'a> IntoIterator for TokenBatch<'a> {
     type Item = Token<'a>;
     type IntoIter = TokenBatchIter<'a>;
 
+    #[inline]
     fn into_iter(self) -> TokenBatchIter<'a> {
         TokenBatchIter {
             batch: self,
@@ -199,6 +204,7 @@ pub struct TokenBatchIter<'a> {
 impl<'a> Iterator for TokenBatchIter<'a> {
     type Item = Token<'a>;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         match self.batch.get(self.offset) {
             Some(token) => {
@@ -436,6 +442,7 @@ pub trait TokenHandler {
     /// Default implementation forwards to [`TokenHandler::handle_token`].
     /// Implementations that have to be fast should instead implement this
     /// function and call it from [`TokenHandler::handle_token`].
+    #[inline]
     fn handle_tokens(&mut self, batch: TokenBatch<'_>) -> Result<(), TokenBatchStop<Self::Error>> {
         for (index, token) in batch.into_iter().enumerate() {
             self.handle_token(token).map_err(|stop| TokenBatchStop {
