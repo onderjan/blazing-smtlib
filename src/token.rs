@@ -473,4 +473,9 @@ impl<T: TokenHandler + ?Sized> TokenHandler for &mut T {
     fn handle_token(&mut self, token: Token) -> Result<(), TokenStop<Self::Error>> {
         (**self).handle_token(token)
     }
+
+    #[inline]
+    fn handle_tokens(&mut self, batch: TokenBatch<'_>) -> Result<(), TokenBatchStop<Self::Error>> {
+        (**self).handle_tokens(batch)
+    }
 }
