@@ -109,40 +109,40 @@ impl CharClass {
         )
     }
 
-    pub(super) const fn flags(c: u8) -> u8 {
+    pub(super) const fn run_flags(c: u8) -> u8 {
         let class = Self::classify(c);
         let mut flags = 0;
         if class.is_allowed_in_simple_symbol() {
-            flags |= SIMPLE_SYMBOL;
+            flags |= RUN_SIMPLE_SYMBOL;
         }
         if matches!(class, CharClass::Digit) {
-            flags |= DIGIT;
+            flags |= RUN_DIGIT;
         }
         // Letter does not separate a-f from the rest
         if matches!(class, CharClass::Digit) || matches!(c, b'a'..=b'f' | b'A'..=b'F') {
-            flags |= HEX_DIGIT;
+            flags |= RUN_HEX_DIGIT;
         }
         if matches!(c, b'0' | b'1') {
-            flags |= BINARY_DIGIT;
+            flags |= RUN_BINARY_DIGIT;
         }
         if matches!(
             class,
             CharClass::Tab | CharClass::Space | CharClass::LineBreak
         ) && c != b'\n'
         {
-            flags |= NON_LF_WHITESPACE;
+            flags |= RUN_NON_LF_WHITESPACE;
         }
         // LineBreak covers CR too, and CR is plain inside strings and quoted symbols;
         // only LF ends the run (it has to be marked before the scan continues)
         let plain_text = class.is_printable_or_whitespace() && c != b'\n';
         if plain_text && !matches!(class, CharClass::Pipe | CharClass::Backslash) {
-            flags |= QUOTED_PLAIN;
+            flags |= RUN_QUOTED_PLAIN;
         }
         if plain_text && !matches!(class, CharClass::DoubleQuote) {
-            flags |= STRING_PLAIN;
+            flags |= RUN_STRING_PLAIN;
         }
         if !matches!(class, CharClass::LineBreak) {
-            flags |= COMMENT_PLAIN;
+            flags |= RUN_COMMENT_PLAIN;
         }
         flags
     }
@@ -155,20 +155,50 @@ impl From<u8> for CharClass {
     }
 }
 
-pub(super) const SIMPLE_SYMBOL: u8 = 1u8 << 0;
-pub(super) const DIGIT: u8 = 1u8 << 1;
-pub(super) const HEX_DIGIT: u8 = 1u8 << 2;
-pub(super) const BINARY_DIGIT: u8 = 1u8 << 3;
-pub(super) const NON_LF_WHITESPACE: u8 = 1u8 << 4;
-pub(super) const QUOTED_PLAIN: u8 = 1u8 << 5;
-pub(super) const STRING_PLAIN: u8 = 1u8 << 6;
-pub(super) const COMMENT_PLAIN: u8 = 1u8 << 7;
+pub(super) const RUN_STRING_PLAIN: u8 = 1u8 << 0;
+pub(super) const RUN_DIGIT: u8 = 1u8 << 1;
+pub(super) const RUN_HEX_DIGIT: u8 = 1u8 << 2;
+pub(super) const RUN_BINARY_DIGIT: u8 = 1u8 << 3;
+pub(super) const RUN_NON_LF_WHITESPACE: u8 = 1u8 << 4;
+pub(super) const RUN_QUOTED_PLAIN: u8 = 1u8 << 5;
+pub(super) const RUN_SIMPLE_SYMBOL: u8 = 1u8 << 6;
+pub(super) const RUN_COMMENT_PLAIN: u8 = 1u8 << 7;
 
-pub(super) static FLAGS: [u8; 256] = {
+/// The run flags, one per bit of the byte.
+const RUN_FLAG_BITS: [u8; 8] = [
+    RUN_STRING_PLAIN,
+    RUN_DIGIT,
+    RUN_HEX_DIGIT,
+    RUN_BINARY_DIGIT,
+    RUN_NON_LF_WHITESPACE,
+    RUN_QUOTED_PLAIN,
+    RUN_SIMPLE_SYMBOL,
+    RUN_COMMENT_PLAIN,
+];
+
+/// The run flags partition the byte into single bits.
+const _: () = {
+    let mut union = 0u8;
+    let mut i = 0;
+    while i < RUN_FLAG_BITS.len() {
+        assert!(
+            RUN_FLAG_BITS[i] == 1 << i,
+            "a run flag must be a single bit at a given place"
+        );
+        union |= RUN_FLAG_BITS[i];
+        i += 1;
+    }
+    assert!(
+        union == u8::MAX,
+        "run flags must cover every bit of the byte"
+    );
+};
+
+pub(super) static RUN_FLAGS: [u8; 256] = {
     let mut table = [0u8; 256];
     let mut i = 0;
     while i < 256 {
-        table[i] = CharClass::flags(i as u8);
+        table[i] = CharClass::run_flags(i as u8);
         i += 1;
     }
     table
@@ -177,7 +207,7 @@ pub(super) static FLAGS: [u8; 256] = {
 /// Whether the byte ends a run as it carries no flags from the mask.
 #[inline(always)]
 fn ends_run(c: u8, mask: u8) -> bool {
-    FLAGS[c as usize] & mask == 0
+    RUN_FLAGS[c as usize] & mask == 0
 }
 
 /// Position of the first byte carrying no flags from the mask, slice length if none.
@@ -218,14 +248,14 @@ mod tests {
     use super::*;
 
     const ALL_FLAGS: [(&str, u8); 8] = [
-        ("SIMPLE_SYMBOL", SIMPLE_SYMBOL),
-        ("DIGIT", DIGIT),
-        ("HEX_DIGIT", HEX_DIGIT),
-        ("BINARY_DIGIT", BINARY_DIGIT),
-        ("NON_LF_WHITESPACE", NON_LF_WHITESPACE),
-        ("QUOTED_PLAIN", QUOTED_PLAIN),
-        ("STRING_PLAIN", STRING_PLAIN),
-        ("COMMENT_PLAIN", COMMENT_PLAIN),
+        ("RUN_SIMPLE_SYMBOL", RUN_SIMPLE_SYMBOL),
+        ("RUN_DIGIT", RUN_DIGIT),
+        ("RUN_HEX_DIGIT", RUN_HEX_DIGIT),
+        ("RUN_BINARY_DIGIT", RUN_BINARY_DIGIT),
+        ("RUN_NON_LF_WHITESPACE", RUN_NON_LF_WHITESPACE),
+        ("RUN_QUOTED_PLAIN", RUN_QUOTED_PLAIN),
+        ("RUN_STRING_PLAIN", RUN_STRING_PLAIN),
+        ("RUN_COMMENT_PLAIN", RUN_COMMENT_PLAIN),
     ];
 
     /// The flag definitions written out longhand, independently of `CharClass`.
@@ -236,28 +266,28 @@ mod tests {
         let printable_or_whitespace = !non_printable;
         let mut flags = 0;
         if simple_symbol {
-            flags |= SIMPLE_SYMBOL;
+            flags |= RUN_SIMPLE_SYMBOL;
         }
         if c.is_ascii_digit() {
-            flags |= DIGIT;
+            flags |= RUN_DIGIT;
         }
         if c.is_ascii_hexdigit() {
-            flags |= HEX_DIGIT;
+            flags |= RUN_HEX_DIGIT;
         }
         if c == b'0' || c == b'1' {
-            flags |= BINARY_DIGIT;
+            flags |= RUN_BINARY_DIGIT;
         }
         if matches!(c, b' ' | b'\t' | b'\r') {
-            flags |= NON_LF_WHITESPACE;
+            flags |= RUN_NON_LF_WHITESPACE;
         }
         if printable_or_whitespace && !matches!(c, b'|' | b'\\' | b'\n') {
-            flags |= QUOTED_PLAIN;
+            flags |= RUN_QUOTED_PLAIN;
         }
         if printable_or_whitespace && !matches!(c, b'"' | b'\n') {
-            flags |= STRING_PLAIN;
+            flags |= RUN_STRING_PLAIN;
         }
         if !matches!(c, b'\n' | b'\r') {
-            flags |= COMMENT_PLAIN;
+            flags |= RUN_COMMENT_PLAIN;
         }
         flags
     }
@@ -267,7 +297,7 @@ mod tests {
         for c in 0..=255u8 {
             for (name, flag) in ALL_FLAGS {
                 assert_eq!(
-                    FLAGS[c as usize] & flag != 0,
+                    RUN_FLAGS[c as usize] & flag != 0,
                     expected_flags(c) & flag != 0,
                     "{name} for byte {c:#04x} ({:?})",
                     c as char
@@ -282,7 +312,7 @@ mod tests {
         // otherwise the line bookkeeping would miss it
         for (name, flag) in ALL_FLAGS {
             assert_eq!(
-                FLAGS[b'\n' as usize] & flag,
+                RUN_FLAGS[b'\n' as usize] & flag,
                 0,
                 "{name} must not continue over a line feed"
             );
@@ -293,7 +323,7 @@ mod tests {
     fn reference_run_end(slice: &[u8], mask: u8) -> usize {
         slice
             .iter()
-            .position(|c| FLAGS[*c as usize] & mask == 0)
+            .position(|c| RUN_FLAGS[*c as usize] & mask == 0)
             .unwrap_or(slice.len())
     }
 
@@ -306,12 +336,12 @@ mod tests {
     /// while carrying as many other flags as possible.
     fn run_and_terminator_bytes(flag: u8) -> (u8, Vec<u8>) {
         let run_byte = (0..=255u8)
-            .find(|&c| FLAGS[c as usize] & flag != 0)
+            .find(|&c| RUN_FLAGS[c as usize] & flag != 0)
             .expect("every flag has at least one byte");
         // all terminators for the flag, so that terminators which continue
         // other runs (a hex letter ending a decimal-digit run) are included
         let terminators: Vec<u8> = (0..=255u8)
-            .filter(|&c| FLAGS[c as usize] & flag == 0)
+            .filter(|&c| RUN_FLAGS[c as usize] & flag == 0)
             .collect();
         (run_byte, terminators)
     }

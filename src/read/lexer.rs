@@ -9,7 +9,10 @@ pub(crate) use char_class::CharClass;
 use crate::{
     SmtLocation, SmtSpan, String8,
     read::lexer::{
-        char_class::{COMMENT_PLAIN, DIGIT, QUOTED_PLAIN, SIMPLE_SYMBOL, STRING_PLAIN, run_end},
+        char_class::{
+            RUN_COMMENT_PLAIN, RUN_DIGIT, RUN_QUOTED_PLAIN, RUN_SIMPLE_SYMBOL, RUN_STRING_PLAIN,
+            run_end,
+        },
         helpers::{BINARY_RUN, Content, DigitRun, HEXADECIMAL_RUN, START, Start, TokenEnd},
     },
     token::{InnerType, TokenBatch, TokenBatchStop, TokenHandler, TokenStop},
@@ -341,7 +344,7 @@ impl<H: TokenHandler> Lexer<H> {
                     // a comment has been started
                     // process the run eagerly
                     self.start_token(index);
-                    let end = after + run_end(&slice[after..], COMMENT_PLAIN);
+                    let end = after + run_end(&slice[after..], RUN_COMMENT_PLAIN);
                     match slice.get(end) {
                         Some(b'\n') => {
                             // line feed, we need to mark it
@@ -405,7 +408,7 @@ impl<H: TokenHandler> Lexer<H> {
                     // starts a string literal
                     self.start_token(index);
                     // determine the run of content bytes
-                    let after_content_end = after + run_end(&slice[after..], STRING_PLAIN);
+                    let after_content_end = after + run_end(&slice[after..], RUN_STRING_PLAIN);
                     // we can only eagerly borrow if the content is ended by a closing quote
                     // that is definitely not followed by another closing quote
                     // (we cannot borrow a string containing an escape)
@@ -445,7 +448,7 @@ impl<H: TokenHandler> Lexer<H> {
                         return Err(self.error_at(LexerErrorKind::ForbiddenKeywordName, after + 1));
                     }
                     // get a run of simple-symbol bytes
-                    let after_end = after + run_end(&slice[after..], SIMPLE_SYMBOL);
+                    let after_end = after + run_end(&slice[after..], RUN_SIMPLE_SYMBOL);
                     if after_end == slice.len() {
                         // we ran out of bytes
                         // update the content and state and return
@@ -466,7 +469,7 @@ impl<H: TokenHandler> Lexer<H> {
                 Start::Pipe => {
                     self.start_token(index);
                     // determine the run of content bytes
-                    let after_content_end = after + run_end(&slice[after..], QUOTED_PLAIN);
+                    let after_content_end = after + run_end(&slice[after..], RUN_QUOTED_PLAIN);
                     if slice.get(after_content_end) == Some(&b'|') {
                         // closed by another pipe
                         // dispatch the token with borrowed content
@@ -491,7 +494,7 @@ impl<H: TokenHandler> Lexer<H> {
                 Start::Digit => {
                     self.start_token(index);
                     // determine the run of digits
-                    let after_end = after + run_end(&slice[after..], DIGIT);
+                    let after_end = after + run_end(&slice[after..], RUN_DIGIT);
                     // check that we are not in a leading zero condition,
                     // which is only possible if the first character was zero
                     // and there is a subsequent digit;
@@ -505,7 +508,7 @@ impl<H: TokenHandler> Lexer<H> {
                         Some(b'.') => {
                             // a dot starts a fraction, try to do a subsequent run of fraction digits
                             let after_fraction_end =
-                                after_end + 1 + run_end(&slice[after_end + 1..], DIGIT);
+                                after_end + 1 + run_end(&slice[after_end + 1..], RUN_DIGIT);
                             if after_fraction_end == slice.len() {
                                 // we ran out of bytes
                                 // update the content and state and return
@@ -547,7 +550,7 @@ impl<H: TokenHandler> Lexer<H> {
                 Start::Symbol => {
                     self.start_token(index);
                     // get a run of simple-symbol bytes
-                    let after_end = after + run_end(&slice[after..], SIMPLE_SYMBOL);
+                    let after_end = after + run_end(&slice[after..], RUN_SIMPLE_SYMBOL);
                     if after_end == slice.len() {
                         // we ran out of bytes
                         // update the content and state and return
@@ -582,7 +585,7 @@ impl<H: TokenHandler> Lexer<H> {
         slice: &[u8],
     ) -> Result<usize, Interrupted<LexError<H::Error>>> {
         // find the first byte that is not a digit
-        let index = run_end(slice, DIGIT);
+        let index = run_end(slice, RUN_DIGIT);
 
         // check that we are not in a leading zero condition
         // this could not have been done when starting the numeral/decimal
@@ -628,7 +631,7 @@ impl<H: TokenHandler> Lexer<H> {
         start: usize,
     ) -> Result<usize, Interrupted<LexError<H::Error>>> {
         // find the first byte in the remainder that is not a digit
-        let end = start + run_end(&slice[start..], DIGIT);
+        let end = start + run_end(&slice[start..], RUN_DIGIT);
         // extend the token from slice
         self.token_content.extend_from_slice(&slice[start..end]);
         if end < slice.len() {
@@ -712,7 +715,7 @@ impl<H: TokenHandler> Lexer<H> {
             }
 
             // find the first byte that is not a plain string byte
-            let index = run_end(rest, STRING_PLAIN);
+            let index = run_end(rest, RUN_STRING_PLAIN);
 
             match rest.get(index) {
                 Some(b'\n') => {
@@ -760,7 +763,7 @@ impl<H: TokenHandler> Lexer<H> {
         slice: &[u8],
     ) -> Result<usize, Interrupted<LexError<H::Error>>> {
         // find the first byte that is not a simple symbol
-        let index = run_end(slice, SIMPLE_SYMBOL);
+        let index = run_end(slice, RUN_SIMPLE_SYMBOL);
 
         // extend the token from slice
         self.token_content.extend_from_slice(&slice[..index]);
@@ -783,7 +786,7 @@ impl<H: TokenHandler> Lexer<H> {
         let mut consumed = 0;
         loop {
             // find the first byte that is not a quoted symbol
-            let index = run_end(rest, QUOTED_PLAIN);
+            let index = run_end(rest, RUN_QUOTED_PLAIN);
             let after_slice_position = consumed + index + 1;
 
             // inspect the problematic byte
@@ -847,7 +850,7 @@ impl<H: TokenHandler> Lexer<H> {
         }
 
         // find the first byte that is not simple-symbol-like
-        let index = run_end(slice, SIMPLE_SYMBOL);
+        let index = run_end(slice, RUN_SIMPLE_SYMBOL);
 
         // extend the token from slice
         self.token_content.extend_from_slice(&slice[..index]);
@@ -864,7 +867,7 @@ impl<H: TokenHandler> Lexer<H> {
 
     fn lex_comment(&mut self, slice: &[u8]) -> Result<usize, Interrupted<LexError<H::Error>>> {
         // run until comment end
-        let index = run_end(slice, COMMENT_PLAIN);
+        let index = run_end(slice, RUN_COMMENT_PLAIN);
         let Some(c) = slice.get(index) else {
             // the comment continues, just consume the whole slice
             // and remain in comment state
