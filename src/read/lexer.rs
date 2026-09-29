@@ -1013,7 +1013,7 @@ impl<H: TokenHandler> Lexer<H> {
                 let mut cursor = TokenCursor::new(std::slice::from_ref(&entry), spans);
                 self.handler
                     .handle_tokens(&mut cursor)
-                    .map_err(|stop| Self::to_interrupted(cursor, stop, spans))
+                    .map_err(|stop| Self::to_interrupted(cursor, stop))
             }
         }
     }
@@ -1028,19 +1028,23 @@ impl<H: TokenHandler> Lexer<H> {
         let mut cursor = TokenCursor::new(&batch.entries[..len], spans);
         self.handler
             .handle_tokens(&mut cursor)
-            .map_err(|stop| Self::to_interrupted(cursor, stop, spans))
+            .map_err(|stop| Self::to_interrupted(cursor, stop))
     }
 
-    fn to_interrupted<E>(
-        cursor: TokenCursor,
-        stop: TokenStop<E>,
-        spans: &[SmtSpan],
-    ) -> Interrupted<LexError<E>> {
-        let stop_location = match cursor.consumed() {
-            // nothing was taken, lex again from the first token
-            0 => spans[0].start(),
-            // at least one token was taken, lex again after it
-            n => spans[n - 1].end(),
+    fn to_interrupted<E>(cursor: TokenCursor, stop: TokenStop<E>) -> Interrupted<LexError<E>> {
+        let stop_location = match cursor.last_consumed() {
+            None => {
+                // nothing was taken, lex again from the first token
+                cursor
+                    .get(0)
+                    .expect("cursor should have at least one token")
+                    .span()
+                    .start()
+            }
+            Some(token) => {
+                // at least one token was taken, lex again after it
+                token.span().end()
+            }
         };
         let stop = match stop {
             TokenStop::Relex => TokenStop::Relex,
@@ -1064,7 +1068,7 @@ impl<H: TokenHandler> Lexer<H> {
         let mut cursor = TokenCursor::new(std::slice::from_ref(&entry), spans);
         self.handler
             .handle_tokens(&mut cursor)
-            .map_err(|stop| Self::to_interrupted(cursor, stop, spans))
+            .map_err(|stop| Self::to_interrupted(cursor, stop))
     }
 
     /// Moves a fast-path symbol run that cannot be finished
