@@ -14,7 +14,8 @@ use crate::{
             run_end,
         },
         helpers::{
-            BINARY_RUN, Content, DigitRun, FAST_PIPE, HEXADECIMAL_RUN, START, Start, TokenEnd,
+            BINARY_RUN, Content, DigitRun, FAST, FAST_EMIT, FAST_INNER, FAST_ON, FAST_PIPE,
+            FAST_RUN_MASK, FAST_TYPE_MASK, HEXADECIMAL_RUN, START, Start, TokenEnd,
         },
     },
     token::{InnerType, TokenBatch, TokenBatchStop, TokenHandler, TokenStop},
@@ -294,8 +295,13 @@ impl<H: TokenHandler> Lexer<H> {
     ) -> Result<usize, Interrupted<LexError<H::Error>>> {
         let mut index = 0;
 
+        // PERFORMANCE: use a local for the batch-length variable commonly used on the fast path.
+        let mut batch_len = batch.len;
+
         while let Some(&c) = slice.get(index) {
-            // PERFORMANCE: One table lookup decides the arm. Arms eagerly
+            // PERFORMANCE: A fast path handles the most common token types.
+            // It is determined by one table lookup. If the started token is not on
+            // the fast path, a slower path is taken, again looked up. Arms eagerly
             // try to complete the token with the whole content borrowed from the slice,
             // which resets the lexer back to the normal state, so the loop can continue.
             //
@@ -305,41 +311,85 @@ impl<H: TokenHandler> Lexer<H> {
             // This loop is VERY HOT and even small changes can drastically affect
             // performance. This especially applies to unintentional panic paths
             // introduced by maybe-panicking bounds checks.
+
             let after = index + 1;
-            match START[c as usize] {
-                Start::Whitespace => {
-                    index = after;
+            // Handle whitespace, symbols, and parentheses in a fast path.
+            let fast_entry = FAST[c as usize];
+            if fast_entry & FAST_ON != 0 {
+                // Fast path, compute where the run ends and where the token ends.
+                // For quoted symbols, the token will end after the closing pipe.
+                let run_end_at: usize =
+                    after + run_end(&slice[after..], fast_entry & FAST_RUN_MASK);
+                let is_quoted = fast_entry & FAST_PIPE != 0;
+
+                // We might need to fall back to state-machine lexing if the token
+                // we have found is not properly finished.
+                // This can only happen if we are processing a quoted symbol
+                // and the expected pipe after the end of the run is not there,
+                // or if we are processing a simple symbol and we overrun the slice.
+                // Parentheses have trivially zero-length runs and whitespace
+                // can be split as it is discarded.
+
+                // PERFORMANCE: gate the check for unfinished by a simpler condition.
+                if run_end_at == slice.len() || is_quoted {
+                    let is_unfinished = if is_quoted {
+                        slice.get(run_end_at) != Some(&b'|')
+                    } else {
+                        fast_entry & RUN_SIMPLE_SYMBOL != 0
+                    };
+
+                    if is_unfinished {
+                        // store the locals back
+                        batch.len = batch_len;
+                        self.store_unfinished_symbol_run(
+                            slice, fast_entry, index, after, run_end_at,
+                        );
+                        return Ok(run_end_at);
+                    }
                 }
+                let token_end = run_end_at + is_quoted as usize;
+
+                // No need to fall back, construct the token.
+                batch.entries[batch_len] = Some(if is_quoted {
+                    // The pipes delimit the token but are not part of its content.
+                    (InnerType::QuotedSymbol, &slice[after..run_end_at])
+                } else {
+                    // Get the inner type from the entry, the whole token is the content.
+                    (
+                        FAST_INNER[(fast_entry & FAST_TYPE_MASK) as usize],
+                        &slice[index..token_end],
+                    )
+                });
+                // The token is on a single line as all fast-lex runs exclude newlines.
+                self.spans[batch_len] = SmtSpan::on_line(
+                    self.line,
+                    self.line_start,
+                    self.offset + index as u64,
+                    self.offset + token_end as u64,
+                );
+
+                // Add the token to the batch if it should be emitted.
+                batch_len += (fast_entry & FAST_EMIT != 0) as usize;
+                if batch_len == BATCH_CAPACITY {
+                    // Batch capacity reached, we need to flush the batch.
+                    batch.len = batch_len;
+                    self.flush_batch(batch)?;
+                    batch_len = 0;
+                }
+                // Fast path done, continue normally after the token end.
+                index = token_end;
+                continue;
+            }
+
+            // The slow path will use the batch itself, write the local back.
+            batch.len = batch_len;
+
+            // Fast path was not taken, use the slow path.
+            match START[c as usize] {
                 Start::LineFeed => {
                     // line feeds must be marked for line offsets
                     // mark it and update the index
                     self.mark_line_feed_at(index);
-                    index = after;
-                }
-                Start::ParenOpen => {
-                    // parentheses are tokens by themselves
-                    // dispatch the token, it has no content
-                    self.start_token(index);
-                    self.sink_slice(
-                        batch,
-                        InnerType::ParenOpen,
-                        TokenEnd::at_byte(after),
-                        Content::Borrowed(&[]),
-                    )?;
-                    // update the index and continue the loop
-                    index = after;
-                }
-                Start::ParenClose => {
-                    // parentheses are tokens by themselves
-                    // dispatch the token, it has no content
-                    self.start_token(index);
-                    self.sink_slice(
-                        batch,
-                        InnerType::ParenClose,
-                        TokenEnd::at_byte(after),
-                        Content::Borrowed(&[]),
-                    )?;
-                    // update the index and continue the loop
                     index = after;
                 }
                 Start::Comment => {
@@ -468,31 +518,6 @@ impl<H: TokenHandler> Lexer<H> {
                     // update the index and continue the loop
                     index = after_end;
                 }
-                Start::Pipe => {
-                    self.start_token(index);
-                    // determine the run of content bytes
-                    let after_content_end = after + run_end(&slice[after..], RUN_QUOTED_PLAIN);
-                    if slice.get(after_content_end) == Some(&b'|') {
-                        // closed by another pipe
-                        // dispatch the token with borrowed content
-                        self.sink_slice(
-                            batch,
-                            InnerType::QuotedSymbol,
-                            TokenEnd::at_byte(after_content_end + 1),
-                            Content::Borrowed(&slice[after..after_content_end]),
-                        )?;
-                        // update the index and continue the loop
-                        // the closing pipe is not a part of the content but was processed
-                        index = after_content_end + 1;
-                    } else {
-                        // we encountered a line feed, an error, or ran out of bytes
-                        // update the content and state and return
-                        self.token_content
-                            .extend_from_slice(&slice[after..after_content_end]);
-                        self.state = LexerState::QuotedSymbol;
-                        return Ok(after_content_end);
-                    }
-                }
                 Start::Digit => {
                     self.start_token(index);
                     // determine the run of digits
@@ -549,35 +574,24 @@ impl<H: TokenHandler> Lexer<H> {
                         }
                     }
                 }
-                Start::Symbol => {
+                Start::Other
+                | Start::Whitespace
+                | Start::ParenOpen
+                | Start::ParenClose
+                | Start::Symbol
+                | Start::Pipe => {
+                    // can actually only be Other (resulting in unexpected character),
+                    // as the other arms have already been handled in the fast path.
                     self.start_token(index);
-                    // get a run of simple-symbol bytes
-                    let after_end = after + run_end(&slice[after..], RUN_SIMPLE_SYMBOL);
-                    if after_end == slice.len() {
-                        // we ran out of bytes
-                        // update the content and state and return
-                        self.token_content
-                            .extend_from_slice(&slice[index..after_end]);
-                        self.state = LexerState::SimpleSymbol;
-                        return Ok(after_end);
-                    }
-                    // dispatch a token with borrowed content
-                    self.finish_simple_symbol(
-                        batch,
-                        TokenEnd::at_byte(after_end),
-                        Content::Borrowed(&slice[index..after_end]),
-                    )?;
-                    // update the index and continue the loop
-                    index = after_end;
-                }
-                Start::Other => {
-                    self.start_token(index);
-                    // unexpected character
                     return Err(self.error_at(LexerErrorKind::UnexpectedCharacter, after));
                 }
             }
+            // Update the local from the batch.
+            batch_len = batch.len;
         }
         // we have consumed every byte
+        // write the local back
+        batch.len = batch_len;
         Ok(slice.len())
     }
 
