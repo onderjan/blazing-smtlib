@@ -1,7 +1,8 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtApplication, SmtHandler, SmtQualifiedIdentView, SmtQuantifierKind, SmtSymbolView, SmtTerm,
+    SmtApplication, SmtHandler, SmtQualifiedIdentView, SmtQuantifierKind, SmtSpan, SmtSymbolView,
+    SmtTerm,
     read::parser::{
         Arena, CloseParenParser, IdentHandle, OpenParenParser, ParserError, ParserResources,
         QualifiedIdentHandle,
@@ -11,7 +12,7 @@ use crate::{
         },
         handle_err,
     },
-    token::{GeneralReserved, Reserved, Token, TokenKind, TokenType},
+    token::{GeneralReserved, Reserved, Token, TokenCursor, TokenKind, TokenType},
 };
 
 /// A parser that reads an SMT-LIB term.
@@ -178,8 +179,19 @@ impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
         resources: &mut ParserResources<H>,
         token: Token,
     ) -> Result<ControlFlow<H::Term>, ParserError<H::Error>> {
-        // progress the slot inside the resources
+        // progress the slot with the token
         TermSlot::progress(handler, resources, token)
+    }
+
+    #[inline(always)]
+    fn progress_all(
+        &mut self,
+        handler: &mut H,
+        resources: &mut ParserResources<H>,
+        cursor: &mut TokenCursor<'_>,
+    ) -> Result<ControlFlow<H::Term>, ParserError<H::Error>> {
+        // progress the slot with the cursor
+        TermSlot::progress_all(handler, resources, cursor)
     }
 }
 
@@ -223,6 +235,90 @@ impl<H: SmtHandler + ?Sized> TermSlot<H> {
 }
 
 impl<H: SmtHandler> TermSlot<H> {
+    #[inline]
+    pub(crate) fn progress_all(
+        handler: &mut H,
+        resources: &mut ParserResources<H>,
+        cursor: &mut TokenCursor,
+    ) -> Result<ControlFlow<H::Term>, ParserError<H::Error>> {
+        while let Some(token) = cursor.take() {
+            if matches!(resources.term_slot.state, State::Start)
+                && resources.term_slot.pending.is_none()
+            {
+                // PERFORMANCE: dispatch common term idioms fast.
+                match token.ty() {
+                    TokenType::UnquotedSymbol | TokenType::QuotedSymbol => {
+                        if let TokenKind::Symbol(name) = resources.store.token_kind(token) {
+                            // this is an unqualified, non-indexed symbol, dispatch it
+                            let term = SmtTerm::QualifiedIdent(SmtQualifiedIdentView {
+                                ident: resources.store.simple_ident_view(name),
+                                sort: None,
+                            });
+                            let term = handle_err(handler.handle_term(term), token.span())?;
+                            if let ControlFlow::Break(term) =
+                                Self::finish_term(handler, resources, term, token.span())?
+                            {
+                                return Ok(ControlFlow::Break(term));
+                            }
+                            continue;
+                        }
+                    }
+                    TokenType::ParenOpen => {
+                        if let Some(peeked) = cursor.peek() {
+                            match resources.store.token_kind(peeked) {
+                                TokenKind::Symbol(fn_name) => {
+                                    // this is an application start
+                                    // consume the peeked token and dispatch
+                                    cursor.advance(1);
+                                    resources
+                                        .term_slot
+                                        .start_application(&mut resources.store, fn_name);
+                                    continue;
+                                }
+                                TokenKind::Reserved(Reserved::General(GeneralReserved::Let)) => {
+                                    // the proper way to start a let binder is "(let((name"
+                                    // we need two more opening parentheses and a symbol
+                                    if cursor
+                                        .get(1)
+                                        .is_some_and(|t| matches!(t.ty(), TokenType::ParenOpen))
+                                        && cursor
+                                            .get(2)
+                                            .is_some_and(|t| matches!(t.ty(), TokenType::ParenOpen))
+                                        && let Some(name_token) = cursor.get(3)
+                                        && let TokenKind::Symbol(name) =
+                                            resources.store.token_kind(name_token)
+                                    {
+                                        // this is a let binder
+                                        // consume the four peeked tokens
+                                        cursor.advance(4);
+                                        // dispatch the let and push the first binding name
+                                        resources.term_slot.start_let(&mut resources.store);
+                                        resources
+                                            .term_slot
+                                            .push_binding_name(&mut resources.store, name);
+                                        continue;
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            match Self::progress(handler, resources, token)? {
+                ControlFlow::Continue(()) => {}
+                ControlFlow::Break(term) => {
+                    // we are done
+                    return Ok(ControlFlow::Break(term));
+                }
+            }
+        }
+        // not done yet
+        Ok(ControlFlow::Continue(()))
+    }
+
     #[inline]
     pub(crate) fn progress(
         handler: &mut H,
@@ -276,6 +372,19 @@ impl<H: SmtHandler> TermSlot<H> {
             }
         };
 
+        Self::finish_term(handler, resources, term, span)
+    }
+}
+
+impl<H: SmtHandler> TermSlot<H> {
+    /// Processes a newly created term, updating the level above it if there is one.
+    #[inline]
+    fn finish_term(
+        handler: &mut H,
+        resources: &mut ParserResources<H>,
+        term: H::Term,
+        span: SmtSpan,
+    ) -> Result<ControlFlow<H::Term>, ParserError<H::Error>> {
         // we have parsed a term, set state to start
         let slot = &mut resources.term_slot;
         slot.state = State::Start;
@@ -352,9 +461,7 @@ impl<H: SmtHandler> TermSlot<H> {
         }
         Ok(ControlFlow::Continue(()))
     }
-}
 
-impl<H: SmtHandler> TermSlot<H> {
     #[inline]
     fn progress_inner(
         handler: &mut H,
@@ -438,13 +545,9 @@ impl<H: SmtHandler> TermSlot<H> {
                         token.span(),
                     ));
                 };
-                // push the name into the arena
-                // the binding term knows where the binding names start
-                let store = &mut resources.store;
-                let name = store.push_text(name.as_slice());
-                store.symbols.push(name);
-                // go to the start state to parse the binding term
-                slot.state = State::Start;
+                resources
+                    .term_slot
+                    .push_binding_name(&mut resources.store, name);
                 Ok(ControlFlow::Continue(()))
             }
             State::LetBindingClose => {
@@ -621,32 +724,13 @@ impl<H: SmtHandler> TermSlot<H> {
         let state = match resources.store.token_kind(token) {
             TokenKind::Symbol(fn_name) => {
                 // this is an application where the function identifier is just a symbol
-                // start a new level with the head name in the arena text,
-                // remember where its arguments will start in the arena
-                let store = &mut resources.store;
-                let name = store.push_text(fn_name.as_slice());
-                slot.start_level(Level::Application {
-                    function: QualifiedIdentHandle {
-                        ident: IdentHandle {
-                            name,
-                            indices_start: store.indices.len(),
-                        },
-                        sort: None,
-                    },
-                    arena_args_start: store.terms.len(),
-                });
+                slot.start_application(&mut resources.store, fn_name);
                 return Ok(());
             }
             TokenKind::Reserved(Reserved::General(GeneralReserved::Let)) => {
-                // add a level for let bindings and move before the bindings opening
-                // remember where the bindings start in the arena
-                let store = &resources.store;
-                slot.levels.push(Level::LetBinding {
-                    arena_text_start: store.text.len(),
-                    arena_names_start: store.symbols.len(),
-                    arena_terms_start: store.terms.len(),
-                });
-                State::LetAllBindingsOpen
+                // this is a let, start it
+                slot.start_let(&mut resources.store);
+                return Ok(());
             }
             TokenKind::Reserved(Reserved::General(GeneralReserved::Lambda)) => {
                 // this is a lambda, move to parsing its variables
@@ -817,6 +901,45 @@ impl<H: SmtHandler> TermSlot<H> {
                 span,
             )),
         }
+    }
+
+    #[inline]
+    fn push_binding_name(&mut self, store: &mut Arena<H>, name: SmtSymbolView) {
+        // push the name into the arena
+        // the binding term knows where the binding names start
+        let name = store.push_text(name.as_slice());
+        store.symbols.push(name);
+        // go to the start state to parse the binding term
+        self.state = State::Start;
+    }
+
+    #[inline]
+    fn start_application(&mut self, store: &mut Arena<H>, fn_name: SmtSymbolView) {
+        // start a new level with the head name in the arena text,
+        // remember where its arguments will start in the arena
+        let name = store.push_text(fn_name.as_slice());
+        self.start_level(Level::Application {
+            function: QualifiedIdentHandle {
+                ident: IdentHandle {
+                    name,
+                    indices_start: store.indices.len(),
+                },
+                sort: None,
+            },
+            arena_args_start: store.terms.len(),
+        });
+    }
+
+    #[inline]
+    fn start_let(&mut self, store: &mut Arena<H>) {
+        // add a level for let bindings and move before the bindings opening
+        // remember where the bindings start in the arena
+        self.levels.push(Level::LetBinding {
+            arena_text_start: store.text.len(),
+            arena_names_start: store.symbols.len(),
+            arena_terms_start: store.terms.len(),
+        });
+        self.state = State::LetAllBindingsOpen;
     }
 
     #[inline]
