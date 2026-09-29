@@ -4,7 +4,7 @@ use crate::{
     SmtApplication, SmtHandler, SmtQualifiedIdentView, SmtQuantifierKind, SmtSpan, SmtSymbolView,
     SmtTerm,
     read::parser::{
-        Arena, CloseParenParser, IdentHandle, OpenParenParser, ParserError, ParserResources,
+        Arena, CloseParenParser, OpenParenParser, ParserError, ParserResources,
         QualifiedIdentHandle,
         category::{
             CategoryErrorKind, CategoryParser, attribute::MultipleAttributes,
@@ -270,9 +270,12 @@ impl<H: SmtHandler> TermSlot<H> {
                                     // this is an application start
                                     // consume the peeked token and dispatch
                                     cursor.advance(1);
+                                    let function = QualifiedIdentHandle::unqualified(
+                                        resources.store.push_nonindexed_ident(fn_name),
+                                    );
                                     resources
                                         .term_slot
-                                        .start_application(&mut resources.store, fn_name);
+                                        .start_application(&resources.store, function);
                                     continue;
                                 }
                                 TokenKind::Reserved(Reserved::General(GeneralReserved::Let)) => {
@@ -515,13 +518,11 @@ impl<H: SmtHandler> TermSlot<H> {
                     token,
                 )? {
                     ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
-                    ControlFlow::Break(qualified_ident) => {
-                        // start a new level, the head stays in the arena,
-                        // remember where its arguments will start in the arena
-                        slot.start_level(Level::Application {
-                            function: qualified_ident,
-                            arena_args_start: resources.store.terms.len(),
-                        });
+                    ControlFlow::Break(function) => {
+                        // start a new application level
+                        resources
+                            .term_slot
+                            .start_application(&resources.store, function);
                         Ok(ControlFlow::Continue(()))
                     }
                 }
@@ -724,7 +725,10 @@ impl<H: SmtHandler> TermSlot<H> {
         let state = match resources.store.token_kind(token) {
             TokenKind::Symbol(fn_name) => {
                 // this is an application where the function identifier is just a symbol
-                slot.start_application(&mut resources.store, fn_name);
+                let function = QualifiedIdentHandle::unqualified(
+                    resources.store.push_nonindexed_ident(fn_name),
+                );
+                slot.start_application(&resources.store, function);
                 return Ok(());
             }
             TokenKind::Reserved(Reserved::General(GeneralReserved::Let)) => {
@@ -914,18 +918,10 @@ impl<H: SmtHandler> TermSlot<H> {
     }
 
     #[inline]
-    fn start_application(&mut self, store: &mut Arena<H>, fn_name: SmtSymbolView) {
-        // start a new level with the head name in the arena text,
-        // remember where its arguments will start in the arena
-        let name = store.push_text(fn_name.as_slice());
+    fn start_application(&mut self, store: &Arena<H>, function: QualifiedIdentHandle<H>) {
+        // a new level; the head is in the arena, its arguments follow from here
         self.start_level(Level::Application {
-            function: QualifiedIdentHandle {
-                ident: IdentHandle {
-                    name,
-                    indices_start: store.indices.len(),
-                },
-                sort: None,
-            },
+            function,
             arena_args_start: store.terms.len(),
         });
     }

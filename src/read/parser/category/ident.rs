@@ -118,12 +118,8 @@ impl IdentSlot {
                 debug_assert!(self.is_pristine(), "must be pristine when starting");
                 match arena.token_kind(token) {
                     TokenKind::Symbol(name) => {
-                        // a simple identifier: its name goes to the arena text, no indices
-                        let name = arena.push_text(name.as_slice());
-                        return Ok(ControlFlow::Break(IdentHandle {
-                            name,
-                            indices_start: arena.indices.len(),
-                        }));
+                        // a simple identifier
+                        return Ok(ControlFlow::Break(arena.push_nonindexed_ident(name)));
                     }
                     TokenKind::ParenOpen => {
                         self.state = State::Open;

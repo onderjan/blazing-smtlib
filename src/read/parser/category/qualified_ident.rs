@@ -181,15 +181,9 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
                 match arena.token_kind(token) {
                     TokenKind::Symbol(name) => {
                         // return a simple ident, the slot is in its initial state
-                        // its name goes to the arena text, there are no indices
-                        let name = arena.push_text(name.as_slice());
-                        return Ok(ControlFlow::Break(QualifiedIdentHandle {
-                            ident: IdentHandle {
-                                name,
-                                indices_start: arena.indices.len(),
-                            },
-                            sort: None,
-                        }));
+                        return Ok(ControlFlow::Break(QualifiedIdentHandle::unqualified(
+                            arena.push_nonindexed_ident(name),
+                        )));
                     }
                     TokenKind::ParenOpen => self.state = State::Open,
                     _ => {
@@ -225,10 +219,7 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
                     // the closing parenthesis was already consumed by the ident slot
                     // reset and return an unqualified but indexed ident
                     self.state = State::Start;
-                    return Ok(ControlFlow::Break(QualifiedIdentHandle {
-                        ident,
-                        sort: None,
-                    }));
+                    return Ok(ControlFlow::Break(QualifiedIdentHandle::unqualified(ident)));
                 }
             }
             // step 4: parsing the identifier of a qualified identifier

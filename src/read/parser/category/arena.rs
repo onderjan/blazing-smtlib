@@ -91,6 +91,14 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
         }
     }
 
+    /// Pushes a non-indexed identifier into the arena and returns its handle.
+    pub(crate) fn push_nonindexed_ident(&mut self, name: SmtSymbolView) -> IdentHandle {
+        IdentHandle {
+            name: self.push_text(name.as_slice()),
+            indices_start: self.indices.len(),
+        }
+    }
+
     /// Hands an application to `f`, removing it afterwards: its function
     /// identifier and the arguments from `args_start` onward.
     #[inline]
@@ -370,6 +378,12 @@ pub(crate) struct IdentHandle {
 pub(crate) struct QualifiedIdentHandle<H: SmtHandler + ?Sized> {
     pub(crate) ident: IdentHandle,
     pub(crate) sort: Option<H::Sort>,
+}
+
+impl<H: SmtHandler + ?Sized> QualifiedIdentHandle<H> {
+    pub(crate) fn unqualified(ident: IdentHandle) -> Self {
+        Self { ident, sort: None }
+    }
 }
 
 /// A simple pattern: a symbol in the arena text, or a wildcard.
