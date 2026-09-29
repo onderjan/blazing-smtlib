@@ -7,139 +7,106 @@ pub enum Reserved {
     CommandName(CommandNameReserved),
 }
 
-/// Every reserved word with its classification.
-const RESERVED_WORDS: [(&[u8], Reserved); 46] = [
-    (b"as", Reserved::General(GeneralReserved::As)),
-    (
-        b"assert",
-        Reserved::CommandName(CommandNameReserved::Assert),
-    ),
-    (b"BINARY", Reserved::General(GeneralReserved::Binary)),
-    (
-        b"check-sat-assuming",
-        Reserved::CommandName(CommandNameReserved::CheckSatAssuming),
-    ),
-    (
-        b"check-sat",
-        Reserved::CommandName(CommandNameReserved::CheckSat),
-    ),
-    (b"DECIMAL", Reserved::General(GeneralReserved::Decimal)),
-    (
-        b"declare-const",
-        Reserved::CommandName(CommandNameReserved::DeclareConst),
-    ),
-    (
-        b"declare-datatype",
-        Reserved::CommandName(CommandNameReserved::DeclareDatatype),
-    ),
-    (
-        b"declare-datatypes",
-        Reserved::CommandName(CommandNameReserved::DeclareDatatypes),
-    ),
-    (
-        b"declare-fun",
-        Reserved::CommandName(CommandNameReserved::DeclareFun),
-    ),
-    (
-        b"declare-sort",
-        Reserved::CommandName(CommandNameReserved::DeclareSort),
-    ),
-    (
-        b"declare-sort-parameter",
-        Reserved::CommandName(CommandNameReserved::DeclareSortParameter),
-    ),
-    (
-        b"define-const",
-        Reserved::CommandName(CommandNameReserved::DefineConst),
-    ),
-    (
-        b"define-fun",
-        Reserved::CommandName(CommandNameReserved::DefineFun),
-    ),
-    (
-        b"define-fun-rec",
-        Reserved::CommandName(CommandNameReserved::DefineFunRec),
-    ),
-    (
-        b"define-funs-rec",
-        Reserved::CommandName(CommandNameReserved::DefineFunsRec),
-    ),
-    (
-        b"define-sort",
-        Reserved::CommandName(CommandNameReserved::DefineSort),
-    ),
-    (b"echo", Reserved::CommandName(CommandNameReserved::Echo)),
-    (b"exists", Reserved::General(GeneralReserved::Exists)),
-    (b"exit", Reserved::CommandName(CommandNameReserved::Exit)),
-    (b"forall", Reserved::General(GeneralReserved::Forall)),
-    (b"!", Reserved::General(GeneralReserved::ExclamationMark)),
-    (b"_", Reserved::General(GeneralReserved::Underscore)),
-    (
-        b"get-assertions",
-        Reserved::CommandName(CommandNameReserved::GetAssertions),
-    ),
-    (
-        b"get-assignment",
-        Reserved::CommandName(CommandNameReserved::GetAssignment),
-    ),
-    (
-        b"get-info",
-        Reserved::CommandName(CommandNameReserved::GetInfo),
-    ),
-    (
-        b"get-model",
-        Reserved::CommandName(CommandNameReserved::GetModel),
-    ),
-    (
-        b"get-option",
-        Reserved::CommandName(CommandNameReserved::GetOption),
-    ),
-    (
-        b"get-proof",
-        Reserved::CommandName(CommandNameReserved::GetProof),
-    ),
-    (
-        b"get-unsat-assumptions",
-        Reserved::CommandName(CommandNameReserved::GetUnsatAssumptions),
-    ),
-    (
-        b"get-unsat-core",
-        Reserved::CommandName(CommandNameReserved::GetUnsatCore),
-    ),
-    (
-        b"get-value",
-        Reserved::CommandName(CommandNameReserved::GetValue),
-    ),
-    (
-        b"HEXADECIMAL",
-        Reserved::General(GeneralReserved::Hexadecimal),
-    ),
-    (b"lambda", Reserved::General(GeneralReserved::Lambda)),
-    (b"let", Reserved::General(GeneralReserved::Let)),
-    (b"match", Reserved::General(GeneralReserved::Match)),
-    (b"NUMERAL", Reserved::General(GeneralReserved::Numeral)),
-    (b"par", Reserved::General(GeneralReserved::Par)),
-    (b"pop", Reserved::CommandName(CommandNameReserved::Pop)),
-    (b"push", Reserved::CommandName(CommandNameReserved::Push)),
-    (
-        b"reset-assertions",
-        Reserved::CommandName(CommandNameReserved::ResetAssertions),
-    ),
-    (b"reset", Reserved::CommandName(CommandNameReserved::Reset)),
-    (
-        b"set-info",
-        Reserved::CommandName(CommandNameReserved::SetInfo),
-    ),
-    (
-        b"set-logic",
-        Reserved::CommandName(CommandNameReserved::SetLogic),
-    ),
-    (
-        b"set-option",
-        Reserved::CommandName(CommandNameReserved::SetOption),
-    ),
-    (b"STRING", Reserved::General(GeneralReserved::String)),
-];
+/// Defines the reserved words.
+///
+/// For each group of reserved words, the macro builds an enum with one variant
+/// per word, the conversions between the variants and the words, and the table
+/// of every reserved word with its classification used to build the perfect hash.
+macro_rules! reserved_words {
+    ($(
+        $(#[$meta:meta])*
+        $variant_kind:ident: $enum_name:ident {
+            $($variant:ident = $word:literal,)*
+        }
+    )*) => {
+        $(
+            $(#[$meta])*
+            #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+            pub enum $enum_name {
+                $($variant,)*
+            }
+
+            impl $enum_name {
+                /// The reserved word of this group spelled by the symbol, if any.
+                #[inline]
+                pub fn from_bytes_opt(symbol: &[u8]) -> Option<Self> {
+                    match Reserved::from_bytes_opt(symbol) {
+                        Some(Reserved::$variant_kind(reserved)) => Some(reserved),
+                        _ => None,
+                    }
+                }
+
+                pub fn as_str(&self) -> &'static str {
+                    match self {
+                        $(Self::$variant => $word,)*
+                    }
+                }
+            }
+        )*
+
+        /// Every reserved word with its classification.
+        const RESERVED_WORDS: &[(&[u8], Reserved)] = &[
+            $($(($word.as_bytes(), Reserved::$variant_kind($enum_name::$variant)),)*)*
+        ];
+    };
+}
+
+reserved_words! {
+    /// General reserved words of the SMT-LIB2 grammar.
+    General: GeneralReserved {
+        Binary = "BINARY",
+        Decimal = "DECIMAL",
+        Hexadecimal = "HEXADECIMAL",
+        Numeral = "NUMERAL",
+        String = "STRING",
+        Underscore = "_",
+        ExclamationMark = "!",
+        As = "as",
+        Lambda = "lambda",
+        Let = "let",
+        Exists = "exists",
+        Forall = "forall",
+        Match = "match",
+        Par = "par",
+    }
+    /// Reserved words naming standard SMT-LIB2 commands.
+    ///
+    /// Standard SMT-LIB2 commands are reserved words.
+    CommandName: CommandNameReserved {
+        Assert = "assert",
+        CheckSat = "check-sat",
+        CheckSatAssuming = "check-sat-assuming",
+        DeclareConst = "declare-const",
+        DeclareDatatype = "declare-datatype",
+        DeclareDatatypes = "declare-datatypes",
+        DeclareFun = "declare-fun",
+        DeclareSort = "declare-sort",
+        DeclareSortParameter = "declare-sort-parameter",
+        DefineConst = "define-const",
+        DefineFun = "define-fun",
+        DefineFunRec = "define-fun-rec",
+        DefineFunsRec = "define-funs-rec",
+        DefineSort = "define-sort",
+        Echo = "echo",
+        Exit = "exit",
+        GetAssertions = "get-assertions",
+        GetAssignment = "get-assignment",
+        GetInfo = "get-info",
+        GetModel = "get-model",
+        GetOption = "get-option",
+        GetProof = "get-proof",
+        GetUnsatAssumptions = "get-unsat-assumptions",
+        GetUnsatCore = "get-unsat-core",
+        GetValue = "get-value",
+        Pop = "pop",
+        Push = "push",
+        Reset = "reset",
+        ResetAssertions = "reset-assertions",
+        SetInfo = "set-info",
+        SetLogic = "set-logic",
+        SetOption = "set-option",
+    }
+}
 
 /// Number of slots of the reserved-word table.
 const RESERVED_SLOTS: usize = 128;
@@ -212,184 +179,6 @@ impl Reserved {
     #[inline]
     pub fn is_command_name(&self) -> bool {
         matches!(self, Reserved::CommandName(_))
-    }
-}
-
-/// General reserved words of the SMT-LIB2 grammar.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GeneralReserved {
-    Binary,
-    Decimal,
-    Hexadecimal,
-    Numeral,
-    String,
-    Underscore,
-    ExclamationMark,
-    As,
-    Lambda,
-    Let,
-    Exists,
-    Forall,
-    Match,
-    Par,
-}
-
-impl GeneralReserved {
-    #[inline]
-    pub fn from_bytes_opt(symbol: &[u8]) -> Option<GeneralReserved> {
-        Some(match symbol {
-            b"BINARY" => GeneralReserved::Binary,
-            b"DECIMAL" => GeneralReserved::Decimal,
-            b"HEXADECIMAL" => GeneralReserved::Hexadecimal,
-            b"NUMERAL" => GeneralReserved::Numeral,
-            b"STRING" => GeneralReserved::String,
-            b"_" => GeneralReserved::Underscore,
-            b"!" => GeneralReserved::ExclamationMark,
-            b"as" => GeneralReserved::As,
-            b"lambda" => GeneralReserved::Lambda,
-            b"let" => GeneralReserved::Let,
-            b"exists" => GeneralReserved::Exists,
-            b"forall" => GeneralReserved::Forall,
-            b"match" => GeneralReserved::Match,
-            b"par" => GeneralReserved::Par,
-            _ => return None,
-        })
-    }
-
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            GeneralReserved::Binary => "BINARY",
-            GeneralReserved::Decimal => "DECIMAL",
-            GeneralReserved::Hexadecimal => "HEXADECIMAL",
-            GeneralReserved::Numeral => "NUMERAL",
-            GeneralReserved::String => "STRING",
-            GeneralReserved::Underscore => "_",
-            GeneralReserved::ExclamationMark => "!",
-            GeneralReserved::As => "as",
-            GeneralReserved::Lambda => "lambda",
-            GeneralReserved::Let => "let",
-            GeneralReserved::Exists => "exists",
-            GeneralReserved::Forall => "forall",
-            GeneralReserved::Match => "match",
-            GeneralReserved::Par => "par",
-        }
-    }
-}
-
-/// Reserved words naming standard SMT-LIB2 commands.
-///
-/// Standard SMT-LIB2 commands are reserved words.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CommandNameReserved {
-    Assert,
-    CheckSat,
-    CheckSatAssuming,
-    DeclareConst,
-    DeclareDatatype,
-    DeclareDatatypes,
-    DeclareFun,
-    DeclareSort,
-    DeclareSortParameter,
-    DefineConst,
-    DefineFun,
-    DefineFunRec,
-    DefineFunsRec,
-    DefineSort,
-    Echo,
-    Exit,
-    GetAssertions,
-    GetAssignment,
-    GetInfo,
-    GetModel,
-    GetOption,
-    GetProof,
-    GetUnsatAssumptions,
-    GetUnsatCore,
-    GetValue,
-    Pop,
-    Push,
-    Reset,
-    ResetAssertions,
-    SetInfo,
-    SetLogic,
-    SetOption,
-}
-
-impl CommandNameReserved {
-    #[inline]
-    pub fn from_bytes_opt(symbol: &[u8]) -> Option<CommandNameReserved> {
-        Some(match symbol {
-            b"assert" => CommandNameReserved::Assert,
-            b"check-sat" => CommandNameReserved::CheckSat,
-            b"check-sat-assuming" => CommandNameReserved::CheckSatAssuming,
-            b"declare-const" => CommandNameReserved::DeclareConst,
-            b"declare-datatype" => CommandNameReserved::DeclareDatatype,
-            b"declare-datatypes" => CommandNameReserved::DeclareDatatypes,
-            b"declare-fun" => CommandNameReserved::DeclareFun,
-            b"declare-sort" => CommandNameReserved::DeclareSort,
-            b"declare-sort-parameter" => CommandNameReserved::DeclareSortParameter,
-            b"define-const" => CommandNameReserved::DefineConst,
-            b"define-fun" => CommandNameReserved::DefineFun,
-            b"define-fun-rec" => CommandNameReserved::DefineFunRec,
-            b"define-funs-rec" => CommandNameReserved::DefineFunsRec,
-            b"define-sort" => CommandNameReserved::DefineSort,
-            b"echo" => CommandNameReserved::Echo,
-            b"exit" => CommandNameReserved::Exit,
-            b"get-assertions" => CommandNameReserved::GetAssertions,
-            b"get-assignment" => CommandNameReserved::GetAssignment,
-            b"get-info" => CommandNameReserved::GetInfo,
-            b"get-model" => CommandNameReserved::GetModel,
-            b"get-option" => CommandNameReserved::GetOption,
-            b"get-proof" => CommandNameReserved::GetProof,
-            b"get-unsat-assumptions" => CommandNameReserved::GetUnsatAssumptions,
-            b"get-unsat-core" => CommandNameReserved::GetUnsatCore,
-            b"get-value" => CommandNameReserved::GetValue,
-            b"pop" => CommandNameReserved::Pop,
-            b"push" => CommandNameReserved::Push,
-            b"reset" => CommandNameReserved::Reset,
-            b"reset-assertions" => CommandNameReserved::ResetAssertions,
-            b"set-info" => CommandNameReserved::SetInfo,
-            b"set-logic" => CommandNameReserved::SetLogic,
-            b"set-option" => CommandNameReserved::SetOption,
-            _ => return None,
-        })
-    }
-
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            CommandNameReserved::Assert => "assert",
-            CommandNameReserved::CheckSat => "check-sat",
-            CommandNameReserved::CheckSatAssuming => "check-sat-assuming",
-            CommandNameReserved::DeclareConst => "declare-const",
-            CommandNameReserved::DeclareDatatype => "declare-datatype",
-            CommandNameReserved::DeclareDatatypes => "declare-datatypes",
-            CommandNameReserved::DeclareFun => "declare-fun",
-            CommandNameReserved::DeclareSort => "declare-sort",
-            CommandNameReserved::DeclareSortParameter => "declare-sort-parameter",
-            CommandNameReserved::DefineConst => "define-const",
-            CommandNameReserved::DefineFun => "define-fun",
-            CommandNameReserved::DefineFunRec => "define-fun-rec",
-            CommandNameReserved::DefineFunsRec => "define-funs-rec",
-            CommandNameReserved::DefineSort => "define-sort",
-            CommandNameReserved::Echo => "echo",
-            CommandNameReserved::Exit => "exit",
-            CommandNameReserved::GetAssertions => "get-assertions",
-            CommandNameReserved::GetAssignment => "get-assignment",
-            CommandNameReserved::GetInfo => "get-info",
-            CommandNameReserved::GetModel => "get-model",
-            CommandNameReserved::GetOption => "get-option",
-            CommandNameReserved::GetProof => "get-proof",
-            CommandNameReserved::GetUnsatAssumptions => "get-unsat-assumptions",
-            CommandNameReserved::GetUnsatCore => "get-unsat-core",
-            CommandNameReserved::GetValue => "get-value",
-            CommandNameReserved::Pop => "pop",
-            CommandNameReserved::Push => "push",
-            CommandNameReserved::Reset => "reset",
-            CommandNameReserved::ResetAssertions => "reset-assertions",
-            CommandNameReserved::SetInfo => "set-info",
-            CommandNameReserved::SetLogic => "set-logic",
-            CommandNameReserved::SetOption => "set-option",
-        }
     }
 }
 
