@@ -18,7 +18,7 @@ use crate::{
             HEXADECIMAL_RUN, START, Start, TokenEnd,
         },
     },
-    token::{InnerType, TokenBatch, TokenCursor, TokenHandler, TokenStop},
+    token::{InnerType, TokenCursor, TokenHandler, TokenStop},
 };
 
 pub struct Lexer<H: TokenHandler> {
@@ -1010,7 +1010,7 @@ impl<H: TokenHandler> Lexer<H> {
                 self.spans[0] = span;
                 let spans = &self.spans[..1];
                 let entry = Some((ty, self.token_content.as_slice()));
-                let mut cursor = TokenBatch::new(std::slice::from_ref(&entry), spans).into_cursor();
+                let mut cursor = TokenCursor::new(std::slice::from_ref(&entry), spans);
                 self.handler
                     .handle_tokens(&mut cursor)
                     .map_err(|stop| Self::to_interrupted(cursor, stop, spans))
@@ -1025,7 +1025,7 @@ impl<H: TokenHandler> Lexer<H> {
             return Ok(());
         }
         let spans = &self.spans[..len];
-        let mut cursor = TokenBatch::new(&batch.entries[..len], spans).into_cursor();
+        let mut cursor = TokenCursor::new(&batch.entries[..len], spans);
         self.handler
             .handle_tokens(&mut cursor)
             .map_err(|stop| Self::to_interrupted(cursor, stop, spans))
@@ -1061,7 +1061,7 @@ impl<H: TokenHandler> Lexer<H> {
         // the end of file has entry None
         let entry = None;
         let spans = &self.spans[..1];
-        let mut cursor = TokenBatch::new(std::slice::from_ref(&entry), spans).into_cursor();
+        let mut cursor = TokenCursor::new(std::slice::from_ref(&entry), spans);
         self.handler
             .handle_tokens(&mut cursor)
             .map_err(|stop| Self::to_interrupted(cursor, stop, spans))

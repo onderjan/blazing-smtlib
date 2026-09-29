@@ -150,78 +150,6 @@ impl<'a> Token<'a> {
     }
 }
 
-#[derive(Clone, Copy)]
-pub(crate) struct TokenBatch<'a> {
-    entries: &'a [Option<(InnerType, &'a [u8])>],
-    spans: &'a [SmtSpan],
-}
-
-impl<'a> TokenBatch<'a> {
-    #[inline]
-    pub(crate) fn new(entries: &'a [Option<(InnerType, &'a [u8])>], spans: &'a [SmtSpan]) -> Self {
-        debug_assert_eq!(entries.len(), spans.len());
-        Self { entries, spans }
-    }
-
-    #[inline]
-    pub(crate) fn len(&self) -> usize {
-        self.entries.len()
-    }
-
-    #[inline]
-    pub(crate) fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
-    #[inline]
-    pub(crate) fn get(&self, index: usize) -> Option<Token<'a>> {
-        if let (Some(entry), Some(span)) = (self.entries.get(index), self.spans.get(index)) {
-            Some(Token::new(entry, span))
-        } else {
-            None
-        }
-    }
-
-    #[inline]
-    pub(crate) fn into_cursor(self) -> TokenCursor<'a> {
-        TokenCursor::new(self)
-    }
-}
-
-impl<'a> IntoIterator for TokenBatch<'a> {
-    type Item = Token<'a>;
-    type IntoIter = TokenBatchIter<'a>;
-
-    #[inline]
-    fn into_iter(self) -> TokenBatchIter<'a> {
-        TokenBatchIter {
-            batch: self,
-            offset: 0,
-        }
-    }
-}
-
-pub struct TokenBatchIter<'a> {
-    batch: TokenBatch<'a>,
-    offset: usize,
-}
-
-impl<'a> Iterator for TokenBatchIter<'a> {
-    type Item = Token<'a>;
-
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.batch.get(self.offset) {
-            Some(token) => {
-                // increment offset before returning
-                self.offset += 1;
-                Some(token)
-            }
-            None => None,
-        }
-    }
-}
-
 /// A cursor into a batch of tokens, from which elements are consumed sequentially.
 ///
 /// A parser reads a batch through a cursor: it can look at the
@@ -232,15 +160,31 @@ impl<'a> Iterator for TokenBatchIter<'a> {
 /// slow paths with the same behaviour if the lookahead is not available.
 #[derive(Clone, Copy)]
 pub struct TokenCursor<'a> {
-    batch: TokenBatch<'a>,
+    entries: &'a [Option<(InnerType, &'a [u8])>],
+    spans: &'a [SmtSpan],
     next: usize,
 }
 
 impl<'a> TokenCursor<'a> {
-    /// Returns a cursor at the start of the batch.
+    /// Returns a cursor at the start of the batch given as its entries and
+    /// their spans, of equal length.
     #[inline]
-    fn new(batch: TokenBatch<'a>) -> Self {
-        Self { batch, next: 0 }
+    pub(crate) fn new(entries: &'a [Option<(InnerType, &'a [u8])>], spans: &'a [SmtSpan]) -> Self {
+        debug_assert_eq!(entries.len(), spans.len());
+        Self {
+            entries,
+            spans,
+            next: 0,
+        }
+    }
+
+    /// The token at `index` of the batch, if any.
+    #[inline]
+    fn at(&self, index: usize) -> Option<Token<'a>> {
+        match (self.entries.get(index), self.spans.get(index)) {
+            (Some(entry), Some(span)) => Some(Token::new(entry, span)),
+            _ => None,
+        }
     }
 
     /// Returns a cursor over a single token.
@@ -248,16 +192,16 @@ impl<'a> TokenCursor<'a> {
     /// This can be used for parsing one token using a cursor-parsing function.
     #[inline]
     pub fn single(token: Token<'a>) -> Self {
-        Self::new(TokenBatch::new(
+        Self::new(
             std::slice::from_ref(token.entry),
             std::slice::from_ref(token.span),
-        ))
+        )
     }
 
     /// Returns the next token (if any) without consuming it.
     #[inline]
     pub fn peek(&self) -> Option<Token<'a>> {
-        self.batch.get(self.next)
+        self.at(self.next)
     }
 
     /// Returns the token `ahead` positions after the next one without consuming anything.
@@ -265,13 +209,13 @@ impl<'a> TokenCursor<'a> {
     /// `get(0)` is the next token, also available through `peek`.
     #[inline]
     pub fn get(&self, ahead: usize) -> Option<Token<'a>> {
-        self.batch.get(self.next + ahead)
+        self.at(self.next + ahead)
     }
 
     /// Consumes the next token (if any).
     #[inline]
     pub fn take(&mut self) -> Option<Token<'a>> {
-        let token = self.batch.get(self.next)?;
+        let token = self.at(self.next)?;
         self.next += 1;
         Some(token)
     }
@@ -282,14 +226,14 @@ impl<'a> TokenCursor<'a> {
     /// with the results discarded, stopping at the end of the cursor.
     #[inline]
     pub fn advance(&mut self, count: usize) {
-        self.next = self.next.saturating_add(count).min(self.batch.len());
+        self.next = self.next.saturating_add(count).min(self.entries.len());
     }
 
     /// Returns the most recently consumed token, if any was consumed through
     /// this cursor.
     #[inline]
     pub fn last_consumed(&self) -> Option<Token<'a>> {
-        self.batch.get(self.next.checked_sub(1)?)
+        self.at(self.next.checked_sub(1)?)
     }
 
     /// How many tokens have been consumed.
@@ -301,7 +245,7 @@ impl<'a> TokenCursor<'a> {
     /// Whether every token has been consumed.
     #[inline]
     pub fn is_empty(&self) -> bool {
-        self.next >= self.batch.len()
+        self.next >= self.entries.len()
     }
 }
 
