@@ -15,7 +15,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use smt_parser_rs::{
     SmtLocation, SmtSpan,
     read::lexer::{LexError, Lexer, LexerErrorKind},
-    token::{Token, TokenBatch, TokenBatchStop, TokenHandler, TokenStop, TokenType},
+    token::{Token, TokenCursor, TokenHandler, TokenStop, TokenType},
 };
 
 /// The batch capacity the lexer is expected to use.
@@ -56,6 +56,9 @@ enum Reply {
     Relex { consumed: usize },
     /// Take `consumed` tokens (at most the batch length) and fail.
     Fail { consumed: usize },
+    /// Take `consumed` tokens and return as if done, which the lexer rejects
+    /// when tokens are left.
+    Leave { consumed: usize },
 }
 
 impl Reply {
@@ -63,7 +66,9 @@ impl Reply {
     fn takes(self, len: usize) -> usize {
         match self {
             Reply::TakeAll => len,
-            Reply::Relex { consumed } | Reply::Fail { consumed } => consumed.min(len),
+            Reply::Relex { consumed } | Reply::Fail { consumed } | Reply::Leave { consumed } => {
+                consumed.min(len)
+            }
         }
     }
 }
@@ -85,20 +90,23 @@ impl TokenHandler for Recorder<'_> {
         panic!("test bug: the recorder expects every hand-over through handle_tokens")
     }
 
-    fn handle_tokens(&mut self, batch: TokenBatch<'_>) -> Result<(), TokenBatchStop<()>> {
-        let len = batch.len();
+    fn handle_tokens(&mut self, cursor: &mut TokenCursor<'_>) -> Result<(), TokenStop<()>> {
+        // record every token of the hand-over by walking a copy of the cursor
+        let mut walk = *cursor;
+        let mut tokens = Vec::new();
+        while let Some(token) = walk.take() {
+            tokens.push(record(token));
+        }
+        let len = tokens.len();
         let index = self.calls.len();
-        self.calls.push(batch.into_iter().map(record).collect());
+        self.calls.push(tokens);
         let reply = self.plan.get(index).copied().unwrap_or(Reply::TakeAll);
-        let stop = match reply {
-            Reply::TakeAll => return Ok(()),
-            Reply::Relex { .. } => TokenStop::Relex,
-            Reply::Fail { .. } => TokenStop::Error(()),
-        };
-        Err(TokenBatchStop {
-            consumed: reply.takes(len),
-            stop,
-        })
+        cursor.advance(reply.takes(len));
+        match reply {
+            Reply::TakeAll | Reply::Leave { .. } => Ok(()),
+            Reply::Relex { .. } => Err(TokenStop::Relex),
+            Reply::Fail { .. } => Err(TokenStop::Error(())),
+        }
     }
 }
 
@@ -444,6 +452,42 @@ fn tokens_before_a_lexer_error_are_handed_over_first() {
         "{:?}",
         stopped.error
     );
+}
+
+#[test]
+fn a_handler_that_returns_ok_with_tokens_left_panics() {
+    let cases: &[(Chunks, &[Reply])] = &[
+        (&[b"a b c "], &[Reply::Leave { consumed: 1 }]),
+        (&[b"a b c "], &[Reply::Leave { consumed: 0 }]),
+        // a lone stored token and the end-of-file token count too
+        (&[b"a", b"b "], &[Reply::Leave { consumed: 0 }]),
+        (&[b"a "], &[Reply::TakeAll, Reply::Leave { consumed: 0 }]),
+    ];
+    for (chunks, plan) in cases {
+        let outcome = catch_unwind(AssertUnwindSafe(|| run(chunks, plan)));
+        let payload = outcome.expect_err("the run must panic");
+        let message = payload
+            .downcast_ref::<String>()
+            .map(String::as_str)
+            .or_else(|| payload.downcast_ref::<&str>().copied())
+            .unwrap_or("<non-string panic payload>");
+        assert!(
+            message.contains("must consume all tokens before returning Ok"),
+            "chunks {chunks:?} under {plan:?}: panic {message:?}"
+        );
+    }
+}
+
+#[test]
+fn a_handler_that_consumes_everything_and_returns_ok_continues() {
+    // the plain plan is exactly that on every hand-over, so the reference run
+    // is the witness; a plan that leaves nothing is the same as taking all
+    let full = run(
+        &[b"a b c "],
+        &[Reply::Leave { consumed: 3 }, Reply::Leave { consumed: 1 }],
+    );
+    assert!(full.error.is_none());
+    assert_eq!(full.all(), reference(b"a b c "));
 }
 
 #[test]
