@@ -778,9 +778,9 @@ fn reserved_word_followed_by_a_symbol_byte_is_a_longer_symbol() {
         token_payloads(b"let(letx)"),
         vec![
             (TokenType::UnquotedSymbol, b"let".to_vec()),
-            (TokenType::ParenOpen, vec![]),
+            (TokenType::ParenOpen, b"(".to_vec()),
             (TokenType::UnquotedSymbol, b"letx".to_vec()),
-            (TokenType::ParenClose, vec![]),
+            (TokenType::ParenClose, b")".to_vec()),
             (TokenType::EndOfFile, vec![]),
         ]
     );
@@ -1129,7 +1129,7 @@ fn decimal_fraction_ends_at_a_letter() {
             (TokenType::UnquotedSymbol, b"e".to_vec()),
             (TokenType::Decimal, b"3.25".to_vec()),
             (TokenType::UnquotedSymbol, b"fed".to_vec()),
-            (TokenType::ParenClose, vec![]),
+            (TokenType::ParenClose, b")".to_vec()),
             (TokenType::EndOfFile, vec![]),
         ]
     );

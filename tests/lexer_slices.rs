@@ -617,7 +617,7 @@ fn long_token_input(length: usize) -> (Vec<u8>, Vec<(TokenType, Vec<u8>)>) {
     input.extend_from_slice(b";");
     input.extend_from_slice(&comment);
     input.extend_from_slice(b"\n(");
-    expected.push((TokenType::ParenOpen, Vec::new()));
+    expected.push((TokenType::ParenOpen, b"(".to_vec()));
     expected.push((TokenType::EndOfFile, Vec::new()));
     (input, expected)
 }
@@ -670,7 +670,12 @@ fn payload_from_span(input: &[u8], token: &OwnedToken) -> Vec<u8> {
     let text = &input[start..end];
     match token.ty {
         TokenType::QuotedSymbol => text[1..text.len() - 1].to_vec(),
-        TokenType::UnquotedSymbol | TokenType::Numeral | TokenType::Decimal => text.to_vec(),
+        // parentheses carry their own byte, like every other borrowed token
+        TokenType::UnquotedSymbol
+        | TokenType::Numeral
+        | TokenType::Decimal
+        | TokenType::ParenOpen
+        | TokenType::ParenClose => text.to_vec(),
         TokenType::Keyword => text[1..].to_vec(),
         TokenType::Hexadecimal | TokenType::Binary => text[2..].to_vec(),
         TokenType::String => {
@@ -682,14 +687,6 @@ fn payload_from_span(input: &[u8], token: &OwnedToken) -> Vec<u8> {
                 rest = if c == b'"' { &rest[2..] } else { &rest[1..] };
             }
             payload
-        }
-        TokenType::ParenOpen => {
-            assert_eq!(text, b"(");
-            Vec::new()
-        }
-        TokenType::ParenClose => {
-            assert_eq!(text, b")");
-            Vec::new()
         }
         TokenType::EndOfFile => {
             assert_eq!((start, end), (input.len(), input.len()), "EOF span");
