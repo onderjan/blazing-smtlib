@@ -13,7 +13,9 @@ use crate::{
             RUN_COMMENT_PLAIN, RUN_DIGIT, RUN_QUOTED_PLAIN, RUN_SIMPLE_SYMBOL, RUN_STRING_PLAIN,
             run_end,
         },
-        helpers::{BINARY_RUN, Content, DigitRun, HEXADECIMAL_RUN, START, Start, TokenEnd},
+        helpers::{
+            BINARY_RUN, Content, DigitRun, FAST_PIPE, HEXADECIMAL_RUN, START, Start, TokenEnd,
+        },
     },
     token::{InnerType, TokenBatch, TokenBatchStop, TokenHandler, TokenStop},
 };
@@ -1047,6 +1049,35 @@ impl<H: TokenHandler> Lexer<H> {
         self.handler
             .handle_tokens(TokenBatch::new(std::slice::from_ref(&entry), spans))
             .map_err(|stop| Self::to_interrupted(stop, spans))
+    }
+
+    /// Moves a fast-path symbol run that cannot be finished
+    /// in this slice to the stored path.
+    ///
+    /// The token itself starts at `index`, its content either at `index`
+    /// (simple symbol) or `after` (quoted symbol, excludes pipe), and
+    /// the token continues at least to `run_end_at`, where it has been
+    /// left unfinished.
+    fn store_unfinished_symbol_run(
+        &mut self,
+        slice: &[u8],
+        entry: u8,
+        index: usize,
+        after: usize,
+        run_end_at: usize,
+    ) {
+        self.start_token(index);
+        if entry & FAST_PIPE != 0 {
+            // quoted symbol, skip the start pipe
+            self.token_content
+                .extend_from_slice(&slice[after..run_end_at]);
+            self.state = LexerState::QuotedSymbol;
+        } else {
+            // simple symbol, do not skip anything
+            self.token_content
+                .extend_from_slice(&slice[index..run_end_at]);
+            self.state = LexerState::SimpleSymbol;
+        }
     }
 
     fn start_token(&mut self, position: usize) {

@@ -109,6 +109,17 @@ impl SmtSpan {
         Self { start, end }
     }
 
+    /// A span within one line: the line, the offset of its start, and the
+    /// offsets of the span on it.
+    #[inline]
+    pub(crate) fn on_line(line: u64, line_start: u64, start: u64, end: u64) -> Self {
+        debug_assert!(start <= end, "span start {start} is after end {end}");
+        Self {
+            start: SmtLocation::new(start, line, start - line_start),
+            end: SmtLocation::new(end, line, end - line_start),
+        }
+    }
+
     #[inline]
     pub(crate) fn new_empty(location: SmtLocation) -> Self {
         Self {
