@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtHandler, SmtQualifiedIdent,
+    SmtHandler, SmtQualifiedIdent, SmtSymbolView,
     read::parser::{
         Arena, CloseParenParser, IdentHandle, IdentSlot, ParserError, ParserResources,
         QualifiedIdentHandle, SortSlot,
@@ -114,6 +114,22 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
         debug_assert!(self.is_pristine(), "must be pristine when moving after (_");
         // the ident slot must be after underscore as well
         ident_slot.move_after_underscore();
+        self.state = State::UnqualifiedIndexed;
+    }
+
+    /// Moves after "(_ name" of an unqualified indexed identifier: the name goes to
+    /// the arena and the indices follow.
+    pub(crate) fn move_after_indexed_name(
+        &mut self,
+        ident_slot: &mut IdentSlot,
+        arena: &mut Arena<H>,
+        name: SmtSymbolView,
+    ) {
+        debug_assert!(
+            self.is_pristine(),
+            "must be pristine when moving after (_ name"
+        );
+        ident_slot.move_after_indexed_name(arena, name);
         self.state = State::UnqualifiedIndexed;
     }
 

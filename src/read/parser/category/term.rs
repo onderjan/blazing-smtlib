@@ -302,6 +302,28 @@ impl<H: SmtHandler> TermSlot<H> {
                                         continue;
                                     }
                                 }
+                                TokenKind::Reserved(Reserved::General(
+                                    GeneralReserved::Underscore,
+                                )) => {
+                                    // an indexed identifier starts with "(_ name"
+                                    if let Some(name_token) = cursor.get(1)
+                                        && let TokenKind::Symbol(name) =
+                                            resources.store.token_kind(name_token)
+                                    {
+                                        // this is an indexed identifier
+                                        // consume the two peeked tokens
+                                        cursor.advance(2);
+                                        // move the qualified ident after the indexed name
+                                        resources.qualified_ident_slot.move_after_indexed_name(
+                                            &mut resources.ident_slot,
+                                            &mut resources.store,
+                                            name,
+                                        );
+                                        // change the state to qualified ident parsing
+                                        resources.term_slot.state = State::QualifiedIdent;
+                                        continue;
+                                    }
+                                }
                                 _ => {}
                             }
                         }

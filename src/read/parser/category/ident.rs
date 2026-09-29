@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtHandler, SmtIdent,
+    SmtHandler, SmtIdent, SmtSymbolView,
     read::parser::{
         Arena, IdentHandle, IndexHandle, ParserError, ParserResources, TextHandle,
         category::{CategoryErrorKind, CategoryParser},
@@ -97,6 +97,32 @@ impl IdentSlot {
         self.state = State::Open;
     }
 
+    /// Moves after the name of an indexed identifier, "(_ name": the name goes to the
+    /// arena and the indices follow.
+    pub(crate) fn move_after_indexed_name<H: SmtHandler + ?Sized>(
+        &mut self,
+        arena: &mut Arena<H>,
+        name: SmtSymbolView,
+    ) {
+        debug_assert!(
+            self.is_pristine(),
+            "must be pristine to move after an indexed name"
+        );
+        self.state = State::AfterUnderscore;
+        self.name = Some(self.push_name(arena, name));
+    }
+
+    /// Puts the name of an indexed identifier into the arena text; its indices will
+    /// follow in the arena from here.
+    fn push_name<H: SmtHandler + ?Sized>(
+        &mut self,
+        arena: &mut Arena<H>,
+        name: SmtSymbolView,
+    ) -> TextHandle {
+        self.arena_indices_start = arena.indices.len();
+        arena.push_text(name.as_slice())
+    }
+
     pub(crate) fn move_after_underscore(&mut self) {
         debug_assert!(
             self.is_pristine(),
@@ -149,8 +175,7 @@ impl IdentSlot {
                     None => {
                         // we need to read the name, its indices will follow in the arena
                         if let TokenKind::Symbol(name) = arena.token_kind(token) {
-                            self.arena_indices_start = arena.indices.len();
-                            Some(arena.push_text(name.as_slice()))
+                            Some(self.push_name(arena, name))
                         } else {
                             return Err(ParserError::category_error(
                                 CategoryErrorKind::ExpectedSymbol,
