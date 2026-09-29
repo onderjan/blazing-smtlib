@@ -18,7 +18,7 @@ use crate::{
             HEXADECIMAL_RUN, START, Start, TokenEnd,
         },
     },
-    token::{InnerType, TokenBatch, TokenBatchStop, TokenHandler, TokenStop},
+    token::{InnerType, TokenBatch, TokenCursor, TokenHandler, TokenStop},
 };
 
 pub struct Lexer<H: TokenHandler> {
@@ -1010,11 +1010,10 @@ impl<H: TokenHandler> Lexer<H> {
                 self.spans[0] = span;
                 let spans = &self.spans[..1];
                 let entry = Some((ty, self.token_content.as_slice()));
-                let tokens = TokenBatch::new(std::slice::from_ref(&entry), spans);
-
+                let mut cursor = TokenBatch::new(std::slice::from_ref(&entry), spans).into_cursor();
                 self.handler
-                    .handle_tokens(tokens)
-                    .map_err(|stop| Self::to_interrupted(stop, spans))
+                    .handle_tokens(&mut cursor)
+                    .map_err(|stop| Self::to_interrupted(cursor, stop, spans))
             }
         }
     }
@@ -1026,22 +1025,24 @@ impl<H: TokenHandler> Lexer<H> {
             return Ok(());
         }
         let spans = &self.spans[..len];
+        let mut cursor = TokenBatch::new(&batch.entries[..len], spans).into_cursor();
         self.handler
-            .handle_tokens(TokenBatch::new(&batch.entries[..len], spans))
-            .map_err(|stop| Self::to_interrupted(stop, spans))
+            .handle_tokens(&mut cursor)
+            .map_err(|stop| Self::to_interrupted(cursor, stop, spans))
     }
 
     fn to_interrupted<E>(
-        batch_stop: TokenBatchStop<E>,
+        cursor: TokenCursor,
+        stop: TokenStop<E>,
         spans: &[SmtSpan],
     ) -> Interrupted<LexError<E>> {
-        let stop_location = match batch_stop.consumed {
+        let stop_location = match cursor.consumed() {
             // nothing was taken, lex again from the first token
             0 => spans[0].start(),
             // at least one token was taken, lex again after it
             n => spans[n - 1].end(),
         };
-        let stop = match batch_stop.stop {
+        let stop = match stop {
             TokenStop::Relex => TokenStop::Relex,
             TokenStop::Error(err) => TokenStop::Error(LexError::Handler(err)),
         };
@@ -1060,9 +1061,10 @@ impl<H: TokenHandler> Lexer<H> {
         // the end of file has entry None
         let entry = None;
         let spans = &self.spans[..1];
+        let mut cursor = TokenBatch::new(std::slice::from_ref(&entry), spans).into_cursor();
         self.handler
-            .handle_tokens(TokenBatch::new(std::slice::from_ref(&entry), spans))
-            .map_err(|stop| Self::to_interrupted(stop, spans))
+            .handle_tokens(&mut cursor)
+            .map_err(|stop| Self::to_interrupted(cursor, stop, spans))
     }
 
     /// Moves a fast-path symbol run that cannot be finished

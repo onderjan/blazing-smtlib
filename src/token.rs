@@ -151,7 +151,7 @@ impl<'a> Token<'a> {
 }
 
 #[derive(Clone, Copy)]
-pub struct TokenBatch<'a> {
+pub(crate) struct TokenBatch<'a> {
     entries: &'a [Option<(InnerType, &'a [u8])>],
     spans: &'a [SmtSpan],
 }
@@ -164,22 +164,27 @@ impl<'a> TokenBatch<'a> {
     }
 
     #[inline]
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.entries.len()
     }
 
     #[inline]
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
     #[inline]
-    pub fn get(&self, index: usize) -> Option<Token<'a>> {
+    pub(crate) fn get(&self, index: usize) -> Option<Token<'a>> {
         if let (Some(entry), Some(span)) = (self.entries.get(index), self.spans.get(index)) {
             Some(Token::new(entry, span))
         } else {
             None
         }
+    }
+
+    #[inline]
+    pub(crate) fn into_cursor(self) -> TokenCursor<'a> {
+        TokenCursor::new(self)
     }
 }
 
@@ -217,7 +222,7 @@ impl<'a> Iterator for TokenBatchIter<'a> {
     }
 }
 
-/// A position in a [`TokenBatch`], from which the tokens are consumed in order.
+/// A cursor into a batch of tokens, from which elements are consumed sequentially.
 ///
 /// A parser reads a batch through a cursor: it can look at the
 /// tokens ahead, consume them one at a time or several at once, look back at
@@ -234,7 +239,7 @@ pub struct TokenCursor<'a> {
 impl<'a> TokenCursor<'a> {
     /// Returns a cursor at the start of the batch.
     #[inline]
-    pub fn new(batch: TokenBatch<'a>) -> Self {
+    fn new(batch: TokenBatch<'a>) -> Self {
         Self { batch, next: 0 }
     }
 
@@ -526,12 +531,12 @@ pub trait TokenHandler {
     /// Implementations that have to be fast should instead implement this
     /// function and call it from [`TokenHandler::handle_token`].
     #[inline]
-    fn handle_tokens(&mut self, batch: TokenBatch<'_>) -> Result<(), TokenBatchStop<Self::Error>> {
-        for (index, token) in batch.into_iter().enumerate() {
-            self.handle_token(token).map_err(|stop| TokenBatchStop {
-                consumed: index,
-                stop,
-            })?;
+    fn handle_tokens(
+        &mut self,
+        cursor: &mut TokenCursor<'_>,
+    ) -> Result<(), TokenStop<Self::Error>> {
+        while let Some(token) = cursor.take() {
+            self.handle_token(token)?;
         }
         Ok(())
     }
@@ -545,16 +550,6 @@ pub enum TokenStop<E> {
     Error(E),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct TokenBatchStop<E> {
-    /// The number of tokens consumed.
-    ///
-    /// If the lexer resumes, it will resume after the last consumed token.
-    pub consumed: usize,
-
-    pub stop: TokenStop<E>,
-}
-
 /// Mutable references over token handlers are token handlers.
 impl<T: TokenHandler + ?Sized> TokenHandler for &mut T {
     type Error = T::Error;
@@ -565,7 +560,10 @@ impl<T: TokenHandler + ?Sized> TokenHandler for &mut T {
     }
 
     #[inline]
-    fn handle_tokens(&mut self, batch: TokenBatch<'_>) -> Result<(), TokenBatchStop<Self::Error>> {
-        (**self).handle_tokens(batch)
+    fn handle_tokens(
+        &mut self,
+        cursor: &mut TokenCursor<'_>,
+    ) -> Result<(), TokenStop<Self::Error>> {
+        (**self).handle_tokens(cursor)
     }
 }
