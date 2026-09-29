@@ -14,7 +14,7 @@ use crate::{
             function::{DefineFunsRecParser, FunctionSignatureParser, RecursiveBodyParser},
         },
     },
-    token::{CommandNameReserved, Token},
+    token::{CommandNameReserved, Token, TokenCursor},
 };
 
 pub enum StandardCommandResult {
@@ -73,15 +73,15 @@ macro_rules! standard_commands {
                     $($field: CommandParser::default(),)*
                 }
             }
-            pub fn progress(
+            pub fn progress_all(
                 &mut self,
                 kind: StandardCommandKind,
                 handler: &mut H,
                 resources: &mut ParserResources<H>,
-                token: Token,
+                cursor: &mut TokenCursor<'_>,
             ) -> Result<ControlFlow<StandardCommandResult, ()>, ParserError<H::Error>> {
                 let flow = match kind {
-                    $(StandardCommandKind::$kind => self.$field.progress(handler, resources, token)?,)*
+                    $(StandardCommandKind::$kind => self.$field.progress_all(handler, resources, cursor)?,)*
                 };
                 // only the exit command ends reading
                 Ok(flow.map_break(|()| match kind {

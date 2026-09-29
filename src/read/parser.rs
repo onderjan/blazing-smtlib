@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
 
 use crate::{
     CommandHandler, SmtSpan,
-    token::{Reserved, Token, TokenHandler, TokenKind, TokenStop, TokenType},
+    token::{Reserved, Token, TokenCursor, TokenHandler, TokenKind, TokenStop, TokenType},
 };
 
 mod category;
@@ -121,73 +121,92 @@ impl<'a, H: CommandHandler> TokenHandler for Parser<'a, H> {
 
     #[inline]
     fn handle_token(&mut self, token: Token) -> Result<(), TokenStop<ParserError<H::Error>>> {
-        let span = token.span();
-        match &mut self.state {
-            ParserState::AwaitingCommand => {
-                match token.ty() {
-                    TokenType::ParenOpen => {
-                        // open the command
-                        self.state = ParserState::CommandOpen;
+        // delegate to handle_tokens
+        self.handle_tokens(&mut TokenCursor::single(token))
+    }
+
+    #[inline]
+    fn handle_tokens(
+        &mut self,
+        cursor: &mut TokenCursor<'_>,
+    ) -> Result<(), TokenStop<ParserError<H::Error>>> {
+        while let Some(peeked) = cursor.peek() {
+            match &mut self.state {
+                ParserState::AwaitingCommand => {
+                    // we will handle the token here
+                    cursor.advance(1);
+                    match peeked.ty() {
+                        TokenType::ParenOpen => {
+                            // open the command
+                            self.state = ParserState::CommandOpen;
+                        }
+                        TokenType::EndOfFile => {
+                            // end of file here is fine, do not change the state
+                            self.state = ParserState::AwaitingCommand;
+                        }
+                        _ => {
+                            return Err(TokenStop::Error(ParserError::category_error(
+                                CategoryErrorKind::ExpectedCommand,
+                                peeked.span(),
+                            )));
+                        }
                     }
-                    TokenType::EndOfFile => {
-                        // end of file here is fine, do not change the state
+                }
+                ParserState::CommandOpen => {
+                    // we will handle the token here
+                    cursor.advance(1);
+                    // expect the command name
+                    self.state = match self.resources.store.token_kind(peeked) {
+                        TokenKind::Reserved(Reserved::CommandName(name)) => {
+                            // a command-name reserved word names a standard command
+                            ParserState::Command(StandardCommandKind::from_reserved(name))
+                        }
+                        TokenKind::Symbol(name) => {
+                            // a symbol (even a quoted one spelled like a standard command)
+                            // can only name a nonstandard command
+                            self.start_nonstandard_command(name, peeked.span())
+                                .map_err(TokenStop::Error)?
+                        }
+                        _ => {
+                            return Err(TokenStop::Error(ParserError::category_error(
+                                CategoryErrorKind::ExpectedCommandName,
+                                peeked.span(),
+                            )));
+                        }
+                    };
+                }
+                ParserState::Command(kind) => {
+                    // handle the cursor within standard command parsers
+                    let kind = *kind;
+                    let flow = self
+                        .command_parsers
+                        .progress_all(kind, self.handler, &mut self.resources, cursor)
+                        .map_err(TokenStop::Error)?;
+                    if let Some(result) = self.handle_command_progress(flow, Some(kind)) {
+                        self.state = match result {
+                            StandardCommandResult::EndCommand => ParserState::AwaitingCommand,
+                            StandardCommandResult::Exit => ParserState::Exit,
+                        }
+                    }
+                }
+                ParserState::NonstandardCommand(parser) => {
+                    // handle the cursor within nonstandard command parsers
+                    let flow = parser
+                        .progress_all(self.handler, &mut self.resources, cursor)
+                        .map_err(TokenStop::Error)?;
+                    if let Some(()) = self.handle_command_progress(flow, None) {
+                        // update the state; a non-standard command cannot force an early exit
                         self.state = ParserState::AwaitingCommand;
                     }
-                    _ => {
-                        return Err(TokenStop::Error(ParserError::category_error(
-                            CategoryErrorKind::ExpectedCommand,
-                            span,
-                        )));
-                    }
                 }
-            }
-            ParserState::CommandOpen => {
-                // expect the command name
-                self.state = match self.resources.store.token_kind(token) {
-                    TokenKind::Reserved(Reserved::CommandName(name)) => {
-                        // a command-name reserved word names a standard command
-                        ParserState::Command(StandardCommandKind::from_reserved(name))
-                    }
-                    TokenKind::Symbol(name) => {
-                        // a symbol (even a quoted one spelled like a standard command)
-                        // can only name a nonstandard command
-                        self.start_nonstandard_command(name, span)
-                            .map_err(TokenStop::Error)?
-                    }
-                    _ => {
-                        return Err(TokenStop::Error(ParserError::category_error(
-                            CategoryErrorKind::ExpectedCommandName,
-                            span,
-                        )));
-                    }
-                };
-            }
-            ParserState::Command(kind) => {
-                let kind = *kind;
-                let flow = self
-                    .command_parsers
-                    .progress(kind, self.handler, &mut self.resources, token)
-                    .map_err(TokenStop::Error)?;
-                if let Some(result) = self.handle_command_progress(flow, Some(kind)) {
-                    self.state = match result {
-                        StandardCommandResult::EndCommand => ParserState::AwaitingCommand,
-                        StandardCommandResult::Exit => ParserState::Exit,
-                    }
+                ParserState::Exit => {
+                    // consume everything and return
+                    cursor.advance(usize::MAX);
+                    return Ok(());
                 }
-            }
-            ParserState::NonstandardCommand(parser) => {
-                let flow = parser
-                    .progress(self.handler, &mut self.resources, token)
-                    .map_err(TokenStop::Error)?;
-                if let Some(()) = self.handle_command_progress(flow, None) {
-                    // update the state; a non-standard command cannot force an early exit
-                    self.state = ParserState::AwaitingCommand;
-                }
-            }
-            ParserState::Exit => {
-                // no operation on fed tokens
             }
         }
+        // we consumed the cursor, return
         Ok(())
     }
 }
