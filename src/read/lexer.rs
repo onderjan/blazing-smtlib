@@ -14,8 +14,8 @@ use crate::{
             run_end,
         },
         helpers::{
-            BINARY_RUN, Content, DigitRun, FAST, FAST_EMIT, FAST_INNER, FAST_ON, FAST_PIPE,
-            FAST_RUN_MASK, FAST_TYPE_MASK, HEXADECIMAL_RUN, START, Start, TokenEnd,
+            BINARY_RUN, Content, DigitRun, FAST, FAST_EMIT, FAST_ON, FAST_PIPE, FAST_RUN_MASK,
+            HEXADECIMAL_RUN, START, Start, TokenEnd,
         },
     },
     token::{InnerType, TokenBatch, TokenBatchStop, TokenHandler, TokenStop},
@@ -314,7 +314,22 @@ impl<H: TokenHandler> Lexer<H> {
             // introduced by maybe-panicking bounds checks.
 
             let after = index + 1;
-            // Handle whitespace, symbols, and parentheses in a fast path.
+            // Handle the parentheses first as they are numerous and
+            // need no special processing. The closing parenthesis is first
+            // as it forms more clusters.
+            if c == b')' {
+                let entry = (InnerType::ParenClose, &slice[index..after]);
+                self.push_fast(batch, &mut local, offset, entry, index..after, 1)?;
+                index = after;
+                continue;
+            }
+            if c == b'(' {
+                let entry = (InnerType::ParenOpen, &slice[index..after]);
+                self.push_fast(batch, &mut local, offset, entry, index..after, 1)?;
+                index = after;
+                continue;
+            }
+            // Handle whitespace and symbols in a fast path.
             let fast_entry = FAST[c as usize];
             if fast_entry & FAST_ON != 0 {
                 // Fast path, compute where the run ends and where the token ends.
@@ -350,33 +365,17 @@ impl<H: TokenHandler> Lexer<H> {
                 }
                 let token_end = run_end_at + is_quoted as usize;
 
-                // No need to fall back, construct the token.
-                batch.entries[local.len] = Some(if is_quoted {
-                    // The pipes delimit the token but are not part of its content.
+                // No need to fall back, construct the token: the pipes delimit a quoted
+                // symbol but are not part of its content, any other fast token is its
+                // whole text. The token is on a single line as all fast-lex runs exclude
+                // newlines. Whitespace is not emitted and overwritten by next tokens.
+                let entry = if is_quoted {
                     (InnerType::QuotedSymbol, &slice[after..run_end_at])
                 } else {
-                    // Get the inner type from the entry, the whole token is the content.
-                    (
-                        FAST_INNER[(fast_entry & FAST_TYPE_MASK) as usize],
-                        &slice[index..token_end],
-                    )
-                });
-                // The token is on a single line as all fast-lex runs exclude newlines.
-                self.spans[local.len] = SmtSpan::on_line(
-                    local.line,
-                    local.line_start,
-                    offset + index as u64,
-                    offset + token_end as u64,
-                );
-
-                // Add the token to the batch if it should be emitted.
-                local.len += (fast_entry & FAST_EMIT != 0) as usize;
-                if local.len == BATCH_CAPACITY {
-                    // Batch capacity reached, we need to flush the batch.
-                    local.store(self, batch);
-                    self.flush_batch(batch)?;
-                    local.len = 0;
-                }
+                    (InnerType::UnquotedSymbol, &slice[index..token_end])
+                };
+                let emit = (fast_entry & FAST_EMIT != 0) as usize;
+                self.push_fast(batch, &mut local, offset, entry, index..token_end, emit)?;
                 // Fast path done, continue normally after the token end.
                 index = token_end;
                 continue;
@@ -1093,6 +1092,37 @@ impl<H: TokenHandler> Lexer<H> {
                 .extend_from_slice(&slice[index..run_end_at]);
             self.state = LexerState::SimpleSymbol;
         }
+    }
+
+    /// Writes a fast-path token into the next batch slot and counts it if `emit`
+    /// is one, flushing the batch when it is full.
+    ///
+    /// The span is on the current line, over `range` in the slice.
+    #[inline(always)]
+    fn push_fast<'a>(
+        &mut self,
+        batch: &mut Batch<'a>,
+        local: &mut FastState,
+        offset: u64,
+        entry: (InnerType, &'a [u8]),
+        range: std::ops::Range<usize>,
+        emit: usize,
+    ) -> Result<(), Interrupted<LexError<H::Error>>> {
+        batch.entries[local.len] = Some(entry);
+        self.spans[local.len] = SmtSpan::on_line(
+            local.line,
+            local.line_start,
+            offset + range.start as u64,
+            offset + range.end as u64,
+        );
+        local.len += emit;
+        if local.len == BATCH_CAPACITY {
+            // Batch capacity reached, we need to flush the batch.
+            local.store(self, batch);
+            self.flush_batch(batch)?;
+            local.len = 0;
+        }
+        Ok(())
     }
 
     fn start_token(&mut self, position: usize) {

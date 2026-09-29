@@ -58,8 +58,8 @@ pub(super) static START: [Start; 256] = {
     table
 };
 
-/// Determines the inner type through `FAST_INNER`.
-pub(super) const FAST_TYPE_MASK: u8 = 0b0000_0011;
+/// Bits not used by fast masks, kept so that `FAST_MASKS` partition the byte.
+pub(super) const FAST_RESERVED: u8 = 0b0000_0011;
 
 /// Determines whether the fast path should be taken.
 pub(super) const FAST_ON: u8 = 0b0000_0100;
@@ -80,7 +80,7 @@ pub(super) const FAST_RUN_MASK: u8 = 0b0111_0000;
 pub(super) const FAST_PIPE: u8 = 0b1000_0000;
 
 /// Masks for the fast flags.
-const FAST_MASKS: [u8; 5] = [FAST_TYPE_MASK, FAST_ON, FAST_EMIT, FAST_RUN_MASK, FAST_PIPE];
+const FAST_MASKS: [u8; 5] = [FAST_RESERVED, FAST_ON, FAST_EMIT, FAST_RUN_MASK, FAST_PIPE];
 
 /// Fast masks partition u8 and are pairwise distinct.
 const _: () = {
@@ -106,25 +106,6 @@ const _: () = assert!(
     "exactly the fast-path run flags must lie inside FAST_RUN_MASK"
 );
 
-/// Index of whitespace in `FAST_INNER`.
-pub(super) const FAST_TYPE_WHITESPACE: u8 = 0;
-/// Index of symbol in `FAST_INNER`.
-pub(super) const FAST_TYPE_SYMBOL: u8 = 1;
-/// Index of opening parenthesis in `FAST_INNER`.
-pub(super) const FAST_TYPE_PAREN_OPEN: u8 = 2;
-/// Index of closing parenthesis in `FAST_INNER`.
-pub(super) const FAST_TYPE_PAREN_CLOSE: u8 = 3;
-
-/// The inner type per fast type index.
-///
-/// Whitespace is never emitted, so its entry is never observed.
-pub(super) const FAST_INNER: [InnerType; 4] = [
-    InnerType::UnquotedSymbol,
-    InnerType::UnquotedSymbol,
-    InnerType::ParenOpen,
-    InnerType::ParenClose,
-];
-
 /// Fast dispatch bitmasks for every input byte.
 ///
 /// The bitmasks carry the masks present in `FAST_MASKS`.
@@ -135,13 +116,11 @@ pub(super) static FAST: [u8; 256] = {
         let c = i as u8;
         let flags = CharClass::run_flags(c);
         table[i] = match c {
-            b' ' | b'\t' | b'\r' => FAST_ON | RUN_NON_LF_WHITESPACE | FAST_TYPE_WHITESPACE,
-            b'(' => FAST_ON | FAST_EMIT | FAST_TYPE_PAREN_OPEN,
-            b')' => FAST_ON | FAST_EMIT | FAST_TYPE_PAREN_CLOSE,
-            b'|' => FAST_ON | FAST_EMIT | FAST_PIPE | RUN_QUOTED_PLAIN | FAST_TYPE_SYMBOL,
+            b' ' | b'\t' | b'\r' => FAST_ON | RUN_NON_LF_WHITESPACE,
+            b'|' => FAST_ON | FAST_EMIT | FAST_PIPE | RUN_QUOTED_PLAIN,
             // a simple symbol may contain digits but must not start with one
             _ if flags & RUN_SIMPLE_SYMBOL != 0 && flags & RUN_DIGIT == 0 => {
-                FAST_ON | FAST_EMIT | RUN_SIMPLE_SYMBOL | FAST_TYPE_SYMBOL
+                FAST_ON | FAST_EMIT | RUN_SIMPLE_SYMBOL
             }
             _ => 0,
         };
@@ -156,10 +135,9 @@ const _: () = {
     let mut i = 0;
     while i < 256 {
         let fast = FAST[i] & FAST_ON != 0;
-        let covered = matches!(
-            START[i],
-            Start::Whitespace | Start::ParenOpen | Start::ParenClose | Start::Pipe | Start::Symbol
-        );
+        // parentheses are dispatched by byte tests ahead of the table, so they are
+        // neither fast nor covered here
+        let covered = matches!(START[i], Start::Whitespace | Start::Pipe | Start::Symbol);
         assert!(
             fast == covered,
             "a byte is fast exactly when its START class is one the fast path replaces"
