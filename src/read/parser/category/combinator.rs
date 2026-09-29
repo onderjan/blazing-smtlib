@@ -6,7 +6,7 @@ use crate::{
         CategoryErrorKind, CategoryParser, CloseParenParser, OpenParenParser, ParserError,
         ParserResources, category::resources::ClosedMultipleResource,
     },
-    token::{Token, TokenType},
+    token::{Token, TokenCursor, TokenType},
 };
 
 /// Parses using the first parser, then the second, then returns the result tuple.
@@ -49,24 +49,37 @@ impl<H: SmtHandler, P1: CategoryParser<H>, P2: CategoryParser<H>> CategoryParser
         resources: &mut ParserResources<H>,
         token: Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
-        match self.first_result.take() {
-            None => {
-                // progress the first parser, emplace the first result if it breaks
-                if let ControlFlow::Break(first) = self.first.progress(handler, resources, token)? {
+        self.progress_all(handler, resources, &mut TokenCursor::single(token))
+    }
+
+    #[inline]
+    fn progress_all(
+        &mut self,
+        handler: &mut H,
+        resources: &mut ParserResources<H>,
+        cursor: &mut TokenCursor,
+    ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
+        // progress the first parser until it breaks or the tokens run out
+        if self.first_result.is_none() {
+            match self.first.progress_all(handler, resources, cursor)? {
+                ControlFlow::Continue(()) => return Ok(ControlFlow::Continue(())),
+                ControlFlow::Break(first) => {
                     self.first_result = Some(first);
-                }
-            }
-            Some(first) => {
-                // progress the second parser
-                // put the first result back if it continues
-                // break with the result tuple if it breaks
-                match self.second.progress(handler, resources, token)? {
-                    ControlFlow::Continue(()) => self.first_result = Some(first),
-                    ControlFlow::Break(second) => return Ok(ControlFlow::Break((first, second))),
+                    // move to progressing the second parser
                 }
             }
         }
-        Ok(ControlFlow::Continue(()))
+        // progress the second parser; the first result stays until it breaks
+        match self.second.progress_all(handler, resources, cursor)? {
+            ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
+            ControlFlow::Break(second) => {
+                let first = self
+                    .first_result
+                    .take()
+                    .expect("the first result is kept until the second parser breaks");
+                Ok(ControlFlow::Break((first, second)))
+            }
+        }
     }
 }
 
@@ -102,9 +115,19 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for ClosedParser<H, 
         resources: &mut ParserResources<H>,
         token: Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
+        self.progress_all(handler, resources, &mut TokenCursor::single(token))
+    }
+
+    #[inline]
+    fn progress_all(
+        &mut self,
+        handler: &mut H,
+        resources: &mut ParserResources<H>,
+        cursor: &mut TokenCursor,
+    ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         Ok(self
             .inner
-            .progress(handler, resources, token)?
+            .progress_all(handler, resources, cursor)?
             .map_break(|(result, ())| result))
     }
 }
@@ -141,9 +164,19 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for OpenedParser<H, 
         resources: &mut ParserResources<H>,
         token: Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
+        self.progress_all(handler, resources, &mut TokenCursor::single(token))
+    }
+
+    #[inline]
+    fn progress_all(
+        &mut self,
+        handler: &mut H,
+        resources: &mut ParserResources<H>,
+        cursor: &mut TokenCursor,
+    ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         Ok(self
             .inner
-            .progress(handler, resources, token)?
+            .progress_all(handler, resources, cursor)?
             .map_break(|((), result)| result))
     }
 }
@@ -193,8 +226,18 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for ClosedMultiplePa
         resources: &mut ParserResources<H>,
         token: Token,
     ) -> Result<ControlFlow<Vec<P::Result>>, ParserError<H::Error>> {
-        self.resource.progress(token, |token| {
-            self.inner.progress(handler, resources, token)
+        self.progress_all(handler, resources, &mut TokenCursor::single(token))
+    }
+
+    #[inline]
+    fn progress_all(
+        &mut self,
+        handler: &mut H,
+        resources: &mut ParserResources<H>,
+        cursor: &mut TokenCursor,
+    ) -> Result<ControlFlow<Vec<P::Result>>, ParserError<H::Error>> {
+        self.resource.progress_all(cursor, |cursor| {
+            self.inner.progress_all(handler, resources, cursor)
         })
     }
 }
@@ -255,31 +298,48 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for ClosedMaximumPar
         resources: &mut ParserResources<H>,
         token: Token,
     ) -> Result<ControlFlow<Vec<P::Result>>, ParserError<H::Error>> {
-        if self.outside {
-            // we are outside, a closing parenthesis ends processing
-            if matches!(token.ty(), TokenType::ParenClose) {
-                // we will break, return the results
-                let results = self.results.drain(..).collect();
-                return Ok(ControlFlow::Break(results));
-            }
+        self.progress_all(handler, resources, &mut TokenCursor::single(token))
+    }
 
-            if self.results.len() >= self.max_elements {
-                // we cannot allow this element
-                // so the closing parenthesis was the only allowed choice here
-                return Err(ParserError::category_error(
-                    CategoryErrorKind::ExpectedToken(&[TokenType::ParenClose]),
-                    token.span(),
-                ));
-            }
+    fn progress_all(
+        &mut self,
+        handler: &mut H,
+        resources: &mut ParserResources<H>,
+        cursor: &mut TokenCursor,
+    ) -> Result<ControlFlow<Vec<P::Result>>, ParserError<H::Error>> {
+        while let Some(peeked) = cursor.peek() {
+            if self.outside {
+                // we are outside, a closing parenthesis ends processing
+                if matches!(peeked.ty(), TokenType::ParenClose) {
+                    cursor.advance(1);
+                    let results = self.results.drain(..).collect();
+                    return Ok(ControlFlow::Break(results));
+                }
 
-            // we are no longer outside
-            self.outside = false;
-        }
-        // we are inside, parse the element using the inner parser
-        if let ControlFlow::Break(element) = self.inner.progress(handler, resources, token)? {
-            // add element, we are back outside
-            self.results.push(element);
-            self.outside = true;
+                if self.results.len() >= self.max_elements {
+                    // we cannot allow this element
+                    // so the closing parenthesis was the only allowed choice here
+                    // as we decided to reject based on the peeked token,
+                    // it counts as consumed, so we need to advance
+                    cursor.advance(1);
+                    return Err(ParserError::category_error(
+                        CategoryErrorKind::ExpectedToken(&[TokenType::ParenClose]),
+                        peeked.span(),
+                    ));
+                }
+
+                // we are no longer outside
+                self.outside = false;
+            }
+            // we are inside, parse the element using the inner parser
+            match self.inner.progress_all(handler, resources, cursor)? {
+                ControlFlow::Continue(()) => return Ok(ControlFlow::Continue(())),
+                ControlFlow::Break(element) => {
+                    // add element, we are back outside
+                    self.results.push(element);
+                    self.outside = true;
+                }
+            }
         }
         Ok(ControlFlow::Continue(()))
     }
@@ -327,17 +387,33 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for ParenMaximumPars
         resources: &mut ParserResources<H>,
         token: Token,
     ) -> Result<ControlFlow<Vec<P::Result>>, ParserError<H::Error>> {
-        if self.is_opened {
-            if let ControlFlow::Break(result) = self.inner.progress(handler, resources, token)? {
-                // we are done, reset open and break
-                self.is_opened = false;
-                return Ok(ControlFlow::Break(result));
+        self.progress_all(handler, resources, &mut TokenCursor::single(token))
+    }
+
+    fn progress_all(
+        &mut self,
+        handler: &mut H,
+        resources: &mut ParserResources<H>,
+        cursor: &mut TokenCursor,
+    ) -> Result<ControlFlow<Vec<P::Result>>, ParserError<H::Error>> {
+        loop {
+            if self.is_opened {
+                match self.inner.progress_all(handler, resources, cursor)? {
+                    ControlFlow::Continue(()) => return Ok(ControlFlow::Continue(())),
+                    ControlFlow::Break(result) => {
+                        // we are done, reset open and break
+                        self.is_opened = false;
+                        return Ok(ControlFlow::Break(result));
+                    }
+                }
+            } else {
+                // not opened yet, expect opening parenthesis
+                let Some(token) = cursor.take() else {
+                    return Ok(ControlFlow::Continue(()));
+                };
+                OpenParenParser::expect(token)?;
+                self.is_opened = true;
             }
-        } else {
-            // expect opening parenthesis
-            OpenParenParser::expect(token)?;
-            self.is_opened = true;
         }
-        Ok(ControlFlow::Continue(()))
     }
 }

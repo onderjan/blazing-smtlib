@@ -288,12 +288,25 @@ impl<H: CommandHandler> CategoryParser<H> for GetValueParser<H> {
         resources: &mut ParserResources<H>,
         token: Token,
     ) -> Result<ControlFlow<Vec<H::Term>, ()>, ParserError<H::Error>> {
-        let span = token.span();
-        match self.inner.progress(handler, resources, token)? {
+        self.progress_all(handler, resources, &mut TokenCursor::single(token))
+    }
+
+    #[inline]
+    fn progress_all(
+        &mut self,
+        handler: &mut H,
+        resources: &mut ParserResources<H>,
+        cursor: &mut TokenCursor,
+    ) -> Result<ControlFlow<Vec<H::Term>, ()>, ParserError<H::Error>> {
+        match self.inner.progress_all(handler, resources, cursor)? {
             ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
             ControlFlow::Break(terms) => {
-                // ensure there is at least one term
+                // ensure there is at least one term; the list ends at the last consumed token
                 if terms.is_empty() {
+                    let span = cursor
+                        .last_consumed()
+                        .expect("a finished term list parser must have consumed a token")
+                        .span();
                     return Err(ParserError::category_error(
                         CategoryErrorKind::EmptyGetValueTerms,
                         span,

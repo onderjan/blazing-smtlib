@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     CommandHandler,
     read::parser::{CategoryParser, ParserError, ParserResources, handle_err},
-    token::Token,
+    token::{Token, TokenCursor},
 };
 
 /// A definition where a signature is followed by a body.
@@ -70,31 +70,47 @@ impl<H: CommandHandler, D: Definition<H>> CategoryParser<H> for DefinitionParser
         resources: &mut ParserResources<H>,
         token: Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
-        let span = token.span();
-        match self.state {
-            DefinitionParserState::Signature => {
-                // parse the signature
-                if let ControlFlow::Break(signature) =
-                    self.signature_parser.progress(handler, resources, token)?
-                {
+        self.progress_all(handler, resources, &mut TokenCursor::single(token))
+    }
+
+    #[inline]
+    fn progress_all(
+        &mut self,
+        handler: &mut H,
+        resources: &mut ParserResources<H>,
+        cursor: &mut TokenCursor,
+    ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
+        if matches!(self.state, DefinitionParserState::Signature) {
+            // parse the signature; it ends at the last consumed token
+            match self
+                .signature_parser
+                .progress_all(handler, resources, cursor)?
+            {
+                ControlFlow::Continue(()) => return Ok(ControlFlow::Continue(())),
+                ControlFlow::Break(signature) => {
+                    let span = cursor
+                        .last_consumed()
+                        .expect("a finished signature parser must have consumed a token")
+                        .span();
                     // start the body in the handler and move to parsing the body
                     handle_err(D::start(handler, signature), span)?;
                     self.state = DefinitionParserState::Body;
                 }
             }
-            DefinitionParserState::Body => {
-                // parse the body
-                if let ControlFlow::Break(body) =
-                    self.body_parser.progress(handler, resources, token)?
-                {
-                    // end the body in the handler, reset, and break
-                    handle_err(D::end(handler, body), span)?;
-                    self.state = DefinitionParserState::Signature;
-                    return Ok(ControlFlow::Break(()));
-                }
+        }
+        // parse the body on the tokens left; it ends at the last consumed token
+        match self.body_parser.progress_all(handler, resources, cursor)? {
+            ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
+            ControlFlow::Break(body) => {
+                let span = cursor
+                    .last_consumed()
+                    .expect("a finished body parser must have consumed a token")
+                    .span();
+                // end the body in the handler, reset, and break
+                handle_err(D::end(handler, body), span)?;
+                self.state = DefinitionParserState::Signature;
+                Ok(ControlFlow::Break(()))
             }
         }
-
-        Ok(ControlFlow::Continue(()))
     }
 }

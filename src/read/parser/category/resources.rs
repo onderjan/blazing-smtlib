@@ -6,7 +6,7 @@ use crate::{
         Arena, IdentSlot, ParserError, PatternSlot, QualifiedIdentSlot, SExprSlot, SortSlot,
         SortedVarSlot, TermSlot, category::attribute::AttributeSlot,
     },
-    token::{Token, TokenType},
+    token::{TokenCursor, TokenType},
 };
 
 /// Contains non-duplicated parser resources.
@@ -88,24 +88,30 @@ impl<T> ClosedMultipleResource<T> {
         }
     }
 
-    pub(crate) fn progress<E>(
+    pub(crate) fn progress_all<E>(
         &mut self,
-        token: Token,
-        element: impl FnOnce(Token) -> Result<ControlFlow<T>, ParserError<E>>,
+        cursor: &mut TokenCursor,
+        mut element: impl FnMut(&mut TokenCursor) -> Result<ControlFlow<T>, ParserError<E>>,
     ) -> Result<ControlFlow<Vec<T>>, ParserError<E>> {
-        if self.outside {
-            // we are outside, a closing parenthesis ends processing
-            if matches!(token.ty(), TokenType::ParenClose) {
-                return Ok(ControlFlow::Break(self.items.drain(..).collect()));
+        while let Some(token) = cursor.peek() {
+            if self.outside {
+                // we are outside, a closing parenthesis ends processing
+                if matches!(token.ty(), TokenType::ParenClose) {
+                    cursor.advance(1);
+                    return Ok(ControlFlow::Break(self.items.drain(..).collect()));
+                }
+                // we are no longer outside
+                self.outside = false;
             }
-            // we are no longer outside
-            self.outside = false;
-        }
-        // we are inside, parse the element using the inner parser
-        if let ControlFlow::Break(item) = element(token)? {
-            // add element, we are back outside
-            self.items.push(item);
-            self.outside = true;
+            // we are inside, parse the element using the inner parser
+            match element(cursor)? {
+                ControlFlow::Continue(()) => return Ok(ControlFlow::Continue(())),
+                ControlFlow::Break(item) => {
+                    // add element, we are back outside
+                    self.items.push(item);
+                    self.outside = true;
+                }
+            }
         }
         Ok(ControlFlow::Continue(()))
     }

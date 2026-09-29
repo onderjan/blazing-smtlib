@@ -5,7 +5,7 @@ use crate::{
     read::parser::{
         ParserError, ParserResources, ParserState, category::CategoryParser, handle_err,
     },
-    token::Token,
+    token::{Token, TokenCursor},
 };
 
 mod datatype;
@@ -82,12 +82,28 @@ impl<H: CommandHandler, C: CommandAction<H>> CategoryParser<H> for CommandParser
         resources: &mut ParserResources<H>,
         token: Token,
     ) -> Result<ControlFlow<()>, ParserError<H::Error>> {
-        let span = token.span();
-        let ControlFlow::Break(result) = self.parser.progress(handler, resources, token)? else {
-            return Ok(ControlFlow::Continue(()));
-        };
-        handle_err(C::handle(handler, result), span)?;
-        Ok(ControlFlow::Break(()))
+        self.progress_all(handler, resources, &mut TokenCursor::single(token))
+    }
+
+    #[inline]
+    fn progress_all(
+        &mut self,
+        handler: &mut H,
+        resources: &mut ParserResources<H>,
+        cursor: &mut TokenCursor,
+    ) -> Result<ControlFlow<()>, ParserError<H::Error>> {
+        match self.parser.progress_all(handler, resources, cursor)? {
+            ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
+            ControlFlow::Break(result) => {
+                // the command ends at the last consumed token, get its span
+                let span = cursor
+                    .last_consumed()
+                    .expect("a finished command parser has consumed a token")
+                    .span();
+                handle_err(C::handle(handler, result), span)?;
+                Ok(ControlFlow::Break(()))
+            }
+        }
     }
 }
 
