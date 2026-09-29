@@ -295,8 +295,9 @@ impl<H: TokenHandler> Lexer<H> {
     ) -> Result<usize, Interrupted<LexError<H::Error>>> {
         let mut index = 0;
 
-        // PERFORMANCE: use a local for the batch-length variable commonly used on the fast path.
-        let mut batch_len = batch.len;
+        // PERFORMANCE: use locals for variables commonly used on the fast path.
+        let offset = self.offset;
+        let mut local = FastState::load(self, batch);
 
         while let Some(&c) = slice.get(index) {
             // PERFORMANCE: A fast path handles the most common token types.
@@ -339,8 +340,8 @@ impl<H: TokenHandler> Lexer<H> {
                     };
 
                     if is_unfinished {
-                        // store the locals back
-                        batch.len = batch_len;
+                        // write the locals back
+                        local.store(self, batch);
                         self.store_unfinished_symbol_run(
                             slice, fast_entry, index, after, run_end_at,
                         );
@@ -350,7 +351,7 @@ impl<H: TokenHandler> Lexer<H> {
                 let token_end = run_end_at + is_quoted as usize;
 
                 // No need to fall back, construct the token.
-                batch.entries[batch_len] = Some(if is_quoted {
+                batch.entries[local.len] = Some(if is_quoted {
                     // The pipes delimit the token but are not part of its content.
                     (InnerType::QuotedSymbol, &slice[after..run_end_at])
                 } else {
@@ -361,28 +362,28 @@ impl<H: TokenHandler> Lexer<H> {
                     )
                 });
                 // The token is on a single line as all fast-lex runs exclude newlines.
-                self.spans[batch_len] = SmtSpan::on_line(
-                    self.line,
-                    self.line_start,
-                    self.offset + index as u64,
-                    self.offset + token_end as u64,
+                self.spans[local.len] = SmtSpan::on_line(
+                    local.line,
+                    local.line_start,
+                    offset + index as u64,
+                    offset + token_end as u64,
                 );
 
                 // Add the token to the batch if it should be emitted.
-                batch_len += (fast_entry & FAST_EMIT != 0) as usize;
-                if batch_len == BATCH_CAPACITY {
+                local.len += (fast_entry & FAST_EMIT != 0) as usize;
+                if local.len == BATCH_CAPACITY {
                     // Batch capacity reached, we need to flush the batch.
-                    batch.len = batch_len;
+                    local.store(self, batch);
                     self.flush_batch(batch)?;
-                    batch_len = 0;
+                    local.len = 0;
                 }
                 // Fast path done, continue normally after the token end.
                 index = token_end;
                 continue;
             }
 
-            // The slow path will use the batch itself, write the local back.
-            batch.len = batch_len;
+            // The slow path will not use the locals, write them back.
+            local.store(self, batch);
 
             // Fast path was not taken, use the slow path.
             match START[c as usize] {
@@ -586,12 +587,12 @@ impl<H: TokenHandler> Lexer<H> {
                     return Err(self.error_at(LexerErrorKind::UnexpectedCharacter, after));
                 }
             }
-            // Update the local from the batch.
-            batch_len = batch.len;
+            // Read the locals for use in a future fast path.
+            local = FastState::load(self, batch);
         }
-        // we have consumed every byte
-        // write the local back
-        batch.len = batch_len;
+        // We have consumed every byte of the slice.
+        // Write the locals back before returning.
+        local.store(self, batch);
         Ok(slice.len())
     }
 
@@ -1149,5 +1150,38 @@ impl<H: TokenHandler> Lexer<H> {
             self.state = LexerState::Failed;
         }
         result
+    }
+}
+
+/// Local state of `lex_normal`.
+///
+/// Locals improve performance of fast lexing over always going
+/// through the lexer and batch references. The struct allows
+/// loading/storing them together for better maintainability.
+#[derive(Clone, Copy)]
+struct FastState {
+    /// Current batch length.
+    len: usize,
+    /// Current line.
+    line: u64,
+    /// Byte offset of the start of the current line.
+    line_start: u64,
+}
+
+impl FastState {
+    #[inline(always)]
+    fn load<H: TokenHandler>(lexer: &Lexer<H>, batch: &Batch) -> Self {
+        Self {
+            len: batch.len,
+            line: lexer.line,
+            line_start: lexer.line_start,
+        }
+    }
+
+    #[inline(always)]
+    fn store<H: TokenHandler>(self, lexer: &mut Lexer<H>, batch: &mut Batch) {
+        batch.len = self.len;
+        lexer.line = self.line;
+        lexer.line_start = self.line_start;
     }
 }
