@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler, SmtSpecialConstantView,
     read::parser::ParserError,
-    token::{Token, TokenKind, TokenType},
+    token::{Token, TokenCursor, TokenKind, TokenType},
 };
 
 mod arena;
@@ -78,6 +78,35 @@ pub trait CategoryParser<H: SmtHandler + ?Sized> {
         resources: &mut ParserResources<H>,
         token: Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>>;
+
+    /// Parses all tokens from the cursor, progressing the parser.
+    ///
+    /// Tokens are consumed until the parser is finished, returning
+    /// [`ControlFlow::Break`] with the result and leaving the cursor after the
+    /// last consumed token, or until the cursor is empty, returning
+    /// [`ControlFlow::Continue`]. After an error, the cursor position is not
+    /// specified.
+    ///
+    /// The contract of [`CategoryParser::progress()`] applies: once started,
+    /// the parser must be progressed until completion.
+    ///
+    /// The default implementation loops over [`CategoryParser::progress()`].
+    /// If better performance is needed, implement this function and call it
+    /// from [`CategoryParser::progress()`] with a cursor over the single token.
+    #[inline]
+    fn progress_all(
+        &mut self,
+        handler: &mut H,
+        resources: &mut ParserResources<H>,
+        cursor: &mut TokenCursor,
+    ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
+        while let Some(token) = cursor.take() {
+            if let ControlFlow::Break(result) = self.progress(handler, resources, token)? {
+                return Ok(ControlFlow::Break(result));
+            }
+        }
+        Ok(ControlFlow::Continue(()))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

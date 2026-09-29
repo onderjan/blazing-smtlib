@@ -217,6 +217,89 @@ impl<'a> Iterator for TokenBatchIter<'a> {
     }
 }
 
+/// A position in a [`TokenBatch`], from which the tokens are consumed in order.
+///
+/// A parser reads a batch through a cursor: it can look at the
+/// tokens ahead, consume them one at a time or several at once, look back at
+/// what it consumed last, and tell how many tokens it has taken. However,
+/// it is not guaranteed how many elements the batch will actually have,
+/// so the lookahead is only useful for fast paths that fall back to
+/// slow paths with the same behaviour if the lookahead is not available.
+#[derive(Clone, Copy)]
+pub struct TokenCursor<'a> {
+    batch: TokenBatch<'a>,
+    next: usize,
+}
+
+impl<'a> TokenCursor<'a> {
+    /// Returns a cursor at the start of the batch.
+    #[inline]
+    pub fn new(batch: TokenBatch<'a>) -> Self {
+        Self { batch, next: 0 }
+    }
+
+    /// Returns a cursor over a single token.
+    ///
+    /// This can be used for parsing one token using a cursor-parsing function.
+    #[inline]
+    pub fn single(token: Token<'a>) -> Self {
+        Self::new(TokenBatch::new(
+            std::slice::from_ref(token.entry),
+            std::slice::from_ref(token.span),
+        ))
+    }
+
+    /// Returns the next token (if any) without consuming it.
+    #[inline]
+    pub fn peek(&self) -> Option<Token<'a>> {
+        self.batch.get(self.next)
+    }
+
+    /// Returns the token `ahead` positions after the next one without consuming anything.
+    ///
+    /// `get(0)` is the next token, also available through `peek`.
+    #[inline]
+    pub fn get(&self, ahead: usize) -> Option<Token<'a>> {
+        self.batch.get(self.next + ahead)
+    }
+
+    /// Consumes the next token (if any).
+    #[inline]
+    pub fn take(&mut self) -> Option<Token<'a>> {
+        let token = self.batch.get(self.next)?;
+        self.next += 1;
+        Some(token)
+    }
+
+    /// Consumes the next `count` tokens.
+    ///
+    /// Behaves as if [`TokenCursor::take`] was called `count` times
+    /// with the results discarded, stopping at the end of the cursor.
+    #[inline]
+    pub fn advance(&mut self, count: usize) {
+        self.next = self.next.saturating_add(count).min(self.batch.len());
+    }
+
+    /// Returns the most recently consumed token, if any was consumed through
+    /// this cursor.
+    #[inline]
+    pub fn last_consumed(&self) -> Option<Token<'a>> {
+        self.batch.get(self.next.checked_sub(1)?)
+    }
+
+    /// How many tokens have been consumed.
+    #[inline]
+    pub fn consumed(&self) -> usize {
+        self.next
+    }
+
+    /// Whether every token has been consumed.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.next >= self.batch.len()
+    }
+}
+
 /// Reserved words in SMT-LIB2, including standard command names.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Reserved {
