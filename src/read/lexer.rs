@@ -1010,10 +1010,10 @@ impl<H: TokenHandler> Lexer<H> {
                 self.spans[0] = span;
                 let spans = &self.spans[..1];
                 let entry = Some((ty, self.token_content.as_slice()));
-                let mut cursor = TokenCursor::new(std::slice::from_ref(&entry), spans);
-                self.handler
-                    .handle_tokens(&mut cursor)
-                    .map_err(|stop| Self::to_interrupted(cursor, stop))
+                Self::flush_cursor(
+                    &mut self.handler,
+                    TokenCursor::new(std::slice::from_ref(&entry), spans),
+                )
             }
         }
     }
@@ -1024,35 +1024,50 @@ impl<H: TokenHandler> Lexer<H> {
         if len == 0 {
             return Ok(());
         }
-        let spans = &self.spans[..len];
-        let mut cursor = TokenCursor::new(&batch.entries[..len], spans);
-        self.handler
-            .handle_tokens(&mut cursor)
-            .map_err(|stop| Self::to_interrupted(cursor, stop))
+        Self::flush_cursor(
+            &mut self.handler,
+            TokenCursor::new(&batch.entries[..len], &self.spans[..len]),
+        )
     }
 
-    fn to_interrupted<E>(cursor: TokenCursor, stop: TokenStop<E>) -> Interrupted<LexError<E>> {
-        let stop_location = match cursor.last_consumed() {
-            None => {
-                // nothing was taken, lex again from the first token
-                cursor
-                    .get(0)
-                    .expect("cursor should have at least one token")
-                    .span()
-                    .start()
+    fn flush_cursor(
+        handler: &mut H,
+        mut cursor: TokenCursor,
+    ) -> Result<(), Interrupted<LexError<H::Error>>> {
+        match handler.handle_tokens(&mut cursor) {
+            Ok(()) => {
+                // ensure the cursor has been fully consumed
+                assert!(
+                    cursor.is_empty(),
+                    "the token handler must consume all tokens before returning Ok"
+                );
+                Ok(())
             }
-            Some(token) => {
-                // at least one token was taken, lex again after it
-                token.span().end()
+            Err(stop) => {
+                // convert the stop to Interrupted
+                let stop_location = match cursor.last_consumed() {
+                    None => {
+                        // nothing was taken, lex again from the first token
+                        cursor
+                            .get(0)
+                            .expect("flushed batch must have at least one token")
+                            .span()
+                            .start()
+                    }
+                    Some(token) => {
+                        // at least one token was taken, lex again after it
+                        token.span().end()
+                    }
+                };
+                let stop = match stop {
+                    TokenStop::Relex => TokenStop::Relex,
+                    TokenStop::Error(err) => TokenStop::Error(LexError::Handler(err)),
+                };
+                Err(Interrupted {
+                    stop,
+                    stop_location,
+                })
             }
-        };
-        let stop = match stop {
-            TokenStop::Relex => TokenStop::Relex,
-            TokenStop::Error(err) => TokenStop::Error(LexError::Handler(err)),
-        };
-        Interrupted {
-            stop,
-            stop_location,
         }
     }
 
@@ -1065,10 +1080,11 @@ impl<H: TokenHandler> Lexer<H> {
         // the end of file has entry None
         let entry = None;
         let spans = &self.spans[..1];
-        let mut cursor = TokenCursor::new(std::slice::from_ref(&entry), spans);
-        self.handler
-            .handle_tokens(&mut cursor)
-            .map_err(|stop| Self::to_interrupted(cursor, stop))
+
+        Self::flush_cursor(
+            &mut self.handler,
+            TokenCursor::new(std::slice::from_ref(&entry), spans),
+        )
     }
 
     /// Moves a fast-path symbol run that cannot be finished
