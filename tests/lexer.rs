@@ -35,7 +35,7 @@ impl TokenHandler for CollectTokens {
         &mut self,
         cursor: &mut TokenCursor<'_>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
-        while let Some(token) = cursor.take() {
+        while let Some(token) = cursor.next() {
             let reserved = match TokenKind::from_token(token, SmtVersion::V2_7) {
                 TokenKind::Reserved(reserved) => Some(reserved),
                 _ => None,
@@ -621,7 +621,7 @@ impl TokenHandler for RejectTokens {
         &mut self,
         cursor: &mut TokenCursor<'_>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
-        match cursor.take() {
+        match cursor.next() {
             Some(token) => Err(token.span()),
             None => Ok(ControlFlow::Continue(())),
         }
@@ -841,7 +841,7 @@ impl TokenHandler for RejectEof {
         &mut self,
         cursor: &mut TokenCursor<'_>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
-        while let Some(token) = cursor.take() {
+        while let Some(token) = cursor.next() {
             if token.ty() == TokenType::EndOfFile {
                 return Err(());
             }

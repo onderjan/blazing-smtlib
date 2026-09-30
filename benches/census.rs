@@ -109,7 +109,7 @@ impl TokenHandler for Census {
         &mut self,
         cursor: &mut TokenCursor<'_>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
-        while let Some(token) = cursor.take() {
+        while let Some(token) = cursor.next() {
             self.tally(token);
         }
         Ok(ControlFlow::Continue(()))

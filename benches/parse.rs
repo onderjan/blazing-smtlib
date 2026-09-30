@@ -64,7 +64,7 @@ impl TokenHandler for DiscardTokens {
         &mut self,
         cursor: &mut TokenCursor<'_>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
-        while cursor.take().is_some() {
+        while cursor.next().is_some() {
             self.tokens += 1;
         }
         Ok(ControlFlow::Continue(()))

@@ -54,7 +54,7 @@ pub(crate) fn parse_by_token<R, E>(
     cursor: &mut TokenCursor,
     mut progress: impl FnMut(Token) -> Result<ControlFlow<R>, E>,
 ) -> Result<ControlFlow<R>, E> {
-    while let Some(token) = cursor.take() {
+    while let Some(token) = cursor.next() {
         if let ControlFlow::Break(result) = progress(token)? {
             return Ok(ControlFlow::Break(result));
         }

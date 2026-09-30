@@ -227,7 +227,7 @@ impl<H: SmtHandler> TermSlot<H> {
         resources: &mut ParserResources<H>,
         cursor: &mut TokenCursor,
     ) -> Result<ControlFlow<H::Term>, ParserError<H::Error>> {
-        while let Some(token) = cursor.take() {
+        while let Some(token) = cursor.next() {
             if matches!(resources.term_slot.state, State::Start)
                 && resources.term_slot.pending.is_none()
             {

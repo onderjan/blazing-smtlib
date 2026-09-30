@@ -374,7 +374,7 @@ impl<H: SmtHandler, P: Parser<H>> TokenHandler for Drive<'_, H, P> {
         while !cursor.is_empty() {
             if self.remaining == 0 {
                 // count the tokens left after the wanted results, except the end of the input
-                while let Some(token) = cursor.take() {
+                while let Some(token) = cursor.next() {
                     if token.ty() != TokenType::EndOfFile {
                         self.unconsumed += 1;
                     }

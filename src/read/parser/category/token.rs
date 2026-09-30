@@ -47,7 +47,7 @@ impl<H: SmtHandler> Parser<H> for SymbolParser {
         resources: &mut ParserResources<H>,
         cursor: &mut TokenCursor,
     ) -> Result<ControlFlow<Self::Result, ()>, ParserError<H::Error>> {
-        let Some(token) = cursor.take() else {
+        let Some(token) = cursor.next() else {
             return Ok(ControlFlow::Continue(()));
         };
         Ok(ControlFlow::Break(Self::expect(&resources.arena, token)?))
@@ -99,7 +99,7 @@ macro_rules! token_parser {
                 _resources: &mut ParserResources<H>,
                 cursor: &mut TokenCursor,
             ) -> Result<ControlFlow<Self::Result, ()>, ParserError<H::Error>> {
-                let Some(token) = cursor.take() else {
+                let Some(token) = cursor.next() else {
                     return Ok(ControlFlow::Continue(()));
                 };
                 Ok(ControlFlow::Break(Self::expect(token)?))

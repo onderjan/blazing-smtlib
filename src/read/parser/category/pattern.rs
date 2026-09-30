@@ -60,7 +60,7 @@ impl<H: SmtHandler> Parser<H> for SimplePatternParser {
         resources: &mut ParserResources<H>,
         cursor: &mut TokenCursor,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
-        let Some(token) = cursor.take() else {
+        let Some(token) = cursor.next() else {
             return Ok(ControlFlow::Continue(()));
         };
         Ok(ControlFlow::Break(Self::expect(&resources.arena, token)?))

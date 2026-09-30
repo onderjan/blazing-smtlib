@@ -103,7 +103,7 @@ impl TokenHandler for Recorder<'_> {
         // record every token of the hand-over by walking a copy of the cursor
         let mut walk = *cursor;
         let mut tokens = Vec::new();
-        while let Some(token) = walk.take() {
+        while let Some(token) = walk.next() {
             tokens.push(record(token));
         }
         let len = tokens.len();

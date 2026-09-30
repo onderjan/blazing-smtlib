@@ -103,7 +103,7 @@ pub(crate) mod tests {
                 while !cursor.is_empty() {
                     if self.result.is_some() {
                         // count the tokens left after the result, except the end of the input
-                        while let Some(token) = cursor.take() {
+                        while let Some(token) = cursor.next() {
                             if !matches!(token.ty(), TokenType::EndOfFile) {
                                 self.unconsumed += 1;
                             }

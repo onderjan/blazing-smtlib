@@ -47,7 +47,7 @@ impl TokenHandler for CollectTokens {
         &mut self,
         cursor: &mut TokenCursor<'_>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
-        while let Some(token) = cursor.take() {
+        while let Some(token) = cursor.next() {
             self.collect(token);
         }
         Ok(ControlFlow::Continue(()))
@@ -205,7 +205,7 @@ fn end_of_input_has_no_content_and_an_empty_span_at_the_end() {
                 &mut self,
                 cursor: &mut TokenCursor<'_>,
             ) -> Result<ControlFlow<Self::Result>, Self::Error> {
-                while let Some(token) = cursor.take() {
+                while let Some(token) = cursor.next() {
                     if token.ty() == TokenType::EndOfFile {
                         let end = token.span().end();
                         self.1.push((end.offset(), end.line(), end.column()));

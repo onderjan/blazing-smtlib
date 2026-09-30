@@ -29,7 +29,7 @@ impl<F: FnMut(TokenCursor<'_>)> TokenHandler for Probe<F> {
         cursor: &mut TokenCursor<'_>,
     ) -> Result<ControlFlow<Self::Result>, Infallible> {
         (self.0)(*cursor);
-        cursor.advance(usize::MAX);
+        cursor.consume_all();
         Ok(ControlFlow::Continue(()))
     }
 }
@@ -63,7 +63,7 @@ fn on_token_batch(input: &[u8], mut check: impl FnMut(TokenCursor<'_>)) {
 fn len(cursor: TokenCursor<'_>) -> usize {
     let mut walk = cursor;
     let mut count = 0;
-    while walk.take().is_some() {
+    while walk.next().is_some() {
         count += 1;
     }
     count
@@ -87,7 +87,7 @@ fn cursor_walks_the_batch_in_order() {
         assert_eq!(cursor.last_consumed(), None);
 
         // one token taken
-        let first = cursor.take().expect("a token");
+        let first = cursor.next().expect("a token");
         assert_eq!(first.ty(), TokenType::ParenOpen);
         assert_eq!(cursor.consumed(), 1);
         assert_eq!(cursor.last_consumed(), Some(first));
@@ -103,14 +103,14 @@ fn cursor_walks_the_batch_in_order() {
 
         // to the end and past it
         assert_eq!(
-            cursor.take().map(|token| token.ty()),
+            cursor.next().map(|token| token.ty()),
             Some(TokenType::ParenClose)
         );
-        assert_eq!(cursor.take().map(|token| token.content()), Some(&b"c"[..]));
+        assert_eq!(cursor.next().map(|token| token.content()), Some(&b"c"[..]));
         assert!(cursor.is_empty());
         assert_eq!(cursor.consumed(), 5);
         assert_eq!(cursor.peek(), None);
-        assert_eq!(cursor.take(), None);
+        assert_eq!(cursor.next(), None);
         assert_eq!(cursor.consumed(), 5, "taking past the end consumes nothing");
         assert_eq!(cursor.last_consumed(), start.get(4));
     });
@@ -125,7 +125,7 @@ fn cursor_over_the_end_of_file_batch_yields_it_alone() {
             assert_eq!(len(start), 1);
             let mut cursor = start;
             assert_eq!(
-                cursor.take().map(|token| token.ty()),
+                cursor.next().map(|token| token.ty()),
                 Some(TokenType::EndOfFile)
             );
             assert!(cursor.is_empty());
@@ -144,7 +144,7 @@ fn cursor_is_a_copy_of_its_position() {
         ahead.advance(3);
         assert_eq!(cursor.consumed(), 0);
         assert_eq!(ahead.consumed(), 3);
-        cursor.take();
+        cursor.next();
         assert_eq!(ahead.consumed(), 3);
     });
 }
@@ -153,12 +153,12 @@ fn cursor_is_a_copy_of_its_position() {
 fn single_token_cursor_holds_that_token_alone() {
     on_token_batch(b"(a b) c ", |start| {
         let mut walk = start;
-        while let Some(token) = walk.take() {
+        while let Some(token) = walk.next() {
             let mut cursor = TokenCursor::single(token);
             assert!(!cursor.is_empty());
             assert_eq!(cursor.peek(), Some(token));
             assert_eq!(cursor.get(1), None);
-            assert_eq!(cursor.take(), Some(token));
+            assert_eq!(cursor.next(), Some(token));
             assert!(cursor.is_empty());
             assert_eq!(cursor.last_consumed(), Some(token));
         }
@@ -173,7 +173,7 @@ fn advancing_past_the_end_stops_at_the_end_like_take() {
         assert!(cursor.is_empty());
         assert_eq!(cursor.consumed(), 2);
         assert_eq!(cursor.last_consumed(), start.get(1));
-        cursor.advance(usize::MAX);
+        cursor.consume_all();
         assert_eq!(cursor.consumed(), 2);
     });
 }
@@ -251,7 +251,7 @@ fn a_relex_request_fixes_the_cursor_at_the_consumed_position() {
         assert!(cursor.is_empty());
         assert!(cursor.peek().is_none());
         assert!(cursor.get(0).is_none());
-        assert!(cursor.take().is_none());
+        assert!(cursor.next().is_none());
         cursor.advance(1);
         assert_eq!(cursor.consumed(), 2);
         assert_eq!(

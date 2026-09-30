@@ -36,7 +36,7 @@ impl TokenHandler for CollectTokens {
         &mut self,
         cursor: &mut TokenCursor<'_>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
-        while let Some(token) = cursor.take() {
+        while let Some(token) = cursor.next() {
             self.0.push(OwnedToken {
                 ty: token.ty(),
                 content: token.content().to_vec(),
@@ -742,7 +742,7 @@ impl TokenHandler for RejectNth {
         &mut self,
         cursor: &mut TokenCursor<'_>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
-        while cursor.take().is_some() {
+        while cursor.next().is_some() {
             if self.remaining == 0 {
                 return Err(());
             }

@@ -348,7 +348,7 @@ impl<H: SmtHandler, P: Parser<H>> Parser<H> for ParenMaximumParser<H, P> {
                 }
             } else {
                 // not opened yet, expect opening parenthesis
-                let Some(token) = cursor.take() else {
+                let Some(token) = cursor.next() else {
                     return Ok(ControlFlow::Continue(()));
                 };
                 OpenParenParser::expect(token)?;

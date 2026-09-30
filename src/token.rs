@@ -221,8 +221,11 @@ impl<'a> TokenCursor<'a> {
     }
 
     /// Consumes the next token (if any).
+    // CLIPPY: do not warn on next() without implementing Iterator,
+    // as we implement an iterator-like but more powerful API
+    #[allow(clippy::should_implement_trait)]
     #[inline]
-    pub fn take(&mut self) -> Option<Token<'a>> {
+    pub fn next(&mut self) -> Option<Token<'a>> {
         let token = self.at(self.next)?;
         self.next += 1;
         Some(token)
@@ -230,11 +233,17 @@ impl<'a> TokenCursor<'a> {
 
     /// Consumes the next `count` tokens.
     ///
-    /// Behaves as if [`TokenCursor::take`] was called `count` times
+    /// Behaves as if [`TokenCursor::next`] was called `count` times
     /// with the results discarded, stopping at the end of the cursor.
     #[inline]
     pub fn advance(&mut self, count: usize) {
         self.next = self.next.saturating_add(count).min(self.entries.len());
+    }
+
+    /// Consumes all tokens remaining in the cursor.
+    #[inline]
+    pub fn consume_all(&mut self) {
+        self.next = self.entries.len()
     }
 
     /// Returns the most recently consumed token, if any was consumed through
