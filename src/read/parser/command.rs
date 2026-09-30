@@ -36,13 +36,6 @@ pub trait CommandAction<H: CommandHandler> {
     /// Handles the result of a command.
     fn handle(handler: &mut H, result: <Self::Parser as Parser<H>>::Result)
     -> Result<(), H::Error>;
-
-    /// Determines whether this should lead to an exit.
-    ///
-    /// This is overridden by the SMT-LIB (exit) command.
-    fn is_exit() -> bool {
-        false
-    }
 }
 
 /// A parser that processes a single command (starting after its name).
