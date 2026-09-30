@@ -45,10 +45,10 @@ impl<H: SmtHandler> Parser<H> for SortParser<H> {
         let ParserResources {
             ident_slot,
             sort_slot,
-            store,
+            arena,
             ..
         } = resources;
-        sort_slot.progress(handler, store, ident_slot, token)
+        sort_slot.progress(handler, arena, ident_slot, token)
     }
 }
 

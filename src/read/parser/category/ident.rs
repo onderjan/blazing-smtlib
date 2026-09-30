@@ -41,12 +41,12 @@ impl<H: SmtHandler> Parser<H> for IdentParser {
     ) -> Result<ControlFlow<SmtIdent, ()>, ParserError<H::Error>> {
         // progress the slot over the arena, returning an owned identifier
         let ParserResources {
-            ident_slot, store, ..
+            ident_slot, arena, ..
         } = resources;
-        match ident_slot.progress(store, token)? {
+        match ident_slot.progress(arena, token)? {
             ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
             ControlFlow::Break(ident) => Ok(ControlFlow::Break(
-                store.hand_over_ident(ident, |ident| ident.into_owned()),
+                arena.hand_over_ident(ident, |ident| ident.into_owned()),
             )),
         }
     }

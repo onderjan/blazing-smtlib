@@ -121,7 +121,7 @@ impl<'a, H: CommandHandler> TokenHandler for ScriptParser<'a, H> {
                     // we will handle the token here
                     cursor.advance(1);
                     // expect the command name
-                    self.state = match self.resources.store.token_kind(peeked) {
+                    self.state = match self.resources.arena.token_kind(peeked) {
                         TokenKind::Reserved(Reserved::CommandName(name)) => {
                             // a command-name reserved word names a standard command
                             ScriptParserState::Command(StandardCommandKind::from_reserved(name))

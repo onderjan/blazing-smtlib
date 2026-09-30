@@ -60,7 +60,7 @@ impl<H: SmtHandler> Parser<H> for SimplePatternParser {
         resources: &mut ParserResources<H>,
         token: Token,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
-        Ok(ControlFlow::Break(Self::expect(&resources.store, token)?))
+        Ok(ControlFlow::Break(Self::expect(&resources.arena, token)?))
     }
 }
 
@@ -99,15 +99,15 @@ impl<H: SmtHandler> Parser<H> for PatternParser<H> {
         // progress the slot
         let ParserResources {
             pattern_slot,
-            store,
+            arena,
             ..
         } = resources;
-        match pattern_slot.progress(store, token)? {
+        match pattern_slot.progress(arena, token)? {
             ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
             ControlFlow::Break(pattern) => {
                 // break with the owned pattern
                 Ok(ControlFlow::Break(
-                    store.hand_over_pattern(pattern, |pattern| pattern.into_owned()),
+                    arena.hand_over_pattern(pattern, |pattern| pattern.into_owned()),
                 ))
             }
         }

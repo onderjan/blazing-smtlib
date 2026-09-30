@@ -46,13 +46,13 @@ impl<H: SmtHandler> Parser<H> for QualifiedIdentParser<H> {
             ident_slot,
             sort_slot,
             qualified_ident_slot,
-            store,
+            arena,
             ..
         } = resources;
-        match qualified_ident_slot.progress(handler, store, sort_slot, ident_slot, token)? {
+        match qualified_ident_slot.progress(handler, arena, sort_slot, ident_slot, token)? {
             ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
             ControlFlow::Break(qualified_ident) => Ok(ControlFlow::Break(
-                store.hand_over_qualified_ident(qualified_ident, |view| view.into_owned()),
+                arena.hand_over_qualified_ident(qualified_ident, |view| view.into_owned()),
             )),
         }
     }

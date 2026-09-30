@@ -111,7 +111,7 @@ impl<H: CommandHandler> Parser<H> for DatatypeParser<H> {
                 self.state = DatatypeState::Kind;
                 None
             }
-            DatatypeState::Kind => match resources.store.token_kind(token) {
+            DatatypeState::Kind => match resources.arena.token_kind(token) {
                 TokenKind::ParenOpen => {
                     // simple constructors, start the datatype with no parameters
                     self.start_datatype(handler, Vec::new(), span)?;
@@ -342,7 +342,7 @@ impl<H: CommandHandler> Parser<H> for DeclareDatatypeParser<H> {
         match self.state {
             DeclareDatatypeState::Name => {
                 // parse the datatype name
-                let name = SymbolParser::expect(&resources.store, token)?;
+                let name = SymbolParser::expect(&resources.arena, token)?;
                 self.datatype_parser.set_single_datatype_mode(name, span);
                 self.state = DeclareDatatypeState::Datatype;
             }

@@ -42,7 +42,7 @@ impl<H: SmtHandler> Parser<H> for ClosedAttributeParser<H> {
     ) -> Result<ControlFlow<Self::Result>, ParserError<<H as SmtHandler>::Error>> {
         resources.attribute_slot.progress::<H, SingleAttribute>(
             handler,
-            &mut resources.store,
+            &mut resources.arena,
             &mut resources.s_expr_slot,
             token,
         )
@@ -82,7 +82,7 @@ impl<H: SmtHandler> Parser<H> for ClosedMultipleAttributeParser<H> {
     ) -> Result<ControlFlow<Self::Result>, ParserError<<H as SmtHandler>::Error>> {
         match resources.attribute_slot.progress::<H, MultipleAttributes>(
             handler,
-            &mut resources.store,
+            &mut resources.arena,
             &mut resources.s_expr_slot,
             token,
         )? {
@@ -91,7 +91,7 @@ impl<H: SmtHandler> Parser<H> for ClosedMultipleAttributeParser<H> {
                 // the attributes are at the end of the arena, hand them over
                 Ok(ControlFlow::Break(
                     resources
-                        .store
+                        .arena
                         .hand_over_attributes(start, |attributes| attributes.into_iter().collect()),
                 ))
             }

@@ -44,7 +44,7 @@ impl<H: SmtHandler> Parser<H> for SExprParser<H> {
         // progress the slot over the arena
         resources
             .s_expr_slot
-            .progress(handler, &mut resources.store, token)
+            .progress(handler, &mut resources.arena, token)
     }
 }
 

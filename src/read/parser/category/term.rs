@@ -245,10 +245,10 @@ impl<H: SmtHandler> TermSlot<H> {
                 // PERFORMANCE: dispatch common term idioms fast.
                 match token.ty() {
                     TokenType::UnquotedSymbol | TokenType::QuotedSymbol => {
-                        if let TokenKind::Symbol(name) = resources.store.token_kind(token) {
+                        if let TokenKind::Symbol(name) = resources.arena.token_kind(token) {
                             // this is an unqualified, non-indexed symbol, dispatch it
                             let term = SmtTerm::QualifiedIdent(SmtQualifiedIdentView {
-                                ident: resources.store.simple_ident_view(name),
+                                ident: resources.arena.simple_ident_view(name),
                                 sort: None,
                             });
                             let term = handle_err(handler.handle_term(term), token.span())?;
@@ -262,17 +262,17 @@ impl<H: SmtHandler> TermSlot<H> {
                     }
                     TokenType::ParenOpen => {
                         if let Some(peeked) = cursor.peek() {
-                            match resources.store.token_kind(peeked) {
+                            match resources.arena.token_kind(peeked) {
                                 TokenKind::Symbol(fn_name) => {
                                     // this is an application start
                                     // consume the peeked token and dispatch
                                     cursor.advance(1);
                                     let function = QualifiedIdentHandle::unqualified(
-                                        resources.store.push_nonindexed_ident(fn_name),
+                                        resources.arena.push_nonindexed_ident(fn_name),
                                     );
                                     resources
                                         .term_slot
-                                        .start_application(&resources.store, function);
+                                        .start_application(&resources.arena, function);
                                     continue;
                                 }
                                 TokenKind::Reserved(Reserved::General(GeneralReserved::Let)) => {
@@ -286,16 +286,16 @@ impl<H: SmtHandler> TermSlot<H> {
                                             .is_some_and(|t| matches!(t.ty(), TokenType::ParenOpen))
                                         && let Some(name_token) = cursor.get(3)
                                         && let TokenKind::Symbol(name) =
-                                            resources.store.token_kind(name_token)
+                                            resources.arena.token_kind(name_token)
                                     {
                                         // this is a let binder
                                         // consume the four peeked tokens
                                         cursor.advance(4);
                                         // dispatch the let and push the first binding name
-                                        resources.term_slot.start_let(&mut resources.store);
+                                        resources.term_slot.start_let(&mut resources.arena);
                                         resources
                                             .term_slot
-                                            .push_binding_name(&mut resources.store, name);
+                                            .push_binding_name(&mut resources.arena, name);
                                         continue;
                                     }
                                 }
@@ -305,7 +305,7 @@ impl<H: SmtHandler> TermSlot<H> {
                                     // an indexed identifier starts with "(_ name"
                                     if let Some(name_token) = cursor.get(1)
                                         && let TokenKind::Symbol(name) =
-                                            resources.store.token_kind(name_token)
+                                            resources.arena.token_kind(name_token)
                                     {
                                         // this is an indexed identifier
                                         // consume the two peeked tokens
@@ -313,7 +313,7 @@ impl<H: SmtHandler> TermSlot<H> {
                                         // move the qualified ident after the indexed name
                                         resources.qualified_ident_slot.move_after_indexed_name(
                                             &mut resources.ident_slot,
-                                            &mut resources.store,
+                                            &mut resources.arena,
                                             name,
                                         );
                                         // change the state to qualified ident parsing
@@ -354,7 +354,7 @@ impl<H: SmtHandler> TermSlot<H> {
                     // we are parsing attributes
                     match resources.attribute_slot.progress::<H, MultipleAttributes>(
                         handler,
-                        &mut resources.store,
+                        &mut resources.arena,
                         &mut resources.s_expr_slot,
                         token,
                     )? {
@@ -364,16 +364,16 @@ impl<H: SmtHandler> TermSlot<H> {
                             return Ok(ControlFlow::Continue(()));
                         }
                         ControlFlow::Break(arena_attributes_start) => {
-                            let store = &mut resources.store;
+                            let arena = &mut resources.arena;
                             // check that there is at least one attribute
-                            if store.attributes.len() == arena_attributes_start {
+                            if arena.attributes.len() == arena_attributes_start {
                                 return Err(ParserError::category_error(
                                     SyntaxErrorKind::EmptyAnnotation,
                                     span,
                                 ));
                             }
                             // produce the annotated term, the attributes are consumed
-                            store.hand_over_attributes(arena_attributes_start, |attributes| {
+                            arena.hand_over_attributes(arena_attributes_start, |attributes| {
                                 handle_err(handler.annotate_term(pending.term, attributes), span)
                             })?
                         }
@@ -424,12 +424,12 @@ impl<H: SmtHandler> TermSlot<H> {
                 // push the produced term into the term arena
                 // there no need to update anything else as lower-level terms
                 // remember where their arguments start im the arena
-                resources.store.terms.push(term);
+                resources.arena.terms.push(term);
             }
             Level::LetBinding { .. } => {
                 // push the produced term into the term arena
                 // its name is already in the arena symbols
-                resources.store.terms.push(term);
+                resources.arena.terms.push(term);
                 slot.state = State::LetBindingClose;
             }
             Level::BinderInner {
@@ -508,7 +508,7 @@ impl<H: SmtHandler> TermSlot<H> {
             State::QualifiedIdent => {
                 match resources.qualified_ident_slot.progress(
                     handler,
-                    &mut resources.store,
+                    &mut resources.arena,
                     &mut resources.sort_slot,
                     &mut resources.ident_slot,
                     token,
@@ -516,7 +516,7 @@ impl<H: SmtHandler> TermSlot<H> {
                     ControlFlow::Break(qualified_ident) => {
                         // a term that is a qualified identifier, handle it and break
                         let span = token.span();
-                        let term = resources.store.hand_over_qualified_ident(
+                        let term = resources.arena.hand_over_qualified_ident(
                             qualified_ident,
                             |qualified_ident| {
                                 let term = SmtTerm::QualifiedIdent(qualified_ident);
@@ -531,7 +531,7 @@ impl<H: SmtHandler> TermSlot<H> {
             State::ApplicationIdent => {
                 match resources.qualified_ident_slot.progress(
                     handler,
-                    &mut resources.store,
+                    &mut resources.arena,
                     &mut resources.sort_slot,
                     &mut resources.ident_slot,
                     token,
@@ -541,7 +541,7 @@ impl<H: SmtHandler> TermSlot<H> {
                         // start a new application level
                         resources
                             .term_slot
-                            .start_application(&resources.store, function);
+                            .start_application(&resources.arena, function);
                         Ok(ControlFlow::Continue(()))
                     }
                 }
@@ -559,7 +559,7 @@ impl<H: SmtHandler> TermSlot<H> {
             }
             State::LetBindingSymbol => {
                 // expect a symbol that will be the binding name
-                let TokenKind::Symbol(name) = resources.store.token_kind(token) else {
+                let TokenKind::Symbol(name) = resources.arena.token_kind(token) else {
                     return Err(ParserError::category_error(
                         SyntaxErrorKind::ExpectedSymbol,
                         token.span(),
@@ -567,7 +567,7 @@ impl<H: SmtHandler> TermSlot<H> {
                 };
                 resources
                     .term_slot
-                    .push_binding_name(&mut resources.store, name);
+                    .push_binding_name(&mut resources.arena, name);
                 Ok(ControlFlow::Continue(()))
             }
             State::LetBindingClose => {
@@ -633,7 +633,7 @@ impl<H: SmtHandler> TermSlot<H> {
             }
             State::MatchCaseOpen => {
                 // parse the match case and continue
-                slot.parse_match_case_open(handler, &resources.store, token)?;
+                slot.parse_match_case_open(handler, &resources.arena, token)?;
                 Ok(ControlFlow::Continue(()))
             }
             State::MatchPattern => {
@@ -641,10 +641,10 @@ impl<H: SmtHandler> TermSlot<H> {
                 let span = token.span();
                 if let ControlFlow::Break(pattern) = resources
                     .pattern_slot
-                    .progress(&mut resources.store, token)?
+                    .progress(&mut resources.arena, token)?
                 {
                     // a match case is starting, call the handler with the pattern handed over
-                    resources.store.hand_over_pattern(pattern, |pattern| {
+                    resources.arena.hand_over_pattern(pattern, |pattern| {
                         handle_err(handler.start_match_case(pattern), span)
                     })?;
                     // move the start state to parse the case term
@@ -670,7 +670,7 @@ impl<H: SmtHandler> TermSlot<H> {
     ) -> Result<ControlFlow<H::Term>, ParserError<H::Error>> {
         let span = token.span();
         let slot = &mut resources.term_slot;
-        let term = match resources.store.token_kind(token) {
+        let term = match resources.arena.token_kind(token) {
             TokenKind::ParenOpen => {
                 // application, binder, or annotation
                 // move to operator parsing
@@ -690,16 +690,16 @@ impl<H: SmtHandler> TermSlot<H> {
                         span,
                     ));
                 };
-                let store = &mut resources.store;
+                let arena = &mut resources.arena;
                 // the application must contain at least one argument
-                if store.terms.len() == arena_args_start {
+                if arena.terms.len() == arena_args_start {
                     return Err(ParserError::category_error(
                         SyntaxErrorKind::EmptyTermApplication,
                         span,
                     ));
                 }
                 // construct and handle the term, the head and the arguments are consumed
-                store.hand_over_application(function, arena_args_start, |function, args| {
+                arena.hand_over_application(function, arena_args_start, |function, args| {
                     let term = SmtTerm::Application(SmtApplication { function, args });
                     handle_err(handler.handle_term(term), span)
                 })?
@@ -708,7 +708,7 @@ impl<H: SmtHandler> TermSlot<H> {
                 // a term that is a qualified identifier that is just a symbol,
                 // handed over straight from the token
                 let term = SmtTerm::QualifiedIdent(SmtQualifiedIdentView {
-                    ident: resources.store.simple_ident_view(name),
+                    ident: resources.arena.simple_ident_view(name),
                     sort: None,
                 });
                 handle_err(handler.handle_term(term), span)?
@@ -741,18 +741,18 @@ impl<H: SmtHandler> TermSlot<H> {
         let span = token.span();
         let slot = &mut resources.term_slot;
 
-        let state = match resources.store.token_kind(token) {
+        let state = match resources.arena.token_kind(token) {
             TokenKind::Symbol(fn_name) => {
                 // this is an application where the function identifier is just a symbol
                 let function = QualifiedIdentHandle::unqualified(
-                    resources.store.push_nonindexed_ident(fn_name),
+                    resources.arena.push_nonindexed_ident(fn_name),
                 );
-                slot.start_application(&resources.store, function);
+                slot.start_application(&resources.arena, function);
                 return Ok(());
             }
             TokenKind::Reserved(Reserved::General(GeneralReserved::Let)) => {
                 // this is a let, start it
-                slot.start_let(&mut resources.store);
+                slot.start_let(&mut resources.arena);
                 return Ok(());
             }
             TokenKind::Reserved(Reserved::General(GeneralReserved::Lambda)) => {
@@ -823,7 +823,7 @@ impl<H: SmtHandler> TermSlot<H> {
     ) -> Result<(), ParserError<H::Error>> {
         let span = token.span();
         let slot = &mut resources.term_slot;
-        match resources.store.token_kind(token) {
+        match resources.arena.token_kind(token) {
             TokenKind::ParenOpen => {
                 // opening a new binding, we will parse the symbol next
                 slot.state = State::LetBindingSymbol;
@@ -842,9 +842,9 @@ impl<H: SmtHandler> TermSlot<H> {
                     panic!("last level should be a let binding when closing bindings")
                 };
 
-                let store = &mut resources.store;
+                let arena = &mut resources.arena;
                 // there must be at least one binding
-                if store.symbols.len() == arena_names_start {
+                if arena.symbols.len() == arena_names_start {
                     return Err(ParserError::category_error(
                         SyntaxErrorKind::EmptyLetBindings,
                         span,
@@ -852,7 +852,7 @@ impl<H: SmtHandler> TermSlot<H> {
                 }
 
                 // tell the handler we are starting a let, the bindings are consumed
-                store.hand_over_bindings(
+                arena.hand_over_bindings(
                     arena_text_start,
                     arena_names_start,
                     arena_terms_start,
@@ -927,32 +927,32 @@ impl<H: SmtHandler> TermSlot<H> {
     }
 
     #[inline]
-    fn push_binding_name(&mut self, store: &mut Arena<H>, name: SmtSymbolView) {
+    fn push_binding_name(&mut self, arena: &mut Arena<H>, name: SmtSymbolView) {
         // push the name into the arena
         // the binding term knows where the binding names start
-        let name = store.push_text(name.as_slice());
-        store.symbols.push(name);
+        let name = arena.push_text(name.as_slice());
+        arena.symbols.push(name);
         // go to the start state to parse the binding term
         self.state = State::Start;
     }
 
     #[inline]
-    fn start_application(&mut self, store: &Arena<H>, function: QualifiedIdentHandle<H>) {
+    fn start_application(&mut self, arena: &Arena<H>, function: QualifiedIdentHandle<H>) {
         // a new level; the head is in the arena, its arguments follow from here
         self.start_level(Level::Application {
             function,
-            arena_args_start: store.terms.len(),
+            arena_args_start: arena.terms.len(),
         });
     }
 
     #[inline]
-    fn start_let(&mut self, store: &mut Arena<H>) {
+    fn start_let(&mut self, arena: &mut Arena<H>) {
         // add a level for let bindings and move before the bindings opening
         // remember where the bindings start in the arena
         self.levels.push(Level::LetBinding {
-            arena_text_start: store.text.len(),
-            arena_names_start: store.symbols.len(),
-            arena_terms_start: store.terms.len(),
+            arena_text_start: arena.text.len(),
+            arena_names_start: arena.symbols.len(),
+            arena_terms_start: arena.terms.len(),
         });
         self.state = State::LetAllBindingsOpen;
     }
@@ -1030,7 +1030,7 @@ impl SortedBindingsParser {
         let span = token.span();
         match resources.sorted_var_slot.progress(
             handler,
-            &mut resources.store,
+            &mut resources.arena,
             &mut resources.sort_slot,
             &mut resources.ident_slot,
             token,
@@ -1039,7 +1039,7 @@ impl SortedBindingsParser {
             ControlFlow::Break((name, sort)) => {
                 // start the binder with the name handed over, and increment opened
                 resources
-                    .store
+                    .arena
                     .hand_over_sorted_var(name, sort, |name, sort| {
                         handle_err(open_fn(handler, name, sort), span)
                     })?;

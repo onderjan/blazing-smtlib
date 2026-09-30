@@ -46,12 +46,12 @@ impl<H: SmtHandler> Parser<H> for SortedVarParser<H> {
             ident_slot,
             sort_slot,
             sorted_var_slot,
-            store,
+            arena,
             ..
         } = resources;
-        match sorted_var_slot.progress(handler, store, sort_slot, ident_slot, token)? {
+        match sorted_var_slot.progress(handler, arena, sort_slot, ident_slot, token)? {
             ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
-            ControlFlow::Break((name, sort)) => Ok(ControlFlow::Break(store.hand_over_sorted_var(
+            ControlFlow::Break((name, sort)) => Ok(ControlFlow::Break(arena.hand_over_sorted_var(
                 name,
                 sort,
                 |name, sort| (name.into_owned(), sort),

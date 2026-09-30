@@ -47,7 +47,7 @@ impl<H: SmtHandler> Parser<H> for SymbolParser {
         resources: &mut ParserResources<H>,
         token: Token,
     ) -> Result<ControlFlow<Self::Result, ()>, ParserError<H::Error>> {
-        Ok(ControlFlow::Break(Self::expect(&resources.store, token)?))
+        Ok(ControlFlow::Break(Self::expect(&resources.arena, token)?))
     }
 }
 
