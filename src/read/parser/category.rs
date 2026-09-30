@@ -93,9 +93,13 @@ pub(crate) mod tests {
         }
 
         impl<P: Parser<CheckStandardSyntax>> TokenHandler for Drive<'_, P> {
+            type Result = ();
             type Error = ParserError<NonstandardCommandError>;
 
-            fn handle_tokens(&mut self, cursor: &mut TokenCursor<'_>) -> Result<(), Self::Error> {
+            fn handle_tokens(
+                &mut self,
+                cursor: &mut TokenCursor<'_>,
+            ) -> Result<ControlFlow<()>, Self::Error> {
                 while !cursor.is_empty() {
                     if self.result.is_some() {
                         // count the tokens left after the result, except the end of the input
@@ -104,7 +108,7 @@ pub(crate) mod tests {
                                 self.unconsumed += 1;
                             }
                         }
-                        return Ok(());
+                        return Ok(ControlFlow::Continue(()));
                     }
                     if let ControlFlow::Break(result) =
                         self.parser
@@ -113,7 +117,7 @@ pub(crate) mod tests {
                         self.result = Some(result);
                     }
                 }
-                Ok(())
+                Ok(ControlFlow::Continue(()))
             }
         }
 
@@ -123,7 +127,7 @@ pub(crate) mod tests {
             result: None,
             unconsumed: 0,
         };
-        Lexer::new(&mut drive)
+        let _ = Lexer::new(&mut drive)
             .lex_all(input)
             .expect("test input must lex and parse");
         assert_eq!(

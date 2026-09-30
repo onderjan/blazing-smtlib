@@ -9,6 +9,7 @@
 //! each of them.
 
 use std::convert::Infallible;
+use std::ops::ControlFlow;
 
 use smt_parser_rs::{
     SmtLocation, SmtSpan,
@@ -28,9 +29,13 @@ struct OwnedToken {
 struct CollectTokens(Vec<OwnedToken>);
 
 impl TokenHandler for CollectTokens {
+    type Result = ();
     type Error = Infallible;
 
-    fn handle_tokens(&mut self, cursor: &mut TokenCursor<'_>) -> Result<(), Self::Error> {
+    fn handle_tokens(
+        &mut self,
+        cursor: &mut TokenCursor<'_>,
+    ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         while let Some(token) = cursor.take() {
             self.0.push(OwnedToken {
                 ty: token.ty(),
@@ -38,7 +43,7 @@ impl TokenHandler for CollectTokens {
                 span: token.span(),
             });
         }
-        Ok(())
+        Ok(ControlFlow::Continue(()))
     }
 }
 
@@ -730,16 +735,20 @@ struct RejectNth {
 }
 
 impl TokenHandler for RejectNth {
+    type Result = ();
     type Error = ();
 
-    fn handle_tokens(&mut self, cursor: &mut TokenCursor<'_>) -> Result<(), Self::Error> {
+    fn handle_tokens(
+        &mut self,
+        cursor: &mut TokenCursor<'_>,
+    ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         while cursor.take().is_some() {
             if self.remaining == 0 {
                 return Err(());
             }
             self.remaining -= 1;
         }
-        Ok(())
+        Ok(ControlFlow::Continue(()))
     }
 }
 

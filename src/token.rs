@@ -1,3 +1,5 @@
+use std::ops::ControlFlow;
+
 use crate::{
     SmtBinDigitsView, SmtDecimalView, SmtHexDigitsView, SmtKeywordView, SmtNumeralView, SmtSpan,
     SmtStringContentView, SmtSymbolView,
@@ -276,23 +278,35 @@ impl<'a> TokenCursor<'a> {
 
 /// A sequential handler of tokens.
 pub trait TokenHandler {
+    /// The value the handler finishes with.
+    type Result;
     type Error;
 
     /// Handles the tokens handed over in the cursor, in order.
     ///
-    /// Returning `Ok(())` means all tokens were handled: the cursor must
-    /// be empty, which it also is after a [`TokenCursor::relex`] request.
+    /// Returning [`ControlFlow::Continue`] means all tokens were handled and
+    /// more are wanted: the cursor must be empty, which it also is after a
+    /// [`TokenCursor::relex`] request. Returning [`ControlFlow::Break`] with
+    /// the result means the handler is finished: lexing stops after the
+    /// consumed tokens and the result is returned to the caller of the lexer.
     /// Returning an error means the handler failed at the token after
     /// the consumed ones.
-    fn handle_tokens(&mut self, cursor: &mut TokenCursor<'_>) -> Result<(), Self::Error>;
+    fn handle_tokens(
+        &mut self,
+        cursor: &mut TokenCursor<'_>,
+    ) -> Result<ControlFlow<Self::Result>, Self::Error>;
 }
 
 /// Mutable references over token handlers are token handlers.
 impl<T: TokenHandler + ?Sized> TokenHandler for &mut T {
+    type Result = T::Result;
     type Error = T::Error;
 
     #[inline]
-    fn handle_tokens(&mut self, cursor: &mut TokenCursor<'_>) -> Result<(), Self::Error> {
+    fn handle_tokens(
+        &mut self,
+        cursor: &mut TokenCursor<'_>,
+    ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         (**self).handle_tokens(cursor)
     }
 }

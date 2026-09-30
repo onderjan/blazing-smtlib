@@ -7,6 +7,7 @@
 mod reserved_words;
 
 use std::convert::Infallible;
+use std::ops::ControlFlow;
 
 use smt_parser_rs::{
     read::lexer::Lexer,
@@ -39,13 +40,17 @@ struct Lexed {
 struct CollectTokens(Vec<Lexed>);
 
 impl TokenHandler for CollectTokens {
+    type Result = ();
     type Error = Infallible;
 
-    fn handle_tokens(&mut self, cursor: &mut TokenCursor<'_>) -> Result<(), Self::Error> {
+    fn handle_tokens(
+        &mut self,
+        cursor: &mut TokenCursor<'_>,
+    ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         while let Some(token) = cursor.take() {
             self.collect(token);
         }
-        Ok(())
+        Ok(ControlFlow::Continue(()))
     }
 }
 
@@ -76,11 +81,11 @@ fn lex_pieces(pieces: &[&[u8]]) -> Vec<Lexed> {
     let mut collected = CollectTokens(Vec::new());
     let mut lexer = Lexer::new(&mut collected);
     for piece in pieces {
-        lexer
+        let _ = lexer
             .lex_slice(piece)
             .unwrap_or_else(|err| panic!("{:?} must lex, got {err:?}", text(&pieces.concat())));
     }
-    lexer
+    let _ = lexer
         .lex_eof()
         .unwrap_or_else(|err| panic!("{:?} must lex, got {err:?}", text(&pieces.concat())));
     drop(lexer);
@@ -194,8 +199,12 @@ fn end_of_input_has_no_content_and_an_empty_span_at_the_end() {
         // line and column, which the offsets alone do not show
         struct Locate<'h>(&'h mut CollectTokens, &'h mut Vec<(u64, u64, u64)>);
         impl TokenHandler for Locate<'_> {
+            type Result = ();
             type Error = Infallible;
-            fn handle_tokens(&mut self, cursor: &mut TokenCursor<'_>) -> Result<(), Self::Error> {
+            fn handle_tokens(
+                &mut self,
+                cursor: &mut TokenCursor<'_>,
+            ) -> Result<ControlFlow<Self::Result>, Self::Error> {
                 while let Some(token) = cursor.take() {
                     if token.ty() == TokenType::EndOfFile {
                         let end = token.span().end();
@@ -203,11 +212,11 @@ fn end_of_input_has_no_content_and_an_empty_span_at_the_end() {
                     }
                     self.0.collect(token);
                 }
-                Ok(())
+                Ok(ControlFlow::Continue(()))
             }
         }
         let mut handler = Locate(&mut collected, &mut locations);
-        Lexer::new(&mut handler)
+        let _ = Lexer::new(&mut handler)
             .lex_all(b"(a)\n  b ")
             .expect("valid input must lex");
     }

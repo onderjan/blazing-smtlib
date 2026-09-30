@@ -8,8 +8,10 @@
 //! handed over alone. A handler that takes only some of a batch's tokens
 //! and requests re-lexing makes the lexer lex again after the last taken
 //! token, so the tokens a handler takes are the same in every stopping
-//! pattern, spans included.
+//! pattern, spans included. A handler that finishes ends lexing after the
+//! tokens it took, with the lexer left at that location.
 
+use std::ops::ControlFlow;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use smt_parser_rs::{
@@ -59,6 +61,11 @@ enum Reply {
     /// Take `consumed` tokens and return as if done, which the lexer rejects
     /// when tokens are left.
     Leave { consumed: usize },
+    /// Take `consumed` tokens and finish.
+    Finish { consumed: usize },
+    /// Take `consumed` tokens, request re-lexing, and finish, which is a
+    /// contradiction the lexer rejects.
+    FinishAfterRelex { consumed: usize },
 }
 
 impl Reply {
@@ -66,9 +73,11 @@ impl Reply {
     fn takes(self, len: usize) -> usize {
         match self {
             Reply::TakeAll => len,
-            Reply::Relex { consumed } | Reply::Fail { consumed } | Reply::Leave { consumed } => {
-                consumed.min(len)
-            }
+            Reply::Relex { consumed }
+            | Reply::Fail { consumed }
+            | Reply::Leave { consumed }
+            | Reply::Finish { consumed }
+            | Reply::FinishAfterRelex { consumed } => consumed.min(len),
         }
     }
 }
@@ -84,9 +93,13 @@ struct Recorder<'r> {
 }
 
 impl TokenHandler for Recorder<'_> {
+    type Result = ();
     type Error = ();
 
-    fn handle_tokens(&mut self, cursor: &mut TokenCursor<'_>) -> Result<(), ()> {
+    fn handle_tokens(
+        &mut self,
+        cursor: &mut TokenCursor<'_>,
+    ) -> Result<ControlFlow<Self::Result>, ()> {
         // record every token of the hand-over by walking a copy of the cursor
         let mut walk = *cursor;
         let mut tokens = Vec::new();
@@ -99,12 +112,17 @@ impl TokenHandler for Recorder<'_> {
         let reply = self.plan.get(index).copied().unwrap_or(Reply::TakeAll);
         cursor.advance(reply.takes(len));
         match reply {
-            Reply::TakeAll | Reply::Leave { .. } => Ok(()),
+            Reply::TakeAll | Reply::Leave { .. } => Ok(ControlFlow::Continue(())),
             Reply::Relex { .. } => {
                 cursor.relex();
-                Ok(())
+                Ok(ControlFlow::Continue(()))
             }
             Reply::Fail { .. } => Err(()),
+            Reply::Finish { .. } => Ok(ControlFlow::Break(())),
+            Reply::FinishAfterRelex { .. } => {
+                cursor.relex();
+                Ok(ControlFlow::Break(()))
+            }
         }
     }
 }
@@ -116,6 +134,8 @@ struct Run {
     calls: Vec<Vec<Recorded>>,
     /// The error that ended the run, if any.
     error: Option<LexError<()>>,
+    /// The lexer location at which the handler finished, if it did.
+    finished_at: Option<(u64, u64, u64)>,
 }
 
 impl Run {
@@ -152,6 +172,7 @@ impl Run {
 fn run(chunks: &[&[u8]], plan: &[Reply]) -> Run {
     let mut calls = Vec::new();
     let mut error = None;
+    let mut finished_at = None;
     {
         let mut lexer = Lexer::new(Recorder {
             calls: &mut calls,
@@ -159,9 +180,16 @@ fn run(chunks: &[&[u8]], plan: &[Reply]) -> Run {
         });
         let mut expected = SmtLocation::initial();
         for chunk in chunks {
-            if let Err(err) = lexer.lex_slice(chunk) {
-                error = Some(err);
-                break;
+            match lexer.lex_slice(chunk) {
+                Ok(ControlFlow::Continue(())) => {}
+                Ok(ControlFlow::Break(())) => {
+                    finished_at = Some(loc(lexer.current_location()));
+                    break;
+                }
+                Err(err) => {
+                    error = Some(err);
+                    break;
+                }
             }
             expected = chunk
                 .iter()
@@ -173,13 +201,19 @@ fn run(chunks: &[&[u8]], plan: &[Reply]) -> Run {
                 String::from_utf8_lossy(chunk)
             );
         }
-        if error.is_none()
-            && let Err(err) = lexer.lex_eof()
-        {
-            error = Some(err);
+        if error.is_none() && finished_at.is_none() {
+            match lexer.lex_eof() {
+                Ok(ControlFlow::Continue(())) => {}
+                Ok(ControlFlow::Break(())) => finished_at = Some(loc(lexer.current_location())),
+                Err(err) => error = Some(err),
+            }
         }
     }
-    Run { calls, error }
+    Run {
+        calls,
+        error,
+        finished_at,
+    }
 }
 
 /// The tokens of the input lexed as one slice, taking everything.
@@ -425,6 +459,78 @@ fn impossible_relex_stops_panic() {
     }
 }
 
+// --- Finishing ---
+
+#[test]
+fn a_finish_stop_takes_a_prefix_and_ends_lexing() {
+    // the handler finishes after three tokens of the first hand-over: nothing
+    // more is handed over, not even the end of file, and the lexer is left
+    // after the third token
+    let plan = [Reply::Finish { consumed: 3 }];
+    let run = run(&[RELEX_INPUT], &plan);
+    assert!(run.error.is_none());
+    assert_eq!(run.sizes(), [7]);
+    assert_eq!(run.taken(&plan), reference(RELEX_INPUT)[..3]);
+    assert_eq!(run.finished_at, Some(loc(run.calls[0][2].span.end())));
+}
+
+#[test]
+fn a_finish_stop_before_the_first_token_ends_at_the_batch_start() {
+    let plan = [Reply::Finish { consumed: 0 }];
+    let run = run(&[RELEX_INPUT], &plan);
+    assert!(run.error.is_none());
+    assert_eq!(run.sizes(), [7]);
+    assert!(run.taken(&plan).is_empty());
+    assert_eq!(run.finished_at, Some((0, 0, 0)));
+}
+
+#[test]
+fn a_finish_stop_across_chunks_leaves_the_rest_unread() {
+    // the second chunk finishes the handler after its first token: the
+    // third chunk is never lexed
+    let chunks: &[&[u8]] = &[b"a b ", b"c d ", b"e f "];
+    let plan = [Reply::TakeAll, Reply::Finish { consumed: 1 }];
+    let run = run(chunks, &plan);
+    assert!(run.error.is_none());
+    assert_eq!(run.sizes(), [2, 2]);
+    assert_eq!(run.taken(&plan), reference(b"a b c ")[..3]);
+    assert_eq!(run.finished_at, Some((5, 0, 5)));
+}
+
+#[test]
+fn a_finish_stop_at_the_end_of_file_token_is_returned_by_lex_eof() {
+    // the tokens are handed over at the end of the slice, so the second
+    // hand-over is the end-of-file token alone
+    let plan = [Reply::TakeAll, Reply::Finish { consumed: 1 }];
+    let run = run(&[b"a b "], &plan);
+    assert!(run.error.is_none());
+    assert_ends_with_eof_alone(&run);
+    assert_eq!(run.finished_at, Some((4, 0, 4)));
+}
+
+#[test]
+#[should_panic(expected = "cannot lex after the token handler finished")]
+fn lexing_after_a_finish_panics() {
+    let mut calls = Vec::new();
+    let plan = [Reply::Finish { consumed: 1 }];
+    let mut lexer = Lexer::new(Recorder {
+        calls: &mut calls,
+        plan: &plan,
+    });
+    assert!(matches!(
+        lexer.lex_slice(b"a b "),
+        Ok(ControlFlow::Break(()))
+    ));
+    let _ = lexer.lex_slice(b"c ");
+}
+
+#[test]
+#[should_panic(expected = "cannot both finish and request relex")]
+fn finishing_and_requesting_relex_together_panics() {
+    let plan = [Reply::FinishAfterRelex { consumed: 1 }];
+    let _ = run(&[b"a b "], &plan);
+}
+
 // --- Errors ---
 
 #[test]
@@ -471,7 +577,7 @@ fn a_handler_that_returns_ok_with_tokens_left_panics() {
             .or_else(|| payload.downcast_ref::<&str>().copied())
             .unwrap_or("<non-string panic payload>");
         assert!(
-            message.contains("must consume all tokens before returning Ok"),
+            message.contains("must consume all tokens before continuing"),
             "chunks {chunks:?} under {plan:?}: panic {message:?}"
         );
     }

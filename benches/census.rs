@@ -19,6 +19,7 @@ mod common;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::BTreeMap;
 use std::convert::Infallible;
+use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -101,13 +102,17 @@ struct Census {
 }
 
 impl TokenHandler for Census {
+    type Result = ();
     type Error = Infallible;
 
-    fn handle_tokens(&mut self, cursor: &mut TokenCursor<'_>) -> Result<(), Self::Error> {
+    fn handle_tokens(
+        &mut self,
+        cursor: &mut TokenCursor<'_>,
+    ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         while let Some(token) = cursor.take() {
             self.tally(token);
         }
-        Ok(())
+        Ok(ControlFlow::Continue(()))
     }
 }
 

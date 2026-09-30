@@ -12,6 +12,8 @@ mod reserved_words;
 use common::{assert_error_span, assert_parser_error, parse};
 use reserved_words::{COMMAND_NAMES, reserved_words};
 
+use std::ops::ControlFlow;
+
 use smt_parser_rs::{
     CheckStandardSyntax, NonstandardCommandError,
     read::{SmtReadError, SmtReader},
@@ -223,7 +225,9 @@ fn read_pieces(pieces: &[&[u8]]) -> Result<(), SmtReadError<NonstandardCommandEr
     let mut handler = CheckStandardSyntax;
     let mut reader = SmtReader::new(&mut handler);
     for piece in pieces {
-        reader.read_slice(piece)?;
+        if let ControlFlow::Break(()) = reader.read_slice(piece)? {
+            return Ok(());
+        }
     }
     reader.read_eof()
 }

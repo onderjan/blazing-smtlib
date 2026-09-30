@@ -21,12 +21,16 @@ use smt_parser_rs::{
 struct Probe<F>(F);
 
 impl<F: FnMut(TokenCursor<'_>)> TokenHandler for Probe<F> {
+    type Result = ();
     type Error = Infallible;
 
-    fn handle_tokens(&mut self, cursor: &mut TokenCursor<'_>) -> Result<(), Infallible> {
+    fn handle_tokens(
+        &mut self,
+        cursor: &mut TokenCursor<'_>,
+    ) -> Result<ControlFlow<Self::Result>, Infallible> {
         (self.0)(*cursor);
         cursor.advance(usize::MAX);
-        Ok(())
+        Ok(ControlFlow::Continue(()))
     }
 }
 
@@ -34,9 +38,9 @@ impl<F: FnMut(TokenCursor<'_>)> TokenHandler for Probe<F> {
 fn on_batches(chunks: &[&[u8]], check: impl FnMut(TokenCursor<'_>)) {
     let mut lexer = Lexer::new(Probe(check));
     for chunk in chunks {
-        lexer.lex_slice(chunk).expect("valid input must lex");
+        let _ = lexer.lex_slice(chunk).expect("valid input must lex");
     }
-    lexer.lex_eof().expect("valid input must lex");
+    let _ = lexer.lex_eof().expect("valid input must lex");
 }
 
 /// The single hand-over of the input as one slice, before the end of file.

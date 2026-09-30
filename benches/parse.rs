@@ -37,6 +37,7 @@
 mod common;
 
 use std::convert::Infallible;
+use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Instant;
@@ -56,13 +57,17 @@ struct DiscardTokens {
 }
 
 impl TokenHandler for DiscardTokens {
+    type Result = ();
     type Error = Infallible;
 
-    fn handle_tokens(&mut self, cursor: &mut TokenCursor<'_>) -> Result<(), Self::Error> {
+    fn handle_tokens(
+        &mut self,
+        cursor: &mut TokenCursor<'_>,
+    ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         while cursor.take().is_some() {
             self.tokens += 1;
         }
-        Ok(())
+        Ok(ControlFlow::Continue(()))
     }
 }
 

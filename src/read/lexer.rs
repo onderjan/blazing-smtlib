@@ -6,6 +6,8 @@ pub use error::{LexError, LexerError, LexerErrorKind};
 
 pub(crate) use char_class::CharClass;
 
+use std::ops::ControlFlow;
+
 use crate::{
     SmtLocation, SmtSpan, String8,
     read::lexer::{
@@ -63,15 +65,17 @@ struct Batch<'a> {
 }
 
 /// Why lexing stopped before the end of the slice.
-enum Stop<E> {
+enum Stop<R, E> {
     /// The handler requested lexing again from the stop location.
     Relex,
+    /// The handler finished with a result at the stop location.
+    Finished(R),
     /// Lexing or handling failed.
     Error(E),
 }
 
-struct Interrupted<E> {
-    stop: Stop<E>,
+struct Interrupted<R, E> {
+    stop: Stop<R, E>,
     stop_location: SmtLocation,
 }
 
@@ -89,7 +93,10 @@ enum LexerState {
     QuotedSymbol,
     Keyword,
     Comment,
+    /// A lexer or handler error was returned; lexing cannot continue.
     Failed,
+    /// The handler finished with a result; lexing cannot continue.
+    Finished,
 }
 
 impl<H: TokenHandler> Lexer<H> {
@@ -115,15 +122,20 @@ impl<H: TokenHandler> Lexer<H> {
     ///
     /// Sends the lexed tokens to the handler progressively.
     /// Returns on the first error.
-    pub fn lex_all(&mut self, input: &[u8]) -> Result<(), LexError<H::Error>> {
-        self.lex_slice(input)?;
-        self.lex_eof()
+    pub fn lex_all(&mut self, input: &[u8]) -> Result<ControlFlow<H::Result>, LexError<H::Error>> {
+        match self.lex_slice(input)? {
+            ControlFlow::Break(result) => Ok(ControlFlow::Break(result)),
+            ControlFlow::Continue(()) => self.lex_eof(),
+        }
     }
 
     /// Lexes the given slice, sending the lexed tokens to the handler.
     ///
     /// Panics if a previous call returned an error.
-    pub fn lex_slice(&mut self, slice: &[u8]) -> Result<(), LexError<H::Error>> {
+    pub fn lex_slice(
+        &mut self,
+        slice: &[u8],
+    ) -> Result<ControlFlow<H::Result>, LexError<H::Error>> {
         // call inner lexing and fail on error
         self.fail_on_error(|lexer| lexer.lex_slice_inner(slice))
     }
@@ -134,19 +146,19 @@ impl<H: TokenHandler> Lexer<H> {
     /// if a slice is available.
     ///
     /// Panics if a previous call returned an error.
-    pub fn lex_next(&mut self, c: u8) -> Result<(), LexError<H::Error>> {
+    pub fn lex_next(&mut self, c: u8) -> Result<ControlFlow<H::Result>, LexError<H::Error>> {
         self.lex_slice(&[c])
     }
 
     /// Lexes end-of-file, sending the lexed tokens to the handler.
     ///
     /// Panics if a previous call returned an error.
-    pub fn lex_eof(&mut self) -> Result<(), LexError<H::Error>> {
+    pub fn lex_eof(&mut self) -> Result<ControlFlow<H::Result>, LexError<H::Error>> {
         // call inner EOF lexing and fail on error
         self.fail_on_error(|lexer| lexer.lex_eof_inner())
     }
 
-    fn lex_eof_inner(&mut self) -> Result<(), LexError<H::Error>> {
+    fn lex_eof_inner(&mut self) -> Result<ControlFlow<H::Result>, LexError<H::Error>> {
         // TODO: do not construct batch here
         let mut batch: Batch = Batch {
             entries: [None; BATCH_CAPACITY],
@@ -193,6 +205,9 @@ impl<H: TokenHandler> Lexer<H> {
             LexerState::Failed => {
                 panic!("cannot lex after a lexer error")
             }
+            LexerState::Finished => {
+                panic!("cannot lex after the token handler finished")
+            }
         }
         .and_then(|()| {
             // everything has been processed, start the EOF token and sink it
@@ -204,18 +219,26 @@ impl<H: TokenHandler> Lexer<H> {
             Ok(()) => {
                 // everything processed, reset the lexer to normal
                 self.state = LexerState::Normal;
-                Ok(())
+                Ok(ControlFlow::Continue(()))
             }
             Err(interrupted) => match interrupted.stop {
                 Stop::Relex => {
                     panic!("token handler cannot request relex at end of file")
+                }
+                Stop::Finished(result) => {
+                    // the handler is done with the input
+                    self.state = LexerState::Finished;
+                    Ok(ControlFlow::Break(result))
                 }
                 Stop::Error(err) => Err(err),
             },
         }
     }
 
-    fn lex_slice_inner(&mut self, slice: &[u8]) -> Result<(), LexError<H::Error>> {
+    fn lex_slice_inner(
+        &mut self,
+        slice: &[u8],
+    ) -> Result<ControlFlow<H::Result>, LexError<H::Error>> {
         let mut batch: Batch = Batch {
             entries: [None; BATCH_CAPACITY],
             len: 0,
@@ -223,7 +246,7 @@ impl<H: TokenHandler> Lexer<H> {
 
         let initial_offset = self.offset;
         let mut rest = slice;
-        let mut fn_result = Ok(());
+        let mut fn_result = Ok(ControlFlow::Continue(()));
 
         loop {
             let result = if rest.is_empty() || fn_result.is_err() {
@@ -253,6 +276,9 @@ impl<H: TokenHandler> Lexer<H> {
                     LexerState::Keyword => self.lex_keyword(&mut batch, rest),
                     LexerState::Comment => self.lex_comment(rest),
                     LexerState::Failed => panic!("cannot lex after a lexer error"),
+                    LexerState::Finished => {
+                        panic!("cannot lex after the token handler finished")
+                    }
                 }
             };
 
@@ -270,14 +296,7 @@ impl<H: TokenHandler> Lexer<H> {
                 Err(interrupted) => match interrupted.stop {
                     Stop::Relex => {
                         let location = interrupted.stop_location;
-                        // the region after the location was lexed once already,
-                        // restore all bookkeeping
-                        self.offset = location.offset();
-                        self.line = location.line();
-                        self.line_start = location.offset() - location.column();
-                        // a stop inside an arm leaves it mid-token
-                        self.state = LexerState::Normal;
-                        self.token_content.clear();
+                        self.resume_at(location);
                         // every handed-over token borrows this slice
                         // so the location must be equal or greater to initial offset
                         let index = location
@@ -285,7 +304,15 @@ impl<H: TokenHandler> Lexer<H> {
                             .checked_sub(initial_offset)
                             .expect("the token handler must not stop before the starting token");
                         rest = &slice[index as usize..];
-                        fn_result = Ok(());
+                        fn_result = Ok(ControlFlow::Continue(()));
+                    }
+                    Stop::Finished(result) => {
+                        // the handler is done: the batch was handed over, the rest
+                        // of the slice stays unlexed and the location is where
+                        // the handler stopped
+                        self.resume_at(interrupted.stop_location);
+                        self.state = LexerState::Finished;
+                        return Ok(ControlFlow::Break(result));
                     }
                     Stop::Error(err) => {
                         // make sure the tokens before the error get handed over
@@ -300,7 +327,7 @@ impl<H: TokenHandler> Lexer<H> {
         &mut self,
         batch: &mut Batch<'a>,
         slice: &'a [u8],
-    ) -> Result<usize, Interrupted<LexError<H::Error>>> {
+    ) -> Result<usize, Interrupted<H::Result, LexError<H::Error>>> {
         let mut index = 0;
 
         // PERFORMANCE: use locals for variables commonly used on the fast path.
@@ -607,7 +634,7 @@ impl<H: TokenHandler> Lexer<H> {
         &mut self,
         batch: &mut Batch<'a>,
         slice: &[u8],
-    ) -> Result<usize, Interrupted<LexError<H::Error>>> {
+    ) -> Result<usize, Interrupted<H::Result, LexError<H::Error>>> {
         // find the first byte that is not a digit
         let index = run_end(slice, RUN_DIGIT);
 
@@ -653,7 +680,7 @@ impl<H: TokenHandler> Lexer<H> {
         batch: &mut Batch<'a>,
         slice: &[u8],
         start: usize,
-    ) -> Result<usize, Interrupted<LexError<H::Error>>> {
+    ) -> Result<usize, Interrupted<H::Result, LexError<H::Error>>> {
         // find the first byte in the remainder that is not a digit
         let end = start + run_end(&slice[start..], RUN_DIGIT);
         // extend the token from slice
@@ -673,7 +700,7 @@ impl<H: TokenHandler> Lexer<H> {
     fn lex_base_selection(
         &mut self,
         slice: &[u8],
-    ) -> Result<usize, Interrupted<LexError<H::Error>>> {
+    ) -> Result<usize, Interrupted<H::Result, LexError<H::Error>>> {
         let c = slice[0];
         self.state = match c {
             b'x' => LexerState::Hexadecimal,
@@ -691,7 +718,7 @@ impl<H: TokenHandler> Lexer<H> {
         batch: &mut Batch<'a>,
         slice: &[u8],
         run: DigitRun,
-    ) -> Result<usize, Interrupted<LexError<H::Error>>> {
+    ) -> Result<usize, Interrupted<H::Result, LexError<H::Error>>> {
         // find the first byte that is not allowed in the run
         let index = run_end(slice, run.flag);
         // extend the token from slice
@@ -709,7 +736,7 @@ impl<H: TokenHandler> Lexer<H> {
         &mut self,
         batch: &mut Batch<'a>,
         mut rest: &[u8],
-    ) -> Result<usize, Interrupted<LexError<H::Error>>> {
+    ) -> Result<usize, Interrupted<H::Result, LexError<H::Error>>> {
         let mut consumed = 0;
         while !rest.is_empty() {
             if matches!(self.state, LexerState::StringLiteralDoubleQuote) {
@@ -785,7 +812,7 @@ impl<H: TokenHandler> Lexer<H> {
         &mut self,
         batch: &mut Batch<'a>,
         slice: &[u8],
-    ) -> Result<usize, Interrupted<LexError<H::Error>>> {
+    ) -> Result<usize, Interrupted<H::Result, LexError<H::Error>>> {
         // find the first byte that is not a simple symbol
         let index = run_end(slice, RUN_SIMPLE_SYMBOL);
 
@@ -806,7 +833,7 @@ impl<H: TokenHandler> Lexer<H> {
         &mut self,
         batch: &mut Batch<'a>,
         mut rest: &[u8],
-    ) -> Result<usize, Interrupted<LexError<H::Error>>> {
+    ) -> Result<usize, Interrupted<H::Result, LexError<H::Error>>> {
         let mut consumed = 0;
         loop {
             // find the first byte that is not a quoted symbol
@@ -867,7 +894,7 @@ impl<H: TokenHandler> Lexer<H> {
         &mut self,
         batch: &mut Batch<'a>,
         slice: &[u8],
-    ) -> Result<usize, Interrupted<LexError<H::Error>>> {
+    ) -> Result<usize, Interrupted<H::Result, LexError<H::Error>>> {
         // test that the keyword does not start with a digit
         if self.token_content.is_empty() && slice[0].is_ascii_digit() {
             return Err(self.error_at(LexerErrorKind::ForbiddenKeywordName, 1));
@@ -889,7 +916,10 @@ impl<H: TokenHandler> Lexer<H> {
         Ok(index)
     }
 
-    fn lex_comment(&mut self, slice: &[u8]) -> Result<usize, Interrupted<LexError<H::Error>>> {
+    fn lex_comment(
+        &mut self,
+        slice: &[u8],
+    ) -> Result<usize, Interrupted<H::Result, LexError<H::Error>>> {
         // run until comment end
         let index = run_end(slice, RUN_COMMENT_PLAIN);
         let Some(c) = slice.get(index) else {
@@ -917,7 +947,7 @@ impl<H: TokenHandler> Lexer<H> {
         batch: &mut Batch<'a>,
         end: TokenEnd,
         content: Content<'a>,
-    ) -> Result<(), Interrupted<LexError<H::Error>>> {
+    ) -> Result<(), Interrupted<H::Result, LexError<H::Error>>> {
         // decimals of the form 7. without any digit in fractional part are disallowed
         let value = content.bytes(&self.token_content);
         if value.last().is_none_or(|c| *c == b'.') {
@@ -931,7 +961,7 @@ impl<H: TokenHandler> Lexer<H> {
         batch: &mut Batch<'a>,
         end: TokenEnd,
         content: Content<'a>,
-    ) -> Result<(), Interrupted<LexError<H::Error>>> {
+    ) -> Result<(), Interrupted<H::Result, LexError<H::Error>>> {
         self.sink_slice(batch, InnerType::Numeral, end, content)
     }
 
@@ -941,7 +971,7 @@ impl<H: TokenHandler> Lexer<H> {
         run: DigitRun,
         end: TokenEnd,
         content: Content<'a>,
-    ) -> Result<(), Interrupted<LexError<H::Error>>> {
+    ) -> Result<(), Interrupted<H::Result, LexError<H::Error>>> {
         // digit runs must not be empty
         let value = content.bytes(&self.token_content);
         if value.is_empty() {
@@ -955,7 +985,7 @@ impl<H: TokenHandler> Lexer<H> {
         batch: &mut Batch<'a>,
         end: TokenEnd,
         content: Content<'a>,
-    ) -> Result<(), Interrupted<LexError<H::Error>>> {
+    ) -> Result<(), Interrupted<H::Result, LexError<H::Error>>> {
         self.sink_slice(batch, InnerType::UnquotedSymbol, end, content)
     }
 
@@ -964,7 +994,7 @@ impl<H: TokenHandler> Lexer<H> {
         batch: &mut Batch<'a>,
         end: TokenEnd,
         content: Content<'a>,
-    ) -> Result<(), Interrupted<LexError<H::Error>>> {
+    ) -> Result<(), Interrupted<H::Result, LexError<H::Error>>> {
         let value = content.bytes(&self.token_content);
         // ensure the keyword is not empty
         if value.is_empty() {
@@ -978,7 +1008,7 @@ impl<H: TokenHandler> Lexer<H> {
         batch: &mut Batch<'a>,
         end: TokenEnd,
         content: Content<'a>,
-    ) -> Result<(), Interrupted<LexError<H::Error>>> {
+    ) -> Result<(), Interrupted<H::Result, LexError<H::Error>>> {
         self.sink_slice(batch, InnerType::String, end, content)
     }
 
@@ -990,7 +1020,7 @@ impl<H: TokenHandler> Lexer<H> {
         ty: InnerType,
         end: TokenEnd,
         content: Content<'a>,
-    ) -> Result<(), Interrupted<LexError<H::Error>>> {
+    ) -> Result<(), Interrupted<H::Result, LexError<H::Error>>> {
         // the caller of this function is responsible
         // for ensuring that the constructed token is valid
 
@@ -1026,7 +1056,23 @@ impl<H: TokenHandler> Lexer<H> {
         }
     }
 
-    fn flush_batch(&mut self, batch: &mut Batch) -> Result<(), Interrupted<LexError<H::Error>>> {
+    /// Moves the lexer back to `location`, which the tokens handed over
+    /// so far end at, discarding whatever was lexed beyond it.
+    fn resume_at(&mut self, location: SmtLocation) {
+        // the region after the location was lexed once already,
+        // restore all bookkeeping
+        self.offset = location.offset();
+        self.line = location.line();
+        self.line_start = location.offset() - location.column();
+        // a stop inside an arm leaves it mid-token
+        self.state = LexerState::Normal;
+        self.token_content.clear();
+    }
+
+    fn flush_batch(
+        &mut self,
+        batch: &mut Batch,
+    ) -> Result<(), Interrupted<H::Result, LexError<H::Error>>> {
         // the batch is spent once handed over, no matter what the handler decides
         let len = std::mem::replace(&mut batch.len, 0);
         if len == 0 {
@@ -1041,7 +1087,7 @@ impl<H: TokenHandler> Lexer<H> {
     fn flush_cursor(
         handler: &mut H,
         mut cursor: TokenCursor,
-    ) -> Result<(), Interrupted<LexError<H::Error>>> {
+    ) -> Result<(), Interrupted<H::Result, LexError<H::Error>>> {
         // where lexing continues if the handler stops before the first token
         // relex request empties the cursor, so we need to remember it here
         let first_start = cursor
@@ -1050,14 +1096,21 @@ impl<H: TokenHandler> Lexer<H> {
             .span()
             .start();
         let stop = match handler.handle_tokens(&mut cursor) {
-            Ok(()) if cursor.relex_requested() => Stop::Relex,
-            Ok(()) => {
+            Ok(ControlFlow::Continue(())) if cursor.relex_requested() => Stop::Relex,
+            Ok(ControlFlow::Continue(())) => {
                 // ensure the cursor has been fully consumed
                 assert!(
                     cursor.is_empty(),
-                    "the token handler must consume all tokens before returning Ok"
+                    "the token handler must consume all tokens before continuing"
                 );
                 return Ok(());
+            }
+            Ok(ControlFlow::Break(result)) => {
+                assert!(
+                    !cursor.relex_requested(),
+                    "the token handler cannot both finish and request relex"
+                );
+                Stop::Finished(result)
             }
             Err(err) => Stop::Error(LexError::Handler(err)),
         };
@@ -1075,7 +1128,7 @@ impl<H: TokenHandler> Lexer<H> {
     }
 
     #[inline]
-    fn sink_eof(&mut self) -> Result<(), Interrupted<LexError<H::Error>>> {
+    fn sink_eof(&mut self) -> Result<(), Interrupted<H::Result, LexError<H::Error>>> {
         // construct the span at the first position in the batch
         let end = self.location_at(0);
         self.spans[0] = SmtSpan::new_unchecked(self.token_start, end);
@@ -1132,7 +1185,7 @@ impl<H: TokenHandler> Lexer<H> {
         entry: (InnerType, &'a [u8]),
         range: std::ops::Range<usize>,
         emit: usize,
-    ) -> Result<(), Interrupted<LexError<H::Error>>> {
+    ) -> Result<(), Interrupted<H::Result, LexError<H::Error>>> {
         batch.entries[local.len] = Some(entry);
         self.spans[local.len] = SmtSpan::on_line(
             local.line,
@@ -1173,7 +1226,7 @@ impl<H: TokenHandler> Lexer<H> {
     }
 
     /// Error spanning the token so far and, if it ended at a byte, that byte.
-    fn error<E>(&self, kind: LexerErrorKind, end: TokenEnd) -> Interrupted<LexError<E>> {
+    fn error<R, E>(&self, kind: LexerErrorKind, end: TokenEnd) -> Interrupted<R, LexError<E>> {
         self.error_at(kind, end.position + end.at_byte as usize)
     }
 
@@ -1181,7 +1234,7 @@ impl<H: TokenHandler> Lexer<H> {
     ///
     /// Used for errors detected mid-run, e.g. forbidden byte in a string
     /// or a backslash in a quoted symbol.
-    fn error_at<E>(&self, kind: LexerErrorKind, position: usize) -> Interrupted<LexError<E>> {
+    fn error_at<R, E>(&self, kind: LexerErrorKind, position: usize) -> Interrupted<R, LexError<E>> {
         let end = self.location_at(position);
         let span = SmtSpan::new_unchecked(self.token_start, end);
         // no tokens have been consumed, as this is an error
@@ -1198,8 +1251,8 @@ impl<H: TokenHandler> Lexer<H> {
     /// Called from the outer public functions.
     fn fail_on_error(
         &mut self,
-        step: impl FnOnce(&mut Self) -> Result<(), LexError<H::Error>>,
-    ) -> Result<(), LexError<H::Error>> {
+        step: impl FnOnce(&mut Self) -> Result<ControlFlow<H::Result>, LexError<H::Error>>,
+    ) -> Result<ControlFlow<H::Result>, LexError<H::Error>> {
         let result = step(self);
         if result.is_err() {
             self.state = LexerState::Failed;

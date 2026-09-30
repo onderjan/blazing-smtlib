@@ -22,7 +22,6 @@ pub(crate) enum ScriptParserState<H: CommandHandler> {
     CommandOpen,
     Command(StandardCommandKind),
     NonstandardCommand(H::NonstandardParser),
-    Exit,
 }
 
 impl<'a, H: CommandHandler> ScriptParser<'a, H> {
@@ -82,10 +81,14 @@ impl<'a, H: CommandHandler> ScriptParser<'a, H> {
 }
 
 impl<'a, H: CommandHandler> TokenHandler for ScriptParser<'a, H> {
+    type Result = ();
     type Error = ParserError<H::Error>;
 
     #[inline]
-    fn handle_tokens(&mut self, cursor: &mut TokenCursor<'_>) -> Result<(), ParserError<H::Error>> {
+    fn handle_tokens(
+        &mut self,
+        cursor: &mut TokenCursor<'_>,
+    ) -> Result<ControlFlow<()>, ParserError<H::Error>> {
         while let Some(peeked) = cursor.peek() {
             match &mut self.state {
                 ScriptParserState::AwaitingCommand => {
@@ -140,9 +143,11 @@ impl<'a, H: CommandHandler> TokenHandler for ScriptParser<'a, H> {
                         cursor,
                     )?;
                     if let Some(result) = self.handle_command_progress(flow, Some(kind)) {
-                        self.state = match result {
-                            StandardCommandResult::EndCommand => ScriptParserState::AwaitingCommand,
-                            StandardCommandResult::Exit => ScriptParserState::Exit,
+                        // the script parser is back at its start after every command
+                        self.state = ScriptParserState::AwaitingCommand;
+                        if let StandardCommandResult::Exit = result {
+                            // the exit command ends the script: stop lexing after it
+                            return Ok(ControlFlow::Break(()));
                         }
                     }
                 }
@@ -154,14 +159,9 @@ impl<'a, H: CommandHandler> TokenHandler for ScriptParser<'a, H> {
                         self.state = ScriptParserState::AwaitingCommand;
                     }
                 }
-                ScriptParserState::Exit => {
-                    // consume everything and return
-                    cursor.advance(usize::MAX);
-                    return Ok(());
-                }
             }
         }
         // we consumed the cursor, return
-        Ok(())
+        Ok(ControlFlow::Continue(()))
     }
 }

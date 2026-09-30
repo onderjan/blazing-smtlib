@@ -50,8 +50,8 @@ fn numeral_as_command_name() {
 #[test]
 fn unclosed_command_points_at_eof() {
     // the error is on the zero-width EOF token
-    let _ = assert_parser_error(b"(check-sat", 10, 10);
-    let _ = assert_parser_error(b"(check-sat\n", 11, 11);
+    assert_parser_error(b"(check-sat", 10, 10);
+    assert_parser_error(b"(check-sat\n", 11, 11);
 }
 
 // --- Nonstandard commands ---
@@ -530,8 +530,8 @@ fn set_info_with_s_expr_attribute_value() {
 
 #[test]
 fn everything_after_exit_is_discarded() {
-    // after (exit), the parser ignores all further tokens, even non-command
-    // garbage and unbalanced parentheses: callers may keep feeding tokens
+    // after (exit), reading stops: the rest of the input is not even lexed,
+    // so garbage and unbalanced parentheses there raise no error
     assert!(parse(b"(exit) x ) ( 1 (check-sat").is_ok());
 }
 

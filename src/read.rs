@@ -14,6 +14,7 @@
 //! resources should serve several reads. The [`lexer`] and [`parser`]
 //! modules can also be used on their own.
 
+use std::ops::ControlFlow;
 use std::{
     fs::File,
     io::{BufRead, BufReader},
@@ -168,7 +169,10 @@ impl<'a, H: CommandHandler> SmtReader<'a, H> {
     /// span at the start of the input. An I/O read error is reported as
     /// an empty span at the respective position.
     ///
-    /// Panics if a previous call on this reader returned an error.
+    /// Reading stops after an exit command: the rest of the file is not read.
+    ///
+    /// Panics if a previous call on this reader returned an error or
+    /// read an exit command.
     pub fn read_file(&mut self, path: &Path) -> Result<(), SmtReadError<H::Error>> {
         let file = File::open(path)
             .map_err(|err| SmtReadError::new(SmtReadErrorKind::Io(err), SmtSpan::new_zero()))?;
@@ -186,7 +190,11 @@ impl<'a, H: CommandHandler> SmtReader<'a, H> {
     /// a zero-length buffer. A failure while reading is reported as
     /// an I/O error with an empty span at the position reached.
     ///
-    /// Panics if a previous call on this reader returned an error.
+    /// Reading stops after an exit command, leaving the buffered reader
+    /// positioned after it: the rest of the input is not read.
+    ///
+    /// Panics if a previous call on this reader returned an error or
+    /// read an exit command.
     pub fn read_all<R: BufRead>(
         &mut self,
         mut buf_reader: R,
@@ -195,10 +203,16 @@ impl<'a, H: CommandHandler> SmtReader<'a, H> {
             match buf_reader.fill_buf() {
                 Ok(buffer) => {
                     if !buffer.is_empty() {
-                        // process the buffer and mark it consumed
-                        let num_consumed = buffer.len();
-                        self.read_slice(buffer)?;
-                        buf_reader.consume(num_consumed)
+                        // process the buffer and mark consumed what the lexer took:
+                        // the whole buffer, or up to where the parser finished
+                        let start = self.lexer.current_location().offset();
+                        let flow = self.read_slice(buffer)?;
+                        let consumed = (self.lexer.current_location().offset() - start) as usize;
+                        buf_reader.consume(consumed);
+                        if let ControlFlow::Break(()) = flow {
+                            // the script has exited, the rest of the input is not read
+                            return Ok(());
+                        }
                     } else {
                         // end of stream, process End of File and return
                         return self.read_eof();
@@ -224,8 +238,14 @@ impl<'a, H: CommandHandler> SmtReader<'a, H> {
     /// call [`read_eof`](Self::read_eof) so the whole input
     /// is fully processed.
     ///
-    /// Panics if a previous call on this reader returned an error.
-    pub fn read_slice(&mut self, slice: &[u8]) -> Result<(), SmtReadError<H::Error>> {
+    /// Returns [`ControlFlow::Break`] if the script ended with an exit
+    /// command inside the piece: the rest of the piece is not read, and
+    /// the reader is finished. The lexer location then tells where the
+    /// script ended, for callers that continue with other input.
+    ///
+    /// Panics if a previous call on this reader returned an error or
+    /// read an exit command.
+    pub fn read_slice(&mut self, slice: &[u8]) -> Result<ControlFlow<()>, SmtReadError<H::Error>> {
         // parsing goes through lexing, so just call the lexer
         Ok(self.lexer.lex_slice(slice)?)
     }
@@ -236,8 +256,12 @@ impl<'a, H: CommandHandler> SmtReader<'a, H> {
     /// [`read_file`](Self::read_file) and [`read_all`](Self::read_all) call
     /// it themselves.
     ///
-    /// Panics if a previous call on this reader returned an error.
+    /// Panics if a previous call on this reader returned an error or
+    /// read an exit command.
     pub fn read_eof(&mut self) -> Result<(), SmtReadError<H::Error>> {
-        Ok(self.lexer.lex_eof()?)
+        // whether the script exited here or the input just ended,
+        // the whole input has been read
+        let _exited = self.lexer.lex_eof()?;
+        Ok(())
     }
 }

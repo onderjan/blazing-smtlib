@@ -364,9 +364,13 @@ struct Drive<'h, H: SmtHandler, P: Parser<H>> {
 }
 
 impl<H: SmtHandler, P: Parser<H>> TokenHandler for Drive<'_, H, P> {
+    type Result = ();
     type Error = ParserError<H::Error>;
 
-    fn handle_tokens(&mut self, cursor: &mut TokenCursor<'_>) -> Result<(), Self::Error> {
+    fn handle_tokens(
+        &mut self,
+        cursor: &mut TokenCursor<'_>,
+    ) -> Result<ControlFlow<()>, Self::Error> {
         while !cursor.is_empty() {
             if self.remaining == 0 {
                 // count the tokens left after the wanted results, except the end of the input
@@ -375,7 +379,7 @@ impl<H: SmtHandler, P: Parser<H>> TokenHandler for Drive<'_, H, P> {
                         self.unconsumed += 1;
                     }
                 }
-                return Ok(());
+                return Ok(ControlFlow::Continue(()));
             }
             if let ControlFlow::Break(result) =
                 self.parser
@@ -385,7 +389,7 @@ impl<H: SmtHandler, P: Parser<H>> TokenHandler for Drive<'_, H, P> {
                 self.remaining -= 1;
             }
         }
-        Ok(())
+        Ok(ControlFlow::Continue(()))
     }
 }
 
@@ -412,7 +416,7 @@ fn run_count_from<H: SmtHandler<Error = Infallible>, P: Parser<H>>(
     };
     let mut lexer = Lexer::new(&mut drive);
     match lexer.lex_all(input) {
-        Ok(()) => {}
+        Ok(_) => {}
         Err(LexError::Handler(err)) => {
             let span = err.span();
             return Err(match err.into_kind() {

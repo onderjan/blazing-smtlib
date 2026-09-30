@@ -2,6 +2,7 @@
 //! payloads, location tracking, handler errors, and misuse panics.
 
 use std::convert::Infallible;
+use std::ops::ControlFlow;
 
 use smt_parser_rs::{
     SmtLocation, SmtSpan,
@@ -27,9 +28,13 @@ struct OwnedToken {
 struct CollectTokens(Vec<OwnedToken>);
 
 impl TokenHandler for CollectTokens {
+    type Result = ();
     type Error = Infallible;
 
-    fn handle_tokens(&mut self, cursor: &mut TokenCursor<'_>) -> Result<(), Self::Error> {
+    fn handle_tokens(
+        &mut self,
+        cursor: &mut TokenCursor<'_>,
+    ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         while let Some(token) = cursor.take() {
             let reserved = match TokenKind::from_token(token, SmtVersion::V2_7) {
                 TokenKind::Reserved(reserved) => Some(reserved),
@@ -42,7 +47,7 @@ impl TokenHandler for CollectTokens {
                 reserved,
             });
         }
-        Ok(())
+        Ok(ControlFlow::Continue(()))
     }
 }
 
@@ -58,7 +63,7 @@ fn into_lexer_error(err: LexError<Infallible>) -> LexerError {
 fn lex_all(input: &[u8]) -> Result<Vec<OwnedToken>, LexerError> {
     let mut collected = CollectTokens(Vec::new());
     let mut lexer = Lexer::new(&mut collected);
-    lexer.lex_all(input).map_err(into_lexer_error)?;
+    let _ = lexer.lex_all(input).map_err(into_lexer_error)?;
     drop(lexer);
     Ok(collected.0)
 }
@@ -343,7 +348,7 @@ fn current_location_follows_consumed_bytes() {
     let mut lexer = Lexer::new(&mut collected);
     assert_eq!(loc(lexer.current_location()), (0, 0, 0));
     for &c in b"ab\nc" {
-        lexer
+        let _ = lexer
             .lex_next(c)
             .map_err(into_lexer_error)
             .expect("valid input");
@@ -609,12 +614,16 @@ fn string_double_quote_escape_is_a_single_quote_in_the_payload() {
 struct RejectTokens;
 
 impl TokenHandler for RejectTokens {
+    type Result = ();
     type Error = SmtSpan;
 
-    fn handle_tokens(&mut self, cursor: &mut TokenCursor<'_>) -> Result<(), Self::Error> {
+    fn handle_tokens(
+        &mut self,
+        cursor: &mut TokenCursor<'_>,
+    ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         match cursor.take() {
             Some(token) => Err(token.span()),
-            None => Ok(()),
+            None => Ok(ControlFlow::Continue(())),
         }
     }
 }
@@ -636,7 +645,7 @@ fn handler_error_is_returned_with_the_handled_token() {
 fn lexing_after_an_error_panics() {
     let mut collected = CollectTokens(Vec::new());
     let mut lexer = Lexer::new(&mut collected);
-    lexer
+    let _ = lexer
         .lex_next(b'7')
         .map_err(into_lexer_error)
         .expect("valid input");
@@ -825,15 +834,19 @@ fn cr_alone_ends_a_comment_but_not_a_line() {
 struct RejectEof;
 
 impl TokenHandler for RejectEof {
+    type Result = ();
     type Error = ();
 
-    fn handle_tokens(&mut self, cursor: &mut TokenCursor<'_>) -> Result<(), Self::Error> {
+    fn handle_tokens(
+        &mut self,
+        cursor: &mut TokenCursor<'_>,
+    ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         while let Some(token) = cursor.take() {
             if token.ty() == TokenType::EndOfFile {
                 return Err(());
             }
         }
-        Ok(())
+        Ok(ControlFlow::Continue(()))
     }
 }
 
@@ -843,7 +856,7 @@ fn lexing_after_a_handler_error_on_the_eof_token_panics() {
     // the EOF token is the last thing lex_eof does; a handler error there
     // must still leave the lexer failed like every other error
     let mut lexer = Lexer::new(RejectEof);
-    lexer.lex_slice(b"a").expect("valid input");
+    let _ = lexer.lex_slice(b"a").expect("valid input");
     assert!(lexer.lex_eof().is_err(), "expected a handler error");
     let _ = lexer.lex_next(b'b');
 }
@@ -853,7 +866,7 @@ fn lexing_after_a_handler_error_on_the_eof_token_panics() {
 fn lexing_after_a_lexer_error_at_eof_panics() {
     let mut collected = CollectTokens(Vec::new());
     let mut lexer = Lexer::new(&mut collected);
-    lexer
+    let _ = lexer
         .lex_slice(b"\"unclosed")
         .map_err(into_lexer_error)
         .expect("valid so far");
@@ -891,18 +904,18 @@ fn records(tokens: &[OwnedToken]) -> Vec<TokenRecord> {
 fn eof_twice_after_a_pending_symbol_produces_two_eof_tokens() {
     let mut collected = CollectTokens(Vec::new());
     let mut lexer = Lexer::new(&mut collected);
-    lexer
+    let _ = lexer
         .lex_slice(b"a")
         .map_err(into_lexer_error)
         .expect("valid input");
-    lexer
+    let _ = lexer
         .lex_eof()
         .map_err(into_lexer_error)
         .expect("first EOF");
     // currently, a second EOF is not rejected: finishing the symbol at the
     // first EOF returns the lexer to the normal state, so the second EOF
     // only repeats the EOF token (a full reset of the lexer is still undecided)
-    lexer
+    let _ = lexer
         .lex_eof()
         .map_err(into_lexer_error)
         .expect("second EOF");
@@ -927,21 +940,21 @@ fn eof_twice_after_a_pending_symbol_produces_two_eof_tokens() {
 fn lexing_continues_after_eof_as_if_the_input_went_on() {
     let mut collected = CollectTokens(Vec::new());
     let mut lexer = Lexer::new(&mut collected);
-    lexer
+    let _ = lexer
         .lex_slice(b"a\n")
         .map_err(into_lexer_error)
         .expect("valid input");
-    lexer
+    let _ = lexer
         .lex_eof()
         .map_err(into_lexer_error)
         .expect("first EOF");
     // currently, more input after EOF is lexed normally, with locations
     // continuing from where the first EOF was reported
-    lexer
+    let _ = lexer
         .lex_slice(b"|b\nc| ")
         .map_err(into_lexer_error)
         .expect("input after EOF");
-    lexer
+    let _ = lexer
         .lex_eof()
         .map_err(into_lexer_error)
         .expect("second EOF");
@@ -971,17 +984,17 @@ fn lexing_continues_after_eof_as_if_the_input_went_on() {
 fn a_token_cut_by_eof_is_finished_and_not_resumed() {
     let mut collected = CollectTokens(Vec::new());
     let mut lexer = Lexer::new(&mut collected);
-    lexer
+    let _ = lexer
         .lex_slice(b"ab")
         .map_err(into_lexer_error)
         .expect("valid input");
     // EOF finishes the pending symbol; bytes fed afterwards start a new one
-    lexer.lex_eof().map_err(into_lexer_error).expect("EOF");
-    lexer
+    let _ = lexer.lex_eof().map_err(into_lexer_error).expect("EOF");
+    let _ = lexer
         .lex_slice(b"cd")
         .map_err(into_lexer_error)
         .expect("input after EOF");
-    lexer
+    let _ = lexer
         .lex_eof()
         .map_err(into_lexer_error)
         .expect("second EOF");
@@ -1013,15 +1026,15 @@ fn eof_twice_after_whitespace_produces_two_eof_tokens() {
     // and the second EOF only repeats the EOF token
     let mut collected = CollectTokens(Vec::new());
     let mut lexer = Lexer::new(&mut collected);
-    lexer
+    let _ = lexer
         .lex_slice(b"a ")
         .map_err(into_lexer_error)
         .expect("valid input");
-    lexer
+    let _ = lexer
         .lex_eof()
         .map_err(into_lexer_error)
         .expect("first EOF");
-    lexer
+    let _ = lexer
         .lex_eof()
         .map_err(into_lexer_error)
         .expect("second EOF");
