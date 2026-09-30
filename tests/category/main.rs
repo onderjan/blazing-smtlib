@@ -31,7 +31,7 @@ use smt_parser_rs::{
     read::{
         lexer::{LexError, Lexer},
         parser::{
-            CategoryErrorKind, CategoryParser, CloseParenParser, ClosedAttributeParser,
+            CategoryErrorKind, Parser, CloseParenParser, ClosedAttributeParser,
             ClosedMultipleAttributeParser, ClosedMultipleParser, ClosedParser, IdentParser,
             KeywordParser, OpenParenParser, PairParser, ParenMultipleParser, ParenParser,
             ParserError, ParserErrorKind, ParserResources, QualifiedIdentParser, SExprParser,
@@ -349,7 +349,7 @@ type ParseFailure = (CategoryErrorKind, SmtSpan);
 ///
 /// The parser instance is reused for every result in turn, so driving with
 /// a wanted count above one exercises the self-reset contract.
-struct Drive<'h, H: SmtHandler, P: CategoryParser<H>> {
+struct Drive<'h, H: SmtHandler, P: Parser<H>> {
     handler: &'h mut H,
     /// The parser resources, shared by every parser in a run.
     resources: ParserResources<H>,
@@ -363,7 +363,7 @@ struct Drive<'h, H: SmtHandler, P: CategoryParser<H>> {
     unconsumed: usize,
 }
 
-impl<H: SmtHandler, P: CategoryParser<H>> TokenHandler for Drive<'_, H, P> {
+impl<H: SmtHandler, P: Parser<H>> TokenHandler for Drive<'_, H, P> {
     type Error = ParserError<H::Error>;
 
     fn handle_token(&mut self, token: Token) -> Result<(), TokenStop<Self::Error>> {
@@ -392,7 +392,7 @@ impl<H: SmtHandler, P: CategoryParser<H>> TokenHandler for Drive<'_, H, P> {
 /// (not counting the end-of-file token), so tests can check where the parser stopped;
 /// a parser error is returned as its kind and span.
 /// Panics if the parser did not finish `count` times before the end of the input.
-fn run_count_from<H: SmtHandler<Error = Infallible>, P: CategoryParser<H>>(
+fn run_count_from<H: SmtHandler<Error = Infallible>, P: Parser<H>>(
     parser: P,
     handler: &mut H,
     input: &[u8],
@@ -441,7 +441,7 @@ fn run_count_from<H: SmtHandler<Error = Infallible>, P: CategoryParser<H>>(
 /// (not counting the end-of-file token), so tests can check where the parser stopped;
 /// a parser error is returned as its kind and span.
 /// Panics if the parser did not finish before the end of the input.
-fn run_with<H: SmtHandler<Error = Infallible>, P: CategoryParser<H> + Default>(
+fn run_with<H: SmtHandler<Error = Infallible>, P: Parser<H> + Default>(
     handler: &mut H,
     input: &[u8],
 ) -> Result<(P::Result, usize), ParseFailure> {
@@ -454,7 +454,7 @@ fn run_with<H: SmtHandler<Error = Infallible>, P: CategoryParser<H> + Default>(
 }
 
 /// Runs the parser over a fresh `Printing` handler.
-fn run<P: CategoryParser<Printing> + Default>(
+fn run<P: Parser<Printing> + Default>(
     input: &[u8],
 ) -> Result<(P::Result, usize), ParseFailure> {
     run_with::<Printing, P>(&mut Printing::default(), input)
@@ -466,7 +466,7 @@ fn run<P: CategoryParser<Printing> + Default>(
 /// This exercises the self-reset contract: after `progress` returns Break,
 /// the parser instance must be back in the default state.
 #[track_caller]
-fn parse_two<P: CategoryParser<Printing> + Default>(input: &[u8]) -> (P::Result, P::Result) {
+fn parse_two<P: Parser<Printing> + Default>(input: &[u8]) -> (P::Result, P::Result) {
     match run_count_from(P::default(), &mut Printing::default(), input, 2) {
         Ok((results, 0)) => {
             let mut results = results.into_iter();
@@ -483,7 +483,7 @@ fn parse_two<P: CategoryParser<Printing> + Default>(input: &[u8]) -> (P::Result,
 
 /// Runs the parser, requires success with no unconsumed tokens, and returns the result.
 #[track_caller]
-fn parse_all<P: CategoryParser<Printing> + Default>(input: &[u8]) -> P::Result {
+fn parse_all<P: Parser<Printing> + Default>(input: &[u8]) -> P::Result {
     match run::<P>(input) {
         Ok((result, 0)) => result,
         Ok((_, left)) => panic!("{left} tokens left unconsumed in {:?}", text(input)),
@@ -496,7 +496,7 @@ fn parse_all<P: CategoryParser<Printing> + Default>(input: &[u8]) -> P::Result {
 /// Runs the parser, requires a parser error, checks the byte span the error carries,
 /// and returns its kind so that the caller can inspect the variant.
 #[track_caller]
-fn assert_error<P: CategoryParser<Printing> + Default>(
+fn assert_error<P: Parser<Printing> + Default>(
     input: &[u8],
     start: u64,
     end: u64,

@@ -4,7 +4,7 @@ use crate::{
     SmtAttributeValue, SmtHandler, SmtKeywordView, SmtSpan,
     read::parser::{
         Arena, CloseParenParser, ParserError, ParserResources, SExprSlot, TextHandle,
-        category::{CategoryErrorKind, CategoryParser, parse_special_constant},
+        category::{CategoryErrorKind, Parser, parse_special_constant},
         handle_err,
     },
     token::{Token, TokenKind, TokenType},
@@ -32,7 +32,7 @@ impl<H: SmtHandler> Default for ClosedAttributeParser<H> {
     }
 }
 
-impl<H: SmtHandler> CategoryParser<H> for ClosedAttributeParser<H> {
+impl<H: SmtHandler> Parser<H> for ClosedAttributeParser<H> {
     type Result = H::Attribute;
 
     fn progress(
@@ -72,7 +72,7 @@ impl<H: SmtHandler> Default for ClosedMultipleAttributeParser<H> {
     }
 }
 
-impl<H: SmtHandler> CategoryParser<H> for ClosedMultipleAttributeParser<H> {
+impl<H: SmtHandler> Parser<H> for ClosedMultipleAttributeParser<H> {
     type Result = Vec<H::Attribute>;
 
     fn progress(

@@ -4,7 +4,7 @@ use crate::{
     SmtHandler, SmtPattern, SmtSimplePattern, SmtSimplePatternView,
     read::parser::{
         Arena, ParserError, ParserResources, PatternHandle, SimplePatternHandle, TextHandle,
-        category::{CategoryErrorKind, CategoryParser},
+        category::{CategoryErrorKind, Parser},
     },
     token::{GeneralReserved, Reserved, Token, TokenKind, TokenType},
 };
@@ -51,7 +51,7 @@ impl Default for SimplePatternParser {
     }
 }
 
-impl<H: SmtHandler> CategoryParser<H> for SimplePatternParser {
+impl<H: SmtHandler> Parser<H> for SimplePatternParser {
     type Result = SmtSimplePattern;
 
     fn progress(
@@ -86,7 +86,7 @@ impl<H: SmtHandler> Default for PatternParser<H> {
     }
 }
 
-impl<H: SmtHandler> CategoryParser<H> for PatternParser<H> {
+impl<H: SmtHandler> Parser<H> for PatternParser<H> {
     type Result = SmtPattern;
 
     #[inline]

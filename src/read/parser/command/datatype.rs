@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     CommandHandler, SmtDatatypeConstructor, SmtNumeral, SmtSpan, SmtSymbol,
     read::parser::{
-        CategoryErrorKind, CategoryParser, CloseParenParser, ClosedMultipleParser, NumeralParser,
+        CategoryErrorKind, Parser, CloseParenParser, ClosedMultipleParser, NumeralParser,
         OpenParenParser, OpenedParser, ParenMaximumParser, ParenMultipleParser, ParenParser,
         ParserError, ParserResources, SortedVarParser, SymbolParser, category::PairParser,
         handle_err,
@@ -94,7 +94,7 @@ impl<H: CommandHandler> Default for DatatypeParser<H> {
     }
 }
 
-impl<H: CommandHandler> CategoryParser<H> for DatatypeParser<H> {
+impl<H: CommandHandler> Parser<H> for DatatypeParser<H> {
     type Result = ();
 
     fn progress(
@@ -242,7 +242,7 @@ impl<H: CommandHandler> DeclareDatatypesParser<H> {
     }
 }
 
-impl<H: CommandHandler> CategoryParser<H> for DeclareDatatypesParser<H> {
+impl<H: CommandHandler> Parser<H> for DeclareDatatypesParser<H> {
     type Result = ();
 
     fn progress(
@@ -329,7 +329,7 @@ impl<H: CommandHandler> Default for DeclareDatatypeParser<H> {
     }
 }
 
-impl<H: CommandHandler> CategoryParser<H> for DeclareDatatypeParser<H> {
+impl<H: CommandHandler> Parser<H> for DeclareDatatypeParser<H> {
     type Result = ();
 
     fn progress(

@@ -7,7 +7,7 @@ use crate::{
         Arena, CloseParenParser, OpenParenParser, ParserError, ParserResources,
         QualifiedIdentHandle,
         category::{
-            CategoryErrorKind, CategoryParser, attribute::MultipleAttributes,
+            CategoryErrorKind, Parser, attribute::MultipleAttributes,
             parse_special_constant,
         },
         handle_err,
@@ -169,7 +169,7 @@ impl<H: SmtHandler> Default for TermParser<H> {
     }
 }
 
-impl<H: SmtHandler> CategoryParser<H> for TermParser<H> {
+impl<H: SmtHandler> Parser<H> for TermParser<H> {
     type Result = H::Term;
 
     #[inline(always)]

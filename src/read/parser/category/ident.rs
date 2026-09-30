@@ -4,7 +4,7 @@ use crate::{
     SmtHandler, SmtIdent, SmtSymbolView,
     read::parser::{
         Arena, IdentHandle, IndexHandle, ParserError, ParserResources, TextHandle,
-        category::{CategoryErrorKind, CategoryParser},
+        category::{CategoryErrorKind, Parser},
     },
     token::{GeneralReserved, Reserved, Token, TokenKind},
 };
@@ -29,7 +29,7 @@ impl Default for IdentParser {
     }
 }
 
-impl<H: SmtHandler> CategoryParser<H> for IdentParser {
+impl<H: SmtHandler> Parser<H> for IdentParser {
     type Result = SmtIdent;
 
     #[inline]

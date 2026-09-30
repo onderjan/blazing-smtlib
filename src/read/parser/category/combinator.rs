@@ -3,8 +3,8 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler,
     read::parser::{
-        CategoryErrorKind, CategoryParser, CloseParenParser, OpenParenParser, ParserError,
-        ParserResources, category::resources::ClosedMultipleResource,
+        CategoryErrorKind, CloseParenParser, OpenParenParser, Parser, ParserError, ParserResources,
+        category::resources::ClosedMultipleResource,
     },
     token::{Token, TokenCursor, TokenType},
 };
@@ -13,13 +13,13 @@ use crate::{
 ///
 /// Preserves self-reset: if the inner parsers are self-resetting,
 /// moves back into the default state before returning Break.
-pub struct PairParser<H: SmtHandler, P1: CategoryParser<H>, P2: CategoryParser<H>> {
+pub struct PairParser<H: SmtHandler, P1: Parser<H>, P2: Parser<H>> {
     first: P1,
     second: P2,
     first_result: Option<P1::Result>,
 }
 
-impl<H: SmtHandler, P1: CategoryParser<H>, P2: CategoryParser<H>> PairParser<H, P1, P2> {
+impl<H: SmtHandler, P1: Parser<H>, P2: Parser<H>> PairParser<H, P1, P2> {
     pub fn new(first: P1, second: P2) -> Self {
         Self {
             first,
@@ -29,7 +29,7 @@ impl<H: SmtHandler, P1: CategoryParser<H>, P2: CategoryParser<H>> PairParser<H, 
     }
 }
 
-impl<H: SmtHandler, P1: CategoryParser<H> + Default, P2: CategoryParser<H> + Default> Default
+impl<H: SmtHandler, P1: Parser<H> + Default, P2: Parser<H> + Default> Default
     for PairParser<H, P1, P2>
 {
     fn default() -> Self {
@@ -37,9 +37,7 @@ impl<H: SmtHandler, P1: CategoryParser<H> + Default, P2: CategoryParser<H> + Def
     }
 }
 
-impl<H: SmtHandler, P1: CategoryParser<H>, P2: CategoryParser<H>> CategoryParser<H>
-    for PairParser<H, P1, P2>
-{
+impl<H: SmtHandler, P1: Parser<H>, P2: Parser<H>> Parser<H> for PairParser<H, P1, P2> {
     type Result = (P1::Result, P2::Result);
 
     #[inline]
@@ -87,11 +85,11 @@ impl<H: SmtHandler, P1: CategoryParser<H>, P2: CategoryParser<H>> CategoryParser
 ///
 /// Preserves self-reset: if the inner parser is self-resetting,
 /// moves back into the default state before returning Break.
-pub struct ClosedParser<H: SmtHandler, P: CategoryParser<H>> {
+pub struct ClosedParser<H: SmtHandler, P: Parser<H>> {
     inner: PairParser<H, P, CloseParenParser>,
 }
 
-impl<H: SmtHandler, P: CategoryParser<H>> ClosedParser<H, P> {
+impl<H: SmtHandler, P: Parser<H>> ClosedParser<H, P> {
     pub fn new(inner: P) -> Self {
         Self {
             inner: PairParser::new(inner, CloseParenParser),
@@ -99,13 +97,13 @@ impl<H: SmtHandler, P: CategoryParser<H>> ClosedParser<H, P> {
     }
 }
 
-impl<H: SmtHandler, P: CategoryParser<H> + Default> Default for ClosedParser<H, P> {
+impl<H: SmtHandler, P: Parser<H> + Default> Default for ClosedParser<H, P> {
     fn default() -> Self {
         Self::new(P::default())
     }
 }
 
-impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for ClosedParser<H, P> {
+impl<H: SmtHandler, P: Parser<H>> Parser<H> for ClosedParser<H, P> {
     type Result = P::Result;
 
     #[inline]
@@ -136,11 +134,11 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for ClosedParser<H, 
 ///
 /// Preserves self-reset: if the inner parser is self-resetting,
 /// moves back into the default state before returning Break.
-pub struct OpenedParser<H: SmtHandler, P: CategoryParser<H>> {
+pub struct OpenedParser<H: SmtHandler, P: Parser<H>> {
     inner: PairParser<H, OpenParenParser, P>,
 }
 
-impl<H: SmtHandler, P: CategoryParser<H>> OpenedParser<H, P> {
+impl<H: SmtHandler, P: Parser<H>> OpenedParser<H, P> {
     pub fn new(inner: P) -> Self {
         Self {
             inner: PairParser::new(OpenParenParser, inner),
@@ -148,13 +146,13 @@ impl<H: SmtHandler, P: CategoryParser<H>> OpenedParser<H, P> {
     }
 }
 
-impl<H: SmtHandler, P: CategoryParser<H> + Default> Default for OpenedParser<H, P> {
+impl<H: SmtHandler, P: Parser<H> + Default> Default for OpenedParser<H, P> {
     fn default() -> Self {
         Self::new(P::default())
     }
 }
 
-impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for OpenedParser<H, P> {
+impl<H: SmtHandler, P: Parser<H>> Parser<H> for OpenedParser<H, P> {
     type Result = P::Result;
 
     #[inline]
@@ -196,12 +194,12 @@ pub type ParenParser<H, P> = OpenedParser<H, ClosedParser<H, P>>;
 ///
 /// Preserves self-reset: if the inner parser is self-resetting,
 /// moves back into the default state before returning Break.
-pub struct ClosedMultipleParser<H: SmtHandler, P: CategoryParser<H>> {
+pub struct ClosedMultipleParser<H: SmtHandler, P: Parser<H>> {
     inner: P,
     resource: ClosedMultipleResource<P::Result>,
 }
 
-impl<H: SmtHandler, P: CategoryParser<H>> ClosedMultipleParser<H, P> {
+impl<H: SmtHandler, P: Parser<H>> ClosedMultipleParser<H, P> {
     pub fn new(inner: P) -> Self {
         Self {
             inner,
@@ -210,13 +208,13 @@ impl<H: SmtHandler, P: CategoryParser<H>> ClosedMultipleParser<H, P> {
     }
 }
 
-impl<H: SmtHandler, P: CategoryParser<H> + Default> Default for ClosedMultipleParser<H, P> {
+impl<H: SmtHandler, P: Parser<H> + Default> Default for ClosedMultipleParser<H, P> {
     fn default() -> Self {
         Self::new(P::default())
     }
 }
 
-impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for ClosedMultipleParser<H, P> {
+impl<H: SmtHandler, P: Parser<H>> Parser<H> for ClosedMultipleParser<H, P> {
     type Result = Vec<P::Result>;
 
     #[inline]
@@ -253,7 +251,7 @@ pub type ParenMultipleParser<H, P> = OpenedParser<H, ClosedMultipleParser<H, P>>
 /// Parser that parses a number of items ending with a closing parenthesis up to some maximum.
 ///
 /// The maximum can be changed by [`ClosedMaximumParser::set_maximum`].
-pub struct ClosedMaximumParser<H: SmtHandler, P: CategoryParser<H>> {
+pub struct ClosedMaximumParser<H: SmtHandler, P: Parser<H>> {
     max_elements: usize,
 
     outside: bool,
@@ -261,7 +259,7 @@ pub struct ClosedMaximumParser<H: SmtHandler, P: CategoryParser<H>> {
     inner: P,
 }
 
-impl<H: SmtHandler, P: CategoryParser<H>> ClosedMaximumParser<H, P> {
+impl<H: SmtHandler, P: Parser<H>> ClosedMaximumParser<H, P> {
     pub fn new(inner: P, max_elements: usize) -> Self {
         Self {
             max_elements,
@@ -289,7 +287,7 @@ impl<H: SmtHandler, P: CategoryParser<H>> ClosedMaximumParser<H, P> {
     }
 }
 
-impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for ClosedMaximumParser<H, P> {
+impl<H: SmtHandler, P: Parser<H>> Parser<H> for ClosedMaximumParser<H, P> {
     type Result = Vec<P::Result>;
 
     fn progress(
@@ -348,12 +346,12 @@ impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for ClosedMaximumPar
 /// Parser that parses a number of items enclosed in parentheses up to some maximum.
 ///
 /// The maximum can be changed by [`ParenMaximumParser::set_maximum`].
-pub struct ParenMaximumParser<H: SmtHandler, P: CategoryParser<H>> {
+pub struct ParenMaximumParser<H: SmtHandler, P: Parser<H>> {
     is_opened: bool,
     inner: ClosedMaximumParser<H, P>,
 }
 
-impl<H: SmtHandler, P: CategoryParser<H>> ParenMaximumParser<H, P> {
+impl<H: SmtHandler, P: Parser<H>> ParenMaximumParser<H, P> {
     pub fn new(inner: P, max_elements: usize) -> Self {
         Self {
             is_opened: false,
@@ -378,7 +376,7 @@ impl<H: SmtHandler, P: CategoryParser<H>> ParenMaximumParser<H, P> {
     }
 }
 
-impl<H: SmtHandler, P: CategoryParser<H>> CategoryParser<H> for ParenMaximumParser<H, P> {
+impl<H: SmtHandler, P: Parser<H>> Parser<H> for ParenMaximumParser<H, P> {
     type Result = Vec<P::Result>;
 
     fn progress(

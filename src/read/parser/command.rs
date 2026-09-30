@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
 
 use crate::{
     CommandHandler,
-    read::parser::{ParserError, ParserResources, category::CategoryParser, handle_err},
+    read::parser::{ParserError, ParserResources, category::Parser, handle_err},
     token::{Token, TokenCursor},
 };
 
@@ -15,7 +15,7 @@ pub(super) use standard::{CommandParsers, StandardCommandKind, StandardCommandRe
 
 pub enum NoCommandParser {}
 
-impl<H: CommandHandler> CategoryParser<H> for NoCommandParser {
+impl<H: CommandHandler> Parser<H> for NoCommandParser {
     type Result = ();
 
     #[inline]
@@ -31,13 +31,11 @@ impl<H: CommandHandler> CategoryParser<H> for NoCommandParser {
 
 /// Determines how a single command should be handled by a command handler.
 pub trait CommandAction<H: CommandHandler> {
-    type Parser: CategoryParser<H>;
+    type Parser: Parser<H>;
 
     /// Handles the result of a command.
-    fn handle(
-        handler: &mut H,
-        result: <Self::Parser as CategoryParser<H>>::Result,
-    ) -> Result<(), H::Error>;
+    fn handle(handler: &mut H, result: <Self::Parser as Parser<H>>::Result)
+    -> Result<(), H::Error>;
 
     /// Determines whether this should lead to an exit.
     ///
@@ -70,7 +68,7 @@ where
     }
 }
 
-impl<H: CommandHandler, C: CommandAction<H>> CategoryParser<H> for CommandParser<H, C> {
+impl<H: CommandHandler, C: CommandAction<H>> Parser<H> for CommandParser<H, C> {
     type Result = ();
 
     #[inline]

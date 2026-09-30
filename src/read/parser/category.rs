@@ -52,7 +52,7 @@ pub(crate) use term::TermSlot;
 
 pub type ParenSortedVarsParser<H> = ParenMultipleParser<H, SortedVarParser<H>>;
 
-pub trait CategoryParser<H: SmtHandler + ?Sized> {
+pub trait Parser<H: SmtHandler + ?Sized> {
     type Result;
 
     /// Parses a single token, progressing the parser.
@@ -170,7 +170,7 @@ pub(crate) mod tests {
         CheckStandardSyntax, NonstandardCommandError,
         read::{
             lexer::Lexer,
-            parser::{CategoryParser, ParserError, ParserResources},
+            parser::{Parser, ParserError, ParserResources},
         },
         token::{Token, TokenHandler, TokenStop, TokenType},
     };
@@ -181,19 +181,19 @@ pub(crate) mod tests {
     ///
     /// Lets unit tests enter a category through its crate-private entry
     /// points before driving it.
-    pub(crate) fn parse_all_with<P: CategoryParser<CheckStandardSyntax>>(
+    pub(crate) fn parse_all_with<P: Parser<CheckStandardSyntax>>(
         parser: P,
         resources: &mut ParserResources<CheckStandardSyntax>,
         input: &[u8],
     ) -> P::Result {
-        struct Drive<'r, P: CategoryParser<CheckStandardSyntax>> {
+        struct Drive<'r, P: Parser<CheckStandardSyntax>> {
             parser: P,
             resources: &'r mut ParserResources<CheckStandardSyntax>,
             result: Option<P::Result>,
             unconsumed: usize,
         }
 
-        impl<P: CategoryParser<CheckStandardSyntax>> TokenHandler for Drive<'_, P> {
+        impl<P: Parser<CheckStandardSyntax>> TokenHandler for Drive<'_, P> {
             type Error = ParserError<NonstandardCommandError>;
 
             fn handle_token(&mut self, token: Token) -> Result<(), TokenStop<Self::Error>> {

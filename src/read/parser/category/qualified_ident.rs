@@ -5,7 +5,7 @@ use crate::{
     read::parser::{
         Arena, CloseParenParser, IdentHandle, IdentSlot, ParserError, ParserResources,
         QualifiedIdentHandle, SortSlot,
-        category::{CategoryErrorKind, CategoryParser},
+        category::{CategoryErrorKind, Parser},
     },
     token::{GeneralReserved, Reserved, Token, TokenKind},
 };
@@ -32,7 +32,7 @@ impl<H: SmtHandler> Default for QualifiedIdentParser<H> {
     }
 }
 
-impl<H: SmtHandler> CategoryParser<H> for QualifiedIdentParser<H> {
+impl<H: SmtHandler> Parser<H> for QualifiedIdentParser<H> {
     type Result = SmtQualifiedIdent<H>;
 
     #[inline]

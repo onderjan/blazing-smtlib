@@ -11,7 +11,7 @@ use smt_parser_rs::{
     CheckStandardSyntax,
     read::{
         lexer::Lexer,
-        parser::{CategoryParser, ParserResources, SortParser, TermParser},
+        parser::{Parser, ParserResources, SortParser, TermParser},
     },
     token::{Token, TokenCursor, TokenHandler, TokenStop, TokenType},
 };
@@ -182,7 +182,7 @@ fn advancing_past_the_end_stops_at_the_end_like_take() {
 
 /// Drives the parser through `progress_all` on the hand-overs of the chunks,
 /// returning per hand-over how many tokens it consumed and whether it finished.
-fn drive<P: CategoryParser<CheckStandardSyntax> + Default>(chunks: &[&[u8]]) -> Vec<(usize, bool)> {
+fn drive<P: Parser<CheckStandardSyntax> + Default>(chunks: &[&[u8]]) -> Vec<(usize, bool)> {
     let mut parser = P::default();
     let mut resources = ParserResources::new();
     let mut finished = false;

@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler, SmtKeyword, SmtKeywordView, SmtNumeral, SmtNumeralView, SmtStringContent,
     SmtStringContentView, SmtSymbol,
-    read::parser::{Arena, CategoryErrorKind, CategoryParser, ParserError, ParserResources},
+    read::parser::{Arena, CategoryErrorKind, Parser, ParserError, ParserResources},
     token::{Token, TokenKind, TokenType},
 };
 
@@ -38,7 +38,7 @@ impl SymbolParser {
     }
 }
 
-impl<H: SmtHandler> CategoryParser<H> for SymbolParser {
+impl<H: SmtHandler> Parser<H> for SymbolParser {
     type Result = SmtSymbol;
 
     fn progress(
@@ -87,7 +87,7 @@ macro_rules! token_parser {
             }
         }
 
-        impl<H: SmtHandler> CategoryParser<H> for $parser {
+        impl<H: SmtHandler> Parser<H> for $parser {
             type Result = $result;
 
             fn progress(

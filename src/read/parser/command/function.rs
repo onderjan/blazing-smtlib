@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     CommandHandler, SmtFunctionSignature,
     read::parser::{
-        CategoryErrorKind, CategoryParser, PairParser, ParenMaximumParser, ParenMultipleParser,
+        CategoryErrorKind, Parser, PairParser, ParenMaximumParser, ParenMultipleParser,
         ParenParser, ParenSortedVarsParser, ParserError, ParserResources, SortParser, SymbolParser,
         TermParser, handle_err,
     },
@@ -29,7 +29,7 @@ impl<H: CommandHandler> Default for FunctionSignatureParser<H> {
     }
 }
 
-impl<H: CommandHandler> CategoryParser<H> for FunctionSignatureParser<H> {
+impl<H: CommandHandler> Parser<H> for FunctionSignatureParser<H> {
     type Result = SmtFunctionSignature<H>;
 
     fn progress(
@@ -69,7 +69,7 @@ impl<H: CommandHandler> Default for RecursiveBodyParser<H> {
     }
 }
 
-impl<H: CommandHandler> CategoryParser<H> for RecursiveBodyParser<H> {
+impl<H: CommandHandler> Parser<H> for RecursiveBodyParser<H> {
     type Result = ();
 
     fn progress(
@@ -132,7 +132,7 @@ impl<H: CommandHandler> Default for DefineFunsRecParser<H> {
     }
 }
 
-impl<H: CommandHandler> CategoryParser<H> for DefineFunsRecParser<H> {
+impl<H: CommandHandler> Parser<H> for DefineFunsRecParser<H> {
     type Result = ();
 
     fn progress(

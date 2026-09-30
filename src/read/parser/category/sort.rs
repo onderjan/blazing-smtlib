@@ -4,7 +4,7 @@ use crate::{
     SmtHandler,
     read::parser::{
         Arena, IdentHandle, IdentSlot, ParserError, ParserResources,
-        category::{CategoryErrorKind, CategoryParser},
+        category::{CategoryErrorKind, Parser},
         handle_err,
     },
     token::{GeneralReserved, Reserved, Token, TokenKind},
@@ -32,7 +32,7 @@ impl<H: SmtHandler> Default for SortParser<H> {
     }
 }
 
-impl<H: SmtHandler> CategoryParser<H> for SortParser<H> {
+impl<H: SmtHandler> Parser<H> for SortParser<H> {
     type Result = H::Sort;
 
     #[inline]

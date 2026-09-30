@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
 
 use crate::{
     CommandHandler,
-    read::parser::{CategoryParser, ParserError, ParserResources, handle_err},
+    read::parser::{Parser, ParserError, ParserResources, handle_err},
     token::{Token, TokenCursor},
 };
 
@@ -13,19 +13,19 @@ use crate::{
 /// The commands using a definition parser do not call the
 /// handler after ending, as everything is handled by the parser.
 pub(super) trait Definition<H: CommandHandler> {
-    type Signature: CategoryParser<H> + Default;
-    type Body: CategoryParser<H> + Default;
+    type Signature: Parser<H> + Default;
+    type Body: Parser<H> + Default;
 
     /// Start is invoked before the first definition body token.
     fn start(
         handler: &mut H,
-        signature: <Self::Signature as CategoryParser<H>>::Result,
+        signature: <Self::Signature as Parser<H>>::Result,
     ) -> Result<(), H::Error>;
 
     /// End is invoked when the last definition body token is processed.
     fn end(
         handler: &mut H,
-        body: <Self::Body as CategoryParser<H>>::Result,
+        body: <Self::Body as Parser<H>>::Result,
     ) -> Result<(), H::Error>;
 }
 
@@ -60,7 +60,7 @@ impl<H: CommandHandler, D: Definition<H>> Default for DefinitionParser<H, D> {
     }
 }
 
-impl<H: CommandHandler, D: Definition<H>> CategoryParser<H> for DefinitionParser<H, D> {
+impl<H: CommandHandler, D: Definition<H>> Parser<H> for DefinitionParser<H, D> {
     type Result = ();
 
     #[inline]

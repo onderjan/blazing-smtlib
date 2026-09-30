@@ -3,9 +3,8 @@ use std::ops::ControlFlow;
 use crate::{
     CommandHandler, SmtFunctionSignature, SmtSymbol,
     read::parser::{
-        CategoryErrorKind, CategoryParser, CloseParenParser, CommandParser, KeywordParser,
-        NumeralParser, ParenMultipleParser, ParserError, ParserResources, StringParser,
-        SymbolParser,
+        CategoryErrorKind, CloseParenParser, CommandParser, KeywordParser, NumeralParser,
+        ParenMultipleParser, Parser, ParserError, ParserResources, StringParser, SymbolParser,
         category::{ClosedAttributeParser, ClosedParser, PairParser, SortParser, TermParser},
         command::{
             CommandAction,
@@ -37,7 +36,7 @@ macro_rules! standard_commands {
 
                 fn handle(
                     $handler: &mut H,
-                    $result: <$parser as CategoryParser<H>>::Result,
+                    $result: <$parser as Parser<H>>::Result,
                 ) -> Result<(), H::Error> {
                     $handle
                 }
@@ -278,7 +277,7 @@ impl<H: CommandHandler> Default for GetValueParser<H> {
     }
 }
 
-impl<H: CommandHandler> CategoryParser<H> for GetValueParser<H> {
+impl<H: CommandHandler> Parser<H> for GetValueParser<H> {
     type Result = Vec<H::Term>;
 
     #[inline]

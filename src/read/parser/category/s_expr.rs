@@ -4,7 +4,7 @@ use crate::{
     SmtHandler, SmtSExpr,
     read::parser::{
         Arena, ParserError, ParserResources,
-        category::{CategoryErrorKind, CategoryParser, parse_special_constant},
+        category::{CategoryErrorKind, Parser, parse_special_constant},
         handle_err,
     },
     token::{Token, TokenKind},
@@ -32,7 +32,7 @@ impl<H: SmtHandler> Default for SExprParser<H> {
     }
 }
 
-impl<H: SmtHandler> CategoryParser<H> for SExprParser<H> {
+impl<H: SmtHandler> Parser<H> for SExprParser<H> {
     type Result = H::SExpr;
 
     #[inline]
