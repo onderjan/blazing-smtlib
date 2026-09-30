@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     CommandHandler, SmtSpan, SmtSymbolView,
     read::parser::{
-        ParserError, ParserResources, ParserState, category::CategoryParser, handle_err,
+        ParserError, ParserResources, ScriptParserState, category::CategoryParser, handle_err,
     },
     token::{Token, TokenCursor},
 };
@@ -107,7 +107,7 @@ impl<H: CommandHandler, C: CommandAction<H>> CategoryParser<H> for CommandParser
     }
 }
 
-impl<H: CommandHandler> super::Parser<'_, H> {
+impl<H: CommandHandler> super::ScriptParser<'_, H> {
     /// Starts a non-standard command named by a symbol.
     ///
     /// A command identified by a symbol is never standard,
@@ -116,9 +116,9 @@ impl<H: CommandHandler> super::Parser<'_, H> {
         &mut self,
         name: SmtSymbolView<'_>,
         span: SmtSpan,
-    ) -> Result<ParserState<H>, ParserError<H::Error>> {
+    ) -> Result<ScriptParserState<H>, ParserError<H::Error>> {
         match self.handler.nonstandard_command(name) {
-            Ok(parser) => Ok(ParserState::NonstandardCommand(parser)),
+            Ok(parser) => Ok(ScriptParserState::NonstandardCommand(parser)),
             Err(err) => Err(ParserError::handler_error(err, span)),
         }
     }

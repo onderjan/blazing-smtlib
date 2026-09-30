@@ -24,7 +24,7 @@ use crate::{
     CommandHandler, SmtSpan,
     read::{
         lexer::{LexError, Lexer, LexerError, LexerErrorKind},
-        parser::{CategoryErrorKind, Parser, ParserError, ParserErrorKind},
+        parser::{CategoryErrorKind, ParserError, ParserErrorKind, ScriptParser},
     },
 };
 
@@ -150,13 +150,13 @@ pub fn read_smt<H: CommandHandler>(
 ///
 /// For whole inputs, consider [`read_smt_file`] and [`read_smt`].
 pub struct SmtReader<'a, H: CommandHandler> {
-    lexer: Lexer<Parser<'a, H>>,
+    lexer: Lexer<ScriptParser<'a, H>>,
 }
 
 impl<'a, H: CommandHandler> SmtReader<'a, H> {
     /// Creates a reader that calls `handler` sequentially when reading.
     pub fn new(handler: &'a mut H) -> Self {
-        let parser = Parser::new(handler);
+        let parser = ScriptParser::new(handler);
         let lexer = Lexer::new(parser);
         Self { lexer }
     }
