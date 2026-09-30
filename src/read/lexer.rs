@@ -18,7 +18,7 @@ use crate::{
             HEXADECIMAL_RUN, START, Start, TokenEnd,
         },
     },
-    token::{InnerType, TokenCursor, TokenHandler, TokenStop},
+    token::{InnerType, TokenCursor, TokenHandler},
 };
 
 pub struct Lexer<H: TokenHandler> {
@@ -62,8 +62,16 @@ struct Batch<'a> {
     len: usize,
 }
 
+/// Why lexing stopped before the end of the slice.
+enum Stop<E> {
+    /// The handler requested lexing again from the stop location.
+    Relex,
+    /// Lexing or handling failed.
+    Error(E),
+}
+
 struct Interrupted<E> {
-    stop: TokenStop<E>,
+    stop: Stop<E>,
     stop_location: SmtLocation,
 }
 
@@ -199,10 +207,10 @@ impl<H: TokenHandler> Lexer<H> {
                 Ok(())
             }
             Err(interrupted) => match interrupted.stop {
-                TokenStop::Relex => {
+                Stop::Relex => {
                     panic!("token handler cannot request relex at end of file")
                 }
-                TokenStop::Error(err) => Err(err),
+                Stop::Error(err) => Err(err),
             },
         }
     }
@@ -260,7 +268,7 @@ impl<H: TokenHandler> Lexer<H> {
                     continue;
                 }
                 Err(interrupted) => match interrupted.stop {
-                    TokenStop::Relex => {
+                    Stop::Relex => {
                         let location = interrupted.stop_location;
                         // the region after the location was lexed once already,
                         // restore all bookkeeping
@@ -279,7 +287,7 @@ impl<H: TokenHandler> Lexer<H> {
                         rest = &slice[index as usize..];
                         fn_result = Ok(());
                     }
-                    TokenStop::Error(err) => {
+                    Stop::Error(err) => {
                         // make sure the tokens before the error get handed over
                         fn_result = Err(err);
                     }
@@ -1034,41 +1042,36 @@ impl<H: TokenHandler> Lexer<H> {
         handler: &mut H,
         mut cursor: TokenCursor,
     ) -> Result<(), Interrupted<LexError<H::Error>>> {
-        match handler.handle_tokens(&mut cursor) {
+        // where lexing continues if the handler stops before the first token
+        // relex request empties the cursor, so we need to remember it here
+        let first_start = cursor
+            .get(0)
+            .expect("flushed batch must have at least one token")
+            .span()
+            .start();
+        let stop = match handler.handle_tokens(&mut cursor) {
+            Ok(()) if cursor.relex_requested() => Stop::Relex,
             Ok(()) => {
                 // ensure the cursor has been fully consumed
                 assert!(
                     cursor.is_empty(),
                     "the token handler must consume all tokens before returning Ok"
                 );
-                Ok(())
+                return Ok(());
             }
-            Err(stop) => {
-                // convert the stop to Interrupted
-                let stop_location = match cursor.last_consumed() {
-                    None => {
-                        // nothing was taken, lex again from the first token
-                        cursor
-                            .get(0)
-                            .expect("flushed batch must have at least one token")
-                            .span()
-                            .start()
-                    }
-                    Some(token) => {
-                        // at least one token was taken, lex again after it
-                        token.span().end()
-                    }
-                };
-                let stop = match stop {
-                    TokenStop::Relex => TokenStop::Relex,
-                    TokenStop::Error(err) => TokenStop::Error(LexError::Handler(err)),
-                };
-                Err(Interrupted {
-                    stop,
-                    stop_location,
-                })
-            }
-        }
+            Err(err) => Stop::Error(LexError::Handler(err)),
+        };
+        // the stop takes effect after the consumed tokens
+        let stop_location = match cursor.last_consumed() {
+            // nothing was taken, lex again from the first token
+            None => first_start,
+            // at least one token was taken, lex again after it
+            Some(token) => token.span().end(),
+        };
+        Err(Interrupted {
+            stop,
+            stop_location,
+        })
     }
 
     #[inline]
@@ -1183,7 +1186,7 @@ impl<H: TokenHandler> Lexer<H> {
         let span = SmtSpan::new_unchecked(self.token_start, end);
         // no tokens have been consumed, as this is an error
         // that occurred during lexing
-        let stop = TokenStop::Error(LexError::Lexer(LexerError::new(kind, span)));
+        let stop = Stop::Error(LexError::Lexer(LexerError::new(kind, span)));
         Interrupted {
             stop,
             stop_location: end,

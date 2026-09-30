@@ -13,7 +13,7 @@ use smt_parser_rs::{
         lexer::Lexer,
         parser::{Parser, ParserResources, SortParser, TermParser},
     },
-    token::{TokenCursor, TokenHandler, TokenStop, TokenType},
+    token::{TokenCursor, TokenHandler, TokenType},
 };
 
 /// A handler that runs a check on a copy of every cursor it receives, then
@@ -23,7 +23,7 @@ struct Probe<F>(F);
 impl<F: FnMut(TokenCursor<'_>)> TokenHandler for Probe<F> {
     type Error = Infallible;
 
-    fn handle_tokens(&mut self, cursor: &mut TokenCursor<'_>) -> Result<(), TokenStop<Infallible>> {
+    fn handle_tokens(&mut self, cursor: &mut TokenCursor<'_>) -> Result<(), Infallible> {
         (self.0)(*cursor);
         cursor.advance(usize::MAX);
         Ok(())
@@ -233,5 +233,26 @@ fn parse_reports_the_parser_error() {
             &mut cursor,
         );
         assert!(result.is_err(), "a closing parenthesis cannot start a term");
+    });
+}
+
+#[test]
+fn a_relex_request_fixes_the_cursor_at_the_consumed_position() {
+    on_token_batch(b"(a b) ", |mut cursor| {
+        cursor.advance(2);
+        assert!(!cursor.relex_requested());
+        cursor.relex();
+        // nothing more comes out of the cursor, and the position stays
+        assert!(cursor.relex_requested());
+        assert!(cursor.is_empty());
+        assert!(cursor.peek().is_none());
+        assert!(cursor.get(0).is_none());
+        assert!(cursor.take().is_none());
+        cursor.advance(1);
+        assert_eq!(cursor.consumed(), 2);
+        assert_eq!(
+            cursor.last_consumed().map(|token| token.content().to_vec()),
+            Some(b"a".to_vec())
+        );
     });
 }

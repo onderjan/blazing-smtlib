@@ -15,7 +15,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use smt_parser_rs::{
     SmtLocation, SmtSpan,
     read::lexer::{LexError, Lexer, LexerErrorKind},
-    token::{Token, TokenCursor, TokenHandler, TokenStop, TokenType},
+    token::{Token, TokenCursor, TokenHandler, TokenType},
 };
 
 /// The batch capacity the lexer is expected to use.
@@ -86,7 +86,7 @@ struct Recorder<'r> {
 impl TokenHandler for Recorder<'_> {
     type Error = ();
 
-    fn handle_tokens(&mut self, cursor: &mut TokenCursor<'_>) -> Result<(), TokenStop<()>> {
+    fn handle_tokens(&mut self, cursor: &mut TokenCursor<'_>) -> Result<(), ()> {
         // record every token of the hand-over by walking a copy of the cursor
         let mut walk = *cursor;
         let mut tokens = Vec::new();
@@ -100,8 +100,11 @@ impl TokenHandler for Recorder<'_> {
         cursor.advance(reply.takes(len));
         match reply {
             Reply::TakeAll | Reply::Leave { .. } => Ok(()),
-            Reply::Relex { .. } => Err(TokenStop::Relex),
-            Reply::Fail { .. } => Err(TokenStop::Error(())),
+            Reply::Relex { .. } => {
+                cursor.relex();
+                Ok(())
+            }
+            Reply::Fail { .. } => Err(()),
         }
     }
 }

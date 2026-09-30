@@ -13,7 +13,7 @@ use std::convert::Infallible;
 use smt_parser_rs::{
     SmtLocation, SmtSpan,
     read::lexer::{LexError, Lexer, LexerError, LexerErrorKind},
-    token::{TokenCursor, TokenHandler, TokenStop, TokenType},
+    token::{TokenCursor, TokenHandler, TokenType},
 };
 
 /// An owned copy of a produced token, comparable between lexer runs.
@@ -30,10 +30,7 @@ struct CollectTokens(Vec<OwnedToken>);
 impl TokenHandler for CollectTokens {
     type Error = Infallible;
 
-    fn handle_tokens(
-        &mut self,
-        cursor: &mut TokenCursor<'_>,
-    ) -> Result<(), TokenStop<Self::Error>> {
+    fn handle_tokens(&mut self, cursor: &mut TokenCursor<'_>) -> Result<(), Self::Error> {
         while let Some(token) = cursor.take() {
             self.0.push(OwnedToken {
                 ty: token.ty(),
@@ -735,13 +732,10 @@ struct RejectNth {
 impl TokenHandler for RejectNth {
     type Error = ();
 
-    fn handle_tokens(
-        &mut self,
-        cursor: &mut TokenCursor<'_>,
-    ) -> Result<(), TokenStop<Self::Error>> {
+    fn handle_tokens(&mut self, cursor: &mut TokenCursor<'_>) -> Result<(), Self::Error> {
         while cursor.take().is_some() {
             if self.remaining == 0 {
-                return Err(TokenStop::Error(()));
+                return Err(());
             }
             self.remaining -= 1;
         }

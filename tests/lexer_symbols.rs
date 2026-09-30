@@ -10,9 +10,7 @@ use std::convert::Infallible;
 
 use smt_parser_rs::{
     read::lexer::Lexer,
-    token::{
-        Reserved, SmtVersion, Token, TokenCursor, TokenHandler, TokenKind, TokenStop, TokenType,
-    },
+    token::{Reserved, SmtVersion, Token, TokenCursor, TokenHandler, TokenKind, TokenType},
 };
 
 use reserved_words::reserved_words;
@@ -43,10 +41,7 @@ struct CollectTokens(Vec<Lexed>);
 impl TokenHandler for CollectTokens {
     type Error = Infallible;
 
-    fn handle_tokens(
-        &mut self,
-        cursor: &mut TokenCursor<'_>,
-    ) -> Result<(), TokenStop<Self::Error>> {
+    fn handle_tokens(&mut self, cursor: &mut TokenCursor<'_>) -> Result<(), Self::Error> {
         while let Some(token) = cursor.take() {
             self.collect(token);
         }
@@ -200,10 +195,7 @@ fn end_of_input_has_no_content_and_an_empty_span_at_the_end() {
         struct Locate<'h>(&'h mut CollectTokens, &'h mut Vec<(u64, u64, u64)>);
         impl TokenHandler for Locate<'_> {
             type Error = Infallible;
-            fn handle_tokens(
-                &mut self,
-                cursor: &mut TokenCursor<'_>,
-            ) -> Result<(), TokenStop<Self::Error>> {
+            fn handle_tokens(&mut self, cursor: &mut TokenCursor<'_>) -> Result<(), Self::Error> {
                 while let Some(token) = cursor.take() {
                     if token.ty() == TokenType::EndOfFile {
                         let end = token.span().end();

@@ -71,7 +71,7 @@ pub(crate) mod tests {
             lexer::Lexer,
             parser::{Parser, ParserError, ParserResources},
         },
-        token::{TokenCursor, TokenHandler, TokenStop, TokenType},
+        token::{TokenCursor, TokenHandler, TokenType},
     };
 
     /// Drives `parser` over `resources` through the whole input with the
@@ -95,10 +95,7 @@ pub(crate) mod tests {
         impl<P: Parser<CheckStandardSyntax>> TokenHandler for Drive<'_, P> {
             type Error = ParserError<NonstandardCommandError>;
 
-            fn handle_tokens(
-                &mut self,
-                cursor: &mut TokenCursor<'_>,
-            ) -> Result<(), TokenStop<Self::Error>> {
+            fn handle_tokens(&mut self, cursor: &mut TokenCursor<'_>) -> Result<(), Self::Error> {
                 while !cursor.is_empty() {
                     if self.result.is_some() {
                         // count the tokens left after the result, except the end of the input
@@ -109,10 +106,9 @@ pub(crate) mod tests {
                         }
                         return Ok(());
                     }
-                    if let ControlFlow::Break(result) = self
-                        .parser
-                        .parse(&mut CheckStandardSyntax, self.resources, cursor)
-                        .map_err(TokenStop::Error)?
+                    if let ControlFlow::Break(result) =
+                        self.parser
+                            .parse(&mut CheckStandardSyntax, self.resources, cursor)?
                     {
                         self.result = Some(result);
                     }

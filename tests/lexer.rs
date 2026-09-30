@@ -7,8 +7,7 @@ use smt_parser_rs::{
     SmtLocation, SmtSpan,
     read::lexer::{LexError, Lexer, LexerError, LexerErrorKind},
     token::{
-        GeneralReserved, Reserved, SmtVersion, TokenCursor, TokenHandler, TokenKind, TokenStop,
-        TokenType,
+        GeneralReserved, Reserved, SmtVersion, TokenCursor, TokenHandler, TokenKind, TokenType,
     },
 };
 
@@ -30,10 +29,7 @@ struct CollectTokens(Vec<OwnedToken>);
 impl TokenHandler for CollectTokens {
     type Error = Infallible;
 
-    fn handle_tokens(
-        &mut self,
-        cursor: &mut TokenCursor<'_>,
-    ) -> Result<(), TokenStop<Self::Error>> {
+    fn handle_tokens(&mut self, cursor: &mut TokenCursor<'_>) -> Result<(), Self::Error> {
         while let Some(token) = cursor.take() {
             let reserved = match TokenKind::from_token(token, SmtVersion::V2_7) {
                 TokenKind::Reserved(reserved) => Some(reserved),
@@ -615,12 +611,9 @@ struct RejectTokens;
 impl TokenHandler for RejectTokens {
     type Error = SmtSpan;
 
-    fn handle_tokens(
-        &mut self,
-        cursor: &mut TokenCursor<'_>,
-    ) -> Result<(), TokenStop<Self::Error>> {
+    fn handle_tokens(&mut self, cursor: &mut TokenCursor<'_>) -> Result<(), Self::Error> {
         match cursor.take() {
-            Some(token) => Err(TokenStop::Error(token.span())),
+            Some(token) => Err(token.span()),
             None => Ok(()),
         }
     }
@@ -834,13 +827,10 @@ struct RejectEof;
 impl TokenHandler for RejectEof {
     type Error = ();
 
-    fn handle_tokens(
-        &mut self,
-        cursor: &mut TokenCursor<'_>,
-    ) -> Result<(), TokenStop<Self::Error>> {
+    fn handle_tokens(&mut self, cursor: &mut TokenCursor<'_>) -> Result<(), Self::Error> {
         while let Some(token) = cursor.take() {
             if token.ty() == TokenType::EndOfFile {
-                return Err(TokenStop::Error(()));
+                return Err(());
             }
         }
         Ok(())

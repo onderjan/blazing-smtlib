@@ -167,6 +167,7 @@ pub struct TokenCursor<'a> {
     entries: &'a [Option<(InnerType, &'a [u8])>],
     spans: &'a [SmtSpan],
     next: usize,
+    relex: bool,
 }
 
 impl<'a> TokenCursor<'a> {
@@ -179,6 +180,7 @@ impl<'a> TokenCursor<'a> {
             entries,
             spans,
             next: 0,
+            relex: false,
         }
     }
 
@@ -251,6 +253,25 @@ impl<'a> TokenCursor<'a> {
     pub fn is_empty(&self) -> bool {
         self.next >= self.entries.len()
     }
+
+    /// Requests that the input is lexed again from the end of the last
+    /// consumed token.
+    ///
+    /// The tokens not consumed through this cursor are discarded and will be
+    /// produced again by the lexer, so the cursor yields no more tokens:
+    /// it is empty from now on, and the consumed count stays where it is.
+    #[inline]
+    pub fn relex(&mut self) {
+        self.entries = &self.entries[..self.next];
+        self.spans = &self.spans[..self.next];
+        self.relex = true;
+    }
+
+    /// Whether [`TokenCursor::relex`] has been called on this cursor.
+    #[inline]
+    pub fn relex_requested(&self) -> bool {
+        self.relex
+    }
 }
 
 /// A sequential handler of tokens.
@@ -260,18 +281,10 @@ pub trait TokenHandler {
     /// Handles the tokens handed over in the cursor, in order.
     ///
     /// Returning `Ok(())` means all tokens were handled: the cursor must
-    /// be empty. Returning a [`TokenStop`] leaves the cursor after the
-    /// last consumed token, which is where the stop takes effect.
-    fn handle_tokens(&mut self, cursor: &mut TokenCursor<'_>)
-    -> Result<(), TokenStop<Self::Error>>;
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TokenStop<E> {
-    /// Lex again from the end of the last consumed token.
-    Relex,
-    /// The handler failed at the token after the consumed ones.
-    Error(E),
+    /// be empty, which it also is after a [`TokenCursor::relex`] request.
+    /// Returning an error means the handler failed at the token after
+    /// the consumed ones.
+    fn handle_tokens(&mut self, cursor: &mut TokenCursor<'_>) -> Result<(), Self::Error>;
 }
 
 /// Mutable references over token handlers are token handlers.
@@ -279,10 +292,7 @@ impl<T: TokenHandler + ?Sized> TokenHandler for &mut T {
     type Error = T::Error;
 
     #[inline]
-    fn handle_tokens(
-        &mut self,
-        cursor: &mut TokenCursor<'_>,
-    ) -> Result<(), TokenStop<Self::Error>> {
+    fn handle_tokens(&mut self, cursor: &mut TokenCursor<'_>) -> Result<(), Self::Error> {
         (**self).handle_tokens(cursor)
     }
 }

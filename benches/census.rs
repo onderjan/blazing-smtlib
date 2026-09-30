@@ -25,7 +25,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use smt_parser_rs::{
     read::lexer::Lexer,
-    token::{SmtVersion, Token, TokenCursor, TokenHandler, TokenKind, TokenStop},
+    token::{SmtVersion, Token, TokenCursor, TokenHandler, TokenKind},
 };
 
 /// Global allocator that counts allocations and tracks the live heap.
@@ -103,10 +103,7 @@ struct Census {
 impl TokenHandler for Census {
     type Error = Infallible;
 
-    fn handle_tokens(
-        &mut self,
-        cursor: &mut TokenCursor<'_>,
-    ) -> Result<(), TokenStop<Self::Error>> {
+    fn handle_tokens(&mut self, cursor: &mut TokenCursor<'_>) -> Result<(), Self::Error> {
         while let Some(token) = cursor.take() {
             self.tally(token);
         }

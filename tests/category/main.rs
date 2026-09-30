@@ -38,7 +38,7 @@ use smt_parser_rs::{
             SymbolParser, SyntaxErrorKind, TermParser,
         },
     },
-    token::{Reserved, TokenCursor, TokenHandler, TokenStop, TokenType},
+    token::{Reserved, TokenCursor, TokenHandler, TokenType},
 };
 
 // --- Test handler rendering everything it receives back into text ---
@@ -366,10 +366,7 @@ struct Drive<'h, H: SmtHandler, P: Parser<H>> {
 impl<H: SmtHandler, P: Parser<H>> TokenHandler for Drive<'_, H, P> {
     type Error = ParserError<H::Error>;
 
-    fn handle_tokens(
-        &mut self,
-        cursor: &mut TokenCursor<'_>,
-    ) -> Result<(), TokenStop<Self::Error>> {
+    fn handle_tokens(&mut self, cursor: &mut TokenCursor<'_>) -> Result<(), Self::Error> {
         while !cursor.is_empty() {
             if self.remaining == 0 {
                 // count the tokens left after the wanted results, except the end of the input
@@ -380,10 +377,9 @@ impl<H: SmtHandler, P: Parser<H>> TokenHandler for Drive<'_, H, P> {
                 }
                 return Ok(());
             }
-            if let ControlFlow::Break(result) = self
-                .parser
-                .parse(self.handler, &mut self.resources, cursor)
-                .map_err(TokenStop::Error)?
+            if let ControlFlow::Break(result) =
+                self.parser
+                    .parse(self.handler, &mut self.resources, cursor)?
             {
                 self.results.push(result);
                 self.remaining -= 1;

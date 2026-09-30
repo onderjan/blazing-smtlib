@@ -6,7 +6,7 @@ use crate::{
         CommandParsers, Parser, ParserError, ParserResources, StandardCommandKind,
         StandardCommandResult, SyntaxErrorKind,
     },
-    token::{Reserved, TokenCursor, TokenHandler, TokenKind, TokenStop, TokenType},
+    token::{Reserved, TokenCursor, TokenHandler, TokenKind, TokenType},
 };
 
 pub struct ScriptParser<'a, H: CommandHandler> {
@@ -85,10 +85,7 @@ impl<'a, H: CommandHandler> TokenHandler for ScriptParser<'a, H> {
     type Error = ParserError<H::Error>;
 
     #[inline]
-    fn handle_tokens(
-        &mut self,
-        cursor: &mut TokenCursor<'_>,
-    ) -> Result<(), TokenStop<ParserError<H::Error>>> {
+    fn handle_tokens(&mut self, cursor: &mut TokenCursor<'_>) -> Result<(), ParserError<H::Error>> {
         while let Some(peeked) = cursor.peek() {
             match &mut self.state {
                 ScriptParserState::AwaitingCommand => {
@@ -104,10 +101,10 @@ impl<'a, H: CommandHandler> TokenHandler for ScriptParser<'a, H> {
                             self.state = ScriptParserState::AwaitingCommand;
                         }
                         _ => {
-                            return Err(TokenStop::Error(ParserError::category_error(
+                            return Err(ParserError::category_error(
                                 SyntaxErrorKind::ExpectedCommand,
                                 peeked.span(),
-                            )));
+                            ));
                         }
                     }
                 }
@@ -123,24 +120,25 @@ impl<'a, H: CommandHandler> TokenHandler for ScriptParser<'a, H> {
                         TokenKind::Symbol(name) => {
                             // a symbol (even a quoted one spelled like a standard command)
                             // can only name a nonstandard command
-                            self.start_nonstandard_command(name, peeked.span())
-                                .map_err(TokenStop::Error)?
+                            self.start_nonstandard_command(name, peeked.span())?
                         }
                         _ => {
-                            return Err(TokenStop::Error(ParserError::category_error(
+                            return Err(ParserError::category_error(
                                 SyntaxErrorKind::ExpectedCommandName,
                                 peeked.span(),
-                            )));
+                            ));
                         }
                     };
                 }
                 ScriptParserState::Command(kind) => {
                     // handle the cursor within standard command parsers
                     let kind = *kind;
-                    let flow = self
-                        .command_parsers
-                        .parse(kind, self.handler, &mut self.resources, cursor)
-                        .map_err(TokenStop::Error)?;
+                    let flow = self.command_parsers.parse(
+                        kind,
+                        self.handler,
+                        &mut self.resources,
+                        cursor,
+                    )?;
                     if let Some(result) = self.handle_command_progress(flow, Some(kind)) {
                         self.state = match result {
                             StandardCommandResult::EndCommand => ScriptParserState::AwaitingCommand,
@@ -150,9 +148,7 @@ impl<'a, H: CommandHandler> TokenHandler for ScriptParser<'a, H> {
                 }
                 ScriptParserState::NonstandardCommand(parser) => {
                     // handle the cursor within nonstandard command parsers
-                    let flow = parser
-                        .parse(self.handler, &mut self.resources, cursor)
-                        .map_err(TokenStop::Error)?;
+                    let flow = parser.parse(self.handler, &mut self.resources, cursor)?;
                     if let Some(()) = self.handle_command_progress(flow, None) {
                         // update the state; a non-standard command cannot force an early exit
                         self.state = ScriptParserState::AwaitingCommand;

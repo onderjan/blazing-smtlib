@@ -43,7 +43,7 @@ use std::time::Instant;
 
 use smt_parser_rs::{
     read::lexer::Lexer,
-    token::{TokenCursor, TokenHandler, TokenStop},
+    token::{TokenCursor, TokenHandler},
 };
 
 /// Default timed runs per file and mode; an additional first (warm-up) run
@@ -58,10 +58,7 @@ struct DiscardTokens {
 impl TokenHandler for DiscardTokens {
     type Error = Infallible;
 
-    fn handle_tokens(
-        &mut self,
-        cursor: &mut TokenCursor<'_>,
-    ) -> Result<(), TokenStop<Self::Error>> {
+    fn handle_tokens(&mut self, cursor: &mut TokenCursor<'_>) -> Result<(), Self::Error> {
         while cursor.take().is_some() {
             self.tokens += 1;
         }
