@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
 
 use crate::{
     CommandHandler,
-    read::parser::{ParserError, ParserResources, category::Parser, handle_err},
+    read::parser::{Parser, ParserError, ParserResources, handle_err},
     token::{Token, TokenCursor},
 };
 
