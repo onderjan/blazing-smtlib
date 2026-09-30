@@ -1,7 +1,4 @@
-use crate::{
-    SmtSpecialConstantView,
-    token::{TokenKind, TokenType},
-};
+use crate::{SmtSpecialConstantView, token::TokenKind};
 
 mod arena;
 mod attribute;
@@ -48,44 +45,6 @@ pub(crate) use sorted_var::SortedVarSlot;
 pub(crate) use term::TermSlot;
 
 pub type ParenSortedVarsParser<H> = ParenMultipleParser<H, SortedVarParser<H>>;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CategoryErrorKind {
-    ExpectedToken(&'static [TokenType]),
-    ExpectedSymbol,
-    ExpectedUnderscore,
-    ExpectedSymbolOrUnderscore,
-    ExpectedSymbolUnderscoreOrParenOpen,
-    ExpectedUnderscoreOrAs,
-
-    EmptyIdentIndices,
-    EmptySortApplication,
-    EmptyTermApplication,
-    EmptyLetBindings,
-    EmptyAnnotation,
-    EmptyQuantifierBindings,
-    EmptyLambdaBindings,
-    ExpectedIndexOrCloseParen,
-    ExpectedOperator,
-    ExpectedSExpr,
-    ExpectedIdent,
-    ExpectedSort,
-    ExpectedSortInner,
-    ExpectedTerm,
-    ExpectedAttribute,
-    ExpectedCommand,
-    ExpectedCommandName,
-    ExpectedDatatype,
-    ExpectedDatatypeKind,
-    ExpectedFunctionBody,
-    EmptyFunctionSignatures,
-    EmptyDatatypeIntroductions,
-    EmptyDatatypeParameters,
-    EmptyDatatypeConstructors,
-    EmptyPatternArguments,
-    EmptyMatchCases,
-    EmptyGetValueTerms,
-}
 
 #[inline]
 fn parse_special_constant<'a>(

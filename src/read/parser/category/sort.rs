@@ -3,8 +3,8 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler,
     read::parser::{
-        Arena, IdentHandle, IdentSlot, Parser, ParserError, ParserResources,
-        category::CategoryErrorKind, handle_err,
+        Arena, CategoryErrorKind, IdentHandle, IdentSlot, Parser, ParserError, ParserResources,
+        handle_err,
     },
     token::{GeneralReserved, Reserved, Token, TokenKind},
 };

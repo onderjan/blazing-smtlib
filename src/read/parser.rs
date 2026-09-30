@@ -10,7 +10,7 @@ pub use script::*;
 
 use crate::{
     SmtHandler, SmtSpan,
-    token::{Token, TokenCursor},
+    token::{Token, TokenCursor, TokenType},
 };
 
 pub trait Parser<H: SmtHandler + ?Sized> {
@@ -70,21 +70,53 @@ pub trait Parser<H: SmtHandler + ?Sized> {
     }
 }
 
+/// Error emitted by a parser, including the error span.
+#[derive(Debug)]
+pub struct ParserError<E>(Box<ParserErrorInner<E>>);
+
 #[derive(Debug)]
 pub enum ParserErrorKind<E> {
     Category(CategoryErrorKind),
     Handler(E),
 }
 
-#[derive(Debug)]
-struct ParserErrorInner<E> {
-    kind: ParserErrorKind<E>,
-    span: SmtSpan,
-}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CategoryErrorKind {
+    ExpectedToken(&'static [TokenType]),
+    ExpectedSymbol,
+    ExpectedUnderscore,
+    ExpectedSymbolOrUnderscore,
+    ExpectedSymbolUnderscoreOrParenOpen,
+    ExpectedUnderscoreOrAs,
 
-/// Error emitted by a parser, including the error span.
-#[derive(Debug)]
-pub struct ParserError<E>(Box<ParserErrorInner<E>>);
+    EmptyIdentIndices,
+    EmptySortApplication,
+    EmptyTermApplication,
+    EmptyLetBindings,
+    EmptyAnnotation,
+    EmptyQuantifierBindings,
+    EmptyLambdaBindings,
+    ExpectedIndexOrCloseParen,
+    ExpectedOperator,
+    ExpectedSExpr,
+    ExpectedIdent,
+    ExpectedSort,
+    ExpectedSortInner,
+    ExpectedTerm,
+    ExpectedAttribute,
+    ExpectedCommand,
+    ExpectedCommandName,
+    ExpectedDatatype,
+    ExpectedDatatypeKind,
+    ExpectedFunctionBody,
+    EmptyFunctionSignatures,
+    EmptyDatatypeIntroductions,
+    EmptyDatatypeParameters,
+    EmptyDatatypeConstructors,
+    EmptyPatternArguments,
+    EmptyMatchCases,
+    EmptyGetValueTerms,
+}
 
 impl<E> ParserError<E> {
     #[cold]
@@ -116,6 +148,12 @@ impl<E> ParserError<E> {
     pub fn into_kind(self) -> ParserErrorKind<E> {
         self.0.kind
     }
+}
+
+#[derive(Debug)]
+struct ParserErrorInner<E> {
+    kind: ParserErrorKind<E>,
+    span: SmtSpan,
 }
 
 fn handle_err<O, E>(handled: Result<O, E>, span: SmtSpan) -> Result<O, ParserError<E>> {

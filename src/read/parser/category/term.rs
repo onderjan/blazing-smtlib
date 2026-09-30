@@ -4,9 +4,9 @@ use crate::{
     SmtApplication, SmtHandler, SmtQualifiedIdentView, SmtQuantifierKind, SmtSpan, SmtSymbolView,
     SmtTerm,
     read::parser::{
-        Arena, CloseParenParser, OpenParenParser, Parser, ParserError, ParserResources,
-        QualifiedIdentHandle,
-        category::{CategoryErrorKind, attribute::MultipleAttributes, parse_special_constant},
+        Arena, CategoryErrorKind, CloseParenParser, OpenParenParser, Parser, ParserError,
+        ParserResources, QualifiedIdentHandle,
+        category::{attribute::MultipleAttributes, parse_special_constant},
         handle_err,
     },
     token::{GeneralReserved, Reserved, Token, TokenCursor, TokenKind, TokenType},
