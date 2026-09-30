@@ -194,7 +194,7 @@ impl<H: SmtHandler, P: Parser<H>> Parser<H> for ClosedMultipleParser<H, P> {
         resources: &mut ParserResources<H>,
         cursor: &mut TokenCursor,
     ) -> Result<ControlFlow<Vec<P::Result>>, ParserError<H::Error>> {
-        self.resource.progress_all(cursor, |cursor| {
+        self.resource.parse(cursor, |cursor| {
             self.inner.parse(handler, resources, cursor)
         })
     }

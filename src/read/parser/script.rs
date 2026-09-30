@@ -139,7 +139,7 @@ impl<'a, H: CommandHandler> TokenHandler for ScriptParser<'a, H> {
                     let kind = *kind;
                     let flow = self
                         .command_parsers
-                        .progress_all(kind, self.handler, &mut self.resources, cursor)
+                        .parse(kind, self.handler, &mut self.resources, cursor)
                         .map_err(TokenStop::Error)?;
                     if let Some(result) = self.handle_command_progress(flow, Some(kind)) {
                         self.state = match result {

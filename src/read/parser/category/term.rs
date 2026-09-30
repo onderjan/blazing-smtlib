@@ -177,7 +177,7 @@ impl<H: SmtHandler> Parser<H> for TermParser<H> {
         cursor: &mut TokenCursor<'_>,
     ) -> Result<ControlFlow<H::Term>, ParserError<H::Error>> {
         // progress the slot with the cursor
-        TermSlot::progress_all(handler, resources, cursor)
+        TermSlot::parse(handler, resources, cursor)
     }
 }
 
@@ -222,7 +222,7 @@ impl<H: SmtHandler + ?Sized> TermSlot<H> {
 
 impl<H: SmtHandler> TermSlot<H> {
     #[inline]
-    pub(crate) fn progress_all(
+    pub(crate) fn parse(
         handler: &mut H,
         resources: &mut ParserResources<H>,
         cursor: &mut TokenCursor,

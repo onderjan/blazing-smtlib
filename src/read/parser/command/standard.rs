@@ -72,7 +72,7 @@ macro_rules! standard_commands {
                     $($field: CommandParser::default(),)*
                 }
             }
-            pub fn progress_all(
+            pub fn parse(
                 &mut self,
                 kind: StandardCommandKind,
                 handler: &mut H,

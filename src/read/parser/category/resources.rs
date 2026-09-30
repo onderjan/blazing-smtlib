@@ -88,7 +88,7 @@ impl<T> ClosedMultipleResource<T> {
         }
     }
 
-    pub(crate) fn progress_all<E>(
+    pub(crate) fn parse<E>(
         &mut self,
         cursor: &mut TokenCursor,
         mut element: impl FnMut(&mut TokenCursor) -> Result<ControlFlow<T>, ParserError<E>>,
