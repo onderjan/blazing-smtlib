@@ -3,8 +3,8 @@ use std::ops::ControlFlow;
 use crate::{
     CommandHandler, SmtFunctionSignature,
     read::parser::{
-        SyntaxErrorKind, Parser, PairParser, ParenMaximumParser, ParenMultipleParser,
-        ParenParser, ParenSortedVarsParser, ParserError, ParserResources, SortParser, SymbolParser,
+        PairParser, ParenMaximumParser, ParenMultipleParser, ParenParser, ParenSortedVarsParser,
+        Parser, ParserError, ParserResources, SortParser, SymbolParser, SyntaxErrorKind,
         TermParser, handle_err,
     },
     token::Token,

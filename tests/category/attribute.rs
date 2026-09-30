@@ -30,16 +30,10 @@ fn stops_after_closing_paren() {
 #[test]
 fn errors() {
     let err = assert_error::<P>(b"status sat)", 0, 6);
-    assert!(
-        matches!(err, SyntaxErrorKind::ExpectedAttribute),
-        "{err:?}"
-    );
+    assert!(matches!(err, SyntaxErrorKind::ExpectedAttribute), "{err:?}");
 
     let err = assert_error::<P>(b"", 0, 0);
-    assert!(
-        matches!(err, SyntaxErrorKind::ExpectedAttribute),
-        "{err:?}"
-    );
+    assert!(matches!(err, SyntaxErrorKind::ExpectedAttribute), "{err:?}");
 
     // a keyword is not a valid value, and the single parser does not
     // accept it starting a second attribute either; the error must point
@@ -190,28 +184,16 @@ fn multiple_attribute_parser_is_reusable() {
 fn multiple_attribute_errors() {
     // the list must start with a keyword or the closing parenthesis
     let err = assert_error::<MP>(b"x)", 0, 1);
-    assert!(
-        matches!(err, SyntaxErrorKind::ExpectedAttribute),
-        "{err:?}"
-    );
+    assert!(matches!(err, SyntaxErrorKind::ExpectedAttribute), "{err:?}");
 
     // a second value is rejected where the next attribute or the closing
     // parenthesis is expected
     let err = assert_error::<MP>(b":a 1 2)", 5, 6);
-    assert!(
-        matches!(err, SyntaxErrorKind::ExpectedAttribute),
-        "{err:?}"
-    );
+    assert!(matches!(err, SyntaxErrorKind::ExpectedAttribute), "{err:?}");
 
     // EOF at the start of the list and EOF after an attribute name
     let err = assert_error::<MP>(b"", 0, 0);
-    assert!(
-        matches!(err, SyntaxErrorKind::ExpectedAttribute),
-        "{err:?}"
-    );
+    assert!(matches!(err, SyntaxErrorKind::ExpectedAttribute), "{err:?}");
     let err = assert_error::<MP>(b":a", 2, 2);
-    assert!(
-        matches!(err, SyntaxErrorKind::ExpectedAttribute),
-        "{err:?}"
-    );
+    assert!(matches!(err, SyntaxErrorKind::ExpectedAttribute), "{err:?}");
 }

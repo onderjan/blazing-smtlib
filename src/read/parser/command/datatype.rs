@@ -3,10 +3,9 @@ use std::ops::ControlFlow;
 use crate::{
     CommandHandler, SmtDatatypeConstructor, SmtNumeral, SmtSpan, SmtSymbol,
     read::parser::{
-        SyntaxErrorKind, Parser, CloseParenParser, ClosedMultipleParser, NumeralParser,
-        OpenParenParser, OpenedParser, ParenMaximumParser, ParenMultipleParser, ParenParser,
-        ParserError, ParserResources, SortedVarParser, SymbolParser, category::PairParser,
-        handle_err,
+        CloseParenParser, ClosedMultipleParser, NumeralParser, OpenParenParser, OpenedParser,
+        ParenMaximumParser, ParenMultipleParser, ParenParser, Parser, ParserError, ParserResources,
+        SortedVarParser, SymbolParser, SyntaxErrorKind, category::PairParser, handle_err,
     },
     token::{GeneralReserved, Reserved, Token, TokenKind},
 };

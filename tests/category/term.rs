@@ -123,17 +123,11 @@ fn lets() {
 #[test]
 fn let_errors() {
     let err = assert_error::<TermParser<Printing>>(b"(let () x)", 6, 7);
-    assert!(
-        matches!(err, SyntaxErrorKind::EmptyLetBindings),
-        "{err:?}"
-    );
+    assert!(matches!(err, SyntaxErrorKind::EmptyLetBindings), "{err:?}");
 
     let err = assert_error::<TermParser<Printing>>(b"(let x x)", 5, 6);
     assert!(
-        matches!(
-            err,
-            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])
-        ),
+        matches!(err, SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])),
         "{err:?}"
     );
 
@@ -181,16 +175,10 @@ fn errors() {
 
     // the operator position takes a symbol, a reserved binder, `_` or `(`
     let err = assert_error::<TermParser<Printing>>(b"(1 x)", 1, 2);
-    assert!(
-        matches!(err, SyntaxErrorKind::ExpectedOperator),
-        "{err:?}"
-    );
+    assert!(matches!(err, SyntaxErrorKind::ExpectedOperator), "{err:?}");
 
     let err = assert_error::<TermParser<Printing>>(b"()", 1, 2);
-    assert!(
-        matches!(err, SyntaxErrorKind::ExpectedOperator),
-        "{err:?}"
-    );
+    assert!(matches!(err, SyntaxErrorKind::ExpectedOperator), "{err:?}");
 
     // bad argument
     let err = assert_error::<TermParser<Printing>>(b"(f x :kw)", 5, 8);
@@ -202,10 +190,7 @@ fn errors() {
 
     // bad indexed identifier in a term
     let err = assert_error::<TermParser<Printing>>(b"(_ f)", 4, 5);
-    assert!(
-        matches!(err, SyntaxErrorKind::EmptyIdentIndices),
-        "{err:?}"
-    );
+    assert!(matches!(err, SyntaxErrorKind::EmptyIdentIndices), "{err:?}");
 }
 
 #[test]
@@ -394,10 +379,7 @@ fn binder_errors() {
     // the variable list must be parenthesized
     let err = assert_error::<TermParser<Printing>>(b"(forall x x)", 8, 9);
     assert!(
-        matches!(
-            err,
-            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])
-        ),
+        matches!(err, SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])),
         "{err:?}"
     );
 
@@ -681,10 +663,7 @@ fn match_errors() {
     // the case list is required
     let err = assert_error::<TermParser<Printing>>(b"(match x)", 8, 9);
     assert!(
-        matches!(
-            err,
-            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])
-        ),
+        matches!(err, SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])),
         "{err:?}"
     );
     // at least one case is required

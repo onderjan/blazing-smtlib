@@ -23,10 +23,7 @@ pub(super) trait Definition<H: CommandHandler> {
     ) -> Result<(), H::Error>;
 
     /// End is invoked when the last definition body token is processed.
-    fn end(
-        handler: &mut H,
-        body: <Self::Body as Parser<H>>::Result,
-    ) -> Result<(), H::Error>;
+    fn end(handler: &mut H, body: <Self::Body as Parser<H>>::Result) -> Result<(), H::Error>;
 }
 
 enum DefinitionParserState {

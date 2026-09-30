@@ -4,7 +4,7 @@ use crate::{
     SmtAttributeValue, SmtAttributes, SmtBindings, SmtDatatypeConstructor, SmtFunctionSignature,
     SmtKeyword, SmtKeywordView, SmtNumeral, SmtPatternView, SmtQuantifierKind, SmtSExpr, SmtSort,
     SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm,
-    read::parser::{Parser, NoCommandParser},
+    read::parser::{NoCommandParser, Parser},
 };
 
 pub trait SmtHandler {

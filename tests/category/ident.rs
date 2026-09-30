@@ -69,10 +69,7 @@ fn errors() {
 
     // at least one index is required
     let err = assert_error::<IdentParser>(b"(_ f)", 4, 5);
-    assert!(
-        matches!(err, SyntaxErrorKind::EmptyIdentIndices),
-        "{err:?}"
-    );
+    assert!(matches!(err, SyntaxErrorKind::EmptyIdentIndices), "{err:?}");
 
     // indices are numerals or symbols only
     let err = assert_error::<IdentParser>(b"(_ f \"s\")", 5, 8);

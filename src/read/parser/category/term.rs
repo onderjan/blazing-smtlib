@@ -4,8 +4,8 @@ use crate::{
     SmtApplication, SmtHandler, SmtQualifiedIdentView, SmtQuantifierKind, SmtSpan, SmtSymbolView,
     SmtTerm,
     read::parser::{
-        Arena, SyntaxErrorKind, CloseParenParser, OpenParenParser, Parser, ParserError,
-        ParserResources, QualifiedIdentHandle,
+        Arena, CloseParenParser, OpenParenParser, Parser, ParserError, ParserResources,
+        QualifiedIdentHandle, SyntaxErrorKind,
         category::{attribute::MultipleAttributes, parse_special_constant},
         handle_err,
     },
@@ -870,10 +870,7 @@ impl<H: SmtHandler> TermSlot<H> {
             _ => {
                 // expected open or close parenthesis
                 Err(ParserError::category_error(
-                    SyntaxErrorKind::ExpectedToken(&[
-                        TokenType::ParenOpen,
-                        TokenType::ParenClose,
-                    ]),
+                    SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen, TokenType::ParenClose]),
                     span,
                 ))
             }

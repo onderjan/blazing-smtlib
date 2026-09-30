@@ -12,7 +12,7 @@ use smt_parser_rs::{
     SmtSymbolView, SmtTerm,
     read::{
         SmtReadErrorKind,
-        parser::{SyntaxErrorKind, ClosedParser, CommandAction, CommandParser, TermParser},
+        parser::{ClosedParser, CommandAction, CommandParser, SyntaxErrorKind, TermParser},
     },
 };
 

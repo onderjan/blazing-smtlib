@@ -44,10 +44,7 @@ fn open_closed_parser() {
 
     let err = assert_error::<ParenParser<Printing, SymbolParser>>(b"a)", 0, 1);
     assert!(
-        matches!(
-            err,
-            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])
-        ),
+        matches!(err, SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])),
         "{err:?}"
     );
     let err = assert_error::<ParenParser<Printing, SymbolParser>>(b"(a", 2, 2);
@@ -94,10 +91,7 @@ fn paren_multiple_parser() {
     // the opening parenthesis is required
     let err = assert_error::<ParenMultipleParser<Printing, SymbolParser>>(b"a", 0, 1);
     assert!(
-        matches!(
-            err,
-            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])
-        ),
+        matches!(err, SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])),
         "{err:?}"
     );
     // the element parser's error is reported for a bad element

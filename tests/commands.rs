@@ -13,7 +13,7 @@ use smt_parser_rs::{
     read::{
         SmtReadErrorKind,
         lexer::LexerErrorKind,
-        parser::{SyntaxErrorKind, NoCommandParser},
+        parser::{NoCommandParser, SyntaxErrorKind},
     },
     token::TokenType,
 };
@@ -732,10 +732,7 @@ fn define_sort_errors_point_at_offending_token() {
     // the parameter list is required, even when empty
     let err = assert_parser_error(b"(define-sort S Int)", 15, 18);
     assert!(
-        matches!(
-            err,
-            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])
-        ),
+        matches!(err, SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])),
         "{err:?}"
     );
     // the parameters are bare symbols, not sorted vars or numerals
@@ -1015,10 +1012,7 @@ fn define_const_errors_point_at_offending_token() {
     assert!(matches!(err, SyntaxErrorKind::ExpectedSymbol), "{err:?}");
     // define-const has no parameter list, an empty one is not a sort
     let err = assert_parser_error(b"(define-const c () Int 5)", 17, 18);
-    assert!(
-        matches!(err, SyntaxErrorKind::ExpectedSortInner),
-        "{err:?}"
-    );
+    assert!(matches!(err, SyntaxErrorKind::ExpectedSortInner), "{err:?}");
     // the body term is required
     let err = assert_parser_error(b"(define-const c Int)", 19, 20);
     assert!(matches!(err, SyntaxErrorKind::ExpectedTerm), "{err:?}");
@@ -1086,19 +1080,13 @@ fn check_sat_errors_point_at_offending_token() {
     // the assumption list is required, even when empty
     let err = assert_parser_error(b"(check-sat-assuming)", 19, 20);
     assert!(
-        matches!(
-            err,
-            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])
-        ),
+        matches!(err, SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])),
         "{err:?}"
     );
     // the assumptions must be parenthesized as a list
     let err = assert_parser_error(b"(check-sat-assuming a)", 20, 21);
     assert!(
-        matches!(
-            err,
-            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])
-        ),
+        matches!(err, SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])),
         "{err:?}"
     );
     // nothing may follow the assumption list
@@ -1196,10 +1184,7 @@ fn signature_errors_point_at_offending_token() {
     // each sorted var must be parenthesized
     let err = assert_parser_error(b"(define-fun f (x Int) Int x)", 15, 16);
     assert!(
-        matches!(
-            err,
-            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])
-        ),
+        matches!(err, SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])),
         "{err:?}"
     );
     // the body term is required
@@ -1276,10 +1261,7 @@ fn trivial_command_errors_point_at_offending_token() {
     );
     // set-option requires an attribute
     let err = assert_parser_error(b"(set-option)", 11, 12);
-    assert!(
-        matches!(err, SyntaxErrorKind::ExpectedAttribute),
-        "{err:?}"
-    );
+    assert!(matches!(err, SyntaxErrorKind::ExpectedAttribute), "{err:?}");
     // reset and reset-assertions take no arguments
     let err = assert_parser_error(b"(reset x)", 7, 8);
     assert!(
@@ -1599,10 +1581,7 @@ fn declare_datatypes_errors_point_at_offending_token() {
     // each sort declaration is parenthesized
     let err = assert_parser_error(b"(declare-datatypes (A 0) (((a))))", 20, 21);
     assert!(
-        matches!(
-            err,
-            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])
-        ),
+        matches!(err, SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])),
         "{err:?}"
     );
     // the arity is required
@@ -1614,18 +1593,12 @@ fn declare_datatypes_errors_point_at_offending_token() {
     // the declaration list is required
     let err = assert_parser_error(b"(declare-datatypes ((A 0)))", 26, 27);
     assert!(
-        matches!(
-            err,
-            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])
-        ),
+        matches!(err, SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])),
         "{err:?}"
     );
     // fewer declarations than sorts: the list closes where a declaration should start
     let err = assert_parser_error(b"(declare-datatypes ((A 0) (B 0)) (((a))))", 39, 40);
-    assert!(
-        matches!(err, SyntaxErrorKind::ExpectedDatatype),
-        "{err:?}"
-    );
+    assert!(matches!(err, SyntaxErrorKind::ExpectedDatatype), "{err:?}");
     // more declarations than sorts: only the list end is allowed after the last one
     let err = assert_parser_error(b"(declare-datatypes ((A 0)) (((a)) ((b))))", 34, 35);
     assert!(
@@ -1674,10 +1647,7 @@ fn declare_datatypes_errors_point_at_offending_token() {
     // a selector is a parenthesized pair
     let err = assert_parser_error(b"(declare-datatypes ((A 0)) (((a x))))", 32, 33);
     assert!(
-        matches!(
-            err,
-            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])
-        ),
+        matches!(err, SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])),
         "{err:?}"
     );
     // with a sort
@@ -1815,10 +1785,7 @@ fn declare_datatype_errors_point_at_offending_token() {
     // the declaration is required
     let err = assert_parser_error(b"(declare-datatype A)", 19, 20);
     assert!(
-        matches!(
-            err,
-            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])
-        ),
+        matches!(err, SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])),
         "{err:?}"
     );
     // the declaration has the same shape as in declare-datatypes
@@ -2123,10 +2090,7 @@ fn define_funs_rec_errors_point_at_offending_token() {
     // each signature is parenthesized
     let err = assert_parser_error(b"(define-funs-rec (f () Int) (1))", 18, 19);
     assert!(
-        matches!(
-            err,
-            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])
-        ),
+        matches!(err, SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])),
         "{err:?}"
     );
     // the function name must be a symbol
@@ -2135,10 +2099,7 @@ fn define_funs_rec_errors_point_at_offending_token() {
     // each sorted var is parenthesized
     let err = assert_parser_error(b"(define-funs-rec ((f (x Int) Int)) (1))", 22, 23);
     assert!(
-        matches!(
-            err,
-            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])
-        ),
+        matches!(err, SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])),
         "{err:?}"
     );
     // the result sort is required
@@ -2147,10 +2108,7 @@ fn define_funs_rec_errors_point_at_offending_token() {
     // the body list is required
     let err = assert_parser_error(b"(define-funs-rec ((f () Int)))", 29, 30);
     assert!(
-        matches!(
-            err,
-            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])
-        ),
+        matches!(err, SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])),
         "{err:?}"
     );
     // one body per function: the shortfall is detected at the end of the body list
@@ -2208,10 +2166,7 @@ fn define_fun_rec_errors_point_at_offending_token() {
     // each sorted var is parenthesized
     let err = assert_parser_error(b"(define-fun-rec f (x Int) Int x)", 19, 20);
     assert!(
-        matches!(
-            err,
-            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])
-        ),
+        matches!(err, SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])),
         "{err:?}"
     );
     // the body term is required
@@ -2513,18 +2468,12 @@ fn get_value_errors_point_at_offending_token() {
     // the term list is required and parenthesized
     let err = assert_parser_error(b"(get-value)", 10, 11);
     assert!(
-        matches!(
-            err,
-            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])
-        ),
+        matches!(err, SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])),
         "{err:?}"
     );
     let err = assert_parser_error(b"(get-value x)", 11, 12);
     assert!(
-        matches!(
-            err,
-            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])
-        ),
+        matches!(err, SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])),
         "{err:?}"
     );
     // the list holds terms, which are checked as terms

@@ -93,20 +93,11 @@ fn errors() {
 
     // after `(`, only `_`, a symbol, or `(` may follow
     let err = assert_error::<SortParser<Printing>>(b"(as x Bool)", 1, 3);
-    assert!(
-        matches!(err, SyntaxErrorKind::ExpectedSortInner),
-        "{err:?}"
-    );
+    assert!(matches!(err, SyntaxErrorKind::ExpectedSortInner), "{err:?}");
     let err = assert_error::<SortParser<Printing>>(b"(1 2)", 1, 2);
-    assert!(
-        matches!(err, SyntaxErrorKind::ExpectedSortInner),
-        "{err:?}"
-    );
+    assert!(matches!(err, SyntaxErrorKind::ExpectedSortInner), "{err:?}");
     let err = assert_error::<SortParser<Printing>>(b"()", 1, 2);
-    assert!(
-        matches!(err, SyntaxErrorKind::ExpectedSortInner),
-        "{err:?}"
-    );
+    assert!(matches!(err, SyntaxErrorKind::ExpectedSortInner), "{err:?}");
 
     // an applied identifier must be applied to at least one sort
     let err = assert_error::<SortParser<Printing>>(b"(Int)", 4, 5);
@@ -129,10 +120,7 @@ fn errors() {
 
     // errors inside the indexed identifier are reported by the identifier parser
     let err = assert_error::<SortParser<Printing>>(b"(_ BitVec)", 9, 10);
-    assert!(
-        matches!(err, SyntaxErrorKind::EmptyIdentIndices),
-        "{err:?}"
-    );
+    assert!(matches!(err, SyntaxErrorKind::EmptyIdentIndices), "{err:?}");
 }
 
 /// Handler that only counts sorts, so deep nesting does not build huge strings.

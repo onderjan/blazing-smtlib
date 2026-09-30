@@ -31,11 +31,11 @@ use smt_parser_rs::{
     read::{
         lexer::{LexError, Lexer},
         parser::{
-            SyntaxErrorKind, CloseParenParser, ClosedAttributeParser,
-            ClosedMultipleAttributeParser, ClosedMultipleParser, ClosedParser, IdentParser,
-            KeywordParser, OpenParenParser, PairParser, ParenMultipleParser, ParenParser, Parser,
-            ParserError, ParserErrorKind, ParserResources, QualifiedIdentParser, SExprParser,
-            SortParser, StringParser, SymbolParser, TermParser,
+            CloseParenParser, ClosedAttributeParser, ClosedMultipleAttributeParser,
+            ClosedMultipleParser, ClosedParser, IdentParser, KeywordParser, OpenParenParser,
+            PairParser, ParenMultipleParser, ParenParser, Parser, ParserError, ParserErrorKind,
+            ParserResources, QualifiedIdentParser, SExprParser, SortParser, StringParser,
+            SymbolParser, SyntaxErrorKind, TermParser,
         },
     },
     token::{Reserved, Token, TokenHandler, TokenStop, TokenType},

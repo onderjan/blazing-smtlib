@@ -24,7 +24,7 @@ use crate::{
     CommandHandler, SmtSpan,
     read::{
         lexer::{LexError, Lexer, LexerError, LexerErrorKind},
-        parser::{SyntaxErrorKind, ParserError, ParserErrorKind, ScriptParser},
+        parser::{ParserError, ParserErrorKind, ScriptParser, SyntaxErrorKind},
     },
 };
 
