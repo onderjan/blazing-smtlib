@@ -4,7 +4,7 @@ use crate::{
     SmtHandler, SmtKeyword, SmtKeywordView, SmtNumeral, SmtNumeralView, SmtStringContent,
     SmtStringContentView, SmtSymbol,
     read::parser::{Arena, Parser, ParserError, ParserResources, SyntaxErrorKind},
-    token::{Token, TokenKind, TokenType},
+    token::{Token, TokenCursor, TokenKind, TokenType},
 };
 
 pub struct SymbolParser;
@@ -41,12 +41,15 @@ impl SymbolParser {
 impl<H: SmtHandler> Parser<H> for SymbolParser {
     type Result = SmtSymbol;
 
-    fn progress(
+    fn parse(
         &mut self,
         _handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: Token,
+        cursor: &mut TokenCursor,
     ) -> Result<ControlFlow<Self::Result, ()>, ParserError<H::Error>> {
+        let Some(token) = cursor.take() else {
+            return Ok(ControlFlow::Continue(()));
+        };
         Ok(ControlFlow::Break(Self::expect(&resources.arena, token)?))
     }
 }
@@ -90,12 +93,15 @@ macro_rules! token_parser {
         impl<H: SmtHandler> Parser<H> for $parser {
             type Result = $result;
 
-            fn progress(
+            fn parse(
                 &mut self,
                 _handler: &mut H,
                 _resources: &mut ParserResources<H>,
-                token: Token,
+                cursor: &mut TokenCursor,
             ) -> Result<ControlFlow<Self::Result, ()>, ParserError<H::Error>> {
+                let Some(token) = cursor.take() else {
+                    return Ok(ControlFlow::Continue(()));
+                };
                 Ok(ControlFlow::Break(Self::expect(token)?))
             }
         }

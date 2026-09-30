@@ -6,7 +6,7 @@ use crate::{
         CommandParsers, Parser, ParserError, ParserResources, StandardCommandKind,
         StandardCommandResult, SyntaxErrorKind,
     },
-    token::{Reserved, Token, TokenCursor, TokenHandler, TokenKind, TokenStop, TokenType},
+    token::{Reserved, TokenCursor, TokenHandler, TokenKind, TokenStop, TokenType},
 };
 
 pub struct ScriptParser<'a, H: CommandHandler> {
@@ -85,12 +85,6 @@ impl<'a, H: CommandHandler> TokenHandler for ScriptParser<'a, H> {
     type Error = ParserError<H::Error>;
 
     #[inline]
-    fn handle_token(&mut self, token: Token) -> Result<(), TokenStop<ParserError<H::Error>>> {
-        // delegate to handle_tokens
-        self.handle_tokens(&mut TokenCursor::single(token))
-    }
-
-    #[inline]
     fn handle_tokens(
         &mut self,
         cursor: &mut TokenCursor<'_>,
@@ -157,7 +151,7 @@ impl<'a, H: CommandHandler> TokenHandler for ScriptParser<'a, H> {
                 ScriptParserState::NonstandardCommand(parser) => {
                     // handle the cursor within nonstandard command parsers
                     let flow = parser
-                        .progress_all(self.handler, &mut self.resources, cursor)
+                        .parse(self.handler, &mut self.resources, cursor)
                         .map_err(TokenStop::Error)?;
                     if let Some(()) = self.handle_command_progress(flow, None) {
                         // update the state; a non-standard command cannot force an early exit

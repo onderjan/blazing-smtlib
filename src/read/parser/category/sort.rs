@@ -4,9 +4,9 @@ use crate::{
     SmtHandler,
     read::parser::{
         Arena, IdentHandle, IdentSlot, Parser, ParserError, ParserResources, SyntaxErrorKind,
-        handle_err,
+        handle_err, parse_by_token,
     },
-    token::{GeneralReserved, Reserved, Token, TokenKind},
+    token::{GeneralReserved, Reserved, Token, TokenCursor, TokenKind},
 };
 
 /// A parser that reads an SMT-LIB sort.
@@ -35,11 +35,11 @@ impl<H: SmtHandler> Parser<H> for SortParser<H> {
     type Result = H::Sort;
 
     #[inline]
-    fn progress(
+    fn parse(
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: Token,
+        cursor: &mut TokenCursor,
     ) -> Result<ControlFlow<H::Sort>, ParserError<H::Error>> {
         // progress the slot, giving it the ident slot it delegates to
         let ParserResources {
@@ -48,7 +48,9 @@ impl<H: SmtHandler> Parser<H> for SortParser<H> {
             arena,
             ..
         } = resources;
-        sort_slot.progress(handler, arena, ident_slot, token)
+        parse_by_token(cursor, |token| {
+            sort_slot.progress(handler, arena, ident_slot, token)
+        })
     }
 }
 

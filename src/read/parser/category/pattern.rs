@@ -4,9 +4,9 @@ use crate::{
     SmtHandler, SmtPattern, SmtSimplePattern, SmtSimplePatternView,
     read::parser::{
         Arena, Parser, ParserError, ParserResources, PatternHandle, SimplePatternHandle,
-        SyntaxErrorKind, TextHandle,
+        SyntaxErrorKind, TextHandle, parse_by_token,
     },
-    token::{GeneralReserved, Reserved, Token, TokenKind, TokenType},
+    token::{GeneralReserved, Reserved, Token, TokenCursor, TokenKind, TokenType},
 };
 
 pub struct SimplePatternParser;
@@ -54,12 +54,15 @@ impl Default for SimplePatternParser {
 impl<H: SmtHandler> Parser<H> for SimplePatternParser {
     type Result = SmtSimplePattern;
 
-    fn progress(
+    fn parse(
         &mut self,
         _handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: Token,
+        cursor: &mut TokenCursor,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
+        let Some(token) = cursor.take() else {
+            return Ok(ControlFlow::Continue(()));
+        };
         Ok(ControlFlow::Break(Self::expect(&resources.arena, token)?))
     }
 }
@@ -90,11 +93,11 @@ impl<H: SmtHandler> Parser<H> for PatternParser<H> {
     type Result = SmtPattern;
 
     #[inline]
-    fn progress(
+    fn parse(
         &mut self,
         _handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: Token,
+        cursor: &mut TokenCursor,
     ) -> Result<ControlFlow<SmtPattern, ()>, ParserError<H::Error>> {
         // progress the slot
         let ParserResources {
@@ -102,15 +105,17 @@ impl<H: SmtHandler> Parser<H> for PatternParser<H> {
             arena,
             ..
         } = resources;
-        match pattern_slot.progress(arena, token)? {
-            ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
-            ControlFlow::Break(pattern) => {
-                // break with the owned pattern
-                Ok(ControlFlow::Break(
-                    arena.hand_over_pattern(pattern, |pattern| pattern.into_owned()),
-                ))
+        parse_by_token(cursor, |token| {
+            match pattern_slot.progress(arena, token)? {
+                ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
+                ControlFlow::Break(pattern) => {
+                    // break with the owned pattern
+                    Ok(ControlFlow::Break(
+                        arena.hand_over_pattern(pattern, |pattern| pattern.into_owned()),
+                    ))
+                }
             }
-        }
+        })
     }
 }
 

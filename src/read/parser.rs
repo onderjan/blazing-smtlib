@@ -16,31 +16,7 @@ use crate::{
 pub trait Parser<H: SmtHandler + ?Sized> {
     type Result;
 
-    /// Parses a single token, progressing the parser.
-    ///
-    /// If a non-error result is returned, it either signals that the
-    /// parser is finished ([`ControlFlow::Break`] with the result value),
-    /// or that it is not finished yet ([`ControlFlow::Continue`]).
-    ///
-    /// All standard parsers implementing [`CategoryParser`] are self-resetting:
-    /// after returning [`ControlFlow::Break`], they are back in their initial state.
-    ///
-    /// The `resources` are shared resources of standard category parsers.
-    /// To keep resources valid, each [`CategoryParser`] must progress
-    /// until completion once started, i.e. if [`CategoryParser::progress()`]
-    /// returns `Ok(Continue(()))`, the subsequent outer progress call
-    /// must call [`CategoryParser::progress()`] on the same parser, and
-    /// is forbidden from progressing any other parsers.
-    /// Failure to heed this contract may lead to silently wrong parsing
-    /// or panics, but never unsafe behaviour.
-    fn progress(
-        &mut self,
-        handler: &mut H,
-        resources: &mut ParserResources<H>,
-        token: Token,
-    ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>>;
-
-    /// Parses all tokens from the cursor, progressing the parser.
+    /// Parses tokens from the cursor, progressing the parser.
     ///
     /// Tokens are consumed until the parser is finished, returning
     /// [`ControlFlow::Break`] with the result and leaving the cursor after the
@@ -48,26 +24,40 @@ pub trait Parser<H: SmtHandler + ?Sized> {
     /// [`ControlFlow::Continue`]. After an error, the cursor position is not
     /// specified.
     ///
-    /// The contract of [`CategoryParser::progress()`] applies: once started,
-    /// the parser must be progressed until completion.
+    /// All standard parsers implementing [`Parser`] are self-resetting:
+    /// after returning [`ControlFlow::Break`], they are back in their initial state.
     ///
-    /// The default implementation loops over [`CategoryParser::progress()`].
-    /// If better performance is needed, implement this function and call it
-    /// from [`CategoryParser::progress()`] with a cursor over the single token.
-    #[inline]
-    fn progress_all(
+    /// The `resources` are shared resources of standard category parsers.
+    /// To keep resources valid, each [`Parser`] must be progressed
+    /// until completion once started, i.e. if [`Parser::parse()`]
+    /// returns `Ok(Continue(()))`, the subsequent outer parse call
+    /// must call [`Parser::parse()`] on the same parser, and
+    /// is forbidden from progressing any other parsers.
+    /// Failure to heed this contract may lead to silently wrong parsing
+    /// or panics, but never unsafe behaviour.
+    fn parse(
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
         cursor: &mut TokenCursor,
-    ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
-        while let Some(token) = cursor.take() {
-            if let ControlFlow::Break(result) = self.progress(handler, resources, token)? {
-                return Ok(ControlFlow::Break(result));
-            }
+    ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>>;
+}
+
+/// Parses the cursor one token at a time with `progress`, until the cursor
+/// is empty or `progress` breaks.
+///
+/// For parsers whose state machine steps by single tokens.
+#[inline]
+pub(crate) fn parse_by_token<R, E>(
+    cursor: &mut TokenCursor,
+    mut progress: impl FnMut(Token) -> Result<ControlFlow<R>, E>,
+) -> Result<ControlFlow<R>, E> {
+    while let Some(token) = cursor.take() {
+        if let ControlFlow::Break(result) = progress(token)? {
+            return Ok(ControlFlow::Break(result));
         }
-        Ok(ControlFlow::Continue(()))
     }
+    Ok(ControlFlow::Continue(()))
 }
 
 /// Error emitted by a parser, including the error span.

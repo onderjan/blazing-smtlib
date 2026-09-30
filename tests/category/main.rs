@@ -1,6 +1,6 @@
 //! Public-API tests of the category parsers: the single-token parsers, the
 //! generic combinators, and the ident, qualified-ident, sort, term, s-expression
-//! and attribute parsers, each driven in isolation through `CategoryParser`.
+//! and attribute parsers, each driven in isolation through `Parser`.
 //!
 //! This file holds the shared test handler and driver; the tests themselves
 //! live in the submodules under `category/`.
@@ -38,7 +38,7 @@ use smt_parser_rs::{
             SymbolParser, SyntaxErrorKind, TermParser,
         },
     },
-    token::{Reserved, Token, TokenHandler, TokenStop, TokenType},
+    token::{Reserved, TokenCursor, TokenHandler, TokenStop, TokenType},
 };
 
 // --- Test handler rendering everything it receives back into text ---
@@ -366,20 +366,28 @@ struct Drive<'h, H: SmtHandler, P: Parser<H>> {
 impl<H: SmtHandler, P: Parser<H>> TokenHandler for Drive<'_, H, P> {
     type Error = ParserError<H::Error>;
 
-    fn handle_token(&mut self, token: Token) -> Result<(), TokenStop<Self::Error>> {
-        if self.remaining == 0 {
-            if token.ty() != TokenType::EndOfFile {
-                self.unconsumed += 1;
+    fn handle_tokens(
+        &mut self,
+        cursor: &mut TokenCursor<'_>,
+    ) -> Result<(), TokenStop<Self::Error>> {
+        while !cursor.is_empty() {
+            if self.remaining == 0 {
+                // count the tokens left after the wanted results, except the end of the input
+                while let Some(token) = cursor.take() {
+                    if token.ty() != TokenType::EndOfFile {
+                        self.unconsumed += 1;
+                    }
+                }
+                return Ok(());
             }
-            return Ok(());
-        }
-        if let ControlFlow::Break(result) = self
-            .parser
-            .progress(self.handler, &mut self.resources, token)
-            .map_err(TokenStop::Error)?
-        {
-            self.results.push(result);
-            self.remaining -= 1;
+            if let ControlFlow::Break(result) = self
+                .parser
+                .parse(self.handler, &mut self.resources, cursor)
+                .map_err(TokenStop::Error)?
+            {
+                self.results.push(result);
+                self.remaining -= 1;
+            }
         }
         Ok(())
     }

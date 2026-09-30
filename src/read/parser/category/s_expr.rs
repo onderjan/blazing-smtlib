@@ -4,9 +4,9 @@ use crate::{
     SmtHandler, SmtSExpr,
     read::parser::{
         Arena, Parser, ParserError, ParserResources, SyntaxErrorKind,
-        category::parse_special_constant, handle_err,
+        category::parse_special_constant, handle_err, parse_by_token,
     },
-    token::{Token, TokenKind},
+    token::{Token, TokenCursor, TokenKind},
 };
 
 /// A parser that reads an SMT-LIB S-expression.
@@ -35,16 +35,17 @@ impl<H: SmtHandler> Parser<H> for SExprParser<H> {
     type Result = H::SExpr;
 
     #[inline]
-    fn progress(
+    fn parse(
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: Token,
+        cursor: &mut TokenCursor,
     ) -> Result<ControlFlow<H::SExpr>, ParserError<H::Error>> {
         // progress the slot over the arena
-        resources
-            .s_expr_slot
-            .progress(handler, &mut resources.arena, token)
+        let ParserResources {
+            s_expr_slot, arena, ..
+        } = resources;
+        parse_by_token(cursor, |token| s_expr_slot.progress(handler, arena, token))
     }
 }
 

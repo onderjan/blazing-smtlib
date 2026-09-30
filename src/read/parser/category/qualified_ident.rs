@@ -4,9 +4,9 @@ use crate::{
     SmtHandler, SmtQualifiedIdent, SmtSymbolView,
     read::parser::{
         Arena, CloseParenParser, IdentHandle, IdentSlot, Parser, ParserError, ParserResources,
-        QualifiedIdentHandle, SortSlot, SyntaxErrorKind,
+        QualifiedIdentHandle, SortSlot, SyntaxErrorKind, parse_by_token,
     },
-    token::{GeneralReserved, Reserved, Token, TokenKind},
+    token::{GeneralReserved, Reserved, Token, TokenCursor, TokenKind},
 };
 
 /// A parser that reads an SMT-LIB qualified identifier.
@@ -35,11 +35,11 @@ impl<H: SmtHandler> Parser<H> for QualifiedIdentParser<H> {
     type Result = SmtQualifiedIdent<H>;
 
     #[inline]
-    fn progress(
+    fn parse(
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: Token,
+        cursor: &mut TokenCursor,
     ) -> Result<ControlFlow<SmtQualifiedIdent<H>>, ParserError<H::Error>> {
         // progress the slot, giving it the ident and sort slots it delegates to
         let ParserResources {
@@ -49,12 +49,14 @@ impl<H: SmtHandler> Parser<H> for QualifiedIdentParser<H> {
             arena,
             ..
         } = resources;
-        match qualified_ident_slot.progress(handler, arena, sort_slot, ident_slot, token)? {
-            ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
-            ControlFlow::Break(qualified_ident) => Ok(ControlFlow::Break(
-                arena.hand_over_qualified_ident(qualified_ident, |view| view.into_owned()),
-            )),
-        }
+        parse_by_token(cursor, |token| {
+            match qualified_ident_slot.progress(handler, arena, sort_slot, ident_slot, token)? {
+                ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
+                ControlFlow::Break(qualified_ident) => Ok(ControlFlow::Break(
+                    arena.hand_over_qualified_ident(qualified_ident, |view| view.into_owned()),
+                )),
+            }
+        })
     }
 }
 

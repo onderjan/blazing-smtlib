@@ -10,7 +10,9 @@ use std::convert::Infallible;
 
 use smt_parser_rs::{
     read::lexer::Lexer,
-    token::{Reserved, SmtVersion, Token, TokenHandler, TokenKind, TokenStop, TokenType},
+    token::{
+        Reserved, SmtVersion, Token, TokenCursor, TokenHandler, TokenKind, TokenStop, TokenType,
+    },
 };
 
 use reserved_words::reserved_words;
@@ -41,7 +43,20 @@ struct CollectTokens(Vec<Lexed>);
 impl TokenHandler for CollectTokens {
     type Error = Infallible;
 
-    fn handle_token(&mut self, token: Token) -> Result<(), TokenStop<Self::Error>> {
+    fn handle_tokens(
+        &mut self,
+        cursor: &mut TokenCursor<'_>,
+    ) -> Result<(), TokenStop<Self::Error>> {
+        while let Some(token) = cursor.take() {
+            self.collect(token);
+        }
+        Ok(())
+    }
+}
+
+impl CollectTokens {
+    /// Collects an owned copy of the token.
+    fn collect(&mut self, token: Token) {
         let kind = match TokenKind::from_token(token, SmtVersion::V2_7) {
             TokenKind::Symbol(symbol) => Kind::Symbol(symbol.as_slice().to_vec()),
             TokenKind::Reserved(reserved) => Kind::Reserved(reserved),
@@ -56,7 +71,6 @@ impl TokenHandler for CollectTokens {
             kind,
             span: (span.start().offset(), span.end().offset()),
         });
-        Ok(())
     }
 }
 
@@ -186,12 +200,18 @@ fn end_of_input_has_no_content_and_an_empty_span_at_the_end() {
         struct Locate<'h>(&'h mut CollectTokens, &'h mut Vec<(u64, u64, u64)>);
         impl TokenHandler for Locate<'_> {
             type Error = Infallible;
-            fn handle_token(&mut self, token: Token) -> Result<(), TokenStop<Self::Error>> {
-                if token.ty() == TokenType::EndOfFile {
-                    let end = token.span().end();
-                    self.1.push((end.offset(), end.line(), end.column()));
+            fn handle_tokens(
+                &mut self,
+                cursor: &mut TokenCursor<'_>,
+            ) -> Result<(), TokenStop<Self::Error>> {
+                while let Some(token) = cursor.take() {
+                    if token.ty() == TokenType::EndOfFile {
+                        let end = token.span().end();
+                        self.1.push((end.offset(), end.line(), end.column()));
+                    }
+                    self.0.collect(token);
                 }
-                self.0.handle_token(token)
+                Ok(())
             }
         }
         let mut handler = Locate(&mut collected, &mut locations);

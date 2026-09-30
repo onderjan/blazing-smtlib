@@ -4,9 +4,9 @@ use crate::{
     SmtHandler, SmtIdent, SmtSymbolView,
     read::parser::{
         Arena, IdentHandle, IndexHandle, Parser, ParserError, ParserResources, SyntaxErrorKind,
-        TextHandle,
+        TextHandle, parse_by_token,
     },
-    token::{GeneralReserved, Reserved, Token, TokenKind},
+    token::{GeneralReserved, Reserved, Token, TokenCursor, TokenKind},
 };
 
 /// A parser that reads an SMT-LIB identifier.
@@ -33,22 +33,22 @@ impl<H: SmtHandler> Parser<H> for IdentParser {
     type Result = SmtIdent;
 
     #[inline]
-    fn progress(
+    fn parse(
         &mut self,
         _handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: Token,
+        cursor: &mut TokenCursor,
     ) -> Result<ControlFlow<SmtIdent, ()>, ParserError<H::Error>> {
         // progress the slot over the arena, returning an owned identifier
         let ParserResources {
             ident_slot, arena, ..
         } = resources;
-        match ident_slot.progress(arena, token)? {
+        parse_by_token(cursor, |token| match ident_slot.progress(arena, token)? {
             ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
             ControlFlow::Break(ident) => Ok(ControlFlow::Break(
                 arena.hand_over_ident(ident, |ident| ident.into_owned()),
             )),
-        }
+        })
     }
 }
 

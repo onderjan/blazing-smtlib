@@ -13,7 +13,7 @@ use std::convert::Infallible;
 use smt_parser_rs::{
     SmtLocation, SmtSpan,
     read::lexer::{LexError, Lexer, LexerError, LexerErrorKind},
-    token::{Token, TokenHandler, TokenStop, TokenType},
+    token::{TokenCursor, TokenHandler, TokenStop, TokenType},
 };
 
 /// An owned copy of a produced token, comparable between lexer runs.
@@ -30,12 +30,17 @@ struct CollectTokens(Vec<OwnedToken>);
 impl TokenHandler for CollectTokens {
     type Error = Infallible;
 
-    fn handle_token(&mut self, token: Token) -> Result<(), TokenStop<Self::Error>> {
-        self.0.push(OwnedToken {
-            ty: token.ty(),
-            content: token.content().to_vec(),
-            span: token.span(),
-        });
+    fn handle_tokens(
+        &mut self,
+        cursor: &mut TokenCursor<'_>,
+    ) -> Result<(), TokenStop<Self::Error>> {
+        while let Some(token) = cursor.take() {
+            self.0.push(OwnedToken {
+                ty: token.ty(),
+                content: token.content().to_vec(),
+                span: token.span(),
+            });
+        }
         Ok(())
     }
 }
@@ -730,11 +735,16 @@ struct RejectNth {
 impl TokenHandler for RejectNth {
     type Error = ();
 
-    fn handle_token(&mut self, _token: Token) -> Result<(), TokenStop<Self::Error>> {
-        if self.remaining == 0 {
-            return Err(TokenStop::Error(()));
+    fn handle_tokens(
+        &mut self,
+        cursor: &mut TokenCursor<'_>,
+    ) -> Result<(), TokenStop<Self::Error>> {
+        while cursor.take().is_some() {
+            if self.remaining == 0 {
+                return Err(TokenStop::Error(()));
+            }
+            self.remaining -= 1;
         }
-        self.remaining -= 1;
         Ok(())
     }
 }

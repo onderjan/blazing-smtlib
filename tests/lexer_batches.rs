@@ -86,10 +86,6 @@ struct Recorder<'r> {
 impl TokenHandler for Recorder<'_> {
     type Error = ();
 
-    fn handle_token(&mut self, _token: Token) -> Result<(), TokenStop<()>> {
-        panic!("test bug: the recorder expects every hand-over through handle_tokens")
-    }
-
     fn handle_tokens(&mut self, cursor: &mut TokenCursor<'_>) -> Result<(), TokenStop<()>> {
         // record every token of the hand-over by walking a copy of the cursor
         let mut walk = *cursor;

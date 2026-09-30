@@ -4,9 +4,9 @@ use crate::{
     SmtHandler, SmtSymbol,
     read::parser::{
         Arena, CloseParenParser, IdentSlot, OpenParenParser, Parser, ParserError, ParserResources,
-        SortSlot, SyntaxErrorKind, TextHandle,
+        SortSlot, SyntaxErrorKind, TextHandle, parse_by_token,
     },
-    token::{Token, TokenKind},
+    token::{Token, TokenCursor, TokenKind},
 };
 
 /// Parses a sorted variable: parentheses-enclosed pair of a symbol and a sort.
@@ -35,11 +35,11 @@ impl<H: SmtHandler> Parser<H> for SortedVarParser<H> {
     type Result = (SmtSymbol, H::Sort);
 
     #[inline]
-    fn progress(
+    fn parse(
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: Token,
+        cursor: &mut TokenCursor,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         // progress the slot, giving it the sort and ident slots it delegates to
         let ParserResources {
@@ -49,14 +49,14 @@ impl<H: SmtHandler> Parser<H> for SortedVarParser<H> {
             arena,
             ..
         } = resources;
-        match sorted_var_slot.progress(handler, arena, sort_slot, ident_slot, token)? {
-            ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
-            ControlFlow::Break((name, sort)) => Ok(ControlFlow::Break(arena.hand_over_sorted_var(
-                name,
-                sort,
-                |name, sort| (name.into_owned(), sort),
-            ))),
-        }
+        parse_by_token(cursor, |token| {
+            match sorted_var_slot.progress(handler, arena, sort_slot, ident_slot, token)? {
+                ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
+                ControlFlow::Break((name, sort)) => Ok(ControlFlow::Break(
+                    arena.hand_over_sorted_var(name, sort, |name, sort| (name.into_owned(), sort)),
+                )),
+            }
+        })
     }
 }
 

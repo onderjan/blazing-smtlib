@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     CommandHandler,
     read::parser::{Parser, ParserError, ParserResources, handle_err},
-    token::{Token, TokenCursor},
+    token::TokenCursor,
 };
 
 mod datatype;
@@ -19,11 +19,11 @@ impl<H: CommandHandler> Parser<H> for NoCommandParser {
     type Result = ();
 
     #[inline]
-    fn progress(
+    fn parse(
         &mut self,
         _handler: &mut H,
         _resources: &mut ParserResources<H>,
-        _token: Token,
+        _cursor: &mut TokenCursor,
     ) -> Result<ControlFlow<()>, ParserError<H::Error>> {
         match *self {}
     }
@@ -65,23 +65,13 @@ impl<H: CommandHandler, C: CommandAction<H>> Parser<H> for CommandParser<H, C> {
     type Result = ();
 
     #[inline]
-    fn progress(
-        &mut self,
-        handler: &mut H,
-        resources: &mut ParserResources<H>,
-        token: Token,
-    ) -> Result<ControlFlow<()>, ParserError<H::Error>> {
-        self.progress_all(handler, resources, &mut TokenCursor::single(token))
-    }
-
-    #[inline]
-    fn progress_all(
+    fn parse(
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
         cursor: &mut TokenCursor,
     ) -> Result<ControlFlow<()>, ParserError<H::Error>> {
-        match self.parser.progress_all(handler, resources, cursor)? {
+        match self.parser.parse(handler, resources, cursor)? {
             ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
             ControlFlow::Break(result) => {
                 // the command ends at the last consumed token, get its span
@@ -99,7 +89,10 @@ impl<H: CommandHandler, C: CommandAction<H>> Parser<H> for CommandParser<H, C> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{CheckStandardSyntax, SmtSpan, token::InnerType};
+    use crate::{
+        CheckStandardSyntax, SmtSpan,
+        token::{InnerType, Token},
+    };
 
     #[test]
     fn finished_command_parser_parses_the_next_command() {
@@ -114,7 +107,11 @@ mod tests {
             let span = SmtSpan::new_zero();
             let close = Token::new(&Some((InnerType::ParenClose, &[])), &span);
             let flow = parser
-                .progress(&mut handler, &mut ParserResources::new(), close)
+                .parse(
+                    &mut handler,
+                    &mut ParserResources::new(),
+                    &mut TokenCursor::single(close),
+                )
                 .expect("check-sat closing parenthesis must parse");
             assert!(matches!(flow, ControlFlow::Break(())));
         }

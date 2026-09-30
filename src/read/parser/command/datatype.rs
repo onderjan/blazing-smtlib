@@ -6,8 +6,9 @@ use crate::{
         CloseParenParser, ClosedMultipleParser, NumeralParser, OpenParenParser, OpenedParser,
         ParenMaximumParser, ParenMultipleParser, ParenParser, Parser, ParserError, ParserResources,
         SortedVarParser, SymbolParser, SyntaxErrorKind, category::PairParser, handle_err,
+        parse_by_token,
     },
-    token::{GeneralReserved, Reserved, Token, TokenKind},
+    token::{GeneralReserved, Reserved, Token, TokenCursor, TokenKind},
 };
 
 /// Parser for a single datatype introduction (name and arity in parentheses).
@@ -96,12 +97,24 @@ impl<H: CommandHandler> Default for DatatypeParser<H> {
 impl<H: CommandHandler> Parser<H> for DatatypeParser<H> {
     type Result = ();
 
+    fn parse(
+        &mut self,
+        handler: &mut H,
+        resources: &mut ParserResources<H>,
+        cursor: &mut TokenCursor,
+    ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
+        parse_by_token(cursor, |token| self.progress(handler, resources, token))
+    }
+}
+
+impl<H: CommandHandler> DatatypeParser<H> {
+    /// Progresses the parser by one token.
     fn progress(
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
         token: Token,
-    ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<()>, ParserError<H::Error>> {
         let span = token.span();
         let constructors = match self.state {
             DatatypeState::Start => {
@@ -117,9 +130,11 @@ impl<H: CommandHandler> Parser<H> for DatatypeParser<H> {
                     self.state = DatatypeState::SimpleConstructors;
                     // this parenthesis already is the start of the constructor,
                     // so we will forward it
-                    let result = self
-                        .constructors_parser
-                        .progress(handler, resources, token)?;
+                    let result = self.constructors_parser.parse(
+                        handler,
+                        resources,
+                        &mut TokenCursor::single(token),
+                    )?;
                     debug_assert!(
                         matches!(result, ControlFlow::Continue(())),
                         "datatype constructor should continue on opening parenthesis"
@@ -141,14 +156,16 @@ impl<H: CommandHandler> Parser<H> for DatatypeParser<H> {
             DatatypeState::SimpleConstructors => {
                 // parse the simple constructors
                 self.constructors_parser
-                    .progress(handler, resources, token)?
+                    .parse(handler, resources, &mut TokenCursor::single(token))?
                     .break_value()
             }
             DatatypeState::Parameters => {
                 // parse the parameters
-                if let ControlFlow::Break(params) =
-                    self.symbols_parser.progress(handler, resources, token)?
-                {
+                if let ControlFlow::Break(params) = self.symbols_parser.parse(
+                    handler,
+                    resources,
+                    &mut TokenCursor::single(token),
+                )? {
                     // there must be at least one parameter
                     if params.is_empty() {
                         return Err(ParserError::category_error(
@@ -172,7 +189,7 @@ impl<H: CommandHandler> Parser<H> for DatatypeParser<H> {
             DatatypeState::ParametricConstructors => {
                 // parse the parametric constructors
                 self.constructors_parser
-                    .progress(handler, resources, token)?
+                    .parse(handler, resources, &mut TokenCursor::single(token))?
                     .break_value()
             }
             DatatypeState::Close => {
@@ -244,20 +261,33 @@ impl<H: CommandHandler> DeclareDatatypesParser<H> {
 impl<H: CommandHandler> Parser<H> for DeclareDatatypesParser<H> {
     type Result = ();
 
+    fn parse(
+        &mut self,
+        handler: &mut H,
+        resources: &mut ParserResources<H>,
+        cursor: &mut TokenCursor,
+    ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
+        parse_by_token(cursor, |token| self.progress(handler, resources, token))
+    }
+}
+
+impl<H: CommandHandler> DeclareDatatypesParser<H> {
+    /// Progresses the parser by one token.
     fn progress(
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
         token: Token,
-    ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<()>, ParserError<H::Error>> {
         let span = token.span();
         match self.state {
             DeclareDatatypesState::Introductions => {
                 // parse datatype introductions
-                if let ControlFlow::Break(introductions) = self
-                    .introductions_parser
-                    .progress(handler, resources, token)?
-                {
+                if let ControlFlow::Break(introductions) = self.introductions_parser.parse(
+                    handler,
+                    resources,
+                    &mut TokenCursor::single(token),
+                )? {
                     // introductions must not be empty
                     if introductions.is_empty() {
                         return Err(ParserError::category_error(
@@ -274,9 +304,11 @@ impl<H: CommandHandler> Parser<H> for DeclareDatatypesParser<H> {
             }
             DeclareDatatypesState::Declarations => {
                 // parse datatypes
-                if let ControlFlow::Break(datatypes) =
-                    self.datatypes_parser.progress(handler, resources, token)?
-                {
+                if let ControlFlow::Break(datatypes) = self.datatypes_parser.parse(
+                    handler,
+                    resources,
+                    &mut TokenCursor::single(token),
+                )? {
                     // there cannot be more datatypes than sort declarations due to the maximum parser
                     // ensure there are not more sort declarations than datatypes
                     if datatypes.len() != self.datatypes_parser.max_elements() {
@@ -331,12 +363,24 @@ impl<H: CommandHandler> Default for DeclareDatatypeParser<H> {
 impl<H: CommandHandler> Parser<H> for DeclareDatatypeParser<H> {
     type Result = ();
 
+    fn parse(
+        &mut self,
+        handler: &mut H,
+        resources: &mut ParserResources<H>,
+        cursor: &mut TokenCursor,
+    ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
+        parse_by_token(cursor, |token| self.progress(handler, resources, token))
+    }
+}
+
+impl<H: CommandHandler> DeclareDatatypeParser<H> {
+    /// Progresses the parser by one token.
     fn progress(
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
         token: Token,
-    ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<()>, ParserError<H::Error>> {
         let span = token.span();
         match self.state {
             DeclareDatatypeState::Name => {
@@ -346,9 +390,11 @@ impl<H: CommandHandler> Parser<H> for DeclareDatatypeParser<H> {
                 self.state = DeclareDatatypeState::Datatype;
             }
             DeclareDatatypeState::Datatype => {
-                if let ControlFlow::Break(()) =
-                    self.datatype_parser.progress(handler, resources, token)?
-                {
+                if let ControlFlow::Break(()) = self.datatype_parser.parse(
+                    handler,
+                    resources,
+                    &mut TokenCursor::single(token),
+                )? {
                     // the single declaration ends the command
                     handle_err(handler.end_declare_datatypes(), span)?;
                     self.state = DeclareDatatypeState::Name;

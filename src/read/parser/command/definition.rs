@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     CommandHandler,
     read::parser::{Parser, ParserError, ParserResources, handle_err},
-    token::{Token, TokenCursor},
+    token::TokenCursor,
 };
 
 /// A definition where a signature is followed by a body.
@@ -61,17 +61,7 @@ impl<H: CommandHandler, D: Definition<H>> Parser<H> for DefinitionParser<H, D> {
     type Result = ();
 
     #[inline]
-    fn progress(
-        &mut self,
-        handler: &mut H,
-        resources: &mut ParserResources<H>,
-        token: Token,
-    ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
-        self.progress_all(handler, resources, &mut TokenCursor::single(token))
-    }
-
-    #[inline]
-    fn progress_all(
+    fn parse(
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
@@ -79,10 +69,7 @@ impl<H: CommandHandler, D: Definition<H>> Parser<H> for DefinitionParser<H, D> {
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         if matches!(self.state, DefinitionParserState::Signature) {
             // parse the signature; it ends at the last consumed token
-            match self
-                .signature_parser
-                .progress_all(handler, resources, cursor)?
-            {
+            match self.signature_parser.parse(handler, resources, cursor)? {
                 ControlFlow::Continue(()) => return Ok(ControlFlow::Continue(())),
                 ControlFlow::Break(signature) => {
                     let span = cursor
@@ -96,7 +83,7 @@ impl<H: CommandHandler, D: Definition<H>> Parser<H> for DefinitionParser<H, D> {
             }
         }
         // parse the body on the tokens left; it ends at the last consumed token
-        match self.body_parser.progress_all(handler, resources, cursor)? {
+        match self.body_parser.parse(handler, resources, cursor)? {
             ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
             ControlFlow::Break(body) => {
                 let span = cursor

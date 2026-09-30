@@ -7,7 +7,8 @@ use smt_parser_rs::{
     SmtLocation, SmtSpan,
     read::lexer::{LexError, Lexer, LexerError, LexerErrorKind},
     token::{
-        GeneralReserved, Reserved, SmtVersion, Token, TokenHandler, TokenKind, TokenStop, TokenType,
+        GeneralReserved, Reserved, SmtVersion, TokenCursor, TokenHandler, TokenKind, TokenStop,
+        TokenType,
     },
 };
 
@@ -29,17 +30,22 @@ struct CollectTokens(Vec<OwnedToken>);
 impl TokenHandler for CollectTokens {
     type Error = Infallible;
 
-    fn handle_token(&mut self, token: Token) -> Result<(), TokenStop<Self::Error>> {
-        let reserved = match TokenKind::from_token(token, SmtVersion::V2_7) {
-            TokenKind::Reserved(reserved) => Some(reserved),
-            _ => None,
-        };
-        self.0.push(OwnedToken {
-            ty: token.ty(),
-            content: token.content().to_vec(),
-            span: token.span(),
-            reserved,
-        });
+    fn handle_tokens(
+        &mut self,
+        cursor: &mut TokenCursor<'_>,
+    ) -> Result<(), TokenStop<Self::Error>> {
+        while let Some(token) = cursor.take() {
+            let reserved = match TokenKind::from_token(token, SmtVersion::V2_7) {
+                TokenKind::Reserved(reserved) => Some(reserved),
+                _ => None,
+            };
+            self.0.push(OwnedToken {
+                ty: token.ty(),
+                content: token.content().to_vec(),
+                span: token.span(),
+                reserved,
+            });
+        }
         Ok(())
     }
 }
@@ -609,8 +615,14 @@ struct RejectTokens;
 impl TokenHandler for RejectTokens {
     type Error = SmtSpan;
 
-    fn handle_token(&mut self, token: Token) -> Result<(), TokenStop<Self::Error>> {
-        Err(TokenStop::Error(token.span()))
+    fn handle_tokens(
+        &mut self,
+        cursor: &mut TokenCursor<'_>,
+    ) -> Result<(), TokenStop<Self::Error>> {
+        match cursor.take() {
+            Some(token) => Err(TokenStop::Error(token.span())),
+            None => Ok(()),
+        }
     }
 }
 
@@ -822,12 +834,16 @@ struct RejectEof;
 impl TokenHandler for RejectEof {
     type Error = ();
 
-    fn handle_token(&mut self, token: Token) -> Result<(), TokenStop<Self::Error>> {
-        if token.ty() == TokenType::EndOfFile {
-            Err(TokenStop::Error(()))
-        } else {
-            Ok(())
+    fn handle_tokens(
+        &mut self,
+        cursor: &mut TokenCursor<'_>,
+    ) -> Result<(), TokenStop<Self::Error>> {
+        while let Some(token) = cursor.take() {
+            if token.ty() == TokenType::EndOfFile {
+                return Err(TokenStop::Error(()));
+            }
         }
+        Ok(())
     }
 }
 

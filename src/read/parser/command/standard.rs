@@ -13,7 +13,7 @@ use crate::{
             function::{DefineFunsRecParser, FunctionSignatureParser, RecursiveBodyParser},
         },
     },
-    token::{CommandNameReserved, Token, TokenCursor},
+    token::{CommandNameReserved, TokenCursor},
 };
 
 pub enum StandardCommandResult {
@@ -80,7 +80,7 @@ macro_rules! standard_commands {
                 cursor: &mut TokenCursor<'_>,
             ) -> Result<ControlFlow<StandardCommandResult, ()>, ParserError<H::Error>> {
                 let flow = match kind {
-                    $(StandardCommandKind::$kind => self.$field.progress_all(handler, resources, cursor)?,)*
+                    $(StandardCommandKind::$kind => self.$field.parse(handler, resources, cursor)?,)*
                 };
                 // only the exit command ends reading
                 Ok(flow.map_break(|()| match kind {
@@ -281,23 +281,13 @@ impl<H: CommandHandler> Parser<H> for GetValueParser<H> {
     type Result = Vec<H::Term>;
 
     #[inline]
-    fn progress(
-        &mut self,
-        handler: &mut H,
-        resources: &mut ParserResources<H>,
-        token: Token,
-    ) -> Result<ControlFlow<Vec<H::Term>, ()>, ParserError<H::Error>> {
-        self.progress_all(handler, resources, &mut TokenCursor::single(token))
-    }
-
-    #[inline]
-    fn progress_all(
+    fn parse(
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
         cursor: &mut TokenCursor,
     ) -> Result<ControlFlow<Vec<H::Term>, ()>, ParserError<H::Error>> {
-        match self.inner.progress_all(handler, resources, cursor)? {
+        match self.inner.parse(handler, resources, cursor)? {
             ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
             ControlFlow::Break(terms) => {
                 // ensure there is at least one term; the list ends at the last consumed token

@@ -4,9 +4,9 @@ use crate::{
     SmtAttributeValue, SmtHandler, SmtKeywordView, SmtSpan,
     read::parser::{
         Arena, CloseParenParser, Parser, ParserError, ParserResources, SExprSlot, SyntaxErrorKind,
-        TextHandle, category::parse_special_constant, handle_err,
+        TextHandle, category::parse_special_constant, handle_err, parse_by_token,
     },
-    token::{Token, TokenKind, TokenType},
+    token::{Token, TokenCursor, TokenKind, TokenType},
 };
 
 /// A parser that reads an SMT-LIB attribute followed by a closing parenthesis.
@@ -34,18 +34,21 @@ impl<H: SmtHandler> Default for ClosedAttributeParser<H> {
 impl<H: SmtHandler> Parser<H> for ClosedAttributeParser<H> {
     type Result = H::Attribute;
 
-    fn progress(
+    fn parse(
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: Token,
+        cursor: &mut TokenCursor,
     ) -> Result<ControlFlow<Self::Result>, ParserError<<H as SmtHandler>::Error>> {
-        resources.attribute_slot.progress::<H, SingleAttribute>(
-            handler,
-            &mut resources.arena,
-            &mut resources.s_expr_slot,
-            token,
-        )
+        let ParserResources {
+            attribute_slot,
+            arena,
+            s_expr_slot,
+            ..
+        } = resources;
+        parse_by_token(cursor, |token| {
+            attribute_slot.progress::<H, SingleAttribute>(handler, arena, s_expr_slot, token)
+        })
     }
 }
 
@@ -74,28 +77,36 @@ impl<H: SmtHandler> Default for ClosedMultipleAttributeParser<H> {
 impl<H: SmtHandler> Parser<H> for ClosedMultipleAttributeParser<H> {
     type Result = Vec<H::Attribute>;
 
-    fn progress(
+    fn parse(
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        token: Token,
+        cursor: &mut TokenCursor,
     ) -> Result<ControlFlow<Self::Result>, ParserError<<H as SmtHandler>::Error>> {
-        match resources.attribute_slot.progress::<H, MultipleAttributes>(
-            handler,
-            &mut resources.arena,
-            &mut resources.s_expr_slot,
-            token,
-        )? {
-            ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
-            ControlFlow::Break(start) => {
-                // the attributes are at the end of the arena, hand them over
-                Ok(ControlFlow::Break(
-                    resources
-                        .arena
-                        .hand_over_attributes(start, |attributes| attributes.into_iter().collect()),
-                ))
+        let ParserResources {
+            attribute_slot,
+            arena,
+            s_expr_slot,
+            ..
+        } = resources;
+        parse_by_token(cursor, |token| {
+            match attribute_slot.progress::<H, MultipleAttributes>(
+                handler,
+                arena,
+                s_expr_slot,
+                token,
+            )? {
+                ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
+                ControlFlow::Break(start) => {
+                    // the attributes are at the end of the arena, hand them over
+                    Ok(ControlFlow::Break(
+                        arena.hand_over_attributes(start, |attributes| {
+                            attributes.into_iter().collect()
+                        }),
+                    ))
+                }
             }
-        }
+        })
     }
 }
 

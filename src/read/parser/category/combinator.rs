@@ -6,7 +6,7 @@ use crate::{
         CloseParenParser, OpenParenParser, Parser, ParserError, ParserResources, SyntaxErrorKind,
         category::resources::ClosedMultipleResource,
     },
-    token::{Token, TokenCursor, TokenType},
+    token::{TokenCursor, TokenType},
 };
 
 /// Parses using the first parser, then the second, then returns the result tuple.
@@ -41,17 +41,7 @@ impl<H: SmtHandler, P1: Parser<H>, P2: Parser<H>> Parser<H> for PairParser<H, P1
     type Result = (P1::Result, P2::Result);
 
     #[inline]
-    fn progress(
-        &mut self,
-        handler: &mut H,
-        resources: &mut ParserResources<H>,
-        token: Token,
-    ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
-        self.progress_all(handler, resources, &mut TokenCursor::single(token))
-    }
-
-    #[inline]
-    fn progress_all(
+    fn parse(
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
@@ -59,7 +49,7 @@ impl<H: SmtHandler, P1: Parser<H>, P2: Parser<H>> Parser<H> for PairParser<H, P1
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         // progress the first parser until it breaks or the tokens run out
         if self.first_result.is_none() {
-            match self.first.progress_all(handler, resources, cursor)? {
+            match self.first.parse(handler, resources, cursor)? {
                 ControlFlow::Continue(()) => return Ok(ControlFlow::Continue(())),
                 ControlFlow::Break(first) => {
                     self.first_result = Some(first);
@@ -68,7 +58,7 @@ impl<H: SmtHandler, P1: Parser<H>, P2: Parser<H>> Parser<H> for PairParser<H, P1
             }
         }
         // progress the second parser; the first result stays until it breaks
-        match self.second.progress_all(handler, resources, cursor)? {
+        match self.second.parse(handler, resources, cursor)? {
             ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
             ControlFlow::Break(second) => {
                 let first = self
@@ -107,17 +97,7 @@ impl<H: SmtHandler, P: Parser<H>> Parser<H> for ClosedParser<H, P> {
     type Result = P::Result;
 
     #[inline]
-    fn progress(
-        &mut self,
-        handler: &mut H,
-        resources: &mut ParserResources<H>,
-        token: Token,
-    ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
-        self.progress_all(handler, resources, &mut TokenCursor::single(token))
-    }
-
-    #[inline]
-    fn progress_all(
+    fn parse(
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
@@ -125,7 +105,7 @@ impl<H: SmtHandler, P: Parser<H>> Parser<H> for ClosedParser<H, P> {
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         Ok(self
             .inner
-            .progress_all(handler, resources, cursor)?
+            .parse(handler, resources, cursor)?
             .map_break(|(result, ())| result))
     }
 }
@@ -156,17 +136,7 @@ impl<H: SmtHandler, P: Parser<H>> Parser<H> for OpenedParser<H, P> {
     type Result = P::Result;
 
     #[inline]
-    fn progress(
-        &mut self,
-        handler: &mut H,
-        resources: &mut ParserResources<H>,
-        token: Token,
-    ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
-        self.progress_all(handler, resources, &mut TokenCursor::single(token))
-    }
-
-    #[inline]
-    fn progress_all(
+    fn parse(
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
@@ -174,7 +144,7 @@ impl<H: SmtHandler, P: Parser<H>> Parser<H> for OpenedParser<H, P> {
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         Ok(self
             .inner
-            .progress_all(handler, resources, cursor)?
+            .parse(handler, resources, cursor)?
             .map_break(|((), result)| result))
     }
 }
@@ -218,24 +188,14 @@ impl<H: SmtHandler, P: Parser<H>> Parser<H> for ClosedMultipleParser<H, P> {
     type Result = Vec<P::Result>;
 
     #[inline]
-    fn progress(
-        &mut self,
-        handler: &mut H,
-        resources: &mut ParserResources<H>,
-        token: Token,
-    ) -> Result<ControlFlow<Vec<P::Result>>, ParserError<H::Error>> {
-        self.progress_all(handler, resources, &mut TokenCursor::single(token))
-    }
-
-    #[inline]
-    fn progress_all(
+    fn parse(
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
         cursor: &mut TokenCursor,
     ) -> Result<ControlFlow<Vec<P::Result>>, ParserError<H::Error>> {
         self.resource.progress_all(cursor, |cursor| {
-            self.inner.progress_all(handler, resources, cursor)
+            self.inner.parse(handler, resources, cursor)
         })
     }
 }
@@ -290,16 +250,7 @@ impl<H: SmtHandler, P: Parser<H>> ClosedMaximumParser<H, P> {
 impl<H: SmtHandler, P: Parser<H>> Parser<H> for ClosedMaximumParser<H, P> {
     type Result = Vec<P::Result>;
 
-    fn progress(
-        &mut self,
-        handler: &mut H,
-        resources: &mut ParserResources<H>,
-        token: Token,
-    ) -> Result<ControlFlow<Vec<P::Result>>, ParserError<H::Error>> {
-        self.progress_all(handler, resources, &mut TokenCursor::single(token))
-    }
-
-    fn progress_all(
+    fn parse(
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
@@ -330,7 +281,7 @@ impl<H: SmtHandler, P: Parser<H>> Parser<H> for ClosedMaximumParser<H, P> {
                 self.outside = false;
             }
             // we are inside, parse the element using the inner parser
-            match self.inner.progress_all(handler, resources, cursor)? {
+            match self.inner.parse(handler, resources, cursor)? {
                 ControlFlow::Continue(()) => return Ok(ControlFlow::Continue(())),
                 ControlFlow::Break(element) => {
                     // add element, we are back outside
@@ -379,16 +330,7 @@ impl<H: SmtHandler, P: Parser<H>> ParenMaximumParser<H, P> {
 impl<H: SmtHandler, P: Parser<H>> Parser<H> for ParenMaximumParser<H, P> {
     type Result = Vec<P::Result>;
 
-    fn progress(
-        &mut self,
-        handler: &mut H,
-        resources: &mut ParserResources<H>,
-        token: Token,
-    ) -> Result<ControlFlow<Vec<P::Result>>, ParserError<H::Error>> {
-        self.progress_all(handler, resources, &mut TokenCursor::single(token))
-    }
-
-    fn progress_all(
+    fn parse(
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
@@ -396,7 +338,7 @@ impl<H: SmtHandler, P: Parser<H>> Parser<H> for ParenMaximumParser<H, P> {
     ) -> Result<ControlFlow<Vec<P::Result>>, ParserError<H::Error>> {
         loop {
             if self.is_opened {
-                match self.inner.progress_all(handler, resources, cursor)? {
+                match self.inner.parse(handler, resources, cursor)? {
                     ControlFlow::Continue(()) => return Ok(ControlFlow::Continue(())),
                     ControlFlow::Break(result) => {
                         // we are done, reset open and break

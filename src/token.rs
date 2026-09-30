@@ -257,24 +257,13 @@ impl<'a> TokenCursor<'a> {
 pub trait TokenHandler {
     type Error;
 
-    /// Sequentially handles one token.
-    fn handle_token(&mut self, token: Token) -> Result<(), TokenStop<Self::Error>>;
-
-    /// Handles the tokens in a batch.
+    /// Handles the tokens handed over in the cursor, in order.
     ///
-    /// Default implementation forwards to [`TokenHandler::handle_token`].
-    /// Implementations that have to be fast should instead implement this
-    /// function and call it from [`TokenHandler::handle_token`].
-    #[inline]
-    fn handle_tokens(
-        &mut self,
-        cursor: &mut TokenCursor<'_>,
-    ) -> Result<(), TokenStop<Self::Error>> {
-        while let Some(token) = cursor.take() {
-            self.handle_token(token)?;
-        }
-        Ok(())
-    }
+    /// Returning `Ok(())` means all tokens were handled: the cursor must
+    /// be empty. Returning a [`TokenStop`] leaves the cursor after the
+    /// last consumed token, which is where the stop takes effect.
+    fn handle_tokens(&mut self, cursor: &mut TokenCursor<'_>)
+    -> Result<(), TokenStop<Self::Error>>;
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -288,11 +277,6 @@ pub enum TokenStop<E> {
 /// Mutable references over token handlers are token handlers.
 impl<T: TokenHandler + ?Sized> TokenHandler for &mut T {
     type Error = T::Error;
-
-    #[inline]
-    fn handle_token(&mut self, token: Token) -> Result<(), TokenStop<Self::Error>> {
-        (**self).handle_token(token)
-    }
 
     #[inline]
     fn handle_tokens(

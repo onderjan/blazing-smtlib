@@ -1,5 +1,5 @@
-//! Tests of the token cursor and of the batch entry point of the category
-//! parsers, `progress_all`, on the cursors the lexer hands over.
+//! Tests of the token cursor and of the entry point of the category
+//! parsers, `parse`, on the cursors the lexer hands over.
 //!
 //! A cursor over a batch can only come from the lexer, so every test lexes a
 //! small input and runs its checks inside the handler, on each hand-over.
@@ -13,7 +13,7 @@ use smt_parser_rs::{
         lexer::Lexer,
         parser::{Parser, ParserResources, SortParser, TermParser},
     },
-    token::{Token, TokenCursor, TokenHandler, TokenStop, TokenType},
+    token::{TokenCursor, TokenHandler, TokenStop, TokenType},
 };
 
 /// A handler that runs a check on a copy of every cursor it receives, then
@@ -22,10 +22,6 @@ struct Probe<F>(F);
 
 impl<F: FnMut(TokenCursor<'_>)> TokenHandler for Probe<F> {
     type Error = Infallible;
-
-    fn handle_token(&mut self, _token: Token) -> Result<(), TokenStop<Infallible>> {
-        panic!("test bug: the probe expects every hand-over through handle_tokens")
-    }
 
     fn handle_tokens(&mut self, cursor: &mut TokenCursor<'_>) -> Result<(), TokenStop<Infallible>> {
         (self.0)(*cursor);
@@ -180,7 +176,7 @@ fn advancing_past_the_end_stops_at_the_end_like_take() {
 
 // --- The batch entry point of category parsers ---
 
-/// Drives the parser through `progress_all` on the hand-overs of the chunks,
+/// Drives the parser through `parse` on the hand-overs of the chunks,
 /// returning per hand-over how many tokens it consumed and whether it finished.
 fn drive<P: Parser<CheckStandardSyntax> + Default>(chunks: &[&[u8]]) -> Vec<(usize, bool)> {
     let mut parser = P::default();
@@ -192,7 +188,7 @@ fn drive<P: Parser<CheckStandardSyntax> + Default>(chunks: &[&[u8]]) -> Vec<(usi
             return;
         }
         let flow = parser
-            .progress_all(&mut CheckStandardSyntax, &mut resources, &mut cursor)
+            .parse(&mut CheckStandardSyntax, &mut resources, &mut cursor)
             .expect("the category must parse");
         finished = matches!(flow, ControlFlow::Break(_));
         calls.push((cursor.consumed(), finished));
@@ -201,7 +197,7 @@ fn drive<P: Parser<CheckStandardSyntax> + Default>(chunks: &[&[u8]]) -> Vec<(usi
 }
 
 #[test]
-fn default_progress_all_stops_after_the_category_and_leaves_the_rest() {
+fn parse_stops_after_the_category_and_leaves_the_rest() {
     // the same property for a term and a sort: five tokens make the category,
     // the sixth is left in the cursor
     assert_eq!(drive::<TermParser<_>>(&[b"(f a b) x "]), [(5, true)]);
@@ -209,7 +205,7 @@ fn default_progress_all_stops_after_the_category_and_leaves_the_rest() {
 }
 
 #[test]
-fn default_progress_all_continues_across_batches() {
+fn parse_continues_across_batches() {
     // the category spans two hand-overs: the first is consumed whole without a
     // result, the second finishes it after two tokens
     assert_eq!(
@@ -223,15 +219,15 @@ fn default_progress_all_continues_across_batches() {
 }
 
 #[test]
-fn default_progress_all_finishes_at_the_last_token_of_a_batch() {
+fn parse_finishes_at_the_last_token_of_a_batch() {
     // the closing parenthesis is the hand-over's last token: finished, nothing left
     assert_eq!(drive::<TermParser<_>>(&[b"(f a b)", b" x "]), [(5, true)]);
 }
 
 #[test]
-fn default_progress_all_reports_the_parser_error() {
+fn parse_reports_the_parser_error() {
     on_token_batch(b") x ", |mut cursor| {
-        let result = TermParser::<CheckStandardSyntax>::default().progress_all(
+        let result = TermParser::<CheckStandardSyntax>::default().parse(
             &mut CheckStandardSyntax,
             &mut ParserResources::new(),
             &mut cursor,

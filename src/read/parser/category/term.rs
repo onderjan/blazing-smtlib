@@ -170,18 +170,7 @@ impl<H: SmtHandler> Parser<H> for TermParser<H> {
     type Result = H::Term;
 
     #[inline(always)]
-    fn progress(
-        &mut self,
-        handler: &mut H,
-        resources: &mut ParserResources<H>,
-        token: Token,
-    ) -> Result<ControlFlow<H::Term>, ParserError<H::Error>> {
-        // progress the slot with the token
-        TermSlot::progress(handler, resources, token)
-    }
-
-    #[inline(always)]
-    fn progress_all(
+    fn parse(
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
