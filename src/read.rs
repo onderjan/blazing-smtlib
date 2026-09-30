@@ -22,10 +22,12 @@ use std::{
 };
 
 use crate::{
-    CommandHandler, SmtSpan,
+    CommandHandler, SmtHandler, SmtSpan,
     read::{
         lexer::{LexError, Lexer, LexerError, LexerErrorKind},
-        parser::{ParserError, ParserErrorKind, ScriptParser, SyntaxErrorKind},
+        parser::{
+            ParseAdapter, Parser, ParserError, ParserErrorKind, ScriptParser, SyntaxErrorKind,
+        },
     },
 };
 
@@ -120,7 +122,7 @@ pub fn read_smt_file<H: CommandHandler>(
     handler: &mut H,
     path: &Path,
 ) -> Result<(), SmtReadError<H::Error>> {
-    SmtReader::new(handler).read_file(path)
+    SmtReader::script(handler).read_file(path)
 }
 
 /// Reads SMT-LIB input from `buf_reader` to its end, delivering its content
@@ -137,12 +139,15 @@ pub fn read_smt<H: CommandHandler>(
     handler: &mut H,
     buf_reader: impl BufRead,
 ) -> Result<(), SmtReadError<H::Error>> {
-    SmtReader::new(handler).read_all(buf_reader)
+    SmtReader::script(handler).read_all(buf_reader)
 }
 
 /// Streams SMT-LIB input from bytes to a [`CommandHandler`].
 ///
-/// A reader owns its lexer and parser and borrows the handler and its resources.
+/// A reader owns its lexer, its parser, and the parser resources, and borrows
+/// the handler. By default it parses a script with a [`ScriptParser`]; a reader
+/// created with [`with_parser`](Self::with_parser) adapts another top-level
+/// parser, for other SMT-LIB input such as solver responses.
 ///
 /// The input is read either whole, through [`read_file`](Self::read_file)
 /// or [`read_all`](Self::read_all), or in pieces, using
@@ -150,15 +155,21 @@ pub fn read_smt<H: CommandHandler>(
 /// once the input has ended. A piece may end anywhere, even inside a token.
 ///
 /// For whole inputs, consider [`read_smt_file`] and [`read_smt`].
-pub struct SmtReader<'a, H: CommandHandler> {
-    lexer: Lexer<ScriptParser<'a, H>>,
+pub struct SmtReader<'a, H: SmtHandler + ?Sized, P: Parser<H> = ScriptParser<H>> {
+    lexer: Lexer<ParseAdapter<'a, H, P>>,
 }
 
 impl<'a, H: CommandHandler> SmtReader<'a, H> {
-    /// Creates a reader that calls `handler` sequentially when reading.
-    pub fn new(handler: &'a mut H) -> Self {
-        let parser = ScriptParser::new(handler);
-        let lexer = Lexer::new(parser);
+    /// Creates a reader of scripts, whose commands are delivered to `handler`.
+    pub fn script(handler: &'a mut H) -> Self {
+        Self::with_parser(handler, ScriptParser::new())
+    }
+}
+
+impl<'a, H: SmtHandler + ?Sized, P: Parser<H>> SmtReader<'a, H, P> {
+    /// Creates a reader of the input `parser` accepts, over `handler`.
+    pub fn with_parser(handler: &'a mut H, parser: P) -> Self {
+        let lexer = Lexer::new(ParseAdapter::new(handler, parser));
         Self { lexer }
     }
 
@@ -169,10 +180,11 @@ impl<'a, H: CommandHandler> SmtReader<'a, H> {
     /// span at the start of the input. An I/O read error is reported as
     /// an empty span at the respective position.
     ///
-    /// Reading stops after an exit command: the rest of the file is not read.
+    /// Reading stops when the parser finishes, which for a script is its exit
+    /// command: the rest of the file is not read.
     ///
     /// Panics if a previous call on this reader returned an error or
-    /// read an exit command.
+    /// finished the parser.
     pub fn read_file(&mut self, path: &Path) -> Result<(), SmtReadError<H::Error>> {
         let file = File::open(path)
             .map_err(|err| SmtReadError::new(SmtReadErrorKind::Io(err), SmtSpan::new_zero()))?;
@@ -190,11 +202,12 @@ impl<'a, H: CommandHandler> SmtReader<'a, H> {
     /// a zero-length buffer. A failure while reading is reported as
     /// an I/O error with an empty span at the position reached.
     ///
-    /// Reading stops after an exit command, leaving the buffered reader
-    /// positioned after it: the rest of the input is not read.
+    /// Reading stops when the parser finishes, which for a script is its exit
+    /// command, leaving the buffered reader positioned after it: the rest of
+    /// the input is not read.
     ///
     /// Panics if a previous call on this reader returned an error or
-    /// read an exit command.
+    /// finished the parser.
     pub fn read_all<R: BufRead>(
         &mut self,
         mut buf_reader: R,
@@ -209,7 +222,7 @@ impl<'a, H: CommandHandler> SmtReader<'a, H> {
                         let flow = self.read_slice(buffer)?;
                         let consumed = (self.lexer.current_location().offset() - start) as usize;
                         buf_reader.consume(consumed);
-                        if let ControlFlow::Break(()) = flow {
+                        if let ControlFlow::Break(_) = flow {
                             // the script has exited, the rest of the input is not read
                             return Ok(());
                         }
@@ -238,14 +251,18 @@ impl<'a, H: CommandHandler> SmtReader<'a, H> {
     /// call [`read_eof`](Self::read_eof) so the whole input
     /// is fully processed.
     ///
-    /// Returns [`ControlFlow::Break`] if the script ended with an exit
-    /// command inside the piece: the rest of the piece is not read, and
-    /// the reader is finished. The lexer location then tells where the
-    /// script ended, for callers that continue with other input.
+    /// Returns [`ControlFlow::Break`] with the parser's result if the parser
+    /// finished inside the piece, which for a script is its exit command:
+    /// the rest of the piece is not read, and the reader is finished. The
+    /// lexer location then tells where the input ended, for callers that
+    /// continue with other input.
     ///
     /// Panics if a previous call on this reader returned an error or
-    /// read an exit command.
-    pub fn read_slice(&mut self, slice: &[u8]) -> Result<ControlFlow<()>, SmtReadError<H::Error>> {
+    /// finished the parser.
+    pub fn read_slice(
+        &mut self,
+        slice: &[u8],
+    ) -> Result<ControlFlow<P::Result>, SmtReadError<H::Error>> {
         // parsing goes through lexing, so just call the lexer
         Ok(self.lexer.lex_slice(slice)?)
     }
@@ -257,7 +274,7 @@ impl<'a, H: CommandHandler> SmtReader<'a, H> {
     /// it themselves.
     ///
     /// Panics if a previous call on this reader returned an error or
-    /// read an exit command.
+    /// finished the parser.
     pub fn read_eof(&mut self) -> Result<(), SmtReadError<H::Error>> {
         // whether the script exited here or the input just ended,
         // the whole input has been read

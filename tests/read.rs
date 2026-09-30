@@ -7,7 +7,9 @@ use std::ops::ControlFlow;
 use smt_parser_rs::{
     CheckStandardSyntax, NonstandardCommandError, SmtLocation,
     read::{
-        SmtReadError, SmtReadErrorKind, SmtReader, lexer::LexerErrorKind, parser::SyntaxErrorKind,
+        SmtReadError, SmtReadErrorKind, SmtReader,
+        lexer::LexerErrorKind,
+        parser::{SyntaxErrorKind, TermParser},
         read_smt, read_smt_file,
     },
 };
@@ -250,7 +252,7 @@ fn read_slice_reports_an_exit_command_and_read_eof_does_not() {
     // the piece, and the end of the input completes a read the same way
     // whether it ends a script or follows nothing
     let mut handler = CheckStandardSyntax;
-    let mut reader = SmtReader::new(&mut handler);
+    let mut reader = SmtReader::script(&mut handler);
     assert!(matches!(
         reader.read_slice(b"(check-sat) "),
         Ok(ControlFlow::Continue(()))
@@ -261,7 +263,7 @@ fn read_slice_reports_an_exit_command_and_read_eof_does_not() {
     ));
 
     let mut handler = CheckStandardSyntax;
-    let mut reader = SmtReader::new(&mut handler);
+    let mut reader = SmtReader::script(&mut handler);
     assert!(matches!(
         reader.read_slice(b"(check-sat) "),
         Ok(ControlFlow::Continue(()))
@@ -273,10 +275,36 @@ fn read_slice_reports_an_exit_command_and_read_eof_does_not() {
 #[should_panic(expected = "cannot lex after the token handler finished")]
 fn reading_after_an_exit_command_panics() {
     let mut handler = CheckStandardSyntax;
-    let mut reader = SmtReader::new(&mut handler);
+    let mut reader = SmtReader::script(&mut handler);
     assert!(matches!(
         reader.read_slice(b"(exit) "),
         Ok(ControlFlow::Break(()))
     ));
     let _ = reader.read_slice(b"(check-sat) ");
+}
+
+#[test]
+fn a_reader_over_another_top_level_parser_finishes_where_that_parser_does() {
+    // a term parser as the top-level parser: the reader finishes after one
+    // term with that parser's result, whatever follows in the piece
+    let mut handler = CheckStandardSyntax;
+    let mut reader = SmtReader::with_parser(&mut handler, TermParser::new());
+    assert!(matches!(
+        reader.read_slice(b"(f a b) (check-sat)"),
+        Ok(ControlFlow::Break(()))
+    ));
+
+    // reading the whole input stops there as well, without an error for the rest
+    let mut handler = CheckStandardSyntax;
+    let mut reader = SmtReader::with_parser(&mut handler, TermParser::new());
+    assert!(reader.read_all(&b"(f a b) ) ("[..]).is_ok());
+
+    // a term cut off by the end of the input is that parser's error
+    let mut handler = CheckStandardSyntax;
+    let mut reader = SmtReader::with_parser(&mut handler, TermParser::new());
+    assert!(matches!(
+        reader.read_slice(b"(f a "),
+        Ok(ControlFlow::Continue(()))
+    ));
+    assert!(reader.read_eof().is_err());
 }

@@ -6,14 +6,18 @@ use crate::{
         CommandParsers, Parser, ParserError, ParserResources, StandardCommandKind,
         StandardCommandResult, SyntaxErrorKind,
     },
-    token::{Reserved, TokenCursor, TokenHandler, TokenKind, TokenType},
+    token::{Reserved, TokenCursor, TokenKind, TokenType},
 };
 
-pub struct ScriptParser<'a, H: CommandHandler> {
-    handler: &'a mut H,
+/// Parses an SMT-LIB script: a sequence of commands, each delivered to the
+/// command handler as it is parsed.
+///
+/// The parser finishes at the exit command, returning [`ControlFlow::Break`];
+/// the end of the input is accepted between commands and asks for more.
+/// It is back at its start after every command, so one instance parses
+/// any number of scripts in turn.
+pub struct ScriptParser<H: CommandHandler> {
     state: ScriptParserState<H>,
-    resources: ParserResources<H>,
-
     command_parsers: CommandParsers<H>,
 }
 
@@ -24,18 +28,16 @@ pub(crate) enum ScriptParserState<H: CommandHandler> {
     NonstandardCommand(H::NonstandardParser),
 }
 
-impl<'a, H: CommandHandler> ScriptParser<'a, H> {
-    pub fn new(handler: &'a mut H) -> Self {
+impl<H: CommandHandler> ScriptParser<H> {
+    pub fn new() -> Self {
         Self {
-            handler,
             state: ScriptParserState::AwaitingCommand,
-            resources: ParserResources::new(),
             command_parsers: CommandParsers::new(),
         }
     }
 
     fn handle_command_progress<R>(
-        &mut self,
+        resources: &mut ParserResources<H>,
         flow: ControlFlow<R>,
         standard_kind: Option<StandardCommandKind>,
     ) -> Option<R> {
@@ -49,16 +51,16 @@ impl<'a, H: CommandHandler> ScriptParser<'a, H> {
             // we trust ourselves enough to only assert this in debug mode
             // and we will not without clear in release
             debug_assert!(
-                self.resources.are_pristine(),
+                resources.are_pristine(),
                 "resources should be pristine after end of standard command {standard_kind:?}"
             );
         } else {
             // we do not trust the library users: assert this in debug mode, always clear
             debug_assert!(
-                self.resources.are_pristine(),
+                resources.are_pristine(),
                 "resources should be pristine after end of non-standard command"
             );
-            self.resources.clear();
+            resources.clear();
         }
 
         Some(result)
@@ -68,26 +70,33 @@ impl<'a, H: CommandHandler> ScriptParser<'a, H> {
     ///
     /// A command identified by a symbol is never standard,
     /// as standard command names are reserved words.
-    pub(super) fn start_nonstandard_command(
-        &mut self,
+    fn start_nonstandard_command(
+        handler: &mut H,
         name: SmtSymbolView<'_>,
         span: SmtSpan,
     ) -> Result<ScriptParserState<H>, ParserError<H::Error>> {
-        match self.handler.nonstandard_command(name) {
+        match handler.nonstandard_command(name) {
             Ok(parser) => Ok(ScriptParserState::NonstandardCommand(parser)),
             Err(err) => Err(ParserError::handler_error(err, span)),
         }
     }
 }
 
-impl<'a, H: CommandHandler> TokenHandler for ScriptParser<'a, H> {
+impl<H: CommandHandler> Default for ScriptParser<H> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<H: CommandHandler> Parser<H> for ScriptParser<H> {
     type Result = ();
-    type Error = ParserError<H::Error>;
 
     #[inline]
-    fn handle_tokens(
+    fn parse(
         &mut self,
-        cursor: &mut TokenCursor<'_>,
+        handler: &mut H,
+        resources: &mut ParserResources<H>,
+        cursor: &mut TokenCursor,
     ) -> Result<ControlFlow<()>, ParserError<H::Error>> {
         while let Some(peeked) = cursor.peek() {
             match &mut self.state {
@@ -115,7 +124,7 @@ impl<'a, H: CommandHandler> TokenHandler for ScriptParser<'a, H> {
                     // we will handle the token here
                     cursor.advance(1);
                     // expect the command name
-                    self.state = match self.resources.arena.token_kind(peeked) {
+                    self.state = match resources.arena.token_kind(peeked) {
                         TokenKind::Reserved(Reserved::CommandName(name)) => {
                             // a command-name reserved word names a standard command
                             ScriptParserState::Command(StandardCommandKind::from_reserved(name))
@@ -123,7 +132,7 @@ impl<'a, H: CommandHandler> TokenHandler for ScriptParser<'a, H> {
                         TokenKind::Symbol(name) => {
                             // a symbol (even a quoted one spelled like a standard command)
                             // can only name a nonstandard command
-                            self.start_nonstandard_command(name, peeked.span())?
+                            Self::start_nonstandard_command(handler, name, peeked.span())?
                         }
                         _ => {
                             return Err(ParserError::category_error(
@@ -136,13 +145,11 @@ impl<'a, H: CommandHandler> TokenHandler for ScriptParser<'a, H> {
                 ScriptParserState::Command(kind) => {
                     // handle the cursor within standard command parsers
                     let kind = *kind;
-                    let flow = self.command_parsers.parse(
-                        kind,
-                        self.handler,
-                        &mut self.resources,
-                        cursor,
-                    )?;
-                    if let Some(result) = self.handle_command_progress(flow, Some(kind)) {
+                    let flow = self
+                        .command_parsers
+                        .parse(kind, handler, resources, cursor)?;
+                    if let Some(result) = Self::handle_command_progress(resources, flow, Some(kind))
+                    {
                         // the script parser is back at its start after every command
                         self.state = ScriptParserState::AwaitingCommand;
                         if let StandardCommandResult::Exit = result {
@@ -153,8 +160,8 @@ impl<'a, H: CommandHandler> TokenHandler for ScriptParser<'a, H> {
                 }
                 ScriptParserState::NonstandardCommand(parser) => {
                     // handle the cursor within nonstandard command parsers
-                    let flow = parser.parse(self.handler, &mut self.resources, cursor)?;
-                    if let Some(()) = self.handle_command_progress(flow, None) {
+                    let flow = parser.parse(handler, resources, cursor)?;
+                    if let Some(()) = Self::handle_command_progress(resources, flow, None) {
                         // update the state; a non-standard command cannot force an early exit
                         self.state = ScriptParserState::AwaitingCommand;
                     }

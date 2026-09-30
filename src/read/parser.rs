@@ -1,9 +1,11 @@
+mod adapter;
 mod category;
 mod command;
 mod script;
 
 use std::ops::ControlFlow;
 
+pub use adapter::*;
 pub use category::*;
 pub use command::*;
 pub use script::*;
