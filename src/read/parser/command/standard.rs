@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     CommandHandler, SmtFunctionSignature, SmtSymbol,
     read::parser::{
-        CategoryErrorKind, CloseParenParser, CommandParser, KeywordParser, NumeralParser,
+        SyntaxErrorKind, CloseParenParser, CommandParser, KeywordParser, NumeralParser,
         ParenMultipleParser, Parser, ParserError, ParserResources, StringParser, SymbolParser,
         category::{ClosedAttributeParser, ClosedParser, PairParser, SortParser, TermParser},
         command::{
@@ -307,7 +307,7 @@ impl<H: CommandHandler> Parser<H> for GetValueParser<H> {
                         .expect("a finished term list parser must have consumed a token")
                         .span();
                     return Err(ParserError::category_error(
-                        CategoryErrorKind::EmptyGetValueTerms,
+                        SyntaxErrorKind::EmptyGetValueTerms,
                         span,
                     ));
                 }

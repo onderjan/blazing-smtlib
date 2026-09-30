@@ -3,8 +3,8 @@ use std::ops::ControlFlow;
 use crate::{
     SmtAttributeValue, SmtHandler, SmtKeywordView, SmtSpan,
     read::parser::{
-        Arena, CategoryErrorKind, CloseParenParser, Parser, ParserError, ParserResources,
-        SExprSlot, TextHandle, category::parse_special_constant, handle_err,
+        Arena, CloseParenParser, Parser, ParserError, ParserResources, SExprSlot, SyntaxErrorKind,
+        TextHandle, category::parse_special_constant, handle_err,
     },
     token::{Token, TokenKind, TokenType},
 };
@@ -193,7 +193,7 @@ impl AttributeSlot {
                     }
                     _ => {
                         return Err(ParserError::category_error(
-                            CategoryErrorKind::ExpectedAttribute,
+                            SyntaxErrorKind::ExpectedAttribute,
                             span,
                         ));
                     }
@@ -240,7 +240,7 @@ impl AttributeSlot {
                             )
                         } else {
                             return Err(ParserError::category_error(
-                                CategoryErrorKind::ExpectedAttribute,
+                                SyntaxErrorKind::ExpectedAttribute,
                                 span,
                             ));
                         }
@@ -268,7 +268,7 @@ impl AttributeSlot {
                         if !C::next_allowed(self.num_attributes) {
                             // it turns out that we actually expected a closing parenthesis
                             return Err(ParserError::category_error(
-                                CategoryErrorKind::ExpectedToken(&[TokenType::ParenClose]),
+                                SyntaxErrorKind::ExpectedToken(&[TokenType::ParenClose]),
                                 span,
                             ));
                         }
@@ -353,7 +353,7 @@ impl<H: SmtHandler + ?Sized> AttributeCollection<H> for SingleAttribute {
 
         if arena.attributes.len() == start {
             return Err(ParserError::category_error(
-                CategoryErrorKind::ExpectedAttribute,
+                SyntaxErrorKind::ExpectedAttribute,
                 span,
             ));
         }

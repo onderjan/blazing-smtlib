@@ -31,13 +31,13 @@ fn stops_after_closing_paren() {
 fn errors() {
     let err = assert_error::<P>(b"status sat)", 0, 6);
     assert!(
-        matches!(err, CategoryErrorKind::ExpectedAttribute),
+        matches!(err, SyntaxErrorKind::ExpectedAttribute),
         "{err:?}"
     );
 
     let err = assert_error::<P>(b"", 0, 0);
     assert!(
-        matches!(err, CategoryErrorKind::ExpectedAttribute),
+        matches!(err, SyntaxErrorKind::ExpectedAttribute),
         "{err:?}"
     );
 
@@ -48,7 +48,7 @@ fn errors() {
     assert!(
         matches!(
             err,
-            CategoryErrorKind::ExpectedToken(&[TokenType::ParenClose])
+            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenClose])
         ),
         "{err:?}"
     );
@@ -58,7 +58,7 @@ fn errors() {
     assert!(
         matches!(
             err,
-            CategoryErrorKind::ExpectedToken(&[TokenType::ParenClose])
+            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenClose])
         ),
         "{err:?}"
     );
@@ -68,7 +68,7 @@ fn errors() {
     assert!(
         matches!(
             err,
-            CategoryErrorKind::ExpectedToken(&[TokenType::ParenClose])
+            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenClose])
         ),
         "{err:?}"
     );
@@ -78,7 +78,7 @@ fn errors() {
     assert!(
         matches!(
             err,
-            CategoryErrorKind::ExpectedToken(&[TokenType::ParenClose])
+            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenClose])
         ),
         "{err:?}"
     );
@@ -111,14 +111,14 @@ fn s_expr_list_value_stops_after_closing_paren() {
 fn s_expr_list_value_errors() {
     // EOF inside the value list
     let err = assert_error::<P>(b":a (1", 5, 5);
-    assert!(matches!(err, CategoryErrorKind::ExpectedSExpr), "{err:?}");
+    assert!(matches!(err, SyntaxErrorKind::ExpectedSExpr), "{err:?}");
 
     // EOF after the value list, before the enclosing closing parenthesis
     let err = assert_error::<P>(b":a ()", 5, 5);
     assert!(
         matches!(
             err,
-            CategoryErrorKind::ExpectedToken(&[TokenType::ParenClose])
+            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenClose])
         ),
         "{err:?}"
     );
@@ -128,7 +128,7 @@ fn s_expr_list_value_errors() {
     assert!(
         matches!(
             err,
-            CategoryErrorKind::ExpectedToken(&[TokenType::ParenClose])
+            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenClose])
         ),
         "{err:?}"
     );
@@ -191,7 +191,7 @@ fn multiple_attribute_errors() {
     // the list must start with a keyword or the closing parenthesis
     let err = assert_error::<MP>(b"x)", 0, 1);
     assert!(
-        matches!(err, CategoryErrorKind::ExpectedAttribute),
+        matches!(err, SyntaxErrorKind::ExpectedAttribute),
         "{err:?}"
     );
 
@@ -199,19 +199,19 @@ fn multiple_attribute_errors() {
     // parenthesis is expected
     let err = assert_error::<MP>(b":a 1 2)", 5, 6);
     assert!(
-        matches!(err, CategoryErrorKind::ExpectedAttribute),
+        matches!(err, SyntaxErrorKind::ExpectedAttribute),
         "{err:?}"
     );
 
     // EOF at the start of the list and EOF after an attribute name
     let err = assert_error::<MP>(b"", 0, 0);
     assert!(
-        matches!(err, CategoryErrorKind::ExpectedAttribute),
+        matches!(err, SyntaxErrorKind::ExpectedAttribute),
         "{err:?}"
     );
     let err = assert_error::<MP>(b":a", 2, 2);
     assert!(
-        matches!(err, CategoryErrorKind::ExpectedAttribute),
+        matches!(err, SyntaxErrorKind::ExpectedAttribute),
         "{err:?}"
     );
 }

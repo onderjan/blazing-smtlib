@@ -31,9 +31,9 @@ use smt_parser_rs::{
     read::{
         lexer::{LexError, Lexer},
         parser::{
-            CategoryErrorKind, Parser, CloseParenParser, ClosedAttributeParser,
+            SyntaxErrorKind, CloseParenParser, ClosedAttributeParser,
             ClosedMultipleAttributeParser, ClosedMultipleParser, ClosedParser, IdentParser,
-            KeywordParser, OpenParenParser, PairParser, ParenMultipleParser, ParenParser,
+            KeywordParser, OpenParenParser, PairParser, ParenMultipleParser, ParenParser, Parser,
             ParserError, ParserErrorKind, ParserResources, QualifiedIdentParser, SExprParser,
             SortParser, StringParser, SymbolParser, TermParser,
         },
@@ -341,7 +341,7 @@ impl SmtHandler for Printing {
 // --- Driver ---
 
 /// A parse failure, as the error kind and the span it carries.
-type ParseFailure = (CategoryErrorKind, SmtSpan);
+type ParseFailure = (SyntaxErrorKind, SmtSpan);
 
 /// Token handler that advances a category parser with each lexed token,
 /// collecting a wanted number of consecutive parser results, and counts
@@ -412,7 +412,7 @@ fn run_count_from<H: SmtHandler<Error = Infallible>, P: Parser<H>>(
         Err(LexError::Handler(err)) => {
             let span = err.span();
             return Err(match err.into_kind() {
-                ParserErrorKind::Category(kind) => (kind, span),
+                ParserErrorKind::Syntax(kind) => (kind, span),
                 // the handler never fails
                 ParserErrorKind::Handler(err) => match err {},
             });
@@ -454,9 +454,7 @@ fn run_with<H: SmtHandler<Error = Infallible>, P: Parser<H> + Default>(
 }
 
 /// Runs the parser over a fresh `Printing` handler.
-fn run<P: Parser<Printing> + Default>(
-    input: &[u8],
-) -> Result<(P::Result, usize), ParseFailure> {
+fn run<P: Parser<Printing> + Default>(input: &[u8]) -> Result<(P::Result, usize), ParseFailure> {
     run_with::<Printing, P>(&mut Printing::default(), input)
 }
 
@@ -500,7 +498,7 @@ fn assert_error<P: Parser<Printing> + Default>(
     input: &[u8],
     start: u64,
     end: u64,
-) -> CategoryErrorKind {
+) -> SyntaxErrorKind {
     match run::<P>(input) {
         Ok(_) => panic!("expected a parser error in {:?}, got Ok", text(input)),
         Err((kind, span)) => {

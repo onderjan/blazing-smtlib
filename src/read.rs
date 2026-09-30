@@ -24,7 +24,7 @@ use crate::{
     CommandHandler, SmtSpan,
     read::{
         lexer::{LexError, Lexer, LexerError, LexerErrorKind},
-        parser::{CategoryErrorKind, ParserError, ParserErrorKind, ScriptParser},
+        parser::{SyntaxErrorKind, ParserError, ParserErrorKind, ScriptParser},
     },
 };
 
@@ -43,7 +43,7 @@ pub enum SmtReadErrorKind<E> {
     /// Commands with non-standard names are routed to the handler for
     /// processing, so they are rejected with a [`SmtReadErrorKind::Handler`]
     /// error kind instead.
-    Parser(CategoryErrorKind),
+    Parser(SyntaxErrorKind),
     /// The handler rejected a command or a syntactic category.
     Handler(E),
 }
@@ -99,7 +99,7 @@ impl<E> From<ParserError<E>> for SmtReadError<E> {
     fn from(err: ParserError<E>) -> Self {
         let span = err.span();
         let kind = match err.into_kind() {
-            ParserErrorKind::Category(err) => SmtReadErrorKind::Parser(err),
+            ParserErrorKind::Syntax(err) => SmtReadErrorKind::Parser(err),
             ParserErrorKind::Handler(err) => SmtReadErrorKind::Handler(err),
         };
         SmtReadError::new(kind, span)

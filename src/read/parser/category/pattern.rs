@@ -3,8 +3,8 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler, SmtPattern, SmtSimplePattern, SmtSimplePatternView,
     read::parser::{
-        Arena, CategoryErrorKind, Parser, ParserError, ParserResources, PatternHandle,
-        SimplePatternHandle, TextHandle,
+        Arena, Parser, ParserError, ParserResources, PatternHandle, SimplePatternHandle,
+        SyntaxErrorKind, TextHandle,
     },
     token::{GeneralReserved, Reserved, Token, TokenKind, TokenType},
 };
@@ -36,7 +36,7 @@ impl SimplePatternParser {
             }
             _ => {
                 return Err(ParserError::category_error(
-                    CategoryErrorKind::ExpectedSymbolOrUnderscore,
+                    SyntaxErrorKind::ExpectedSymbolOrUnderscore,
                     token.span(),
                 ));
             }
@@ -170,7 +170,7 @@ impl PatternSlot {
                 // there must be at least one argument to the constructor
                 if arena.simple_patterns.len() == self.arena_args_start {
                     return Err(ParserError::category_error(
-                        CategoryErrorKind::EmptyPatternArguments,
+                        SyntaxErrorKind::EmptyPatternArguments,
                         span,
                     ));
                 }
@@ -196,7 +196,7 @@ impl PatternSlot {
             // step 2: expecting the constructor, which goes to the arena text
             let TokenKind::Symbol(constructor) = arena.token_kind(token) else {
                 return Err(ParserError::category_error(
-                    CategoryErrorKind::ExpectedSymbol,
+                    SyntaxErrorKind::ExpectedSymbol,
                     span,
                 ));
             };
@@ -221,7 +221,7 @@ impl PatternSlot {
             }
             _ => {
                 return Err(ParserError::category_error(
-                    CategoryErrorKind::ExpectedSymbolUnderscoreOrParenOpen,
+                    SyntaxErrorKind::ExpectedSymbolUnderscoreOrParenOpen,
                     span,
                 ));
             }

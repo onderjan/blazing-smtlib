@@ -71,7 +71,7 @@ fn applied_indexed_sort() {
 
 #[test]
 fn errors() {
-    let expected_sort = CategoryErrorKind::ExpectedSort;
+    let expected_sort = SyntaxErrorKind::ExpectedSort;
     assert_eq!(
         assert_error::<SortParser<Printing>>(b"1", 0, 1),
         expected_sort
@@ -94,43 +94,43 @@ fn errors() {
     // after `(`, only `_`, a symbol, or `(` may follow
     let err = assert_error::<SortParser<Printing>>(b"(as x Bool)", 1, 3);
     assert!(
-        matches!(err, CategoryErrorKind::ExpectedSortInner),
+        matches!(err, SyntaxErrorKind::ExpectedSortInner),
         "{err:?}"
     );
     let err = assert_error::<SortParser<Printing>>(b"(1 2)", 1, 2);
     assert!(
-        matches!(err, CategoryErrorKind::ExpectedSortInner),
+        matches!(err, SyntaxErrorKind::ExpectedSortInner),
         "{err:?}"
     );
     let err = assert_error::<SortParser<Printing>>(b"()", 1, 2);
     assert!(
-        matches!(err, CategoryErrorKind::ExpectedSortInner),
+        matches!(err, SyntaxErrorKind::ExpectedSortInner),
         "{err:?}"
     );
 
     // an applied identifier must be applied to at least one sort
     let err = assert_error::<SortParser<Printing>>(b"(Int)", 4, 5);
     assert!(
-        matches!(err, CategoryErrorKind::EmptySortApplication),
+        matches!(err, SyntaxErrorKind::EmptySortApplication),
         "{err:?}"
     );
     let err = assert_error::<SortParser<Printing>>(b"((_ BitVec 8))", 13, 14);
     assert!(
-        matches!(err, CategoryErrorKind::EmptySortApplication),
+        matches!(err, SyntaxErrorKind::EmptySortApplication),
         "{err:?}"
     );
 
     // a parenthesized applied head must be an indexed identifier
     let err = assert_error::<SortParser<Printing>>(b"((Array) Int)", 2, 7);
     assert!(
-        matches!(err, CategoryErrorKind::ExpectedUnderscore),
+        matches!(err, SyntaxErrorKind::ExpectedUnderscore),
         "{err:?}"
     );
 
     // errors inside the indexed identifier are reported by the identifier parser
     let err = assert_error::<SortParser<Printing>>(b"(_ BitVec)", 9, 10);
     assert!(
-        matches!(err, CategoryErrorKind::EmptyIdentIndices),
+        matches!(err, SyntaxErrorKind::EmptyIdentIndices),
         "{err:?}"
     );
 }

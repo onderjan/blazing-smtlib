@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler, SmtSExpr,
     read::parser::{
-        Arena, CategoryErrorKind, Parser, ParserError, ParserResources,
+        Arena, SyntaxErrorKind, Parser, ParserError, ParserResources,
         category::parse_special_constant, handle_err,
     },
     token::{Token, TokenKind},
@@ -101,7 +101,7 @@ impl SExprSlot {
                 let Some(last_level) = self.levels.pop() else {
                     // no last level, all that we received was ")"
                     return Err(ParserError::category_error(
-                        CategoryErrorKind::ExpectedSExpr,
+                        SyntaxErrorKind::ExpectedSExpr,
                         span,
                     ));
                 };
@@ -118,7 +118,7 @@ impl SExprSlot {
                     SmtSExpr::SpecialConstant(special_constant)
                 } else {
                     return Err(ParserError::category_error(
-                        CategoryErrorKind::ExpectedSExpr,
+                        SyntaxErrorKind::ExpectedSExpr,
                         span,
                     ));
                 }

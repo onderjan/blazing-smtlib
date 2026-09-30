@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler,
     read::parser::{
-        CategoryErrorKind, CloseParenParser, OpenParenParser, Parser, ParserError, ParserResources,
+        SyntaxErrorKind, CloseParenParser, OpenParenParser, Parser, ParserError, ParserResources,
         category::resources::ClosedMultipleResource,
     },
     token::{Token, TokenCursor, TokenType},
@@ -321,7 +321,7 @@ impl<H: SmtHandler, P: Parser<H>> Parser<H> for ClosedMaximumParser<H, P> {
                     // it counts as consumed, so we need to advance
                     cursor.advance(1);
                     return Err(ParserError::category_error(
-                        CategoryErrorKind::ExpectedToken(&[TokenType::ParenClose]),
+                        SyntaxErrorKind::ExpectedToken(&[TokenType::ParenClose]),
                         peeked.span(),
                     ));
                 }

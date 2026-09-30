@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler, SmtKeyword, SmtKeywordView, SmtNumeral, SmtNumeralView, SmtStringContent,
     SmtStringContentView, SmtSymbol,
-    read::parser::{Arena, CategoryErrorKind, Parser, ParserError, ParserResources},
+    read::parser::{Arena, Parser, ParserError, ParserResources, SyntaxErrorKind},
     token::{Token, TokenKind, TokenType},
 };
 
@@ -31,7 +31,7 @@ impl SymbolParser {
         match arena.token_kind(token) {
             TokenKind::Symbol(symbol) => Ok(symbol.into_owned()),
             _ => Err(ParserError::category_error(
-                CategoryErrorKind::ExpectedSymbol,
+                SyntaxErrorKind::ExpectedSymbol,
                 span,
             )),
         }
@@ -80,7 +80,7 @@ macro_rules! token_parser {
                     Ok($value)
                 } else {
                     Err(ParserError::category_error(
-                        CategoryErrorKind::ExpectedToken(&[TokenType::$ty]),
+                        SyntaxErrorKind::ExpectedToken(&[TokenType::$ty]),
                         token.span(),
                     ))
                 }

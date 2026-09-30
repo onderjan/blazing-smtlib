@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler, SmtIdent, SmtSymbolView,
     read::parser::{
-        Arena, CategoryErrorKind, IdentHandle, IndexHandle, Parser, ParserError, ParserResources,
+        Arena, IdentHandle, IndexHandle, Parser, ParserError, ParserResources, SyntaxErrorKind,
         TextHandle,
     },
     token::{GeneralReserved, Reserved, Token, TokenKind},
@@ -151,7 +151,7 @@ impl IdentSlot {
                         self.state = State::Open;
                     }
                     _ => {
-                        let kind = CategoryErrorKind::ExpectedIdent;
+                        let kind = SyntaxErrorKind::ExpectedIdent;
                         return Err(ParserError::category_error(kind, span));
                     }
                 }
@@ -165,7 +165,7 @@ impl IdentSlot {
                     self.state = State::AfterUnderscore;
                 } else {
                     return Err(ParserError::category_error(
-                        CategoryErrorKind::ExpectedUnderscore,
+                        SyntaxErrorKind::ExpectedUnderscore,
                         span,
                     ));
                 }
@@ -178,7 +178,7 @@ impl IdentSlot {
                             Some(self.push_name(arena, name))
                         } else {
                             return Err(ParserError::category_error(
-                                CategoryErrorKind::ExpectedSymbol,
+                                SyntaxErrorKind::ExpectedSymbol,
                                 span,
                             ));
                         }
@@ -190,7 +190,7 @@ impl IdentSlot {
                             TokenKind::ParenClose => {
                                 let indices_start = self.arena_indices_start;
                                 if arena.indices.len() == indices_start {
-                                    let kind = CategoryErrorKind::EmptyIdentIndices;
+                                    let kind = SyntaxErrorKind::EmptyIdentIndices;
                                     return Err(ParserError::category_error(kind, span));
                                 }
                                 // reset to the starting state
@@ -211,7 +211,7 @@ impl IdentSlot {
                                 arena.indices.push(IndexHandle::Symbol(index));
                             }
                             _ => {
-                                let kind = CategoryErrorKind::ExpectedIndexOrCloseParen;
+                                let kind = SyntaxErrorKind::ExpectedIndexOrCloseParen;
                                 return Err(ParserError::category_error(kind, span));
                             }
                         }

@@ -12,7 +12,7 @@ use smt_parser_rs::{
     SmtSymbolView, SmtTerm,
     read::{
         SmtReadErrorKind,
-        parser::{CategoryErrorKind, ClosedParser, CommandAction, CommandParser, TermParser},
+        parser::{SyntaxErrorKind, ClosedParser, CommandAction, CommandParser, TermParser},
     },
 };
 
@@ -29,20 +29,20 @@ fn valid_input_has_no_error() {
 fn bare_symbol_is_whole_token() {
     // a command must be parenthesized; the whole symbol token is the span
     let err = assert_parser_error(b"check-sat", 0, 9);
-    assert!(matches!(err, CategoryErrorKind::ExpectedCommand), "{err:?}");
+    assert!(matches!(err, SyntaxErrorKind::ExpectedCommand), "{err:?}");
 }
 
 #[test]
 fn missing_term_points_at_close_paren() {
     let err = assert_parser_error(b"(check-sat)\n(assert )", 20, 21);
-    assert!(matches!(err, CategoryErrorKind::ExpectedTerm), "{err:?}");
+    assert!(matches!(err, SyntaxErrorKind::ExpectedTerm), "{err:?}");
 }
 
 #[test]
 fn numeral_as_command_name() {
     let err = assert_parser_error(b"(set-logic QF_UF)\n(1)", 19, 20);
     assert!(
-        matches!(err, CategoryErrorKind::ExpectedCommandName),
+        matches!(err, SyntaxErrorKind::ExpectedCommandName),
         "{err:?}"
     );
 }
@@ -93,7 +93,7 @@ fn quoted_standard_command_name_names_a_nonstandard_command() {
 fn reserved_word_other_than_a_command_name_is_no_command_name() {
     let err = assert_parser_error(b"(let ((x 1)) x)", 1, 4);
     assert!(
-        matches!(err, CategoryErrorKind::ExpectedCommandName),
+        matches!(err, SyntaxErrorKind::ExpectedCommandName),
         "{err:?}"
     );
 }
@@ -493,7 +493,7 @@ fn nonstandard_command_body_is_checked() {
     let err = parse_with(&mut handler, b"(my-assert )").expect_err("expected a parser error");
     assert_error_span(&err, 11, 12);
     match err.kind() {
-        SmtReadErrorKind::Parser(CategoryErrorKind::ExpectedTerm) => {}
+        SmtReadErrorKind::Parser(SyntaxErrorKind::ExpectedTerm) => {}
         SmtReadErrorKind::Parser(kind) => panic!("unexpected parser error {kind:?}"),
         SmtReadErrorKind::Handler(_) => panic!("unexpected handler error"),
         _ => panic!("unexpected error kind"),

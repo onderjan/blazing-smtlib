@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler, SmtSymbol,
     read::parser::{
-        Arena, CategoryErrorKind, CloseParenParser, IdentSlot, OpenParenParser, Parser,
+        Arena, SyntaxErrorKind, CloseParenParser, IdentSlot, OpenParenParser, Parser,
         ParserError, ParserResources, SortSlot, TextHandle,
     },
     token::{Token, TokenKind},
@@ -131,7 +131,7 @@ impl<H: SmtHandler + ?Sized> SortedVarSlot<H> {
             // after "(", waiting for the name, which goes to the arena text
             let TokenKind::Symbol(name) = arena.token_kind(token) else {
                 return Err(ParserError::category_error(
-                    CategoryErrorKind::ExpectedSymbol,
+                    SyntaxErrorKind::ExpectedSymbol,
                     token.span(),
                 ));
             };

@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     CommandHandler, SmtSpan, SmtSymbolView,
     read::parser::{
-        CategoryErrorKind, CommandParsers, Parser, ParserError, ParserResources,
+        SyntaxErrorKind, CommandParsers, Parser, ParserError, ParserResources,
         StandardCommandKind, StandardCommandResult,
     },
     token::{Reserved, Token, TokenCursor, TokenHandler, TokenKind, TokenStop, TokenType},
@@ -111,7 +111,7 @@ impl<'a, H: CommandHandler> TokenHandler for ScriptParser<'a, H> {
                         }
                         _ => {
                             return Err(TokenStop::Error(ParserError::category_error(
-                                CategoryErrorKind::ExpectedCommand,
+                                SyntaxErrorKind::ExpectedCommand,
                                 peeked.span(),
                             )));
                         }
@@ -134,7 +134,7 @@ impl<'a, H: CommandHandler> TokenHandler for ScriptParser<'a, H> {
                         }
                         _ => {
                             return Err(TokenStop::Error(ParserError::category_error(
-                                CategoryErrorKind::ExpectedCommandName,
+                                SyntaxErrorKind::ExpectedCommandName,
                                 peeked.span(),
                             )));
                         }

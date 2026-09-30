@@ -3,8 +3,8 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler, SmtQualifiedIdent, SmtSymbolView,
     read::parser::{
-        Arena, CategoryErrorKind, CloseParenParser, IdentHandle, IdentSlot, Parser, ParserError,
-        ParserResources, QualifiedIdentHandle, SortSlot,
+        Arena, CloseParenParser, IdentHandle, IdentSlot, Parser, ParserError, ParserResources,
+        QualifiedIdentHandle, SortSlot, SyntaxErrorKind,
     },
     token::{GeneralReserved, Reserved, Token, TokenKind},
 };
@@ -203,7 +203,7 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
                     TokenKind::ParenOpen => self.state = State::Open,
                     _ => {
                         return Err(ParserError::category_error(
-                            CategoryErrorKind::ExpectedIdent,
+                            SyntaxErrorKind::ExpectedIdent,
                             span,
                         ));
                     }
@@ -223,7 +223,7 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
                 }
                 _ => {
                     return Err(ParserError::category_error(
-                        CategoryErrorKind::ExpectedUnderscoreOrAs,
+                        SyntaxErrorKind::ExpectedUnderscoreOrAs,
                         span,
                     ));
                 }

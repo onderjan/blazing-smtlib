@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler,
     read::parser::{
-        Arena, CategoryErrorKind, IdentHandle, IdentSlot, Parser, ParserError, ParserResources,
+        Arena, SyntaxErrorKind, IdentHandle, IdentSlot, Parser, ParserError, ParserResources,
         handle_err,
     },
     token::{GeneralReserved, Reserved, Token, TokenKind},
@@ -143,7 +143,7 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
                                 // there must be at least one of them
                                 if arena.sorts.len() == last_level.arena_applied_start {
                                     return Err(ParserError::category_error(
-                                        CategoryErrorKind::EmptySortApplication,
+                                        SyntaxErrorKind::EmptySortApplication,
                                         span,
                                     ));
                                 }
@@ -155,7 +155,7 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
                             None => {
                                 // we just received ")"
                                 return Err(ParserError::category_error(
-                                    CategoryErrorKind::ExpectedSort,
+                                    SyntaxErrorKind::ExpectedSort,
                                     span,
                                 ));
                             }
@@ -163,7 +163,7 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
                     }
                     _ => {
                         return Err(ParserError::category_error(
-                            CategoryErrorKind::ExpectedSort,
+                            SyntaxErrorKind::ExpectedSort,
                             span,
                         ));
                     }
@@ -199,7 +199,7 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
                     }
                     _ => {
                         return Err(ParserError::category_error(
-                            CategoryErrorKind::ExpectedSortInner,
+                            SyntaxErrorKind::ExpectedSortInner,
                             span,
                         ));
                     }

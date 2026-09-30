@@ -4,7 +4,7 @@ use crate::{
     SmtApplication, SmtHandler, SmtQualifiedIdentView, SmtQuantifierKind, SmtSpan, SmtSymbolView,
     SmtTerm,
     read::parser::{
-        Arena, CategoryErrorKind, CloseParenParser, OpenParenParser, Parser, ParserError,
+        Arena, SyntaxErrorKind, CloseParenParser, OpenParenParser, Parser, ParserError,
         ParserResources, QualifiedIdentHandle,
         category::{attribute::MultipleAttributes, parse_special_constant},
         handle_err,
@@ -368,7 +368,7 @@ impl<H: SmtHandler> TermSlot<H> {
                             // check that there is at least one attribute
                             if store.attributes.len() == arena_attributes_start {
                                 return Err(ParserError::category_error(
-                                    CategoryErrorKind::EmptyAnnotation,
+                                    SyntaxErrorKind::EmptyAnnotation,
                                     span,
                                 ));
                             }
@@ -561,7 +561,7 @@ impl<H: SmtHandler> TermSlot<H> {
                 // expect a symbol that will be the binding name
                 let TokenKind::Symbol(name) = resources.store.token_kind(token) else {
                     return Err(ParserError::category_error(
-                        CategoryErrorKind::ExpectedSymbol,
+                        SyntaxErrorKind::ExpectedSymbol,
                         token.span(),
                     ));
                 };
@@ -600,11 +600,11 @@ impl<H: SmtHandler> TermSlot<H> {
                     ControlFlow::Break(num_opened) => {
                         // there must be at least one sorted variable in the binder
                         if num_opened == 0 {
-                            let err_kind: CategoryErrorKind = match binder_kind {
+                            let err_kind: SyntaxErrorKind = match binder_kind {
                                 SortedBinderKind::Exists | SortedBinderKind::Forall => {
-                                    CategoryErrorKind::EmptyQuantifierBindings
+                                    SyntaxErrorKind::EmptyQuantifierBindings
                                 }
-                                SortedBinderKind::Lambda => CategoryErrorKind::EmptyLambdaBindings,
+                                SortedBinderKind::Lambda => SyntaxErrorKind::EmptyLambdaBindings,
                             };
                             return Err(ParserError::category_error(err_kind, span));
                         }
@@ -686,7 +686,7 @@ impl<H: SmtHandler> TermSlot<H> {
                 }) = slot.levels.pop()
                 else {
                     return Err(ParserError::category_error(
-                        CategoryErrorKind::ExpectedTerm,
+                        SyntaxErrorKind::ExpectedTerm,
                         span,
                     ));
                 };
@@ -694,7 +694,7 @@ impl<H: SmtHandler> TermSlot<H> {
                 // the application must contain at least one argument
                 if store.terms.len() == arena_args_start {
                     return Err(ParserError::category_error(
-                        CategoryErrorKind::EmptyTermApplication,
+                        SyntaxErrorKind::EmptyTermApplication,
                         span,
                     ));
                 }
@@ -723,7 +723,7 @@ impl<H: SmtHandler> TermSlot<H> {
                     }
                     Err(_) => {
                         return Err(ParserError::category_error(
-                            CategoryErrorKind::ExpectedTerm,
+                            SyntaxErrorKind::ExpectedTerm,
                             span,
                         ));
                     }
@@ -803,7 +803,7 @@ impl<H: SmtHandler> TermSlot<H> {
             }
             _ => {
                 return Err(ParserError::category_error(
-                    CategoryErrorKind::ExpectedOperator,
+                    SyntaxErrorKind::ExpectedOperator,
                     span,
                 ));
             }
@@ -846,7 +846,7 @@ impl<H: SmtHandler> TermSlot<H> {
                 // there must be at least one binding
                 if store.symbols.len() == arena_names_start {
                     return Err(ParserError::category_error(
-                        CategoryErrorKind::EmptyLetBindings,
+                        SyntaxErrorKind::EmptyLetBindings,
                         span,
                     ));
                 }
@@ -870,7 +870,7 @@ impl<H: SmtHandler> TermSlot<H> {
             _ => {
                 // expected open or close parenthesis
                 Err(ParserError::category_error(
-                    CategoryErrorKind::ExpectedToken(&[
+                    SyntaxErrorKind::ExpectedToken(&[
                         TokenType::ParenOpen,
                         TokenType::ParenClose,
                     ]),
@@ -905,7 +905,7 @@ impl<H: SmtHandler> TermSlot<H> {
                 // there must be at least one case
                 if num_cases == 0 {
                     return Err(ParserError::category_error(
-                        CategoryErrorKind::EmptyMatchCases,
+                        SyntaxErrorKind::EmptyMatchCases,
                         span,
                     ));
                 }
@@ -920,7 +920,7 @@ impl<H: SmtHandler> TermSlot<H> {
                 Ok(())
             }
             _ => Err(ParserError::category_error(
-                CategoryErrorKind::ExpectedToken(&[TokenType::ParenOpen, TokenType::ParenClose]),
+                SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen, TokenType::ParenClose]),
                 span,
             )),
         }

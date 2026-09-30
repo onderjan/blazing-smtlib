@@ -76,12 +76,12 @@ pub struct ParserError<E>(Box<ParserErrorInner<E>>);
 
 #[derive(Debug)]
 pub enum ParserErrorKind<E> {
-    Category(CategoryErrorKind),
+    Syntax(SyntaxErrorKind),
     Handler(E),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CategoryErrorKind {
+pub enum SyntaxErrorKind {
     ExpectedToken(&'static [TokenType]),
     ExpectedSymbol,
     ExpectedUnderscore,
@@ -133,8 +133,8 @@ impl<E> ParserError<E> {
         Self::new(ParserErrorKind::Handler(err), span)
     }
 
-    pub(crate) fn category_error(err: CategoryErrorKind, span: SmtSpan) -> Self {
-        Self::new(ParserErrorKind::Category(err), span)
+    pub(crate) fn category_error(err: SyntaxErrorKind, span: SmtSpan) -> Self {
+        Self::new(ParserErrorKind::Syntax(err), span)
     }
 
     pub fn kind(&self) -> &ParserErrorKind<E> {
