@@ -1,10 +1,8 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    CommandHandler, SmtSpan, SmtSymbolView,
-    read::parser::{
-        ParserError, ParserResources, ScriptParserState, category::CategoryParser, handle_err,
-    },
+    CommandHandler,
+    read::parser::{ParserError, ParserResources, category::CategoryParser, handle_err},
     token::{Token, TokenCursor},
 };
 
@@ -103,23 +101,6 @@ impl<H: CommandHandler, C: CommandAction<H>> CategoryParser<H> for CommandParser
                 handle_err(C::handle(handler, result), span)?;
                 Ok(ControlFlow::Break(()))
             }
-        }
-    }
-}
-
-impl<H: CommandHandler> super::ScriptParser<'_, H> {
-    /// Starts a non-standard command named by a symbol.
-    ///
-    /// A command identified by a symbol is never standard,
-    /// as standard command names are reserved words.
-    pub(super) fn start_nonstandard_command(
-        &mut self,
-        name: SmtSymbolView<'_>,
-        span: SmtSpan,
-    ) -> Result<ScriptParserState<H>, ParserError<H::Error>> {
-        match self.handler.nonstandard_command(name) {
-            Ok(parser) => Ok(ScriptParserState::NonstandardCommand(parser)),
-            Err(err) => Err(ParserError::handler_error(err, span)),
         }
     }
 }
