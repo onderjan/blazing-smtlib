@@ -349,7 +349,7 @@ fn current_location_follows_consumed_bytes() {
     assert_eq!(loc(lexer.current_location()), (0, 0, 0));
     for &c in b"ab\nc" {
         let _ = lexer
-            .lex_next(c)
+            .lex_slice(&[c])
             .map_err(into_lexer_error)
             .expect("valid input");
     }
@@ -632,7 +632,7 @@ impl TokenHandler for RejectTokens {
 fn handler_error_is_returned_with_the_handled_token() {
     let mut lexer = Lexer::new(RejectTokens);
     // the parenthesis token is produced and handed to the handler immediately
-    let Err(LexError::Handler(span)) = lexer.lex_next(b'(') else {
+    let Err(LexError::Handler(span)) = lexer.lex_slice(b"(") else {
         panic!("expected a handler error");
     };
     assert_eq!((loc(span.start()), loc(span.end())), ((0, 0, 0), (1, 0, 1)));
@@ -646,12 +646,12 @@ fn lexing_after_an_error_panics() {
     let mut collected = CollectTokens(Vec::new());
     let mut lexer = Lexer::new(&mut collected);
     let _ = lexer
-        .lex_next(b'7')
+        .lex_slice(b"7")
         .map_err(into_lexer_error)
         .expect("valid input");
     // the backslash raises an error just after the numeral token was produced
-    assert!(lexer.lex_next(b'\\').is_err(), "expected a lexer error");
-    let _ = lexer.lex_next(b' ');
+    assert!(lexer.lex_slice(b"\\").is_err(), "expected a lexer error");
+    let _ = lexer.lex_slice(b" ");
 }
 
 #[test]
@@ -659,8 +659,8 @@ fn lexing_after_an_error_panics() {
 fn lexing_after_a_handler_error_panics() {
     // a handler error also makes the lexer unusable
     let mut lexer = Lexer::new(RejectTokens);
-    assert!(lexer.lex_next(b'(').is_err(), "expected a handler error");
-    let _ = lexer.lex_next(b'a');
+    assert!(lexer.lex_slice(b"(").is_err(), "expected a handler error");
+    let _ = lexer.lex_slice(b"a");
 }
 
 // --- Reserved words against similar symbols ---
@@ -858,7 +858,7 @@ fn lexing_after_a_handler_error_on_the_eof_token_panics() {
     let mut lexer = Lexer::new(RejectEof);
     let _ = lexer.lex_slice(b"a").expect("valid input");
     assert!(lexer.lex_eof().is_err(), "expected a handler error");
-    let _ = lexer.lex_next(b'b');
+    let _ = lexer.lex_slice(b"b");
 }
 
 #[test]
@@ -874,7 +874,7 @@ fn lexing_after_a_lexer_error_at_eof_panics() {
         lexer.lex_eof().is_err(),
         "expected an unclosed string error"
     );
-    let _ = lexer.lex_next(b'"');
+    let _ = lexer.lex_slice(b"\"");
 }
 
 // --- Lexing after a successful end of file ---

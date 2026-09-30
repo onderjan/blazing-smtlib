@@ -438,7 +438,7 @@ fn every_three_piece_split_matches_the_whole_slice() {
 }
 
 #[test]
-fn byte_by_byte_through_lex_next_matches_the_whole_slice() {
+fn byte_by_byte_slices_match_the_whole_slice() {
     for input in all_inputs() {
         let reference = lex_whole(input);
 
@@ -446,7 +446,7 @@ fn byte_by_byte_through_lex_next_matches_the_whole_slice() {
         let mut lexer = Lexer::new(&mut collected);
         let mut error = None;
         for (index, &c) in input.iter().enumerate() {
-            if let Err(err) = lexer.lex_next(c) {
+            if let Err(err) = lexer.lex_slice(&[c]) {
                 let site = ErrorSite::Slice {
                     start: index as u64,
                     end: index as u64 + 1,

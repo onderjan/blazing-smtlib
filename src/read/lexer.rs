@@ -140,16 +140,6 @@ impl<H: TokenHandler> Lexer<H> {
         self.fail_on_error(|lexer| lexer.lex_slice_inner(slice))
     }
 
-    /// Lexes one byte, sending the lexed tokens to the handler.
-    ///
-    /// This is a slow convenience function, use `lex_slice` for speed
-    /// if a slice is available.
-    ///
-    /// Panics if a previous call returned an error.
-    pub fn lex_next(&mut self, c: u8) -> Result<ControlFlow<H::Result>, LexError<H::Error>> {
-        self.lex_slice(&[c])
-    }
-
     /// Lexes end-of-file, sending the lexed tokens to the handler.
     ///
     /// Panics if a previous call returned an error.
