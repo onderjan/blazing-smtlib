@@ -7,7 +7,7 @@ use crate::{
         Parser, ParserError, ParserResources, StringParser, SymbolParser, SyntaxErrorKind,
         category::{ClosedAttributeParser, ClosedParser, PairParser, SortParser, TermParser},
         command::{
-            CommandAction,
+            CommandAction, CommandParserStop,
             datatype::{DeclareDatatypeParser, DeclareDatatypesParser},
             definition::{Definition, DefinitionParser},
             function::{DefineFunsRecParser, FunctionSignatureParser, RecursiveBodyParser},
@@ -15,11 +15,6 @@ use crate::{
     },
     token::{CommandNameReserved, TokenCursor},
 };
-
-pub enum StandardCommandResult {
-    EndCommand,
-    Exit,
-}
 
 /// Defines the standard commands, each named like its variant of
 /// [`CommandNameReserved`], which the command kinds are mapped from.
@@ -78,14 +73,14 @@ macro_rules! standard_commands {
                 handler: &mut H,
                 resources: &mut ParserResources<H>,
                 cursor: &mut TokenCursor<'_>,
-            ) -> Result<ControlFlow<StandardCommandResult, ()>, ParserError<H::Error>> {
+            ) -> Result<ControlFlow<CommandParserStop, ()>, ParserError<H::Error>> {
                 let flow = match kind {
                     $(StandardCommandKind::$kind => self.$field.parse(handler, resources, cursor)?,)*
                 };
-                // only the exit command ends reading
+                // only the exit command ends a script
                 Ok(flow.map_break(|()| match kind {
-                    StandardCommandKind::Exit => StandardCommandResult::Exit,
-                    _ => StandardCommandResult::EndCommand,
+                    StandardCommandKind::Exit => CommandParserStop::ExitCommand,
+                    _ => CommandParserStop::Command,
                 }))
             }
         }

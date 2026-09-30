@@ -1,9 +1,9 @@
 use std::{convert::Infallible, ops::ControlFlow};
 
 use crate::{
-    CommandHandler,
-    read::parser::{Parser, ParserError, ParserResources, handle_err},
-    token::TokenCursor,
+    CommandHandler, SmtSpan, SmtSymbolView,
+    read::parser::{Parser, ParserError, ParserResources, SyntaxErrorKind, handle_err},
+    token::{Reserved, TokenCursor, TokenKind, TokenType},
 };
 
 mod datatype;
@@ -11,7 +11,171 @@ mod definition;
 mod function;
 mod standard;
 
-pub(super) use standard::{StandardCommandKind, StandardCommandParsers, StandardCommandResult};
+use standard::{StandardCommandKind, StandardCommandParsers};
+
+/// Parses one SMT-LIB command.
+///
+/// The parser finishes after every command, returning [`ControlFlow::Break`]
+/// with a [`CommandParserStop`] that distinguishes the command `(exit)`
+/// from the others. It also finishes after an EOF while awaiting a command.
+/// An EOF inside a command is a syntax error.
+///
+/// The parser self-resets after finishing.
+pub struct CommandParser<H: CommandHandler> {
+    state: CommandParserState<H>,
+    standard_parsers: StandardCommandParsers<H>,
+}
+
+/// Why the command parser finished.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CommandParserStop {
+    /// A command other than the exit command was parsed.
+    Command,
+    /// The exit command was parsed.
+    ExitCommand,
+    /// The end of the input was reached before a command.
+    EndOfFile,
+}
+
+enum CommandParserState<H: CommandHandler> {
+    AwaitingCommand,
+    CommandOpen,
+    Standard(StandardCommandKind),
+    Nonstandard(H::NonstandardParser),
+}
+
+impl<H: CommandHandler> CommandParser<H> {
+    pub fn new() -> Self {
+        Self {
+            state: CommandParserState::AwaitingCommand,
+            standard_parsers: StandardCommandParsers::new(),
+        }
+    }
+
+    /// Starts a non-standard command named by a symbol.
+    ///
+    /// A command identified by a symbol is never standard,
+    /// as standard command names are reserved words.
+    fn start_nonstandard_command(
+        handler: &mut H,
+        name: SmtSymbolView<'_>,
+        span: SmtSpan,
+    ) -> Result<CommandParserState<H>, ParserError<H::Error>> {
+        match handler.nonstandard_command(name) {
+            Ok(parser) => Ok(CommandParserState::Nonstandard(parser)),
+            Err(err) => Err(ParserError::handler_error(err, span)),
+        }
+    }
+}
+
+impl<H: CommandHandler> Default for CommandParser<H> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<H: CommandHandler> Parser<H> for CommandParser<H> {
+    type Result = CommandParserStop;
+
+    #[inline]
+    fn parse(
+        &mut self,
+        handler: &mut H,
+        resources: &mut ParserResources<H>,
+        cursor: &mut TokenCursor,
+    ) -> Result<ControlFlow<CommandParserStop>, ParserError<H::Error>> {
+        // State machine:
+        // 1. AwaitingCommand takes:
+        //  - either the opening parenthesis and moves to CommandOpen,
+        //  - or the end of the input, which finishes.
+        // 2. CommandOpen takes the command name and selects the payload parser.
+        // 3. Standard and Nonstandard drive the payload parser to finish,
+        //    after which the parser goes back to AwaitingCommand.
+        while let Some(peeked) = cursor.peek() {
+            match &mut self.state {
+                CommandParserState::AwaitingCommand => {
+                    // we will handle the token here
+                    cursor.advance(1);
+                    match peeked.ty() {
+                        TokenType::ParenOpen => {
+                            // open the command
+                            self.state = CommandParserState::CommandOpen;
+                        }
+                        TokenType::EndOfFile => {
+                            // end of file here finishes the parser,
+                            // which is already in its initial state
+                            return Ok(ControlFlow::Break(CommandParserStop::EndOfFile));
+                        }
+                        _ => {
+                            return Err(ParserError::category_error(
+                                SyntaxErrorKind::ExpectedCommand,
+                                peeked.span(),
+                            ));
+                        }
+                    }
+                }
+                CommandParserState::CommandOpen => {
+                    // we will handle the token here
+                    cursor.advance(1);
+                    // expect the command name
+                    self.state = match resources.arena.token_kind(peeked) {
+                        TokenKind::Reserved(Reserved::CommandName(name)) => {
+                            // a command-name reserved word names a standard command
+                            CommandParserState::Standard(StandardCommandKind::from_reserved(name))
+                        }
+                        TokenKind::Symbol(name) => {
+                            // a symbol (even a quoted one spelled like a standard command)
+                            // can only name a nonstandard command
+                            Self::start_nonstandard_command(handler, name, peeked.span())?
+                        }
+                        _ => {
+                            return Err(ParserError::category_error(
+                                SyntaxErrorKind::ExpectedCommandName,
+                                peeked.span(),
+                            ));
+                        }
+                    };
+                }
+                CommandParserState::Standard(kind) => {
+                    // handle the cursor within the standard payload parsers
+                    let kind = *kind;
+                    let flow = self
+                        .standard_parsers
+                        .parse(kind, handler, resources, cursor)?;
+                    if let ControlFlow::Break(stop) = flow {
+                        // the command has ended, resources should be back in pristine state;
+                        // we trust our own parsers enough to only assert this in debug mode
+                        // and never clear them, which would make them pristine but slow us down
+                        debug_assert!(
+                            resources.are_pristine(),
+                            "resources should be pristine after end of standard command {kind:?}"
+                        );
+                        self.state = CommandParserState::AwaitingCommand;
+                        return Ok(ControlFlow::Break(stop));
+                    }
+                }
+                CommandParserState::Nonstandard(parser) => {
+                    // handle the cursor within the nonstandard payload parser
+                    let flow = parser.parse(handler, resources, cursor)?;
+                    if let ControlFlow::Break(()) = flow {
+                        // the command has ended, resources should be back in pristine state;
+                        // we do not trust the library users: assert this in debug mode, always clear
+                        debug_assert!(
+                            resources.are_pristine(),
+                            "resources should be pristine after end of non-standard command"
+                        );
+                        resources.clear();
+                        // a non-standard command cannot be the exit command
+                        self.state = CommandParserState::AwaitingCommand;
+                        return Ok(ControlFlow::Break(CommandParserStop::Command));
+                    }
+                }
+            }
+        }
+        // we consumed the cursor, return
+        Ok(ControlFlow::Continue(()))
+    }
+}
 
 impl<H: CommandHandler> Parser<H> for Infallible {
     type Result = ();

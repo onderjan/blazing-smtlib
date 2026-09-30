@@ -9,7 +9,7 @@ use smt_parser_rs::{
     read::{
         SmtReadError, SmtReadErrorKind, SmtReader,
         lexer::LexerErrorKind,
-        parser::{ScriptParserStop, SyntaxErrorKind, TermParser},
+        parser::{CommandParser, CommandParserStop, ScriptParserStop, SyntaxErrorKind, TermParser},
         read_smt, read_smt_file,
     },
 };
@@ -397,6 +397,50 @@ fn a_reader_over_another_top_level_parser_finishes_where_that_parser_does() {
     let mut reader = SmtReader::with_parser(&mut handler, TermParser::new());
     assert!(matches!(
         reader.read_slice(b"(f a "),
+        Ok(ControlFlow::Continue(()))
+    ));
+    assert!(reader.read_eof().is_err());
+}
+
+#[test]
+fn a_reader_over_a_command_parser_reads_one_command_per_break() {
+    // every command finishes the reader with the location after it; the rest
+    // of the piece is a new input, fed again from that location, so each
+    // command's location counts from the end of the previous one
+    let mut handler = CheckStandardSyntax;
+    let mut reader = SmtReader::with_parser(&mut handler, CommandParser::new());
+    let mut rest: &[u8] = b"(set-logic QF_UF)\n(check-sat)\n(exit)\n";
+    let mut stops = Vec::new();
+    loop {
+        match reader.read_slice(rest).expect("valid input") {
+            ControlFlow::Continue(()) => break,
+            ControlFlow::Break(located) => {
+                stops.push((*located.value(), loc(located.location())));
+                rest = &rest[located.location().offset() as usize..];
+            }
+        }
+    }
+    assert_eq!(
+        stops,
+        [
+            (CommandParserStop::Command, (17, 0, 17)),
+            (CommandParserStop::Command, (12, 1, 11)),
+            (CommandParserStop::ExitCommand, (7, 1, 6)),
+        ]
+    );
+    assert_eq!(rest, b"\n");
+
+    // the end of the input before a command finishes the reader too;
+    // inside a command it is a syntax error
+    let located = reader
+        .read_eof()
+        .expect("valid up to the end of the input")
+        .break_value()
+        .expect("the end of the input finishes the reader");
+    assert_eq!(*located.value(), CommandParserStop::EndOfFile);
+    assert_eq!(loc(located.location()), (1, 1, 0));
+    assert!(matches!(
+        reader.read_slice(b"(check-sat"),
         Ok(ControlFlow::Continue(()))
     ));
     assert!(reader.read_eof().is_err());
