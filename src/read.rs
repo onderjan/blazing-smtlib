@@ -22,7 +22,7 @@ use std::{
 };
 
 use crate::{
-    CommandHandler, SmtHandler, SmtSpan,
+    CommandHandler, SmtHandler, SmtLocated, SmtSpan,
     read::{
         lexer::{LexError, Lexer, LexerError, LexerErrorKind},
         parser::{
@@ -122,7 +122,7 @@ pub fn read_smt_file<H: CommandHandler>(
     handler: &mut H,
     path: &Path,
 ) -> Result<(), SmtReadError<H::Error>> {
-    SmtReader::script(handler).read_file(path)
+    SmtReader::script(handler).read_file(path).map(|_| ())
 }
 
 /// Reads SMT-LIB input from `buf_reader` to its end, delivering its content
@@ -139,7 +139,7 @@ pub fn read_smt<H: CommandHandler>(
     handler: &mut H,
     buf_reader: impl BufRead,
 ) -> Result<(), SmtReadError<H::Error>> {
-    SmtReader::script(handler).read_all(buf_reader)
+    SmtReader::script(handler).read_all(buf_reader).map(|_| ())
 }
 
 /// Streams SMT-LIB input from bytes to a [`CommandHandler`].
@@ -154,13 +154,18 @@ pub fn read_smt<H: CommandHandler>(
 /// [`read_slice`](Self::read_slice) sequentially, followed by [`read_eof`](Self::read_eof)
 /// once the input has ended. A piece may end anywhere, even inside a token.
 ///
+/// The reader may be used even after [`read_eof`](Self::read_eof).
+/// In case the underlying parser returns a result, the parser immediately
+/// resets and can be reused. In case of a reading error,
+/// every subsequent read call panics.
+///
 /// For whole inputs, consider [`read_smt_file`] and [`read_smt`].
 pub struct SmtReader<'a, H: SmtHandler + ?Sized, P: Parser<H> = ScriptParser<H>> {
     lexer: Lexer<ParseAdapter<'a, H, P>>,
 }
 
 impl<'a, H: CommandHandler> SmtReader<'a, H> {
-    /// Creates a reader of scripts, whose commands are delivered to `handler`.
+    /// Creates a reader of an SMT-LIB script, whose commands are delivered to `handler`.
     pub fn script(handler: &'a mut H) -> Self {
         Self::with_parser(handler, ScriptParser::new())
     }
@@ -173,19 +178,23 @@ impl<'a, H: SmtHandler + ?Sized, P: Parser<H>> SmtReader<'a, H, P> {
         Self { lexer }
     }
 
-    /// Opens the file at `path` and reads it to its end, including the end
-    /// of the input.
+    /// Opens the file at `path` and reads it to its end, including an EOF token.
     ///
     /// A failure to open the file is reported as an I/O error with an empty
     /// span at the start of the input. An I/O read error is reported as
     /// an empty span at the respective position.
     ///
-    /// Reading stops when the parser finishes, which for a script is its exit
-    /// command: the rest of the file is not read.
+    /// Reading stops either when the parser returns a result,
+    /// in which case it is returned within [`Option::Some`],
+    /// or when all tokens including the EOF have been parsed,
+    /// in which case [`Option::None`] is returned.
     ///
-    /// Panics if a previous call on this reader returned an error or
-    /// finished the parser.
-    pub fn read_file(&mut self, path: &Path) -> Result<(), SmtReadError<H::Error>> {
+    /// For the common case of reading SMT-LIB scripts, the parser returns
+    /// exactly when either `(exit)` or an EOF in a valid position
+    /// is encountered, identifying the reason in the result.
+    ///
+    /// Panics if a previous call on this reader returned an error.
+    pub fn read_file(&mut self, path: &Path) -> Result<Option<P::Result>, SmtReadError<H::Error>> {
         let file = File::open(path)
             .map_err(|err| SmtReadError::new(SmtReadErrorKind::Io(err), SmtSpan::new_zero()))?;
 
@@ -196,22 +205,27 @@ impl<'a, H: SmtHandler + ?Sized, P: Parser<H>> SmtReader<'a, H, P> {
         self.read_all(buf_reader)
     }
 
-    /// Reads `buf_reader` to its end, including the end of the input.
+    /// Reads `buf_reader` to its end, including an EOF token.
     ///
     /// The input is considered to end when the buffered reader returns
     /// a zero-length buffer. A failure while reading is reported as
     /// an I/O error with an empty span at the position reached.
     ///
-    /// Reading stops when the parser finishes, which for a script is its exit
-    /// command, leaving the buffered reader positioned after it: the rest of
-    /// the input is not read.
+    /// Reading stops either when the parser returns a result,
+    /// in which case it is returned within [`Option::Some`] and
+    /// the buffered reader is positioned after it,
+    /// or when all tokens including the EOF have been parsed,
+    /// in which case [`Option::None`] is returned.
     ///
-    /// Panics if a previous call on this reader returned an error or
-    /// finished the parser.
+    /// For the common case of reading SMT-LIB scripts, the parser returns
+    /// exactly when either `(exit)` or an EOF in a valid position
+    /// is encountered, identifying the reason in the result.
+    ///
+    /// Panics if a previous call on this reader returned an error.
     pub fn read_all<R: BufRead>(
         &mut self,
         mut buf_reader: R,
-    ) -> Result<(), SmtReadError<H::Error>> {
+    ) -> Result<Option<P::Result>, SmtReadError<H::Error>> {
         loop {
             match buf_reader.fill_buf() {
                 Ok(buffer) => {
@@ -219,16 +233,27 @@ impl<'a, H: SmtHandler + ?Sized, P: Parser<H>> SmtReader<'a, H, P> {
                         // process the buffer and mark consumed what the lexer took:
                         // the whole buffer, or up to where the parser finished
                         let start = self.lexer.current_location().offset();
-                        let flow = self.read_slice(buffer)?;
-                        let consumed = (self.lexer.current_location().offset() - start) as usize;
-                        buf_reader.consume(consumed);
-                        if let ControlFlow::Break(_) = flow {
-                            // the script has exited, the rest of the input is not read
-                            return Ok(());
+
+                        match self.read_slice(buffer)? {
+                            ControlFlow::Continue(()) => {
+                                // consume the read bytes
+                                let consumed =
+                                    (self.lexer.current_location().offset() - start) as usize;
+                                buf_reader.consume(consumed);
+                            }
+                            ControlFlow::Break(located) => {
+                                // the parser finished, the rest of the input is not read
+                                // consume the bytes up to the end location to fulfil the contract
+                                // we cannot use the current lexer location as that was reset
+                                let consumed = (located.location().offset() - start) as usize;
+                                buf_reader.consume(consumed);
+                                return Ok(Some(located.into_value()));
+                            }
                         }
                     } else {
-                        // end of stream, process End of File and return
-                        return self.read_eof();
+                        // end of stream, process End of File and return the break value
+                        // if no break occurs even at the end of the file, return None
+                        return Ok(self.read_eof()?.break_value().map(SmtLocated::into_value));
                     }
                 }
                 Err(err) => {
@@ -252,17 +277,16 @@ impl<'a, H: SmtHandler + ?Sized, P: Parser<H>> SmtReader<'a, H, P> {
     /// is fully processed.
     ///
     /// Returns [`ControlFlow::Break`] with the parser's result if the parser
-    /// finished inside the piece, which for a script is its exit command:
-    /// the rest of the piece is not read, and the reader is finished. The
-    /// lexer location then tells where the input ended, for callers that
-    /// continue with other input.
+    /// finished inside the piece (which for a script is the command `(exit)`):
+    /// the rest of the piece is not read, and the reader resets.
+    /// [`SmtLocated::location()`] then identifies the location
+    /// where the parser finished.
     ///
-    /// Panics if a previous call on this reader returned an error or
-    /// finished the parser.
+    /// Panics if a previous call on this reader returned an error.
     pub fn read_slice(
         &mut self,
         slice: &[u8],
-    ) -> Result<ControlFlow<P::Result>, SmtReadError<H::Error>> {
+    ) -> Result<ControlFlow<SmtLocated<P::Result>>, SmtReadError<H::Error>> {
         // parsing goes through lexing, so just call the lexer
         Ok(self.lexer.lex_slice(slice)?)
     }
@@ -273,12 +297,16 @@ impl<'a, H: SmtHandler + ?Sized, P: Parser<H>> SmtReader<'a, H, P> {
     /// [`read_file`](Self::read_file) and [`read_all`](Self::read_all) call
     /// it themselves.
     ///
-    /// Panics if a previous call on this reader returned an error or
-    /// finished the parser.
-    pub fn read_eof(&mut self) -> Result<(), SmtReadError<H::Error>> {
-        // whether the script exited here or the input just ended,
-        // the whole input has been read
-        let _exited = self.lexer.lex_eof()?;
-        Ok(())
+    /// Returns [`ControlFlow::Break`] with the parser's result if the parser
+    /// finished due to the EOF token (which for a script is the end of the input
+    /// between commands), and the reader resets. [`SmtLocated::location()`]
+    /// then identifies the location where the parser finished.
+    ///
+    /// Panics if a previous call on this reader returned an error.
+    pub fn read_eof(
+        &mut self,
+    ) -> Result<ControlFlow<SmtLocated<P::Result>>, SmtReadError<H::Error>> {
+        // parsing goes through lexing, so just call the lexer
+        Ok(self.lexer.lex_eof()?)
     }
 }

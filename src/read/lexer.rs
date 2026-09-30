@@ -9,7 +9,7 @@ pub(crate) use char_class::CharClass;
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtLocation, SmtSpan, String8,
+    SmtLocated, SmtLocation, SmtSpan, String8,
     read::lexer::{
         char_class::{
             RUN_COMMENT_PLAIN, RUN_DIGIT, RUN_QUOTED_PLAIN, RUN_SIMPLE_SYMBOL, RUN_STRING_PLAIN,
@@ -65,18 +65,16 @@ struct Batch<'a> {
 }
 
 /// Why lexing stopped before the end of the slice.
-enum Stop<R, E> {
+enum Stop<R> {
     /// The handler requested lexing again from the stop location.
     Relex,
     /// The handler finished with a result at the stop location.
     Finished(R),
-    /// Lexing or handling failed.
-    Error(E),
 }
 
 struct Interrupted<R, E> {
-    stop: Stop<R, E>,
-    stop_location: SmtLocation,
+    result: Result<Stop<R>, E>,
+    location: SmtLocation,
 }
 
 #[derive(Clone, Copy)]
@@ -95,8 +93,6 @@ enum LexerState {
     Comment,
     /// A lexer or handler error was returned; lexing cannot continue.
     Failed,
-    /// The handler finished with a result; lexing cannot continue.
-    Finished,
 }
 
 impl<H: TokenHandler> Lexer<H> {
@@ -120,9 +116,20 @@ impl<H: TokenHandler> Lexer<H> {
 
     /// Lexes the whole input including EOF at the end.
     ///
-    /// Sends the lexed tokens to the handler progressively.
-    /// Returns on the first error.
-    pub fn lex_all(&mut self, input: &[u8]) -> Result<ControlFlow<H::Result>, LexError<H::Error>> {
+    /// If the token handler returns [`ControlFlow::Break`] on some token,
+    /// the lexer passes it through, adding the break location,
+    /// and resets itself.
+    ///
+    /// If the token handler returns [`ControlFlow::Continue`] on all tokens
+    /// including EOF, the lexer resets itself after EOF
+    /// and returns [`ControlFlow::Continue`].
+    ///
+    /// If an error occurs, the lexer moves into a failure state;
+    /// all further lexing calls panic.
+    pub fn lex_all(
+        &mut self,
+        input: &[u8],
+    ) -> Result<ControlFlow<SmtLocated<H::Result>>, LexError<H::Error>> {
         match self.lex_slice(input)? {
             ControlFlow::Break(result) => Ok(ControlFlow::Break(result)),
             ControlFlow::Continue(()) => self.lex_eof(),
@@ -131,21 +138,37 @@ impl<H: TokenHandler> Lexer<H> {
 
     /// Lexes the given slice, sending the lexed tokens to the handler.
     ///
-    /// Panics if a previous call returned an error.
+    /// If the token handler returns [`ControlFlow::Break`] on some token,
+    /// the lexer passes it through, adding the break location,
+    /// and resets itself.
+    ///
+    /// If the token handler returns [`ControlFlow::Continue`] on all tokens,
+    /// the lexer is ready for further lexing.
+    ///
+    /// If an error occurs, the lexer moves into a failure state;
+    /// all further lexing calls panic.
     pub fn lex_slice(
         &mut self,
         slice: &[u8],
-    ) -> Result<ControlFlow<H::Result>, LexError<H::Error>> {
+    ) -> Result<ControlFlow<SmtLocated<H::Result>>, LexError<H::Error>> {
         // call inner lexing and fail on error
-        self.fail_on_error(|lexer| lexer.lex_slice_inner(slice))
+        self.execute_step(|lexer| lexer.lex_slice_inner(slice))
     }
 
     /// Lexes end-of-file, sending the lexed tokens to the handler.
     ///
-    /// Panics if a previous call returned an error.
-    pub fn lex_eof(&mut self) -> Result<ControlFlow<H::Result>, LexError<H::Error>> {
+    /// If the token handler returns [`ControlFlow::Break`] on the EOF token,
+    /// the lexer passes it through, adding the break location,
+    /// and resets itself.
+    ///
+    /// If the token handler returns [`ControlFlow::Continue`] on the EOF token,
+    /// the lexer resets itself and returns [`ControlFlow::Continue`].
+    ///
+    /// If an error occurs, the lexer moves into a failure state;
+    /// all further lexing calls panic.
+    pub fn lex_eof(&mut self) -> Result<ControlFlow<SmtLocated<H::Result>>, LexError<H::Error>> {
         // call inner EOF lexing and fail on error
-        self.fail_on_error(|lexer| lexer.lex_eof_inner())
+        self.execute_step(|lexer| lexer.lex_eof_inner())
     }
 
     fn lex_eof_inner(&mut self) -> Result<ControlFlow<H::Result>, LexError<H::Error>> {
@@ -195,9 +218,6 @@ impl<H: TokenHandler> Lexer<H> {
             LexerState::Failed => {
                 panic!("cannot lex after a lexer error")
             }
-            LexerState::Finished => {
-                panic!("cannot lex after the token handler finished")
-            }
         }
         .and_then(|()| {
             // everything has been processed, start the EOF token and sink it
@@ -207,20 +227,20 @@ impl<H: TokenHandler> Lexer<H> {
 
         match result {
             Ok(()) => {
-                // everything processed, reset the lexer to normal
-                self.state = LexerState::Normal;
+                // everything processed, but there was no break out
+                // we need manually reset the lexer and return Continue
+                self.reset();
                 Ok(ControlFlow::Continue(()))
             }
-            Err(interrupted) => match interrupted.stop {
+            Err(interrupted) => match interrupted.result? {
                 Stop::Relex => {
                     panic!("token handler cannot request relex at end of file")
                 }
                 Stop::Finished(result) => {
                     // the handler is done with the input
-                    self.state = LexerState::Finished;
+                    // the lexer will be reset as a consequence of the Break result
                     Ok(ControlFlow::Break(result))
                 }
-                Stop::Error(err) => Err(err),
             },
         }
     }
@@ -266,9 +286,6 @@ impl<H: TokenHandler> Lexer<H> {
                     LexerState::Keyword => self.lex_keyword(&mut batch, rest),
                     LexerState::Comment => self.lex_comment(rest),
                     LexerState::Failed => panic!("cannot lex after a lexer error"),
-                    LexerState::Finished => {
-                        panic!("cannot lex after the token handler finished")
-                    }
                 }
             };
 
@@ -283,32 +300,38 @@ impl<H: TokenHandler> Lexer<H> {
                     // continue consuming
                     continue;
                 }
-                Err(interrupted) => match interrupted.stop {
-                    Stop::Relex => {
-                        let location = interrupted.stop_location;
-                        self.resume_at(location);
-                        // every handed-over token borrows this slice
-                        // so the location must be equal or greater to initial offset
-                        let index = location
-                            .offset()
-                            .checked_sub(initial_offset)
-                            .expect("the token handler must not stop before the starting token");
-                        rest = &slice[index as usize..];
-                        fn_result = Ok(ControlFlow::Continue(()));
+                Err(interrupted) => {
+                    match interrupted.result {
+                        Ok(stop) => {
+                            let location = interrupted.location;
+                            self.resume_at(location);
+                            // every handed-over token borrows this slice
+                            // so the location must be equal or greater to initial offset
+                            // compute this even for Finished to assert the interrupted location
+                            let index = location.offset().checked_sub(initial_offset).expect(
+                                "the token handler must not stop before the starting token",
+                            );
+                            match stop {
+                                Stop::Relex => {
+                                    // everything up to the index was already consumed
+                                    // continue from there
+                                    rest = &slice[index as usize..];
+                                    fn_result = Ok(ControlFlow::Continue(()));
+                                }
+                                Stop::Finished(result) => {
+                                    // the handler is done: the batch was handed over,
+                                    // the rest of the slice stays unlexed
+                                    // the lexer will be reset as a consequence of the Break result
+                                    return Ok(ControlFlow::Break(result));
+                                }
+                            }
+                        }
+                        Err(err) => {
+                            // make sure the tokens before the error get handed over
+                            fn_result = Err(err);
+                        }
                     }
-                    Stop::Finished(result) => {
-                        // the handler is done: the batch was handed over, the rest
-                        // of the slice stays unlexed and the location is where
-                        // the handler stopped
-                        self.resume_at(interrupted.stop_location);
-                        self.state = LexerState::Finished;
-                        return Ok(ControlFlow::Break(result));
-                    }
-                    Stop::Error(err) => {
-                        // make sure the tokens before the error get handed over
-                        fn_result = Err(err);
-                    }
-                },
+                }
             }
         }
     }
@@ -1085,8 +1108,8 @@ impl<H: TokenHandler> Lexer<H> {
             .expect("flushed batch must have at least one token")
             .span()
             .start();
-        let stop = match handler.handle_tokens(&mut cursor) {
-            Ok(ControlFlow::Continue(())) if cursor.relex_requested() => Stop::Relex,
+        let result = match handler.handle_tokens(&mut cursor) {
+            Ok(ControlFlow::Continue(())) if cursor.relex_requested() => Ok(Stop::Relex),
             Ok(ControlFlow::Continue(())) => {
                 // ensure the cursor has been fully consumed
                 assert!(
@@ -1100,9 +1123,9 @@ impl<H: TokenHandler> Lexer<H> {
                     !cursor.relex_requested(),
                     "the token handler cannot both finish and request relex"
                 );
-                Stop::Finished(result)
+                Ok(Stop::Finished(result))
             }
-            Err(err) => Stop::Error(LexError::Handler(err)),
+            Err(err) => Err(LexError::Handler(err)),
         };
         // the stop takes effect after the consumed tokens
         let stop_location = match cursor.last_consumed() {
@@ -1112,8 +1135,8 @@ impl<H: TokenHandler> Lexer<H> {
             Some(token) => token.span().end(),
         };
         Err(Interrupted {
-            stop,
-            stop_location,
+            result,
+            location: stop_location,
         })
     }
 
@@ -1229,25 +1252,46 @@ impl<H: TokenHandler> Lexer<H> {
         let span = SmtSpan::new_unchecked(self.token_start, end);
         // no tokens have been consumed, as this is an error
         // that occurred during lexing
-        let stop = Stop::Error(LexError::Lexer(LexerError::new(kind, span)));
         Interrupted {
-            stop,
-            stop_location: end,
+            result: Err(LexError::Lexer(LexerError::new(kind, span))),
+            location: end,
         }
     }
 
-    /// Sets state to failed when an error propagates from the inner function.
+    /// Executes an inner lexer step and updates the lexer according to the result.
     ///
     /// Called from the outer public functions.
-    fn fail_on_error(
+    fn execute_step(
         &mut self,
         step: impl FnOnce(&mut Self) -> Result<ControlFlow<H::Result>, LexError<H::Error>>,
-    ) -> Result<ControlFlow<H::Result>, LexError<H::Error>> {
-        let result = step(self);
-        if result.is_err() {
-            self.state = LexerState::Failed;
+    ) -> Result<ControlFlow<SmtLocated<H::Result>>, LexError<H::Error>> {
+        match step(self) {
+            Ok(ControlFlow::Continue(())) => Ok(ControlFlow::Continue(())),
+            Ok(ControlFlow::Break(result)) => {
+                // get the break location, then reset the lexer
+                let location = self.current_location();
+                self.reset();
+                Ok(ControlFlow::Break(SmtLocated::new(result, location)))
+            }
+            Err(err) => {
+                // set the lexer to failed state
+                self.state = LexerState::Failed;
+                Err(err)
+            }
         }
-        result
+    }
+
+    /// Resets the lexer to the initial state, including the location.
+    ///
+    /// Called after each [`ControlFlow::Break`] from the handler.
+    fn reset(&mut self) {
+        self.state = LexerState::Normal;
+        self.token_start = SmtLocation::initial();
+        self.token_content.clear();
+        self.offset = 0;
+        self.line = 0;
+        self.line_start = 0;
+        // the spans do not need to be reset, they can be kept dirty
     }
 }
 

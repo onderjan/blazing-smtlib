@@ -20,13 +20,19 @@ pub trait Parser<H: SmtHandler + ?Sized> {
 
     /// Parses tokens from the cursor, progressing the parser.
     ///
-    /// Tokens are consumed until the parser is finished, returning
-    /// [`ControlFlow::Break`] with the result and leaving the cursor after the
-    /// last consumed token, or until the cursor is empty, returning
-    /// [`ControlFlow::Continue`]. After an error, the cursor position is not
-    /// specified.
+    /// If the parser returns [`ControlFlow::Continue`], it means all tokens
+    /// were handled and more are wanted: the cursor must be empty, which it
+    /// also is after a [`TokenCursor::relex`] request.
     ///
-    /// All standard parsers implementing [`Parser`] are self-resetting:
+    /// If the parser returns [`ControlFlow::Break`], it means
+    /// it finished the input it accepts (consuming exactly its tokens),
+    /// is returning a result and waiting for processing of the next value.
+    ///
+    /// Returning an error means the handler failed at the token after
+    /// the consumed ones. The state of the parser, cursor, and resources
+    /// is unspecified.
+    ///
+    /// All library parsers implementing [`Parser`] are fully self-resetting:
     /// after returning [`ControlFlow::Break`], they are back in their initial state.
     ///
     /// The `resources` are shared resources of standard category parsers.

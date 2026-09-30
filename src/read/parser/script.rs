@@ -12,13 +12,20 @@ use crate::{
 /// Parses an SMT-LIB script: a sequence of commands, each delivered to the
 /// command handler as it is parsed.
 ///
-/// The parser finishes at the exit command, returning [`ControlFlow::Break`];
-/// the end of the input is accepted between commands and asks for more.
-/// It is back at its start after every command, so one instance parses
-/// any number of scripts in turn.
+/// The parser finishes after the command `(exit)` or an EOF in a valid position,
+/// resetting and returning [`ControlFlow::Break`].
 pub struct ScriptParser<H: CommandHandler> {
     state: ScriptParserState<H>,
     command_parsers: CommandParsers<H>,
+}
+
+/// Why the script parser finished.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScriptParserStop {
+    /// Finished due to an exit command.
+    ExitCommand,
+    /// Finished due to reaching the end of file.
+    EndOfFile,
 }
 
 pub(crate) enum ScriptParserState<H: CommandHandler> {
@@ -89,7 +96,7 @@ impl<H: CommandHandler> Default for ScriptParser<H> {
 }
 
 impl<H: CommandHandler> Parser<H> for ScriptParser<H> {
-    type Result = ();
+    type Result = ScriptParserStop;
 
     #[inline]
     fn parse(
@@ -97,7 +104,7 @@ impl<H: CommandHandler> Parser<H> for ScriptParser<H> {
         handler: &mut H,
         resources: &mut ParserResources<H>,
         cursor: &mut TokenCursor,
-    ) -> Result<ControlFlow<()>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<ScriptParserStop>, ParserError<H::Error>> {
         while let Some(peeked) = cursor.peek() {
             match &mut self.state {
                 ScriptParserState::AwaitingCommand => {
@@ -109,8 +116,9 @@ impl<H: CommandHandler> Parser<H> for ScriptParser<H> {
                             self.state = ScriptParserState::CommandOpen;
                         }
                         TokenType::EndOfFile => {
-                            // end of file here is fine, do not change the state
-                            self.state = ScriptParserState::AwaitingCommand;
+                            // end of file here breaks out
+                            // we are already in the initial state
+                            return Ok(ControlFlow::Break(ScriptParserStop::EndOfFile));
                         }
                         _ => {
                             return Err(ParserError::category_error(
@@ -154,7 +162,7 @@ impl<H: CommandHandler> Parser<H> for ScriptParser<H> {
                         self.state = ScriptParserState::AwaitingCommand;
                         if let StandardCommandResult::Exit = result {
                             // the exit command ends the script: stop lexing after it
-                            return Ok(ControlFlow::Break(()));
+                            return Ok(ControlFlow::Break(ScriptParserStop::ExitCommand));
                         }
                     }
                 }

@@ -293,13 +293,16 @@ pub trait TokenHandler {
 
     /// Handles the tokens handed over in the cursor, in order.
     ///
-    /// Returning [`ControlFlow::Continue`] means all tokens were handled and
-    /// more are wanted: the cursor must be empty, which it also is after a
-    /// [`TokenCursor::relex`] request. Returning [`ControlFlow::Break`] with
-    /// the result means the handler is finished: lexing stops after the
-    /// consumed tokens and the result is returned to the caller of the lexer.
+    /// If the handler returns [`ControlFlow::Continue`], it means all tokens
+    /// were handled and more are wanted: the cursor must be empty, which it
+    /// also is after a [`TokenCursor::relex`] request.
+    ///
+    /// If the handler returns [`ControlFlow::Break`], it means
+    /// it finished the input it accepts (consuming exactly its tokens),
+    /// is returning a result and waiting for processing of the next value.
+    ///
     /// Returning an error means the handler failed at the token after
-    /// the consumed ones.
+    /// the consumed ones. The state of the handler and cursor is unspecified.
     fn handle_tokens(
         &mut self,
         cursor: &mut TokenCursor<'_>,

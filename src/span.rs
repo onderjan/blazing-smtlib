@@ -90,6 +90,35 @@ impl SmtLocation {
     }
 }
 
+/// A value located in an SMT-LIB stream.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct SmtLocated<V> {
+    value: V,
+    location: SmtLocation,
+}
+
+impl<V> SmtLocated<V> {
+    #[inline]
+    pub(crate) fn new(value: V, location: SmtLocation) -> Self {
+        Self { value, location }
+    }
+
+    /// Returns a reference to the value.
+    pub fn value(&self) -> &V {
+        &self.value
+    }
+
+    /// Returns the location.
+    pub fn location(&self) -> SmtLocation {
+        self.location
+    }
+
+    /// Destructures into the value.
+    pub fn into_value(self) -> V {
+        self.value
+    }
+}
+
 /// Span of an SMT-LIB element.
 ///
 /// The span is a half-open range `[start, end)` between locations.
