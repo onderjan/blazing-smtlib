@@ -52,6 +52,15 @@ impl<H: SmtHandler + ?Sized, P: Parser<H>> TokenHandler for ParseAdapter<'_, H, 
         cursor: &mut TokenCursor<'_>,
     ) -> Result<ControlFlow<P::Result>, ParserError<H::Error>> {
         // provide the handler and resources to the parser
-        self.parser.parse(self.handler, &mut self.resources, cursor)
+        let result = self
+            .parser
+            .parse(self.handler, &mut self.resources, cursor)?;
+        if result.is_break() {
+            debug_assert!(
+                self.resources.are_pristine(),
+                "resources should be pristine after the top-level parser finishes"
+            );
+        }
+        Ok(result)
     }
 }
