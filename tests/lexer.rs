@@ -879,9 +879,9 @@ fn lexing_after_a_lexer_error_at_eof_panics() {
 
 // --- Lexing after a successful end of file ---
 //
-// The behaviour after `lex_eof` has succeeded is not decided yet. These tests
-// pin what the lexer does today so that a change is noticed; if another
-// behaviour is chosen later, they are to be changed deliberately along with it.
+// The end of file ends an input: the lexer finishes the pending token, hands
+// over the end-of-file token, and resets to its initial state, location
+// included. Whatever is lexed afterwards is a new input from the origin.
 
 /// Every token as `(type, payload, start, end)`.
 type TokenRecord = (TokenType, Vec<u8>, Loc, Loc);
@@ -901,43 +901,47 @@ fn records(tokens: &[OwnedToken]) -> Vec<TokenRecord> {
 }
 
 #[test]
-fn eof_twice_after_a_pending_symbol_produces_two_eof_tokens() {
-    let mut collected = CollectTokens(Vec::new());
-    let mut lexer = Lexer::new(&mut collected);
-    let _ = lexer
-        .lex_slice(b"a")
-        .map_err(into_lexer_error)
-        .expect("valid input");
-    let _ = lexer
-        .lex_eof()
-        .map_err(into_lexer_error)
-        .expect("first EOF");
-    // currently, a second EOF is not rejected: finishing the symbol at the
-    // first EOF returns the lexer to the normal state, so the second EOF
-    // only repeats the EOF token (a full reset of the lexer is still undecided)
-    let _ = lexer
-        .lex_eof()
-        .map_err(into_lexer_error)
-        .expect("second EOF");
-    assert_eq!(loc(lexer.current_location()), (1, 0, 1));
-    drop(lexer);
-    assert_eq!(
-        records(&collected.0),
-        vec![
-            (
-                TokenType::UnquotedSymbol,
-                b"a".to_vec(),
-                (0, 0, 0),
-                (1, 0, 1)
-            ),
-            (TokenType::EndOfFile, vec![], (1, 0, 1), (1, 0, 1)),
-            (TokenType::EndOfFile, vec![], (1, 0, 1), (1, 0, 1)),
-        ]
-    );
+fn the_end_of_file_resets_the_lexer_so_a_second_one_is_at_the_origin() {
+    // whether a token is pending at the first EOF or not, the lexer is back
+    // at the origin after it, and a second EOF is a new, empty input
+    for (input, eof_at) in [(&b"a"[..], (1, 0, 1)), (&b"a "[..], (2, 0, 2))] {
+        let mut collected = CollectTokens(Vec::new());
+        let mut lexer = Lexer::new(&mut collected);
+        let _ = lexer
+            .lex_slice(input)
+            .map_err(into_lexer_error)
+            .expect("valid input");
+        let _ = lexer
+            .lex_eof()
+            .map_err(into_lexer_error)
+            .expect("first EOF");
+        assert_eq!(loc(lexer.current_location()), (0, 0, 0));
+        let _ = lexer
+            .lex_eof()
+            .map_err(into_lexer_error)
+            .expect("second EOF");
+        assert_eq!(loc(lexer.current_location()), (0, 0, 0));
+        drop(lexer);
+        assert_eq!(
+            records(&collected.0),
+            vec![
+                (
+                    TokenType::UnquotedSymbol,
+                    b"a".to_vec(),
+                    (0, 0, 0),
+                    (1, 0, 1)
+                ),
+                (TokenType::EndOfFile, vec![], eof_at, eof_at),
+                (TokenType::EndOfFile, vec![], (0, 0, 0), (0, 0, 0)),
+            ],
+            "input {:?}",
+            String::from_utf8_lossy(input)
+        );
+    }
 }
 
 #[test]
-fn lexing_continues_after_eof_as_if_the_input_went_on() {
+fn input_after_the_end_of_file_is_a_new_input_from_the_origin() {
     let mut collected = CollectTokens(Vec::new());
     let mut lexer = Lexer::new(&mut collected);
     let _ = lexer
@@ -948,8 +952,7 @@ fn lexing_continues_after_eof_as_if_the_input_went_on() {
         .lex_eof()
         .map_err(into_lexer_error)
         .expect("first EOF");
-    // currently, more input after EOF is lexed normally, with locations
-    // continuing from where the first EOF was reported
+    // the line count starts over as well
     let _ = lexer
         .lex_slice(b"|b\nc| ")
         .map_err(into_lexer_error)
@@ -972,16 +975,16 @@ fn lexing_continues_after_eof_as_if_the_input_went_on() {
             (
                 TokenType::QuotedSymbol,
                 b"b\nc".to_vec(),
-                (2, 1, 0),
-                (7, 2, 2)
+                (0, 0, 0),
+                (5, 1, 2)
             ),
-            (TokenType::EndOfFile, vec![], (8, 2, 3), (8, 2, 3)),
+            (TokenType::EndOfFile, vec![], (6, 1, 3), (6, 1, 3)),
         ]
     );
 }
 
 #[test]
-fn a_token_cut_by_eof_is_finished_and_not_resumed() {
+fn a_token_cut_by_the_end_of_file_is_finished_and_not_resumed() {
     let mut collected = CollectTokens(Vec::new());
     let mut lexer = Lexer::new(&mut collected);
     let _ = lexer
@@ -1012,43 +1015,9 @@ fn a_token_cut_by_eof_is_finished_and_not_resumed() {
             (
                 TokenType::UnquotedSymbol,
                 b"cd".to_vec(),
-                (2, 0, 2),
-                (4, 0, 4)
-            ),
-            (TokenType::EndOfFile, vec![], (4, 0, 4), (4, 0, 4)),
-        ]
-    );
-}
-
-#[test]
-fn eof_twice_after_whitespace_produces_two_eof_tokens() {
-    // with no token pending at the first EOF, the state is already normal
-    // and the second EOF only repeats the EOF token
-    let mut collected = CollectTokens(Vec::new());
-    let mut lexer = Lexer::new(&mut collected);
-    let _ = lexer
-        .lex_slice(b"a ")
-        .map_err(into_lexer_error)
-        .expect("valid input");
-    let _ = lexer
-        .lex_eof()
-        .map_err(into_lexer_error)
-        .expect("first EOF");
-    let _ = lexer
-        .lex_eof()
-        .map_err(into_lexer_error)
-        .expect("second EOF");
-    drop(lexer);
-    assert_eq!(
-        records(&collected.0),
-        vec![
-            (
-                TokenType::UnquotedSymbol,
-                b"a".to_vec(),
                 (0, 0, 0),
-                (1, 0, 1)
+                (2, 0, 2)
             ),
-            (TokenType::EndOfFile, vec![], (2, 0, 2), (2, 0, 2)),
             (TokenType::EndOfFile, vec![], (2, 0, 2), (2, 0, 2)),
         ]
     );

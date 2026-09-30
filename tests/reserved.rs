@@ -225,11 +225,11 @@ fn read_pieces(pieces: &[&[u8]]) -> Result<(), SmtReadError<NonstandardCommandEr
     let mut handler = CheckStandardSyntax;
     let mut reader = SmtReader::script(&mut handler);
     for piece in pieces {
-        if let ControlFlow::Break(()) = reader.read_slice(piece)? {
+        if let ControlFlow::Break(_) = reader.read_slice(piece)? {
             return Ok(());
         }
     }
-    reader.read_eof()
+    reader.read_eof().map(|_| ())
 }
 
 /// Every way to feed the input: all two-piece splits, and byte by byte.

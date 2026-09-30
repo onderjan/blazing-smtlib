@@ -9,7 +9,8 @@
 //! and requests re-lexing makes the lexer lex again after the last taken
 //! token, so the tokens a handler takes are the same in every stopping
 //! pattern, spans included. A handler that finishes ends lexing after the
-//! tokens it took, with the lexer left at that location.
+//! tokens it took: that location is returned with the result, and the lexer
+//! is reset to its initial state for the next input.
 
 use std::ops::ControlFlow;
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -134,7 +135,7 @@ struct Run {
     calls: Vec<Vec<Recorded>>,
     /// The error that ended the run, if any.
     error: Option<LexError<()>>,
-    /// The lexer location at which the handler finished, if it did.
+    /// The location returned with the result if the handler finished.
     finished_at: Option<(u64, u64, u64)>,
 }
 
@@ -163,11 +164,22 @@ impl Run {
     }
 }
 
+/// The lexer is at the origin, as it must be after a finish or an end of file.
+#[track_caller]
+fn assert_at_origin<H: TokenHandler>(lexer: &Lexer<H>) {
+    assert_eq!(
+        loc(lexer.current_location()),
+        (0, 0, 0),
+        "the lexer must be reset to the origin"
+    );
+}
+
 /// Lexes the chunks, then end of file, with the handler replying by the plan.
 ///
 /// After every successfully lexed chunk, the lexer's location is checked
 /// against the location computed independently from the bytes, which a
-/// rewind must restore correctly.
+/// rewind must restore correctly. After a finish, the lexer must be back
+/// at the origin.
 #[track_caller]
 fn run(chunks: &[&[u8]], plan: &[Reply]) -> Run {
     let mut calls = Vec::new();
@@ -182,8 +194,9 @@ fn run(chunks: &[&[u8]], plan: &[Reply]) -> Run {
         for chunk in chunks {
             match lexer.lex_slice(chunk) {
                 Ok(ControlFlow::Continue(())) => {}
-                Ok(ControlFlow::Break(())) => {
-                    finished_at = Some(loc(lexer.current_location()));
+                Ok(ControlFlow::Break(located)) => {
+                    finished_at = Some(loc(located.location()));
+                    assert_at_origin(&lexer);
                     break;
                 }
                 Err(err) => {
@@ -203,8 +216,11 @@ fn run(chunks: &[&[u8]], plan: &[Reply]) -> Run {
         }
         if error.is_none() && finished_at.is_none() {
             match lexer.lex_eof() {
-                Ok(ControlFlow::Continue(())) => {}
-                Ok(ControlFlow::Break(())) => finished_at = Some(loc(lexer.current_location())),
+                Ok(ControlFlow::Continue(())) => assert_at_origin(&lexer),
+                Ok(ControlFlow::Break(located)) => {
+                    finished_at = Some(loc(located.location()));
+                    assert_at_origin(&lexer);
+                }
                 Err(err) => error = Some(err),
             }
         }
@@ -424,9 +440,9 @@ fn a_relex_stop_at_every_hand_over_in_turn_still_takes_the_reference() {
 }
 
 #[test]
-fn impossible_relex_stops_panic() {
+fn impossible_stops_panic() {
     let cases: &[(Chunks, &[Reply], &str)] = &[
-        // a stop at end of file, before or after the end-of-file token
+        // a relex stop at end of file, before or after the end-of-file token
         (
             &[b"a b"],
             &[Reply::TakeAll, Reply::Relex { consumed: 0 }],
@@ -437,10 +453,17 @@ fn impossible_relex_stops_panic() {
             &[Reply::TakeAll, Reply::Relex { consumed: 1 }],
             "cannot request relex at end of file",
         ),
-        // a stop before a token that began in an earlier slice
+        // a stop before a token that began in an earlier slice, whether the
+        // handler asks for re-lexing or finishes: the location it would
+        // report lies before the slice being lexed
         (
             &[b"a", b"b c"],
             &[Reply::Relex { consumed: 0 }],
+            "must not stop before the starting token",
+        ),
+        (
+            &[b"a", b"b c"],
+            &[Reply::Finish { consumed: 0 }],
             "must not stop before the starting token",
         ),
     ];
@@ -509,19 +532,69 @@ fn a_finish_stop_at_the_end_of_file_token_is_returned_by_lex_eof() {
 }
 
 #[test]
-#[should_panic(expected = "cannot lex after the token handler finished")]
-fn lexing_after_a_finish_panics() {
+fn lexing_after_a_finish_starts_a_new_input_at_the_origin() {
+    // the handler finishes after the first token of the first hand-over; the
+    // bytes fed afterwards are a new input: the rest of the first slice is
+    // not seen again, and the new tokens are located from the origin
     let mut calls = Vec::new();
     let plan = [Reply::Finish { consumed: 1 }];
-    let mut lexer = Lexer::new(Recorder {
-        calls: &mut calls,
-        plan: &plan,
-    });
-    assert!(matches!(
-        lexer.lex_slice(b"a b "),
-        Ok(ControlFlow::Break(()))
-    ));
-    let _ = lexer.lex_slice(b"c ");
+    {
+        let mut lexer = Lexer::new(Recorder {
+            calls: &mut calls,
+            plan: &plan,
+        });
+        let located = match lexer.lex_slice(b"a b ") {
+            Ok(ControlFlow::Break(located)) => located,
+            other => panic!("expected a finish, got {other:?}"),
+        };
+        assert_eq!(loc(located.location()), (1, 0, 1));
+        assert_at_origin(&lexer);
+        assert!(matches!(
+            lexer.lex_slice(b"c\nd "),
+            Ok(ControlFlow::Continue(()))
+        ));
+        assert_eq!(loc(lexer.current_location()), (4, 1, 2));
+        assert!(matches!(lexer.lex_eof(), Ok(ControlFlow::Continue(()))));
+        assert_at_origin(&lexer);
+    }
+    assert_eq!(
+        calls.iter().map(Vec::len).collect::<Vec<_>>(),
+        [2, 2, 1],
+        "the second hand-over is the new input, the third its end of file"
+    );
+    let mut expected = reference(b"c\nd ");
+    expected.truncate(2);
+    assert_eq!(calls[1], expected);
+    assert_eq!(calls[2][0].ty, TokenType::EndOfFile);
+    assert_eq!(loc(calls[2][0].span.start()), (4, 1, 2));
+}
+
+#[test]
+fn a_finish_at_the_end_of_file_token_is_followed_by_a_new_input() {
+    // finishing on the end-of-file token resets the lexer like any finish:
+    // a further end of file is a new, empty input at the origin
+    let mut calls = Vec::new();
+    let plan = [Reply::TakeAll, Reply::Finish { consumed: 1 }];
+    {
+        let mut lexer = Lexer::new(Recorder {
+            calls: &mut calls,
+            plan: &plan,
+        });
+        assert!(matches!(
+            lexer.lex_slice(b"a b "),
+            Ok(ControlFlow::Continue(()))
+        ));
+        let located = match lexer.lex_eof() {
+            Ok(ControlFlow::Break(located)) => located,
+            other => panic!("expected a finish, got {other:?}"),
+        };
+        assert_eq!(loc(located.location()), (4, 0, 4));
+        assert_at_origin(&lexer);
+        assert!(matches!(lexer.lex_eof(), Ok(ControlFlow::Continue(()))));
+    }
+    assert_eq!(calls.iter().map(Vec::len).collect::<Vec<_>>(), [2, 1, 1]);
+    assert_eq!(calls[2][0].ty, TokenType::EndOfFile);
+    assert_eq!(loc(calls[2][0].span.start()), (0, 0, 0));
 }
 
 #[test]
