@@ -166,7 +166,7 @@ fn single_token_cursor_holds_that_token_alone() {
 }
 
 #[test]
-fn advancing_past_the_end_stops_at_the_end_like_take() {
+fn advancing_past_the_end_stops_at_the_end_like_next() {
     on_token_batch(b"a b ", |start| {
         let mut cursor = start;
         cursor.advance(3);
@@ -175,6 +175,49 @@ fn advancing_past_the_end_stops_at_the_end_like_take() {
         assert_eq!(cursor.last_consumed(), start.get(1));
         cursor.consume_all();
         assert_eq!(cursor.consumed(), 2);
+    });
+}
+
+#[test]
+fn advancing_consumes_that_many_tokens_in_order() {
+    on_token_batch(b"a b c d ", |start| {
+        let mut cursor = start;
+        cursor.advance(0);
+        assert_eq!(cursor.consumed(), 0);
+        assert_eq!(cursor.last_consumed(), None);
+        cursor.advance(2);
+        assert_eq!(cursor.consumed(), 2);
+        assert_eq!(cursor.peek(), start.get(2));
+        assert_eq!(cursor.last_consumed(), start.get(1));
+        // advancing continues where the cursor is, like repeated next calls
+        cursor.advance(1);
+        assert_eq!(cursor.next(), start.get(3));
+        assert!(cursor.is_empty());
+    });
+}
+
+#[test]
+fn consuming_all_empties_the_cursor_at_its_end() {
+    on_token_batch(b"a b c ", |start| {
+        let mut cursor = start;
+        cursor.next();
+        cursor.consume_all();
+        assert!(cursor.is_empty());
+        assert_eq!(cursor.consumed(), 3);
+        assert_eq!(cursor.peek(), None);
+        assert_eq!(cursor.next(), None);
+        assert_eq!(cursor.last_consumed(), start.get(2));
+        // consuming all of an empty cursor changes nothing
+        cursor.consume_all();
+        assert_eq!(cursor.consumed(), 3);
+
+        // after a relex request there is nothing left to consume
+        let mut cursor = start;
+        cursor.advance(1);
+        cursor.relex();
+        cursor.consume_all();
+        assert_eq!(cursor.consumed(), 1);
+        assert_eq!(cursor.last_consumed(), start.get(0));
     });
 }
 
