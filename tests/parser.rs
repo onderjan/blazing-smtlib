@@ -12,7 +12,7 @@ use smt_parser_rs::{
     SmtSymbolView, SmtTerm,
     read::{
         SmtReadErrorKind,
-        parser::{ClosedParser, CommandAction, CommandParser, SyntaxErrorKind, TermParser},
+        parser::{ClosedParser, CommandAction, CommandPayloadParser, SyntaxErrorKind, TermParser},
     },
 };
 
@@ -184,14 +184,14 @@ impl SmtHandler for Recording {
 }
 
 impl CommandHandler for Recording {
-    type NonstandardParser = CommandParser<Self, MyAssert>;
+    type NonstandardParser = CommandPayloadParser<Self, MyAssert>;
 
     fn nonstandard_command(
         &mut self,
         name: SmtSymbolView<'_>,
     ) -> Result<Self::NonstandardParser, Self::Error> {
         match name.as_slice() {
-            b"my-assert" => Ok(CommandParser::default()),
+            b"my-assert" => Ok(CommandPayloadParser::default()),
             _ => Err(NonstandardCommandError(name.into_owned())),
         }
     }

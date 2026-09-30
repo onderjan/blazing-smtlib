@@ -3,8 +3,8 @@ use std::ops::ControlFlow;
 use crate::{
     CommandHandler, SmtFunctionSignature, SmtSymbol,
     read::parser::{
-        CloseParenParser, CommandParser, KeywordParser, NumeralParser, ParenMultipleParser, Parser,
-        ParserError, ParserResources, StringParser, SymbolParser, SyntaxErrorKind,
+        CloseParenParser, CommandPayloadParser, KeywordParser, NumeralParser, ParenMultipleParser,
+        Parser, ParserError, ParserResources, StringParser, SymbolParser, SyntaxErrorKind,
         category::{ClosedAttributeParser, ClosedParser, PairParser, SortParser, TermParser},
         command::{
             CommandAction,
@@ -62,14 +62,14 @@ macro_rules! standard_commands {
         /// A struct containing all command parsers.
         ///
         /// All parsers are persistent to avoid dropping buffers.
-        pub(crate) struct CommandParsers<H: CommandHandler> {
-            $($field: CommandParser<H, $kind>,)*
+        pub(crate) struct StandardCommandParsers<H: CommandHandler> {
+            $($field: CommandPayloadParser<H, $kind>,)*
         }
 
-        impl<H: CommandHandler> CommandParsers<H> {
+        impl<H: CommandHandler> StandardCommandParsers<H> {
             pub fn new() -> Self {
                 Self {
-                    $($field: CommandParser::default(),)*
+                    $($field: CommandPayloadParser::default(),)*
                 }
             }
             pub fn parse(
@@ -90,7 +90,7 @@ macro_rules! standard_commands {
             }
         }
 
-        impl<H: CommandHandler> Default for CommandParsers<H> {
+        impl<H: CommandHandler> Default for StandardCommandParsers<H> {
             fn default() -> Self {
                 Self::new()
             }

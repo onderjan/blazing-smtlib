@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     CommandHandler, SmtSpan, SmtSymbolView,
     read::parser::{
-        CommandParsers, Parser, ParserError, ParserResources, StandardCommandKind,
+        Parser, ParserError, ParserResources, StandardCommandKind, StandardCommandParsers,
         StandardCommandResult, SyntaxErrorKind,
     },
     token::{Reserved, TokenCursor, TokenKind, TokenType},
@@ -16,7 +16,7 @@ use crate::{
 /// resetting and returning [`ControlFlow::Break`].
 pub struct ScriptParser<H: CommandHandler> {
     state: ScriptParserState<H>,
-    command_parsers: CommandParsers<H>,
+    command_parsers: StandardCommandParsers<H>,
 }
 
 /// Why the script parser finished.
@@ -39,7 +39,7 @@ impl<H: CommandHandler> ScriptParser<H> {
     pub fn new() -> Self {
         Self {
             state: ScriptParserState::AwaitingCommand,
-            command_parsers: CommandParsers::new(),
+            command_parsers: StandardCommandParsers::new(),
         }
     }
 

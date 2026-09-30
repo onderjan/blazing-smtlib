@@ -3,6 +3,8 @@
 
 mod common;
 
+use std::convert::Infallible;
+
 use common::{assert_error_span, assert_parser_error, parse_with};
 
 use smt_parser_rs::{
@@ -10,11 +12,7 @@ use smt_parser_rs::{
     SmtFunctionSignature, SmtHandler, SmtIdentView, SmtIndexView, SmtKeyword, SmtKeywordView,
     SmtNumeral, SmtPatternView, SmtQuantifierKind, SmtSExpr, SmtSimplePatternView, SmtSort,
     SmtSpecialConstantView, SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm,
-    read::{
-        SmtReadErrorKind,
-        lexer::LexerErrorKind,
-        parser::{NoCommandParser, SyntaxErrorKind},
-    },
+    read::{SmtReadErrorKind, lexer::LexerErrorKind, parser::SyntaxErrorKind},
     token::TokenType,
 };
 
@@ -291,7 +289,7 @@ impl SmtHandler for Resolving {
 }
 
 impl CommandHandler for Resolving {
-    type NonstandardParser = NoCommandParser;
+    type NonstandardParser = Infallible;
 
     fn nonstandard_command(
         &mut self,

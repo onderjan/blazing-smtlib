@@ -1,10 +1,9 @@
-use std::fmt::Debug;
+use std::{convert::Infallible, fmt::Debug};
 
 use crate::{
     SmtAttributeValue, SmtAttributes, SmtBindings, SmtDatatypeConstructor, SmtFunctionSignature,
     SmtKeyword, SmtKeywordView, SmtNumeral, SmtPatternView, SmtQuantifierKind, SmtSExpr, SmtSort,
-    SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm,
-    read::parser::{NoCommandParser, Parser},
+    SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm, read::parser::Parser,
 };
 
 pub trait SmtHandler {
@@ -464,7 +463,7 @@ impl SmtHandler for CheckStandardSyntax {
 }
 
 impl CommandHandler for CheckStandardSyntax {
-    type NonstandardParser = NoCommandParser;
+    type NonstandardParser = Infallible;
 
     fn nonstandard_command(
         &mut self,

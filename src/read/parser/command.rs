@@ -1,4 +1,4 @@
-use std::ops::ControlFlow;
+use std::{convert::Infallible, ops::ControlFlow};
 
 use crate::{
     CommandHandler,
@@ -11,11 +11,9 @@ mod definition;
 mod function;
 mod standard;
 
-pub(super) use standard::{CommandParsers, StandardCommandKind, StandardCommandResult};
+pub(super) use standard::{StandardCommandKind, StandardCommandParsers, StandardCommandResult};
 
-pub enum NoCommandParser {}
-
-impl<H: CommandHandler> Parser<H> for NoCommandParser {
+impl<H: CommandHandler> Parser<H> for Infallible {
     type Result = ();
 
     #[inline]
@@ -38,21 +36,21 @@ pub trait CommandAction<H: CommandHandler> {
     -> Result<(), H::Error>;
 }
 
-/// A parser that processes a single command (starting after its name).
+/// A parser that processes the payload of a single command (starting after its name).
 ///
 /// Preserves self-reset: if the inner parser is self-resetting,
 /// moves back into the default state before returning Break.
-pub struct CommandParser<H: CommandHandler, C: CommandAction<H>> {
+pub struct CommandPayloadParser<H: CommandHandler, C: CommandAction<H>> {
     parser: C::Parser,
 }
 
-impl<H: CommandHandler, C: CommandAction<H>> CommandParser<H, C> {
+impl<H: CommandHandler, C: CommandAction<H>> CommandPayloadParser<H, C> {
     pub fn new(parser: C::Parser) -> Self {
         Self { parser }
     }
 }
 
-impl<H: CommandHandler, C: CommandAction<H>> Default for CommandParser<H, C>
+impl<H: CommandHandler, C: CommandAction<H>> Default for CommandPayloadParser<H, C>
 where
     C::Parser: Default,
 {
@@ -61,7 +59,7 @@ where
     }
 }
 
-impl<H: CommandHandler, C: CommandAction<H>> Parser<H> for CommandParser<H, C> {
+impl<H: CommandHandler, C: CommandAction<H>> Parser<H> for CommandPayloadParser<H, C> {
     type Result = ();
 
     #[inline]
@@ -97,8 +95,8 @@ mod tests {
     #[test]
     fn finished_command_parser_parses_the_next_command() {
         let mut handler = CheckStandardSyntax;
-        let mut parser: CommandParser<CheckStandardSyntax, standard::CheckSat> =
-            CommandParser::default();
+        let mut parser: CommandPayloadParser<CheckStandardSyntax, standard::CheckSat> =
+            CommandPayloadParser::default();
 
         // a check-sat command body is just the closing parenthesis,
         // so one token finishes the command; the parser is self-restarting

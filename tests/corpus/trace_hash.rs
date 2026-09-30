@@ -14,12 +14,14 @@
 //! every byte string is length-prefixed, every collection is count-prefixed,
 //! and every handled value is written as eight bytes.
 
+use std::convert::Infallible;
+
 use smt_parser_rs::{
     CommandHandler, NonstandardCommandError, SmtAttributeValue, SmtAttributes, SmtBindings,
     SmtDatatypeConstructor, SmtFunctionSignature, SmtHandler, SmtIdentView, SmtIndexView,
     SmtKeyword, SmtKeywordView, SmtNumeral, SmtPatternView, SmtQuantifierKind, SmtSExpr,
     SmtSimplePatternView, SmtSort, SmtSpecialConstantView, SmtStringContent, SmtSymbol,
-    SmtSymbolView, SmtTerm, read::parser::NoCommandParser,
+    SmtSymbolView, SmtTerm,
 };
 
 const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
@@ -424,7 +426,7 @@ impl SmtHandler for TraceHash {
 }
 
 impl CommandHandler for TraceHash {
-    type NonstandardParser = NoCommandParser;
+    type NonstandardParser = Infallible;
 
     fn nonstandard_command(
         &mut self,
