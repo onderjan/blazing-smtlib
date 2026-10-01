@@ -21,6 +21,7 @@ use std::{
     path::Path,
 };
 
+use crate::token::{SmtVersion, SmtVersionPosture};
 use crate::{
     CommandHandler, SmtHandler, SmtLocated, SmtSpan,
     read::{
@@ -122,7 +123,9 @@ pub fn read_smt_file<H: CommandHandler>(
     handler: &mut H,
     path: &Path,
 ) -> Result<(), SmtReadError<H::Error>> {
-    SmtReader::script(handler).read_file(path).map(|_| ())
+    SmtReader::script(handler, SmtVersion::default(), SmtVersionPosture::default())
+        .read_file(path)
+        .map(|_| ())
 }
 
 /// Reads SMT-LIB input from `buf_reader` to its end, delivering its content
@@ -139,7 +142,9 @@ pub fn read_smt<H: CommandHandler>(
     handler: &mut H,
     buf_reader: impl BufRead,
 ) -> Result<(), SmtReadError<H::Error>> {
-    SmtReader::script(handler).read_all(buf_reader).map(|_| ())
+    SmtReader::script(handler, SmtVersion::default(), SmtVersionPosture::default())
+        .read_all(buf_reader)
+        .map(|_| ())
 }
 
 /// Streams SMT-LIB input from bytes to a [`CommandHandler`].
@@ -166,15 +171,19 @@ pub struct SmtReader<'a, H: SmtHandler + ?Sized, P: Parser<H> = ScriptParser<H>>
 
 impl<'a, H: CommandHandler> SmtReader<'a, H> {
     /// Creates a reader of an SMT-LIB script, whose commands are delivered to `handler`.
-    pub fn script(handler: &'a mut H) -> Self {
-        Self::with_parser(handler, ScriptParser::new())
+    pub fn script(
+        handler: &'a mut H,
+        initial_version: SmtVersion,
+        posture: SmtVersionPosture,
+    ) -> Self {
+        Self::with_parser(handler, ScriptParser::new(posture), initial_version)
     }
 }
 
 impl<'a, H: SmtHandler + ?Sized, P: Parser<H>> SmtReader<'a, H, P> {
     /// Creates a reader of the input `parser` accepts, over `handler`.
-    pub fn with_parser(handler: &'a mut H, parser: P) -> Self {
-        let lexer = Lexer::new(ParseAdapter::new(handler, parser));
+    pub fn with_parser(handler: &'a mut H, parser: P, initial_version: SmtVersion) -> Self {
+        let lexer = Lexer::new(ParseAdapter::new(handler, parser), initial_version);
         Self { lexer }
     }
 

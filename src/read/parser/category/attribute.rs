@@ -6,7 +6,7 @@ use crate::{
         Arena, CloseParenParser, Parser, ParserError, ParserResources, SExprSlot, SyntaxErrorKind,
         TextHandle, category::parse_special_constant, handle_err, parse_by_token,
     },
-    token::{Token, TokenCursor, TokenKind, TokenType},
+    token::{SmtVersion, Token, TokenCursor, TokenKind, TokenType},
 };
 
 /// A parser that reads an SMT-LIB attribute followed by a closing parenthesis.
@@ -46,8 +46,14 @@ impl<H: SmtHandler> Parser<H> for ClosedAttributeParser<H> {
             s_expr_slot,
             ..
         } = resources;
-        parse_by_token(cursor, |token| {
-            attribute_slot.progress::<H, SingleAttribute>(handler, arena, s_expr_slot, token)
+        parse_by_token(cursor, |version, token| {
+            attribute_slot.progress::<H, SingleAttribute>(
+                handler,
+                arena,
+                s_expr_slot,
+                version,
+                token,
+            )
         })
     }
 }
@@ -89,11 +95,12 @@ impl<H: SmtHandler> Parser<H> for ClosedMultipleAttributeParser<H> {
             s_expr_slot,
             ..
         } = resources;
-        parse_by_token(cursor, |token| {
+        parse_by_token(cursor, |version, token| {
             match attribute_slot.progress::<H, MultipleAttributes>(
                 handler,
                 arena,
                 s_expr_slot,
+                version,
                 token,
             )? {
                 ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
@@ -174,6 +181,7 @@ impl AttributeSlot {
         handler: &mut H,
         arena: &mut Arena<H>,
         s_expr_slot: &mut SExprSlot,
+        version: SmtVersion,
         token: Token,
     ) -> Result<ControlFlow<C::Output>, ParserError<H::Error>> {
         let span = token.span();
@@ -193,7 +201,7 @@ impl AttributeSlot {
                     debug_assert!(self.is_pristine(), "must be pristine when starting");
                     self.arena_attributes_start = arena.attributes.len();
                 }
-                match arena.token_kind(token) {
+                match token.kind(version) {
                     TokenKind::ParenClose => {
                         // finish the attribute
                         return Ok(ControlFlow::Break(self.finish::<H, C>(arena, span)?));
@@ -217,7 +225,7 @@ impl AttributeSlot {
                     Break,
                 }
 
-                let (value, decision) = match arena.token_kind(token) {
+                let (value, decision) = match token.kind(version) {
                     TokenKind::Symbol(symbol) => (
                         Some(SmtAttributeValue::Symbol(symbol)),
                         Decision::FinishAttribute,
@@ -311,7 +319,7 @@ impl AttributeSlot {
                     self.num_attributes += 1;
                 } else {
                     // inside an S-expression, progress it
-                    let outside = match s_expr_slot.progress(handler, arena, token)? {
+                    let outside = match s_expr_slot.progress(handler, arena, version, token)? {
                         ControlFlow::Continue(()) => false,
                         ControlFlow::Break(s_expr) => {
                             // push the finished S-expression to its arena

@@ -71,7 +71,7 @@ pub(crate) mod tests {
             lexer::Lexer,
             parser::{Parser, ParserError, ParserResources},
         },
-        token::{TokenCursor, TokenHandler, TokenType},
+        token::{SmtVersion, TokenCursor, TokenHandler, TokenType},
     };
 
     /// Drives `parser` over `resources` through the whole input with the
@@ -127,7 +127,7 @@ pub(crate) mod tests {
             result: None,
             unconsumed: 0,
         };
-        let _ = Lexer::new(&mut drive)
+        let _ = Lexer::new(&mut drive, SmtVersion::V2_7)
             .lex_all(input)
             .expect("test input must lex and parse");
         assert_eq!(

@@ -6,7 +6,7 @@ use crate::{
         Arena, Parser, ParserError, ParserResources, SyntaxErrorKind,
         category::parse_special_constant, handle_err, parse_by_token,
     },
-    token::{Token, TokenCursor, TokenKind},
+    token::{SmtVersion, Token, TokenCursor, TokenKind},
 };
 
 /// A parser that reads an SMT-LIB S-expression.
@@ -45,7 +45,9 @@ impl<H: SmtHandler> Parser<H> for SExprParser<H> {
         let ParserResources {
             s_expr_slot, arena, ..
         } = resources;
-        parse_by_token(cursor, |token| s_expr_slot.progress(handler, arena, token))
+        parse_by_token(cursor, |version, token| {
+            s_expr_slot.progress(handler, arena, version, token)
+        })
     }
 }
 
@@ -77,6 +79,7 @@ impl SExprSlot {
         &mut self,
         handler: &mut H,
         arena: &mut Arena<H>,
+        version: SmtVersion,
         token: Token,
     ) -> Result<ControlFlow<H::SExpr>, ParserError<H::Error>> {
         // there is no state besides the levels, so an empty level stack
@@ -86,7 +89,7 @@ impl SExprSlot {
         }
 
         let span = token.span();
-        let s_expr = match arena.token_kind(token) {
+        let s_expr = match token.kind(version) {
             TokenKind::Symbol(symbol) => SmtSExpr::Symbol(symbol),
             TokenKind::Reserved(reserved) => SmtSExpr::Reserved(reserved),
             TokenKind::Keyword(keyword) => SmtSExpr::Keyword(keyword),

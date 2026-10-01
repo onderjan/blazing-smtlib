@@ -6,7 +6,7 @@ use crate::{
         Arena, Parser, ParserError, ParserResources, PatternHandle, SimplePatternHandle,
         SyntaxErrorKind, TextHandle, parse_by_token,
     },
-    token::{GeneralReserved, Reserved, Token, TokenCursor, TokenKind, TokenType},
+    token::{GeneralReserved, Reserved, SmtVersion, Token, TokenCursor, TokenKind, TokenType},
 };
 
 pub struct SimplePatternParser;
@@ -18,18 +18,18 @@ impl SimplePatternParser {
 
     /// Consumes exactly one token, which must be a simple pattern.
     pub(crate) fn expect<H: SmtHandler + ?Sized>(
-        arena: &Arena<H>,
+        version: SmtVersion,
         token: Token,
     ) -> Result<SmtSimplePattern, ParserError<H::Error>> {
-        Ok(Self::expect_view(arena, token)?.into_owned())
+        Ok(Self::expect_view::<H>(version, token)?.into_owned())
     }
 
     /// Consumes exactly one token, which must be a simple pattern, viewing it.
     pub(crate) fn expect_view<'t, H: SmtHandler + ?Sized>(
-        arena: &Arena<H>,
+        version: SmtVersion,
         token: Token<'t>,
     ) -> Result<SmtSimplePatternView<'t>, ParserError<H::Error>> {
-        let result = match arena.token_kind(token) {
+        let result = match token.kind(version) {
             TokenKind::Symbol(symbol) => SmtSimplePatternView::Symbol(symbol),
             TokenKind::Reserved(Reserved::General(GeneralReserved::Underscore)) => {
                 SmtSimplePatternView::Wildcard
@@ -57,13 +57,16 @@ impl<H: SmtHandler> Parser<H> for SimplePatternParser {
     fn parse(
         &mut self,
         _handler: &mut H,
-        resources: &mut ParserResources<H>,
+        _resources: &mut ParserResources<H>,
         cursor: &mut TokenCursor,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         let Some(token) = cursor.next() else {
             return Ok(ControlFlow::Continue(()));
         };
-        Ok(ControlFlow::Break(Self::expect(&resources.arena, token)?))
+        Ok(ControlFlow::Break(Self::expect::<H>(
+            cursor.version(),
+            token,
+        )?))
     }
 }
 
@@ -105,8 +108,8 @@ impl<H: SmtHandler> Parser<H> for PatternParser<H> {
             arena,
             ..
         } = resources;
-        parse_by_token(cursor, |token| {
-            match pattern_slot.progress(arena, token)? {
+        parse_by_token(cursor, |version, token| {
+            match pattern_slot.progress(arena, version, token)? {
                 ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
                 ControlFlow::Break(pattern) => {
                     // break with the owned pattern
@@ -152,6 +155,7 @@ impl PatternSlot {
     pub(crate) fn progress<'t, H: SmtHandler + ?Sized>(
         &mut self,
         arena: &mut Arena<H>,
+        version: SmtVersion,
         token: Token<'t>,
     ) -> Result<ControlFlow<PatternHandle<'t>>, ParserError<H::Error>> {
         // The sequential progress is as follows:
@@ -186,7 +190,7 @@ impl PatternSlot {
                 }));
             }
             // an argument is starting here, it will be stored in the arena
-            let argument = match SimplePatternParser::expect_view(arena, token)? {
+            let argument = match SimplePatternParser::expect_view::<H>(version, token)? {
                 SmtSimplePatternView::Symbol(symbol) => {
                     SimplePatternHandle::Symbol(arena.push_text(symbol.as_slice()))
                 }
@@ -199,7 +203,7 @@ impl PatternSlot {
 
         if self.is_open {
             // step 2: expecting the constructor, which goes to the arena text
-            let TokenKind::Symbol(constructor) = arena.token_kind(token) else {
+            let TokenKind::Symbol(constructor) = token.kind(version) else {
                 return Err(ParserError::category_error(
                     SyntaxErrorKind::ExpectedSymbol,
                     span,
@@ -214,7 +218,7 @@ impl PatternSlot {
 
         // step 1: expecting a simple pattern or an opening parenthesis
         debug_assert!(self.is_pristine(), "must be pristine when starting");
-        let result = match arena.token_kind(token) {
+        let result = match token.kind(version) {
             TokenKind::Symbol(symbol) => SmtSimplePatternView::Symbol(symbol),
             TokenKind::Reserved(Reserved::General(GeneralReserved::Underscore)) => {
                 SmtSimplePatternView::Wildcard

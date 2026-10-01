@@ -20,12 +20,18 @@ use crate::{
             FAST_RUN_MASK, HEXADECIMAL_RUN, START, Start, TokenEnd,
         },
     },
-    token::{InnerType, TokenCursor, TokenHandler},
+    token::{InnerType, SmtVersion, TokenCursor, TokenHandler},
 };
 
 pub struct Lexer<H: TokenHandler> {
     /// Handler of produced tokens.
     handler: H,
+
+    /// The SMT-LIB version the lexer currently operates under.
+    version: SmtVersion,
+
+    /// The initial SMT-LIB version the lexer will reset to.
+    initial_version: SmtVersion,
 
     /// Current lexer state.
     state: LexerState,
@@ -124,9 +130,11 @@ enum LexerState {
 
 impl<H: TokenHandler> Lexer<H> {
     /// Constructs the lexer.
-    pub fn new(handler: H) -> Self {
+    pub fn new(handler: H, version: SmtVersion) -> Self {
         Lexer {
             handler,
+            version,
+            initial_version: version,
             state: LexerState::Normal,
             token_start: SmtLocation::initial(),
             token_content: String8::new(),
@@ -1232,7 +1240,8 @@ impl<H: TokenHandler> Lexer<H> {
                 let entry = Some((ty, self.token_content.as_slice()));
                 Self::flush_cursor(
                     &mut self.handler,
-                    TokenCursor::new(std::slice::from_ref(&entry), spans),
+                    TokenCursor::new(self.version, std::slice::from_ref(&entry), spans),
+                    &mut self.version,
                 )
             }
         }
@@ -1262,13 +1271,15 @@ impl<H: TokenHandler> Lexer<H> {
         }
         Self::flush_cursor(
             &mut self.handler,
-            TokenCursor::new(&batch.entries[..len], &self.spans[..len]),
+            TokenCursor::new(self.version, &batch.entries[..len], &self.spans[..len]),
+            &mut self.version,
         )
     }
 
     fn flush_cursor(
         handler: &mut H,
         mut cursor: TokenCursor,
+        version: &mut SmtVersion,
     ) -> Result<(), Interrupted<H::Result, LexError<H::Error>>> {
         // where lexing continues if the handler stops before the first token
         // relex request empties the cursor, so we need to remember it here
@@ -1277,7 +1288,15 @@ impl<H: TokenHandler> Lexer<H> {
             .expect("flushed batch must have at least one token")
             .span()
             .start();
-        let result = match handler.handle_tokens(&mut cursor) {
+
+        // flush the cursor
+        let result = handler.handle_tokens(&mut cursor);
+
+        // set our version to the cursor-requested version
+        *version = cursor.version();
+
+        // process the result
+        let result = match result {
             Ok(ControlFlow::Continue(())) if cursor.relex_requested() => Ok(Stop::Relex),
             Ok(ControlFlow::Continue(())) => {
                 // ensure the cursor has been fully consumed
@@ -1321,7 +1340,8 @@ impl<H: TokenHandler> Lexer<H> {
 
         Self::flush_cursor(
             &mut self.handler,
-            TokenCursor::new(std::slice::from_ref(&entry), spans),
+            TokenCursor::new(self.version, std::slice::from_ref(&entry), spans),
+            &mut self.version,
         )
     }
 
@@ -1450,10 +1470,11 @@ impl<H: TokenHandler> Lexer<H> {
         }
     }
 
-    /// Resets the lexer to the initial state, including the location.
+    /// Resets the lexer to the initial state, including the location and version.
     ///
     /// Called after each [`ControlFlow::Break`] from the handler.
     fn reset(&mut self) {
+        self.version = self.initial_version;
         self.state = LexerState::Normal;
         self.token_start = SmtLocation::initial();
         self.token_content.clear();

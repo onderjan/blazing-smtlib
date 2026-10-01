@@ -6,7 +6,7 @@ use crate::{
         Arena, CloseParenParser, IdentHandle, IdentSlot, Parser, ParserError, ParserResources,
         QualifiedIdentHandle, SortSlot, SyntaxErrorKind, parse_by_token,
     },
-    token::{GeneralReserved, Reserved, Token, TokenCursor, TokenKind},
+    token::{GeneralReserved, Reserved, SmtVersion, Token, TokenCursor, TokenKind},
 };
 
 /// A parser that reads an SMT-LIB qualified identifier.
@@ -49,8 +49,10 @@ impl<H: SmtHandler> Parser<H> for QualifiedIdentParser<H> {
             arena,
             ..
         } = resources;
-        parse_by_token(cursor, |token| {
-            match qualified_ident_slot.progress(handler, arena, sort_slot, ident_slot, token)? {
+        parse_by_token(cursor, |version, token| {
+            match qualified_ident_slot
+                .progress(handler, arena, sort_slot, ident_slot, version, token)?
+            {
                 ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
                 ControlFlow::Break(qualified_ident) => Ok(ControlFlow::Break(
                     arena.hand_over_qualified_ident(qualified_ident, |view| view.into_owned()),
@@ -146,6 +148,7 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
         arena: &mut Arena<H>,
         sort_slot: &mut SortSlot<H>,
         ident_slot: &mut IdentSlot,
+        version: SmtVersion,
         token: Token,
     ) -> Result<ControlFlow<QualifiedIdentHandle<H>>, ParserError<H::Error>> {
         // The sequential progress is as follows:
@@ -179,7 +182,7 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
 
         if let Some(ident) = self.ident.take() {
             // step 5: after the identifier of "(as", parsing the sort
-            match sort_slot.progress(handler, arena, ident_slot, token)? {
+            match sort_slot.progress(handler, arena, ident_slot, version, token)? {
                 ControlFlow::Continue(()) => self.ident = Some(ident),
                 ControlFlow::Break(sort) => {
                     self.qualified_ident = Some(QualifiedIdentHandle {
@@ -195,7 +198,7 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
             // step 1: expecting a symbol or an opening parenthesis
             State::Start => {
                 debug_assert!(self.is_pristine(), "must be pristine when starting");
-                match arena.token_kind(token) {
+                match token.kind(version) {
                     TokenKind::Symbol(name) => {
                         // return a simple ident, the slot is in its initial state
                         return Ok(ControlFlow::Break(QualifiedIdentHandle::unqualified(
@@ -212,7 +215,7 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
                 }
             }
             // step 2: expecting an underscore or 'as'
-            State::Open => match arena.token_kind(token) {
+            State::Open => match token.kind(version) {
                 TokenKind::Reserved(Reserved::General(GeneralReserved::Underscore)) => {
                     // unqualified indexed ident
                     // move the ident slot after underscore
@@ -232,7 +235,7 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
             },
             // step 3: parsing an unqualified indexed identifier
             State::UnqualifiedIndexed => {
-                if let ControlFlow::Break(ident) = ident_slot.progress(arena, token)? {
+                if let ControlFlow::Break(ident) = ident_slot.progress(arena, version, token)? {
                     // the closing parenthesis was already consumed by the ident slot
                     // reset and return an unqualified but indexed ident
                     self.state = State::Start;
@@ -241,7 +244,7 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
             }
             // step 4: parsing the identifier of a qualified identifier
             State::QualifiedIdent => {
-                if let ControlFlow::Break(ident) = ident_slot.progress(arena, token)? {
+                if let ControlFlow::Break(ident) = ident_slot.progress(arena, version, token)? {
                     // store the identifier
                     // this moves us to step 5 where its sort is parsed next
                     self.ident = Some(ident);

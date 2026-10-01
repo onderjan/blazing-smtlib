@@ -6,7 +6,7 @@ use crate::{
         Arena, CloseParenParser, IdentSlot, OpenParenParser, Parser, ParserError, ParserResources,
         SortSlot, SyntaxErrorKind, TextHandle, parse_by_token,
     },
-    token::{Token, TokenCursor, TokenKind},
+    token::{SmtVersion, Token, TokenCursor, TokenKind},
 };
 
 /// Parses a sorted variable: parentheses-enclosed pair of a symbol and a sort.
@@ -49,8 +49,8 @@ impl<H: SmtHandler> Parser<H> for SortedVarParser<H> {
             arena,
             ..
         } = resources;
-        parse_by_token(cursor, |token| {
-            match sorted_var_slot.progress(handler, arena, sort_slot, ident_slot, token)? {
+        parse_by_token(cursor, |version, token| {
+            match sorted_var_slot.progress(handler, arena, sort_slot, ident_slot, version, token)? {
                 ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
                 ControlFlow::Break((name, sort)) => Ok(ControlFlow::Break(
                     arena.hand_over_sorted_var(name, sort, |name, sort| (name.into_owned(), sort)),
@@ -101,6 +101,7 @@ impl<H: SmtHandler + ?Sized> SortedVarSlot<H> {
         arena: &mut Arena<H>,
         sort_slot: &mut SortSlot<H>,
         ident_slot: &mut IdentSlot,
+        version: SmtVersion,
         token: Token,
     ) -> Result<ControlFlow<SortedVarHandle<H>>, ParserError<H::Error>> {
         // The sequential progress is as follows:
@@ -120,7 +121,7 @@ impl<H: SmtHandler + ?Sized> SortedVarSlot<H> {
 
         if let Some(name) = self.name.take() {
             // after the name, parsing the sort
-            match sort_slot.progress(handler, arena, ident_slot, token)? {
+            match sort_slot.progress(handler, arena, ident_slot, version, token)? {
                 ControlFlow::Continue(()) => self.name = Some(name),
                 ControlFlow::Break(sort) => self.sorted_var = Some((name, sort)),
             }
@@ -129,7 +130,7 @@ impl<H: SmtHandler + ?Sized> SortedVarSlot<H> {
 
         if self.is_open {
             // after "(", waiting for the name, which goes to the arena text
-            let TokenKind::Symbol(name) = arena.token_kind(token) else {
+            let TokenKind::Symbol(name) = token.kind(version) else {
                 return Err(ParserError::category_error(
                     SyntaxErrorKind::ExpectedSymbol,
                     token.span(),

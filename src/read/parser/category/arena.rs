@@ -2,7 +2,6 @@ use crate::{
     SmtBindings, SmtHandler, SmtIdentView, SmtIndexView, SmtIndices, SmtKeywordView, SmtMultiple,
     SmtNumeralView, SmtPatternView, SmtQualifiedIdentView, SmtSimplePatternView, SmtSimplePatterns,
     SmtSort, SmtSymbolView,
-    token::{SmtVersion, Token, TokenKind},
 };
 
 /// An arena of bytes and handled values.
@@ -68,16 +67,6 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
         self.simple_patterns.clear();
         self.sorts.clear();
         self.terms.clear();
-    }
-
-    /// Translates a token into its kind.
-    ///
-    /// This depends on the keyword list and thus the version,
-    /// which will be stored in the arena in future.
-    #[inline]
-    pub(crate) fn token_kind<'a>(&self, token: Token<'a>) -> TokenKind<'a> {
-        // TODO: classify kind by currently set version
-        TokenKind::from_token(token, SmtVersion::V2_7)
     }
 
     /// Appends the bytes to the text, returning their handle.

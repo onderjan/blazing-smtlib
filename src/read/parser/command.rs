@@ -3,7 +3,7 @@ use std::{convert::Infallible, ops::ControlFlow};
 use crate::{
     CommandHandler, SmtSpan, SmtSymbolView,
     read::parser::{Parser, ParserError, ParserResources, SyntaxErrorKind, handle_err},
-    token::{Reserved, TokenCursor, TokenKind, TokenType},
+    token::{Reserved, SmtVersion, TokenCursor, TokenKind, TokenType},
 };
 
 mod datatype;
@@ -17,6 +17,7 @@ use standard::{StandardCommandKind, StandardCommandParsers};
 ///
 /// The parser finishes after every command, returning [`ControlFlow::Break`]
 /// with a [`CommandParserStop`] that distinguishes the command `(exit)`
+/// and the version-switch command `(set-info :smt-lib-version <version>)`
 /// from the others. It also finishes after an EOF while awaiting a command.
 /// An EOF inside a command is a syntax error.
 ///
@@ -29,8 +30,10 @@ pub struct CommandParser<H: CommandHandler> {
 /// Why the command parser finished.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CommandParserStop {
-    /// A command other than the exit command was parsed.
+    /// A command other than special ones was parsed.
     Command,
+    /// A version-switch command was parsed.
+    SetVersion(SmtVersion, SmtSpan),
     /// The exit command was parsed.
     ExitCommand,
     /// The end of the input was reached before a command.
@@ -118,7 +121,7 @@ impl<H: CommandHandler> Parser<H> for CommandParser<H> {
                     // we will handle the token here
                     cursor.advance(1);
                     // expect the command name
-                    self.state = match resources.arena.token_kind(peeked) {
+                    self.state = match peeked.kind(cursor.version()) {
                         TokenKind::Reserved(Reserved::CommandName(name)) => {
                             // a command-name reserved word names a standard command
                             CommandParserState::Standard(StandardCommandKind::from_reserved(name))
@@ -272,7 +275,7 @@ mod tests {
                 .parse(
                     &mut handler,
                     &mut ParserResources::new(),
-                    &mut TokenCursor::single(close),
+                    &mut TokenCursor::single(SmtVersion::V2_7, close),
                 )
                 .expect("check-sat closing parenthesis must parse");
             assert!(matches!(flow, ControlFlow::Break(())));

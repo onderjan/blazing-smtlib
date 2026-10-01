@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    CommandHandler, SmtFunctionSignature, SmtSymbol,
+    CommandHandler, SmtFunctionSignature, SmtSpan, SmtSymbol,
     read::parser::{
         CloseParenParser, CommandPayloadParser, KeywordParser, NumeralParser, ParenMultipleParser,
         Parser, ParserError, ParserResources, StringParser, SymbolParser, SyntaxErrorKind,
@@ -13,7 +13,7 @@ use crate::{
             function::{DefineFunsRecParser, FunctionSignatureParser, RecursiveBodyParser},
         },
     },
-    token::{CommandNameReserved, TokenCursor},
+    token::{CommandNameReserved, SmtVersion, TokenCursor, TokenType},
 };
 
 /// Defines the standard commands, each named like its variant of
@@ -77,11 +77,22 @@ macro_rules! standard_commands {
                 let flow = match kind {
                     $(StandardCommandKind::$kind => self.$field.parse(handler, resources, cursor)?,)*
                 };
-                // only the exit command ends a script
-                Ok(flow.map_break(|()| match kind {
+                let ControlFlow::Break(()) = flow else {
+                    return Ok(ControlFlow::Continue(()));
+                };
+
+                // handle version-switch and exit specially
+                let result = match kind {
+                    StandardCommandKind::SetInfo => {
+                        match self.set_info.parser.take_declared_version() {
+                            Some((version, span)) => CommandParserStop::SetVersion(version, span),
+                            None => CommandParserStop::Command,
+                        }
+                    }
                     StandardCommandKind::Exit => CommandParserStop::ExitCommand,
                     _ => CommandParserStop::Command,
-                }))
+                };
+                Ok(ControlFlow::Break(result))
             }
         }
 
@@ -151,7 +162,7 @@ standard_commands! {
         ClosedParser<H,NumeralParser>,
         |handler, amount| handler.command_pop(amount)),
     set_info: SetInfo(
-        ClosedAttributeParser<H>,
+        SetInfoParser<H>,
         |handler, attribute| handler.command_set_info(attribute)),
     echo: Echo(
         ClosedParser<H, StringParser>,
@@ -299,5 +310,110 @@ impl<H: CommandHandler> Parser<H> for GetValueParser<H> {
                 Ok(ControlFlow::Break(terms))
             }
         }
+    }
+}
+
+/// A parser for the payload of `set-info`: an attribute followed by
+/// a closing parenthesis.
+///
+/// This parser is necessary to recognise the version declaration
+/// attribute `:smt-lib-version <version>`, where the version
+/// should be a decimal.
+pub(super) struct SetInfoParser<H: CommandHandler> {
+    inner: ClosedAttributeParser<H>,
+    state: SetInfoState,
+    declared_version: Option<(SmtVersion, SmtSpan)>,
+}
+
+enum SetInfoState {
+    /// The next token of the payload is the attribute name.
+    Name,
+    /// The attribute name was `:smt-lib-version`,
+    /// the next token of the payload is the version.
+    Version,
+    /// Continue to parse normally.
+    Rest,
+}
+
+impl<H: CommandHandler> SetInfoParser<H> {
+    fn new() -> Self {
+        Self {
+            inner: ClosedAttributeParser::new(),
+            state: SetInfoState::Name,
+            declared_version: None,
+        }
+    }
+
+    /// Takes the spanned version declared by the last parsed command if it exists.
+    pub(super) fn take_declared_version(&mut self) -> Option<(SmtVersion, SmtSpan)> {
+        self.declared_version.take()
+    }
+}
+
+impl<H: CommandHandler> Default for SetInfoParser<H> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<H: CommandHandler> Parser<H> for SetInfoParser<H> {
+    type Result = H::Attribute;
+
+    #[inline]
+    fn parse(
+        &mut self,
+        handler: &mut H,
+        resources: &mut ParserResources<H>,
+        cursor: &mut TokenCursor,
+    ) -> Result<ControlFlow<H::Attribute, ()>, ParserError<H::Error>> {
+        // We process the version before the actual processing, as we
+        // cannot process token-by-token in parallel, just look at the cursor
+        // and then hand it over.
+        //
+        // The state machine is as follows:
+        // 1. Name: if the first token is :smt-lib-version, move to version handling;
+        //    otherwise, move to the rest.
+        // 2. Version looks at the second token of the payload, which must name
+        //    a version, remembers the version and moves to Rest.
+        // 3. Rest looks at nothing more.
+
+        let mut ahead = 0;
+        while let Some(token) = cursor.get(ahead) {
+            match self.state {
+                SetInfoState::Name => {
+                    let declares_version =
+                        token.ty() == TokenType::Keyword && token.content() == b"smt-lib-version";
+                    self.state = if declares_version {
+                        SetInfoState::Version
+                    } else {
+                        SetInfoState::Rest
+                    };
+                }
+                SetInfoState::Version => {
+                    // disallow any version that isn't a decimal that converts to a version
+                    let version = match token.ty() {
+                        TokenType::Decimal => SmtVersion::from_decimal_opt(token.content()),
+                        _ => None,
+                    };
+                    let Some(version) = version else {
+                        return Err(ParserError::category_error(
+                            SyntaxErrorKind::UnsupportedVersion,
+                            token.span(),
+                        ));
+                    };
+                    self.declared_version = Some((version, token.span()));
+                    self.state = SetInfoState::Rest;
+                }
+                SetInfoState::Rest => break,
+            }
+            ahead += 1;
+        }
+
+        let flow = self.inner.parse(handler, resources, cursor)?;
+        if flow.is_break() {
+            // the command has ended, the next payload starts with its attribute name
+            self.state = SetInfoState::Name;
+        }
+        Ok(flow)
     }
 }

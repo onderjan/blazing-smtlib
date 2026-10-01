@@ -74,9 +74,103 @@ pub enum TokenKind<'a> {
 }
 
 /// Version of the SMT-LIB standard.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SmtVersion {
+    V2_5,
+    V2_6,
+    #[default]
     V2_7,
+}
+
+impl SmtVersion {
+    pub fn from_decimal_opt(decimal: &[u8]) -> Option<Self> {
+        match decimal {
+            b"2.5" => Some(SmtVersion::V2_5),
+            b"2.6" => Some(SmtVersion::V2_6),
+            b"2.7" => Some(SmtVersion::V2_7),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SmtVersionPosture {
+    allowed: Vec<SmtVersion>,
+    max_declarations: Option<u64>,
+}
+
+impl SmtVersionPosture {
+    pub fn allowed(&self) -> &[SmtVersion] {
+        &self.allowed
+    }
+
+    pub fn max_declarations(&self) -> Option<u64> {
+        self.max_declarations
+    }
+}
+
+impl Default for SmtVersionPosture {
+    fn default() -> Self {
+        SmtVersionPostureBuilder::new().build()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SmtVersionPostureBuilder {
+    allowed: Vec<SmtVersion>,
+    max_declarations: Option<u64>,
+}
+
+impl SmtVersionPostureBuilder {
+    pub fn new() -> Self {
+        Self {
+            allowed: vec![SmtVersion::V2_5, SmtVersion::V2_6, SmtVersion::V2_7],
+            max_declarations: Some(1),
+        }
+    }
+
+    pub fn allowed(&self) -> &[SmtVersion] {
+        &self.allowed
+    }
+
+    pub fn max_declarations(&self) -> Option<u64> {
+        self.max_declarations
+    }
+
+    pub fn clear_allowed(&mut self) -> &mut Self {
+        self.allowed.clear();
+        self
+    }
+
+    pub fn add_allowed(&mut self, allowed: SmtVersion) -> &mut Self {
+        self.allowed.push(allowed);
+        self
+    }
+
+    pub fn remove_allowed(&mut self, allowed: SmtVersion) -> &mut Self {
+        while let Some(index) = self.allowed.iter().position(|elem| *elem == allowed) {
+            self.allowed.remove(index);
+        }
+        self
+    }
+
+    pub fn set_max_declarations(&mut self, max_declarations: Option<u64>) -> &mut Self {
+        self.max_declarations = max_declarations;
+        self
+    }
+
+    pub fn build(self) -> SmtVersionPosture {
+        SmtVersionPosture {
+            allowed: self.allowed,
+            max_declarations: self.max_declarations,
+        }
+    }
+}
+
+impl Default for SmtVersionPostureBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<'a> TokenKind<'a> {
@@ -94,18 +188,13 @@ impl<'a> TokenKind<'a> {
             }
             TokenType::Binary => TokenKind::Binary(SmtBinDigitsView::new_unchecked(content)),
             TokenType::UnquotedSymbol => {
-                // process reserved words
-                // TODO: multiple versions
-                match version {
-                    SmtVersion::V2_7 => {
-                        match Reserved::from_bytes_opt(content) {
-                            Some(reserved) => {
-                                // reserved word, not a symbol
-                                TokenKind::Reserved(reserved)
-                            }
-                            None => TokenKind::Symbol(SmtSymbolView::new_unchecked(content)),
-                        }
-                    }
+                // filter the reserved words by the version
+                if let Some(reserved) = Reserved::from_bytes_opt(content)
+                    .filter(|reserved| reserved.is_in_version(version))
+                {
+                    TokenKind::Reserved(reserved)
+                } else {
+                    TokenKind::Symbol(SmtSymbolView::new_unchecked(content))
                 }
             }
             TokenType::QuotedSymbol => TokenKind::Symbol(SmtSymbolView::new_unchecked(content)),
@@ -154,6 +243,11 @@ impl<'a> Token<'a> {
     pub fn span(&self) -> SmtSpan {
         *self.span
     }
+
+    #[inline]
+    pub fn kind(self, version: SmtVersion) -> TokenKind<'a> {
+        TokenKind::from_token(self, version)
+    }
 }
 
 /// A cursor into a batch of tokens, from which elements are consumed sequentially.
@@ -166,6 +260,7 @@ impl<'a> Token<'a> {
 /// slow paths with the same behaviour if the lookahead is not available.
 #[derive(Clone, Copy)]
 pub struct TokenCursor<'a> {
+    version: SmtVersion,
     entries: &'a [Option<(InnerType, &'a [u8])>],
     spans: &'a [SmtSpan],
     next: usize,
@@ -176,14 +271,23 @@ impl<'a> TokenCursor<'a> {
     /// Returns a cursor at the start of the batch given as its entries and
     /// their spans, of equal length.
     #[inline]
-    pub(crate) fn new(entries: &'a [Option<(InnerType, &'a [u8])>], spans: &'a [SmtSpan]) -> Self {
+    pub(crate) fn new(
+        version: SmtVersion,
+        entries: &'a [Option<(InnerType, &'a [u8])>],
+        spans: &'a [SmtSpan],
+    ) -> Self {
         debug_assert_eq!(entries.len(), spans.len());
         Self {
+            version,
             entries,
             spans,
             next: 0,
             relex: false,
         }
+    }
+
+    pub fn version(&self) -> SmtVersion {
+        self.version
     }
 
     /// The token at `index` of the batch, if any.
@@ -199,8 +303,9 @@ impl<'a> TokenCursor<'a> {
     ///
     /// This can be used for parsing one token using a cursor-parsing function.
     #[inline]
-    pub fn single(token: Token<'a>) -> Self {
+    pub fn single(version: SmtVersion, token: Token<'a>) -> Self {
         Self::new(
+            version,
             std::slice::from_ref(token.entry),
             std::slice::from_ref(token.span),
         )
@@ -263,6 +368,17 @@ impl<'a> TokenCursor<'a> {
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.next >= self.entries.len()
+    }
+
+    /// Sets the SMT-LIB version that should apply from now on.
+    ///
+    /// This will adjust the non-consumed tokens so they correspond
+    /// to the set version. There is no guarantee on their shape
+    /// or whether any remain at all; the caller must not use any
+    /// information gathered on them beforehand.
+    pub fn set_version(&mut self, version: SmtVersion) {
+        // TODO: relex on 2.0/2.5+ switch
+        self.version = version;
     }
 
     /// Requests that the input is lexed again from the end of the last

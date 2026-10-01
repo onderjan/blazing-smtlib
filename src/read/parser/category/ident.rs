@@ -6,7 +6,7 @@ use crate::{
         Arena, IdentHandle, IndexHandle, Parser, ParserError, ParserResources, SyntaxErrorKind,
         TextHandle, parse_by_token,
     },
-    token::{GeneralReserved, Reserved, Token, TokenCursor, TokenKind},
+    token::{GeneralReserved, Reserved, SmtVersion, Token, TokenCursor, TokenKind},
 };
 
 /// A parser that reads an SMT-LIB identifier.
@@ -43,11 +43,13 @@ impl<H: SmtHandler> Parser<H> for IdentParser {
         let ParserResources {
             ident_slot, arena, ..
         } = resources;
-        parse_by_token(cursor, |token| match ident_slot.progress(arena, token)? {
-            ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
-            ControlFlow::Break(ident) => Ok(ControlFlow::Break(
-                arena.hand_over_ident(ident, |ident| ident.into_owned()),
-            )),
+        parse_by_token(cursor, |version, token| {
+            match ident_slot.progress(arena, version, token)? {
+                ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
+                ControlFlow::Break(ident) => Ok(ControlFlow::Break(
+                    arena.hand_over_ident(ident, |ident| ident.into_owned()),
+                )),
+            }
         })
     }
 }
@@ -135,6 +137,7 @@ impl IdentSlot {
     pub(crate) fn progress<H: SmtHandler + ?Sized, E>(
         &mut self,
         arena: &mut Arena<H>,
+        version: SmtVersion,
         token: Token,
     ) -> Result<ControlFlow<IdentHandle, ()>, ParserError<E>> {
         let span = token.span();
@@ -142,7 +145,7 @@ impl IdentSlot {
         match self.state {
             State::Start => {
                 debug_assert!(self.is_pristine(), "must be pristine when starting");
-                match arena.token_kind(token) {
+                match token.kind(version) {
                     TokenKind::Symbol(name) => {
                         // a simple identifier
                         return Ok(ControlFlow::Break(arena.push_nonindexed_ident(name)));
@@ -159,7 +162,7 @@ impl IdentSlot {
             State::Open => {
                 // this must be an underscore
                 if matches!(
-                    arena.token_kind(token),
+                    token.kind(version),
                     TokenKind::Reserved(Reserved::General(GeneralReserved::Underscore))
                 ) {
                     self.state = State::AfterUnderscore;
@@ -174,7 +177,7 @@ impl IdentSlot {
                 let name = match self.name.take() {
                     None => {
                         // we need to read the name, its indices will follow in the arena
-                        if let TokenKind::Symbol(name) = arena.token_kind(token) {
+                        if let TokenKind::Symbol(name) = token.kind(version) {
                             Some(self.push_name(arena, name))
                         } else {
                             return Err(ParserError::category_error(
@@ -186,7 +189,7 @@ impl IdentSlot {
                     Some(name) => {
                         // we have already read the name, so we will be reading an index
                         // and ending with closing parenthesis
-                        match arena.token_kind(token) {
+                        match token.kind(version) {
                             TokenKind::ParenClose => {
                                 let indices_start = self.arena_indices_start;
                                 if arena.indices.len() == indices_start {

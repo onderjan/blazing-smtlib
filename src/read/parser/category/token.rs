@@ -3,8 +3,8 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler, SmtKeyword, SmtKeywordView, SmtNumeral, SmtNumeralView, SmtStringContent,
     SmtStringContentView, SmtSymbol,
-    read::parser::{Arena, Parser, ParserError, ParserResources, SyntaxErrorKind},
-    token::{Token, TokenCursor, TokenKind, TokenType},
+    read::parser::{Parser, ParserError, ParserResources, SyntaxErrorKind},
+    token::{SmtVersion, Token, TokenCursor, TokenKind, TokenType},
 };
 
 pub struct SymbolParser;
@@ -24,11 +24,11 @@ impl Default for SymbolParser {
 impl SymbolParser {
     /// Consumes exactly one token, which must match.
     pub(crate) fn expect<H: SmtHandler + ?Sized>(
-        arena: &Arena<H>,
+        version: SmtVersion,
         token: Token,
     ) -> Result<SmtSymbol, ParserError<H::Error>> {
         let span = token.span();
-        match arena.token_kind(token) {
+        match token.kind(version) {
             TokenKind::Symbol(symbol) => Ok(symbol.into_owned()),
             _ => Err(ParserError::category_error(
                 SyntaxErrorKind::ExpectedSymbol,
@@ -44,13 +44,16 @@ impl<H: SmtHandler> Parser<H> for SymbolParser {
     fn parse(
         &mut self,
         _handler: &mut H,
-        resources: &mut ParserResources<H>,
+        _resources: &mut ParserResources<H>,
         cursor: &mut TokenCursor,
     ) -> Result<ControlFlow<Self::Result, ()>, ParserError<H::Error>> {
         let Some(token) = cursor.next() else {
             return Ok(ControlFlow::Continue(()));
         };
-        Ok(ControlFlow::Break(Self::expect(&resources.arena, token)?))
+        Ok(ControlFlow::Break(Self::expect::<H>(
+            cursor.version(),
+            token,
+        )?))
     }
 }
 

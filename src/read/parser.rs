@@ -12,7 +12,7 @@ pub use script::*;
 
 use crate::{
     SmtHandler, SmtSpan,
-    token::{Token, TokenCursor, TokenType},
+    token::{SmtVersion, Token, TokenCursor, TokenType},
 };
 
 pub trait Parser<H: SmtHandler + ?Sized> {
@@ -58,10 +58,10 @@ pub trait Parser<H: SmtHandler + ?Sized> {
 #[inline]
 pub(crate) fn parse_by_token<R, E>(
     cursor: &mut TokenCursor,
-    mut progress: impl FnMut(Token) -> Result<ControlFlow<R>, E>,
+    mut progress: impl FnMut(SmtVersion, Token) -> Result<ControlFlow<R>, E>,
 ) -> Result<ControlFlow<R>, E> {
     while let Some(token) = cursor.next() {
-        if let ControlFlow::Break(result) = progress(token)? {
+        if let ControlFlow::Break(result) = progress(cursor.version(), token)? {
             return Ok(ControlFlow::Break(result));
         }
     }
@@ -114,6 +114,9 @@ pub enum SyntaxErrorKind {
     EmptyPatternArguments,
     EmptyMatchCases,
     EmptyGetValueTerms,
+
+    UnsupportedVersion,
+    TooManyVersionDeclarations(u64),
 }
 
 impl<E> ParserError<E> {

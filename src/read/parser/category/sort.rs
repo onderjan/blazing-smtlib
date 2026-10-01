@@ -6,7 +6,7 @@ use crate::{
         Arena, IdentHandle, IdentSlot, Parser, ParserError, ParserResources, SyntaxErrorKind,
         handle_err, parse_by_token,
     },
-    token::{GeneralReserved, Reserved, Token, TokenCursor, TokenKind},
+    token::{GeneralReserved, Reserved, SmtVersion, Token, TokenCursor, TokenKind},
 };
 
 /// A parser that reads an SMT-LIB sort.
@@ -48,8 +48,8 @@ impl<H: SmtHandler> Parser<H> for SortParser<H> {
             arena,
             ..
         } = resources;
-        parse_by_token(cursor, |token| {
-            sort_slot.progress(handler, arena, ident_slot, token)
+        parse_by_token(cursor, |version, token| {
+            sort_slot.progress(handler, arena, ident_slot, version, token)
         })
     }
 }
@@ -112,6 +112,7 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
         handler: &mut H,
         arena: &mut Arena<H>,
         ident_slot: &mut IdentSlot,
+        version: SmtVersion,
         token: Token,
     ) -> Result<ControlFlow<H::Sort>, ParserError<H::Error>> {
         let span = token.span();
@@ -122,7 +123,7 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
                 if self.levels.is_empty() {
                     debug_assert!(self.is_pristine(), "must be pristine when starting");
                 }
-                match arena.token_kind(token) {
+                match token.kind(version) {
                     TokenKind::Symbol(name) => {
                         // the sort consists just of a single-symbol ident
                         let name = arena.push_text(name.as_slice());
@@ -173,7 +174,7 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
             }
             State::Open => {
                 // decide how to continue
-                let state = match arena.token_kind(token) {
+                let state = match token.kind(version) {
                     TokenKind::Reserved(Reserved::General(GeneralReserved::Underscore)) => {
                         // this is a sort consisting just of an indexed identifier
                         // move the ident slot after underscore
@@ -210,10 +211,10 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
                 ControlFlow::Continue(())
             }
             State::IdentOnly => ident_slot
-                .progress(arena, token)?
+                .progress(arena, version, token)?
                 .map_break(|ident| (ident, arena.sorts.len())),
             State::StartingIdent => {
-                match ident_slot.progress(arena, token)? {
+                match ident_slot.progress(arena, version, token)? {
                     ControlFlow::Continue(()) => ControlFlow::Continue(()),
                     ControlFlow::Break(ident) => {
                         // add a new level and start parsing the new sort

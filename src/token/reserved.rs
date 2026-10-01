@@ -1,4 +1,4 @@
-use crate::String8;
+use crate::{String8, token::SmtVersion};
 
 /// Reserved words in SMT-LIB2, including standard command names.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -105,6 +105,35 @@ reserved_words! {
         SetInfo = "set-info",
         SetLogic = "set-logic",
         SetOption = "set-option",
+    }
+}
+
+impl Reserved {
+    pub fn is_in_version(&self, version: SmtVersion) -> bool {
+        // we found a word reserved in the latest version
+        // ensure it is a reserved word in the given version
+        if matches!(version, SmtVersion::V2_7) {
+            return true;
+        }
+        // only introduced in 2.7: lambda, declare-sort-parameter, define-const
+        if matches!(
+            self,
+            Reserved::General(GeneralReserved::Lambda)
+                | Reserved::CommandName(CommandNameReserved::DeclareSortParameter)
+                | Reserved::CommandName(CommandNameReserved::DefineConst)
+        ) {
+            return false;
+        }
+        if matches!(version, SmtVersion::V2_6) {
+            return true;
+        }
+        // only introduced in 2.6: match, declare-datatype, declare-datatypes
+        !matches!(
+            self,
+            Reserved::General(GeneralReserved::Match)
+                | Reserved::CommandName(CommandNameReserved::DeclareDatatype)
+                | Reserved::CommandName(CommandNameReserved::DeclareDatatypes)
+        )
     }
 }
 
