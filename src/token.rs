@@ -188,10 +188,8 @@ impl<'a> TokenKind<'a> {
             }
             TokenType::Binary => TokenKind::Binary(SmtBinDigitsView::new_unchecked(content)),
             TokenType::UnquotedSymbol => {
-                // filter the reserved words by the version
-                if let Some(reserved) = Reserved::from_bytes_opt(content)
-                    .filter(|reserved| reserved.is_in_version(version))
-                {
+                // only the words reserved in the version are reserved words
+                if let Some(reserved) = Reserved::from_bytes_opt(content, version) {
                     TokenKind::Reserved(reserved)
                 } else {
                     TokenKind::Symbol(SmtSymbolView::new_unchecked(content))

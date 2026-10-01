@@ -27,10 +27,10 @@ macro_rules! reserved_words {
             }
 
             impl $enum_name {
-                /// The reserved word of this group spelled by the symbol, if any.
+                /// The word of this group that the symbol spells in the version, if any.
                 #[inline]
-                pub fn from_bytes_opt(symbol: &[u8]) -> Option<Self> {
-                    match Reserved::from_bytes_opt(symbol) {
+                pub fn from_bytes_opt(symbol: &[u8], version: SmtVersion) -> Option<Self> {
+                    match Reserved::from_bytes_opt(symbol, version) {
                         Some(Reserved::$variant_kind(reserved)) => Some(reserved),
                         _ => None,
                     }
@@ -109,32 +109,32 @@ reserved_words! {
 }
 
 impl Reserved {
-    pub fn is_in_version(&self, version: SmtVersion) -> bool {
-        // we found a word reserved in the latest version
-        // ensure it is a reserved word in the given version
-        if matches!(version, SmtVersion::V2_7) {
-            return true;
-        }
-        // only introduced in 2.7: lambda, declare-sort-parameter, define-const
-        if matches!(
-            self,
+    /// The version that made the word reserved.
+    const fn since(self) -> SmtVersion {
+        match self {
             Reserved::General(GeneralReserved::Lambda)
-                | Reserved::CommandName(CommandNameReserved::DeclareSortParameter)
-                | Reserved::CommandName(CommandNameReserved::DefineConst)
-        ) {
-            return false;
-        }
-        if matches!(version, SmtVersion::V2_6) {
-            return true;
-        }
-        // only introduced in 2.6: match, declare-datatype, declare-datatypes
-        !matches!(
-            self,
+            | Reserved::CommandName(CommandNameReserved::DeclareSortParameter)
+            | Reserved::CommandName(CommandNameReserved::DefineConst) => SmtVersion::V2_7,
             Reserved::General(GeneralReserved::Match)
-                | Reserved::CommandName(CommandNameReserved::DeclareDatatype)
-                | Reserved::CommandName(CommandNameReserved::DeclareDatatypes)
-        )
+            | Reserved::CommandName(CommandNameReserved::DeclareDatatype)
+            | Reserved::CommandName(CommandNameReserved::DeclareDatatypes) => SmtVersion::V2_6,
+            _ => SmtVersion::V2_5,
+        }
     }
+
+    /// Whether the word is reserved in the version.
+    #[inline]
+    pub fn is_in_version(&self, version: SmtVersion) -> bool {
+        is_since(self.since(), version)
+    }
+}
+
+/// Whether a word reserved since the version `since` is reserved in `version`.
+///
+/// The versions only add reserved words, and are declared from the oldest.
+#[inline(always)]
+const fn is_since(since: SmtVersion, version: SmtVersion) -> bool {
+    since as u8 <= version as u8
 }
 
 /// Number of slots of the reserved-word table.
@@ -161,9 +161,13 @@ const fn reserved_slot(symbol: &[u8]) -> usize {
 /// The empty word is used as a sentinel value for empty reserved-word table slots.
 const EMPTY_WORD: &[u8] = &[];
 
-/// The reserved words by slot.
-static RESERVED_TABLE: [(&[u8], Reserved); RESERVED_SLOTS] = {
-    let mut table = [(EMPTY_WORD, Reserved::General(GeneralReserved::Underscore)); RESERVED_SLOTS];
+/// The reserved words by slot, each with the version that made it reserved.
+static RESERVED_TABLE: [(&[u8], Reserved, SmtVersion); RESERVED_SLOTS] = {
+    let mut table = [(
+        EMPTY_WORD,
+        Reserved::General(GeneralReserved::Underscore),
+        SmtVersion::V2_5,
+    ); RESERVED_SLOTS];
     let mut i = 0;
     while i < RESERVED_WORDS.len() {
         let (word, reserved) = RESERVED_WORDS[i];
@@ -172,29 +176,35 @@ static RESERVED_TABLE: [(&[u8], Reserved); RESERVED_SLOTS] = {
             table[slot].0.is_empty(),
             "the reserved-word hash must be perfect"
         );
-        table[slot] = (word, reserved);
+        table[slot] = (word, reserved, reserved.since());
         i += 1;
     }
     table
 };
 
 impl Reserved {
+    /// The reserved word that the symbol spells in the version, if any.
     #[inline]
-    pub fn from_symbol_opt(symbol: &String8) -> Option<Reserved> {
-        Self::from_bytes_opt(symbol.as_slice())
+    pub fn from_symbol_opt(symbol: &String8, version: SmtVersion) -> Option<Reserved> {
+        Self::from_bytes_opt(symbol.as_slice(), version)
     }
 
+    /// The reserved word that the symbol spells in the version, if any.
     #[inline]
-    pub fn from_bytes_opt(symbol: &[u8]) -> Option<Reserved> {
+    pub fn from_bytes_opt(symbol: &[u8], version: SmtVersion) -> Option<Reserved> {
         // make sure that the symbol is not an empty word,
         // which is a sentinel
         if symbol.is_empty() {
             return None;
         }
         // the slot holds a reserved word or a sentinel
-        let (word, reserved) = RESERVED_TABLE[reserved_slot(symbol)];
-        // if the symbol is equal to the reserved word, return it
-        if word == symbol { Some(reserved) } else { None }
+        let (word, reserved, since) = RESERVED_TABLE[reserved_slot(symbol)];
+        // if the symbol is equal to the reserved word and the version has it, return it
+        if word == symbol && is_since(since, version) {
+            Some(reserved)
+        } else {
+            None
+        }
     }
 
     pub fn as_str(&self) -> &'static str {

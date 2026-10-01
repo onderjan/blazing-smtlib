@@ -3,7 +3,7 @@
 mod reserved_words;
 
 use smt_parser_rs::String8;
-use smt_parser_rs::token::{CommandNameReserved, GeneralReserved, Reserved};
+use smt_parser_rs::token::{CommandNameReserved, GeneralReserved, Reserved, SmtVersion};
 
 /// Returns every `GeneralReserved` variant, in declaration order.
 ///
@@ -91,7 +91,7 @@ fn reserved_as_str_round_trips_through_from_symbol_opt() {
     for reserved in all_reserved() {
         let symbol = String8::from_vec(reserved.as_str().as_bytes().to_vec());
         assert_eq!(
-            Reserved::from_symbol_opt(&symbol),
+            Reserved::from_symbol_opt(&symbol, SmtVersion::V2_7),
             Some(reserved),
             "as_str/from_symbol_opt disagree for {reserved:?}"
         );
@@ -143,7 +143,7 @@ fn non_reserved_symbols_are_rejected() {
     for text in near_misses {
         let symbol = String8::from_vec(text.to_vec());
         assert_eq!(
-            Reserved::from_symbol_opt(&symbol),
+            Reserved::from_symbol_opt(&symbol, SmtVersion::V2_7),
             None,
             "{:?} should not be a reserved word",
             text.escape_ascii().to_string()
@@ -156,12 +156,12 @@ fn non_reserved_symbols_are_rejected() {
 #[test]
 fn every_reserved_spelling_is_recognized() {
     for word in reserved_words::reserved_words() {
-        let reserved = Reserved::from_bytes_opt(word.as_bytes())
+        let reserved = Reserved::from_bytes_opt(word.as_bytes(), SmtVersion::V2_7)
             .unwrap_or_else(|| panic!("{word:?} should be a reserved word"));
         assert_eq!(reserved.as_str(), word, "as_str of {reserved:?}");
         let symbol = String8::from_vec(word.as_bytes().to_vec());
         assert_eq!(
-            Reserved::from_symbol_opt(&symbol),
+            Reserved::from_symbol_opt(&symbol, SmtVersion::V2_7),
             Some(reserved),
             "from_symbol_opt and from_bytes_opt disagree for {word:?}"
         );
@@ -223,7 +223,7 @@ fn non_reserved_command_like_symbols_are_rejected() {
     ];
     for text in near_misses {
         assert_eq!(
-            Reserved::from_bytes_opt(text),
+            Reserved::from_bytes_opt(text, SmtVersion::V2_7),
             None,
             "{:?} should not be a reserved word",
             text.escape_ascii().to_string()
@@ -239,7 +239,7 @@ fn reserved_words_are_general_or_command_names() {
         let reserved = Reserved::General(general);
         assert!(!reserved.is_command_name(), "{reserved:?}");
         assert_eq!(
-            CommandNameReserved::from_bytes_opt(general.as_str().as_bytes()),
+            CommandNameReserved::from_bytes_opt(general.as_str().as_bytes(), SmtVersion::V2_7),
             None
         );
         assert_eq!(reserved.as_str(), general.as_str());
@@ -248,7 +248,7 @@ fn reserved_words_are_general_or_command_names() {
         let reserved = Reserved::CommandName(command_name);
         assert!(reserved.is_command_name(), "{reserved:?}");
         assert_eq!(
-            GeneralReserved::from_bytes_opt(command_name.as_str().as_bytes()),
+            GeneralReserved::from_bytes_opt(command_name.as_str().as_bytes(), SmtVersion::V2_7),
             None
         );
         assert_eq!(reserved.as_str(), command_name.as_str());

@@ -90,7 +90,7 @@ fn text(bytes: &[u8]) -> String {
 /// Renders a symbol, quoting it when it is spelled like a reserved word,
 /// so that the rendering tells such a symbol apart from the reserved word.
 fn render_symbol(bytes: &[u8]) -> String {
-    if Reserved::from_bytes_opt(bytes).is_some() {
+    if Reserved::from_bytes_opt(bytes, SmtVersion::V2_7).is_some() {
         format!("|{}|", text(bytes))
     } else {
         text(bytes)

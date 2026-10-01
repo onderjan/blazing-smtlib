@@ -11,12 +11,15 @@ use reserved_words::reserved_words;
 use std::ops::ControlFlow;
 
 use smt_parser_rs::{
-    CheckStandardSyntax, NonstandardCommandError,
+    CheckStandardSyntax, NonstandardCommandError, String8,
     read::{
         SmtReadError, SmtReadErrorKind, SmtReader,
         parser::{CommandParser, CommandParserStop, SyntaxErrorKind},
     },
-    token::{SmtVersion, SmtVersionPosture, SmtVersionPostureBuilder},
+    token::{
+        CommandNameReserved, GeneralReserved, Reserved, SmtVersion, SmtVersionPosture,
+        SmtVersionPostureBuilder,
+    },
 };
 
 type ReadError = SmtReadError<NonstandardCommandError>;
@@ -118,6 +121,37 @@ fn posture(build: impl FnOnce(&mut SmtVersionPostureBuilder)) -> SmtVersionPostu
     builder.build()
 }
 
+#[test]
+fn the_lookups_find_a_word_from_its_version_on() {
+    for (index, (version, _)) in VERSIONS.into_iter().enumerate() {
+        for word in reserved_words() {
+            let expected = introduced_in(word) <= index;
+            // the word itself is known from the latest version
+            let reserved = Reserved::from_bytes_opt(word.as_bytes(), SmtVersion::V2_7)
+                .unwrap_or_else(|| panic!("{word:?} should be reserved in the latest version"));
+            let symbol = String8::from_vec(word.as_bytes().to_vec());
+            let group = match reserved {
+                Reserved::General(_) => {
+                    GeneralReserved::from_bytes_opt(word.as_bytes(), version).is_some()
+                }
+                Reserved::CommandName(_) => {
+                    CommandNameReserved::from_bytes_opt(word.as_bytes(), version).is_some()
+                }
+            };
+            let found = [
+                Reserved::from_bytes_opt(word.as_bytes(), version) == Some(reserved),
+                Reserved::from_symbol_opt(&symbol, version) == Some(reserved),
+                group,
+                reserved.is_in_version(version),
+            ];
+            assert_eq!(found, [expected; 4], "{word:?} in {version:?}");
+            // and when it is not reserved yet, nothing else is found in its place
+            if !expected {
+                assert_eq!(Reserved::from_bytes_opt(word.as_bytes(), version), None);
+            }
+        }
+    }
+}
 #[test]
 fn each_version_reserves_exactly_its_words() {
     // a reserved word cannot name a constant, a word not yet reserved can;
