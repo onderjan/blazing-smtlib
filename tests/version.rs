@@ -14,7 +14,7 @@ use smt_parser_rs::{
     CheckStandardSyntax, NonstandardCommandError, String8,
     read::{
         SmtReadError, SmtReadErrorKind, SmtReader,
-        parser::{CommandParser, CommandParserStop, SyntaxErrorKind},
+        parser::{CommandParser, CommandParserStop, SExprParser, SyntaxErrorKind},
     },
     token::{
         CommandNameReserved, GeneralReserved, Reserved, SmtVersion, SmtVersionPosture,
@@ -452,4 +452,267 @@ fn a_command_parser_reports_the_declaration_without_applying_it() {
     // lambda is still reserved after the declarations of 2.5 and 2.6
     assert!(stop(b"(set-info :smt-lib-version 2.6)").is_ok());
     assert!(stop(b"(declare-const lambda Bool)").is_err());
+}
+
+#[test]
+fn assumptions_are_literals_before_2_7() {
+    let declarations = "(declare-const p Bool)(declare-const q Bool)";
+    let check = |version: &str, assumptions: &str| {
+        let input = format!(
+            "(set-info :smt-lib-version {version}){declarations}\
+             (check-sat-assuming ({assumptions}))(check-sat-assuming ((not p)))"
+        );
+        read_default(&input)
+    };
+    // the offset of the assumption list's content
+    let start = (31 + declarations.len() + 21) as u64;
+
+    // literals are assumptions in every version, also an empty list of them;
+    // a quoted symbol is a symbol, `not` included
+    for assumptions in [
+        "",
+        "p",
+        "p q",
+        "(not p)",
+        "p (not q) true",
+        "(|not| p)",
+        "|not|",
+    ] {
+        for (_, version) in VERSIONS {
+            assert_eq!(
+                check(version, assumptions),
+                Ok(()),
+                "{assumptions} in {version}"
+            );
+        }
+    }
+
+    // other terms are assumptions only since 2.7; before, the error is at the
+    // first token that cannot continue a literal, given as (offset, length)
+    for (assumptions, at, len) in [
+        ("(and p q)", 1, 3),
+        ("(not (not p))", 5, 1),
+        ("(not p q)", 7, 1),
+        ("(not)", 4, 1),
+        ("(p)", 1, 1),
+        ("p (! q :named n)", 3, 1),
+        ("((_ is c) p)", 1, 1),
+        ("((as p Bool))", 1, 1),
+        ("1", 0, 1),
+        ("#b1", 0, 3),
+        ("\"p\"", 0, 3),
+        (":p", 0, 2),
+        ("(let ((x p)) x)", 1, 3),
+    ] {
+        for (index, (_, version)) in VERSIONS.into_iter().enumerate() {
+            let result = check(version, assumptions);
+            if index < 2 {
+                assert_syntax_error(
+                    result,
+                    SyntaxErrorKind::ExpectedPropositionalLiteral,
+                    start + at,
+                    start + at + len,
+                );
+            } else if let Err((kind, _, _)) = result {
+                // a term, so not a syntax error of the literal shape in 2.7
+                assert!(
+                    !kind.contains("ExpectedPropositionalLiteral"),
+                    "{assumptions} in {version}: {kind}"
+                );
+            }
+        }
+    }
+    // these are terms: accepted in 2.7
+    for assumptions in [
+        "(and p q)",
+        "(not (not p))",
+        "p (! q :named n)",
+        "(let ((x p)) x)",
+    ] {
+        assert_eq!(check("2.7", assumptions), Ok(()), "{assumptions}");
+    }
+
+    // what is not a list at all is reported the same way in every version
+    for (_, version) in VERSIONS {
+        let input = format!("(set-info :smt-lib-version {version})(check-sat-assuming p)");
+        let (kind, start, end) = read_default(&input).expect_err("the list is missing");
+        assert!(kind.starts_with("Parser(ExpectedToken("), "{kind}");
+        assert_eq!((start, end), (51, 52));
+    }
+}
+
+/// Splits a text with one `@` in it into the text without the mark
+/// and the byte offset where the mark was.
+fn marked(text: &str) -> (String, u64) {
+    let at = text.find('@').expect("the text must have a mark");
+    (text.replacen('@', "", 1), at as u64)
+}
+
+#[test]
+fn a_reserved_word_is_an_s_expression_since_2_6() {
+    // inside an attribute value, in a set-info, a set-option and an annotation,
+    // at the first level and deeper; the mark is where the word goes
+    let sites = [
+        "(set-info :a (@))",
+        "(set-info :a (x @ y))",
+        "(set-info :a (x (1 (@ :k)) \"s\"))",
+        "(set-option :a (@))",
+        "(assert (! true :a (@) :b))",
+        "(assert (! true :pattern ((f @))))",
+    ];
+    let mut failures = Vec::new();
+    for (index, (_, spelling)) in VERSIONS.into_iter().enumerate() {
+        for word in reserved_words() {
+            for site in sites {
+                let (template, at) =
+                    marked(&format!("(set-info :smt-lib-version {spelling}){site}"));
+                let mut input = template;
+                input.insert_str(at as usize, word);
+                // a word that is not reserved yet is a symbol, which always was an
+                // S-expression; a reserved word is one from 2.6 on
+                let reserved = introduced_in(word) <= index;
+                let expected = if reserved && index == 0 {
+                    Err((
+                        "Parser(ExpectedSExpr)".to_string(),
+                        at,
+                        at + word.len() as u64,
+                    ))
+                } else {
+                    Ok(())
+                };
+                let result = outcome(read_pieces(
+                    &[input.as_bytes()],
+                    SmtVersion::V2_7,
+                    SmtVersionPosture::default(),
+                ));
+                if result != expected {
+                    failures.push(format!("{input}: {result:?}, expected {expected:?}"));
+                }
+            }
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "{} reserved words in S-expressions are not handled as their version says:\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
+
+    // the same holds wherever the input is cut
+    assert_syntax_error(
+        read_default("(set-info :smt-lib-version 2.5)(set-info :a (x (let) y))"),
+        SyntaxErrorKind::ExpectedSExpr,
+        48,
+        51,
+    );
+    assert_eq!(
+        read_default("(set-info :smt-lib-version 2.6)(set-info :a (x (let) y))"),
+        Ok(())
+    );
+
+    // a reserved word alone is no attribute value in any version
+    for (_, spelling) in VERSIONS {
+        let input = format!("(set-info :smt-lib-version {spelling})(set-info :a let)");
+        assert_syntax_error(
+            read_default(&input),
+            SyntaxErrorKind::ExpectedAttribute,
+            44,
+            47,
+        );
+    }
+}
+
+#[test]
+fn a_reserved_word_alone_is_an_s_expression_since_2_6() {
+    // the S-expression parser on its own takes the reserved word as a whole S-expression
+    for (index, (version, _)) in VERSIONS.into_iter().enumerate() {
+        let mut handler = CheckStandardSyntax;
+        let mut reader = SmtReader::with_parser(&mut handler, SExprParser::new(), version);
+        let result = reader.read_slice(b"let ");
+        if index == 0 {
+            let err = result.expect_err("a reserved word is no S-expression in 2.5");
+            assert!(matches!(
+                err.kind(),
+                SmtReadErrorKind::Parser(SyntaxErrorKind::ExpectedSExpr)
+            ));
+            assert_eq!(
+                (err.span().start().offset(), err.span().end().offset()),
+                (0, 3)
+            );
+        } else {
+            assert!(
+                matches!(result, Ok(ControlFlow::Break(_))),
+                "a reserved word is an S-expression in {version:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn the_underscore_is_a_match_pattern_since_2_7() {
+    // `match` itself is reserved since 2.6, so the patterns exist in 2.6 and 2.7;
+    // the mark is at the token the error is reported at
+    let check = |spelling: &str, body: &str| {
+        let (body, at) = marked(body);
+        let prefix = format!("(set-info :smt-lib-version {spelling})(assert ");
+        let at = at + prefix.len() as u64;
+        (read_default(&format!("{prefix}{body})")), at)
+    };
+
+    // patterns without an underscore are the same in both versions
+    for body in [
+        "@(match x ((y true)))",
+        "@(match x (((c y) true) (d false)))",
+        "@(match x (((c y z) (match y ((|_| z))))))",
+    ] {
+        for spelling in ["2.6", "2.7"] {
+            assert_eq!(check(spelling, body).0, Ok(()), "{body} in {spelling}");
+        }
+    }
+
+    // the underscore as a whole pattern and as a constructor argument
+    for (body, kind_2_6) in [
+        (
+            "(match x ((@_ true)))",
+            SyntaxErrorKind::ExpectedSymbolOrParenOpen,
+        ),
+        ("(match x (((c @_) true)))", SyntaxErrorKind::ExpectedSymbol),
+        (
+            "(match x (((c y @_ z) true) (d false)))",
+            SyntaxErrorKind::ExpectedSymbol,
+        ),
+        (
+            "(match x (((c y) true) (@_ false)))",
+            SyntaxErrorKind::ExpectedSymbolOrParenOpen,
+        ),
+    ] {
+        let (result, at) = check("2.6", body);
+        assert_syntax_error(result, kind_2_6, at, at + 1);
+        assert_eq!(check("2.7", body).0, Ok(()), "{body} in 2.7");
+    }
+
+    // the underscore is never the constructor of a pattern
+    for spelling in ["2.6", "2.7"] {
+        let (result, at) = check(spelling, "(match x (((@_ y) true)))");
+        assert_syntax_error(result, SyntaxErrorKind::ExpectedSymbol, at, at + 1);
+    }
+
+    // what is no pattern at all is reported by what the version expects there
+    for (body, kind_2_6, kind_2_7) in [
+        (
+            "(match x ((@1 true)))",
+            SyntaxErrorKind::ExpectedSymbolOrParenOpen,
+            SyntaxErrorKind::ExpectedSymbolUnderscoreOrParenOpen,
+        ),
+        (
+            "(match x (((c @1) true)))",
+            SyntaxErrorKind::ExpectedSymbol,
+            SyntaxErrorKind::ExpectedSymbolOrUnderscore,
+        ),
+    ] {
+        let (result, at) = check("2.6", body);
+        assert_syntax_error(result, kind_2_6, at, at + 1);
+        let (result, at) = check("2.7", body);
+        assert_syntax_error(result, kind_2_7, at, at + 1);
+    }
 }
