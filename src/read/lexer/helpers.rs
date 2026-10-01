@@ -59,7 +59,12 @@ pub(super) static START: [Start; 256] = {
 };
 
 /// Bits not used by fast masks, kept so that `FAST_MASKS` partition the byte.
-pub(super) const FAST_RESERVED: u8 = 0b0000_0011;
+pub(super) const FAST_RESERVED: u8 = 0b0000_0010;
+
+/// Set if the byte delimits a token: whitespace, a parenthesis, or the start
+/// of a comment. Every token must be followed by such a byte or by the end
+/// of the input.
+pub(super) const FAST_DELIM: u8 = 0b0000_0001;
 
 /// Determines whether the fast path should be taken.
 pub(super) const FAST_ON: u8 = 0b0000_0100;
@@ -80,7 +85,14 @@ pub(super) const FAST_RUN_MASK: u8 = 0b0111_0000;
 pub(super) const FAST_PIPE: u8 = 0b1000_0000;
 
 /// Masks for the fast flags.
-const FAST_MASKS: [u8; 5] = [FAST_RESERVED, FAST_ON, FAST_EMIT, FAST_RUN_MASK, FAST_PIPE];
+const FAST_MASKS: [u8; 6] = [
+    FAST_RESERVED,
+    FAST_DELIM,
+    FAST_ON,
+    FAST_EMIT,
+    FAST_RUN_MASK,
+    FAST_PIPE,
+];
 
 /// Fast masks partition u8 and are pairwise distinct.
 const _: () = {
@@ -116,7 +128,8 @@ pub(super) static FAST: [u8; 256] = {
         let c = i as u8;
         let flags = CharClass::run_flags(c);
         table[i] = match c {
-            b' ' | b'\t' | b'\r' => FAST_ON | RUN_NON_LF_WHITESPACE,
+            b' ' | b'\t' | b'\r' => FAST_ON | FAST_DELIM | RUN_NON_LF_WHITESPACE,
+            b'\n' | b'(' | b')' | b';' => FAST_DELIM,
             b'|' => FAST_ON | FAST_EMIT | FAST_PIPE | RUN_QUOTED_PLAIN,
             // a simple symbol may contain digits but must not start with one
             _ if flags & RUN_SIMPLE_SYMBOL != 0 && flags & RUN_DIGIT == 0 => {
@@ -127,6 +140,20 @@ pub(super) static FAST: [u8; 256] = {
         i += 1;
     }
     table
+};
+
+/// The delimiters are exactly whitespace, the parentheses, and the comment start.
+const _: () = {
+    let mut i = 0;
+    while i < 256 {
+        let delimiter = FAST[i] & FAST_DELIM != 0;
+        let expected = matches!(i as u8, b' ' | b'\t' | b'\n' | b'\r' | b'(' | b')' | b';');
+        assert!(
+            delimiter == expected,
+            "a byte carries the delimiter flag exactly when it is whitespace, a parenthesis, or a semicolon"
+        );
+        i += 1;
+    }
 };
 
 /// The fast table and `START` agree on which bytes are fast, so that the

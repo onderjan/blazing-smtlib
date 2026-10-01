@@ -260,14 +260,15 @@ const VALID_INPUTS: &[&[u8]] = &[
     // keywords spelled like reserved words, and quoted reserved words
     b":let :_ :par :STRING |let| |_| |assert|",
     b"0 0.5 10.25 123456789 9.0",
-    // letters directly after decimals: hexadecimal letters are not fraction digits
-    b"1.5a 2.0e 3.25fed)",
+    // hexadecimal letters after decimals, delimited; glued they are an error
+    b"1.5 a 2.0 e 3.25 fed)",
     b"#xDEADbeef #b0101 #x0 #b1",
     b":named :pattern :a1 :_x :+",
     b"\"\xC3\xA9\" |\xFF|",
     b"(((((x)))))",
-    b"a(b)c\"d\"e|f|g;h\ni",
-    b"1.5(2.5)#x1#b1:k|q|\"s\"",
+    // every token kind delimited only by parentheses or comments
+    b"a(b)(c)(\"d\")(e)(|f|)g;h\ni",
+    b"1.5(2.5)(#x1)(#b1)(:k)(|q|)(\"s\");c\n:a(b)",
     b"~!@$%^&*_-+=<>.?/ a.b -1 +2",
 ];
 
@@ -304,6 +305,17 @@ const ERROR_INPUTS: &[&[u8]] = &[
     b"\xC3\xA9",
     b"|\x7F|",
     b"\"\x7F\"",
+    // glued tokens: the first token ends and the next byte does not delimit it
+    b"123abc",
+    b"1.5a 2.0e 3.25fed)",
+    b"a(b)c\"d\"e|f|g;h\ni",
+    b"1.5(2.5)#x1#b1:k|q|\"s\"",
+    b"x:kw",
+    b":a\"s\"",
+    b"|q|b",
+    b"|a||b|",
+    b"\"s\"t",
+    b"\"s\"\"t\"|u|",
 ];
 
 fn all_inputs() -> impl Iterator<Item = &'static [u8]> {
@@ -1052,7 +1064,7 @@ fn payloads_from_cut_tokens_escaped_strings_and_plain_tokens_alternate_correctly
         b"r| s #x1",               // continued quoted, plain symbol, hex cut here
         b"F 12",                   // continued hex, numeral cut here (at slice end)
         b"3.5 |\n| :k",            // continued decimal, quoted with line feed, keyword cut
-        b"w\"\"\"\"",              // continued keyword, string of one escaped quote
+        b"w \"\"\"\"",             // continued keyword, string of one escaped quote
     ];
     let input: Vec<u8> = chunks.concat();
     let outcome = lex_chunks(&input, chunks);

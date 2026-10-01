@@ -1107,28 +1107,171 @@ fn whitespace_and_comments_with_several_line_breaks() {
 #[test]
 fn decimal_fraction_ends_at_a_letter() {
     // hexadecimal letters are not fraction digits: the decimal ends before
-    // them and the letters start a symbol
+    // them, and as the letter does not delimit it, that is an error
+    assert_error(
+        b"1.5a",
+        LexerErrorKind::MissingDelimiter,
+        (0, 0, 0),
+        (4, 0, 4),
+    );
+    assert_error(
+        b"3.25fed)",
+        LexerErrorKind::MissingDelimiter,
+        (0, 0, 0),
+        (5, 0, 5),
+    );
+}
+
+// --- Token separation ---
+//
+// A token must be followed by whitespace, a parenthesis, a comment start,
+// or the end of the input. The error spans the token and the byte that
+// should have delimited it, and the token is not handed over.
+
+#[test]
+fn a_token_must_be_delimited() {
+    // every pair of token classes that can be glued, the first token and
+    // the byte after it as the span
+    let cases: &[(&[u8], Loc)] = &[
+        (b"123abc", (4, 0, 4)),
+        (b"0x", (2, 0, 2)),
+        (b"1.5x", (4, 0, 4)),
+        (b"1.5.3", (4, 0, 4)),
+        (b"#x1Fg", (5, 0, 5)),
+        (b"#b10a", (5, 0, 5)),
+        (b"12|q|", (3, 0, 3)),
+        (b"x\"s\"", (2, 0, 2)),
+        (b"x|q|", (2, 0, 2)),
+        (b"x#x1", (2, 0, 2)),
+        (b"x:kw", (2, 0, 2)),
+        (b":kw:kw2", (4, 0, 4)),
+        (b":a\"s\"", (3, 0, 3)),
+        (b"\"s\"t", (4, 0, 4)),
+        (b"\"s\"\"t\"x", (7, 0, 7)),
+        (b"|a|b", (4, 0, 4)),
+        (b"|a||b|", (4, 0, 4)),
+        (b"|a|\"s\"", (4, 0, 4)),
+    ];
+    for &(input, end) in cases {
+        let err = lex_all(input).err().unwrap_or_else(|| {
+            panic!("{:?} must be a lexer error", String::from_utf8_lossy(input))
+        });
+        assert_eq!(
+            *err.kind(),
+            LexerErrorKind::MissingDelimiter,
+            "{:?}",
+            String::from_utf8_lossy(input)
+        );
+        assert_eq!(
+            (loc(err.span().start()), loc(err.span().end())),
+            ((0, 0, 0), end),
+            "span of {:?}",
+            String::from_utf8_lossy(input)
+        );
+    }
+}
+
+#[test]
+fn every_delimiter_separates_every_token_kind() {
+    // each token kind followed by each delimiter and by the end of the input
+    let tokens: &[&[u8]] = &[
+        b"x", b"123", b"1.5", b"#x1F", b"#b10", b":kw", b"\"s\"", b"|q|",
+    ];
+    let delimiters: &[&[u8]] = &[b" ", b"\t", b"\r", b"\n", b"(", b")", b";c", b""];
+    for token in tokens {
+        for delimiter in delimiters {
+            let input = [*token, *delimiter].concat();
+            let lexed = lex_all(&input).unwrap_or_else(|err| {
+                panic!(
+                    "{:?} must lex, got {:?}",
+                    String::from_utf8_lossy(&input),
+                    err.kind()
+                )
+            });
+            // the token, possibly a parenthesis, and the end of file
+            let expected = 2 + matches!(delimiter[..], [b'(' | b')']) as usize;
+            assert_eq!(
+                lexed.len(),
+                expected,
+                "{:?}",
+                String::from_utf8_lossy(&input)
+            );
+        }
+    }
+}
+
+#[test]
+fn a_keyword_is_delimited_by_a_parenthesised_value() {
+    // the parenthesis delimits the keyword, so a glued list value is fine
     assert_eq!(
-        token_payloads(b"1.5a 2.0e 3.25fed)"),
+        token_payloads(b":a(b)"),
         vec![
-            (TokenType::Decimal, b"1.5".to_vec()),
-            (TokenType::UnquotedSymbol, b"a".to_vec()),
-            (TokenType::Decimal, b"2.0".to_vec()),
-            (TokenType::UnquotedSymbol, b"e".to_vec()),
-            (TokenType::Decimal, b"3.25".to_vec()),
-            (TokenType::UnquotedSymbol, b"fed".to_vec()),
+            (TokenType::Keyword, b"a".to_vec()),
+            (TokenType::ParenOpen, b"(".to_vec()),
+            (TokenType::UnquotedSymbol, b"b".to_vec()),
             (TokenType::ParenClose, b")".to_vec()),
             (TokenType::EndOfFile, vec![]),
         ]
     );
+}
+
+#[test]
+fn a_doubled_quote_continues_a_string_rather_than_ending_it() {
+    // one token with the escape resolved, not two glued strings
     assert_eq!(
-        token_spans(b"1.5a"),
+        token_payloads(b"\"a\"\"b\""),
         vec![
-            (TokenType::Decimal, (0, 0, 0), (3, 0, 3)),
-            (TokenType::UnquotedSymbol, (3, 0, 3), (4, 0, 4)),
-            (TokenType::EndOfFile, (4, 0, 4), (4, 0, 4)),
+            (TokenType::String, b"a\"b".to_vec()),
+            (TokenType::EndOfFile, vec![]),
         ]
     );
+}
+
+#[test]
+fn a_token_ending_at_a_slice_end_is_delimited_by_the_next_slice() {
+    // the byte that delimits a string or a quoted symbol closed exactly at
+    // the end of a slice arrives with the next one, or never if the input ends
+    for (first, second, ok) in [
+        (&b"|q|"[..], &b")"[..], true),
+        (b"|q|", b" x", true),
+        (b"|q|", b"", true),
+        (b"|q|", b"b", false),
+        (b"|q|", b"|r|", false),
+        (b"\"s\"", b")", true),
+        (b"\"s\"", b"", true),
+        (b"\"s\"", b"t", false),
+        (b"\"s\"", b"\"t\"", true),
+    ] {
+        let mut collected = CollectTokens(Vec::new());
+        let mut lexer = Lexer::new(&mut collected);
+        let _ = lexer
+            .lex_slice(first)
+            .map_err(into_lexer_error)
+            .expect("the first slice lexes");
+        let result = lexer.lex_slice(second).map_err(into_lexer_error);
+        let result = result.and_then(|_| lexer.lex_eof().map_err(into_lexer_error));
+        let name = format!(
+            "{:?} then {:?}",
+            String::from_utf8_lossy(first),
+            String::from_utf8_lossy(second)
+        );
+        match result {
+            Ok(_) => assert!(ok, "{name} must not lex"),
+            Err(err) => {
+                assert!(!ok, "{name} must lex, got {:?}", err.kind());
+                assert_eq!(*err.kind(), LexerErrorKind::MissingDelimiter, "{name}");
+                // the span covers the token in the first slice and the byte in the second
+                assert_eq!(
+                    (loc(err.span().start()), loc(err.span().end())),
+                    (
+                        (0, 0, 0),
+                        (first.len() as u64 + 1, 0, first.len() as u64 + 1)
+                    ),
+                    "span of {name}"
+                );
+            }
+        }
+    }
 }
 
 #[test]

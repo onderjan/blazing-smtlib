@@ -14,6 +14,7 @@ pub enum LexerErrorKind {
     ForbiddenCharInQuotedSymbol,
     UnclosedQuotedSymbol,
     NumeralLeadingZero,
+    MissingDelimiter,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

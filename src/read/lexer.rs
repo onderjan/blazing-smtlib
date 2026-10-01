@@ -16,8 +16,8 @@ use crate::{
             run_end,
         },
         helpers::{
-            BINARY_RUN, Content, DigitRun, FAST, FAST_EMIT, FAST_ON, FAST_PIPE, FAST_RUN_MASK,
-            HEXADECIMAL_RUN, START, Start, TokenEnd,
+            BINARY_RUN, Content, DigitRun, FAST, FAST_DELIM, FAST_EMIT, FAST_ON, FAST_PIPE,
+            FAST_RUN_MASK, HEXADECIMAL_RUN, START, Start, TokenEnd,
         },
     },
     token::{InnerType, TokenCursor, TokenHandler},
@@ -79,18 +79,45 @@ struct Interrupted<R, E> {
 
 #[derive(Clone, Copy)]
 enum LexerState {
+    /// Awaiting the start of a token.
     Normal,
+    /// Lexing a numeral or the whole part of a decimal.
+    ///
+    /// Whether the token is a numeral or a decimal will
+    /// only become apparent after encountering a dot
+    /// or token end.
     NumeralOrDecimal,
+    /// Lexing a fraction.
     Fraction,
+    /// Hash encountered, 'h' will select hexadecimal, 'b' binary.
     BaseSelection,
+    /// Lexing a hexadecimal number.
     Hexadecimal,
+    /// Lexing a binary number.
     Binary,
+    /// Lexing a string literal.
     StringLiteral,
+    /// Lexing a string literal, a double quote was encountered.
+    ///
+    /// Either another double quote should follow, acting as an escape,
+    /// or a token delimiter, confirming the string literal closed.
     StringLiteralDoubleQuote,
+    /// Lexing a simple symbol.
+    ///
+    /// Reserved words are not handled by the lexer, so this may
+    /// be a reserved word as well.
     SimpleSymbol,
+    /// Lexing a quoted symbol.
     QuotedSymbol,
+    /// Lexing a keyword.
     Keyword,
+    /// Lexing a comment.
     Comment,
+    /// Quoted symbol closing pipe was encountered, waiting for token delimiter.
+    ///
+    /// The token cannot be emitted before confirming that the next byte is
+    /// a token delimiter; otherwise, an error will occur.
+    QuotedSymbolClosed,
     /// A lexer or handler error was returned; lexing cannot continue.
     Failed,
 }
@@ -178,20 +205,38 @@ impl<H: TokenHandler> Lexer<H> {
             len: 0,
         };
 
+        // EOF is a token delimiter, we need to produce the token
+        // that waits for a delimiter if there is any
         let result = match self.state {
             LexerState::Normal | LexerState::Comment => {
                 // nothing to do, we accept EOF even in comments
                 Ok(())
             }
-            LexerState::Fraction => self.finish_decimal(&mut batch, TokenEnd::EOF, Content::Stored),
+            LexerState::QuotedSymbolClosed => {
+                // the end of the input is a token delimiter,
+                // produce the quoted symbol
+                self.sink_slice(
+                    &mut batch,
+                    InnerType::QuotedSymbol,
+                    TokenEnd::EOF,
+                    Content::Stored,
+                )
+            }
+            LexerState::Fraction => {
+                self.finish_decimal(&mut batch, TokenEnd::EOF, Content::Stored, None)
+            }
             LexerState::NumeralOrDecimal => {
                 self.finish_numeral(&mut batch, TokenEnd::EOF, Content::Stored)
             }
-            LexerState::Hexadecimal => {
-                self.finish_digit_run(&mut batch, HEXADECIMAL_RUN, TokenEnd::EOF, Content::Stored)
-            }
+            LexerState::Hexadecimal => self.finish_digit_run(
+                &mut batch,
+                HEXADECIMAL_RUN,
+                TokenEnd::EOF,
+                Content::Stored,
+                None,
+            ),
             LexerState::Binary => {
-                self.finish_digit_run(&mut batch, BINARY_RUN, TokenEnd::EOF, Content::Stored)
+                self.finish_digit_run(&mut batch, BINARY_RUN, TokenEnd::EOF, Content::Stored, None)
             }
             LexerState::BaseSelection => {
                 // hash without selection following it
@@ -210,7 +255,9 @@ impl<H: TokenHandler> Lexer<H> {
             LexerState::SimpleSymbol => {
                 self.finish_simple_symbol(&mut batch, TokenEnd::EOF, Content::Stored)
             }
-            LexerState::Keyword => self.finish_keyword(&mut batch, TokenEnd::EOF, Content::Stored),
+            LexerState::Keyword => {
+                self.finish_keyword(&mut batch, TokenEnd::EOF, Content::Stored, None)
+            }
             LexerState::QuotedSymbol => {
                 // EOF forbidden as the symbol must be totally enclosed by pipes
                 Err(self.error(LexerErrorKind::UnclosedQuotedSymbol, TokenEnd::EOF))
@@ -285,6 +332,9 @@ impl<H: TokenHandler> Lexer<H> {
                     LexerState::QuotedSymbol => self.lex_quoted_symbol(&mut batch, rest),
                     LexerState::Keyword => self.lex_keyword(&mut batch, rest),
                     LexerState::Comment => self.lex_comment(rest),
+                    LexerState::QuotedSymbolClosed => {
+                        self.lex_quoted_symbol_closed(&mut batch, rest)
+                    }
                     LexerState::Failed => panic!("cannot lex after a lexer error"),
                 }
             };
@@ -423,6 +473,30 @@ impl<H: TokenHandler> Lexer<H> {
                     (InnerType::UnquotedSymbol, &slice[index..token_end])
                 };
                 let emit = (fast_entry & FAST_EMIT != 0) as usize;
+                // A token must be delimited by the byte after it,
+                // fall back to the state machine if the delimiter is not found.
+                if emit != 0 {
+                    if let Some(&next) = slice.get(token_end) {
+                        // the token ended inside the slice: the byte after it must delimit it
+                        if FAST[next as usize] & FAST_DELIM == 0 {
+                            local.store(self, batch);
+                            self.start_token(index);
+                            return Err(
+                                self.error_at(LexerErrorKind::MissingDelimiter, token_end + 1)
+                            );
+                        }
+                    } else {
+                        // the token ended exactly at the slice end
+                        // this must be a quoted symbol as the unquoted symbol
+                        // has its token end inside the confirmed run
+                        // the quoted symbol must be wait for the delimiter
+                        local.store(self, batch);
+                        self.start_token(index);
+                        self.token_content.extend_from_slice(entry.1);
+                        self.state = LexerState::QuotedSymbolClosed;
+                        return Ok(token_end);
+                    }
+                }
                 self.push_fast(batch, &mut local, offset, entry, index..token_end, emit)?;
                 // Fast path done, continue normally after the token end.
                 index = token_end;
@@ -500,6 +574,7 @@ impl<H: TokenHandler> Lexer<H> {
                         run,
                         TokenEnd::at_byte(after_end),
                         Content::Borrowed(&slice[start..after_end]),
+                        Some(slice[after_end]),
                     )?;
                     // update the index and continue the loop
                     index = after_end;
@@ -520,6 +595,7 @@ impl<H: TokenHandler> Lexer<H> {
                         Some([b'"', next]) if *next != b'"' => {
                             // definitely closed by a quote not followed by another quote
                             // borrow the string literal content and produce a token
+                            self.expect_delimiter(*next, after_content_end + 1)?;
                             self.finish_string_literal(
                                 batch,
                                 TokenEnd::at_byte(after_content_end + 1),
@@ -562,6 +638,7 @@ impl<H: TokenHandler> Lexer<H> {
                         batch,
                         TokenEnd::at_byte(after_end),
                         Content::Borrowed(&slice[after..after_end]),
+                        Some(slice[after_end]),
                     )?;
                     // update the index and continue the loop
                     index = after_end;
@@ -597,13 +674,15 @@ impl<H: TokenHandler> Lexer<H> {
                                 batch,
                                 TokenEnd::at_byte(after_fraction_end),
                                 Content::Borrowed(&slice[index..after_fraction_end]),
+                                Some(slice[after_fraction_end]),
                             )?;
                             // update the index and continue the loop
                             index = after_fraction_end;
                         }
-                        Some(_) => {
+                        Some(&next) => {
                             // the numeral is not actually a decimal and ends
                             // dispatch a numeral token with borrowed content
+                            self.expect_delimiter(next, after_end)?;
                             self.finish_numeral(
                                 batch,
                                 TokenEnd::at_byte(after_end),
@@ -673,9 +752,10 @@ impl<H: TokenHandler> Lexer<H> {
                 self.token_content.push(b'.');
                 self.lex_fraction_from(batch, slice, index + 1)
             }
-            Some(_) => {
+            Some(&next) => {
                 // we have successfully consumed the numeral, finish it
                 // compute the end location, no line feeds are allowed in simple symbols
+                self.expect_delimiter(next, index)?;
                 self.finish_numeral(batch, TokenEnd::at_byte(index), Content::Stored)?;
                 // move back to normal lexer state, not consuming the current byte
                 self.state = LexerState::Normal;
@@ -701,7 +781,12 @@ impl<H: TokenHandler> Lexer<H> {
         if end < slice.len() {
             // we have successfully consumed the fraction, finish the decimal
             // compute the end location, no line feeds are allowed in simple symbols
-            self.finish_decimal(batch, TokenEnd::at_byte(end), Content::Stored)?;
+            self.finish_decimal(
+                batch,
+                TokenEnd::at_byte(end),
+                Content::Stored,
+                Some(slice[end]),
+            )?;
             self.state = LexerState::Normal;
         } else {
             // we ran out of bytes for now
@@ -739,7 +824,13 @@ impl<H: TokenHandler> Lexer<H> {
         if index < slice.len() {
             // we have successfully consumed the digit run, finish it
             // compute the end location, no line feeds are allowed in simple symbols
-            self.finish_digit_run(batch, run, TokenEnd::at_byte(index), Content::Stored)?;
+            self.finish_digit_run(
+                batch,
+                run,
+                TokenEnd::at_byte(index),
+                Content::Stored,
+                Some(slice[index]),
+            )?;
             self.state = LexerState::Normal;
         }
         Ok(index)
@@ -758,6 +849,7 @@ impl<H: TokenHandler> Lexer<H> {
                 if rest[0] != b'\"' {
                     // the previous character was really a quote ending the string literal
                     // finish the previously ended token
+                    self.expect_delimiter(rest[0], consumed)?;
                     self.finish_string_literal(
                         batch,
                         TokenEnd::at_byte(consumed),
@@ -835,6 +927,7 @@ impl<H: TokenHandler> Lexer<H> {
         if index < slice.len() {
             // we have successfully consumed the symbol, finish it
             // compute the end location, no line feeds are allowed in simple symbols
+            self.expect_delimiter(slice[index], index)?;
             self.finish_simple_symbol(batch, TokenEnd::at_byte(index), Content::Stored)?;
             self.state = LexerState::Normal;
         }
@@ -856,17 +949,27 @@ impl<H: TokenHandler> Lexer<H> {
             // inspect the problematic byte
             match rest.get(index) {
                 Some(b'|') => {
-                    // end of quoted symbol, extend and sink its token
-                    // the closing pipe is not consumed but delimits the token
+                    // end of quoted symbol, extend its content
                     self.token_content.extend_from_slice(&rest[..index]);
-                    self.sink_slice(
-                        batch,
-                        InnerType::QuotedSymbol,
-                        TokenEnd::at_byte(after_slice_position),
-                        Content::Stored,
-                    )?;
-                    // return to normal, consuming bytes including the pipe
-                    self.state = LexerState::Normal;
+                    // the byte after the pipe must delimit the token before it is sunk
+                    self.state = match rest.get(index + 1) {
+                        Some(&next) => {
+                            self.expect_delimiter(next, after_slice_position)?;
+                            self.sink_slice(
+                                batch,
+                                InnerType::QuotedSymbol,
+                                TokenEnd::at_byte(after_slice_position),
+                                Content::Stored,
+                            )?;
+                            LexerState::Normal
+                        }
+                        None => {
+                            // we do not have the next byte available,
+                            // move to the state expecting it to be a delimiter
+                            LexerState::QuotedSymbolClosed
+                        }
+                    };
+                    // consume the bytes including the pipe
                     return Ok(after_slice_position);
                 }
                 Some(b'\\') => {
@@ -922,11 +1025,54 @@ impl<H: TokenHandler> Lexer<H> {
         if index < slice.len() {
             // we have successfully consumed the keyword, finish it
             // compute the end locations, no line feeds are allowed in keywords
-            self.finish_keyword(batch, TokenEnd::at_byte(index), Content::Stored)?;
+            self.finish_keyword(
+                batch,
+                TokenEnd::at_byte(index),
+                Content::Stored,
+                Some(slice[index]),
+            )?;
             self.state = LexerState::Normal;
         }
 
         Ok(index)
+    }
+
+    fn lex_quoted_symbol_closed<'a>(
+        &mut self,
+        batch: &mut Batch<'a>,
+        slice: &[u8],
+    ) -> Result<usize, Interrupted<H::Result, LexError<H::Error>>> {
+        // we expect a token delimiter to follow the closing pipe
+        self.expect_delimiter(slice[0], 0)?;
+        // all good, produce the quoted symbol token
+        self.sink_slice(
+            batch,
+            InnerType::QuotedSymbol,
+            TokenEnd::at_byte(0),
+            Content::Stored,
+        )?;
+        // the delimiter is not consumed
+        self.state = LexerState::Normal;
+        Ok(0)
+    }
+
+    /// Checks that `next`, the byte at `position` right after a token,
+    /// delimits it.
+    ///
+    /// Called before the token is handed over, so that a token without its
+    /// delimiter never reaches the handler; the error spans the token and
+    /// the offending byte.
+    #[inline]
+    fn expect_delimiter<R, E>(
+        &self,
+        next: u8,
+        position: usize,
+    ) -> Result<(), Interrupted<R, LexError<E>>> {
+        if FAST[next as usize] & FAST_DELIM != 0 {
+            Ok(())
+        } else {
+            Err(self.error_at(LexerErrorKind::MissingDelimiter, position + 1))
+        }
     }
 
     fn lex_comment(
@@ -954,17 +1100,24 @@ impl<H: TokenHandler> Lexer<H> {
         Ok(index + 1)
     }
 
-    /// Sinks the current token, ending at `position`.
+    /// Sinks a decimal token.
+    ///
+    /// The token's own shape is checked first, then that `next`, the byte
+    /// at the end (if there is one), delimits it.
     fn finish_decimal<'a>(
         &mut self,
         batch: &mut Batch<'a>,
         end: TokenEnd,
         content: Content<'a>,
+        next: Option<u8>,
     ) -> Result<(), Interrupted<H::Result, LexError<H::Error>>> {
         // decimals of the form 7. without any digit in fractional part are disallowed
         let value = content.bytes(&self.token_content);
         if value.last().is_none_or(|c| *c == b'.') {
             return Err(self.error(LexerErrorKind::FractionDigitExpected, end));
+        }
+        if let Some(next) = next {
+            self.expect_delimiter(next, end.position)?;
         }
         self.sink_slice(batch, InnerType::Decimal, end, content)
     }
@@ -978,17 +1131,25 @@ impl<H: TokenHandler> Lexer<H> {
         self.sink_slice(batch, InnerType::Numeral, end, content)
     }
 
+    /// Sinks a hexadecimal/binary token.
+    ///
+    /// The token's own shape is checked first, then that `next`, the byte
+    /// at the end (if there is one), delimits it.
     fn finish_digit_run<'a>(
         &mut self,
         batch: &mut Batch<'a>,
         run: DigitRun,
         end: TokenEnd,
         content: Content<'a>,
+        next: Option<u8>,
     ) -> Result<(), Interrupted<H::Result, LexError<H::Error>>> {
         // digit runs must not be empty
         let value = content.bytes(&self.token_content);
         if value.is_empty() {
             return Err(self.error(run.empty_error, end));
+        }
+        if let Some(next) = next {
+            self.expect_delimiter(next, end.position)?;
         }
         self.sink_slice(batch, run.token_type, end, content)
     }
@@ -1002,16 +1163,24 @@ impl<H: TokenHandler> Lexer<H> {
         self.sink_slice(batch, InnerType::UnquotedSymbol, end, content)
     }
 
+    /// Sinks a keyword.
+    ///
+    /// The token's own shape is checked first, then that `next`, the byte
+    /// at the end (if there is one), delimits it.
     fn finish_keyword<'a>(
         &mut self,
         batch: &mut Batch<'a>,
         end: TokenEnd,
         content: Content<'a>,
+        next: Option<u8>,
     ) -> Result<(), Interrupted<H::Result, LexError<H::Error>>> {
         let value = content.bytes(&self.token_content);
         // ensure the keyword is not empty
         if value.is_empty() {
             return Err(self.error(LexerErrorKind::ForbiddenKeywordName, end));
+        }
+        if let Some(next) = next {
+            self.expect_delimiter(next, end.position)?;
         }
         self.sink_slice(batch, InnerType::Keyword, end, content)
     }
