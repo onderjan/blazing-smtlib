@@ -62,7 +62,7 @@ fn into_lexer_error(err: LexError<Infallible>) -> LexerError {
 /// Lexes the whole input including EOF and returns all produced tokens.
 fn lex_all(input: &[u8]) -> Result<Vec<OwnedToken>, LexerError> {
     let mut collected = CollectTokens(Vec::new());
-    let mut lexer = Lexer::new(&mut collected);
+    let mut lexer = Lexer::new(&mut collected, SmtVersion::V2_7);
     let _ = lexer.lex_all(input).map_err(into_lexer_error)?;
     drop(lexer);
     Ok(collected.0)
@@ -345,7 +345,7 @@ fn error_after_comment_line() {
 #[test]
 fn current_location_follows_consumed_bytes() {
     let mut collected = CollectTokens(Vec::new());
-    let mut lexer = Lexer::new(&mut collected);
+    let mut lexer = Lexer::new(&mut collected, SmtVersion::V2_7);
     assert_eq!(loc(lexer.current_location()), (0, 0, 0));
     for &c in b"ab\nc" {
         let _ = lexer
@@ -630,7 +630,7 @@ impl TokenHandler for RejectTokens {
 
 #[test]
 fn handler_error_is_returned_with_the_handled_token() {
-    let mut lexer = Lexer::new(RejectTokens);
+    let mut lexer = Lexer::new(RejectTokens, SmtVersion::V2_7);
     // the parenthesis token is produced and handed to the handler immediately
     let Err(LexError::Handler(span)) = lexer.lex_slice(b"(") else {
         panic!("expected a handler error");
@@ -644,7 +644,7 @@ fn handler_error_is_returned_with_the_handled_token() {
 #[should_panic(expected = "cannot lex after a lexer error")]
 fn lexing_after_an_error_panics() {
     let mut collected = CollectTokens(Vec::new());
-    let mut lexer = Lexer::new(&mut collected);
+    let mut lexer = Lexer::new(&mut collected, SmtVersion::V2_7);
     let _ = lexer
         .lex_slice(b"7")
         .map_err(into_lexer_error)
@@ -658,7 +658,7 @@ fn lexing_after_an_error_panics() {
 #[should_panic(expected = "cannot lex after a lexer error")]
 fn lexing_after_a_handler_error_panics() {
     // a handler error also makes the lexer unusable
-    let mut lexer = Lexer::new(RejectTokens);
+    let mut lexer = Lexer::new(RejectTokens, SmtVersion::V2_7);
     assert!(lexer.lex_slice(b"(").is_err(), "expected a handler error");
     let _ = lexer.lex_slice(b"a");
 }
@@ -855,7 +855,7 @@ impl TokenHandler for RejectEof {
 fn lexing_after_a_handler_error_on_the_eof_token_panics() {
     // the EOF token is the last thing lex_eof does; a handler error there
     // must still leave the lexer failed like every other error
-    let mut lexer = Lexer::new(RejectEof);
+    let mut lexer = Lexer::new(RejectEof, SmtVersion::V2_7);
     let _ = lexer.lex_slice(b"a").expect("valid input");
     assert!(lexer.lex_eof().is_err(), "expected a handler error");
     let _ = lexer.lex_slice(b"b");
@@ -865,7 +865,7 @@ fn lexing_after_a_handler_error_on_the_eof_token_panics() {
 #[should_panic(expected = "cannot lex after a lexer error")]
 fn lexing_after_a_lexer_error_at_eof_panics() {
     let mut collected = CollectTokens(Vec::new());
-    let mut lexer = Lexer::new(&mut collected);
+    let mut lexer = Lexer::new(&mut collected, SmtVersion::V2_7);
     let _ = lexer
         .lex_slice(b"\"unclosed")
         .map_err(into_lexer_error)
@@ -906,7 +906,7 @@ fn the_end_of_file_resets_the_lexer_so_a_second_one_is_at_the_origin() {
     // at the origin after it, and a second EOF is a new, empty input
     for (input, eof_at) in [(&b"a"[..], (1, 0, 1)), (&b"a "[..], (2, 0, 2))] {
         let mut collected = CollectTokens(Vec::new());
-        let mut lexer = Lexer::new(&mut collected);
+        let mut lexer = Lexer::new(&mut collected, SmtVersion::V2_7);
         let _ = lexer
             .lex_slice(input)
             .map_err(into_lexer_error)
@@ -943,7 +943,7 @@ fn the_end_of_file_resets_the_lexer_so_a_second_one_is_at_the_origin() {
 #[test]
 fn input_after_the_end_of_file_is_a_new_input_from_the_origin() {
     let mut collected = CollectTokens(Vec::new());
-    let mut lexer = Lexer::new(&mut collected);
+    let mut lexer = Lexer::new(&mut collected, SmtVersion::V2_7);
     let _ = lexer
         .lex_slice(b"a\n")
         .map_err(into_lexer_error)
@@ -986,7 +986,7 @@ fn input_after_the_end_of_file_is_a_new_input_from_the_origin() {
 #[test]
 fn a_token_cut_by_the_end_of_file_is_finished_and_not_resumed() {
     let mut collected = CollectTokens(Vec::new());
-    let mut lexer = Lexer::new(&mut collected);
+    let mut lexer = Lexer::new(&mut collected, SmtVersion::V2_7);
     let _ = lexer
         .lex_slice(b"ab")
         .map_err(into_lexer_error)
@@ -1243,7 +1243,7 @@ fn a_token_ending_at_a_slice_end_is_delimited_by_the_next_slice() {
         (b"\"s\"", b"\"t\"", true),
     ] {
         let mut collected = CollectTokens(Vec::new());
-        let mut lexer = Lexer::new(&mut collected);
+        let mut lexer = Lexer::new(&mut collected, SmtVersion::V2_7);
         let _ = lexer
             .lex_slice(first)
             .map_err(into_lexer_error)

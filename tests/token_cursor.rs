@@ -13,7 +13,7 @@ use smt_parser_rs::{
         lexer::Lexer,
         parser::{Parser, ParserResources, SortParser, TermParser},
     },
-    token::{TokenCursor, TokenHandler, TokenType},
+    token::{SmtVersion, TokenCursor, TokenHandler, TokenType},
 };
 
 /// A handler that runs a check on a copy of every cursor it receives, then
@@ -36,7 +36,7 @@ impl<F: FnMut(TokenCursor<'_>)> TokenHandler for Probe<F> {
 
 /// Lexes the chunks and end of file, running the check on every hand-over.
 fn on_batches(chunks: &[&[u8]], check: impl FnMut(TokenCursor<'_>)) {
-    let mut lexer = Lexer::new(Probe(check));
+    let mut lexer = Lexer::new(Probe(check), SmtVersion::V2_7);
     for chunk in chunks {
         let _ = lexer.lex_slice(chunk).expect("valid input must lex");
     }
@@ -154,7 +154,7 @@ fn single_token_cursor_holds_that_token_alone() {
     on_token_batch(b"(a b) c ", |start| {
         let mut walk = start;
         while let Some(token) = walk.next() {
-            let mut cursor = TokenCursor::single(token);
+            let mut cursor = TokenCursor::single(SmtVersion::V2_7, token);
             assert!(!cursor.is_empty());
             assert_eq!(cursor.peek(), Some(token));
             assert_eq!(cursor.get(1), None);

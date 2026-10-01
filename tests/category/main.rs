@@ -38,7 +38,7 @@ use smt_parser_rs::{
             SymbolParser, SyntaxErrorKind, TermParser,
         },
     },
-    token::{Reserved, TokenCursor, TokenHandler, TokenType},
+    token::{Reserved, SmtVersion, TokenCursor, TokenHandler, TokenType},
 };
 
 // --- Test handler rendering everything it receives back into text ---
@@ -414,7 +414,7 @@ fn run_count_from<H: SmtHandler<Error = Infallible>, P: Parser<H>>(
         results: Vec::new(),
         unconsumed: 0,
     };
-    let mut lexer = Lexer::new(&mut drive);
+    let mut lexer = Lexer::new(&mut drive, SmtVersion::V2_7);
     match lexer.lex_all(input) {
         Ok(_) => {}
         Err(LexError::Handler(err)) => {

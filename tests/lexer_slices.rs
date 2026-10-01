@@ -14,7 +14,7 @@ use std::ops::ControlFlow;
 use smt_parser_rs::{
     SmtLocation, SmtSpan,
     read::lexer::{LexError, Lexer, LexerError, LexerErrorKind},
-    token::{TokenCursor, TokenHandler, TokenType},
+    token::{SmtVersion, TokenCursor, TokenHandler, TokenType},
 };
 
 /// An owned copy of a produced token, comparable between lexer runs.
@@ -103,7 +103,7 @@ fn lex_chunks(input: &[u8], chunks: &[&[u8]]) -> Outcome {
     );
 
     let mut collected = CollectTokens(Vec::new());
-    let mut lexer = Lexer::new(&mut collected);
+    let mut lexer = Lexer::new(&mut collected, SmtVersion::V2_7);
     let mut consumed = 0usize;
     let mut expected_location = SmtLocation::initial();
     let mut error = None;
@@ -455,7 +455,7 @@ fn byte_by_byte_slices_match_the_whole_slice() {
         let reference = lex_whole(input);
 
         let mut collected = CollectTokens(Vec::new());
-        let mut lexer = Lexer::new(&mut collected);
+        let mut lexer = Lexer::new(&mut collected, SmtVersion::V2_7);
         let mut error = None;
         for (index, &c) in input.iter().enumerate() {
             if let Err(err) = lexer.lex_slice(&[c]) {
@@ -536,7 +536,7 @@ fn whole_slice_agrees_with_lex_all() {
         let reference = lex_whole(input);
 
         let mut collected = CollectTokens(Vec::new());
-        let mut lexer = Lexer::new(&mut collected);
+        let mut lexer = Lexer::new(&mut collected, SmtVersion::V2_7);
         let error = lexer.lex_all(input).err().map(into_lexer_error);
         drop(lexer);
 
@@ -771,7 +771,7 @@ fn handler_errors_are_raised_where_the_token_is_produced_in_every_chunking() {
         for (n, rejected) in reference.tokens.iter().enumerate() {
             for chunk_length in [1usize, 2, 3, 5, input.len().max(1)] {
                 let chunks = split_by_lengths(input, &[chunk_length]);
-                let mut lexer = Lexer::new(RejectNth { remaining: n });
+                let mut lexer = Lexer::new(RejectNth { remaining: n }, SmtVersion::V2_7);
                 let mut consumed = 0;
                 let mut site = None;
                 for chunk in &chunks {

@@ -79,7 +79,7 @@ impl CollectTokens {
 #[track_caller]
 fn lex_pieces(pieces: &[&[u8]]) -> Vec<Lexed> {
     let mut collected = CollectTokens(Vec::new());
-    let mut lexer = Lexer::new(&mut collected);
+    let mut lexer = Lexer::new(&mut collected, SmtVersion::V2_7);
     for piece in pieces {
         let _ = lexer
             .lex_slice(piece)
@@ -216,7 +216,7 @@ fn end_of_input_has_no_content_and_an_empty_span_at_the_end() {
             }
         }
         let mut handler = Locate(&mut collected, &mut locations);
-        let _ = Lexer::new(&mut handler)
+        let _ = Lexer::new(&mut handler, SmtVersion::V2_7)
             .lex_all(b"(a)\n  b ")
             .expect("valid input must lex");
     }

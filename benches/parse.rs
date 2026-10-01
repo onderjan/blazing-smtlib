@@ -44,7 +44,7 @@ use std::time::Instant;
 
 use smt_parser_rs::{
     read::lexer::Lexer,
-    token::{TokenCursor, TokenHandler},
+    token::{SmtVersion, TokenCursor, TokenHandler},
 };
 
 /// Default timed runs per file and mode; an additional first (warm-up) run
@@ -74,7 +74,7 @@ impl TokenHandler for DiscardTokens {
 /// Lexes the in-memory file, discarding tokens, and returns the token count.
 fn lex_from_memory(data: &[u8], path: &Path) -> usize {
     let mut handler = DiscardTokens { tokens: 0 };
-    let mut lexer = Lexer::new(&mut handler);
+    let mut lexer = Lexer::new(&mut handler, SmtVersion::V2_7);
     if let Err(err) = lexer.lex_all(data) {
         panic!("benchmark file {} must lex, got {:?}", path.display(), err);
     }

@@ -17,6 +17,7 @@ use std::ops::ControlFlow;
 use smt_parser_rs::{
     CheckStandardSyntax, NonstandardCommandError,
     read::{SmtReadError, SmtReader},
+    token::{SmtVersion, SmtVersionPosture},
 };
 
 /// A command with one place where a name is expected, marked `NAME`.
@@ -223,7 +224,8 @@ fn keywords_spelled_like_reserved_words_are_keywords() {
 /// stopping at the first error.
 fn read_pieces(pieces: &[&[u8]]) -> Result<(), SmtReadError<NonstandardCommandError>> {
     let mut handler = CheckStandardSyntax;
-    let mut reader = SmtReader::script(&mut handler);
+    let mut reader =
+        SmtReader::script(&mut handler, SmtVersion::V2_7, SmtVersionPosture::default());
     for piece in pieces {
         if let ControlFlow::Break(_) = reader.read_slice(piece)? {
             return Ok(());

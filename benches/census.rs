@@ -168,7 +168,7 @@ impl Census {
 /// Prints the census of the in-memory file.
 fn print_census(label: &str, data: &[u8], path: &Path) {
     let mut census = Census::default();
-    let mut lexer = Lexer::new(&mut census);
+    let mut lexer = Lexer::new(&mut census, SmtVersion::V2_7);
     if let Err(err) = lexer.lex_all(data) {
         panic!("benchmark file {} must lex, got {:?}", path.display(), err);
     }

@@ -18,7 +18,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use smt_parser_rs::{
     SmtLocation, SmtSpan,
     read::lexer::{LexError, Lexer, LexerErrorKind},
-    token::{Token, TokenCursor, TokenHandler, TokenType},
+    token::{SmtVersion, Token, TokenCursor, TokenHandler, TokenType},
 };
 
 /// The batch capacity the lexer is expected to use.
@@ -186,10 +186,13 @@ fn run(chunks: &[&[u8]], plan: &[Reply]) -> Run {
     let mut error = None;
     let mut finished_at = None;
     {
-        let mut lexer = Lexer::new(Recorder {
-            calls: &mut calls,
-            plan,
-        });
+        let mut lexer = Lexer::new(
+            Recorder {
+                calls: &mut calls,
+                plan,
+            },
+            SmtVersion::V2_7,
+        );
         let mut expected = SmtLocation::initial();
         for chunk in chunks {
             match lexer.lex_slice(chunk) {
@@ -539,10 +542,13 @@ fn lexing_after_a_finish_starts_a_new_input_at_the_origin() {
     let mut calls = Vec::new();
     let plan = [Reply::Finish { consumed: 1 }];
     {
-        let mut lexer = Lexer::new(Recorder {
-            calls: &mut calls,
-            plan: &plan,
-        });
+        let mut lexer = Lexer::new(
+            Recorder {
+                calls: &mut calls,
+                plan: &plan,
+            },
+            SmtVersion::V2_7,
+        );
         let located = match lexer.lex_slice(b"a b ") {
             Ok(ControlFlow::Break(located)) => located,
             other => panic!("expected a finish, got {other:?}"),
@@ -576,10 +582,13 @@ fn a_finish_at_the_end_of_file_token_is_followed_by_a_new_input() {
     let mut calls = Vec::new();
     let plan = [Reply::TakeAll, Reply::Finish { consumed: 1 }];
     {
-        let mut lexer = Lexer::new(Recorder {
-            calls: &mut calls,
-            plan: &plan,
-        });
+        let mut lexer = Lexer::new(
+            Recorder {
+                calls: &mut calls,
+                plan: &plan,
+            },
+            SmtVersion::V2_7,
+        );
         assert!(matches!(
             lexer.lex_slice(b"a b "),
             Ok(ControlFlow::Continue(()))
