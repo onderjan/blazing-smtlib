@@ -30,18 +30,30 @@ impl SimplePatternParser {
         token: Token<'t>,
     ) -> Result<SmtSimplePatternView<'t>, ParserError<H::Error>> {
         let result = match token.kind(version) {
-            TokenKind::Symbol(symbol) => SmtSimplePatternView::Symbol(symbol),
+            TokenKind::Symbol(symbol) => Some(SmtSimplePatternView::Symbol(symbol)),
             TokenKind::Reserved(Reserved::General(GeneralReserved::Underscore)) => {
-                SmtSimplePatternView::Wildcard
+                // the underscore wildcard is not allowed in every version
+                if underscore_wildcard_allowed(version) {
+                    Some(SmtSimplePatternView::Wildcard)
+                } else {
+                    None
+                }
             }
-            _ => {
-                return Err(ParserError::category_error(
-                    SyntaxErrorKind::ExpectedSymbolOrUnderscore,
-                    token.span(),
-                ));
-            }
+            _ => None,
         };
-        Ok(result)
+        match result {
+            Some(view) => Ok(view),
+            None => {
+                // the underscore wildcard is not allowed in every version
+                let kind = if underscore_wildcard_allowed(version) {
+                    SyntaxErrorKind::ExpectedSymbolOrUnderscore
+                } else {
+                    SyntaxErrorKind::ExpectedSymbol
+                };
+
+                Err(ParserError::category_error(kind, token.span()))
+            }
+        }
     }
 }
 
@@ -219,25 +231,43 @@ impl PatternSlot {
         // step 1: expecting a simple pattern or an opening parenthesis
         debug_assert!(self.is_pristine(), "must be pristine when starting");
         let result = match token.kind(version) {
-            TokenKind::Symbol(symbol) => SmtSimplePatternView::Symbol(symbol),
+            TokenKind::Symbol(symbol) => Some(SmtSimplePatternView::Symbol(symbol)),
             TokenKind::Reserved(Reserved::General(GeneralReserved::Underscore)) => {
-                SmtSimplePatternView::Wildcard
+                // the underscore wildcard is not allowed in every version
+                if underscore_wildcard_allowed(version) {
+                    Some(SmtSimplePatternView::Wildcard)
+                } else {
+                    None
+                }
             }
             TokenKind::ParenOpen => {
                 // move to constructor parsing
                 self.is_open = true;
                 return Ok(ControlFlow::Continue(()));
             }
-            _ => {
-                return Err(ParserError::category_error(
-                    SyntaxErrorKind::ExpectedSymbolUnderscoreOrParenOpen,
-                    span,
-                ));
-            }
+            _ => None,
         };
-        // this was just a simple pattern, the slot is in its initial state
-        Ok(ControlFlow::Break(PatternHandle::Simple(result)))
+        match result {
+            Some(view) => {
+                // this was just a simple pattern, the slot is in its initial state
+                Ok(ControlFlow::Break(PatternHandle::Simple(view)))
+            }
+            None => {
+                // the underscore wildcard is not allowed in every version
+                let kind = if underscore_wildcard_allowed(version) {
+                    SyntaxErrorKind::ExpectedSymbolUnderscoreOrParenOpen
+                } else {
+                    SyntaxErrorKind::ExpectedSymbolOrParenOpen
+                };
+                Err(ParserError::category_error(kind, span))
+            }
+        }
     }
+}
+
+fn underscore_wildcard_allowed(version: SmtVersion) -> bool {
+    // the underscore names a wildcard since SMT-LIB 2.7
+    version >= SmtVersion::V2_7
 }
 
 #[cfg(test)]

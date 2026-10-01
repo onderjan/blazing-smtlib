@@ -74,7 +74,7 @@ pub enum TokenKind<'a> {
 }
 
 /// Version of the SMT-LIB standard.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, PartialOrd, Ord)]
 pub enum SmtVersion {
     V2_5,
     V2_6,

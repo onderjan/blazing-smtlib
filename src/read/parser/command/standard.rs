@@ -13,7 +13,7 @@ use crate::{
             function::{DefineFunsRecParser, FunctionSignatureParser, RecursiveBodyParser},
         },
     },
-    token::{CommandNameReserved, SmtVersion, TokenCursor, TokenType},
+    token::{CommandNameReserved, SmtVersion, TokenCursor, TokenKind, TokenType},
 };
 
 /// Defines the standard commands, each named like its variant of
@@ -150,7 +150,7 @@ standard_commands! {
         CloseParenParser,
         |handler, ()| handler.command_check_sat(Vec::new())),
     check_sat_assuming: CheckSatAssuming(
-        ClosedParser<H, ParenMultipleParser<H, TermParser<H>>>,
+        CheckSatAssumingParser<H>,
         |handler, assuming| handler.command_check_sat(assuming)),
     exit: Exit(
         CloseParenParser,
@@ -313,12 +313,12 @@ impl<H: CommandHandler> Parser<H> for GetValueParser<H> {
     }
 }
 
-/// A parser for the payload of `set-info`: an attribute followed by
-/// a closing parenthesis.
+/// A parser for the payload of `set-info`.
 ///
-/// This parser is necessary to recognise the version declaration
-/// attribute `:smt-lib-version <version>`, where the version
-/// should be a decimal.
+/// The payload for `set-info` is an attribute followed by a closing parenthesis.
+///
+/// This parser is necessary to recognise the version declaration attribute
+/// `:smt-lib-version <version>`, where the version should be a decimal.
 pub(super) struct SetInfoParser<H: CommandHandler> {
     inner: ClosedAttributeParser<H>,
     state: SetInfoState,
@@ -413,6 +413,117 @@ impl<H: CommandHandler> Parser<H> for SetInfoParser<H> {
         if flow.is_break() {
             // the command has ended, the next payload starts with its attribute name
             self.state = SetInfoState::Name;
+        }
+        Ok(flow)
+    }
+}
+
+/// A parser for the payload of `check-sat-assuming`.
+///
+/// `check-sat-assuming` payload is a parenthesised list of assumptions
+/// followed by a closing parenthesis.
+///
+/// The assumptions are terms since SMT-LIB 2.7. Before it, each assumption
+/// must be a propositional literal: `<symbol>` or `(not <symbol>)`.
+/// The literals are terms too, and are parsed as such.
+pub(super) struct CheckSatAssumingParser<H: CommandHandler> {
+    inner: ClosedParser<H, ParenMultipleParser<H, TermParser<H>>>,
+    state: PropLiteralsState,
+}
+
+enum PropLiteralsState {
+    /// The next token of the payload opens the list.
+    Open,
+    /// Inside the list: the next token starts a literal or closes the list.
+    Literal,
+    /// After the parenthesis that opens a literal: the next token is `not`.
+    Not,
+    /// After `not`: the next token is the negated symbol.
+    Negated,
+    /// After the negated symbol: the next token closes the literal.
+    Close,
+    /// Continue to parse normally.
+    Rest,
+}
+
+impl<H: CommandHandler> CheckSatAssumingParser<H> {
+    fn new() -> Self {
+        Self {
+            inner: ClosedParser::default(),
+            state: PropLiteralsState::Open,
+        }
+    }
+}
+
+impl<H: CommandHandler> Default for CheckSatAssumingParser<H> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<H: CommandHandler> Parser<H> for CheckSatAssumingParser<H> {
+    type Result = Vec<H::Term>;
+
+    #[inline]
+    fn parse(
+        &mut self,
+        handler: &mut H,
+        resources: &mut ParserResources<H>,
+        cursor: &mut TokenCursor,
+    ) -> Result<ControlFlow<Vec<H::Term>, ()>, ParserError<H::Error>> {
+        // Any terms are allowed as assumptions since SMT-LIB 2.7. Before it,
+        // the terms must be propositional literals, i.e. `<symbol>` or `(not <symbol>)`.
+        // In that case, we check that the assumptions are propositional literals
+        // before handing the cursor off to the actual processing.
+        //
+        // The state machine is as follows:
+        // 1. Open: the first token should open the list, move to Literal;
+        //    otherwise, move to Rest and leave the error to the actual processing.
+        // 2. Literal: a symbol is a literal; "(" starts a negated one, move to Not;
+        //    ")" closes the list, move to Rest.
+        // 3. Not, Negated, Close: expect the symbol "not", any symbol and ")"
+        //    in turn, then move back to Literal.
+        // 4. Rest looks at nothing more.
+        let version = cursor.version();
+        if version < SmtVersion::V2_7 {
+            let mut ahead = 0;
+            while let Some(token) = cursor.get(ahead) {
+                let kind = token.kind(version);
+                self.state = match (&self.state, kind) {
+                    (PropLiteralsState::Rest, _) => break,
+                    (PropLiteralsState::Open, TokenKind::ParenOpen) => PropLiteralsState::Literal,
+                    // anything else, and the end of the input in any state,
+                    // is left to the actual processing
+                    (PropLiteralsState::Open, _) | (_, TokenKind::EndOfFile) => {
+                        PropLiteralsState::Rest
+                    }
+                    (PropLiteralsState::Literal, TokenKind::Symbol(_)) => {
+                        PropLiteralsState::Literal
+                    }
+                    (PropLiteralsState::Literal, TokenKind::ParenOpen) => PropLiteralsState::Not,
+                    (PropLiteralsState::Literal, TokenKind::ParenClose) => PropLiteralsState::Rest,
+                    (PropLiteralsState::Not, TokenKind::Symbol(symbol))
+                        if symbol.as_slice() == b"not" =>
+                    {
+                        PropLiteralsState::Negated
+                    }
+                    (PropLiteralsState::Negated, TokenKind::Symbol(_)) => PropLiteralsState::Close,
+                    (PropLiteralsState::Close, TokenKind::ParenClose) => PropLiteralsState::Literal,
+                    _ => {
+                        return Err(ParserError::category_error(
+                            SyntaxErrorKind::ExpectedPropositionalLiteral,
+                            token.span(),
+                        ));
+                    }
+                };
+                ahead += 1;
+            }
+        }
+
+        let flow = self.inner.parse(handler, resources, cursor)?;
+        if flow.is_break() {
+            // the command has ended, the next payload starts with the list
+            self.state = PropLiteralsState::Open;
         }
         Ok(flow)
     }

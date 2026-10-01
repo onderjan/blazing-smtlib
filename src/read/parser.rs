@@ -84,6 +84,7 @@ pub enum SyntaxErrorKind {
     ExpectedSymbol,
     ExpectedUnderscore,
     ExpectedSymbolOrUnderscore,
+    ExpectedSymbolOrParenOpen,
     ExpectedSymbolUnderscoreOrParenOpen,
     ExpectedUnderscoreOrAs,
 
@@ -107,6 +108,7 @@ pub enum SyntaxErrorKind {
     ExpectedDatatype,
     ExpectedDatatypeKind,
     ExpectedFunctionBody,
+    ExpectedPropositionalLiteral,
     EmptyFunctionSignatures,
     EmptyDatatypeIntroductions,
     EmptyDatatypeParameters,

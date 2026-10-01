@@ -91,7 +91,17 @@ impl SExprSlot {
         let span = token.span();
         let s_expr = match token.kind(version) {
             TokenKind::Symbol(symbol) => SmtSExpr::Symbol(symbol),
-            TokenKind::Reserved(reserved) => SmtSExpr::Reserved(reserved),
+            TokenKind::Reserved(reserved) => {
+                // reserved words are only allowed in S-expressions since SMT-LIB 2.6
+                if version >= SmtVersion::V2_6 {
+                    SmtSExpr::Reserved(reserved)
+                } else {
+                    return Err(ParserError::category_error(
+                        SyntaxErrorKind::ExpectedSExpr,
+                        span,
+                    ));
+                }
+            }
             TokenKind::Keyword(keyword) => SmtSExpr::Keyword(keyword),
             TokenKind::ParenOpen => {
                 // add a new level, remember where its S-expressions will start in the arena

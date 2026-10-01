@@ -125,16 +125,8 @@ impl Reserved {
     /// Whether the word is reserved in the version.
     #[inline]
     pub fn is_in_version(&self, version: SmtVersion) -> bool {
-        is_since(self.since(), version)
+        version >= self.since()
     }
-}
-
-/// Whether a word reserved since the version `since` is reserved in `version`.
-///
-/// The versions only add reserved words, and are declared from the oldest.
-#[inline(always)]
-const fn is_since(since: SmtVersion, version: SmtVersion) -> bool {
-    since as u8 <= version as u8
 }
 
 /// Number of slots of the reserved-word table.
@@ -200,7 +192,7 @@ impl Reserved {
         // the slot holds a reserved word or a sentinel
         let (word, reserved, since) = RESERVED_TABLE[reserved_slot(symbol)];
         // if the symbol is equal to the reserved word and the version has it, return it
-        if word == symbol && is_since(since, version) {
+        if word == symbol && version >= since {
             Some(reserved)
         } else {
             None
