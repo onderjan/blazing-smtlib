@@ -13,7 +13,7 @@ use crate::{
     read::lexer::{
         char_class::{
             RUN_COMMENT_PLAIN, RUN_DIGIT, RUN_QUOTED_PLAIN, RUN_SIMPLE_SYMBOL, RUN_STRING_PLAIN,
-            run_end,
+            run_end, run_end_all,
         },
         helpers::{
             BINARY_RUN, Content, DigitRun, FAST, FAST_DELIM, FAST_EMIT, FAST_ON, FAST_PIPE,
@@ -105,9 +105,21 @@ enum LexerState {
     StringLiteral,
     /// Lexing a string literal, a double quote was encountered.
     ///
-    /// Either another double quote should follow, acting as an escape,
-    /// or a token delimiter, confirming the string literal closed.
+    /// In standard 2.5+ mode, it should be followed by another
+    /// double quote acting as an escape, or a token delimiter,
+    /// confirming the string literal closed.
+    ///
+    /// In legacy 2.0 mode, it should be followed by a token delimiter,
+    /// as double quote does not escape itself.
     StringLiteralDoubleQuote,
+    /// Lexing a string literal, a backslash escape was encountered (SMT-LIB 2.0 only).
+    ///
+    /// In the standard 2.5+ mode, backslash does not escape,
+    /// so this state is never taken.
+    ///
+    /// In the legacy 2.0 mode, there are two escape sequences, \" and \\.
+    /// Otherwise, the backslash and the byte after it are taken as-is.
+    StringLiteralBackslashEscape,
     /// Lexing a simple symbol.
     ///
     /// Reserved words are not handled by the lexer, so this may
@@ -250,7 +262,7 @@ impl<H: TokenHandler> Lexer<H> {
                 // hash without selection following it
                 Err(self.error(LexerErrorKind::BaseSelectionExpected, TokenEnd::EOF))
             }
-            LexerState::StringLiteral => {
+            LexerState::StringLiteral | LexerState::StringLiteralBackslashEscape => {
                 // we are still within the string literal
                 // forbidden as the literal must be totally enclosed by double quotes
                 Err(self.error(LexerErrorKind::UnclosedStringLiteral, TokenEnd::EOF))
@@ -258,6 +270,7 @@ impl<H: TokenHandler> Lexer<H> {
             LexerState::StringLiteralDoubleQuote => {
                 // string literal has ended by the previous character,
                 // a quote directly before the end of the file
+                // this works both for 2.0 and 2.5+
                 self.finish_string_literal(&mut batch, TokenEnd::EOF, Content::Stored)
             }
             LexerState::SimpleSymbol => {
@@ -333,7 +346,9 @@ impl<H: TokenHandler> Lexer<H> {
                         self.lex_digit_run(&mut batch, rest, HEXADECIMAL_RUN)
                     }
                     LexerState::Binary => self.lex_digit_run(&mut batch, rest, BINARY_RUN),
-                    LexerState::StringLiteral | LexerState::StringLiteralDoubleQuote => {
+                    LexerState::StringLiteral
+                    | LexerState::StringLiteralDoubleQuote
+                    | LexerState::StringLiteralBackslashEscape => {
                         self.lex_string_literal(&mut batch, rest)
                     }
                     LexerState::SimpleSymbol => self.lex_simple_symbol(&mut batch, rest),
@@ -590,6 +605,12 @@ impl<H: TokenHandler> Lexer<H> {
                 Start::Quote => {
                     // starts a string literal
                     self.start_token(index);
+                    if self.version == SmtVersion::V2_0 {
+                        // SMT-LIB 2.0 has a different string-escape format
+                        // than the subsequent versions, leave the fast path immediately
+                        self.state = LexerState::StringLiteral;
+                        return Ok(after);
+                    }
                     // determine the run of content bytes
                     let after_content_end = after + run_end(&slice[after..], RUN_STRING_PLAIN);
                     // we can only eagerly borrow if the content is ended by a closing quote
@@ -660,7 +681,7 @@ impl<H: TokenHandler> Lexer<H> {
                     // and there is a subsequent digit;
                     // it is possible we will not be able to decide it here
                     // if the slice ends with a single zero, so we need to handle that
-                    // when parsing digit in the state `NumeralOrDecimal`
+                    // when lexing digit in the state `NumeralOrDecimal`
                     if c == b'0' && after_end > after {
                         return Err(self.error_at(LexerErrorKind::NumeralLeadingZero, after + 1));
                     }
@@ -745,7 +766,7 @@ impl<H: TokenHandler> Lexer<H> {
         // as we emplace the first digit in the normal state,
         // it suffices for the leading zero condition that
         // 1. at least one additional digit has been consumed
-        // 2. the content parsed previously is exactly "0"
+        // 2. the content lexed previously is exactly "0"
         if index > 0 && self.token_content.as_slice() == b"0" {
             return Err(self.error_at(LexerErrorKind::NumeralLeadingZero, 1));
         }
@@ -756,7 +777,7 @@ impl<H: TokenHandler> Lexer<H> {
         match slice.get(index) {
             Some(b'.') => {
                 // decimal, the next character will start fraction
-                // add the dot and immediately start parsing the fraction after it
+                // add the dot and immediately start lexing the fraction after it
                 self.token_content.push(b'.');
                 self.lex_fraction_from(batch, slice, index + 1)
             }
@@ -844,11 +865,18 @@ impl<H: TokenHandler> Lexer<H> {
         Ok(index)
     }
 
+    /// Lexes the string literal.
     fn lex_string_literal<'a>(
         &mut self,
         batch: &mut Batch<'a>,
         mut rest: &[u8],
     ) -> Result<usize, Interrupted<H::Result, LexError<H::Error>>> {
+        if self.version == SmtVersion::V2_0 {
+            // in 2.0 mode, the string literals are lexed differently,
+            // hand over to the legacy lexing function
+            return self.lex_string_literal_legacy(batch, rest);
+        }
+
         let mut consumed = 0;
         while !rest.is_empty() {
             if matches!(self.state, LexerState::StringLiteralDoubleQuote) {
@@ -873,7 +901,7 @@ impl<H: TokenHandler> Lexer<H> {
                     consumed += 1;
                     // push a double-quote byte (just one, we encountered two)
                     self.token_content.push(b'\"');
-                    // return to string-literal state and continue parsing
+                    // return to string-literal state and continue lexing
                     self.state = LexerState::StringLiteral;
                 }
             }
@@ -889,7 +917,7 @@ impl<H: TokenHandler> Lexer<H> {
                     self.token_content.extend_from_slice(&rest[..=index]);
                     rest = &rest[index + 1..];
                     consumed += index + 1;
-                    // continue parsing
+                    // continue lexing
                 }
                 Some(b'\"') => {
                     // we have a double quote in string literal
@@ -902,7 +930,7 @@ impl<H: TokenHandler> Lexer<H> {
                     // otherwise, it will end the string literal
                     // put the lexer in a special state to handle the next character
                     self.state = LexerState::StringLiteralDoubleQuote;
-                    // continue parsing
+                    // continue lexing
                 }
                 Some(_) => {
                     // forbidden, not printable or whitespace
@@ -917,6 +945,109 @@ impl<H: TokenHandler> Lexer<H> {
                     return Ok(consumed + rest.len());
                 }
             }
+        }
+        Ok(consumed)
+    }
+
+    /// Lex the string literal in the legacy 2.0 mode.
+    ///
+    /// The legacy 2.0 mode has two backslash escapes, \" and \\.
+    /// There are no other escapes.
+    fn lex_string_literal_legacy<'a>(
+        &mut self,
+        batch: &mut Batch<'a>,
+        mut rest: &[u8],
+    ) -> Result<usize, Interrupted<H::Result, LexError<H::Error>>> {
+        let mut consumed = 0;
+        while !rest.is_empty() {
+            match self.state {
+                LexerState::StringLiteralDoubleQuote => {
+                    // expect a delimiter and finish the previously ended token
+                    self.expect_delimiter(rest[0], consumed)?;
+                    self.finish_string_literal(
+                        batch,
+                        TokenEnd::at_byte(consumed),
+                        Content::Stored,
+                    )?;
+                    // set lexer to normal state and return, not consuming the current byte
+                    self.state = LexerState::Normal;
+                    return Ok(consumed);
+                }
+                LexerState::StringLiteralBackslashEscape => {
+                    // handle the backslash escape
+                    let c = rest[0];
+                    if c == b'\"' || c == b'\\' {
+                        // a backslash escape: only the escaped byte belongs to the content
+                        self.token_content.push(c);
+                        rest = &rest[1..];
+                        consumed += 1;
+                    } else {
+                        // not a backslash escape: the backslash belongs to the content,
+                        // and the byte after it is lexed like any other
+                        self.token_content.push(b'\\');
+                    }
+                    // continue parsing the string literal
+                    self.state = LexerState::StringLiteral;
+                }
+                _ => {}
+            }
+
+            // find the first byte that does not belong to string nor quoted
+            // this means backslash and pipe end the run as well, so we can act on them
+            let index = run_end_all(rest, RUN_STRING_PLAIN | RUN_QUOTED_PLAIN);
+
+            let c = match rest.get(index) {
+                Some(c) => *c,
+                None => {
+                    // extend the content with the rest
+                    self.token_content.extend_from_slice(rest);
+                    // we have nothing more to consume, return
+                    return Ok(consumed + rest.len());
+                }
+            };
+
+            let add_run_ending = match c {
+                b'\n' => {
+                    // mark the line feed
+                    self.mark_line_feed_at(consumed + index);
+                    // it belongs to the string, add it and continue lexing
+                    true
+                }
+                b'\"' => {
+                    // put the lexer in the double-quote state
+                    // do not add the quote, it is not part of the content
+                    self.state = LexerState::StringLiteralDoubleQuote;
+                    false
+                }
+                b'\\' => {
+                    // put the lexer in the backslash-escape state
+                    // do not add the backslash yet
+                    // it may or may not be part of the content
+                    // depending on if it truly is a backslash escape or not
+                    self.state = LexerState::StringLiteralBackslashEscape;
+                    false
+                }
+                b'|' => {
+                    // pipe belongs to the string, add it and continue lexing
+                    true
+                }
+                _ => {
+                    // forbidden character
+                    return Err(
+                        self.error_at(LexerErrorKind::ForbiddenCharInString, consumed + index + 1)
+                    );
+                }
+            };
+
+            // extend the content with bytes before the run-ending byte
+            self.token_content.extend_from_slice(&rest[..index]);
+            if add_run_ending {
+                // add the byte to the content
+                self.token_content.push(c);
+            }
+            // consume the run-ending byte and everything before it
+            rest = &rest[index + 1..];
+            consumed += index + 1;
         }
         Ok(consumed)
     }
@@ -1413,7 +1544,7 @@ impl<H: TokenHandler> Lexer<H> {
     }
 
     fn mark_line_feed_at(&mut self, position: usize) {
-        // when parsing a run, this is used to mark a line feed
+        // when lexing a run, this is used to mark a line feed
         // the locations must only refer to positions after it afterwards
         self.line += 1;
         self.line_start = self.offset + position as u64 + 1;

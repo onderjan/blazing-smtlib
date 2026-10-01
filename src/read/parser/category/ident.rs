@@ -209,13 +209,17 @@ impl IdentSlot {
                                 let index = arena.push_text(index_value.as_slice());
                                 arena.indices.push(IndexHandle::Numeral(index));
                             }
-                            TokenKind::Symbol(index_symbol) => {
+                            // symbol index is only allowed since SMT-LIB 2.5,
+                            // otherwise the fallback is taken
+                            TokenKind::Symbol(index_symbol) if version >= SmtVersion::V2_5 => {
                                 let index = arena.push_text(index_symbol.as_slice());
                                 arena.indices.push(IndexHandle::Symbol(index));
                             }
                             _ => {
-                                let kind = SyntaxErrorKind::ExpectedIndexOrCloseParen;
-                                return Err(ParserError::category_error(kind, span));
+                                return Err(ParserError::category_error(
+                                    SyntaxErrorKind::ExpectedIndexOrCloseParen,
+                                    span,
+                                ));
                             }
                         }
                         // put the name back

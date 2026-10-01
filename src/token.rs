@@ -76,6 +76,7 @@ pub enum TokenKind<'a> {
 /// Version of the SMT-LIB standard.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, PartialOrd, Ord)]
 pub enum SmtVersion {
+    V2_0,
     V2_5,
     V2_6,
     #[default]
@@ -85,6 +86,7 @@ pub enum SmtVersion {
 impl SmtVersion {
     pub fn from_decimal_opt(decimal: &[u8]) -> Option<Self> {
         match decimal {
+            b"2.0" => Some(SmtVersion::V2_0),
             b"2.5" => Some(SmtVersion::V2_5),
             b"2.6" => Some(SmtVersion::V2_6),
             b"2.7" => Some(SmtVersion::V2_7),
@@ -375,7 +377,12 @@ impl<'a> TokenCursor<'a> {
     /// or whether any remain at all; the caller must not use any
     /// information gathered on them beforehand.
     pub fn set_version(&mut self, version: SmtVersion) {
-        // TODO: relex on 2.0/2.5+ switch
+        let is_current_2_0 = self.version == SmtVersion::V2_0;
+        let is_new_2_0 = version == SmtVersion::V2_0;
+        if is_current_2_0 != is_new_2_0 {
+            // we need to relex
+            self.relex();
+        }
         self.version = version;
     }
 

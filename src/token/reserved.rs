@@ -112,13 +112,28 @@ impl Reserved {
     /// The version that made the word reserved.
     const fn since(self) -> SmtVersion {
         match self {
+            // SMT-LIB 2.7: lambda terms, sort parameters, constant definitions
             Reserved::General(GeneralReserved::Lambda)
             | Reserved::CommandName(CommandNameReserved::DeclareSortParameter)
             | Reserved::CommandName(CommandNameReserved::DefineConst) => SmtVersion::V2_7,
+            // SMT-LIB 2.6: datatypes and matching on them
             Reserved::General(GeneralReserved::Match)
             | Reserved::CommandName(CommandNameReserved::DeclareDatatype)
             | Reserved::CommandName(CommandNameReserved::DeclareDatatypes) => SmtVersion::V2_6,
-            _ => SmtVersion::V2_5,
+            // SMT-LIB 2.5: the remaining special-constant categories and added commands
+            Reserved::General(GeneralReserved::Binary)
+            | Reserved::General(GeneralReserved::Hexadecimal)
+            | Reserved::CommandName(CommandNameReserved::CheckSatAssuming)
+            | Reserved::CommandName(CommandNameReserved::DeclareConst)
+            | Reserved::CommandName(CommandNameReserved::DefineFunRec)
+            | Reserved::CommandName(CommandNameReserved::DefineFunsRec)
+            | Reserved::CommandName(CommandNameReserved::Echo)
+            | Reserved::CommandName(CommandNameReserved::GetModel)
+            | Reserved::CommandName(CommandNameReserved::GetUnsatAssumptions)
+            | Reserved::CommandName(CommandNameReserved::Reset)
+            | Reserved::CommandName(CommandNameReserved::ResetAssertions) => SmtVersion::V2_5,
+            // everything else is reserved since SMT-LIB 2.0
+            _ => SmtVersion::V2_0,
         }
     }
 
