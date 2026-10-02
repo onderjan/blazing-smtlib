@@ -116,20 +116,39 @@ private def modifyCore (f : LexerCore → LexerCore) : LexM H m R E Unit :=
 private def setState (state : LexerState) : LexM H m R E Unit :=
   modifyCore fun c => { c with state }
 
+/- LEAN: the content buffer and the batch are taken out of the state before they are changed:
+changing `c.tokenContent` while `c` still refers to it would find it shared and copy it,
+together with its array. -/
+/-- Changes the content buffer in place. -/
+@[inline]
+private def modifyContent (f : ContentBuffer → ContentBuffer) : LexM H m R E Unit :=
+  modifyCore fun c =>
+    let content := c.tokenContent
+    let c := { c with tokenContent := ContentBuffer.empty }
+    { c with tokenContent := f content }
+
+/-- Changes the batch in place. -/
+@[inline]
+private def modifyBatch (f : TokenBatch → TokenBatch) : LexM H m R E Unit :=
+  modifyCore fun c =>
+    let batch := c.batch
+    let c := { c with batch := default }
+    { c with batch := f batch }
+
 @[inline]
 private def extendContent (slice : ByteSlice) : LexM H m R E Unit :=
-  modifyCore fun c => { c with tokenContent := c.tokenContent.extendFromSlice slice }
+  modifyContent (·.extendFromSlice slice)
 
 @[inline]
 private def pushContent (c : UInt8) : LexM H m R E Unit :=
-  modifyCore fun core => { core with tokenContent := core.tokenContent.push c }
+  modifyContent (·.push c)
 
 @[inline]
-private def startToken (position : Nat) : LexM H m R E Unit :=
+private def startToken (position : Nat) : LexM H m R E Unit := do
   -- update the token start to the computed location
+  modifyCore fun c => { c with tokenStart := c.locationAt position }
   -- clear the token string
-  modifyCore fun c =>
-    { c with tokenStart := c.locationAt position, tokenContent := c.tokenContent.clear }
+  modifyContent (·.clear)
 
 @[inline]
 private def markLineFeedAt (position : Nat) : LexM H m R E Unit :=
@@ -268,8 +287,10 @@ private def sinkSlice (ty : TokenType) (tokenEnd : TokenEnd) (content : Content)
   match content with
   | .borrowed _ start stop =>
     -- this is borrowed content, so put it into the batch
-    modifyCore fun c =>
-      { c with batch := c.batch.pushLocated ty start stop c.tokenStart (c.locationAt tokenEnd.position) }
+    let c ← core
+    let spanStart := c.tokenStart
+    let spanEnd := c.locationAt tokenEnd.position
+    modifyBatch (·.pushLocated ty start stop spanStart spanEnd)
     if (← core).batch.len == BATCH_CAPACITY then
       flushBatch
   | .stored =>
@@ -342,33 +363,17 @@ private def finishKeyword (tokenEnd : TokenEnd) (content : Content) (next : Opti
 private def finishStringLiteral (tokenEnd : TokenEnd) (content : Content) : LexM H m R E Unit :=
   sinkSlice .string tokenEnd content
 
-/--
-Local state of `lexNormal`.
+/- LEAN: Rust keeps the batch length, the line and the line start in locals of `lex_normal`.
+Here the local is the batch itself, which the loop passes along; the line and the line start
+stay in the lexer state, which the fast path only reads. While the loop holds the batch, the
+lexer state has an empty batch, so the batch must be stored before anything else uses it:
+the slow path, a flush, an error, or a return. The batch is a local of its own, not a field
+of a structure of locals, so that it is not shared when it is changed. -/
 
-Locals improve performance of fast lexing over always going
-through the lexer state. The struct allows loading/storing them
-together for better maintainability.
--/
-/- LEAN: Rust keeps the batch length in a local and writes into the batch arrays; here the
-batch with its arrays is the local. While the fast path holds it, the lexer state has an empty
-batch, so the state must be stored before anything else uses the batch: the slow path,
-a flush, an error, or a return. -/
-private structure FastState where
-  /-- The current batch. -/
-  batch : TokenBatch
-  /-- Current line. -/
-  line : Nat
-  /-- Byte offset of the start of the current line. -/
-  lineStart : Nat
-
+/-- Puts the batch held by the loop back into the lexer state. -/
 @[inline]
-private def FastState.load : LexM H m R E FastState :=
-  modifyGetThe LexerCore fun c =>
-    ({ batch := c.batch, line := c.line, lineStart := c.lineStart }, { c with batch := default })
-
-@[inline]
-private def FastState.store (fast : FastState) : LexM H m R E Unit :=
-  modifyCore fun c => { c with batch := fast.batch, line := fast.line, lineStart := fast.lineStart }
+private def storeBatch (batch : TokenBatch) : LexM H m R E Unit :=
+  modifyCore fun c => { c with batch }
 
 /--
 Puts a fast-path token into the batch if `emit` is set, flushing the batch
@@ -380,20 +385,22 @@ current line, over `start` to `end` in the slice.
 /- LEAN: Rust writes the entry even when it is not emitted, as the next token overwrites it;
 here a token that is not emitted is not written. -/
 @[inline]
-private def pushFast (fast : FastState) (offset : Nat) (slice : ByteSlice) (ty : TokenType)
-    (contentStart contentStop start «end» : Nat) (emit : Bool) : LexM H m R E FastState := do
+private def pushFast (batch : TokenBatch) (offset : Nat) (slice : ByteSlice) (ty : TokenType)
+    (contentStart contentStop start «end» : Nat) (emit : Bool) : LexM H m R E TokenBatch := do
   if !emit then
-    return fast
-  let fast := { fast with
-    batch := fast.batch.pushOnLine ty (slice.start + contentStart) (slice.start + contentStop)
-      fast.line fast.lineStart (offset + start) (offset + «end») }
-  if fast.batch.len == BATCH_CAPACITY then
+    return batch
+  let c ← core
+  let line := c.line
+  let lineStart := c.lineStart
+  let batch := batch.pushOnLine ty (slice.start + contentStart) (slice.start + contentStop)
+    line lineStart (offset + start) (offset + «end»)
+  if batch.len == BATCH_CAPACITY then
     -- batch capacity reached, we need to flush the batch
-    fast.store
+    storeBatch batch
     flushBatch
-    FastState.load
+    takeBatch
   else
-    return fast
+    return batch
 
 /--
 Moves a fast-path symbol run that cannot be finished
@@ -421,13 +428,13 @@ recursion on `index`, and `partial` because Lean is not shown that every arm adv
 Every arm that continues the loop in Rust calls `lexNormalFrom` again at the new index,
 with the locals loaded again after the slow path. `offset` is the lexer's offset when
 the loop started, which stays the same while the loop runs. -/
-private partial def lexNormalFrom (slice : ByteSlice) (offset index : Nat) (fast : FastState) :
+private partial def lexNormalFrom (slice : ByteSlice) (offset index : Nat) (batch : TokenBatch) :
     LexM H m R E Nat := do
   let some c := byteAt? slice index
     | do
       -- we have consumed every byte of the slice
       -- write the locals back before returning
-      fast.store
+      storeBatch batch
       return sliceSize slice
   -- A fast path handles the most common token types.
   -- It is determined by one table lookup. If the started token is not on
@@ -443,11 +450,11 @@ private partial def lexNormalFrom (slice : ByteSlice) (offset index : Nat) (fast
   -- need no special processing. The closing parenthesis is first
   -- as it forms more clusters.
   if c == byte! ')' then
-    let fast ← pushFast fast offset slice .parenClose index after index after true
-    return ← lexNormalFrom slice offset after fast
+    let batch ← pushFast batch offset slice .parenClose index after index after true
+    return ← lexNormalFrom slice offset after batch
   if c == byte! '(' then
-    let fast ← pushFast fast offset slice .parenOpen index after index after true
-    return ← lexNormalFrom slice offset after fast
+    let batch ← pushFast batch offset slice .parenOpen index after index after true
+    return ← lexNormalFrom slice offset after batch
   -- Handle whitespace and symbols in a fast path.
   let fastEntry := fastFlags c
   if fastEntry &&& FAST_ON != 0 then
@@ -469,7 +476,7 @@ private partial def lexNormalFrom (slice : ByteSlice) (offset index : Nat) (fast
         else fastEntry &&& RUN_SIMPLE_SYMBOL != 0
       if isUnfinished then
         -- write the locals back
-        fast.store
+        storeBatch batch
         storeUnfinishedSymbolRun slice fastEntry index after runEndAt
         return runEndAt
     let tokenEnd := if isQuoted then runEndAt + 1 else runEndAt
@@ -489,7 +496,7 @@ private partial def lexNormalFrom (slice : ByteSlice) (offset index : Nat) (fast
       | some next =>
         -- the token ended inside the slice: the byte after it must delimit it
         if !isDelimiter next then
-          fast.store
+          storeBatch batch
           startToken index
           failAt .missingDelimiter (tokenEnd + 1)
       | none =>
@@ -497,17 +504,17 @@ private partial def lexNormalFrom (slice : ByteSlice) (offset index : Nat) (fast
         -- this must be a quoted symbol as the unquoted symbol
         -- has its token end inside the confirmed run
         -- the quoted symbol must wait for the delimiter
-        fast.store
+        storeBatch batch
         startToken index
         extendContent (slice.slice contentStart contentStop)
         setState .quotedSymbolClosed
         return tokenEnd
-    let fast ← pushFast fast offset slice ty contentStart contentStop index tokenEnd emit
+    let batch ← pushFast batch offset slice ty contentStart contentStop index tokenEnd emit
     -- Fast path done, continue normally after the token end.
-    return ← lexNormalFrom slice offset tokenEnd fast
+    return ← lexNormalFrom slice offset tokenEnd batch
 
   -- The slow path will not use the locals, write them back.
-  fast.store
+  storeBatch batch
 
   -- Fast path was not taken, use the slow path.
   match START[c.toNat]! with
@@ -515,7 +522,7 @@ private partial def lexNormalFrom (slice : ByteSlice) (offset index : Nat) (fast
     -- line feeds must be marked for line offsets
     -- mark it and update the index
     markLineFeedAt index
-    lexNormalFrom slice offset after (← FastState.load)
+    lexNormalFrom slice offset after (← takeBatch)
   | .comment =>
     -- a comment has been started
     -- process the run eagerly
@@ -529,7 +536,7 @@ private partial def lexNormalFrom (slice : ByteSlice) (offset index : Nat) (fast
       -- otherwise a carriage return, which also ends the comment
       -- we have reached the end of the comment
       -- update the index and continue the loop
-      lexNormalFrom slice offset («end» + 1) (← FastState.load)
+      lexNormalFrom slice offset («end» + 1) (← takeBatch)
     | none =>
       -- we ran out of bytes
       -- update the state and return
@@ -564,7 +571,7 @@ private partial def lexNormalFrom (slice : ByteSlice) (offset index : Nat) (fast
     finishDigitRun run (.mkAtByte afterEnd) (.borrow slice start afterEnd)
       (some (sliceGet slice afterEnd))
     -- update the index and continue the loop
-    lexNormalFrom slice offset afterEnd (← FastState.load)
+    lexNormalFrom slice offset afterEnd (← takeBatch)
   | .quote =>
     -- starts a string literal
     startToken index
@@ -588,7 +595,7 @@ private partial def lexNormalFrom (slice : ByteSlice) (offset index : Nat) (fast
           (.borrow slice after afterContentEnd)
         -- the closing quote is not part of the content,
         -- but was also processed
-        lexNormalFrom slice offset (afterContentEnd + 1) (← FastState.load)
+        lexNormalFrom slice offset (afterContentEnd + 1) (← takeBatch)
       else
         extendContent (slice.slice after afterContentEnd)
         setState .stringLiteral
@@ -618,7 +625,7 @@ private partial def lexNormalFrom (slice : ByteSlice) (offset index : Nat) (fast
     finishKeyword (.mkAtByte afterEnd) (.borrow slice after afterEnd)
       (some (sliceGet slice afterEnd))
     -- update the index and continue the loop
-    lexNormalFrom slice offset afterEnd (← FastState.load)
+    lexNormalFrom slice offset afterEnd (← takeBatch)
   | .digit =>
     startToken index
     -- determine the run of digits
@@ -646,14 +653,14 @@ private partial def lexNormalFrom (slice : ByteSlice) (offset index : Nat) (fast
         finishDecimal (.mkAtByte afterFractionEnd) (.borrow slice index afterFractionEnd)
           (some (sliceGet slice afterFractionEnd))
         -- update the index and continue the loop
-        lexNormalFrom slice offset afterFractionEnd (← FastState.load)
+        lexNormalFrom slice offset afterFractionEnd (← takeBatch)
       else
         -- the numeral is not actually a decimal and ends
         -- dispatch a numeral token with borrowed content
         expectDelimiter next afterEnd
         finishNumeral (.mkAtByte afterEnd) (.borrow slice index afterEnd)
         -- update the index and continue the loop
-        lexNormalFrom slice offset afterEnd (← FastState.load)
+        lexNormalFrom slice offset afterEnd (← takeBatch)
     | none =>
       -- we ran out of bytes
       -- update the content and state and return
@@ -669,7 +676,7 @@ private partial def lexNormalFrom (slice : ByteSlice) (offset index : Nat) (fast
 private def lexNormal (slice : ByteSlice) : LexM H m R E Nat := do
   -- use locals for variables commonly used on the fast path
   let offset := (← core).offset
-  lexNormalFrom slice offset 0 (← FastState.load)
+  lexNormalFrom slice offset 0 (← takeBatch)
 
 private def lexFractionFrom (slice : ByteSlice) (start : Nat) : LexM H m R E Nat := do
   -- find the first byte in the remainder that is not a digit

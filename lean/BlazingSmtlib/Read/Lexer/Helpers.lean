@@ -225,17 +225,21 @@ def isEmpty (self : ContentBuffer) : Bool :=
 def view (self : ContentBuffer) : ByteSlice :=
   self.bytes.toByteSlice 0 self.len
 
+/- LEAN: the fields are taken out of `self` before the array is changed. Changing
+`self.bytes` while `self` still refers to it would find the array shared and copy it. -/
 @[inline]
 def extendFromSlice (self : ContentBuffer) (slice : ByteSlice) : ContentBuffer :=
-  { bytes := slice.byteArray.copySlice slice.start self.bytes self.len (sliceSize slice) false,
-    len := self.len + sliceSize slice }
+  let { bytes, len } := self
+  { bytes := slice.byteArray.copySlice slice.start bytes len (sliceSize slice) false,
+    len := len + sliceSize slice }
 
 @[inline]
 def push (self : ContentBuffer) (byte : UInt8) : ContentBuffer :=
-  if self.len < self.bytes.size then
-    { bytes := self.bytes.set! self.len byte, len := self.len + 1 }
+  let { bytes, len } := self
+  if len < bytes.size then
+    { bytes := bytes.set! len byte, len := len + 1 }
   else
-    { bytes := self.bytes.push byte, len := self.len + 1 }
+    { bytes := bytes.push byte, len := len + 1 }
 
 end ContentBuffer
 
