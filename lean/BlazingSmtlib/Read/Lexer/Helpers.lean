@@ -45,8 +45,95 @@ end Start
 def START : Array Start :=
   (Array.range 256).map fun i => Start.classify i.toUInt8
 
-/- LEAN: Rust tests the `FAST_DELIM` bit of the fast-path table; the fast path is not ported
-yet, so the delimiters are tested directly. -/
+/-- Bits not used by fast masks, kept so that `FAST_MASKS` partition the byte. -/
+def FAST_RESERVED : UInt8 := 0b0000_0010
+
+/--
+Set if the byte delimits a token: whitespace, a parenthesis, or the start
+of a comment. Every token must be followed by such a byte or by the end
+of the input.
+-/
+def FAST_DELIM : UInt8 := 0b0000_0001
+
+/-- Determines whether the fast path should be taken. -/
+def FAST_ON : UInt8 := 0b0000_0100
+
+/--
+Determines whether a token should be emitted in the fast path.
+
+Is unset for whitespace.
+-/
+def FAST_EMIT : UInt8 := 0b0000_1000
+
+/-- Determines the run mask that should be used. -/
+def FAST_RUN_MASK : UInt8 := 0b0111_0000
+
+/--
+Set if this is a quoted symbol ending with a pipe.
+
+The pipe requires special behaviour: the token extends
+from the opening pipe to the closing pipe including them,
+but its content excludes the pipes.
+-/
+def FAST_PIPE : UInt8 := 0b1000_0000
+
+/-- Masks for the fast flags. -/
+def FAST_MASKS : Array UInt8 :=
+  #[FAST_RESERVED, FAST_DELIM, FAST_ON, FAST_EMIT, FAST_RUN_MASK, FAST_PIPE]
+
+/- LEAN: the `#guard` checks below run when the module is built, as the Rust `assert!`s in
+`const` blocks do. -/
+-- fast masks partition u8 and are pairwise distinct
+#guard (FAST_MASKS.foldl (init := some (0 : UInt8)) fun union mask =>
+    union.bind fun union => if union &&& mask == 0 then some (union ||| mask) else none)
+  == some 0xFF
+
+-- fast run flags contain exactly the three run flags we need
+#guard (RUN_SIMPLE_SYMBOL ||| RUN_NON_LF_WHITESPACE ||| RUN_QUOTED_PLAIN) &&& FAST_RUN_MASK
+    == FAST_RUN_MASK
+  && (RUN_STRING_PLAIN ||| RUN_DIGIT ||| RUN_HEX_DIGIT ||| RUN_BINARY_DIGIT ||| RUN_COMMENT_PLAIN)
+    &&& FAST_RUN_MASK == 0
+
+/--
+Fast dispatch bitmasks for every input byte.
+
+The bitmasks carry the masks present in `FAST_MASKS`.
+-/
+def FAST : ByteArray :=
+  ⟨(Array.range 256).map fun i =>
+    let c := i.toUInt8
+    let flags := CharClass.runFlags c
+    if c == byte ' ' || c == byte '\t' || c == byte '\r' then
+      FAST_ON ||| FAST_DELIM ||| RUN_NON_LF_WHITESPACE
+    else if c == byte '\n' || c == byte '(' || c == byte ')' || c == byte ';' then
+      FAST_DELIM
+    else if c == byte '|' then
+      FAST_ON ||| FAST_EMIT ||| FAST_PIPE ||| RUN_QUOTED_PLAIN
+    -- a simple symbol may contain digits but must not start with one
+    else if flags &&& RUN_SIMPLE_SYMBOL != 0 && flags &&& RUN_DIGIT == 0 then
+      FAST_ON ||| FAST_EMIT ||| RUN_SIMPLE_SYMBOL
+    else
+      0⟩
+
+/-- The fast flags of the byte. -/
+@[inline]
+def fastFlags (c : UInt8) : UInt8 :=
+  FAST.get! c.toNat
+
+-- a byte carries the delimiter flag exactly when it is whitespace, a parenthesis, or a semicolon
+#guard (List.range 256).all fun i =>
+  let c := i.toUInt8
+  (fastFlags c &&& FAST_DELIM != 0)
+    == (c == byte ' ' || c == byte '\t' || c == byte '\n' || c == byte '\r'
+      || c == byte '(' || c == byte ')' || c == byte ';')
+
+-- a byte is fast exactly when its START class is one the fast path replaces; parentheses
+-- are dispatched by byte tests ahead of the table, so they are neither fast nor covered here
+#guard (List.range 256).all fun i =>
+  let start := START[i]!
+  (fastFlags i.toUInt8 &&& FAST_ON != 0)
+    == (start == .whitespace || start == .pipe || start == .symbol)
+
 /--
 Whether the byte delimits a token: whitespace, a parenthesis, or the start
 of a comment. Every token must be followed by such a byte or by the end
@@ -54,8 +141,7 @@ of the input.
 -/
 @[inline]
 def isDelimiter (c : UInt8) : Bool :=
-  c == byte ' ' || c == byte '\t' || c == byte '\n' || c == byte '\r'
-    || c == byte '(' || c == byte ')' || c == byte ';'
+  fastFlags c &&& FAST_DELIM != 0
 
 /- LEAN: declared in `lexer.rs` in Rust, where `helpers.rs` uses it in turn. Lean modules
 cannot import each other, so it is declared here, before `DigitRun` needs it. -/
