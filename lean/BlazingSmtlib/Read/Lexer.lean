@@ -126,7 +126,7 @@ private def modifyCore (f : LexerCore → LexerCore) : LexM H m R E Unit :=
 private def setState (state : LexerState) : LexM H m R E Unit :=
   modifyCore fun c => { c with state }
 
-/- LEAN: the content buffer and the batch are taken out of the state before they are changed:
+/- LEAN: the content buffer is taken out of the state before it is changed:
 changing `c.tokenContent` while `c` still refers to it would find it shared and copy it,
 together with its array. -/
 /-- Changes the content buffer in place. -/
@@ -528,7 +528,7 @@ private partial def lexNormalFrom (input : Input) (offset : Nat) (base index : U
   storeBatch batch
 
   -- Fast path was not taken, use the slow path.
-  match START[c.toNat]! with
+  match startOf c with
   | .lineFeed =>
     -- line feeds must be marked for line offsets
     -- mark it and update the index

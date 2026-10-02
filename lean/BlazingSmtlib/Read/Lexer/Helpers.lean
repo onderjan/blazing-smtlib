@@ -45,6 +45,11 @@ end Start
 def START : Array Start :=
   (Array.range 256).map fun i => Start.classify i.toUInt8
 
+/-- What the byte does in the normal state. -/
+@[inline]
+def startOf (c : UInt8) : Start :=
+  START[c.toNat]!
+
 /-- Bits not used by fast masks, kept so that `FAST_MASKS` partition the byte. -/
 def FAST_RESERVED : UInt8 := 0b0000_0010
 
@@ -130,7 +135,7 @@ def fastFlags (c : UInt8) : UInt8 :=
 -- a byte is fast exactly when its START class is one the fast path replaces; parentheses
 -- are dispatched by byte tests ahead of the table, so they are neither fast nor covered here
 #guard (List.range 256).all fun i =>
-  let start := START[i]!
+  let start := startOf i.toUInt8
   (fastFlags i.toUInt8 &&& FAST_ON != 0)
     == (start == .whitespace || start == .pipe || start == .symbol)
 

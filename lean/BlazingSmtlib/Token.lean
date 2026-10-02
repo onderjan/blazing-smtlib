@@ -98,6 +98,10 @@ def ofUInt8 : UInt8 → TokenType
   | 9 => .quotedSymbol
   | _ => .endOfFile
 
+-- the types are read back from the batch as they were written to it
+#guard [TokenType.parenOpen, .parenClose, .numeral, .decimal, .hexadecimal, .binary, .string,
+    .keyword, .unquotedSymbol, .quotedSymbol, .endOfFile].all fun ty => ofUInt8 ty.toUInt8 == ty
+
 end TokenType
 
 /- LEAN: the Rust token is a pair of references to its entry and its span in the lexer's
