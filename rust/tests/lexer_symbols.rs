@@ -4,27 +4,14 @@
 //! spelled like a reserved word as that reserved word, and a quoted one never.
 //! The same holds wherever the input is cut into slices.
 
+mod lex_backend;
 mod reserved_words;
 
-use std::convert::Infallible;
-use std::ops::ControlFlow;
+use blazing_smtlib::token::{SmtVersion, TokenType};
 
-use blazing_smtlib::{
-    read::lexer::Lexer,
-    token::{Reserved, SmtVersion, Token, TokenCursor, TokenHandler, TokenKind, TokenType},
-};
-
+// What `TokenKind::from_token` says about a token, owned.
+use lex_backend::LexedKind as Kind;
 use reserved_words::reserved_words;
-
-/// What `TokenKind::from_token` says about a token, owned.
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum Kind {
-    Symbol(Vec<u8>),
-    Reserved(Reserved),
-    Keyword(Vec<u8>),
-    EndOfFile,
-    Other,
-}
 
 /// An owned copy of everything observable about a token.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -36,60 +23,23 @@ struct Lexed {
     span: (u64, u64),
 }
 
-/// A token handler that collects owned copies of all tokens.
-struct CollectTokens(Vec<Lexed>);
-
-impl TokenHandler for CollectTokens {
-    type Result = ();
-    type Error = Infallible;
-
-    fn handle_tokens(
-        &mut self,
-        cursor: &mut TokenCursor<'_>,
-    ) -> Result<ControlFlow<Self::Result>, Self::Error> {
-        while let Some(token) = cursor.next() {
-            self.collect(token);
-        }
-        Ok(ControlFlow::Continue(()))
-    }
-}
-
-impl CollectTokens {
-    /// Collects an owned copy of the token.
-    fn collect(&mut self, token: Token) {
-        let kind = match TokenKind::from_token(token, SmtVersion::V2_7) {
-            TokenKind::Symbol(symbol) => Kind::Symbol(symbol.as_slice().to_vec()),
-            TokenKind::Reserved(reserved) => Kind::Reserved(reserved),
-            TokenKind::Keyword(keyword) => Kind::Keyword(keyword.as_slice().to_vec()),
-            TokenKind::EndOfFile => Kind::EndOfFile,
-            _ => Kind::Other,
-        };
-        let span = token.span();
-        self.0.push(Lexed {
-            ty: token.ty(),
-            content: token.content().to_vec(),
-            kind,
-            span: (span.start().offset(), span.end().offset()),
-        });
-    }
-}
-
-/// Lexes the input as the given pieces, then the end of the input,
-/// requiring success, and returns every token.
+/// Lexes the input as the given pieces, then the end of the input, with the
+/// lexer under test, requiring success, and returns every token.
 #[track_caller]
 fn lex_pieces(pieces: &[&[u8]]) -> Vec<Lexed> {
-    let mut collected = CollectTokens(Vec::new());
-    let mut lexer = Lexer::new(&mut collected, SmtVersion::V2_7);
-    for piece in pieces {
-        let _ = lexer
-            .lex_slice(piece)
-            .unwrap_or_else(|err| panic!("{:?} must lex, got {err:?}", text(&pieces.concat())));
+    let run = lex_backend::lex_pieces(SmtVersion::V2_7, pieces);
+    if let Some(err) = run.error {
+        panic!("{:?} must lex, got {err:?}", text(&pieces.concat()));
     }
-    let _ = lexer
-        .lex_eof()
-        .unwrap_or_else(|err| panic!("{:?} must lex, got {err:?}", text(&pieces.concat())));
-    drop(lexer);
-    collected.0
+    run.tokens
+        .into_iter()
+        .map(|token| Lexed {
+            ty: token.ty,
+            content: token.content,
+            kind: token.kind,
+            span: (token.start.0, token.end.0),
+        })
+        .collect()
 }
 
 #[track_caller]
@@ -192,43 +142,21 @@ fn keywords_spelled_like_reserved_words_are_keywords() {
 
 #[test]
 fn end_of_input_has_no_content_and_an_empty_span_at_the_end() {
-    let mut collected = CollectTokens(Vec::new());
-    let mut locations = Vec::new();
-    {
-        // a handler that also records the end-of-input location with its
-        // line and column, which the offsets alone do not show
-        struct Locate<'h>(&'h mut CollectTokens, &'h mut Vec<(u64, u64, u64)>);
-        impl TokenHandler for Locate<'_> {
-            type Result = ();
-            type Error = Infallible;
-            fn handle_tokens(
-                &mut self,
-                cursor: &mut TokenCursor<'_>,
-            ) -> Result<ControlFlow<Self::Result>, Self::Error> {
-                while let Some(token) = cursor.next() {
-                    if token.ty() == TokenType::EndOfFile {
-                        let end = token.span().end();
-                        self.1.push((end.offset(), end.line(), end.column()));
-                    }
-                    self.0.collect(token);
-                }
-                Ok(ControlFlow::Continue(()))
-            }
-        }
-        let mut handler = Locate(&mut collected, &mut locations);
-        let _ = Lexer::new(&mut handler, SmtVersion::V2_7)
-            .lex_all(b"(a)\n  b ")
-            .expect("valid input must lex");
-    }
+    let input = b"(a)\n  b ";
     assert_eq!(
-        collected.0.last(),
+        lex(input).last(),
         Some(&lexed(TokenType::EndOfFile, b"", Kind::EndOfFile, (8, 8)))
     );
-    assert_eq!(
-        locations,
-        [(8, 1, 4)],
-        "end of input as (offset, line, column)"
-    );
+    // the end-of-input location with its line and column, which the
+    // offsets alone do not show
+    let run = lex_backend::lex_whole(SmtVersion::V2_7, input);
+    let ends: Vec<_> = run
+        .tokens
+        .iter()
+        .filter(|token| token.ty == TokenType::EndOfFile)
+        .map(|token| token.end)
+        .collect();
+    assert_eq!(ends, [(8, 1, 4)], "end of input as (offset, line, column)");
 }
 
 #[test]
