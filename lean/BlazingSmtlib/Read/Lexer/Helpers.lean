@@ -180,8 +180,8 @@ def BINARY_RUN : DigitRun :=
 
 /-- Where a token ended. -/
 structure TokenEnd where
-  /-- The position after `Lexer.offset` where the token ended. -/
-  position : Nat
+  /-- The position in the input where the token ended. -/
+  position : USize
   /-- Whether the token end was detected at a byte that is not a part of the token. -/
   atByte : Bool
 
@@ -191,7 +191,7 @@ def EOF : TokenEnd := { position := 0, atByte := false }
 
 /- LEAN: `at_byte` in Rust; the name clashes with the field `atByte` in Lean. -/
 @[inline]
-def mkAtByte (position : Nat) : TokenEnd := { position, atByte := true }
+def mkAtByte (position : USize) : TokenEnd := { position, atByte := true }
 
 end TokenEnd
 
@@ -227,11 +227,12 @@ def view (self : ContentBuffer) : ByteSlice :=
 
 /- LEAN: the fields are taken out of `self` before the array is changed. Changing
 `self.bytes` while `self` still refers to it would find the array shared and copy it. -/
+/-- Appends the bytes of `source` from `start` to `stop`. -/
 @[inline]
-def extendFromSlice (self : ContentBuffer) (slice : ByteSlice) : ContentBuffer :=
+def extendFrom (self : ContentBuffer) (source : ByteArray) (start stop : Nat) : ContentBuffer :=
   let { bytes, len } := self
-  { bytes := slice.byteArray.copySlice slice.start bytes len (sliceSize slice) false,
-    len := len + sliceSize slice }
+  { bytes := source.copySlice start bytes len (stop - start) false,
+    len := len + (stop - start) }
 
 @[inline]
 def push (self : ContentBuffer) (byte : UInt8) : ContentBuffer :=
@@ -254,10 +255,10 @@ inductive Content where
 
 namespace Content
 
-/-- The bytes of the slice from `start` to `stop`, positions in the slice. -/
+/-- The bytes of the input from `start` to `stop`. -/
 @[inline]
-def borrow (slice : ByteSlice) (start stop : Nat) : Content :=
-  .borrowed slice.byteArray (slice.start + start) (slice.start + stop)
+def borrow (input : Input) (start stop : USize) : Content :=
+  .borrowed input.bytes start.toNat stop.toNat
 
 /-- The number of bytes of the content. -/
 @[inline]

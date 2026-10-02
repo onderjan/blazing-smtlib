@@ -43,6 +43,10 @@ inductive InternalError where
   | stoppedBeforeStart
   /-- The token handler requested relex at end of file. -/
   | relexAtEndOfFile
+  /- LEAN: a slice whose end is not below `USize.size`, which cannot be in memory; see
+  `Input.ofSlice?`. -/
+  /-- The slice does not fit the positions of the lexer. -/
+  | sliceTooLarge
   deriving BEq, Repr, Inhabited
 
 namespace InternalError
@@ -55,6 +59,7 @@ def message : InternalError → String
   | .lexedAfterError => "cannot lex after a lexer error"
   | .stoppedBeforeStart => "the token handler must not stop before the starting token"
   | .relexAtEndOfFile => "token handler cannot request relex at end of file"
+  | .sliceTooLarge => "the slice must end below the largest position"
 
 end InternalError
 

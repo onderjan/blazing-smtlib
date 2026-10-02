@@ -166,63 +166,112 @@ compile time. -/
 def RUN_FLAGS : ByteArray :=
   ⟨(Array.range 256).map fun i => CharClass.runFlags i.toUInt8⟩
 
-/- LEAN: the size and the bytes of a slice, read through the slice's array; the functions of
-the standard library for these are calls that the compiler does not inline. -/
-/-- The number of bytes in the slice. -/
-@[inline]
-def sliceSize (slice : ByteSlice) : Nat :=
-  slice.stop - slice.start
+/- LEAN: Rust's lexer reads a `&[u8]` with `usize` indices. Here the lexer reads the slice's
+array with `USize` positions in the array, from `start` to `stop`: a `Nat` would be checked
+for being small at every operation, and the functions of the standard library's `ByteSlice`
+are calls that the compiler does not inline. `stop_le` is the proof that every position
+below `stop` is in the array, so the reads need no bounds check; it is established once, where
+the lexer receives the slice (see `Input.ofSlice?`). A position never wraps around: the
+lexer only adds to a position that is below `stop`, and only one. -/
+/-- The input slice of the lexer: the bytes of `bytes` from `start` to `stop`. -/
+structure Input where
+  /-- The array the slice is in. -/
+  bytes : ByteArray
+  /-- The position of the first byte of the slice. -/
+  start : USize
+  /-- The position after the last byte of the slice. -/
+  stop : USize
+  /-- Every position below `stop` is in the array. -/
+  stop_le : stop.toNat ≤ bytes.size
 
-/-- The byte at `index` of the slice, zero if there is none. -/
+namespace Input
+
+/-
+LEAN: that the end of an array is below `USize.size` holds for every array in memory, but
+Lean's standard library states no lemma for it, so it is checked here, once per slice.
+-/
+/-- The input over the slice, if its end is below `USize.size`. -/
+def ofSlice? (slice : ByteSlice) : Option Input :=
+  if h : slice.stop < USize.size then
+    some {
+      bytes := slice.byteArray
+      start := USize.ofNat slice.start
+      stop := USize.ofNatLT slice.stop h
+      stop_le := by
+        simp only [USize.toNat_ofNatLT]
+        exact slice.stop_le_size_byteArray }
+  else
+    none
+
+/-- The byte at `position`, if it is below the end of the slice. -/
 @[inline]
-def sliceGet (slice : ByteSlice) (index : Nat) : UInt8 :=
-  slice.byteArray.get! (slice.start + index)
+def get? (input : Input) (position : USize) : Option UInt8 :=
+  if h : position < input.stop then
+    some (input.bytes.uget position (by
+      have := USize.lt_iff_toNat_lt.mp h
+      have := input.stop_le
+      omega))
+  else
+    none
+
+/-- The byte at `position`, which is below the end of the slice. -/
+@[inline]
+def get (input : Input) (position : USize) : UInt8 :=
+  (input.get? position).getD 0
+
+end Input
 
 /-- Whether the byte ends a run as it carries no flags from the mask. -/
 @[inline]
 def endsRun (c : UInt8) (mask : UInt8) : Bool :=
   RUN_FLAGS.get! c.toNat &&& mask == 0
 
+/- LEAN: Rust calls `start + run_end(&slice[start..], mask)`; taking `start` here avoids
+building a sub-slice. The scan is a recursive function: Lean has no `while` that it can prove
+to end, and `termination_by` names the quantity that shrinks with every call, with the proof
+after `decreasing_by`. The test is a function argument for the two kinds of runs; the scan
+is `@[specialize]`, so that each kind gets its own compiled scan instead of a call through a
+closure for every byte. The 4-byte unrolling of the Rust scan is left out. -/
+
+/-- Whether the byte at `position` of `bytes` ends the run. -/
+private abbrev RunTest := (bytes : ByteArray) → (position : USize) → position.toNat < bytes.size → Bool
+
+/-- The first position from `position` to `stop` of a byte ending the run, `stop` if none. -/
+@[specialize]
+private def runEndIn (test : RunTest) (bytes : ByteArray) (position stop : USize)
+    (hstop : stop.toNat ≤ bytes.size) : USize :=
+  if h : position < stop then
+    if test bytes position (by have := USize.lt_iff_toNat_lt.mp h; omega) then position
+    else runEndIn test bytes (position + 1) stop hstop
+  else
+    position
+termination_by stop.toNat - position.toNat
+decreasing_by
+  have h1 := USize.lt_iff_toNat_lt.mp h
+  have h2 := USize.toNat_lt_size stop
+  have h3 : USize.size = 2 ^ System.Platform.numBits := USize.size_eq_two_pow
+  rw [USize.toNat_add, USize.toNat_one, Nat.mod_eq_of_lt (by omega)]
+  omega
+
 /--
 Position of the first byte at `start` or after it carrying no flags from the
-mask, slice length if none.
+mask, the end of the slice if none, or `start` if it is at the end or after it.
 
 In other words, the end of the longest run from `start` where all bytes carry
 at least one flag from the mask.
 -/
-/- LEAN: Rust calls `start + run_end(&slice[start..], mask)`; taking `start` here avoids
-building a sub-slice. The scan runs over the slice's array with positions in the array, as
-the slice functions of the standard library are calls that the compiler does not inline.
-The loop is a recursive function: Lean has no `while` that it can prove to end, and
-`termination_by` names the quantity that shrinks with every call so that Lean accepts the
-recursion as terminating. The 4-byte unrolling of the Rust scan is left out. -/
-def runEnd (slice : ByteSlice) (start : Nat) (mask : UInt8) : Nat :=
-  let size := sliceSize slice
-  if start ≥ size then start else go slice.byteArray (slice.start + start) slice.stop - slice.start
-where
-  /-- The first position from `position` to `stop` of a byte ending the run, `stop` if none. -/
-  go (bytes : ByteArray) (position stop : Nat) : Nat :=
-    if h : position < stop then
-      if endsRun (bytes.get! position) mask then position else go bytes (position + 1) stop
-    else
-      position
-  termination_by stop - position
+@[inline]
+def runEnd (input : Input) (start : USize) (mask : UInt8) : USize :=
+  runEndIn (fun bytes position h => endsRun (bytes.uget position h) mask) input.bytes start
+    input.stop input.stop_le
 
 /--
 Like `runEnd`, but a byte continues the run only if it has all the flags of
 the mask.
 -/
-def runEndAll (slice : ByteSlice) (start : Nat) (mask : UInt8) : Nat :=
-  let size := sliceSize slice
-  if start ≥ size then start else go slice.byteArray (slice.start + start) slice.stop - slice.start
-where
-  /-- The first position from `position` to `stop` of a byte ending the run, `stop` if none. -/
-  go (bytes : ByteArray) (position stop : Nat) : Nat :=
-    if h : position < stop then
-      if RUN_FLAGS.get! (bytes.get! position).toNat &&& mask != mask then position
-      else go bytes (position + 1) stop
-    else
-      position
-  termination_by stop - position
+@[inline]
+def runEndAll (input : Input) (start : USize) (mask : UInt8) : USize :=
+  runEndIn (fun bytes position h => RUN_FLAGS.get! (bytes.uget position h).toNat &&& mask != mask)
+    input.bytes start input.stop input.stop_le
 
 end BlazingSmtlib.Read.Lexer
