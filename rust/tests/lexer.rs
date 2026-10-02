@@ -1,33 +1,24 @@
 //! Public-API tests of the lexer: error kinds and spans, token spans and
 //! payloads, location tracking, handler errors, and misuse panics.
 
+mod lex_backend;
+
 use std::convert::Infallible;
 use std::ops::ControlFlow;
 
 use blazing_smtlib::{
-    SmtLocation, SmtSpan,
+    SmtSpan,
     read::lexer::{LexError, Lexer, LexerError, LexerErrorKind},
-    token::{
-        GeneralReserved, Reserved, SmtVersion, TokenCursor, TokenHandler, TokenKind, TokenType,
-    },
+    token::{GeneralReserved, Reserved, SmtVersion, TokenCursor, TokenHandler, TokenType},
 };
 
-/// An owned copy of a produced token, collected by [`CollectTokens`].
-///
-/// Borrowed tokens cannot outlive the lexer's buffer, so tests collect these instead.
-#[derive(Debug)]
-struct OwnedToken {
-    ty: TokenType,
-    content: Vec<u8>,
-    span: SmtSpan,
-    /// The reserved word the token is classified as, if any.
-    reserved: Option<Reserved>,
-}
+use lex_backend::{Feed, LexedError, LexedToken, Loc, loc};
 
-/// A token handler that collects owned copies of all tokens for later inspection.
-struct CollectTokens(Vec<OwnedToken>);
+/// A token handler that takes every token and keeps nothing, for the tests
+/// that drive the Rust lexer directly.
+struct TakeTokens;
 
-impl TokenHandler for CollectTokens {
+impl TokenHandler for TakeTokens {
     type Result = ();
     type Error = Infallible;
 
@@ -35,18 +26,7 @@ impl TokenHandler for CollectTokens {
         &mut self,
         cursor: &mut TokenCursor<'_>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
-        while let Some(token) = cursor.next() {
-            let reserved = match TokenKind::from_token(token, SmtVersion::V2_7) {
-                TokenKind::Reserved(reserved) => Some(reserved),
-                _ => None,
-            };
-            self.0.push(OwnedToken {
-                ty: token.ty(),
-                content: token.content().to_vec(),
-                span: token.span(),
-                reserved,
-            });
-        }
+        cursor.consume_all();
         Ok(ControlFlow::Continue(()))
     }
 }
@@ -59,30 +39,23 @@ fn into_lexer_error(err: LexError<Infallible>) -> LexerError {
     }
 }
 
-/// Lexes the whole input including EOF and returns all produced tokens.
-fn lex_all(input: &[u8]) -> Result<Vec<OwnedToken>, LexerError> {
-    let mut collected = CollectTokens(Vec::new());
-    let mut lexer = Lexer::new(&mut collected, SmtVersion::V2_7);
-    let _ = lexer.lex_all(input).map_err(into_lexer_error)?;
-    drop(lexer);
-    Ok(collected.0)
-}
-
-/// Expected location as `(offset, line, column)`.
-type Loc = (u64, u64, u64);
-
-fn loc(location: SmtLocation) -> Loc {
-    (location.offset(), location.line(), location.column())
+/// Lexes the whole input including EOF with the lexer under test and returns
+/// all produced tokens.
+fn lex_all(input: &[u8]) -> Result<Vec<LexedToken>, LexedError> {
+    let lexed = lex_backend::lex_whole(SmtVersion::V2_7, input);
+    match lexed.error {
+        Some(err) => Err(err),
+        None => Ok(lexed.tokens),
+    }
 }
 
 /// Lexes the input, requires an error of the given kind, and checks its span.
 #[track_caller]
 fn assert_error(input: &[u8], kind: LexerErrorKind, start: Loc, end: Loc) {
     let err = lex_all(input).expect_err("expected a lexer error, got tokens");
-    assert_eq!(*err.kind(), kind);
-    let span = err.span();
+    assert_eq!(err.kind, kind);
     assert_eq!(
-        (loc(span.start()), loc(span.end())),
+        (err.start, err.end),
         (start, end),
         "span mismatch (start, end) as (offset, line, column)"
     );
@@ -200,7 +173,7 @@ fn keyword_spelled_like_a_reserved_word_is_a_keyword() {
     let tokens = lex_all(b":let ").expect("a keyword spelled like a reserved word must lex");
     assert_eq!(tokens[0].ty, TokenType::Keyword);
     assert_eq!(tokens[0].content, b"let");
-    assert_eq!(tokens[0].reserved, None);
+    assert_eq!(tokens[0].reserved(), None);
 }
 
 #[test]
@@ -344,8 +317,7 @@ fn error_after_comment_line() {
 
 #[test]
 fn current_location_follows_consumed_bytes() {
-    let mut collected = CollectTokens(Vec::new());
-    let mut lexer = Lexer::new(&mut collected, SmtVersion::V2_7);
+    let mut lexer = Lexer::new(TakeTokens, SmtVersion::V2_7);
     assert_eq!(loc(lexer.current_location()), (0, 0, 0));
     for &c in b"ab\nc" {
         let _ = lexer
@@ -364,7 +336,7 @@ fn token_spans(input: &[u8]) -> Vec<TokenLoc> {
     lex_all(input)
         .expect("test input must lex")
         .iter()
-        .map(|token| (token.ty, loc(token.span.start()), loc(token.span.end())))
+        .map(|token| (token.ty, token.start, token.end))
         .collect()
 }
 
@@ -643,8 +615,7 @@ fn handler_error_is_returned_with_the_handled_token() {
 #[test]
 #[should_panic(expected = "cannot lex after a lexer error")]
 fn lexing_after_an_error_panics() {
-    let mut collected = CollectTokens(Vec::new());
-    let mut lexer = Lexer::new(&mut collected, SmtVersion::V2_7);
+    let mut lexer = Lexer::new(TakeTokens, SmtVersion::V2_7);
     let _ = lexer
         .lex_slice(b"7")
         .map_err(into_lexer_error)
@@ -674,7 +645,7 @@ fn token_classes(input: &[u8]) -> Vec<(TokenType, Option<Reserved>)> {
     lex_all(input)
         .expect("test input must lex")
         .iter()
-        .map(|token| (token.ty, token.reserved))
+        .map(|token| (token.ty, token.reserved()))
         .collect()
 }
 
@@ -864,8 +835,7 @@ fn lexing_after_a_handler_error_on_the_eof_token_panics() {
 #[test]
 #[should_panic(expected = "cannot lex after a lexer error")]
 fn lexing_after_a_lexer_error_at_eof_panics() {
-    let mut collected = CollectTokens(Vec::new());
-    let mut lexer = Lexer::new(&mut collected, SmtVersion::V2_7);
+    let mut lexer = Lexer::new(TakeTokens, SmtVersion::V2_7);
     let _ = lexer
         .lex_slice(b"\"unclosed")
         .map_err(into_lexer_error)
@@ -886,17 +856,10 @@ fn lexing_after_a_lexer_error_at_eof_panics() {
 /// Every token as `(type, payload, start, end)`.
 type TokenRecord = (TokenType, Vec<u8>, Loc, Loc);
 
-fn records(tokens: &[OwnedToken]) -> Vec<TokenRecord> {
+fn records(tokens: &[LexedToken]) -> Vec<TokenRecord> {
     tokens
         .iter()
-        .map(|token| {
-            (
-                token.ty,
-                token.content.clone(),
-                loc(token.span.start()),
-                loc(token.span.end()),
-            )
-        })
+        .map(|token| (token.ty, token.content.clone(), token.start, token.end))
         .collect()
 }
 
@@ -905,25 +868,15 @@ fn the_end_of_file_resets_the_lexer_so_a_second_one_is_at_the_origin() {
     // whether a token is pending at the first EOF or not, the lexer is back
     // at the origin after it, and a second EOF is a new, empty input
     for (input, eof_at) in [(&b"a"[..], (1, 0, 1)), (&b"a "[..], (2, 0, 2))] {
-        let mut collected = CollectTokens(Vec::new());
-        let mut lexer = Lexer::new(&mut collected, SmtVersion::V2_7);
-        let _ = lexer
-            .lex_slice(input)
-            .map_err(into_lexer_error)
-            .expect("valid input");
-        let _ = lexer
-            .lex_eof()
-            .map_err(into_lexer_error)
-            .expect("first EOF");
-        assert_eq!(loc(lexer.current_location()), (0, 0, 0));
-        let _ = lexer
-            .lex_eof()
-            .map_err(into_lexer_error)
-            .expect("second EOF");
-        assert_eq!(loc(lexer.current_location()), (0, 0, 0));
-        drop(lexer);
+        let lexed = lex_backend::lex(
+            SmtVersion::V2_7,
+            &[Feed::Slice(input), Feed::Eof, Feed::Eof],
+        );
+        assert_eq!(lexed.error, None, "valid input and two ends of file");
+        // the location after the first and after the second end of file
+        assert_eq!(lexed.locations[1..], [(0, 0, 0), (0, 0, 0)]);
         assert_eq!(
-            records(&collected.0),
+            records(&lexed.tokens),
             vec![
                 (
                     TokenType::UnquotedSymbol,
@@ -942,28 +895,19 @@ fn the_end_of_file_resets_the_lexer_so_a_second_one_is_at_the_origin() {
 
 #[test]
 fn input_after_the_end_of_file_is_a_new_input_from_the_origin() {
-    let mut collected = CollectTokens(Vec::new());
-    let mut lexer = Lexer::new(&mut collected, SmtVersion::V2_7);
-    let _ = lexer
-        .lex_slice(b"a\n")
-        .map_err(into_lexer_error)
-        .expect("valid input");
-    let _ = lexer
-        .lex_eof()
-        .map_err(into_lexer_error)
-        .expect("first EOF");
     // the line count starts over as well
-    let _ = lexer
-        .lex_slice(b"|b\nc| ")
-        .map_err(into_lexer_error)
-        .expect("input after EOF");
-    let _ = lexer
-        .lex_eof()
-        .map_err(into_lexer_error)
-        .expect("second EOF");
-    drop(lexer);
+    let lexed = lex_backend::lex(
+        SmtVersion::V2_7,
+        &[
+            Feed::Slice(b"a\n"),
+            Feed::Eof,
+            Feed::Slice(b"|b\nc| "),
+            Feed::Eof,
+        ],
+    );
+    assert_eq!(lexed.error, None, "two valid inputs");
     assert_eq!(
-        records(&collected.0),
+        records(&lexed.tokens),
         vec![
             (
                 TokenType::UnquotedSymbol,
@@ -985,25 +929,14 @@ fn input_after_the_end_of_file_is_a_new_input_from_the_origin() {
 
 #[test]
 fn a_token_cut_by_the_end_of_file_is_finished_and_not_resumed() {
-    let mut collected = CollectTokens(Vec::new());
-    let mut lexer = Lexer::new(&mut collected, SmtVersion::V2_7);
-    let _ = lexer
-        .lex_slice(b"ab")
-        .map_err(into_lexer_error)
-        .expect("valid input");
     // EOF finishes the pending symbol; bytes fed afterwards start a new one
-    let _ = lexer.lex_eof().map_err(into_lexer_error).expect("EOF");
-    let _ = lexer
-        .lex_slice(b"cd")
-        .map_err(into_lexer_error)
-        .expect("input after EOF");
-    let _ = lexer
-        .lex_eof()
-        .map_err(into_lexer_error)
-        .expect("second EOF");
-    drop(lexer);
+    let lexed = lex_backend::lex(
+        SmtVersion::V2_7,
+        &[Feed::Slice(b"ab"), Feed::Eof, Feed::Slice(b"cd"), Feed::Eof],
+    );
+    assert_eq!(lexed.error, None, "two valid inputs");
     assert_eq!(
-        records(&collected.0),
+        records(&lexed.tokens),
         vec![
             (
                 TokenType::UnquotedSymbol,
@@ -1157,13 +1090,13 @@ fn a_token_must_be_delimited() {
             panic!("{:?} must be a lexer error", String::from_utf8_lossy(input))
         });
         assert_eq!(
-            *err.kind(),
+            err.kind,
             LexerErrorKind::MissingDelimiter,
             "{:?}",
             String::from_utf8_lossy(input)
         );
         assert_eq!(
-            (loc(err.span().start()), loc(err.span().end())),
+            (err.start, err.end),
             ((0, 0, 0), end),
             "span of {:?}",
             String::from_utf8_lossy(input)
@@ -1185,7 +1118,7 @@ fn every_delimiter_separates_every_token_kind() {
                 panic!(
                     "{:?} must lex, got {:?}",
                     String::from_utf8_lossy(&input),
-                    err.kind()
+                    err.kind
                 )
             });
             // the token, possibly a parenthesis, and the end of file
@@ -1242,27 +1175,28 @@ fn a_token_ending_at_a_slice_end_is_delimited_by_the_next_slice() {
         (b"\"s\"", b"t", false),
         (b"\"s\"", b"\"t\"", true),
     ] {
-        let mut collected = CollectTokens(Vec::new());
-        let mut lexer = Lexer::new(&mut collected, SmtVersion::V2_7);
-        let _ = lexer
-            .lex_slice(first)
-            .map_err(into_lexer_error)
-            .expect("the first slice lexes");
-        let result = lexer.lex_slice(second).map_err(into_lexer_error);
-        let result = result.and_then(|_| lexer.lex_eof().map_err(into_lexer_error));
+        let lexed = lex_backend::lex(
+            SmtVersion::V2_7,
+            &[Feed::Slice(first), Feed::Slice(second), Feed::Eof],
+        );
+        assert!(
+            !lexed.locations.is_empty(),
+            "the first slice lexes: {:?}",
+            lexed.error
+        );
         let name = format!(
             "{:?} then {:?}",
             String::from_utf8_lossy(first),
             String::from_utf8_lossy(second)
         );
-        match result {
-            Ok(_) => assert!(ok, "{name} must not lex"),
-            Err(err) => {
-                assert!(!ok, "{name} must lex, got {:?}", err.kind());
-                assert_eq!(*err.kind(), LexerErrorKind::MissingDelimiter, "{name}");
+        match lexed.error {
+            None => assert!(ok, "{name} must not lex"),
+            Some(err) => {
+                assert!(!ok, "{name} must lex, got {:?}", err.kind);
+                assert_eq!(err.kind, LexerErrorKind::MissingDelimiter, "{name}");
                 // the span covers the token in the first slice and the byte in the second
                 assert_eq!(
-                    (loc(err.span().start()), loc(err.span().end())),
+                    (err.start, err.end),
                     (
                         (0, 0, 0),
                         (first.len() as u64 + 1, 0, first.len() as u64 + 1)

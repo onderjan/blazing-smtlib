@@ -1,0 +1,13 @@
+# The lexer driver protocol answered by the Rust lexer: a reference to compare
+# the Lean driver with. Not part of the published crate.
+[package]
+name = "rust-lex-driver"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+blazing-smtlib = { path = "../../rust" }
+
+# Keeps this crate out of any workspace in a parent directory.
+[workspace]

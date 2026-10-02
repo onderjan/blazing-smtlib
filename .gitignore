@@ -10,3 +10,10 @@
 /output
 /untracked
 /benchmarks
+
+# Lean
+/lean/.lake
+
+# tools
+/tools/*/target
+/tools/*/Cargo.lock

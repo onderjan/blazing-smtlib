@@ -5,21 +5,14 @@
 //! Every input is lexed whole, in every two-piece split and byte by byte,
 //! and must give the same tokens or the same error each time.
 
-use std::convert::Infallible;
-use std::ops::ControlFlow;
+mod lex_backend;
 
 use blazing_smtlib::{
-    SmtLocation,
-    read::lexer::{LexError, Lexer, LexerErrorKind},
-    token::{SmtVersion, TokenCursor, TokenHandler, TokenType},
+    read::lexer::LexerErrorKind,
+    token::{SmtVersion, TokenType},
 };
 
-/// Expected location as `(offset, line, column)`.
-type Loc = (u64, u64, u64);
-
-fn loc(location: SmtLocation) -> Loc {
-    (location.offset(), location.line(), location.column())
-}
+use lex_backend::Loc;
 
 /// An owned copy of a token: its type, content, and the start and end of its span.
 type OwnedToken = (TokenType, Vec<u8>, Loc, Loc);
@@ -27,45 +20,18 @@ type OwnedToken = (TokenType, Vec<u8>, Loc, Loc);
 /// The tokens of an input, or the kind and the span of the lexer error.
 type Outcome = Result<Vec<OwnedToken>, (LexerErrorKind, Loc, Loc)>;
 
-struct CollectTokens(Vec<OwnedToken>);
-
-impl TokenHandler for &mut CollectTokens {
-    type Result = Infallible;
-    type Error = Infallible;
-
-    fn handle_tokens(
-        &mut self,
-        cursor: &mut TokenCursor<'_>,
-    ) -> Result<ControlFlow<Self::Result>, Self::Error> {
-        while let Some(token) = cursor.next() {
-            let span = token.span();
-            self.0.push((
-                token.ty(),
-                token.content().to_vec(),
-                loc(span.start()),
-                loc(span.end()),
-            ));
-        }
-        Ok(ControlFlow::Continue(()))
-    }
-}
-
-/// Lexes the pieces and the end of the input under the version.
+/// Lexes the pieces and the end of the input under the version, with the
+/// lexer under test.
 fn lex_pieces(pieces: &[&[u8]], version: SmtVersion) -> Outcome {
-    let mut collected = CollectTokens(Vec::new());
-    let mut lexer = Lexer::new(&mut collected, version);
-    let failed = |err| match err {
-        LexError::Lexer(err) => (*err.kind(), loc(err.span().start()), loc(err.span().end())),
-        LexError::Handler(never) => match never {},
-    };
-    for piece in pieces {
-        let flow = lexer.lex_slice(piece).map_err(failed)?;
-        assert!(flow.is_continue(), "the collecting handler never finishes");
+    let lexed = lex_backend::lex_pieces(version, pieces);
+    match lexed.error {
+        Some(err) => Err((err.kind, err.start, err.end)),
+        None => Ok(lexed
+            .tokens
+            .into_iter()
+            .map(|token| (token.ty, token.content, token.start, token.end))
+            .collect()),
     }
-    let flow = lexer.lex_eof().map_err(failed)?;
-    assert!(flow.is_continue(), "the collecting handler never finishes");
-    drop(lexer);
-    Ok(collected.0)
 }
 
 /// Lexes the input whole, in every two-piece split and byte by byte,

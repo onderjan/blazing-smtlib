@@ -8,52 +8,17 @@
 //! can afford to try every fixed chunk length and every two-piece split of
 //! each of them.
 
-use std::convert::Infallible;
+mod lex_backend;
+
 use std::ops::ControlFlow;
 
 use blazing_smtlib::{
-    SmtLocation, SmtSpan,
-    read::lexer::{LexError, Lexer, LexerError, LexerErrorKind},
+    SmtLocation,
+    read::lexer::{Lexer, LexerErrorKind},
     token::{SmtVersion, TokenCursor, TokenHandler, TokenType},
 };
 
-/// An owned copy of a produced token, comparable between lexer runs.
-#[derive(Debug, PartialEq, Eq)]
-struct OwnedToken {
-    ty: TokenType,
-    content: Vec<u8>,
-    span: SmtSpan,
-}
-
-/// A token handler that collects owned copies of all tokens.
-struct CollectTokens(Vec<OwnedToken>);
-
-impl TokenHandler for CollectTokens {
-    type Result = ();
-    type Error = Infallible;
-
-    fn handle_tokens(
-        &mut self,
-        cursor: &mut TokenCursor<'_>,
-    ) -> Result<ControlFlow<Self::Result>, Self::Error> {
-        while let Some(token) = cursor.next() {
-            self.0.push(OwnedToken {
-                ty: token.ty(),
-                content: token.content().to_vec(),
-                span: token.span(),
-            });
-        }
-        Ok(ControlFlow::Continue(()))
-    }
-}
-
-/// Extracts the lexer error from a lex error whose handler cannot fail.
-fn into_lexer_error(err: LexError<Infallible>) -> LexerError {
-    match err {
-        LexError::Lexer(err) => err,
-        LexError::Handler(never) => match never {},
-    }
-}
+use lex_backend::{Feed, LexedError, LexedToken, loc};
 
 /// Where a lexer error was raised.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -67,13 +32,13 @@ enum ErrorSite {
 /// Everything observable about one lexer run.
 #[derive(Debug)]
 struct Outcome {
-    tokens: Vec<OwnedToken>,
-    error: Option<(LexerError, ErrorSite)>,
+    tokens: Vec<LexedToken>,
+    error: Option<(LexedError, ErrorSite)>,
 }
 
 impl Outcome {
     fn error_kind(&self) -> Option<&LexerErrorKind> {
-        self.error.as_ref().map(|(err, _)| err.kind())
+        self.error.as_ref().map(|(err, _)| &err.kind)
     }
 }
 
@@ -85,11 +50,8 @@ fn location_after(from: SmtLocation, bytes: &[u8]) -> SmtLocation {
         .fold(from, |location, &c| location.after_byte(c))
 }
 
-fn loc(location: SmtLocation) -> (u64, u64, u64) {
-    (location.offset(), location.line(), location.column())
-}
-
-/// Lexes the input as the given sequence of chunks, then EOF.
+/// Lexes the input as the given sequence of chunks, then EOF, with the lexer
+/// under test.
 ///
 /// The chunks must concatenate to the input. After every successfully lexed
 /// chunk, the lexer's current location is checked against the independently
@@ -102,25 +64,18 @@ fn lex_chunks(input: &[u8], chunks: &[&[u8]]) -> Outcome {
         "test bug: chunks must concatenate to the input"
     );
 
-    let mut collected = CollectTokens(Vec::new());
-    let mut lexer = Lexer::new(&mut collected, SmtVersion::V2_7);
+    let mut feeds: Vec<Feed<'_>> = chunks.iter().map(|chunk| Feed::Slice(chunk)).collect();
+    feeds.push(Feed::Eof);
+    let lexed = lex_backend::lex(SmtVersion::V2_7, &feeds);
+
+    // the chunks that were lexed without an error are those with a location
     let mut consumed = 0usize;
     let mut expected_location = SmtLocation::initial();
-    let mut error = None;
-
-    for chunk in chunks {
-        if let Err(err) = lexer.lex_slice(chunk) {
-            let site = ErrorSite::Slice {
-                start: consumed as u64,
-                end: (consumed + chunk.len()) as u64,
-            };
-            error = Some((into_lexer_error(err), site));
-            break;
-        }
+    for (chunk, location) in chunks.iter().zip(&lexed.locations) {
         consumed += chunk.len();
         expected_location = location_after(expected_location, chunk);
         assert_eq!(
-            loc(lexer.current_location()),
+            *location,
             loc(expected_location),
             "current location after {consumed} bytes of {:?} fed as {} chunks",
             String::from_utf8_lossy(input),
@@ -128,15 +83,20 @@ fn lex_chunks(input: &[u8], chunks: &[&[u8]]) -> Outcome {
         );
     }
 
-    if error.is_none()
-        && let Err(err) = lexer.lex_eof()
-    {
-        error = Some((into_lexer_error(err), ErrorSite::Eof));
-    }
+    // the error was raised by the feed after the ones that have a location
+    let error = lexed.error.map(|err| {
+        let site = match chunks.get(lexed.locations.len()) {
+            Some(chunk) => ErrorSite::Slice {
+                start: consumed as u64,
+                end: (consumed + chunk.len()) as u64,
+            },
+            None => ErrorSite::Eof,
+        };
+        (err, site)
+    });
 
-    drop(lexer);
     Outcome {
-        tokens: collected.0,
+        tokens: lexed.tokens,
         error,
     }
 }
@@ -203,9 +163,8 @@ fn assert_same_outcome(input: &[u8], reference: &Outcome, chunks: &[&[u8]]) {
                     // an error detected on a byte is raised by the call that
                     // fed that byte, which is the last byte of the error span
                     let offending = expected
-                        .span()
-                        .end()
-                        .offset()
+                        .end
+                        .0
                         .checked_sub(1)
                         .expect("an error detected on a byte has a nonempty span");
                     assert!(
@@ -454,34 +413,17 @@ fn byte_by_byte_slices_match_the_whole_slice() {
     for input in all_inputs() {
         let reference = lex_whole(input);
 
-        let mut collected = CollectTokens(Vec::new());
-        let mut lexer = Lexer::new(&mut collected, SmtVersion::V2_7);
-        let mut error = None;
-        for (index, &c) in input.iter().enumerate() {
-            if let Err(err) = lexer.lex_slice(&[c]) {
-                let site = ErrorSite::Slice {
-                    start: index as u64,
-                    end: index as u64 + 1,
-                };
-                error = Some((into_lexer_error(err), site));
-                break;
-            }
-        }
-        if error.is_none()
-            && let Err(err) = lexer.lex_eof()
-        {
-            error = Some((into_lexer_error(err), ErrorSite::Eof));
-        }
-        drop(lexer);
+        let bytes: Vec<&[u8]> = input.chunks(1).collect();
+        let chunked = lex_chunks(input, &bytes);
 
         assert_eq!(
-            collected.0,
+            chunked.tokens,
             reference.tokens,
             "tokens differ for {:?} fed byte by byte",
             String::from_utf8_lossy(input)
         );
         assert_eq!(
-            error.as_ref().map(|(err, _)| err),
+            chunked.error.as_ref().map(|(err, _)| err),
             reference.error.as_ref().map(|(err, _)| err),
             "error differs for {:?} fed byte by byte",
             String::from_utf8_lossy(input)
@@ -532,16 +474,14 @@ fn empty_slices_between_chunks_change_nothing() {
 fn whole_slice_agrees_with_lex_all() {
     // lex_all is the convenience the other tests in this crate use, so the
     // reference here must be the same thing
+    // this compares two ways of calling the Rust lexer, whatever lexer the
+    // other tests run against
     for input in all_inputs() {
-        let reference = lex_whole(input);
+        let reference = lex_backend::rust_lex(SmtVersion::V2_7, &[Feed::Slice(input), Feed::Eof]);
+        let all = lex_backend::rust_lex_all(SmtVersion::V2_7, input);
 
-        let mut collected = CollectTokens(Vec::new());
-        let mut lexer = Lexer::new(&mut collected, SmtVersion::V2_7);
-        let error = lexer.lex_all(input).err().map(into_lexer_error);
-        drop(lexer);
-
-        assert_eq!(collected.0, reference.tokens);
-        assert_eq!(error.as_ref(), reference.error.as_ref().map(|(err, _)| err));
+        assert_eq!(all.tokens, reference.tokens);
+        assert_eq!(all.error, reference.error);
     }
 }
 
@@ -683,9 +623,9 @@ fn long_tokens_match_across_chunk_lengths() {
 
 /// The payload the span of a token selects in the input, independent of the
 /// lexer's own content buffer.
-fn payload_from_span(input: &[u8], token: &OwnedToken) -> Vec<u8> {
-    let start = token.span.start().offset() as usize;
-    let end = token.span.end().offset() as usize;
+fn payload_from_span(input: &[u8], token: &LexedToken) -> Vec<u8> {
+    let start = token.start.0 as usize;
+    let end = token.end.0 as usize;
     let text = &input[start..end];
     match token.ty {
         TokenType::QuotedSymbol => text[1..text.len() - 1].to_vec(),
@@ -732,7 +672,7 @@ fn token_contents_match_their_spans() {
                 payload_from_span(&input, token),
                 "{:?} token at {:?} in {:?}",
                 token.ty,
-                loc(token.span.start()),
+                token.start,
                 String::from_utf8_lossy(&input)
             );
         }
@@ -794,7 +734,7 @@ fn handler_errors_are_raised_where_the_token_is_produced_in_every_chunking() {
 
                 // a token is produced when its last byte or the byte after it
                 // is fed, or at EOF when nothing follows it
-                let end = rejected.span.end().offset();
+                let end = rejected.end.0;
                 let describe = format!(
                     "token {n} ({:?}) of {:?} with chunks of {chunk_length}",
                     rejected.ty,
@@ -920,10 +860,7 @@ fn every_run_length_at_every_alignment_lexes_correctly() {
                 assert_eq!(token.ty, ty, "{describe}");
                 assert_eq!(token.content, payload, "{describe}");
                 assert_eq!(
-                    (
-                        token.span.start().offset() as usize,
-                        token.span.end().offset() as usize
-                    ),
+                    (token.start.0 as usize, token.end.0 as usize),
                     (prefix, prefix + source.len()),
                     "{describe}: span"
                 );
@@ -952,8 +889,8 @@ fn every_comment_and_whitespace_run_length_at_every_alignment() {
             assert_eq!(
                 (
                     reference.tokens[0].ty,
-                    loc(reference.tokens[0].span.start()),
-                    loc(reference.tokens[0].span.end())
+                    reference.tokens[0].start,
+                    reference.tokens[0].end
                 ),
                 (
                     TokenType::UnquotedSymbol,
@@ -989,10 +926,7 @@ fn every_comment_and_whitespace_run_length_at_every_alignment() {
                 (0, b_start)
             };
             assert_eq!(
-                (
-                    reference.tokens[1].ty,
-                    loc(reference.tokens[1].span.start())
-                ),
+                (reference.tokens[1].ty, reference.tokens[1].start),
                 (TokenType::UnquotedSymbol, (b_start, line, column)),
                 "whitespace run of length {run_length} at {prefix}"
             );
