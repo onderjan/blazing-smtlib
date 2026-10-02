@@ -1,0 +1,12 @@
+# The lexer driver protocol answered by the Lean lexer, see
+# lean/driver-protocol.md. Not part of the library package.
+name = "lean-lex-driver"
+defaultTargets = ["lean-lex-driver"]
+
+[[require]]
+name = "blazing-smtlib"
+path = "../../lean"
+
+[[lean_exe]]
+name = "lean-lex-driver"
+root = "Main"

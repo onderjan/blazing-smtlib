@@ -1,0 +1,13 @@
+{"version": "1.2.0",
+ "packagesDir": ".lake/packages",
+ "packages":
+ [{"type": "path",
+   "scope": "",
+   "name": "«blazing-smtlib»",
+   "manifestFile": "lake-manifest.json",
+   "inherited": false,
+   "dir": "../../lean",
+   "configFile": "lakefile.toml"}],
+ "name": "«lean-lex-driver»",
+ "lakeDir": ".lake",
+ "fixedToolchain": false}

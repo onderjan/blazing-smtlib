@@ -1,0 +1,5 @@
+name = "blazing-smtlib"
+defaultTargets = ["BlazingSmtlib"]
+
+[[lean_lib]]
+name = "BlazingSmtlib"
