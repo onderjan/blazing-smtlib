@@ -59,7 +59,7 @@ structure LexerCore where
   -/
   lineStart : Nat
   /-- Token batch, may be only partially filled. -/
-  batch : Array Token
+  batch : TokenBatch
 
 structure Lexer (H : Type) where
   private mk ::
@@ -90,12 +90,12 @@ def LexerCore.locationAt (self : LexerCore) (position : Nat) : SmtLocation :=
 /-- The byte at `index` of the slice, if any. -/
 @[inline]
 private def byteAt? (slice : ByteSlice) (index : Nat) : Option UInt8 :=
-  if h : index < slice.size then some slice[index] else none
+  if index < sliceSize slice then some (sliceGet slice index) else none
 
 /-- Whether the byte is an ASCII digit. -/
 @[inline]
 private def isAsciiDigit (c : UInt8) : Bool :=
-  byte '0' ≤ c && c ≤ byte '9'
+  byte! '0' ≤ c && c ≤ byte! '9'
 
 section
 
@@ -124,12 +124,14 @@ private def extendContent (slice : ByteSlice) : LexM H m R E Unit :=
 private def pushContent (c : UInt8) : LexM H m R E Unit :=
   modifyCore fun core => { core with tokenContent := core.tokenContent.push c }
 
+@[inline]
 private def startToken (position : Nat) : LexM H m R E Unit :=
   -- update the token start to the computed location
   -- clear the token string
   modifyCore fun c =>
     { c with tokenStart := c.locationAt position, tokenContent := c.tokenContent.clear }
 
+@[inline]
 private def markLineFeedAt (position : Nat) : LexM H m R E Unit :=
   -- when lexing a run, this is used to mark a line feed
   -- the locations must only refer to positions after it afterwards
@@ -180,86 +182,104 @@ private def callHandler (cursor : TokenCursor) :
     (TokenHandler.handleTokens (H := H)).run.run cursor
   action
 
-/- LEAN: returns the cursor's tokens when the handler continues, for their storage to be
-reused by the next batch. -/
-private def flushCursor (cursor : TokenCursor) : LexM H m R E (Array Token) := do
+/- LEAN: Rust's `flush_cursor` takes a cursor over the lexer's arrays; here the batch itself
+is handed to the handler in the cursor, and taken back into the lexer state afterwards,
+whatever the handler decides, so that its storage is overwritten by the next batch. The
+batch's array of contents is then set to `bytesAfter`, so that the batch does not keep a
+reference to the lexer's content buffer, which would make the buffer's next change copy
+it. -/
+/-- Hands the non-empty batch over to the handler and takes it back. -/
+private def handOver (batch : TokenBatch) (bytesAfter : ByteArray) : LexM H m R E Unit := do
+  let cursor := TokenCursor.new (← core).version batch
   -- where lexing continues if the handler stops before the first token
   -- relex request empties the cursor, so we need to remember it here
   let some first := cursor.get 0
     | failInternal .emptyBatch
-  let firstStart := first.span.start
+  let firstStart := (cursor.span first).start
 
   -- flush the cursor
   let (result, cursor) ← callHandler cursor
 
-  -- set our version to the cursor-requested version
-  modifyCore fun c => { c with version := cursor.version }
-
-  -- process the result
-  let result : Except (LexError E) (Stop R) ← match result with
-    | .ok .continue =>
-      if cursor.relexRequested then
-        pure (.ok .relex)
-      else
-        -- ensure the cursor has been fully consumed
-        if !cursor.isEmpty then
-          failInternal .tokensNotConsumed
-        return cursor.intoTokens
-    | .ok (.break result) =>
-      if cursor.relexRequested then
-        failInternal .finishedAndRelexed
-      pure (.ok (.finished result))
-    | .error err => pure (.error (.handler err))
   -- the stop takes effect after the consumed tokens
   let location := match cursor.lastConsumed with
     -- nothing was taken, lex again from the first token
     | none => firstStart
     -- at least one token was taken, lex again after it
-    | some token => token.span.end
+    | some token => (cursor.span token).end
+  let relexRequested := cursor.relexRequested
+  let isEmpty := cursor.isEmpty
+  -- set our version to the cursor-requested version, and take the batch back
+  modifyCore fun c =>
+    { c with version := cursor.version, batch := { cursor.intoBatch.clear with bytes := bytesAfter } }
+
+  -- process the result
+  let result : Except (LexError E) (Stop R) ← match result with
+    | .ok .continue =>
+      if relexRequested then
+        pure (.ok .relex)
+      else
+        -- ensure the cursor has been fully consumed
+        if !isEmpty then
+          failInternal .tokensNotConsumed
+        return
+    | .ok (.break result) =>
+      if relexRequested then
+        failInternal .finishedAndRelexed
+      pure (.ok (.finished result))
+    | .error err => pure (.error (.handler err))
   throw { result, location }
+
+/-- Takes the batch out of the lexer state, leaving an empty one without storage. -/
+@[inline]
+private def takeBatch : LexM H m R E TokenBatch :=
+  modifyGetThe LexerCore fun c => (c.batch, { c with batch := default })
 
 private def flushBatch : LexM H m R E Unit := do
   -- the batch is spent once handed over, no matter what the handler decides
-  let batch ← modifyGetThe LexerCore fun c => (c.batch, { c with batch := #[] })
-  if batch.isEmpty then
-    modifyCore fun c => { c with batch }
+  if (← core).batch.len == 0 then
     return
-  let version := (← core).version
-  let tokens ← flushCursor (TokenCursor.new version batch)
-  modifyCore fun c => { c with batch := tokens.shrink 0 }
+  let batch ← takeBatch
+  let bytes := batch.bytes
+  handOver batch bytes
+
+/--
+Hands over a single token whose content is in the lexer's content buffer
+(empty for the end of file), spanning from the token start to `end`.
+-/
+/- LEAN: Rust hands such a token over in a cursor of its own; here it goes in the batch,
+which is empty after the flush, with the content buffer as its array of contents for the
+one token. -/
+private def handOverStored (ty : TokenType) («end» : SmtLocation) : LexM H m R E Unit := do
+  -- flush the batch, then hand over this token
+  flushBatch
+  let batch ← takeBatch
+  let bytes := batch.bytes
+  let c ← core
+  let batch := { batch with bytes := c.tokenContent.bytes }.pushLocated ty 0 c.tokenContent.len
+    c.tokenStart «end»
+  handOver batch bytes
 
 /-- Sinks a token with the given content, ending at `tokenEnd`. -/
+@[inline]
 private def sinkSlice (ty : TokenType) (tokenEnd : TokenEnd) (content : Content) :
     LexM H m R E Unit := do
   -- the caller of this function is responsible
   -- for ensuring that the constructed token is valid
-
-  -- construct the span
-  let c ← core
-  let span := SmtSpan.newUnchecked c.tokenStart (c.locationAt tokenEnd.position)
-
   match content with
-  | .borrowed bytes =>
+  | .borrowed _ start stop =>
     -- this is borrowed content, so put it into the batch
-    modifyCore fun c => { c with batch := c.batch.push { ty, content := bytes, span } }
-    if (← core).batch.size == BATCH_CAPACITY then
+    modifyCore fun c =>
+      { c with batch := c.batch.pushLocated ty start stop c.tokenStart (c.locationAt tokenEnd.position) }
+    if (← core).batch.len == BATCH_CAPACITY then
       flushBatch
   | .stored =>
     -- this is in our own buffer, so we cannot put it into the batch
     -- as we need the buffer usable for the next token
-    -- flush the batch, then hand over this token
-    flushBatch
-    let c ← core
-    let token := { ty, content := c.tokenContent.view, span }
-    discard <| flushCursor (TokenCursor.single c.version token)
+    handOverStored ty ((← core).locationAt tokenEnd.position)
 
 private def sinkEof : LexM H m R E Unit := do
-  -- construct the span at the first position in the batch
-  let c ← core
-  let span := SmtSpan.newUnchecked c.tokenStart (c.locationAt 0)
-  -- the end of file has no content
-  let token := { ty := .endOfFile, content := ByteSlice.empty, span }
-  discard <| flushCursor (TokenCursor.single c.version token)
+  -- the end of file has no content, which the cleared content buffer gives
+  handOverStored .endOfFile ((← core).locationAt 0)
 
 /--
 Sinks a decimal token.
@@ -267,16 +287,18 @@ Sinks a decimal token.
 The token's own shape is checked first, then that `next`, the byte
 at the end (if there is one), delimits it.
 -/
+@[inline]
 private def finishDecimal (tokenEnd : TokenEnd) (content : Content) (next : Option UInt8) :
     LexM H m R E Unit := do
   -- decimals of the form 7. without any digit in fractional part are disallowed
-  let value := content.bytes (← core).tokenContent
-  if value.size == 0 || value.get! (value.size - 1) == byte '.' then
+  let last := content.last? (← core).tokenContent
+  if last.isNone || last == some (byte! '.') then
     fail .fractionDigitExpected tokenEnd
   if let some next := next then
     expectDelimiter next tokenEnd.position
   sinkSlice .decimal tokenEnd content
 
+@[inline]
 private def finishNumeral (tokenEnd : TokenEnd) (content : Content) : LexM H m R E Unit :=
   sinkSlice .numeral tokenEnd content
 
@@ -286,16 +308,17 @@ Sinks a hexadecimal/binary token.
 The token's own shape is checked first, then that `next`, the byte
 at the end (if there is one), delimits it.
 -/
+@[inline]
 private def finishDigitRun (run : DigitRun) (tokenEnd : TokenEnd) (content : Content)
     (next : Option UInt8) : LexM H m R E Unit := do
   -- digit runs must not be empty
-  let value := content.bytes (← core).tokenContent
-  if value.size == 0 then
+  if content.size (← core).tokenContent == 0 then
     fail run.emptyError tokenEnd
   if let some next := next then
     expectDelimiter next tokenEnd.position
   sinkSlice run.tokenType tokenEnd content
 
+@[inline]
 private def finishSimpleSymbol (tokenEnd : TokenEnd) (content : Content) : LexM H m R E Unit :=
   sinkSlice .unquotedSymbol tokenEnd content
 
@@ -305,16 +328,17 @@ Sinks a keyword.
 The token's own shape is checked first, then that `next`, the byte
 at the end (if there is one), delimits it.
 -/
+@[inline]
 private def finishKeyword (tokenEnd : TokenEnd) (content : Content) (next : Option UInt8) :
     LexM H m R E Unit := do
-  let value := content.bytes (← core).tokenContent
   -- ensure the keyword is not empty
-  if value.size == 0 then
+  if content.size (← core).tokenContent == 0 then
     fail .forbiddenKeywordName tokenEnd
   if let some next := next then
     expectDelimiter next tokenEnd.position
   sinkSlice .keyword tokenEnd content
 
+@[inline]
 private def finishStringLiteral (tokenEnd : TokenEnd) (content : Content) : LexM H m R E Unit :=
   sinkSlice .string tokenEnd content
 
@@ -326,12 +350,12 @@ through the lexer state. The struct allows loading/storing them
 together for better maintainability.
 -/
 /- LEAN: Rust keeps the batch length in a local and writes into the batch arrays; here the
-batch itself is the local. While the fast path holds it, the lexer state has an empty
+batch with its arrays is the local. While the fast path holds it, the lexer state has an empty
 batch, so the state must be stored before anything else uses the batch: the slow path,
 a flush, an error, or a return. -/
 private structure FastState where
   /-- The current batch. -/
-  batch : Array Token
+  batch : TokenBatch
   /-- Current line. -/
   line : Nat
   /-- Byte offset of the start of the current line. -/
@@ -340,7 +364,7 @@ private structure FastState where
 @[inline]
 private def FastState.load : LexM H m R E FastState :=
   modifyGetThe LexerCore fun c =>
-    ({ batch := c.batch, line := c.line, lineStart := c.lineStart }, { c with batch := #[] })
+    ({ batch := c.batch, line := c.line, lineStart := c.lineStart }, { c with batch := default })
 
 @[inline]
 private def FastState.store (fast : FastState) : LexM H m R E Unit :=
@@ -350,18 +374,20 @@ private def FastState.store (fast : FastState) : LexM H m R E Unit :=
 Puts a fast-path token into the batch if `emit` is set, flushing the batch
 when it is full.
 
-The span is on the current line, over `start` to `end` in the slice.
+The content is from `contentStart` to `contentStop` in the slice, and the span is on the
+current line, over `start` to `end` in the slice.
 -/
 /- LEAN: Rust writes the entry even when it is not emitted, as the next token overwrites it;
-here a token that is not emitted is not built at all. -/
+here a token that is not emitted is not written. -/
 @[inline]
-private def pushFast (fast : FastState) (offset : Nat) (ty : TokenType) (content : ByteSlice)
-    (start «end» : Nat) (emit : Bool) : LexM H m R E FastState := do
+private def pushFast (fast : FastState) (offset : Nat) (slice : ByteSlice) (ty : TokenType)
+    (contentStart contentStop start «end» : Nat) (emit : Bool) : LexM H m R E FastState := do
   if !emit then
     return fast
-  let span := SmtSpan.onLine fast.line fast.lineStart (offset + start) (offset + «end»)
-  let fast := { fast with batch := fast.batch.push { ty, content, span } }
-  if fast.batch.size == BATCH_CAPACITY then
+  let fast := { fast with
+    batch := fast.batch.pushOnLine ty (slice.start + contentStart) (slice.start + contentStop)
+      fast.line fast.lineStart (offset + start) (offset + «end») }
+  if fast.batch.len == BATCH_CAPACITY then
     -- batch capacity reached, we need to flush the batch
     fast.store
     flushBatch
@@ -402,7 +428,7 @@ private partial def lexNormalFrom (slice : ByteSlice) (offset index : Nat) (fast
       -- we have consumed every byte of the slice
       -- write the locals back before returning
       fast.store
-      return slice.size
+      return sliceSize slice
   -- A fast path handles the most common token types.
   -- It is determined by one table lookup. If the started token is not on
   -- the fast path, a slower path is taken, again looked up. Arms eagerly
@@ -416,11 +442,11 @@ private partial def lexNormalFrom (slice : ByteSlice) (offset index : Nat) (fast
   -- Handle the parentheses first as they are numerous and
   -- need no special processing. The closing parenthesis is first
   -- as it forms more clusters.
-  if c == byte ')' then
-    let fast ← pushFast fast offset .parenClose (slice.slice index after) index after true
+  if c == byte! ')' then
+    let fast ← pushFast fast offset slice .parenClose index after index after true
     return ← lexNormalFrom slice offset after fast
-  if c == byte '(' then
-    let fast ← pushFast fast offset .parenOpen (slice.slice index after) index after true
+  if c == byte! '(' then
+    let fast ← pushFast fast offset slice .parenOpen index after index after true
     return ← lexNormalFrom slice offset after fast
   -- Handle whitespace and symbols in a fast path.
   let fastEntry := fastFlags c
@@ -437,9 +463,9 @@ private partial def lexNormalFrom (slice : ByteSlice) (offset index : Nat) (fast
     -- or if we are processing a simple symbol and we overrun the slice.
     -- Parentheses have trivially zero-length runs and whitespace
     -- can be split as it is discarded.
-    if runEndAt == slice.size || isQuoted then
+    if runEndAt == sliceSize slice || isQuoted then
       let isUnfinished :=
-        if isQuoted then byteAt? slice runEndAt != some (byte '|')
+        if isQuoted then byteAt? slice runEndAt != some (byte! '|')
         else fastEntry &&& RUN_SIMPLE_SYMBOL != 0
       if isUnfinished then
         -- write the locals back
@@ -452,9 +478,9 @@ private partial def lexNormalFrom (slice : ByteSlice) (offset index : Nat) (fast
     -- symbol but are not part of its content, any other fast token is its
     -- whole text. The token is on a single line as all fast-lex runs exclude
     -- newlines. Whitespace is not emitted.
-    let (ty, content) :=
-      if isQuoted then (TokenType.quotedSymbol, slice.slice after runEndAt)
-      else (TokenType.unquotedSymbol, slice.slice index tokenEnd)
+    let (ty, contentStart, contentStop) :=
+      if isQuoted then (TokenType.quotedSymbol, after, runEndAt)
+      else (TokenType.unquotedSymbol, index, tokenEnd)
     let emit := fastEntry &&& FAST_EMIT != 0
     -- A token must be delimited by the byte after it,
     -- fall back to the state machine if the delimiter is not found.
@@ -473,10 +499,10 @@ private partial def lexNormalFrom (slice : ByteSlice) (offset index : Nat) (fast
         -- the quoted symbol must wait for the delimiter
         fast.store
         startToken index
-        extendContent content
+        extendContent (slice.slice contentStart contentStop)
         setState .quotedSymbolClosed
         return tokenEnd
-    let fast ← pushFast fast offset ty content index tokenEnd emit
+    let fast ← pushFast fast offset slice ty contentStart contentStop index tokenEnd emit
     -- Fast path done, continue normally after the token end.
     return ← lexNormalFrom slice offset tokenEnd fast
 
@@ -497,7 +523,7 @@ private partial def lexNormalFrom (slice : ByteSlice) (offset index : Nat) (fast
     let «end» := runEnd slice after RUN_COMMENT_PLAIN
     match byteAt? slice «end» with
     | some c =>
-      if c == byte '\n' then
+      if c == byte! '\n' then
         -- line feed, we need to mark it
         markLineFeedAt «end»
       -- otherwise a carriage return, which also ends the comment
@@ -513,8 +539,8 @@ private partial def lexNormalFrom (slice : ByteSlice) (offset index : Nat) (fast
     -- base selection
     startToken index
     let selected := (byteAt? slice after).bind fun c =>
-      if c == byte 'x' then some HEXADECIMAL_RUN
-      else if c == byte 'b' then some BINARY_RUN
+      if c == byte! 'x' then some HEXADECIMAL_RUN
+      else if c == byte! 'b' then some BINARY_RUN
       else none
     let some run := selected
       | do
@@ -528,15 +554,15 @@ private partial def lexNormalFrom (slice : ByteSlice) (offset index : Nat) (fast
     -- the base has been selected, get a run of its digits
     let start := after + 1
     let afterEnd := runEnd slice start run.flag
-    if afterEnd == slice.size then
+    if afterEnd == sliceSize slice then
       -- we ran out of bytes
       -- update the content and the state and return
       extendContent (slice.slice start afterEnd)
       setState run.state
       return afterEnd
     -- dispatch a token with borrowed content
-    finishDigitRun run (.mkAtByte afterEnd) (.borrowed (slice.slice start afterEnd))
-      (some (slice.get! afterEnd))
+    finishDigitRun run (.mkAtByte afterEnd) (.borrow slice start afterEnd)
+      (some (sliceGet slice afterEnd))
     -- update the index and continue the loop
     lexNormalFrom slice offset afterEnd (← FastState.load)
   | .quote =>
@@ -554,12 +580,12 @@ private partial def lexNormalFrom (slice : ByteSlice) (offset index : Nat) (fast
     -- (we cannot borrow a string containing an escape)
     match byteAt? slice afterContentEnd, byteAt? slice (afterContentEnd + 1) with
     | some quote, some next =>
-      if quote == byte '"' && next != byte '"' then
+      if quote == byte! '"' && next != byte! '"' then
         -- definitely closed by a quote not followed by another quote
         -- borrow the string literal content and produce a token
         expectDelimiter next (afterContentEnd + 1)
         finishStringLiteral (.mkAtByte (afterContentEnd + 1))
-          (.borrowed (slice.slice after afterContentEnd))
+          (.borrow slice after afterContentEnd)
         -- the closing quote is not part of the content,
         -- but was also processed
         lexNormalFrom slice offset (afterContentEnd + 1) (← FastState.load)
@@ -582,15 +608,15 @@ private partial def lexNormalFrom (slice : ByteSlice) (offset index : Nat) (fast
       failAt .forbiddenKeywordName (after + 1)
     -- get a run of simple-symbol bytes
     let afterEnd := runEnd slice after RUN_SIMPLE_SYMBOL
-    if afterEnd == slice.size then
+    if afterEnd == sliceSize slice then
       -- we ran out of bytes
       -- update the content and state and return
       extendContent (slice.slice after afterEnd)
       setState .keyword
       return afterEnd
     -- dispatch a token with borrowed content
-    finishKeyword (.mkAtByte afterEnd) (.borrowed (slice.slice after afterEnd))
-      (some (slice.get! afterEnd))
+    finishKeyword (.mkAtByte afterEnd) (.borrow slice after afterEnd)
+      (some (sliceGet slice afterEnd))
     -- update the index and continue the loop
     lexNormalFrom slice offset afterEnd (← FastState.load)
   | .digit =>
@@ -603,29 +629,29 @@ private partial def lexNormalFrom (slice : ByteSlice) (offset index : Nat) (fast
     -- it is possible we will not be able to decide it here
     -- if the slice ends with a single zero, so we need to handle that
     -- when lexing digit in the state `numeralOrDecimal`
-    if c == byte '0' && afterEnd > after then
+    if c == byte! '0' && afterEnd > after then
       failAt .numeralLeadingZero (after + 1)
     match byteAt? slice afterEnd with
     | some next =>
-      if next == byte '.' then
+      if next == byte! '.' then
         -- a dot starts a fraction, try to do a subsequent run of fraction digits
         let afterFractionEnd := runEnd slice (afterEnd + 1) RUN_DIGIT
-        if afterFractionEnd == slice.size then
+        if afterFractionEnd == sliceSize slice then
           -- we ran out of bytes
           -- update the content and state and return
           extendContent (slice.slice index afterFractionEnd)
           setState .fraction
           return afterFractionEnd
         -- dispatch a decimal token with borrowed content
-        finishDecimal (.mkAtByte afterFractionEnd) (.borrowed (slice.slice index afterFractionEnd))
-          (some (slice.get! afterFractionEnd))
+        finishDecimal (.mkAtByte afterFractionEnd) (.borrow slice index afterFractionEnd)
+          (some (sliceGet slice afterFractionEnd))
         -- update the index and continue the loop
         lexNormalFrom slice offset afterFractionEnd (← FastState.load)
       else
         -- the numeral is not actually a decimal and ends
         -- dispatch a numeral token with borrowed content
         expectDelimiter next afterEnd
-        finishNumeral (.mkAtByte afterEnd) (.borrowed (slice.slice index afterEnd))
+        finishNumeral (.mkAtByte afterEnd) (.borrow slice index afterEnd)
         -- update the index and continue the loop
         lexNormalFrom slice offset afterEnd (← FastState.load)
     | none =>
@@ -650,9 +676,9 @@ private def lexFractionFrom (slice : ByteSlice) (start : Nat) : LexM H m R E Nat
   let «end» := runEnd slice start RUN_DIGIT
   -- extend the token from slice
   extendContent (slice.slice start «end»)
-  if «end» < slice.size then
+  if «end» < sliceSize slice then
     -- we have successfully consumed the fraction, finish the decimal
-    finishDecimal (.mkAtByte «end») .stored (some (slice.get! «end»))
+    finishDecimal (.mkAtByte «end») .stored (some (sliceGet slice «end»))
     setState .normal
   else
     -- we ran out of bytes for now
@@ -672,7 +698,7 @@ private def lexNumeralOrDecimal (slice : ByteSlice) : LexM H m R E Nat := do
   -- 1. at least one additional digit has been consumed
   -- 2. the content lexed previously is exactly "0"
   let content := (← core).tokenContent
-  let isZero := content.len == 1 && content.bytes.get! 0 == byte '0'
+  let isZero := content.len == 1 && content.bytes.get! 0 == byte! '0'
   if index > 0 && isZero then
     failAt .numeralLeadingZero 1
 
@@ -681,10 +707,10 @@ private def lexNumeralOrDecimal (slice : ByteSlice) : LexM H m R E Nat := do
 
   match byteAt? slice index with
   | some next =>
-    if next == byte '.' then
+    if next == byte! '.' then
       -- decimal, the next character will start fraction
       -- add the dot and immediately start lexing the fraction after it
-      pushContent (byte '.')
+      pushContent (byte! '.')
       lexFractionFrom slice (index + 1)
     else
       -- we have successfully consumed the numeral, finish it
@@ -698,10 +724,10 @@ private def lexNumeralOrDecimal (slice : ByteSlice) : LexM H m R E Nat := do
     return index
 
 private def lexBaseSelection (slice : ByteSlice) : LexM H m R E Nat := do
-  let c := slice.get! 0
-  if c == byte 'x' then
+  let c := sliceGet slice 0
+  if c == byte! 'x' then
     setState .hexadecimal
-  else if c == byte 'b' then
+  else if c == byte! 'b' then
     setState .binary
   else
     failAt .baseSelectionExpected 1
@@ -713,9 +739,9 @@ private def lexDigitRun (slice : ByteSlice) (run : DigitRun) : LexM H m R E Nat 
   let index := runEnd slice 0 run.flag
   -- extend the token from slice
   extendContent (slice.slice 0 index)
-  if index < slice.size then
+  if index < sliceSize slice then
     -- we have successfully consumed the digit run, finish it
-    finishDigitRun run (.mkAtByte index) .stored (some (slice.get! index))
+    finishDigitRun run (.mkAtByte index) .stored (some (sliceGet slice index))
     setState .normal
   return index
 
@@ -745,14 +771,14 @@ private partial def lexStringLiteralLegacy (slice : ByteSlice) (consumed : Nat) 
     return consumed
   | .stringLiteralBackslashEscape =>
     -- handle the backslash escape
-    if first == byte '"' || first == byte '\\' then
+    if first == byte! '"' || first == byte! '\\' then
       -- a backslash escape: only the escaped byte belongs to the content
       pushContent first
       consumed := consumed + 1
     else
       -- not a backslash escape: the backslash belongs to the content,
       -- and the byte after it is lexed like any other
-      pushContent (byte '\\')
+      pushContent (byte! '\\')
     -- continue parsing the string literal
     setState .stringLiteral
   | _ => pure ()
@@ -764,29 +790,29 @@ private partial def lexStringLiteralLegacy (slice : ByteSlice) (consumed : Nat) 
   let some c := byteAt? slice index
     | do
       -- extend the content with the rest
-      extendContent (slice.slice consumed slice.size)
+      extendContent (slice.slice consumed (sliceSize slice))
       -- we have nothing more to consume, return
-      return slice.size
+      return sliceSize slice
 
   let addRunEnding ←
-    if c == byte '\n' then do
+    if c == byte! '\n' then do
       -- mark the line feed
       markLineFeedAt index
       -- it belongs to the string, add it and continue lexing
       pure true
-    else if c == byte '"' then do
+    else if c == byte! '"' then do
       -- put the lexer in the double-quote state
       -- do not add the quote, it is not part of the content
       setState .stringLiteralDoubleQuote
       pure false
-    else if c == byte '\\' then do
+    else if c == byte! '\\' then do
       -- put the lexer in the backslash-escape state
       -- do not add the backslash yet
       -- it may or may not be part of the content
       -- depending on if it truly is a backslash escape or not
       setState .stringLiteralBackslashEscape
       pure false
-    else if c == byte '|' then
+    else if c == byte! '|' then
       -- pipe belongs to the string, add it and continue lexing
       pure true
     else
@@ -810,7 +836,7 @@ private partial def lexStringLiteralFrom (slice : ByteSlice) (consumed : Nat) :
   if (← core).state == .stringLiteralDoubleQuote then
     -- we need to react to the literal being closed by a previous double-quote
     -- look at the first byte
-    if first != byte '"' then
+    if first != byte! '"' then
       -- the previous character was really a quote ending the string literal
       -- finish the previously ended token
       expectDelimiter first consumed
@@ -823,7 +849,7 @@ private partial def lexStringLiteralFrom (slice : ByteSlice) (consumed : Nat) :
       -- consume the first byte
       consumed := consumed + 1
       -- push a double-quote byte (just one, we encountered two)
-      pushContent (byte '"')
+      pushContent (byte! '"')
       -- return to string-literal state and continue lexing
       setState .stringLiteral
 
@@ -832,14 +858,14 @@ private partial def lexStringLiteralFrom (slice : ByteSlice) (consumed : Nat) :
 
   match byteAt? slice index with
   | some c =>
-    if c == byte '\n' then
+    if c == byte! '\n' then
       -- mark the line feed
       markLineFeedAt index
       -- extend with & consume the run including the line feed
       extendContent (slice.slice consumed (index + 1))
       -- continue lexing
       lexStringLiteralFrom slice (index + 1)
-    else if c == byte '"' then
+    else if c == byte! '"' then
       -- we have a double quote in string literal
       -- only extend the content with bytes before it
       extendContent (slice.slice consumed index)
@@ -854,9 +880,9 @@ private partial def lexStringLiteralFrom (slice : ByteSlice) (consumed : Nat) :
       failAt .forbiddenCharInString (index + 1)
   | none =>
     -- extend the content with the rest
-    extendContent (slice.slice consumed slice.size)
+    extendContent (slice.slice consumed (sliceSize slice))
     -- we have nothing more to consume, return
-    return slice.size
+    return sliceSize slice
 
 /-- Lexes the string literal. -/
 private def lexStringLiteral (slice : ByteSlice) : LexM H m R E Nat := do
@@ -872,9 +898,9 @@ private def lexSimpleSymbol (slice : ByteSlice) : LexM H m R E Nat := do
   let index := runEnd slice 0 RUN_SIMPLE_SYMBOL
   -- extend the token from slice
   extendContent (slice.slice 0 index)
-  if index < slice.size then
+  if index < sliceSize slice then
     -- we have successfully consumed the symbol, finish it
-    expectDelimiter (slice.get! index) index
+    expectDelimiter (sliceGet slice index) index
     finishSimpleSymbol (.mkAtByte index) .stored
     setState .normal
   return index
@@ -887,7 +913,7 @@ private partial def lexQuotedSymbol (slice : ByteSlice) (consumed : Nat) : LexM 
   -- inspect the problematic byte
   match byteAt? slice index with
   | some c =>
-    if c == byte '|' then
+    if c == byte! '|' then
       -- end of quoted symbol, extend its content
       extendContent (slice.slice consumed index)
       -- the byte after the pipe must delimit the token before it is sunk
@@ -902,10 +928,10 @@ private partial def lexQuotedSymbol (slice : ByteSlice) (consumed : Nat) : LexM 
         setState .quotedSymbolClosed
       -- consume the bytes including the pipe
       return afterSlicePosition
-    else if c == byte '\\' then
+    else if c == byte! '\\' then
       -- backslash is forbidden in quoted symbols
       failAt .backslashInQuotedSymbol afterSlicePosition
-    else if c == byte '\n' then
+    else if c == byte! '\n' then
       -- mark the line feed at the given position
       markLineFeedAt index
       -- prepare for the next run
@@ -918,12 +944,12 @@ private partial def lexQuotedSymbol (slice : ByteSlice) (consumed : Nat) : LexM 
   | none =>
     -- we ran out of bytes before the token ended
     -- extend content and keep the quoted symbol state
-    extendContent (slice.slice consumed slice.size)
-    return slice.size
+    extendContent (slice.slice consumed (sliceSize slice))
+    return sliceSize slice
 
 private def lexKeyword (slice : ByteSlice) : LexM H m R E Nat := do
   -- test that the keyword does not start with a digit
-  if (← core).tokenContent.isEmpty && isAsciiDigit (slice.get! 0) then
+  if (← core).tokenContent.isEmpty && isAsciiDigit (sliceGet slice 0) then
     failAt .forbiddenKeywordName 1
 
   -- find the first byte that is not simple-symbol-like
@@ -932,15 +958,15 @@ private def lexKeyword (slice : ByteSlice) : LexM H m R E Nat := do
   -- extend the token from slice
   extendContent (slice.slice 0 index)
 
-  if index < slice.size then
+  if index < sliceSize slice then
     -- we have successfully consumed the keyword, finish it
-    finishKeyword (.mkAtByte index) .stored (some (slice.get! index))
+    finishKeyword (.mkAtByte index) .stored (some (sliceGet slice index))
     setState .normal
   return index
 
 private def lexQuotedSymbolClosed (slice : ByteSlice) : LexM H m R E Nat := do
   -- we expect a token delimiter to follow the closing pipe
-  expectDelimiter (slice.get! 0) 0
+  expectDelimiter (sliceGet slice 0) 0
   -- all good, produce the quoted symbol token
   sinkSlice .quotedSymbol (.mkAtByte 0) .stored
   -- the delimiter is not consumed
@@ -953,11 +979,11 @@ private def lexComment (slice : ByteSlice) : LexM H m R E Nat := do
   let some c := byteAt? slice index
     -- the comment continues, just consume the whole slice
     -- and remain in comment state
-    | return slice.size
+    | return sliceSize slice
 
   -- the comment has ended, either by CR or LF
   -- if it ended by LF, we must mark it
-  if c == byte '\n' then
+  if c == byte! '\n' then
     markLineFeedAt index
 
   -- move back to the normal state
@@ -1012,7 +1038,7 @@ private partial def lexSliceLoop (slice : ByteSlice) (initialOffset : Nat) (rest
     | .ok _ => false
   /- LEAN: `none` stands for a batch handed over without an interruption, `some` for the
   number of bytes a step consumed. -/
-  let result : Except (Interrupted R E) (Option Nat) ← if rest.size == 0 || failed then do
+  let result : Except (Interrupted R E) (Option Nat) ← if sliceSize rest == 0 || failed then do
       -- hand over the batch
       let flushed ← (flushBatch (m := m) (R := R) (E := E)).run
       pure (flushed.map fun () => none)
@@ -1058,6 +1084,8 @@ private partial def lexSliceLoop (slice : ByteSlice) (initialOffset : Nat) (rest
 private def lexSliceInner (slice : ByteSlice) :
     InnerM H m (Except (LexError E) (ControlFlow R)) := do
   let initialOffset := (← getThe LexerCore).offset
+  -- the tokens borrowed from this slice have their contents in its array
+  modifyThe LexerCore fun c => { c with batch := { c.batch with bytes := slice.byteArray } }
   lexSliceLoop slice initialOffset slice (.ok .continue)
 
 /-- Resets the lexer to the initial state, including the location and version. -/
@@ -1156,7 +1184,7 @@ def new (handler : H) (version : SmtVersion) : Lexer H :=
       offset := 0
       line := 0
       lineStart := 0
-      batch := Array.emptyWithCapacity BATCH_CAPACITY } }
+      batch := TokenBatch.empty BATCH_CAPACITY } }
 
 def currentLocation (self : Lexer H) : SmtLocation :=
   self.core.locationAt 0

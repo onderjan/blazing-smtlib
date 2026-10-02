@@ -60,12 +60,12 @@ def errorKindName : LexerErrorKind → String
   | .missingDelimiter => "MissingDelimiter"
 
 /-- What the token is as a reserved word under the version. -/
-def reservedName (token : Token) (version : SmtVersion) : String :=
+def reservedName (ty : TokenType) (content : ByteSlice) (version : SmtVersion) : String :=
   -- only unquoted symbols can be reserved words
-  if token.ty != .unquotedSymbol then
+  if ty != .unquotedSymbol then
     "-"
   else
-    match Reserved.fromBytes? token.content version with
+    match Reserved.fromBytes? content version with
     | some (.general _) => "general"
     | some (.commandName _) => "command"
     | none => "-"
@@ -75,9 +75,12 @@ def reservedName (token : Token) (version : SmtVersion) : String :=
 partial def reportTokens (report : Report) : TokenHandlerM Report IO Empty Unit := do
   let some token ← modifyGetThe TokenCursor TokenCursor.next
     | return
-  let span := token.span
-  let line := s!"t {tokenTypeName token.ty} {location span.start} {location span.end} \
-    {reservedName token report.version} x{hex token.content}\n"
+  let cursor ← getThe TokenCursor
+  let ty := cursor.ty token
+  let content := cursor.content token
+  let span := cursor.span token
+  let line := s!"t {tokenTypeName ty} {location span.start} {location span.end} \
+    {reservedName ty content report.version} x{hex content}\n"
   report.out.modify (· ++ line)
   reportTokens report
 

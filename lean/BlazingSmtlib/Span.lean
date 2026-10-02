@@ -70,18 +70,44 @@ Span of an SMT-LIB element.
 
 The span is a half-open range `[start, end)` between locations.
 -/
+/- LEAN: Rust's span holds its two locations inline. A Lean structure holds a structure field
+as a pointer to a separate object, so a span of two `SmtLocation` fields would take three
+allocations. The span therefore holds the six numbers itself, and `start` and `end` are
+functions that build the locations when asked. -/
 structure SmtSpan where
-  /- LEAN: `end` is a keyword in Lean, so the field name is written in guillemets where it
-  is declared or bound; `span.end` works as usual. -/
-  start : SmtLocation
-  «end» : SmtLocation
-  deriving BEq, Hashable, Repr, Inhabited
+  private mk ::
+  private startOffset : Nat
+  private startLine : Nat
+  private startColumn : Nat
+  private endOffset : Nat
+  private endLine : Nat
+  private endColumn : Nat
+  deriving BEq, Hashable, Inhabited
 
 namespace SmtSpan
 
 @[inline]
+def start (self : SmtSpan) : SmtLocation :=
+  { offset := self.startOffset, line := self.startLine, column := self.startColumn }
+
+/- LEAN: `end` is a keyword in Lean, so the name is written in guillemets where it is
+declared; `span.end` works as usual. -/
+@[inline]
+def «end» (self : SmtSpan) : SmtLocation :=
+  { offset := self.endOffset, line := self.endLine, column := self.endColumn }
+
+@[inline]
 def newUnchecked (start «end» : SmtLocation) : SmtSpan :=
-  { start, «end» }
+  { startOffset := start.offset, startLine := start.line, startColumn := start.column,
+    endOffset := «end».offset, endLine := «end».line, endColumn := «end».column }
+
+/--
+A span given by the numbers of its two locations.
+-/
+/- LEAN: not in Rust; it builds a span without building its locations first. -/
+@[inline]
+def ofNumbers (startOffset startLine startColumn endOffset endLine endColumn : Nat) : SmtSpan :=
+  { startOffset, startLine, startColumn, endOffset, endLine, endColumn }
 
 /--
 A span within one line: the line, the offset of its start, and the
@@ -89,12 +115,11 @@ offsets of the span on it.
 -/
 @[inline]
 def onLine (line lineStart start «end» : Nat) : SmtSpan :=
-  { start := { offset := start, line, column := start - lineStart },
-    «end» := { offset := «end», line, column := «end» - lineStart } }
+  ofNumbers start line (start - lineStart) «end» line («end» - lineStart)
 
 @[inline]
 def newEmpty (location : SmtLocation) : SmtSpan :=
-  { start := location, «end» := location }
+  newUnchecked location location
 
 def newZero : SmtSpan :=
   newEmpty SmtLocation.initial
@@ -103,7 +128,10 @@ def isEmpty (self : SmtSpan) : Bool :=
   self.start == self.end
 
 def join (self other : SmtSpan) : SmtSpan :=
-  { start := self.start.min other.start, «end» := self.end.max other.end }
+  newUnchecked (self.start.min other.start) (self.end.max other.end)
+
+instance : Repr SmtSpan where
+  reprPrec span _ := s!"\{ start := {repr span.start}, end := {repr span.end} }"
 
 end SmtSpan
 

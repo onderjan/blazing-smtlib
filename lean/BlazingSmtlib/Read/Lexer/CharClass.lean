@@ -62,10 +62,12 @@ inductive CharClass where
   | nonAscii
   deriving BEq, Repr, Inhabited
 
-/- LEAN: Lean has no byte literals like `b'('`; `byte '('` stands for one. -/
-/-- The byte of an ASCII character. -/
-@[inline]
-def byte (c : Char) : UInt8 := c.toUInt8
+/- LEAN: Lean has no byte literals like `b'('`; `byte! '('` stands for one. It is a macro, so
+that the byte is a constant in the compiled code: converting the character with a function
+is not folded by the compiler and costs a call at every use. -/
+/-- The byte of an ASCII character literal. -/
+macro "byte! " c:char : term =>
+  `(($(Lean.Syntax.mkNumLit (toString c.getChar.toNat)) : UInt8))
 
 namespace CharClass
 
@@ -79,19 +81,19 @@ def classify (c : UInt8) : CharClass :=
     .digit
   else if n ≥ 128 then
     .nonAscii
-  else if c == byte '\t' then .tab
-  else if c == byte '\r' || c == byte '\n' then .lineBreak
-  else if c == byte ' ' then .space
-  else if c == byte '#' then .hash
-  else if c == byte '"' then .doubleQuote
-  else if c == byte '(' then .parenOpen
-  else if c == byte ')' then .parenClose
-  else if c == byte '.' then .dot
-  else if c == byte ':' then .colon
-  else if c == byte ';' then .semicolon
-  else if c == byte '\\' then .backslash
-  else if c == byte '|' then .pipe
-  else if "~!@$%^&*_-+=<>?/".toList.any (fun s => byte s == c) then .special
+  else if c == byte! '\t' then .tab
+  else if c == byte! '\r' || c == byte! '\n' then .lineBreak
+  else if c == byte! ' ' then .space
+  else if c == byte! '#' then .hash
+  else if c == byte! '"' then .doubleQuote
+  else if c == byte! '(' then .parenOpen
+  else if c == byte! ')' then .parenClose
+  else if c == byte! '.' then .dot
+  else if c == byte! ':' then .colon
+  else if c == byte! ';' then .semicolon
+  else if c == byte! '\\' then .backslash
+  else if c == byte! '|' then .pipe
+  else if "~!@$%^&*_-+=<>?/".toList.any (fun s => s.toUInt8 == c) then .special
   else if n == 127 then .del
   -- below 128 and not in any interesting class
   else if n < 32 then .otherNonPrintable
@@ -139,15 +141,15 @@ def runFlags (c : UInt8) : UInt8 := Id.run do
   if class_ == .digit then
     flags := flags ||| RUN_DIGIT
   -- letter does not separate a-f from the rest
-  if class_ == .digit || (byte 'a' ≤ c && c ≤ byte 'f') || (byte 'A' ≤ c && c ≤ byte 'F') then
+  if class_ == .digit || (byte! 'a' ≤ c && c ≤ byte! 'f') || (byte! 'A' ≤ c && c ≤ byte! 'F') then
     flags := flags ||| RUN_HEX_DIGIT
-  if c == byte '0' || c == byte '1' then
+  if c == byte! '0' || c == byte! '1' then
     flags := flags ||| RUN_BINARY_DIGIT
-  if (class_ == .tab || class_ == .space || class_ == .lineBreak) && c != byte '\n' then
+  if (class_ == .tab || class_ == .space || class_ == .lineBreak) && c != byte! '\n' then
     flags := flags ||| RUN_NON_LF_WHITESPACE
   -- lineBreak covers CR too, and CR is plain inside strings and quoted symbols;
   -- only LF ends the run (it has to be marked before the scan continues)
-  let plainText := class_.isPrintableOrWhitespace && c != byte '\n'
+  let plainText := class_.isPrintableOrWhitespace && c != byte! '\n'
   if plainText && !(class_ == .pipe || class_ == .backslash) then
     flags := flags ||| RUN_QUOTED_PLAIN
   if plainText && class_ != .doubleQuote then
@@ -164,6 +166,18 @@ compile time. -/
 def RUN_FLAGS : ByteArray :=
   ⟨(Array.range 256).map fun i => CharClass.runFlags i.toUInt8⟩
 
+/- LEAN: the size and the bytes of a slice, read through the slice's array; the functions of
+the standard library for these are calls that the compiler does not inline. -/
+/-- The number of bytes in the slice. -/
+@[inline]
+def sliceSize (slice : ByteSlice) : Nat :=
+  slice.stop - slice.start
+
+/-- The byte at `index` of the slice, zero if there is none. -/
+@[inline]
+def sliceGet (slice : ByteSlice) (index : Nat) : UInt8 :=
+  slice.byteArray.get! (slice.start + index)
+
 /-- Whether the byte ends a run as it carries no flags from the mask. -/
 @[inline]
 def endsRun (c : UInt8) (mask : UInt8) : Bool :=
@@ -177,27 +191,38 @@ In other words, the end of the longest run from `start` where all bytes carry
 at least one flag from the mask.
 -/
 /- LEAN: Rust calls `start + run_end(&slice[start..], mask)`; taking `start` here avoids
-building a sub-slice. The loop is a recursive function: Lean has no `while` that it can
-prove to end, and `termination_by` names the quantity that shrinks with every call so that
-Lean accepts the recursion as terminating. The 4-byte unrolling of the Rust scan is a
-performance measure left out for now. -/
+building a sub-slice. The scan runs over the slice's array with positions in the array, as
+the slice functions of the standard library are calls that the compiler does not inline.
+The loop is a recursive function: Lean has no `while` that it can prove to end, and
+`termination_by` names the quantity that shrinks with every call so that Lean accepts the
+recursion as terminating. The 4-byte unrolling of the Rust scan is left out. -/
 def runEnd (slice : ByteSlice) (start : Nat) (mask : UInt8) : Nat :=
-  if h : start < slice.size then
-    if endsRun slice[start] mask then start else runEnd slice (start + 1) mask
-  else
-    max start slice.size
-termination_by slice.size - start
+  let size := sliceSize slice
+  if start ≥ size then start else go slice.byteArray (slice.start + start) slice.stop - slice.start
+where
+  /-- The first position from `position` to `stop` of a byte ending the run, `stop` if none. -/
+  go (bytes : ByteArray) (position stop : Nat) : Nat :=
+    if h : position < stop then
+      if endsRun (bytes.get! position) mask then position else go bytes (position + 1) stop
+    else
+      position
+  termination_by stop - position
 
 /--
 Like `runEnd`, but a byte continues the run only if it has all the flags of
 the mask.
 -/
 def runEndAll (slice : ByteSlice) (start : Nat) (mask : UInt8) : Nat :=
-  if h : start < slice.size then
-    if RUN_FLAGS.get! slice[start].toNat &&& mask != mask then start
-    else runEndAll slice (start + 1) mask
-  else
-    max start slice.size
-termination_by slice.size - start
+  let size := sliceSize slice
+  if start ≥ size then start else go slice.byteArray (slice.start + start) slice.stop - slice.start
+where
+  /-- The first position from `position` to `stop` of a byte ending the run, `stop` if none. -/
+  go (bytes : ByteArray) (position stop : Nat) : Nat :=
+    if h : position < stop then
+      if RUN_FLAGS.get! (bytes.get! position).toNat &&& mask != mask then position
+      else go bytes (position + 1) stop
+    else
+      position
+  termination_by stop - position
 
 end BlazingSmtlib.Read.Lexer

@@ -26,15 +26,15 @@ namespace Start
 
 def classify (c : UInt8) : Start :=
   let flags := CharClass.runFlags c
-  if c == byte ' ' || c == byte '\t' || c == byte '\r' then .whitespace
-  else if c == byte '\n' then .lineFeed
-  else if c == byte '(' then .parenOpen
-  else if c == byte ')' then .parenClose
-  else if c == byte ';' then .comment
-  else if c == byte '#' then .hash
-  else if c == byte '"' then .quote
-  else if c == byte ':' then .colon
-  else if c == byte '|' then .pipe
+  if c == byte! ' ' || c == byte! '\t' || c == byte! '\r' then .whitespace
+  else if c == byte! '\n' then .lineFeed
+  else if c == byte! '(' then .parenOpen
+  else if c == byte! ')' then .parenClose
+  else if c == byte! ';' then .comment
+  else if c == byte! '#' then .hash
+  else if c == byte! '"' then .quote
+  else if c == byte! ':' then .colon
+  else if c == byte! '|' then .pipe
   else if flags &&& RUN_DIGIT != 0 then .digit
   else if flags &&& RUN_SIMPLE_SYMBOL != 0 then .symbol
   else .other
@@ -103,11 +103,11 @@ def FAST : ByteArray :=
   ⟨(Array.range 256).map fun i =>
     let c := i.toUInt8
     let flags := CharClass.runFlags c
-    if c == byte ' ' || c == byte '\t' || c == byte '\r' then
+    if c == byte! ' ' || c == byte! '\t' || c == byte! '\r' then
       FAST_ON ||| FAST_DELIM ||| RUN_NON_LF_WHITESPACE
-    else if c == byte '\n' || c == byte '(' || c == byte ')' || c == byte ';' then
+    else if c == byte! '\n' || c == byte! '(' || c == byte! ')' || c == byte! ';' then
       FAST_DELIM
-    else if c == byte '|' then
+    else if c == byte! '|' then
       FAST_ON ||| FAST_EMIT ||| FAST_PIPE ||| RUN_QUOTED_PLAIN
     -- a simple symbol may contain digits but must not start with one
     else if flags &&& RUN_SIMPLE_SYMBOL != 0 && flags &&& RUN_DIGIT == 0 then
@@ -124,8 +124,8 @@ def fastFlags (c : UInt8) : UInt8 :=
 #guard (List.range 256).all fun i =>
   let c := i.toUInt8
   (fastFlags c &&& FAST_DELIM != 0)
-    == (c == byte ' ' || c == byte '\t' || c == byte '\n' || c == byte '\r'
-      || c == byte '(' || c == byte ')' || c == byte ';')
+    == (c == byte! ' ' || c == byte! '\t' || c == byte! '\n' || c == byte! '\r'
+      || c == byte! '(' || c == byte! ')' || c == byte! ';')
 
 -- a byte is fast exactly when its START class is one the fast path replaces; parentheses
 -- are dispatched by byte tests ahead of the table, so they are neither fast nor covered here
@@ -227,8 +227,8 @@ def view (self : ContentBuffer) : ByteSlice :=
 
 @[inline]
 def extendFromSlice (self : ContentBuffer) (slice : ByteSlice) : ContentBuffer :=
-  { bytes := slice.byteArray.copySlice slice.start self.bytes self.len slice.size false,
-    len := self.len + slice.size }
+  { bytes := slice.byteArray.copySlice slice.start self.bytes self.len (sliceSize slice) false,
+    len := self.len + sliceSize slice }
 
 @[inline]
 def push (self : ContentBuffer) (byte : UInt8) : ContentBuffer :=
@@ -240,19 +240,34 @@ def push (self : ContentBuffer) (byte : UInt8) : ContentBuffer :=
 end ContentBuffer
 
 /-- Where the bytes of a finished token are. -/
+/- LEAN: Rust borrows a sub-slice; here the content is the slice's array with the positions
+in it, from which the token is built without allocating a view. -/
 inductive Content where
   /-- Accumulated in the lexer's token content. -/
   | stored
-  /-- Still in the input slice. -/
-  | borrowed (bytes : ByteSlice)
+  /-- Still in the input slice: its array from `start` to `stop`. -/
+  | borrowed (bytes : ByteArray) (start stop : Nat)
 
 namespace Content
 
+/-- The bytes of the slice from `start` to `stop`, positions in the slice. -/
 @[inline]
-def bytes (self : Content) (stored : ContentBuffer) : ByteSlice :=
+def borrow (slice : ByteSlice) (start stop : Nat) : Content :=
+  .borrowed slice.byteArray (slice.start + start) (slice.start + stop)
+
+/-- The number of bytes of the content. -/
+@[inline]
+def size (self : Content) (stored : ContentBuffer) : Nat :=
   match self with
-  | .stored => stored.view
-  | .borrowed bytes => bytes
+  | .stored => stored.len
+  | .borrowed _ start stop => stop - start
+
+/-- The last byte of the content, if any. -/
+@[inline]
+def last? (self : Content) (stored : ContentBuffer) : Option UInt8 :=
+  match self with
+  | .stored => if stored.len == 0 then none else some (stored.bytes.get! (stored.len - 1))
+  | .borrowed bytes start stop => if stop == start then none else some (bytes.get! (stop - 1))
 
 end Content
 
