@@ -3,3 +3,8 @@ defaultTargets = ["BlazingSmtlib"]
 
 [[lean_lib]]
 name = "BlazingSmtlib"
+
+# the lexing mode of rust/benches/parse.rs, run with `lake exe bench-parse`
+[[lean_exe]]
+name = "bench-parse"
+root = "Benches.Parse"
