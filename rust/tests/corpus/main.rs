@@ -148,7 +148,7 @@ impl Corpus {
     fn locate() -> Self {
         let root = match std::env::var_os("SMT_BENCHMARKS_DIR") {
             Some(dir) => PathBuf::from(dir),
-            None => Path::new(env!("CARGO_MANIFEST_DIR")).join("benchmarks/2025"),
+            None => Path::new(env!("CARGO_MANIFEST_DIR")).join("../benchmarks/2025"),
         };
         assert!(
             root.exists(),

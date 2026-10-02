@@ -1,7 +1,9 @@
+# Rust
 /target
-Cargo.lock
+/rust/target
+/rust/Cargo.lock
 
-# Claude is used for reviewing only
+# Claude is used, see README.md for the policy
 .claude
 
 # misc untracked folders

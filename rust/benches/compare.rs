@@ -364,7 +364,7 @@ fn main_inner() -> Result<(), String> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let corpus = match std::env::var_os("SMT_BENCHMARKS_DIR") {
         Some(dir) => PathBuf::from(dir),
-        None => root.join("benchmarks/2025"),
+        None => root.join("../benchmarks/2025"),
     };
 
     let baseline = resolve_side(root, &options.baseline)?;

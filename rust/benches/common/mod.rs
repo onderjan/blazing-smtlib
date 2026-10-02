@@ -142,7 +142,7 @@ pub const FILES: &[BenchFile] = &[
     ),
 ];
 
-/// The corpus root: `SMT_BENCHMARKS_DIR`, or `benchmarks/2025` relative to
+/// The corpus root: `SMT_BENCHMARKS_DIR`, or `../benchmarks/2025` relative to
 /// the current directory, which cargo sets to the package root.
 ///
 /// An embedded absolute path would make the code layout, and so the
@@ -150,7 +150,7 @@ pub const FILES: &[BenchFile] = &[
 pub fn benchmarks_dir() -> PathBuf {
     match std::env::var_os("SMT_BENCHMARKS_DIR") {
         Some(dir) => PathBuf::from(dir),
-        None => PathBuf::from("benchmarks/2025"),
+        None => PathBuf::from("../benchmarks/2025"),
     }
 }
 

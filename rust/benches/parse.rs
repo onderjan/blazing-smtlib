@@ -1,6 +1,6 @@
 //! Parse-throughput benchmark over pinned SMT-LIB benchmark files.
 //!
-//! Expects the SMT-LIB corpus under `benchmarks/2025` in the current
+//! Expects the SMT-LIB corpus under `../benchmarks/2025` in the current
 //! directory, which is the repository root under `cargo bench` (tracks
 //! unpacked as `non-incremental/<LOGIC>/...` and `incremental/<LOGIC>/...`);
 //! set the environment variable `SMT_BENCHMARKS_DIR` to use a corpus root
