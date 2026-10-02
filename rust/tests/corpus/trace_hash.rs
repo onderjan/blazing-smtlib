@@ -16,7 +16,7 @@
 
 use std::convert::Infallible;
 
-use smt_parser_rs::{
+use blazing_smtlib::{
     CommandHandler, NonstandardCommandError, SmtAttributeValue, SmtAttributes, SmtBindings,
     SmtDatatypeConstructor, SmtFunctionSignature, SmtHandler, SmtIdentView, SmtIndexView,
     SmtKeyword, SmtKeywordView, SmtNumeral, SmtPatternView, SmtQuantifierKind, SmtSExpr,

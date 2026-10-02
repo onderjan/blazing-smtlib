@@ -5,7 +5,7 @@ mod common;
 
 use common::{assert_error_span, assert_parser_error, parse, parse_with};
 
-use smt_parser_rs::{
+use blazing_smtlib::{
     CommandHandler, NonstandardCommandError, SmtAttributeValue, SmtAttributes, SmtBindings,
     SmtDatatypeConstructor, SmtFunctionSignature, SmtHandler, SmtKeyword, SmtKeywordView,
     SmtNumeral, SmtPatternView, SmtQuantifierKind, SmtSExpr, SmtSort, SmtStringContent, SmtSymbol,

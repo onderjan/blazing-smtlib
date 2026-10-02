@@ -42,7 +42,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Instant;
 
-use smt_parser_rs::{
+use blazing_smtlib::{
     read::lexer::Lexer,
     token::{SmtVersion, TokenCursor, TokenHandler},
 };

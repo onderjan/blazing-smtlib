@@ -7,7 +7,7 @@ use std::convert::Infallible;
 
 use common::{assert_error_span, assert_parser_error, parse_with};
 
-use smt_parser_rs::{
+use blazing_smtlib::{
     CommandHandler, SmtAttributeValue, SmtAttributes, SmtBindings, SmtDatatypeConstructor,
     SmtFunctionSignature, SmtHandler, SmtIdentView, SmtIndexView, SmtKeyword, SmtKeywordView,
     SmtNumeral, SmtPatternView, SmtQuantifierKind, SmtSExpr, SmtSimplePatternView, SmtSort,

@@ -1,6 +1,6 @@
 //! Shared helpers driving full command streams through the public reader.
 
-use smt_parser_rs::{
+use blazing_smtlib::{
     CheckStandardSyntax, CommandHandler, NonstandardCommandError,
     read::{SmtReadError, SmtReadErrorKind, parser::SyntaxErrorKind, read_smt},
 };

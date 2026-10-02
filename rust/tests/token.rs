@@ -2,8 +2,8 @@
 
 mod reserved_words;
 
-use smt_parser_rs::String8;
-use smt_parser_rs::token::{CommandNameReserved, GeneralReserved, Reserved, SmtVersion};
+use blazing_smtlib::String8;
+use blazing_smtlib::token::{CommandNameReserved, GeneralReserved, Reserved, SmtVersion};
 
 /// Returns every `GeneralReserved` variant, in declaration order.
 ///

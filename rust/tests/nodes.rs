@@ -3,7 +3,7 @@
 use std::convert::Infallible;
 use std::fmt::Debug;
 
-use smt_parser_rs::{
+use blazing_smtlib::{
     SmtApplication, SmtAttributeValue, SmtAttributes, SmtBindings, SmtDatatypeConstructor,
     SmtFunctionSignature, SmtHandler, SmtIdent, SmtIdentView, SmtIndex, SmtIndexView, SmtIndices,
     SmtKeywordView, SmtPattern, SmtPatternView, SmtQualifiedIdent, SmtQualifiedIdentView,

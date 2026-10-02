@@ -7,7 +7,7 @@
 
 use std::path::{Path, PathBuf};
 
-use smt_parser_rs::{
+use blazing_smtlib::{
     CheckStandardSyntax,
     read::{SmtReadErrorKind, read_smt},
 };

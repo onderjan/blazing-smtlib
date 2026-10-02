@@ -8,7 +8,7 @@
 use std::convert::Infallible;
 use std::ops::ControlFlow;
 
-use smt_parser_rs::{
+use blazing_smtlib::{
     SmtLocation,
     read::lexer::{LexError, Lexer, LexerErrorKind},
     token::{SmtVersion, TokenCursor, TokenHandler, TokenType},

@@ -15,7 +15,7 @@
 use std::ops::ControlFlow;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
-use smt_parser_rs::{
+use blazing_smtlib::{
     SmtLocation, SmtSpan,
     read::lexer::{LexError, Lexer, LexerErrorKind},
     token::{SmtVersion, Token, TokenCursor, TokenHandler, TokenType},

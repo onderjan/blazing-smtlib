@@ -4,7 +4,7 @@ use std::io::{BufRead, Read};
 
 use std::ops::ControlFlow;
 
-use smt_parser_rs::{
+use blazing_smtlib::{
     CheckStandardSyntax, NonstandardCommandError, SmtLocation,
     read::{
         SmtReadError, SmtReadErrorKind, SmtReader,

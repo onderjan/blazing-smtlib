@@ -1,6 +1,6 @@
 //! Public-API tests of the plain string-like value types.
 
-use smt_parser_rs::{
+use blazing_smtlib::{
     SmtBinDigits, SmtDecimal, SmtHexDigits, SmtKeyword, SmtNumeral, SmtStringContent, SmtSymbol,
 };
 

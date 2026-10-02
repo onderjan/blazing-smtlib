@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use smt_parser_rs::{
+use blazing_smtlib::{
     CheckStandardSyntax,
     read::{SmtReadErrorKind, read_smt_file},
 };

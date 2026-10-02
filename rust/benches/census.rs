@@ -4,7 +4,7 @@
 //! Run with `cargo bench --bench census`. For each selected file it prints
 //! the size, token count, bytes per token, and nesting depth; token counts
 //! by type, reserved words, and top-level command names; and the allocations
-//! of one full parse with [`smt_parser_rs::CheckStandardSyntax`]: the count,
+//! of one full parse with [`blazing_smtlib::CheckStandardSyntax`]: the count,
 //! the count per token, and the peak live heap. Command-line arguments name
 //! additional files to describe, relative to the corpus root, which helps
 //! when choosing files to add to [`common::FILES`].
@@ -24,7 +24,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use smt_parser_rs::{
+use blazing_smtlib::{
     read::lexer::Lexer,
     token::{SmtVersion, Token, TokenCursor, TokenHandler, TokenKind},
 };

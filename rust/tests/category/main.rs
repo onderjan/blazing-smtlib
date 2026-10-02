@@ -23,7 +23,7 @@ mod term;
 use std::convert::Infallible;
 use std::ops::ControlFlow;
 
-use smt_parser_rs::{
+use blazing_smtlib::{
     SmtAttributeValue, SmtAttributes, SmtBindings, SmtHandler, SmtIdent, SmtIdentView, SmtIndex,
     SmtIndexView, SmtKeywordView, SmtPatternView, SmtQualifiedIdent, SmtQualifiedIdentView,
     SmtQuantifierKind, SmtSExpr, SmtSimplePatternView, SmtSort, SmtSpan, SmtSpecialConstantView,

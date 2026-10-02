@@ -10,7 +10,7 @@ use reserved_words::reserved_words;
 
 use std::ops::ControlFlow;
 
-use smt_parser_rs::{
+use blazing_smtlib::{
     CheckStandardSyntax, NonstandardCommandError, String8,
     read::{
         SmtReadError, SmtReadErrorKind, SmtReader,

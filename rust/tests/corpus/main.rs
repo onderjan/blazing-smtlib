@@ -35,12 +35,12 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
-use rayon::ThreadPoolBuilder;
-use rayon::prelude::*;
-use smt_parser_rs::{
+use blazing_smtlib::{
     CheckStandardSyntax, NonstandardCommandError,
     read::{SmtReadError, SmtReadErrorKind, read_smt_file},
 };
+use rayon::ThreadPoolBuilder;
+use rayon::prelude::*;
 use trace_hash::TraceHash;
 
 /// How often the progress ticker prints, and also the in-flight time

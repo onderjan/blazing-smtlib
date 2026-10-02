@@ -14,7 +14,7 @@ use reserved_words::{COMMAND_NAMES, reserved_words};
 
 use std::ops::ControlFlow;
 
-use smt_parser_rs::{
+use blazing_smtlib::{
     CheckStandardSyntax, NonstandardCommandError,
     read::{SmtReadError, SmtReader},
     token::{SmtVersion, SmtVersionPosture},

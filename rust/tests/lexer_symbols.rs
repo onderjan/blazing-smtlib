@@ -9,7 +9,7 @@ mod reserved_words;
 use std::convert::Infallible;
 use std::ops::ControlFlow;
 
-use smt_parser_rs::{
+use blazing_smtlib::{
     read::lexer::Lexer,
     token::{Reserved, SmtVersion, Token, TokenCursor, TokenHandler, TokenKind, TokenType},
 };
