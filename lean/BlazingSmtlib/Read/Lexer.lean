@@ -21,8 +21,8 @@ structure Interrupted (R E : Type) where
   result : Except (LexError E) (Stop R)
   location : SmtLocation
 
-/- LEAN: a default value is needed to `panic!` and to `throw` in the lexer's monad; it cannot
-be derived without one for the handler's result type. -/
+/- LEAN: a default value is needed for the functions marked `partial` in the lexer's monad; it
+cannot be derived without one for the handler's result type. -/
 instance : Inhabited (Interrupted R E) := ⟨{ result := .ok .relex, location := default }⟩
 
 /- LEAN: the fields of the Rust `Lexer` except the handler, which the lexer's monad keeps
@@ -153,6 +153,11 @@ private def failAt (kind : LexerErrorKind) (position : Nat) : LexM H m R E α :=
 private def fail (kind : LexerErrorKind) (tokenEnd : TokenEnd) : LexM H m R E α :=
   failAt kind (tokenEnd.position + if tokenEnd.atByte then 1 else 0)
 
+/- LEAN: raises what is a panic in Rust, see `InternalError`. -/
+/-- Fails with an internal error at the current location. -/
+private def failInternal (error : InternalError) : LexM H m R E α := do
+  throw { result := .error (.internal error), location := (← core).locationAt 0 }
+
 /--
 Checks that `next`, the byte at `position` right after a token,
 delimits it.
@@ -180,9 +185,9 @@ reused by the next batch. -/
 private def flushCursor (cursor : TokenCursor) : LexM H m R E (Array Token) := do
   -- where lexing continues if the handler stops before the first token
   -- relex request empties the cursor, so we need to remember it here
-  let firstStart := match cursor.get 0 with
-    | some token => token.span.start
-    | none => panic! "flushed batch must have at least one token"
+  let some first := cursor.get 0
+    | failInternal .emptyBatch
+  let firstStart := first.span.start
 
   -- flush the cursor
   let (result, cursor) ← callHandler cursor
@@ -198,11 +203,11 @@ private def flushCursor (cursor : TokenCursor) : LexM H m R E (Array Token) := d
       else
         -- ensure the cursor has been fully consumed
         if !cursor.isEmpty then
-          panic! "the token handler must consume all tokens before continuing"
+          failInternal .tokensNotConsumed
         return cursor.intoTokens
     | .ok (.break result) =>
       if cursor.relexRequested then
-        panic! "the token handler cannot both finish and request relex"
+        failInternal .finishedAndRelexed
       pure (.ok (.finished result))
     | .error err => pure (.error (.handler err))
   -- the stop takes effect after the consumed tokens
@@ -868,7 +873,7 @@ private def lexStep (rest : ByteSlice) : LexM H m R E Nat := do
   | .keyword => lexKeyword rest
   | .comment => lexComment rest
   | .quotedSymbolClosed => lexQuotedSymbolClosed rest
-  | .failed => panic! "cannot lex after a lexer error"
+  | .failed => failInternal .lexedAfterError
 
 /--
 Moves the lexer back to `location`, which the tokens handed over
@@ -924,10 +929,9 @@ private partial def lexSliceLoop (slice : ByteSlice) (initialOffset : Nat) (rest
       -- every handed-over token is in this slice
       -- so the location must be equal or greater to initial offset
       -- compute this even for finished to assert the interrupted location
-      let index := if location.offset < initialOffset then
-          panic! "the token handler must not stop before the starting token"
-        else
-          location.offset - initialOffset
+      if location.offset < initialOffset then
+        return .error (.internal .stoppedBeforeStart)
+      let index := location.offset - initialOffset
       match stop with
       | .relex =>
         -- everything up to the index was already consumed
@@ -992,7 +996,7 @@ private def lexEofInner : InnerM H m (Except (LexError E) (ControlFlow R)) := do
     | .quotedSymbol =>
       -- EOF forbidden as the symbol must be totally enclosed by pipes
       fail .unclosedQuotedSymbol TokenEnd.EOF
-    | .failed => panic! "cannot lex after a lexer error"
+    | .failed => failInternal .lexedAfterError
     -- everything has been processed, start the EOF token and sink it
     startToken 0
     sinkEof
@@ -1006,7 +1010,7 @@ private def lexEofInner : InnerM H m (Except (LexError E) (ControlFlow R)) := do
   | .error interrupted =>
     match interrupted.result with
     | .error err => return .error err
-    | .ok .relex => panic! "token handler cannot request relex at end of file"
+    | .ok .relex => return .error (.internal .relexAtEndOfFile)
     | .ok (.finished result) =>
       -- the handler is done with the input
       -- the lexer will be reset as a consequence of the break result
@@ -1071,7 +1075,7 @@ If the token handler returns `ControlFlow.continue` on all tokens,
 the lexer is ready for further lexing.
 
 If an error occurs, the lexer moves into a failure state;
-all further lexing calls panic.
+all further lexing calls fail with an internal error.
 -/
 def lexSlice [Monad m] [TokenHandler H m R E] (self : Lexer H) (slice : ByteSlice) :
     m (Except (LexError E) (ControlFlow (SmtLocated R)) × Lexer H) :=
@@ -1089,7 +1093,7 @@ If the token handler returns `ControlFlow.continue` on the EOF token,
 the lexer resets itself and returns `ControlFlow.continue`.
 
 If an error occurs, the lexer moves into a failure state;
-all further lexing calls panic.
+all further lexing calls fail with an internal error.
 -/
 def lexEof [Monad m] [TokenHandler H m R E] (self : Lexer H) :
     m (Except (LexError E) (ControlFlow (SmtLocated R)) × Lexer H) :=
@@ -1108,7 +1112,7 @@ including EOF, the lexer resets itself after EOF
 and returns `ControlFlow.continue`.
 
 If an error occurs, the lexer moves into a failure state;
-all further lexing calls panic.
+all further lexing calls fail with an internal error.
 -/
 def lexAll [Monad m] [TokenHandler H m R E] (self : Lexer H) (input : ByteSlice) :
     m (Except (LexError E) (ControlFlow (SmtLocated R)) × Lexer H) := do

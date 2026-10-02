@@ -142,6 +142,8 @@ def answer (request : String) : ExceptT String IO String := do
       error := some err
       break
     | .error (.handler never) => nomatch never
+    -- the protocol has no line for an internal error, which must not occur
+    | .error (.internal err) => throw s!"internal error: {err.message}"
 
   let mut out ← lines.get
   match error with
