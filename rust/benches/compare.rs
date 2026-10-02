@@ -23,11 +23,13 @@
 //! `git worktree prune` drops the stale registrations). Without a head the
 //! head is the current working tree, uncommitted changes included, so the
 //! usual workflow is `cargo bench --bench compare -- HEAD` after editing. The
+//! crate of a revision is in the `rust` directory of its worktree, or at the
+//! root of the worktree for revisions older than that directory. The
 //! untracked `Cargo.lock` and the current `benches/parse.rs` (with the
 //! `benches/common` module it shares with the census bench) are copied into
-//! each worktree, so both sides run the same measurement code against their
-//! own library; this requires the baseline to still offer the small API the
-//! bench uses.
+//! the crate of each worktree, so both sides run the same measurement code
+//! against their own library; this requires the baseline to still offer the
+//! small API the bench uses.
 //!
 //! Options:
 //!
@@ -204,13 +206,26 @@ fn build_revision(root: &Path, revision: &str) -> Result<Side, String> {
         )?;
     }
 
+    // the crate is in the `rust` directory of the revision, or at its root
+    // for revisions older than that directory; without a manifest of its own,
+    // cargo would walk up from the worktree and build the working tree instead
+    let package = [worktree.join("rust"), worktree.clone()]
+        .into_iter()
+        .find(|package| package.join("Cargo.toml").exists())
+        .ok_or_else(|| {
+            format!(
+                "{revision} ({short}) has no Cargo.toml in {} or in its rust directory",
+                worktree.display()
+            )
+        })?;
+
     // the lockfile is untracked, and the bench source must be the one whose
     // protocol this driver speaks, together with the module it shares with
     // the census bench (which a baseline may predate, hence the directory)
     for relative in ["Cargo.lock", "benches/parse.rs", "benches/common/mod.rs"] {
         let source = root.join(relative);
         if source.exists() {
-            let destination = worktree.join(relative);
+            let destination = package.join(relative);
             if let Some(parent) = destination.parent() {
                 std::fs::create_dir_all(parent)
                     .map_err(|err| format!("cannot create {}: {err}", parent.display()))?;
@@ -226,7 +241,7 @@ fn build_revision(root: &Path, revision: &str) -> Result<Side, String> {
     }
 
     eprintln!("compare: building {revision} ({short})");
-    let binary = build_parse_bench(&worktree)?;
+    let binary = build_parse_bench(&package)?;
     Ok(Side {
         name: format!("{revision} ({short})"),
         binary,
