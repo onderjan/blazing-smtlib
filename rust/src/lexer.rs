@@ -557,19 +557,16 @@ impl<C: SmtConsume> SmtLexer<C> {
                 // newlines. Whitespace is only emitted if the consumer wants it.
                 let entry = if is_quoted {
                     (InnerCategory::QuotedSymbol, &slice[after..run_end_at])
-                } else if is_whitespace {
+                } else if C::CONSUMES_WHITESPACE_AND_COMMENTS && is_whitespace {
                     // only emitted if the consumer takes whitespace
                     (InnerCategory::Whitespace, &slice[index..token_end])
                 } else {
                     (InnerCategory::UnquotedSymbol, &slice[index..token_end])
                 };
-                let needs_delimiter = fast_entry & FAST_EMIT != 0;
-                let emit = (needs_delimiter
-                    || (C::CONSUMES_WHITESPACE_AND_COMMENTS && is_whitespace))
-                    as usize;
+                let emit = (fast_entry & FAST_EMIT != 0) as usize;
                 // A token must be delimited by the byte after it,
                 // fall back to the state machine if the delimiter is not found.
-                if needs_delimiter {
+                if emit != 0 {
                     if let Some(&next) = slice.get(token_end) {
                         // the token ended inside the slice: the byte after it must delimit it
                         if FAST[next as usize] & FAST_DELIM == 0 {
@@ -591,6 +588,12 @@ impl<C: SmtConsume> SmtLexer<C> {
                         return Ok(token_end);
                     }
                 }
+                // whitespace needs no delimiter, it is emitted only if the consumer takes it
+                let emit = if C::CONSUMES_WHITESPACE_AND_COMMENTS {
+                    emit | is_whitespace as usize
+                } else {
+                    emit
+                };
                 self.push_fast(batch, &mut local, offset, entry, index..token_end, emit)?;
                 // Fast path done, continue normally after the token end.
                 index = token_end;
