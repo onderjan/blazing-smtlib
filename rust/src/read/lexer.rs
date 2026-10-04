@@ -9,7 +9,7 @@ pub(crate) use char_class::CharClass;
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtLocated, SmtLocation, SmtSpan, String8,
+    SmtBytes, SmtLocated, SmtLocation, SmtSpan,
     read::lexer::{
         char_class::{
             RUN_COMMENT_PLAIN, RUN_DIGIT, RUN_QUOTED_PLAIN, RUN_SIMPLE_SYMBOL, RUN_STRING_PLAIN,
@@ -40,7 +40,7 @@ pub struct SmtLexer<H: SmtConsume> {
     token_start: SmtLocation,
 
     /// The currently-built string content of the currently-processed token.
-    token_content: String8,
+    token_content: SmtBytes,
 
     /// Offset of the start of the byte being processed during lexing.
     ///
@@ -149,7 +149,7 @@ impl<H: SmtConsume> SmtLexer<H> {
             initial_version: version,
             state: LexerState::Normal,
             token_start: SmtLocation::initial(),
-            token_content: String8::new(),
+            token_content: SmtBytes::new(),
             offset: 0,
             line: 0,
             line_start: 0,
