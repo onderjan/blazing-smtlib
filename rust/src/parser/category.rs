@@ -88,6 +88,7 @@ pub(crate) mod tests {
         impl<P: SmtParse<SmtSyntaxChecker>> SmtConsume for Drive<'_, P> {
             type Result = ();
             type Error = SmtParseError<NonstandardCommandError>;
+            const CONSUMES_WHITESPACE_AND_COMMENTS: bool = false;
 
             fn consume(
                 &mut self,

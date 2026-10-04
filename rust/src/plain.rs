@@ -163,6 +163,46 @@ impl SmtDecimal {
     }
 }
 
+/// SMT-LIB whitespace (one or more whitespace bytes)
+///
+/// Cannot be empty.
+/// Must contain only tabs, line feeds, carriage returns and spaces.
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct SmtWhitespace(SmtBytes);
+
+impl SmtWhitespace {
+    pub fn is_allowed(value: &[u8]) -> bool {
+        !value.is_empty()
+            && value
+                .iter()
+                .copied()
+                .all(|c| matches!(c, b'\t' | b'\n' | b'\r' | b' '))
+    }
+}
+
+/// SMT-LIB comment (not including starting semicolon, including ending CR/LF)
+///
+/// The semicolon that starts the comment is not a part of it.
+/// The content may be empty.
+/// Only the last byte may be a carriage return (CR) or a line feed (LF).
+/// If the comment runs to the end of the input, there is no ending CR/LF.
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct SmtComment(SmtBytes);
+
+impl SmtComment {
+    pub fn is_allowed(value: &[u8]) -> bool {
+        if value.is_empty() {
+            // empty content is allowed (starting semicolon at the end of input)
+            return true;
+        };
+        // not empty: it may not contain CR/LF except in the last position,
+        // no other restrictions
+        value[0..value.len() - 1]
+            .iter()
+            .all(|c| *c != b'\r' && *c != b'\n')
+    }
+}
+
 #[derive(Debug)]
 pub struct SmtDisallowedByteVecError(SmtBytes);
 
@@ -333,3 +373,5 @@ string8_newtype!(SmtNumeral, SmtNumeralView);
 string8_newtype!(SmtHexDigits, SmtHexDigitsView);
 string8_newtype!(SmtBinDigits, SmtBinDigitsView);
 string8_newtype!(SmtDecimal, SmtDecimalView);
+string8_newtype!(SmtWhitespace, SmtWhitespaceView);
+string8_newtype!(SmtComment, SmtCommentView);

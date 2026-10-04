@@ -1,8 +1,8 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtBinDigitsView, SmtDecimalView, SmtHexDigitsView, SmtKeywordView, SmtLocation,
-    SmtNumeralView, SmtSpan, SmtStringContentView, SmtSymbolView,
+    SmtBinDigitsView, SmtCommentView, SmtDecimalView, SmtHexDigitsView, SmtKeywordView,
+    SmtLocation, SmtNumeralView, SmtSpan, SmtStringContentView, SmtSymbolView, SmtWhitespaceView,
 };
 
 mod reserved;
@@ -21,6 +21,8 @@ pub enum SmtTokenCategory {
     Keyword,
     UnquotedSymbol,
     QuotedSymbol,
+    Whitespace,
+    Comment,
     // PERFORMANCE: leave EOF last for easy construction
     // from InnerCategory in the lexer
     EndOfFile,
@@ -39,6 +41,8 @@ pub(crate) enum InnerCategory {
     Keyword,
     UnquotedSymbol,
     QuotedSymbol,
+    Whitespace,
+    Comment,
 }
 
 impl InnerCategory {
@@ -54,6 +58,8 @@ impl InnerCategory {
             InnerCategory::Keyword => SmtTokenCategory::Keyword,
             InnerCategory::UnquotedSymbol => SmtTokenCategory::UnquotedSymbol,
             InnerCategory::QuotedSymbol => SmtTokenCategory::QuotedSymbol,
+            InnerCategory::Whitespace => SmtTokenCategory::Whitespace,
+            InnerCategory::Comment => SmtTokenCategory::Comment,
         }
     }
 }
@@ -70,6 +76,8 @@ pub enum SmtSyntaxToken<'a> {
     Keyword(SmtKeywordView<'a>),
     Symbol(SmtSymbolView<'a>),
     Reserved(SmtReserved),
+    Whitespace(SmtWhitespaceView<'a>),
+    Comment(SmtCommentView<'a>),
     EndOfFile,
 }
 
@@ -211,6 +219,12 @@ impl<'a> SmtSyntaxToken<'a> {
             }
             SmtTokenCategory::Keyword => {
                 SmtSyntaxToken::Keyword(SmtKeywordView::new_unchecked(content))
+            }
+            SmtTokenCategory::Whitespace => {
+                SmtSyntaxToken::Whitespace(SmtWhitespaceView::new_unchecked(content))
+            }
+            SmtTokenCategory::Comment => {
+                SmtSyntaxToken::Comment(SmtCommentView::new_unchecked(content))
             }
             SmtTokenCategory::EndOfFile => SmtSyntaxToken::EndOfFile,
         }
@@ -483,7 +497,20 @@ impl<'a> SmtTokenWindow<'a> {
 pub trait SmtConsume {
     /// The value the consumer finishes with.
     type Result;
+    /// The error emitted by the consumer.
     type Error;
+    /// Whether the consumer consumes whitespace and comments.
+    ///
+    /// If false, the consumer operates over abstract tokens:
+    /// it is not interested in whitespace and comments,
+    /// and the caller must not hand them over for consumption.
+    ///
+    /// If true, the consumer operates over concrete tokens:
+    /// it can reconstruct the byte stream precisely thanks
+    /// to the whitespace and comments. The caller must hand
+    /// over the whitespace and comment tokens present between
+    /// true syntactic tokens.
+    const CONSUMES_WHITESPACE_AND_COMMENTS: bool;
 
     /// Consumes the tokens handed over in the cursor, in order.
     ///
@@ -512,6 +539,7 @@ pub trait SmtConsume {
 impl<T: SmtConsume + ?Sized> SmtConsume for &mut T {
     type Result = T::Result;
     type Error = T::Error;
+    const CONSUMES_WHITESPACE_AND_COMMENTS: bool = T::CONSUMES_WHITESPACE_AND_COMMENTS;
 
     #[inline]
     fn consume(

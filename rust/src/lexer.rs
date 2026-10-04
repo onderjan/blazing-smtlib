@@ -12,8 +12,8 @@ use crate::{
     SmtBytes, SmtLocated, SmtLocation, SmtSpan,
     lexer::{
         char_class::{
-            RUN_COMMENT_PLAIN, RUN_DIGIT, RUN_QUOTED_PLAIN, RUN_SIMPLE_SYMBOL, RUN_STRING_PLAIN,
-            run_end, run_end_all,
+            RUN_COMMENT_PLAIN, RUN_DIGIT, RUN_NON_LF_WHITESPACE, RUN_QUOTED_PLAIN,
+            RUN_SIMPLE_SYMBOL, RUN_STRING_PLAIN, run_end, run_end_all,
         },
         helpers::{
             BINARY_RUN, Content, DigitRun, FAST, FAST_DELIM, FAST_EMIT, FAST_ON, FAST_PIPE,
@@ -127,15 +127,21 @@ enum LexerState {
     SimpleSymbol,
     /// Lexing a quoted symbol.
     QuotedSymbol,
-    /// Lexing a keyword.
-    Keyword,
-    /// Lexing a comment.
-    Comment,
     /// Quoted symbol closing pipe was encountered, waiting for token delimiter.
     ///
     /// The token cannot be emitted before confirming that the next byte is
     /// a token delimiter; otherwise, an error will occur.
     QuotedSymbolClosed,
+    /// Lexing a keyword.
+    Keyword,
+    /// Lexing a comment.
+    Comment,
+    /// Lexing whitespace.
+    ///
+    /// The lexer can only be set to this state if
+    /// [`SmtConsume::CONSUMES_WHITESPACE_AND_COMMENTS`] is true,
+    /// otherwise the whitespace is eagerly discarded without combining it.
+    Whitespace,
     /// A lexer or consumer error was returned; lexing cannot continue.
     Failed,
 }
@@ -228,8 +234,8 @@ impl<C: SmtConsume> SmtLexer<C> {
         // EOF is a token delimiter, we need to produce the token
         // that waits for a delimiter if there is any
         let pending = match self.state {
-            LexerState::Normal | LexerState::Comment => {
-                // nothing to do, we accept EOF even in comments
+            LexerState::Normal => {
+                // nothing to do
                 Ok(())
             }
             LexerState::QuotedSymbolClosed => {
@@ -282,6 +288,29 @@ impl<C: SmtConsume> SmtLexer<C> {
             LexerState::QuotedSymbol => {
                 // EOF forbidden as the symbol must be totally enclosed by pipes
                 Err(self.error(SmtLexicalErrorKind::UnclosedQuotedSymbol, TokenEnd::EOF))
+            }
+            LexerState::Whitespace => {
+                // we can only be in this state if the consumer wants the
+                // whitespace to be emitted, so sink it
+                self.sink_slice(
+                    &mut batch,
+                    InnerCategory::Whitespace,
+                    TokenEnd::EOF,
+                    Content::Stored,
+                )
+            }
+            LexerState::Comment => {
+                // only produce the comment if the consumer wants it
+                if C::CONSUMES_WHITESPACE_AND_COMMENTS {
+                    self.sink_slice(
+                        &mut batch,
+                        InnerCategory::Comment,
+                        TokenEnd::EOF,
+                        Content::Stored,
+                    )
+                } else {
+                    Ok(())
+                }
             }
             LexerState::Failed => {
                 panic!("cannot lex after a lexer error")
@@ -363,11 +392,12 @@ impl<C: SmtConsume> SmtLexer<C> {
                     }
                     LexerState::SimpleSymbol => self.lex_simple_symbol(&mut batch, rest),
                     LexerState::QuotedSymbol => self.lex_quoted_symbol(&mut batch, rest),
-                    LexerState::Keyword => self.lex_keyword(&mut batch, rest),
-                    LexerState::Comment => self.lex_comment(rest),
                     LexerState::QuotedSymbolClosed => {
                         self.lex_quoted_symbol_closed(&mut batch, rest)
                     }
+                    LexerState::Keyword => self.lex_keyword(&mut batch, rest),
+                    LexerState::Whitespace => self.lex_whitespace(&mut batch, rest),
+                    LexerState::Comment => self.lex_comment(&mut batch, rest),
                     LexerState::Failed => panic!("cannot lex after a lexer error"),
                 }
             };
@@ -473,13 +503,34 @@ impl<C: SmtConsume> SmtLexer<C> {
                     after + run_end(&slice[after..], fast_entry & FAST_RUN_MASK);
                 let is_quoted = fast_entry & FAST_PIPE != 0;
 
+                // Check if we need to fall back to state-machine lexing
+                // if we have been asked to emit whitespace and are handling it.
+                // We need to fall back if we have overrun the slice or encountered
+                // a line-feed which needs to update the location line/column.
+                let is_whitespace = fast_entry & RUN_NON_LF_WHITESPACE != 0;
+                if C::CONSUMES_WHITESPACE_AND_COMMENTS
+                    && is_whitespace
+                    && matches!(slice.get(run_end_at), None | Some(b'\n'))
+                {
+                    // the whitespace token does not end on this line inside the slice
+                    local.store(self, batch);
+                    index = self.start_whitespace(batch, slice, index)?;
+                    if index == slice.len() {
+                        // we ran out of bytes inside the whitespace
+                        return Ok(index);
+                    }
+                    local = FastState::load(self, batch);
+                    continue;
+                }
+
                 // We might need to fall back to state-machine lexing if the token
                 // we have found is not properly finished.
                 // This can only happen if we are processing a quoted symbol
                 // and the expected pipe after the end of the run is not there,
                 // or if we are processing a simple symbol and we overrun the slice.
-                // Parentheses have trivially zero-length runs and whitespace
-                // can be split as it is discarded.
+                // Parentheses have trivially zero-length runs.
+                // If the consumer does not want whitespace to be emitted,
+                // it can be discarded split.
 
                 // PERFORMANCE: gate the check for unfinished by a simpler condition.
                 if run_end_at == slice.len() || is_quoted {
@@ -503,16 +554,22 @@ impl<C: SmtConsume> SmtLexer<C> {
                 // No need to fall back, construct the token: the pipes delimit a quoted
                 // symbol but are not part of its content, any other fast token is its
                 // whole text. The token is on a single line as all fast-lex runs exclude
-                // newlines. Whitespace is not emitted and overwritten by next tokens.
+                // newlines. Whitespace is only emitted if the consumer wants it.
                 let entry = if is_quoted {
                     (InnerCategory::QuotedSymbol, &slice[after..run_end_at])
+                } else if is_whitespace {
+                    // only emitted if the consumer takes whitespace
+                    (InnerCategory::Whitespace, &slice[index..token_end])
                 } else {
                     (InnerCategory::UnquotedSymbol, &slice[index..token_end])
                 };
-                let emit = (fast_entry & FAST_EMIT != 0) as usize;
+                let needs_delimiter = fast_entry & FAST_EMIT != 0;
+                let emit = (needs_delimiter
+                    || (C::CONSUMES_WHITESPACE_AND_COMMENTS && is_whitespace))
+                    as usize;
                 // A token must be delimited by the byte after it,
                 // fall back to the state machine if the delimiter is not found.
-                if emit != 0 {
+                if needs_delimiter {
                     if let Some(&next) = slice.get(token_end) {
                         // the token ended inside the slice: the byte after it must delimit it
                         if FAST[next as usize] & FAST_DELIM == 0 {
@@ -546,10 +603,18 @@ impl<C: SmtConsume> SmtLexer<C> {
             // Fast path was not taken, use the slow path.
             match START[c as usize] {
                 Start::LineFeed => {
-                    // line feeds must be marked for line offsets
-                    // mark it and update the index
-                    self.mark_line_feed_at(index);
-                    index = after;
+                    if C::CONSUMES_WHITESPACE_AND_COMMENTS {
+                        // the line feed starts a whitespace token
+                        index = self.start_whitespace(batch, slice, index)?;
+                        if index == slice.len() {
+                            return Ok(index);
+                        }
+                    } else {
+                        // line feeds must be marked for line offsets
+                        // mark it and update the index
+                        self.mark_line_feed_at(index);
+                        index = after;
+                    }
                 }
                 Start::Comment => {
                     // a comment has been started
@@ -568,13 +633,27 @@ impl<C: SmtConsume> SmtLexer<C> {
                             // also ends the comment
                         }
                         None => {
-                            // we ran out of bytes
+                            // we ran out of bytes while inside the comment
+                            // extend the content if if should be emitted
+                            if C::CONSUMES_WHITESPACE_AND_COMMENTS {
+                                self.token_content.extend_from_slice(&slice[after..]);
+                            }
                             // update the state and return
                             self.state = LexerState::Comment;
                             return Ok(end);
                         }
                     }
-                    // we have reached the end of the comment
+                    // we have reached the end of the comment, which includes
+                    // the byte that ended it but not its semicolon
+                    // sink the content if it should be emitted
+                    if C::CONSUMES_WHITESPACE_AND_COMMENTS {
+                        self.sink_slice(
+                            batch,
+                            InnerCategory::Comment,
+                            TokenEnd::at_byte(end + 1),
+                            Content::Borrowed(&slice[after..end + 1]),
+                        )?;
+                    }
                     // update the index and continue the loop
                     index = end + 1;
                 }
@@ -1222,15 +1301,111 @@ impl<C: SmtConsume> SmtLexer<C> {
         }
     }
 
-    fn lex_comment(
+    /// Lexes the whitespace run that starts at `index` of the slice,
+    /// to be handed over as a token.
+    ///
+    /// Returns the position after the run. If the run ends inside the slice,
+    /// its token is sunk with borrowed content. Otherwise, the run is stored,
+    /// the state becomes `Whitespace`, and the length of the slice is returned.
+    fn start_whitespace<'a>(
         &mut self,
+        batch: &mut Batch<'a>,
+        slice: &'a [u8],
+        index: usize,
+    ) -> Result<usize, Interrupted<C::Result, SmtLexError<C::Error>>> {
+        self.start_token(index);
+        let mut end = index;
+        loop {
+            // find the first byte that is not whitespace other than a line feed
+            end += run_end(&slice[end..], RUN_NON_LF_WHITESPACE);
+            match slice.get(end) {
+                Some(b'\n') => {
+                    // the line feed is a part of the run, mark it and continue
+                    self.mark_line_feed_at(end);
+                    end += 1;
+                }
+                Some(_) => {
+                    // the run has ended inside the slice
+                    self.finish_whitespace(
+                        batch,
+                        TokenEnd::at_byte(end),
+                        Content::Borrowed(&slice[index..end]),
+                    )?;
+                    return Ok(end);
+                }
+                None => {
+                    // we ran out of bytes, update the content and state
+                    self.token_content.extend_from_slice(&slice[index..]);
+                    self.state = LexerState::Whitespace;
+                    return Ok(slice.len());
+                }
+            }
+        }
+    }
+
+    fn lex_whitespace<'a>(
+        &mut self,
+        batch: &mut Batch<'a>,
+        mut rest: &[u8],
+    ) -> Result<usize, Interrupted<C::Result, SmtLexError<C::Error>>> {
+        // we know that the consumer is interested in the whitespace
+        // as it would otherwise be immediately discarded instead
+        // of the state change
+        let mut consumed = 0;
+        loop {
+            // find the first byte that is not non-LF whitespace
+            let index = run_end(rest, RUN_NON_LF_WHITESPACE);
+            // inspect the problematic byte
+            match rest.get(index) {
+                Some(b'\n') => {
+                    // mark the line feed at the given position
+                    self.mark_line_feed_at(consumed + index);
+                    // prepare for the next run
+                    // extend the token content with everything including this LF
+                    self.token_content.extend_from_slice(&rest[..index + 1]);
+                    // take it out of this slice and remember it is consumed
+                    rest = &rest[index + 1..];
+                    consumed += index + 1;
+                }
+                Some(_) => {
+                    // end of whitespace
+                    // extend and finish the token
+                    let after_whitespace_end = consumed + index;
+                    self.token_content.extend_from_slice(&rest[..index]);
+                    self.finish_whitespace(
+                        batch,
+                        TokenEnd::at_byte(after_whitespace_end),
+                        Content::Stored,
+                    )?;
+                    // go back to normal state, consuming the whitespace
+                    self.state = LexerState::Normal;
+                    return Ok(after_whitespace_end);
+                }
+                None => {
+                    // we ran out of bytes before the token ended
+                    // extend the token content with everything
+                    // keep the whitespace state
+                    self.token_content.extend_from_slice(rest);
+                    return Ok(consumed + rest.len());
+                }
+            }
+        }
+    }
+
+    fn lex_comment<'a>(
+        &mut self,
+        batch: &mut Batch<'a>,
         slice: &[u8],
     ) -> Result<usize, Interrupted<C::Result, SmtLexError<C::Error>>> {
         // run until comment end
         let index = run_end(slice, RUN_COMMENT_PLAIN);
         let Some(c) = slice.get(index) else {
-            // the comment continues, just consume the whole slice
-            // and remain in comment state
+            // the comment continues; if we are producing comments,
+            // extend the content from the whole slice
+            if C::CONSUMES_WHITESPACE_AND_COMMENTS {
+                self.token_content.extend_from_slice(slice);
+            }
+            // remain in comment state
             return Ok(slice.len());
         };
 
@@ -1240,11 +1415,24 @@ impl<C: SmtConsume> SmtLexer<C> {
             self.mark_line_feed_at(index);
         }
 
-        // move back to the normal state
-        self.state = LexerState::Normal;
+        let after_comment_end = index + 1;
 
-        // return, consuming up to comment end including it
-        Ok(index + 1)
+        if C::CONSUMES_WHITESPACE_AND_COMMENTS {
+            // we need to produce the comment token
+            // extend the comment content and finish the token
+            self.token_content
+                .extend_from_slice(&slice[..after_comment_end]);
+            self.sink_slice(
+                batch,
+                InnerCategory::Comment,
+                TokenEnd::at_byte(after_comment_end),
+                Content::Stored,
+            )?;
+        }
+
+        // move back to the normal state and return
+        self.state = LexerState::Normal;
+        Ok(after_comment_end)
     }
 
     /// Sinks a decimal token.
@@ -1339,6 +1527,15 @@ impl<C: SmtConsume> SmtLexer<C> {
         content: Content<'a>,
     ) -> Result<(), Interrupted<C::Result, SmtLexError<C::Error>>> {
         self.sink_slice(batch, InnerCategory::String, end, content)
+    }
+
+    fn finish_whitespace<'a>(
+        &mut self,
+        batch: &mut Batch<'a>,
+        end: TokenEnd,
+        content: Content<'a>,
+    ) -> Result<(), Interrupted<C::Result, SmtLexError<C::Error>>> {
+        self.sink_slice(batch, InnerCategory::Whitespace, end, content)
     }
 
     /// Sinks a token with the given content, ending at `end`.
