@@ -8,14 +8,13 @@
 //! handed over alone.
 //!
 //! Every hand-over has at least one token, and the consumer must consume at
-//! least one before it returns, whatever it returns. Lexing goes on from the
-//! end of the last consumed token: tokens the consumer left are lexed and
-//! handed over again, so the tokens a consumer takes are the same in every
-//! stopping pattern, spans included. A version the consumer sets applies
-//! from that point on, also to what the lexer had lexed ahead. A consumer
-//! that finishes ends lexing after the tokens it took: that location is
-//! returned with the result, and the lexer is reset to its initial state
-//! for the next input.
+//! least one before it returns, whatever it returns. The tokens a consumer
+//! leaves are handed over again before any new ones, so the tokens a
+//! consumer takes are the same in every stopping pattern, spans included.
+//! A version the consumer sets applies from the end of the last consumed
+//! token, also to what the lexer had lexed ahead. A consumer that finishes
+//! ends lexing after the tokens it took: that location is returned with the
+//! result, and the lexer is reset to its initial state for the next input.
 
 use std::ops::ControlFlow;
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -416,7 +415,7 @@ fn tokens_left_are_handed_over_again() {
                     assert_eq!(
                         stopped.calls[index + 1][0],
                         tokens[consumed],
-                        "{describe}: the first token left is lexed again"
+                        "{describe}: the first token left is handed over again"
                     );
                 }
             }
@@ -426,8 +425,8 @@ fn tokens_left_are_handed_over_again() {
 
 #[test]
 fn leaving_nothing_continues_after_the_batch() {
-    // every token of the hand-over is taken: nothing is lexed again, and the
-    // next slice continues with the right locations
+    // every token of the hand-over is taken: nothing is handed over again, and
+    // the next slice continues with the right locations
     let chunks: &[&[u8]] = &[b"a b ", b"c\nd "];
     let plan = [Reply::Leave { consumed: 2 }];
     let run = run(chunks, &plan);
@@ -440,15 +439,18 @@ fn leaving_nothing_continues_after_the_batch() {
 }
 
 #[test]
-fn tokens_left_of_a_full_batch_refill_it_from_the_stop() {
+fn tokens_left_of_a_full_batch_come_before_the_rest_of_the_slice() {
     let input = symbols(300);
     let plan = [Reply::Leave { consumed: 100 }];
     let run = run(&[&input], &plan);
     assert!(run.error.is_none());
-    // the first batch was full; the remaining 200 symbols are lexed again
-    // into one batch, then the end of file follows alone
-    assert_eq!(run.sizes(), [BATCH_CAPACITY, 200, 1]);
+    // the first batch was full; the 156 symbols left of it are handed over
+    // again before the symbols that had not fitted into it. How the tokens
+    // after the stop are grouped is not part of the contract.
+    assert_eq!(run.sizes()[0], BATCH_CAPACITY);
+    assert_eq!(run.calls[1][0], run.calls[0][100]);
     assert_eq!(run.taken(&plan), reference(&input));
+    assert_ends_with_eof_alone(&run);
 }
 
 #[test]

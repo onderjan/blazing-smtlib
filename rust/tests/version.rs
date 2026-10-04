@@ -15,8 +15,8 @@ use blazing_smtlib::{
     parser::{SmtCommandOutcome, SmtCommandParser, SmtSExprParser, SmtSyntaxErrorKind},
     reader::{SmtReadError, SmtReadErrorKind, SmtReader},
     token::{
-        SmtCommandNameReserved, SmtGeneralReserved, SmtReserved, SmtVersion, SmtVersionPosture,
-        SmtVersionPostureBuilder,
+        SmtCommandNameReserved, SmtGeneralReserved, SmtReserved, SmtTokenCategory, SmtVersion,
+        SmtVersionPosture, SmtVersionPostureBuilder,
     },
 };
 
@@ -295,7 +295,8 @@ fn only_the_set_info_attribute_declares_a_version() {
 #[test]
 fn a_version_that_is_not_supported_is_rejected() {
     // the value must be a decimal that names a version the posture allows;
-    // the error is at the value, or at what stands in its place
+    // the error is at the value, or at what stands in its place, and is
+    // raised once the command is complete
     for (value, end) in [
         // a version that is not allowed by default
         ("2.0", 30),
@@ -310,7 +311,6 @@ fn a_version_that_is_not_supported_is_rejected() {
         ("\"2.6\"", 32),
         ("|2.6|", 32),
         ("v2.6", 31),
-        (":version", 35),
         ("(2.6)", 28),
         // no value at all
         ("", 28),
@@ -323,6 +323,16 @@ fn a_version_that_is_not_supported_is_rejected() {
             end,
         );
     }
+
+    // a command that is malformed is rejected for that first, like any other
+    // command: the version is only looked at when the command is complete;
+    // here, a keyword cannot be the value of an attribute
+    assert_syntax_error(
+        read_default("(set-info :smt-lib-version :version)"),
+        SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose]),
+        27,
+        35,
+    );
 
     // 2.0 has to be allowed explicitly
     assert_eq!(read_any_version("(set-info :smt-lib-version 2.0)"), Ok(()));
