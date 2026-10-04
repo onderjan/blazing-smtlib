@@ -207,6 +207,13 @@ impl Run {
 
 /// The lexer is at the origin, as it must be after a finish or an end of file.
 #[track_caller]
+/// The location after the bytes, counted from the origin.
+fn location_after(bytes: &[u8]) -> (u64, u64, u64) {
+    loc(bytes.iter().fold(SmtLocation::initial(), |location, &c| {
+        location.after_byte(c)
+    }))
+}
+
 fn assert_at_origin<C: SmtConsume>(lexer: &SmtLexer<C>) {
     assert_eq!(
         loc(lexer.current_location()),
@@ -253,15 +260,19 @@ fn run_from(version: SmtVersion, chunks: &[&[u8]], plan: &[Reply]) -> Run {
             match lexer.lex_slice(chunk) {
                 Ok(ControlFlow::Continue(())) => {}
                 Ok(ControlFlow::Break(located)) => {
+                    assert!(
+                        finished_at.is_none(),
+                        "a finished consumer is handed nothing more"
+                    );
                     finished_at = Some(loc(located.location()));
-                    assert_at_origin(&lexer);
-                    break;
                 }
                 Err(err) => {
                     error = Some(into_cause(err));
                     break;
                 }
             }
+            // whatever the consumer did, the lexer is after everything it was
+            // fed: once the consumer has finished, the rest is discarded
             expected = chunk
                 .iter()
                 .fold(expected, |location, &c| location.after_byte(c));
@@ -272,10 +283,14 @@ fn run_from(version: SmtVersion, chunks: &[&[u8]], plan: &[Reply]) -> Run {
                 String::from_utf8_lossy(chunk)
             );
         }
-        if error.is_none() && finished_at.is_none() {
+        if error.is_none() {
             match lexer.lex_eof() {
                 Ok(ControlFlow::Continue(())) => assert_at_origin(&lexer),
                 Ok(ControlFlow::Break(located)) => {
+                    assert!(
+                        finished_at.is_none(),
+                        "a finished consumer is not handed the end of file"
+                    );
                     finished_at = Some(loc(located.location()));
                     assert_at_origin(&lexer);
                 }
@@ -576,7 +591,7 @@ fn a_stop_without_a_consumed_token_panics() {
 #[test]
 fn a_finish_stop_takes_a_prefix_and_ends_lexing() {
     // the consumer finishes after three tokens of the first hand-over: nothing
-    // more is handed over, not even the end of file, and the lexer is left
+    // more is handed over, not even the end of file, and the stop is located
     // after the third token
     let plan = [Reply::Finish { consumed: 3 }];
     let run = run(&[REWIND_INPUT], &plan);
@@ -587,9 +602,9 @@ fn a_finish_stop_takes_a_prefix_and_ends_lexing() {
 }
 
 #[test]
-fn a_finish_stop_across_chunks_leaves_the_rest_unread() {
+fn a_finish_stop_across_chunks_discards_the_rest() {
     // the second chunk finishes the consumer after its first token: the
-    // third chunk is never lexed
+    // third chunk is fed but discarded
     let chunks: &[&[u8]] = &[b"a b ", b"c d ", b"e f "];
     let plan = [Reply::TakeAll, Reply::Finish { consumed: 1 }];
     let run = run(chunks, &plan);
@@ -633,14 +648,17 @@ fn after_a_finish_the_rest_of_the_input_is_disregarded() {
             other => panic!("expected a finish, got {other:?}"),
         };
         assert_eq!(loc(located.location()), (1, 0, 1));
-        assert_at_origin(&lexer);
-        for disregarded in [&b"c\nd "[..], b"", b"#q \x00 \"open"] {
+        // the lexer is after the whole slice: its rest is the first to be discarded
+        let mut fed = b"a b ".to_vec();
+        assert_eq!(loc(lexer.current_location()), location_after(&fed));
+        for disregarded in [&b"c\nd "[..], b"", b"#q \x00 \"open", b"\n\n"] {
             assert!(matches!(
                 lexer.lex_slice(disregarded),
                 Ok(ControlFlow::Continue(()))
             ));
-            // the lexer was reset when the consumer finished, and stays so
-            assert_at_origin(&lexer);
+            // the location advances over what is discarded, lines included
+            fed.extend_from_slice(disregarded);
+            assert_eq!(loc(lexer.current_location()), location_after(&fed));
         }
         assert!(matches!(lexer.lex_eof(), Ok(ControlFlow::Continue(()))));
         assert_at_origin(&lexer);
@@ -674,7 +692,7 @@ fn the_input_after_a_finished_one_starts_at_the_origin() {
             other => panic!("expected a finish, got {other:?}"),
         };
         assert_eq!(loc(located.location()), (1, 0, 1));
-        assert_at_origin(&lexer);
+        assert_eq!(loc(lexer.current_location()), (4, 0, 4));
         assert!(matches!(lexer.lex_eof(), Ok(ControlFlow::Continue(()))));
         assert_at_origin(&lexer);
         assert!(matches!(
@@ -946,7 +964,7 @@ fn a_version_set_while_finishing_has_no_effect() {
             other => panic!("expected a finish, got {other:?}"),
         };
         assert_eq!(loc(located.location()), (1, 0, 1));
-        assert_at_origin(&lexer);
+        assert_eq!(loc(lexer.current_location()), (4, 0, 4));
         // the end of the input ends the finished input, the next one follows
         assert!(matches!(lexer.lex_eof(), Ok(ControlFlow::Continue(()))));
         assert!(matches!(

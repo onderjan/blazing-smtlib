@@ -461,3 +461,61 @@ fn a_reader_over_a_command_parser_reads_one_command_per_break() {
     ));
     assert!(reader.read_eof().is_err());
 }
+
+/// A buffered reader over bytes that panics when it is asked for its buffer
+/// too many times, so that a reading loop that consumes nothing shows as a
+/// failure and not as a test that never ends.
+struct Bounded<'a> {
+    rest: &'a [u8],
+    fills: usize,
+}
+
+impl Read for Bounded<'_> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let len = buf.len().min(self.rest.len());
+        buf[..len].copy_from_slice(&self.rest[..len]);
+        self.rest = &self.rest[len..];
+        Ok(len)
+    }
+}
+
+impl BufRead for Bounded<'_> {
+    fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
+        self.fills += 1;
+        assert!(
+            self.fills <= 16,
+            "the buffer was asked for again and again without being consumed"
+        );
+        Ok(self.rest)
+    }
+
+    fn consume(&mut self, amount: usize) {
+        self.rest = &self.rest[amount..];
+    }
+}
+
+#[test]
+fn the_rest_of_a_finished_input_can_be_read_to_its_end() {
+    // the exit command finishes the reader inside a piece; the rest of the
+    // input is discarded, also when it is read to its end as a whole: it is
+    // consumed without being parsed, and the input ends
+    let mut handler = SmtSyntaxChecker;
+    let mut reader =
+        SmtReader::script(&mut handler, SmtVersion::V2_7, SmtVersionPosture::default());
+    assert!(matches!(
+        reader.read_slice(b"(check-sat)\n(exit) (assert"),
+        Ok(ControlFlow::Break(_))
+    ));
+    let mut rest = Bounded {
+        rest: b" ) #q\n(check-sat)",
+        fills: 0,
+    };
+    assert!(matches!(reader.read_all(&mut rest), Ok(None)));
+    assert!(rest.rest.is_empty(), "the rest was consumed");
+
+    // the next input is read from the origin
+    let err = reader
+        .read_slice(b"(assert )")
+        .expect_err("a missing term is a parser error");
+    assert_span(&err, (8, 0, 8), (9, 0, 9));
+}
