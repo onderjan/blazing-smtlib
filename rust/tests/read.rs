@@ -284,15 +284,23 @@ fn read_slice_reports_an_exit_command_and_read_eof_the_end_of_the_input() {
 
 #[test]
 fn reading_after_a_finished_input_starts_a_new_one_from_the_origin() {
-    // whether the first input ended by the exit command or by the end of
-    // the input, the reader is back at its start: the next pieces are a new
-    // input whose locations begin at the origin, as an error span shows
+    // whether the parser finished by the exit command or by the end of the
+    // input, the reader is back at its start once the input has ended: the
+    // next pieces are a new input whose locations begin at the origin, as an
+    // error span shows
     type End = fn(&mut SmtReader<'_, SmtSyntaxChecker>);
     let by_exit: End = |reader| {
         assert!(matches!(
             reader.read_slice(b"(check-sat)\n(exit) x"),
             Ok(ControlFlow::Break(_))
         ));
+        // the rest of the input is disregarded, also what would be an error
+        assert!(matches!(
+            reader.read_slice(b"(assert )"),
+            Ok(ControlFlow::Continue(()))
+        ));
+        // until the end of the input, which hands nothing more to the parser
+        assert!(matches!(reader.read_eof(), Ok(ControlFlow::Continue(()))));
     };
     let by_eof: End = |reader| {
         assert!(matches!(
@@ -409,9 +417,10 @@ fn a_reader_over_another_top_level_parser_finishes_where_that_parser_does() {
 
 #[test]
 fn a_reader_over_a_command_parser_reads_one_command_per_break() {
-    // every command finishes the reader with the location after it; the rest
-    // of the piece is a new input, fed again from that location, so each
-    // command's location counts from the end of the previous one
+    // every command finishes the reader with the location after it, and the
+    // reader disregards what it is fed until the input ends; ending it there
+    // makes the rest of the piece a new input, fed from that location, so
+    // each command's location counts from the end of the previous one
     let mut handler = SmtSyntaxChecker;
     let mut reader =
         SmtReader::with_parser(&mut handler, SmtCommandParser::new(), SmtVersion::V2_7);
@@ -423,6 +432,7 @@ fn a_reader_over_a_command_parser_reads_one_command_per_break() {
             ControlFlow::Break(located) => {
                 stops.push((*located.value(), loc(located.location())));
                 rest = &rest[located.location().offset() as usize..];
+                assert!(matches!(reader.read_eof(), Ok(ControlFlow::Continue(()))));
             }
         }
     }

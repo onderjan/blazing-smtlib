@@ -465,6 +465,11 @@ fn the_version_and_the_declaration_count_reset_with_the_input() {
                 reader.read_slice(ending)
             };
             assert!(matches!(finished, Ok(ControlFlow::Break(_))));
+            if !ending.is_empty() {
+                // the exit command finished the reader before the end of the
+                // input, which is still to come
+                assert!(matches!(reader.read_eof(), Ok(ControlFlow::Continue(()))));
+            }
         }
         // and the declared version is gone: the next input starts in the initial one
         let err = reader
@@ -481,15 +486,18 @@ fn the_version_and_the_declaration_count_reset_with_the_input() {
 fn a_command_parser_reports_the_declaration_without_applying_it() {
     // switching is the script parser's job: the one-command parser has nothing
     // to switch, so it finishes with the declared version and its span, applies
-    // no posture, and the reader is back in its initial version for the next command
+    // no posture, and the reader is back in its initial version for the next input
     let mut handler = SmtSyntaxChecker;
     let mut reader =
         SmtReader::with_parser(&mut handler, SmtCommandParser::new(), SmtVersion::V2_7);
     let mut stop = |input: &[u8]| -> Result<SmtCommandOutcome, ReadError> {
-        match reader.read_slice(input)? {
-            ControlFlow::Break(located) => Ok(*located.value()),
+        let outcome = match reader.read_slice(input)? {
+            ControlFlow::Break(located) => *located.value(),
             ControlFlow::Continue(()) => panic!("the command must finish the reader"),
-        }
+        };
+        // every command is an input of its own, which ends here
+        assert!(matches!(reader.read_eof(), Ok(ControlFlow::Continue(()))));
+        Ok(outcome)
     };
 
     for (version, spelling) in VERSIONS {

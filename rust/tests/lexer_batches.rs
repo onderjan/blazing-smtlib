@@ -611,10 +611,11 @@ fn a_finish_stop_at_the_end_of_file_token_is_returned_by_lex_eof() {
 }
 
 #[test]
-fn lexing_after_a_finish_starts_a_new_input_at_the_origin() {
-    // the consumer finishes after the first token of the first hand-over; the
-    // bytes fed afterwards are a new input: the rest of the first slice is
-    // not seen again, and the new tokens are located from the origin
+fn after_a_finish_the_rest_of_the_input_is_disregarded() {
+    // the consumer finishes after the first token of the first hand-over, and
+    // with that it has finished with the input: whatever is fed afterwards is
+    // disregarded, also what would be a lexical error, and the end of the
+    // input hands nothing over, not even the end-of-file token
     let mut calls = Vec::new();
     let mut versions = Vec::new();
     let plan = [Reply::Finish { consumed: 1 }];
@@ -632,6 +633,49 @@ fn lexing_after_a_finish_starts_a_new_input_at_the_origin() {
             other => panic!("expected a finish, got {other:?}"),
         };
         assert_eq!(loc(located.location()), (1, 0, 1));
+        assert_at_origin(&lexer);
+        for disregarded in [&b"c\nd "[..], b"", b"#q \x00 \"open"] {
+            assert!(matches!(
+                lexer.lex_slice(disregarded),
+                Ok(ControlFlow::Continue(()))
+            ));
+            // the lexer was reset when the consumer finished, and stays so
+            assert_at_origin(&lexer);
+        }
+        assert!(matches!(lexer.lex_eof(), Ok(ControlFlow::Continue(()))));
+        assert_at_origin(&lexer);
+    }
+    assert_eq!(
+        calls.iter().map(Vec::len).collect::<Vec<_>>(),
+        [2],
+        "nothing is handed over after the finish"
+    );
+}
+
+#[test]
+fn the_input_after_a_finished_one_starts_at_the_origin() {
+    // once the end of the input has ended the finished input, the bytes fed
+    // are a new input: the rest of the finished one is not seen again, and
+    // the new tokens are located from the origin
+    let mut calls = Vec::new();
+    let mut versions = Vec::new();
+    let plan = [Reply::Finish { consumed: 1 }];
+    {
+        let mut lexer = SmtLexer::new(
+            Recorder {
+                calls: &mut calls,
+                versions: &mut versions,
+                plan: &plan,
+            },
+            SmtVersion::V2_7,
+        );
+        let located = match lexer.lex_slice(b"a b ") {
+            Ok(ControlFlow::Break(located)) => located,
+            other => panic!("expected a finish, got {other:?}"),
+        };
+        assert_eq!(loc(located.location()), (1, 0, 1));
+        assert_at_origin(&lexer);
+        assert!(matches!(lexer.lex_eof(), Ok(ControlFlow::Continue(()))));
         assert_at_origin(&lexer);
         assert!(matches!(
             lexer.lex_slice(b"c\nd "),
@@ -903,6 +947,8 @@ fn a_version_set_while_finishing_has_no_effect() {
         };
         assert_eq!(loc(located.location()), (1, 0, 1));
         assert_at_origin(&lexer);
+        // the end of the input ends the finished input, the next one follows
+        assert!(matches!(lexer.lex_eof(), Ok(ControlFlow::Continue(()))));
         assert!(matches!(
             lexer.lex_slice(b"c "),
             Ok(ControlFlow::Continue(()))
@@ -945,4 +991,42 @@ fn a_consumer_error_ends_the_run_with_the_consumer_error() {
     let run = run(&[b"a b c "], &plan);
     assert_eq!(run.sizes(), [3]);
     assert_eq!(run.error, Some(SmtLexErrorCause::Consumer(())));
+}
+
+#[test]
+fn a_finish_in_a_whole_input_ends_that_input() {
+    // an input lexed whole ends with its slice: nothing is left to
+    // disregard after a finish, and the next call lexes a new input
+    let mut calls = Vec::new();
+    let mut versions = Vec::new();
+    let plan = [Reply::Finish { consumed: 1 }];
+    {
+        let mut lexer = SmtLexer::new(
+            Recorder {
+                calls: &mut calls,
+                versions: &mut versions,
+                plan: &plan,
+            },
+            SmtVersion::V2_7,
+        );
+        let located = match lexer.lex_all(b"a b ") {
+            Ok(ControlFlow::Break(located)) => located,
+            other => panic!("expected a finish, got {other:?}"),
+        };
+        assert_eq!(loc(located.location()), (1, 0, 1));
+        assert_at_origin(&lexer);
+        assert!(matches!(
+            lexer.lex_all(b"c\nd "),
+            Ok(ControlFlow::Continue(()))
+        ));
+        assert_at_origin(&lexer);
+    }
+    assert_eq!(
+        calls.iter().map(Vec::len).collect::<Vec<_>>(),
+        [2, 2, 1],
+        "the second hand-over is the new input, the third its end of file"
+    );
+    let mut expected = reference(b"c\nd ");
+    expected.truncate(2);
+    assert_eq!(calls[1], expected);
 }
