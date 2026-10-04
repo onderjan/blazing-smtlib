@@ -425,8 +425,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
             },
         }
         // everything processed, there was no break out
-        // we need manually reset the lexer and return Continue
-        self.reset();
+        // the lexer will be reset outside, just continue
         Ok(ControlFlow::Continue(()))
     }
 
