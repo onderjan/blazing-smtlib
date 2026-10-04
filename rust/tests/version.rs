@@ -325,14 +325,25 @@ fn a_version_that_is_not_supported_is_rejected() {
     }
 
     // a command that is malformed is rejected for that first, like any other
-    // command: the version is only looked at when the command is complete;
-    // here, a keyword cannot be the value of an attribute
-    assert_syntax_error(
-        read_default("(set-info :smt-lib-version :version)"),
-        SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose]),
-        27,
-        35,
-    );
+    // command: the version is only looked at when the command is complete
+    for (input, kind, start, end) in [
+        // a keyword cannot be the value of an attribute
+        (
+            "(set-info :smt-lib-version :version)",
+            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose]),
+            27,
+            35,
+        ),
+        // a second value after one that names no version
+        (
+            "(set-info :smt-lib-version 9.9 x)",
+            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose]),
+            31,
+            32,
+        ),
+    ] {
+        assert_syntax_error(read_default(input), kind, start, end);
+    }
 
     // 2.0 has to be allowed explicitly
     assert_eq!(read_any_version("(set-info :smt-lib-version 2.0)"), Ok(()));

@@ -9,12 +9,13 @@
 //!
 //! Every hand-over has at least one token, and the consumer must consume at
 //! least one before it returns, whatever it returns. The tokens a consumer
-//! leaves are handed over again before any new ones, so the tokens a
-//! consumer takes are the same in every stopping pattern, spans included.
-//! A version the consumer sets applies from the end of the last consumed
-//! token, also to what the lexer had lexed ahead. A consumer that finishes
-//! ends lexing after the tokens it took: that location is returned with the
-//! result, and the lexer is reset to its initial state for the next input.
+//! leaves are handed over again before any new ones, in a hand-over that
+//! starts with nothing consumed, so the tokens a consumer takes are the same
+//! in every stopping pattern, spans included. A version the consumer sets
+//! applies from the end of the last consumed token, also to what the lexer
+//! had lexed ahead. A consumer that finishes ends lexing after the tokens it
+//! took: that location is returned with the result, and the lexer is reset
+//! to its initial state for the next input.
 
 use std::ops::ControlFlow;
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -118,13 +119,28 @@ impl SmtConsume for Recorder<'_> {
             tokens.push(record(token));
         }
         let len = tokens.len();
+        assert_ne!(len, 0, "every hand-over has at least one token");
+        // every hand-over starts with nothing consumed, also one that hands
+        // over the tokens left of a batch
+        assert_eq!(
+            cursor.consumed_end(),
+            None,
+            "nothing is consumed at the start of a hand-over"
+        );
         let index = self.calls.len();
-        self.calls.push(tokens);
-        self.versions.push(cursor.version());
         let reply = self.plan.get(index).copied().unwrap_or(Reply::TakeAll);
-        for _ in 0..reply.takes(len) {
+        let taken = reply.takes(len);
+        for _ in 0..taken {
             cursor.next();
         }
+        // what was consumed ends at the last token taken in this hand-over
+        assert_eq!(
+            cursor.consumed_end(),
+            taken.checked_sub(1).map(|last| tokens[last].span.end()),
+            "the consumed end after taking {taken} of {len} tokens"
+        );
+        self.calls.push(tokens);
+        self.versions.push(cursor.version());
         match reply {
             Reply::TakeAll | Reply::Leave { .. } => Ok(ControlFlow::Continue(())),
             Reply::Fail { .. } => Err(()),
@@ -502,8 +518,13 @@ fn a_stop_without_a_consumed_token_panics() {
         },
     ];
     for reply in replies {
-        let cases: [(Chunks, Vec<Reply>, &str); 4] = [
+        let cases: [(Chunks, Vec<Reply>, &str); 5] = [
             (&[b"a b c "], vec![reply], "a batch of the slice"),
+            (
+                &[b"a b c "],
+                vec![Reply::Leave { consumed: 1 }, reply],
+                "the tokens left of a batch",
+            ),
             (
                 &[b"a b ", b"c d "],
                 vec![Reply::TakeAll, reply],

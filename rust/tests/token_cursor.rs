@@ -83,18 +83,24 @@ fn cursor_walks_the_batch_in_order() {
         assert_eq!(cursor.get(4), start.get(4));
         assert_eq!(cursor.get(5), None);
         assert_eq!(cursor.last_consumed(), None);
+        assert_eq!(cursor.consumed_end(), None);
 
         // one token taken
         let first = cursor.next().expect("a token");
         assert_eq!(first.category(), SmtTokenCategory::ParenOpen);
         assert_eq!(cursor.consumed(), 1);
         assert_eq!(cursor.last_consumed(), Some(first));
+        assert_eq!(cursor.consumed_end(), Some(first.span().end()));
         assert_eq!(cursor.peek(), start.get(1));
 
         // two more at once: the lookback and lookahead move with them
         cursor.advance(2);
         assert_eq!(cursor.consumed(), 3);
         assert_eq!(cursor.last_consumed(), start.get(2));
+        assert_eq!(
+            cursor.consumed_end(),
+            start.get(2).map(|token| token.span().end())
+        );
         assert_eq!(cursor.get(0), start.get(3));
         assert_eq!(cursor.get(1), start.get(4));
         assert_eq!(cursor.get(2), None);
@@ -111,6 +117,10 @@ fn cursor_walks_the_batch_in_order() {
         assert_eq!(cursor.next(), None);
         assert_eq!(cursor.consumed(), 5, "taking past the end consumes nothing");
         assert_eq!(cursor.last_consumed(), start.get(4));
+        assert_eq!(
+            cursor.consumed_end(),
+            start.get(4).map(|token| token.span().end())
+        );
     });
 }
 
