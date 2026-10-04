@@ -247,7 +247,8 @@ impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtReader<'a, H, P> {
                             ControlFlow::Break(located) => {
                                 // the parser finished, the rest of the input is not read
                                 // consume the bytes up to the end location to fulfil the contract
-                                // we cannot use the current lexer location as that was reset
+                                // we cannot use the current lexer location: the lexer has
+                                // discarded the rest of the buffer and is after it
                                 let consumed = (located.location().offset() - start) as usize;
                                 buf_reader.consume(consumed);
                                 // reset the lexer by reading EOF

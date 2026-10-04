@@ -247,16 +247,33 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
         if self.discard {
             // we are discarding bytes
             // pretend that we lexed everything we were given
+            self.discard_bytes(slice);
             return Ok(ControlFlow::Continue(()));
         }
 
         // call inner lexing and fail on error
+        let start = self.offset;
         let flow = self.execute_step(|lexer| lexer.lex_slice_inner(slice))?;
         // if the consumer has produced a result, remember to stop feeding it
-        if flow.is_break() {
+        if let ControlFlow::Break(located) = &flow {
             self.discard = true;
+            // discard the remaining bytes after break
+            let lexed = (located.location().offset() - start) as usize;
+            self.discard_bytes(&slice[lexed..]);
         }
         Ok(flow)
+    }
+
+    /// Discards the bytes while keeping the location correct.
+    fn discard_bytes(&mut self, bytes: &[u8]) {
+        // the line feeds must be counted for the location to stay correct
+        // get the last LF position; if it exists, count all line feeds,
+        // and compute the line and line offset
+        if let Some(last) = bytes.iter().rposition(|&c| c == b'\n') {
+            self.line += bytes.iter().filter(|&&c| c == b'\n').count() as u64;
+            self.line_start = self.offset + last as u64 + 1;
+        }
+        self.offset += bytes.len() as u64;
     }
 
     /// Lexes end-of-file, sending the lexed tokens to the consumer.
@@ -278,7 +295,10 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
             Ok(ControlFlow::Continue(()))
         } else {
             // call inner EOF lexing and fail on error
-            self.execute_step(|lexer| lexer.lex_eof_inner())
+            let flow = self.execute_step(|lexer| lexer.lex_eof_inner())?;
+            // the input has ended, reset the lexer
+            self.reset();
+            Ok(flow)
         }
     }
 
@@ -496,7 +516,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
                                 Stop::Finished(result) => {
                                     // the consumer is done: the batch was handed over,
                                     // the rest of the slice stays unlexed
-                                    // the lexer will be reset as a consequence of the Break result
+                                    // the lexer discards it and everything fed until the end of the input
                                     return Ok(ControlFlow::Break(result));
                                 }
                             }
@@ -1858,9 +1878,8 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
         match step(self) {
             Ok(ControlFlow::Continue(())) => Ok(ControlFlow::Continue(())),
             Ok(ControlFlow::Break(result)) => {
-                // get the break location, then reset the lexer
+                // add the break location: the lexer is at the last consumed token
                 let location = self.current_location();
-                self.reset();
                 Ok(ControlFlow::Break(SmtLocated::new(result, location)))
             }
             Err(err) => {
@@ -1873,7 +1892,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
 
     /// Resets the lexer to the initial state, including the location and version.
     ///
-    /// Called after each [`ControlFlow::Break`] from the consumer.
+    /// Called at the end of every input.
     fn reset(&mut self) {
         self.version = self.initial_version;
         self.state = LexerState::Normal;
