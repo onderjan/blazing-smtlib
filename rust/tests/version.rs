@@ -12,10 +12,8 @@ use std::ops::ControlFlow;
 
 use blazing_smtlib::{
     NonstandardCommandError, SmtBytes, SmtSyntaxChecker,
-    read::{
-        SmtReadError, SmtReadErrorKind, SmtReader,
-        parser::{SmtCommandOutcome, SmtCommandParser, SmtSExprParser, SmtSyntaxErrorKind},
-    },
+    parser::{SmtCommandOutcome, SmtCommandParser, SmtSExprParser, SmtSyntaxErrorKind},
+    reader::{SmtReadError, SmtReadErrorKind, SmtReader},
     token::{
         SmtCommandNameReserved, SmtGeneralReserved, SmtReserved, SmtVersion, SmtVersionPosture,
         SmtVersionPostureBuilder,

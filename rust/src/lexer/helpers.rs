@@ -1,6 +1,6 @@
 use crate::{
     SmtBytes,
-    read::lexer::{
+    lexer::{
         LexerState, SmtLexicalErrorKind,
         char_class::{
             CharClass, RUN_BINARY_DIGIT, RUN_COMMENT_PLAIN, RUN_DIGIT, RUN_HEX_DIGIT,

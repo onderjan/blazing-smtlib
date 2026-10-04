@@ -10,7 +10,7 @@ use std::ops::ControlFlow;
 
 use crate::{
     SmtBytes, SmtLocated, SmtLocation, SmtSpan,
-    read::lexer::{
+    lexer::{
         char_class::{
             RUN_COMMENT_PLAIN, RUN_DIGIT, RUN_QUOTED_PLAIN, RUN_SIMPLE_SYMBOL, RUN_STRING_PLAIN,
             run_end, run_end_all,

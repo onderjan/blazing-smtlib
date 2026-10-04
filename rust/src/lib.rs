@@ -7,7 +7,9 @@ mod plain;
 mod span;
 mod traits;
 
-pub mod read;
+pub mod lexer;
+pub mod parser;
+pub mod reader;
 pub mod token;
 
 pub use crate::bytes::*;

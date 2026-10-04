@@ -37,7 +37,7 @@ use std::time::{Duration, Instant};
 
 use blazing_smtlib::{
     NonstandardCommandError, SmtSyntaxChecker,
-    read::{SmtReadError, SmtReadErrorKind, read_smt_file},
+    reader::{SmtReadError, SmtReadErrorKind, read_smt_file},
 };
 use rayon::ThreadPoolBuilder;
 use rayon::prelude::*;

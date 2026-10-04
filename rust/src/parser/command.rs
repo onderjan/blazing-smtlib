@@ -2,7 +2,7 @@ use std::{convert::Infallible, ops::ControlFlow};
 
 use crate::{
     SmtCommandHandler, SmtSpan, SmtSymbolView,
-    read::parser::{SmtParse, SmtParseError, SmtParseState, SmtSyntaxErrorKind, handle_err},
+    parser::{SmtParse, SmtParseError, SmtParseState, SmtSyntaxErrorKind, handle_err},
     token::{SmtBatchCursor, SmtReserved, SmtSyntaxToken, SmtTokenCategory, SmtVersion},
 };
 

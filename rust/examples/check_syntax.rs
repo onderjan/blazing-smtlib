@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use blazing_smtlib::{
     SmtSyntaxChecker,
-    read::{SmtReadErrorKind, read_smt_file},
+    reader::{SmtReadErrorKind, read_smt_file},
 };
 fn main() -> Result<(), u32> {
     let mut args = std::env::args();

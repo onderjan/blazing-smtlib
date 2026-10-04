@@ -25,7 +25,7 @@ use std::process::ExitCode;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use blazing_smtlib::{
-    read::lexer::SmtLexer,
+    lexer::SmtLexer,
     token::{SmtBatchCursor, SmtConsume, SmtSyntaxToken, SmtToken, SmtVersion},
 };
 

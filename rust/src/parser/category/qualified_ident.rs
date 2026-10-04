@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
 
 use crate::{
     SmtHandler, SmtQualifiedIdent, SmtSymbolView,
-    read::parser::{
+    parser::{
         Arena, IdentHandle, IdentSlot, QualifiedIdentHandle, SmtCloseParenParser, SmtParse,
         SmtParseError, SmtParseState, SmtSyntaxErrorKind, SortSlot, parse_by_token,
     },
@@ -261,7 +261,7 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{SmtSyntaxChecker, read::parser::category::tests::parse_all_with};
+    use crate::{SmtSyntaxChecker, parser::category::tests::parse_all_with};
 
     #[test]
     fn entry_points() {

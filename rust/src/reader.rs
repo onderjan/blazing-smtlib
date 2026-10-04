@@ -1,7 +1,7 @@
 //! Reading SMT-LIB input: lexing and parsing.
 //!
-//! Reading turns bytes into tokens (the [`lexer`] module) and tokens into
-//! the syntactic categories and commands of SMT-LIB (the [`parser`] module),
+//! Reading turns bytes into tokens (the [`lexer`](crate::lexer) module) and tokens into
+//! the syntactic categories and commands of SMT-LIB (the [`parser`](crate::parser) module),
 //! which are delivered to a [`SmtCommandHandler`] in streaming fashion:
 //! the input is processed piece by piece and every category or command
 //! to be handled reaches the handler before the next one is read.
@@ -11,7 +11,7 @@
 //! [`SmtReader`] reads the same way from any sequence of buffers and keeps
 //! the parser's resources under the caller's control, so it is the entry
 //! point when the input does not arrive as one buffered reader or when the
-//! resources should serve several reads. The [`lexer`] and [`parser`]
+//! resources should serve several reads. The [`lexer`](crate::lexer) and [`parser`](crate::parser)
 //! modules can also be used on their own.
 
 use std::ops::ControlFlow;
@@ -24,17 +24,12 @@ use std::{
 use crate::token::{SmtVersion, SmtVersionPosture};
 use crate::{
     SmtCommandHandler, SmtHandler, SmtLocated, SmtSpan,
-    read::{
-        lexer::{SmtLexError, SmtLexer, SmtLexicalError, SmtLexicalErrorKind},
-        parser::{
-            SmtParse, SmtParseAdapter, SmtParseError, SmtParseErrorKind, SmtScriptParser,
-            SmtSyntaxErrorKind,
-        },
+    lexer::{SmtLexError, SmtLexer, SmtLexicalError, SmtLexicalErrorKind},
+    parser::{
+        SmtParse, SmtParseAdapter, SmtParseError, SmtParseErrorKind, SmtScriptParser,
+        SmtSyntaxErrorKind,
     },
 };
-
-pub mod lexer;
-pub mod parser;
 
 /// Determines why reading has failed.
 #[derive(Debug)]

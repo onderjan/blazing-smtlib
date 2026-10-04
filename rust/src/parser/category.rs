@@ -62,10 +62,8 @@ pub(crate) mod tests {
 
     use crate::{
         NonstandardCommandError, SmtSyntaxChecker,
-        read::{
-            lexer::SmtLexer,
-            parser::{SmtParse, SmtParseError, SmtParseState},
-        },
+        lexer::SmtLexer,
+        parser::{SmtParse, SmtParseError, SmtParseState},
         token::{SmtBatchCursor, SmtConsume, SmtTokenCategory, SmtVersion},
     };
 

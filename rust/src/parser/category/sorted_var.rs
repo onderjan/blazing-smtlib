@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
 
 use crate::{
     SmtHandler, SmtSymbol,
-    read::parser::{
+    parser::{
         Arena, IdentSlot, SmtCloseParenParser, SmtOpenParenParser, SmtParse, SmtParseError,
         SmtParseState, SmtSyntaxErrorKind, SortSlot, TextHandle, parse_by_token,
     },
@@ -151,7 +151,7 @@ impl<H: SmtHandler + ?Sized> SortedVarSlot<H> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{SmtSyntaxChecker, read::parser::category::tests::parse_all_with};
+    use crate::{SmtSyntaxChecker, parser::category::tests::parse_all_with};
 
     #[test]
     fn slots_are_pristine_after_every_sorted_var() {

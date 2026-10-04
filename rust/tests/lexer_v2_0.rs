@@ -8,7 +8,7 @@
 mod lex_backend;
 
 use blazing_smtlib::{
-    read::lexer::SmtLexicalErrorKind,
+    lexer::SmtLexicalErrorKind,
     token::{SmtTokenCategory, SmtVersion},
 };
 

@@ -22,7 +22,7 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
 use blazing_smtlib::{
     SmtLocation,
-    read::lexer::{SmtLexError, SmtLexer, SmtLexicalErrorKind},
+    lexer::{SmtLexError, SmtLexer, SmtLexicalErrorKind},
     token::{
         SmtBatchCursor, SmtConsume, SmtReserved, SmtSyntaxToken, SmtTokenCategory, SmtVersion,
     },

@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::{SmtBytes, SmtBytesView, read::lexer::CharClass};
+use crate::{SmtBytes, SmtBytesView, lexer::CharClass};
 
 /// SMT-LIB string content.
 ///

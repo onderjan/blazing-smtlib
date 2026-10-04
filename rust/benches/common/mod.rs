@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 use blazing_smtlib::{
     SmtSyntaxChecker,
-    read::{SmtReadErrorKind, read_smt},
+    reader::{SmtReadErrorKind, read_smt},
 };
 
 /// Parses the in-memory file with [`SmtSyntaxChecker`], panicking on any

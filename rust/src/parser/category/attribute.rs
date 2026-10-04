@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
 
 use crate::{
     SmtAttributeValue, SmtHandler, SmtKeywordView, SmtSpan,
-    read::parser::{
+    parser::{
         Arena, SExprSlot, SmtCloseParenParser, SmtParse, SmtParseError, SmtParseState,
         SmtSyntaxErrorKind, TextHandle, category::parse_special_constant, handle_err,
         parse_by_token,
@@ -406,7 +406,7 @@ impl<H: SmtHandler + ?Sized> AttributeCollection<H> for MultipleAttributes {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{SmtSyntaxChecker, read::parser::category::tests::parse_all_with};
+    use crate::{SmtSyntaxChecker, parser::category::tests::parse_all_with};
 
     #[test]
     fn slot_is_pristine_after_every_attribute_list() {

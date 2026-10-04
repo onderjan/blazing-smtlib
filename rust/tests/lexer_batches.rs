@@ -17,7 +17,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use blazing_smtlib::{
     SmtLocation, SmtSpan,
-    read::lexer::{SmtLexError, SmtLexer, SmtLexicalErrorKind},
+    lexer::{SmtLexError, SmtLexer, SmtLexicalErrorKind},
     token::{SmtBatchCursor, SmtConsume, SmtToken, SmtTokenCategory, SmtVersion},
 };
 

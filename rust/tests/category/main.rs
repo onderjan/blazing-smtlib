@@ -28,16 +28,13 @@ use blazing_smtlib::{
     SmtIndexView, SmtKeywordView, SmtPatternView, SmtQualifiedIdent, SmtQualifiedIdentView,
     SmtQuantifierKind, SmtSExpr, SmtSimplePatternView, SmtSort, SmtSpan, SmtSpecialConstantView,
     SmtSymbolView, SmtTerm,
-    read::{
-        lexer::{SmtLexError, SmtLexer},
-        parser::{
-            SmtCloseParenParser, SmtClosedAttributeParser, SmtClosedMultipleAttributeParser,
-            SmtClosedMultipleParser, SmtClosedParser, SmtIdentParser, SmtKeywordParser,
-            SmtOpenParenParser, SmtPairParser, SmtParenMultipleParser, SmtParenParser, SmtParse,
-            SmtParseError, SmtParseErrorKind, SmtParseState, SmtQualifiedIdentParser,
-            SmtSExprParser, SmtSortParser, SmtStringParser, SmtSymbolParser, SmtSyntaxErrorKind,
-            SmtTermParser,
-        },
+    lexer::{SmtLexError, SmtLexer},
+    parser::{
+        SmtCloseParenParser, SmtClosedAttributeParser, SmtClosedMultipleAttributeParser,
+        SmtClosedMultipleParser, SmtClosedParser, SmtIdentParser, SmtKeywordParser,
+        SmtOpenParenParser, SmtPairParser, SmtParenMultipleParser, SmtParenParser, SmtParse,
+        SmtParseError, SmtParseErrorKind, SmtParseState, SmtQualifiedIdentParser, SmtSExprParser,
+        SmtSortParser, SmtStringParser, SmtSymbolParser, SmtSyntaxErrorKind, SmtTermParser,
     },
     token::{SmtBatchCursor, SmtConsume, SmtReserved, SmtTokenCategory, SmtVersion},
 };

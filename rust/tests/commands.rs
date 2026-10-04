@@ -12,7 +12,7 @@ use blazing_smtlib::{
     SmtFunctionSignature, SmtHandler, SmtIdentView, SmtIndexView, SmtKeyword, SmtKeywordView,
     SmtNumeral, SmtPatternView, SmtQuantifierKind, SmtSExpr, SmtSimplePatternView, SmtSort,
     SmtSpecialConstantView, SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm,
-    read::{SmtReadErrorKind, lexer::SmtLexicalErrorKind, parser::SmtSyntaxErrorKind},
+    lexer::SmtLexicalErrorKind, parser::SmtSyntaxErrorKind, reader::SmtReadErrorKind,
     token::SmtTokenCategory,
 };
 

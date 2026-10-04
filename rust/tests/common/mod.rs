@@ -2,7 +2,8 @@
 
 use blazing_smtlib::{
     NonstandardCommandError, SmtCommandHandler, SmtSyntaxChecker,
-    read::{SmtReadError, SmtReadErrorKind, parser::SmtSyntaxErrorKind, read_smt},
+    parser::SmtSyntaxErrorKind,
+    reader::{SmtReadError, SmtReadErrorKind, read_smt},
 };
 
 /// Parses the whole input, feeding the commands to the given handler.

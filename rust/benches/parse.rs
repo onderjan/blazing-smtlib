@@ -43,7 +43,7 @@ use std::process::ExitCode;
 use std::time::Instant;
 
 use blazing_smtlib::{
-    read::lexer::SmtLexer,
+    lexer::SmtLexer,
     token::{SmtBatchCursor, SmtConsume, SmtVersion},
 };
 

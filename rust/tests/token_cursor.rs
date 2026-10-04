@@ -9,10 +9,8 @@ use std::ops::ControlFlow;
 
 use blazing_smtlib::{
     SmtSyntaxChecker,
-    read::{
-        lexer::SmtLexer,
-        parser::{SmtParse, SmtParseState, SmtSortParser, SmtTermParser},
-    },
+    lexer::SmtLexer,
+    parser::{SmtParse, SmtParseState, SmtSortParser, SmtTermParser},
     token::{SmtBatchCursor, SmtConsume, SmtTokenCategory, SmtVersion},
 };
 

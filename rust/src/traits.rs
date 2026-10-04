@@ -3,7 +3,7 @@ use std::{convert::Infallible, fmt::Debug};
 use crate::{
     SmtAttributeValue, SmtAttributes, SmtBindings, SmtDatatypeConstructor, SmtFunctionSignature,
     SmtKeyword, SmtKeywordView, SmtNumeral, SmtPatternView, SmtQuantifierKind, SmtSExpr, SmtSort,
-    SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm, read::parser::SmtParse,
+    SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm, parser::SmtParse,
 };
 
 pub trait SmtHandler {

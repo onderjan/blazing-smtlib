@@ -10,13 +10,10 @@ use blazing_smtlib::{
     SmtDatatypeConstructor, SmtFunctionSignature, SmtHandler, SmtKeyword, SmtKeywordView,
     SmtNumeral, SmtPatternView, SmtQuantifierKind, SmtSExpr, SmtSort, SmtStringContent, SmtSymbol,
     SmtSymbolView, SmtTerm,
-    read::{
-        SmtReadErrorKind,
-        parser::{
-            SmtClosedParser, SmtCommandPayloadParser, SmtCommandRule, SmtSyntaxErrorKind,
-            SmtTermParser,
-        },
+    parser::{
+        SmtClosedParser, SmtCommandPayloadParser, SmtCommandRule, SmtSyntaxErrorKind, SmtTermParser,
     },
+    reader::SmtReadErrorKind,
 };
 
 #[test]

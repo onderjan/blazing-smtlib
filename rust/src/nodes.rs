@@ -4,7 +4,7 @@ use crate::{
     SmtBinDigits, SmtBinDigitsView, SmtDecimal, SmtDecimalView, SmtHandler, SmtHexDigits,
     SmtHexDigitsView, SmtKeywordView, SmtMultiple, SmtNumeral, SmtNumeralView, SmtStringContent,
     SmtStringContentView, SmtSymbol, SmtSymbolView,
-    read::parser::{ArenaAccess, IndexHandle, SimplePatternHandle},
+    parser::{ArenaAccess, IndexHandle, SimplePatternHandle},
     token::SmtReserved,
 };
 

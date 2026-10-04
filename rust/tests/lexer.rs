@@ -8,7 +8,7 @@ use std::ops::ControlFlow;
 
 use blazing_smtlib::{
     SmtSpan,
-    read::lexer::{SmtLexError, SmtLexer, SmtLexicalError, SmtLexicalErrorKind},
+    lexer::{SmtLexError, SmtLexer, SmtLexicalError, SmtLexicalErrorKind},
     token::{
         SmtBatchCursor, SmtConsume, SmtGeneralReserved, SmtReserved, SmtTokenCategory, SmtVersion,
     },

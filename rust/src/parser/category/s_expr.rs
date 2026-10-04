@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
 
 use crate::{
     SmtHandler, SmtSExpr,
-    read::parser::{
+    parser::{
         Arena, SmtParse, SmtParseError, SmtParseState, SmtSyntaxErrorKind,
         category::parse_special_constant, handle_err, parse_by_token,
     },
@@ -164,7 +164,7 @@ impl SExprSlot {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{SmtSyntaxChecker, read::parser::category::tests::parse_all_with};
+    use crate::{SmtSyntaxChecker, parser::category::tests::parse_all_with};
 
     #[test]
     fn slot_is_pristine_after_every_s_expr() {

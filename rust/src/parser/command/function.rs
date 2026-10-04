@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
 
 use crate::{
     SmtCommandHandler, SmtFunctionSignature,
-    read::parser::{
+    parser::{
         SmtPairParser, SmtParenMaximumParser, SmtParenMultipleParser, SmtParenParser,
         SmtParenSortedVarsParser, SmtParse, SmtParseError, SmtParseState, SmtSortParser,
         SmtSymbolParser, SmtSyntaxErrorKind, SmtTermParser, handle_err, parse_by_token,

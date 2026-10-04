@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
 
 use crate::{
     SmtHandler,
-    read::parser::{SmtParse, SmtParseError, SmtParseState},
+    parser::{SmtParse, SmtParseError, SmtParseState},
     token::{SmtBatchCursor, SmtConsume},
 };
 

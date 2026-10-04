@@ -16,7 +16,7 @@ use std::ops::ControlFlow;
 
 use blazing_smtlib::{
     NonstandardCommandError, SmtSyntaxChecker,
-    read::{SmtReadError, SmtReader},
+    reader::{SmtReadError, SmtReader},
     token::{SmtVersion, SmtVersionPosture},
 };
 

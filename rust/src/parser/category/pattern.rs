@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
 
 use crate::{
     SmtHandler, SmtPattern, SmtSimplePattern, SmtSimplePatternView,
-    read::parser::{
+    parser::{
         Arena, PatternHandle, SimplePatternHandle, SmtParse, SmtParseError, SmtParseState,
         SmtSyntaxErrorKind, TextHandle, parse_by_token,
     },
@@ -276,7 +276,7 @@ fn underscore_wildcard_allowed(version: SmtVersion) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{SmtSyntaxChecker, read::parser::category::tests::parse_all_with};
+    use crate::{SmtSyntaxChecker, parser::category::tests::parse_all_with};
 
     #[test]
     fn slot_is_pristine_after_every_pattern() {
