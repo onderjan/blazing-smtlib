@@ -15,7 +15,7 @@ use reserved_words::{COMMAND_NAMES, reserved_words};
 use std::ops::ControlFlow;
 
 use blazing_smtlib::{
-    CheckStandardSyntax, NonstandardCommandError,
+    NonstandardCommandError, SmtSyntaxChecker,
     read::{SmtReadError, SmtReader},
     token::{SmtVersion, SmtVersionPosture},
 };
@@ -223,7 +223,7 @@ fn keywords_spelled_like_reserved_words_are_keywords() {
 /// Reads the input as the given pieces, then the end of the input,
 /// stopping at the first error.
 fn read_pieces(pieces: &[&[u8]]) -> Result<(), SmtReadError<NonstandardCommandError>> {
-    let mut handler = CheckStandardSyntax;
+    let mut handler = SmtSyntaxChecker;
     let mut reader =
         SmtReader::script(&mut handler, SmtVersion::V2_7, SmtVersionPosture::default());
     for piece in pieces {

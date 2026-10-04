@@ -11,7 +11,7 @@ use reserved_words::reserved_words;
 use std::ops::ControlFlow;
 
 use blazing_smtlib::{
-    CheckStandardSyntax, NonstandardCommandError, String8,
+    NonstandardCommandError, SmtSyntaxChecker, String8,
     read::{
         SmtReadError, SmtReadErrorKind, SmtReader,
         parser::{CommandParser, CommandParserStop, SExprParser, SmtSyntaxErrorKind},
@@ -66,7 +66,7 @@ fn read_pieces(
     initial: SmtVersion,
     posture: SmtVersionPosture,
 ) -> Result<(), ReadError> {
-    let mut handler = CheckStandardSyntax;
+    let mut handler = SmtSyntaxChecker;
     let mut reader = SmtReader::script(&mut handler, initial, posture);
     for piece in pieces {
         if let ControlFlow::Break(_) = reader.read_slice(piece)? {
@@ -431,7 +431,7 @@ fn the_version_and_the_declaration_count_reset_with_the_input() {
     let declared = b"(set-info :smt-lib-version 2.6)(declare-const lambda Bool)";
     let undeclared = b"(declare-const lambda Bool)";
     for ending in [&b""[..], b"(exit)"] {
-        let mut handler = CheckStandardSyntax;
+        let mut handler = SmtSyntaxChecker;
         let mut reader =
             SmtReader::script(&mut handler, SmtVersion::V2_7, SmtVersionPosture::default());
         // every input may declare its version once: the count starts again
@@ -463,7 +463,7 @@ fn a_command_parser_reports_the_declaration_without_applying_it() {
     // switching is the script parser's job: the one-command parser has nothing
     // to switch, so it finishes with the declared version and its span, applies
     // no posture, and the reader is back in its initial version for the next command
-    let mut handler = CheckStandardSyntax;
+    let mut handler = SmtSyntaxChecker;
     let mut reader = SmtReader::with_parser(&mut handler, CommandParser::new(), SmtVersion::V2_7);
     let mut stop = |input: &[u8]| -> Result<CommandParserStop, ReadError> {
         match reader.read_slice(input)? {
@@ -673,7 +673,7 @@ fn a_reserved_word_is_an_s_expression_since_2_6() {
 fn a_reserved_word_alone_is_an_s_expression_since_2_6() {
     // the S-expression parser on its own takes the reserved word as a whole S-expression
     for (version, _) in VERSIONS {
-        let mut handler = CheckStandardSyntax;
+        let mut handler = SmtSyntaxChecker;
         let mut reader = SmtReader::with_parser(&mut handler, SExprParser::new(), version);
         let result = reader.read_slice(b"let ");
         if version < SmtVersion::V2_6 {
@@ -877,7 +877,7 @@ fn the_string_escapes_follow_the_declared_version() {
 fn the_string_escapes_reset_with_the_input() {
     let declared = b"(set-info :smt-lib-version 2.0)(set-info :a \"x\\\"y\")";
     let legacy = b"(set-info :a \"x\\\"y\")";
-    let mut handler = CheckStandardSyntax;
+    let mut handler = SmtSyntaxChecker;
     let mut reader = SmtReader::script(&mut handler, SmtVersion::V2_7, every_version_allowed());
     // every input can switch to the 2.0 strings ...
     for _ in 0..2 {

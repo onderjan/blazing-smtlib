@@ -17,7 +17,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use blazing_smtlib::{
     SmtLocation, SmtSpan,
-    read::lexer::{Lexer, SmtLexError, SmtLexicalErrorKind},
+    read::lexer::{SmtLexError, SmtLexer, SmtLexicalErrorKind},
     token::{SmtBatchCursor, SmtConsume, SmtToken, SmtTokenCategory, SmtVersion},
 };
 
@@ -166,7 +166,7 @@ impl Run {
 
 /// The lexer is at the origin, as it must be after a finish or an end of file.
 #[track_caller]
-fn assert_at_origin<H: SmtConsume>(lexer: &Lexer<H>) {
+fn assert_at_origin<H: SmtConsume>(lexer: &SmtLexer<H>) {
     assert_eq!(
         loc(lexer.current_location()),
         (0, 0, 0),
@@ -186,7 +186,7 @@ fn run(chunks: &[&[u8]], plan: &[Reply]) -> Run {
     let mut error = None;
     let mut finished_at = None;
     {
-        let mut lexer = Lexer::new(
+        let mut lexer = SmtLexer::new(
             Recorder {
                 calls: &mut calls,
                 plan,
@@ -542,7 +542,7 @@ fn lexing_after_a_finish_starts_a_new_input_at_the_origin() {
     let mut calls = Vec::new();
     let plan = [Reply::Finish { consumed: 1 }];
     {
-        let mut lexer = Lexer::new(
+        let mut lexer = SmtLexer::new(
             Recorder {
                 calls: &mut calls,
                 plan: &plan,
@@ -582,7 +582,7 @@ fn a_finish_at_the_end_of_file_token_is_followed_by_a_new_input() {
     let mut calls = Vec::new();
     let plan = [Reply::TakeAll, Reply::Finish { consumed: 1 }];
     {
-        let mut lexer = Lexer::new(
+        let mut lexer = SmtLexer::new(
             Recorder {
                 calls: &mut calls,
                 plan: &plan,

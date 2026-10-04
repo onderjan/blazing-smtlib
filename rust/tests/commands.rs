@@ -8,7 +8,7 @@ use std::convert::Infallible;
 use common::{assert_error_span, assert_parser_error, parse_with};
 
 use blazing_smtlib::{
-    CommandHandler, SmtAttributeValue, SmtAttributes, SmtBindings, SmtDatatypeConstructor,
+    SmtAttributeValue, SmtAttributes, SmtBindings, SmtCommandHandler, SmtDatatypeConstructor,
     SmtFunctionSignature, SmtHandler, SmtIdentView, SmtIndexView, SmtKeyword, SmtKeywordView,
     SmtNumeral, SmtPatternView, SmtQuantifierKind, SmtSExpr, SmtSimplePatternView, SmtSort,
     SmtSpecialConstantView, SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm,
@@ -288,7 +288,7 @@ impl SmtHandler for Resolving {
     }
 }
 
-impl CommandHandler for Resolving {
+impl SmtCommandHandler for Resolving {
     type NonstandardParser = Infallible;
 
     fn nonstandard_command(

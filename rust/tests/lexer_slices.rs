@@ -14,7 +14,7 @@ use std::ops::ControlFlow;
 
 use blazing_smtlib::{
     SmtLocation,
-    read::lexer::{Lexer, SmtLexicalErrorKind},
+    read::lexer::{SmtLexer, SmtLexicalErrorKind},
     token::{SmtBatchCursor, SmtConsume, SmtTokenCategory, SmtVersion},
 };
 
@@ -716,7 +716,7 @@ fn handler_errors_are_raised_where_the_token_is_produced_in_every_chunking() {
         for (n, rejected) in reference.tokens.iter().enumerate() {
             for chunk_length in [1usize, 2, 3, 5, input.len().max(1)] {
                 let chunks = split_by_lengths(input, &[chunk_length]);
-                let mut lexer = Lexer::new(RejectNth { remaining: n }, SmtVersion::V2_7);
+                let mut lexer = SmtLexer::new(RejectNth { remaining: n }, SmtVersion::V2_7);
                 let mut consumed = 0;
                 let mut site = None;
                 for chunk in &chunks {

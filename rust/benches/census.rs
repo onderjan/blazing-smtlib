@@ -4,7 +4,7 @@
 //! Run with `cargo bench --bench census`. For each selected file it prints
 //! the size, token count, bytes per token, and nesting depth; token counts
 //! by type, reserved words, and top-level command names; and the allocations
-//! of one full parse with [`blazing_smtlib::CheckStandardSyntax`]: the count,
+//! of one full parse with [`blazing_smtlib::SmtSyntaxChecker`]: the count,
 //! the count per token, and the peak live heap. Command-line arguments name
 //! additional files to describe, relative to the corpus root, which helps
 //! when choosing files to add to [`common::FILES`].
@@ -25,7 +25,7 @@ use std::process::ExitCode;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use blazing_smtlib::{
-    read::lexer::Lexer,
+    read::lexer::SmtLexer,
     token::{SmtBatchCursor, SmtConsume, SmtSyntaxToken, SmtToken, SmtVersion},
 };
 
@@ -168,7 +168,7 @@ impl Census {
 /// Prints the census of the in-memory file.
 fn print_census(label: &str, data: &[u8], path: &Path) {
     let mut census = Census::default();
-    let mut lexer = Lexer::new(&mut census, SmtVersion::V2_7);
+    let mut lexer = SmtLexer::new(&mut census, SmtVersion::V2_7);
     if let Err(err) = lexer.lex_all(data) {
         panic!("benchmark file {} must lex, got {:?}", path.display(), err);
     }

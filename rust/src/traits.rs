@@ -110,7 +110,7 @@ pub trait SmtHandler {
     fn end_match(&mut self) -> Result<Self::Term, Self::Error>;
 }
 
-pub trait CommandHandler: SmtHandler {
+pub trait SmtCommandHandler: SmtHandler {
     type NonstandardParser: Parser<Self, Result = ()>;
 
     /// Returns a parser that parses a non-standard command with the given name.
@@ -370,12 +370,12 @@ pub trait CommandHandler: SmtHandler {
 }
 
 #[derive(Debug)]
-pub struct CheckStandardSyntax;
+pub struct SmtSyntaxChecker;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NonstandardCommandError(pub SmtSymbol);
 
-impl SmtHandler for CheckStandardSyntax {
+impl SmtHandler for SmtSyntaxChecker {
     type Error = NonstandardCommandError;
 
     type SExpr = ();
@@ -462,7 +462,7 @@ impl SmtHandler for CheckStandardSyntax {
     }
 }
 
-impl CommandHandler for CheckStandardSyntax {
+impl SmtCommandHandler for SmtSyntaxChecker {
     type NonstandardParser = Infallible;
 
     fn nonstandard_command(

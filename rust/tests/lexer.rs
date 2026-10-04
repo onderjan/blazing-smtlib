@@ -8,7 +8,7 @@ use std::ops::ControlFlow;
 
 use blazing_smtlib::{
     SmtSpan,
-    read::lexer::{Lexer, SmtLexError, SmtLexicalError, SmtLexicalErrorKind},
+    read::lexer::{SmtLexError, SmtLexer, SmtLexicalError, SmtLexicalErrorKind},
     token::{
         SmtBatchCursor, SmtConsume, SmtGeneralReserved, SmtReserved, SmtTokenCategory, SmtVersion,
     },
@@ -319,7 +319,7 @@ fn error_after_comment_line() {
 
 #[test]
 fn current_location_follows_consumed_bytes() {
-    let mut lexer = Lexer::new(TakeTokens, SmtVersion::V2_7);
+    let mut lexer = SmtLexer::new(TakeTokens, SmtVersion::V2_7);
     assert_eq!(loc(lexer.current_location()), (0, 0, 0));
     for &c in b"ab\nc" {
         let _ = lexer
@@ -604,7 +604,7 @@ impl SmtConsume for RejectTokens {
 
 #[test]
 fn handler_error_is_returned_with_the_handled_token() {
-    let mut lexer = Lexer::new(RejectTokens, SmtVersion::V2_7);
+    let mut lexer = SmtLexer::new(RejectTokens, SmtVersion::V2_7);
     // the parenthesis token is produced and handed to the handler immediately
     let Err(SmtLexError::Consumer(span)) = lexer.lex_slice(b"(") else {
         panic!("expected a handler error");
@@ -617,7 +617,7 @@ fn handler_error_is_returned_with_the_handled_token() {
 #[test]
 #[should_panic(expected = "cannot lex after a lexer error")]
 fn lexing_after_an_error_panics() {
-    let mut lexer = Lexer::new(TakeTokens, SmtVersion::V2_7);
+    let mut lexer = SmtLexer::new(TakeTokens, SmtVersion::V2_7);
     let _ = lexer
         .lex_slice(b"7")
         .map_err(into_lexer_error)
@@ -631,7 +631,7 @@ fn lexing_after_an_error_panics() {
 #[should_panic(expected = "cannot lex after a lexer error")]
 fn lexing_after_a_handler_error_panics() {
     // a handler error also makes the lexer unusable
-    let mut lexer = Lexer::new(RejectTokens, SmtVersion::V2_7);
+    let mut lexer = SmtLexer::new(RejectTokens, SmtVersion::V2_7);
     assert!(lexer.lex_slice(b"(").is_err(), "expected a handler error");
     let _ = lexer.lex_slice(b"a");
 }
@@ -837,7 +837,7 @@ impl SmtConsume for RejectEof {
 fn lexing_after_a_handler_error_on_the_eof_token_panics() {
     // the EOF token is the last thing lex_eof does; a handler error there
     // must still leave the lexer failed like every other error
-    let mut lexer = Lexer::new(RejectEof, SmtVersion::V2_7);
+    let mut lexer = SmtLexer::new(RejectEof, SmtVersion::V2_7);
     let _ = lexer.lex_slice(b"a").expect("valid input");
     assert!(lexer.lex_eof().is_err(), "expected a handler error");
     let _ = lexer.lex_slice(b"b");
@@ -846,7 +846,7 @@ fn lexing_after_a_handler_error_on_the_eof_token_panics() {
 #[test]
 #[should_panic(expected = "cannot lex after a lexer error")]
 fn lexing_after_a_lexer_error_at_eof_panics() {
-    let mut lexer = Lexer::new(TakeTokens, SmtVersion::V2_7);
+    let mut lexer = SmtLexer::new(TakeTokens, SmtVersion::V2_7);
     let _ = lexer
         .lex_slice(b"\"unclosed")
         .map_err(into_lexer_error)

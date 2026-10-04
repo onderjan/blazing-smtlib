@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    CommandHandler,
+    SmtCommandHandler,
     read::parser::{Parser, ParserResources, SmtParseError, handle_err},
     token::SmtBatchCursor,
 };
@@ -12,7 +12,7 @@ use crate::{
 ///
 /// The commands using a definition parser do not call the
 /// handler after ending, as everything is handled by the parser.
-pub(super) trait Definition<H: CommandHandler> {
+pub(super) trait Definition<H: SmtCommandHandler> {
     type Signature: Parser<H> + Default;
     type Body: Parser<H> + Default;
 
@@ -35,13 +35,13 @@ enum DefinitionParserState {
 ///
 /// The commands using this parser do not call the
 /// handler after ending, as everything is handled by the parser.
-pub(super) struct DefinitionParser<H: CommandHandler, D: Definition<H>> {
+pub(super) struct DefinitionParser<H: SmtCommandHandler, D: Definition<H>> {
     state: DefinitionParserState,
     signature_parser: D::Signature,
     body_parser: D::Body,
 }
 
-impl<H: CommandHandler, D: Definition<H>> DefinitionParser<H, D> {
+impl<H: SmtCommandHandler, D: Definition<H>> DefinitionParser<H, D> {
     pub fn new() -> Self {
         Self {
             state: DefinitionParserState::Signature,
@@ -51,13 +51,13 @@ impl<H: CommandHandler, D: Definition<H>> DefinitionParser<H, D> {
     }
 }
 
-impl<H: CommandHandler, D: Definition<H>> Default for DefinitionParser<H, D> {
+impl<H: SmtCommandHandler, D: Definition<H>> Default for DefinitionParser<H, D> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<H: CommandHandler, D: Definition<H>> Parser<H> for DefinitionParser<H, D> {
+impl<H: SmtCommandHandler, D: Definition<H>> Parser<H> for DefinitionParser<H, D> {
     type Result = ();
 
     #[inline]

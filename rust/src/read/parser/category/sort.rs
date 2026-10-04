@@ -258,7 +258,7 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{CheckStandardSyntax, read::parser::category::tests::parse_all_with};
+    use crate::{SmtSyntaxChecker, read::parser::category::tests::parse_all_with};
 
     #[test]
     fn slots_are_pristine_after_every_sort() {
@@ -271,11 +271,7 @@ mod tests {
             b"((_ Tuple 2) (_ BitVec 8) (Set Int))",
         ] {
             let mut resources = ParserResources::new();
-            parse_all_with(
-                SortParser::<CheckStandardSyntax>::new(),
-                &mut resources,
-                input,
-            );
+            parse_all_with(SortParser::<SmtSyntaxChecker>::new(), &mut resources, input);
             assert!(resources.are_pristine(), "after {input:?}");
         }
     }

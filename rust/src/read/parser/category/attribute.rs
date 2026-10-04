@@ -406,7 +406,7 @@ impl<H: SmtHandler + ?Sized> AttributeCollection<H> for MultipleAttributes {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{CheckStandardSyntax, read::parser::category::tests::parse_all_with};
+    use crate::{SmtSyntaxChecker, read::parser::category::tests::parse_all_with};
 
     #[test]
     fn slot_is_pristine_after_every_attribute_list() {
@@ -421,7 +421,7 @@ mod tests {
         ] {
             let mut resources = ParserResources::new();
             parse_all_with(
-                ClosedAttributeParser::<CheckStandardSyntax>::new(),
+                ClosedAttributeParser::<SmtSyntaxChecker>::new(),
                 &mut resources,
                 input,
             );
@@ -434,7 +434,7 @@ mod tests {
         ] {
             let mut resources = ParserResources::new();
             parse_all_with(
-                ClosedMultipleAttributeParser::<CheckStandardSyntax>::new(),
+                ClosedMultipleAttributeParser::<SmtSyntaxChecker>::new(),
                 &mut resources,
                 input,
             );

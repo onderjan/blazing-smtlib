@@ -276,7 +276,7 @@ fn underscore_wildcard_allowed(version: SmtVersion) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{CheckStandardSyntax, read::parser::category::tests::parse_all_with};
+    use crate::{SmtSyntaxChecker, read::parser::category::tests::parse_all_with};
 
     #[test]
     fn slot_is_pristine_after_every_pattern() {
@@ -286,7 +286,7 @@ mod tests {
         for input in [&b"x"[..], b"_", b"(cons x xs)", b"(node _ l r)"] {
             let mut resources = ParserResources::new();
             parse_all_with(
-                PatternParser::<CheckStandardSyntax>::new(),
+                PatternParser::<SmtSyntaxChecker>::new(),
                 &mut resources,
                 input,
             );

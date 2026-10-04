@@ -6,7 +6,7 @@
 //! live in the submodules under `category/`.
 //!
 //! Tokens cannot be constructed outside the crate, so the driver feeds the
-//! parser under test by pushing the input through a `Lexer` whose token consumer
+//! parser under test by pushing the input through a `SmtLexer` whose token consumer
 //! advances the parser.
 
 mod attribute;
@@ -29,7 +29,7 @@ use blazing_smtlib::{
     SmtQuantifierKind, SmtSExpr, SmtSimplePatternView, SmtSort, SmtSpan, SmtSpecialConstantView,
     SmtSymbolView, SmtTerm,
     read::{
-        lexer::{Lexer, SmtLexError},
+        lexer::{SmtLexError, SmtLexer},
         parser::{
             CloseParenParser, ClosedAttributeParser, ClosedMultipleAttributeParser,
             ClosedMultipleParser, ClosedParser, IdentParser, KeywordParser, OpenParenParser,
@@ -411,7 +411,7 @@ fn run_count_from<H: SmtHandler<Error = Infallible>, P: Parser<H>>(
         results: Vec::new(),
         unconsumed: 0,
     };
-    let mut lexer = Lexer::new(&mut drive, SmtVersion::V2_7);
+    let mut lexer = SmtLexer::new(&mut drive, SmtVersion::V2_7);
     match lexer.lex_all(input) {
         Ok(_) => {}
         Err(SmtLexError::Consumer(err)) => {

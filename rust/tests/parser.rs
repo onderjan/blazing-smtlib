@@ -6,7 +6,7 @@ mod common;
 use common::{assert_error_span, assert_parser_error, parse, parse_with};
 
 use blazing_smtlib::{
-    CommandHandler, NonstandardCommandError, SmtAttributeValue, SmtAttributes, SmtBindings,
+    NonstandardCommandError, SmtAttributeValue, SmtAttributes, SmtBindings, SmtCommandHandler,
     SmtDatatypeConstructor, SmtFunctionSignature, SmtHandler, SmtKeyword, SmtKeywordView,
     SmtNumeral, SmtPatternView, SmtQuantifierKind, SmtSExpr, SmtSort, SmtStringContent, SmtSymbol,
     SmtSymbolView, SmtTerm,
@@ -188,7 +188,7 @@ impl SmtHandler for Recording {
     }
 }
 
-impl CommandHandler for Recording {
+impl SmtCommandHandler for Recording {
     type NonstandardParser = CommandPayloadParser<Self, MyAssert>;
 
     fn nonstandard_command(

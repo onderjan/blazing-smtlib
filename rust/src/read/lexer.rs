@@ -23,7 +23,7 @@ use crate::{
     token::{InnerCategory, SmtBatchCursor, SmtConsume, SmtVersion},
 };
 
-pub struct Lexer<H: SmtConsume> {
+pub struct SmtLexer<H: SmtConsume> {
     /// Handler of produced tokens.
     handler: H,
 
@@ -140,10 +140,10 @@ enum LexerState {
     Failed,
 }
 
-impl<H: SmtConsume> Lexer<H> {
+impl<H: SmtConsume> SmtLexer<H> {
     /// Constructs the lexer.
     pub fn new(handler: H, version: SmtVersion) -> Self {
-        Lexer {
+        SmtLexer {
             handler,
             version,
             initial_version: version,
@@ -1647,7 +1647,7 @@ struct FastState {
 
 impl FastState {
     #[inline(always)]
-    fn load<H: SmtConsume>(lexer: &Lexer<H>, batch: &Batch) -> Self {
+    fn load<H: SmtConsume>(lexer: &SmtLexer<H>, batch: &Batch) -> Self {
         Self {
             len: batch.len,
             line: lexer.line,
@@ -1656,7 +1656,7 @@ impl FastState {
     }
 
     #[inline(always)]
-    fn store<H: SmtConsume>(self, lexer: &mut Lexer<H>, batch: &mut Batch) {
+    fn store<H: SmtConsume>(self, lexer: &mut SmtLexer<H>, batch: &mut Batch) {
         batch.len = self.len;
         lexer.line = self.line;
         lexer.line_start = self.line_start;

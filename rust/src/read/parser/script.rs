@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    CommandHandler,
+    SmtCommandHandler,
     read::parser::{
         CommandParser, CommandParserStop, Parser, ParserResources, SmtParseError,
         SmtSyntaxErrorKind,
@@ -16,7 +16,7 @@ use crate::{
 /// command `(exit)` or at the end of the input between commands, returning
 /// [`ControlFlow::Break`] with a [`ScriptParserStop`], and is then back at
 /// its start.
-pub struct ScriptParser<H: CommandHandler> {
+pub struct ScriptParser<H: SmtCommandHandler> {
     command: CommandParser<H>,
     posture: SmtVersionPosture,
     num_version_declarations: u64,
@@ -31,7 +31,7 @@ pub enum ScriptParserStop {
     EndOfFile,
 }
 
-impl<H: CommandHandler> ScriptParser<H> {
+impl<H: SmtCommandHandler> ScriptParser<H> {
     pub fn new(posture: SmtVersionPosture) -> Self {
         Self {
             command: CommandParser::new(),
@@ -41,13 +41,13 @@ impl<H: CommandHandler> ScriptParser<H> {
     }
 }
 
-impl<H: CommandHandler> Default for ScriptParser<H> {
+impl<H: SmtCommandHandler> Default for ScriptParser<H> {
     fn default() -> Self {
         Self::new(SmtVersionPosture::default())
     }
 }
 
-impl<H: CommandHandler> Parser<H> for ScriptParser<H> {
+impl<H: SmtCommandHandler> Parser<H> for ScriptParser<H> {
     type Result = ScriptParserStop;
 
     #[inline]

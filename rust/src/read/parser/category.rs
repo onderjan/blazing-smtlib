@@ -66,9 +66,9 @@ pub(crate) mod tests {
     use std::ops::ControlFlow;
 
     use crate::{
-        CheckStandardSyntax, NonstandardCommandError,
+        NonstandardCommandError, SmtSyntaxChecker,
         read::{
-            lexer::Lexer,
+            lexer::SmtLexer,
             parser::{Parser, ParserResources, SmtParseError},
         },
         token::{SmtBatchCursor, SmtConsume, SmtTokenCategory, SmtVersion},
@@ -80,19 +80,19 @@ pub(crate) mod tests {
     ///
     /// Lets unit tests enter a category through its crate-private entry
     /// points before driving it.
-    pub(crate) fn parse_all_with<P: Parser<CheckStandardSyntax>>(
+    pub(crate) fn parse_all_with<P: Parser<SmtSyntaxChecker>>(
         parser: P,
-        resources: &mut ParserResources<CheckStandardSyntax>,
+        resources: &mut ParserResources<SmtSyntaxChecker>,
         input: &[u8],
     ) -> P::Result {
-        struct Drive<'r, P: Parser<CheckStandardSyntax>> {
+        struct Drive<'r, P: Parser<SmtSyntaxChecker>> {
             parser: P,
-            resources: &'r mut ParserResources<CheckStandardSyntax>,
+            resources: &'r mut ParserResources<SmtSyntaxChecker>,
             result: Option<P::Result>,
             unconsumed: usize,
         }
 
-        impl<P: Parser<CheckStandardSyntax>> SmtConsume for Drive<'_, P> {
+        impl<P: Parser<SmtSyntaxChecker>> SmtConsume for Drive<'_, P> {
             type Result = ();
             type Error = SmtParseError<NonstandardCommandError>;
 
@@ -112,7 +112,7 @@ pub(crate) mod tests {
                     }
                     if let ControlFlow::Break(result) =
                         self.parser
-                            .parse(&mut CheckStandardSyntax, self.resources, cursor)?
+                            .parse(&mut SmtSyntaxChecker, self.resources, cursor)?
                     {
                         self.result = Some(result);
                     }
@@ -127,7 +127,7 @@ pub(crate) mod tests {
             result: None,
             unconsumed: 0,
         };
-        let _ = Lexer::new(&mut drive, SmtVersion::V2_7)
+        let _ = SmtLexer::new(&mut drive, SmtVersion::V2_7)
             .lex_all(input)
             .expect("test input must lex and parse");
         assert_eq!(

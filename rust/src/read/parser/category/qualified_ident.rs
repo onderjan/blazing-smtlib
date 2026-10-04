@@ -261,7 +261,7 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{CheckStandardSyntax, read::parser::category::tests::parse_all_with};
+    use crate::{SmtSyntaxChecker, read::parser::category::tests::parse_all_with};
 
     #[test]
     fn entry_points() {
@@ -271,7 +271,7 @@ mod tests {
         let mut resources = ParserResources::new();
         resources.qualified_ident_slot.move_after_open_paren();
         let qi = parse_all_with(
-            QualifiedIdentParser::<CheckStandardSyntax>::new(),
+            QualifiedIdentParser::<SmtSyntaxChecker>::new(),
             &mut resources,
             b"_ f 1)",
         );
@@ -290,7 +290,7 @@ mod tests {
         } = &mut resources;
         qualified_ident_slot.move_after_underscore(ident_slot);
         let qi = parse_all_with(
-            QualifiedIdentParser::<CheckStandardSyntax>::new(),
+            QualifiedIdentParser::<SmtSyntaxChecker>::new(),
             &mut resources,
             b"f 1)",
         );
@@ -302,7 +302,7 @@ mod tests {
         let mut resources = ParserResources::new();
         resources.qualified_ident_slot.move_after_as();
         let qi = parse_all_with(
-            QualifiedIdentParser::<CheckStandardSyntax>::new(),
+            QualifiedIdentParser::<SmtSyntaxChecker>::new(),
             &mut resources,
             b"x Bool)",
         );
@@ -325,7 +325,7 @@ mod tests {
         ] {
             let mut resources = ParserResources::new();
             parse_all_with(
-                QualifiedIdentParser::<CheckStandardSyntax>::new(),
+                QualifiedIdentParser::<SmtSyntaxChecker>::new(),
                 &mut resources,
                 input,
             );
@@ -338,7 +338,7 @@ mod tests {
     #[should_panic(expected = "must be pristine")]
     fn entering_a_busy_slot_is_rejected() {
         // an entry point may only be used on a pristine slot
-        let mut resources = ParserResources::<CheckStandardSyntax>::new();
+        let mut resources = ParserResources::<SmtSyntaxChecker>::new();
         resources.qualified_ident_slot.move_after_as();
         resources.qualified_ident_slot.move_after_open_paren();
     }

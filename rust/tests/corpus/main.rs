@@ -36,7 +36,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use blazing_smtlib::{
-    CheckStandardSyntax, NonstandardCommandError,
+    NonstandardCommandError, SmtSyntaxChecker,
     read::{SmtReadError, SmtReadErrorKind, read_smt_file},
 };
 use rayon::ThreadPoolBuilder;
@@ -82,7 +82,7 @@ struct FailureRecord {
 }
 
 fn parse_file(path: &Path) -> Result<(), SmtReadError<NonstandardCommandError>> {
-    read_smt_file(&mut CheckStandardSyntax, path)?;
+    read_smt_file(&mut SmtSyntaxChecker, path)?;
     Ok(())
 }
 

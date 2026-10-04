@@ -11,7 +11,7 @@ use std::ops::ControlFlow;
 
 use blazing_smtlib::{
     SmtLocation,
-    read::lexer::{Lexer, SmtLexError},
+    read::lexer::{SmtLexError, SmtLexer},
     token::{SmtBatchCursor, SmtConsume, SmtReserved, SmtSyntaxToken, SmtVersion},
 };
 
@@ -100,7 +100,7 @@ fn answer(request: &str, out: &mut String) -> Result<(), String> {
     }
 
     let lines = RefCell::new(String::new());
-    let mut lexer = Lexer::new(
+    let mut lexer = SmtLexer::new(
         Report {
             version,
             out: &lines,

@@ -1,7 +1,7 @@
 use std::{convert::Infallible, ops::ControlFlow};
 
 use crate::{
-    CommandHandler, SmtSpan, SmtSymbolView,
+    SmtCommandHandler, SmtSpan, SmtSymbolView,
     read::parser::{Parser, ParserResources, SmtParseError, SmtSyntaxErrorKind, handle_err},
     token::{SmtBatchCursor, SmtReserved, SmtSyntaxToken, SmtTokenCategory, SmtVersion},
 };
@@ -22,7 +22,7 @@ use standard::{StandardCommandKind, StandardCommandParsers};
 /// An EOF inside a command is a syntax error.
 ///
 /// The parser self-resets after finishing.
-pub struct CommandParser<H: CommandHandler> {
+pub struct CommandParser<H: SmtCommandHandler> {
     state: CommandParserState<H>,
     standard_parsers: StandardCommandParsers<H>,
 }
@@ -40,14 +40,14 @@ pub enum CommandParserStop {
     EndOfFile,
 }
 
-enum CommandParserState<H: CommandHandler> {
+enum CommandParserState<H: SmtCommandHandler> {
     AwaitingCommand,
     CommandOpen,
     Standard(StandardCommandKind),
     Nonstandard(H::NonstandardParser),
 }
 
-impl<H: CommandHandler> CommandParser<H> {
+impl<H: SmtCommandHandler> CommandParser<H> {
     pub fn new() -> Self {
         Self {
             state: CommandParserState::AwaitingCommand,
@@ -71,13 +71,13 @@ impl<H: CommandHandler> CommandParser<H> {
     }
 }
 
-impl<H: CommandHandler> Default for CommandParser<H> {
+impl<H: SmtCommandHandler> Default for CommandParser<H> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<H: CommandHandler> Parser<H> for CommandParser<H> {
+impl<H: SmtCommandHandler> Parser<H> for CommandParser<H> {
     type Result = CommandParserStop;
 
     #[inline]
@@ -180,7 +180,7 @@ impl<H: CommandHandler> Parser<H> for CommandParser<H> {
     }
 }
 
-impl<H: CommandHandler> Parser<H> for Infallible {
+impl<H: SmtCommandHandler> Parser<H> for Infallible {
     type Result = ();
 
     #[inline]
@@ -195,7 +195,7 @@ impl<H: CommandHandler> Parser<H> for Infallible {
 }
 
 /// Determines how a single command should be handled by a command handler.
-pub trait CommandAction<H: CommandHandler> {
+pub trait CommandAction<H: SmtCommandHandler> {
     type Parser: Parser<H>;
 
     /// Handles the result of a command.
@@ -207,17 +207,17 @@ pub trait CommandAction<H: CommandHandler> {
 ///
 /// Preserves self-reset: if the inner parser is self-resetting,
 /// moves back into the default state before returning Break.
-pub struct CommandPayloadParser<H: CommandHandler, C: CommandAction<H>> {
+pub struct CommandPayloadParser<H: SmtCommandHandler, C: CommandAction<H>> {
     parser: C::Parser,
 }
 
-impl<H: CommandHandler, C: CommandAction<H>> CommandPayloadParser<H, C> {
+impl<H: SmtCommandHandler, C: CommandAction<H>> CommandPayloadParser<H, C> {
     pub fn new(parser: C::Parser) -> Self {
         Self { parser }
     }
 }
 
-impl<H: CommandHandler, C: CommandAction<H>> Default for CommandPayloadParser<H, C>
+impl<H: SmtCommandHandler, C: CommandAction<H>> Default for CommandPayloadParser<H, C>
 where
     C::Parser: Default,
 {
@@ -226,7 +226,7 @@ where
     }
 }
 
-impl<H: CommandHandler, C: CommandAction<H>> Parser<H> for CommandPayloadParser<H, C> {
+impl<H: SmtCommandHandler, C: CommandAction<H>> Parser<H> for CommandPayloadParser<H, C> {
     type Result = ();
 
     #[inline]
@@ -255,14 +255,14 @@ impl<H: CommandHandler, C: CommandAction<H>> Parser<H> for CommandPayloadParser<
 mod tests {
     use super::*;
     use crate::{
-        CheckStandardSyntax, SmtSpan,
+        SmtSpan, SmtSyntaxChecker,
         token::{InnerCategory, SmtToken},
     };
 
     #[test]
     fn finished_command_parser_parses_the_next_command() {
-        let mut handler = CheckStandardSyntax;
-        let mut parser: CommandPayloadParser<CheckStandardSyntax, standard::CheckSat> =
+        let mut handler = SmtSyntaxChecker;
+        let mut parser: CommandPayloadParser<SmtSyntaxChecker, standard::CheckSat> =
             CommandPayloadParser::default();
 
         // a check-sat command body is just the closing parenthesis,

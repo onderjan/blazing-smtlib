@@ -8,9 +8,9 @@ use std::convert::Infallible;
 use std::ops::ControlFlow;
 
 use blazing_smtlib::{
-    CheckStandardSyntax,
+    SmtSyntaxChecker,
     read::{
-        lexer::Lexer,
+        lexer::SmtLexer,
         parser::{Parser, ParserResources, SortParser, TermParser},
     },
     token::{SmtBatchCursor, SmtConsume, SmtTokenCategory, SmtVersion},
@@ -36,7 +36,7 @@ impl<F: FnMut(SmtBatchCursor<'_>)> SmtConsume for Probe<F> {
 
 /// Lexes the chunks and end of file, running the check on every hand-over.
 fn on_batches(chunks: &[&[u8]], check: impl FnMut(SmtBatchCursor<'_>)) {
-    let mut lexer = Lexer::new(Probe(check), SmtVersion::V2_7);
+    let mut lexer = SmtLexer::new(Probe(check), SmtVersion::V2_7);
     for chunk in chunks {
         let _ = lexer.lex_slice(chunk).expect("valid input must lex");
     }
@@ -225,7 +225,7 @@ fn consuming_all_empties_the_cursor_at_its_end() {
 
 /// Drives the parser through `parse` on the hand-overs of the chunks,
 /// returning per hand-over how many tokens it consumed and whether it finished.
-fn drive<P: Parser<CheckStandardSyntax> + Default>(chunks: &[&[u8]]) -> Vec<(usize, bool)> {
+fn drive<P: Parser<SmtSyntaxChecker> + Default>(chunks: &[&[u8]]) -> Vec<(usize, bool)> {
     let mut parser = P::default();
     let mut resources = ParserResources::new();
     let mut finished = false;
@@ -235,7 +235,7 @@ fn drive<P: Parser<CheckStandardSyntax> + Default>(chunks: &[&[u8]]) -> Vec<(usi
             return;
         }
         let flow = parser
-            .parse(&mut CheckStandardSyntax, &mut resources, &mut cursor)
+            .parse(&mut SmtSyntaxChecker, &mut resources, &mut cursor)
             .expect("the category must parse");
         finished = matches!(flow, ControlFlow::Break(_));
         calls.push((cursor.consumed(), finished));
@@ -274,8 +274,8 @@ fn parse_finishes_at_the_last_token_of_a_batch() {
 #[test]
 fn parse_reports_the_parser_error() {
     on_token_batch(b") x ", |mut cursor| {
-        let result = TermParser::<CheckStandardSyntax>::default().parse(
-            &mut CheckStandardSyntax,
+        let result = TermParser::<SmtSyntaxChecker>::default().parse(
+            &mut SmtSyntaxChecker,
             &mut ParserResources::new(),
             &mut cursor,
         );

@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    CommandHandler, SmtFunctionSignature,
+    SmtCommandHandler, SmtFunctionSignature,
     read::parser::{
         PairParser, ParenMaximumParser, ParenMultipleParser, ParenParser, ParenSortedVarsParser,
         Parser, ParserResources, SmtParseError, SmtSyntaxErrorKind, SortParser, SymbolParser,
@@ -11,11 +11,11 @@ use crate::{
 };
 
 /// Parses a function signature: name, parameters (name and sort), and result sort.
-pub(super) struct FunctionSignatureParser<H: CommandHandler> {
+pub(super) struct FunctionSignatureParser<H: SmtCommandHandler> {
     inner: PairParser<H, SymbolParser, PairParser<H, ParenSortedVarsParser<H>, SortParser<H>>>,
 }
 
-impl<H: CommandHandler> FunctionSignatureParser<H> {
+impl<H: SmtCommandHandler> FunctionSignatureParser<H> {
     fn new() -> Self {
         Self {
             inner: PairParser::default(),
@@ -23,13 +23,13 @@ impl<H: CommandHandler> FunctionSignatureParser<H> {
     }
 }
 
-impl<H: CommandHandler> Default for FunctionSignatureParser<H> {
+impl<H: SmtCommandHandler> Default for FunctionSignatureParser<H> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<H: CommandHandler> Parser<H> for FunctionSignatureParser<H> {
+impl<H: SmtCommandHandler> Parser<H> for FunctionSignatureParser<H> {
     type Result = SmtFunctionSignature<H>;
 
     fn parse(
@@ -49,12 +49,12 @@ impl<H: CommandHandler> Parser<H> for FunctionSignatureParser<H> {
 }
 
 /// Parses a function body inside `define-funs-rec` or `define-fun-rec`, calling the handler for its start and end.
-pub(super) struct RecursiveBodyParser<H: CommandHandler> {
+pub(super) struct RecursiveBodyParser<H: SmtCommandHandler> {
     is_inner: bool,
     term_parser: TermParser<H>,
 }
 
-impl<H: CommandHandler> RecursiveBodyParser<H> {
+impl<H: SmtCommandHandler> RecursiveBodyParser<H> {
     fn new() -> Self {
         Self {
             is_inner: false,
@@ -63,13 +63,13 @@ impl<H: CommandHandler> RecursiveBodyParser<H> {
     }
 }
 
-impl<H: CommandHandler> Default for RecursiveBodyParser<H> {
+impl<H: SmtCommandHandler> Default for RecursiveBodyParser<H> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<H: CommandHandler> Parser<H> for RecursiveBodyParser<H> {
+impl<H: SmtCommandHandler> Parser<H> for RecursiveBodyParser<H> {
     type Result = ();
 
     fn parse(
@@ -84,7 +84,7 @@ impl<H: CommandHandler> Parser<H> for RecursiveBodyParser<H> {
     }
 }
 
-impl<H: CommandHandler> RecursiveBodyParser<H> {
+impl<H: SmtCommandHandler> RecursiveBodyParser<H> {
     /// Progresses the parser by one token.
     fn progress(
         &mut self,
@@ -121,7 +121,7 @@ impl<H: CommandHandler> RecursiveBodyParser<H> {
 ///
 /// The commands using this parser do not call the
 /// handler after ending, as everything is handled by the parser.
-pub(super) struct DefineFunsRecParser<H: CommandHandler> {
+pub(super) struct DefineFunsRecParser<H: SmtCommandHandler> {
     state: DefineFunsRecState,
 
     signatures_parser: ParenMultipleParser<H, ParenParser<H, FunctionSignatureParser<H>>>,
@@ -133,7 +133,7 @@ enum DefineFunsRecState {
     Bodies,
 }
 
-impl<H: CommandHandler> DefineFunsRecParser<H> {
+impl<H: SmtCommandHandler> DefineFunsRecParser<H> {
     pub fn new() -> Self {
         // the number of maximum elements for bodies parser will be
         // resized before each parse, it does not matter in the initial state
@@ -145,13 +145,13 @@ impl<H: CommandHandler> DefineFunsRecParser<H> {
     }
 }
 
-impl<H: CommandHandler> Default for DefineFunsRecParser<H> {
+impl<H: SmtCommandHandler> Default for DefineFunsRecParser<H> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<H: CommandHandler> Parser<H> for DefineFunsRecParser<H> {
+impl<H: SmtCommandHandler> Parser<H> for DefineFunsRecParser<H> {
     type Result = ();
 
     fn parse(
@@ -166,7 +166,7 @@ impl<H: CommandHandler> Parser<H> for DefineFunsRecParser<H> {
     }
 }
 
-impl<H: CommandHandler> DefineFunsRecParser<H> {
+impl<H: SmtCommandHandler> DefineFunsRecParser<H> {
     /// Progresses the parser by one token.
     fn progress(
         &mut self,

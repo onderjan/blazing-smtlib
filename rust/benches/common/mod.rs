@@ -8,14 +8,14 @@
 use std::path::{Path, PathBuf};
 
 use blazing_smtlib::{
-    CheckStandardSyntax,
+    SmtSyntaxChecker,
     read::{SmtReadErrorKind, read_smt},
 };
 
-/// Parses the in-memory file with [`CheckStandardSyntax`], panicking on any
+/// Parses the in-memory file with [`SmtSyntaxChecker`], panicking on any
 /// error: benchmark files must parse.
 pub fn parse_from_memory(data: &[u8], path: &Path) {
-    if let Err(err) = read_smt(&mut CheckStandardSyntax, data) {
+    if let Err(err) = read_smt(&mut SmtSyntaxChecker, data) {
         let span = err.span();
         let description = match err.kind() {
             SmtReadErrorKind::Lexical(err) => format!("lexer error: {:?}", err),

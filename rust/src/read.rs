@@ -2,7 +2,7 @@
 //!
 //! Reading turns bytes into tokens (the [`lexer`] module) and tokens into
 //! the syntactic categories and commands of SMT-LIB (the [`parser`] module),
-//! which are delivered to a [`CommandHandler`] in streaming fashion:
+//! which are delivered to a [`SmtCommandHandler`] in streaming fashion:
 //! the input is processed piece by piece and every category or command
 //! to be handled reaches the handler before the next one is read.
 //!
@@ -23,9 +23,9 @@ use std::{
 
 use crate::token::{SmtVersion, SmtVersionPosture};
 use crate::{
-    CommandHandler, SmtHandler, SmtLocated, SmtSpan,
+    SmtCommandHandler, SmtHandler, SmtLocated, SmtSpan,
     read::{
-        lexer::{Lexer, SmtLexError, SmtLexicalError, SmtLexicalErrorKind},
+        lexer::{SmtLexError, SmtLexer, SmtLexicalError, SmtLexicalErrorKind},
         parser::{
             ParseAdapter, Parser, ScriptParser, SmtParseError, SmtParseErrorKind,
             SmtSyntaxErrorKind,
@@ -120,7 +120,7 @@ impl<E> From<SmtParseError<E>> for SmtReadError<E> {
 ///
 /// A failure to open the file is reported as an I/O error with an empty
 /// span at the start of the input.
-pub fn read_smt_file<H: CommandHandler>(
+pub fn read_smt_file<H: SmtCommandHandler>(
     handler: &mut H,
     path: &Path,
 ) -> Result<(), SmtReadError<H::Error>> {
@@ -139,7 +139,7 @@ pub fn read_smt_file<H: CommandHandler>(
 /// is dropped after reading, so its resources cannot be preserved
 /// for future use. Use [`SmtReader`] directly to keep the
 /// resources across reads or to feed the input in pieces.
-pub fn read_smt<H: CommandHandler>(
+pub fn read_smt<H: SmtCommandHandler>(
     handler: &mut H,
     buf_reader: impl BufRead,
 ) -> Result<(), SmtReadError<H::Error>> {
@@ -148,7 +148,7 @@ pub fn read_smt<H: CommandHandler>(
         .map(|_| ())
 }
 
-/// Streams SMT-LIB input from bytes to a [`CommandHandler`].
+/// Streams SMT-LIB input from bytes to a [`SmtCommandHandler`].
 ///
 /// A reader owns its lexer, its parser, and the parser resources, and borrows
 /// the handler. By default it parses a script with a [`ScriptParser`]; a reader
@@ -167,10 +167,10 @@ pub fn read_smt<H: CommandHandler>(
 ///
 /// For whole inputs, consider [`read_smt_file`] and [`read_smt`].
 pub struct SmtReader<'a, H: SmtHandler + ?Sized, P: Parser<H> = ScriptParser<H>> {
-    lexer: Lexer<ParseAdapter<'a, H, P>>,
+    lexer: SmtLexer<ParseAdapter<'a, H, P>>,
 }
 
-impl<'a, H: CommandHandler> SmtReader<'a, H> {
+impl<'a, H: SmtCommandHandler> SmtReader<'a, H> {
     /// Creates a reader of an SMT-LIB script, whose commands are delivered to `handler`.
     pub fn script(
         handler: &'a mut H,
@@ -184,7 +184,7 @@ impl<'a, H: CommandHandler> SmtReader<'a, H> {
 impl<'a, H: SmtHandler + ?Sized, P: Parser<H>> SmtReader<'a, H, P> {
     /// Creates a reader of the input `parser` accepts, over `handler`.
     pub fn with_parser(handler: &'a mut H, parser: P, initial_version: SmtVersion) -> Self {
-        let lexer = Lexer::new(ParseAdapter::new(handler, parser), initial_version);
+        let lexer = SmtLexer::new(ParseAdapter::new(handler, parser), initial_version);
         Self { lexer }
     }
 

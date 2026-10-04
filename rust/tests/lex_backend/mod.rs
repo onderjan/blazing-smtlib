@@ -22,7 +22,7 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
 use blazing_smtlib::{
     SmtLocation,
-    read::lexer::{Lexer, SmtLexError, SmtLexicalErrorKind},
+    read::lexer::{SmtLexError, SmtLexer, SmtLexicalErrorKind},
     token::{
         SmtBatchCursor, SmtConsume, SmtReserved, SmtSyntaxToken, SmtTokenCategory, SmtVersion,
     },
@@ -161,7 +161,7 @@ pub fn rust_lex(version: SmtVersion, feeds: &[Feed<'_>]) -> Lexed {
     let mut locations = Vec::new();
     let mut error = None;
     {
-        let mut lexer = Lexer::new(
+        let mut lexer = SmtLexer::new(
             Collect {
                 version,
                 tokens: &mut tokens,
@@ -200,7 +200,7 @@ pub fn rust_lex_all(version: SmtVersion, input: &[u8]) -> Lexed {
     let mut locations = Vec::new();
     let mut error = None;
     {
-        let mut lexer = Lexer::new(
+        let mut lexer = SmtLexer::new(
             Collect {
                 version,
                 tokens: &mut tokens,

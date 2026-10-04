@@ -151,7 +151,7 @@ impl<H: SmtHandler + ?Sized> SortedVarSlot<H> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{CheckStandardSyntax, read::parser::category::tests::parse_all_with};
+    use crate::{SmtSyntaxChecker, read::parser::category::tests::parse_all_with};
 
     #[test]
     fn slots_are_pristine_after_every_sorted_var() {
@@ -164,7 +164,7 @@ mod tests {
         ] {
             let mut resources = ParserResources::new();
             let (name, _sort) = parse_all_with(
-                SortedVarParser::<CheckStandardSyntax>::new(),
+                SortedVarParser::<SmtSyntaxChecker>::new(),
                 &mut resources,
                 input,
             );

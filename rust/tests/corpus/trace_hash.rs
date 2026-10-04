@@ -17,7 +17,7 @@
 use std::convert::Infallible;
 
 use blazing_smtlib::{
-    CommandHandler, NonstandardCommandError, SmtAttributeValue, SmtAttributes, SmtBindings,
+    NonstandardCommandError, SmtAttributeValue, SmtAttributes, SmtBindings, SmtCommandHandler,
     SmtDatatypeConstructor, SmtFunctionSignature, SmtHandler, SmtIdentView, SmtIndexView,
     SmtKeyword, SmtKeywordView, SmtNumeral, SmtPatternView, SmtQuantifierKind, SmtSExpr,
     SmtSimplePatternView, SmtSort, SmtSpecialConstantView, SmtStringContent, SmtSymbol,
@@ -425,14 +425,14 @@ impl SmtHandler for TraceHash {
     }
 }
 
-impl CommandHandler for TraceHash {
+impl SmtCommandHandler for TraceHash {
     type NonstandardParser = Infallible;
 
     fn nonstandard_command(
         &mut self,
         name: SmtSymbolView<'_>,
     ) -> Result<Self::NonstandardParser, Self::Error> {
-        // nonstandard commands are rejected, as by CheckStandardSyntax, so the
+        // nonstandard commands are rejected, as by SmtSyntaxChecker, so the
         // sweep reports the same failure classes as the plain parse sweep
         Err(NonstandardCommandError(name.into_owned()))
     }

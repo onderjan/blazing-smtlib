@@ -1062,7 +1062,7 @@ impl SortedBindingsParser {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{CheckStandardSyntax, read::parser::category::tests::parse_all_with};
+    use crate::{SmtSyntaxChecker, read::parser::category::tests::parse_all_with};
 
     #[test]
     fn slots_are_pristine_after_every_term() {
@@ -1082,11 +1082,7 @@ mod tests {
             b"(match l ((nil l2) ((cons h t) (cons h (append t l2)))))",
         ] {
             let mut resources = ParserResources::new();
-            parse_all_with(
-                TermParser::<CheckStandardSyntax>::new(),
-                &mut resources,
-                input,
-            );
+            parse_all_with(TermParser::<SmtSyntaxChecker>::new(), &mut resources, input);
             assert!(resources.are_pristine(), "after {input:?}");
         }
     }

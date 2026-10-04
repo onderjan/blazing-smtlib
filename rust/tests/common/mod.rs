@@ -1,12 +1,12 @@
 //! Shared helpers driving full command streams through the public reader.
 
 use blazing_smtlib::{
-    CheckStandardSyntax, CommandHandler, NonstandardCommandError,
+    NonstandardCommandError, SmtCommandHandler, SmtSyntaxChecker,
     read::{SmtReadError, SmtReadErrorKind, parser::SmtSyntaxErrorKind, read_smt},
 };
 
 /// Parses the whole input, feeding the commands to the given handler.
-pub fn parse_with<H: CommandHandler>(
+pub fn parse_with<H: SmtCommandHandler>(
     handler: &mut H,
     input: &[u8],
 ) -> Result<(), SmtReadError<H::Error>> {
@@ -15,7 +15,7 @@ pub fn parse_with<H: CommandHandler>(
 
 /// Parses the whole input with the standard syntax checker.
 pub fn parse(input: &[u8]) -> Result<(), SmtReadError<NonstandardCommandError>> {
-    parse_with(&mut CheckStandardSyntax, input)
+    parse_with(&mut SmtSyntaxChecker, input)
 }
 
 #[track_caller]

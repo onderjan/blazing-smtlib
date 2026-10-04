@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    CommandHandler, SmtDatatypeConstructor, SmtNumeral, SmtSpan, SmtSymbol,
+    SmtCommandHandler, SmtDatatypeConstructor, SmtNumeral, SmtSpan, SmtSymbol,
     read::parser::{
         CloseParenParser, ClosedMultipleParser, NumeralParser, OpenParenParser, OpenedParser,
         ParenMaximumParser, ParenMultipleParser, ParenParser, Parser, ParserResources,
@@ -45,7 +45,7 @@ enum DatatypeState {
 }
 
 /// Parser for a datatype.
-struct DatatypeParser<H: CommandHandler> {
+struct DatatypeParser<H: SmtCommandHandler> {
     state: DatatypeState,
     single_introduction: Option<(SmtSymbol, SmtSpan)>,
 
@@ -53,7 +53,7 @@ struct DatatypeParser<H: CommandHandler> {
     constructors_parser: ClosedMultipleParser<H, ConstructorParser<H>>,
 }
 
-impl<H: CommandHandler> DatatypeParser<H> {
+impl<H: SmtCommandHandler> DatatypeParser<H> {
     fn new() -> Self {
         Self {
             state: DatatypeState::Start,
@@ -90,13 +90,13 @@ impl<H: CommandHandler> DatatypeParser<H> {
     }
 }
 
-impl<H: CommandHandler> Default for DatatypeParser<H> {
+impl<H: SmtCommandHandler> Default for DatatypeParser<H> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<H: CommandHandler> Parser<H> for DatatypeParser<H> {
+impl<H: SmtCommandHandler> Parser<H> for DatatypeParser<H> {
     type Result = ();
 
     fn parse(
@@ -111,7 +111,7 @@ impl<H: CommandHandler> Parser<H> for DatatypeParser<H> {
     }
 }
 
-impl<H: CommandHandler> DatatypeParser<H> {
+impl<H: SmtCommandHandler> DatatypeParser<H> {
     /// Progresses the parser by one token.
     fn progress(
         &mut self,
@@ -252,14 +252,14 @@ enum DeclareDatatypesState {
 }
 
 /// Parser for the command `declare-datatypes`.
-pub(super) struct DeclareDatatypesParser<H: CommandHandler> {
+pub(super) struct DeclareDatatypesParser<H: SmtCommandHandler> {
     state: DeclareDatatypesState,
 
     introductions_parser: ParenMultipleParser<H, IntroductionParser<H>>,
     datatypes_parser: ParenMaximumParser<H, DatatypeParser<H>>,
 }
 
-impl<H: CommandHandler> DeclareDatatypesParser<H> {
+impl<H: SmtCommandHandler> DeclareDatatypesParser<H> {
     pub fn new() -> Self {
         // the number of maximum elements for datatypes parser will be
         // resized before each parse, it does not matter in the initial state
@@ -271,7 +271,7 @@ impl<H: CommandHandler> DeclareDatatypesParser<H> {
     }
 }
 
-impl<H: CommandHandler> Parser<H> for DeclareDatatypesParser<H> {
+impl<H: SmtCommandHandler> Parser<H> for DeclareDatatypesParser<H> {
     type Result = ();
 
     fn parse(
@@ -286,7 +286,7 @@ impl<H: CommandHandler> Parser<H> for DeclareDatatypesParser<H> {
     }
 }
 
-impl<H: CommandHandler> DeclareDatatypesParser<H> {
+impl<H: SmtCommandHandler> DeclareDatatypesParser<H> {
     /// Progresses the parser by one token.
     fn progress(
         &mut self,
@@ -347,7 +347,7 @@ impl<H: CommandHandler> DeclareDatatypesParser<H> {
     }
 }
 
-impl<H: CommandHandler> Default for DeclareDatatypesParser<H> {
+impl<H: SmtCommandHandler> Default for DeclareDatatypesParser<H> {
     fn default() -> Self {
         Self::new()
     }
@@ -362,12 +362,12 @@ enum DeclareDatatypeState {
 }
 
 /// Parser for the command `declare-datatype`.
-pub(super) struct DeclareDatatypeParser<H: CommandHandler> {
+pub(super) struct DeclareDatatypeParser<H: SmtCommandHandler> {
     state: DeclareDatatypeState,
     datatype_parser: DatatypeParser<H>,
 }
 
-impl<H: CommandHandler> Default for DeclareDatatypeParser<H> {
+impl<H: SmtCommandHandler> Default for DeclareDatatypeParser<H> {
     fn default() -> Self {
         Self {
             state: DeclareDatatypeState::Name,
@@ -376,7 +376,7 @@ impl<H: CommandHandler> Default for DeclareDatatypeParser<H> {
     }
 }
 
-impl<H: CommandHandler> Parser<H> for DeclareDatatypeParser<H> {
+impl<H: SmtCommandHandler> Parser<H> for DeclareDatatypeParser<H> {
     type Result = ();
 
     fn parse(
@@ -391,7 +391,7 @@ impl<H: CommandHandler> Parser<H> for DeclareDatatypeParser<H> {
     }
 }
 
-impl<H: CommandHandler> DeclareDatatypeParser<H> {
+impl<H: SmtCommandHandler> DeclareDatatypeParser<H> {
     /// Progresses the parser by one token.
     fn progress(
         &mut self,

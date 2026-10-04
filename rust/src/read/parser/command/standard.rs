@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    CommandHandler, SmtFunctionSignature, SmtSpan, SmtSymbol,
+    SmtCommandHandler, SmtFunctionSignature, SmtSpan, SmtSymbol,
     read::parser::{
         CloseParenParser, CommandPayloadParser, KeywordParser, NumeralParser, ParenMultipleParser,
         Parser, ParserResources, SmtParseError, SmtSyntaxErrorKind, StringParser, SymbolParser,
@@ -26,7 +26,7 @@ macro_rules! standard_commands {
         $(
             pub(super) struct $kind;
 
-            impl<H: CommandHandler> CommandAction<H> for $kind {
+            impl<H: SmtCommandHandler> CommandAction<H> for $kind {
                 type Parser = $parser;
 
                 fn handle(
@@ -57,11 +57,11 @@ macro_rules! standard_commands {
         /// A struct containing all command parsers.
         ///
         /// All parsers are persistent to avoid dropping buffers.
-        pub(crate) struct StandardCommandParsers<H: CommandHandler> {
+        pub(crate) struct StandardCommandParsers<H: SmtCommandHandler> {
             $($field: CommandPayloadParser<H, $kind>,)*
         }
 
-        impl<H: CommandHandler> StandardCommandParsers<H> {
+        impl<H: SmtCommandHandler> StandardCommandParsers<H> {
             pub fn new() -> Self {
                 Self {
                     $($field: CommandPayloadParser::default(),)*
@@ -96,7 +96,7 @@ macro_rules! standard_commands {
             }
         }
 
-        impl<H: CommandHandler> Default for StandardCommandParsers<H> {
+        impl<H: SmtCommandHandler> Default for StandardCommandParsers<H> {
             fn default() -> Self {
                 Self::new()
             }
@@ -205,7 +205,7 @@ standard_commands! {
         |handler, ()| handler.command_get_unsat_core()),
 }
 
-impl<H: CommandHandler> Definition<H> for DefineConst {
+impl<H: SmtCommandHandler> Definition<H> for DefineConst {
     type Signature = PairParser<H, SymbolParser, SortParser<H>>;
     type Body = TermParser<H>;
 
@@ -224,7 +224,7 @@ impl<H: CommandHandler> Definition<H> for DefineConst {
     }
 }
 
-impl<H: CommandHandler> Definition<H> for DefineFun {
+impl<H: SmtCommandHandler> Definition<H> for DefineFun {
     type Signature = FunctionSignatureParser<H>;
     type Body = TermParser<H>;
 
@@ -237,7 +237,7 @@ impl<H: CommandHandler> Definition<H> for DefineFun {
     }
 }
 
-impl<H: CommandHandler> Definition<H> for DefineSort {
+impl<H: SmtCommandHandler> Definition<H> for DefineSort {
     type Signature = PairParser<H, SymbolParser, ParenMultipleParser<H, SymbolParser>>;
     type Body = SortParser<H>;
 
@@ -251,7 +251,7 @@ impl<H: CommandHandler> Definition<H> for DefineSort {
     }
 }
 
-impl<H: CommandHandler> Definition<H> for DefineFunRec {
+impl<H: SmtCommandHandler> Definition<H> for DefineFunRec {
     type Signature = FunctionSignatureParser<H>;
     type Body = RecursiveBodyParser<H>;
 
@@ -265,11 +265,11 @@ impl<H: CommandHandler> Definition<H> for DefineFunRec {
 }
 
 /// A parser for parameters of `get-value`: a non-empty list of terms.
-pub(super) struct GetValueParser<H: CommandHandler> {
+pub(super) struct GetValueParser<H: SmtCommandHandler> {
     inner: ParenMultipleParser<H, TermParser<H>>,
 }
 
-impl<H: CommandHandler> GetValueParser<H> {
+impl<H: SmtCommandHandler> GetValueParser<H> {
     fn new() -> Self {
         Self {
             inner: ParenMultipleParser::default(),
@@ -277,13 +277,13 @@ impl<H: CommandHandler> GetValueParser<H> {
     }
 }
 
-impl<H: CommandHandler> Default for GetValueParser<H> {
+impl<H: SmtCommandHandler> Default for GetValueParser<H> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<H: CommandHandler> Parser<H> for GetValueParser<H> {
+impl<H: SmtCommandHandler> Parser<H> for GetValueParser<H> {
     type Result = Vec<H::Term>;
 
     #[inline]
@@ -319,7 +319,7 @@ impl<H: CommandHandler> Parser<H> for GetValueParser<H> {
 ///
 /// This parser is necessary to recognise the version declaration attribute
 /// `:smt-lib-version <version>`, where the version should be a decimal.
-pub(super) struct SetInfoParser<H: CommandHandler> {
+pub(super) struct SetInfoParser<H: SmtCommandHandler> {
     inner: ClosedAttributeParser<H>,
     state: SetInfoState,
     declared_version: Option<(SmtVersion, SmtSpan)>,
@@ -335,7 +335,7 @@ enum SetInfoState {
     Rest,
 }
 
-impl<H: CommandHandler> SetInfoParser<H> {
+impl<H: SmtCommandHandler> SetInfoParser<H> {
     fn new() -> Self {
         Self {
             inner: ClosedAttributeParser::new(),
@@ -350,13 +350,13 @@ impl<H: CommandHandler> SetInfoParser<H> {
     }
 }
 
-impl<H: CommandHandler> Default for SetInfoParser<H> {
+impl<H: SmtCommandHandler> Default for SetInfoParser<H> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<H: CommandHandler> Parser<H> for SetInfoParser<H> {
+impl<H: SmtCommandHandler> Parser<H> for SetInfoParser<H> {
     type Result = H::Attribute;
 
     #[inline]
@@ -426,7 +426,7 @@ impl<H: CommandHandler> Parser<H> for SetInfoParser<H> {
 /// The assumptions are terms since SMT-LIB 2.7. Before it, each assumption
 /// must be a propositional literal: `<symbol>` or `(not <symbol>)`.
 /// The literals are terms too, and are parsed as such.
-pub(super) struct CheckSatAssumingParser<H: CommandHandler> {
+pub(super) struct CheckSatAssumingParser<H: SmtCommandHandler> {
     inner: ClosedParser<H, ParenMultipleParser<H, TermParser<H>>>,
     state: PropLiteralsState,
 }
@@ -446,7 +446,7 @@ enum PropLiteralsState {
     Rest,
 }
 
-impl<H: CommandHandler> CheckSatAssumingParser<H> {
+impl<H: SmtCommandHandler> CheckSatAssumingParser<H> {
     fn new() -> Self {
         Self {
             inner: ClosedParser::default(),
@@ -455,13 +455,13 @@ impl<H: CommandHandler> CheckSatAssumingParser<H> {
     }
 }
 
-impl<H: CommandHandler> Default for CheckSatAssumingParser<H> {
+impl<H: SmtCommandHandler> Default for CheckSatAssumingParser<H> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<H: CommandHandler> Parser<H> for CheckSatAssumingParser<H> {
+impl<H: SmtCommandHandler> Parser<H> for CheckSatAssumingParser<H> {
     type Result = Vec<H::Term>;
 
     #[inline]

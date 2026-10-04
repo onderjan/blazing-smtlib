@@ -5,7 +5,7 @@ use std::io::{BufRead, Read};
 use std::ops::ControlFlow;
 
 use blazing_smtlib::{
-    CheckStandardSyntax, NonstandardCommandError, SmtLocation,
+    NonstandardCommandError, SmtLocation, SmtSyntaxChecker,
     read::{
         SmtReadError, SmtReadErrorKind, SmtReader,
         lexer::SmtLexicalErrorKind,
@@ -25,7 +25,7 @@ fn loc(location: SmtLocation) -> Loc {
 }
 
 fn read(input: &[u8]) -> Result<(), SmtReadError<NonstandardCommandError>> {
-    read_smt(&mut CheckStandardSyntax, input)
+    read_smt(&mut SmtSyntaxChecker, input)
 }
 
 #[track_caller]
@@ -138,8 +138,7 @@ fn io_error_has_empty_span_at_current_location() {
     let reader = FailingReader {
         data: b"(check-sat)\n(",
     };
-    let err =
-        read_smt(&mut CheckStandardSyntax, reader).expect_err("expected an I/O error, got Ok");
+    let err = read_smt(&mut SmtSyntaxChecker, reader).expect_err("expected an I/O error, got Ok");
     assert!(matches!(err.kind(), SmtReadErrorKind::Io(_)));
     // 13 bytes were consumed, so the location is zero-based line 1, column 1
     assert_span(&err, (13, 1, 1), (13, 1, 1));
@@ -149,7 +148,7 @@ fn io_error_has_empty_span_at_current_location() {
 fn file_open_error_has_zero_span() {
     let path = std::path::Path::new("/nonexistent/smt-parser-test/does-not-exist.smt2");
     let err =
-        read_smt_file(&mut CheckStandardSyntax, path).expect_err("expected an I/O error, got Ok");
+        read_smt_file(&mut SmtSyntaxChecker, path).expect_err("expected an I/O error, got Ok");
     assert!(matches!(err.kind(), SmtReadErrorKind::Io(_)));
     assert_span(&err, (0, 0, 0), (0, 0, 0));
 }
@@ -212,7 +211,7 @@ fn every_buffer_capacity_reads_the_same() {
         let expected = outcome_text(read(input));
         for capacity in (1..=70).chain([4096]) {
             let reader = std::io::BufReader::with_capacity(capacity, std::io::Cursor::new(*input));
-            let actual = outcome_text(read_smt(&mut CheckStandardSyntax, reader));
+            let actual = outcome_text(read_smt(&mut SmtSyntaxChecker, reader));
             assert_eq!(
                 actual,
                 expected,
@@ -237,7 +236,7 @@ fn every_refill_pattern_reads_the_same() {
                     index: 0,
                 },
             );
-            let actual = outcome_text(read_smt(&mut CheckStandardSyntax, reader));
+            let actual = outcome_text(read_smt(&mut SmtSyntaxChecker, reader));
             assert_eq!(
                 actual,
                 expected,
@@ -253,7 +252,7 @@ fn read_slice_reports_an_exit_command_and_read_eof_the_end_of_the_input() {
     // a piece that runs out before any exit command asks for more; a piece
     // with the exit command finishes the reader there, whatever follows in
     // the piece, with the location after the command
-    let mut handler = CheckStandardSyntax;
+    let mut handler = SmtSyntaxChecker;
     let mut reader =
         SmtReader::script(&mut handler, SmtVersion::V2_7, SmtVersionPosture::default());
     assert!(matches!(
@@ -270,7 +269,7 @@ fn read_slice_reports_an_exit_command_and_read_eof_the_end_of_the_input() {
 
     // the end of the input between commands finishes the reader as well,
     // at the end of the input
-    let mut handler = CheckStandardSyntax;
+    let mut handler = SmtSyntaxChecker;
     let mut reader =
         SmtReader::script(&mut handler, SmtVersion::V2_7, SmtVersionPosture::default());
     assert!(matches!(
@@ -291,7 +290,7 @@ fn reading_after_a_finished_input_starts_a_new_one_from_the_origin() {
     // whether the first input ended by the exit command or by the end of
     // the input, the reader is back at its start: the next pieces are a new
     // input whose locations begin at the origin, as an error span shows
-    type End = fn(&mut SmtReader<'_, CheckStandardSyntax>);
+    type End = fn(&mut SmtReader<'_, SmtSyntaxChecker>);
     let by_exit: End = |reader| {
         assert!(matches!(
             reader.read_slice(b"(check-sat)\n(exit) x"),
@@ -306,7 +305,7 @@ fn reading_after_a_finished_input_starts_a_new_one_from_the_origin() {
         assert!(matches!(reader.read_eof(), Ok(ControlFlow::Break(_))));
     };
     for end in [by_exit, by_eof] {
-        let mut handler = CheckStandardSyntax;
+        let mut handler = SmtSyntaxChecker;
         let mut reader =
             SmtReader::script(&mut handler, SmtVersion::V2_7, SmtVersionPosture::default());
         end(&mut reader);
@@ -334,7 +333,7 @@ fn read_all_tells_an_exit_command_from_the_end_of_the_input() {
     for capacity in (1..=24).chain([4096]) {
         let mut buf_reader =
             std::io::BufReader::with_capacity(capacity, std::io::Cursor::new(input));
-        let mut handler = CheckStandardSyntax;
+        let mut handler = SmtSyntaxChecker;
         let mut reader =
             SmtReader::script(&mut handler, SmtVersion::V2_7, SmtVersionPosture::default());
         assert_eq!(
@@ -350,7 +349,7 @@ fn read_all_tells_an_exit_command_from_the_end_of_the_input() {
     }
 
     // without it, the end of the input ends the script
-    let mut handler = CheckStandardSyntax;
+    let mut handler = SmtSyntaxChecker;
     let mut reader =
         SmtReader::script(&mut handler, SmtVersion::V2_7, SmtVersionPosture::default());
     assert_eq!(
@@ -363,7 +362,7 @@ fn read_all_tells_an_exit_command_from_the_end_of_the_input() {
 fn one_reader_reads_several_inputs_in_turn_each_from_the_origin() {
     // after a whole input, however it ended, the reader serves the next one
     // with fresh locations, as an error span in the last input shows
-    let mut handler = CheckStandardSyntax;
+    let mut handler = SmtSyntaxChecker;
     let mut reader =
         SmtReader::script(&mut handler, SmtVersion::V2_7, SmtVersionPosture::default());
     assert_eq!(
@@ -387,7 +386,7 @@ fn a_reader_over_another_top_level_parser_finishes_where_that_parser_does() {
     // a term parser as the top-level parser: the reader finishes after one
     // term with that parser's result, whatever follows in the piece, and
     // reports the location after the term
-    let mut handler = CheckStandardSyntax;
+    let mut handler = SmtSyntaxChecker;
     let mut reader = SmtReader::with_parser(&mut handler, TermParser::new(), SmtVersion::V2_7);
     let located = reader
         .read_slice(b"(f a b) (check-sat)")
@@ -397,12 +396,12 @@ fn a_reader_over_another_top_level_parser_finishes_where_that_parser_does() {
     assert_eq!(loc(located.location()), (7, 0, 7));
 
     // reading the whole input stops there as well, without an error for the rest
-    let mut handler = CheckStandardSyntax;
+    let mut handler = SmtSyntaxChecker;
     let mut reader = SmtReader::with_parser(&mut handler, TermParser::new(), SmtVersion::V2_7);
     assert!(matches!(reader.read_all(&b"(f a b) ) ("[..]), Ok(Some(()))));
 
     // a term cut off by the end of the input is that parser's error
-    let mut handler = CheckStandardSyntax;
+    let mut handler = SmtSyntaxChecker;
     let mut reader = SmtReader::with_parser(&mut handler, TermParser::new(), SmtVersion::V2_7);
     assert!(matches!(
         reader.read_slice(b"(f a "),
@@ -416,7 +415,7 @@ fn a_reader_over_a_command_parser_reads_one_command_per_break() {
     // every command finishes the reader with the location after it; the rest
     // of the piece is a new input, fed again from that location, so each
     // command's location counts from the end of the previous one
-    let mut handler = CheckStandardSyntax;
+    let mut handler = SmtSyntaxChecker;
     let mut reader = SmtReader::with_parser(&mut handler, CommandParser::new(), SmtVersion::V2_7);
     let mut rest: &[u8] = b"(set-logic QF_UF)\n(check-sat)\n(exit)\n";
     let mut stops = Vec::new();

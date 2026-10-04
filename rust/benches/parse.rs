@@ -43,7 +43,7 @@ use std::process::ExitCode;
 use std::time::Instant;
 
 use blazing_smtlib::{
-    read::lexer::Lexer,
+    read::lexer::SmtLexer,
     token::{SmtBatchCursor, SmtConsume, SmtVersion},
 };
 
@@ -74,7 +74,7 @@ impl SmtConsume for DiscardTokens {
 /// Lexes the in-memory file, discarding tokens, and returns the token count.
 fn lex_from_memory(data: &[u8], path: &Path) -> usize {
     let mut handler = DiscardTokens { tokens: 0 };
-    let mut lexer = Lexer::new(&mut handler, SmtVersion::V2_7);
+    let mut lexer = SmtLexer::new(&mut handler, SmtVersion::V2_7);
     if let Err(err) = lexer.lex_all(data) {
         panic!("benchmark file {} must lex, got {:?}", path.display(), err);
     }

@@ -196,7 +196,7 @@ pub(super) const BINARY_RUN: DigitRun = DigitRun {
 /// Helper struct for where a token ended.
 #[derive(Clone, Copy)]
 pub(super) struct TokenEnd {
-    /// The position after `Lexer.offset` where the token ended.
+    /// The position after [`SmtLexer::offset`](super::SmtLexer::offset) where the token ended.
     pub position: usize,
     /// Whether the token end was detected at a byte that is not a part of the token.
     pub at_byte: bool,
