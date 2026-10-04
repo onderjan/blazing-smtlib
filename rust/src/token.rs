@@ -421,24 +421,24 @@ impl<'a> SmtBatchCursor<'a> {
     }
 }
 
-/// A sequential handler of tokens.
+/// A sequential consumer of tokens.
 pub trait SmtConsume {
-    /// The value the handler finishes with.
+    /// The value the consumer finishes with.
     type Result;
     type Error;
 
     /// Handles the tokens handed over in the cursor, in order.
     ///
-    /// If the handler returns [`ControlFlow::Continue`], it means all tokens
+    /// If the consumer returns [`ControlFlow::Continue`], it means all tokens
     /// were handled and more are wanted: the cursor must be empty, which it
     /// also is after a [`SmtBatchCursor::relex`] request.
     ///
-    /// If the handler returns [`ControlFlow::Break`], it means
+    /// If the consumer returns [`ControlFlow::Break`], it means
     /// it finished the input it accepts (consuming exactly its tokens),
     /// is returning a result and waiting for processing of the next value.
     ///
-    /// Returning an error means the handler failed at the token after
-    /// the consumed ones. The state of the handler and cursor is unspecified.
+    /// Returning an error means the consumer failed at the token after
+    /// the consumed ones. The state of the consumer and cursor is unspecified.
     fn consume(
         &mut self,
         cursor: &mut SmtBatchCursor<'_>,
