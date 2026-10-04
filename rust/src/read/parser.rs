@@ -2,6 +2,7 @@ mod adapter;
 mod category;
 mod command;
 mod script;
+mod state;
 
 use std::ops::ControlFlow;
 
@@ -9,6 +10,7 @@ pub use adapter::*;
 pub use category::*;
 pub use command::*;
 pub use script::*;
+pub use state::*;
 
 use crate::{
     SmtHandler, SmtSpan,

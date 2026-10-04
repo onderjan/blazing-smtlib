@@ -2,7 +2,76 @@ use crate::{
     SmtBindings, SmtHandler, SmtIdentView, SmtIndexView, SmtIndices, SmtKeywordView, SmtMultiple,
     SmtNumeralView, SmtPatternView, SmtQualifiedIdentView, SmtSimplePatternView, SmtSimplePatterns,
     SmtSort, SmtSymbolView,
+    read::parser::{
+        AttributeSlot, IdentSlot, PatternSlot, QualifiedIdentSlot, SExprSlot, SortSlot,
+        SortedVarSlot, TermSlot,
+    },
 };
+
+/// Current state of standard parsers.
+///
+/// Parsers that are constructed multiple times in locations
+/// where their use does not overlap can have unnecessarily
+/// duplicated resources (e.g. collections). This structure
+/// is only constructed once for the root parser and
+/// propagated to smaller parsers.
+pub struct SmtParseState<H: SmtHandler + ?Sized> {
+    pub(crate) arena: Arena<H>,
+    pub(crate) ident_slot: IdentSlot,
+    pub(crate) qualified_ident_slot: QualifiedIdentSlot<H>,
+    pub(crate) sort_slot: SortSlot<H>,
+    pub(crate) sorted_var_slot: SortedVarSlot<H>,
+    pub(crate) s_expr_slot: SExprSlot,
+    pub(crate) attribute_slot: AttributeSlot,
+    pub(crate) pattern_slot: PatternSlot,
+    pub(crate) term_slot: TermSlot<H>,
+}
+
+impl<H: SmtHandler + ?Sized> SmtParseState<H> {
+    pub fn new() -> Self {
+        Self {
+            arena: Arena::new(),
+            ident_slot: IdentSlot::new(),
+            qualified_ident_slot: QualifiedIdentSlot::new(),
+            sort_slot: SortSlot::new(),
+            sorted_var_slot: SortedVarSlot::new(),
+            s_expr_slot: SExprSlot::new(),
+            attribute_slot: AttributeSlot::new(),
+            pattern_slot: PatternSlot::new(),
+            term_slot: TermSlot::new(),
+        }
+    }
+
+    pub(crate) fn are_pristine(&self) -> bool {
+        self.arena.is_pristine()
+            && self.ident_slot.is_pristine()
+            && self.qualified_ident_slot.is_pristine()
+            && self.sort_slot.is_pristine()
+            && self.sorted_var_slot.is_pristine()
+            && self.s_expr_slot.is_pristine()
+            && self.attribute_slot.is_pristine()
+            && self.pattern_slot.is_pristine()
+            && self.term_slot.is_pristine()
+    }
+
+    pub(crate) fn clear(&mut self) {
+        self.arena.clear();
+        self.ident_slot.clear();
+        self.qualified_ident_slot.clear();
+        self.sort_slot.clear();
+        self.sorted_var_slot.clear();
+        self.s_expr_slot.clear();
+        self.attribute_slot.clear();
+        self.pattern_slot.clear();
+        self.term_slot.clear();
+    }
+}
+
+impl<H: SmtHandler + ?Sized> Default for SmtParseState<H> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 /// An arena of bytes and handled values.
 ///

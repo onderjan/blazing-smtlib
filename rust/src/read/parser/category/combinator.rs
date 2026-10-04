@@ -4,7 +4,7 @@ use crate::{
     SmtHandler,
     read::parser::{
         SmtCloseParenParser, SmtOpenParenParser, SmtParse, SmtParseError, SmtParseState,
-        SmtSyntaxErrorKind, category::resources::ClosedMultipleResource,
+        SmtSyntaxErrorKind,
     },
     token::{SmtBatchCursor, SmtTokenCategory},
 };
@@ -197,6 +197,49 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtClosedMultipleParser<H, P
         self.resource.parse(cursor, |cursor| {
             self.inner.parse(handler, resources, cursor)
         })
+    }
+}
+
+/// A resource that stores multiple elements closed by a parenthesis.
+pub(crate) struct ClosedMultipleResource<T> {
+    outside: bool,
+    items: Vec<T>,
+}
+
+impl<T> ClosedMultipleResource<T> {
+    pub(crate) fn new() -> Self {
+        Self {
+            outside: true,
+            items: Vec::new(),
+        }
+    }
+
+    pub(crate) fn parse<E>(
+        &mut self,
+        cursor: &mut SmtBatchCursor,
+        mut element: impl FnMut(&mut SmtBatchCursor) -> Result<ControlFlow<T>, SmtParseError<E>>,
+    ) -> Result<ControlFlow<Vec<T>>, SmtParseError<E>> {
+        while let Some(token) = cursor.peek() {
+            if self.outside {
+                // we are outside, a closing parenthesis ends processing
+                if matches!(token.category(), SmtTokenCategory::ParenClose) {
+                    cursor.advance(1);
+                    return Ok(ControlFlow::Break(self.items.drain(..).collect()));
+                }
+                // we are no longer outside
+                self.outside = false;
+            }
+            // we are inside, parse the element using the inner parser
+            match element(cursor)? {
+                ControlFlow::Continue(()) => return Ok(ControlFlow::Continue(())),
+                ControlFlow::Break(item) => {
+                    // add element, we are back outside
+                    self.items.push(item);
+                    self.outside = true;
+                }
+            }
+        }
+        Ok(ControlFlow::Continue(()))
     }
 }
 

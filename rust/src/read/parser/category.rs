@@ -1,12 +1,10 @@
 use crate::{SmtSpecialConstantView, token::SmtSyntaxToken};
 
-mod arena;
 mod attribute;
 mod combinator;
 mod ident;
 mod pattern;
 mod qualified_ident;
-mod resources;
 mod s_expr;
 mod sort;
 mod sorted_var;
@@ -22,7 +20,6 @@ pub use {
     ident::SmtIdentParser,
     pattern::SmtPatternParser,
     qualified_ident::SmtQualifiedIdentParser,
-    resources::SmtParseState,
     s_expr::SmtSExprParser,
     sort::SmtSortParser,
     sorted_var::SmtSortedVarParser,
@@ -33,10 +30,7 @@ pub use {
     },
 };
 
-pub(crate) use arena::{
-    Arena, ArenaAccess, IdentHandle, IndexHandle, PatternHandle, QualifiedIdentHandle,
-    SimplePatternHandle, TextHandle,
-};
+pub(crate) use attribute::AttributeSlot;
 pub(crate) use ident::IdentSlot;
 pub(crate) use pattern::PatternSlot;
 pub(crate) use qualified_ident::QualifiedIdentSlot;
