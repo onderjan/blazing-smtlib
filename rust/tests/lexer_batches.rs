@@ -17,6 +17,7 @@
 //! took: that location is returned with the result, and the lexer is reset
 //! to its initial state for the next input.
 
+use std::cell::RefCell;
 use std::ops::ControlFlow;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
@@ -112,12 +113,20 @@ impl SmtConsume for Recorder<'_> {
         &mut self,
         cursor: &mut SmtBatchCursor<'_>,
     ) -> Result<ControlFlow<Self::Result>, ()> {
-        // record every token of the hand-over by walking a copy of the cursor
-        let mut walk = *cursor;
-        let mut tokens = Vec::new();
-        while let Some(token) = walk.next() {
-            tokens.push(record(token));
-        }
+        // Record every token of the hand-over, also those the reply will not
+        // take. A consumer has no way to look at tokens without consuming
+        // them, so the recording goes through an attempt that takes every
+        // token and then fails, which consumes nothing, and carries the
+        // tokens out of the extractor in a cell.
+        let seen = RefCell::new(Vec::new());
+        let failed: Option<()> = cursor.attempt(|window| {
+            while let Some(token) = window.next() {
+                seen.borrow_mut().push(record(token));
+            }
+            None
+        });
+        assert!(failed.is_none());
+        let tokens = seen.into_inner();
         let len = tokens.len();
         assert_ne!(len, 0, "every hand-over has at least one token");
         // every hand-over starts with nothing consumed, also one that hands
