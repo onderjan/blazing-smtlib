@@ -39,10 +39,10 @@ impl<H: SmtCommandHandler> SmtParse<H> for FunctionSignatureParser<H> {
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut SmtParseState<H>,
+        parse_state: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<SmtFunctionSignature<H>>, SmtParseError<H::Error>> {
-        Ok(self.inner.parse(handler, resources, cursor)?.map_break(
+        Ok(self.inner.parse(handler, parse_state, cursor)?.map_break(
             |(name, (params, result_sort))| SmtFunctionSignature {
                 name,
                 params,
@@ -79,11 +79,11 @@ impl<H: SmtCommandHandler> SmtParse<H> for RecursiveBodyParser<H> {
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut SmtParseState<H>,
+        parse_state: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         parse_by_token(cursor, |version, token| {
-            self.progress(handler, resources, version, token)
+            self.progress(handler, parse_state, version, token)
         })
     }
 }
@@ -93,7 +93,7 @@ impl<H: SmtCommandHandler> RecursiveBodyParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
-        resources: &mut SmtParseState<H>,
+        parse_state: &mut SmtParseState<H>,
         version: SmtVersion,
         token: SmtToken,
     ) -> Result<ControlFlow<()>, SmtParseError<H::Error>> {
@@ -106,7 +106,7 @@ impl<H: SmtCommandHandler> RecursiveBodyParser<H> {
 
         match self.term_parser.parse(
             handler,
-            resources,
+            parse_state,
             &mut SmtBatchCursor::single(version, token),
         )? {
             ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
@@ -161,11 +161,11 @@ impl<H: SmtCommandHandler> SmtParse<H> for DefineFunsRecParser<H> {
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut SmtParseState<H>,
+        parse_state: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         parse_by_token(cursor, |version, token| {
-            self.progress(handler, resources, version, token)
+            self.progress(handler, parse_state, version, token)
         })
     }
 }
@@ -175,7 +175,7 @@ impl<H: SmtCommandHandler> DefineFunsRecParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
-        resources: &mut SmtParseState<H>,
+        parse_state: &mut SmtParseState<H>,
         version: SmtVersion,
         token: SmtToken,
     ) -> Result<ControlFlow<()>, SmtParseError<H::Error>> {
@@ -185,7 +185,7 @@ impl<H: SmtCommandHandler> DefineFunsRecParser<H> {
                 // parse the signatures
                 if let ControlFlow::Break(signatures) = self.signatures_parser.parse(
                     handler,
-                    resources,
+                    parse_state,
                     &mut SmtBatchCursor::single(version, token),
                 )? {
                     // there must be at least one signature
@@ -209,7 +209,7 @@ impl<H: SmtCommandHandler> DefineFunsRecParser<H> {
                 // parse bodies
                 if let ControlFlow::Break(bodies) = self.bodies_parser.parse(
                     handler,
-                    resources,
+                    parse_state,
                     &mut SmtBatchCursor::single(version, token),
                 )? {
                     // the parser returned a vector of units corresponding to the number of bodies

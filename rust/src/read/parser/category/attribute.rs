@@ -38,7 +38,7 @@ impl<H: SmtHandler> SmtParse<H> for SmtClosedAttributeParser<H> {
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut SmtParseState<H>,
+        parse_state: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<<H as SmtHandler>::Error>> {
         let SmtParseState {
@@ -46,7 +46,7 @@ impl<H: SmtHandler> SmtParse<H> for SmtClosedAttributeParser<H> {
             arena,
             s_expr_slot,
             ..
-        } = resources;
+        } = parse_state;
         parse_by_token(cursor, |version, token| {
             attribute_slot.progress::<H, SingleAttribute>(
                 handler,
@@ -87,7 +87,7 @@ impl<H: SmtHandler> SmtParse<H> for SmtClosedMultipleAttributeParser<H> {
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut SmtParseState<H>,
+        parse_state: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<<H as SmtHandler>::Error>> {
         let SmtParseState {
@@ -95,7 +95,7 @@ impl<H: SmtHandler> SmtParse<H> for SmtClosedMultipleAttributeParser<H> {
             arena,
             s_expr_slot,
             ..
-        } = resources;
+        } = parse_state;
         parse_by_token(cursor, |version, token| {
             match attribute_slot.progress::<H, MultipleAttributes>(
                 handler,
@@ -419,26 +419,26 @@ mod tests {
             b":weight 3)",
             b":pattern ((f x) y))",
         ] {
-            let mut resources = SmtParseState::new();
+            let mut parse_state = SmtParseState::new();
             parse_all_with(
                 SmtClosedAttributeParser::<SmtSyntaxChecker>::new(),
-                &mut resources,
+                &mut parse_state,
                 input,
             );
-            assert!(resources.is_pristine(), "after {input:?}");
+            assert!(parse_state.is_pristine(), "after {input:?}");
         }
         for input in [
             &b":a x :b (1 (2 3)) :c)"[..],
             b":pattern ((f x)) :qid q)",
             b")",
         ] {
-            let mut resources = SmtParseState::new();
+            let mut parse_state = SmtParseState::new();
             parse_all_with(
                 SmtClosedMultipleAttributeParser::<SmtSyntaxChecker>::new(),
-                &mut resources,
+                &mut parse_state,
                 input,
             );
-            assert!(resources.is_pristine(), "after {input:?}");
+            assert!(parse_state.is_pristine(), "after {input:?}");
         }
     }
 }

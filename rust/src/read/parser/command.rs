@@ -84,7 +84,7 @@ impl<H: SmtCommandHandler> SmtParse<H> for SmtCommandParser<H> {
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut SmtParseState<H>,
+        parse_state: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<SmtCommandOutcome>, SmtParseError<H::Error>> {
         // State machine:
@@ -144,13 +144,13 @@ impl<H: SmtCommandHandler> SmtParse<H> for SmtCommandParser<H> {
                     let kind = *kind;
                     let flow = self
                         .standard_parsers
-                        .parse(kind, handler, resources, cursor)?;
+                        .parse(kind, handler, parse_state, cursor)?;
                     if let ControlFlow::Break(stop) = flow {
                         // the command has ended, resources should be back in pristine state;
                         // we trust our own parsers enough to only assert this in debug mode
                         // and never clear them, which would make them pristine but slow us down
                         debug_assert!(
-                            resources.is_pristine(),
+                            parse_state.is_pristine(),
                             "resources should be pristine after end of standard command {kind:?}"
                         );
                         self.state = CommandParserState::AwaitingCommand;
@@ -159,15 +159,15 @@ impl<H: SmtCommandHandler> SmtParse<H> for SmtCommandParser<H> {
                 }
                 CommandParserState::Nonstandard(parser) => {
                     // handle the cursor within the nonstandard payload parser
-                    let flow = parser.parse(handler, resources, cursor)?;
+                    let flow = parser.parse(handler, parse_state, cursor)?;
                     if let ControlFlow::Break(()) = flow {
                         // the command has ended, resources should be back in pristine state;
                         // we do not trust the library users: assert this in debug mode, always clear
                         debug_assert!(
-                            resources.is_pristine(),
+                            parse_state.is_pristine(),
                             "resources should be pristine after end of non-standard command"
                         );
-                        resources.clear();
+                        parse_state.clear();
                         // a non-standard command cannot be the exit command
                         self.state = CommandParserState::AwaitingCommand;
                         return Ok(ControlFlow::Break(SmtCommandOutcome::Command));
@@ -187,7 +187,7 @@ impl<H: SmtCommandHandler> SmtParse<H> for Infallible {
     fn parse(
         &mut self,
         _handler: &mut H,
-        _resources: &mut SmtParseState<H>,
+        _parse_state: &mut SmtParseState<H>,
         _cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<()>, SmtParseError<H::Error>> {
         match *self {}
@@ -235,10 +235,10 @@ impl<H: SmtCommandHandler, C: SmtCommandRule<H>> SmtParse<H> for SmtCommandPaylo
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut SmtParseState<H>,
+        parse_state: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<()>, SmtParseError<H::Error>> {
-        match self.parser.parse(handler, resources, cursor)? {
+        match self.parser.parse(handler, parse_state, cursor)? {
             ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
             ControlFlow::Break(result) => {
                 // the command ends at the last consumed token, get its span

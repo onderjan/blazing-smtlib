@@ -69,7 +69,7 @@ pub(crate) mod tests {
         token::{SmtBatchCursor, SmtConsume, SmtTokenCategory, SmtVersion},
     };
 
-    /// Drives `parser` over `resources` through the whole input with the
+    /// Drives `parser` over `parse_state` through the whole input with the
     /// standard syntax checker as the handler, requiring that it finishes
     /// exactly at the end of the input, and returns its result.
     ///
@@ -77,12 +77,12 @@ pub(crate) mod tests {
     /// points before driving it.
     pub(crate) fn parse_all_with<P: SmtParse<SmtSyntaxChecker>>(
         parser: P,
-        resources: &mut SmtParseState<SmtSyntaxChecker>,
+        parse_state: &mut SmtParseState<SmtSyntaxChecker>,
         input: &[u8],
     ) -> P::Result {
         struct Drive<'r, P: SmtParse<SmtSyntaxChecker>> {
             parser: P,
-            resources: &'r mut SmtParseState<SmtSyntaxChecker>,
+            parse_state: &'r mut SmtParseState<SmtSyntaxChecker>,
             result: Option<P::Result>,
             unconsumed: usize,
         }
@@ -107,7 +107,7 @@ pub(crate) mod tests {
                     }
                     if let ControlFlow::Break(result) =
                         self.parser
-                            .parse(&mut SmtSyntaxChecker, self.resources, cursor)?
+                            .parse(&mut SmtSyntaxChecker, self.parse_state, cursor)?
                     {
                         self.result = Some(result);
                     }
@@ -118,7 +118,7 @@ pub(crate) mod tests {
 
         let mut drive = Drive {
             parser,
-            resources,
+            parse_state,
             result: None,
             unconsumed: 0,
         };

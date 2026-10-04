@@ -12,7 +12,7 @@ use crate::{
 /// providing it the handler and additional persistent resources.
 pub struct SmtParseAdapter<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> {
     handler: &'a mut H,
-    resources: SmtParseState<H>,
+    parse_state: SmtParseState<H>,
     parser: P,
 }
 
@@ -21,7 +21,7 @@ impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtParseAdapter<'a, H, P> {
     pub fn new(handler: &'a mut H, parser: P) -> Self {
         Self {
             handler,
-            resources: SmtParseState::new(),
+            parse_state: SmtParseState::new(),
             parser,
         }
     }
@@ -54,10 +54,10 @@ impl<H: SmtHandler + ?Sized, P: SmtParse<H>> SmtConsume for SmtParseAdapter<'_, 
         // provide the handler and resources to the parser
         let result = self
             .parser
-            .parse(self.handler, &mut self.resources, cursor)?;
+            .parse(self.handler, &mut self.parse_state, cursor)?;
         if result.is_break() {
             debug_assert!(
-                self.resources.is_pristine(),
+                self.parse_state.is_pristine(),
                 "resources should be pristine after the top-level parser finishes"
             );
         }

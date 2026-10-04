@@ -38,13 +38,13 @@ impl<H: SmtHandler> SmtParse<H> for SmtIdentParser {
     fn parse(
         &mut self,
         _handler: &mut H,
-        resources: &mut SmtParseState<H>,
+        parse_state: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<SmtIdent, ()>, SmtParseError<H::Error>> {
         // progress the slot over the arena, returning an owned identifier
         let SmtParseState {
             ident_slot, arena, ..
-        } = resources;
+        } = parse_state;
         parse_by_token(cursor, |version, token| {
             match ident_slot.progress(arena, version, token)? {
                 ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
@@ -259,19 +259,19 @@ mod tests {
         // the callers that already consumed `(` or `( _` enter the slot in the
         // corresponding state, so the parser accepts the rest of the indexed
         // identifier and leaves the slot pristine
-        let mut resources = SmtParseState::new();
-        resources.ident_slot.move_after_open_paren();
-        let ident = parse_all_with(SmtIdentParser::new(), &mut resources, b"_ f 1)");
+        let mut parse_state = SmtParseState::new();
+        parse_state.ident_slot.move_after_open_paren();
+        let ident = parse_all_with(SmtIdentParser::new(), &mut parse_state, b"_ f 1)");
         assert_eq!(ident.name.as_slice(), b"f");
         assert_eq!(index_texts(&ident), ["1"]);
-        assert!(resources.is_pristine());
+        assert!(parse_state.is_pristine());
 
-        let mut resources = SmtParseState::new();
-        resources.ident_slot.move_after_underscore();
-        let ident = parse_all_with(SmtIdentParser::new(), &mut resources, b"f 1)");
+        let mut parse_state = SmtParseState::new();
+        parse_state.ident_slot.move_after_underscore();
+        let ident = parse_all_with(SmtIdentParser::new(), &mut parse_state, b"f 1)");
         assert_eq!(ident.name.as_slice(), b"f");
         assert_eq!(index_texts(&ident), ["1"]);
-        assert!(resources.is_pristine());
+        assert!(parse_state.is_pristine());
     }
 
     #[cfg(debug_assertions)]
@@ -279,8 +279,8 @@ mod tests {
     #[should_panic(expected = "must be pristine")]
     fn entering_a_busy_slot_is_rejected() {
         // an entry point may only be used on a pristine slot
-        let mut resources = SmtParseState::<SmtSyntaxChecker>::new();
-        resources.ident_slot.move_after_underscore();
-        resources.ident_slot.move_after_open_paren();
+        let mut parse_state = SmtParseState::<SmtSyntaxChecker>::new();
+        parse_state.ident_slot.move_after_underscore();
+        parse_state.ident_slot.move_after_open_paren();
     }
 }

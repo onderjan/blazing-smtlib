@@ -104,11 +104,11 @@ impl<H: SmtCommandHandler> SmtParse<H> for DatatypeParser<H> {
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut SmtParseState<H>,
+        parse_state: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         parse_by_token(cursor, |version, token| {
-            self.progress(handler, resources, version, token)
+            self.progress(handler, parse_state, version, token)
         })
     }
 }
@@ -118,7 +118,7 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
-        resources: &mut SmtParseState<H>,
+        parse_state: &mut SmtParseState<H>,
         version: SmtVersion,
         token: SmtToken,
     ) -> Result<ControlFlow<()>, SmtParseError<H::Error>> {
@@ -139,7 +139,7 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
                     // so we will forward it
                     let result = self.constructors_parser.parse(
                         handler,
-                        resources,
+                        parse_state,
                         &mut SmtBatchCursor::single(version, token),
                     )?;
                     debug_assert!(
@@ -165,7 +165,7 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
                 self.constructors_parser
                     .parse(
                         handler,
-                        resources,
+                        parse_state,
                         &mut SmtBatchCursor::single(version, token),
                     )?
                     .break_value()
@@ -174,7 +174,7 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
                 // parse the parameters
                 if let ControlFlow::Break(params) = self.symbols_parser.parse(
                     handler,
-                    resources,
+                    parse_state,
                     &mut SmtBatchCursor::single(version, token),
                 )? {
                     // there must be at least one parameter
@@ -202,7 +202,7 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
                 self.constructors_parser
                     .parse(
                         handler,
-                        resources,
+                        parse_state,
                         &mut SmtBatchCursor::single(version, token),
                     )?
                     .break_value()
@@ -279,11 +279,11 @@ impl<H: SmtCommandHandler> SmtParse<H> for DeclareDatatypesParser<H> {
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut SmtParseState<H>,
+        parse_state: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         parse_by_token(cursor, |version, token| {
-            self.progress(handler, resources, version, token)
+            self.progress(handler, parse_state, version, token)
         })
     }
 }
@@ -293,7 +293,7 @@ impl<H: SmtCommandHandler> DeclareDatatypesParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
-        resources: &mut SmtParseState<H>,
+        parse_state: &mut SmtParseState<H>,
         version: SmtVersion,
         token: SmtToken,
     ) -> Result<ControlFlow<()>, SmtParseError<H::Error>> {
@@ -303,7 +303,7 @@ impl<H: SmtCommandHandler> DeclareDatatypesParser<H> {
                 // parse datatype introductions
                 if let ControlFlow::Break(introductions) = self.introductions_parser.parse(
                     handler,
-                    resources,
+                    parse_state,
                     &mut SmtBatchCursor::single(version, token),
                 )? {
                     // introductions must not be empty
@@ -324,7 +324,7 @@ impl<H: SmtCommandHandler> DeclareDatatypesParser<H> {
                 // parse datatypes
                 if let ControlFlow::Break(datatypes) = self.datatypes_parser.parse(
                     handler,
-                    resources,
+                    parse_state,
                     &mut SmtBatchCursor::single(version, token),
                 )? {
                     // there cannot be more datatypes than sort declarations due to the maximum parser
@@ -384,11 +384,11 @@ impl<H: SmtCommandHandler> SmtParse<H> for DeclareDatatypeParser<H> {
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut SmtParseState<H>,
+        parse_state: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         parse_by_token(cursor, |version, token| {
-            self.progress(handler, resources, version, token)
+            self.progress(handler, parse_state, version, token)
         })
     }
 }
@@ -398,7 +398,7 @@ impl<H: SmtCommandHandler> DeclareDatatypeParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
-        resources: &mut SmtParseState<H>,
+        parse_state: &mut SmtParseState<H>,
         version: SmtVersion,
         token: SmtToken,
     ) -> Result<ControlFlow<()>, SmtParseError<H::Error>> {
@@ -413,7 +413,7 @@ impl<H: SmtCommandHandler> DeclareDatatypeParser<H> {
             DeclareDatatypeState::Datatype => {
                 if let ControlFlow::Break(()) = self.datatype_parser.parse(
                     handler,
-                    resources,
+                    parse_state,
                     &mut SmtBatchCursor::single(version, token),
                 )? {
                     // the single declaration ends the command

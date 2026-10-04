@@ -40,7 +40,7 @@ impl<H: SmtHandler> SmtParse<H> for SmtSortParser<H> {
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut SmtParseState<H>,
+        parse_state: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<H::Sort>, SmtParseError<H::Error>> {
         // progress the slot, giving it the ident slot it delegates to
@@ -49,7 +49,7 @@ impl<H: SmtHandler> SmtParse<H> for SmtSortParser<H> {
             sort_slot,
             arena,
             ..
-        } = resources;
+        } = parse_state;
         parse_by_token(cursor, |version, token| {
             sort_slot.progress(handler, arena, ident_slot, version, token)
         })
@@ -270,13 +270,13 @@ mod tests {
             b"(Array (_ BitVec 8) Int)",
             b"((_ Tuple 2) (_ BitVec 8) (Set Int))",
         ] {
-            let mut resources = SmtParseState::new();
+            let mut parse_state = SmtParseState::new();
             parse_all_with(
                 SmtSortParser::<SmtSyntaxChecker>::new(),
-                &mut resources,
+                &mut parse_state,
                 input,
             );
-            assert!(resources.is_pristine(), "after {input:?}");
+            assert!(parse_state.is_pristine(), "after {input:?}");
         }
     }
 }

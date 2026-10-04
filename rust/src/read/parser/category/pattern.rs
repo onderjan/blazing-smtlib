@@ -72,7 +72,7 @@ impl<H: SmtHandler> SmtParse<H> for SmtSimplePatternParser {
     fn parse(
         &mut self,
         _handler: &mut H,
-        _resources: &mut SmtParseState<H>,
+        _parse_state: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         let Some(token) = cursor.next() else {
@@ -114,7 +114,7 @@ impl<H: SmtHandler> SmtParse<H> for SmtPatternParser<H> {
     fn parse(
         &mut self,
         _handler: &mut H,
-        resources: &mut SmtParseState<H>,
+        parse_state: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<SmtPattern, ()>, SmtParseError<H::Error>> {
         // progress the slot
@@ -122,7 +122,7 @@ impl<H: SmtHandler> SmtParse<H> for SmtPatternParser<H> {
             pattern_slot,
             arena,
             ..
-        } = resources;
+        } = parse_state;
         parse_by_token(cursor, |version, token| {
             match pattern_slot.progress(arena, version, token)? {
                 ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
@@ -284,13 +284,13 @@ mod tests {
         // the stored constructor and the arguments in the arena; the slot and
         // the arena must be back in their initial state after each
         for input in [&b"x"[..], b"_", b"(cons x xs)", b"(node _ l r)"] {
-            let mut resources = SmtParseState::new();
+            let mut parse_state = SmtParseState::new();
             parse_all_with(
                 SmtPatternParser::<SmtSyntaxChecker>::new(),
-                &mut resources,
+                &mut parse_state,
                 input,
             );
-            assert!(resources.is_pristine(), "after {input:?}");
+            assert!(parse_state.is_pristine(), "after {input:?}");
         }
     }
 }

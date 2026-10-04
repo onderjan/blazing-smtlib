@@ -64,12 +64,12 @@ impl<H: SmtCommandHandler, D: Definition<H>> SmtParse<H> for DefinitionParser<H,
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut SmtParseState<H>,
+        parse_state: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         if matches!(self.state, DefinitionParserState::Signature) {
             // parse the signature; it ends at the last consumed token
-            match self.signature_parser.parse(handler, resources, cursor)? {
+            match self.signature_parser.parse(handler, parse_state, cursor)? {
                 ControlFlow::Continue(()) => return Ok(ControlFlow::Continue(())),
                 ControlFlow::Break(signature) => {
                     let span = cursor
@@ -83,7 +83,7 @@ impl<H: SmtCommandHandler, D: Definition<H>> SmtParse<H> for DefinitionParser<H,
             }
         }
         // parse the body on the tokens left; it ends at the last consumed token
-        match self.body_parser.parse(handler, resources, cursor)? {
+        match self.body_parser.parse(handler, parse_state, cursor)? {
             ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
             ControlFlow::Break(body) => {
                 let span = cursor

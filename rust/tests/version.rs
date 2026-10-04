@@ -11,7 +11,7 @@ use reserved_words::reserved_words;
 use std::ops::ControlFlow;
 
 use blazing_smtlib::{
-    NonstandardCommandError, SmtSyntaxChecker, SmtBytes,
+    NonstandardCommandError, SmtBytes, SmtSyntaxChecker,
     read::{
         SmtReadError, SmtReadErrorKind, SmtReader,
         parser::{SmtCommandOutcome, SmtCommandParser, SmtSExprParser, SmtSyntaxErrorKind},

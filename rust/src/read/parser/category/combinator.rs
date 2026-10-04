@@ -44,12 +44,12 @@ impl<H: SmtHandler, P1: SmtParse<H>, P2: SmtParse<H>> SmtParse<H> for SmtPairPar
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut SmtParseState<H>,
+        parse_state: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         // progress the first parser until it breaks or the tokens run out
         if self.first_result.is_none() {
-            match self.first.parse(handler, resources, cursor)? {
+            match self.first.parse(handler, parse_state, cursor)? {
                 ControlFlow::Continue(()) => return Ok(ControlFlow::Continue(())),
                 ControlFlow::Break(first) => {
                     self.first_result = Some(first);
@@ -58,7 +58,7 @@ impl<H: SmtHandler, P1: SmtParse<H>, P2: SmtParse<H>> SmtParse<H> for SmtPairPar
             }
         }
         // progress the second parser; the first result stays until it breaks
-        match self.second.parse(handler, resources, cursor)? {
+        match self.second.parse(handler, parse_state, cursor)? {
             ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
             ControlFlow::Break(second) => {
                 let first = self
@@ -100,12 +100,12 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtClosedParser<H, P> {
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut SmtParseState<H>,
+        parse_state: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         Ok(self
             .inner
-            .parse(handler, resources, cursor)?
+            .parse(handler, parse_state, cursor)?
             .map_break(|(result, ())| result))
     }
 }
@@ -139,12 +139,12 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtOpenedParser<H, P> {
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut SmtParseState<H>,
+        parse_state: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         Ok(self
             .inner
-            .parse(handler, resources, cursor)?
+            .parse(handler, parse_state, cursor)?
             .map_break(|((), result)| result))
     }
 }
@@ -191,11 +191,11 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtClosedMultipleParser<H, P
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut SmtParseState<H>,
+        parse_state: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Vec<P::Result>>, SmtParseError<H::Error>> {
         self.resource.parse(cursor, |cursor| {
-            self.inner.parse(handler, resources, cursor)
+            self.inner.parse(handler, parse_state, cursor)
         })
     }
 }
@@ -296,7 +296,7 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtClosedMaximumParser<H, P>
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut SmtParseState<H>,
+        parse_state: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Vec<P::Result>>, SmtParseError<H::Error>> {
         while let Some(peeked) = cursor.peek() {
@@ -324,7 +324,7 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtClosedMaximumParser<H, P>
                 self.outside = false;
             }
             // we are inside, parse the element using the inner parser
-            match self.inner.parse(handler, resources, cursor)? {
+            match self.inner.parse(handler, parse_state, cursor)? {
                 ControlFlow::Continue(()) => return Ok(ControlFlow::Continue(())),
                 ControlFlow::Break(element) => {
                     // add element, we are back outside
@@ -376,12 +376,12 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtParenMaximumParser<H, P> 
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut SmtParseState<H>,
+        parse_state: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Vec<P::Result>>, SmtParseError<H::Error>> {
         loop {
             if self.is_opened {
-                match self.inner.parse(handler, resources, cursor)? {
+                match self.inner.parse(handler, parse_state, cursor)? {
                     ControlFlow::Continue(()) => return Ok(ControlFlow::Continue(())),
                     ControlFlow::Break(result) => {
                         // we are done, reset open and break

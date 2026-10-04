@@ -54,11 +54,11 @@ impl<H: SmtCommandHandler> SmtParse<H> for SmtScriptParser<H> {
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut SmtParseState<H>,
+        parse_state: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<SmtScriptEnd>, SmtParseError<H::Error>> {
         loop {
-            match self.command.parse(handler, resources, cursor)? {
+            match self.command.parse(handler, parse_state, cursor)? {
                 ControlFlow::Continue(()) => {
                     // the cursor is consumed, the command continues in the next one
                     return Ok(ControlFlow::Continue(()));

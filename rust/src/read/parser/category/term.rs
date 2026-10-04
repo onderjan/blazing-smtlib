@@ -176,11 +176,11 @@ impl<H: SmtHandler> SmtParse<H> for SmtTermParser<H> {
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut SmtParseState<H>,
+        parse_state: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor<'_>,
     ) -> Result<ControlFlow<H::Term>, SmtParseError<H::Error>> {
         // progress the slot with the cursor
-        TermSlot::parse(handler, resources, cursor)
+        TermSlot::parse(handler, parse_state, cursor)
     }
 }
 
@@ -227,12 +227,12 @@ impl<H: SmtHandler> TermSlot<H> {
     #[inline]
     pub(crate) fn parse(
         handler: &mut H,
-        resources: &mut SmtParseState<H>,
+        parse_state: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<H::Term>, SmtParseError<H::Error>> {
         while let Some(token) = cursor.next() {
-            if matches!(resources.term_slot.state, State::Start)
-                && resources.term_slot.pending.is_none()
+            if matches!(parse_state.term_slot.state, State::Start)
+                && parse_state.term_slot.pending.is_none()
             {
                 // PERFORMANCE: dispatch common term idioms fast.
                 match token.category() {
@@ -240,12 +240,12 @@ impl<H: SmtHandler> TermSlot<H> {
                         if let SmtSyntaxToken::Symbol(name) = token.syntax(cursor.version()) {
                             // this is an unqualified, non-indexed symbol, dispatch it
                             let term = SmtTerm::QualifiedIdent(SmtQualifiedIdentView {
-                                ident: resources.arena.simple_ident_view(name),
+                                ident: parse_state.arena.simple_ident_view(name),
                                 sort: None,
                             });
                             let term = handle_err(handler.handle_term(term), token.span())?;
                             if let ControlFlow::Break(term) =
-                                Self::finish_term(handler, resources, term, token.span())?
+                                Self::finish_term(handler, parse_state, term, token.span())?
                             {
                                 return Ok(ControlFlow::Break(term));
                             }
@@ -260,11 +260,11 @@ impl<H: SmtHandler> TermSlot<H> {
                                     // consume the peeked token and dispatch
                                     cursor.advance(1);
                                     let function = QualifiedIdentHandle::unqualified(
-                                        resources.arena.push_nonindexed_ident(fn_name),
+                                        parse_state.arena.push_nonindexed_ident(fn_name),
                                     );
-                                    resources
+                                    parse_state
                                         .term_slot
-                                        .start_application(&resources.arena, function);
+                                        .start_application(&parse_state.arena, function);
                                     continue;
                                 }
                                 SmtSyntaxToken::Reserved(SmtReserved::General(
@@ -284,10 +284,10 @@ impl<H: SmtHandler> TermSlot<H> {
                                         // consume the four peeked tokens
                                         cursor.advance(4);
                                         // dispatch the let and push the first binding name
-                                        resources.term_slot.start_let(&mut resources.arena);
-                                        resources
+                                        parse_state.term_slot.start_let(&mut parse_state.arena);
+                                        parse_state
                                             .term_slot
-                                            .push_binding_name(&mut resources.arena, name);
+                                            .push_binding_name(&mut parse_state.arena, name);
                                         continue;
                                     }
                                 }
@@ -303,13 +303,13 @@ impl<H: SmtHandler> TermSlot<H> {
                                         // consume the two peeked tokens
                                         cursor.advance(2);
                                         // move the qualified ident after the indexed name
-                                        resources.qualified_ident_slot.move_after_indexed_name(
-                                            &mut resources.ident_slot,
-                                            &mut resources.arena,
+                                        parse_state.qualified_ident_slot.move_after_indexed_name(
+                                            &mut parse_state.ident_slot,
+                                            &mut parse_state.arena,
                                             name,
                                         );
                                         // change the state to qualified ident parsing
-                                        resources.term_slot.state = State::QualifiedIdent;
+                                        parse_state.term_slot.state = State::QualifiedIdent;
                                         continue;
                                     }
                                 }
@@ -321,7 +321,7 @@ impl<H: SmtHandler> TermSlot<H> {
                 }
             }
 
-            match Self::progress(handler, resources, cursor.version(), token)? {
+            match Self::progress(handler, parse_state, cursor.version(), token)? {
                 ControlFlow::Continue(()) => {}
                 ControlFlow::Break(term) => {
                     // we are done
@@ -336,29 +336,31 @@ impl<H: SmtHandler> TermSlot<H> {
     #[inline]
     pub(crate) fn progress(
         handler: &mut H,
-        resources: &mut SmtParseState<H>,
+        parse_state: &mut SmtParseState<H>,
         version: SmtVersion,
         token: SmtToken,
     ) -> Result<ControlFlow<H::Term>, SmtParseError<H::Error>> {
         let span = token.span();
-        let term = match resources.term_slot.pending.take() {
+        let term = match parse_state.term_slot.pending.take() {
             Some(pending) => {
                 if pending.is_annotation {
                     // we are parsing attributes
-                    match resources.attribute_slot.progress::<H, MultipleAttributes>(
-                        handler,
-                        &mut resources.arena,
-                        &mut resources.s_expr_slot,
-                        version,
-                        token,
-                    )? {
+                    match parse_state
+                        .attribute_slot
+                        .progress::<H, MultipleAttributes>(
+                            handler,
+                            &mut parse_state.arena,
+                            &mut parse_state.s_expr_slot,
+                            version,
+                            token,
+                        )? {
                         ControlFlow::Continue(()) => {
                             // put the pending term back
-                            resources.term_slot.pending = Some(pending);
+                            parse_state.term_slot.pending = Some(pending);
                             return Ok(ControlFlow::Continue(()));
                         }
                         ControlFlow::Break(arena_attributes_start) => {
-                            let arena = &mut resources.arena;
+                            let arena = &mut parse_state.arena;
                             // check that there is at least one attribute
                             if arena.attributes.len() == arena_attributes_start {
                                 return Err(SmtParseError::category_error(
@@ -381,14 +383,14 @@ impl<H: SmtHandler> TermSlot<H> {
             }
             None => {
                 // no pending term, try to get one
-                match Self::progress_inner(handler, resources, version, token)? {
+                match Self::progress_inner(handler, parse_state, version, token)? {
                     ControlFlow::Continue(()) => return Ok(ControlFlow::Continue(())),
                     ControlFlow::Break(term) => term,
                 }
             }
         };
 
-        Self::finish_term(handler, resources, term, span)
+        Self::finish_term(handler, parse_state, term, span)
     }
 }
 
@@ -397,12 +399,12 @@ impl<H: SmtHandler> TermSlot<H> {
     #[inline]
     fn finish_term(
         handler: &mut H,
-        resources: &mut SmtParseState<H>,
+        parse_state: &mut SmtParseState<H>,
         term: H::Term,
         span: SmtSpan,
     ) -> Result<ControlFlow<H::Term>, SmtParseError<H::Error>> {
         // we have parsed a term, set state to start
-        let slot = &mut resources.term_slot;
+        let slot = &mut parse_state.term_slot;
         slot.state = State::Start;
 
         // return the term if there is no last level
@@ -418,12 +420,12 @@ impl<H: SmtHandler> TermSlot<H> {
                 // push the produced term into the term arena
                 // there no need to update anything else as lower-level terms
                 // remember where their arguments start im the arena
-                resources.arena.terms.push(term);
+                parse_state.arena.terms.push(term);
             }
             Level::LetBinding { .. } => {
                 // push the produced term into the term arena
                 // its name is already in the arena symbols
-                resources.arena.terms.push(term);
+                parse_state.arena.terms.push(term);
                 slot.state = State::LetBindingClose;
             }
             Level::BinderInner {
@@ -481,11 +483,11 @@ impl<H: SmtHandler> TermSlot<H> {
     #[inline]
     fn progress_inner(
         handler: &mut H,
-        resources: &mut SmtParseState<H>,
+        parse_state: &mut SmtParseState<H>,
         version: SmtVersion,
         token: SmtToken,
     ) -> Result<ControlFlow<H::Term>, SmtParseError<H::Error>> {
-        let slot = &mut resources.term_slot;
+        let slot = &mut parse_state.term_slot;
 
         match slot.state {
             State::Start => {
@@ -494,25 +496,25 @@ impl<H: SmtHandler> TermSlot<H> {
                 if slot.levels.is_empty() {
                     debug_assert!(slot.is_pristine(), "must be pristine when starting");
                 }
-                Self::parse_term_start(handler, resources, version, token)
+                Self::parse_term_start(handler, parse_state, version, token)
             }
             State::Open => {
-                Self::parse_term_open(resources, version, token)?;
+                Self::parse_term_open(parse_state, version, token)?;
                 Ok(ControlFlow::Continue(()))
             }
             State::QualifiedIdent => {
-                match resources.qualified_ident_slot.progress(
+                match parse_state.qualified_ident_slot.progress(
                     handler,
-                    &mut resources.arena,
-                    &mut resources.sort_slot,
-                    &mut resources.ident_slot,
+                    &mut parse_state.arena,
+                    &mut parse_state.sort_slot,
+                    &mut parse_state.ident_slot,
                     version,
                     token,
                 )? {
                     ControlFlow::Break(qualified_ident) => {
                         // a term that is a qualified identifier, handle it and break
                         let span = token.span();
-                        let term = resources.arena.hand_over_qualified_ident(
+                        let term = parse_state.arena.hand_over_qualified_ident(
                             qualified_ident,
                             |qualified_ident| {
                                 let term = SmtTerm::QualifiedIdent(qualified_ident);
@@ -525,20 +527,20 @@ impl<H: SmtHandler> TermSlot<H> {
                 }
             }
             State::ApplicationIdent => {
-                match resources.qualified_ident_slot.progress(
+                match parse_state.qualified_ident_slot.progress(
                     handler,
-                    &mut resources.arena,
-                    &mut resources.sort_slot,
-                    &mut resources.ident_slot,
+                    &mut parse_state.arena,
+                    &mut parse_state.sort_slot,
+                    &mut parse_state.ident_slot,
                     version,
                     token,
                 )? {
                     ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
                     ControlFlow::Break(function) => {
                         // start a new application level
-                        resources
+                        parse_state
                             .term_slot
-                            .start_application(&resources.arena, function);
+                            .start_application(&parse_state.arena, function);
                         Ok(ControlFlow::Continue(()))
                     }
                 }
@@ -551,7 +553,7 @@ impl<H: SmtHandler> TermSlot<H> {
             }
             State::LetBindingOpen => {
                 // parse the let binding and continue
-                Self::parse_let_binding_open(handler, resources, version, token)?;
+                Self::parse_let_binding_open(handler, parse_state, version, token)?;
                 Ok(ControlFlow::Continue(()))
             }
             State::LetBindingSymbol => {
@@ -562,9 +564,9 @@ impl<H: SmtHandler> TermSlot<H> {
                         token.span(),
                     ));
                 };
-                resources
+                parse_state
                     .term_slot
-                    .push_binding_name(&mut resources.arena, name);
+                    .push_binding_name(&mut parse_state.arena, name);
                 Ok(ControlFlow::Continue(()))
             }
             State::LetBindingClose => {
@@ -579,7 +581,7 @@ impl<H: SmtHandler> TermSlot<H> {
 
                 let flow = SortedBindingsParser::progress_and_open(
                     handler,
-                    resources,
+                    parse_state,
                     version,
                     token,
                     |handler, name, sort| match binder_kind {
@@ -614,7 +616,7 @@ impl<H: SmtHandler> TermSlot<H> {
                         };
 
                         // push a level to handle the inner term and then properly close all opened binders
-                        resources.term_slot.start_level(Level::BinderInner {
+                        parse_state.term_slot.start_level(Level::BinderInner {
                             end_kind,
                             num_close: num_opened,
                         });
@@ -638,12 +640,12 @@ impl<H: SmtHandler> TermSlot<H> {
                 // parse the match pattern
                 let span = token.span();
                 if let ControlFlow::Break(pattern) =
-                    resources
+                    parse_state
                         .pattern_slot
-                        .progress(&mut resources.arena, version, token)?
+                        .progress(&mut parse_state.arena, version, token)?
                 {
                     // a match case is starting, call the handler with the pattern handed over
-                    resources.arena.hand_over_pattern(pattern, |pattern| {
+                    parse_state.arena.hand_over_pattern(pattern, |pattern| {
                         handle_err(handler.start_match_case(pattern), span)
                     })?;
                     // move the start state to parse the case term
@@ -664,12 +666,12 @@ impl<H: SmtHandler> TermSlot<H> {
     #[inline]
     fn parse_term_start(
         handler: &mut H,
-        resources: &mut SmtParseState<H>,
+        parse_state: &mut SmtParseState<H>,
         version: SmtVersion,
         token: SmtToken,
     ) -> Result<ControlFlow<H::Term>, SmtParseError<H::Error>> {
         let span = token.span();
-        let slot = &mut resources.term_slot;
+        let slot = &mut parse_state.term_slot;
         let term = match token.syntax(version) {
             SmtSyntaxToken::ParenOpen => {
                 // application, binder, or annotation
@@ -690,7 +692,7 @@ impl<H: SmtHandler> TermSlot<H> {
                         span,
                     ));
                 };
-                let arena = &mut resources.arena;
+                let arena = &mut parse_state.arena;
                 // the application must contain at least one argument
                 if arena.terms.len() == arena_args_start {
                     return Err(SmtParseError::category_error(
@@ -708,7 +710,7 @@ impl<H: SmtHandler> TermSlot<H> {
                 // a term that is a qualified identifier that is just a symbol,
                 // handed over straight from the token
                 let term = SmtTerm::QualifiedIdent(SmtQualifiedIdentView {
-                    ident: resources.arena.simple_ident_view(name),
+                    ident: parse_state.arena.simple_ident_view(name),
                     sort: None,
                 });
                 handle_err(handler.handle_term(term), span)?
@@ -735,25 +737,25 @@ impl<H: SmtHandler> TermSlot<H> {
 
     #[inline]
     fn parse_term_open(
-        resources: &mut SmtParseState<H>,
+        parse_state: &mut SmtParseState<H>,
         version: SmtVersion,
         token: SmtToken,
     ) -> Result<(), SmtParseError<H::Error>> {
         let span = token.span();
-        let slot = &mut resources.term_slot;
+        let slot = &mut parse_state.term_slot;
 
         let state = match token.syntax(version) {
             SmtSyntaxToken::Symbol(fn_name) => {
                 // this is an application where the function identifier is just a symbol
                 let function = QualifiedIdentHandle::unqualified(
-                    resources.arena.push_nonindexed_ident(fn_name),
+                    parse_state.arena.push_nonindexed_ident(fn_name),
                 );
-                slot.start_application(&resources.arena, function);
+                slot.start_application(&parse_state.arena, function);
                 return Ok(());
             }
             SmtSyntaxToken::Reserved(SmtReserved::General(SmtGeneralReserved::Let)) => {
                 // this is a let, start it
-                slot.start_let(&mut resources.arena);
+                slot.start_let(&mut parse_state.arena);
                 return Ok(());
             }
             SmtSyntaxToken::Reserved(SmtReserved::General(SmtGeneralReserved::Lambda)) => {
@@ -784,22 +786,22 @@ impl<H: SmtHandler> TermSlot<H> {
                 // this is actually a term composed of an indexed identifier
                 // move the qualified ident parser after the underscore
                 // (meaning the ident will be unqualified but indexed)
-                resources
+                parse_state
                     .qualified_ident_slot
-                    .move_after_underscore(&mut resources.ident_slot);
+                    .move_after_underscore(&mut parse_state.ident_slot);
                 State::QualifiedIdent
             }
             SmtSyntaxToken::Reserved(SmtReserved::General(SmtGeneralReserved::As)) => {
                 // this is actually a term composed of a qualified identifier
                 // move the qualified ident parser after the 'as' reserved word
                 // (meaning the ident will be qualified)
-                resources.qualified_ident_slot.move_after_as();
+                parse_state.qualified_ident_slot.move_after_as();
                 State::QualifiedIdent
             }
             SmtSyntaxToken::ParenOpen => {
                 // this is an application where the function identifier is qualified or indexed
                 // move the qualified ident parser after the parenthesis open
-                resources.qualified_ident_slot.move_after_open_paren();
+                parse_state.qualified_ident_slot.move_after_open_paren();
                 State::ApplicationIdent
             }
             _ => {
@@ -819,12 +821,12 @@ impl<H: SmtHandler> TermSlot<H> {
     /// that closes the bindings followed by the rest of the term.
     fn parse_let_binding_open(
         handler: &mut H,
-        resources: &mut SmtParseState<H>,
+        parse_state: &mut SmtParseState<H>,
         version: SmtVersion,
         token: SmtToken,
     ) -> Result<(), SmtParseError<H::Error>> {
         let span = token.span();
-        let slot = &mut resources.term_slot;
+        let slot = &mut parse_state.term_slot;
         match token.syntax(version) {
             SmtSyntaxToken::ParenOpen => {
                 // opening a new binding, we will parse the symbol next
@@ -844,7 +846,7 @@ impl<H: SmtHandler> TermSlot<H> {
                     panic!("last level should be a let binding when closing bindings")
                 };
 
-                let arena = &mut resources.arena;
+                let arena = &mut parse_state.arena;
                 // there must be at least one binding
                 if arena.symbols.len() == arena_names_start {
                     return Err(SmtParseError::category_error(
@@ -1002,12 +1004,12 @@ impl SortedBindingsParser {
 impl SortedBindingsParser {
     fn progress_and_open<H: SmtHandler>(
         handler: &mut H,
-        resources: &mut SmtParseState<H>,
+        parse_state: &mut SmtParseState<H>,
         version: SmtVersion,
         token: SmtToken,
         open_fn: impl Fn(&mut H, SmtSymbolView<'_>, H::Sort) -> Result<(), H::Error>,
     ) -> Result<ControlFlow<u64>, SmtParseError<H::Error>> {
-        let this = &mut resources.term_slot.sorted_bindings_parser;
+        let this = &mut parse_state.term_slot.sorted_bindings_parser;
         let token = match this.state {
             SortedBindingsParserState::Start => {
                 // expect an opening parenthesis
@@ -1034,18 +1036,18 @@ impl SortedBindingsParser {
 
         // parse the sorted variable
         let span = token.span();
-        match resources.sorted_var_slot.progress(
+        match parse_state.sorted_var_slot.progress(
             handler,
-            &mut resources.arena,
-            &mut resources.sort_slot,
-            &mut resources.ident_slot,
+            &mut parse_state.arena,
+            &mut parse_state.sort_slot,
+            &mut parse_state.ident_slot,
             version,
             token,
         )? {
             ControlFlow::Continue(()) => {}
             ControlFlow::Break((name, sort)) => {
                 // start the binder with the name handed over, and increment opened
-                resources
+                parse_state
                     .arena
                     .hand_over_sorted_var(name, sort, |name, sort| {
                         handle_err(open_fn(handler, name, sort), span)
@@ -1081,13 +1083,13 @@ mod tests {
             b"(! (f x) :named n :pattern ((f x)))",
             b"(match l ((nil l2) ((cons h t) (cons h (append t l2)))))",
         ] {
-            let mut resources = SmtParseState::new();
+            let mut parse_state = SmtParseState::new();
             parse_all_with(
                 SmtTermParser::<SmtSyntaxChecker>::new(),
-                &mut resources,
+                &mut parse_state,
                 input,
             );
-            assert!(resources.is_pristine(), "after {input:?}");
+            assert!(parse_state.is_pristine(), "after {input:?}");
         }
     }
 }

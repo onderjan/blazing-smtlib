@@ -38,13 +38,13 @@ impl<H: SmtHandler> SmtParse<H> for SmtSExprParser<H> {
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut SmtParseState<H>,
+        parse_state: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<H::SExpr>, SmtParseError<H::Error>> {
         // progress the slot over the arena
         let SmtParseState {
             s_expr_slot, arena, ..
-        } = resources;
+        } = parse_state;
         parse_by_token(cursor, |version, token| {
             s_expr_slot.progress(handler, arena, version, token)
         })
@@ -171,13 +171,13 @@ mod tests {
         // atoms, empty lists, and nested lists all use the level stack of the
         // slot and the arena, which must be empty again afterwards
         for input in [&b"x"[..], b"()", b"(a (b c) :kw 1)", b"((()))"] {
-            let mut resources = SmtParseState::new();
+            let mut parse_state = SmtParseState::new();
             parse_all_with(
                 SmtSExprParser::<SmtSyntaxChecker>::new(),
-                &mut resources,
+                &mut parse_state,
                 input,
             );
-            assert!(resources.is_pristine(), "after {input:?}");
+            assert!(parse_state.is_pristine(), "after {input:?}");
         }
     }
 }

@@ -227,7 +227,7 @@ fn consuming_all_empties_the_cursor_at_its_end() {
 /// returning per hand-over how many tokens it consumed and whether it finished.
 fn drive<P: SmtParse<SmtSyntaxChecker> + Default>(chunks: &[&[u8]]) -> Vec<(usize, bool)> {
     let mut parser = P::default();
-    let mut resources = SmtParseState::new();
+    let mut parse_state = SmtParseState::new();
     let mut finished = false;
     let mut calls = Vec::new();
     on_batches(chunks, |mut cursor| {
@@ -235,7 +235,7 @@ fn drive<P: SmtParse<SmtSyntaxChecker> + Default>(chunks: &[&[u8]]) -> Vec<(usiz
             return;
         }
         let flow = parser
-            .parse(&mut SmtSyntaxChecker, &mut resources, &mut cursor)
+            .parse(&mut SmtSyntaxChecker, &mut parse_state, &mut cursor)
             .expect("the category must parse");
         finished = matches!(flow, ControlFlow::Break(_));
         calls.push((cursor.consumed(), finished));

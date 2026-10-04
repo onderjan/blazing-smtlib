@@ -74,11 +74,11 @@ macro_rules! standard_commands {
                 &mut self,
                 kind: StandardCommandKind,
                 handler: &mut H,
-                resources: &mut SmtParseState<H>,
+                parse_state: &mut SmtParseState<H>,
                 cursor: &mut SmtBatchCursor<'_>,
             ) -> Result<ControlFlow<SmtCommandOutcome, ()>, SmtParseError<H::Error>> {
                 let flow = match kind {
-                    $(StandardCommandKind::$kind => self.$field.parse(handler, resources, cursor)?,)*
+                    $(StandardCommandKind::$kind => self.$field.parse(handler, parse_state, cursor)?,)*
                 };
                 let ControlFlow::Break(()) = flow else {
                     return Ok(ControlFlow::Continue(()));
@@ -293,10 +293,10 @@ impl<H: SmtCommandHandler> SmtParse<H> for GetValueParser<H> {
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut SmtParseState<H>,
+        parse_state: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Vec<H::Term>, ()>, SmtParseError<H::Error>> {
-        match self.inner.parse(handler, resources, cursor)? {
+        match self.inner.parse(handler, parse_state, cursor)? {
             ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
             ControlFlow::Break(terms) => {
                 // ensure there is at least one term; the list ends at the last consumed token
@@ -366,7 +366,7 @@ impl<H: SmtCommandHandler> SmtParse<H> for SetInfoParser<H> {
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut SmtParseState<H>,
+        parse_state: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<H::Attribute, ()>, SmtParseError<H::Error>> {
         // We process the version before the actual processing, as we
@@ -412,7 +412,7 @@ impl<H: SmtCommandHandler> SmtParse<H> for SetInfoParser<H> {
             ahead += 1;
         }
 
-        let flow = self.inner.parse(handler, resources, cursor)?;
+        let flow = self.inner.parse(handler, parse_state, cursor)?;
         if flow.is_break() {
             // the command has ended, the next payload starts with its attribute name
             self.state = SetInfoState::Name;
@@ -471,7 +471,7 @@ impl<H: SmtCommandHandler> SmtParse<H> for CheckSatAssumingParser<H> {
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut SmtParseState<H>,
+        parse_state: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Vec<H::Term>, ()>, SmtParseError<H::Error>> {
         // Any terms are allowed as assumptions since SMT-LIB 2.7. Before it,
@@ -533,7 +533,7 @@ impl<H: SmtCommandHandler> SmtParse<H> for CheckSatAssumingParser<H> {
             }
         }
 
-        let flow = self.inner.parse(handler, resources, cursor)?;
+        let flow = self.inner.parse(handler, parse_state, cursor)?;
         if flow.is_break() {
             // the command has ended, the next payload starts with the list
             self.state = PropLiteralsState::Open;

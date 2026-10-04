@@ -37,7 +37,7 @@ pub trait SmtParse<H: SmtHandler + ?Sized> {
     /// All library parsers implementing [`SmtParse`] are fully self-resetting:
     /// after returning [`ControlFlow::Break`], they are back in their initial state.
     ///
-    /// The `resources` are shared resources of standard category parsers.
+    /// The `parse_state` holds the shared resources of standard category parsers.
     /// To keep resources valid, each [`SmtParse`] must be progressed
     /// until completion once started, i.e. if [`SmtParse::parse()`]
     /// returns `Ok(Continue(()))`, the subsequent outer parse call
@@ -48,7 +48,7 @@ pub trait SmtParse<H: SmtHandler + ?Sized> {
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut SmtParseState<H>,
+        parse_state: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>>;
 }

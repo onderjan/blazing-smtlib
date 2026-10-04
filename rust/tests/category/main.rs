@@ -353,7 +353,7 @@ type ParseFailure = (SmtSyntaxErrorKind, SmtSpan);
 struct Drive<'h, H: SmtHandler, P: SmtParse<H>> {
     handler: &'h mut H,
     /// The parser resources, shared by every parser in a run.
-    resources: SmtParseState<H>,
+    parse_state: SmtParseState<H>,
     /// The parser under test, reused across parses.
     parser: P,
     /// How many more results to parse before tokens count as unconsumed.
@@ -381,7 +381,7 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtConsume for Drive<'_, H, P> {
             }
             if let ControlFlow::Break(result) =
                 self.parser
-                    .parse(self.handler, &mut self.resources, cursor)?
+                    .parse(self.handler, &mut self.parse_state, cursor)?
             {
                 self.results.push(result);
                 self.remaining -= 1;
@@ -406,7 +406,7 @@ fn run_count_from<H: SmtHandler<Error = Infallible>, P: SmtParse<H>>(
 ) -> Result<(Vec<P::Result>, usize), ParseFailure> {
     let mut drive = Drive {
         handler,
-        resources: SmtParseState::new(),
+        parse_state: SmtParseState::new(),
         parser,
         remaining: count,
         results: Vec::new(),

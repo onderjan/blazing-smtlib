@@ -40,7 +40,7 @@ impl<H: SmtHandler> SmtParse<H> for SmtQualifiedIdentParser<H> {
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut SmtParseState<H>,
+        parse_state: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<SmtQualifiedIdent<H>>, SmtParseError<H::Error>> {
         // progress the slot, giving it the ident and sort slots it delegates to
@@ -50,7 +50,7 @@ impl<H: SmtHandler> SmtParse<H> for SmtQualifiedIdentParser<H> {
             qualified_ident_slot,
             arena,
             ..
-        } = resources;
+        } = parse_state;
         parse_by_token(cursor, |version, token| {
             match qualified_ident_slot
                 .progress(handler, arena, sort_slot, ident_slot, version, token)?
@@ -268,47 +268,47 @@ mod tests {
         // the callers that already consumed `(`, `( _` or `( as` enter the
         // slot in the corresponding state, so the parser accepts the rest of
         // the qualified identifier and leaves the slots pristine
-        let mut resources = SmtParseState::new();
-        resources.qualified_ident_slot.move_after_open_paren();
+        let mut parse_state = SmtParseState::new();
+        parse_state.qualified_ident_slot.move_after_open_paren();
         let qi = parse_all_with(
             SmtQualifiedIdentParser::<SmtSyntaxChecker>::new(),
-            &mut resources,
+            &mut parse_state,
             b"_ f 1)",
         );
         assert_eq!(qi.ident.name.as_slice(), b"f");
         assert_eq!(qi.ident.indices.len(), 1);
         assert!(qi.sort.is_none());
-        assert!(resources.is_pristine());
+        assert!(parse_state.is_pristine());
 
         // regression: the entry point must put the ident slot after the
         // underscore as well, or `f` alone would finish the identifier
-        let mut resources = SmtParseState::new();
+        let mut parse_state = SmtParseState::new();
         let SmtParseState {
             ident_slot,
             qualified_ident_slot,
             ..
-        } = &mut resources;
+        } = &mut parse_state;
         qualified_ident_slot.move_after_underscore(ident_slot);
         let qi = parse_all_with(
             SmtQualifiedIdentParser::<SmtSyntaxChecker>::new(),
-            &mut resources,
+            &mut parse_state,
             b"f 1)",
         );
         assert_eq!(qi.ident.name.as_slice(), b"f");
         assert_eq!(qi.ident.indices.len(), 1);
         assert!(qi.sort.is_none());
-        assert!(resources.is_pristine());
+        assert!(parse_state.is_pristine());
 
-        let mut resources = SmtParseState::new();
-        resources.qualified_ident_slot.move_after_as();
+        let mut parse_state = SmtParseState::new();
+        parse_state.qualified_ident_slot.move_after_as();
         let qi = parse_all_with(
             SmtQualifiedIdentParser::<SmtSyntaxChecker>::new(),
-            &mut resources,
+            &mut parse_state,
             b"x Bool)",
         );
         assert_eq!(qi.ident.name.as_slice(), b"x");
         assert!(qi.sort.is_some());
-        assert!(resources.is_pristine());
+        assert!(parse_state.is_pristine());
     }
 
     #[test]
@@ -323,13 +323,13 @@ mod tests {
             b"(as (_ f 1) (_ BitVec 8))",
             b"(as nil (List Int))",
         ] {
-            let mut resources = SmtParseState::new();
+            let mut parse_state = SmtParseState::new();
             parse_all_with(
                 SmtQualifiedIdentParser::<SmtSyntaxChecker>::new(),
-                &mut resources,
+                &mut parse_state,
                 input,
             );
-            assert!(resources.is_pristine(), "after {input:?}");
+            assert!(parse_state.is_pristine(), "after {input:?}");
         }
     }
 
@@ -338,8 +338,8 @@ mod tests {
     #[should_panic(expected = "must be pristine")]
     fn entering_a_busy_slot_is_rejected() {
         // an entry point may only be used on a pristine slot
-        let mut resources = SmtParseState::<SmtSyntaxChecker>::new();
-        resources.qualified_ident_slot.move_after_as();
-        resources.qualified_ident_slot.move_after_open_paren();
+        let mut parse_state = SmtParseState::<SmtSyntaxChecker>::new();
+        parse_state.qualified_ident_slot.move_after_as();
+        parse_state.qualified_ident_slot.move_after_open_paren();
     }
 }

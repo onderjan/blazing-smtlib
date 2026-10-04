@@ -44,7 +44,7 @@ impl<H: SmtHandler> SmtParse<H> for SmtSymbolParser {
     fn parse(
         &mut self,
         _handler: &mut H,
-        _resources: &mut SmtParseState<H>,
+        _parse_state: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result, ()>, SmtParseError<H::Error>> {
         let Some(token) = cursor.next() else {
@@ -99,7 +99,7 @@ macro_rules! token_parser {
             fn parse(
                 &mut self,
                 _handler: &mut H,
-                _resources: &mut SmtParseState<H>,
+                _parse_state: &mut SmtParseState<H>,
                 cursor: &mut SmtBatchCursor,
             ) -> Result<ControlFlow<Self::Result, ()>, SmtParseError<H::Error>> {
                 let Some(token) = cursor.next() else {
