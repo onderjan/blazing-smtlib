@@ -3,10 +3,10 @@ use std::ops::ControlFlow;
 use crate::{
     SmtCommandHandler, SmtDatatypeConstructor, SmtNumeral, SmtSpan, SmtSymbol,
     read::parser::{
-        CloseParenParser, ClosedMultipleParser, NumeralParser, OpenParenParser, OpenedParser,
-        ParenMaximumParser, ParenMultipleParser, ParenParser, Parser, ParserResources,
-        SmtParseError, SmtSyntaxErrorKind, SortedVarParser, SymbolParser, category::PairParser,
-        handle_err, parse_by_token,
+        SmtCloseParenParser, SmtClosedMultipleParser, SmtNumeralParser, SmtOpenParenParser,
+        SmtOpenedParser, SmtParenMaximumParser, SmtParenMultipleParser, SmtParenParser, SmtParse,
+        SmtParseError, SmtParseState, SmtSortedVarParser, SmtSymbolParser, SmtSyntaxErrorKind,
+        category::SmtPairParser, handle_err, parse_by_token,
     },
     token::{
         SmtBatchCursor, SmtGeneralReserved, SmtReserved, SmtSyntaxToken, SmtToken, SmtVersion,
@@ -14,11 +14,13 @@ use crate::{
 };
 
 /// Parser for a single datatype introduction (name and arity in parentheses).
-type IntroductionParser<H> = ParenParser<H, PairParser<H, SymbolParser, NumeralParser>>;
+type IntroductionParser<H> = SmtParenParser<H, SmtPairParser<H, SmtSymbolParser, SmtNumeralParser>>;
 
 /// Parser for a single datatype constructor.
-type ConstructorParser<H> =
-    OpenedParser<H, PairParser<H, SymbolParser, ClosedMultipleParser<H, SortedVarParser<H>>>>;
+type ConstructorParser<H> = SmtOpenedParser<
+    H,
+    SmtPairParser<H, SmtSymbolParser, SmtClosedMultipleParser<H, SmtSortedVarParser<H>>>,
+>;
 
 #[derive(Clone, Copy)]
 enum DatatypeState {
@@ -49,8 +51,8 @@ struct DatatypeParser<H: SmtCommandHandler> {
     state: DatatypeState,
     single_introduction: Option<(SmtSymbol, SmtSpan)>,
 
-    symbols_parser: ParenMultipleParser<H, SymbolParser>,
-    constructors_parser: ClosedMultipleParser<H, ConstructorParser<H>>,
+    symbols_parser: SmtParenMultipleParser<H, SmtSymbolParser>,
+    constructors_parser: SmtClosedMultipleParser<H, ConstructorParser<H>>,
 }
 
 impl<H: SmtCommandHandler> DatatypeParser<H> {
@@ -58,8 +60,8 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
         Self {
             state: DatatypeState::Start,
             single_introduction: None,
-            symbols_parser: ParenMultipleParser::default(),
-            constructors_parser: ClosedMultipleParser::default(),
+            symbols_parser: SmtParenMultipleParser::default(),
+            constructors_parser: SmtClosedMultipleParser::default(),
         }
     }
 
@@ -96,13 +98,13 @@ impl<H: SmtCommandHandler> Default for DatatypeParser<H> {
     }
 }
 
-impl<H: SmtCommandHandler> Parser<H> for DatatypeParser<H> {
+impl<H: SmtCommandHandler> SmtParse<H> for DatatypeParser<H> {
     type Result = ();
 
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H>,
+        resources: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         parse_by_token(cursor, |version, token| {
@@ -116,7 +118,7 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H>,
+        resources: &mut SmtParseState<H>,
         version: SmtVersion,
         token: SmtToken,
     ) -> Result<ControlFlow<()>, SmtParseError<H::Error>> {
@@ -124,7 +126,7 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
         let constructors = match self.state {
             DatatypeState::Start => {
                 // expect opening parenthesis and move to deciding the kind
-                OpenParenParser::expect(token)?;
+                SmtOpenParenParser::expect(token)?;
                 self.state = DatatypeState::Kind;
                 None
             }
@@ -191,7 +193,7 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
             }
             DatatypeState::ParametricOpen => {
                 // expect opening parenthesis and move to parsing parametric constructors
-                OpenParenParser::expect(token)?;
+                SmtOpenParenParser::expect(token)?;
                 self.state = DatatypeState::ParametricConstructors;
                 None
             }
@@ -207,7 +209,7 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
             }
             DatatypeState::Close => {
                 // expect closing parenthesis, reset and break
-                CloseParenParser::expect(token)?;
+                SmtCloseParenParser::expect(token)?;
                 self.state = DatatypeState::Start;
                 return Ok(ControlFlow::Break(()));
             }
@@ -255,8 +257,8 @@ enum DeclareDatatypesState {
 pub(super) struct DeclareDatatypesParser<H: SmtCommandHandler> {
     state: DeclareDatatypesState,
 
-    introductions_parser: ParenMultipleParser<H, IntroductionParser<H>>,
-    datatypes_parser: ParenMaximumParser<H, DatatypeParser<H>>,
+    introductions_parser: SmtParenMultipleParser<H, IntroductionParser<H>>,
+    datatypes_parser: SmtParenMaximumParser<H, DatatypeParser<H>>,
 }
 
 impl<H: SmtCommandHandler> DeclareDatatypesParser<H> {
@@ -265,19 +267,19 @@ impl<H: SmtCommandHandler> DeclareDatatypesParser<H> {
         // resized before each parse, it does not matter in the initial state
         Self {
             state: DeclareDatatypesState::Introductions,
-            introductions_parser: ParenMultipleParser::default(),
-            datatypes_parser: ParenMaximumParser::new(DatatypeParser::new(), 0),
+            introductions_parser: SmtParenMultipleParser::default(),
+            datatypes_parser: SmtParenMaximumParser::new(DatatypeParser::new(), 0),
         }
     }
 }
 
-impl<H: SmtCommandHandler> Parser<H> for DeclareDatatypesParser<H> {
+impl<H: SmtCommandHandler> SmtParse<H> for DeclareDatatypesParser<H> {
     type Result = ();
 
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H>,
+        resources: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         parse_by_token(cursor, |version, token| {
@@ -291,7 +293,7 @@ impl<H: SmtCommandHandler> DeclareDatatypesParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H>,
+        resources: &mut SmtParseState<H>,
         version: SmtVersion,
         token: SmtToken,
     ) -> Result<ControlFlow<()>, SmtParseError<H::Error>> {
@@ -376,13 +378,13 @@ impl<H: SmtCommandHandler> Default for DeclareDatatypeParser<H> {
     }
 }
 
-impl<H: SmtCommandHandler> Parser<H> for DeclareDatatypeParser<H> {
+impl<H: SmtCommandHandler> SmtParse<H> for DeclareDatatypeParser<H> {
     type Result = ();
 
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H>,
+        resources: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         parse_by_token(cursor, |version, token| {
@@ -396,7 +398,7 @@ impl<H: SmtCommandHandler> DeclareDatatypeParser<H> {
     fn progress(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H>,
+        resources: &mut SmtParseState<H>,
         version: SmtVersion,
         token: SmtToken,
     ) -> Result<ControlFlow<()>, SmtParseError<H::Error>> {
@@ -404,7 +406,7 @@ impl<H: SmtCommandHandler> DeclareDatatypeParser<H> {
         match self.state {
             DeclareDatatypeState::Name => {
                 // parse the datatype name
-                let name = SymbolParser::expect::<H>(version, token)?;
+                let name = SmtSymbolParser::expect::<H>(version, token)?;
                 self.datatype_parser.set_single_datatype_mode(name, span);
                 self.state = DeclareDatatypeState::Datatype;
             }

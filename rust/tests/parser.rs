@@ -13,7 +13,8 @@ use blazing_smtlib::{
     read::{
         SmtReadErrorKind,
         parser::{
-            ClosedParser, CommandAction, CommandPayloadParser, SmtSyntaxErrorKind, TermParser,
+            SmtClosedParser, SmtCommandPayloadParser, SmtCommandRule, SmtSyntaxErrorKind,
+            SmtTermParser,
         },
     },
 };
@@ -112,8 +113,8 @@ struct Recording {
 
 struct MyAssert;
 
-impl CommandAction<Recording> for MyAssert {
-    type Parser = ClosedParser<Recording, TermParser<Recording>>;
+impl SmtCommandRule<Recording> for MyAssert {
+    type Parser = SmtClosedParser<Recording, SmtTermParser<Recording>>;
 
     fn handle(handler: &mut Recording, _term: ()) -> Result<(), NonstandardCommandError> {
         handler.commands.push("my-assert");
@@ -189,14 +190,14 @@ impl SmtHandler for Recording {
 }
 
 impl SmtCommandHandler for Recording {
-    type NonstandardParser = CommandPayloadParser<Self, MyAssert>;
+    type NonstandardParser = SmtCommandPayloadParser<Self, MyAssert>;
 
     fn nonstandard_command(
         &mut self,
         name: SmtSymbolView<'_>,
     ) -> Result<Self::NonstandardParser, Self::Error> {
         match name.as_slice() {
-            b"my-assert" => Ok(CommandPayloadParser::default()),
+            b"my-assert" => Ok(SmtCommandPayloadParser::default()),
             _ => Err(NonstandardCommandError(name.into_owned())),
         }
     }

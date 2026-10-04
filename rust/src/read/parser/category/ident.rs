@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler, SmtIdent, SmtSymbolView,
     read::parser::{
-        Arena, IdentHandle, IndexHandle, Parser, ParserResources, SmtParseError,
+        Arena, IdentHandle, IndexHandle, SmtParse, SmtParseError, SmtParseState,
         SmtSyntaxErrorKind, TextHandle, parse_by_token,
     },
     token::{
@@ -15,34 +15,34 @@ use crate::{
 ///
 /// This parser is self-restarting: after returning Break,
 /// it is in the default state.
-pub struct IdentParser {
+pub struct SmtIdentParser {
     _priv: (),
 }
 
-impl IdentParser {
+impl SmtIdentParser {
     pub fn new() -> Self {
         Self { _priv: () }
     }
 }
 
-impl Default for IdentParser {
+impl Default for SmtIdentParser {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<H: SmtHandler> Parser<H> for IdentParser {
+impl<H: SmtHandler> SmtParse<H> for SmtIdentParser {
     type Result = SmtIdent;
 
     #[inline]
     fn parse(
         &mut self,
         _handler: &mut H,
-        resources: &mut ParserResources<H>,
+        resources: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<SmtIdent, ()>, SmtParseError<H::Error>> {
         // progress the slot over the arena, returning an owned identifier
-        let ParserResources {
+        let SmtParseState {
             ident_slot, arena, ..
         } = resources;
         parse_by_token(cursor, |version, token| {
@@ -259,16 +259,16 @@ mod tests {
         // the callers that already consumed `(` or `( _` enter the slot in the
         // corresponding state, so the parser accepts the rest of the indexed
         // identifier and leaves the slot pristine
-        let mut resources = ParserResources::new();
+        let mut resources = SmtParseState::new();
         resources.ident_slot.move_after_open_paren();
-        let ident = parse_all_with(IdentParser::new(), &mut resources, b"_ f 1)");
+        let ident = parse_all_with(SmtIdentParser::new(), &mut resources, b"_ f 1)");
         assert_eq!(ident.name.as_slice(), b"f");
         assert_eq!(index_texts(&ident), ["1"]);
         assert!(resources.are_pristine());
 
-        let mut resources = ParserResources::new();
+        let mut resources = SmtParseState::new();
         resources.ident_slot.move_after_underscore();
-        let ident = parse_all_with(IdentParser::new(), &mut resources, b"f 1)");
+        let ident = parse_all_with(SmtIdentParser::new(), &mut resources, b"f 1)");
         assert_eq!(ident.name.as_slice(), b"f");
         assert_eq!(index_texts(&ident), ["1"]);
         assert!(resources.are_pristine());
@@ -279,7 +279,7 @@ mod tests {
     #[should_panic(expected = "must be pristine")]
     fn entering_a_busy_slot_is_rejected() {
         // an entry point may only be used on a pristine slot
-        let mut resources = ParserResources::<SmtSyntaxChecker>::new();
+        let mut resources = SmtParseState::<SmtSyntaxChecker>::new();
         resources.ident_slot.move_after_underscore();
         resources.ident_slot.move_after_open_paren();
     }

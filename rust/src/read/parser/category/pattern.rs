@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler, SmtPattern, SmtSimplePattern, SmtSimplePatternView,
     read::parser::{
-        Arena, Parser, ParserResources, PatternHandle, SimplePatternHandle, SmtParseError,
+        Arena, PatternHandle, SimplePatternHandle, SmtParse, SmtParseError, SmtParseState,
         SmtSyntaxErrorKind, TextHandle, parse_by_token,
     },
     token::{
@@ -12,9 +12,9 @@ use crate::{
     },
 };
 
-pub struct SimplePatternParser;
+pub struct SmtSimplePatternParser;
 
-impl SimplePatternParser {
+impl SmtSimplePatternParser {
     pub fn new() -> Self {
         Self
     }
@@ -60,19 +60,19 @@ impl SimplePatternParser {
     }
 }
 
-impl Default for SimplePatternParser {
+impl Default for SmtSimplePatternParser {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<H: SmtHandler> Parser<H> for SimplePatternParser {
+impl<H: SmtHandler> SmtParse<H> for SmtSimplePatternParser {
     type Result = SmtSimplePattern;
 
     fn parse(
         &mut self,
         _handler: &mut H,
-        _resources: &mut ParserResources<H>,
+        _resources: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         let Some(token) = cursor.next() else {
@@ -89,11 +89,11 @@ impl<H: SmtHandler> Parser<H> for SimplePatternParser {
 ///
 /// This parser is self-restarting: after returning Break,
 /// it is in the default state.
-pub struct PatternParser<H: SmtHandler> {
+pub struct SmtPatternParser<H: SmtHandler> {
     _priv: std::marker::PhantomData<H>,
 }
 
-impl<H: SmtHandler> PatternParser<H> {
+impl<H: SmtHandler> SmtPatternParser<H> {
     pub fn new() -> Self {
         Self {
             _priv: std::marker::PhantomData,
@@ -101,24 +101,24 @@ impl<H: SmtHandler> PatternParser<H> {
     }
 }
 
-impl<H: SmtHandler> Default for PatternParser<H> {
+impl<H: SmtHandler> Default for SmtPatternParser<H> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<H: SmtHandler> Parser<H> for PatternParser<H> {
+impl<H: SmtHandler> SmtParse<H> for SmtPatternParser<H> {
     type Result = SmtPattern;
 
     #[inline]
     fn parse(
         &mut self,
         _handler: &mut H,
-        resources: &mut ParserResources<H>,
+        resources: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<SmtPattern, ()>, SmtParseError<H::Error>> {
         // progress the slot
-        let ParserResources {
+        let SmtParseState {
             pattern_slot,
             arena,
             ..
@@ -205,7 +205,7 @@ impl PatternSlot {
                 }));
             }
             // an argument is starting here, it will be stored in the arena
-            let argument = match SimplePatternParser::expect_view::<H>(version, token)? {
+            let argument = match SmtSimplePatternParser::expect_view::<H>(version, token)? {
                 SmtSimplePatternView::Symbol(symbol) => {
                     SimplePatternHandle::Symbol(arena.push_text(symbol.as_slice()))
                 }
@@ -284,9 +284,9 @@ mod tests {
         // the stored constructor and the arguments in the arena; the slot and
         // the arena must be back in their initial state after each
         for input in [&b"x"[..], b"_", b"(cons x xs)", b"(node _ l r)"] {
-            let mut resources = ParserResources::new();
+            let mut resources = SmtParseState::new();
             parse_all_with(
-                PatternParser::<SmtSyntaxChecker>::new(),
+                SmtPatternParser::<SmtSyntaxChecker>::new(),
                 &mut resources,
                 input,
             );

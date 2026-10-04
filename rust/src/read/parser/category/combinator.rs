@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler,
     read::parser::{
-        CloseParenParser, OpenParenParser, Parser, ParserResources, SmtParseError,
+        SmtCloseParenParser, SmtOpenParenParser, SmtParse, SmtParseError, SmtParseState,
         SmtSyntaxErrorKind, category::resources::ClosedMultipleResource,
     },
     token::{SmtBatchCursor, SmtTokenCategory},
@@ -13,13 +13,13 @@ use crate::{
 ///
 /// Preserves self-reset: if the inner parsers are self-resetting,
 /// moves back into the default state before returning Break.
-pub struct PairParser<H: SmtHandler, P1: Parser<H>, P2: Parser<H>> {
+pub struct SmtPairParser<H: SmtHandler, P1: SmtParse<H>, P2: SmtParse<H>> {
     first: P1,
     second: P2,
     first_result: Option<P1::Result>,
 }
 
-impl<H: SmtHandler, P1: Parser<H>, P2: Parser<H>> PairParser<H, P1, P2> {
+impl<H: SmtHandler, P1: SmtParse<H>, P2: SmtParse<H>> SmtPairParser<H, P1, P2> {
     pub fn new(first: P1, second: P2) -> Self {
         Self {
             first,
@@ -29,22 +29,22 @@ impl<H: SmtHandler, P1: Parser<H>, P2: Parser<H>> PairParser<H, P1, P2> {
     }
 }
 
-impl<H: SmtHandler, P1: Parser<H> + Default, P2: Parser<H> + Default> Default
-    for PairParser<H, P1, P2>
+impl<H: SmtHandler, P1: SmtParse<H> + Default, P2: SmtParse<H> + Default> Default
+    for SmtPairParser<H, P1, P2>
 {
     fn default() -> Self {
         Self::new(P1::default(), P2::default())
     }
 }
 
-impl<H: SmtHandler, P1: Parser<H>, P2: Parser<H>> Parser<H> for PairParser<H, P1, P2> {
+impl<H: SmtHandler, P1: SmtParse<H>, P2: SmtParse<H>> SmtParse<H> for SmtPairParser<H, P1, P2> {
     type Result = (P1::Result, P2::Result);
 
     #[inline]
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H>,
+        resources: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         // progress the first parser until it breaks or the tokens run out
@@ -75,32 +75,32 @@ impl<H: SmtHandler, P1: Parser<H>, P2: Parser<H>> Parser<H> for PairParser<H, P1
 ///
 /// Preserves self-reset: if the inner parser is self-resetting,
 /// moves back into the default state before returning Break.
-pub struct ClosedParser<H: SmtHandler, P: Parser<H>> {
-    inner: PairParser<H, P, CloseParenParser>,
+pub struct SmtClosedParser<H: SmtHandler, P: SmtParse<H>> {
+    inner: SmtPairParser<H, P, SmtCloseParenParser>,
 }
 
-impl<H: SmtHandler, P: Parser<H>> ClosedParser<H, P> {
+impl<H: SmtHandler, P: SmtParse<H>> SmtClosedParser<H, P> {
     pub fn new(inner: P) -> Self {
         Self {
-            inner: PairParser::new(inner, CloseParenParser),
+            inner: SmtPairParser::new(inner, SmtCloseParenParser),
         }
     }
 }
 
-impl<H: SmtHandler, P: Parser<H> + Default> Default for ClosedParser<H, P> {
+impl<H: SmtHandler, P: SmtParse<H> + Default> Default for SmtClosedParser<H, P> {
     fn default() -> Self {
         Self::new(P::default())
     }
 }
 
-impl<H: SmtHandler, P: Parser<H>> Parser<H> for ClosedParser<H, P> {
+impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtClosedParser<H, P> {
     type Result = P::Result;
 
     #[inline]
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H>,
+        resources: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         Ok(self
@@ -114,32 +114,32 @@ impl<H: SmtHandler, P: Parser<H>> Parser<H> for ClosedParser<H, P> {
 ///
 /// Preserves self-reset: if the inner parser is self-resetting,
 /// moves back into the default state before returning Break.
-pub struct OpenedParser<H: SmtHandler, P: Parser<H>> {
-    inner: PairParser<H, OpenParenParser, P>,
+pub struct SmtOpenedParser<H: SmtHandler, P: SmtParse<H>> {
+    inner: SmtPairParser<H, SmtOpenParenParser, P>,
 }
 
-impl<H: SmtHandler, P: Parser<H>> OpenedParser<H, P> {
+impl<H: SmtHandler, P: SmtParse<H>> SmtOpenedParser<H, P> {
     pub fn new(inner: P) -> Self {
         Self {
-            inner: PairParser::new(OpenParenParser, inner),
+            inner: SmtPairParser::new(SmtOpenParenParser, inner),
         }
     }
 }
 
-impl<H: SmtHandler, P: Parser<H> + Default> Default for OpenedParser<H, P> {
+impl<H: SmtHandler, P: SmtParse<H> + Default> Default for SmtOpenedParser<H, P> {
     fn default() -> Self {
         Self::new(P::default())
     }
 }
 
-impl<H: SmtHandler, P: Parser<H>> Parser<H> for OpenedParser<H, P> {
+impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtOpenedParser<H, P> {
     type Result = P::Result;
 
     #[inline]
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H>,
+        resources: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         Ok(self
@@ -153,23 +153,23 @@ impl<H: SmtHandler, P: Parser<H>> Parser<H> for OpenedParser<H, P> {
 ///
 /// Preserves self-reset: if the inner parser is self-resetting,
 /// moves back into the default state before returning Break.
-pub type ParenParser<H, P> = OpenedParser<H, ClosedParser<H, P>>;
+pub type SmtParenParser<H, P> = SmtOpenedParser<H, SmtClosedParser<H, P>>;
 
 /// Parses multiple items followed by a closing parenthesis, returning the results as a vector.
 ///
 /// Note that this parser does not consume the opening parenthesis the closing would belong to,
-/// for that, use `ParenMultipleParser`.
+/// for that, use `SmtParenMultipleParser`.
 ///
 /// Keeps the state of the inner parser after break for parsing a next element.
 ///
 /// Preserves self-reset: if the inner parser is self-resetting,
 /// moves back into the default state before returning Break.
-pub struct ClosedMultipleParser<H: SmtHandler, P: Parser<H>> {
+pub struct SmtClosedMultipleParser<H: SmtHandler, P: SmtParse<H>> {
     inner: P,
     resource: ClosedMultipleResource<P::Result>,
 }
 
-impl<H: SmtHandler, P: Parser<H>> ClosedMultipleParser<H, P> {
+impl<H: SmtHandler, P: SmtParse<H>> SmtClosedMultipleParser<H, P> {
     pub fn new(inner: P) -> Self {
         Self {
             inner,
@@ -178,20 +178,20 @@ impl<H: SmtHandler, P: Parser<H>> ClosedMultipleParser<H, P> {
     }
 }
 
-impl<H: SmtHandler, P: Parser<H> + Default> Default for ClosedMultipleParser<H, P> {
+impl<H: SmtHandler, P: SmtParse<H> + Default> Default for SmtClosedMultipleParser<H, P> {
     fn default() -> Self {
         Self::new(P::default())
     }
 }
 
-impl<H: SmtHandler, P: Parser<H>> Parser<H> for ClosedMultipleParser<H, P> {
+impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtClosedMultipleParser<H, P> {
     type Result = Vec<P::Result>;
 
     #[inline]
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H>,
+        resources: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Vec<P::Result>>, SmtParseError<H::Error>> {
         self.resource.parse(cursor, |cursor| {
@@ -206,12 +206,12 @@ impl<H: SmtHandler, P: Parser<H>> Parser<H> for ClosedMultipleParser<H, P> {
 ///
 /// Preserves self-reset: if the inner parser is self-resetting,
 /// moves back into the default state before returning Break.
-pub type ParenMultipleParser<H, P> = OpenedParser<H, ClosedMultipleParser<H, P>>;
+pub type SmtParenMultipleParser<H, P> = SmtOpenedParser<H, SmtClosedMultipleParser<H, P>>;
 
 /// Parser that parses a number of items ending with a closing parenthesis up to some maximum.
 ///
-/// The maximum can be changed by [`ClosedMaximumParser::set_maximum`].
-pub struct ClosedMaximumParser<H: SmtHandler, P: Parser<H>> {
+/// The maximum can be changed by [`SmtClosedMaximumParser::set_maximum`].
+pub struct SmtClosedMaximumParser<H: SmtHandler, P: SmtParse<H>> {
     max_elements: usize,
 
     outside: bool,
@@ -219,7 +219,7 @@ pub struct ClosedMaximumParser<H: SmtHandler, P: Parser<H>> {
     inner: P,
 }
 
-impl<H: SmtHandler, P: Parser<H>> ClosedMaximumParser<H, P> {
+impl<H: SmtHandler, P: SmtParse<H>> SmtClosedMaximumParser<H, P> {
     pub fn new(inner: P, max_elements: usize) -> Self {
         Self {
             max_elements,
@@ -247,13 +247,13 @@ impl<H: SmtHandler, P: Parser<H>> ClosedMaximumParser<H, P> {
     }
 }
 
-impl<H: SmtHandler, P: Parser<H>> Parser<H> for ClosedMaximumParser<H, P> {
+impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtClosedMaximumParser<H, P> {
     type Result = Vec<P::Result>;
 
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H>,
+        resources: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Vec<P::Result>>, SmtParseError<H::Error>> {
         while let Some(peeked) = cursor.peek() {
@@ -296,17 +296,17 @@ impl<H: SmtHandler, P: Parser<H>> Parser<H> for ClosedMaximumParser<H, P> {
 
 /// Parser that parses a number of items enclosed in parentheses up to some maximum.
 ///
-/// The maximum can be changed by [`ParenMaximumParser::set_maximum`].
-pub struct ParenMaximumParser<H: SmtHandler, P: Parser<H>> {
+/// The maximum can be changed by [`SmtParenMaximumParser::set_maximum`].
+pub struct SmtParenMaximumParser<H: SmtHandler, P: SmtParse<H>> {
     is_opened: bool,
-    inner: ClosedMaximumParser<H, P>,
+    inner: SmtClosedMaximumParser<H, P>,
 }
 
-impl<H: SmtHandler, P: Parser<H>> ParenMaximumParser<H, P> {
+impl<H: SmtHandler, P: SmtParse<H>> SmtParenMaximumParser<H, P> {
     pub fn new(inner: P, max_elements: usize) -> Self {
         Self {
             is_opened: false,
-            inner: ClosedMaximumParser::new(inner, max_elements),
+            inner: SmtClosedMaximumParser::new(inner, max_elements),
         }
     }
 
@@ -327,13 +327,13 @@ impl<H: SmtHandler, P: Parser<H>> ParenMaximumParser<H, P> {
     }
 }
 
-impl<H: SmtHandler, P: Parser<H>> Parser<H> for ParenMaximumParser<H, P> {
+impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtParenMaximumParser<H, P> {
     type Result = Vec<P::Result>;
 
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H>,
+        resources: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Vec<P::Result>>, SmtParseError<H::Error>> {
         loop {
@@ -351,7 +351,7 @@ impl<H: SmtHandler, P: Parser<H>> Parser<H> for ParenMaximumParser<H, P> {
                 let Some(token) = cursor.next() else {
                     return Ok(ControlFlow::Continue(()));
                 };
-                OpenParenParser::expect(token)?;
+                SmtOpenParenParser::expect(token)?;
                 self.is_opened = true;
             }
         }

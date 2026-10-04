@@ -2,7 +2,7 @@ use std::{convert::Infallible, ops::ControlFlow};
 
 use crate::{
     SmtCommandHandler, SmtSpan, SmtSymbolView,
-    read::parser::{Parser, ParserResources, SmtParseError, SmtSyntaxErrorKind, handle_err},
+    read::parser::{SmtParse, SmtParseError, SmtParseState, SmtSyntaxErrorKind, handle_err},
     token::{SmtBatchCursor, SmtReserved, SmtSyntaxToken, SmtTokenCategory, SmtVersion},
 };
 
@@ -16,26 +16,26 @@ use standard::{StandardCommandKind, StandardCommandParsers};
 /// Parses one SMT-LIB command.
 ///
 /// The parser finishes after every command, returning [`ControlFlow::Break`]
-/// with a [`CommandParserStop`] that distinguishes the command `(exit)`
+/// with a [`SmtCommandOutcome`] that distinguishes the command `(exit)`
 /// and the version-switch command `(set-info :smt-lib-version <version>)`
 /// from the others. It also finishes after an EOF while awaiting a command.
 /// An EOF inside a command is a syntax error.
 ///
 /// The parser self-resets after finishing.
-pub struct CommandParser<H: SmtCommandHandler> {
+pub struct SmtCommandParser<H: SmtCommandHandler> {
     state: CommandParserState<H>,
     standard_parsers: StandardCommandParsers<H>,
 }
 
 /// Why the command parser finished.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CommandParserStop {
+pub enum SmtCommandOutcome {
     /// A command other than special ones was parsed.
     Command,
     /// A version-switch command was parsed.
     SetVersion(SmtVersion, SmtSpan),
     /// The exit command was parsed.
-    ExitCommand,
+    Exit,
     /// The end of the input was reached before a command.
     EndOfFile,
 }
@@ -47,7 +47,7 @@ enum CommandParserState<H: SmtCommandHandler> {
     Nonstandard(H::NonstandardParser),
 }
 
-impl<H: SmtCommandHandler> CommandParser<H> {
+impl<H: SmtCommandHandler> SmtCommandParser<H> {
     pub fn new() -> Self {
         Self {
             state: CommandParserState::AwaitingCommand,
@@ -71,22 +71,22 @@ impl<H: SmtCommandHandler> CommandParser<H> {
     }
 }
 
-impl<H: SmtCommandHandler> Default for CommandParser<H> {
+impl<H: SmtCommandHandler> Default for SmtCommandParser<H> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<H: SmtCommandHandler> Parser<H> for CommandParser<H> {
-    type Result = CommandParserStop;
+impl<H: SmtCommandHandler> SmtParse<H> for SmtCommandParser<H> {
+    type Result = SmtCommandOutcome;
 
     #[inline]
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H>,
+        resources: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
-    ) -> Result<ControlFlow<CommandParserStop>, SmtParseError<H::Error>> {
+    ) -> Result<ControlFlow<SmtCommandOutcome>, SmtParseError<H::Error>> {
         // State machine:
         // 1. AwaitingCommand takes:
         //  - either the opening parenthesis and moves to CommandOpen,
@@ -107,7 +107,7 @@ impl<H: SmtCommandHandler> Parser<H> for CommandParser<H> {
                         SmtTokenCategory::EndOfFile => {
                             // end of file here finishes the parser,
                             // which is already in its initial state
-                            return Ok(ControlFlow::Break(CommandParserStop::EndOfFile));
+                            return Ok(ControlFlow::Break(SmtCommandOutcome::EndOfFile));
                         }
                         _ => {
                             return Err(SmtParseError::category_error(
@@ -170,7 +170,7 @@ impl<H: SmtCommandHandler> Parser<H> for CommandParser<H> {
                         resources.clear();
                         // a non-standard command cannot be the exit command
                         self.state = CommandParserState::AwaitingCommand;
-                        return Ok(ControlFlow::Break(CommandParserStop::Command));
+                        return Ok(ControlFlow::Break(SmtCommandOutcome::Command));
                     }
                 }
             }
@@ -180,14 +180,14 @@ impl<H: SmtCommandHandler> Parser<H> for CommandParser<H> {
     }
 }
 
-impl<H: SmtCommandHandler> Parser<H> for Infallible {
+impl<H: SmtCommandHandler> SmtParse<H> for Infallible {
     type Result = ();
 
     #[inline]
     fn parse(
         &mut self,
         _handler: &mut H,
-        _resources: &mut ParserResources<H>,
+        _resources: &mut SmtParseState<H>,
         _cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<()>, SmtParseError<H::Error>> {
         match *self {}
@@ -195,29 +195,31 @@ impl<H: SmtCommandHandler> Parser<H> for Infallible {
 }
 
 /// Determines how a single command should be handled by a command handler.
-pub trait CommandAction<H: SmtCommandHandler> {
-    type Parser: Parser<H>;
+pub trait SmtCommandRule<H: SmtCommandHandler> {
+    type Parser: SmtParse<H>;
 
     /// Handles the result of a command.
-    fn handle(handler: &mut H, result: <Self::Parser as Parser<H>>::Result)
-    -> Result<(), H::Error>;
+    fn handle(
+        handler: &mut H,
+        result: <Self::Parser as SmtParse<H>>::Result,
+    ) -> Result<(), H::Error>;
 }
 
 /// A parser that processes the payload of a single command (starting after its name).
 ///
 /// Preserves self-reset: if the inner parser is self-resetting,
 /// moves back into the default state before returning Break.
-pub struct CommandPayloadParser<H: SmtCommandHandler, C: CommandAction<H>> {
+pub struct SmtCommandPayloadParser<H: SmtCommandHandler, C: SmtCommandRule<H>> {
     parser: C::Parser,
 }
 
-impl<H: SmtCommandHandler, C: CommandAction<H>> CommandPayloadParser<H, C> {
+impl<H: SmtCommandHandler, C: SmtCommandRule<H>> SmtCommandPayloadParser<H, C> {
     pub fn new(parser: C::Parser) -> Self {
         Self { parser }
     }
 }
 
-impl<H: SmtCommandHandler, C: CommandAction<H>> Default for CommandPayloadParser<H, C>
+impl<H: SmtCommandHandler, C: SmtCommandRule<H>> Default for SmtCommandPayloadParser<H, C>
 where
     C::Parser: Default,
 {
@@ -226,14 +228,14 @@ where
     }
 }
 
-impl<H: SmtCommandHandler, C: CommandAction<H>> Parser<H> for CommandPayloadParser<H, C> {
+impl<H: SmtCommandHandler, C: SmtCommandRule<H>> SmtParse<H> for SmtCommandPayloadParser<H, C> {
     type Result = ();
 
     #[inline]
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H>,
+        resources: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<()>, SmtParseError<H::Error>> {
         match self.parser.parse(handler, resources, cursor)? {
@@ -262,8 +264,8 @@ mod tests {
     #[test]
     fn finished_command_parser_parses_the_next_command() {
         let mut handler = SmtSyntaxChecker;
-        let mut parser: CommandPayloadParser<SmtSyntaxChecker, standard::CheckSat> =
-            CommandPayloadParser::default();
+        let mut parser: SmtCommandPayloadParser<SmtSyntaxChecker, standard::CheckSat> =
+            SmtCommandPayloadParser::default();
 
         // a check-sat command body is just the closing parenthesis,
         // so one token finishes the command; the parser is self-restarting
@@ -274,7 +276,7 @@ mod tests {
             let flow = parser
                 .parse(
                     &mut handler,
-                    &mut ParserResources::new(),
+                    &mut SmtParseState::new(),
                     &mut SmtBatchCursor::single(SmtVersion::V2_7, close),
                 )
                 .expect("check-sat closing parenthesis must parse");

@@ -4,8 +4,8 @@ use crate::{
     SmtApplication, SmtHandler, SmtQualifiedIdentView, SmtQuantifierKind, SmtSpan, SmtSymbolView,
     SmtTerm,
     read::parser::{
-        Arena, CloseParenParser, OpenParenParser, Parser, ParserResources, QualifiedIdentHandle,
-        SmtParseError, SmtSyntaxErrorKind,
+        Arena, QualifiedIdentHandle, SmtCloseParenParser, SmtOpenParenParser, SmtParse,
+        SmtParseError, SmtParseState, SmtSyntaxErrorKind,
         category::{attribute::MultipleAttributes, parse_special_constant},
         handle_err,
     },
@@ -19,7 +19,7 @@ use crate::{
 ///
 /// This parser is self-restarting: after returning Break,
 /// it is in the default state.
-pub struct TermParser<H: SmtHandler> {
+pub struct SmtTermParser<H: SmtHandler> {
     _priv: std::marker::PhantomData<H>,
 }
 
@@ -155,28 +155,28 @@ struct Pending<H: SmtHandler + ?Sized> {
     is_annotation: bool,
 }
 
-impl<H: SmtHandler> TermParser<H> {
+impl<H: SmtHandler> SmtTermParser<H> {
     pub fn new() -> Self {
-        TermParser {
+        SmtTermParser {
             _priv: std::marker::PhantomData,
         }
     }
 }
 
-impl<H: SmtHandler> Default for TermParser<H> {
+impl<H: SmtHandler> Default for SmtTermParser<H> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<H: SmtHandler> Parser<H> for TermParser<H> {
+impl<H: SmtHandler> SmtParse<H> for SmtTermParser<H> {
     type Result = H::Term;
 
     #[inline(always)]
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H>,
+        resources: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor<'_>,
     ) -> Result<ControlFlow<H::Term>, SmtParseError<H::Error>> {
         // progress the slot with the cursor
@@ -227,7 +227,7 @@ impl<H: SmtHandler> TermSlot<H> {
     #[inline]
     pub(crate) fn parse(
         handler: &mut H,
-        resources: &mut ParserResources<H>,
+        resources: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<H::Term>, SmtParseError<H::Error>> {
         while let Some(token) = cursor.next() {
@@ -336,7 +336,7 @@ impl<H: SmtHandler> TermSlot<H> {
     #[inline]
     pub(crate) fn progress(
         handler: &mut H,
-        resources: &mut ParserResources<H>,
+        resources: &mut SmtParseState<H>,
         version: SmtVersion,
         token: SmtToken,
     ) -> Result<ControlFlow<H::Term>, SmtParseError<H::Error>> {
@@ -374,7 +374,7 @@ impl<H: SmtHandler> TermSlot<H> {
                     }
                 } else {
                     // we are waiting for a closing parenthesis
-                    CloseParenParser::expect(token)?;
+                    SmtCloseParenParser::expect(token)?;
                     // produce the term
                     pending.term
                 }
@@ -397,7 +397,7 @@ impl<H: SmtHandler> TermSlot<H> {
     #[inline]
     fn finish_term(
         handler: &mut H,
-        resources: &mut ParserResources<H>,
+        resources: &mut SmtParseState<H>,
         term: H::Term,
         span: SmtSpan,
     ) -> Result<ControlFlow<H::Term>, SmtParseError<H::Error>> {
@@ -481,7 +481,7 @@ impl<H: SmtHandler> TermSlot<H> {
     #[inline]
     fn progress_inner(
         handler: &mut H,
-        resources: &mut ParserResources<H>,
+        resources: &mut SmtParseState<H>,
         version: SmtVersion,
         token: SmtToken,
     ) -> Result<ControlFlow<H::Term>, SmtParseError<H::Error>> {
@@ -545,7 +545,7 @@ impl<H: SmtHandler> TermSlot<H> {
             }
             State::LetAllBindingsOpen => {
                 // expect an opening parenthesis and move to the single binding
-                OpenParenParser::expect(token)?;
+                SmtOpenParenParser::expect(token)?;
                 slot.state = State::LetBindingOpen;
                 Ok(ControlFlow::Continue(()))
             }
@@ -569,7 +569,7 @@ impl<H: SmtHandler> TermSlot<H> {
             }
             State::LetBindingClose => {
                 // expect a close parenthesis
-                CloseParenParser::expect(token)?;
+                SmtCloseParenParser::expect(token)?;
                 // move to before binding open, a next binding can be opened
                 slot.state = State::LetBindingOpen;
                 Ok(ControlFlow::Continue(()))
@@ -624,7 +624,7 @@ impl<H: SmtHandler> TermSlot<H> {
             }
             State::MatchCasesOpen => {
                 // expect an opening parenthesis
-                OpenParenParser::expect(token)?;
+                SmtOpenParenParser::expect(token)?;
                 // move to awaiting a match case or a closing parenthesis
                 slot.state = State::MatchCaseOpen;
                 Ok(ControlFlow::Continue(()))
@@ -653,7 +653,7 @@ impl<H: SmtHandler> TermSlot<H> {
             }
             State::MatchCaseClose => {
                 // expect a closing parenthesis
-                CloseParenParser::expect(token)?;
+                SmtCloseParenParser::expect(token)?;
                 // move to await a match case or a closing parenthesis
                 slot.state = State::MatchCaseOpen;
                 Ok(ControlFlow::Continue(()))
@@ -664,7 +664,7 @@ impl<H: SmtHandler> TermSlot<H> {
     #[inline]
     fn parse_term_start(
         handler: &mut H,
-        resources: &mut ParserResources<H>,
+        resources: &mut SmtParseState<H>,
         version: SmtVersion,
         token: SmtToken,
     ) -> Result<ControlFlow<H::Term>, SmtParseError<H::Error>> {
@@ -735,7 +735,7 @@ impl<H: SmtHandler> TermSlot<H> {
 
     #[inline]
     fn parse_term_open(
-        resources: &mut ParserResources<H>,
+        resources: &mut SmtParseState<H>,
         version: SmtVersion,
         token: SmtToken,
     ) -> Result<(), SmtParseError<H::Error>> {
@@ -819,7 +819,7 @@ impl<H: SmtHandler> TermSlot<H> {
     /// that closes the bindings followed by the rest of the term.
     fn parse_let_binding_open(
         handler: &mut H,
-        resources: &mut ParserResources<H>,
+        resources: &mut SmtParseState<H>,
         version: SmtVersion,
         token: SmtToken,
     ) -> Result<(), SmtParseError<H::Error>> {
@@ -1002,7 +1002,7 @@ impl SortedBindingsParser {
 impl SortedBindingsParser {
     fn progress_and_open<H: SmtHandler>(
         handler: &mut H,
-        resources: &mut ParserResources<H>,
+        resources: &mut SmtParseState<H>,
         version: SmtVersion,
         token: SmtToken,
         open_fn: impl Fn(&mut H, SmtSymbolView<'_>, H::Sort) -> Result<(), H::Error>,
@@ -1011,7 +1011,7 @@ impl SortedBindingsParser {
         let token = match this.state {
             SortedBindingsParserState::Start => {
                 // expect an opening parenthesis
-                OpenParenParser::expect(token)?;
+                SmtOpenParenParser::expect(token)?;
                 this.state = SortedBindingsParserState::AwaitingBinder;
                 return Ok(ControlFlow::Continue(()));
             }
@@ -1081,8 +1081,12 @@ mod tests {
             b"(! (f x) :named n :pattern ((f x)))",
             b"(match l ((nil l2) ((cons h t) (cons h (append t l2)))))",
         ] {
-            let mut resources = ParserResources::new();
-            parse_all_with(TermParser::<SmtSyntaxChecker>::new(), &mut resources, input);
+            let mut resources = SmtParseState::new();
+            parse_all_with(
+                SmtTermParser::<SmtSyntaxChecker>::new(),
+                &mut resources,
+                input,
+            );
             assert!(resources.are_pristine(), "after {input:?}");
         }
     }

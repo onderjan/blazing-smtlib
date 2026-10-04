@@ -3,25 +3,25 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler, SmtKeyword, SmtKeywordView, SmtNumeral, SmtNumeralView, SmtStringContent,
     SmtStringContentView, SmtSymbol,
-    read::parser::{Parser, ParserResources, SmtParseError, SmtSyntaxErrorKind},
+    read::parser::{SmtParse, SmtParseError, SmtParseState, SmtSyntaxErrorKind},
     token::{SmtBatchCursor, SmtSyntaxToken, SmtToken, SmtTokenCategory, SmtVersion},
 };
 
-pub struct SymbolParser;
+pub struct SmtSymbolParser;
 
-impl SymbolParser {
+impl SmtSymbolParser {
     pub fn new() -> Self {
         Self
     }
 }
 
-impl Default for SymbolParser {
+impl Default for SmtSymbolParser {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl SymbolParser {
+impl SmtSymbolParser {
     /// Consumes exactly one token, which must match.
     pub(crate) fn expect<H: SmtHandler + ?Sized>(
         version: SmtVersion,
@@ -38,13 +38,13 @@ impl SymbolParser {
     }
 }
 
-impl<H: SmtHandler> Parser<H> for SymbolParser {
+impl<H: SmtHandler> SmtParse<H> for SmtSymbolParser {
     type Result = SmtSymbol;
 
     fn parse(
         &mut self,
         _handler: &mut H,
-        _resources: &mut ParserResources<H>,
+        _resources: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result, ()>, SmtParseError<H::Error>> {
         let Some(token) = cursor.next() else {
@@ -93,13 +93,13 @@ macro_rules! token_parser {
             }
         }
 
-        impl<H: SmtHandler> Parser<H> for $parser {
+        impl<H: SmtHandler> SmtParse<H> for $parser {
             type Result = $result;
 
             fn parse(
                 &mut self,
                 _handler: &mut H,
-                _resources: &mut ParserResources<H>,
+                _resources: &mut SmtParseState<H>,
                 cursor: &mut SmtBatchCursor,
             ) -> Result<ControlFlow<Self::Result, ()>, SmtParseError<H::Error>> {
                 let Some(token) = cursor.next() else {
@@ -111,16 +111,16 @@ macro_rules! token_parser {
     };
 }
 
-token_parser!(NumeralParser, SmtNumeral, Numeral, |content| {
+token_parser!(SmtNumeralParser, SmtNumeral, Numeral, |content| {
     SmtNumeralView::new_unchecked(content).into_owned()
 });
 
-token_parser!(OpenParenParser, (), ParenOpen, |_| ());
-token_parser!(CloseParenParser, (), ParenClose, |_| ());
+token_parser!(SmtOpenParenParser, (), ParenOpen, |_| ());
+token_parser!(SmtCloseParenParser, (), ParenClose, |_| ());
 
-token_parser!(KeywordParser, SmtKeyword, Keyword, |content| {
+token_parser!(SmtKeywordParser, SmtKeyword, Keyword, |content| {
     SmtKeywordView::new_unchecked(content).into_owned()
 });
-token_parser!(StringParser, SmtStringContent, String, |content| {
+token_parser!(SmtStringParser, SmtStringContent, String, |content| {
     SmtStringContentView::new_unchecked(content).into_owned()
 });

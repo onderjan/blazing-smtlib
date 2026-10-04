@@ -27,7 +27,7 @@ use crate::{
     read::{
         lexer::{SmtLexError, SmtLexer, SmtLexicalError, SmtLexicalErrorKind},
         parser::{
-            ParseAdapter, Parser, ScriptParser, SmtParseError, SmtParseErrorKind,
+            ParseAdapter, SmtParse, SmtParseError, SmtParseErrorKind, SmtScriptParser,
             SmtSyntaxErrorKind,
         },
     },
@@ -151,7 +151,7 @@ pub fn read_smt<H: SmtCommandHandler>(
 /// Streams SMT-LIB input from bytes to a [`SmtCommandHandler`].
 ///
 /// A reader owns its lexer, its parser, and the parser resources, and borrows
-/// the handler. By default it parses a script with a [`ScriptParser`]; a reader
+/// the handler. By default it parses a script with a [`SmtScriptParser`]; a reader
 /// created with [`with_parser`](Self::with_parser) adapts another top-level
 /// parser, for other SMT-LIB input such as solver responses.
 ///
@@ -166,7 +166,7 @@ pub fn read_smt<H: SmtCommandHandler>(
 /// every subsequent read call panics.
 ///
 /// For whole inputs, consider [`read_smt_file`] and [`read_smt`].
-pub struct SmtReader<'a, H: SmtHandler + ?Sized, P: Parser<H> = ScriptParser<H>> {
+pub struct SmtReader<'a, H: SmtHandler + ?Sized, P: SmtParse<H> = SmtScriptParser<H>> {
     lexer: SmtLexer<ParseAdapter<'a, H, P>>,
 }
 
@@ -177,11 +177,11 @@ impl<'a, H: SmtCommandHandler> SmtReader<'a, H> {
         initial_version: SmtVersion,
         posture: SmtVersionPosture,
     ) -> Self {
-        Self::with_parser(handler, ScriptParser::new(posture), initial_version)
+        Self::with_parser(handler, SmtScriptParser::new(posture), initial_version)
     }
 }
 
-impl<'a, H: SmtHandler + ?Sized, P: Parser<H>> SmtReader<'a, H, P> {
+impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtReader<'a, H, P> {
     /// Creates a reader of the input `parser` accepts, over `handler`.
     pub fn with_parser(handler: &'a mut H, parser: P, initial_version: SmtVersion) -> Self {
         let lexer = SmtLexer::new(ParseAdapter::new(handler, parser), initial_version);

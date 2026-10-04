@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler,
     read::parser::{
-        Arena, IdentHandle, IdentSlot, Parser, ParserResources, SmtParseError, SmtSyntaxErrorKind,
+        Arena, IdentHandle, IdentSlot, SmtParse, SmtParseError, SmtParseState, SmtSyntaxErrorKind,
         handle_err, parse_by_token,
     },
     token::{
@@ -15,11 +15,11 @@ use crate::{
 ///
 /// This parser is self-restarting: after returning Break,
 /// it is in the default state.
-pub struct SortParser<H: SmtHandler> {
+pub struct SmtSortParser<H: SmtHandler> {
     _priv: std::marker::PhantomData<H>,
 }
 
-impl<H: SmtHandler> SortParser<H> {
+impl<H: SmtHandler> SmtSortParser<H> {
     pub fn new() -> Self {
         Self {
             _priv: std::marker::PhantomData,
@@ -27,24 +27,24 @@ impl<H: SmtHandler> SortParser<H> {
     }
 }
 
-impl<H: SmtHandler> Default for SortParser<H> {
+impl<H: SmtHandler> Default for SmtSortParser<H> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<H: SmtHandler> Parser<H> for SortParser<H> {
+impl<H: SmtHandler> SmtParse<H> for SmtSortParser<H> {
     type Result = H::Sort;
 
     #[inline]
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H>,
+        resources: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<H::Sort>, SmtParseError<H::Error>> {
         // progress the slot, giving it the ident slot it delegates to
-        let ParserResources {
+        let SmtParseState {
             ident_slot,
             sort_slot,
             arena,
@@ -270,8 +270,12 @@ mod tests {
             b"(Array (_ BitVec 8) Int)",
             b"((_ Tuple 2) (_ BitVec 8) (Set Int))",
         ] {
-            let mut resources = ParserResources::new();
-            parse_all_with(SortParser::<SmtSyntaxChecker>::new(), &mut resources, input);
+            let mut resources = SmtParseState::new();
+            parse_all_with(
+                SmtSortParser::<SmtSyntaxChecker>::new(),
+                &mut resources,
+                input,
+            );
             assert!(resources.are_pristine(), "after {input:?}");
         }
     }

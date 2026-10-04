@@ -14,7 +14,7 @@ use blazing_smtlib::{
     NonstandardCommandError, SmtSyntaxChecker, String8,
     read::{
         SmtReadError, SmtReadErrorKind, SmtReader,
-        parser::{CommandParser, CommandParserStop, SExprParser, SmtSyntaxErrorKind},
+        parser::{SmtCommandOutcome, SmtCommandParser, SmtSExprParser, SmtSyntaxErrorKind},
     },
     token::{
         SmtCommandNameReserved, SmtGeneralReserved, SmtReserved, SmtVersion, SmtVersionPosture,
@@ -464,8 +464,9 @@ fn a_command_parser_reports_the_declaration_without_applying_it() {
     // to switch, so it finishes with the declared version and its span, applies
     // no posture, and the reader is back in its initial version for the next command
     let mut handler = SmtSyntaxChecker;
-    let mut reader = SmtReader::with_parser(&mut handler, CommandParser::new(), SmtVersion::V2_7);
-    let mut stop = |input: &[u8]| -> Result<CommandParserStop, ReadError> {
+    let mut reader =
+        SmtReader::with_parser(&mut handler, SmtCommandParser::new(), SmtVersion::V2_7);
+    let mut stop = |input: &[u8]| -> Result<SmtCommandOutcome, ReadError> {
         match reader.read_slice(input)? {
             ControlFlow::Break(located) => Ok(*located.value()),
             ControlFlow::Continue(()) => panic!("the command must finish the reader"),
@@ -477,7 +478,7 @@ fn a_command_parser_reports_the_declaration_without_applying_it() {
         for _ in 0..2 {
             let input = format!("(set-info :smt-lib-version {spelling})");
             match stop(input.as_bytes()).expect("a declaration of a known version") {
-                CommandParserStop::SetVersion(declared, span) => {
+                SmtCommandOutcome::SetVersion(declared, span) => {
                     assert_eq!(declared, version);
                     assert_eq!((span.start().offset(), span.end().offset()), (27, 30));
                 }
@@ -487,7 +488,7 @@ fn a_command_parser_reports_the_declaration_without_applying_it() {
     }
     assert_eq!(
         stop(b"(set-info :status sat)").expect("another attribute"),
-        CommandParserStop::Command
+        SmtCommandOutcome::Command
     );
     // lambda is still reserved after the declarations of 2.5 and 2.6
     assert!(stop(b"(set-info :smt-lib-version 2.6)").is_ok());
@@ -674,7 +675,7 @@ fn a_reserved_word_alone_is_an_s_expression_since_2_6() {
     // the S-expression parser on its own takes the reserved word as a whole S-expression
     for (version, _) in VERSIONS {
         let mut handler = SmtSyntaxChecker;
-        let mut reader = SmtReader::with_parser(&mut handler, SExprParser::new(), version);
+        let mut reader = SmtReader::with_parser(&mut handler, SmtSExprParser::new(), version);
         let result = reader.read_slice(b"let ");
         if version < SmtVersion::V2_6 {
             let err = result.expect_err("a reserved word is no S-expression before 2.6");

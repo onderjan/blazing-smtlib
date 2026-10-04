@@ -11,7 +11,7 @@ use blazing_smtlib::{
     SmtSyntaxChecker,
     read::{
         lexer::SmtLexer,
-        parser::{Parser, ParserResources, SortParser, TermParser},
+        parser::{SmtParse, SmtParseState, SmtSortParser, SmtTermParser},
     },
     token::{SmtBatchCursor, SmtConsume, SmtTokenCategory, SmtVersion},
 };
@@ -225,9 +225,9 @@ fn consuming_all_empties_the_cursor_at_its_end() {
 
 /// Drives the parser through `parse` on the hand-overs of the chunks,
 /// returning per hand-over how many tokens it consumed and whether it finished.
-fn drive<P: Parser<SmtSyntaxChecker> + Default>(chunks: &[&[u8]]) -> Vec<(usize, bool)> {
+fn drive<P: SmtParse<SmtSyntaxChecker> + Default>(chunks: &[&[u8]]) -> Vec<(usize, bool)> {
     let mut parser = P::default();
-    let mut resources = ParserResources::new();
+    let mut resources = SmtParseState::new();
     let mut finished = false;
     let mut calls = Vec::new();
     on_batches(chunks, |mut cursor| {
@@ -247,8 +247,8 @@ fn drive<P: Parser<SmtSyntaxChecker> + Default>(chunks: &[&[u8]]) -> Vec<(usize,
 fn parse_stops_after_the_category_and_leaves_the_rest() {
     // the same property for a term and a sort: five tokens make the category,
     // the sixth is left in the cursor
-    assert_eq!(drive::<TermParser<_>>(&[b"(f a b) x "]), [(5, true)]);
-    assert_eq!(drive::<SortParser<_>>(&[b"(Array a b) x "]), [(5, true)]);
+    assert_eq!(drive::<SmtTermParser<_>>(&[b"(f a b) x "]), [(5, true)]);
+    assert_eq!(drive::<SmtSortParser<_>>(&[b"(Array a b) x "]), [(5, true)]);
 }
 
 #[test]
@@ -256,11 +256,11 @@ fn parse_continues_across_batches() {
     // the category spans two hand-overs: the first is consumed whole without a
     // result, the second finishes it after two tokens
     assert_eq!(
-        drive::<TermParser<_>>(&[b"(f a ", b"b) x "]),
+        drive::<SmtTermParser<_>>(&[b"(f a ", b"b) x "]),
         [(3, false), (2, true)]
     );
     assert_eq!(
-        drive::<SortParser<_>>(&[b"(Array a ", b"b) x "]),
+        drive::<SmtSortParser<_>>(&[b"(Array a ", b"b) x "]),
         [(3, false), (2, true)]
     );
 }
@@ -268,15 +268,18 @@ fn parse_continues_across_batches() {
 #[test]
 fn parse_finishes_at_the_last_token_of_a_batch() {
     // the closing parenthesis is the hand-over's last token: finished, nothing left
-    assert_eq!(drive::<TermParser<_>>(&[b"(f a b)", b" x "]), [(5, true)]);
+    assert_eq!(
+        drive::<SmtTermParser<_>>(&[b"(f a b)", b" x "]),
+        [(5, true)]
+    );
 }
 
 #[test]
 fn parse_reports_the_parser_error() {
     on_token_batch(b") x ", |mut cursor| {
-        let result = TermParser::<SmtSyntaxChecker>::default().parse(
+        let result = SmtTermParser::<SmtSyntaxChecker>::default().parse(
             &mut SmtSyntaxChecker,
-            &mut ParserResources::new(),
+            &mut SmtParseState::new(),
             &mut cursor,
         );
         assert!(result.is_err(), "a closing parenthesis cannot start a term");

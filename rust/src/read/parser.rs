@@ -15,7 +15,7 @@ use crate::{
     token::{SmtBatchCursor, SmtToken, SmtTokenCategory, SmtVersion},
 };
 
-pub trait Parser<H: SmtHandler + ?Sized> {
+pub trait SmtParse<H: SmtHandler + ?Sized> {
     type Result;
 
     /// Parses tokens from the cursor, progressing the parser.
@@ -32,21 +32,21 @@ pub trait Parser<H: SmtHandler + ?Sized> {
     /// the consumed ones. The state of the parser, cursor, and resources
     /// is unspecified.
     ///
-    /// All library parsers implementing [`Parser`] are fully self-resetting:
+    /// All library parsers implementing [`SmtParse`] are fully self-resetting:
     /// after returning [`ControlFlow::Break`], they are back in their initial state.
     ///
     /// The `resources` are shared resources of standard category parsers.
-    /// To keep resources valid, each [`Parser`] must be progressed
-    /// until completion once started, i.e. if [`Parser::parse()`]
+    /// To keep resources valid, each [`SmtParse`] must be progressed
+    /// until completion once started, i.e. if [`SmtParse::parse()`]
     /// returns `Ok(Continue(()))`, the subsequent outer parse call
-    /// must call [`Parser::parse()`] on the same parser, and
+    /// must call [`SmtParse::parse()`] on the same parser, and
     /// is forbidden from progressing any other parsers.
     /// Failure to heed this contract may lead to silently wrong parsing
     /// or panics, but never unsafe behaviour.
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H>,
+        resources: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>>;
 }

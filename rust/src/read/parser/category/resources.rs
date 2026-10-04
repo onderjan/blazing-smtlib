@@ -16,7 +16,7 @@ use crate::{
 /// duplicated resources (e.g. collections). This structure
 /// is only constructed once for the root parser and
 /// propagated to smaller parsers.
-pub struct ParserResources<H: SmtHandler + ?Sized> {
+pub struct SmtParseState<H: SmtHandler + ?Sized> {
     pub(crate) arena: Arena<H>,
     pub(crate) ident_slot: IdentSlot,
     pub(crate) qualified_ident_slot: QualifiedIdentSlot<H>,
@@ -28,7 +28,7 @@ pub struct ParserResources<H: SmtHandler + ?Sized> {
     pub(crate) term_slot: TermSlot<H>,
 }
 
-impl<H: SmtHandler + ?Sized> ParserResources<H> {
+impl<H: SmtHandler + ?Sized> SmtParseState<H> {
     pub fn new() -> Self {
         Self {
             arena: Arena::new(),
@@ -68,7 +68,7 @@ impl<H: SmtHandler + ?Sized> ParserResources<H> {
     }
 }
 
-impl<H: SmtHandler + ?Sized> Default for ParserResources<H> {
+impl<H: SmtHandler + ?Sized> Default for SmtParseState<H> {
     fn default() -> Self {
         Self::new()
     }

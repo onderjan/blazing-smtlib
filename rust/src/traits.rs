@@ -3,7 +3,7 @@ use std::{convert::Infallible, fmt::Debug};
 use crate::{
     SmtAttributeValue, SmtAttributes, SmtBindings, SmtDatatypeConstructor, SmtFunctionSignature,
     SmtKeyword, SmtKeywordView, SmtNumeral, SmtPatternView, SmtQuantifierKind, SmtSExpr, SmtSort,
-    SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm, read::parser::Parser,
+    SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm, read::parser::SmtParse,
 };
 
 pub trait SmtHandler {
@@ -111,7 +111,7 @@ pub trait SmtHandler {
 }
 
 pub trait SmtCommandHandler: SmtHandler {
-    type NonstandardParser: Parser<Self, Result = ()>;
+    type NonstandardParser: SmtParse<Self, Result = ()>;
 
     /// Returns a parser that parses a non-standard command with the given name.
     fn nonstandard_command(

@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
 
 use crate::{
     SmtHandler,
-    read::parser::{Parser, ParserResources, SmtParseError},
+    read::parser::{SmtParse, SmtParseError, SmtParseState},
     token::{SmtBatchCursor, SmtConsume},
 };
 
@@ -10,18 +10,18 @@ use crate::{
 ///
 /// The adapter implements [`SmtConsume`]: it calls the parser,
 /// providing it the handler and additional persistent resources.
-pub struct ParseAdapter<'a, H: SmtHandler + ?Sized, P: Parser<H>> {
+pub struct ParseAdapter<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> {
     handler: &'a mut H,
-    resources: ParserResources<H>,
+    resources: SmtParseState<H>,
     parser: P,
 }
 
-impl<'a, H: SmtHandler + ?Sized, P: Parser<H>> ParseAdapter<'a, H, P> {
+impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> ParseAdapter<'a, H, P> {
     /// Creates an adapter of `parser` over `handler`, with fresh resources.
     pub fn new(handler: &'a mut H, parser: P) -> Self {
         Self {
             handler,
-            resources: ParserResources::new(),
+            resources: SmtParseState::new(),
             parser,
         }
     }
@@ -42,7 +42,7 @@ impl<'a, H: SmtHandler + ?Sized, P: Parser<H>> ParseAdapter<'a, H, P> {
     }
 }
 
-impl<H: SmtHandler + ?Sized, P: Parser<H>> SmtConsume for ParseAdapter<'_, H, P> {
+impl<H: SmtHandler + ?Sized, P: SmtParse<H>> SmtConsume for ParseAdapter<'_, H, P> {
     type Result = P::Result;
     type Error = SmtParseError<H::Error>;
 

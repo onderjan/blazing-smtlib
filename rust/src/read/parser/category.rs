@@ -14,21 +14,22 @@ mod term;
 mod token;
 
 pub use {
-    attribute::{ClosedAttributeParser, ClosedMultipleAttributeParser},
+    attribute::{SmtClosedAttributeParser, SmtClosedMultipleAttributeParser},
     combinator::{
-        ClosedMaximumParser, ClosedMultipleParser, ClosedParser, OpenedParser, PairParser,
-        ParenMaximumParser, ParenMultipleParser, ParenParser,
+        SmtClosedMaximumParser, SmtClosedMultipleParser, SmtClosedParser, SmtOpenedParser,
+        SmtPairParser, SmtParenMaximumParser, SmtParenMultipleParser, SmtParenParser,
     },
-    ident::IdentParser,
-    pattern::PatternParser,
-    qualified_ident::QualifiedIdentParser,
-    resources::ParserResources,
-    s_expr::SExprParser,
-    sort::SortParser,
-    sorted_var::SortedVarParser,
-    term::TermParser,
+    ident::SmtIdentParser,
+    pattern::SmtPatternParser,
+    qualified_ident::SmtQualifiedIdentParser,
+    resources::SmtParseState,
+    s_expr::SmtSExprParser,
+    sort::SmtSortParser,
+    sorted_var::SmtSortedVarParser,
+    term::SmtTermParser,
     token::{
-        CloseParenParser, KeywordParser, NumeralParser, OpenParenParser, StringParser, SymbolParser,
+        SmtCloseParenParser, SmtKeywordParser, SmtNumeralParser, SmtOpenParenParser,
+        SmtStringParser, SmtSymbolParser,
     },
 };
 
@@ -44,7 +45,7 @@ pub(crate) use sort::SortSlot;
 pub(crate) use sorted_var::SortedVarSlot;
 pub(crate) use term::TermSlot;
 
-pub type ParenSortedVarsParser<H> = ParenMultipleParser<H, SortedVarParser<H>>;
+pub type SmtParenSortedVarsParser<H> = SmtParenMultipleParser<H, SmtSortedVarParser<H>>;
 
 #[inline]
 fn parse_special_constant<'a>(
@@ -69,7 +70,7 @@ pub(crate) mod tests {
         NonstandardCommandError, SmtSyntaxChecker,
         read::{
             lexer::SmtLexer,
-            parser::{Parser, ParserResources, SmtParseError},
+            parser::{SmtParse, SmtParseError, SmtParseState},
         },
         token::{SmtBatchCursor, SmtConsume, SmtTokenCategory, SmtVersion},
     };
@@ -80,19 +81,19 @@ pub(crate) mod tests {
     ///
     /// Lets unit tests enter a category through its crate-private entry
     /// points before driving it.
-    pub(crate) fn parse_all_with<P: Parser<SmtSyntaxChecker>>(
+    pub(crate) fn parse_all_with<P: SmtParse<SmtSyntaxChecker>>(
         parser: P,
-        resources: &mut ParserResources<SmtSyntaxChecker>,
+        resources: &mut SmtParseState<SmtSyntaxChecker>,
         input: &[u8],
     ) -> P::Result {
-        struct Drive<'r, P: Parser<SmtSyntaxChecker>> {
+        struct Drive<'r, P: SmtParse<SmtSyntaxChecker>> {
             parser: P,
-            resources: &'r mut ParserResources<SmtSyntaxChecker>,
+            resources: &'r mut SmtParseState<SmtSyntaxChecker>,
             result: Option<P::Result>,
             unconsumed: usize,
         }
 
-        impl<P: Parser<SmtSyntaxChecker>> SmtConsume for Drive<'_, P> {
+        impl<P: SmtParse<SmtSyntaxChecker>> SmtConsume for Drive<'_, P> {
             type Result = ();
             type Error = SmtParseError<NonstandardCommandError>;
 

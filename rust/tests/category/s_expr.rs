@@ -2,7 +2,7 @@
 
 use super::*;
 
-type P = SExprParser<Printing>;
+type P = SmtSExprParser<Printing>;
 
 #[test]
 fn atoms() {
@@ -153,7 +153,7 @@ fn deep_nesting_does_not_overflow_the_stack() {
     input.extend(std::iter::repeat_n(b')', DEPTH));
 
     let mut handler = Counting::default();
-    let ((), left) = run_with::<Counting, SExprParser<Counting>>(&mut handler, &input)
+    let ((), left) = run_with::<Counting, SmtSExprParser<Counting>>(&mut handler, &input)
         .unwrap_or_else(|(kind, span)| panic!("{kind:?} at {span:?}"));
     assert_eq!(left, 0);
     // every list level plus the single atom

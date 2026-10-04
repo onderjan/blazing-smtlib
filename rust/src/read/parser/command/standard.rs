@@ -3,11 +3,14 @@ use std::ops::ControlFlow;
 use crate::{
     SmtCommandHandler, SmtFunctionSignature, SmtSpan, SmtSymbol,
     read::parser::{
-        CloseParenParser, CommandPayloadParser, KeywordParser, NumeralParser, ParenMultipleParser,
-        Parser, ParserResources, SmtParseError, SmtSyntaxErrorKind, StringParser, SymbolParser,
-        category::{ClosedAttributeParser, ClosedParser, PairParser, SortParser, TermParser},
+        SmtCloseParenParser, SmtCommandPayloadParser, SmtKeywordParser, SmtNumeralParser,
+        SmtParenMultipleParser, SmtParse, SmtParseError, SmtParseState, SmtStringParser,
+        SmtSymbolParser, SmtSyntaxErrorKind,
+        category::{
+            SmtClosedAttributeParser, SmtClosedParser, SmtPairParser, SmtSortParser, SmtTermParser,
+        },
         command::{
-            CommandAction, CommandParserStop,
+            SmtCommandOutcome, SmtCommandRule,
             datatype::{DeclareDatatypeParser, DeclareDatatypesParser},
             definition::{Definition, DefinitionParser},
             function::{DefineFunsRecParser, FunctionSignatureParser, RecursiveBodyParser},
@@ -26,12 +29,12 @@ macro_rules! standard_commands {
         $(
             pub(super) struct $kind;
 
-            impl<H: SmtCommandHandler> CommandAction<H> for $kind {
+            impl<H: SmtCommandHandler> SmtCommandRule<H> for $kind {
                 type Parser = $parser;
 
                 fn handle(
                     $handler: &mut H,
-                    $result: <$parser as Parser<H>>::Result,
+                    $result: <$parser as SmtParse<H>>::Result,
                 ) -> Result<(), H::Error> {
                     $handle
                 }
@@ -58,22 +61,22 @@ macro_rules! standard_commands {
         ///
         /// All parsers are persistent to avoid dropping buffers.
         pub(crate) struct StandardCommandParsers<H: SmtCommandHandler> {
-            $($field: CommandPayloadParser<H, $kind>,)*
+            $($field: SmtCommandPayloadParser<H, $kind>,)*
         }
 
         impl<H: SmtCommandHandler> StandardCommandParsers<H> {
             pub fn new() -> Self {
                 Self {
-                    $($field: CommandPayloadParser::default(),)*
+                    $($field: SmtCommandPayloadParser::default(),)*
                 }
             }
             pub fn parse(
                 &mut self,
                 kind: StandardCommandKind,
                 handler: &mut H,
-                resources: &mut ParserResources<H>,
+                resources: &mut SmtParseState<H>,
                 cursor: &mut SmtBatchCursor<'_>,
-            ) -> Result<ControlFlow<CommandParserStop, ()>, SmtParseError<H::Error>> {
+            ) -> Result<ControlFlow<SmtCommandOutcome, ()>, SmtParseError<H::Error>> {
                 let flow = match kind {
                     $(StandardCommandKind::$kind => self.$field.parse(handler, resources, cursor)?,)*
                 };
@@ -85,12 +88,12 @@ macro_rules! standard_commands {
                 let result = match kind {
                     StandardCommandKind::SetInfo => {
                         match self.set_info.parser.take_declared_version() {
-                            Some((version, span)) => CommandParserStop::SetVersion(version, span),
-                            None => CommandParserStop::Command,
+                            Some((version, span)) => SmtCommandOutcome::SetVersion(version, span),
+                            None => SmtCommandOutcome::Command,
                         }
                     }
-                    StandardCommandKind::Exit => CommandParserStop::ExitCommand,
-                    _ => CommandParserStop::Command,
+                    StandardCommandKind::Exit => SmtCommandOutcome::Exit,
+                    _ => SmtCommandOutcome::Command,
                 };
                 Ok(ControlFlow::Break(result))
             }
@@ -106,108 +109,108 @@ macro_rules! standard_commands {
 
 standard_commands! {
     set_logic: SetLogic(
-        ClosedParser<H, SymbolParser>,
+        SmtClosedParser<H, SmtSymbolParser>,
         |handler, logic| handler.command_set_logic(logic)),
     declare_sort: DeclareSort(
-        ClosedParser<H, PairParser<H, SymbolParser, NumeralParser>>,
+        SmtClosedParser<H, SmtPairParser<H, SmtSymbolParser, SmtNumeralParser>>,
         |handler, (name, arity)| handler.command_declare_sort(name, arity)),
     declare_sort_parameter: DeclareSortParameter(
-        ClosedParser<H, SymbolParser>,
+        SmtClosedParser<H, SmtSymbolParser>,
         |handler, name| handler.command_declare_sort_parameter(name)),
     declare_const: DeclareConst(
-        ClosedParser<H, PairParser<H, SymbolParser, SortParser<H>>>,
+        SmtClosedParser<H, SmtPairParser<H, SmtSymbolParser, SmtSortParser<H>>>,
         |handler, (name, sort)| handler.command_declare_fun(name, Vec::new(), sort)),
     declare_fun: DeclareFun(
-        ClosedParser<H, PairParser<H, SymbolParser,
-            PairParser<H, ParenMultipleParser<H, SortParser<H>>, SortParser<H>>>>,
+        SmtClosedParser<H, SmtPairParser<H, SmtSymbolParser,
+            SmtPairParser<H, SmtParenMultipleParser<H, SmtSortParser<H>>, SmtSortParser<H>>>>,
         |handler, (name, (param_sorts, result_sort))|
             handler.command_declare_fun(name, param_sorts, result_sort)),
     declare_datatype: DeclareDatatype(
-        ClosedParser<H, DeclareDatatypeParser<H>>,
+        SmtClosedParser<H, DeclareDatatypeParser<H>>,
         |_handler, ()| Ok(())),
     declare_datatypes: DeclareDatatypes(
-        ClosedParser<H, DeclareDatatypesParser<H>>,
+        SmtClosedParser<H, DeclareDatatypesParser<H>>,
         |_handler, ()| Ok(())),
     define_sort: DefineSort(
-        ClosedParser<H, DefinitionParser<H, DefineSort>>,
+        SmtClosedParser<H, DefinitionParser<H, DefineSort>>,
         |_handler, ()| Ok(())),
     define_const: DefineConst(
-        ClosedParser<H, DefinitionParser<H, DefineConst>>,
+        SmtClosedParser<H, DefinitionParser<H, DefineConst>>,
         |_handler, ()| Ok(())),
     define_fun: DefineFun(
-        ClosedParser<H, DefinitionParser<H, DefineFun>>,
+        SmtClosedParser<H, DefinitionParser<H, DefineFun>>,
         |_handler, ()| Ok(())),
     define_fun_rec: DefineFunRec(
-        ClosedParser<H, DefinitionParser<H, DefineFunRec>>,
+        SmtClosedParser<H, DefinitionParser<H, DefineFunRec>>,
         |_handler, ()| Ok(())),
     define_funs_rec: DefineFunsRec(
-        ClosedParser<H, DefineFunsRecParser<H>>,
+        SmtClosedParser<H, DefineFunsRecParser<H>>,
         |_handler, ()| Ok(())),
     assert: Assert(
-        ClosedParser<H, TermParser<H>>,
+        SmtClosedParser<H, SmtTermParser<H>>,
         |handler, term| handler.command_assert(term)),
     check_sat: CheckSat(
-        CloseParenParser,
+        SmtCloseParenParser,
         |handler, ()| handler.command_check_sat(Vec::new())),
     check_sat_assuming: CheckSatAssuming(
         CheckSatAssumingParser<H>,
         |handler, assuming| handler.command_check_sat(assuming)),
     exit: Exit(
-        CloseParenParser,
+        SmtCloseParenParser,
         |handler, ()| handler.command_exit()),
     push: Push(
-        ClosedParser<H,NumeralParser>,
+        SmtClosedParser<H,SmtNumeralParser>,
         |handler, amount| handler.command_push(amount)),
     pop: Pop(
-        ClosedParser<H,NumeralParser>,
+        SmtClosedParser<H,SmtNumeralParser>,
         |handler, amount| handler.command_pop(amount)),
     set_info: SetInfo(
         SetInfoParser<H>,
         |handler, attribute| handler.command_set_info(attribute)),
     echo: Echo(
-        ClosedParser<H, StringParser>,
+        SmtClosedParser<H, SmtStringParser>,
         |handler, value| handler.command_echo(value)),
     get_option: GetOption(
-        ClosedParser<H, KeywordParser>,
+        SmtClosedParser<H, SmtKeywordParser>,
         |handler, option| handler.command_get_option(option)),
     set_option: SetOption(
-        ClosedAttributeParser<H>,
+        SmtClosedAttributeParser<H>,
         |handler, option| handler.command_set_option(option)),
     get_info: GetInfo(
-        ClosedParser<H, KeywordParser>,
+        SmtClosedParser<H, SmtKeywordParser>,
         |handler, keyword| handler.command_get_info(keyword)),
     get_value: GetValue(
-        ClosedParser<H,GetValueParser<H>>,
+        SmtClosedParser<H,GetValueParser<H>>,
         |handler, terms| handler.command_get_value(terms)),
     reset: Reset(
-        CloseParenParser,
+        SmtCloseParenParser,
         |handler, ()| handler.command_reset()),
     reset_assertions: ResetAssertions(
-        CloseParenParser,
+        SmtCloseParenParser,
         |handler, ()| handler.command_reset_assertions()),
     get_assertions: GetAssertions(
-        CloseParenParser,
+        SmtCloseParenParser,
         |handler, ()| handler.command_get_assertions()),
     get_assignment: GetAssignment(
-        CloseParenParser,
+        SmtCloseParenParser,
         |handler, ()| handler.command_get_assignment()),
     get_model: GetModel(
-        CloseParenParser,
+        SmtCloseParenParser,
         |handler, ()| handler.command_get_model()),
     get_proof: GetProof(
-        CloseParenParser,
+        SmtCloseParenParser,
         |handler, ()| handler.command_get_proof()),
     get_unsat_assumptions: GetUnsatAssumptions(
-        CloseParenParser,
+        SmtCloseParenParser,
         |handler, ()| handler.command_get_unsat_assumptions()),
     get_unsat_core: GetUnsatCore(
-        CloseParenParser,
+        SmtCloseParenParser,
         |handler, ()| handler.command_get_unsat_core()),
 }
 
 impl<H: SmtCommandHandler> Definition<H> for DefineConst {
-    type Signature = PairParser<H, SymbolParser, SortParser<H>>;
-    type Body = TermParser<H>;
+    type Signature = SmtPairParser<H, SmtSymbolParser, SmtSortParser<H>>;
+    type Body = SmtTermParser<H>;
 
     fn start(handler: &mut H, signature: (SmtSymbol, H::Sort)) -> Result<(), H::Error> {
         let (name, result_sort) = signature;
@@ -226,7 +229,7 @@ impl<H: SmtCommandHandler> Definition<H> for DefineConst {
 
 impl<H: SmtCommandHandler> Definition<H> for DefineFun {
     type Signature = FunctionSignatureParser<H>;
-    type Body = TermParser<H>;
+    type Body = SmtTermParser<H>;
 
     fn start(handler: &mut H, signature: SmtFunctionSignature<H>) -> Result<(), H::Error> {
         handler.start_define_fun(signature)
@@ -238,8 +241,8 @@ impl<H: SmtCommandHandler> Definition<H> for DefineFun {
 }
 
 impl<H: SmtCommandHandler> Definition<H> for DefineSort {
-    type Signature = PairParser<H, SymbolParser, ParenMultipleParser<H, SymbolParser>>;
-    type Body = SortParser<H>;
+    type Signature = SmtPairParser<H, SmtSymbolParser, SmtParenMultipleParser<H, SmtSymbolParser>>;
+    type Body = SmtSortParser<H>;
 
     fn start(handler: &mut H, signature: (SmtSymbol, Vec<SmtSymbol>)) -> Result<(), H::Error> {
         let (name, params) = signature;
@@ -266,13 +269,13 @@ impl<H: SmtCommandHandler> Definition<H> for DefineFunRec {
 
 /// A parser for parameters of `get-value`: a non-empty list of terms.
 pub(super) struct GetValueParser<H: SmtCommandHandler> {
-    inner: ParenMultipleParser<H, TermParser<H>>,
+    inner: SmtParenMultipleParser<H, SmtTermParser<H>>,
 }
 
 impl<H: SmtCommandHandler> GetValueParser<H> {
     fn new() -> Self {
         Self {
-            inner: ParenMultipleParser::default(),
+            inner: SmtParenMultipleParser::default(),
         }
     }
 }
@@ -283,14 +286,14 @@ impl<H: SmtCommandHandler> Default for GetValueParser<H> {
     }
 }
 
-impl<H: SmtCommandHandler> Parser<H> for GetValueParser<H> {
+impl<H: SmtCommandHandler> SmtParse<H> for GetValueParser<H> {
     type Result = Vec<H::Term>;
 
     #[inline]
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H>,
+        resources: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Vec<H::Term>, ()>, SmtParseError<H::Error>> {
         match self.inner.parse(handler, resources, cursor)? {
@@ -320,7 +323,7 @@ impl<H: SmtCommandHandler> Parser<H> for GetValueParser<H> {
 /// This parser is necessary to recognise the version declaration attribute
 /// `:smt-lib-version <version>`, where the version should be a decimal.
 pub(super) struct SetInfoParser<H: SmtCommandHandler> {
-    inner: ClosedAttributeParser<H>,
+    inner: SmtClosedAttributeParser<H>,
     state: SetInfoState,
     declared_version: Option<(SmtVersion, SmtSpan)>,
 }
@@ -338,7 +341,7 @@ enum SetInfoState {
 impl<H: SmtCommandHandler> SetInfoParser<H> {
     fn new() -> Self {
         Self {
-            inner: ClosedAttributeParser::new(),
+            inner: SmtClosedAttributeParser::new(),
             state: SetInfoState::Name,
             declared_version: None,
         }
@@ -356,14 +359,14 @@ impl<H: SmtCommandHandler> Default for SetInfoParser<H> {
     }
 }
 
-impl<H: SmtCommandHandler> Parser<H> for SetInfoParser<H> {
+impl<H: SmtCommandHandler> SmtParse<H> for SetInfoParser<H> {
     type Result = H::Attribute;
 
     #[inline]
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H>,
+        resources: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<H::Attribute, ()>, SmtParseError<H::Error>> {
         // We process the version before the actual processing, as we
@@ -427,7 +430,7 @@ impl<H: SmtCommandHandler> Parser<H> for SetInfoParser<H> {
 /// must be a propositional literal: `<symbol>` or `(not <symbol>)`.
 /// The literals are terms too, and are parsed as such.
 pub(super) struct CheckSatAssumingParser<H: SmtCommandHandler> {
-    inner: ClosedParser<H, ParenMultipleParser<H, TermParser<H>>>,
+    inner: SmtClosedParser<H, SmtParenMultipleParser<H, SmtTermParser<H>>>,
     state: PropLiteralsState,
 }
 
@@ -449,7 +452,7 @@ enum PropLiteralsState {
 impl<H: SmtCommandHandler> CheckSatAssumingParser<H> {
     fn new() -> Self {
         Self {
-            inner: ClosedParser::default(),
+            inner: SmtClosedParser::default(),
             state: PropLiteralsState::Open,
         }
     }
@@ -461,14 +464,14 @@ impl<H: SmtCommandHandler> Default for CheckSatAssumingParser<H> {
     }
 }
 
-impl<H: SmtCommandHandler> Parser<H> for CheckSatAssumingParser<H> {
+impl<H: SmtCommandHandler> SmtParse<H> for CheckSatAssumingParser<H> {
     type Result = Vec<H::Term>;
 
     #[inline]
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H>,
+        resources: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Vec<H::Term>, ()>, SmtParseError<H::Error>> {
         // Any terms are allowed as assumptions since SMT-LIB 2.7. Before it,

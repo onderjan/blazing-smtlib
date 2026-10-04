@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler, SmtSExpr,
     read::parser::{
-        Arena, Parser, ParserResources, SmtParseError, SmtSyntaxErrorKind,
+        Arena, SmtParse, SmtParseError, SmtParseState, SmtSyntaxErrorKind,
         category::parse_special_constant, handle_err, parse_by_token,
     },
     token::{SmtBatchCursor, SmtSyntaxToken, SmtToken, SmtVersion},
@@ -13,11 +13,11 @@ use crate::{
 ///
 /// This parser is self-restarting: after returning Break,
 /// it is in the default state.
-pub struct SExprParser<H: SmtHandler> {
+pub struct SmtSExprParser<H: SmtHandler> {
     _priv: std::marker::PhantomData<H>,
 }
 
-impl<H: SmtHandler> SExprParser<H> {
+impl<H: SmtHandler> SmtSExprParser<H> {
     pub fn new() -> Self {
         Self {
             _priv: std::marker::PhantomData,
@@ -25,24 +25,24 @@ impl<H: SmtHandler> SExprParser<H> {
     }
 }
 
-impl<H: SmtHandler> Default for SExprParser<H> {
+impl<H: SmtHandler> Default for SmtSExprParser<H> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<H: SmtHandler> Parser<H> for SExprParser<H> {
+impl<H: SmtHandler> SmtParse<H> for SmtSExprParser<H> {
     type Result = H::SExpr;
 
     #[inline]
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H>,
+        resources: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<H::SExpr>, SmtParseError<H::Error>> {
         // progress the slot over the arena
-        let ParserResources {
+        let SmtParseState {
             s_expr_slot, arena, ..
         } = resources;
         parse_by_token(cursor, |version, token| {
@@ -171,9 +171,9 @@ mod tests {
         // atoms, empty lists, and nested lists all use the level stack of the
         // slot and the arena, which must be empty again afterwards
         for input in [&b"x"[..], b"()", b"(a (b c) :kw 1)", b"((()))"] {
-            let mut resources = ParserResources::new();
+            let mut resources = SmtParseState::new();
             parse_all_with(
-                SExprParser::<SmtSyntaxChecker>::new(),
+                SmtSExprParser::<SmtSyntaxChecker>::new(),
                 &mut resources,
                 input,
             );

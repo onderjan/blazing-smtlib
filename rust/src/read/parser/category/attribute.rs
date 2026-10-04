@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtAttributeValue, SmtHandler, SmtKeywordView, SmtSpan,
     read::parser::{
-        Arena, CloseParenParser, Parser, ParserResources, SExprSlot, SmtParseError,
+        Arena, SExprSlot, SmtCloseParenParser, SmtParse, SmtParseError, SmtParseState,
         SmtSyntaxErrorKind, TextHandle, category::parse_special_constant, handle_err,
         parse_by_token,
     },
@@ -14,11 +14,11 @@ use crate::{
 ///
 /// This parser is self-restarting: after returning Break,
 /// it is in the default state.
-pub struct ClosedAttributeParser<H: SmtHandler> {
+pub struct SmtClosedAttributeParser<H: SmtHandler> {
     _priv: std::marker::PhantomData<H>,
 }
 
-impl<H: SmtHandler> ClosedAttributeParser<H> {
+impl<H: SmtHandler> SmtClosedAttributeParser<H> {
     pub fn new() -> Self {
         Self {
             _priv: std::marker::PhantomData,
@@ -26,22 +26,22 @@ impl<H: SmtHandler> ClosedAttributeParser<H> {
     }
 }
 
-impl<H: SmtHandler> Default for ClosedAttributeParser<H> {
+impl<H: SmtHandler> Default for SmtClosedAttributeParser<H> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<H: SmtHandler> Parser<H> for ClosedAttributeParser<H> {
+impl<H: SmtHandler> SmtParse<H> for SmtClosedAttributeParser<H> {
     type Result = H::Attribute;
 
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H>,
+        resources: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<<H as SmtHandler>::Error>> {
-        let ParserResources {
+        let SmtParseState {
             attribute_slot,
             arena,
             s_expr_slot,
@@ -63,11 +63,11 @@ impl<H: SmtHandler> Parser<H> for ClosedAttributeParser<H> {
 ///
 /// This parser is self-restarting: after returning Break,
 /// it is in the default state.
-pub struct ClosedMultipleAttributeParser<H: SmtHandler> {
+pub struct SmtClosedMultipleAttributeParser<H: SmtHandler> {
     _priv: std::marker::PhantomData<H>,
 }
 
-impl<H: SmtHandler> ClosedMultipleAttributeParser<H> {
+impl<H: SmtHandler> SmtClosedMultipleAttributeParser<H> {
     pub fn new() -> Self {
         Self {
             _priv: std::marker::PhantomData,
@@ -75,22 +75,22 @@ impl<H: SmtHandler> ClosedMultipleAttributeParser<H> {
     }
 }
 
-impl<H: SmtHandler> Default for ClosedMultipleAttributeParser<H> {
+impl<H: SmtHandler> Default for SmtClosedMultipleAttributeParser<H> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<H: SmtHandler> Parser<H> for ClosedMultipleAttributeParser<H> {
+impl<H: SmtHandler> SmtParse<H> for SmtClosedMultipleAttributeParser<H> {
     type Result = Vec<H::Attribute>;
 
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H>,
+        resources: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<<H as SmtHandler>::Error>> {
-        let ParserResources {
+        let SmtParseState {
             attribute_slot,
             arena,
             s_expr_slot,
@@ -188,7 +188,7 @@ impl AttributeSlot {
         let span = token.span();
         if !C::next_allowed(self.num_attributes) {
             // no more attributes are allowed, just expect a closing parenthesis
-            CloseParenParser::expect(token)?;
+            SmtCloseParenParser::expect(token)?;
             return Ok(ControlFlow::Break(self.finish::<H, C>(arena, span)?));
         }
 
@@ -419,9 +419,9 @@ mod tests {
             b":weight 3)",
             b":pattern ((f x) y))",
         ] {
-            let mut resources = ParserResources::new();
+            let mut resources = SmtParseState::new();
             parse_all_with(
-                ClosedAttributeParser::<SmtSyntaxChecker>::new(),
+                SmtClosedAttributeParser::<SmtSyntaxChecker>::new(),
                 &mut resources,
                 input,
             );
@@ -432,9 +432,9 @@ mod tests {
             b":pattern ((f x)) :qid q)",
             b")",
         ] {
-            let mut resources = ParserResources::new();
+            let mut resources = SmtParseState::new();
             parse_all_with(
-                ClosedMultipleAttributeParser::<SmtSyntaxChecker>::new(),
+                SmtClosedMultipleAttributeParser::<SmtSyntaxChecker>::new(),
                 &mut resources,
                 input,
             );

@@ -3,8 +3,8 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler, SmtSymbol,
     read::parser::{
-        Arena, CloseParenParser, IdentSlot, OpenParenParser, Parser, ParserResources,
-        SmtParseError, SmtSyntaxErrorKind, SortSlot, TextHandle, parse_by_token,
+        Arena, IdentSlot, SmtCloseParenParser, SmtOpenParenParser, SmtParse, SmtParseError,
+        SmtParseState, SmtSyntaxErrorKind, SortSlot, TextHandle, parse_by_token,
     },
     token::{SmtBatchCursor, SmtSyntaxToken, SmtToken, SmtVersion},
 };
@@ -13,11 +13,11 @@ use crate::{
 ///
 /// This parser is self-restarting: after returning Break,
 /// it is in the default state.
-pub struct SortedVarParser<H: SmtHandler> {
+pub struct SmtSortedVarParser<H: SmtHandler> {
     _priv: std::marker::PhantomData<H>,
 }
 
-impl<H: SmtHandler> SortedVarParser<H> {
+impl<H: SmtHandler> SmtSortedVarParser<H> {
     pub fn new() -> Self {
         Self {
             _priv: std::marker::PhantomData,
@@ -25,24 +25,24 @@ impl<H: SmtHandler> SortedVarParser<H> {
     }
 }
 
-impl<H: SmtHandler> Default for SortedVarParser<H> {
+impl<H: SmtHandler> Default for SmtSortedVarParser<H> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<H: SmtHandler> Parser<H> for SortedVarParser<H> {
+impl<H: SmtHandler> SmtParse<H> for SmtSortedVarParser<H> {
     type Result = (SmtSymbol, H::Sort);
 
     #[inline]
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H>,
+        resources: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         // progress the slot, giving it the sort and ident slots it delegates to
-        let ParserResources {
+        let SmtParseState {
             ident_slot,
             sort_slot,
             sorted_var_slot,
@@ -114,7 +114,7 @@ impl<H: SmtHandler + ?Sized> SortedVarSlot<H> {
 
         if let Some(sorted_var) = self.sorted_var.take() {
             // after the sort, waiting for ")"
-            CloseParenParser::expect(token)?;
+            SmtCloseParenParser::expect(token)?;
             // the slot is back in its initial state
             return Ok(ControlFlow::Break(sorted_var));
         }
@@ -141,7 +141,7 @@ impl<H: SmtHandler + ?Sized> SortedVarSlot<H> {
         } else {
             // waiting for "("
             debug_assert!(self.is_pristine(), "must be pristine when starting");
-            OpenParenParser::expect(token)?;
+            SmtOpenParenParser::expect(token)?;
             self.is_open = true;
         }
         Ok(ControlFlow::Continue(()))
@@ -162,9 +162,9 @@ mod tests {
             b"(y (_ BitVec 8))",
             b"(z (Array Int (_ BitVec 8)))",
         ] {
-            let mut resources = ParserResources::new();
+            let mut resources = SmtParseState::new();
             let (name, _sort) = parse_all_with(
-                SortedVarParser::<SmtSyntaxChecker>::new(),
+                SmtSortedVarParser::<SmtSyntaxChecker>::new(),
                 &mut resources,
                 input,
             );

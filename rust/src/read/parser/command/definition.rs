@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
 
 use crate::{
     SmtCommandHandler,
-    read::parser::{Parser, ParserResources, SmtParseError, handle_err},
+    read::parser::{SmtParse, SmtParseError, SmtParseState, handle_err},
     token::SmtBatchCursor,
 };
 
@@ -13,17 +13,17 @@ use crate::{
 /// The commands using a definition parser do not call the
 /// handler after ending, as everything is handled by the parser.
 pub(super) trait Definition<H: SmtCommandHandler> {
-    type Signature: Parser<H> + Default;
-    type Body: Parser<H> + Default;
+    type Signature: SmtParse<H> + Default;
+    type Body: SmtParse<H> + Default;
 
     /// Start is invoked before the first definition body token.
     fn start(
         handler: &mut H,
-        signature: <Self::Signature as Parser<H>>::Result,
+        signature: <Self::Signature as SmtParse<H>>::Result,
     ) -> Result<(), H::Error>;
 
     /// End is invoked when the last definition body token is processed.
-    fn end(handler: &mut H, body: <Self::Body as Parser<H>>::Result) -> Result<(), H::Error>;
+    fn end(handler: &mut H, body: <Self::Body as SmtParse<H>>::Result) -> Result<(), H::Error>;
 }
 
 enum DefinitionParserState {
@@ -57,14 +57,14 @@ impl<H: SmtCommandHandler, D: Definition<H>> Default for DefinitionParser<H, D> 
     }
 }
 
-impl<H: SmtCommandHandler, D: Definition<H>> Parser<H> for DefinitionParser<H, D> {
+impl<H: SmtCommandHandler, D: Definition<H>> SmtParse<H> for DefinitionParser<H, D> {
     type Result = ();
 
     #[inline]
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H>,
+        resources: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         if matches!(self.state, DefinitionParserState::Signature) {

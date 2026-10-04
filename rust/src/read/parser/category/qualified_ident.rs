@@ -3,8 +3,8 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler, SmtQualifiedIdent, SmtSymbolView,
     read::parser::{
-        Arena, CloseParenParser, IdentHandle, IdentSlot, Parser, ParserResources,
-        QualifiedIdentHandle, SmtParseError, SmtSyntaxErrorKind, SortSlot, parse_by_token,
+        Arena, IdentHandle, IdentSlot, QualifiedIdentHandle, SmtCloseParenParser, SmtParse,
+        SmtParseError, SmtParseState, SmtSyntaxErrorKind, SortSlot, parse_by_token,
     },
     token::{
         SmtBatchCursor, SmtGeneralReserved, SmtReserved, SmtSyntaxToken, SmtToken, SmtVersion,
@@ -15,11 +15,11 @@ use crate::{
 ///
 /// This parser is self-restarting: after returning Break,
 /// it is in the default state.
-pub struct QualifiedIdentParser<H: SmtHandler> {
+pub struct SmtQualifiedIdentParser<H: SmtHandler> {
     _priv: std::marker::PhantomData<H>,
 }
 
-impl<H: SmtHandler> QualifiedIdentParser<H> {
+impl<H: SmtHandler> SmtQualifiedIdentParser<H> {
     pub fn new() -> Self {
         Self {
             _priv: std::marker::PhantomData,
@@ -27,24 +27,24 @@ impl<H: SmtHandler> QualifiedIdentParser<H> {
     }
 }
 
-impl<H: SmtHandler> Default for QualifiedIdentParser<H> {
+impl<H: SmtHandler> Default for SmtQualifiedIdentParser<H> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<H: SmtHandler> Parser<H> for QualifiedIdentParser<H> {
+impl<H: SmtHandler> SmtParse<H> for SmtQualifiedIdentParser<H> {
     type Result = SmtQualifiedIdent<H>;
 
     #[inline]
     fn parse(
         &mut self,
         handler: &mut H,
-        resources: &mut ParserResources<H>,
+        resources: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<SmtQualifiedIdent<H>>, SmtParseError<H::Error>> {
         // progress the slot, giving it the ident and sort slots it delegates to
-        let ParserResources {
+        let SmtParseState {
             ident_slot,
             sort_slot,
             qualified_ident_slot,
@@ -177,7 +177,7 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
 
         if let Some(qualified_ident) = self.qualified_ident.take() {
             // step 6: after the sort, waiting for ")"
-            CloseParenParser::expect(token)?;
+            SmtCloseParenParser::expect(token)?;
             // the slot is back in its initial state
             return Ok(ControlFlow::Break(qualified_ident));
         }
@@ -268,10 +268,10 @@ mod tests {
         // the callers that already consumed `(`, `( _` or `( as` enter the
         // slot in the corresponding state, so the parser accepts the rest of
         // the qualified identifier and leaves the slots pristine
-        let mut resources = ParserResources::new();
+        let mut resources = SmtParseState::new();
         resources.qualified_ident_slot.move_after_open_paren();
         let qi = parse_all_with(
-            QualifiedIdentParser::<SmtSyntaxChecker>::new(),
+            SmtQualifiedIdentParser::<SmtSyntaxChecker>::new(),
             &mut resources,
             b"_ f 1)",
         );
@@ -282,15 +282,15 @@ mod tests {
 
         // regression: the entry point must put the ident slot after the
         // underscore as well, or `f` alone would finish the identifier
-        let mut resources = ParserResources::new();
-        let ParserResources {
+        let mut resources = SmtParseState::new();
+        let SmtParseState {
             ident_slot,
             qualified_ident_slot,
             ..
         } = &mut resources;
         qualified_ident_slot.move_after_underscore(ident_slot);
         let qi = parse_all_with(
-            QualifiedIdentParser::<SmtSyntaxChecker>::new(),
+            SmtQualifiedIdentParser::<SmtSyntaxChecker>::new(),
             &mut resources,
             b"f 1)",
         );
@@ -299,10 +299,10 @@ mod tests {
         assert!(qi.sort.is_none());
         assert!(resources.are_pristine());
 
-        let mut resources = ParserResources::new();
+        let mut resources = SmtParseState::new();
         resources.qualified_ident_slot.move_after_as();
         let qi = parse_all_with(
-            QualifiedIdentParser::<SmtSyntaxChecker>::new(),
+            SmtQualifiedIdentParser::<SmtSyntaxChecker>::new(),
             &mut resources,
             b"x Bool)",
         );
@@ -323,9 +323,9 @@ mod tests {
             b"(as (_ f 1) (_ BitVec 8))",
             b"(as nil (List Int))",
         ] {
-            let mut resources = ParserResources::new();
+            let mut resources = SmtParseState::new();
             parse_all_with(
-                QualifiedIdentParser::<SmtSyntaxChecker>::new(),
+                SmtQualifiedIdentParser::<SmtSyntaxChecker>::new(),
                 &mut resources,
                 input,
             );
@@ -338,7 +338,7 @@ mod tests {
     #[should_panic(expected = "must be pristine")]
     fn entering_a_busy_slot_is_rejected() {
         // an entry point may only be used on a pristine slot
-        let mut resources = ParserResources::<SmtSyntaxChecker>::new();
+        let mut resources = SmtParseState::<SmtSyntaxChecker>::new();
         resources.qualified_ident_slot.move_after_as();
         resources.qualified_ident_slot.move_after_open_paren();
     }

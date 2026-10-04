@@ -2,7 +2,7 @@
 
 use super::*;
 
-type P = ClosedAttributeParser<Printing>;
+type P = SmtClosedAttributeParser<Printing>;
 
 #[test]
 fn attribute_without_value() {
@@ -136,7 +136,7 @@ fn s_expr_list_value_errors() {
 
 // --- Multiple attributes ---
 
-type MP = ClosedMultipleAttributeParser<Printing>;
+type MP = SmtClosedMultipleAttributeParser<Printing>;
 
 #[test]
 fn multiple_attributes() {
