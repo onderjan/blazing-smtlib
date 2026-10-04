@@ -2,7 +2,7 @@ mod char_class;
 mod error;
 mod helpers;
 
-pub use error::{SmtLexError, SmtLexicalError, SmtLexicalErrorKind};
+pub use error::{SmtLexError, SmtLexErrorCause, SmtLexicalError, SmtLexicalErrorKind};
 
 pub(crate) use char_class::CharClass;
 
@@ -1648,7 +1648,7 @@ impl<C: SmtConsume> SmtLexer<C> {
                     }
                 }
                 Ok(ControlFlow::Break(result)) => Ok(Stop::Finished(result)),
-                Err(err) => Err(SmtLexError::Consumer(err)),
+                Err(err) => Err(SmtLexError::new(SmtLexErrorCause::Consumer(err), None)),
             };
             // the stop takes effect after the consumed tokens
             return Err(Interrupted {
@@ -1782,7 +1782,10 @@ impl<C: SmtConsume> SmtLexer<C> {
         // no tokens have been consumed, as this is an error
         // that occurred during lexing
         Interrupted {
-            result: Err(SmtLexError::Lexical(SmtLexicalError::new(kind, span))),
+            result: Err(SmtLexError::new(
+                SmtLexErrorCause::Lexical(SmtLexicalError::new(kind, span)),
+                None,
+            )),
             location: end,
         }
     }

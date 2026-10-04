@@ -24,7 +24,7 @@ use std::{
 use crate::token::{SmtVersion, SmtVersionPosture};
 use crate::{
     SmtCommandHandler, SmtHandler, SmtLocated, SmtSpan,
-    lexer::{SmtLexError, SmtLexer, SmtLexicalError, SmtLexicalErrorKind},
+    lexer::{SmtLexError, SmtLexErrorCause, SmtLexer, SmtLexicalError, SmtLexicalErrorKind},
     parser::{
         SmtParse, SmtParseAdapter, SmtParseError, SmtParseErrorKind, SmtScriptParser,
         SmtSyntaxErrorKind,
@@ -81,9 +81,9 @@ impl<E> SmtReadError<E> {
 
 impl<E> From<SmtLexError<SmtParseError<E>>> for SmtReadError<E> {
     fn from(err: SmtLexError<SmtParseError<E>>) -> Self {
-        match err {
-            SmtLexError::Lexical(err) => err.into(),
-            SmtLexError::Consumer(err) => err.into(),
+        match err.into_cause() {
+            SmtLexErrorCause::Lexical(err) => err.into(),
+            SmtLexErrorCause::Consumer(err) => err.into(),
         }
     }
 }
