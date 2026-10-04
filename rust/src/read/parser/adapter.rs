@@ -10,13 +10,13 @@ use crate::{
 ///
 /// The adapter implements [`SmtConsume`]: it calls the parser,
 /// providing it the handler and additional persistent resources.
-pub struct ParseAdapter<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> {
+pub struct SmtParseAdapter<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> {
     handler: &'a mut H,
     resources: SmtParseState<H>,
     parser: P,
 }
 
-impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> ParseAdapter<'a, H, P> {
+impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtParseAdapter<'a, H, P> {
     /// Creates an adapter of `parser` over `handler`, with fresh resources.
     pub fn new(handler: &'a mut H, parser: P) -> Self {
         Self {
@@ -42,7 +42,7 @@ impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> ParseAdapter<'a, H, P> {
     }
 }
 
-impl<H: SmtHandler + ?Sized, P: SmtParse<H>> SmtConsume for ParseAdapter<'_, H, P> {
+impl<H: SmtHandler + ?Sized, P: SmtParse<H>> SmtConsume for SmtParseAdapter<'_, H, P> {
     type Result = P::Result;
     type Error = SmtParseError<H::Error>;
 

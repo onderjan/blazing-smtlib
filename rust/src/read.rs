@@ -27,7 +27,7 @@ use crate::{
     read::{
         lexer::{SmtLexError, SmtLexer, SmtLexicalError, SmtLexicalErrorKind},
         parser::{
-            ParseAdapter, SmtParse, SmtParseError, SmtParseErrorKind, SmtScriptParser,
+            SmtParse, SmtParseAdapter, SmtParseError, SmtParseErrorKind, SmtScriptParser,
             SmtSyntaxErrorKind,
         },
     },
@@ -167,7 +167,7 @@ pub fn read_smt<H: SmtCommandHandler>(
 ///
 /// For whole inputs, consider [`read_smt_file`] and [`read_smt`].
 pub struct SmtReader<'a, H: SmtHandler + ?Sized, P: SmtParse<H> = SmtScriptParser<H>> {
-    lexer: SmtLexer<ParseAdapter<'a, H, P>>,
+    lexer: SmtLexer<SmtParseAdapter<'a, H, P>>,
 }
 
 impl<'a, H: SmtCommandHandler> SmtReader<'a, H> {
@@ -184,7 +184,7 @@ impl<'a, H: SmtCommandHandler> SmtReader<'a, H> {
 impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtReader<'a, H, P> {
     /// Creates a reader of the input `parser` accepts, over `handler`.
     pub fn with_parser(handler: &'a mut H, parser: P, initial_version: SmtVersion) -> Self {
-        let lexer = SmtLexer::new(ParseAdapter::new(handler, parser), initial_version);
+        let lexer = SmtLexer::new(SmtParseAdapter::new(handler, parser), initial_version);
         Self { lexer }
     }
 
