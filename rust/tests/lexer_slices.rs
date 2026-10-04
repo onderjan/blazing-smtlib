@@ -642,8 +642,10 @@ fn payload_from_span(input: &[u8], token: &LexedToken) -> Vec<u8> {
         | SmtTokenCategory::Numeral
         | SmtTokenCategory::Decimal
         | SmtTokenCategory::ParenOpen
-        | SmtTokenCategory::ParenClose => text.to_vec(),
-        SmtTokenCategory::Keyword => text[1..].to_vec(),
+        | SmtTokenCategory::ParenClose
+        | SmtTokenCategory::Whitespace => text.to_vec(),
+        // a comment carries what follows its semicolon, like a keyword its colon
+        SmtTokenCategory::Keyword | SmtTokenCategory::Comment => text[1..].to_vec(),
         SmtTokenCategory::Hexadecimal | SmtTokenCategory::Binary => text[2..].to_vec(),
         SmtTokenCategory::String => {
             let mut payload = Vec::new();
@@ -697,6 +699,7 @@ struct RejectNth {
 impl SmtConsume for RejectNth {
     type Result = ();
     type Error = ();
+    const CONSUMES_WHITESPACE_AND_COMMENTS: bool = false;
 
     fn consume(
         &mut self,

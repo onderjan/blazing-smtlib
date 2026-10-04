@@ -59,6 +59,7 @@ struct DiscardTokens {
 impl SmtConsume for DiscardTokens {
     type Result = ();
     type Error = Infallible;
+    const CONSUMES_WHITESPACE_AND_COMMENTS: bool = false;
 
     fn consume(
         &mut self,

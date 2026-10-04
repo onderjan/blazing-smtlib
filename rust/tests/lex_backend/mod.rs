@@ -121,14 +121,17 @@ pub fn lex_pieces(version: SmtVersion, pieces: &[&[u8]]) -> Lexed {
 
 // --- The Rust lexer ---
 
-struct Collect<'a> {
+/// Takes every token. `WHITESPACE` says whether it consumes whitespace and
+/// comments.
+struct Collect<'a, const WHITESPACE: bool> {
     version: SmtVersion,
     tokens: &'a mut Vec<LexedToken>,
 }
 
-impl SmtConsume for Collect<'_> {
+impl<const WHITESPACE: bool> SmtConsume for Collect<'_, WHITESPACE> {
     type Result = ();
     type Error = Infallible;
+    const CONSUMES_WHITESPACE_AND_COMMENTS: bool = WHITESPACE;
 
     fn consume(
         &mut self,
@@ -157,12 +160,22 @@ impl SmtConsume for Collect<'_> {
 /// Runs a fresh Rust lexer over the feeds, whatever lexer the tests run
 /// against.
 pub fn rust_lex(version: SmtVersion, feeds: &[Feed<'_>]) -> Lexed {
+    rust_lex_as::<false>(version, feeds)
+}
+
+/// Runs a fresh Rust lexer over the feeds with a consumer that takes
+/// whitespace and comments too, whatever lexer the tests run against.
+pub fn rust_lex_with_whitespace(version: SmtVersion, feeds: &[Feed<'_>]) -> Lexed {
+    rust_lex_as::<true>(version, feeds)
+}
+
+fn rust_lex_as<const WHITESPACE: bool>(version: SmtVersion, feeds: &[Feed<'_>]) -> Lexed {
     let mut tokens = Vec::new();
     let mut locations = Vec::new();
     let mut error = None;
     {
         let mut lexer = SmtLexer::new(
-            Collect {
+            Collect::<WHITESPACE> {
                 version,
                 tokens: &mut tokens,
             },
@@ -201,7 +214,7 @@ pub fn rust_lex_all(version: SmtVersion, input: &[u8]) -> Lexed {
     let mut error = None;
     {
         let mut lexer = SmtLexer::new(
-            Collect {
+            Collect::<false> {
                 version,
                 tokens: &mut tokens,
             },
@@ -262,7 +275,7 @@ fn start_driver(path: &OsString) -> Driver {
     }
 }
 
-const TOKEN_TYPES: [SmtTokenCategory; 11] = [
+const TOKEN_TYPES: [SmtTokenCategory; 13] = [
     SmtTokenCategory::ParenOpen,
     SmtTokenCategory::ParenClose,
     SmtTokenCategory::Numeral,
@@ -273,6 +286,8 @@ const TOKEN_TYPES: [SmtTokenCategory; 11] = [
     SmtTokenCategory::Keyword,
     SmtTokenCategory::UnquotedSymbol,
     SmtTokenCategory::QuotedSymbol,
+    SmtTokenCategory::Whitespace,
+    SmtTokenCategory::Comment,
     SmtTokenCategory::EndOfFile,
 ];
 

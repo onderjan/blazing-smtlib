@@ -37,6 +37,7 @@ fn hex(bytes: &[u8]) -> String {
 impl SmtConsume for Report<'_> {
     type Result = ();
     type Error = Infallible;
+    const CONSUMES_WHITESPACE_AND_COMMENTS: bool = false;
 
     fn consume(
         &mut self,
@@ -63,7 +64,7 @@ impl SmtConsume for Report<'_> {
 
 /// Decodes the hexadecimal digits of a slice operand.
 fn unhex(digits: &str) -> Result<Vec<u8>, String> {
-    if digits.len() % 2 != 0 {
+    if !digits.len().is_multiple_of(2) {
         return Err(format!("odd number of hexadecimal digits in {digits:?}"));
     }
     (0..digits.len())

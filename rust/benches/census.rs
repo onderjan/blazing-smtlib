@@ -104,6 +104,7 @@ struct Census {
 impl SmtConsume for Census {
     type Result = ();
     type Error = Infallible;
+    const CONSUMES_WHITESPACE_AND_COMMENTS: bool = false;
 
     fn consume(
         &mut self,
@@ -159,6 +160,9 @@ impl Census {
             }
             SmtSyntaxToken::String(_) => "string",
             SmtSyntaxToken::Keyword(_) => "keyword",
+            // not handed over: the census does not consume whitespace and comments
+            SmtSyntaxToken::Whitespace(_) => "whitespace",
+            SmtSyntaxToken::Comment(_) => "comment",
             SmtSyntaxToken::EndOfFile => return,
         };
         *self.types.entry(type_name).or_default() += 1;
