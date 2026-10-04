@@ -153,20 +153,20 @@ fn keyword_name_expected() {
 }
 
 #[test]
-fn keyword_leading_digit() {
-    assert_error(
-        b":0",
-        SmtLexicalErrorKind::ForbiddenKeywordName,
-        (0, 0, 0),
-        (2, 0, 2),
-    );
-    // the leading digit is rejected even when more characters would follow
-    assert_error(
-        b":0abc",
-        SmtLexicalErrorKind::ForbiddenKeywordName,
-        (0, 0, 0),
-        (2, 0, 2),
-    );
+fn keyword_starting_with_a_digit_is_a_keyword() {
+    // the restrictions on simple symbols do not apply after the colon:
+    // a keyword may start with a digit and may consist of digits only
+    let inputs: [(&[u8], &[u8]); 4] = [
+        (b":0", b"0"),
+        (b":56 ", b"56"),
+        (b":0abc", b"0abc"),
+        (b":1.5)", b"1.5"),
+    ];
+    for (input, content) in inputs {
+        let tokens = lex_all(input).expect("a keyword starting with a digit must lex");
+        assert_eq!(tokens[0].ty, SmtTokenCategory::Keyword);
+        assert_eq!(tokens[0].content, content);
+    }
 }
 
 #[test]

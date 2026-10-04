@@ -40,12 +40,16 @@ fn symbol_accepts_everything_a_string_does_except_pipe_and_backslash() {
 }
 
 #[test]
-fn keyword_accepts_only_nonempty_simple_symbol_bytes_not_starting_with_digit() {
+fn keyword_accepts_only_nonempty_simple_symbol_bytes() {
     assert!(SmtKeyword::is_allowed(b"a-simple-symbol~!@$%^&*_-+=<>.?/"));
     assert!(SmtKeyword::is_allowed(b"quick"));
+    // unlike a simple symbol, a keyword may spell a reserved word
+    // and may start with a digit
     assert!(SmtKeyword::is_allowed(b"let"));
+    assert!(SmtKeyword::is_allowed(b"0"));
+    assert!(SmtKeyword::is_allowed(b"56"));
+    assert!(SmtKeyword::is_allowed(b"0abc"));
 
-    assert!(!SmtKeyword::is_allowed(b"0"));
     assert!(!SmtKeyword::is_allowed(b""));
     // no whitespace, UTF-8, or non-UTF-8 bytes, unlike strings and symbols
     assert!(!SmtKeyword::is_allowed(

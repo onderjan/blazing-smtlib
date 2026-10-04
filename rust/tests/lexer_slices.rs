@@ -223,6 +223,10 @@ const VALID_INPUTS: &[&[u8]] = &[
     b"1.5 a 2.0 e 3.25 fed)",
     b"#xDEADbeef #b0101 #x0 #b1",
     b":named :pattern :a1 :_x :+",
+    // keywords starting with a digit; split after the colon, the digit is the
+    // first byte the lexer sees of the keyword's content
+    b":1",
+    b":56 :0abc :1.5 (:0)",
     b"\"\xC3\xA9\" |\xFF|",
     b"(((((x)))))",
     // every token kind delimited only by parentheses or comments
@@ -251,7 +255,6 @@ const ERROR_INPUTS: &[&[u8]] = &[
     b"(a\n  01)",
     b":",
     b": ",
-    b":1",
     b"|a\\b|",
     b"\"a\x01\"",
     b"|a\x01|",
