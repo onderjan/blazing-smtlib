@@ -37,23 +37,26 @@ impl SmtSymbol {
 /// SMT-LIB keyword.
 ///
 /// Cannot be empty.
-/// Must contain only SMT-LIB simple-symbol-class bytes, starting with a non-digit.
+/// Must contain only SMT-LIB simple-symbol-class bytes.
+///
+/// A keyword may start with a digit and may spell a reserved word.
+/// It is defined in version 2.0 as a colon followed by a non-empty sequence
+/// of simple-symbol-class bytes with no further restriction. From version 2.5 on,
+/// the standard defines it as a colon followed by a simple symbol, which
+/// read literally excludes a leading digit and the reserved words. We consider
+/// this unintended and keep the 2.0 rule in every version: the standard's
+/// own keyword examples include `:56`, and there is no need to exclude
+/// reserved words as the colon already uniquely determines the category.
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct SmtKeyword(SmtBytes);
 
 impl SmtKeyword {
     pub fn is_allowed(value: &[u8]) -> bool {
-        let Some(first) = value.first() else {
-            return false;
-        };
-        if first.is_ascii_digit() {
-            return false;
-        }
-
-        value
-            .iter()
-            .copied()
-            .all(|c| CharClass::from(c).is_allowed_in_simple_symbol())
+        !value.is_empty()
+            && value
+                .iter()
+                .copied()
+                .all(|c| CharClass::from(c).is_allowed_in_simple_symbol())
     }
 }
 

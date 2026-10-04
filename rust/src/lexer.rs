@@ -647,13 +647,6 @@ impl<C: SmtConsume> SmtLexer<C> {
                 Start::Colon => {
                     // starts a keyword
                     self.start_token(index);
-                    // we require that the keyword does not start with a digit
-                    // (also non-empty, but that is checked after finishing)
-                    if slice.get(after).is_some_and(u8::is_ascii_digit) {
-                        return Err(
-                            self.error_at(SmtLexicalErrorKind::ForbiddenKeywordName, after + 1)
-                        );
-                    }
                     // get a run of simple-symbol bytes
                     let after_end = after + run_end(&slice[after..], RUN_SIMPLE_SYMBOL);
                     if after_end == slice.len() {
@@ -1156,11 +1149,6 @@ impl<C: SmtConsume> SmtLexer<C> {
         batch: &mut Batch<'a>,
         slice: &[u8],
     ) -> Result<usize, Interrupted<C::Result, SmtLexError<C::Error>>> {
-        // test that the keyword does not start with a digit
-        if self.token_content.is_empty() && slice[0].is_ascii_digit() {
-            return Err(self.error_at(SmtLexicalErrorKind::ForbiddenKeywordName, 1));
-        }
-
         // find the first byte that is not simple-symbol-like
         let index = run_end(slice, RUN_SIMPLE_SYMBOL);
 
