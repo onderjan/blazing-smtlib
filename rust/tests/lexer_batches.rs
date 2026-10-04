@@ -23,7 +23,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use blazing_smtlib::{
     SmtLocation, SmtSpan,
-    lexer::{SmtLexError, SmtLexer, SmtLexicalErrorKind},
+    lexer::{SmtLexError, SmtLexErrorCause, SmtLexer, SmtLexicalErrorKind},
     token::{SmtBatchCursor, SmtConsume, SmtToken, SmtTokenCategory, SmtVersion},
 };
 
@@ -175,7 +175,7 @@ struct Run {
     /// The version of the cursor at the start of every hand-over.
     versions: Vec<SmtVersion>,
     /// The error that ended the run, if any.
-    error: Option<SmtLexError<()>>,
+    error: Option<SmtLexErrorCause<()>>,
     /// The location returned with the result if the consumer finished.
     finished_at: Option<(u64, u64, u64)>,
 }
@@ -223,6 +223,17 @@ fn assert_at_origin<C: SmtConsume>(lexer: &SmtLexer<C>) {
 /// rewind must restore correctly. After a finish, the lexer must be back
 /// at the origin.
 #[track_caller]
+/// What made the call fail. The lexer of these runs stops at its first error,
+/// so no error may say that the input continues.
+fn into_cause(err: SmtLexError<()>) -> SmtLexErrorCause<()> {
+    assert_eq!(
+        err.continues_from(),
+        None,
+        "a lexer that stops at its first error does not continue the input"
+    );
+    err.into_cause()
+}
+
 fn run_from(version: SmtVersion, chunks: &[&[u8]], plan: &[Reply]) -> Run {
     let mut calls = Vec::new();
     let mut versions = Vec::new();
@@ -247,7 +258,7 @@ fn run_from(version: SmtVersion, chunks: &[&[u8]], plan: &[Reply]) -> Run {
                     break;
                 }
                 Err(err) => {
-                    error = Some(err);
+                    error = Some(into_cause(err));
                     break;
                 }
             }
@@ -268,7 +279,7 @@ fn run_from(version: SmtVersion, chunks: &[&[u8]], plan: &[Reply]) -> Run {
                     finished_at = Some(loc(located.location()));
                     assert_at_origin(&lexer);
                 }
-                Err(err) => error = Some(err),
+                Err(err) => error = Some(into_cause(err)),
             }
         }
     }
@@ -724,7 +735,7 @@ fn an_error_met_ahead_under_the_old_version_is_dropped() {
     let plain = run_from(SmtVersion::V2_0, &[DOUBLED_QUOTE], &[]);
     assert_eq!(plain.sizes(), [1]);
     assert!(
-        matches!(&plain.error, Some(SmtLexError::Lexical(err)) if *err.kind() == SmtLexicalErrorKind::MissingDelimiter),
+        matches!(&plain.error, Some(SmtLexErrorCause::Lexical(err)) if *err.kind() == SmtLexicalErrorKind::MissingDelimiter),
         "{:?}",
         plain.error
     );
@@ -754,7 +765,7 @@ fn an_error_under_both_versions_is_still_reported() {
         }];
         let switched = run_from(SmtVersion::V2_6, &[input], &plan);
         assert!(
-            matches!(&switched.error, Some(SmtLexError::Lexical(err)) if *err.kind() == SmtLexicalErrorKind::UnexpectedCharacter),
+            matches!(&switched.error, Some(SmtLexErrorCause::Lexical(err)) if *err.kind() == SmtLexicalErrorKind::UnexpectedCharacter),
             "to {declared:?}: {:?}",
             switched.error
         );
@@ -910,7 +921,7 @@ fn tokens_before_a_lexer_error_are_handed_over_first() {
     let plain = run(&[input], &[]);
     assert_eq!(plain.sizes(), [2]);
     assert!(
-        matches!(&plain.error, Some(SmtLexError::Lexical(err)) if *err.kind() == SmtLexicalErrorKind::UnexpectedCharacter),
+        matches!(&plain.error, Some(SmtLexErrorCause::Lexical(err)) if *err.kind() == SmtLexicalErrorKind::UnexpectedCharacter),
         "{:?}",
         plain.error
     );
@@ -922,7 +933,7 @@ fn tokens_before_a_lexer_error_are_handed_over_first() {
     assert_eq!(stopped.sizes(), [2, 1]);
     assert_eq!(stopped.calls[1][0].content, b"b");
     assert!(
-        matches!(&stopped.error, Some(SmtLexError::Lexical(_))),
+        matches!(&stopped.error, Some(SmtLexErrorCause::Lexical(_))),
         "{:?}",
         stopped.error
     );
@@ -933,5 +944,5 @@ fn a_consumer_error_ends_the_run_with_the_consumer_error() {
     let plan = [Reply::Fail { consumed: 1 }];
     let run = run(&[b"a b c "], &plan);
     assert_eq!(run.sizes(), [3]);
-    assert_eq!(run.error, Some(SmtLexError::Consumer(())));
+    assert_eq!(run.error, Some(SmtLexErrorCause::Consumer(())));
 }

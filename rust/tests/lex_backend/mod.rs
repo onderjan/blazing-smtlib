@@ -22,7 +22,7 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
 use blazing_smtlib::{
     SmtLocation,
-    lexer::{SmtLexError, SmtLexer, SmtLexicalErrorKind},
+    lexer::{SmtLexErrorCause, SmtLexer, SmtLexicalErrorKind},
     token::{
         SmtBatchCursor, SmtConsume, SmtReserved, SmtSyntaxToken, SmtTokenCategory, SmtVersion,
     },
@@ -188,15 +188,17 @@ fn rust_lex_as<const WHITESPACE: bool>(version: SmtVersion, feeds: &[Feed<'_>]) 
             };
             match result {
                 Ok(_) => locations.push(loc(lexer.current_location())),
-                Err(SmtLexError::Lexical(err)) => {
-                    error = Some(LexedError {
-                        kind: *err.kind(),
-                        start: loc(err.span().start()),
-                        end: loc(err.span().end()),
-                    });
-                    break;
-                }
-                Err(SmtLexError::Consumer(never)) => match never {},
+                Err(err) => match err.into_cause() {
+                    SmtLexErrorCause::Lexical(err) => {
+                        error = Some(LexedError {
+                            kind: *err.kind(),
+                            start: loc(err.span().start()),
+                            end: loc(err.span().end()),
+                        });
+                        break;
+                    }
+                    SmtLexErrorCause::Consumer(never) => match never {},
+                },
             }
         }
     }
@@ -222,14 +224,16 @@ pub fn rust_lex_all(version: SmtVersion, input: &[u8]) -> Lexed {
         );
         match lexer.lex_all(input) {
             Ok(_) => locations.push(loc(lexer.current_location())),
-            Err(SmtLexError::Lexical(err)) => {
-                error = Some(LexedError {
-                    kind: *err.kind(),
-                    start: loc(err.span().start()),
-                    end: loc(err.span().end()),
-                });
-            }
-            Err(SmtLexError::Consumer(never)) => match never {},
+            Err(err) => match err.into_cause() {
+                SmtLexErrorCause::Lexical(err) => {
+                    error = Some(LexedError {
+                        kind: *err.kind(),
+                        start: loc(err.span().start()),
+                        end: loc(err.span().end()),
+                    });
+                }
+                SmtLexErrorCause::Consumer(never) => match never {},
+            },
         }
     }
     Lexed {

@@ -8,7 +8,7 @@ use std::ops::ControlFlow;
 
 use blazing_smtlib::{
     SmtSpan,
-    lexer::{SmtLexError, SmtLexer, SmtLexicalError, SmtLexicalErrorKind},
+    lexer::{SmtLexError, SmtLexErrorCause, SmtLexer, SmtLexicalError, SmtLexicalErrorKind},
     token::{
         SmtBatchCursor, SmtConsume, SmtGeneralReserved, SmtReserved, SmtTokenCategory, SmtVersion,
     },
@@ -36,9 +36,9 @@ impl SmtConsume for TakeTokens {
 
 /// Extracts the lexer error from a lex error whose handler cannot fail.
 fn into_lexer_error(err: SmtLexError<Infallible>) -> SmtLexicalError {
-    match err {
-        SmtLexError::Lexical(err) => err,
-        SmtLexError::Consumer(never) => match never {},
+    match err.into_cause() {
+        SmtLexErrorCause::Lexical(err) => err,
+        SmtLexErrorCause::Consumer(never) => match never {},
     }
 }
 
@@ -608,7 +608,10 @@ impl SmtConsume for RejectTokens {
 fn handler_error_is_returned_with_the_handled_token() {
     let mut lexer = SmtLexer::new(RejectTokens, SmtVersion::V2_7);
     // the parenthesis token is produced and handed to the handler immediately
-    let Err(SmtLexError::Consumer(span)) = lexer.lex_slice(b"(") else {
+    let Err(err) = lexer.lex_slice(b"(") else {
+        panic!("expected a handler error");
+    };
+    let SmtLexErrorCause::Consumer(span) = err.into_cause() else {
         panic!("expected a handler error");
     };
     assert_eq!((loc(span.start()), loc(span.end())), ((0, 0, 0), (1, 0, 1)));

@@ -11,7 +11,7 @@ use std::ops::ControlFlow;
 
 use blazing_smtlib::{
     SmtLocation,
-    lexer::{SmtLexError, SmtLexer},
+    lexer::{SmtLexErrorCause, SmtLexer},
     token::{SmtBatchCursor, SmtConsume, SmtReserved, SmtSyntaxToken, SmtVersion},
 };
 
@@ -114,16 +114,16 @@ fn answer(request: &str, out: &mut String) -> Result<(), String> {
             Some(slice) => lexer.lex_slice(slice),
             None => lexer.lex_eof(),
         };
-        match result {
+        match result.map_err(|err| err.into_cause()) {
             // the location the lexer is at after the operation
             Ok(_) => lines
                 .borrow_mut()
                 .push_str(&format!("at {}\n", location(lexer.current_location()))),
-            Err(SmtLexError::Lexical(err)) => {
+            Err(SmtLexErrorCause::Lexical(err)) => {
                 error = Some(err);
                 break;
             }
-            Err(SmtLexError::Consumer(never)) => match never {},
+            Err(SmtLexErrorCause::Consumer(never)) => match never {},
         }
     }
     drop(lexer);
