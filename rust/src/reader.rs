@@ -238,13 +238,11 @@ impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtReader<'a, H, P> {
                         // process the buffer and mark consumed what the lexer took:
                         // the whole buffer, or up to where the parser finished
                         let start = self.lexer.current_location().offset();
-
                         match self.read_slice(buffer)? {
                             ControlFlow::Continue(()) => {
-                                // consume the read bytes
-                                let consumed =
-                                    (self.lexer.current_location().offset() - start) as usize;
-                                buf_reader.consume(consumed);
+                                // all bytes were read, consume them
+                                let len = buffer.len();
+                                buf_reader.consume(len)
                             }
                             ControlFlow::Break(located) => {
                                 // the parser finished, the rest of the input is not read
@@ -252,6 +250,8 @@ impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtReader<'a, H, P> {
                                 // we cannot use the current lexer location as that was reset
                                 let consumed = (located.location().offset() - start) as usize;
                                 buf_reader.consume(consumed);
+                                // reset the lexer by reading EOF
+                                let _ = self.read_eof()?;
                                 return Ok(Some(located.into_value()));
                             }
                         }
