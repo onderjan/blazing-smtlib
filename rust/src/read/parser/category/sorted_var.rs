@@ -3,8 +3,8 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler, SmtSymbol,
     read::parser::{
-        Arena, CloseParenParser, IdentSlot, OpenParenParser, Parser, ParserError, ParserResources,
-        SortSlot, SyntaxErrorKind, TextHandle, parse_by_token,
+        Arena, CloseParenParser, IdentSlot, OpenParenParser, Parser, ParserResources,
+        SmtParseError, SmtSyntaxErrorKind, SortSlot, TextHandle, parse_by_token,
     },
     token::{SmtBatchCursor, SmtSyntaxToken, SmtToken, SmtVersion},
 };
@@ -40,7 +40,7 @@ impl<H: SmtHandler> Parser<H> for SortedVarParser<H> {
         handler: &mut H,
         resources: &mut ParserResources<H>,
         cursor: &mut SmtBatchCursor,
-    ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         // progress the slot, giving it the sort and ident slots it delegates to
         let ParserResources {
             ident_slot,
@@ -103,7 +103,7 @@ impl<H: SmtHandler + ?Sized> SortedVarSlot<H> {
         ident_slot: &mut IdentSlot,
         version: SmtVersion,
         token: SmtToken,
-    ) -> Result<ControlFlow<SortedVarHandle<H>>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<SortedVarHandle<H>>, SmtParseError<H::Error>> {
         // The sequential progress is as follows:
         // 1. Not open, expect an opening parenthesis.
         // 2. Open, expect a symbol serving as the name.
@@ -131,8 +131,8 @@ impl<H: SmtHandler + ?Sized> SortedVarSlot<H> {
         if self.is_open {
             // after "(", waiting for the name, which goes to the arena text
             let SmtSyntaxToken::Symbol(name) = token.syntax(version) else {
-                return Err(ParserError::category_error(
-                    SyntaxErrorKind::ExpectedSymbol,
+                return Err(SmtParseError::category_error(
+                    SmtSyntaxErrorKind::ExpectedSymbol,
                     token.span(),
                 ));
             };

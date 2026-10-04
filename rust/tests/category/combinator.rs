@@ -10,7 +10,7 @@ fn pair_parser() {
 
     // the error of the second element points at its token
     let err = assert_error::<PairParser<Printing, SymbolParser, SymbolParser>>(b"a 1", 2, 3);
-    assert!(matches!(err, SyntaxErrorKind::ExpectedSymbol), "{err:?}");
+    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
 }
 
 #[test]
@@ -22,7 +22,7 @@ fn closed_parser() {
     assert!(
         matches!(
             err,
-            SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
+            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
         ),
         "{err:?}"
     );
@@ -31,7 +31,7 @@ fn closed_parser() {
     assert!(
         matches!(
             err,
-            SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
+            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
         ),
         "{err:?}"
     );
@@ -46,7 +46,7 @@ fn open_closed_parser() {
     assert!(
         matches!(
             err,
-            SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenOpen])
+            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenOpen])
         ),
         "{err:?}"
     );
@@ -54,7 +54,7 @@ fn open_closed_parser() {
     assert!(
         matches!(
             err,
-            SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
+            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
         ),
         "{err:?}"
     );
@@ -74,10 +74,10 @@ fn closed_multiple_parser() {
 
     // the element parser's error is reported for a bad element
     let err = assert_error::<ClosedMultipleParser<Printing, SymbolParser>>(b"a 1)", 2, 3);
-    assert!(matches!(err, SyntaxErrorKind::ExpectedSymbol), "{err:?}");
+    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
     // unclosed list ends at EOF inside the element parser
     let err = assert_error::<ClosedMultipleParser<Printing, SymbolParser>>(b"a", 1, 1);
-    assert!(matches!(err, SyntaxErrorKind::ExpectedSymbol), "{err:?}");
+    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
 }
 
 #[test]
@@ -96,16 +96,16 @@ fn paren_multiple_parser() {
     assert!(
         matches!(
             err,
-            SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenOpen])
+            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenOpen])
         ),
         "{err:?}"
     );
     // the element parser's error is reported for a bad element
     let err = assert_error::<ParenMultipleParser<Printing, SymbolParser>>(b"(a 1)", 3, 4);
-    assert!(matches!(err, SyntaxErrorKind::ExpectedSymbol), "{err:?}");
+    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
     // unclosed list ends at EOF inside the element parser
     let err = assert_error::<ParenMultipleParser<Printing, SymbolParser>>(b"(a", 2, 2);
-    assert!(matches!(err, SyntaxErrorKind::ExpectedSymbol), "{err:?}");
+    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
 }
 
 #[test]
@@ -123,5 +123,5 @@ fn nested_combinators() {
     assert_eq!(params, [(b"x" as &[u8], b"Int" as &[u8]), (b"y", b"Bool")]);
 
     let err = assert_error::<Params>(b"((x Int) (y))", 11, 12);
-    assert!(matches!(err, SyntaxErrorKind::ExpectedSymbol), "{err:?}");
+    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
 }

@@ -8,7 +8,7 @@ use std::ops::ControlFlow;
 
 use blazing_smtlib::{
     SmtSpan,
-    read::lexer::{LexError, Lexer, LexerError, LexerErrorKind},
+    read::lexer::{Lexer, SmtLexError, SmtLexicalError, SmtLexicalErrorKind},
     token::{
         SmtBatchCursor, SmtConsume, SmtGeneralReserved, SmtReserved, SmtTokenCategory, SmtVersion,
     },
@@ -34,10 +34,10 @@ impl SmtConsume for TakeTokens {
 }
 
 /// Extracts the lexer error from a lex error whose handler cannot fail.
-fn into_lexer_error(err: LexError<Infallible>) -> LexerError {
+fn into_lexer_error(err: SmtLexError<Infallible>) -> SmtLexicalError {
     match err {
-        LexError::Lexer(err) => err,
-        LexError::Handler(never) => match never {},
+        SmtLexError::Lexical(err) => err,
+        SmtLexError::Consumer(never) => match never {},
     }
 }
 
@@ -53,7 +53,7 @@ fn lex_all(input: &[u8]) -> Result<Vec<LexedToken>, LexedError> {
 
 /// Lexes the input, requires an error of the given kind, and checks its span.
 #[track_caller]
-fn assert_error(input: &[u8], kind: LexerErrorKind, start: Loc, end: Loc) {
+fn assert_error(input: &[u8], kind: SmtLexicalErrorKind, start: Loc, end: Loc) {
     let err = lex_all(input).expect_err("expected a lexer error, got tokens");
     assert_eq!(err.kind, kind);
     assert_eq!(
@@ -78,14 +78,14 @@ fn unexpected_character_is_single_byte() {
     // backslash is not allowed outside of string literals
     assert_error(
         b"\\",
-        LexerErrorKind::UnexpectedCharacter,
+        SmtLexicalErrorKind::UnexpectedCharacter,
         (0, 0, 0),
         (1, 0, 1),
     );
     // after other tokens, still just the one byte
     assert_error(
         b"(check-sat) \\",
-        LexerErrorKind::UnexpectedCharacter,
+        SmtLexicalErrorKind::UnexpectedCharacter,
         (12, 0, 12),
         (13, 0, 13),
     );
@@ -96,7 +96,7 @@ fn fraction_digit_expected_on_byte() {
     // "7." followed by a space: the space is the byte where the error is detected
     assert_error(
         b"7. ",
-        LexerErrorKind::FractionDigitExpected,
+        SmtLexicalErrorKind::FractionDigitExpected,
         (0, 0, 0),
         (3, 0, 3),
     );
@@ -106,7 +106,7 @@ fn fraction_digit_expected_on_byte() {
 fn base_selection_expected() {
     assert_error(
         b"#q",
-        LexerErrorKind::BaseSelectionExpected,
+        SmtLexicalErrorKind::BaseSelectionExpected,
         (0, 0, 0),
         (2, 0, 2),
     );
@@ -116,7 +116,7 @@ fn base_selection_expected() {
 fn hexadecimal_digit_expected() {
     assert_error(
         b"#x ",
-        LexerErrorKind::HexadecimalDigitExpected,
+        SmtLexicalErrorKind::HexadecimalDigitExpected,
         (0, 0, 0),
         (3, 0, 3),
     );
@@ -126,7 +126,7 @@ fn hexadecimal_digit_expected() {
 fn binary_digit_expected() {
     assert_error(
         b"#b)",
-        LexerErrorKind::BinaryDigitExpected,
+        SmtLexicalErrorKind::BinaryDigitExpected,
         (0, 0, 0),
         (3, 0, 3),
     );
@@ -136,7 +136,7 @@ fn binary_digit_expected() {
 fn numeral_leading_zero() {
     assert_error(
         b"01",
-        LexerErrorKind::NumeralLeadingZero,
+        SmtLexicalErrorKind::NumeralLeadingZero,
         (0, 0, 0),
         (2, 0, 2),
     );
@@ -146,7 +146,7 @@ fn numeral_leading_zero() {
 fn keyword_name_expected() {
     assert_error(
         b": ",
-        LexerErrorKind::ForbiddenKeywordName,
+        SmtLexicalErrorKind::ForbiddenKeywordName,
         (0, 0, 0),
         (2, 0, 2),
     );
@@ -156,14 +156,14 @@ fn keyword_name_expected() {
 fn keyword_leading_digit() {
     assert_error(
         b":0",
-        LexerErrorKind::ForbiddenKeywordName,
+        SmtLexicalErrorKind::ForbiddenKeywordName,
         (0, 0, 0),
         (2, 0, 2),
     );
     // the leading digit is rejected even when more characters would follow
     assert_error(
         b":0abc",
-        LexerErrorKind::ForbiddenKeywordName,
+        SmtLexicalErrorKind::ForbiddenKeywordName,
         (0, 0, 0),
         (2, 0, 2),
     );
@@ -182,7 +182,7 @@ fn keyword_spelled_like_a_reserved_word_is_a_keyword() {
 fn backslash_in_quoted_symbol() {
     assert_error(
         b"|a\\b|",
-        LexerErrorKind::BackslashInQuotedSymbol,
+        SmtLexicalErrorKind::BackslashInQuotedSymbol,
         (0, 0, 0),
         (3, 0, 3),
     );
@@ -192,7 +192,7 @@ fn backslash_in_quoted_symbol() {
 fn forbidden_char_in_string() {
     assert_error(
         b"\"a\x01b\"",
-        LexerErrorKind::ForbiddenCharInString,
+        SmtLexicalErrorKind::ForbiddenCharInString,
         (0, 0, 0),
         (3, 0, 3),
     );
@@ -202,7 +202,7 @@ fn forbidden_char_in_string() {
 fn forbidden_char_in_quoted_symbol() {
     assert_error(
         b"|a\x7fb|",
-        LexerErrorKind::ForbiddenCharInQuotedSymbol,
+        SmtLexicalErrorKind::ForbiddenCharInQuotedSymbol,
         (0, 0, 0),
         (3, 0, 3),
     );
@@ -214,7 +214,7 @@ fn forbidden_char_in_quoted_symbol() {
 fn fraction_digit_expected_at_eof() {
     assert_error(
         b"7.",
-        LexerErrorKind::FractionDigitExpected,
+        SmtLexicalErrorKind::FractionDigitExpected,
         (0, 0, 0),
         (2, 0, 2),
     );
@@ -224,7 +224,7 @@ fn fraction_digit_expected_at_eof() {
 fn hexadecimal_digit_expected_at_eof() {
     assert_error(
         b"#x",
-        LexerErrorKind::HexadecimalDigitExpected,
+        SmtLexicalErrorKind::HexadecimalDigitExpected,
         (0, 0, 0),
         (2, 0, 2),
     );
@@ -234,7 +234,7 @@ fn hexadecimal_digit_expected_at_eof() {
 fn base_selection_expected_at_eof() {
     assert_error(
         b"#",
-        LexerErrorKind::BaseSelectionExpected,
+        SmtLexicalErrorKind::BaseSelectionExpected,
         (0, 0, 0),
         (1, 0, 1),
     );
@@ -244,7 +244,7 @@ fn base_selection_expected_at_eof() {
 fn keyword_name_expected_at_eof() {
     assert_error(
         b":",
-        LexerErrorKind::ForbiddenKeywordName,
+        SmtLexicalErrorKind::ForbiddenKeywordName,
         (0, 0, 0),
         (1, 0, 1),
     );
@@ -254,7 +254,7 @@ fn keyword_name_expected_at_eof() {
 fn unclosed_string_literal_at_eof() {
     assert_error(
         b"\"abc",
-        LexerErrorKind::UnclosedStringLiteral,
+        SmtLexicalErrorKind::UnclosedStringLiteral,
         (0, 0, 0),
         (4, 0, 4),
     );
@@ -264,7 +264,7 @@ fn unclosed_string_literal_at_eof() {
 fn unclosed_quoted_symbol_at_eof() {
     assert_error(
         b"|abc",
-        LexerErrorKind::UnclosedQuotedSymbol,
+        SmtLexicalErrorKind::UnclosedQuotedSymbol,
         (0, 0, 0),
         (4, 0, 4),
     );
@@ -277,7 +277,7 @@ fn error_on_later_line() {
     // the string literal starts at offset 15, zero-based line 2, column 2, and is unclosed at EOF
     assert_error(
         b"(check-sat)\n\n  \"abc",
-        LexerErrorKind::UnclosedStringLiteral,
+        SmtLexicalErrorKind::UnclosedStringLiteral,
         (15, 2, 2),
         (19, 2, 6),
     );
@@ -288,7 +288,7 @@ fn error_spanning_lines() {
     // an unclosed quoted symbol may contain newlines; the end is on a later line
     assert_error(
         b"|ab\ncd",
-        LexerErrorKind::UnclosedQuotedSymbol,
+        SmtLexicalErrorKind::UnclosedQuotedSymbol,
         (0, 0, 0),
         (6, 1, 2),
     );
@@ -299,7 +299,7 @@ fn crlf_counts_as_one_line() {
     // CR must not start a new line, so "01" is on zero-based line 1, column 0
     assert_error(
         b"(check-sat)\r\n01",
-        LexerErrorKind::NumeralLeadingZero,
+        SmtLexicalErrorKind::NumeralLeadingZero,
         (13, 1, 0),
         (15, 1, 2),
     );
@@ -309,7 +309,7 @@ fn crlf_counts_as_one_line() {
 fn error_after_comment_line() {
     assert_error(
         b"; a comment\n\\",
-        LexerErrorKind::UnexpectedCharacter,
+        SmtLexicalErrorKind::UnexpectedCharacter,
         (12, 1, 0),
         (13, 1, 1),
     );
@@ -606,7 +606,7 @@ impl SmtConsume for RejectTokens {
 fn handler_error_is_returned_with_the_handled_token() {
     let mut lexer = Lexer::new(RejectTokens, SmtVersion::V2_7);
     // the parenthesis token is produced and handed to the handler immediately
-    let Err(LexError::Handler(span)) = lexer.lex_slice(b"(") else {
+    let Err(SmtLexError::Consumer(span)) = lexer.lex_slice(b"(") else {
         panic!("expected a handler error");
     };
     assert_eq!((loc(span.start()), loc(span.end())), ((0, 0, 0), (1, 0, 1)));
@@ -1054,13 +1054,13 @@ fn decimal_fraction_ends_at_a_letter() {
     // them, and as the letter does not delimit it, that is an error
     assert_error(
         b"1.5a",
-        LexerErrorKind::MissingDelimiter,
+        SmtLexicalErrorKind::MissingDelimiter,
         (0, 0, 0),
         (4, 0, 4),
     );
     assert_error(
         b"3.25fed)",
-        LexerErrorKind::MissingDelimiter,
+        SmtLexicalErrorKind::MissingDelimiter,
         (0, 0, 0),
         (5, 0, 5),
     );
@@ -1102,7 +1102,7 @@ fn a_token_must_be_delimited() {
         });
         assert_eq!(
             err.kind,
-            LexerErrorKind::MissingDelimiter,
+            SmtLexicalErrorKind::MissingDelimiter,
             "{:?}",
             String::from_utf8_lossy(input)
         );
@@ -1204,7 +1204,7 @@ fn a_token_ending_at_a_slice_end_is_delimited_by_the_next_slice() {
             None => assert!(ok, "{name} must not lex"),
             Some(err) => {
                 assert!(!ok, "{name} must lex, got {:?}", err.kind);
-                assert_eq!(err.kind, LexerErrorKind::MissingDelimiter, "{name}");
+                assert_eq!(err.kind, SmtLexicalErrorKind::MissingDelimiter, "{name}");
                 // the span covers the token in the first slice and the byte in the second
                 assert_eq!(
                     (err.start, err.end),
@@ -1224,13 +1224,13 @@ fn fraction_digit_expected_before_a_letter() {
     // a letter right after the dot is not a fraction digit either
     assert_error(
         b"1.a",
-        LexerErrorKind::FractionDigitExpected,
+        SmtLexicalErrorKind::FractionDigitExpected,
         (0, 0, 0),
         (3, 0, 3),
     );
     assert_error(
         b"7.F",
-        LexerErrorKind::FractionDigitExpected,
+        SmtLexicalErrorKind::FractionDigitExpected,
         (0, 0, 0),
         (3, 0, 3),
     );

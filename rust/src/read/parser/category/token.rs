@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler, SmtKeyword, SmtKeywordView, SmtNumeral, SmtNumeralView, SmtStringContent,
     SmtStringContentView, SmtSymbol,
-    read::parser::{Parser, ParserError, ParserResources, SyntaxErrorKind},
+    read::parser::{Parser, ParserResources, SmtParseError, SmtSyntaxErrorKind},
     token::{SmtBatchCursor, SmtSyntaxToken, SmtToken, SmtTokenCategory, SmtVersion},
 };
 
@@ -26,12 +26,12 @@ impl SymbolParser {
     pub(crate) fn expect<H: SmtHandler + ?Sized>(
         version: SmtVersion,
         token: SmtToken,
-    ) -> Result<SmtSymbol, ParserError<H::Error>> {
+    ) -> Result<SmtSymbol, SmtParseError<H::Error>> {
         let span = token.span();
         match token.syntax(version) {
             SmtSyntaxToken::Symbol(symbol) => Ok(symbol.into_owned()),
-            _ => Err(ParserError::category_error(
-                SyntaxErrorKind::ExpectedSymbol,
+            _ => Err(SmtParseError::category_error(
+                SmtSyntaxErrorKind::ExpectedSymbol,
                 span,
             )),
         }
@@ -46,7 +46,7 @@ impl<H: SmtHandler> Parser<H> for SymbolParser {
         _handler: &mut H,
         _resources: &mut ParserResources<H>,
         cursor: &mut SmtBatchCursor,
-    ) -> Result<ControlFlow<Self::Result, ()>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<Self::Result, ()>, SmtParseError<H::Error>> {
         let Some(token) = cursor.next() else {
             return Ok(ControlFlow::Continue(()));
         };
@@ -80,13 +80,13 @@ macro_rules! token_parser {
 
         impl $parser {
             /// Consumes exactly one token, which must be of the parser's type.
-            pub(crate) fn expect<E>(token: SmtToken) -> Result<$result, ParserError<E>> {
+            pub(crate) fn expect<E>(token: SmtToken) -> Result<$result, SmtParseError<E>> {
                 if token.category() == SmtTokenCategory::$ty {
                     let $content = token.content();
                     Ok($value)
                 } else {
-                    Err(ParserError::category_error(
-                        SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::$ty]),
+                    Err(SmtParseError::category_error(
+                        SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::$ty]),
                         token.span(),
                     ))
                 }
@@ -101,7 +101,7 @@ macro_rules! token_parser {
                 _handler: &mut H,
                 _resources: &mut ParserResources<H>,
                 cursor: &mut SmtBatchCursor,
-            ) -> Result<ControlFlow<Self::Result, ()>, ParserError<H::Error>> {
+            ) -> Result<ControlFlow<Self::Result, ()>, SmtParseError<H::Error>> {
                 let Some(token) = cursor.next() else {
                     return Ok(ControlFlow::Continue(()));
                 };

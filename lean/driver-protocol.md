@@ -81,7 +81,7 @@ err <kind> <start> <end>
 
 The feed raised a lexer error, with this kind and span. The response ends
 here: the feeds after it are not applied and there is no closing line.
-`<kind>` is the Rust `LexerErrorKind` variant: `UnexpectedCharacter`,
+`<kind>` is the Rust `SmtLexicalErrorKind` variant: `UnexpectedCharacter`,
 `FractionDigitExpected`, `HexadecimalDigitExpected`, `BinaryDigitExpected`,
 `BaseSelectionExpected`, `UnclosedStringLiteral`, `ForbiddenCharInString`,
 `ForbiddenKeywordName`, `BackslashInQuotedSymbol`,

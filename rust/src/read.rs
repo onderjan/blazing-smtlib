@@ -25,9 +25,10 @@ use crate::token::{SmtVersion, SmtVersionPosture};
 use crate::{
     CommandHandler, SmtHandler, SmtLocated, SmtSpan,
     read::{
-        lexer::{LexError, Lexer, LexerError, LexerErrorKind},
+        lexer::{Lexer, SmtLexError, SmtLexicalError, SmtLexicalErrorKind},
         parser::{
-            ParseAdapter, Parser, ParserError, ParserErrorKind, ScriptParser, SyntaxErrorKind,
+            ParseAdapter, Parser, ScriptParser, SmtParseError, SmtParseErrorKind,
+            SmtSyntaxErrorKind,
         },
     },
 };
@@ -41,13 +42,13 @@ pub enum SmtReadErrorKind<E> {
     /// Reading from a file or a buffered reader failed.
     Io(std::io::Error),
     /// The input is not a valid sequence of SMT-LIB tokens.
-    Lexer(LexerErrorKind),
+    Lexical(SmtLexicalErrorKind),
     /// The tokens do not form valid SMT-LIB syntactic categories or commands.
     ///
     /// Commands with non-standard names are routed to the handler for
     /// processing, so they are rejected with a [`SmtReadErrorKind::Handler`]
     /// error kind instead.
-    Parser(SyntaxErrorKind),
+    Syntax(SmtSyntaxErrorKind),
     /// The handler rejected a command or a syntactic category.
     Handler(E),
 }
@@ -83,28 +84,28 @@ impl<E> SmtReadError<E> {
     }
 }
 
-impl<E> From<LexError<ParserError<E>>> for SmtReadError<E> {
-    fn from(err: LexError<ParserError<E>>) -> Self {
+impl<E> From<SmtLexError<SmtParseError<E>>> for SmtReadError<E> {
+    fn from(err: SmtLexError<SmtParseError<E>>) -> Self {
         match err {
-            LexError::Lexer(err) => err.into(),
-            LexError::Handler(err) => err.into(),
+            SmtLexError::Lexical(err) => err.into(),
+            SmtLexError::Consumer(err) => err.into(),
         }
     }
 }
 
-impl<E> From<LexerError> for SmtReadError<E> {
-    fn from(err: LexerError) -> Self {
+impl<E> From<SmtLexicalError> for SmtReadError<E> {
+    fn from(err: SmtLexicalError) -> Self {
         let span = err.span();
-        SmtReadError::new(SmtReadErrorKind::Lexer(err.into_kind()), span)
+        SmtReadError::new(SmtReadErrorKind::Lexical(err.into_kind()), span)
     }
 }
 
-impl<E> From<ParserError<E>> for SmtReadError<E> {
-    fn from(err: ParserError<E>) -> Self {
+impl<E> From<SmtParseError<E>> for SmtReadError<E> {
+    fn from(err: SmtParseError<E>) -> Self {
         let span = err.span();
         let kind = match err.into_kind() {
-            ParserErrorKind::Syntax(err) => SmtReadErrorKind::Parser(err),
-            ParserErrorKind::Handler(err) => SmtReadErrorKind::Handler(err),
+            SmtParseErrorKind::Syntax(err) => SmtReadErrorKind::Syntax(err),
+            SmtParseErrorKind::Handler(err) => SmtReadErrorKind::Handler(err),
         };
         SmtReadError::new(kind, span)
     }

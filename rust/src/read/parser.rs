@@ -48,7 +48,7 @@ pub trait Parser<H: SmtHandler + ?Sized> {
         handler: &mut H,
         resources: &mut ParserResources<H>,
         cursor: &mut SmtBatchCursor,
-    ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>>;
+    ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>>;
 }
 
 /// Parses the cursor one token at a time with `progress`, until the cursor
@@ -70,16 +70,16 @@ pub(crate) fn parse_by_token<R, E>(
 
 /// Error emitted by a parser, including the error span.
 #[derive(Debug)]
-pub struct ParserError<E>(Box<ParserErrorInner<E>>);
+pub struct SmtParseError<E>(Box<SmtParseErrorInner<E>>);
 
 #[derive(Debug)]
-pub enum ParserErrorKind<E> {
-    Syntax(SyntaxErrorKind),
+pub enum SmtParseErrorKind<E> {
+    Syntax(SmtSyntaxErrorKind),
     Handler(E),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SyntaxErrorKind {
+pub enum SmtSyntaxErrorKind {
     ExpectedToken(&'static [SmtTokenCategory]),
     ExpectedSymbol,
     ExpectedUnderscore,
@@ -121,26 +121,26 @@ pub enum SyntaxErrorKind {
     TooManyVersionDeclarations(u64),
 }
 
-impl<E> ParserError<E> {
+impl<E> SmtParseError<E> {
     #[cold]
     #[inline(never)]
-    pub(crate) fn new(kind: ParserErrorKind<E>, span: SmtSpan) -> Self {
+    pub(crate) fn new(kind: SmtParseErrorKind<E>, span: SmtSpan) -> Self {
         // PERFORMANCE: error kind and span are boxed
         // so that parser results are not unnecessarily large
         // this method boxes them, which forces an allocation
         // so it is is marked cold and never-inline
-        Self(Box::new(ParserErrorInner { kind, span }))
+        Self(Box::new(SmtParseErrorInner { kind, span }))
     }
 
     pub(crate) fn handler_error(err: E, span: SmtSpan) -> Self {
-        Self::new(ParserErrorKind::Handler(err), span)
+        Self::new(SmtParseErrorKind::Handler(err), span)
     }
 
-    pub(crate) fn category_error(err: SyntaxErrorKind, span: SmtSpan) -> Self {
-        Self::new(ParserErrorKind::Syntax(err), span)
+    pub(crate) fn category_error(err: SmtSyntaxErrorKind, span: SmtSpan) -> Self {
+        Self::new(SmtParseErrorKind::Syntax(err), span)
     }
 
-    pub fn kind(&self) -> &ParserErrorKind<E> {
+    pub fn kind(&self) -> &SmtParseErrorKind<E> {
         &self.0.kind
     }
 
@@ -148,20 +148,20 @@ impl<E> ParserError<E> {
         self.0.span
     }
 
-    pub fn into_kind(self) -> ParserErrorKind<E> {
+    pub fn into_kind(self) -> SmtParseErrorKind<E> {
         self.0.kind
     }
 }
 
 #[derive(Debug)]
-struct ParserErrorInner<E> {
-    kind: ParserErrorKind<E>,
+struct SmtParseErrorInner<E> {
+    kind: SmtParseErrorKind<E>,
     span: SmtSpan,
 }
 
-fn handle_err<O, E>(handled: Result<O, E>, span: SmtSpan) -> Result<O, ParserError<E>> {
+fn handle_err<O, E>(handled: Result<O, E>, span: SmtSpan) -> Result<O, SmtParseError<E>> {
     match handled {
         Ok(ok) => Ok(ok),
-        Err(err) => Err(ParserError::handler_error(err, span)),
+        Err(err) => Err(SmtParseError::handler_error(err, span)),
     }
 }

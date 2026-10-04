@@ -4,8 +4,8 @@ use crate::{
     SmtApplication, SmtHandler, SmtQualifiedIdentView, SmtQuantifierKind, SmtSpan, SmtSymbolView,
     SmtTerm,
     read::parser::{
-        Arena, CloseParenParser, OpenParenParser, Parser, ParserError, ParserResources,
-        QualifiedIdentHandle, SyntaxErrorKind,
+        Arena, CloseParenParser, OpenParenParser, Parser, ParserResources, QualifiedIdentHandle,
+        SmtParseError, SmtSyntaxErrorKind,
         category::{attribute::MultipleAttributes, parse_special_constant},
         handle_err,
     },
@@ -178,7 +178,7 @@ impl<H: SmtHandler> Parser<H> for TermParser<H> {
         handler: &mut H,
         resources: &mut ParserResources<H>,
         cursor: &mut SmtBatchCursor<'_>,
-    ) -> Result<ControlFlow<H::Term>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<H::Term>, SmtParseError<H::Error>> {
         // progress the slot with the cursor
         TermSlot::parse(handler, resources, cursor)
     }
@@ -229,7 +229,7 @@ impl<H: SmtHandler> TermSlot<H> {
         handler: &mut H,
         resources: &mut ParserResources<H>,
         cursor: &mut SmtBatchCursor,
-    ) -> Result<ControlFlow<H::Term>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<H::Term>, SmtParseError<H::Error>> {
         while let Some(token) = cursor.next() {
             if matches!(resources.term_slot.state, State::Start)
                 && resources.term_slot.pending.is_none()
@@ -339,7 +339,7 @@ impl<H: SmtHandler> TermSlot<H> {
         resources: &mut ParserResources<H>,
         version: SmtVersion,
         token: SmtToken,
-    ) -> Result<ControlFlow<H::Term>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<H::Term>, SmtParseError<H::Error>> {
         let span = token.span();
         let term = match resources.term_slot.pending.take() {
             Some(pending) => {
@@ -361,8 +361,8 @@ impl<H: SmtHandler> TermSlot<H> {
                             let arena = &mut resources.arena;
                             // check that there is at least one attribute
                             if arena.attributes.len() == arena_attributes_start {
-                                return Err(ParserError::category_error(
-                                    SyntaxErrorKind::EmptyAnnotation,
+                                return Err(SmtParseError::category_error(
+                                    SmtSyntaxErrorKind::EmptyAnnotation,
                                     span,
                                 ));
                             }
@@ -400,7 +400,7 @@ impl<H: SmtHandler> TermSlot<H> {
         resources: &mut ParserResources<H>,
         term: H::Term,
         span: SmtSpan,
-    ) -> Result<ControlFlow<H::Term>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<H::Term>, SmtParseError<H::Error>> {
         // we have parsed a term, set state to start
         let slot = &mut resources.term_slot;
         slot.state = State::Start;
@@ -484,7 +484,7 @@ impl<H: SmtHandler> TermSlot<H> {
         resources: &mut ParserResources<H>,
         version: SmtVersion,
         token: SmtToken,
-    ) -> Result<ControlFlow<H::Term>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<H::Term>, SmtParseError<H::Error>> {
         let slot = &mut resources.term_slot;
 
         match slot.state {
@@ -557,8 +557,8 @@ impl<H: SmtHandler> TermSlot<H> {
             State::LetBindingSymbol => {
                 // expect a symbol that will be the binding name
                 let SmtSyntaxToken::Symbol(name) = token.syntax(version) else {
-                    return Err(ParserError::category_error(
-                        SyntaxErrorKind::ExpectedSymbol,
+                    return Err(SmtParseError::category_error(
+                        SmtSyntaxErrorKind::ExpectedSymbol,
                         token.span(),
                     ));
                 };
@@ -598,13 +598,13 @@ impl<H: SmtHandler> TermSlot<H> {
                     ControlFlow::Break(num_opened) => {
                         // there must be at least one sorted variable in the binder
                         if num_opened == 0 {
-                            let err_kind: SyntaxErrorKind = match binder_kind {
+                            let err_kind: SmtSyntaxErrorKind = match binder_kind {
                                 SortedBinderKind::Exists | SortedBinderKind::Forall => {
-                                    SyntaxErrorKind::EmptyQuantifierBindings
+                                    SmtSyntaxErrorKind::EmptyQuantifierBindings
                                 }
-                                SortedBinderKind::Lambda => SyntaxErrorKind::EmptyLambdaBindings,
+                                SortedBinderKind::Lambda => SmtSyntaxErrorKind::EmptyLambdaBindings,
                             };
-                            return Err(ParserError::category_error(err_kind, span));
+                            return Err(SmtParseError::category_error(err_kind, span));
                         }
 
                         let end_kind = match binder_kind {
@@ -667,7 +667,7 @@ impl<H: SmtHandler> TermSlot<H> {
         resources: &mut ParserResources<H>,
         version: SmtVersion,
         token: SmtToken,
-    ) -> Result<ControlFlow<H::Term>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<H::Term>, SmtParseError<H::Error>> {
         let span = token.span();
         let slot = &mut resources.term_slot;
         let term = match token.syntax(version) {
@@ -685,16 +685,16 @@ impl<H: SmtHandler> TermSlot<H> {
                     arena_args_start,
                 }) = slot.levels.pop()
                 else {
-                    return Err(ParserError::category_error(
-                        SyntaxErrorKind::ExpectedTerm,
+                    return Err(SmtParseError::category_error(
+                        SmtSyntaxErrorKind::ExpectedTerm,
                         span,
                     ));
                 };
                 let arena = &mut resources.arena;
                 // the application must contain at least one argument
                 if arena.terms.len() == arena_args_start {
-                    return Err(ParserError::category_error(
-                        SyntaxErrorKind::EmptyTermApplication,
+                    return Err(SmtParseError::category_error(
+                        SmtSyntaxErrorKind::EmptyTermApplication,
                         span,
                     ));
                 }
@@ -722,8 +722,8 @@ impl<H: SmtHandler> TermSlot<H> {
                         handle_err(handler.handle_term(term), span)?
                     }
                     Err(_) => {
-                        return Err(ParserError::category_error(
-                            SyntaxErrorKind::ExpectedTerm,
+                        return Err(SmtParseError::category_error(
+                            SmtSyntaxErrorKind::ExpectedTerm,
                             span,
                         ));
                     }
@@ -738,7 +738,7 @@ impl<H: SmtHandler> TermSlot<H> {
         resources: &mut ParserResources<H>,
         version: SmtVersion,
         token: SmtToken,
-    ) -> Result<(), ParserError<H::Error>> {
+    ) -> Result<(), SmtParseError<H::Error>> {
         let span = token.span();
         let slot = &mut resources.term_slot;
 
@@ -803,8 +803,8 @@ impl<H: SmtHandler> TermSlot<H> {
                 State::ApplicationIdent
             }
             _ => {
-                return Err(ParserError::category_error(
-                    SyntaxErrorKind::ExpectedOperator,
+                return Err(SmtParseError::category_error(
+                    SmtSyntaxErrorKind::ExpectedOperator,
                     span,
                 ));
             }
@@ -822,7 +822,7 @@ impl<H: SmtHandler> TermSlot<H> {
         resources: &mut ParserResources<H>,
         version: SmtVersion,
         token: SmtToken,
-    ) -> Result<(), ParserError<H::Error>> {
+    ) -> Result<(), SmtParseError<H::Error>> {
         let span = token.span();
         let slot = &mut resources.term_slot;
         match token.syntax(version) {
@@ -847,8 +847,8 @@ impl<H: SmtHandler> TermSlot<H> {
                 let arena = &mut resources.arena;
                 // there must be at least one binding
                 if arena.symbols.len() == arena_names_start {
-                    return Err(ParserError::category_error(
-                        SyntaxErrorKind::EmptyLetBindings,
+                    return Err(SmtParseError::category_error(
+                        SmtSyntaxErrorKind::EmptyLetBindings,
                         span,
                     ));
                 }
@@ -871,8 +871,8 @@ impl<H: SmtHandler> TermSlot<H> {
             }
             _ => {
                 // expected open or close parenthesis
-                Err(ParserError::category_error(
-                    SyntaxErrorKind::ExpectedToken(&[
+                Err(SmtParseError::category_error(
+                    SmtSyntaxErrorKind::ExpectedToken(&[
                         SmtTokenCategory::ParenOpen,
                         SmtTokenCategory::ParenClose,
                     ]),
@@ -891,7 +891,7 @@ impl<H: SmtHandler> TermSlot<H> {
         handler: &mut H,
         version: SmtVersion,
         token: SmtToken,
-    ) -> Result<(), ParserError<H::Error>> {
+    ) -> Result<(), SmtParseError<H::Error>> {
         let span = token.span();
         match token.syntax(version) {
             SmtSyntaxToken::ParenOpen => {
@@ -906,8 +906,8 @@ impl<H: SmtHandler> TermSlot<H> {
                 };
                 // there must be at least one case
                 if num_cases == 0 {
-                    return Err(ParserError::category_error(
-                        SyntaxErrorKind::EmptyMatchCases,
+                    return Err(SmtParseError::category_error(
+                        SmtSyntaxErrorKind::EmptyMatchCases,
                         span,
                     ));
                 }
@@ -921,8 +921,8 @@ impl<H: SmtHandler> TermSlot<H> {
                 });
                 Ok(())
             }
-            _ => Err(ParserError::category_error(
-                SyntaxErrorKind::ExpectedToken(&[
+            _ => Err(SmtParseError::category_error(
+                SmtSyntaxErrorKind::ExpectedToken(&[
                     SmtTokenCategory::ParenOpen,
                     SmtTokenCategory::ParenClose,
                 ]),
@@ -1006,7 +1006,7 @@ impl SortedBindingsParser {
         version: SmtVersion,
         token: SmtToken,
         open_fn: impl Fn(&mut H, SmtSymbolView<'_>, H::Sort) -> Result<(), H::Error>,
-    ) -> Result<ControlFlow<u64>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<u64>, SmtParseError<H::Error>> {
         let this = &mut resources.term_slot.sorted_bindings_parser;
         let token = match this.state {
             SortedBindingsParserState::Start => {

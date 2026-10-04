@@ -14,7 +14,7 @@ use blazing_smtlib::{
     CheckStandardSyntax, NonstandardCommandError, String8,
     read::{
         SmtReadError, SmtReadErrorKind, SmtReader,
-        parser::{CommandParser, CommandParserStop, SExprParser, SyntaxErrorKind},
+        parser::{CommandParser, CommandParserStop, SExprParser, SmtSyntaxErrorKind},
     },
     token::{
         SmtCommandNameReserved, SmtGeneralReserved, SmtReserved, SmtVersion, SmtVersionPosture,
@@ -129,11 +129,11 @@ fn read_any_version(input: &str) -> Outcome {
 
 /// Requires a syntax error of the given kind spanning the given byte offsets.
 #[track_caller]
-fn assert_syntax_error(outcome: Outcome, kind: SyntaxErrorKind, start: u64, end: u64) {
+fn assert_syntax_error(outcome: Outcome, kind: SmtSyntaxErrorKind, start: u64, end: u64) {
     assert_eq!(
         outcome,
         Err((
-            format!("{:?}", SmtReadErrorKind::<()>::Parser(kind)),
+            format!("{:?}", SmtReadErrorKind::<()>::Syntax(kind)),
             start,
             end
         ))
@@ -249,7 +249,7 @@ fn a_command_of_a_later_version_is_nonstandard() {
 fn a_declaration_applies_after_its_command() {
     // not to the commands before it
     let result = read_default("(declare-const lambda Bool)(set-info :smt-lib-version 2.6)");
-    assert_syntax_error(result, SyntaxErrorKind::ExpectedSymbol, 15, 21);
+    assert_syntax_error(result, SmtSyntaxErrorKind::ExpectedSymbol, 15, 21);
     // to all the commands after it, whatever the input is cut into
     assert_eq!(
         read_default(
@@ -264,7 +264,7 @@ fn a_declaration_applies_after_its_command() {
         SmtVersion::V2_6,
         SmtVersionPosture::default(),
     );
-    assert_syntax_error(result, SyntaxErrorKind::ExpectedTerm, 66, 72);
+    assert_syntax_error(result, SmtSyntaxErrorKind::ExpectedTerm, 66, 72);
 }
 
 #[test]
@@ -287,7 +287,7 @@ fn only_the_set_info_attribute_declares_a_version() {
         let start = input.len() as u64 + 46;
         assert_syntax_error(
             read_default(&script),
-            SyntaxErrorKind::ExpectedSymbol,
+            SmtSyntaxErrorKind::ExpectedSymbol,
             start,
             start + 6,
         );
@@ -320,7 +320,7 @@ fn a_version_that_is_not_supported_is_rejected() {
         let input = format!("(set-info :smt-lib-version {value})");
         assert_syntax_error(
             read_default(&input),
-            SyntaxErrorKind::UnsupportedVersion,
+            SmtSyntaxErrorKind::UnsupportedVersion,
             27,
             end,
         );
@@ -340,7 +340,7 @@ fn a_version_that_is_not_supported_is_rejected() {
             let input = format!("(set-info :smt-lib-version {declared})");
             let result = read(&input, SmtVersion::V2_7, without.clone());
             if declared == spelling {
-                assert_syntax_error(result, SyntaxErrorKind::UnsupportedVersion, 27, 30);
+                assert_syntax_error(result, SmtSyntaxErrorKind::UnsupportedVersion, 27, 30);
             } else {
                 assert_eq!(result, Ok(()), "{declared} without {excluded:?}");
             }
@@ -350,14 +350,14 @@ fn a_version_that_is_not_supported_is_rejected() {
         builder.clear_allowed();
     });
     let result = read("(set-info :smt-lib-version 2.7)", SmtVersion::V2_7, none);
-    assert_syntax_error(result, SyntaxErrorKind::UnsupportedVersion, 27, 30);
+    assert_syntax_error(result, SmtSyntaxErrorKind::UnsupportedVersion, 27, 30);
 }
 
 #[test]
 fn a_version_value_is_followed_by_the_closing_parenthesis() {
     let result = read_default("(set-info :smt-lib-version 2.6 2.6)");
     let (kind, start, end) = result.expect_err("a second value is no attribute");
-    assert!(kind.starts_with("Parser(ExpectedToken("), "{kind}");
+    assert!(kind.starts_with("Syntax(ExpectedToken("), "{kind}");
     assert_eq!((start, end), (31, 34));
 }
 
@@ -370,7 +370,7 @@ fn the_number_of_declarations_is_limited() {
     for input in [two, same] {
         assert_syntax_error(
             read_default(input),
-            SyntaxErrorKind::TooManyVersionDeclarations(1),
+            SmtSyntaxErrorKind::TooManyVersionDeclarations(1),
             59,
             62,
         );
@@ -387,7 +387,7 @@ fn the_number_of_declarations_is_limited() {
     );
     assert_syntax_error(
         result,
-        SyntaxErrorKind::TooManyVersionDeclarations(0),
+        SmtSyntaxErrorKind::TooManyVersionDeclarations(0),
         27,
         30,
     );
@@ -404,7 +404,7 @@ fn the_number_of_declarations_is_limited() {
     assert_eq!(read(two, SmtVersion::V2_7, up_to_two.clone()), Ok(()));
     assert_syntax_error(
         read(&three, SmtVersion::V2_7, up_to_two),
-        SyntaxErrorKind::TooManyVersionDeclarations(2),
+        SmtSyntaxErrorKind::TooManyVersionDeclarations(2),
         91,
         94,
     );
@@ -414,7 +414,7 @@ fn the_number_of_declarations_is_limited() {
     let input = format!("{three}(declare-const lambda Bool)");
     assert_syntax_error(
         read(&input, SmtVersion::V2_7, unlimited.clone()),
-        SyntaxErrorKind::ExpectedSymbol,
+        SmtSyntaxErrorKind::ExpectedSymbol,
         110,
         116,
     );
@@ -423,7 +423,7 @@ fn the_number_of_declarations_is_limited() {
 
     // a rejected version is reported before the limit
     let result = read_default("(set-info :smt-lib-version 2.6)(set-info :smt-lib-version 2.0)");
-    assert_syntax_error(result, SyntaxErrorKind::UnsupportedVersion, 58, 61);
+    assert_syntax_error(result, SmtSyntaxErrorKind::UnsupportedVersion, 58, 61);
 }
 
 #[test]
@@ -453,7 +453,7 @@ fn the_version_and_the_declaration_count_reset_with_the_input() {
             .expect_err("lambda is reserved in the initial version");
         assert!(matches!(
             err.kind(),
-            SmtReadErrorKind::Parser(SyntaxErrorKind::ExpectedSymbol)
+            SmtReadErrorKind::Syntax(SmtSyntaxErrorKind::ExpectedSymbol)
         ));
     }
 }
@@ -556,7 +556,7 @@ fn assumptions_are_literals_before_2_7() {
             if version < SmtVersion::V2_7 {
                 assert_syntax_error(
                     result,
-                    SyntaxErrorKind::ExpectedPropositionalLiteral,
+                    SmtSyntaxErrorKind::ExpectedPropositionalLiteral,
                     start + at,
                     start + at + len,
                 );
@@ -583,7 +583,7 @@ fn assumptions_are_literals_before_2_7() {
     for (_, version) in versions() {
         let input = format!("(set-info :smt-lib-version {version})(check-sat-assuming p)");
         let (kind, start, end) = read_default(&input).expect_err("the list is missing");
-        assert!(kind.starts_with("Parser(ExpectedToken("), "{kind}");
+        assert!(kind.starts_with("Syntax(ExpectedToken("), "{kind}");
         assert_eq!((start, end), (51, 52));
     }
 }
@@ -620,7 +620,7 @@ fn a_reserved_word_is_an_s_expression_since_2_6() {
                 let reserved = version >= introduced_in(word);
                 let expected = if reserved && version < SmtVersion::V2_6 {
                     Err((
-                        "Parser(ExpectedSExpr)".to_string(),
+                        "Syntax(ExpectedSExpr)".to_string(),
                         at,
                         at + word.len() as u64,
                     ))
@@ -648,7 +648,7 @@ fn a_reserved_word_is_an_s_expression_since_2_6() {
     // the same holds wherever the input is cut
     assert_syntax_error(
         read_default("(set-info :smt-lib-version 2.5)(set-info :a (x (let) y))"),
-        SyntaxErrorKind::ExpectedSExpr,
+        SmtSyntaxErrorKind::ExpectedSExpr,
         48,
         51,
     );
@@ -662,7 +662,7 @@ fn a_reserved_word_is_an_s_expression_since_2_6() {
         let input = format!("(set-info :smt-lib-version {spelling})(set-info :a let)");
         assert_syntax_error(
             read_any_version(&input),
-            SyntaxErrorKind::ExpectedAttribute,
+            SmtSyntaxErrorKind::ExpectedAttribute,
             44,
             47,
         );
@@ -680,7 +680,7 @@ fn a_reserved_word_alone_is_an_s_expression_since_2_6() {
             let err = result.expect_err("a reserved word is no S-expression before 2.6");
             assert!(matches!(
                 err.kind(),
-                SmtReadErrorKind::Parser(SyntaxErrorKind::ExpectedSExpr)
+                SmtReadErrorKind::Syntax(SmtSyntaxErrorKind::ExpectedSExpr)
             ));
             assert_eq!(
                 (err.span().start().offset(), err.span().end().offset()),
@@ -721,16 +721,19 @@ fn the_underscore_is_a_match_pattern_since_2_7() {
     for (body, kind_2_6) in [
         (
             "(match x ((@_ true)))",
-            SyntaxErrorKind::ExpectedSymbolOrParenOpen,
+            SmtSyntaxErrorKind::ExpectedSymbolOrParenOpen,
         ),
-        ("(match x (((c @_) true)))", SyntaxErrorKind::ExpectedSymbol),
+        (
+            "(match x (((c @_) true)))",
+            SmtSyntaxErrorKind::ExpectedSymbol,
+        ),
         (
             "(match x (((c y @_ z) true) (d false)))",
-            SyntaxErrorKind::ExpectedSymbol,
+            SmtSyntaxErrorKind::ExpectedSymbol,
         ),
         (
             "(match x (((c y) true) (@_ false)))",
-            SyntaxErrorKind::ExpectedSymbolOrParenOpen,
+            SmtSyntaxErrorKind::ExpectedSymbolOrParenOpen,
         ),
     ] {
         let (result, at) = check("2.6", body);
@@ -741,20 +744,20 @@ fn the_underscore_is_a_match_pattern_since_2_7() {
     // the underscore is never the constructor of a pattern
     for spelling in ["2.6", "2.7"] {
         let (result, at) = check(spelling, "(match x (((@_ y) true)))");
-        assert_syntax_error(result, SyntaxErrorKind::ExpectedSymbol, at, at + 1);
+        assert_syntax_error(result, SmtSyntaxErrorKind::ExpectedSymbol, at, at + 1);
     }
 
     // what is no pattern at all is reported by what the version expects there
     for (body, kind_2_6, kind_2_7) in [
         (
             "(match x ((@1 true)))",
-            SyntaxErrorKind::ExpectedSymbolOrParenOpen,
-            SyntaxErrorKind::ExpectedSymbolUnderscoreOrParenOpen,
+            SmtSyntaxErrorKind::ExpectedSymbolOrParenOpen,
+            SmtSyntaxErrorKind::ExpectedSymbolUnderscoreOrParenOpen,
         ),
         (
             "(match x (((c @1) true)))",
-            SyntaxErrorKind::ExpectedSymbol,
-            SyntaxErrorKind::ExpectedSymbolOrUnderscore,
+            SmtSyntaxErrorKind::ExpectedSymbol,
+            SmtSyntaxErrorKind::ExpectedSymbolOrUnderscore,
         ),
     ] {
         let (result, at) = check("2.6", body);
@@ -795,7 +798,7 @@ fn an_index_is_a_numeral_before_2_5() {
                 let (kind, error_start, _) = result.expect_err("a symbol is no index in 2.0");
                 assert_eq!(
                     (kind.as_str(), error_start),
-                    ("Parser(ExpectedIndexOrCloseParen)", start),
+                    ("Syntax(ExpectedIndexOrCloseParen)", start),
                     "{body} in {spelling}"
                 );
             }
@@ -838,7 +841,7 @@ fn the_string_escapes_follow_the_declared_version() {
             Err((kind, _, _)) => {
                 assert!(!ok, "{input} from {initial:?}: {kind}");
                 assert!(
-                    kind.starts_with("Lexer("),
+                    kind.starts_with("Lexical("),
                     "{input} from {initial:?}: {kind}"
                 );
             }
@@ -888,5 +891,5 @@ fn the_string_escapes_reset_with_the_input() {
     let err = reader
         .read_slice(legacy)
         .expect_err("a backslash does not escape in the initial version");
-    assert!(matches!(err.kind(), SmtReadErrorKind::Lexer(_)));
+    assert!(matches!(err.kind(), SmtReadErrorKind::Lexical(_)));
 }

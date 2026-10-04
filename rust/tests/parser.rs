@@ -12,7 +12,9 @@ use blazing_smtlib::{
     SmtSymbolView, SmtTerm,
     read::{
         SmtReadErrorKind,
-        parser::{ClosedParser, CommandAction, CommandPayloadParser, SyntaxErrorKind, TermParser},
+        parser::{
+            ClosedParser, CommandAction, CommandPayloadParser, SmtSyntaxErrorKind, TermParser,
+        },
     },
 };
 
@@ -29,20 +31,23 @@ fn valid_input_has_no_error() {
 fn bare_symbol_is_whole_token() {
     // a command must be parenthesized; the whole symbol token is the span
     let err = assert_parser_error(b"check-sat", 0, 9);
-    assert!(matches!(err, SyntaxErrorKind::ExpectedCommand), "{err:?}");
+    assert!(
+        matches!(err, SmtSyntaxErrorKind::ExpectedCommand),
+        "{err:?}"
+    );
 }
 
 #[test]
 fn missing_term_points_at_close_paren() {
     let err = assert_parser_error(b"(check-sat)\n(assert )", 20, 21);
-    assert!(matches!(err, SyntaxErrorKind::ExpectedTerm), "{err:?}");
+    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedTerm), "{err:?}");
 }
 
 #[test]
 fn numeral_as_command_name() {
     let err = assert_parser_error(b"(set-logic QF_UF)\n(1)", 19, 20);
     assert!(
-        matches!(err, SyntaxErrorKind::ExpectedCommandName),
+        matches!(err, SmtSyntaxErrorKind::ExpectedCommandName),
         "{err:?}"
     );
 }
@@ -65,7 +70,7 @@ fn nonstandard_command_is_rejected_by_standard_syntax() {
         SmtReadErrorKind::Handler(NonstandardCommandError(name)) => {
             assert_eq!(name.as_slice(), b"frobnicate");
         }
-        SmtReadErrorKind::Parser(kind) => {
+        SmtReadErrorKind::Syntax(kind) => {
             panic!("expected handler error, got parser error {kind:?}")
         }
         _ => panic!("expected handler error"),
@@ -82,7 +87,7 @@ fn quoted_standard_command_name_names_a_nonstandard_command() {
         SmtReadErrorKind::Handler(NonstandardCommandError(name)) => {
             assert_eq!(name.as_slice(), b"check-sat");
         }
-        SmtReadErrorKind::Parser(kind) => {
+        SmtReadErrorKind::Syntax(kind) => {
             panic!("expected handler error, got parser error {kind:?}")
         }
         _ => panic!("expected handler error"),
@@ -93,7 +98,7 @@ fn quoted_standard_command_name_names_a_nonstandard_command() {
 fn reserved_word_other_than_a_command_name_is_no_command_name() {
     let err = assert_parser_error(b"(let ((x 1)) x)", 1, 4);
     assert!(
-        matches!(err, SyntaxErrorKind::ExpectedCommandName),
+        matches!(err, SmtSyntaxErrorKind::ExpectedCommandName),
         "{err:?}"
     );
 }
@@ -493,8 +498,8 @@ fn nonstandard_command_body_is_checked() {
     let err = parse_with(&mut handler, b"(my-assert )").expect_err("expected a parser error");
     assert_error_span(&err, 11, 12);
     match err.kind() {
-        SmtReadErrorKind::Parser(SyntaxErrorKind::ExpectedTerm) => {}
-        SmtReadErrorKind::Parser(kind) => panic!("unexpected parser error {kind:?}"),
+        SmtReadErrorKind::Syntax(SmtSyntaxErrorKind::ExpectedTerm) => {}
+        SmtReadErrorKind::Syntax(kind) => panic!("unexpected parser error {kind:?}"),
         SmtReadErrorKind::Handler(_) => panic!("unexpected handler error"),
         _ => panic!("unexpected error kind"),
     }
@@ -511,7 +516,7 @@ fn nonstandard_command_unknown_to_handler_is_rejected() {
         SmtReadErrorKind::Handler(NonstandardCommandError(name)) => {
             assert_eq!(name.as_slice(), b"other");
         }
-        SmtReadErrorKind::Parser(kind) => {
+        SmtReadErrorKind::Syntax(kind) => {
             panic!("expected handler error, got parser error {kind:?}")
         }
         _ => panic!("expected handler error"),

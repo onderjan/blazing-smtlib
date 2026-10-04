@@ -8,8 +8,10 @@ use blazing_smtlib::{
     CheckStandardSyntax, NonstandardCommandError, SmtLocation,
     read::{
         SmtReadError, SmtReadErrorKind, SmtReader,
-        lexer::LexerErrorKind,
-        parser::{CommandParser, CommandParserStop, ScriptParserStop, SyntaxErrorKind, TermParser},
+        lexer::SmtLexicalErrorKind,
+        parser::{
+            CommandParser, CommandParserStop, ScriptParserStop, SmtSyntaxErrorKind, TermParser,
+        },
         read_smt, read_smt_file,
     },
     token::{SmtVersion, SmtVersionPosture},
@@ -49,7 +51,7 @@ fn lexer_error_kind_and_span_are_passed_through() {
     let err = read(b"(check-sat)\n\n  \"abc").expect_err("expected a lexer error, got Ok");
     assert!(matches!(
         err.kind(),
-        SmtReadErrorKind::Lexer(LexerErrorKind::UnclosedStringLiteral)
+        SmtReadErrorKind::Lexical(SmtLexicalErrorKind::UnclosedStringLiteral)
     ));
     assert_span(&err, (15, 2, 2), (19, 2, 6));
 }
@@ -60,7 +62,7 @@ fn parser_error_span_is_resolved_to_lines() {
     let err = read(b"(check-sat)\n(assert )").expect_err("expected a parser error, got Ok");
     assert!(matches!(
         err.kind(),
-        SmtReadErrorKind::Parser(SyntaxErrorKind::ExpectedTerm)
+        SmtReadErrorKind::Syntax(SmtSyntaxErrorKind::ExpectedTerm)
     ));
     assert_span(&err, (20, 1, 8), (21, 1, 9));
 }
@@ -73,7 +75,7 @@ fn parser_error_deep_in_the_input_is_resolved_to_lines() {
     let err = read(input).expect_err("expected a parser error, got Ok");
     assert!(matches!(
         err.kind(),
-        SmtReadErrorKind::Parser(SyntaxErrorKind::EmptyTermApplication)
+        SmtReadErrorKind::Syntax(SmtSyntaxErrorKind::EmptyTermApplication)
     ));
     assert_span(&err, (52, 2, 11), (53, 2, 12));
 }
@@ -92,7 +94,7 @@ fn span_after_a_token_containing_a_line_break() {
     // the quoted symbol carries the line break, so the offending `x` after it
     // must be reported on the second line
     let err = read(b"(assert |a\nb| x)").expect_err("expected a parser error, got Ok");
-    assert!(matches!(err.kind(), SmtReadErrorKind::Parser(_)));
+    assert!(matches!(err.kind(), SmtReadErrorKind::Syntax(_)));
     assert_span(&err, (14, 1, 3), (15, 1, 4));
 }
 
@@ -100,7 +102,7 @@ fn span_after_a_token_containing_a_line_break() {
 fn parser_error_at_eof_is_empty_span() {
     // unclosed command: the error is on the zero-width EOF token after a newline
     let err = read(b"(check-sat\n").expect_err("expected a parser error, got Ok");
-    assert!(matches!(err.kind(), SmtReadErrorKind::Parser(_)));
+    assert!(matches!(err.kind(), SmtReadErrorKind::Syntax(_)));
     assert_span(&err, (11, 1, 0), (11, 1, 0));
 }
 
@@ -317,7 +319,7 @@ fn reading_after_a_finished_input_starts_a_new_one_from_the_origin() {
             .expect_err("a missing term is a parser error");
         assert!(matches!(
             err.kind(),
-            SmtReadErrorKind::Parser(SyntaxErrorKind::ExpectedTerm)
+            SmtReadErrorKind::Syntax(SmtSyntaxErrorKind::ExpectedTerm)
         ));
         assert_span(&err, (20, 1, 8), (21, 1, 9));
     }

@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler, SmtSExpr,
     read::parser::{
-        Arena, Parser, ParserError, ParserResources, SyntaxErrorKind,
+        Arena, Parser, ParserResources, SmtParseError, SmtSyntaxErrorKind,
         category::parse_special_constant, handle_err, parse_by_token,
     },
     token::{SmtBatchCursor, SmtSyntaxToken, SmtToken, SmtVersion},
@@ -40,7 +40,7 @@ impl<H: SmtHandler> Parser<H> for SExprParser<H> {
         handler: &mut H,
         resources: &mut ParserResources<H>,
         cursor: &mut SmtBatchCursor,
-    ) -> Result<ControlFlow<H::SExpr>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<H::SExpr>, SmtParseError<H::Error>> {
         // progress the slot over the arena
         let ParserResources {
             s_expr_slot, arena, ..
@@ -81,7 +81,7 @@ impl SExprSlot {
         arena: &mut Arena<H>,
         version: SmtVersion,
         token: SmtToken,
-    ) -> Result<ControlFlow<H::SExpr>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<H::SExpr>, SmtParseError<H::Error>> {
         // there is no state besides the levels, so an empty level stack
         // means the category is being entered
         if self.levels.is_empty() {
@@ -96,8 +96,8 @@ impl SExprSlot {
                 if version >= SmtVersion::V2_6 {
                     SmtSExpr::Reserved(reserved)
                 } else {
-                    return Err(ParserError::category_error(
-                        SyntaxErrorKind::ExpectedSExpr,
+                    return Err(SmtParseError::category_error(
+                        SmtSyntaxErrorKind::ExpectedSExpr,
                         span,
                     ));
                 }
@@ -114,8 +114,8 @@ impl SExprSlot {
                 // try to pop the last level
                 let Some(last_level) = self.levels.pop() else {
                     // no last level, all that we received was ")"
-                    return Err(ParserError::category_error(
-                        SyntaxErrorKind::ExpectedSExpr,
+                    return Err(SmtParseError::category_error(
+                        SmtSyntaxErrorKind::ExpectedSExpr,
                         span,
                     ));
                 };
@@ -131,8 +131,8 @@ impl SExprSlot {
                 if let Ok(special_constant) = parse_special_constant(kind) {
                     SmtSExpr::SpecialConstant(special_constant)
                 } else {
-                    return Err(ParserError::category_error(
-                        SyntaxErrorKind::ExpectedSExpr,
+                    return Err(SmtParseError::category_error(
+                        SmtSyntaxErrorKind::ExpectedSExpr,
                         span,
                     ));
                 }

@@ -11,7 +11,7 @@ use std::ops::ControlFlow;
 
 use blazing_smtlib::{
     SmtLocation,
-    read::lexer::{LexError, Lexer},
+    read::lexer::{Lexer, SmtLexError},
     token::{SmtBatchCursor, SmtConsume, SmtReserved, SmtSyntaxToken, SmtVersion},
 };
 
@@ -118,11 +118,11 @@ fn answer(request: &str, out: &mut String) -> Result<(), String> {
             Ok(_) => lines
                 .borrow_mut()
                 .push_str(&format!("at {}\n", location(lexer.current_location()))),
-            Err(LexError::Lexer(err)) => {
+            Err(SmtLexError::Lexical(err)) => {
                 error = Some(err);
                 break;
             }
-            Err(LexError::Handler(never)) => match never {},
+            Err(SmtLexError::Consumer(never)) => match never {},
         }
     }
     drop(lexer);

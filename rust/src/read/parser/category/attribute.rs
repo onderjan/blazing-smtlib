@@ -3,8 +3,9 @@ use std::ops::ControlFlow;
 use crate::{
     SmtAttributeValue, SmtHandler, SmtKeywordView, SmtSpan,
     read::parser::{
-        Arena, CloseParenParser, Parser, ParserError, ParserResources, SExprSlot, SyntaxErrorKind,
-        TextHandle, category::parse_special_constant, handle_err, parse_by_token,
+        Arena, CloseParenParser, Parser, ParserResources, SExprSlot, SmtParseError,
+        SmtSyntaxErrorKind, TextHandle, category::parse_special_constant, handle_err,
+        parse_by_token,
     },
     token::{SmtBatchCursor, SmtSyntaxToken, SmtToken, SmtTokenCategory, SmtVersion},
 };
@@ -39,7 +40,7 @@ impl<H: SmtHandler> Parser<H> for ClosedAttributeParser<H> {
         handler: &mut H,
         resources: &mut ParserResources<H>,
         cursor: &mut SmtBatchCursor,
-    ) -> Result<ControlFlow<Self::Result>, ParserError<<H as SmtHandler>::Error>> {
+    ) -> Result<ControlFlow<Self::Result>, SmtParseError<<H as SmtHandler>::Error>> {
         let ParserResources {
             attribute_slot,
             arena,
@@ -88,7 +89,7 @@ impl<H: SmtHandler> Parser<H> for ClosedMultipleAttributeParser<H> {
         handler: &mut H,
         resources: &mut ParserResources<H>,
         cursor: &mut SmtBatchCursor,
-    ) -> Result<ControlFlow<Self::Result>, ParserError<<H as SmtHandler>::Error>> {
+    ) -> Result<ControlFlow<Self::Result>, SmtParseError<<H as SmtHandler>::Error>> {
         let ParserResources {
             attribute_slot,
             arena,
@@ -128,7 +129,7 @@ pub(crate) trait AttributeCollection<H: SmtHandler + ?Sized> {
         arena: &mut Arena<H>,
         start: usize,
         span: SmtSpan,
-    ) -> Result<Self::Output, ParserError<H::Error>>;
+    ) -> Result<Self::Output, SmtParseError<H::Error>>;
 }
 
 /// Attribute-parsing state.
@@ -183,7 +184,7 @@ impl AttributeSlot {
         s_expr_slot: &mut SExprSlot,
         version: SmtVersion,
         token: SmtToken,
-    ) -> Result<ControlFlow<C::Output>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<C::Output>, SmtParseError<H::Error>> {
         let span = token.span();
         if !C::next_allowed(self.num_attributes) {
             // no more attributes are allowed, just expect a closing parenthesis
@@ -211,8 +212,8 @@ impl AttributeSlot {
                         self.state = State::AfterName(arena.push_text(keyword.as_slice()));
                     }
                     _ => {
-                        return Err(ParserError::category_error(
-                            SyntaxErrorKind::ExpectedAttribute,
+                        return Err(SmtParseError::category_error(
+                            SmtSyntaxErrorKind::ExpectedAttribute,
                             span,
                         ));
                     }
@@ -258,8 +259,8 @@ impl AttributeSlot {
                                 Decision::FinishAttribute,
                             )
                         } else {
-                            return Err(ParserError::category_error(
-                                SyntaxErrorKind::ExpectedAttribute,
+                            return Err(SmtParseError::category_error(
+                                SmtSyntaxErrorKind::ExpectedAttribute,
                                 span,
                             ));
                         }
@@ -286,8 +287,8 @@ impl AttributeSlot {
                         // check if we actually can start a next keyword
                         if !C::next_allowed(self.num_attributes) {
                             // it turns out that we actually expected a closing parenthesis
-                            return Err(ParserError::category_error(
-                                SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose]),
+                            return Err(SmtParseError::category_error(
+                                SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose]),
                                 span,
                             ));
                         }
@@ -345,7 +346,7 @@ impl AttributeSlot {
         &mut self,
         arena: &mut Arena<H>,
         span: SmtSpan,
-    ) -> Result<C::Output, ParserError<H::Error>> {
+    ) -> Result<C::Output, SmtParseError<H::Error>> {
         self.num_attributes = 0;
         C::finish(arena, self.arena_attributes_start, span)
     }
@@ -364,15 +365,15 @@ impl<H: SmtHandler + ?Sized> AttributeCollection<H> for SingleAttribute {
         arena: &mut Arena<H>,
         start: usize,
         span: SmtSpan,
-    ) -> Result<Self::Output, ParserError<H::Error>> {
+    ) -> Result<Self::Output, SmtParseError<H::Error>> {
         debug_assert!(
             arena.attributes.len() <= start + 1,
             "at most one attribute should be parsed"
         );
 
         if arena.attributes.len() == start {
-            return Err(ParserError::category_error(
-                SyntaxErrorKind::ExpectedAttribute,
+            return Err(SmtParseError::category_error(
+                SmtSyntaxErrorKind::ExpectedAttribute,
                 span,
             ));
         }
@@ -397,7 +398,7 @@ impl<H: SmtHandler + ?Sized> AttributeCollection<H> for MultipleAttributes {
         _arena: &mut Arena<H>,
         start: usize,
         _span: SmtSpan,
-    ) -> Result<Self::Output, ParserError<H::Error>> {
+    ) -> Result<Self::Output, SmtParseError<H::Error>> {
         Ok(start)
     }
 }

@@ -1,7 +1,7 @@
 use crate::SmtSpan;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LexerErrorKind {
+pub enum SmtLexicalErrorKind {
     UnexpectedCharacter,
     FractionDigitExpected,
     HexadecimalDigitExpected,
@@ -18,23 +18,23 @@ pub enum LexerErrorKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LexerError {
-    kind: LexerErrorKind,
+pub struct SmtLexicalError {
+    kind: SmtLexicalErrorKind,
     span: SmtSpan,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum LexError<E> {
-    Lexer(LexerError),
-    Handler(E),
+pub enum SmtLexError<E> {
+    Lexical(SmtLexicalError),
+    Consumer(E),
 }
 
-impl LexerError {
-    pub(super) fn new(kind: LexerErrorKind, span: SmtSpan) -> Self {
+impl SmtLexicalError {
+    pub(super) fn new(kind: SmtLexicalErrorKind, span: SmtSpan) -> Self {
         Self { kind, span }
     }
 
-    pub fn kind(&self) -> &LexerErrorKind {
+    pub fn kind(&self) -> &SmtLexicalErrorKind {
         &self.kind
     }
 
@@ -42,7 +42,7 @@ impl LexerError {
         self.span
     }
 
-    pub fn into_kind(self) -> LexerErrorKind {
+    pub fn into_kind(self) -> SmtLexicalErrorKind {
         self.kind
     }
 }

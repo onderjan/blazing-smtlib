@@ -3,8 +3,8 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler, SmtIdent, SmtSymbolView,
     read::parser::{
-        Arena, IdentHandle, IndexHandle, Parser, ParserError, ParserResources, SyntaxErrorKind,
-        TextHandle, parse_by_token,
+        Arena, IdentHandle, IndexHandle, Parser, ParserResources, SmtParseError,
+        SmtSyntaxErrorKind, TextHandle, parse_by_token,
     },
     token::{
         SmtBatchCursor, SmtGeneralReserved, SmtReserved, SmtSyntaxToken, SmtToken, SmtVersion,
@@ -40,7 +40,7 @@ impl<H: SmtHandler> Parser<H> for IdentParser {
         _handler: &mut H,
         resources: &mut ParserResources<H>,
         cursor: &mut SmtBatchCursor,
-    ) -> Result<ControlFlow<SmtIdent, ()>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<SmtIdent, ()>, SmtParseError<H::Error>> {
         // progress the slot over the arena, returning an owned identifier
         let ParserResources {
             ident_slot, arena, ..
@@ -141,7 +141,7 @@ impl IdentSlot {
         arena: &mut Arena<H>,
         version: SmtVersion,
         token: SmtToken,
-    ) -> Result<ControlFlow<IdentHandle, ()>, ParserError<E>> {
+    ) -> Result<ControlFlow<IdentHandle, ()>, SmtParseError<E>> {
         let span = token.span();
 
         match self.state {
@@ -156,8 +156,8 @@ impl IdentSlot {
                         self.state = State::Open;
                     }
                     _ => {
-                        let kind = SyntaxErrorKind::ExpectedIdent;
-                        return Err(ParserError::category_error(kind, span));
+                        let kind = SmtSyntaxErrorKind::ExpectedIdent;
+                        return Err(SmtParseError::category_error(kind, span));
                     }
                 }
             }
@@ -169,8 +169,8 @@ impl IdentSlot {
                 ) {
                     self.state = State::AfterUnderscore;
                 } else {
-                    return Err(ParserError::category_error(
-                        SyntaxErrorKind::ExpectedUnderscore,
+                    return Err(SmtParseError::category_error(
+                        SmtSyntaxErrorKind::ExpectedUnderscore,
                         span,
                     ));
                 }
@@ -182,8 +182,8 @@ impl IdentSlot {
                         if let SmtSyntaxToken::Symbol(name) = token.syntax(version) {
                             Some(self.push_name(arena, name))
                         } else {
-                            return Err(ParserError::category_error(
-                                SyntaxErrorKind::ExpectedSymbol,
+                            return Err(SmtParseError::category_error(
+                                SmtSyntaxErrorKind::ExpectedSymbol,
                                 span,
                             ));
                         }
@@ -195,8 +195,8 @@ impl IdentSlot {
                             SmtSyntaxToken::ParenClose => {
                                 let indices_start = self.arena_indices_start;
                                 if arena.indices.len() == indices_start {
-                                    let kind = SyntaxErrorKind::EmptyIdentIndices;
-                                    return Err(ParserError::category_error(kind, span));
+                                    let kind = SmtSyntaxErrorKind::EmptyIdentIndices;
+                                    return Err(SmtParseError::category_error(kind, span));
                                 }
                                 // reset to the starting state
                                 // we already took the name
@@ -218,8 +218,8 @@ impl IdentSlot {
                                 arena.indices.push(IndexHandle::Symbol(index));
                             }
                             _ => {
-                                return Err(ParserError::category_error(
-                                    SyntaxErrorKind::ExpectedIndexOrCloseParen,
+                                return Err(SmtParseError::category_error(
+                                    SmtSyntaxErrorKind::ExpectedIndexOrCloseParen,
                                     span,
                                 ));
                             }

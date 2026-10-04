@@ -14,7 +14,7 @@ use std::ops::ControlFlow;
 
 use blazing_smtlib::{
     SmtLocation,
-    read::lexer::{Lexer, LexerErrorKind},
+    read::lexer::{Lexer, SmtLexicalErrorKind},
     token::{SmtBatchCursor, SmtConsume, SmtTokenCategory, SmtVersion},
 };
 
@@ -37,7 +37,7 @@ struct Outcome {
 }
 
 impl Outcome {
-    fn error_kind(&self) -> Option<&LexerErrorKind> {
+    fn error_kind(&self) -> Option<&SmtLexicalErrorKind> {
         self.error.as_ref().map(|(err, _)| &err.kind)
     }
 }
@@ -307,7 +307,7 @@ fn inputs_cover_every_token_type_and_error_kind() {
     // keep the input sets expansive: every token type and every error kind
     // must be exercised, so that a boundary inside any of them is tested
     let mut token_types: Vec<SmtTokenCategory> = Vec::new();
-    let mut error_kinds: Vec<LexerErrorKind> = Vec::new();
+    let mut error_kinds: Vec<SmtLexicalErrorKind> = Vec::new();
     for input in all_inputs() {
         let outcome = lex_whole(input);
         for token in &outcome.tokens {
@@ -340,18 +340,18 @@ fn inputs_cover_every_token_type_and_error_kind() {
     }
 
     let expected_kinds = [
-        LexerErrorKind::UnexpectedCharacter,
-        LexerErrorKind::FractionDigitExpected,
-        LexerErrorKind::HexadecimalDigitExpected,
-        LexerErrorKind::BinaryDigitExpected,
-        LexerErrorKind::BaseSelectionExpected,
-        LexerErrorKind::UnclosedStringLiteral,
-        LexerErrorKind::ForbiddenCharInString,
-        LexerErrorKind::ForbiddenKeywordName,
-        LexerErrorKind::BackslashInQuotedSymbol,
-        LexerErrorKind::ForbiddenCharInQuotedSymbol,
-        LexerErrorKind::UnclosedQuotedSymbol,
-        LexerErrorKind::NumeralLeadingZero,
+        SmtLexicalErrorKind::UnexpectedCharacter,
+        SmtLexicalErrorKind::FractionDigitExpected,
+        SmtLexicalErrorKind::HexadecimalDigitExpected,
+        SmtLexicalErrorKind::BinaryDigitExpected,
+        SmtLexicalErrorKind::BaseSelectionExpected,
+        SmtLexicalErrorKind::UnclosedStringLiteral,
+        SmtLexicalErrorKind::ForbiddenCharInString,
+        SmtLexicalErrorKind::ForbiddenKeywordName,
+        SmtLexicalErrorKind::BackslashInQuotedSymbol,
+        SmtLexicalErrorKind::ForbiddenCharInQuotedSymbol,
+        SmtLexicalErrorKind::UnclosedQuotedSymbol,
+        SmtLexicalErrorKind::NumeralLeadingZero,
     ];
     for kind in expected_kinds {
         assert!(error_kinds.contains(&kind), "no input raises {kind:?}");

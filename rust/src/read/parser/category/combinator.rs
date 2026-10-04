@@ -3,8 +3,8 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler,
     read::parser::{
-        CloseParenParser, OpenParenParser, Parser, ParserError, ParserResources, SyntaxErrorKind,
-        category::resources::ClosedMultipleResource,
+        CloseParenParser, OpenParenParser, Parser, ParserResources, SmtParseError,
+        SmtSyntaxErrorKind, category::resources::ClosedMultipleResource,
     },
     token::{SmtBatchCursor, SmtTokenCategory},
 };
@@ -46,7 +46,7 @@ impl<H: SmtHandler, P1: Parser<H>, P2: Parser<H>> Parser<H> for PairParser<H, P1
         handler: &mut H,
         resources: &mut ParserResources<H>,
         cursor: &mut SmtBatchCursor,
-    ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         // progress the first parser until it breaks or the tokens run out
         if self.first_result.is_none() {
             match self.first.parse(handler, resources, cursor)? {
@@ -102,7 +102,7 @@ impl<H: SmtHandler, P: Parser<H>> Parser<H> for ClosedParser<H, P> {
         handler: &mut H,
         resources: &mut ParserResources<H>,
         cursor: &mut SmtBatchCursor,
-    ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         Ok(self
             .inner
             .parse(handler, resources, cursor)?
@@ -141,7 +141,7 @@ impl<H: SmtHandler, P: Parser<H>> Parser<H> for OpenedParser<H, P> {
         handler: &mut H,
         resources: &mut ParserResources<H>,
         cursor: &mut SmtBatchCursor,
-    ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         Ok(self
             .inner
             .parse(handler, resources, cursor)?
@@ -193,7 +193,7 @@ impl<H: SmtHandler, P: Parser<H>> Parser<H> for ClosedMultipleParser<H, P> {
         handler: &mut H,
         resources: &mut ParserResources<H>,
         cursor: &mut SmtBatchCursor,
-    ) -> Result<ControlFlow<Vec<P::Result>>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<Vec<P::Result>>, SmtParseError<H::Error>> {
         self.resource.parse(cursor, |cursor| {
             self.inner.parse(handler, resources, cursor)
         })
@@ -255,7 +255,7 @@ impl<H: SmtHandler, P: Parser<H>> Parser<H> for ClosedMaximumParser<H, P> {
         handler: &mut H,
         resources: &mut ParserResources<H>,
         cursor: &mut SmtBatchCursor,
-    ) -> Result<ControlFlow<Vec<P::Result>>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<Vec<P::Result>>, SmtParseError<H::Error>> {
         while let Some(peeked) = cursor.peek() {
             if self.outside {
                 // we are outside, a closing parenthesis ends processing
@@ -271,8 +271,8 @@ impl<H: SmtHandler, P: Parser<H>> Parser<H> for ClosedMaximumParser<H, P> {
                     // as we decided to reject based on the peeked token,
                     // it counts as consumed, so we need to advance
                     cursor.advance(1);
-                    return Err(ParserError::category_error(
-                        SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose]),
+                    return Err(SmtParseError::category_error(
+                        SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose]),
                         peeked.span(),
                     ));
                 }
@@ -335,7 +335,7 @@ impl<H: SmtHandler, P: Parser<H>> Parser<H> for ParenMaximumParser<H, P> {
         handler: &mut H,
         resources: &mut ParserResources<H>,
         cursor: &mut SmtBatchCursor,
-    ) -> Result<ControlFlow<Vec<P::Result>>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<Vec<P::Result>>, SmtParseError<H::Error>> {
         loop {
             if self.is_opened {
                 match self.inner.parse(handler, resources, cursor)? {

@@ -3,8 +3,8 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler, SmtPattern, SmtSimplePattern, SmtSimplePatternView,
     read::parser::{
-        Arena, Parser, ParserError, ParserResources, PatternHandle, SimplePatternHandle,
-        SyntaxErrorKind, TextHandle, parse_by_token,
+        Arena, Parser, ParserResources, PatternHandle, SimplePatternHandle, SmtParseError,
+        SmtSyntaxErrorKind, TextHandle, parse_by_token,
     },
     token::{
         SmtBatchCursor, SmtGeneralReserved, SmtReserved, SmtSyntaxToken, SmtToken,
@@ -23,7 +23,7 @@ impl SimplePatternParser {
     pub(crate) fn expect<H: SmtHandler + ?Sized>(
         version: SmtVersion,
         token: SmtToken,
-    ) -> Result<SmtSimplePattern, ParserError<H::Error>> {
+    ) -> Result<SmtSimplePattern, SmtParseError<H::Error>> {
         Ok(Self::expect_view::<H>(version, token)?.into_owned())
     }
 
@@ -31,7 +31,7 @@ impl SimplePatternParser {
     pub(crate) fn expect_view<'t, H: SmtHandler + ?Sized>(
         version: SmtVersion,
         token: SmtToken<'t>,
-    ) -> Result<SmtSimplePatternView<'t>, ParserError<H::Error>> {
+    ) -> Result<SmtSimplePatternView<'t>, SmtParseError<H::Error>> {
         let result = match token.syntax(version) {
             SmtSyntaxToken::Symbol(symbol) => Some(SmtSimplePatternView::Symbol(symbol)),
             SmtSyntaxToken::Reserved(SmtReserved::General(SmtGeneralReserved::Underscore)) => {
@@ -49,12 +49,12 @@ impl SimplePatternParser {
             None => {
                 // the underscore wildcard is not allowed in every version
                 let kind = if underscore_wildcard_allowed(version) {
-                    SyntaxErrorKind::ExpectedSymbolOrUnderscore
+                    SmtSyntaxErrorKind::ExpectedSymbolOrUnderscore
                 } else {
-                    SyntaxErrorKind::ExpectedSymbol
+                    SmtSyntaxErrorKind::ExpectedSymbol
                 };
 
-                Err(ParserError::category_error(kind, token.span()))
+                Err(SmtParseError::category_error(kind, token.span()))
             }
         }
     }
@@ -74,7 +74,7 @@ impl<H: SmtHandler> Parser<H> for SimplePatternParser {
         _handler: &mut H,
         _resources: &mut ParserResources<H>,
         cursor: &mut SmtBatchCursor,
-    ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         let Some(token) = cursor.next() else {
             return Ok(ControlFlow::Continue(()));
         };
@@ -116,7 +116,7 @@ impl<H: SmtHandler> Parser<H> for PatternParser<H> {
         _handler: &mut H,
         resources: &mut ParserResources<H>,
         cursor: &mut SmtBatchCursor,
-    ) -> Result<ControlFlow<SmtPattern, ()>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<SmtPattern, ()>, SmtParseError<H::Error>> {
         // progress the slot
         let ParserResources {
             pattern_slot,
@@ -172,7 +172,7 @@ impl PatternSlot {
         arena: &mut Arena<H>,
         version: SmtVersion,
         token: SmtToken<'t>,
-    ) -> Result<ControlFlow<PatternHandle<'t>>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<PatternHandle<'t>>, SmtParseError<H::Error>> {
         // The sequential progress is as follows:
         // 1. Not open, expect one of:
         //    - A symbol or "_", immediately break with a simple pattern.
@@ -193,8 +193,8 @@ impl PatternSlot {
             if matches!(token.category(), SmtTokenCategory::ParenClose) {
                 // there must be at least one argument to the constructor
                 if arena.simple_patterns.len() == self.arena_args_start {
-                    return Err(ParserError::category_error(
-                        SyntaxErrorKind::EmptyPatternArguments,
+                    return Err(SmtParseError::category_error(
+                        SmtSyntaxErrorKind::EmptyPatternArguments,
                         span,
                     ));
                 }
@@ -219,8 +219,8 @@ impl PatternSlot {
         if self.is_open {
             // step 2: expecting the constructor, which goes to the arena text
             let SmtSyntaxToken::Symbol(constructor) = token.syntax(version) else {
-                return Err(ParserError::category_error(
-                    SyntaxErrorKind::ExpectedSymbol,
+                return Err(SmtParseError::category_error(
+                    SmtSyntaxErrorKind::ExpectedSymbol,
                     span,
                 ));
             };
@@ -258,11 +258,11 @@ impl PatternSlot {
             None => {
                 // the underscore wildcard is not allowed in every version
                 let kind = if underscore_wildcard_allowed(version) {
-                    SyntaxErrorKind::ExpectedSymbolUnderscoreOrParenOpen
+                    SmtSyntaxErrorKind::ExpectedSymbolUnderscoreOrParenOpen
                 } else {
-                    SyntaxErrorKind::ExpectedSymbolOrParenOpen
+                    SmtSyntaxErrorKind::ExpectedSymbolOrParenOpen
                 };
-                Err(ParserError::category_error(kind, span))
+                Err(SmtParseError::category_error(kind, span))
             }
         }
     }

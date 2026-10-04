@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
 
 use crate::{
     SmtHandler,
-    read::parser::{Parser, ParserError, ParserResources},
+    read::parser::{Parser, ParserResources, SmtParseError},
     token::{SmtBatchCursor, SmtConsume},
 };
 
@@ -44,13 +44,13 @@ impl<'a, H: SmtHandler + ?Sized, P: Parser<H>> ParseAdapter<'a, H, P> {
 
 impl<H: SmtHandler + ?Sized, P: Parser<H>> SmtConsume for ParseAdapter<'_, H, P> {
     type Result = P::Result;
-    type Error = ParserError<H::Error>;
+    type Error = SmtParseError<H::Error>;
 
     #[inline]
     fn consume(
         &mut self,
         cursor: &mut SmtBatchCursor<'_>,
-    ) -> Result<ControlFlow<P::Result>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<P::Result>, SmtParseError<H::Error>> {
         // provide the handler and resources to the parser
         let result = self
             .parser

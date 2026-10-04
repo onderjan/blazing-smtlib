@@ -93,7 +93,7 @@ fn empty_application_is_rejected() {
     // an application must have at least one argument
     let err = assert_error::<TermParser<Printing>>(b"(f)", 2, 3);
     assert!(
-        matches!(err, SyntaxErrorKind::EmptyTermApplication),
+        matches!(err, SmtSyntaxErrorKind::EmptyTermApplication),
         "{err:?}"
     );
 }
@@ -123,13 +123,16 @@ fn lets() {
 #[test]
 fn let_errors() {
     let err = assert_error::<TermParser<Printing>>(b"(let () x)", 6, 7);
-    assert!(matches!(err, SyntaxErrorKind::EmptyLetBindings), "{err:?}");
+    assert!(
+        matches!(err, SmtSyntaxErrorKind::EmptyLetBindings),
+        "{err:?}"
+    );
 
     let err = assert_error::<TermParser<Printing>>(b"(let x x)", 5, 6);
     assert!(
         matches!(
             err,
-            SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenOpen])
+            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenOpen])
         ),
         "{err:?}"
     );
@@ -138,7 +141,7 @@ fn let_errors() {
     assert!(
         matches!(
             err,
-            SyntaxErrorKind::ExpectedToken(&[
+            SmtSyntaxErrorKind::ExpectedToken(&[
                 SmtTokenCategory::ParenOpen,
                 SmtTokenCategory::ParenClose
             ])
@@ -147,13 +150,13 @@ fn let_errors() {
     );
 
     let err = assert_error::<TermParser<Printing>>(b"(let ((1 x)) x)", 7, 8);
-    assert!(matches!(err, SyntaxErrorKind::ExpectedSymbol), "{err:?}");
+    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
 
     let err = assert_error::<TermParser<Printing>>(b"(let ((x 1 2)) x)", 11, 12);
     assert!(
         matches!(
             err,
-            SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
+            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
         ),
         "{err:?}"
     );
@@ -162,7 +165,7 @@ fn let_errors() {
     assert!(
         matches!(
             err,
-            SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
+            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
         ),
         "{err:?}"
     );
@@ -171,32 +174,41 @@ fn let_errors() {
 #[test]
 fn errors() {
     let err = assert_error::<TermParser<Printing>>(b")", 0, 1);
-    assert!(matches!(err, SyntaxErrorKind::ExpectedTerm), "{err:?}");
+    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedTerm), "{err:?}");
 
     let err = assert_error::<TermParser<Printing>>(b":kw", 0, 3);
-    assert!(matches!(err, SyntaxErrorKind::ExpectedTerm), "{err:?}");
+    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedTerm), "{err:?}");
 
     let err = assert_error::<TermParser<Printing>>(b"", 0, 0);
-    assert!(matches!(err, SyntaxErrorKind::ExpectedTerm), "{err:?}");
+    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedTerm), "{err:?}");
 
     // the operator position takes a symbol, a reserved binder, `_` or `(`
     let err = assert_error::<TermParser<Printing>>(b"(1 x)", 1, 2);
-    assert!(matches!(err, SyntaxErrorKind::ExpectedOperator), "{err:?}");
+    assert!(
+        matches!(err, SmtSyntaxErrorKind::ExpectedOperator),
+        "{err:?}"
+    );
 
     let err = assert_error::<TermParser<Printing>>(b"()", 1, 2);
-    assert!(matches!(err, SyntaxErrorKind::ExpectedOperator), "{err:?}");
+    assert!(
+        matches!(err, SmtSyntaxErrorKind::ExpectedOperator),
+        "{err:?}"
+    );
 
     // bad argument
     let err = assert_error::<TermParser<Printing>>(b"(f x :kw)", 5, 8);
-    assert!(matches!(err, SyntaxErrorKind::ExpectedTerm), "{err:?}");
+    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedTerm), "{err:?}");
 
     // EOF inside an application is a missing term
     let err = assert_error::<TermParser<Printing>>(b"(f x", 4, 4);
-    assert!(matches!(err, SyntaxErrorKind::ExpectedTerm), "{err:?}");
+    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedTerm), "{err:?}");
 
     // bad indexed identifier in a term
     let err = assert_error::<TermParser<Printing>>(b"(_ f)", 4, 5);
-    assert!(matches!(err, SyntaxErrorKind::EmptyIdentIndices), "{err:?}");
+    assert!(
+        matches!(err, SmtSyntaxErrorKind::EmptyIdentIndices),
+        "{err:?}"
+    );
 }
 
 #[test]
@@ -366,19 +378,19 @@ fn binder_errors() {
     // a quantifier must bind at least one variable
     let err = assert_error::<TermParser<Printing>>(b"(forall () x)", 9, 10);
     assert!(
-        matches!(err, SyntaxErrorKind::EmptyQuantifierBindings),
+        matches!(err, SmtSyntaxErrorKind::EmptyQuantifierBindings),
         "{err:?}"
     );
     let err = assert_error::<TermParser<Printing>>(b"(exists () x)", 9, 10);
     assert!(
-        matches!(err, SyntaxErrorKind::EmptyQuantifierBindings),
+        matches!(err, SmtSyntaxErrorKind::EmptyQuantifierBindings),
         "{err:?}"
     );
 
     // so must a lambda, with its own error kind
     let err = assert_error::<TermParser<Printing>>(b"(lambda () x)", 9, 10);
     assert!(
-        matches!(err, SyntaxErrorKind::EmptyLambdaBindings),
+        matches!(err, SmtSyntaxErrorKind::EmptyLambdaBindings),
         "{err:?}"
     );
 
@@ -387,29 +399,32 @@ fn binder_errors() {
     assert!(
         matches!(
             err,
-            SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenOpen])
+            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenOpen])
         ),
         "{err:?}"
     );
 
     // a variable must have a sort
     let err = assert_error::<TermParser<Printing>>(b"(forall ((x)) x)", 11, 12);
-    assert!(matches!(err, SyntaxErrorKind::ExpectedSort), "{err:?}");
+    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSort), "{err:?}");
 
     // EOF before the body is a missing term
     let err = assert_error::<TermParser<Printing>>(b"(forall ((x Int))", 17, 17);
-    assert!(matches!(err, SyntaxErrorKind::ExpectedTerm), "{err:?}");
+    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedTerm), "{err:?}");
 }
 
 #[test]
 fn annotation_errors() {
     // an annotation must contain at least one attribute
     let err = assert_error::<TermParser<Printing>>(b"(! x)", 4, 5);
-    assert!(matches!(err, SyntaxErrorKind::EmptyAnnotation), "{err:?}");
+    assert!(
+        matches!(err, SmtSyntaxErrorKind::EmptyAnnotation),
+        "{err:?}"
+    );
 
     // an annotation must contain a term
     let err = assert_error::<TermParser<Printing>>(b"(!)", 2, 3);
-    assert!(matches!(err, SyntaxErrorKind::ExpectedTerm), "{err:?}");
+    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedTerm), "{err:?}");
 }
 
 /// Handler that only counts terms, so deep nesting does not build huge strings.
@@ -668,25 +683,28 @@ fn match_term_parser_is_reusable() {
 fn match_errors() {
     // the scrutinee is required
     let err = assert_error::<TermParser<Printing>>(b"(match)", 6, 7);
-    assert!(matches!(err, SyntaxErrorKind::ExpectedTerm), "{err:?}");
+    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedTerm), "{err:?}");
     // the case list is required
     let err = assert_error::<TermParser<Printing>>(b"(match x)", 8, 9);
     assert!(
         matches!(
             err,
-            SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenOpen])
+            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenOpen])
         ),
         "{err:?}"
     );
     // at least one case is required
     let err = assert_error::<TermParser<Printing>>(b"(match x ())", 10, 11);
-    assert!(matches!(err, SyntaxErrorKind::EmptyMatchCases), "{err:?}");
+    assert!(
+        matches!(err, SmtSyntaxErrorKind::EmptyMatchCases),
+        "{err:?}"
+    );
     // each case is parenthesized
     let err = assert_error::<TermParser<Printing>>(b"(match x (x))", 10, 11);
     assert!(
         matches!(
             err,
-            SyntaxErrorKind::ExpectedToken(&[
+            SmtSyntaxErrorKind::ExpectedToken(&[
                 SmtTokenCategory::ParenOpen,
                 SmtTokenCategory::ParenClose
             ])
@@ -696,40 +714,40 @@ fn match_errors() {
     // a pattern starts with a symbol, a wildcard, or a constructor application
     let err = assert_error::<TermParser<Printing>>(b"(match x ((1 y)))", 11, 12);
     assert!(
-        matches!(err, SyntaxErrorKind::ExpectedSymbolUnderscoreOrParenOpen),
+        matches!(err, SmtSyntaxErrorKind::ExpectedSymbolUnderscoreOrParenOpen),
         "{err:?}"
     );
     // a constructor application has at least one argument
     let err = assert_error::<TermParser<Printing>>(b"(match x (((c) y)))", 13, 14);
     assert!(
-        matches!(err, SyntaxErrorKind::EmptyPatternArguments),
+        matches!(err, SmtSyntaxErrorKind::EmptyPatternArguments),
         "{err:?}"
     );
     // the constructor is a symbol, not a wildcard or a constant
     let err = assert_error::<TermParser<Printing>>(b"(match x (((1 y) z)))", 12, 13);
-    assert!(matches!(err, SyntaxErrorKind::ExpectedSymbol), "{err:?}");
+    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
     let err = assert_error::<TermParser<Printing>>(b"(match x (((_ y) z)))", 12, 13);
-    assert!(matches!(err, SyntaxErrorKind::ExpectedSymbol), "{err:?}");
+    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
     // the arguments are symbols or wildcards, not nested patterns or constants
     let err = assert_error::<TermParser<Printing>>(b"(match x (((c 1) z)))", 14, 15);
     assert!(
-        matches!(err, SyntaxErrorKind::ExpectedSymbolOrUnderscore),
+        matches!(err, SmtSyntaxErrorKind::ExpectedSymbolOrUnderscore),
         "{err:?}"
     );
     let err = assert_error::<TermParser<Printing>>(b"(match x (((c (d y)) z)))", 14, 15);
     assert!(
-        matches!(err, SyntaxErrorKind::ExpectedSymbolOrUnderscore),
+        matches!(err, SmtSyntaxErrorKind::ExpectedSymbolOrUnderscore),
         "{err:?}"
     );
     // the case body is required
     let err = assert_error::<TermParser<Printing>>(b"(match x ((y)))", 12, 13);
-    assert!(matches!(err, SyntaxErrorKind::ExpectedTerm), "{err:?}");
+    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedTerm), "{err:?}");
     // exactly one case body
     let err = assert_error::<TermParser<Printing>>(b"(match x ((y 1 2)))", 15, 16);
     assert!(
         matches!(
             err,
-            SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
+            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
         ),
         "{err:?}"
     );
@@ -738,7 +756,7 @@ fn match_errors() {
     assert!(
         matches!(
             err,
-            SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
+            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
         ),
         "{err:?}"
     );

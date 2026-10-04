@@ -69,7 +69,7 @@ pub(crate) mod tests {
         CheckStandardSyntax, NonstandardCommandError,
         read::{
             lexer::Lexer,
-            parser::{Parser, ParserError, ParserResources},
+            parser::{Parser, ParserResources, SmtParseError},
         },
         token::{SmtBatchCursor, SmtConsume, SmtTokenCategory, SmtVersion},
     };
@@ -94,7 +94,7 @@ pub(crate) mod tests {
 
         impl<P: Parser<CheckStandardSyntax>> SmtConsume for Drive<'_, P> {
             type Result = ();
-            type Error = ParserError<NonstandardCommandError>;
+            type Error = SmtParseError<NonstandardCommandError>;
 
             fn consume(
                 &mut self,

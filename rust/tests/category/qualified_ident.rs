@@ -68,31 +68,31 @@ fn qualified_applied_sort() {
 #[test]
 fn errors() {
     let err = assert_error::<QualifiedIdentParser<Printing>>(b"1", 0, 1);
-    assert!(matches!(err, SyntaxErrorKind::ExpectedIdent), "{err:?}");
+    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedIdent), "{err:?}");
 
     // after `(` only `_` or `as` may follow
     let err = assert_error::<QualifiedIdentParser<Printing>>(b"(f 1)", 1, 2);
     assert!(
-        matches!(err, SyntaxErrorKind::ExpectedUnderscoreOrAs),
+        matches!(err, SmtSyntaxErrorKind::ExpectedUnderscoreOrAs),
         "{err:?}"
     );
 
     // `as` must be followed by an identifier
     let err = assert_error::<QualifiedIdentParser<Printing>>(b"(as)", 3, 4);
-    assert!(matches!(err, SyntaxErrorKind::ExpectedIdent), "{err:?}");
+    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedIdent), "{err:?}");
     let err = assert_error::<QualifiedIdentParser<Printing>>(b"(as 1 Bool)", 4, 5);
-    assert!(matches!(err, SyntaxErrorKind::ExpectedIdent), "{err:?}");
+    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedIdent), "{err:?}");
 
     // ... and a sort
     let err = assert_error::<QualifiedIdentParser<Printing>>(b"(as x)", 5, 6);
-    assert!(matches!(err, SyntaxErrorKind::ExpectedSort), "{err:?}");
+    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSort), "{err:?}");
 
     // ... and the closing parenthesis
     let err = assert_error::<QualifiedIdentParser<Printing>>(b"(as x Bool z)", 11, 12);
     assert!(
         matches!(
             err,
-            SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
+            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
         ),
         "{err:?}"
     );
@@ -102,7 +102,7 @@ fn errors() {
     assert!(
         matches!(
             err,
-            SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
+            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
         ),
         "{err:?}"
     );

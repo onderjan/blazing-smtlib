@@ -8,7 +8,7 @@
 mod lex_backend;
 
 use blazing_smtlib::{
-    read::lexer::LexerErrorKind,
+    read::lexer::SmtLexicalErrorKind,
     token::{SmtTokenCategory, SmtVersion},
 };
 
@@ -18,7 +18,7 @@ use lex_backend::Loc;
 type OwnedToken = (SmtTokenCategory, Vec<u8>, Loc, Loc);
 
 /// The tokens of an input, or the kind and the span of the lexer error.
-type Outcome = Result<Vec<OwnedToken>, (LexerErrorKind, Loc, Loc)>;
+type Outcome = Result<Vec<OwnedToken>, (SmtLexicalErrorKind, Loc, Loc)>;
 
 /// Lexes the pieces and the end of the input under the version, with the
 /// lexer under test.
@@ -210,7 +210,7 @@ fn the_span_of_a_string_covers_its_quotes_and_escapes() {
 
 #[test]
 fn the_same_text_is_cut_differently_by_the_two_string_regimes() {
-    use LexerErrorKind::*;
+    use SmtLexicalErrorKind::*;
     use SmtTokenCategory::*;
 
     // an escaped quote: one string in 2.0; from 2.5 on the string ends at its
@@ -278,7 +278,7 @@ fn the_same_text_is_cut_differently_by_the_two_string_regimes() {
 
 #[test]
 fn a_string_must_be_closed_and_delimited() {
-    use LexerErrorKind::*;
+    use SmtLexicalErrorKind::*;
 
     for (input, kind, end) in [
         // the end of the input inside the string, also right after a backslash
@@ -320,7 +320,11 @@ fn a_control_character_is_forbidden_in_a_string() {
             let input = [prefix, &[forbidden], b"c\""].concat();
             assert_eq!(
                 lex(&input, SmtVersion::V2_0),
-                Err((LexerErrorKind::ForbiddenCharInString, (0, 0, 0), (4, 0, 4))),
+                Err((
+                    SmtLexicalErrorKind::ForbiddenCharInString,
+                    (0, 0, 0),
+                    (4, 0, 4)
+                )),
                 "{:?}",
                 input.escape_ascii().to_string()
             );

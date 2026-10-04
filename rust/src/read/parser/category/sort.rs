@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler,
     read::parser::{
-        Arena, IdentHandle, IdentSlot, Parser, ParserError, ParserResources, SyntaxErrorKind,
+        Arena, IdentHandle, IdentSlot, Parser, ParserResources, SmtParseError, SmtSyntaxErrorKind,
         handle_err, parse_by_token,
     },
     token::{
@@ -42,7 +42,7 @@ impl<H: SmtHandler> Parser<H> for SortParser<H> {
         handler: &mut H,
         resources: &mut ParserResources<H>,
         cursor: &mut SmtBatchCursor,
-    ) -> Result<ControlFlow<H::Sort>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<H::Sort>, SmtParseError<H::Error>> {
         // progress the slot, giving it the ident slot it delegates to
         let ParserResources {
             ident_slot,
@@ -116,7 +116,7 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
         ident_slot: &mut IdentSlot,
         version: SmtVersion,
         token: SmtToken,
-    ) -> Result<ControlFlow<H::Sort>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<H::Sort>, SmtParseError<H::Error>> {
         let span = token.span();
         let flow = match self.state {
             State::Start => {
@@ -147,8 +147,8 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
                                 // if the sort committed to having applications,
                                 // there must be at least one of them
                                 if arena.sorts.len() == last_level.arena_applied_start {
-                                    return Err(ParserError::category_error(
-                                        SyntaxErrorKind::EmptySortApplication,
+                                    return Err(SmtParseError::category_error(
+                                        SmtSyntaxErrorKind::EmptySortApplication,
                                         span,
                                     ));
                                 }
@@ -159,16 +159,16 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
                             }
                             None => {
                                 // we just received ")"
-                                return Err(ParserError::category_error(
-                                    SyntaxErrorKind::ExpectedSort,
+                                return Err(SmtParseError::category_error(
+                                    SmtSyntaxErrorKind::ExpectedSort,
                                     span,
                                 ));
                             }
                         }
                     }
                     _ => {
-                        return Err(ParserError::category_error(
-                            SyntaxErrorKind::ExpectedSort,
+                        return Err(SmtParseError::category_error(
+                            SmtSyntaxErrorKind::ExpectedSort,
                             span,
                         ));
                     }
@@ -205,8 +205,8 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
                         State::StartingIdent
                     }
                     _ => {
-                        return Err(ParserError::category_error(
-                            SyntaxErrorKind::ExpectedSortInner,
+                        return Err(SmtParseError::category_error(
+                            SmtSyntaxErrorKind::ExpectedSortInner,
                             span,
                         ));
                     }

@@ -2,7 +2,7 @@ use std::{convert::Infallible, ops::ControlFlow};
 
 use crate::{
     CommandHandler, SmtSpan, SmtSymbolView,
-    read::parser::{Parser, ParserError, ParserResources, SyntaxErrorKind, handle_err},
+    read::parser::{Parser, ParserResources, SmtParseError, SmtSyntaxErrorKind, handle_err},
     token::{SmtBatchCursor, SmtReserved, SmtSyntaxToken, SmtTokenCategory, SmtVersion},
 };
 
@@ -63,10 +63,10 @@ impl<H: CommandHandler> CommandParser<H> {
         handler: &mut H,
         name: SmtSymbolView<'_>,
         span: SmtSpan,
-    ) -> Result<CommandParserState<H>, ParserError<H::Error>> {
+    ) -> Result<CommandParserState<H>, SmtParseError<H::Error>> {
         match handler.nonstandard_command(name) {
             Ok(parser) => Ok(CommandParserState::Nonstandard(parser)),
-            Err(err) => Err(ParserError::handler_error(err, span)),
+            Err(err) => Err(SmtParseError::handler_error(err, span)),
         }
     }
 }
@@ -86,7 +86,7 @@ impl<H: CommandHandler> Parser<H> for CommandParser<H> {
         handler: &mut H,
         resources: &mut ParserResources<H>,
         cursor: &mut SmtBatchCursor,
-    ) -> Result<ControlFlow<CommandParserStop>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<CommandParserStop>, SmtParseError<H::Error>> {
         // State machine:
         // 1. AwaitingCommand takes:
         //  - either the opening parenthesis and moves to CommandOpen,
@@ -110,8 +110,8 @@ impl<H: CommandHandler> Parser<H> for CommandParser<H> {
                             return Ok(ControlFlow::Break(CommandParserStop::EndOfFile));
                         }
                         _ => {
-                            return Err(ParserError::category_error(
-                                SyntaxErrorKind::ExpectedCommand,
+                            return Err(SmtParseError::category_error(
+                                SmtSyntaxErrorKind::ExpectedCommand,
                                 peeked.span(),
                             ));
                         }
@@ -132,8 +132,8 @@ impl<H: CommandHandler> Parser<H> for CommandParser<H> {
                             Self::start_nonstandard_command(handler, name, peeked.span())?
                         }
                         _ => {
-                            return Err(ParserError::category_error(
-                                SyntaxErrorKind::ExpectedCommandName,
+                            return Err(SmtParseError::category_error(
+                                SmtSyntaxErrorKind::ExpectedCommandName,
                                 peeked.span(),
                             ));
                         }
@@ -189,7 +189,7 @@ impl<H: CommandHandler> Parser<H> for Infallible {
         _handler: &mut H,
         _resources: &mut ParserResources<H>,
         _cursor: &mut SmtBatchCursor,
-    ) -> Result<ControlFlow<()>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<()>, SmtParseError<H::Error>> {
         match *self {}
     }
 }
@@ -235,7 +235,7 @@ impl<H: CommandHandler, C: CommandAction<H>> Parser<H> for CommandPayloadParser<
         handler: &mut H,
         resources: &mut ParserResources<H>,
         cursor: &mut SmtBatchCursor,
-    ) -> Result<ControlFlow<()>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<()>, SmtParseError<H::Error>> {
         match self.parser.parse(handler, resources, cursor)? {
             ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
             ControlFlow::Break(result) => {

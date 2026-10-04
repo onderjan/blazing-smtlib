@@ -29,13 +29,13 @@ use blazing_smtlib::{
     SmtQuantifierKind, SmtSExpr, SmtSimplePatternView, SmtSort, SmtSpan, SmtSpecialConstantView,
     SmtSymbolView, SmtTerm,
     read::{
-        lexer::{LexError, Lexer},
+        lexer::{Lexer, SmtLexError},
         parser::{
             CloseParenParser, ClosedAttributeParser, ClosedMultipleAttributeParser,
             ClosedMultipleParser, ClosedParser, IdentParser, KeywordParser, OpenParenParser,
-            PairParser, ParenMultipleParser, ParenParser, Parser, ParserError, ParserErrorKind,
-            ParserResources, QualifiedIdentParser, SExprParser, SortParser, StringParser,
-            SymbolParser, SyntaxErrorKind, TermParser,
+            PairParser, ParenMultipleParser, ParenParser, Parser, ParserResources,
+            QualifiedIdentParser, SExprParser, SmtParseError, SmtParseErrorKind,
+            SmtSyntaxErrorKind, SortParser, StringParser, SymbolParser, TermParser,
         },
     },
     token::{SmtBatchCursor, SmtConsume, SmtReserved, SmtTokenCategory, SmtVersion},
@@ -341,7 +341,7 @@ impl SmtHandler for Printing {
 // --- Driver ---
 
 /// A parse failure, as the error kind and the span it carries.
-type ParseFailure = (SyntaxErrorKind, SmtSpan);
+type ParseFailure = (SmtSyntaxErrorKind, SmtSpan);
 
 /// Token consumer that advances a category parser with each lexed token,
 /// collecting a wanted number of consecutive parser results, and counts
@@ -365,7 +365,7 @@ struct Drive<'h, H: SmtHandler, P: Parser<H>> {
 
 impl<H: SmtHandler, P: Parser<H>> SmtConsume for Drive<'_, H, P> {
     type Result = ();
-    type Error = ParserError<H::Error>;
+    type Error = SmtParseError<H::Error>;
 
     fn consume(&mut self, cursor: &mut SmtBatchCursor<'_>) -> Result<ControlFlow<()>, Self::Error> {
         while !cursor.is_empty() {
@@ -414,15 +414,15 @@ fn run_count_from<H: SmtHandler<Error = Infallible>, P: Parser<H>>(
     let mut lexer = Lexer::new(&mut drive, SmtVersion::V2_7);
     match lexer.lex_all(input) {
         Ok(_) => {}
-        Err(LexError::Handler(err)) => {
+        Err(SmtLexError::Consumer(err)) => {
             let span = err.span();
             return Err(match err.into_kind() {
-                ParserErrorKind::Syntax(kind) => (kind, span),
+                SmtParseErrorKind::Syntax(kind) => (kind, span),
                 // the handler never fails
-                ParserErrorKind::Handler(err) => match err {},
+                SmtParseErrorKind::Handler(err) => match err {},
             });
         }
-        Err(LexError::Lexer(err)) => {
+        Err(SmtLexError::Lexical(err)) => {
             panic!(
                 "test input {:?} must lex, got {:?}",
                 text(input),
@@ -503,7 +503,7 @@ fn assert_error<P: Parser<Printing> + Default>(
     input: &[u8],
     start: u64,
     end: u64,
-) -> SyntaxErrorKind {
+) -> SmtSyntaxErrorKind {
     match run::<P>(input) {
         Ok(_) => panic!("expected a parser error in {:?}, got Ok", text(input)),
         Err((kind, span)) => {

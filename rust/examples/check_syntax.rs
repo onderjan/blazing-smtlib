@@ -20,11 +20,11 @@ fn main() -> Result<(), u32> {
                 eprintln!("Error reading file: {}", err);
                 Err(2)
             }
-            SmtReadErrorKind::Lexer(err) => {
+            SmtReadErrorKind::Lexical(err) => {
                 eprintln!("Error lexing file: {:?}", err);
                 Err(3)
             }
-            SmtReadErrorKind::Parser(err) => {
+            SmtReadErrorKind::Syntax(err) => {
                 eprintln!("Error parsing file: {:?}", err);
                 Err(4)
             }

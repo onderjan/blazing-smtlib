@@ -112,8 +112,8 @@ fn try_run_file<T>(
     match result {
         Ok(Ok(value)) => Ok(value),
         Ok(Err(e)) => match e.kind() {
-            SmtReadErrorKind::Lexer(err) => Err(format!("Lexer error: {:?}", err)),
-            SmtReadErrorKind::Parser(err) => Err(format!("Parser error: {:?}", err)),
+            SmtReadErrorKind::Lexical(err) => Err(format!("Lexer error: {:?}", err)),
+            SmtReadErrorKind::Syntax(err) => Err(format!("Parser error: {:?}", err)),
             SmtReadErrorKind::Io(err) => Err(format!("Read error: {:?}", err)),
             SmtReadErrorKind::Handler(err) => Err(format!("Nonstandard command: {:?}", err.0)),
         },

@@ -4,7 +4,7 @@ use crate::{
     CommandHandler, SmtFunctionSignature, SmtSpan, SmtSymbol,
     read::parser::{
         CloseParenParser, CommandPayloadParser, KeywordParser, NumeralParser, ParenMultipleParser,
-        Parser, ParserError, ParserResources, StringParser, SymbolParser, SyntaxErrorKind,
+        Parser, ParserResources, SmtParseError, SmtSyntaxErrorKind, StringParser, SymbolParser,
         category::{ClosedAttributeParser, ClosedParser, PairParser, SortParser, TermParser},
         command::{
             CommandAction, CommandParserStop,
@@ -73,7 +73,7 @@ macro_rules! standard_commands {
                 handler: &mut H,
                 resources: &mut ParserResources<H>,
                 cursor: &mut SmtBatchCursor<'_>,
-            ) -> Result<ControlFlow<CommandParserStop, ()>, ParserError<H::Error>> {
+            ) -> Result<ControlFlow<CommandParserStop, ()>, SmtParseError<H::Error>> {
                 let flow = match kind {
                     $(StandardCommandKind::$kind => self.$field.parse(handler, resources, cursor)?,)*
                 };
@@ -292,7 +292,7 @@ impl<H: CommandHandler> Parser<H> for GetValueParser<H> {
         handler: &mut H,
         resources: &mut ParserResources<H>,
         cursor: &mut SmtBatchCursor,
-    ) -> Result<ControlFlow<Vec<H::Term>, ()>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<Vec<H::Term>, ()>, SmtParseError<H::Error>> {
         match self.inner.parse(handler, resources, cursor)? {
             ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
             ControlFlow::Break(terms) => {
@@ -302,8 +302,8 @@ impl<H: CommandHandler> Parser<H> for GetValueParser<H> {
                         .last_consumed()
                         .expect("a finished term list parser must have consumed a token")
                         .span();
-                    return Err(ParserError::category_error(
-                        SyntaxErrorKind::EmptyGetValueTerms,
+                    return Err(SmtParseError::category_error(
+                        SmtSyntaxErrorKind::EmptyGetValueTerms,
                         span,
                     ));
                 }
@@ -365,7 +365,7 @@ impl<H: CommandHandler> Parser<H> for SetInfoParser<H> {
         handler: &mut H,
         resources: &mut ParserResources<H>,
         cursor: &mut SmtBatchCursor,
-    ) -> Result<ControlFlow<H::Attribute, ()>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<H::Attribute, ()>, SmtParseError<H::Error>> {
         // We process the version before the actual processing, as we
         // cannot process token-by-token in parallel, just look at the cursor
         // and then hand it over.
@@ -396,8 +396,8 @@ impl<H: CommandHandler> Parser<H> for SetInfoParser<H> {
                         _ => None,
                     };
                     let Some(version) = version else {
-                        return Err(ParserError::category_error(
-                            SyntaxErrorKind::UnsupportedVersion,
+                        return Err(SmtParseError::category_error(
+                            SmtSyntaxErrorKind::UnsupportedVersion,
                             token.span(),
                         ));
                     };
@@ -470,7 +470,7 @@ impl<H: CommandHandler> Parser<H> for CheckSatAssumingParser<H> {
         handler: &mut H,
         resources: &mut ParserResources<H>,
         cursor: &mut SmtBatchCursor,
-    ) -> Result<ControlFlow<Vec<H::Term>, ()>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<Vec<H::Term>, ()>, SmtParseError<H::Error>> {
         // Any terms are allowed as assumptions since SMT-LIB 2.7. Before it,
         // the terms must be propositional literals, i.e. `<symbol>` or `(not <symbol>)`.
         // In that case, we check that the assumptions are propositional literals
@@ -520,8 +520,8 @@ impl<H: CommandHandler> Parser<H> for CheckSatAssumingParser<H> {
                         PropLiteralsState::Literal
                     }
                     _ => {
-                        return Err(ParserError::category_error(
-                            SyntaxErrorKind::ExpectedPropositionalLiteral,
+                        return Err(SmtParseError::category_error(
+                            SmtSyntaxErrorKind::ExpectedPropositionalLiteral,
                             token.span(),
                         ));
                     }

@@ -3,8 +3,8 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler, SmtQualifiedIdent, SmtSymbolView,
     read::parser::{
-        Arena, CloseParenParser, IdentHandle, IdentSlot, Parser, ParserError, ParserResources,
-        QualifiedIdentHandle, SortSlot, SyntaxErrorKind, parse_by_token,
+        Arena, CloseParenParser, IdentHandle, IdentSlot, Parser, ParserResources,
+        QualifiedIdentHandle, SmtParseError, SmtSyntaxErrorKind, SortSlot, parse_by_token,
     },
     token::{
         SmtBatchCursor, SmtGeneralReserved, SmtReserved, SmtSyntaxToken, SmtToken, SmtVersion,
@@ -42,7 +42,7 @@ impl<H: SmtHandler> Parser<H> for QualifiedIdentParser<H> {
         handler: &mut H,
         resources: &mut ParserResources<H>,
         cursor: &mut SmtBatchCursor,
-    ) -> Result<ControlFlow<SmtQualifiedIdent<H>>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<SmtQualifiedIdent<H>>, SmtParseError<H::Error>> {
         // progress the slot, giving it the ident and sort slots it delegates to
         let ParserResources {
             ident_slot,
@@ -152,7 +152,7 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
         ident_slot: &mut IdentSlot,
         version: SmtVersion,
         token: SmtToken,
-    ) -> Result<ControlFlow<QualifiedIdentHandle<H>>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<QualifiedIdentHandle<H>>, SmtParseError<H::Error>> {
         // The sequential progress is as follows:
         // 1. Start, expecting one of:
         //    - a symbol, immediately break with a simple identifier
@@ -209,8 +209,8 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
                     }
                     SmtSyntaxToken::ParenOpen => self.state = State::Open,
                     _ => {
-                        return Err(ParserError::category_error(
-                            SyntaxErrorKind::ExpectedIdent,
+                        return Err(SmtParseError::category_error(
+                            SmtSyntaxErrorKind::ExpectedIdent,
                             span,
                         ));
                     }
@@ -229,8 +229,8 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
                     self.state = State::QualifiedIdent;
                 }
                 _ => {
-                    return Err(ParserError::category_error(
-                        SyntaxErrorKind::ExpectedUnderscoreOrAs,
+                    return Err(SmtParseError::category_error(
+                        SmtSyntaxErrorKind::ExpectedUnderscoreOrAs,
                         span,
                     ));
                 }

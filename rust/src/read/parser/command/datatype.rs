@@ -4,9 +4,9 @@ use crate::{
     CommandHandler, SmtDatatypeConstructor, SmtNumeral, SmtSpan, SmtSymbol,
     read::parser::{
         CloseParenParser, ClosedMultipleParser, NumeralParser, OpenParenParser, OpenedParser,
-        ParenMaximumParser, ParenMultipleParser, ParenParser, Parser, ParserError, ParserResources,
-        SortedVarParser, SymbolParser, SyntaxErrorKind, category::PairParser, handle_err,
-        parse_by_token,
+        ParenMaximumParser, ParenMultipleParser, ParenParser, Parser, ParserResources,
+        SmtParseError, SmtSyntaxErrorKind, SortedVarParser, SymbolParser, category::PairParser,
+        handle_err, parse_by_token,
     },
     token::{
         SmtBatchCursor, SmtGeneralReserved, SmtReserved, SmtSyntaxToken, SmtToken, SmtVersion,
@@ -77,7 +77,7 @@ impl<H: CommandHandler> DatatypeParser<H> {
         handler: &mut H,
         params: Vec<SmtSymbol>,
         span: SmtSpan,
-    ) -> Result<(), ParserError<H::Error>> {
+    ) -> Result<(), SmtParseError<H::Error>> {
         if let Some((name, name_span)) = self.single_introduction.take() {
             // start declare datatypes with the arity equal to the number of parameters
             let arity = SmtNumeral::from_usize(params.len());
@@ -104,7 +104,7 @@ impl<H: CommandHandler> Parser<H> for DatatypeParser<H> {
         handler: &mut H,
         resources: &mut ParserResources<H>,
         cursor: &mut SmtBatchCursor,
-    ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         parse_by_token(cursor, |version, token| {
             self.progress(handler, resources, version, token)
         })
@@ -119,7 +119,7 @@ impl<H: CommandHandler> DatatypeParser<H> {
         resources: &mut ParserResources<H>,
         version: SmtVersion,
         token: SmtToken,
-    ) -> Result<ControlFlow<()>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<()>, SmtParseError<H::Error>> {
         let span = token.span();
         let constructors = match self.state {
             DatatypeState::Start => {
@@ -152,8 +152,8 @@ impl<H: CommandHandler> DatatypeParser<H> {
                     None
                 }
                 _ => {
-                    return Err(ParserError::category_error(
-                        SyntaxErrorKind::ExpectedDatatypeKind,
+                    return Err(SmtParseError::category_error(
+                        SmtSyntaxErrorKind::ExpectedDatatypeKind,
                         span,
                     ));
                 }
@@ -177,8 +177,8 @@ impl<H: CommandHandler> DatatypeParser<H> {
                 )? {
                     // there must be at least one parameter
                     if params.is_empty() {
-                        return Err(ParserError::category_error(
-                            SyntaxErrorKind::EmptyDatatypeParameters,
+                        return Err(SmtParseError::category_error(
+                            SmtSyntaxErrorKind::EmptyDatatypeParameters,
                             span,
                         ));
                     }
@@ -216,8 +216,8 @@ impl<H: CommandHandler> DatatypeParser<H> {
         if let Some(constructors) = constructors {
             // there must be at least one constructor
             if constructors.is_empty() {
-                return Err(ParserError::category_error(
-                    SyntaxErrorKind::EmptyDatatypeConstructors,
+                return Err(SmtParseError::category_error(
+                    SmtSyntaxErrorKind::EmptyDatatypeConstructors,
                     span,
                 ));
             }
@@ -279,7 +279,7 @@ impl<H: CommandHandler> Parser<H> for DeclareDatatypesParser<H> {
         handler: &mut H,
         resources: &mut ParserResources<H>,
         cursor: &mut SmtBatchCursor,
-    ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         parse_by_token(cursor, |version, token| {
             self.progress(handler, resources, version, token)
         })
@@ -294,7 +294,7 @@ impl<H: CommandHandler> DeclareDatatypesParser<H> {
         resources: &mut ParserResources<H>,
         version: SmtVersion,
         token: SmtToken,
-    ) -> Result<ControlFlow<()>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<()>, SmtParseError<H::Error>> {
         let span = token.span();
         match self.state {
             DeclareDatatypesState::Introductions => {
@@ -306,8 +306,8 @@ impl<H: CommandHandler> DeclareDatatypesParser<H> {
                 )? {
                     // introductions must not be empty
                     if introductions.is_empty() {
-                        return Err(ParserError::category_error(
-                            SyntaxErrorKind::EmptyDatatypeIntroductions,
+                        return Err(SmtParseError::category_error(
+                            SmtSyntaxErrorKind::EmptyDatatypeIntroductions,
                             span,
                         ));
                     }
@@ -328,8 +328,8 @@ impl<H: CommandHandler> DeclareDatatypesParser<H> {
                     // there cannot be more datatypes than sort declarations due to the maximum parser
                     // ensure there are not more sort declarations than datatypes
                     if datatypes.len() != self.datatypes_parser.max_elements() {
-                        return Err(ParserError::category_error(
-                            SyntaxErrorKind::ExpectedDatatype,
+                        return Err(SmtParseError::category_error(
+                            SmtSyntaxErrorKind::ExpectedDatatype,
                             span,
                         ));
                     }
@@ -384,7 +384,7 @@ impl<H: CommandHandler> Parser<H> for DeclareDatatypeParser<H> {
         handler: &mut H,
         resources: &mut ParserResources<H>,
         cursor: &mut SmtBatchCursor,
-    ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         parse_by_token(cursor, |version, token| {
             self.progress(handler, resources, version, token)
         })
@@ -399,7 +399,7 @@ impl<H: CommandHandler> DeclareDatatypeParser<H> {
         resources: &mut ParserResources<H>,
         version: SmtVersion,
         token: SmtToken,
-    ) -> Result<ControlFlow<()>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<()>, SmtParseError<H::Error>> {
         let span = token.span();
         match self.state {
             DeclareDatatypeState::Name => {

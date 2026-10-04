@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler,
     read::parser::{
-        Arena, IdentSlot, ParserError, PatternSlot, QualifiedIdentSlot, SExprSlot, SortSlot,
+        Arena, IdentSlot, PatternSlot, QualifiedIdentSlot, SExprSlot, SmtParseError, SortSlot,
         SortedVarSlot, TermSlot, category::attribute::AttributeSlot,
     },
     token::{SmtBatchCursor, SmtTokenCategory},
@@ -91,8 +91,8 @@ impl<T> ClosedMultipleResource<T> {
     pub(crate) fn parse<E>(
         &mut self,
         cursor: &mut SmtBatchCursor,
-        mut element: impl FnMut(&mut SmtBatchCursor) -> Result<ControlFlow<T>, ParserError<E>>,
-    ) -> Result<ControlFlow<Vec<T>>, ParserError<E>> {
+        mut element: impl FnMut(&mut SmtBatchCursor) -> Result<ControlFlow<T>, SmtParseError<E>>,
+    ) -> Result<ControlFlow<Vec<T>>, SmtParseError<E>> {
         while let Some(token) = cursor.peek() {
             if self.outside {
                 // we are outside, a closing parenthesis ends processing

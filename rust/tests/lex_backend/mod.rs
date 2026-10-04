@@ -22,7 +22,7 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
 use blazing_smtlib::{
     SmtLocation,
-    read::lexer::{LexError, Lexer, LexerErrorKind},
+    read::lexer::{Lexer, SmtLexError, SmtLexicalErrorKind},
     token::{
         SmtBatchCursor, SmtConsume, SmtReserved, SmtSyntaxToken, SmtTokenCategory, SmtVersion,
     },
@@ -68,7 +68,7 @@ impl LexedToken {
 /// A lexer error.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LexedError {
-    pub kind: LexerErrorKind,
+    pub kind: SmtLexicalErrorKind,
     pub start: Loc,
     pub end: Loc,
 }
@@ -175,7 +175,7 @@ pub fn rust_lex(version: SmtVersion, feeds: &[Feed<'_>]) -> Lexed {
             };
             match result {
                 Ok(_) => locations.push(loc(lexer.current_location())),
-                Err(LexError::Lexer(err)) => {
+                Err(SmtLexError::Lexical(err)) => {
                     error = Some(LexedError {
                         kind: *err.kind(),
                         start: loc(err.span().start()),
@@ -183,7 +183,7 @@ pub fn rust_lex(version: SmtVersion, feeds: &[Feed<'_>]) -> Lexed {
                     });
                     break;
                 }
-                Err(LexError::Handler(never)) => match never {},
+                Err(SmtLexError::Consumer(never)) => match never {},
             }
         }
     }
@@ -209,14 +209,14 @@ pub fn rust_lex_all(version: SmtVersion, input: &[u8]) -> Lexed {
         );
         match lexer.lex_all(input) {
             Ok(_) => locations.push(loc(lexer.current_location())),
-            Err(LexError::Lexer(err)) => {
+            Err(SmtLexError::Lexical(err)) => {
                 error = Some(LexedError {
                     kind: *err.kind(),
                     start: loc(err.span().start()),
                     end: loc(err.span().end()),
                 });
             }
-            Err(LexError::Handler(never)) => match never {},
+            Err(SmtLexError::Consumer(never)) => match never {},
         }
     }
     Lexed {
@@ -276,20 +276,20 @@ const TOKEN_TYPES: [SmtTokenCategory; 11] = [
     SmtTokenCategory::EndOfFile,
 ];
 
-const ERROR_KINDS: [LexerErrorKind; 13] = [
-    LexerErrorKind::UnexpectedCharacter,
-    LexerErrorKind::FractionDigitExpected,
-    LexerErrorKind::HexadecimalDigitExpected,
-    LexerErrorKind::BinaryDigitExpected,
-    LexerErrorKind::BaseSelectionExpected,
-    LexerErrorKind::UnclosedStringLiteral,
-    LexerErrorKind::ForbiddenCharInString,
-    LexerErrorKind::ForbiddenKeywordName,
-    LexerErrorKind::BackslashInQuotedSymbol,
-    LexerErrorKind::ForbiddenCharInQuotedSymbol,
-    LexerErrorKind::UnclosedQuotedSymbol,
-    LexerErrorKind::NumeralLeadingZero,
-    LexerErrorKind::MissingDelimiter,
+const ERROR_KINDS: [SmtLexicalErrorKind; 13] = [
+    SmtLexicalErrorKind::UnexpectedCharacter,
+    SmtLexicalErrorKind::FractionDigitExpected,
+    SmtLexicalErrorKind::HexadecimalDigitExpected,
+    SmtLexicalErrorKind::BinaryDigitExpected,
+    SmtLexicalErrorKind::BaseSelectionExpected,
+    SmtLexicalErrorKind::UnclosedStringLiteral,
+    SmtLexicalErrorKind::ForbiddenCharInString,
+    SmtLexicalErrorKind::ForbiddenKeywordName,
+    SmtLexicalErrorKind::BackslashInQuotedSymbol,
+    SmtLexicalErrorKind::ForbiddenCharInQuotedSymbol,
+    SmtLexicalErrorKind::UnclosedQuotedSymbol,
+    SmtLexicalErrorKind::NumeralLeadingZero,
+    SmtLexicalErrorKind::MissingDelimiter,
 ];
 
 fn version_name(version: SmtVersion) -> &'static str {

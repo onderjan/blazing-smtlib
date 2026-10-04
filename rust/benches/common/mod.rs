@@ -18,8 +18,8 @@ pub fn parse_from_memory(data: &[u8], path: &Path) {
     if let Err(err) = read_smt(&mut CheckStandardSyntax, data) {
         let span = err.span();
         let description = match err.kind() {
-            SmtReadErrorKind::Lexer(err) => format!("lexer error: {:?}", err),
-            SmtReadErrorKind::Parser(err) => format!("parser error: {:?}", err),
+            SmtReadErrorKind::Lexical(err) => format!("lexer error: {:?}", err),
+            SmtReadErrorKind::Syntax(err) => format!("parser error: {:?}", err),
             SmtReadErrorKind::Io(err) => format!("read error: {:?}", err),
             SmtReadErrorKind::Handler(err) => format!("nonstandard command: {:?}", err.0),
         };

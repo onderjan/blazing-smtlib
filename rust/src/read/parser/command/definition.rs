@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
 
 use crate::{
     CommandHandler,
-    read::parser::{Parser, ParserError, ParserResources, handle_err},
+    read::parser::{Parser, ParserResources, SmtParseError, handle_err},
     token::SmtBatchCursor,
 };
 
@@ -66,7 +66,7 @@ impl<H: CommandHandler, D: Definition<H>> Parser<H> for DefinitionParser<H, D> {
         handler: &mut H,
         resources: &mut ParserResources<H>,
         cursor: &mut SmtBatchCursor,
-    ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         if matches!(self.state, DefinitionParserState::Signature) {
             // parse the signature; it ends at the last consumed token
             match self.signature_parser.parse(handler, resources, cursor)? {

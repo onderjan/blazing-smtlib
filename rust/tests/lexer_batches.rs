@@ -17,7 +17,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use blazing_smtlib::{
     SmtLocation, SmtSpan,
-    read::lexer::{LexError, Lexer, LexerErrorKind},
+    read::lexer::{Lexer, SmtLexError, SmtLexicalErrorKind},
     token::{SmtBatchCursor, SmtConsume, SmtToken, SmtTokenCategory, SmtVersion},
 };
 
@@ -134,7 +134,7 @@ struct Run {
     /// The tokens of every hand-over, in order.
     calls: Vec<Vec<Recorded>>,
     /// The error that ended the run, if any.
-    error: Option<LexError<()>>,
+    error: Option<SmtLexError<()>>,
     /// The location returned with the result if the handler finished.
     finished_at: Option<(u64, u64, u64)>,
 }
@@ -623,7 +623,7 @@ fn tokens_before_a_lexer_error_are_handed_over_first() {
     let plain = run(&[input], &[]);
     assert_eq!(plain.sizes(), [2]);
     assert!(
-        matches!(&plain.error, Some(LexError::Lexer(err)) if *err.kind() == LexerErrorKind::UnexpectedCharacter),
+        matches!(&plain.error, Some(SmtLexError::Lexical(err)) if *err.kind() == SmtLexicalErrorKind::UnexpectedCharacter),
         "{:?}",
         plain.error
     );
@@ -635,7 +635,7 @@ fn tokens_before_a_lexer_error_are_handed_over_first() {
     assert_eq!(stopped.sizes(), [2, 1]);
     assert_eq!(stopped.calls[1][0].content, b"b");
     assert!(
-        matches!(&stopped.error, Some(LexError::Lexer(_))),
+        matches!(&stopped.error, Some(SmtLexError::Lexical(_))),
         "{:?}",
         stopped.error
     );
@@ -682,5 +682,5 @@ fn a_handler_error_ends_the_run_with_the_handler_error() {
     let plan = [Reply::Fail { consumed: 1 }];
     let run = run(&[b"a b c "], &plan);
     assert_eq!(run.sizes(), [3]);
-    assert_eq!(run.error, Some(LexError::Handler(())));
+    assert_eq!(run.error, Some(SmtLexError::Consumer(())));
 }

@@ -2,7 +2,7 @@ mod char_class;
 mod error;
 mod helpers;
 
-pub use error::{LexError, LexerError, LexerErrorKind};
+pub use error::{SmtLexError, SmtLexicalError, SmtLexicalErrorKind};
 
 pub(crate) use char_class::CharClass;
 
@@ -176,7 +176,7 @@ impl<H: SmtConsume> Lexer<H> {
     pub fn lex_all(
         &mut self,
         input: &[u8],
-    ) -> Result<ControlFlow<SmtLocated<H::Result>>, LexError<H::Error>> {
+    ) -> Result<ControlFlow<SmtLocated<H::Result>>, SmtLexError<H::Error>> {
         match self.lex_slice(input)? {
             ControlFlow::Break(result) => Ok(ControlFlow::Break(result)),
             ControlFlow::Continue(()) => self.lex_eof(),
@@ -197,7 +197,7 @@ impl<H: SmtConsume> Lexer<H> {
     pub fn lex_slice(
         &mut self,
         slice: &[u8],
-    ) -> Result<ControlFlow<SmtLocated<H::Result>>, LexError<H::Error>> {
+    ) -> Result<ControlFlow<SmtLocated<H::Result>>, SmtLexError<H::Error>> {
         // call inner lexing and fail on error
         self.execute_step(|lexer| lexer.lex_slice_inner(slice))
     }
@@ -213,12 +213,12 @@ impl<H: SmtConsume> Lexer<H> {
     ///
     /// If an error occurs, the lexer moves into a failure state;
     /// all further lexing calls panic.
-    pub fn lex_eof(&mut self) -> Result<ControlFlow<SmtLocated<H::Result>>, LexError<H::Error>> {
+    pub fn lex_eof(&mut self) -> Result<ControlFlow<SmtLocated<H::Result>>, SmtLexError<H::Error>> {
         // call inner EOF lexing and fail on error
         self.execute_step(|lexer| lexer.lex_eof_inner())
     }
 
-    fn lex_eof_inner(&mut self) -> Result<ControlFlow<H::Result>, LexError<H::Error>> {
+    fn lex_eof_inner(&mut self) -> Result<ControlFlow<H::Result>, SmtLexError<H::Error>> {
         // TODO: do not construct batch here
         let mut batch: Batch = Batch {
             entries: [None; BATCH_CAPACITY],
@@ -260,12 +260,12 @@ impl<H: SmtConsume> Lexer<H> {
             }
             LexerState::BaseSelection => {
                 // hash without selection following it
-                Err(self.error(LexerErrorKind::BaseSelectionExpected, TokenEnd::EOF))
+                Err(self.error(SmtLexicalErrorKind::BaseSelectionExpected, TokenEnd::EOF))
             }
             LexerState::StringLiteral | LexerState::StringLiteralBackslashEscape => {
                 // we are still within the string literal
                 // forbidden as the literal must be totally enclosed by double quotes
-                Err(self.error(LexerErrorKind::UnclosedStringLiteral, TokenEnd::EOF))
+                Err(self.error(SmtLexicalErrorKind::UnclosedStringLiteral, TokenEnd::EOF))
             }
             LexerState::StringLiteralDoubleQuote => {
                 // string literal has ended by the previous character,
@@ -281,7 +281,7 @@ impl<H: SmtConsume> Lexer<H> {
             }
             LexerState::QuotedSymbol => {
                 // EOF forbidden as the symbol must be totally enclosed by pipes
-                Err(self.error(LexerErrorKind::UnclosedQuotedSymbol, TokenEnd::EOF))
+                Err(self.error(SmtLexicalErrorKind::UnclosedQuotedSymbol, TokenEnd::EOF))
             }
             LexerState::Failed => {
                 panic!("cannot lex after a lexer error")
@@ -316,7 +316,7 @@ impl<H: SmtConsume> Lexer<H> {
     fn lex_slice_inner(
         &mut self,
         slice: &[u8],
-    ) -> Result<ControlFlow<H::Result>, LexError<H::Error>> {
+    ) -> Result<ControlFlow<H::Result>, SmtLexError<H::Error>> {
         let mut batch: Batch = Batch {
             entries: [None; BATCH_CAPACITY],
             len: 0,
@@ -413,7 +413,7 @@ impl<H: SmtConsume> Lexer<H> {
         &mut self,
         batch: &mut Batch<'a>,
         slice: &'a [u8],
-    ) -> Result<usize, Interrupted<H::Result, LexError<H::Error>>> {
+    ) -> Result<usize, Interrupted<H::Result, SmtLexError<H::Error>>> {
         let mut index = 0;
 
         // PERFORMANCE: use locals for variables commonly used on the fast path.
@@ -505,7 +505,7 @@ impl<H: SmtConsume> Lexer<H> {
                             local.store(self, batch);
                             self.start_token(index);
                             return Err(
-                                self.error_at(LexerErrorKind::MissingDelimiter, token_end + 1)
+                                self.error_at(SmtLexicalErrorKind::MissingDelimiter, token_end + 1)
                             );
                         }
                     } else {
@@ -650,7 +650,9 @@ impl<H: SmtConsume> Lexer<H> {
                     // we require that the keyword does not start with a digit
                     // (also non-empty, but that is checked after finishing)
                     if slice.get(after).is_some_and(u8::is_ascii_digit) {
-                        return Err(self.error_at(LexerErrorKind::ForbiddenKeywordName, after + 1));
+                        return Err(
+                            self.error_at(SmtLexicalErrorKind::ForbiddenKeywordName, after + 1)
+                        );
                     }
                     // get a run of simple-symbol bytes
                     let after_end = after + run_end(&slice[after..], RUN_SIMPLE_SYMBOL);
@@ -683,7 +685,9 @@ impl<H: SmtConsume> Lexer<H> {
                     // if the slice ends with a single zero, so we need to handle that
                     // when lexing digit in the state `NumeralOrDecimal`
                     if c == b'0' && after_end > after {
-                        return Err(self.error_at(LexerErrorKind::NumeralLeadingZero, after + 1));
+                        return Err(
+                            self.error_at(SmtLexicalErrorKind::NumeralLeadingZero, after + 1)
+                        );
                     }
                     match slice.get(after_end) {
                         Some(b'.') => {
@@ -739,7 +743,7 @@ impl<H: SmtConsume> Lexer<H> {
                     // can actually only be Other (resulting in unexpected character),
                     // as the other arms have already been handled in the fast path.
                     self.start_token(index);
-                    return Err(self.error_at(LexerErrorKind::UnexpectedCharacter, after));
+                    return Err(self.error_at(SmtLexicalErrorKind::UnexpectedCharacter, after));
                 }
             }
             // Read the locals for use in a future fast path.
@@ -755,7 +759,7 @@ impl<H: SmtConsume> Lexer<H> {
         &mut self,
         batch: &mut Batch<'a>,
         slice: &[u8],
-    ) -> Result<usize, Interrupted<H::Result, LexError<H::Error>>> {
+    ) -> Result<usize, Interrupted<H::Result, SmtLexError<H::Error>>> {
         // find the first byte that is not a digit
         let index = run_end(slice, RUN_DIGIT);
 
@@ -768,7 +772,7 @@ impl<H: SmtConsume> Lexer<H> {
         // 1. at least one additional digit has been consumed
         // 2. the content lexed previously is exactly "0"
         if index > 0 && self.token_content.as_slice() == b"0" {
-            return Err(self.error_at(LexerErrorKind::NumeralLeadingZero, 1));
+            return Err(self.error_at(SmtLexicalErrorKind::NumeralLeadingZero, 1));
         }
 
         // extend the token from slice
@@ -802,7 +806,7 @@ impl<H: SmtConsume> Lexer<H> {
         batch: &mut Batch<'a>,
         slice: &[u8],
         start: usize,
-    ) -> Result<usize, Interrupted<H::Result, LexError<H::Error>>> {
+    ) -> Result<usize, Interrupted<H::Result, SmtLexError<H::Error>>> {
         // find the first byte in the remainder that is not a digit
         let end = start + run_end(&slice[start..], RUN_DIGIT);
         // extend the token from slice
@@ -827,13 +831,13 @@ impl<H: SmtConsume> Lexer<H> {
     fn lex_base_selection(
         &mut self,
         slice: &[u8],
-    ) -> Result<usize, Interrupted<H::Result, LexError<H::Error>>> {
+    ) -> Result<usize, Interrupted<H::Result, SmtLexError<H::Error>>> {
         let c = slice[0];
         self.state = match c {
             b'x' => LexerState::Hexadecimal,
             b'b' => LexerState::Binary,
             _ => {
-                return Err(self.error_at(LexerErrorKind::BaseSelectionExpected, 1));
+                return Err(self.error_at(SmtLexicalErrorKind::BaseSelectionExpected, 1));
             }
         };
         Ok(1)
@@ -845,7 +849,7 @@ impl<H: SmtConsume> Lexer<H> {
         batch: &mut Batch<'a>,
         slice: &[u8],
         run: DigitRun,
-    ) -> Result<usize, Interrupted<H::Result, LexError<H::Error>>> {
+    ) -> Result<usize, Interrupted<H::Result, SmtLexError<H::Error>>> {
         // find the first byte that is not allowed in the run
         let index = run_end(slice, run.flag);
         // extend the token from slice
@@ -870,7 +874,7 @@ impl<H: SmtConsume> Lexer<H> {
         &mut self,
         batch: &mut Batch<'a>,
         mut rest: &[u8],
-    ) -> Result<usize, Interrupted<H::Result, LexError<H::Error>>> {
+    ) -> Result<usize, Interrupted<H::Result, SmtLexError<H::Error>>> {
         if self.version == SmtVersion::V2_0 {
             // in 2.0 mode, the string literals are lexed differently,
             // hand over to the legacy lexing function
@@ -934,9 +938,10 @@ impl<H: SmtConsume> Lexer<H> {
                 }
                 Some(_) => {
                     // forbidden, not printable or whitespace
-                    return Err(
-                        self.error_at(LexerErrorKind::ForbiddenCharInString, consumed + index + 1)
-                    );
+                    return Err(self.error_at(
+                        SmtLexicalErrorKind::ForbiddenCharInString,
+                        consumed + index + 1,
+                    ));
                 }
                 None => {
                     // extend the content with the rest
@@ -957,7 +962,7 @@ impl<H: SmtConsume> Lexer<H> {
         &mut self,
         batch: &mut Batch<'a>,
         mut rest: &[u8],
-    ) -> Result<usize, Interrupted<H::Result, LexError<H::Error>>> {
+    ) -> Result<usize, Interrupted<H::Result, SmtLexError<H::Error>>> {
         let mut consumed = 0;
         while !rest.is_empty() {
             match self.state {
@@ -1033,9 +1038,10 @@ impl<H: SmtConsume> Lexer<H> {
                 }
                 _ => {
                     // forbidden character
-                    return Err(
-                        self.error_at(LexerErrorKind::ForbiddenCharInString, consumed + index + 1)
-                    );
+                    return Err(self.error_at(
+                        SmtLexicalErrorKind::ForbiddenCharInString,
+                        consumed + index + 1,
+                    ));
                 }
             };
 
@@ -1056,7 +1062,7 @@ impl<H: SmtConsume> Lexer<H> {
         &mut self,
         batch: &mut Batch<'a>,
         slice: &[u8],
-    ) -> Result<usize, Interrupted<H::Result, LexError<H::Error>>> {
+    ) -> Result<usize, Interrupted<H::Result, SmtLexError<H::Error>>> {
         // find the first byte that is not a simple symbol
         let index = run_end(slice, RUN_SIMPLE_SYMBOL);
 
@@ -1078,7 +1084,7 @@ impl<H: SmtConsume> Lexer<H> {
         &mut self,
         batch: &mut Batch<'a>,
         mut rest: &[u8],
-    ) -> Result<usize, Interrupted<H::Result, LexError<H::Error>>> {
+    ) -> Result<usize, Interrupted<H::Result, SmtLexError<H::Error>>> {
         let mut consumed = 0;
         loop {
             // find the first byte that is not a quoted symbol
@@ -1114,7 +1120,7 @@ impl<H: SmtConsume> Lexer<H> {
                 Some(b'\\') => {
                     // backslash is forbidden in quoted symbols
                     return Err(self.error_at(
-                        LexerErrorKind::BackslashInQuotedSymbol,
+                        SmtLexicalErrorKind::BackslashInQuotedSymbol,
                         after_slice_position,
                     ));
                 }
@@ -1131,7 +1137,7 @@ impl<H: SmtConsume> Lexer<H> {
                 Some(_) => {
                     // forbidden character
                     return Err(self.error_at(
-                        LexerErrorKind::ForbiddenCharInQuotedSymbol,
+                        SmtLexicalErrorKind::ForbiddenCharInQuotedSymbol,
                         after_slice_position,
                     ));
                 }
@@ -1149,10 +1155,10 @@ impl<H: SmtConsume> Lexer<H> {
         &mut self,
         batch: &mut Batch<'a>,
         slice: &[u8],
-    ) -> Result<usize, Interrupted<H::Result, LexError<H::Error>>> {
+    ) -> Result<usize, Interrupted<H::Result, SmtLexError<H::Error>>> {
         // test that the keyword does not start with a digit
         if self.token_content.is_empty() && slice[0].is_ascii_digit() {
-            return Err(self.error_at(LexerErrorKind::ForbiddenKeywordName, 1));
+            return Err(self.error_at(SmtLexicalErrorKind::ForbiddenKeywordName, 1));
         }
 
         // find the first byte that is not simple-symbol-like
@@ -1180,7 +1186,7 @@ impl<H: SmtConsume> Lexer<H> {
         &mut self,
         batch: &mut Batch<'a>,
         slice: &[u8],
-    ) -> Result<usize, Interrupted<H::Result, LexError<H::Error>>> {
+    ) -> Result<usize, Interrupted<H::Result, SmtLexError<H::Error>>> {
         // we expect a token delimiter to follow the closing pipe
         self.expect_delimiter(slice[0], 0)?;
         // all good, produce the quoted symbol token
@@ -1206,18 +1212,18 @@ impl<H: SmtConsume> Lexer<H> {
         &self,
         next: u8,
         position: usize,
-    ) -> Result<(), Interrupted<R, LexError<E>>> {
+    ) -> Result<(), Interrupted<R, SmtLexError<E>>> {
         if FAST[next as usize] & FAST_DELIM != 0 {
             Ok(())
         } else {
-            Err(self.error_at(LexerErrorKind::MissingDelimiter, position + 1))
+            Err(self.error_at(SmtLexicalErrorKind::MissingDelimiter, position + 1))
         }
     }
 
     fn lex_comment(
         &mut self,
         slice: &[u8],
-    ) -> Result<usize, Interrupted<H::Result, LexError<H::Error>>> {
+    ) -> Result<usize, Interrupted<H::Result, SmtLexError<H::Error>>> {
         // run until comment end
         let index = run_end(slice, RUN_COMMENT_PLAIN);
         let Some(c) = slice.get(index) else {
@@ -1249,11 +1255,11 @@ impl<H: SmtConsume> Lexer<H> {
         end: TokenEnd,
         content: Content<'a>,
         next: Option<u8>,
-    ) -> Result<(), Interrupted<H::Result, LexError<H::Error>>> {
+    ) -> Result<(), Interrupted<H::Result, SmtLexError<H::Error>>> {
         // decimals of the form 7. without any digit in fractional part are disallowed
         let value = content.bytes(&self.token_content);
         if value.last().is_none_or(|c| *c == b'.') {
-            return Err(self.error(LexerErrorKind::FractionDigitExpected, end));
+            return Err(self.error(SmtLexicalErrorKind::FractionDigitExpected, end));
         }
         if let Some(next) = next {
             self.expect_delimiter(next, end.position)?;
@@ -1266,7 +1272,7 @@ impl<H: SmtConsume> Lexer<H> {
         batch: &mut Batch<'a>,
         end: TokenEnd,
         content: Content<'a>,
-    ) -> Result<(), Interrupted<H::Result, LexError<H::Error>>> {
+    ) -> Result<(), Interrupted<H::Result, SmtLexError<H::Error>>> {
         self.sink_slice(batch, InnerCategory::Numeral, end, content)
     }
 
@@ -1281,7 +1287,7 @@ impl<H: SmtConsume> Lexer<H> {
         end: TokenEnd,
         content: Content<'a>,
         next: Option<u8>,
-    ) -> Result<(), Interrupted<H::Result, LexError<H::Error>>> {
+    ) -> Result<(), Interrupted<H::Result, SmtLexError<H::Error>>> {
         // digit runs must not be empty
         let value = content.bytes(&self.token_content);
         if value.is_empty() {
@@ -1298,7 +1304,7 @@ impl<H: SmtConsume> Lexer<H> {
         batch: &mut Batch<'a>,
         end: TokenEnd,
         content: Content<'a>,
-    ) -> Result<(), Interrupted<H::Result, LexError<H::Error>>> {
+    ) -> Result<(), Interrupted<H::Result, SmtLexError<H::Error>>> {
         self.sink_slice(batch, InnerCategory::UnquotedSymbol, end, content)
     }
 
@@ -1312,11 +1318,11 @@ impl<H: SmtConsume> Lexer<H> {
         end: TokenEnd,
         content: Content<'a>,
         next: Option<u8>,
-    ) -> Result<(), Interrupted<H::Result, LexError<H::Error>>> {
+    ) -> Result<(), Interrupted<H::Result, SmtLexError<H::Error>>> {
         let value = content.bytes(&self.token_content);
         // ensure the keyword is not empty
         if value.is_empty() {
-            return Err(self.error(LexerErrorKind::ForbiddenKeywordName, end));
+            return Err(self.error(SmtLexicalErrorKind::ForbiddenKeywordName, end));
         }
         if let Some(next) = next {
             self.expect_delimiter(next, end.position)?;
@@ -1329,7 +1335,7 @@ impl<H: SmtConsume> Lexer<H> {
         batch: &mut Batch<'a>,
         end: TokenEnd,
         content: Content<'a>,
-    ) -> Result<(), Interrupted<H::Result, LexError<H::Error>>> {
+    ) -> Result<(), Interrupted<H::Result, SmtLexError<H::Error>>> {
         self.sink_slice(batch, InnerCategory::String, end, content)
     }
 
@@ -1341,7 +1347,7 @@ impl<H: SmtConsume> Lexer<H> {
         ty: InnerCategory,
         end: TokenEnd,
         content: Content<'a>,
-    ) -> Result<(), Interrupted<H::Result, LexError<H::Error>>> {
+    ) -> Result<(), Interrupted<H::Result, SmtLexError<H::Error>>> {
         // the caller of this function is responsible
         // for ensuring that the constructed token is valid
 
@@ -1394,7 +1400,7 @@ impl<H: SmtConsume> Lexer<H> {
     fn flush_batch(
         &mut self,
         batch: &mut Batch,
-    ) -> Result<(), Interrupted<H::Result, LexError<H::Error>>> {
+    ) -> Result<(), Interrupted<H::Result, SmtLexError<H::Error>>> {
         // the batch is spent once handed over, no matter what the handler decides
         let len = std::mem::replace(&mut batch.len, 0);
         if len == 0 {
@@ -1411,7 +1417,7 @@ impl<H: SmtConsume> Lexer<H> {
         handler: &mut H,
         mut cursor: SmtBatchCursor,
         version: &mut SmtVersion,
-    ) -> Result<(), Interrupted<H::Result, LexError<H::Error>>> {
+    ) -> Result<(), Interrupted<H::Result, SmtLexError<H::Error>>> {
         // where lexing continues if the handler stops before the first token
         // relex request empties the cursor, so we need to remember it here
         let first_start = cursor
@@ -1444,7 +1450,7 @@ impl<H: SmtConsume> Lexer<H> {
                 );
                 Ok(Stop::Finished(result))
             }
-            Err(err) => Err(LexError::Handler(err)),
+            Err(err) => Err(SmtLexError::Consumer(err)),
         };
         // the stop takes effect after the consumed tokens
         let stop_location = match cursor.last_consumed() {
@@ -1460,7 +1466,7 @@ impl<H: SmtConsume> Lexer<H> {
     }
 
     #[inline]
-    fn sink_eof(&mut self) -> Result<(), Interrupted<H::Result, LexError<H::Error>>> {
+    fn sink_eof(&mut self) -> Result<(), Interrupted<H::Result, SmtLexError<H::Error>>> {
         // construct the span at the first position in the batch
         let end = self.location_at(0);
         self.spans[0] = SmtSpan::new_unchecked(self.token_start, end);
@@ -1518,7 +1524,7 @@ impl<H: SmtConsume> Lexer<H> {
         entry: (InnerCategory, &'a [u8]),
         range: std::ops::Range<usize>,
         emit: usize,
-    ) -> Result<(), Interrupted<H::Result, LexError<H::Error>>> {
+    ) -> Result<(), Interrupted<H::Result, SmtLexError<H::Error>>> {
         batch.entries[local.len] = Some(entry);
         self.spans[local.len] = SmtSpan::on_line(
             local.line,
@@ -1559,7 +1565,11 @@ impl<H: SmtConsume> Lexer<H> {
     }
 
     /// Error spanning the token so far and, if it ended at a byte, that byte.
-    fn error<R, E>(&self, kind: LexerErrorKind, end: TokenEnd) -> Interrupted<R, LexError<E>> {
+    fn error<R, E>(
+        &self,
+        kind: SmtLexicalErrorKind,
+        end: TokenEnd,
+    ) -> Interrupted<R, SmtLexError<E>> {
         self.error_at(kind, end.position + end.at_byte as usize)
     }
 
@@ -1567,13 +1577,17 @@ impl<H: SmtConsume> Lexer<H> {
     ///
     /// Used for errors detected mid-run, e.g. forbidden byte in a string
     /// or a backslash in a quoted symbol.
-    fn error_at<R, E>(&self, kind: LexerErrorKind, position: usize) -> Interrupted<R, LexError<E>> {
+    fn error_at<R, E>(
+        &self,
+        kind: SmtLexicalErrorKind,
+        position: usize,
+    ) -> Interrupted<R, SmtLexError<E>> {
         let end = self.location_at(position);
         let span = SmtSpan::new_unchecked(self.token_start, end);
         // no tokens have been consumed, as this is an error
         // that occurred during lexing
         Interrupted {
-            result: Err(LexError::Lexer(LexerError::new(kind, span))),
+            result: Err(SmtLexError::Lexical(SmtLexicalError::new(kind, span))),
             location: end,
         }
     }
@@ -1583,8 +1597,8 @@ impl<H: SmtConsume> Lexer<H> {
     /// Called from the outer public functions.
     fn execute_step(
         &mut self,
-        step: impl FnOnce(&mut Self) -> Result<ControlFlow<H::Result>, LexError<H::Error>>,
-    ) -> Result<ControlFlow<SmtLocated<H::Result>>, LexError<H::Error>> {
+        step: impl FnOnce(&mut Self) -> Result<ControlFlow<H::Result>, SmtLexError<H::Error>>,
+    ) -> Result<ControlFlow<SmtLocated<H::Result>>, SmtLexError<H::Error>> {
         match step(self) {
             Ok(ControlFlow::Continue(())) => Ok(ControlFlow::Continue(())),
             Ok(ControlFlow::Break(result)) => {

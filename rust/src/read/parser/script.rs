@@ -3,7 +3,8 @@ use std::ops::ControlFlow;
 use crate::{
     CommandHandler,
     read::parser::{
-        CommandParser, CommandParserStop, Parser, ParserError, ParserResources, SyntaxErrorKind,
+        CommandParser, CommandParserStop, Parser, ParserResources, SmtParseError,
+        SmtSyntaxErrorKind,
     },
     token::{SmtBatchCursor, SmtVersionPosture},
 };
@@ -55,7 +56,7 @@ impl<H: CommandHandler> Parser<H> for ScriptParser<H> {
         handler: &mut H,
         resources: &mut ParserResources<H>,
         cursor: &mut SmtBatchCursor,
-    ) -> Result<ControlFlow<ScriptParserStop>, ParserError<H::Error>> {
+    ) -> Result<ControlFlow<ScriptParserStop>, SmtParseError<H::Error>> {
         loop {
             match self.command.parse(handler, resources, cursor)? {
                 ControlFlow::Continue(()) => {
@@ -68,16 +69,16 @@ impl<H: CommandHandler> Parser<H> for ScriptParser<H> {
                 ControlFlow::Break(CommandParserStop::SetVersion(version, span)) => {
                     // ensure the version is allowed by the posture
                     if !self.posture.allowed().contains(&version) {
-                        return Err(ParserError::category_error(
-                            SyntaxErrorKind::UnsupportedVersion,
+                        return Err(SmtParseError::category_error(
+                            SmtSyntaxErrorKind::UnsupportedVersion,
                             span,
                         ));
                     }
                     if let Some(max_declarations) = self.posture.max_declarations()
                         && self.num_version_declarations >= max_declarations
                     {
-                        return Err(ParserError::category_error(
-                            SyntaxErrorKind::TooManyVersionDeclarations(max_declarations),
+                        return Err(SmtParseError::category_error(
+                            SmtSyntaxErrorKind::TooManyVersionDeclarations(max_declarations),
                             span,
                         ));
                     }

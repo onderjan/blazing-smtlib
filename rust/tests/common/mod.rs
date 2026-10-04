@@ -2,7 +2,7 @@
 
 use blazing_smtlib::{
     CheckStandardSyntax, CommandHandler, NonstandardCommandError,
-    read::{SmtReadError, SmtReadErrorKind, parser::SyntaxErrorKind, read_smt},
+    read::{SmtReadError, SmtReadErrorKind, parser::SmtSyntaxErrorKind, read_smt},
 };
 
 /// Parses the whole input, feeding the commands to the given handler.
@@ -31,15 +31,15 @@ pub fn assert_error_span<E>(err: &SmtReadError<E>, start: u64, end: u64) {
 /// Parses the input, requires a parser error, checks the byte span the error carries,
 /// and returns its kind so that the caller can inspect the variant.
 #[track_caller]
-pub fn assert_parser_error(input: &[u8], start: u64, end: u64) -> SyntaxErrorKind {
+pub fn assert_parser_error(input: &[u8], start: u64, end: u64) -> SmtSyntaxErrorKind {
     let err = parse(input).expect_err("expected a parser error, got Ok");
     assert_error_span(&err, start, end);
     match err.into_kind() {
-        SmtReadErrorKind::Parser(kind) => kind,
+        SmtReadErrorKind::Syntax(kind) => kind,
         SmtReadErrorKind::Handler(err) => {
             panic!("expected parser error, got handler error on {:?}", err.0)
         }
-        SmtReadErrorKind::Lexer(kind) => {
+        SmtReadErrorKind::Lexical(kind) => {
             panic!("expected parser error, got lexer error {kind:?}")
         }
         SmtReadErrorKind::Io(err) => panic!("expected parser error, got I/O error {err}"),
