@@ -352,7 +352,7 @@ impl AttributeSlot {
     }
 }
 
-struct SingleAttribute;
+pub(crate) struct SingleAttribute;
 
 impl<H: SmtHandler + ?Sized> AttributeCollection<H> for SingleAttribute {
     type Output = H::Attribute;

@@ -124,7 +124,10 @@ impl<H: SmtCommandHandler> SmtParse<H> for SmtCommandParser<H> {
                     self.state = match peeked.syntax(cursor.version()) {
                         SmtSyntaxToken::Reserved(SmtReserved::CommandName(name)) => {
                             // a command-name reserved word names a standard command
-                            CommandParserState::Standard(StandardCommandKind::from_reserved(name))
+                            CommandParserState::Standard(StandardCommandKind::from_reserved(
+                                name,
+                                cursor.version(),
+                            ))
                         }
                         SmtSyntaxToken::Symbol(name) => {
                             // a symbol (even a quoted one spelled like a standard command)

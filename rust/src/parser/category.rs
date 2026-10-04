@@ -30,7 +30,7 @@ pub use {
     },
 };
 
-pub(crate) use attribute::AttributeSlot;
+pub(crate) use attribute::{AttributeSlot, SingleAttribute};
 pub(crate) use ident::IdentSlot;
 pub(crate) use pattern::PatternSlot;
 pub(crate) use qualified_ident::QualifiedIdentSlot;

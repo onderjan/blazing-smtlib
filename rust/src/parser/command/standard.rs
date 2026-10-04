@@ -7,7 +7,8 @@ use crate::{
         SmtParenMultipleParser, SmtParse, SmtParseError, SmtParseState, SmtStringParser,
         SmtSymbolParser, SmtSyntaxErrorKind,
         category::{
-            SmtClosedAttributeParser, SmtClosedParser, SmtPairParser, SmtSortParser, SmtTermParser,
+            SingleAttribute, SmtClosedAttributeParser, SmtClosedParser, SmtPairParser,
+            SmtSortParser, SmtTermParser, TermSlot,
         },
         command::{
             SmtCommandOutcome, SmtCommandRule,
@@ -15,43 +16,70 @@ use crate::{
             definition::{Definition, DefinitionParser},
             function::{DefineFunsRecParser, FunctionSignatureParser, RecursiveBodyParser},
         },
+        parse_by_token,
     },
     token::{SmtBatchCursor, SmtCommandNameReserved, SmtSyntaxToken, SmtTokenCategory, SmtVersion},
 };
 
-/// Defines the standard commands, each named like its variant of
-/// [`SmtCommandNameReserved`], which the command kinds are mapped from.
-macro_rules! standard_commands {
-    ($($field:ident: $kind:ident(
-        $parser:ty,
-        |$handler:ident, $result:pat_param| $handle:expr
-    )),* $(,)?) => {
-        $(
-            pub(super) struct $kind;
+/// Defines the rule of one standard command: its payload parser
+/// and the handler call that delivers the parsed payload.
+macro_rules! standard_command_rule {
+    ($kind:ident, $parser:ty, |$handler:ident, $result:pat_param| $handle:expr) => {
+        pub(super) struct $kind;
 
-            impl<H: SmtCommandHandler> SmtCommandRule<H> for $kind {
-                type Parser = $parser;
+        impl<H: SmtCommandHandler> SmtCommandRule<H> for $kind {
+            type Parser = $parser;
 
-                fn handle(
-                    $handler: &mut H,
-                    $result: <$parser as SmtParse<H>>::Result,
-                ) -> Result<(), H::Error> {
-                    $handle
-                }
+            fn handle(
+                $handler: &mut H,
+                $result: <$parser as SmtParse<H>>::Result,
+            ) -> Result<(), H::Error> {
+                $handle
             }
-        )*
+        }
+    };
+}
+
+/// Defines the standard commands.
+///
+/// The commands before the semicolon are each named like their variant of
+/// [`SmtCommandNameReserved`], which the command kinds are mapped from.
+///
+/// A command after the semicolon is the form a command had before the given
+/// version, where its payload has another grammar: before that version,
+/// the reserved word of the replaced command is mapped to it instead.
+macro_rules! standard_commands {
+    (
+        $($field:ident: $kind:ident(
+            $parser:ty,
+            |$handler:ident, $result:pat_param| $handle:expr
+        )),* $(,)?
+        ;
+        $($old_field:ident: $old_kind:ident(
+            $old_parser:ty,
+            |$old_handler:ident, $old_result:pat_param| $old_handle:expr
+        ) replaces $replaced:ident before $before:ident),* $(,)?
+    ) => {
+        $(standard_command_rule!($kind, $parser, |$handler, $result| $handle);)*
+        $(standard_command_rule!(
+            $old_kind, $old_parser, |$old_handler, $old_result| $old_handle
+        );)*
 
         /// Identifies a standard command.
         #[derive(Clone, Copy, Debug)]
         pub(crate) enum StandardCommandKind {
             $($kind,)*
+            $($old_kind,)*
         }
 
         impl StandardCommandKind {
-            /// The command named by the reserved word.
+            /// The command named by the reserved word under the version.
             #[inline]
-            pub fn from_reserved(name: SmtCommandNameReserved) -> Self {
+            pub fn from_reserved(name: SmtCommandNameReserved, version: SmtVersion) -> Self {
                 match name {
+                    $(SmtCommandNameReserved::$replaced if version < SmtVersion::$before => {
+                        Self::$old_kind
+                    })*
                     $(SmtCommandNameReserved::$kind => Self::$kind,)*
                 }
             }
@@ -62,12 +90,14 @@ macro_rules! standard_commands {
         /// All parsers are persistent to avoid dropping buffers.
         pub(crate) struct StandardCommandParsers<H: SmtCommandHandler> {
             $($field: SmtCommandPayloadParser<H, $kind>,)*
+            $($old_field: SmtCommandPayloadParser<H, $old_kind>,)*
         }
 
         impl<H: SmtCommandHandler> StandardCommandParsers<H> {
             pub fn new() -> Self {
                 Self {
                     $($field: SmtCommandPayloadParser::default(),)*
+                    $($old_field: SmtCommandPayloadParser::default(),)*
                 }
             }
             pub fn parse(
@@ -79,6 +109,9 @@ macro_rules! standard_commands {
             ) -> Result<ControlFlow<SmtCommandOutcome, ()>, SmtParseError<H::Error>> {
                 let flow = match kind {
                     $(StandardCommandKind::$kind => self.$field.parse(handler, parse_state, cursor)?,)*
+                    $(StandardCommandKind::$old_kind => {
+                        self.$old_field.parse(handler, parse_state, cursor)?
+                    })*
                 };
                 let ControlFlow::Break(()) = flow else {
                     return Ok(ControlFlow::Continue(()));
@@ -153,8 +186,8 @@ standard_commands! {
         SmtCloseParenParser,
         |handler, ()| handler.command_check_sat(Vec::new())),
     check_sat_assuming: CheckSatAssuming(
-        CheckSatAssumingParser<H>,
-        |handler, assuming| handler.command_check_sat(assuming)),
+        SmtClosedParser<H, SmtParenMultipleParser<H, SmtTermParser<H>>>,
+        |handler, assumptions| handler.command_check_sat(assumptions)),
     exit: Exit(
         SmtCloseParenParser,
         |handler, ()| handler.command_exit()),
@@ -165,7 +198,7 @@ standard_commands! {
         SmtClosedParser<H,SmtNumeralParser>,
         |handler, amount| handler.command_pop(amount)),
     set_info: SetInfo(
-        SetInfoParser<H>,
+        SetInfoParser,
         |handler, attribute| handler.command_set_info(attribute)),
     echo: Echo(
         SmtClosedParser<H, SmtStringParser>,
@@ -206,6 +239,11 @@ standard_commands! {
     get_unsat_core: GetUnsatCore(
         SmtCloseParenParser,
         |handler, ()| handler.command_get_unsat_core()),
+    ;
+    check_sat_assuming_literals: CheckSatAssumingLiterals(
+        SmtClosedParser<H, SmtParenMultipleParser<H, PropLiteralParser>>,
+        |handler, assumptions| handler.command_check_sat(assumptions))
+        replaces CheckSatAssuming before V2_7,
 }
 
 impl<H: SmtCommandHandler> Definition<H> for DefineConst {
@@ -322,10 +360,11 @@ impl<H: SmtCommandHandler> SmtParse<H> for GetValueParser<H> {
 ///
 /// This parser is necessary to recognise the version declaration attribute
 /// `:smt-lib-version <version>`, where the version should be a decimal.
-pub(super) struct SetInfoParser<H: SmtCommandHandler> {
-    inner: SmtClosedAttributeParser<H>,
+pub(super) struct SetInfoParser {
     state: SetInfoState,
     declared_version: Option<(SmtVersion, SmtSpan)>,
+    /// Where a value that names no version stands, if the payload declares one.
+    unsupported_version: Option<SmtSpan>,
 }
 
 enum SetInfoState {
@@ -338,12 +377,12 @@ enum SetInfoState {
     Rest,
 }
 
-impl<H: SmtCommandHandler> SetInfoParser<H> {
+impl SetInfoParser {
     fn new() -> Self {
         Self {
-            inner: SmtClosedAttributeParser::new(),
             state: SetInfoState::Name,
             declared_version: None,
+            unsupported_version: None,
         }
     }
 
@@ -353,13 +392,13 @@ impl<H: SmtCommandHandler> SetInfoParser<H> {
     }
 }
 
-impl<H: SmtCommandHandler> Default for SetInfoParser<H> {
+impl Default for SetInfoParser {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<H: SmtCommandHandler> SmtParse<H> for SetInfoParser<H> {
+impl<H: SmtCommandHandler> SmtParse<H> for SetInfoParser {
     type Result = H::Attribute;
 
     #[inline]
@@ -369,19 +408,26 @@ impl<H: SmtCommandHandler> SmtParse<H> for SetInfoParser<H> {
         parse_state: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<H::Attribute, ()>, SmtParseError<H::Error>> {
-        // We process the version before the actual processing, as we
-        // cannot process token-by-token in parallel, just look at the cursor
-        // and then hand it over.
+        // The version declaration must be treated specially while parsing
+        // the attribute. We look at the set-info attribute name; if it's s
+        // :smt-lib-version we parse the version to be able to switch.
         //
         // The state machine is as follows:
         // 1. Name: if the first token is :smt-lib-version, move to version handling;
         //    otherwise, move to the rest.
-        // 2. Version looks at the second token of the payload, which must name
-        //    a version, remembers the version and moves to Rest.
+        // 2. Version takes the second token of the payload, remembers the version
+        //    it names, or that it names none, and moves to Rest.
         // 3. Rest looks at nothing more.
-
-        let mut ahead = 0;
-        while let Some(token) = cursor.get(ahead) {
+        //
+        // A value that names no version is an error of the command as a whole:
+        // it is raised once the payload has ended, at the closing parenthesis.
+        let SmtParseState {
+            attribute_slot,
+            arena,
+            s_expr_slot,
+            ..
+        } = parse_state;
+        parse_by_token(cursor, |version, token| {
             match self.state {
                 SetInfoState::Name => {
                     let declares_version = token.category() == SmtTokenCategory::Keyword
@@ -393,79 +439,77 @@ impl<H: SmtCommandHandler> SmtParse<H> for SetInfoParser<H> {
                     };
                 }
                 SetInfoState::Version => {
-                    // disallow any version that isn't a decimal that converts to a version
-                    let version = match token.category() {
+                    // only a decimal that converts to a version names one
+                    let declared = match token.category() {
                         SmtTokenCategory::Decimal => SmtVersion::from_decimal_opt(token.content()),
                         _ => None,
                     };
-                    let Some(version) = version else {
-                        return Err(SmtParseError::category_error(
-                            SmtSyntaxErrorKind::UnsupportedVersion,
-                            token.span(),
-                        ));
-                    };
-                    self.declared_version = Some((version, token.span()));
+                    match declared {
+                        Some(declared) => self.declared_version = Some((declared, token.span())),
+                        None => self.unsupported_version = Some(token.span()),
+                    }
                     self.state = SetInfoState::Rest;
                 }
-                SetInfoState::Rest => break,
+                SetInfoState::Rest => {}
             }
-            ahead += 1;
-        }
 
-        let flow = self.inner.parse(handler, parse_state, cursor)?;
-        if flow.is_break() {
-            // the command has ended, the next payload starts with its attribute name
-            self.state = SetInfoState::Name;
-        }
-        Ok(flow)
+            let flow = attribute_slot.progress::<H, SingleAttribute>(
+                handler,
+                arena,
+                s_expr_slot,
+                version,
+                token,
+            )?;
+            if flow.is_break() {
+                // the command has ended, the next payload starts with its attribute name
+                self.state = SetInfoState::Name;
+                if let Some(span) = self.unsupported_version.take() {
+                    return Err(SmtParseError::category_error(
+                        SmtSyntaxErrorKind::UnsupportedVersion,
+                        span,
+                    ));
+                }
+            }
+            Ok(flow)
+        })
     }
 }
 
-/// A parser for the payload of `check-sat-assuming`.
+/// A parser for a propositional literal: `<symbol>` or `(not <symbol>)`.
 ///
-/// `check-sat-assuming` payload is a parenthesised list of assumptions
-/// followed by a closing parenthesis.
-///
-/// The assumptions are terms since SMT-LIB 2.7. Before it, each assumption
-/// must be a propositional literal: `<symbol>` or `(not <symbol>)`.
-/// The literals are terms too, and are parsed as such.
-pub(super) struct CheckSatAssumingParser<H: SmtCommandHandler> {
-    inner: SmtClosedParser<H, SmtParenMultipleParser<H, SmtTermParser<H>>>,
-    state: PropLiteralsState,
+/// Before SMT-LIB 2.7, the assumptions of `check-sat-assuming` are
+/// propositional literals. The literals are terms, and are handled as such.
+pub(super) struct PropLiteralParser {
+    state: PropLiteralState,
 }
 
-enum PropLiteralsState {
-    /// The next token of the payload opens the list.
-    Open,
-    /// Inside the list: the next token starts a literal or closes the list.
-    Literal,
-    /// After the parenthesis that opens a literal: the next token is `not`.
+enum PropLiteralState {
+    /// The next token starts a literal.
+    Start,
+    /// After the parenthesis that opens a negated literal: the next token is `not`.
     Not,
     /// After `not`: the next token is the negated symbol.
     Negated,
     /// After the negated symbol: the next token closes the literal.
     Close,
-    /// Continue to parse normally.
-    Rest,
 }
 
-impl<H: SmtCommandHandler> CheckSatAssumingParser<H> {
+impl PropLiteralParser {
     fn new() -> Self {
         Self {
-            inner: SmtClosedParser::default(),
-            state: PropLiteralsState::Open,
+            state: PropLiteralState::Start,
         }
     }
 }
 
-impl<H: SmtCommandHandler> Default for CheckSatAssumingParser<H> {
+impl Default for PropLiteralParser {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<H: SmtCommandHandler> SmtParse<H> for CheckSatAssumingParser<H> {
-    type Result = Vec<H::Term>;
+impl<H: SmtCommandHandler> SmtParse<H> for PropLiteralParser {
+    type Result = H::Term;
 
     #[inline]
     fn parse(
@@ -473,71 +517,42 @@ impl<H: SmtCommandHandler> SmtParse<H> for CheckSatAssumingParser<H> {
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
-    ) -> Result<ControlFlow<Vec<H::Term>, ()>, SmtParseError<H::Error>> {
-        // Any terms are allowed as assumptions since SMT-LIB 2.7. Before it,
-        // the terms must be propositional literals, i.e. `<symbol>` or `(not <symbol>)`.
-        // In that case, we check that the assumptions are propositional literals
-        // before handing the cursor off to the actual processing.
+    ) -> Result<ControlFlow<H::Term, ()>, SmtParseError<H::Error>> {
+        // A literal is a term of one of two shapes, so every token is
+        // progressed in the term slot once it is known to fit the shape.
+        // The term slot finishes the term at the last token of the literal.
         //
         // The state machine is as follows:
-        // 1. Open: the first token should open the list, move to Literal;
-        //    otherwise, move to Rest and leave the error to the actual processing.
-        // 2. Literal: a symbol is a literal; "(" starts a negated one, move to Not;
-        //    ")" closes the list, move to Rest.
-        // 3. Not, Negated, Close: expect the symbol "not", any symbol and ")"
-        //    in turn, then move back to Literal.
-        // 4. Rest looks at nothing more.
-        let version = cursor.version();
-        if version < SmtVersion::V2_7 {
-            let mut ahead = 0;
-            while let Some(token) = cursor.get(ahead) {
-                let kind = token.syntax(version);
-                self.state = match (&self.state, kind) {
-                    (PropLiteralsState::Rest, _) => break,
-                    (PropLiteralsState::Open, SmtSyntaxToken::ParenOpen) => {
-                        PropLiteralsState::Literal
-                    }
-                    // anything else, and the end of the input in any state,
-                    // is left to the actual processing
-                    (PropLiteralsState::Open, _) | (_, SmtSyntaxToken::EndOfFile) => {
-                        PropLiteralsState::Rest
-                    }
-                    (PropLiteralsState::Literal, SmtSyntaxToken::Symbol(_)) => {
-                        PropLiteralsState::Literal
-                    }
-                    (PropLiteralsState::Literal, SmtSyntaxToken::ParenOpen) => {
-                        PropLiteralsState::Not
-                    }
-                    (PropLiteralsState::Literal, SmtSyntaxToken::ParenClose) => {
-                        PropLiteralsState::Rest
-                    }
-                    (PropLiteralsState::Not, SmtSyntaxToken::Symbol(symbol))
-                        if symbol.as_slice() == b"not" =>
-                    {
-                        PropLiteralsState::Negated
-                    }
-                    (PropLiteralsState::Negated, SmtSyntaxToken::Symbol(_)) => {
-                        PropLiteralsState::Close
-                    }
-                    (PropLiteralsState::Close, SmtSyntaxToken::ParenClose) => {
-                        PropLiteralsState::Literal
-                    }
-                    _ => {
-                        return Err(SmtParseError::category_error(
-                            SmtSyntaxErrorKind::ExpectedPropositionalLiteral,
-                            token.span(),
-                        ));
-                    }
-                };
-                ahead += 1;
-            }
-        }
+        // 1. Start: a symbol is a literal by itself; "(" opens a negated
+        //    literal, move to Not.
+        // 2. Not, Negated, Close: expect the symbol "not", any symbol and ")"
+        //    in turn, then move back to Start.
+        parse_by_token(cursor, |version, token| {
+            self.state = match (&self.state, token.syntax(version)) {
+                (PropLiteralState::Start, SmtSyntaxToken::Symbol(_)) => PropLiteralState::Start,
+                (PropLiteralState::Start, SmtSyntaxToken::ParenOpen) => PropLiteralState::Not,
+                (PropLiteralState::Not, SmtSyntaxToken::Symbol(symbol))
+                    if symbol.as_slice() == b"not" =>
+                {
+                    PropLiteralState::Negated
+                }
+                (PropLiteralState::Negated, SmtSyntaxToken::Symbol(_)) => PropLiteralState::Close,
+                (PropLiteralState::Close, SmtSyntaxToken::ParenClose) => PropLiteralState::Start,
+                _ => {
+                    return Err(SmtParseError::category_error(
+                        SmtSyntaxErrorKind::ExpectedPropositionalLiteral,
+                        token.span(),
+                    ));
+                }
+            };
 
-        let flow = self.inner.parse(handler, parse_state, cursor)?;
-        if flow.is_break() {
-            // the command has ended, the next payload starts with the list
-            self.state = PropLiteralsState::Open;
-        }
-        Ok(flow)
+            let flow = TermSlot::progress(handler, parse_state, version, token)?;
+            debug_assert_eq!(
+                flow.is_break(),
+                matches!(self.state, PropLiteralState::Start),
+                "the term must finish exactly at the last token of the literal"
+            );
+            Ok(flow)
+        })
     }
 }
