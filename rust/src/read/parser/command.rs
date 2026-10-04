@@ -150,7 +150,7 @@ impl<H: SmtCommandHandler> SmtParse<H> for SmtCommandParser<H> {
                         // we trust our own parsers enough to only assert this in debug mode
                         // and never clear them, which would make them pristine but slow us down
                         debug_assert!(
-                            resources.are_pristine(),
+                            resources.is_pristine(),
                             "resources should be pristine after end of standard command {kind:?}"
                         );
                         self.state = CommandParserState::AwaitingCommand;
@@ -164,7 +164,7 @@ impl<H: SmtCommandHandler> SmtParse<H> for SmtCommandParser<H> {
                         // the command has ended, resources should be back in pristine state;
                         // we do not trust the library users: assert this in debug mode, always clear
                         debug_assert!(
-                            resources.are_pristine(),
+                            resources.is_pristine(),
                             "resources should be pristine after end of non-standard command"
                         );
                         resources.clear();

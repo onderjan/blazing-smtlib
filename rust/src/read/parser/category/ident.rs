@@ -264,14 +264,14 @@ mod tests {
         let ident = parse_all_with(SmtIdentParser::new(), &mut resources, b"_ f 1)");
         assert_eq!(ident.name.as_slice(), b"f");
         assert_eq!(index_texts(&ident), ["1"]);
-        assert!(resources.are_pristine());
+        assert!(resources.is_pristine());
 
         let mut resources = SmtParseState::new();
         resources.ident_slot.move_after_underscore();
         let ident = parse_all_with(SmtIdentParser::new(), &mut resources, b"f 1)");
         assert_eq!(ident.name.as_slice(), b"f");
         assert_eq!(index_texts(&ident), ["1"]);
-        assert!(resources.are_pristine());
+        assert!(resources.is_pristine());
     }
 
     #[cfg(debug_assertions)]

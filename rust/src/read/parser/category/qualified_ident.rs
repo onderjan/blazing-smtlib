@@ -278,7 +278,7 @@ mod tests {
         assert_eq!(qi.ident.name.as_slice(), b"f");
         assert_eq!(qi.ident.indices.len(), 1);
         assert!(qi.sort.is_none());
-        assert!(resources.are_pristine());
+        assert!(resources.is_pristine());
 
         // regression: the entry point must put the ident slot after the
         // underscore as well, or `f` alone would finish the identifier
@@ -297,7 +297,7 @@ mod tests {
         assert_eq!(qi.ident.name.as_slice(), b"f");
         assert_eq!(qi.ident.indices.len(), 1);
         assert!(qi.sort.is_none());
-        assert!(resources.are_pristine());
+        assert!(resources.is_pristine());
 
         let mut resources = SmtParseState::new();
         resources.qualified_ident_slot.move_after_as();
@@ -308,7 +308,7 @@ mod tests {
         );
         assert_eq!(qi.ident.name.as_slice(), b"x");
         assert!(qi.sort.is_some());
-        assert!(resources.are_pristine());
+        assert!(resources.is_pristine());
     }
 
     #[test]
@@ -329,7 +329,7 @@ mod tests {
                 &mut resources,
                 input,
             );
-            assert!(resources.are_pristine(), "after {input:?}");
+            assert!(resources.is_pristine(), "after {input:?}");
         }
     }
 

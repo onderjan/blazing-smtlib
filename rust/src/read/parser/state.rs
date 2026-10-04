@@ -42,7 +42,7 @@ impl<H: SmtHandler + ?Sized> SmtParseState<H> {
         }
     }
 
-    pub(crate) fn are_pristine(&self) -> bool {
+    pub(crate) fn is_pristine(&self) -> bool {
         self.arena.is_pristine()
             && self.ident_slot.is_pristine()
             && self.qualified_ident_slot.is_pristine()

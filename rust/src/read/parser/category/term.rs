@@ -1087,7 +1087,7 @@ mod tests {
                 &mut resources,
                 input,
             );
-            assert!(resources.are_pristine(), "after {input:?}");
+            assert!(resources.is_pristine(), "after {input:?}");
         }
     }
 }

@@ -425,7 +425,7 @@ mod tests {
                 &mut resources,
                 input,
             );
-            assert!(resources.are_pristine(), "after {input:?}");
+            assert!(resources.is_pristine(), "after {input:?}");
         }
         for input in [
             &b":a x :b (1 (2 3)) :c)"[..],
@@ -438,7 +438,7 @@ mod tests {
                 &mut resources,
                 input,
             );
-            assert!(resources.are_pristine(), "after {input:?}");
+            assert!(resources.is_pristine(), "after {input:?}");
         }
     }
 }

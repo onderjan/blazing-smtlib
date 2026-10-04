@@ -57,7 +57,7 @@ impl<H: SmtHandler + ?Sized, P: SmtParse<H>> SmtConsume for SmtParseAdapter<'_, 
             .parse(self.handler, &mut self.resources, cursor)?;
         if result.is_break() {
             debug_assert!(
-                self.resources.are_pristine(),
+                self.resources.is_pristine(),
                 "resources should be pristine after the top-level parser finishes"
             );
         }

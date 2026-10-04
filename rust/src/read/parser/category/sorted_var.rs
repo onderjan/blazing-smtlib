@@ -169,7 +169,7 @@ mod tests {
                 input,
             );
             assert_eq!(name.as_slice().len(), 1, "after {input:?}");
-            assert!(resources.are_pristine(), "after {input:?}");
+            assert!(resources.is_pristine(), "after {input:?}");
         }
     }
 }
