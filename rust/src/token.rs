@@ -267,13 +267,11 @@ impl<'a> SmtToken<'a> {
 
 /// A cursor into a batch of tokens, from which elements are consumed sequentially.
 ///
-/// A parser reads a batch through a cursor: it can look at the
-/// tokens ahead, consume them one at a time or several at once, look back at
-/// what it consumed last, and tell how many tokens it has taken. However,
-/// it is not guaranteed how many elements the batch will actually have,
-/// so the lookahead is only useful for fast paths that fall back to
-/// slow paths with the same behaviour if the lookahead is not available.
-#[derive(Clone, Copy)]
+/// A parser reads a batch through a cursor: it consumes the tokens one at
+/// a time, can look at the next one, and can attempt to take several at once.
+/// However, it is not guaranteed how many tokens the batch will actually have,
+/// so an attempt is only useful for fast paths that fall back to slow paths
+/// with the same behaviour if the tokens are not available.
 pub struct SmtBatchCursor<'a> {
     version: SmtVersion,
     entries: &'a [Option<(InnerCategory, &'a [u8])>],
@@ -338,7 +336,7 @@ impl<'a> SmtBatchCursor<'a> {
     ///
     /// `get(0)` is the next token, also available through `peek`.
     #[inline]
-    pub fn get(&self, ahead: usize) -> Option<SmtToken<'a>> {
+    pub(crate) fn get(&self, ahead: usize) -> Option<SmtToken<'a>> {
         self.at(self.next + ahead)
     }
 
@@ -353,24 +351,43 @@ impl<'a> SmtBatchCursor<'a> {
         Some(token)
     }
 
+    /// Attempts to consume several tokens at once.
+    ///
+    /// The extractor takes tokens from the window ahead of the cursor, in order.
+    /// If it returns [`Option::Some`], exactly the tokens it took are consumed.
+    /// If it returns [`Option::None`], nothing is consumed.
+    ///
+    /// The window ends where the cursor does, which may be after any token.
+    /// An extractor that runs out of tokens must return [`Option::None`]; the
+    /// caller must then reach the same result by consuming token by token.
+    #[inline]
+    pub fn attempt<R>(
+        &mut self,
+        extract: impl Fn(&mut SmtTokenWindow<'a>) -> Option<R>,
+    ) -> Option<R> {
+        let mut window = SmtTokenWindow {
+            entries: self.entries,
+            spans: self.spans,
+            next: self.next,
+        };
+        let result = extract(&mut window)?;
+        // the extractor succeeded, consume what it took
+        self.next = window.next;
+        Some(result)
+    }
+
     /// Consumes the next `count` tokens.
     ///
     /// Behaves as if [`SmtBatchCursor::next`] was called `count` times
     /// with the results discarded, stopping at the end of the cursor.
     #[inline]
-    pub fn advance(&mut self, count: usize) {
+    pub(crate) fn advance(&mut self, count: usize) {
         self.next = self.next.saturating_add(count).min(self.entries.len());
-    }
-
-    /// How many tokens have been consumed in this handover.
-    #[inline]
-    pub fn consumed(&self) -> usize {
-        self.next - self.start
     }
 
     /// Returns the most recently consumed token in this handover (if any).
     #[inline]
-    pub fn last_consumed(&self) -> Option<SmtToken<'a>> {
+    pub(crate) fn last_consumed(&self) -> Option<SmtToken<'a>> {
         if self.next > self.start {
             self.at(self.next - 1)
         } else {
@@ -435,6 +452,30 @@ impl<'a> SmtBatchCursor<'a> {
     #[inline]
     pub(crate) fn reset_consumed(&mut self) {
         self.start = self.next;
+    }
+}
+
+/// The tokens ahead of a cursor, as the extractor of [`SmtBatchCursor::attempt`]
+/// sees them: they can only be taken in order.
+pub struct SmtTokenWindow<'a> {
+    entries: &'a [Option<(InnerCategory, &'a [u8])>],
+    spans: &'a [SmtSpan],
+    next: usize,
+}
+
+impl<'a> SmtTokenWindow<'a> {
+    /// Takes the next token of the window (if any).
+    // CLIPPY: do not warn on next() without implementing Iterator,
+    // as the window mirrors the cursor it belongs to
+    #[allow(clippy::should_implement_trait)]
+    #[inline]
+    pub fn next(&mut self) -> Option<SmtToken<'a>> {
+        let token = match (self.entries.get(self.next), self.spans.get(self.next)) {
+            (Some(entry), Some(span)) => SmtToken::new(entry, span),
+            _ => return None,
+        };
+        self.next += 1;
+        Some(token)
     }
 }
 
