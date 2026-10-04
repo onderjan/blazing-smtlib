@@ -209,10 +209,11 @@ fn consuming_all_empties_the_cursor_at_its_end() {
         cursor.consume_all();
         assert_eq!(cursor.consumed(), 3);
 
-        // after a relex request there is nothing left to consume
+        // after a version with other lexical rules is set, there is nothing
+        // left to consume
         let mut cursor = start;
         cursor.advance(1);
-        cursor.relex();
+        cursor.set_version(SmtVersion::V2_0);
         cursor.consume_all();
         assert_eq!(cursor.consumed(), 1);
         assert_eq!(cursor.last_consumed(), start.get(0));
@@ -285,13 +286,27 @@ fn parse_reports_the_parser_error() {
 }
 
 #[test]
-fn a_relex_request_fixes_the_cursor_at_the_consumed_position() {
+fn a_version_with_the_same_lexical_rules_keeps_the_tokens_ahead() {
     on_token_batch(b"(a b) ", |mut cursor| {
         cursor.advance(2);
-        assert!(!cursor.relex_requested());
-        cursor.relex();
-        // nothing more comes out of the cursor, and the position stays
-        assert!(cursor.relex_requested());
+        cursor.set_version(SmtVersion::V2_5);
+        assert_eq!(cursor.version(), SmtVersion::V2_5);
+        assert!(!cursor.is_empty());
+        assert_eq!(
+            cursor.next().map(|token| token.content().to_vec()),
+            Some(b"b".to_vec())
+        );
+    });
+}
+
+#[test]
+fn a_version_with_other_lexical_rules_fixes_the_cursor_at_the_consumed_position() {
+    on_token_batch(b"(a b) ", |mut cursor| {
+        cursor.advance(2);
+        cursor.set_version(SmtVersion::V2_0);
+        assert_eq!(cursor.version(), SmtVersion::V2_0);
+        // the tokens ahead were lexed under the old rules: nothing more comes
+        // out of the cursor, and the position stays
         assert!(cursor.is_empty());
         assert!(cursor.peek().is_none());
         assert!(cursor.get(0).is_none());

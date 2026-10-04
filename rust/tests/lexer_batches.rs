@@ -1,16 +1,21 @@
 //! Tests of the batch contract between the lexer and its token consumer:
-//! how tokens are grouped into `consume` calls, and what a handler's
+//! how tokens are grouped into `consume` calls, and what a consumer's
 //! stop does to lexing.
 //!
 //! Tokens borrowing the current slice are batched and handed over when the
 //! batch is full, at the end of the slice, and before an error is returned.
 //! A token that began in an earlier slice and the end-of-file token are
-//! handed over alone. A handler that takes only some of a batch's tokens
-//! and requests re-lexing makes the lexer lex again after the last taken
-//! token, so the tokens a handler takes are the same in every stopping
-//! pattern, spans included. A handler that finishes ends lexing after the
-//! tokens it took: that location is returned with the result, and the lexer
-//! is reset to its initial state for the next input.
+//! handed over alone.
+//!
+//! Every hand-over has at least one token, and the consumer must consume at
+//! least one before it returns, whatever it returns. Lexing goes on from the
+//! end of the last consumed token: tokens the consumer left are lexed and
+//! handed over again, so the tokens a consumer takes are the same in every
+//! stopping pattern, spans included. A version the consumer sets applies
+//! from that point on, also to what the lexer had lexed ahead. A consumer
+//! that finishes ends lexing after the tokens it took: that location is
+//! returned with the result, and the lexer is reset to its initial state
+//! for the next input.
 
 use std::ops::ControlFlow;
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -50,23 +55,28 @@ fn loc(location: SmtLocation) -> (u64, u64, u64) {
     (location.offset(), location.line(), location.column())
 }
 
-/// What the handler replies to one `consume` call.
+/// What the consumer replies to one `consume` call.
 #[derive(Debug, Clone, Copy)]
 enum Reply {
-    /// Take every token.
+    /// Take every token and continue.
     TakeAll,
-    /// Take `consumed` tokens (at most the batch length) and request re-lexing.
-    Relex { consumed: usize },
+    /// Take `consumed` tokens (at most the batch length) and continue: the
+    /// lexer hands the tokens left over again.
+    Leave { consumed: usize },
     /// Take `consumed` tokens (at most the batch length) and fail.
     Fail { consumed: usize },
-    /// Take `consumed` tokens and return as if done, which the lexer rejects
-    /// when tokens are left.
-    Leave { consumed: usize },
     /// Take `consumed` tokens and finish.
     Finish { consumed: usize },
-    /// Take `consumed` tokens, request re-lexing, and finish, which is a
-    /// contradiction the lexer rejects.
-    FinishAfterRelex { consumed: usize },
+    /// Take `consumed` tokens, set the version, and continue.
+    Switch {
+        consumed: usize,
+        version: SmtVersion,
+    },
+    /// Take `consumed` tokens, set the version, and finish.
+    SwitchAndFinish {
+        consumed: usize,
+        version: SmtVersion,
+    },
 }
 
 impl Reply {
@@ -74,22 +84,23 @@ impl Reply {
     fn takes(self, len: usize) -> usize {
         match self {
             Reply::TakeAll => len,
-            Reply::Relex { consumed }
+            Reply::Leave { consumed }
             | Reply::Fail { consumed }
-            | Reply::Leave { consumed }
             | Reply::Finish { consumed }
-            | Reply::FinishAfterRelex { consumed } => consumed.min(len),
+            | Reply::Switch { consumed, .. }
+            | Reply::SwitchAndFinish { consumed, .. } => consumed.min(len),
         }
     }
 }
 
-/// A handler that records every hand-over and replies according to a plan.
+/// A consumer that records every hand-over and replies according to a plan.
 ///
 /// The plan gives the reply of each call by index; calls past the plan's end
-/// take every token. The records live outside the handler, so that they can
-/// be read after the lexer, which owns the handler, is gone.
+/// take every token. The records live outside the consumer, so that they can
+/// be read after the lexer, which owns the consumer, is gone.
 struct Recorder<'r> {
     calls: &'r mut Vec<Vec<Recorded>>,
+    versions: &'r mut Vec<SmtVersion>,
     plan: &'r [Reply],
 }
 
@@ -110,18 +121,21 @@ impl SmtConsume for Recorder<'_> {
         let len = tokens.len();
         let index = self.calls.len();
         self.calls.push(tokens);
+        self.versions.push(cursor.version());
         let reply = self.plan.get(index).copied().unwrap_or(Reply::TakeAll);
-        cursor.advance(reply.takes(len));
+        for _ in 0..reply.takes(len) {
+            cursor.next();
+        }
         match reply {
             Reply::TakeAll | Reply::Leave { .. } => Ok(ControlFlow::Continue(())),
-            Reply::Relex { .. } => {
-                cursor.relex();
-                Ok(ControlFlow::Continue(()))
-            }
             Reply::Fail { .. } => Err(()),
             Reply::Finish { .. } => Ok(ControlFlow::Break(())),
-            Reply::FinishAfterRelex { .. } => {
-                cursor.relex();
+            Reply::Switch { version, .. } => {
+                cursor.set_version(version);
+                Ok(ControlFlow::Continue(()))
+            }
+            Reply::SwitchAndFinish { version, .. } => {
+                cursor.set_version(version);
                 Ok(ControlFlow::Break(()))
             }
         }
@@ -133,9 +147,11 @@ impl SmtConsume for Recorder<'_> {
 struct Run {
     /// The tokens of every hand-over, in order.
     calls: Vec<Vec<Recorded>>,
+    /// The version of the cursor at the start of every hand-over.
+    versions: Vec<SmtVersion>,
     /// The error that ended the run, if any.
     error: Option<SmtLexError<()>>,
-    /// The location returned with the result if the handler finished.
+    /// The location returned with the result if the consumer finished.
     finished_at: Option<(u64, u64, u64)>,
 }
 
@@ -150,7 +166,7 @@ impl Run {
         self.calls.concat()
     }
 
-    /// The tokens the handler took under the plan: for each hand-over, the
+    /// The tokens the consumer took under the plan: for each hand-over, the
     /// prefix the reply consumed.
     fn taken(&self, plan: &[Reply]) -> Vec<Recorded> {
         self.calls
@@ -166,7 +182,7 @@ impl Run {
 
 /// The lexer is at the origin, as it must be after a finish or an end of file.
 #[track_caller]
-fn assert_at_origin<H: SmtConsume>(lexer: &SmtLexer<H>) {
+fn assert_at_origin<C: SmtConsume>(lexer: &SmtLexer<C>) {
     assert_eq!(
         loc(lexer.current_location()),
         (0, 0, 0),
@@ -174,24 +190,27 @@ fn assert_at_origin<H: SmtConsume>(lexer: &SmtLexer<H>) {
     );
 }
 
-/// Lexes the chunks, then end of file, with the handler replying by the plan.
+/// Lexes the chunks, then end of file, from the given version, with the
+/// consumer replying by the plan.
 ///
 /// After every successfully lexed chunk, the lexer's location is checked
 /// against the location computed independently from the bytes, which a
 /// rewind must restore correctly. After a finish, the lexer must be back
 /// at the origin.
 #[track_caller]
-fn run(chunks: &[&[u8]], plan: &[Reply]) -> Run {
+fn run_from(version: SmtVersion, chunks: &[&[u8]], plan: &[Reply]) -> Run {
     let mut calls = Vec::new();
+    let mut versions = Vec::new();
     let mut error = None;
     let mut finished_at = None;
     {
         let mut lexer = SmtLexer::new(
             Recorder {
                 calls: &mut calls,
+                versions: &mut versions,
                 plan,
             },
-            SmtVersion::V2_7,
+            version,
         );
         let mut expected = SmtLocation::initial();
         for chunk in chunks {
@@ -230,9 +249,16 @@ fn run(chunks: &[&[u8]], plan: &[Reply]) -> Run {
     }
     Run {
         calls,
+        versions,
         error,
         finished_at,
     }
+}
+
+/// Lexes the chunks, then end of file, from version 2.7.
+#[track_caller]
+fn run(chunks: &[&[u8]], plan: &[Reply]) -> Run {
+    run_from(SmtVersion::V2_7, chunks, plan)
 }
 
 /// The tokens of the input lexed as one slice, taking everything.
@@ -258,6 +284,17 @@ fn assert_ends_with_eof_alone(run: &Run) {
         "the end-of-file token must be handed over alone"
     );
     assert_eq!(last[0].ty, SmtTokenCategory::EndOfFile);
+}
+
+/// The message of the panic the closure must raise.
+#[track_caller]
+fn panic_message(run: impl FnOnce()) -> String {
+    let payload = catch_unwind(AssertUnwindSafe(run)).expect_err("the run must panic");
+    payload
+        .downcast_ref::<String>()
+        .cloned()
+        .or_else(|| payload.downcast_ref::<&str>().map(|s| s.to_string()))
+        .unwrap_or_else(|| "<non-string panic payload>".to_string())
 }
 
 // --- Grouping ---
@@ -333,17 +370,17 @@ fn a_token_cut_by_a_slice_boundary_is_handed_over_alone() {
     }
 }
 
-// --- Re-lexing after a stop ---
+// --- Tokens left by the consumer ---
 
 /// An input with every kind of line and location bookkeeping a rewind must
 /// restore: line feeds between and inside tokens, a comment, and tokens of
 /// several types.
-const RELEX_INPUT: &[u8] = b"(a)\n(b c)\n|q\nr| \"s\" 12 ; c\n#x1F 1.5 :k)";
+const REWIND_INPUT: &[u8] = b"(a)\n(b c)\n|q\nr| \"s\" 12 ; c\n#x1F 1.5 :k)";
 
 #[test]
-fn a_relex_stop_takes_a_prefix_and_lexes_the_rest_again() {
-    let reference = reference(RELEX_INPUT);
-    let plain = run(&[RELEX_INPUT], &[]);
+fn tokens_left_are_handed_over_again() {
+    let reference = reference(REWIND_INPUT);
+    let plain = run(&[REWIND_INPUT], &[]);
     assert_eq!(
         reference.len(),
         15,
@@ -353,20 +390,18 @@ fn a_relex_stop_takes_a_prefix_and_lexes_the_rest_again() {
     // content, so it is handed over alone between the two batches
     assert_eq!(plain.sizes(), [7, 1, 6, 1]);
 
-    for chunk_length in [1usize, 2, 3, 5, 7, RELEX_INPUT.len()] {
-        let chunks: Vec<&[u8]> = RELEX_INPUT.chunks(chunk_length).collect();
+    for chunk_length in [1usize, 2, 3, 5, 7, REWIND_INPUT.len()] {
+        let chunks: Vec<&[u8]> = REWIND_INPUT.chunks(chunk_length).collect();
         let calls = run(&chunks, &[]).calls;
-        // every hand-over but the end of file, stopped after every prefix of
-        // at least one token; a stop before the first token of a hand-over
-        // is legal only where that token began in the current slice, so it
-        // is tested separately on whole slices
+        // every hand-over but the end of file, left after every prefix of at
+        // least one token
         for (index, tokens) in calls[..calls.len() - 1].iter().enumerate() {
             for consumed in 1..=tokens.len() {
                 let mut plan = vec![Reply::TakeAll; index];
-                plan.push(Reply::Relex { consumed });
+                plan.push(Reply::Leave { consumed });
                 let stopped = run(&chunks, &plan);
                 let describe = format!(
-                    "chunks of {chunk_length}, stop after {consumed} of {} tokens of hand-over {index}",
+                    "chunks of {chunk_length}, {consumed} of {} tokens of hand-over {index} taken",
                     tokens.len()
                 );
                 assert!(stopped.error.is_none(), "{describe}: {:?}", stopped.error);
@@ -377,11 +412,11 @@ fn a_relex_stop_takes_a_prefix_and_lexes_the_rest_again() {
                 );
                 assert_ends_with_eof_alone(&stopped);
                 if consumed < tokens.len() {
-                    // the first token after the stop arrives again, unchanged
+                    // the first token left arrives again, unchanged
                     assert_eq!(
                         stopped.calls[index + 1][0],
                         tokens[consumed],
-                        "{describe}: the token after the stop is lexed again"
+                        "{describe}: the first token left is lexed again"
                     );
                 }
             }
@@ -390,21 +425,11 @@ fn a_relex_stop_takes_a_prefix_and_lexes_the_rest_again() {
 }
 
 #[test]
-fn a_relex_stop_before_the_first_token_lexes_the_batch_again() {
-    let plan = [Reply::Relex { consumed: 0 }];
-    let run = run(&[RELEX_INPUT], &plan);
-    assert!(run.error.is_none());
-    assert_eq!(run.sizes(), [7, 7, 1, 6, 1]);
-    assert_eq!(run.calls[1], run.calls[0]);
-    assert_eq!(run.taken(&plan), reference(RELEX_INPUT));
-}
-
-#[test]
-fn a_relex_stop_after_a_whole_batch_continues_after_it() {
-    // consumed equal to the batch length: nothing is lexed again, and the
+fn leaving_nothing_continues_after_the_batch() {
+    // every token of the hand-over is taken: nothing is lexed again, and the
     // next slice continues with the right locations
     let chunks: &[&[u8]] = &[b"a b ", b"c\nd "];
-    let plan = [Reply::Relex { consumed: 2 }];
+    let plan = [Reply::Leave { consumed: 2 }];
     let run = run(chunks, &plan);
     assert!(run.error.is_none());
     assert_eq!(run.sizes(), [2, 2, 1]);
@@ -415,73 +440,90 @@ fn a_relex_stop_after_a_whole_batch_continues_after_it() {
 }
 
 #[test]
-fn a_relex_stop_in_a_full_batch_refills_from_the_stop() {
+fn tokens_left_of_a_full_batch_refill_it_from_the_stop() {
     let input = symbols(300);
-    let plan = [Reply::Relex { consumed: 100 }];
+    let plan = [Reply::Leave { consumed: 100 }];
     let run = run(&[&input], &plan);
     assert!(run.error.is_none());
-    // the first batch was full; after the stop the remaining 200 symbols
-    // are lexed again into one batch, then the end of file follows alone
+    // the first batch was full; the remaining 200 symbols are lexed again
+    // into one batch, then the end of file follows alone
     assert_eq!(run.sizes(), [BATCH_CAPACITY, 200, 1]);
     assert_eq!(run.taken(&plan), reference(&input));
 }
 
 #[test]
-fn a_relex_stop_at_every_hand_over_in_turn_still_takes_the_reference() {
-    // stopping on every hand-over, not only the first: the plan replies with
-    // a stop to each call, and the handler still takes exactly the reference
+fn leaving_tokens_at_every_hand_over_still_takes_the_reference() {
+    // leaving tokens on every hand-over, not only the first: the consumer
+    // still takes exactly the reference
     let plan = [
-        Reply::Relex { consumed: 3 },
-        Reply::Relex { consumed: 1 },
-        Reply::Relex { consumed: 5 },
-        Reply::Relex { consumed: 2 },
+        Reply::Leave { consumed: 3 },
+        Reply::Leave { consumed: 1 },
+        Reply::Leave { consumed: 5 },
+        Reply::Leave { consumed: 2 },
     ];
-    let run = run(&[RELEX_INPUT], &plan);
+    let run = run(&[REWIND_INPUT], &plan);
     assert!(run.error.is_none());
-    assert_eq!(run.taken(&plan), reference(RELEX_INPUT));
+    assert_eq!(run.taken(&plan), reference(REWIND_INPUT));
     assert_eq!(run.sizes(), [7, 4, 3, 1, 6, 1]);
 }
 
 #[test]
-fn impossible_stops_panic() {
-    let cases: &[(Chunks, &[Reply], &str)] = &[
-        // a relex stop at end of file, before or after the end-of-file token
-        (
-            &[b"a b"],
-            &[Reply::TakeAll, Reply::Relex { consumed: 0 }],
-            "cannot request relex at end of file",
-        ),
-        (
-            &[b"a b"],
-            &[Reply::TakeAll, Reply::Relex { consumed: 1 }],
-            "cannot request relex at end of file",
-        ),
-        // a stop before a token that began in an earlier slice, whether the
-        // handler asks for re-lexing or finishes: the location it would
-        // report lies before the slice being lexed
-        (
-            &[b"a", b"b c"],
-            &[Reply::Relex { consumed: 0 }],
-            "must not stop before the starting token",
-        ),
-        (
-            &[b"a", b"b c"],
-            &[Reply::Finish { consumed: 0 }],
-            "must not stop before the starting token",
-        ),
+fn taking_one_token_per_hand_over_still_takes_the_reference() {
+    // the slowest lawful consumer: every hand-over starts at the next token
+    let reference = reference(REWIND_INPUT);
+    let plan = vec![Reply::Leave { consumed: 1 }; reference.len()];
+    for chunk_length in [1usize, 4, REWIND_INPUT.len()] {
+        let chunks: Vec<&[u8]> = REWIND_INPUT.chunks(chunk_length).collect();
+        let run = run(&chunks, &plan);
+        assert!(run.error.is_none(), "chunks of {chunk_length}");
+        assert_eq!(run.calls.len(), reference.len(), "chunks of {chunk_length}");
+        assert_eq!(run.taken(&plan), reference, "chunks of {chunk_length}");
+    }
+}
+
+// --- A stop without a consumed token ---
+
+#[test]
+fn a_stop_without_a_consumed_token_panics() {
+    let v2_0 = SmtVersion::V2_0;
+    let replies = [
+        Reply::Leave { consumed: 0 },
+        Reply::Fail { consumed: 0 },
+        Reply::Finish { consumed: 0 },
+        Reply::Switch {
+            consumed: 0,
+            version: v2_0,
+        },
+        Reply::SwitchAndFinish {
+            consumed: 0,
+            version: v2_0,
+        },
     ];
-    for (chunks, plan, expected) in cases {
-        let outcome = catch_unwind(AssertUnwindSafe(|| run(chunks, plan)));
-        let payload = outcome.expect_err("the run must panic");
-        let message = payload
-            .downcast_ref::<String>()
-            .map(String::as_str)
-            .or_else(|| payload.downcast_ref::<&str>().copied())
-            .unwrap_or("<non-string panic payload>");
-        assert!(
-            message.contains(expected),
-            "chunks {chunks:?} under {plan:?}: panic {message:?} must mention {expected:?}"
-        );
+    for reply in replies {
+        let cases: [(Chunks, Vec<Reply>, &str); 4] = [
+            (&[b"a b c "], vec![reply], "a batch of the slice"),
+            (
+                &[b"a b ", b"c d "],
+                vec![Reply::TakeAll, reply],
+                "a batch of a later slice",
+            ),
+            (&[b"a", b"b c"], vec![reply], "a token cut by the slice end"),
+            (
+                &[b"a "],
+                vec![Reply::TakeAll, reply],
+                "the end-of-file token",
+            ),
+        ];
+        for (chunks, plan, what) in cases {
+            let message = panic_message(|| {
+                let _ = run(chunks, &plan);
+            });
+            assert!(
+                message.contains("at least one token"),
+                "{reply:?} on {what}: panic {message:?} must say that the consumer \
+                 has to consume at least one token"
+            );
+        }
     }
 }
 
@@ -489,30 +531,20 @@ fn impossible_stops_panic() {
 
 #[test]
 fn a_finish_stop_takes_a_prefix_and_ends_lexing() {
-    // the handler finishes after three tokens of the first hand-over: nothing
+    // the consumer finishes after three tokens of the first hand-over: nothing
     // more is handed over, not even the end of file, and the lexer is left
     // after the third token
     let plan = [Reply::Finish { consumed: 3 }];
-    let run = run(&[RELEX_INPUT], &plan);
+    let run = run(&[REWIND_INPUT], &plan);
     assert!(run.error.is_none());
     assert_eq!(run.sizes(), [7]);
-    assert_eq!(run.taken(&plan), reference(RELEX_INPUT)[..3]);
+    assert_eq!(run.taken(&plan), reference(REWIND_INPUT)[..3]);
     assert_eq!(run.finished_at, Some(loc(run.calls[0][2].span.end())));
 }
 
 #[test]
-fn a_finish_stop_before_the_first_token_ends_at_the_batch_start() {
-    let plan = [Reply::Finish { consumed: 0 }];
-    let run = run(&[RELEX_INPUT], &plan);
-    assert!(run.error.is_none());
-    assert_eq!(run.sizes(), [7]);
-    assert!(run.taken(&plan).is_empty());
-    assert_eq!(run.finished_at, Some((0, 0, 0)));
-}
-
-#[test]
 fn a_finish_stop_across_chunks_leaves_the_rest_unread() {
-    // the second chunk finishes the handler after its first token: the
+    // the second chunk finishes the consumer after its first token: the
     // third chunk is never lexed
     let chunks: &[&[u8]] = &[b"a b ", b"c d ", b"e f "];
     let plan = [Reply::TakeAll, Reply::Finish { consumed: 1 }];
@@ -536,15 +568,17 @@ fn a_finish_stop_at_the_end_of_file_token_is_returned_by_lex_eof() {
 
 #[test]
 fn lexing_after_a_finish_starts_a_new_input_at_the_origin() {
-    // the handler finishes after the first token of the first hand-over; the
+    // the consumer finishes after the first token of the first hand-over; the
     // bytes fed afterwards are a new input: the rest of the first slice is
     // not seen again, and the new tokens are located from the origin
     let mut calls = Vec::new();
+    let mut versions = Vec::new();
     let plan = [Reply::Finish { consumed: 1 }];
     {
         let mut lexer = SmtLexer::new(
             Recorder {
                 calls: &mut calls,
+                versions: &mut versions,
                 plan: &plan,
             },
             SmtVersion::V2_7,
@@ -580,11 +614,13 @@ fn a_finish_at_the_end_of_file_token_is_followed_by_a_new_input() {
     // finishing on the end-of-file token resets the lexer like any finish:
     // a further end of file is a new, empty input at the origin
     let mut calls = Vec::new();
+    let mut versions = Vec::new();
     let plan = [Reply::TakeAll, Reply::Finish { consumed: 1 }];
     {
         let mut lexer = SmtLexer::new(
             Recorder {
                 calls: &mut calls,
+                versions: &mut versions,
                 plan: &plan,
             },
             SmtVersion::V2_7,
@@ -606,11 +642,229 @@ fn a_finish_at_the_end_of_file_token_is_followed_by_a_new_input() {
     assert_eq!(loc(calls[2][0].span.start()), (0, 0, 0));
 }
 
+// --- Setting the version ---
+
+/// A string literal that is one token from version 2.5 on, and under
+/// version 2.0 a string directly followed by a quote, which is an error.
+const DOUBLED_QUOTE: &[u8] = b"a \"x\"\"y\" b";
+
+/// A string literal that is one token under version 2.0, and from version
+/// 2.5 on a string directly followed by a letter, which is an error.
+const BACKSLASH_QUOTE: &[u8] = b"a \"x\\\"y\" b";
+
 #[test]
-#[should_panic(expected = "cannot both finish and request relex")]
-fn finishing_and_requesting_relex_together_panics() {
-    let plan = [Reply::FinishAfterRelex { consumed: 1 }];
-    let _ = run(&[b"a b "], &plan);
+fn a_version_applies_from_the_end_of_the_last_consumed_token() {
+    // the consumer takes the first symbol and sets the other version: what
+    // follows is lexed under it, in every chunking, though the lexer had
+    // already lexed ahead under the old one
+    let cases = [
+        (SmtVersion::V2_0, SmtVersion::V2_6, DOUBLED_QUOTE),
+        (SmtVersion::V2_7, SmtVersion::V2_0, BACKSLASH_QUOTE),
+    ];
+    for (initial, declared, input) in cases {
+        let expected = run_from(declared, &[input], &[]);
+        assert!(expected.error.is_none(), "test bug: {:?}", expected.error);
+        let plan = [Reply::Switch {
+            consumed: 1,
+            version: declared,
+        }];
+        for chunk_length in 1..=input.len() {
+            let chunks: Vec<&[u8]> = input.chunks(chunk_length).collect();
+            let switched = run_from(initial, &chunks, &plan);
+            let describe = format!("{initial:?} to {declared:?}, chunks of {chunk_length}");
+            assert!(switched.error.is_none(), "{describe}: {:?}", switched.error);
+            assert_eq!(switched.taken(&plan), expected.all(), "{describe}");
+            assert_eq!(switched.versions[0], initial, "{describe}");
+            assert!(
+                switched.versions[1..].iter().all(|&v| v == declared),
+                "{describe}: every later hand-over is under the set version, got {:?}",
+                switched.versions
+            );
+        }
+    }
+}
+
+#[test]
+fn an_error_met_ahead_under_the_old_version_is_dropped() {
+    // under 2.0 the quote directly after the string is an error, which the
+    // lexer meets while lexing ahead; only the symbol before it is handed over
+    let plain = run_from(SmtVersion::V2_0, &[DOUBLED_QUOTE], &[]);
+    assert_eq!(plain.sizes(), [1]);
+    assert!(
+        matches!(&plain.error, Some(SmtLexError::Lexical(err)) if *err.kind() == SmtLexicalErrorKind::MissingDelimiter),
+        "{:?}",
+        plain.error
+    );
+
+    // the consumer takes that symbol, so no token is left, and sets 2.6:
+    // the error belongs to the old version and must not be reported
+    let plan = [Reply::Switch {
+        consumed: 1,
+        version: SmtVersion::V2_6,
+    }];
+    let switched = run_from(SmtVersion::V2_0, &[DOUBLED_QUOTE], &plan);
+    assert!(switched.error.is_none(), "{:?}", switched.error);
+    assert_eq!(switched.calls[0].len(), 1);
+    assert_eq!(switched.calls[1][0].ty, SmtTokenCategory::String);
+    assert_eq!(switched.calls[1][0].content, b"x\"y");
+}
+
+#[test]
+fn an_error_under_both_versions_is_still_reported() {
+    // the backslash is an error in every version: setting a version before
+    // it does not make it go away
+    let input: &[u8] = b"a \\ b";
+    for declared in [SmtVersion::V2_0, SmtVersion::V2_7] {
+        let plan = [Reply::Switch {
+            consumed: 1,
+            version: declared,
+        }];
+        let switched = run_from(SmtVersion::V2_6, &[input], &plan);
+        assert!(
+            matches!(&switched.error, Some(SmtLexError::Lexical(err)) if *err.kind() == SmtLexicalErrorKind::UnexpectedCharacter),
+            "to {declared:?}: {:?}",
+            switched.error
+        );
+    }
+}
+
+#[test]
+fn a_version_set_with_tokens_left_hands_them_over_again_under_it() {
+    // under 2.0 the hand-over holds two symbols, and the error lies ahead;
+    // the consumer takes the first symbol and sets 2.6: the second symbol
+    // comes again, and what follows it is one string and a symbol
+    let input: &[u8] = b"a b \"x\"\"y\" c";
+    let plain = run_from(SmtVersion::V2_0, &[input], &[]);
+    assert_eq!(plain.sizes(), [2]);
+    assert!(plain.error.is_some());
+
+    let plan = [Reply::Switch {
+        consumed: 1,
+        version: SmtVersion::V2_6,
+    }];
+    let switched = run_from(SmtVersion::V2_0, &[input], &plan);
+    assert!(switched.error.is_none(), "{:?}", switched.error);
+    assert_eq!(
+        switched.calls[1][0], plain.calls[0][1],
+        "the symbol left is handed over again"
+    );
+    let taken = switched.taken(&plan);
+    assert_eq!(taken, run_from(SmtVersion::V2_6, &[input], &[]).all());
+    assert_eq!(taken[2].ty, SmtTokenCategory::String);
+    assert_eq!(taken[2].content, b"x\"y");
+}
+
+#[test]
+fn a_version_lasts_until_the_end_of_the_input() {
+    // set on the first hand-over, the version holds for the later slices and
+    // the end-of-file token; the next input starts under the initial version
+    let mut calls = Vec::new();
+    let mut versions = Vec::new();
+    let plan = [Reply::Switch {
+        consumed: 1,
+        version: SmtVersion::V2_5,
+    }];
+    {
+        let mut lexer = SmtLexer::new(
+            Recorder {
+                calls: &mut calls,
+                versions: &mut versions,
+                plan: &plan,
+            },
+            SmtVersion::V2_7,
+        );
+        for chunk in [&b"a "[..], b"b ", b"c "] {
+            assert!(matches!(
+                lexer.lex_slice(chunk),
+                Ok(ControlFlow::Continue(()))
+            ));
+        }
+        assert!(matches!(lexer.lex_eof(), Ok(ControlFlow::Continue(()))));
+        assert!(matches!(
+            lexer.lex_slice(b"d "),
+            Ok(ControlFlow::Continue(()))
+        ));
+        assert!(matches!(lexer.lex_eof(), Ok(ControlFlow::Continue(()))));
+    }
+    assert_eq!(
+        versions,
+        [
+            SmtVersion::V2_7,
+            SmtVersion::V2_5,
+            SmtVersion::V2_5,
+            SmtVersion::V2_5,
+            SmtVersion::V2_7,
+            SmtVersion::V2_7,
+        ]
+    );
+}
+
+#[test]
+fn a_version_may_be_set_at_the_end_of_the_input() {
+    // a token finished by the end of the input, and the end-of-file token
+    // itself, are hand-overs like any other: setting a version on them, also
+    // one with other lexical rules, is allowed and lasts until the input ends
+    let cases: [(&[Reply], &[SmtVersion]); 2] = [
+        (
+            &[Reply::Switch {
+                consumed: 1,
+                version: SmtVersion::V2_0,
+            }],
+            &[SmtVersion::V2_7, SmtVersion::V2_0],
+        ),
+        (
+            &[
+                Reply::TakeAll,
+                Reply::Switch {
+                    consumed: 1,
+                    version: SmtVersion::V2_0,
+                },
+            ],
+            &[SmtVersion::V2_7, SmtVersion::V2_7],
+        ),
+    ];
+    for (plan, versions) in cases {
+        // the symbol is cut by the end of the input: it is handed over alone
+        // by the end-of-file call, before the end-of-file token
+        let run = run(&[b"a"], plan);
+        assert!(run.error.is_none(), "{plan:?}: {:?}", run.error);
+        assert_eq!(run.sizes(), [1, 1], "{plan:?}");
+        assert_ends_with_eof_alone(&run);
+        assert_eq!(run.versions, versions, "{plan:?}");
+    }
+}
+
+#[test]
+fn a_version_set_while_finishing_has_no_effect() {
+    // the finish ends the input, and the version ends with it: the next
+    // input starts under the initial version
+    let mut calls = Vec::new();
+    let mut versions = Vec::new();
+    let plan = [Reply::SwitchAndFinish {
+        consumed: 1,
+        version: SmtVersion::V2_0,
+    }];
+    {
+        let mut lexer = SmtLexer::new(
+            Recorder {
+                calls: &mut calls,
+                versions: &mut versions,
+                plan: &plan,
+            },
+            SmtVersion::V2_7,
+        );
+        let located = match lexer.lex_slice(b"a b ") {
+            Ok(ControlFlow::Break(located)) => located,
+            other => panic!("expected a finish, got {other:?}"),
+        };
+        assert_eq!(loc(located.location()), (1, 0, 1));
+        assert_at_origin(&lexer);
+        assert!(matches!(
+            lexer.lex_slice(b"c "),
+            Ok(ControlFlow::Continue(()))
+        ));
+    }
+    assert_eq!(versions, [SmtVersion::V2_7, SmtVersion::V2_7]);
 }
 
 // --- Errors ---
@@ -618,7 +872,7 @@ fn finishing_and_requesting_relex_together_panics() {
 #[test]
 fn tokens_before_a_lexer_error_are_handed_over_first() {
     // the backslash is a lexer error; the two tokens before it are batched
-    // and reach the handler before the error is returned
+    // and reach the consumer before the error is returned
     let input: &[u8] = b"a b \\ c";
     let plain = run(&[input], &[]);
     assert_eq!(plain.sizes(), [2]);
@@ -628,9 +882,9 @@ fn tokens_before_a_lexer_error_are_handed_over_first() {
         plain.error
     );
 
-    // a stop on that hand-over wins over the error: the lexer rewinds, lexes
-    // the second symbol again, and meets the error again
-    let plan = [Reply::Relex { consumed: 1 }];
+    // a token left on that hand-over comes before the error: the lexer goes
+    // back, lexes the second symbol again, and meets the error again
+    let plan = [Reply::Leave { consumed: 1 }];
     let stopped = run(&[input], &plan);
     assert_eq!(stopped.sizes(), [2, 1]);
     assert_eq!(stopped.calls[1][0].content, b"b");
@@ -642,43 +896,7 @@ fn tokens_before_a_lexer_error_are_handed_over_first() {
 }
 
 #[test]
-fn a_handler_that_returns_ok_with_tokens_left_panics() {
-    let cases: &[(Chunks, &[Reply])] = &[
-        (&[b"a b c "], &[Reply::Leave { consumed: 1 }]),
-        (&[b"a b c "], &[Reply::Leave { consumed: 0 }]),
-        // a lone stored token and the end-of-file token count too
-        (&[b"a", b"b "], &[Reply::Leave { consumed: 0 }]),
-        (&[b"a "], &[Reply::TakeAll, Reply::Leave { consumed: 0 }]),
-    ];
-    for (chunks, plan) in cases {
-        let outcome = catch_unwind(AssertUnwindSafe(|| run(chunks, plan)));
-        let payload = outcome.expect_err("the run must panic");
-        let message = payload
-            .downcast_ref::<String>()
-            .map(String::as_str)
-            .or_else(|| payload.downcast_ref::<&str>().copied())
-            .unwrap_or("<non-string panic payload>");
-        assert!(
-            message.contains("must consume all tokens before continuing"),
-            "chunks {chunks:?} under {plan:?}: panic {message:?}"
-        );
-    }
-}
-
-#[test]
-fn a_handler_that_consumes_everything_and_returns_ok_continues() {
-    // the plain plan is exactly that on every hand-over, so the reference run
-    // is the witness; a plan that leaves nothing is the same as taking all
-    let full = run(
-        &[b"a b c "],
-        &[Reply::Leave { consumed: 3 }, Reply::Leave { consumed: 1 }],
-    );
-    assert!(full.error.is_none());
-    assert_eq!(full.all(), reference(b"a b c "));
-}
-
-#[test]
-fn a_handler_error_ends_the_run_with_the_handler_error() {
+fn a_consumer_error_ends_the_run_with_the_consumer_error() {
     let plan = [Reply::Fail { consumed: 1 }];
     let run = run(&[b"a b c "], &plan);
     assert_eq!(run.sizes(), [3]);
