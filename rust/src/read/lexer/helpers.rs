@@ -7,7 +7,7 @@ use crate::{
             RUN_NON_LF_WHITESPACE, RUN_QUOTED_PLAIN, RUN_SIMPLE_SYMBOL, RUN_STRING_PLAIN,
         },
     },
-    token::InnerType,
+    token::InnerCategory,
 };
 
 /// What a byte does in the normal state.
@@ -177,19 +177,19 @@ const _: () = {
 pub(super) struct DigitRun {
     pub flag: u8,
     pub state: LexerState,
-    pub token_type: InnerType,
+    pub token_type: InnerCategory,
     pub empty_error: LexerErrorKind,
 }
 pub(super) const HEXADECIMAL_RUN: DigitRun = DigitRun {
     flag: RUN_HEX_DIGIT,
     state: LexerState::Hexadecimal,
-    token_type: InnerType::Hexadecimal,
+    token_type: InnerCategory::Hexadecimal,
     empty_error: LexerErrorKind::HexadecimalDigitExpected,
 };
 pub(super) const BINARY_RUN: DigitRun = DigitRun {
     flag: RUN_BINARY_DIGIT,
     state: LexerState::Binary,
-    token_type: InnerType::Binary,
+    token_type: InnerCategory::Binary,
     empty_error: LexerErrorKind::BinaryDigitExpected,
 };
 

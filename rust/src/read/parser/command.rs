@@ -3,7 +3,7 @@ use std::{convert::Infallible, ops::ControlFlow};
 use crate::{
     CommandHandler, SmtSpan, SmtSymbolView,
     read::parser::{Parser, ParserError, ParserResources, SyntaxErrorKind, handle_err},
-    token::{Reserved, SmtVersion, TokenCursor, TokenKind, TokenType},
+    token::{SmtReserved, SmtSyntaxToken, SmtTokenCategory, SmtVersion, TokenCursor},
 };
 
 mod datatype;
@@ -99,12 +99,12 @@ impl<H: CommandHandler> Parser<H> for CommandParser<H> {
                 CommandParserState::AwaitingCommand => {
                     // we will handle the token here
                     cursor.advance(1);
-                    match peeked.ty() {
-                        TokenType::ParenOpen => {
+                    match peeked.category() {
+                        SmtTokenCategory::ParenOpen => {
                             // open the command
                             self.state = CommandParserState::CommandOpen;
                         }
-                        TokenType::EndOfFile => {
+                        SmtTokenCategory::EndOfFile => {
                             // end of file here finishes the parser,
                             // which is already in its initial state
                             return Ok(ControlFlow::Break(CommandParserStop::EndOfFile));
@@ -121,12 +121,12 @@ impl<H: CommandHandler> Parser<H> for CommandParser<H> {
                     // we will handle the token here
                     cursor.advance(1);
                     // expect the command name
-                    self.state = match peeked.kind(cursor.version()) {
-                        TokenKind::Reserved(Reserved::CommandName(name)) => {
+                    self.state = match peeked.syntax(cursor.version()) {
+                        SmtSyntaxToken::Reserved(SmtReserved::CommandName(name)) => {
                             // a command-name reserved word names a standard command
                             CommandParserState::Standard(StandardCommandKind::from_reserved(name))
                         }
-                        TokenKind::Symbol(name) => {
+                        SmtSyntaxToken::Symbol(name) => {
                             // a symbol (even a quoted one spelled like a standard command)
                             // can only name a nonstandard command
                             Self::start_nonstandard_command(handler, name, peeked.span())?
@@ -256,7 +256,7 @@ mod tests {
     use super::*;
     use crate::{
         CheckStandardSyntax, SmtSpan,
-        token::{InnerType, Token},
+        token::{InnerCategory, SmtToken},
     };
 
     #[test]
@@ -270,7 +270,7 @@ mod tests {
         // after the break, so the next command body parses without a restart
         for _ in 0..2 {
             let span = SmtSpan::new_zero();
-            let close = Token::new(&Some((InnerType::ParenClose, &[])), &span);
+            let close = SmtToken::new(&Some((InnerCategory::ParenClose, &[])), &span);
             let flow = parser
                 .parse(
                     &mut handler,

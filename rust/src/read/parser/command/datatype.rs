@@ -8,7 +8,7 @@ use crate::{
         SortedVarParser, SymbolParser, SyntaxErrorKind, category::PairParser, handle_err,
         parse_by_token,
     },
-    token::{GeneralReserved, Reserved, SmtVersion, Token, TokenCursor, TokenKind},
+    token::{SmtGeneralReserved, SmtReserved, SmtSyntaxToken, SmtToken, SmtVersion, TokenCursor},
 };
 
 /// Parser for a single datatype introduction (name and arity in parentheses).
@@ -116,7 +116,7 @@ impl<H: CommandHandler> DatatypeParser<H> {
         handler: &mut H,
         resources: &mut ParserResources<H>,
         version: SmtVersion,
-        token: Token,
+        token: SmtToken,
     ) -> Result<ControlFlow<()>, ParserError<H::Error>> {
         let span = token.span();
         let constructors = match self.state {
@@ -126,8 +126,8 @@ impl<H: CommandHandler> DatatypeParser<H> {
                 self.state = DatatypeState::Kind;
                 None
             }
-            DatatypeState::Kind => match token.kind(version) {
-                TokenKind::ParenOpen => {
+            DatatypeState::Kind => match token.syntax(version) {
+                SmtSyntaxToken::ParenOpen => {
                     // simple constructors, start the datatype with no parameters
                     self.start_datatype(handler, Vec::new(), span)?;
                     self.state = DatatypeState::SimpleConstructors;
@@ -144,7 +144,7 @@ impl<H: CommandHandler> DatatypeParser<H> {
                     );
                     None
                 }
-                TokenKind::Reserved(Reserved::General(GeneralReserved::Par)) => {
+                SmtSyntaxToken::Reserved(SmtReserved::General(SmtGeneralReserved::Par)) => {
                     // parametric constructors, we need to parse the parameters first
                     self.state = DatatypeState::Parameters;
                     None
@@ -283,7 +283,7 @@ impl<H: CommandHandler> DeclareDatatypesParser<H> {
         handler: &mut H,
         resources: &mut ParserResources<H>,
         version: SmtVersion,
-        token: Token,
+        token: SmtToken,
     ) -> Result<ControlFlow<()>, ParserError<H::Error>> {
         let span = token.span();
         match self.state {
@@ -388,7 +388,7 @@ impl<H: CommandHandler> DeclareDatatypeParser<H> {
         handler: &mut H,
         resources: &mut ParserResources<H>,
         version: SmtVersion,
-        token: Token,
+        token: SmtToken,
     ) -> Result<ControlFlow<()>, ParserError<H::Error>> {
         let span = token.span();
         match self.state {

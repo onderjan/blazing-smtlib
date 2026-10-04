@@ -30,7 +30,7 @@ fn symbol_parser_consumes_one_token() {
 fn open_paren_parser() {
     parse_all::<OpenParenParser>(b"(");
 
-    let expected_open = SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen]);
+    let expected_open = SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenOpen]);
     let err = assert_error::<OpenParenParser>(b")", 0, 1);
     assert_eq!(err, expected_open, "{err:?}");
     let err = assert_error::<OpenParenParser>(b"x", 0, 1);
@@ -41,7 +41,7 @@ fn open_paren_parser() {
 fn close_paren_parser() {
     parse_all::<CloseParenParser>(b")");
 
-    let expected_close = SyntaxErrorKind::ExpectedToken(&[TokenType::ParenClose]);
+    let expected_close = SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose]);
     let err = assert_error::<CloseParenParser>(b"x", 0, 1);
     assert_eq!(err, expected_close, "{err:?}");
     // the end-of-file token does not match either; its span is zero-width
@@ -55,7 +55,7 @@ fn keyword_parser() {
     let keyword = parse_all::<KeywordParser>(b":status");
     assert_eq!(keyword.as_slice(), b"status");
 
-    let expected_keyword = SyntaxErrorKind::ExpectedToken(&[TokenType::Keyword]);
+    let expected_keyword = SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::Keyword]);
     // a bare symbol is not a keyword
     let err = assert_error::<KeywordParser>(b"status", 0, 6);
     assert_eq!(err, expected_keyword, "{err:?}");
@@ -72,7 +72,7 @@ fn string_parser() {
     let string = parse_all::<StringParser>(b"\"a\"\"b\"");
     assert_eq!(string.as_slice(), b"a\"b");
 
-    let expected_string = SyntaxErrorKind::ExpectedToken(&[TokenType::String]);
+    let expected_string = SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::String]);
     // neither a quoted symbol nor a numeral is a string literal
     let err = assert_error::<StringParser>(b"|hello|", 0, 7);
     assert_eq!(err, expected_string, "{err:?}");

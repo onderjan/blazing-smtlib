@@ -38,7 +38,7 @@ use blazing_smtlib::{
             SymbolParser, SyntaxErrorKind, TermParser,
         },
     },
-    token::{Reserved, SmtVersion, TokenCursor, TokenHandler, TokenType},
+    token::{SmtReserved, SmtTokenCategory, SmtVersion, TokenCursor, TokenHandler},
 };
 
 // --- Test handler rendering everything it receives back into text ---
@@ -90,7 +90,7 @@ fn text(bytes: &[u8]) -> String {
 /// Renders a symbol, quoting it when it is spelled like a reserved word,
 /// so that the rendering tells such a symbol apart from the reserved word.
 fn render_symbol(bytes: &[u8]) -> String {
-    if Reserved::from_bytes_opt(bytes, SmtVersion::V2_7).is_some() {
+    if SmtReserved::from_bytes_opt(bytes, SmtVersion::V2_7).is_some() {
         format!("|{}|", text(bytes))
     } else {
         text(bytes)
@@ -375,7 +375,7 @@ impl<H: SmtHandler, P: Parser<H>> TokenHandler for Drive<'_, H, P> {
             if self.remaining == 0 {
                 // count the tokens left after the wanted results, except the end of the input
                 while let Some(token) = cursor.next() {
-                    if token.ty() != TokenType::EndOfFile {
+                    if token.category() != SmtTokenCategory::EndOfFile {
                         self.unconsumed += 1;
                     }
                 }

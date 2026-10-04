@@ -92,7 +92,7 @@ fn errors() {
     assert!(
         matches!(
             err,
-            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenClose])
+            SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
         ),
         "{err:?}"
     );
@@ -102,7 +102,7 @@ fn errors() {
     assert!(
         matches!(
             err,
-            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenClose])
+            SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
         ),
         "{err:?}"
     );

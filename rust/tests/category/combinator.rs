@@ -22,7 +22,7 @@ fn closed_parser() {
     assert!(
         matches!(
             err,
-            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenClose])
+            SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
         ),
         "{err:?}"
     );
@@ -31,7 +31,7 @@ fn closed_parser() {
     assert!(
         matches!(
             err,
-            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenClose])
+            SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
         ),
         "{err:?}"
     );
@@ -44,14 +44,17 @@ fn open_closed_parser() {
 
     let err = assert_error::<ParenParser<Printing, SymbolParser>>(b"a)", 0, 1);
     assert!(
-        matches!(err, SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])),
+        matches!(
+            err,
+            SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenOpen])
+        ),
         "{err:?}"
     );
     let err = assert_error::<ParenParser<Printing, SymbolParser>>(b"(a", 2, 2);
     assert!(
         matches!(
             err,
-            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenClose])
+            SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
         ),
         "{err:?}"
     );
@@ -91,7 +94,10 @@ fn paren_multiple_parser() {
     // the opening parenthesis is required
     let err = assert_error::<ParenMultipleParser<Printing, SymbolParser>>(b"a", 0, 1);
     assert!(
-        matches!(err, SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])),
+        matches!(
+            err,
+            SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenOpen])
+        ),
         "{err:?}"
     );
     // the element parser's error is reported for a bad element

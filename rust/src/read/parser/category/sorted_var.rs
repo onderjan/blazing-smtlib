@@ -6,7 +6,7 @@ use crate::{
         Arena, CloseParenParser, IdentSlot, OpenParenParser, Parser, ParserError, ParserResources,
         SortSlot, SyntaxErrorKind, TextHandle, parse_by_token,
     },
-    token::{SmtVersion, Token, TokenCursor, TokenKind},
+    token::{SmtSyntaxToken, SmtToken, SmtVersion, TokenCursor},
 };
 
 /// Parses a sorted variable: parentheses-enclosed pair of a symbol and a sort.
@@ -102,7 +102,7 @@ impl<H: SmtHandler + ?Sized> SortedVarSlot<H> {
         sort_slot: &mut SortSlot<H>,
         ident_slot: &mut IdentSlot,
         version: SmtVersion,
-        token: Token,
+        token: SmtToken,
     ) -> Result<ControlFlow<SortedVarHandle<H>>, ParserError<H::Error>> {
         // The sequential progress is as follows:
         // 1. Not open, expect an opening parenthesis.
@@ -130,7 +130,7 @@ impl<H: SmtHandler + ?Sized> SortedVarSlot<H> {
 
         if self.is_open {
             // after "(", waiting for the name, which goes to the arena text
-            let TokenKind::Symbol(name) = token.kind(version) else {
+            let SmtSyntaxToken::Symbol(name) = token.syntax(version) else {
                 return Err(ParserError::category_error(
                     SyntaxErrorKind::ExpectedSymbol,
                     token.span(),

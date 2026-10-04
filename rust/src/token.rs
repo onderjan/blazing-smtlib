@@ -7,10 +7,10 @@ use crate::{
 
 mod reserved;
 
-pub use reserved::{CommandNameReserved, GeneralReserved, Reserved};
+pub use reserved::{SmtCommandNameReserved, SmtGeneralReserved, SmtReserved};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TokenType {
+pub enum SmtTokenCategory {
     ParenOpen,
     ParenClose,
     Numeral,
@@ -22,13 +22,13 @@ pub enum TokenType {
     UnquotedSymbol,
     QuotedSymbol,
     // PERFORMANCE: leave EOF last for easy construction
-    // from InnerType in the lexer
+    // from InnerCategory in the lexer
     EndOfFile,
 }
 
-/// TokenType but without End of File.
+/// SmtTokenCategory but without End of File.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum InnerType {
+pub(crate) enum InnerCategory {
     ParenOpen,
     ParenClose,
     Numeral,
@@ -41,25 +41,25 @@ pub(crate) enum InnerType {
     QuotedSymbol,
 }
 
-impl InnerType {
-    fn into_type(self) -> TokenType {
+impl InnerCategory {
+    fn into_category(self) -> SmtTokenCategory {
         match self {
-            InnerType::ParenOpen => TokenType::ParenOpen,
-            InnerType::ParenClose => TokenType::ParenClose,
-            InnerType::Numeral => TokenType::Numeral,
-            InnerType::Decimal => TokenType::Decimal,
-            InnerType::Hexadecimal => TokenType::Hexadecimal,
-            InnerType::Binary => TokenType::Binary,
-            InnerType::String => TokenType::String,
-            InnerType::Keyword => TokenType::Keyword,
-            InnerType::UnquotedSymbol => TokenType::UnquotedSymbol,
-            InnerType::QuotedSymbol => TokenType::QuotedSymbol,
+            InnerCategory::ParenOpen => SmtTokenCategory::ParenOpen,
+            InnerCategory::ParenClose => SmtTokenCategory::ParenClose,
+            InnerCategory::Numeral => SmtTokenCategory::Numeral,
+            InnerCategory::Decimal => SmtTokenCategory::Decimal,
+            InnerCategory::Hexadecimal => SmtTokenCategory::Hexadecimal,
+            InnerCategory::Binary => SmtTokenCategory::Binary,
+            InnerCategory::String => SmtTokenCategory::String,
+            InnerCategory::Keyword => SmtTokenCategory::Keyword,
+            InnerCategory::UnquotedSymbol => SmtTokenCategory::UnquotedSymbol,
+            InnerCategory::QuotedSymbol => SmtTokenCategory::QuotedSymbol,
         }
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TokenKind<'a> {
+pub enum SmtSyntaxToken<'a> {
     ParenOpen,
     ParenClose,
     Numeral(SmtNumeralView<'a>),
@@ -69,7 +69,7 @@ pub enum TokenKind<'a> {
     String(SmtStringContentView<'a>),
     Keyword(SmtKeywordView<'a>),
     Symbol(SmtSymbolView<'a>),
-    Reserved(Reserved),
+    Reserved(SmtReserved),
     EndOfFile,
 }
 
@@ -175,59 +175,74 @@ impl Default for SmtVersionPostureBuilder {
     }
 }
 
-impl<'a> TokenKind<'a> {
+impl<'a> SmtSyntaxToken<'a> {
     /// Construct the token kind from the token and version.
     #[inline]
-    pub fn from_token(token: Token<'a>, version: SmtVersion) -> Self {
+    pub fn from_token(token: SmtToken<'a>, version: SmtVersion) -> Self {
         let content = token.content();
-        match token.ty() {
-            TokenType::ParenOpen => TokenKind::ParenOpen,
-            TokenType::ParenClose => TokenKind::ParenClose,
-            TokenType::Numeral => TokenKind::Numeral(SmtNumeralView::new_unchecked(content)),
-            TokenType::Decimal => TokenKind::Decimal(SmtDecimalView::new_unchecked(content)),
-            TokenType::Hexadecimal => {
-                TokenKind::Hexadecimal(SmtHexDigitsView::new_unchecked(content))
+        match token.category() {
+            SmtTokenCategory::ParenOpen => SmtSyntaxToken::ParenOpen,
+            SmtTokenCategory::ParenClose => SmtSyntaxToken::ParenClose,
+            SmtTokenCategory::Numeral => {
+                SmtSyntaxToken::Numeral(SmtNumeralView::new_unchecked(content))
             }
-            TokenType::Binary => TokenKind::Binary(SmtBinDigitsView::new_unchecked(content)),
-            TokenType::UnquotedSymbol => {
+            SmtTokenCategory::Decimal => {
+                SmtSyntaxToken::Decimal(SmtDecimalView::new_unchecked(content))
+            }
+            SmtTokenCategory::Hexadecimal => {
+                SmtSyntaxToken::Hexadecimal(SmtHexDigitsView::new_unchecked(content))
+            }
+            SmtTokenCategory::Binary => {
+                SmtSyntaxToken::Binary(SmtBinDigitsView::new_unchecked(content))
+            }
+            SmtTokenCategory::UnquotedSymbol => {
                 // only the words reserved in the version are reserved words
-                if let Some(reserved) = Reserved::from_bytes_opt(content, version) {
-                    TokenKind::Reserved(reserved)
+                if let Some(reserved) = SmtReserved::from_bytes_opt(content, version) {
+                    SmtSyntaxToken::Reserved(reserved)
                 } else {
-                    TokenKind::Symbol(SmtSymbolView::new_unchecked(content))
+                    SmtSyntaxToken::Symbol(SmtSymbolView::new_unchecked(content))
                 }
             }
-            TokenType::QuotedSymbol => TokenKind::Symbol(SmtSymbolView::new_unchecked(content)),
-            TokenType::String => TokenKind::String(SmtStringContentView::new_unchecked(content)),
-            TokenType::Keyword => TokenKind::Keyword(SmtKeywordView::new_unchecked(content)),
-            TokenType::EndOfFile => TokenKind::EndOfFile,
+            SmtTokenCategory::QuotedSymbol => {
+                SmtSyntaxToken::Symbol(SmtSymbolView::new_unchecked(content))
+            }
+            SmtTokenCategory::String => {
+                SmtSyntaxToken::String(SmtStringContentView::new_unchecked(content))
+            }
+            SmtTokenCategory::Keyword => {
+                SmtSyntaxToken::Keyword(SmtKeywordView::new_unchecked(content))
+            }
+            SmtTokenCategory::EndOfFile => SmtSyntaxToken::EndOfFile,
         }
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Token<'a> {
+pub struct SmtToken<'a> {
     /// Entry where End of File is kept as None.
     ///
     /// This is for performance reasons: instead of having to
     /// overwrite the whole token when the referenced buffer
     /// is no longer available, we have to only overwrite
     /// the Option variant byte to None.
-    entry: &'a Option<(InnerType, &'a [u8])>,
+    entry: &'a Option<(InnerCategory, &'a [u8])>,
     span: &'a SmtSpan,
 }
 
-impl<'a> Token<'a> {
+impl<'a> SmtToken<'a> {
     #[inline]
-    pub(crate) fn new(entry: &'a Option<(InnerType, &'a [u8])>, span: &'a SmtSpan) -> Token<'a> {
+    pub(crate) fn new(
+        entry: &'a Option<(InnerCategory, &'a [u8])>,
+        span: &'a SmtSpan,
+    ) -> SmtToken<'a> {
         Self { entry, span }
     }
 
     #[inline]
-    pub fn ty(&self) -> TokenType {
+    pub fn category(&self) -> SmtTokenCategory {
         match self.entry {
-            Some((ty, _)) => ty.into_type(),
-            None => TokenType::EndOfFile,
+            Some((ty, _)) => ty.into_category(),
+            None => SmtTokenCategory::EndOfFile,
         }
     }
 
@@ -245,8 +260,8 @@ impl<'a> Token<'a> {
     }
 
     #[inline]
-    pub fn kind(self, version: SmtVersion) -> TokenKind<'a> {
-        TokenKind::from_token(self, version)
+    pub fn syntax(self, version: SmtVersion) -> SmtSyntaxToken<'a> {
+        SmtSyntaxToken::from_token(self, version)
     }
 }
 
@@ -261,7 +276,7 @@ impl<'a> Token<'a> {
 #[derive(Clone, Copy)]
 pub struct TokenCursor<'a> {
     version: SmtVersion,
-    entries: &'a [Option<(InnerType, &'a [u8])>],
+    entries: &'a [Option<(InnerCategory, &'a [u8])>],
     spans: &'a [SmtSpan],
     next: usize,
     relex: bool,
@@ -273,7 +288,7 @@ impl<'a> TokenCursor<'a> {
     #[inline]
     pub(crate) fn new(
         version: SmtVersion,
-        entries: &'a [Option<(InnerType, &'a [u8])>],
+        entries: &'a [Option<(InnerCategory, &'a [u8])>],
         spans: &'a [SmtSpan],
     ) -> Self {
         debug_assert_eq!(entries.len(), spans.len());
@@ -292,9 +307,9 @@ impl<'a> TokenCursor<'a> {
 
     /// The token at `index` of the batch, if any.
     #[inline]
-    fn at(&self, index: usize) -> Option<Token<'a>> {
+    fn at(&self, index: usize) -> Option<SmtToken<'a>> {
         match (self.entries.get(index), self.spans.get(index)) {
-            (Some(entry), Some(span)) => Some(Token::new(entry, span)),
+            (Some(entry), Some(span)) => Some(SmtToken::new(entry, span)),
             _ => None,
         }
     }
@@ -303,7 +318,7 @@ impl<'a> TokenCursor<'a> {
     ///
     /// This can be used for parsing one token using a cursor-parsing function.
     #[inline]
-    pub fn single(version: SmtVersion, token: Token<'a>) -> Self {
+    pub fn single(version: SmtVersion, token: SmtToken<'a>) -> Self {
         Self::new(
             version,
             std::slice::from_ref(token.entry),
@@ -313,7 +328,7 @@ impl<'a> TokenCursor<'a> {
 
     /// Returns the next token (if any) without consuming it.
     #[inline]
-    pub fn peek(&self) -> Option<Token<'a>> {
+    pub fn peek(&self) -> Option<SmtToken<'a>> {
         self.at(self.next)
     }
 
@@ -321,7 +336,7 @@ impl<'a> TokenCursor<'a> {
     ///
     /// `get(0)` is the next token, also available through `peek`.
     #[inline]
-    pub fn get(&self, ahead: usize) -> Option<Token<'a>> {
+    pub fn get(&self, ahead: usize) -> Option<SmtToken<'a>> {
         self.at(self.next + ahead)
     }
 
@@ -330,7 +345,7 @@ impl<'a> TokenCursor<'a> {
     // as we implement an iterator-like but more powerful API
     #[allow(clippy::should_implement_trait)]
     #[inline]
-    pub fn next(&mut self) -> Option<Token<'a>> {
+    pub fn next(&mut self) -> Option<SmtToken<'a>> {
         let token = self.at(self.next)?;
         self.next += 1;
         Some(token)
@@ -354,7 +369,7 @@ impl<'a> TokenCursor<'a> {
     /// Returns the most recently consumed token, if any was consumed through
     /// this cursor.
     #[inline]
-    pub fn last_consumed(&self) -> Option<Token<'a>> {
+    pub fn last_consumed(&self) -> Option<SmtToken<'a>> {
         self.at(self.next.checked_sub(1)?)
     }
 

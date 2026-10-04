@@ -26,7 +26,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use blazing_smtlib::{
     read::lexer::Lexer,
-    token::{SmtVersion, Token, TokenCursor, TokenHandler, TokenKind},
+    token::{SmtSyntaxToken, SmtToken, SmtVersion, TokenCursor, TokenHandler},
 };
 
 /// Global allocator that counts allocations and tracks the live heap.
@@ -118,33 +118,33 @@ impl TokenHandler for Census {
 
 impl Census {
     /// Tallies one token.
-    fn tally(&mut self, token: Token) {
+    fn tally(&mut self, token: SmtToken) {
         self.tokens += 1;
         let expecting_command_name = self.expecting_command_name;
         self.expecting_command_name = false;
-        let type_name = match TokenKind::from_token(token, SmtVersion::V2_7) {
-            TokenKind::ParenOpen => {
+        let type_name = match SmtSyntaxToken::from_token(token, SmtVersion::V2_7) {
+            SmtSyntaxToken::ParenOpen => {
                 self.expecting_command_name = self.depth == 0;
                 self.depth += 1;
                 self.max_depth = self.max_depth.max(self.depth);
                 "("
             }
-            TokenKind::ParenClose => {
+            SmtSyntaxToken::ParenClose => {
                 self.depth = self.depth.saturating_sub(1);
                 ")"
             }
-            TokenKind::Numeral(_) => "numeral",
-            TokenKind::Decimal(_) => "decimal",
-            TokenKind::Hexadecimal(_) => "hexadecimal",
-            TokenKind::Binary(_) => "binary",
-            TokenKind::Symbol(name) => {
+            SmtSyntaxToken::Numeral(_) => "numeral",
+            SmtSyntaxToken::Decimal(_) => "decimal",
+            SmtSyntaxToken::Hexadecimal(_) => "hexadecimal",
+            SmtSyntaxToken::Binary(_) => "binary",
+            SmtSyntaxToken::Symbol(name) => {
                 if expecting_command_name {
                     let name = String::from_utf8_lossy(name.as_slice()).into_owned();
                     *self.commands.entry(name).or_default() += 1;
                 }
                 "symbol"
             }
-            TokenKind::Reserved(reserved) => {
+            SmtSyntaxToken::Reserved(reserved) => {
                 // the standard command names are reserved words, so a command
                 // is named by one; it is tallied as a command, not as a word
                 if expecting_command_name && reserved.is_command_name() {
@@ -157,9 +157,9 @@ impl Census {
                 }
                 "reserved"
             }
-            TokenKind::String(_) => "string",
-            TokenKind::Keyword(_) => "keyword",
-            TokenKind::EndOfFile => return,
+            SmtSyntaxToken::String(_) => "string",
+            SmtSyntaxToken::Keyword(_) => "keyword",
+            SmtSyntaxToken::EndOfFile => return,
         };
         *self.types.entry(type_name).or_default() += 1;
     }

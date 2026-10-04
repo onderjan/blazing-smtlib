@@ -13,11 +13,11 @@ use crate::{
             function::{DefineFunsRecParser, FunctionSignatureParser, RecursiveBodyParser},
         },
     },
-    token::{CommandNameReserved, SmtVersion, TokenCursor, TokenKind, TokenType},
+    token::{SmtCommandNameReserved, SmtSyntaxToken, SmtTokenCategory, SmtVersion, TokenCursor},
 };
 
 /// Defines the standard commands, each named like its variant of
-/// [`CommandNameReserved`], which the command kinds are mapped from.
+/// [`SmtCommandNameReserved`], which the command kinds are mapped from.
 macro_rules! standard_commands {
     ($($field:ident: $kind:ident(
         $parser:ty,
@@ -47,9 +47,9 @@ macro_rules! standard_commands {
         impl StandardCommandKind {
             /// The command named by the reserved word.
             #[inline]
-            pub fn from_reserved(name: CommandNameReserved) -> Self {
+            pub fn from_reserved(name: SmtCommandNameReserved) -> Self {
                 match name {
-                    $(CommandNameReserved::$kind => Self::$kind,)*
+                    $(SmtCommandNameReserved::$kind => Self::$kind,)*
                 }
             }
         }
@@ -381,8 +381,8 @@ impl<H: CommandHandler> Parser<H> for SetInfoParser<H> {
         while let Some(token) = cursor.get(ahead) {
             match self.state {
                 SetInfoState::Name => {
-                    let declares_version =
-                        token.ty() == TokenType::Keyword && token.content() == b"smt-lib-version";
+                    let declares_version = token.category() == SmtTokenCategory::Keyword
+                        && token.content() == b"smt-lib-version";
                     self.state = if declares_version {
                         SetInfoState::Version
                     } else {
@@ -391,8 +391,8 @@ impl<H: CommandHandler> Parser<H> for SetInfoParser<H> {
                 }
                 SetInfoState::Version => {
                     // disallow any version that isn't a decimal that converts to a version
-                    let version = match token.ty() {
-                        TokenType::Decimal => SmtVersion::from_decimal_opt(token.content()),
+                    let version = match token.category() {
+                        SmtTokenCategory::Decimal => SmtVersion::from_decimal_opt(token.content()),
                         _ => None,
                     };
                     let Some(version) = version else {
@@ -488,27 +488,37 @@ impl<H: CommandHandler> Parser<H> for CheckSatAssumingParser<H> {
         if version < SmtVersion::V2_7 {
             let mut ahead = 0;
             while let Some(token) = cursor.get(ahead) {
-                let kind = token.kind(version);
+                let kind = token.syntax(version);
                 self.state = match (&self.state, kind) {
                     (PropLiteralsState::Rest, _) => break,
-                    (PropLiteralsState::Open, TokenKind::ParenOpen) => PropLiteralsState::Literal,
-                    // anything else, and the end of the input in any state,
-                    // is left to the actual processing
-                    (PropLiteralsState::Open, _) | (_, TokenKind::EndOfFile) => {
-                        PropLiteralsState::Rest
-                    }
-                    (PropLiteralsState::Literal, TokenKind::Symbol(_)) => {
+                    (PropLiteralsState::Open, SmtSyntaxToken::ParenOpen) => {
                         PropLiteralsState::Literal
                     }
-                    (PropLiteralsState::Literal, TokenKind::ParenOpen) => PropLiteralsState::Not,
-                    (PropLiteralsState::Literal, TokenKind::ParenClose) => PropLiteralsState::Rest,
-                    (PropLiteralsState::Not, TokenKind::Symbol(symbol))
+                    // anything else, and the end of the input in any state,
+                    // is left to the actual processing
+                    (PropLiteralsState::Open, _) | (_, SmtSyntaxToken::EndOfFile) => {
+                        PropLiteralsState::Rest
+                    }
+                    (PropLiteralsState::Literal, SmtSyntaxToken::Symbol(_)) => {
+                        PropLiteralsState::Literal
+                    }
+                    (PropLiteralsState::Literal, SmtSyntaxToken::ParenOpen) => {
+                        PropLiteralsState::Not
+                    }
+                    (PropLiteralsState::Literal, SmtSyntaxToken::ParenClose) => {
+                        PropLiteralsState::Rest
+                    }
+                    (PropLiteralsState::Not, SmtSyntaxToken::Symbol(symbol))
                         if symbol.as_slice() == b"not" =>
                     {
                         PropLiteralsState::Negated
                     }
-                    (PropLiteralsState::Negated, TokenKind::Symbol(_)) => PropLiteralsState::Close,
-                    (PropLiteralsState::Close, TokenKind::ParenClose) => PropLiteralsState::Literal,
+                    (PropLiteralsState::Negated, SmtSyntaxToken::Symbol(_)) => {
+                        PropLiteralsState::Close
+                    }
+                    (PropLiteralsState::Close, SmtSyntaxToken::ParenClose) => {
+                        PropLiteralsState::Literal
+                    }
                     _ => {
                         return Err(ParserError::category_error(
                             SyntaxErrorKind::ExpectedPropositionalLiteral,

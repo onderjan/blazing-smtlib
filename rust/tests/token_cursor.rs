@@ -13,7 +13,7 @@ use blazing_smtlib::{
         lexer::Lexer,
         parser::{Parser, ParserResources, SortParser, TermParser},
     },
-    token::{SmtVersion, TokenCursor, TokenHandler, TokenType},
+    token::{SmtTokenCategory, SmtVersion, TokenCursor, TokenHandler},
 };
 
 /// A handler that runs a check on a copy of every cursor it receives, then
@@ -47,7 +47,7 @@ fn on_batches(chunks: &[&[u8]], check: impl FnMut(TokenCursor<'_>)) {
 fn on_token_batch(input: &[u8], mut check: impl FnMut(TokenCursor<'_>)) {
     let mut seen = 0;
     on_batches(&[input], |cursor| {
-        if cursor.peek().map(|token| token.ty()) == Some(TokenType::EndOfFile) {
+        if cursor.peek().map(|token| token.category()) == Some(SmtTokenCategory::EndOfFile) {
             return;
         }
         seen += 1;
@@ -88,7 +88,7 @@ fn cursor_walks_the_batch_in_order() {
 
         // one token taken
         let first = cursor.next().expect("a token");
-        assert_eq!(first.ty(), TokenType::ParenOpen);
+        assert_eq!(first.category(), SmtTokenCategory::ParenOpen);
         assert_eq!(cursor.consumed(), 1);
         assert_eq!(cursor.last_consumed(), Some(first));
         assert_eq!(cursor.peek(), start.get(1));
@@ -103,8 +103,8 @@ fn cursor_walks_the_batch_in_order() {
 
         // to the end and past it
         assert_eq!(
-            cursor.next().map(|token| token.ty()),
-            Some(TokenType::ParenClose)
+            cursor.next().map(|token| token.category()),
+            Some(SmtTokenCategory::ParenClose)
         );
         assert_eq!(cursor.next().map(|token| token.content()), Some(&b"c"[..]));
         assert!(cursor.is_empty());
@@ -125,8 +125,8 @@ fn cursor_over_the_end_of_file_batch_yields_it_alone() {
             assert_eq!(len(start), 1);
             let mut cursor = start;
             assert_eq!(
-                cursor.next().map(|token| token.ty()),
-                Some(TokenType::EndOfFile)
+                cursor.next().map(|token| token.category()),
+                Some(SmtTokenCategory::EndOfFile)
             );
             assert!(cursor.is_empty());
         }

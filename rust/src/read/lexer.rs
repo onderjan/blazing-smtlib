@@ -20,7 +20,7 @@ use crate::{
             FAST_RUN_MASK, HEXADECIMAL_RUN, START, Start, TokenEnd,
         },
     },
-    token::{InnerType, SmtVersion, TokenCursor, TokenHandler},
+    token::{InnerCategory, SmtVersion, TokenCursor, TokenHandler},
 };
 
 pub struct Lexer<H: TokenHandler> {
@@ -66,7 +66,7 @@ const BATCH_CAPACITY: usize = 256;
 
 /// Token batch, may be only partially filled.
 struct Batch<'a> {
-    entries: [Option<(InnerType, &'a [u8])>; BATCH_CAPACITY],
+    entries: [Option<(InnerCategory, &'a [u8])>; BATCH_CAPACITY],
     len: usize,
 }
 
@@ -237,7 +237,7 @@ impl<H: TokenHandler> Lexer<H> {
                 // produce the quoted symbol
                 self.sink_slice(
                     &mut batch,
-                    InnerType::QuotedSymbol,
+                    InnerCategory::QuotedSymbol,
                     TokenEnd::EOF,
                     Content::Stored,
                 )
@@ -439,13 +439,13 @@ impl<H: TokenHandler> Lexer<H> {
             // need no special processing. The closing parenthesis is first
             // as it forms more clusters.
             if c == b')' {
-                let entry = (InnerType::ParenClose, &slice[index..after]);
+                let entry = (InnerCategory::ParenClose, &slice[index..after]);
                 self.push_fast(batch, &mut local, offset, entry, index..after, 1)?;
                 index = after;
                 continue;
             }
             if c == b'(' {
-                let entry = (InnerType::ParenOpen, &slice[index..after]);
+                let entry = (InnerCategory::ParenOpen, &slice[index..after]);
                 self.push_fast(batch, &mut local, offset, entry, index..after, 1)?;
                 index = after;
                 continue;
@@ -491,9 +491,9 @@ impl<H: TokenHandler> Lexer<H> {
                 // whole text. The token is on a single line as all fast-lex runs exclude
                 // newlines. Whitespace is not emitted and overwritten by next tokens.
                 let entry = if is_quoted {
-                    (InnerType::QuotedSymbol, &slice[after..run_end_at])
+                    (InnerCategory::QuotedSymbol, &slice[after..run_end_at])
                 } else {
-                    (InnerType::UnquotedSymbol, &slice[index..token_end])
+                    (InnerCategory::UnquotedSymbol, &slice[index..token_end])
                 };
                 let emit = (fast_entry & FAST_EMIT != 0) as usize;
                 // A token must be delimited by the byte after it,
@@ -1096,7 +1096,7 @@ impl<H: TokenHandler> Lexer<H> {
                             self.expect_delimiter(next, after_slice_position)?;
                             self.sink_slice(
                                 batch,
-                                InnerType::QuotedSymbol,
+                                InnerCategory::QuotedSymbol,
                                 TokenEnd::at_byte(after_slice_position),
                                 Content::Stored,
                             )?;
@@ -1186,7 +1186,7 @@ impl<H: TokenHandler> Lexer<H> {
         // all good, produce the quoted symbol token
         self.sink_slice(
             batch,
-            InnerType::QuotedSymbol,
+            InnerCategory::QuotedSymbol,
             TokenEnd::at_byte(0),
             Content::Stored,
         )?;
@@ -1258,7 +1258,7 @@ impl<H: TokenHandler> Lexer<H> {
         if let Some(next) = next {
             self.expect_delimiter(next, end.position)?;
         }
-        self.sink_slice(batch, InnerType::Decimal, end, content)
+        self.sink_slice(batch, InnerCategory::Decimal, end, content)
     }
 
     fn finish_numeral<'a>(
@@ -1267,7 +1267,7 @@ impl<H: TokenHandler> Lexer<H> {
         end: TokenEnd,
         content: Content<'a>,
     ) -> Result<(), Interrupted<H::Result, LexError<H::Error>>> {
-        self.sink_slice(batch, InnerType::Numeral, end, content)
+        self.sink_slice(batch, InnerCategory::Numeral, end, content)
     }
 
     /// Sinks a hexadecimal/binary token.
@@ -1299,7 +1299,7 @@ impl<H: TokenHandler> Lexer<H> {
         end: TokenEnd,
         content: Content<'a>,
     ) -> Result<(), Interrupted<H::Result, LexError<H::Error>>> {
-        self.sink_slice(batch, InnerType::UnquotedSymbol, end, content)
+        self.sink_slice(batch, InnerCategory::UnquotedSymbol, end, content)
     }
 
     /// Sinks a keyword.
@@ -1321,7 +1321,7 @@ impl<H: TokenHandler> Lexer<H> {
         if let Some(next) = next {
             self.expect_delimiter(next, end.position)?;
         }
-        self.sink_slice(batch, InnerType::Keyword, end, content)
+        self.sink_slice(batch, InnerCategory::Keyword, end, content)
     }
 
     fn finish_string_literal<'a>(
@@ -1330,7 +1330,7 @@ impl<H: TokenHandler> Lexer<H> {
         end: TokenEnd,
         content: Content<'a>,
     ) -> Result<(), Interrupted<H::Result, LexError<H::Error>>> {
-        self.sink_slice(batch, InnerType::String, end, content)
+        self.sink_slice(batch, InnerCategory::String, end, content)
     }
 
     /// Sinks a token with the given content, ending at `end`.
@@ -1338,7 +1338,7 @@ impl<H: TokenHandler> Lexer<H> {
     fn sink_slice<'a>(
         &mut self,
         batch: &mut Batch<'a>,
-        ty: InnerType,
+        ty: InnerCategory,
         end: TokenEnd,
         content: Content<'a>,
     ) -> Result<(), Interrupted<H::Result, LexError<H::Error>>> {
@@ -1515,7 +1515,7 @@ impl<H: TokenHandler> Lexer<H> {
         batch: &mut Batch<'a>,
         local: &mut FastState,
         offset: u64,
-        entry: (InnerType, &'a [u8]),
+        entry: (InnerCategory, &'a [u8]),
         range: std::ops::Range<usize>,
         emit: usize,
     ) -> Result<(), Interrupted<H::Result, LexError<H::Error>>> {

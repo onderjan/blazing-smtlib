@@ -6,7 +6,7 @@ use crate::{
         CloseParenParser, OpenParenParser, Parser, ParserError, ParserResources, SyntaxErrorKind,
         category::resources::ClosedMultipleResource,
     },
-    token::{TokenCursor, TokenType},
+    token::{SmtTokenCategory, TokenCursor},
 };
 
 /// Parses using the first parser, then the second, then returns the result tuple.
@@ -259,7 +259,7 @@ impl<H: SmtHandler, P: Parser<H>> Parser<H> for ClosedMaximumParser<H, P> {
         while let Some(peeked) = cursor.peek() {
             if self.outside {
                 // we are outside, a closing parenthesis ends processing
-                if matches!(peeked.ty(), TokenType::ParenClose) {
+                if matches!(peeked.category(), SmtTokenCategory::ParenClose) {
                     cursor.advance(1);
                     let results = self.results.drain(..).collect();
                     return Ok(ControlFlow::Break(results));
@@ -272,7 +272,7 @@ impl<H: SmtHandler, P: Parser<H>> Parser<H> for ClosedMaximumParser<H, P> {
                     // it counts as consumed, so we need to advance
                     cursor.advance(1);
                     return Err(ParserError::category_error(
-                        SyntaxErrorKind::ExpectedToken(&[TokenType::ParenClose]),
+                        SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose]),
                         peeked.span(),
                     ));
                 }

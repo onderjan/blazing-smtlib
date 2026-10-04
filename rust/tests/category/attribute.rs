@@ -42,7 +42,7 @@ fn errors() {
     assert!(
         matches!(
             err,
-            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenClose])
+            SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
         ),
         "{err:?}"
     );
@@ -52,7 +52,7 @@ fn errors() {
     assert!(
         matches!(
             err,
-            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenClose])
+            SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
         ),
         "{err:?}"
     );
@@ -62,7 +62,7 @@ fn errors() {
     assert!(
         matches!(
             err,
-            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenClose])
+            SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
         ),
         "{err:?}"
     );
@@ -72,7 +72,7 @@ fn errors() {
     assert!(
         matches!(
             err,
-            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenClose])
+            SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
         ),
         "{err:?}"
     );
@@ -112,7 +112,7 @@ fn s_expr_list_value_errors() {
     assert!(
         matches!(
             err,
-            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenClose])
+            SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
         ),
         "{err:?}"
     );
@@ -122,7 +122,7 @@ fn s_expr_list_value_errors() {
     assert!(
         matches!(
             err,
-            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenClose])
+            SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
         ),
         "{err:?}"
     );

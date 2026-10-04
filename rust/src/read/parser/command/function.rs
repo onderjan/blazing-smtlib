@@ -7,7 +7,7 @@ use crate::{
         Parser, ParserError, ParserResources, SortParser, SymbolParser, SyntaxErrorKind,
         TermParser, handle_err, parse_by_token,
     },
-    token::{SmtVersion, Token, TokenCursor},
+    token::{SmtToken, SmtVersion, TokenCursor},
 };
 
 /// Parses a function signature: name, parameters (name and sort), and result sort.
@@ -91,7 +91,7 @@ impl<H: CommandHandler> RecursiveBodyParser<H> {
         handler: &mut H,
         resources: &mut ParserResources<H>,
         version: SmtVersion,
-        token: Token,
+        token: SmtToken,
     ) -> Result<ControlFlow<()>, ParserError<H::Error>> {
         let span = token.span();
         if !self.is_inner {
@@ -173,7 +173,7 @@ impl<H: CommandHandler> DefineFunsRecParser<H> {
         handler: &mut H,
         resources: &mut ParserResources<H>,
         version: SmtVersion,
-        token: Token,
+        token: SmtToken,
     ) -> Result<ControlFlow<()>, ParserError<H::Error>> {
         let span = token.span();
         match self.state {

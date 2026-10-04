@@ -5,7 +5,7 @@ use crate::{
     SmtHexDigitsView, SmtKeywordView, SmtMultiple, SmtNumeral, SmtNumeralView, SmtStringContent,
     SmtStringContentView, SmtSymbol, SmtSymbolView,
     read::parser::{ArenaAccess, IndexHandle, SimplePatternHandle},
-    token::Reserved,
+    token::SmtReserved,
 };
 
 #[derive(Debug, Clone)]
@@ -404,7 +404,7 @@ pub enum SmtPattern {
 pub enum SmtSExpr<'a, H: SmtHandler + ?Sized> {
     SpecialConstant(SmtSpecialConstantView<'a>),
     Symbol(SmtSymbolView<'a>),
-    Reserved(Reserved),
+    Reserved(SmtReserved),
     Keyword(SmtKeywordView<'a>),
     SExprs(SmtSExprs<'a, H>),
 }

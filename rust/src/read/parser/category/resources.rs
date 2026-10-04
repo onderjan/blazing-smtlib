@@ -6,7 +6,7 @@ use crate::{
         Arena, IdentSlot, ParserError, PatternSlot, QualifiedIdentSlot, SExprSlot, SortSlot,
         SortedVarSlot, TermSlot, category::attribute::AttributeSlot,
     },
-    token::{TokenCursor, TokenType},
+    token::{SmtTokenCategory, TokenCursor},
 };
 
 /// Contains non-duplicated parser resources.
@@ -96,7 +96,7 @@ impl<T> ClosedMultipleResource<T> {
         while let Some(token) = cursor.peek() {
             if self.outside {
                 // we are outside, a closing parenthesis ends processing
-                if matches!(token.ty(), TokenType::ParenClose) {
+                if matches!(token.category(), SmtTokenCategory::ParenClose) {
                     cursor.advance(1);
                     return Ok(ControlFlow::Break(self.items.drain(..).collect()));
                 }

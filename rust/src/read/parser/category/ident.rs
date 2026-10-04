@@ -6,7 +6,7 @@ use crate::{
         Arena, IdentHandle, IndexHandle, Parser, ParserError, ParserResources, SyntaxErrorKind,
         TextHandle, parse_by_token,
     },
-    token::{GeneralReserved, Reserved, SmtVersion, Token, TokenCursor, TokenKind},
+    token::{SmtGeneralReserved, SmtReserved, SmtSyntaxToken, SmtToken, SmtVersion, TokenCursor},
 };
 
 /// A parser that reads an SMT-LIB identifier.
@@ -138,19 +138,19 @@ impl IdentSlot {
         &mut self,
         arena: &mut Arena<H>,
         version: SmtVersion,
-        token: Token,
+        token: SmtToken,
     ) -> Result<ControlFlow<IdentHandle, ()>, ParserError<E>> {
         let span = token.span();
 
         match self.state {
             State::Start => {
                 debug_assert!(self.is_pristine(), "must be pristine when starting");
-                match token.kind(version) {
-                    TokenKind::Symbol(name) => {
+                match token.syntax(version) {
+                    SmtSyntaxToken::Symbol(name) => {
                         // a simple identifier
                         return Ok(ControlFlow::Break(arena.push_nonindexed_ident(name)));
                     }
-                    TokenKind::ParenOpen => {
+                    SmtSyntaxToken::ParenOpen => {
                         self.state = State::Open;
                     }
                     _ => {
@@ -162,8 +162,8 @@ impl IdentSlot {
             State::Open => {
                 // this must be an underscore
                 if matches!(
-                    token.kind(version),
-                    TokenKind::Reserved(Reserved::General(GeneralReserved::Underscore))
+                    token.syntax(version),
+                    SmtSyntaxToken::Reserved(SmtReserved::General(SmtGeneralReserved::Underscore))
                 ) {
                     self.state = State::AfterUnderscore;
                 } else {
@@ -177,7 +177,7 @@ impl IdentSlot {
                 let name = match self.name.take() {
                     None => {
                         // we need to read the name, its indices will follow in the arena
-                        if let TokenKind::Symbol(name) = token.kind(version) {
+                        if let SmtSyntaxToken::Symbol(name) = token.syntax(version) {
                             Some(self.push_name(arena, name))
                         } else {
                             return Err(ParserError::category_error(
@@ -189,8 +189,8 @@ impl IdentSlot {
                     Some(name) => {
                         // we have already read the name, so we will be reading an index
                         // and ending with closing parenthesis
-                        match token.kind(version) {
-                            TokenKind::ParenClose => {
+                        match token.syntax(version) {
+                            SmtSyntaxToken::ParenClose => {
                                 let indices_start = self.arena_indices_start;
                                 if arena.indices.len() == indices_start {
                                     let kind = SyntaxErrorKind::EmptyIdentIndices;
@@ -205,13 +205,13 @@ impl IdentSlot {
                                     indices_start,
                                 }));
                             }
-                            TokenKind::Numeral(index_value) => {
+                            SmtSyntaxToken::Numeral(index_value) => {
                                 let index = arena.push_text(index_value.as_slice());
                                 arena.indices.push(IndexHandle::Numeral(index));
                             }
                             // symbol index is only allowed since SMT-LIB 2.5,
                             // otherwise the fallback is taken
-                            TokenKind::Symbol(index_symbol) if version >= SmtVersion::V2_5 => {
+                            SmtSyntaxToken::Symbol(index_symbol) if version >= SmtVersion::V2_5 => {
                                 let index = arena.push_text(index_symbol.as_slice());
                                 arena.indices.push(IndexHandle::Symbol(index));
                             }

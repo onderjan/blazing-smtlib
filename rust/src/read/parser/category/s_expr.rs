@@ -6,7 +6,7 @@ use crate::{
         Arena, Parser, ParserError, ParserResources, SyntaxErrorKind,
         category::parse_special_constant, handle_err, parse_by_token,
     },
-    token::{SmtVersion, Token, TokenCursor, TokenKind},
+    token::{SmtSyntaxToken, SmtToken, SmtVersion, TokenCursor},
 };
 
 /// A parser that reads an SMT-LIB S-expression.
@@ -80,7 +80,7 @@ impl SExprSlot {
         handler: &mut H,
         arena: &mut Arena<H>,
         version: SmtVersion,
-        token: Token,
+        token: SmtToken,
     ) -> Result<ControlFlow<H::SExpr>, ParserError<H::Error>> {
         // there is no state besides the levels, so an empty level stack
         // means the category is being entered
@@ -89,9 +89,9 @@ impl SExprSlot {
         }
 
         let span = token.span();
-        let s_expr = match token.kind(version) {
-            TokenKind::Symbol(symbol) => SmtSExpr::Symbol(symbol),
-            TokenKind::Reserved(reserved) => {
+        let s_expr = match token.syntax(version) {
+            SmtSyntaxToken::Symbol(symbol) => SmtSExpr::Symbol(symbol),
+            SmtSyntaxToken::Reserved(reserved) => {
                 // reserved words are only allowed in S-expressions since SMT-LIB 2.6
                 if version >= SmtVersion::V2_6 {
                     SmtSExpr::Reserved(reserved)
@@ -102,15 +102,15 @@ impl SExprSlot {
                     ));
                 }
             }
-            TokenKind::Keyword(keyword) => SmtSExpr::Keyword(keyword),
-            TokenKind::ParenOpen => {
+            SmtSyntaxToken::Keyword(keyword) => SmtSExpr::Keyword(keyword),
+            SmtSyntaxToken::ParenOpen => {
                 // add a new level, remember where its S-expressions will start in the arena
                 self.levels.push(Level {
                     arena_s_exprs_start: arena.s_exprs.len(),
                 });
                 return Ok(ControlFlow::Continue(()));
             }
-            TokenKind::ParenClose => {
+            SmtSyntaxToken::ParenClose => {
                 // try to pop the last level
                 let Some(last_level) = self.levels.pop() else {
                     // no last level, all that we received was ")"

@@ -6,7 +6,10 @@ use crate::{
         Arena, Parser, ParserError, ParserResources, PatternHandle, SimplePatternHandle,
         SyntaxErrorKind, TextHandle, parse_by_token,
     },
-    token::{GeneralReserved, Reserved, SmtVersion, Token, TokenCursor, TokenKind, TokenType},
+    token::{
+        SmtGeneralReserved, SmtReserved, SmtSyntaxToken, SmtToken, SmtTokenCategory, SmtVersion,
+        TokenCursor,
+    },
 };
 
 pub struct SimplePatternParser;
@@ -19,7 +22,7 @@ impl SimplePatternParser {
     /// Consumes exactly one token, which must be a simple pattern.
     pub(crate) fn expect<H: SmtHandler + ?Sized>(
         version: SmtVersion,
-        token: Token,
+        token: SmtToken,
     ) -> Result<SmtSimplePattern, ParserError<H::Error>> {
         Ok(Self::expect_view::<H>(version, token)?.into_owned())
     }
@@ -27,11 +30,11 @@ impl SimplePatternParser {
     /// Consumes exactly one token, which must be a simple pattern, viewing it.
     pub(crate) fn expect_view<'t, H: SmtHandler + ?Sized>(
         version: SmtVersion,
-        token: Token<'t>,
+        token: SmtToken<'t>,
     ) -> Result<SmtSimplePatternView<'t>, ParserError<H::Error>> {
-        let result = match token.kind(version) {
-            TokenKind::Symbol(symbol) => Some(SmtSimplePatternView::Symbol(symbol)),
-            TokenKind::Reserved(Reserved::General(GeneralReserved::Underscore)) => {
+        let result = match token.syntax(version) {
+            SmtSyntaxToken::Symbol(symbol) => Some(SmtSimplePatternView::Symbol(symbol)),
+            SmtSyntaxToken::Reserved(SmtReserved::General(SmtGeneralReserved::Underscore)) => {
                 // the underscore wildcard is not allowed in every version
                 if underscore_wildcard_allowed(version) {
                     Some(SmtSimplePatternView::Wildcard)
@@ -168,7 +171,7 @@ impl PatternSlot {
         &mut self,
         arena: &mut Arena<H>,
         version: SmtVersion,
-        token: Token<'t>,
+        token: SmtToken<'t>,
     ) -> Result<ControlFlow<PatternHandle<'t>>, ParserError<H::Error>> {
         // The sequential progress is as follows:
         // 1. Not open, expect one of:
@@ -187,7 +190,7 @@ impl PatternSlot {
 
         if let Some(constructor) = self.constructor.take() {
             // step 3: parsing the arguments
-            if matches!(token.ty(), TokenType::ParenClose) {
+            if matches!(token.category(), SmtTokenCategory::ParenClose) {
                 // there must be at least one argument to the constructor
                 if arena.simple_patterns.len() == self.arena_args_start {
                     return Err(ParserError::category_error(
@@ -215,7 +218,7 @@ impl PatternSlot {
 
         if self.is_open {
             // step 2: expecting the constructor, which goes to the arena text
-            let TokenKind::Symbol(constructor) = token.kind(version) else {
+            let SmtSyntaxToken::Symbol(constructor) = token.syntax(version) else {
                 return Err(ParserError::category_error(
                     SyntaxErrorKind::ExpectedSymbol,
                     span,
@@ -230,9 +233,9 @@ impl PatternSlot {
 
         // step 1: expecting a simple pattern or an opening parenthesis
         debug_assert!(self.is_pristine(), "must be pristine when starting");
-        let result = match token.kind(version) {
-            TokenKind::Symbol(symbol) => Some(SmtSimplePatternView::Symbol(symbol)),
-            TokenKind::Reserved(Reserved::General(GeneralReserved::Underscore)) => {
+        let result = match token.syntax(version) {
+            SmtSyntaxToken::Symbol(symbol) => Some(SmtSimplePatternView::Symbol(symbol)),
+            SmtSyntaxToken::Reserved(SmtReserved::General(SmtGeneralReserved::Underscore)) => {
                 // the underscore wildcard is not allowed in every version
                 if underscore_wildcard_allowed(version) {
                     Some(SmtSimplePatternView::Wildcard)
@@ -240,7 +243,7 @@ impl PatternSlot {
                     None
                 }
             }
-            TokenKind::ParenOpen => {
+            SmtSyntaxToken::ParenOpen => {
                 // move to constructor parsing
                 self.is_open = true;
                 return Ok(ControlFlow::Continue(()));

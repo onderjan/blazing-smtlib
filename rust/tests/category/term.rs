@@ -127,7 +127,10 @@ fn let_errors() {
 
     let err = assert_error::<TermParser<Printing>>(b"(let x x)", 5, 6);
     assert!(
-        matches!(err, SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])),
+        matches!(
+            err,
+            SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenOpen])
+        ),
         "{err:?}"
     );
 
@@ -135,7 +138,10 @@ fn let_errors() {
     assert!(
         matches!(
             err,
-            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen, TokenType::ParenClose])
+            SyntaxErrorKind::ExpectedToken(&[
+                SmtTokenCategory::ParenOpen,
+                SmtTokenCategory::ParenClose
+            ])
         ),
         "{err:?}"
     );
@@ -147,7 +153,7 @@ fn let_errors() {
     assert!(
         matches!(
             err,
-            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenClose])
+            SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
         ),
         "{err:?}"
     );
@@ -156,7 +162,7 @@ fn let_errors() {
     assert!(
         matches!(
             err,
-            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenClose])
+            SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
         ),
         "{err:?}"
     );
@@ -379,7 +385,10 @@ fn binder_errors() {
     // the variable list must be parenthesized
     let err = assert_error::<TermParser<Printing>>(b"(forall x x)", 8, 9);
     assert!(
-        matches!(err, SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])),
+        matches!(
+            err,
+            SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenOpen])
+        ),
         "{err:?}"
     );
 
@@ -663,7 +672,10 @@ fn match_errors() {
     // the case list is required
     let err = assert_error::<TermParser<Printing>>(b"(match x)", 8, 9);
     assert!(
-        matches!(err, SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen])),
+        matches!(
+            err,
+            SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenOpen])
+        ),
         "{err:?}"
     );
     // at least one case is required
@@ -674,7 +686,10 @@ fn match_errors() {
     assert!(
         matches!(
             err,
-            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen, TokenType::ParenClose])
+            SyntaxErrorKind::ExpectedToken(&[
+                SmtTokenCategory::ParenOpen,
+                SmtTokenCategory::ParenClose
+            ])
         ),
         "{err:?}"
     );
@@ -714,7 +729,7 @@ fn match_errors() {
     assert!(
         matches!(
             err,
-            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenClose])
+            SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
         ),
         "{err:?}"
     );
@@ -723,7 +738,7 @@ fn match_errors() {
     assert!(
         matches!(
             err,
-            SyntaxErrorKind::ExpectedToken(&[TokenType::ParenClose])
+            SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
         ),
         "{err:?}"
     );

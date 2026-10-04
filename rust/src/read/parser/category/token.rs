@@ -4,7 +4,7 @@ use crate::{
     SmtHandler, SmtKeyword, SmtKeywordView, SmtNumeral, SmtNumeralView, SmtStringContent,
     SmtStringContentView, SmtSymbol,
     read::parser::{Parser, ParserError, ParserResources, SyntaxErrorKind},
-    token::{SmtVersion, Token, TokenCursor, TokenKind, TokenType},
+    token::{SmtSyntaxToken, SmtToken, SmtTokenCategory, SmtVersion, TokenCursor},
 };
 
 pub struct SymbolParser;
@@ -25,11 +25,11 @@ impl SymbolParser {
     /// Consumes exactly one token, which must match.
     pub(crate) fn expect<H: SmtHandler + ?Sized>(
         version: SmtVersion,
-        token: Token,
+        token: SmtToken,
     ) -> Result<SmtSymbol, ParserError<H::Error>> {
         let span = token.span();
-        match token.kind(version) {
-            TokenKind::Symbol(symbol) => Ok(symbol.into_owned()),
+        match token.syntax(version) {
+            SmtSyntaxToken::Symbol(symbol) => Ok(symbol.into_owned()),
             _ => Err(ParserError::category_error(
                 SyntaxErrorKind::ExpectedSymbol,
                 span,
@@ -80,13 +80,13 @@ macro_rules! token_parser {
 
         impl $parser {
             /// Consumes exactly one token, which must be of the parser's type.
-            pub(crate) fn expect<E>(token: Token) -> Result<$result, ParserError<E>> {
-                if token.ty() == TokenType::$ty {
+            pub(crate) fn expect<E>(token: SmtToken) -> Result<$result, ParserError<E>> {
+                if token.category() == SmtTokenCategory::$ty {
                     let $content = token.content();
                     Ok($value)
                 } else {
                     Err(ParserError::category_error(
-                        SyntaxErrorKind::ExpectedToken(&[TokenType::$ty]),
+                        SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::$ty]),
                         token.span(),
                     ))
                 }

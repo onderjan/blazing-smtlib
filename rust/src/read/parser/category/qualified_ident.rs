@@ -6,7 +6,7 @@ use crate::{
         Arena, CloseParenParser, IdentHandle, IdentSlot, Parser, ParserError, ParserResources,
         QualifiedIdentHandle, SortSlot, SyntaxErrorKind, parse_by_token,
     },
-    token::{GeneralReserved, Reserved, SmtVersion, Token, TokenCursor, TokenKind},
+    token::{SmtGeneralReserved, SmtReserved, SmtSyntaxToken, SmtToken, SmtVersion, TokenCursor},
 };
 
 /// A parser that reads an SMT-LIB qualified identifier.
@@ -149,7 +149,7 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
         sort_slot: &mut SortSlot<H>,
         ident_slot: &mut IdentSlot,
         version: SmtVersion,
-        token: Token,
+        token: SmtToken,
     ) -> Result<ControlFlow<QualifiedIdentHandle<H>>, ParserError<H::Error>> {
         // The sequential progress is as follows:
         // 1. Start, expecting one of:
@@ -198,14 +198,14 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
             // step 1: expecting a symbol or an opening parenthesis
             State::Start => {
                 debug_assert!(self.is_pristine(), "must be pristine when starting");
-                match token.kind(version) {
-                    TokenKind::Symbol(name) => {
+                match token.syntax(version) {
+                    SmtSyntaxToken::Symbol(name) => {
                         // return a simple ident, the slot is in its initial state
                         return Ok(ControlFlow::Break(QualifiedIdentHandle::unqualified(
                             arena.push_nonindexed_ident(name),
                         )));
                     }
-                    TokenKind::ParenOpen => self.state = State::Open,
+                    SmtSyntaxToken::ParenOpen => self.state = State::Open,
                     _ => {
                         return Err(ParserError::category_error(
                             SyntaxErrorKind::ExpectedIdent,
@@ -215,14 +215,14 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
                 }
             }
             // step 2: expecting an underscore or 'as'
-            State::Open => match token.kind(version) {
-                TokenKind::Reserved(Reserved::General(GeneralReserved::Underscore)) => {
+            State::Open => match token.syntax(version) {
+                SmtSyntaxToken::Reserved(SmtReserved::General(SmtGeneralReserved::Underscore)) => {
                     // unqualified indexed ident
                     // move the ident slot after underscore
                     ident_slot.move_after_underscore();
                     self.state = State::UnqualifiedIndexed;
                 }
-                TokenKind::Reserved(Reserved::General(GeneralReserved::As)) => {
+                SmtSyntaxToken::Reserved(SmtReserved::General(SmtGeneralReserved::As)) => {
                     // qualified ident, parse identifier next
                     self.state = State::QualifiedIdent;
                 }

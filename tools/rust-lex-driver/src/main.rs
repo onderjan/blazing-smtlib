@@ -12,7 +12,7 @@ use std::ops::ControlFlow;
 use blazing_smtlib::{
     SmtLocation,
     read::lexer::{LexError, Lexer},
-    token::{Reserved, SmtVersion, TokenCursor, TokenHandler, TokenKind},
+    token::{SmtReserved, SmtSyntaxToken, SmtVersion, TokenCursor, TokenHandler},
 };
 
 /// Writes every token handed over as a response line.
@@ -43,14 +43,14 @@ impl TokenHandler for Report<'_> {
         cursor: &mut TokenCursor<'_>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         while let Some(token) = cursor.next() {
-            let reserved = match TokenKind::from_token(token, self.version) {
-                TokenKind::Reserved(Reserved::General(_)) => "general",
-                TokenKind::Reserved(Reserved::CommandName(_)) => "command",
+            let reserved = match SmtSyntaxToken::from_token(token, self.version) {
+                SmtSyntaxToken::Reserved(SmtReserved::General(_)) => "general",
+                SmtSyntaxToken::Reserved(SmtReserved::CommandName(_)) => "command",
                 _ => "-",
             };
             self.out.borrow_mut().push_str(&format!(
                 "t {:?} {} {} {} x{}\n",
-                token.ty(),
+                token.category(),
                 location(token.span().start()),
                 location(token.span().end()),
                 reserved,

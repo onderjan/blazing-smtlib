@@ -1,22 +1,22 @@
 //! Public-API tests of symbol tokens: the lexer produces unquoted and quoted
 //! symbols alike, whatever they spell, with the content of a quoted symbol
-//! excluding its pipes; `TokenKind::from_token` classifies an unquoted symbol
+//! excluding its pipes; `SmtSyntaxToken::from_token` classifies an unquoted symbol
 //! spelled like a reserved word as that reserved word, and a quoted one never.
 //! The same holds wherever the input is cut into slices.
 
 mod lex_backend;
 mod reserved_words;
 
-use blazing_smtlib::token::{SmtVersion, TokenType};
+use blazing_smtlib::token::{SmtTokenCategory, SmtVersion};
 
-// What `TokenKind::from_token` says about a token, owned.
+// What `SmtSyntaxToken::from_token` says about a token, owned.
 use lex_backend::LexedKind as Kind;
 use reserved_words::reserved_words;
 
 /// An owned copy of everything observable about a token.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Lexed {
-    ty: TokenType,
+    ty: SmtTokenCategory,
     content: Vec<u8>,
     kind: Kind,
     /// The span as byte offsets.
@@ -51,7 +51,7 @@ fn text(input: &[u8]) -> String {
     String::from_utf8_lossy(input).into_owned()
 }
 
-fn lexed(ty: TokenType, content: &[u8], kind: Kind, span: (u64, u64)) -> Lexed {
+fn lexed(ty: SmtTokenCategory, content: &[u8], kind: Kind, span: (u64, u64)) -> Lexed {
     Lexed {
         ty,
         content: content.to_vec(),
@@ -62,7 +62,7 @@ fn lexed(ty: TokenType, content: &[u8], kind: Kind, span: (u64, u64)) -> Lexed {
 
 #[test]
 fn symbols_are_unquoted_or_quoted_without_pipes() {
-    use TokenType::{EndOfFile, QuotedSymbol, UnquotedSymbol};
+    use SmtTokenCategory::{EndOfFile, QuotedSymbol, UnquotedSymbol};
     fn symbol(content: &[u8]) -> Kind {
         Kind::Symbol(content.to_vec())
     }
@@ -93,7 +93,7 @@ fn unquoted_reserved_words_are_unquoted_symbols_classified_as_reserved() {
         let token = &tokens[0];
         assert_eq!(
             (token.ty, token.content.as_slice(), token.span),
-            (TokenType::UnquotedSymbol, word.as_bytes(), (0, end)),
+            (SmtTokenCategory::UnquotedSymbol, word.as_bytes(), (0, end)),
             "token for {word:?}"
         );
         assert!(
@@ -112,7 +112,7 @@ fn quoted_reserved_words_are_quoted_symbols_never_classified_as_reserved() {
         assert_eq!(
             lex(input.as_bytes())[0],
             lexed(
-                TokenType::QuotedSymbol,
+                SmtTokenCategory::QuotedSymbol,
                 word.as_bytes(),
                 Kind::Symbol(word.as_bytes().to_vec()),
                 (0, end)
@@ -130,7 +130,7 @@ fn keywords_spelled_like_reserved_words_are_keywords() {
         assert_eq!(
             lex(input.as_bytes())[0],
             lexed(
-                TokenType::Keyword,
+                SmtTokenCategory::Keyword,
                 word.as_bytes(),
                 Kind::Keyword(word.as_bytes().to_vec()),
                 (0, end)
@@ -145,7 +145,12 @@ fn end_of_input_has_no_content_and_an_empty_span_at_the_end() {
     let input = b"(a)\n  b ";
     assert_eq!(
         lex(input).last(),
-        Some(&lexed(TokenType::EndOfFile, b"", Kind::EndOfFile, (8, 8)))
+        Some(&lexed(
+            SmtTokenCategory::EndOfFile,
+            b"",
+            Kind::EndOfFile,
+            (8, 8)
+        ))
     );
     // the end-of-input location with its line and column, which the
     // offsets alone do not show
@@ -153,7 +158,7 @@ fn end_of_input_has_no_content_and_an_empty_span_at_the_end() {
     let ends: Vec<_> = run
         .tokens
         .iter()
-        .filter(|token| token.ty == TokenType::EndOfFile)
+        .filter(|token| token.ty == SmtTokenCategory::EndOfFile)
         .map(|token| token.end)
         .collect();
     assert_eq!(ends, [(8, 1, 4)], "end of input as (offset, line, column)");

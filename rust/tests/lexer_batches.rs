@@ -18,7 +18,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use blazing_smtlib::{
     SmtLocation, SmtSpan,
     read::lexer::{LexError, Lexer, LexerErrorKind},
-    token::{SmtVersion, Token, TokenCursor, TokenHandler, TokenType},
+    token::{SmtToken, SmtTokenCategory, SmtVersion, TokenCursor, TokenHandler},
 };
 
 /// The batch capacity the lexer is expected to use.
@@ -30,14 +30,14 @@ const BATCH_CAPACITY: usize = 256;
 /// An owned copy of a handed-over token.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Recorded {
-    ty: TokenType,
+    ty: SmtTokenCategory,
     content: Vec<u8>,
     span: SmtSpan,
 }
 
-fn record(token: Token) -> Recorded {
+fn record(token: SmtToken) -> Recorded {
     Recorded {
-        ty: token.ty(),
+        ty: token.category(),
         content: token.content().to_vec(),
         span: token.span(),
     }
@@ -257,7 +257,7 @@ fn assert_ends_with_eof_alone(run: &Run) {
         1,
         "the end-of-file token must be handed over alone"
     );
-    assert_eq!(last[0].ty, TokenType::EndOfFile);
+    assert_eq!(last[0].ty, SmtTokenCategory::EndOfFile);
 }
 
 // --- Grouping ---
@@ -277,7 +277,7 @@ fn tokens_are_batched_up_to_the_capacity_and_the_rest_follows() {
         let all = run.all();
         assert_eq!(all.len(), count + 1);
         for (index, token) in all[..count].iter().enumerate() {
-            assert_eq!(token.ty, TokenType::UnquotedSymbol, "token {index}");
+            assert_eq!(token.ty, SmtTokenCategory::UnquotedSymbol, "token {index}");
             assert_eq!(token.content, b"a", "token {index}");
             let start = 2 * index as u64;
             assert_eq!(loc(token.span.start()), (start, 0, start), "token {index}");
@@ -571,7 +571,7 @@ fn lexing_after_a_finish_starts_a_new_input_at_the_origin() {
     let mut expected = reference(b"c\nd ");
     expected.truncate(2);
     assert_eq!(calls[1], expected);
-    assert_eq!(calls[2][0].ty, TokenType::EndOfFile);
+    assert_eq!(calls[2][0].ty, SmtTokenCategory::EndOfFile);
     assert_eq!(loc(calls[2][0].span.start()), (4, 1, 2));
 }
 
@@ -602,7 +602,7 @@ fn a_finish_at_the_end_of_file_token_is_followed_by_a_new_input() {
         assert!(matches!(lexer.lex_eof(), Ok(ControlFlow::Continue(()))));
     }
     assert_eq!(calls.iter().map(Vec::len).collect::<Vec<_>>(), [2, 1, 1]);
-    assert_eq!(calls[2][0].ty, TokenType::EndOfFile);
+    assert_eq!(calls[2][0].ty, SmtTokenCategory::EndOfFile);
     assert_eq!(loc(calls[2][0].span.start()), (0, 0, 0));
 }
 

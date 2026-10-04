@@ -57,7 +57,7 @@ t <type> <start> <end> <reserved> x<hex>
 
 A token, the end-of-file token included.
 
-- `<type>` is the token type, spelled as the Rust `TokenType` variant:
+- `<type>` is the token type, spelled as the Rust `SmtTokenCategory` variant:
   `ParenOpen`, `ParenClose`, `Numeral`, `Decimal`, `Hexadecimal`, `Binary`,
   `String`, `Keyword`, `UnquotedSymbol`, `QuotedSymbol`, `EndOfFile`.
 - `<start>` and `<end>` are the two ends of the token's span.

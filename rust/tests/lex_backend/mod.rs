@@ -23,7 +23,7 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use blazing_smtlib::{
     SmtLocation,
     read::lexer::{LexError, Lexer, LexerErrorKind},
-    token::{Reserved, SmtVersion, TokenCursor, TokenHandler, TokenKind, TokenType},
+    token::{SmtReserved, SmtSyntaxToken, SmtTokenCategory, SmtVersion, TokenCursor, TokenHandler},
 };
 
 /// A location as `(offset, line, column)`, all zero-based.
@@ -37,7 +37,7 @@ pub fn loc(location: SmtLocation) -> Loc {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LexedKind {
     Symbol(Vec<u8>),
-    Reserved(Reserved),
+    Reserved(SmtReserved),
     Keyword(Vec<u8>),
     EndOfFile,
     Other,
@@ -46,7 +46,7 @@ pub enum LexedKind {
 /// A token as the handler received it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LexedToken {
-    pub ty: TokenType,
+    pub ty: SmtTokenCategory,
     pub content: Vec<u8>,
     pub start: Loc,
     pub end: Loc,
@@ -55,7 +55,7 @@ pub struct LexedToken {
 
 impl LexedToken {
     /// The reserved word the token is, if any.
-    pub fn reserved(&self) -> Option<Reserved> {
+    pub fn reserved(&self) -> Option<SmtReserved> {
         match self.kind {
             LexedKind::Reserved(reserved) => Some(reserved),
             _ => None,
@@ -133,15 +133,15 @@ impl TokenHandler for Collect<'_> {
         cursor: &mut TokenCursor<'_>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         while let Some(token) = cursor.next() {
-            let kind = match TokenKind::from_token(token, self.version) {
-                TokenKind::Symbol(symbol) => LexedKind::Symbol(symbol.as_slice().to_vec()),
-                TokenKind::Reserved(reserved) => LexedKind::Reserved(reserved),
-                TokenKind::Keyword(keyword) => LexedKind::Keyword(keyword.as_slice().to_vec()),
-                TokenKind::EndOfFile => LexedKind::EndOfFile,
+            let kind = match SmtSyntaxToken::from_token(token, self.version) {
+                SmtSyntaxToken::Symbol(symbol) => LexedKind::Symbol(symbol.as_slice().to_vec()),
+                SmtSyntaxToken::Reserved(reserved) => LexedKind::Reserved(reserved),
+                SmtSyntaxToken::Keyword(keyword) => LexedKind::Keyword(keyword.as_slice().to_vec()),
+                SmtSyntaxToken::EndOfFile => LexedKind::EndOfFile,
                 _ => LexedKind::Other,
             };
             self.tokens.push(LexedToken {
-                ty: token.ty(),
+                ty: token.category(),
                 content: token.content().to_vec(),
                 start: loc(token.span().start()),
                 end: loc(token.span().end()),
@@ -260,18 +260,18 @@ fn start_driver(path: &OsString) -> Driver {
     }
 }
 
-const TOKEN_TYPES: [TokenType; 11] = [
-    TokenType::ParenOpen,
-    TokenType::ParenClose,
-    TokenType::Numeral,
-    TokenType::Decimal,
-    TokenType::Hexadecimal,
-    TokenType::Binary,
-    TokenType::String,
-    TokenType::Keyword,
-    TokenType::UnquotedSymbol,
-    TokenType::QuotedSymbol,
-    TokenType::EndOfFile,
+const TOKEN_TYPES: [SmtTokenCategory; 11] = [
+    SmtTokenCategory::ParenOpen,
+    SmtTokenCategory::ParenClose,
+    SmtTokenCategory::Numeral,
+    SmtTokenCategory::Decimal,
+    SmtTokenCategory::Hexadecimal,
+    SmtTokenCategory::Binary,
+    SmtTokenCategory::String,
+    SmtTokenCategory::Keyword,
+    SmtTokenCategory::UnquotedSymbol,
+    SmtTokenCategory::QuotedSymbol,
+    SmtTokenCategory::EndOfFile,
 ];
 
 const ERROR_KINDS: [LexerErrorKind; 13] = [
@@ -348,14 +348,14 @@ fn by_name<T: Copy + std::fmt::Debug>(values: &[T], name: &str, line: &str) -> T
 
 /// What a token is, from its type, its content and the reserved word the
 /// driver reported it to be.
-fn kind_of(ty: TokenType, content: &[u8], reserved: Option<Reserved>) -> LexedKind {
+fn kind_of(ty: SmtTokenCategory, content: &[u8], reserved: Option<SmtReserved>) -> LexedKind {
     match (reserved, ty) {
         (Some(reserved), _) => LexedKind::Reserved(reserved),
-        (None, TokenType::UnquotedSymbol | TokenType::QuotedSymbol) => {
+        (None, SmtTokenCategory::UnquotedSymbol | SmtTokenCategory::QuotedSymbol) => {
             LexedKind::Symbol(content.to_vec())
         }
-        (None, TokenType::Keyword) => LexedKind::Keyword(content.to_vec()),
-        (None, TokenType::EndOfFile) => LexedKind::EndOfFile,
+        (None, SmtTokenCategory::Keyword) => LexedKind::Keyword(content.to_vec()),
+        (None, SmtTokenCategory::EndOfFile) => LexedKind::EndOfFile,
         (None, _) => LexedKind::Other,
     }
 }
@@ -366,14 +366,14 @@ fn parse_reserved(
     content: &[u8],
     version: SmtVersion,
     line: &str,
-) -> Option<Reserved> {
+) -> Option<SmtReserved> {
     let is_command_name = match class {
         "-" => return None,
         "general" => false,
         "command" => true,
         _ => panic!("the Lean driver sent an unknown reserved class: {line:?}"),
     };
-    let reserved = Reserved::from_bytes_opt(content, version).unwrap_or_else(|| {
+    let reserved = SmtReserved::from_bytes_opt(content, version).unwrap_or_else(|| {
         panic!("the Lean driver reported a reserved word that is none in {version:?}: {line:?}")
     });
     assert_eq!(

@@ -1,4 +1,4 @@
-use crate::{SmtSpecialConstantView, token::TokenKind};
+use crate::{SmtSpecialConstantView, token::SmtSyntaxToken};
 
 mod arena;
 mod attribute;
@@ -48,14 +48,14 @@ pub type ParenSortedVarsParser<H> = ParenMultipleParser<H, SortedVarParser<H>>;
 
 #[inline]
 fn parse_special_constant<'a>(
-    kind: TokenKind<'a>,
-) -> Result<SmtSpecialConstantView<'a>, TokenKind<'a>> {
+    kind: SmtSyntaxToken<'a>,
+) -> Result<SmtSpecialConstantView<'a>, SmtSyntaxToken<'a>> {
     let constant = match kind {
-        TokenKind::Numeral(value) => SmtSpecialConstantView::Numeral(value),
-        TokenKind::Decimal(decimal) => SmtSpecialConstantView::Decimal(decimal),
-        TokenKind::Hexadecimal(value) => SmtSpecialConstantView::Hexadecimal(value),
-        TokenKind::Binary(value) => SmtSpecialConstantView::Binary(value),
-        TokenKind::String(string) => SmtSpecialConstantView::String(string),
+        SmtSyntaxToken::Numeral(value) => SmtSpecialConstantView::Numeral(value),
+        SmtSyntaxToken::Decimal(decimal) => SmtSpecialConstantView::Decimal(decimal),
+        SmtSyntaxToken::Hexadecimal(value) => SmtSpecialConstantView::Hexadecimal(value),
+        SmtSyntaxToken::Binary(value) => SmtSpecialConstantView::Binary(value),
+        SmtSyntaxToken::String(string) => SmtSpecialConstantView::String(string),
         kind => return Err(kind),
     };
     Ok(constant)
@@ -71,7 +71,7 @@ pub(crate) mod tests {
             lexer::Lexer,
             parser::{Parser, ParserError, ParserResources},
         },
-        token::{SmtVersion, TokenCursor, TokenHandler, TokenType},
+        token::{SmtTokenCategory, SmtVersion, TokenCursor, TokenHandler},
     };
 
     /// Drives `parser` over `resources` through the whole input with the
@@ -104,7 +104,7 @@ pub(crate) mod tests {
                     if self.result.is_some() {
                         // count the tokens left after the result, except the end of the input
                         while let Some(token) = cursor.next() {
-                            if !matches!(token.ty(), TokenType::EndOfFile) {
+                            if !matches!(token.category(), SmtTokenCategory::EndOfFile) {
                                 self.unconsumed += 1;
                             }
                         }

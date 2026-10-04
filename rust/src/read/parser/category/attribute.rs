@@ -6,7 +6,7 @@ use crate::{
         Arena, CloseParenParser, Parser, ParserError, ParserResources, SExprSlot, SyntaxErrorKind,
         TextHandle, category::parse_special_constant, handle_err, parse_by_token,
     },
-    token::{SmtVersion, Token, TokenCursor, TokenKind, TokenType},
+    token::{SmtSyntaxToken, SmtToken, SmtTokenCategory, SmtVersion, TokenCursor},
 };
 
 /// A parser that reads an SMT-LIB attribute followed by a closing parenthesis.
@@ -182,7 +182,7 @@ impl AttributeSlot {
         arena: &mut Arena<H>,
         s_expr_slot: &mut SExprSlot,
         version: SmtVersion,
-        token: Token,
+        token: SmtToken,
     ) -> Result<ControlFlow<C::Output>, ParserError<H::Error>> {
         let span = token.span();
         if !C::next_allowed(self.num_attributes) {
@@ -201,12 +201,12 @@ impl AttributeSlot {
                     debug_assert!(self.is_pristine(), "must be pristine when starting");
                     self.arena_attributes_start = arena.attributes.len();
                 }
-                match token.kind(version) {
-                    TokenKind::ParenClose => {
+                match token.syntax(version) {
+                    SmtSyntaxToken::ParenClose => {
                         // finish the attribute
                         return Ok(ControlFlow::Break(self.finish::<H, C>(arena, span)?));
                     }
-                    TokenKind::Keyword(keyword) => {
+                    SmtSyntaxToken::Keyword(keyword) => {
                         // we received an attribute name, store it in the arena text
                         self.state = State::AfterName(arena.push_text(keyword.as_slice()));
                     }
@@ -225,12 +225,12 @@ impl AttributeSlot {
                     Break,
                 }
 
-                let (value, decision) = match token.kind(version) {
-                    TokenKind::Symbol(symbol) => (
+                let (value, decision) = match token.syntax(version) {
+                    SmtSyntaxToken::Symbol(symbol) => (
                         Some(SmtAttributeValue::Symbol(symbol)),
                         Decision::FinishAttribute,
                     ),
-                    TokenKind::ParenOpen => {
+                    SmtSyntaxToken::ParenOpen => {
                         // start a list of sexprs ending with closing parenthesis
                         self.state = State::InsideSExpr {
                             name,
@@ -239,13 +239,13 @@ impl AttributeSlot {
                         };
                         return Ok(ControlFlow::Continue(()));
                     }
-                    TokenKind::ParenClose => {
+                    SmtSyntaxToken::ParenClose => {
                         // an attribute with only a name followed by the parenthesis
                         // since we already have a closing parenthesis here,
                         // we need to immediately finish after pushing the attribute
                         (None, Decision::Break)
                     }
-                    TokenKind::Keyword(keyword) => {
+                    SmtSyntaxToken::Keyword(keyword) => {
                         // the current attribute was just a name
                         // the new state will be after the new name given by the keyword
                         // push the previous attribute to the collection,
@@ -287,7 +287,7 @@ impl AttributeSlot {
                         if !C::next_allowed(self.num_attributes) {
                             // it turns out that we actually expected a closing parenthesis
                             return Err(ParserError::category_error(
-                                SyntaxErrorKind::ExpectedToken(&[TokenType::ParenClose]),
+                                SyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose]),
                                 span,
                             ));
                         }
@@ -301,7 +301,7 @@ impl AttributeSlot {
                 arena_s_exprs_start,
                 outside,
             } => {
-                if outside && matches!(token.ty(), TokenType::ParenClose) {
+                if outside && matches!(token.category(), SmtTokenCategory::ParenClose) {
                     // the s-expr closing parenthesis was consumed,
                     // the attribute closing parenthesis was not consumed yet
                     // handle the attribute with its name and S-expressions handed over

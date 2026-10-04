@@ -9,7 +9,10 @@ use crate::{
         category::{attribute::MultipleAttributes, parse_special_constant},
         handle_err,
     },
-    token::{GeneralReserved, Reserved, SmtVersion, Token, TokenCursor, TokenKind, TokenType},
+    token::{
+        SmtGeneralReserved, SmtReserved, SmtSyntaxToken, SmtToken, SmtTokenCategory, SmtVersion,
+        TokenCursor,
+    },
 };
 
 /// A parser that reads an SMT-LIB term.
@@ -232,9 +235,9 @@ impl<H: SmtHandler> TermSlot<H> {
                 && resources.term_slot.pending.is_none()
             {
                 // PERFORMANCE: dispatch common term idioms fast.
-                match token.ty() {
-                    TokenType::UnquotedSymbol | TokenType::QuotedSymbol => {
-                        if let TokenKind::Symbol(name) = token.kind(cursor.version()) {
+                match token.category() {
+                    SmtTokenCategory::UnquotedSymbol | SmtTokenCategory::QuotedSymbol => {
+                        if let SmtSyntaxToken::Symbol(name) = token.syntax(cursor.version()) {
                             // this is an unqualified, non-indexed symbol, dispatch it
                             let term = SmtTerm::QualifiedIdent(SmtQualifiedIdentView {
                                 ident: resources.arena.simple_ident_view(name),
@@ -249,10 +252,10 @@ impl<H: SmtHandler> TermSlot<H> {
                             continue;
                         }
                     }
-                    TokenType::ParenOpen => {
+                    SmtTokenCategory::ParenOpen => {
                         if let Some(peeked) = cursor.peek() {
-                            match peeked.kind(cursor.version()) {
-                                TokenKind::Symbol(fn_name) => {
+                            match peeked.syntax(cursor.version()) {
+                                SmtSyntaxToken::Symbol(fn_name) => {
                                     // this is an application start
                                     // consume the peeked token and dispatch
                                     cursor.advance(1);
@@ -264,18 +267,18 @@ impl<H: SmtHandler> TermSlot<H> {
                                         .start_application(&resources.arena, function);
                                     continue;
                                 }
-                                TokenKind::Reserved(Reserved::General(GeneralReserved::Let)) => {
+                                SmtSyntaxToken::Reserved(SmtReserved::General(
+                                    SmtGeneralReserved::Let,
+                                )) => {
                                     // the proper way to start a let binder is "(let((name"
                                     // we need two more opening parentheses and a symbol
-                                    if cursor
-                                        .get(1)
-                                        .is_some_and(|t| matches!(t.ty(), TokenType::ParenOpen))
-                                        && cursor
-                                            .get(2)
-                                            .is_some_and(|t| matches!(t.ty(), TokenType::ParenOpen))
-                                        && let Some(name_token) = cursor.get(3)
-                                        && let TokenKind::Symbol(name) =
-                                            name_token.kind(cursor.version())
+                                    if cursor.get(1).is_some_and(|t| {
+                                        matches!(t.category(), SmtTokenCategory::ParenOpen)
+                                    }) && cursor.get(2).is_some_and(|t| {
+                                        matches!(t.category(), SmtTokenCategory::ParenOpen)
+                                    }) && let Some(name_token) = cursor.get(3)
+                                        && let SmtSyntaxToken::Symbol(name) =
+                                            name_token.syntax(cursor.version())
                                     {
                                         // this is a let binder
                                         // consume the four peeked tokens
@@ -288,13 +291,13 @@ impl<H: SmtHandler> TermSlot<H> {
                                         continue;
                                     }
                                 }
-                                TokenKind::Reserved(Reserved::General(
-                                    GeneralReserved::Underscore,
+                                SmtSyntaxToken::Reserved(SmtReserved::General(
+                                    SmtGeneralReserved::Underscore,
                                 )) => {
                                     // an indexed identifier starts with "(_ name"
                                     if let Some(name_token) = cursor.get(1)
-                                        && let TokenKind::Symbol(name) =
-                                            name_token.kind(cursor.version())
+                                        && let SmtSyntaxToken::Symbol(name) =
+                                            name_token.syntax(cursor.version())
                                     {
                                         // this is an indexed identifier
                                         // consume the two peeked tokens
@@ -335,7 +338,7 @@ impl<H: SmtHandler> TermSlot<H> {
         handler: &mut H,
         resources: &mut ParserResources<H>,
         version: SmtVersion,
-        token: Token,
+        token: SmtToken,
     ) -> Result<ControlFlow<H::Term>, ParserError<H::Error>> {
         let span = token.span();
         let term = match resources.term_slot.pending.take() {
@@ -480,7 +483,7 @@ impl<H: SmtHandler> TermSlot<H> {
         handler: &mut H,
         resources: &mut ParserResources<H>,
         version: SmtVersion,
-        token: Token,
+        token: SmtToken,
     ) -> Result<ControlFlow<H::Term>, ParserError<H::Error>> {
         let slot = &mut resources.term_slot;
 
@@ -553,7 +556,7 @@ impl<H: SmtHandler> TermSlot<H> {
             }
             State::LetBindingSymbol => {
                 // expect a symbol that will be the binding name
-                let TokenKind::Symbol(name) = token.kind(version) else {
+                let SmtSyntaxToken::Symbol(name) = token.syntax(version) else {
                     return Err(ParserError::category_error(
                         SyntaxErrorKind::ExpectedSymbol,
                         token.span(),
@@ -663,18 +666,18 @@ impl<H: SmtHandler> TermSlot<H> {
         handler: &mut H,
         resources: &mut ParserResources<H>,
         version: SmtVersion,
-        token: Token,
+        token: SmtToken,
     ) -> Result<ControlFlow<H::Term>, ParserError<H::Error>> {
         let span = token.span();
         let slot = &mut resources.term_slot;
-        let term = match token.kind(version) {
-            TokenKind::ParenOpen => {
+        let term = match token.syntax(version) {
+            SmtSyntaxToken::ParenOpen => {
                 // application, binder, or annotation
                 // move to operator parsing
                 slot.state = State::Open;
                 return Ok(ControlFlow::Continue(()));
             }
-            TokenKind::ParenClose => {
+            SmtSyntaxToken::ParenClose => {
                 // this is only permitted when we are ending an application
                 // pop the level
                 let Some(Level::Application {
@@ -701,7 +704,7 @@ impl<H: SmtHandler> TermSlot<H> {
                     handle_err(handler.handle_term(term), span)
                 })?
             }
-            TokenKind::Symbol(name) => {
+            SmtSyntaxToken::Symbol(name) => {
                 // a term that is a qualified identifier that is just a symbol,
                 // handed over straight from the token
                 let term = SmtTerm::QualifiedIdent(SmtQualifiedIdentView {
@@ -734,13 +737,13 @@ impl<H: SmtHandler> TermSlot<H> {
     fn parse_term_open(
         resources: &mut ParserResources<H>,
         version: SmtVersion,
-        token: Token,
+        token: SmtToken,
     ) -> Result<(), ParserError<H::Error>> {
         let span = token.span();
         let slot = &mut resources.term_slot;
 
-        let state = match token.kind(version) {
-            TokenKind::Symbol(fn_name) => {
+        let state = match token.syntax(version) {
+            SmtSyntaxToken::Symbol(fn_name) => {
                 // this is an application where the function identifier is just a symbol
                 let function = QualifiedIdentHandle::unqualified(
                     resources.arena.push_nonindexed_ident(fn_name),
@@ -748,36 +751,36 @@ impl<H: SmtHandler> TermSlot<H> {
                 slot.start_application(&resources.arena, function);
                 return Ok(());
             }
-            TokenKind::Reserved(Reserved::General(GeneralReserved::Let)) => {
+            SmtSyntaxToken::Reserved(SmtReserved::General(SmtGeneralReserved::Let)) => {
                 // this is a let, start it
                 slot.start_let(&mut resources.arena);
                 return Ok(());
             }
-            TokenKind::Reserved(Reserved::General(GeneralReserved::Lambda)) => {
+            SmtSyntaxToken::Reserved(SmtReserved::General(SmtGeneralReserved::Lambda)) => {
                 // this is a lambda, move to parsing its variables
                 State::SortedBinderVars(SortedBinderKind::Lambda)
             }
-            TokenKind::Reserved(Reserved::General(GeneralReserved::Forall)) => {
+            SmtSyntaxToken::Reserved(SmtReserved::General(SmtGeneralReserved::Forall)) => {
                 // this is a universal binder, move to parsing its variables
                 State::SortedBinderVars(SortedBinderKind::Forall)
             }
-            TokenKind::Reserved(Reserved::General(GeneralReserved::Exists)) => {
+            SmtSyntaxToken::Reserved(SmtReserved::General(SmtGeneralReserved::Exists)) => {
                 // this is an existential binder, move to parsing its variables
                 State::SortedBinderVars(SortedBinderKind::Exists)
             }
-            TokenKind::Reserved(Reserved::General(GeneralReserved::Match)) => {
+            SmtSyntaxToken::Reserved(SmtReserved::General(SmtGeneralReserved::Match)) => {
                 // this is a match
                 // we are parsing its scrutinee next, add a level for it
                 slot.start_level(Level::MatchScrutinee);
                 return Ok(());
             }
-            TokenKind::Reserved(Reserved::General(GeneralReserved::ExclamationMark)) => {
+            SmtSyntaxToken::Reserved(SmtReserved::General(SmtGeneralReserved::ExclamationMark)) => {
                 // this is an annotation
                 // we are parsing its annotated term next, add a level for it
                 slot.start_level(Level::Annotation);
                 return Ok(());
             }
-            TokenKind::Reserved(Reserved::General(GeneralReserved::Underscore)) => {
+            SmtSyntaxToken::Reserved(SmtReserved::General(SmtGeneralReserved::Underscore)) => {
                 // this is actually a term composed of an indexed identifier
                 // move the qualified ident parser after the underscore
                 // (meaning the ident will be unqualified but indexed)
@@ -786,14 +789,14 @@ impl<H: SmtHandler> TermSlot<H> {
                     .move_after_underscore(&mut resources.ident_slot);
                 State::QualifiedIdent
             }
-            TokenKind::Reserved(Reserved::General(GeneralReserved::As)) => {
+            SmtSyntaxToken::Reserved(SmtReserved::General(SmtGeneralReserved::As)) => {
                 // this is actually a term composed of a qualified identifier
                 // move the qualified ident parser after the 'as' reserved word
                 // (meaning the ident will be qualified)
                 resources.qualified_ident_slot.move_after_as();
                 State::QualifiedIdent
             }
-            TokenKind::ParenOpen => {
+            SmtSyntaxToken::ParenOpen => {
                 // this is an application where the function identifier is qualified or indexed
                 // move the qualified ident parser after the parenthesis open
                 resources.qualified_ident_slot.move_after_open_paren();
@@ -818,17 +821,17 @@ impl<H: SmtHandler> TermSlot<H> {
         handler: &mut H,
         resources: &mut ParserResources<H>,
         version: SmtVersion,
-        token: Token,
+        token: SmtToken,
     ) -> Result<(), ParserError<H::Error>> {
         let span = token.span();
         let slot = &mut resources.term_slot;
-        match token.kind(version) {
-            TokenKind::ParenOpen => {
+        match token.syntax(version) {
+            SmtSyntaxToken::ParenOpen => {
                 // opening a new binding, we will parse the symbol next
                 slot.state = State::LetBindingSymbol;
                 Ok(())
             }
-            TokenKind::ParenClose => {
+            SmtSyntaxToken::ParenClose => {
                 // bindings are closed, inner term will be next
 
                 // retrieve where the bindings start in the arena
@@ -869,7 +872,10 @@ impl<H: SmtHandler> TermSlot<H> {
             _ => {
                 // expected open or close parenthesis
                 Err(ParserError::category_error(
-                    SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen, TokenType::ParenClose]),
+                    SyntaxErrorKind::ExpectedToken(&[
+                        SmtTokenCategory::ParenOpen,
+                        SmtTokenCategory::ParenClose,
+                    ]),
                     span,
                 ))
             }
@@ -884,16 +890,16 @@ impl<H: SmtHandler> TermSlot<H> {
         &mut self,
         handler: &mut H,
         version: SmtVersion,
-        token: Token,
+        token: SmtToken,
     ) -> Result<(), ParserError<H::Error>> {
         let span = token.span();
-        match token.kind(version) {
-            TokenKind::ParenOpen => {
+        match token.syntax(version) {
+            SmtSyntaxToken::ParenOpen => {
                 // a new case is being opened, we will parse the pattern next
                 self.state = State::MatchPattern;
                 Ok(())
             }
-            TokenKind::ParenClose => {
+            SmtSyntaxToken::ParenClose => {
                 // the match cases are done
                 let Some(Level::MatchCase { num_cases }) = self.levels.pop() else {
                     panic!("last level should be a match case when closing cases")
@@ -916,7 +922,10 @@ impl<H: SmtHandler> TermSlot<H> {
                 Ok(())
             }
             _ => Err(ParserError::category_error(
-                SyntaxErrorKind::ExpectedToken(&[TokenType::ParenOpen, TokenType::ParenClose]),
+                SyntaxErrorKind::ExpectedToken(&[
+                    SmtTokenCategory::ParenOpen,
+                    SmtTokenCategory::ParenClose,
+                ]),
                 span,
             )),
         }
@@ -995,7 +1004,7 @@ impl SortedBindingsParser {
         handler: &mut H,
         resources: &mut ParserResources<H>,
         version: SmtVersion,
-        token: Token,
+        token: SmtToken,
         open_fn: impl Fn(&mut H, SmtSymbolView<'_>, H::Sort) -> Result<(), H::Error>,
     ) -> Result<ControlFlow<u64>, ParserError<H::Error>> {
         let this = &mut resources.term_slot.sorted_bindings_parser;
@@ -1009,7 +1018,7 @@ impl SortedBindingsParser {
             SortedBindingsParserState::AwaitingBinder => {
                 // either a new sorted variable
                 // or a closing parenthesis ending binders
-                if matches!(token.ty(), TokenType::ParenClose) {
+                if matches!(token.category(), SmtTokenCategory::ParenClose) {
                     let num_opened = this.num_opened;
                     // reset before break
                     this.state = SortedBindingsParserState::Start;
