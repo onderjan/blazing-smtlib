@@ -1,11 +1,14 @@
 mod char_class;
 mod error;
 mod helpers;
+mod recovery;
 
 pub use error::{SmtLexError, SmtLexErrorCause, SmtLexicalError, SmtLexicalErrorKind};
+pub use recovery::{SmtFailFast, SmtLexRecovery, SmtRecovering};
 
 pub(crate) use char_class::CharClass;
 
+use std::marker::PhantomData;
 use std::ops::ControlFlow;
 
 use crate::{
@@ -20,10 +23,10 @@ use crate::{
             FAST_RUN_MASK, HEXADECIMAL_RUN, START, Start, TokenEnd,
         },
     },
-    token::{InnerCategory, SmtBatchCursor, SmtConsume, SmtVersion},
+    token::{InnerCategory, SmtBatchCursor, SmtConsume, SmtRecover, SmtVersion},
 };
 
-pub struct SmtLexer<C: SmtConsume> {
+pub struct SmtLexer<C: SmtConsume, R: SmtLexRecovery<C> = SmtFailFast> {
     /// Consumer of produced tokens.
     consumer: C,
 
@@ -59,6 +62,9 @@ pub struct SmtLexer<C: SmtConsume> {
 
     /// Spans of respective batch tokens.
     spans: Box<[SmtSpan; BATCH_CAPACITY]>,
+
+    /// What the lexer does after an error.
+    recovery: PhantomData<R>,
 }
 
 /// Maximal number of tokens that can be batched.
@@ -147,8 +153,25 @@ enum LexerState {
 }
 
 impl<C: SmtConsume> SmtLexer<C> {
-    /// Constructs the lexer.
+    /// Constructs a lexer that stops at its first error.
     pub fn new(consumer: C, version: SmtVersion) -> Self {
+        // construct the lexer normally
+        // fail-fast is selected by the implementation generics
+        Self::construct(consumer, version)
+    }
+}
+
+impl<C: SmtRecover> SmtLexer<C, SmtRecovering> {
+    /// Constructs a lexer that recovers from errors.
+    pub fn new_recovering(consumer: C, version: SmtVersion) -> Self {
+        // construct the lexer normally
+        // recovering is selected by the implementation generics
+        Self::construct(consumer, version)
+    }
+}
+
+impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
+    fn construct(consumer: C, version: SmtVersion) -> Self {
         SmtLexer {
             consumer,
             version,
@@ -160,6 +183,7 @@ impl<C: SmtConsume> SmtLexer<C> {
             line: 0,
             line_start: 0,
             spans: Box::new([SmtSpan::new_zero(); BATCH_CAPACITY]),
+            recovery: PhantomData,
         }
     }
 
@@ -1292,11 +1316,11 @@ impl<C: SmtConsume> SmtLexer<C> {
     /// delimiter never reaches the consumer; the error spans the token and
     /// the offending byte.
     #[inline]
-    fn expect_delimiter<R, E>(
+    fn expect_delimiter<T, E>(
         &self,
         next: u8,
         position: usize,
-    ) -> Result<(), Interrupted<R, SmtLexError<E>>> {
+    ) -> Result<(), Interrupted<T, SmtLexError<E>>> {
         if FAST[next as usize] & FAST_DELIM != 0 {
             Ok(())
         } else {
@@ -1760,11 +1784,11 @@ impl<C: SmtConsume> SmtLexer<C> {
     }
 
     /// Error spanning the token so far and, if it ended at a byte, that byte.
-    fn error<R, E>(
+    fn error<T, E>(
         &self,
         kind: SmtLexicalErrorKind,
         end: TokenEnd,
-    ) -> Interrupted<R, SmtLexError<E>> {
+    ) -> Interrupted<T, SmtLexError<E>> {
         self.error_at(kind, end.position + end.at_byte as usize)
     }
 
@@ -1772,11 +1796,11 @@ impl<C: SmtConsume> SmtLexer<C> {
     ///
     /// Used for errors detected mid-run, e.g. forbidden byte in a string
     /// or a backslash in a quoted symbol.
-    fn error_at<R, E>(
+    fn error_at<T, E>(
         &self,
         kind: SmtLexicalErrorKind,
         position: usize,
-    ) -> Interrupted<R, SmtLexError<E>> {
+    ) -> Interrupted<T, SmtLexError<E>> {
         let end = self.location_at(position);
         let span = SmtSpan::new_unchecked(self.token_start, end);
         // no tokens have been consumed, as this is an error
@@ -1845,7 +1869,7 @@ struct FastState {
 
 impl FastState {
     #[inline(always)]
-    fn load<C: SmtConsume>(lexer: &SmtLexer<C>, batch: &Batch) -> Self {
+    fn load<C: SmtConsume, R: SmtLexRecovery<C>>(lexer: &SmtLexer<C, R>, batch: &Batch) -> Self {
         Self {
             len: batch.len,
             line: lexer.line,
@@ -1854,7 +1878,11 @@ impl FastState {
     }
 
     #[inline(always)]
-    fn store<C: SmtConsume>(self, lexer: &mut SmtLexer<C>, batch: &mut Batch) {
+    fn store<C: SmtConsume, R: SmtLexRecovery<C>>(
+        self,
+        lexer: &mut SmtLexer<C, R>,
+        batch: &mut Batch,
+    ) {
         batch.len = self.len;
         lexer.line = self.line;
         lexer.line_start = self.line_start;

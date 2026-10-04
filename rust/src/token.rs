@@ -549,3 +549,48 @@ impl<T: SmtConsume + ?Sized> SmtConsume for &mut T {
         (**self).consume(cursor)
     }
 }
+
+/// A token consumer that can recover after an error.
+///
+/// This is used in the library to implement SMT-LIB script processing
+/// with error recovery: after an error, the current command is abandoned
+/// and the lexer closes all open parentheses before announcing recovery.
+/// If the command remains unclosed at the end of input, recovery is made
+/// before the end of input is handed over (only the unclosed command is
+/// abandoned and dropped).
+pub trait SmtRecover: SmtConsume {
+    /// Abandons everything the consumer has not finished.
+    ///
+    /// Called when the input is lexically malformed or the consumer itself
+    /// returns an error, before the failing call returns. The location is
+    /// where the failure occurred: the input from there on is skipped, up
+    /// to the location given to [`recover`](Self::recover).
+    ///
+    /// The tokens consumed so far that belong to an unfinished top-level
+    /// value (typically, an SMT-LIB command) are to be abandoned, as if
+    /// they never were handed over.
+    fn abandon(&mut self, location: SmtLocation);
+
+    /// Finishes the recovery after abandoning.
+    ///
+    /// Called exactly once after every [`abandon`](Self::abandon) before the
+    /// new token is handed over after the recovery. The tokens handed over
+    /// after the recovery are to be considered to follow the tokens before
+    /// the abandoned top-level value started, as if the abandoned top-level
+    /// value was never started. The input between abandonment and recovery
+    /// is not handed over in any way.
+    fn recover(&mut self, location: SmtLocation);
+}
+
+/// Mutable references over token consumers that can recover can recover.
+impl<T: SmtRecover + ?Sized> SmtRecover for &mut T {
+    #[inline]
+    fn abandon(&mut self, location: SmtLocation) {
+        (**self).abandon(location)
+    }
+
+    #[inline]
+    fn recover(&mut self, location: SmtLocation) {
+        (**self).recover(location)
+    }
+}
