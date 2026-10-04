@@ -6,7 +6,7 @@ use crate::{
         CloseParenParser, OpenParenParser, Parser, ParserError, ParserResources, SyntaxErrorKind,
         category::resources::ClosedMultipleResource,
     },
-    token::{SmtTokenCategory, TokenCursor},
+    token::{SmtBatchCursor, SmtTokenCategory},
 };
 
 /// Parses using the first parser, then the second, then returns the result tuple.
@@ -45,7 +45,7 @@ impl<H: SmtHandler, P1: Parser<H>, P2: Parser<H>> Parser<H> for PairParser<H, P1
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        cursor: &mut TokenCursor,
+        cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         // progress the first parser until it breaks or the tokens run out
         if self.first_result.is_none() {
@@ -101,7 +101,7 @@ impl<H: SmtHandler, P: Parser<H>> Parser<H> for ClosedParser<H, P> {
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        cursor: &mut TokenCursor,
+        cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         Ok(self
             .inner
@@ -140,7 +140,7 @@ impl<H: SmtHandler, P: Parser<H>> Parser<H> for OpenedParser<H, P> {
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        cursor: &mut TokenCursor,
+        cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         Ok(self
             .inner
@@ -192,7 +192,7 @@ impl<H: SmtHandler, P: Parser<H>> Parser<H> for ClosedMultipleParser<H, P> {
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        cursor: &mut TokenCursor,
+        cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Vec<P::Result>>, ParserError<H::Error>> {
         self.resource.parse(cursor, |cursor| {
             self.inner.parse(handler, resources, cursor)
@@ -254,7 +254,7 @@ impl<H: SmtHandler, P: Parser<H>> Parser<H> for ClosedMaximumParser<H, P> {
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        cursor: &mut TokenCursor,
+        cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Vec<P::Result>>, ParserError<H::Error>> {
         while let Some(peeked) = cursor.peek() {
             if self.outside {
@@ -334,7 +334,7 @@ impl<H: SmtHandler, P: Parser<H>> Parser<H> for ParenMaximumParser<H, P> {
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        cursor: &mut TokenCursor,
+        cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Vec<P::Result>>, ParserError<H::Error>> {
         loop {
             if self.is_opened {

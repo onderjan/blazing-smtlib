@@ -274,7 +274,7 @@ impl<'a> SmtToken<'a> {
 /// so the lookahead is only useful for fast paths that fall back to
 /// slow paths with the same behaviour if the lookahead is not available.
 #[derive(Clone, Copy)]
-pub struct TokenCursor<'a> {
+pub struct SmtBatchCursor<'a> {
     version: SmtVersion,
     entries: &'a [Option<(InnerCategory, &'a [u8])>],
     spans: &'a [SmtSpan],
@@ -282,7 +282,7 @@ pub struct TokenCursor<'a> {
     relex: bool,
 }
 
-impl<'a> TokenCursor<'a> {
+impl<'a> SmtBatchCursor<'a> {
     /// Returns a cursor at the start of the batch given as its entries and
     /// their spans, of equal length.
     #[inline]
@@ -353,7 +353,7 @@ impl<'a> TokenCursor<'a> {
 
     /// Consumes the next `count` tokens.
     ///
-    /// Behaves as if [`TokenCursor::next`] was called `count` times
+    /// Behaves as if [`SmtBatchCursor::next`] was called `count` times
     /// with the results discarded, stopping at the end of the cursor.
     #[inline]
     pub fn advance(&mut self, count: usize) {
@@ -414,7 +414,7 @@ impl<'a> TokenCursor<'a> {
         self.relex = true;
     }
 
-    /// Whether [`TokenCursor::relex`] has been called on this cursor.
+    /// Whether [`SmtBatchCursor::relex`] has been called on this cursor.
     #[inline]
     pub fn relex_requested(&self) -> bool {
         self.relex
@@ -422,7 +422,7 @@ impl<'a> TokenCursor<'a> {
 }
 
 /// A sequential handler of tokens.
-pub trait TokenHandler {
+pub trait SmtConsume {
     /// The value the handler finishes with.
     type Result;
     type Error;
@@ -431,7 +431,7 @@ pub trait TokenHandler {
     ///
     /// If the handler returns [`ControlFlow::Continue`], it means all tokens
     /// were handled and more are wanted: the cursor must be empty, which it
-    /// also is after a [`TokenCursor::relex`] request.
+    /// also is after a [`SmtBatchCursor::relex`] request.
     ///
     /// If the handler returns [`ControlFlow::Break`], it means
     /// it finished the input it accepts (consuming exactly its tokens),
@@ -439,22 +439,22 @@ pub trait TokenHandler {
     ///
     /// Returning an error means the handler failed at the token after
     /// the consumed ones. The state of the handler and cursor is unspecified.
-    fn handle_tokens(
+    fn consume(
         &mut self,
-        cursor: &mut TokenCursor<'_>,
+        cursor: &mut SmtBatchCursor<'_>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error>;
 }
 
-/// Mutable references over token handlers are token handlers.
-impl<T: TokenHandler + ?Sized> TokenHandler for &mut T {
+/// Mutable references over token consumers are token consumers.
+impl<T: SmtConsume + ?Sized> SmtConsume for &mut T {
     type Result = T::Result;
     type Error = T::Error;
 
     #[inline]
-    fn handle_tokens(
+    fn consume(
         &mut self,
-        cursor: &mut TokenCursor<'_>,
+        cursor: &mut SmtBatchCursor<'_>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
-        (**self).handle_tokens(cursor)
+        (**self).consume(cursor)
     }
 }

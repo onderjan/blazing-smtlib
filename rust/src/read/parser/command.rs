@@ -3,7 +3,7 @@ use std::{convert::Infallible, ops::ControlFlow};
 use crate::{
     CommandHandler, SmtSpan, SmtSymbolView,
     read::parser::{Parser, ParserError, ParserResources, SyntaxErrorKind, handle_err},
-    token::{SmtReserved, SmtSyntaxToken, SmtTokenCategory, SmtVersion, TokenCursor},
+    token::{SmtBatchCursor, SmtReserved, SmtSyntaxToken, SmtTokenCategory, SmtVersion},
 };
 
 mod datatype;
@@ -85,7 +85,7 @@ impl<H: CommandHandler> Parser<H> for CommandParser<H> {
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        cursor: &mut TokenCursor,
+        cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<CommandParserStop>, ParserError<H::Error>> {
         // State machine:
         // 1. AwaitingCommand takes:
@@ -188,7 +188,7 @@ impl<H: CommandHandler> Parser<H> for Infallible {
         &mut self,
         _handler: &mut H,
         _resources: &mut ParserResources<H>,
-        _cursor: &mut TokenCursor,
+        _cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<()>, ParserError<H::Error>> {
         match *self {}
     }
@@ -234,7 +234,7 @@ impl<H: CommandHandler, C: CommandAction<H>> Parser<H> for CommandPayloadParser<
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        cursor: &mut TokenCursor,
+        cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<()>, ParserError<H::Error>> {
         match self.parser.parse(handler, resources, cursor)? {
             ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
@@ -275,7 +275,7 @@ mod tests {
                 .parse(
                     &mut handler,
                     &mut ParserResources::new(),
-                    &mut TokenCursor::single(SmtVersion::V2_7, close),
+                    &mut SmtBatchCursor::single(SmtVersion::V2_7, close),
                 )
                 .expect("check-sat closing parenthesis must parse");
             assert!(matches!(flow, ControlFlow::Break(())));

@@ -13,20 +13,20 @@ use blazing_smtlib::{
         lexer::Lexer,
         parser::{Parser, ParserResources, SortParser, TermParser},
     },
-    token::{SmtTokenCategory, SmtVersion, TokenCursor, TokenHandler},
+    token::{SmtBatchCursor, SmtConsume, SmtTokenCategory, SmtVersion},
 };
 
 /// A handler that runs a check on a copy of every cursor it receives, then
 /// consumes the hand-over.
 struct Probe<F>(F);
 
-impl<F: FnMut(TokenCursor<'_>)> TokenHandler for Probe<F> {
+impl<F: FnMut(SmtBatchCursor<'_>)> SmtConsume for Probe<F> {
     type Result = ();
     type Error = Infallible;
 
-    fn handle_tokens(
+    fn consume(
         &mut self,
-        cursor: &mut TokenCursor<'_>,
+        cursor: &mut SmtBatchCursor<'_>,
     ) -> Result<ControlFlow<Self::Result>, Infallible> {
         (self.0)(*cursor);
         cursor.consume_all();
@@ -35,7 +35,7 @@ impl<F: FnMut(TokenCursor<'_>)> TokenHandler for Probe<F> {
 }
 
 /// Lexes the chunks and end of file, running the check on every hand-over.
-fn on_batches(chunks: &[&[u8]], check: impl FnMut(TokenCursor<'_>)) {
+fn on_batches(chunks: &[&[u8]], check: impl FnMut(SmtBatchCursor<'_>)) {
     let mut lexer = Lexer::new(Probe(check), SmtVersion::V2_7);
     for chunk in chunks {
         let _ = lexer.lex_slice(chunk).expect("valid input must lex");
@@ -44,7 +44,7 @@ fn on_batches(chunks: &[&[u8]], check: impl FnMut(TokenCursor<'_>)) {
 }
 
 /// The single hand-over of the input as one slice, before the end of file.
-fn on_token_batch(input: &[u8], mut check: impl FnMut(TokenCursor<'_>)) {
+fn on_token_batch(input: &[u8], mut check: impl FnMut(SmtBatchCursor<'_>)) {
     let mut seen = 0;
     on_batches(&[input], |cursor| {
         if cursor.peek().map(|token| token.category()) == Some(SmtTokenCategory::EndOfFile) {
@@ -60,7 +60,7 @@ fn on_token_batch(input: &[u8], mut check: impl FnMut(TokenCursor<'_>)) {
 }
 
 /// How many tokens a fresh cursor holds, counted by walking a copy.
-fn len(cursor: TokenCursor<'_>) -> usize {
+fn len(cursor: SmtBatchCursor<'_>) -> usize {
     let mut walk = cursor;
     let mut count = 0;
     while walk.next().is_some() {
@@ -154,7 +154,7 @@ fn single_token_cursor_holds_that_token_alone() {
     on_token_batch(b"(a b) c ", |start| {
         let mut walk = start;
         while let Some(token) = walk.next() {
-            let mut cursor = TokenCursor::single(SmtVersion::V2_7, token);
+            let mut cursor = SmtBatchCursor::single(SmtVersion::V2_7, token);
             assert!(!cursor.is_empty());
             assert_eq!(cursor.peek(), Some(token));
             assert_eq!(cursor.get(1), None);

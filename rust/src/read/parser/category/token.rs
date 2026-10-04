@@ -4,7 +4,7 @@ use crate::{
     SmtHandler, SmtKeyword, SmtKeywordView, SmtNumeral, SmtNumeralView, SmtStringContent,
     SmtStringContentView, SmtSymbol,
     read::parser::{Parser, ParserError, ParserResources, SyntaxErrorKind},
-    token::{SmtSyntaxToken, SmtToken, SmtTokenCategory, SmtVersion, TokenCursor},
+    token::{SmtBatchCursor, SmtSyntaxToken, SmtToken, SmtTokenCategory, SmtVersion},
 };
 
 pub struct SymbolParser;
@@ -45,7 +45,7 @@ impl<H: SmtHandler> Parser<H> for SymbolParser {
         &mut self,
         _handler: &mut H,
         _resources: &mut ParserResources<H>,
-        cursor: &mut TokenCursor,
+        cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result, ()>, ParserError<H::Error>> {
         let Some(token) = cursor.next() else {
             return Ok(ControlFlow::Continue(()));
@@ -100,7 +100,7 @@ macro_rules! token_parser {
                 &mut self,
                 _handler: &mut H,
                 _resources: &mut ParserResources<H>,
-                cursor: &mut TokenCursor,
+                cursor: &mut SmtBatchCursor,
             ) -> Result<ControlFlow<Self::Result, ()>, ParserError<H::Error>> {
                 let Some(token) = cursor.next() else {
                     return Ok(ControlFlow::Continue(()));

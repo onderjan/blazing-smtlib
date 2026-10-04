@@ -12,7 +12,7 @@ pub use script::*;
 
 use crate::{
     SmtHandler, SmtSpan,
-    token::{SmtToken, SmtTokenCategory, SmtVersion, TokenCursor},
+    token::{SmtBatchCursor, SmtToken, SmtTokenCategory, SmtVersion},
 };
 
 pub trait Parser<H: SmtHandler + ?Sized> {
@@ -22,7 +22,7 @@ pub trait Parser<H: SmtHandler + ?Sized> {
     ///
     /// If the parser returns [`ControlFlow::Continue`], it means all tokens
     /// were handled and more are wanted: the cursor must be empty, which it
-    /// also is after a [`TokenCursor::relex`] request.
+    /// also is after a [`SmtBatchCursor::relex`] request.
     ///
     /// If the parser returns [`ControlFlow::Break`], it means
     /// it finished the input it accepts (consuming exactly its tokens),
@@ -47,7 +47,7 @@ pub trait Parser<H: SmtHandler + ?Sized> {
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        cursor: &mut TokenCursor,
+        cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>>;
 }
 
@@ -57,7 +57,7 @@ pub trait Parser<H: SmtHandler + ?Sized> {
 /// For parsers whose state machine steps by single tokens.
 #[inline]
 pub(crate) fn parse_by_token<R, E>(
-    cursor: &mut TokenCursor,
+    cursor: &mut SmtBatchCursor,
     mut progress: impl FnMut(SmtVersion, SmtToken) -> Result<ControlFlow<R>, E>,
 ) -> Result<ControlFlow<R>, E> {
     while let Some(token) = cursor.next() {

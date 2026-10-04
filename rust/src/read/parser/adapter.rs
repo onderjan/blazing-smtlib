@@ -3,12 +3,12 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler,
     read::parser::{Parser, ParserError, ParserResources},
-    token::{TokenCursor, TokenHandler},
+    token::{SmtBatchCursor, SmtConsume},
 };
 
-/// Adapts a parser to the token handler a lexer drives.
+/// Adapts a parser to the token consumer a lexer drives.
 ///
-/// The adapter implements [`TokenHandler`]: it calls the parser,
+/// The adapter implements [`SmtConsume`]: it calls the parser,
 /// providing it the handler and additional persistent resources.
 pub struct ParseAdapter<'a, H: SmtHandler + ?Sized, P: Parser<H>> {
     handler: &'a mut H,
@@ -42,14 +42,14 @@ impl<'a, H: SmtHandler + ?Sized, P: Parser<H>> ParseAdapter<'a, H, P> {
     }
 }
 
-impl<H: SmtHandler + ?Sized, P: Parser<H>> TokenHandler for ParseAdapter<'_, H, P> {
+impl<H: SmtHandler + ?Sized, P: Parser<H>> SmtConsume for ParseAdapter<'_, H, P> {
     type Result = P::Result;
     type Error = ParserError<H::Error>;
 
     #[inline]
-    fn handle_tokens(
+    fn consume(
         &mut self,
-        cursor: &mut TokenCursor<'_>,
+        cursor: &mut SmtBatchCursor<'_>,
     ) -> Result<ControlFlow<P::Result>, ParserError<H::Error>> {
         // provide the handler and resources to the parser
         let result = self

@@ -12,7 +12,7 @@ use std::ops::ControlFlow;
 use blazing_smtlib::{
     SmtLocation,
     read::lexer::{LexError, Lexer},
-    token::{SmtReserved, SmtSyntaxToken, SmtVersion, TokenCursor, TokenHandler},
+    token::{SmtBatchCursor, SmtConsume, SmtReserved, SmtSyntaxToken, SmtVersion},
 };
 
 /// Writes every token handed over as a response line.
@@ -34,13 +34,13 @@ fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
-impl TokenHandler for Report<'_> {
+impl SmtConsume for Report<'_> {
     type Result = ();
     type Error = Infallible;
 
-    fn handle_tokens(
+    fn consume(
         &mut self,
-        cursor: &mut TokenCursor<'_>,
+        cursor: &mut SmtBatchCursor<'_>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         while let Some(token) = cursor.next() {
             let reserved = match SmtSyntaxToken::from_token(token, self.version) {

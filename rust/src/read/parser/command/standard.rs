@@ -13,7 +13,7 @@ use crate::{
             function::{DefineFunsRecParser, FunctionSignatureParser, RecursiveBodyParser},
         },
     },
-    token::{SmtCommandNameReserved, SmtSyntaxToken, SmtTokenCategory, SmtVersion, TokenCursor},
+    token::{SmtBatchCursor, SmtCommandNameReserved, SmtSyntaxToken, SmtTokenCategory, SmtVersion},
 };
 
 /// Defines the standard commands, each named like its variant of
@@ -72,7 +72,7 @@ macro_rules! standard_commands {
                 kind: StandardCommandKind,
                 handler: &mut H,
                 resources: &mut ParserResources<H>,
-                cursor: &mut TokenCursor<'_>,
+                cursor: &mut SmtBatchCursor<'_>,
             ) -> Result<ControlFlow<CommandParserStop, ()>, ParserError<H::Error>> {
                 let flow = match kind {
                     $(StandardCommandKind::$kind => self.$field.parse(handler, resources, cursor)?,)*
@@ -291,7 +291,7 @@ impl<H: CommandHandler> Parser<H> for GetValueParser<H> {
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        cursor: &mut TokenCursor,
+        cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Vec<H::Term>, ()>, ParserError<H::Error>> {
         match self.inner.parse(handler, resources, cursor)? {
             ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
@@ -364,7 +364,7 @@ impl<H: CommandHandler> Parser<H> for SetInfoParser<H> {
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        cursor: &mut TokenCursor,
+        cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<H::Attribute, ()>, ParserError<H::Error>> {
         // We process the version before the actual processing, as we
         // cannot process token-by-token in parallel, just look at the cursor
@@ -469,7 +469,7 @@ impl<H: CommandHandler> Parser<H> for CheckSatAssumingParser<H> {
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        cursor: &mut TokenCursor,
+        cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Vec<H::Term>, ()>, ParserError<H::Error>> {
         // Any terms are allowed as assumptions since SMT-LIB 2.7. Before it,
         // the terms must be propositional literals, i.e. `<symbol>` or `(not <symbol>)`.

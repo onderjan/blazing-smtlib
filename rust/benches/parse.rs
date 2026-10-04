@@ -44,25 +44,25 @@ use std::time::Instant;
 
 use blazing_smtlib::{
     read::lexer::Lexer,
-    token::{SmtVersion, TokenCursor, TokenHandler},
+    token::{SmtBatchCursor, SmtConsume, SmtVersion},
 };
 
 /// Default timed runs per file and mode; an additional first (warm-up) run
 /// is discarded.
 const DEFAULT_ITERATIONS: usize = 5;
 
-/// Token handler that only counts tokens, so timed lexing includes no parsing.
+/// Token consumer that only counts tokens, so timed lexing includes no parsing.
 struct DiscardTokens {
     tokens: usize,
 }
 
-impl TokenHandler for DiscardTokens {
+impl SmtConsume for DiscardTokens {
     type Result = ();
     type Error = Infallible;
 
-    fn handle_tokens(
+    fn consume(
         &mut self,
-        cursor: &mut TokenCursor<'_>,
+        cursor: &mut SmtBatchCursor<'_>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         while cursor.next().is_some() {
             self.tokens += 1;

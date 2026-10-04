@@ -10,23 +10,23 @@ use blazing_smtlib::{
     SmtSpan,
     read::lexer::{LexError, Lexer, LexerError, LexerErrorKind},
     token::{
-        SmtGeneralReserved, SmtReserved, SmtTokenCategory, SmtVersion, TokenCursor, TokenHandler,
+        SmtBatchCursor, SmtConsume, SmtGeneralReserved, SmtReserved, SmtTokenCategory, SmtVersion,
     },
 };
 
 use lex_backend::{Feed, LexedError, LexedToken, Loc, loc};
 
-/// A token handler that takes every token and keeps nothing, for the tests
+/// A token consumer that takes every token and keeps nothing, for the tests
 /// that drive the Rust lexer directly.
 struct TakeTokens;
 
-impl TokenHandler for TakeTokens {
+impl SmtConsume for TakeTokens {
     type Result = ();
     type Error = Infallible;
 
-    fn handle_tokens(
+    fn consume(
         &mut self,
-        cursor: &mut TokenCursor<'_>,
+        cursor: &mut SmtBatchCursor<'_>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         cursor.consume_all();
         Ok(ControlFlow::Continue(()))
@@ -584,16 +584,16 @@ fn string_double_quote_escape_is_a_single_quote_in_the_payload() {
 
 // --- Handler errors ---
 
-/// A token handler that rejects every token, returning its span.
+/// A token consumer that rejects every token, returning its span.
 struct RejectTokens;
 
-impl TokenHandler for RejectTokens {
+impl SmtConsume for RejectTokens {
     type Result = ();
     type Error = SmtSpan;
 
-    fn handle_tokens(
+    fn consume(
         &mut self,
-        cursor: &mut TokenCursor<'_>,
+        cursor: &mut SmtBatchCursor<'_>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         match cursor.next() {
             Some(token) => Err(token.span()),
@@ -812,16 +812,16 @@ fn cr_alone_ends_a_comment_but_not_a_line() {
 
 // --- Failed state after errors raised at EOF ---
 
-/// A token handler that rejects only the end-of-file token.
+/// A token consumer that rejects only the end-of-file token.
 struct RejectEof;
 
-impl TokenHandler for RejectEof {
+impl SmtConsume for RejectEof {
     type Result = ();
     type Error = ();
 
-    fn handle_tokens(
+    fn consume(
         &mut self,
-        cursor: &mut TokenCursor<'_>,
+        cursor: &mut SmtBatchCursor<'_>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         while let Some(token) = cursor.next() {
             if token.category() == SmtTokenCategory::EndOfFile {

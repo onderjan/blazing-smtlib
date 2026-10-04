@@ -71,7 +71,7 @@ pub(crate) mod tests {
             lexer::Lexer,
             parser::{Parser, ParserError, ParserResources},
         },
-        token::{SmtTokenCategory, SmtVersion, TokenCursor, TokenHandler},
+        token::{SmtBatchCursor, SmtConsume, SmtTokenCategory, SmtVersion},
     };
 
     /// Drives `parser` over `resources` through the whole input with the
@@ -92,13 +92,13 @@ pub(crate) mod tests {
             unconsumed: usize,
         }
 
-        impl<P: Parser<CheckStandardSyntax>> TokenHandler for Drive<'_, P> {
+        impl<P: Parser<CheckStandardSyntax>> SmtConsume for Drive<'_, P> {
             type Result = ();
             type Error = ParserError<NonstandardCommandError>;
 
-            fn handle_tokens(
+            fn consume(
                 &mut self,
-                cursor: &mut TokenCursor<'_>,
+                cursor: &mut SmtBatchCursor<'_>,
             ) -> Result<ControlFlow<()>, Self::Error> {
                 while !cursor.is_empty() {
                     if self.result.is_some() {

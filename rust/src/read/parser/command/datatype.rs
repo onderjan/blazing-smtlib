@@ -8,7 +8,9 @@ use crate::{
         SortedVarParser, SymbolParser, SyntaxErrorKind, category::PairParser, handle_err,
         parse_by_token,
     },
-    token::{SmtGeneralReserved, SmtReserved, SmtSyntaxToken, SmtToken, SmtVersion, TokenCursor},
+    token::{
+        SmtBatchCursor, SmtGeneralReserved, SmtReserved, SmtSyntaxToken, SmtToken, SmtVersion,
+    },
 };
 
 /// Parser for a single datatype introduction (name and arity in parentheses).
@@ -101,7 +103,7 @@ impl<H: CommandHandler> Parser<H> for DatatypeParser<H> {
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        cursor: &mut TokenCursor,
+        cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         parse_by_token(cursor, |version, token| {
             self.progress(handler, resources, version, token)
@@ -136,7 +138,7 @@ impl<H: CommandHandler> DatatypeParser<H> {
                     let result = self.constructors_parser.parse(
                         handler,
                         resources,
-                        &mut TokenCursor::single(version, token),
+                        &mut SmtBatchCursor::single(version, token),
                     )?;
                     debug_assert!(
                         matches!(result, ControlFlow::Continue(())),
@@ -159,7 +161,11 @@ impl<H: CommandHandler> DatatypeParser<H> {
             DatatypeState::SimpleConstructors => {
                 // parse the simple constructors
                 self.constructors_parser
-                    .parse(handler, resources, &mut TokenCursor::single(version, token))?
+                    .parse(
+                        handler,
+                        resources,
+                        &mut SmtBatchCursor::single(version, token),
+                    )?
                     .break_value()
             }
             DatatypeState::Parameters => {
@@ -167,7 +173,7 @@ impl<H: CommandHandler> DatatypeParser<H> {
                 if let ControlFlow::Break(params) = self.symbols_parser.parse(
                     handler,
                     resources,
-                    &mut TokenCursor::single(version, token),
+                    &mut SmtBatchCursor::single(version, token),
                 )? {
                     // there must be at least one parameter
                     if params.is_empty() {
@@ -192,7 +198,11 @@ impl<H: CommandHandler> DatatypeParser<H> {
             DatatypeState::ParametricConstructors => {
                 // parse the parametric constructors
                 self.constructors_parser
-                    .parse(handler, resources, &mut TokenCursor::single(version, token))?
+                    .parse(
+                        handler,
+                        resources,
+                        &mut SmtBatchCursor::single(version, token),
+                    )?
                     .break_value()
             }
             DatatypeState::Close => {
@@ -268,7 +278,7 @@ impl<H: CommandHandler> Parser<H> for DeclareDatatypesParser<H> {
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        cursor: &mut TokenCursor,
+        cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         parse_by_token(cursor, |version, token| {
             self.progress(handler, resources, version, token)
@@ -292,7 +302,7 @@ impl<H: CommandHandler> DeclareDatatypesParser<H> {
                 if let ControlFlow::Break(introductions) = self.introductions_parser.parse(
                     handler,
                     resources,
-                    &mut TokenCursor::single(version, token),
+                    &mut SmtBatchCursor::single(version, token),
                 )? {
                     // introductions must not be empty
                     if introductions.is_empty() {
@@ -313,7 +323,7 @@ impl<H: CommandHandler> DeclareDatatypesParser<H> {
                 if let ControlFlow::Break(datatypes) = self.datatypes_parser.parse(
                     handler,
                     resources,
-                    &mut TokenCursor::single(version, token),
+                    &mut SmtBatchCursor::single(version, token),
                 )? {
                     // there cannot be more datatypes than sort declarations due to the maximum parser
                     // ensure there are not more sort declarations than datatypes
@@ -373,7 +383,7 @@ impl<H: CommandHandler> Parser<H> for DeclareDatatypeParser<H> {
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        cursor: &mut TokenCursor,
+        cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         parse_by_token(cursor, |version, token| {
             self.progress(handler, resources, version, token)
@@ -402,7 +412,7 @@ impl<H: CommandHandler> DeclareDatatypeParser<H> {
                 if let ControlFlow::Break(()) = self.datatype_parser.parse(
                     handler,
                     resources,
-                    &mut TokenCursor::single(version, token),
+                    &mut SmtBatchCursor::single(version, token),
                 )? {
                     // the single declaration ends the command
                     handle_err(handler.end_declare_datatypes(), span)?;

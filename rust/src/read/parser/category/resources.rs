@@ -6,7 +6,7 @@ use crate::{
         Arena, IdentSlot, ParserError, PatternSlot, QualifiedIdentSlot, SExprSlot, SortSlot,
         SortedVarSlot, TermSlot, category::attribute::AttributeSlot,
     },
-    token::{SmtTokenCategory, TokenCursor},
+    token::{SmtBatchCursor, SmtTokenCategory},
 };
 
 /// Contains non-duplicated parser resources.
@@ -90,8 +90,8 @@ impl<T> ClosedMultipleResource<T> {
 
     pub(crate) fn parse<E>(
         &mut self,
-        cursor: &mut TokenCursor,
-        mut element: impl FnMut(&mut TokenCursor) -> Result<ControlFlow<T>, ParserError<E>>,
+        cursor: &mut SmtBatchCursor,
+        mut element: impl FnMut(&mut SmtBatchCursor) -> Result<ControlFlow<T>, ParserError<E>>,
     ) -> Result<ControlFlow<Vec<T>>, ParserError<E>> {
         while let Some(token) = cursor.peek() {
             if self.outside {

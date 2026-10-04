@@ -23,7 +23,9 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use blazing_smtlib::{
     SmtLocation,
     read::lexer::{LexError, Lexer, LexerErrorKind},
-    token::{SmtReserved, SmtSyntaxToken, SmtTokenCategory, SmtVersion, TokenCursor, TokenHandler},
+    token::{
+        SmtBatchCursor, SmtConsume, SmtReserved, SmtSyntaxToken, SmtTokenCategory, SmtVersion,
+    },
 };
 
 /// A location as `(offset, line, column)`, all zero-based.
@@ -124,13 +126,13 @@ struct Collect<'a> {
     tokens: &'a mut Vec<LexedToken>,
 }
 
-impl TokenHandler for Collect<'_> {
+impl SmtConsume for Collect<'_> {
     type Result = ();
     type Error = Infallible;
 
-    fn handle_tokens(
+    fn consume(
         &mut self,
-        cursor: &mut TokenCursor<'_>,
+        cursor: &mut SmtBatchCursor<'_>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         while let Some(token) = cursor.next() {
             let kind = match SmtSyntaxToken::from_token(token, self.version) {

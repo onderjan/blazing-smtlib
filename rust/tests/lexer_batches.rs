@@ -1,5 +1,5 @@
-//! Tests of the batch contract between the lexer and its token handler:
-//! how tokens are grouped into `handle_tokens` calls, and what a handler's
+//! Tests of the batch contract between the lexer and its token consumer:
+//! how tokens are grouped into `consume` calls, and what a handler's
 //! stop does to lexing.
 //!
 //! Tokens borrowing the current slice are batched and handed over when the
@@ -18,7 +18,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use blazing_smtlib::{
     SmtLocation, SmtSpan,
     read::lexer::{LexError, Lexer, LexerErrorKind},
-    token::{SmtToken, SmtTokenCategory, SmtVersion, TokenCursor, TokenHandler},
+    token::{SmtBatchCursor, SmtConsume, SmtToken, SmtTokenCategory, SmtVersion},
 };
 
 /// The batch capacity the lexer is expected to use.
@@ -50,7 +50,7 @@ fn loc(location: SmtLocation) -> (u64, u64, u64) {
     (location.offset(), location.line(), location.column())
 }
 
-/// What the handler replies to one `handle_tokens` call.
+/// What the handler replies to one `consume` call.
 #[derive(Debug, Clone, Copy)]
 enum Reply {
     /// Take every token.
@@ -93,13 +93,13 @@ struct Recorder<'r> {
     plan: &'r [Reply],
 }
 
-impl TokenHandler for Recorder<'_> {
+impl SmtConsume for Recorder<'_> {
     type Result = ();
     type Error = ();
 
-    fn handle_tokens(
+    fn consume(
         &mut self,
-        cursor: &mut TokenCursor<'_>,
+        cursor: &mut SmtBatchCursor<'_>,
     ) -> Result<ControlFlow<Self::Result>, ()> {
         // record every token of the hand-over by walking a copy of the cursor
         let mut walk = *cursor;
@@ -166,7 +166,7 @@ impl Run {
 
 /// The lexer is at the origin, as it must be after a finish or an end of file.
 #[track_caller]
-fn assert_at_origin<H: TokenHandler>(lexer: &Lexer<H>) {
+fn assert_at_origin<H: SmtConsume>(lexer: &Lexer<H>) {
     assert_eq!(
         loc(lexer.current_location()),
         (0, 0, 0),

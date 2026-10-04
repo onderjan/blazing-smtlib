@@ -20,10 +20,10 @@ use crate::{
             FAST_RUN_MASK, HEXADECIMAL_RUN, START, Start, TokenEnd,
         },
     },
-    token::{InnerCategory, SmtVersion, TokenCursor, TokenHandler},
+    token::{InnerCategory, SmtBatchCursor, SmtConsume, SmtVersion},
 };
 
-pub struct Lexer<H: TokenHandler> {
+pub struct Lexer<H: SmtConsume> {
     /// Handler of produced tokens.
     handler: H,
 
@@ -140,7 +140,7 @@ enum LexerState {
     Failed,
 }
 
-impl<H: TokenHandler> Lexer<H> {
+impl<H: SmtConsume> Lexer<H> {
     /// Constructs the lexer.
     pub fn new(handler: H, version: SmtVersion) -> Self {
         Lexer {
@@ -163,11 +163,11 @@ impl<H: TokenHandler> Lexer<H> {
 
     /// Lexes the whole input including EOF at the end.
     ///
-    /// If the token handler returns [`ControlFlow::Break`] on some token,
+    /// If the token consumer returns [`ControlFlow::Break`] on some token,
     /// the lexer passes it through, adding the break location,
     /// and resets itself.
     ///
-    /// If the token handler returns [`ControlFlow::Continue`] on all tokens
+    /// If the token consumer returns [`ControlFlow::Continue`] on all tokens
     /// including EOF, the lexer resets itself after EOF
     /// and returns [`ControlFlow::Continue`].
     ///
@@ -185,11 +185,11 @@ impl<H: TokenHandler> Lexer<H> {
 
     /// Lexes the given slice, sending the lexed tokens to the handler.
     ///
-    /// If the token handler returns [`ControlFlow::Break`] on some token,
+    /// If the token consumer returns [`ControlFlow::Break`] on some token,
     /// the lexer passes it through, adding the break location,
     /// and resets itself.
     ///
-    /// If the token handler returns [`ControlFlow::Continue`] on all tokens,
+    /// If the token consumer returns [`ControlFlow::Continue`] on all tokens,
     /// the lexer is ready for further lexing.
     ///
     /// If an error occurs, the lexer moves into a failure state;
@@ -204,11 +204,11 @@ impl<H: TokenHandler> Lexer<H> {
 
     /// Lexes end-of-file, sending the lexed tokens to the handler.
     ///
-    /// If the token handler returns [`ControlFlow::Break`] on the EOF token,
+    /// If the token consumer returns [`ControlFlow::Break`] on the EOF token,
     /// the lexer passes it through, adding the break location,
     /// and resets itself.
     ///
-    /// If the token handler returns [`ControlFlow::Continue`] on the EOF token,
+    /// If the token consumer returns [`ControlFlow::Continue`] on the EOF token,
     /// the lexer resets itself and returns [`ControlFlow::Continue`].
     ///
     /// If an error occurs, the lexer moves into a failure state;
@@ -302,7 +302,7 @@ impl<H: TokenHandler> Lexer<H> {
             }
             Err(interrupted) => match interrupted.result? {
                 Stop::Relex => {
-                    panic!("token handler cannot request relex at end of file")
+                    panic!("token consumer cannot request relex at end of file")
                 }
                 Stop::Finished(result) => {
                     // the handler is done with the input
@@ -382,7 +382,7 @@ impl<H: TokenHandler> Lexer<H> {
                             // so the location must be equal or greater to initial offset
                             // compute this even for Finished to assert the interrupted location
                             let index = location.offset().checked_sub(initial_offset).expect(
-                                "the token handler must not stop before the starting token",
+                                "the token consumer must not stop before the starting token",
                             );
                             match stop {
                                 Stop::Relex => {
@@ -1371,7 +1371,7 @@ impl<H: TokenHandler> Lexer<H> {
                 let entry = Some((ty, self.token_content.as_slice()));
                 Self::flush_cursor(
                     &mut self.handler,
-                    TokenCursor::new(self.version, std::slice::from_ref(&entry), spans),
+                    SmtBatchCursor::new(self.version, std::slice::from_ref(&entry), spans),
                     &mut self.version,
                 )
             }
@@ -1402,14 +1402,14 @@ impl<H: TokenHandler> Lexer<H> {
         }
         Self::flush_cursor(
             &mut self.handler,
-            TokenCursor::new(self.version, &batch.entries[..len], &self.spans[..len]),
+            SmtBatchCursor::new(self.version, &batch.entries[..len], &self.spans[..len]),
             &mut self.version,
         )
     }
 
     fn flush_cursor(
         handler: &mut H,
-        mut cursor: TokenCursor,
+        mut cursor: SmtBatchCursor,
         version: &mut SmtVersion,
     ) -> Result<(), Interrupted<H::Result, LexError<H::Error>>> {
         // where lexing continues if the handler stops before the first token
@@ -1421,7 +1421,7 @@ impl<H: TokenHandler> Lexer<H> {
             .start();
 
         // flush the cursor
-        let result = handler.handle_tokens(&mut cursor);
+        let result = handler.consume(&mut cursor);
 
         // set our version to the cursor-requested version
         *version = cursor.version();
@@ -1433,14 +1433,14 @@ impl<H: TokenHandler> Lexer<H> {
                 // ensure the cursor has been fully consumed
                 assert!(
                     cursor.is_empty(),
-                    "the token handler must consume all tokens before continuing"
+                    "the token consumer must consume all tokens before continuing"
                 );
                 return Ok(());
             }
             Ok(ControlFlow::Break(result)) => {
                 assert!(
                     !cursor.relex_requested(),
-                    "the token handler cannot both finish and request relex"
+                    "the token consumer cannot both finish and request relex"
                 );
                 Ok(Stop::Finished(result))
             }
@@ -1471,7 +1471,7 @@ impl<H: TokenHandler> Lexer<H> {
 
         Self::flush_cursor(
             &mut self.handler,
-            TokenCursor::new(self.version, std::slice::from_ref(&entry), spans),
+            SmtBatchCursor::new(self.version, std::slice::from_ref(&entry), spans),
             &mut self.version,
         )
     }
@@ -1633,7 +1633,7 @@ struct FastState {
 
 impl FastState {
     #[inline(always)]
-    fn load<H: TokenHandler>(lexer: &Lexer<H>, batch: &Batch) -> Self {
+    fn load<H: SmtConsume>(lexer: &Lexer<H>, batch: &Batch) -> Self {
         Self {
             len: batch.len,
             line: lexer.line,
@@ -1642,7 +1642,7 @@ impl FastState {
     }
 
     #[inline(always)]
-    fn store<H: TokenHandler>(self, lexer: &mut Lexer<H>, batch: &mut Batch) {
+    fn store<H: SmtConsume>(self, lexer: &mut Lexer<H>, batch: &mut Batch) {
         batch.len = self.len;
         lexer.line = self.line;
         lexer.line_start = self.line_start;

@@ -26,7 +26,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use blazing_smtlib::{
     read::lexer::Lexer,
-    token::{SmtSyntaxToken, SmtToken, SmtVersion, TokenCursor, TokenHandler},
+    token::{SmtBatchCursor, SmtConsume, SmtSyntaxToken, SmtToken, SmtVersion},
 };
 
 /// Global allocator that counts allocations and tracks the live heap.
@@ -85,7 +85,7 @@ fn count_allocations(data: &[u8], path: &Path) -> Allocations {
     }
 }
 
-/// Token handler that tallies what a file consists of.
+/// Token consumer that tallies what a file consists of.
 #[derive(Default)]
 struct Census {
     tokens: u64,
@@ -101,13 +101,13 @@ struct Census {
     expecting_command_name: bool,
 }
 
-impl TokenHandler for Census {
+impl SmtConsume for Census {
     type Result = ();
     type Error = Infallible;
 
-    fn handle_tokens(
+    fn consume(
         &mut self,
-        cursor: &mut TokenCursor<'_>,
+        cursor: &mut SmtBatchCursor<'_>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         while let Some(token) = cursor.next() {
             self.tally(token);

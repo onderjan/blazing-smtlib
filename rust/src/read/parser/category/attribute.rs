@@ -6,7 +6,7 @@ use crate::{
         Arena, CloseParenParser, Parser, ParserError, ParserResources, SExprSlot, SyntaxErrorKind,
         TextHandle, category::parse_special_constant, handle_err, parse_by_token,
     },
-    token::{SmtSyntaxToken, SmtToken, SmtTokenCategory, SmtVersion, TokenCursor},
+    token::{SmtBatchCursor, SmtSyntaxToken, SmtToken, SmtTokenCategory, SmtVersion},
 };
 
 /// A parser that reads an SMT-LIB attribute followed by a closing parenthesis.
@@ -38,7 +38,7 @@ impl<H: SmtHandler> Parser<H> for ClosedAttributeParser<H> {
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        cursor: &mut TokenCursor,
+        cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result>, ParserError<<H as SmtHandler>::Error>> {
         let ParserResources {
             attribute_slot,
@@ -87,7 +87,7 @@ impl<H: SmtHandler> Parser<H> for ClosedMultipleAttributeParser<H> {
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        cursor: &mut TokenCursor,
+        cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result>, ParserError<<H as SmtHandler>::Error>> {
         let ParserResources {
             attribute_slot,

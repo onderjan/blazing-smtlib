@@ -10,8 +10,8 @@ use crate::{
         handle_err,
     },
     token::{
-        SmtGeneralReserved, SmtReserved, SmtSyntaxToken, SmtToken, SmtTokenCategory, SmtVersion,
-        TokenCursor,
+        SmtBatchCursor, SmtGeneralReserved, SmtReserved, SmtSyntaxToken, SmtToken,
+        SmtTokenCategory, SmtVersion,
     },
 };
 
@@ -177,7 +177,7 @@ impl<H: SmtHandler> Parser<H> for TermParser<H> {
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        cursor: &mut TokenCursor<'_>,
+        cursor: &mut SmtBatchCursor<'_>,
     ) -> Result<ControlFlow<H::Term>, ParserError<H::Error>> {
         // progress the slot with the cursor
         TermSlot::parse(handler, resources, cursor)
@@ -228,7 +228,7 @@ impl<H: SmtHandler> TermSlot<H> {
     pub(crate) fn parse(
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        cursor: &mut TokenCursor,
+        cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<H::Term>, ParserError<H::Error>> {
         while let Some(token) = cursor.next() {
             if matches!(resources.term_slot.state, State::Start)

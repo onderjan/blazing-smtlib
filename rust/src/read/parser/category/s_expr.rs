@@ -6,7 +6,7 @@ use crate::{
         Arena, Parser, ParserError, ParserResources, SyntaxErrorKind,
         category::parse_special_constant, handle_err, parse_by_token,
     },
-    token::{SmtSyntaxToken, SmtToken, SmtVersion, TokenCursor},
+    token::{SmtBatchCursor, SmtSyntaxToken, SmtToken, SmtVersion},
 };
 
 /// A parser that reads an SMT-LIB S-expression.
@@ -39,7 +39,7 @@ impl<H: SmtHandler> Parser<H> for SExprParser<H> {
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        cursor: &mut TokenCursor,
+        cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<H::SExpr>, ParserError<H::Error>> {
         // progress the slot over the arena
         let ParserResources {

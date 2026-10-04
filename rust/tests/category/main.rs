@@ -6,7 +6,7 @@
 //! live in the submodules under `category/`.
 //!
 //! Tokens cannot be constructed outside the crate, so the driver feeds the
-//! parser under test by pushing the input through a `Lexer` whose token handler
+//! parser under test by pushing the input through a `Lexer` whose token consumer
 //! advances the parser.
 
 mod attribute;
@@ -38,7 +38,7 @@ use blazing_smtlib::{
             SymbolParser, SyntaxErrorKind, TermParser,
         },
     },
-    token::{SmtReserved, SmtTokenCategory, SmtVersion, TokenCursor, TokenHandler},
+    token::{SmtBatchCursor, SmtConsume, SmtReserved, SmtTokenCategory, SmtVersion},
 };
 
 // --- Test handler rendering everything it receives back into text ---
@@ -343,7 +343,7 @@ impl SmtHandler for Printing {
 /// A parse failure, as the error kind and the span it carries.
 type ParseFailure = (SyntaxErrorKind, SmtSpan);
 
-/// Token handler that advances a category parser with each lexed token,
+/// Token consumer that advances a category parser with each lexed token,
 /// collecting a wanted number of consecutive parser results, and counts
 /// the tokens left over after the last one.
 ///
@@ -363,14 +363,11 @@ struct Drive<'h, H: SmtHandler, P: Parser<H>> {
     unconsumed: usize,
 }
 
-impl<H: SmtHandler, P: Parser<H>> TokenHandler for Drive<'_, H, P> {
+impl<H: SmtHandler, P: Parser<H>> SmtConsume for Drive<'_, H, P> {
     type Result = ();
     type Error = ParserError<H::Error>;
 
-    fn handle_tokens(
-        &mut self,
-        cursor: &mut TokenCursor<'_>,
-    ) -> Result<ControlFlow<()>, Self::Error> {
+    fn consume(&mut self, cursor: &mut SmtBatchCursor<'_>) -> Result<ControlFlow<()>, Self::Error> {
         while !cursor.is_empty() {
             if self.remaining == 0 {
                 // count the tokens left after the wanted results, except the end of the input

@@ -6,7 +6,9 @@ use crate::{
         Arena, CloseParenParser, IdentHandle, IdentSlot, Parser, ParserError, ParserResources,
         QualifiedIdentHandle, SortSlot, SyntaxErrorKind, parse_by_token,
     },
-    token::{SmtGeneralReserved, SmtReserved, SmtSyntaxToken, SmtToken, SmtVersion, TokenCursor},
+    token::{
+        SmtBatchCursor, SmtGeneralReserved, SmtReserved, SmtSyntaxToken, SmtToken, SmtVersion,
+    },
 };
 
 /// A parser that reads an SMT-LIB qualified identifier.
@@ -39,7 +41,7 @@ impl<H: SmtHandler> Parser<H> for QualifiedIdentParser<H> {
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        cursor: &mut TokenCursor,
+        cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<SmtQualifiedIdent<H>>, ParserError<H::Error>> {
         // progress the slot, giving it the ident and sort slots it delegates to
         let ParserResources {

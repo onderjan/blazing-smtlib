@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     CommandHandler,
     read::parser::{Parser, ParserError, ParserResources, handle_err},
-    token::TokenCursor,
+    token::SmtBatchCursor,
 };
 
 /// A definition where a signature is followed by a body.
@@ -65,7 +65,7 @@ impl<H: CommandHandler, D: Definition<H>> Parser<H> for DefinitionParser<H, D> {
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        cursor: &mut TokenCursor,
+        cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         if matches!(self.state, DefinitionParserState::Signature) {
             // parse the signature; it ends at the last consumed token

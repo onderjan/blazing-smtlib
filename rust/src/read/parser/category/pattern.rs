@@ -7,8 +7,8 @@ use crate::{
         SyntaxErrorKind, TextHandle, parse_by_token,
     },
     token::{
-        SmtGeneralReserved, SmtReserved, SmtSyntaxToken, SmtToken, SmtTokenCategory, SmtVersion,
-        TokenCursor,
+        SmtBatchCursor, SmtGeneralReserved, SmtReserved, SmtSyntaxToken, SmtToken,
+        SmtTokenCategory, SmtVersion,
     },
 };
 
@@ -73,7 +73,7 @@ impl<H: SmtHandler> Parser<H> for SimplePatternParser {
         &mut self,
         _handler: &mut H,
         _resources: &mut ParserResources<H>,
-        cursor: &mut TokenCursor,
+        cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         let Some(token) = cursor.next() else {
             return Ok(ControlFlow::Continue(()));
@@ -115,7 +115,7 @@ impl<H: SmtHandler> Parser<H> for PatternParser<H> {
         &mut self,
         _handler: &mut H,
         resources: &mut ParserResources<H>,
-        cursor: &mut TokenCursor,
+        cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<SmtPattern, ()>, ParserError<H::Error>> {
         // progress the slot
         let ParserResources {

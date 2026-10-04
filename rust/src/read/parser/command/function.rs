@@ -7,7 +7,7 @@ use crate::{
         Parser, ParserError, ParserResources, SortParser, SymbolParser, SyntaxErrorKind,
         TermParser, handle_err, parse_by_token,
     },
-    token::{SmtToken, SmtVersion, TokenCursor},
+    token::{SmtBatchCursor, SmtToken, SmtVersion},
 };
 
 /// Parses a function signature: name, parameters (name and sort), and result sort.
@@ -36,7 +36,7 @@ impl<H: CommandHandler> Parser<H> for FunctionSignatureParser<H> {
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        cursor: &mut TokenCursor,
+        cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<SmtFunctionSignature<H>>, ParserError<H::Error>> {
         Ok(self.inner.parse(handler, resources, cursor)?.map_break(
             |(name, (params, result_sort))| SmtFunctionSignature {
@@ -76,7 +76,7 @@ impl<H: CommandHandler> Parser<H> for RecursiveBodyParser<H> {
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        cursor: &mut TokenCursor,
+        cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         parse_by_token(cursor, |version, token| {
             self.progress(handler, resources, version, token)
@@ -103,7 +103,7 @@ impl<H: CommandHandler> RecursiveBodyParser<H> {
         match self.term_parser.parse(
             handler,
             resources,
-            &mut TokenCursor::single(version, token),
+            &mut SmtBatchCursor::single(version, token),
         )? {
             ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
             ControlFlow::Break(term) => {
@@ -158,7 +158,7 @@ impl<H: CommandHandler> Parser<H> for DefineFunsRecParser<H> {
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        cursor: &mut TokenCursor,
+        cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         parse_by_token(cursor, |version, token| {
             self.progress(handler, resources, version, token)
@@ -182,7 +182,7 @@ impl<H: CommandHandler> DefineFunsRecParser<H> {
                 if let ControlFlow::Break(signatures) = self.signatures_parser.parse(
                     handler,
                     resources,
-                    &mut TokenCursor::single(version, token),
+                    &mut SmtBatchCursor::single(version, token),
                 )? {
                     // there must be at least one signature
                     if signatures.is_empty() {
@@ -206,7 +206,7 @@ impl<H: CommandHandler> DefineFunsRecParser<H> {
                 if let ControlFlow::Break(bodies) = self.bodies_parser.parse(
                     handler,
                     resources,
-                    &mut TokenCursor::single(version, token),
+                    &mut SmtBatchCursor::single(version, token),
                 )? {
                     // the parser returned a vector of units corresponding to the number of bodies
                     // bounded by the maximum which is the number of signatures

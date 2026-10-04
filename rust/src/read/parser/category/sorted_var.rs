@@ -6,7 +6,7 @@ use crate::{
         Arena, CloseParenParser, IdentSlot, OpenParenParser, Parser, ParserError, ParserResources,
         SortSlot, SyntaxErrorKind, TextHandle, parse_by_token,
     },
-    token::{SmtSyntaxToken, SmtToken, SmtVersion, TokenCursor},
+    token::{SmtBatchCursor, SmtSyntaxToken, SmtToken, SmtVersion},
 };
 
 /// Parses a sorted variable: parentheses-enclosed pair of a symbol and a sort.
@@ -39,7 +39,7 @@ impl<H: SmtHandler> Parser<H> for SortedVarParser<H> {
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        cursor: &mut TokenCursor,
+        cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Self::Result>, ParserError<H::Error>> {
         // progress the slot, giving it the sort and ident slots it delegates to
         let ParserResources {

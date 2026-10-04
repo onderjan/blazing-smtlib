@@ -5,7 +5,7 @@ use crate::{
     read::parser::{
         CommandParser, CommandParserStop, Parser, ParserError, ParserResources, SyntaxErrorKind,
     },
-    token::{SmtVersionPosture, TokenCursor},
+    token::{SmtBatchCursor, SmtVersionPosture},
 };
 
 /// Parses an SMT-LIB script: a sequence of commands, each delivered to the
@@ -54,7 +54,7 @@ impl<H: CommandHandler> Parser<H> for ScriptParser<H> {
         &mut self,
         handler: &mut H,
         resources: &mut ParserResources<H>,
-        cursor: &mut TokenCursor,
+        cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<ScriptParserStop>, ParserError<H::Error>> {
         loop {
             match self.command.parse(handler, resources, cursor)? {

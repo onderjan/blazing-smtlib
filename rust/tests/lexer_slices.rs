@@ -15,7 +15,7 @@ use std::ops::ControlFlow;
 use blazing_smtlib::{
     SmtLocation,
     read::lexer::{Lexer, LexerErrorKind},
-    token::{SmtTokenCategory, SmtVersion, TokenCursor, TokenHandler},
+    token::{SmtBatchCursor, SmtConsume, SmtTokenCategory, SmtVersion},
 };
 
 use lex_backend::{Feed, LexedError, LexedToken, loc};
@@ -686,18 +686,18 @@ fn token_contents_match_their_spans() {
 
 // --- Handler errors under chunking ---
 
-/// A token handler that accepts the first `n` tokens and rejects the next.
+/// A token consumer that accepts the first `n` tokens and rejects the next.
 struct RejectNth {
     remaining: usize,
 }
 
-impl TokenHandler for RejectNth {
+impl SmtConsume for RejectNth {
     type Result = ();
     type Error = ();
 
-    fn handle_tokens(
+    fn consume(
         &mut self,
-        cursor: &mut TokenCursor<'_>,
+        cursor: &mut SmtBatchCursor<'_>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         while cursor.next().is_some() {
             if self.remaining == 0 {
