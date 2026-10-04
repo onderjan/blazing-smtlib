@@ -23,8 +23,7 @@ pub trait SmtParse<H: SmtHandler + ?Sized> {
     /// Parses tokens from the cursor, progressing the parser.
     ///
     /// If the parser returns [`ControlFlow::Continue`], it means all tokens
-    /// were handled and more are wanted: the cursor must be empty, which it
-    /// also is after a [`SmtBatchCursor::relex`] request.
+    /// were handled and more are wanted: the cursor must be empty.
     ///
     /// If the parser returns [`ControlFlow::Break`], it means
     /// it finished the input it accepts (consuming exactly its tokens),

@@ -1,8 +1,8 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtBinDigitsView, SmtDecimalView, SmtHexDigitsView, SmtKeywordView, SmtNumeralView, SmtSpan,
-    SmtStringContentView, SmtSymbolView,
+    SmtBinDigitsView, SmtDecimalView, SmtHexDigitsView, SmtKeywordView, SmtLocation,
+    SmtNumeralView, SmtSpan, SmtStringContentView, SmtSymbolView,
 };
 
 mod reserved;
@@ -278,6 +278,7 @@ pub struct SmtBatchCursor<'a> {
     version: SmtVersion,
     entries: &'a [Option<(InnerCategory, &'a [u8])>],
     spans: &'a [SmtSpan],
+    start: usize,
     next: usize,
     relex: bool,
 }
@@ -296,6 +297,7 @@ impl<'a> SmtBatchCursor<'a> {
             version,
             entries,
             spans,
+            start: 0,
             next: 0,
             relex: false,
         }
@@ -360,23 +362,32 @@ impl<'a> SmtBatchCursor<'a> {
         self.next = self.next.saturating_add(count).min(self.entries.len());
     }
 
+    /// How many tokens have been consumed in this handover.
+    #[inline]
+    pub fn consumed(&self) -> usize {
+        self.next - self.start
+    }
+
+    /// Returns the most recently consumed token in this handover (if any).
+    #[inline]
+    pub fn last_consumed(&self) -> Option<SmtToken<'a>> {
+        if self.next > self.start {
+            self.at(self.next - 1)
+        } else {
+            None
+        }
+    }
+
+    /// Location of the end of the last consumed token in this handover (if any).
+    #[inline]
+    pub fn consumed_end(&self) -> Option<SmtLocation> {
+        self.last_consumed().map(|token| token.span().end())
+    }
+
     /// Consumes all tokens remaining in the cursor.
     #[inline]
     pub fn consume_all(&mut self) {
         self.next = self.entries.len()
-    }
-
-    /// Returns the most recently consumed token, if any was consumed through
-    /// this cursor.
-    #[inline]
-    pub fn last_consumed(&self) -> Option<SmtToken<'a>> {
-        self.at(self.next.checked_sub(1)?)
-    }
-
-    /// How many tokens have been consumed.
-    #[inline]
-    pub fn consumed(&self) -> usize {
-        self.next
     }
 
     /// Whether every token has been consumed.
@@ -408,7 +419,7 @@ impl<'a> SmtBatchCursor<'a> {
     /// produced again by the lexer, so the cursor yields no more tokens:
     /// it is empty from now on, and the consumed count stays where it is.
     #[inline]
-    pub fn relex(&mut self) {
+    pub(crate) fn relex(&mut self) {
         self.entries = &self.entries[..self.next];
         self.spans = &self.spans[..self.next];
         self.relex = true;
@@ -416,8 +427,14 @@ impl<'a> SmtBatchCursor<'a> {
 
     /// Whether [`SmtBatchCursor::relex`] has been called on this cursor.
     #[inline]
-    pub fn relex_requested(&self) -> bool {
+    pub(crate) fn relex_requested(&self) -> bool {
         self.relex
+    }
+
+    /// Resets the number of consumed tokens to zero.
+    #[inline]
+    pub(crate) fn reset_consumed(&mut self) {
+        self.start = self.next;
     }
 }
 
@@ -427,18 +444,23 @@ pub trait SmtConsume {
     type Result;
     type Error;
 
-    /// Handles the tokens handed over in the cursor, in order.
+    /// Consumes the tokens handed over in the cursor, in order.
     ///
-    /// If the consumer returns [`ControlFlow::Continue`], it means all tokens
-    /// were handled and more are wanted: the cursor must be empty, which it
-    /// also is after a [`SmtBatchCursor::relex`] request.
+    /// The caller must ensure that the cursor contains at least one token.
+    /// The consumer must ensure that at least one token is consumed before
+    /// return, no matter the result (even when returning an error).
     ///
-    /// If the consumer returns [`ControlFlow::Break`], it means
-    /// it finished the input it accepts (consuming exactly its tokens),
-    /// is returning a result and waiting for processing of the next value.
+    /// If the consumer returns [`ControlFlow::Continue`], the consumer is
+    /// not finished yet and is ready to consume more tokens. Tokens that
+    /// remain unconsumed in the cursor must be handed over again before
+    /// any new ones.
     ///
-    /// Returning an error means the consumer failed at the token after
-    /// the consumed ones. The state of the consumer and cursor is unspecified.
+    /// If the consumer returns [`ControlFlow::Break`], it has finished
+    /// consuming the current value, is returning a result, and is ready
+    /// to start consuming a new value.
+    ///
+    /// If the consumer returns [`Result::Err`], it has failed at the last
+    /// consumed token. The state of the consumer is unspecified.
     fn consume(
         &mut self,
         cursor: &mut SmtBatchCursor<'_>,

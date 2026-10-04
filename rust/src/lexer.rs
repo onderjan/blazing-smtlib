@@ -219,7 +219,7 @@ impl<C: SmtConsume> SmtLexer<C> {
     }
 
     fn lex_eof_inner(&mut self) -> Result<ControlFlow<C::Result>, SmtLexError<C::Error>> {
-        // TODO: do not construct batch here
+        // construct a batch for the tokens
         let mut batch: Batch = Batch {
             entries: [None; BATCH_CAPACITY],
             len: 0,
@@ -227,7 +227,7 @@ impl<C: SmtConsume> SmtLexer<C> {
 
         // EOF is a token delimiter, we need to produce the token
         // that waits for a delimiter if there is any
-        let result = match self.state {
+        let pending = match self.state {
             LexerState::Normal | LexerState::Comment => {
                 // nothing to do, we accept EOF even in comments
                 Ok(())
@@ -286,31 +286,41 @@ impl<C: SmtConsume> SmtLexer<C> {
             LexerState::Failed => {
                 panic!("cannot lex after a lexer error")
             }
-        }
-        .and_then(|()| {
+        };
+
+        // if we were told to relex, treat is as a normal continuation,
+        // as there is nothing to relex (we are at the end of input)
+        let pending = match pending {
+            Err(Interrupted {
+                result: Ok(Stop::Relex),
+                ..
+            }) => Ok(()),
+            other => other,
+        };
+
+        let result = pending.and_then(|()| {
             // everything has been processed, start the EOF token and sink it
             self.start_token(0);
             self.sink_eof()
         });
 
         match result {
-            Ok(()) => {
-                // everything processed, but there was no break out
-                // we need manually reset the lexer and return Continue
-                self.reset();
-                Ok(ControlFlow::Continue(()))
-            }
+            Ok(()) => {}
             Err(interrupted) => match interrupted.result? {
                 Stop::Relex => {
-                    panic!("token consumer cannot request relex at end of file")
+                    // we were asked to relex, but the file is ending anyway, nothing to relex
                 }
                 Stop::Finished(result) => {
                     // the consumer is done with the input
                     // the lexer will be reset as a consequence of the Break result
-                    Ok(ControlFlow::Break(result))
+                    return Ok(ControlFlow::Break(result));
                 }
             },
         }
+        // everything processed, there was no break out
+        // we need manually reset the lexer and return Continue
+        self.reset();
+        Ok(ControlFlow::Continue(()))
     }
 
     fn lex_slice_inner(
@@ -377,6 +387,7 @@ impl<C: SmtConsume> SmtLexer<C> {
                     match interrupted.result {
                         Ok(stop) => {
                             let location = interrupted.location;
+                            // we will resume consuming at a given location
                             self.resume_at(location);
                             // every handed-over token borrows this slice
                             // so the location must be equal or greater to initial offset
@@ -389,7 +400,10 @@ impl<C: SmtConsume> SmtLexer<C> {
                                     // everything up to the index was already consumed
                                     // continue from there
                                     rest = &slice[index as usize..];
+                                    // clear any existing lexer errors we did not get to yet
                                     fn_result = Ok(ControlFlow::Continue(()));
+                                    // continue consuming
+                                    continue;
                                 }
                                 Stop::Finished(result) => {
                                     // the consumer is done: the batch was handed over,
@@ -1406,51 +1420,44 @@ impl<C: SmtConsume> SmtLexer<C> {
         mut cursor: SmtBatchCursor,
         version: &mut SmtVersion,
     ) -> Result<(), Interrupted<C::Result, SmtLexError<C::Error>>> {
-        // where lexing continues if the consumer stops before the first token
-        // relex request empties the cursor, so we need to remember it here
-        let first_start = cursor
-            .get(0)
-            .expect("flushed batch must have at least one token")
-            .span()
-            .start();
+        // flush the cursor until nothing remains
+        while !cursor.is_empty() {
+            let result = consumer.consume(&mut cursor);
 
-        // flush the cursor
-        let result = consumer.consume(&mut cursor);
+            // get the location where the cursor ended up
+            // this will panic if no tokens were consumed,
+            // which violates the consumer contract
+            let consumed_end = cursor
+                .consumed_end()
+                .expect("token consumer must consume at least one token");
 
-        // set our version to the cursor-requested version
-        *version = cursor.version();
+            // set our version to the cursor-requested version
+            *version = cursor.version();
 
-        // process the result
-        let result = match result {
-            Ok(ControlFlow::Continue(())) if cursor.relex_requested() => Ok(Stop::Relex),
-            Ok(ControlFlow::Continue(())) => {
-                // ensure the cursor has been fully consumed
-                assert!(
-                    cursor.is_empty(),
-                    "the token consumer must consume all tokens before continuing"
-                );
-                return Ok(());
-            }
-            Ok(ControlFlow::Break(result)) => {
-                assert!(
-                    !cursor.relex_requested(),
-                    "the token consumer cannot both finish and request relex"
-                );
-                Ok(Stop::Finished(result))
-            }
-            Err(err) => Err(SmtLexError::Consumer(err)),
-        };
-        // the stop takes effect after the consumed tokens
-        let stop_location = match cursor.last_consumed() {
-            // nothing was taken, lex again from the first token
-            None => first_start,
-            // at least one token was taken, lex again after it
-            Some(token) => token.span().end(),
-        };
-        Err(Interrupted {
-            result,
-            location: stop_location,
-        })
+            // process the result
+            let result = match result {
+                Ok(ControlFlow::Continue(())) => {
+                    if cursor.relex_requested() {
+                        // we need to stop and relex here
+                        Ok(Stop::Relex)
+                    } else {
+                        // zero the number of consumed tokens in the cursor
+                        cursor.reset_consumed();
+                        // continue flushing until nothing remains
+                        continue;
+                    }
+                }
+                Ok(ControlFlow::Break(result)) => Ok(Stop::Finished(result)),
+                Err(err) => Err(SmtLexError::Consumer(err)),
+            };
+            // the stop takes effect after the consumed tokens
+            return Err(Interrupted {
+                result,
+                location: consumed_end,
+            });
+        }
+        // everything was consumed without break or error
+        Ok(())
     }
 
     #[inline]
