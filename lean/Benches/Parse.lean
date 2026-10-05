@@ -77,14 +77,14 @@ structure DiscardTokens where
 
 /- LEAN: `partial`, as Lean is not shown that taking tokens from the cursor ends. -/
 /-- Takes every token remaining in the cursor, counting it. -/
-partial def countTokens : TokenHandlerM DiscardTokens Id Empty Unit := do
-  let some _ ← modifyGetThe TokenCursor TokenCursor.next
+partial def countTokens : ConsumeM DiscardTokens Id Empty Unit := do
+  let some _ ← modifyGetThe BatchCursor BatchCursor.next
     | return
   modifyThe DiscardTokens fun handler => { tokens := handler.tokens + 1 }
   countTokens
 
-instance : TokenHandler DiscardTokens Id Unit Empty where
-  handleTokens := do
+instance : Consume DiscardTokens Id Unit Empty where
+  consume := do
     countTokens
     return .continue
 
@@ -111,14 +111,14 @@ structure CountTokens where
   tokens : IO.Ref Nat
 
 /-- Takes every token remaining in the cursor, counting it. -/
-partial def countTokensInRef (tokens : IO.Ref Nat) : TokenHandlerM CountTokens IO Empty Unit := do
-  let some _ ← modifyGetThe TokenCursor TokenCursor.next
+partial def countTokensInRef (tokens : IO.Ref Nat) : ConsumeM CountTokens IO Empty Unit := do
+  let some _ ← modifyGetThe BatchCursor BatchCursor.next
     | return
   tokens.modify (· + 1)
   countTokensInRef tokens
 
-instance : TokenHandler CountTokens IO Unit Empty where
-  handleTokens := do
+instance : Consume CountTokens IO Unit Empty where
+  consume := do
     countTokensInRef (← getThe CountTokens).tokens
     return .continue
 

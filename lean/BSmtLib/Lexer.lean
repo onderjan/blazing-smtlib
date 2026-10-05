@@ -17,7 +17,7 @@ inductive Stop (R : Type) where
 
 structure Interrupted (R E : Type) where
   result : Except (LexError E) (Stop R)
-  location : SmtLocation
+  location : Location
 
 /- LEAN: a default value is needed for the functions marked `partial` in the lexer's monad; it
 cannot be derived without one for the handler's result type. -/
@@ -29,13 +29,13 @@ batch lives here instead of in a local of `lex_slice_inner`, so that its storage
 from one slice to the next; it is empty whenever lexing returns. -/
 structure LexerCore where
   /-- The SMT-LIB version the lexer currently operates under. -/
-  version : SmtVersion
+  version : Version
   /-- The initial SMT-LIB version the lexer will reset to. -/
-  initialVersion : SmtVersion
+  initialVersion : Version
   /-- Current lexer state. -/
   state : LexerState
   /-- Location of the start of the currently-processed token. -/
-  tokenStart : SmtLocation
+  tokenStart : Location
   /-- The currently-built string content of the currently-processed token. -/
   tokenContent : ContentBuffer
   /--
@@ -75,7 +75,7 @@ using `?` to pass an interruption up. In Lean the same is a monad: `StateT Lexer
 the lexer's fields as mutable state, `StateT H` the handler, and `ExceptT (Interrupted R E)`
 is the `Err` that `throw` raises and that passes up through every `←` like `?`. `ExceptT` is
 outermost so that the lexer's fields keep their changes when an interruption is thrown, as
-in Rust. The handler is a separate state so that it can be handed to `handleTokens` without
+in Rust. The handler is a separate state so that it can be handed to `consume` without
 another reference to it remaining in the lexer's state, which would make the handler's
 updates copy it. -/
 abbrev InnerM (H : Type) (m : Type → Type) := StateT LexerCore (StateT H m)
@@ -91,13 +91,13 @@ def LexerCore.offsetAt (self : LexerCore) (position : USize) : Nat :=
 
 Every line feed before `position` must be marked before calling this. -/
 @[inline]
-def LexerCore.locationAt (self : LexerCore) (position : USize) : SmtLocation :=
+def LexerCore.locationAt (self : LexerCore) (position : USize) : Location :=
   let offset := self.offsetAt position
   { offset, line := self.line, column := offset - self.lineStart }
 
 /-- The current location: that of the next byte to be lexed. -/
 @[inline]
-def LexerCore.currentLocation (self : LexerCore) : SmtLocation :=
+def LexerCore.currentLocation (self : LexerCore) : Location :=
   self.locationAt self.base
 
 /-- Whether the byte is an ASCII digit. -/
@@ -107,7 +107,7 @@ private def isAsciiDigit (c : UInt8) : Bool :=
 
 section
 
-variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [TokenHandler H m R E]
+variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [Consume H m R E]
 
 /- LEAN: `getThe` and `modifyThe` name the state they access, as there are two. Reading the
 state with `← getCore` gives a reference to it; the code below lets such references die before
@@ -170,16 +170,16 @@ Fails with an error spanning the token up to `position`.
 Used for errors detected mid-run, e.g. forbidden byte in a string
 or a backslash in a quoted symbol.
 -/
-private def failAt (kind : LexerErrorKind) (position : USize) : LexM H m R E α := do
+private def failAt (kind : LexicalErrorKind) (position : USize) : LexM H m R E α := do
   let c ← getCore
   let «end» := c.locationAt position
-  let span := SmtSpan.newUnchecked c.tokenStart «end»
+  let span := Span.newUnchecked c.tokenStart «end»
   -- no tokens have been consumed, as this is an error
   -- that occurred during lexing
   throw { result := .error (.lexer { kind, span }), location := «end» }
 
 /-- Fails with an error spanning the token so far and, if it ended at a byte, that byte. -/
-private def fail (kind : LexerErrorKind) (tokenEnd : TokenEnd) : LexM H m R E α :=
+private def fail (kind : LexicalErrorKind) (tokenEnd : TokenEnd) : LexM H m R E α :=
   failAt kind (tokenEnd.position + if tokenEnd.atByte then 1 else 0)
 
 /- LEAN: raises what is a panic in Rust, see `InternalError`. -/
@@ -200,13 +200,13 @@ private def expectDelimiter (next : UInt8) (position : USize) : LexM H m R E Uni
   unless isDelimiter next do
     failAt .missingDelimiter (position + 1)
 
-/- LEAN: runs the handler on the cursor. `handleTokens.run.run cursor` unwraps the handler's
+/- LEAN: runs the handler on the cursor. `consume.run.run cursor` unwraps the handler's
 monad down to a `StateT H m` action, which the `←` lifts into the lexer's monad, where the
 handler is the inner state. -/
-private def callHandler (cursor : TokenCursor) :
-    LexM H m R E (Except E (ControlFlow R) × TokenCursor) := do
-  let action : StateT H m (Except E (ControlFlow R) × TokenCursor) :=
-    (TokenHandler.handleTokens (H := H)).run.run cursor
+private def callHandler (cursor : BatchCursor) :
+    LexM H m R E (Except E (ControlFlow R) × BatchCursor) := do
+  let action : StateT H m (Except E (ControlFlow R) × BatchCursor) :=
+    (Consume.consume (H := H)).run.run cursor
   action
 
 /- LEAN: Rust's `flush_cursor` takes a cursor over the lexer's arrays; here the batch itself
@@ -217,7 +217,7 @@ reference to the lexer's content buffer, which would make the buffer's next chan
 it. -/
 /-- Hands the non-empty batch over to the handler and takes it back. -/
 private def handOver (batch : TokenBatch) (bytesAfter : ByteArray) : LexM H m R E Unit := do
-  let cursor := TokenCursor.new (← getCore).version batch
+  let cursor := BatchCursor.new (← getCore).version batch
   -- where lexing continues if the handler stops before the first token
   -- relex request empties the cursor, so we need to remember it here
   let some first := cursor.get 0
@@ -276,7 +276,7 @@ Hands over a single token whose content is in the lexer's content buffer
 /- LEAN: Rust hands such a token over in a cursor of its own; here it goes in the batch,
 which is empty after the flush, with the content buffer as its array of contents for the
 one token. -/
-private def handOverStored (ty : TokenType) («end» : SmtLocation) : LexM H m R E Unit := do
+private def handOverStored (ty : TokenCategory) («end» : Location) : LexM H m R E Unit := do
   -- flush the batch, then hand over this token
   flushBatch
   let batch ← takeBatch
@@ -288,7 +288,7 @@ private def handOverStored (ty : TokenType) («end» : SmtLocation) : LexM H m R
 
 /-- Sinks a token with the given content, ending at `tokenEnd`. -/
 @[inline]
-private def sinkSlice (ty : TokenType) (tokenEnd : TokenEnd) (content : Content) :
+private def sinkSlice (ty : TokenCategory) (tokenEnd : TokenEnd) (content : Content) :
     LexM H m R E Unit := do
   -- the caller of this function is responsible
   -- for ensuring that the constructed token is valid
@@ -395,7 +395,7 @@ position `base`.
 here a token that is not emitted is not written. -/
 @[inline]
 private def pushFast (batch : TokenBatch) (offset : Nat) (base : USize)
-    (ty : TokenType) (contentStart contentStop start «end» : USize) (emit : Bool) : LexM H m R E TokenBatch := do
+    (ty : TokenCategory) (contentStart contentStop start «end» : USize) (emit : Bool) : LexM H m R E TokenBatch := do
   if !emit then
     return batch
   let c ← getCore
@@ -495,8 +495,8 @@ private partial def lexNormalFrom (input : Input) (offset : Nat) (base index : U
     -- whole text. The token is on a single line as all fast-lex runs exclude
     -- newlines. Whitespace is not emitted.
     let (ty, contentStart, contentStop) :=
-      if isQuoted then (TokenType.quotedSymbol, after, runEndAt)
-      else (TokenType.unquotedSymbol, index, tokenEnd)
+      if isQuoted then (TokenCategory.quotedSymbol, after, runEndAt)
+      else (TokenCategory.unquotedSymbol, index, tokenEnd)
     let emit := fastEntry &&& FAST_EMIT != 0
     -- A token must be delimited by the byte after it,
     -- fall back to the state machine if the delimiter is not found.
@@ -1046,7 +1046,7 @@ Moves the lexer back to `location`, which the tokens handed over
 so far end at, discarding whatever was lexed beyond it; `position` is its position in the
 input.
 -/
-private def resumeAt (location : SmtLocation) (position : USize) : InnerM H m Unit :=
+private def resumeAt (location : Location) (position : USize) : InnerM H m Unit :=
   -- the region after the location was lexed once already,
   -- restore all bookkeeping
   -- a stop inside an arm leaves it mid-token
@@ -1132,7 +1132,7 @@ private def reset : InnerM H m Unit :=
     { c with
       version := c.initialVersion
       state := .normal
-      tokenStart := SmtLocation.initial
+      tokenStart := Location.initial
       tokenContent := c.tokenContent.clear
       offset := 0
       line := 0
@@ -1196,7 +1196,7 @@ private def lexEofInner : InnerM H m (Except (LexError E) (ControlFlow R)) := do
 
 /-- Executes an inner lexer step and updates the lexer according to the result. -/
 private def executeStep (step : InnerM H m (Except (LexError E) (ControlFlow R))) :
-    InnerM H m (Except (LexError E) (ControlFlow (SmtLocated R))) := do
+    InnerM H m (Except (LexError E) (ControlFlow (Located R))) := do
   match ← step with
   | .ok .continue => return .ok .continue
   | .ok (.break result) =>
@@ -1212,13 +1212,13 @@ private def executeStep (step : InnerM H m (Except (LexError E) (ControlFlow R))
 end
 
 /-- Constructs the lexer. -/
-def new (handler : H) (version : SmtVersion) : Lexer H :=
+def new (handler : H) (version : Version) : Lexer H :=
   { handler,
     core := {
       version
       initialVersion := version
       state := .normal
-      tokenStart := SmtLocation.initial
+      tokenStart := Location.initial
       tokenContent := ContentBuffer.empty
       offset := 0
       base := 0
@@ -1226,7 +1226,7 @@ def new (handler : H) (version : SmtVersion) : Lexer H :=
       lineStart := 0
       batch := TokenBatch.empty BATCH_CAPACITY } }
 
-def currentLocation (self : Lexer H) : SmtLocation :=
+def currentLocation (self : Lexer H) : Location :=
   self.core.currentLocation
 
 /- LEAN: takes the lexer apart so that the handler and the fields are each held once, runs
@@ -1254,8 +1254,8 @@ the lexer is ready for further lexing.
 If an error occurs, the lexer moves into a failure state;
 all further lexing calls fail with an internal error.
 -/
-def lexSlice [Monad m] [TokenHandler H m R E] (self : Lexer H) (slice : ByteSlice) :
-    m (Except (LexError E) (ControlFlow (SmtLocated R)) × Lexer H) :=
+def lexSlice [Monad m] [Consume H m R E] (self : Lexer H) (slice : ByteSlice) :
+    m (Except (LexError E) (ControlFlow (Located R)) × Lexer H) :=
   -- call inner lexing and fail on error
   match Input.ofSlice? slice with
   | some input => self.run (executeStep (lexSliceInner input))
@@ -1274,8 +1274,8 @@ the lexer resets itself and returns `ControlFlow.continue`.
 If an error occurs, the lexer moves into a failure state;
 all further lexing calls fail with an internal error.
 -/
-def lexEof [Monad m] [TokenHandler H m R E] (self : Lexer H) :
-    m (Except (LexError E) (ControlFlow (SmtLocated R)) × Lexer H) :=
+def lexEof [Monad m] [Consume H m R E] (self : Lexer H) :
+    m (Except (LexError E) (ControlFlow (Located R)) × Lexer H) :=
   -- call inner EOF lexing and fail on error
   self.run (executeStep lexEofInner)
 
@@ -1293,8 +1293,8 @@ and returns `ControlFlow.continue`.
 If an error occurs, the lexer moves into a failure state;
 all further lexing calls fail with an internal error.
 -/
-def lexAll [Monad m] [TokenHandler H m R E] (self : Lexer H) (input : ByteSlice) :
-    m (Except (LexError E) (ControlFlow (SmtLocated R)) × Lexer H) := do
+def lexAll [Monad m] [Consume H m R E] (self : Lexer H) (input : ByteSlice) :
+    m (Except (LexError E) (ControlFlow (Located R)) × Lexer H) := do
   let (result, self) ← self.lexSlice input
   match result with
   | .ok .continue => self.lexEof

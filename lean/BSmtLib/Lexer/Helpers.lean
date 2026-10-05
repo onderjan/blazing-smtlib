@@ -170,8 +170,8 @@ inductive LexerState where
 structure DigitRun where
   flag : UInt8
   state : LexerState
-  tokenType : TokenType
-  emptyError : LexerErrorKind
+  tokenType : TokenCategory
+  emptyError : LexicalErrorKind
 
 def HEXADECIMAL_RUN : DigitRun :=
   { flag := RUN_HEX_DIGIT, state := .hexadecimal, tokenType := .hexadecimal,
@@ -205,7 +205,7 @@ A byte array cannot be shortened in place, so the buffer keeps its bytes
 and the length of the content in use: clearing it only resets the length,
 and the bytes after it are overwritten as the content grows again.
 -/
-/- LEAN: Rust keeps the content in a `String8` and clears it, keeping its allocation. Lean
+/- LEAN: Rust keeps the content in a `Bytes` and clears it, keeping its allocation. Lean
 cannot shorten a `ByteArray` in place, so the lexer keeps its own buffer with a length. -/
 structure ContentBuffer where
   bytes : ByteArray

@@ -14,10 +14,10 @@ open BSmtLib
 `IO.Ref` is Lean's counterpart, so the handler runs in `IO`. -/
 /-- Writes every token handed over as a response line. -/
 structure Report where
-  version : SmtVersion
+  version : Version
   out : IO.Ref String
 
-def location (location : SmtLocation) : String :=
+def location (location : Location) : String :=
   s!"{location.offset}:{location.line}:{location.column}"
 
 def hexDigit (n : Nat) : Char :=
@@ -31,7 +31,7 @@ def hex (bytes : ByteSlice) : String := Id.run do
   out
 
 /-- The token type, spelled as the Rust variant. -/
-def tokenTypeName : TokenType → String
+def tokenTypeName : TokenCategory → String
   | .parenOpen => "ParenOpen"
   | .parenClose => "ParenClose"
   | .numeral => "Numeral"
@@ -45,7 +45,7 @@ def tokenTypeName : TokenType → String
   | .endOfFile => "EndOfFile"
 
 /-- The lexer error kind, spelled as the Rust variant. -/
-def errorKindName : LexerErrorKind → String
+def errorKindName : LexicalErrorKind → String
   | .unexpectedCharacter => "UnexpectedCharacter"
   | .fractionDigitExpected => "FractionDigitExpected"
   | .hexadecimalDigitExpected => "HexadecimalDigitExpected"
@@ -61,7 +61,7 @@ def errorKindName : LexerErrorKind → String
   | .missingDelimiter => "MissingDelimiter"
 
 /-- What the token is as a reserved word under the version. -/
-def reservedName (ty : TokenType) (content : ByteSlice) (version : SmtVersion) : String :=
+def reservedName (ty : TokenCategory) (content : ByteSlice) (version : Version) : String :=
   -- only unquoted symbols can be reserved words
   if ty != .unquotedSymbol then
     "-"
@@ -73,11 +73,11 @@ def reservedName (ty : TokenType) (content : ByteSlice) (version : SmtVersion) :
 
 /- LEAN: `partial`, as Lean is not shown that taking tokens from the cursor ends. -/
 /-- Writes a line for every token remaining in the cursor. -/
-partial def reportTokens (report : Report) : TokenHandlerM Report IO Empty Unit := do
-  let some token ← modifyGetThe TokenCursor TokenCursor.next
+partial def reportTokens (report : Report) : ConsumeM Report IO Empty Unit := do
+  let some token ← modifyGetThe BatchCursor BatchCursor.next
     | return
-  let cursor ← getThe TokenCursor
-  let ty := cursor.ty token
+  let cursor ← getThe BatchCursor
+  let ty := cursor.category token
   let content := cursor.content token
   let span := cursor.span token
   let line := s!"t {tokenTypeName ty} {location span.start} {location span.end} \
@@ -86,8 +86,8 @@ partial def reportTokens (report : Report) : TokenHandlerM Report IO Empty Unit 
   reportTokens report
 
 /- LEAN: `Empty` is Lean's `Infallible`, a type without values. -/
-instance : TokenHandler Report IO Unit Empty where
-  handleTokens := do
+instance : Consume Report IO Unit Empty where
+  consume := do
     reportTokens (← getThe Report)
     return .continue
 
@@ -115,7 +115,7 @@ def answer (request : String) : ExceptT String IO String := do
   if kind != "lex" then
     throw "unknown request"
   let some version := (words.head?).bind fun version =>
-      SmtVersion.fromDecimal? version.toUTF8.toByteSlice
+      Version.fromDecimal? version.toUTF8.toByteSlice
     | throw "unknown version"
 
   -- decode every operation first, so that a malformed request produces
@@ -133,7 +133,7 @@ def answer (request : String) : ExceptT String IO String := do
 
   let lines ← IO.mkRef ""
   let mut lexer := Lexer.new { version, out := lines : Report } version
-  let mut error : Option LexerError := none
+  let mut error : Option LexicalError := none
   for operation in operations do
     let (result, next) ← match operation with
       | some slice => lexer.lexSlice slice.toByteSlice

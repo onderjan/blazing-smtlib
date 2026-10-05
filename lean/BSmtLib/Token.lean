@@ -2,14 +2,14 @@ import Std.Data.ByteSlice
 import BSmtLib.ControlFlow
 import BSmtLib.Span
 
-/- LEAN: the public items of the Rust crate are in the namespace `BSmtLib`. The internals of the
-lexer are in `BSmtLib.Lexer`.
-Variant and function names follow Lean conventions (`TokenType.parenOpen` for
+/- LEAN: the public items of the Rust crate are in the namespace `BSmtLib`, without the prefix
+`Smt`: `SmtToken` is `BSmtLib.Token`. The internals of the lexer are in `BSmtLib.Lexer`.
+Variant and function names follow Lean conventions (`TokenCategory.parenOpen` for
 `SmtTokenCategory::ParenOpen`, `lastConsumed` for `last_consumed`). An `inductive` without
 fields is a Rust enum. -/
 namespace BSmtLib
 
-inductive TokenType where
+inductive TokenCategory where
   | parenOpen
   | parenClose
   | numeral
@@ -24,52 +24,52 @@ inductive TokenType where
   deriving BEq, Repr, Inhabited
 
 /-- Version of the SMT-LIB standard. -/
-inductive SmtVersion where
+inductive Version where
   | v2_0
   | v2_5
   | v2_6
   | v2_7
   deriving BEq, Repr
 
-namespace SmtVersion
+namespace Version
 
 /- LEAN: `Inhabited` gives the default value, the Rust `#[default]`. -/
-instance : Inhabited SmtVersion := ⟨.v2_7⟩
+instance : Inhabited Version := ⟨.v2_7⟩
 
 /- LEAN: Lean cannot derive `PartialOrd`/`Ord` for comparison with `≤` from the order of the
 variants, so the order is spelled out as a rank, and `≤` and `<` compare the ranks. -/
 /-- The position of the version in the order of releases. -/
-private def rank : SmtVersion → Nat
+private def rank : Version → Nat
   | .v2_0 => 0
   | .v2_5 => 1
   | .v2_6 => 2
   | .v2_7 => 3
 
-instance : LE SmtVersion := ⟨fun a b => a.rank ≤ b.rank⟩
+instance : LE Version := ⟨fun a b => a.rank ≤ b.rank⟩
 
-instance : LT SmtVersion := ⟨fun a b => a.rank < b.rank⟩
+instance : LT Version := ⟨fun a b => a.rank < b.rank⟩
 
 /- LEAN: in Lean, `a ≤ b` is a proposition, not a boolean. To use it in an `if`, Lean
 needs a `Decidable` instance that computes its truth; these reuse the one of `Nat`. -/
-instance (a b : SmtVersion) : Decidable (a ≤ b) := inferInstanceAs (Decidable (a.rank ≤ b.rank))
+instance (a b : Version) : Decidable (a ≤ b) := inferInstanceAs (Decidable (a.rank ≤ b.rank))
 
-instance (a b : SmtVersion) : Decidable (a < b) := inferInstanceAs (Decidable (a.rank < b.rank))
+instance (a b : Version) : Decidable (a < b) := inferInstanceAs (Decidable (a.rank < b.rank))
 
-def fromDecimal? (decimal : ByteSlice) : Option SmtVersion :=
+def fromDecimal? (decimal : ByteSlice) : Option Version :=
   if decimal == "2.0".toUTF8.toByteSlice then some .v2_0
   else if decimal == "2.5".toUTF8.toByteSlice then some .v2_5
   else if decimal == "2.6".toUTF8.toByteSlice then some .v2_6
   else if decimal == "2.7".toUTF8.toByteSlice then some .v2_7
   else none
 
-end SmtVersion
+end Version
 
-namespace TokenType
+namespace TokenCategory
 
 /- LEAN: the batch keeps the types in a byte array, as numbers. -/
 /-- The number of the type, in the order of declaration. -/
 @[inline]
-def toUInt8 : TokenType → UInt8
+def toUInt8 : TokenCategory → UInt8
   | .parenOpen => 0
   | .parenClose => 1
   | .numeral => 2
@@ -84,7 +84,7 @@ def toUInt8 : TokenType → UInt8
 
 /-- The type of the number given by `toUInt8`. -/
 @[inline]
-def ofUInt8 : UInt8 → TokenType
+def ofUInt8 : UInt8 → TokenCategory
   | 0 => .parenOpen
   | 1 => .parenClose
   | 2 => .numeral
@@ -98,10 +98,10 @@ def ofUInt8 : UInt8 → TokenType
   | _ => .endOfFile
 
 -- the types are read back from the batch as they were written to it
-#guard [TokenType.parenOpen, .parenClose, .numeral, .decimal, .hexadecimal, .binary, .string,
+#guard [TokenCategory.parenOpen, .parenClose, .numeral, .decimal, .hexadecimal, .binary, .string,
     .keyword, .unquotedSymbol, .quotedSymbol, .endOfFile].all fun ty => ofUInt8 ty.toUInt8 == ty
 
-end TokenType
+end TokenCategory
 
 /- LEAN: the Rust token is a pair of references to its entry and its span in the lexer's
 batch arrays, valid while the batch is. A Lean array holds every structure as a pointer to
@@ -110,7 +110,7 @@ is lexed and freed when it is overwritten. The batch therefore keeps the tokens'
 arrays of their own (`TokenBatch`), which the lexer overwrites in place, and a token is its
 index in the batch. A structure with a single number field is represented as the number
 itself, so a token costs nothing. Its fields are read through the cursor it came from:
-`cursor.ty token`, `cursor.content token`, `cursor.span token`. -/
+`cursor.category token`, `cursor.content token`, `cursor.span token`. -/
 /-- A token of a batch, read through the cursor it came from. -/
 structure Token where
   private mk ::
@@ -128,7 +128,7 @@ structure TokenBatch where
   len : Nat
   /-- The array of the tokens' contents. -/
   bytes : ByteArray
-  /-- The types of the tokens, as `TokenType.toUInt8`. -/
+  /-- The types of the tokens, as `TokenCategory.toUInt8`. -/
   types : ByteArray
   contentStarts : Array Nat
   contentStops : Array Nat
@@ -164,7 +164,7 @@ Appends a token with the type, its content from `contentStart` to `contentStop` 
 and the span given by the numbers of its two locations.
 -/
 @[inline]
-def push (self : TokenBatch) (ty : TokenType) (contentStart contentStop : Nat)
+def push (self : TokenBatch) (ty : TokenCategory) (contentStart contentStop : Nat)
     (startOffset startLine startColumn endOffset endLine endColumn : Nat) : TokenBatch :=
   let index := self.len
   { self with
@@ -185,7 +185,7 @@ Appends a token with the type, its content from `contentStart` to `contentStop` 
 spanning the offsets from `start` to `end` on the line that starts at the offset `lineStart`.
 -/
 @[inline]
-def pushOnLine (self : TokenBatch) (ty : TokenType) (contentStart contentStop : Nat)
+def pushOnLine (self : TokenBatch) (ty : TokenCategory) (contentStart contentStop : Nat)
     (line lineStart start «end» : Nat) : TokenBatch :=
   self.push ty contentStart contentStop start line (start - lineStart) «end» line («end» - lineStart)
 
@@ -194,8 +194,8 @@ Appends a token with the type, its content from `contentStart` to `contentStop` 
 spanning from `start` to `end`.
 -/
 @[inline]
-def pushLocated (self : TokenBatch) (ty : TokenType) (contentStart contentStop : Nat)
-    (start «end» : SmtLocation) : TokenBatch :=
+def pushLocated (self : TokenBatch) (ty : TokenCategory) (contentStart contentStop : Nat)
+    (start «end» : Location) : TokenBatch :=
   self.push ty contentStart contentStop start.offset start.line start.column
     «end».offset «end».line «end».column
 
@@ -219,10 +219,10 @@ slow paths with the same behaviour if the lookahead is not available.
 /- LEAN: Rust narrows the borrowed slices of the batch; here the cursor holds the whole batch
 and the range of it that it yields, from `first` to `stop`. A relex request moves `stop`,
 which needs no copy. -/
-structure TokenCursor where
+structure BatchCursor where
   private mk ::
   /-- The SMT-LIB version that applies to the tokens. -/
-  version : SmtVersion
+  version : Version
   private batch : TokenBatch
   /-- The first token the cursor yields. -/
   private first : Nat
@@ -232,11 +232,11 @@ structure TokenCursor where
   private relexFlag : Bool
   deriving Inhabited
 
-namespace TokenCursor
+namespace BatchCursor
 
 /-- Returns a cursor at the start of the batch. -/
 @[inline]
-def new (version : SmtVersion) (batch : TokenBatch) : TokenCursor :=
+def new (version : Version) (batch : TokenBatch) : BatchCursor :=
   { version, batch, first := 0, stop := batch.len, nextIndex := 0, relexFlag := false }
 
 /- LEAN: not in Rust. The lexer takes the batch back after the handler is done with the
@@ -244,12 +244,12 @@ cursor; if nothing else refers to it, its storage is overwritten by the next bat
 Rust lexer overwrites its fixed arrays. -/
 /-- The batch of the cursor, for reuse of its storage once the cursor is spent. -/
 @[inline]
-def intoBatch (self : TokenCursor) : TokenBatch :=
+def intoBatch (self : BatchCursor) : TokenBatch :=
   self.batch
 
 /-- The token at `index` of the batch, if the cursor yields it. -/
 @[inline]
-private def at? (self : TokenCursor) (index : Nat) : Option Token :=
+private def at? (self : BatchCursor) (index : Nat) : Option Token :=
   if index < self.stop then some ⟨index⟩ else none
 
 /--
@@ -261,13 +261,13 @@ This can be used for parsing one token using a cursor-parsing function.
 token is read through its batch, so the new cursor is made from the cursor the token came
 from, over the same batch. -/
 @[inline]
-def single (self : TokenCursor) (version : SmtVersion) (token : Token) : TokenCursor :=
+def single (self : BatchCursor) (version : Version) (token : Token) : BatchCursor :=
   { version, batch := self.batch, first := token.index, stop := token.index + 1,
     nextIndex := token.index, relexFlag := false }
 
 /-- Returns the next token (if any) without consuming it. -/
 @[inline]
-def peek (self : TokenCursor) : Option Token :=
+def peek (self : BatchCursor) : Option Token :=
   self.at? self.nextIndex
 
 /--
@@ -276,15 +276,15 @@ Returns the token `ahead` positions after the next one without consuming anythin
 `get 0` is the next token, also available through `peek`.
 -/
 @[inline]
-def get (self : TokenCursor) (ahead : Nat) : Option Token :=
+def get (self : BatchCursor) (ahead : Nat) : Option Token :=
   self.at? (self.nextIndex + ahead)
 
 /- LEAN: methods taking `&mut self` in Rust return the updated cursor in Lean; this one
 returns the token too. Within a handler, the cursor is state of the monad, and
-`modifyGetThe TokenCursor TokenCursor.next` consumes a token in place. -/
+`modifyGetThe BatchCursor BatchCursor.next` consumes a token in place. -/
 /-- Consumes the next token (if any), returning it with the updated cursor. -/
 @[inline]
-def next (self : TokenCursor) : Option Token × TokenCursor :=
+def next (self : BatchCursor) : Option Token × BatchCursor :=
   if self.nextIndex < self.stop then
     (some ⟨self.nextIndex⟩, { self with nextIndex := self.nextIndex + 1 })
   else
@@ -297,12 +297,12 @@ Behaves as if `next` was called `count` times with the results discarded,
 stopping at the end of the cursor.
 -/
 @[inline]
-def advance (self : TokenCursor) (count : Nat) : TokenCursor :=
+def advance (self : BatchCursor) (count : Nat) : BatchCursor :=
   { self with nextIndex := min (self.nextIndex + count) self.stop }
 
 /-- Consumes all tokens remaining in the cursor. -/
 @[inline]
-def consumeAll (self : TokenCursor) : TokenCursor :=
+def consumeAll (self : BatchCursor) : BatchCursor :=
   { self with nextIndex := self.stop }
 
 /--
@@ -310,17 +310,17 @@ Returns the most recently consumed token, if any was consumed through
 this cursor.
 -/
 @[inline]
-def lastConsumed (self : TokenCursor) : Option Token :=
+def lastConsumed (self : BatchCursor) : Option Token :=
   if self.nextIndex == self.first then none else self.at? (self.nextIndex - 1)
 
 /-- How many tokens have been consumed. -/
 @[inline]
-def consumed (self : TokenCursor) : Nat :=
+def consumed (self : BatchCursor) : Nat :=
   self.nextIndex - self.first
 
 /-- Whether every token has been consumed. -/
 @[inline]
-def isEmpty (self : TokenCursor) : Bool :=
+def isEmpty (self : BatchCursor) : Bool :=
   self.nextIndex ≥ self.stop
 
 /--
@@ -332,7 +332,7 @@ produced again by the lexer, so the cursor yields no more tokens:
 it is empty from now on, and the consumed count stays where it is.
 -/
 @[inline]
-def relex (self : TokenCursor) : TokenCursor :=
+def relex (self : BatchCursor) : BatchCursor :=
   { self with stop := self.nextIndex, relexFlag := true }
 
 /--
@@ -343,7 +343,7 @@ to the set version. There is no guarantee on their shape
 or whether any remain at all; the caller must not use any
 information gathered on them beforehand.
 -/
-def setVersion (self : TokenCursor) (version : SmtVersion) : TokenCursor :=
+def setVersion (self : BatchCursor) (version : Version) : BatchCursor :=
   let isCurrent2_0 := self.version == .v2_0
   let isNew2_0 := version == .v2_0
   -- we need to relex if the lexical rules change
@@ -352,34 +352,34 @@ def setVersion (self : TokenCursor) (version : SmtVersion) : TokenCursor :=
 
 /-- Whether `relex` has been called on this cursor. -/
 @[inline]
-def relexRequested (self : TokenCursor) : Bool :=
+def relexRequested (self : BatchCursor) : Bool :=
   self.relexFlag
 
 /- LEAN: the counterparts of the methods of the Rust token, which carries its data. A token
 must only be given to the cursor it came from or to a copy of it. -/
 
-/-- The type of the token. -/
+/-- The category of the token. -/
 @[inline]
-def ty (self : TokenCursor) (token : Token) : TokenType :=
-  TokenType.ofUInt8 (self.batch.types.get! token.index)
+def category (self : BatchCursor) (token : Token) : TokenCategory :=
+  TokenCategory.ofUInt8 (self.batch.types.get! token.index)
 
 /-- The bytes of the token; empty for the end of file. -/
 @[inline]
-def content (self : TokenCursor) (token : Token) : ByteSlice :=
+def content (self : BatchCursor) (token : Token) : ByteSlice :=
   self.batch.bytes.toByteSlice (self.batch.contentStarts[token.index]!)
     (self.batch.contentStops[token.index]!)
 
 /-- The span of the token. -/
 @[inline]
-def span (self : TokenCursor) (token : Token) : SmtSpan :=
+def span (self : BatchCursor) (token : Token) : Span :=
   let batch := self.batch
   let index := token.index
-  SmtSpan.ofNumbers batch.startOffsets[index]! batch.startLines[index]! batch.startColumns[index]!
+  Span.ofNumbers batch.startOffsets[index]! batch.startLines[index]! batch.startColumns[index]!
     batch.endOffsets[index]! batch.endLines[index]! batch.endColumns[index]!
 
-end TokenCursor
+end BatchCursor
 
-/- LEAN: Rust's `handle_tokens(&mut self, cursor: &mut TokenCursor) -> Result<ControlFlow<R>, E>`
+/- LEAN: Rust's `handle_tokens(&mut self, cursor: &mut BatchCursor) -> Result<ControlFlow<R>, E>`
 mutates the handler and the cursor in place and can do any side effect, such as I/O.
 Lean functions are pure: to change a value they must return the new one, and side effects
 are only possible inside a monad. A monad here does both. `StateT` threads the cursor and
@@ -392,24 +392,24 @@ outermost so that the handler and the cursor survive an error, as in Rust. -/
 The monad a token handler runs in: the handler `H` and the cursor are its
 state, and it can fail with an error of type `E`.
 -/
-abbrev TokenHandlerM (H : Type) (m : Type → Type) (E : Type) :=
-  ExceptT E (StateT TokenCursor (StateT H m))
+abbrev ConsumeM (H : Type) (m : Type → Type) (E : Type) :=
+  ExceptT E (StateT BatchCursor (StateT H m))
 
 /- LEAN: a class is Lean's trait. The Rust associated types `Result` and `Error` and the
 monad are parameters marked `outParam`: the handler type determines them, as an `impl`
-determines associated types. The Rust blanket `impl TokenHandler for &mut T` has no
+determines associated types. The Rust blanket `impl Consume for &mut T` has no
 counterpart, as Lean has no references. -/
 /--
 A sequential handler of tokens, running in the monad `m`, finishing with a
 value of type `R` and failing with an error of type `E`.
 -/
-class TokenHandler (H : Type) (m : outParam (Type → Type)) (R E : outParam Type) where
+class Consume (H : Type) (m : outParam (Type → Type)) (R E : outParam Type) where
   /--
   Handles the tokens handed over in the cursor, in order.
 
   If the handler returns `ControlFlow.continue`, it means all tokens
   were handled and more are wanted: the cursor must be empty, which it
-  also is after a `TokenCursor.relex` request.
+  also is after a `BatchCursor.relex` request.
 
   If the handler returns `ControlFlow.break`, it means
   it finished the input it accepts (consuming exactly its tokens),
@@ -418,6 +418,6 @@ class TokenHandler (H : Type) (m : outParam (Type → Type)) (R E : outParam Typ
   Throwing an error means the handler failed at the token after
   the consumed ones. The state of the handler and cursor is unspecified.
   -/
-  handleTokens : TokenHandlerM H m E (ControlFlow R)
+  consume : ConsumeM H m E (ControlFlow R)
 
 end BSmtLib

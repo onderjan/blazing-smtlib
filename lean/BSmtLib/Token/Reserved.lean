@@ -1,8 +1,8 @@
-import BSmtLib.String8
+import BSmtLib.Bytes
 import BSmtLib.Token
 
 /- LEAN: in Rust, `token` declares `reserved` as a submodule and re-exports its types, while
-`reserved` uses `SmtVersion` from `token`. Lean modules cannot import each other, so this
+`reserved` uses `Version` from `token`. Lean modules cannot import each other, so this
 module imports `BSmtLib.Token` and declares its types in the same namespace; the root
 module `BSmtLib` imports both. -/
 
@@ -153,7 +153,7 @@ def asStr : Reserved → String
   | .commandName word => word.asStr
 
 /-- The version that made the word reserved. -/
-private def since : Reserved → SmtVersion
+private def since : Reserved → Version
   -- SMT-LIB 2.7: lambda terms, sort parameters, constant definitions
   | .general .lambda
   | .commandName .declareSortParameter
@@ -179,7 +179,7 @@ private def since : Reserved → SmtVersion
 
 /-- Whether the word is reserved in the version. -/
 @[inline]
-def isInVersion (self : Reserved) (version : SmtVersion) : Bool :=
+def isInVersion (self : Reserved) (version : Version) : Bool :=
   version ≥ self.since
 
 /-- Every reserved word with its classification. -/
@@ -213,8 +213,8 @@ The empty word is used as a sentinel value for empty slots.
 /- LEAN: Rust computes the table in a `static` at compile time. A Lean definition without
 arguments is computed once, when the module is loaded. `Id.run do` runs imperative-looking
 code (`let mut`, `for`) that has no side effects. -/
-private def reservedTable : Array (ByteArray × Reserved × SmtVersion) := Id.run do
-  let mut table := Array.replicate reservedSlots (ByteArray.empty, Reserved.general .underscore, SmtVersion.v2_5)
+private def reservedTable : Array (ByteArray × Reserved × Version) := Id.run do
+  let mut table := Array.replicate reservedSlots (ByteArray.empty, Reserved.general .underscore, Version.v2_5)
   for (word, reserved) in reservedWords do
     table := table.set! (reservedSlot word.toByteSlice) (word, reserved, reserved.since)
   table
@@ -228,7 +228,7 @@ a slot would have been overwritten in the table by a later one. -/
 
 /-- The reserved word that the symbol spells in the version, if any. -/
 @[inline]
-def fromBytes? (symbol : ByteSlice) (version : SmtVersion) : Option Reserved :=
+def fromBytes? (symbol : ByteSlice) (version : Version) : Option Reserved :=
   -- make sure that the symbol is not an empty word, which is a sentinel
   if symbol.size == 0 then
     none
@@ -240,7 +240,7 @@ def fromBytes? (symbol : ByteSlice) (version : SmtVersion) : Option Reserved :=
 
 /-- The reserved word that the symbol spells in the version, if any. -/
 @[inline]
-def fromSymbol? (symbol : String8) (version : SmtVersion) : Option Reserved :=
+def fromSymbol? (symbol : Bytes) (version : Version) : Option Reserved :=
   fromBytes? symbol.asSlice version
 
 /-- Whether the reserved word is the name of a standard command. -/
@@ -255,7 +255,7 @@ namespace GeneralReserved
 
 /-- The word of this group that the symbol spells in the version, if any. -/
 @[inline]
-def fromBytes? (symbol : ByteSlice) (version : SmtVersion) : Option GeneralReserved :=
+def fromBytes? (symbol : ByteSlice) (version : Version) : Option GeneralReserved :=
   match Reserved.fromBytes? symbol version with
   | some (.general reserved) => some reserved
   | _ => none
@@ -266,7 +266,7 @@ namespace CommandNameReserved
 
 /-- The word of this group that the symbol spells in the version, if any. -/
 @[inline]
-def fromBytes? (symbol : ByteSlice) (version : SmtVersion) : Option CommandNameReserved :=
+def fromBytes? (symbol : ByteSlice) (version : Version) : Option CommandNameReserved :=
   match Reserved.fromBytes? symbol version with
   | some (.commandName reserved) => some reserved
   | _ => none

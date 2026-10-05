@@ -2,7 +2,7 @@ import BSmtLib.Span
 
 namespace BSmtLib
 
-inductive LexerErrorKind where
+inductive LexicalErrorKind where
   | unexpectedCharacter
   | fractionDigitExpected
   | hexadecimalDigitExpected
@@ -19,9 +19,9 @@ inductive LexerErrorKind where
   deriving BEq, Repr, Inhabited
 
 /- LEAN: the fields are readable as `error.kind` and `error.span`, replacing the getters. -/
-structure LexerError where
-  kind : LexerErrorKind
-  span : SmtSpan
+structure LexicalError where
+  kind : LexicalErrorKind
+  span : Span
   deriving BEq, Repr, Inhabited
 
 namespace Lexer
@@ -66,7 +66,7 @@ end InternalError
 end Lexer
 
 inductive LexError (E : Type) where
-  | lexer (error : LexerError)
+  | lexer (error : LexicalError)
   | handler (error : E)
   /- LEAN: not in Rust, see `InternalError`. -/
   | internal (error : Lexer.InternalError)

@@ -6,7 +6,7 @@ namespace BSmtLib
 /- LEAN: `ByteArray` is Lean's `Vec<u8>`. Lean values are immutable and reference-counted;
 an update changes an array in place when nothing else refers to it, and copies it
 otherwise. So a view never dangles and needs no lifetime. -/
-structure String8 where
+structure Bytes where
   private ofByteArray ::
   private bytes : ByteArray
   deriving Inhabited
@@ -14,7 +14,7 @@ structure String8 where
 /-- A view of a string of bytes. -/
 /- LEAN: `ByteSlice` from Lean's `Std` is the counterpart of `&[u8]`: a reference to a
 byte array with a start and a stop. -/
-structure String8View where
+structure BytesView where
   private ofSlice ::
   private slice : ByteSlice
   deriving Inhabited
@@ -51,72 +51,72 @@ private def reprBytes (bytes : ByteSlice) : String := Id.run do
   out.push '"'
 
 
-namespace String8
+namespace Bytes
 
 @[inline]
-def new : String8 := ⟨ByteArray.empty⟩
+def new : Bytes := ⟨ByteArray.empty⟩
 
-def fromByteArray (bytes : ByteArray) : String8 := ⟨bytes⟩
+def fromByteArray (bytes : ByteArray) : Bytes := ⟨bytes⟩
 
-def fromByte (byte : UInt8) : String8 := ⟨ByteArray.empty.push byte⟩
-
-@[inline]
-def asSlice (self : String8) : ByteSlice := self.bytes.toByteSlice
+def fromByte (byte : UInt8) : Bytes := ⟨ByteArray.empty.push byte⟩
 
 @[inline]
-def asView (self : String8) : String8View := ⟨self.asSlice⟩
-
-def intoByteArray (self : String8) : ByteArray := self.bytes
+def asSlice (self : Bytes) : ByteSlice := self.bytes.toByteSlice
 
 @[inline]
-def len (self : String8) : Nat := self.bytes.size
+def asView (self : Bytes) : BytesView := ⟨self.asSlice⟩
+
+def intoByteArray (self : Bytes) : ByteArray := self.bytes
 
 @[inline]
-def isEmpty (self : String8) : Bool := self.len == 0
+def len (self : Bytes) : Nat := self.bytes.size
+
+@[inline]
+def isEmpty (self : Bytes) : Bool := self.len == 0
 
 /- LEAN: a `ByteArray` cannot be shortened in place, so clearing gives a new empty string
 instead of keeping the allocation as `Vec::clear` does. Methods that mutate in Rust
 return the updated value in Lean. -/
 @[inline]
-def clear (_ : String8) : String8 := new
+def clear (_ : Bytes) : Bytes := new
 
 /- LEAN: `copySlice` with `exact := false` appends the slice's bytes, growing the capacity
 by doubling as `Vec` does. -/
 @[inline]
-def extendFromSlice (self : String8) (slice : ByteSlice) : String8 :=
+def extendFromSlice (self : Bytes) (slice : ByteSlice) : Bytes :=
   ⟨slice.byteArray.copySlice slice.start self.bytes self.bytes.size slice.size false⟩
 
 @[inline]
-def push (self : String8) (byte : UInt8) : String8 := ⟨self.bytes.push byte⟩
+def push (self : Bytes) (byte : UInt8) : Bytes := ⟨self.bytes.push byte⟩
 
-instance : BEq String8 := ⟨fun a b => a.bytes == b.bytes⟩
+instance : BEq Bytes := ⟨fun a b => a.bytes == b.bytes⟩
 
-instance : Hashable String8 := ⟨fun s => hash s.bytes⟩
+instance : Hashable Bytes := ⟨fun s => hash s.bytes⟩
 
-instance : Repr String8 := ⟨fun s _ => reprBytes s.asSlice⟩
+instance : Repr Bytes := ⟨fun s _ => reprBytes s.asSlice⟩
 
-end String8
+end Bytes
 
-namespace String8View
-
-@[inline]
-def new (slice : ByteSlice) : String8View := ⟨slice⟩
+namespace BytesView
 
 @[inline]
-def len (self : String8View) : Nat := self.slice.size
+def new (slice : ByteSlice) : BytesView := ⟨slice⟩
 
 @[inline]
-def isEmpty (self : String8View) : Bool := self.len == 0
+def len (self : BytesView) : Nat := self.slice.size
 
 @[inline]
-def asSlice (self : String8View) : ByteSlice := self.slice
+def isEmpty (self : BytesView) : Bool := self.len == 0
 
-def intoOwned (self : String8View) : String8 := ⟨self.slice.toByteArray⟩
+@[inline]
+def asSlice (self : BytesView) : ByteSlice := self.slice
 
-instance : BEq String8View := ⟨fun a b => a.slice == b.slice⟩
+def intoOwned (self : BytesView) : Bytes := ⟨self.slice.toByteArray⟩
 
-instance : Repr String8View := ⟨fun s _ => reprBytes s.slice⟩
+instance : BEq BytesView := ⟨fun a b => a.slice == b.slice⟩
 
-end String8View
+instance : Repr BytesView := ⟨fun s _ => reprBytes s.slice⟩
+
+end BytesView
 
 end BSmtLib
