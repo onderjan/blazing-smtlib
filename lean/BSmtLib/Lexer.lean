@@ -34,6 +34,8 @@ structure LexerCore where
   initialVersion : Version
   /-- Current lexer state. -/
   state : LexerState
+  /-- Whether the lexer should discard bytes until EOF is reached. -/
+  discard : Bool
   /-- Location of the start of the currently-processed token. -/
   tokenStart : Location
   /-- The currently-built string content of the currently-processed token. -/
@@ -1243,6 +1245,7 @@ private def reset : InnerM H m Unit :=
     { c with
       version := c.initialVersion
       state := .normal
+      discard := false
       tokenStart := Location.initial
       tokenContent := c.tokenContent.clear
       offset := 0
@@ -1307,20 +1310,18 @@ private def lexEofInner : InnerM H m (Except (LexError E) (ControlFlow R)) := do
 
   match ← step.run with
   | .ok () =>
-    -- everything processed, but there was no break out
-    -- we need manually reset the lexer and return continue
-    reset
+    -- everything processed, there was no break out
+    -- the lexer will be reset outside, just continue
     return .ok .continue
   | .error interrupted =>
     match interrupted.result with
     | .error err => return .error err
     | .ok .relex =>
       -- we were asked to relex, but the file is ending anyway, nothing to relex
-      reset
       return .ok .continue
     | .ok (.finished result) =>
-      -- the handler is done with the input
-      -- the lexer will be reset as a consequence of the break result
+      -- the consumer is done with the input
+      -- the lexer will be reset outside
       return .ok (.break result)
 
 /-- Executes an inner lexer step and updates the lexer according to the result. -/
@@ -1329,14 +1330,81 @@ private def executeStep (step : InnerM H m (Except (LexError E) (ControlFlow R))
   match ← step with
   | .ok .continue => return .ok .continue
   | .ok (.break result) =>
-    -- get the break location, then reset the lexer
+    -- add the break location: the lexer is at the last consumed token
     let location := (← getThe LexerCore).currentLocation
-    reset
     return .ok (.break { value := result, location })
   | .error err =>
     -- set the lexer to failed state
     modifyThe LexerCore fun c => { c with state := .failed }
     return .error err
+
+/- LEAN: Rust finds the last line feed with `rposition` and counts the line feeds in a second
+pass; here one pass does both. -/
+/-- The number of line feeds in the bytes, and the position after the last one, if any. -/
+private def countLineFeeds (bytes : ByteSlice) : Nat × Option Nat :=
+  let rec loop (i count : Nat) (afterLast : Option Nat) : Nat × Option Nat :=
+    if h : i < bytes.size then
+      if bytes[i] == byte! '\n' then loop (i + 1) (count + 1) (some (i + 1))
+      else loop (i + 1) count afterLast
+    else
+      (count, afterLast)
+  termination_by bytes.size - i
+  loop 0 0 none
+
+/-- Discards the bytes while keeping the location correct. -/
+private def discardBytes (bytes : ByteSlice) : InnerM H m Unit :=
+  -- the line feeds must be counted for the location to stay correct
+  -- if there is a line feed, the line starts after the last one
+  modifyThe LexerCore fun c =>
+    let c := match countLineFeeds bytes with
+      | (lineFeeds, some afterLast) =>
+        { c with line := c.line + lineFeeds, lineStart := c.offset + afterLast }
+      | (_, none) => c
+    { c with offset := c.offset + bytes.size }
+
+/-- Lexes the slice, or discards it if the consumer has finished. -/
+private def lexSliceStep (slice : ByteSlice) :
+    InnerM H m (Except (LexError E) (ControlFlow (Located R))) := do
+  if (← getThe LexerCore).discard then
+    -- we are discarding bytes
+    -- pretend that we lexed everything we were given
+    discardBytes slice
+    return .ok .continue
+  let start := (← getThe LexerCore).offset
+  -- call inner lexing and fail on error
+  let result ← match Input.ofSlice? slice with
+    | some input => executeStep (lexSliceInner input)
+    | none => executeStep (pure (.error (.internal .sliceTooLarge)))
+  -- if the consumer has produced a result, remember to stop feeding it
+  if let .ok (.break located) := result then
+    modifyThe LexerCore fun c => { c with discard := true }
+    -- discard the remaining bytes after break
+    discardBytes (slice.slice (located.location.offset - start))
+  return result
+
+/-- Lexes the end of the input, which resets the lexer unless an error occurs. -/
+private def lexEofStep : InnerM H m (Except (LexError E) (ControlFlow (Located R))) := do
+  if (← getThe LexerCore).discard then
+    -- no need to feed anything, just reset the lexer
+    reset
+    return .ok .continue
+  -- call inner EOF lexing and fail on error
+  let result ← executeStep lexEofInner
+  if let .ok _ := result then
+    -- the input has ended, reset the lexer
+    reset
+  return result
+
+/-- Lexes the whole input including the end of it. -/
+private def lexAllStep (input : ByteSlice) :
+    InnerM H m (Except (LexError E) (ControlFlow (Located R))) := do
+  match ← lexSliceStep input with
+  | .ok (.break result) =>
+    -- reset the lexer as if we are at the start of a new file
+    reset
+    return .ok (.break result)
+  | .ok .continue => lexEofStep
+  | .error err => return .error err
 
 end
 
@@ -1347,6 +1415,7 @@ def new (handler : H) (version : Version) : Lexer H :=
       version
       initialVersion := version
       state := .normal
+      discard := false
       tokenStart := Location.initial
       tokenContent := ContentBuffer.empty
       offset := 0
@@ -1380,13 +1449,14 @@ private def run [Monad m] (self : Lexer H) (step : InnerM H m α) : m (α × Lex
 with the result. If the caller does not keep the old lexer, it is updated in place. -/
 
 /--
-Lexes the given slice, sending the lexed tokens to the handler.
+Lexes the given slice, sending the lexed tokens to the consumer.
 
-If the token handler returns `ControlFlow.break` on some token,
-the lexer passes it through, adding the break location,
-and resets itself.
+If the token consumer returns `ControlFlow.break` on some token,
+the lexer passes it through, adding the break location.
+Subsequent bytes are discarded until EOF, which resets
+the lexer.
 
-If the token handler returns `ControlFlow.continue` on all tokens,
+If the token consumer returns `ControlFlow.continue` on all tokens,
 the lexer is ready for further lexing.
 
 If an error occurs, the lexer moves into a failure state;
@@ -1394,19 +1464,17 @@ all further lexing calls fail with an internal error.
 -/
 def lexSlice [Monad m] [Consume H m R E] (self : Lexer H) (slice : ByteSlice) :
     m (Except (LexError E) (ControlFlow (Located R)) × Lexer H) :=
-  -- call inner lexing and fail on error
-  match Input.ofSlice? slice with
-  | some input => self.run (executeStep (lexSliceInner input))
-  | none => self.run (executeStep (pure (.error (.internal .sliceTooLarge))))
+  self.run (lexSliceStep slice)
 
 /--
-Lexes end-of-file, sending the lexed tokens to the handler.
+Lexes end-of-file, sending the lexed tokens to the consumer.
 
-If the token handler returns `ControlFlow.break` on the EOF token,
-the lexer passes it through, adding the break location,
-and resets itself.
+If the token consumer returns `ControlFlow.break` on the EOF token,
+the lexer passes it through, adding the break location.
+Subsequent bytes are discarded until EOF, which resets
+the lexer.
 
-If the token handler returns `ControlFlow.continue` on the EOF token,
+If the token consumer returns `ControlFlow.continue` on the EOF token,
 the lexer resets itself and returns `ControlFlow.continue`.
 
 If an error occurs, the lexer moves into a failure state;
@@ -1414,17 +1482,17 @@ all further lexing calls fail with an internal error.
 -/
 def lexEof [Monad m] [Consume H m R E] (self : Lexer H) :
     m (Except (LexError E) (ControlFlow (Located R)) × Lexer H) :=
-  -- call inner EOF lexing and fail on error
-  self.run (executeStep lexEofInner)
+  self.run lexEofStep
 
 /--
 Lexes the whole input including EOF at the end.
 
-If the token handler returns `ControlFlow.break` on some token,
-the lexer passes it through, adding the break location,
-and resets itself.
+If the token consumer returns `ControlFlow.break` on some token,
+the lexer passes it through, adding the break location.
+Subsequent bytes are discarded until EOF, which resets
+the lexer.
 
-If the token handler returns `ControlFlow.continue` on all tokens
+If the token consumer returns `ControlFlow.continue` on all tokens
 including EOF, the lexer resets itself after EOF
 and returns `ControlFlow.continue`.
 
@@ -1432,10 +1500,7 @@ If an error occurs, the lexer moves into a failure state;
 all further lexing calls fail with an internal error.
 -/
 def lexAll [Monad m] [Consume H m R E] (self : Lexer H) (input : ByteSlice) :
-    m (Except (LexError E) (ControlFlow (Located R)) × Lexer H) := do
-  let (result, self) ← self.lexSlice input
-  match result with
-  | .ok .continue => self.lexEof
-  | _ => return (result, self)
+    m (Except (LexError E) (ControlFlow (Located R)) × Lexer H) :=
+  self.run (lexAllStep input)
 
 end BSmtLib.Lexer
