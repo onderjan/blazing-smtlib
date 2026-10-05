@@ -4,8 +4,8 @@ import BSmtLib.Spec.Lexicon
 # Lexers
 
 What a lexer hands over, in a form that does not depend on how a lexer represents its tokens,
-and what it means for a lexer to be correct. The claims are trusted as much as the spec: a
-proof shows that a claim holds, so the claim has to say what is meant.
+and what it means for a lexer to be correct. The properties are trusted as much as the spec:
+a proof shows that a property holds, so the property has to say what is meant.
 -/
 
 namespace BSmtLib.Spec.Lexer
@@ -137,14 +137,14 @@ def endOfFile (input : Chars) : Handed :=
 
 /-! ## About a lexer
 
-Extension D: the claims do not require the input to be a `SourceFile`, so a lexer that
-satisfies them accepts characters from 128 on in 2.0 as 2.5 and later do. 2.0 is used mainly
+Extension D: the properties do not require the input to be a `SourceFile`, so a lexer that
+has them accepts characters from 128 on in 2.0 as 2.5 and later do. 2.0 is used mainly
 to read old scripts into 2.5 and later, or to give a solver that reads 2.5 and later a legacy
 mode, where accepting these characters as 2.5 does is what is wanted.
 -/
 
 /--
-Claim: about a lexer, to be proved of an implementation. Extension D: the input need not be a
+Property: of a lexer, to be proved of an implementation. Extension D: the input need not be a
 `SourceFile`.
 
 A lexer of whole inputs is correct: it hands over the tokens of the tokenisation
@@ -156,7 +156,7 @@ def LexerCorrect (lex : Version → Chars → Option (List Handed)) : Prop :=
       handed = tokens.map (·.handed version input) ++ [endOfFile input]
 
 /--
-Claim: about a lexer, to be proved of an implementation. Extension D: the input need not be a
+Property: of a lexer, to be proved of an implementation. Extension D: the input need not be a
 `SourceFile`.
 
 A lexer fed in slices is correct: `feed version slices` is what it handed over after the

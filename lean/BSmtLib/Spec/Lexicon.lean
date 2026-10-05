@@ -1,7 +1,7 @@
 import BSmtLib.Spec.Lexicon.Regex
 import BSmtLib.Spec.Lexicon.Rules
 import BSmtLib.Spec.Lexicon.Tokenization
-import BSmtLib.Spec.Lexicon.Claims
+import BSmtLib.Spec.Lexicon.Properties
 
 /-!
 # Lexicon

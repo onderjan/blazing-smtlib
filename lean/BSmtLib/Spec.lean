@@ -15,7 +15,7 @@ lexer and a parser can be proved correct. Its source of truth is the standard it
 
 ## How each definition relates to the standard
 
-The documentation of every definition that states a rule or a claim begins with one or more
+The documentation of every definition that states a rule or a property begins with one or more
 of these tags. The definitions of the regular-expression formalism, and helpers that state no
 rule, carry none.
 
@@ -26,7 +26,7 @@ rule, carry none.
   reading.
 - **Extension:** not in the standard; this specification's or this library's own.
 - **Scope:** what the definition leaves out of the standard on purpose.
-- **Claim:** a statement to be proved, about the specification or about an implementation.
+- **Property:** a proposition to be proved, about the specification or about an implementation.
 
 ## The named rulings
 

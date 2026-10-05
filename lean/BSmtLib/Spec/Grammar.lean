@@ -1,7 +1,7 @@
 import BSmtLib.Spec.Grammar.Tree
 import BSmtLib.Spec.Grammar.Rules
 import BSmtLib.Spec.Grammar.Script
-import BSmtLib.Spec.Grammar.Claims
+import BSmtLib.Spec.Grammar.Properties
 
 /-!
 # Grammar

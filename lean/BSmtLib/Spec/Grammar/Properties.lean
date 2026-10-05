@@ -1,10 +1,12 @@
 import BSmtLib.Spec.Grammar.Script
 
 /-!
-# Claims
+# Properties of the grammar
 
-What is claimed about the syntactic rules. What the parser hands to the handler is claimed
-once the handler interface is settled.
+Properties of the syntactic rules: each states that the rules are unambiguous. They are
+properties of the specification alone, and `BSmtLib.SpecChecks` is to prove them.
+Properties of what the parser hands to the handler are stated once the handler interface is
+settled.
 -/
 
 namespace BSmtLib.Spec.Grammar
@@ -12,7 +14,7 @@ namespace BSmtLib.Spec.Grammar
 open BSmtLib.Spec.Lexicon
 
 /--
-Claim: about the grammar, to be proved.
+Property: of the grammar, to be proved.
 
 The rules leave at most one syntax tree for every sequence of tokens of a term.
 -/
@@ -21,7 +23,7 @@ def TermsUnique : Prop :=
     Grammar.Term version tokens term → Grammar.Term version tokens term' → term = term'
 
 /--
-Claim: about the grammar, to be proved.
+Property: of the grammar, to be proved.
 
 The rules leave at most one syntax tree for every sequence of tokens of a command.
 -/
@@ -31,7 +33,7 @@ def CommandsUnique : Prop :=
       command = command'
 
 /--
-Claim: about the grammar, to be proved.
+Property: of the grammar, to be proved.
 
 Every script has at most one parse.
 -/
