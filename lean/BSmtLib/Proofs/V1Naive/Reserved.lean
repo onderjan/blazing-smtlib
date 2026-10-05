@@ -53,13 +53,13 @@ theorem size_toByteSlice' (a : ByteArray) : a.toByteSlice.size = a.data.toList.l
   rfl
 
 theorem fromBytes_kind (version : Spec.Lexicon.Version) (a : ByteArray) :
-    (Reserved.fromBytes? a.toByteSlice (V1Spec.toVersion version)).map reservedKindOf =
+    (Reserved.fromBytes? a.toByteSlice (Adapter.toVersion version)).map reservedKindOf =
       specReservedKind version a.data.toList := by
   unfold Reserved.fromBytes?
   generalize hT : BSmtLib.Reserved.Internal.reservedTable = T
   generalize hslot : BSmtLib.Reserved.Internal.reservedSlot = slot
   have hgood : ∀ e ∈ T.toList, e.1.size = 0 ∨
-      (if V1Spec.toVersion version ≥ e.2.2 then some (reservedKindOf e.2.1) else none) =
+      (if Adapter.toVersion version ≥ e.2.2 then some (reservedKindOf e.2.1) else none) =
         specReservedKind version e.1.data.toList := by
     subst hT
     cases version <;> decide +kernel
@@ -94,7 +94,7 @@ theorem fromBytes_kind (version : Spec.Lexicon.Version) (a : ByteArray) :
       · exact absurd h hne
       · rw [← h]
         have hb : (word.toByteSlice == word.toByteSlice) = true := (toByteSlice_beq _ _).mpr rfl
-        by_cases hv : V1Spec.toVersion version ≥ since <;> simp [hb, hv]
+        by_cases hv : Adapter.toVersion version ≥ since <;> simp [hb, hv]
     · have hb : (word.toByteSlice == a.toByteSlice) = false := by
         cases h : (word.toByteSlice == a.toByteSlice)
         · rfl

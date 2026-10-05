@@ -4,15 +4,16 @@ import BSmtLib.Proofs.V1Naive.Reserved
 /-!
 # The naive lexer is correct
 
-`lexerCorrect`: `V1Spec.lex` has the property `Spec.Lexer.LexerCorrect`. `V1Spec.lex` gives what
-the pure run of the whole input gives (`lex_eq_run`); the pure run finishes exactly the inputs
-that have a tokenisation (`run_sound`, `run_complete`), with the lexemes of its tokens; and the
-consumer records the lexeme of a token as the spec hands the token over (`lexemeHanded_token`).
+`lex_correct`: the naive lexer as the adapter runs it, `handed V1Naive.ops`, has the property
+`Spec.Lexer.LexerCorrect`. It gives what the pure run of the whole input gives
+(`handed_eq_run`); the pure run finishes exactly the inputs that have a tokenisation
+(`run_sound`, `run_complete`), with the lexemes of its tokens; and the consumer records the
+lexeme of a token as the spec hands the token over (`lexemeHanded_token`).
 -/
 
 namespace BSmtLib.Proofs.Lexer.V1Naive
 
-open BSmtLib.Proofs.Lexer.V1Spec BSmtLib.Spec.Lexicon BSmtLib.SpecChecks.Lexicon
+open BSmtLib.Proofs.Adapter BSmtLib.Spec.Lexicon BSmtLib.SpecChecks.Lexicon
 
 /-! ## What the consumer records of a lexeme -/
 
@@ -63,7 +64,7 @@ theorem lexemeHanded_eq (version : Version) (l : Lexeme) :
   have hversion : (BatchCursor.new version l.batch).version = version := rfl
   unfold lexemeHanded toHanded
   simp only [BatchCursor.syntax, SyntaxToken.fromToken, hcat, hstart, hend, hcontent, hversion,
-    toByteArray_toByteSlice, byteArray_toList]
+    toContent, toByteArray_toByteSlice, byteArray_toList]
   cases hc : l.category <;> simp [toTokenType, lexemeReserved, toReservedKind]
   cases Reserved.fromBytes? l.content.toByteSlice version <;> rfl
 
@@ -172,12 +173,12 @@ theorem handedAll_tokens {version : Spec.Lexicon.Version} {input : Chars}
 
 /-! ## The lexer -/
 
-/-- `V1Spec.lex` hands over the tokens of the tokenisation of the input and the end-of-file
-token exactly when the input has a tokenisation. -/
-theorem lex_correct : Spec.Lexer.LexerCorrect V1Spec.lex := by
-  intro version slices handed
+/-- `handed V1Naive.ops` hands over the tokens of the tokenisation of the input and the
+end-of-file token exactly when the input has a tokenisation. -/
+theorem lex_correct : Spec.Lexer.LexerCorrect (handed V1Naive.ops) := by
+  intro version slices handed'
   simp only
-  rw [lex_eq_run]
+  rw [handed_eq_run]
   constructor
   · intro h
     obtain ⟨ls, hrun, hh⟩ := Option.bind_eq_some_iff.mp h

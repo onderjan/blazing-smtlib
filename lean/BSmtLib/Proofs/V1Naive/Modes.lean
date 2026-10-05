@@ -30,7 +30,7 @@ theorem isEmpty_iff (a : ByteArray) : a.isEmpty = true ↔ a.data.toList = [] :=
   exact List.length_eq_zero_iff
 
 theorem toVersion_beq (version : Spec.Lexicon.Version) :
-    (V1Spec.toVersion version == .v2_0) = true ↔ version = .v2_0 := by
+    (Adapter.toVersion version == .v2_0) = true ↔ version = .v2_0 := by
   cases version <;> decide
 
 /-- A sequence of zero or more parts and one more part. -/
@@ -250,7 +250,7 @@ def FinishSound (version : Spec.Lexicon.Version) (p : Pending) (text : Chars)
 /-! ## The steps keep the relation -/
 
 theorem start_sound (version : Spec.Lexicon.Version) (location : Location) (c : UInt8) :
-    StartSound version location c (start (V1Spec.toVersion version) false location c) := by
+    StartSound version location c (start (Adapter.toVersion version) false location c) := by
   unfold start
   by_cases hw : isWhitespace c = true
   · simp only [hw, Bool.false_eq_true, ite_true, ite_false]
@@ -278,8 +278,8 @@ theorem start_sound (version : Spec.Lexicon.Version) (location : Location) (c : 
     · have := (toVersion_beq version).mpr hv
       simp only [this, ite_true]
       exact ⟨rfl, hv, [], rfl, star_parts [] (by simp), rfl⟩
-    · have : (V1Spec.toVersion version == .v2_0) = false := by
-        cases h : (V1Spec.toVersion version == .v2_0)
+    · have : (Adapter.toVersion version == .v2_0) = false := by
+        cases h : (Adapter.toVersion version == .v2_0)
         · rfl
         · exact absurd ((toVersion_beq version).mp h) hv
       simp only [this, Bool.false_eq_true, ite_false]

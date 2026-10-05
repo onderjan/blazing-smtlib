@@ -152,8 +152,8 @@ def lexemeFor (version : Spec.Lexicon.Version) (category : Category) (start «en
 followed by what may follow such a token, finish the token's lexeme before the rest. -/
 def TokenRun (version : Spec.Lexicon.Version) (category : Category) (text : Chars) : Prop :=
   ∀ location rest, DelimRest rest →
-    runFrom (V1Spec.toVersion version) .idle location (text ++ rest) =
-      (runFrom (V1Spec.toVersion version) .idle (advanceLoc location text) rest).map
+    runFrom (Adapter.toVersion version) .idle location (text ++ rest) =
+      (runFrom (Adapter.toVersion version) .idle (advanceLoc location text) rest).map
         (lexemeFor version category location (advanceLoc location text) text :: ·)
 
 /-- The token in progress `p` finishes as the token of the kind with the characters `text`
@@ -167,7 +167,7 @@ def Closes (version : Spec.Lexicon.Version) (category : Category) (start : Locat
 
 theorem tokenRun_of_closes {version : Spec.Lexicon.Version} {category : Category}
     {text : Chars}
-    (h : ∀ location, ∃ p, Reaches (V1Spec.toVersion version) .idle location text (.token p) ∧
+    (h : ∀ location, ∃ p, Reaches (Adapter.toVersion version) .idle location text (.token p) ∧
       Closes version category location text p) :
     TokenRun version category text := by
   intro location rest hrest
@@ -182,12 +182,12 @@ theorem tokenRun_of_closes {version : Spec.Lexicon.Version} {category : Category
     rw [runFrom_cons, runFrom_cons]
     simp only [byteStep, ha]
     rw [lexemeIs_eq hl]
-    cases startStep (V1Spec.toVersion version) loc' d with
+    cases startStep (Adapter.toVersion version) loc' d with
     | none => rfl
     | some e =>
       obtain ⟨st, ls⟩ := e
       simp only [Option.map_some, Option.bind_some]
-      cases runFrom (V1Spec.toVersion version) st (loc'.afterByte d) r <;> rfl
+      cases runFrom (Adapter.toVersion version) st (loc'.afterByte d) r <;> rfl
 
 /-- What a delimiter is not. -/
 theorem delim_facts {d : UInt8} (h : Delim d.toNat) :
@@ -407,7 +407,7 @@ theorem reaches_numeral {version : Version} {s : Chars} (hs : numeral s) (locati
 theorem run_numeral (version : Spec.Lexicon.Version) {s : Chars} (hs : numeral s) :
     TokenRun version .numeral s := by
   refine tokenRun_of_closes fun location => ?_
-  obtain ⟨p, hr, ⟨zero, hm⟩, hst, hk⟩ := reaches_numeral (version := V1Spec.toVersion version)
+  obtain ⟨p, hr, ⟨zero, hm⟩, hst, hk⟩ := reaches_numeral (version := Adapter.toVersion version)
     hs location
   exact ⟨p, hr, closes_numeral hm hst hk⟩
 
@@ -417,7 +417,7 @@ theorem run_decimal (version : Spec.Lexicon.Version) {s : Chars} (hs : decimal s
   obtain ⟨n, r1, rfl, hn, dot, r2, rfl, hdot, z, n', rfl, hz, hn'⟩ := hs
   have hdot2 : dot = [46] := hdot
   subst hdot2
-  obtain ⟨p, hr, ⟨zero, hm⟩, hst, hk⟩ := reaches_numeral (version := V1Spec.toVersion version)
+  obtain ⟨p, hr, ⟨zero, hm⟩, hst, hk⟩ := reaches_numeral (version := Adapter.toVersion version)
     hn location
   -- the dot
   have hdot' : advance false p (advanceLoc location n) 46 =
@@ -444,7 +444,7 @@ theorem run_decimal (version : Spec.Lexicon.Version) {s : Chars} (hs : decimal s
       .pending { p with mode := .fraction true, content := (p.content.push 46).push e } := by
     have hd := (isDigit_iff e).mpr (hdigits e (by simp))
     simp [advance, hd]
-  obtain ⟨p', hr', hI⟩ := reaches_segment (version := V1Spec.toVersion version)
+  obtain ⟨p', hr', hI⟩ := reaches_segment (version := Adapter.toVersion version)
     (I := fun q pre => (q.mode = .fraction true ∧ q.content.data.toList = pre) ∧
       q.start = p.start) es
     (fun q pre loc x hq hx => by
@@ -508,12 +508,12 @@ theorem run_hexadecimal (version : Spec.Lexicon.Version) {s : Chars} (hs : hexad
   obtain ⟨ds, rfl, hds⟩ := seq_lit hs
   have hall := plus_chars (fun _ => hexChar_single) hds
   have hne := plus_ne_nil (fun p hp => by obtain ⟨c, rfl⟩ := hexChar_single hp; simp) hds
-  have h0 : start (V1Spec.toVersion version) false location 35 =
+  have h0 : start (Adapter.toVersion version) false location 35 =
       .pending { mode := .hash, start := location, content := .empty } := rfl
   have h1 : advance false { mode := .hash, start := location, content := .empty }
       (location.afterByte 35) 120 =
       .pending { mode := .digits .hexadecimal, start := location, content := .empty } := rfl
-  obtain ⟨p', hr, hm, hst, hk⟩ := reaches_extend (version := V1Spec.toVersion version)
+  obtain ⟨p', hr, hm, hst, hk⟩ := reaches_extend (version := Adapter.toVersion version)
     (m := .digits .hexadecimal) (P := fun x => isHexDigit x = true) (xs := ds)
     (fun q loc x hq hx => by simp [advance, hq, Radix.allows, hx])
     (fun x hx => (hexDigit_iff x).mpr (hall x hx))
@@ -533,12 +533,12 @@ theorem run_binary (version : Spec.Lexicon.Version) {s : Chars} (hs : binary s) 
     exact ⟨c, rfl⟩
   have hall := plus_chars hsingle hds
   have hne := plus_ne_nil (fun p hp => by obtain ⟨c, rfl⟩ := hsingle p hp; simp) hds
-  have h0 : start (V1Spec.toVersion version) false location 35 =
+  have h0 : start (Adapter.toVersion version) false location 35 =
       .pending { mode := .hash, start := location, content := .empty } := rfl
   have h1 : advance false { mode := .hash, start := location, content := .empty }
       (location.afterByte 35) 98 =
       .pending { mode := .digits .binary, start := location, content := .empty } := rfl
-  obtain ⟨p', hr, hm, hst, hk⟩ := reaches_extend (version := V1Spec.toVersion version)
+  obtain ⟨p', hr, hm, hst, hk⟩ := reaches_extend (version := Adapter.toVersion version)
     (m := .digits .binary) (P := fun x => isBinaryDigit x = true) (xs := ds)
     (fun q loc x hq hx => by simp [advance, hq, Radix.allows, hx])
     (fun x hx => (binaryDigit_iff x).mpr (hall x hx))
@@ -559,9 +559,9 @@ theorem run_keyword (version : Spec.Lexicon.Version) {s : Chars} (hs : keyword s
     have e : t = ds := (List.cons.inj hts').2.symm
     subst e
     exact plus_ne_nil (fun p hp => by obtain ⟨c, rfl, -⟩ := symChar_inv hp; simp) hpl
-  have h0 : start (V1Spec.toVersion version) false location 58 =
+  have h0 : start (Adapter.toVersion version) false location 58 =
       .pending { mode := .keyword, start := location, content := .empty } := rfl
-  obtain ⟨p', hr, hm, hst, hk⟩ := reaches_extend (version := V1Spec.toVersion version)
+  obtain ⟨p', hr, hm, hst, hk⟩ := reaches_extend (version := Adapter.toVersion version)
     (m := .keyword) (P := fun x => SymChar x.toNat) (xs := ds)
     (fun q loc x hq hx => by simp [advance, hq, (isSymbolByte_iff x).mpr hx])
     hall { mode := .keyword, start := location, content := .empty }
@@ -596,7 +596,7 @@ theorem run_symbol (version : Spec.Lexicon.Version) {s : Chars} {category : Cate
     · obtain ⟨c, t, rfl, hd, hall, -⟩ := simpleSymbol_inv hs
       exact ⟨c, t, rfl, hd, hall⟩
     · exact reservedWords_shape version s (litOneOf_iff.mp hs)
-  obtain ⟨p', hr, hm, hst, hk⟩ := reaches_extend (version := V1Spec.toVersion version)
+  obtain ⟨p', hr, hm, hst, hk⟩ := reaches_extend (version := Adapter.toVersion version)
     (m := .simpleSymbol) (P := fun x => SymChar x.toNat) (xs := t)
     (fun q loc x hq hx => by simp [advance, hq, (isSymbolByte_iff x).mpr hx])
     (fun x hx => hall x (by simp [hx]))
@@ -615,9 +615,9 @@ theorem run_quoted (version : Spec.Lexicon.Version) {s : Chars} (hs : quotedSymb
       exact ⟨c, rfl⟩
     · exact printableOrSpace_inv (Or.inl h)
   have hall := star_chars hsingle hb
-  have h0 : start (V1Spec.toVersion version) false location 124 =
+  have h0 : start (Adapter.toVersion version) false location 124 =
       .pending { mode := .quotedSymbol, start := location, content := .empty } := rfl
-  obtain ⟨p', hr, hm, hst, hk⟩ := reaches_extend (version := V1Spec.toVersion version)
+  obtain ⟨p', hr, hm, hst, hk⟩ := reaches_extend (version := Adapter.toVersion version)
     (m := .quotedSymbol) (P := fun x => QuotedChar [x]) (xs := b)
     (fun q loc x hq hx => by
       obtain ⟨hx1, hx2⟩ := hx
@@ -637,22 +637,22 @@ theorem run_quoted (version : Spec.Lexicon.Version) {s : Chars} (hs : quotedSymb
 theorem run_paren (version : Spec.Lexicon.Version) {s : Chars} {category : Category}
     (hc : category = .parenOpen ∨ category = .parenClose) (hs : categoryRegex version category s) :
     ∀ location rest,
-      runFrom (V1Spec.toVersion version) .idle location (s ++ rest) =
-        (runFrom (V1Spec.toVersion version) .idle (advanceLoc location s) rest).map
+      runFrom (Adapter.toVersion version) .idle location (s ++ rest) =
+        (runFrom (Adapter.toVersion version) .idle (advanceLoc location s) rest).map
           (lexemeFor version category location (advanceLoc location s) s :: ·) := by
   intro location rest
   rcases hc with rfl | rfl
   · have e : s = [40] := hs
     subst e
     rw [List.singleton_append, runFrom_cons]
-    have hst : byteStep (V1Spec.toVersion version) .idle location 40 =
+    have hst : byteStep (Adapter.toVersion version) .idle location 40 =
         some (.idle, [lexemeFor version .parenOpen location (location.afterByte 40) [40]]) := rfl
     rw [hst, Option.bind_some]
     rfl
   · have e : s = [41] := hs
     subst e
     rw [List.singleton_append, runFrom_cons]
-    have hst : byteStep (V1Spec.toVersion version) .idle location 41 =
+    have hst : byteStep (Adapter.toVersion version) .idle location 41 =
         some (.idle, [lexemeFor version .parenClose location (location.afterByte 41) [41]]) := rfl
     rw [hst, Option.bind_some]
     rfl
@@ -662,14 +662,14 @@ theorem run_string (version : Spec.Lexicon.Version) (hv : version ≠ .v2_0) {s 
     (hs : string s) : TokenRun version .string s := by
   refine tokenRun_of_closes fun location => ?_
   obtain ⟨b, rfl, hb⟩ := string_inv hs
-  have hv' : (V1Spec.toVersion version == .v2_0) = false := by
-    cases h : (V1Spec.toVersion version == .v2_0)
+  have hv' : (Adapter.toVersion version == .v2_0) = false := by
+    cases h : (Adapter.toVersion version == .v2_0)
     · rfl
     · exact absurd ((toVersion_beq version).mp h) hv
-  have h0 : start (V1Spec.toVersion version) false location 34 =
+  have h0 : start (Adapter.toVersion version) false location 34 =
       .pending { mode := .string, start := location, content := .empty } := by
     simp [start, hv', show isWhitespace 34 = false from rfl]
-  obtain ⟨p', hr, hm, hst, -, hk⟩ := reaches_parts (version := V1Spec.toVersion version)
+  obtain ⟨p', hr, hm, hst, -, hk⟩ := reaches_parts (version := Adapter.toVersion version)
     (I := fun q pre => q.mode = .string ∧ q.start = location ∧ StringBody pre ∧
       q.content.data.toList = unescape pre)
     (fun q pre loc u ⟨hm, hst, hpre, hk⟩ hu => by
@@ -707,11 +707,11 @@ theorem run_string20 (version : Spec.Lexicon.Version) (hv : version = .v2_0) {s 
     (hs : string20 s) : TokenRun version .string s := by
   refine tokenRun_of_closes fun location => ?_
   obtain ⟨b, rfl, hb⟩ := string20_inv hs
-  have hv' : (V1Spec.toVersion version == .v2_0) = true := (toVersion_beq version).mpr hv
-  have h0 : start (V1Spec.toVersion version) false location 34 =
+  have hv' : (Adapter.toVersion version == .v2_0) = true := (toVersion_beq version).mpr hv
+  have h0 : start (Adapter.toVersion version) false location 34 =
       .pending { mode := .legacyString, start := location, content := .empty } := by
     simp [start, hv', show isWhitespace 34 = false from rfl]
-  obtain ⟨p', hr, hm, hst, -, hk⟩ := reaches_parts (version := V1Spec.toVersion version)
+  obtain ⟨p', hr, hm, hst, -, hk⟩ := reaches_parts (version := Adapter.toVersion version)
     (r := alt (minus (alt printableChar whiteSpaceChar) (oneOf "\"\\"))
       (seq (lit "\\") (alt printableChar whiteSpaceChar)))
     (I := fun q pre => q.mode = .legacyString ∧ q.start = location ∧ StringBody20 pre ∧
@@ -784,8 +784,8 @@ the rest. -/
 theorem token_run {version : Spec.Lexicon.Version} {category : Category} {s rest : Chars}
     (hs : categoryRegex version category s) (hd : Delimited category rest)
     (location : Location) :
-    runFrom (V1Spec.toVersion version) .idle location (s ++ rest) =
-      (runFrom (V1Spec.toVersion version) .idle (advanceLoc location s) rest).map
+    runFrom (Adapter.toVersion version) .idle location (s ++ rest) =
+      (runFrom (Adapter.toVersion version) .idle (advanceLoc location s) rest).map
         (lexemeFor version category location (advanceLoc location s) s :: ·) := by
   cases category with
   | parenOpen => exact run_paren version (Or.inl rfl) hs location rest
@@ -812,7 +812,7 @@ theorem token_run {version : Spec.Lexicon.Version} {category : Category} {s rest
 theorem runFrom_complete {version : Spec.Lexicon.Version} {offset : Nat} {input : Chars}
     {tokens : List Spec.Lexicon.Token} (h : TokenizationFrom version offset input tokens) :
     ∀ before, offset = before.length →
-      runFrom (V1Spec.toVersion version) .idle (locAfter before) input =
+      runFrom (Adapter.toVersion version) .idle (locAfter before) input =
         some (tokens.map (lexemeOf version (before ++ input)) ++
           [eofLexeme (locAfter (before ++ input))]) := by
   induction h with
@@ -844,7 +844,7 @@ theorem runFrom_complete {version : Spec.Lexicon.Version} {offset : Nat} {input 
 then the end-of-file lexeme. -/
 theorem run_complete {version : Spec.Lexicon.Version} {input : Chars}
     {tokens : List Spec.Lexicon.Token} (h : Tokenization version input tokens) :
-    run (V1Spec.toVersion version) input =
+    run (Adapter.toVersion version) input =
       some (tokens.map (lexemeOf version input) ++ [eofLexeme (locAfter input)]) := by
   have := runFrom_complete h [] rfl
   simp only [List.nil_append] at this

@@ -1,18 +1,19 @@
-import BSmtLib.Proofs.V1Naive.Spec
+import BSmtLib.Proofs.Adapter
 
 /-!
 # The pure run of the naive lexer
 
 The naive lexer of `V1Naive` lexes an input by a pure step over one byte at a time, and hands
-each finished token over to its consumer in a monad. For the consumer of `V1Spec.lex`, which
-takes every token and does not take whitespace and comments, this module states the lexing as
-a pure run over the bytes of the whole input (`run`) and proves that `V1Spec.lex` gives what
-the run gives, whatever slices the input is cut into (`lex_eq_run`).
+each finished token over to its consumer in a monad. For the adapter's consumer `Collector`,
+which takes every token and does not take whitespace and comments, this module states the
+lexing as a pure run over the bytes of the whole input (`run`) and proves that
+`handed V1Naive.ops` gives what the run gives, whatever slices the input is cut into
+(`handed_eq_run`).
 -/
 
 namespace BSmtLib.Proofs.Lexer.V1Naive
 
-open BSmtLib.Proofs.Lexer.V1Spec
+open BSmtLib.Proofs.Adapter
 
 /-! ## The pure run -/
 
@@ -85,7 +86,7 @@ def runFrom (version : Version) (st : St) (location : Location) (bytes : List UI
 def run (version : Version) (bytes : List UInt8) : Option (List Lexeme) :=
   runFrom version .idle Location.initial bytes
 
-/-- The lexeme as the consumer of `V1Spec.lex` records it, when it is handed over alone in a
+/-- The lexeme as the consumer `Collector` records it, when it is handed over alone in a
 cursor under the version. -/
 def lexemeHanded (version : Version) (l : Lexeme) : Option Spec.Lexer.Handed :=
   toHanded (BatchCursor.new version l.batch) ((BatchCursor.new version l.batch).peek
@@ -132,18 +133,21 @@ theorem handOverAt_run (core : Core) (l : Lexeme) (c : Collector) :
           { handed := c.handed ++ [h] })
       | none => ((.error { cause := .consumer (), location := l.end },
           { core with depth := depthAfter core.depth l.category }), c) := by
-  simp only [handOverAt, handOver, Consume.consume, BatchCursor.next]
-  split
-  next handed heq =>
-    have : lexemeHanded core.version l = some handed := heq
-    rw [this]
-    rfl
-  next heq =>
-    have : lexemeHanded core.version l = none := heq
-    rw [this]
-    rfl
+  have hnone :
+      ¬ ((BatchCursor.new core.version l.batch).next (l.hasNext core.version)).2.1.HasNext :=
+    Nat.lt_irrefl _
+  have ht : takeRest ((BatchCursor.new core.version l.batch).next (l.hasNext core.version)).2.1 =
+      (some [], ⟨_, .refl _⟩) := by
+    rw [takeRest]
+    simp only [hnone, dite_false]
+  have hk : toHanded (BatchCursor.new core.version l.batch)
+      ((BatchCursor.new core.version l.batch).next (l.hasNext core.version)).1 =
+      lexemeHanded core.version l := rfl
+  simp only [handOverAt, handOver, Consume.consume]
+  rw [ht, hk]
+  cases lexemeHanded core.version l <;> rfl
 
-/-- The lexemes as the consumer of `V1Spec.lex` records them, or none if it fails on one. -/
+/-- The lexemes as the consumer `Collector` records them, or none if it fails on one. -/
 def handedAll (version : Version) (ls : List Lexeme) : Option (List Spec.Lexer.Handed) :=
   ls.mapM (lexemeHanded version)
 
@@ -635,6 +639,10 @@ theorem lexEof_eq (handler : Collector) (core : Core) :
   obtain ⟨⟨res, core'⟩, h'⟩ := r
   cases res <;> rfl
 
+theorem ops_lexSlice : V1Naive.ops.lexSlice = Lexer.lexSlice := rfl
+
+theorem ops_lexEof : V1Naive.ops.lexEof = Lexer.lexEof := rfl
+
 theorem runFrom_append (version : Version) (st : St) (location : Location) (a b : List UInt8) :
     runFrom version st location (a ++ b) =
       (feedBytes version st location a).bind fun (st', location', ls) =>
@@ -655,14 +663,14 @@ theorem runFrom_append (version : Version) (st : St) (location : Location) (a b 
 theorem feed_eq {version : Version} (slices : List Spec.Lexicon.Chars) :
     ∀ {st : St} {location : Location} (handler : Collector) (core : Core),
       Agrees version st location core →
-      feed ⟨handler, core⟩ slices =
+      feed V1Naive.ops ⟨handler, core⟩ slices =
         (runFrom version st location slices.flatten).bind fun ls =>
           (handedAll version ls).map (handler.handed ++ ·) := by
   induction slices with
   | nil =>
     intro st location handler core h
     have he := lexEofStep_run h handler
-    simp only [feed, lexEof_eq, List.flatten_nil, runFrom, feedBytes, Option.bind_some,
+    simp only [feed, ops_lexEof, lexEof_eq, List.flatten_nil, runFrom, feedBytes, Option.bind_some,
       List.nil_append]
     generalize (lexEofStep (H := Collector) false (fun _ => pure ()) (fun _ => pure ())
       core).run handler = r at he ⊢
@@ -690,11 +698,12 @@ theorem feed_eq {version : Version} (slices : List Spec.Lexicon.Chars) :
       | some ls =>
         rw [hend] at hx
         simp only [Option.bind_some] at hx
-        simp [hx, hhs]
+        simp [hx, ← hhs]
+        rfl
   | cons slice slices ih =>
     intro st location handler core h
     have hf := lexSliceStep_run h slice handler
-    simp only [feed, lexSlice_eq, List.flatten_cons, runFrom_append]
+    simp only [feed, ops_lexSlice, lexSlice_eq, List.flatten_cons, runFrom_append]
     generalize (lexSliceStep (H := Collector) false (fun _ => pure ()) (fun _ => pure ())
       slice.toByteArray.toByteSlice core).run handler = r at hf ⊢
     obtain ⟨⟨res, core'⟩, handler'⟩ := r
@@ -731,13 +740,13 @@ theorem feed_eq {version : Version} (slices : List Spec.Lexicon.Chars) :
           simp only [Option.bind_some, Option.map_some, handedAll_append, hls, hhs]
           cases handedAll version ls' <;> simp [List.append_assoc]
 
-/-- `V1Spec.lex` gives what the pure run of the whole input gives, as the consumer records
+/-- `handed V1Naive.ops` gives what the pure run of the whole input gives, as the consumer records
 it, however the input is cut into slices. -/
-theorem lex_eq_run (version : Spec.Lexicon.Version) (slices : List Spec.Lexicon.Chars) :
-    lex version slices =
+theorem handed_eq_run (version : Spec.Lexicon.Version) (slices : List Spec.Lexicon.Chars) :
+    handed V1Naive.ops version slices =
       (run (toVersion version) slices.flatten).bind (handedAll (toVersion version)) := by
-  rw [lex, Lexer.new, run, feed_eq (st := .idle) slices { handed := [] }
-    (Core.initial (toVersion version))
+  rw [handed, show V1Naive.ops.new = Lexer.new from rfl, Lexer.new, run,
+    feed_eq (st := .idle) slices { handed := [] } (Core.initial (toVersion version))
     ⟨rfl, rfl, rfl⟩]
   simp only [Core.initial, List.nil_append]
   cases runFrom (toVersion version) .idle Location.initial slices.flatten with

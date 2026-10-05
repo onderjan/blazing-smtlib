@@ -140,9 +140,9 @@ theorem locAfter_concat (a : List UInt8) (c : UInt8) :
 
 /-- The location after the bytes is where the spec locates their end. -/
 theorem toLocation_locAfter (bytes : List UInt8) :
-    V1Spec.toLocation (locAfter bytes) = Spec.Lexer.locate bytes bytes.length := by
+    Adapter.toLocation (locAfter bytes) = Spec.Lexer.locate bytes bytes.length := by
   suffices h : ∀ rs : List UInt8,
-      V1Spec.toLocation (locAfter rs.reverse) = Spec.Lexer.locate rs.reverse rs.reverse.length by
+      Adapter.toLocation (locAfter rs.reverse) = Spec.Lexer.locate rs.reverse rs.reverse.length by
     simpa using h bytes.reverse
   intro rs
   induction rs with
@@ -151,7 +151,7 @@ theorem toLocation_locAfter (bytes : List UInt8) :
     simp only [List.reverse_cons]
     generalize rs.reverse = bs at ih ⊢
     rw [locAfter_concat]
-    simp only [V1Spec.toLocation, Spec.Lexer.locate, List.take_length] at ih ⊢
+    simp only [Adapter.toLocation, Spec.Lexer.locate, List.take_length] at ih ⊢
     simp only [Spec.Lexer.Location.mk.injEq] at ih
     obtain ⟨h1, h2, h3⟩ := ih
     have h10 : '\n'.toUInt8 = 10 := rfl
@@ -169,7 +169,7 @@ theorem locate_append (bytes more : List UInt8) :
 
 /-- The location after the bytes, as the spec locates it in an input that starts with them. -/
 theorem toLocation_locAfter_append (bytes more : List UInt8) :
-    V1Spec.toLocation (locAfter bytes) = Spec.Lexer.locate (bytes ++ more) bytes.length := by
+    Adapter.toLocation (locAfter bytes) = Spec.Lexer.locate (bytes ++ more) bytes.length := by
   rw [locate_append, toLocation_locAfter]
 
 theorem feedBytes_location {version : Version} {st st' : St} {location location' : Location}

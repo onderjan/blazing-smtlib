@@ -161,15 +161,15 @@ theorem eof_sound {version : Spec.Lexicon.Version} (before : Chars) :
 first byte. -/
 theorem idle_sound {version : Spec.Lexicon.Version} {c : UInt8} {r : Chars}
     (ih : ∀ (st : St) (before text : Chars) (ls : List Lexeme), StInv version st before text →
-      runFrom (V1Spec.toVersion version) st (locAfter (before ++ text)) r = some ls →
+      runFrom (Adapter.toVersion version) st (locAfter (before ++ text)) r = some ls →
       Sound version before (text ++ r) ls)
     (before : Chars) (ls : List Lexeme)
-    (h : runFrom (V1Spec.toVersion version) .idle (locAfter before) (c :: r) = some ls) :
+    (h : runFrom (Adapter.toVersion version) .idle (locAfter before) (c :: r) = some ls) :
     Sound version before (c :: r) ls := by
   rw [runFrom_cons] at h
   have hs := start_sound version (locAfter before) c
   simp only [byteStep, startStep] at h
-  cases hst : start (V1Spec.toVersion version) false (locAfter before) c with
+  cases hst : start (Adapter.toVersion version) false (locAfter before) c with
   | idle =>
     rw [hst] at h hs
     simp only [Option.bind_some, List.nil_append, Option.map_id_fun', id_eq] at h
@@ -199,7 +199,7 @@ theorem idle_sound {version : Spec.Lexicon.Version} {c : UInt8} {r : Chars}
 /-- The pure run is sound from any state that keeps `StInv`. -/
 theorem runFrom_sound (version : Spec.Lexicon.Version) (r : Chars) :
     ∀ (st : St) (before text : Chars) (ls : List Lexeme), StInv version st before text →
-      runFrom (V1Spec.toVersion version) st (locAfter (before ++ text)) r = some ls →
+      runFrom (Adapter.toVersion version) st (locAfter (before ++ text)) r = some ls →
       Sound version before (text ++ r) ls := by
   induction r with
   | nil =>
@@ -266,12 +266,12 @@ theorem runFrom_sound (version : Spec.Lexicon.Version) (r : Chars) :
       | tokenBefore l =>
         rw [hadv] at h ha
         obtain ⟨hdelim, category, hr, hl⟩ := ha
-        have hidle : runFrom (V1Spec.toVersion version) .idle (locAfter (before ++ text))
-            (c :: r) = (startStep (V1Spec.toVersion version) (locAfter (before ++ text)) c).bind
-              fun (st', ls) => (runFrom (V1Spec.toVersion version) st'
+        have hidle : runFrom (Adapter.toVersion version) .idle (locAfter (before ++ text))
+            (c :: r) = (startStep (Adapter.toVersion version) (locAfter (before ++ text)) c).bind
+              fun (st', ls) => (runFrom (Adapter.toVersion version) st'
                 ((locAfter (before ++ text)).afterByte c) r).map (ls ++ ·) := by
           rw [runFrom_cons]; rfl
-        cases hss : startStep (V1Spec.toVersion version) (locAfter (before ++ text)) c with
+        cases hss : startStep (Adapter.toVersion version) (locAfter (before ++ text)) c with
         | none =>
           rw [hss] at h
           simp at h
@@ -291,7 +291,7 @@ theorem runFrom_sound (version : Spec.Lexicon.Version) (r : Chars) :
 /-- When the pure run finishes an input, its lexemes are the tokens of a tokenisation of the
 input and then the end-of-file lexeme. -/
 theorem run_sound {version : Spec.Lexicon.Version} {input : Chars} {ls : List Lexeme}
-    (h : run (V1Spec.toVersion version) input = some ls) :
+    (h : run (Adapter.toVersion version) input = some ls) :
     ∃ tokens, Tokenization version input tokens ∧ Matches version input tokens ls := by
   have := runFrom_sound version input .idle [] [] ls rfl h
   obtain ⟨tokens, ht, hm⟩ := this
