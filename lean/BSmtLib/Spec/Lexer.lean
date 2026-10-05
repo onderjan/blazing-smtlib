@@ -144,6 +144,33 @@ mode, where accepting these characters as 2.5 does is what is wanted.
 -/
 
 /--
+Property: the token is a parenthesis or ends before the last character fed so far.
+Extension: as `Settled`.
+
+A token other than a parenthesis needs a delimiter after it (`Delimited`); this states that
+the character after it has been fed. `Settled` is stated with it.
+-/
+def DelimiterFed (fed : Chars) (token : Token) : Prop :=
+  token.category = .parenOpen ∨ token.category = .parenClose ∨
+    token.offset + token.text.length < fed.length
+
+/--
+Property: the tokens are the longest list that is `Determined` by the characters fed so far
+and in which every token but a parenthesis ends before the last character fed. Extension: when
+this library's lexer hands a token over; not in the standard.
+
+This is used to state what a lexer fed an input in slices hands over: `StreamingCorrect`
+requires it to hand over exactly these tokens. A lexer hands a token over only once it has
+seen that the character after it delimits it; a parenthesis needs no delimiter. After
+`(x |abc|`, the settled tokens are `(` and `x`: `|abc|` is determined, but the character
+after it has not been fed yet.
+-/
+def Settled (version : Version) (fed : Chars) (tokens : List Token) : Prop :=
+  Determined version fed tokens ∧ (∀ token ∈ tokens, DelimiterFed fed token) ∧
+    ∀ tokens', Determined version fed tokens' → (∀ token ∈ tokens', DelimiterFed fed token) →
+      tokens'.length ≤ tokens.length
+
+/--
 Property: of a lexer, to be proved of an implementation. Extension D: the input need not be a
 `SourceFile`.
 
@@ -161,14 +188,15 @@ Property: of a lexer, to be proved of an implementation. Extension D: the input 
 
 A lexer fed in slices is correct: `feed version slices` is what it handed over after the
 slices, and whether it failed. It fails exactly when the characters fed stop being viable,
-and what it hands over is determined by the longest viable part of them.
+and it hands over the tokens settled by the longest viable part of them.
 -/
 def StreamingCorrect (feed : Version → List Chars → List Handed × Bool) : Prop :=
   ∀ version slices, let fed := slices.flatten
     ((feed version slices).2 = true ↔ ¬ Viable version fed) ∧
-    ∃ viable tokens, viable <+: fed ∧ Viable version viable ∧
-      (∀ longer, longer <+: fed → Viable version longer → longer.length ≤ viable.length) ∧
-      Determined version viable tokens ∧
+    ∃ viable tokens, (∃ after, fed = viable ++ after) ∧ Viable version viable ∧
+      (∀ longer after, fed = longer ++ after → Viable version longer →
+        longer.length ≤ viable.length) ∧
+      Settled version viable tokens ∧
       (feed version slices).1 = tokens.map (·.handed version fed)
 
 end BSmtLib.Spec.Lexer

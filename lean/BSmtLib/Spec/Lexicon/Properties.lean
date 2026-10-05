@@ -21,32 +21,33 @@ namespace BSmtLib.Spec.Lexicon
 /--
 Property: every input has at most one tokenisation.
 
-This is a property of the specification alone; `BSmtLib.SpecChecks` is to prove it. It is the
-lexical half of `Grammar.ScriptsUnique`.
+This is a property of the specification alone; `BSmtLib.SpecChecks` is to prove it. If it did
+not hold, the specification would let one input stand for two different sequences of tokens,
+and no lexer could hand over the right one.
 -/
 def Unique : Prop :=
   ∀ version input tokens tokens',
     Tokenization version input tokens → Tokenization version input tokens' → tokens = tokens'
 
 /--
-Property: the characters fed so far begin some input that has a tokenisation.
+Property: there is a tokenisation of an input that starts with the given characters.
 
-This is used to state when a lexer fed an input in slices fails: `StreamingCorrect` requires
-it to fail exactly when the characters fed stop being viable.
+A lexer fed an input in slices does not know the characters that follow. It can report an
+error only once the characters fed are not viable: until then, the characters that follow may
+still make a valid input of them.
 -/
-def Viable (version : Version) (fed : Chars) : Prop :=
-  ∃ rest tokens, Tokenization version (fed ++ rest) tokens
+def Viable (version : Version) (start : Chars) : Prop :=
+  ∃ rest tokens, Tokenization version (start ++ rest) tokens
 
 /--
-Property: the tokens begin every tokenisation of every input that begins with the characters
-fed so far.
+Property: all tokenisations of inputs that start with the given characters start with the
+given tokens.
 
-This is used to state what a lexer fed an input in slices may hand over: `StreamingCorrect`
-requires it to hand over tokens determined by the characters fed, as no later character can
-change them. After `(a 12`, the tokens `(` and `a` are determined, but `12` is not, as `123`
-or `12.5` may follow.
+No characters that follow can change these tokens, so a lexer fed an input in slices can hand
+them over without waiting for the rest of the input. The empty list always qualifies, and if
+the given characters are not `Viable`, every list does.
 -/
-def Determined (version : Version) (fed : Chars) (tokens : List Token) : Prop :=
-  ∀ rest tokens', Tokenization version (fed ++ rest) tokens' → tokens <+: tokens'
+def Determined (version : Version) (start : Chars) (tokens : List Token) : Prop :=
+  ∀ rest tokens', Tokenization version (start ++ rest) tokens' → ∃ more, tokens' = tokens ++ more
 
 end BSmtLib.Spec.Lexicon
