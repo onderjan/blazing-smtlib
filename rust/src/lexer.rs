@@ -48,7 +48,14 @@ pub struct SmtLexer<C: SmtConsume, R: SmtLexRecovery<C> = SmtFailFast> {
     /// The number of parentheses left open by the tokens the consumer has consumed.
     ///
     /// Only tracked by a recovering lexer to aid recovery.
-    depth: u64,
+    consumed_depth: u64,
+
+    /// The number of parentheses lexed.
+    ///
+    /// Only tracked by a recovering lexer to aid recovery.
+    /// Used to speed up depth tracking in the common case
+    /// of consumer consuming the whole batch.
+    lexed_depth: u64,
 
     /// The current state of lexer recovery (if any).
     recovery_state: Option<RecoveryState>,
@@ -254,7 +261,8 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
             initial_version: version,
             state: LexerState::Normal,
             discard: false,
-            depth: 0,
+            consumed_depth: 0,
+            lexed_depth: 0,
             recovery_state: None,
             token_start: SmtLocation::initial(),
             token_content: SmtBytes::new(),
@@ -314,6 +322,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
             };
             // the lexing goes on from here, tell the consumer before any token
             self.recovery_state = None;
+            self.lexed_depth = self.consumed_depth;
             let location = self.current_location();
             R::recover(&mut self.consumer, location);
             slice = &slice[skipped..];
@@ -659,12 +668,20 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
             // need no special processing. The closing parenthesis is first
             // as it forms more clusters.
             if c == b')' {
+                if R::RECOVERS {
+                    // saturate to avoid going below zero depth
+                    // which would happen with too many closing parentheses
+                    self.lexed_depth = self.lexed_depth.saturating_sub(1);
+                }
                 let entry = (InnerCategory::ParenClose, &slice[index..after]);
                 self.push_fast(batch, &mut local, offset, entry, index..after, 1)?;
                 index = after;
                 continue;
             }
             if c == b'(' {
+                if R::RECOVERS {
+                    self.lexed_depth += 1;
+                }
                 let entry = (InnerCategory::ParenOpen, &slice[index..after]);
                 self.push_fast(batch, &mut local, offset, entry, index..after, 1)?;
                 index = after;
@@ -1757,7 +1774,8 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
                     &mut self.consumer,
                     SmtBatchCursor::new(self.version, std::slice::from_ref(&entry), spans),
                     &mut self.version,
-                    &mut self.depth,
+                    &mut self.consumed_depth,
+                    &mut self.lexed_depth,
                 )
             }
         }
@@ -1789,7 +1807,8 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
             &mut self.consumer,
             SmtBatchCursor::new(self.version, &batch.entries[..len], &self.spans[..len]),
             &mut self.version,
-            &mut self.depth,
+            &mut self.consumed_depth,
+            &mut self.lexed_depth,
         )
     }
 
@@ -1797,7 +1816,8 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
         consumer: &mut C,
         mut cursor: SmtBatchCursor,
         version: &mut SmtVersion,
-        depth: &mut u64,
+        consumed_depth: &mut u64,
+        lexed_depth: &mut u64,
     ) -> Result<(), Interrupted<C::Result, SmtLexError<C::Error>>> {
         // flush the cursor until nothing remains
         while !cursor.is_empty() {
@@ -1812,19 +1832,6 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
 
             // set our version to the cursor-requested version
             *version = cursor.version();
-
-            if R::RECOVERS {
-                // count the parentheses left open by the consumed tokens,
-                // whatever the consumer returned: a closing parenthesis
-                // that closes nothing leaves nothing open
-                for entry in cursor.consumed_entries() {
-                    match entry {
-                        Some((InnerCategory::ParenOpen, _)) => *depth += 1,
-                        Some((InnerCategory::ParenClose, _)) => *depth = depth.saturating_sub(1),
-                        _ => {}
-                    }
-                }
-            }
 
             // process the result
             let result = match result {
@@ -1842,6 +1849,21 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
                 Ok(ControlFlow::Break(result)) => Ok(Stop::Finished(result)),
                 Err(err) => Err(SmtLexError::new(SmtLexErrorCause::Consumer(err), None)),
             };
+            if R::RECOVERS {
+                // the consumer has not taken the whole batch
+                // count the actually consumed parentheses only
+                // and reset the lexed depth to them
+                for entry in cursor.consumed_entries() {
+                    match entry {
+                        Some((InnerCategory::ParenOpen, _)) => *consumed_depth += 1,
+                        Some((InnerCategory::ParenClose, _)) => {
+                            *consumed_depth = consumed_depth.saturating_sub(1)
+                        }
+                        _ => {}
+                    }
+                }
+                *lexed_depth = *consumed_depth;
+            }
             // the stop takes effect after the consumed tokens
             return Err(Interrupted {
                 result,
@@ -1849,6 +1871,13 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
             });
         }
         // everything was consumed without break or error
+        // the consumer has taken every token lexed so far
+        // as the cursor is empty, so the consumed parentheses
+        // are the same that were lexed and we can find out
+        // the new depth easily
+        if R::RECOVERS {
+            *consumed_depth = *lexed_depth;
+        }
         Ok(())
     }
 
@@ -1866,7 +1895,8 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
             &mut self.consumer,
             SmtBatchCursor::new(self.version, std::slice::from_ref(&entry), spans),
             &mut self.version,
-            &mut self.depth,
+            &mut self.consumed_depth,
+            &mut self.lexed_depth,
         )
     }
 
@@ -2042,7 +2072,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
     /// or returns [`Option::None`] if it has not yet been done.
     fn skip_slice(&mut self, slice: &[u8], mut skip: RecoveryState) -> Option<usize> {
         if let RecoveryState::Boundary = skip {
-            if self.depth == 0 {
+            if self.consumed_depth == 0 {
                 // the consumer failed after a whole value, no recovery needed
                 return Some(0);
             }
@@ -2056,20 +2086,22 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
                 RecoveryState::End | RecoveryState::Boundary | RecoveryState::Plain => match c {
                     b'"' => RecoveryState::String,
                     b'|' => RecoveryState::QuotedSymbol,
-                    b' ' | b'\t' | b'\r' | b'\n' | b'(' | b')' | b';' if self.depth == 0 => {
+                    b' ' | b'\t' | b'\r' | b'\n' | b'(' | b')' | b';'
+                        if self.consumed_depth == 0 =>
+                    {
                         // delimits the error end while nothing is open, we have recoveded
                         self.offset += position as u64;
                         return Some(position);
                     }
                     b';' => RecoveryState::Comment,
                     b'(' => {
-                        self.depth += 1;
+                        self.consumed_depth += 1;
                         RecoveryState::Plain
                     }
                     b')' => {
                         // depth must be nonzero here as zero depth would have ended recovery
-                        self.depth -= 1;
-                        if self.depth == 0 {
+                        self.consumed_depth -= 1;
+                        if self.consumed_depth == 0 {
                             // recover after the closing parenthesis
                             self.offset += position as u64 + 1;
                             return Some(position + 1);
@@ -2130,7 +2162,8 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
         self.version = self.initial_version;
         self.state = LexerState::Normal;
         self.discard = false;
-        self.depth = 0;
+        self.consumed_depth = 0;
+        self.lexed_depth = 0;
         self.recovery_state = None;
         self.token_start = SmtLocation::initial();
         self.token_content.clear();
