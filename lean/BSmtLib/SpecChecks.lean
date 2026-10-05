@@ -15,7 +15,11 @@ and that every input has at most one tokenisation, with examples of what a lexer
 hands over; and that the grammar is unambiguous: every sequence of tokens of a term or of a
 command has at most one syntax tree, and every script has at most one parse; and that the
 tokens of an input can be printed back, exactly with the whitespace and comments between them
-and in a canonical layout without them, and are read back from what is printed.
+and in a canonical layout without them, and are read back from what is printed; and that the
+syntax trees of terms and commands are printed as the tokens they are read from, that the
+commands of a script are printed as characters that are read back as them, and that these are
+the script's tokens in the canonical layout unless a 2.0 string literal has a backslash that
+does not start `\\` or `\"`.
 They are not part of the specification and are not trusted.
 -/
 
@@ -179,5 +183,176 @@ info: 'BSmtLib.SpecChecks.Lexicon.layout_read_only' depends on axioms: [propext,
 -/
 #guard_msgs in
 #print axioms Lexicon.layout_read_only
+
+
+/-!
+### Round trips of syntax trees
+
+`Grammar.printTerm` and `Grammar.printCommand` write a tree as syntax tokens, each symbol in the
+form it records. `Grammar.printScript version` writes the commands of a script as characters:
+each command's tokens in the version in force at it, laid out by `Lexicon.layout`, and followed
+by a line feed. `Grammar.ScriptLexing` is the parse of a script together with the tokens of each
+command and the version they are read in.
+-/
+
+/-- The grammar loses nothing: the tokens a term is read from are the tokens printed for it. -/
+theorem Grammar.printTerm_eq {version : Lexicon.Version} {tokens : List Grammar.SyntaxToken}
+    {term : Grammar.Tree.Term} (h : Grammar.Term version tokens term) :
+    Grammar.printTerm term = tokens :=
+  (Grammar.term_tokens h).symm
+
+/--
+info: 'BSmtLib.SpecChecks.Grammar.printTerm_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms Grammar.printTerm_eq
+
+/-- The grammar loses nothing: the tokens a command is read from are the tokens printed for
+it. -/
+theorem Grammar.printCommand_eq {version : Lexicon.Version} {tokens : List Grammar.SyntaxToken}
+    {command : Grammar.Tree.Command} (h : Grammar.Command version tokens command) :
+    Grammar.printCommand command = tokens :=
+  (Grammar.command_tokens h).symm
+
+/--
+info: 'BSmtLib.SpecChecks.Grammar.printCommand_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms Grammar.printCommand_eq
+
+/-- Print-read for terms: a term that some tokens are read as is read from its printed tokens,
+and from them as nothing else. -/
+theorem Grammar.term_print_read {version : Lexicon.Version} {tokens : List Grammar.SyntaxToken}
+    {term term' : Grammar.Tree.Term} (h : Grammar.Term version tokens term) :
+    Grammar.Term version (Grammar.printTerm term) term' ↔ term' = term := by
+  rw [Grammar.printTerm_eq h]
+  exact ⟨fun h' => Grammar.termsUnique _ _ _ _ h' h, fun e => e ▸ h⟩
+
+/--
+info: 'BSmtLib.SpecChecks.Grammar.term_print_read' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms Grammar.term_print_read
+
+/-- Idempotence for terms: printing the term read from printed tokens gives those tokens. -/
+theorem Grammar.term_idempotent {version : Lexicon.Version} {term term' : Grammar.Tree.Term}
+    (h : Grammar.Term version (Grammar.printTerm term) term') :
+    Grammar.printTerm term' = Grammar.printTerm term :=
+  Grammar.printTerm_eq h
+
+/--
+info: 'BSmtLib.SpecChecks.Grammar.term_idempotent' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms Grammar.term_idempotent
+
+/-- Print-read for commands: a command that some tokens are read as is read from its printed
+tokens, and from them as nothing else. -/
+theorem Grammar.command_print_read {version : Lexicon.Version}
+    {tokens : List Grammar.SyntaxToken} {command command' : Grammar.Tree.Command}
+    (h : Grammar.Command version tokens command) :
+    Grammar.Command version (Grammar.printCommand command) command' ↔ command' = command := by
+  rw [Grammar.printCommand_eq h]
+  exact ⟨fun h' => Grammar.commandsUnique _ _ _ _ h' h, fun e => e ▸ h⟩
+
+/--
+info: 'BSmtLib.SpecChecks.Grammar.command_print_read' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms Grammar.command_print_read
+
+/-- Idempotence for commands: printing the command read from printed tokens gives those
+tokens. -/
+theorem Grammar.command_idempotent {version : Lexicon.Version}
+    {command command' : Grammar.Tree.Command}
+    (h : Grammar.Command version (Grammar.printCommand command) command') :
+    Grammar.printCommand command' = Grammar.printCommand command :=
+  Grammar.printCommand_eq h
+
+/--
+info: 'BSmtLib.SpecChecks.Grammar.command_idempotent' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms Grammar.command_idempotent
+
+/-- Idempotence for a command as characters: the characters printed for a command read from the
+tokens of an input are read as a command whose characters are the same. -/
+theorem Grammar.commandText_idempotent {version : Lexicon.Version} {input : Lexicon.Chars}
+    {tokens tokens' : List Lexicon.Token} {command command' : Grammar.Tree.Command}
+    (h : Lexicon.Tokenization version input tokens)
+    (hc : Grammar.Command version (tokens.map (Grammar.SyntaxToken.ofToken version)) command)
+    (h' : Lexicon.Tokenization version (Grammar.printCommandText version command) tokens')
+    (hc' : Grammar.Command version (tokens'.map (Grammar.SyntaxToken.ofToken version)) command') :
+    Grammar.printCommandText version command' = Grammar.printCommandText version command :=
+  Grammar.printCommandText_idempotent h hc h' hc'
+
+/--
+info: 'BSmtLib.SpecChecks.Grammar.commandText_idempotent' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms Grammar.commandText_idempotent
+
+/-- Print-read for scripts: the commands of a script are the parse of their printed characters,
+and the only one. -/
+theorem Grammar.script_print_read {version : Lexicon.Version} {input : Lexicon.Chars}
+    {commands commands' : List Grammar.Tree.Command}
+    (h : Grammar.ScriptParse version input commands) :
+    Grammar.ScriptParse version (Grammar.printScript version commands) commands' ↔
+      commands' = commands := by
+  have hp : Grammar.ScriptParse version (Grammar.printScript version commands) commands := by
+    simpa [Grammar.ScriptParse] using Grammar.printScript_read h 0 Lexicon.whitespace_nil
+  exact ⟨fun h' => Grammar.scriptsUnique _ _ _ _ h' hp, fun e => e ▸ hp⟩
+
+/--
+info: 'BSmtLib.SpecChecks.Grammar.script_print_read' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms Grammar.script_print_read
+
+/-- Idempotence for scripts: printing a script that was read, reading the printed characters and
+printing again gives the same characters. -/
+theorem Grammar.script_idempotent {version : Lexicon.Version} {input : Lexicon.Chars}
+    {commands commands' : List Grammar.Tree.Command}
+    (h : Grammar.ScriptParse version input commands)
+    (h' : Grammar.ScriptParse version (Grammar.printScript version commands) commands') :
+    Grammar.printScript version commands' = Grammar.printScript version commands := by
+  rw [(Grammar.script_print_read h).mp h']
+
+/--
+info: 'BSmtLib.SpecChecks.Grammar.script_idempotent' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms Grammar.script_idempotent
+
+/-- A script parse records the tokens of its commands: it is the same as a parse. -/
+theorem Grammar.scriptParse_iff_lexing {version : Lexicon.Version} {input : Lexicon.Chars}
+    {commands : List Grammar.Tree.Command} :
+    Grammar.ScriptParse version input commands ↔
+      ∃ segments, Grammar.ScriptLexing version 0 input commands segments :=
+  Grammar.scriptParseFrom_iff
+
+/--
+info: 'BSmtLib.SpecChecks.Grammar.scriptParse_iff_lexing' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms Grammar.scriptParse_iff_lexing
+
+/--
+Read-print for scripts: the characters printed for the commands of a script are the tokens of
+its commands laid out canonically, each command followed by a line feed, unless a 2.0 string
+literal among them has a backslash that does not start `\\` or `\"`.
+-/
+theorem Grammar.script_read_print {version : Lexicon.Version} {input : Lexicon.Chars}
+    {commands : List Grammar.Tree.Command} {segments : List (Lexicon.Version × List Lexicon.Token)}
+    (h : Grammar.ScriptLexing version 0 input commands segments)
+    (hl : Grammar.NoLoneBackslashIn segments) :
+    Grammar.printScript version commands = Grammar.layoutScript segments :=
+  Grammar.printScript_layout h hl
+
+/--
+info: 'BSmtLib.SpecChecks.Grammar.script_read_print' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms Grammar.script_read_print
 
 end BSmtLib.SpecChecks

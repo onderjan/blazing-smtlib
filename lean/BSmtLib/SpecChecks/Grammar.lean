@@ -1,11 +1,12 @@
 import BSmtLib.Spec.Grammar
 import BSmtLib.Spec.Parser
+import BSmtLib.SpecChecks.RoundTrip
 
 /-!
 # The standard's examples of syntax
 
-Examples the standard gives with its syntactic rules, checked against the parser spec. Not
-trusted: these are proofs.
+Examples the standard gives with its syntactic rules, checked against the parser spec, and what
+the printers write for them. Not trusted: these are proofs.
 -/
 
 namespace BSmtLib.SpecChecks.Grammar
@@ -165,5 +166,43 @@ theorem scriptParseUnder_unrestricted (version : Version) (input : Chars)
     ScriptParseUnder .unrestricted version input commands ↔ ScriptParse version input commands := by
   refine ⟨fun h => h.1, fun h => ⟨h, fun declared _ => ?_, by simp [VersionPolicy.unrestricted]⟩⟩
   cases declared <;> simp [VersionPolicy.unrestricted]
+
+
+/-! ## Printing the examples -/
+
+/-- `(_ BitVec 3)` is printed as the tokens it was read from. -/
+example : printSort (.mk ⟨simple "BitVec", [.numeral (chars "3")]⟩ []) =
+    paren [word "_", sym "BitVec", num "3"] := rfl
+
+/-- `(f x 1)` -/
+example : printTerm (.application (.plain (ident "f"))
+      [.identifier (.plain (ident "x")), .constant (.numeral (chars "1"))]) =
+    paren [sym "f", sym "x", num "1"] := rfl
+
+/-- `(declare-fun f (Int) Int)`, as characters. -/
+example : printScript .v2_0 [.declareFun (simple "f") [sort "Int"] (sort "Int")] =
+    chars "(declare-fun f (Int) Int)\n" := by decide
+
+/-- The list datatype of the standard, as characters: a space between `)` and `(`. -/
+example : printScript .v2_6
+    [.declareDatatypes [⟨simple "List", chars "1"⟩]
+      [⟨[simple "T"], [⟨simple "nil", []⟩,
+        ⟨simple "cons",
+          [⟨simple "head", sort "T"⟩, ⟨simple "tail", .mk (ident "List") [sort "T"]⟩]⟩]⟩]] =
+    chars ("(declare-datatypes ((List 1)) ((par (T) ((nil) (cons (head T) " ++
+      "(tail (List T)))))))\n") := by decide
+
+/-- A version declaration switches the version: the same string literal is written in 2.0 after
+it, with `"` escaped by a backslash, and in 2.6 before it, with `"` doubled. -/
+example : printScript .v2_6
+    [.setInfo ⟨chars "source", some (.constant (.string (chars "a\"b")))⟩,
+      .setInfo ⟨chars "smt-lib-version", some (.constant (.decimal (chars "2.0")))⟩,
+      .setInfo ⟨chars "source", some (.constant (.string (chars "a\"b")))⟩] =
+    chars ("(set-info :source \"a\"\"b\")\n(set-info :smt-lib-version 2.0)\n" ++
+      "(set-info :source \"a\\\"b\")\n") := by decide
+
+/-- A symbol is written in the form it records. -/
+example : printScript .v2_7 [.declareConst ⟨chars "x y", true⟩ (sort "Int"), .checkSat] =
+    chars "(declare-const |x y| Int)\n(check-sat)\n" := by decide
 
 end BSmtLib.SpecChecks.Grammar
