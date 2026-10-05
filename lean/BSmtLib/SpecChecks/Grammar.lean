@@ -12,14 +12,17 @@ namespace BSmtLib.SpecChecks.Grammar
 
 open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Grammar BSmtLib.Spec.Parser
 
-/-- The symbol `s`. -/
-abbrev sym (s : String) : SyntaxToken := .symbol (chars s)
+/-- The symbol `s`, written simple. -/
+abbrev simple (s : String) : Tree.Symbol := ⟨chars s, false⟩
+
+/-- The syntax token of the symbol `s`, written simple. -/
+abbrev sym (s : String) : SyntaxToken := .symbol (simple s)
 
 /-- The numeral `s`. -/
 abbrev num (s : String) : SyntaxToken := .numeral (chars s)
 
 /-- The identifier `s`, not indexed. -/
-abbrev ident (s : String) : Tree.Identifier := ⟨chars s, []⟩
+abbrev ident (s : String) : Tree.Identifier := ⟨simple s, []⟩
 
 /-- The sort `s`, not applied. -/
 abbrev sort (s : String) : Tree.Sort := .mk (ident s) []
@@ -36,14 +39,14 @@ theorem Each.single {α : Type} {rule : List SyntaxToken → α → Prop} {token
 
 /-- `(_ BitVec 3)` -/
 example : Grammar.Sort .v2_7 (paren [word "_", sym "BitVec", num "3"])
-    (.mk ⟨chars "BitVec", [.numeral (chars "3")]⟩ []) :=
+    (.mk ⟨simple "BitVec", [.numeral (chars "3")]⟩ []) :=
   .identifier (.indexed (tokens := [num "3"])
     (.cons (first := [num "3"]) (rest := []) .numeral .nil)
     (by simp))
 
 /-- `(_ move up)`: a symbol index, from 2.5 on. -/
 example : Grammar.Identifier .v2_5 (paren [word "_", sym "move", sym "up"])
-    ⟨chars "move", [.symbol (chars "up")]⟩ :=
+    ⟨simple "move", [.symbol (simple "up")]⟩ :=
   .indexed (tokens := [sym "up"])
     (.cons (first := [sym "up"]) (rest := []) (.symbol (by decide)) .nil) (by simp)
 
@@ -67,11 +70,11 @@ example : ¬ Grammar.Identifier .v2_0 (paren [word "_", sym "move", sym "up"]) i
   | symbol => simp [paren] at htokens
   | @indexed indexTokens _ _ hindices _ =>
     simp only [paren, word, sym, List.cons_append, List.cons.injEq, true_and] at htokens
-    have hsplit : [SyntaxToken.symbol (chars "up")] ++ [.parenClose] =
+    have hsplit : [SyntaxToken.symbol (simple "up")] ++ [.parenClose] =
         indexTokens ++ [.parenClose] := by simpa using htokens.2
     have hup := List.append_cancel_right hsplit
     subst hup
-    generalize hrest : [SyntaxToken.symbol (chars "up")] = rest at hindices
+    generalize hrest : [SyntaxToken.symbol (simple "up")] = rest at hindices
     cases hindices with
     | nil => simp at hrest
     | cons hfirst _ =>
@@ -95,7 +98,7 @@ example : Grammar.Term .v2_7 (paren [sym "f", sym "x", num "1"])
 /-- `(declare-fun f (Int) Int)` -/
 example : Grammar.Command .v2_0
     (commandTokens "declare-fun" [sym "f", .parenOpen, sym "Int", .parenClose, sym "Int"])
-    (.declareFun (chars "f") [sort "Int"] (sort "Int")) :=
+    (.declareFun (simple "f") [sort "Int"] (sort "Int")) :=
   .declareFun (parameterTokens := [sym "Int"]) (resultTokens := [sym "Int"])
     (.cons (first := [sym "Int"]) (rest := []) (.identifier .symbol) .nil) (.identifier .symbol)
 
@@ -108,10 +111,10 @@ example : Grammar.Command .v2_6
           paren (paren [sym "nil"] ++
             paren (sym "cons" :: paren [sym "head", sym "T"] ++
               paren [sym "tail", .parenOpen, sym "List", sym "T", .parenClose]))))))
-    (.declareDatatypes [⟨chars "List", chars "1"⟩]
-      [⟨[chars "T"], [⟨chars "nil", []⟩,
-        ⟨chars "cons",
-          [⟨chars "head", sort "T"⟩, ⟨chars "tail", .mk (ident "List") [sort "T"]⟩]⟩]⟩]) := by
+    (.declareDatatypes [⟨simple "List", chars "1"⟩]
+      [⟨[simple "T"], [⟨simple "nil", []⟩,
+        ⟨simple "cons",
+          [⟨simple "head", sort "T"⟩, ⟨simple "tail", .mk (ident "List") [sort "T"]⟩]⟩]⟩]) := by
   apply Grammar.Command.declareDatatypes (by decide)
     (.cons (first := paren [sym "List", num "1"]) (rest := []) .mk .nil)
     _ (by simp) rfl

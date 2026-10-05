@@ -128,7 +128,7 @@ theorem Term.item {tokens : List SyntaxToken} {t : Tree.Term} (h : Term version 
     Item tokens :=
   (items_lt _ _ (Nat.lt_succ_self _)).1 _ h
 
-theorem Bindings.balanced {tokens : List SyntaxToken} {b : List (Chars × Tree.Term)}
+theorem Bindings.balanced {tokens : List SyntaxToken} {b : List (Tree.Symbol × Tree.Term)}
     (h : Bindings version tokens b) : Balanced tokens :=
   (items_lt _ _ (Nat.lt_succ_self _)).2.1 _ h
 
@@ -237,7 +237,7 @@ theorem term_step {n : Nat} (ih : ∀ tokens : List SyntaxToken, tokens.length <
 
 theorem bindings_step {n : Nat} (ih : ∀ tokens : List SyntaxToken, tokens.length < n →
       TermsAt version tokens)
-    {a b : List SyntaxToken} {bs bs' : List (Chars × Tree.Term)} (h : Bindings version a bs)
+    {a b : List SyntaxToken} {bs bs' : List (Tree.Symbol × Tree.Term)} (h : Bindings version a bs)
     (h' : Bindings version b bs') (hab : a = b) (hn : a.length ≤ n) : bs = bs' := by
   cases h with
   | nil =>

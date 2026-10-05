@@ -42,11 +42,11 @@ theorem SpecConstant.unique {a b : List SyntaxToken} {c c' : Tree.SpecConstant}
     (h : SpecConstant a c) (h' : SpecConstant b c') (hab : a = b) : c = c' := by
   cases h <;> cases h' <;> tokens_eq hab
 
-theorem Symbol.item {tokens : List SyntaxToken} {s : Chars} (h : Symbol tokens s) :
+theorem Symbol.item {tokens : List SyntaxToken} {s : Tree.Symbol} (h : Symbol tokens s) :
     Item tokens := by
   cases h; exact .atom ⟨nofun, nofun⟩
 
-theorem Symbol.unique {a b : List SyntaxToken} {s s' : Chars}
+theorem Symbol.unique {a b : List SyntaxToken} {s s' : Tree.Symbol}
     (h : Symbol a s) (h' : Symbol b s') (hab : a = b) : s = s' := by
   cases h; cases h'; tokens_eq hab
 

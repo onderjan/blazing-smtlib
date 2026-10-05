@@ -165,7 +165,7 @@ mutual
 /-- An s-expression: a list's items, then the list. -/
 def sExpr : Tree.SExpr → m HandledSExpr
   | .constant constant => handler.handleSExpr (.constant constant)
-  | .symbol name => handler.handleSExpr (.symbol name)
+  | .symbol symbol => handler.handleSExpr (.symbol symbol.name)
   | .reserved word => handler.handleSExpr (.reserved word)
   | .keyword name => handler.handleSExpr (.keyword name)
   | .list items => do
@@ -189,7 +189,7 @@ over as its items; the list itself is not handled as an s-expression.
 def «attribute» : Tree.Attribute → m HandledAttribute
   | ⟨name, none⟩ => handler.handleAttribute name none
   | ⟨name, some (.constant constant)⟩ => handler.handleAttribute name (some (.constant constant))
-  | ⟨name, some (.symbol symbol)⟩ => handler.handleAttribute name (some (.symbol symbol))
+  | ⟨name, some (.symbol symbol)⟩ => handler.handleAttribute name (some (.symbol symbol.name))
   | ⟨name, some (.list items)⟩ => do
     let handled ← sExprs handler items
     handler.handleAttribute name (some (.list handled))
@@ -215,9 +215,9 @@ binder for it. A binder of several variables is started once for each of them.
 -/
 def openVariables (start : Chars → HandledSort → m Unit) : List Tree.SortedVar → m Unit
   | [] => pure ()
-  | ⟨name, variableSort⟩ :: rest => do
+  | ⟨symbol, variableSort⟩ :: rest => do
     let handled ← sort handler variableSort
-    start name handled
+    start symbol.name handled
     openVariables start rest
 
 /-- Ends a binder as many times as it was started. -/
@@ -286,12 +286,12 @@ def terms : List Tree.Term → m (List HandledTerm)
     pure (handled :: others)
 
 /-- The bindings of a `let`, one after another: the term of each. -/
-def bindings : List (Chars × Tree.Term) → m (List (Chars × HandledTerm))
+def bindings : List (Tree.Symbol × Tree.Term) → m (List (Chars × HandledTerm))
   | [] => pure []
-  | (name, bound) :: rest => do
+  | (symbol, bound) :: rest => do
     let handled ← term bound
     let others ← bindings rest
-    pure ((name, handled) :: others)
+    pure ((symbol.name, handled) :: others)
 
 /-- The cases of a `match`, one after another: the start of each, its body, then its end. -/
 def cases : List (Tree.Pattern × Tree.Term) → m Unit
@@ -309,8 +309,8 @@ end
 /-- A propositional literal as the term it is: the symbol, or `not` applied to it. -/
 def Tree.PropLiteral.asTerm : Tree.PropLiteral → Tree.Term
   | .positive symbol => .identifier (.plain ⟨symbol, []⟩)
-  | .negative symbol =>
-    .application (.plain ⟨chars "not", []⟩) [.identifier (.plain ⟨symbol, []⟩)]
+  | .negative negation symbol =>
+    .application (.plain ⟨negation, []⟩) [.identifier (.plain ⟨symbol, []⟩)]
 
 section
 
@@ -318,23 +318,23 @@ variable {m : Type → Type} [Monad m] {HandledSExpr HandledAttribute HandledSor
 variable (handler : CommandHandler m HandledSExpr HandledAttribute HandledSort HandledTerm)
 
 /-- The signature of a function: the sorts of its parameters, then its result sort. -/
-def signature (symbol : Chars) (parameters : List Tree.SortedVar) (result : Tree.Sort) :
+def signature (symbol : Tree.Symbol) (parameters : List Tree.SortedVar) (result : Tree.Sort) :
     m (Signature HandledSort) := do
-  let handledParameters ← parameters.mapM fun ⟨name, parameterSort⟩ => do
-    pure (name, ← sort handler.toTermHandler parameterSort)
+  let handledParameters ← parameters.mapM fun ⟨parameter, parameterSort⟩ => do
+    pure (parameter.name, ← sort handler.toTermHandler parameterSort)
   let handledResult ← sort handler.toTermHandler result
-  pure ⟨symbol, handledParameters, handledResult⟩
+  pure ⟨symbol.name, handledParameters, handledResult⟩
 
 /--
 A datatype declaration: the start with its sort parameters, the sorts of the selectors of its
 constructors, then the end with the constructors.
 -/
 def datatype (declaration : Tree.DatatypeDec) : m Unit := do
-  handler.startDatatypeDeclaration declaration.parameters
+  handler.startDatatypeDeclaration (declaration.parameters.map (·.name))
   let constructors ← declaration.constructors.mapM fun constructor => do
     let selectors ← constructor.selectors.mapM fun selector => do
-      pure (selector.symbol, ← sort handler.toTermHandler selector.sort)
-    pure (⟨constructor.symbol, selectors⟩ : Constructor HandledSort)
+      pure (selector.symbol.name, ← sort handler.toTermHandler selector.sort)
+    pure (⟨constructor.symbol.name, selectors⟩ : Constructor HandledSort)
   handler.endDatatypeDeclaration constructors
 
 /-- The body of a recursive function: the start, the body, then the end. -/
@@ -355,26 +355,26 @@ def command : Tree.Command → m Unit
     handler.checkSat (← terms handler.toTermHandler (literals.map Tree.PropLiteral.asTerm))
   /- `declare-const` is `declare-fun` without parameters -/
   | .declareConst symbol declaredSort => do
-    handler.declareFun symbol [] (← sort handler.toTermHandler declaredSort)
+    handler.declareFun symbol.name [] (← sort handler.toTermHandler declaredSort)
   /- `declare-datatype` is `declare-datatypes` of one datatype, whose arity is the number of
   its sort parameters -/
   | .declareDatatype symbol declaration => do
-    handler.startDeclareDatatypes [(symbol, chars (toString declaration.parameters.length))]
+    handler.startDeclareDatatypes [(symbol.name, chars (toString declaration.parameters.length))]
     datatype handler declaration
     handler.endDeclareDatatypes
   | .declareDatatypes sortDecs declarations => do
-    handler.startDeclareDatatypes (sortDecs.map fun sortDec => (sortDec.symbol, sortDec.arity))
+    handler.startDeclareDatatypes (sortDecs.map fun sortDec => (sortDec.symbol.name, sortDec.arity))
     declarations.forM (datatype handler)
     handler.endDeclareDatatypes
   | .declareFun symbol parameters result => do
     let handledParameters ← sorts handler.toTermHandler parameters
     let handledResult ← sort handler.toTermHandler result
-    handler.declareFun symbol handledParameters handledResult
-  | .declareSort symbol arity => handler.declareSort symbol arity
-  | .declareSortParameter symbol => handler.declareSortParameter symbol
+    handler.declareFun symbol.name handledParameters handledResult
+  | .declareSort symbol arity => handler.declareSort symbol.name arity
+  | .declareSortParameter symbol => handler.declareSortParameter symbol.name
   /- `define-const` is `define-fun` without parameters -/
   | .defineConst symbol definedSort body => do
-    handler.startDefineFun ⟨symbol, [], ← sort handler.toTermHandler definedSort⟩
+    handler.startDefineFun ⟨symbol.name, [], ← sort handler.toTermHandler definedSort⟩
     handler.endDefineFun (← term handler.toTermHandler body)
   | .defineFun ⟨symbol, parameters, result, body⟩ => do
     handler.startDefineFun (← signature handler symbol parameters result)
@@ -391,7 +391,7 @@ def command : Tree.Command → m Unit
     bodies.forM (recursiveBody handler)
     handler.endDefineFunsRec
   | .defineSort symbol parameters definedSort => do
-    handler.startDefineSort symbol parameters
+    handler.startDefineSort symbol.name (parameters.map (·.name))
     handler.endDefineSort (← sort handler.toTermHandler definedSort)
   | .echo content => handler.echo content
   | .exit => handler.exit
@@ -409,7 +409,7 @@ def command : Tree.Command → m Unit
   | .reset => handler.reset
   | .resetAssertions => handler.resetAssertions
   | .setInfo info => do handler.setInfo (← Traversal.attribute handler.toTermHandler info)
-  | .setLogic symbol => handler.setLogic symbol
+  | .setLogic symbol => handler.setLogic symbol.name
   | .setOption option => do handler.setOption (← Traversal.attribute handler.toTermHandler option)
 
 /--

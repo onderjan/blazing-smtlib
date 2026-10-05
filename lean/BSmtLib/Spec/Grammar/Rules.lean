@@ -27,7 +27,8 @@ def _root_.BSmtLib.Spec.Lexicon.Version.number : Version → Chars
 /--
 Standard: 2.7 §3.1 Symbols: a simple symbol and its quoted form are the same symbol.
 
-A token as the syntactic rules see it: what the lexical token stands for.
+A token as the syntactic rules see it: what the lexical token stands for, and for a symbol
+whether it was quoted.
 -/
 inductive SyntaxToken where
   | parenOpen
@@ -37,15 +38,18 @@ inductive SyntaxToken where
   | hexadecimal (digits : Chars)
   | binary (digits : Chars)
   | string (content : Chars)
-  /-- A simple or a quoted symbol: `abc` and `|abc|` are the same symbol. -/
-  | symbol (name : Chars)
+  /--
+  A simple or a quoted symbol: `abc` and `|abc|` are the same symbol. Whether it was quoted
+  is recorded for printing, not for identity.
+  -/
+  | symbol (symbol : Tree.Symbol)
   | keyword (name : Chars)
   | reserved (word : Chars)
 
 /--
 Standard: 2.7 §3.1 Symbols, as `SyntaxToken`.
 
-What a lexical token of the version stands for.
+What a lexical token of the version stands for, and for a symbol whether it was quoted.
 -/
 def SyntaxToken.ofToken (version : Version) (token : Token) : SyntaxToken :=
   match token.category with
@@ -56,7 +60,8 @@ def SyntaxToken.ofToken (version : Version) (token : Token) : SyntaxToken :=
   | .hexadecimal => .hexadecimal (token.content version)
   | .binary => .binary (token.content version)
   | .string => .string (token.content version)
-  | .simpleSymbol | .quotedSymbol => .symbol (token.content version)
+  | .simpleSymbol => .symbol ⟨token.content version, false⟩
+  | .quotedSymbol => .symbol ⟨token.content version, true⟩
   | .keyword => .keyword (token.content version)
   | .reserved => .reserved token.text
 
@@ -94,7 +99,7 @@ Standard: 2.7 §3.1 Symbols; App. B ⟨symbol⟩.
 
 ⟨symbol⟩
 -/
-inductive Symbol : List SyntaxToken → Chars → Prop
+inductive Symbol : List SyntaxToken → Tree.Symbol → Prop
   | mk : Symbol [.symbol name] name
 
 /-! ## S-expressions, identifiers, sorts and attributes -/
@@ -284,7 +289,8 @@ Standard: 2.7 §3.6 Terms and Formulas; App. B ⟨var_binding⟩.
 
 ⟨var_binding⟩∗, where ⟨var_binding⟩ ::= `(` ⟨symbol⟩ ⟨term⟩ `)`
 -/
-inductive Bindings (version : Version) : List SyntaxToken → List (Chars × Tree.Term) → Prop
+inductive Bindings (version : Version) :
+    List SyntaxToken → List (Tree.Symbol × Tree.Term) → Prop
   | nil : Bindings version [] []
 
   | cons : Term version termTokens term → Bindings version rest bindings →
@@ -374,11 +380,13 @@ inductive FunctionDef (version : Version) : List SyntaxToken → Tree.FunctionDe
 /--
 Standard: 2.5 and 2.6 §3.9 Scripts; App. B ⟨prop_literal⟩.
 
-⟨prop_literal⟩ ::= ⟨symbol⟩ | `(` `not` ⟨symbol⟩ `)`
+⟨prop_literal⟩ ::= ⟨symbol⟩ | `(` `not` ⟨symbol⟩ `)`, where `not` is the symbol of that name,
+quoted or not.
 -/
 inductive PropLiteral : List SyntaxToken → Tree.PropLiteral → Prop
   | positive : PropLiteral [.symbol name] (.positive name)
-  | negative : PropLiteral (paren [.symbol (chars "not"), .symbol name]) (.negative name)
+  | negative : negation.name = chars "not" →
+      PropLiteral (paren [.symbol negation, .symbol name]) (.negative negation name)
 
 /--
 Standard: 2.7 §3.11 Scripts; App. B ⟨command⟩ of each version. Reading P2: `set-option` takes
