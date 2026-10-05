@@ -84,6 +84,7 @@ partial def countTokens : ConsumeM DiscardTokens Id Empty Unit := do
   countTokens
 
 instance : Consume DiscardTokens Id Unit Empty where
+  consumesWhitespaceAndComments := false
   consume := do
     countTokens
     return .continue
@@ -118,6 +119,7 @@ partial def countTokensInRef (tokens : IO.Ref Nat) : ConsumeM CountTokens IO Emp
   countTokensInRef tokens
 
 instance : Consume CountTokens IO Unit Empty where
+  consumesWhitespaceAndComments := false
   consume := do
     countTokensInRef (← getThe CountTokens).tokens
     return .continue

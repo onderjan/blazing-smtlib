@@ -163,6 +163,7 @@ inductive LexerState where
   | quotedSymbol
   | keyword
   | comment
+  | whitespace
   | quotedSymbolClosed
   | failed
   deriving BEq, Inhabited

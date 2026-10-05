@@ -20,6 +20,8 @@ inductive TokenCategory where
   | keyword
   | unquotedSymbol
   | quotedSymbol
+  | whitespace
+  | comment
   | endOfFile
   deriving BEq, Repr, Inhabited
 
@@ -80,7 +82,9 @@ def toUInt8 : TokenCategory → UInt8
   | .keyword => 7
   | .unquotedSymbol => 8
   | .quotedSymbol => 9
-  | .endOfFile => 10
+  | .whitespace => 10
+  | .comment => 11
+  | .endOfFile => 12
 
 /-- The type of the number given by `toUInt8`. -/
 @[inline]
@@ -95,11 +99,14 @@ def ofUInt8 : UInt8 → TokenCategory
   | 7 => .keyword
   | 8 => .unquotedSymbol
   | 9 => .quotedSymbol
+  | 10 => .whitespace
+  | 11 => .comment
   | _ => .endOfFile
 
 -- the types are read back from the batch as they were written to it
 #guard [TokenCategory.parenOpen, .parenClose, .numeral, .decimal, .hexadecimal, .binary, .string,
-    .keyword, .unquotedSymbol, .quotedSymbol, .endOfFile].all fun ty => ofUInt8 ty.toUInt8 == ty
+    .keyword, .unquotedSymbol, .quotedSymbol, .whitespace, .comment, .endOfFile].all
+  fun ty => ofUInt8 ty.toUInt8 == ty
 
 end TokenCategory
 
@@ -404,6 +411,22 @@ A sequential handler of tokens, running in the monad `m`, finishing with a
 value of type `R` and failing with an error of type `E`.
 -/
 class Consume (H : Type) (m : outParam (Type → Type)) (R E : outParam Type) where
+  /- LEAN: the Rust associated constant `CONSUMES_WHITESPACE_AND_COMMENTS`; a field without a
+  default, so that every consumer states it. -/
+  /--
+  Whether the consumer consumes whitespace and comments.
+
+  If false, the consumer operates over abstract tokens:
+  it is not interested in whitespace and comments,
+  and the caller must not hand them over for consumption.
+
+  If true, the consumer operates over concrete tokens:
+  it can reconstruct the byte stream precisely thanks
+  to the whitespace and comments. The caller must hand
+  over the whitespace and comment tokens present between
+  true syntactic tokens.
+  -/
+  consumesWhitespaceAndComments : Bool
   /--
   Handles the tokens handed over in the cursor, in order.
 

@@ -12,8 +12,10 @@ open BSmtLib
 
 /- LEAN: the Rust driver collects the lines in a `RefCell<String>` shared with the handler;
 `IO.Ref` is Lean's counterpart, so the handler runs in `IO`. -/
+/- LEAN: `whitespace` is the Rust const parameter `WHITESPACE` of `Scripted`, which says
+whether the consumer takes whitespace and comments. -/
 /-- Writes every token handed over as a response line. -/
-structure Report where
+structure Report (whitespace : Bool) where
   version : Version
   out : IO.Ref String
 
@@ -42,6 +44,8 @@ def tokenTypeName : TokenCategory → String
   | .keyword => "Keyword"
   | .unquotedSymbol => "UnquotedSymbol"
   | .quotedSymbol => "QuotedSymbol"
+  | .whitespace => "Whitespace"
+  | .comment => "Comment"
   | .endOfFile => "EndOfFile"
 
 /-- The lexer error kind, spelled as the Rust variant. -/
@@ -73,7 +77,8 @@ def reservedName (ty : TokenCategory) (content : ByteSlice) (version : Version) 
 
 /- LEAN: `partial`, as Lean is not shown that taking tokens from the cursor ends. -/
 /-- Writes a line for every token remaining in the cursor. -/
-partial def reportTokens (report : Report) : ConsumeM Report IO Empty Unit := do
+partial def reportTokens (report : Report whitespace) :
+    ConsumeM (Report whitespace) IO Empty Unit := do
   let some token ← modifyGetThe BatchCursor BatchCursor.next
     | return
   let cursor ← getThe BatchCursor
@@ -86,9 +91,10 @@ partial def reportTokens (report : Report) : ConsumeM Report IO Empty Unit := do
   reportTokens report
 
 /- LEAN: `Empty` is Lean's `Infallible`, a type without values. -/
-instance : Consume Report IO Unit Empty where
+instance : Consume (Report whitespace) IO Unit Empty where
+  consumesWhitespaceAndComments := whitespace
   consume := do
-    reportTokens (← getThe Report)
+    reportTokens (← getThe (Report whitespace))
     return .continue
 
 /-- Decodes the hexadecimal digits of a slice operand. -/
@@ -215,39 +221,46 @@ def readRequest (line : String) : Except String Request := do
       throw s!"unknown operation {repr word}"
   return request
 
+/--
+Applies the feeds of the request to the lexer and writes the lines of
+the feeds themselves. Returns the error that ended the response, if any.
+-/
+def drive (request : Request) (lines : IO.Ref String) (lexer : Lexer (Report whitespace)) :
+    ExceptT String IO (Option LexicalError) := do
+  let mut lexer := lexer
+  for feed in request.feeds do
+    let (result, next) ← match feed with
+      | some slice => lexer.lexSlice slice.toByteSlice
+      | none => lexer.lexEof
+    lexer := next
+    match result with
+    -- the location the lexer is at after the feed
+    | .ok _ => lines.modify (· ++ s!"at {location lexer.currentLocation}\n")
+    | .error (.lexer err) => return some err
+    | .error (.handler never) => nomatch never
+    -- the protocol has no line for an internal error, which must not occur
+    | .error (.internal err) => throw s!"internal error: {err.message}"
+  return none
+
 /-- Answers one request line, giving the response lines. -/
 def answer (line : String) : ExceptT String IO String := do
   -- decode the whole request first, so that a malformed one produces no lines
   let request ← readRequest line
   -- the options that the Lean lexer cannot answer yet
-  if request.whitespace then
-    throw "the option ws is not implemented yet"
   if request.recover then
     throw "the option recover is not implemented yet"
   match request.behaviour with
   | .takeAll => pure ()
   | .plan _ => throw "the option plan is not implemented yet"
   | .rules _ => throw "the option rules is not implemented yet"
-  let version := request.version
-  let operations := request.feeds
 
+  -- the consumer writes into the response while the lexer owns it
   let lines ← IO.mkRef ""
-  let mut lexer := Lexer.new { version, out := lines : Report } version
-  let mut error : Option LexicalError := none
-  for operation in operations do
-    let (result, next) ← match operation with
-      | some slice => lexer.lexSlice slice.toByteSlice
-      | none => lexer.lexEof
-    lexer := next
-    match result with
-    -- the location the lexer is at after the operation
-    | .ok _ => lines.modify (· ++ s!"at {location lexer.currentLocation}\n")
-    | .error (.lexer err) =>
-      error := some err
-      break
-    | .error (.handler never) => nomatch never
-    -- the protocol has no line for an internal error, which must not occur
-    | .error (.internal err) => throw s!"internal error: {err.message}"
+  let version := request.version
+  let error ← if request.whitespace then
+      drive request lines (Lexer.new ({ version, out := lines } : Report true) version)
+    else
+      drive request lines (Lexer.new ({ version, out := lines } : Report false) version)
 
   let mut out ← lines.get
   match error with

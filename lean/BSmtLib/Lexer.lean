@@ -119,6 +119,11 @@ private def modifyCore (f : LexerCore → LexerCore) : LexM H m R E Unit :=
 private def setState (state : LexerState) : LexM H m R E Unit :=
   modifyCore fun c => { c with state }
 
+/- LEAN: Rust's `C::CONSUMES_WHITESPACE_AND_COMMENTS`, read from the consumer's instance. -/
+@[inline]
+private def consumesWhitespaceAndComments : LexM H m R E Bool :=
+  pure (Consume.consumesWhitespaceAndComments (H := H))
+
 /- LEAN: the content buffer is taken out of the state before it is changed:
 changing `c.tokenContent` while `c` still refers to it would find it shared and copy it,
 together with its array. -/
@@ -366,6 +371,10 @@ private def finishKeyword (tokenEnd : TokenEnd) (content : Content) (next : Opti
 private def finishStringLiteral (tokenEnd : TokenEnd) (content : Content) : LexM H m R E Unit :=
   sinkSlice .string tokenEnd content
 
+@[inline]
+private def finishWhitespace (tokenEnd : TokenEnd) (content : Content) : LexM H m R E Unit :=
+  sinkSlice .whitespace tokenEnd content
+
 /- LEAN: Rust keeps the batch length, the line and the line start in locals of `lex_normal`.
 Here the local is the batch itself, which the loop passes along; the line and the line start
 stay in the lexer state, which the fast path only reads. While the loop holds the batch, the
@@ -427,6 +436,40 @@ private def storeUnfinishedSymbolRun (input : Input) (entry : UInt8) (index afte
     extendContent input index runEndAt
     setState .simpleSymbol
 
+/- LEAN: the loop of `start_whitespace`, `partial` for the reason given at `lexNormalFrom`.
+`index` is where the run starts and `«end»` where the search for its end continues. -/
+private partial def startWhitespaceFrom (input : Input) (index «end» : USize) :
+    LexM H m R E USize := do
+  -- find the first byte that is not whitespace other than a line feed
+  let «end» := runEnd input «end» RUN_NON_LF_WHITESPACE
+  match input.get? «end» with
+  | some c =>
+    if c == byte! '\n' then
+      -- the line feed is a part of the run, mark it and continue
+      markLineFeedAt «end»
+      startWhitespaceFrom input index («end» + 1)
+    else
+      -- the run has ended inside the slice
+      finishWhitespace (.mkAtByte «end») (.borrow input index «end»)
+      return «end»
+  | none =>
+    -- we ran out of bytes, update the content and state
+    extendContent input index input.stop
+    setState .whitespace
+    return input.stop
+
+/--
+Lexes the whitespace run that starts at `index` of the slice,
+to be handed over as a token.
+
+Returns the position after the run. If the run ends inside the slice,
+its token is sunk with borrowed content. Otherwise, the run is stored,
+the state becomes `whitespace`, and the end of the slice is returned.
+-/
+private def startWhitespace (input : Input) (index : USize) : LexM H m R E USize := do
+  startToken index
+  startWhitespaceFrom input index index
+
 /- LEAN: the Rust function loops over the slice with `while let`; here the loop is the
 recursion on `index`, and `partial` because Lean is not shown that every arm advances it.
 Every arm that continues the loop in Rust calls `lexNormalFrom` again at the new index,
@@ -467,13 +510,29 @@ private partial def lexNormalFrom (input : Input) (offset : Nat) (base index : U
     let runEndAt := runEnd input after (fastEntry &&& FAST_RUN_MASK)
     let isQuoted := fastEntry &&& FAST_PIPE != 0
 
+    -- Check if we need to fall back to state-machine lexing
+    -- if we have been asked to emit whitespace and are handling it.
+    -- We need to fall back if we have overrun the slice or encountered
+    -- a line-feed which needs to update the location line/column.
+    let isWhitespace := fastEntry &&& RUN_NON_LF_WHITESPACE != 0
+    let emitsWhitespace := (← consumesWhitespaceAndComments) && isWhitespace
+    if emitsWhitespace && (input.get? runEndAt).all (· == byte! '\n') then
+      -- the whitespace token does not end on this line inside the slice
+      storeBatch batch
+      let index ← startWhitespace input index
+      if index == input.stop then
+        -- we ran out of bytes inside the whitespace
+        return index
+      return ← lexNormalFrom input offset base index (← takeBatch)
+
     -- We might need to fall back to state-machine lexing if the token
     -- we have found is not properly finished.
     -- This can only happen if we are processing a quoted symbol
     -- and the expected pipe after the end of the run is not there,
     -- or if we are processing a simple symbol and we overrun the slice.
-    -- Parentheses have trivially zero-length runs and whitespace
-    -- can be split as it is discarded.
+    -- Parentheses have trivially zero-length runs.
+    -- If the consumer does not want whitespace to be emitted,
+    -- it can be discarded split.
     if runEndAt == input.stop || isQuoted then
       let isUnfinished :=
         if isQuoted then input.get? runEndAt != some (byte! '|')
@@ -488,9 +547,11 @@ private partial def lexNormalFrom (input : Input) (offset : Nat) (base index : U
     -- No need to fall back, construct the token: the pipes delimit a quoted
     -- symbol but are not part of its content, any other fast token is its
     -- whole text. The token is on a single line as all fast-lex runs exclude
-    -- newlines. Whitespace is not emitted.
+    -- newlines. Whitespace is only emitted if the consumer wants it.
     let (ty, contentStart, contentStop) :=
       if isQuoted then (TokenCategory.quotedSymbol, after, runEndAt)
+      -- only emitted if the consumer takes whitespace
+      else if emitsWhitespace then (TokenCategory.whitespace, index, tokenEnd)
       else (TokenCategory.unquotedSymbol, index, tokenEnd)
     let emit := fastEntry &&& FAST_EMIT != 0
     -- A token must be delimited by the byte after it,
@@ -513,6 +574,8 @@ private partial def lexNormalFrom (input : Input) (offset : Nat) (base index : U
         extendContent input contentStart contentStop
         setState .quotedSymbolClosed
         return tokenEnd
+    -- whitespace needs no delimiter, it is emitted only if the consumer takes it
+    let emit := emit || emitsWhitespace
     let batch ← pushFast batch offset base ty contentStart contentStop index tokenEnd emit
     -- Fast path done, continue normally after the token end.
     return ← lexNormalFrom input offset base tokenEnd batch
@@ -523,10 +586,17 @@ private partial def lexNormalFrom (input : Input) (offset : Nat) (base index : U
   -- Fast path was not taken, use the slow path.
   match startOf c with
   | .lineFeed =>
-    -- line feeds must be marked for line offsets
-    -- mark it and update the index
-    markLineFeedAt index
-    lexNormalFrom input offset base after (← takeBatch)
+    if ← consumesWhitespaceAndComments then
+      -- the line feed starts a whitespace token
+      let index ← startWhitespace input index
+      if index == input.stop then
+        return index
+      lexNormalFrom input offset base index (← takeBatch)
+    else
+      -- line feeds must be marked for line offsets
+      -- mark it and update the index
+      markLineFeedAt index
+      lexNormalFrom input offset base after (← takeBatch)
   | .comment =>
     -- a comment has been started
     -- process the run eagerly
@@ -538,11 +608,18 @@ private partial def lexNormalFrom (input : Input) (offset : Nat) (base index : U
         -- line feed, we need to mark it
         markLineFeedAt «end»
       -- otherwise a carriage return, which also ends the comment
-      -- we have reached the end of the comment
+      -- we have reached the end of the comment, which includes
+      -- the byte that ended it but not its semicolon
+      -- sink the content if it should be emitted
+      if ← consumesWhitespaceAndComments then
+        sinkSlice .comment (.mkAtByte («end» + 1)) (.borrow input after («end» + 1))
       -- update the index and continue the loop
       lexNormalFrom input offset base («end» + 1) (← takeBatch)
     | none =>
-      -- we ran out of bytes
+      -- we ran out of bytes while inside the comment
+      -- extend the content if it should be emitted
+      if ← consumesWhitespaceAndComments then
+        extendContent input after «end»
       -- update the state and return
       setState .comment
       return «end»
@@ -988,24 +1065,67 @@ private def lexQuotedSymbolClosed (input : Input) (start : USize) : LexM H m R E
   setState .normal
   return start
 
+/- LEAN: the loop of `lex_whitespace` is the recursion on `start`, `partial` for the reason given
+at `lexNormalFrom`. -/
+private partial def lexWhitespace (input : Input) (start : USize) : LexM H m R E USize := do
+  -- we know that the consumer is interested in the whitespace
+  -- as it would otherwise be immediately discarded instead
+  -- of the state change
+  -- find the first byte that is not non-LF whitespace
+  let index := runEnd input start RUN_NON_LF_WHITESPACE
+  -- inspect the problematic byte
+  match input.get? index with
+  | some c =>
+    if c == byte! '\n' then
+      -- mark the line feed at the given position
+      markLineFeedAt index
+      -- prepare for the next run
+      -- extend the token content with everything including this LF
+      extendContent input start (index + 1)
+      lexWhitespace input (index + 1)
+    else
+      -- end of whitespace
+      -- extend and finish the token
+      extendContent input start index
+      finishWhitespace (.mkAtByte index) .stored
+      -- go back to normal state, consuming the whitespace
+      setState .normal
+      return index
+  | none =>
+    -- we ran out of bytes before the token ended
+    -- extend the token content with everything
+    -- keep the whitespace state
+    extendContent input start input.stop
+    return input.stop
+
 private def lexComment (input : Input) (start : USize) : LexM H m R E USize := do
   -- run until comment end
   let index := runEnd input start RUN_COMMENT_PLAIN
   let some c := input.get? index
-    -- the comment continues, just consume the whole slice
-    -- and remain in comment state
-    | return input.stop
+    | do
+      -- the comment continues; if we are producing comments,
+      -- extend the content from the whole slice
+      if ← consumesWhitespaceAndComments then
+        extendContent input start input.stop
+      -- remain in comment state
+      return input.stop
 
   -- the comment has ended, either by CR or LF
   -- if it ended by LF, we must mark it
   if c == byte! '\n' then
     markLineFeedAt index
 
-  -- move back to the normal state
-  setState .normal
+  let afterCommentEnd := index + 1
 
-  -- return, consuming up to comment end including it
-  return index + 1
+  if ← consumesWhitespaceAndComments then
+    -- we need to produce the comment token
+    -- extend the comment content and finish the token
+    extendContent input start afterCommentEnd
+    sinkSlice .comment (.mkAtByte afterCommentEnd) .stored
+
+  -- move back to the normal state and return
+  setState .normal
+  return afterCommentEnd
 
 /--
 Lexes the input from `start`, which is below its end, in the current state, returning the
@@ -1025,6 +1145,7 @@ private def lexStep (input : Input) (start : USize) : LexM H m R E USize := do
   | .quotedSymbol => lexQuotedSymbol input start
   | .keyword => lexKeyword input start
   | .comment => lexComment input start
+  | .whitespace => lexWhitespace input start
   | .quotedSymbolClosed => lexQuotedSymbolClosed input start
   | .failed => failInternal .lexedAfterError
 
@@ -1133,8 +1254,8 @@ private def lexEofInner : InnerM H m (Except (LexError E) (ControlFlow R)) := do
   modifyThe LexerCore fun c => { c with base := 0 }
   let step : LexM H m R E Unit := do
     match (← getCore).state with
-    | .normal | .comment =>
-      -- nothing to do, we accept EOF even in comments
+    | .normal =>
+      -- nothing to do
       pure ()
     | .quotedSymbolClosed =>
       -- the end of the input is a token delimiter,
@@ -1161,6 +1282,14 @@ private def lexEofInner : InnerM H m (Except (LexError E) (ControlFlow R)) := do
     | .quotedSymbol =>
       -- EOF forbidden as the symbol must be totally enclosed by pipes
       fail .unclosedQuotedSymbol TokenEnd.EOF
+    | .whitespace =>
+      -- we can only be in this state if the consumer wants the
+      -- whitespace to be emitted, so sink it
+      sinkSlice .whitespace TokenEnd.EOF .stored
+    | .comment =>
+      -- only produce the comment if the consumer wants it
+      if ← consumesWhitespaceAndComments then
+        sinkSlice .comment TokenEnd.EOF .stored
     | .failed => failInternal .lexedAfterError
     -- everything has been processed, start the EOF token and sink it
     startToken 0

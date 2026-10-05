@@ -4,8 +4,7 @@ import BSmtLib.Token.Reserved
 
 /- LEAN: in Rust, `SmtSyntaxToken` is in `token` with the token it classifies. It needs
 `Reserved`, whose module imports `BSmtLib.Token`, so it has a module of its own here; the root
-module `BSmtLib` imports it. The Rust variants `Whitespace` and `Comment` come with the
-whitespace and comment tokens. -/
+module `BSmtLib` imports it. -/
 
 namespace BSmtLib
 
@@ -20,6 +19,8 @@ inductive SyntaxToken where
   | keyword (value : KeywordView)
   | symbol (value : SymbolView)
   | reserved (value : Reserved)
+  | whitespace (value : WhitespaceView)
+  | comment (value : CommentView)
   | endOfFile
   deriving BEq, Repr
 
@@ -45,6 +46,8 @@ def fromToken (cursor : BatchCursor) (token : Token) (version : Version) : Synta
   | .quotedSymbol => .symbol (SymbolView.newUnchecked content)
   | .string => .string (StringContentView.newUnchecked content)
   | .keyword => .keyword (KeywordView.newUnchecked content)
+  | .whitespace => .whitespace (WhitespaceView.newUnchecked content)
+  | .comment => .comment (CommentView.newUnchecked content)
   | .endOfFile => .endOfFile
 
 end SyntaxToken
