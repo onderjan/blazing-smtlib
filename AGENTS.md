@@ -34,7 +34,7 @@ are how agents follow it.
   comments on public items state behaviour, not implementation.
 - When a change makes a documentation comment on a public item untrue, do not
   reword it: report it to the maintainer.
-- Every public item has the prefix `Smt`; in Lean, the namespace `BSmtlib`
+- Every public item has the prefix `Smt`; in Lean, the namespace `BSmtLib`
   takes its place. A trait is named by its verb (`SmtConsume`, `SmtParse`).
   An enum that says which party failed is a `Cause`; one that classifies a
   defect is a `Kind`.

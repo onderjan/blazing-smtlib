@@ -1,8 +1,8 @@
 name = "blazing-smtlib"
-defaultTargets = ["BlazingSmtlib"]
+defaultTargets = ["BSmtLib"]
 
 [[lean_lib]]
-name = "BlazingSmtlib"
+name = "BSmtLib"
 
 # the lexing mode of rust/benches/parse.rs, run with `lake exe bench-parse`
 [[lean_exe]]

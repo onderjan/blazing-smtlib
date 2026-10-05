@@ -1,11 +1,9 @@
-import BlazingSmtlib.Read.Lexer.CharClass
-import BlazingSmtlib.Read.Lexer.Error
-import BlazingSmtlib.Read.Lexer.Helpers
-import BlazingSmtlib.Token
+import BSmtLib.Lexer.CharClass
+import BSmtLib.Lexer.Error
+import BSmtLib.Lexer.Helpers
+import BSmtLib.Token
 
-namespace BlazingSmtlib.Read.Lexer
-
-open BlazingSmtlib BlazingSmtlib.Token
+namespace BSmtLib.Lexer
 
 /-- Maximal number of tokens that can be batched. -/
 def BATCH_CAPACITY : Nat := 256
@@ -66,7 +64,7 @@ structure LexerCore where
   /-- Token batch, may be only partially filled. -/
   batch : TokenBatch
 
-structure Lexer (H : Type) where
+structure _root_.BSmtLib.Lexer (H : Type) where
   private mk ::
   /-- Handler of produced tokens. -/
   private handler : H
@@ -112,10 +110,10 @@ section
 variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [TokenHandler H m R E]
 
 /- LEAN: `getThe` and `modifyThe` name the state they access, as there are two. Reading the
-state with `← core` gives a reference to it; the code below lets such references die before
+state with `← getCore` gives a reference to it; the code below lets such references die before
 the state is modified, so that it is modified in place and not copied. -/
 @[inline]
-private def core : LexM H m R E LexerCore :=
+private def getCore : LexM H m R E LexerCore :=
   getThe LexerCore
 
 @[inline]
@@ -173,7 +171,7 @@ Used for errors detected mid-run, e.g. forbidden byte in a string
 or a backslash in a quoted symbol.
 -/
 private def failAt (kind : LexerErrorKind) (position : USize) : LexM H m R E α := do
-  let c ← core
+  let c ← getCore
   let «end» := c.locationAt position
   let span := SmtSpan.newUnchecked c.tokenStart «end»
   -- no tokens have been consumed, as this is an error
@@ -187,7 +185,7 @@ private def fail (kind : LexerErrorKind) (tokenEnd : TokenEnd) : LexM H m R E α
 /- LEAN: raises what is a panic in Rust, see `InternalError`. -/
 /-- Fails with an internal error at the current location. -/
 private def failInternal (error : InternalError) : LexM H m R E α := do
-  throw { result := .error (.internal error), location := (← core).currentLocation }
+  throw { result := .error (.internal error), location := (← getCore).currentLocation }
 
 /--
 Checks that `next`, the byte at `position` right after a token,
@@ -219,7 +217,7 @@ reference to the lexer's content buffer, which would make the buffer's next chan
 it. -/
 /-- Hands the non-empty batch over to the handler and takes it back. -/
 private def handOver (batch : TokenBatch) (bytesAfter : ByteArray) : LexM H m R E Unit := do
-  let cursor := TokenCursor.new (← core).version batch
+  let cursor := TokenCursor.new (← getCore).version batch
   -- where lexing continues if the handler stops before the first token
   -- relex request empties the cursor, so we need to remember it here
   let some first := cursor.get 0
@@ -265,7 +263,7 @@ private def takeBatch : LexM H m R E TokenBatch :=
 
 private def flushBatch : LexM H m R E Unit := do
   -- the batch is spent once handed over, no matter what the handler decides
-  if (← core).batch.len == 0 then
+  if (← getCore).batch.len == 0 then
     return
   let batch ← takeBatch
   let bytes := batch.bytes
@@ -283,7 +281,7 @@ private def handOverStored (ty : TokenType) («end» : SmtLocation) : LexM H m R
   flushBatch
   let batch ← takeBatch
   let bytes := batch.bytes
-  let c ← core
+  let c ← getCore
   let batch := { batch with bytes := c.tokenContent.bytes }.pushLocated ty 0 c.tokenContent.len
     c.tokenStart «end»
   handOver batch bytes
@@ -297,20 +295,20 @@ private def sinkSlice (ty : TokenType) (tokenEnd : TokenEnd) (content : Content)
   match content with
   | .borrowed _ start stop =>
     -- this is borrowed content, so put it into the batch
-    let c ← core
+    let c ← getCore
     let spanStart := c.tokenStart
     let spanEnd := c.locationAt tokenEnd.position
     modifyBatch (·.pushLocated ty start stop spanStart spanEnd)
-    if (← core).batch.len == BATCH_CAPACITY then
+    if (← getCore).batch.len == BATCH_CAPACITY then
       flushBatch
   | .stored =>
     -- this is in our own buffer, so we cannot put it into the batch
     -- as we need the buffer usable for the next token
-    handOverStored ty ((← core).locationAt tokenEnd.position)
+    handOverStored ty ((← getCore).locationAt tokenEnd.position)
 
 private def sinkEof : LexM H m R E Unit := do
   -- the end of file has no content, which the cleared content buffer gives
-  handOverStored .endOfFile (← core).currentLocation
+  handOverStored .endOfFile (← getCore).currentLocation
 
 /--
 Sinks a decimal token.
@@ -322,7 +320,7 @@ at the end (if there is one), delimits it.
 private def finishDecimal (tokenEnd : TokenEnd) (content : Content) (next : Option UInt8) :
     LexM H m R E Unit := do
   -- decimals of the form 7. without any digit in fractional part are disallowed
-  let last := content.last? (← core).tokenContent
+  let last := content.last? (← getCore).tokenContent
   if last.isNone || last == some (byte! '.') then
     fail .fractionDigitExpected tokenEnd
   if let some next := next then
@@ -343,7 +341,7 @@ at the end (if there is one), delimits it.
 private def finishDigitRun (run : DigitRun) (tokenEnd : TokenEnd) (content : Content)
     (next : Option UInt8) : LexM H m R E Unit := do
   -- digit runs must not be empty
-  if content.size (← core).tokenContent == 0 then
+  if content.size (← getCore).tokenContent == 0 then
     fail run.emptyError tokenEnd
   if let some next := next then
     expectDelimiter next tokenEnd.position
@@ -363,7 +361,7 @@ at the end (if there is one), delimits it.
 private def finishKeyword (tokenEnd : TokenEnd) (content : Content) (next : Option UInt8) :
     LexM H m R E Unit := do
   -- ensure the keyword is not empty
-  if content.size (← core).tokenContent == 0 then
+  if content.size (← getCore).tokenContent == 0 then
     fail .forbiddenKeywordName tokenEnd
   if let some next := next then
     expectDelimiter next tokenEnd.position
@@ -400,7 +398,7 @@ private def pushFast (batch : TokenBatch) (offset : Nat) (base : USize)
     (ty : TokenType) (contentStart contentStop start «end» : USize) (emit : Bool) : LexM H m R E TokenBatch := do
   if !emit then
     return batch
-  let c ← core
+  let c ← getCore
   let line := c.line
   let lineStart := c.lineStart
   let batch := batch.pushOnLine ty contentStart.toNat contentStop.toNat
@@ -586,7 +584,7 @@ private partial def lexNormalFrom (input : Input) (offset : Nat) (base index : U
   | .quote =>
     -- starts a string literal
     startToken index
-    if (← core).version == .v2_0 then
+    if (← getCore).version == .v2_0 then
       -- SMT-LIB 2.0 has a different string-escape format
       -- than the subsequent versions, leave the fast path immediately
       setState .stringLiteral
@@ -693,7 +691,7 @@ private partial def lexNormalFrom (input : Input) (offset : Nat) (base index : U
 
 private def lexNormal (input : Input) (start : USize) : LexM H m R E USize := do
   -- use locals for variables commonly used on the fast path
-  let c ← core
+  let c ← getCore
   let offset := c.offset
   let base := c.base
   lexNormalFrom input offset base start (← takeBatch)
@@ -728,7 +726,7 @@ private def lexNumeralOrDecimal (input : Input) (start : USize) : LexM H m R E U
   -- it suffices for the leading zero condition that
   -- 1. at least one additional digit has been consumed
   -- 2. the content lexed previously is exactly "0"
-  let content := (← core).tokenContent
+  let content := (← getCore).tokenContent
   let isZero := content.len == 1 && content.bytes.get! 0 == byte! '0'
   if index > start && isZero then
     failAt .numeralLeadingZero (start + 1)
@@ -791,7 +789,7 @@ private partial def lexStringLiteralLegacy (input : Input) (consumed : USize) :
   let some first := input.get? consumed
     | return consumed
   let mut consumed := consumed
-  match (← core).state with
+  match (← getCore).state with
   | .stringLiteralDoubleQuote =>
     -- expect a delimiter and finish the previously ended token
     expectDelimiter first consumed
@@ -863,7 +861,7 @@ private partial def lexStringLiteralFrom (input : Input) (consumed : USize) :
   let some first := input.get? consumed
     | return consumed
   let mut consumed := consumed
-  if (← core).state == .stringLiteralDoubleQuote then
+  if (← getCore).state == .stringLiteralDoubleQuote then
     -- we need to react to the literal being closed by a previous double-quote
     -- look at the first byte
     if first != byte! '"' then
@@ -916,7 +914,7 @@ private partial def lexStringLiteralFrom (input : Input) (consumed : USize) :
 
 /-- Lexes the string literal. -/
 private def lexStringLiteral (input : Input) (start : USize) : LexM H m R E USize := do
-  if (← core).version == .v2_0 then
+  if (← getCore).version == .v2_0 then
     -- in 2.0 mode, the string literals are lexed differently,
     -- hand over to the legacy lexing function
     lexStringLiteralLegacy input start
@@ -979,7 +977,7 @@ private partial def lexQuotedSymbol (input : Input) (consumed : USize) : LexM H 
 
 private def lexKeyword (input : Input) (start : USize) : LexM H m R E USize := do
   -- test that the keyword does not start with a digit
-  if (← core).tokenContent.isEmpty && isAsciiDigit (input.get start) then
+  if (← getCore).tokenContent.isEmpty && isAsciiDigit (input.get start) then
     failAt .forbiddenKeywordName (start + 1)
 
   -- find the first byte that is not simple-symbol-like
@@ -1027,7 +1025,7 @@ Lexes the input from `start`, which is below its end, in the current state, retu
 position up to which the input was consumed.
 -/
 private def lexStep (input : Input) (start : USize) : LexM H m R E USize := do
-  match (← core).state with
+  match (← getCore).state with
   | .normal => lexNormal input start
   | .numeralOrDecimal => lexNumeralOrDecimal input start
   | .fraction => lexFractionFrom input start
@@ -1147,7 +1145,7 @@ private def lexEofInner : InnerM H m (Except (LexError E) (ControlFlow R)) := do
   -- there is no input at the end of the file, positions are relative to the offset
   modifyThe LexerCore fun c => { c with base := 0 }
   let step : LexM H m R E Unit := do
-    match (← core).state with
+    match (← getCore).state with
     | .normal | .comment =>
       -- nothing to do, we accept EOF even in comments
       pure ()
@@ -1212,8 +1210,6 @@ private def executeStep (step : InnerM H m (Except (LexError E) (ControlFlow R))
     return .error err
 
 end
-
-namespace Lexer
 
 /-- Constructs the lexer. -/
 def new (handler : H) (version : SmtVersion) : Lexer H :=
@@ -1304,6 +1300,4 @@ def lexAll [Monad m] [TokenHandler H m R E] (self : Lexer H) (input : ByteSlice)
   | .ok .continue => self.lexEof
   | _ => return (result, self)
 
-end Lexer
-
-end BlazingSmtlib.Read.Lexer
+end BSmtLib.Lexer

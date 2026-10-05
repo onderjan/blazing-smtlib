@@ -1,6 +1,6 @@
 import Std.Data.ByteSlice
 
-namespace BlazingSmtlib
+namespace BSmtLib
 
 /-- An owned string of bytes. -/
 /- LEAN: `ByteArray` is Lean's `Vec<u8>`. Lean values are immutable and reference-counted;
@@ -119,4 +119,4 @@ instance : Repr String8View := ⟨fun s _ => reprBytes s.slice⟩
 
 end String8View
 
-end BlazingSmtlib
+end BSmtLib

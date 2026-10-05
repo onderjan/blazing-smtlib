@@ -1,4 +1,4 @@
-namespace BlazingSmtlib
+namespace BSmtLib
 
 /--
 A location in an SMT-LIB stream.
@@ -135,4 +135,4 @@ instance : Repr SmtSpan where
 
 end SmtSpan
 
-end BlazingSmtlib
+end BSmtLib

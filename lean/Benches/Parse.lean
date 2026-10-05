@@ -23,9 +23,10 @@ Environment variables, as for the Rust benchmark:
   every timed run in seconds, and `list` prints the selected labels one per
   line without measuring anything.
 -/
-import BlazingSmtlib
+import BSmtLib
 
-open BlazingSmtlib BlazingSmtlib.Token BlazingSmtlib.Read.Lexer
+open BSmtLib
+
 
 /-- Default timed runs per file; additional warm-up runs are discarded. -/
 def defaultIterations : Nat := 5

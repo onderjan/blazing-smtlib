@@ -1,4 +1,4 @@
-namespace BlazingSmtlib
+namespace BSmtLib
 
 /-- Whether an operation should go on or stop early with a value. -/
 /- LEAN: Rust's `std::ops::ControlFlow<B>`, which Lean's standard library lacks. `continue`
@@ -11,4 +11,4 @@ inductive ControlFlow (β : Type) where
   | «break» (value : β)
   deriving BEq, Repr, Inhabited
 
-end BlazingSmtlib
+end BSmtLib

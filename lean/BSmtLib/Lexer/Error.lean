@@ -1,8 +1,6 @@
-import BlazingSmtlib.Span
+import BSmtLib.Span
 
-namespace BlazingSmtlib.Read.Lexer
-
-open BlazingSmtlib
+namespace BSmtLib
 
 inductive LexerErrorKind where
   | unexpectedCharacter
@@ -25,6 +23,8 @@ structure LexerError where
   kind : LexerErrorKind
   span : SmtSpan
   deriving BEq, Repr, Inhabited
+
+namespace Lexer
 
 /- LEAN: not in Rust, where each of these conditions is a panic. Lean's `panic!` does not stop
 the program but goes on with a default value, so these are reported as errors instead,
@@ -63,11 +63,13 @@ def message : InternalError → String
 
 end InternalError
 
+end Lexer
+
 inductive LexError (E : Type) where
   | lexer (error : LexerError)
   | handler (error : E)
   /- LEAN: not in Rust, see `InternalError`. -/
-  | internal (error : InternalError)
+  | internal (error : Lexer.InternalError)
   deriving BEq, Repr
 
-end BlazingSmtlib.Read.Lexer
+end BSmtLib

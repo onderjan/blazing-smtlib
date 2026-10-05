@@ -1,10 +1,8 @@
-import BlazingSmtlib.Read.Lexer.CharClass
-import BlazingSmtlib.Read.Lexer.Error
-import BlazingSmtlib.Token
+import BSmtLib.Lexer.CharClass
+import BSmtLib.Lexer.Error
+import BSmtLib.Token
 
-namespace BlazingSmtlib.Read.Lexer
-
-open BlazingSmtlib.Token
+namespace BSmtLib.Lexer
 
 /-- What a byte does in the normal state. -/
 inductive Start where
@@ -281,4 +279,4 @@ def last? (self : Content) (stored : ContentBuffer) : Option UInt8 :=
 
 end Content
 
-end BlazingSmtlib.Read.Lexer
+end BSmtLib.Lexer

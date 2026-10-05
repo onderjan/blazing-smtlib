@@ -1,14 +1,12 @@
-import BlazingSmtlib.String8
-import BlazingSmtlib.Token
+import BSmtLib.String8
+import BSmtLib.Token
 
 /- LEAN: in Rust, `token` declares `reserved` as a submodule and re-exports its types, while
 `reserved` uses `SmtVersion` from `token`. Lean modules cannot import each other, so this
-module imports `BlazingSmtlib.Token` and declares its types in the same namespace; the root
-module `BlazingSmtlib` imports both. -/
+module imports `BSmtLib.Token` and declares its types in the same namespace; the root
+module `BSmtLib` imports both. -/
 
-namespace BlazingSmtlib.Token
-
-open BlazingSmtlib
+namespace BSmtLib
 
 /-- General reserved words of the SMT-LIB2 grammar. -/
 inductive GeneralReserved where
@@ -275,4 +273,4 @@ def fromBytes? (symbol : ByteSlice) (version : SmtVersion) : Option CommandNameR
 
 end CommandNameReserved
 
-end BlazingSmtlib.Token
+end BSmtLib

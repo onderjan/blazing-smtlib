@@ -5,9 +5,10 @@ The Rust tests run their lexer inputs through it to check the Lean port.
 Reads one request per line from the standard input and writes the response
 to the standard output, until the input ends.
 -/
-import BlazingSmtlib
+import BSmtLib
 
-open BlazingSmtlib BlazingSmtlib.Token BlazingSmtlib.Read.Lexer
+open BSmtLib
+
 
 /- LEAN: the Rust driver collects the lines in a `RefCell<String>` shared with the handler;
 `IO.Ref` is Lean's counterpart, so the handler runs in `IO`. -/

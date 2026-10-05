@@ -1,14 +1,13 @@
 import Std.Data.ByteSlice
-import BlazingSmtlib.ControlFlow
-import BlazingSmtlib.Span
+import BSmtLib.ControlFlow
+import BSmtLib.Span
 
-/- LEAN: the namespaces follow the Rust modules: `BlazingSmtlib.Token` is `crate::token`.
+/- LEAN: the public items of the Rust crate are in the namespace `BSmtLib`. The internals of the
+lexer are in `BSmtLib.Lexer`.
 Variant and function names follow Lean conventions (`TokenType.parenOpen` for
-`TokenType::ParenOpen`, `lastConsumed` for `last_consumed`). An `inductive` without
+`SmtTokenCategory::ParenOpen`, `lastConsumed` for `last_consumed`). An `inductive` without
 fields is a Rust enum. -/
-namespace BlazingSmtlib.Token
-
-open BlazingSmtlib
+namespace BSmtLib
 
 inductive TokenType where
   | parenOpen
@@ -421,4 +420,4 @@ class TokenHandler (H : Type) (m : outParam (Type → Type)) (R E : outParam Typ
   -/
   handleTokens : TokenHandlerM H m E (ControlFlow R)
 
-end BlazingSmtlib.Token
+end BSmtLib

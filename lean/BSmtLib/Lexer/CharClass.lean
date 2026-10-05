@@ -1,6 +1,6 @@
 import Std.Data.ByteSlice
 
-namespace BlazingSmtlib.Read.Lexer
+namespace BSmtLib.Lexer
 
 /--
 Class of a character following the SMT-LIB standard.
@@ -274,4 +274,4 @@ def runEndAll (input : Input) (start : USize) (mask : UInt8) : USize :=
   runEndIn (fun bytes position h => RUN_FLAGS.get! (bytes.uget position h).toNat &&& mask != mask)
     input.bytes start input.stop input.stop_le
 
-end BlazingSmtlib.Read.Lexer
+end BSmtLib.Lexer
