@@ -1,8 +1,10 @@
 import BSmtLib.ControlFlow
 import BSmtLib.Span
 import BSmtLib.Bytes
+import BSmtLib.Plain
 import BSmtLib.Token
 import BSmtLib.Token.Reserved
+import BSmtLib.Token.Syntax
 import BSmtLib.Lexer.CharClass
 import BSmtLib.Lexer.Error
 import BSmtLib.Lexer.Helpers
