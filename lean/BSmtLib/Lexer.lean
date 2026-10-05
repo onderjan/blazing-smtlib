@@ -200,61 +200,64 @@ private def expectDelimiter (next : UInt8) (position : USize) : LexM H m R E Uni
   unless isDelimiter next do
     failAt .missingDelimiter (position + 1)
 
-/- LEAN: runs the handler on the cursor. `consume.run.run cursor` unwraps the handler's
-monad down to a `StateT H m` action, which the `←` lifts into the lexer's monad, where the
-handler is the inner state. -/
-private def callHandler (cursor : BatchCursor) :
-    LexM H m R E (Except E (ControlFlow R) × BatchCursor) := do
-  let action : StateT H m (Except E (ControlFlow R) × BatchCursor) :=
-    (Consume.consume (H := H)).run.run cursor
+/- LEAN: runs the consumer on the cursor. The consumer runs in `StateT H m`, which the `←` lifts
+into the lexer's monad, where the consumer is the inner state. -/
+private def callConsumer (cursor : BatchCursor) (h : cursor.HasNext) :
+    LexM H m R E (Except E (ControlFlow R) × { c : BatchCursor // c.Consumed cursor }) := do
+  let action : StateT H m (Except E (ControlFlow R) × { c : BatchCursor // c.Consumed cursor }) :=
+    Consume.consume (H := H) cursor h
   action
 
+/- LEAN: Rust's `flush_cursor` loops while the cursor is not empty; here the loop is the
+recursion, which ends as every call of the consumer consumes a token, by the proof the
+consumer returns. The interruption is returned rather than thrown, so that the caller can
+take the batch back first. -/
+/--
+Hands the cursor over to the consumer until nothing remains in it or the consumer stops.
+
+Returns the stop, if the consumer stopped, and the cursor as the consumer left it.
+-/
+private def flushCursor (cursor : BatchCursor) :
+    LexM H m R E (Option (Interrupted R E) × BatchCursor) := do
+  -- flush the cursor until nothing remains
+  if h : cursor.HasNext then
+    let (result, ⟨next, consumed⟩) ← callConsumer cursor h
+    -- the stop takes effect after the consumed tokens
+    let location := next.consumedEndOf consumed
+    -- process the result
+    match result with
+    | .ok .continue =>
+      if next.relexRequested then
+        -- we need to stop and relex here
+        return (some { result := .ok .relex, location }, next)
+      else
+        -- zero the number of consumed tokens in the cursor
+        -- continue flushing until nothing remains
+        have : next.resetConsumed.remaining < cursor.remaining := by
+          rw [BatchCursor.remaining_resetConsumed]
+          exact consumed.remaining_lt
+        flushCursor next.resetConsumed
+    | .ok (.break result) => return (some { result := .ok (.finished result), location }, next)
+    | .error err => return (some { result := .error (.handler err), location }, next)
+  else
+    -- everything was consumed without break or error
+    return (none, cursor)
+termination_by cursor.remaining
+
 /- LEAN: Rust's `flush_cursor` takes a cursor over the lexer's arrays; here the batch itself
-is handed to the handler in the cursor, and taken back into the lexer state afterwards,
-whatever the handler decides, so that its storage is overwritten by the next batch. The
+is handed to the consumer in the cursor, and taken back into the lexer state afterwards,
+whatever the consumer decides, so that its storage is overwritten by the next batch. The
 batch's array of contents is then set to `bytesAfter`, so that the batch does not keep a
 reference to the lexer's content buffer, which would make the buffer's next change copy
 it. -/
-/-- Hands the non-empty batch over to the handler and takes it back. -/
+/-- Hands the batch over to the consumer and takes it back. -/
 private def handOver (batch : TokenBatch) (bytesAfter : ByteArray) : LexM H m R E Unit := do
-  let cursor := BatchCursor.new (← getCore).version batch
-  -- where lexing continues if the handler stops before the first token
-  -- relex request empties the cursor, so we need to remember it here
-  let some first := cursor.get 0
-    | failInternal .emptyBatch
-  let firstStart := (cursor.span first).start
-
-  -- flush the cursor
-  let (result, cursor) ← callHandler cursor
-
-  -- the stop takes effect after the consumed tokens
-  let location := match cursor.lastConsumed with
-    -- nothing was taken, lex again from the first token
-    | none => firstStart
-    -- at least one token was taken, lex again after it
-    | some token => (cursor.span token).end
-  let relexRequested := cursor.relexRequested
-  let isEmpty := cursor.isEmpty
+  let (stop, cursor) ← flushCursor (BatchCursor.new (← getCore).version batch)
   -- set our version to the cursor-requested version, and take the batch back
   modifyCore fun c =>
     { c with version := cursor.version, batch := { cursor.intoBatch.clear with bytes := bytesAfter } }
-
-  -- process the result
-  let result : Except (LexError E) (Stop R) ← match result with
-    | .ok .continue =>
-      if relexRequested then
-        pure (.ok .relex)
-      else
-        -- ensure the cursor has been fully consumed
-        if !isEmpty then
-          failInternal .tokensNotConsumed
-        return
-    | .ok (.break result) =>
-      if relexRequested then
-        failInternal .finishedAndRelexed
-      pure (.ok (.finished result))
-    | .error err => pure (.error (.handler err))
-  throw { result, location }
+  if let some interrupted := stop then
+    throw interrupted
 
 /-- Takes the batch out of the lexer state, leaving an empty one without storage. -/
 @[inline]
@@ -1252,7 +1255,7 @@ private def lexEofInner : InnerM H m (Except (LexError E) (ControlFlow R)) := do
   -- that waits for a delimiter if there is any
   -- there is no input at the end of the file, positions are relative to the offset
   modifyThe LexerCore fun c => { c with base := 0 }
-  let step : LexM H m R E Unit := do
+  let pending : LexM H m R E Unit := do
     match (← getCore).state with
     | .normal =>
       -- nothing to do
@@ -1291,6 +1294,13 @@ private def lexEofInner : InnerM H m (Except (LexError E) (ControlFlow R)) := do
       if ← consumesWhitespaceAndComments then
         sinkSlice .comment TokenEnd.EOF .stored
     | .failed => failInternal .lexedAfterError
+  let step : LexM H m R E Unit := do
+    -- if we were told to relex, treat it as a normal continuation,
+    -- as there is nothing to relex (we are at the end of input)
+    tryCatch pending fun interrupted =>
+      match interrupted.result with
+      | .ok .relex => pure ()
+      | _ => throw interrupted
     -- everything has been processed, start the EOF token and sink it
     startToken 0
     sinkEof
@@ -1304,7 +1314,10 @@ private def lexEofInner : InnerM H m (Except (LexError E) (ControlFlow R)) := do
   | .error interrupted =>
     match interrupted.result with
     | .error err => return .error err
-    | .ok .relex => return .error (.internal .relexAtEndOfFile)
+    | .ok .relex =>
+      -- we were asked to relex, but the file is ending anyway, nothing to relex
+      reset
+      return .ok .continue
     | .ok (.finished result) =>
       -- the handler is done with the input
       -- the lexer will be reset as a consequence of the break result
@@ -1344,6 +1357,15 @@ def new (handler : H) (version : Version) : Lexer H :=
 
 def currentLocation (self : Lexer H) : Location :=
   self.core.currentLocation
+
+/--
+The SMT-LIB version currently in force.
+
+The version can change if the token consumer asks for it from the
+cursor. The end of the input resets the version to the initial one.
+-/
+def version (self : Lexer H) : Version :=
+  self.core.version
 
 /- LEAN: takes the lexer apart so that the handler and the fields are each held once, runs
 the step on them, and puts the lexer together again; Rust does the same through

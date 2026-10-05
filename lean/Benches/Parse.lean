@@ -75,19 +75,28 @@ def files : Array BenchFile := #[
 structure DiscardTokens where
   tokens : Nat
 
-/- LEAN: `partial`, as Lean is not shown that taking tokens from the cursor ends. -/
-/-- Takes every token remaining in the cursor, counting it. -/
-partial def countTokens : ConsumeM DiscardTokens Id Empty Unit := do
-  let some _ ← modifyGetThe BatchCursor BatchCursor.next
-    | return
-  modifyThe DiscardTokens fun handler => { tokens := handler.tokens + 1 }
-  countTokens
+/- LEAN: the Rust `while cursor.next().is_some()` loop, carrying the proof that the tokens were
+consumed; it ends as every step consumes a token. -/
+/--
+Takes every token remaining in the cursor, which has one, running `step` for each.
+-/
+def takeEach [Monad m] (step : m Unit) (cursor : BatchCursor) (h : cursor.HasNext) :
+    m { c : BatchCursor // c.Consumed cursor } := do
+  let (_, ⟨next, consumed⟩) := cursor.next h
+  step
+  if h : next.HasNext then
+    have : next.remaining < cursor.remaining := consumed.remaining_lt
+    let ⟨last, taken⟩ ← takeEach step next h
+    return ⟨last, taken.trans consumed⟩
+  else
+    return ⟨next, consumed⟩
+termination_by cursor.remaining
 
 instance : Consume DiscardTokens Id Unit Empty where
   consumesWhitespaceAndComments := false
-  consume := do
-    countTokens
-    return .continue
+  consume cursor h := do
+    let step := modify fun (handler : DiscardTokens) => { tokens := handler.tokens + 1 }
+    return (.ok .continue, ← takeEach step cursor h)
 
 /-- Fails unless the file lexed without an error. -/
 def checkLexed (result : Except (LexError Empty) α) (path : String) : IO Unit :=
@@ -111,18 +120,11 @@ outside the timed runs, by a handler that adds to a reference. -/
 structure CountTokens where
   tokens : IO.Ref Nat
 
-/-- Takes every token remaining in the cursor, counting it. -/
-partial def countTokensInRef (tokens : IO.Ref Nat) : ConsumeM CountTokens IO Empty Unit := do
-  let some _ ← modifyGetThe BatchCursor BatchCursor.next
-    | return
-  tokens.modify (· + 1)
-  countTokensInRef tokens
-
 instance : Consume CountTokens IO Unit Empty where
   consumesWhitespaceAndComments := false
-  consume := do
-    countTokensInRef (← getThe CountTokens).tokens
-    return .continue
+  consume cursor h := do
+    let tokens := (← get).tokens
+    return (.ok .continue, ← takeEach (tokens.modify (· + 1)) cursor h)
 
 /-- Lexes the in-memory file and returns the token count. -/
 def countFromMemory (data : ByteArray) (path : String) : IO Nat := do
