@@ -1,8 +1,20 @@
 name = "blazing-smtlib"
-defaultTargets = ["BSmtLib"]
+defaultTargets = ["BSmtLib", "LexerSpec", "ParserSpec", "Checks"]
 
 [[lean_lib]]
 name = "BSmtLib"
+
+# the trusted spec of the lexer
+[[lean_lib]]
+name = "LexerSpec"
+
+# the trusted spec of the parser
+[[lean_lib]]
+name = "ParserSpec"
+
+# checks of the specs against the standard's examples; not trusted
+[[lean_lib]]
+name = "Checks"
 
 # the lexing mode of rust/benches/parse.rs, run with `lake exe bench-parse`
 [[lean_exe]]
