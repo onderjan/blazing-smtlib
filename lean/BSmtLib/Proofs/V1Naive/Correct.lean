@@ -51,22 +51,9 @@ theorem lexemeHanded_eq (version : Version) (l : Lexeme) :
       { type, start := toLocation l.start, «end» := toLocation l.end,
         reserved := lexemeReserved version l.category l.content,
         content := l.content.data.toList } := by
-  have hcat : (BatchCursor.new version l.batch).category
-      ((BatchCursor.new version l.batch).peek (l.hasNext version)) = l.category := by
-    obtain ⟨category, content, start, «end»⟩ := l
-    cases category <;> rfl
-  have hstart : ((BatchCursor.new version l.batch).span
-      ((BatchCursor.new version l.batch).peek (l.hasNext version))).start = l.start := rfl
-  have hend : ((BatchCursor.new version l.batch).span
-      ((BatchCursor.new version l.batch).peek (l.hasNext version))).end = l.end := rfl
-  have hcontent : (BatchCursor.new version l.batch).content
-      ((BatchCursor.new version l.batch).peek (l.hasNext version)) = l.content.toByteSlice := rfl
-  have hversion : (BatchCursor.new version l.batch).version = version := rfl
-  unfold lexemeHanded toHanded
-  simp only [BatchCursor.syntax, SyntaxToken.fromToken, hcat, hstart, hend, hcontent, hversion,
-    toContent, toByteArray_toByteSlice, byteArray_toList]
-  cases hc : l.category <;> simp [toTokenType, lexemeReserved, toReservedKind]
-  cases Reserved.fromBytes? l.content.toByteSlice version <;> rfl
+  unfold lexemeHanded
+  simp only [toContent, toByteArray_toByteSlice, byteArray_toList]
+  cases hc : l.category <;> simp [lexemeReserved] <;> rfl
 
 
 /-! ## What the consumer records of the tokens of a tokenisation -/

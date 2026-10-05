@@ -313,6 +313,68 @@ def run (whitespace : Bool) (slice : ByteSlice) (p : Pending) (i : Nat) (locatio
       .pending { p with content } at_
 termination_by slice.size - i
 
+/-! ## Where the lexemes are
+
+The token that `run` lexes starts where the token in progress starts, and ends at or after the
+location where the run started: what the hand-overs need to put the lexeme into a batch (see
+`TokenBatch.ordered`).
+-/
+
+/-- What lexing the token `p` from `location` on gives, as far as where it is goes. -/
+abbrev Ran.Spec (p : Pending) (location : Location) : Ran size i → Prop
+  | .pending p' location' => p'.start = p.start ∧ location.offset ≤ location'.offset
+  | .idle _ location' _ => location.offset ≤ location'.offset
+  | .tokenWith l _ _ => l.start = p.start ∧ location.offset < l.end.offset
+  | .tokenBefore l _ _ _ => l.start = p.start ∧ location.offset ≤ l.end.offset
+  | .error _ => True
+
+theorem Ran.spec_lift {p : Pending} {location : Location} {h : i ≤ i'} {r : Ran size i'}
+    (hr : r.Spec p location) : (r.lift h).Spec p location := by
+  cases r <;> exact hr
+
+/-- A token lexed on from a later location is where the token lexed from the earlier one is. -/
+theorem Ran.Spec.weaken {p p' : Pending} {location location' : Location} {r : Ran size i}
+    (hr : r.Spec p' location') (hp : p'.start = p.start) (hl : location.offset ≤ location'.offset) :
+    r.Spec p location := by
+  cases r with
+  | pending q l => exact ⟨hr.1.trans hp, Nat.le_trans hl hr.2⟩
+  | idle _ l _ => exact Nat.le_trans hl hr
+  | tokenWith l _ _ => exact ⟨hr.1.trans hp, Nat.lt_of_le_of_lt hl hr.2⟩
+  | tokenBefore l _ _ _ => exact ⟨hr.1.trans hp, Nat.le_trans hl hr.2⟩
+  | error _ => trivial
+
+theorem afterColumns_offset (location : Location) (n : Nat) :
+    (afterColumns location n).offset = location.offset + n :=
+  rfl
+
+theorem delimited_spec {p : Pending} {category : TokenCategory} {content : ByteArray} {j : Nat}
+    {location at_ : Location} {c : UInt8} {after : i ≤ j} {inside : j < size}
+    (h : location.offset ≤ at_.offset) :
+    (delimited (size := size) p category content j at_ c after inside).Spec p location := by
+  unfold delimited
+  split
+  · exact ⟨rfl, h⟩
+  · trivial
+
+theorem run_spec (whitespace : Bool) (slice : ByteSlice) (p : Pending) (i : Nat)
+    (location : Location) : (run whitespace slice p i location).Spec p location := by
+  fun_induction run whitespace slice p i location
+  all_goals first
+    | trivial
+    | exact delimited_spec (Nat.le_refl _)
+    | (apply delimited_spec; simp +zetaDelta only [afterColumns_offset]; omega)
+    | (simp +zetaDelta only [Ran.Spec, afterColumns_offset, afterByte_offset]; omega)
+    | (refine ⟨rfl, ?_⟩; simp +zetaDelta only [afterColumns_offset, afterByte_offset]; omega)
+    | (refine ⟨rfl, ?_⟩; omega)
+    | (apply Ran.spec_lift
+       apply Ran.Spec.weaken ‹_› rfl
+       simp +zetaDelta only [afterColumns_offset, afterByte_offset]; omega)
+
+/-- `run`, with where the token it lexes is. -/
+def runS (whitespace : Bool) (slice : ByteSlice) (p : Pending) (i : Nat) (location : Location) :
+    {r : Ran slice.size i // r.Spec p location} :=
+  ⟨run whitespace slice p i location, run_spec whitespace slice p i location⟩
+
 /-! ## Lexing a slice -/
 
 section
@@ -322,49 +384,72 @@ variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [Consume H m R E]
 /--
 How the lexer lexes from the byte at `i` with no token in progress: it gives back the outcome
 and the index where lexing goes on, past `i`. `sliceStart` is the offset of the first byte of
-the slice. The fast paths of `V4FastPaths` are such a step.
+the slice. The fast paths of `V4FastPaths` are such a step. The batch fits the lexer state, and
+comes back fitting it (`V2Batched.Fits`).
 -/
 abbrev IdleStep (H : Type) (m : Type → Type) (R E : Type) :=
-  (sliceStart : Nat) → (slice : ByteSlice) → (i : Nat) → i < slice.size → Core → Array Lexeme →
-    StateT H m (Outcome R E × Core × Array Lexeme × { n // i < n })
+  (sliceStart : Nat) → (slice : ByteSlice) → (i : Nat) → i < slice.size → (core : Core) →
+    (batch : Array Lexeme) → Fits core batch →
+    StateT H m {r : Outcome R E × Core × Array Lexeme × { n // i < n } // Fits r.2.1 r.2.2.1}
 
 /--
 Lexes from the byte at `i`, with no token in progress: starts the token with the naive lexer's
 `start`, and lexes the rest of it with `run`. The token's delimiter is not lexed.
 -/
-def lexIdle : IdleStep H m R E := fun sliceStart slice i h core batch => do
+def lexIdle : IdleStep H m R E := fun sliceStart slice i h core batch hfits => do
   let c := slice[i]
   let whitespace := Consume.consumesWhitespaceAndComments (H := H)
   let after := core.location.afterByte c
-  match start core.version whitespace core.location c with
-  | .idle =>
-    return (.next, { core with activity := .idle, location := after }, batch, ⟨i + 1, by omega⟩)
-  | .token l =>
-    let (outcome, core, batch) ← emit sliceStart { core with activity := .idle, location := after }
-      batch l
-    return (outcome, core, batch, ⟨i + 1, by omega⟩)
-  | .error failure =>
+  have hle : core.frontier ≤ core.location.offset := core.frontier_le
+  have hafter : core.location.offset < after.offset := by
+    simp only [after, afterByte_offset]; omega
+  have hlast := hfits.2
+  match startS core.version whitespace core.location c with
+  | ⟨.idle, _⟩ =>
+    return ⟨(.next, { core with activity := .idle, location := after, startedBefore := trivial },
+      batch, ⟨i + 1, by omega⟩), hfits.mono (show core.frontier ≤ after.offset by omega)⟩
+  | ⟨.token l, hl⟩ =>
+    have hl : l.Valid ∧ l.start = core.location ∧ l.end = core.location.afterByte c := hl
+    let ⟨(outcome, core, batch), hfits, _⟩ ← emit sliceStart
+      { core with activity := .idle, location := after, startedBefore := trivial } batch l hfits.1
+      (by rw [hl.2.1]; omega) hl.1
+      (Nat.le_of_eq (by rw [hl.2.2]; try rfl))
+    return ⟨(outcome, core, batch, ⟨i + 1, by omega⟩), hfits⟩
+  | ⟨.error failure, _⟩ =>
     let failure := { cause := .lexical failure.error, location := failure.location }
-    return (.failed failure, core, batch, ⟨i + 1, by omega⟩)
-  | .pending p =>
-    match run whitespace slice p (i + 1) after with
-    | .pending p location =>
-      return (.next, { core with activity := .token p, location }, batch, ⟨slice.size, h⟩)
-    | .idle next location hn =>
-      return (.next, { core with activity := .idle, location }, batch, ⟨next, by omega⟩)
-    | .tokenWith l next hn =>
-      let core := { core with activity := .idle, location := l.end }
-      let (outcome, core, batch) ← emit sliceStart core batch l
-      return (outcome, core, batch, ⟨next, by omega⟩)
-    | .tokenBefore l next hn _ =>
+    return ⟨(.failed failure, core, batch, ⟨i + 1, by omega⟩), hfits⟩
+  | ⟨.pending p, hp⟩ =>
+    have hp : p.start = core.location := hp
+    match runS whitespace slice p (i + 1) after with
+    | ⟨.pending p' location, hspec⟩ =>
+      have hspec : p'.start = p.start ∧ after.offset ≤ location.offset := hspec
+      return ⟨(.next, { core with
+          activity := .token p', location
+          startedBefore := show p'.start.offset < location.offset by
+            rw [hspec.1, hp]; omega },
+        batch, ⟨slice.size, h⟩),
+        hfits.mono (show core.frontier ≤ p'.start.offset by rw [hspec.1, hp]; exact hle)⟩
+    | ⟨.idle next location hn, hspec⟩ =>
+      have hspec : after.offset ≤ location.offset := hspec
+      return ⟨(.next, { core with activity := .idle, location, startedBefore := trivial }, batch,
+        ⟨next, by omega⟩), hfits.mono (show core.frontier ≤ location.offset by omega)⟩
+    | ⟨.tokenWith l next hn, hspec⟩ =>
+      have hspec : l.start = p.start ∧ after.offset < l.end.offset := hspec
+      let core := { core with activity := .idle, location := l.end, startedBefore := trivial }
+      let ⟨(outcome, core, batch), hfits, _⟩ ← emit sliceStart core batch l hfits.1
+        (by rw [hspec.1, hp]; omega) (.inl (by rw [hspec.1, hp]; omega)) (Nat.le_refl _)
+      return ⟨(outcome, core, batch, ⟨next, by omega⟩), hfits⟩
+    | ⟨.tokenBefore l next hn _, hspec⟩ =>
+      have hspec : l.start = p.start ∧ after.offset ≤ l.end.offset := hspec
       -- the delimiter is lexed next; if the consumer has finished, it is the first byte
       -- discarded
-      let core := { core with activity := .idle, location := l.end }
-      let (outcome, core, batch) ← emit sliceStart core batch l
-      return (outcome, core, batch, ⟨next, by omega⟩)
-    | .error failure =>
+      let core := { core with activity := .idle, location := l.end, startedBefore := trivial }
+      let ⟨(outcome, core, batch), hfits, _⟩ ← emit sliceStart core batch l hfits.1
+        (by rw [hspec.1, hp]; omega) (.inl (by rw [hspec.1, hp]; omega)) (Nat.le_refl _)
+      return ⟨(outcome, core, batch, ⟨next, by omega⟩), hfits⟩
+    | ⟨.error failure, _⟩ =>
       let failure := { cause := .lexical failure.error, location := failure.location }
-      return (.failed failure, core, batch, ⟨i + 1, by omega⟩)
+      return ⟨(.failed failure, core, batch, ⟨i + 1, by omega⟩), hfits⟩
 
 /--
 Lexes the token in progress `p` from the byte at `i` on with `run`. If the token ends before a
@@ -372,34 +457,56 @@ byte, lexing goes on at that byte with `idle`, as the naive lexer lexes the deli
 after the token.
 -/
 def lexToken (idle : IdleStep H m R E) (sliceStart : Nat) (slice : ByteSlice) (i : Nat)
-    (h : i < slice.size) (core : Core) (batch : Array Lexeme) (p : Pending) :
-    StateT H m (Outcome R E × Core × Array Lexeme × { n // i < n }) := do
+    (h : i < slice.size) (core : Core) (batch : Array Lexeme) (p : Pending)
+    (ha : core.activity = .token p) (hfits : Fits core batch) :
+    StateT H m {r : Outcome R E × Core × Array Lexeme × { n // i < n } // Fits r.2.1 r.2.2.1} := do
   let whitespace := Consume.consumesWhitespaceAndComments (H := H)
-  match run whitespace slice p i core.location with
-  | .pending p location =>
-    return (.next, { core with activity := .token p, location }, batch, ⟨slice.size, h⟩)
-  | .idle next location hn =>
-    return (.next, { core with activity := .idle, location }, batch, ⟨next, hn⟩)
-  | .tokenWith l next hn =>
-    let (outcome, core, batch) ← emit sliceStart { core with activity := .idle, location := l.end }
-      batch l
-    return (outcome, core, batch, ⟨next, hn⟩)
-  | .tokenBefore l next hn inside =>
-    let (outcome, core, batch) ← emit sliceStart { core with activity := .idle, location := l.end }
-      batch l
+  have hp : p.start.offset < core.location.offset := core.started ha
+  have hfront : core.frontier = p.start.offset := by unfold Core.frontier; rw [ha]
+  have hlast := hfits.2
+  match runS whitespace slice p i core.location with
+  | ⟨.pending p' location, hspec⟩ =>
+    have hspec : p'.start = p.start ∧ core.location.offset ≤ location.offset := hspec
+    return ⟨(.next, { core with
+        activity := .token p', location
+        startedBefore := show p'.start.offset < location.offset by rw [hspec.1]; omega },
+      batch, ⟨slice.size, h⟩),
+      hfits.mono (show core.frontier ≤ p'.start.offset by rw [hspec.1]; omega)⟩
+  | ⟨.idle next location hn, hspec⟩ =>
+    have hspec : core.location.offset ≤ location.offset := hspec
+    return ⟨(.next, { core with activity := .idle, location, startedBefore := trivial }, batch,
+      ⟨next, hn⟩), hfits.mono (show core.frontier ≤ location.offset by omega)⟩
+  | ⟨.tokenWith l next hn, hspec⟩ =>
+    have hspec : l.start = p.start ∧ core.location.offset < l.end.offset := hspec
+    let ⟨(outcome, core, batch), hfits, _⟩ ← emit sliceStart
+      { core with activity := .idle, location := l.end, startedBefore := trivial } batch l hfits.1
+      (by rw [hspec.1]; omega) (.inl (by rw [hspec.1]; omega)) (Nat.le_refl _)
+    return ⟨(outcome, core, batch, ⟨next, hn⟩), hfits⟩
+  | ⟨.tokenBefore l next hn inside, hspec⟩ =>
+    have hspec : l.start = p.start ∧ core.location.offset ≤ l.end.offset := hspec
+    let ⟨(outcome, core, batch), hfits, _⟩ ← emit sliceStart
+      { core with activity := .idle, location := l.end, startedBefore := trivial } batch l hfits.1
+      (by rw [hspec.1]; omega) (.inl (by rw [hspec.1]; omega)) (Nat.le_refl _)
     match outcome with
     -- the byte is lexed under the version the consumer has left in force
     | .next =>
-      let (outcome, core, batch, ⟨n, hn'⟩) ← idle sliceStart slice next inside core batch
-      return (outcome, core, batch, ⟨n, by omega⟩)
+      let ⟨(outcome, core, batch, ⟨n, hn'⟩), hfits⟩ ←
+        idle sliceStart slice next inside core batch hfits
+      return ⟨(outcome, core, batch, ⟨n, by omega⟩), hfits⟩
     -- the consumer has finished on the token alone: the byte is the first one discarded
     | .finished located =>
-      let core := { core with location := core.location.afterByte slice[next] }
-      return (.finished located, core, batch, ⟨next + 1, by omega⟩)
-    | outcome => return (outcome, core, batch, ⟨next + 1, by omega⟩)
-  | .error failure =>
+      have hmono : core.frontier ≤ (core.location.afterByte slice[next]).offset := by
+        have := core.frontier_le
+        rw [afterByte_offset]
+        omega
+      let core := { core with
+        location := core.location.afterByte slice[next], activity := .discarding
+        startedBefore := trivial }
+      return ⟨(.finished located, core, batch, ⟨next + 1, by omega⟩), hfits.mono hmono⟩
+    | outcome => return ⟨(outcome, core, batch, ⟨next + 1, by omega⟩), hfits⟩
+  | ⟨.error failure, _⟩ =>
     let failure := { cause := .lexical failure.error, location := failure.location }
-    return (.failed failure, core, batch, ⟨i + 1, by omega⟩)
+    return ⟨(.failed failure, core, batch, ⟨i + 1, by omega⟩), hfits⟩
 
 /--
 Lexes from the byte at `i` on, as the batched lexer's `lexByte` does at that byte, except that
@@ -407,25 +514,33 @@ a token is lexed in one go: with `idle` where no token is in progress, and with 
 where one is. Skipping and discarding go one byte at a time, by `V2Batched.lexByte`.
 -/
 def lexAt (idle : IdleStep H m R E) (recover : Location → StateT H m Unit) (sliceStart : Nat)
-    (slice : ByteSlice) (i : Nat) (h : i < slice.size) (core : Core) (batch : Array Lexeme) :
-    StateT H m (Outcome R E × Core × Array Lexeme × { n // i < n }) := do
-  let byte : StateT H m (Outcome R E × Core × Array Lexeme × { n // i < n }) := do
-    let (outcome, core, batch) ← V2Batched.lexByte recover sliceStart core batch slice[i]
-    return (outcome, core, batch, ⟨i + 1, by omega⟩)
-  match core.activity with
-  | .idle => idle sliceStart slice i h core batch
-  | .token p => lexToken idle sliceStart slice i h core batch p
-  | .recovered =>
+    (slice : ByteSlice) (i : Nat) (h : i < slice.size) (core : Core) (batch : Array Lexeme)
+    (hfits : Fits core batch) :
+    StateT H m {r : Outcome R E × Core × Array Lexeme × { n // i < n } // Fits r.2.1 r.2.2.1} := do
+  let byte : StateT H m
+      {r : Outcome R E × Core × Array Lexeme × { n // i < n } // Fits r.2.1 r.2.2.1} := do
+    let ⟨(outcome, core, batch), hfits⟩ ←
+      V2Batched.lexByte recover sliceStart core batch slice[i] hfits
+    return ⟨(outcome, core, batch, ⟨i + 1, by omega⟩), hfits⟩
+  have hidle : ∀ (core' : Core), core'.location = core.location →
+      (∀ p, core'.activity ≠ .token p) → Fits core' batch := fun core' hl hn =>
+    hfits.mono (by rw [Core.frontier_of_not_token hn, hl]; exact core.frontier_le)
+  match withEq core.activity with
+  | ⟨.idle, _⟩ => idle sliceStart slice i h core batch hfits
+  | ⟨.token p, ha⟩ => lexToken idle sliceStart slice i h core batch p ha hfits
+  | ⟨.recovered, _⟩ =>
     -- the consumer is told of a recovery before any token
     recover core.location
-    idle sliceStart slice i h { core with activity := .idle } batch
-  | .skipping skip =>
+    idle sliceStart slice i h { core with activity := .idle, startedBefore := trivial } batch
+      (hidle _ rfl fun _ h => nomatch h)
+  | ⟨.skipping skip, _⟩ =>
     if scan (core.version == .v2_0) skip core.depth slice[i] == .before then
       recover core.location
-      idle sliceStart slice i h { core with activity := .idle } batch
+      idle sliceStart slice i h { core with activity := .idle, startedBefore := trivial } batch
+        (hidle _ rfl fun _ h => nomatch h)
     else
       byte
-  | .discarding | .ended => byte
+  | ⟨.discarding, _⟩ | ⟨.ended, _⟩ => byte
 
 /--
 Lexes the slice from `index` on and hands the batch over at the end, as the batched lexer's
@@ -433,36 +548,39 @@ Lexes the slice from `index` on and hands the batch over at the end, as the batc
 -/
 def lexFrom (idle : IdleStep H m R E) (recover : Location → StateT H m Unit) (sliceStart : Nat)
     (slice : ByteSlice) (index committed : Nat) (core : Core) (batch : Array Lexeme)
-    (flow : ControlFlow (Located R)) :
+    (flow : ControlFlow (Located R)) (hfits : Fits core batch) :
     StateT H m (Except (Failure E) (ControlFlow (Located R)) × Core) := do
   if h : index < slice.size then
-    let (outcome, core, batch, ⟨next, _hn⟩) ← lexAt idle recover sliceStart slice index h core batch
-    match ← settle outcome core batch flow with
-    | .proceed core batch flow =>
-      lexFrom idle recover sliceStart slice next committed core batch flow
+    let ⟨(outcome, core, batch, ⟨next, _hn⟩), hfits⟩ ←
+      lexAt idle recover sliceStart slice index h core batch hfits
+    match ← settle outcome core batch flow hfits with
+    | .proceed core batch flow hfits =>
+      lexFrom idle recover sliceStart slice next committed core batch flow hfits
     | .fail failure core => return (.error failure, core)
     | .stop stop core flow =>
-      match resumption stop flow with
-      | .error failure => return (.error failure, core)
-      | .ok (location, activity, flow) =>
+      match withEq (resumption stop flow) with
+      | ⟨.error failure, _⟩ => return (.error failure, core)
+      | ⟨.ok (location, activity, flow), hres⟩ =>
         let resumed := location.offset - sliceStart
         if _hr : committed < resumed ∧ resumed ≤ slice.size then
-          lexFrom idle recover sliceStart slice resumed resumed { core with location, activity } #[]
-            flow
+          lexFrom idle recover sliceStart slice resumed resumed
+            { core with location, activity, startedBefore := resumption_startsBefore hres } #[]
+            flow (fits_empty _)
         else
           return (.error { cause := .internal .stoppedBeforeStart, location }, core)
   else
-    match ← settleEnd core batch flow with
-    | .proceed core _ flow => return (.ok flow, core)
+    match ← settleEnd core batch flow hfits with
+    | .proceed core _ flow _ => return (.ok flow, core)
     | .fail failure core => return (.error failure, core)
     | .stop stop core flow =>
-      match resumption stop flow with
-      | .error failure => return (.error failure, core)
-      | .ok (location, activity, flow) =>
+      match withEq (resumption stop flow) with
+      | ⟨.error failure, _⟩ => return (.error failure, core)
+      | ⟨.ok (location, activity, flow), hres⟩ =>
         let resumed := location.offset - sliceStart
         if _hr : committed < resumed ∧ resumed ≤ slice.size then
-          lexFrom idle recover sliceStart slice resumed resumed { core with location, activity } #[]
-            flow
+          lexFrom idle recover sliceStart slice resumed resumed
+            { core with location, activity, startedBefore := resumption_startsBefore hres } #[]
+            flow (fits_empty _)
         else
           return (.error { cause := .internal .stoppedBeforeStart, location }, core)
 termination_by (slice.size - committed, slice.size - index)
@@ -481,13 +599,14 @@ def lexSliceStep (idle : IdleStep H m R E) (recovers : Bool)
     -- even if the slice is empty
     | .recovered => do
       recover core.location
-      pure { core with activity := .idle }
+      pure { core with activity := .idle, startedBefore := trivial }
     | _ => pure core
   match core.activity with
   -- the input has ended with the error, there is nothing to lex
   | .ended => return (.ok .continue, core)
   | _ =>
     let (result, core) ← lexFrom idle recover core.location.offset slice 0 0 core #[] .continue
+      (fits_empty _)
     match result with
     | .ok flow => return (.ok flow, core)
     | .error failure =>

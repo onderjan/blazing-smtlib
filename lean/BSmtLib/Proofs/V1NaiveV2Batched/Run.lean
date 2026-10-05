@@ -35,6 +35,10 @@ theorem handedAll_single (v : Version) (l : Lexeme) :
   simp only [handedAll, List.mapM_cons, List.mapM_nil]
   cases lexemeHanded v l <;> rfl
 
+/-- A result of a step, without the proof that the batch fits the state. -/
+def strip {α : Type} {P : α → Prop} (r : {a // P a} × Collector) : α × Collector :=
+  (r.1.1, r.2)
+
 /-- What a hand-over of the lexeme `l` after the batch `b` may give: the lexer goes on in the same
 state, and the consumer records or will record the batch and the lexeme; or the hand-over fails,
 and the consumer would fail on the batch and the lexeme. -/
@@ -47,13 +51,15 @@ def EmitSpec (core : Core) (b : Array Lexeme) (l : Lexeme) (coll : Collector)
 
 /-- What the batched lexer's hand-over of a lexeme does with the consumer. -/
 theorem emit_run (sliceStart : Nat) (core : Core) (b : Array Lexeme) (l : Lexeme)
-    (coll : Collector) :
-    EmitSpec core b l coll ((emit (H := Collector) (m := Id) sliceStart core b l).run coll) := by
+    (h : Ordered 0 b.toList) (hstart : lastEnd 0 b.toList ≤ l.start.offset) (hl : l.Valid)
+    (hend : l.end.offset ≤ core.frontier) (coll : Collector) :
+    EmitSpec core b l coll (strip ((emit (H := Collector) (m := Id) (R := Empty) (E := Unit)
+      sliceStart core b l h hstart hl hend).run coll)) := by
   unfold emit
   split
   · simp only [StateT.run_bind]
-    obtain ⟨fok, ferr⟩ := flush_batch core b coll
-    generalize (flush (H := Collector) (m := Id) (R := Empty) (E := Unit) core b).run coll = X
+    obtain ⟨fok, ferr⟩ := flush_batch core b h coll
+    generalize (flush (H := Collector) (m := Id) (R := Empty) (E := Unit) core b h).run coll = X
       at fok ferr ⊢
     obtain ⟨⟨stop, core1⟩, coll1⟩ := X
     cases hb : handedAll core.version b.toList with
@@ -62,35 +68,37 @@ theorem emit_run (sliceStart : Nat) (core : Core) (b : Array Lexeme) (l : Lexeme
       simp only at hf
       subst hf
       right
-      refine ⟨⟨f, Or.inr rfl⟩, pending_none_append (by simp [pending, hb]) _⟩
+      exact ⟨⟨f, Or.inr rfl⟩, pending_none_append (by simp [pending, hb]) _⟩
     | some hs =>
       obtain ⟨h1, ⟨d, h2⟩, h3⟩ := fok hs hb
       simp only at h1 h2 h3
       subst h1 h2
-      simp only [id_bind]
-      have hh := handOverAt_run { core with depth := d } l coll1
+      have hh := handOverAt_run { core with depth := d } l hl coll1
       simp only [StateT.run] at hh ⊢
       simp only [bind, StateT.bind, hh]
-      cases hl : lexemeHanded core.version l with
-      | some h =>
+      cases hlh : lexemeHanded core.version l with
+      | some x =>
         left
         refine ⟨rfl, rfl, rfl, rfl, ?_⟩
-        show pending core.version { handed := coll1.handed ++ [h] } [] = _
-        simp only [pending, handedAll_append, hb, handedAll_single, hl, h3, Option.bind_some,
+        show pending core.version { handed := coll1.handed ++ [x] } [] = _
+        simp only [pending, handedAll_append, hb, handedAll_single, hlh, h3, Option.bind_some,
           Option.map_some]
         simp [handedAll]
       | none =>
         right
         refine ⟨⟨_, Or.inl rfl⟩, ?_⟩
-        simp [pending, handedAll_append, hb, handedAll_single, hl]
+        simp [pending, handedAll_append, hb, handedAll_single, hlh]
   · simp only
     split
     · left
-      simp [pending, pure, StateT.pure, StateT.run]
+      simp [strip, pending, pure, StateT.pure, StateT.run]
     · simp only [StateT.run_bind]
-      obtain ⟨fok, ferr⟩ := flush_batch core (b.push l) coll
+      have hpush : Ordered 0 (b.push l).toList := by
+        rw [Array.toList_push]
+        exact ordered_append h hstart hl
+      obtain ⟨fok, ferr⟩ := flush_batch core (b.push l) hpush coll
       generalize (flush (H := Collector) (m := Id) (R := Empty) (E := Unit) core
-        (b.push l)).run coll = X at fok ferr ⊢
+        (b.push l) _).run coll = X at fok ferr ⊢
       obtain ⟨⟨stop, core1⟩, coll1⟩ := X
       rw [Array.toList_push] at fok ferr
       cases hb : handedAll core.version (b.toList ++ [l]) with
@@ -153,76 +161,101 @@ theorem collector_ws : Consume.consumesWhitespaceAndComments (H := Collector) = 
 
 theorem lexStart_run2 {version : Version} {location : Location} {core : Core}
     (hv : core.version = version) (hl : core.location = location) (sliceStart : Nat)
-    (b : Array Lexeme) (coll : Collector) (c : UInt8) :
+    (b : Array Lexeme) (coll : Collector) (c : UInt8) (hfits : Fits core b) :
     StepSpec version (startStep version location c) (location.afterByte c) b coll
-      ((V2Batched.lexStart (H := Collector) (m := Id) sliceStart core b c).run coll) := by
+      (strip ((V2Batched.lexStart (H := Collector) (m := Id) sliceStart core b c hfits).run
+        coll)) := by
   subst hv hl
   simp only [V2Batched.lexStart, startStep, collector_ws]
   cases hs : start core.version false core.location c with
   | idle =>
+    simp only [startS, hs]
     left
     refine ⟨rfl, ⟨rfl, rfl, rfl⟩, ?_⟩
     show pending core.version coll b.toList = _
     rw [List.append_nil]
   | pending p =>
+    simp only [startS, hs]
     left
     refine ⟨rfl, ⟨rfl, rfl, rfl⟩, ?_⟩
     show pending core.version coll b.toList = _
     rw [List.append_nil]
   | token l =>
-    let core' : Core := { core with activity := .idle, location := core.location.afterByte c }
-    have he := emit_run sliceStart core' b l coll
-    simp only [StateT.run] at he ⊢
+    simp only [startS, hs]
+    simp only [StateT.run, bind, StateT.bind, pure]
+    generalize hX : emit (H := Collector) (m := Id) (R := Empty) (E := Unit) sliceStart _ b l _ _
+      _ _ coll = X
+    have he : EmitSpec { core with
+        activity := .idle, location := core.location.afterByte c, startedBefore := trivial }
+        b l coll (X.1.1, X.2) := by
+      rw [← hX]
+      exact emit_run _ _ _ _ _ _ _ _ _
+    obtain ⟨⟨⟨o, c1, b1⟩, hf, hx⟩, coll1⟩ := X
     rcases he with ⟨h1, h2, h3, h4, h5⟩ | ⟨h1, h2⟩
     · left; exact ⟨h1, ⟨h2, h4, h3⟩, h5⟩
     · right; exact ⟨h1, h2⟩
-  | error f => exact ⟨_, Or.inl rfl⟩
+  | error f =>
+    simp only [startS, hs]
+    exact ⟨_, Or.inl rfl⟩
 
 theorem lexByte_run2 {version : Version} {st : St} {location : Location} {core : Core}
     (h : Agrees version st location core) (recover : Location → StateT Collector Id Unit)
-    (sliceStart : Nat) (b : Array Lexeme) (coll : Collector) (c : UInt8) :
+    (sliceStart : Nat) (b : Array Lexeme) (coll : Collector) (c : UInt8) (hfits : Fits core b) :
     StepSpec version (byteStep version st location c) (location.afterByte c) b coll
-      ((V2Batched.lexByte (H := Collector) recover sliceStart core b c).run coll) := by
+      (strip ((V2Batched.lexByte (H := Collector) recover sliceStart core b c hfits).run
+        coll)) := by
   obtain ⟨hv, ha, hl⟩ := h
   cases st with
   | idle =>
     simp only [St.activity] at ha
-    simp only [V2Batched.lexByte, ha, byteStep]
-    exact lexStart_run2 hv hl sliceStart b coll c
+    simp only [V2Batched.lexByte, withEq, ha, byteStep]
+    exact lexStart_run2 hv hl sliceStart b coll c hfits
   | token p =>
     simp only [St.activity] at ha
     subst hv hl
-    simp only [V2Batched.lexByte, ha, collector_ws, byteStep]
+    simp only [V2Batched.lexByte, withEq, ha, collector_ws, byteStep]
     cases hadv : advance false p core.location c with
     | pending p' =>
+      simp only [advanceS, hadv]
       left
       refine ⟨rfl, ⟨rfl, rfl, rfl⟩, ?_⟩
       show pending core.version coll b.toList = _
       rw [List.append_nil]
     | idle =>
+      simp only [advanceS, hadv]
       left
       refine ⟨rfl, ⟨rfl, rfl, rfl⟩, ?_⟩
       show pending core.version coll b.toList = _
       rw [List.append_nil]
     | tokenWith l =>
-      let core' : Core := { core with activity := .idle, location := core.location.afterByte c }
-      have he := emit_run sliceStart core' b l coll
-      simp only [StateT.run] at he ⊢
+      simp only [advanceS, hadv]
+      simp only [StateT.run, bind, StateT.bind, pure]
+      generalize hX : emit (H := Collector) (m := Id) (R := Empty) (E := Unit) sliceStart _ b l
+        _ _ _ _ coll = X
+      have he : EmitSpec { core with
+          activity := .idle, location := core.location.afterByte c, startedBefore := trivial }
+          b l coll (X.1.1, X.2) := by
+        rw [← hX]
+        exact emit_run _ _ _ _ _ _ _ _ _
+      obtain ⟨⟨⟨o, c1, b1⟩, hf, hx⟩, coll1⟩ := X
       rcases he with ⟨h1, h2, h3, h4, h5⟩ | ⟨h1, h2⟩
       · left; exact ⟨h1, ⟨h2, h4, h3⟩, h5⟩
       · right; exact ⟨h1, h2⟩
     | tokenBefore l =>
-      let core' : Core := { core with activity := .idle }
-      have he := emit_run sliceStart core' b l coll
-      simp only [StateT.run] at he ⊢
-      simp only [bind, StateT.bind]
-      generalize emit sliceStart core' b l coll = X at he ⊢
-      obtain ⟨⟨outcome, core1, b1⟩, coll1⟩ := X
+      simp only [advanceS, hadv]
+      simp only [StateT.run, bind, StateT.bind, pure]
+      generalize hX : emit (H := Collector) (m := Id) (R := Empty) (E := Unit) sliceStart _ b l
+        _ _ _ _ coll = X
+      have he : EmitSpec { core with activity := .idle, startedBefore := trivial } b l coll
+          (X.1.1, X.2) := by
+        rw [← hX]
+        exact emit_run _ _ _ _ _ _ _ _ _
+      obtain ⟨⟨⟨outcome, core1, b1⟩, hf, hx⟩, coll1⟩ := X
       rcases he with ⟨h1, h2, h3, h4, h5⟩ | ⟨h1, h2⟩
       · simp only at h1 h2 h3 h4 h5
         subst h1
         have hs := lexStart_run2 (version := core.version) (location := core.location) h2 h3
-          sliceStart b1 coll1 c
+          sliceStart b1 coll1 c hf
         simp only [StateT.run] at hs
         cases hss : startStep core.version core.location c with
         | none =>
@@ -258,7 +291,9 @@ theorem lexByte_run2 {version : Version} {st : St} {location : Location} {core :
           · have := pending_none_append h2 ls
             simp only [List.append_assoc, List.singleton_append] at this
             exact this
-    | error f => exact ⟨_, Or.inl rfl⟩
+    | error f =>
+      simp only [advanceS, hadv]
+      exact ⟨_, Or.inl rfl⟩
 
 /-! ## The loop over a slice -/
 
@@ -266,13 +301,15 @@ theorem lexByte_run2 {version : Version} {st : St} {location : Location} {core :
 theorem cont_fails (recover : Location → StateT Collector Id Unit) (sliceStart : Nat)
     (slice : ByteSlice) (committed : Nat) (flow : ControlFlow (Located Empty))
     {o : Outcome Empty Unit} (ho : Fails o) (core : Core) (b : Array Lexeme) (next : Nat)
+    (hfits : Fits core b)
     (coll : Collector) :
     ∃ f, ((cont (loop2 (H := Collector) (m := Id) recover sliceStart slice) sliceStart slice
-      committed flow o core b next).run coll).1.1 = .error f := by
+      committed flow o core b next hfits).run coll).1.1 = .error f := by
   obtain ⟨f, hf | hf⟩ := ho <;> subst hf
   · simp only [cont, settle, StateT.run_bind]
-    obtain ⟨fok, ferr⟩ := flush_batch core b coll
-    generalize (flush (H := Collector) (m := Id) (R := Empty) (E := Unit) core b).run coll = X
+    obtain ⟨fok, ferr⟩ := flush_batch core b hfits.1 coll
+    generalize (flush (H := Collector) (m := Id) (R := Empty) (E := Unit) core b hfits.1).run
+      coll = X
       at fok ferr ⊢
     obtain ⟨⟨stop, core1⟩, coll1⟩ := X
     cases hb : handedAll core.version b.toList with
@@ -304,13 +341,14 @@ def FeedsB (version : Version) (expected : Option (St × Location × List Lexeme
 theorem lexFrom_run2 {version : Version} (bytes : List UInt8)
     (recover : Location → StateT Collector Id Unit) (sliceStart committed : Nat) (n : Nat) :
     ∀ (index : Nat), bytes.length - index = n → ∀ {st : St} {location : Location} {core : Core},
-      Agrees version st location core → ∀ (b : Array Lexeme) (coll : Collector),
+      Agrees version st location core → ∀ (b : Array Lexeme) (hfits : Fits core b)
+      (coll : Collector),
       FeedsB version (feedBytes version st location (bytes.drop index)) b coll
         ((V2Batched.lexFrom (H := Collector) recover sliceStart bytes.toByteArray.toByteSlice
-          index committed core b .continue).run coll) := by
+          index committed core b .continue hfits).run coll) := by
   induction n with
   | zero =>
-    intro index hn st location core h b coll
+    intro index hn st location core h b hfits coll
     have hle : bytes.length ≤ index := by omega
     have hns : ¬ index < bytes.toByteArray.toByteSlice.size := by
       rw [size_toByteSlice]; omega
@@ -318,8 +356,9 @@ theorem lexFrom_run2 {version : Version} (bytes : List UInt8)
     simp only [feedBytes, FeedsB, List.append_nil]
     rw [V2Batched.lexFrom]
     simp only [hns, dite_false, settleEnd, StateT.run_bind]
-    obtain ⟨fok, ferr⟩ := flush_batch core b coll
-    generalize (flush (H := Collector) (m := Id) (R := Empty) (E := Unit) core b).run coll = X
+    obtain ⟨fok, ferr⟩ := flush_batch core b hfits.1 coll
+    generalize (flush (H := Collector) (m := Id) (R := Empty) (E := Unit) core b hfits.1).run
+      coll = X
       at fok ferr ⊢
     obtain ⟨⟨stop, core1⟩, coll1⟩ := X
     have hv : core.version = version := h.1
@@ -338,25 +377,26 @@ theorem lexFrom_run2 {version : Version} (bytes : List UInt8)
       simp only [pending, hb, Option.map_some]
       exact ⟨rfl, h, h3⟩
   | succ n ih =>
-    intro index hn st location core h b coll
+    intro index hn st location core h b hfits coll
     have hlt : index < bytes.length := by omega
     have hs : index < bytes.toByteArray.toByteSlice.size := by
       rw [size_toByteSlice]; exact hlt
     have hl := loop2_lt recover sliceStart bytes.toByteArray.toByteSlice index committed core b
-      (.continue : ControlFlow (Located Empty)) hs
+      (.continue : ControlFlow (Located Empty)) hfits hs
     simp only [loop2] at hl
     rw [hl, getElem_toByteSlice, List.drop_eq_getElem_cons hlt]
     simp only [feedBytes, StateT.run_bind]
     generalize bytes[index] = c
-    have hb := lexByte_run2 h recover sliceStart b coll c
-    generalize (V2Batched.lexByte recover sliceStart core b c).run coll = R at hb ⊢
-    obtain ⟨⟨o, core1, b1⟩, coll1⟩ := R
+    have hb := lexByte_run2 h recover sliceStart b coll c hfits
+    generalize (V2Batched.lexByte recover sliceStart core b c hfits).run coll = R at hb ⊢
+    obtain ⟨⟨⟨o, core1, b1⟩, hf1⟩, coll1⟩ := R
+    simp only [strip] at hb
     simp only [id_bind]
     cases hstep : byteStep version st location c with
     | none =>
       rw [hstep] at hb
       obtain ⟨f, hf⟩ := cont_fails recover sliceStart _ committed .continue hb core1 b1
-        (index + 1) coll1
+        (index + 1) hf1 coll1
       exact ⟨f, hf⟩
     | some e =>
       obtain ⟨st', ls⟩ := e
@@ -365,7 +405,7 @@ theorem lexFrom_run2 {version : Version} (bytes : List UInt8)
       · simp only at h1 h2 h3
         subst h1
         rw [cont_next]
-        have hrest := ih (index + 1) (by omega) h2 b1 coll1
+        have hrest := ih (index + 1) (by omega) h2 b1 hf1 coll1
         simp only [loop2]
         cases hf : feedBytes version st' (location.afterByte c) (List.drop (index + 1) bytes) with
         | none =>
@@ -378,7 +418,7 @@ theorem lexFrom_run2 {version : Version} (bytes : List UInt8)
           rw [← List.append_assoc, ← pending_congr_append h3 ls']
           exact hrest
       · obtain ⟨f, hf⟩ := cont_fails recover sliceStart _ committed .continue h1 core1 b1
-          (index + 1) coll1
+          (index + 1) hf1 coll1
         cases hfb : feedBytes version st' (location.afterByte c) (List.drop (index + 1) bytes) with
         | none =>
           dsimp only
@@ -448,7 +488,8 @@ theorem lexSliceStep_run2 {version : Version} {st : St} {location : Location} {c
       (feedBytes version st location bytes) coll
       ((V2Batched.lexSliceStep (H := Collector) false (fun _ => pure ()) (fun _ => pure ())
         bytes.toByteArray.toByteSlice core).run coll) := by
-  have hf := lexFrom_run2 bytes (fun _ => pure ()) core.location.offset 0 _ 0 rfl h #[] coll
+  have hf := lexFrom_run2 bytes (fun _ => pure ()) core.location.offset 0 _ 0 rfl h #[]
+    (fits_empty _) coll
   simp only [List.drop_zero] at hf
   have ha : core.activity = st.activity := h.2.1
   cases st with
@@ -458,7 +499,7 @@ theorem lexSliceStep_run2 {version : Version} {st : St} {location : Location} {c
       failCall]
     simp only [StateT.run] at hf
     generalize V2Batched.lexFrom (fun _ => pure ()) core.location.offset
-      bytes.toByteArray.toByteSlice 0 0 core #[] .continue coll = r at hf ⊢
+      bytes.toByteArray.toByteSlice 0 0 core #[] .continue (fits_empty _) coll = r at hf ⊢
     obtain ⟨⟨res, core'⟩, coll'⟩ := r
     cases res with
     | ok flow => exact feeds_of_feedsB_ok hf
@@ -469,7 +510,7 @@ theorem lexSliceStep_run2 {version : Version} {st : St} {location : Location} {c
       failCall]
     simp only [StateT.run] at hf
     generalize V2Batched.lexFrom (fun _ => pure ()) core.location.offset
-      bytes.toByteArray.toByteSlice 0 0 core #[] .continue coll = r at hf ⊢
+      bytes.toByteArray.toByteSlice 0 0 core #[] .continue (fits_empty _) coll = r at hf ⊢
     obtain ⟨⟨res, core'⟩, coll'⟩ := r
     cases res with
     | ok flow => exact feeds_of_feedsB_ok hf

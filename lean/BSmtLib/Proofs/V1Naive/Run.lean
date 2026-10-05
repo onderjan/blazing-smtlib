@@ -87,10 +87,40 @@ def run (version : Version) (bytes : List UInt8) : Option (List Lexeme) :=
   runFrom version .idle Location.initial bytes
 
 /-- The lexeme as the consumer `Collector` records it, when it is handed over alone in a
-cursor under the version. -/
+cursor under the version (see `toHanded_batch`). -/
 def lexemeHanded (version : Version) (l : Lexeme) : Option Spec.Lexer.Handed :=
-  toHanded (BatchCursor.new version l.batch) ((BatchCursor.new version l.batch).peek
-    (l.hasNext version))
+  (toTokenType l.category).map fun type =>
+    { type
+      start := toLocation l.start
+      «end» := toLocation l.end
+      reserved := match l.category with
+        | .unquotedSymbol => (Reserved.fromBytes? l.content.toByteSlice version).map fun word =>
+          if word.isCommandName then .command else .general
+        | _ => none
+      content := toContent l.content.toByteSlice }
+
+/-- The consumer `Collector` records the lexeme handed over alone in a cursor as
+`lexemeHanded` gives it. -/
+theorem toHanded_batch (version : Version) (l : Lexeme) (h : l.Valid) :
+    toHanded (BatchCursor.new version (l.batch h))
+      ((BatchCursor.new version (l.batch h)).peek (l.hasNext h version)) =
+      lexemeHanded version l := by
+  have hcat : (BatchCursor.new version (l.batch h)).category
+      ((BatchCursor.new version (l.batch h)).peek (l.hasNext h version)) = l.category := by
+    obtain ⟨category, content, start, «end»⟩ := l
+    cases category <;> rfl
+  have hstart : ((BatchCursor.new version (l.batch h)).span
+      ((BatchCursor.new version (l.batch h)).peek (l.hasNext h version))).start = l.start := rfl
+  have hend : ((BatchCursor.new version (l.batch h)).span
+      ((BatchCursor.new version (l.batch h)).peek (l.hasNext h version))).end = l.end := rfl
+  have hcontent : (BatchCursor.new version (l.batch h)).content
+      ((BatchCursor.new version (l.batch h)).peek (l.hasNext h version)) =
+        l.content.toByteSlice := rfl
+  have hversion : (BatchCursor.new version (l.batch h)).version = version := rfl
+  unfold lexemeHanded toHanded
+  simp only [BatchCursor.syntax, SyntaxToken.fromToken, hcat, hstart, hend, hcontent, hversion]
+  cases hc : l.category <;> simp [toTokenType, toReservedKind]
+  cases Reserved.fromBytes? l.content.toByteSlice version <;> rfl
 
 /-! ## Feeding in pieces -/
 
@@ -126,23 +156,24 @@ theorem feedBytes_append (version : Version) (st : St) (location : Location)
 def Agrees (version : Version) (st : St) (location : Location) (core : Core) : Prop :=
   core.version = version ∧ core.activity = st.activity ∧ core.location = location
 
-theorem handOverAt_run (core : Core) (l : Lexeme) (c : Collector) :
-    (handOverAt (H := Collector) core l).run c =
+theorem handOverAt_run (core : Core) (l : Lexeme) (hl : l.Valid) (c : Collector) :
+    (handOverAt (H := Collector) core l hl).run c =
       match lexemeHanded core.version l with
       | some h => ((.ok none, { core with depth := depthAfter core.depth l.category }),
           { handed := c.handed ++ [h] })
       | none => ((.error { cause := .consumer (), location := l.end },
           { core with depth := depthAfter core.depth l.category }), c) := by
   have hnone :
-      ¬ ((BatchCursor.new core.version l.batch).next (l.hasNext core.version)).2.1.HasNext :=
+      ¬ ((BatchCursor.new core.version (l.batch hl)).next
+        (l.hasNext hl core.version)).2.1.HasNext :=
     Nat.lt_irrefl _
-  have ht : takeRest ((BatchCursor.new core.version l.batch).next (l.hasNext core.version)).2.1 =
-      (some [], ⟨_, .refl _⟩) := by
+  have ht : takeRest ((BatchCursor.new core.version (l.batch hl)).next
+      (l.hasNext hl core.version)).2.1 = (some [], ⟨_, .refl _⟩) := by
     rw [takeRest]
     simp only [hnone, dite_false]
-  have hk : toHanded (BatchCursor.new core.version l.batch)
-      ((BatchCursor.new core.version l.batch).next (l.hasNext core.version)).1 =
-      lexemeHanded core.version l := rfl
+  have hk : toHanded (BatchCursor.new core.version (l.batch hl))
+      ((BatchCursor.new core.version (l.batch hl)).next (l.hasNext hl core.version)).1 =
+      lexemeHanded core.version l := toHanded_batch core.version l hl
   simp only [handOverAt, handOver, Consume.consume]
   rw [ht, hk]
   cases lexemeHanded core.version l <;> rfl
@@ -214,23 +245,29 @@ theorem lexStart_run {version : Version} {location : Location} {core : Core}
   simp only [lexStart, startStep, hw]
   cases hs : start core.version false core.location c with
   | idle =>
+    simp only [startS, hs]
     simp only [Steps, handedAll, Agrees, St.activity, Option.map_some, Option.bind_some,
       List.mapM_nil]
     exact ⟨rfl, ⟨rfl, rfl, rfl⟩, by simp; rfl⟩
   | pending p =>
+    simp only [startS, hs]
     simp only [Steps, handedAll, Agrees, St.activity, Option.map_some, Option.bind_some,
       List.mapM_nil]
     exact ⟨rfl, ⟨rfl, rfl, rfl⟩, by simp; rfl⟩
   | token l =>
+    simp only [startS, hs]
     simp only [Steps, handedAll, Agrees, St.activity, Option.map_some, Option.bind_some]
-    have := handOverAt_run { core with activity := .idle, location := core.location.afterByte c }
-      l coll
+    have := handOverAt_run
+      { core with
+        activity := .idle, location := core.location.afterByte c, startedBefore := trivial }
+      l (start_token hs) coll
     simp only [StateT.run] at this
     simp only [StateT.run, this]
     cases h : lexemeHanded core.version l with
     | none => simp [h]
     | some x => simp [h]
   | error f =>
+    simp only [startS, hs]
     simp only [Steps, Option.map_none, Option.bind_none]
     exact ⟨_, rfl⟩
 
@@ -245,32 +282,42 @@ theorem lexByte_run {version : Version} {st : St} {location : Location} {core : 
   cases st with
   | idle =>
     simp only [St.activity] at ha
-    simp only [lexByte, ha, byteStep]
+    simp only [lexByte, withEq, ha, byteStep]
     exact lexStart_run hv hl coll c
   | token p =>
     simp only [St.activity] at ha
     subst hv hl
-    simp only [lexByte, ha, hw, byteStep]
+    have hp : p.start.offset < core.location.offset := core.started ha
+    simp only [lexByte, withEq, ha, hw, byteStep]
     cases hadv : advance false p core.location c with
     | pending p' =>
+      simp only [advanceS, hadv]
       simp only [Steps, handedAll, Agrees, St.activity, Option.map_some, Option.bind_some,
         List.mapM_nil]
       exact ⟨rfl, ⟨rfl, rfl, rfl⟩, by simp; rfl⟩
     | idle =>
+      simp only [advanceS, hadv]
       simp only [Steps, handedAll, Agrees, St.activity, Option.map_some, Option.bind_some,
         List.mapM_nil]
       exact ⟨rfl, ⟨rfl, rfl, rfl⟩, by simp; rfl⟩
     | tokenWith l =>
+      simp only [advanceS, hadv]
       simp only [Steps, handedAll, Agrees, St.activity, Option.map_some, Option.bind_some]
       have := handOverAt_run
-        { core with activity := .idle, location := core.location.afterByte c } l coll
+        { core with
+          activity := .idle, location := core.location.afterByte c, startedBefore := trivial }
+        l (.inl (by
+          rw [(advance_tokenWith hadv).1, (advance_tokenWith hadv).2, afterByte_offset]; omega))
+        coll
       simp only [StateT.run] at this
       simp only [StateT.run, this]
       cases h : lexemeHanded core.version l with
       | none => simp [h]
       | some x => simp [h]
     | tokenBefore l =>
-      have hh := handOverAt_run { core with activity := .idle } l coll
+      simp only [advanceS, hadv]
+      have hh := handOverAt_run { core with activity := .idle, startedBefore := trivial } l
+        (.inl (by rw [(advance_tokenBefore hadv).1, (advance_tokenBefore hadv).2]; exact hp)) coll
       simp only [StateT.run] at hh ⊢
       simp only [bind, StateT.bind, hh]
       cases hlh : lexemeHanded core.version l with
@@ -279,10 +326,11 @@ theorem lexByte_run {version : Version} {st : St} {location : Location} {core : 
         exact ⟨_, rfl⟩
       | some x =>
         refine steps_cons hlh ?_
-        let core' : Core := { core with activity := .idle }
+        let core' : Core := { core with activity := .idle, startedBefore := trivial }
         exact lexStart_run (core := { core' with depth := depthAfter core.depth l.category })
           rfl rfl _ c
     | error f =>
+      simp only [advanceS, hadv]
       simp only [Steps, Option.map_none, Option.bind_none]
       exact ⟨_, rfl⟩
 
@@ -481,25 +529,27 @@ theorem lexEnd_run {version : Version} {st : St} {location : Location} {core : C
   have hw : Consume.consumesWhitespaceAndComments (H := Collector) = false := rfl
   obtain ⟨hv, ha, hl⟩ := h
   subst hv hl
-  have heof : ∀ (core' : Core) (coll' : Collector),
-      (handOverAt core' (eofLexeme core.location)).run coll' = _ :=
-    fun core' coll' => handOverAt_run core' (eofLexeme core.location) coll'
+  have heof : ∀ (core' : Core) (coll' : Collector)
+      (hv : Lexeme.Valid ⟨.endOfFile, .empty, core.location, core.location⟩),
+      (handOverAt core' ⟨.endOfFile, .empty, core.location, core.location⟩ hv).run coll' = _ :=
+    fun core' coll' hv => handOverAt_run core' (eofLexeme core.location) hv coll'
   simp only [StateT.run] at heof
   have he : ∀ loc : Location, (⟨.endOfFile, .empty, loc, loc⟩ : Lexeme) = eofLexeme loc :=
     fun _ => rfl
   cases st with
   | idle =>
     simp only [St.activity] at ha
-    simp only [lexEnd, StateT.run, ha, bind, StateT.bind, pure, StateT.pure, he, heof]
+    simp only [lexEnd, withEq, StateT.run, ha, bind, StateT.bind, pure, StateT.pure, heof]
     cases hx : lexemeHanded core.version (eofLexeme core.location) with
     | none => simp [Ends, endStep, handedAll, hx]
     | some x => simp [Ends, endStep, handedAll, hx]
   | token p =>
     simp only [St.activity] at ha
-    simp only [lexEnd, StateT.run, ha, hw, bind, pure, he]
+    simp only [lexEnd, withEq, StateT.run, ha, hw, bind, pure]
     cases hf : finish false p core.location with
     | none =>
-      dsimp only
+      simp only [finishS, hf]
+      try dsimp only
       simp only [StateT.bind, StateT.pure, pure_bind]
       simp only [heof]
       cases hx : lexemeHanded core.version (eofLexeme core.location) with
@@ -514,9 +564,11 @@ theorem lexEnd_run {version : Version} {st : St} {location : Location} {core : C
         unfold Ends; rw [e]
         exact ⟨rfl, rfl⟩
     | token l =>
-      have hl := handOverAt_run { core with activity := .idle } l coll
+      simp only [finishS, hf]
+      have hl := handOverAt_run { core with activity := .idle, startedBefore := trivial } l
+        (.inl (by rw [(finish_token hf).1, (finish_token hf).2]; exact core.started ha)) coll
       simp only [StateT.run] at hl
-      dsimp only
+      try dsimp only
       simp only [StateT.bind]
       simp only [hl]
       cases hy : lexemeHanded core.version l with
@@ -542,6 +594,7 @@ theorem lexEnd_run {version : Version} {st : St} {location : Location} {core : C
           unfold Ends; rw [e]
           exact ⟨rfl, List.append_assoc _ _ _⟩
     | error f =>
+      simp only [finishS, hf]
       simp only [Ends, endStep, hf]
       exact ⟨_, rfl⟩
 

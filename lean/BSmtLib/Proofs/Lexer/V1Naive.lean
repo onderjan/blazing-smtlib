@@ -335,6 +335,132 @@ def finish (whitespace : Bool) (p : Pending) (location : Location) : Finished :=
   | .comment => if whitespace then token .comment else .none
   | .whitespace => token .whitespace
 
+/-! ## Where the lexemes are
+
+A lexeme has a byte, except the end of file, which is empty: the pure step finishes a token
+at or after the byte after its start. The facts below are what the hand-overs need to put a
+lexeme into a batch (see `TokenBatch.ordered`).
+-/
+
+/-- Whether the lexeme has a byte, or is the end of file, which is empty. -/
+abbrev Lexeme.Valid (l : Lexeme) : Prop :=
+  l.start.offset < l.end.offset ∨ l.category = .endOfFile ∧ l.start.offset = l.end.offset
+
+theorem afterByte_offset (location : Location) (c : UInt8) :
+    (location.afterByte c).offset = location.offset + 1 := by
+  unfold Location.afterByte Location.afterColumn
+  split <;> rfl
+
+/-- A token started by a byte starts at it. -/
+theorem start_pending {version : Version} {whitespace : Bool} {location : Location} {c : UInt8}
+    {p : Pending} (h : start version whitespace location c = .pending p) :
+    p.start = location := by
+  simp only [start] at h
+  repeat' split at h
+  all_goals first | (cases h; rfl) | cases h
+
+/-- A byte that is a token by itself is a lexeme with a byte. -/
+theorem start_token {version : Version} {whitespace : Bool} {location : Location} {c : UInt8}
+    {l : Lexeme} (h : start version whitespace location c = .token l) : l.Valid := by
+  simp only [start] at h
+  repeat' split at h
+  all_goals first
+    | (cases h; left; show location.offset < (location.afterByte c).offset
+       rw [afterByte_offset]; omega)
+    | cases h
+
+/-- A byte that is a token by itself spans from it to after it. -/
+theorem start_token_span {version : Version} {whitespace : Bool} {location : Location}
+    {c : UInt8} {l : Lexeme} (h : start version whitespace location c = .token l) :
+    l.start = location ∧ l.end = location.afterByte c := by
+  simp only [start] at h
+  repeat' split at h
+  all_goals first | (cases h; exact ⟨rfl, rfl⟩) | cases h
+
+/-- A token goes on from where it started. -/
+theorem advance_pending {whitespace : Bool} {p p' : Pending} {location : Location} {c : UInt8}
+    (h : advance whitespace p location c = .pending p') : p'.start = p.start := by
+  simp only [advance, legacyStringByte] at h
+  repeat' split at h
+  all_goals first | (cases h; rfl) | cases h
+
+/-- A token ended with a byte spans from its start to after the byte. -/
+theorem advance_tokenWith {whitespace : Bool} {p : Pending} {location : Location} {c : UInt8}
+    {l : Lexeme} (h : advance whitespace p location c = .tokenWith l) :
+    l.start = p.start ∧ l.end = location.afterByte c := by
+  simp only [advance, legacyStringByte] at h
+  repeat' split at h
+  all_goals first | (cases h; exact ⟨rfl, rfl⟩) | cases h
+
+/-- A token ended before a byte spans from its start to the byte. -/
+theorem advance_tokenBefore {whitespace : Bool} {p : Pending} {location : Location} {c : UInt8}
+    {l : Lexeme} (h : advance whitespace p location c = .tokenBefore l) :
+    l.start = p.start ∧ l.end = location := by
+  simp only [advance, legacyStringByte] at h
+  repeat' split at h
+  all_goals first | (cases h; exact ⟨rfl, rfl⟩) | cases h
+
+/-- A token ended by the end of the input spans from its start to the end. -/
+theorem finish_token {whitespace : Bool} {p : Pending} {location : Location} {l : Lexeme}
+    (h : finish whitespace p location = .token l) : l.start = p.start ∧ l.end = location := by
+  simp only [finish] at h
+  repeat' split at h
+  all_goals first | (cases h; exact ⟨rfl, rfl⟩) | cases h
+
+/-- What `start` gives, as far as where the lexemes are. -/
+abbrev Started.Spec (location : Location) (c : UInt8) : Started → Prop
+  | .pending p => p.start = location
+  | .token l => l.Valid ∧ l.start = location ∧ l.end = location.afterByte c
+  | _ => True
+
+theorem start_spec (version : Version) (whitespace : Bool) (location : Location) (c : UInt8) :
+    (start version whitespace location c).Spec location c := by
+  cases h : start version whitespace location c with
+  | pending p => exact start_pending h
+  | token l => exact ⟨start_token h, start_token_span h⟩
+  | _ => trivial
+
+/-- `start`, with what it gives as far as where the lexemes are. -/
+def startS (version : Version) (whitespace : Bool) (location : Location) (c : UInt8) :
+    {s : Started // s.Spec location c} :=
+  ⟨start version whitespace location c, start_spec version whitespace location c⟩
+
+/-- What `advance` gives, as far as where the lexemes are. -/
+abbrev Advanced.Spec (p : Pending) (location : Location) (c : UInt8) : Advanced → Prop
+  | .pending p' => p'.start = p.start
+  | .tokenWith l => l.start = p.start ∧ l.end = location.afterByte c
+  | .tokenBefore l => l.start = p.start ∧ l.end = location
+  | _ => True
+
+theorem advance_spec (whitespace : Bool) (p : Pending) (location : Location) (c : UInt8) :
+    (advance whitespace p location c).Spec p location c := by
+  cases h : advance whitespace p location c with
+  | pending p' => exact advance_pending h
+  | tokenWith l => exact advance_tokenWith h
+  | tokenBefore l => exact advance_tokenBefore h
+  | _ => trivial
+
+/-- `advance`, with what it gives as far as where the lexemes are. -/
+def advanceS (whitespace : Bool) (p : Pending) (location : Location) (c : UInt8) :
+    {a : Advanced // a.Spec p location c} :=
+  ⟨advance whitespace p location c, advance_spec whitespace p location c⟩
+
+/-- What `finish` gives, as far as where the lexemes are. -/
+abbrev Finished.Spec (p : Pending) (location : Location) : Finished → Prop
+  | .token l => l.start = p.start ∧ l.end = location
+  | _ => True
+
+theorem finish_spec (whitespace : Bool) (p : Pending) (location : Location) :
+    (finish whitespace p location).Spec p location := by
+  cases h : finish whitespace p location with
+  | token l => exact finish_token h
+  | _ => trivial
+
+/-- `finish`, with what it gives as far as where the lexemes are. -/
+def finishS (whitespace : Bool) (p : Pending) (location : Location) :
+    {f : Finished // f.Spec p location} :=
+  ⟨finish whitespace p location, finish_spec whitespace p location⟩
+
 /-! ## The pure step of recovery -/
 
 /--
@@ -410,6 +536,11 @@ inductive Activity where
   /-- The consumer has finished: the input is discarded up to its end. -/
   | discarding
 
+/-- Whether the token in progress, if any, starts before the location. -/
+abbrev Activity.StartsBefore : Activity → Location → Prop
+  | .token p, location => p.start.offset < location.offset
+  | _, _ => True
+
 /- The fields are public, so that proofs about the lexer can read them. -/
 /-- The state of the lexer, apart from its consumer. -/
 structure Core where
@@ -425,13 +556,16 @@ structure Core where
   skips to where they are closed.
   -/
   depth : Nat
+  /-- The token in progress, if any, starts before the next byte to be fed, so that the token
+  has a byte when it ends. -/
+  startedBefore : activity.StartsBefore location
 
 namespace Core
 
 /-- The state at the start of an input. -/
 def initial (version : Version) : Core :=
   { version, initialVersion := version, location := Location.initial, activity := .idle,
-    depth := 0 }
+    depth := 0, startedBefore := trivial }
 
 /-- The state after the end of the input: as at the start, under the initial version. -/
 def reset (self : Core) : Core :=
@@ -441,14 +575,14 @@ end Core
 
 /-! ## Hand-overs -/
 
-/-- A batch of the lexeme alone. -/
-def Lexeme.batch (l : Lexeme) : TokenBatch :=
+/-- A batch of the lexeme alone, which has a byte unless it is the end of file. -/
+def Lexeme.batch (l : Lexeme) (h : l.Valid) : TokenBatch :=
   ({ TokenBatch.empty 1 with bytes := l.content } : TokenBatch).pushLocated l.category 0
-    l.content.size l.start l.end
+    l.content.size l.start l.end (Nat.zero_le _) h
 
 /-- A cursor over the batch of a lexeme alone has a token. -/
-theorem Lexeme.hasNext (l : Lexeme) (version : Version) :
-    (BatchCursor.new version l.batch).HasNext :=
+theorem Lexeme.hasNext (l : Lexeme) (h : l.Valid) (version : Version) :
+    (BatchCursor.new version (l.batch h)).HasNext :=
   Nat.zero_lt_one
 
 /-- The number of parentheses open after a token of the category. -/
@@ -463,6 +597,46 @@ structure Failure (E : Type) where
   cause : LexErrorCause E
   location : Location
 
+/-- The token in progress, which starts before the next byte, starts before the byte after
+it. -/
+theorem startsBefore_afterByte {p : Pending} {location : Location} (c : UInt8)
+    (h : p.start.offset < location.offset) :
+    (Activity.token p).StartsBefore (location.afterByte c) := by
+  show p.start.offset < (location.afterByte c).offset
+  rw [afterByte_offset]
+  omega
+
+/-- The token in progress of the lexer state starts before its location. -/
+theorem Core.started {core : Core} {p : Pending} (h : core.activity = .token p) :
+    p.start.offset < core.location.offset := by
+  have := core.startedBefore
+  rw [h] at this
+  exact this
+
+/-- The value, with the proof that it is the value: a match on it gives the equation. -/
+def withEq {α : Type} (x : α) : {y : α // x = y} :=
+  ⟨x, rfl⟩
+
+/-- The offset that the tokens lexed so far end at or before: the start of the token in
+progress, or the location if there is none. -/
+abbrev Core.frontier (core : Core) : Nat :=
+  match core.activity with
+  | .token p => p.start.offset
+  | _ => core.location.offset
+
+theorem Core.frontier_of_not_token {core : Core} (h : ∀ p, core.activity ≠ .token p) :
+    core.frontier = core.location.offset := by
+  unfold Core.frontier
+  split
+  · exact absurd ‹_› (h _)
+  · rfl
+
+theorem Core.frontier_le (core : Core) : core.frontier ≤ core.location.offset := by
+  unfold Core.frontier
+  split
+  · exact Nat.le_of_lt (core.started ‹_›)
+  · exact Nat.le_refl _
+
 section
 
 variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [Consume H m R E]
@@ -476,10 +650,10 @@ decided by the pure step above. -/
 Hands the lexeme over to the consumer, alone in a cursor under the version in force, and
 takes its answer. The version on the cursor the consumer gives back is in force from then on.
 -/
-def handOver (core : Core) (l : Lexeme) :
+def handOver (core : Core) (l : Lexeme) (h : l.Valid) :
     StateT H m (Except E (ControlFlow R) × Core) := do
-  let cursor := BatchCursor.new core.version l.batch
-  let (answer, ⟨after, _⟩) ← Consume.consume (H := H) cursor (l.hasNext core.version)
+  let cursor := BatchCursor.new core.version (l.batch h)
+  let (answer, ⟨after, _⟩) ← Consume.consume (H := H) cursor (l.hasNext h core.version)
   -- the consumer has consumed at least one token, and the cursor has just this one
   return (answer, { core with version := after.version, depth := depthAfter core.depth l.category })
 
@@ -488,13 +662,14 @@ Hands the lexeme over and turns the consumer's answer into what lexing does next
 (`none`), stop as the consumer has finished (`some`, located at the end of the lexeme, and the
 input is discarded from then on), or fail after the lexeme.
 -/
-def handOverAt (core : Core) (l : Lexeme) :
+def handOverAt (core : Core) (l : Lexeme) (h : l.Valid) :
     StateT H m (Except (Failure E) (Option (Located R)) × Core) := do
-  let (answer, core) ← handOver core l
+  let (answer, core) ← handOver core l h
   return match answer with
     | .ok .continue => (.ok none, core)
     | .ok (.break value) =>
-      (.ok (some { value, location := l.end }), { core with activity := .discarding })
+      (.ok (some { value, location := l.end }),
+        { core with activity := .discarding, startedBefore := trivial })
     | .error err => (.error { cause := .consumer err, location := l.end }, core)
 
 /-- Lexes the byte `c` with no token in progress. -/
@@ -502,11 +677,18 @@ def lexStart (core : Core) (c : UInt8) :
     StateT H m (Except (Failure E) (Option (Located R)) × Core) := do
   let whitespace := Consume.consumesWhitespaceAndComments (H := H)
   let after := core.location.afterByte c
-  match start core.version whitespace core.location c with
-  | .idle => return (.ok none, { core with activity := .idle, location := after })
-  | .pending p => return (.ok none, { core with activity := .token p, location := after })
-  | .token l => handOverAt { core with activity := .idle, location := after } l
-  | .error failure =>
+  match startS core.version whitespace core.location c with
+  | ⟨.idle, _⟩ =>
+    return (.ok none, { core with activity := .idle, location := after, startedBefore := trivial })
+  | ⟨.pending p, hp⟩ =>
+    return (.ok none, { core with
+      activity := .token p, location := after
+      startedBefore := by
+        show p.start.offset < (core.location.afterByte c).offset
+        rw [show p.start = core.location from hp, afterByte_offset]; omega })
+  | ⟨.token l, hl⟩ =>
+    handOverAt { core with activity := .idle, location := after, startedBefore := trivial } l hl.1
+  | ⟨.error failure, _⟩ =>
     return (.error { cause := .lexical failure.error, location := failure.location }, core)
 
 /--
@@ -519,43 +701,64 @@ raised one; the lexer is then at the failure point.
 def lexByte (recover : Location → StateT H m Unit) (core : Core) (c : UInt8) :
     StateT H m (Except (Failure E) (Option (Located R)) × Core) := do
   let location := core.location
-  match core.activity with
-  | .discarding => return (.ok none, { core with location := location.afterByte c })
+  match withEq core.activity with
+  | ⟨.discarding, _⟩ =>
+    return (.ok none, { core with
+      location := location.afterByte c, activity := .discarding, startedBefore := trivial })
   -- only the end of the input can follow, there is nothing to lex
-  | .ended => return (.ok none, core)
-  | .recovered =>
+  | ⟨.ended, _⟩ => return (.ok none, core)
+  | ⟨.recovered, _⟩ =>
     -- the consumer is told of a recovery before any token
     recover location
-    lexStart { core with activity := .idle } c
-  | .skipping skip =>
+    lexStart { core with activity := .idle, startedBefore := trivial } c
+  | ⟨.skipping skip, _⟩ =>
     match scan (core.version == .v2_0) skip core.depth c with
     | .skip skip depth =>
-      let core := { core with location := location.afterByte c, activity := .skipping skip, depth }
+      let core := { core with
+        location := location.afterByte c, activity := .skipping skip, depth
+        startedBefore := trivial }
       return (.ok none, core)
     | .before =>
       recover location
-      lexStart { core with activity := .idle } c
+      lexStart { core with activity := .idle, startedBefore := trivial } c
     | .after =>
       let location := location.afterByte c
       recover location
-      return (.ok none, { core with location, activity := .idle, depth := 0 })
-  | .idle => lexStart core c
-  | .token p =>
+      return (.ok none, { core with
+        location, activity := .idle, depth := 0, startedBefore := trivial })
+  | ⟨.idle, _⟩ => lexStart core c
+  | ⟨.token p, ha⟩ =>
     let whitespace := Consume.consumesWhitespaceAndComments (H := H)
     let after := location.afterByte c
-    match advance whitespace p location c with
-    | .pending p => return (.ok none, { core with activity := .token p, location := after })
-    | .idle => return (.ok none, { core with activity := .idle, location := after })
-    | .tokenWith l => handOverAt { core with activity := .idle, location := after } l
-    | .tokenBefore l =>
-      let (result, core) ← handOverAt { core with activity := .idle } l
+    have hp : p.start.offset < location.offset := core.started ha
+    match advanceS whitespace p location c with
+    | ⟨.pending p', h⟩ =>
+      return (.ok none, { core with
+        activity := .token p', location := after
+        startedBefore :=
+          startsBefore_afterByte c (by rw [show p'.start = p.start from h]; exact hp) })
+    | ⟨.idle, _⟩ =>
+      return (.ok none,
+        { core with activity := .idle, location := after, startedBefore := trivial })
+    | ⟨.tokenWith l, h⟩ =>
+      handOverAt { core with activity := .idle, location := after, startedBefore := trivial } l
+        (.inl (by
+          rw [show l.start = p.start from h.1, show l.end = location.afterByte c from h.2,
+            afterByte_offset]
+          omega))
+    | ⟨.tokenBefore l, h⟩ =>
+      let (result, core) ← handOverAt { core with activity := .idle, startedBefore := trivial } l
+        (.inl (by
+          rw [show l.start = p.start from h.1, show l.end = location from h.2]; exact hp))
       match result with
       -- the byte is lexed under the version the consumer has left in force
       | .ok none => lexStart core c
       -- the consumer has finished: the byte is the first one discarded
-      | .ok (some located) => return (.ok (some located), { core with location := after })
+      | .ok (some located) =>
+        return (.ok (some located), { core with
+          location := after, activity := .discarding, startedBefore := trivial })
       | .error failure => return (.error failure, core)
-    | .error failure =>
+    | ⟨.error failure, _⟩ =>
       return (.error { cause := .lexical failure.error, location := failure.location }, core)
 
 /--
@@ -599,7 +802,9 @@ def failCall (recovers : Bool) (abandon : Location → StateT H m Unit) (failure
       | .internal _ => .skipping .plain
   abandon failure.location
   return ({ cause := failure.cause, continuesFrom := some failure.location },
-    { core with location := failure.location, activity })
+    { core with
+      location := failure.location, activity
+      startedBefore := by simp only [activity]; split <;> (repeat' split) <;> trivial })
 
 /-- Lexes the slice, or discards it if the consumer has finished. -/
 def lexSliceStep (recovers : Bool) (abandon recover : Location → StateT H m Unit)
@@ -610,7 +815,7 @@ def lexSliceStep (recovers : Bool) (abandon recover : Location → StateT H m Un
     -- even if the slice is empty
     | .recovered => do
       recover core.location
-      pure { core with activity := .idle }
+      pure { core with activity := .idle, startedBefore := trivial }
     | _ => pure core
   match core.activity with
   -- the input has ended with the error, there is nothing to lex
@@ -630,13 +835,18 @@ def lexEnd (core : Core) :
     StateT H m (Except (Failure E) (ControlFlow (Located R)) × Core) := do
   let whitespace := Consume.consumesWhitespaceAndComments (H := H)
   let location := core.location
-  let (result, core) ← match core.activity with
-    | .token p => match finish whitespace p location with
-      | .none => pure (.ok none, { core with activity := .idle })
-      | .token l => handOverAt { core with activity := .idle } l
-      | .error failure =>
+  let (result, core) ← match withEq core.activity with
+    | ⟨.token p, ha⟩ => match finishS whitespace p location with
+      | ⟨.none, _⟩ => pure (.ok none, { core with activity := .idle, startedBefore := trivial })
+      | ⟨.token l, h⟩ =>
+        handOverAt { core with activity := .idle, startedBefore := trivial } l
+          (.inl (by
+            rw [show l.start = p.start from h.1, show l.end = location from h.2]
+            exact core.started ha))
+      | ⟨.error failure, _⟩ =>
         pure (.error { cause := .lexical failure.error, location := failure.location }, core)
-    | _ => pure (.ok none, core)
+    | ⟨.idle, _⟩ | ⟨.recovered, _⟩ | ⟨.skipping _, _⟩ | ⟨.ended, _⟩ | ⟨.discarding, _⟩ =>
+      pure (.ok none, core)
   match result with
   | .error failure => return (.error failure, core)
   -- the consumer has finished on the token, the end-of-file token is not handed over
@@ -644,7 +854,7 @@ def lexEnd (core : Core) :
   | .ok none =>
     let eof : Lexeme :=
       { category := .endOfFile, content := .empty, start := location, «end» := location }
-    let (result, core) ← handOverAt core eof
+    let (result, core) ← handOverAt core eof (.inr ⟨rfl, rfl⟩)
     return match result with
       | .ok none => (.ok .continue, core)
       | .ok (some located) => (.ok (.break located), core)
@@ -663,7 +873,7 @@ def lexEofStep (recovers : Bool) (abandon recover : Location → StateT H m Unit
       | _ => false
     let core ← if recovered then do
         recover core.location
-        pure { core with activity := .idle }
+        pure { core with activity := .idle, startedBefore := trivial }
       else
         pure core
     let (result, core) ← lexEnd core

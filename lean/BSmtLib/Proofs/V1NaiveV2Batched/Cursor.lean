@@ -139,63 +139,62 @@ theorem extract_append_right (a b : ByteArray) :
     Nat.sub_self, Nat.add_sub_cancel_left, Array.extract_size, Array.extract_size_left]
   rw [Array.empty_append]
 
-/-- The step of `V2Batched.toTokenBatch`. -/
-def pushLexeme (batch : TokenBatch) (l : Lexeme) : TokenBatch :=
+/-- The step of `V2Batched.pushLexemes`. -/
+def pushLexeme (batch : TokenBatch) (l : Lexeme)
+    (after : ({ batch with bytes := batch.bytes ++ l.content } : TokenBatch).lastEnd ≤
+      l.start.offset)
+    (hv : l.Valid) : TokenBatch :=
   let start := batch.bytes.size
   ({ batch with bytes := batch.bytes ++ l.content } : TokenBatch).pushLocated l.category start
-    (start + l.content.size) l.start l.end
+    (start + l.content.size) l.start l.end after hv
 
-theorem batchOf_push {T : TokenBatch} {ls : List Lexeme} (h : BatchOf T ls) (l : Lexeme) :
-    BatchOf (pushLexeme T l) (ls ++ [l]) := by
+theorem batchOf_push {T : TokenBatch} {ls : List Lexeme} (h : BatchOf T ls) (l : Lexeme)
+    (after : ({ T with bytes := T.bytes ++ l.content } : TokenBatch).lastEnd ≤ l.start.offset)
+    (hv : l.Valid) : BatchOf (pushLexeme T l after hv) (ls ++ [l]) := by
   obtain ⟨hlen, ht, hcs, hce, hso, hsl, hsc, heo, hel, hec, hentry⟩ := h
-  have e : pushLexeme T l =
-      { T with
-        len := T.len + 1
-        bytes := T.bytes ++ l.content
-        types := T.types.push l.category.toUInt8
-        contentStarts := T.contentStarts.push T.bytes.size
-        contentStops := T.contentStops.push (T.bytes.size + l.content.size)
-        startOffsets := T.startOffsets.push l.start.offset
-        startLines := T.startLines.push l.start.line
-        startColumns := T.startColumns.push l.start.column
-        endOffsets := T.endOffsets.push l.end.offset
-        endLines := T.endLines.push l.end.line
-        endColumns := T.endColumns.push l.end.column } := by
-    show ({ T with
-        len := T.len + 1
-        bytes := T.bytes ++ l.content
-        types := if T.len < T.types.size then T.types.set! T.len l.category.toUInt8
-          else T.types.push l.category.toUInt8
-        contentStarts := if T.len < T.contentStarts.size then
-          T.contentStarts.set! T.len T.bytes.size else T.contentStarts.push T.bytes.size
-        contentStops := if T.len < T.contentStops.size then
+  generalize hP : pushLexeme T l after hv = P
+  have e : (P.len, P.bytes, P.types, P.contentStarts, P.contentStops, P.startOffsets,
+      P.startLines, P.startColumns, P.endOffsets, P.endLines, P.endColumns) =
+      (T.len + 1, T.bytes ++ l.content, T.types.push l.category.toUInt8,
+        T.contentStarts.push T.bytes.size, T.contentStops.push (T.bytes.size + l.content.size),
+        T.startOffsets.push l.start.offset, T.startLines.push l.start.line,
+        T.startColumns.push l.start.column, T.endOffsets.push l.end.offset,
+        T.endLines.push l.end.line, T.endColumns.push l.end.column) := by
+    subst hP
+    show (T.len + 1, T.bytes ++ l.content,
+        (if T.len < T.types.size then T.types.set! T.len l.category.toUInt8
+          else T.types.push l.category.toUInt8),
+        (if T.len < T.contentStarts.size then T.contentStarts.set! T.len T.bytes.size
+          else T.contentStarts.push T.bytes.size),
+        (if T.len < T.contentStops.size then
           T.contentStops.set! T.len (T.bytes.size + l.content.size)
-          else T.contentStops.push (T.bytes.size + l.content.size)
-        startOffsets := if T.len < T.startOffsets.size then
-          T.startOffsets.set! T.len l.start.offset else T.startOffsets.push l.start.offset
-        startLines := if T.len < T.startLines.size then
-          T.startLines.set! T.len l.start.line else T.startLines.push l.start.line
-        startColumns := if T.len < T.startColumns.size then
-          T.startColumns.set! T.len l.start.column else T.startColumns.push l.start.column
-        endOffsets := if T.len < T.endOffsets.size then
-          T.endOffsets.set! T.len l.end.offset else T.endOffsets.push l.end.offset
-        endLines := if T.len < T.endLines.size then
-          T.endLines.set! T.len l.end.line else T.endLines.push l.end.line
-        endColumns := if T.len < T.endColumns.size then
-          T.endColumns.set! T.len l.end.column else T.endColumns.push l.end.column } :
-        TokenBatch) = _
+          else T.contentStops.push (T.bytes.size + l.content.size)),
+        (if T.len < T.startOffsets.size then T.startOffsets.set! T.len l.start.offset
+          else T.startOffsets.push l.start.offset),
+        (if T.len < T.startLines.size then T.startLines.set! T.len l.start.line
+          else T.startLines.push l.start.line),
+        (if T.len < T.startColumns.size then T.startColumns.set! T.len l.start.column
+          else T.startColumns.push l.start.column),
+        (if T.len < T.endOffsets.size then T.endOffsets.set! T.len l.end.offset
+          else T.endOffsets.push l.end.offset),
+        (if T.len < T.endLines.size then T.endLines.set! T.len l.end.line
+          else T.endLines.push l.end.line),
+        (if T.len < T.endColumns.size then T.endColumns.set! T.len l.end.column
+          else T.endColumns.push l.end.column)) = _
     simp [hlen, ht, hcs, hce, hso, hsl, hsc, heo, hel, hec]
-  rw [e]
+  simp only [Prod.mk.injEq] at e
+  obtain ⟨e0, eb, et, ecs, ece, eso, esl, esc, eeo, eel, eec⟩ := e
   have hbs : T.bytes.size + l.content.size = (T.bytes ++ l.content).size := by
     simp [ByteArray.size_append]
-  refine ⟨by simp [hlen], by simp [ht], by simp [hcs], by simp [hce], by simp [hso],
-    by simp [hsl], by simp [hsc], by simp [heo], by simp [hel], by simp [hec], ?_⟩
+  refine ⟨by simp [e0, hlen], by simp [et, ht], by simp [ecs, hcs], by simp [ece, hce],
+    by simp [eso, hso], by simp [esl, hsl], by simp [esc, hsc], by simp [eeo, heo],
+    by simp [eel, hel], by simp [eec, hec], ?_⟩
   intro j hj
+  rw [eb, et, ecs, ece, eso, esl, esc, eeo, eel, eec]
   simp only [List.length_append, List.length_singleton] at hj
   by_cases hlt : j < ls.length
   · obtain ⟨e1, e2, e3, e4, e5, e6, e7, e8, e9, e10⟩ := hentry j hlt
     rw [List.getElem_append_left hlt]
-    simp only
     rw [get!_push_lt _ _ _ (by omega), getElem!_push_lt _ _ _ (by omega),
       getElem!_push_lt _ _ _ (by omega), getElem!_push_lt _ _ _ (by omega),
       getElem!_push_lt _ _ _ (by omega), getElem!_push_lt _ _ _ (by omega),
@@ -206,7 +205,6 @@ theorem batchOf_push {T : TokenBatch} {ls : List Lexeme} (h : BatchOf T ls) (l :
   · have hj' : j = ls.length := by omega
     subst hj'
     rw [List.getElem_concat_length rfl]
-    simp only
     have et := get!_push_eq T.types l.category.toUInt8
     have e1 := getElem!_push_eq T.contentStarts T.bytes.size
     have e2 := getElem!_push_eq T.contentStops (T.bytes.size + l.content.size)
@@ -228,20 +226,22 @@ theorem batchOf_push {T : TokenBatch} {ls : List Lexeme} (h : BatchOf T ls) (l :
     rw [et, e1, e2, e3, e4, e5, e6, e7, e8, extract_append_right]
     exact ⟨rfl, by omega, Nat.le_of_eq hbs, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
 
-theorem batchOf_foldl (ls : List Lexeme) :
-    ∀ (T : TokenBatch) (done : List Lexeme), BatchOf T done →
-      BatchOf (ls.foldl pushLexeme T) (done ++ ls) := by
+theorem batchOf_pushLexemes (ls : List Lexeme) :
+    ∀ (T : TokenBatch) (h : Ordered T.lastEnd ls) (done : List Lexeme), BatchOf T done →
+      BatchOf (pushLexemes T ls h) (done ++ ls) := by
   induction ls with
-  | nil => intro T done h; simpa using h
+  | nil => intro T h done hT; rw [List.append_nil]; exact hT
   | cons l ls ih =>
-    intro T done h
-    simp only [List.foldl_cons]
-    have := ih (pushLexeme T l) (done ++ [l]) (batchOf_push h l)
-    simpa using this
+    intro T h done hT
+    obtain ⟨hstart, hv, hrest⟩ := h
+    have := ih _ ((TokenBatch.lastEnd_pushLocated ..).symm ▸ hrest) (done ++ [l])
+      (batchOf_push hT l hstart hv)
+    rw [show done ++ l :: ls = done ++ [l] ++ ls by simp]
+    exact this
 
-theorem batchOf_toTokenBatch (b : Array Lexeme) : BatchOf (toTokenBatch b) b.toList := by
-  have := batchOf_foldl b.toList (TokenBatch.empty b.size) [] (batchOf_empty _)
-  simp only [List.nil_append, Array.foldl_toList] at this
+theorem batchOf_toTokenBatch (b : Array Lexeme) (h : Ordered 0 b.toList) :
+    BatchOf (toTokenBatch b h) b.toList := by
+  have := batchOf_pushLexemes b.toList (TokenBatch.empty b.size) h [] (batchOf_empty _)
   exact this
 
 /-! ## Tokens of a batch -/
@@ -307,10 +307,10 @@ theorem fromBytes_toByteArray (s : ByteSlice) (v : Version) :
   simp only [beq_toByteArray]
 
 /-- A token of a batch of lexemes is reported as the naive lexer reports its lexeme alone. -/
-theorem toHanded_batch (b : Array Lexeme) (c : BatchCursor) (h : c.HasNext)
-    (hb : c.intoBatch = toTokenBatch b) (hj : idx c < b.size) :
+theorem toHanded_batch (b : Array Lexeme) (hb0 : Ordered 0 b.toList) (c : BatchCursor)
+    (h : c.HasNext) (hb : c.intoBatch = toTokenBatch b hb0) (hj : idx c < b.size) :
     toHanded c (c.next h).1 = lexemeHanded c.version b[idx c] := by
-  have hB := batchOf_toTokenBatch b
+  have hB := batchOf_toTokenBatch b hb0
   obtain ⟨e1, e2, e3, e4, e5, e6, e7, e8, e9, e10⟩ := hB.entry (idx c) (by simpa using hj)
   simp only [Array.getElem_toList] at e1 e4 e5 e6 e7 e8 e9 e10
   rw [lexemeHanded_eq]

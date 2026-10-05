@@ -124,11 +124,28 @@ structure Token where
   private index : Nat
   deriving BEq, Inhabited
 
+/--
+Whether the first `len` tokens, given by their types and the offsets where they start and
+end, are in input order from the offset `origin` on: each token starts at or after the end of
+the token before it, the first one at or after `origin`, and each token ends after it starts,
+except the end of file, which is empty. The arrays hold an entry for each of the tokens.
+-/
+def TokensInOrder (origin len : Nat) (types : ByteArray) (starts ends : Array Nat) : Prop :=
+  len ≤ types.size ∧ len ≤ starts.size ∧ len ≤ ends.size ∧
+    ∀ i, i < len →
+      (if i = 0 then origin else ends[i - 1]!) ≤ starts[i]! ∧
+        (starts[i]! < ends[i]! ∨
+          types.get! i = TokenCategory.endOfFile.toUInt8 ∧ starts[i]! = ends[i]!)
+
 /- LEAN: what the Rust lexer keeps in its batch arrays. Each field is an array with one entry
 per token; entries from `len` on are left over from earlier batches and are overwritten. The
 contents of all tokens of a batch are in the one array `bytes`: either the input slice the
 batch was lexed from, or the lexer's content buffer for a batch of one token. The fields are
-public, as the lexer, which is another module, writes them. -/
+public, as the lexer, which is another module, writes them.
+
+Not in Rust: `origin` and `ordered`, the proof that the tokens are in input order. Whoever
+pushes a token proves that it starts at or after the end of the last one (`lastEnd`) and has
+a byte; the proof costs nothing when the lexer runs. -/
 /-- The tokens of a batch, field by field. -/
 structure TokenBatch where
   /-- The number of tokens in the batch. -/
@@ -145,9 +162,17 @@ structure TokenBatch where
   endOffsets : Array Nat
   endLines : Array Nat
   endColumns : Array Nat
-  deriving Inhabited
+  /-- The offset at or after which the first token starts. -/
+  origin : Nat
+  /-- The tokens are in input order from `origin` on, and each but the end of file has a byte. -/
+  ordered : TokensInOrder origin len types startOffsets endOffsets
 
 namespace TokenBatch
+
+/-- No tokens are in input order from any origin on. -/
+private theorem tokensInOrder_zero (origin : Nat) (types : ByteArray) (starts ends : Array Nat) :
+    TokensInOrder origin 0 types starts ends :=
+  ⟨Nat.zero_le _, Nat.zero_le _, Nat.zero_le _, fun _ h => absurd h (Nat.not_lt_zero _)⟩
 
 /-- An empty batch with room for `capacity` tokens. -/
 def empty (capacity : Nat) : TokenBatch :=
@@ -159,20 +184,119 @@ def empty (capacity : Nat) : TokenBatch :=
     startColumns := Array.emptyWithCapacity capacity,
     endOffsets := Array.emptyWithCapacity capacity,
     endLines := Array.emptyWithCapacity capacity,
-    endColumns := Array.emptyWithCapacity capacity }
+    endColumns := Array.emptyWithCapacity capacity,
+    origin := 0,
+    ordered := tokensInOrder_zero _ _ _ _ }
+
+instance : Inhabited TokenBatch := ⟨empty 0⟩
+
+/-- The offset where the last token ends, or the origin if the batch has no token. -/
+def lastEnd (self : TokenBatch) : Nat :=
+  if self.len = 0 then self.origin else self.endOffsets[self.len - 1]!
 
 /-- Writes the value at `index` of the array, which is at most its size. -/
 @[inline]
 private def write (array : Array Nat) (index value : Nat) : Array Nat :=
   if index < array.size then array.set! index value else array.push value
 
+/-- Writes the byte at `index` of the array, which is at most its size. -/
+@[inline]
+private def writeByte (array : ByteArray) (index : Nat) (value : UInt8) : ByteArray :=
+  if index < array.size then array.set! index value else array.push value
+
+private theorem size_write (array : Array Nat) (index value : Nat) (h : index ≤ array.size) :
+    index < (write array index value).size := by
+  unfold write
+  split
+  · rw [Array.size_set!]; assumption
+  · rw [Array.size_push]; omega
+
+private theorem getElem!_write (array : Array Nat) (index value i : Nat) (h : index ≤ array.size) :
+    (write array index value)[i]! = if i = index then value else array[i]! := by
+  unfold write
+  by_cases hlt : index < array.size
+  · simp only [hlt, ↓reduceIte, getElem!_def, Array.set!_eq_setIfInBounds,
+      Array.getElem?_setIfInBounds]
+    by_cases e : i = index
+    · simp [e]
+    · simp [e, Ne.symm e]
+  · simp only [hlt, ↓reduceIte, getElem!_def, Array.getElem?_push]
+    by_cases e : i = index
+    · simp [e, show index = array.size by omega]
+    · simp [e, show i ≠ array.size by omega]
+
+private theorem size_writeByte (array : ByteArray) (index : Nat) (value : UInt8)
+    (h : index ≤ array.size) : index < (writeByte array index value).size := by
+  unfold writeByte
+  split
+  · show index < (array.data.set! index value).size
+    rw [Array.size_set!]; assumption
+  · show index < (array.data.push value).size
+    rw [Array.size_push]; simp only [ByteArray.size] at h; omega
+
+private theorem get!_writeByte (array : ByteArray) (index : Nat) (value : UInt8) (i : Nat)
+    (h : index ≤ array.size) :
+    (writeByte array index value).get! i = if i = index then value else array.get! i := by
+  unfold writeByte
+  have hs : array.size = array.data.size := rfl
+  by_cases hlt : index < array.size
+  · simp only [hlt, ↓reduceIte]
+    show (array.data.set! index value)[i]! = if i = index then value else array.data[i]!
+    simp only [getElem!_def, Array.set!_eq_setIfInBounds, Array.getElem?_setIfInBounds]
+    by_cases e : i = index
+    · simp [e, hlt]
+    · simp [e, Ne.symm e]
+  · simp only [hlt, ↓reduceIte]
+    show (array.data.push value)[i]! = if i = index then value else array.data[i]!
+    simp only [getElem!_def, Array.getElem?_push]
+    by_cases e : i = index
+    · simp [e, show index = array.data.size by omega]
+    · simp [e, show i ≠ array.size by omega]
+
+/-- A token appended after the last one, with a byte unless it is the end of file, keeps the
+tokens in order. -/
+private theorem tokensInOrder_push {origin len : Nat} {types : ByteArray} {starts ends : Array Nat}
+    (h : TokensInOrder origin len types starts ends) (ty : UInt8) (start «end» : Nat)
+    (after : (if len = 0 then origin else ends[len - 1]!) ≤ start)
+    (nonempty : start < «end» ∨ ty = TokenCategory.endOfFile.toUInt8 ∧ start = «end») :
+    TokensInOrder origin (len + 1) (writeByte types len ty) (write starts len start)
+      (write ends len «end») := by
+  obtain ⟨ht, hs, he, hall⟩ := h
+  refine ⟨size_writeByte _ _ _ ht, size_write _ _ _ hs, size_write _ _ _ he, ?_⟩
+  intro i hi
+  have hS := getElem!_write starts len start
+  have hE := getElem!_write ends len «end»
+  have hT := get!_writeByte types len ty
+  rw [hS i hs, hE i he, hT i ht]
+  by_cases e : i = len
+  · simp only [e, ↓reduceIte]
+    refine ⟨?_, nonempty⟩
+    by_cases z : len = 0
+    · simpa [z] using after
+    · simp only [z, ↓reduceIte] at after ⊢
+      rw [hE (len - 1) he]
+      simpa [show len - 1 ≠ len by omega] using after
+  · have hlt : i < len := by omega
+    simp only [e, ↓reduceIte]
+    obtain ⟨hprev, hne⟩ := hall i hlt
+    refine ⟨?_, hne⟩
+    by_cases z : i = 0
+    · simpa [z] using hprev
+    · simp only [z, ↓reduceIte] at hprev ⊢
+      rw [hE (i - 1) he]
+      simpa [show i - 1 ≠ len by omega] using hprev
+
 /--
 Appends a token with the type, its content from `contentStart` to `contentStop` in `bytes`,
-and the span given by the numbers of its two locations.
+and the span given by the numbers of its two locations. The token starts at or after the end
+of the last one, and has a byte unless it is the end of file.
 -/
 @[inline]
 def push (self : TokenBatch) (ty : TokenCategory) (contentStart contentStop : Nat)
-    (startOffset startLine startColumn endOffset endLine endColumn : Nat) : TokenBatch :=
+    (startOffset startLine startColumn endOffset endLine endColumn : Nat)
+    (after : self.lastEnd ≤ startOffset)
+    (nonempty : startOffset < endOffset ∨ ty = .endOfFile ∧ startOffset = endOffset) :
+    TokenBatch :=
   let index := self.len
   { self with
     len := index + 1
@@ -185,31 +309,148 @@ def push (self : TokenBatch) (ty : TokenCategory) (contentStart contentStop : Na
     startColumns := write self.startColumns index startColumn
     endOffsets := write self.endOffsets index endOffset
     endLines := write self.endLines index endLine
-    endColumns := write self.endColumns index endColumn }
+    endColumns := write self.endColumns index endColumn
+    ordered := tokensInOrder_push self.ordered ty.toUInt8 startOffset endOffset after
+      (nonempty.imp_right fun h => ⟨by rw [h.1], h.2⟩) }
 
 /--
 Appends a token with the type, its content from `contentStart` to `contentStop` in `bytes`,
 spanning the offsets from `start` to `end` on the line that starts at the offset `lineStart`.
+The token starts at or after the end of the last one, and has a byte unless it is the end of
+file.
 -/
 @[inline]
 def pushOnLine (self : TokenBatch) (ty : TokenCategory) (contentStart contentStop : Nat)
-    (line lineStart start «end» : Nat) : TokenBatch :=
-  self.push ty contentStart contentStop start line (start - lineStart) «end» line («end» - lineStart)
+    (line lineStart start «end» : Nat) (after : self.lastEnd ≤ start)
+    (nonempty : start < «end» ∨ ty = .endOfFile ∧ start = «end») : TokenBatch :=
+  self.push ty contentStart contentStop start line (start - lineStart) «end» line
+    («end» - lineStart)
+    after nonempty
 
 /--
 Appends a token with the type, its content from `contentStart` to `contentStop` in `bytes`,
-spanning from `start` to `end`.
+spanning from `start` to `end`. The token starts at or after the end of the last one, and has
+a byte unless it is the end of file.
 -/
 @[inline]
 def pushLocated (self : TokenBatch) (ty : TokenCategory) (contentStart contentStop : Nat)
-    (start «end» : Location) : TokenBatch :=
+    (start «end» : Location) (after : self.lastEnd ≤ start.offset)
+    (nonempty : start.offset < «end».offset ∨ ty = .endOfFile ∧ start.offset = «end».offset) :
+    TokenBatch :=
   self.push ty contentStart contentStop start.offset start.line start.column
-    «end».offset «end».line «end».column
+    «end».offset «end».line «end».column after nonempty
 
-/-- Empties the batch, keeping its storage. -/
+/-- Empties the batch, keeping its storage; the tokens appended next start at or after
+`origin`. -/
 @[inline]
-def clear (self : TokenBatch) : TokenBatch :=
-  { self with len := 0 }
+def clear (self : TokenBatch) (origin : Nat) : TokenBatch :=
+  { self with len := 0, origin, ordered := tokensInOrder_zero _ _ _ _ }
+
+theorem lastEnd_push (self : TokenBatch) (ty : TokenCategory) (contentStart contentStop : Nat)
+    (startOffset startLine startColumn endOffset endLine endColumn : Nat)
+    (after : self.lastEnd ≤ startOffset)
+    (nonempty : startOffset < endOffset ∨ ty = .endOfFile ∧ startOffset = endOffset) :
+    (self.push ty contentStart contentStop startOffset startLine startColumn endOffset endLine
+      endColumn after nonempty).lastEnd = endOffset := by
+  simp only [lastEnd, push, Nat.add_one_ne_zero, ↓reduceIte, Nat.add_sub_cancel]
+  rw [getElem!_write _ _ _ _ self.ordered.2.2.1]; simp
+
+theorem lastEnd_clear (self : TokenBatch) (origin : Nat) :
+    (self.clear origin).lastEnd = origin := by
+  simp [lastEnd, clear]
+
+theorem lastEnd_default : (default : TokenBatch).lastEnd = 0 :=
+  rfl
+
+theorem lastEnd_pushOnLine (self : TokenBatch) (ty : TokenCategory) (contentStart contentStop : Nat)
+    (line lineStart start «end» : Nat) (after : self.lastEnd ≤ start)
+    (nonempty : start < «end» ∨ ty = .endOfFile ∧ start = «end») :
+    (self.pushOnLine ty contentStart contentStop line lineStart start «end» after
+      nonempty).lastEnd =
+      «end» :=
+  lastEnd_push ..
+
+theorem lastEnd_pushLocated (self : TokenBatch) (ty : TokenCategory)
+    (contentStart contentStop : Nat)
+    (start «end» : Location) (after : self.lastEnd ≤ start.offset)
+    (nonempty : start.offset < «end».offset ∨ ty = .endOfFile ∧ start.offset = «end».offset) :
+    (self.pushLocated ty contentStart contentStop start «end» after nonempty).lastEnd =
+      «end».offset :=
+  lastEnd_push ..
+
+theorem len_push (self : TokenBatch) (ty : TokenCategory) (contentStart contentStop : Nat)
+    (startOffset startLine startColumn endOffset endLine endColumn : Nat)
+    (after : self.lastEnd ≤ startOffset)
+    (nonempty : startOffset < endOffset ∨ ty = .endOfFile ∧ startOffset = endOffset) :
+    (self.push ty contentStart contentStop startOffset startLine startColumn endOffset endLine
+      endColumn after nonempty).len = self.len + 1 :=
+  rfl
+
+/--
+Whether every token of the batch starts at or after the offset and is not the end of file, so
+that it ends after the offset.
+-/
+def StartsFrom (self : TokenBatch) (offset : Nat) : Prop :=
+  ∀ i, i < self.len →
+    offset ≤ self.startOffsets[i]! ∧ self.types.get! i ≠ TokenCategory.endOfFile.toUInt8
+
+theorem startsFrom_clear (self : TokenBatch) (origin offset : Nat) :
+    (self.clear origin).StartsFrom offset :=
+  fun _ h => absurd h (Nat.not_lt_zero _)
+
+theorem startsFrom_empty (capacity offset : Nat) : (empty capacity).StartsFrom offset :=
+  fun _ h => absurd h (Nat.not_lt_zero _)
+
+theorem startsFrom_push {self : TokenBatch} {offset : Nat} (h : self.StartsFrom offset)
+    {ty : TokenCategory} {contentStart contentStop : Nat}
+    {startOffset startLine startColumn endOffset endLine endColumn : Nat}
+    {after : self.lastEnd ≤ startOffset}
+    {nonempty : startOffset < endOffset ∨ ty = .endOfFile ∧ startOffset = endOffset}
+    (hstart : offset ≤ startOffset) (hty : ty ≠ .endOfFile) :
+    (self.push ty contentStart contentStop startOffset startLine startColumn endOffset endLine
+      endColumn after nonempty).StartsFrom offset := by
+  intro i hi
+  simp only [push] at hi ⊢
+  have hs := self.ordered.2.1
+  have ht := self.ordered.1
+  have hw := get!_writeByte self.types self.len ty.toUInt8 i ht
+  simp only [writeByte] at hw
+  rw [getElem!_write _ _ _ _ hs, hw]
+  by_cases e : i = self.len
+  · subst e
+    simp only [↓reduceIte]
+    refine ⟨hstart, fun heq => hty ?_⟩
+    cases ty <;> first | rfl | exact absurd heq (by decide)
+  · simp only [e, ↓reduceIte]
+    exact h i (by omega)
+
+theorem startsFrom_default (offset : Nat) : (default : TokenBatch).StartsFrom offset :=
+  startsFrom_empty 0 offset
+
+theorem startsFrom_pushOnLine {self : TokenBatch} {offset : Nat} (h : self.StartsFrom offset)
+    {ty : TokenCategory} {contentStart contentStop line lineStart start «end» : Nat}
+    {after : self.lastEnd ≤ start} {nonempty : start < «end» ∨ ty = .endOfFile ∧ start = «end»}
+    (hstart : offset ≤ start) (hty : ty ≠ .endOfFile) :
+    (self.pushOnLine ty contentStart contentStop line lineStart start «end» after
+      nonempty).StartsFrom offset :=
+  startsFrom_push h hstart hty
+
+theorem startsFrom_pushLocated {self : TokenBatch} {offset : Nat} (h : self.StartsFrom offset)
+    {ty : TokenCategory} {contentStart contentStop : Nat} {start «end» : Location}
+    {after : self.lastEnd ≤ start.offset}
+    {nonempty : start.offset < «end».offset ∨ ty = .endOfFile ∧ start.offset = «end».offset}
+    (hstart : offset ≤ start.offset) (hty : ty ≠ .endOfFile) :
+    (self.pushLocated ty contentStart contentStop start «end» after nonempty).StartsFrom offset :=
+  startsFrom_push h hstart hty
+
+/-- A token of the batch other than the end of file ends after it starts, and so after
+`origin`. -/
+theorem start_lt_end (self : TokenBatch) {i : Nat} (hi : i < self.len)
+    (hty : self.types.get! i ≠ TokenCategory.endOfFile.toUInt8) :
+    self.startOffsets[i]! < self.endOffsets[i]! := by
+  rcases (self.ordered.2.2.2 i hi).2 with h | h
+  · exact h
+  · exact absurd h.1 hty
 
 end TokenBatch
 
@@ -452,6 +693,39 @@ def consumedEndOf (self : BatchCursor) {origin : BatchCursor} (_ : self.Consumed
     Location :=
   (self.batch.spanOf ⟨self.nextIndex - 1⟩).end
 
+/--
+Whether the cursor yields no token beyond its batch, and every token of its batch starts at or
+after the offset and is not the end of file.
+-/
+def StartsFrom (self : BatchCursor) (offset : Nat) : Prop :=
+  self.stop ≤ self.batch.len ∧ self.batch.StartsFrom offset
+
+theorem startsFrom_new {batch : TokenBatch} {offset : Nat} (h : batch.StartsFrom offset)
+    (version : Version) : (new version batch).StartsFrom offset :=
+  ⟨Nat.le_refl _, h⟩
+
+theorem Follows.startsFrom {self origin : BatchCursor} (h : self.Follows origin) {offset : Nat}
+    (ho : origin.StartsFrom offset) : self.StartsFrom offset := by
+  obtain ⟨hb, _, hs, _⟩ := h
+  exact ⟨by rw [hb]; exact Nat.le_trans hs ho.1, hb ▸ ho.2⟩
+
+/--
+The last token consumed ends after the offset that every token of the batch starts at or
+after: it is not the end of file, so it ends after it starts.
+-/
+theorem Consumed.lt_consumedEndOf {self origin : BatchCursor} (h : self.Consumed origin)
+    {offset : Nat} (ho : origin.StartsFrom offset) : offset < (self.consumedEndOf h).offset := by
+  have hs := h.follows.startsFrom ho
+  have hlt : self.nextIndex - 1 < self.batch.len := by
+    have := h.2
+    have := self.bounded.2
+    have := hs.1
+    omega
+  obtain ⟨hstart, hty⟩ := hs.2 _ hlt
+  have := self.batch.start_lt_end hlt hty
+  show offset < self.batch.endOffsets[self.nextIndex - 1]!
+  omega
+
 /-- Consumes all tokens remaining in the cursor. -/
 @[inline]
 def consumeAll (self : BatchCursor) : BatchCursor :=
@@ -543,6 +817,10 @@ theorem Consumed.remaining_lt {self origin : BatchCursor} (h : self.Consumed ori
 theorem remaining_resetConsumed (self : BatchCursor) :
     self.resetConsumed.remaining = self.remaining :=
   rfl
+
+theorem startsFrom_resetConsumed {self : BatchCursor} {offset : Nat}
+    (h : self.StartsFrom offset) : self.resetConsumed.StartsFrom offset :=
+  h
 
 theorem hasNext_resetConsumed {self : BatchCursor} :
     self.resetConsumed.HasNext ↔ self.HasNext :=

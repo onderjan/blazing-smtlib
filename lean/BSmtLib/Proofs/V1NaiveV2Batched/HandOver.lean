@@ -17,8 +17,9 @@ theorem drop_eq_cons (b : Array Lexeme) (j : Nat) (hj : j < b.size) :
   rw [List.drop_eq_getElem_cons (by simpa using hj)]
   simp
 
-theorem takeRest_batch (b : Array Lexeme) : ∀ n (c : BatchCursor), c.remaining = n →
-    c.intoBatch = toTokenBatch b → idx c + c.remaining = b.size →
+theorem takeRest_batch (b : Array Lexeme) (hb0 : Ordered 0 b.toList) :
+    ∀ n (c : BatchCursor), c.remaining = n →
+    c.intoBatch = toTokenBatch b hb0 → idx c + c.remaining = b.size →
     (takeRest c).1 = (b.toList.drop (idx c)).mapM (lexemeHanded c.version) ∧
     ((takeRest c).1 ≠ none → (takeRest c).2.1.remaining = 0) ∧
     (takeRest c).2.1.version = c.version ∧
@@ -42,7 +43,7 @@ theorem takeRest_batch (b : Array Lexeme) : ∀ n (c : BatchCursor), c.remaining
       (by omega)
     rw [takeRest]
     simp only [hh, dite_true]
-    rw [toHanded_batch b c hh hb hj, drop_eq_cons b _ hj, List.mapM_cons]
+    rw [toHanded_batch b hb0 c hh hb hj, drop_eq_cons b _ hj, List.mapM_cons]
     cases hl : lexemeHanded c.version b[idx c] with
     | none =>
       exact ⟨rfl, fun h => absurd rfl h, rfl, rfl⟩
@@ -60,8 +61,9 @@ theorem takeRest_batch (b : Array Lexeme) : ∀ n (c : BatchCursor), c.remaining
         exact hne rfl
 
 /-- What the consumer does with a cursor over a batch of lexemes. -/
-theorem consume_batch (b : Array Lexeme) (c : BatchCursor) (h : c.HasNext)
-    (hb : c.intoBatch = toTokenBatch b) (hs : idx c + c.remaining = b.size) (coll : Collector) :
+theorem consume_batch (b : Array Lexeme) (hb0 : Ordered 0 b.toList) (c : BatchCursor)
+    (h : c.HasNext) (hb : c.intoBatch = toTokenBatch b hb0) (hs : idx c + c.remaining = b.size)
+    (coll : Collector) :
     (∀ hs', (b.toList.drop (idx c)).mapM (lexemeHanded c.version) = some hs' →
       ((Consume.consume (H := Collector) c h).run coll).1.1 = .ok .continue ∧
       ((Consume.consume (H := Collector) c h).run coll).2.handed = coll.handed ++ hs' ∧
@@ -74,13 +76,13 @@ theorem consume_batch (b : Array Lexeme) (c : BatchCursor) (h : c.HasNext)
   have hr := remaining_next c h
   have hi := idx_next c h
   have hj : idx c < b.size := by rw [hasNext_iff] at h; omega
-  obtain ⟨i1, i2, i3, i4⟩ := takeRest_batch b _ (c.next h).2.1 rfl
+  obtain ⟨i1, i2, i3, i4⟩ := takeRest_batch b hb0 _ (c.next h).2.1 rfl
     (by rw [intoBatch_next]; exact hb) (by omega)
   rw [version_next, hi] at i1
   rw [version_next] at i3
   rw [relex_next] at i4
   simp only [Consume.consume]
-  rw [toHanded_batch b c h hb hj, drop_eq_cons b _ hj, List.mapM_cons]
+  rw [toHanded_batch b hb0 c h hb hj, drop_eq_cons b _ hj, List.mapM_cons]
   cases hl : lexemeHanded c.version b[idx c] with
   | none =>
     refine ⟨fun hs' h' => ?_, fun _ => rfl⟩
@@ -101,31 +103,33 @@ theorem consume_batch (b : Array Lexeme) (c : BatchCursor) (h : c.HasNext)
         exact ⟨rfl, rfl, i2 (by simp [hm]), i3, i4⟩
       · simp at h'
 
-theorem len_toTokenBatch (b : Array Lexeme) : (toTokenBatch b).len = b.size := by
-  simpa using (batchOf_toTokenBatch b).len
+theorem len_toTokenBatch (b : Array Lexeme) (hb0 : Ordered 0 b.toList) :
+    (toTokenBatch b hb0).len = b.size := by
+  simpa using (batchOf_toTokenBatch b hb0).len
 
 /-- What the batched lexer's hand-over of a cursor over a batch does with the consumer. -/
-theorem handOverCursor_batch (v : Version) (b : Array Lexeme) (coll : Collector) :
+theorem handOverCursor_batch (v : Version) (b : Array Lexeme) (hb0 : Ordered 0 b.toList)
+    (coll : Collector) :
     (∀ hs, handedAll v b.toList = some hs →
       ((handOverCursor (H := Collector) (m := Id) (R := Empty) (E := Unit)
-          (BatchCursor.new v (toTokenBatch b))).run coll).1.1 = none ∧
+          (BatchCursor.new v (toTokenBatch b hb0))).run coll).1.1 = none ∧
       ((handOverCursor (H := Collector) (m := Id) (R := Empty) (E := Unit)
-          (BatchCursor.new v (toTokenBatch b))).run coll).1.2.version = v ∧
+          (BatchCursor.new v (toTokenBatch b hb0))).run coll).1.2.version = v ∧
       ((handOverCursor (H := Collector) (m := Id) (R := Empty) (E := Unit)
-          (BatchCursor.new v (toTokenBatch b))).run coll).2.handed = coll.handed ++ hs) ∧
+          (BatchCursor.new v (toTokenBatch b hb0))).run coll).2.handed = coll.handed ++ hs) ∧
     (handedAll v b.toList = none → ∃ f,
       ((handOverCursor (H := Collector) (m := Id) (R := Empty) (E := Unit)
-          (BatchCursor.new v (toTokenBatch b))).run coll).1.1 = some (.failed f)) := by
+          (BatchCursor.new v (toTokenBatch b hb0))).run coll).1.1 = some (.failed f)) := by
   rw [handOverCursor]
-  by_cases h : (BatchCursor.new v (toTokenBatch b)).HasNext
-  · have hc := consume_batch b _ h rfl
-      (by rw [idx_new, remaining_new, len_toTokenBatch]; omega) coll
+  by_cases h : (BatchCursor.new v (toTokenBatch b hb0)).HasNext
+  · have hc := consume_batch b hb0 _ h rfl
+      (by rw [idx_new, remaining_new, len_toTokenBatch b hb0]; omega) coll
     simp only [idx_new, List.drop_zero] at hc
     simp only [h, dite_true, StateT.run_bind]
-    have hv : (BatchCursor.new v (toTokenBatch b)).version = v := rfl
-    have hrl : (BatchCursor.new v (toTokenBatch b)).relexRequested = false := rfl
+    have hv : (BatchCursor.new v (toTokenBatch b hb0)).version = v := rfl
+    have hrl : (BatchCursor.new v (toTokenBatch b hb0)).relexRequested = false := rfl
     rw [hv, hrl] at hc
-    generalize (Consume.consume (BatchCursor.new v (toTokenBatch b)) h).run coll = X at hc ⊢
+    generalize (Consume.consume (BatchCursor.new v (toTokenBatch b hb0)) h).run coll = X at hc ⊢
     obtain ⟨⟨answer, next, hnext⟩, coll'⟩ := X
     obtain ⟨hok, herr⟩ := hc
     refine ⟨fun hs hhs => ?_, fun hn => ?_⟩
@@ -143,7 +147,7 @@ theorem handOverCursor_batch (v : Version) (b : Array Lexeme) (coll : Collector)
       subst h1
       exact ⟨_, rfl⟩
   · have h0 : b.size = 0 := by
-      rw [hasNext_iff, remaining_new, len_toTokenBatch] at h; omega
+      rw [hasNext_iff, remaining_new, len_toTokenBatch b hb0] at h; omega
     simp only [h, dite_false]
     have hl : b.toList = [] := by simpa using h0
     rw [hl]
@@ -154,20 +158,22 @@ theorem handOverCursor_batch (v : Version) (b : Array Lexeme) (coll : Collector)
     · simp [handedAll] at hn
 
 /-- What the batched lexer's hand-over of a batch does with the consumer. -/
-theorem flush_batch (core : Core) (b : Array Lexeme) (coll : Collector) :
+theorem flush_batch (core : Core) (b : Array Lexeme) (hb0 : Ordered 0 b.toList)
+    (coll : Collector) :
     (∀ hs, handedAll core.version b.toList = some hs →
-      ((flush (H := Collector) (m := Id) (R := Empty) (E := Unit) core b).run coll).1.1 = none ∧
-      (∃ d, ((flush (H := Collector) (m := Id) (R := Empty) (E := Unit) core b).run coll).1.2 =
-        { core with depth := d }) ∧
-      ((flush (H := Collector) (m := Id) (R := Empty) (E := Unit) core b).run coll).2.handed =
-        coll.handed ++ hs) ∧
+      (StateT.run (flush (H := Collector) (m := Id) (R := Empty) (E := Unit) core b hb0)
+        coll).1.1 = none ∧
+      (∃ d, (StateT.run (flush (H := Collector) (m := Id) (R := Empty) (E := Unit) core b hb0)
+        coll).1.2 = { core with depth := d }) ∧
+      (StateT.run (flush (H := Collector) (m := Id) (R := Empty) (E := Unit) core b hb0)
+        coll).2.handed = coll.handed ++ hs) ∧
     (handedAll core.version b.toList = none → ∃ f,
-      ((flush (H := Collector) (m := Id) (R := Empty) (E := Unit) core b).run coll).1.1 =
-        some (.failed f)) := by
-  obtain ⟨hok, herr⟩ := handOverCursor_batch core.version b coll
+      (StateT.run (flush (H := Collector) (m := Id) (R := Empty) (E := Unit) core b hb0)
+        coll).1.1 = some (.failed f)) := by
+  obtain ⟨hok, herr⟩ := handOverCursor_batch core.version b hb0 coll
   simp only [flush, StateT.run_bind]
   generalize (handOverCursor (H := Collector) (m := Id) (R := Empty) (E := Unit)
-    (BatchCursor.new core.version (toTokenBatch b))).run coll = X at hok herr ⊢
+    (BatchCursor.new core.version (toTokenBatch b hb0))).run coll = X at hok herr ⊢
   obtain ⟨⟨stop, cursor⟩, coll'⟩ := X
   refine ⟨fun hs hhs => ?_, fun hn => ?_⟩
   · obtain ⟨h1, h2, h3⟩ := hok hs hhs

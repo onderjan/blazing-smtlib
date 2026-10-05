@@ -33,57 +33,61 @@ namespace V3RunsV4FastPaths
 theorem stepAgrees [LawfulMonad m] (recover : Location → StateT H m Unit) (sliceStart : Nat)
     (slice : ByteSlice) :
     StepAgrees (R := R) (E := E) V3Runs.lexIdle V4FastPaths.lexIdle recover sliceStart slice := by
-  intro index committed core batch flow h
-  rw [loop3_lt _ _ _ _ _ _ _ _ _ h]
-  simp only [lexAt]
+  intro index committed core batch flow hfits h
+  rw [loop3_lt _ _ _ _ _ _ _ _ _ hfits h]
   cases hact : core.activity with
-  | idle => exact lexIdle_agrees recover sliceStart slice committed flow index h core batch
+  | idle =>
+    simp only [lexAt, withEq, hact]
+    exact lexIdle_agrees recover sliceStart slice committed flow index h core batch hfits
   | token p =>
-    simp only [V3Runs.lexToken]
-    generalize run (Consume.consumesWhitespaceAndComments (H := H)) slice p index core.location = r
+    simp only [lexAt, withEq, hact, V3Runs.lexToken]
+    generalize runS (Consume.consumesWhitespaceAndComments (H := H)) slice p index
+      core.location = x
+    obtain ⟨r, hr⟩ := x
     cases r with
     | tokenBefore l next _ inside =>
       simp only [bind_assoc, map_bind]
       refine congrArg (_ >>= ·) (funext fun x => ?_)
-      obtain ⟨outcome, c, b⟩ := x
+      obtain ⟨⟨outcome, c, b⟩, hf, hx⟩ := x
       cases outcome with
       | next =>
         simp only [bind_assoc, pure_bind, ← map_bind]
-        exact lexIdle_agrees recover sliceStart slice committed flow next inside c b
+        exact lexIdle_agrees recover sliceStart slice committed flow next inside c b hf
       | finished located => rfl
       | stopped stop => rfl
       | failed failure => rfl
     | _ => rfl
   | recovered =>
-    simp only [bind_assoc, map_bind]
+    simp only [lexAt, withEq, hact, bind_assoc, map_bind]
     refine congrArg (_ >>= ·) (funext fun _ => ?_)
     simp only [← map_bind]
-    exact lexIdle_agrees recover sliceStart slice committed flow index h _ batch
+    exact lexIdle_agrees recover sliceStart slice committed flow index h _ batch _
   | skipping skip =>
-    simp only
+    simp only [lexAt, withEq, hact]
     cases hs : scan (core.version == .v2_0) skip core.depth slice[index] with
     | before =>
       simp only [show (Scanned.before == Scanned.before) = true from rfl, ite_true, bind_assoc,
         map_bind]
       refine congrArg (_ >>= ·) (funext fun _ => ?_)
       simp only [← map_bind]
-      exact lexIdle_agrees recover sliceStart slice committed flow index h _ batch
+      exact lexIdle_agrees recover sliceStart slice committed flow index h _ batch _
     | skip skip' depth =>
       simp only [show (Scanned.skip skip' depth == Scanned.before) = false from rfl,
         Bool.false_eq_true, ite_false]
     | after =>
       simp only [show (Scanned.after == Scanned.before) = false from rfl, Bool.false_eq_true,
         ite_false]
-  | discarding => rfl
-  | ended => rfl
+  | discarding => simp only [lexAt, withEq, hact]
+  | ended => simp only [lexAt, withEq, hact]
 
 theorem lexFrom_agree [LawfulMonad m] (recover : Location → StateT H m Unit) (sliceStart : Nat)
     (slice : ByteSlice) (core : Core) :
-    erase <$> V3Runs.lexFrom V3Runs.lexIdle recover sliceStart slice 0 0 core #[] .continue =
+    erase <$> V3Runs.lexFrom V3Runs.lexIdle recover sliceStart slice 0 0 core #[] .continue
+        (fits_empty _) =
       erase <$> V3Runs.lexFrom V4FastPaths.lexIdle recover sliceStart slice 0 0 core #[]
-        (.continue : ControlFlow (Located R)) :=
+        (.continue : ControlFlow (Located R)) (fits_empty _) :=
   loop3_agree _ _ recover sliceStart slice (stepAgrees recover sliceStart slice) _ 0 rfl _ 0 rfl
-    core #[] .continue
+    core #[] .continue (fits_empty _)
 
 end V3RunsV4FastPaths
 
