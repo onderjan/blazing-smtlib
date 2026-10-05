@@ -22,8 +22,17 @@ Environment variables, as for the Rust benchmark:
   prints one tab-separated line per file with the label, mode, byte size, and
   every timed run in seconds, and `list` prints the selected labels one per
   line without measuring anything.
+
+An environment variable of its own:
+
+- `SMT_BENCH_LEXER`: comma-separated lexers to measure, from `v1` to `v5` (default `v5`,
+  the library's lexer; `v1` to `v4` are the lexers of the proofs, `BSmtLib.Proofs.Lexer`).
+  The timed runs of a file alternate between the lexers, so that a drift of the machine affects
+  them alike. Each lexer gets its own line, and in `raw` format its own mode, `lex-v1` to
+  `lex-v5`; with the default alone the mode stays `lex`, as in the Rust benchmark.
 -/
 import BSmtLib
+import BSmtLib.Proofs.Lexer.V4FastPaths
 
 open BSmtLib
 
@@ -108,11 +117,42 @@ def checkLexed (result : Except (LexError Empty × β) α) (path : String) : IO 
     throw <| IO.userError s!"benchmark file {path} must lex, got {err.message}"
   | .error ({ cause := .consumer never, .. }, _) => nomatch never
 
-/-- Lexes the in-memory file, discarding tokens. -/
-def lexFromMemory (data : ByteArray) (path : String) : IO Unit := do
-  let lexer := Lexer.new ({ tokens := 0 } : DiscardTokens) .v2_7
-  let result := Id.run (lexer.lexAll data.toByteSlice)
-  checkLexed result path
+/-- A lexer of the chain from the specification to the library's lexer. -/
+inductive LexerChoice where
+  | v1
+  | v2
+  | v3
+  | v4
+  | v5
+  deriving BEq
+
+/-- The name of the lexer, as `SMT_BENCH_LEXER` gives it. -/
+def LexerChoice.name : LexerChoice → String
+  | .v1 => "v1"
+  | .v2 => "v2"
+  | .v3 => "v3"
+  | .v4 => "v4"
+  | .v5 => "v5"
+
+/-- The lexer of the name, if any. -/
+def LexerChoice.ofName? : String → Option LexerChoice
+  | "v1" => some .v1
+  | "v2" => some .v2
+  | "v3" => some .v3
+  | "v4" => some .v4
+  | "v5" => some .v5
+  | _ => none
+
+/-- Lexes the in-memory file with the lexer, discarding tokens. -/
+def lexFromMemory (choice : LexerChoice) (data : ByteArray) (path : String) : IO Unit := do
+  let handler : DiscardTokens := { tokens := 0 }
+  let naive := Proofs.Lexer.V1Naive.Lexer.new handler .v2_7
+  match choice with
+  | .v1 => checkLexed (Id.run (naive.lexAll data.toByteSlice)) path
+  | .v2 => checkLexed (Id.run (Proofs.Lexer.V2Batched.lexAll naive data.toByteSlice)) path
+  | .v3 => checkLexed (Id.run (Proofs.Lexer.V3Runs.lexAll naive data.toByteSlice)) path
+  | .v4 => checkLexed (Id.run (Proofs.Lexer.V4FastPaths.lexAll naive data.toByteSlice)) path
+  | .v5 => checkLexed (Id.run ((Lexer.new handler .v2_7).lexAll data.toByteSlice)) path
 
 /- LEAN: the lexer owns its handler and does not give it back, where the Rust benchmark lends
 the handler with `&mut` and reads the count afterwards. The count is therefore taken once,
@@ -135,21 +175,23 @@ def countFromMemory (data : ByteArray) (path : String) : IO Nat := do
   checkLexed result path
   tokens.get
 
-/-- Times the action over discarded warm-up runs (at least one, and at least
-`warmUpNanos` in total) and `iterations` timed runs, returning the run times
-in seconds in measurement order. -/
-def timeRuns (iterations : Nat) (run : IO Unit) : IO (Array Float) := do
-  let warmUpStart ← IO.monoNanosNow
-  repeat
-    run
-    if (← IO.monoNanosNow) - warmUpStart ≥ warmUpNanos then
-      break
-  let mut times := #[]
+/-- Times the actions over discarded warm-up runs of each (at least one, and at least
+`warmUpNanos` in total) and `iterations` timed rounds, a round running every action once in
+turn. Returns the run times of each action in seconds, in measurement order. -/
+def timeRuns (iterations : Nat) (runs : Array (IO Unit)) : IO (Array (Array Float)) := do
+  for run in runs do
+    let warmUpStart ← IO.monoNanosNow
+    repeat
+      run
+      if (← IO.monoNanosNow) - warmUpStart ≥ warmUpNanos then
+        break
+  let mut times := runs.map fun _ => #[]
   for _ in [0:iterations] do
-    let start ← IO.monoNanosNow
-    run
-    let stop ← IO.monoNanosNow
-    times := times.push ((stop - start).toFloat / 1e9)
+    for i in [0:runs.size] do
+      let start ← IO.monoNanosNow
+      runs[i]!
+      let stop ← IO.monoNanosNow
+      times := times.modify i (·.push ((stop - start).toFloat / 1e9))
   return times
 
 /-- Minimum and median of the run times, in seconds. -/
@@ -233,6 +275,22 @@ def main : IO UInt32 := do
       stderr.putStrLn message
       return 1
 
+  let lexers ← match ← IO.getEnv "SMT_BENCH_LEXER" with
+    | none | some "" => pure #[LexerChoice.v5]
+    | some names =>
+      let mut lexers := #[]
+      for name in names.splitOn "," do
+        let name := name.trimAscii.toString
+        match LexerChoice.ofName? name with
+        | some lexer => lexers := lexers.push lexer
+        | none =>
+          stderr.putStrLn s!"Unknown lexer {repr name} in SMT_BENCH_LEXER; use v1 to v5"
+          return 1
+      pure lexers
+  -- the mode names the lexer, except for the library's lexer measured alone, as in Rust
+  let modeOf (lexer : LexerChoice) : String :=
+    if lexers == #[.v5] then "lex" else s!"lex-{lexer.name}"
+
   if let .list := format then
     for file in files do
       stdout.putStrLn file.label
@@ -252,19 +310,21 @@ def main : IO UInt32 := do
     -- the token count turns run times into nanoseconds per token
     let tokens := (max (← countFromMemory data path.toString) 1).toFloat
 
-    let times ← timeRuns iterations do
-      lexFromMemory data path.toString
+    let times ← timeRuns iterations (lexers.map fun lexer => lexFromMemory lexer data path.toString)
 
-    match format with
-    | .table =>
-      let (min, median) := minAndMedian times
-      stdout.putStrLn s!"{file.label.pushn ' ' (labelWidth - file.label.length)}  \
-        {fixed megabytes 2 7} MB  lex {fixed (megabytes / min) 1 6}/{fixed (megabytes / median) 1 6} \
-        MB/s {fixed (min * 1e9 / tokens) 2 5} ns/tok"
-    | .raw =>
-      let runs := " ".intercalate (times.toList.map toString)
-      stdout.putStrLn s!"{file.label}\tlex\t{data.size}\t{runs}"
-    | .list => pure ()
+    for (lexer, times) in lexers.zip times do
+      let mode := modeOf lexer
+      match format with
+      | .table =>
+        let (min, median) := minAndMedian times
+        stdout.putStrLn s!"{file.label.pushn ' ' (labelWidth - file.label.length)}  \
+          {fixed megabytes 2 7} MB  {mode.pushn ' ' (6 - mode.length)} \
+          {fixed (megabytes / min) 1 6}/{fixed (megabytes / median) 1 6} \
+          MB/s {fixed (min * 1e9 / tokens) 2 5} ns/tok"
+      | .raw =>
+        let runs := " ".intercalate (times.toList.map toString)
+        stdout.putStrLn s!"{file.label}\t{mode}\t{data.size}\t{runs}"
+      | .list => pure ()
     stdout.flush
 
   if let .table := format then
