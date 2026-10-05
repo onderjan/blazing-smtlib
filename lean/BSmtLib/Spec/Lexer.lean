@@ -68,6 +68,14 @@ inductive ReservedKind where
 Extension: the common form of a token a lexer hands over.
 
 A token as the implementation hands it over.
+
+The form is a set of conventions, not a restriction on a lexer: a lexer that represents its
+tokens otherwise is correct when its tokens map to this form. The content is what
+`Token.content` gives: what a string literal stands for, a quoted symbol without its bars, a
+keyword without its colon, the digits of a hexadecimal or a binary without `#x` or `#b`, and
+otherwise the characters of the token. The start and the end are located by `locate`:
+zero-based, with lines counted by line feeds alone; the end is the location just after the
+token's last character.
 -/
 structure Handed where
   type : TokenType
@@ -127,10 +135,17 @@ def endOfFile (input : Chars) : Handed :=
   { type := .endOfFile, start := locate input input.length, «end» := locate input input.length,
     reserved := none, content := [] }
 
-/-! ## About a lexer -/
+/-! ## About a lexer
+
+Extension D: the claims do not require the input to be a `SourceFile`, so a lexer that
+satisfies them reads characters from 128 on in 2.0 as 2.5 and later do. 2.0 is used mainly
+to read old scripts into 2.5 and later, or to give a solver that reads 2.5 and later a legacy
+mode, where accepting these characters as 2.5 does is what is wanted.
+-/
 
 /--
-Claim: about a lexer, to be proved of an implementation.
+Claim: about a lexer, to be proved of an implementation. Extension D: the input need not be a
+`SourceFile`.
 
 A lexer of whole inputs is correct: it hands over the tokens of the reading and the
 end-of-file token exactly when the input has a reading.
@@ -141,7 +156,8 @@ def LexerCorrect (lex : Version → Chars → Option (List Handed)) : Prop :=
       handed = tokens.map (·.handed version input) ++ [endOfFile input]
 
 /--
-Claim: about a lexer, to be proved of an implementation.
+Claim: about a lexer, to be proved of an implementation. Extension D: the input need not be a
+`SourceFile`.
 
 A lexer fed in slices is correct: `feed version slices` is what it handed over after the
 slices, and whether it failed. It fails exactly when the characters fed stop being viable,

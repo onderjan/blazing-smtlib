@@ -42,16 +42,26 @@ Standard: 2.7 §3.1 White Space Characters; App. B ⟨white_space_char⟩.
 def whiteSpaceChar : Regex := altAll [code 9, code 10, code 13, code 32]
 
 /--
-Standard: 2.7 §3.1 Printable Characters; App. B ⟨printable_char⟩. Extension D: characters from
-128 on in 2.0, as below.
+Standard: 2.0 §3.1: SMT-LIB source files consist of ASCII characters. From 2.5 on, §3.1
+lifts this limit.
 
-⟨printable_char⟩: a character from 32 to 126, or from 128 on.
+The input is a source file of the version: in 2.0, every character of it is from 0 to 127;
+from 2.5 on, any input is.
 
-In every version, characters from 128 on are allowed where 2.5 and later allow them: in
-string literals, quoted symbols and comments. The 2.0 standard limits source files to ASCII
-characters; this is not followed, because 2.0 is used mainly to read old scripts into 2.5
-and later, or to give a solver that reads 2.5 and later a legacy mode, where accepting these
-characters as 2.5 does is what is wanted.
+This is a rule on the input, not on the lexicon: the lexicon reads characters from 128 on
+alike in every version, so a 2.0 input that breaks this rule may still have a reading. Where
+2.0 App. B says printable ASCII characters, its printable characters on an input that keeps
+this rule are meant.
+-/
+def SourceFile : Version → Chars → Prop
+  | .v2_0, input => ∀ c ∈ input, c.toNat < 128
+  | _, _ => True
+
+/--
+Standard: 2.7 §3.1 Printable Characters; App. B ⟨printable_char⟩.
+
+⟨printable_char⟩: a character from 32 to 126, or from 128 on. In 2.0, the characters from 128
+on are excluded by `SourceFile`, not here.
 -/
 def printableChar : Regex := alt (range 32 126) (range 128 255)
 

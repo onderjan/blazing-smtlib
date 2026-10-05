@@ -157,4 +157,7 @@ example : Reads .v2_0 stringE [⟨.string, 0, stringE⟩] := by
     · simp at hc
       rcases hc with rfl | rfl <;> simp [oneOf_one, chars] <;> decide
 
+/-- The same input is not a 2.0 source file. -/
+example : ¬ SourceFile .v2_0 stringE := fun h => absurd (h 195 (by decide)) (by decide)
+
 end BSmtLib.SpecChecks.Lexicon

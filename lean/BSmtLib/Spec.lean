@@ -38,7 +38,7 @@ rule, carry none.
   any attribute in `set-option` and any keyword in `get-info`; **P3**, reserved words as
   s-expressions from 2.6 on; **P4**, how a version declaration takes effect; **P5**, `exit`
   ends a script.
-- Extensions: **D**, characters from 128 on in 2.0; the form of handed-over tokens; the
-  version policies; the handler contract.
+- Extensions: **D**, a lexer reads characters from 128 on in 2.0 input; the form of
+  handed-over tokens; the version policies; the handler contract.
 - Scope: **P1**, scripts only; **P6**, standard commands only.
 -/
