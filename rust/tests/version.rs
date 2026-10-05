@@ -921,3 +921,26 @@ fn the_string_escapes_reset_with_the_input() {
         .expect_err("a backslash does not escape in the initial version");
     assert!(matches!(err.cause(), SmtReadErrorCause::Lexical(_)));
 }
+
+#[test]
+fn the_reader_tells_the_version_in_force() {
+    let mut handler = SmtSyntaxChecker;
+    let mut reader =
+        SmtReader::script(&mut handler, SmtVersion::V2_7, SmtVersionPosture::default());
+    assert_eq!(reader.version(), SmtVersion::V2_7);
+    // a declared version is in force once its command has been read
+    assert!(matches!(
+        reader.read_slice(b"(set-info :smt-lib-version 2.6)"),
+        Ok(ControlFlow::Continue(()))
+    ));
+    assert_eq!(reader.version(), SmtVersion::V2_6);
+    // also after the exit command, until the input ends
+    assert!(matches!(
+        reader.read_slice(b"(exit) (assert"),
+        Ok(ControlFlow::Break(_))
+    ));
+    assert_eq!(reader.version(), SmtVersion::V2_6);
+    // the end of the input brings back the initial version
+    assert!(matches!(reader.read_eof(), Ok(ControlFlow::Continue(()))));
+    assert_eq!(reader.version(), SmtVersion::V2_7);
+}

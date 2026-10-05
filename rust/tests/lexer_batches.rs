@@ -1048,3 +1048,56 @@ fn a_finish_in_a_whole_input_ends_that_input() {
     expected.truncate(2);
     assert_eq!(calls[1], expected);
 }
+
+#[test]
+fn the_lexer_tells_the_version_in_force() {
+    // the version the consumer has set is in force until the input ends,
+    // whatever the consumer does afterwards, and the end of the input brings
+    // back the version the lexer was constructed with
+    let switch = Reply::Switch {
+        consumed: 1,
+        version: SmtVersion::V2_0,
+    };
+    let after_switch: [(&[Reply], &str); 4] = [
+        (&[switch], "the consumer goes on"),
+        (
+            &[switch, Reply::Finish { consumed: 1 }],
+            "the consumer finishes",
+        ),
+        (&[switch, Reply::Fail { consumed: 1 }], "the consumer fails"),
+        (
+            &[Reply::SwitchAndFinish {
+                consumed: 1,
+                version: SmtVersion::V2_0,
+            }],
+            "the consumer finishes with the switch",
+        ),
+    ];
+    for (plan, what) in after_switch {
+        let mut calls = Vec::new();
+        let mut versions = Vec::new();
+        let mut lexer = SmtLexer::new(
+            Recorder {
+                calls: &mut calls,
+                versions: &mut versions,
+                plan,
+            },
+            SmtVersion::V2_7,
+        );
+        assert_eq!(lexer.version(), SmtVersion::V2_7, "before the input");
+        let result = lexer.lex_slice(b"a b c ");
+        assert_eq!(lexer.version(), SmtVersion::V2_0, "{what}");
+        if result.is_err() {
+            // the lexer has stopped at its first error, the input cannot end
+            continue;
+        }
+        // also while the rest of a finished input is discarded
+        assert!(matches!(
+            lexer.lex_slice(b"d "),
+            Ok(ControlFlow::Continue(()))
+        ));
+        assert_eq!(lexer.version(), SmtVersion::V2_0, "{what}");
+        assert!(matches!(lexer.lex_eof(), Ok(ControlFlow::Continue(()))));
+        assert_eq!(lexer.version(), SmtVersion::V2_7, "{what}: after the input");
+    }
+}

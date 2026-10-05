@@ -503,6 +503,30 @@ fn the_open_parentheses_are_counted_over_many_hand_overs() {
     );
 }
 
+#[test]
+fn the_open_parentheses_are_counted_anew_after_a_recovery() {
+    // the first error is inside a parenthesis, the second with nothing open:
+    // what was open at the first one must not count for the second, or the
+    // rest of the input would be skipped
+    check(
+        b"(a #q) b #x c",
+        "( a !4 >6 b !11 >11 c $",
+        &["BaseSelectionExpected@4", "HexadecimalDigitExpected@11"],
+    );
+    check(
+        b"(x bad) y bad z",
+        "( x bad !6 >7 y bad !13 >13 z $",
+        &["bad@6", "bad@13"],
+    );
+    // and the other way round: nothing is left over from the first error
+    // when the second one is inside a parenthesis
+    check(
+        b"#q (a #x b) c",
+        "!1 >2 ( a !8 >11 c $",
+        &["BaseSelectionExpected@1", "HexadecimalDigitExpected@8"],
+    );
+}
+
 // --- Locations ---
 
 #[test]

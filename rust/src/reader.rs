@@ -183,6 +183,14 @@ impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtReader<'a, H, P> {
         Self { lexer }
     }
 
+    /// The SMT-LIB version currently in force.
+    ///
+    /// The version can change if the token consumer asks for it from the
+    /// cursor. The end of the input resets the version to the initial one.
+    pub fn version(&self) -> SmtVersion {
+        self.lexer.version()
+    }
+
     /// Opens the file at `path` and reads it to its end, including an EOF token.
     ///
     /// A failure to open the file is reported as an I/O error with an empty

@@ -278,6 +278,14 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
         self.location_at(0)
     }
 
+    /// The SMT-LIB version currently in force.
+    ///
+    /// The version can change if the token consumer asks for it from the
+    /// cursor. The end of the input resets the version to the initial one.
+    pub fn version(&self) -> SmtVersion {
+        self.version
+    }
+
     /// Lexes the given slice, sending the lexed tokens to the consumer.
     ///
     /// If the token consumer returns [`ControlFlow::Break`] on some token,
