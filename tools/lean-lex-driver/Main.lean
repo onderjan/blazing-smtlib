@@ -4,8 +4,14 @@ The Rust tests run their lexer inputs through it to check the Lean port.
 
 Reads one request per line from the standard input and writes the response
 to the standard output, until the input ends.
+
+The environment variable `BLAZING_SMTLIB_LEAN_LEXER` chooses the lexer that answers: `v5`, the
+library's lexer `BSmtLib.Lexer`, which is the one when the variable is unset, or `v1`, the naive
+lexer `BSmtLib.Proofs.Lexer.V1Naive`. Any other value makes the driver exit at once with an
+error.
 -/
 import BSmtLib
+import BSmtLib.Proofs
 
 open BSmtLib
 
@@ -433,10 +439,139 @@ def driveRecovering (request : Request) (lines : IO.Ref String)
             lines.modify (· ++ (← errorLine err true))
     lines.modify (· ++ feedLines request lexer)
 
+/-! The same for the naive lexer V1, `BSmtLib.Proofs.Lexer.V1Naive`, which has the operations of
+the library's lexer on a lexer type of its own. -/
+
+namespace V1
+
+/-- The naive lexer. -/
+abbrev NaiveLexer (H : Type) (recovery : Recovery := .failFast) :=
+  Proofs.Lexer.V1Naive.Lexer H recovery
+
+/-- The lines that end the feed: where the lexer is, and its version if the consumer is scripted. -/
+def feedLines (request : Request) (lexer : NaiveLexer (Scripted whitespace) recovery) : String :=
+  let scripted := request.behaviour != .takeAll
+  s!"at {location lexer.currentLocation}\n" ++
+    if scripted then s!"v {versionName lexer.version}\n" else ""
+
+/--
+Applies the feeds of the request to the lexer that stops at its first error and writes the
+lines of the feeds themselves. Returns whether every feed was applied.
+-/
+def drive (request : Request) (lines : IO.Ref String) :
+    List (Option ByteArray) → NaiveLexer (Scripted whitespace) → ExceptT String IO Bool
+  | [], _ => return true
+  | feed :: feeds, lexer => do
+    let result ← match feed with
+      | some slice => lexer.lexSlice slice.toByteSlice
+      | none => lexer.lexEof
+    match result with
+    | .ok (flow, lexer) =>
+      lines.modify (· ++ flowLine flow ++ feedLines request lexer)
+      drive request lines feeds lexer
+    | .error (err, ()) =>
+      lines.modify (· ++ (← errorLine err false))
+      -- the lexer has stopped for good, and the response with it
+      return false
+
+/--
+Applies the feeds of the request to the recovering lexer and writes the lines of the feeds
+themselves. After an error on a slice, the rest of that slice is applied again, from where
+the input continues; after an error on the end of the input that continues, the end of the
+input is applied again.
+-/
+def driveRecovering (request : Request) (lines : IO.Ref String)
+    (lexer : NaiveLexer (Scripted whitespace) .recovering) : ExceptT String IO Unit := do
+  let mut lexer := lexer
+  for feed in request.feeds do
+    match feed with
+    | some slice =>
+      -- the part of a slice that the lexer has not taken yet
+      let mut from_ := 0
+      repeat
+        let before := lexer.currentLocation.offset
+        match ← lexer.lexSlice (slice.toByteSlice from_) with
+        | .ok (flow, next) =>
+          lexer := next
+          lines.modify (· ++ flowLine flow)
+          break
+        | .error (err, next) =>
+          lexer := next
+          lines.modify (· ++ (← errorLine err true))
+          match err.continuesFrom with
+          -- the rest of the feed is applied again from there
+          | some continues => from_ := from_ + (continues.offset - before)
+          -- the input has ended with the error, the feed is done
+          | none => break
+    | none =>
+      match ← lexer.lexEof with
+      | .ok (flow, next) =>
+        lexer := next
+        lines.modify (· ++ flowLine flow)
+      | .error (err, after) =>
+        lines.modify (· ++ (← errorLine err true))
+        match after with
+        | .lexer next => lexer := next
+        | .pending pending =>
+          -- the end of the input continues, apply it again
+          match ← pending.lexEof with
+          | .ok (flow, next) =>
+            lexer := next
+            lines.modify (· ++ flowLine flow)
+          | .error (err, next) =>
+            lexer := next
+            lines.modify (· ++ (← errorLine err true))
+    lines.modify (· ++ feedLines request lexer)
+
+end V1
+
+/-- The lexer that answers the requests. -/
+inductive LexerChoice where
+  /-- The naive lexer, `BSmtLib.Proofs.Lexer.V1Naive`. -/
+  | v1
+  /-- The library's lexer, `BSmtLib.Lexer`. -/
+  | v5
+
+/-- The lexer named by the value of `BLAZING_SMTLIB_LEAN_LEXER`, the library's if it is unset. -/
+def readLexerChoice : Option String → Except String LexerChoice
+  | none | some "v5" => pure .v5
+  | some "v1" => pure .v1
+  | some other => throw s!"unknown lexer {repr other} in BLAZING_SMTLIB_LEAN_LEXER, \
+      expected v1 or v5"
+
+/-- Answers one request line with the naive lexer, giving the response lines. -/
+def answerV1 (request : Request) : ExceptT String IO String := do
+  -- the consumer writes into the response while the lexer owns it
+  let lines ← IO.mkRef ""
+  let version := request.version
+  let behaviour := request.behaviour
+  let complete ← match request.whitespace, request.recover with
+    | false, false =>
+      V1.drive request lines request.feeds.toList (Proofs.Lexer.V1Naive.Lexer.new
+        ({ behaviour, handed := 0, opened := 0, out := lines } : Scripted false) version)
+    | true, false =>
+      V1.drive request lines request.feeds.toList (Proofs.Lexer.V1Naive.Lexer.new
+        ({ behaviour, handed := 0, opened := 0, out := lines } : Scripted true) version)
+    | false, true =>
+      V1.driveRecovering request lines (Proofs.Lexer.V1Naive.Lexer.newRecovering
+        ({ behaviour, handed := 0, opened := 0, out := lines } : Scripted false) version)
+      pure true
+    | true, true =>
+      V1.driveRecovering request lines (Proofs.Lexer.V1Naive.Lexer.newRecovering
+        ({ behaviour, handed := 0, opened := 0, out := lines } : Scripted true) version)
+      pure true
+
+  let mut response ← lines.get
+  if complete then
+    response := response ++ "ok\n"
+  return response
+
 /-- Answers one request line, giving the response lines. -/
-def answer (line : String) : ExceptT String IO String := do
+def answer (choice : LexerChoice) (line : String) : ExceptT String IO String := do
   -- decode the whole request first, so that a malformed one produces no lines
   let request ← readRequest line
+  if let .v1 := choice then
+    return ← answerV1 request
 
   -- the consumer writes into the response while the lexer owns it
   let lines ← IO.mkRef ""
@@ -463,19 +598,26 @@ def answer (line : String) : ExceptT String IO String := do
     response := response ++ "ok\n"
   return response
 
-partial def serve (stdin : IO.FS.Stream) (stdout : IO.FS.Stream) : IO Unit := do
+partial def serve (choice : LexerChoice) (stdin : IO.FS.Stream) (stdout : IO.FS.Stream) :
+    IO Unit := do
   let line ← stdin.getLine
   -- the input has ended
   if line.isEmpty then
     return
   let request := (line.dropEndWhile (· == '\n')).toString
   let request := (request.dropEndWhile (· == '\r')).toString
-  let out ← match ← (answer request).run with
+  let out ← match ← (answer choice request).run with
     | .ok out => pure out
     | .error message => pure s!"fail {message}\n"
   stdout.putStr out
   stdout.flush
-  serve stdin stdout
+  serve choice stdin stdout
 
-def main : IO Unit := do
-  serve (← IO.getStdin) (← IO.getStdout)
+def main : IO UInt32 := do
+  match readLexerChoice (← IO.getEnv "BLAZING_SMTLIB_LEAN_LEXER") with
+  | .ok choice =>
+    serve choice (← IO.getStdin) (← IO.getStdout)
+    return 0
+  | .error message =>
+    IO.eprintln message
+    return 1

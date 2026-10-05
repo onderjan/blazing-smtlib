@@ -391,5 +391,16 @@ The tests that go through the driver are those of `tests/lexer.rs`,
 `tests/lexer_recovery.rs` that do not use the Rust lexer's own interface. Everything else in the suite tests the Rust
 library whatever the variable says.
 
+The environment variable `BLAZING_SMTLIB_LEAN_LEXER` chooses the Lean lexer
+that the driver answers with: `v5`, the library's, when it is unset, or `v1`,
+the naive lexer of `lean/BSmtLib/Proofs/Lexer/V1Naive.lean`, which hands every
+token over alone. Under `v1` the tests that send a plan, whose expectations
+depend on where the hand-overs are cut, report themselves as not applicable on
+the standard error and end; every other test runs unchanged.
+
+```
+BLAZING_SMTLIB_LEAN_DRIVER=/path/to/the/driver BLAZING_SMTLIB_LEAN_LEXER=v1 cargo test
+```
+
 The answers of the Rust lexer come from `rust/tests/lex_backend/driver.rs`,
 which the tests call in process and `tools/rust-lex-driver` prints.

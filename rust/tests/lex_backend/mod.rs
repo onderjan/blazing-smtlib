@@ -6,6 +6,13 @@
 //! tests check the Lean port. The protocol is described in
 //! `lean/driver-protocol.md`.
 //!
+//! The environment variable `BLAZING_SMTLIB_LEAN_LEXER` chooses the Lean
+//! lexer that the driver answers with: `v5`, the library's, if it is unset,
+//! or `v1`, the naive lexer, which hands every token over alone. Under `v1`
+//! the tests whose expectations depend on where the hand-overs are cut, those
+//! that send a plan, are reported as not applicable (see
+//! `boundaries_not_applicable`); every other test runs unchanged.
+//!
 //! Either way a run is reported in plain values: the library's span and
 //! error types cannot be built from the driver's answer, so the tests compare
 //! locations as `(offset, line, column)` triples.
@@ -97,6 +104,44 @@ pub struct Lexed {
 /// Whether the tests run against the Lean driver.
 pub fn lean_driver() -> Option<OsString> {
     std::env::var_os("BLAZING_SMTLIB_LEAN_DRIVER")
+}
+
+/// The Lean lexers that hand every token over in a cursor of its own, so
+/// that their hand-overs are cut elsewhere than the Rust lexer's.
+const BOUNDARY_FREE_LEXERS: [&str; 1] = ["v1"];
+
+/// Whether the tests run against a Lean lexer that cuts its hand-overs
+/// elsewhere than the Rust lexer: the one the environment variable
+/// `BLAZING_SMTLIB_LEAN_LEXER` selects in the driver is one of
+/// `BOUNDARY_FREE_LEXERS`. The driver answers with the library's lexer
+/// when the variable is unset.
+pub fn boundary_free() -> bool {
+    lean_driver().is_some()
+        && std::env::var("BLAZING_SMTLIB_LEAN_LEXER")
+            .is_ok_and(|lexer| BOUNDARY_FREE_LEXERS.contains(&lexer.as_str()))
+}
+
+/// Whether the calling test is to end here, as its expectations depend on
+/// where the hand-overs are cut and the lexer under test cuts them
+/// elsewhere (see `boundary_free`). A test that sends a plan calls this
+/// first and returns if it is true.
+///
+/// The test is then reported as not applicable on the standard error, past
+/// the output capture of the test harness, so that the report shows in
+/// every run.
+pub fn boundaries_not_applicable() -> bool {
+    if !boundary_free() {
+        return false;
+    }
+    let thread = std::thread::current();
+    let test = thread.name().unwrap_or("a test");
+    let report = format!(
+        "{test}: not applicable, the Lean lexer under test cuts its hand-overs elsewhere\n"
+    );
+    // one write, so that the line is not split by the output of other tests; a failed write
+    // only loses the report, the test itself is not affected
+    let _ = std::io::stderr().lock().write_all(report.as_bytes());
+    true
 }
 
 /// Runs a fresh lexer of the version over the feeds, stopping at the first
@@ -636,6 +681,11 @@ fn parse_version(field: &str, line: &str) -> SmtVersion {
 /// After an error of a recovering lexer, the rest of the failed feed is
 /// applied again from where the input continues, until the feed is done.
 pub fn run(version: SmtVersion, options: &Options, feeds: &[Feed<'_>]) -> Vec<Line> {
+    assert!(
+        !(boundary_free() && matches!(options.behaviour, driver::Behaviour::Plan(_))),
+        "a plan is answered by hand-overs, which the lexer under test cuts elsewhere: \
+         the test must end first where `boundaries_not_applicable` says so"
+    );
     let request = request_line(version, options, feeds);
     // the version in force, as far as the response tells
     let mut current = version;
