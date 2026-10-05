@@ -146,6 +146,29 @@ of the input.
 def isDelimiter (c : UInt8) : Bool :=
   fastFlags c &&& FAST_DELIM != 0
 
+/- LEAN: the two facts below are checked by the kernel for every byte; the loops of the
+lexer are shown to end by them. -/
+
+/-- A byte that the fast path takes for whitespace continues a run of whitespace. -/
+theorem not_endsRun_of_fastFlags {c : UInt8}
+    (h : (fastFlags c &&& RUN_NON_LF_WHITESPACE != 0) = true) :
+    endsRun c RUN_NON_LF_WHITESPACE = false := by
+  have table : ∀ n, n < 256 → (fastFlags n.toUInt8 &&& RUN_NON_LF_WHITESPACE != 0) = true →
+      endsRun n.toUInt8 RUN_NON_LF_WHITESPACE = false := by
+    decide +kernel
+  have := table c.toNat c.toNat_lt
+  rw [show c.toNat.toUInt8 = c by simp] at this
+  exact this h
+
+/-- The only byte that the normal state takes for a line feed is the line feed. -/
+theorem eq_of_startOf_eq_lineFeed {c : UInt8} (h : startOf c = .lineFeed) : c = byte! '\n' := by
+  have table : ∀ n, n < 256 → (startOf n.toUInt8 == .lineFeed) = true →
+      n.toUInt8 = byte! '\n' := by
+    decide +kernel
+  have := table c.toNat c.toNat_lt
+  rw [show c.toNat.toUInt8 = c by simp] at this
+  exact this (by rw [h]; rfl)
+
 /- LEAN: declared in `lexer.rs` in Rust, where `helpers.rs` uses it in turn. Lean modules
 cannot import each other, so it is declared here, before `DigitRun` needs it. -/
 /-- The states of the lexer, see the lexer for their meaning. -/

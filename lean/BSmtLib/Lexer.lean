@@ -31,10 +31,6 @@ structure Failure (E : Type) where
   cause : LexErrorCause E
   location : Location
 
-/- LEAN: a default value is needed for the functions marked `partial` in the lexer's monad; it
-cannot be derived without one for the handler's result type. -/
-instance : Inhabited (Interrupted R E) := ⟨{ result := .ok .relex, location := default }⟩
-
 /- LEAN: the fields of the Rust `Lexer` except the handler, which the lexer's monad keeps
 separately (see `LexM`). The lexer states are documented at `LexerState` in Rust. The
 batch lives here instead of in a local of `lex_slice_inner`, so that its storage is reused
@@ -494,27 +490,79 @@ private def storeUnfinishedSymbolRun (input : Input) (entry : UInt8) (index afte
     extendContent input index runEndAt
     setState .simpleSymbol
 
-/- LEAN: the loop of `start_whitespace`, `partial` for the reason given at `lexNormalFrom`.
-`index` is where the run starts and `«end»` where the search for its end continues. -/
-private partial def startWhitespaceFrom (input : Input) (index «end» : USize) :
-    LexM H m R E USize := do
+/- LEAN: the loops of the lexer are recursions on a position in the slice, which are shown to
+end by the bytes left after it: every call goes on after a byte it has read. The facts that
+show it are stated with `have` before the call; the tactic expands the local definitions that
+they and the call are stated with, and does the arithmetic. -/
+local macro "decreasing_position" : tactic =>
+  `(tactic| ((try simp +zetaDelta only at *) <;> omega))
+
+/- LEAN: not in Rust. What `startWhitespace` needs to return a position after the start of the
+run: a byte there that the run takes. -/
+/--
+Whether the byte at `position` continues a whitespace run: a line feed, or whitespace other
+than it.
+-/
+private def ContinuesWhitespace (input : Input) (position : USize) : Prop :=
+  ∃ c, input.get? position = some c ∧ (c = byte! '\n' ∨ endsRun c RUN_NON_LF_WHITESPACE = false)
+
+/-- The run ends after its start: the search has passed the start, or the byte where it continues
+belongs to the run. -/
+private theorem lt_whitespaceRunEnd {input : Input} {index start : USize} {c : UInt8}
+    (hindex : index.toNat ≤ start.toNat)
+    (hrun : index.toNat < start.toNat ∨ ContinuesWhitespace input start)
+    (h : input.get? (runEnd input start RUN_NON_LF_WHITESPACE) = some c)
+    (hc : ¬(c == byte! '\n') = true) :
+    index.toNat < (runEnd input start RUN_NON_LF_WHITESPACE).toNat := by
+  have hle := le_runEnd input start RUN_NON_LF_WHITESPACE
+  rcases hrun with hlt | ⟨first, hfirst, hlf | hcontinues⟩
+  · omega
+  · -- the search stops at the line feed, where the byte is not one
+    have : runEnd input start RUN_NON_LF_WHITESPACE ≠ start := by
+      intro heq
+      rw [heq, hfirst] at h
+      cases h
+      exact hc (by rw [hlf]; rfl)
+    have : (runEnd input start RUN_NON_LF_WHITESPACE).toNat ≠ start.toNat :=
+      fun heq => this (USize.toNat_inj.mp heq)
+    omega
+  · have := lt_runEnd RUN_NON_LF_WHITESPACE hfirst hcontinues
+    omega
+
+/- LEAN: the loop of `start_whitespace`, as a recursion on `«end»` that is shown to end.
+`index` is where the run starts and `«end»` where the search for its end continues; the
+search has passed `index` or the byte at `«end»` belongs to the run, so that the position
+returned is after `index`, which `lexNormalFrom` is shown to end by. -/
+private def startWhitespaceFrom (input : Input) (index «end» : USize)
+    (hend : index.toNat ≤ «end».toNat ∧ «end».toNat ≤ input.stop.toNat)
+    (hrun : index.toNat < «end».toNat ∨ ContinuesWhitespace input «end») :
+    LexM H m R E { position : USize // index.toNat < position.toNat } := do
   -- find the first byte that is not whitespace other than a line feed
   let «end» := runEnd input «end» RUN_NON_LF_WHITESPACE
-  match input.get? «end» with
+  -- the search goes on from where it was
+  have : _ ≤ «end».toNat := le_runEnd input _ RUN_NON_LF_WHITESPACE
+  match h : input.get? «end» with
   | some c =>
-    if c == byte! '\n' then
+    if hc : c == byte! '\n' then
       -- the line feed is a part of the run, mark it and continue
       markLineFeedAt «end»
-      startWhitespaceFrom input index («end» + 1)
+      have := Input.toNat_add_one_of_get? h
+      startWhitespaceFrom input index («end» + 1) (by omega) (.inl (by omega))
     else
       -- the run has ended inside the slice
       finishWhitespace (.mkAtByte «end») (.borrow input index «end»)
-      return «end»
+      return ⟨«end», lt_whitespaceRunEnd hend.1 hrun h hc⟩
   | none =>
     -- we ran out of bytes, update the content and state
     extendContent input index input.stop
     setState .whitespace
-    return input.stop
+    return ⟨input.stop, by
+      rcases hrun with hlt | ⟨_, hfirst, _⟩
+      · omega
+      · have := Input.lt_stop_of_get? hfirst
+        omega⟩
+termination_by input.stop.toNat - «end».toNat
+decreasing_by decreasing_position
 
 /--
 Lexes the whitespace run that starts at `index` of the slice,
@@ -524,23 +572,32 @@ Returns the position after the run. If the run ends inside the slice,
 its token is sunk with borrowed content. Otherwise, the run is stored,
 the state becomes `whitespace`, and the end of the slice is returned.
 -/
-private def startWhitespace (input : Input) (index : USize) : LexM H m R E USize := do
+private def startWhitespace (input : Input) (index : USize)
+    (hrun : ContinuesWhitespace input index) :
+    LexM H m R E { position : USize // index.toNat < position.toNat } := do
   startToken index
-  startWhitespaceFrom input index index
+  have hindex : index.toNat ≤ input.stop.toNat := by
+    have ⟨_, hfirst, _⟩ := hrun
+    have := Input.lt_stop_of_get? hfirst
+    omega
+  startWhitespaceFrom input index index ⟨Nat.le_refl _, hindex⟩ (.inr hrun)
 
 /- LEAN: the Rust function loops over the slice with `while let`; here the loop is the
-recursion on `index`, and `partial` because Lean is not shown that every arm advances it.
-Every arm that continues the loop in Rust calls `lexNormalFrom` again at the new index,
-with the locals loaded again after the slow path. `offset` and `base` are the lexer's offset
-and base when the loop started, which stay the same while the loop runs. -/
-private partial def lexNormalFrom (input : Input) (offset : Nat) (base index : USize)
+recursion on `index`. Every arm that continues the loop in Rust calls `lexNormalFrom` again
+at the new index, which is after `index`, with the locals loaded again after the slow path.
+`offset` and `base` are the lexer's offset and base when the loop started, which stay the same
+while the loop runs. The recursion is encoded as a well-founded one, which for a function this
+long nests deeper than the default limit allows. -/
+set_option maxRecDepth 2048 in
+private def lexNormalFrom (input : Input) (offset : Nat) (base index : USize)
     (batch : TokenBatch) : LexM H m R E USize := do
-  let some c := input.get? index
+  let some ⟨c, hc⟩ := (input.get? index).attach
     | do
       -- we have consumed every byte of the slice
       -- write the locals back before returning
       storeBatch batch
       return input.stop
+  have := Input.toNat_add_one_of_get? hc
   -- A fast path handles the most common token types.
   -- It is determined by one table lookup. If the started token is not on
   -- the fast path, a slower path is taken, again looked up. Arms eagerly
@@ -572,6 +629,7 @@ private partial def lexNormalFrom (input : Input) (offset : Nat) (base index : U
     -- Fast path, compute where the run ends and where the token ends.
     -- For quoted symbols, the token will end after the closing pipe.
     let runEndAt := runEnd input after (fastEntry &&& FAST_RUN_MASK)
+    have : after.toNat ≤ runEndAt.toNat := le_runEnd input after _
     let isQuoted := fastEntry &&& FAST_PIPE != 0
 
     -- Check if we need to fall back to state-machine lexing
@@ -580,10 +638,12 @@ private partial def lexNormalFrom (input : Input) (offset : Nat) (base index : U
     -- a line-feed which needs to update the location line/column.
     let isWhitespace := fastEntry &&& RUN_NON_LF_WHITESPACE != 0
     let emitsWhitespace := (← consumesWhitespaceAndComments) && isWhitespace
-    if emitsWhitespace && (input.get? runEndAt).all (· == byte! '\n') then
+    if hws : emitsWhitespace && (input.get? runEndAt).all (· == byte! '\n') then
       -- the whitespace token does not end on this line inside the slice
       storeBatch batch
-      let index ← startWhitespace input index
+      let ⟨index, hnext⟩ ← startWhitespace input index ⟨c, hc, .inr (not_endsRun_of_fastFlags (by
+        simp only [emitsWhitespace, isWhitespace, fastEntry, Bool.and_eq_true] at hws
+        exact hws.1.2))⟩
       if index == input.stop then
         -- we ran out of bytes inside the whitespace
         return index
@@ -597,16 +657,29 @@ private partial def lexNormalFrom (input : Input) (offset : Nat) (base index : U
     -- Parentheses have trivially zero-length runs.
     -- If the consumer does not want whitespace to be emitted,
     -- it can be discarded split.
-    if runEndAt == input.stop || isQuoted then
-      let isUnfinished :=
-        if isQuoted then input.get? runEndAt != some (byte! '|')
-        else fastEntry &&& RUN_SIMPLE_SYMBOL != 0
-      if isUnfinished then
-        -- write the locals back
-        storeBatch batch
-        storeUnfinishedSymbolRun input fastEntry index after runEndAt
-        return runEndAt
+    /- LEAN: Rust tests whether the token is unfinished inside the test of the condition.
+    Here the two tests are one, and the code after it is its `else`, so that the code is known
+    there to have found the closing pipe of a quoted symbol at `runEndAt`: the token end after
+    it is then after `index`. -/
+    let isUnfinished := (runEndAt == input.stop || isQuoted) &&
+      if isQuoted then input.get? runEndAt != some (byte! '|')
+      else fastEntry &&& RUN_SIMPLE_SYMBOL != 0
+    if hunfinished : isUnfinished then
+      -- write the locals back
+      storeBatch batch
+      storeUnfinishedSymbolRun input fastEntry index after runEndAt
+      return runEndAt
+    else
     let tokenEnd := if isQuoted then runEndAt + 1 else runEndAt
+    have htokenEnd : runEndAt.toNat ≤ tokenEnd.toNat := by
+      simp only [tokenEnd]
+      split
+      · rename_i hquoted
+        have hpipe : input.get? runEndAt = some (byte! '|') := by
+          simpa [isUnfinished, hquoted] using hunfinished
+        rw [toNat_add_one_of_lt (Input.lt_stop_of_get? hpipe)]
+        omega
+      · omega
 
     -- No need to fall back, construct the token: the pipes delimit a quoted
     -- symbol but are not part of its content, any other fast token is its
@@ -648,11 +721,12 @@ private partial def lexNormalFrom (input : Input) (offset : Nat) (base index : U
   storeBatch batch
 
   -- Fast path was not taken, use the slow path.
-  match startOf c with
+  match hstart : startOf c with
   | .lineFeed =>
     if ← consumesWhitespaceAndComments then
       -- the line feed starts a whitespace token
-      let index ← startWhitespace input index
+      let ⟨index, hnext⟩ ← startWhitespace input index
+        ⟨c, hc, .inl (eq_of_startOf_eq_lineFeed hstart)⟩
       if index == input.stop then
         return index
       lexNormalFrom input offset base index (← takeBatch)
@@ -666,8 +740,10 @@ private partial def lexNormalFrom (input : Input) (offset : Nat) (base index : U
     -- process the run eagerly
     startToken index
     let «end» := runEnd input after RUN_COMMENT_PLAIN
-    match input.get? «end» with
+    have : after.toNat ≤ «end».toNat := le_runEnd input after _
+    match hbyte : input.get? «end» with
     | some c =>
+      have := Input.toNat_add_one_of_get? hbyte
       if c == byte! '\n' then
         -- line feed, we need to mark it
         markLineFeedAt «end»
@@ -694,7 +770,7 @@ private partial def lexNormalFrom (input : Input) (offset : Nat) (base index : U
       if c == byte! 'x' then some HEXADECIMAL_RUN
       else if c == byte! 'b' then some BINARY_RUN
       else none
-    let some run := selected
+    let some ⟨run, hrun⟩ := selected.attach
       | do
         -- we either encountered a wrong base selection
         -- or ran out of bytes
@@ -706,6 +782,10 @@ private partial def lexNormalFrom (input : Input) (offset : Nat) (base index : U
     -- the base has been selected, get a run of its digits
     let start := after + 1
     let afterEnd := runEnd input start run.flag
+    have : start.toNat ≤ afterEnd.toNat := le_runEnd input start _
+    have : start.toNat = after.toNat + 1 := by
+      have ⟨_, hselection, _⟩ := Option.bind_eq_some_iff.mp hrun
+      exact toNat_add_one_of_lt (Input.lt_stop_of_get? hselection)
     if afterEnd == input.stop then
       -- we ran out of bytes
       -- update the content and the state and return
@@ -743,8 +823,23 @@ private partial def lexNormalFrom (input : Input) (offset : Nat) (base index : U
         else
           none
       | none => none
-    match closed with
+    match hclosed : closed with
     | some (afterQuote, next) =>
+      have : after.toNat < afterQuote.toNat := by
+        have : after.toNat ≤ afterContentEnd.toNat := le_runEnd input after _
+        simp only [closed] at hclosed
+        split at hclosed
+        · rename_i hquote
+          have := Input.toNat_add_one_of_get? hquote
+          split at hclosed
+          · split at hclosed
+            · split at hclosed
+              · cases hclosed
+                omega
+              · cases hclosed
+            · cases hclosed
+          · cases hclosed
+        · cases hclosed
       -- definitely closed by a quote not followed by another quote
       -- borrow the string literal content and produce a token
       expectDelimiter next afterQuote
@@ -763,6 +858,7 @@ private partial def lexNormalFrom (input : Input) (offset : Nat) (base index : U
     startToken index
     -- get a run of simple-symbol bytes
     let afterEnd := runEnd input after RUN_SIMPLE_SYMBOL
+    have : after.toNat ≤ afterEnd.toNat := le_runEnd input after _
     if afterEnd == input.stop then
       -- we ran out of bytes
       -- update the content and state and return
@@ -778,6 +874,7 @@ private partial def lexNormalFrom (input : Input) (offset : Nat) (base index : U
     startToken index
     -- determine the run of digits
     let afterEnd := runEnd input after RUN_DIGIT
+    have : after.toNat ≤ afterEnd.toNat := le_runEnd input after _
     -- check that we are not in a leading zero condition,
     -- which is only possible if the first character was zero
     -- and there is a subsequent digit;
@@ -786,11 +883,14 @@ private partial def lexNormalFrom (input : Input) (offset : Nat) (base index : U
     -- when lexing digit in the state `numeralOrDecimal`
     if c == byte! '0' && afterEnd > after then
       failAt .numeralLeadingZero (after + 1)
-    match input.get? afterEnd with
+    match hnext : input.get? afterEnd with
     | some next =>
       if next == byte! '.' then
         -- a dot starts a fraction, try to do a subsequent run of fraction digits
         let afterFractionEnd := runEnd input (afterEnd + 1) RUN_DIGIT
+        have : (afterEnd + 1).toNat ≤ afterFractionEnd.toNat :=
+          le_runEnd input _ _
+        have := Input.toNat_add_one_of_get? hnext
         if afterFractionEnd == input.stop then
           -- we ran out of bytes
           -- update the content and state and return
@@ -820,6 +920,8 @@ private partial def lexNormalFrom (input : Input) (offset : Nat) (base index : U
     -- as the other arms have already been handled in the fast path.
     startToken index
     failAt .unexpectedCharacter after
+termination_by input.stop.toNat - index.toNat
+decreasing_by all_goals decreasing_position
 
 private def lexNormal (input : Input) (start : USize) : LexM H m R E USize := do
   -- use locals for variables commonly used on the fast path
@@ -908,7 +1010,9 @@ private def lexDigitRun (input : Input) (start : USize) (run : DigitRun) : LexM 
 
 /- LEAN: the Rust loops keep the rest of the slice and the number of bytes consumed from it;
 here the loops keep the position `consumed` in the input, so a position in the rest in Rust
-is `consumed` plus it here. The loops are `partial` for the reason given at `lexNormal`. -/
+is `consumed` plus it here. The loops are shown to end as `lexNormalFrom` is. Where a loop
+moves `consumed` on before its run, the position is kept with the proof that it is not
+before the one the call started from, which the code after the move is shown to end by. -/
 
 /--
 Lexes the string literal in the legacy 2.0 mode.
@@ -916,11 +1020,13 @@ Lexes the string literal in the legacy 2.0 mode.
 The legacy 2.0 mode has two backslash escapes, \" and \\.
 There are no other escapes.
 -/
-private partial def lexStringLiteralLegacy (input : Input) (consumed : USize) :
+private def lexStringLiteralLegacy (input : Input) (consumed : USize) :
     LexM H m R E USize := do
-  let some first := input.get? consumed
+  let some ⟨first, hfirst⟩ := (input.get? consumed).attach
     | return consumed
-  let mut consumed := consumed
+  have := Input.toNat_add_one_of_get? hfirst
+  let mut consumed : { position : USize // consumed.toNat ≤ position.toNat } :=
+    ⟨consumed, Nat.le_refl _⟩
   match (← getCore).state with
   | .stringLiteralDoubleQuote =>
     -- expect a delimiter and finish the previously ended token
@@ -934,7 +1040,7 @@ private partial def lexStringLiteralLegacy (input : Input) (consumed : USize) :
     if first == byte! '"' || first == byte! '\\' then
       -- a backslash escape: only the escaped byte belongs to the content
       pushContent first
-      consumed := consumed + 1
+      consumed := ⟨consumed.1 + 1, by simp +zetaDelta only; omega⟩
     else
       -- not a backslash escape: the backslash belongs to the content,
       -- and the byte after it is lexed like any other
@@ -946,8 +1052,10 @@ private partial def lexStringLiteralLegacy (input : Input) (consumed : USize) :
   -- find the first byte that does not belong to string nor quoted
   -- this means backslash and pipe end the run as well, so we can act on them
   let index := runEndAll input consumed (RUN_STRING_PLAIN ||| RUN_QUOTED_PLAIN)
+  have : consumed.1.toNat ≤ index.toNat := le_runEndAll input _ _
+  have := consumed.2
 
-  let some c := input.get? index
+  let some ⟨c, hc⟩ := (input.get? index).attach
     | do
       -- extend the content with the rest
       extendContent input consumed input.stop
@@ -985,14 +1093,19 @@ private partial def lexStringLiteralLegacy (input : Input) (consumed : USize) :
     -- add the byte to the content
     pushContent c
   -- consume the run-ending byte and everything before it
+  have := Input.toNat_add_one_of_get? hc
   lexStringLiteralLegacy input (index + 1)
+termination_by input.stop.toNat - consumed.toNat
+decreasing_by decreasing_position
 
 /-- Lexes the string literal. -/
-private partial def lexStringLiteralFrom (input : Input) (consumed : USize) :
+private def lexStringLiteralFrom (input : Input) (consumed : USize) :
     LexM H m R E USize := do
-  let some first := input.get? consumed
+  let some ⟨first, hfirst⟩ := (input.get? consumed).attach
     | return consumed
-  let mut consumed := consumed
+  have := Input.toNat_add_one_of_get? hfirst
+  let mut consumed : { position : USize // consumed.toNat ≤ position.toNat } :=
+    ⟨consumed, Nat.le_refl _⟩
   if (← getCore).state == .stringLiteralDoubleQuote then
     -- we need to react to the literal being closed by a previous double-quote
     -- look at the first byte
@@ -1007,7 +1120,7 @@ private partial def lexStringLiteralFrom (input : Input) (consumed : USize) :
     else
       -- this has been a double-quote escape
       -- consume the first byte
-      consumed := consumed + 1
+      consumed := ⟨consumed.1 + 1, by simp +zetaDelta only; omega⟩
       -- push a double-quote byte (just one, we encountered two)
       pushContent (byte! '"')
       -- return to string-literal state and continue lexing
@@ -1015,9 +1128,12 @@ private partial def lexStringLiteralFrom (input : Input) (consumed : USize) :
 
   -- find the first byte that is not a plain string byte
   let index := runEnd input consumed RUN_STRING_PLAIN
+  have : consumed.1.toNat ≤ index.toNat := le_runEnd input _ _
+  have := consumed.2
 
-  match input.get? index with
+  match hc : input.get? index with
   | some c =>
+    have := Input.toNat_add_one_of_get? hc
     if c == byte! '\n' then
       -- mark the line feed
       markLineFeedAt index
@@ -1043,6 +1159,8 @@ private partial def lexStringLiteralFrom (input : Input) (consumed : USize) :
     extendContent input consumed input.stop
     -- we have nothing more to consume, return
     return input.stop
+termination_by input.stop.toNat - consumed.toNat
+decreasing_by all_goals decreasing_position
 
 /-- Lexes the string literal. -/
 private def lexStringLiteral (input : Input) (start : USize) : LexM H m R E USize := do
@@ -1065,13 +1183,15 @@ private def lexSimpleSymbol (input : Input) (start : USize) : LexM H m R E USize
     setState .normal
   return index
 
-private partial def lexQuotedSymbol (input : Input) (consumed : USize) : LexM H m R E USize := do
+private def lexQuotedSymbol (input : Input) (consumed : USize) : LexM H m R E USize := do
   -- find the first byte that is not a quoted symbol
   let index := runEnd input consumed RUN_QUOTED_PLAIN
+  have : consumed.toNat ≤ index.toNat := le_runEnd input _ _
 
   -- inspect the problematic byte
-  match input.get? index with
+  match hc : input.get? index with
   | some c =>
+    have := Input.toNat_add_one_of_get? hc
     let afterSlicePosition := index + 1
     if c == byte! '|' then
       -- end of quoted symbol, extend its content
@@ -1106,6 +1226,8 @@ private partial def lexQuotedSymbol (input : Input) (consumed : USize) : LexM H 
     -- extend content and keep the quoted symbol state
     extendContent input consumed input.stop
     return input.stop
+termination_by input.stop.toNat - consumed.toNat
+decreasing_by decreasing_position
 
 private def lexKeyword (input : Input) (start : USize) : LexM H m R E USize := do
   -- find the first byte that is not simple-symbol-like
@@ -1129,17 +1251,19 @@ private def lexQuotedSymbolClosed (input : Input) (start : USize) : LexM H m R E
   setState .normal
   return start
 
-/- LEAN: the loop of `lex_whitespace` is the recursion on `start`, `partial` for the reason given
-at `lexNormalFrom`. -/
-private partial def lexWhitespace (input : Input) (start : USize) : LexM H m R E USize := do
+/- LEAN: the loop of `lex_whitespace` is the recursion on `start`, shown to end as
+`lexNormalFrom` is. -/
+private def lexWhitespace (input : Input) (start : USize) : LexM H m R E USize := do
   -- we know that the consumer is interested in the whitespace
   -- as it would otherwise be immediately discarded instead
   -- of the state change
   -- find the first byte that is not non-LF whitespace
   let index := runEnd input start RUN_NON_LF_WHITESPACE
+  have : start.toNat ≤ index.toNat := le_runEnd input _ _
   -- inspect the problematic byte
-  match input.get? index with
+  match hc : input.get? index with
   | some c =>
+    have := Input.toNat_add_one_of_get? hc
     if c == byte! '\n' then
       -- mark the line feed at the given position
       markLineFeedAt index
@@ -1161,6 +1285,8 @@ private partial def lexWhitespace (input : Input) (start : USize) : LexM H m R E
     -- keep the whitespace state
     extendContent input start input.stop
     return input.stop
+termination_by input.stop.toNat - start.toNat
+decreasing_by decreasing_position
 
 private def lexComment (input : Input) (start : USize) : LexM H m R E USize := do
   -- run until comment end

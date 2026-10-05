@@ -274,4 +274,75 @@ def runEndAll (input : Input) (start : USize) (mask : UInt8) : USize :=
   runEndIn (fun bytes position h => RUN_FLAGS.get! (bytes.uget position h).toNat &&& mask != mask)
     input.bytes start input.stop input.stop_le
 
+/- LEAN: the facts below are what the loops of the lexer are shown to end by: a loop goes on
+from a position after one it has read a byte at, and so closer to the end of the slice. -/
+
+/-- The position after one below another does not wrap around. -/
+theorem toNat_add_one_of_lt {position bound : USize} (h : position.toNat < bound.toNat) :
+    (position + 1).toNat = position.toNat + 1 := by
+  have := USize.toNat_lt_size bound
+  have : USize.size = 2 ^ System.Platform.numBits := USize.size_eq_two_pow
+  rw [USize.toNat_add, USize.toNat_one, Nat.mod_eq_of_lt (by omega)]
+
+namespace Input
+
+/-- A position with a byte is below the end of the slice. -/
+theorem lt_stop_of_get? {input : Input} {position : USize} {c : UInt8}
+    (h : input.get? position = some c) : position.toNat < input.stop.toNat := by
+  unfold get? at h
+  split at h
+  · exact USize.lt_iff_toNat_lt.mp ‹_›
+  · cases h
+
+/-- The position after one with a byte is below the end of the slice or at it. -/
+theorem toNat_add_one_of_get? {input : Input} {position : USize} {c : UInt8}
+    (h : input.get? position = some c) :
+    position.toNat < input.stop.toNat ∧ (position + 1).toNat = position.toNat + 1 :=
+  ⟨lt_stop_of_get? h, toNat_add_one_of_lt (lt_stop_of_get? h)⟩
+
+end Input
+
+private theorem le_runEndIn (test : RunTest) (bytes : ByteArray) (position stop : USize)
+    (hstop : stop.toNat ≤ bytes.size) :
+    position.toNat ≤ (runEndIn test bytes position stop hstop).toNat := by
+  fun_induction runEndIn test bytes position stop hstop with
+  | case1 => exact Nat.le_refl _
+  | case2 position h _ ih =>
+    rw [toNat_add_one_of_lt (USize.lt_iff_toNat_lt.mp h)] at ih
+    omega
+  | case3 => exact Nat.le_refl _
+
+private theorem lt_runEndIn (test : RunTest) (bytes : ByteArray) (position stop : USize)
+    (hstop : stop.toNat ≤ bytes.size) (h : position < stop)
+    (hcontinues : test bytes position (by have := USize.lt_iff_toNat_lt.mp h; omega) = false) :
+    position.toNat < (runEndIn test bytes position stop hstop).toNat := by
+  rw [runEndIn]
+  simp only [h, hcontinues, dite_true, Bool.false_eq_true, ite_false]
+  have := le_runEndIn test bytes (position + 1) stop hstop
+  rw [toNat_add_one_of_lt (USize.lt_iff_toNat_lt.mp h)] at this
+  omega
+
+/-- A run ends at its start or after it. -/
+theorem le_runEnd (input : Input) (start : USize) (mask : UInt8) :
+    start.toNat ≤ (runEnd input start mask).toNat :=
+  le_runEndIn _ _ _ _ _
+
+/-- A run ends at its start or after it. -/
+theorem le_runEndAll (input : Input) (start : USize) (mask : UInt8) :
+    start.toNat ≤ (runEndAll input start mask).toNat :=
+  le_runEndIn _ _ _ _ _
+
+/-- A run ends after its start if the byte at the start does not end it. -/
+theorem lt_runEnd {input : Input} {start : USize} {c : UInt8} (mask : UInt8)
+    (h : input.get? start = some c) (hc : endsRun c mask = false) :
+    start.toNat < (runEnd input start mask).toNat := by
+  unfold Input.get? at h
+  split at h
+  · rename_i hlt
+    apply lt_runEndIn _ _ _ _ _ hlt
+    simp only [Option.some.injEq] at h
+    rw [h]
+    exact hc
+  · cases h
+
 end BSmtLib.Lexer
