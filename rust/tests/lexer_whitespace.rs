@@ -3,8 +3,8 @@
 //! the whole input, and that everything else stays as it is for a consumer
 //! that does not take them.
 //!
-//! These run against the Rust lexer only: the driver protocol has no request
-//! for this kind of consumer.
+//! They run through the lexing backend of the tests, so they check the Lean
+//! port when its driver is selected.
 
 mod lex_backend;
 
@@ -59,13 +59,13 @@ const INPUTS: [&[u8]; 22] = [
 fn lex_with_whitespace(version: SmtVersion, pieces: &[&[u8]]) -> Lexed {
     let mut feeds: Vec<Feed<'_>> = pieces.iter().map(|piece| Feed::Slice(piece)).collect();
     feeds.push(Feed::Eof);
-    lex_backend::rust_lex_with_whitespace(version, &feeds)
+    lex_backend::lex_with_whitespace(version, &feeds)
 }
 
 fn lex_without_whitespace(version: SmtVersion, pieces: &[&[u8]]) -> Lexed {
     let mut feeds: Vec<Feed<'_>> = pieces.iter().map(|piece| Feed::Slice(piece)).collect();
     feeds.push(Feed::Eof);
-    lex_backend::rust_lex(version, &feeds)
+    lex_backend::lex(version, &feeds)
 }
 
 fn show(input: &[u8]) -> String {

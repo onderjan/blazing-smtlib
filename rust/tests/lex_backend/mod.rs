@@ -13,6 +13,8 @@
 // Every test file that includes this module uses its own part of it.
 #![allow(dead_code)]
 
+pub mod driver;
+
 use std::cell::RefCell;
 use std::convert::Infallible;
 use std::ffi::OsString;
@@ -161,12 +163,6 @@ impl<const WHITESPACE: bool> SmtConsume for Collect<'_, WHITESPACE> {
 /// against.
 pub fn rust_lex(version: SmtVersion, feeds: &[Feed<'_>]) -> Lexed {
     rust_lex_as::<false>(version, feeds)
-}
-
-/// Runs a fresh Rust lexer over the feeds with a consumer that takes
-/// whitespace and comments too, whatever lexer the tests run against.
-pub fn rust_lex_with_whitespace(version: SmtVersion, feeds: &[Feed<'_>]) -> Lexed {
-    rust_lex_as::<true>(version, feeds)
 }
 
 fn rust_lex_as<const WHITESPACE: bool>(version: SmtVersion, feeds: &[Feed<'_>]) -> Lexed {
@@ -478,4 +474,263 @@ fn lex_with_driver(path: &OsString, version: SmtVersion, feeds: &[Feed<'_>]) -> 
             }
         }
     })
+}
+
+// --- Requests with options: scripted consumers, whitespace, recovery ---
+
+/// The options of a request.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Options {
+    /// The consumer takes whitespace and comments.
+    pub whitespace: bool,
+    /// The lexer recovers from errors.
+    pub recover: bool,
+    /// What the consumer does.
+    pub behaviour: driver::Behaviour,
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Options {
+            whitespace: false,
+            recover: false,
+            behaviour: driver::Behaviour::TakeAll,
+        }
+    }
+}
+
+/// One line of a response, in order.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Line {
+    /// A hand-over starts: the version its tokens were lexed under and
+    /// their number. Only reported for a consumer with a plan.
+    Handover { version: SmtVersion, count: usize },
+    /// A token: of a hand-over for a consumer with a plan, a consumed one
+    /// otherwise.
+    Token(LexedToken),
+    /// The consumer was made to abandon its unfinished work.
+    Abandon(Loc),
+    /// The consumer was told where the skipped input ends.
+    Recover(Loc),
+    /// The consumer finished at the location.
+    Finish(Loc),
+    /// A lexical error. With recovery it says where the input continues from.
+    LexicalError {
+        error: LexedError,
+        continues: Option<Option<Loc>>,
+    },
+    /// An error of the consumer, by its name. With recovery it says where
+    /// the input continues from.
+    ConsumerError {
+        name: String,
+        continues: Option<Option<Loc>>,
+    },
+    /// A feed was applied: the lexer's location afterwards.
+    At(Loc),
+    /// The lexer's version after a feed. Only reported for a scripted consumer.
+    Version(SmtVersion),
+}
+
+fn reply_word(reply: driver::Reply) -> String {
+    match reply {
+        driver::Reply::TakeAll => "t".into(),
+        driver::Reply::Leave(taken) => format!("l{taken}"),
+        driver::Reply::Finish(taken) => format!("f{taken}"),
+        driver::Reply::Fail(taken) => format!("x{taken}"),
+        driver::Reply::Switch(taken, version) => format!("v{taken}:{}", version_name(version)),
+        driver::Reply::SwitchAndFinish(taken, version) => {
+            format!("w{taken}:{}", version_name(version))
+        }
+    }
+}
+
+fn request_line(version: SmtVersion, options: &Options, feeds: &[Feed<'_>]) -> String {
+    let mut request = format!("lex {}", version_name(version));
+    if options.whitespace {
+        request.push_str(" ws");
+    }
+    if options.recover {
+        request.push_str(" recover");
+    }
+    match &options.behaviour {
+        driver::Behaviour::TakeAll => {}
+        driver::Behaviour::Plan(replies) => {
+            let words: Vec<String> = replies.iter().copied().map(reply_word).collect();
+            request.push_str(&format!(" plan={}", words.join(",")));
+        }
+        driver::Behaviour::Rules { refuse_end: false } => request.push_str(" rules"),
+        driver::Behaviour::Rules { refuse_end: true } => request.push_str(" rules=refuse-end"),
+    }
+    for feed in feeds {
+        match feed {
+            Feed::Slice(slice) => {
+                request.push_str(" s");
+                request.push_str(&hex(slice));
+            }
+            Feed::Eof => request.push_str(" e"),
+        }
+    }
+    request
+}
+
+/// Whether the line is the last one of a response.
+fn ends_response(line: &str, recover: bool) -> bool {
+    line == "ok"
+        || line.starts_with("fail ")
+        || (!recover && (line.starts_with("err ") || line.starts_with("cerr ")))
+}
+
+/// The lines of the response to the request, from the Lean driver if the
+/// tests run against it and from the Rust lexer otherwise.
+fn respond(request: &str, recover: bool) -> Vec<String> {
+    let Some(path) = lean_driver() else {
+        let response = driver::answer(request)
+            .unwrap_or_else(|message| panic!("the request {request:?} is refused: {message}"));
+        return response.lines().map(str::to_string).collect();
+    };
+    DRIVER.with(|driver| {
+        let mut driver = driver.borrow_mut();
+        let driver = driver.get_or_insert_with(|| start_driver(&path));
+        let requests = driver
+            .requests
+            .as_mut()
+            .expect("a running driver has its input open");
+        requests
+            .write_all(format!("{request}\n").as_bytes())
+            .and_then(|()| requests.flush())
+            .unwrap_or_else(|err| panic!("cannot send a request to the Lean driver: {err}"));
+        let mut lines = Vec::new();
+        loop {
+            let mut line = String::new();
+            let read = driver
+                .responses
+                .read_line(&mut line)
+                .unwrap_or_else(|err| panic!("cannot read the Lean driver's response: {err}"));
+            assert!(
+                read > 0,
+                "the Lean driver ended in the middle of its response to {request:?}"
+            );
+            let line = line.trim_end_matches('\n').to_string();
+            let last = ends_response(&line, recover);
+            lines.push(line);
+            if last {
+                return lines;
+            }
+        }
+    })
+}
+
+/// Parses where the input continues from: a location, or `-` if it does not.
+fn parse_continues(field: &str, line: &str) -> Option<Loc> {
+    (field != "-").then(|| parse_loc(field, line))
+}
+
+fn parse_version(field: &str, line: &str) -> SmtVersion {
+    SmtVersion::from_decimal_opt(field.as_bytes())
+        .unwrap_or_else(|| panic!("the driver sent an unknown version: {line:?}"))
+}
+
+/// Runs a fresh lexer of the version over the feeds, with a consumer and a
+/// kind of lexer as the options say, and returns everything it reported.
+///
+/// After an error of a recovering lexer, the rest of the failed feed is
+/// applied again from where the input continues, until the feed is done.
+pub fn run(version: SmtVersion, options: &Options, feeds: &[Feed<'_>]) -> Vec<Line> {
+    let request = request_line(version, options, feeds);
+    // the version in force, as far as the response tells
+    let mut current = version;
+    let mut lines = Vec::new();
+    for line in respond(&request, options.recover) {
+        let line = line.as_str();
+        let fields: Vec<&str> = line.split(' ').collect();
+        match fields.as_slice() {
+            ["ok"] => break,
+            ["h", version, count] => {
+                current = parse_version(version, line);
+                lines.push(Line::Handover {
+                    version: current,
+                    count: count
+                        .parse()
+                        .unwrap_or_else(|_| panic!("the driver sent a bad count: {line:?}")),
+                });
+            }
+            ["t", ty, start, end, class, content] => {
+                let content = content.strip_prefix('x').unwrap_or_else(|| {
+                    panic!("the driver sent content without its prefix: {line:?}")
+                });
+                let content = unhex(content, line);
+                let ty = by_name(&TOKEN_TYPES, ty, line);
+                // a scripted consumer may have set another version by now, and
+                // only a plan reports it with the hand-over: the word is looked
+                // up under the version known, then under any other one
+                let reserved = (*class != "-").then(|| {
+                    [
+                        current,
+                        SmtVersion::V2_7,
+                        SmtVersion::V2_6,
+                        SmtVersion::V2_5,
+                        SmtVersion::V2_0,
+                    ]
+                    .into_iter()
+                    .find_map(|version| SmtReserved::from_bytes_opt(&content, version))
+                    .unwrap_or_else(|| {
+                        panic!("the driver reported a reserved word that is none: {line:?}")
+                    })
+                });
+                lines.push(Line::Token(LexedToken {
+                    ty,
+                    start: parse_loc(start, line),
+                    end: parse_loc(end, line),
+                    kind: kind_of(ty, &content, reserved),
+                    content,
+                }));
+            }
+            ["ab", location] => lines.push(Line::Abandon(parse_loc(location, line))),
+            ["rc", location] => lines.push(Line::Recover(parse_loc(location, line))),
+            ["fin", location] => lines.push(Line::Finish(parse_loc(location, line))),
+            ["at", location] => lines.push(Line::At(parse_loc(location, line))),
+            ["v", version] => {
+                current = parse_version(version, line);
+                lines.push(Line::Version(current));
+            }
+            ["err", kind, start, end, rest @ ..] => lines.push(Line::LexicalError {
+                error: LexedError {
+                    kind: by_name(&ERROR_KINDS, kind, line),
+                    start: parse_loc(start, line),
+                    end: parse_loc(end, line),
+                },
+                continues: rest.first().map(|field| parse_continues(field, line)),
+            }),
+            ["cerr", name, rest @ ..] => lines.push(Line::ConsumerError {
+                name: name.to_string(),
+                continues: rest.first().map(|field| parse_continues(field, line)),
+            }),
+            ["fail", ..] => panic!("the driver refused {request:?}: {line:?}"),
+            _ => panic!("the driver sent a line that is not understood: {line:?}"),
+        }
+    }
+    lines
+}
+
+/// Runs a fresh lexer of the version over the feeds, stopping at the first
+/// error, with a consumer that takes whitespace and comments too.
+pub fn lex_with_whitespace(version: SmtVersion, feeds: &[Feed<'_>]) -> Lexed {
+    let options = Options {
+        whitespace: true,
+        ..Options::default()
+    };
+    let mut lexed = Lexed {
+        tokens: Vec::new(),
+        locations: Vec::new(),
+        error: None,
+    };
+    for line in run(version, &options, feeds) {
+        match line {
+            Line::Token(token) => lexed.tokens.push(token),
+            Line::At(location) => lexed.locations.push(location),
+            Line::LexicalError { error, .. } => lexed.error = Some(error),
+            other => panic!("a line that no option asked for: {other:?}"),
+        }
+    }
+    lexed
 }

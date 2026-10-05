@@ -5,21 +5,29 @@
 //! A run is written as a trace of what the consumer was called with, in
 //! order: the tokens as their text, an abandon as `!` and a recovery as `>`,
 //! both with the offset of their location, and the end-of-file token as `$`.
+//!
+//! The consumer is the one of the driver protocol that fails by what the
+//! tokens are: on the symbol `bad`, on a closing parenthesis that closes
+//! nothing, and on the end-of-file token inside a parenthesis. The symbol
+//! `to-2.0` makes it set the version. The runs go through the lexing backend
+//! of the tests, so they check the Lean port when its driver is selected; the
+//! tests at the end use the Rust interface itself.
 
+mod lex_backend;
+
+use std::cell::RefCell;
 use std::ops::ControlFlow;
+use std::rc::Rc;
 
 use blazing_smtlib::{
-    SmtLocation,
-    lexer::{SmtLexError, SmtLexErrorCause, SmtLexer, SmtRecovering},
-    token::{SmtBatchCursor, SmtConsume, SmtRecover, SmtTokenCategory, SmtVersion},
+    lexer::{SmtLexer, SmtRecovering},
+    token::{SmtTokenCategory, SmtVersion},
 };
 
-/// A location as `(offset, line, column)`, all zero-based.
-type Loc = (u64, u64, u64);
-
-fn loc(location: SmtLocation) -> Loc {
-    (location.offset(), location.line(), location.column())
-}
+use lex_backend::{
+    Feed, Line, Loc, Options,
+    driver::{Behaviour, Scripted},
+};
 
 /// What a consumer was called with.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -36,68 +44,6 @@ struct Rules {
     refuse_every_end: bool,
 }
 
-/// Records every call and refuses some tokens, after consuming them:
-/// the symbol `bad`, a closing parenthesis that closes nothing, and the
-/// end-of-file token inside a parenthesis. The symbol `to-2.0` makes it set
-/// the version. `WHITESPACE` says whether it takes whitespace and comments.
-struct Checker<'r, const WHITESPACE: bool> {
-    events: &'r mut Vec<Event>,
-    open: u64,
-    rules: Rules,
-}
-
-impl<const WHITESPACE: bool> SmtConsume for Checker<'_, WHITESPACE> {
-    type Result = ();
-    type Error = &'static str;
-    const CONSUMES_WHITESPACE_AND_COMMENTS: bool = WHITESPACE;
-
-    fn consume(
-        &mut self,
-        cursor: &mut SmtBatchCursor<'_>,
-    ) -> Result<ControlFlow<Self::Result>, Self::Error> {
-        while let Some(token) = cursor.next() {
-            self.events.push(Event::Token(
-                token.category(),
-                token.content().to_vec(),
-                loc(token.span().start()),
-            ));
-            match token.category() {
-                SmtTokenCategory::ParenOpen => self.open += 1,
-                SmtTokenCategory::ParenClose => {
-                    if self.open == 0 {
-                        return Err("unmatched");
-                    }
-                    self.open -= 1;
-                }
-                SmtTokenCategory::EndOfFile => {
-                    if self.rules.refuse_every_end || self.open > 0 {
-                        return Err("unexpected-end");
-                    }
-                }
-                SmtTokenCategory::UnquotedSymbol if token.content() == b"bad" => {
-                    return Err("bad");
-                }
-                SmtTokenCategory::UnquotedSymbol if token.content() == b"to-2.0" => {
-                    cursor.set_version(SmtVersion::V2_0);
-                }
-                _ => {}
-            }
-        }
-        Ok(ControlFlow::Continue(()))
-    }
-}
-
-impl<const WHITESPACE: bool> SmtRecover for Checker<'_, WHITESPACE> {
-    fn abandon(&mut self, location: SmtLocation) {
-        self.events.push(Event::Abandon(loc(location)));
-        self.open = 0;
-    }
-
-    fn recover(&mut self, location: SmtLocation) {
-        self.events.push(Event::Recover(loc(location)));
-    }
-}
-
 /// Everything observable about a run.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Run {
@@ -105,6 +51,8 @@ struct Run {
     /// Every error returned, as its kind and the offset the input continues
     /// from, or `-` if it does not continue.
     errors: Vec<String>,
+    /// The lexer's location after every feed.
+    locations: Vec<Loc>,
 }
 
 impl Run {
@@ -136,13 +84,12 @@ impl Run {
     }
 }
 
-fn describe(err: &SmtLexError<&'static str>) -> String {
-    let what = match err.cause() {
-        SmtLexErrorCause::Lexical(err) => format!("{:?}", err.kind()),
-        SmtLexErrorCause::Consumer(err) => err.to_string(),
-    };
-    match err.continues_from() {
-        Some(location) => format!("{what}@{}", location.offset()),
+/// An error as its kind and where the input continues from.
+fn describe(what: String, continues: Option<Option<Loc>>, context: &str) -> String {
+    match continues
+        .unwrap_or_else(|| panic!("a recovering lexer says where it continues: {context}"))
+    {
+        Some(location) => format!("{what}@{}", location.0),
         None => format!("{what}@-"),
     }
 }
@@ -169,10 +116,60 @@ fn assert_paired(events: &[Event], context: &str) {
     assert!(!abandoned, "an abandon without a recovery in {context}");
 }
 
+/// Runs a fresh recovering lexer over the feeds. After an error, the rest of
+/// the failed feed is applied again from where the input continues, and the
+/// end of the input is given again if the first time failed.
+fn run_feeds<const WHITESPACE: bool>(
+    version: SmtVersion,
+    feeds: &[Feed<'_>],
+    rules: Rules,
+    context: &str,
+) -> Run {
+    let options = Options {
+        whitespace: WHITESPACE,
+        recover: true,
+        behaviour: Behaviour::Rules {
+            refuse_end: rules.refuse_every_end,
+        },
+    };
+    let mut run = Run {
+        events: Vec::new(),
+        errors: Vec::new(),
+        locations: Vec::new(),
+    };
+    for line in lex_backend::run(version, &options, feeds) {
+        match line {
+            Line::Token(token) => {
+                run.events
+                    .push(Event::Token(token.ty, token.content, token.start));
+            }
+            Line::Abandon(location) => run.events.push(Event::Abandon(location)),
+            Line::Recover(location) => run.events.push(Event::Recover(location)),
+            Line::LexicalError { error, continues } => {
+                run.errors
+                    .push(describe(format!("{:?}", error.kind), continues, context));
+            }
+            Line::ConsumerError { name, continues } => {
+                run.errors.push(describe(name, continues, context));
+            }
+            Line::At(location) => run.locations.push(location),
+            Line::Version(_) => {}
+            Line::Handover { .. } | Line::Finish(_) => {
+                panic!("the consumer has no plan and never finishes: {context}")
+            }
+        }
+    }
+    assert_eq!(
+        run.locations.len(),
+        feeds.len(),
+        "every feed is applied: {context}"
+    );
+    assert_paired(&run.events, context);
+    run
+}
+
 /// Runs a fresh recovering lexer over the input, fed as the pieces between
-/// the cuts, the way a driver does: after an error, the rest of the piece
-/// is fed again from where the input continues, and the end of the input
-/// is given again if the first time failed.
+/// the cuts and then its end.
 fn run_as<const WHITESPACE: bool>(
     version: SmtVersion,
     input: &[u8],
@@ -183,72 +180,25 @@ fn run_as<const WHITESPACE: bool>(
         "{:?} cut at {cuts:?} under {version:?}",
         String::from_utf8_lossy(input)
     );
-    let mut events = Vec::new();
-    let mut errors = Vec::new();
-    {
-        let mut lexer: SmtLexer<_, SmtRecovering> = SmtLexer::new_recovering(
-            Checker::<WHITESPACE> {
-                events: &mut events,
-                open: 0,
-                rules,
-            },
-            version,
-        );
-        let mut at = 0;
-        for &end in cuts.iter().chain([&input.len()]) {
-            // every failed call makes progress, or the loop would not end
-            let mut calls = 0;
-            loop {
-                calls += 1;
-                assert!(calls <= 2 * input.len() + 2, "no progress in {context}");
-                match lexer.lex_slice(&input[at..end]) {
-                    Ok(ControlFlow::Continue(())) => {
-                        at = end;
-                        break;
-                    }
-                    Ok(ControlFlow::Break(_)) => panic!("the consumer never finishes"),
-                    Err(err) => {
-                        errors.push(describe(&err));
-                        let from = err
-                            .continues_from()
-                            .unwrap_or_else(|| panic!("a recovering lexer continues in {context}"));
-                        // the failure is inside the piece, and the lexer is there
-                        assert!(
-                            (at..=end).contains(&(from.offset() as usize)),
-                            "the input continues outside of the piece in {context}"
-                        );
-                        assert_eq!(loc(lexer.current_location()), loc(from), "{context}");
-                        at = from.offset() as usize;
-                    }
-                }
-            }
-            assert_eq!(lexer.current_location().offset() as usize, at, "{context}");
-        }
-        match lexer.lex_eof() {
-            Ok(ControlFlow::Continue(())) => {}
-            Ok(ControlFlow::Break(_)) => panic!("the consumer never finishes"),
-            Err(err) => {
-                errors.push(describe(&err));
-                // an error at the end either is final, or continues at the end
-                if let Some(from) = err.continues_from() {
-                    assert_eq!(from.offset() as usize, input.len(), "{context}");
-                    // nothing is left of the input, so its end is given again
-                    match lexer.lex_eof() {
-                        Ok(ControlFlow::Continue(())) => {}
-                        Ok(ControlFlow::Break(_)) => panic!("the consumer never finishes"),
-                        Err(err) => {
-                            errors.push(describe(&err));
-                            assert_eq!(err.continues_from(), None, "{context}");
-                        }
-                    }
-                }
-            }
-        }
-        // the input has ended, whatever happened in it
-        assert_eq!(loc(lexer.current_location()), (0, 0, 0), "{context}");
+    let mut feeds = Vec::new();
+    let mut at = 0;
+    for &end in cuts.iter().chain([&input.len()]) {
+        feeds.push(Feed::Slice(&input[at..end]));
+        at = end;
     }
-    assert_paired(&events, &context);
-    Run { events, errors }
+    feeds.push(Feed::Eof);
+    let mut run = run_feeds::<WHITESPACE>(version, &feeds, rules, &context);
+
+    // after every piece the lexer is after everything it was fed, however
+    // often it failed inside the piece, and the end of the input resets it
+    let mut expected: Vec<u64> = cuts.iter().map(|&cut| cut as u64).collect();
+    expected.push(input.len() as u64);
+    expected.push(0);
+    let offsets: Vec<u64> = run.locations.iter().map(|location| location.0).collect();
+    assert_eq!(offsets, expected, "{context}");
+    // the locations depend on the cuts, the rest of a run must not
+    run.locations.clear();
+    run
 }
 
 fn run(input: &[u8]) -> Run {
@@ -584,88 +534,16 @@ fn an_error_on_the_second_end_of_the_input_is_final() {
 
 #[test]
 fn the_lexer_takes_a_new_input_after_a_final_error() {
-    let mut events = Vec::new();
-    {
-        let mut lexer = SmtLexer::new_recovering(
-            Checker::<false> {
-                events: &mut events,
-                open: 0,
-                rules: Rules {
-                    refuse_every_end: true,
-                },
-            },
-            SmtVersion::V2_7,
-        );
-        assert!(matches!(
-            lexer.lex_slice(b"a"),
-            Ok(ControlFlow::Continue(()))
-        ));
-        assert!(lexer.lex_eof().is_err());
-        assert!(lexer.lex_eof().is_err());
-        // the next input is lexed from the origin
-        assert!(matches!(
-            lexer.lex_slice(b"b c "),
-            Ok(ControlFlow::Continue(()))
-        ));
-        assert_eq!(loc(lexer.current_location()), (4, 0, 4));
-    }
-    let run = Run {
-        events,
-        errors: Vec::new(),
+    let rules = Rules {
+        refuse_every_end: true,
     };
+    // the end of the first input fails twice; what is fed then is a new
+    // input, lexed from the origin
+    let feeds = [Feed::Slice(b"a"), Feed::Eof, Feed::Slice(b"b c ")];
+    let run = run_feeds::<false>(SmtVersion::V2_7, &feeds, rules, "two inputs");
     assert_eq!(run.trace(), "a $ !1 >1 $ b c");
-}
-
-#[test]
-#[should_panic(expected = "cannot lex a slice after the end of the input")]
-fn a_slice_after_a_failed_end_of_the_input_panics() {
-    let mut events = Vec::new();
-    let mut lexer = SmtLexer::new_recovering(
-        Checker::<false> {
-            events: &mut events,
-            open: 0,
-            rules: Rules::default(),
-        },
-        SmtVersion::V2_7,
-    );
-    assert!(matches!(
-        lexer.lex_slice(b"(a"),
-        Ok(ControlFlow::Continue(()))
-    ));
-    assert!(lexer.lex_eof().is_err());
-    let _ = lexer.lex_slice(b"b");
-}
-
-#[test]
-fn an_empty_slice_after_a_failed_end_of_the_input_is_allowed() {
-    // a driver that gives the rest of the input again gives nothing here
-    let mut events = Vec::new();
-    {
-        let mut lexer = SmtLexer::new_recovering(
-            Checker::<false> {
-                events: &mut events,
-                open: 0,
-                rules: Rules::default(),
-            },
-            SmtVersion::V2_7,
-        );
-        assert!(matches!(
-            lexer.lex_slice(b"(a"),
-            Ok(ControlFlow::Continue(()))
-        ));
-        let err = lexer.lex_eof().expect_err("the end is refused");
-        assert_eq!(err.continues_from().map(loc), Some((2, 0, 2)));
-        assert!(matches!(
-            lexer.lex_slice(b""),
-            Ok(ControlFlow::Continue(()))
-        ));
-        assert!(matches!(lexer.lex_eof(), Ok(ControlFlow::Continue(()))));
-    }
-    let run = Run {
-        events,
-        errors: Vec::new(),
-    };
-    assert_eq!(run.trace(), "( a $ !2 >2 $");
+    assert_eq!(run.errors, ["unexpected-end@1", "unexpected-end@-"]);
+    assert_eq!(run.locations, [(1, 0, 1), (0, 0, 0), (4, 0, 4)]);
 }
 
 // --- A consumer that takes whitespace and comments ---
@@ -733,7 +611,96 @@ fn the_run_is_the_same_for_every_slicing() {
     }
 }
 
-// --- A lexer that stops at its first error is not affected ---
+// --- The Rust interface itself ---
+
+/// A recovering lexer over the consumer of these tests, and what the
+/// consumer writes.
+fn rust_lexer() -> (
+    SmtLexer<Scripted<false>, SmtRecovering>,
+    Rc<RefCell<String>>,
+) {
+    let written = Rc::new(RefCell::new(String::new()));
+    let consumer = Scripted::new(Behaviour::Rules { refuse_end: false }, written.clone());
+    (
+        SmtLexer::new_recovering(consumer, SmtVersion::V2_7),
+        written,
+    )
+}
+
+/// The number of lines the consumer wrote that start with the word.
+fn count_lines(written: &RefCell<String>, word: &str) -> usize {
+    written
+        .borrow()
+        .lines()
+        .filter(|line| line.split(' ').next() == Some(word))
+        .count()
+}
+
+#[test]
+#[should_panic(expected = "cannot lex a slice after the end of the input")]
+fn a_slice_after_a_failed_end_of_the_input_panics() {
+    let (mut lexer, _written) = rust_lexer();
+    assert!(matches!(
+        lexer.lex_slice(b"(a"),
+        Ok(ControlFlow::Continue(()))
+    ));
+    assert!(lexer.lex_eof().is_err());
+    let _ = lexer.lex_slice(b"b");
+}
+
+#[test]
+fn an_empty_slice_after_a_failed_end_of_the_input_is_allowed() {
+    // an empty slice feeds nothing, as everywhere else
+    let (mut lexer, written) = rust_lexer();
+    assert!(matches!(
+        lexer.lex_slice(b"(a"),
+        Ok(ControlFlow::Continue(()))
+    ));
+    let err = lexer.lex_eof().expect_err("the end is refused");
+    assert_eq!(
+        err.continues_from().map(|location| location.offset()),
+        Some(2)
+    );
+    assert!(matches!(
+        lexer.lex_slice(b""),
+        Ok(ControlFlow::Continue(()))
+    ));
+    // the recovery only comes with the second end of the input
+    assert_eq!(count_lines(&written, "rc"), 0);
+    assert!(matches!(lexer.lex_eof(), Ok(ControlFlow::Continue(()))));
+    assert_eq!(count_lines(&written, "ab"), 1);
+    assert_eq!(count_lines(&written, "rc"), 1);
+}
+
+#[test]
+fn a_mutable_reference_to_a_consumer_that_can_recover_can_recover() {
+    let written = Rc::new(RefCell::new(String::new()));
+    let mut consumer =
+        Scripted::<false>::new(Behaviour::Rules { refuse_end: false }, written.clone());
+    let mut lexer = SmtLexer::new_recovering(&mut consumer, SmtVersion::V2_7);
+    assert!(lexer.lex_slice(b"(a #q) b").is_err());
+    assert!(matches!(
+        lexer.lex_slice(b"q) b"),
+        Ok(ControlFlow::Continue(()))
+    ));
+    assert!(matches!(lexer.lex_eof(), Ok(ControlFlow::Continue(()))));
+    assert_eq!(count_lines(&written, "ab"), 1);
+    assert_eq!(count_lines(&written, "rc"), 1);
+}
+
+#[test]
+fn a_lexer_that_stops_at_its_first_error_does_not_abandon() {
+    // the same consumer serves a lexer that stops at its first error, which
+    // calls neither of the two and does not continue the input
+    let written = Rc::new(RefCell::new(String::new()));
+    let consumer = Scripted::<false>::new(Behaviour::Rules { refuse_end: false }, written.clone());
+    let mut lexer = SmtLexer::new(consumer, SmtVersion::V2_7);
+    let err = lexer.lex_all(b"(a #q) b").expect_err("a lexical error");
+    assert_eq!(err.continues_from(), None);
+    assert_eq!(count_lines(&written, "t"), 2);
+    assert_eq!(count_lines(&written, "ab"), 0);
+    assert_eq!(count_lines(&written, "rc"), 0);
+}
 
 #[test]
 fn well_formed_input_is_lexed_without_abandoning() {
@@ -742,47 +709,4 @@ fn well_formed_input_is_lexed_without_abandoning() {
         "( assert x ) ( check-sat ) $",
         &[],
     );
-
-    // a mutable reference to a consumer that can recover can recover
-    let mut events = Vec::new();
-    {
-        let mut consumer = Checker::<false> {
-            events: &mut events,
-            open: 0,
-            rules: Rules::default(),
-        };
-        let mut lexer = SmtLexer::new_recovering(&mut consumer, SmtVersion::V2_7);
-        assert!(lexer.lex_slice(b"(a #q) b").is_err());
-        assert!(matches!(
-            lexer.lex_slice(b"q) b"),
-            Ok(ControlFlow::Continue(()))
-        ));
-        assert!(matches!(lexer.lex_eof(), Ok(ControlFlow::Continue(()))));
-    }
-    let run = Run {
-        events,
-        errors: Vec::new(),
-    };
-    assert_eq!(run.trace(), "( a !4 >6 b $");
-
-    // the same consumer serves a lexer that stops at its first error, which
-    // calls neither of the two and does not continue the input
-    let mut events = Vec::new();
-    {
-        let mut lexer = SmtLexer::new(
-            Checker::<false> {
-                events: &mut events,
-                open: 0,
-                rules: Rules::default(),
-            },
-            SmtVersion::V2_7,
-        );
-        let err = lexer.lex_all(b"(a #q) b").expect_err("a lexical error");
-        assert_eq!(err.continues_from(), None);
-    }
-    let run = Run {
-        events,
-        errors: Vec::new(),
-    };
-    assert_eq!(run.trace(), "( a");
 }
