@@ -1,4 +1,4 @@
-import LexerSpec
+import BSmtLib.Spec.Lexicon
 
 /-!
 # The reserved words as the standard lists them
@@ -9,9 +9,9 @@ the version adds. Not trusted: the lists are a second transcription, and the the
 that the two agree.
 -/
 
-namespace LexerSpec.Checks
+namespace BSmtLib.SpecChecks.Lexicon
 
-open LexerSpec
+open BSmtLib.Spec BSmtLib.Spec.Lexicon
 
 /-- The basic set of reserved words, as each version lists it. -/
 def listedBasicReservedWords : Version → List String
@@ -61,4 +61,4 @@ theorem reservedWords_nodup (version : Version) :
     (basicReservedWords version ++ commandNames version).Nodup := by
   cases version <;> decide
 
-end LexerSpec.Checks
+end BSmtLib.SpecChecks.Lexicon

@@ -1,4 +1,4 @@
-import LexerSpec
+import BSmtLib.Spec.Lexicon
 
 /-!
 # Lemmas for checking the spec
@@ -7,9 +7,9 @@ Facts about the combinators that make the checks short. Not trusted: everything 
 proved.
 -/
 
-namespace LexerSpec.Checks
+namespace BSmtLib.SpecChecks.Lexicon
 
-open LexerSpec Regex
+open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Lexicon.Regex
 
 theorem range_one {lo hi : Nat} {c : UInt8} : range lo hi [c] ↔ lo ≤ c.toNat ∧ c.toNat ≤ hi := by
   simp [range]
@@ -95,11 +95,11 @@ theorem simpleSymbol_of {version : Version} {c : UInt8} {s : Chars}
   · rw [reserved, litOneOf_iff]
     exact hreserved
 
-end LexerSpec.Checks
+end BSmtLib.SpecChecks.Lexicon
 
-namespace LexerSpec.Checks
+namespace BSmtLib.SpecChecks.Lexicon
 
-open LexerSpec Regex
+open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Lexicon.Regex
 
 theorem whiteSpaceChar_one {c : UInt8} :
     whiteSpaceChar [c] ↔ c.toNat = 9 ∨ c.toNat = 10 ∨ c.toNat = 13 ∨ c.toNat = 32 := by
@@ -115,11 +115,11 @@ theorem whitespace_spaces {s : Chars} (h : ∀ c ∈ s, c.toNat = 32) : whitespa
 
 theorem whitespace_nil : whitespace [] := star_parts [] (by simp)
 
-end LexerSpec.Checks
+end BSmtLib.SpecChecks.Lexicon
 
-namespace LexerSpec.Checks
+namespace BSmtLib.SpecChecks.Lexicon
 
-open LexerSpec Regex
+open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Lexicon.Regex
 
 /-- A part of the body of a string literal from 2.5 on, checked by computation. -/
 def stringPartOk (p : Chars) : Bool :=
@@ -149,5 +149,5 @@ theorem stringPart_of_ok {p : Chars} (h : stringPartOk p = true) :
     | [], h, _ => simp [stringPartOk] at h
     | _ :: _ :: _, h, hq => simp_all [stringPartOk]
 
-end LexerSpec.Checks
+end BSmtLib.SpecChecks.Lexicon
 

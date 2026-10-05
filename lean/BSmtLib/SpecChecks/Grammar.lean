@@ -1,4 +1,5 @@
-import ParserSpec
+import BSmtLib.Spec.Grammar
+import BSmtLib.Spec.Parser
 
 /-!
 # The standard's examples of syntax
@@ -7,9 +8,9 @@ Examples the standard gives with its syntactic rules, checked against the parser
 trusted: these are proofs.
 -/
 
-namespace ParserSpec.Checks
+namespace BSmtLib.SpecChecks.Grammar
 
-open LexerSpec ParserSpec
+open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Grammar BSmtLib.Spec.Parser
 
 /-- The symbol `s`. -/
 abbrev sym (s : String) : SyntaxToken := .symbol (chars s)
@@ -162,4 +163,4 @@ theorem scriptReadsUnder_unrestricted (version : Version) (input : Chars)
   refine ⟨fun h => h.1, fun h => ⟨h, fun declared _ => ?_, by simp [VersionPolicy.unrestricted]⟩⟩
   cases declared <;> simp [VersionPolicy.unrestricted]
 
-end ParserSpec.Checks
+end BSmtLib.SpecChecks.Grammar

@@ -1,4 +1,4 @@
-import Checks.Lemmas
+import BSmtLib.SpecChecks.Lemmas
 
 /-!
 # The standard's examples
@@ -7,9 +7,9 @@ The examples the standard gives with its lexical rules, checked against the spec
 trusted: these are proofs.
 -/
 
-namespace LexerSpec.Checks
+namespace BSmtLib.SpecChecks.Lexicon
 
-open LexerSpec Regex
+open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Lexicon.Regex
 
 /-! ## Hexadecimals and binaries -/
 
@@ -157,4 +157,4 @@ example : Reads .v2_0 stringE [⟨.string, 0, stringE⟩] := by
     · simp at hc
       rcases hc with rfl | rfl <;> simp [oneOf_one, chars] <;> decide
 
-end LexerSpec.Checks
+end BSmtLib.SpecChecks.Lexicon

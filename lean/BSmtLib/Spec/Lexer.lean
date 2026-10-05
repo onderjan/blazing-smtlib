@@ -1,32 +1,24 @@
-import LexerSpec.Reading
+import BSmtLib.Spec.Lexicon
 
 /-!
-# Claims
+# Lexers
 
-What is claimed about the spec and about a lexer. The claims are trusted as much as the
-spec: a proof shows that a claim holds, so the claim has to say what is meant.
+What a lexer hands over, in a form that does not depend on how a lexer represents its tokens,
+and what it means for a lexer to be correct. The claims are trusted as much as the spec: a
+proof shows that a claim holds, so the claim has to say what is meant.
 -/
 
-namespace LexerSpec
+namespace BSmtLib.Spec.Lexer
 
-/-! ## About the spec -/
-
-/-- Every input has at most one reading. -/
-def Unique : Prop :=
-  ∀ version input tokens tokens',
-    Reads version input tokens → Reads version input tokens' → tokens = tokens'
-
-/-- The characters fed so far can still be continued into an input that has a reading. -/
-def Viable (version : Version) (fed : Chars) : Prop :=
-  ∃ rest tokens, Reads version (fed ++ rest) tokens
-
-/-- Every reading of every continuation of the characters fed so far starts with the tokens. -/
-def Determined (version : Version) (fed : Chars) (tokens : List Token) : Prop :=
-  ∀ rest tokens', Reads version (fed ++ rest) tokens' → tokens <+: tokens'
+open BSmtLib.Spec.Lexicon
 
 /-! ## What a lexer hands over -/
 
-/-- A location in the input, all zero-based. -/
+/--
+Extension: where a lexer reports a token to be; not in the standard.
+
+A location in the input, all zero-based.
+-/
 structure Location where
   offset : Nat
   line : Nat
@@ -34,6 +26,8 @@ structure Location where
   deriving DecidableEq, Repr
 
 /--
+Extension: locations are zero-based, and lines are counted by line feeds alone.
+
 The location of `offset` in the input: lines are counted by line feeds (10) alone, and
 columns by characters.
 -/
@@ -41,7 +35,11 @@ def locate (input : Chars) (offset : Nat) : Location :=
   let before := input.take offset
   { offset, line := before.count 10, column := (before.reverse.takeWhile (· ≠ 10)).length }
 
-/-- The token types of the implementation. -/
+/--
+Extension: the types of the tokens a lexer hands over.
+
+The token types of the implementation.
+-/
 inductive TokenType where
   | parenOpen
   | parenClose
@@ -56,13 +54,21 @@ inductive TokenType where
   | endOfFile
   deriving DecidableEq, Repr
 
-/-- Which kind of reserved word a token is. -/
+/--
+Extension: which kind of reserved word a handed-over token is.
+
+Which kind of reserved word a token is.
+-/
 inductive ReservedKind where
   | general
   | command
   deriving DecidableEq, Repr
 
-/-- A token as the implementation hands it over. -/
+/--
+Extension: the common form of a token a lexer hands over.
+
+A token as the implementation hands it over.
+-/
 structure Handed where
   type : TokenType
   start : Location
@@ -71,8 +77,12 @@ structure Handed where
   content : Chars
   deriving DecidableEq, Repr
 
-/-- The type of a token of each kind; a reserved word is an unquoted symbol. -/
-def Category.type : Category → TokenType
+/--
+Extension: the type of a handed-over token of each kind.
+
+The type of a token of each kind; a reserved word is an unquoted symbol.
+-/
+def _root_.BSmtLib.Spec.Lexicon.Category.type : Category → TokenType
   | .parenOpen => .parenOpen
   | .parenClose => .parenClose
   | .numeral => .numeral
@@ -85,33 +95,34 @@ def Category.type : Category → TokenType
   | .keyword => .keyword
 
 /--
-The content of a token: what a string literal stands for, the name of a quoted symbol
-without its bars, a keyword without its colon, the digits of a hexadecimal or binary without
-`#x` or `#b`, and otherwise the characters of the token.
--/
-def Token.content (version : Version) (token : Token) : Chars :=
-  match token.category with
-  | .string => (if version = .v2_0 then unescape20 else unescape) (token.text.drop 1).dropLast
-  | .quotedSymbol => (token.text.drop 1).dropLast
-  | .keyword => token.text.drop 1
-  | .hexadecimal | .binary => token.text.drop 2
-  | _ => token.text
+Extension: as `ReservedKind`.
 
-/-- Which kind of reserved word a token is, if it is one. -/
-def Token.reservedKind (version : Version) (token : Token) : Option ReservedKind :=
+Which kind of reserved word a token is, if it is one.
+-/
+def _root_.BSmtLib.Spec.Lexicon.Token.reservedKind (version : Version) (token : Token) :
+    Option ReservedKind :=
   if token.category ≠ .reserved then none
   else if ∃ w ∈ basicReservedWords version, token.text = chars w then some .general
   else some .command
 
-/-- The token as the implementation hands it over. -/
-def Token.handed (version : Version) (input : Chars) (token : Token) : Handed :=
+/--
+Extension: as `Handed`.
+
+The token as the implementation hands it over.
+-/
+def _root_.BSmtLib.Spec.Lexicon.Token.handed (version : Version) (input : Chars) (token : Token) :
+    Handed :=
   { type := token.category.type
     start := locate input token.offset
     «end» := locate input (token.offset + token.text.length)
     reserved := token.reservedKind version
     content := token.content version }
 
-/-- The end-of-file token after the input. -/
+/--
+Extension: a lexer hands over an end-of-file token after the input.
+
+The end-of-file token after the input.
+-/
 def endOfFile (input : Chars) : Handed :=
   { type := .endOfFile, start := locate input input.length, «end» := locate input input.length,
     reserved := none, content := [] }
@@ -119,6 +130,8 @@ def endOfFile (input : Chars) : Handed :=
 /-! ## About a lexer -/
 
 /--
+Claim: about a lexer, to be proved of an implementation.
+
 A lexer of whole inputs is correct: it hands over the tokens of the reading and the
 end-of-file token exactly when the input has a reading.
 -/
@@ -128,6 +141,8 @@ def LexerCorrect (lex : Version → Chars → Option (List Handed)) : Prop :=
       handed = tokens.map (·.handed version input) ++ [endOfFile input]
 
 /--
+Claim: about a lexer, to be proved of an implementation.
+
 A lexer fed in slices is correct: `feed version slices` is what it handed over after the
 slices, and whether it failed. It fails exactly when the characters fed stop being viable,
 and what it hands over is determined by the longest viable part of them.
@@ -140,4 +155,4 @@ def StreamingCorrect (feed : Version → List Chars → List Handed × Bool) : P
       Determined version viable tokens ∧
       (feed version slices).1 = tokens.map (·.handed version fed)
 
-end LexerSpec
+end BSmtLib.Spec.Lexer

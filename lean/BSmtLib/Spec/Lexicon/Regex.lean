@@ -9,7 +9,7 @@ The standard counts characters in an 8-bit encoding, with codes from 0 to 255, s
 character is a byte.
 -/
 
-namespace LexerSpec
+namespace BSmtLib.Spec.Lexicon
 
 /-- A sequence of characters. -/
 abbrev Chars := List UInt8
@@ -66,4 +66,4 @@ def startsWith (r : Regex) : Regex := seq r anything
 
 end Regex
 
-end LexerSpec
+end BSmtLib.Spec.Lexicon

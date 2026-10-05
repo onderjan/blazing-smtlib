@@ -1,20 +1,18 @@
 name = "blazing-smtlib"
-defaultTargets = ["BSmtLib", "LexerSpec", "ParserSpec", "Checks"]
+defaultTargets = ["BSmtLib", "BSmtLibSpec", "BSmtLibSpecChecks"]
 
 [[lean_lib]]
 name = "BSmtLib"
 
-# the trusted spec of the lexer
+# the trusted specification of SMT-LIB
 [[lean_lib]]
-name = "LexerSpec"
+name = "BSmtLibSpec"
+roots = ["BSmtLib.Spec"]
 
-# the trusted spec of the parser
+# checks of the specification against the standard's examples; not trusted
 [[lean_lib]]
-name = "ParserSpec"
-
-# checks of the specs against the standard's examples; not trusted
-[[lean_lib]]
-name = "Checks"
+name = "BSmtLibSpecChecks"
+roots = ["BSmtLib.SpecChecks"]
 
 # the lexing mode of rust/benches/parse.rs, run with `lake exe bench-parse`
 [[lean_exe]]

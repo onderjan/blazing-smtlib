@@ -1,4 +1,4 @@
-import ParserSpec.Script
+import BSmtLib.Spec.Grammar
 
 /-!
 # The traversal
@@ -10,13 +10,17 @@ already handled, as the values the handler returned for them.
 A draft, written after what the Rust parser does.
 -/
 
-namespace ParserSpec
+namespace BSmtLib.Spec.Parser
 
-open LexerSpec
+open BSmtLib.Spec.Lexicon BSmtLib.Spec.Grammar
 
 namespace Traversal
 
-/-- A term as the handler receives it, its parts already handled. -/
+/--
+Extension: this library's handler contract.
+
+A term as the handler receives it, its parts already handled.
+-/
 inductive TermNode (HandledSort HandledTerm : Type) where
   | constant (constant : Tree.SpecConstant)
   /-- A qualified identifier, with its sort if it is qualified by `as`. -/
@@ -25,7 +29,11 @@ inductive TermNode (HandledSort HandledTerm : Type) where
   | application (function : Tree.Identifier) (sort : Option HandledSort)
       (arguments : List HandledTerm)
 
-/-- An s-expression as the handler receives it, its items already handled. -/
+/--
+Extension: this library's handler contract.
+
+An s-expression as the handler receives it, its items already handled.
+-/
 inductive SExprNode (HandledSExpr : Type) where
   | constant (constant : Tree.SpecConstant)
   | symbol (name : Chars)
@@ -33,13 +41,21 @@ inductive SExprNode (HandledSExpr : Type) where
   | keyword (name : Chars)
   | list (items : List HandledSExpr)
 
-/-- An attribute value as the handler receives it, its s-expressions already handled. -/
+/--
+Extension: this library's handler contract.
+
+An attribute value as the handler receives it, its s-expressions already handled.
+-/
 inductive AttributeValueNode (HandledSExpr : Type) where
   | constant (constant : Tree.SpecConstant)
   | symbol (name : Chars)
   | list (items : List HandledSExpr)
 
-/-- The handler of the categories that terms are built from (`SmtHandler`). -/
+/--
+Extension: this library's handler contract.
+
+The handler of the categories that terms are built from (`SmtHandler`).
+-/
 structure TermHandler (m : Type → Type)
     (HandledSExpr HandledAttribute HandledSort HandledTerm : Type) where
   handleSort : Tree.Identifier → List HandledSort → m HandledSort
@@ -58,18 +74,30 @@ structure TermHandler (m : Type → Type)
   endMatchCase : HandledTerm → m Unit
   endMatch : m HandledTerm
 
-/-- The signature of a defined function, its sorts already handled. -/
+/--
+Extension: this library's handler contract.
+
+The signature of a defined function, its sorts already handled.
+-/
 structure Signature (HandledSort : Type) where
   symbol : Chars
   parameters : List (Chars × HandledSort)
   result : HandledSort
 
-/-- A datatype constructor, the sorts of its selectors already handled. -/
+/--
+Extension: this library's handler contract.
+
+A datatype constructor, the sorts of its selectors already handled.
+-/
 structure Constructor (HandledSort : Type) where
   symbol : Chars
   selectors : List (Chars × HandledSort)
 
-/-- The handler of commands (`CommandHandler`). -/
+/--
+Extension: this library's handler contract.
+
+The handler of commands (`CommandHandler`).
+-/
 structure CommandHandler (m : Type → Type)
     (HandledSExpr HandledAttribute HandledSort HandledTerm : Type)
     extends TermHandler m HandledSExpr HandledAttribute HandledSort HandledTerm where
@@ -384,7 +412,11 @@ def command : Tree.Command → m Unit
   | .setLogic symbol => handler.setLogic symbol
   | .setOption option => do handler.setOption (← Traversal.attribute handler.toTermHandler option)
 
-/-- A script: its commands, one after another. -/
+/--
+Extension: this library's handler contract.
+
+A script: its commands, one after another.
+-/
 def script (commands : List Tree.Command) : m Unit :=
   commands.forM (command handler)
 
@@ -392,4 +424,4 @@ end
 
 end Traversal
 
-end ParserSpec
+end BSmtLib.Spec.Parser

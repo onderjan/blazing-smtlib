@@ -94,3 +94,16 @@ are how agents follow it.
 - There is one set of tests, the Rust one. The tests are not translated to
   Lean: a driver runs them against the Lean implementation. Do not write Lean
   copies of Rust tests.
+- `lean/BSmtLib/Spec` is the trusted specification: a formal version of the
+  SMT-LIB standard, independent of this library's implementation. It changes
+  only by the maintainer or at the maintainer's explicit request. When a proof
+  needs a change of it, stop and propose the change with its reason. Never
+  weaken a definition or a claim of it to make a proof go through. It imports
+  only itself and the Lean standard library.
+- The specification's source of truth is the SMT-LIB standard. Its comments
+  cite the standard by version, section and production, as the one exception
+  to the rule against referring to documents outside the repository. Every
+  definition in it that states a rule or a claim begins with a tag saying how
+  it relates to the standard; `lean/BSmtLib/Spec.lean` lists the tags.
+- `lean/BSmtLib/SpecChecks` checks the specification on the standard's
+  examples. It is not trusted and not a part of the specification.

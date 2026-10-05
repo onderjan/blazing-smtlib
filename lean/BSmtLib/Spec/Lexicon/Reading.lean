@@ -1,4 +1,4 @@
-import LexerSpec.Lexicon
+import BSmtLib.Spec.Lexicon.Rules
 
 /-!
 # Reading an input
@@ -7,11 +7,16 @@ How an input is read as a sequence of tokens: whitespace breaks the input into t
 every token is one of the lexical tokens of the version.
 -/
 
-namespace LexerSpec
+namespace BSmtLib.Spec.Lexicon
 
 open Regex
 
-/-- The kinds of lexical token: the parentheses, the token categories and the reserved words. -/
+/--
+Standard: 2.7 §3.1: the lexical tokens are the parentheses, the elements of the token
+categories and the reserved words.
+
+The kinds of lexical token: the parentheses, the token categories and the reserved words.
+-/
 inductive Category where
   | parenOpen
   | parenClose
@@ -26,7 +31,11 @@ inductive Category where
   | reserved
   deriving DecidableEq, Repr
 
-/-- The expression of each kind of token in the version. -/
+/--
+Standard: 2.7 §3.1, as `Category`.
+
+The expression of each kind of token in the version.
+-/
 def categoryRegex (version : Version) : Category → Regex
   | .parenOpen => lit "("
   | .parenClose => lit ")"
@@ -40,7 +49,12 @@ def categoryRegex (version : Version) : Category → Regex
   | .keyword => keyword
   | .reserved => reserved version
 
-/-- A token of an input: its kind, the offset of its first character, and its characters. -/
+/--
+Standard: 2.7 §3.1 lexical tokens; the offset and the characters are how the spec records a
+token.
+
+A token of an input: its kind, the offset of its first character, and its characters.
+-/
 structure Token where
   category : Category
   offset : Nat
@@ -48,6 +62,8 @@ structure Token where
   deriving DecidableEq, Repr
 
 /--
+Reading R1: a token other than a parenthesis is followed by a delimiter.
+
 The delimitation rule: a token other than a parenthesis is followed by the end of the
 input, a white space character, a parenthesis or the `;` that starts a comment. The standard
 does not state how adjacent tokens are separated; this is the strict reading, under which
@@ -58,6 +74,9 @@ def Delimited (category : Category) (rest : Chars) : Prop :=
     ∃ c more, rest = c :: more ∧ (whiteSpaceChar [c] ∨ oneOf "();" [c])
 
 /--
+Standard: 2.7 §3.1: the only lexical function of whitespace is to break the source text into
+tokens. Readings R1 and C.
+
 `ReadsFrom version offset input tokens`: in the version, the input, whose first character is
 at `offset`, reads as the tokens.
 -/
@@ -67,8 +86,29 @@ inductive ReadsFrom (version : Version) : Nat → Chars → List Token → Prop
       ReadsFrom version (offset + w.length + s.length) rest tokens →
       ReadsFrom version offset (w ++ s ++ rest) (⟨category, offset + w.length, s⟩ :: tokens)
 
-/-- `Reads version input tokens`: in the version, the input reads as the tokens. -/
+/--
+Standard: 2.7 §3.1, as `ReadsFrom`.
+
+`Reads version input tokens`: in the version, the input reads as the tokens.
+-/
 def Reads (version : Version) (input : Chars) (tokens : List Token) : Prop :=
   ReadsFrom version 0 input tokens
 
-end LexerSpec
+/--
+Standard: 2.7 §3.1 String literals and Symbols, for what a string literal and a quoted symbol
+stand for. Dropping the colon of a keyword and the `#x` and `#b` of a hexadecimal and a binary
+is a convention of the spec.
+
+The content of a token: what a string literal stands for, the name of a quoted symbol
+without its bars, a keyword without its colon, the digits of a hexadecimal or binary without
+`#x` or `#b`, and otherwise the characters of the token.
+-/
+def Token.content (version : Version) (token : Token) : Chars :=
+  match token.category with
+  | .string => (if version = .v2_0 then unescape20 else unescape) (token.text.drop 1).dropLast
+  | .quotedSymbol => (token.text.drop 1).dropLast
+  | .keyword => token.text.drop 1
+  | .hexadecimal | .binary => token.text.drop 2
+  | _ => token.text
+
+end BSmtLib.Spec.Lexicon
