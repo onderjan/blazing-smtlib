@@ -8,9 +8,11 @@
 //!
 //! The environment variable `BLAZING_SMTLIB_LEAN_LEXER` chooses the Lean
 //! lexer that the driver answers with: `v5`, the library's, if it is unset,
-//! or `v1`, the naive lexer, which hands every token over alone. Under `v1`
-//! the tests whose expectations depend on where the hand-overs are cut, those
-//! that send a plan, are reported as not applicable (see
+//! `v2`, `v3` or `v4`, the batched lexer, the lexer over runs and the lexer
+//! with fast paths, which cut their hand-overs as the library's does, or
+//! `v1`, the naive lexer, which hands every token over alone. Under `v1` the
+//! tests whose expectations depend on where the hand-overs are cut, those that
+//! send a plan, are reported as not applicable (see
 //! `boundaries_not_applicable`); every other test runs unchanged.
 //!
 //! Either way a run is reported in plain values: the library's span and

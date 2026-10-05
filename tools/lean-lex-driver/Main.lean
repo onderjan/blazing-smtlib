@@ -6,9 +6,10 @@ Reads one request per line from the standard input and writes the response
 to the standard output, until the input ends.
 
 The environment variable `BLAZING_SMTLIB_LEAN_LEXER` chooses the lexer that answers: `v5`, the
-library's lexer `BSmtLib.Lexer`, which is the one when the variable is unset, or `v1`, the naive
-lexer `BSmtLib.Proofs.Lexer.V1Naive`. Any other value makes the driver exit at once with an
-error.
+library's lexer `BSmtLib.Lexer`, which is the one when the variable is unset, `v1`, the naive
+lexer `BSmtLib.Proofs.Lexer.V1Naive`, `v2`, the batched lexer `BSmtLib.Proofs.Lexer.V2Batched`,
+`v3`, the lexer over runs `BSmtLib.Proofs.Lexer.V3Runs`, or `v4`, the lexer with fast paths
+`BSmtLib.Proofs.Lexer.V4FastPaths`. Any other value makes the driver exit at once with an error.
 -/
 import BSmtLib
 import BSmtLib.Proofs
@@ -440,13 +441,46 @@ def driveRecovering (request : Request) (lines : IO.Ref String)
     lines.modify (· ++ feedLines request lexer)
 
 /-! The same for the naive lexer V1, `BSmtLib.Proofs.Lexer.V1Naive`, which has the operations of
-the library's lexer on a lexer type of its own. -/
+the library's lexer on a lexer type of its own, and for the later lexers of the chain, which
+have the naive lexer's type and operations except for the lexing of a slice. -/
 
 namespace V1
 
 /-- The naive lexer. -/
 abbrev NaiveLexer (H : Type) (recovery : Recovery := .failFast) :=
   Proofs.Lexer.V1Naive.Lexer H recovery
+
+/--
+The lexing of a slice by a lexer of the chain on the naive lexer's type, for a lexer that stops
+at its first error and for a recovering one.
+-/
+structure Slicer (whitespace : Bool) where
+  failFast : NaiveLexer (Scripted whitespace) → ByteSlice →
+    IO (Except (LexError String × Unit)
+      (ControlFlow (Located Unit) × NaiveLexer (Scripted whitespace)))
+  recovering : NaiveLexer (Scripted whitespace) .recovering → ByteSlice →
+    IO (Except (LexError String × NaiveLexer (Scripted whitespace) .recovering)
+      (ControlFlow (Located Unit) × NaiveLexer (Scripted whitespace) .recovering))
+
+/-- The naive lexer's own lexing of a slice. -/
+def Slicer.v1 (whitespace : Bool) : Slicer whitespace :=
+  { failFast := fun lexer slice => lexer.lexSlice slice
+    recovering := fun lexer slice => lexer.lexSlice slice }
+
+/-- The lexing of a slice by the batched lexer, `BSmtLib.Proofs.Lexer.V2Batched`. -/
+def Slicer.v2 (whitespace : Bool) : Slicer whitespace :=
+  { failFast := fun lexer slice => Proofs.Lexer.V2Batched.lexSlice lexer slice
+    recovering := fun lexer slice => Proofs.Lexer.V2Batched.lexSlice lexer slice }
+
+/-- The lexing of a slice by the lexer over runs, `BSmtLib.Proofs.Lexer.V3Runs`. -/
+def Slicer.v3 (whitespace : Bool) : Slicer whitespace :=
+  { failFast := fun lexer slice => Proofs.Lexer.V3Runs.lexSlice lexer slice
+    recovering := fun lexer slice => Proofs.Lexer.V3Runs.lexSlice lexer slice }
+
+/-- The lexing of a slice by the lexer with fast paths, `BSmtLib.Proofs.Lexer.V4FastPaths`. -/
+def Slicer.v4 (whitespace : Bool) : Slicer whitespace :=
+  { failFast := fun lexer slice => Proofs.Lexer.V4FastPaths.lexSlice lexer slice
+    recovering := fun lexer slice => Proofs.Lexer.V4FastPaths.lexSlice lexer slice }
 
 /-- The lines that end the feed: where the lexer is, and its version if the consumer is scripted. -/
 def feedLines (request : Request) (lexer : NaiveLexer (Scripted whitespace) recovery) : String :=
@@ -458,17 +492,17 @@ def feedLines (request : Request) (lexer : NaiveLexer (Scripted whitespace) reco
 Applies the feeds of the request to the lexer that stops at its first error and writes the
 lines of the feeds themselves. Returns whether every feed was applied.
 -/
-def drive (request : Request) (lines : IO.Ref String) :
+def drive (request : Request) (lines : IO.Ref String) (slicer : Slicer whitespace) :
     List (Option ByteArray) → NaiveLexer (Scripted whitespace) → ExceptT String IO Bool
   | [], _ => return true
   | feed :: feeds, lexer => do
     let result ← match feed with
-      | some slice => lexer.lexSlice slice.toByteSlice
+      | some slice => slicer.failFast lexer slice.toByteSlice
       | none => lexer.lexEof
     match result with
     | .ok (flow, lexer) =>
       lines.modify (· ++ flowLine flow ++ feedLines request lexer)
-      drive request lines feeds lexer
+      drive request lines slicer feeds lexer
     | .error (err, ()) =>
       lines.modify (· ++ (← errorLine err false))
       -- the lexer has stopped for good, and the response with it
@@ -480,7 +514,7 @@ themselves. After an error on a slice, the rest of that slice is applied again, 
 the input continues; after an error on the end of the input that continues, the end of the
 input is applied again.
 -/
-def driveRecovering (request : Request) (lines : IO.Ref String)
+def driveRecovering (request : Request) (lines : IO.Ref String) (slicer : Slicer whitespace)
     (lexer : NaiveLexer (Scripted whitespace) .recovering) : ExceptT String IO Unit := do
   let mut lexer := lexer
   for feed in request.feeds do
@@ -490,7 +524,7 @@ def driveRecovering (request : Request) (lines : IO.Ref String)
       let mut from_ := 0
       repeat
         let before := lexer.currentLocation.offset
-        match ← lexer.lexSlice (slice.toByteSlice from_) with
+        match ← slicer.recovering lexer (slice.toByteSlice from_) with
         | .ok (flow, next) =>
           lexer := next
           lines.modify (· ++ flowLine flow)
@@ -529,6 +563,12 @@ end V1
 inductive LexerChoice where
   /-- The naive lexer, `BSmtLib.Proofs.Lexer.V1Naive`. -/
   | v1
+  /-- The batched lexer, `BSmtLib.Proofs.Lexer.V2Batched`. -/
+  | v2
+  /-- The lexer over runs, `BSmtLib.Proofs.Lexer.V3Runs`. -/
+  | v3
+  /-- The lexer with fast paths, `BSmtLib.Proofs.Lexer.V4FastPaths`. -/
+  | v4
   /-- The library's lexer, `BSmtLib.Lexer`. -/
   | v5
 
@@ -536,29 +576,38 @@ inductive LexerChoice where
 def readLexerChoice : Option String → Except String LexerChoice
   | none | some "v5" => pure .v5
   | some "v1" => pure .v1
+  | some "v2" => pure .v2
+  | some "v3" => pure .v3
+  | some "v4" => pure .v4
   | some other => throw s!"unknown lexer {repr other} in BLAZING_SMTLIB_LEAN_LEXER, \
-      expected v1 or v5"
+      expected v1, v2, v3, v4 or v5"
 
-/-- Answers one request line with the naive lexer, giving the response lines. -/
-def answerV1 (request : Request) : ExceptT String IO String := do
+/--
+Answers one request line with a lexer of the chain on the naive lexer's type, which lexes a
+slice by `slicer`, giving the response lines.
+-/
+def answerChain (slicer : (whitespace : Bool) → V1.Slicer whitespace) (request : Request) :
+    ExceptT String IO String := do
   -- the consumer writes into the response while the lexer owns it
   let lines ← IO.mkRef ""
   let version := request.version
   let behaviour := request.behaviour
   let complete ← match request.whitespace, request.recover with
     | false, false =>
-      V1.drive request lines request.feeds.toList (Proofs.Lexer.V1Naive.Lexer.new
+      V1.drive request lines (slicer false) request.feeds.toList (Proofs.Lexer.V1Naive.Lexer.new
         ({ behaviour, handed := 0, opened := 0, out := lines } : Scripted false) version)
     | true, false =>
-      V1.drive request lines request.feeds.toList (Proofs.Lexer.V1Naive.Lexer.new
+      V1.drive request lines (slicer true) request.feeds.toList (Proofs.Lexer.V1Naive.Lexer.new
         ({ behaviour, handed := 0, opened := 0, out := lines } : Scripted true) version)
     | false, true =>
-      V1.driveRecovering request lines (Proofs.Lexer.V1Naive.Lexer.newRecovering
-        ({ behaviour, handed := 0, opened := 0, out := lines } : Scripted false) version)
+      V1.driveRecovering request lines (slicer false)
+        (Proofs.Lexer.V1Naive.Lexer.newRecovering
+          ({ behaviour, handed := 0, opened := 0, out := lines } : Scripted false) version)
       pure true
     | true, true =>
-      V1.driveRecovering request lines (Proofs.Lexer.V1Naive.Lexer.newRecovering
-        ({ behaviour, handed := 0, opened := 0, out := lines } : Scripted true) version)
+      V1.driveRecovering request lines (slicer true)
+        (Proofs.Lexer.V1Naive.Lexer.newRecovering
+          ({ behaviour, handed := 0, opened := 0, out := lines } : Scripted true) version)
       pure true
 
   let mut response ← lines.get
@@ -570,8 +619,12 @@ def answerV1 (request : Request) : ExceptT String IO String := do
 def answer (choice : LexerChoice) (line : String) : ExceptT String IO String := do
   -- decode the whole request first, so that a malformed one produces no lines
   let request ← readRequest line
-  if let .v1 := choice then
-    return ← answerV1 request
+  match choice with
+  | .v1 => return ← answerChain V1.Slicer.v1 request
+  | .v2 => return ← answerChain V1.Slicer.v2 request
+  | .v3 => return ← answerChain V1.Slicer.v3 request
+  | .v4 => return ← answerChain V1.Slicer.v4 request
+  | .v5 => pure ()
 
   -- the consumer writes into the response while the lexer owns it
   let lines ← IO.mkRef ""

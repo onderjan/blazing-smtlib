@@ -392,11 +392,20 @@ The tests that go through the driver are those of `tests/lexer.rs`,
 library whatever the variable says.
 
 The environment variable `BLAZING_SMTLIB_LEAN_LEXER` chooses the Lean lexer
-that the driver answers with: `v5`, the library's, when it is unset, or `v1`,
-the naive lexer of `lean/BSmtLib/Proofs/Lexer/V1Naive.lean`, which hands every
-token over alone. Under `v1` the tests that send a plan, whose expectations
-depend on where the hand-overs are cut, report themselves as not applicable on
-the standard error and end; every other test runs unchanged.
+that the driver answers with: `v5`, the library's, when it is unset; `v1`, the
+naive lexer of `lean/BSmtLib/Proofs/Lexer/V1Naive.lean`, which hands every
+token over alone; `v2`, the batched lexer of
+`lean/BSmtLib/Proofs/Lexer/V2Batched.lean`; `v3`, the lexer over runs of
+`lean/BSmtLib/Proofs/Lexer/V3Runs.lean`; or `v4`, the lexer with fast paths of
+`lean/BSmtLib/Proofs/Lexer/V4FastPaths.lean`. The last three cut their
+hand-overs as the library's lexer does: a batch of up to 256 tokens at a time,
+except that a token the lexer builds in a buffer of its own is handed over
+alone, after the batch before it. These are a token cut by a slice boundary,
+every string literal under 2.0, a string literal with a doubled quote or a line
+feed, and a quoted symbol with a line feed. Under `v1` the tests that send a
+plan, whose expectations depend on where the hand-overs are cut, report
+themselves as not applicable on the standard error and end; every other test
+runs unchanged. Under `v2`, `v3` and `v4` every test runs.
 
 ```
 BLAZING_SMTLIB_LEAN_DRIVER=/path/to/the/driver BLAZING_SMTLIB_LEAN_LEXER=v1 cargo test
