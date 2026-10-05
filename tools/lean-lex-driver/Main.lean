@@ -108,28 +108,128 @@ def unhex (digits : String) : Except String ByteArray := do
     bytes := bytes.push (high * 16 + low).toUInt8
   return bytes
 
-/-- Answers one request line, giving the response lines. -/
-def answer (request : String) : ExceptT String IO String := do
-  let words := request.splitOn " "
-  let (kind, words) := (words.headD "", words.drop 1)
-  if kind != "lex" then
-    throw "unknown request"
-  let some version := (words.head?).bind fun version =>
-      Version.fromDecimal? version.toUTF8.toByteSlice
-    | throw "unknown version"
+/-- What the consumer of a request does with one hand-over, by its plan. -/
+inductive Reply where
+  /-- Take every token and continue. -/
+  | takeAll
+  /-- Take this many tokens and continue: the rest is handed over again. -/
+  | leave (count : Nat)
+  /-- Take this many tokens and finish. -/
+  | finish (count : Nat)
+  /-- Take this many tokens and fail. -/
+  | fail (count : Nat)
+  /-- Take this many tokens, set the version and continue. -/
+  | switch (count : Nat) (version : Version)
+  /-- Take this many tokens, set the version and finish. -/
+  | switchAndFinish (count : Nat) (version : Version)
+  deriving BEq
 
-  -- decode every operation first, so that a malformed request produces
-  -- no token lines
-  let mut operations : Array (Option ByteArray) := #[]
-  for word in words.drop 1 do
-    if word.startsWith "s" then
-      match unhex (word.drop 1).toString with
-      | .ok bytes => operations := operations.push (some bytes)
-      | .error message => throw message
-    else if word == "e" then
-      operations := operations.push none
+/-- How the consumer of a request behaves. -/
+inductive Behaviour where
+  /-- It takes every token and always continues. -/
+  | takeAll
+  /-- It answers the hand-overs in order by the replies, and takes every
+  token once they have run out. -/
+  | plan (replies : Array Reply)
+  /-- It takes every token and fails by what the tokens are: on the symbol
+  `bad`, on a closing parenthesis that closes nothing, and on the
+  end-of-file token inside a parenthesis, or on every end-of-file token
+  if `refuseEnd` is set. The symbol `to-2.0` makes it set the version. -/
+  | rules (refuseEnd : Bool)
+  deriving BEq
+
+/-- A request, read from its line. A feed is a slice, or `none` for the end of the input. -/
+structure Request where
+  version : Version
+  whitespace : Bool
+  recover : Bool
+  behaviour : Behaviour
+  feeds : Array (Option ByteArray)
+
+def readVersion (word : String) : Except String Version :=
+  match Version.fromDecimal? word.toUTF8.toByteSlice with
+  | some version => pure version
+  | none => throw s!"unknown version {repr word}"
+
+def readReply (word : String) : Except String Reply := do
+  let bad := s!"unknown reply {repr word}"
+  if word == "t" then
+    return .takeAll
+  if word.isEmpty then
+    throw bad
+  let letter := (word.take 1).toString
+  let rest := (word.drop 1).toString
+  -- the version follows the first colon, if there is one
+  let (count, version) ← match rest.splitOn ":" with
+    | [count] => pure (count, none)
+    | count :: version => pure (count, some (← readVersion (":".intercalate version)))
+    | [] => throw bad
+  let some count := count.toNat?
+    | throw bad
+  if count == 0 then
+    throw s!"a reply must take a token: {repr word}"
+  match letter, version with
+  | "l", none => return .leave count
+  | "f", none => return .finish count
+  | "x", none => return .fail count
+  | "v", some version => return .switch count version
+  | "w", some version => return .switchAndFinish count version
+  | _, _ => throw bad
+
+def readRequest (line : String) : Except String Request := do
+  let words := line.splitOn " "
+  if words.head? != some "lex" then
+    throw "unknown request"
+  let some version := words[1]?
+    | throw "no version"
+  let mut request : Request := {
+    version := ← readVersion version
+    whitespace := false
+    recover := false
+    behaviour := .takeAll
+    feeds := #[] }
+  for word in words.drop 2 do
+    let scripted := request.behaviour != .takeAll
+    -- the options come before the feeds
+    let option := request.feeds.isEmpty
+    if word == "e" then
+      request := { request with feeds := request.feeds.push none }
+    else if word == "ws" && option then
+      request := { request with whitespace := true }
+    else if word == "recover" && option then
+      request := { request with recover := true }
+    else if word == "rules" && option && !scripted then
+      request := { request with behaviour := .rules false }
+    else if word == "rules=refuse-end" && option && !scripted then
+      request := { request with behaviour := .rules true }
+    else if word.startsWith "plan=" && option && !scripted then
+      let replies := (word.drop 5).toString
+      -- no replies at all are a plan too: every token is taken,
+      -- and the hand-overs are reported
+      let replies ← if replies.isEmpty then pure #[]
+        else (replies.splitOn ",").toArray.mapM readReply
+      request := { request with behaviour := .plan replies }
+    else if word.startsWith "s" then
+      request := { request with feeds := request.feeds.push (some (← unhex (word.drop 1).toString)) }
     else
       throw s!"unknown operation {repr word}"
+  return request
+
+/-- Answers one request line, giving the response lines. -/
+def answer (line : String) : ExceptT String IO String := do
+  -- decode the whole request first, so that a malformed one produces no lines
+  let request ← readRequest line
+  -- the options that the Lean lexer cannot answer yet
+  if request.whitespace then
+    throw "the option ws is not implemented yet"
+  if request.recover then
+    throw "the option recover is not implemented yet"
+  match request.behaviour with
+  | .takeAll => pure ()
+  | .plan _ => throw "the option plan is not implemented yet"
+  | .rules _ => throw "the option rules is not implemented yet"
+  let version := request.version
+  let operations := request.feeds
 
   let lines ← IO.mkRef ""
   let mut lexer := Lexer.new { version, out := lines : Report } version
