@@ -462,6 +462,12 @@ impl<'a> SmtBatchCursor<'a> {
         self.relex
     }
 
+    /// The entries of the tokens consumed since the handover.
+    #[inline]
+    pub(crate) fn consumed_entries(&self) -> &'a [Option<(InnerCategory, &'a [u8])>] {
+        &self.entries[self.start..self.next]
+    }
+
     /// Resets the number of consumed tokens to zero.
     #[inline]
     pub(crate) fn reset_consumed(&mut self) {

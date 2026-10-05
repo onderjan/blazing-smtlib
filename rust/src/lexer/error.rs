@@ -47,6 +47,12 @@ impl<E> SmtLexError<E> {
         }
     }
 
+    /// Returns an error with the same cause and continuation location set as requested.
+    pub(super) fn continuing_from(mut self, location: SmtLocation) -> Self {
+        self.continues_from = Some(location);
+        self
+    }
+
     /// The reason why the lexer call failed: a lexical error or a consumer error.
     pub fn cause(&self) -> &SmtLexErrorCause<E> {
         &self.cause
