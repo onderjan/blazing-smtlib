@@ -8,23 +8,26 @@ use std::ops::ControlFlow;
 
 use blazing_smtlib::{
     SmtSpan,
-    read::lexer::{LexError, Lexer, LexerError, LexerErrorKind},
-    token::{GeneralReserved, Reserved, SmtVersion, TokenCursor, TokenHandler, TokenType},
+    lexer::{SmtLexError, SmtLexErrorCause, SmtLexer, SmtLexicalError, SmtLexicalErrorKind},
+    token::{
+        SmtBatchCursor, SmtConsume, SmtGeneralReserved, SmtReserved, SmtTokenCategory, SmtVersion,
+    },
 };
 
 use lex_backend::{Feed, LexedError, LexedToken, Loc, loc};
 
-/// A token handler that takes every token and keeps nothing, for the tests
+/// A token consumer that takes every token and keeps nothing, for the tests
 /// that drive the Rust lexer directly.
 struct TakeTokens;
 
-impl TokenHandler for TakeTokens {
+impl SmtConsume for TakeTokens {
     type Result = ();
     type Error = Infallible;
+    const CONSUMES_WHITESPACE_AND_COMMENTS: bool = false;
 
-    fn handle_tokens(
+    fn consume(
         &mut self,
-        cursor: &mut TokenCursor<'_>,
+        cursor: &mut SmtBatchCursor<'_>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         cursor.consume_all();
         Ok(ControlFlow::Continue(()))
@@ -32,10 +35,10 @@ impl TokenHandler for TakeTokens {
 }
 
 /// Extracts the lexer error from a lex error whose handler cannot fail.
-fn into_lexer_error(err: LexError<Infallible>) -> LexerError {
-    match err {
-        LexError::Lexer(err) => err,
-        LexError::Handler(never) => match never {},
+fn into_lexer_error(err: SmtLexError<Infallible>) -> SmtLexicalError {
+    match err.into_cause() {
+        SmtLexErrorCause::Lexical(err) => err,
+        SmtLexErrorCause::Consumer(never) => match never {},
     }
 }
 
@@ -51,7 +54,7 @@ fn lex_all(input: &[u8]) -> Result<Vec<LexedToken>, LexedError> {
 
 /// Lexes the input, requires an error of the given kind, and checks its span.
 #[track_caller]
-fn assert_error(input: &[u8], kind: LexerErrorKind, start: Loc, end: Loc) {
+fn assert_error(input: &[u8], kind: SmtLexicalErrorKind, start: Loc, end: Loc) {
     let err = lex_all(input).expect_err("expected a lexer error, got tokens");
     assert_eq!(err.kind, kind);
     assert_eq!(
@@ -76,14 +79,14 @@ fn unexpected_character_is_single_byte() {
     // backslash is not allowed outside of string literals
     assert_error(
         b"\\",
-        LexerErrorKind::UnexpectedCharacter,
+        SmtLexicalErrorKind::UnexpectedCharacter,
         (0, 0, 0),
         (1, 0, 1),
     );
     // after other tokens, still just the one byte
     assert_error(
         b"(check-sat) \\",
-        LexerErrorKind::UnexpectedCharacter,
+        SmtLexicalErrorKind::UnexpectedCharacter,
         (12, 0, 12),
         (13, 0, 13),
     );
@@ -94,7 +97,7 @@ fn fraction_digit_expected_on_byte() {
     // "7." followed by a space: the space is the byte where the error is detected
     assert_error(
         b"7. ",
-        LexerErrorKind::FractionDigitExpected,
+        SmtLexicalErrorKind::FractionDigitExpected,
         (0, 0, 0),
         (3, 0, 3),
     );
@@ -104,7 +107,7 @@ fn fraction_digit_expected_on_byte() {
 fn base_selection_expected() {
     assert_error(
         b"#q",
-        LexerErrorKind::BaseSelectionExpected,
+        SmtLexicalErrorKind::BaseSelectionExpected,
         (0, 0, 0),
         (2, 0, 2),
     );
@@ -114,7 +117,7 @@ fn base_selection_expected() {
 fn hexadecimal_digit_expected() {
     assert_error(
         b"#x ",
-        LexerErrorKind::HexadecimalDigitExpected,
+        SmtLexicalErrorKind::HexadecimalDigitExpected,
         (0, 0, 0),
         (3, 0, 3),
     );
@@ -124,7 +127,7 @@ fn hexadecimal_digit_expected() {
 fn binary_digit_expected() {
     assert_error(
         b"#b)",
-        LexerErrorKind::BinaryDigitExpected,
+        SmtLexicalErrorKind::BinaryDigitExpected,
         (0, 0, 0),
         (3, 0, 3),
     );
@@ -134,7 +137,7 @@ fn binary_digit_expected() {
 fn numeral_leading_zero() {
     assert_error(
         b"01",
-        LexerErrorKind::NumeralLeadingZero,
+        SmtLexicalErrorKind::NumeralLeadingZero,
         (0, 0, 0),
         (2, 0, 2),
     );
@@ -144,34 +147,34 @@ fn numeral_leading_zero() {
 fn keyword_name_expected() {
     assert_error(
         b": ",
-        LexerErrorKind::ForbiddenKeywordName,
+        SmtLexicalErrorKind::ForbiddenKeywordName,
         (0, 0, 0),
         (2, 0, 2),
     );
 }
 
 #[test]
-fn keyword_leading_digit() {
-    assert_error(
-        b":0",
-        LexerErrorKind::ForbiddenKeywordName,
-        (0, 0, 0),
-        (2, 0, 2),
-    );
-    // the leading digit is rejected even when more characters would follow
-    assert_error(
-        b":0abc",
-        LexerErrorKind::ForbiddenKeywordName,
-        (0, 0, 0),
-        (2, 0, 2),
-    );
+fn keyword_starting_with_a_digit_is_a_keyword() {
+    // the restrictions on simple symbols do not apply after the colon:
+    // a keyword may start with a digit and may consist of digits only
+    let inputs: [(&[u8], &[u8]); 4] = [
+        (b":0", b"0"),
+        (b":56 ", b"56"),
+        (b":0abc", b"0abc"),
+        (b":1.5)", b"1.5"),
+    ];
+    for (input, content) in inputs {
+        let tokens = lex_all(input).expect("a keyword starting with a digit must lex");
+        assert_eq!(tokens[0].ty, SmtTokenCategory::Keyword);
+        assert_eq!(tokens[0].content, content);
+    }
 }
 
 #[test]
 fn keyword_spelled_like_a_reserved_word_is_a_keyword() {
     // reserved words are only recognized in symbols, so this is no error
     let tokens = lex_all(b":let ").expect("a keyword spelled like a reserved word must lex");
-    assert_eq!(tokens[0].ty, TokenType::Keyword);
+    assert_eq!(tokens[0].ty, SmtTokenCategory::Keyword);
     assert_eq!(tokens[0].content, b"let");
     assert_eq!(tokens[0].reserved(), None);
 }
@@ -180,7 +183,7 @@ fn keyword_spelled_like_a_reserved_word_is_a_keyword() {
 fn backslash_in_quoted_symbol() {
     assert_error(
         b"|a\\b|",
-        LexerErrorKind::BackslashInQuotedSymbol,
+        SmtLexicalErrorKind::BackslashInQuotedSymbol,
         (0, 0, 0),
         (3, 0, 3),
     );
@@ -190,7 +193,7 @@ fn backslash_in_quoted_symbol() {
 fn forbidden_char_in_string() {
     assert_error(
         b"\"a\x01b\"",
-        LexerErrorKind::ForbiddenCharInString,
+        SmtLexicalErrorKind::ForbiddenCharInString,
         (0, 0, 0),
         (3, 0, 3),
     );
@@ -200,7 +203,7 @@ fn forbidden_char_in_string() {
 fn forbidden_char_in_quoted_symbol() {
     assert_error(
         b"|a\x7fb|",
-        LexerErrorKind::ForbiddenCharInQuotedSymbol,
+        SmtLexicalErrorKind::ForbiddenCharInQuotedSymbol,
         (0, 0, 0),
         (3, 0, 3),
     );
@@ -212,7 +215,7 @@ fn forbidden_char_in_quoted_symbol() {
 fn fraction_digit_expected_at_eof() {
     assert_error(
         b"7.",
-        LexerErrorKind::FractionDigitExpected,
+        SmtLexicalErrorKind::FractionDigitExpected,
         (0, 0, 0),
         (2, 0, 2),
     );
@@ -222,7 +225,7 @@ fn fraction_digit_expected_at_eof() {
 fn hexadecimal_digit_expected_at_eof() {
     assert_error(
         b"#x",
-        LexerErrorKind::HexadecimalDigitExpected,
+        SmtLexicalErrorKind::HexadecimalDigitExpected,
         (0, 0, 0),
         (2, 0, 2),
     );
@@ -232,7 +235,7 @@ fn hexadecimal_digit_expected_at_eof() {
 fn base_selection_expected_at_eof() {
     assert_error(
         b"#",
-        LexerErrorKind::BaseSelectionExpected,
+        SmtLexicalErrorKind::BaseSelectionExpected,
         (0, 0, 0),
         (1, 0, 1),
     );
@@ -242,7 +245,7 @@ fn base_selection_expected_at_eof() {
 fn keyword_name_expected_at_eof() {
     assert_error(
         b":",
-        LexerErrorKind::ForbiddenKeywordName,
+        SmtLexicalErrorKind::ForbiddenKeywordName,
         (0, 0, 0),
         (1, 0, 1),
     );
@@ -252,7 +255,7 @@ fn keyword_name_expected_at_eof() {
 fn unclosed_string_literal_at_eof() {
     assert_error(
         b"\"abc",
-        LexerErrorKind::UnclosedStringLiteral,
+        SmtLexicalErrorKind::UnclosedStringLiteral,
         (0, 0, 0),
         (4, 0, 4),
     );
@@ -262,7 +265,7 @@ fn unclosed_string_literal_at_eof() {
 fn unclosed_quoted_symbol_at_eof() {
     assert_error(
         b"|abc",
-        LexerErrorKind::UnclosedQuotedSymbol,
+        SmtLexicalErrorKind::UnclosedQuotedSymbol,
         (0, 0, 0),
         (4, 0, 4),
     );
@@ -275,7 +278,7 @@ fn error_on_later_line() {
     // the string literal starts at offset 15, zero-based line 2, column 2, and is unclosed at EOF
     assert_error(
         b"(check-sat)\n\n  \"abc",
-        LexerErrorKind::UnclosedStringLiteral,
+        SmtLexicalErrorKind::UnclosedStringLiteral,
         (15, 2, 2),
         (19, 2, 6),
     );
@@ -286,7 +289,7 @@ fn error_spanning_lines() {
     // an unclosed quoted symbol may contain newlines; the end is on a later line
     assert_error(
         b"|ab\ncd",
-        LexerErrorKind::UnclosedQuotedSymbol,
+        SmtLexicalErrorKind::UnclosedQuotedSymbol,
         (0, 0, 0),
         (6, 1, 2),
     );
@@ -297,7 +300,7 @@ fn crlf_counts_as_one_line() {
     // CR must not start a new line, so "01" is on zero-based line 1, column 0
     assert_error(
         b"(check-sat)\r\n01",
-        LexerErrorKind::NumeralLeadingZero,
+        SmtLexicalErrorKind::NumeralLeadingZero,
         (13, 1, 0),
         (15, 1, 2),
     );
@@ -307,7 +310,7 @@ fn crlf_counts_as_one_line() {
 fn error_after_comment_line() {
     assert_error(
         b"; a comment\n\\",
-        LexerErrorKind::UnexpectedCharacter,
+        SmtLexicalErrorKind::UnexpectedCharacter,
         (12, 1, 0),
         (13, 1, 1),
     );
@@ -317,7 +320,7 @@ fn error_after_comment_line() {
 
 #[test]
 fn current_location_follows_consumed_bytes() {
-    let mut lexer = Lexer::new(TakeTokens, SmtVersion::V2_7);
+    let mut lexer = SmtLexer::new(TakeTokens, SmtVersion::V2_7);
     assert_eq!(loc(lexer.current_location()), (0, 0, 0));
     for &c in b"ab\nc" {
         let _ = lexer
@@ -329,7 +332,7 @@ fn current_location_follows_consumed_bytes() {
 }
 
 /// Expected token as `(type, start, end)`, with the locations as `(offset, line, column)`.
-type TokenLoc = (TokenType, Loc, Loc);
+type TokenLoc = (SmtTokenCategory, Loc, Loc);
 
 /// Lexes the whole input and describes every token by its type and its span.
 fn token_spans(input: &[u8]) -> Vec<TokenLoc> {
@@ -346,11 +349,11 @@ fn spans_on_a_single_line() {
     assert_eq!(
         token_spans(b"(a 12)"),
         vec![
-            (TokenType::ParenOpen, (0, 0, 0), (1, 0, 1)),
-            (TokenType::UnquotedSymbol, (1, 0, 1), (2, 0, 2)),
-            (TokenType::Numeral, (3, 0, 3), (5, 0, 5)),
-            (TokenType::ParenClose, (5, 0, 5), (6, 0, 6)),
-            (TokenType::EndOfFile, (6, 0, 6), (6, 0, 6)),
+            (SmtTokenCategory::ParenOpen, (0, 0, 0), (1, 0, 1)),
+            (SmtTokenCategory::UnquotedSymbol, (1, 0, 1), (2, 0, 2)),
+            (SmtTokenCategory::Numeral, (3, 0, 3), (5, 0, 5)),
+            (SmtTokenCategory::ParenClose, (5, 0, 5), (6, 0, 6)),
+            (SmtTokenCategory::EndOfFile, (6, 0, 6), (6, 0, 6)),
         ]
     );
 }
@@ -360,13 +363,13 @@ fn spans_restart_the_column_on_every_line() {
     assert_eq!(
         token_spans(b"(a)\n(b)"),
         vec![
-            (TokenType::ParenOpen, (0, 0, 0), (1, 0, 1)),
-            (TokenType::UnquotedSymbol, (1, 0, 1), (2, 0, 2)),
-            (TokenType::ParenClose, (2, 0, 2), (3, 0, 3)),
-            (TokenType::ParenOpen, (4, 1, 0), (5, 1, 1)),
-            (TokenType::UnquotedSymbol, (5, 1, 1), (6, 1, 2)),
-            (TokenType::ParenClose, (6, 1, 2), (7, 1, 3)),
-            (TokenType::EndOfFile, (7, 1, 3), (7, 1, 3)),
+            (SmtTokenCategory::ParenOpen, (0, 0, 0), (1, 0, 1)),
+            (SmtTokenCategory::UnquotedSymbol, (1, 0, 1), (2, 0, 2)),
+            (SmtTokenCategory::ParenClose, (2, 0, 2), (3, 0, 3)),
+            (SmtTokenCategory::ParenOpen, (4, 1, 0), (5, 1, 1)),
+            (SmtTokenCategory::UnquotedSymbol, (5, 1, 1), (6, 1, 2)),
+            (SmtTokenCategory::ParenClose, (6, 1, 2), (7, 1, 3)),
+            (SmtTokenCategory::EndOfFile, (7, 1, 3), (7, 1, 3)),
         ]
     );
 }
@@ -378,9 +381,9 @@ fn span_end_is_one_past_the_last_byte_of_the_token() {
     assert_eq!(
         token_spans(b"ab\ncd"),
         vec![
-            (TokenType::UnquotedSymbol, (0, 0, 0), (2, 0, 2)),
-            (TokenType::UnquotedSymbol, (3, 1, 0), (5, 1, 2)),
-            (TokenType::EndOfFile, (5, 1, 2), (5, 1, 2)),
+            (SmtTokenCategory::UnquotedSymbol, (0, 0, 0), (2, 0, 2)),
+            (SmtTokenCategory::UnquotedSymbol, (3, 1, 0), (5, 1, 2)),
+            (SmtTokenCategory::EndOfFile, (5, 1, 2), (5, 1, 2)),
         ]
     );
 }
@@ -392,9 +395,9 @@ fn quoted_symbol_may_span_a_line_break() {
     assert_eq!(
         token_spans(b"|a\nb| c"),
         vec![
-            (TokenType::QuotedSymbol, (0, 0, 0), (5, 1, 2)),
-            (TokenType::UnquotedSymbol, (6, 1, 3), (7, 1, 4)),
-            (TokenType::EndOfFile, (7, 1, 4), (7, 1, 4)),
+            (SmtTokenCategory::QuotedSymbol, (0, 0, 0), (5, 1, 2)),
+            (SmtTokenCategory::UnquotedSymbol, (6, 1, 3), (7, 1, 4)),
+            (SmtTokenCategory::EndOfFile, (7, 1, 4), (7, 1, 4)),
         ]
     );
 }
@@ -404,8 +407,8 @@ fn string_literal_may_span_a_line_break() {
     assert_eq!(
         token_spans(b"\"a\nb\""),
         vec![
-            (TokenType::String, (0, 0, 0), (5, 1, 2)),
-            (TokenType::EndOfFile, (5, 1, 2), (5, 1, 2)),
+            (SmtTokenCategory::String, (0, 0, 0), (5, 1, 2)),
+            (SmtTokenCategory::EndOfFile, (5, 1, 2), (5, 1, 2)),
         ]
     );
 }
@@ -415,16 +418,16 @@ fn end_of_file_token_location() {
     // an empty input consists of the end-of-file token alone, at the stream start
     assert_eq!(
         token_spans(b""),
-        vec![(TokenType::EndOfFile, (0, 0, 0), (0, 0, 0))]
+        vec![(SmtTokenCategory::EndOfFile, (0, 0, 0), (0, 0, 0))]
     );
     // without a trailing line break, the end-of-file token is just past the last token
     assert_eq!(
         token_spans(b"(a)"),
         vec![
-            (TokenType::ParenOpen, (0, 0, 0), (1, 0, 1)),
-            (TokenType::UnquotedSymbol, (1, 0, 1), (2, 0, 2)),
-            (TokenType::ParenClose, (2, 0, 2), (3, 0, 3)),
-            (TokenType::EndOfFile, (3, 0, 3), (3, 0, 3)),
+            (SmtTokenCategory::ParenOpen, (0, 0, 0), (1, 0, 1)),
+            (SmtTokenCategory::UnquotedSymbol, (1, 0, 1), (2, 0, 2)),
+            (SmtTokenCategory::ParenClose, (2, 0, 2), (3, 0, 3)),
+            (SmtTokenCategory::EndOfFile, (3, 0, 3), (3, 0, 3)),
         ]
     );
     // with one, its offset is exactly the start of the next line,
@@ -433,10 +436,10 @@ fn end_of_file_token_location() {
     assert_eq!(
         token_spans(b"(a)\n"),
         vec![
-            (TokenType::ParenOpen, (0, 0, 0), (1, 0, 1)),
-            (TokenType::UnquotedSymbol, (1, 0, 1), (2, 0, 2)),
-            (TokenType::ParenClose, (2, 0, 2), (3, 0, 3)),
-            (TokenType::EndOfFile, (4, 1, 0), (4, 1, 0)),
+            (SmtTokenCategory::ParenOpen, (0, 0, 0), (1, 0, 1)),
+            (SmtTokenCategory::UnquotedSymbol, (1, 0, 1), (2, 0, 2)),
+            (SmtTokenCategory::ParenClose, (2, 0, 2), (3, 0, 3)),
+            (SmtTokenCategory::EndOfFile, (4, 1, 0), (4, 1, 0)),
         ]
     );
 }
@@ -447,9 +450,9 @@ fn crlf_is_a_single_line_break_in_token_spans() {
     assert_eq!(
         token_spans(b"a\r\nb"),
         vec![
-            (TokenType::UnquotedSymbol, (0, 0, 0), (1, 0, 1)),
-            (TokenType::UnquotedSymbol, (3, 1, 0), (4, 1, 1)),
-            (TokenType::EndOfFile, (4, 1, 1), (4, 1, 1)),
+            (SmtTokenCategory::UnquotedSymbol, (0, 0, 0), (1, 0, 1)),
+            (SmtTokenCategory::UnquotedSymbol, (3, 1, 0), (4, 1, 1)),
+            (SmtTokenCategory::EndOfFile, (4, 1, 1), (4, 1, 1)),
         ]
     );
 }
@@ -459,8 +462,8 @@ fn comments_produce_no_tokens_but_still_count_lines() {
     assert_eq!(
         token_spans(b"; c\nx"),
         vec![
-            (TokenType::UnquotedSymbol, (4, 1, 0), (5, 1, 1)),
-            (TokenType::EndOfFile, (5, 1, 1), (5, 1, 1)),
+            (SmtTokenCategory::UnquotedSymbol, (4, 1, 0), (5, 1, 1)),
+            (SmtTokenCategory::EndOfFile, (5, 1, 1), (5, 1, 1)),
         ]
     );
 }
@@ -471,9 +474,9 @@ fn keyword_may_contain_digits_after_the_first_character() {
     assert_eq!(
         token_spans(b":a0 :x1y2"),
         vec![
-            (TokenType::Keyword, (0, 0, 0), (3, 0, 3)),
-            (TokenType::Keyword, (4, 0, 4), (9, 0, 9)),
-            (TokenType::EndOfFile, (9, 0, 9), (9, 0, 9)),
+            (SmtTokenCategory::Keyword, (0, 0, 0), (3, 0, 3)),
+            (SmtTokenCategory::Keyword, (4, 0, 4), (9, 0, 9)),
+            (SmtTokenCategory::EndOfFile, (9, 0, 9), (9, 0, 9)),
         ]
     );
 }
@@ -486,14 +489,14 @@ fn spans_of_every_token_type() {
     assert_eq!(
         token_spans(b":kw #xAB #b01 1.5 \"s\" let |q|"),
         vec![
-            (TokenType::Keyword, (0, 0, 0), (3, 0, 3)),
-            (TokenType::Hexadecimal, (4, 0, 4), (8, 0, 8)),
-            (TokenType::Binary, (9, 0, 9), (13, 0, 13)),
-            (TokenType::Decimal, (14, 0, 14), (17, 0, 17)),
-            (TokenType::String, (18, 0, 18), (21, 0, 21)),
-            (TokenType::UnquotedSymbol, (22, 0, 22), (25, 0, 25)),
-            (TokenType::QuotedSymbol, (26, 0, 26), (29, 0, 29)),
-            (TokenType::EndOfFile, (29, 0, 29), (29, 0, 29)),
+            (SmtTokenCategory::Keyword, (0, 0, 0), (3, 0, 3)),
+            (SmtTokenCategory::Hexadecimal, (4, 0, 4), (8, 0, 8)),
+            (SmtTokenCategory::Binary, (9, 0, 9), (13, 0, 13)),
+            (SmtTokenCategory::Decimal, (14, 0, 14), (17, 0, 17)),
+            (SmtTokenCategory::String, (18, 0, 18), (21, 0, 21)),
+            (SmtTokenCategory::UnquotedSymbol, (22, 0, 22), (25, 0, 25)),
+            (SmtTokenCategory::QuotedSymbol, (26, 0, 26), (29, 0, 29)),
+            (SmtTokenCategory::EndOfFile, (29, 0, 29), (29, 0, 29)),
         ]
     );
 }
@@ -505,7 +508,7 @@ fn decimal_token_payload_is_the_verbatim_source() {
     let tokens = lex_all(b"7.5 1.05 3.500 0.0").expect("valid input");
     let decimals: Vec<Vec<u8>> = tokens
         .iter()
-        .filter(|token| token.ty == TokenType::Decimal)
+        .filter(|token| token.ty == SmtTokenCategory::Decimal)
         .map(|token| token.content.clone())
         .collect();
     assert_eq!(
@@ -521,7 +524,7 @@ fn decimal_token_payload_is_the_verbatim_source() {
 
 /// Lexes the whole input and describes every token by its type and payload,
 /// with an empty payload for the token types that have none.
-fn token_payloads(input: &[u8]) -> Vec<(TokenType, Vec<u8>)> {
+fn token_payloads(input: &[u8]) -> Vec<(SmtTokenCategory, Vec<u8>)> {
     lex_all(input)
         .expect("test input must lex")
         .iter()
@@ -536,17 +539,17 @@ fn token_payloads_are_not_contaminated_by_previous_tokens() {
     assert_eq!(
         token_payloads(b"abcd let e :k1 \"s\" |q| 12 3.4 #xA #b0"),
         vec![
-            (TokenType::UnquotedSymbol, b"abcd".to_vec()),
-            (TokenType::UnquotedSymbol, b"let".to_vec()),
-            (TokenType::UnquotedSymbol, b"e".to_vec()),
-            (TokenType::Keyword, b"k1".to_vec()),
-            (TokenType::String, b"s".to_vec()),
-            (TokenType::QuotedSymbol, b"q".to_vec()),
-            (TokenType::Numeral, b"12".to_vec()),
-            (TokenType::Decimal, b"3.4".to_vec()),
-            (TokenType::Hexadecimal, b"A".to_vec()),
-            (TokenType::Binary, b"0".to_vec()),
-            (TokenType::EndOfFile, vec![]),
+            (SmtTokenCategory::UnquotedSymbol, b"abcd".to_vec()),
+            (SmtTokenCategory::UnquotedSymbol, b"let".to_vec()),
+            (SmtTokenCategory::UnquotedSymbol, b"e".to_vec()),
+            (SmtTokenCategory::Keyword, b"k1".to_vec()),
+            (SmtTokenCategory::String, b"s".to_vec()),
+            (SmtTokenCategory::QuotedSymbol, b"q".to_vec()),
+            (SmtTokenCategory::Numeral, b"12".to_vec()),
+            (SmtTokenCategory::Decimal, b"3.4".to_vec()),
+            (SmtTokenCategory::Hexadecimal, b"A".to_vec()),
+            (SmtTokenCategory::Binary, b"0".to_vec()),
+            (SmtTokenCategory::EndOfFile, vec![]),
         ]
     );
 }
@@ -558,12 +561,12 @@ fn empty_payloads_follow_nonempty_ones() {
     assert_eq!(
         token_payloads(b"|abc| || \"xy\" \"\" :a"),
         vec![
-            (TokenType::QuotedSymbol, b"abc".to_vec()),
-            (TokenType::QuotedSymbol, vec![]),
-            (TokenType::String, b"xy".to_vec()),
-            (TokenType::String, vec![]),
-            (TokenType::Keyword, b"a".to_vec()),
-            (TokenType::EndOfFile, vec![]),
+            (SmtTokenCategory::QuotedSymbol, b"abc".to_vec()),
+            (SmtTokenCategory::QuotedSymbol, vec![]),
+            (SmtTokenCategory::String, b"xy".to_vec()),
+            (SmtTokenCategory::String, vec![]),
+            (SmtTokenCategory::Keyword, b"a".to_vec()),
+            (SmtTokenCategory::EndOfFile, vec![]),
         ]
     );
 }
@@ -573,25 +576,26 @@ fn string_double_quote_escape_is_a_single_quote_in_the_payload() {
     assert_eq!(
         token_payloads(b"\"a\"\"b\" \"\"\"\""),
         vec![
-            (TokenType::String, b"a\"b".to_vec()),
-            (TokenType::String, b"\"".to_vec()),
-            (TokenType::EndOfFile, vec![]),
+            (SmtTokenCategory::String, b"a\"b".to_vec()),
+            (SmtTokenCategory::String, b"\"".to_vec()),
+            (SmtTokenCategory::EndOfFile, vec![]),
         ]
     );
 }
 
 // --- Handler errors ---
 
-/// A token handler that rejects every token, returning its span.
+/// A token consumer that rejects every token, returning its span.
 struct RejectTokens;
 
-impl TokenHandler for RejectTokens {
+impl SmtConsume for RejectTokens {
     type Result = ();
     type Error = SmtSpan;
+    const CONSUMES_WHITESPACE_AND_COMMENTS: bool = false;
 
-    fn handle_tokens(
+    fn consume(
         &mut self,
-        cursor: &mut TokenCursor<'_>,
+        cursor: &mut SmtBatchCursor<'_>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         match cursor.next() {
             Some(token) => Err(token.span()),
@@ -602,9 +606,12 @@ impl TokenHandler for RejectTokens {
 
 #[test]
 fn handler_error_is_returned_with_the_handled_token() {
-    let mut lexer = Lexer::new(RejectTokens, SmtVersion::V2_7);
+    let mut lexer = SmtLexer::new(RejectTokens, SmtVersion::V2_7);
     // the parenthesis token is produced and handed to the handler immediately
-    let Err(LexError::Handler(span)) = lexer.lex_slice(b"(") else {
+    let Err(err) = lexer.lex_slice(b"(") else {
+        panic!("expected a handler error");
+    };
+    let SmtLexErrorCause::Consumer(span) = err.into_cause() else {
         panic!("expected a handler error");
     };
     assert_eq!((loc(span.start()), loc(span.end())), ((0, 0, 0), (1, 0, 1)));
@@ -615,7 +622,7 @@ fn handler_error_is_returned_with_the_handled_token() {
 #[test]
 #[should_panic(expected = "cannot lex after a lexer error")]
 fn lexing_after_an_error_panics() {
-    let mut lexer = Lexer::new(TakeTokens, SmtVersion::V2_7);
+    let mut lexer = SmtLexer::new(TakeTokens, SmtVersion::V2_7);
     let _ = lexer
         .lex_slice(b"7")
         .map_err(into_lexer_error)
@@ -629,7 +636,7 @@ fn lexing_after_an_error_panics() {
 #[should_panic(expected = "cannot lex after a lexer error")]
 fn lexing_after_a_handler_error_panics() {
     // a handler error also makes the lexer unusable
-    let mut lexer = Lexer::new(RejectTokens, SmtVersion::V2_7);
+    let mut lexer = SmtLexer::new(RejectTokens, SmtVersion::V2_7);
     assert!(lexer.lex_slice(b"(").is_err(), "expected a handler error");
     let _ = lexer.lex_slice(b"a");
 }
@@ -641,7 +648,7 @@ fn lexing_after_a_handler_error_panics() {
 
 /// Every token of the input as its type and the reserved word it is
 /// classified as, in order.
-fn token_classes(input: &[u8]) -> Vec<(TokenType, Option<Reserved>)> {
+fn token_classes(input: &[u8]) -> Vec<(SmtTokenCategory, Option<SmtReserved>)> {
     lex_all(input)
         .expect("test input must lex")
         .iter()
@@ -691,38 +698,47 @@ fn reserved_words_are_recognized_exactly() {
         assert_eq!(
             token_classes(symbol),
             vec![
-                (TokenType::UnquotedSymbol, None),
-                (TokenType::EndOfFile, None)
+                (SmtTokenCategory::UnquotedSymbol, None),
+                (SmtTokenCategory::EndOfFile, None)
             ],
             "{:?} must be a plain symbol",
             String::from_utf8_lossy(symbol)
         );
     }
-    let reserved: &[(&[u8], Reserved)] = &[
-        (b"BINARY", Reserved::General(GeneralReserved::Binary)),
-        (b"DECIMAL", Reserved::General(GeneralReserved::Decimal)),
+    let reserved: &[(&[u8], SmtReserved)] = &[
+        (b"BINARY", SmtReserved::General(SmtGeneralReserved::Binary)),
+        (
+            b"DECIMAL",
+            SmtReserved::General(SmtGeneralReserved::Decimal),
+        ),
         (
             b"HEXADECIMAL",
-            Reserved::General(GeneralReserved::Hexadecimal),
+            SmtReserved::General(SmtGeneralReserved::Hexadecimal),
         ),
-        (b"NUMERAL", Reserved::General(GeneralReserved::Numeral)),
-        (b"STRING", Reserved::General(GeneralReserved::String)),
-        (b"_", Reserved::General(GeneralReserved::Underscore)),
-        (b"!", Reserved::General(GeneralReserved::ExclamationMark)),
-        (b"as", Reserved::General(GeneralReserved::As)),
-        (b"lambda", Reserved::General(GeneralReserved::Lambda)),
-        (b"let", Reserved::General(GeneralReserved::Let)),
-        (b"exists", Reserved::General(GeneralReserved::Exists)),
-        (b"forall", Reserved::General(GeneralReserved::Forall)),
-        (b"match", Reserved::General(GeneralReserved::Match)),
-        (b"par", Reserved::General(GeneralReserved::Par)),
+        (
+            b"NUMERAL",
+            SmtReserved::General(SmtGeneralReserved::Numeral),
+        ),
+        (b"STRING", SmtReserved::General(SmtGeneralReserved::String)),
+        (b"_", SmtReserved::General(SmtGeneralReserved::Underscore)),
+        (
+            b"!",
+            SmtReserved::General(SmtGeneralReserved::ExclamationMark),
+        ),
+        (b"as", SmtReserved::General(SmtGeneralReserved::As)),
+        (b"lambda", SmtReserved::General(SmtGeneralReserved::Lambda)),
+        (b"let", SmtReserved::General(SmtGeneralReserved::Let)),
+        (b"exists", SmtReserved::General(SmtGeneralReserved::Exists)),
+        (b"forall", SmtReserved::General(SmtGeneralReserved::Forall)),
+        (b"match", SmtReserved::General(SmtGeneralReserved::Match)),
+        (b"par", SmtReserved::General(SmtGeneralReserved::Par)),
     ];
     for (word, expected) in reserved {
         assert_eq!(
             token_classes(word),
             vec![
-                (TokenType::UnquotedSymbol, Some(*expected)),
-                (TokenType::EndOfFile, None)
+                (SmtTokenCategory::UnquotedSymbol, Some(*expected)),
+                (SmtTokenCategory::EndOfFile, None)
             ],
             "{:?} must be reserved",
             String::from_utf8_lossy(word)
@@ -736,21 +752,21 @@ fn quoted_reserved_words_are_symbols() {
     assert_eq!(
         token_payloads(b"|let| |_| |forall| |!|"),
         vec![
-            (TokenType::QuotedSymbol, b"let".to_vec()),
-            (TokenType::QuotedSymbol, b"_".to_vec()),
-            (TokenType::QuotedSymbol, b"forall".to_vec()),
-            (TokenType::QuotedSymbol, b"!".to_vec()),
-            (TokenType::EndOfFile, vec![]),
+            (SmtTokenCategory::QuotedSymbol, b"let".to_vec()),
+            (SmtTokenCategory::QuotedSymbol, b"_".to_vec()),
+            (SmtTokenCategory::QuotedSymbol, b"forall".to_vec()),
+            (SmtTokenCategory::QuotedSymbol, b"!".to_vec()),
+            (SmtTokenCategory::EndOfFile, vec![]),
         ]
     );
     assert_eq!(
         token_classes(b"|let| |_| |forall| |!|"),
         vec![
-            (TokenType::QuotedSymbol, None),
-            (TokenType::QuotedSymbol, None),
-            (TokenType::QuotedSymbol, None),
-            (TokenType::QuotedSymbol, None),
-            (TokenType::EndOfFile, None),
+            (SmtTokenCategory::QuotedSymbol, None),
+            (SmtTokenCategory::QuotedSymbol, None),
+            (SmtTokenCategory::QuotedSymbol, None),
+            (SmtTokenCategory::QuotedSymbol, None),
+            (SmtTokenCategory::EndOfFile, None),
         ]
     );
 }
@@ -762,24 +778,24 @@ fn reserved_word_followed_by_a_symbol_byte_is_a_longer_symbol() {
     assert_eq!(
         token_payloads(b"let(letx)"),
         vec![
-            (TokenType::UnquotedSymbol, b"let".to_vec()),
-            (TokenType::ParenOpen, b"(".to_vec()),
-            (TokenType::UnquotedSymbol, b"letx".to_vec()),
-            (TokenType::ParenClose, b")".to_vec()),
-            (TokenType::EndOfFile, vec![]),
+            (SmtTokenCategory::UnquotedSymbol, b"let".to_vec()),
+            (SmtTokenCategory::ParenOpen, b"(".to_vec()),
+            (SmtTokenCategory::UnquotedSymbol, b"letx".to_vec()),
+            (SmtTokenCategory::ParenClose, b")".to_vec()),
+            (SmtTokenCategory::EndOfFile, vec![]),
         ]
     );
     assert_eq!(
         token_classes(b"let(letx)"),
         vec![
             (
-                TokenType::UnquotedSymbol,
-                Some(Reserved::General(GeneralReserved::Let))
+                SmtTokenCategory::UnquotedSymbol,
+                Some(SmtReserved::General(SmtGeneralReserved::Let))
             ),
-            (TokenType::ParenOpen, None),
-            (TokenType::UnquotedSymbol, None),
-            (TokenType::ParenClose, None),
-            (TokenType::EndOfFile, None),
+            (SmtTokenCategory::ParenOpen, None),
+            (SmtTokenCategory::UnquotedSymbol, None),
+            (SmtTokenCategory::ParenClose, None),
+            (SmtTokenCategory::EndOfFile, None),
         ]
     );
 }
@@ -793,27 +809,28 @@ fn cr_alone_ends_a_comment_but_not_a_line() {
     assert_eq!(
         token_spans(b"; c\rx"),
         vec![
-            (TokenType::UnquotedSymbol, (4, 0, 4), (5, 0, 5)),
-            (TokenType::EndOfFile, (5, 0, 5), (5, 0, 5)),
+            (SmtTokenCategory::UnquotedSymbol, (4, 0, 4), (5, 0, 5)),
+            (SmtTokenCategory::EndOfFile, (5, 0, 5), (5, 0, 5)),
         ]
     );
 }
 
 // --- Failed state after errors raised at EOF ---
 
-/// A token handler that rejects only the end-of-file token.
+/// A token consumer that rejects only the end-of-file token.
 struct RejectEof;
 
-impl TokenHandler for RejectEof {
+impl SmtConsume for RejectEof {
     type Result = ();
     type Error = ();
+    const CONSUMES_WHITESPACE_AND_COMMENTS: bool = false;
 
-    fn handle_tokens(
+    fn consume(
         &mut self,
-        cursor: &mut TokenCursor<'_>,
+        cursor: &mut SmtBatchCursor<'_>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         while let Some(token) = cursor.next() {
-            if token.ty() == TokenType::EndOfFile {
+            if token.category() == SmtTokenCategory::EndOfFile {
                 return Err(());
             }
         }
@@ -826,7 +843,7 @@ impl TokenHandler for RejectEof {
 fn lexing_after_a_handler_error_on_the_eof_token_panics() {
     // the EOF token is the last thing lex_eof does; a handler error there
     // must still leave the lexer failed like every other error
-    let mut lexer = Lexer::new(RejectEof, SmtVersion::V2_7);
+    let mut lexer = SmtLexer::new(RejectEof, SmtVersion::V2_7);
     let _ = lexer.lex_slice(b"a").expect("valid input");
     assert!(lexer.lex_eof().is_err(), "expected a handler error");
     let _ = lexer.lex_slice(b"b");
@@ -835,7 +852,7 @@ fn lexing_after_a_handler_error_on_the_eof_token_panics() {
 #[test]
 #[should_panic(expected = "cannot lex after a lexer error")]
 fn lexing_after_a_lexer_error_at_eof_panics() {
-    let mut lexer = Lexer::new(TakeTokens, SmtVersion::V2_7);
+    let mut lexer = SmtLexer::new(TakeTokens, SmtVersion::V2_7);
     let _ = lexer
         .lex_slice(b"\"unclosed")
         .map_err(into_lexer_error)
@@ -854,7 +871,7 @@ fn lexing_after_a_lexer_error_at_eof_panics() {
 // included. Whatever is lexed afterwards is a new input from the origin.
 
 /// Every token as `(type, payload, start, end)`.
-type TokenRecord = (TokenType, Vec<u8>, Loc, Loc);
+type TokenRecord = (SmtTokenCategory, Vec<u8>, Loc, Loc);
 
 fn records(tokens: &[LexedToken]) -> Vec<TokenRecord> {
     tokens
@@ -879,13 +896,13 @@ fn the_end_of_file_resets_the_lexer_so_a_second_one_is_at_the_origin() {
             records(&lexed.tokens),
             vec![
                 (
-                    TokenType::UnquotedSymbol,
+                    SmtTokenCategory::UnquotedSymbol,
                     b"a".to_vec(),
                     (0, 0, 0),
                     (1, 0, 1)
                 ),
-                (TokenType::EndOfFile, vec![], eof_at, eof_at),
-                (TokenType::EndOfFile, vec![], (0, 0, 0), (0, 0, 0)),
+                (SmtTokenCategory::EndOfFile, vec![], eof_at, eof_at),
+                (SmtTokenCategory::EndOfFile, vec![], (0, 0, 0), (0, 0, 0)),
             ],
             "input {:?}",
             String::from_utf8_lossy(input)
@@ -910,19 +927,19 @@ fn input_after_the_end_of_file_is_a_new_input_from_the_origin() {
         records(&lexed.tokens),
         vec![
             (
-                TokenType::UnquotedSymbol,
+                SmtTokenCategory::UnquotedSymbol,
                 b"a".to_vec(),
                 (0, 0, 0),
                 (1, 0, 1)
             ),
-            (TokenType::EndOfFile, vec![], (2, 1, 0), (2, 1, 0)),
+            (SmtTokenCategory::EndOfFile, vec![], (2, 1, 0), (2, 1, 0)),
             (
-                TokenType::QuotedSymbol,
+                SmtTokenCategory::QuotedSymbol,
                 b"b\nc".to_vec(),
                 (0, 0, 0),
                 (5, 1, 2)
             ),
-            (TokenType::EndOfFile, vec![], (6, 1, 3), (6, 1, 3)),
+            (SmtTokenCategory::EndOfFile, vec![], (6, 1, 3), (6, 1, 3)),
         ]
     );
 }
@@ -939,19 +956,19 @@ fn a_token_cut_by_the_end_of_file_is_finished_and_not_resumed() {
         records(&lexed.tokens),
         vec![
             (
-                TokenType::UnquotedSymbol,
+                SmtTokenCategory::UnquotedSymbol,
                 b"ab".to_vec(),
                 (0, 0, 0),
                 (2, 0, 2)
             ),
-            (TokenType::EndOfFile, vec![], (2, 0, 2), (2, 0, 2)),
+            (SmtTokenCategory::EndOfFile, vec![], (2, 0, 2), (2, 0, 2)),
             (
-                TokenType::UnquotedSymbol,
+                SmtTokenCategory::UnquotedSymbol,
                 b"cd".to_vec(),
                 (0, 0, 0),
                 (2, 0, 2)
             ),
-            (TokenType::EndOfFile, vec![], (2, 0, 2), (2, 0, 2)),
+            (SmtTokenCategory::EndOfFile, vec![], (2, 0, 2), (2, 0, 2)),
         ]
     );
 }
@@ -968,18 +985,18 @@ fn quoted_symbol_may_span_several_line_breaks() {
     assert_eq!(
         token_spans(b"|a\nb\nc| d"),
         vec![
-            (TokenType::QuotedSymbol, (0, 0, 0), (7, 2, 2)),
-            (TokenType::UnquotedSymbol, (8, 2, 3), (9, 2, 4)),
-            (TokenType::EndOfFile, (9, 2, 4), (9, 2, 4)),
+            (SmtTokenCategory::QuotedSymbol, (0, 0, 0), (7, 2, 2)),
+            (SmtTokenCategory::UnquotedSymbol, (8, 2, 3), (9, 2, 4)),
+            (SmtTokenCategory::EndOfFile, (9, 2, 4), (9, 2, 4)),
         ]
     );
     // consecutive line breaks each start a line of their own
     assert_eq!(
         token_spans(b"|a\n\n\nb| d"),
         vec![
-            (TokenType::QuotedSymbol, (0, 0, 0), (7, 3, 2)),
-            (TokenType::UnquotedSymbol, (8, 3, 3), (9, 3, 4)),
-            (TokenType::EndOfFile, (9, 3, 4), (9, 3, 4)),
+            (SmtTokenCategory::QuotedSymbol, (0, 0, 0), (7, 3, 2)),
+            (SmtTokenCategory::UnquotedSymbol, (8, 3, 3), (9, 3, 4)),
+            (SmtTokenCategory::EndOfFile, (9, 3, 4), (9, 3, 4)),
         ]
     );
 }
@@ -989,26 +1006,26 @@ fn string_literal_may_span_several_line_breaks() {
     assert_eq!(
         token_spans(b"\"a\nb\nc\" d"),
         vec![
-            (TokenType::String, (0, 0, 0), (7, 2, 2)),
-            (TokenType::UnquotedSymbol, (8, 2, 3), (9, 2, 4)),
-            (TokenType::EndOfFile, (9, 2, 4), (9, 2, 4)),
+            (SmtTokenCategory::String, (0, 0, 0), (7, 2, 2)),
+            (SmtTokenCategory::UnquotedSymbol, (8, 2, 3), (9, 2, 4)),
+            (SmtTokenCategory::EndOfFile, (9, 2, 4), (9, 2, 4)),
         ]
     );
     // an escaped quote between the line breaks is one payload byte
     assert_eq!(
         token_payloads(b"\"a\n\"\"\nb\" c"),
         vec![
-            (TokenType::String, b"a\n\"\nb".to_vec()),
-            (TokenType::UnquotedSymbol, b"c".to_vec()),
-            (TokenType::EndOfFile, vec![]),
+            (SmtTokenCategory::String, b"a\n\"\nb".to_vec()),
+            (SmtTokenCategory::UnquotedSymbol, b"c".to_vec()),
+            (SmtTokenCategory::EndOfFile, vec![]),
         ]
     );
     assert_eq!(
         token_spans(b"\"a\n\"\"\nb\" c"),
         vec![
-            (TokenType::String, (0, 0, 0), (8, 2, 2)),
-            (TokenType::UnquotedSymbol, (9, 2, 3), (10, 2, 4)),
-            (TokenType::EndOfFile, (10, 2, 4), (10, 2, 4)),
+            (SmtTokenCategory::String, (0, 0, 0), (8, 2, 2)),
+            (SmtTokenCategory::UnquotedSymbol, (9, 2, 3), (10, 2, 4)),
+            (SmtTokenCategory::EndOfFile, (10, 2, 4), (10, 2, 4)),
         ]
     );
 }
@@ -1018,19 +1035,19 @@ fn whitespace_and_comments_with_several_line_breaks() {
     assert_eq!(
         token_spans(b"a\n\n\n  b"),
         vec![
-            (TokenType::UnquotedSymbol, (0, 0, 0), (1, 0, 1)),
-            (TokenType::UnquotedSymbol, (6, 3, 2), (7, 3, 3)),
-            (TokenType::EndOfFile, (7, 3, 3), (7, 3, 3)),
+            (SmtTokenCategory::UnquotedSymbol, (0, 0, 0), (1, 0, 1)),
+            (SmtTokenCategory::UnquotedSymbol, (6, 3, 2), (7, 3, 3)),
+            (SmtTokenCategory::EndOfFile, (7, 3, 3), (7, 3, 3)),
         ]
     );
     // a comment ends at the first line break; the blank lines after it are whitespace
     assert_eq!(
         token_spans(b"; c\n\n\n(x)"),
         vec![
-            (TokenType::ParenOpen, (6, 3, 0), (7, 3, 1)),
-            (TokenType::UnquotedSymbol, (7, 3, 1), (8, 3, 2)),
-            (TokenType::ParenClose, (8, 3, 2), (9, 3, 3)),
-            (TokenType::EndOfFile, (9, 3, 3), (9, 3, 3)),
+            (SmtTokenCategory::ParenOpen, (6, 3, 0), (7, 3, 1)),
+            (SmtTokenCategory::UnquotedSymbol, (7, 3, 1), (8, 3, 2)),
+            (SmtTokenCategory::ParenClose, (8, 3, 2), (9, 3, 3)),
+            (SmtTokenCategory::EndOfFile, (9, 3, 3), (9, 3, 3)),
         ]
     );
 }
@@ -1043,13 +1060,13 @@ fn decimal_fraction_ends_at_a_letter() {
     // them, and as the letter does not delimit it, that is an error
     assert_error(
         b"1.5a",
-        LexerErrorKind::MissingDelimiter,
+        SmtLexicalErrorKind::MissingDelimiter,
         (0, 0, 0),
         (4, 0, 4),
     );
     assert_error(
         b"3.25fed)",
-        LexerErrorKind::MissingDelimiter,
+        SmtLexicalErrorKind::MissingDelimiter,
         (0, 0, 0),
         (5, 0, 5),
     );
@@ -1091,7 +1108,7 @@ fn a_token_must_be_delimited() {
         });
         assert_eq!(
             err.kind,
-            LexerErrorKind::MissingDelimiter,
+            SmtLexicalErrorKind::MissingDelimiter,
             "{:?}",
             String::from_utf8_lossy(input)
         );
@@ -1139,11 +1156,11 @@ fn a_keyword_is_delimited_by_a_parenthesised_value() {
     assert_eq!(
         token_payloads(b":a(b)"),
         vec![
-            (TokenType::Keyword, b"a".to_vec()),
-            (TokenType::ParenOpen, b"(".to_vec()),
-            (TokenType::UnquotedSymbol, b"b".to_vec()),
-            (TokenType::ParenClose, b")".to_vec()),
-            (TokenType::EndOfFile, vec![]),
+            (SmtTokenCategory::Keyword, b"a".to_vec()),
+            (SmtTokenCategory::ParenOpen, b"(".to_vec()),
+            (SmtTokenCategory::UnquotedSymbol, b"b".to_vec()),
+            (SmtTokenCategory::ParenClose, b")".to_vec()),
+            (SmtTokenCategory::EndOfFile, vec![]),
         ]
     );
 }
@@ -1154,8 +1171,8 @@ fn a_doubled_quote_continues_a_string_rather_than_ending_it() {
     assert_eq!(
         token_payloads(b"\"a\"\"b\""),
         vec![
-            (TokenType::String, b"a\"b".to_vec()),
-            (TokenType::EndOfFile, vec![]),
+            (SmtTokenCategory::String, b"a\"b".to_vec()),
+            (SmtTokenCategory::EndOfFile, vec![]),
         ]
     );
 }
@@ -1193,7 +1210,7 @@ fn a_token_ending_at_a_slice_end_is_delimited_by_the_next_slice() {
             None => assert!(ok, "{name} must not lex"),
             Some(err) => {
                 assert!(!ok, "{name} must lex, got {:?}", err.kind);
-                assert_eq!(err.kind, LexerErrorKind::MissingDelimiter, "{name}");
+                assert_eq!(err.kind, SmtLexicalErrorKind::MissingDelimiter, "{name}");
                 // the span covers the token in the first slice and the byte in the second
                 assert_eq!(
                     (err.start, err.end),
@@ -1213,13 +1230,13 @@ fn fraction_digit_expected_before_a_letter() {
     // a letter right after the dot is not a fraction digit either
     assert_error(
         b"1.a",
-        LexerErrorKind::FractionDigitExpected,
+        SmtLexicalErrorKind::FractionDigitExpected,
         (0, 0, 0),
         (3, 0, 3),
     );
     assert_error(
         b"7.F",
-        LexerErrorKind::FractionDigitExpected,
+        SmtLexicalErrorKind::FractionDigitExpected,
         (0, 0, 0),
         (3, 0, 3),
     );

@@ -14,8 +14,8 @@ use std::ops::ControlFlow;
 
 use blazing_smtlib::{
     SmtLocation,
-    read::lexer::{Lexer, LexerErrorKind},
-    token::{SmtVersion, TokenCursor, TokenHandler, TokenType},
+    lexer::{SmtLexer, SmtLexicalErrorKind},
+    token::{SmtBatchCursor, SmtConsume, SmtTokenCategory, SmtVersion},
 };
 
 use lex_backend::{Feed, LexedError, LexedToken, loc};
@@ -37,7 +37,7 @@ struct Outcome {
 }
 
 impl Outcome {
-    fn error_kind(&self) -> Option<&LexerErrorKind> {
+    fn error_kind(&self) -> Option<&SmtLexicalErrorKind> {
         self.error.as_ref().map(|(err, _)| &err.kind)
     }
 }
@@ -223,6 +223,10 @@ const VALID_INPUTS: &[&[u8]] = &[
     b"1.5 a 2.0 e 3.25 fed)",
     b"#xDEADbeef #b0101 #x0 #b1",
     b":named :pattern :a1 :_x :+",
+    // keywords starting with a digit; split after the colon, the digit is the
+    // first byte the lexer sees of the keyword's content
+    b":1",
+    b":56 :0abc :1.5 (:0)",
     b"\"\xC3\xA9\" |\xFF|",
     b"(((((x)))))",
     // every token kind delimited only by parentheses or comments
@@ -251,7 +255,6 @@ const ERROR_INPUTS: &[&[u8]] = &[
     b"(a\n  01)",
     b":",
     b": ",
-    b":1",
     b"|a\\b|",
     b"\"a\x01\"",
     b"|a\x01|",
@@ -306,8 +309,8 @@ fn valid_inputs_lex_and_error_inputs_do_not() {
 fn inputs_cover_every_token_type_and_error_kind() {
     // keep the input sets expansive: every token type and every error kind
     // must be exercised, so that a boundary inside any of them is tested
-    let mut token_types: Vec<TokenType> = Vec::new();
-    let mut error_kinds: Vec<LexerErrorKind> = Vec::new();
+    let mut token_types: Vec<SmtTokenCategory> = Vec::new();
+    let mut error_kinds: Vec<SmtLexicalErrorKind> = Vec::new();
     for input in all_inputs() {
         let outcome = lex_whole(input);
         for token in &outcome.tokens {
@@ -323,35 +326,35 @@ fn inputs_cover_every_token_type_and_error_kind() {
     }
 
     let expected_types = [
-        TokenType::ParenOpen,
-        TokenType::ParenClose,
-        TokenType::Numeral,
-        TokenType::Decimal,
-        TokenType::Hexadecimal,
-        TokenType::Binary,
-        TokenType::UnquotedSymbol,
-        TokenType::QuotedSymbol,
-        TokenType::String,
-        TokenType::Keyword,
-        TokenType::EndOfFile,
+        SmtTokenCategory::ParenOpen,
+        SmtTokenCategory::ParenClose,
+        SmtTokenCategory::Numeral,
+        SmtTokenCategory::Decimal,
+        SmtTokenCategory::Hexadecimal,
+        SmtTokenCategory::Binary,
+        SmtTokenCategory::UnquotedSymbol,
+        SmtTokenCategory::QuotedSymbol,
+        SmtTokenCategory::String,
+        SmtTokenCategory::Keyword,
+        SmtTokenCategory::EndOfFile,
     ];
     for ty in expected_types {
         assert!(token_types.contains(&ty), "no input produces {ty:?}");
     }
 
     let expected_kinds = [
-        LexerErrorKind::UnexpectedCharacter,
-        LexerErrorKind::FractionDigitExpected,
-        LexerErrorKind::HexadecimalDigitExpected,
-        LexerErrorKind::BinaryDigitExpected,
-        LexerErrorKind::BaseSelectionExpected,
-        LexerErrorKind::UnclosedStringLiteral,
-        LexerErrorKind::ForbiddenCharInString,
-        LexerErrorKind::ForbiddenKeywordName,
-        LexerErrorKind::BackslashInQuotedSymbol,
-        LexerErrorKind::ForbiddenCharInQuotedSymbol,
-        LexerErrorKind::UnclosedQuotedSymbol,
-        LexerErrorKind::NumeralLeadingZero,
+        SmtLexicalErrorKind::UnexpectedCharacter,
+        SmtLexicalErrorKind::FractionDigitExpected,
+        SmtLexicalErrorKind::HexadecimalDigitExpected,
+        SmtLexicalErrorKind::BinaryDigitExpected,
+        SmtLexicalErrorKind::BaseSelectionExpected,
+        SmtLexicalErrorKind::UnclosedStringLiteral,
+        SmtLexicalErrorKind::ForbiddenCharInString,
+        SmtLexicalErrorKind::ForbiddenKeywordName,
+        SmtLexicalErrorKind::BackslashInQuotedSymbol,
+        SmtLexicalErrorKind::ForbiddenCharInQuotedSymbol,
+        SmtLexicalErrorKind::UnclosedQuotedSymbol,
+        SmtLexicalErrorKind::NumeralLeadingZero,
     ];
     for kind in expected_kinds {
         assert!(error_kinds.contains(&kind), "no input raises {kind:?}");
@@ -495,7 +498,7 @@ const LONG_LENGTHS: &[usize] = &[1, 15, 16, 17, 31, 32, 33, 63, 64, 65, 127, 128
 /// bytes long, separated by whitespace runs of the same length, with the
 /// string containing an escaped quote and the quoted symbol a line break
 /// in the middle. Returns the input and the expected payloads in order.
-fn long_token_input(length: usize) -> (Vec<u8>, Vec<(TokenType, Vec<u8>)>) {
+fn long_token_input(length: usize) -> (Vec<u8>, Vec<(SmtTokenCategory, Vec<u8>)>) {
     let symbol: Vec<u8> = (0..length).map(|i| b"abcxyz_-+.?"[i % 11]).collect();
     let numeral: Vec<u8> = (0..length).map(|i| b"1234567890"[i % 10]).collect();
     let hex: Vec<u8> = (0..length)
@@ -531,53 +534,58 @@ fn long_token_input(length: usize) -> (Vec<u8>, Vec<(TokenType, Vec<u8>)>) {
 
     let mut input = Vec::new();
     let mut expected = Vec::new();
-    let mut push = |input: &mut Vec<u8>, source: &[u8], ty: TokenType, payload: &[u8]| {
+    let mut push = |input: &mut Vec<u8>, source: &[u8], ty: SmtTokenCategory, payload: &[u8]| {
         input.extend_from_slice(source);
         input.extend_from_slice(&whitespace);
         expected.push((ty, payload.to_vec()));
     };
-    push(&mut input, &symbol, TokenType::UnquotedSymbol, &symbol);
-    push(&mut input, &numeral, TokenType::Numeral, &numeral);
+    push(
+        &mut input,
+        &symbol,
+        SmtTokenCategory::UnquotedSymbol,
+        &symbol,
+    );
+    push(&mut input, &numeral, SmtTokenCategory::Numeral, &numeral);
     let mut decimal = numeral.clone();
     decimal.push(b'.');
     decimal.extend_from_slice(&numeral);
-    push(&mut input, &decimal, TokenType::Decimal, &decimal);
+    push(&mut input, &decimal, SmtTokenCategory::Decimal, &decimal);
     push(
         &mut input,
         &[b"#x", hex.as_slice()].concat(),
-        TokenType::Hexadecimal,
+        SmtTokenCategory::Hexadecimal,
         &hex,
     );
     push(
         &mut input,
         &[b"#b", binary.as_slice()].concat(),
-        TokenType::Binary,
+        SmtTokenCategory::Binary,
         &binary,
     );
     push(
         &mut input,
         &[b":", keyword.as_slice()].concat(),
-        TokenType::Keyword,
+        SmtTokenCategory::Keyword,
         &keyword,
     );
     push(
         &mut input,
         &[b"\"", string_source.as_slice(), b"\""].concat(),
-        TokenType::String,
+        SmtTokenCategory::String,
         &string_payload,
     );
     push(
         &mut input,
         &[b"|", quoted.as_slice(), b"|"].concat(),
-        TokenType::QuotedSymbol,
+        SmtTokenCategory::QuotedSymbol,
         &quoted,
     );
     // the comment produces no token; the parenthesis after it does
     input.extend_from_slice(b";");
     input.extend_from_slice(&comment);
     input.extend_from_slice(b"\n(");
-    expected.push((TokenType::ParenOpen, b"(".to_vec()));
-    expected.push((TokenType::EndOfFile, Vec::new()));
+    expected.push((SmtTokenCategory::ParenOpen, b"(".to_vec()));
+    expected.push((SmtTokenCategory::EndOfFile, Vec::new()));
     (input, expected)
 }
 
@@ -591,7 +599,7 @@ fn long_tokens_have_the_expected_payloads() {
             "length {length}: {:?}",
             outcome.error
         );
-        let payloads: Vec<(TokenType, Vec<u8>)> = outcome
+        let payloads: Vec<(SmtTokenCategory, Vec<u8>)> = outcome
             .tokens
             .iter()
             .map(|token| (token.ty, token.content.clone()))
@@ -628,16 +636,18 @@ fn payload_from_span(input: &[u8], token: &LexedToken) -> Vec<u8> {
     let end = token.end.0 as usize;
     let text = &input[start..end];
     match token.ty {
-        TokenType::QuotedSymbol => text[1..text.len() - 1].to_vec(),
+        SmtTokenCategory::QuotedSymbol => text[1..text.len() - 1].to_vec(),
         // parentheses carry their own byte, like every other borrowed token
-        TokenType::UnquotedSymbol
-        | TokenType::Numeral
-        | TokenType::Decimal
-        | TokenType::ParenOpen
-        | TokenType::ParenClose => text.to_vec(),
-        TokenType::Keyword => text[1..].to_vec(),
-        TokenType::Hexadecimal | TokenType::Binary => text[2..].to_vec(),
-        TokenType::String => {
+        SmtTokenCategory::UnquotedSymbol
+        | SmtTokenCategory::Numeral
+        | SmtTokenCategory::Decimal
+        | SmtTokenCategory::ParenOpen
+        | SmtTokenCategory::ParenClose
+        | SmtTokenCategory::Whitespace => text.to_vec(),
+        // a comment carries what follows its semicolon, like a keyword its colon
+        SmtTokenCategory::Keyword | SmtTokenCategory::Comment => text[1..].to_vec(),
+        SmtTokenCategory::Hexadecimal | SmtTokenCategory::Binary => text[2..].to_vec(),
+        SmtTokenCategory::String => {
             let mut payload = Vec::new();
             let mut rest = &text[1..text.len() - 1];
             while let Some(&c) = rest.first() {
@@ -647,7 +657,7 @@ fn payload_from_span(input: &[u8], token: &LexedToken) -> Vec<u8> {
             }
             payload
         }
-        TokenType::EndOfFile => {
+        SmtTokenCategory::EndOfFile => {
             assert_eq!((start, end), (input.len(), input.len()), "EOF span");
             Vec::new()
         }
@@ -681,18 +691,19 @@ fn token_contents_match_their_spans() {
 
 // --- Handler errors under chunking ---
 
-/// A token handler that accepts the first `n` tokens and rejects the next.
+/// A token consumer that accepts the first `n` tokens and rejects the next.
 struct RejectNth {
     remaining: usize,
 }
 
-impl TokenHandler for RejectNth {
+impl SmtConsume for RejectNth {
     type Result = ();
     type Error = ();
+    const CONSUMES_WHITESPACE_AND_COMMENTS: bool = false;
 
-    fn handle_tokens(
+    fn consume(
         &mut self,
-        cursor: &mut TokenCursor<'_>,
+        cursor: &mut SmtBatchCursor<'_>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         while cursor.next().is_some() {
             if self.remaining == 0 {
@@ -711,7 +722,7 @@ fn handler_errors_are_raised_where_the_token_is_produced_in_every_chunking() {
         for (n, rejected) in reference.tokens.iter().enumerate() {
             for chunk_length in [1usize, 2, 3, 5, input.len().max(1)] {
                 let chunks = split_by_lengths(input, &[chunk_length]);
-                let mut lexer = Lexer::new(RejectNth { remaining: n }, SmtVersion::V2_7);
+                let mut lexer = SmtLexer::new(RejectNth { remaining: n }, SmtVersion::V2_7);
                 let mut consumed = 0;
                 let mut site = None;
                 for chunk in &chunks {
@@ -765,7 +776,7 @@ fn handler_errors_are_raised_where_the_token_is_produced_in_every_chunking() {
 
 /// Builds the token source of a given run length and says what token and
 /// payload to expect, or `None` if the length is not valid for the kind.
-type BuildRun = fn(usize) -> Option<(Vec<u8>, TokenType, Vec<u8>)>;
+type BuildRun = fn(usize) -> Option<(Vec<u8>, SmtTokenCategory, Vec<u8>)>;
 
 /// One kind of run the lexer scans.
 struct RunKind {
@@ -776,20 +787,28 @@ struct RunKind {
 const RUN_KINDS: &[RunKind] = &[
     RunKind {
         name: "simple symbol",
-        build: |n| (n > 0).then(|| (vec![b'a'; n], TokenType::UnquotedSymbol, vec![b'a'; n])),
+        build: |n| {
+            (n > 0).then(|| {
+                (
+                    vec![b'a'; n],
+                    SmtTokenCategory::UnquotedSymbol,
+                    vec![b'a'; n],
+                )
+            })
+        },
     },
     RunKind {
         name: "quoted symbol",
         build: |n| {
             let source = [b"|".as_slice(), &vec![b'q'; n], b"|"].concat();
-            Some((source, TokenType::QuotedSymbol, vec![b'q'; n]))
+            Some((source, SmtTokenCategory::QuotedSymbol, vec![b'q'; n]))
         },
     },
     RunKind {
         name: "string literal",
         build: |n| {
             let source = [b"\"".as_slice(), &vec![b's'; n], b"\""].concat();
-            Some((source, TokenType::String, vec![b's'; n]))
+            Some((source, SmtTokenCategory::String, vec![b's'; n]))
         },
     },
     RunKind {
@@ -797,20 +816,20 @@ const RUN_KINDS: &[RunKind] = &[
         build: |n| {
             (n > 0).then(|| {
                 let source = [b":".as_slice(), &vec![b'k'; n]].concat();
-                (source, TokenType::Keyword, vec![b'k'; n])
+                (source, SmtTokenCategory::Keyword, vec![b'k'; n])
             })
         },
     },
     RunKind {
         name: "numeral",
-        build: |n| (n > 0).then(|| (vec![b'7'; n], TokenType::Numeral, vec![b'7'; n])),
+        build: |n| (n > 0).then(|| (vec![b'7'; n], SmtTokenCategory::Numeral, vec![b'7'; n])),
     },
     RunKind {
         name: "decimal fraction",
         build: |n| {
             (n > 0).then(|| {
                 let source = [b"1.".as_slice(), &vec![b'5'; n]].concat();
-                (source.clone(), TokenType::Decimal, source)
+                (source.clone(), SmtTokenCategory::Decimal, source)
             })
         },
     },
@@ -819,7 +838,7 @@ const RUN_KINDS: &[RunKind] = &[
         build: |n| {
             (n > 0).then(|| {
                 let source = [b"#x".as_slice(), &vec![b'A'; n]].concat();
-                (source, TokenType::Hexadecimal, vec![b'A'; n])
+                (source, SmtTokenCategory::Hexadecimal, vec![b'A'; n])
             })
         },
     },
@@ -828,7 +847,7 @@ const RUN_KINDS: &[RunKind] = &[
         build: |n| {
             (n > 0).then(|| {
                 let source = [b"#b".as_slice(), &vec![b'1'; n]].concat();
-                (source, TokenType::Binary, vec![b'1'; n])
+                (source, SmtTokenCategory::Binary, vec![b'1'; n])
             })
         },
     },
@@ -864,7 +883,11 @@ fn every_run_length_at_every_alignment_lexes_correctly() {
                     (prefix, prefix + source.len()),
                     "{describe}: span"
                 );
-                assert_eq!(reference.tokens[1].ty, TokenType::ParenClose, "{describe}");
+                assert_eq!(
+                    reference.tokens[1].ty,
+                    SmtTokenCategory::ParenClose,
+                    "{describe}"
+                );
 
                 for chunk_length in [1usize, 3, 16, 17, 32, 33] {
                     let chunks = split_by_lengths(&input, &[chunk_length]);
@@ -893,7 +916,7 @@ fn every_comment_and_whitespace_run_length_at_every_alignment() {
                     reference.tokens[0].end
                 ),
                 (
-                    TokenType::UnquotedSymbol,
+                    SmtTokenCategory::UnquotedSymbol,
                     (x_start, 1, 0),
                     (x_start + 1, 1, 1)
                 ),
@@ -927,7 +950,7 @@ fn every_comment_and_whitespace_run_length_at_every_alignment() {
             };
             assert_eq!(
                 (reference.tokens[1].ty, reference.tokens[1].start),
-                (TokenType::UnquotedSymbol, (b_start, line, column)),
+                (SmtTokenCategory::UnquotedSymbol, (b_start, line, column)),
                 "whitespace run of length {run_length} at {prefix}"
             );
             for chunk_length in [1usize, 3, 16, 17, 32, 33] {
@@ -1003,7 +1026,7 @@ fn payloads_from_cut_tokens_escaped_strings_and_plain_tokens_alternate_correctly
     let input: Vec<u8> = chunks.concat();
     let outcome = lex_chunks(&input, chunks);
     assert!(outcome.error.is_none(), "{:?}", outcome.error);
-    let payloads: Vec<(TokenType, Vec<u8>)> = outcome
+    let payloads: Vec<(SmtTokenCategory, Vec<u8>)> = outcome
         .tokens
         .iter()
         .map(|token| (token.ty, token.content.clone()))
@@ -1011,17 +1034,17 @@ fn payloads_from_cut_tokens_escaped_strings_and_plain_tokens_alternate_correctly
     assert_eq!(
         payloads,
         vec![
-            (TokenType::UnquotedSymbol, b"abcd".to_vec()),
-            (TokenType::String, b"x\"y".to_vec()),
-            (TokenType::String, b"z".to_vec()),
-            (TokenType::QuotedSymbol, b"qr".to_vec()),
-            (TokenType::UnquotedSymbol, b"s".to_vec()),
-            (TokenType::Hexadecimal, b"1F".to_vec()),
-            (TokenType::Decimal, b"123.5".to_vec()),
-            (TokenType::QuotedSymbol, b"\n".to_vec()),
-            (TokenType::Keyword, b"kw".to_vec()),
-            (TokenType::String, b"\"".to_vec()),
-            (TokenType::EndOfFile, vec![]),
+            (SmtTokenCategory::UnquotedSymbol, b"abcd".to_vec()),
+            (SmtTokenCategory::String, b"x\"y".to_vec()),
+            (SmtTokenCategory::String, b"z".to_vec()),
+            (SmtTokenCategory::QuotedSymbol, b"qr".to_vec()),
+            (SmtTokenCategory::UnquotedSymbol, b"s".to_vec()),
+            (SmtTokenCategory::Hexadecimal, b"1F".to_vec()),
+            (SmtTokenCategory::Decimal, b"123.5".to_vec()),
+            (SmtTokenCategory::QuotedSymbol, b"\n".to_vec()),
+            (SmtTokenCategory::Keyword, b"kw".to_vec()),
+            (SmtTokenCategory::String, b"\"".to_vec()),
+            (SmtTokenCategory::EndOfFile, vec![]),
         ]
     );
     // and the same input in every other chunking agrees

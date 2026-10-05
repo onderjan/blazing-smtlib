@@ -1,12 +1,12 @@
 //! Public-API tests of the category parsers: the single-token parsers, the
 //! generic combinators, and the ident, qualified-ident, sort, term, s-expression
-//! and attribute parsers, each driven in isolation through `Parser`.
+//! and attribute parsers, each driven in isolation through `SmtParse`.
 //!
 //! This file holds the shared test handler and driver; the tests themselves
 //! live in the submodules under `category/`.
 //!
 //! Tokens cannot be constructed outside the crate, so the driver feeds the
-//! parser under test by pushing the input through a `Lexer` whose token handler
+//! parser under test by pushing the input through a `SmtLexer` whose token consumer
 //! advances the parser.
 
 mod attribute;
@@ -28,17 +28,15 @@ use blazing_smtlib::{
     SmtIndexView, SmtKeywordView, SmtPatternView, SmtQualifiedIdent, SmtQualifiedIdentView,
     SmtQuantifierKind, SmtSExpr, SmtSimplePatternView, SmtSort, SmtSpan, SmtSpecialConstantView,
     SmtSymbolView, SmtTerm,
-    read::{
-        lexer::{LexError, Lexer},
-        parser::{
-            CloseParenParser, ClosedAttributeParser, ClosedMultipleAttributeParser,
-            ClosedMultipleParser, ClosedParser, IdentParser, KeywordParser, OpenParenParser,
-            PairParser, ParenMultipleParser, ParenParser, Parser, ParserError, ParserErrorKind,
-            ParserResources, QualifiedIdentParser, SExprParser, SortParser, StringParser,
-            SymbolParser, SyntaxErrorKind, TermParser,
-        },
+    lexer::{SmtLexErrorCause, SmtLexer},
+    parser::{
+        SmtCloseParenParser, SmtClosedAttributeParser, SmtClosedMultipleAttributeParser,
+        SmtClosedMultipleParser, SmtClosedParser, SmtIdentParser, SmtKeywordParser,
+        SmtOpenParenParser, SmtPairParser, SmtParenMultipleParser, SmtParenParser, SmtParse,
+        SmtParseError, SmtParseErrorCause, SmtParseState, SmtQualifiedIdentParser, SmtSExprParser,
+        SmtSortParser, SmtStringParser, SmtSymbolParser, SmtSyntaxErrorKind, SmtTermParser,
     },
-    token::{Reserved, SmtVersion, TokenCursor, TokenHandler, TokenType},
+    token::{SmtBatchCursor, SmtConsume, SmtReserved, SmtTokenCategory, SmtVersion},
 };
 
 // --- Test handler rendering everything it receives back into text ---
@@ -90,7 +88,7 @@ fn text(bytes: &[u8]) -> String {
 /// Renders a symbol, quoting it when it is spelled like a reserved word,
 /// so that the rendering tells such a symbol apart from the reserved word.
 fn render_symbol(bytes: &[u8]) -> String {
-    if Reserved::from_bytes_opt(bytes, SmtVersion::V2_7).is_some() {
+    if SmtReserved::from_bytes_opt(bytes, SmtVersion::V2_7).is_some() {
         format!("|{}|", text(bytes))
     } else {
         text(bytes)
@@ -341,18 +339,18 @@ impl SmtHandler for Printing {
 // --- Driver ---
 
 /// A parse failure, as the error kind and the span it carries.
-type ParseFailure = (SyntaxErrorKind, SmtSpan);
+type ParseFailure = (SmtSyntaxErrorKind, SmtSpan);
 
-/// Token handler that advances a category parser with each lexed token,
+/// Token consumer that advances a category parser with each lexed token,
 /// collecting a wanted number of consecutive parser results, and counts
 /// the tokens left over after the last one.
 ///
 /// The parser instance is reused for every result in turn, so driving with
 /// a wanted count above one exercises the self-reset contract.
-struct Drive<'h, H: SmtHandler, P: Parser<H>> {
+struct Drive<'h, H: SmtHandler, P: SmtParse<H>> {
     handler: &'h mut H,
     /// The parser resources, shared by every parser in a run.
-    resources: ParserResources<H>,
+    parse_state: SmtParseState<H>,
     /// The parser under test, reused across parses.
     parser: P,
     /// How many more results to parse before tokens count as unconsumed.
@@ -363,19 +361,17 @@ struct Drive<'h, H: SmtHandler, P: Parser<H>> {
     unconsumed: usize,
 }
 
-impl<H: SmtHandler, P: Parser<H>> TokenHandler for Drive<'_, H, P> {
+impl<H: SmtHandler, P: SmtParse<H>> SmtConsume for Drive<'_, H, P> {
     type Result = ();
-    type Error = ParserError<H::Error>;
+    type Error = SmtParseError<H::Error>;
+    const CONSUMES_WHITESPACE_AND_COMMENTS: bool = false;
 
-    fn handle_tokens(
-        &mut self,
-        cursor: &mut TokenCursor<'_>,
-    ) -> Result<ControlFlow<()>, Self::Error> {
+    fn consume(&mut self, cursor: &mut SmtBatchCursor<'_>) -> Result<ControlFlow<()>, Self::Error> {
         while !cursor.is_empty() {
             if self.remaining == 0 {
                 // count the tokens left after the wanted results, except the end of the input
                 while let Some(token) = cursor.next() {
-                    if token.ty() != TokenType::EndOfFile {
+                    if token.category() != SmtTokenCategory::EndOfFile {
                         self.unconsumed += 1;
                     }
                 }
@@ -383,7 +379,7 @@ impl<H: SmtHandler, P: Parser<H>> TokenHandler for Drive<'_, H, P> {
             }
             if let ControlFlow::Break(result) =
                 self.parser
-                    .parse(self.handler, &mut self.resources, cursor)?
+                    .parse(self.handler, &mut self.parse_state, cursor)?
             {
                 self.results.push(result);
                 self.remaining -= 1;
@@ -400,7 +396,7 @@ impl<H: SmtHandler, P: Parser<H>> TokenHandler for Drive<'_, H, P> {
 /// (not counting the end-of-file token), so tests can check where the parser stopped;
 /// a parser error is returned as its kind and span.
 /// Panics if the parser did not finish `count` times before the end of the input.
-fn run_count_from<H: SmtHandler<Error = Infallible>, P: Parser<H>>(
+fn run_count_from<H: SmtHandler<Error = Infallible>, P: SmtParse<H>>(
     parser: P,
     handler: &mut H,
     input: &[u8],
@@ -408,24 +404,24 @@ fn run_count_from<H: SmtHandler<Error = Infallible>, P: Parser<H>>(
 ) -> Result<(Vec<P::Result>, usize), ParseFailure> {
     let mut drive = Drive {
         handler,
-        resources: ParserResources::new(),
+        parse_state: SmtParseState::new(),
         parser,
         remaining: count,
         results: Vec::new(),
         unconsumed: 0,
     };
-    let mut lexer = Lexer::new(&mut drive, SmtVersion::V2_7);
-    match lexer.lex_all(input) {
+    let mut lexer = SmtLexer::new(&mut drive, SmtVersion::V2_7);
+    match lexer.lex_all(input).map_err(|err| err.into_cause()) {
         Ok(_) => {}
-        Err(LexError::Handler(err)) => {
+        Err(SmtLexErrorCause::Consumer(err)) => {
             let span = err.span();
-            return Err(match err.into_kind() {
-                ParserErrorKind::Syntax(kind) => (kind, span),
+            return Err(match err.into_cause() {
+                SmtParseErrorCause::Syntax(kind) => (kind, span),
                 // the handler never fails
-                ParserErrorKind::Handler(err) => match err {},
+                SmtParseErrorCause::Handler(err) => match err {},
             });
         }
-        Err(LexError::Lexer(err)) => {
+        Err(SmtLexErrorCause::Lexical(err)) => {
             panic!(
                 "test input {:?} must lex, got {:?}",
                 text(input),
@@ -449,7 +445,7 @@ fn run_count_from<H: SmtHandler<Error = Infallible>, P: Parser<H>>(
 /// (not counting the end-of-file token), so tests can check where the parser stopped;
 /// a parser error is returned as its kind and span.
 /// Panics if the parser did not finish before the end of the input.
-fn run_with<H: SmtHandler<Error = Infallible>, P: Parser<H> + Default>(
+fn run_with<H: SmtHandler<Error = Infallible>, P: SmtParse<H> + Default>(
     handler: &mut H,
     input: &[u8],
 ) -> Result<(P::Result, usize), ParseFailure> {
@@ -462,7 +458,7 @@ fn run_with<H: SmtHandler<Error = Infallible>, P: Parser<H> + Default>(
 }
 
 /// Runs the parser over a fresh `Printing` handler.
-fn run<P: Parser<Printing> + Default>(input: &[u8]) -> Result<(P::Result, usize), ParseFailure> {
+fn run<P: SmtParse<Printing> + Default>(input: &[u8]) -> Result<(P::Result, usize), ParseFailure> {
     run_with::<Printing, P>(&mut Printing::default(), input)
 }
 
@@ -472,7 +468,7 @@ fn run<P: Parser<Printing> + Default>(input: &[u8]) -> Result<(P::Result, usize)
 /// This exercises the self-reset contract: after `progress` returns Break,
 /// the parser instance must be back in the default state.
 #[track_caller]
-fn parse_two<P: Parser<Printing> + Default>(input: &[u8]) -> (P::Result, P::Result) {
+fn parse_two<P: SmtParse<Printing> + Default>(input: &[u8]) -> (P::Result, P::Result) {
     match run_count_from(P::default(), &mut Printing::default(), input, 2) {
         Ok((results, 0)) => {
             let mut results = results.into_iter();
@@ -489,7 +485,7 @@ fn parse_two<P: Parser<Printing> + Default>(input: &[u8]) -> (P::Result, P::Resu
 
 /// Runs the parser, requires success with no unconsumed tokens, and returns the result.
 #[track_caller]
-fn parse_all<P: Parser<Printing> + Default>(input: &[u8]) -> P::Result {
+fn parse_all<P: SmtParse<Printing> + Default>(input: &[u8]) -> P::Result {
     match run::<P>(input) {
         Ok((result, 0)) => result,
         Ok((_, left)) => panic!("{left} tokens left unconsumed in {:?}", text(input)),
@@ -502,11 +498,11 @@ fn parse_all<P: Parser<Printing> + Default>(input: &[u8]) -> P::Result {
 /// Runs the parser, requires a parser error, checks the byte span the error carries,
 /// and returns its kind so that the caller can inspect the variant.
 #[track_caller]
-fn assert_error<P: Parser<Printing> + Default>(
+fn assert_error<P: SmtParse<Printing> + Default>(
     input: &[u8],
     start: u64,
     end: u64,
-) -> SyntaxErrorKind {
+) -> SmtSyntaxErrorKind {
     match run::<P>(input) {
         Ok(_) => panic!("expected a parser error in {:?}, got Ok", text(input)),
         Err((kind, span)) => {

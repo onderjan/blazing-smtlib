@@ -7,7 +7,7 @@ use std::{
 
 use crate::{
     SmtHandler, SmtSymbolView,
-    read::parser::{ArenaAccess, TextHandle},
+    parser::{ArenaAccess, TextHandle},
 };
 
 /// Multiple values to be handled.

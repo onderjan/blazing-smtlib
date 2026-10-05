@@ -1,16 +1,16 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtBinDigitsView, SmtDecimalView, SmtHexDigitsView, SmtKeywordView, SmtNumeralView, SmtSpan,
-    SmtStringContentView, SmtSymbolView,
+    SmtBinDigitsView, SmtCommentView, SmtDecimalView, SmtHexDigitsView, SmtKeywordView,
+    SmtLocation, SmtNumeralView, SmtSpan, SmtStringContentView, SmtSymbolView, SmtWhitespaceView,
 };
 
 mod reserved;
 
-pub use reserved::{CommandNameReserved, GeneralReserved, Reserved};
+pub use reserved::{SmtCommandNameReserved, SmtGeneralReserved, SmtReserved};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TokenType {
+pub enum SmtTokenCategory {
     ParenOpen,
     ParenClose,
     Numeral,
@@ -21,14 +21,16 @@ pub enum TokenType {
     Keyword,
     UnquotedSymbol,
     QuotedSymbol,
+    Whitespace,
+    Comment,
     // PERFORMANCE: leave EOF last for easy construction
-    // from InnerType in the lexer
+    // from InnerCategory in the lexer
     EndOfFile,
 }
 
-/// TokenType but without End of File.
+/// SmtTokenCategory but without End of File.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum InnerType {
+pub(crate) enum InnerCategory {
     ParenOpen,
     ParenClose,
     Numeral,
@@ -39,27 +41,31 @@ pub(crate) enum InnerType {
     Keyword,
     UnquotedSymbol,
     QuotedSymbol,
+    Whitespace,
+    Comment,
 }
 
-impl InnerType {
-    fn into_type(self) -> TokenType {
+impl InnerCategory {
+    fn into_category(self) -> SmtTokenCategory {
         match self {
-            InnerType::ParenOpen => TokenType::ParenOpen,
-            InnerType::ParenClose => TokenType::ParenClose,
-            InnerType::Numeral => TokenType::Numeral,
-            InnerType::Decimal => TokenType::Decimal,
-            InnerType::Hexadecimal => TokenType::Hexadecimal,
-            InnerType::Binary => TokenType::Binary,
-            InnerType::String => TokenType::String,
-            InnerType::Keyword => TokenType::Keyword,
-            InnerType::UnquotedSymbol => TokenType::UnquotedSymbol,
-            InnerType::QuotedSymbol => TokenType::QuotedSymbol,
+            InnerCategory::ParenOpen => SmtTokenCategory::ParenOpen,
+            InnerCategory::ParenClose => SmtTokenCategory::ParenClose,
+            InnerCategory::Numeral => SmtTokenCategory::Numeral,
+            InnerCategory::Decimal => SmtTokenCategory::Decimal,
+            InnerCategory::Hexadecimal => SmtTokenCategory::Hexadecimal,
+            InnerCategory::Binary => SmtTokenCategory::Binary,
+            InnerCategory::String => SmtTokenCategory::String,
+            InnerCategory::Keyword => SmtTokenCategory::Keyword,
+            InnerCategory::UnquotedSymbol => SmtTokenCategory::UnquotedSymbol,
+            InnerCategory::QuotedSymbol => SmtTokenCategory::QuotedSymbol,
+            InnerCategory::Whitespace => SmtTokenCategory::Whitespace,
+            InnerCategory::Comment => SmtTokenCategory::Comment,
         }
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TokenKind<'a> {
+pub enum SmtSyntaxToken<'a> {
     ParenOpen,
     ParenClose,
     Numeral(SmtNumeralView<'a>),
@@ -69,7 +75,9 @@ pub enum TokenKind<'a> {
     String(SmtStringContentView<'a>),
     Keyword(SmtKeywordView<'a>),
     Symbol(SmtSymbolView<'a>),
-    Reserved(Reserved),
+    Reserved(SmtReserved),
+    Whitespace(SmtWhitespaceView<'a>),
+    Comment(SmtCommentView<'a>),
     EndOfFile,
 }
 
@@ -175,59 +183,80 @@ impl Default for SmtVersionPostureBuilder {
     }
 }
 
-impl<'a> TokenKind<'a> {
+impl<'a> SmtSyntaxToken<'a> {
     /// Construct the token kind from the token and version.
     #[inline]
-    pub fn from_token(token: Token<'a>, version: SmtVersion) -> Self {
+    pub fn from_token(token: SmtToken<'a>, version: SmtVersion) -> Self {
         let content = token.content();
-        match token.ty() {
-            TokenType::ParenOpen => TokenKind::ParenOpen,
-            TokenType::ParenClose => TokenKind::ParenClose,
-            TokenType::Numeral => TokenKind::Numeral(SmtNumeralView::new_unchecked(content)),
-            TokenType::Decimal => TokenKind::Decimal(SmtDecimalView::new_unchecked(content)),
-            TokenType::Hexadecimal => {
-                TokenKind::Hexadecimal(SmtHexDigitsView::new_unchecked(content))
+        match token.category() {
+            SmtTokenCategory::ParenOpen => SmtSyntaxToken::ParenOpen,
+            SmtTokenCategory::ParenClose => SmtSyntaxToken::ParenClose,
+            SmtTokenCategory::Numeral => {
+                SmtSyntaxToken::Numeral(SmtNumeralView::new_unchecked(content))
             }
-            TokenType::Binary => TokenKind::Binary(SmtBinDigitsView::new_unchecked(content)),
-            TokenType::UnquotedSymbol => {
+            SmtTokenCategory::Decimal => {
+                SmtSyntaxToken::Decimal(SmtDecimalView::new_unchecked(content))
+            }
+            SmtTokenCategory::Hexadecimal => {
+                SmtSyntaxToken::Hexadecimal(SmtHexDigitsView::new_unchecked(content))
+            }
+            SmtTokenCategory::Binary => {
+                SmtSyntaxToken::Binary(SmtBinDigitsView::new_unchecked(content))
+            }
+            SmtTokenCategory::UnquotedSymbol => {
                 // only the words reserved in the version are reserved words
-                if let Some(reserved) = Reserved::from_bytes_opt(content, version) {
-                    TokenKind::Reserved(reserved)
+                if let Some(reserved) = SmtReserved::from_bytes_opt(content, version) {
+                    SmtSyntaxToken::Reserved(reserved)
                 } else {
-                    TokenKind::Symbol(SmtSymbolView::new_unchecked(content))
+                    SmtSyntaxToken::Symbol(SmtSymbolView::new_unchecked(content))
                 }
             }
-            TokenType::QuotedSymbol => TokenKind::Symbol(SmtSymbolView::new_unchecked(content)),
-            TokenType::String => TokenKind::String(SmtStringContentView::new_unchecked(content)),
-            TokenType::Keyword => TokenKind::Keyword(SmtKeywordView::new_unchecked(content)),
-            TokenType::EndOfFile => TokenKind::EndOfFile,
+            SmtTokenCategory::QuotedSymbol => {
+                SmtSyntaxToken::Symbol(SmtSymbolView::new_unchecked(content))
+            }
+            SmtTokenCategory::String => {
+                SmtSyntaxToken::String(SmtStringContentView::new_unchecked(content))
+            }
+            SmtTokenCategory::Keyword => {
+                SmtSyntaxToken::Keyword(SmtKeywordView::new_unchecked(content))
+            }
+            SmtTokenCategory::Whitespace => {
+                SmtSyntaxToken::Whitespace(SmtWhitespaceView::new_unchecked(content))
+            }
+            SmtTokenCategory::Comment => {
+                SmtSyntaxToken::Comment(SmtCommentView::new_unchecked(content))
+            }
+            SmtTokenCategory::EndOfFile => SmtSyntaxToken::EndOfFile,
         }
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Token<'a> {
+pub struct SmtToken<'a> {
     /// Entry where End of File is kept as None.
     ///
     /// This is for performance reasons: instead of having to
     /// overwrite the whole token when the referenced buffer
     /// is no longer available, we have to only overwrite
     /// the Option variant byte to None.
-    entry: &'a Option<(InnerType, &'a [u8])>,
+    entry: &'a Option<(InnerCategory, &'a [u8])>,
     span: &'a SmtSpan,
 }
 
-impl<'a> Token<'a> {
+impl<'a> SmtToken<'a> {
     #[inline]
-    pub(crate) fn new(entry: &'a Option<(InnerType, &'a [u8])>, span: &'a SmtSpan) -> Token<'a> {
+    pub(crate) fn new(
+        entry: &'a Option<(InnerCategory, &'a [u8])>,
+        span: &'a SmtSpan,
+    ) -> SmtToken<'a> {
         Self { entry, span }
     }
 
     #[inline]
-    pub fn ty(&self) -> TokenType {
+    pub fn category(&self) -> SmtTokenCategory {
         match self.entry {
-            Some((ty, _)) => ty.into_type(),
-            None => TokenType::EndOfFile,
+            Some((ty, _)) => ty.into_category(),
+            None => SmtTokenCategory::EndOfFile,
         }
     }
 
@@ -245,35 +274,34 @@ impl<'a> Token<'a> {
     }
 
     #[inline]
-    pub fn kind(self, version: SmtVersion) -> TokenKind<'a> {
-        TokenKind::from_token(self, version)
+    pub fn syntax(self, version: SmtVersion) -> SmtSyntaxToken<'a> {
+        SmtSyntaxToken::from_token(self, version)
     }
 }
 
 /// A cursor into a batch of tokens, from which elements are consumed sequentially.
 ///
-/// A parser reads a batch through a cursor: it can look at the
-/// tokens ahead, consume them one at a time or several at once, look back at
-/// what it consumed last, and tell how many tokens it has taken. However,
-/// it is not guaranteed how many elements the batch will actually have,
-/// so the lookahead is only useful for fast paths that fall back to
-/// slow paths with the same behaviour if the lookahead is not available.
-#[derive(Clone, Copy)]
-pub struct TokenCursor<'a> {
+/// A parser reads a batch through a cursor: it consumes the tokens one at
+/// a time, can look at the next one, and can attempt to take several at once.
+/// However, it is not guaranteed how many tokens the batch will actually have,
+/// so an attempt is only useful for fast paths that fall back to slow paths
+/// with the same behaviour if the tokens are not available.
+pub struct SmtBatchCursor<'a> {
     version: SmtVersion,
-    entries: &'a [Option<(InnerType, &'a [u8])>],
+    entries: &'a [Option<(InnerCategory, &'a [u8])>],
     spans: &'a [SmtSpan],
+    start: usize,
     next: usize,
     relex: bool,
 }
 
-impl<'a> TokenCursor<'a> {
+impl<'a> SmtBatchCursor<'a> {
     /// Returns a cursor at the start of the batch given as its entries and
     /// their spans, of equal length.
     #[inline]
     pub(crate) fn new(
         version: SmtVersion,
-        entries: &'a [Option<(InnerType, &'a [u8])>],
+        entries: &'a [Option<(InnerCategory, &'a [u8])>],
         spans: &'a [SmtSpan],
     ) -> Self {
         debug_assert_eq!(entries.len(), spans.len());
@@ -281,6 +309,7 @@ impl<'a> TokenCursor<'a> {
             version,
             entries,
             spans,
+            start: 0,
             next: 0,
             relex: false,
         }
@@ -292,9 +321,9 @@ impl<'a> TokenCursor<'a> {
 
     /// The token at `index` of the batch, if any.
     #[inline]
-    fn at(&self, index: usize) -> Option<Token<'a>> {
+    fn at(&self, index: usize) -> Option<SmtToken<'a>> {
         match (self.entries.get(index), self.spans.get(index)) {
-            (Some(entry), Some(span)) => Some(Token::new(entry, span)),
+            (Some(entry), Some(span)) => Some(SmtToken::new(entry, span)),
             _ => None,
         }
     }
@@ -303,7 +332,7 @@ impl<'a> TokenCursor<'a> {
     ///
     /// This can be used for parsing one token using a cursor-parsing function.
     #[inline]
-    pub fn single(version: SmtVersion, token: Token<'a>) -> Self {
+    pub fn single(version: SmtVersion, token: SmtToken<'a>) -> Self {
         Self::new(
             version,
             std::slice::from_ref(token.entry),
@@ -313,7 +342,7 @@ impl<'a> TokenCursor<'a> {
 
     /// Returns the next token (if any) without consuming it.
     #[inline]
-    pub fn peek(&self) -> Option<Token<'a>> {
+    pub fn peek(&self) -> Option<SmtToken<'a>> {
         self.at(self.next)
     }
 
@@ -321,7 +350,7 @@ impl<'a> TokenCursor<'a> {
     ///
     /// `get(0)` is the next token, also available through `peek`.
     #[inline]
-    pub fn get(&self, ahead: usize) -> Option<Token<'a>> {
+    pub(crate) fn get(&self, ahead: usize) -> Option<SmtToken<'a>> {
         self.at(self.next + ahead)
     }
 
@@ -330,38 +359,66 @@ impl<'a> TokenCursor<'a> {
     // as we implement an iterator-like but more powerful API
     #[allow(clippy::should_implement_trait)]
     #[inline]
-    pub fn next(&mut self) -> Option<Token<'a>> {
+    pub fn next(&mut self) -> Option<SmtToken<'a>> {
         let token = self.at(self.next)?;
         self.next += 1;
         Some(token)
     }
 
+    /// Attempts to consume several tokens at once.
+    ///
+    /// The extractor takes tokens from the window ahead of the cursor, in order.
+    /// If it returns [`Option::Some`], exactly the tokens it took are consumed.
+    /// If it returns [`Option::None`], nothing is consumed.
+    ///
+    /// The window ends where the cursor does, which may be after any token.
+    /// An extractor that runs out of tokens must return [`Option::None`]; the
+    /// caller must then reach the same result by consuming token by token.
+    #[inline]
+    pub fn attempt<R>(
+        &mut self,
+        extract: impl Fn(&mut SmtTokenWindow<'a>) -> Option<R>,
+    ) -> Option<R> {
+        let mut window = SmtTokenWindow {
+            entries: self.entries,
+            spans: self.spans,
+            next: self.next,
+        };
+        let result = extract(&mut window)?;
+        // the extractor succeeded, consume what it took
+        self.next = window.next;
+        Some(result)
+    }
+
     /// Consumes the next `count` tokens.
     ///
-    /// Behaves as if [`TokenCursor::next`] was called `count` times
+    /// Behaves as if [`SmtBatchCursor::next`] was called `count` times
     /// with the results discarded, stopping at the end of the cursor.
     #[inline]
-    pub fn advance(&mut self, count: usize) {
+    pub(crate) fn advance(&mut self, count: usize) {
         self.next = self.next.saturating_add(count).min(self.entries.len());
+    }
+
+    /// Returns the most recently consumed token in this handover (if any).
+    #[inline]
+    pub(crate) fn last_consumed(&self) -> Option<SmtToken<'a>> {
+        if self.next > self.start {
+            self.at(self.next - 1)
+        } else {
+            None
+        }
+    }
+
+    /// Location of the end of the last consumed token in this handover (if any).
+    #[inline]
+    pub fn consumed_end(&self) -> Option<SmtLocation> {
+        self.last_consumed().map(|token| token.span().end())
     }
 
     /// Consumes all tokens remaining in the cursor.
     #[inline]
     pub fn consume_all(&mut self) {
         self.next = self.entries.len()
-    }
-
-    /// Returns the most recently consumed token, if any was consumed through
-    /// this cursor.
-    #[inline]
-    pub fn last_consumed(&self) -> Option<Token<'a>> {
-        self.at(self.next.checked_sub(1)?)
-    }
-
-    /// How many tokens have been consumed.
-    #[inline]
-    pub fn consumed(&self) -> usize {
-        self.next
     }
 
     /// Whether every token has been consumed.
@@ -393,53 +450,153 @@ impl<'a> TokenCursor<'a> {
     /// produced again by the lexer, so the cursor yields no more tokens:
     /// it is empty from now on, and the consumed count stays where it is.
     #[inline]
-    pub fn relex(&mut self) {
+    pub(crate) fn relex(&mut self) {
         self.entries = &self.entries[..self.next];
         self.spans = &self.spans[..self.next];
         self.relex = true;
     }
 
-    /// Whether [`TokenCursor::relex`] has been called on this cursor.
+    /// Whether [`SmtBatchCursor::relex`] has been called on this cursor.
     #[inline]
-    pub fn relex_requested(&self) -> bool {
+    pub(crate) fn relex_requested(&self) -> bool {
         self.relex
+    }
+
+    /// The entries of the tokens of the batch consumed so far.
+    #[inline]
+    pub(crate) fn consumed_entries(&self) -> &'a [Option<(InnerCategory, &'a [u8])>] {
+        &self.entries[..self.next]
+    }
+
+    /// Resets the number of consumed tokens to zero.
+    #[inline]
+    pub(crate) fn reset_consumed(&mut self) {
+        self.start = self.next;
     }
 }
 
-/// A sequential handler of tokens.
-pub trait TokenHandler {
-    /// The value the handler finishes with.
-    type Result;
-    type Error;
+/// The tokens ahead of a cursor, as the extractor of [`SmtBatchCursor::attempt`]
+/// sees them: they can only be taken in order.
+pub struct SmtTokenWindow<'a> {
+    entries: &'a [Option<(InnerCategory, &'a [u8])>],
+    spans: &'a [SmtSpan],
+    next: usize,
+}
 
-    /// Handles the tokens handed over in the cursor, in order.
+impl<'a> SmtTokenWindow<'a> {
+    /// Takes the next token of the window (if any).
+    // CLIPPY: do not warn on next() without implementing Iterator,
+    // as the window mirrors the cursor it belongs to
+    #[allow(clippy::should_implement_trait)]
+    #[inline]
+    pub fn next(&mut self) -> Option<SmtToken<'a>> {
+        let token = match (self.entries.get(self.next), self.spans.get(self.next)) {
+            (Some(entry), Some(span)) => SmtToken::new(entry, span),
+            _ => return None,
+        };
+        self.next += 1;
+        Some(token)
+    }
+}
+
+/// A sequential consumer of tokens.
+pub trait SmtConsume {
+    /// The value the consumer finishes with.
+    type Result;
+    /// The error emitted by the consumer.
+    type Error;
+    /// Whether the consumer consumes whitespace and comments.
     ///
-    /// If the handler returns [`ControlFlow::Continue`], it means all tokens
-    /// were handled and more are wanted: the cursor must be empty, which it
-    /// also is after a [`TokenCursor::relex`] request.
+    /// If false, the consumer operates over abstract tokens:
+    /// it is not interested in whitespace and comments,
+    /// and the caller must not hand them over for consumption.
     ///
-    /// If the handler returns [`ControlFlow::Break`], it means
-    /// it finished the input it accepts (consuming exactly its tokens),
-    /// is returning a result and waiting for processing of the next value.
+    /// If true, the consumer operates over concrete tokens:
+    /// it can reconstruct the byte stream precisely thanks
+    /// to the whitespace and comments. The caller must hand
+    /// over the whitespace and comment tokens present between
+    /// true syntactic tokens.
+    const CONSUMES_WHITESPACE_AND_COMMENTS: bool;
+
+    /// Consumes the tokens handed over in the cursor, in order.
     ///
-    /// Returning an error means the handler failed at the token after
-    /// the consumed ones. The state of the handler and cursor is unspecified.
-    fn handle_tokens(
+    /// The caller must ensure that the cursor contains at least one token.
+    /// The consumer must ensure that at least one token is consumed before
+    /// return, no matter the result (even when returning an error).
+    ///
+    /// If the consumer returns [`ControlFlow::Continue`], the consumer is
+    /// not finished yet and is ready to consume more tokens. Tokens that
+    /// remain unconsumed in the cursor must be handed over again before
+    /// any new ones.
+    ///
+    /// If the consumer returns [`ControlFlow::Break`], it has finished
+    /// consuming the current value, is returning a result, and is ready
+    /// to start consuming a new value.
+    ///
+    /// If the consumer returns [`Result::Err`], it has failed at the last
+    /// consumed token. The state of the consumer is unspecified.
+    fn consume(
         &mut self,
-        cursor: &mut TokenCursor<'_>,
+        cursor: &mut SmtBatchCursor<'_>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error>;
 }
 
-/// Mutable references over token handlers are token handlers.
-impl<T: TokenHandler + ?Sized> TokenHandler for &mut T {
+/// Mutable references over token consumers are token consumers.
+impl<T: SmtConsume + ?Sized> SmtConsume for &mut T {
     type Result = T::Result;
     type Error = T::Error;
+    const CONSUMES_WHITESPACE_AND_COMMENTS: bool = T::CONSUMES_WHITESPACE_AND_COMMENTS;
 
     #[inline]
-    fn handle_tokens(
+    fn consume(
         &mut self,
-        cursor: &mut TokenCursor<'_>,
+        cursor: &mut SmtBatchCursor<'_>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
-        (**self).handle_tokens(cursor)
+        (**self).consume(cursor)
+    }
+}
+
+/// A token consumer that can recover after an error.
+///
+/// This is used in the library to implement SMT-LIB script processing
+/// with error recovery: after an error, the current command is abandoned
+/// and the lexer closes all open parentheses before announcing recovery.
+/// If the command remains unclosed at the end of input, recovery is made
+/// before the end of input is handed over (only the unclosed command is
+/// abandoned and dropped).
+pub trait SmtRecover: SmtConsume {
+    /// Abandons everything the consumer has not finished.
+    ///
+    /// Called when the input is lexically malformed or the consumer itself
+    /// returns an error, before the failing call returns. The location is
+    /// where the failure occurred: the input from there on is skipped, up
+    /// to the location given to [`recover`](Self::recover).
+    ///
+    /// The tokens consumed so far that belong to an unfinished top-level
+    /// value (typically, an SMT-LIB command) are to be abandoned, as if
+    /// they never were handed over.
+    fn abandon(&mut self, location: SmtLocation);
+
+    /// Finishes the recovery after abandoning.
+    ///
+    /// Called exactly once after every [`abandon`](Self::abandon) before the
+    /// new token is handed over after the recovery. The tokens handed over
+    /// after the recovery are to be considered to follow the tokens before
+    /// the abandoned top-level value started, as if the abandoned top-level
+    /// value was never started. The input between abandonment and recovery
+    /// is not handed over in any way.
+    fn recover(&mut self, location: SmtLocation);
+}
+
+/// Mutable references over token consumers that can recover can recover.
+impl<T: SmtRecover + ?Sized> SmtRecover for &mut T {
+    #[inline]
+    fn abandon(&mut self, location: SmtLocation) {
+        (**self).abandon(location)
+    }
+
+    #[inline]
+    fn recover(&mut self, location: SmtLocation) {
+        (**self).recover(location)
     }
 }

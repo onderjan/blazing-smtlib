@@ -8,20 +8,20 @@
 use std::path::{Path, PathBuf};
 
 use blazing_smtlib::{
-    CheckStandardSyntax,
-    read::{SmtReadErrorKind, read_smt},
+    SmtSyntaxChecker,
+    reader::{SmtReadErrorCause, read_smt},
 };
 
-/// Parses the in-memory file with [`CheckStandardSyntax`], panicking on any
+/// Parses the in-memory file with [`SmtSyntaxChecker`], panicking on any
 /// error: benchmark files must parse.
 pub fn parse_from_memory(data: &[u8], path: &Path) {
-    if let Err(err) = read_smt(&mut CheckStandardSyntax, data) {
+    if let Err(err) = read_smt(&mut SmtSyntaxChecker, data) {
         let span = err.span();
-        let description = match err.kind() {
-            SmtReadErrorKind::Lexer(err) => format!("lexer error: {:?}", err),
-            SmtReadErrorKind::Parser(err) => format!("parser error: {:?}", err),
-            SmtReadErrorKind::Io(err) => format!("read error: {:?}", err),
-            SmtReadErrorKind::Handler(err) => format!("nonstandard command: {:?}", err.0),
+        let description = match err.cause() {
+            SmtReadErrorCause::Lexical(err) => format!("lexer error: {:?}", err),
+            SmtReadErrorCause::Syntax(err) => format!("parser error: {:?}", err),
+            SmtReadErrorCause::Io(err) => format!("read error: {:?}", err),
+            SmtReadErrorCause::Handler(err) => format!("nonstandard command: {:?}", err.0),
         };
         panic!(
             "benchmark file {} must parse, got {} at {:?}",

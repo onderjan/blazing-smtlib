@@ -11,14 +11,12 @@ use reserved_words::reserved_words;
 use std::ops::ControlFlow;
 
 use blazing_smtlib::{
-    CheckStandardSyntax, NonstandardCommandError, String8,
-    read::{
-        SmtReadError, SmtReadErrorKind, SmtReader,
-        parser::{CommandParser, CommandParserStop, SExprParser, SyntaxErrorKind},
-    },
+    NonstandardCommandError, SmtBytes, SmtSyntaxChecker,
+    parser::{SmtCommandOutcome, SmtCommandParser, SmtSExprParser, SmtSyntaxErrorKind},
+    reader::{SmtReadError, SmtReadErrorCause, SmtReader},
     token::{
-        CommandNameReserved, GeneralReserved, Reserved, SmtVersion, SmtVersionPosture,
-        SmtVersionPostureBuilder,
+        SmtCommandNameReserved, SmtGeneralReserved, SmtReserved, SmtTokenCategory, SmtVersion,
+        SmtVersionPosture, SmtVersionPostureBuilder,
     },
 };
 
@@ -66,7 +64,7 @@ fn read_pieces(
     initial: SmtVersion,
     posture: SmtVersionPosture,
 ) -> Result<(), ReadError> {
-    let mut handler = CheckStandardSyntax;
+    let mut handler = SmtSyntaxChecker;
     let mut reader = SmtReader::script(&mut handler, initial, posture);
     for piece in pieces {
         if let ControlFlow::Break(_) = reader.read_slice(piece)? {
@@ -83,7 +81,7 @@ type Outcome = Result<(), (String, u64, u64)>;
 fn outcome(result: Result<(), ReadError>) -> Outcome {
     result.map_err(|err| {
         (
-            format!("{:?}", err.kind()),
+            format!("{:?}", err.cause()),
             err.span().start().offset(),
             err.span().end().offset(),
         )
@@ -129,11 +127,11 @@ fn read_any_version(input: &str) -> Outcome {
 
 /// Requires a syntax error of the given kind spanning the given byte offsets.
 #[track_caller]
-fn assert_syntax_error(outcome: Outcome, kind: SyntaxErrorKind, start: u64, end: u64) {
+fn assert_syntax_error(outcome: Outcome, kind: SmtSyntaxErrorKind, start: u64, end: u64) {
     assert_eq!(
         outcome,
         Err((
-            format!("{:?}", SmtReadErrorKind::<()>::Parser(kind)),
+            format!("{:?}", SmtReadErrorCause::<()>::Syntax(kind)),
             start,
             end
         ))
@@ -152,27 +150,27 @@ fn the_lookups_find_a_word_from_its_version_on() {
         for word in reserved_words() {
             let expected = version >= introduced_in(word);
             // the word itself is known from the latest version
-            let reserved = Reserved::from_bytes_opt(word.as_bytes(), SmtVersion::V2_7)
+            let reserved = SmtReserved::from_bytes_opt(word.as_bytes(), SmtVersion::V2_7)
                 .unwrap_or_else(|| panic!("{word:?} should be reserved in the latest version"));
-            let symbol = String8::from_vec(word.as_bytes().to_vec());
+            let symbol = SmtBytes::from_vec(word.as_bytes().to_vec());
             let group = match reserved {
-                Reserved::General(_) => {
-                    GeneralReserved::from_bytes_opt(word.as_bytes(), version).is_some()
+                SmtReserved::General(_) => {
+                    SmtGeneralReserved::from_bytes_opt(word.as_bytes(), version).is_some()
                 }
-                Reserved::CommandName(_) => {
-                    CommandNameReserved::from_bytes_opt(word.as_bytes(), version).is_some()
+                SmtReserved::CommandName(_) => {
+                    SmtCommandNameReserved::from_bytes_opt(word.as_bytes(), version).is_some()
                 }
             };
             let found = [
-                Reserved::from_bytes_opt(word.as_bytes(), version) == Some(reserved),
-                Reserved::from_symbol_opt(&symbol, version) == Some(reserved),
+                SmtReserved::from_bytes_opt(word.as_bytes(), version) == Some(reserved),
+                SmtReserved::from_symbol_opt(&symbol, version) == Some(reserved),
                 group,
                 reserved.is_in_version(version),
             ];
             assert_eq!(found, [expected; 4], "{word:?} in {version:?}");
             // and when it is not reserved yet, nothing else is found in its place
             if !expected {
-                assert_eq!(Reserved::from_bytes_opt(word.as_bytes(), version), None);
+                assert_eq!(SmtReserved::from_bytes_opt(word.as_bytes(), version), None);
             }
         }
     }
@@ -249,7 +247,7 @@ fn a_command_of_a_later_version_is_nonstandard() {
 fn a_declaration_applies_after_its_command() {
     // not to the commands before it
     let result = read_default("(declare-const lambda Bool)(set-info :smt-lib-version 2.6)");
-    assert_syntax_error(result, SyntaxErrorKind::ExpectedSymbol, 15, 21);
+    assert_syntax_error(result, SmtSyntaxErrorKind::ExpectedSymbol, 15, 21);
     // to all the commands after it, whatever the input is cut into
     assert_eq!(
         read_default(
@@ -264,7 +262,7 @@ fn a_declaration_applies_after_its_command() {
         SmtVersion::V2_6,
         SmtVersionPosture::default(),
     );
-    assert_syntax_error(result, SyntaxErrorKind::ExpectedTerm, 66, 72);
+    assert_syntax_error(result, SmtSyntaxErrorKind::ExpectedTerm, 66, 72);
 }
 
 #[test]
@@ -287,7 +285,7 @@ fn only_the_set_info_attribute_declares_a_version() {
         let start = input.len() as u64 + 46;
         assert_syntax_error(
             read_default(&script),
-            SyntaxErrorKind::ExpectedSymbol,
+            SmtSyntaxErrorKind::ExpectedSymbol,
             start,
             start + 6,
         );
@@ -297,7 +295,8 @@ fn only_the_set_info_attribute_declares_a_version() {
 #[test]
 fn a_version_that_is_not_supported_is_rejected() {
     // the value must be a decimal that names a version the posture allows;
-    // the error is at the value, or at what stands in its place
+    // the error is at the value, or at what stands in its place, and is
+    // raised once the command is complete
     for (value, end) in [
         // a version that is not allowed by default
         ("2.0", 30),
@@ -312,7 +311,6 @@ fn a_version_that_is_not_supported_is_rejected() {
         ("\"2.6\"", 32),
         ("|2.6|", 32),
         ("v2.6", 31),
-        (":version", 35),
         ("(2.6)", 28),
         // no value at all
         ("", 28),
@@ -320,10 +318,31 @@ fn a_version_that_is_not_supported_is_rejected() {
         let input = format!("(set-info :smt-lib-version {value})");
         assert_syntax_error(
             read_default(&input),
-            SyntaxErrorKind::UnsupportedVersion,
+            SmtSyntaxErrorKind::UnsupportedVersion,
             27,
             end,
         );
+    }
+
+    // a command that is malformed is rejected for that first, like any other
+    // command: the version is only looked at when the command is complete
+    for (input, kind, start, end) in [
+        // a keyword cannot be the value of an attribute
+        (
+            "(set-info :smt-lib-version :version)",
+            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose]),
+            27,
+            35,
+        ),
+        // a second value after one that names no version
+        (
+            "(set-info :smt-lib-version 9.9 x)",
+            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose]),
+            31,
+            32,
+        ),
+    ] {
+        assert_syntax_error(read_default(input), kind, start, end);
     }
 
     // 2.0 has to be allowed explicitly
@@ -340,7 +359,7 @@ fn a_version_that_is_not_supported_is_rejected() {
             let input = format!("(set-info :smt-lib-version {declared})");
             let result = read(&input, SmtVersion::V2_7, without.clone());
             if declared == spelling {
-                assert_syntax_error(result, SyntaxErrorKind::UnsupportedVersion, 27, 30);
+                assert_syntax_error(result, SmtSyntaxErrorKind::UnsupportedVersion, 27, 30);
             } else {
                 assert_eq!(result, Ok(()), "{declared} without {excluded:?}");
             }
@@ -350,14 +369,14 @@ fn a_version_that_is_not_supported_is_rejected() {
         builder.clear_allowed();
     });
     let result = read("(set-info :smt-lib-version 2.7)", SmtVersion::V2_7, none);
-    assert_syntax_error(result, SyntaxErrorKind::UnsupportedVersion, 27, 30);
+    assert_syntax_error(result, SmtSyntaxErrorKind::UnsupportedVersion, 27, 30);
 }
 
 #[test]
 fn a_version_value_is_followed_by_the_closing_parenthesis() {
     let result = read_default("(set-info :smt-lib-version 2.6 2.6)");
     let (kind, start, end) = result.expect_err("a second value is no attribute");
-    assert!(kind.starts_with("Parser(ExpectedToken("), "{kind}");
+    assert!(kind.starts_with("Syntax(ExpectedToken("), "{kind}");
     assert_eq!((start, end), (31, 34));
 }
 
@@ -370,7 +389,7 @@ fn the_number_of_declarations_is_limited() {
     for input in [two, same] {
         assert_syntax_error(
             read_default(input),
-            SyntaxErrorKind::TooManyVersionDeclarations(1),
+            SmtSyntaxErrorKind::TooManyVersionDeclarations(1),
             59,
             62,
         );
@@ -387,7 +406,7 @@ fn the_number_of_declarations_is_limited() {
     );
     assert_syntax_error(
         result,
-        SyntaxErrorKind::TooManyVersionDeclarations(0),
+        SmtSyntaxErrorKind::TooManyVersionDeclarations(0),
         27,
         30,
     );
@@ -404,7 +423,7 @@ fn the_number_of_declarations_is_limited() {
     assert_eq!(read(two, SmtVersion::V2_7, up_to_two.clone()), Ok(()));
     assert_syntax_error(
         read(&three, SmtVersion::V2_7, up_to_two),
-        SyntaxErrorKind::TooManyVersionDeclarations(2),
+        SmtSyntaxErrorKind::TooManyVersionDeclarations(2),
         91,
         94,
     );
@@ -414,7 +433,7 @@ fn the_number_of_declarations_is_limited() {
     let input = format!("{three}(declare-const lambda Bool)");
     assert_syntax_error(
         read(&input, SmtVersion::V2_7, unlimited.clone()),
-        SyntaxErrorKind::ExpectedSymbol,
+        SmtSyntaxErrorKind::ExpectedSymbol,
         110,
         116,
     );
@@ -423,7 +442,7 @@ fn the_number_of_declarations_is_limited() {
 
     // a rejected version is reported before the limit
     let result = read_default("(set-info :smt-lib-version 2.6)(set-info :smt-lib-version 2.0)");
-    assert_syntax_error(result, SyntaxErrorKind::UnsupportedVersion, 58, 61);
+    assert_syntax_error(result, SmtSyntaxErrorKind::UnsupportedVersion, 58, 61);
 }
 
 #[test]
@@ -431,7 +450,7 @@ fn the_version_and_the_declaration_count_reset_with_the_input() {
     let declared = b"(set-info :smt-lib-version 2.6)(declare-const lambda Bool)";
     let undeclared = b"(declare-const lambda Bool)";
     for ending in [&b""[..], b"(exit)"] {
-        let mut handler = CheckStandardSyntax;
+        let mut handler = SmtSyntaxChecker;
         let mut reader =
             SmtReader::script(&mut handler, SmtVersion::V2_7, SmtVersionPosture::default());
         // every input may declare its version once: the count starts again
@@ -446,14 +465,19 @@ fn the_version_and_the_declaration_count_reset_with_the_input() {
                 reader.read_slice(ending)
             };
             assert!(matches!(finished, Ok(ControlFlow::Break(_))));
+            if !ending.is_empty() {
+                // the exit command finished the reader before the end of the
+                // input, which is still to come
+                assert!(matches!(reader.read_eof(), Ok(ControlFlow::Continue(()))));
+            }
         }
         // and the declared version is gone: the next input starts in the initial one
         let err = reader
             .read_slice(undeclared)
             .expect_err("lambda is reserved in the initial version");
         assert!(matches!(
-            err.kind(),
-            SmtReadErrorKind::Parser(SyntaxErrorKind::ExpectedSymbol)
+            err.cause(),
+            SmtReadErrorCause::Syntax(SmtSyntaxErrorKind::ExpectedSymbol)
         ));
     }
 }
@@ -462,14 +486,18 @@ fn the_version_and_the_declaration_count_reset_with_the_input() {
 fn a_command_parser_reports_the_declaration_without_applying_it() {
     // switching is the script parser's job: the one-command parser has nothing
     // to switch, so it finishes with the declared version and its span, applies
-    // no posture, and the reader is back in its initial version for the next command
-    let mut handler = CheckStandardSyntax;
-    let mut reader = SmtReader::with_parser(&mut handler, CommandParser::new(), SmtVersion::V2_7);
-    let mut stop = |input: &[u8]| -> Result<CommandParserStop, ReadError> {
-        match reader.read_slice(input)? {
-            ControlFlow::Break(located) => Ok(*located.value()),
+    // no posture, and the reader is back in its initial version for the next input
+    let mut handler = SmtSyntaxChecker;
+    let mut reader =
+        SmtReader::with_parser(&mut handler, SmtCommandParser::new(), SmtVersion::V2_7);
+    let mut stop = |input: &[u8]| -> Result<SmtCommandOutcome, ReadError> {
+        let outcome = match reader.read_slice(input)? {
+            ControlFlow::Break(located) => *located.value(),
             ControlFlow::Continue(()) => panic!("the command must finish the reader"),
-        }
+        };
+        // every command is an input of its own, which ends here
+        assert!(matches!(reader.read_eof(), Ok(ControlFlow::Continue(()))));
+        Ok(outcome)
     };
 
     for (version, spelling) in VERSIONS {
@@ -477,7 +505,7 @@ fn a_command_parser_reports_the_declaration_without_applying_it() {
         for _ in 0..2 {
             let input = format!("(set-info :smt-lib-version {spelling})");
             match stop(input.as_bytes()).expect("a declaration of a known version") {
-                CommandParserStop::SetVersion(declared, span) => {
+                SmtCommandOutcome::SetVersion(declared, span) => {
                     assert_eq!(declared, version);
                     assert_eq!((span.start().offset(), span.end().offset()), (27, 30));
                 }
@@ -487,7 +515,7 @@ fn a_command_parser_reports_the_declaration_without_applying_it() {
     }
     assert_eq!(
         stop(b"(set-info :status sat)").expect("another attribute"),
-        CommandParserStop::Command
+        SmtCommandOutcome::Command
     );
     // lambda is still reserved after the declarations of 2.5 and 2.6
     assert!(stop(b"(set-info :smt-lib-version 2.6)").is_ok());
@@ -556,7 +584,7 @@ fn assumptions_are_literals_before_2_7() {
             if version < SmtVersion::V2_7 {
                 assert_syntax_error(
                     result,
-                    SyntaxErrorKind::ExpectedPropositionalLiteral,
+                    SmtSyntaxErrorKind::ExpectedPropositionalLiteral,
                     start + at,
                     start + at + len,
                 );
@@ -583,7 +611,7 @@ fn assumptions_are_literals_before_2_7() {
     for (_, version) in versions() {
         let input = format!("(set-info :smt-lib-version {version})(check-sat-assuming p)");
         let (kind, start, end) = read_default(&input).expect_err("the list is missing");
-        assert!(kind.starts_with("Parser(ExpectedToken("), "{kind}");
+        assert!(kind.starts_with("Syntax(ExpectedToken("), "{kind}");
         assert_eq!((start, end), (51, 52));
     }
 }
@@ -620,7 +648,7 @@ fn a_reserved_word_is_an_s_expression_since_2_6() {
                 let reserved = version >= introduced_in(word);
                 let expected = if reserved && version < SmtVersion::V2_6 {
                     Err((
-                        "Parser(ExpectedSExpr)".to_string(),
+                        "Syntax(ExpectedSExpr)".to_string(),
                         at,
                         at + word.len() as u64,
                     ))
@@ -648,7 +676,7 @@ fn a_reserved_word_is_an_s_expression_since_2_6() {
     // the same holds wherever the input is cut
     assert_syntax_error(
         read_default("(set-info :smt-lib-version 2.5)(set-info :a (x (let) y))"),
-        SyntaxErrorKind::ExpectedSExpr,
+        SmtSyntaxErrorKind::ExpectedSExpr,
         48,
         51,
     );
@@ -662,7 +690,7 @@ fn a_reserved_word_is_an_s_expression_since_2_6() {
         let input = format!("(set-info :smt-lib-version {spelling})(set-info :a let)");
         assert_syntax_error(
             read_any_version(&input),
-            SyntaxErrorKind::ExpectedAttribute,
+            SmtSyntaxErrorKind::ExpectedAttribute,
             44,
             47,
         );
@@ -673,14 +701,14 @@ fn a_reserved_word_is_an_s_expression_since_2_6() {
 fn a_reserved_word_alone_is_an_s_expression_since_2_6() {
     // the S-expression parser on its own takes the reserved word as a whole S-expression
     for (version, _) in VERSIONS {
-        let mut handler = CheckStandardSyntax;
-        let mut reader = SmtReader::with_parser(&mut handler, SExprParser::new(), version);
+        let mut handler = SmtSyntaxChecker;
+        let mut reader = SmtReader::with_parser(&mut handler, SmtSExprParser::new(), version);
         let result = reader.read_slice(b"let ");
         if version < SmtVersion::V2_6 {
             let err = result.expect_err("a reserved word is no S-expression before 2.6");
             assert!(matches!(
-                err.kind(),
-                SmtReadErrorKind::Parser(SyntaxErrorKind::ExpectedSExpr)
+                err.cause(),
+                SmtReadErrorCause::Syntax(SmtSyntaxErrorKind::ExpectedSExpr)
             ));
             assert_eq!(
                 (err.span().start().offset(), err.span().end().offset()),
@@ -721,16 +749,19 @@ fn the_underscore_is_a_match_pattern_since_2_7() {
     for (body, kind_2_6) in [
         (
             "(match x ((@_ true)))",
-            SyntaxErrorKind::ExpectedSymbolOrParenOpen,
+            SmtSyntaxErrorKind::ExpectedSymbolOrParenOpen,
         ),
-        ("(match x (((c @_) true)))", SyntaxErrorKind::ExpectedSymbol),
+        (
+            "(match x (((c @_) true)))",
+            SmtSyntaxErrorKind::ExpectedSymbol,
+        ),
         (
             "(match x (((c y @_ z) true) (d false)))",
-            SyntaxErrorKind::ExpectedSymbol,
+            SmtSyntaxErrorKind::ExpectedSymbol,
         ),
         (
             "(match x (((c y) true) (@_ false)))",
-            SyntaxErrorKind::ExpectedSymbolOrParenOpen,
+            SmtSyntaxErrorKind::ExpectedSymbolOrParenOpen,
         ),
     ] {
         let (result, at) = check("2.6", body);
@@ -741,20 +772,20 @@ fn the_underscore_is_a_match_pattern_since_2_7() {
     // the underscore is never the constructor of a pattern
     for spelling in ["2.6", "2.7"] {
         let (result, at) = check(spelling, "(match x (((@_ y) true)))");
-        assert_syntax_error(result, SyntaxErrorKind::ExpectedSymbol, at, at + 1);
+        assert_syntax_error(result, SmtSyntaxErrorKind::ExpectedSymbol, at, at + 1);
     }
 
     // what is no pattern at all is reported by what the version expects there
     for (body, kind_2_6, kind_2_7) in [
         (
             "(match x ((@1 true)))",
-            SyntaxErrorKind::ExpectedSymbolOrParenOpen,
-            SyntaxErrorKind::ExpectedSymbolUnderscoreOrParenOpen,
+            SmtSyntaxErrorKind::ExpectedSymbolOrParenOpen,
+            SmtSyntaxErrorKind::ExpectedSymbolUnderscoreOrParenOpen,
         ),
         (
             "(match x (((c @1) true)))",
-            SyntaxErrorKind::ExpectedSymbol,
-            SyntaxErrorKind::ExpectedSymbolOrUnderscore,
+            SmtSyntaxErrorKind::ExpectedSymbol,
+            SmtSyntaxErrorKind::ExpectedSymbolOrUnderscore,
         ),
     ] {
         let (result, at) = check("2.6", body);
@@ -795,7 +826,7 @@ fn an_index_is_a_numeral_before_2_5() {
                 let (kind, error_start, _) = result.expect_err("a symbol is no index in 2.0");
                 assert_eq!(
                     (kind.as_str(), error_start),
-                    ("Parser(ExpectedIndexOrCloseParen)", start),
+                    ("Syntax(ExpectedIndexOrCloseParen)", start),
                     "{body} in {spelling}"
                 );
             }
@@ -838,7 +869,7 @@ fn the_string_escapes_follow_the_declared_version() {
             Err((kind, _, _)) => {
                 assert!(!ok, "{input} from {initial:?}: {kind}");
                 assert!(
-                    kind.starts_with("Lexer("),
+                    kind.starts_with("Lexical("),
                     "{input} from {initial:?}: {kind}"
                 );
             }
@@ -874,7 +905,7 @@ fn the_string_escapes_follow_the_declared_version() {
 fn the_string_escapes_reset_with_the_input() {
     let declared = b"(set-info :smt-lib-version 2.0)(set-info :a \"x\\\"y\")";
     let legacy = b"(set-info :a \"x\\\"y\")";
-    let mut handler = CheckStandardSyntax;
+    let mut handler = SmtSyntaxChecker;
     let mut reader = SmtReader::script(&mut handler, SmtVersion::V2_7, every_version_allowed());
     // every input can switch to the 2.0 strings ...
     for _ in 0..2 {
@@ -888,5 +919,28 @@ fn the_string_escapes_reset_with_the_input() {
     let err = reader
         .read_slice(legacy)
         .expect_err("a backslash does not escape in the initial version");
-    assert!(matches!(err.kind(), SmtReadErrorKind::Lexer(_)));
+    assert!(matches!(err.cause(), SmtReadErrorCause::Lexical(_)));
+}
+
+#[test]
+fn the_reader_tells_the_version_in_force() {
+    let mut handler = SmtSyntaxChecker;
+    let mut reader =
+        SmtReader::script(&mut handler, SmtVersion::V2_7, SmtVersionPosture::default());
+    assert_eq!(reader.version(), SmtVersion::V2_7);
+    // a declared version is in force once its command has been read
+    assert!(matches!(
+        reader.read_slice(b"(set-info :smt-lib-version 2.6)"),
+        Ok(ControlFlow::Continue(()))
+    ));
+    assert_eq!(reader.version(), SmtVersion::V2_6);
+    // also after the exit command, until the input ends
+    assert!(matches!(
+        reader.read_slice(b"(exit) (assert"),
+        Ok(ControlFlow::Break(_))
+    ));
+    assert_eq!(reader.version(), SmtVersion::V2_6);
+    // the end of the input brings back the initial version
+    assert!(matches!(reader.read_eof(), Ok(ControlFlow::Continue(()))));
+    assert_eq!(reader.version(), SmtVersion::V2_7);
 }

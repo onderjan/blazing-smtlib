@@ -2,83 +2,85 @@
 
 mod reserved_words;
 
-use blazing_smtlib::String8;
-use blazing_smtlib::token::{CommandNameReserved, GeneralReserved, Reserved, SmtVersion};
+use blazing_smtlib::SmtBytes;
+use blazing_smtlib::token::{SmtCommandNameReserved, SmtGeneralReserved, SmtReserved, SmtVersion};
 
-/// Returns every `GeneralReserved` variant, in declaration order.
+/// Returns every `SmtGeneralReserved` variant, in declaration order.
 ///
 /// Built from an exhaustive successor match, so adding a variant
 /// fails compilation here instead of leaving the list stale.
-fn all_general() -> Vec<GeneralReserved> {
-    let mut all = vec![GeneralReserved::Binary];
+fn all_general() -> Vec<SmtGeneralReserved> {
+    let mut all = vec![SmtGeneralReserved::Binary];
     loop {
         let next = match all.last().expect("the list starts non-empty") {
-            GeneralReserved::Binary => GeneralReserved::Decimal,
-            GeneralReserved::Decimal => GeneralReserved::Hexadecimal,
-            GeneralReserved::Hexadecimal => GeneralReserved::Numeral,
-            GeneralReserved::Numeral => GeneralReserved::String,
-            GeneralReserved::String => GeneralReserved::Underscore,
-            GeneralReserved::Underscore => GeneralReserved::ExclamationMark,
-            GeneralReserved::ExclamationMark => GeneralReserved::As,
-            GeneralReserved::As => GeneralReserved::Lambda,
-            GeneralReserved::Lambda => GeneralReserved::Let,
-            GeneralReserved::Let => GeneralReserved::Exists,
-            GeneralReserved::Exists => GeneralReserved::Forall,
-            GeneralReserved::Forall => GeneralReserved::Match,
-            GeneralReserved::Match => GeneralReserved::Par,
-            GeneralReserved::Par => return all,
+            SmtGeneralReserved::Binary => SmtGeneralReserved::Decimal,
+            SmtGeneralReserved::Decimal => SmtGeneralReserved::Hexadecimal,
+            SmtGeneralReserved::Hexadecimal => SmtGeneralReserved::Numeral,
+            SmtGeneralReserved::Numeral => SmtGeneralReserved::String,
+            SmtGeneralReserved::String => SmtGeneralReserved::Underscore,
+            SmtGeneralReserved::Underscore => SmtGeneralReserved::ExclamationMark,
+            SmtGeneralReserved::ExclamationMark => SmtGeneralReserved::As,
+            SmtGeneralReserved::As => SmtGeneralReserved::Lambda,
+            SmtGeneralReserved::Lambda => SmtGeneralReserved::Let,
+            SmtGeneralReserved::Let => SmtGeneralReserved::Exists,
+            SmtGeneralReserved::Exists => SmtGeneralReserved::Forall,
+            SmtGeneralReserved::Forall => SmtGeneralReserved::Match,
+            SmtGeneralReserved::Match => SmtGeneralReserved::Par,
+            SmtGeneralReserved::Par => return all,
         };
         all.push(next);
     }
 }
 
-/// Returns every `CommandNameReserved` variant, in declaration order,
+/// Returns every `SmtCommandNameReserved` variant, in declaration order,
 /// built like [`all_general`].
-fn all_command_names() -> Vec<CommandNameReserved> {
-    let mut all = vec![CommandNameReserved::Assert];
+fn all_command_names() -> Vec<SmtCommandNameReserved> {
+    let mut all = vec![SmtCommandNameReserved::Assert];
     loop {
         let next = match all.last().expect("the list starts non-empty") {
-            CommandNameReserved::Assert => CommandNameReserved::CheckSat,
-            CommandNameReserved::CheckSat => CommandNameReserved::CheckSatAssuming,
-            CommandNameReserved::CheckSatAssuming => CommandNameReserved::DeclareConst,
-            CommandNameReserved::DeclareConst => CommandNameReserved::DeclareDatatype,
-            CommandNameReserved::DeclareDatatype => CommandNameReserved::DeclareDatatypes,
-            CommandNameReserved::DeclareDatatypes => CommandNameReserved::DeclareFun,
-            CommandNameReserved::DeclareFun => CommandNameReserved::DeclareSort,
-            CommandNameReserved::DeclareSort => CommandNameReserved::DeclareSortParameter,
-            CommandNameReserved::DeclareSortParameter => CommandNameReserved::DefineConst,
-            CommandNameReserved::DefineConst => CommandNameReserved::DefineFun,
-            CommandNameReserved::DefineFun => CommandNameReserved::DefineFunRec,
-            CommandNameReserved::DefineFunRec => CommandNameReserved::DefineFunsRec,
-            CommandNameReserved::DefineFunsRec => CommandNameReserved::DefineSort,
-            CommandNameReserved::DefineSort => CommandNameReserved::Echo,
-            CommandNameReserved::Echo => CommandNameReserved::Exit,
-            CommandNameReserved::Exit => CommandNameReserved::GetAssertions,
-            CommandNameReserved::GetAssertions => CommandNameReserved::GetAssignment,
-            CommandNameReserved::GetAssignment => CommandNameReserved::GetInfo,
-            CommandNameReserved::GetInfo => CommandNameReserved::GetModel,
-            CommandNameReserved::GetModel => CommandNameReserved::GetOption,
-            CommandNameReserved::GetOption => CommandNameReserved::GetProof,
-            CommandNameReserved::GetProof => CommandNameReserved::GetUnsatAssumptions,
-            CommandNameReserved::GetUnsatAssumptions => CommandNameReserved::GetUnsatCore,
-            CommandNameReserved::GetUnsatCore => CommandNameReserved::GetValue,
-            CommandNameReserved::GetValue => CommandNameReserved::Pop,
-            CommandNameReserved::Pop => CommandNameReserved::Push,
-            CommandNameReserved::Push => CommandNameReserved::Reset,
-            CommandNameReserved::Reset => CommandNameReserved::ResetAssertions,
-            CommandNameReserved::ResetAssertions => CommandNameReserved::SetInfo,
-            CommandNameReserved::SetInfo => CommandNameReserved::SetLogic,
-            CommandNameReserved::SetLogic => CommandNameReserved::SetOption,
-            CommandNameReserved::SetOption => return all,
+            SmtCommandNameReserved::Assert => SmtCommandNameReserved::CheckSat,
+            SmtCommandNameReserved::CheckSat => SmtCommandNameReserved::CheckSatAssuming,
+            SmtCommandNameReserved::CheckSatAssuming => SmtCommandNameReserved::DeclareConst,
+            SmtCommandNameReserved::DeclareConst => SmtCommandNameReserved::DeclareDatatype,
+            SmtCommandNameReserved::DeclareDatatype => SmtCommandNameReserved::DeclareDatatypes,
+            SmtCommandNameReserved::DeclareDatatypes => SmtCommandNameReserved::DeclareFun,
+            SmtCommandNameReserved::DeclareFun => SmtCommandNameReserved::DeclareSort,
+            SmtCommandNameReserved::DeclareSort => SmtCommandNameReserved::DeclareSortParameter,
+            SmtCommandNameReserved::DeclareSortParameter => SmtCommandNameReserved::DefineConst,
+            SmtCommandNameReserved::DefineConst => SmtCommandNameReserved::DefineFun,
+            SmtCommandNameReserved::DefineFun => SmtCommandNameReserved::DefineFunRec,
+            SmtCommandNameReserved::DefineFunRec => SmtCommandNameReserved::DefineFunsRec,
+            SmtCommandNameReserved::DefineFunsRec => SmtCommandNameReserved::DefineSort,
+            SmtCommandNameReserved::DefineSort => SmtCommandNameReserved::Echo,
+            SmtCommandNameReserved::Echo => SmtCommandNameReserved::Exit,
+            SmtCommandNameReserved::Exit => SmtCommandNameReserved::GetAssertions,
+            SmtCommandNameReserved::GetAssertions => SmtCommandNameReserved::GetAssignment,
+            SmtCommandNameReserved::GetAssignment => SmtCommandNameReserved::GetInfo,
+            SmtCommandNameReserved::GetInfo => SmtCommandNameReserved::GetModel,
+            SmtCommandNameReserved::GetModel => SmtCommandNameReserved::GetOption,
+            SmtCommandNameReserved::GetOption => SmtCommandNameReserved::GetProof,
+            SmtCommandNameReserved::GetProof => SmtCommandNameReserved::GetUnsatAssumptions,
+            SmtCommandNameReserved::GetUnsatAssumptions => SmtCommandNameReserved::GetUnsatCore,
+            SmtCommandNameReserved::GetUnsatCore => SmtCommandNameReserved::GetValue,
+            SmtCommandNameReserved::GetValue => SmtCommandNameReserved::Pop,
+            SmtCommandNameReserved::Pop => SmtCommandNameReserved::Push,
+            SmtCommandNameReserved::Push => SmtCommandNameReserved::Reset,
+            SmtCommandNameReserved::Reset => SmtCommandNameReserved::ResetAssertions,
+            SmtCommandNameReserved::ResetAssertions => SmtCommandNameReserved::SetInfo,
+            SmtCommandNameReserved::SetInfo => SmtCommandNameReserved::SetLogic,
+            SmtCommandNameReserved::SetLogic => SmtCommandNameReserved::SetOption,
+            SmtCommandNameReserved::SetOption => return all,
         };
         all.push(next);
     }
 }
 
 /// Returns every `Reserved` word: the general ones, then the command names.
-fn all_reserved() -> Vec<Reserved> {
-    let general = all_general().into_iter().map(Reserved::General);
-    let command_names = all_command_names().into_iter().map(Reserved::CommandName);
+fn all_reserved() -> Vec<SmtReserved> {
+    let general = all_general().into_iter().map(SmtReserved::General);
+    let command_names = all_command_names()
+        .into_iter()
+        .map(SmtReserved::CommandName);
     general.chain(command_names).collect()
 }
 
@@ -89,9 +91,9 @@ fn all_reserved() -> Vec<Reserved> {
 #[test]
 fn reserved_as_str_round_trips_through_from_symbol_opt() {
     for reserved in all_reserved() {
-        let symbol = String8::from_vec(reserved.as_str().as_bytes().to_vec());
+        let symbol = SmtBytes::from_vec(reserved.as_str().as_bytes().to_vec());
         assert_eq!(
-            Reserved::from_symbol_opt(&symbol, SmtVersion::V2_7),
+            SmtReserved::from_symbol_opt(&symbol, SmtVersion::V2_7),
             Some(reserved),
             "as_str/from_symbol_opt disagree for {reserved:?}"
         );
@@ -141,9 +143,9 @@ fn non_reserved_symbols_are_rejected() {
         b"x",
     ];
     for text in near_misses {
-        let symbol = String8::from_vec(text.to_vec());
+        let symbol = SmtBytes::from_vec(text.to_vec());
         assert_eq!(
-            Reserved::from_symbol_opt(&symbol, SmtVersion::V2_7),
+            SmtReserved::from_symbol_opt(&symbol, SmtVersion::V2_7),
             None,
             "{:?} should not be a reserved word",
             text.escape_ascii().to_string()
@@ -156,12 +158,12 @@ fn non_reserved_symbols_are_rejected() {
 #[test]
 fn every_reserved_spelling_is_recognized() {
     for word in reserved_words::reserved_words() {
-        let reserved = Reserved::from_bytes_opt(word.as_bytes(), SmtVersion::V2_7)
+        let reserved = SmtReserved::from_bytes_opt(word.as_bytes(), SmtVersion::V2_7)
             .unwrap_or_else(|| panic!("{word:?} should be a reserved word"));
         assert_eq!(reserved.as_str(), word, "as_str of {reserved:?}");
-        let symbol = String8::from_vec(word.as_bytes().to_vec());
+        let symbol = SmtBytes::from_vec(word.as_bytes().to_vec());
         assert_eq!(
-            Reserved::from_symbol_opt(&symbol, SmtVersion::V2_7),
+            SmtReserved::from_symbol_opt(&symbol, SmtVersion::V2_7),
             Some(reserved),
             "from_symbol_opt and from_bytes_opt disagree for {word:?}"
         );
@@ -223,7 +225,7 @@ fn non_reserved_command_like_symbols_are_rejected() {
     ];
     for text in near_misses {
         assert_eq!(
-            Reserved::from_bytes_opt(text, SmtVersion::V2_7),
+            SmtReserved::from_bytes_opt(text, SmtVersion::V2_7),
             None,
             "{:?} should not be a reserved word",
             text.escape_ascii().to_string()
@@ -236,19 +238,19 @@ fn non_reserved_command_like_symbols_are_rejected() {
 #[test]
 fn reserved_words_are_general_or_command_names() {
     for general in all_general() {
-        let reserved = Reserved::General(general);
+        let reserved = SmtReserved::General(general);
         assert!(!reserved.is_command_name(), "{reserved:?}");
         assert_eq!(
-            CommandNameReserved::from_bytes_opt(general.as_str().as_bytes(), SmtVersion::V2_7),
+            SmtCommandNameReserved::from_bytes_opt(general.as_str().as_bytes(), SmtVersion::V2_7),
             None
         );
         assert_eq!(reserved.as_str(), general.as_str());
     }
     for command_name in all_command_names() {
-        let reserved = Reserved::CommandName(command_name);
+        let reserved = SmtReserved::CommandName(command_name);
         assert!(reserved.is_command_name(), "{reserved:?}");
         assert_eq!(
-            GeneralReserved::from_bytes_opt(command_name.as_str().as_bytes(), SmtVersion::V2_7),
+            SmtGeneralReserved::from_bytes_opt(command_name.as_str().as_bytes(), SmtVersion::V2_7),
             None
         );
         assert_eq!(reserved.as_str(), command_name.as_str());

@@ -5,13 +5,12 @@ use std::io::{BufRead, Read};
 use std::ops::ControlFlow;
 
 use blazing_smtlib::{
-    CheckStandardSyntax, NonstandardCommandError, SmtLocation,
-    read::{
-        SmtReadError, SmtReadErrorKind, SmtReader,
-        lexer::LexerErrorKind,
-        parser::{CommandParser, CommandParserStop, ScriptParserStop, SyntaxErrorKind, TermParser},
-        read_smt, read_smt_file,
+    NonstandardCommandError, SmtLocation, SmtSyntaxChecker,
+    lexer::SmtLexicalErrorKind,
+    parser::{
+        SmtCommandOutcome, SmtCommandParser, SmtScriptEnd, SmtSyntaxErrorKind, SmtTermParser,
     },
+    reader::{SmtReadError, SmtReadErrorCause, SmtReader, read_smt, read_smt_file},
     token::{SmtVersion, SmtVersionPosture},
 };
 
@@ -23,7 +22,7 @@ fn loc(location: SmtLocation) -> Loc {
 }
 
 fn read(input: &[u8]) -> Result<(), SmtReadError<NonstandardCommandError>> {
-    read_smt(&mut CheckStandardSyntax, input)
+    read_smt(&mut SmtSyntaxChecker, input)
 }
 
 #[track_caller]
@@ -48,8 +47,8 @@ fn lexer_error_kind_and_span_are_passed_through() {
     // the string literal starts at offset 15, zero-based line 2, column 2, and is unclosed at EOF
     let err = read(b"(check-sat)\n\n  \"abc").expect_err("expected a lexer error, got Ok");
     assert!(matches!(
-        err.kind(),
-        SmtReadErrorKind::Lexer(LexerErrorKind::UnclosedStringLiteral)
+        err.cause(),
+        SmtReadErrorCause::Lexical(SmtLexicalErrorKind::UnclosedStringLiteral)
     ));
     assert_span(&err, (15, 2, 2), (19, 2, 6));
 }
@@ -59,8 +58,8 @@ fn parser_error_span_is_resolved_to_lines() {
     // `(assert )` is missing a term; the offending token is the `)` on line 2
     let err = read(b"(check-sat)\n(assert )").expect_err("expected a parser error, got Ok");
     assert!(matches!(
-        err.kind(),
-        SmtReadErrorKind::Parser(SyntaxErrorKind::ExpectedTerm)
+        err.cause(),
+        SmtReadErrorCause::Syntax(SmtSyntaxErrorKind::ExpectedTerm)
     ));
     assert_span(&err, (20, 1, 8), (21, 1, 9));
 }
@@ -72,8 +71,8 @@ fn parser_error_deep_in_the_input_is_resolved_to_lines() {
     let input = b"(set-logic QF_UF)\n(declare-const x Bool)\n(assert (f ))\n";
     let err = read(input).expect_err("expected a parser error, got Ok");
     assert!(matches!(
-        err.kind(),
-        SmtReadErrorKind::Parser(SyntaxErrorKind::EmptyTermApplication)
+        err.cause(),
+        SmtReadErrorCause::Syntax(SmtSyntaxErrorKind::EmptyTermApplication)
     ));
     assert_span(&err, (52, 2, 11), (53, 2, 12));
 }
@@ -83,7 +82,7 @@ fn handler_error_span_is_resolved_to_lines() {
     // the handler rejects the command by name, and the reported span is that
     // of the name symbol on the second line rather than of the whole command
     let err = read(b"(check-sat)\n(frobnicate 1)").expect_err("expected a handler error");
-    assert!(matches!(err.kind(), SmtReadErrorKind::Handler(_)));
+    assert!(matches!(err.cause(), SmtReadErrorCause::Handler(_)));
     assert_span(&err, (13, 1, 1), (23, 1, 11));
 }
 
@@ -92,7 +91,7 @@ fn span_after_a_token_containing_a_line_break() {
     // the quoted symbol carries the line break, so the offending `x` after it
     // must be reported on the second line
     let err = read(b"(assert |a\nb| x)").expect_err("expected a parser error, got Ok");
-    assert!(matches!(err.kind(), SmtReadErrorKind::Parser(_)));
+    assert!(matches!(err.cause(), SmtReadErrorCause::Syntax(_)));
     assert_span(&err, (14, 1, 3), (15, 1, 4));
 }
 
@@ -100,7 +99,7 @@ fn span_after_a_token_containing_a_line_break() {
 fn parser_error_at_eof_is_empty_span() {
     // unclosed command: the error is on the zero-width EOF token after a newline
     let err = read(b"(check-sat\n").expect_err("expected a parser error, got Ok");
-    assert!(matches!(err.kind(), SmtReadErrorKind::Parser(_)));
+    assert!(matches!(err.cause(), SmtReadErrorCause::Syntax(_)));
     assert_span(&err, (11, 1, 0), (11, 1, 0));
 }
 
@@ -136,9 +135,8 @@ fn io_error_has_empty_span_at_current_location() {
     let reader = FailingReader {
         data: b"(check-sat)\n(",
     };
-    let err =
-        read_smt(&mut CheckStandardSyntax, reader).expect_err("expected an I/O error, got Ok");
-    assert!(matches!(err.kind(), SmtReadErrorKind::Io(_)));
+    let err = read_smt(&mut SmtSyntaxChecker, reader).expect_err("expected an I/O error, got Ok");
+    assert!(matches!(err.cause(), SmtReadErrorCause::Io(_)));
     // 13 bytes were consumed, so the location is zero-based line 1, column 1
     assert_span(&err, (13, 1, 1), (13, 1, 1));
 }
@@ -147,8 +145,8 @@ fn io_error_has_empty_span_at_current_location() {
 fn file_open_error_has_zero_span() {
     let path = std::path::Path::new("/nonexistent/smt-parser-test/does-not-exist.smt2");
     let err =
-        read_smt_file(&mut CheckStandardSyntax, path).expect_err("expected an I/O error, got Ok");
-    assert!(matches!(err.kind(), SmtReadErrorKind::Io(_)));
+        read_smt_file(&mut SmtSyntaxChecker, path).expect_err("expected an I/O error, got Ok");
+    assert!(matches!(err.cause(), SmtReadErrorCause::Io(_)));
     assert_span(&err, (0, 0, 0), (0, 0, 0));
 }
 
@@ -180,7 +178,7 @@ fn outcome_text(result: Result<(), SmtReadError<NonstandardCommandError>>) -> St
         Ok(()) => "ok".to_string(),
         Err(err) => format!(
             "{:?} at {:?}..{:?}",
-            err.kind(),
+            err.cause(),
             loc(err.span().start()),
             loc(err.span().end())
         ),
@@ -210,7 +208,7 @@ fn every_buffer_capacity_reads_the_same() {
         let expected = outcome_text(read(input));
         for capacity in (1..=70).chain([4096]) {
             let reader = std::io::BufReader::with_capacity(capacity, std::io::Cursor::new(*input));
-            let actual = outcome_text(read_smt(&mut CheckStandardSyntax, reader));
+            let actual = outcome_text(read_smt(&mut SmtSyntaxChecker, reader));
             assert_eq!(
                 actual,
                 expected,
@@ -235,7 +233,7 @@ fn every_refill_pattern_reads_the_same() {
                     index: 0,
                 },
             );
-            let actual = outcome_text(read_smt(&mut CheckStandardSyntax, reader));
+            let actual = outcome_text(read_smt(&mut SmtSyntaxChecker, reader));
             assert_eq!(
                 actual,
                 expected,
@@ -251,7 +249,7 @@ fn read_slice_reports_an_exit_command_and_read_eof_the_end_of_the_input() {
     // a piece that runs out before any exit command asks for more; a piece
     // with the exit command finishes the reader there, whatever follows in
     // the piece, with the location after the command
-    let mut handler = CheckStandardSyntax;
+    let mut handler = SmtSyntaxChecker;
     let mut reader =
         SmtReader::script(&mut handler, SmtVersion::V2_7, SmtVersionPosture::default());
     assert!(matches!(
@@ -263,12 +261,12 @@ fn read_slice_reports_an_exit_command_and_read_eof_the_end_of_the_input() {
         .expect("valid up to the exit command")
         .break_value()
         .expect("the exit command finishes the reader");
-    assert_eq!(*located.value(), ScriptParserStop::ExitCommand);
+    assert_eq!(*located.value(), SmtScriptEnd::Exit);
     assert_eq!(loc(located.location()), (18, 0, 18));
 
     // the end of the input between commands finishes the reader as well,
     // at the end of the input
-    let mut handler = CheckStandardSyntax;
+    let mut handler = SmtSyntaxChecker;
     let mut reader =
         SmtReader::script(&mut handler, SmtVersion::V2_7, SmtVersionPosture::default());
     assert!(matches!(
@@ -280,21 +278,29 @@ fn read_slice_reports_an_exit_command_and_read_eof_the_end_of_the_input() {
         .expect("valid up to the end of the input")
         .break_value()
         .expect("the end of the input finishes the reader");
-    assert_eq!(*located.value(), ScriptParserStop::EndOfFile);
+    assert_eq!(*located.value(), SmtScriptEnd::EndOfFile);
     assert_eq!(loc(located.location()), (12, 0, 12));
 }
 
 #[test]
 fn reading_after_a_finished_input_starts_a_new_one_from_the_origin() {
-    // whether the first input ended by the exit command or by the end of
-    // the input, the reader is back at its start: the next pieces are a new
-    // input whose locations begin at the origin, as an error span shows
-    type End = fn(&mut SmtReader<'_, CheckStandardSyntax>);
+    // whether the parser finished by the exit command or by the end of the
+    // input, the reader is back at its start once the input has ended: the
+    // next pieces are a new input whose locations begin at the origin, as an
+    // error span shows
+    type End = fn(&mut SmtReader<'_, SmtSyntaxChecker>);
     let by_exit: End = |reader| {
         assert!(matches!(
             reader.read_slice(b"(check-sat)\n(exit) x"),
             Ok(ControlFlow::Break(_))
         ));
+        // the rest of the input is disregarded, also what would be an error
+        assert!(matches!(
+            reader.read_slice(b"(assert )"),
+            Ok(ControlFlow::Continue(()))
+        ));
+        // until the end of the input, which hands nothing more to the parser
+        assert!(matches!(reader.read_eof(), Ok(ControlFlow::Continue(()))));
     };
     let by_eof: End = |reader| {
         assert!(matches!(
@@ -304,7 +310,7 @@ fn reading_after_a_finished_input_starts_a_new_one_from_the_origin() {
         assert!(matches!(reader.read_eof(), Ok(ControlFlow::Break(_))));
     };
     for end in [by_exit, by_eof] {
-        let mut handler = CheckStandardSyntax;
+        let mut handler = SmtSyntaxChecker;
         let mut reader =
             SmtReader::script(&mut handler, SmtVersion::V2_7, SmtVersionPosture::default());
         end(&mut reader);
@@ -316,8 +322,8 @@ fn reading_after_a_finished_input_starts_a_new_one_from_the_origin() {
             .read_slice(b"(assert )")
             .expect_err("a missing term is a parser error");
         assert!(matches!(
-            err.kind(),
-            SmtReadErrorKind::Parser(SyntaxErrorKind::ExpectedTerm)
+            err.cause(),
+            SmtReadErrorCause::Syntax(SmtSyntaxErrorKind::ExpectedTerm)
         ));
         assert_span(&err, (20, 1, 8), (21, 1, 9));
     }
@@ -332,12 +338,12 @@ fn read_all_tells_an_exit_command_from_the_end_of_the_input() {
     for capacity in (1..=24).chain([4096]) {
         let mut buf_reader =
             std::io::BufReader::with_capacity(capacity, std::io::Cursor::new(input));
-        let mut handler = CheckStandardSyntax;
+        let mut handler = SmtSyntaxChecker;
         let mut reader =
             SmtReader::script(&mut handler, SmtVersion::V2_7, SmtVersionPosture::default());
         assert_eq!(
             reader.read_all(&mut buf_reader).expect("valid input"),
-            Some(ScriptParserStop::ExitCommand),
+            Some(SmtScriptEnd::Exit),
             "capacity {capacity}"
         );
         let mut rest = Vec::new();
@@ -348,12 +354,12 @@ fn read_all_tells_an_exit_command_from_the_end_of_the_input() {
     }
 
     // without it, the end of the input ends the script
-    let mut handler = CheckStandardSyntax;
+    let mut handler = SmtSyntaxChecker;
     let mut reader =
         SmtReader::script(&mut handler, SmtVersion::V2_7, SmtVersionPosture::default());
     assert_eq!(
         reader.read_all(&b"(check-sat)\n"[..]).expect("valid input"),
-        Some(ScriptParserStop::EndOfFile)
+        Some(SmtScriptEnd::EndOfFile)
     );
 }
 
@@ -361,18 +367,18 @@ fn read_all_tells_an_exit_command_from_the_end_of_the_input() {
 fn one_reader_reads_several_inputs_in_turn_each_from_the_origin() {
     // after a whole input, however it ended, the reader serves the next one
     // with fresh locations, as an error span in the last input shows
-    let mut handler = CheckStandardSyntax;
+    let mut handler = SmtSyntaxChecker;
     let mut reader =
         SmtReader::script(&mut handler, SmtVersion::V2_7, SmtVersionPosture::default());
     assert_eq!(
         reader
             .read_all(&b"(set-logic QF_UF)\n(check-sat)\n(exit)\n"[..])
             .expect("valid input"),
-        Some(ScriptParserStop::ExitCommand)
+        Some(SmtScriptEnd::Exit)
     );
     assert_eq!(
         reader.read_all(&b"(check-sat)\n"[..]).expect("valid input"),
-        Some(ScriptParserStop::EndOfFile)
+        Some(SmtScriptEnd::EndOfFile)
     );
     let err = reader
         .read_all(&b"(check-sat)\n(assert )"[..])
@@ -385,8 +391,8 @@ fn a_reader_over_another_top_level_parser_finishes_where_that_parser_does() {
     // a term parser as the top-level parser: the reader finishes after one
     // term with that parser's result, whatever follows in the piece, and
     // reports the location after the term
-    let mut handler = CheckStandardSyntax;
-    let mut reader = SmtReader::with_parser(&mut handler, TermParser::new(), SmtVersion::V2_7);
+    let mut handler = SmtSyntaxChecker;
+    let mut reader = SmtReader::with_parser(&mut handler, SmtTermParser::new(), SmtVersion::V2_7);
     let located = reader
         .read_slice(b"(f a b) (check-sat)")
         .expect("valid up to the term")
@@ -395,13 +401,13 @@ fn a_reader_over_another_top_level_parser_finishes_where_that_parser_does() {
     assert_eq!(loc(located.location()), (7, 0, 7));
 
     // reading the whole input stops there as well, without an error for the rest
-    let mut handler = CheckStandardSyntax;
-    let mut reader = SmtReader::with_parser(&mut handler, TermParser::new(), SmtVersion::V2_7);
+    let mut handler = SmtSyntaxChecker;
+    let mut reader = SmtReader::with_parser(&mut handler, SmtTermParser::new(), SmtVersion::V2_7);
     assert!(matches!(reader.read_all(&b"(f a b) ) ("[..]), Ok(Some(()))));
 
     // a term cut off by the end of the input is that parser's error
-    let mut handler = CheckStandardSyntax;
-    let mut reader = SmtReader::with_parser(&mut handler, TermParser::new(), SmtVersion::V2_7);
+    let mut handler = SmtSyntaxChecker;
+    let mut reader = SmtReader::with_parser(&mut handler, SmtTermParser::new(), SmtVersion::V2_7);
     assert!(matches!(
         reader.read_slice(b"(f a "),
         Ok(ControlFlow::Continue(()))
@@ -411,11 +417,13 @@ fn a_reader_over_another_top_level_parser_finishes_where_that_parser_does() {
 
 #[test]
 fn a_reader_over_a_command_parser_reads_one_command_per_break() {
-    // every command finishes the reader with the location after it; the rest
-    // of the piece is a new input, fed again from that location, so each
-    // command's location counts from the end of the previous one
-    let mut handler = CheckStandardSyntax;
-    let mut reader = SmtReader::with_parser(&mut handler, CommandParser::new(), SmtVersion::V2_7);
+    // every command finishes the reader with the location after it, and the
+    // reader disregards what it is fed until the input ends; ending it there
+    // makes the rest of the piece a new input, fed from that location, so
+    // each command's location counts from the end of the previous one
+    let mut handler = SmtSyntaxChecker;
+    let mut reader =
+        SmtReader::with_parser(&mut handler, SmtCommandParser::new(), SmtVersion::V2_7);
     let mut rest: &[u8] = b"(set-logic QF_UF)\n(check-sat)\n(exit)\n";
     let mut stops = Vec::new();
     loop {
@@ -424,15 +432,16 @@ fn a_reader_over_a_command_parser_reads_one_command_per_break() {
             ControlFlow::Break(located) => {
                 stops.push((*located.value(), loc(located.location())));
                 rest = &rest[located.location().offset() as usize..];
+                assert!(matches!(reader.read_eof(), Ok(ControlFlow::Continue(()))));
             }
         }
     }
     assert_eq!(
         stops,
         [
-            (CommandParserStop::Command, (17, 0, 17)),
-            (CommandParserStop::Command, (12, 1, 11)),
-            (CommandParserStop::ExitCommand, (7, 1, 6)),
+            (SmtCommandOutcome::Command, (17, 0, 17)),
+            (SmtCommandOutcome::Command, (12, 1, 11)),
+            (SmtCommandOutcome::Exit, (7, 1, 6)),
         ]
     );
     assert_eq!(rest, b"\n");
@@ -444,11 +453,69 @@ fn a_reader_over_a_command_parser_reads_one_command_per_break() {
         .expect("valid up to the end of the input")
         .break_value()
         .expect("the end of the input finishes the reader");
-    assert_eq!(*located.value(), CommandParserStop::EndOfFile);
+    assert_eq!(*located.value(), SmtCommandOutcome::EndOfFile);
     assert_eq!(loc(located.location()), (1, 1, 0));
     assert!(matches!(
         reader.read_slice(b"(check-sat"),
         Ok(ControlFlow::Continue(()))
     ));
     assert!(reader.read_eof().is_err());
+}
+
+/// A buffered reader over bytes that panics when it is asked for its buffer
+/// too many times, so that a reading loop that consumes nothing shows as a
+/// failure and not as a test that never ends.
+struct Bounded<'a> {
+    rest: &'a [u8],
+    fills: usize,
+}
+
+impl Read for Bounded<'_> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let len = buf.len().min(self.rest.len());
+        buf[..len].copy_from_slice(&self.rest[..len]);
+        self.rest = &self.rest[len..];
+        Ok(len)
+    }
+}
+
+impl BufRead for Bounded<'_> {
+    fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
+        self.fills += 1;
+        assert!(
+            self.fills <= 16,
+            "the buffer was asked for again and again without being consumed"
+        );
+        Ok(self.rest)
+    }
+
+    fn consume(&mut self, amount: usize) {
+        self.rest = &self.rest[amount..];
+    }
+}
+
+#[test]
+fn the_rest_of_a_finished_input_can_be_read_to_its_end() {
+    // the exit command finishes the reader inside a piece; the rest of the
+    // input is discarded, also when it is read to its end as a whole: it is
+    // consumed without being parsed, and the input ends
+    let mut handler = SmtSyntaxChecker;
+    let mut reader =
+        SmtReader::script(&mut handler, SmtVersion::V2_7, SmtVersionPosture::default());
+    assert!(matches!(
+        reader.read_slice(b"(check-sat)\n(exit) (assert"),
+        Ok(ControlFlow::Break(_))
+    ));
+    let mut rest = Bounded {
+        rest: b" ) #q\n(check-sat)",
+        fills: 0,
+    };
+    assert!(matches!(reader.read_all(&mut rest), Ok(None)));
+    assert!(rest.rest.is_empty(), "the rest was consumed");
+
+    // the next input is read from the origin
+    let err = reader
+        .read_slice(b"(assert )")
+        .expect_err("a missing term is a parser error");
+    assert_span(&err, (8, 0, 8), (9, 0, 9));
 }

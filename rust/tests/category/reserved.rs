@@ -10,7 +10,7 @@ use super::*;
 #[test]
 fn s_expressions_tell_reserved_words_from_quoted_symbols() {
     assert_eq!(
-        parse_all::<SExprParser<Printing>>(b"(let |let| _ |_| ! |!| STRING |STRING| x |x|)"),
+        parse_all::<SmtSExprParser<Printing>>(b"(let |let| _ |_| ! |!| STRING |STRING| x |x|)"),
         "(let |let| _ |_| ! |!| STRING |STRING| x x)"
     );
 }
@@ -18,7 +18,7 @@ fn s_expressions_tell_reserved_words_from_quoted_symbols() {
 #[test]
 fn s_expressions_treat_command_names_as_reserved_words() {
     assert_eq!(
-        parse_all::<SExprParser<Printing>>(
+        parse_all::<SmtSExprParser<Printing>>(
             b"(assert |assert| check-sat-assuming |check-sat-assuming| pop |pop|)"
         ),
         "(assert |assert| check-sat-assuming |check-sat-assuming| pop |pop|)"
@@ -28,7 +28,7 @@ fn s_expressions_treat_command_names_as_reserved_words() {
 #[test]
 fn quoted_underscore_in_a_pattern_is_a_variable() {
     assert_eq!(
-        parse_all::<TermParser<Printing>>(
+        parse_all::<SmtTermParser<Printing>>(
             b"(match l ((_ 0) (|_| 1) ((cons _ |_|) 2) ((|match| |let|) 3)))"
         ),
         "(match l ((_ 0) (|_| 1) ((cons _ |_|) 2) ((|match| |let|) 3)))"
@@ -37,7 +37,7 @@ fn quoted_underscore_in_a_pattern_is_a_variable() {
 
 #[test]
 fn quoted_reserved_words_are_term_symbols() {
-    type P = TermParser<Printing>;
+    type P = SmtTermParser<Printing>;
     assert_eq!(parse_all::<P>(b"|let|"), "|let|");
     assert_eq!(
         parse_all::<P>(b"(|let| |_| |!| |as|)"),
@@ -66,14 +66,14 @@ fn quoted_reserved_words_are_term_symbols() {
 #[test]
 fn quoted_command_names_are_term_symbols() {
     assert_eq!(
-        parse_all::<TermParser<Printing>>(b"(|assert| |push| (_ |pop| |echo|))"),
+        parse_all::<SmtTermParser<Printing>>(b"(|assert| |push| (_ |pop| |echo|))"),
         "(|assert| |push| (_ |pop| |echo|))"
     );
 }
 
 #[test]
 fn quoted_reserved_words_are_sort_symbols() {
-    type P = SortParser<Printing>;
+    type P = SmtSortParser<Printing>;
     assert_eq!(parse_all::<P>(b"|STRING|"), "|STRING|");
     assert_eq!(
         parse_all::<P>(b"(|par| |NUMERAL| (_ |_| 8) |set-logic|)"),
@@ -84,17 +84,17 @@ fn quoted_reserved_words_are_sort_symbols() {
 #[test]
 fn quoted_reserved_words_are_attribute_symbols() {
     assert_eq!(
-        parse_all::<ClosedAttributeParser<Printing>>(b":named |let|)"),
+        parse_all::<SmtClosedAttributeParser<Printing>>(b":named |let|)"),
         ":named |let|"
     );
 }
 
 #[test]
 fn unquoted_command_names_are_not_symbols() {
-    assert_error::<SymbolParser>(b"exit", 0, 4);
-    assert_error::<TermParser<Printing>>(b"assert", 0, 6);
-    assert_error::<TermParser<Printing>>(b"(f push)", 3, 7);
-    assert_error::<TermParser<Printing>>(b"(push 1)", 1, 5);
-    assert_error::<SortParser<Printing>>(b"(Array echo Int)", 7, 11);
-    assert_error::<IdentParser>(b"(_ get-model 1)", 3, 12);
+    assert_error::<SmtSymbolParser>(b"exit", 0, 4);
+    assert_error::<SmtTermParser<Printing>>(b"assert", 0, 6);
+    assert_error::<SmtTermParser<Printing>>(b"(f push)", 3, 7);
+    assert_error::<SmtTermParser<Printing>>(b"(push 1)", 1, 5);
+    assert_error::<SmtSortParser<Printing>>(b"(Array echo Int)", 7, 11);
+    assert_error::<SmtIdentParser>(b"(_ get-model 1)", 3, 12);
 }

@@ -17,76 +17,79 @@ fn indices(ident: &SmtIdent) -> Vec<String> {
 
 #[test]
 fn plain_symbol() {
-    let ident = parse_all::<IdentParser>(b"x");
+    let ident = parse_all::<SmtIdentParser>(b"x");
     assert_eq!(ident.name.as_slice(), b"x");
     assert!(ident.indices.is_empty());
 
     // a plain symbol is a single token; the rest is left for the caller
-    let (ident, left) = run::<IdentParser>(b"x y").expect("valid");
+    let (ident, left) = run::<SmtIdentParser>(b"x y").expect("valid");
     assert_eq!(ident.name.as_slice(), b"x");
     assert_eq!(left, 1);
 }
 
 #[test]
 fn indexed_with_numerals() {
-    let ident = parse_all::<IdentParser>(b"(_ extract 7 0)");
+    let ident = parse_all::<SmtIdentParser>(b"(_ extract 7 0)");
     assert_eq!(ident.name.as_slice(), b"extract");
     assert_eq!(indices(&ident), ["7", "0"]);
 }
 
 #[test]
 fn indexed_with_symbols_and_numerals() {
-    let ident = parse_all::<IdentParser>(b"(_ f a 1 b)");
+    let ident = parse_all::<SmtIdentParser>(b"(_ f a 1 b)");
     assert_eq!(ident.name.as_slice(), b"f");
     assert_eq!(indices(&ident), ["'a", "1", "'b"]);
 }
 
 #[test]
 fn indexed_over_lines() {
-    let ident = parse_all::<IdentParser>(b"(_\n  bv42\n  8)");
+    let ident = parse_all::<SmtIdentParser>(b"(_\n  bv42\n  8)");
     assert_eq!(ident.name.as_slice(), b"bv42");
     assert_eq!(indices(&ident), ["8"]);
 }
 
 #[test]
 fn errors() {
-    let err = assert_error::<IdentParser>(b"1", 0, 1);
-    assert!(matches!(err, SyntaxErrorKind::ExpectedIdent), "{err:?}");
+    let err = assert_error::<SmtIdentParser>(b"1", 0, 1);
+    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedIdent), "{err:?}");
 
-    let err = assert_error::<IdentParser>(b")", 0, 1);
-    assert!(matches!(err, SyntaxErrorKind::ExpectedIdent), "{err:?}");
+    let err = assert_error::<SmtIdentParser>(b")", 0, 1);
+    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedIdent), "{err:?}");
 
     // after `(` only an underscore may follow
-    let err = assert_error::<IdentParser>(b"(f 1)", 1, 2);
+    let err = assert_error::<SmtIdentParser>(b"(f 1)", 1, 2);
     assert!(
-        matches!(err, SyntaxErrorKind::ExpectedUnderscore),
+        matches!(err, SmtSyntaxErrorKind::ExpectedUnderscore),
         "{err:?}"
     );
 
     // the name must be a symbol
-    let err = assert_error::<IdentParser>(b"(_ 1 2)", 3, 4);
-    assert!(matches!(err, SyntaxErrorKind::ExpectedSymbol), "{err:?}");
+    let err = assert_error::<SmtIdentParser>(b"(_ 1 2)", 3, 4);
+    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
 
     // at least one index is required
-    let err = assert_error::<IdentParser>(b"(_ f)", 4, 5);
-    assert!(matches!(err, SyntaxErrorKind::EmptyIdentIndices), "{err:?}");
-
-    // indices are numerals or symbols only
-    let err = assert_error::<IdentParser>(b"(_ f \"s\")", 5, 8);
+    let err = assert_error::<SmtIdentParser>(b"(_ f)", 4, 5);
     assert!(
-        matches!(err, SyntaxErrorKind::ExpectedIndexOrCloseParen),
+        matches!(err, SmtSyntaxErrorKind::EmptyIdentIndices),
         "{err:?}"
     );
-    let err = assert_error::<IdentParser>(b"(_ f (a))", 5, 6);
+
+    // indices are numerals or symbols only
+    let err = assert_error::<SmtIdentParser>(b"(_ f \"s\")", 5, 8);
     assert!(
-        matches!(err, SyntaxErrorKind::ExpectedIndexOrCloseParen),
+        matches!(err, SmtSyntaxErrorKind::ExpectedIndexOrCloseParen),
+        "{err:?}"
+    );
+    let err = assert_error::<SmtIdentParser>(b"(_ f (a))", 5, 6);
+    assert!(
+        matches!(err, SmtSyntaxErrorKind::ExpectedIndexOrCloseParen),
         "{err:?}"
     );
 
     // EOF inside the indexed identifier
-    let err = assert_error::<IdentParser>(b"(_ f 1", 6, 6);
+    let err = assert_error::<SmtIdentParser>(b"(_ f 1", 6, 6);
     assert!(
-        matches!(err, SyntaxErrorKind::ExpectedIndexOrCloseParen),
+        matches!(err, SmtSyntaxErrorKind::ExpectedIndexOrCloseParen),
         "{err:?}"
     );
 }

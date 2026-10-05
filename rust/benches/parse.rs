@@ -43,26 +43,27 @@ use std::process::ExitCode;
 use std::time::Instant;
 
 use blazing_smtlib::{
-    read::lexer::Lexer,
-    token::{SmtVersion, TokenCursor, TokenHandler},
+    lexer::SmtLexer,
+    token::{SmtBatchCursor, SmtConsume, SmtVersion},
 };
 
 /// Default timed runs per file and mode; an additional first (warm-up) run
 /// is discarded.
 const DEFAULT_ITERATIONS: usize = 5;
 
-/// Token handler that only counts tokens, so timed lexing includes no parsing.
+/// Token consumer that only counts tokens, so timed lexing includes no parsing.
 struct DiscardTokens {
     tokens: usize,
 }
 
-impl TokenHandler for DiscardTokens {
+impl SmtConsume for DiscardTokens {
     type Result = ();
     type Error = Infallible;
+    const CONSUMES_WHITESPACE_AND_COMMENTS: bool = false;
 
-    fn handle_tokens(
+    fn consume(
         &mut self,
-        cursor: &mut TokenCursor<'_>,
+        cursor: &mut SmtBatchCursor<'_>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         while cursor.next().is_some() {
             self.tokens += 1;
@@ -74,7 +75,7 @@ impl TokenHandler for DiscardTokens {
 /// Lexes the in-memory file, discarding tokens, and returns the token count.
 fn lex_from_memory(data: &[u8], path: &Path) -> usize {
     let mut handler = DiscardTokens { tokens: 0 };
-    let mut lexer = Lexer::new(&mut handler, SmtVersion::V2_7);
+    let mut lexer = SmtLexer::new(&mut handler, SmtVersion::V2_7);
     if let Err(err) = lexer.lex_all(data) {
         panic!("benchmark file {} must lex, got {:?}", path.display(), err);
     }

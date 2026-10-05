@@ -6,14 +6,14 @@ mod common;
 use common::{assert_error_span, assert_parser_error, parse, parse_with};
 
 use blazing_smtlib::{
-    CommandHandler, NonstandardCommandError, SmtAttributeValue, SmtAttributes, SmtBindings,
+    NonstandardCommandError, SmtAttributeValue, SmtAttributes, SmtBindings, SmtCommandHandler,
     SmtDatatypeConstructor, SmtFunctionSignature, SmtHandler, SmtKeyword, SmtKeywordView,
     SmtNumeral, SmtPatternView, SmtQuantifierKind, SmtSExpr, SmtSort, SmtStringContent, SmtSymbol,
     SmtSymbolView, SmtTerm,
-    read::{
-        SmtReadErrorKind,
-        parser::{ClosedParser, CommandAction, CommandPayloadParser, SyntaxErrorKind, TermParser},
+    parser::{
+        SmtClosedParser, SmtCommandPayloadParser, SmtCommandRule, SmtSyntaxErrorKind, SmtTermParser,
     },
+    reader::SmtReadErrorCause,
 };
 
 #[test]
@@ -29,20 +29,23 @@ fn valid_input_has_no_error() {
 fn bare_symbol_is_whole_token() {
     // a command must be parenthesized; the whole symbol token is the span
     let err = assert_parser_error(b"check-sat", 0, 9);
-    assert!(matches!(err, SyntaxErrorKind::ExpectedCommand), "{err:?}");
+    assert!(
+        matches!(err, SmtSyntaxErrorKind::ExpectedCommand),
+        "{err:?}"
+    );
 }
 
 #[test]
 fn missing_term_points_at_close_paren() {
     let err = assert_parser_error(b"(check-sat)\n(assert )", 20, 21);
-    assert!(matches!(err, SyntaxErrorKind::ExpectedTerm), "{err:?}");
+    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedTerm), "{err:?}");
 }
 
 #[test]
 fn numeral_as_command_name() {
     let err = assert_parser_error(b"(set-logic QF_UF)\n(1)", 19, 20);
     assert!(
-        matches!(err, SyntaxErrorKind::ExpectedCommandName),
+        matches!(err, SmtSyntaxErrorKind::ExpectedCommandName),
         "{err:?}"
     );
 }
@@ -61,11 +64,11 @@ fn nonstandard_command_is_rejected_by_standard_syntax() {
     // the handler rejects the command by name; the span is that of the name symbol
     let err = parse(b"(frobnicate 1)").expect_err("expected a handler error");
     assert_error_span(&err, 1, 11);
-    match err.kind() {
-        SmtReadErrorKind::Handler(NonstandardCommandError(name)) => {
+    match err.cause() {
+        SmtReadErrorCause::Handler(NonstandardCommandError(name)) => {
             assert_eq!(name.as_slice(), b"frobnicate");
         }
-        SmtReadErrorKind::Parser(kind) => {
+        SmtReadErrorCause::Syntax(kind) => {
             panic!("expected handler error, got parser error {kind:?}")
         }
         _ => panic!("expected handler error"),
@@ -78,11 +81,11 @@ fn quoted_standard_command_name_names_a_nonstandard_command() {
     // a symbol, so it is handed to the handler as a nonstandard command
     let err = parse(b"(|check-sat|)").expect_err("expected a handler error");
     assert_error_span(&err, 1, 12);
-    match err.kind() {
-        SmtReadErrorKind::Handler(NonstandardCommandError(name)) => {
+    match err.cause() {
+        SmtReadErrorCause::Handler(NonstandardCommandError(name)) => {
             assert_eq!(name.as_slice(), b"check-sat");
         }
-        SmtReadErrorKind::Parser(kind) => {
+        SmtReadErrorCause::Syntax(kind) => {
             panic!("expected handler error, got parser error {kind:?}")
         }
         _ => panic!("expected handler error"),
@@ -93,7 +96,7 @@ fn quoted_standard_command_name_names_a_nonstandard_command() {
 fn reserved_word_other_than_a_command_name_is_no_command_name() {
     let err = assert_parser_error(b"(let ((x 1)) x)", 1, 4);
     assert!(
-        matches!(err, SyntaxErrorKind::ExpectedCommandName),
+        matches!(err, SmtSyntaxErrorKind::ExpectedCommandName),
         "{err:?}"
     );
 }
@@ -107,8 +110,8 @@ struct Recording {
 
 struct MyAssert;
 
-impl CommandAction<Recording> for MyAssert {
-    type Parser = ClosedParser<Recording, TermParser<Recording>>;
+impl SmtCommandRule<Recording> for MyAssert {
+    type Parser = SmtClosedParser<Recording, SmtTermParser<Recording>>;
 
     fn handle(handler: &mut Recording, _term: ()) -> Result<(), NonstandardCommandError> {
         handler.commands.push("my-assert");
@@ -183,15 +186,15 @@ impl SmtHandler for Recording {
     }
 }
 
-impl CommandHandler for Recording {
-    type NonstandardParser = CommandPayloadParser<Self, MyAssert>;
+impl SmtCommandHandler for Recording {
+    type NonstandardParser = SmtCommandPayloadParser<Self, MyAssert>;
 
     fn nonstandard_command(
         &mut self,
         name: SmtSymbolView<'_>,
     ) -> Result<Self::NonstandardParser, Self::Error> {
         match name.as_slice() {
-            b"my-assert" => Ok(CommandPayloadParser::default()),
+            b"my-assert" => Ok(SmtCommandPayloadParser::default()),
             _ => Err(NonstandardCommandError(name.into_owned())),
         }
     }
@@ -492,10 +495,10 @@ fn nonstandard_command_body_is_checked() {
     let mut handler = Recording::default();
     let err = parse_with(&mut handler, b"(my-assert )").expect_err("expected a parser error");
     assert_error_span(&err, 11, 12);
-    match err.kind() {
-        SmtReadErrorKind::Parser(SyntaxErrorKind::ExpectedTerm) => {}
-        SmtReadErrorKind::Parser(kind) => panic!("unexpected parser error {kind:?}"),
-        SmtReadErrorKind::Handler(_) => panic!("unexpected handler error"),
+    match err.cause() {
+        SmtReadErrorCause::Syntax(SmtSyntaxErrorKind::ExpectedTerm) => {}
+        SmtReadErrorCause::Syntax(kind) => panic!("unexpected parser error {kind:?}"),
+        SmtReadErrorCause::Handler(_) => panic!("unexpected handler error"),
         _ => panic!("unexpected error kind"),
     }
     assert!(handler.commands.is_empty());
@@ -507,11 +510,11 @@ fn nonstandard_command_unknown_to_handler_is_rejected() {
     let err =
         parse_with(&mut handler, b"(my-assert x) (other)").expect_err("expected a handler error");
     assert_error_span(&err, 15, 20);
-    match err.kind() {
-        SmtReadErrorKind::Handler(NonstandardCommandError(name)) => {
+    match err.cause() {
+        SmtReadErrorCause::Handler(NonstandardCommandError(name)) => {
             assert_eq!(name.as_slice(), b"other");
         }
-        SmtReadErrorKind::Parser(kind) => {
+        SmtReadErrorCause::Syntax(kind) => {
             panic!("expected handler error, got parser error {kind:?}")
         }
         _ => panic!("expected handler error"),

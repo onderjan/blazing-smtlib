@@ -1,13 +1,13 @@
 use std::fmt::Debug;
 
-use crate::{String8, String8View, read::lexer::CharClass};
+use crate::{SmtBytes, SmtBytesView, lexer::CharClass};
 
 /// SMT-LIB string content.
 ///
 /// May be empty.
 /// Must contain only SMT-LIB printable or whitespace bytes.
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct SmtStringContent(String8);
+pub struct SmtStringContent(SmtBytes);
 
 impl SmtStringContent {
     pub fn is_allowed(value: &[u8]) -> bool {
@@ -23,7 +23,7 @@ impl SmtStringContent {
 /// May be empty.
 /// Must contain only SMT-LIB printable or whitespace bytes except for pipe (|) and backslash (\).
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct SmtSymbol(String8);
+pub struct SmtSymbol(SmtBytes);
 
 impl SmtSymbol {
     pub fn is_allowed(value: &[u8]) -> bool {
@@ -37,23 +37,26 @@ impl SmtSymbol {
 /// SMT-LIB keyword.
 ///
 /// Cannot be empty.
-/// Must contain only SMT-LIB simple-symbol-class bytes, starting with a non-digit.
+/// Must contain only SMT-LIB simple-symbol-class bytes.
+///
+/// A keyword may start with a digit and may spell a reserved word.
+/// It is defined in version 2.0 as a colon followed by a non-empty sequence
+/// of simple-symbol-class bytes with no further restriction. From version 2.5 on,
+/// the standard defines it as a colon followed by a simple symbol, which
+/// read literally excludes a leading digit and the reserved words. We consider
+/// this unintended and keep the 2.0 rule in every version: the standard's
+/// own keyword examples include `:56`, and there is no need to exclude
+/// reserved words as the colon already uniquely determines the category.
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct SmtKeyword(String8);
+pub struct SmtKeyword(SmtBytes);
 
 impl SmtKeyword {
     pub fn is_allowed(value: &[u8]) -> bool {
-        let Some(first) = value.first() else {
-            return false;
-        };
-        if first.is_ascii_digit() {
-            return false;
-        }
-
-        value
-            .iter()
-            .copied()
-            .all(|c| CharClass::from(c).is_allowed_in_simple_symbol())
+        !value.is_empty()
+            && value
+                .iter()
+                .copied()
+                .all(|c| CharClass::from(c).is_allowed_in_simple_symbol())
     }
 }
 
@@ -63,7 +66,7 @@ impl SmtKeyword {
 /// Must contain only digits.
 /// Cannot contain any leading zeros except for the constant "0" itself.
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct SmtNumeral(String8);
+pub struct SmtNumeral(SmtBytes);
 
 impl SmtNumeral {
     pub fn is_allowed(value: &[u8]) -> bool {
@@ -90,7 +93,7 @@ impl SmtNumeral {
         // convert the value into a string and get its bytes
         // this is allowed since it produces digits without leading zeros
         // or the allowed special case of constant "0"
-        Self(String8::from_vec(value.to_string().into_bytes()))
+        Self(SmtBytes::from_vec(value.to_string().into_bytes()))
     }
 }
 
@@ -99,7 +102,7 @@ impl SmtNumeral {
 /// Cannot be empty.
 /// Must contain only digits, lower-case letters a-f or upper-case letters A-F.
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct SmtHexDigits(String8);
+pub struct SmtHexDigits(SmtBytes);
 
 impl SmtHexDigits {
     pub fn is_allowed(value: &[u8]) -> bool {
@@ -112,7 +115,7 @@ impl SmtHexDigits {
 /// Cannot be empty.
 /// Must contain only the digits 0, 1.
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct SmtBinDigits(String8);
+pub struct SmtBinDigits(SmtBytes);
 
 impl SmtBinDigits {
     pub fn is_allowed(value: &[u8]) -> bool {
@@ -131,7 +134,7 @@ impl SmtBinDigits {
 /// The fractional part cannot be empty and must contain only digits.
 ///
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct SmtDecimal(String8);
+pub struct SmtDecimal(SmtBytes);
 
 impl SmtDecimal {
     pub fn is_allowed(value: &[u8]) -> bool {
@@ -160,8 +163,48 @@ impl SmtDecimal {
     }
 }
 
+/// SMT-LIB whitespace (one or more whitespace bytes)
+///
+/// Cannot be empty.
+/// Must contain only tabs, line feeds, carriage returns and spaces.
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct SmtWhitespace(SmtBytes);
+
+impl SmtWhitespace {
+    pub fn is_allowed(value: &[u8]) -> bool {
+        !value.is_empty()
+            && value
+                .iter()
+                .copied()
+                .all(|c| matches!(c, b'\t' | b'\n' | b'\r' | b' '))
+    }
+}
+
+/// SMT-LIB comment (not including starting semicolon, including ending CR/LF)
+///
+/// The semicolon that starts the comment is not a part of it.
+/// The content may be empty.
+/// Only the last byte may be a carriage return (CR) or a line feed (LF).
+/// If the comment runs to the end of the input, there is no ending CR/LF.
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct SmtComment(SmtBytes);
+
+impl SmtComment {
+    pub fn is_allowed(value: &[u8]) -> bool {
+        if value.is_empty() {
+            // empty content is allowed (starting semicolon at the end of input)
+            return true;
+        };
+        // not empty: it may not contain CR/LF except in the last position,
+        // no other restrictions
+        value[0..value.len() - 1]
+            .iter()
+            .all(|c| *c != b'\r' && *c != b'\n')
+    }
+}
+
 #[derive(Debug)]
-pub struct SmtDisallowedByteVecError(String8);
+pub struct SmtDisallowedByteVecError(SmtBytes);
 
 impl SmtDisallowedByteVecError {
     pub fn into_vec(self) -> Vec<u8> {
@@ -173,7 +216,7 @@ macro_rules! string8_newtype {
     ($name:ident, $view:ident) => {
         impl $name {
             pub fn new(value: Vec<u8>) -> Result<Self, SmtDisallowedByteVecError> {
-                let value = String8::from_vec(value);
+                let value = SmtBytes::from_vec(value);
                 if Self::is_allowed(value.as_slice()) {
                     Ok(Self(value))
                 } else {
@@ -187,7 +230,7 @@ macro_rules! string8_newtype {
             pub fn as_view(&self) -> $view<'_> {
                 $view(self.0.as_slice())
             }
-            pub fn into_string8(self) -> String8 {
+            pub fn into_string8(self) -> SmtBytes {
                 self.0
             }
             pub fn into_vec(self) -> Vec<u8> {
@@ -266,7 +309,7 @@ macro_rules! string8_newtype {
             }
             #[inline]
             pub fn into_owned(self) -> $name {
-                $name(String8View::new(self.0).into_owned())
+                $name(SmtBytesView::new(self.0).into_owned())
             }
             pub fn len(&self) -> usize {
                 self.0.len()
@@ -330,3 +373,5 @@ string8_newtype!(SmtNumeral, SmtNumeralView);
 string8_newtype!(SmtHexDigits, SmtHexDigitsView);
 string8_newtype!(SmtBinDigits, SmtBinDigitsView);
 string8_newtype!(SmtDecimal, SmtDecimalView);
+string8_newtype!(SmtWhitespace, SmtWhitespaceView);
+string8_newtype!(SmtComment, SmtCommentView);

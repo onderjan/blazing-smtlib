@@ -8,17 +8,17 @@
 mod lex_backend;
 
 use blazing_smtlib::{
-    read::lexer::LexerErrorKind,
-    token::{SmtVersion, TokenType},
+    lexer::SmtLexicalErrorKind,
+    token::{SmtTokenCategory, SmtVersion},
 };
 
 use lex_backend::Loc;
 
 /// An owned copy of a token: its type, content, and the start and end of its span.
-type OwnedToken = (TokenType, Vec<u8>, Loc, Loc);
+type OwnedToken = (SmtTokenCategory, Vec<u8>, Loc, Loc);
 
 /// The tokens of an input, or the kind and the span of the lexer error.
-type Outcome = Result<Vec<OwnedToken>, (LexerErrorKind, Loc, Loc)>;
+type Outcome = Result<Vec<OwnedToken>, (SmtLexicalErrorKind, Loc, Loc)>;
 
 /// Lexes the pieces and the end of the input under the version, with the
 /// lexer under test.
@@ -60,7 +60,7 @@ fn lex(input: &[u8], version: SmtVersion) -> Outcome {
 
 /// The types and contents of the tokens of an input that must lex, without the EOF token.
 #[track_caller]
-fn contents(input: &[u8], version: SmtVersion) -> Vec<(TokenType, Vec<u8>)> {
+fn contents(input: &[u8], version: SmtVersion) -> Vec<(SmtTokenCategory, Vec<u8>)> {
     let mut tokens = lex(input, version).unwrap_or_else(|err| {
         panic!(
             "{:?} must lex in {version:?}: {err:?}",
@@ -68,19 +68,19 @@ fn contents(input: &[u8], version: SmtVersion) -> Vec<(TokenType, Vec<u8>)> {
         )
     });
     let eof = tokens.pop().expect("the EOF token is always produced");
-    assert_eq!(eof.0, TokenType::EndOfFile);
+    assert_eq!(eof.0, SmtTokenCategory::EndOfFile);
     tokens
         .into_iter()
         .map(|(ty, content, _, _)| (ty, content))
         .collect()
 }
 
-fn string(content: &[u8]) -> (TokenType, Vec<u8>) {
-    (TokenType::String, content.to_vec())
+fn string(content: &[u8]) -> (SmtTokenCategory, Vec<u8>) {
+    (SmtTokenCategory::String, content.to_vec())
 }
 
-fn symbol(content: &[u8]) -> (TokenType, Vec<u8>) {
-    (TokenType::UnquotedSymbol, content.to_vec())
+fn symbol(content: &[u8]) -> (SmtTokenCategory, Vec<u8>) {
+    (SmtTokenCategory::UnquotedSymbol, content.to_vec())
 }
 
 #[test]
@@ -199,7 +199,7 @@ fn the_span_of_a_string_covers_its_quotes_and_escapes() {
     assert_eq!(
         tokens[2],
         (
-            TokenType::String,
+            SmtTokenCategory::String,
             b"x\"\\y".to_vec(),
             (6, 0, 6),
             (14, 0, 14)
@@ -210,8 +210,8 @@ fn the_span_of_a_string_covers_its_quotes_and_escapes() {
 
 #[test]
 fn the_same_text_is_cut_differently_by_the_two_string_regimes() {
-    use LexerErrorKind::*;
-    use TokenType::*;
+    use SmtLexicalErrorKind::*;
+    use SmtTokenCategory::*;
 
     // an escaped quote: one string in 2.0; from 2.5 on the string ends at its
     // second quote, right before the rest
@@ -278,7 +278,7 @@ fn the_same_text_is_cut_differently_by_the_two_string_regimes() {
 
 #[test]
 fn a_string_must_be_closed_and_delimited() {
-    use LexerErrorKind::*;
+    use SmtLexicalErrorKind::*;
 
     for (input, kind, end) in [
         // the end of the input inside the string, also right after a backslash
@@ -306,7 +306,7 @@ fn a_string_must_be_closed_and_delimited() {
     for delimiter in [&b" "[..], b"\t", b"\n", b"\r", b"(", b")", b";c", b""] {
         let input = [br#""a\"""#, delimiter].concat();
         let tokens = lex(&input, SmtVersion::V2_0).expect("a delimited string must lex");
-        assert_eq!(tokens[0].0, TokenType::String);
+        assert_eq!(tokens[0].0, SmtTokenCategory::String);
         assert_eq!(tokens[0].1, b"a\"");
         assert_eq!(tokens[0].3.0, 5);
     }
@@ -320,7 +320,11 @@ fn a_control_character_is_forbidden_in_a_string() {
             let input = [prefix, &[forbidden], b"c\""].concat();
             assert_eq!(
                 lex(&input, SmtVersion::V2_0),
-                Err((LexerErrorKind::ForbiddenCharInString, (0, 0, 0), (4, 0, 4))),
+                Err((
+                    SmtLexicalErrorKind::ForbiddenCharInString,
+                    (0, 0, 0),
+                    (4, 0, 4)
+                )),
                 "{:?}",
                 input.escape_ascii().to_string()
             );
@@ -381,7 +385,7 @@ fn a_long_string_of_escapes_is_lexed_in_one_pass() {
     }
     input.push(b'"');
     let tokens = lex_pieces(&[&input], SmtVersion::V2_0).expect("the string must lex");
-    assert_eq!(tokens[0].0, TokenType::String);
+    assert_eq!(tokens[0].0, SmtTokenCategory::String);
     assert_eq!(tokens[0].1, b"\\\"".repeat(pairs));
     // also when the escapes are cut by the slices at every possible place
     for piece in [1, 2, 3, 5] {

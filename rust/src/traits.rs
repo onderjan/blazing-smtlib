@@ -3,7 +3,7 @@ use std::{convert::Infallible, fmt::Debug};
 use crate::{
     SmtAttributeValue, SmtAttributes, SmtBindings, SmtDatatypeConstructor, SmtFunctionSignature,
     SmtKeyword, SmtKeywordView, SmtNumeral, SmtPatternView, SmtQuantifierKind, SmtSExpr, SmtSort,
-    SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm, read::parser::Parser,
+    SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm, parser::SmtParse,
 };
 
 pub trait SmtHandler {
@@ -110,8 +110,8 @@ pub trait SmtHandler {
     fn end_match(&mut self) -> Result<Self::Term, Self::Error>;
 }
 
-pub trait CommandHandler: SmtHandler {
-    type NonstandardParser: Parser<Self, Result = ()>;
+pub trait SmtCommandHandler: SmtHandler {
+    type NonstandardParser: SmtParse<Self, Result = ()>;
 
     /// Returns a parser that parses a non-standard command with the given name.
     fn nonstandard_command(
@@ -370,12 +370,12 @@ pub trait CommandHandler: SmtHandler {
 }
 
 #[derive(Debug)]
-pub struct CheckStandardSyntax;
+pub struct SmtSyntaxChecker;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NonstandardCommandError(pub SmtSymbol);
 
-impl SmtHandler for CheckStandardSyntax {
+impl SmtHandler for SmtSyntaxChecker {
     type Error = NonstandardCommandError;
 
     type SExpr = ();
@@ -462,7 +462,7 @@ impl SmtHandler for CheckStandardSyntax {
     }
 }
 
-impl CommandHandler for CheckStandardSyntax {
+impl SmtCommandHandler for SmtSyntaxChecker {
     type NonstandardParser = Infallible;
 
     fn nonstandard_command(

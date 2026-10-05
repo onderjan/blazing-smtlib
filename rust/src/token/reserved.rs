@@ -1,10 +1,10 @@
-use crate::{String8, token::SmtVersion};
+use crate::{SmtBytes, token::SmtVersion};
 
 /// Reserved words in SMT-LIB2, including standard command names.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Reserved {
-    General(GeneralReserved),
-    CommandName(CommandNameReserved),
+pub enum SmtReserved {
+    General(SmtGeneralReserved),
+    CommandName(SmtCommandNameReserved),
 }
 
 /// Defines the reserved words.
@@ -30,8 +30,8 @@ macro_rules! reserved_words {
                 /// The word of this group that the symbol spells in the version, if any.
                 #[inline]
                 pub fn from_bytes_opt(symbol: &[u8], version: SmtVersion) -> Option<Self> {
-                    match Reserved::from_bytes_opt(symbol, version) {
-                        Some(Reserved::$variant_kind(reserved)) => Some(reserved),
+                    match SmtReserved::from_bytes_opt(symbol, version) {
+                        Some(SmtReserved::$variant_kind(reserved)) => Some(reserved),
                         _ => None,
                     }
                 }
@@ -45,15 +45,15 @@ macro_rules! reserved_words {
         )*
 
         /// Every reserved word with its classification.
-        const RESERVED_WORDS: &[(&[u8], Reserved)] = &[
-            $($(($word.as_bytes(), Reserved::$variant_kind($enum_name::$variant)),)*)*
+        const RESERVED_WORDS: &[(&[u8], SmtReserved)] = &[
+            $($(($word.as_bytes(), SmtReserved::$variant_kind($enum_name::$variant)),)*)*
         ];
     };
 }
 
 reserved_words! {
     /// General reserved words of the SMT-LIB2 grammar.
-    General: GeneralReserved {
+    General: SmtGeneralReserved {
         Binary = "BINARY",
         Decimal = "DECIMAL",
         Hexadecimal = "HEXADECIMAL",
@@ -72,7 +72,7 @@ reserved_words! {
     /// Reserved words naming standard SMT-LIB2 commands.
     ///
     /// Standard SMT-LIB2 commands are reserved words.
-    CommandName: CommandNameReserved {
+    CommandName: SmtCommandNameReserved {
         Assert = "assert",
         CheckSat = "check-sat",
         CheckSatAssuming = "check-sat-assuming",
@@ -108,30 +108,32 @@ reserved_words! {
     }
 }
 
-impl Reserved {
+impl SmtReserved {
     /// The version that made the word reserved.
     const fn since(self) -> SmtVersion {
         match self {
             // SMT-LIB 2.7: lambda terms, sort parameters, constant definitions
-            Reserved::General(GeneralReserved::Lambda)
-            | Reserved::CommandName(CommandNameReserved::DeclareSortParameter)
-            | Reserved::CommandName(CommandNameReserved::DefineConst) => SmtVersion::V2_7,
+            SmtReserved::General(SmtGeneralReserved::Lambda)
+            | SmtReserved::CommandName(SmtCommandNameReserved::DeclareSortParameter)
+            | SmtReserved::CommandName(SmtCommandNameReserved::DefineConst) => SmtVersion::V2_7,
             // SMT-LIB 2.6: datatypes and matching on them
-            Reserved::General(GeneralReserved::Match)
-            | Reserved::CommandName(CommandNameReserved::DeclareDatatype)
-            | Reserved::CommandName(CommandNameReserved::DeclareDatatypes) => SmtVersion::V2_6,
+            SmtReserved::General(SmtGeneralReserved::Match)
+            | SmtReserved::CommandName(SmtCommandNameReserved::DeclareDatatype)
+            | SmtReserved::CommandName(SmtCommandNameReserved::DeclareDatatypes) => {
+                SmtVersion::V2_6
+            }
             // SMT-LIB 2.5: the remaining special-constant categories and added commands
-            Reserved::General(GeneralReserved::Binary)
-            | Reserved::General(GeneralReserved::Hexadecimal)
-            | Reserved::CommandName(CommandNameReserved::CheckSatAssuming)
-            | Reserved::CommandName(CommandNameReserved::DeclareConst)
-            | Reserved::CommandName(CommandNameReserved::DefineFunRec)
-            | Reserved::CommandName(CommandNameReserved::DefineFunsRec)
-            | Reserved::CommandName(CommandNameReserved::Echo)
-            | Reserved::CommandName(CommandNameReserved::GetModel)
-            | Reserved::CommandName(CommandNameReserved::GetUnsatAssumptions)
-            | Reserved::CommandName(CommandNameReserved::Reset)
-            | Reserved::CommandName(CommandNameReserved::ResetAssertions) => SmtVersion::V2_5,
+            SmtReserved::General(SmtGeneralReserved::Binary)
+            | SmtReserved::General(SmtGeneralReserved::Hexadecimal)
+            | SmtReserved::CommandName(SmtCommandNameReserved::CheckSatAssuming)
+            | SmtReserved::CommandName(SmtCommandNameReserved::DeclareConst)
+            | SmtReserved::CommandName(SmtCommandNameReserved::DefineFunRec)
+            | SmtReserved::CommandName(SmtCommandNameReserved::DefineFunsRec)
+            | SmtReserved::CommandName(SmtCommandNameReserved::Echo)
+            | SmtReserved::CommandName(SmtCommandNameReserved::GetModel)
+            | SmtReserved::CommandName(SmtCommandNameReserved::GetUnsatAssumptions)
+            | SmtReserved::CommandName(SmtCommandNameReserved::Reset)
+            | SmtReserved::CommandName(SmtCommandNameReserved::ResetAssertions) => SmtVersion::V2_5,
             // everything else is reserved since SMT-LIB 2.0
             _ => SmtVersion::V2_0,
         }
@@ -169,10 +171,10 @@ const fn reserved_slot(symbol: &[u8]) -> usize {
 const EMPTY_WORD: &[u8] = &[];
 
 /// The reserved words by slot, each with the version that made it reserved.
-static RESERVED_TABLE: [(&[u8], Reserved, SmtVersion); RESERVED_SLOTS] = {
+static RESERVED_TABLE: [(&[u8], SmtReserved, SmtVersion); RESERVED_SLOTS] = {
     let mut table = [(
         EMPTY_WORD,
-        Reserved::General(GeneralReserved::Underscore),
+        SmtReserved::General(SmtGeneralReserved::Underscore),
         SmtVersion::V2_5,
     ); RESERVED_SLOTS];
     let mut i = 0;
@@ -189,16 +191,16 @@ static RESERVED_TABLE: [(&[u8], Reserved, SmtVersion); RESERVED_SLOTS] = {
     table
 };
 
-impl Reserved {
+impl SmtReserved {
     /// The reserved word that the symbol spells in the version, if any.
     #[inline]
-    pub fn from_symbol_opt(symbol: &String8, version: SmtVersion) -> Option<Reserved> {
+    pub fn from_symbol_opt(symbol: &SmtBytes, version: SmtVersion) -> Option<SmtReserved> {
         Self::from_bytes_opt(symbol.as_slice(), version)
     }
 
     /// The reserved word that the symbol spells in the version, if any.
     #[inline]
-    pub fn from_bytes_opt(symbol: &[u8], version: SmtVersion) -> Option<Reserved> {
+    pub fn from_bytes_opt(symbol: &[u8], version: SmtVersion) -> Option<SmtReserved> {
         // make sure that the symbol is not an empty word,
         // which is a sentinel
         if symbol.is_empty() {
@@ -216,15 +218,15 @@ impl Reserved {
 
     pub fn as_str(&self) -> &'static str {
         match self {
-            Reserved::General(general) => general.as_str(),
-            Reserved::CommandName(command_name) => command_name.as_str(),
+            SmtReserved::General(general) => general.as_str(),
+            SmtReserved::CommandName(command_name) => command_name.as_str(),
         }
     }
 
     /// Whether the reserved word is the name of a standard command.
     #[inline]
     pub fn is_command_name(&self) -> bool {
-        matches!(self, Reserved::CommandName(_))
+        matches!(self, SmtReserved::CommandName(_))
     }
 }
 
