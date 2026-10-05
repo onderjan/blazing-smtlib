@@ -3,12 +3,14 @@ import BSmtLib.SpecChecks.Examples
 import BSmtLib.SpecChecks.Reserved
 import BSmtLib.SpecChecks.Grammar
 import BSmtLib.SpecChecks.Unique
+import BSmtLib.SpecChecks.Streaming
 
 /-!
 # Checks of the specification
 
 Proofs that the specification means what it says on the standard's own examples and lists,
-and that every input has at most one tokenisation; that the grammar is unambiguous is to come.
+and that every input has at most one tokenisation, with examples of what a lexer fed in slices
+hands over; that the grammar is unambiguous is to come.
 They are not part of the specification and are not trusted.
 -/
 

@@ -145,10 +145,10 @@ mode, where accepting these characters as 2.5 does is what is wanted.
 
 /--
 Property: the token is a parenthesis or ends before the last character fed so far.
-Extension: as `Settled`.
+Extension: when this library's lexer hands a token over; not in the standard.
 
 A token other than a parenthesis needs a delimiter after it (`Delimited`); this states that
-the character after it has been fed. `Settled` is stated with it.
+the character after it has been fed.
 -/
 def DelimiterFed (fed : Chars) (token : Token) : Prop :=
   token.category = .parenOpen ∨ token.category = .parenClose ∨
@@ -159,11 +159,11 @@ Property: the tokens are the longest list that is `Determined` by the characters
 and in which every token but a parenthesis ends before the last character fed. Extension: when
 this library's lexer hands a token over; not in the standard.
 
-This is used to state what a lexer fed an input in slices hands over: `StreamingCorrect`
-requires it to hand over exactly these tokens. A lexer hands a token over only once it has
-seen that the character after it delimits it; a parenthesis needs no delimiter. After
-`(x |abc|`, the settled tokens are `(` and `x`: `|abc|` is determined, but the character
-after it has not been fed yet.
+These are the tokens that a lexer fed an input in slices hands over. A lexer hands a token
+over only once it has seen that the character after it delimits it; a parenthesis needs no
+delimiter. After `(x |abc|`, the settled tokens are `(` and `x`: `|abc|` is determined, but
+the character after it has not been fed yet. On characters that are not `Viable`, no list is
+settled.
 -/
 def Settled (version : Version) (fed : Chars) (tokens : List Token) : Prop :=
   Determined version fed tokens ∧ (∀ token ∈ tokens, DelimiterFed fed token) ∧

@@ -768,4 +768,111 @@ theorem tokenizationFrom_unique {version : Version} {offset : Nat} {input : Char
       subst hr
       rw [ih hrest']
 
+/-! ## The first token of an input -/
+
+/-- `HeadOf version s x`: every token that an input `s ++ x` starts with, followed by what
+`Delimited` allows, has the characters `s`. -/
+def HeadOf (version : Version) (s x : Chars) : Prop :=
+  ∀ category s' r, categoryRegex version category s' → Delimited category r →
+    s' ++ r = s ++ x → s' = s
+
+/-- A tokenisation of an input that starts with whitespace and a token, where the token is
+the only one the input can start with after the whitespace, starts with that token: the
+whitespace before a token is determined, and so is the category of a token by its
+characters. The rest of the input is delimited and has a tokenisation of its own. -/
+theorem tokenizationFrom_head {version : Version} {offset : Nat} {w s x : Chars}
+    {category : Category} {tokens : List Token} (hw : whitespace w)
+    (hs : categoryRegex version category s) (hhead : HeadOf version s x)
+    (h : TokenizationFrom version offset (w ++ s ++ x) tokens) :
+    ∃ ts, Delimited category x ∧
+      TokenizationFrom version (offset + w.length + s.length) x ts ∧
+      tokens = ⟨category, offset + w.length, s⟩ :: ts := by
+  obtain ⟨c, t, hct, hc, -⟩ := token_shape hs
+  rcases tokenizationFrom_inv h with ⟨-, hend⟩ |
+    ⟨w', cat', s', rest', ts', hin, hw', hs', hd', hrest', rfl⟩
+  · exfalso
+    exact not_atEnd (x := t ++ x) hw hend hc (by rw [hct]; simp)
+  · obtain ⟨c', t', hct', hc', -⟩ := token_shape hs'
+    have hww : w' = w := ws_eq hw' hw hc' hc
+      (by rw [hct, hct'] at hin; simpa only [List.append_assoc, List.cons_append] using hin.symm)
+    subst hww
+    simp only [List.append_assoc] at hin
+    have hin' := List.append_cancel_left hin
+    have hss := hhead cat' s' rest' hs' hd' hin'.symm
+    subst hss
+    have hr := List.append_cancel_left hin'
+    subst hr
+    have hcat : cat' = category := (kind_spec hs').symm.trans (kind_spec hs)
+    subst hcat
+    exact ⟨ts', hd', hrest', rfl⟩
+
+/-- A token that is delimited by what follows it is the only token the input can start
+with. -/
+theorem headOf_delimited {version : Version} {category : Category} {s x : Chars}
+    (hs : categoryRegex version category s) (hd : Delimited category x) : HeadOf version s x :=
+  fun _ _ _ hs' hd' h => text_eq hs' hs hd' hd h
+
+/-- The category of a token that starts with `|` is a quoted symbol. -/
+theorem quoted_category {version : Version} {category : Category} {t : Chars}
+    (h : categoryRegex version category (124 :: t)) : category = .quotedSymbol := by
+  rw [← kind_spec h]
+  rfl
+
+/-- The category of a token that starts with `"` is a string literal. -/
+theorem string_category {version : Version} {category : Category} {t : Chars}
+    (h : categoryRegex version category (34 :: t)) : category = .string := by
+  rw [← kind_spec h]
+  rfl
+
+/-- A quoted symbol is the only token the input can start with, whatever follows it: it
+ends at the first `|` after the opening one. -/
+theorem headOf_quoted {version : Version} {s x : Chars} (hs : quotedSymbol s) :
+    HeadOf version s x := by
+  intro category s' r hs' _ h
+  obtain ⟨b, rfl, -⟩ := quotedSymbol_inv hs
+  obtain ⟨c, t, rfl, -, -⟩ := token_shape hs'
+  have hc : c = 124 := by
+    simp only [List.cons_append, List.cons.injEq] at h
+    exact h.1
+  subst hc
+  obtain rfl := quoted_category hs'
+  exact quoted_text hs' hs h
+
+/-- A string literal in 2.0 is the only token the input can start with, whatever follows
+it: it ends at the first `"` that a backslash does not take. -/
+theorem headOf_string20 {s x : Chars} (hs : string20 s) : HeadOf .v2_0 s x := by
+  intro category s' r hs' _ h
+  obtain ⟨b, rfl, hb⟩ := string20_inv hs
+  obtain ⟨c, t, rfl, -, -⟩ := token_shape hs'
+  have hc : c = 34 := by
+    simp only [List.cons_append, List.cons.injEq] at h
+    exact h.1
+  subst hc
+  obtain rfl := string_category hs'
+  obtain ⟨b', hb'e, hb'⟩ := string20_inv hs'
+  rw [hb'e] at h ⊢
+  simp only [List.cons_append, List.append_assoc, List.cons.injEq, true_and] at h
+  rw [string20_body_eq hb' hb h]
+
+/-! ## Determined tokens -/
+
+/-- Tokens determined by some characters are determined by any characters that start with
+them. -/
+theorem determined_append {version : Version} {start more : Chars} {tokens : List Token}
+    (h : Determined version start tokens) : Determined version (start ++ more) tokens :=
+  fun rest ts ht => h (more ++ rest) ts (by simpa only [List.append_assoc] using ht)
+
+/-- Determined tokens start every tokenisation of an input that starts with the characters
+that determine them. -/
+theorem determined_prefix {version : Version} {start rest : Chars} {tokens ts : List Token}
+    (h : Determined version start tokens) (ht : Tokenization version (start ++ rest) ts) :
+    tokens <+: ts := by
+  obtain ⟨more, rfl⟩ := h rest ts ht
+  exact ⟨more, rfl⟩
+
+/-- Characters that are not viable determine every list of tokens. -/
+theorem determined_of_not_viable {version : Version} {start : Chars} {tokens : List Token}
+    (h : ¬ Viable version start) : Determined version start tokens :=
+  fun rest ts ht => absurd ⟨rest, ts, ht⟩ h
+
 end BSmtLib.SpecChecks.Lexicon
