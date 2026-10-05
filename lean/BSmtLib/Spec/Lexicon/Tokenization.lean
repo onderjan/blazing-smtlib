@@ -1,10 +1,10 @@
 import BSmtLib.Spec.Lexicon.Rules
 
 /-!
-# Reading an input
+# Tokenising an input
 
-How an input is read as a sequence of tokens: whitespace breaks the input into tokens, and
-every token is one of the lexical tokens of the version.
+How an input is broken into a sequence of tokens, its tokenisation: whitespace breaks the
+input into tokens, and every token is one of the lexical tokens of the version.
 -/
 
 namespace BSmtLib.Spec.Lexicon
@@ -77,22 +77,24 @@ def Delimited (category : Category) (rest : Chars) : Prop :=
 Standard: 2.7 §3.1: the only lexical function of whitespace is to break the source text into
 tokens. Readings R1 and C.
 
-`ReadsFrom version offset input tokens`: in the version, the input, whose first character is
-at `offset`, reads as the tokens.
+`TokenizationFrom version offset input tokens`: in the version, the tokens are a tokenisation
+of the input, whose first character is at `offset`.
 -/
-inductive ReadsFrom (version : Version) : Nat → Chars → List Token → Prop
-  | done : whitespaceAtEnd w → ReadsFrom version offset w []
+inductive TokenizationFrom (version : Version) : Nat → Chars → List Token → Prop
+  | done : whitespaceAtEnd w → TokenizationFrom version offset w []
   | token : whitespace w → categoryRegex version category s → Delimited category rest →
-      ReadsFrom version (offset + w.length + s.length) rest tokens →
-      ReadsFrom version offset (w ++ s ++ rest) (⟨category, offset + w.length, s⟩ :: tokens)
+      TokenizationFrom version (offset + w.length + s.length) rest tokens →
+      TokenizationFrom version offset (w ++ s ++ rest) 
+        (⟨category, offset + w.length, s⟩ :: tokens)
 
 /--
-Standard: 2.7 §3.1, as `ReadsFrom`.
+Standard: 2.7 §3.1, as `TokenizationFrom`.
 
-`Reads version input tokens`: in the version, the input reads as the tokens.
+`Tokenization version input tokens`: in the version, the tokens are a tokenisation of the
+input.
 -/
-def Reads (version : Version) (input : Chars) (tokens : List Token) : Prop :=
-  ReadsFrom version 0 input tokens
+def Tokenization (version : Version) (input : Chars) (tokens : List Token) : Prop :=
+  TokenizationFrom version 0 input tokens
 
 /--
 Standard: 2.7 §3.1 String literals and Symbols, for what a string literal and a quoted symbol

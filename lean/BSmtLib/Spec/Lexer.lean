@@ -138,7 +138,7 @@ def endOfFile (input : Chars) : Handed :=
 /-! ## About a lexer
 
 Extension D: the claims do not require the input to be a `SourceFile`, so a lexer that
-satisfies them reads characters from 128 on in 2.0 as 2.5 and later do. 2.0 is used mainly
+satisfies them accepts characters from 128 on in 2.0 as 2.5 and later do. 2.0 is used mainly
 to read old scripts into 2.5 and later, or to give a solver that reads 2.5 and later a legacy
 mode, where accepting these characters as 2.5 does is what is wanted.
 -/
@@ -147,12 +147,12 @@ mode, where accepting these characters as 2.5 does is what is wanted.
 Claim: about a lexer, to be proved of an implementation. Extension D: the input need not be a
 `SourceFile`.
 
-A lexer of whole inputs is correct: it hands over the tokens of the reading and the
-end-of-file token exactly when the input has a reading.
+A lexer of whole inputs is correct: it hands over the tokens of the tokenisation
+and the end-of-file token exactly when the input has a tokenisation.
 -/
 def LexerCorrect (lex : Version → Chars → Option (List Handed)) : Prop :=
   ∀ version input handed, lex version input = some handed ↔
-    ∃ tokens, Reads version input tokens ∧
+    ∃ tokens, Tokenization version input tokens ∧
       handed = tokens.map (·.handed version input) ++ [endOfFile input]
 
 /--

@@ -48,8 +48,8 @@ lifts this limit.
 The input is a source file of the version: in 2.0, every character of it is from 0 to 127;
 from 2.5 on, any input is.
 
-This is a rule on the input, not on the lexicon: the lexicon reads characters from 128 on
-alike in every version, so a 2.0 input that breaks this rule may still have a reading. Where
+This is a rule on the input, not on the lexicon: the lexicon allows characters from 128 on
+alike in every version, so a 2.0 input that breaks this rule may still have a tokenisation. Where
 2.0 App. B says printable ASCII characters, its printable characters on an input that keeps
 this rule are meant.
 -/

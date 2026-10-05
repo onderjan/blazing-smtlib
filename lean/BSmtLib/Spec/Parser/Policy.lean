@@ -4,7 +4,7 @@ import BSmtLib.Spec.Grammar
 # Version policies
 
 A policy restricts which versions a script may declare, and how often. The standard has no
-such policies; they are this library's, and only restrict the reading of a script.
+such policies; they are this library's, and only restrict the parse of a script.
 -/
 
 namespace BSmtLib.Spec.Parser
@@ -42,13 +42,13 @@ def VersionPolicy.unrestricted : VersionPolicy :=
 /--
 Extension: as `VersionPolicy`.
 
-`ScriptReadsUnder policy version input commands`: starting in the version, the input reads as
-the commands, and its version declarations keep to the policy. A policy only restricts
-`ScriptReads`, which is the reading under `VersionPolicy.unrestricted`.
+`ScriptParseUnder policy version input commands`: starting in the version, the input has the
+commands as a parse, and its version declarations keep to the policy. A policy only restricts
+`ScriptParse`, which is the parse under `VersionPolicy.unrestricted`.
 -/
-def ScriptReadsUnder (policy : VersionPolicy) (version : Version) (input : Chars)
+def ScriptParseUnder (policy : VersionPolicy) (version : Version) (input : Chars)
     (commands : List Tree.Command) : Prop :=
-  ScriptReads version input commands ∧
+  ScriptParse version input commands ∧
     (∀ declared ∈ commands.filterMap Tree.Command.declaredVersion, declared ∈ policy.allowed) ∧
     ∀ limit, policy.maxDeclarations = some limit →
       (commands.filterMap Tree.Command.declaredVersion).length ≤ limit

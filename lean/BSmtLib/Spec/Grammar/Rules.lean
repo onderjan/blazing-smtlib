@@ -527,10 +527,10 @@ inductive Command (version : Version) : List SyntaxToken → Tree.Command → Pr
 
   /--
   `(` `set-info` `:smt-lib-version` ⟨decimal⟩ `)`, where the decimal is the number of the
-  version: a version declaration is read in the version it declares (see `ScriptReads`), and
+  version: a version declaration is parsed in the version it declares (see `ScriptParse`), and
   each version accepts only its own number. The standard does not say what a declaration of a
-  version that is not read means; it is rejected, as a version number could not mean anything
-  otherwise.
+  version other than the one it is parsed in means; it is rejected, as a version number could
+  not mean anything otherwise.
   -/
   | declareVersion :
       Command version

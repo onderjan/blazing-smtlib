@@ -157,9 +157,9 @@ example : ¬ Grammar.Command .v2_7
   all_goals simp_all (config := { decide := true }) [commandTokens, paren, word]
 
 /-- The unrestricted policy restricts nothing. -/
-theorem scriptReadsUnder_unrestricted (version : Version) (input : Chars)
+theorem scriptParseUnder_unrestricted (version : Version) (input : Chars)
     (commands : List Tree.Command) :
-    ScriptReadsUnder .unrestricted version input commands ↔ ScriptReads version input commands := by
+    ScriptParseUnder .unrestricted version input commands ↔ ScriptParse version input commands := by
   refine ⟨fun h => h.1, fun h => ⟨h, fun declared _ => ?_, by simp [VersionPolicy.unrestricted]⟩⟩
   cases declared <;> simp [VersionPolicy.unrestricted]
 

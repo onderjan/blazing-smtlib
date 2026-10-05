@@ -1,9 +1,9 @@
 import BSmtLib.Spec.Grammar.Rules
 
 /-!
-# Reading a script
+# Parsing a script
 
-How the characters of a script read as commands: each command is lexed and parsed in the
+How the characters of a script parse as commands: each command is lexed and parsed in the
 version in force where it starts.
 -/
 
@@ -11,10 +11,13 @@ namespace BSmtLib.Spec.Grammar
 
 open BSmtLib.Spec.Lexicon
 
-/-- The input reads as the tokens and ends with the last of them: no whitespace follows. -/
-def ReadsExactly (version : Version) (offset : Nat) (input : Chars) (tokens : List Token) :
+/--
+The tokens are a tokenisation of the input, which ends with the last of them: no whitespace
+follows.
+-/
+def TokenizationExactly (version : Version) (offset : Nat) (input : Chars) (tokens : List Token) :
     Prop :=
-  ReadsFrom version offset input tokens ∧
+  TokenizationFrom version offset input tokens ∧
     ∃ last, tokens.getLast? = some last ∧ last.offset + last.text.length = offset + input.length
 
 /--
@@ -29,36 +32,36 @@ def Tree.Command.DeclaresVersion (command : Tree.Command) : Prop :=
 Standard: 2.7 §3.11 Scripts: a script is a sequence of commands. Reading P4: a version
 declaration starts its version at its first character. Reading P5: `exit` ends the script.
 
-`ScriptReadsFrom version offset input commands`: starting in the version, the input, whose
-first character is at `offset`, reads as the commands.
+`ScriptParseFrom version offset input commands`: starting in the version, the input, whose
+first character is at `offset`, has the commands as a parse.
 
 A version declaration starts the version it declares from its own first character: it is
-read in that version, which accepts only a declaration of itself, and so is the input after
-it. The library switches at the end of the declaration instead; a declaration reads the same
+parsed in that version, which accepts only a declaration of itself, and so is the input after
+it. The library switches at the end of the declaration instead; a declaration parses the same
 in every version, so the two agree.
 
-A script is the commands of the input, which `exit` may end early: nothing after it is read.
+A script is the commands of the input, which `exit` may end early: nothing after it is parsed.
 -/
-inductive ScriptReadsFrom : Version → Nat → Chars → List Tree.Command → Prop
-  | done : ReadsFrom version offset input [] → ScriptReadsFrom version offset input []
+inductive ScriptParseFrom : Version → Nat → Chars → List Tree.Command → Prop
+  | done : TokenizationFrom version offset input [] → ScriptParseFrom version offset input []
 
-  | command : ReadsExactly commandVersion offset segment tokens →
+  | command : TokenizationExactly commandVersion offset segment tokens →
       Grammar.Command commandVersion (tokens.map (SyntaxToken.ofToken commandVersion)) command →
       (commandVersion = version ∨ command.DeclaresVersion) → command ≠ .exit →
-      ScriptReadsFrom commandVersion (offset + segment.length) rest commands →
-      ScriptReadsFrom version offset (segment ++ rest) (command :: commands)
+      ScriptParseFrom commandVersion (offset + segment.length) rest commands →
+      ScriptParseFrom version offset (segment ++ rest) (command :: commands)
 
-  | exit : ReadsExactly version offset segment tokens →
+  | exit : TokenizationExactly version offset segment tokens →
       Grammar.Command version (tokens.map (SyntaxToken.ofToken version)) .exit →
-      ScriptReadsFrom version offset (segment ++ rest) [.exit]
+      ScriptParseFrom version offset (segment ++ rest) [.exit]
 
 /--
-Standard: 2.7 §3.11 Scripts. Readings P4 and P5, as `ScriptReadsFrom`.
+Standard: 2.7 §3.11 Scripts. Readings P4 and P5, as `ScriptParseFrom`.
 
-`ScriptReads version input commands`: starting in the version, the input reads as the
-commands.
+`ScriptParse version input commands`: starting in the version, the input has the
+commands as a parse.
 -/
-def ScriptReads (version : Version) (input : Chars) (commands : List Tree.Command) : Prop :=
-  ScriptReadsFrom version 0 input commands
+def ScriptParse (version : Version) (input : Chars) (commands : List Tree.Command) : Prop :=
+  ScriptParseFrom version 0 input commands
 
 end BSmtLib.Spec.Grammar

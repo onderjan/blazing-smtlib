@@ -33,11 +33,11 @@ def CommandsUnique : Prop :=
 /--
 Claim: about the grammar, to be proved.
 
-Every script has at most one reading.
+Every script has at most one parse.
 -/
 def ScriptsUnique : Prop :=
   ∀ version input commands commands',
-    ScriptReads version input commands → ScriptReads version input commands' →
+    ScriptParse version input commands → ScriptParse version input commands' →
       commands = commands'
 
 end BSmtLib.Spec.Grammar
