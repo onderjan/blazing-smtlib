@@ -523,6 +523,11 @@ consumed.
 def resetConsumed (self : BatchCursor) : BatchCursor :=
   { self with first := self.nextIndex, bounded := ⟨Nat.le_refl _, self.bounded.2⟩ }
 
+/- LEAN: for the lexer, Rust's `consumed_entries`. -/
+/-- Folds over the categories of the tokens of the batch consumed so far, from its first one. -/
+def foldConsumedCategories (self : BatchCursor) (init : β) (f : β → TokenCategory → β) : β :=
+  (List.range self.nextIndex).foldl (fun acc index => f acc (self.batch.categoryOf ⟨index⟩)) init
+
 /-- The number of tokens not consumed yet. -/
 def remaining (self : BatchCursor) : Nat :=
   self.stop - self.nextIndex
@@ -610,5 +615,44 @@ class Consume (H : Type) (m : outParam (Type → Type)) (R E : outParam Type) wh
   -/
   consume : (cursor : BatchCursor) → cursor.HasNext →
     StateT H m (Except E (ControlFlow R) × { c : BatchCursor // c.Consumed cursor })
+
+/- LEAN: Rust's `SmtRecover: SmtConsume`. A recovering lexer requires both classes of its
+consumer. The calls cannot fail, and run in the consumer's monad with its state. The Rust
+blanket `impl SmtRecover for &mut T` has no counterpart, as Lean has no references. -/
+/--
+A token consumer that can recover after an error.
+
+This is used in the library to implement SMT-LIB script processing
+with error recovery: after an error, the current command is abandoned
+and the lexer closes all open parentheses before announcing recovery.
+If the command remains unclosed at the end of input, recovery is made
+before the end of input is handed over (only the unclosed command is
+abandoned and dropped).
+-/
+class Recover (H : Type) (m : outParam (Type → Type)) where
+  /--
+  Abandons everything the consumer has not finished.
+
+  Called when the input is lexically malformed or the consumer itself
+  returns an error, before the failing call returns. The location is
+  where the failure occurred: the input from there on is skipped, up
+  to the location given to `recover`.
+
+  The tokens consumed so far that belong to an unfinished top-level
+  value (typically, an SMT-LIB command) are to be abandoned, as if
+  they never were handed over.
+  -/
+  abandon : Location → StateT H m Unit
+  /--
+  Finishes the recovery after abandoning.
+
+  Called exactly once after every `abandon` before the
+  new token is handed over after the recovery. The tokens handed over
+  after the recovery are to be considered to follow the tokens before
+  the abandoned top-level value started, as if the abandoned top-level
+  value was never started. The input between abandonment and recovery
+  is not handed over in any way.
+  -/
+  recover : Location → StateT H m Unit
 
 end BSmtLib

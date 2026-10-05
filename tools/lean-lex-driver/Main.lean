@@ -319,55 +319,144 @@ instance : Consume (Scripted whitespace) IO Unit String where
         | .switchAndFinish _ version => (.ok (.break ()), switched version)
     | .rules refuseEnd => takeByRules refuseEnd version cursor h
 
+instance : Recover (Scripted whitespace) IO where
+  abandon place := do
+    let state : Scripted whitespace ← get
+    state.out.modify (· ++ s!"ab {location place}\n")
+    -- nothing is open any more
+    set ({ state with opened := 0 } : Scripted whitespace)
+  recover place := do
+    let state : Scripted whitespace ← get
+    state.out.modify (· ++ s!"rc {location place}\n")
+
 /--
-Applies the feeds of the request to the lexer and writes the lines of
-the feeds themselves. Returns whether every feed was applied.
+The line of the error. With `recover`, it ends with where the input continues from, if it
+does.
 -/
-def drive (request : Request) (lines : IO.Ref String) (lexer : Lexer (Scripted whitespace)) :
-    ExceptT String IO Bool := do
+def errorLine (err : LexError String) (recover : Bool) : Except String String := do
+  let line ← match err.cause with
+    | .lexical err => pure s!"err {errorKindName err.kind} {location err.span.start} \
+        {location err.span.end}"
+    | .consumer name => pure s!"cerr {name}"
+    -- the protocol has no line for an internal error, which must not occur
+    | .internal err => throw s!"internal error: {err.message}"
+  if !recover then
+    return line ++ "\n"
+  -- where the input continues from, if it does
+  let continues := match err.continuesFrom with
+    | some continues => location continues
+    | none => "-"
+  return s!"{line} {continues}\n"
+
+/-- The line of the flow the lexer returned, if it has one. -/
+def flowLine (flow : ControlFlow (Located Unit)) : String :=
+  match flow with
+  | .continue => ""
+  | .break located => s!"fin {location located.location}\n"
+
+/-- The lines that end the feed: where the lexer is, and its version if the consumer is scripted. -/
+def feedLines (request : Request) (lexer : Lexer (Scripted whitespace) recovery) : String :=
   let scripted := request.behaviour != .takeAll
-  let mut lexer := lexer
-  for feed in request.feeds do
-    let (result, next) ← match feed with
+  s!"at {location lexer.currentLocation}\n" ++
+    if scripted then s!"v {versionName lexer.version}\n" else ""
+
+/--
+Applies the feeds of the request to the lexer that stops at its first error and writes the
+lines of the feeds themselves. Returns whether every feed was applied.
+-/
+/- LEAN: a recursion over the feeds rather than a loop, so that each lexer is handed on once:
+a lexer still referred to while it lexes would be copied by every change of its state. -/
+def drive (request : Request) (lines : IO.Ref String) :
+    List (Option ByteArray) → Lexer (Scripted whitespace) → ExceptT String IO Bool
+  | [], _ => return true
+  | feed :: feeds, lexer => do
+    let result ← match feed with
       | some slice => lexer.lexSlice slice.toByteSlice
       | none => lexer.lexEof
-    lexer := next
     match result with
-    | .ok .continue => pure ()
-    | .ok (.break located) => lines.modify (· ++ s!"fin {location located.location}\n")
-    | .error err =>
-      let line ← match err with
-        | .lexer err => pure s!"err {errorKindName err.kind} {location err.span.start} \
-            {location err.span.end}"
-        | .handler name => pure s!"cerr {name}"
-        -- the protocol has no line for an internal error, which must not occur
-        | .internal err => throw s!"internal error: {err.message}"
-      lines.modify (· ++ line ++ "\n")
+    | .ok (flow, lexer) =>
+      lines.modify (· ++ flowLine flow ++ feedLines request lexer)
+      drive request lines feeds lexer
+    | .error (err, ()) =>
+      lines.modify (· ++ (← errorLine err false))
       -- the lexer has stopped for good, and the response with it
       return false
-    lines.modify (· ++ s!"at {location lexer.currentLocation}\n")
-    if scripted then
-      lines.modify (· ++ s!"v {versionName lexer.version}\n")
-  return true
+
+/- LEAN: Rust's `drive` serves both kinds of lexer; here the recovering one has its own, as its
+calls give back different things. -/
+/--
+Applies the feeds of the request to the recovering lexer and writes the lines of the feeds
+themselves. After an error on a slice, the rest of that slice is applied again, from where
+the input continues; after an error on the end of the input that continues, the end of the
+input is applied again.
+-/
+def driveRecovering (request : Request) (lines : IO.Ref String)
+    (lexer : Lexer (Scripted whitespace) .recovering) : ExceptT String IO Unit := do
+  let mut lexer := lexer
+  for feed in request.feeds do
+    match feed with
+    | some slice =>
+      -- the part of a slice that the lexer has not taken yet
+      let mut from_ := 0
+      repeat
+        let before := lexer.currentLocation.offset
+        match ← lexer.lexSlice (slice.toByteSlice from_) with
+        | .ok (flow, next) =>
+          lexer := next
+          lines.modify (· ++ flowLine flow)
+          break
+        | .error (err, next) =>
+          lexer := next
+          lines.modify (· ++ (← errorLine err true))
+          match err.continuesFrom with
+          -- the rest of the feed is applied again from there
+          | some continues => from_ := from_ + (continues.offset - before)
+          -- the input has ended with the error, the feed is done
+          | none => break
+    | none =>
+      match ← lexer.lexEof with
+      | .ok (flow, next) =>
+        lexer := next
+        lines.modify (· ++ flowLine flow)
+      | .error (err, after) =>
+        lines.modify (· ++ (← errorLine err true))
+        match after with
+        | .lexer next => lexer := next
+        | .pending pending =>
+          -- the end of the input continues, apply it again
+          match ← pending.lexEof with
+          | .ok (flow, next) =>
+            lexer := next
+            lines.modify (· ++ flowLine flow)
+          | .error (err, next) =>
+            lexer := next
+            lines.modify (· ++ (← errorLine err true))
+    lines.modify (· ++ feedLines request lexer)
 
 /-- Answers one request line, giving the response lines. -/
 def answer (line : String) : ExceptT String IO String := do
   -- decode the whole request first, so that a malformed one produces no lines
   let request ← readRequest line
-  -- the option that the Lean lexer cannot answer yet
-  if request.recover then
-    throw "the option recover is not implemented yet"
 
   -- the consumer writes into the response while the lexer owns it
   let lines ← IO.mkRef ""
   let version := request.version
   let behaviour := request.behaviour
-  let complete ← if request.whitespace then
-      drive request lines
-        (Lexer.new ({ behaviour, handed := 0, opened := 0, out := lines } : Scripted true) version)
-    else
-      drive request lines
+  let complete ← match request.whitespace, request.recover with
+    | false, false =>
+      drive request lines request.feeds.toList
         (Lexer.new ({ behaviour, handed := 0, opened := 0, out := lines } : Scripted false) version)
+    | true, false =>
+      drive request lines request.feeds.toList
+        (Lexer.new ({ behaviour, handed := 0, opened := 0, out := lines } : Scripted true) version)
+    | false, true =>
+      driveRecovering request lines (Lexer.newRecovering
+        ({ behaviour, handed := 0, opened := 0, out := lines } : Scripted false) version)
+      pure true
+    | true, true =>
+      driveRecovering request lines (Lexer.newRecovering
+        ({ behaviour, handed := 0, opened := 0, out := lines } : Scripted true) version)
+      pure true
 
   let mut response ← lines.get
   if complete then

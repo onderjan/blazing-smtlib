@@ -99,18 +99,19 @@ instance : Consume DiscardTokens Id Unit Empty where
     return (.ok .continue, ← takeEach step cursor h)
 
 /-- Fails unless the file lexed without an error. -/
-def checkLexed (result : Except (LexError Empty) α) (path : String) : IO Unit :=
+def checkLexed (result : Except (LexError Empty × β) α) (path : String) : IO Unit :=
   match result with
   | .ok _ => pure ()
-  | .error (.lexer err) => throw <| IO.userError s!"benchmark file {path} must lex, got {repr err}"
-  | .error (.internal err) =>
+  | .error ({ cause := .lexical err, .. }, _) =>
+    throw <| IO.userError s!"benchmark file {path} must lex, got {repr err}"
+  | .error ({ cause := .internal err, .. }, _) =>
     throw <| IO.userError s!"benchmark file {path} must lex, got {err.message}"
-  | .error (.handler never) => nomatch never
+  | .error ({ cause := .consumer never, .. }, _) => nomatch never
 
 /-- Lexes the in-memory file, discarding tokens. -/
 def lexFromMemory (data : ByteArray) (path : String) : IO Unit := do
   let lexer := Lexer.new ({ tokens := 0 } : DiscardTokens) .v2_7
-  let (result, _) := Id.run (lexer.lexAll data.toByteSlice)
+  let result := Id.run (lexer.lexAll data.toByteSlice)
   checkLexed result path
 
 /- LEAN: the lexer owns its handler and does not give it back, where the Rust benchmark lends
@@ -130,7 +131,7 @@ instance : Consume CountTokens IO Unit Empty where
 def countFromMemory (data : ByteArray) (path : String) : IO Nat := do
   let tokens ← IO.mkRef 0
   let lexer := Lexer.new ({ tokens } : CountTokens) .v2_7
-  let (result, _) ← lexer.lexAll data.toByteSlice
+  let result ← lexer.lexAll data.toByteSlice
   checkLexed result path
   tokens.get
 

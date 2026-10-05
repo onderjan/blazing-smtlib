@@ -8,4 +8,5 @@ import BSmtLib.Token.Syntax
 import BSmtLib.Lexer.CharClass
 import BSmtLib.Lexer.Error
 import BSmtLib.Lexer.Helpers
+import BSmtLib.Lexer.Recovery
 import BSmtLib.Lexer

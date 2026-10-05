@@ -165,7 +165,31 @@ inductive LexerState where
   | comment
   | whitespace
   | quotedSymbolClosed
-  | failed
+  deriving BEq, Inhabited
+
+/-- The state of recovery in a lexer. -/
+inductive RecoveryState where
+  /--
+  Nothing more: the end of the input raised the error, so only
+  the end of the input can be lexed again.
+  -/
+  | «end»
+  /--
+  Nothing yet: recovery starts at a token boundary.
+
+  If no parenthesis is open there, nothing is skipped at all.
+  -/
+  | boundary
+  /-- Plain text outside of the strings, quoted symbols, and comments. -/
+  | plain
+  /-- Inside string literal. -/
+  | string
+  /-- At the byte after a backslash in a string literal (SMT-LIB 2.0 only). -/
+  | stringEscape
+  /-- Inside a quoted symbol. -/
+  | quotedSymbol
+  /-- Inside a comment. -/
+  | comment
   deriving BEq, Inhabited
 
 structure DigitRun where
