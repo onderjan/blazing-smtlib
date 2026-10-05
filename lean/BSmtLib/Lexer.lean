@@ -100,11 +100,6 @@ def LexerCore.locationAt (self : LexerCore) (position : USize) : Location :=
 def LexerCore.currentLocation (self : LexerCore) : Location :=
   self.locationAt self.base
 
-/-- Whether the byte is an ASCII digit. -/
-@[inline]
-private def isAsciiDigit (c : UInt8) : Bool :=
-  byte! '0' ≤ c && c ≤ byte! '9'
-
 section
 
 variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [Consume H m R E]
@@ -625,10 +620,6 @@ private partial def lexNormalFrom (input : Input) (offset : Nat) (base index : U
   | .colon =>
     -- starts a keyword
     startToken index
-    -- we require that the keyword does not start with a digit
-    -- (also non-empty, but that is checked after finishing)
-    if (input.get? after).any isAsciiDigit then
-      failAt .forbiddenKeywordName (after + 1)
     -- get a run of simple-symbol bytes
     let afterEnd := runEnd input after RUN_SIMPLE_SYMBOL
     if afterEnd == input.stop then
@@ -976,10 +967,6 @@ private partial def lexQuotedSymbol (input : Input) (consumed : USize) : LexM H 
     return input.stop
 
 private def lexKeyword (input : Input) (start : USize) : LexM H m R E USize := do
-  -- test that the keyword does not start with a digit
-  if (← getCore).tokenContent.isEmpty && isAsciiDigit (input.get start) then
-    failAt .forbiddenKeywordName (start + 1)
-
   -- find the first byte that is not simple-symbol-like
   let index := runEnd input start RUN_SIMPLE_SYMBOL
 
