@@ -174,13 +174,20 @@ def Settled (version : Version) (fed : Chars) (tokens : List Token) : Prop :=
 Property: of a lexer, to be proved of an implementation. Extension D: the input need not be a
 `SourceFile`.
 
-A lexer of whole inputs is correct: it hands over the tokens of the tokenisation
-and the end-of-file token exactly when the input has a tokenisation.
+A lexer is correct on whole inputs, however they are cut into slices: `lex version slices` is
+what it hands over when fed the slices and then the end of the input, or `none` if it fails.
+It hands over the tokens of the tokenisation of the characters fed and the end-of-file token
+exactly when they have a tokenisation.
+
+This is stated for a consumer that takes every token handed over and always continues; how a
+lexer answers a consumer that finishes, leaves tokens, switches version or fails will be
+stated relative to it.
 -/
-def LexerCorrect (lex : Version → Chars → Option (List Handed)) : Prop :=
-  ∀ version input handed, lex version input = some handed ↔
-    ∃ tokens, Tokenization version input tokens ∧
-      handed = tokens.map (·.handed version input) ++ [endOfFile input]
+def LexerCorrect (lex : Version → List Chars → Option (List Handed)) : Prop :=
+  ∀ version slices handed, let input := slices.flatten
+    lex version slices = some handed ↔
+      ∃ tokens, Tokenization version input tokens ∧
+        handed = tokens.map (·.handed version input) ++ [endOfFile input]
 
 /--
 Property: of a lexer, to be proved of an implementation. Extension D: the input need not be a
@@ -189,6 +196,10 @@ Property: of a lexer, to be proved of an implementation. Extension D: the input 
 A lexer fed in slices is correct: `feed version slices` is what it handed over after the
 slices, and whether it failed. It fails exactly when the characters fed stop being viable,
 and it hands over the tokens settled by the longest viable part of them.
+
+This is stated for a consumer that takes every token handed over and always continues; how a
+lexer answers a consumer that finishes, leaves tokens, switches version or fails will be
+stated relative to it.
 -/
 def StreamingCorrect (feed : Version → List Chars → List Handed × Bool) : Prop :=
   ∀ version slices, let fed := slices.flatten
