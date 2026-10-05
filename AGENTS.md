@@ -108,3 +108,11 @@ are how agents follow it.
 - `lean/BSmtLib/SpecChecks` checks the specification: on the standard's
   examples, and that it is unambiguous. It is not trusted and not a part of the
   specification.
+- A theorem that proves a property stated in the specification, of the
+  specification itself or of an implementation, is stated in the root module of
+  its library (`lean/BSmtLib/SpecChecks.lean` for the specification), with its
+  proof in the modules that root imports, so that one file shows what holds. It
+  is followed by `#guard_msgs in #print axioms` with its expected output, which
+  names no axiom but `propext`, `Classical.choice` and `Quot.sound`, so that a
+  `sorry` or an axiom of its own fails the build. Examples and lemmas need no
+  such check.

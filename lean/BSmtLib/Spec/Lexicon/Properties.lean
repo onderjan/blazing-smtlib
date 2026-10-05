@@ -21,9 +21,9 @@ namespace BSmtLib.Spec.Lexicon
 /--
 Property: every input has at most one tokenisation.
 
-This is a property of the specification alone; `BSmtLib.SpecChecks` is to prove it. If it did
-not hold, the specification would let one input stand for two different sequences of tokens,
-and no lexer could hand over the right one.
+This is a property of the specification alone. `BSmtLib.SpecChecks` proves it as
+`Lexicon.unique`. If it did not hold, the specification would let one input stand for two
+different sequences of tokens, and no lexer could hand over the right one.
 -/
 def Unique : Prop :=
   ∀ version input tokens tokens',
