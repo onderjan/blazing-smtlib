@@ -745,18 +745,23 @@ input resets the version to the initial one.
 def version (self : Lexer H recovery) : Version :=
   self.core.version
 
-private def afterError : {recovery : Recovery} → Lexer H recovery → AfterError H recovery
+/-- What a failed call gives back: nothing for a lexer that stops at its first error, the lexer
+for a recovering one. -/
+def afterError : {recovery : Recovery} → Lexer H recovery → AfterError H recovery
   | .failFast, _ => ()
   | .recovering, lexer => lexer
 
-private def afterEofError : {recovery : Recovery} → Lexer H recovery → (continues : Bool) →
+/-- What a failed end of the input gives back: nothing for a lexer that stops at its first error;
+for a recovering one, the lexer that can only lex the end of the input again if the error
+continues there, and the lexer otherwise. -/
+def afterEofError : {recovery : Recovery} → Lexer H recovery → (continues : Bool) →
     AfterEofError H recovery
   | .failFast, _, _ => ()
   | .recovering, lexer, true => .pending ⟨lexer⟩
   | .recovering, lexer, false => .lexer lexer
 
 /-- Runs a step on the lexer's state with its consumer, and puts the lexer together again. -/
-private def run [Monad m] (self : Lexer H recovery)
+def run [Monad m] (self : Lexer H recovery)
     (step : Core → StateT H m (α × Core)) : m (α × Lexer H recovery) := do
   let { handler, core } := self
   let ((result, core), handler) ← (step core).run handler

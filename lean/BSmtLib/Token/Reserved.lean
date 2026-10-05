@@ -190,6 +190,13 @@ private def reservedWords : Array (ByteArray × Reserved) :=
 /-- Number of slots of the reserved-word table. -/
 private def reservedSlots : Nat := 128
 
+/-!
+The reserved-word table and its hash. They are public, in `Internal`, only so that the proofs
+of the lexers can read them; they are not a part of the library's interface.
+-/
+
+namespace Internal
+
 /--
 Returns the slot in the reserved-word table corresponding to the non-empty symbol.
 
@@ -198,7 +205,7 @@ middle byte: no two reserved words share a slot, which a check after
 `reservedTable` ensures when the module is built.
 -/
 @[inline]
-private def reservedSlot (symbol : ByteSlice) : Nat :=
+def reservedSlot (symbol : ByteSlice) : Nat :=
   let len := symbol.size
   let first := (symbol.get! 0).toNat
   let last := (symbol.get! (len - 1)).toNat
@@ -213,11 +220,15 @@ The empty word is used as a sentinel value for empty slots.
 /- LEAN: Rust computes the table in a `static` at compile time. A Lean definition without
 arguments is computed once, when the module is loaded. `Id.run do` runs imperative-looking
 code (`let mut`, `for`) that has no side effects. -/
-private def reservedTable : Array (ByteArray × Reserved × Version) := Id.run do
+def reservedTable : Array (ByteArray × Reserved × Version) := Id.run do
   let mut table := Array.replicate reservedSlots (ByteArray.empty, Reserved.general .underscore, Version.v2_5)
   for (word, reserved) in reservedWords do
     table := table.set! (reservedSlot word.toByteSlice) (word, reserved, reserved.since)
   table
+
+end Internal
+
+open Internal
 
 /- LEAN: `#guard` evaluates the condition when the module is built and fails the build if
 it is false; it stands in for the Rust `assert!` in a `const` context. A word that shared
