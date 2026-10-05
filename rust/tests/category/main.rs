@@ -33,7 +33,7 @@ use blazing_smtlib::{
         SmtCloseParenParser, SmtClosedAttributeParser, SmtClosedMultipleAttributeParser,
         SmtClosedMultipleParser, SmtClosedParser, SmtIdentParser, SmtKeywordParser,
         SmtOpenParenParser, SmtPairParser, SmtParenMultipleParser, SmtParenParser, SmtParse,
-        SmtParseError, SmtParseErrorKind, SmtParseState, SmtQualifiedIdentParser, SmtSExprParser,
+        SmtParseError, SmtParseErrorCause, SmtParseState, SmtQualifiedIdentParser, SmtSExprParser,
         SmtSortParser, SmtStringParser, SmtSymbolParser, SmtSyntaxErrorKind, SmtTermParser,
     },
     token::{SmtBatchCursor, SmtConsume, SmtReserved, SmtTokenCategory, SmtVersion},
@@ -415,10 +415,10 @@ fn run_count_from<H: SmtHandler<Error = Infallible>, P: SmtParse<H>>(
         Ok(_) => {}
         Err(SmtLexErrorCause::Consumer(err)) => {
             let span = err.span();
-            return Err(match err.into_kind() {
-                SmtParseErrorKind::Syntax(kind) => (kind, span),
+            return Err(match err.into_cause() {
+                SmtParseErrorCause::Syntax(kind) => (kind, span),
                 // the handler never fails
-                SmtParseErrorKind::Handler(err) => match err {},
+                SmtParseErrorCause::Handler(err) => match err {},
             });
         }
         Err(SmtLexErrorCause::Lexical(err)) => {

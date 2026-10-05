@@ -13,7 +13,7 @@ use std::ops::ControlFlow;
 use blazing_smtlib::{
     NonstandardCommandError, SmtBytes, SmtSyntaxChecker,
     parser::{SmtCommandOutcome, SmtCommandParser, SmtSExprParser, SmtSyntaxErrorKind},
-    reader::{SmtReadError, SmtReadErrorKind, SmtReader},
+    reader::{SmtReadError, SmtReadErrorCause, SmtReader},
     token::{
         SmtCommandNameReserved, SmtGeneralReserved, SmtReserved, SmtTokenCategory, SmtVersion,
         SmtVersionPosture, SmtVersionPostureBuilder,
@@ -81,7 +81,7 @@ type Outcome = Result<(), (String, u64, u64)>;
 fn outcome(result: Result<(), ReadError>) -> Outcome {
     result.map_err(|err| {
         (
-            format!("{:?}", err.kind()),
+            format!("{:?}", err.cause()),
             err.span().start().offset(),
             err.span().end().offset(),
         )
@@ -131,7 +131,7 @@ fn assert_syntax_error(outcome: Outcome, kind: SmtSyntaxErrorKind, start: u64, e
     assert_eq!(
         outcome,
         Err((
-            format!("{:?}", SmtReadErrorKind::<()>::Syntax(kind)),
+            format!("{:?}", SmtReadErrorCause::<()>::Syntax(kind)),
             start,
             end
         ))
@@ -476,8 +476,8 @@ fn the_version_and_the_declaration_count_reset_with_the_input() {
             .read_slice(undeclared)
             .expect_err("lambda is reserved in the initial version");
         assert!(matches!(
-            err.kind(),
-            SmtReadErrorKind::Syntax(SmtSyntaxErrorKind::ExpectedSymbol)
+            err.cause(),
+            SmtReadErrorCause::Syntax(SmtSyntaxErrorKind::ExpectedSymbol)
         ));
     }
 }
@@ -707,8 +707,8 @@ fn a_reserved_word_alone_is_an_s_expression_since_2_6() {
         if version < SmtVersion::V2_6 {
             let err = result.expect_err("a reserved word is no S-expression before 2.6");
             assert!(matches!(
-                err.kind(),
-                SmtReadErrorKind::Syntax(SmtSyntaxErrorKind::ExpectedSExpr)
+                err.cause(),
+                SmtReadErrorCause::Syntax(SmtSyntaxErrorKind::ExpectedSExpr)
             ));
             assert_eq!(
                 (err.span().start().offset(), err.span().end().offset()),
@@ -919,5 +919,5 @@ fn the_string_escapes_reset_with_the_input() {
     let err = reader
         .read_slice(legacy)
         .expect_err("a backslash does not escape in the initial version");
-    assert!(matches!(err.kind(), SmtReadErrorKind::Lexical(_)));
+    assert!(matches!(err.cause(), SmtReadErrorCause::Lexical(_)));
 }

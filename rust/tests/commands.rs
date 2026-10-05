@@ -12,7 +12,7 @@ use blazing_smtlib::{
     SmtFunctionSignature, SmtHandler, SmtIdentView, SmtIndexView, SmtKeyword, SmtKeywordView,
     SmtNumeral, SmtPatternView, SmtQuantifierKind, SmtSExpr, SmtSimplePatternView, SmtSort,
     SmtSpecialConstantView, SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm,
-    lexer::SmtLexicalErrorKind, parser::SmtSyntaxErrorKind, reader::SmtReadErrorKind,
+    lexer::SmtLexicalErrorKind, parser::SmtSyntaxErrorKind, reader::SmtReadErrorCause,
     token::SmtTokenCategory,
 };
 
@@ -902,8 +902,8 @@ fn declare_sort_leading_zero_arity_is_rejected_by_lexer() {
         .expect_err("expected a lexer error");
     // the lexer reports the error as soon as a digit follows the leading zero
     assert_error_span(&err, 16, 18);
-    match err.kind() {
-        SmtReadErrorKind::Lexical(SmtLexicalErrorKind::NumeralLeadingZero) => {}
+    match err.cause() {
+        SmtReadErrorCause::Lexical(SmtLexicalErrorKind::NumeralLeadingZero) => {}
         kind => panic!("expected a leading zero lexer error, got {kind:?}"),
     }
 }
@@ -1240,9 +1240,9 @@ fn assert_handler_error(input: &[u8], message: &str, start: u64, end: u64) -> Re
     let mut handler = Resolving::default();
     let err = parse_with(&mut handler, input).expect_err("expected a handler error");
     assert_error_span(&err, start, end);
-    match err.kind() {
-        SmtReadErrorKind::Handler(handler_message) => assert_eq!(handler_message, message),
-        SmtReadErrorKind::Syntax(kind) => panic!("expected handler error, got {kind:?}"),
+    match err.cause() {
+        SmtReadErrorCause::Handler(handler_message) => assert_eq!(handler_message, message),
+        SmtReadErrorCause::Syntax(kind) => panic!("expected handler error, got {kind:?}"),
         _ => panic!("expected handler error"),
     }
     handler
@@ -2271,11 +2271,11 @@ fn missing_recursive_body_is_started_only_in_the_sugar_form() {
     assert_error_span(&err, 24, 25);
     assert!(
         matches!(
-            err.kind(),
-            SmtReadErrorKind::Syntax(SmtSyntaxErrorKind::ExpectedTerm)
+            err.cause(),
+            SmtReadErrorCause::Syntax(SmtSyntaxErrorKind::ExpectedTerm)
         ),
         "{:?}",
-        err.kind()
+        err.cause()
     );
     assert_eq!(
         handler.events,
@@ -2290,11 +2290,11 @@ fn missing_recursive_body_is_started_only_in_the_sugar_form() {
     assert_error_span(&err, 31, 32);
     assert!(
         matches!(
-            err.kind(),
-            SmtReadErrorKind::Syntax(SmtSyntaxErrorKind::ExpectedFunctionBody)
+            err.cause(),
+            SmtReadErrorCause::Syntax(SmtSyntaxErrorKind::ExpectedFunctionBody)
         ),
         "{:?}",
-        err.kind()
+        err.cause()
     );
     assert_eq!(handler.events, ["start-funs-rec ((f () Int))"]);
 }

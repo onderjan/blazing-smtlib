@@ -10,7 +10,7 @@ use blazing_smtlib::{
     parser::{
         SmtCommandOutcome, SmtCommandParser, SmtScriptEnd, SmtSyntaxErrorKind, SmtTermParser,
     },
-    reader::{SmtReadError, SmtReadErrorKind, SmtReader, read_smt, read_smt_file},
+    reader::{SmtReadError, SmtReadErrorCause, SmtReader, read_smt, read_smt_file},
     token::{SmtVersion, SmtVersionPosture},
 };
 
@@ -47,8 +47,8 @@ fn lexer_error_kind_and_span_are_passed_through() {
     // the string literal starts at offset 15, zero-based line 2, column 2, and is unclosed at EOF
     let err = read(b"(check-sat)\n\n  \"abc").expect_err("expected a lexer error, got Ok");
     assert!(matches!(
-        err.kind(),
-        SmtReadErrorKind::Lexical(SmtLexicalErrorKind::UnclosedStringLiteral)
+        err.cause(),
+        SmtReadErrorCause::Lexical(SmtLexicalErrorKind::UnclosedStringLiteral)
     ));
     assert_span(&err, (15, 2, 2), (19, 2, 6));
 }
@@ -58,8 +58,8 @@ fn parser_error_span_is_resolved_to_lines() {
     // `(assert )` is missing a term; the offending token is the `)` on line 2
     let err = read(b"(check-sat)\n(assert )").expect_err("expected a parser error, got Ok");
     assert!(matches!(
-        err.kind(),
-        SmtReadErrorKind::Syntax(SmtSyntaxErrorKind::ExpectedTerm)
+        err.cause(),
+        SmtReadErrorCause::Syntax(SmtSyntaxErrorKind::ExpectedTerm)
     ));
     assert_span(&err, (20, 1, 8), (21, 1, 9));
 }
@@ -71,8 +71,8 @@ fn parser_error_deep_in_the_input_is_resolved_to_lines() {
     let input = b"(set-logic QF_UF)\n(declare-const x Bool)\n(assert (f ))\n";
     let err = read(input).expect_err("expected a parser error, got Ok");
     assert!(matches!(
-        err.kind(),
-        SmtReadErrorKind::Syntax(SmtSyntaxErrorKind::EmptyTermApplication)
+        err.cause(),
+        SmtReadErrorCause::Syntax(SmtSyntaxErrorKind::EmptyTermApplication)
     ));
     assert_span(&err, (52, 2, 11), (53, 2, 12));
 }
@@ -82,7 +82,7 @@ fn handler_error_span_is_resolved_to_lines() {
     // the handler rejects the command by name, and the reported span is that
     // of the name symbol on the second line rather than of the whole command
     let err = read(b"(check-sat)\n(frobnicate 1)").expect_err("expected a handler error");
-    assert!(matches!(err.kind(), SmtReadErrorKind::Handler(_)));
+    assert!(matches!(err.cause(), SmtReadErrorCause::Handler(_)));
     assert_span(&err, (13, 1, 1), (23, 1, 11));
 }
 
@@ -91,7 +91,7 @@ fn span_after_a_token_containing_a_line_break() {
     // the quoted symbol carries the line break, so the offending `x` after it
     // must be reported on the second line
     let err = read(b"(assert |a\nb| x)").expect_err("expected a parser error, got Ok");
-    assert!(matches!(err.kind(), SmtReadErrorKind::Syntax(_)));
+    assert!(matches!(err.cause(), SmtReadErrorCause::Syntax(_)));
     assert_span(&err, (14, 1, 3), (15, 1, 4));
 }
 
@@ -99,7 +99,7 @@ fn span_after_a_token_containing_a_line_break() {
 fn parser_error_at_eof_is_empty_span() {
     // unclosed command: the error is on the zero-width EOF token after a newline
     let err = read(b"(check-sat\n").expect_err("expected a parser error, got Ok");
-    assert!(matches!(err.kind(), SmtReadErrorKind::Syntax(_)));
+    assert!(matches!(err.cause(), SmtReadErrorCause::Syntax(_)));
     assert_span(&err, (11, 1, 0), (11, 1, 0));
 }
 
@@ -136,7 +136,7 @@ fn io_error_has_empty_span_at_current_location() {
         data: b"(check-sat)\n(",
     };
     let err = read_smt(&mut SmtSyntaxChecker, reader).expect_err("expected an I/O error, got Ok");
-    assert!(matches!(err.kind(), SmtReadErrorKind::Io(_)));
+    assert!(matches!(err.cause(), SmtReadErrorCause::Io(_)));
     // 13 bytes were consumed, so the location is zero-based line 1, column 1
     assert_span(&err, (13, 1, 1), (13, 1, 1));
 }
@@ -146,7 +146,7 @@ fn file_open_error_has_zero_span() {
     let path = std::path::Path::new("/nonexistent/smt-parser-test/does-not-exist.smt2");
     let err =
         read_smt_file(&mut SmtSyntaxChecker, path).expect_err("expected an I/O error, got Ok");
-    assert!(matches!(err.kind(), SmtReadErrorKind::Io(_)));
+    assert!(matches!(err.cause(), SmtReadErrorCause::Io(_)));
     assert_span(&err, (0, 0, 0), (0, 0, 0));
 }
 
@@ -178,7 +178,7 @@ fn outcome_text(result: Result<(), SmtReadError<NonstandardCommandError>>) -> St
         Ok(()) => "ok".to_string(),
         Err(err) => format!(
             "{:?} at {:?}..{:?}",
-            err.kind(),
+            err.cause(),
             loc(err.span().start()),
             loc(err.span().end())
         ),
@@ -322,8 +322,8 @@ fn reading_after_a_finished_input_starts_a_new_one_from_the_origin() {
             .read_slice(b"(assert )")
             .expect_err("a missing term is a parser error");
         assert!(matches!(
-            err.kind(),
-            SmtReadErrorKind::Syntax(SmtSyntaxErrorKind::ExpectedTerm)
+            err.cause(),
+            SmtReadErrorCause::Syntax(SmtSyntaxErrorKind::ExpectedTerm)
         ));
         assert_span(&err, (20, 1, 8), (21, 1, 9));
     }

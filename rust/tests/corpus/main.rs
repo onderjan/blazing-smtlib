@@ -37,7 +37,7 @@ use std::time::{Duration, Instant};
 
 use blazing_smtlib::{
     NonstandardCommandError, SmtSyntaxChecker,
-    reader::{SmtReadError, SmtReadErrorKind, read_smt_file},
+    reader::{SmtReadError, SmtReadErrorCause, read_smt_file},
 };
 use rayon::ThreadPoolBuilder;
 use rayon::prelude::*;
@@ -111,11 +111,11 @@ fn try_run_file<T>(
 
     match result {
         Ok(Ok(value)) => Ok(value),
-        Ok(Err(e)) => match e.kind() {
-            SmtReadErrorKind::Lexical(err) => Err(format!("Lexer error: {:?}", err)),
-            SmtReadErrorKind::Syntax(err) => Err(format!("Parser error: {:?}", err)),
-            SmtReadErrorKind::Io(err) => Err(format!("Read error: {:?}", err)),
-            SmtReadErrorKind::Handler(err) => Err(format!("Nonstandard command: {:?}", err.0)),
+        Ok(Err(e)) => match e.cause() {
+            SmtReadErrorCause::Lexical(err) => Err(format!("Lexer error: {:?}", err)),
+            SmtReadErrorCause::Syntax(err) => Err(format!("Parser error: {:?}", err)),
+            SmtReadErrorCause::Io(err) => Err(format!("Read error: {:?}", err)),
+            SmtReadErrorCause::Handler(err) => Err(format!("Nonstandard command: {:?}", err.0)),
         },
         Err(cause) => {
             let msg = match cause.downcast_ref::<&'static str>() {

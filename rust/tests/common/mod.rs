@@ -3,7 +3,7 @@
 use blazing_smtlib::{
     NonstandardCommandError, SmtCommandHandler, SmtSyntaxChecker,
     parser::SmtSyntaxErrorKind,
-    reader::{SmtReadError, SmtReadErrorKind, read_smt},
+    reader::{SmtReadError, SmtReadErrorCause, read_smt},
 };
 
 /// Parses the whole input, feeding the commands to the given handler.
@@ -35,14 +35,14 @@ pub fn assert_error_span<E>(err: &SmtReadError<E>, start: u64, end: u64) {
 pub fn assert_parser_error(input: &[u8], start: u64, end: u64) -> SmtSyntaxErrorKind {
     let err = parse(input).expect_err("expected a parser error, got Ok");
     assert_error_span(&err, start, end);
-    match err.into_kind() {
-        SmtReadErrorKind::Syntax(kind) => kind,
-        SmtReadErrorKind::Handler(err) => {
+    match err.into_cause() {
+        SmtReadErrorCause::Syntax(kind) => kind,
+        SmtReadErrorCause::Handler(err) => {
             panic!("expected parser error, got handler error on {:?}", err.0)
         }
-        SmtReadErrorKind::Lexical(kind) => {
+        SmtReadErrorCause::Lexical(kind) => {
             panic!("expected parser error, got lexer error {kind:?}")
         }
-        SmtReadErrorKind::Io(err) => panic!("expected parser error, got I/O error {err}"),
+        SmtReadErrorCause::Io(err) => panic!("expected parser error, got I/O error {err}"),
     }
 }

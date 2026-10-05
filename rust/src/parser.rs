@@ -74,7 +74,7 @@ pub(crate) fn parse_by_token<R, E>(
 pub struct SmtParseError<E>(Box<SmtParseErrorInner<E>>);
 
 #[derive(Debug)]
-pub enum SmtParseErrorKind<E> {
+pub enum SmtParseErrorCause<E> {
     Syntax(SmtSyntaxErrorKind),
     Handler(E),
 }
@@ -125,38 +125,38 @@ pub enum SmtSyntaxErrorKind {
 impl<E> SmtParseError<E> {
     #[cold]
     #[inline(never)]
-    pub(crate) fn new(kind: SmtParseErrorKind<E>, span: SmtSpan) -> Self {
-        // PERFORMANCE: error kind and span are boxed
+    pub(crate) fn new(cause: SmtParseErrorCause<E>, span: SmtSpan) -> Self {
+        // PERFORMANCE: error cause and span are boxed
         // so that parser results are not unnecessarily large
         // this method boxes them, which forces an allocation
         // so it is is marked cold and never-inline
-        Self(Box::new(SmtParseErrorInner { kind, span }))
+        Self(Box::new(SmtParseErrorInner { cause, span }))
     }
 
     pub(crate) fn handler_error(err: E, span: SmtSpan) -> Self {
-        Self::new(SmtParseErrorKind::Handler(err), span)
+        Self::new(SmtParseErrorCause::Handler(err), span)
     }
 
     pub(crate) fn category_error(err: SmtSyntaxErrorKind, span: SmtSpan) -> Self {
-        Self::new(SmtParseErrorKind::Syntax(err), span)
+        Self::new(SmtParseErrorCause::Syntax(err), span)
     }
 
-    pub fn kind(&self) -> &SmtParseErrorKind<E> {
-        &self.0.kind
+    pub fn cause(&self) -> &SmtParseErrorCause<E> {
+        &self.0.cause
     }
 
     pub fn span(&self) -> SmtSpan {
         self.0.span
     }
 
-    pub fn into_kind(self) -> SmtParseErrorKind<E> {
-        self.0.kind
+    pub fn into_cause(self) -> SmtParseErrorCause<E> {
+        self.0.cause
     }
 }
 
 #[derive(Debug)]
 struct SmtParseErrorInner<E> {
-    kind: SmtParseErrorKind<E>,
+    cause: SmtParseErrorCause<E>,
     span: SmtSpan,
 }
 
