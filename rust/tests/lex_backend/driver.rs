@@ -310,8 +310,13 @@ fn read_request(line: &str) -> Result<Request, String> {
             }
             _ => {
                 if let Some(replies) = word.strip_prefix("plan=").filter(|_| option && !scripted) {
-                    let replies: Result<Vec<Reply>, String> =
-                        replies.split(',').map(read_reply).collect();
+                    // no replies at all are a plan too: every token is taken,
+                    // and the hand-overs are reported
+                    let replies: Result<Vec<Reply>, String> = replies
+                        .split(',')
+                        .filter(|_| !replies.is_empty())
+                        .map(read_reply)
+                        .collect();
                     request.behaviour = Behaviour::Plan(replies?);
                 } else if let Some(digits) = word.strip_prefix('s') {
                     request.feeds.push(Some(unhex(digits)?));

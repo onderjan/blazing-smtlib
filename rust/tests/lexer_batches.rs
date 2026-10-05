@@ -14,18 +14,26 @@
 //! in every stopping pattern, spans included. A version the consumer sets
 //! applies from the end of the last consumed token, also to what the lexer
 //! had lexed ahead. A consumer that finishes ends lexing after the tokens it
-//! took: that location is returned with the result, and the lexer is reset
-//! to its initial state for the next input.
+//! took: that location is returned with the result, and the lexer discards
+//! what it is fed until the end of the input.
+//!
+//! The runs with a plan go through the lexing backend of the tests, so they
+//! check the Lean port when its driver is selected. The tests that build a
+//! lexer themselves use the Rust interface and test the Rust lexer only.
+
+mod lex_backend;
 
 use std::cell::RefCell;
 use std::ops::ControlFlow;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use blazing_smtlib::{
-    SmtLocation, SmtSpan,
+    SmtLocation,
     lexer::{SmtLexError, SmtLexErrorCause, SmtLexer, SmtLexicalErrorKind},
     token::{SmtBatchCursor, SmtConsume, SmtToken, SmtTokenCategory, SmtVersion},
 };
+
+use lex_backend::{Feed, Line, Loc, Options, driver};
 
 /// The batch capacity the lexer is expected to use.
 ///
@@ -33,26 +41,36 @@ use blazing_smtlib::{
 /// change is noticed and the expectations below are updated with it.
 const BATCH_CAPACITY: usize = 256;
 
+/// The two ends of the span of a recorded token.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct RecordedSpan {
+    start: Loc,
+    end: Loc,
+}
+
 /// An owned copy of a handed-over token.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Recorded {
     ty: SmtTokenCategory,
     content: Vec<u8>,
-    span: SmtSpan,
+    span: RecordedSpan,
 }
 
 fn record(token: SmtToken) -> Recorded {
     Recorded {
         ty: token.category(),
         content: token.content().to_vec(),
-        span: token.span(),
+        span: RecordedSpan {
+            start: loc(token.span().start()),
+            end: loc(token.span().end()),
+        },
     }
 }
 
 /// The slices of one input, fed to the lexer in turn.
 type Chunks = &'static [&'static [u8]];
 
-fn loc(location: SmtLocation) -> (u64, u64, u64) {
+fn loc(location: SmtLocation) -> Loc {
     (location.offset(), location.line(), location.column())
 }
 
@@ -145,8 +163,8 @@ impl SmtConsume for Recorder<'_> {
         }
         // what was consumed ends at the last token taken in this hand-over
         assert_eq!(
-            cursor.consumed_end(),
-            taken.checked_sub(1).map(|last| tokens[last].span.end()),
+            cursor.consumed_end().map(loc),
+            taken.checked_sub(1).map(|last| tokens[last].span.end),
             "the consumed end after taking {taken} of {len} tokens"
         );
         self.calls.push(tokens);
@@ -167,15 +185,22 @@ impl SmtConsume for Recorder<'_> {
     }
 }
 
+/// Why a run ended in an error.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RunError {
+    Lexical(SmtLexicalErrorKind),
+    Consumer,
+}
+
 /// Everything observable about one lexer run.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 struct Run {
     /// The tokens of every hand-over, in order.
     calls: Vec<Vec<Recorded>>,
     /// The version of the cursor at the start of every hand-over.
     versions: Vec<SmtVersion>,
     /// The error that ended the run, if any.
-    error: Option<SmtLexErrorCause<()>>,
+    error: Option<RunError>,
     /// The location returned with the result if the consumer finished.
     finished_at: Option<(u64, u64, u64)>,
 }
@@ -232,16 +257,19 @@ fn assert_at_origin<C: SmtConsume>(lexer: &SmtLexer<C>) {
 #[track_caller]
 /// What made the call fail. The lexer of these runs stops at its first error,
 /// so no error may say that the input continues.
-fn into_cause(err: SmtLexError<()>) -> SmtLexErrorCause<()> {
+fn into_cause(err: SmtLexError<()>) -> RunError {
     assert_eq!(
         err.continues_from(),
         None,
         "a lexer that stops at its first error does not continue the input"
     );
-    err.into_cause()
+    match err.into_cause() {
+        SmtLexErrorCause::Lexical(err) => RunError::Lexical(*err.kind()),
+        SmtLexErrorCause::Consumer(()) => RunError::Consumer,
+    }
 }
 
-fn run_from(version: SmtVersion, chunks: &[&[u8]], plan: &[Reply]) -> Run {
+fn run_direct_from(version: SmtVersion, chunks: &[&[u8]], plan: &[Reply]) -> Run {
     let mut calls = Vec::new();
     let mut versions = Vec::new();
     let mut error = None;
@@ -306,6 +334,126 @@ fn run_from(version: SmtVersion, chunks: &[&[u8]], plan: &[Reply]) -> Run {
     }
 }
 
+/// Lexes the chunks, then end of file, from the given version, with the
+/// consumer replying by the plan, through the lexing backend of the tests:
+/// the Lean driver if it is selected, the Rust lexer otherwise.
+///
+/// The Rust lexer is also run directly with a consumer of this file, which
+/// checks the cursor as it goes, and the two runs must be the same.
+#[track_caller]
+fn run_from(version: SmtVersion, chunks: &[&[u8]], plan: &[Reply]) -> Run {
+    let replies = plan
+        .iter()
+        .map(|reply| match *reply {
+            Reply::TakeAll => driver::Reply::TakeAll,
+            Reply::Leave { consumed } => driver::Reply::Leave(consumed),
+            Reply::Fail { consumed } => driver::Reply::Fail(consumed),
+            Reply::Finish { consumed } => driver::Reply::Finish(consumed),
+            Reply::Switch { consumed, version } => driver::Reply::Switch(consumed, version),
+            Reply::SwitchAndFinish { consumed, version } => {
+                driver::Reply::SwitchAndFinish(consumed, version)
+            }
+        })
+        .collect();
+    let options = Options {
+        behaviour: driver::Behaviour::Plan(replies),
+        ..Options::default()
+    };
+    let mut feeds: Vec<Feed<'_>> = chunks.iter().map(|chunk| Feed::Slice(chunk)).collect();
+    feeds.push(Feed::Eof);
+
+    let mut run = Run {
+        calls: Vec::new(),
+        versions: Vec::new(),
+        error: None,
+        finished_at: None,
+    };
+    let mut locations = Vec::new();
+    // the tokens of the current hand-over that are still to come
+    let mut awaited = 0;
+    for line in lex_backend::run(version, &options, &feeds) {
+        match line {
+            Line::Handover { version, count } => {
+                assert_eq!(awaited, 0, "a hand-over with fewer tokens than it said");
+                assert_ne!(count, 0, "every hand-over has at least one token");
+                run.versions.push(version);
+                run.calls.push(Vec::with_capacity(count));
+                awaited = count;
+            }
+            Line::Token(token) => {
+                assert_ne!(awaited, 0, "a token outside of a hand-over");
+                awaited -= 1;
+                let call = run.calls.last_mut().expect("a hand-over was started");
+                call.push(Recorded {
+                    ty: token.ty,
+                    content: token.content,
+                    span: RecordedSpan {
+                        start: token.start,
+                        end: token.end,
+                    },
+                });
+            }
+            Line::Finish(location) => {
+                assert!(
+                    run.finished_at.is_none(),
+                    "a finished consumer is handed nothing more"
+                );
+                run.finished_at = Some(location);
+            }
+            Line::LexicalError { error, continues } => {
+                assert_eq!(continues, None, "the lexer stops at its first error");
+                run.error = Some(RunError::Lexical(error.kind));
+            }
+            Line::ConsumerError { continues, .. } => {
+                assert_eq!(continues, None, "the lexer stops at its first error");
+                run.error = Some(RunError::Consumer);
+            }
+            Line::At(location) => locations.push(location),
+            Line::Version(_) => {}
+            Line::Abandon(_) | Line::Recover(_) => {
+                panic!("a lexer that stops at its first error does not recover")
+            }
+        }
+    }
+    assert_eq!(awaited, 0, "a hand-over with fewer tokens than it said");
+
+    // whatever the consumer did, after every chunk the lexer is after
+    // everything it was fed, and the end of the input resets it
+    let mut expected = SmtLocation::initial();
+    for (index, location) in locations.iter().enumerate() {
+        match chunks.get(index) {
+            Some(chunk) => {
+                expected = chunk
+                    .iter()
+                    .fold(expected, |location, &c| location.after_byte(c));
+                assert_eq!(
+                    *location,
+                    loc(expected),
+                    "location after the chunk {:?} under the plan {plan:?}",
+                    String::from_utf8_lossy(chunk)
+                );
+            }
+            None => assert_eq!(
+                *location,
+                (0, 0, 0),
+                "the lexer must be reset to the origin"
+            ),
+        }
+    }
+    if run.error.is_none() {
+        assert_eq!(locations.len(), feeds.len(), "every feed is applied");
+    }
+
+    if lex_backend::lean_driver().is_none() {
+        assert_eq!(
+            run_direct_from(version, chunks, plan),
+            run,
+            "the direct run and the run through the backend"
+        );
+    }
+    run
+}
+
 /// Lexes the chunks, then end of file, from version 2.7.
 #[track_caller]
 fn run(chunks: &[&[u8]], plan: &[Reply]) -> Run {
@@ -368,7 +516,7 @@ fn tokens_are_batched_up_to_the_capacity_and_the_rest_follows() {
             assert_eq!(token.ty, SmtTokenCategory::UnquotedSymbol, "token {index}");
             assert_eq!(token.content, b"a", "token {index}");
             let start = 2 * index as u64;
-            assert_eq!(loc(token.span.start()), (start, 0, start), "token {index}");
+            assert_eq!(token.span.start, (start, 0, start), "token {index}");
         }
         assert!(run.error.is_none());
     }
@@ -487,7 +635,7 @@ fn leaving_nothing_continues_after_the_batch() {
     assert_eq!(run.taken(&plan), reference(&chunks.concat()));
     let d = &run.calls[1][1];
     assert_eq!(d.content, b"d");
-    assert_eq!(loc(d.span.start()), (6, 1, 0));
+    assert_eq!(d.span.start, (6, 1, 0));
 }
 
 #[test]
@@ -575,7 +723,7 @@ fn a_stop_without_a_consumed_token_panics() {
         ];
         for (chunks, plan, what) in cases {
             let message = panic_message(|| {
-                let _ = run(chunks, &plan);
+                let _ = run_direct_from(SmtVersion::V2_7, chunks, &plan);
             });
             assert!(
                 message.contains("at least one token"),
@@ -598,7 +746,7 @@ fn a_finish_stop_takes_a_prefix_and_ends_lexing() {
     assert!(run.error.is_none());
     assert_eq!(run.sizes(), [7]);
     assert_eq!(run.taken(&plan), reference(REWIND_INPUT)[..3]);
-    assert_eq!(run.finished_at, Some(loc(run.calls[0][2].span.end())));
+    assert_eq!(run.finished_at, Some(run.calls[0][2].span.end));
 }
 
 #[test]
@@ -712,7 +860,7 @@ fn the_input_after_a_finished_one_starts_at_the_origin() {
     expected.truncate(2);
     assert_eq!(calls[1], expected);
     assert_eq!(calls[2][0].ty, SmtTokenCategory::EndOfFile);
-    assert_eq!(loc(calls[2][0].span.start()), (4, 1, 2));
+    assert_eq!(calls[2][0].span.start, (4, 1, 2));
 }
 
 #[test]
@@ -745,7 +893,7 @@ fn a_finish_at_the_end_of_file_token_is_followed_by_a_new_input() {
     }
     assert_eq!(calls.iter().map(Vec::len).collect::<Vec<_>>(), [2, 1, 1]);
     assert_eq!(calls[2][0].ty, SmtTokenCategory::EndOfFile);
-    assert_eq!(loc(calls[2][0].span.start()), (0, 0, 0));
+    assert_eq!(calls[2][0].span.start, (0, 0, 0));
 }
 
 // --- Setting the version ---
@@ -797,7 +945,10 @@ fn an_error_met_ahead_under_the_old_version_is_dropped() {
     let plain = run_from(SmtVersion::V2_0, &[DOUBLED_QUOTE], &[]);
     assert_eq!(plain.sizes(), [1]);
     assert!(
-        matches!(&plain.error, Some(SmtLexErrorCause::Lexical(err)) if *err.kind() == SmtLexicalErrorKind::MissingDelimiter),
+        matches!(
+            &plain.error,
+            Some(RunError::Lexical(SmtLexicalErrorKind::MissingDelimiter))
+        ),
         "{:?}",
         plain.error
     );
@@ -827,7 +978,10 @@ fn an_error_under_both_versions_is_still_reported() {
         }];
         let switched = run_from(SmtVersion::V2_6, &[input], &plan);
         assert!(
-            matches!(&switched.error, Some(SmtLexErrorCause::Lexical(err)) if *err.kind() == SmtLexicalErrorKind::UnexpectedCharacter),
+            matches!(
+                &switched.error,
+                Some(RunError::Lexical(SmtLexicalErrorKind::UnexpectedCharacter))
+            ),
             "to {declared:?}: {:?}",
             switched.error
         );
@@ -985,7 +1139,10 @@ fn tokens_before_a_lexer_error_are_handed_over_first() {
     let plain = run(&[input], &[]);
     assert_eq!(plain.sizes(), [2]);
     assert!(
-        matches!(&plain.error, Some(SmtLexErrorCause::Lexical(err)) if *err.kind() == SmtLexicalErrorKind::UnexpectedCharacter),
+        matches!(
+            &plain.error,
+            Some(RunError::Lexical(SmtLexicalErrorKind::UnexpectedCharacter))
+        ),
         "{:?}",
         plain.error
     );
@@ -997,7 +1154,7 @@ fn tokens_before_a_lexer_error_are_handed_over_first() {
     assert_eq!(stopped.sizes(), [2, 1]);
     assert_eq!(stopped.calls[1][0].content, b"b");
     assert!(
-        matches!(&stopped.error, Some(SmtLexErrorCause::Lexical(_))),
+        matches!(&stopped.error, Some(RunError::Lexical(_))),
         "{:?}",
         stopped.error
     );
@@ -1008,7 +1165,7 @@ fn a_consumer_error_ends_the_run_with_the_consumer_error() {
     let plan = [Reply::Fail { consumed: 1 }];
     let run = run(&[b"a b c "], &plan);
     assert_eq!(run.sizes(), [3]);
-    assert_eq!(run.error, Some(SmtLexErrorCause::Consumer(())));
+    assert_eq!(run.error, Some(RunError::Consumer));
 }
 
 #[test]

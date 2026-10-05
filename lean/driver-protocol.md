@@ -205,6 +205,8 @@ hand-over, and takes every token once the replies have run out. A reply is:
 - `w<k>:<version>`: take `k` tokens, set the version and finish.
 
 `k` is at least one; if the hand-over has fewer tokens, all of them are taken.
+`plan=` alone is a plan without replies: every token is taken, and the
+hand-overs are reported.
 
 ```
 rules
@@ -385,8 +387,8 @@ BLAZING_SMTLIB_LEAN_DRIVER=/path/to/the/driver cargo test
 
 The tests that go through the driver are those of `tests/lexer.rs`,
 `tests/lexer_slices.rs`, `tests/lexer_symbols.rs`, `tests/lexer_v2_0.rs`,
-`tests/lexer_whitespace.rs` and `tests/lexer_recovery.rs` that do not use the
-Rust lexer's own interface. Everything else in the suite tests the Rust
+`tests/lexer_whitespace.rs`, `tests/lexer_batches.rs` and
+`tests/lexer_recovery.rs` that do not use the Rust lexer's own interface. Everything else in the suite tests the Rust
 library whatever the variable says.
 
 The answers of the Rust lexer come from `rust/tests/lex_backend/driver.rs`,
