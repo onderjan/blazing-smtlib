@@ -7,19 +7,26 @@ import BSmtLib.Spec.Lexer
 /-!
 # The adapter from the lexers to the spec
 
-This module is trusted, as the spec is. `Spec.Lexer.LexerCorrect` is a property of a function
-that gives what a lexer hands over in the spec's form; `handed` is that function for each lexer
-of the chain. A theorem stated through `handed` says only what `handed` makes of the lexer, so
-it is to be read like the spec: `handed` has to run the lexer as a consumer would, and record
-what the lexer hands over as it is, or the theorem says nothing about the lexer.
+This module is trusted, as the spec is. `Spec.Lexer.LexerCorrect` and `Spec.Lexer.Correct` are
+properties of functions that give what a lexer hands over in the spec's form; `handed`, for the
+slices and then the end of the input, and `fed`, for the slices alone, are those functions for
+each lexer of the chain. A theorem stated through them says only what they make of the lexer,
+so they are to be read like the spec: they have to run the lexer as a consumer would, and
+record what the lexer hands over as it is, or the theorem says nothing about the lexer.
 
-So `handed` fixes nothing up. It feeds the slices and then the end of the input, with a
-consumer that takes every token of each cursor and records it. The consumer does not take
-whitespace and comments, never finishes and never switches the version. Each field of a
-recorded token is read from the cursor the lexer hands it over in, and is only converted from
+So `handed` and `fed` fix nothing up. They feed the slices, and `handed` then the end of the
+input, with a consumer that takes every token of each cursor and records it. The consumer does
+not take whitespace and comments, never finishes and never switches the version. Each field of
+a recorded token is read from the cursor the lexer hands it over in, and is only converted from
 the library's types to the spec's, by one small function per type. Each lexer is given to
-`handed` by its operations alone (`Ops`), which name the lexer's own functions and do nothing
-else.
+`handed` and `fed` by its operations alone (`Ops`), which name the lexer's own functions and do
+nothing else.
+
+A lexer that stops at its first error does not give itself back from a call that fails, so its
+consumer cannot be read after it from the public calls. `fed` feeds the slices by the step that
+the public call runs (`Ops.lexSliceStep`), through the lexer's own entry point that gives the
+lexer back also when the step fails; the public call is that step followed by dropping the
+lexer on an error.
 -/
 
 namespace BSmtLib.Proofs.Adapter
@@ -135,6 +142,10 @@ structure Ops where
   lexSlice : Lexer → ByteSlice →
     Id (Except (LexError Unit × AfterError) (ControlFlow (Located Empty) × Lexer))
   lexEof : Lexer → Id (Except (LexError Unit × AfterEofError) (ControlFlow (Located Empty) × Lexer))
+  /-- The step that `lexSlice` runs, run by the lexer's entry point that gives the lexer back
+  also when the step fails. -/
+  lexSliceStep : Lexer → ByteSlice →
+    Id (Except (LexError Unit) (ControlFlow (Located Empty)) × Lexer)
   /-- The consumer of the lexer. -/
   handler : Lexer → Collector
 
@@ -162,6 +173,28 @@ def handed (ops : Ops) (version : Spec.Lexicon.Version) (slices : List Spec.Lexi
     Option (List Handed) :=
   feed ops (ops.new { handed := [] } (toVersion version)) slices
 
+/--
+Feeds the lexer the slices, without the end of the input, by the step of `lexSlice`, and gives
+the consumer and whether a call failed. The feeding stops at the first call that fails, with
+the consumer as that call left it. The consumer never finishes, so no call breaks.
+-/
+def feedSlices (ops : Ops) (lexer : ops.Lexer) : List Spec.Lexicon.Chars → Collector × Bool
+  | [] => (ops.handler lexer, false)
+  | slice :: slices =>
+    match ops.lexSliceStep lexer slice.toByteArray.toByteSlice with
+    | (.ok .continue, lexer) => feedSlices ops lexer slices
+    | (.ok (.break finished), _) => finished.value.elim
+    | (.error _, lexer) => (ops.handler lexer, true)
+
+/--
+What the lexer has done after being fed the slices under the version, before the end of the
+input: what it has handed over, and whether a call failed.
+-/
+def fed (ops : Ops) (version : Spec.Lexicon.Version) (slices : List Spec.Lexicon.Chars) :
+    Spec.Lexer.Fed :=
+  let (collector, failed) := feedSlices ops (ops.new { handed := [] } (toVersion version)) slices
+  { handed := collector.handed, failed }
+
 /-! ## The lexers -/
 
 /-- The naive lexer `Lexer.V1Naive`. -/
@@ -172,6 +205,9 @@ def V1Naive.ops : Ops where
   new := Lexer.V1Naive.Lexer.new
   lexSlice := Lexer.V1Naive.Lexer.lexSlice
   lexEof := Lexer.V1Naive.Lexer.lexEof
+  lexSliceStep lexer slice :=
+    lexer.run (Lexer.V1Naive.lexSliceStep (Recovery.failFast == .recovering)
+      (LexRecovery.abandon Recovery.failFast) (LexRecovery.recover Recovery.failFast) slice)
   handler := Lexer.V1Naive.Lexer.handler
 
 /-- The Rust lexer ported to Lean `Lexer.WRustPort`. -/
@@ -182,6 +218,9 @@ def WRustPort.ops : Ops where
   new := Lexer.WRustPort.Lexer.new
   lexSlice := Lexer.WRustPort.Lexer.lexSlice
   lexEof := Lexer.WRustPort.Lexer.lexEof
+  lexSliceStep lexer slice :=
+    lexer.run (Lexer.WRustPort.lexSliceStep (ops := Lexer.WRustPort.Rust.ops)
+      (LexRecovery.abandon Recovery.failFast) (LexRecovery.recover Recovery.failFast) slice)
   handler := Lexer.WRustPort.Lexer.handler
 
 /-- The lexer with the batch kept in its state `Lexer.X1BatchInCore`, which has the type of the
@@ -193,6 +232,9 @@ def X1BatchInCore.ops : Ops where
   new := Lexer.WRustPort.Lexer.new
   lexSlice := Lexer.X1BatchInCore.Lexer.lexSlice
   lexEof := Lexer.X1BatchInCore.Lexer.lexEof
+  lexSliceStep lexer slice :=
+    lexer.run (Lexer.WRustPort.lexSliceStep (ops := Lexer.X1BatchInCore.ops)
+      (LexRecovery.abandon Recovery.failFast) (LexRecovery.recover Recovery.failFast) slice)
   handler := Lexer.WRustPort.Lexer.handler
 
 /-- The library's lexer `BSmtLib.Lexer`. -/
@@ -203,6 +245,9 @@ def Lexer.ops : Ops where
   new := BSmtLib.Lexer.new
   lexSlice := BSmtLib.Lexer.lexSlice
   lexEof := BSmtLib.Lexer.lexEof
+  lexSliceStep lexer slice :=
+    BSmtLib.Lexer.Internal.run lexer (BSmtLib.Lexer.Internal.lexSliceStep
+      (LexRecovery.abandon Recovery.failFast) (LexRecovery.recover Recovery.failFast) slice)
   handler := BSmtLib.Lexer.Internal.handler
 
 end BSmtLib.Proofs.Adapter
