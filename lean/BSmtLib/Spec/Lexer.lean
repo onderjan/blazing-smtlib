@@ -298,18 +298,6 @@ def Sequential (feed : Version → List Chars → Fed) (version : Version)
     ((feed version slices).failed → (feed version (slices ++ more)).failed)
 
 /--
-Property: a lexer is `WholeInputCorrect` on every version and every input.
-
-Not the final version: it is the part of `Correct` that is about whole inputs, kept until
-`Correct` takes its place.
--/
-def LexerCorrect (lex : Version → List Chars → Option (List Handed)) : Prop :=
-  ∀ version slices handed, let input := slices.flatten
-    lex version slices = some handed ↔
-      ∃ tokens, Tokenization version input tokens ∧
-        handed = tokens.map (·.handed version input) ++ [endOfFile input]
-
-/--
 Property: a lexer is correct on every version and every input, both on the whole input and fed
 in slices.
 
