@@ -799,7 +799,6 @@ def failCall (recovers : Bool) (abandon : Location → StateT H m Unit) (failure
         | _ => .skipping .plain
       -- the consumer fails after a whole token: with nothing open, nothing is skipped
       | .consumer _ => if core.depth == 0 then .recovered else .skipping .plain
-      | .internal _ => .skipping .plain
   abandon failure.location
   return ({ cause := failure.cause, continuesFrom := some failure.location },
     { core with

@@ -25,8 +25,8 @@ def StepAgrees (idleA idleB : IdleStep H m R E) (recover : Location → StateT H
     erase <$> loop3 idleA recover sliceStart slice index committed core batch flow hfits =
       erase <$> (do
         let ⟨(outcome, core, batch, ⟨next, _⟩), hfits⟩ ←
-          lexAt idleB recover sliceStart slice index h core batch hfits
-        cont (loop3 idleA recover sliceStart slice) sliceStart slice committed flow outcome core
+          lexAt idleB recover (sliceStart + committed) slice index h core batch hfits
+        cont (loop3 idleA recover sliceStart slice) slice committed flow outcome core
           batch next hfits)
 
 theorem loop3_agree [LawfulMonad m] (idleA idleB : IdleStep H m R E)
@@ -40,7 +40,7 @@ theorem loop3_agree [LawfulMonad m] (idleA idleB : IdleStep H m R E)
   intro a iha committed ha b
   refine Nat.strongRecOn b ?_
   intro b ihb index hb core batch flow hfits
-  have hres : ∀ r, committed < r → r ≤ slice.size →
+  have hres : ∀ r, committed < r → r < slice.size →
       Agree (loop3 idleA recover sliceStart slice) (loop3 idleB recover sliceStart slice) r r :=
     fun r h1 h2 => iha (slice.size - r) (by omega) r rfl _ r rfl
   by_cases h : index < slice.size
@@ -49,23 +49,25 @@ theorem loop3_agree [LawfulMonad m] (idleA idleB : IdleStep H m R E)
     congr
     funext x
     obtain ⟨⟨outcome, core, batch, ⟨next, hn⟩⟩, hfits⟩ := x
-    exact cont_agree _ _ _ _ _ _ _ _ _ _ _
+    exact cont_agree _ _ _ _ _ _ _ _ _ _
       (ihb (slice.size - next) (by omega) next rfl) hres
   · rw [loop3_ge _ _ _ _ _ _ _ _ _ hfits h, loop3_ge _ _ _ _ _ _ _ _ _ hfits h]
-    exact atEnd_agree _ _ _ _ _ _ _ _ _ hres
+    exact atEnd_agree _ _ _ _ _ _ _ _ hres
 
 /-- A batch that fits an idle state fits it at any later location. -/
-theorem fits_idle {core : Core} {batch : Array Lexeme} (hfits : Fits core batch)
+theorem fits_idle {floor : Nat} {core : Core} {batch : Array Lexeme}
+    (hfits : Fits floor core batch)
     (location : Location) (hle : core.location.offset ≤ location.offset) :
-    Fits { core with activity := .idle, location, startedBefore := trivial } batch :=
+    Fits floor { core with activity := .idle, location, startedBefore := trivial } batch :=
   hfits.mono (show core.frontier ≤ location.offset by have := core.frontier_le; omega)
 
 /-- The loop from equal positions and states is the same, whatever the proofs that the batch
 fits. -/
 theorem loop3_congr {idle : IdleStep H m R E} {recover : Location → StateT H m Unit}
     {sliceStart : Nat} {slice : ByteSlice} {index index' committed : Nat} {core core' : Core}
-    {batch : Array Lexeme} {flow : ControlFlow (Located R)} {h : Fits core batch}
-    {h' : Fits core' batch} (ei : index = index') (e : core = core') :
+    {batch : Array Lexeme} {flow : ControlFlow (Located R)}
+    {h : Fits (sliceStart + committed) core batch}
+    {h' : Fits (sliceStart + committed) core' batch} (ei : index = index') (e : core = core') :
     loop3 idle recover sliceStart slice index committed core batch flow h =
       loop3 idle recover sliceStart slice index' committed core' batch flow h' := by
   subst ei e

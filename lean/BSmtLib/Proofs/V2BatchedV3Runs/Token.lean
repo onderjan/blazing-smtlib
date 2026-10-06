@@ -35,11 +35,12 @@ theorem started_cols {core : Core} {p q : Pending} (hact : core.activity = .toke
 
 /-- A batch that fits a state with a token in progress fits it with any token in progress that
 starts at the same place. -/
-theorem fits_token {core : Core} {batch : Array Lexeme} {p q : Pending} (hfits : Fits core batch)
+theorem fits_token {floor : Nat} {core : Core} {batch : Array Lexeme} {p q : Pending}
+    (hfits : Fits floor core batch)
     (hact : core.activity = .token p) (hq : q.start = p.start) (location : Location)
     (hs : q.start.offset < location.offset) :
-    Fits { core with activity := .token q, location, startedBefore := hs } batch :=
-  ⟨hfits.1, show _ ≤ q.start.offset by rw [hq]; exact Fits.le_start hfits hact⟩
+    Fits floor { core with activity := .token q, location, startedBefore := hs } batch :=
+  ⟨hfits.1, show _ ≤ q.start.offset by rw [hq]; exact Fits.le_start hfits hact, hfits.3⟩
 
 theorem core_token (p : Pending) (core : Core) (hact : core.activity = .token p)
     (hs : p.start.offset < core.location.offset) :
@@ -56,7 +57,8 @@ variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [Consume H m R E]
 theorem expand_congr' [LawfulMonad m] {recover : Location → StateT H m Unit} {sliceStart : Nat}
     {slice : ByteSlice} {committed : Nat} {flow : ControlFlow (Located R)} {c₁ c₂ : Core}
     (hb : blank c₁ = blank c₂) {batch : Array Lexeme} {p₁ p₂ : Pending}
-    {location₁ location₂ : Location} {h₁ : Fits c₁ batch} {h₂ : Fits c₂ batch}
+    {location₁ location₂ : Location} {h₁ : Fits (sliceStart + committed) c₁ batch}
+    {h₂ : Fits (sliceStart + committed) c₂ batch}
     {hlast₁ : lastEnd 0 batch.toList ≤ p₁.start.offset}
     {hlast₂ : lastEnd 0 batch.toList ≤ p₂.start.offset}
     {hstart₁ : p₁.start.offset < location₁.offset} {hstart₂ : p₂.start.offset < location₂.offset}
@@ -74,12 +76,15 @@ does there, given that from the byte after it on it does what the lexer over run
 rest of the token. -/
 theorem loop2_runOrPending [LawfulMonad m] (recover : Location → StateT H m Unit)
     (sliceStart : Nat) (slice : ByteSlice) (committed : Nat) (flow : ControlFlow (Located R))
-    (batch : Array Lexeme) (core : Core) (hfits : Fits core batch) {i j : Nat} (hij : i ≤ j)
+    (batch : Array Lexeme) (core : Core) (hfits : Fits (sliceStart + committed) core batch)
+    {i j : Nat} (hij : i ≤ j)
     (hj : j ≤ slice.size) (q : Pending) (location : Location)
     (hs : q.start.offset < location.offset)
-    (hfits' : Fits { core with activity := .token q, location, startedBefore := hs } batch)
+    (hfits' : Fits (sliceStart + committed)
+      { core with activity := .token q, location, startedBefore := hs } batch)
     (ih : j < slice.size → ∀ (q' : Pending) (core' : Core) (hact' : core'.activity = .token q')
-      (hfits' : Fits core' batch) (r : Ran slice.size (j + 1)) (hr : r.Spec q' core'.location),
+      (hfits' : Fits (sliceStart + committed) core' batch) (r : Ran slice.size (j + 1))
+      (hr : r.Spec q' core'.location),
       r = run (Consume.consumesWhitespaceAndComments (H := H)) slice q' (j + 1) core'.location →
       erase <$> loop2 recover sliceStart slice (j + 1) committed core' batch flow hfits' =
         erase <$> expand recover sliceStart slice committed flow core' batch q' core'.location
@@ -116,7 +121,8 @@ theorem loop2_token [LawfulMonad m] (recover : Location → StateT H m Unit) (sl
     (slice : ByteSlice) (committed : Nat) (flow : ControlFlow (Located R))
     (batch : Array Lexeme) :
     ∀ n i, slice.size - i = n → i ≤ slice.size → ∀ (p : Pending) (core : Core)
-      (hact : core.activity = .token p) (hfits : Fits core batch) (r : Ran slice.size i)
+      (hact : core.activity = .token p) (hfits : Fits (sliceStart + committed) core batch)
+      (r : Ran slice.size i)
       (hr : r.Spec p core.location),
       r = run (Consume.consumesWhitespaceAndComments (H := H)) slice p i core.location →
       erase <$> loop2 recover sliceStart slice i committed core batch flow hfits =
@@ -127,7 +133,7 @@ theorem loop2_token [LawfulMonad m] (recover : Location → StateT H m Unit) (sl
   intro n ihn i hn hi p core hact hfits r hr hr0
   -- what the loop does from the byte after the end of a run on
   have ih : ∀ j, i ≤ j → j < slice.size → ∀ (q' : Pending) (core' : Core)
-      (hact' : core'.activity = .token q') (hfits' : Fits core' batch)
+      (hact' : core'.activity = .token q') (hfits' : Fits (sliceStart + committed) core' batch)
       (r : Ran slice.size (j + 1)) (hr : r.Spec q' core'.location),
       r = run (Consume.consumesWhitespaceAndComments (H := H)) slice q' (j + 1) core'.location →
       erase <$> loop2 recover sliceStart slice (j + 1) committed core' batch flow hfits' =
@@ -154,7 +160,7 @@ theorem loop2_token [LawfulMonad m] (recover : Location → StateT H m Unit) (sl
       (q := { p with content := p.content ++ bytesOf slice i (runEnd slice pred i) })
       hact rfl (runEnd slice pred i - i)
     rw [loop2_steps recover sliceStart slice committed batch flow pred mode hstep hnl _ i rfl hi
-      p core hm hact hfits hs (fits_token hfits hact rfl _ hs)]
+      p core hm hact hfits hs (fits_token hfits hact (by rfl) _ hs)]
     exact loop2_runOrPending recover sliceStart slice committed flow batch core hfits _
       (runEnd_le slice pred i hi) _ _ _ _
       (fun hj => ih _ (le_runEnd slice pred i) hj) _ _ _ _ r hr hr0
@@ -166,7 +172,7 @@ theorem loop2_token [LawfulMonad m] (recover : Location → StateT H m Unit) (sl
         erase <$> expand recover sliceStart slice committed flow core batch p core.location
           hfits (Fits.le_start hfits hact) (core.started hact) r hr := by
     intro hr0
-    rw [loop2_congr (h' := fits_token hfits hact rfl core.location (core.started hact))
+    rw [loop2_congr (h' := fits_token hfits hact (by rfl) core.location (core.started hact))
       (core_token p core hact (core.started hact)).symm]
     exact loop2_runOrPending recover sliceStart slice committed flow batch core hfits
       (Nat.le_refl i) hi p core.location (core.started hact) _
@@ -187,7 +193,7 @@ theorem loop2_token [LawfulMonad m] (recover : Location → StateT H m Unit) (sl
         simp [advance, hd, hz.1]
       subst hr0
       simp only [V2Batched.lexByte, withEq, hact, advanceS, hadv, pure_bind, expand]
-      exact cont_failed _ _ _ _ _ _ rfl _ _ _ _ _
+      exact cont_failed _ _ _ _ _ rfl _ _ _ _ _
     · rename_i hz
       cases zero with
       | false => exact steps isDigit (.numeral false) (advance_numeral_run _) isDigit_ne rfl hr0
@@ -219,7 +225,7 @@ theorem loop2_token [LawfulMonad m] (recover : Location → StateT H m Unit) (sl
         have hs1 : start.offset < (core.location.afterByte slice[i]).offset := by
           rw [afterByte_offset]; omega
         rw [loop2_pending recover sliceStart slice committed batch flow i hi' _ _ core hact hfits
-          hadv hs1 (fits_token hfits hact rfl _ hs1)]
+          hadv hs1 (fits_token hfits hact (by rfl) _ hs1)]
         have hfits1 := fits_token (q := ⟨.fraction true, start, content.push slice[i]⟩) hfits hact
           rfl _ hs1
         have hs2 := started_cols
@@ -232,7 +238,7 @@ theorem loop2_token [LawfulMonad m] (recover : Location → StateT H m Unit) (sl
         rw [loop2_steps recover sliceStart slice committed batch flow isDigit (.fraction true)
           (advance_fraction_run _) isDigit_ne _ (i + 1) rfl (by omega)
           ⟨.fraction true, start, content.push slice[i]⟩ _ rfl rfl hfits1 hs2
-          (fits_token hfits1 rfl rfl _ hs2)]
+          (fits_token hfits1 rfl (by rfl) _ hs2)]
         have hend := runEnd_succ slice isDigit i hi' hd
         have hle := le_runEnd slice isDigit (i + 1)
         have hle' := runEnd_le slice isDigit (i + 1) (by omega)

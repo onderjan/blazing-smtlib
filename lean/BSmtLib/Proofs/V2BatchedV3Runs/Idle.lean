@@ -21,16 +21,16 @@ variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [Consume H m R E]
 theorem lexStart_agrees [LawfulMonad m] (recover : Location → StateT H m Unit)
     (sliceStart : Nat) (slice : ByteSlice) (committed : Nat) (flow : ControlFlow (Located R))
     (i : Nat) (hi : i < slice.size) (core : Core) (batch : Array Lexeme)
-    (hfits : Fits core batch) :
+    (hfits : Fits (sliceStart + committed) core batch) :
     erase <$> (do
       let ⟨(outcome, core, batch), hfits⟩ ←
-        V2Batched.lexStart sliceStart core batch slice[i] hfits
-      cont (loop2 recover sliceStart slice) sliceStart slice committed flow outcome core batch
+        V2Batched.lexStart (sliceStart + committed) core batch slice[i] hfits
+      cont (loop2 recover sliceStart slice) slice committed flow outcome core batch
         (i + 1) hfits) =
     erase <$> (do
       let ⟨(outcome, core, batch, ⟨next, _⟩), hfits⟩ ←
-        V3Runs.lexIdle sliceStart slice i hi core batch hfits
-      cont (loop2 recover sliceStart slice) sliceStart slice committed flow outcome core batch
+        V3Runs.lexIdle (sliceStart + committed) slice i hi core batch hfits
+      cont (loop2 recover sliceStart slice) slice committed flow outcome core batch
         next hfits) := by
   simp only [V2Batched.lexStart, V3Runs.lexIdle]
   cases hs : start core.version (Consume.consumesWhitespaceAndComments (H := H)) core.location
@@ -78,21 +78,21 @@ theorem lexStart_agrees [LawfulMonad m] (recover : Location → StateT H m Unit)
       | stopped stop => simp only [pure_bind]; rw [cont_stopped]
       | failed failure =>
         simp only [pure_bind]
-        exact cont_failed _ _ _ _ _ _ rfl _ _ _ _ _
+        exact cont_failed _ _ _ _ _ rfl _ _ _ _ _
     | error failure =>
       simp only [expand, pure_bind]
-      refine cont_failed _ _ _ _ _ _ ?_ _ _ _ _ _
+      refine cont_failed _ _ _ _ _ ?_ _ _ _ _ _
       rfl
 
 theorem lexToken_agrees [LawfulMonad m] (recover : Location → StateT H m Unit)
     (sliceStart : Nat) (slice : ByteSlice) (committed : Nat) (flow : ControlFlow (Located R))
     (i : Nat) (hi : i < slice.size) (p : Pending) (core : Core) (hact : core.activity = .token p)
-    (batch : Array Lexeme) (hfits : Fits core batch) :
+    (batch : Array Lexeme) (hfits : Fits (sliceStart + committed) core batch) :
     erase <$> loop2 recover sliceStart slice i committed core batch flow hfits =
     erase <$> (do
       let ⟨(outcome, core, batch, ⟨next, _⟩), hfits⟩ ←
-        V3Runs.lexToken V3Runs.lexIdle sliceStart slice i hi core batch p hact hfits
-      cont (loop2 recover sliceStart slice) sliceStart slice committed flow outcome core batch
+        V3Runs.lexToken V3Runs.lexIdle (sliceStart + committed) slice i hi core batch p hact hfits
+      cont (loop2 recover sliceStart slice) slice committed flow outcome core batch
         next hfits) := by
   rw [loop2_token recover sliceStart slice committed flow batch _ i rfl (by omega) p core hact
     hfits (runS (Consume.consumesWhitespaceAndComments (H := H)) slice p i core.location).1
@@ -121,7 +121,7 @@ theorem lexToken_agrees [LawfulMonad m] (recover : Location → StateT H m Unit)
     | failed failure => simp only [pure_bind]
   | error failure =>
     simp only [expand, pure_bind]
-    exact cont_failed _ _ _ _ _ _ rfl _ _ _ _ _
+    exact cont_failed _ _ _ _ _ rfl _ _ _ _ _
 
 theorem stepAgrees [LawfulMonad m] (recover : Location → StateT H m Unit) (sliceStart : Nat)
     (slice : ByteSlice) : StepAgrees (R := R) (E := E) recover sliceStart slice := by

@@ -42,16 +42,16 @@ variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [Consume H m R E]
 theorem lexIdle_agrees [LawfulMonad m] (recover : Location → StateT H m Unit)
     (sliceStart : Nat) (slice : ByteSlice) (committed : Nat) (flow : ControlFlow (Located R))
     (i : Nat) (hi : i < slice.size) (core : Core) (batch : Array Lexeme)
-    (hfits : Fits core batch) :
+    (hfits : Fits (sliceStart + committed) core batch) :
     erase <$> (do
       let ⟨(outcome, core, batch, ⟨next, _⟩), hfits⟩ ←
-        V3Runs.lexIdle sliceStart slice i hi core batch hfits
-      cont (loop3 V3Runs.lexIdle recover sliceStart slice) sliceStart slice committed flow
+        V3Runs.lexIdle (sliceStart + committed) slice i hi core batch hfits
+      cont (loop3 V3Runs.lexIdle recover sliceStart slice) slice committed flow
         outcome core batch next hfits) =
     erase <$> (do
       let ⟨(outcome, core, batch, ⟨next, _⟩), hfits⟩ ←
-        V4FastPaths.lexIdle sliceStart slice i hi core batch hfits
-      cont (loop3 V3Runs.lexIdle recover sliceStart slice) sliceStart slice committed flow
+        V4FastPaths.lexIdle (sliceStart + committed) slice i hi core batch hfits
+      cont (loop3 V3Runs.lexIdle recover sliceStart slice) slice committed flow
         outcome core batch next hfits) := by
   simp only [V4FastPaths.lexIdle]
   by_cases hp : (slice[i] == 41 || slice[i] == 40) = true
@@ -87,7 +87,7 @@ theorem lexIdle_agrees [LawfulMonad m] (recover : Location → StateT H m Unit)
               · intro o c b _ _ _ _
                 simp only [pure_bind]
             · simp only [hd, Bool.false_eq_true, ite_false, Bool.not_false, ite_true, pure_bind]
-              exact cont_failed _ _ _ _ _ _ rfl _ _ _ _ _
+              exact cont_failed _ _ _ _ _ rfl _ _ _ _ _
           · simp only [get?_neg slice _ h1, h1, dite_false, pure_bind, cont_next]
             have : runEnd slice isQuotedRun (i + 1) + 1 = slice.size := by omega
             exact congrArg (erase <$> ·) (loop3_congr this.symm rfl)
@@ -173,7 +173,7 @@ theorem lexIdle_agrees [LawfulMonad m] (recover : Location → StateT H m Unit)
                 simp only [pure_bind]
             · simp only [hd, Bool.false_eq_true, ite_false, Ran.lift, Bool.not_false, ite_true,
                 pure_bind]
-              exact cont_failed _ _ _ _ _ _ rfl _ _ _ _ _
+              exact cont_failed _ _ _ _ _ rfl _ _ _ _ _
           · simp only [get?_neg slice _ hj, show ((none : Option UInt8) == none) = true from rfl,
               ite_true]
         · simp only [hsym, Bool.not_false, ite_true]

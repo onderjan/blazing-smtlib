@@ -452,6 +452,45 @@ theorem start_lt_end (self : TokenBatch) {i : Nat} (hi : i < self.len)
   · exact h
   · exact absurd h.1 hty
 
+/-- Whether every token of the batch ends after the offset. -/
+def EndsAfter (self : TokenBatch) (offset : Nat) : Prop :=
+  ∀ i, i < self.len → offset < self.endOffsets[i]!
+
+/-- Tokens that start at or after the offset and are not the end of file end after it. -/
+theorem StartsFrom.endsAfter {self : TokenBatch} {offset : Nat} (h : self.StartsFrom offset) :
+    self.EndsAfter offset := fun i hi =>
+  Nat.lt_of_le_of_lt (h i hi).1 (self.start_lt_end hi (h i hi).2)
+
+theorem endsAfter_clear (self : TokenBatch) (origin offset : Nat) :
+    (self.clear origin).EndsAfter offset :=
+  fun _ h => absurd h (Nat.not_lt_zero _)
+
+theorem endsAfter_push {self : TokenBatch} {offset : Nat} (h : self.EndsAfter offset)
+    {ty : TokenCategory} {contentStart contentStop : Nat}
+    {startOffset startLine startColumn endOffset endLine endColumn : Nat}
+    {after : self.lastEnd ≤ startOffset}
+    {nonempty : startOffset < endOffset ∨ ty = .endOfFile ∧ startOffset = endOffset}
+    (hend : offset < endOffset) :
+    (self.push ty contentStart contentStop startOffset startLine startColumn endOffset endLine
+      endColumn after nonempty).EndsAfter offset := by
+  intro i hi
+  simp only [push] at hi ⊢
+  rw [getElem!_write _ _ _ _ self.ordered.2.2.1]
+  by_cases e : i = self.len
+  · subst e
+    simp only [↓reduceIte]
+    exact hend
+  · simp only [e, ↓reduceIte]
+    exact h i (by omega)
+
+theorem endsAfter_pushLocated {self : TokenBatch} {offset : Nat} (h : self.EndsAfter offset)
+    {ty : TokenCategory} {contentStart contentStop : Nat} {start «end» : Location}
+    {after : self.lastEnd ≤ start.offset}
+    {nonempty : start.offset < «end».offset ∨ ty = .endOfFile ∧ start.offset = «end».offset}
+    (hend : offset < «end».offset) :
+    (self.pushLocated ty contentStart contentStop start «end» after nonempty).EndsAfter offset :=
+  endsAfter_push h hend
+
 end TokenBatch
 
 namespace TokenBatch
@@ -694,37 +733,31 @@ def consumedEndOf (self : BatchCursor) {origin : BatchCursor} (_ : self.Consumed
   (self.batch.spanOf ⟨self.nextIndex - 1⟩).end
 
 /--
-Whether the cursor yields no token beyond its batch, and every token of its batch starts at or
-after the offset and is not the end of file.
+Whether the cursor yields no token beyond its batch, and every token of its batch ends after
+the offset.
 -/
-def StartsFrom (self : BatchCursor) (offset : Nat) : Prop :=
-  self.stop ≤ self.batch.len ∧ self.batch.StartsFrom offset
+def EndsAfter (self : BatchCursor) (offset : Nat) : Prop :=
+  self.stop ≤ self.batch.len ∧ self.batch.EndsAfter offset
 
-theorem startsFrom_new {batch : TokenBatch} {offset : Nat} (h : batch.StartsFrom offset)
-    (version : Version) : (new version batch).StartsFrom offset :=
+theorem endsAfter_new {batch : TokenBatch} {offset : Nat} (h : batch.EndsAfter offset)
+    (version : Version) : (new version batch).EndsAfter offset :=
   ⟨Nat.le_refl _, h⟩
 
-theorem Follows.startsFrom {self origin : BatchCursor} (h : self.Follows origin) {offset : Nat}
-    (ho : origin.StartsFrom offset) : self.StartsFrom offset := by
+theorem Follows.endsAfter {self origin : BatchCursor} (h : self.Follows origin) {offset : Nat}
+    (ho : origin.EndsAfter offset) : self.EndsAfter offset := by
   obtain ⟨hb, _, hs, _⟩ := h
   exact ⟨by rw [hb]; exact Nat.le_trans hs ho.1, hb ▸ ho.2⟩
 
-/--
-The last token consumed ends after the offset that every token of the batch starts at or
-after: it is not the end of file, so it ends after it starts.
--/
+/-- The last token consumed ends after the offset that every token of the batch ends after. -/
 theorem Consumed.lt_consumedEndOf {self origin : BatchCursor} (h : self.Consumed origin)
-    {offset : Nat} (ho : origin.StartsFrom offset) : offset < (self.consumedEndOf h).offset := by
-  have hs := h.follows.startsFrom ho
+    {offset : Nat} (ho : origin.EndsAfter offset) : offset < (self.consumedEndOf h).offset := by
+  have hs := h.follows.endsAfter ho
   have hlt : self.nextIndex - 1 < self.batch.len := by
     have := h.2
     have := self.bounded.2
     have := hs.1
     omega
-  obtain ⟨hstart, hty⟩ := hs.2 _ hlt
-  have := self.batch.start_lt_end hlt hty
-  show offset < self.batch.endOffsets[self.nextIndex - 1]!
-  omega
+  exact hs.2 _ hlt
 
 /-- Consumes all tokens remaining in the cursor. -/
 @[inline]
@@ -818,8 +851,8 @@ theorem remaining_resetConsumed (self : BatchCursor) :
     self.resetConsumed.remaining = self.remaining :=
   rfl
 
-theorem startsFrom_resetConsumed {self : BatchCursor} {offset : Nat}
-    (h : self.StartsFrom offset) : self.resetConsumed.StartsFrom offset :=
+theorem endsAfter_resetConsumed {self : BatchCursor} {offset : Nat}
+    (h : self.EndsAfter offset) : self.resetConsumed.EndsAfter offset :=
   h
 
 theorem hasNext_resetConsumed {self : BatchCursor} :

@@ -113,8 +113,6 @@ def checkLexed (result : Except (LexError Empty × β) α) (path : String) : IO 
   | .ok _ => pure ()
   | .error ({ cause := .lexical err, .. }, _) =>
     throw <| IO.userError s!"benchmark file {path} must lex, got {repr err}"
-  | .error ({ cause := .internal err, .. }, _) =>
-    throw <| IO.userError s!"benchmark file {path} must lex, got {err.message}"
   | .error ({ cause := .consumer never, .. }, _) => nomatch never
 
 /-- A lexer of the chain from the specification to the library's lexer. -/

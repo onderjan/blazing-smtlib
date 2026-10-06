@@ -22,15 +22,18 @@ open V1Naive V2Batched V3Runs
 section
 variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [Consume H m R E]
 
-/-- A loop over a slice, from a lexer state that the batch fits. -/
-abbrev Loop (H : Type) (m : Type → Type) (R E : Type) :=
-  Nat → Nat → (core : Core) → (batch : Array Lexeme) → ControlFlow (Located R) →
-    Fits core batch → StateT H m (Except (Failure E) (ControlFlow (Located R)) × Core)
+/-- A loop over a slice whose first byte is at the offset `sliceStart`, from a lexer state that
+the batch fits. -/
+abbrev Loop (H : Type) (m : Type → Type) (R E : Type) (sliceStart : Nat) :=
+  (index committed : Nat) → (core : Core) → (batch : Array Lexeme) → ControlFlow (Located R) →
+    Fits (sliceStart + committed) core batch →
+      StateT H m (Except (Failure E) (ControlFlow (Located R)) × Core)
 
 /-- What the loops do after the outcome of a step, going on at `next`. -/
-def cont (loop : Loop H m R E) (sliceStart : Nat) (slice : ByteSlice) (committed : Nat)
-    (flow : ControlFlow (Located R)) (outcome : Outcome R E) (core : Core) (batch : Array Lexeme)
-    (next : Nat) (hfits : Fits core batch) :
+def cont {sliceStart : Nat} (loop : Loop H m R E sliceStart) (slice : ByteSlice)
+    (committed : Nat) (flow : ControlFlow (Located R))
+    (outcome : Outcome R E (sliceStart + committed)) (core : Core) (batch : Array Lexeme)
+    (next : Nat) (hfits : Fits (sliceStart + committed) core batch) :
     StateT H m (Except (Failure E) (ControlFlow (Located R)) × Core) := do
   match ← settle outcome core batch flow hfits with
   | .proceed core batch flow hfits => loop next committed core batch flow hfits
@@ -40,27 +43,26 @@ def cont (loop : Loop H m R E) (sliceStart : Nat) (slice : ByteSlice) (committed
     | ⟨.error failure, _⟩ => return (.error failure, core)
     | ⟨.ok (location, activity, flow), hres⟩ =>
       let resumed := location.offset - sliceStart
-      if committed < resumed ∧ resumed ≤ slice.size then
-        loop resumed resumed
-          { core with location, activity, startedBefore := resumption_startsBefore hres } #[] flow
-          (fits_empty _)
+      let core := { core with location, activity, startedBefore := resumption_startsBefore hres }
+      if resumed < slice.size then
+        loop resumed resumed core #[] flow (fits_empty _ _)
       else
-        return (.error { cause := .internal .stoppedBeforeStart, location }, core)
+        return (.ok flow, core)
 
 /-- The batched lexer's loop. -/
 def loop2 (recover : Location → StateT H m Unit) (sliceStart : Nat) (slice : ByteSlice) :
-    Loop H m R E :=
+    Loop H m R E sliceStart :=
   fun index committed core batch flow hfits =>
     V2Batched.lexFrom recover sliceStart slice index committed core batch flow hfits
 
 theorem loop2_lt (recover : Location → StateT H m Unit) (sliceStart : Nat) (slice : ByteSlice)
     (index committed : Nat) (core : Core) (batch : Array Lexeme) (flow : ControlFlow (Located R))
-    (hfits : Fits core batch) (h : index < slice.size) :
+    (hfits : Fits (sliceStart + committed) core batch) (h : index < slice.size) :
     loop2 recover sliceStart slice index committed core batch flow hfits = (do
       let ⟨(outcome, core, batch), hfits⟩ ←
-        V2Batched.lexByte recover sliceStart core batch slice[index] hfits
-      cont (loop2 recover sliceStart slice) sliceStart slice committed flow outcome core batch
-        (index + 1) hfits) := by
+        V2Batched.lexByte recover (sliceStart + committed) core batch slice[index] hfits
+      cont (loop2 recover sliceStart slice) slice committed flow outcome core batch (index + 1)
+        hfits) := by
   simp only [loop2]
   rw [V2Batched.lexFrom]
   simp only [h, dite_true, cont]
@@ -68,28 +70,28 @@ theorem loop2_lt (recover : Location → StateT H m Unit) (sliceStart : Nat) (sl
 
 /-- The lexer over runs' loop, with the idle step `idle`. -/
 def loop3 (idle : IdleStep H m R E) (recover : Location → StateT H m Unit) (sliceStart : Nat)
-    (slice : ByteSlice) : Loop H m R E :=
+    (slice : ByteSlice) : Loop H m R E sliceStart :=
   fun index committed core batch flow hfits =>
     V3Runs.lexFrom idle recover sliceStart slice index committed core batch flow hfits
 
 theorem loop3_lt (idle : IdleStep H m R E) (recover : Location → StateT H m Unit)
     (sliceStart : Nat) (slice : ByteSlice)
     (index committed : Nat) (core : Core) (batch : Array Lexeme) (flow : ControlFlow (Located R))
-    (hfits : Fits core batch) (h : index < slice.size) :
+    (hfits : Fits (sliceStart + committed) core batch) (h : index < slice.size) :
     loop3 idle recover sliceStart slice index committed core batch flow hfits = (do
       let ⟨(outcome, core, batch, ⟨next, _⟩), hfits⟩ ←
-        lexAt idle recover sliceStart slice index h core batch hfits
-      cont (loop3 idle recover sliceStart slice) sliceStart slice committed flow outcome core batch
-        next hfits) := by
+        lexAt idle recover (sliceStart + committed) slice index h core batch hfits
+      cont (loop3 idle recover sliceStart slice) slice committed flow outcome core batch next
+        hfits) := by
   simp only [loop3]
   rw [V3Runs.lexFrom]
   simp only [h, dite_true, cont]
   rfl
 
 /-- The loops at the end of the slice. -/
-def atEnd (loop : Loop H m R E) (sliceStart : Nat) (slice : ByteSlice) (committed : Nat)
-    (core : Core) (batch : Array Lexeme) (flow : ControlFlow (Located R))
-    (hfits : Fits core batch) :
+def atEnd {sliceStart : Nat} (loop : Loop H m R E sliceStart) (slice : ByteSlice)
+    (committed : Nat) (core : Core) (batch : Array Lexeme) (flow : ControlFlow (Located R))
+    (hfits : Fits (sliceStart + committed) core batch) :
     StateT H m (Except (Failure E) (ControlFlow (Located R)) × Core) := do
   match ← settleEnd core batch flow hfits with
   | .proceed core _ flow _ => return (.ok flow, core)
@@ -99,18 +101,17 @@ def atEnd (loop : Loop H m R E) (sliceStart : Nat) (slice : ByteSlice) (committe
     | ⟨.error failure, _⟩ => return (.error failure, core)
     | ⟨.ok (location, activity, flow), hres⟩ =>
       let resumed := location.offset - sliceStart
-      if committed < resumed ∧ resumed ≤ slice.size then
-        loop resumed resumed
-          { core with location, activity, startedBefore := resumption_startsBefore hres } #[] flow
-          (fits_empty _)
+      let core := { core with location, activity, startedBefore := resumption_startsBefore hres }
+      if resumed < slice.size then
+        loop resumed resumed core #[] flow (fits_empty _ _)
       else
-        return (.error { cause := .internal .stoppedBeforeStart, location }, core)
+        return (.ok flow, core)
 
 theorem loop2_ge (recover : Location → StateT H m Unit) (sliceStart : Nat) (slice : ByteSlice)
     (index committed : Nat) (core : Core) (batch : Array Lexeme) (flow : ControlFlow (Located R))
-    (hfits : Fits core batch) (h : ¬ index < slice.size) :
+    (hfits : Fits (sliceStart + committed) core batch) (h : ¬ index < slice.size) :
     loop2 recover sliceStart slice index committed core batch flow hfits =
-      atEnd (loop2 recover sliceStart slice) sliceStart slice committed core batch flow hfits := by
+      atEnd (loop2 recover sliceStart slice) slice committed core batch flow hfits := by
   simp only [loop2]
   rw [V2Batched.lexFrom]
   simp only [h, dite_false, atEnd]
@@ -119,10 +120,9 @@ theorem loop2_ge (recover : Location → StateT H m Unit) (sliceStart : Nat) (sl
 theorem loop3_ge (idle : IdleStep H m R E) (recover : Location → StateT H m Unit)
     (sliceStart : Nat) (slice : ByteSlice)
     (index committed : Nat) (core : Core) (batch : Array Lexeme) (flow : ControlFlow (Located R))
-    (hfits : Fits core batch) (h : ¬ index < slice.size) :
+    (hfits : Fits (sliceStart + committed) core batch) (h : ¬ index < slice.size) :
     loop3 idle recover sliceStart slice index committed core batch flow hfits =
-      atEnd (loop3 idle recover sliceStart slice) sliceStart slice committed core batch flow
-        hfits := by
+      atEnd (loop3 idle recover sliceStart slice) slice committed core batch flow hfits := by
   simp only [loop3]
   rw [V3Runs.lexFrom]
   simp only [h, dite_false, atEnd]
@@ -130,9 +130,10 @@ theorem loop3_ge (idle : IdleStep H m R E) (recover : Location → StateT H m Un
 
 omit [Monad m] [Consume H m R E] in
 /-- A loop from equal states is the same, whatever the proofs that the batch fits. -/
-theorem loop_congr (loop : Loop H m R E) {index committed : Nat} {core core' : Core}
-    {batch : Array Lexeme} {flow : ControlFlow (Located R)} {h : Fits core batch}
-    {h' : Fits core' batch} (e : core = core') :
+theorem loop_congr {sliceStart : Nat} (loop : Loop H m R E sliceStart) {index committed : Nat}
+    {core core' : Core} {batch : Array Lexeme} {flow : ControlFlow (Located R)}
+    {h : Fits (sliceStart + committed) core batch}
+    {h' : Fits (sliceStart + committed) core' batch} (e : core = core') :
     loop index committed core batch flow h = loop index committed core' batch flow h' := by
   subst e
   rfl
@@ -147,17 +148,19 @@ def erase {α : Type} : Except (Failure E) α × Core → Except (Failure E) α 
   | (.error failure, core) => (.error failure, blank core)
 
 /-- Two loops agree up to `erase`. -/
-def Agree (loopA loopB : Loop H m R E) (index committed : Nat) : Prop :=
+def Agree {sliceStart : Nat} (loopA loopB : Loop H m R E sliceStart) (index committed : Nat) :
+    Prop :=
   ∀ core batch flow hfits, erase <$> loopA index committed core batch flow hfits =
     erase <$> loopB index committed core batch flow hfits
 
-theorem cont_agree [LawfulMonad m] (loopA loopB : Loop H m R E) (sliceStart : Nat)
-    (slice : ByteSlice) (committed : Nat) (flow : ControlFlow (Located R)) (outcome : Outcome R E)
-    (core : Core) (batch : Array Lexeme) (next : Nat) (hfits : Fits core batch)
+theorem cont_agree [LawfulMonad m] {sliceStart : Nat} (loopA loopB : Loop H m R E sliceStart)
+    (slice : ByteSlice) (committed : Nat) (flow : ControlFlow (Located R))
+    (outcome : Outcome R E (sliceStart + committed)) (core : Core) (batch : Array Lexeme)
+    (next : Nat) (hfits : Fits (sliceStart + committed) core batch)
     (hnext : Agree loopA loopB next committed)
-    (hres : ∀ r, committed < r → r ≤ slice.size → Agree loopA loopB r r) :
-    erase <$> cont loopA sliceStart slice committed flow outcome core batch next hfits =
-      erase <$> cont loopB sliceStart slice committed flow outcome core batch next hfits := by
+    (hres : ∀ r, committed < r → r < slice.size → Agree loopA loopB r r) :
+    erase <$> cont loopA slice committed flow outcome core batch next hfits =
+      erase <$> cont loopB slice committed flow outcome core batch next hfits := by
   simp only [cont, map_bind]
   congr
   funext x
@@ -168,17 +171,18 @@ theorem cont_agree [LawfulMonad m] (loopA loopB : Loop H m R E) (sliceStart : Na
     simp only
     split
     · rfl
-    · split
-      · rename_i h
-        exact hres _ h.1 h.2 _ _ _ _
+    · rename_i hstop _
+      have := resumption_after hstop
+      split
+      · exact hres _ (by omega) ‹_› _ _ _ _
       · rfl
 
-theorem atEnd_agree [LawfulMonad m] (loopA loopB : Loop H m R E) (sliceStart : Nat)
+theorem atEnd_agree [LawfulMonad m] {sliceStart : Nat} (loopA loopB : Loop H m R E sliceStart)
     (slice : ByteSlice) (committed : Nat) (core : Core) (batch : Array Lexeme)
-    (flow : ControlFlow (Located R)) (hfits : Fits core batch)
-    (hres : ∀ r, committed < r → r ≤ slice.size → Agree loopA loopB r r) :
-    erase <$> atEnd loopA sliceStart slice committed core batch flow hfits =
-      erase <$> atEnd loopB sliceStart slice committed core batch flow hfits := by
+    (flow : ControlFlow (Located R)) (hfits : Fits (sliceStart + committed) core batch)
+    (hres : ∀ r, committed < r → r < slice.size → Agree loopA loopB r r) :
+    erase <$> atEnd loopA slice committed core batch flow hfits =
+      erase <$> atEnd loopB slice committed core batch flow hfits := by
   simp only [atEnd, map_bind]
   congr
   funext x
@@ -189,9 +193,10 @@ theorem atEnd_agree [LawfulMonad m] (loopA loopB : Loop H m R E) (sliceStart : N
     simp only
     split
     · rfl
-    · split
-      · rename_i h
-        exact hres _ h.1 h.2 _ _ _ _
+    · rename_i hstop _
+      have := resumption_after hstop
+      split
+      · exact hres _ (by omega) ‹_› _ _ _ _
       · rfl
 
 /-- The step of the batched lexer's loop at a byte agrees with the step of the lexer over runs
@@ -202,9 +207,8 @@ def StepAgrees (recover : Location → StateT H m Unit) (sliceStart : Nat) (slic
     erase <$> loop2 recover sliceStart slice index committed core batch flow hfits =
       erase <$> (do
         let ⟨(outcome, core, batch, ⟨next, _⟩), hfits⟩ ←
-          lexAt V3Runs.lexIdle recover sliceStart slice index h core batch hfits
-        cont (loop2 recover sliceStart slice) sliceStart slice committed flow outcome core batch
-          next hfits)
+          lexAt V3Runs.lexIdle recover (sliceStart + committed) slice index h core batch hfits
+        cont (loop2 recover sliceStart slice) slice committed flow outcome core batch next hfits)
 
 theorem loop2_agree_loop3 [LawfulMonad m] (recover : Location → StateT H m Unit)
     (sliceStart : Nat) (slice : ByteSlice) (hstep : StepAgrees recover sliceStart slice) :
@@ -216,7 +220,7 @@ theorem loop2_agree_loop3 [LawfulMonad m] (recover : Location → StateT H m Uni
   intro a iha committed ha b
   refine Nat.strongRecOn b ?_
   intro b ihb index hb core batch flow hfits
-  have hres : ∀ r, committed < r → r ≤ slice.size →
+  have hres : ∀ r, committed < r → r < slice.size →
       Agree (loop2 recover sliceStart slice) (loop3 V3Runs.lexIdle recover sliceStart slice) r r :=
     fun r h1 h2 => iha (slice.size - r) (by omega) r rfl _ r rfl
   by_cases h : index < slice.size
@@ -225,10 +229,10 @@ theorem loop2_agree_loop3 [LawfulMonad m] (recover : Location → StateT H m Uni
     congr
     funext x
     obtain ⟨⟨outcome, core, batch, ⟨next, hn⟩⟩, hfits⟩ := x
-    exact cont_agree _ _ _ _ _ _ _ _ _ _ _
+    exact cont_agree _ _ _ _ _ _ _ _ _ _
       (ihb (slice.size - next) (by omega) next rfl) hres
   · rw [loop2_ge _ _ _ _ _ _ _ _ hfits h, loop3_ge _ _ _ _ _ _ _ _ _ hfits h]
-    exact atEnd_agree _ _ _ _ _ _ _ _ _ hres
+    exact atEnd_agree _ _ _ _ _ _ _ _ hres
 
 end
 end BSmtLib.Proofs.Lexer.V2BatchedV3Runs

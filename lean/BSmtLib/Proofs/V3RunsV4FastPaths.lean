@@ -83,11 +83,11 @@ theorem stepAgrees [LawfulMonad m] (recover : Location → StateT H m Unit) (sli
 theorem lexFrom_agree [LawfulMonad m] (recover : Location → StateT H m Unit) (sliceStart : Nat)
     (slice : ByteSlice) (core : Core) :
     erase <$> V3Runs.lexFrom V3Runs.lexIdle recover sliceStart slice 0 0 core #[] .continue
-        (fits_empty _) =
+        (fits_empty _ _) =
       erase <$> V3Runs.lexFrom V4FastPaths.lexIdle recover sliceStart slice 0 0 core #[]
-        (.continue : ControlFlow (Located R)) (fits_empty _) :=
+        (.continue : ControlFlow (Located R)) (fits_empty _ _) :=
   loop3_agree _ _ recover sliceStart slice (stepAgrees recover sliceStart slice) _ 0 rfl _ 0 rfl
-    core #[] .continue (fits_empty _)
+    core #[] .continue (fits_empty _ _)
 
 end V3RunsV4FastPaths
 

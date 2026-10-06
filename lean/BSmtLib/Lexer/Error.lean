@@ -24,35 +24,12 @@ structure LexicalError where
   span : Span
   deriving BEq, Repr, Inhabited
 
-namespace Lexer
-
-/- LEAN: not in Rust, where each of these conditions is a panic. Lean's `panic!` does not stop
-the program but goes on with a default value, so these are reported as errors instead,
-until it is shown that they cannot occur. -/
-/-- A broken contract between the lexer and its consumer, or a bug in the lexer. -/
-inductive InternalError where
-  /-- The token consumer stopped before the token the slice started with. -/
-  | stoppedBeforeStart
-  deriving BEq, Repr, Inhabited
-
-namespace InternalError
-
-/-- What went wrong, in words. -/
-def message : InternalError → String
-  | .stoppedBeforeStart => "the token consumer must not stop before the starting token"
-
-end InternalError
-
-end Lexer
-
 /-- The reason why a lexer call failed: a lexical error or a consumer error. -/
 inductive LexErrorCause (E : Type) where
   /-- The input is lexically malformed. -/
   | lexical (error : LexicalError)
   /-- The token consumer returned an error. -/
   | consumer (error : E)
-  /- LEAN: not in Rust, see `InternalError`. -/
-  | internal (error : Lexer.InternalError)
   deriving BEq, Repr
 
 /- LEAN: the fields are readable as `error.cause` and `error.continuesFrom`, replacing the

@@ -345,8 +345,6 @@ def errorLine (err : LexError String) (recover : Bool) : Except String String :=
     | .lexical err => pure s!"err {errorKindName err.kind} {location err.span.start} \
         {location err.span.end}"
     | .consumer name => pure s!"cerr {name}"
-    -- the protocol has no line for an internal error, which must not occur
-    | .internal err => throw s!"internal error: {err.message}"
   if !recover then
     return line ++ "\n"
   -- where the input continues from, if it does

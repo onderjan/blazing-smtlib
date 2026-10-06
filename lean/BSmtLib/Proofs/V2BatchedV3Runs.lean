@@ -37,11 +37,11 @@ namespace V2BatchedV3Runs
 
 theorem lexFrom_agree [LawfulMonad m] (recover : Location → StateT H m Unit) (sliceStart : Nat)
     (slice : ByteSlice) (core : Core) :
-    erase <$> V2Batched.lexFrom recover sliceStart slice 0 0 core #[] .continue (fits_empty _) =
+    erase <$> V2Batched.lexFrom recover sliceStart slice 0 0 core #[] .continue (fits_empty _ _) =
       erase <$> V3Runs.lexFrom V3Runs.lexIdle recover sliceStart slice 0 0 core #[]
-        (.continue : ControlFlow (Located R)) (fits_empty _) :=
+        (.continue : ControlFlow (Located R)) (fits_empty _ _) :=
   loop2_agree_loop3 recover sliceStart slice (stepAgrees recover sliceStart slice) _ 0 rfl _ 0 rfl
-    core #[] .continue (fits_empty _)
+    core #[] .continue (fits_empty _ _)
 
 /-- A continuation that does not depend on what `erase` forgets. -/
 theorem bind_erase [LawfulMonad m] {α β : Type}
@@ -102,7 +102,7 @@ theorem lexSliceStep2_eq [LawfulMonad m] (recovers : Bool)
     V2Batched.lexSliceStep (R := R) recovers abandon recover slice core =
       beforeLoop recover core >>= sliceTail
         (fun c => V2Batched.lexFrom recover c.location.offset slice 0 0 c #[] .continue
-          (fits_empty _))
+          (fits_empty _ _))
         recovers abandon := by
   cases hact : core.activity <;>
     simp only [V2Batched.lexSliceStep, beforeLoop, hact, bind_assoc, pure_bind, sliceTail] <;> rfl
@@ -113,7 +113,7 @@ theorem lexSliceStep3_eq [LawfulMonad m] (idle : IdleStep H m R E) (recovers : B
     V3Runs.lexSliceStep idle recovers abandon recover slice core =
       beforeLoop recover core >>= sliceTail
         (fun c => V3Runs.lexFrom idle recover c.location.offset slice 0 0 c #[] .continue
-          (fits_empty _))
+          (fits_empty _ _))
         recovers abandon := by
   cases hact : core.activity <;>
     simp only [V3Runs.lexSliceStep, beforeLoop, hact, bind_assoc, pure_bind, sliceTail] <;> rfl

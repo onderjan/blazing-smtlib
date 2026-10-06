@@ -42,8 +42,8 @@ def lexIdle : IdleStep H m R E := fun sliceStart slice i h core batch hfits => d
         «end» := location.afterColumn }
     let ⟨(outcome, core, batch), hfits, _⟩ ← emit sliceStart
       { core with activity := .idle, location := l.end, startedBefore := trivial } batch l hfits.1
-      (show _ ≤ location.offset by omega)
-      (.inl (show location.offset < location.offset + 1 by omega))
+      hfits.3 (show _ ≤ location.offset by omega)
+      (show location.offset < location.offset + 1 by omega)
       (Nat.le_refl _)
     return ⟨(outcome, core, batch, ⟨i + 1, by omega⟩), hfits⟩
   let whitespace := Consume.consumesWhitespaceAndComments (H := H)
@@ -97,7 +97,7 @@ def lexIdle : IdleStep H m R E := fun sliceStart slice i h core batch hfits => d
   let l : Lexeme := { category, content, start := location, «end» := atEnd }
   let ⟨(outcome, core, batch), hfits, _⟩ ← emit sliceStart
     { core with activity := .idle, location := atEnd, startedBefore := trivial } batch l hfits.1
-    (show _ ≤ location.offset by omega) (.inl hend) (Nat.le_refl _)
+    hfits.3 (show _ ≤ location.offset by omega) hend (Nat.le_refl _)
   return ⟨(outcome, core, batch, ⟨tokenEnd, by omega⟩), hfits⟩
 
 end
