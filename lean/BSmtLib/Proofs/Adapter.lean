@@ -7,12 +7,12 @@ import BSmtLib.Spec.Lexer
 /-!
 # The adapter from the lexers to the spec
 
-This module is trusted, as the spec is. `Spec.Lexer.LexerCorrect` and `Spec.Lexer.Correct` are
-properties of functions that give what a lexer hands over in the spec's form; `handed`, for the
-slices and then the end of the input, and `fed`, for the slices alone, are those functions for
-each lexer of the chain. A theorem stated through them says only what they make of the lexer,
-so they are to be read like the spec: they have to run the lexer as a consumer would, and
-record what the lexer hands over as it is, or the theorem says nothing about the lexer.
+This module is trusted, as the spec is. `Spec.Lexer.Correct` is a property of functions that
+give what a lexer hands over in the spec's form; `handed`, for the slices and then the end of
+the input, and `fed`, for the slices alone, are those functions for each lexer of the chain. A
+theorem stated through them says only what they make of the lexer, so they are to be read like
+the spec: they have to run the lexer as a consumer would, and record what the lexer hands over
+as it is, or the theorem says nothing about the lexer.
 
 So `handed` and `fed` fix nothing up. They feed the slices, and `handed` then the end of the
 input, with a consumer that takes every token of each cursor and records it. The consumer does

@@ -51,8 +51,8 @@ info: 'BSmtLib.SpecChecks.Lexicon.unique' depends on axioms: [propext, Classical
 ### A lexer fed in slices
 
 `Spec.Lexer.HandsOverCorrectly` asks for the tokens maximal to hand over on the longest viable
-start of the input; both exist and are unique, so it is not vacuous. `Spec.Lexer.Sequential` is not a part of
-`Spec.Lexer.Correct`, as it follows from `Spec.Lexer.StreamingInputCorrect`.
+start of the input; both exist and are unique, so it is not vacuous. `Spec.Lexer.Sequential`
+is not a part of `Spec.Lexer.Correct`, as it follows from `Spec.Lexer.StreamingInputCorrect`.
 -/
 
 /-- Every input has exactly one longest viable start. -/

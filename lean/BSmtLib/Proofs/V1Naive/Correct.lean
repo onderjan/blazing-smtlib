@@ -5,10 +5,10 @@ import BSmtLib.Proofs.V1Naive.Reserved
 # The naive lexer is correct
 
 `lex_correct`: the naive lexer as the adapter runs it, `handed V1Naive.ops`, has the property
-`Spec.Lexer.LexerCorrect`. It gives what the pure run of the whole input gives
-(`handed_eq_run`); the pure run finishes exactly the inputs that have a tokenisation
-(`run_sound`, `run_complete`), with the lexemes of its tokens; and the consumer records the
-lexeme of a token as the spec hands the token over (`lexemeHanded_token`).
+`Spec.Lexer.WholeInputCorrect` on every version and every input. It gives what the pure run of
+the whole input gives (`handed_eq_run`); the pure run finishes exactly the inputs that have a
+tokenisation (`run_sound`, `run_complete`), with the lexemes of its tokens; and the consumer
+records the lexeme of a token as the spec hands the token over (`lexemeHanded_token`).
 -/
 
 namespace BSmtLib.Proofs.Lexer.V1Naive
@@ -143,9 +143,11 @@ theorem handedAll_tokens {version : Spec.Lexicon.Version} {input : Chars}
 
 /-- `handed V1Naive.ops` hands over the tokens of the tokenisation of the input and the
 end-of-file token exactly when the input has a tokenisation. -/
-theorem lex_correct : Spec.Lexer.LexerCorrect (handed V1Naive.ops) := by
+theorem lex_correct :
+    ∀ version slices handed',
+      Spec.Lexer.WholeInputCorrect (handed V1Naive.ops) version slices handed' := by
   intro version slices handed'
-  simp only
+  simp only [Spec.Lexer.WholeInputCorrect]
   rw [handed_eq_run]
   constructor
   · intro h
