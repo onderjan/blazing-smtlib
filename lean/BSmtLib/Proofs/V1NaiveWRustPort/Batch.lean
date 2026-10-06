@@ -1,5 +1,5 @@
-import BSmtLib.Proofs.V4FastPathsWRustPort.WP
-import BSmtLib.Proofs.V4FastPathsWRustPort.Feed
+import BSmtLib.Proofs.V1NaiveWRustPort.WP
+import BSmtLib.Proofs.V1NaiveWRustPort.Feed
 
 /-!
 # The Rust port's batches
@@ -11,10 +11,10 @@ is reported to the adapter's consumer as the naive lexer reports each lexeme alo
 (`toHanded_holds`), and the consumer records the lexemes of the cursor (`consume_holds`).
 -/
 
-namespace BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
+namespace BSmtLib.Proofs.Lexer.V1NaiveWRustPort
 
 open BSmtLib.Lexer.Internal (intoBatch)
-open BSmtLib.Proofs.Adapter V1Naive
+open BSmtLib.Proofs.Adapter V1Naive BSmtLib.Proofs.Simulation
 
 /-! ## Writing an entry -/
 
@@ -303,4 +303,4 @@ theorem consume_holds {g : BatchTag} (ls : List Lexeme) (c : BatchCursor g) (h :
         exact ⟨rfl, rfl, i2 (by simp [hm]), i3, i4⟩
       · simp at h'
 
-end BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
+end BSmtLib.Proofs.Lexer.V1NaiveWRustPort

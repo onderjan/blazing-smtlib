@@ -1,4 +1,4 @@
-import BSmtLib.Proofs.V4FastPathsWRustPort.Step
+import BSmtLib.Proofs.V1NaiveWRustPort.Step
 
 /-!
 # The naive lexer's pure run over the pieces of a token
@@ -9,9 +9,9 @@ digit of a fraction (`feedFrom_fraction`), and the byte that ends a token, which
 raises an error (`feedFrom_end`).
 -/
 
-namespace BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
+namespace BSmtLib.Proofs.Lexer.V1NaiveWRustPort
 
-open V1Naive
+open V1Naive BSmtLib.Proofs.Simulation
 
 theorem afterByte_eq_afterColumns' (location : Location) (c : UInt8) (h : c ≠ 10) :
     location.afterByte c = afterColumns location 1 := by
@@ -252,11 +252,6 @@ theorem bytesOf_get! (s : ByteSlice) {i j k : Nat} (hij : i ≤ j) (hj : j ≤ s
   congr 1
   omega
 
-theorem slice_size' (s : ByteSlice) {a b : Nat} (hab : a ≤ b) (hb : b ≤ s.size) :
-    (s.slice a b).size = b - a := by
-  rw [← size_toByteArray]
-  exact bytesOf_size s hab hb
-
 /-- Every byte of a run passes its test. -/
 theorem runEnd_mem (s : ByteSlice) (P : UInt8 → Bool) (i : Nat) :
     ∀ k (hk : k < s.size), i ≤ k → k < runEnd s P i → P s[k] = true := by
@@ -285,9 +280,9 @@ theorem start_digit (v : Version) (location : Location) {c : UInt8} (hd : isDigi
 
 /-- The last stored byte of a piece of a slice. -/
 theorem stored_last (s : ByteSlice) {i j : Nat} (hij : i < j) (hj : j ≤ s.size) :
-    Lexer.WRustPort.Content.stored.last? (bytesOf s i j) = some (s[j - 1]'(by omega)) := by
+    lastOf (bytesOf s i j) = some (s[j - 1]'(by omega)) := by
   have hs := bytesOf_size s (Nat.le_of_lt hij) hj
-  simp only [Lexer.WRustPort.Content.last?, hs, show (j - i == 0) = false by simp; omega,
+  simp only [lastOf, hs, show (j - i == 0) = false by simp; omega,
     Bool.false_eq_true, ↓reduceIte, Option.some.injEq]
   rw [bytesOf_get! s (Nat.le_of_lt hij) hj (k := j - i - 1) (by omega)]
   congr 1
@@ -316,52 +311,20 @@ theorem bytesOf_append (s : ByteSlice) {i j k : Nat} (hij : i ≤ j) (hjk : j �
       congr 1
       omega
 
-theorem slice_byteArray' (s : ByteSlice) (i j : Nat) :
-    (s.slice i j).byteArray = s.byteArray := by
-  unfold ByteSlice.slice
-  dsimp only
-  split
-  · split <;> rfl
-  · rfl
-
-theorem slice_start (s : ByteSlice) {i j : Nat} (hij : i ≤ j) (hj : j ≤ s.size) :
-    (s.slice i j).start = s.start + i := by
-  have h1 := s.stop_le_size_byteArray
-  have h2 := s.start_le_stop
-  have hmi : min i s.size = i := Nat.min_eq_left (by omega)
-  have hmj : min j s.size = j := Nat.min_eq_left hj
-  simp only [ByteSlice.size] at hj hmi hmj
-  unfold ByteSlice.slice
-  dsimp only
-  simp only [ByteSlice.size, hmi, hmj]
-  split
-  · split
-    · rfl
-    · omega
-  · omega
-
-theorem slice_getD (s : ByteSlice) {i j k : Nat} (hij : i ≤ j) (hj : j ≤ s.size)
-    (hk : i + k < j) : (s.slice i j).getD k 0 = s[i + k]'(by omega) := by
-  have hs := slice_size' s hij hj
-  have hk' : k < (s.slice i j).size := by omega
-  simp only [ByteSlice.getD, hk', dite_true]
-  rw [getElem_slice, getElem_slice]
-  have hb := V4FastPathsWRustPort.slice_byteArray' s i j
-  have hst : (s.slice i j).start = s.start + i := slice_start s hij hj
-  have key : ∀ (a b : ByteArray) (x y : Nat) (hx : x < a.data.size) (hy : y < b.data.size),
-      a = b → x = y → a.data[x] = b.data[y] := by
-    intro a b x y hx hy hab hxy; subst hab hxy; rfl
-  exact key _ _ _ _ _ _ hb (by rw [hst]; omega)
-
 /-- The last byte of a piece of a slice, borrowed from it. -/
 theorem borrowed_last (s : ByteSlice) {i j : Nat} (hij : i < j) (hj : j ≤ s.size)
-    (stored : ByteArray) :
-    (Lexer.WRustPort.borrow s i j).last? stored = some (s[j - 1]'(by omega)) := by
-  have hs := slice_size' s (Nat.le_of_lt hij) hj
-  simp only [Lexer.WRustPort.borrow, Lexer.WRustPort.Content.last?, hs,
-    show (j - i == 0) = false by simp; omega, Bool.false_eq_true, ↓reduceIte, Option.some.injEq]
-  rw [slice_getD s (Nat.le_of_lt hij) hj (k := j - i - 1) (by omega)]
+    (stored : BSmtLib.Lexer.ContentBuffer) :
+    (Lexer.Slice.borrow s i j).last? stored = some (s[j - 1]'(by omega)) := by
+  have h1 := s.stop_le_size_byteArray
+  have h2 := s.start_le_stop
+  simp only [ByteSlice.size] at hj
+  simp only [Lexer.Slice.borrow, BSmtLib.Lexer.Content.last?,
+    show (s.start + j == s.start + i) = false by simp; omega, Bool.false_eq_true, ↓reduceIte,
+    Option.some.injEq]
+  rw [getElem_slice, get!_eq_getElem!]
+  simp only [ByteArray.size] at h1
+  rw [getElem!_pos _ _ (by simp only [ByteArray.size]; omega)]
   congr 1
   omega
 
-end BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
+end BSmtLib.Proofs.Lexer.V1NaiveWRustPort

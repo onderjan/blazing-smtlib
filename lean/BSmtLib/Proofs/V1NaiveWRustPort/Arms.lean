@@ -1,4 +1,4 @@
-import BSmtLib.Proofs.V4FastPathsWRustPort.NormalStep
+import BSmtLib.Proofs.V1NaiveWRustPort.NormalStep
 
 /-!
 # The Rust port's steps for a token in progress
@@ -8,9 +8,9 @@ pure run: an arm lexes on the token from the lexer's index; it may finish the to
 then the step goes on in the normal state (`afterStep_wp`).
 -/
 
-namespace BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
+namespace BSmtLib.Proofs.Lexer.V1NaiveWRustPort
 
-open BSmtLib.Proofs.Adapter V1Naive
+open BSmtLib.Proofs.Adapter V1Naive BSmtLib.Proofs.Simulation
 open Lexer.Slice (get? get)
 
 section
@@ -51,7 +51,7 @@ theorem afterStep_wp (v : Version) (input : ByteSlice) (start : Nat)
       cases st' with
       | idle => rfl
       | token p =>
-        have := hagree.2
+        have := hagree.1.2
         rw [hnormal hn'] at this
         exact this.elim
     subst hidle
@@ -153,8 +153,13 @@ theorem stepLocation_eq' {c : WCore} {low base j pos : Nat} {location : Location
 /-- The agreement of a token in progress, in the state of the lexer. -/
 theorem token_agrees {v : Version} {c : WCore} {p : Pending} {state : Lexer.LexerState}
     (h : StAgrees v (.token p) c) (hs : c.state = state) :
-    TokenAgrees v state c.tokenStart c.tokenContent p := by
-  rw [← hs]; exact h
+    TokenAgrees v state c.tokenStart (contentBytes c.tokenContent) p := by
+  rw [← hs]; exact h.1
+
+/-- The content buffer of a token in progress fits its array. -/
+theorem token_fits {v : Version} {c : WCore} {p : Pending} (h : StAgrees v (.token p) c) :
+    Fits c.tokenContent :=
+  h.2
 
 /-- The arm of `lexStep` for a quoted symbol closed by its pipe. -/
 theorem arm_quotedSymbolClosed (v : Version) (input : ByteSlice) (start : Nat)
@@ -192,8 +197,8 @@ theorem arm_quotedSymbolClosed (v : Version) (input : ByteSlice) (start : Nat)
     simp only [↓reduceIte] at hC
     apply wp_pure
     apply wp_bind
-    refine sinkStored_wp v .quotedSymbol _ (.mkAtByte start) tokenStart base h held s hpre.holds
-      coll hpre.fixed.recovers hpre.fixed.version ?_ ?_
+    refine sinkStored_wp v .quotedSymbol (.mkAtByte start) tokenStart base h held s hpre.holds
+      coll hpre.fixed.recovers hpre.fixed.version (token_fits hpre.agrees) ?_ ?_
     · intro s1 coll1 hk1 hb1 hc1
       obtain ⟨k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11⟩ := key_fields hk1
       unfold Lexer.WRustPort.setNormal
@@ -215,4 +220,4 @@ theorem arm_quotedSymbolClosed (v : Version) (input : ByteSlice) (start : Nat)
 
 end
 
-end BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
+end BSmtLib.Proofs.Lexer.V1NaiveWRustPort

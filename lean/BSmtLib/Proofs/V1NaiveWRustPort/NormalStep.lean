@@ -1,4 +1,4 @@
-import BSmtLib.Proofs.V4FastPathsWRustPort.Normal
+import BSmtLib.Proofs.V1NaiveWRustPort.Normal
 
 /-!
 # The Rust port's step in the normal state
@@ -8,9 +8,9 @@ runs the loop `lexNormalFrom` from the lexer's index, keeps the correspondence w
 lexer's pure run.
 -/
 
-namespace BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
+namespace BSmtLib.Proofs.Lexer.V1NaiveWRustPort
 
-open BSmtLib.Proofs.Adapter V1Naive
+open BSmtLib.Proofs.Adapter V1Naive BSmtLib.Proofs.Simulation
 open Lexer.WRustPort (lexNormalFrom FastState Frame Held Past)
 
 section
@@ -32,7 +32,9 @@ theorem lexNormal_wp (v : Version) (input : ByteSlice) (start : Nat)
       (fun r s' coll' => StepPost v input .idle location start coll held r.1 s'.val coll')
       (fun _ _ _ => StepFails v input .idle location start coll held) := by
   obtain ⟨hfix, hbase, hagree, hloc, hholds, hbytes⟩ := hpre
-  unfold Lexer.WRustPort.lexNormal FastState.load
+  unfold Lexer.WRustPort.lexNormal
+  rw [rust_loadLocals]
+  unfold FastState.load
   apply wp_bind; apply wp_modifyGetThe
   dsimp only
   split
@@ -58,4 +60,4 @@ theorem lexNormal_wp (v : Version) (input : ByteSlice) (start : Nat)
 
 end
 
-end BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
+end BSmtLib.Proofs.Lexer.V1NaiveWRustPort

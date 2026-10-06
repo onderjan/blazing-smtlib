@@ -1,4 +1,4 @@
-import BSmtLib.Proofs.V4FastPathsWRustPort.Eof
+import BSmtLib.Proofs.V1NaiveWRustPort.Eof
 
 /-!
 # The Rust port's loop over a slice
@@ -12,9 +12,9 @@ over the batch as it was left, and the hand-over is done or fails (`flushBatch_n
 loop fails (`sliceRun_error`).
 -/
 
-namespace BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
+namespace BSmtLib.Proofs.Lexer.V1NaiveWRustPort
 
-open BSmtLib.Proofs.Adapter V1Naive
+open BSmtLib.Proofs.Adapter V1Naive BSmtLib.Proofs.Simulation
 
 section
 
@@ -34,7 +34,7 @@ theorem sliceRun_error (input : ByteSlice) (position : Nat) (f : Lexer.Failure U
   rw [run_step]
   have hw := flushBatch_noStop core coll
   unfold WP at hw
-  generalize runM Lexer.WRustPort.flushBatch core coll = r at hw ⊢
+  generalize runM Lexer.WRustPort.Rust.flushBatch core coll = r at hw ⊢
   obtain ⟨⟨res, c'⟩, coll'⟩ := r
   cases res with
   | ok u => exact ⟨f, rfl⟩
@@ -109,7 +109,7 @@ theorem sliceRun_ok (v : Version) (input : ByteSlice) :
       (QE := fun _ _ _ => pending v coll held = none)
       (fun s' coll' hk _ hc => ⟨hk, hc⟩) (fun hn _ _ _ => hn)
     unfold WP at hw
-    generalize runM Lexer.WRustPort.flushBatch core coll = r at hw ⊢
+    generalize runM Lexer.WRustPort.Rust.flushBatch core coll = r at hw ⊢
     obtain ⟨⟨res, c'⟩, coll'⟩ := r
     unfold SliceOut
     rw [feedFrom_ge hp]
@@ -138,4 +138,4 @@ theorem sliceRun_ok (v : Version) (input : ByteSlice) :
 
 end
 
-end BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
+end BSmtLib.Proofs.Lexer.V1NaiveWRustPort

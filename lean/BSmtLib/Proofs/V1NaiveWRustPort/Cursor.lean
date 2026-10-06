@@ -10,10 +10,10 @@ index. The lookup of reserved words reads only the bytes of a content (`fromByte
 lexemes not yet handed over.
 -/
 
-namespace BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
+namespace BSmtLib.Proofs.Lexer.V1NaiveWRustPort
 
 open BSmtLib.Lexer.Internal (intoBatch)
-open BSmtLib.Proofs.Adapter V1Naive
+open BSmtLib.Proofs.Adapter V1Naive BSmtLib.Proofs.Simulation
 
 variable {g : BatchTag}
 
@@ -80,50 +80,6 @@ theorem span_next (c : BatchCursor g) (h : c.HasNext) :
 theorem ofUInt8_toUInt8 (c : TokenCategory) : TokenCategory.ofUInt8 c.toUInt8 = c := by
   cases c <;> rfl
 
-theorem toByteArray_toByteSlice_range (a : ByteArray) {i j : Nat} (hij : i ≤ j) (hj : j ≤ a.size) :
-    (a.toByteSlice i j).toByteArray = a.extract i j := by
-  simp only [ByteArray.toByteSlice, hj, hij, dite_true, ByteSlice.toByteArray, ByteSlice.byteArray,
-    ByteSlice.start, ByteSlice.size, ByteSlice.stop]
-  congr 1
-  omega
-
-theorem size_toByteArray (s : ByteSlice) : s.toByteArray.size = s.size := by
-  have h1 := s.stop_le_size_byteArray
-  have h2 := s.start_le_stop
-  simp only [ByteSlice.toByteArray, ByteArray.size_extract, ByteSlice.size]
-  omega
-
-theorem size_toByteSlice_full (a : ByteArray) : a.toByteSlice.size = a.size := by
-  simp [ByteArray.toByteSlice, ByteSlice.size, ByteSlice.start, ByteSlice.stop]
-
-theorem getElem_slice_byteArray (s : ByteSlice) (i : Nat) (h : i < s.size) :
-    s[i] = s.byteArray[s.start + i]'(by
-      have := s.stop_le_size_byteArray; simp only [ByteSlice.size] at h; omega) := rfl
-
-theorem size_toByteArray_toByteSlice (s : ByteSlice) :
-    s.toByteArray.toByteSlice.size = s.size := by
-  rw [size_toByteSlice_full, size_toByteArray]
-
-theorem get!_toByteArray (s : ByteSlice) (i : Nat) :
-    s.toByteArray.toByteSlice.get! i = s.get! i := by
-  have hs := size_toByteArray_toByteSlice s
-  simp only [ByteSlice.get!, ByteSlice.getD]
-  by_cases h : i < s.size
-  · have h' : i < s.toByteArray.toByteSlice.size := by omega
-    simp only [h, h', dite_true]
-    rw [getElem_slice_byteArray, getElem_slice_byteArray]
-    have h1 := s.stop_le_size_byteArray
-    simp only [ByteSlice.size] at h
-    simp [ByteArray.toByteSlice, ByteSlice.byteArray, ByteSlice.start, ByteSlice.toByteArray,
-      ByteSlice.size, ByteSlice.stop, ByteArray.getElem_extract]
-  · have h' : ¬ i < s.toByteArray.toByteSlice.size := by omega
-    simp only [h, h', dite_false]
-
-theorem beq_toByteArray (w s : ByteSlice) : (w == s.toByteArray.toByteSlice) = (w == s) := by
-  show ByteSlice.beq _ _ = ByteSlice.beq _ _
-  unfold ByteSlice.beq
-  rw [toByteArray_toByteSlice]
-
 theorem reservedSlot_toByteArray (s : ByteSlice) :
     Reserved.Internal.reservedSlot s.toByteArray.toByteSlice =
       Reserved.Internal.reservedSlot s := by
@@ -174,4 +130,4 @@ theorem pending_congr_append {v : Version} {c₁ c₂ : Collector} {xs ys : List
 
 theorem collector_ws : Consume.consumesWhitespaceAndComments (H := Collector) = false := rfl
 
-end BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
+end BSmtLib.Proofs.Lexer.V1NaiveWRustPort

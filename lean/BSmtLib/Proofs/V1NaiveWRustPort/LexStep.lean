@@ -1,5 +1,5 @@
-import BSmtLib.Proofs.V4FastPathsWRustPort.ArmsRuns
-import BSmtLib.Proofs.V4FastPathsWRustPort.ArmsStrings
+import BSmtLib.Proofs.V1NaiveWRustPort.ArmsRuns
+import BSmtLib.Proofs.V1NaiveWRustPort.ArmsStrings
 
 /-!
 # A step of the Rust port's loop over a slice
@@ -10,9 +10,9 @@ import BSmtLib.Proofs.V4FastPathsWRustPort.ArmsStrings
 `whitespace` is never reached, as the adapter's consumer does not take whitespace.
 -/
 
-namespace BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
+namespace BSmtLib.Proofs.Lexer.V1NaiveWRustPort
 
-open BSmtLib.Proofs.Adapter V1Naive
+open BSmtLib.Proofs.Adapter V1Naive BSmtLib.Proofs.Simulation
 
 section
 
@@ -65,18 +65,19 @@ theorem lexStep_wp (v : Version) (input : ByteSlice) (start : Nat)
     token_arm (fractionFrom_wp v input start (Nat.le_of_lt hstart) start hstart (Nat.le_refl _)
       tokenStart base _ s coll (.token p) location held p location hpre.fixed hpre.base
       hpre.holds hpre.bytes hpre.loc hlow hb (token_agrees hpre.agrees hstate).2.1
-      ((token_agrees hpre.agrees hstate).1.trans hts) (token_agrees hpre.agrees hstate).2.2 rfl)
+      ((token_agrees hpre.agrees hstate).1.trans hts) (token_agrees hpre.agrees hstate).2.2
+      (token_fits hpre.agrees) rfl)
   | baseSelection =>
     token_arm (arm_baseSelection v input start hstart tokenStart _ s coll p location held hpre
       hts' hstate)
   | hexadecimal =>
     token_arm (arm_digitRun v input start hstart tokenStart base _ s coll p location held hpre hlow
-      hts' hb _ _ .hexadecimal (fun c => endsRun_hex c) rfl
+      hts' hb _ .hexadecimal (fun c => endsRun_hex c) rfl
       (fun st content q h => by rw [hstate] at h; exact ⟨h.1, h.2.1, h.2.2⟩)
       (fun q st content hm hs hc => by rw [hstate]; exact ⟨hs, hm, hc⟩))
   | binary =>
     token_arm (arm_digitRun v input start hstart tokenStart base _ s coll p location held hpre hlow
-      hts' hb _ _ .binary (fun c => endsRun_binary c) rfl
+      hts' hb _ .binary (fun c => endsRun_binary c) rfl
       (fun st content q h => by rw [hstate] at h; exact ⟨h.1, h.2.1, h.2.2⟩)
       (fun q st content hm hs hc => by rw [hstate]; exact ⟨hs, hm, hc⟩))
   | stringLiteral =>
@@ -106,4 +107,4 @@ theorem lexStep_wp (v : Version) (input : ByteSlice) (start : Nat)
 
 end
 
-end BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
+end BSmtLib.Proofs.Lexer.V1NaiveWRustPort

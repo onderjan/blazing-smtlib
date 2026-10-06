@@ -4,6 +4,7 @@ import BSmtLib.Proofs.Lexer.X1BatchInCore
 import BSmtLib.Proofs.Adapter
 import BSmtLib.Proofs.Simulation
 import BSmtLib.Proofs.V1Naive
+import BSmtLib.Proofs.V1NaiveWRustPort
 
 /-!
 # Proofs about the lexers
@@ -36,14 +37,6 @@ info: 'BSmtLib.Proofs.Lexer.V1Naive.lexerCorrect' depends on axioms: [propext, C
 #guard_msgs in
 #print axioms Lexer.V1Naive.lexerCorrect
 
-/-
-Currently broken: the theorems below rest on the links between the lexers, which the change of
-the lexers' code broke: `V4FastPathsWRustPort` (the Rust port against the naive lexer),
-`WRustPortX1BatchInCore` (the lexer with the batch kept in its state against the Rust port) and
-`X2ContentsLexer` (the library's lexer against the lexer with the content buffer, which is now
-the lexer with the batch kept in its state). Their modules are not imported until they are
-proved again, and the theorems come back one lexer at a time.
-
 /-- The Rust port, run by the adapter with its consumer that takes every token and does not take
 whitespace and comments, is correct on whole inputs, however they are cut into slices: it hands
 over what the naive lexer does. -/
@@ -57,6 +50,13 @@ info: 'BSmtLib.Proofs.Lexer.WRustPort.lexerCorrect' depends on axioms: [propext,
 -/
 #guard_msgs in
 #print axioms Lexer.WRustPort.lexerCorrect
+
+/-
+Currently broken: the theorems below rest on the links between the lexers, which the change of
+the lexers' code broke: `WRustPortX1BatchInCore` (the lexer with the batch kept in its state
+against the Rust port) and `X2ContentsLexer` (the library's lexer against the lexer with the
+content buffer, which is now the lexer with the batch kept in its state). Their modules are not
+imported until they are proved again, and the theorems come back one lexer at a time.
 
 /-- The lexer with the batch kept in its state, run by the adapter with its consumer that takes
 every token and does not take whitespace and comments, is correct on whole inputs, however they

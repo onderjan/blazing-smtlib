@@ -1,4 +1,4 @@
-import BSmtLib.Proofs.V4FastPathsWRustPort.Bytes
+import BSmtLib.Proofs.V1NaiveWRustPort.Bytes
 import BSmtLib.Proofs.Lexer.WRustPort
 
 /-!
@@ -8,9 +8,9 @@ The Rust port classifies a byte by its tables (`RUN_FLAGS`, `FAST`, `START`); ea
 of the naive lexer's byte classes, checked by the kernel for every byte.
 -/
 
-namespace BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
+namespace BSmtLib.Proofs.Lexer.V1NaiveWRustPort
 
-open V1Naive
+open V1Naive BSmtLib.Proofs.Simulation
 open BSmtLib.Lexer (endsRun RUN_FLAGS RUN_DIGIT RUN_SIMPLE_SYMBOL RUN_HEX_DIGIT RUN_BINARY_DIGIT
   RUN_NON_LF_WHITESPACE RUN_QUOTED_PLAIN RUN_STRING_PLAIN RUN_COMMENT_PLAIN)
 
@@ -120,4 +120,4 @@ theorem startOf_other (c : UInt8) :
       (!isWhitespace c && c != 59 && c != 35 && c != 34 && c != 58 && c != 124 && !isDigit c &&
         !isSymbolByte c)) = true) (by decide +kernel) c
 
-end BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
+end BSmtLib.Proofs.Lexer.V1NaiveWRustPort

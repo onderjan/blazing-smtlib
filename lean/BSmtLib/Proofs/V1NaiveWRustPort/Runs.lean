@@ -1,5 +1,5 @@
-import BSmtLib.Proofs.V4FastPathsWRustPort.Feed
-import BSmtLib.Proofs.V4FastPathsWRustPort.Tables
+import BSmtLib.Proofs.V1NaiveWRustPort.Feed
+import BSmtLib.Proofs.V1NaiveWRustPort.Tables
 
 /-!
 # The Rust port's runs against the naive lexer's bytes
@@ -11,9 +11,9 @@ that delimits it is handed over before the byte, which is then lexed with no tok
 (`feedFrom_tokenBefore`).
 -/
 
-namespace BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
+namespace BSmtLib.Proofs.Lexer.V1NaiveWRustPort
 
-open V1Naive
+open V1Naive BSmtLib.Proofs.Simulation
 open BSmtLib.Lexer (endsRun RUN_FLAGS RUN_DIGIT RUN_SIMPLE_SYMBOL RUN_HEX_DIGIT RUN_BINARY_DIGIT
   RUN_NON_LF_WHITESPACE RUN_QUOTED_PLAIN RUN_STRING_PLAIN RUN_COMMENT_PLAIN)
 
@@ -42,6 +42,26 @@ theorem runEndBy_eq (stops : UInt8 → Bool) (P : UInt8 → Bool) (hP : ∀ c, s
 theorem runEnd_eq {mask : UInt8} {P : UInt8 → Bool} (hP : ∀ c, endsRun c mask = !P c)
     (s : ByteSlice) (i : Nat) : Lexer.Slice.runEnd s i mask = runEnd s P i :=
   runEndBy_eq _ P hP s i
+
+/-- A run scan of the Rust port from within the slice ends within it. -/
+theorem runEndBy_le (stops : UInt8 → Bool) (s : ByteSlice) {i : Nat} (h : i ≤ s.size) :
+    Lexer.Slice.runEndBy stops s i ≤ s.size := by
+  rw [runEndBy_eq stops (fun c => !stops c) (fun c => by simp) s i]
+  exact runEnd_le s _ i h
+
+/-- Shows that an index into the slice, possibly the end of a run scan, is within the slice. -/
+macro "bound_tac" : tactic =>
+  `(tactic| first
+    | omega
+    | exact runEndBy_le _ _ (by omega))
+
+/-- Shows that the content buffer of a token begun in the step fits its array. -/
+macro "fits_tac" : tactic =>
+  `(tactic| first
+    | exact fits_clear_extendSlice _ _ (by bound_tac)
+    | exact fits_clear _
+    | exact fits_push (fits_clear _) _
+    | exact fits_empty)
 
 /-- The run of the Rust port over a string under version 2.0. -/
 theorem runEndAll_legacy (s : ByteSlice) (i : Nat) :
@@ -146,4 +166,4 @@ theorem feedFrom_start_error {j : Nat} (hj : j < s.size) {location : Location} {
 
 end
 
-end BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
+end BSmtLib.Proofs.Lexer.V1NaiveWRustPort

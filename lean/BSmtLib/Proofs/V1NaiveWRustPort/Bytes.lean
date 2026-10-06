@@ -11,9 +11,9 @@ is (`advance_*_run`), and its step `start` starts the tokens of the fast paths a
 `start_symbol`, `start_space` and `start_quoted`.
 -/
 
-namespace BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
+namespace BSmtLib.Proofs.Lexer.V1NaiveWRustPort
 
-open V1Naive
+open V1Naive BSmtLib.Proofs.Simulation
 
 /-! ## Runs -/
 
@@ -59,16 +59,6 @@ theorem runEnd_succ (s : ByteSlice) (p : UInt8 → Bool) (i : Nat) (hi : i < s.s
 /-- The bytes of the slice from `i` to `j`. -/
 def bytesOf (slice : ByteSlice) (i j : Nat) : ByteArray :=
   (slice.slice i j).toByteArray
-
-theorem start_add_lt (s : ByteSlice) {i : Nat} (h : i < s.size) :
-    s.start + i < s.byteArray.data.size := by
-  have := s.stop_le_size_byteArray
-  simp only [ByteSlice.size] at h
-  simp only [ByteArray.size] at this
-  omega
-
-theorem getElem_slice (s : ByteSlice) (i : Nat) (h : i < s.size) :
-    s[i] = s.byteArray.data[s.start + i]'(start_add_lt s h) := rfl
 
 theorem data_bytesOf (s : ByteSlice) {i j : Nat} (hij : i ≤ j) (hj : j ≤ s.size) :
     (bytesOf s i j).data = s.byteArray.data.extract (s.start + i) (s.start + j) := by
@@ -130,9 +120,20 @@ theorem push_append_bytesOf (x : ByteArray) (s : ByteSlice) {i j : Nat} (hi : i 
     simp only [ByteArray.data_append, ByteArray.data_push] at e ⊢
     rw [Array.append_push, Array.append_push, e]
 
-theorem empty_append (b : ByteArray) : ByteArray.empty ++ b = b := by
-  apply ByteArray.ext
-  rw [ByteArray.data_append, show ByteArray.empty.data = #[] from rfl, Array.empty_append]
+/-- A cleared content buffer extended from positions in the slice's array holds the bytes of the
+slice between them. -/
+theorem contentBytes_clear_extendSlice (buf : BSmtLib.Lexer.ContentBuffer) (input : ByteSlice)
+    {a b : Nat} (hb : b ≤ input.size) :
+    contentBytes (buf.clear.extendFrom input.byteArray (input.start + a) (input.start + b)) =
+      (input.slice a b).toByteArray := by
+  rw [contentBytes_extendSlice input (fits_clear buf) (.inl hb), contentBytes_clear,
+    empty_append]
+
+/-- A cleared content buffer extended from positions in the slice's array fits its array. -/
+theorem fits_clear_extendSlice (buf : BSmtLib.Lexer.ContentBuffer) (input : ByteSlice)
+    {a b : Nat} (hb : b ≤ input.size) :
+    Fits (buf.clear.extendFrom input.byteArray (input.start + a) (input.start + b)) :=
+  fits_extendSlice input (fits_clear buf) (.inl hb)
 
 /-! ## Locations -/
 
@@ -293,4 +294,4 @@ theorem start_space (version : Version) (ws : Bool) (location : Location) (c : U
 theorem start_quoted (version : Version) (ws : Bool) (location : Location) :
     start version ws location 124 = .pending ⟨.quotedSymbol, location, .empty⟩ := rfl
 
-end BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
+end BSmtLib.Proofs.Lexer.V1NaiveWRustPort

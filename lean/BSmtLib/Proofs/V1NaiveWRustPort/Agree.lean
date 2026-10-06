@@ -1,4 +1,4 @@
-import BSmtLib.Proofs.V4FastPathsWRustPort.HandOver
+import BSmtLib.Proofs.V1NaiveWRustPort.HandOver
 
 /-!
 # The Rust port's state against the naive lexer's pure state
@@ -11,7 +11,8 @@ comments, and the lexer stops at its first error.
 - `Fixed`: the version is the one in force, the lexer does not recover, does not discard and is
   not recovering.
 - `StAgrees`: the lexer state `normal` is `St.idle`; any other state is a token in progress
-  (`TokenAgrees`), which starts at `tokenStart`, with the content `tokenContent`, in the mode
+  (`TokenAgrees`), which starts at `tokenStart`, with the content of the content buffer
+  `tokenContent` (`contentBytes`), whose length is within its array (`Fits`), in the mode
   that the state stands for under the version: `numeralOrDecimal` is a numeral, which is the
   single digit `0` exactly when the content is; `fraction` is a fraction, with a digit after
   the dot exactly when the content does not end with the dot; `baseSelection` is the `#`;
@@ -28,9 +29,9 @@ comments, and the lexer stops at its first error.
   consumer will record before those still to come (`outcome`).
 -/
 
-namespace BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
+namespace BSmtLib.Proofs.Lexer.V1NaiveWRustPort
 
-open BSmtLib.Proofs.Adapter V1Naive
+open BSmtLib.Proofs.Adapter V1Naive BSmtLib.Proofs.Simulation
 open BSmtLib.Lexer (LexerState)
 
 /-- The Rust port's lexer state is fixed as the adapter's consumer runs it, under the version. -/
@@ -39,6 +40,20 @@ structure Fixed (v : Version) (c : WCore) : Prop where
   recovers : c.recovers = false
   discard : c.discard = false
   recoveryState : c.recoveryState = none
+
+/-- The last byte of the content, if any. -/
+def lastOf (content : ByteArray) : Option UInt8 :=
+  if content.size == 0 then none else some (content.get! (content.size - 1))
+
+/-- The last byte of the content buffer is that of its content. -/
+theorem last?_stored {buf : BSmtLib.Lexer.ContentBuffer} (h : Fits buf) :
+    BSmtLib.Lexer.Content.stored.last? buf = lastOf (contentBytes buf) := by
+  unfold BSmtLib.Lexer.Content.last? lastOf
+  rw [size_contentBytes h]
+  by_cases h0 : buf.len = 0
+  · simp [h0]
+  · have h1 : buf.len - 1 < buf.len := by omega
+    simp [h0, get!_eq_getElem!, get!_contentBytes h h1]
 
 /-- The Rust port's token in progress, in the state `state` from `start` with the content
 `content`, is the naive lexer's token in progress `p`, under the version. -/
@@ -51,8 +66,8 @@ def TokenAgrees (v : Version) (state : LexerState) (start : Location) (content :
       p.mode = .numeral (content.size == 1 && content.get! 0 == byte! '0') ∧ p.content = content ∧
         content.size ≠ 0
     | .fraction =>
-      p.mode = .fraction !((Lexer.WRustPort.Content.stored.last? content).isNone ||
-        Lexer.WRustPort.Content.stored.last? content == some (byte! '.')) ∧ p.content = content
+      p.mode = .fraction !((lastOf content).isNone || lastOf content == some (byte! '.')) ∧
+        p.content = content
     | .baseSelection => p.mode = .hash ∧ p.content = content
     | .hexadecimal => p.mode = .digits .hexadecimal ∧ p.content = content
     | .binary => p.mode = .digits .binary ∧ p.content = content
@@ -71,7 +86,8 @@ def TokenAgrees (v : Version) (state : LexerState) (start : Location) (content :
 /-- The Rust port's lexer state is the naive lexer's pure state, under the version. -/
 def StAgrees (v : Version) : St → WCore → Prop
   | .idle, c => c.state = .normal
-  | .token p, c => TokenAgrees v c.state c.tokenStart c.tokenContent p
+  | .token p, c =>
+    TokenAgrees v c.state c.tokenStart (contentBytes c.tokenContent) p ∧ Fits c.tokenContent
 
 /-- The location is that of the index `index` of the slice, from the offset `offset` of the
 index `base`, on the lexer's line. -/
@@ -88,7 +104,7 @@ theorem LocAt.congr {c c' : WCore} {offset base index : Nat} {location : Locatio
 theorem fixed_of_key {v : Version} {c c' : WCore} (h : Fixed v c) (hk : key c' = key c) :
     Fixed v c' := by
   simp only [key, Prod.mk.injEq] at hk
-  obtain ⟨e1, e2, e3, e4, e5, -⟩ := hk
+  obtain ⟨e1, -, e3, e4, e5, -⟩ := hk
   exact ⟨e1.trans h.1, e4.trans h.2, e3.trans h.3, e5.trans h.4⟩
 
 theorem fixed_of_key' {v : Version} {c c' : WCore} (hk : key c' = key c) (h : Fixed v c) :
@@ -102,7 +118,8 @@ theorem stAgrees_of_key {v : Version} {st : St} {c c' : WCore} (h : StAgrees v s
   cases st with
   | idle => exact e2.trans h
   | token p =>
-    show TokenAgrees v c'.state c'.tokenStart c'.tokenContent p
+    show TokenAgrees v c'.state c'.tokenStart (contentBytes c'.tokenContent) p ∧
+      Fits c'.tokenContent
     rw [e2, e6, e7]
     exact h
 
@@ -112,4 +129,4 @@ theorem locAt_of_key {c c' : WCore} {offset base index : Nat} {location : Locati
   simp only [key, Prod.mk.injEq] at hk
   exact h.congr hk.2.2.2.2.2.2.2.2.2.1 hk.2.2.2.2.2.2.2.2.2.2
 
-end BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
+end BSmtLib.Proofs.Lexer.V1NaiveWRustPort

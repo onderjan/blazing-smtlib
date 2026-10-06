@@ -11,11 +11,20 @@ says that the result satisfies `Q` if the step returns, and if it is interrupted
 interruption is an error, not a stop of the consumer (`IsErr`), and satisfies `QE`; the lemmas
 below take a step apart along the code. Every interruption that the code raises with this
 consumer is an error, as the consumer never asks to relex and has no result to finish with.
+
+
+The code of the Rust port is written over a structure of operations; the Rust port runs it with
+the Rust lexer's (`Rust.ops`), which is an instance in this namespace, and whose operations
+unfold to the Rust port's functions (`rust_loadLocals`, `rust_storeLocals`, `rust_eofBatch`).
 -/
 
-namespace BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
+namespace BSmtLib.Proofs.Lexer.V1NaiveWRustPort
 
 open BSmtLib.Proofs.Adapter
+
+/- The Rust port runs its code with the Rust lexer's operations, which every function of
+its code takes as an instance. -/
+attribute [scoped instance] Lexer.WRustPort.Rust.ops
 
 /-- The Rust port's lexer state. -/
 abbrev WCore := Lexer.WRustPort.LexerCore
@@ -137,4 +146,32 @@ theorem wp_liftConsumer {Q : β → BS floor low → Collector → Prop} {x : St
 
 end
 
-end BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
+/-! ## The Rust lexer's operations
+
+The code of the Rust port calls the operations of its instance; with the Rust lexer's, each is
+the function of the Rust port of the same name.
+-/
+
+section
+
+variable {floor : Option Nat} {low : Nat}
+
+open Lexer.WRustPort (Ops FastState)
+
+theorem rust_loadLocals :
+    Ops.loadLocals (H := Collector) (m := Id) (R := Empty) (E := Unit) (floor := floor)
+      (low := low) =
+      FastState.load := rfl
+
+theorem rust_storeLocals :
+    Ops.storeLocals (H := Collector) (m := Id) (R := Empty) (E := Unit) (floor := floor)
+      (low := low) = FastState.store := rfl
+
+theorem rust_eofBatch (c : Lexer.WRustPort.LexerCore) :
+    Ops.eofBatch (H := Collector) (m := Id) (R := Empty) (E := Unit) c =
+      ⟨(TokenBatch.empty BSmtLib.Lexer.BATCH_CAPACITY).clear c.offset,
+        Nat.le_of_eq (TokenBatch.lastEnd_clear _ _)⟩ := rfl
+
+end
+
+end BSmtLib.Proofs.Lexer.V1NaiveWRustPort

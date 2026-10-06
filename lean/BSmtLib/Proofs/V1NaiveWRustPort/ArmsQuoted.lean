@@ -1,4 +1,4 @@
-import BSmtLib.Proofs.V4FastPathsWRustPort.ArmsNumbers
+import BSmtLib.Proofs.V1NaiveWRustPort.ArmsNumbers
 
 /-!
 # The arm of the Rust port's `lexStep` for a quoted symbol
@@ -10,9 +10,9 @@ It is proved by induction on the bytes left in the slice (`QuotedSpec`), with th
 lexer's pure run from where the step started anchored to the loop's index.
 -/
 
-namespace BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
+namespace BSmtLib.Proofs.Lexer.V1NaiveWRustPort
 
-open BSmtLib.Proofs.Adapter V1Naive
+open BSmtLib.Proofs.Adapter V1Naive BSmtLib.Proofs.Simulation
 open Lexer.Slice (get? get)
 
 section
@@ -42,9 +42,11 @@ def QuotedSpec (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St) (loc0
     (locq : Location), Fixed v s.val → s.val.base = start0 → Holds s.val.batch held →
     s.val.batch.bytes = input.byteArray → LocAt s.val s.val.offset s.val.base consumed locq →
     low = s.val.offset → base = s.val.base → tokenStart = s.val.tokenStart →
-    s.val.state = .quotedSymbol → start0 ≤ consumed → start0 < input.size →
+    s.val.state = .quotedSymbol → Fits s.val.tokenContent → start0 ≤ consumed → start0 < input.size
+        →
     feedFrom v input st0 loc0 start0 =
-      feedFrom v input (.token ⟨.quotedSymbol, tokenStart, s.val.tokenContent⟩) locq consumed →
+      feedFrom v input (.token ⟨.quotedSymbol, tokenStart, contentBytes s.val.tokenContent⟩) locq
+          consumed →
     WP (Lexer.WRustPort.lexQuotedSymbol (H := Collector) (m := Id) (R := Empty) (E := Unit)
         input consumed origin horigin hconsumed tokenStart base h) s coll
       (fun r s' coll' => ArmPost v input st0 loc0 start0 coll held r.1 s'.val coll')
@@ -59,8 +61,8 @@ theorem quotedSpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
   induction n with
   | zero => intro consumed hn; omega
   | succ n ih =>
-  intro consumed hn horigin hconsumed s locq hfix hbase0 hholds hbytes hloc hlow hb hts hstate h0
-    hs0 hanchor
+  intro consumed hn horigin hconsumed s locq hfix hbase0 hholds hbytes hloc hlow hb hts hstate hfits
+    h0 hs0 hanchor
   have hJ : Lexer.Slice.runEnd input consumed Lexer.RUN_QUOTED_PLAIN =
       runEnd input isQuotedRun consumed := runEnd_eq endsRun_quoted _ _
   have hle := le_runEnd input isQuotedRun consumed
@@ -68,8 +70,14 @@ theorem quotedSpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
   have hstop := fun h => runEnd_stop input isQuotedRun consumed h
   have hA := feedFrom_mode v input isQuotedRun isQuotedRun_ne .quotedSymbol
     (fun q l c hm hc => advance_quotedSymbol_run false q l c hm hc) consumed
-    ⟨.quotedSymbol, tokenStart, s.val.tokenContent⟩ locq rfl hconsumed
+    ⟨.quotedSymbol, tokenStart, contentBytes s.val.tokenContent⟩ locq rfl hconsumed
   rw [← hJ] at hA hle hle' hstop
+  have hext : contentBytes (s.val.tokenContent.extendFrom input.byteArray (input.start + consumed)
+      (input.start + Lexer.Slice.runEnd input consumed Lexer.RUN_QUOTED_PLAIN)) =
+      contentBytes s.val.tokenContent ++
+        bytesOf input consumed (Lexer.Slice.runEnd input consumed Lexer.RUN_QUOTED_PLAIN) :=
+    contentBytes_extendSlice input hfits (.inl hle')
+  have hfits' := fits_extendSlice input hfits (a := consumed) (.inl hle')
   have hA' := hanchor.trans hA
   have hLI := hloc.afterColumns (by rw [hbase0]; exact h0) hle
   rw [Lexer.WRustPort.lexQuotedSymbol]
@@ -85,7 +93,8 @@ theorem quotedSpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
       intro hp
       have hp' : c = 124 := by simpa using hp
       have hB : feedFrom v input st0 loc0 start0 =
-          feedFrom v input (.token ⟨.quotedSymbolClosed, tokenStart, s.val.tokenContent ++
+          feedFrom v input (.token ⟨.quotedSymbolClosed, tokenStart, contentBytes s.val.tokenContent
+              ++
             bytesOf input consumed (Lexer.Slice.runEnd input consumed Lexer.RUN_QUOTED_PLAIN)⟩)
             (afterColumns locq (Lexer.Slice.runEnd input consumed Lexer.RUN_QUOTED_PLAIN + 1 -
               consumed)) (Lexer.Slice.runEnd input consumed Lexer.RUN_QUOTED_PLAIN + 1) := by
@@ -95,15 +104,14 @@ theorem quotedSpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
         omega
       have hLJ := hloc.afterColumns (by rw [hbase0]; exact h0)
         (show consumed ≤ Lexer.Slice.runEnd input consumed Lexer.RUN_QUOTED_PLAIN + 1 by omega)
-      unfold Lexer.WRustPort.extendContent Lexer.WRustPort.extendContentFrom
-        Lexer.WRustPort.modifyContent
+      unfold Lexer.WRustPort.extendContent Lexer.WRustPort.modifyContent
       apply wp_bind; apply wp_modifyCore
       split
       · -- the byte after the pipe is in the slice
         rename_i next hnext
         obtain ⟨hNs, hNc⟩ := get?_eq hnext
         have hC := feedFrom_end v input hNs (q := ⟨.quotedSymbolClosed, tokenStart,
-            s.val.tokenContent ++ bytesOf input consumed
+            contentBytes s.val.tokenContent ++ bytesOf input consumed
               (Lexer.Slice.runEnd input consumed Lexer.RUN_QUOTED_PLAIN)⟩)
           (location := afterColumns locq (Lexer.Slice.runEnd input consumed
             Lexer.RUN_QUOTED_PLAIN + 1 - consumed)) (advance_end_quotedSymbolClosed rfl)
@@ -127,11 +135,12 @@ theorem quotedSpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
           simp only [↓reduceIte] at hC
           apply wp_pure
           apply wp_bind
-          refine sinkStored_wp v .quotedSymbol _ (.mkAtByte _) tokenStart base h held _ ?_ coll
-            ?_ ?_ ?_ ?_
+          refine sinkStored_wp v .quotedSymbol (.mkAtByte _) tokenStart base h held _ ?_ coll
+            ?_ ?_ ?_ ?_ ?_
           · exact hholds
           · exact hfix.recovers
           · exact hfix.version
+          · exact hfits'
           · intro s1 coll1 hk1 hb1 hc1
             obtain ⟨k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11⟩ := key_fields hk1
             unfold Lexer.WRustPort.setNormal
@@ -143,23 +152,24 @@ theorem quotedSpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
               (show start0 ≤ Lexer.Slice.runEnd input consumed Lexer.RUN_QUOTED_PLAIN + 1 by
                 omega) hbytes ⟨k1, k4, k3, k5, rfl, k8, k9, k10, k11, hb1⟩ hLJ hc1 ?_
             rw [hC]
-            show _ = Prep [⟨.quotedSymbol, s.val.tokenContent ++ (input.slice consumed
-              (Lexer.Slice.runEnd input consumed Lexer.RUN_QUOTED_PLAIN)).toByteArray, tokenStart,
+            show _ = Prep [⟨.quotedSymbol, contentBytes (s.val.tokenContent.extendFrom
+                input.byteArray (input.start + consumed)
+            (input.start + (Lexer.Slice.runEnd input consumed Lexer.RUN_QUOTED_PLAIN))), tokenStart,
               stepLocation s.val low base
                 (Lexer.Slice.runEnd input consumed Lexer.RUN_QUOTED_PLAIN + 1)⟩] _
-            rw [hstep]
-            rfl
+            rw [hext, hstep]
           · intro hn e s' coll'
             show outcome v _ _ = none
             rw [hC, outcome_prep]
             have hstep := stepLocation_eq' (pos := Lexer.Slice.runEnd input consumed
               Lexer.RUN_QUOTED_PLAIN + 1) hloc (by rw [hbase0]; exact h0) hb hlow (by omega)
-            have hn' : pending v coll (held ++ [⟨.quotedSymbol, s.val.tokenContent ++
-                (input.slice consumed (Lexer.Slice.runEnd input consumed
-                  Lexer.RUN_QUOTED_PLAIN)).toByteArray, tokenStart,
+            have hn' : pending v coll (held ++ [⟨.quotedSymbol, contentBytes
+                (s.val.tokenContent.extendFrom input.byteArray (input.start + consumed)
+            (input.start + (Lexer.Slice.runEnd input consumed
+                  Lexer.RUN_QUOTED_PLAIN))), tokenStart,
                 stepLocation s.val low base
                   (Lexer.Slice.runEnd input consumed Lexer.RUN_QUOTED_PLAIN + 1)⟩]) = none := hn
-            rw [hstep] at hn'
+            rw [hext, hstep] at hn'
             exact (congrArg (fun x => outcome v x _) hn').trans (outcome_none_left v _)
       · -- the pipe is the last byte of the slice: the symbol waits for its delimiter
         rename_i hnext
@@ -170,14 +180,14 @@ theorem quotedSpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
         refine armPost_pending (s0 := s.val) hfix hbase0
           (show start0 < Lexer.Slice.runEnd input consumed Lexer.RUN_QUOTED_PLAIN + 1 by omega)
           hholds hbytes ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩ ?_ hLJ hB
-        exact ⟨rfl, rfl, rfl⟩
+        exact ⟨⟨rfl, rfl, hext.symm⟩, hfits'⟩
     · intro hp
       have hp' : c ≠ 124 := by simpa using hp
       apply wp_ite
       · -- a backslash
         intro hbs
         have hbs' : c = 92 := by simpa using hbs
-        have hf : ∃ f, advance false ⟨.quotedSymbol, tokenStart, s.val.tokenContent ++
+        have hf : ∃ f, advance false ⟨.quotedSymbol, tokenStart, contentBytes s.val.tokenContent ++
             bytesOf input consumed (Lexer.Slice.runEnd input consumed Lexer.RUN_QUOTED_PLAIN)⟩
             (afterColumns locq (Lexer.Slice.runEnd input consumed Lexer.RUN_QUOTED_PLAIN -
               consumed)) input[Lexer.Slice.runEnd input consumed Lexer.RUN_QUOTED_PLAIN] =
@@ -195,7 +205,8 @@ theorem quotedSpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
           intro h10
           have h10' : c = 10 := by simpa using h10
           have hB : feedFrom v input st0 loc0 start0 =
-              feedFrom v input (.token ⟨.quotedSymbol, tokenStart, (s.val.tokenContent ++
+              feedFrom v input (.token ⟨.quotedSymbol, tokenStart, (contentBytes s.val.tokenContent
+                  ++
                 bytesOf input consumed (Lexer.Slice.runEnd input consumed
                   Lexer.RUN_QUOTED_PLAIN)).push 10⟩)
                 ((afterColumns locq (Lexer.Slice.runEnd input consumed Lexer.RUN_QUOTED_PLAIN -
@@ -204,21 +215,21 @@ theorem quotedSpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
             rw [hA', feedFrom_step hIs (byteStep_token_pending v (by rw [hIc, h10']; rfl)),
               prep_nil, hIc, h10']
           unfold Lexer.WRustPort.markLineFeedAt Lexer.WRustPort.extendContent
-            Lexer.WRustPort.extendContentFrom Lexer.WRustPort.modifyContent
+            Lexer.WRustPort.modifyContent
           apply wp_bind; apply wp_modifyCore
           apply wp_bind; apply wp_modifyCore
           refine ih (Lexer.Slice.runEnd input consumed Lexer.RUN_QUOTED_PLAIN + 1) (by omega) _ _ _
             ((afterColumns locq (Lexer.Slice.runEnd input consumed Lexer.RUN_QUOTED_PLAIN -
               consumed)).afterByte 10) ⟨hfix.1, hfix.2, hfix.3, hfix.4⟩ hbase0 hholds hbytes
-            ?_ hlow hb hts hstate (by omega) hs0 ?_
+            ?_ hlow hb hts hstate (fits_extendSlice input hfits (a := consumed)
+              (b := Lexer.Slice.runEnd input consumed Lexer.RUN_QUOTED_PLAIN + 1) (.inl (by omega)))
+                  (by omega) hs0 ?_
           · refine LocAt.lineFeed hLI (by rw [hbase0]; omega) rfl ?_
             show Lexer.WRustPort.LexerCore.offsetAt _ _ + 1 = _
             simp only [Lexer.WRustPort.LexerCore.offsetAt]
-          · rw [hB]
-            show _ = feedFrom v input (.token ⟨.quotedSymbol, tokenStart, s.val.tokenContent ++
-              (input.slice consumed (Lexer.Slice.runEnd input consumed
-                Lexer.RUN_QUOTED_PLAIN + 1)).toByteArray⟩) _ _
-            rw [content_succ input _ hle hIs, hIc, h10']
+          · rw [hB, contentBytes_extendSlice input hfits (a := consumed)
+              (b := Lexer.Slice.runEnd input consumed Lexer.RUN_QUOTED_PLAIN + 1) (.inl (by omega)),
+              content_succ input _ hle hIs, hIc, h10']
         · -- any other byte is not in a quoted symbol
           intro h10
           have h10' : c ≠ 10 := by simpa using h10
@@ -229,7 +240,8 @@ theorem quotedSpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
             · exact absurd h1 hp'
             · exact absurd h1 hbs'
             · exact absurd h1 h10'
-          have hf : ∃ f, advance false ⟨.quotedSymbol, tokenStart, s.val.tokenContent ++
+          have hf : ∃ f, advance false ⟨.quotedSymbol, tokenStart, contentBytes s.val.tokenContent
+              ++
               bytesOf input consumed (Lexer.Slice.runEnd input consumed Lexer.RUN_QUOTED_PLAIN)⟩
               (afterColumns locq (Lexer.Slice.runEnd input consumed Lexer.RUN_QUOTED_PLAIN -
                 consumed)) input[Lexer.Slice.runEnd input consumed Lexer.RUN_QUOTED_PLAIN] =
@@ -245,16 +257,17 @@ theorem quotedSpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
     rename_i hget
     have hIe := Lexer.Slice.size_le_of_get?_none hget
     have he : Lexer.Slice.runEnd input consumed Lexer.RUN_QUOTED_PLAIN = input.size := by omega
-    unfold Lexer.WRustPort.extendContent Lexer.WRustPort.extendContentFrom
-      Lexer.WRustPort.modifyContent
+    unfold Lexer.WRustPort.extendContent Lexer.WRustPort.modifyContent
     apply wp_bind; apply wp_modifyCore
     apply wp_pure
-    rw [he] at hA' hLI
+    rw [he] at hA' hLI hext hfits'
     refine armPost_pending (s0 := s.val) hfix hbase0 hs0 hholds hbytes
       ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩ ?_ hLI hA'
+    refine ⟨?_, hfits'⟩
     show TokenAgrees v s.val.state s.val.tokenStart
-      (s.val.tokenContent ++ (input.slice consumed input.size).toByteArray) _
-    rw [hstate]
+      (contentBytes (s.val.tokenContent.extendFrom input.byteArray (input.start + consumed)
+        (input.start + input.size))) _
+    rw [hext, hstate]
     exact ⟨hts, rfl, rfl⟩
 
 /-- The arm of `lexStep` for a quoted symbol. -/
@@ -272,7 +285,8 @@ theorem arm_quotedSymbol (v : Version) (input : ByteSlice) (start : Nat)
   obtain ⟨hps, hm, hcont⟩ := token_agrees hpre.agrees hstate
   refine quotedSpec_lt v input start (.token p) location coll held tokenStart base h start _
     start (Nat.lt_succ_self _) (Nat.le_refl _) (Nat.le_of_lt hstart) s location hpre.fixed
-    hpre.base hpre.holds hpre.bytes hpre.loc hlow hb hts hstate (Nat.le_refl _) hstart ?_
+    hpre.base hpre.holds hpre.bytes hpre.loc hlow hb hts hstate (token_fits hpre.agrees)
+    (Nat.le_refl _) hstart ?_
   obtain ⟨mode, pstart, pcontent⟩ := p
   simp only at hps hm hcont
   subst hm hps hcont
@@ -280,4 +294,4 @@ theorem arm_quotedSymbol (v : Version) (input : ByteSlice) (start : Nat)
 
 end
 
-end BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
+end BSmtLib.Proofs.Lexer.V1NaiveWRustPort

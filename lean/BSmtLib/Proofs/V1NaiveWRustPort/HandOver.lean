@@ -1,4 +1,4 @@
-import BSmtLib.Proofs.V4FastPathsWRustPort.Batch
+import BSmtLib.Proofs.V1NaiveWRustPort.Batch
 
 /-!
 # The Rust port's hand-overs to the adapter's consumer
@@ -9,11 +9,12 @@ version or finishes. So the Rust port's hand-over of a batch that holds lexemes 
 state as it was, under the version, and the consumer with the lexemes recorded, or fails.
 -/
 
-namespace BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
+namespace BSmtLib.Proofs.Lexer.V1NaiveWRustPort
 
 open BSmtLib.Lexer.Internal (intoBatch)
-open BSmtLib.Proofs.Adapter V1Naive
-open Lexer.WRustPort (flushCursor callConsumer)
+open BSmtLib.Proofs.Adapter V1Naive BSmtLib.Proofs.Simulation
+open Lexer.WRustPort (callConsumer)
+open Lexer.WRustPort.Rust (flushCursor)
 
 section
 
@@ -159,10 +160,10 @@ theorem flushBatch_wp (v : Version) (ls : List Lexeme) (s : BS floor low)
     (hok : ∀ s' coll', key s'.val = key s.val → s'.val.batch = s.val.batch.clear s.val.offset →
       pending v coll' [] = pending v coll ls → Q () s' coll')
     (herr : pending v coll ls = none → ∀ e s' coll', QE e s' coll') :
-    WP (Lexer.WRustPort.flushBatch (H := Collector) (m := Id) (R := Empty) (E := Unit)) s coll
+    WP (Lexer.WRustPort.Rust.flushBatch (H := Collector) (m := Id) (R := Empty) (E := Unit)) s coll
       Q QE := by
   subst hv
-  unfold Lexer.WRustPort.flushBatch
+  unfold Lexer.WRustPort.Rust.flushBatch
   apply wp_bind
   apply wp_modifyGetThe
   dsimp only
@@ -191,12 +192,15 @@ def onLine (ty : TokenCategory) (content : ByteSlice) (line lineStart start «en
     start := { offset := start, line, column := start - lineStart },
     «end» := { offset := «end», line, column := «end» - lineStart } }
 
-theorem extract_slice (content : ByteSlice) :
-    content.byteArray.extract content.start content.stop = content.toByteArray := by
-  have := content.start_le_stop
-  simp only [ByteSlice.toByteArray, ByteSlice.size]
-  congr 1
-  omega
+/-- The bytes of the slice from `a` to `b`, as positions in its array. -/
+theorem extract_input (input : ByteSlice) {a b : Nat} (hab : a ≤ b) (hb : b ≤ input.size) :
+    input.start + a ≤ input.start + b ∧ input.start + b ≤ input.byteArray.size ∧
+      input.byteArray.extract (input.start + a) (input.start + b) =
+        (input.slice a b).toByteArray := by
+  have := input.stop_le_size_byteArray
+  have := input.start_le_stop
+  simp only [ByteSlice.size] at hb
+  refine ⟨by omega, by omega, (slice_toByteArray input (.inl hb)).symm⟩
 
 /-- The hand-over of the full batch that the loop of `lexNormal` holds. -/
 theorem flushHeld_wp (v : Version) (batch : TokenBatch) (origin : Nat)
@@ -208,10 +212,10 @@ theorem flushHeld_wp (v : Version) (batch : TokenBatch) (origin : Nat)
     (hok : ∀ r s' coll', r.val = batch.clear origin → key s'.val = key s.val →
       pending v coll' [] = pending v coll ls → Q r s' coll')
     (herr : pending v coll ls = none → ∀ e s' coll', QE e s' coll') :
-    WP (Lexer.WRustPort.flushHeld (H := Collector) (m := Id) (R := Empty) (E := Unit) batch origin
-      hbatch) s coll Q QE := by
+    WP (Lexer.WRustPort.Rust.flushHeld (H := Collector) (m := Id) (R := Empty) (E := Unit) batch
+      origin hbatch) s coll Q QE := by
   subst hv
-  unfold Lexer.WRustPort.flushHeld
+  unfold Lexer.WRustPort.Rust.flushHeld
   apply wp_bind
   apply wp_modifyBound
   apply wp_bind
@@ -226,26 +230,30 @@ theorem flushHeld_wp (v : Version) (batch : TokenBatch) (origin : Nat)
 
 /-- The hand-over of a token on the fast path into the batch that the loop of `lexNormal`
 holds. -/
-theorem pushFast_wp (v : Version) (batch : TokenBatch) (locals : Lexer.WRustPort.FastState)
-    (offset base : Nat) (ty : TokenCategory) (content : ByteSlice) (start «end» : Nat)
+theorem pushFast_wp (v : Version) (input : ByteSlice) (batch : TokenBatch)
+    (locals : Lexer.WRustPort.FastState) (offset base : Nat) (ty : TokenCategory)
+    (contentStart contentStop start «end» : Nat)
     (emit : Bool) (hty : ty ≠ .endOfFile) (hstart : base ≤ start) (hend : start < «end»)
     (hframe : Lexer.WRustPort.Frame floor low offset)
     (hbatch : Lexer.WRustPort.Held floor offset base start batch)
-    (ls : List Lexeme) (hT : Holds batch ls) (hb : content.byteArray = batch.bytes)
+    (ls : List Lexeme) (hT : Holds batch ls) (hb : input.byteArray = batch.bytes)
+    (hcs : contentStart ≤ contentStop) (hce : contentStop ≤ input.size)
     (s : BS floor low) (coll : Collector) (hrec : s.val.recovers = false) (hv : s.val.version = v)
     {Q : {batch : TokenBatch // Lexer.WRustPort.Held floor offset base «end» batch} →
       BS floor low → Collector → Prop}
     {QE : Intr floor → BS floor low → Collector → Prop}
     (hok : ∀ r s' coll' ls', Holds r.val ls' → r.val.bytes = batch.bytes → key s'.val = key s.val →
       pending v coll' ls' = pending v coll (ls ++ if emit then
-        [onLine ty content locals.line locals.lineStart (offset + (start - base))
-          (offset + («end» - base))] else []) → Q r s' coll')
+        [onLine ty (input.slice contentStart contentStop) locals.line locals.lineStart
+          (offset + (start - base)) (offset + («end» - base))] else []) → Q r s' coll')
     (herr : pending v coll (ls ++ if emit then
-        [onLine ty content locals.line locals.lineStart (offset + (start - base))
-          (offset + («end» - base))] else []) = none → ∀ e s' coll', QE e s' coll') :
-    WP (Lexer.WRustPort.pushFast (H := Collector) (m := Id) (R := Empty) (E := Unit) batch locals
-      offset base ty content start «end» emit hty hstart hend hframe hbatch) s coll Q QE := by
-  unfold Lexer.WRustPort.pushFast
+        [onLine ty (input.slice contentStart contentStop) locals.line locals.lineStart
+          (offset + (start - base)) (offset + («end» - base))] else []) = none →
+      ∀ e s' coll', QE e s' coll') :
+    WP (Lexer.WRustPort.Rust.pushFast (H := Collector) (m := Id) (R := Empty) (E := Unit) input
+      batch locals offset base ty contentStart contentStop start «end» emit hty hstart hend hframe
+      hbatch) s coll Q QE := by
+  unfold Lexer.WRustPort.Rust.pushFast
   cases emit
   · simp only [Bool.false_eq_true, ↓reduceIte, List.append_nil] at hok herr ⊢
     split
@@ -267,10 +275,11 @@ theorem pushFast_wp (v : Version) (batch : TokenBatch) (locals : Lexer.WRustPort
       exact hok _ s coll ls hT rfl rfl rfl
   · simp only [↓reduceIte] at hok herr ⊢
     have hT' := holds_push hT
-      (onLine ty content locals.line locals.lineStart (offset + (start - base))
-        (offset + («end» - base))) content.start content.stop content.start_le_stop
-      (by rw [← hb]; exact content.stop_le_size_byteArray)
-      (by rw [← hb, extract_slice]; rfl) hbatch.1
+      (onLine ty (input.slice contentStart contentStop) locals.line locals.lineStart
+        (offset + (start - base)) (offset + («end» - base)))
+      (input.start + contentStart) (input.start + contentStop) (extract_input input hcs hce).1
+      (by rw [← hb]; exact (extract_input input hcs hce).2.1)
+      (by rw [← hb, (extract_input input hcs hce).2.2]; rfl) hbatch.1
       (.inl (show offset + (start - base) < offset + («end» - base) by omega))
     split
     rename_i b' hl' hf' heq
@@ -299,33 +308,39 @@ def borrowedLexeme (ty : TokenCategory) (content : ByteSlice) (start : Location)
 
 /-- The hand-over of a token on the slow path into the batch that the loop of `lexNormal`
 holds. -/
-theorem pushBorrowed_wp (v : Version) (batch : TokenBatch) (offset base : Nat)
-    (ty : TokenCategory) (content : ByteSlice) (start : Location) (tokenEnd : Nat)
+theorem pushBorrowed_wp (v : Version) (input : ByteSlice) (batch : TokenBatch)
+    (offset base : Nat) (ty : TokenCategory) (contentStart contentStop : Nat) (start : Location)
+    (tokenEnd : Nat)
     (hty : ty ≠ .endOfFile) (hafter : batch.lastEnd ≤ start.offset)
     (hend : start.offset < offset + (tokenEnd - base))
     (hfloor : ∀ p, floor = some p → p ≤ start.offset ∧ batch.StartsFrom p)
-    (ls : List Lexeme) (hT : Holds batch ls) (hb : content.byteArray = batch.bytes)
+    (ls : List Lexeme) (hT : Holds batch ls) (hb : input.byteArray = batch.bytes)
+    (hcs : contentStart ≤ contentStop) (hce : contentStop ≤ input.size)
     (s : BS floor low) (coll : Collector) (hrec : s.val.recovers = false) (hv : s.val.version = v)
     {Q : {batch : TokenBatch // Lexer.WRustPort.Held floor offset base tokenEnd batch} →
       BS floor low → Collector → Prop}
     {QE : Intr floor → BS floor low → Collector → Prop}
     (hok : ∀ r s' coll' ls', Holds r.val ls' → r.val.bytes = batch.bytes → key s'.val = key s.val →
       pending v coll' ls' = pending v coll (ls ++
-        [borrowedLexeme ty content start s.val.line s.val.lineStart (offset + (tokenEnd - base))]) →
+        [borrowedLexeme ty (input.slice contentStart contentStop) start s.val.line s.val.lineStart
+          (offset + (tokenEnd - base))]) →
       Q r s' coll')
     (herr : pending v coll (ls ++
-        [borrowedLexeme ty content start s.val.line s.val.lineStart (offset + (tokenEnd - base))]) =
+        [borrowedLexeme ty (input.slice contentStart contentStop) start s.val.line s.val.lineStart
+          (offset + (tokenEnd - base))]) =
       none → ∀ e s' coll', QE e s' coll') :
-    WP (Lexer.WRustPort.pushBorrowed (H := Collector) (m := Id) (R := Empty) (E := Unit) batch
-      offset base ty content start tokenEnd hty hafter hend hfloor) s coll Q QE := by
+    WP (Lexer.WRustPort.pushBorrowed (H := Collector) (m := Id) (R := Empty) (E := Unit) input
+      batch offset base ty contentStart contentStop start tokenEnd hty hafter hend hfloor) s coll
+      Q QE := by
   unfold Lexer.WRustPort.pushBorrowed
   apply wp_bind
   apply wp_getCore
   have hT' := holds_push hT
-    (borrowedLexeme ty content start s.val.line s.val.lineStart (offset + (tokenEnd - base)))
-    content.start content.stop content.start_le_stop
-    (by rw [← hb]; exact content.stop_le_size_byteArray)
-    (by rw [← hb, extract_slice]; rfl) hafter (.inl hend)
+    (borrowedLexeme ty (input.slice contentStart contentStop) start s.val.line s.val.lineStart
+      (offset + (tokenEnd - base)))
+    (input.start + contentStart) (input.start + contentStop) (extract_input input hcs hce).1
+    (by rw [← hb]; exact (extract_input input hcs hce).2.1)
+    (by rw [← hb, (extract_input input hcs hce).2.2]; rfl) hafter (.inl hend)
   dsimp only
   apply wp_ite
   · intro _
@@ -347,22 +362,24 @@ theorem holds_of_len_zero {T : TokenBatch} (h : T.len = 0) : Holds T [] := by
 
 /-- The hand-over of a token whose content is in the lexer's token content, alone, after the
 batch of the lexer state. -/
-theorem sinkStoredAt_wp (v : Version) (ty : TokenCategory) (hty : ty ≠ .endOfFile)
+theorem sinkStoredAt_wp (v : Version) (ty : TokenCategory)
     (start «end» : Location) (hend : start.offset < «end».offset)
     (hfloor : ∀ p, floor = some p → p < «end».offset) (ls : List Lexeme)
     (s : BS floor low) (hT : Holds s.val.batch ls) (coll : Collector)
     (hrec : s.val.recovers = false) (hv : s.val.version = v)
+    (hfits : Fits s.val.tokenContent)
     {Q : Unit → BS floor low → Collector → Prop} {QE : Intr floor → BS floor low → Collector → Prop}
     (hok : ∀ s' coll', key s'.val = key s.val → s'.val.batch = s.val.batch.clear s.val.offset →
       pending v coll' [] = pending v coll
-        (ls ++ [{ category := ty, content := s.val.tokenContent, start, «end» }]) →
+        (ls ++ [{ category := ty, content := contentBytes s.val.tokenContent, start, «end» }]) →
       Q () s' coll')
     (herr : pending v coll
-        (ls ++ [{ category := ty, content := s.val.tokenContent, start, «end» }]) = none →
+        (ls ++ [{ category := ty, content := contentBytes s.val.tokenContent, start, «end» }]) =
+        none →
       ∀ e s' coll', QE e s' coll') :
-    WP (Lexer.WRustPort.sinkStoredAt (H := Collector) (m := Id) (R := Empty) (E := Unit) ty hty
+    WP (Lexer.WRustPort.Rust.sinkStoredAt (H := Collector) (m := Id) (R := Empty) (E := Unit) ty
       start «end» hend hfloor) s coll Q QE := by
-  unfold Lexer.WRustPort.sinkStoredAt
+  unfold Lexer.WRustPort.Rust.sinkStoredAt
   apply wp_bind
   refine flushBatch_wp v ls s hT coll hrec hv ?_ ?_
   · intro s1 coll1 hk1 hb1 hc1
@@ -371,13 +388,13 @@ theorem sinkStoredAt_wp (v : Version) (ty : TokenCategory) (hty : ty ≠ .endOfF
     obtain ⟨e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11⟩ := hk1'
     apply wp_bind
     apply wp_getCore
-    let l : Lexeme := { category := ty, content := s.val.tokenContent, start, «end» }
+    let l : Lexeme := { category := ty, content := contentBytes s.val.tokenContent, start, «end» }
     have hS : Holds (({ (TokenBatch.empty 1).clear start.offset with
-        bytes := s1.val.tokenContent } : TokenBatch).pushLocated ty 0 s1.val.tokenContent.size
+        bytes := s1.val.tokenContent.bytes } : TokenBatch).pushLocated ty 0 s1.val.tokenContent.len
         start «end» (Nat.le_of_eq (TokenBatch.lastEnd_clear _ _)) (.inl hend)) [l] := by
       have := holds_push (holds_of_len_zero (T := ({ (TokenBatch.empty 1).clear start.offset with
-        bytes := s1.val.tokenContent } : TokenBatch)) rfl) l 0 s1.val.tokenContent.size
-        (Nat.zero_le _) (Nat.le_refl _) (by rw [e7]; exact ByteArray.extract_zero_size)
+        bytes := s1.val.tokenContent.bytes } : TokenBatch)) rfl) l 0 s1.val.tokenContent.len
+        (Nat.zero_le _) (by rw [e7]; exact hfits) (by rw [e7]; rfl)
         (Nat.le_of_eq (TokenBatch.lastEnd_clear _ _)) (.inl hend)
       exact this
     have hv1 : s1.val.version = v := e1.trans hv
@@ -406,27 +423,30 @@ def stepLocation (c : WCore) (low base position : Nat) : Location :=
 
 /-- The hand-over of the token in progress, ended at `tokenEnd`, alone after the batch of the
 lexer state. -/
-theorem sinkStored_wp (v : Version) (ty : TokenCategory) (hty : ty ≠ .endOfFile)
+theorem sinkStored_wp (v : Version) (ty : TokenCategory)
     (tokenEnd : Lexer.Slice.TokenEnd) (start : Location) (base : Nat)
     (h : Lexer.WRustPort.Started floor low start) (ls : List Lexeme)
     (s : BS floor low) (hT : Holds s.val.batch ls) (coll : Collector)
     (hrec : s.val.recovers = false) (hv : s.val.version = v)
+    (hfits : Fits s.val.tokenContent)
     {Q : Unit → BS floor low → Collector → Prop} {QE : Intr floor → BS floor low → Collector → Prop}
     (hok : ∀ s' coll', key s'.val = key s.val → s'.val.batch = s.val.batch.clear s.val.offset →
       pending v coll' [] = pending v coll
-        (ls ++ [⟨ty, s.val.tokenContent, start, stepLocation s.val low base tokenEnd.position⟩]) →
+        (ls ++ [⟨ty, contentBytes s.val.tokenContent, start,
+          stepLocation s.val low base tokenEnd.position⟩]) →
       Q () s' coll')
     (herr : pending v coll
-        (ls ++ [⟨ty, s.val.tokenContent, start, stepLocation s.val low base tokenEnd.position⟩]) =
+        (ls ++ [⟨ty, contentBytes s.val.tokenContent, start,
+          stepLocation s.val low base tokenEnd.position⟩]) =
       none → ∀ e s' coll', QE e s' coll') :
-    WP (Lexer.WRustPort.sinkStored (H := Collector) (m := Id) (R := Empty) (E := Unit) ty hty
+    WP (Lexer.WRustPort.sinkStored (H := Collector) (m := Id) (R := Empty) (E := Unit) ty
       tokenEnd start base h) s coll Q QE := by
   unfold Lexer.WRustPort.sinkStored Lexer.WRustPort.locationFrom
   apply wp_bind
   apply wp_bind
   apply wp_getCore
   apply wp_pure
-  exact sinkStoredAt_wp v ty hty start _ _ _ ls s hT coll hrec hv hok herr
+  exact sinkStoredAt_wp v ty start _ _ _ ls s hT coll hrec hv hfits hok herr
 
 /-- The hand-over of the end-of-file token at the location. -/
 theorem sinkEof_wp (v : Version) (location : Location) (s : BS none low) (coll : Collector)
@@ -434,17 +454,19 @@ theorem sinkEof_wp (v : Version) (location : Location) (s : BS none low) (coll :
     {Q : Unit → BS none low → Collector → Prop} {QE : Intr none → BS none low → Collector → Prop}
     (hok : ∀ coll', pending v coll' [] = pending v coll [eofLexeme location] → Q () s coll')
     (herr : pending v coll [eofLexeme location] = none → ∀ e s' coll', QE e s' coll') :
-    WP (Lexer.WRustPort.sinkEof (H := Collector) (m := Id) (R := Empty) (E := Unit) location) s
+    WP (Lexer.WRustPort.Rust.sinkEof (H := Collector) (m := Id) (R := Empty) (E := Unit) location) s
       coll Q QE := by
-  unfold Lexer.WRustPort.sinkEof
+  unfold Lexer.WRustPort.Rust.sinkEof
   apply wp_bind
   apply wp_getCore
-  have hS := holds_push (holds_clear (TokenBatch.empty 1) location.offset) (eofLexeme location) 0 0
-    (Nat.le_refl _) (Nat.zero_le _) rfl (Nat.le_of_eq (TokenBatch.lastEnd_clear _ _))
+  have hS := holds_push (holds_of_len_zero (T := ({ (TokenBatch.empty 1).clear location.offset with
+      bytes := s.val.tokenContent.bytes } : TokenBatch)) rfl) (eofLexeme location) 0 0
+    (Nat.le_refl _) (Nat.zero_le _) (by rw [ByteArray.extract_same]; rfl)
+    (Nat.le_of_eq (TokenBatch.lastEnd_clear _ _))
     (.inr ⟨rfl, rfl⟩)
   subst hv
   exact flushCursor_wp' _ _ _ hS _ s coll hrec rfl hok herr
 
 end
 
-end BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
+end BSmtLib.Proofs.Lexer.V1NaiveWRustPort

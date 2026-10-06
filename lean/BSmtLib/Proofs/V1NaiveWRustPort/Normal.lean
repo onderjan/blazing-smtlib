@@ -1,4 +1,4 @@
-import BSmtLib.Proofs.V4FastPathsWRustPort.Pure
+import BSmtLib.Proofs.V1NaiveWRustPort.Pure
 
 /-!
 # The Rust port's normal state against the naive lexer
@@ -7,9 +7,9 @@ import BSmtLib.Proofs.V4FastPathsWRustPort.Pure
 path, keeps the correspondence with the naive lexer's pure run.
 -/
 
-namespace BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
+namespace BSmtLib.Proofs.Lexer.V1NaiveWRustPort
 
-open BSmtLib.Proofs.Adapter V1Naive
+open BSmtLib.Proofs.Adapter V1Naive BSmtLib.Proofs.Simulation
 open Lexer.WRustPort (lexNormalFrom FastState Frame Held Past)
 open Lexer.Slice (get? get)
 
@@ -26,8 +26,7 @@ macro "wp_walk" : tactic =>
 set_option hygiene false in
 /-- A string left in progress at the end of its run, in the proof of `normalSpec_lt`. -/
 local macro "string_stay" : tactic => `(tactic| (
-  unfold Lexer.WRustPort.extendContent Lexer.WRustPort.extendContentFrom
-    Lexer.WRustPort.modifyContent Lexer.WRustPort.leavePending
+  unfold Lexer.WRustPort.extendContent Lexer.WRustPort.modifyContent Lexer.WRustPort.leavePending
   apply wp_bind; apply wp_modifyCore
   apply wp_bind; apply wp_modifyBound
   apply wp_pure
@@ -37,9 +36,10 @@ local macro "string_stay" : tactic => `(tactic| (
       Lexer.RUN_STRING_PLAIN - index), held, ⟨hfix.1, hfix.2, hfix.3, hfix.4⟩, Nat.le_refl _,
     ?_, ?_, hheld, hbytes, ?_⟩
   · dsimp only [StAgrees, TokenAgrees]
-    refine ⟨?_, by simp [hv2'], ?_⟩
+    refine ⟨⟨?_, by simp [hv2'], ?_⟩, ?_⟩
     · rw [locAt_eq hloc]; rfl
-    · show _ = ByteArray.empty ++ _; rw [empty_append]; rfl
+    · exact (contentBytes_clear_extendSlice _ _ (by bound_tac)).symm
+    · fits_tac
   · dsimp only [LocAt, afterColumns, Past.from]
     refine ⟨?_, ?_, ?_⟩ <;> omega
   · rw [hA]; rfl))
@@ -50,13 +50,16 @@ the proof of `normalSpec_lt`; `hC` is the naive lexer's run that hands the token
 local macro "borrow_push" cat:term:max lo:term:max hi:term:max : tactic => `(tactic| (
   have hlex := borrowedLexeme_eq hloc hindex (j := $hi) (by omega) $cat (input.slice $lo $hi)
   apply wp_bind
-  refine pushBorrowed_wp v batch offset base _ _ _ _ _ _ _ _ held hheld ?_ _ coll ?_ ?_ ?_ ?_
-  · rw [slice_byteArray, hbytes]
+  refine pushBorrowed_wp v input batch offset base _ _ _ _ _ _ _ _ _ held hheld hbytes.symm ?_ ?_ _
+    coll ?_ ?_ ?_ ?_
+  · omega
+  · omega
   · exact hfix.recovers
   · exact hfix.version
   · intro r s' coll' held' hH hb hk hp
     have hp' := hp.trans (congrArg (fun l => pending v coll (held ++ [l])) hlex)
     obtain ⟨k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11⟩ := key_fields hk
+    rw [rust_loadLocals]
     unfold FastState.load
     apply wp_bind; apply wp_bind; apply wp_getCore; apply wp_pure
     refine wp_recurse (f := fun (r : Past input origin) => r.1)
@@ -136,13 +139,6 @@ theorem bytesOf_one (s : ByteSlice) (i : Nat) (hi : i < s.size) :
     bytesOf s i (i + 1) = ByteArray.empty.push s[i] := by
   rw [bytesOf_push s (Nat.le_refl _) hi, bytesOf_self s i (Nat.le_of_lt hi)]
 
-theorem slice_byteArray (s : ByteSlice) (i j : Nat) : (s.slice i j).byteArray = s.byteArray := by
-  unfold ByteSlice.slice
-  dsimp only
-  split
-  · split <;> rfl
-  · rfl
-
 /-- The fields that `key` compares. -/
 theorem key_fields {c c' : WCore} (hk : key c' = key c) :
     c'.version = c.version ∧ c'.state = c.state ∧ c'.discard = c.discard ∧
@@ -162,7 +158,7 @@ theorem LocAt.afterColumns {c : WCore} {offset base i j : Nat} {location : Locat
     (h : LocAt c offset base i location) (hb : base ≤ i) (hij : i ≤ j) :
     LocAt c offset base j (afterColumns location (j - i)) := by
   obtain ⟨h1, h2, h3⟩ := h
-  refine ⟨?_, h2, ?_⟩ <;> simp only [V4FastPathsWRustPort.afterColumns] <;> omega
+  refine ⟨?_, h2, ?_⟩ <;> simp only [V1NaiveWRustPort.afterColumns] <;> omega
 
 theorem start_parenClose (v : Version) (location : Location) :
     start v false location 41 =
@@ -205,26 +201,14 @@ theorem wp_store {β : Type} {locals : FastState} {s : BS floor low} {coll : Col
     {QE : Intr floor → BS floor low → Collector → Prop}
     (h1 : locals.line = s.val.line) (h2 : locals.lineStart = s.val.lineStart)
     (h : WP (f ()) s coll Q QE) :
-    WP (FastState.store (H := Collector) (m := Id) (R := Empty) (E := Unit) locals >>= f) s coll
-      Q QE := by
+    WP (Lexer.WRustPort.Ops.storeLocals (H := Collector) (m := Id) (R := Empty) (E := Unit) locals
+      >>= f) s coll Q QE := by
   apply wp_bind
-  unfold FastState.store
+  rw [rust_storeLocals]; unfold FastState.store
   apply wp_modifyCore
   refine wp_state_congr ?_ h
   show { s.val with line := locals.line, lineStart := locals.lineStart } = s.val
   rw [h1, h2]
-
-theorem slice_size (s : ByteSlice) {a b : Nat} (hab : a ≤ b) (hb : b ≤ s.size) :
-    (s.slice a b).size = b - a := by
-  rw [← size_toByteArray]
-  show (bytesOf s a b).size = b - a
-  have h1 := data_bytesOf s hab hb
-  have h2 := s.stop_le_size_byteArray
-  simp only [ByteSlice.size] at hb
-  show (bytesOf s a b).data.size = b - a
-  rw [h1, Array.size_extract]
-  simp only [ByteArray.size] at h2
-  omega
 
 theorem get_eq {s : ByteSlice} {i : Nat} (h : i < s.size) : Lexer.Slice.get s i = s[i] := by
   simp [Lexer.Slice.get, Lexer.Slice.get?, h]
@@ -297,6 +281,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
   split
   · -- the end of the slice
     rename_i hget
+    rw [rust_storeLocals]
     unfold FastState.store Lexer.WRustPort.leave
     apply wp_bind
     apply wp_modifyCore
@@ -339,8 +324,9 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
       show bytesOf input index (index + 1) = _
       rw [bytesOf_one input index hi, hc]
     apply wp_bind
-    refine pushFast_wp v batch locals offset base _ _ index (index + 1) true _ hindex _ hframe
-      hbatch held hheld (by rw [slice_byteArray, hbytes]) s coll hfix.recovers hfix.version ?_ ?_
+    refine pushFast_wp v input batch locals offset base _ index (index + 1) index (index + 1) true _
+      hindex _ hframe hbatch held hheld hbytes.symm (Nat.le_succ _) hi s coll hfix.recovers
+      hfix.version ?_ ?_
     · intro r s' coll' held' hH hb hk hp
       simp only [↓reduceIte, hl] at hp
       obtain ⟨k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11⟩ := key_fields hk
@@ -384,8 +370,9 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
       show bytesOf input index (index + 1) = _
       rw [bytesOf_one input index hi, hc]
     apply wp_bind
-    refine pushFast_wp v batch locals offset base _ _ index (index + 1) true _ hindex _ hframe
-      hbatch held hheld (by rw [slice_byteArray, hbytes]) s coll hfix.recovers hfix.version ?_ ?_
+    refine pushFast_wp v input batch locals offset base _ index (index + 1) index (index + 1) true _
+      hindex _ hframe hbatch held hheld hbytes.symm (Nat.le_succ _) hi s coll hfix.recovers
+      hfix.version ?_ ?_
     · intro r s' coll' held' hH hb hk hp
       simp only [↓reduceIte, hl] at hp
       obtain ⟨k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11⟩ := key_fields hk
@@ -443,8 +430,11 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
       · intro h; rw [hemit] at h; cases h
       intro _
       apply wp_bind
-      refine pushFast_wp v batch locals offset base _ _ index _ _ _ hindex _ hframe hbatch held
-        hheld (by split <;> rw [slice_byteArray, hbytes]) s coll hfix.recovers hfix.version ?_ ?_
+      refine pushFast_wp v input batch locals offset base _ _ _ index _ _ _ hindex _ hframe hbatch
+        held hheld hbytes.symm ?_ ?_ s coll hfix.recovers hfix.version ?_ ?_
+      · simp only [hpipe, Bool.false_eq_true, ↓reduceIte, hj]; omega
+      · simp only [hpipe, Bool.false_eq_true, ↓reduceIte, hj]
+        exact runEnd_le input _ _ (Nat.le_of_lt hi)
       · intro r s' coll' held' hH hb hk hp
         simp only [hemit, Bool.false_eq_true, ↓reduceIte, List.append_nil] at hp
         obtain ⟨k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11⟩ := key_fields hk
@@ -491,9 +481,9 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
       · -- the run is not closed by a pipe: the quoted symbol is left in progress
         intro h
         simp only [hpipeb, ↓reduceIte, Bool.or_true, Bool.true_and, bne_iff_ne, ne_eq] at h
+        rw [rust_storeLocals]
         unfold FastState.store Lexer.WRustPort.storeUnfinishedSymbolRun Lexer.WRustPort.startToken
-          Lexer.WRustPort.extendContent Lexer.WRustPort.extendContentFrom
-          Lexer.WRustPort.modifyContent Lexer.WRustPort.leavePending
+          Lexer.WRustPort.extendContent Lexer.WRustPort.modifyContent Lexer.WRustPort.leavePending
         apply wp_bind; apply wp_modifyCore
         apply wp_bind
         apply wp_bind
@@ -513,9 +503,10 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
               (Lexer.fastFlags c &&& Lexer.FAST_RUN_MASK) - index), held,
             ⟨hfix.1, hfix.2, hfix.3, hfix.4⟩, Nat.le_refl _, ?_, ?_, hheld, hbytes, ?_⟩
           · dsimp only [StAgrees, TokenAgrees]
-            refine ⟨?_, rfl, ?_⟩
+            refine ⟨⟨?_, rfl, ?_⟩, ?_⟩
             · rw [locAt_eq hloc, hline, hlineStart]; rfl
-            · rw [empty_append]; rfl
+            · exact (contentBytes_clear_extendSlice _ _ (by bound_tac)).symm
+            · fits_tac
           · obtain ⟨h1, h2, h3⟩ := hloc
             dsimp only [LocAt, afterColumns, Past.from]
             refine ⟨?_, ?_, ?_⟩ <;> omega
@@ -562,6 +553,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
               have hnd' : V1Naive.isDelimiter next = false := by
                 rw [← isDelimiter_eq]; simpa using hnd
               rw [hnd'] at hC
+              rw [rust_storeLocals]
               unfold FastState.store Lexer.WRustPort.leave Lexer.WRustPort.startToken
                 Lexer.WRustPort.modifyContent Lexer.WRustPort.errorAt Lexer.WRustPort.errorWith
               wp_walk
@@ -586,12 +578,15 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
                       TokenCategory.quotedSymbol
                     else if (false && Lexer.fastFlags c &&& Lexer.RUN_NON_LF_WHITESPACE != 0) = true
                       then TokenCategory.whitespace else TokenCategory.unquotedSymbol)
-                    (if (Lexer.fastFlags c &&& Lexer.FAST_PIPE != 0) = true then
-                      input.slice (index + 1) (Lexer.Slice.runEnd input (index + 1)
-                        (Lexer.fastFlags c &&& Lexer.FAST_RUN_MASK))
-                    else input.slice index (if (Lexer.fastFlags c &&& Lexer.FAST_PIPE != 0) = true
-                      then Lexer.Slice.runEnd input (index + 1)
-                        (Lexer.fastFlags c &&& Lexer.FAST_RUN_MASK) + 1
+                    (input.slice (if (Lexer.fastFlags c &&& Lexer.FAST_PIPE != 0) = true then index
+                        + 1
+                      else index)
+                      (if (Lexer.fastFlags c &&& Lexer.FAST_PIPE != 0) = true then
+                        Lexer.Slice.runEnd input (index + 1) (Lexer.fastFlags c &&&
+                            Lexer.FAST_RUN_MASK)
+                      else if (Lexer.fastFlags c &&& Lexer.FAST_PIPE != 0) = true then
+                        Lexer.Slice.runEnd input (index + 1)
+                          (Lexer.fastFlags c &&& Lexer.FAST_RUN_MASK) + 1
                       else Lexer.Slice.runEnd input (index + 1)
                         (Lexer.fastFlags c &&& Lexer.FAST_RUN_MASK)))
                     locals.line locals.lineStart (offset + (index - base))
@@ -609,9 +604,10 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
                 rw [hline, hlineStart, onLine_eq hloc hindex (by omega)]
                 rfl
               apply wp_bind
-              refine pushFast_wp v batch locals offset base _ _ index _ _ _ hindex _ hframe hbatch
-                held hheld ?_ s coll hfix.recovers hfix.version ?_ ?_
-              · simp only [hpipeb, ↓reduceIte]; rw [slice_byteArray, hbytes]
+              refine pushFast_wp v input batch locals offset base _ _ _ index _ _ _ hindex _ hframe
+                hbatch held hheld hbytes.symm ?_ ?_ s coll hfix.recovers hfix.version ?_ ?_
+              · simp only [hpipeb, ↓reduceIte]; omega
+              · simp only [hpipeb, ↓reduceIte]; omega
               · intro r s' coll' held' hH hb hk hp
                 rw [hlex] at hp
                 obtain ⟨k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11⟩ := key_fields hk
@@ -636,8 +632,9 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
               have := Lexer.Slice.size_le_of_get?_none heq
               omega
             obtain ⟨hl1, hl2, hl3⟩ := id hloc
+            rw [rust_storeLocals]
             unfold FastState.store Lexer.WRustPort.startToken Lexer.WRustPort.modifyContent
-              Lexer.WRustPort.extendContentFrom Lexer.WRustPort.leavePending
+              Lexer.WRustPort.leavePending
             wp_walk
             refine ⟨.token ⟨.quotedSymbolClosed, location, bytesOf input (index + 1)
                 (Lexer.Slice.runEnd input (index + 1) (Lexer.fastFlags c &&& Lexer.FAST_RUN_MASK))⟩,
@@ -645,10 +642,12 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
                 (Lexer.fastFlags c &&& Lexer.FAST_RUN_MASK) + 1 - index), held,
               ⟨hfix.1, hfix.2, hfix.3, hfix.4⟩, Nat.le_refl _, ?_, ?_, hheld, hbytes, ?_⟩
             · dsimp only [StAgrees, TokenAgrees]
-              refine ⟨?_, rfl, ?_⟩
+              refine ⟨⟨?_, rfl, ?_⟩, ?_⟩
               · rw [locAt_eq hloc, hline, hlineStart]; rfl
               · simp only [hpipeb, ↓reduceIte]
-                rw [empty_append]; rfl
+                exact (contentBytes_clear_extendSlice _ _ (by bound_tac)).symm
+              · simp only [hpipeb, ↓reduceIte]
+                fits_tac
             · dsimp only [LocAt, afterColumns, Past.from]
               simp only [hpipeb, ↓reduceIte]
               refine ⟨?_, ?_, ?_⟩ <;> omega
@@ -691,9 +690,9 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
             Bool.and_true, beq_iff_eq] at h
           exact h
         obtain ⟨hl1, hl2, hl3⟩ := id hloc
+        rw [rust_storeLocals]
         unfold FastState.store Lexer.WRustPort.storeUnfinishedSymbolRun Lexer.WRustPort.startToken
-          Lexer.WRustPort.extendContent Lexer.WRustPort.extendContentFrom
-          Lexer.WRustPort.modifyContent Lexer.WRustPort.leavePending
+          Lexer.WRustPort.extendContent Lexer.WRustPort.modifyContent Lexer.WRustPort.leavePending
         apply wp_bind; apply wp_modifyCore
         apply wp_bind
         apply wp_bind
@@ -714,9 +713,10 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
               (Lexer.fastFlags c &&& Lexer.FAST_RUN_MASK) - index), held,
             ⟨hfix.1, hfix.2, hfix.3, hfix.4⟩, Nat.le_refl _, ?_, ?_, hheld, hbytes, ?_⟩
           · dsimp only [StAgrees, TokenAgrees]
-            refine ⟨?_, rfl, ?_⟩
+            refine ⟨⟨?_, rfl, ?_⟩, ?_⟩
             · rw [locAt_eq hloc, hline, hlineStart]; rfl
-            · rw [empty_append]; rfl
+            · exact (contentBytes_clear_extendSlice _ _ (by bound_tac)).symm
+            · fits_tac
           · dsimp only [LocAt, afterColumns, Past.from]
             refine ⟨?_, ?_, ?_⟩ <;> omega
           · rw [hA]; rfl
@@ -752,6 +752,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
               have hnd' : V1Naive.isDelimiter next = false := by
                 rw [← isDelimiter_eq]; simpa using hnd
               rw [hnd'] at hC
+              rw [rust_storeLocals]
               unfold FastState.store Lexer.WRustPort.leave Lexer.WRustPort.startToken
                 Lexer.WRustPort.modifyContent Lexer.WRustPort.errorAt Lexer.WRustPort.errorWith
               wp_walk
@@ -768,12 +769,15 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
                       TokenCategory.quotedSymbol
                     else if (false && Lexer.fastFlags c &&& Lexer.RUN_NON_LF_WHITESPACE != 0) = true
                       then TokenCategory.whitespace else TokenCategory.unquotedSymbol)
-                    (if (Lexer.fastFlags c &&& Lexer.FAST_PIPE != 0) = true then
-                      input.slice (index + 1) (Lexer.Slice.runEnd input (index + 1)
-                        (Lexer.fastFlags c &&& Lexer.FAST_RUN_MASK))
-                    else input.slice index (if (Lexer.fastFlags c &&& Lexer.FAST_PIPE != 0) = true
-                      then Lexer.Slice.runEnd input (index + 1)
-                        (Lexer.fastFlags c &&& Lexer.FAST_RUN_MASK) + 1
+                    (input.slice (if (Lexer.fastFlags c &&& Lexer.FAST_PIPE != 0) = true then index
+                        + 1
+                      else index)
+                      (if (Lexer.fastFlags c &&& Lexer.FAST_PIPE != 0) = true then
+                        Lexer.Slice.runEnd input (index + 1) (Lexer.fastFlags c &&&
+                            Lexer.FAST_RUN_MASK)
+                      else if (Lexer.fastFlags c &&& Lexer.FAST_PIPE != 0) = true then
+                        Lexer.Slice.runEnd input (index + 1)
+                          (Lexer.fastFlags c &&& Lexer.FAST_RUN_MASK) + 1
                       else Lexer.Slice.runEnd input (index + 1)
                         (Lexer.fastFlags c &&& Lexer.FAST_RUN_MASK)))
                     locals.line locals.lineStart (offset + (index - base))
@@ -791,10 +795,10 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
                 rw [hline, hlineStart, onLine_eq hloc hindex (by omega)]
                 rfl
               apply wp_bind
-              refine pushFast_wp v batch locals offset base _ _ index _ _ _ hindex _ hframe hbatch
-                held hheld ?_ s coll hfix.recovers hfix.version ?_ ?_
-              · simp only [hpipeb, Bool.false_eq_true, ↓reduceIte]
-                rw [slice_byteArray, hbytes]
+              refine pushFast_wp v input batch locals offset base _ _ _ index _ _ _ hindex _ hframe
+                hbatch held hheld hbytes.symm ?_ ?_ s coll hfix.recovers hfix.version ?_ ?_
+              · simp only [hpipeb, Bool.false_eq_true, ↓reduceIte]; omega
+              · simp only [hpipeb, Bool.false_eq_true, ↓reduceIte]; omega
               · intro r s' coll' held' hH hb hk hp
                 rw [hlex] at hp
                 obtain ⟨k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11⟩ := key_fields hk
@@ -825,6 +829,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
   · -- a line feed, passed over
     rename_i hst
     have h10 := Lexer.eq_of_startOf_eq_lineFeed hst
+    rw [rust_loadLocals]
     unfold Lexer.WRustPort.markLineFeedAt FastState.load
     apply wp_bind; apply wp_modifyCore
     apply wp_bind; apply wp_bind; apply wp_getCore; apply wp_pure
@@ -886,6 +891,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
         intro h10
         have h10' : c' = 10 := by simpa using h10
         subst h10'
+        rw [rust_loadLocals]
         unfold Lexer.WRustPort.markLineFeedAt FastState.load
         apply wp_bind; apply wp_modifyCore
         apply wp_bind; apply wp_pure
@@ -903,6 +909,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
       · -- a carriage return
         intro h10
         have h10' : c' ≠ 10 := by simpa using h10
+        rw [rust_loadLocals]
         unfold FastState.load
         apply wp_bind; apply wp_pure
         apply wp_bind; apply wp_bind; apply wp_getCore; apply wp_pure
@@ -927,8 +934,9 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
           Lexer.RUN_COMMENT_PLAIN - index), held,
         ⟨hfix.1, hfix.2, hfix.3, hfix.4⟩, Nat.le_refl _, ?_, ?_, hheld, hbytes, ?_⟩
       · dsimp only [StAgrees, TokenAgrees]
-        refine ⟨?_, rfl⟩
+        refine ⟨⟨?_, rfl⟩, ?_⟩
         rw [locAt_eq hloc]; rfl
+        · fits_tac
       · dsimp only [LocAt, afterColumns, Past.from]
         refine ⟨?_, ?_, ?_⟩ <;> omega
       · rw [hA]; rfl
@@ -1001,8 +1009,8 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
         intro hsz
         have hsz' : Lexer.Slice.runEnd input (index + 1 + 1) run.flag = input.size := by
           simpa using hsz
-        unfold Lexer.WRustPort.extendContent Lexer.WRustPort.extendContentFrom
-          Lexer.WRustPort.modifyContent Lexer.WRustPort.leavePending
+        unfold Lexer.WRustPort.extendContent Lexer.WRustPort.modifyContent
+          Lexer.WRustPort.leavePending
         apply wp_bind; apply wp_modifyCore
         apply wp_bind; apply wp_modifyBound
         apply wp_pure
@@ -1010,8 +1018,9 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
             (Lexer.Slice.runEnd input (index + 1 + 1) run.flag)⟩,
           afterColumns location (Lexer.Slice.runEnd input (index + 1 + 1) run.flag - index),
           held, ⟨hfix.1, hfix.2, hfix.3, hfix.4⟩, Nat.le_refl _, ?_, ?_, hheld, hbytes, ?_⟩
-        · exact hstate _ _ _ rfl (locAt_eq hloc)
-            (by show _ = ByteArray.empty ++ _; rw [empty_append]; rfl)
+        · refine ⟨hstate _ _ _ rfl (locAt_eq hloc) ?_, ?_⟩
+          · exact (contentBytes_clear_extendSlice _ _ (by bound_tac)).symm
+          · fits_tac
         · dsimp only [LocAt, afterColumns, Past.from]
           refine ⟨?_, ?_, ?_⟩ <;> omega
         · rw [hB]; rfl
@@ -1021,18 +1030,16 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
           omega
         have hstop' := hstop hJs
         apply wp_bind; apply wp_getCore
-        have hsize : (Lexer.WRustPort.borrow input (index + 1 + 1)
-            (Lexer.Slice.runEnd input (index + 1 + 1) run.flag)).size
-              (ByteArray.empty : ByteArray) =
-            Lexer.Slice.runEnd input (index + 1 + 1) run.flag - (index + 1 + 1) :=
-          slice_size input hle (Nat.le_of_lt hJs)
+        have hsize : ∀ buf, (Lexer.Slice.borrow input (index + 1 + 1)
+            (Lexer.Slice.runEnd input (index + 1 + 1) run.flag)).size buf =
+              Lexer.Slice.runEnd input (index + 1 + 1) run.flag - (index + 1 + 1) := fun _ => by
+          simp only [Lexer.Slice.borrow, BSmtLib.Lexer.Content.size]; omega
         apply wp_ite
         · -- no digit: the literal fails
           intro hempty
           have he : Lexer.Slice.runEnd input (index + 1 + 1) run.flag = index + 1 + 1 := by
-            have : (Lexer.WRustPort.borrow input (index + 1 + 1)
-                (Lexer.Slice.runEnd input (index + 1 + 1) run.flag)).size
-                  (ByteArray.empty : ByteArray) = 0 := by simpa using hempty
+            have : (Lexer.Slice.runEnd input (index + 1 + 1) run.flag) - (index + 1 + 1) = 0 := by
+              simpa [hsize] using hempty
             omega
           obtain ⟨f, hf⟩ := advance_end_digits_empty (location := afterColumns location
             (Lexer.Slice.runEnd input (index + 1 + 1) run.flag - index))
@@ -1046,13 +1053,12 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
         · intro hne
           have hne' : (bytesOf input (index + 1 + 1)
               (Lexer.Slice.runEnd input (index + 1 + 1) run.flag)).isEmpty = false := by
-            have : (Lexer.WRustPort.borrow input (index + 1 + 1)
-                (Lexer.Slice.runEnd input (index + 1 + 1) run.flag)).size
-                  (ByteArray.empty : ByteArray) ≠ 0 := by simpa using hne
+            have : (Lexer.Slice.runEnd input (index + 1 + 1) run.flag) - (index + 1 + 1) ≠ 0 := by
+              simpa [hsize] using hne
             have hpos : (bytesOf input (index + 1 + 1)
                 (Lexer.Slice.runEnd input (index + 1 + 1) run.flag)).size ≠ 0 := by
               show (input.slice _ _).toByteArray.size ≠ 0
-              rw [size_toByteArray]
+              rw [size_toByteArray, slice_size input hle (Nat.le_of_lt hJs)]
               exact this
             simp [ByteArray.isEmpty, hpos]
           have hC := feedFrom_end v input hJs (q := ⟨.digits radix, location,
@@ -1083,9 +1089,11 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
               (j := Lexer.Slice.runEnd input (index + 1 + 1) run.flag) (by omega) run.tokenType
               (input.slice (index + 1 + 1) (Lexer.Slice.runEnd input (index + 1 + 1) run.flag))
             apply wp_bind
-            refine pushBorrowed_wp v batch offset base _ _ _ _ _ _ _ _ held hheld ?_ _ coll ?_ ?_
-              ?_ ?_
-            · rw [slice_byteArray, hbytes]
+            refine pushBorrowed_wp v input batch offset base _ _ _ _ _ _ _ _ _ held hheld
+                hbytes.symm ?_ ?_
+              _ coll ?_ ?_ ?_ ?_
+            · omega
+            · omega
             · exact hfix.recovers
             · exact hfix.version
             · intro r s' coll' held' hH hb hk hp
@@ -1097,6 +1105,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
                 have := hp.trans (congrArg (fun l => pending v coll (held ++ [l])) hlex)
                 rw [htyp] at this; exact this
               obtain ⟨k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11⟩ := key_fields hk
+              rw [rust_loadLocals]
               unfold FastState.load
               apply wp_bind; apply wp_bind; apply wp_getCore; apply wp_pure
               refine wp_recurse (f := fun (r : Past input origin) => r.1)
@@ -1125,8 +1134,9 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
       refine ⟨.token ⟨.hash, location, .empty⟩, location.afterByte 35, held,
         ⟨hfix.1, hfix.2, hfix.3, hfix.4⟩, Nat.le_refl _, ?_, ?_, hheld, hbytes, ?_⟩
       · dsimp only [StAgrees, TokenAgrees]
-        refine ⟨?_, rfl, rfl⟩
+        refine ⟨⟨?_, rfl, (contentBytes_clear _).symm⟩, ?_⟩
         rw [locAt_eq hloc]; rfl
+        · fits_tac
       · have := hloc.afterByte hindex (b := 35) (by decide)
         obtain ⟨h1, h2, h3⟩ := this
         dsimp only [LocAt, Past.from]
@@ -1158,8 +1168,9 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
         location.afterByte 34, held, ⟨hfix.1, hfix.2, hfix.3, hfix.4⟩, Nat.le_refl _, ?_, ?_,
         hheld, hbytes, ?_⟩
       · dsimp only [StAgrees, TokenAgrees]
-        refine ⟨?_, rfl, rfl⟩
+        refine ⟨⟨?_, rfl, (contentBytes_clear _).symm⟩, ?_⟩
         rw [locAt_eq hloc]; rfl
+        · fits_tac
       · have := hloc.afterByte hindex (b := 34) (by decide)
         obtain ⟨h1, h2, h3⟩ := this
         dsimp only [LocAt, Past.from]
@@ -1239,9 +1250,11 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
               .string (input.slice (index + 1)
                 (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_STRING_PLAIN))
             apply wp_bind
-            refine pushBorrowed_wp v batch offset base _ _ _ _ _ _ _ _ held hheld ?_ _ coll ?_ ?_
-              ?_ ?_
-            · rw [slice_byteArray, hbytes]
+            refine pushBorrowed_wp v input batch offset base _ _ _ _ _ _ _ _ _ held hheld
+                hbytes.symm ?_ ?_
+              _ coll ?_ ?_ ?_ ?_
+            · omega
+            · omega
             · exact hfix.recovers
             · exact hfix.version
             · intro r s' coll' held' hH hb hk hp
@@ -1252,6 +1265,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
                       Lexer.RUN_STRING_PLAIN + 1 - index)⟩]) :=
                 hp.trans (congrArg (fun l => pending v coll (held ++ [l])) hlex)
               obtain ⟨k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11⟩ := key_fields hk
+              rw [rust_loadLocals]
               unfold FastState.load
               apply wp_bind; apply wp_bind; apply wp_getCore; apply wp_pure
               refine wp_recurse (f := fun (r : Past input origin) => r.1)
@@ -1306,8 +1320,8 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
       intro hsz
       have hsz' : Lexer.Slice.runEnd input (index + 1) Lexer.RUN_SIMPLE_SYMBOL = input.size := by
         simpa using hsz
-      unfold Lexer.WRustPort.extendContent Lexer.WRustPort.extendContentFrom
-        Lexer.WRustPort.modifyContent Lexer.WRustPort.leavePending
+      unfold Lexer.WRustPort.extendContent Lexer.WRustPort.modifyContent
+        Lexer.WRustPort.leavePending
       apply wp_bind; apply wp_modifyCore
       apply wp_bind; apply wp_modifyBound
       apply wp_pure
@@ -1317,9 +1331,10 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
           Lexer.RUN_SIMPLE_SYMBOL - index),
         held, ⟨hfix.1, hfix.2, hfix.3, hfix.4⟩, Nat.le_refl _, ?_, ?_, hheld, hbytes, ?_⟩
       · dsimp only [StAgrees, TokenAgrees]
-        refine ⟨?_, rfl, ?_⟩
+        refine ⟨⟨?_, rfl, ?_⟩, ?_⟩
         · rw [locAt_eq hloc]; rfl
-        · show _ = ByteArray.empty ++ _; rw [empty_append]; rfl
+        · exact (contentBytes_clear_extendSlice _ _ (by bound_tac)).symm
+        · fits_tac
       · dsimp only [LocAt, afterColumns, Past.from]
         refine ⟨?_, ?_, ?_⟩ <;> omega
       · rw [hA]; rfl
@@ -1329,18 +1344,18 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
         omega
       have hstop' := hstop hJs
       apply wp_bind; apply wp_getCore
-      have hsize : (Lexer.WRustPort.borrow input (index + 1)
-          (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_SIMPLE_SYMBOL)).size
-            (ByteArray.empty : ByteArray) =
-          Lexer.Slice.runEnd input (index + 1) Lexer.RUN_SIMPLE_SYMBOL - (index + 1) :=
-        slice_size input hle (Nat.le_of_lt hJs)
+      have hsize : ∀ buf, (Lexer.Slice.borrow input (index + 1)
+          (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_SIMPLE_SYMBOL)).size buf =
+            Lexer.Slice.runEnd input (index + 1) Lexer.RUN_SIMPLE_SYMBOL - (index + 1) := fun _ =>
+                by
+        simp only [Lexer.Slice.borrow, BSmtLib.Lexer.Content.size]; omega
       apply wp_ite
       · -- an empty keyword
         intro hempty
         have he : Lexer.Slice.runEnd input (index + 1) Lexer.RUN_SIMPLE_SYMBOL = index + 1 := by
-          have : (Lexer.WRustPort.borrow input (index + 1)
-              (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_SIMPLE_SYMBOL)).size
-                (ByteArray.empty : ByteArray) = 0 := by simpa using hempty
+          have : (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_SIMPLE_SYMBOL) - (index + 1) = 0 :=
+              by
+            simpa [hsize] using hempty
           omega
         obtain ⟨f, hf⟩ := advance_end_keyword_empty (location := afterColumns location
           (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_SIMPLE_SYMBOL - index))
@@ -1354,13 +1369,13 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
       · intro hne
         have hne' : (bytesOf input (index + 1)
             (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_SIMPLE_SYMBOL)).isEmpty = false := by
-          have : (Lexer.WRustPort.borrow input (index + 1)
-              (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_SIMPLE_SYMBOL)).size
-                (ByteArray.empty : ByteArray) ≠ 0 := by simpa using hne
+          have : (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_SIMPLE_SYMBOL) - (index + 1) ≠ 0 :=
+              by
+            simpa [hsize] using hne
           have hpos : (bytesOf input (index + 1)
               (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_SIMPLE_SYMBOL)).size ≠ 0 := by
             show (input.slice _ _).toByteArray.size ≠ 0
-            rw [size_toByteArray]
+            rw [size_toByteArray, slice_size input hle (Nat.le_of_lt hJs)]
             exact this
           simp [ByteArray.isEmpty, hpos]
         have hC := feedFrom_end v input hJs (q := ⟨.keyword, location,
@@ -1393,9 +1408,11 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
             .keyword (input.slice (index + 1)
               (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_SIMPLE_SYMBOL))
           apply wp_bind
-          refine pushBorrowed_wp v batch offset base _ _ _ _ _ _ _ _ held hheld ?_ _ coll ?_ ?_
-            ?_ ?_
-          · rw [slice_byteArray, hbytes]
+          refine pushBorrowed_wp v input batch offset base _ _ _ _ _ _ _ _ _ held hheld hbytes.symm
+              ?_ ?_
+            _ coll ?_ ?_ ?_ ?_
+          · omega
+          · omega
           · exact hfix.recovers
           · exact hfix.version
           · intro r s' coll' held' hH hb hk hp
@@ -1406,6 +1423,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
                     Lexer.RUN_SIMPLE_SYMBOL - index)⟩]) :=
               hp.trans (congrArg (fun l => pending v coll (held ++ [l])) hlex)
             obtain ⟨k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11⟩ := key_fields hk
+            rw [rust_loadLocals]
             unfold FastState.load
             apply wp_bind; apply wp_bind; apply wp_getCore; apply wp_pure
             refine wp_recurse (f := fun (r : Past input origin) => r.1)
@@ -1569,8 +1587,8 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
           intro hsz
           have hsz' : Lexer.Slice.runEnd input (Lexer.Slice.runEnd input (index + 1)
               Lexer.RUN_DIGIT + 1) Lexer.RUN_DIGIT = input.size := by simpa using hsz
-          unfold Lexer.WRustPort.extendContent Lexer.WRustPort.extendContentFrom
-            Lexer.WRustPort.modifyContent Lexer.WRustPort.leavePending
+          unfold Lexer.WRustPort.extendContent Lexer.WRustPort.modifyContent
+            Lexer.WRustPort.leavePending
           apply wp_bind; apply wp_modifyCore
           apply wp_bind; apply wp_modifyBound
           apply wp_pure
@@ -1584,18 +1602,18 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
               (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_DIGIT + 1) Lexer.RUN_DIGIT - index),
             held, ⟨hfix.1, hfix.2, hfix.3, hfix.4⟩, Nat.le_refl _, ?_, ?_, hheld, hbytes, ?_⟩
           · dsimp only [StAgrees, TokenAgrees]
-            refine ⟨?_, ?_, ?_⟩
+            refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
             · rw [locAt_eq hloc]; rfl
-            · show _ = Mode.fraction !((Lexer.WRustPort.Content.stored.last?
-                (ByteArray.empty ++ _)).isNone || _)
-              rw [empty_append, show ∀ a b, (input.slice a b).toByteArray = bytesOf input a b
-                from fun _ _ => rfl, stored_last input (by omega) (by omega)]
-              simp only [Option.isNone_some, Bool.false_or]
-              congr 1
-              have hs : ∀ x : UInt8, (some x == some (46 : UInt8)) = (x == 46) := by
-                intro x; cases h : x == 46 <;> simp_all
-              rw [hs, hlastF, Bool.not_not]
-            · show _ = ByteArray.empty ++ _; rw [empty_append]; rfl
+            · rw [contentBytes_clear_extendSlice _ _ ?_, show ∀ a b, (input.slice a b).toByteArray =
+                bytesOf input a b from fun _ _ => rfl, stored_last input (by omega) (by omega)]
+              · simp only [Option.isNone_some, Bool.false_or]
+                congr 1
+                have hs : ∀ x : UInt8, (some x == some (46 : UInt8)) = (x == 46) := by
+                  intro x; cases h : x == 46 <;> simp_all
+                rw [hs, hlastF, Bool.not_not]
+              · bound_tac
+            · exact (contentBytes_clear_extendSlice _ _ (by bound_tac)).symm
+            · fits_tac
           · dsimp only [LocAt, afterColumns, Past.from]
             refine ⟨?_, ?_, ?_⟩ <;> omega
           · rw [hB]; rfl
@@ -1712,8 +1730,8 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
         · have he := hz' hz0
           simp [hz0, he]
         · simp [hz0]
-      unfold Lexer.WRustPort.extendContent Lexer.WRustPort.extendContentFrom
-        Lexer.WRustPort.modifyContent Lexer.WRustPort.leavePending
+      unfold Lexer.WRustPort.extendContent Lexer.WRustPort.modifyContent
+        Lexer.WRustPort.leavePending
       apply wp_bind; apply wp_modifyCore
       apply wp_bind; apply wp_modifyBound
       apply wp_pure
@@ -1723,17 +1741,17 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
           (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_DIGIT - index),
         held, ⟨hfix.1, hfix.2, hfix.3, hfix.4⟩, Nat.le_refl _, ?_, ?_, hheld, hbytes, ?_⟩
       · dsimp only [StAgrees, TokenAgrees]
-        refine ⟨?_, ?_, ?_, ?_⟩
+        refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_⟩
         · rw [locAt_eq hloc]; rfl
-        · show _ = Mode.numeral ((ByteArray.empty ++ _).size == 1 &&
-            (ByteArray.empty ++ _).get! 0 == 48)
-          rw [empty_append]
-          exact congrArg Mode.numeral hzero
-        · show _ = ByteArray.empty ++ _; rw [empty_append]; rfl
-        · show (ByteArray.empty ++ _).size ≠ 0
-          rw [empty_append, show ∀ a b, (input.slice a b).toByteArray = bytesOf input a b
-            from fun _ _ => rfl, bytesOf_size input (by omega) hle']
-          omega
+        · rw [contentBytes_clear_extendSlice _ _ ?_]
+          · exact congrArg Mode.numeral hzero
+          · bound_tac
+        · exact (contentBytes_clear_extendSlice _ _ (by bound_tac)).symm
+        · rw [contentBytes_clear_extendSlice _ _ ?_, show ∀ a b, (input.slice a b).toByteArray =
+            bytesOf input a b from fun _ _ => rfl, bytesOf_size input (by omega) hle']
+          · omega
+          · bound_tac
+        · fits_tac
       · dsimp only [LocAt, afterColumns, Past.from]
         refine ⟨?_, ?_, ?_⟩ <;> omega
       · rw [hA]; rfl
@@ -1764,4 +1782,4 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
 
 end
 
-end BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
+end BSmtLib.Proofs.Lexer.V1NaiveWRustPort

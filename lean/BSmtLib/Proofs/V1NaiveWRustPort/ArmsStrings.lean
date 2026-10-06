@@ -1,4 +1,4 @@
-import BSmtLib.Proofs.V4FastPathsWRustPort.ArmsQuoted
+import BSmtLib.Proofs.V1NaiveWRustPort.ArmsQuoted
 
 /-!
 # The arms of the Rust port's `lexStep` for a string literal
@@ -10,9 +10,9 @@ lexer's pure run from where the step started anchored to the loop's index; the p
 after its first byte, which the code reaches from several places, is proved once in each case.
 -/
 
-namespace BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
+namespace BSmtLib.Proofs.Lexer.V1NaiveWRustPort
 
-open BSmtLib.Proofs.Adapter V1Naive
+open BSmtLib.Proofs.Adapter V1Naive BSmtLib.Proofs.Simulation
 open Lexer.Slice (get? get)
 
 /-! ## The naive lexer in a string under version 2.0 -/
@@ -114,13 +114,15 @@ theorem legacySpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
       Fixed v s'.val → s'.val.base = start0 → Holds s'.val.batch held →
       s'.val.batch.bytes = input.byteArray → LocAt s'.val s'.val.offset s'.val.base X.1 locX →
       low = s'.val.offset → base = s'.val.base → tokenStart = s'.val.tokenStart →
-      s'.val.state = .stringLiteral → start0 ≤ X.1 → X.1 ≤ input.size →
+      s'.val.state = .stringLiteral → Fits s'.val.tokenContent → start0 ≤ X.1 → X.1 ≤ input.size →
       feedFrom v input st0 loc0 start0 =
-        feedFrom v input (.token ⟨.legacyString, tokenStart, s'.val.tokenContent⟩) locX X.1 →
+        feedFrom v input (.token ⟨.legacyString, tokenStart, contentBytes s'.val.tokenContent⟩) locX
+            X.1 →
       WP (jpRun () X) s' coll
         (fun r s' coll' => ArmPost v input st0 loc0 start0 coll held r.1 s'.val coll')
         (fun _ _ _ => StepFails v input st0 loc0 start0 coll held) := by
-    intro X s' locX hfix' hbase' hholds' hbytes' hloc' hlow' hb' hts' hstate' hX0 hXs hanchor'
+    intro X s' locX hfix' hbase' hholds' hbytes' hloc' hlow' hb' hts' hstate' hfitsX hX0 hXs
+        hanchor'
     unfold jpRun
     dsimp -zeta only
     extract_lets index hidx1 hidx2
@@ -132,9 +134,13 @@ theorem legacySpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
       exact this
     have hA := feedFrom_mode v input isLegacyRun isLegacyRun_ne .legacyString
       (fun q l c hm hc => advance_legacyRun q l c hm hc) X.1
-      ⟨.legacyString, tokenStart, s'.val.tokenContent⟩ locX rfl hXs
+      ⟨.legacyString, tokenStart, contentBytes s'.val.tokenContent⟩ locX rfl hXs
     rw [← hI] at hA
     have hA' := hanchor'.trans hA
+    have hextX : contentBytes (s'.val.tokenContent.extendFrom input.byteArray (input.start + X.1)
+        (input.start + index)) = contentBytes s'.val.tokenContent ++ bytesOf input X.1 index :=
+      contentBytes_extendSlice input hfitsX (.inl hle')
+    have hfitsX' := fits_extendSlice input hfitsX (a := X.1) (.inl hle')
     have hLI := hloc'.afterColumns (by rw [hbase']; omega) hle
     split
     rotate_left
@@ -142,16 +148,17 @@ theorem legacySpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
       rename_i hnone
       have hge := attach_none hnone
       have he : index = input.size := by omega
-      unfold Lexer.WRustPort.extendContent Lexer.WRustPort.extendContentFrom
-        Lexer.WRustPort.modifyContent
+      unfold Lexer.WRustPort.extendContent Lexer.WRustPort.modifyContent
       apply wp_bind; apply wp_modifyCore
       apply wp_pure
-      rw [he] at hA' hLI
+      rw [he] at hA' hLI hextX hfitsX'
       refine armPost_pending (s0 := s'.val) hfix' hbase' (by omega) hholds' hbytes'
         ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩ ?_ hLI hA'
+      refine ⟨?_, hfitsX'⟩
       show TokenAgrees v s'.val.state s'.val.tokenStart
-        (s'.val.tokenContent ++ (input.slice X.1 input.size).toByteArray) _
-      rw [hstate']
+        (contentBytes (s'.val.tokenContent.extendFrom input.byteArray (input.start + X.1)
+            (input.start + input.size))) _
+      rw [hextX, hstate']
       exact ⟨hts', by subst hv; rfl, rfl⟩
     rename_i c hc _
     have hIs := Lexer.Slice.lt_size_of_get? hc
@@ -183,7 +190,7 @@ theorem legacySpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
       have h10' : c = 10 := by simpa using h10
       have hB : feedFrom v input st0 loc0 start0 =
           feedFrom v input (.token ⟨.legacyString, tokenStart,
-            (s'.val.tokenContent ++ bytesOf input X.1 index).push 10⟩)
+            (contentBytes s'.val.tokenContent ++ bytesOf input X.1 index).push 10⟩)
             ((afterColumns locX (index - X.1)).afterByte 10) (index + 1) := by
         rw [hA', feedFrom_step hIs (byteStep_token_pending v (by rw [hIc, h10']; rfl)),
           prep_nil, hIc, h10']
@@ -192,20 +199,21 @@ theorem legacySpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
       apply wp_bind; apply wp_pure
       unfold jpEnd
       simp only [↓reduceIte]
-      unfold Lexer.WRustPort.extendContent Lexer.WRustPort.extendContentFrom
-        Lexer.WRustPort.pushContent Lexer.WRustPort.modifyContent
+      unfold Lexer.WRustPort.extendContent Lexer.WRustPort.pushContent Lexer.WRustPort.modifyContent
       apply wp_bind; apply wp_modifyCore
       apply wp_bind; apply wp_modifyCore
       refine hrec _ ((afterColumns locX (index - X.1)).afterByte 10) ⟨.legacyString, tokenStart,
-          (s'.val.tokenContent ++ bytesOf input X.1 index).push 10⟩
+          (contentBytes s'.val.tokenContent ++ bytesOf input X.1 index).push 10⟩
         ⟨hfix'.1, hfix'.2, hfix'.3, hfix'.4⟩ hbase' hholds' hbytes' ?_ hlow' hb' hts' ?_
         (.inl hstate') ?_
       · refine LocAt.lineFeed hLI (by rw [hbase']; omega) rfl ?_
         show Lexer.WRustPort.LexerCore.offsetAt _ _ + 1 = _
         simp only [Lexer.WRustPort.LexerCore.offsetAt]
-      · show TokenAgrees v s'.val.state s'.val.tokenStart
-          ((s'.val.tokenContent ++ (input.slice X.1 index).toByteArray).push c) _
-        rw [hstate', h10']
+      · refine ⟨?_, fits_push hfitsX' _⟩
+        show TokenAgrees v s'.val.state s'.val.tokenStart
+          (contentBytes ((s'.val.tokenContent.extendFrom input.byteArray (input.start + X.1)
+            (input.start + index)).push c)) _
+        rw [contentBytes_push hfitsX', hextX, hstate', h10']
         exact ⟨hts', by subst hv; rfl, rfl⟩
       · exact hB
     intro h10
@@ -216,7 +224,7 @@ theorem legacySpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
       have h34' : c = 34 := by simpa using h34
       have hB : feedFrom v input st0 loc0 start0 =
           feedFrom v input (.token ⟨.legacyQuote, tokenStart,
-            s'.val.tokenContent ++ bytesOf input X.1 index⟩)
+            contentBytes s'.val.tokenContent ++ bytesOf input X.1 index⟩)
             (afterColumns locX (index + 1 - X.1)) (index + 1) := by
         rw [hA', feedFrom_step hIs (byteStep_token_pending v (by rw [hIc, h34']; rfl)),
           prep_nil, hIc, h34', afterByte_eq_afterColumns' _ _ (by decide), afterColumns_add]
@@ -227,13 +235,12 @@ theorem legacySpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
       apply wp_bind; apply wp_pure
       unfold jpEnd
       simp only [Bool.false_eq_true, ↓reduceIte]
-      unfold Lexer.WRustPort.extendContent Lexer.WRustPort.extendContentFrom
-        Lexer.WRustPort.modifyContent
+      unfold Lexer.WRustPort.extendContent Lexer.WRustPort.modifyContent
       apply wp_bind; apply wp_modifyCore
       refine hrec _ (afterColumns locX (index + 1 - X.1)) _
         ⟨hfix'.1, hfix'.2, hfix'.3, hfix'.4⟩ hbase' hholds' hbytes' hLJ hlow' hb' rfl ?_
         (.inr (.inl rfl)) hB
-      exact ⟨rfl, by subst hv; rfl, rfl⟩
+      exact ⟨⟨rfl, by subst hv; rfl, hextX.symm⟩, hfitsX'⟩
     intro h34
     have h34' : c ≠ 34 := by simpa using h34
     apply wp_ite
@@ -242,7 +249,7 @@ theorem legacySpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
       have h92' : c = 92 := by simpa using h92
       have hB : feedFrom v input st0 loc0 start0 =
           feedFrom v input (.token ⟨.legacyEscape, tokenStart,
-            s'.val.tokenContent ++ bytesOf input X.1 index⟩)
+            contentBytes s'.val.tokenContent ++ bytesOf input X.1 index⟩)
             (afterColumns locX (index + 1 - X.1)) (index + 1) := by
         rw [hA', feedFrom_step hIs (byteStep_token_pending v (by rw [hIc, h92']; rfl)),
           prep_nil, hIc, h92', afterByte_eq_afterColumns' _ _ (by decide), afterColumns_add]
@@ -253,13 +260,12 @@ theorem legacySpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
       apply wp_bind; apply wp_pure
       unfold jpEnd
       simp only [Bool.false_eq_true, ↓reduceIte]
-      unfold Lexer.WRustPort.extendContent Lexer.WRustPort.extendContentFrom
-        Lexer.WRustPort.modifyContent
+      unfold Lexer.WRustPort.extendContent Lexer.WRustPort.modifyContent
       apply wp_bind; apply wp_modifyCore
       refine hrec _ (afterColumns locX (index + 1 - X.1)) _
         ⟨hfix'.1, hfix'.2, hfix'.3, hfix'.4⟩ hbase' hholds' hbytes' hLJ hlow' hb' rfl ?_
         (.inr (.inr rfl)) hB
-      exact ⟨rfl, hv, rfl, rfl⟩
+      exact ⟨⟨rfl, hv, rfl, hextX.symm⟩, hfitsX'⟩
     intro h92
     have h92' : c ≠ 92 := by simpa using h92
     apply wp_ite
@@ -268,7 +274,7 @@ theorem legacySpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
       have h124' : c = 124 := by simpa using h124
       have hB : feedFrom v input st0 loc0 start0 =
           feedFrom v input (.token ⟨.legacyString, tokenStart,
-            (s'.val.tokenContent ++ bytesOf input X.1 index).push 124⟩)
+            (contentBytes s'.val.tokenContent ++ bytesOf input X.1 index).push 124⟩)
             (afterColumns locX (index + 1 - X.1)) (index + 1) := by
         rw [hA', feedFrom_step hIs (byteStep_token_pending v (by rw [hIc, h124']; rfl)),
           prep_nil, hIc, h124', afterByte_eq_afterColumns' _ _ (by decide), afterColumns_add]
@@ -277,17 +283,18 @@ theorem legacySpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
       apply wp_bind; apply wp_pure
       unfold jpEnd
       simp only [↓reduceIte]
-      unfold Lexer.WRustPort.extendContent Lexer.WRustPort.extendContentFrom
-        Lexer.WRustPort.pushContent Lexer.WRustPort.modifyContent
+      unfold Lexer.WRustPort.extendContent Lexer.WRustPort.pushContent Lexer.WRustPort.modifyContent
       apply wp_bind; apply wp_modifyCore
       apply wp_bind; apply wp_modifyCore
       refine hrec _ (afterColumns locX (index + 1 - X.1)) ⟨.legacyString, tokenStart,
-          (s'.val.tokenContent ++ bytesOf input X.1 index).push 124⟩
+          (contentBytes s'.val.tokenContent ++ bytesOf input X.1 index).push 124⟩
         ⟨hfix'.1, hfix'.2, hfix'.3, hfix'.4⟩ hbase' hholds' hbytes' hLJ hlow' hb' hts' ?_
         (.inl hstate') hB
+      refine ⟨?_, fits_push hfitsX' _⟩
       show TokenAgrees v s'.val.state s'.val.tokenStart
-        ((s'.val.tokenContent ++ (input.slice X.1 index).toByteArray).push c) _
-      rw [hstate', h124']
+        (contentBytes ((s'.val.tokenContent.extendFrom input.byteArray (input.start + X.1)
+          (input.start + index)).push c)) _
+      rw [contentBytes_push hfitsX', hextX, hstate', h124']
       exact ⟨hts', by subst hv; rfl, rfl⟩
     · -- any other byte is not in a string
       intro h124
@@ -302,7 +309,8 @@ theorem legacySpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
         · exact absurd h1 h10'
         · exact absurd h1 h124'
       have hf : ∃ f, advance false ⟨.legacyString, tokenStart,
-          s'.val.tokenContent ++ bytesOf input X.1 index⟩ (afterColumns locX (index - X.1))
+          contentBytes s'.val.tokenContent ++ bytesOf input X.1 index⟩ (afterColumns locX (index -
+              X.1))
           input[index] = .error f := by
         rw [hIc]
         simp [advance, legacyStringByte, h34', h92', htext]
@@ -340,8 +348,8 @@ theorem legacySpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
       simp only [↓reduceIte] at hC
       apply wp_pure
       apply wp_bind
-      refine sinkStored_wp v .string _ (.mkAtByte _) tokenStart base h held _ hholds coll
-        hfix.recovers hfix.version ?_ ?_
+      refine sinkStored_wp v .string (.mkAtByte _) tokenStart base h held _ hholds coll
+        hfix.recovers hfix.version (token_fits hagree) ?_ ?_
       · intro s1 coll1 hk1 hb1 hc1
         obtain ⟨k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11⟩ := key_fields hk1
         unfold Lexer.WRustPort.setNormal
@@ -352,7 +360,7 @@ theorem legacySpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
         refine armPost_finish (s0 := _) hfix hbase0 h0 hbytes
           ⟨k1, k4, k3, k5, rfl, k8, k9, k10, k11, hb1⟩ hloc hc1 ?_
         rw [hC]
-        show _ = Prep [⟨.string, s.val.tokenContent, tokenStart,
+        show _ = Prep [⟨.string, contentBytes s.val.tokenContent, tokenStart,
           stepLocation s.val low base consumed⟩] _
         rw [hstep, Nat.sub_self, afterColumns_zero, hts, ← hps, ← hcont]
       · intro hn e s' coll'
@@ -360,7 +368,7 @@ theorem legacySpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
         rw [hC, outcome_prep]
         have hstep := stepLocation_eq' (pos := consumed) hloc (by rw [hbase0]; exact h0) hb
           hlow (Nat.le_refl _)
-        have hn' : pending v coll (held ++ [⟨.string, s.val.tokenContent, tokenStart,
+        have hn' : pending v coll (held ++ [⟨.string, contentBytes s.val.tokenContent, tokenStart,
             stepLocation s.val low base consumed⟩]) = none := hn
         rw [hstep, Nat.sub_self, afterColumns_zero, hts, ← hps, ← hcont] at hn'
         exact (congrArg (fun x => outcome v x _) hn').trans (outcome_none_left v _)
@@ -373,10 +381,12 @@ theorem legacySpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
       have hfc := (get?_eq hfirst).2
       have hesc' : first = 34 ∨ first = 92 := by simpa using hesc
       have hB : feedFrom v input st0 loc0 start0 =
-          feedFrom v input (.token ⟨.legacyString, tokenStart, s.val.tokenContent.push first⟩)
+          feedFrom v input (.token ⟨.legacyString, tokenStart, (contentBytes
+              s.val.tokenContent).push first⟩)
             (afterColumns locq 1) (consumed + 1) := by
         rw [hanchor, feedFrom_step hlt (byteStep_token_pending v
-          (q' := ⟨.legacyString, tokenStart, s.val.tokenContent.push first⟩) ?_), prep_nil,
+          (q' := ⟨.legacyString, tokenStart, (contentBytes s.val.tokenContent).push first⟩) ?_),
+              prep_nil,
           afterByte_eq_afterColumns' _ _ (by rw [hfc]; rcases hesc' with h | h <;> rw [h] <;>
             decide)]
         obtain ⟨mode, pstart, pcontent⟩ := q
@@ -389,8 +399,10 @@ theorem legacySpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
       dsimp -zeta only
       apply wp_bind; apply wp_modifyBound
       refine hrun c1 _ (afterColumns locq 1) ⟨hfix.1, hfix.2, hfix.3, hfix.4⟩ hbase0 hholds hbytes
-        ?_ hlow hb rfl rfl (by show start0 ≤ consumed + 1; omega)
-        (by show consumed + 1 ≤ input.size; omega) hB
+        ?_ hlow hb rfl rfl (fits_push (token_fits hagree) _)
+        (by show start0 ≤ consumed + 1; omega)
+        (by show consumed + 1 ≤ input.size; omega)
+        (hB.trans (by rw [← contentBytes_push (token_fits hagree)]))
       have := hloc.afterColumns (by rw [hbase0]; exact h0) (show consumed ≤ consumed + 1 by omega)
       rw [Nat.add_sub_cancel_left] at this
       exact this
@@ -399,7 +411,8 @@ theorem legacySpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
       have hfc := (get?_eq hfirst).2
       have hesc' : first ≠ 34 ∧ first ≠ 92 := by simpa using hesc
       have hB : feedFrom v input st0 loc0 start0 =
-          feedFrom v input (.token ⟨.legacyString, tokenStart, s.val.tokenContent.push 92⟩)
+          feedFrom v input (.token ⟨.legacyString, tokenStart, (contentBytes
+              s.val.tokenContent).push 92⟩)
             locq consumed := by
         rw [hanchor]
         refine feedFrom_advance_congr hlt ?_
@@ -413,7 +426,8 @@ theorem legacySpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
       dsimp -zeta only
       apply wp_bind; apply wp_modifyBound
       exact hrun c0 _ locq ⟨hfix.1, hfix.2, hfix.3, hfix.4⟩ hbase0 hholds hbytes hloc hlow hb rfl
-        rfl h0 hcs hB
+        rfl (fits_push (token_fits hagree) _) h0 hcs
+        (hB.trans (by rw [← contentBytes_push (token_fits hagree)]))
   · -- the string itself
     rename_i hdq hbe
     have hstate : s.val.state = .stringLiteral := by
@@ -422,7 +436,8 @@ theorem legacySpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
       · exact absurd h1 hdq
       · exact absurd h1 hbe
     obtain ⟨hps, hm, hcont⟩ := token_agrees hagree hstate
-    refine hrun c0 s locq hfix hbase0 hholds hbytes hloc hlow hb hts hstate h0 hcs ?_
+    refine hrun c0 s locq hfix hbase0 hholds hbytes hloc hlow hb hts hstate (token_fits hagree) h0
+      hcs ?_
     rw [hanchor]
     obtain ⟨mode, pstart, pcontent⟩ := q
     simp only at hm hps hcont
@@ -477,13 +492,14 @@ theorem stringSpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
       Fixed v s'.val → s'.val.base = start0 → Holds s'.val.batch held →
       s'.val.batch.bytes = input.byteArray → LocAt s'.val s'.val.offset s'.val.base X.1 locX →
       low = s'.val.offset → base = s'.val.base → tokenStart = s'.val.tokenStart →
-      s'.val.state = .stringLiteral → start0 ≤ X.1 → X.1 ≤ input.size →
+      s'.val.state = .stringLiteral → Fits s'.val.tokenContent → start0 ≤ X.1 → X.1 ≤ input.size →
       feedFrom v input st0 loc0 start0 =
-        feedFrom v input (.token ⟨.string, tokenStart, s'.val.tokenContent⟩) locX X.1 →
+        feedFrom v input (.token ⟨.string, tokenStart, contentBytes s'.val.tokenContent⟩) locX X.1 →
       WP (jpRun () X) s' coll
         (fun r s' coll' => ArmPost v input st0 loc0 start0 coll held r.1 s'.val coll')
         (fun _ _ _ => StepFails v input st0 loc0 start0 coll held) := by
-    intro X s' locX hfix' hbase' hholds' hbytes' hloc' hlow' hb' hts' hstate' hX0 hXs hanchor'
+    intro X s' locX hfix' hbase' hholds' hbytes' hloc' hlow' hb' hts' hstate' hfitsX hX0 hXs
+        hanchor'
     unfold jpRun
     dsimp -zeta only
     extract_lets index hidx1
@@ -495,9 +511,13 @@ theorem stringSpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
       exact this
     have hA := feedFrom_mode v input isStringRun isStringRun_ne .string
       (fun q l c hm hc => advance_string_run false q l c hm hc) X.1
-      ⟨.string, tokenStart, s'.val.tokenContent⟩ locX rfl hXs
+      ⟨.string, tokenStart, contentBytes s'.val.tokenContent⟩ locX rfl hXs
     rw [← hI] at hA
     have hA' := hanchor'.trans hA
+    have hextX : contentBytes (s'.val.tokenContent.extendFrom input.byteArray (input.start + X.1)
+        (input.start + index)) = contentBytes s'.val.tokenContent ++ bytesOf input X.1 index :=
+      contentBytes_extendSlice input hfitsX (.inl hle')
+    have hfitsX' := fits_extendSlice input hfitsX (a := X.1) (.inl hle')
     have hLI := hloc'.afterColumns (by rw [hbase']; omega) hle
     have hLJ := hloc'.afterColumns (by rw [hbase']; omega)
       (show X.1 ≤ index + 1 by omega)
@@ -513,24 +533,28 @@ theorem stringSpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
         have h10' : c = 10 := by simpa using h10
         have hB : feedFrom v input st0 loc0 start0 =
             feedFrom v input (.token ⟨.string, tokenStart,
-              (s'.val.tokenContent ++ bytesOf input X.1 index).push 10⟩)
+              (contentBytes s'.val.tokenContent ++ bytesOf input X.1 index).push 10⟩)
               ((afterColumns locX (index - X.1)).afterByte 10) (index + 1) := by
           rw [hA', feedFrom_step hIs (byteStep_token_pending v (by rw [hIc, h10']; rfl)),
             prep_nil, hIc, h10']
         unfold Lexer.WRustPort.markLineFeedAt Lexer.WRustPort.extendContent
-          Lexer.WRustPort.extendContentFrom Lexer.WRustPort.modifyContent
+          Lexer.WRustPort.modifyContent
         apply wp_bind; apply wp_modifyCore
         apply wp_bind; apply wp_modifyCore
         refine ih (index + 1) (by omega) _ _ ((afterColumns locX (index - X.1)).afterByte 10)
-          ⟨.string, tokenStart, (s'.val.tokenContent ++ bytesOf input X.1 index).push 10⟩
+          ⟨.string, tokenStart, (contentBytes s'.val.tokenContent ++ bytesOf input X.1 index).push
+              10⟩
           ⟨hfix'.1, hfix'.2, hfix'.3, hfix'.4⟩ hbase' hholds' hbytes' ?_ hlow' hb' hts' hv ?_
           (.inl hstate') (by omega) hs0 (by omega) hB
         · refine LocAt.lineFeed hLI (by rw [hbase']; omega) rfl ?_
           show Lexer.WRustPort.LexerCore.offsetAt _ _ + 1 = _
           simp only [Lexer.WRustPort.LexerCore.offsetAt]
-        · show TokenAgrees v s'.val.state s'.val.tokenStart
-            (s'.val.tokenContent ++ (input.slice X.1 (index + 1)).toByteArray) _
-          rw [hstate', content_succ input _ hle hIs, hIc, h10']
+        · refine ⟨?_, fits_extendSlice input hfitsX (a := X.1) (b := index + 1) (.inl (by omega))⟩
+          show TokenAgrees v s'.val.state s'.val.tokenStart
+            (contentBytes (s'.val.tokenContent.extendFrom input.byteArray (input.start + X.1)
+              (input.start + (index + 1)))) _
+          rw [contentBytes_extendSlice input hfitsX (a := X.1) (b := index + 1) (.inl (by omega)),
+            hstate', content_succ input _ hle hIs, hIc, h10']
           exact ⟨hts', by simp [hv], rfl⟩
       intro h10
       have h10' : c ≠ 10 := by simpa using h10
@@ -540,21 +564,21 @@ theorem stringSpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
         have h34' : c = 34 := by simpa using h34
         have hB : feedFrom v input st0 loc0 start0 =
             feedFrom v input (.token ⟨.stringQuote, tokenStart,
-              s'.val.tokenContent ++ bytesOf input X.1 index⟩)
+              contentBytes s'.val.tokenContent ++ bytesOf input X.1 index⟩)
               (afterColumns locX (index + 1 - X.1)) (index + 1) := by
           rw [hA', feedFrom_step hIs (byteStep_token_pending v (by rw [hIc, h34']; rfl)),
             prep_nil, hIc, h34', afterByte_eq_afterColumns' _ _ (by decide), afterColumns_add]
           congr 2
           omega
         unfold Lexer.WRustPort.setTokenState Lexer.WRustPort.extendContent
-          Lexer.WRustPort.extendContentFrom Lexer.WRustPort.modifyContent
+          Lexer.WRustPort.modifyContent
         apply wp_bind; apply wp_modifyCore
         apply wp_bind; apply wp_modifyBound
         refine ih (index + 1) (by omega) _ _ (afterColumns locX (index + 1 - X.1))
-          ⟨.stringQuote, tokenStart, s'.val.tokenContent ++ bytesOf input X.1 index⟩
+          ⟨.stringQuote, tokenStart, contentBytes s'.val.tokenContent ++ bytesOf input X.1 index⟩
           ⟨hfix'.1, hfix'.2, hfix'.3, hfix'.4⟩ hbase' hholds' hbytes' hLJ hlow' hb' rfl hv ?_
           (.inr rfl) (by omega) hs0 (by omega) hB
-        exact ⟨rfl, by simp [hv], rfl⟩
+        exact ⟨⟨rfl, by simp [hv], hextX.symm⟩, hfitsX'⟩
       · -- any other byte is not in a string
         intro h34
         have h34' : c ≠ 34 := by simpa using h34
@@ -565,7 +589,8 @@ theorem stringSpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
           · exact absurd h1 h34'
           · exact absurd h1 h10'
         have hf : ∃ f, advance false ⟨.string, tokenStart,
-            s'.val.tokenContent ++ bytesOf input X.1 index⟩ (afterColumns locX (index - X.1))
+            contentBytes s'.val.tokenContent ++ bytesOf input X.1 index⟩ (afterColumns locX (index -
+                X.1))
             input[index] = .error f := by
           rw [hIc]
           simp [advance, h34', htext]
@@ -578,16 +603,17 @@ theorem stringSpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
       rename_i hnone
       have hge := Lexer.Slice.size_le_of_get?_none hnone
       have he : index = input.size := by omega
-      unfold Lexer.WRustPort.extendContent Lexer.WRustPort.extendContentFrom
-        Lexer.WRustPort.modifyContent
+      unfold Lexer.WRustPort.extendContent Lexer.WRustPort.modifyContent
       apply wp_bind; apply wp_modifyCore
       apply wp_pure
-      rw [he] at hA' hLI
+      rw [he] at hA' hLI hextX hfitsX'
       refine armPost_pending (s0 := s'.val) hfix' hbase' (by omega) hholds' hbytes'
         ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩ ?_ hLI hA'
+      refine ⟨?_, hfitsX'⟩
       show TokenAgrees v s'.val.state s'.val.tokenStart
-        (s'.val.tokenContent ++ (input.slice X.1 input.size).toByteArray) _
-      rw [hstate']
+        (contentBytes (s'.val.tokenContent.extendFrom input.byteArray (input.start + X.1)
+            (input.start + input.size))) _
+      rw [hextX, hstate']
       exact ⟨hts', by simp [hv], rfl⟩
   -- the first byte, in the state the string is in
   apply wp_bind; apply wp_getCore
@@ -624,8 +650,8 @@ theorem stringSpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
         simp only [↓reduceIte] at hC
         apply wp_pure
         apply wp_bind
-        refine sinkStored_wp v .string _ (.mkAtByte _) tokenStart base h held _ hholds coll
-          hfix.recovers hfix.version ?_ ?_
+        refine sinkStored_wp v .string (.mkAtByte _) tokenStart base h held _ hholds coll
+          hfix.recovers hfix.version (token_fits hagree) ?_ ?_
         · intro s1 coll1 hk1 hb1 hc1
           obtain ⟨k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11⟩ := key_fields hk1
           unfold Lexer.WRustPort.setNormal
@@ -636,7 +662,7 @@ theorem stringSpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
           refine armPost_finish (s0 := _) hfix hbase0 h0 hbytes
             ⟨k1, k4, k3, k5, rfl, k8, k9, k10, k11, hb1⟩ hloc hc1 ?_
           rw [hC]
-          show _ = Prep [⟨.string, s.val.tokenContent, tokenStart,
+          show _ = Prep [⟨.string, contentBytes s.val.tokenContent, tokenStart,
             stepLocation s.val low base consumed⟩] _
           rw [hstep, Nat.sub_self, afterColumns_zero, hts, ← hps, ← hcont]
         · intro hn e s' coll'
@@ -644,7 +670,7 @@ theorem stringSpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
           rw [hC, outcome_prep]
           have hstep := stepLocation_eq' (pos := consumed) hloc (by rw [hbase0]; exact h0) hb
             hlow (Nat.le_refl _)
-          have hn' : pending v coll (held ++ [⟨.string, s.val.tokenContent, tokenStart,
+          have hn' : pending v coll (held ++ [⟨.string, contentBytes s.val.tokenContent, tokenStart,
               stepLocation s.val low base consumed⟩]) = none := hn
           rw [hstep, Nat.sub_self, afterColumns_zero, hts, ← hps, ← hcont] at hn'
           exact (congrArg (fun x => outcome v x _) hn').trans (outcome_none_left v _)
@@ -652,22 +678,23 @@ theorem stringSpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
       intro hq
       have hq' : first = 34 := by simpa using hq
       have hB : feedFrom v input st0 loc0 start0 =
-          feedFrom v input (.token ⟨.string, tokenStart, s.val.tokenContent.push 34⟩)
+          feedFrom v input (.token ⟨.string, tokenStart, (contentBytes s.val.tokenContent).push 34⟩)
             (afterColumns locq 1) (consumed + 1) := by
         rw [hanchor, feedFrom_step hlt (byteStep_token_pending v
-          (q' := ⟨.string, tokenStart, s.val.tokenContent.push 34⟩) ?_), prep_nil,
+          (q' := ⟨.string, tokenStart, (contentBytes s.val.tokenContent).push 34⟩) ?_), prep_nil,
           afterByte_eq_afterColumns' _ _ (by rw [hfc, hq']; decide)]
         obtain ⟨mode, pstart, pcontent⟩ := q
         simp only at hm' hps hcont
         rw [hm', hps, hcont, hfc, hq', ← hts]
         rfl
-      unfold Lexer.WRustPort.pushContent Lexer.WRustPort.modifyContent
-        Lexer.WRustPort.setTokenState
+      unfold Lexer.WRustPort.pushContent Lexer.WRustPort.modifyContent Lexer.WRustPort.setTokenState
       apply wp_bind; apply wp_modifyCore
       apply wp_bind; apply wp_modifyBound
       refine hrun c1 _ (afterColumns locq 1) ⟨hfix.1, hfix.2, hfix.3, hfix.4⟩ hbase0 hholds hbytes
-        ?_ hlow hb rfl rfl (by show start0 ≤ consumed + 1; omega)
-        (by show consumed + 1 ≤ input.size; omega) hB
+        ?_ hlow hb rfl rfl (fits_push (token_fits hagree) _)
+        (by show start0 ≤ consumed + 1; omega)
+        (by show consumed + 1 ≤ input.size; omega)
+        (hB.trans (by rw [← contentBytes_push (token_fits hagree)]))
       have := hloc.afterColumns (by rw [hbase0]; exact h0) (show consumed ≤ consumed + 1 by omega)
       rw [Nat.add_sub_cancel_left] at this
       exact this
@@ -679,7 +706,8 @@ theorem stringSpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
       · exact h1
       · exact absurd h1 hdq'
     obtain ⟨hps, hm, hcont⟩ := token_agrees hagree hstate
-    refine hrun c0 s locq hfix hbase0 hholds hbytes hloc hlow hb hts hstate h0 hcs ?_
+    refine hrun c0 s locq hfix hbase0 hholds hbytes hloc hlow hb hts hstate (token_fits hagree) h0
+      hcs ?_
     rw [hanchor]
     obtain ⟨mode, pstart, pcontent⟩ := q
     simp only at hm hps hcont
@@ -726,4 +754,4 @@ theorem arm_stringLiteral (v : Version) (input : ByteSlice) (start : Nat)
 
 end
 
-end BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
+end BSmtLib.Proofs.Lexer.V1NaiveWRustPort

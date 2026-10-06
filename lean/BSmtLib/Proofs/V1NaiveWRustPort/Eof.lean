@@ -1,5 +1,5 @@
-import BSmtLib.Proofs.V4FastPathsWRustPort.LexStep
-import BSmtLib.Proofs.V4FastPathsWRustPort.NoStop
+import BSmtLib.Proofs.V1NaiveWRustPort.LexStep
+import BSmtLib.Proofs.V1NaiveWRustPort.NoStop
 
 /-!
 # The Rust port at the end of the input
@@ -13,9 +13,9 @@ that the Rust port wraps the token's hand-over in passes on every error (`wp_try
 the adapter's consumer never stops a hand-over.
 -/
 
-namespace BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
+namespace BSmtLib.Proofs.Lexer.V1NaiveWRustPort
 
-open BSmtLib.Proofs.Adapter V1Naive
+open BSmtLib.Proofs.Adapter V1Naive BSmtLib.Proofs.Simulation
 
 section
 
@@ -102,11 +102,14 @@ local macro "eof_digits" : tactic => `(tactic| (
     unfold Lexer.WRustPort.error Lexer.WRustPort.errorWith
     wp_walk
     show Option.bind _ _ = none
-    have he : c.tokenContent.isEmpty = true := hbad
+    have he : (contentBytes c.tokenContent).isEmpty = true := by
+      unfold ByteArray.isEmpty; rw [size_contentBytes (token_fits hagree)]; exact hbad
     simp [finishLs, finish, he]
   · intro hgood
-    refine hsink _ _ _ ?_
-    have he : c.tokenContent.isEmpty = false := Bool.eq_false_iff.mpr hgood
+    refine hsink _ _ (token_fits hagree) ?_
+    have he : (contentBytes c.tokenContent).isEmpty = false := by
+      unfold ByteArray.isEmpty; rw [size_contentBytes (token_fits hagree)]
+      exact Bool.eq_false_iff.mpr hgood
     simp [finishLs, finish, he]
     rfl))
 
@@ -123,6 +126,7 @@ theorem lexEofInner_run (v : Version) (c : WCore) (coll : Collector) (st : St)
       | some hs => res = .ok .continue ∧ coll'.handed = coll.handed ++ hs
       | none => ∃ f, res = .error f := by
   unfold Lexer.WRustPort.lexEofInner
+  simp -zeta only [rust_eofBatch]
   extract_lets c1 tokenStart offset pend step
   have hp : ∀ s : BS none offset, s.val = c1 →
       WP pend s coll
@@ -135,24 +139,24 @@ theorem lexEofInner_run (v : Version) (c : WCore) (coll : Collector) (st : St)
     simp only at hs
     subst hs
     -- a token handed over at the end of the input
-    have hsink : ∀ (ty : TokenCategory) (hty : ty ≠ .endOfFile)
-        (h : Lexer.WRustPort.Started none offset tokenStart),
-        finishLs st location = some [⟨ty, c.tokenContent, c.tokenStart, location⟩] →
-        WP (Lexer.WRustPort.sinkStored (H := Collector) (m := Id) (R := Empty) (E := Unit) ty hty
+    have hsink : ∀ (ty : TokenCategory) (h : Lexer.WRustPort.Started none offset tokenStart),
+        Fits c.tokenContent →
+        finishLs st location = some [⟨ty, contentBytes c.tokenContent, c.tokenStart, location⟩] →
+        WP (Lexer.WRustPort.sinkStored (H := Collector) (m := Id) (R := Empty) (E := Unit) ty
           .EOF tokenStart 0 h) ⟨c1, sp⟩ coll
           (fun _ s' coll' => s'.val.version = v ∧ s'.val.recovers = false ∧
             s'.val.offset = c.offset ∧ s'.val.line = c.line ∧ s'.val.lineStart = c.lineStart ∧
             ∃ ls, finishLs st location = some ls ∧ pending v coll' [] = pending v coll ls)
           (fun _ _ _ => (finishLs st location).bind (pending v coll) = none) := by
-      intro ty hty h hfin
-      refine sinkStored_wp v ty hty .EOF tokenStart 0 h [] ⟨c1, sp⟩ (holds_clear _ _) coll
-        hfix.recovers hfix.version ?_ ?_
+      intro ty h hfits hfin
+      refine sinkStored_wp v ty .EOF tokenStart 0 h [] ⟨c1, sp⟩ (holds_clear _ _) coll
+        hfix.recovers hfix.version hfits ?_ ?_
       · intro s' coll' hk hb hc
         obtain ⟨k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11⟩ := key_fields hk
         refine ⟨k1.trans hfix.version, k4.trans hfix.recovers, k8, k10, k11, _, hfin, ?_⟩
         have e1 : stepLocation c1 c.offset 0 0 = location := eof_stepLocation hloc rfl rfl
         rw [hc]
-        show pending v coll ([] ++ [⟨ty, c.tokenContent, c.tokenStart,
+        show pending v coll ([] ++ [⟨ty, contentBytes c.tokenContent, c.tokenStart,
           stepLocation c1 c.offset 0 0⟩]) = _
         rw [e1]
         rfl
@@ -160,7 +164,7 @@ theorem lexEofInner_run (v : Version) (c : WCore) (coll : Collector) (st : St)
         show Option.bind _ _ = none
         rw [hfin]
         have e1 : stepLocation c1 c.offset 0 0 = location := eof_stepLocation hloc rfl rfl
-        have hn' : pending v coll ([] ++ [⟨ty, c.tokenContent, c.tokenStart,
+        have hn' : pending v coll ([] ++ [⟨ty, contentBytes c.tokenContent, c.tokenStart,
           stepLocation c1 c.offset 0 0⟩]) = none := hn
         rw [e1] at hn'
         exact hn'
@@ -184,7 +188,7 @@ theorem lexEofInner_run (v : Version) (c : WCore) (coll : Collector) (st : St)
         obtain ⟨mode, pstart, pcontent⟩ := p
         simp only at hps hm hcont
         subst hm hps hcont
-        exact hsink _ _ _ rfl
+        exact hsink _ _ (token_fits hagree) rfl
       next =>
         obtain ⟨hps, hm, hcont⟩ := token_agrees hagree ‹c1.state = _›
         obtain ⟨mode, pstart, pcontent⟩ := p
@@ -195,25 +199,26 @@ theorem lexEofInner_run (v : Version) (c : WCore) (coll : Collector) (st : St)
         dsimp only
         apply wp_ite
         · intro hbad
-          have hbad' : ((Lexer.WRustPort.Content.stored.last? c.tokenContent).isNone ||
-              Lexer.WRustPort.Content.stored.last? c.tokenContent == some 46) = true := hbad
+          have hbad' : ((lastOf (contentBytes c.tokenContent)).isNone ||
+              lastOf (contentBytes c.tokenContent) == some 46) = true := by
+            rw [← last?_stored (token_fits hagree)]; exact hbad
           unfold Lexer.WRustPort.error Lexer.WRustPort.errorWith
           wp_walk
           show Option.bind _ _ = none
           simp only [finishLs, finish, hbad', Bool.not_true, Bool.false_eq_true, ↓reduceIte]
           rfl
         · intro hgood
-          have hgood' : ((Lexer.WRustPort.Content.stored.last? c.tokenContent).isNone ||
-              Lexer.WRustPort.Content.stored.last? c.tokenContent == some 46) = false :=
-            Bool.eq_false_iff.mpr hgood
-          refine hsink _ _ _ ?_
+          have hgood' : ((lastOf (contentBytes c.tokenContent)).isNone ||
+              lastOf (contentBytes c.tokenContent) == some 46) = false := by
+            rw [← last?_stored (token_fits hagree)]; exact Bool.eq_false_iff.mpr hgood
+          refine hsink _ _ (token_fits hagree) ?_
           simp only [finishLs, finish, hgood', Bool.not_false, ↓reduceIte]
       next =>
         obtain ⟨hps, hm, hcont, -⟩ := token_agrees hagree ‹c1.state = _›
         obtain ⟨mode, pstart, pcontent⟩ := p
         simp only at hps hm hcont
         subst hm hps hcont
-        exact hsink _ _ _ rfl
+        exact hsink _ _ (token_fits hagree) rfl
       next =>
         obtain ⟨hps, hm, hcont⟩ := token_agrees hagree ‹c1.state = _›
         obtain ⟨mode, pstart, pcontent⟩ := p
@@ -257,14 +262,15 @@ theorem lexEofInner_run (v : Version) (c : WCore) (coll : Collector) (st : St)
         simp only at hps hm hcont
         subst hm hps hcont
         unfold Lexer.WRustPort.finishStringLiteral
-        exact hsink _ _ _ (by show finishLs (.token ⟨_, _, _⟩) location = _; split <;> rfl)
+        exact hsink _ _ (token_fits hagree) (by show finishLs (.token ⟨_, _, _⟩) location = _; split
+            <;> rfl)
       next =>
         obtain ⟨hps, hm, hcont⟩ := token_agrees hagree ‹c1.state = _›
         obtain ⟨mode, pstart, pcontent⟩ := p
         simp only at hps hm hcont
         subst hm hps hcont
         unfold Lexer.WRustPort.finishSimpleSymbol
-        exact hsink _ _ _ rfl
+        exact hsink _ _ (token_fits hagree) rfl
       next =>
         obtain ⟨hps, hm, hcont⟩ := token_agrees hagree ‹c1.state = _›
         obtain ⟨mode, pstart, pcontent⟩ := p
@@ -278,11 +284,14 @@ theorem lexEofInner_run (v : Version) (c : WCore) (coll : Collector) (st : St)
           unfold Lexer.WRustPort.error Lexer.WRustPort.errorWith
           wp_walk
           show Option.bind _ _ = none
-          have he : c.tokenContent.isEmpty = true := hbad
+          have he : (contentBytes c.tokenContent).isEmpty = true := by
+            unfold ByteArray.isEmpty; rw [size_contentBytes (token_fits hagree)]; exact hbad
           simp [finishLs, finish, he]
         · intro hgood
-          refine hsink _ _ _ ?_
-          have he : c.tokenContent.isEmpty = false := Bool.eq_false_iff.mpr hgood
+          refine hsink _ _ (token_fits hagree) ?_
+          have he : (contentBytes c.tokenContent).isEmpty = false := by
+            unfold ByteArray.isEmpty; rw [size_contentBytes (token_fits hagree)]
+            exact Bool.eq_false_iff.mpr hgood
           simp [finishLs, finish, he]
       next =>
         obtain ⟨hps, hm, hcont⟩ := token_agrees hagree ‹c1.state = _›
@@ -389,4 +398,4 @@ theorem lexEofInner_run (v : Version) (c : WCore) (coll : Collector) (st : St)
     simp only [hc]
     exact ⟨_, rfl⟩
 
-end BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
+end BSmtLib.Proofs.Lexer.V1NaiveWRustPort

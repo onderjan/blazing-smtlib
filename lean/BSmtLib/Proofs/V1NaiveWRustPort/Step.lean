@@ -1,5 +1,5 @@
-import BSmtLib.Proofs.V4FastPathsWRustPort.Agree
-import BSmtLib.Proofs.V4FastPathsWRustPort.Runs
+import BSmtLib.Proofs.V1NaiveWRustPort.Agree
+import BSmtLib.Proofs.V1NaiveWRustPort.Runs
 
 /-!
 # What a step of the Rust port keeps
@@ -13,9 +13,9 @@ left with from `start` (`StepPost`). If the step is interrupted, the consumer wo
 or the naive lexer's run fails.
 -/
 
-namespace BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
+namespace BSmtLib.Proofs.Lexer.V1NaiveWRustPort
 
-open BSmtLib.Proofs.Adapter V1Naive
+open BSmtLib.Proofs.Adapter V1Naive BSmtLib.Proofs.Simulation
 
 /-- The lexer state at the index `start` of the slice is the naive lexer's pure state `st` at
 `location`, under the version, and its batch holds the lexemes `held`, with their contents in
@@ -47,4 +47,4 @@ def StepFails (v : Version) (input : ByteSlice) (st : St) (location : Location) 
     (coll : Collector) (held : List Lexeme) : Prop :=
   outcome v (pending v coll held) (feedFrom v input st location start) = none
 
-end BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
+end BSmtLib.Proofs.Lexer.V1NaiveWRustPort

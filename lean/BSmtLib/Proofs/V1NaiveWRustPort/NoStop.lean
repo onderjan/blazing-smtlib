@@ -1,4 +1,4 @@
-import BSmtLib.Proofs.V4FastPathsWRustPort.HandOver
+import BSmtLib.Proofs.V1NaiveWRustPort.HandOver
 
 /-!
 # The adapter's consumer never stops a hand-over
@@ -9,7 +9,7 @@ the batch holds. The loop over a slice relies on it after an error, when it hand
 batch as it was left.
 -/
 
-namespace BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
+namespace BSmtLib.Proofs.Lexer.V1NaiveWRustPort
 
 open BSmtLib.Proofs.Adapter
 
@@ -82,14 +82,14 @@ error. -/
 theorem flushCursor_noStop {g : BatchTag} : ∀ (n : Nat) (cursor : BatchCursor g),
     cursor.remaining < n → cursor.relexRequested = false →
     ∀ (hfloor : ∀ p, floor = some p → cursor.EndsAfter p) (s : BS floor low) (coll : Collector),
-    WP (Lexer.WRustPort.flushCursor (H := Collector) (m := Id) (R := Empty) (E := Unit) cursor
+    WP (Lexer.WRustPort.Rust.flushCursor (H := Collector) (m := Id) (R := Empty) (E := Unit) cursor
       hfloor) s coll (fun _ _ _ => True) (fun _ _ _ => True) := by
   intro n
   induction n with
   | zero => intro cursor h; omega
   | succ n ih =>
   intro cursor hn hrel hfloor s coll
-  rw [Lexer.WRustPort.flushCursor]
+  rw [Lexer.WRustPort.Rust.flushCursor]
   apply wp_dite
   · intro h
     have hc := consume_relex cursor h coll
@@ -128,9 +128,9 @@ theorem flushCursor_noStop {g : BatchTag} : ∀ (n : Nat) (cursor : BatchCursor 
 
 /-- The hand-over of the batch of the lexer state is done or interrupted by an error. -/
 theorem flushBatch_noStop (s : BS floor low) (coll : Collector) :
-    WP (Lexer.WRustPort.flushBatch (H := Collector) (m := Id) (R := Empty) (E := Unit)) s coll
+    WP (Lexer.WRustPort.Rust.flushBatch (H := Collector) (m := Id) (R := Empty) (E := Unit)) s coll
       (fun _ _ _ => True) (fun _ _ _ => True) := by
-  unfold Lexer.WRustPort.flushBatch
+  unfold Lexer.WRustPort.Rust.flushBatch
   apply wp_bind
   apply wp_modifyGetThe
   dsimp only
@@ -144,4 +144,4 @@ theorem flushBatch_noStop (s : BS floor low) (coll : Collector) :
 
 end
 
-end BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
+end BSmtLib.Proofs.Lexer.V1NaiveWRustPort

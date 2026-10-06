@@ -1,5 +1,5 @@
-import BSmtLib.Proofs.V4FastPathsWRustPort.Cursor
-import BSmtLib.Proofs.V4FastPathsWRustPort.Bytes
+import BSmtLib.Proofs.V1NaiveWRustPort.Cursor
+import BSmtLib.Proofs.V1NaiveWRustPort.Bytes
 
 /-!
 # The naive lexer's pure run over a slice from an index
@@ -13,9 +13,9 @@ equation between the run from the first index and the run from the second (`Prep
 what the consumer has recorded and will record so far.
 -/
 
-namespace BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
+namespace BSmtLib.Proofs.Lexer.V1NaiveWRustPort
 
-open BSmtLib.Proofs.Adapter V1Naive
+open BSmtLib.Proofs.Adapter V1Naive BSmtLib.Proofs.Simulation
 
 /-- The bytes of the slice from `i` on, from the state at `location`: the state and the location
 after them and the lexemes they finish, or none on an error. -/
@@ -137,4 +137,4 @@ theorem outcome_prep (version : Version) (coll : Collector) (held ls : List Lexe
     cases h1 : handedAll version held <;> cases h2 : handedAll version ls <;>
       cases h3 : handedAll version ls' <;> simp [List.append_assoc]
 
-end BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
+end BSmtLib.Proofs.Lexer.V1NaiveWRustPort
