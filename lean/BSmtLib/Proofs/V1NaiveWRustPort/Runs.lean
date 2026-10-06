@@ -143,7 +143,7 @@ theorem feedFrom_tokenBefore {j : Nat} (hj : j < s.size) {q : Pending} {location
   rw [feedFrom_lt hj, feedFrom_lt hj]
   simp only [byteStep, h]
   cases startStep v location s[j] with
-  | none => rfl
+  | none => simp [failedBefore, h, withBefore]
   | some e =>
     obtain ⟨st, ls⟩ := e
     simp only [Option.map_some]
@@ -153,16 +153,16 @@ theorem feedFrom_tokenBefore {j : Nat} (hj : j < s.size) {q : Pending} {location
 /-- A token in progress at a byte that it fails at. -/
 theorem feedFrom_advance_error {j : Nat} (hj : j < s.size) {q : Pending} {location : Location}
     {f : LexFailure} (h : advance false q location s[j] = .error f) :
-    feedFrom v s (.token q) location j = none := by
+    feedFrom v s (.token q) location j = .error [] := by
   rw [feedFrom_lt hj]
-  simp only [byteStep, h]
+  simp only [byteStep, h, failedBefore]
 
 /-- A byte that fails with no token in progress. -/
 theorem feedFrom_start_error {j : Nat} (hj : j < s.size) {location : Location} {f : LexFailure}
     (h : start v false location s[j] = .error f) :
-    feedFrom v s .idle location j = none := by
+    feedFrom v s .idle location j = .error [] := by
   rw [feedFrom_lt hj]
-  simp only [byteStep, startStep, h]
+  simp only [byteStep, startStep, h, failedBefore]
 
 end
 

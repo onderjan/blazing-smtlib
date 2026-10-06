@@ -1,4 +1,4 @@
-import BSmtLib.Proofs.WRustPortX1BatchInCore.Handed
+import BSmtLib.Proofs.WRustPortX1BatchInCore.Fed
 
 /-!
 # The Rust port and the lexer with the batch in its state lex alike
@@ -38,7 +38,8 @@ length of their batches (`Simulation.ConsumesAlike`), as the adapter's consumer 
   `Lexer.WRustPort.pendingLexEof_sim_x1BatchInCore`: the constructed lexers correspond, and the
   calls of the two lexers on lexers that correspond give the same results with lexers that
   correspond again.
-- `Lexer.WRustPort.handed_eq_handed_x1BatchInCore`: the spec's view.
+- `Lexer.WRustPort.handed_eq_handed_x1BatchInCore` and `Lexer.WRustPort.fed_eq_fed_x1BatchInCore`:
+  the spec's view, of the whole input and of slices before the end of the input.
 
 The proof, in parts:
 
@@ -52,8 +53,9 @@ The proof, in parts:
 - `WRustPortX1BatchInCore.HandOver`, `Flush`, `Instance`: the operations of the two lexers
   simulate each other;
 - `WRustPortX1BatchInCore.Api`: the calls of the two lexers;
-- `WRustPortX1BatchInCore.Collector` and `WRustPortX1BatchInCore.Handed`: the adapter's consumer
-  reads only below the length, and what the adapter records.
+- `WRustPortX1BatchInCore.Collector`, `WRustPortX1BatchInCore.Handed` and
+  `WRustPortX1BatchInCore.Fed`: the adapter's consumer reads only below the length, and what the
+  adapter records.
 -/
 
 namespace BSmtLib.Proofs.Lexer
@@ -176,5 +178,13 @@ theorem WRustPort.handed_eq_handed_x1BatchInCore (version : Spec.Lexicon.Version
     Adapter.handed Adapter.WRustPort.ops version slices =
       Adapter.handed Adapter.X1BatchInCore.ops version slices :=
   handed_eq version slices
+
+/-- The Rust port and the lexer with the batch in its state, fed slices by the adapter before
+the end of the input, hand over the same tokens and fail alike. -/
+theorem WRustPort.fed_eq_fed_x1BatchInCore (version : Spec.Lexicon.Version)
+    (slices : List Spec.Lexicon.Chars) :
+    Adapter.fed Adapter.WRustPort.ops version slices =
+      Adapter.fed Adapter.X1BatchInCore.ops version slices :=
+  fed_eq version slices
 
 end BSmtLib.Proofs.Lexer

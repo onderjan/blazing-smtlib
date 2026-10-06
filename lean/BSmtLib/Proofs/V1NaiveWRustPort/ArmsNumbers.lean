@@ -26,7 +26,7 @@ theorem arm_baseSelection (v : Version) (input : ByteSlice) (start : Nat)
     WP (Lexer.WRustPort.lexBaseSelection (H := Collector) (m := Id) (R := Empty) (E := Unit)
         input start tokenStart h) s coll
       (fun r s' coll' => ArmPost v input (.token p) location start coll held r.1 s'.val coll')
-      (fun _ _ _ => StepFails v input (.token p) location start coll held) := by
+      (fun _ s' coll' => StepFails v input (.token p) location start coll held s'.val coll') := by
   obtain ⟨hps, hm, hcont⟩ := token_agrees hpre.agrees hstate
   have hloc := hpre.loc
   obtain ⟨mode, pstart, pcontent⟩ := p
@@ -69,8 +69,8 @@ theorem arm_baseSelection (v : Version) (input : ByteSlice) (start : Nat)
       obtain ⟨f, hf⟩ := herr
       unfold Lexer.WRustPort.errorAt Lexer.WRustPort.errorWith
       wp_walk
-      show outcome v _ _ = none
-      rw [feedFrom_advance_error v input hstart hf, outcome_none_right]
+      refine stepFails_here ?_ hpre.holds hpre.fixed.1 hpre.fixed.2
+      rw [feedFrom_advance_error v input hstart hf]
 
 theorem stored_last_append (a b : ByteArray) (hb : b.size ≠ 0) :
     lastOf (a ++ b) = lastOf b := by
@@ -129,7 +129,7 @@ theorem fractionFrom_wp (v : Version) (input : ByteSlice) (j : Nat) (hj : j ≤ 
     WP (Lexer.WRustPort.lexFractionFrom (H := Collector) (m := Id) (R := Empty) (E := Unit)
         input j tokenStart base h) s coll
       (fun r s' coll' => ArmPost v input st0 loc0 start0 coll held r.1 s'.val coll')
-      (fun _ _ _ => StepFails v input st0 loc0 start0 coll held) := by
+      (fun _ s' coll' => StepFails v input st0 loc0 start0 coll held s'.val coll') := by
   have hJ : Lexer.Slice.runEnd input j Lexer.RUN_DIGIT = runEnd input isDigit j :=
     runEnd_eq endsRun_digit _ _
   have hle := le_runEnd input isDigit j
@@ -182,8 +182,8 @@ theorem fractionFrom_wp (v : Version) (input : ByteSlice) (j : Nat) (hj : j ≤ 
         (by rw [hfc']) hEs'
       unfold Lexer.WRustPort.error Lexer.WRustPort.errorWith
       wp_walk
-      show outcome v _ _ = none
-      rw [hA', feedFrom_advance_error v input hEs hf, outcome_none_right]
+      refine stepFails_here ?_ hholds hfix.1 hfix.2
+      rw [hA', feedFrom_advance_error v input hEs hf]
     · intro hgood
       have hfc' : fractionChecks (contentBytes s.val.tokenContent ++
           bytesOf input j (Lexer.Slice.runEnd input j Lexer.RUN_DIGIT)) = true := by
@@ -209,9 +209,9 @@ theorem fractionFrom_wp (v : Version) (input : ByteSlice) (j : Nat) (hj : j ≤ 
         rw [hnd'] at hC
         unfold Lexer.WRustPort.errorAt Lexer.WRustPort.errorWith
         wp_walk
-        show outcome v _ _ = none
+        refine stepFails_here ?_ hholds hfix.1 hfix.2
         rw [hC]
-        simp only [Bool.false_eq_true, ↓reduceIte, outcome_none_right]
+        simp only [Bool.false_eq_true, ↓reduceIte]
       · intro hd
         have hd' : V1Naive.isDelimiter
             input[Lexer.Slice.runEnd input j Lexer.RUN_DIGIT] = true := by
@@ -245,6 +245,7 @@ theorem fractionFrom_wp (v : Version) (input : ByteSlice) (j : Nat) (hj : j ≤ 
               Lexer.RUN_DIGIT - j)) (Lexer.Slice.runEnd input j Lexer.RUN_DIGIT))
           rw [hext, hstep]
         · intro hn e s' coll'
+          apply stepFails_of_none
           show outcome v _ _ = none
           rw [hC, outcome_prep]
           have hstep := stepLocation_eq' (pos := Lexer.Slice.runEnd input j Lexer.RUN_DIGIT)
@@ -325,7 +326,7 @@ theorem arm_numeralOrDecimal (v : Version) (input : ByteSlice) (start : Nat)
     WP (Lexer.WRustPort.lexNumeralOrDecimal (H := Collector) (m := Id) (R := Empty) (E := Unit)
         input start tokenStart base h) s coll
       (fun r s' coll' => ArmPost v input (.token p) location start coll held r.1 s'.val coll')
-      (fun _ _ _ => StepFails v input (.token p) location start coll held) := by
+      (fun _ s' coll' => StepFails v input (.token p) location start coll held s'.val coll') := by
   obtain ⟨hps, hm, hcont, hsz⟩ := token_agrees hpre.agrees hstate
   have hJ : Lexer.Slice.runEnd input start Lexer.RUN_DIGIT = runEnd input isDigit start :=
     runEnd_eq endsRun_digit _ _
@@ -365,8 +366,8 @@ theorem arm_numeralOrDecimal (v : Version) (input : ByteSlice) (start : Nat)
     obtain ⟨f, hf⟩ := hf
     unfold Lexer.WRustPort.errorAt Lexer.WRustPort.errorWith
     wp_walk
-    show outcome v _ _ = none
-    rw [feedFrom_advance_error v input hstart hf, outcome_none_right]
+    refine stepFails_here ?_ hpre.holds hpre.fixed.1 hpre.fixed.2
+    rw [feedFrom_advance_error v input hstart hf]
   intro hz
   rw [← isZero_contentBytes hfits] at hz
   have hA : feedFrom v input (.token p) location start =
@@ -479,9 +480,9 @@ theorem arm_numeralOrDecimal (v : Version) (input : ByteSlice) (start : Nat)
         rw [hnd'] at hC
         unfold Lexer.WRustPort.errorAt Lexer.WRustPort.errorWith
         wp_walk
-        show outcome v _ _ = none
+        refine stepFails_here ?_ hpre.holds hpre.fixed.1 hpre.fixed.2
         rw [hC]
-        simp only [Bool.false_eq_true, ↓reduceIte, outcome_none_right]
+        simp only [Bool.false_eq_true, ↓reduceIte]
       · intro hd
         have hd' : V1Naive.isDelimiter next = true := by
           rw [← isDelimiter_eq]; simpa using hd
@@ -513,6 +514,7 @@ theorem arm_numeralOrDecimal (v : Version) (input : ByteSlice) (start : Nat)
               Lexer.RUN_DIGIT - start)) (Lexer.Slice.runEnd input start Lexer.RUN_DIGIT))
           rw [hext, hstep, hts, ← hps, ← hcont]
         · intro hn e s' coll'
+          apply stepFails_of_none
           show outcome v _ _ = none
           rw [hC, outcome_prep]
           have hstep := stepLocation_eq (pos := Lexer.Slice.runEnd input start

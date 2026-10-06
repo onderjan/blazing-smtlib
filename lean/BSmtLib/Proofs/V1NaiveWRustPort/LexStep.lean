@@ -44,7 +44,7 @@ theorem lexStep_wp (v : Version) (input : ByteSlice) (start : Nat)
     WP (Lexer.WRustPort.lexStep (H := Collector) (m := Id) (R := Empty) (E := Unit) input start
         hstart state tokenStart base hpending) s coll
       (fun r s' coll' => StepPost v input st location start coll held r.1 s'.val coll')
-      (fun _ _ _ => StepFails v input st location start coll held) := by
+      (fun _ s' coll' => StepFails v input st location start coll held s'.val coll') := by
   have hts' := hts.symm
   cases state with
   | normal =>

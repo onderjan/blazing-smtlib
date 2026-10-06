@@ -13,9 +13,10 @@ end of the input (`lexEofStep_run`) finishes as the naive lexer's (`lexEofInner_
 The slices are fed one at a time by the Rust port's step run (`stepSlice`), which gives the
 lexer back also when a call fails; the public call is the step run without it
 (`lexSlice_eq_stepSlice`). After any slices, before the end of the input, the Rust port has
-handed over what the naive lexer's pure run over their bytes finishes, and has failed exactly
-when that run fails or the consumer fails on a lexeme (`fedSteps_eq`, from the start
-`fedSteps_new`); the whole input follows from it with the end of the input (`handed_eq_run`).
+handed over what the naive lexer's pure run over their bytes finishes, also up to an error, and
+has failed exactly when that run fails or the consumer fails on a lexeme (`fedSteps_eq`, from
+the start `fedSteps_new`); so the adapter's `fed` gives what the pure run gives (`fed_eq_run`).
+The whole input follows from it with the end of the input (`handed_eq_run`).
 -/
 
 namespace BSmtLib.Proofs.Lexer.V1NaiveWRustPort
@@ -42,6 +43,20 @@ theorem runI_pure {α : Type} (a : α) (c : WCore) (coll : Collector) :
 theorem runI_modifyThe (f : WCore → WCore) (c : WCore) (coll : Collector) :
     runI (modifyThe Lexer.WRustPort.LexerCore f) c coll = (((), f c), coll) := rfl
 
+/-- What a call that lexes a slice gives, with the result `res`, the lexer state `c'` and the
+consumer `coll'`, as the naive lexer's run over the slice predicts with `o`: it goes on in the
+predicted state with what the consumer records, or it fails, with what the consumer records of
+the lexemes finished before the failure, or the consumer fails on a lexeme. -/
+def SliceCall {ε α : Type} (v : Version) (cont : α)
+    (o : Option (Except (List Spec.Lexer.Handed) (St × Location × List Spec.Lexer.Handed)))
+    (res : Except ε α) (c' : WCore) (coll' : Collector) : Prop :=
+  match o with
+  | some (.ok (st', location', hs)) =>
+    res = .ok cont ∧ Fixed v c' ∧ StAgrees v st' c' ∧ EofLoc c' location' ∧
+      coll'.handed = hs
+  | some (.error hs) => (∃ e, res = .error e) ∧ c'.recovers = false ∧ coll'.handed = hs
+  | none => ∃ e, res = .error e
+
 /-- The loop over the stops of the consumer in a slice, from its start, hands over what the
 naive lexer's run over the slice finishes. -/
 theorem sliceFrom_run (v : Version) (input : ByteSlice) (initialOffset floor : Nat)
@@ -50,11 +65,8 @@ theorem sliceFrom_run (v : Version) (input : ByteSlice) (initialOffset floor : N
     match (Lexer.WRustPort.lexSliceFrom (H := Collector) (m := Id) (R := Empty) (E := Unit) input
       initialOffset floor hfloor 0 (.ok .continue) core).run coll with
     | ((res, c'), coll') =>
-      match outcome v (some coll.handed) (feedFrom v input st location 0) with
-      | some (st', location', hs) =>
-        res = .ok .continue ∧ Fixed v c' ∧ StAgrees v st' c' ∧ EofLoc c' location' ∧
-          coll'.handed = hs
-      | none => ∃ e, res = .error e := by
+      SliceCall v .continue (outcome v (some coll.handed) (feedFrom v input st location 0))
+        res c' coll' := by
   rw [Lexer.WRustPort.lexSliceFrom, run_bindS]
   have h := sliceRun_ok v input _ 0 (Nat.lt_succ_self _) core coll st location [] hpre
   unfold SliceOut at h
@@ -62,6 +74,7 @@ theorem sliceFrom_run (v : Version) (input : ByteSlice) (initialOffset floor : N
   generalize (Lexer.WRustPort.lexSliceRun (H := Collector) (m := Id) (R := Empty) (E := Unit)
     input 0 (.ok .continue) core).run coll = r at h ⊢
   obtain ⟨⟨exit, c'⟩, coll'⟩ := r
+  unfold SliceCall
   cases ho : outcome v (some coll.handed) (feedFrom v input st location 0) with
   | none =>
     rw [ho] at h
@@ -69,13 +82,21 @@ theorem sliceFrom_run (v : Version) (input : ByteSlice) (initialOffset floor : N
     simp only at hg
     subst hg
     exact ⟨g, rfl⟩
-  | some e =>
-    obtain ⟨st', location', hs⟩ := e
-    rw [ho] at h
-    obtain ⟨hex, hfix, hagree, hloc, hhs⟩ := h
-    simp only at hex
-    subst hex
-    exact ⟨rfl, hfix, hagree, hloc, hhs⟩
+  | some r =>
+    cases r with
+    | ok e =>
+      obtain ⟨st', location', hs⟩ := e
+      rw [ho] at h
+      obtain ⟨hex, hfix, hagree, hloc, hhs⟩ := h
+      simp only at hex
+      subst hex
+      exact ⟨rfl, hfix, hagree, hloc, hhs⟩
+    | error hs =>
+      rw [ho] at h
+      obtain ⟨⟨g, hg⟩, hrec, hhs⟩ := h
+      simp only at hg
+      subst hg
+      exact ⟨⟨g, rfl⟩, hrec, hhs⟩
 
 /-- Lexing a slice from the lexer state that is the naive lexer's pure state at `location`
 hands over what the naive lexer's run over the slice finishes. -/
@@ -85,11 +106,8 @@ theorem sliceInner_run (v : Version) (slice : ByteSlice) (c : WCore) (coll : Col
     match runI (Lexer.WRustPort.lexSliceInner (H := Collector) (m := Id) (R := Empty)
       (E := Unit) slice) c coll with
     | ((res, c'), coll') =>
-      match outcome v (some coll.handed) (feedFrom v slice st location 0) with
-      | some (st', location', hs) =>
-        res = .ok .continue ∧ Fixed v c' ∧ StAgrees v st' c' ∧ EofLoc c' location' ∧
-          coll'.handed = hs
-      | none => ∃ e, res = .error e := by
+      SliceCall v .continue (outcome v (some coll.handed) (feedFrom v slice st location 0))
+        res c' coll' := by
   unfold Lexer.WRustPort.lexSliceInner
   refine sliceFrom_run v slice _ _ _ _ coll st location ⟨⟨hfix.1, hfix.2, hfix.3, hfix.4⟩, rfl,
     by cases st <;> exact hagree, ?_, holds_of_len_zero rfl, rfl⟩
@@ -104,11 +122,8 @@ theorem lexSliceStep_run (v : Version) (abandon recover : Location → StateT Co
     match runI (Lexer.WRustPort.lexSliceStep (H := Collector) (m := Id) (R := Empty) (E := Unit)
       abandon recover slice) c coll with
     | ((res, c'), coll') =>
-      match outcome v (some coll.handed) (feedFrom v slice st location 0) with
-      | some (st', location', hs) =>
-        res = .ok .continue ∧ Fixed v c' ∧ StAgrees v st' c' ∧ EofLoc c' location' ∧
-          coll'.handed = hs
-      | none => ∃ e, res = .error e := by
+      SliceCall v .continue (outcome v (some coll.handed) (feedFrom v slice st location 0))
+        res c' coll' := by
   unfold Lexer.WRustPort.lexSliceStep Lexer.WRustPort.executeStep
   simp only [runI_bind, runI_getThe, hfix.discard, hfix.recoveryState, Bool.false_eq_true,
     ↓reduceIte]
@@ -116,18 +131,28 @@ theorem lexSliceStep_run (v : Version) (abandon recover : Location → StateT Co
   generalize runI (Lexer.WRustPort.lexSliceInner (H := Collector) (m := Id) (R := Empty)
     (E := Unit) slice) c coll = r at hs ⊢
   obtain ⟨⟨res, c'⟩, coll'⟩ := r
+  unfold SliceCall at hs ⊢
   cases ho : outcome v (some coll.handed) (feedFrom v slice st location 0) with
   | none =>
     rw [ho] at hs
     obtain ⟨e, he⟩ := hs
     subst he
     exact ⟨_, rfl⟩
-  | some e =>
-    obtain ⟨st', location', hs'⟩ := e
-    rw [ho] at hs
-    obtain ⟨hres, hfix', hagree', hloc', hhs⟩ := hs
-    subst hres
-    exact ⟨rfl, hfix', hagree', hloc', hhs⟩
+  | some r =>
+    cases r with
+    | ok e =>
+      obtain ⟨st', location', hs'⟩ := e
+      rw [ho] at hs
+      obtain ⟨hres, hfix', hagree', hloc', hhs⟩ := hs
+      subst hres
+      exact ⟨rfl, hfix', hagree', hloc', hhs⟩
+    | error hs' =>
+      rw [ho] at hs
+      obtain ⟨⟨e, he⟩, hrec, hhs⟩ := hs
+      subst he
+      simp only [runI_bind, runI_pure, Lexer.WRustPort.fail, runI_getThe, hrec, Bool.not_false,
+        ↓reduceIte]
+      exact ⟨⟨_, rfl⟩, trivial, hhs⟩
 
 /-- The end of the input, from the lexer state that is the naive lexer's pure state at
 `location`, hands over what the naive lexer's end of the input finishes. -/
@@ -205,15 +230,26 @@ def fedSteps : Lexer.WRustPort.Lexer Collector → List Spec.Lexicon.Chars →
     | (.ok (.break finished), _) => finished.value.elim
     | (.error _, l') => (l', true)
 
+
+/-- What the Rust port's step run gives for a slice, as the naive lexer's run over the slice
+predicts with `o`: the lexer goes on in the predicted state, or fails with the consumer as the
+run leaves it, or fails as the consumer fails on a lexeme. -/
+def StepOut (v : Version)
+    (o : Option (Except (List Spec.Lexer.Handed) (St × Location × List Spec.Lexer.Handed)))
+    (r : Except (LexError Unit) (ControlFlow (Located Empty)) × Lexer.WRustPort.Lexer Collector) :
+    Prop :=
+  match o with
+  | some (.ok (st', location', hs)) =>
+    r.1 = .ok .continue ∧ LexAgrees v st' location' r.2 ∧ r.2.handler.handed = hs
+  | some (.error hs) => (∃ e, r.1 = .error e) ∧ r.2.handler.handed = hs
+  | none => ∃ e, r.1 = .error e
+
 /-- A call that lexes a slice, by the step run, lexes it as the naive lexer's run over its
 bytes. -/
 theorem stepSlice_ops (v : Version) (l : Lexer.WRustPort.Lexer Collector) (slice : ByteSlice)
     (st : St) (location : Location) (h : LexAgrees v st location l) :
-    match outcome v (some l.handler.handed) (feedFrom v slice st location 0) with
-    | some (st', location', hs) =>
-      ∃ l', stepSlice l slice = (.ok .continue, l') ∧ LexAgrees v st' location' l' ∧
-        l'.handler.handed = hs
-    | none => ∃ e l', stepSlice l slice = (.error e, l') := by
+    StepOut v (outcome v (some l.handler.handed) (feedFrom v slice st location 0))
+      (stepSlice l slice) := by
   obtain ⟨handler, core⟩ := l
   have hs := lexSliceStep_run v (LexRecovery.abandon Recovery.failFast)
     (LexRecovery.recover Recovery.failFast) slice core handler st location h.1 h.2.1 h.2.2
@@ -224,90 +260,115 @@ theorem stepSlice_ops (v : Version) (l : Lexer.WRustPort.Lexer Collector) (slice
     slice) core).run handler = r at hs ⊢
   obtain ⟨⟨res, c'⟩, coll'⟩ := r
   simp only at hs ⊢
+  unfold SliceCall at hs
+  unfold StepOut
   split at hs
-  · rename_i st' location' hs' heq
-    obtain ⟨hres, hfix', hagree', hloc', hhs⟩ := hs
-    subst hres
-    exact ⟨⟨coll', c'⟩, rfl, ⟨hfix', hagree', hloc'⟩, hhs⟩
-  · rename_i heq
-    obtain ⟨e, he⟩ := hs
-    subst he
-    exact ⟨_, _, rfl⟩
+  · obtain ⟨hres, hfix', hagree', hloc', hhs⟩ := hs
+    exact ⟨hres, ⟨hfix', hagree', hloc'⟩, hhs⟩
+  · exact ⟨hs.1, hs.2.2⟩
+  · exact hs
 
 /-- The run over two pieces of bytes, with the consumer that has recorded the lexemes of the
 first piece. -/
-theorem outcome_feedBytes_append (v : Version) (before : List Spec.Lexer.Handed) (st : St)
+theorem outcome_lexBytes_append (v : Version) (before : List Spec.Lexer.Handed) (st : St)
     (location : Location) (a b : List UInt8) :
-    outcome v (some before) (feedBytes v st location (a ++ b)) =
-      (outcome v (some before) (feedBytes v st location a)).bind fun (st', location', hs) =>
-        outcome v (some hs) (feedBytes v st' location' b) := by
-  rw [feedBytes_append]
-  cases feedBytes v st location a with
-  | none => rfl
-  | some e =>
-    obtain ⟨st', location', ls⟩ := e
+    outcome v (some before) (lexBytes v st location (a ++ b)) =
+      (outcome v (some before) (lexBytes v st location a)).bind fun r =>
+        match r with
+        | .ok (st', location', hs) => outcome v (some hs) (lexBytes v st' location' b)
+        | .error hs => some (.error hs) := by
+  rw [lexBytes_append]
+  cases lexBytes v st location a with
+  | error ls =>
     simp only [outcome, Option.bind_some]
+    cases handedAll v ls <;> rfl
+  | ok e =>
+    obtain ⟨st', location', ls⟩ := e
+    simp only
+    rw [show withBefore ls (lexBytes v st' location' b) =
+      Prep ls (lexBytes v st' location' b) from rfl]
     cases hls : handedAll v ls with
     | none =>
-      cases feedBytes v st' location' b with
-      | none => rfl
-      | some e' =>
-        obtain ⟨st'', location'', ls'⟩ := e'
-        simp [handedAll_append, hls]
+      have : outcome v (some before) (Prep ls (lexBytes v st' location' b)) = none := by
+        rw [show some before = pending v ⟨before⟩ [] from (pending_nil v ⟨before⟩).symm,
+          outcome_prep, List.nil_append, pending_none hls]
+        rfl
+      rw [this]
+      simp [outcome, hls]
     | some hs =>
-      simp only [Option.map_some, Option.bind_some]
-      cases feedBytes v st' location' b with
-      | none => rfl
-      | some e' =>
-        obtain ⟨st'', location'', ls'⟩ := e'
-        simp only [Option.map_some, Option.bind_some, handedAll_append, hls]
-        cases handedAll v ls' <;> simp [List.append_assoc]
+      rw [show some before = pending v ⟨before⟩ [] from (pending_nil v ⟨before⟩).symm,
+        outcome_prep, List.nil_append, pending_some hls]
+      simp [outcome, hls, pending_nil]
 
 /-- The Rust port fed the slices by its step run, from a lexer state that is the naive lexer's
 pure state at `location`, has handed over what the naive lexer's run over the bytes of the
 slices finishes, and is at the naive lexer's pure state after them; it has failed exactly when
-that run fails or the consumer fails on a lexeme. -/
+that run fails or the consumer fails on a lexeme, and when the run fails, it has handed over
+what the run finishes before the failure. -/
 theorem fedSteps_eq {v : Version} (slices : List Spec.Lexicon.Chars) :
     ∀ {st : St} {location : Location} (l : Lexer.WRustPort.Lexer Collector),
       LexAgrees v st location l →
-      match outcome v (some l.handler.handed) (feedBytes v st location slices.flatten) with
-      | some (st', location', hs) =>
+      match outcome v (some l.handler.handed) (lexBytes v st location slices.flatten) with
+      | some (.ok (st', location', hs)) =>
         (fedSteps l slices).2 = false ∧ (fedSteps l slices).1.handler.handed = hs ∧
           LexAgrees v st' location' (fedSteps l slices).1
+      | some (.error hs) =>
+        (fedSteps l slices).2 = true ∧ (fedSteps l slices).1.handler.handed = hs
       | none => (fedSteps l slices).2 = true := by
   induction slices with
   | nil =>
     intro st location l h
-    simp only [List.flatten_nil, feedBytes, outcome, handedAll, List.mapM_nil, Option.bind_some]
+    simp only [List.flatten_nil, lexBytes, outcome, handedAll, List.mapM_nil, Option.bind_some,
+      Option.pure_def, Option.map_some]
     exact ⟨rfl, (List.append_nil _).symm, h⟩
   | cons slice slices ih =>
     intro st location l h
     have hf := stepSlice_ops v l slice.toByteArray.toByteSlice st location h
     rw [feedFrom_toByteSlice v slice _ 0 rfl, List.drop_zero] at hf
-    rw [List.flatten_cons, outcome_feedBytes_append]
-    cases hx : outcome v (some l.handler.handed) (feedBytes v st location slice) with
+    rw [List.flatten_cons, outcome_lexBytes_append]
+    unfold StepOut at hf
+    cases hx : outcome v (some l.handler.handed) (lexBytes v st location slice) with
     | none =>
       rw [hx] at hf
-      obtain ⟨e, l', he⟩ := hf
-      simp only [Option.bind_none, fedSteps, he]
-    | some e =>
-      obtain ⟨st', location', hs⟩ := e
-      rw [hx] at hf
-      obtain ⟨l', he, hag, hhs⟩ := hf
-      simp only [Option.bind_some, fedSteps, he]
-      rw [← hhs]
-      exact ih l' hag
+      obtain ⟨e, he⟩ := hf
+      simp only [Option.bind_none, fedSteps]
+      split
+      · rename_i heq; rw [heq] at he; cases he
+      · rename_i heq; rw [heq] at he; cases he
+      · rfl
+    | some r =>
+      cases r with
+      | error hs =>
+        rw [hx] at hf
+        obtain ⟨⟨e, he⟩, hhs⟩ := hf
+        simp only [Option.bind_some, fedSteps]
+        split
+        · rename_i heq; rw [heq] at he; cases he
+        · rename_i heq; rw [heq] at he; cases he
+        · rename_i heq; rw [heq] at hhs; exact ⟨rfl, hhs⟩
+      | ok e =>
+        obtain ⟨st', location', hs⟩ := e
+        rw [hx] at hf
+        obtain ⟨hres, hag, hhs⟩ := hf
+        simp only [Option.bind_some, fedSteps]
+        generalize hr : stepSlice l slice.toByteArray.toByteSlice = r at hres hag hhs
+        obtain ⟨res, l'⟩ := r
+        simp only at hres hag hhs
+        subst hres
+        simp only
+        rw [← hhs]
+        exact ih l' hag
 
 /-- The Rust port fed the slices by its step run from its start, before the end of the input,
-has handed over what the naive lexer's pure run over the bytes of the slices finishes, as the
-adapter's consumer records it; it has failed exactly when that run fails or the consumer fails
-on a lexeme. -/
+has handed over what the naive lexer's pure run over the bytes of the slices finishes, also up to
+an error, as the adapter's consumer records it, and has failed exactly when that run fails or the
+consumer fails on a lexeme. -/
 theorem fedSteps_new (version : Spec.Lexicon.Version) (slices : List Spec.Lexicon.Chars) :
-    match (feedBytes (toVersion version) .idle Location.initial slices.flatten).bind
-        (fun (_, _, ls) => handedAll (toVersion version) ls) with
-    | some hs =>
+    match fedOf (toVersion version)
+        (lexBytes (toVersion version) .idle Location.initial slices.flatten) with
+    | some (hs, failed) =>
       (fedSteps (Lexer.WRustPort.Lexer.new { handed := [] } (toVersion version)) slices).2 =
-          false ∧
+          failed ∧
         (fedSteps (Lexer.WRustPort.Lexer.new { handed := [] } (toVersion version))
           slices).1.handler.handed = hs
     | none =>
@@ -318,17 +379,55 @@ theorem fedSteps_new (version : Spec.Lexicon.Version) (slices : List Spec.Lexico
     ⟨⟨rfl, rfl, rfl, rfl⟩, rfl, rfl, rfl, rfl⟩
   revert h
   generalize fedSteps (Lexer.WRustPort.Lexer.new { handed := [] } (toVersion version)) slices = r
-  cases feedBytes (toVersion version) .idle Location.initial slices.flatten with
-  | none => intro h; exact h
-  | some e =>
+  cases lexBytes (toVersion version) .idle Location.initial slices.flatten with
+  | ok e =>
     obtain ⟨st', location', ls⟩ := e
-    simp only [outcome, Option.bind_some]
+    simp only [outcome, fedOf, Option.bind_some]
     cases handedAll (toVersion version) ls with
     | none => intro h; exact h
     | some hs =>
       intro h
       exact ⟨h.1, h.2.1⟩
+  | error ls =>
+    simp only [outcome, fedOf, Option.bind_some]
+    cases handedAll (toVersion version) ls with
+    | none => intro h; exact h
+    | some hs =>
+      intro h
+      exact ⟨h.1, h.2⟩
 
+/-- The adapter's feeding of slices by the step of `lexSlice` is the step run's. -/
+theorem feedSlices_eq_fedSteps (l : Lexer.WRustPort.Lexer Collector)
+    (slices : List Spec.Lexicon.Chars) :
+    feedSlices Adapter.WRustPort.ops l slices =
+      ((fedSteps l slices).1.handler, (fedSteps l slices).2) := by
+  induction slices generalizing l with
+  | nil => rfl
+  | cons slice slices ih =>
+    have e : Adapter.WRustPort.ops.lexSliceStep l slice.toByteArray.toByteSlice =
+        stepSlice l slice.toByteArray.toByteSlice := rfl
+    match hr : stepSlice l slice.toByteArray.toByteSlice with
+    | (.error _, l') =>
+      simp only [feedSlices, e, fedSteps, hr]
+      rfl
+    | (.ok .continue, l') =>
+      simp only [feedSlices, e, fedSteps, hr]
+      exact ih l'
+    | (.ok (.break finished), _) => exact finished.value.elim
+
+/-- `fed WRustPort.ops` gives what the naive lexer's pure run of the bytes of the slices gives,
+also up to an error, if the consumer takes its lexemes. -/
+theorem fed_eq_run (version : Spec.Lexicon.Version) (slices : List Spec.Lexicon.Chars)
+    (hs : List Spec.Lexer.Handed) (failed : Bool)
+    (h : fedOf (toVersion version) (lexBytes (toVersion version) .idle Location.initial
+      slices.flatten) = some (hs, failed)) :
+    fed Adapter.WRustPort.ops version slices = { handed := hs, failed } := by
+  have hn := fedSteps_new version slices
+  rw [h] at hn
+  simp only [fed, show Adapter.WRustPort.ops.new = Lexer.WRustPort.Lexer.new from rfl,
+    feedSlices_eq_fedSteps]
+  rw [hn.1]
+  exact congrArg (fun hs => ({ handed := hs, failed } : Spec.Lexer.Fed)) hn.2
 /-! ## The end of the input and the whole input -/
 
 /-- A call of the adapter that lexes the end of the input hands over what the naive lexer's end
@@ -379,6 +478,7 @@ theorem feed_eq_fedSteps (l : Lexer.WRustPort.Lexer Collector) (slices : List Sp
       exact ih l'
     | (.ok (.break finished), _) => exact finished.value.elim
 
+
 /-- The Rust port, run by the adapter, gives what the naive lexer's pure run of the whole input
 gives, as the consumer records it, however the input is cut into slices. -/
 theorem handed_eq_run (version : Spec.Lexicon.Version) (slices : List Spec.Lexicon.Chars) :
@@ -388,18 +488,22 @@ theorem handed_eq_run (version : Spec.Lexicon.Version) (slices : List Spec.Lexic
     slices (Lexer.WRustPort.Lexer.new { handed := [] } (toVersion version))
     ⟨⟨rfl, rfl, rfl, rfl⟩, rfl, rfl, rfl, rfl⟩
   rw [handed, show Adapter.WRustPort.ops.new = Lexer.WRustPort.Lexer.new from rfl,
-    feed_eq_fedSteps, V1Naive.run, runFrom]
+    feed_eq_fedSteps, V1Naive.run, runFrom, ← lexBytes_toOption]
   revert h
   generalize fedSteps (Lexer.WRustPort.Lexer.new { handed := [] } (toVersion version)) slices = r
   obtain ⟨l', failed⟩ := r
-  cases hx : feedBytes (toVersion version) .idle Location.initial slices.flatten with
-  | none =>
+  cases hx : lexBytes (toVersion version) .idle Location.initial slices.flatten with
+  | error ls =>
     intro h
-    simp only [outcome, Option.bind_none, Option.bind_some] at h
-    simp only [h, ↓reduceIte, Option.bind_none]
-  | some e =>
+    simp only [outcome, Option.bind_some] at h
+    have hf : failed = true := by
+      cases hls : handedAll (toVersion version) ls with
+      | none => rw [hls] at h; exact h
+      | some hs => rw [hls] at h; exact h.1
+    simp only [hf, ↓reduceIte, Except.toOption, Option.bind_none]
+  | ok e =>
     obtain ⟨st', location', ls⟩ := e
-    simp only [outcome, Option.bind_some]
+    simp only [outcome, Option.bind_some, Except.toOption]
     cases hls : handedAll (toVersion version) ls with
     | none =>
       intro h

@@ -13,9 +13,12 @@ finishes: the naive lexer by `V1Naive.handed_eq_run`, the Rust port by
 
 The Rust port's part is proved slice by slice: after any slices, before the end of the input,
 the Rust port fed them by its step run, which gives the lexer back also when a call fails, has
-handed over what the naive lexer's pure run over their bytes finishes, and has failed exactly
-when that run fails or the consumer fails on a lexeme (`V1NaiveWRustPort.fedSteps_new`). The
-whole input follows from it with the end of the input.
+handed over what the naive lexer's pure run over their bytes finishes, also up to an error, and
+has failed exactly when that run fails or the consumer fails on a lexeme
+(`V1NaiveWRustPort.fedSteps_new`). So the two lexers fed slices by the adapter before the end
+of the input have done the same (`Lexer.V1Naive.fed_eq_fed_wRustPort`), as the naive lexer has
+done what its pure run gives too (`V1Naive.fedOf_fed`). The whole input follows from it with
+the end of the input.
 
 The proof that the Rust port records the naive lexer's pure run compares the Rust port's code,
 run with the adapter's consumer, with the naive lexer's pure run over the bytes it consumes:
@@ -64,5 +67,17 @@ info: 'BSmtLib.Proofs.Lexer.V1NaiveWRustPort.fedSteps_new' depends on axioms: [p
 -/
 #guard_msgs in
 #print axioms V1NaiveWRustPort.fedSteps_new
+
+/-- The naive lexer and the Rust port, fed slices by the adapter before the end of the input,
+hand over the same tokens and fail alike. -/
+theorem V1Naive.fed_eq_fed_wRustPort : fed Adapter.V1Naive.ops = fed Adapter.WRustPort.ops := by
+  funext version slices
+  rw [V1NaiveWRustPort.fed_eq_run version slices _ _ (V1Naive.fedOf_fed version slices)]
+
+/--
+info: 'BSmtLib.Proofs.Lexer.V1Naive.fed_eq_fed_wRustPort' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms V1Naive.fed_eq_fed_wRustPort
 
 end BSmtLib.Proofs.Lexer

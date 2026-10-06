@@ -114,7 +114,7 @@ theorem feedFrom_end {j : Nat} (hj : j < s.size) {q : Pending} {location : Locat
     (h : advance false q location s[j] =
       if isDelimiter s[j] then .tokenBefore l else .error f) :
     feedFrom v s (.token q) location j =
-      if isDelimiter s[j] then Prep [l] (feedFrom v s .idle location j) else none := by
+      if isDelimiter s[j] then Prep [l] (feedFrom v s .idle location j) else .error [] := by
   split
   · rename_i hd
     simp only [hd, ↓reduceIte] at h

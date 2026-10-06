@@ -9,7 +9,9 @@ lexer's run from there finishes: it ends with the batch handed over, in the pure
 end of the slice, or fails if the run fails or the consumer fails on a lexeme. It is proved by
 induction on the bytes left, with `lexStep_wp` for each step; after an error the loop hands
 over the batch as it was left, and the hand-over is done or fails (`flushBatch_noStop`), so the
-loop fails (`sliceRun_error`).
+loop fails (`sliceRun_error`); where the run fails, the consumer and the batch hold the lexemes
+it finishes before the failure (`StepFails`), so the loop fails with the consumer having
+recorded them (`sliceRun_error_handed`).
 -/
 
 namespace BSmtLib.Proofs.Lexer.V1NaiveWRustPort
@@ -23,6 +25,34 @@ variable {floor : Option Nat}
 /-- Running a call of the consumer's monad. -/
 theorem run_bindS {α β : Type} (x : StateT Collector Id α) (k : α → StateT Collector Id β)
     (coll : Collector) : (x >>= k).run coll = (k (x.run coll).1).run (x.run coll).2 := rfl
+
+/-- The loop over a slice after an error hands over the batch it was left with, and fails. -/
+theorem sliceRun_error_handed (v : Version) (input : ByteSlice) (position : Nat)
+    (f : Lexer.Failure Unit) (core : BS floor 0) (coll : Collector) (held : List Lexeme)
+    (hs : List Spec.Lexer.Handed) (hH : Holds core.val.batch held) (hv : core.val.version = v)
+    (hr : core.val.recovers = false) (hp : pending v coll held = some hs) :
+    ((Lexer.WRustPort.lexSliceRun (H := Collector) (m := Id) (R := Empty) (E := Unit)
+      input position (.error f) core).run coll).1.1 = .done (.error f) ∧
+      ((Lexer.WRustPort.lexSliceRun (H := Collector) (m := Id) (R := Empty) (E := Unit)
+        input position (.error f) core).run coll).1.2.val.recovers = false ∧
+      ((Lexer.WRustPort.lexSliceRun (H := Collector) (m := Id) (R := Empty) (E := Unit)
+        input position (.error f) core).run coll).2.handed = hs := by
+  rw [Lexer.WRustPort.lexSliceRun]
+  rw [dite_eq_left_of_eq_true (eq_true (by simp))]
+  rw [run_step]
+  have hw := flushBatch_wp v held core hH coll hr hv
+    (Q := fun _ s' coll' => s'.val.recovers = false ∧ coll'.handed = hs)
+    (QE := fun _ _ _ => False)
+    (fun _ _ hk _ hc => by
+      rw [pending_nil, hp] at hc
+      exact ⟨(key_fields hk).2.2.2.1.trans hr, Option.some.inj hc⟩)
+    (fun hn => by rw [hp] at hn; cases hn)
+  unfold WP at hw
+  generalize runM Lexer.WRustPort.Rust.flushBatch core coll = r at hw ⊢
+  obtain ⟨⟨res, c'⟩, coll'⟩ := r
+  cases res with
+  | ok u => exact ⟨rfl, hw.1, hw.2⟩
+  | error e => exact hw.2.elim
 
 /-- The loop over a slice after an error fails. -/
 theorem sliceRun_error (input : ByteSlice) (position : Nat) (f : Lexer.Failure Unit)
@@ -51,9 +81,11 @@ def SliceOut (v : Version) (input : ByteSlice) (st : St) (location : Location) (
     (coll : Collector) (held : List Lexeme)
     (r : (Lexer.WRustPort.SliceExit Empty Unit floor × BS floor 0) × Collector) : Prop :=
   match outcome v (pending v coll held) (feedFrom v input st location position) with
-  | some (st', location', hs) =>
+  | some (.ok (st', location', hs)) =>
     r.1.1 = .done (.ok .continue) ∧ Fixed v r.1.2.val ∧ StAgrees v st' r.1.2.val ∧
       EofLoc r.1.2.val location' ∧ r.2.handed = hs
+  | some (.error hs) =>
+    (∃ g, r.1.1 = .done (.error g)) ∧ r.1.2.val.recovers = false ∧ r.2.handed = hs
   | none => ∃ g, r.1.1 = .done (.error g)
 
 theorem sliceRun_ok (v : Version) (input : ByteSlice) :
@@ -96,12 +128,21 @@ theorem sliceRun_ok (v : Version) (input : ByteSlice) :
     | error e =>
       obtain ⟨⟨cause, hc⟩, hf⟩ := hw
       unfold SliceOut
-      rw [show outcome v (pending v coll held) (feedFrom v input st location position) = none
-        from hf]
+      unfold StepFails at hf
       obtain ⟨result, location, stopAfter⟩ := e
       simp only at hc
       subst hc
-      exact sliceRun_error input position _ _ coll'
+      split
+      · rename_i heq
+        rw [heq] at hf
+        exact hf.elim
+      · rename_i hs heq
+        rw [heq] at hf
+        obtain ⟨held', hH, hv, hr, hp⟩ := hf
+        obtain ⟨h1, h2, h3⟩ := sliceRun_error_handed v input position _
+          ⟨c'.val, c'.property.weaken⟩ coll' held' hs hH hv hr hp
+        exact ⟨⟨_, h1⟩, h2, h3⟩
+      · exact sliceRun_error input position _ _ coll'
   · rw [dite_eq_left_of_eq_true (eq_true (by simp; omega))]
     rw [run_step]
     have hw := flushBatch_wp v held core hpre.holds coll hpre.fixed.recovers hpre.fixed.version

@@ -32,11 +32,11 @@ theorem afterStep_wp (v : Version) (input : ByteSlice) (start : Nat)
     (arm : M floor low {next : Nat // start ≤ next})
     (harm : WP arm s coll
       (fun r s' coll' => ArmPost v input st location start coll held r.1 s'.val coll')
-      (fun _ _ _ => StepFails v input st location start coll held)) :
+      (fun _ s' coll' => StepFails v input st location start coll held s'.val coll')) :
     WP (arm >>= fun n => Lexer.WRustPort.afterStep (H := Collector) (m := Id) (R := Empty)
         (E := Unit) input start hstart n) s coll
       (fun r s' coll' => StepPost v input st location start coll held r.1 s'.val coll')
-      (fun _ _ _ => StepFails v input st location start coll held) := by
+      (fun _ s' coll' => StepFails v input st location start coll held s'.val coll') := by
   apply wp_bind
   refine wp_mono harm ?_ (fun _ _ _ h => h)
   intro n s' coll' ⟨hpost, hbase, hnormal⟩
@@ -172,7 +172,7 @@ theorem arm_quotedSymbolClosed (v : Version) (input : ByteSlice) (start : Nat)
     WP (Lexer.WRustPort.lexQuotedSymbolClosed (H := Collector) (m := Id) (R := Empty) (E := Unit)
         input start tokenStart base h) s coll
       (fun r s' coll' => ArmPost v input (.token p) location start coll held r.1 s'.val coll')
-      (fun _ _ _ => StepFails v input (.token p) location start coll held) := by
+      (fun _ s' coll' => StepFails v input (.token p) location start coll held s'.val coll') := by
   obtain ⟨hps, hm, hcont⟩ := token_agrees hpre.agrees hstate
   have hC := feedFrom_end v input hstart (q := p) (location := location)
     (advance_end_quotedSymbolClosed hm)
@@ -187,9 +187,9 @@ theorem arm_quotedSymbolClosed (v : Version) (input : ByteSlice) (start : Nat)
     rw [hnd'] at hC
     unfold Lexer.WRustPort.errorAt Lexer.WRustPort.errorWith
     wp_walk
-    show outcome v _ _ = none
+    refine stepFails_here ?_ hpre.holds hpre.fixed.1 hpre.fixed.2
     rw [hC]
-    simp only [Bool.false_eq_true, ↓reduceIte, outcome_none_right]
+    simp only [Bool.false_eq_true, ↓reduceIte]
   · intro hd
     have hd' : V1Naive.isDelimiter input[start] = true := by
       rw [← isDelimiter_eq]; simpa using hd
@@ -211,6 +211,7 @@ theorem arm_quotedSymbolClosed (v : Version) (input : ByteSlice) (start : Nat)
         = location from (stepLocation_eq hloc hpre.base hb hlow (Nat.le_refl _)).trans
           (by rw [Nat.sub_self]; rfl), hts, ← hps, ← hcont]
     · intro hn e s' coll'
+      apply stepFails_of_none
       show outcome v _ _ = none
       rw [hC, outcome_prep]
       rw [show stepLocation s.val low base (Lexer.Slice.TokenEnd.mkAtByte start).position

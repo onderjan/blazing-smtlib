@@ -1,4 +1,4 @@
-import BSmtLib.Proofs.X1BatchInCoreLexer.Handed
+import BSmtLib.Proofs.X1BatchInCoreLexer.Fed
 
 /-!
 # The lexer with the batch kept in its state and the library's lexer lex alike
@@ -32,6 +32,9 @@ have the same consumer, and their states are equal once the base is forgotten.
 - `Lexer.handed_eq_handed_x1BatchInCore`: the spec's view of the whole input, run by the
   adapter: the library's lexer hands over for the slices what the lexer with the batch kept in
   its state hands over for their cut.
+- `Lexer.fed_eq_fed_x1BatchInCore`: the spec's view of the slices before the end of the input,
+  fed by the adapter: the library's lexer has done for the slices what the lexer with the batch
+  kept in its state has done for their cut.
 
 The proof, in parts:
 
@@ -54,8 +57,8 @@ The proof, in parts:
 - `X1BatchInCoreLexer.Run`: the calls on slices one after another (`runSlices`), and what the
   adapter records of them;
 - `X1BatchInCoreLexer.Chunks`: the library's lexer on a slice too large for its positions;
-- `X1BatchInCoreLexer.Handed`: the calls on slices one after another, and what the adapter
-  records.
+- `X1BatchInCoreLexer.Handed` and `X1BatchInCoreLexer.Fed`: the calls on slices one after
+  another, and what the adapter records.
 -/
 
 namespace BSmtLib.Proofs.Lexer
@@ -157,5 +160,16 @@ theorem handed_eq_handed_x1BatchInCore (version : Spec.Lexicon.Version)
         Adapter.handed Adapter.X1BatchInCore.ops version (Chunks.cutAll slices) ∧
       (Chunks.cutAll slices).flatten = slices.flatten :=
   ⟨handed_eq_cutAll version slices, Chunks.flatten_cutAll slices⟩
+
+/-- The library's lexer, fed slices by the adapter before the end of the input, has done for the
+slices what the lexer with the batch kept in its state has done for them with each slice too
+large for the positions of the library's lexer cut into its chunks; the cut slices have the same
+bytes. -/
+theorem fed_eq_fed_x1BatchInCore (version : Spec.Lexicon.Version)
+    (slices : List Spec.Lexicon.Chars) :
+    Adapter.fed Adapter.Lexer.ops version slices =
+        Adapter.fed Adapter.X1BatchInCore.ops version (Chunks.cutAll slices) ∧
+      (Chunks.cutAll slices).flatten = slices.flatten :=
+  ⟨fed_eq_cutAll version slices, Chunks.flatten_cutAll slices⟩
 
 end BSmtLib.Proofs.Lexer

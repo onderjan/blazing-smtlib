@@ -30,7 +30,7 @@ theorem lexNormal_wp (v : Version) (input : ByteSlice) (start : Nat)
     WP (Lexer.WRustPort.lexNormal (H := Collector) (m := Id) (R := Empty) (E := Unit) input start
         hstart) s coll
       (fun r s' coll' => StepPost v input .idle location start coll held r.1 s'.val coll')
-      (fun _ _ _ => StepFails v input .idle location start coll held) := by
+      (fun _ s' coll' => StepFails v input .idle location start coll held s'.val coll') := by
   obtain ⟨hfix, hbase, hagree, hloc, hholds, hbytes⟩ := hpre
   unfold Lexer.WRustPort.lexNormal
   rw [rust_loadLocals]

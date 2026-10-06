@@ -31,7 +31,7 @@ theorem feedFrom_advance_congr {v : Version} {s : ByteSlice} {i : Nat} (hi : i <
     (h : advance false p location s[i] = advance false p' location s[i]) :
     feedFrom v s (.token p) location i = feedFrom v s (.token p') location i := by
   rw [feedFrom_lt hi, feedFrom_lt hi]
-  simp only [byteStep, h]
+  simp only [byteStep, h, failedBefore]
 
 theorem attach_none {s : ByteSlice} {i : Nat}
     (h : ∀ (c : UInt8) (hc : get? s i = some c), (get? s i).attach = some ⟨c, hc⟩ → False) :
@@ -84,7 +84,7 @@ def LegacySpec (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St) (loc0
     WP (Lexer.WRustPort.lexStringLiteralLegacy (H := Collector) (m := Id) (R := Empty)
         (E := Unit) input consumed origin horigin tokenStart base h) s coll
       (fun r s' coll' => ArmPost v input st0 loc0 start0 coll held r.1 s'.val coll')
-      (fun _ _ _ => StepFails v input st0 loc0 start0 coll held)
+      (fun _ s' coll' => StepFails v input st0 loc0 start0 coll held s'.val coll')
 
 set_option maxHeartbeats 4000000 in
 theorem legacySpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St)
@@ -120,7 +120,7 @@ theorem legacySpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
             X.1 →
       WP (jpRun () X) s' coll
         (fun r s' coll' => ArmPost v input st0 loc0 start0 coll held r.1 s'.val coll')
-        (fun _ _ _ => StepFails v input st0 loc0 start0 coll held) := by
+        (fun _ s' coll' => StepFails v input st0 loc0 start0 coll held s'.val coll') := by
     intro X s' locX hfix' hbase' hholds' hbytes' hloc' hlow' hb' hts' hstate' hfitsX hX0 hXs
         hanchor'
     unfold jpRun
@@ -177,7 +177,7 @@ theorem legacySpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
         feedFrom v input st0 loc0 start0 = feedFrom v input (.token qN) locN (index + 1) →
         WP (hidx2 ()) s2 coll
           (fun r s' coll' => ArmPost v input st0 loc0 start0 coll held r.1 s'.val coll')
-          (fun _ _ _ => StepFails v input st0 loc0 start0 coll held) := by
+          (fun _ s' coll' => StepFails v input st0 loc0 start0 coll held s'.val coll') := by
       intro s2 locN qN hf2 hb2 hh2 hy2 hl2 hlow2 hbb2 hts2 hag2 hst2 han2
       unfold hidx2
       exact ih (index + 1) (by omega) _ s2 locN qN hf2 hb2 hh2 hy2 hl2 hlow2 hbb2 hts2 hv hag2
@@ -317,8 +317,8 @@ theorem legacySpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
       obtain ⟨f, hf⟩ := hf
       unfold Lexer.WRustPort.errorAt Lexer.WRustPort.errorWith
       wp_walk
-      show outcome v _ _ = none
-      rw [hA', feedFrom_advance_error v input hIs hf, outcome_none_right]
+      refine stepFails_here ?_ hholds' hfix'.1 hfix'.2
+      rw [hA', feedFrom_advance_error v input hIs hf]
   -- the first byte, in the state the string is in
   apply wp_bind; apply wp_getCore
   split
@@ -338,9 +338,9 @@ theorem legacySpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
       rw [hnd'] at hC
       unfold Lexer.WRustPort.errorAt Lexer.WRustPort.errorWith
       wp_walk
-      show outcome v _ _ = none
+      refine stepFails_here ?_ hholds hfix.1 hfix.2
       rw [hC]
-      simp only [Bool.false_eq_true, ↓reduceIte, outcome_none_right]
+      simp only [Bool.false_eq_true, ↓reduceIte]
     · intro hd
       have hd' : V1Naive.isDelimiter first = true := by
         rw [← isDelimiter_eq]; simpa using hd
@@ -364,6 +364,7 @@ theorem legacySpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
           stepLocation s.val low base consumed⟩] _
         rw [hstep, Nat.sub_self, afterColumns_zero, hts, ← hps, ← hcont]
       · intro hn e s' coll'
+        apply stepFails_of_none
         show outcome v _ _ = none
         rw [hC, outcome_prep]
         have hstep := stepLocation_eq' (pos := consumed) hloc (by rw [hbase0]; exact h0) hb
@@ -462,7 +463,7 @@ def StringSpec (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St) (loc0
     WP (Lexer.WRustPort.lexStringLiteralFrom (H := Collector) (m := Id) (R := Empty)
         (E := Unit) input consumed origin horigin tokenStart base h) s coll
       (fun r s' coll' => ArmPost v input st0 loc0 start0 coll held r.1 s'.val coll')
-      (fun _ _ _ => StepFails v input st0 loc0 start0 coll held)
+      (fun _ s' coll' => StepFails v input st0 loc0 start0 coll held s'.val coll')
 
 set_option maxHeartbeats 4000000 in
 theorem stringSpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St)
@@ -497,7 +498,7 @@ theorem stringSpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
         feedFrom v input (.token ⟨.string, tokenStart, contentBytes s'.val.tokenContent⟩) locX X.1 →
       WP (jpRun () X) s' coll
         (fun r s' coll' => ArmPost v input st0 loc0 start0 coll held r.1 s'.val coll')
-        (fun _ _ _ => StepFails v input st0 loc0 start0 coll held) := by
+        (fun _ s' coll' => StepFails v input st0 loc0 start0 coll held s'.val coll') := by
     intro X s' locX hfix' hbase' hholds' hbytes' hloc' hlow' hb' hts' hstate' hfitsX hX0 hXs
         hanchor'
     unfold jpRun
@@ -597,8 +598,8 @@ theorem stringSpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
         obtain ⟨f, hf⟩ := hf
         unfold Lexer.WRustPort.errorAt Lexer.WRustPort.errorWith
         wp_walk
-        show outcome v _ _ = none
-        rw [hA', feedFrom_advance_error v input hIs hf, outcome_none_right]
+        refine stepFails_here ?_ hholds' hfix'.1 hfix'.2
+        rw [hA', feedFrom_advance_error v input hIs hf]
     · -- the run reaches the end of the slice: the string is left in progress
       rename_i hnone
       have hge := Lexer.Slice.size_le_of_get?_none hnone
@@ -640,9 +641,9 @@ theorem stringSpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
         rw [hnd'] at hC
         unfold Lexer.WRustPort.errorAt Lexer.WRustPort.errorWith
         wp_walk
-        show outcome v _ _ = none
+        refine stepFails_here ?_ hholds hfix.1 hfix.2
         rw [hC]
-        simp only [Bool.false_eq_true, ↓reduceIte, outcome_none_right]
+        simp only [Bool.false_eq_true, ↓reduceIte]
       · intro hd
         have hd' : V1Naive.isDelimiter first = true := by
           rw [← isDelimiter_eq]; simpa using hd
@@ -666,6 +667,7 @@ theorem stringSpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
             stepLocation s.val low base consumed⟩] _
           rw [hstep, Nat.sub_self, afterColumns_zero, hts, ← hps, ← hcont]
         · intro hn e s' coll'
+          apply stepFails_of_none
           show outcome v _ _ = none
           rw [hC, outcome_prep]
           have hstep := stepLocation_eq' (pos := consumed) hloc (by rw [hbase0]; exact h0) hb
@@ -726,7 +728,7 @@ theorem arm_stringLiteral (v : Version) (input : ByteSlice) (start : Nat)
     WP (Lexer.WRustPort.lexStringLiteral (H := Collector) (m := Id) (R := Empty) (E := Unit)
         input start tokenStart base h) s coll
       (fun r s' coll' => ArmPost v input (.token p) location start coll held r.1 s'.val coll')
-      (fun _ _ _ => StepFails v input (.token p) location start coll held) := by
+      (fun _ s' coll' => StepFails v input (.token p) location start coll held s'.val coll') := by
   unfold Lexer.WRustPort.lexStringLiteral
   apply wp_bind; apply wp_getCore
   apply wp_ite

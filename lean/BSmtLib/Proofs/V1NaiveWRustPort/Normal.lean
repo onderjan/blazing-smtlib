@@ -72,6 +72,7 @@ local macro "borrow_push" cat:term:max lo:term:max hi:term:max : tactic => `(tac
     try rfl
   · intro hn e s' coll'
     have hn' := (congrArg (fun l => pending v coll (held ++ [l])) hlex).symm.trans hn
+    apply stepFails_of_none
     show outcome v _ _ = none
     rw [hC, outcome_prep]
     exact (congrArg (fun p => outcome v p _) hn').trans (outcome_none_left v _)))
@@ -112,9 +113,12 @@ theorem StepFails.trans {v : Version} {input : ByteSlice} {st st1 : St}
     {held held1 : List Lexeme}
     (h1 : outcome v (pending v coll held) (feedFrom v input st location start) =
       outcome v (pending v coll1 held1) (feedFrom v input st1 location1 start1))
-    (h2 : StepFails v input st1 location1 start1 coll1 held1) :
-    StepFails v input st location start coll held :=
-  h1.trans h2
+    {c : WCore} {coll' : Collector}
+    (h2 : StepFails v input st1 location1 start1 coll1 held1 c coll') :
+    StepFails v input st location start coll held c coll' := by
+  unfold StepFails at h2 ⊢
+  rw [h1]
+  exact h2
 
 /-- A token on the line of the location of its start, with no line feed in it. -/
 theorem onLine_eq {c : WCore} {offset base i j : Nat} {location : Location}
@@ -169,7 +173,8 @@ theorem start_parenOpen (v : Version) (location : Location) :
       .token ⟨.parenOpen, ByteArray.empty.push 40, location, location.afterByte 40⟩ := rfl
 
 theorem outcome_pending_congr {v : Version} {c1 c2 : Collector} {h1 h2 : List Lexeme}
-    (h : pending v c1 h1 = pending v c2 h2) (e : Option (St × Location × List Lexeme)) :
+    (h : pending v c1 h1 = pending v c2 h2)
+    (e : Except (List Lexeme) (St × Location × List Lexeme)) :
     outcome v (pending v c1 h1) e = outcome v (pending v c2 h2) e := by
   rw [h]
 
@@ -179,12 +184,12 @@ theorem wp_recurse {α : Type} {x : M floor low α} {f : α → Nat} {v : Versio
     {coll coll1 : Collector} {held held1 : List Lexeme} {s : BS floor low}
     (h : WP x s coll1
       (fun r s' coll' => StepPost v input st1 location1 start1 coll1 held1 (f r) s'.val coll')
-      (fun _ _ _ => StepFails v input st1 location1 start1 coll1 held1))
+      (fun _ s' coll' => StepFails v input st1 location1 start1 coll1 held1 s'.val coll'))
     (heq : outcome v (pending v coll held) (feedFrom v input st location start) =
       outcome v (pending v coll1 held1) (feedFrom v input st1 location1 start1)) :
     WP x s coll1
       (fun r s' coll' => StepPost v input st location start coll held (f r) s'.val coll')
-      (fun _ _ _ => StepFails v input st location start coll held) :=
+      (fun _ s' coll' => StepFails v input st location start coll held s'.val coll') :=
   wp_mono h (fun _ _ _ hp => StepPost.trans heq hp) (fun _ _ _ hf => StepFails.trans heq hf)
 
 /-- A step from a state with the same value. -/
@@ -265,7 +270,7 @@ def NormalSpec (v : Version) (input : ByteSlice) (offset base : Nat)
     WP (lexNormalFrom (H := Collector) (m := Id) (R := Empty) (E := Unit) input offset base
         index batch locals hframe hindex hbatch origin horigin) s coll
       (fun r s' coll' => StepPost v input .idle location index coll held r.1 s'.val coll')
-      (fun _ _ _ => StepFails v input .idle location index coll held)
+      (fun _ s' coll' => StepFails v input .idle location index coll held s'.val coll')
 
 set_option maxHeartbeats 20000000 in
 theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
@@ -342,6 +347,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
         (fun a s'' coll'' hpost => StepPost.trans heq hpost)
         (fun e s'' coll'' hf => StepFails.trans heq hf)
     · intro hn e s' coll'
+      apply stepFails_of_none
       show outcome v (pending v coll held) (feedFrom v input .idle location index) = none
       rw [hstep, outcome_prep]
       simp only [↓reduceIte, hl] at hn
@@ -388,6 +394,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
         (fun a s'' coll'' hpost => StepPost.trans heq hpost)
         (fun e s'' coll'' hf => StepFails.trans heq hf)
     · intro hn e s' coll'
+      apply stepFails_of_none
       show outcome v (pending v coll held) (feedFrom v input .idle location index) = none
       rw [hstep, outcome_prep]
       simp only [↓reduceIte, hl] at hn
@@ -454,6 +461,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
         rw [hidx, ← hpure, outcome_pending_congr hp]
       · intro hn e s' coll'
         simp only [hemit, Bool.false_eq_true, ↓reduceIte, List.append_nil] at hn
+        apply stepFails_of_none
         show outcome v _ _ = none
         rw [hn, outcome_none_left]
     · -- a quoted symbol
@@ -557,9 +565,9 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
               unfold FastState.store Lexer.WRustPort.leave Lexer.WRustPort.startToken
                 Lexer.WRustPort.modifyContent Lexer.WRustPort.errorAt Lexer.WRustPort.errorWith
               wp_walk
-              show outcome v _ _ = none
+              refine stepFails_here ?_ hheld hfix.1 hfix.2
               rw [hC]
-              simp only [Bool.false_eq_true, ↓reduceIte, outcome_none_right]
+              simp only [Bool.false_eq_true, ↓reduceIte]
             · intro hd
               have hd' : V1Naive.isDelimiter next = true := by
                 rw [← isDelimiter_eq]; simpa using hd
@@ -622,6 +630,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
                 rw [hidx, hC, outcome_prep, outcome_pending_congr hp]
               · intro hn e s' coll'
                 rw [hlex] at hn
+                apply stepFails_of_none
                 show outcome v _ _ = none
                 rw [hC, outcome_prep, hn, outcome_none_left]
           · -- the closing pipe is the last byte of the slice
@@ -756,9 +765,9 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
               unfold FastState.store Lexer.WRustPort.leave Lexer.WRustPort.startToken
                 Lexer.WRustPort.modifyContent Lexer.WRustPort.errorAt Lexer.WRustPort.errorWith
               wp_walk
-              show outcome v _ _ = none
+              refine stepFails_here ?_ hheld hfix.1 hfix.2
               rw [hC]
-              simp only [Bool.false_eq_true, ↓reduceIte, outcome_none_right]
+              simp only [Bool.false_eq_true, ↓reduceIte]
             · intro hd
               have hd' : V1Naive.isDelimiter next = true := by
                 rw [← isDelimiter_eq]; simpa using hd
@@ -813,6 +822,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
                 rw [hidx, hC, outcome_prep, outcome_pending_congr hp]
               · intro hn e s' coll'
                 rw [hlex] at hn
+                apply stepFails_of_none
                 show outcome v _ _ = none
                 rw [hC, outcome_prep, hn, outcome_none_left]
           · rename_i heq
@@ -1048,8 +1058,8 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
             (by rw [he, bytesOf_self input _ hi1]; rfl)
           unfold Lexer.WRustPort.leave Lexer.WRustPort.error Lexer.WRustPort.errorWith
           wp_walk
-          show outcome v _ _ = none
-          rw [hB, feedFrom_advance_error v input hJs hf, outcome_none_right]
+          refine stepFails_here ?_ hheld hfix.1 hfix.2
+          rw [hB, feedFrom_advance_error v input hJs hf]
         · intro hne
           have hne' : (bytesOf input (index + 1 + 1)
               (Lexer.Slice.runEnd input (index + 1 + 1) run.flag)).isEmpty = false := by
@@ -1076,9 +1086,9 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
             rw [hnd'] at hC
             unfold Lexer.WRustPort.leave Lexer.WRustPort.errorAt Lexer.WRustPort.errorWith
             wp_walk
-            show outcome v _ _ = none
+            refine stepFails_here ?_ hheld hfix.1 hfix.2
             rw [hC]
-            simp only [Bool.false_eq_true, ↓reduceIte, outcome_none_right]
+            simp only [Bool.false_eq_true, ↓reduceIte]
           · intro hd
             have hd' : V1Naive.isDelimiter
                 input[Lexer.Slice.runEnd input (index + 1 + 1) run.flag] = true := by
@@ -1125,6 +1135,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
                       run.flag - index)⟩]) = none := by
                 have := (congrArg (fun l => pending v coll (held ++ [l])) hlex).symm.trans hn
                 rw [htyp] at this; exact this
+              apply stepFails_of_none
               show outcome v _ _ = none
               rw [hC, outcome_prep, hn', outcome_none_left]
     · -- no base is selected: the hash is left in progress
@@ -1237,9 +1248,9 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
             rw [hnd'] at hC
             unfold Lexer.WRustPort.leave Lexer.WRustPort.errorAt Lexer.WRustPort.errorWith
             wp_walk
-            show outcome v _ _ = none
+            refine stepFails_here ?_ hheld hfix.1 hfix.2
             rw [hC]
-            simp only [Bool.false_eq_true, ↓reduceIte, outcome_none_right]
+            simp only [Bool.false_eq_true, ↓reduceIte]
           · intro hd
             have hd' : V1Naive.isDelimiter next = true := by
               rw [← isDelimiter_eq]; simpa using hd
@@ -1284,6 +1295,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
                     afterColumns location (Lexer.Slice.runEnd input (index + 1)
                       Lexer.RUN_STRING_PLAIN + 1 - index)⟩]) = none :=
                 (congrArg (fun l => pending v coll (held ++ [l])) hlex).symm.trans hn
+              apply stepFails_of_none
               show outcome v _ _ = none
               rw [hC, outcome_prep, hn', outcome_none_left]
         · intro _
@@ -1364,8 +1376,8 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
           (by rw [he, bytesOf_self input _ hi]; rfl)
         unfold Lexer.WRustPort.leave Lexer.WRustPort.error Lexer.WRustPort.errorWith
         wp_walk
-        show outcome v _ _ = none
-        rw [hA, feedFrom_advance_error v input hJs hf, outcome_none_right]
+        refine stepFails_here ?_ hheld hfix.1 hfix.2
+        rw [hA, feedFrom_advance_error v input hJs hf]
       · intro hne
         have hne' : (bytesOf input (index + 1)
             (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_SIMPLE_SYMBOL)).isEmpty = false := by
@@ -1394,9 +1406,9 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
           rw [hnd'] at hC
           unfold Lexer.WRustPort.leave Lexer.WRustPort.errorAt Lexer.WRustPort.errorWith
           wp_walk
-          show outcome v _ _ = none
+          refine stepFails_here ?_ hheld hfix.1 hfix.2
           rw [hC]
-          simp only [Bool.false_eq_true, ↓reduceIte, outcome_none_right]
+          simp only [Bool.false_eq_true, ↓reduceIte]
         · intro hd
           have hd' : V1Naive.isDelimiter
               input[Lexer.Slice.runEnd input (index + 1) Lexer.RUN_SIMPLE_SYMBOL] = true := by
@@ -1442,6 +1454,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
                   afterColumns location (Lexer.Slice.runEnd input (index + 1)
                     Lexer.RUN_SIMPLE_SYMBOL - index)⟩]) = none :=
               (congrArg (fun l => pending v coll (held ++ [l])) hlex).symm.trans hn
+            apply stepFails_of_none
             show outcome v _ _ = none
             rw [hC, outcome_prep, hn', outcome_none_left]
   · -- a digit: a numeral or a decimal
@@ -1477,12 +1490,12 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
       obtain ⟨f, hf⟩ := hadv
       unfold Lexer.WRustPort.leave Lexer.WRustPort.errorAt Lexer.WRustPort.errorWith
       wp_walk
-      show outcome v _ _ = none
+      refine stepFails_here ?_ hheld hfix.1 hfix.2
       rw [feedFrom_step hi (byteStep_idle_pending v hstart), hc, hz0]
       simp only [beq_self_eq_true]
       rw [hz0] at hf
       rw [feedFrom_advance_error v input hi1 hf]
-      rw [prep_none, outcome_none_right]
+      rfl
     intro hz
     have hz' : c = 48 → Lexer.Slice.runEnd input (index + 1) Lexer.RUN_DIGIT = index + 1 := by
       intro h0
@@ -1646,8 +1659,8 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
                   Lexer.RUN_DIGIT)⟩) (by simp [hlt]) hstopF'
             unfold Lexer.WRustPort.leave Lexer.WRustPort.error Lexer.WRustPort.errorWith
             wp_walk
-            show outcome v _ _ = none
-            rw [hB, feedFrom_advance_error v input hFs hf, outcome_none_right]
+            refine stepFails_here ?_ hheld hfix.1 hfix.2
+            rw [hB, feedFrom_advance_error v input hFs hf]
           · intro hsome
             have hlt : Lexer.Slice.runEnd input (index + 1) Lexer.RUN_DIGIT + 1 <
                 Lexer.Slice.runEnd input (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_DIGIT + 1)
@@ -1678,9 +1691,9 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
               rw [hnd'] at hC
               unfold Lexer.WRustPort.leave Lexer.WRustPort.errorAt Lexer.WRustPort.errorWith
               wp_walk
-              show outcome v _ _ = none
+              refine stepFails_here ?_ hheld hfix.1 hfix.2
               rw [hC]
-              simp only [Bool.false_eq_true, ↓reduceIte, outcome_none_right]
+              simp only [Bool.false_eq_true, ↓reduceIte]
             · intro hd'
               have hd'' : V1Naive.isDelimiter input[Lexer.Slice.runEnd input
                   (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_DIGIT + 1) Lexer.RUN_DIGIT] =
@@ -1706,9 +1719,9 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
           rw [hnd'] at hC
           unfold Lexer.WRustPort.leave Lexer.WRustPort.errorAt Lexer.WRustPort.errorWith
           wp_walk
-          show outcome v _ _ = none
+          refine stepFails_here ?_ hheld hfix.1 hfix.2
           rw [hC]
-          simp only [Bool.false_eq_true, ↓reduceIte, outcome_none_right]
+          simp only [Bool.false_eq_true, ↓reduceIte]
         · intro hd'
           have hd'' : V1Naive.isDelimiter next = true := by
             rw [← isDelimiter_eq]; simpa using hd'
@@ -1776,8 +1789,8 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
     unfold Lexer.WRustPort.startToken Lexer.WRustPort.modifyContent Lexer.WRustPort.leave
       Lexer.WRustPort.errorAt Lexer.WRustPort.errorWith
     wp_walk
-    show outcome v _ _ = none
-    rw [feedFrom_start_error v input hi herr, outcome_none_right]
+    refine stepFails_here ?_ hheld hfix.1 hfix.2
+    rw [feedFrom_start_error v input hi herr]
 
 
 end

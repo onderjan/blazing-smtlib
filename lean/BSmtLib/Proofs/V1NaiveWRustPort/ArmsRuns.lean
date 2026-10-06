@@ -28,7 +28,7 @@ theorem arm_simpleSymbol (v : Version) (input : ByteSlice) (start : Nat)
     WP (Lexer.WRustPort.lexSimpleSymbol (H := Collector) (m := Id) (R := Empty) (E := Unit)
         input start tokenStart base h) s coll
       (fun r s' coll' => ArmPost v input (.token p) location start coll held r.1 s'.val coll')
-      (fun _ _ _ => StepFails v input (.token p) location start coll held) := by
+      (fun _ s' coll' => StepFails v input (.token p) location start coll held s'.val coll') := by
   obtain ⟨hps, hm, hcont⟩ := token_agrees hpre.agrees hstate
   have hJ : Lexer.Slice.runEnd input start Lexer.RUN_SIMPLE_SYMBOL =
       runEnd input isSymbolByte start := runEnd_eq endsRun_symbol _ _
@@ -72,9 +72,9 @@ theorem arm_simpleSymbol (v : Version) (input : ByteSlice) (start : Nat)
       rw [hnd'] at hC
       unfold Lexer.WRustPort.errorAt Lexer.WRustPort.errorWith
       wp_walk
-      show outcome v _ _ = none
+      refine stepFails_here ?_ hpre.holds hpre.fixed.1 hpre.fixed.2
       rw [hC]
-      simp only [Bool.false_eq_true, ↓reduceIte, outcome_none_right]
+      simp only [Bool.false_eq_true, ↓reduceIte]
     · intro hd
       have hd' : V1Naive.isDelimiter
           input[Lexer.Slice.runEnd input start Lexer.RUN_SIMPLE_SYMBOL] = true := by
@@ -109,6 +109,7 @@ theorem arm_simpleSymbol (v : Version) (input : ByteSlice) (start : Nat)
               Lexer.RUN_SIMPLE_SYMBOL))
         rw [hext, hstep, hts, ← hps, ← hcont]
       · intro hn e s' coll'
+        apply stepFails_of_none
         show outcome v _ _ = none
         rw [hC, outcome_prep]
         have hstep := stepLocation_eq (pos := Lexer.Slice.runEnd input start
@@ -148,7 +149,7 @@ theorem arm_keyword (v : Version) (input : ByteSlice) (start : Nat)
     WP (Lexer.WRustPort.lexKeyword (H := Collector) (m := Id) (R := Empty) (E := Unit)
         input start tokenStart base h) s coll
       (fun r s' coll' => ArmPost v input (.token p) location start coll held r.1 s'.val coll')
-      (fun _ _ _ => StepFails v input (.token p) location start coll held) := by
+      (fun _ s' coll' => StepFails v input (.token p) location start coll held s'.val coll') := by
   obtain ⟨hps, hm, hcont⟩ := token_agrees hpre.agrees hstate
   have hJ : Lexer.Slice.runEnd input start Lexer.RUN_SIMPLE_SYMBOL =
       runEnd input isSymbolByte start := runEnd_eq endsRun_symbol _ _
@@ -189,8 +190,8 @@ theorem arm_keyword (v : Version) (input : ByteSlice) (start : Nat)
           (Lexer.Slice.runEnd input start Lexer.RUN_SIMPLE_SYMBOL)⟩) hm hJs' he
       unfold Lexer.WRustPort.error Lexer.WRustPort.errorWith
       wp_walk
-      show outcome v _ _ = none
-      rw [hA, feedFrom_advance_error v input hJs hf, outcome_none_right]
+      refine stepFails_here ?_ hpre.holds hpre.fixed.1 hpre.fixed.2
+      rw [hA, feedFrom_advance_error v input hJs hf]
     intro hne
     have hne' : (p.content ++ bytesOf input start
         (Lexer.Slice.runEnd input start Lexer.RUN_SIMPLE_SYMBOL)).isEmpty = false := by
@@ -218,9 +219,9 @@ theorem arm_keyword (v : Version) (input : ByteSlice) (start : Nat)
       rw [hnd'] at hC
       unfold Lexer.WRustPort.errorAt Lexer.WRustPort.errorWith
       wp_walk
-      show outcome v _ _ = none
+      refine stepFails_here ?_ hpre.holds hpre.fixed.1 hpre.fixed.2
       rw [hC]
-      simp only [Bool.false_eq_true, ↓reduceIte, outcome_none_right]
+      simp only [Bool.false_eq_true, ↓reduceIte]
     · intro hd
       have hd' : V1Naive.isDelimiter
           input[Lexer.Slice.runEnd input start Lexer.RUN_SIMPLE_SYMBOL] = true := by
@@ -254,6 +255,7 @@ theorem arm_keyword (v : Version) (input : ByteSlice) (start : Nat)
               Lexer.RUN_SIMPLE_SYMBOL))
         rw [hext, hstep, hts, ← hps, ← hcont]
       · intro hn e s' coll'
+        apply stepFails_of_none
         show outcome v _ _ = none
         rw [hC, outcome_prep]
         have hstep := stepLocation_eq (pos := Lexer.Slice.runEnd input start
@@ -298,7 +300,7 @@ theorem arm_digitRun (v : Version) (input : ByteSlice) (start : Nat)
     WP (Lexer.WRustPort.lexDigitRun (H := Collector) (m := Id) (R := Empty) (E := Unit)
         input start run tokenStart base h) s coll
       (fun r s' coll' => ArmPost v input (.token p) location start coll held r.1 s'.val coll')
-      (fun _ _ _ => StepFails v input (.token p) location start coll held) := by
+      (fun _ s' coll' => StepFails v input (.token p) location start coll held s'.val coll') := by
   obtain ⟨hps, hm, hcont⟩ := hinv _ _ _ hpre.agrees.1
   have hJ : Lexer.Slice.runEnd input start run.flag =
       runEnd input radix.allows start := runEnd_eq hflag _ _
@@ -339,8 +341,8 @@ theorem arm_digitRun (v : Version) (input : ByteSlice) (start : Nat)
           (Lexer.Slice.runEnd input start run.flag)⟩) hm hJs' he
       unfold Lexer.WRustPort.error Lexer.WRustPort.errorWith
       wp_walk
-      show outcome v _ _ = none
-      rw [hA, feedFrom_advance_error v input hJs hf, outcome_none_right]
+      refine stepFails_here ?_ hpre.holds hpre.fixed.1 hpre.fixed.2
+      rw [hA, feedFrom_advance_error v input hJs hf]
     intro hne
     have hne' : (p.content ++ bytesOf input start
         (Lexer.Slice.runEnd input start run.flag)).isEmpty = false := by
@@ -368,9 +370,9 @@ theorem arm_digitRun (v : Version) (input : ByteSlice) (start : Nat)
       rw [hnd'] at hC
       unfold Lexer.WRustPort.errorAt Lexer.WRustPort.errorWith
       wp_walk
-      show outcome v _ _ = none
+      refine stepFails_here ?_ hpre.holds hpre.fixed.1 hpre.fixed.2
       rw [hC]
-      simp only [Bool.false_eq_true, ↓reduceIte, outcome_none_right]
+      simp only [Bool.false_eq_true, ↓reduceIte]
     · intro hd
       have hd' : V1Naive.isDelimiter
           input[Lexer.Slice.runEnd input start run.flag] = true := by
@@ -404,6 +406,7 @@ theorem arm_digitRun (v : Version) (input : ByteSlice) (start : Nat)
               run.flag))
         rw [hext, hstep, hts, ← hps, ← hcont, htyp]
       · intro hn e s' coll'
+        apply stepFails_of_none
         show outcome v _ _ = none
         rw [hC, outcome_prep]
         have hstep := stepLocation_eq (pos := Lexer.Slice.runEnd input start
@@ -440,7 +443,7 @@ theorem arm_comment (v : Version) (input : ByteSlice) (start : Nat)
     WP (Lexer.WRustPort.lexComment (H := Collector) (m := Id) (R := Empty) (E := Unit)
         input start (Nat.le_of_lt hstart) tokenStart base h) s coll
       (fun r s' coll' => ArmPost v input (.token p) location start coll held r.1 s'.val coll')
-      (fun _ _ _ => StepFails v input (.token p) location start coll held) := by
+      (fun _ s' coll' => StepFails v input (.token p) location start coll held s'.val coll') := by
   obtain ⟨hps, (hm : p.mode = .comment)⟩ := token_agrees hpre.agrees hstate
   have hJ : Lexer.Slice.runEnd input start Lexer.RUN_COMMENT_PLAIN =
       runEnd input isCommentRun start := runEnd_eq endsRun_comment _ _

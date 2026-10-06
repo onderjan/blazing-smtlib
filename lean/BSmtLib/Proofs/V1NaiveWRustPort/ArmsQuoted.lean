@@ -50,7 +50,7 @@ def QuotedSpec (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St) (loc0
     WP (Lexer.WRustPort.lexQuotedSymbol (H := Collector) (m := Id) (R := Empty) (E := Unit)
         input consumed origin horigin hconsumed tokenStart base h) s coll
       (fun r s' coll' => ArmPost v input st0 loc0 start0 coll held r.1 s'.val coll')
-      (fun _ _ _ => StepFails v input st0 loc0 start0 coll held)
+      (fun _ s' coll' => StepFails v input st0 loc0 start0 coll held s'.val coll')
 
 theorem quotedSpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St)
     (loc0 : Location) (coll : Collector) (held : List Lexeme) (tokenStart : Location)
@@ -125,9 +125,9 @@ theorem quotedSpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
           rw [hnd'] at hC
           unfold Lexer.WRustPort.errorAt Lexer.WRustPort.errorWith
           wp_walk
-          show outcome v _ _ = none
+          refine stepFails_here ?_ hholds hfix.1 hfix.2
           rw [hC]
-          simp only [Bool.false_eq_true, ↓reduceIte, outcome_none_right]
+          simp only [Bool.false_eq_true, ↓reduceIte]
         · intro hd
           have hd' : V1Naive.isDelimiter next = true := by
             rw [← isDelimiter_eq]; simpa using hd
@@ -159,6 +159,7 @@ theorem quotedSpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
                 (Lexer.Slice.runEnd input consumed Lexer.RUN_QUOTED_PLAIN + 1)⟩] _
             rw [hext, hstep]
           · intro hn e s' coll'
+            apply stepFails_of_none
             show outcome v _ _ = none
             rw [hC, outcome_prep]
             have hstep := stepLocation_eq' (pos := Lexer.Slice.runEnd input consumed
@@ -196,8 +197,8 @@ theorem quotedSpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
         obtain ⟨f, hf⟩ := hf
         unfold Lexer.WRustPort.errorAt Lexer.WRustPort.errorWith
         wp_walk
-        show outcome v _ _ = none
-        rw [hA', feedFrom_advance_error v input hIs hf, outcome_none_right]
+        refine stepFails_here ?_ hholds hfix.1 hfix.2
+        rw [hA', feedFrom_advance_error v input hIs hf]
       · intro hbs
         have hbs' : c ≠ 92 := by simpa using hbs
         apply wp_ite
@@ -251,8 +252,8 @@ theorem quotedSpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
           obtain ⟨f, hf⟩ := hf
           unfold Lexer.WRustPort.errorAt Lexer.WRustPort.errorWith
           wp_walk
-          show outcome v _ _ = none
-          rw [hA', feedFrom_advance_error v input hIs hf, outcome_none_right]
+          refine stepFails_here ?_ hholds hfix.1 hfix.2
+          rw [hA', feedFrom_advance_error v input hIs hf]
   · -- the run reaches the end of the slice: the symbol is left in progress
     rename_i hget
     have hIe := Lexer.Slice.size_le_of_get?_none hget
@@ -281,7 +282,7 @@ theorem arm_quotedSymbol (v : Version) (input : ByteSlice) (start : Nat)
     WP (Lexer.WRustPort.lexQuotedSymbol (H := Collector) (m := Id) (R := Empty) (E := Unit)
         input start start (Nat.le_refl _) (Nat.le_of_lt hstart) tokenStart base h) s coll
       (fun r s' coll' => ArmPost v input (.token p) location start coll held r.1 s'.val coll')
-      (fun _ _ _ => StepFails v input (.token p) location start coll held) := by
+      (fun _ s' coll' => StepFails v input (.token p) location start coll held s'.val coll') := by
   obtain ⟨hps, hm, hcont⟩ := token_agrees hpre.agrees hstate
   refine quotedSpec_lt v input start (.token p) location coll held tokenStart base h start _
     start (Nat.lt_succ_self _) (Nat.le_refl _) (Nat.le_of_lt hstart) s location hpre.fixed
