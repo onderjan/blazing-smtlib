@@ -1,4 +1,5 @@
 import BSmtLib.Proofs.V1Naive.Facts
+import BSmtLib.Proofs.Simulation.Bytes
 
 /-!
 # Reserved words
@@ -11,6 +12,7 @@ reads the table `Reserved.Internal.reservedTable`, whose entries the kernel chec
 open BSmtLib.Proofs BSmtLib.SpecChecks.Lexicon
 open BSmtLib.Spec.Lexicon (chars basicReservedWords commandNames)
 open BSmtLib.Spec.Lexer (ReservedKind)
+open BSmtLib.Proofs.Simulation (toByteArray_toByteSlice toByteSlice_beq size_toByteSlice')
 
 namespace BSmtLib.Proofs.Lexer.V1Naive
 
@@ -32,25 +34,6 @@ theorem getElem!_mem {α : Type} [Inhabited α] (T : Array α) (i : Nat) :
     exact Array.getElem_mem_toList h
   · right
     rw [getElem!_neg T i h]
-
-theorem toByteArray_toByteSlice (a : ByteArray) : a.toByteSlice.toByteArray = a := by
-  simp [ByteArray.toByteSlice, ByteSlice.toByteArray, ByteSlice.size, ByteSlice.start,
-    ByteSlice.stop, ByteSlice.byteArray, ByteArray.extract_zero_size]
-
-theorem toByteSlice_beq (a b : ByteArray) :
-    (a.toByteSlice == b.toByteSlice) = true ↔ a = b := by
-  change ByteSlice.beq _ _ = true ↔ _
-  unfold ByteSlice.beq
-  rw [toByteArray_toByteSlice, toByteArray_toByteSlice]
-  change (a.data == b.data) = true ↔ _
-  rw [beq_iff_eq]
-  exact ⟨fun h => ByteArray.ext h, fun h => h ▸ rfl⟩
-
-theorem size_toByteSlice' (a : ByteArray) : a.toByteSlice.size = a.data.toList.length := by
-  rw [Array.length_toList]
-  simp only [ByteArray.toByteSlice, Nat.le_refl, Nat.zero_le, dite_true, ByteSlice.size,
-    ByteSlice.start, ByteSlice.stop, Nat.sub_zero]
-  rfl
 
 theorem fromBytes_kind (version : Spec.Lexicon.Version) (a : ByteArray) :
     (Reserved.fromBytes? a.toByteSlice (Adapter.toVersion version)).map reservedKindOf =

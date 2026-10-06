@@ -14,28 +14,9 @@ lexeme of a token as the spec hands the token over (`lexemeHanded_token`).
 namespace BSmtLib.Proofs.Lexer.V1Naive
 
 open BSmtLib.Proofs.Adapter BSmtLib.Spec.Lexicon BSmtLib.SpecChecks.Lexicon
+open BSmtLib.Proofs.Simulation (byteArray_toList toByteArray_toByteSlice)
 
 /-! ## What the consumer records of a lexeme -/
-
-theorem toList_loop (a : ByteArray) (i : Nat) (r : List UInt8) :
-    ByteArray.toList.loop a i r = r.reverse ++ a.data.toList.drop i := by
-  induction i, r using ByteArray.toList.loop.induct a with
-  | case1 i r h ih =>
-    rw [ByteArray.toList.loop]
-    simp only [h, ↓reduceIte]
-    rw [ih]
-    have h' : i < a.data.toList.length := by simpa using h
-    rw [List.drop_eq_getElem_cons h']
-    have h'' : i < a.data.size := h
-    simp [ByteArray.get!, getElem!_pos a.data i h'']
-  | case2 i r h =>
-    rw [ByteArray.toList.loop]
-    simp only [h, ↓reduceIte]
-    have h' : a.data.toList.length ≤ i := by simp; omega
-    simp [List.drop_eq_nil_of_le h']
-
-theorem byteArray_toList (a : ByteArray) : a.toList = a.data.toList := by
-  simp [ByteArray.toList, toList_loop]
 
 /-- The kind of reserved word the consumer records for a lexeme of the category with the
 content, under the version. -/
