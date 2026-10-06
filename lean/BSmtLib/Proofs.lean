@@ -6,6 +6,7 @@ import BSmtLib.Proofs.Lexer.WRustPort
 import BSmtLib.Proofs.Lexer.X1BatchInCore
 import BSmtLib.Proofs.Lexer.X2Contents
 import BSmtLib.Proofs.Adapter
+import BSmtLib.Proofs.Simulation
 import BSmtLib.Proofs.V1Naive
 import BSmtLib.Proofs.V2BatchedV3Runs
 import BSmtLib.Proofs.V3RunsV4FastPaths
