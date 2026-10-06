@@ -1,4 +1,5 @@
 import BSmtLib.Proofs.WRustPortX1BatchInCore.Core
+import BSmtLib.Proofs.Lexer.X1BatchInCore
 
 /-!
 # The hand-overs
@@ -16,38 +17,38 @@ batches have no tokens (`ErZ`).
 namespace BSmtLib.Proofs.WRustPortX1BatchInCore
 
 open BSmtLib.Lexer.Internal (intoBatch)
-open BSmtLib.Proofs.Simulation (M runM)
+open BSmtLib.Proofs.Simulation
 open BSmtLib.Lexer (BATCH_CAPACITY Interrupted)
 
 section
 
 variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Consume H m R E]
-  {floor : Option Nat} {low : Nat} {strict : Bool} {Er : WS floor low → XS floor low → Prop}
+  {floor : Option Nat} {low : Nat} {strict : Bool} {Er : St floor low → St floor low → Prop}
   {g g' : BatchTag}
 
-theorem callConsumer_sim (hc : ConsumesAlike H m R E) (P : WS floor low → XS floor low → Prop)
+theorem callConsumer_sim (hc : ConsumesAlike H m R E) (P : St floor low → St floor low → Prop)
     (c : BatchCursor g) (d : BatchCursor g') (hcd : CursorAgree c d) (h : c.HasNext)
     (h' : d.HasNext) :
     SimR Er P (fun a b s t => P s t ∧ a.1 = b.1 ∧ CursorAgree a.2.val b.2.val)
       (Lexer.WRustPort.callConsumer (H := H) (m := m) (R := R) (E := E) c h)
-      (Lexer.X1BatchInCore.callConsumer d h') := by
-  unfold Lexer.WRustPort.callConsumer Lexer.X1BatchInCore.callConsumer
+      (Lexer.WRustPort.callConsumer d h') := by
+  unfold Lexer.WRustPort.callConsumer
   exact SimR.lift (Rab := fun a b => a.1 = b.1 ∧ CursorAgree a.2.val b.2.val)
     (fun s => by
       obtain ⟨y, h1, h2⟩ := hc c d h h' hcd s
-      exact ⟨(fun z => ⟨(z.val.1, z.val.2.1, z.val.2.2), z.property⟩) <$> y,
+      exact ⟨(fun z => ⟨((z.val.1, z.val.2.2), (z.val.2.1, z.val.2.2)), z.property, rfl⟩) <$> y,
         by rw [h1, Functor.map_map], by rw [h2, Functor.map_map]⟩)
     fun _ _ _ _ hst hab => ⟨hst, hab⟩
 
 /-- What the lexer with the batch in its state does after its loop over the cursor. -/
 def handOverTail (bytesAfter : ByteArray) :
     Option (Interrupted R E floor) × BatchCursor g →
-      Lexer.X1BatchInCore.LexM H m R E floor low TokenBatch :=
+      Lexer.WRustPort.LexM H m R E floor low TokenBatch :=
   fun (stop, cursor) => do
-  if (← Lexer.X1BatchInCore.getCore).recovers then
+  if (← Lexer.WRustPort.getCore).recovers then
     match stop with
     | some _ =>
-      Lexer.X1BatchInCore.modifyCore fun c =>
+      Lexer.WRustPort.modifyCore fun c =>
         let consumedDepth := cursor.foldConsumedCategories c.consumedDepth fun depth category =>
           match category with
           | .parenOpen => depth + 1
@@ -55,8 +56,8 @@ def handOverTail (bytesAfter : ByteArray) :
           | _ => depth
         { c with consumedDepth, lexedDepth := consumedDepth }
     | none =>
-      Lexer.X1BatchInCore.modifyCore fun c => { c with consumedDepth := c.lexedDepth }
-  Lexer.X1BatchInCore.modifyCore fun c => { c with version := cursor.version }
+      Lexer.WRustPort.modifyCore fun c => { c with consumedDepth := c.lexedDepth }
+  Lexer.WRustPort.modifyCore fun c => { c with version := cursor.version }
   let spent : TokenBatch := { intoBatch cursor with bytes := bytesAfter }
   if let some interrupted := stop then
     Lexer.X1BatchInCore.storeSpent spent
@@ -67,7 +68,7 @@ omit [LawfulMonad m] in
 theorem handOver_eq (batch : TokenBatch) (bytesAfter : ByteArray) (hfloor) :
     Lexer.X1BatchInCore.handOver (H := H) (m := m) (R := R) (E := E) (floor := floor) (low := low)
       batch bytesAfter hfloor =
-      Lexer.X1BatchInCore.getCore >>= fun c =>
+      Lexer.WRustPort.getCore >>= fun c =>
         Lexer.X1BatchInCore.flushCursor (BatchCursor.new c.version batch)
           (fun p hp => BatchCursor.endsAfter_new (hfloor p hp) _) >>= handOverTail bytesAfter := by
   unfold Lexer.X1BatchInCore.handOver handOverTail
@@ -77,8 +78,8 @@ theorem handOver_eq (batch : TokenBatch) (bytesAfter : ByteArray) (hfloor) :
 and the batch; the Rust port's version is that of its cursor, as it sets it after every call of
 the consumer; the batches are those before the loop; the Rust port's line and line start are `l`
 and `ls`. -/
-structure FlushRel (l ls : Nat) (Bw Bx : TokenBatch) (c : BatchCursor g) (s : WS floor low)
-    (t : XS floor low) : Prop where
+structure FlushRel (l ls : Nat) (Bw Bx : TokenBatch) (c : BatchCursor g) (s : St floor low)
+    (t : St floor low) : Prop where
   same : SameBut s.val t.val
   version : s.val.version = c.version
   batchW : s.val.batch = Bw
@@ -88,8 +89,8 @@ structure FlushRel (l ls : Nat) (Bw Bx : TokenBatch) (c : BatchCursor g) (s : WS
 
 /-- What the hand-overs keep of the two states: `FlushRel` with the version the same, and the
 batch given back, which is that of the cursor with the array of contents `bytesAfter`. -/
-structure FlushedRel (l ls : Nat) (Bw Bx : TokenBatch) (s : WS floor low)
-    (t : XS floor low) : Prop where
+structure FlushedRel (l ls : Nat) (Bw Bx : TokenBatch) (s : St floor low)
+    (t : St floor low) : Prop where
   same : SameBut s.val t.val
   version : s.val.version = t.val.version
   batchW : s.val.batch = Bw
@@ -106,37 +107,15 @@ def stopDepth (cursor : BatchCursor g) (depth : Nat) : Nat :=
     | _ => depth
 
 omit [Consume H m R E] in
-theorem modifyCore_bind_left {α β : Type} {P : WS floor low → XS floor low → Prop}
-    {Q : α → β → WS floor low → XS floor low → Prop} {f : WCore → WCore} {hf}
-    {k : PUnit → Lexer.WRustPort.LexM H m R E floor low α}
-    {g : Lexer.X1BatchInCore.LexM H m R E floor low β}
-    (hk : ∀ s t, P s t →
-      SimR Er (fun s' t' => s' = ⟨f s.val, hf s.val s.property⟩ ∧ t' = t) Q (k ⟨⟩) g) :
-    SimR Er P Q (Lexer.WRustPort.modifyCore f hf >>= k) g := by
-  unfold Lexer.WRustPort.modifyCore
-  exact SimR.modify_bind_left hk
-
-omit [Consume H m R E] in
-theorem modifyCore_bind_right {α β : Type} {P : WS floor low → XS floor low → Prop}
-    {Q : α → β → WS floor low → XS floor low → Prop} {f : XCore → XCore} {hf}
+theorem storeSpent_bind_right {α β : Type} {P : St floor low → St floor low → Prop}
+    {Q : α → β → St floor low → St floor low → Prop} (spent : TokenBatch)
     {k : Lexer.WRustPort.LexM H m R E floor low α}
-    {g : PUnit → Lexer.X1BatchInCore.LexM H m R E floor low β}
-    (hk : ∀ s t, P s t →
-      SimR Er (fun s' t' => s' = s ∧ t' = ⟨f t.val, hf t.val t.property⟩) Q k (g ⟨⟩)) :
-    SimR Er P Q k (Lexer.X1BatchInCore.modifyCore f hf >>= g) := by
-  unfold Lexer.X1BatchInCore.modifyCore
-  exact SimR.modify_bind_right hk
-
-omit [Consume H m R E] in
-theorem storeSpent_bind_right {α β : Type} {P : WS floor low → XS floor low → Prop}
-    {Q : α → β → WS floor low → XS floor low → Prop} (spent : TokenBatch)
-    {k : Lexer.WRustPort.LexM H m R E floor low α}
-    {g : PUnit → Lexer.X1BatchInCore.LexM H m R E floor low β}
+    {g : PUnit → Lexer.WRustPort.LexM H m R E floor low β}
     (hk : ∀ s t, P s t → SimR Er (fun s' t' => s' = s ∧ t'.val = { t.val with
       batch := spent.clear t.val.offset
       batchEnded := Nat.le_of_eq (TokenBatch.lastEnd_clear _ _) }) Q k (g ⟨⟩)) :
     SimR Er P Q k (Lexer.X1BatchInCore.storeSpent spent >>= g) := by
-  unfold Lexer.X1BatchInCore.storeSpent Lexer.X1BatchInCore.modifyBound
+  unfold Lexer.X1BatchInCore.storeSpent Lexer.WRustPort.modifyBound
   exact SimR.modify_bind_right fun s t hst => SimR.pre
     (fun s' t' h => ⟨h.1, by rw [h.2]⟩) (hk s t hst)
 
@@ -155,10 +134,10 @@ omit [Consume H m R E] in
 the batch in its state sets the depths and the version, and puts the batch back before it throws
 the stop. -/
 theorem stop_sim {α : Type} (bytesAfter : ByteArray) (i i' : Interrupted R E floor) (hi : i = i')
-    (cur : BatchCursor g) (cur' : BatchCursor g') (hag : CursorAgree cur cur') (sW : WCore)
-    (t : XS floor low) (hsame : SameBut sW t.val) (hversion : sW.version = cur.version)
+    (cur : BatchCursor g) (cur' : BatchCursor g') (hag : CursorAgree cur cur') (sW : Core)
+    (t : St floor low) (hsame : SameBut sW t.val) (hversion : sW.version = cur.version)
     (hlen : sW.batch.len = 0) (hbytes : strict = true → sW.batch.bytes = bytesAfter)
-    (Q : α → TokenBatch → WS floor low → XS floor low → Prop) (hd) :
+    (Q : α → TokenBatch → St floor low → St floor low → Prop) (hd) :
     SimR (ErZ strict) (fun s' t' => s'.val = sW ∧ t' = t) Q
       (Lexer.WRustPort.getCore (H := H) (m := m) (R := R) (E := E) >>= fun lift =>
         if lift.recovers = true then
@@ -177,7 +156,7 @@ theorem stop_sim {α : Type} (bytesAfter : ByteArray) (i i' : Interrupted R E fl
   rw [← hs₀] at hsame hversion hlen hbytes
   refine SimR.pre (P := fun s t => s = s₀ ∧ t = t₀) (fun s t h => h.2) ?_
   simp only [throw_bind]
-  have hfin : ∀ (w : WCore) (x : XCore), SameBut w x → w.version = cur.version →
+  have hfin : ∀ (w : Core) (x : Core), SameBut w x → w.version = cur.version →
       w.batch.len = 0 → (strict = true → w.batch.bytes = bytesAfter) → ∀ hb hb',
       CoreRel w { x with
         version := cur'.version
@@ -247,7 +226,7 @@ theorem finish_sim (l ls : Nat) (Bw Bx : TokenBatch) (bytesAfter : ByteArray)
   obtain ⟨hrel, hw, hx⟩ := h₀
   subst hw hx
   refine SimR.pre (P := fun s t => s = s₀ ∧ t = t₀) (fun s t h => h.2) ?_
-  have hfin : ∀ (w : WCore) (x : XCore), SameBut w x → w.version = cur.version → ∀ hb hb',
+  have hfin : ∀ (w : Core) (x : Core), SameBut w x → w.version = cur.version → ∀ hb hb',
       SameBut w { x with version := cur'.version, tokenStarted := hb, batchEnded := hb' } ∧
         w.version = cur'.version := fun w x hs hv _ _ =>
     ⟨by same_but hs, by rw [hv, hag.version]⟩
@@ -286,14 +265,14 @@ theorem flushCursor_sim (hcons : ConsumesAlike H m R E) (l ls : Nat) (Bw Bx : To
     SimR (ErZ strict) (FlushRel l ls Bw Bx c)
       (fun _ spent s t => FlushedRel l ls Bw Bx s t ∧
         spent = { intoBatch d with bytes := bytesAfter })
-      (Lexer.WRustPort.flushCursor (H := H) (m := m) (R := R) (E := E) (floor := floor)
+      (Lexer.WRustPort.Rust.flushCursor (H := H) (m := m) (R := R) (E := E) (floor := floor)
         (low := low) c hf)
       (Lexer.X1BatchInCore.flushCursor d hf' >>= handOverTail bytesAfter) := by
   intro n
   induction n using Nat.strongRecOn with
   | ind n ih =>
   intro c d hn hcd hf hf'
-  rw [Lexer.WRustPort.flushCursor, Lexer.X1BatchInCore.flushCursor]
+  rw [Lexer.WRustPort.Rust.flushCursor, Lexer.X1BatchInCore.flushCursor]
   by_cases hc : c.HasNext
   · have hd : d.HasNext := hcd.hasNext_iff.mp hc
     rw [dite_eq_left_of_eq_true (eq_true hc), dite_eq_left_of_eq_true (eq_true hd), bind_assoc]

@@ -1,4 +1,4 @@
-import BSmtLib.Proofs.WRustPortX1BatchInCore.Calls
+import BSmtLib.Proofs.Simulation
 import BSmtLib.Proofs.Adapter
 
 /-!
@@ -13,6 +13,7 @@ namespace BSmtLib.Proofs.WRustPortX1BatchInCore
 
 open BSmtLib.Lexer.Internal (intoBatch)
 open BSmtLib.Proofs.Adapter
+open BSmtLib.Proofs.Simulation
 
 variable {g g' : BatchTag}
 

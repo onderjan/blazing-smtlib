@@ -1,20 +1,22 @@
+import BSmtLib.Proofs.WRustPortX1BatchInCore.Api
 import BSmtLib.Proofs.WRustPortX1BatchInCore.Collector
 
 /-!
 # The constructed lexers, and what the adapter records
 
-The two lexers are constructed with lexer states that correspond (`new_rel`,
-`newRecovering_rel`); fed the same slices, with the adapter's consumer, they record the same
-tokens (`feed_eq`, `handed_eq`).
+A lexer corresponds to itself as constructed (`new_rel`, `newRecovering_rel`), as the two lexers
+have the same constructors; fed the same slices, with the adapter's consumer, lexers that
+correspond record the same tokens (`feed_eq`, `handed_eq`).
 -/
 
 namespace BSmtLib.Proofs.WRustPortX1BatchInCore
 
 open BSmtLib.Proofs.Adapter
+open BSmtLib.Proofs.Simulation
 
 theorem new_rel {H : Type} (consumer : H) (version : Version) :
     LexRel (Lexer.WRustPort.Lexer.new consumer version)
-      (Lexer.X1BatchInCore.Lexer.new consumer version) :=
+      (Lexer.WRustPort.Lexer.new consumer version) :=
   ⟨rfl, { initialVersion := rfl, state := rfl, discard := rfl, recovers := rfl
           consumedDepth := rfl, lexedDepth := rfl, recoveryState := rfl, tokenStart := rfl
           tokenContent := rfl, offset := rfl, base := rfl, line := rfl, lineStart := rfl
@@ -23,7 +25,7 @@ theorem new_rel {H : Type} (consumer : H) (version : Version) :
 theorem newRecovering_rel {H : Type} {m : Type → Type} [Recover H m] (consumer : H)
     (version : Version) :
     LexRel (Lexer.WRustPort.Lexer.newRecovering (m := m) consumer version)
-      (Lexer.X1BatchInCore.Lexer.newRecovering (m := m) consumer version) :=
+      (Lexer.WRustPort.Lexer.newRecovering (m := m) consumer version) :=
   ⟨rfl, { initialVersion := rfl, state := rfl, discard := rfl, recovers := rfl
           consumedDepth := rfl, lexedDepth := rfl, recoveryState := rfl, tokenStart := rfl
           tokenContent := rfl, offset := rfl, base := rfl, line := rfl, lineStart := rfl
