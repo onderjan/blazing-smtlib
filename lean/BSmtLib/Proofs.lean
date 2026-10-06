@@ -11,6 +11,7 @@ import BSmtLib.Proofs.V1Naive
 import BSmtLib.Proofs.V2BatchedV3Runs
 import BSmtLib.Proofs.V3RunsV4FastPaths
 import BSmtLib.Proofs.V1NaiveV2Batched
+import BSmtLib.Proofs.WRustPortX1BatchInCore
 import BSmtLib.Proofs.V4FastPathsWRustPort
 
 /-!
@@ -109,5 +110,22 @@ info: 'BSmtLib.Proofs.Lexer.WRustPort.lexerCorrect' depends on axioms: [propext,
 -/
 #guard_msgs in
 #print axioms Lexer.WRustPort.lexerCorrect
+
+/-- The lexer with the batch kept in its state, run by the adapter with its consumer that takes
+every token and does not take whitespace and comments, is correct on whole inputs, however they
+are cut into slices: it hands over what the Rust port does. -/
+theorem Lexer.X1BatchInCore.lexerCorrect :
+    Spec.Lexer.LexerCorrect (Adapter.handed Adapter.X1BatchInCore.ops) := by
+  have e : Adapter.handed Adapter.WRustPort.ops = Adapter.handed Adapter.X1BatchInCore.ops := by
+    funext version slices
+    exact Lexer.WRustPort.handed_eq_handed_x1BatchInCore version slices
+  rw [← e]
+  exact Lexer.WRustPort.lexerCorrect
+
+/--
+info: 'BSmtLib.Proofs.Lexer.X1BatchInCore.lexerCorrect' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms Lexer.X1BatchInCore.lexerCorrect
 
 end BSmtLib.Proofs
