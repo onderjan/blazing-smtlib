@@ -85,12 +85,24 @@ structure Handed where
   content : Chars
   deriving DecidableEq, Repr
 
+end BSmtLib.Spec.Lexer
+
+/-
+The three definitions below belong to the lexicon's types, so they are in the lexicon's
+namespace, where dot notation finds them (`token.handed version input`). They are written here
+and not in the lexicon's modules because they build the types above, and a Lean module can use
+only what is declared before it.
+-/
+namespace BSmtLib.Spec.Lexicon
+
+open BSmtLib.Spec.Lexer
+
 /--
 Extension: the type of a handed-over token of each kind.
 
 The type of a token of each kind; a reserved word is an unquoted symbol.
 -/
-def _root_.BSmtLib.Spec.Lexicon.Category.type : Category → TokenType
+def Category.type : Category → TokenType
   | .parenOpen => .parenOpen
   | .parenClose => .parenClose
   | .numeral => .numeral
@@ -107,7 +119,7 @@ Extension: as `ReservedKind`.
 
 Which kind of reserved word a token is, if it is one.
 -/
-def _root_.BSmtLib.Spec.Lexicon.Token.reservedKind (version : Version) (token : Token) :
+def Token.reservedKind (version : Version) (token : Token) :
     Option ReservedKind :=
   if token.category ≠ .reserved then none
   else if ∃ w ∈ basicReservedWords version, token.text = chars w then some .general
@@ -118,13 +130,18 @@ Extension: as `Handed`.
 
 The token as the implementation hands it over.
 -/
-def _root_.BSmtLib.Spec.Lexicon.Token.handed (version : Version) (input : Chars) (token : Token) :
-    Handed :=
+def Token.handed (version : Version) (input : Chars) (token : Token) : Handed :=
   { type := token.category.type
     start := locate input token.offset
     «end» := locate input (token.offset + token.text.length)
     reserved := token.reservedKind version
     content := token.content version }
+
+end BSmtLib.Spec.Lexicon
+
+namespace BSmtLib.Spec.Lexer
+
+open BSmtLib.Spec.Lexicon
 
 /--
 Extension: a lexer hands over an end-of-file token after the input.

@@ -14,11 +14,11 @@ namespace BSmtLib.Spec.Grammar
 open BSmtLib.Spec.Lexicon
 
 /-- The version is `first` or a later one. -/
-def _root_.BSmtLib.Spec.Lexicon.Version.atLeast (version first : Version) : Prop :=
+def versionAtLeast (version first : Version) : Prop :=
   first ∈ version.upTo
 
 /-- The number of the version, as a decimal. -/
-def _root_.BSmtLib.Spec.Lexicon.Version.number : Version → Chars
+def versionNumber : Version → Chars
   | .v2_0 => chars "2.0"
   | .v2_5 => chars "2.5"
   | .v2_6 => chars "2.6"
@@ -116,7 +116,7 @@ inductive SExpr (version : Version) : List SyntaxToken → Tree.SExpr → Prop
 
   | symbol : SExpr version [.symbol name] (.symbol name)
 
-  | reserved : version.atLeast .v2_6 → SExpr version [.reserved w] (.reserved w)
+  | reserved : versionAtLeast version .v2_6 → SExpr version [.reserved w] (.reserved w)
 
   | keyword : SExpr version [.keyword name] (.keyword name)
 
@@ -130,7 +130,7 @@ Standard: 2.7 §3.3 Identifiers; App. B ⟨index⟩.
 -/
 inductive Index (version : Version) : List SyntaxToken → Tree.Index → Prop
   | numeral : Index version [.numeral digits] (.numeral digits)
-  | symbol : version.atLeast .v2_5 → Index version [.symbol name] (.symbol name)
+  | symbol : versionAtLeast version .v2_5 → Index version [.symbol name] (.symbol name)
 
 /--
 Standard: 2.7 §3.3 Identifiers; App. B ⟨identifier⟩.
@@ -213,7 +213,7 @@ Standard: 2.7 §3.6 Terms and Formulas; App. B ⟨pattern⟩.
 -/
 inductive SymbolOrWildcard (version : Version) : List SyntaxToken → Tree.SymbolOrWildcard → Prop
   | symbol : SymbolOrWildcard version [.symbol name] (.symbol name)
-  | wildcard : version.atLeast .v2_7 → SymbolOrWildcard version [word "_"] .wildcard
+  | wildcard : versionAtLeast version .v2_7 → SymbolOrWildcard version [word "_"] .wildcard
 
 /--
 Standard: 2.7 §3.6 Terms and Formulas; App. B ⟨pattern⟩.
@@ -254,7 +254,7 @@ inductive Term (version : Version) : List SyntaxToken → Tree.Term → Prop
         (.«let» bindings body)
 
   /-- `(` `lambda` `(` ⟨sorted_var⟩+ `)` ⟨term⟩ `)`, from 2.7 on -/
-  | lambda : version.atLeast .v2_7 →
+  | lambda : versionAtLeast version .v2_7 →
       Each (SortedVar version) variableTokens variables → variables ≠ [] →
       Term version bodyTokens body →
       Term version (paren (word "lambda" :: paren variableTokens ++ bodyTokens))
@@ -273,7 +273,7 @@ inductive Term (version : Version) : List SyntaxToken → Tree.Term → Prop
         (.quantified .«exists» variables body)
 
   /-- `(` `match` ⟨term⟩ `(` ⟨match_case⟩+ `)` `)`, from 2.6 on -/
-  | «match» : version.atLeast .v2_6 → Term version scrutineeTokens scrutinee →
+  | «match» : versionAtLeast version .v2_6 → Term version scrutineeTokens scrutinee →
       Cases version caseTokens cases → cases ≠ [] →
       Term version (paren (word "match" :: scrutineeTokens ++ paren caseTokens))
         (.«match» scrutinee cases)
@@ -404,28 +404,28 @@ inductive Command (version : Version) : List SyntaxToken → Tree.Command → Pr
   | checkSat : Command version (commandTokens "check-sat" []) .checkSat
 
   /-- `(` `check-sat-assuming` `(` ⟨term⟩∗ `)` `)`, from 2.7 on -/
-  | checkSatAssuming : version.atLeast .v2_7 → Each (Term version) tokens terms →
+  | checkSatAssuming : versionAtLeast version .v2_7 → Each (Term version) tokens terms →
       Command version (commandTokens "check-sat-assuming" (paren tokens))
         (.checkSatAssuming terms)
 
   /-- `(` `check-sat-assuming` `(` ⟨prop_literal⟩∗ `)` `)`, in 2.5 and 2.6 -/
-  | checkSatAssumingLiterals : version.atLeast .v2_5 → ¬ version.atLeast .v2_7 →
+  | checkSatAssumingLiterals : versionAtLeast version .v2_5 → ¬ versionAtLeast version .v2_7 →
       Each PropLiteral tokens literals →
       Command version (commandTokens "check-sat-assuming" (paren tokens))
         (.checkSatAssumingLiterals literals)
 
   /-- `(` `declare-const` ⟨symbol⟩ ⟨sort⟩ `)`, from 2.5 on -/
-  | declareConst : version.atLeast .v2_5 → «Sort» version tokens sort →
+  | declareConst : versionAtLeast version .v2_5 → «Sort» version tokens sort →
       Command version (commandTokens "declare-const" (.symbol name :: tokens))
         (.declareConst name sort)
 
   /-- `(` `declare-datatype` ⟨symbol⟩ ⟨datatype_dec⟩ `)`, from 2.6 on -/
-  | declareDatatype : version.atLeast .v2_6 → DatatypeDec version tokens datatype →
+  | declareDatatype : versionAtLeast version .v2_6 → DatatypeDec version tokens datatype →
       Command version (commandTokens "declare-datatype" (.symbol name :: tokens))
         (.declareDatatype name datatype)
 
   /-- `(` `declare-datatypes` `(` ⟨sort_dec⟩ⁿ⁺¹ `)` `(` ⟨datatype_dec⟩ⁿ⁺¹ `)` `)`, from 2.6 on -/
-  | declareDatatypes : version.atLeast .v2_6 → Each SortDec sortTokens sorts →
+  | declareDatatypes : versionAtLeast version .v2_6 → Each SortDec sortTokens sorts →
       Each (DatatypeDec version) datatypeTokens datatypes → sorts ≠ [] →
       sorts.length = datatypes.length →
       Command version
@@ -445,12 +445,12 @@ inductive Command (version : Version) : List SyntaxToken → Tree.Command → Pr
       (.declareSort name arity)
 
   /-- `(` `declare-sort-parameter` ⟨symbol⟩ `)`, from 2.7 on -/
-  | declareSortParameter : version.atLeast .v2_7 →
+  | declareSortParameter : versionAtLeast version .v2_7 →
       Command version (commandTokens "declare-sort-parameter" [.symbol name])
         (.declareSortParameter name)
 
   /-- `(` `define-const` ⟨symbol⟩ ⟨sort⟩ ⟨term⟩ `)`, from 2.7 on -/
-  | defineConst : version.atLeast .v2_7 → «Sort» version sortTokens sort →
+  | defineConst : versionAtLeast version .v2_7 → «Sort» version sortTokens sort →
       Term version termTokens term →
       Command version
         (commandTokens "define-const" (.symbol name :: sortTokens ++ termTokens))
@@ -461,11 +461,11 @@ inductive Command (version : Version) : List SyntaxToken → Tree.Command → Pr
       Command version (commandTokens "define-fun" tokens) (.defineFun definition)
 
   /-- `(` `define-fun-rec` ⟨function_def⟩ `)`, from 2.5 on -/
-  | defineFunRec : version.atLeast .v2_5 → FunctionDef version tokens definition →
+  | defineFunRec : versionAtLeast version .v2_5 → FunctionDef version tokens definition →
       Command version (commandTokens "define-fun-rec" tokens) (.defineFunRec definition)
 
   /-- `(` `define-funs-rec` `(` ⟨function_dec⟩ⁿ⁺¹ `)` `(` ⟨term⟩ⁿ⁺¹ `)` `)`, from 2.5 on -/
-  | defineFunsRec : version.atLeast .v2_5 →
+  | defineFunsRec : versionAtLeast version .v2_5 →
       Each (FunctionDec version) declarationTokens declarations →
       Each (Term version) bodyTokens bodies → declarations ≠ [] →
       declarations.length = bodies.length →
@@ -480,7 +480,7 @@ inductive Command (version : Version) : List SyntaxToken → Tree.Command → Pr
         (.defineSort name parameters sort)
 
   /-- `(` `echo` ⟨string⟩ `)`, from 2.5 on -/
-  | echo : version.atLeast .v2_5 →
+  | echo : versionAtLeast version .v2_5 →
       Command version (commandTokens "echo" [.string content]) (.echo content)
 
   /-- `(` `exit` `)` -/
@@ -496,7 +496,7 @@ inductive Command (version : Version) : List SyntaxToken → Tree.Command → Pr
   | getInfo : Command version (commandTokens "get-info" [.keyword flag]) (.getInfo flag)
 
   /-- `(` `get-model` `)`, from 2.5 on -/
-  | getModel : version.atLeast .v2_5 →
+  | getModel : versionAtLeast version .v2_5 →
       Command version (commandTokens "get-model" []) .getModel
 
   /-- `(` `get-option` ⟨keyword⟩ `)` -/
@@ -506,7 +506,7 @@ inductive Command (version : Version) : List SyntaxToken → Tree.Command → Pr
   | getProof : Command version (commandTokens "get-proof" []) .getProof
 
   /-- `(` `get-unsat-assumptions` `)`, from 2.5 on -/
-  | getUnsatAssumptions : version.atLeast .v2_5 →
+  | getUnsatAssumptions : versionAtLeast version .v2_5 →
       Command version (commandTokens "get-unsat-assumptions" []) .getUnsatAssumptions
 
   /-- `(` `get-unsat-core` `)` -/
@@ -523,10 +523,10 @@ inductive Command (version : Version) : List SyntaxToken → Tree.Command → Pr
   | push : Command version (commandTokens "push" [.numeral count]) (.push count)
 
   /-- `(` `reset` `)`, from 2.5 on -/
-  | reset : version.atLeast .v2_5 → Command version (commandTokens "reset" []) .reset
+  | reset : versionAtLeast version .v2_5 → Command version (commandTokens "reset" []) .reset
 
   /-- `(` `reset-assertions` `)`, from 2.5 on -/
-  | resetAssertions : version.atLeast .v2_5 →
+  | resetAssertions : versionAtLeast version .v2_5 →
       Command version (commandTokens "reset-assertions" []) .resetAssertions
 
   /-- `(` `set-info` ⟨attribute⟩ `)`, for every attribute but `:smt-lib-version` -/
@@ -542,8 +542,9 @@ inductive Command (version : Version) : List SyntaxToken → Tree.Command → Pr
   -/
   | declareVersion :
       Command version
-        (commandTokens "set-info" [.keyword (chars "smt-lib-version"), .decimal version.number])
-        (.setInfo ⟨chars "smt-lib-version", some (.constant (.decimal version.number))⟩)
+        (commandTokens "set-info"
+          [.keyword (chars "smt-lib-version"), .decimal (versionNumber version)])
+        (.setInfo ⟨chars "smt-lib-version", some (.constant (.decimal (versionNumber version)))⟩)
 
   /-- `(` `set-logic` ⟨symbol⟩ `)` -/
   | setLogic : Command version (commandTokens "set-logic" [.symbol name]) (.setLogic name)

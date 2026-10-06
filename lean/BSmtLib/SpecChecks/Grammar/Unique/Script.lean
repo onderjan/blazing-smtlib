@@ -281,7 +281,7 @@ theorem segment_eq {version : Version} {offset : Nat} {seg seg' rest rest' : Cha
 theorem Command.declaration {version : Version} {tokens : List SyntaxToken} {c : Tree.Command}
     (h : Command version tokens c) (hd : c.DeclaresVersion) :
     tokens = commandTokens "set-info"
-      [.keyword (chars "smt-lib-version"), .decimal version.number] := by
+      [.keyword (chars "smt-lib-version"), .decimal (versionNumber version)] := by
   obtain ⟨value, hv⟩ := hd
   cases h with
   | setInfo _ hne =>
@@ -294,7 +294,7 @@ theorem Command.declaration {version : Version} {tokens : List SyntaxToken} {c :
 theorem declaration_version {version : Version} {d : Chars} {c : Tree.Command}
     (h : Command version
       (commandTokens "set-info" [.keyword (chars "smt-lib-version"), .decimal d]) c) :
-    d = version.number := by
+    d = versionNumber version := by
   generalize ht : commandTokens "set-info" [.keyword (chars "smt-lib-version"), .decimal d] =
     tokens at h
   cases h with
@@ -307,8 +307,8 @@ theorem declaration_version {version : Version} {d : Chars} {c : Tree.Command}
     exact ha
   | _ => names_differ ht
 
-theorem Version.number_inj {version version' : Version}
-    (h : version.number = version'.number) : version = version' := by
+theorem versionNumber_inj {version version' : Version}
+    (h : versionNumber version = versionNumber version') : version = version' := by
   cases version <;> cases version' <;> first | rfl | exact absurd h (by decide)
 
 /-- The tokens of a version declaration are plain. -/
@@ -353,7 +353,7 @@ theorem declaration_unique {version version' : Version} {offset : Nat}
   obtain ⟨-, rfl⟩ := segment_eq ht₂ h'
     (by rw [hmap]; exact Command.group hc) (Command.group hc') heq
   rw [hmap, hdecl] at hc'
-  exact Version.number_inj (declaration_version hc')
+  exact versionNumber_inj (declaration_version hc')
 
 /-! ## The parse of a script -/
 

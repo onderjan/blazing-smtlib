@@ -28,7 +28,7 @@ abbrev ident (s : String) : Tree.Identifier := ⟨simple s, []⟩
 /-- The sort `s`, not applied. -/
 abbrev sort (s : String) : Tree.Sort := .mk (ident s) []
 
-instance (version first : Version) : Decidable (version.atLeast first) :=
+instance (version first : Version) : Decidable (versionAtLeast version first) :=
   inferInstanceAs (Decidable (first ∈ version.upTo))
 
 /-- A single item. -/

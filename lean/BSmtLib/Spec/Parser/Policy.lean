@@ -13,10 +13,10 @@ open BSmtLib.Spec.Lexicon BSmtLib.Spec.Grammar
 
 /-- The version whose number the decimal is. -/
 def versionOfNumber (decimal : Chars) : Option Version :=
-  [Version.v2_0, .v2_5, .v2_6, .v2_7].find? (·.number = decimal)
+  [Version.v2_0, .v2_5, .v2_6, .v2_7].find? (versionNumber · = decimal)
 
 /-- The version that the command declares, if it is a version declaration. -/
-def _root_.BSmtLib.Spec.Grammar.Tree.Command.declaredVersion : Tree.Command → Option Version
+def declaredVersion : Tree.Command → Option Version
   | .setInfo ⟨keyword, some (.constant (.decimal decimal))⟩ =>
     if keyword = chars "smt-lib-version" then versionOfNumber decimal else none
   | _ => none
@@ -49,8 +49,8 @@ commands as a parse, and its version declarations keep to the policy. A policy o
 def ScriptParseUnder (policy : VersionPolicy) (version : Version) (input : Chars)
     (commands : List Tree.Command) : Prop :=
   ScriptParse version input commands ∧
-    (∀ declared ∈ commands.filterMap Tree.Command.declaredVersion, declared ∈ policy.allowed) ∧
+    (∀ declared ∈ commands.filterMap declaredVersion, declared ∈ policy.allowed) ∧
     ∀ limit, policy.maxDeclarations = some limit →
-      (commands.filterMap Tree.Command.declaredVersion).length ≤ limit
+      (commands.filterMap declaredVersion).length ≤ limit
 
 end BSmtLib.Spec.Parser

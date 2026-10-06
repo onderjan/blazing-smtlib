@@ -36,7 +36,7 @@ def printCommandText (version : Version) (command : Tree.Command) : Chars :=
 
 /-- The version in force after the command, when the version is in force before it. -/
 def versionAfter (version : Version) (command : Tree.Command) : Version :=
-  command.declaredVersion.getD version
+  (declaredVersion command).getD version
 
 /-- The characters of a script that starts in the version: each command in the version in force
 at it, followed by `commandSeparator`. -/
@@ -95,12 +95,12 @@ def NoLoneBackslashIn (segments : List (Version × List Token)) : Prop :=
 /-! ## The version in force -/
 
 theorem versionOfNumber_number (version : Version) :
-    versionOfNumber version.number = some version := by
+    versionOfNumber (versionNumber version) = some version := by
   cases version <;> rfl
 
 theorem declaresVersion_of {command : Tree.Command} {version : Version}
-    (h : command.declaredVersion = some version) : command.DeclaresVersion := by
-  unfold Tree.Command.declaredVersion at h
+    (h : declaredVersion command = some version) : command.DeclaresVersion := by
+  unfold declaredVersion at h
   split at h
   · split at h
     · rename_i hk
@@ -123,10 +123,10 @@ theorem versionAfter_eq {version commandVersion : Version} {tokens : List Syntax
     | declareVersion =>
       simp only [Tree.Command.setInfo.injEq, Tree.Attribute.mk.injEq, true_and] at hc
       subst hc
-      simp [versionAfter, Tree.Command.declaredVersion, versionOfNumber_number]
+      simp [versionAfter, declaredVersion, versionOfNumber_number]
     | _ => simp at hc
-  · have hnone : command.declaredVersion = none := by
-      cases hc : command.declaredVersion with
+  · have hnone : declaredVersion command = none := by
+      cases hc : declaredVersion command with
       | none => rfl
       | some _ => exact absurd (declaresVersion_of hc) hd
     rw [versionAfter, hnone]
@@ -246,7 +246,7 @@ theorem printScript_read {version : Version} {offset : Nat} {input : Chars}
     have htne := ne_nil_of_exactly hseg
     obtain ⟨hT, hC⟩ := printCommandText_read hseg.1 htne hc offset' hw
     have := ScriptParseFrom.exit (rest := commandSeparator) hT hC
-    simpa [printScript, versionAfter, Tree.Command.declaredVersion, List.append_assoc]
+    simpa [printScript, versionAfter, declaredVersion, List.append_assoc]
       using this
 
 /-! ## Read-print -/
@@ -278,7 +278,7 @@ theorem printScript_layout {version : Version} {offset : Nat} {input : Chars}
       printCommandText, lexCommand, ← command_tokens hc, layout_ofToken hseg.1 hl₁]
   | exit hseg hc =>
     have hl₁ := hl _ (List.mem_cons_self ..)
-    simp only [printScript, versionAfter, Tree.Command.declaredVersion, Option.getD_none,
+    simp only [printScript, versionAfter, declaredVersion, Option.getD_none,
       layoutScript, List.flatMap_cons, List.flatMap_nil, printCommandText, lexCommand,
       ← command_tokens hc, layout_ofToken hseg.1 hl₁]
 
