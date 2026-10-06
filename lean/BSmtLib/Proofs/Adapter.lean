@@ -204,4 +204,14 @@ def V4FastPaths.ops : Ops where
   lexEof := Lexer.V1Naive.Lexer.lexEof
   handler := Lexer.V1Naive.Lexer.handler
 
+/-- The library's lexer `BSmtLib.Lexer`. -/
+def Lexer.ops : Ops where
+  Lexer := BSmtLib.Lexer Collector
+  AfterError := BSmtLib.Lexer.AfterError Collector .failFast
+  AfterEofError := BSmtLib.Lexer.AfterEofError Collector .failFast
+  new := BSmtLib.Lexer.new
+  lexSlice := BSmtLib.Lexer.lexSlice
+  lexEof := BSmtLib.Lexer.lexEof
+  handler := BSmtLib.Lexer.Internal.handler
+
 end BSmtLib.Proofs.Adapter
