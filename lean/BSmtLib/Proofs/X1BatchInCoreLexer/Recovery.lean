@@ -1,7 +1,7 @@
-import BSmtLib.Proofs.X2ContentsLexer.Outer
+import BSmtLib.Proofs.X1BatchInCoreLexer.Outer
 
 /-!
-# The steps between calls of the library's lexer and of the lexer with the content buffer
+# The steps between calls of the library's lexer and of `X1BatchInCore`
 
 The resetting, the discarding and the skipping of bytes while recovering, the turning of a
 failure into the error of a call, and the adding of the break location are coupled: they read
@@ -10,20 +10,20 @@ to zero. The two lexers have copies of their own of the functions on bytes (`ski
 `countLineFeeds`), which agree.
 -/
 
-namespace BSmtLib.Proofs.X2ContentsLexer
+namespace BSmtLib.Proofs.X1BatchInCoreLexer
 
-/-- The skipping state of the lexer with the content buffer for that of the library's lexer. -/
-def skMap (s : BSmtLib.Lexer.Internal.Skipping) : Lexer.X2Contents.Skipping :=
+/-- The skipping state of `X1BatchInCore` for that of the library's lexer. -/
+def skMap (s : BSmtLib.Lexer.Internal.Skipping) : Lexer.WRustPort.Skipping :=
   { skip := s.skip, depth := s.depth, line := s.line, lineStart := s.lineStart }
 
 theorem countLineFeeds_loop_eq (bytes : ByteSlice) (i count : Nat) (afterLast : Option Nat) :
     BSmtLib.Lexer.Internal.countLineFeeds.loop bytes i count afterLast =
-      Lexer.X2Contents.countLineFeeds.loop bytes i count afterLast := by
+      Lexer.WRustPort.countLineFeeds.loop bytes i count afterLast := by
   fun_induction BSmtLib.Lexer.Internal.countLineFeeds.loop bytes i count afterLast <;>
-    rw [Lexer.X2Contents.countLineFeeds.loop] <;> simp_all <;> intro h <;> omega
+    rw [Lexer.WRustPort.countLineFeeds.loop] <;> simp_all <;> intro h <;> omega
 
 theorem countLineFeeds_eq (bytes : ByteSlice) :
-    BSmtLib.Lexer.Internal.countLineFeeds bytes = Lexer.X2Contents.countLineFeeds bytes :=
+    BSmtLib.Lexer.Internal.countLineFeeds bytes = Lexer.WRustPort.countLineFeeds bytes :=
   countLineFeeds_loop_eq bytes 0 0 none
 
 -- Splits on a condition, reduces the branches that test it and closes the goals of a recursive
@@ -36,14 +36,14 @@ local macro "bc " t:term:max : tactic =>
 theorem skipBytes_eq (bytes : ByteSlice) (legacy : Bool) (offset index : Nat)
     (s : BSmtLib.Lexer.Internal.Skipping) :
     (fun r => (r.1, skMap r.2)) (BSmtLib.Lexer.Internal.skipBytes bytes legacy offset index s) =
-      Lexer.X2Contents.skipBytes bytes legacy offset index (skMap s) := by
+      Lexer.WRustPort.skipBytes bytes legacy offset index (skMap s) := by
   induction h : bytes.size - index using Nat.strongRecOn generalizing index s with
   | ind n ih =>
-  rw [BSmtLib.Lexer.Internal.skipBytes, Lexer.X2Contents.skipBytes]
+  rw [BSmtLib.Lexer.Internal.skipBytes, Lexer.WRustPort.skipBytes]
   by_cases hi : index < bytes.size
   · have IH : ∀ s', (fun r => (r.1, skMap r.2))
         (BSmtLib.Lexer.Internal.skipBytes bytes legacy offset (index + 1) s') =
-        Lexer.X2Contents.skipBytes bytes legacy offset (index + 1) (skMap s') :=
+        Lexer.WRustPort.skipBytes bytes legacy offset (index + 1) (skMap s') :=
       fun s' => ih _ (by omega) (index + 1) s' rfl
     simp only [hi, dite_true]
     generalize bytes[index] = c
@@ -64,79 +64,81 @@ section
 variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] {R E : Type}
 
 theorem discardBytes_couple (bytes : ByteSlice) :
-    Couple (fun _ _ => True) (BSmtLib.Lexer.Internal.discardBytes (H := H) (m := m) bytes)
-      (Lexer.X2Contents.discardBytes bytes) := by
-  unfold BSmtLib.Lexer.Internal.discardBytes Lexer.X2Contents.discardBytes
-  refine Couple.modify fun c x hx => ?_
+    Coupled (fun _ _ => True) (BSmtLib.Lexer.Internal.discardBytes (H := H) (m := m) bytes)
+      (Lexer.WRustPort.discardBytes bytes) := by
+  unfold BSmtLib.Lexer.Internal.discardBytes Lexer.WRustPort.discardBytes
+  refine Coupled.modify fun c x hx => ?_
   rw [eq_wb hx]
   apply rel_mk <;> dsimp only <;> rw [countLineFeeds_eq] <;>
-    generalize Lexer.X2Contents.countLineFeeds bytes = r <;> obtain ⟨n, _ | a⟩ := r <;> rfl
+    generalize Lexer.WRustPort.countLineFeeds bytes = r <;> obtain ⟨n, _ | a⟩ := r <;> rfl
 
 theorem reset_couple :
-    Couple (fun _ _ => True) (BSmtLib.Lexer.Internal.reset (H := H) (m := m))
-      (Lexer.X2Contents.reset) := by
-  unfold BSmtLib.Lexer.Internal.reset Lexer.X2Contents.reset
-  refine Couple.modify fun c x hx => ?_
+    Coupled (fun _ _ => True) (BSmtLib.Lexer.Internal.reset (H := H) (m := m))
+      (Lexer.WRustPort.reset) := by
+  unfold BSmtLib.Lexer.Internal.reset Lexer.WRustPort.reset
+  refine Coupled.modify fun c x hx => ?_
   rw [eq_wb hx]
   rfl
 
 theorem skipSlice_couple (slice : ByteSlice) (skip : Lexer.RecoveryState) :
-    Couple Eq (BSmtLib.Lexer.Internal.skipSlice (H := H) (m := m) slice skip)
-      (Lexer.X2Contents.skipSlice slice skip) := by
-  unfold BSmtLib.Lexer.Internal.skipSlice Lexer.X2Contents.skipSlice
-  refine Couple.bind Couple.get fun c x hx => ?_
+    Coupled Eq (BSmtLib.Lexer.Internal.skipSlice (H := H) (m := m) slice skip)
+      (Lexer.WRustPort.skipSlice slice skip) := by
+  unfold BSmtLib.Lexer.Internal.skipSlice Lexer.WRustPort.skipSlice
+  refine Coupled.bind Coupled.get fun c x hx => ?_
   rw [eq_wb hx]
-  refine Couple.ite Iff.rfl (fun _ => Couple.pure rfl) fun _ => ?_
+  refine Coupled.ite Iff.rfl (fun _ => Coupled.pure rfl) fun _ => ?_
   dsimp only
   split <;> rename_i hz <;> split <;> rename_i hx' <;>
     have e1 := (congrArg (fun r => (r.1, skMap r.2)) hz).symm.trans
       ((skipBytes_eq slice _ _ 0 _).trans hx') <;>
     simp only [Prod.mk.injEq, reduceCtorEq, Option.some.injEq, false_and, true_and] at e1
   · obtain ⟨rfl, rfl⟩ := e1
-    exact Couple.bind (Couple.set (rel_mk rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl))
-      fun _ _ _ => Couple.pure rfl
+    exact Coupled.bind
+      (Coupled.set (rel_mk rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl))
+      fun _ _ _ => Coupled.pure rfl
   · obtain rfl := e1
-    exact Couple.bind (Couple.set (rel_mk rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl))
-      fun _ _ _ => Couple.pure rfl
+    exact Coupled.bind
+      (Coupled.set (rel_mk rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl))
+      fun _ _ _ => Coupled.pure rfl
 
 /-- The current location of related states is the same: the offset. -/
 theorem currentLocation_eq {c : ZCore} {x : XCore} (hx : Rel c x) :
     x.currentLocation = c.currentLocation := by
   rw [eq_wb hx]
-  simp [Lexer.X2Contents.LexerCore.currentLocation, Lexer.X2Contents.LexerCore.locationAt,
-    Lexer.X2Contents.LexerCore.offsetAt, BSmtLib.Lexer.LexerCore.currentLocation,
+  simp [Lexer.WRustPort.LexerCore.currentLocation, Lexer.WRustPort.LexerCore.locationAt,
+    Lexer.WRustPort.LexerCore.offsetAt, BSmtLib.Lexer.LexerCore.currentLocation,
     BSmtLib.Lexer.LexerCore.locationAt, BSmtLib.Lexer.LexerCore.offsetAt, wb, coreMap]
 
 theorem executeStep_couple {R : Type}
     {step : BSmtLib.Lexer.InnerM H m (Except (Lexer.Failure E) (ControlFlow R))}
-    {step' : Lexer.X2Contents.InnerM H m (Except (Lexer.Failure E) (ControlFlow R))}
-    (hs : Couple Eq step step') :
-    Couple Eq (BSmtLib.Lexer.Internal.executeStep step) (Lexer.X2Contents.executeStep step') := by
-  unfold BSmtLib.Lexer.Internal.executeStep Lexer.X2Contents.executeStep
-  refine Couple.bind hs fun a b e => ?_
+    {step' : Lexer.WRustPort.InnerM H m (Except (Lexer.Failure E) (ControlFlow R))}
+    (hs : Coupled Eq step step') :
+    Coupled Eq (BSmtLib.Lexer.Internal.executeStep step) (Lexer.WRustPort.executeStep step') := by
+  unfold BSmtLib.Lexer.Internal.executeStep Lexer.WRustPort.executeStep
+  refine Coupled.bind hs fun a b e => ?_
   subst e
   rcases a with _ | _ | r
-  · exact Couple.pure rfl
-  · exact Couple.pure rfl
-  · refine Couple.bind Couple.get fun c x hx => Couple.pure ?_
+  · exact Coupled.pure rfl
+  · exact Coupled.pure rfl
+  · refine Coupled.bind Coupled.get fun c x hx => Coupled.pure ?_
     rw [currentLocation_eq hx]
 
 theorem failCall_couple (abandon : Location → StateT H m Unit) (failure : Lexer.Failure E)
     (atEnd : Bool) :
-    Couple Eq (BSmtLib.Lexer.Internal.failCall abandon failure atEnd)
-      (Lexer.X2Contents.failCall abandon failure atEnd) := by
-  unfold BSmtLib.Lexer.Internal.failCall Lexer.X2Contents.failCall
-  refine Couple.bind Couple.get fun c x hx => ?_
+    Coupled Eq (BSmtLib.Lexer.Internal.failCall abandon failure atEnd)
+      (Lexer.WRustPort.fail abandon failure atEnd) := by
+  unfold BSmtLib.Lexer.Internal.failCall Lexer.WRustPort.fail
+  refine Coupled.bind Coupled.get fun c x hx => ?_
   rw [eq_wb hx]
-  refine Couple.ite Iff.rfl (fun _ => Couple.pure rfl) fun _ => ?_
-  refine Couple.bind (Couple.modify fun c x hx => ?_) fun _ _ _ => ?_
+  refine Coupled.ite Iff.rfl (fun _ => Coupled.pure rfl) fun _ => ?_
+  refine Coupled.bind (Coupled.modify fun c x hx => ?_) fun _ _ _ => ?_
   · rw [eq_wb hx]
     rfl
-  refine Couple.bind (Couple.lift _) fun _ _ _ => ?_
-  refine Couple.bind (Couple.modify fun c x hx => ?_) fun _ _ _ => Couple.pure rfl
+  refine Coupled.bind (Coupled.lift _) fun _ _ _ => ?_
+  refine Coupled.bind (Coupled.modify fun c x hx => ?_) fun _ _ _ => Coupled.pure rfl
   rw [eq_wb hx]
   rfl
 
 end
 
-end BSmtLib.Proofs.X2ContentsLexer
+end BSmtLib.Proofs.X1BatchInCoreLexer

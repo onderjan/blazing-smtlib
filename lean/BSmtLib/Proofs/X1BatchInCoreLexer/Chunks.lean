@@ -1,5 +1,5 @@
 import BSmtLib.Proofs.Simulation
-import BSmtLib.Proofs.Adapter
+import BSmtLib.Proofs.X1BatchInCoreLexer.Run
 
 /-!
 # The library's lexer on a slice too large for its positions
@@ -21,7 +21,7 @@ fields (`ρ`): every step commutes with it (`Nat'`, `INat`), step by step throug
 lexer, with a tactic that takes the steps of code that is the same on both sides.
 -/
 
-namespace BSmtLib.Proofs.X2ContentsLexer.Chunks
+namespace BSmtLib.Proofs.X1BatchInCoreLexer.Chunks
 
 open BSmtLib.Proofs.Simulation
 open BSmtLib.Lexer (LexerCore Interrupted RecoveryState)
@@ -279,9 +279,9 @@ theorem flushBatch_nat :
 
 macro_rules | `(tactic| nat_lemma) => `(tactic| with_reducible apply flushBatch_nat)
 
-theorem handOverStored_nat (ty hty s e hend hfloor) :
+theorem handOverStored_nat (ty s e hend hfloor) :
     Nat' (H := H) (m := m) (R := R) (E := E) (floor := floor) (low := low) d r
-      (handOverStored ty hty s e hend hfloor) := by
+      (handOverStored ty s e hend hfloor) := by
   unfold handOverStored; nat_auto
 
 macro_rules | `(tactic| nat_lemma) => `(tactic| with_reducible apply handOverStored_nat)
@@ -294,9 +294,9 @@ theorem locationFrom_nat (base position) :
 
 macro_rules | `(tactic| nat_lemma) => `(tactic| with_reducible apply locationFrom_nat)
 
-theorem sinkStored_nat (ty hty te s base h) :
+theorem sinkStored_nat (ty te s base h) :
     Nat' (H := H) (m := m) (R := R) (E := E) (floor := floor) (low := low) d r
-      (sinkStored ty hty te s base h) := by
+      (sinkStored ty te s base h) := by
   unfold sinkStored; nat_auto
 
 macro_rules | `(tactic| nat_lemma) => `(tactic| with_reducible apply sinkStored_nat)
@@ -311,9 +311,9 @@ theorem finishNumeral_nat (te s base h) :
       (finishNumeral te s base h) := by
   unfold finishNumeral; nat_auto
 
-theorem finishDigitRun_nat (run hrun te next s base h) :
+theorem finishDigitRun_nat (run te next s base h) :
     Nat' (H := H) (m := m) (R := R) (E := E) (floor := floor) (low := low) d r
-      (finishDigitRun run hrun te next s base h) := by
+      (finishDigitRun run te next s base h) := by
   unfold finishDigitRun; nat_auto
 
 theorem finishSimpleSymbol_nat (te s base h) :
@@ -436,9 +436,9 @@ theorem lexBaseSelection_nat (input start hstart s h) :
       (lexBaseSelection input start hstart s h) := by
   unfold lexBaseSelection; nat_auto
 
-theorem lexDigitRun_nat (input start run hrun s base h) :
+theorem lexDigitRun_nat (input start run s base h) :
     Nat' (H := H) (m := m) (R := R) (E := E) (floor := floor) (low := low) d r
-      (lexDigitRun input start run hrun s base h) := by
+      (lexDigitRun input start run s base h) := by
   unfold lexDigitRun; nat_auto
 
 theorem lexStringLiteralLegacy_nat (input consumed origin horigin s base h) :
@@ -690,7 +690,7 @@ end
 
 /-! ## The adapter's lexer on the chunks -/
 
-open BSmtLib.Proofs.Adapter (Collector feed)
+open BSmtLib.Proofs.Adapter (Collector)
 
 /-- The step that `lexSliceStep` takes on a slice, past the discarding and the recovery. -/
 def sliceStep (slice : ByteSlice) :
@@ -703,23 +703,31 @@ def sliceStep (slice : ByteSlice) :
 /-- What the chunk lemma needs of the lexer: it neither discards nor recovers. -/
 def Inv (c : LexerCore) : Prop := c.discard = false ∧ c.recoveryState = none
 
-/-- What feeding goes on with after a step of the lexer: the rest of the slices from the lexer
-the step leaves, if the step goes on. -/
+/-- What a failed call gives: the failure handled as `lexSliceStep` handles it, with the lexer
+after it. -/
+def failed (f : BSmtLib.Lexer.Failure Unit) (c : LexerCore) (h : Collector) :
+    Called (BSmtLib.Lexer Collector) :=
+  match ((failCall (LexRecovery.abandon (H := Collector) (m := Id) .failFast) f
+      false).run c).run h with
+  | ((e, c'), h') => (.error e, ofParts h' c')
+
+/-- What the calls go on with after the step that a call takes on a slice: the rest of the
+slices from the lexer the step leaves, if the step goes on, and the failure if it fails. -/
 def afterStep' (rest : List Spec.Lexicon.Chars)
     (x : (Except (BSmtLib.Lexer.Failure Unit) (ControlFlow (Located Empty)) × LexerCore) ×
-      Collector) : Option (List BSmtLib.Spec.Lexer.Handed) :=
+      Collector) : Called (BSmtLib.Lexer Collector) :=
   match x with
-  | ((.ok .continue, c'), h') => feed Adapter.Lexer.ops (BSmtLib.Lexer.Internal.ofParts h' c') rest
+  | ((.ok .continue, c'), h') => runSlices lexerStep (ofParts h' c') rest
   | ((.ok (.break x), _), _) => x.value.elim
-  | ((.error _, _), _) => none
+  | ((.error f, c'), h') => failed f c' h'
 
-theorem feed_step (l : BSmtLib.Lexer Collector) (hl : Inv (BSmtLib.Lexer.Internal.core l))
+theorem run_step (l : BSmtLib.Lexer Collector) (hl : Inv (BSmtLib.Lexer.Internal.core l))
     (s : Spec.Lexicon.Chars) (rest : List Spec.Lexicon.Chars) :
-    feed Adapter.Lexer.ops l (s :: rest) =
+    runSlices lexerStep l (s :: rest) =
       afterStep' rest (((sliceStep s.toByteArray.toByteSlice).run
         (BSmtLib.Lexer.Internal.core l)).run (BSmtLib.Lexer.Internal.handler l)) := by
   obtain ⟨hd, hr⟩ := hl
-  simp only [feed, Adapter.Lexer.ops, BSmtLib.Lexer.lexSlice, BSmtLib.Lexer.Internal.run]
+  simp only [runSlices, lexerStep, BSmtLib.Lexer.Internal.run]
   generalize hX : ((sliceStep s.toByteArray.toByteSlice).run (BSmtLib.Lexer.Internal.core l)).run
     (BSmtLib.Lexer.Internal.handler l) = X
   unfold sliceStep at hX
@@ -909,22 +917,20 @@ theorem chunksCont_error (slice : ByteSlice) (p : Nat) (f : BSmtLib.Lexer.Failur
 /- The kernel must not be left to compare lists of chunks, which would make it unfold
 `chunksFrom`; these state each case of `afterStep'` by its own. -/
 theorem afterStep'_error (rest : List Spec.Lexicon.Chars) (f : BSmtLib.Lexer.Failure Unit)
-    (c : LexerCore) (h : Collector) : afterStep' rest ((.error f, c), h) = none := rfl
+    (c : LexerCore) (h : Collector) : afterStep' rest ((.error f, c), h) = failed f c h := rfl
 
 theorem afterStep'_continue (rest : List Spec.Lexicon.Chars) (c : LexerCore) (h : Collector) :
-    afterStep' rest ((.ok .continue, c), h) =
-      feed Adapter.Lexer.ops (BSmtLib.Lexer.Internal.ofParts h c) rest := rfl
+    afterStep' rest ((.ok .continue, c), h) = runSlices lexerStep (ofParts h c) rest := rfl
 
 theorem run_pure_error (f : BSmtLib.Lexer.Failure Unit) (c : LexerCore) (h : Collector) :
     (((pure (.error f) : BSmtLib.Lexer.InnerM Collector Id
       (Except (BSmtLib.Lexer.Failure Unit) (ControlFlow (Located Empty)))).run c).run h) =
       ((.error f, c), h) := rfl
 
-/-- After a chunk, feeding the further chunks goes on as `lexChunks` goes on. -/
+/-- After a chunk, the calls on the further chunks go on as `lexChunks` goes on. -/
 theorem afterChunk (s : Spec.Lexicon.Chars) (rest : List Spec.Lexicon.Chars) (p : Nat)
     (ih : ∀ (c : LexerCore) (h : Collector), Inv c →
-      feed Adapter.Lexer.ops (BSmtLib.Lexer.Internal.ofParts h c)
-          (chunksFrom s (p + CHUNK_SIZE) ++ rest) =
+      runSlices lexerStep (ofParts h c) (chunksFrom s (p + CHUNK_SIZE) ++ rest) =
         afterStep' rest (((lexChunks s.toByteArray.toByteSlice (p + CHUNK_SIZE)).run c).run h))
     (X : (Except (BSmtLib.Lexer.Failure Unit) (ControlFlow (Located Empty)) × LexerCore) ×
       Collector) (hX : Inv X.1.2) :
@@ -942,14 +948,14 @@ theorem afterChunk (s : Spec.Lexicon.Chars) (rest : List Spec.Lexicon.Chars) (p 
       exact ih c' h' hX
     | «break» v => exact v.value.elim
 
-theorem feed_chunksFrom (s : Spec.Lexicon.Chars) (rest : List Spec.Lexicon.Chars) (p : Nat) :
+theorem run_chunksFrom (s : Spec.Lexicon.Chars) (rest : List Spec.Lexicon.Chars) (p : Nat) :
     ∀ (c : LexerCore) (h : Collector), Inv c →
-      feed Adapter.Lexer.ops (BSmtLib.Lexer.Internal.ofParts h c) (chunksFrom s p ++ rest) =
+      runSlices lexerStep (ofParts h c) (chunksFrom s p ++ rest) =
         afterStep' rest (((lexChunks s.toByteArray.toByteSlice p).run c).run h) := by
   fun_induction chunksFrom s p with
   | case1 p hp ih =>
     intro c h hc
-    rw [List.cons_append, feed_step (BSmtLib.Lexer.Internal.ofParts h c) hc]
+    rw [List.cons_append, run_step (ofParts h c) hc]
     have hp' : p < s.toByteArray.toByteSlice.size := by
       rw [toByteSlice_size, List.size_toByteArray]; exact hp
     rw [lexChunks_unfold _ _ hp']
@@ -976,23 +982,23 @@ theorem ofParts_eta (l : BSmtLib.Lexer Collector) :
     BSmtLib.Lexer.Internal.ofParts (BSmtLib.Lexer.Internal.handler l)
       (BSmtLib.Lexer.Internal.core l) = l := rfl
 
-/-- Feeding a slice is feeding its cut: the library's lexer lexes a slice too large for its
-positions as it lexes the chunks of the slice given one after another. -/
-theorem feed_cut (l : BSmtLib.Lexer Collector) (hl : Inv (BSmtLib.Lexer.Internal.core l))
+/-- A call on a slice is the calls on its cut: the library's lexer lexes a slice too large for
+its positions as it lexes the chunks of the slice given one after another. -/
+theorem run_cut (l : BSmtLib.Lexer Collector) (hl : Inv (BSmtLib.Lexer.Internal.core l))
     (s : Spec.Lexicon.Chars) (rest : List Spec.Lexicon.Chars) :
-    feed Adapter.Lexer.ops l (s :: rest) = feed Adapter.Lexer.ops l (cut s ++ rest) := by
+    runSlices lexerStep l (s :: rest) = runSlices lexerStep l (cut s ++ rest) := by
   unfold cut
   split
   · rfl
   · rename_i hs
-    rw [feed_step l hl, sliceStep, ofSlice_large s hs]
-    rw [← feed_chunksFrom s rest 0 _ _ hl, ofParts_eta]
+    rw [run_step l hl, sliceStep, ofSlice_large s hs]
+    rw [← run_chunksFrom s rest 0 _ _ hl, ofParts_eta]
 
-/-- What feeding goes on with depends on the slices after the step only through feeding them. -/
+/-- What the calls go on with depends on the slices after the step only through the calls on
+them. -/
 theorem afterStep'_congr {L L' : List Spec.Lexicon.Chars}
     (hL : ∀ (c : LexerCore) (h : Collector), Inv c →
-      feed Adapter.Lexer.ops (BSmtLib.Lexer.Internal.ofParts h c) L =
-        feed Adapter.Lexer.ops (BSmtLib.Lexer.Internal.ofParts h c) L')
+      runSlices lexerStep (ofParts h c) L = runSlices lexerStep (ofParts h c) L')
     (X : (Except (BSmtLib.Lexer.Failure Unit) (ControlFlow (Located Empty)) × LexerCore) ×
       Collector) (hX : Inv X.1.2) :
     afterStep' L X = afterStep' L' X := by
@@ -1006,16 +1012,16 @@ theorem afterStep'_congr {L L' : List Spec.Lexicon.Chars}
       exact hL c' h' hX
     | «break» v => exact v.value.elim
 
-theorem feed_append_congr {ys ys' : List Spec.Lexicon.Chars}
+theorem run_append_congr {ys ys' : List Spec.Lexicon.Chars}
     (hy : ∀ l : BSmtLib.Lexer Collector, Inv (BSmtLib.Lexer.Internal.core l) →
-      feed Adapter.Lexer.ops l ys = feed Adapter.Lexer.ops l ys') :
+      runSlices lexerStep l ys = runSlices lexerStep l ys') :
     ∀ (xs : List Spec.Lexicon.Chars) (l : BSmtLib.Lexer Collector),
       Inv (BSmtLib.Lexer.Internal.core l) →
-      feed Adapter.Lexer.ops l (xs ++ ys) = feed Adapter.Lexer.ops l (xs ++ ys')
+      runSlices lexerStep l (xs ++ ys) = runSlices lexerStep l (xs ++ ys')
   | [], l, hl => by rw [List.nil_append, List.nil_append]; exact hy l hl
   | x :: xs, l, hl => by
-    rw [List.cons_append, List.cons_append, feed_step l hl, feed_step l hl]
-    exact afterStep'_congr (fun c h hc => feed_append_congr hy xs _ hc) _
+    rw [List.cons_append, List.cons_append, run_step l hl, run_step l hl]
+    exact afterStep'_congr (fun c h hc => run_append_congr hy xs _ hc) _
       (inv_of_nat _ (fun d r => sliceStep_nat _ d r) _ _ hl)
 
 /-- Every slice of the list cut, as `cut` cuts it. -/
@@ -1035,19 +1041,14 @@ theorem mem_cutAll {slices : List Spec.Lexicon.Chars} {c : Spec.Lexicon.Chars}
   obtain ⟨s, _, hc⟩ := List.mem_flatMap.mp h
   exact mem_cut hc
 
-theorem feed_cutAll : ∀ (slices : List Spec.Lexicon.Chars) (l : BSmtLib.Lexer Collector),
+/-- The library's lexer, fed the slices one call after another, gives what it gives fed their
+cut: every slice too large for its positions cut into chunks that are not. -/
+theorem run_cutAll : ∀ (slices : List Spec.Lexicon.Chars) (l : BSmtLib.Lexer Collector),
     Inv (BSmtLib.Lexer.Internal.core l) →
-    feed Adapter.Lexer.ops l slices = feed Adapter.Lexer.ops l (cutAll slices)
+    runSlices lexerStep l slices = runSlices lexerStep l (cutAll slices)
   | [], _, _ => rfl
   | s :: rest, l, hl => by
-    rw [feed_cut l hl, cutAll, List.flatMap_cons, ← cutAll]
-    exact feed_append_congr (fun l' hl' => feed_cutAll rest l' hl') (cut s) l hl
+    rw [run_cut l hl, cutAll, List.flatMap_cons, ← cutAll]
+    exact run_append_congr (fun l' hl' => run_cutAll rest l' hl') (cut s) l hl
 
-/-- The library's lexer, run by the adapter, hands over for the slices what it hands over for
-their cut: every slice too large for its positions cut into chunks that are not. -/
-theorem handed_cutAll (v : Spec.Lexicon.Version) (slices : List Spec.Lexicon.Chars) :
-    Adapter.handed Adapter.Lexer.ops v slices =
-      Adapter.handed Adapter.Lexer.ops v (cutAll slices) :=
-  feed_cutAll slices _ ⟨rfl, rfl⟩
-
-end BSmtLib.Proofs.X2ContentsLexer.Chunks
+end BSmtLib.Proofs.X1BatchInCoreLexer.Chunks

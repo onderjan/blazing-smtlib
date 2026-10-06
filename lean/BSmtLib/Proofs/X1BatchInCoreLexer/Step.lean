@@ -1,7 +1,7 @@
-import BSmtLib.Proofs.X2ContentsLexer.Normal
+import BSmtLib.Proofs.X1BatchInCoreLexer.Normal
 
 /-!
-# The step of the library's lexer and of the lexer with the content buffer
+# The step of the library's lexer and of `X1BatchInCore`
 
 `lexStep` dispatches on the lexer state to the loop of the normal state (`Normal`) or to the step
 of the token in progress (`Steps`), and `afterStep` goes on in the normal state where a step that
@@ -11,7 +11,7 @@ position returned: the steps of a token in progress keep it, and the normal stat
 that position.
 -/
 
-namespace BSmtLib.Proofs.X2ContentsLexer
+namespace BSmtLib.Proofs.X1BatchInCoreLexer
 
 open BSmtLib.Proofs.Simulation
 
@@ -33,8 +33,8 @@ theorem afterStep_sim (slice : ByteSlice) (h : slice.stop < USize.size) (start :
       (nextMapLt slice.start es (hbs ▸ hb))
       (BSmtLib.Lexer.Internal.afterStep (H := H) (m := m) (R := R) (E := E)
         (inputOf slice h) start hstart r)
-      (Lexer.X2Contents.afterStep slice start' hstart' (nextMap slice.start es r)) := by
-  unfold BSmtLib.Lexer.Internal.afterStep Lexer.X2Contents.afterStep
+      (Lexer.WRustPort.afterStep slice start' hstart' (nextMap slice.start es r)) := by
+  unfold BSmtLib.Lexer.Internal.afterStep Lexer.WRustPort.afterStep
   have hr := r.property
   have hs : slice.start ≤ start.toNat := hbs ▸ hb
   refine SimP.dite (by subst es; simp only [nextMap, ix]; omega)
@@ -52,14 +52,14 @@ theorem lexStep_sim (slice : ByteSlice) (h : slice.stop < USize.size) (start : U
       (nextMapLt slice.start es (hbs ▸ hb))
       (BSmtLib.Lexer.Internal.lexStep (H := H) (m := m) (R := R) (E := E)
         (inputOf slice h) start hstart state tokenStart base hpending)
-      (Lexer.X2Contents.lexStep slice start' hstart' state tokenStart (ix slice.start base)
+      (Lexer.WRustPort.lexStep slice start' hstart' state tokenStart (ix slice.start base)
         hpending') := by
   have hbs' : b.toNat ≤ start.toNat := hbs ▸ Nat.le_refl _
   have hlt : start.toNat < slice.stop := by
     have := hstart
     rw [inputOf_stop] at this
     exact this
-  unfold BSmtLib.Lexer.Internal.lexStep Lexer.X2Contents.lexStep
+  unfold BSmtLib.Lexer.Internal.lexStep Lexer.WRustPort.lexStep
   cases state <;> dsimp only
   case normal =>
     exact SimP.mono (fun _ h => h)
@@ -76,10 +76,10 @@ theorem lexStep_sim (slice : ByteSlice) (h : slice.stop < USize.size) (start : U
     exact SimP.bind (lexBaseSelection_sim b slice h start start' es hstart tokenStart hb
       hbs' _ _) fun r => afterStep_sim b slice h start start' es hb hbs hstart hstart' r
   case hexadecimal =>
-    exact SimP.bind (lexDigitRun_sim b slice h start start' es _ _ _ tokenStart base hbase hb
+    exact SimP.bind (lexDigitRun_sim b slice h start start' es _ tokenStart base hbase hb
       hbs' _ _) fun r => afterStep_sim b slice h start start' es hb hbs hstart hstart' r
   case binary =>
-    exact SimP.bind (lexDigitRun_sim b slice h start start' es _ _ _ tokenStart base hbase hb
+    exact SimP.bind (lexDigitRun_sim b slice h start start' es _ tokenStart base hbase hb
       hbs' _ _) fun r => afterStep_sim b slice h start start' es hb hbs hstart hstart' r
   case stringLiteral =>
     exact SimP.bind (lexStringLiteral_sim b slice h start start' es tokenStart base hbase hb
@@ -113,4 +113,4 @@ theorem lexStep_sim (slice : ByteSlice) (h : slice.stop < USize.size) (start : U
 
 end
 
-end BSmtLib.Proofs.X2ContentsLexer
+end BSmtLib.Proofs.X1BatchInCoreLexer

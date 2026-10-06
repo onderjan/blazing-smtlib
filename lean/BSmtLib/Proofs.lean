@@ -6,6 +6,7 @@ import BSmtLib.Proofs.Simulation
 import BSmtLib.Proofs.V1Naive
 import BSmtLib.Proofs.V1NaiveWRustPort
 import BSmtLib.Proofs.WRustPortX1BatchInCore
+import BSmtLib.Proofs.X1BatchInCoreLexer
 
 /-!
 # Proofs about the lexers
@@ -69,23 +70,18 @@ info: 'BSmtLib.Proofs.Lexer.X1BatchInCore.lexerCorrect' depends on axioms: [prop
 #guard_msgs in
 #print axioms Lexer.X1BatchInCore.lexerCorrect
 
-/-
-Currently broken: the theorem below rests on the link between the lexers, which the change of
-the lexers' code broke: `X2ContentsLexer` (the library's lexer against the lexer with the
-content buffer, which is now the lexer with the batch kept in its state). Its modules are not
-imported until they are proved again.
-
 /-- The library's lexer, run by the adapter with its consumer that takes every token and does
 not take whitespace and comments, is correct on whole inputs, however they are cut into slices:
-it hands over for the slices what it hands over for them cut into chunks short enough for its
-positions, which is what the lexer with the content buffer hands over for the chunks, and the
+it hands over for the slices what the lexer with the batch kept in its state hands over for them
+with each slice too large for the positions of the library's lexer cut into chunks, and the
 chunks make up the same input. -/
 theorem Lexer.lexerCorrect :
     Spec.Lexer.LexerCorrect (Adapter.handed Adapter.Lexer.ops) := by
   intro version slices handed
-  obtain ⟨e, hflat, hb⟩ := Lexer.handed_eq_handed_cutAll version slices
-  rw [e, ← Lexer.X2Contents.handed_eq_handed_lexer version _ hb]
-  have h := Lexer.X2Contents.lexerCorrect version (X2ContentsLexer.Chunks.cutAll slices) handed
+  obtain ⟨e, hflat⟩ := Lexer.handed_eq_handed_x1BatchInCore version slices
+  rw [e]
+  have h := Lexer.X1BatchInCore.lexerCorrect version (X1BatchInCoreLexer.Chunks.cutAll slices)
+    handed
   simp only [hflat] at h
   exact h
 
@@ -94,6 +90,5 @@ info: 'BSmtLib.Proofs.Lexer.lexerCorrect' depends on axioms: [propext, Classical
 -/
 #guard_msgs in
 #print axioms Lexer.lexerCorrect
--/
 
 end BSmtLib.Proofs

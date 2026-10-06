@@ -1,15 +1,16 @@
-import BSmtLib.Proofs.X2ContentsLexer.Recovery
+import BSmtLib.Proofs.X1BatchInCoreLexer.Recovery
 
 /-!
-# The end of the input, in the library's lexer and the lexer with the content buffer
+# The end of the input, in the library's lexer and `X1BatchInCore`
 
 `lexEofInner` sets the base to zero before it reads it, finishes the token in progress at the end
 of the input, catches a relex and hands over the end-of-file token. It is simulated exactly, under
-`coreMap 0`, by the rules of `Simulation` and the simulations of the finishing steps, with one
-rule more for `tryCatch` whose handler does not touch the state.
+`coreMap 0`, by the rules of `Simulation` and the simulations of the finishing steps.
+`X1BatchInCore` takes the batch it starts with from its operations (`Ops.eofBatch`), which is the
+one in its state.
 -/
 
-namespace BSmtLib.Proofs.X2ContentsLexer
+namespace BSmtLib.Proofs.X1BatchInCoreLexer
 
 open BSmtLib.Proofs.Simulation
 
@@ -18,56 +19,6 @@ section
 variable {m : Type → Type} [Monad m] [LawfulMonad m] {H ε : Type} {S T α β : Type}
   {φ : S → T}
 
-omit [LawfulMonad m] in
-theorem runM_tryCatch {f : M m H ε S α} {k : ε → M m H ε S α} (s : S) (h : H) :
-    runM (tryCatch f k) s h = runM f s h >>= fun x =>
-      match x.1.1 with
-      | .ok a => pure ((.ok a, x.1.2), x.2)
-      | .error e => runM (k e) x.1.2 x.2 := by
-  simp only [runM, tryCatch, MonadExcept.tryCatch, tryCatchThe, MonadExceptOf.tryCatch,
-    ExceptT.tryCatch, ExceptT.run_mk, StateT.run_bind]
-  refine congrArg (_ >>= ·) (funext fun x => ?_)
-  obtain ⟨⟨r, s'⟩, h'⟩ := x
-  cases r <;> rfl
-
-/-- `tryCatch`, with a handler simulated from every state. -/
-theorem SimP.tryCatch {P : S → Prop} {f : M m H ε S α} {g : M m H ε T α}
-    {k : ε → M m H ε S α} {k' : ε → M m H ε T α}
-    (hf : SimP P (fun _ _ => True) φ id f g)
-    (hk : ∀ e, SimP (fun _ => True) (fun _ _ => True) φ id (k e) (k' e)) :
-    SimP P (fun _ _ => True) φ id (tryCatch f k) (tryCatch g k') := by
-  intro s hs h
-  obtain ⟨y, hy1, hy2⟩ := hf s hs h
-  have hk' : ∀ x : {x : (Except ε α × S) × H // Good (fun _ _ => True) x},
-      ∃ y' : m {x' : (Except ε α × S) × H // Good (fun _ _ => True) x'},
-        (match x.val.1.1 with
-          | .ok a => Pure.pure ((.ok a, x.val.1.2), x.val.2)
-          | .error e => runM (k e) x.val.1.2 x.val.2) = Subtype.val <$> y' ∧
-        (match (mapOut φ id x.val).1.1 with
-          | .ok a => Pure.pure ((.ok a, (mapOut φ id x.val).1.2), (mapOut φ id x.val).2)
-          | .error e => runM (k' e) (mapOut φ id x.val).1.2 (mapOut φ id x.val).2) =
-          (fun x' => mapOut φ id x'.val) <$> y' := by
-    intro ⟨⟨⟨r, s'⟩, h'⟩, hx⟩
-    cases r with
-    | ok a =>
-      refine ⟨Pure.pure ⟨((.ok a, s'), h'), fun _ _ => trivial⟩, ?_, ?_⟩ <;>
-        simp [mapOut, Except.map]
-    | error e =>
-      obtain ⟨y', h1, h2⟩ := hk e s' trivial h'
-      exact ⟨y', h1, by simpa [mapOut, Except.map] using h2⟩
-  obtain ⟨Y, hY⟩ := Classical.skolem.mp hk'
-  refine ⟨y >>= Y, ?_, ?_⟩
-  · rw [runM_tryCatch, hy1, bind_map_left, map_bind]
-    exact congrArg (y >>= ·) (funext fun x => (hY x).1)
-  · rw [runM_tryCatch, hy2, bind_map_left, map_bind]
-    exact congrArg (y >>= ·) (funext fun x => (hY x).2)
-
-/-- A simulation under conditions, as an equation from a state that satisfies them. -/
-theorem SimP.eq {P : S → Prop} {Q : α → S → Prop} {ψ : α → β} {f : M m H ε S α}
-    {g : M m H ε T β} (hf : SimP P Q φ ψ f g) {s : S} (hs : P s) (h : H) :
-    mapOut φ ψ <$> runM f s h = runM g (φ s) h := by
-  obtain ⟨y, h1, h2⟩ := hf s hs h
-  rw [h1, h2, Functor.map_map]
 
 omit [LawfulMonad m] in
 /-- A step simulated from the states of every base is simulated from every state. -/
@@ -112,12 +63,13 @@ variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] {R E : Type} [
 theorem lexEofInner_exact (c : ZCore) (h : H) :
     (fun r => ((r.1.1, coreMap 0 r.1.2), r.2)) <$>
       runI (BSmtLib.Lexer.Internal.lexEofInner (H := H) (m := m) (R := R) (E := E)) c h =
-    runI (Lexer.X2Contents.lexEofInner (H := H) (m := m) (R := R) (E := E)) (coreMap 0 c) h := by
-  unfold BSmtLib.Lexer.Internal.lexEofInner Lexer.X2Contents.lexEofInner
+    runI (Lexer.WRustPort.lexEofInner (H := H) (m := m) (R := R) (E := E)) (coreMap 0 c) h := by
+  unfold BSmtLib.Lexer.Internal.lexEofInner Lexer.WRustPort.lexEofInner
+  simp only [eofBatch_eq]
   simp only [runI, StateT.run]
   refine bind_post_sim (φ := boundMap 0) (Q := fun _ _ => True) _ _ _ ?_ (rfl : BaseIs 0 _) _ _
     (fun a s h => ?_) h
-  · refine SimP.bind (SimP.tryCatch ?_ fun e => ?_) fun _ => ?_
+  · refine SimP.bind (SimP.tryCatch (ψ := id) (Q := fun _ _ => True) ?_ fun e => ?_) fun _ => ?_
     · obtain ⟨v, iv, st, d, rc, cd, ld, rs, ts, tc, off, bs, ln, ls, bt, tsd, be⟩ := c
       have ok : EndOk 0 0 0 BSmtLib.Lexer.TokenEnd.EOF :=
         ⟨by simp, by simp, by simp [BSmtLib.Lexer.TokenEnd.EOF],
@@ -128,11 +80,11 @@ theorem lexEofInner_exact (c : ZCore) (h : H) :
         refine SimP.bind (Q := fun x s => BaseIs 0 s ∧
           x = Consume.consumesWhitespaceAndComments (H := H)) (ψ := id) ?_ fun x => ?_
         · unfold BSmtLib.Lexer.Internal.consumesWhitespaceAndComments
-            Lexer.X2Contents.consumesWhitespaceAndComments
+            Lexer.WRustPort.consumesWhitespaceAndComments
           exact SimP.pure (fun _ h => ⟨h, rfl⟩) rfl
         refine SimP.ite Iff.rfl (fun _ => ?_) fun _ => SimP.pure (fun _ _ => trivial) rfl
         exact SimP.mono (P := BaseIs 0) (Q := fun _ => BaseIs 0) (fun _ h => h.1)
-          (fun _ _ _ => trivial) (sinkStored_sim 0 0 _ _ _ _ 0 ok.hbase ok.hbp _ _)
+          (fun _ _ _ => trivial) (sinkStored_sim 0 0 _ _ _ 0 ok.hbase ok.hbp _ _)
       case normal => exact SimP.pure (fun _ _ => trivial) rfl
       case fraction =>
         exact SimP.mono (Q := fun _ => BaseIs 0) (fun _ h => h) (fun _ _ _ => trivial)
@@ -142,10 +94,10 @@ theorem lexEofInner_exact (c : ZCore) (h : H) :
           (finishNumeral_sim 0 0 _ _ 0 ok _ _)
       case hexadecimal =>
         exact SimP.mono (Q := fun _ => BaseIs 0) (fun _ h => h) (fun _ _ _ => trivial)
-          (finishDigitRun_sim 0 0 _ _ _ _ _ _ 0 ok _ _)
+          (finishDigitRun_sim 0 0 _ _ _ _ 0 ok _ _)
       case binary =>
         exact SimP.mono (Q := fun _ => BaseIs 0) (fun _ h => h) (fun _ _ _ => trivial)
-          (finishDigitRun_sim 0 0 _ _ _ _ _ _ 0 ok _ _)
+          (finishDigitRun_sim 0 0 _ _ _ _ 0 ok _ _)
       case simpleSymbol =>
         exact SimP.mono (Q := fun _ => BaseIs 0) (fun _ h => h) (fun _ _ _ => trivial)
           (finishSimpleSymbol_sim 0 0 _ _ 0 ok _ _)
@@ -157,10 +109,10 @@ theorem lexEofInner_exact (c : ZCore) (h : H) :
           (finishStringLiteral_sim 0 0 _ _ 0 ok _ _)
       case quotedSymbolClosed =>
         exact SimP.mono (Q := fun _ => BaseIs 0) (fun _ h => h) (fun _ _ _ => trivial)
-          (sinkStored_sim 0 0 _ _ _ _ 0 ok.hbase ok.hbp _ _)
+          (sinkStored_sim 0 0 _ _ _ 0 ok.hbase ok.hbp _ _)
       case whitespace =>
         exact SimP.mono (Q := fun _ => BaseIs 0) (fun _ h => h) (fun _ _ _ => trivial)
-          (sinkStored_sim 0 0 _ _ _ _ 0 ok.hbase ok.hbp _ _)
+          (sinkStored_sim 0 0 _ _ _ 0 ok.hbase ok.hbp _ _)
       all_goals exact fail_sim 0 id 0 _ _ ok.hb ok.hp ok.hno _
     · rcases e with ⟨_ | _ | _, _, _⟩ <;>
         first | exact SimP.pure (fun _ _ => trivial) rfl | exact SimP.throw _
@@ -174,4 +126,4 @@ theorem lexEofInner_exact (c : ZCore) (h : H) :
 
 end
 
-end BSmtLib.Proofs.X2ContentsLexer
+end BSmtLib.Proofs.X1BatchInCoreLexer

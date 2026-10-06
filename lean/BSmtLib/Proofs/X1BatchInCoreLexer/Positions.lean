@@ -1,16 +1,16 @@
-import BSmtLib.Proofs.Lexer.X2Contents
+import BSmtLib.Proofs.Lexer.X1BatchInCore
 
 /-!
-# Positions of the library's lexer and indices of the lexer with the content buffer
+# Positions of the library's lexer and indices of `X1BatchInCore`
 
-The library's lexer reads a slice by `USize` positions in the slice's array (`Input`); the lexer
-with the content buffer `X2Contents` reads it by `Nat` indices into the slice (`Slice`). A
-position `p` of the input over a slice is the index `p.toNat - slice.start`. This module relates
-the reads, the run scans and the contents of the two once, so that the bounds arithmetic of
-`USize` stays here.
+The library's lexer reads a slice by `USize` positions in the slice's array (`Input`);
+`X1BatchInCore`, which runs the code of the Rust port, reads it by `Nat` indices into the slice
+(`Slice`). A position `p` of the input over a slice is the index `p.toNat - slice.start`. This
+module relates the reads, the run scans and the contents of the two once, so that the bounds
+arithmetic of `USize` stays here.
 -/
 
-namespace BSmtLib.Proofs.X2ContentsLexer
+namespace BSmtLib.Proofs.X1BatchInCoreLexer
 
 open BSmtLib.Lexer (Input runEnd runEndAll endsRun RUN_FLAGS Content)
 
@@ -139,4 +139,4 @@ theorem runEndAll_eq (p : USize) (hp : slice.start ≤ p.toNat) (mask : UInt8) :
 
 end
 
-end BSmtLib.Proofs.X2ContentsLexer
+end BSmtLib.Proofs.X1BatchInCoreLexer

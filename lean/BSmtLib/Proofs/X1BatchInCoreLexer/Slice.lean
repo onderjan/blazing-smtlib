@@ -1,8 +1,8 @@
-import BSmtLib.Proofs.X2ContentsLexer.Step
-import BSmtLib.Proofs.X2ContentsLexer.Outer
+import BSmtLib.Proofs.X1BatchInCoreLexer.Step
+import BSmtLib.Proofs.X1BatchInCoreLexer.Outer
 
 /-!
-# The loop over a slice of the library's lexer and of the lexer with the content buffer
+# The loop over a slice of the library's lexer and of `X1BatchInCore`
 
 `lexSliceRun`, the loop of the steps up to the first stop of the consumer, is simulated exactly
 under `coreMap` of the start of the slice, by induction on the bytes left and on whether a
@@ -11,19 +11,19 @@ base, and after it the base is between the start of the slice and the position r
 moving the offset on to that position is the same in both lexers (`coreMap_advance`).
 
 `lexSliceFrom`, the loop over the stops of the consumer, goes back after a stop to the position
-`input.start + resumed`, where the lexer with the content buffer goes back to the index `resumed`.
+`input.start + resumed`, where `X1BatchInCore` goes back to the index `resumed`.
 Where it goes on lexing, `resumed` is below the size of the slice, so the two agree under
 `coreMap`; where it returns, only the base can differ, which means nothing between the calls. So
-the loop over a slice is coupled (`Couple`) from related states, as `Outer` relates them.
+the loop over a slice is coupled (`Coupled`) from related states, as `Outer` relates them.
 -/
 
-namespace BSmtLib.Proofs.X2ContentsLexer
+namespace BSmtLib.Proofs.X1BatchInCoreLexer
 
 open BSmtLib.Proofs.Simulation
 
-/-- How lexing a slice ended, for the lexer with the content buffer. -/
+/-- How lexing a slice ended, for `X1BatchInCore`. -/
 def exitMap {R E : Type} {floor : Option Nat} :
-    BSmtLib.Lexer.Internal.SliceExit R E floor → Lexer.X2Contents.SliceExit R E floor
+    BSmtLib.Lexer.Internal.SliceExit R E floor → Lexer.WRustPort.SliceExit R E floor
   | .done result => .done result
   | .stopped stop location after => .stopped stop location after
 
@@ -31,8 +31,8 @@ def exitMap {R E : Type} {floor : Option Nat} :
 theorem coreMap_advance {start : Nat} {c : ZCore} {p : USize} (hb : start ≤ c.base.toNat)
     (hp : c.base.toNat ≤ p.toNat) :
     coreMap start (c.advance p) = (coreMap start c).advance (ix start p) := by
-  simp only [coreMap, BSmtLib.Lexer.LexerCore.advance, Lexer.X2Contents.LexerCore.advance,
-    BSmtLib.Lexer.LexerCore.offsetAt, Lexer.X2Contents.LexerCore.offsetAt, sub_toNat_ix hb hp]
+  simp only [coreMap, BSmtLib.Lexer.LexerCore.advance, Lexer.WRustPort.LexerCore.advance,
+    BSmtLib.Lexer.LexerCore.offsetAt, Lexer.WRustPort.LexerCore.offsetAt, sub_toNat_ix hb hp]
 
 section
 
@@ -54,7 +54,7 @@ theorem run_bind_simP {S T α β σ τ : Type} {P : S → Prop} {Q : α → S �
     bind_map_left]
   refine congrArg (y >>= ·) (funext fun x => ?_)
   obtain ⟨⟨⟨r, s'⟩, h'⟩, hgood⟩ := x
-  exact hK r s' h' hgood
+  exact hK r s' h' hgood.1
 
 end
 
@@ -77,7 +77,7 @@ theorem lexSliceRun_exact (slice : ByteSlice) (h : slice.stop < USize.size) :
       (fun r => ((exitMap r.1.1, boundMap slice.start r.1.2), r.2)) <$>
         (BSmtLib.Lexer.Internal.lexSliceRun (m := m) (inputOf slice h) position fnResult
           c).run hh =
-      (Lexer.X2Contents.lexSliceRun slice (ix slice.start position) fnResult
+      (Lexer.WRustPort.lexSliceRun slice (ix slice.start position) fnResult
         (boundMap slice.start c)).run hh := by
   intro n
   induction n using Nat.strongRecOn with
@@ -85,7 +85,7 @@ theorem lexSliceRun_exact (slice : ByteSlice) (h : slice.stop < USize.size) :
   intro position fnResult c hn hpos hbase hh
   have hsz : slice.size = slice.stop - slice.start := rfl
   have hstopz : (inputOf slice h).stop.toNat = slice.stop := inputOf_stop
-  rw [BSmtLib.Lexer.Internal.lexSliceRun.eq_def, Lexer.X2Contents.lexSliceRun.eq_def]
+  rw [BSmtLib.Lexer.Internal.lexSliceRun.eq_def, Lexer.WRustPort.lexSliceRun.eq_def]
   dsimp only
   cases fnResult with
   | error e =>
@@ -147,16 +147,15 @@ variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m]
 
 /-- Two runs of the consumer's monad that give a result and a lexer state, from the consumer
 `h`, are the two sides of one run of pairs with equal results, related states and the same
-consumer. -/
-def CoupleAt {γ : Type} (A : StateT H m (γ × ZCore)) (B : StateT H m (γ × XCore)) (h : H) :
+consumer (`Simulation.MCouple`). -/
+abbrev CoupleAt {γ : Type} (A : StateT H m (γ × ZCore)) (B : StateT H m (γ × XCore)) (h : H) :
     Prop :=
-  ∃ y : m {p : ((γ × ZCore) × H) × ((γ × XCore) × H) //
-      p.1.1.1 = p.2.1.1 ∧ Rel p.1.1.2 p.2.1.2 ∧ p.1.2 = p.2.2},
-    A.run h = (fun p => p.val.1) <$> y ∧ B.run h = (fun p => p.val.2) <$> y
+  MCouple (fun p q => (p.1.1 = q.1.1 ∧ Rel p.1.2 q.1.2) ∧ p.2 = q.2) (A.run h) (B.run h)
 
 theorem CoupleAt.pure {γ : Type} {r : γ} {c : ZCore} {x : XCore} (hx : Rel c x) (h : H) :
-    CoupleAt (m := m) (Pure.pure (r, c)) (Pure.pure (r, x)) h :=
-  ⟨Pure.pure ⟨(((r, c), h), ((r, x), h)), rfl, hx, rfl⟩, by simp, by simp⟩
+    CoupleAt (m := m) (Pure.pure (r, c)) (Pure.pure (r, x)) h := by
+  simp only [CoupleAt, StateT.run_pure]
+  exact MCouple.pure ⟨⟨rfl, hx⟩, rfl⟩
 
 /-- A run followed by continuations that are coupled, where the second run is the first one
 mapped. -/
@@ -165,12 +164,9 @@ theorem CoupleAt.bind_exact {σ τ γ : Type} (A : StateT H m σ) (B : StateT H 
     (hAB : B.run h = (fun r => (Φ r.1, r.2)) <$> A.run h)
     (hK : ∀ s h', CoupleAt (K s) (K' (Φ s)) h') :
     CoupleAt (A >>= K) (B >>= K') h := by
-  obtain ⟨Y, hY⟩ := Classical.skolem.mp fun r : σ × H => hK r.1 r.2
-  refine ⟨A.run h >>= Y, ?_, ?_⟩
-  · rw [StateT.run_bind, map_bind]
-    exact congrArg (A.run h >>= ·) (funext fun r => (hY r).1)
-  · rw [StateT.run_bind, hAB, bind_map_left, map_bind]
-    exact congrArg (A.run h >>= ·) (funext fun r => (hY r).2)
+  simp only [CoupleAt, StateT.run_bind]
+  rw [hAB, bind_map_left]
+  exact MCouple.bind (MCouple.refl _) fun x y e => by subst e; exact hK x.1 x.2
 
 end
 
@@ -204,14 +200,14 @@ theorem lexSliceFrom_couple (slice : ByteSlice) (h : slice.stop < USize.size)
       CoupleAt
         (BSmtLib.Lexer.Internal.lexSliceFrom (m := m) (inputOf slice h) initialOffset floor
           hfloor position fnResult c)
-        (Lexer.X2Contents.lexSliceFrom slice initialOffset floor hfloor' position' fnResult x)
+        (Lexer.WRustPort.lexSliceFrom slice initialOffset floor hfloor' position' fnResult x)
         hh := by
   intro k
   induction k using Nat.strongRecOn with
   | ind k ih =>
   intro floor hfloor hfloor' position position' fnResult c x hk ep ex hpos hbase hh
   subst ep ex
-  rw [BSmtLib.Lexer.Internal.lexSliceFrom.eq_def, Lexer.X2Contents.lexSliceFrom.eq_def]
+  rw [BSmtLib.Lexer.Internal.lexSliceFrom.eq_def, Lexer.WRustPort.lexSliceFrom.eq_def]
   refine CoupleAt.bind_exact _ _ (fun r => (exitMap r.1, boundMap slice.start r.2)) _ _ hh
     ?_ fun s h' => ?_
   · rw [← lexSliceRun_exact slice h _ position fnResult c rfl hpos hbase hh]
@@ -241,16 +237,16 @@ theorem lexSliceFrom_couple (slice : ByteSlice) (h : slice.stop < USize.size)
         exact ih _ (by omega) location.offset _ _ _ _ (.ok .continue) _ _ rfl er
           (Subtype.ext (by
             simp only [boundMap, coreMap, BSmtLib.Lexer.LexerCore.resumeAt,
-              Lexer.X2Contents.LexerCore.resumeAt]
+              Lexer.WRustPort.LexerCore.resumeAt]
             rw [er'])) hs (fun _ _ => rfl) h'
       · rw [dite_eq_right (fun h => hr (hcond.mp h)), dite_eq_right hr]
         exact CoupleAt.pure (by rfl) h'
 
-/-- The loop over a slice of the library's lexer and that of the lexer with the content buffer,
+/-- The loop over a slice of the library's lexer and that of `X1BatchInCore`,
 run from related states, are coupled. -/
 theorem lexSliceInner_couple (slice : ByteSlice) (h : slice.stop < USize.size) :
-    Couple Eq (BSmtLib.Lexer.Internal.lexSliceInner (H := H) (m := m) (R := R) (E := E)
-      (inputOf slice h)) (Lexer.X2Contents.lexSliceInner slice) := by
+    Coupled Eq (BSmtLib.Lexer.Internal.lexSliceInner (H := H) (m := m) (R := R) (E := E)
+      (inputOf slice h)) (Lexer.WRustPort.lexSliceInner slice) := by
   intro c x hx hh
   rw [eq_wb hx]
   have hst : ix slice.start (inputOf slice h).start = 0 := by
@@ -263,4 +259,4 @@ theorem lexSliceInner_couple (slice : ByteSlice) (h : slice.stop < USize.size) :
 
 end
 
-end BSmtLib.Proofs.X2ContentsLexer
+end BSmtLib.Proofs.X1BatchInCoreLexer
