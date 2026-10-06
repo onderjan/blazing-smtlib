@@ -11,6 +11,7 @@ state as it was, under the version, and the consumer with the lexemes recorded, 
 
 namespace BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
 
+open BSmtLib.Lexer.Internal (intoBatch)
 open BSmtLib.Proofs.Adapter V1Naive V1NaiveV2Batched
 open Lexer.WRustPort (flushCursor callConsumer)
 
@@ -21,16 +22,16 @@ variable {floor : Option Nat} {low : Nat}
 theorem idx_new' (v : Version) (b : TokenBatch) : idx (BatchCursor.new v b) = 0 := rfl
 
 /-- The call of the consumer. -/
-theorem wp_callConsumer {cursor : BatchCursor} {h : cursor.HasNext} {s : BS floor low}
-    {coll : Collector}
-    {Q : (Except Unit (ControlFlow Empty) × {c : BatchCursor // c.Consumed cursor}) →
+theorem wp_callConsumer {g : BatchTag} {cursor : BatchCursor g} {h : cursor.HasNext}
+    {s : BS floor low} {coll : Collector}
+    {Q : (Except Unit (ControlFlow Empty) × {c : BatchCursor g // c.Consumed cursor}) →
       BS floor low → Collector → Prop} {QE : Intr floor → BS floor low → Collector → Prop}
     (hq : Q ((Consume.consume (H := Collector) cursor h).run coll).1 s
       ((Consume.consume (H := Collector) cursor h).run coll).2) :
     WP (callConsumer (H := Collector) (m := Id) (R := Empty) (E := Unit) (floor := floor)
       (low := low) cursor h) s coll Q QE := hq
 
-theorem intoBatch_new (v : Version) (b : TokenBatch) : (BatchCursor.new v b).intoBatch = b := rfl
+theorem intoBatch_new (v : Version) (b : TokenBatch) : intoBatch (BatchCursor.new v b) = b := rfl
 
 /-- A postcondition holds of a state with the same value. -/
 theorem q_of_val_eq {α : Type} {Q : α → BS floor low → Collector → Prop} {a : α}

@@ -71,7 +71,8 @@ def errorKindName : LexicalErrorKind → String
   | .missingDelimiter => "MissingDelimiter"
 
 /-- The response line of a token of the cursor, under the version. -/
-def tokenLine (cursor : BatchCursor) (token : Token) (version : Version) : String :=
+def tokenLine {batch : BatchTag} (cursor : BatchCursor batch) (token : Token batch)
+    (version : Version) : String :=
   let reserved := match cursor.syntax token version with
     | .reserved (.general _) => "general"
     | .reserved (.commandName _) => "command"
@@ -223,7 +224,8 @@ structure Scripted (whitespace : Bool) where
 reply does not take through an attempt that takes every token and then fails; a Lean cursor
 is a value, so this walks a copy of it instead, which leaves the cursor itself untouched. -/
 /-- The lines of every token remaining in the cursor, and their number. -/
-def describeAll (cursor : BatchCursor) (version : Version) : String × Nat :=
+def describeAll {batch : BatchTag} (cursor : BatchCursor batch) (version : Version) :
+    String × Nat :=
   match cursor.next? with
   | none => ("", 0)
   | some (token, ⟨next, consumed⟩) =>
@@ -233,8 +235,9 @@ def describeAll (cursor : BatchCursor) (version : Version) : String × Nat :=
 termination_by cursor.remaining
 
 /-- Takes every token remaining in the cursor, which has one, writing a line for each. -/
-def takeAll (out : IO.Ref String) (version : Version) (cursor : BatchCursor)
-    (h : cursor.HasNext) : IO { c : BatchCursor // c.Consumed cursor } := do
+def takeAll {batch : BatchTag} (out : IO.Ref String) (version : Version)
+    (cursor : BatchCursor batch)
+    (h : cursor.HasNext) : IO { c : BatchCursor batch // c.Consumed cursor } := do
   let (token, ⟨next, consumed⟩) := cursor.next h
   out.modify (· ++ tokenLine cursor token version)
   if h : next.HasNext then
@@ -246,8 +249,8 @@ def takeAll (out : IO.Ref String) (version : Version) (cursor : BatchCursor)
 termination_by cursor.remaining
 
 /-- Takes the next token, which there is, and then up to `more` further ones. -/
-def takeSome (cursor : BatchCursor) (h : cursor.HasNext) (more : Nat) :
-    { c : BatchCursor // c.Consumed cursor } :=
+def takeSome {batch : BatchTag} (cursor : BatchCursor batch) (h : cursor.HasNext) (more : Nat) :
+    { c : BatchCursor batch // c.Consumed cursor } :=
   let (_, ⟨next, consumed⟩) := cursor.next h
   match more with
   | more + 1 =>
@@ -263,15 +266,15 @@ Takes the tokens of the cursor, which has one, by the rules: fails on the symbol
 a closing parenthesis that closes nothing, and on the end-of-file token inside a parenthesis,
 or on every one if `refuseEnd` is set; the symbol `to-2.0` sets the version.
 -/
-def takeByRules (refuseEnd : Bool) (version : Version) (cursor : BatchCursor)
-    (h : cursor.HasNext) :
+def takeByRules {batch : BatchTag} (refuseEnd : Bool) (version : Version)
+    (cursor : BatchCursor batch) (h : cursor.HasNext) :
     StateT (Scripted whitespace) IO
-      (Except String (ControlFlow Unit) × { c : BatchCursor // c.Consumed cursor }) := do
+      (Except String (ControlFlow Unit) × { c : BatchCursor batch // c.Consumed cursor }) := do
   let (token, ⟨next, consumed⟩) := cursor.next h
   let state : Scripted whitespace ← get
   state.out.modify (· ++ tokenLine cursor token version)
   let content := cursor.content token
-  let mut next : { c : BatchCursor // c.Consumed cursor } := ⟨next, consumed⟩
+  let mut next : { c : BatchCursor batch // c.Consumed cursor } := ⟨next, consumed⟩
   match cursor.category token with
   | .parenOpen => set ({ state with opened := state.opened + 1 } : Scripted whitespace)
   | .parenClose =>
@@ -319,7 +322,7 @@ instance : Consume (Scripted whitespace) IO Unit String where
         | .switchAndFinish taken _ => min taken count
       -- every reply takes a token, and the cursor has one
       let ⟨next, consumed⟩ := takeSome cursor h (taken - 1)
-      let switched (version : Version) : { c : BatchCursor // c.Consumed cursor } :=
+      let switched (version : Version) : { c : BatchCursor _ // c.Consumed cursor } :=
         ⟨next.setVersion version, (next.setVersion_follows version).trans_consumed consumed⟩
       return match reply with
         | .takeAll | .leave _ => (.ok .continue, ⟨next, consumed⟩)

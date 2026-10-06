@@ -16,14 +16,14 @@ section
 variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Consume H m R E]
   {floor : Option Nat} {low : Nat} (start : Nat) (b : USize)
 
-theorem callConsumer_sim (cursor : BatchCursor) (h : cursor.HasNext) :
+theorem callConsumer_sim {g : BatchTag} (cursor : BatchCursor g) (h : cursor.HasNext) :
     SimP (BaseIs b) (fun _ => BaseIs b) (boundMap start (floor := floor) (low := low)) id
       (BSmtLib.Lexer.Internal.callConsumer (H := H) (m := m) (R := R) (E := E) cursor h)
       (Lexer.X2Contents.callConsumer cursor h) := by
   unfold BSmtLib.Lexer.Internal.callConsumer Lexer.X2Contents.callConsumer
   exact SimP.lift (fun _ => by simp) fun _ _ h => h
 
-theorem flushCursor_sim : ∀ n (cursor : BatchCursor), cursor.remaining = n →
+theorem flushCursor_sim {g : BatchTag} : ∀ n (cursor : BatchCursor g), cursor.remaining = n →
     ∀ hfloor hfloor',
     SimP (BaseIs b) (fun _ => BaseIs b) (boundMap start (floor := floor) (low := low)) id
       (BSmtLib.Lexer.Internal.flushCursor (H := H) (m := m) (R := R) (E := E) cursor hfloor)

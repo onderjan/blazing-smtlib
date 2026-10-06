@@ -10,7 +10,10 @@ lexemes as the naive lexer's hand-overs of each alone would (`handOverCursor_bat
 
 namespace BSmtLib.Proofs.Lexer.V1NaiveV2Batched
 
+open BSmtLib.Lexer.Internal (intoBatch)
 open BSmtLib.Proofs.Adapter V1Naive V2Batched
+
+variable {g : BatchTag}
 
 theorem drop_eq_cons (b : Array Lexeme) (j : Nat) (hj : j < b.size) :
     b.toList.drop j = b[j] :: b.toList.drop (j + 1) := by
@@ -18,8 +21,8 @@ theorem drop_eq_cons (b : Array Lexeme) (j : Nat) (hj : j < b.size) :
   simp
 
 theorem takeRest_batch (b : Array Lexeme) (hb0 : Ordered 0 b.toList) :
-    ∀ n (c : BatchCursor), c.remaining = n →
-    c.intoBatch = toTokenBatch b hb0 → idx c + c.remaining = b.size →
+    ∀ n (c : BatchCursor g), c.remaining = n →
+    intoBatch c = toTokenBatch b hb0 → idx c + c.remaining = b.size →
     (takeRest c).1 = (b.toList.drop (idx c)).mapM (lexemeHanded c.version) ∧
     ((takeRest c).1 ≠ none → (takeRest c).2.1.remaining = 0) ∧
     (takeRest c).2.1.version = c.version ∧
@@ -61,8 +64,8 @@ theorem takeRest_batch (b : Array Lexeme) (hb0 : Ordered 0 b.toList) :
         exact hne rfl
 
 /-- What the consumer does with a cursor over a batch of lexemes. -/
-theorem consume_batch (b : Array Lexeme) (hb0 : Ordered 0 b.toList) (c : BatchCursor)
-    (h : c.HasNext) (hb : c.intoBatch = toTokenBatch b hb0) (hs : idx c + c.remaining = b.size)
+theorem consume_batch (b : Array Lexeme) (hb0 : Ordered 0 b.toList) (c : BatchCursor g)
+    (h : c.HasNext) (hb : intoBatch c = toTokenBatch b hb0) (hs : idx c + c.remaining = b.size)
     (coll : Collector) :
     (∀ hs', (b.toList.drop (idx c)).mapM (lexemeHanded c.version) = some hs' →
       ((Consume.consume (H := Collector) c h).run coll).1.1 = .ok .continue ∧

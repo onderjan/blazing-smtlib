@@ -13,6 +13,8 @@ namespace BSmtLib.Proofs.X1BatchInCoreX2Contents
 
 open BSmtLib.Proofs.Adapter
 
+variable {γ γ' : BatchTag}
+
 theorem size_toByteArray (s : ByteSlice) : s.toByteArray.size = s.size := by
   have := s.stop_le_size_byteArray
   have := s.start_le_stop
@@ -47,7 +49,8 @@ theorem fromBytes?_congr {s s' : ByteSlice} (h : s.toByteArray = s'.toByteArray)
   simp only [hbeq]
 
 /-- A token is recorded from what the cursor reports of it, reading its content as its bytes. -/
-theorem toHanded_congr {c c' : BatchCursor} {token token' : Token}
+theorem toHanded_congr {c : BatchCursor γ} {c' : BatchCursor γ'} {token : Token γ}
+    {token' : Token γ'}
     (hcat : c.category token = c'.category token') (hspan : c.span token = c'.span token')
     (hversion : c.version = c'.version)
     (hcontent : (c.content token).toByteArray = (c'.content token').toByteArray) :
@@ -63,19 +66,20 @@ theorem toHanded_congr {c c' : BatchCursor} {token token' : Token}
   split <;> rfl
 
 /-- The tokens next in twin cursors are recorded alike, and the cursors after them are twins. -/
-theorem twin_next {c c' : BatchCursor} (t : Twin c c') (h : c.HasNext) (h' : c'.HasNext) :
+theorem twin_next {c : BatchCursor γ} {c' : BatchCursor γ'} (t : Twin c c') (h : c.HasNext)
+    (h' : c'.HasNext) :
     toHanded c (c.next h).1 = toHanded c' (c'.next h').1 ∧
       Twin (c.next h).2.1 (c'.next h').2.1 := by
-  obtain ⟨v, b, f, s, n, r, hb⟩ := c
-  obtain ⟨v', ⟨len', bytes', types', cs', ce', so', sl', sc', eo', el', ec', origin', ord'⟩, f', s',
-    n', r', hb'⟩ := c'
+  obtain ⟨v, b, tg, f, s, n, r, hb⟩ := c
+  obtain ⟨v', ⟨len', bytes', types', cs', ce', so', sl', sc', eo', el', ec', origin', ord'⟩, tg',
+    f', s', n', r', hb'⟩ := c'
   obtain ⟨ev, ef, es, en, er, hs, hc⟩ := t
   subst ev ef es en er
   cases hs
   have hn : n' < s' := h
   exact ⟨toHanded_congr rfl rfl rfl (hc n' hn), rfl, rfl, rfl, rfl, rfl, rfl, hc⟩
 
-theorem takeRest_twin : ∀ k (c c' : BatchCursor), c.remaining = k → Twin c c' →
+theorem takeRest_twin : ∀ k (c : BatchCursor γ) (c' : BatchCursor γ'), c.remaining = k → Twin c c' →
     (takeRest c).1 = (takeRest c').1 ∧ Twin (takeRest c).2.val (takeRest c').2.val := by
   intro k
   induction k using Nat.strongRecOn with
@@ -109,8 +113,8 @@ theorem takeRest_twin : ∀ k (c c' : BatchCursor), c.remaining = k → Twin c c
     exact ⟨by trivial, t⟩
 
 /-- What the adapter's consumer does with a cursor. -/
-def collectorStep (c : BatchCursor) (h : c.HasNext) (s : Collector) :
-    (Except Unit (ControlFlow Empty) × {d : BatchCursor // d.Consumed c}) × Collector :=
+def collectorStep (c : BatchCursor γ) (h : c.HasNext) (s : Collector) :
+    (Except Unit (ControlFlow Empty) × {d : BatchCursor γ // d.Consumed c}) × Collector :=
   match c.next h with
   | (token, ⟨next, consumed⟩) =>
     match toHanded c token with
@@ -122,7 +126,7 @@ def collectorStep (c : BatchCursor) (h : c.HasNext) (s : Collector) :
         ((.ok .continue, ⟨last, follows.trans_consumed consumed⟩),
           { handed := s.handed ++ handed :: rest })
 
-theorem collector_run (c : BatchCursor) (h : c.HasNext) (s : Collector) :
+theorem collector_run (c : BatchCursor γ) (h : c.HasNext) (s : Collector) :
     (Consume.consume c h).run s = collectorStep c h s := by
   dsimp only [Consume.consume]
   unfold collectorStep
@@ -136,7 +140,7 @@ theorem collector_run (c : BatchCursor) (h : c.HasNext) (s : Collector) :
     cases rest <;> rfl
 
 /-- The result of the consumer's step and the cursor it leaves do not depend on its state. -/
-theorem collectorStep_state (c : BatchCursor) (h : c.HasNext) (s s' : Collector) :
+theorem collectorStep_state (c : BatchCursor γ) (h : c.HasNext) (s s' : Collector) :
     (collectorStep c h s).1 = (collectorStep c h s').1 := by
   unfold collectorStep
   obtain ⟨token, next, consumed⟩ := c.next h
@@ -150,7 +154,7 @@ theorem collectorStep_state (c : BatchCursor) (h : c.HasNext) (s s' : Collector)
 
 /-- The consumer's steps on twin cursors give the same result and state, and leave twin
 cursors. -/
-theorem collectorStep_twin {c c' : BatchCursor} (t : Twin c c') (h : c.HasNext)
+theorem collectorStep_twin {c : BatchCursor γ} {c' : BatchCursor γ'} (t : Twin c c') (h : c.HasNext)
     (h' : c'.HasNext) (s : Collector) :
     (collectorStep c h s).1.1 = (collectorStep c' h' s).1.1 ∧
       (collectorStep c h s).2 = (collectorStep c' h' s).2 ∧
@@ -179,7 +183,7 @@ theorem collectorStep_twin {c c' : BatchCursor} (t : Twin c c') (h : c.HasNext)
 
 /-- The adapter's consumer does not tell twin cursors apart. -/
 theorem collector_contentBlind : ContentBlind Collector Id Empty Unit := by
-  intro c c' h h' t
+  intro _ _ c c' h h' t
   refine ⟨fun x => (x.1, (collectorStep c' h' ⟨[]⟩).1.2), fun s => ?_⟩
   obtain ⟨e1, e2, e3⟩ := collectorStep_twin t h h' s
   have e4 := collectorStep_state c' h' ⟨[]⟩ s

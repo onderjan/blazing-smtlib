@@ -110,20 +110,6 @@ def ofUInt8 : UInt8 → TokenCategory
 
 end TokenCategory
 
-/- LEAN: the Rust token is a pair of references to its entry and its span in the lexer's
-batch arrays, valid while the batch is. A Lean array holds every structure as a pointer to
-a separate object, so a token held as a structure in the batch would be allocated when it
-is lexed and freed when it is overwritten. The batch therefore keeps the tokens' fields in
-arrays of their own (`TokenBatch`), which the lexer overwrites in place, and a token is its
-index in the batch. A structure with a single number field is represented as the number
-itself, so a token costs nothing. Its fields are read through the cursor it came from:
-`cursor.category token`, `cursor.content token`, `cursor.span token`. -/
-/-- A token of a batch, read through the cursor it came from. -/
-structure Token where
-  private mk ::
-  private index : Nat
-  deriving BEq, Inhabited
-
 /--
 Whether the first `len` tokens, given by their types and the offsets where they start and
 end, are in input order from the offset `origin` on: each token starts at or after the end of
@@ -493,22 +479,63 @@ theorem endsAfter_pushLocated {self : TokenBatch} {offset : Nat} (h : self.EndsA
 
 end TokenBatch
 
+/- LEAN: Rust's lifetime `'a` of the token and the cursor is a batch tag here: the type of a
+token names the batch it was taken from by its tag, and a token is read only through a cursor
+with the same tag. The cursor of the next hand-over has another tag, so a token kept from an
+earlier one does not fit it.
+
+A tag is the property of being the batch, not the batch itself, as the compiler erases a
+function to propositions but not a batch: a batch as the parameter would be passed, and its
+references counted, at every call that takes a cursor or a token, and a tag is not. The tag
+of a batch is unique to it (`TokenBatch.tag_injective`). -/
+/-- The name of a batch of tokens, by which the types of its tokens and cursors refer to it. -/
+def BatchTag : Type :=
+  TokenBatch → Prop
+
+/-- The name of the batch. -/
+def TokenBatch.tag (batch : TokenBatch) : BatchTag :=
+  (· = batch)
+
+/-- Batches with the same name are the same. -/
+theorem TokenBatch.tag_injective {a b : TokenBatch} (h : a.tag = b.tag) : a = b :=
+  cast (congrFun h a) (rfl : a = a)
+
+/- LEAN: the Rust token is a pair of references to its entry and its span in the lexer's
+batch arrays, valid while the batch is. A Lean array holds every structure as a pointer to
+a separate object, so a token held as a structure in the batch would be allocated when it
+is lexed and freed when it is overwritten. The batch therefore keeps the tokens' fields in
+arrays of their own (`TokenBatch`), which the lexer overwrites in place, and a token is its
+index in the batch. A structure with a single number field is represented as the number
+itself, so a token costs nothing; its batch tag is a type index and not stored. Its fields
+are read through a cursor over its batch: `cursor.category token`, `cursor.content token`,
+`cursor.span token`. -/
+/--
+A token of the batch named `batch`.
+
+A token is read through a cursor over its batch: the cursor it was taken from, or any cursor
+that the consumer's operations make from that one in the same hand-over. A token cannot be
+read through the cursor of another hand-over, which is over another batch.
+-/
+structure Token (batch : BatchTag) where
+  private mk ::
+  private index : Nat
+  deriving BEq
+
 namespace TokenBatch
 
 /- LEAN: the counterparts of the methods of the Rust token, which carries its data, read from
 the batch at the token's index. -/
 
 @[inline]
-private def categoryOf (self : TokenBatch) (token : Token) : TokenCategory :=
-  TokenCategory.ofUInt8 (self.types.get! token.index)
+private def categoryOf (self : TokenBatch) (index : Nat) : TokenCategory :=
+  TokenCategory.ofUInt8 (self.types.get! index)
 
 @[inline]
-private def contentOf (self : TokenBatch) (token : Token) : ByteSlice :=
-  self.bytes.toByteSlice (self.contentStarts[token.index]!) (self.contentStops[token.index]!)
+private def contentOf (self : TokenBatch) (index : Nat) : ByteSlice :=
+  self.bytes.toByteSlice (self.contentStarts[index]!) (self.contentStops[index]!)
 
 @[inline]
-private def spanOf (self : TokenBatch) (token : Token) : Span :=
-  let index := token.index
+private def spanOf (self : TokenBatch) (index : Nat) : Span :=
   Span.ofNumbers self.startOffsets[index]! self.startLines[index]! self.startColumns[index]!
     self.endOffsets[index]! self.endLines[index]! self.endColumns[index]!
 
@@ -522,40 +549,56 @@ a time, can look at the next one, and can attempt to take several at once.
 However, it is not guaranteed how many tokens the batch will actually have,
 so an attempt is only useful for fast paths that fall back to slow paths
 with the same behaviour if the tokens are not available.
+
+A cursor is over the batch of one hand-over, which its type names. The cursors
+that the consumer's operations make from it are over the same batch and read
+every token taken from any of them. The cursor of another hand-over is over
+another batch.
 -/
 /- LEAN: Rust narrows the borrowed slices of the batch; here the cursor holds the whole batch
 and the range of it that it yields, from `first` to `stop`. A relex request moves `stop`,
 which needs no copy. `first` is the first token of the hand-over, Rust's `start`: the tokens
 from it to `nextIndex` are the consumed ones. `bounded` keeps the indices in order, which the
-proofs about consumption below rest on. -/
-structure BatchCursor where
+proofs about consumption below rest on.
+
+The batch is tagged by the type's parameter, which is not stored, and held in
+the field `batch`, which the reads use; `tagged` ties the two. -/
+structure BatchCursor (tag : BatchTag) where
   private mk ::
   /-- The SMT-LIB version that applies to the tokens. -/
   version : Version
   private batch : TokenBatch
+  private tagged : tag = batch.tag
   private first : Nat
   private stop : Nat
   private nextIndex : Nat
   private relexFlag : Bool
   private bounded : first ≤ nextIndex ∧ nextIndex ≤ stop
 
+/- LEAN: not in Rust. The lexer takes the batch back after the consumer is done with the
+cursor; if nothing else refers to it, its storage is overwritten by the next batch, as the
+Rust lexer overwrites its fixed arrays. It is in the lexer's namespace, as only the lexer
+uses it; it is defined here, where the cursor's fields are visible. -/
+/-- The batch of the cursor, for reuse of its storage once the cursor is spent. -/
+@[inline]
+def Lexer.Internal.intoBatch {batch : BatchTag} (cursor : BatchCursor batch) : TokenBatch :=
+  cursor.batch
+
+theorem Lexer.Internal.tag_intoBatch {batch : BatchTag} (cursor : BatchCursor batch) :
+    (Lexer.Internal.intoBatch cursor).tag = batch :=
+  cursor.tagged.symm
+
 namespace BatchCursor
+
+variable {batch : BatchTag}
 
 /- LEAN: crate-private in Rust, like the other functions here that only the lexer uses. Lean
 has no visibility between the crate and a file, so they are public. -/
 /-- Returns a cursor at the start of the batch. -/
 @[inline]
-def new (version : Version) (batch : TokenBatch) : BatchCursor :=
-  { version, batch, first := 0, stop := batch.len, nextIndex := 0, relexFlag := false,
-    bounded := ⟨Nat.le_refl _, Nat.zero_le _⟩ }
-
-/- LEAN: not in Rust. The lexer takes the batch back after the consumer is done with the
-cursor; if nothing else refers to it, its storage is overwritten by the next batch, as the
-Rust lexer overwrites its fixed arrays. -/
-/-- The batch of the cursor, for reuse of its storage once the cursor is spent. -/
-@[inline]
-def intoBatch (self : BatchCursor) : TokenBatch :=
-  self.batch
+def new (version : Version) (batch : TokenBatch) : BatchCursor batch.tag :=
+  { version, batch, tagged := rfl, first := 0, stop := batch.len, nextIndex := 0,
+    relexFlag := false, bounded := ⟨Nat.le_refl _, Nat.zero_le _⟩ }
 
 /--
 Returns a cursor over a single token of this cursor's batch.
@@ -563,19 +606,20 @@ Returns a cursor over a single token of this cursor's batch.
 This can be used for parsing one token using a cursor-parsing function.
 -/
 /- LEAN: Rust's `single` takes the version and the token, which carries its own data. A Lean
-token is read through its batch, so the new cursor is made from the cursor the token came
-from, over the same batch. -/
+token is read through its batch, so the new cursor is made from a cursor over the token's
+batch. -/
 @[inline]
-def single (self : BatchCursor) (version : Version) (token : Token) : BatchCursor :=
-  { version, batch := self.batch, first := token.index, stop := token.index + 1,
-    nextIndex := token.index, relexFlag := false,
+def single (self : BatchCursor batch) (version : Version) (token : Token batch) :
+    BatchCursor batch :=
+  { version, batch := self.batch, tagged := self.tagged, first := token.index,
+    stop := token.index + 1, nextIndex := token.index, relexFlag := false,
     bounded := ⟨Nat.le_refl _, Nat.le_succ _⟩ }
 
 /-- Whether a token remains to be consumed. -/
-def HasNext (self : BatchCursor) : Prop :=
+def HasNext (self : BatchCursor batch) : Prop :=
   self.nextIndex < self.stop
 
-instance (self : BatchCursor) : Decidable self.HasNext :=
+instance (self : BatchCursor batch) : Decidable self.HasNext :=
   inferInstanceAs (Decidable (self.nextIndex < self.stop))
 
 /--
@@ -584,71 +628,72 @@ same hand-over of the same batch, with at least the tokens consumed that `origin
 has consumed. The tokens not consumed yet may have been dropped, as a version
 switch drops them.
 -/
-def Follows (self origin : BatchCursor) : Prop :=
-  self.batch = origin.batch ∧ self.first = origin.first ∧ self.stop ≤ origin.stop
-    ∧ origin.nextIndex ≤ self.nextIndex
+def Follows (self origin : BatchCursor batch) : Prop :=
+  self.first = origin.first ∧ self.stop ≤ origin.stop ∧ origin.nextIndex ≤ self.nextIndex
 
 /--
 Whether `self` comes from `origin` through the consumer's operations, with at
 least one more token consumed than `origin` has.
 -/
-def Consumed (self origin : BatchCursor) : Prop :=
+def Consumed (self origin : BatchCursor batch) : Prop :=
   self.Follows origin ∧ origin.nextIndex < self.nextIndex
 
-theorem Follows.refl (self : BatchCursor) : self.Follows self :=
-  ⟨rfl, rfl, Nat.le_refl _, Nat.le_refl _⟩
+theorem Follows.refl (self : BatchCursor batch) : self.Follows self :=
+  ⟨rfl, Nat.le_refl _, Nat.le_refl _⟩
 
-theorem Follows.trans {a b c : BatchCursor} (ab : a.Follows b) (bc : b.Follows c) :
+theorem Follows.trans {a b c : BatchCursor batch} (ab : a.Follows b) (bc : b.Follows c) :
     a.Follows c :=
-  ⟨ab.1.trans bc.1, ab.2.1.trans bc.2.1, Nat.le_trans ab.2.2.1 bc.2.2.1,
-    Nat.le_trans bc.2.2.2 ab.2.2.2⟩
+  ⟨ab.1.trans bc.1, Nat.le_trans ab.2.1 bc.2.1, Nat.le_trans bc.2.2 ab.2.2⟩
 
-theorem Consumed.follows {a b : BatchCursor} (ab : a.Consumed b) : a.Follows b :=
+theorem Consumed.follows {a b : BatchCursor batch} (ab : a.Consumed b) : a.Follows b :=
   ab.1
 
-theorem Consumed.trans_follows {a b c : BatchCursor} (ab : a.Consumed b) (bc : b.Follows c) :
-    a.Consumed c :=
-  ⟨ab.1.trans bc, Nat.lt_of_le_of_lt bc.2.2.2 ab.2⟩
+theorem Consumed.trans_follows {a b c : BatchCursor batch} (ab : a.Consumed b)
+    (bc : b.Follows c) : a.Consumed c :=
+  ⟨ab.1.trans bc, Nat.lt_of_le_of_lt bc.2.2 ab.2⟩
 
-theorem Follows.trans_consumed {a b c : BatchCursor} (ab : a.Follows b) (bc : b.Consumed c) :
-    a.Consumed c :=
-  ⟨ab.trans bc.1, Nat.lt_of_lt_of_le bc.2 ab.2.2.2⟩
+theorem Follows.trans_consumed {a b c : BatchCursor batch} (ab : a.Follows b)
+    (bc : b.Consumed c) : a.Consumed c :=
+  ⟨ab.trans bc.1, Nat.lt_of_lt_of_le bc.2 ab.2.2⟩
 
-theorem Consumed.trans {a b c : BatchCursor} (ab : a.Consumed b) (bc : b.Consumed c) :
+theorem Consumed.trans {a b c : BatchCursor batch} (ab : a.Consumed b) (bc : b.Consumed c) :
     a.Consumed c :=
   ab.trans_follows bc.1
 
 /-- Returns the next token (if any) without consuming it. -/
 @[inline]
-def peek? (self : BatchCursor) : Option Token :=
+def peek? (self : BatchCursor batch) : Option (Token batch) :=
   if self.nextIndex < self.stop then some ⟨self.nextIndex⟩ else none
 
 /-- Returns the next token, which there is, without consuming it. -/
 @[inline]
-def peek (self : BatchCursor) (_ : self.HasNext) : Token :=
+def peek (self : BatchCursor batch) (_ : self.HasNext) : Token batch :=
   ⟨self.nextIndex⟩
 
 /- LEAN: methods taking `&mut self` in Rust return the updated cursor in Lean, here with the
 proof that it consumed the token. -/
 /-- Consumes the next token, which there is. -/
 @[inline]
-def next (self : BatchCursor) (h : self.HasNext) : Token × { c : BatchCursor // c.Consumed self } :=
+def next (self : BatchCursor batch) (h : self.HasNext) :
+    Token batch × { c : BatchCursor batch // c.Consumed self } :=
   (⟨self.nextIndex⟩,
     ⟨{ self with nextIndex := self.nextIndex + 1, bounded := ⟨Nat.le_succ_of_le self.bounded.1, h⟩ },
-      ⟨⟨rfl, rfl, Nat.le_refl _, Nat.le_succ _⟩, Nat.lt_succ_self _⟩⟩)
+      ⟨⟨rfl, Nat.le_refl _, Nat.le_succ _⟩, Nat.lt_succ_self _⟩⟩)
 
 /-- Consumes the next token (if any). -/
 @[inline]
-def next? (self : BatchCursor) : Option (Token × { c : BatchCursor // c.Consumed self }) :=
+def next? (self : BatchCursor batch) :
+    Option (Token batch × { c : BatchCursor batch // c.Consumed self }) :=
   if h : self.HasNext then some (self.next h) else none
 
 /--
 The tokens ahead of a cursor, as the extractor of `BatchCursor.attempt` sees them: they can
 only be taken in order.
 -/
-structure TokenWindow where
+structure TokenWindow (tag : BatchTag) where
   private mk ::
   private batch : TokenBatch
+  private tagged : tag = batch.tag
   private stop : Nat
   private nextIndex : Nat
   private bounded : nextIndex ≤ stop
@@ -656,38 +701,42 @@ structure TokenWindow where
 /--
 Whether `self` comes from `origin` by taking at least one token from it.
 -/
-def TokenWindow.Consumed (self origin : TokenWindow) : Prop :=
-  self.batch = origin.batch ∧ self.stop = origin.stop ∧ origin.nextIndex < self.nextIndex
+def TokenWindow.Consumed (self origin : TokenWindow batch) : Prop :=
+  self.stop = origin.stop ∧ origin.nextIndex < self.nextIndex
 
-theorem TokenWindow.Consumed.trans {a b c : TokenWindow} (ab : a.Consumed b)
+theorem TokenWindow.Consumed.trans {a b c : TokenWindow batch} (ab : a.Consumed b)
     (bc : b.Consumed c) : a.Consumed c :=
-  ⟨ab.1.trans bc.1, ab.2.1.trans bc.2.1, Nat.lt_trans bc.2.2 ab.2.2⟩
+  ⟨ab.1.trans bc.1, Nat.lt_trans bc.2 ab.2⟩
 
 /-- Takes the next token of the window (if any). -/
 @[inline]
-def TokenWindow.next? (self : TokenWindow) :
-    Option (Token × { w : TokenWindow // w.Consumed self }) :=
+def TokenWindow.next? (self : TokenWindow batch) :
+    Option (Token batch × { w : TokenWindow batch // w.Consumed self }) :=
   if h : self.nextIndex < self.stop then
     some (⟨self.nextIndex⟩,
       ⟨{ self with nextIndex := self.nextIndex + 1, bounded := h },
-        ⟨rfl, rfl, Nat.lt_succ_self _⟩⟩)
+        ⟨rfl, Nat.lt_succ_self _⟩⟩)
   else
     none
 
 /-- The category of the token. -/
 @[inline]
-def TokenWindow.category (self : TokenWindow) (token : Token) : TokenCategory :=
-  self.batch.categoryOf token
+def TokenWindow.category (self : TokenWindow batch) (token : Token batch) : TokenCategory :=
+  self.batch.categoryOf token.index
 
-/-- The bytes of the token; empty for the end of file. -/
+/--
+The bytes of the token; empty for the end of file.
+
+The bytes are for use during the hand-over; to keep them, copy them.
+-/
 @[inline]
-def TokenWindow.content (self : TokenWindow) (token : Token) : ByteSlice :=
-  self.batch.contentOf token
+def TokenWindow.content (self : TokenWindow batch) (token : Token batch) : ByteSlice :=
+  self.batch.contentOf token.index
 
 /-- The span of the token. -/
 @[inline]
-def TokenWindow.span (self : TokenWindow) (token : Token) : Span :=
-  self.batch.spanOf token
+def TokenWindow.span (self : TokenWindow batch) (token : Token batch) : Span :=
+  self.batch.spanOf token.index
 
 /--
 Attempts to consume several tokens at once.
@@ -703,53 +752,58 @@ caller must then reach the same result by consuming token by token.
 /- LEAN: the extractor returns the window it took the tokens from, with the proof that it
 took at least one, where the Rust closure takes the window by `&mut`. -/
 @[inline]
-def attempt (self : BatchCursor)
-    (extract : (window : TokenWindow) → Option (α × { w : TokenWindow // w.Consumed window })) :
-    Option (α × { c : BatchCursor // c.Consumed self }) :=
-  let window : TokenWindow :=
-    { batch := self.batch, stop := self.stop, nextIndex := self.nextIndex,
+def attempt (self : BatchCursor batch)
+    (extract : (window : TokenWindow batch) →
+      Option (α × { w : TokenWindow batch // w.Consumed window })) :
+    Option (α × { c : BatchCursor batch // c.Consumed self }) :=
+  let window : TokenWindow batch :=
+    { batch := self.batch, tagged := self.tagged, stop := self.stop, nextIndex := self.nextIndex,
       bounded := self.bounded.2 }
   match extract window with
   | none => none
   | some (result, ⟨taken, consumed⟩) =>
     -- the extractor succeeded, consume what it took
     let bounded : self.first ≤ taken.nextIndex ∧ taken.nextIndex ≤ self.stop :=
-      ⟨Nat.le_trans self.bounded.1 (Nat.le_of_lt consumed.2.2),
-        Nat.le_trans taken.bounded (Nat.le_of_eq consumed.2.1)⟩
+      ⟨Nat.le_trans self.bounded.1 (Nat.le_of_lt consumed.2),
+        Nat.le_trans taken.bounded (Nat.le_of_eq consumed.1)⟩
     some (result, ⟨{ self with nextIndex := taken.nextIndex, bounded },
-      ⟨⟨rfl, rfl, Nat.le_refl _, Nat.le_of_lt consumed.2.2⟩, consumed.2.2⟩⟩)
+      ⟨⟨rfl, Nat.le_refl _, Nat.le_of_lt consumed.2⟩, consumed.2⟩⟩)
 
 /-- Location of the end of the last consumed token in this hand-over (if any). -/
 @[inline]
-def consumedEnd (self : BatchCursor) : Option Location :=
-  if self.first < self.nextIndex then some (self.batch.spanOf ⟨self.nextIndex - 1⟩).end
+def consumedEnd (self : BatchCursor batch) : Option Location :=
+  if self.first < self.nextIndex then some (self.batch.spanOf (self.nextIndex - 1)).end
   else none
 
 /- LEAN: for the lexer, which knows from the consumer's proof that a token was consumed. -/
 /-- Location of the end of the last consumed token, given that one was consumed. -/
 @[inline]
-def consumedEndOf (self : BatchCursor) {origin : BatchCursor} (_ : self.Consumed origin) :
-    Location :=
-  (self.batch.spanOf ⟨self.nextIndex - 1⟩).end
+def consumedEndOf (self : BatchCursor batch) {origin : BatchCursor batch}
+    (_ : self.Consumed origin) : Location :=
+  (self.batch.spanOf (self.nextIndex - 1)).end
 
 /--
 Whether the cursor yields no token beyond its batch, and every token of its batch ends after
 the offset.
 -/
-def EndsAfter (self : BatchCursor) (offset : Nat) : Prop :=
+def EndsAfter (self : BatchCursor batch) (offset : Nat) : Prop :=
   self.stop ≤ self.batch.len ∧ self.batch.EndsAfter offset
 
 theorem endsAfter_new {batch : TokenBatch} {offset : Nat} (h : batch.EndsAfter offset)
     (version : Version) : (new version batch).EndsAfter offset :=
   ⟨Nat.le_refl _, h⟩
 
-theorem Follows.endsAfter {self origin : BatchCursor} (h : self.Follows origin) {offset : Nat}
-    (ho : origin.EndsAfter offset) : self.EndsAfter offset := by
-  obtain ⟨hb, _, hs, _⟩ := h
-  exact ⟨by rw [hb]; exact Nat.le_trans hs ho.1, hb ▸ ho.2⟩
+/-- Two cursors with the same tag are over the same batch. -/
+private theorem batch_eq_of_tag (self other : BatchCursor batch) : self.batch = other.batch :=
+  TokenBatch.tag_injective (self.tagged.symm.trans other.tagged)
+
+theorem Follows.endsAfter {self origin : BatchCursor batch} (h : self.Follows origin)
+    {offset : Nat} (ho : origin.EndsAfter offset) : self.EndsAfter offset := by
+  rw [EndsAfter, batch_eq_of_tag self origin]
+  exact ⟨Nat.le_trans h.2.1 ho.1, ho.2⟩
 
 /-- The last token consumed ends after the offset that every token of the batch ends after. -/
-theorem Consumed.lt_consumedEndOf {self origin : BatchCursor} (h : self.Consumed origin)
+theorem Consumed.lt_consumedEndOf {self origin : BatchCursor batch} (h : self.Consumed origin)
     {offset : Nat} (ho : origin.EndsAfter offset) : offset < (self.consumedEndOf h).offset := by
   have hs := h.follows.endsAfter ho
   have hlt : self.nextIndex - 1 < self.batch.len := by
@@ -761,20 +815,20 @@ theorem Consumed.lt_consumedEndOf {self origin : BatchCursor} (h : self.Consumed
 
 /-- Consumes all tokens remaining in the cursor. -/
 @[inline]
-def consumeAll (self : BatchCursor) : BatchCursor :=
+def consumeAll (self : BatchCursor batch) : BatchCursor batch :=
   { self with nextIndex := self.stop, bounded := ⟨Nat.le_trans self.bounded.1 self.bounded.2,
     Nat.le_refl _⟩ }
 
-theorem consumeAll_follows (self : BatchCursor) : self.consumeAll.Follows self :=
-  ⟨rfl, rfl, Nat.le_refl _, self.bounded.2⟩
+theorem consumeAll_follows (self : BatchCursor batch) : self.consumeAll.Follows self :=
+  ⟨rfl, Nat.le_refl _, self.bounded.2⟩
 
-theorem consumeAll_consumed {self : BatchCursor} (h : self.HasNext) :
+theorem consumeAll_consumed {self : BatchCursor batch} (h : self.HasNext) :
     self.consumeAll.Consumed self :=
   ⟨self.consumeAll_follows, h⟩
 
 /-- Whether every token has been consumed. -/
 @[inline]
-def isEmpty (self : BatchCursor) : Bool :=
+def isEmpty (self : BatchCursor batch) : Bool :=
   self.nextIndex ≥ self.stop
 
 /--
@@ -786,7 +840,7 @@ produced again by the lexer, so the cursor yields no more tokens:
 it is empty from now on, and the consumed count stays where it is.
 -/
 @[inline]
-private def relex (self : BatchCursor) : BatchCursor :=
+private def relex (self : BatchCursor batch) : BatchCursor batch :=
   { self with
     stop := self.nextIndex
     relexFlag := true
@@ -800,25 +854,25 @@ to the set version. There is no guarantee on their shape
 or whether any remain at all; the caller must not use any
 information gathered on them beforehand.
 -/
-def setVersion (self : BatchCursor) (version : Version) : BatchCursor :=
+def setVersion (self : BatchCursor batch) (version : Version) : BatchCursor batch :=
   let isCurrent2_0 := self.version == .v2_0
   let isNew2_0 := version == .v2_0
   -- we need to relex if the lexical rules change
   let self := if isCurrent2_0 != isNew2_0 then self.relex else self
   { self with version }
 
-theorem setVersion_follows (self : BatchCursor) (version : Version) :
+theorem setVersion_follows (self : BatchCursor batch) (version : Version) :
     (self.setVersion version).Follows self := by
   unfold setVersion
   by_cases h : ((self.version == .v2_0) != (version == .v2_0)) = true
   · simp only [h, ite_true]
-    exact ⟨rfl, rfl, self.bounded.2, Nat.le_refl _⟩
+    exact ⟨rfl, self.bounded.2, Nat.le_refl _⟩
   · simp only [h]
     exact Follows.refl self
 
 /-- Whether a relex has been requested through this cursor. -/
 @[inline]
-def relexRequested (self : BatchCursor) : Bool :=
+def relexRequested (self : BatchCursor batch) : Bool :=
   self.relexFlag
 
 /--
@@ -827,52 +881,57 @@ consumed.
 -/
 /- LEAN: Rust's `reset_consumed`. -/
 @[inline]
-def resetConsumed (self : BatchCursor) : BatchCursor :=
+def resetConsumed (self : BatchCursor batch) : BatchCursor batch :=
   { self with first := self.nextIndex, bounded := ⟨Nat.le_refl _, self.bounded.2⟩ }
 
 /- LEAN: for the lexer, Rust's `consumed_entries`. -/
 /-- Folds over the categories of the tokens of the batch consumed so far, from its first one. -/
-def foldConsumedCategories (self : BatchCursor) (init : β) (f : β → TokenCategory → β) : β :=
-  (List.range self.nextIndex).foldl (fun acc index => f acc (self.batch.categoryOf ⟨index⟩)) init
+def foldConsumedCategories (self : BatchCursor batch) (init : β) (f : β → TokenCategory → β) :
+    β :=
+  (List.range self.nextIndex).foldl (fun acc index => f acc (self.batch.categoryOf index)) init
 
 /-- The number of tokens not consumed yet. -/
-def remaining (self : BatchCursor) : Nat :=
+def remaining (self : BatchCursor batch) : Nat :=
   self.stop - self.nextIndex
 
-theorem Consumed.remaining_lt {self origin : BatchCursor} (h : self.Consumed origin) :
+theorem Consumed.remaining_lt {self origin : BatchCursor batch} (h : self.Consumed origin) :
     self.remaining < origin.remaining := by
   have := self.bounded.2
-  have := h.1.2.2.1
+  have := h.1.2.1
   have := h.2
   unfold remaining
   omega
 
-theorem remaining_resetConsumed (self : BatchCursor) :
+theorem remaining_resetConsumed (self : BatchCursor batch) :
     self.resetConsumed.remaining = self.remaining :=
   rfl
 
-theorem endsAfter_resetConsumed {self : BatchCursor} {offset : Nat}
+theorem endsAfter_resetConsumed {self : BatchCursor batch} {offset : Nat}
     (h : self.EndsAfter offset) : self.resetConsumed.EndsAfter offset :=
   h
 
-theorem hasNext_resetConsumed {self : BatchCursor} :
+theorem hasNext_resetConsumed {self : BatchCursor batch} :
     self.resetConsumed.HasNext ↔ self.HasNext :=
   Iff.rfl
 
 /-- The category of the token. -/
 @[inline]
-def category (self : BatchCursor) (token : Token) : TokenCategory :=
-  self.batch.categoryOf token
+def category (self : BatchCursor batch) (token : Token batch) : TokenCategory :=
+  self.batch.categoryOf token.index
 
-/-- The bytes of the token; empty for the end of file. -/
+/--
+The bytes of the token; empty for the end of file.
+
+The bytes are for use during the hand-over; to keep them, copy them.
+-/
 @[inline]
-def content (self : BatchCursor) (token : Token) : ByteSlice :=
-  self.batch.contentOf token
+def content (self : BatchCursor batch) (token : Token batch) : ByteSlice :=
+  self.batch.contentOf token.index
 
 /-- The span of the token. -/
 @[inline]
-def span (self : BatchCursor) (token : Token) : Span :=
-  self.batch.spanOf token
+def span (self : BatchCursor batch) (token : Token batch) : Span :=
+  self.batch.spanOf token.index
 
 end BatchCursor
 
@@ -924,8 +983,8 @@ class Consume (H : Type) (m : outParam (Type → Type)) (R E : outParam Type) wh
   If the consumer returns an error, it has failed at the last
   consumed token. The state of the consumer is unspecified.
   -/
-  consume : (cursor : BatchCursor) → cursor.HasNext →
-    StateT H m (Except E (ControlFlow R) × { c : BatchCursor // c.Consumed cursor })
+  consume : {batch : BatchTag} → (cursor : BatchCursor batch) → cursor.HasNext →
+    StateT H m (Except E (ControlFlow R) × { c : BatchCursor batch // c.Consumed cursor })
 
 /- LEAN: Rust's `SmtRecover: SmtConsume`. A recovering lexer requires both classes of its
 consumer. The calls cannot fail, and run in the consumer's monad with its state. The Rust

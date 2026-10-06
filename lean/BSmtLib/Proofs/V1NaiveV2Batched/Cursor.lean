@@ -12,12 +12,15 @@ the index of its next token, counted by `BatchCursor.foldConsumedCategories`.
 
 namespace BSmtLib.Proofs.Lexer.V1NaiveV2Batched
 
+open BSmtLib.Lexer.Internal (intoBatch)
 open BSmtLib.Proofs.Adapter V1Naive V2Batched
+
+variable {g : BatchTag}
 
 /-! ## Cursors -/
 
 /-- The index of the next token of the cursor in its batch. -/
-def idx (c : BatchCursor) : Nat := c.foldConsumedCategories 0 (fun n _ => n + 1)
+def idx (c : BatchCursor g) : Nat := c.foldConsumedCategories 0 (fun n _ => n + 1)
 
 theorem fold_count (n : Nat) : (List.range n).foldl (fun acc (_ : Nat) => acc + 1) 0 = n := by
   induction n with
@@ -30,45 +33,45 @@ theorem remaining_new (v : Version) (b : TokenBatch) :
     (BatchCursor.new v b).remaining = b.len := by
   simp only [BatchCursor.remaining, BatchCursor.new, Nat.sub_zero]
 
-theorem idx_next (c : BatchCursor) (h : c.HasNext) : idx (c.next h).2.1 = idx c + 1 := by
+theorem idx_next (c : BatchCursor g) (h : c.HasNext) : idx (c.next h).2.1 = idx c + 1 := by
   simp only [idx, BatchCursor.foldConsumedCategories, BatchCursor.next, fold_count]
 
-theorem remaining_next (c : BatchCursor) (h : c.HasNext) :
+theorem remaining_next (c : BatchCursor g) (h : c.HasNext) :
     (c.next h).2.1.remaining + 1 = c.remaining := by
   have := h
   simp only [BatchCursor.HasNext] at this
   simp only [BatchCursor.remaining, BatchCursor.next]
   omega
 
-theorem hasNext_iff (c : BatchCursor) : c.HasNext ↔ 0 < c.remaining := by
+theorem hasNext_iff (c : BatchCursor g) : c.HasNext ↔ 0 < c.remaining := by
   simp only [BatchCursor.HasNext, BatchCursor.remaining]
   omega
 
-theorem intoBatch_next (c : BatchCursor) (h : c.HasNext) :
-    (c.next h).2.1.intoBatch = c.intoBatch := rfl
+theorem intoBatch_next (c : BatchCursor g) (h : c.HasNext) :
+    intoBatch (c.next h).2.1 = intoBatch c := rfl
 
-theorem version_next (c : BatchCursor) (h : c.HasNext) :
+theorem version_next (c : BatchCursor g) (h : c.HasNext) :
     (c.next h).2.1.version = c.version := rfl
 
-theorem relex_next (c : BatchCursor) (h : c.HasNext) :
+theorem relex_next (c : BatchCursor g) (h : c.HasNext) :
     (c.next h).2.1.relexRequested = c.relexRequested := rfl
 
-theorem category_next (c : BatchCursor) (h : c.HasNext) :
-    c.category (c.next h).1 = TokenCategory.ofUInt8 (c.intoBatch.types.get! (idx c)) := by
+theorem category_next (c : BatchCursor g) (h : c.HasNext) :
+    c.category (c.next h).1 = TokenCategory.ofUInt8 ((intoBatch c).types.get! (idx c)) := by
   simp only [idx, BatchCursor.foldConsumedCategories, fold_count]
   rfl
 
-theorem content_next (c : BatchCursor) (h : c.HasNext) :
-    c.content (c.next h).1 = c.intoBatch.bytes.toByteSlice (c.intoBatch.contentStarts[idx c]!)
-      (c.intoBatch.contentStops[idx c]!) := by
+theorem content_next (c : BatchCursor g) (h : c.HasNext) :
+    c.content (c.next h).1 = (intoBatch c).bytes.toByteSlice ((intoBatch c).contentStarts[idx c]!)
+      ((intoBatch c).contentStops[idx c]!) := by
   simp only [idx, BatchCursor.foldConsumedCategories, fold_count]
   rfl
 
-theorem span_next (c : BatchCursor) (h : c.HasNext) :
-    c.span (c.next h).1 = Span.ofNumbers (c.intoBatch.startOffsets[idx c]!)
-      (c.intoBatch.startLines[idx c]!) (c.intoBatch.startColumns[idx c]!)
-      (c.intoBatch.endOffsets[idx c]!) (c.intoBatch.endLines[idx c]!)
-      (c.intoBatch.endColumns[idx c]!) := by
+theorem span_next (c : BatchCursor g) (h : c.HasNext) :
+    c.span (c.next h).1 = Span.ofNumbers ((intoBatch c).startOffsets[idx c]!)
+      ((intoBatch c).startLines[idx c]!) ((intoBatch c).startColumns[idx c]!)
+      ((intoBatch c).endOffsets[idx c]!) ((intoBatch c).endLines[idx c]!)
+      ((intoBatch c).endColumns[idx c]!) := by
   simp only [idx, BatchCursor.foldConsumedCategories, fold_count]
   rfl
 
@@ -307,8 +310,8 @@ theorem fromBytes_toByteArray (s : ByteSlice) (v : Version) :
   simp only [beq_toByteArray]
 
 /-- A token of a batch of lexemes is reported as the naive lexer reports its lexeme alone. -/
-theorem toHanded_batch (b : Array Lexeme) (hb0 : Ordered 0 b.toList) (c : BatchCursor)
-    (h : c.HasNext) (hb : c.intoBatch = toTokenBatch b hb0) (hj : idx c < b.size) :
+theorem toHanded_batch (b : Array Lexeme) (hb0 : Ordered 0 b.toList) (c : BatchCursor g)
+    (h : c.HasNext) (hb : intoBatch c = toTokenBatch b hb0) (hj : idx c < b.size) :
     toHanded c (c.next h).1 = lexemeHanded c.version b[idx c] := by
   have hB := batchOf_toTokenBatch b hb0
   obtain ⟨e1, e2, e3, e4, e5, e6, e7, e8, e9, e10⟩ := hB.entry (idx c) (by simpa using hj)

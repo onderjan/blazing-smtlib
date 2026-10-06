@@ -26,10 +26,11 @@ inductive SyntaxToken where
 
 namespace SyntaxToken
 
-/- LEAN: the token is read through the cursor it came from, see `Token`. -/
+/- LEAN: the token is read through a cursor over its batch, see `Token`. -/
 /-- Construct the token kind from the token and version. -/
 @[inline]
-def fromToken (cursor : BatchCursor) (token : Token) (version : Version) : SyntaxToken :=
+def fromToken {batch : BatchTag} (cursor : BatchCursor batch) (token : Token batch)
+    (version : Version) : SyntaxToken :=
   let content := cursor.content token
   match cursor.category token with
   | .parenOpen => .parenOpen
@@ -57,7 +58,8 @@ namespace BatchCursor
 /- LEAN: Rust's `token.syntax(version)`; `syntax` is a keyword in Lean, hence the quotes, which
 a call such as `cursor.syntax token version` does not need. -/
 @[inline]
-def «syntax» (self : BatchCursor) (token : Token) (version : Version) : SyntaxToken :=
+def «syntax» {batch : BatchTag} (self : BatchCursor batch) (token : Token batch)
+    (version : Version) : SyntaxToken :=
   SyntaxToken.fromToken self token version
 
 end BatchCursor

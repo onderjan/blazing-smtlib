@@ -17,6 +17,10 @@ cursor or its twin, does the same and leaves twin cursors (`ContentBlind`).
 
 namespace BSmtLib.Proofs.X1BatchInCoreX2Contents
 
+open BSmtLib.Lexer.Internal (intoBatch)
+
+variable {γ γ' : BatchTag}
+
 /-- The batch `b'` is `b` with another array of contents, in which each of the first `n` tokens
 has the same content. -/
 def SameTokens (b b' : TokenBatch) (n : Nat) : Prop :=
@@ -29,9 +33,9 @@ theorem sameTokens_refl (b : TokenBatch) (n : Nat) : SameTokens b b n :=
 
 /-- The cursor `c'` is `c` over a batch with another array of contents, in which each token that
 `c` can yield has the same content. -/
-def Twin (c c' : BatchCursor) : Prop :=
-  BatchCursor.casesOn (motive := fun _ => Prop) c fun v b f s n r _ =>
-    BatchCursor.casesOn (motive := fun _ => Prop) c' fun v' b' f' s' n' r' _ =>
+def Twin (c : BatchCursor γ) (c' : BatchCursor γ') : Prop :=
+  BatchCursor.casesOn (motive := fun _ => Prop) c fun v b _ f s n r _ =>
+    BatchCursor.casesOn (motive := fun _ => Prop) c' fun v' b' _ f' s' n' r' _ =>
       v' = v ∧ f' = f ∧ s' = s ∧ n' = n ∧ r' = r ∧ SameTokens b b' s
 
 /--
@@ -39,17 +43,18 @@ The consumer does not tell twin cursors apart: handed a cursor and its twin, it 
 result and changes its state alike, and the cursors it leaves are twins.
 -/
 def ContentBlind (H : Type) (m : Type → Type) (R E : Type) [Monad m] [Consume H m R E] : Prop :=
-  ∀ (c c' : BatchCursor) (h : c.HasNext) (h' : c'.HasNext), Twin c c' →
-    ∃ f : Except E (ControlFlow R) × {d : BatchCursor // d.Consumed c} →
-        Except E (ControlFlow R) × {d : BatchCursor // d.Consumed c'},
+  ∀ {γ γ' : BatchTag} (c : BatchCursor γ) (c' : BatchCursor γ') (h : c.HasNext)
+    (h' : c'.HasNext), Twin c c' →
+    ∃ f : Except E (ControlFlow R) × {d : BatchCursor γ // d.Consumed c} →
+        Except E (ControlFlow R) × {d : BatchCursor γ' // d.Consumed c'},
       ∀ s : H,
         (fun y => (f y.1, y.2)) <$> (Consume.consume c h).run s = (Consume.consume c' h').run s ∧
-        ∃ y : m {z : (Except E (ControlFlow R) × {d : BatchCursor // d.Consumed c}) × H //
+        ∃ y : m {z : (Except E (ControlFlow R) × {d : BatchCursor γ // d.Consumed c}) × H //
             (f z.1).1 = z.1.1 ∧ Twin z.1.2.val (f z.1).2.val},
           (Consume.consume c h).run s = Subtype.val <$> y
 
-theorem twin_refl (c : BatchCursor) : Twin c c := by
-  obtain ⟨v, b, f, s, n, r, hb⟩ := c
+theorem twin_refl (c : BatchCursor γ) : Twin c c := by
+  obtain ⟨v, b, tg, f, s, n, r, hb⟩ := c
   exact ⟨rfl, rfl, rfl, rfl, rfl, sameTokens_refl b s⟩
 
 theorem twin_new (v : Version) {b b' : TokenBatch} (h : SameTokens b b' b.len) :
@@ -59,59 +64,63 @@ theorem twin_new (v : Version) {b b' : TokenBatch} (h : SameTokens b b' b.len) :
 
 section
 
-variable {c c' : BatchCursor} (t : Twin c c')
+variable {c : BatchCursor γ} {c' : BatchCursor γ'} (t : Twin c c')
 include t
 
 theorem Twin.resetConsumed : Twin c.resetConsumed c'.resetConsumed := by
-  obtain ⟨v, b, f, s, n, r, hb⟩ := c
-  obtain ⟨v', b', f', s', n', r', hb'⟩ := c'
+  obtain ⟨v, b, tg, f, s, n, r, hb⟩ := c
+  obtain ⟨v', b', tg', f', s', n', r', hb'⟩ := c'
   obtain ⟨rfl, rfl, rfl, rfl, rfl, hs⟩ := t
   exact ⟨rfl, rfl, rfl, rfl, rfl, hs⟩
 
 theorem Twin.version : c'.version = c.version := by
-  obtain ⟨v, b, f, s, n, r, hb⟩ := c
-  obtain ⟨v', b', f', s', n', r', hb'⟩ := c'
+  obtain ⟨v, b, tg, f, s, n, r, hb⟩ := c
+  obtain ⟨v', b', tg', f', s', n', r', hb'⟩ := c'
   exact t.1
 
 theorem Twin.relexRequested : c'.relexRequested = c.relexRequested := by
-  obtain ⟨v, b, f, s, n, r, hb⟩ := c
-  obtain ⟨v', b', f', s', n', r', hb'⟩ := c'
+  obtain ⟨v, b, tg, f, s, n, r, hb⟩ := c
+  obtain ⟨v', b', tg', f', s', n', r', hb'⟩ := c'
   exact t.2.2.2.2.1
 
 theorem Twin.hasNext : c'.HasNext ↔ c.HasNext := by
-  obtain ⟨v, b, f, s, n, r, hb⟩ := c
-  obtain ⟨v', b', f', s', n', r', hb'⟩ := c'
+  obtain ⟨v, b, tg, f, s, n, r, hb⟩ := c
+  obtain ⟨v', b', tg', f', s', n', r', hb'⟩ := c'
   obtain ⟨rfl, rfl, rfl, rfl, rfl, hs⟩ := t
   exact Iff.rfl
 
 theorem Twin.remaining : c'.remaining = c.remaining := by
-  obtain ⟨v, b, f, s, n, r, hb⟩ := c
-  obtain ⟨v', b', f', s', n', r', hb'⟩ := c'
+  obtain ⟨v, b, tg, f, s, n, r, hb⟩ := c
+  obtain ⟨v', b', tg', f', s', n', r', hb'⟩ := c'
   obtain ⟨rfl, rfl, rfl, rfl, rfl, hs⟩ := t
   rfl
 
 theorem Twin.intoBatch (x : ByteArray) :
-    { c'.intoBatch with bytes := x } = { c.intoBatch with bytes := x } := by
-  obtain ⟨v, b, f, s, n, r, hb⟩ := c
-  obtain ⟨v', b', f', s', n', r', hb'⟩ := c'
+    { intoBatch c' with bytes := x } = { intoBatch c with bytes := x } := by
+  obtain ⟨v, b, tg, f, s, n, r, hb⟩ := c
+  obtain ⟨v', b', tg', f', s', n', r', hb'⟩ := c'
   obtain ⟨rfl, rfl, rfl, rfl, rfl, hs, -⟩ := t
+  subst tg tg'
   rw [← hs]
   rfl
 
 theorem Twin.foldConsumedCategories {β : Type} (init : β) (g : β → TokenCategory → β) :
     c'.foldConsumedCategories init g = c.foldConsumedCategories init g := by
-  obtain ⟨v, b, f, s, n, r, hb⟩ := c
-  obtain ⟨v', b', f', s', n', r', hb'⟩ := c'
+  obtain ⟨v, b, tg, f, s, n, r, hb⟩ := c
+  obtain ⟨v', b', tg', f', s', n', r', hb'⟩ := c'
   obtain ⟨rfl, rfl, rfl, rfl, rfl, hs, -⟩ := t
+  subst tg tg'
   rw [← hs]
   rfl
 
-theorem Twin.consumedEndOf {o o' : BatchCursor} (h : c.Consumed o) (h' : c'.Consumed o') :
+theorem Twin.consumedEndOf {o : BatchCursor γ} {o' : BatchCursor γ'} (h : c.Consumed o)
+    (h' : c'.Consumed o') :
     c'.consumedEndOf h' = c.consumedEndOf h := by
-  obtain ⟨v, b, f, s, n, r, hb⟩ := c
-  obtain ⟨v', b', f', s', n', r', hb'⟩ := c'
+  obtain ⟨v, b, tg, f, s, n, r, hb⟩ := c
+  obtain ⟨v', b', tg', f', s', n', r', hb'⟩ := c'
   obtain ⟨rfl, rfl, rfl, rfl, rfl, hs, -⟩ := t
   unfold BatchCursor.consumedEndOf
+  subst tg tg'
   rw [← hs]
   rfl
 

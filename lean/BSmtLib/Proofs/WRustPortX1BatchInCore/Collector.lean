@@ -11,15 +11,20 @@ and returns cursors that agree (`collector_consumesAlike`).
 
 namespace BSmtLib.Proofs.WRustPortX1BatchInCore
 
+open BSmtLib.Lexer.Internal (intoBatch)
 open BSmtLib.Proofs.Adapter
 
-/-- A token below the length of the batches is recorded alike. -/
-theorem toHanded_eq {c d : BatchCursor} (h : CursorAgree c d) (t : Token)
-    (ht : tokenIndex t < c.intoBatch.len) : toHanded c t = toHanded d t := by
-  unfold toHanded BatchCursor.syntax SyntaxToken.fromToken
-  rw [h.category t ht, h.span t ht, h.content t ht, h.version]
+variable {g g' : BatchTag}
 
-theorem takeRest_agree : ∀ n (c d : BatchCursor), c.remaining = n → CursorAgree c d →
+/-- A token below the length of the batches is recorded alike. -/
+theorem toHanded_eq {c : BatchCursor g} {d : BatchCursor g'} (h : CursorAgree c d)
+    {t : Token g} {t' : Token g'} (et : tokenIndex t = tokenIndex t')
+    (ht : tokenIndex t < (intoBatch c).len) : toHanded c t = toHanded d t' := by
+  unfold toHanded BatchCursor.syntax SyntaxToken.fromToken
+  rw [h.category et ht, h.span et ht, h.content et ht, h.version]
+
+theorem takeRest_agree : ∀ n (c : BatchCursor g) (d : BatchCursor g'), c.remaining = n →
+    CursorAgree c d →
     (takeRest c).1 = (takeRest d).1 ∧ CursorAgree (takeRest c).2.val (takeRest d).2.val := by
   intro n
   induction n using Nat.strongRecOn with
@@ -37,10 +42,9 @@ theorem takeRest_agree : ∀ n (c d : BatchCursor), c.remaining = n → CursorAg
     obtain ⟨t, next, consumed⟩ := p
     obtain ⟨t', next', consumed'⟩ := q
     dsimp only at et hag hlt hrem
-    subst et
     dsimp only
-    rw [toHanded_eq h t hlt]
-    cases toHanded d t with
+    rw [toHanded_eq h et hlt]
+    cases toHanded d t' with
     | none => exact ⟨rfl, hag⟩
     | some x =>
       obtain ⟨e1, e2⟩ := ih _ hrem next next' rfl hag
@@ -56,7 +60,7 @@ theorem takeRest_agree : ∀ n (c d : BatchCursor), c.remaining = n → CursorAg
     simp only [hc, hd, dite_false]
     exact ⟨trivial, h⟩
 
-theorem consume_agree (c d : BatchCursor) (hc : c.HasNext) (hd : d.HasNext)
+theorem consume_agree (c : BatchCursor g) (d : BatchCursor g') (hc : c.HasNext) (hd : d.HasNext)
     (h : CursorAgree c d) (s : Collector) :
     ((Consume.consume (H := Collector) c hc).run s).1.1 =
         ((Consume.consume (H := Collector) d hd).run s).1.1 ∧
@@ -72,10 +76,9 @@ theorem consume_agree (c d : BatchCursor) (hc : c.HasNext) (hd : d.HasNext)
   obtain ⟨t, next, consumed⟩ := p
   obtain ⟨t', next', consumed'⟩ := q
   dsimp only at et hag hlt
-  subst et
   dsimp only
-  rw [toHanded_eq h t hlt]
-  cases toHanded d t with
+  rw [toHanded_eq h et hlt]
+  cases toHanded d t' with
   | none => exact ⟨rfl, hag, rfl⟩
   | some x =>
     obtain ⟨e1, e2⟩ := takeRest_agree _ next next' rfl hag
@@ -93,7 +96,7 @@ theorem consume_agree (c d : BatchCursor) (hc : c.HasNext) (hd : d.HasNext)
 /-- The adapter's consumer reads the cursors it is handed only below the length of their
 batches. -/
 theorem collector_consumesAlike : ConsumesAlike Collector Id Empty Unit := by
-  intro c d hc hd h s
+  intro _ _ c d hc hd h s
   obtain ⟨e1, e2, e3⟩ := consume_agree c d hc hd h s
   refine ⟨⟨(((Consume.consume (H := Collector) c hc).run s).1,
     ((Consume.consume (H := Collector) d hd).run s).1,

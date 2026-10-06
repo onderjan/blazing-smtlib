@@ -181,8 +181,9 @@ Returns the stop, if the consumer stopped, and the cursor as the consumer left i
 effect at the end of the last token the consumer took, which is after `floor`, as every token of
 the cursor ends after it.
 -/
-def handOverCursor {floor : Nat} (cursor : BatchCursor) (hfloor : cursor.EndsAfter floor) :
-    StateT H m (Option (Stop R E floor) × BatchCursor) := do
+def handOverCursor {floor : Nat} {batch : BatchTag} (cursor : BatchCursor batch)
+    (hfloor : cursor.EndsAfter floor) :
+    StateT H m (Option (Stop R E floor) × BatchCursor batch) := do
   if h : cursor.HasNext then
     let (answer, ⟨next, consumed⟩) ← Consume.consume (H := H) cursor h
     let location := next.consumedEndOf consumed

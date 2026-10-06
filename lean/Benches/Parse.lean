@@ -89,8 +89,9 @@ consumed; it ends as every step consumes a token. -/
 /--
 Takes every token remaining in the cursor, which has one, running `step` for each.
 -/
-def takeEach [Monad m] (step : m Unit) (cursor : BatchCursor) (h : cursor.HasNext) :
-    m { c : BatchCursor // c.Consumed cursor } := do
+def takeEach [Monad m] {batch : BatchTag} (step : m Unit) (cursor : BatchCursor batch)
+    (h : cursor.HasNext) :
+    m { c : BatchCursor batch // c.Consumed cursor } := do
   let (_, ⟨next, consumed⟩) := cursor.next h
   step
   if h : next.HasNext then

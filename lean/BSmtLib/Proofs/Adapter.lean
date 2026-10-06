@@ -71,7 +71,8 @@ def toContent (content : ByteSlice) : Spec.Lexicon.Chars :=
 /-! ## The consumer -/
 
 /-- A token as the cursor reports it, in the spec's form; none for whitespace and comments. -/
-def toHanded (cursor : BatchCursor) (token : Token) : Option Handed :=
+def toHanded {batch : BatchTag} (cursor : BatchCursor batch) (token : Token batch) :
+    Option Handed :=
   (toTokenType (cursor.category token)).map fun type =>
     { type
       start := toLocation (cursor.span token).start
@@ -89,8 +90,8 @@ Takes the tokens of the cursor from the next one on, in order, and gives them in
 form, with the cursor after the last one taken. Taking stops at a token that is whitespace or a
 comment, which is taken, and then gives none.
 -/
-def takeRest (cursor : BatchCursor) :
-    Option (List Handed) × { c : BatchCursor // c.Follows cursor } :=
+def takeRest {batch : BatchTag} (cursor : BatchCursor batch) :
+    Option (List Handed) × { c : BatchCursor batch // c.Follows cursor } :=
   if h : cursor.HasNext then
     match cursor.next h with
     | (token, ⟨next, consumed⟩) =>

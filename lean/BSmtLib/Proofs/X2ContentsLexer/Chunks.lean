@@ -128,7 +128,8 @@ theorem modifyBound_nat
   unfold modifyBound
   exact Sim.modify fun s => Subtype.ext (e s.val s.property)
 
-theorem flushCursor_nat : ∀ n (cursor : BatchCursor), cursor.remaining = n → ∀ hfloor,
+theorem flushCursor_nat {g : BatchTag} :
+    ∀ n (cursor : BatchCursor g), cursor.remaining = n → ∀ hfloor,
     Nat' (H := H) (m := m) (R := R) (E := E) (low := low) d r
       (flushCursor (floor := floor) cursor hfloor) := by
   intro n

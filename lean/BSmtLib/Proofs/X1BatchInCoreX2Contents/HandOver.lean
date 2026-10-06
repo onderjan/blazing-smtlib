@@ -12,22 +12,23 @@ replaces, and the categories of the consumed tokens.
 
 namespace BSmtLib.Proofs.X1BatchInCoreX2Contents
 
+open BSmtLib.Lexer.Internal (intoBatch)
 open BSmtLib.Proofs.Simulation
 
 section
 
-variable {R E : Type} {floor : Option Nat}
+variable {R E : Type} {floor : Option Nat} {γ γ' : BatchTag}
 
 /-- What a hand-over reads of the cursor that the consumer leaves, with the stop: the version,
 the batch but for its array of contents, and the folds over the categories of the consumed
 tokens. -/
-def obs (x : Option (Lexer.Interrupted R E floor) × BatchCursor) :
+def obs (x : Option (Lexer.Interrupted R E floor) × BatchCursor γ) :
     Option (Lexer.Interrupted R E floor) × Version × TokenBatch ×
       (Nat → (Nat → TokenCategory → Nat) → Nat) :=
-  (x.1, x.2.version, { x.2.intoBatch with bytes := ByteArray.empty },
+  (x.1, x.2.version, { intoBatch x.2 with bytes := ByteArray.empty },
     fun init g => x.2.foldConsumedCategories init g)
 
-theorem obs_twin {c c' : BatchCursor} (t : Twin c c')
+theorem obs_twin {c : BatchCursor γ} {c' : BatchCursor γ'} (t : Twin c c')
     (stop : Option (Lexer.Interrupted R E floor)) :
     obs (stop, c) = obs (stop, c') := by
   simp only [obs, t.version, t.intoBatch, t.foldConsumedCategories]
@@ -42,15 +43,15 @@ theorem interrupted_ext {R E : Type} {floor : Option Nat} {i j : Lexer.Interrupt
   subst hr hl
   rfl
 
-instance : Nonempty BatchCursor := ⟨BatchCursor.new .v2_7 default⟩
 
 section
 
 variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Consume H m R E]
-  {floor : Option Nat} {low : Nat} (hblind : ContentBlind H m R E)
+  {floor : Option Nat} {low : Nat} {γ γ' : BatchTag} (hblind : ContentBlind H m R E)
 include hblind
 
-theorem flushCursor_sim : ∀ n (c c' : BatchCursor), c.remaining = n → Twin c c' →
+theorem flushCursor_sim : ∀ n (c : BatchCursor γ) (c' : BatchCursor γ'), c.remaining = n →
+    Twin c c' →
     ∀ hfl hfl',
     SimF BFits BFits (fun _ => BFits) (boundMap (floor := floor) (low := low)) id
       (obs <$> Lexer.X2Contents.flushCursor (H := H) (m := m) (R := R) (E := E) c hfl)
@@ -135,28 +136,86 @@ local macro "sim_same" : tactic => `(tactic| repeat (first
     | ((with_reducible refine modifyCore_same ?_ ?_); (intro _; rfl); (intro _; rfl))
     | (with_reducible exact storeSpent_sim _)))
 
-/-- The rest of a hand-over reads the cursor only through `obs`. -/
-local macro "obs_congr" : tactic => `(tactic| (
-    intro ⟨stop, cursor⟩ ⟨stop', cursor'⟩ ho
-    simp only [obs, Prod.mk.injEq] at ho
-    obtain ⟨hstop, hv, hb, hf⟩ := ho
-    subst hstop
-    dsimp only
-    generalize BatchCursor.foldConsumedCategories (β := Nat) cursor = F at hf ⊢
-    generalize BatchCursor.foldConsumedCategories (β := Nat) cursor' = F' at hf ⊢
-    have hF : F = F' := funext fun i => funext fun g => congrFun (congrFun hf i) g
-    subst hF
-    generalize cursor.version = V at hv ⊢
-    generalize cursor'.version = V' at hv ⊢
-    subst hv
-    generalize cursor.intoBatch = B at hb ⊢
-    generalize cursor'.intoBatch = B' at hb ⊢
-    obtain ⟨l, by1, t, cs, ce, so, sl, sc, eo, el, ec, o, ord⟩ := B
-    obtain ⟨l', by1', t', cs', ce', so', sl', sc', eo', el', ec', o', ord'⟩ := B'
-    simp only [TokenBatch.mk.injEq] at hb
-    obtain ⟨e1, -, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12⟩ := hb
-    subst e1 e3 e4 e5 e6 e7 e8 e9 e10 e11 e12
-    rfl))
+omit [Consume H m R E] hblind in
+/-- What the lexer with the content buffer does after its loop over the cursor, as a function of
+what it reads of the cursor (`obs`). -/
+def tailX2 (bytesAfter : ByteArray)
+    (w : Option (Lexer.Interrupted R E floor) × Version × TokenBatch ×
+      (Nat → (Nat → TokenCategory → Nat) → Nat)) :
+    Lexer.X2Contents.LexM H m R E floor low TokenBatch := do
+  if (← Lexer.X2Contents.getCore).recovers then
+    match w.1 with
+    | some _ =>
+      Lexer.X2Contents.modifyCore fun c =>
+        let consumedDepth := w.2.2.2 c.consumedDepth fun depth category =>
+          match category with
+          | .parenOpen => depth + 1
+          | .parenClose => depth - 1
+          | _ => depth
+        { c with consumedDepth, lexedDepth := consumedDepth }
+    | none =>
+      Lexer.X2Contents.modifyCore fun c => { c with consumedDepth := c.lexedDepth }
+  Lexer.X2Contents.modifyCore fun c => { c with version := w.2.1 }
+  let spent : TokenBatch := { w.2.2.1 with bytes := bytesAfter }
+  if let some interrupted := w.1 then
+    Lexer.X2Contents.storeSpent spent
+    throw interrupted
+  return spent
+
+omit [Consume H m R E] hblind in
+/-- What the lexer with the batch in its state does after its loop over the cursor, as a
+function of what it reads of the cursor (`obs`). -/
+def tailX1 (bytesAfter : ByteArray)
+    (w : Option (Lexer.Interrupted R E floor) × Version × TokenBatch ×
+      (Nat → (Nat → TokenCategory → Nat) → Nat)) :
+    Lexer.X1BatchInCore.LexM H m R E floor low TokenBatch := do
+  if (← Lexer.X1BatchInCore.getCore).recovers then
+    match w.1 with
+    | some _ =>
+      Lexer.X1BatchInCore.modifyCore fun c =>
+        let consumedDepth := w.2.2.2 c.consumedDepth fun depth category =>
+          match category with
+          | .parenOpen => depth + 1
+          | .parenClose => depth - 1
+          | _ => depth
+        { c with consumedDepth, lexedDepth := consumedDepth }
+    | none =>
+      Lexer.X1BatchInCore.modifyCore fun c => { c with consumedDepth := c.lexedDepth }
+  Lexer.X1BatchInCore.modifyCore fun c => { c with version := w.2.1 }
+  let spent : TokenBatch := { w.2.2.1 with bytes := bytesAfter }
+  if let some interrupted := w.1 then
+    Lexer.X1BatchInCore.storeSpent spent
+    throw interrupted
+  return spent
+
+omit hblind in
+/-- The hand-over of the lexer with the content buffer reads the cursor that the consumer
+leaves only through `obs`. The two lexers' cursors are over different batches, so their
+results are of different types, and are compared through `obs`. -/
+theorem handOver_x2 (batch : TokenBatch) (bytesAfter : ByteArray) (hfl) :
+    Lexer.X2Contents.handOver (H := H) (m := m) (R := R) (E := E) (floor := floor) (low := low)
+      batch bytesAfter hfl =
+      Lexer.X2Contents.getCore >>= fun c =>
+        (obs <$> Lexer.X2Contents.flushCursor (BatchCursor.new c.version batch)
+          fun p hp => BatchCursor.endsAfter_new (hfl p hp) _) >>= tailX2 bytesAfter := by
+  unfold Lexer.X2Contents.handOver
+  refine congrArg (_ >>= ·) (funext fun c => ?_)
+  rw [bind_map_left]
+  rfl
+
+omit hblind in
+/-- The hand-over of the lexer with the batch in its state reads the cursor that the consumer
+leaves only through `obs`. -/
+theorem handOver_x1 (batch : TokenBatch) (bytesAfter : ByteArray) (hfl) :
+    Lexer.X1BatchInCore.handOver (H := H) (m := m) (R := R) (E := E) (floor := floor)
+      (low := low) batch bytesAfter hfl =
+      Lexer.X1BatchInCore.getCore >>= fun c =>
+        (obs <$> Lexer.X1BatchInCore.flushCursor (BatchCursor.new c.version batch)
+          fun p hp => BatchCursor.endsAfter_new (hfl p hp) _) >>= tailX1 bytesAfter := by
+  unfold Lexer.X1BatchInCore.handOver
+  refine congrArg (_ >>= ·) (funext fun c => ?_)
+  rw [bind_map_left]
+  rfl
 
 /-- The hand-over of a batch and of the same batch with another array of contents, which gives
 each of its tokens the same content. -/
@@ -165,26 +224,15 @@ theorem handOver_sim (b2 b1 : TokenBatch) (hs : SameTokens b2 b1 b2.len) (bytesA
     SimF BFits BFits (fun _ => BFits) (boundMap (floor := floor) (low := low)) id
       (Lexer.X2Contents.handOver (H := H) (m := m) (R := R) (E := E) b2 bytesAfter hfl)
       (Lexer.X1BatchInCore.handOver b1 bytesAfter hfl') := by
-  unfold Lexer.X2Contents.handOver Lexer.X1BatchInCore.handOver
+  rw [handOver_x2, handOver_x1]
   refine getCore_bind fun c _ => ?_
-  refine SimF.bind_obs obs (flushCursor_sim hblind _ _ _ rfl (twin_new _ hs) _ _) ?_ ?_
-    fun x => ?_
-  · obs_congr
-  · obs_congr
-  obtain ⟨stop, cursor⟩ := x
-  dsimp only
+  refine SimF.bind (flushCursor_sim hblind _ _ _ rfl (twin_new _ hs) _ _) fun w => ?_
+  obtain ⟨stop, version, batch, fold⟩ := w
+  unfold tailX2 tailX1
+  dsimp only [id]
   refine getCore_bind fun _ _ => ?_
   refine SimF.ite Iff.rfl (fun _ => ?_) fun _ => ?_
-  · cases stop
-    · dsimp only
-      sim_same
-    · dsimp only
-      -- the two lexers count the consumed parentheses by functions of their own
-      refine SimF.seq (modifyCore_same ?_ fun _ => rfl) fun _ => ?_
-      · intro c
-        simp only [coreMap]
-        congr 2 <;> (funext d cat; cases cat <;> rfl)
-      · sim_same
+  · cases stop <;> dsimp only <;> sim_same
   · cases stop <;> dsimp only <;> sim_same
 
 theorem flushBatch_sim :

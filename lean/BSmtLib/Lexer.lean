@@ -384,10 +384,11 @@ def expectDelimiter (next : UInt8) (position : USize) : LexM H m R E floor low U
 
 /- LEAN: runs the consumer on the cursor. The consumer runs in `StateT H m`, which the `←` lifts
 into the lexer's monad, where the consumer is the inner state. -/
-def callConsumer (cursor : BatchCursor) (h : cursor.HasNext) :
+def callConsumer {batch : BatchTag} (cursor : BatchCursor batch) (h : cursor.HasNext) :
     LexM H m R E floor low
-      (Except E (ControlFlow R) × { c : BatchCursor // c.Consumed cursor }) := do
-  let action : StateT H m (Except E (ControlFlow R) × { c : BatchCursor // c.Consumed cursor }) :=
+      (Except E (ControlFlow R) × { c : BatchCursor batch // c.Consumed cursor }) := do
+  let action : StateT H m
+      (Except E (ControlFlow R) × { c : BatchCursor batch // c.Consumed cursor }) :=
     Consume.consume (H := H) cursor h
   action
 
@@ -401,9 +402,9 @@ Hands the cursor over to the consumer until nothing remains in it or the consume
 
 Returns the stop, if the consumer stopped, and the cursor as the consumer left it.
 -/
-def flushCursor (cursor : BatchCursor)
+def flushCursor {batch : BatchTag} (cursor : BatchCursor batch)
     (hfloor : ∀ p, floor = some p → cursor.EndsAfter p) :
-    LexM H m R E floor low (Option (Interrupted R E floor) × BatchCursor) := do
+    LexM H m R E floor low (Option (Interrupted R E floor) × BatchCursor batch) := do
   -- flush the cursor until nothing remains
   if h : cursor.HasNext then
     let (result, ⟨next, consumed⟩) ← callConsumer cursor h
@@ -482,7 +483,7 @@ def handOver (batch : TokenBatch) (bytesAfter : ByteArray)
       modifyCore fun c => { c with consumedDepth := c.lexedDepth }
   -- set our version to the cursor-requested version, and take the batch back
   modifyCore fun c => { c with version := cursor.version }
-  let spent : TokenBatch := { cursor.intoBatch with bytes := bytesAfter }
+  let spent : TokenBatch := { intoBatch cursor with bytes := bytesAfter }
   if let some interrupted := stop then
     storeSpent spent
     throw interrupted

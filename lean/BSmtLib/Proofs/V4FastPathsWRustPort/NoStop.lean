@@ -14,7 +14,7 @@ namespace BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
 open BSmtLib.Proofs.Adapter V1NaiveV2Batched
 
 /-- Taking the rest of a cursor keeps its request to relex. -/
-theorem takeRest_relex : ∀ (n : Nat) (c : BatchCursor), c.remaining = n →
+theorem takeRest_relex {g : BatchTag} : ∀ (n : Nat) (c : BatchCursor g), c.remaining = n →
     (takeRest c).2.1.relexRequested = c.relexRequested := by
   intro n
   induction n with
@@ -43,7 +43,7 @@ theorem takeRest_relex : ∀ (n : Nat) (c : BatchCursor), c.remaining = n →
       exact i.trans i2
 
 /-- The adapter's consumer keeps the cursor's request to relex. -/
-theorem consume_relex (c : BatchCursor) (h : c.HasNext) (coll : Collector) :
+theorem consume_relex {g : BatchTag} (c : BatchCursor g) (h : c.HasNext) (coll : Collector) :
     ((Consume.consume (H := Collector) c h).run coll).1.2.1.relexRequested =
       c.relexRequested := by
   have i := takeRest_relex _ (c.next h).2.1 rfl
@@ -79,8 +79,8 @@ variable {floor : Option Nat} {low : Nat}
 
 /-- The hand-over of a cursor that has not asked to relex is done or interrupted by an
 error. -/
-theorem flushCursor_noStop : ∀ (n : Nat) (cursor : BatchCursor), cursor.remaining < n →
-    cursor.relexRequested = false →
+theorem flushCursor_noStop {g : BatchTag} : ∀ (n : Nat) (cursor : BatchCursor g),
+    cursor.remaining < n → cursor.relexRequested = false →
     ∀ (hfloor : ∀ p, floor = some p → cursor.EndsAfter p) (s : BS floor low) (coll : Collector),
     WP (Lexer.WRustPort.flushCursor (H := Collector) (m := Id) (R := Empty) (E := Unit) cursor
       hfloor) s coll (fun _ _ _ => True) (fun _ _ _ => True) := by

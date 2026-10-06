@@ -13,6 +13,7 @@ is reported to the adapter's consumer as the naive lexer reports each lexeme alo
 
 namespace BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
 
+open BSmtLib.Lexer.Internal (intoBatch)
 open BSmtLib.Proofs.Adapter V1Naive V1NaiveV2Batched
 
 /-! ## Writing an entry -/
@@ -197,8 +198,8 @@ theorem holds_push {T : TokenBatch} {ls : List Lexeme} (h : Holds T ls) (l : Lex
 
 /-- A token of a batch that holds the lexemes is reported as the naive lexer reports its lexeme
 alone. -/
-theorem toHanded_holds {ls : List Lexeme} (c : BatchCursor) (h : c.HasNext)
-    (hb : Holds c.intoBatch ls) (hj : idx c < ls.length) :
+theorem toHanded_holds {g : BatchTag} {ls : List Lexeme} (c : BatchCursor g) (h : c.HasNext)
+    (hb : Holds (intoBatch c) ls) (hj : idx c < ls.length) :
     toHanded c (c.next h).1 = lexemeHanded c.version ls[idx c] := by
   obtain ⟨e1, e2, e3, e4, e5, e6, e7, e8, e9, e10⟩ := hb.entry (idx c) hj
   rw [lexemeHanded_eq]
@@ -217,9 +218,9 @@ theorem toHanded_holds {ls : List Lexeme} (c : BatchCursor) (h : c.HasNext)
   · rw [← hcontent, fromBytes_toByteArray]
     cases Reserved.fromBytes? (c.content (c.next h).1) c.version <;> rfl
 
-theorem takeRest_holds (ls : List Lexeme) :
-    ∀ n (c : BatchCursor), c.remaining = n →
-    Holds c.intoBatch ls → idx c + c.remaining = ls.length →
+theorem takeRest_holds {g : BatchTag} (ls : List Lexeme) :
+    ∀ n (c : BatchCursor g), c.remaining = n →
+    Holds (intoBatch c) ls → idx c + c.remaining = ls.length →
     (takeRest c).1 = (ls.drop (idx c)).mapM (lexemeHanded c.version) ∧
     ((takeRest c).1 ≠ none → (takeRest c).2.1.remaining = 0) ∧
     (takeRest c).2.1.version = c.version ∧
@@ -261,8 +262,8 @@ theorem takeRest_holds (ls : List Lexeme) :
         exact hne rfl
 
 /-- What the adapter's consumer does with a cursor over a batch that holds the lexemes. -/
-theorem consume_holds (ls : List Lexeme) (c : BatchCursor) (h : c.HasNext)
-    (hb : Holds c.intoBatch ls) (hs : idx c + c.remaining = ls.length) (coll : Collector) :
+theorem consume_holds {g : BatchTag} (ls : List Lexeme) (c : BatchCursor g) (h : c.HasNext)
+    (hb : Holds (intoBatch c) ls) (hs : idx c + c.remaining = ls.length) (coll : Collector) :
     (∀ hs', (ls.drop (idx c)).mapM (lexemeHanded c.version) = some hs' →
       ((Consume.consume (H := Collector) c h).run coll).1.1 = .ok .continue ∧
       ((Consume.consume (H := Collector) c h).run coll).2.handed = coll.handed ++ hs' ∧

@@ -408,10 +408,11 @@ def expectDelimiter (next : UInt8) (position : Nat) : LexM H m R E floor low Uni
 
 /- LEAN: runs the consumer on the cursor. The consumer runs in `StateT H m`, which the `←` lifts
 into the lexer's monad, where the consumer is the inner state. -/
-def callConsumer (cursor : BatchCursor) (h : cursor.HasNext) :
+def callConsumer {batch : BatchTag} (cursor : BatchCursor batch) (h : cursor.HasNext) :
     LexM H m R E floor low
-      (Except E (ControlFlow R) × { c : BatchCursor // c.Consumed cursor }) := do
-  let action : StateT H m (Except E (ControlFlow R) × { c : BatchCursor // c.Consumed cursor }) :=
+      (Except E (ControlFlow R) × { c : BatchCursor batch // c.Consumed cursor }) := do
+  let action : StateT H m
+      (Except E (ControlFlow R) × { c : BatchCursor batch // c.Consumed cursor }) :=
     Consume.consume (H := H) cursor h
   action
 
@@ -420,7 +421,7 @@ recursion, which ends as every call of the consumer consumes a token, by the pro
 consumer returns. Rust passes the consumer, the version and the depths by `&mut`; here they are
 in the lexer's monad. A stop is after the floor, as every token of the cursor ends after it
 (`BatchCursor.Consumed.lt_consumedEndOf`). -/
-def flushCursor (cursor : BatchCursor)
+def flushCursor {batch : BatchTag} (cursor : BatchCursor batch)
     (hfloor : ∀ p, floor = some p → cursor.EndsAfter p) : LexM H m R E floor low Unit := do
   -- flush the cursor until nothing remains
   if h : cursor.HasNext then
