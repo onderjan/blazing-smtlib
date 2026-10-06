@@ -11,6 +11,7 @@ import BSmtLib.Proofs.V1Naive
 import BSmtLib.Proofs.V2BatchedV3Runs
 import BSmtLib.Proofs.V3RunsV4FastPaths
 import BSmtLib.Proofs.V1NaiveV2Batched
+import BSmtLib.Proofs.V4FastPathsWRustPort
 
 /-!
 # Proofs about the lexers
@@ -94,5 +95,19 @@ info: 'BSmtLib.Proofs.Lexer.V4FastPaths.lexerCorrect' depends on axioms: [propex
 -/
 #guard_msgs in
 #print axioms Lexer.V4FastPaths.lexerCorrect
+
+/-- The Rust port, run by the adapter with its consumer that takes every token and does not take
+whitespace and comments, is correct on whole inputs, however they are cut into slices: it hands
+over what the lexer with fast paths does. -/
+theorem Lexer.WRustPort.lexerCorrect :
+    Spec.Lexer.LexerCorrect (Adapter.handed Adapter.WRustPort.ops) := by
+  rw [← Lexer.V4FastPaths.handed_eq_handed_wRustPort]
+  exact Lexer.V4FastPaths.lexerCorrect
+
+/--
+info: 'BSmtLib.Proofs.Lexer.WRustPort.lexerCorrect' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms Lexer.WRustPort.lexerCorrect
 
 end BSmtLib.Proofs
