@@ -233,12 +233,19 @@ after `decreasing_by`. The test is a function argument for the two kinds of runs
 is `@[specialize]`, so that each kind gets its own compiled scan instead of a call through a
 closure for every byte. The 4-byte unrolling of the Rust scan is left out. -/
 
+/-!
+The scan of the runs. It is public, in `Internal`, only so that the proofs of the lexers can read
+it; it is not a part of the library's interface.
+-/
+
+namespace Internal
+
 /-- Whether the byte at `position` of `bytes` ends the run. -/
-private abbrev RunTest := (bytes : ByteArray) → (position : USize) → position.toNat < bytes.size → Bool
+abbrev RunTest := (bytes : ByteArray) → (position : USize) → position.toNat < bytes.size → Bool
 
 /-- The first position from `position` to `stop` of a byte ending the run, `stop` if none. -/
 @[specialize]
-private def runEndIn (test : RunTest) (bytes : ByteArray) (position stop : USize)
+def runEndIn (test : RunTest) (bytes : ByteArray) (position stop : USize)
     (hstop : stop.toNat ≤ bytes.size) : USize :=
   if h : position < stop then
     if test bytes position (by have := USize.lt_iff_toNat_lt.mp h; omega) then position
@@ -252,6 +259,10 @@ decreasing_by
   have h3 : USize.size = 2 ^ System.Platform.numBits := USize.size_eq_two_pow
   rw [USize.toNat_add, USize.toNat_one, Nat.mod_eq_of_lt (by omega)]
   omega
+
+end Internal
+
+open Internal
 
 /--
 Position of the first byte at `start` or after it carrying no flags from the
