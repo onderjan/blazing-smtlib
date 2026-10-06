@@ -2360,6 +2360,38 @@ def discardBytes (bytes : ByteSlice) : InnerM H m Unit :=
       tokenStarted := c.tokenStarted.imp_right fun h => Nat.lt_of_lt_of_le h (Nat.le_add_right _ _)
       batchEnded := Nat.le_trans c.batchEnded (Nat.le_add_right _ _) }
 
+/-- The number of bytes of a chunk of a slice too large for the positions of the lexer. -/
+def CHUNK_SIZE : Nat := 2 ^ 31
+
+/- LEAN: not in Rust, whose slices are in memory and so end below the largest position. A slice
+whose end is not below `USize.size` cannot be in memory either, but Lean's logic has such slices;
+they are lexed here, in chunks of `CHUNK_SIZE` bytes, below `USize.size` on every platform. Each
+chunk is copied into an array of its own, as positions in `Input` are positions in the whole
+array, and is lexed as a slice is, from `position` in the slice on. Lexing stops at a break or an
+error, as it does in a slice; the bytes after it are left to the caller, as those of a slice are.
+The function is kept apart from `lexSliceStep`, so that it does not enlarge it. -/
+/-- Lexes the slice from `position` on, a chunk at a time. -/
+@[noinline]
+def lexChunks (slice : ByteSlice) (position : Nat) :
+    InnerM H m (Except (Failure E) (ControlFlow (Located R))) := do
+  if h : position < slice.size then
+    let chunkStart := slice.start + position
+    let chunk := slice.byteArray.extract chunkStart (min (chunkStart + CHUNK_SIZE) slice.stop)
+    have hsize : chunk.size < USize.size := by
+      have := USize.le_size
+      simp only [chunk, ByteArray.size_extract, CHUNK_SIZE] at *
+      omega
+    let input : Input :=
+      { bytes := chunk, start := 0, stop := USize.ofNatLT chunk.size hsize
+        stop_le := by simp only [USize.toNat_ofNatLT]; exact Nat.le_refl _ }
+    match ← executeStep (lexSliceInner input) with
+    | .ok .continue => lexChunks slice (position + CHUNK_SIZE)
+    | result => return result
+  else
+    return .ok .continue
+termination_by slice.size - position
+decreasing_by simp only [CHUNK_SIZE] at *; omega
+
 /- LEAN: the consumer's recovery methods are passed in, those of `LexRecovery`; they are only
 called by a recovering lexer. -/
 /-- Lexes the slice, or discards it if the consumer has finished. -/
@@ -2389,11 +2421,10 @@ def lexSliceStep (abandon recover : Location → StateT H m Unit) (slice : ByteS
     slice := slice.slice skipped
 
   let start := (← getThe LexerCore).offset
-  let location := (← getThe LexerCore).currentLocation
   -- call inner lexing and fail on error
   let result ← match Input.ofSlice? slice with
     | some input => executeStep (lexSliceInner input)
-    | none => pure (.error { cause := .internal .sliceTooLarge, location })
+    | none => lexChunks slice 0
   match result with
   | .error failure => return .error (← failCall abandon failure false)
   | .ok flow =>

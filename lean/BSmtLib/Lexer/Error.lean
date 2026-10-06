@@ -33,10 +33,6 @@ until it is shown that they cannot occur. -/
 inductive InternalError where
   /-- The token consumer stopped before the token the slice started with. -/
   | stoppedBeforeStart
-  /- LEAN: a slice whose end is not below `USize.size`, which cannot be in memory; see
-  `Input.ofSlice?`. -/
-  /-- The slice does not fit the positions of the lexer. -/
-  | sliceTooLarge
   deriving BEq, Repr, Inhabited
 
 namespace InternalError
@@ -44,7 +40,6 @@ namespace InternalError
 /-- What went wrong, in words. -/
 def message : InternalError → String
   | .stoppedBeforeStart => "the token consumer must not stop before the starting token"
-  | .sliceTooLarge => "the slice must end below the largest position"
 
 end InternalError
 
