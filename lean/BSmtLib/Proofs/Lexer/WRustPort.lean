@@ -499,7 +499,7 @@ spanning from `start` to `end`.
 /- LEAN: the stored case of Rust's `sink_slice`, which hands the token over in a cursor of its
 own, after the batch. Here the cursor is over a batch of its own, of the one token, with the
 array of the content buffer as its array of contents. -/
-def Rust.sinkStoredAt (ty : TokenCategory) (_hty : ty ≠ .endOfFile) (start «end» : Location)
+def Rust.sinkStoredAt (ty : TokenCategory) (start «end» : Location)
     (hend : start.offset < «end».offset) (hfloor : ∀ p, floor = some p → p < «end».offset) :
     LexM H m R E floor low Unit := do
   -- this is in our own buffer, so we cannot put it into the batch
@@ -650,7 +650,7 @@ class Ops (H : Type) (m : Type → Type) (R E : Type) : Type 1 where
   flushBatch {floor : Option Nat} {low : Nat} : LexM H m R E floor low Unit
   /-- Flushes the batch, then hands over a single token whose content is in the lexer's
   content buffer, spanning from `start` to `end`. -/
-  sinkStoredAt {floor : Option Nat} {low : Nat} (ty : TokenCategory) (hty : ty ≠ .endOfFile)
+  sinkStoredAt {floor : Option Nat} {low : Nat} (ty : TokenCategory)
     (start «end» : Location) (hend : start.offset < «end».offset)
     (hfloor : ∀ p, floor = some p → p < «end».offset) : LexM H m R E floor low Unit
   /-- Hands over the end-of-file token, at the location. -/
@@ -704,13 +704,13 @@ and sunk here. `start` is where it starts, and `base` the index of the step's of
 /-- Sinks the token in progress, which ends at `tokenEnd`; its content is in the content
 buffer. -/
 @[inline]
-def sinkStored (ty : TokenCategory) (hty : ty ≠ .endOfFile) (tokenEnd : TokenEnd)
+def sinkStored (ty : TokenCategory) (tokenEnd : TokenEnd)
     (start : Location) (base : Nat) (h : Started floor low start) :
     LexM H m R E floor low Unit := do
   -- this is in our own buffer, so we cannot put it into the batch
   -- as we need the buffer usable for the next token
   let ⟨«end», hend⟩ ← locationFrom base tokenEnd.position
-  sinkStoredAt ty hty start «end» (Nat.lt_of_lt_of_le h.1 hend) fun p hp =>
+  sinkStoredAt ty start «end» (Nat.lt_of_lt_of_le h.1 hend) fun p hp =>
     Nat.lt_of_lt_of_le (h.2 p hp) hend
 
 /--
@@ -728,12 +728,12 @@ def finishDecimal (tokenEnd : TokenEnd) (next : Option UInt8) (start : Location)
     throw (← error .fractionDigitExpected tokenEnd)
   if let some next := next then
     expectDelimiter next tokenEnd.position
-  sinkStored .decimal nofun tokenEnd start base h
+  sinkStored .decimal tokenEnd start base h
 
 @[inline]
 def finishNumeral (tokenEnd : TokenEnd) (start : Location) (base : Nat)
     (h : Started floor low start) : LexM H m R E floor low Unit :=
-  sinkStored .numeral nofun tokenEnd start base h
+  sinkStored .numeral tokenEnd start base h
 
 /-- The type of the token of the digit run: hexadecimal or binary. -/
 theorem DigitRun.tokenType_ne {run : DigitRun}
@@ -747,7 +747,7 @@ The token's own shape is checked first, then that `next`, the byte
 at the end (if there is one), delimits it.
 -/
 @[inline]
-def finishDigitRun (run : DigitRun) (hrun : run = HEXADECIMAL_RUN ∨ run = BINARY_RUN)
+def finishDigitRun (run : DigitRun)
     (tokenEnd : TokenEnd) (next : Option UInt8) (start : Location) (base : Nat)
     (h : Started floor low start) : LexM H m R E floor low Unit := do
   -- digit runs must not be empty
@@ -755,12 +755,12 @@ def finishDigitRun (run : DigitRun) (hrun : run = HEXADECIMAL_RUN ∨ run = BINA
     throw (← error run.emptyError tokenEnd)
   if let some next := next then
     expectDelimiter next tokenEnd.position
-  sinkStored run.tokenType (DigitRun.tokenType_ne hrun) tokenEnd start base h
+  sinkStored run.tokenType tokenEnd start base h
 
 @[inline]
 def finishSimpleSymbol (tokenEnd : TokenEnd) (start : Location) (base : Nat)
     (h : Started floor low start) : LexM H m R E floor low Unit :=
-  sinkStored .unquotedSymbol nofun tokenEnd start base h
+  sinkStored .unquotedSymbol tokenEnd start base h
 
 /--
 Sinks a keyword.
@@ -776,17 +776,17 @@ def finishKeyword (tokenEnd : TokenEnd) (next : Option UInt8) (start : Location)
     throw (← error .forbiddenKeywordName tokenEnd)
   if let some next := next then
     expectDelimiter next tokenEnd.position
-  sinkStored .keyword nofun tokenEnd start base h
+  sinkStored .keyword tokenEnd start base h
 
 @[inline]
 def finishStringLiteral (tokenEnd : TokenEnd) (start : Location) (base : Nat)
     (h : Started floor low start) : LexM H m R E floor low Unit :=
-  sinkStored .string nofun tokenEnd start base h
+  sinkStored .string tokenEnd start base h
 
 @[inline]
 def finishWhitespace (tokenEnd : TokenEnd) (start : Location) (base : Nat)
     (h : Started floor low start) : LexM H m R E floor low Unit :=
-  sinkStored .whitespace nofun tokenEnd start base h
+  sinkStored .whitespace tokenEnd start base h
 
 /-- Puts the batch held by the loop back into the lexer state, with the lexer at `position`,
 between tokens. -/
@@ -1608,7 +1608,7 @@ def lexBaseSelection (input : ByteSlice) (start : Nat) (tokenStart : Location)
 
 /-- Lexes a digit run, either hexadecimal or binary. -/
 def lexDigitRun (input : ByteSlice) (start : Nat) (run : DigitRun)
-    (hrun : run = HEXADECIMAL_RUN ∨ run = BINARY_RUN) (tokenStart : Location) (base : Nat)
+    (tokenStart : Location) (base : Nat)
     (h : Started floor low tokenStart) :
     LexM H m R E floor low {next : Nat // start ≤ next} := do
   -- find the first byte that is not allowed in the run
@@ -1617,7 +1617,7 @@ def lexDigitRun (input : ByteSlice) (start : Nat) (run : DigitRun)
   extendContent input start index
   if index < input.size then
     -- we have successfully consumed the digit run, finish it
-    finishDigitRun run hrun (.mkAtByte index) (some (get input index)) tokenStart base h
+    finishDigitRun run (.mkAtByte index) (some (get input index)) tokenStart base h
     setNormal
   return ⟨index, le_runEnd input start _⟩
 
@@ -1830,7 +1830,7 @@ def lexQuotedSymbol (input : ByteSlice) (consumed origin : Nat)
       match get? input afterSlicePosition with
       | some next =>
         expectDelimiter next afterSlicePosition
-        sinkStored .quotedSymbol nofun (.mkAtByte afterSlicePosition) tokenStart base h
+        sinkStored .quotedSymbol (.mkAtByte afterSlicePosition) tokenStart base h
         setNormal
       | none =>
         -- we do not have the next byte available,
@@ -1881,7 +1881,7 @@ def lexQuotedSymbolClosed (input : ByteSlice) (start : Nat) (tokenStart : Locati
   -- we expect a token delimiter to follow the closing pipe
   expectDelimiter (get input start) start
   -- all good, produce the quoted symbol token
-  sinkStored .quotedSymbol nofun (.mkAtByte start) tokenStart base h
+  sinkStored .quotedSymbol (.mkAtByte start) tokenStart base h
   -- the delimiter is not consumed
   setNormal
   return ⟨start, Nat.le_refl _⟩
@@ -1955,7 +1955,7 @@ def lexComment (input : ByteSlice) (start : Nat) (hstart : start ≤ input.size)
     -- we need to produce the comment token
     -- extend the comment content and finish the token
     extendContent input start afterCommentEnd
-    sinkStored .comment nofun (.mkAtByte afterCommentEnd) tokenStart base h
+    sinkStored .comment (.mkAtByte afterCommentEnd) tokenStart base h
 
   -- move back to the normal state and return
   setNormal
@@ -1999,11 +1999,11 @@ def lexStep (input : ByteSlice) (start : Nat) (hstart : start < input.size)
       (← lexBaseSelection input start tokenStart (h.resolve_left nofun))
   | .hexadecimal, h =>
     afterStep input start hstart
-      (← lexDigitRun input start HEXADECIMAL_RUN (.inl rfl) tokenStart base
+      (← lexDigitRun input start HEXADECIMAL_RUN tokenStart base
         (h.resolve_left nofun))
   | .binary, h =>
     afterStep input start hstart
-      (← lexDigitRun input start BINARY_RUN (.inr rfl) tokenStart base
+      (← lexDigitRun input start BINARY_RUN tokenStart base
         (h.resolve_left nofun))
   | .stringLiteral, h | .stringLiteralDoubleQuote, h | .stringLiteralBackslashEscape, h =>
     afterStep input start hstart
@@ -2211,17 +2211,17 @@ def lexEofInner : InnerM H m (Except (Failure E) (ControlFlow R)) := fun c => do
     | .quotedSymbolClosed, h =>
       -- the end of the input is a token delimiter,
       -- produce the quoted symbol
-      sinkStored .quotedSymbol nofun TokenEnd.EOF tokenStart 0
+      sinkStored .quotedSymbol TokenEnd.EOF tokenStart 0
         ⟨h.resolve_left nofun, fun _ h => nomatch h⟩
     | .fraction, h =>
       finishDecimal TokenEnd.EOF none tokenStart 0 ⟨h.resolve_left nofun, fun _ h => nomatch h⟩
     | .numeralOrDecimal, h =>
       finishNumeral TokenEnd.EOF tokenStart 0 ⟨h.resolve_left nofun, fun _ h => nomatch h⟩
     | .hexadecimal, h =>
-      finishDigitRun HEXADECIMAL_RUN (.inl rfl) TokenEnd.EOF none tokenStart 0
+      finishDigitRun HEXADECIMAL_RUN TokenEnd.EOF none tokenStart 0
         ⟨h.resolve_left nofun, fun _ h => nomatch h⟩
     | .binary, h =>
-      finishDigitRun BINARY_RUN (.inr rfl) TokenEnd.EOF none tokenStart 0
+      finishDigitRun BINARY_RUN TokenEnd.EOF none tokenStart 0
         ⟨h.resolve_left nofun, fun _ h => nomatch h⟩
     | .baseSelection, _ =>
       -- hash without selection following it
@@ -2245,12 +2245,12 @@ def lexEofInner : InnerM H m (Except (Failure E) (ControlFlow R)) := fun c => do
     | .whitespace, h =>
       -- we can only be in this state if the consumer wants the
       -- whitespace to be emitted, so sink it
-      sinkStored .whitespace nofun TokenEnd.EOF tokenStart 0
+      sinkStored .whitespace TokenEnd.EOF tokenStart 0
         ⟨h.resolve_left nofun, fun _ h => nomatch h⟩
     | .comment, h => do
       -- only produce the comment if the consumer wants it
       if ← consumesWhitespaceAndComments then
-        sinkStored .comment nofun TokenEnd.EOF tokenStart 0
+        sinkStored .comment TokenEnd.EOF tokenStart 0
           ⟨h.resolve_left nofun, fun _ h => nomatch h⟩
   let step : LexM H m R E none offset Unit := do
     -- if we were told to relex, treat it as a normal continuation,

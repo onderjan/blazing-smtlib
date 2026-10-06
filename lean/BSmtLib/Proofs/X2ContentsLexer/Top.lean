@@ -40,11 +40,11 @@ def afterErrorZb : {recovery : Recovery} → Lexer.X2Contents.Lexer.AfterError H
   | .recovering, x => lexerZb (recovery := .recovering) x
 
 /-- The lexer held by a recovering lexer whose end of the input failed and continues. -/
-noncomputable def pendingLexer (p : BSmtLib.Lexer.PendingEof H) : BSmtLib.Lexer H .recovering :=
-  BSmtLib.Lexer.PendingEof.casesOn p fun l => l
+abbrev pendingLexer (p : BSmtLib.Lexer.PendingEof H) : BSmtLib.Lexer H .recovering :=
+  BSmtLib.Lexer.Internal.pendingLexer p
 
 /-- What a failed end of the input of the library's lexer gives back, mapped by `lexerMap`. -/
-noncomputable def afterEofMap : {recovery : Recovery} →
+def afterEofMap : {recovery : Recovery} →
     BSmtLib.Lexer.AfterEofError H recovery → Lexer.X2Contents.Lexer.AfterEofError H recovery
   | .failFast, _ => ()
   | .recovering, .lexer l => .lexer (lexerMap l)

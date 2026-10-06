@@ -150,7 +150,7 @@ spanning from `start` to `end`.
 /- LEAN: Rust hands such a token over in a cursor of its own; here it goes in the batch,
 which is empty after the flush, with the content buffer as its array of contents for the
 one token. -/
-def handOverStored (ty : TokenCategory) (_hty : ty ≠ .endOfFile) (start «end» : Location)
+def handOverStored (ty : TokenCategory) (start «end» : Location)
     (hend : start.offset < «end».offset) (hfloor : ∀ p, floor = some p → p < «end».offset) :
     LexM H m R E floor low Unit := do
   -- flush the batch, then hand over this token
