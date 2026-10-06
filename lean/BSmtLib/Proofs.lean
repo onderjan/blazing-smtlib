@@ -11,6 +11,7 @@ import BSmtLib.Proofs.V1Naive
 import BSmtLib.Proofs.V2BatchedV3Runs
 import BSmtLib.Proofs.V3RunsV4FastPaths
 import BSmtLib.Proofs.V1NaiveV2Batched
+import BSmtLib.Proofs.X1BatchInCoreX2Contents
 import BSmtLib.Proofs.WRustPortX1BatchInCore
 import BSmtLib.Proofs.V4FastPathsWRustPort
 
@@ -127,5 +128,19 @@ info: 'BSmtLib.Proofs.Lexer.X1BatchInCore.lexerCorrect' depends on axioms: [prop
 -/
 #guard_msgs in
 #print axioms Lexer.X1BatchInCore.lexerCorrect
+
+/-- The lexer with the content buffer, run by the adapter with its consumer that takes every
+token and does not take whitespace and comments, is correct on whole inputs, however they are
+cut into slices: it hands over what the lexer with the batch kept in its state does. -/
+theorem Lexer.X2Contents.lexerCorrect :
+    Spec.Lexer.LexerCorrect (Adapter.handed Adapter.X2Contents.ops) := by
+  rw [← Lexer.X1BatchInCore.handed_eq_handed_x2Contents]
+  exact Lexer.X1BatchInCore.lexerCorrect
+
+/--
+info: 'BSmtLib.Proofs.Lexer.X2Contents.lexerCorrect' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms Lexer.X2Contents.lexerCorrect
 
 end BSmtLib.Proofs
