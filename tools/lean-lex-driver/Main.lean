@@ -8,9 +8,9 @@ to the standard output, until the input ends.
 The environment variable `BLAZING_SMTLIB_LEAN_LEXER` chooses the lexer that answers: `v5`, the
 library's lexer `BSmtLib.Lexer`, which is the one when the variable is unset, `v1`, the naive
 lexer `BSmtLib.Proofs.Lexer.V1Naive`, `w`, the Rust lexer ported to Lean
-`BSmtLib.Proofs.Lexer.WRustPort`, `x1`, the lexer with the batch kept in its state
-`BSmtLib.Proofs.Lexer.X1BatchInCore`, or `x2`, the lexer with the content buffer
-`BSmtLib.Proofs.Lexer.X2Contents`. Any other value makes the driver exit at once with an error.
+`BSmtLib.Proofs.Lexer.WRustPort`, or `x1`, the lexer with the batch kept in its state
+`BSmtLib.Proofs.Lexer.X1BatchInCore`. Any other value makes the driver exit at once with an
+error.
 -/
 import BSmtLib
 import BSmtLib.Proofs
@@ -529,8 +529,8 @@ def driveRecovering (request : Request) (lines : IO.Ref String)
 end V1
 
 /-! The same for the lexers of the chain that have a lexer type of their own, as the library's
-lexer has: `BSmtLib.Proofs.Lexer.WRustPort`, `X1BatchInCore` and `X2Contents`. Each is given to
-the driver by its operations (`Ops`). -/
+lexer has: `BSmtLib.Proofs.Lexer.WRustPort`, and `X1BatchInCore`, which has the type of
+`WRustPort`. Each is given to the driver by its operations (`Ops`). -/
 
 namespace Own
 
@@ -683,43 +683,25 @@ def w (whitespace : Bool) : Ops whitespace :=
     recoveringLocation := Proofs.Lexer.WRustPort.Lexer.currentLocation
     recoveringVersion := Proofs.Lexer.WRustPort.Lexer.version }
 
-/-- The lexer with the batch kept in its state, `BSmtLib.Proofs.Lexer.X1BatchInCore`. -/
+/-- The lexer with the batch kept in its state, `BSmtLib.Proofs.Lexer.X1BatchInCore`, which has
+the Rust port's type and lexes by functions of its own. -/
 def x1 (whitespace : Bool) : Ops whitespace :=
-  { Lexer := Proofs.Lexer.X1BatchInCore.Lexer (Scripted whitespace)
-    Recovering := Proofs.Lexer.X1BatchInCore.Lexer (Scripted whitespace) .recovering
-    AfterEof := Proofs.Lexer.X1BatchInCore.Lexer.AfterEof (Scripted whitespace)
-    new := Proofs.Lexer.X1BatchInCore.Lexer.new
-    newRecovering := Proofs.Lexer.X1BatchInCore.Lexer.newRecovering
+  { Lexer := Proofs.Lexer.WRustPort.Lexer (Scripted whitespace)
+    Recovering := Proofs.Lexer.WRustPort.Lexer (Scripted whitespace) .recovering
+    AfterEof := Proofs.Lexer.WRustPort.Lexer.AfterEof (Scripted whitespace)
+    new := Proofs.Lexer.WRustPort.Lexer.new
+    newRecovering := Proofs.Lexer.WRustPort.Lexer.newRecovering
     lexSlice := Proofs.Lexer.X1BatchInCore.Lexer.lexSlice
     lexEof := Proofs.Lexer.X1BatchInCore.Lexer.lexEof
-    currentLocation := Proofs.Lexer.X1BatchInCore.Lexer.currentLocation
-    version := Proofs.Lexer.X1BatchInCore.Lexer.version
+    currentLocation := Proofs.Lexer.WRustPort.Lexer.currentLocation
+    version := Proofs.Lexer.WRustPort.Lexer.version
     recoveringLexSlice := Proofs.Lexer.X1BatchInCore.Lexer.lexSlice
     recoveringLexEof := Proofs.Lexer.X1BatchInCore.Lexer.lexEof
     afterEof := fun
       | .lexer lexer => .inl lexer
-      | .pending pending => .inr pending.lexEof
-    recoveringLocation := Proofs.Lexer.X1BatchInCore.Lexer.currentLocation
-    recoveringVersion := Proofs.Lexer.X1BatchInCore.Lexer.version }
-
-/-- The lexer with the content buffer, `BSmtLib.Proofs.Lexer.X2Contents`. -/
-def x2 (whitespace : Bool) : Ops whitespace :=
-  { Lexer := Proofs.Lexer.X2Contents.Lexer (Scripted whitespace)
-    Recovering := Proofs.Lexer.X2Contents.Lexer (Scripted whitespace) .recovering
-    AfterEof := Proofs.Lexer.X2Contents.Lexer.AfterEof (Scripted whitespace)
-    new := Proofs.Lexer.X2Contents.Lexer.new
-    newRecovering := Proofs.Lexer.X2Contents.Lexer.newRecovering
-    lexSlice := Proofs.Lexer.X2Contents.Lexer.lexSlice
-    lexEof := Proofs.Lexer.X2Contents.Lexer.lexEof
-    currentLocation := Proofs.Lexer.X2Contents.Lexer.currentLocation
-    version := Proofs.Lexer.X2Contents.Lexer.version
-    recoveringLexSlice := Proofs.Lexer.X2Contents.Lexer.lexSlice
-    recoveringLexEof := Proofs.Lexer.X2Contents.Lexer.lexEof
-    afterEof := fun
-      | .lexer lexer => .inl lexer
-      | .pending pending => .inr pending.lexEof
-    recoveringLocation := Proofs.Lexer.X2Contents.Lexer.currentLocation
-    recoveringVersion := Proofs.Lexer.X2Contents.Lexer.version }
+      | .pending pending => .inr (Proofs.Lexer.X1BatchInCore.Lexer.PendingEof.lexEof pending)
+    recoveringLocation := Proofs.Lexer.WRustPort.Lexer.currentLocation
+    recoveringVersion := Proofs.Lexer.WRustPort.Lexer.version }
 
 end Own
 
@@ -731,8 +713,6 @@ inductive LexerChoice where
   | w
   /-- The lexer with the batch kept in its state, `BSmtLib.Proofs.Lexer.X1BatchInCore`. -/
   | x1
-  /-- The lexer with the content buffer, `BSmtLib.Proofs.Lexer.X2Contents`. -/
-  | x2
   /-- The library's lexer, `BSmtLib.Lexer`. -/
   | v5
 
@@ -742,9 +722,8 @@ def readLexerChoice : Option String → Except String LexerChoice
   | some "v1" => pure .v1
   | some "w" => pure .w
   | some "x1" => pure .x1
-  | some "x2" => pure .x2
   | some other => throw s!"unknown lexer {repr other} in BLAZING_SMTLIB_LEAN_LEXER, \
-      expected v1, w, x1, x2 or v5"
+      expected v1, w, x1 or v5"
 
 /--
 Answers one request line with the naive lexer, giving the response lines.
@@ -785,7 +764,6 @@ def answer (choice : LexerChoice) (line : String) : ExceptT String IO String := 
   | .v1 => return ← answerNaive request
   | .w => return ← Own.answer Own.w request
   | .x1 => return ← Own.answer Own.x1 request
-  | .x2 => return ← Own.answer Own.x2 request
   | .v5 => pure ()
 
   -- the consumer writes into the response while the lexer owns it

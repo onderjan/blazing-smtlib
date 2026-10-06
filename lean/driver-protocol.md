@@ -395,10 +395,9 @@ The environment variable `BLAZING_SMTLIB_LEAN_LEXER` chooses the Lean lexer
 that the driver answers with: `v5`, the library's, when it is unset; `v1`, the
 naive lexer of `lean/BSmtLib/Proofs/Lexer/V1Naive.lean`, which hands every
 token over alone; `w`, the Rust lexer ported to Lean
-of `lean/BSmtLib/Proofs/Lexer/WRustPort.lean`; `x1`, the lexer with the batch
-kept in its state of `lean/BSmtLib/Proofs/Lexer/X1BatchInCore.lean`; or `x2`,
-the lexer with the content buffer of
-`lean/BSmtLib/Proofs/Lexer/X2Contents.lean`. All but `v1` cut their
+of `lean/BSmtLib/Proofs/Lexer/WRustPort.lean`; or `x1`, the lexer with the
+batch kept in its state of `lean/BSmtLib/Proofs/Lexer/X1BatchInCore.lean`. All
+but `v1` cut their
 hand-overs as the library's lexer does: a batch of up to 256 tokens at a time,
 except that a token the lexer builds in a buffer of its own is handed over
 alone, after the batch before it. These are a token cut by a slice boundary,

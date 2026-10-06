@@ -1,7 +1,6 @@
 import BSmtLib.Proofs.Lexer.V1Naive
 import BSmtLib.Proofs.Lexer.WRustPort
 import BSmtLib.Proofs.Lexer.X1BatchInCore
-import BSmtLib.Proofs.Lexer.X2Contents
 import BSmtLib.Token.Syntax
 import BSmtLib.Spec.Lexer
 
@@ -185,25 +184,16 @@ def WRustPort.ops : Ops where
   lexEof := Lexer.WRustPort.Lexer.lexEof
   handler := Lexer.WRustPort.Lexer.handler
 
-/-- The lexer with the batch kept in its state `Lexer.X1BatchInCore`. -/
+/-- The lexer with the batch kept in its state `Lexer.X1BatchInCore`, which has the type of the
+Rust lexer ported to Lean and lexes by functions of its own. -/
 def X1BatchInCore.ops : Ops where
-  Lexer := Lexer.X1BatchInCore.Lexer Collector
-  AfterError := Lexer.X1BatchInCore.Lexer.AfterError Collector .failFast
-  AfterEofError := Lexer.X1BatchInCore.Lexer.AfterEofError Collector .failFast
-  new := Lexer.X1BatchInCore.Lexer.new
+  Lexer := Lexer.WRustPort.Lexer Collector
+  AfterError := Lexer.WRustPort.Lexer.AfterError Collector .failFast
+  AfterEofError := Lexer.WRustPort.Lexer.AfterEofError Collector .failFast
+  new := Lexer.WRustPort.Lexer.new
   lexSlice := Lexer.X1BatchInCore.Lexer.lexSlice
   lexEof := Lexer.X1BatchInCore.Lexer.lexEof
-  handler := Lexer.X1BatchInCore.Lexer.handler
-
-/-- The lexer with the content buffer `Lexer.X2Contents`. -/
-def X2Contents.ops : Ops where
-  Lexer := Lexer.X2Contents.Lexer Collector
-  AfterError := Lexer.X2Contents.Lexer.AfterError Collector .failFast
-  AfterEofError := Lexer.X2Contents.Lexer.AfterEofError Collector .failFast
-  new := Lexer.X2Contents.Lexer.new
-  lexSlice := Lexer.X2Contents.Lexer.lexSlice
-  lexEof := Lexer.X2Contents.Lexer.lexEof
-  handler := Lexer.X2Contents.Lexer.handler
+  handler := Lexer.WRustPort.Lexer.handler
 
 /-- The library's lexer `BSmtLib.Lexer`. -/
 def Lexer.ops : Ops where
