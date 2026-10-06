@@ -4,7 +4,7 @@ import BSmtLib.SpecChecks.Unique
 /-!
 # Examples of a lexer fed in slices
 
-Examples of `Viable`, `Determined` and `Settled` on short inputs, which check that the
+Examples of `Viable`, `Determined` and `HandoverMaximal` on short inputs, which check that the
 definitions say what is meant: which tokens a lexer that has been fed the characters so far
 hands over, and when it fails. Not trusted: these are proofs.
 -/
@@ -14,27 +14,28 @@ namespace BSmtLib.SpecChecks.Lexer
 open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Lexicon.Regex BSmtLib.Spec.Lexer
 open BSmtLib.SpecChecks.Lexicon
 
-/-! ## Facts about settled tokens -/
+/-! ## Facts about the tokens handed over -/
 
-/-- A list of tokens that starts another, and whose tokens all have their delimiter fed, is
-no longer than the position of a token of the other list whose delimiter has not been fed. -/
-theorem delimiterFed_bound {fed : Chars} {tokens all : List Token} {k : Nat}
-    (hp : tokens <+: all) (hk : k < all.length) (hn : ¬ DelimiterFed fed all[k])
-    (hall : ∀ token ∈ tokens, DelimiterFed fed token) : tokens.length ≤ k := by
+/-- A list of tokens that starts another, and whose tokens all have their delimiter seen, is
+no longer than the position of a token of the other list whose delimiter has not been seen. -/
+theorem delimiterSeen_bound {input : Chars} {tokens all : List Token} {k : Nat}
+    (hp : tokens <+: all) (hk : k < all.length) (hn : ¬ DelimiterSeen input all[k])
+    (hall : ∀ token ∈ tokens, DelimiterSeen input token) : tokens.length ≤ k := by
   obtain ⟨more, rfl⟩ := hp
   refine Nat.le_of_not_lt fun hlt => hn ?_
   rw [List.getElem_append_left hlt]
   exact hall _ (List.getElem_mem hlt)
 
-/-- When the characters fed are viable, at most one list of tokens is settled by them. -/
-theorem settled_unique {version : Version} {fed : Chars} {t₁ t₂ : List Token}
-    (hv : Viable version fed) (h₁ : Settled version fed t₁) (h₂ : Settled version fed t₂) :
+/-- When the input is viable, at most one list of tokens is `HandoverMaximal` on it. -/
+theorem handoverMaximal_unique {version : Version} {input : Chars} {t₁ t₂ : List Token}
+    (hv : Viable version input) (h₁ : HandoverMaximal version input t₁)
+    (h₂ : HandoverMaximal version input t₂) :
     t₁ = t₂ := by
   obtain ⟨rest, ts, ht⟩ := hv
-  obtain ⟨a, rfl⟩ := determined_prefix h₁.1 ht
-  obtain ⟨b, hb⟩ := determined_prefix h₂.1 ht
-  exact (List.append_inj_left hb (Nat.le_antisymm (h₂.2.2 t₁ h₁.1 h₁.2.1)
-    (h₁.2.2 t₂ h₂.1 h₂.2.1)).symm).symm
+  obtain ⟨a, rfl⟩ := determined_prefix h₁.1.1 ht
+  obtain ⟨b, hb⟩ := determined_prefix h₂.1.1 ht
+  exact (List.append_inj_left hb (Nat.le_antisymm (h₂.2 t₁ h₁.1)
+    (h₁.2 t₂ h₂.1)).symm).symm
 
 /-- An input split into whitespace, a token and the characters after it, followed by more. -/
 theorem split (input w s x : Chars) {rest : Chars} (h : input = w ++ s ++ x) :
@@ -126,25 +127,25 @@ example : ¬ Determined .v2_7 (chars "(a 12")
   simp only [List.cons_append, List.nil_append, List.cons.injEq, Token.mk.injEq] at hmore
   exact absurd hmore.2.2.1.2.2 (by decide)
 
-/-- After `(a 12`, the settled tokens are exactly `(` and `a`: `12` is not, since a digit may
-still follow it. -/
-example : ∀ tokens, Settled .v2_7 (chars "(a 12") tokens ↔
+/-- After `(a 12`, the tokens that can be handed over are exactly `(` and `a`: `12` cannot,
+since a digit may still follow it. -/
+example : ∀ tokens, HandoverMaximal .v2_7 (chars "(a 12") tokens ↔
     tokens = [⟨.parenOpen, 0, chars "("⟩, ⟨.simpleSymbol, 1, chars "a"⟩] := by
-  have hs : Settled .v2_7 (chars "(a 12")
+  have hs : HandoverMaximal .v2_7 (chars "(a 12")
       [⟨.parenOpen, 0, chars "("⟩, ⟨.simpleSymbol, 1, chars "a"⟩] := by
-    refine ⟨determined_a_12, ?_, ?_⟩
+    refine ⟨⟨determined_a_12, ?_⟩, ?_⟩
     · intro token htoken
       simp only [List.mem_cons, List.not_mem_nil, or_false] at htoken
       rcases htoken with rfl | rfl
       · exact Or.inl rfl
       · exact Or.inr (Or.inr (by decide))
-    · intro tokens' hd hfed
-      exact delimiterFed_bound (k := 2) (determined_prefix hd tokenization_a_123) (by decide)
-        (by simp [DelimiterFed] <;> decide) hfed
+    · rintro tokens' ⟨hd, hfed⟩
+      exact delimiterSeen_bound (k := 2) (determined_prefix hd tokenization_a_123) (by decide)
+        (by simp [DelimiterSeen] <;> decide) hfed
   intro tokens
   constructor
   · intro h
-    exact settled_unique ⟨chars "3", _, tokenization_a_123⟩ h hs
+    exact handoverMaximal_unique ⟨chars "3", _, tokenization_a_123⟩ h hs
   · rintro rfl
     exact hs
 
@@ -180,13 +181,13 @@ theorem determined_x_abc : Determined .v2_7 (chars "(x |abc|")
   exact ⟨ts, rfl⟩
 
 /-- After `(x |abc|`, the tokens `(`, `x` and `|abc|` are determined, but only `(` and `x`
-are settled: the character after `|abc|` has not been fed yet. -/
+can be handed over: the character after `|abc|` has not been read yet. -/
 example : Determined .v2_7 (chars "(x |abc|")
       [⟨.parenOpen, 0, chars "("⟩, ⟨.simpleSymbol, 1, chars "x"⟩,
         ⟨.quotedSymbol, 3, chars "|abc|"⟩] ∧
-    Settled .v2_7 (chars "(x |abc|")
+    HandoverMaximal .v2_7 (chars "(x |abc|")
       [⟨.parenOpen, 0, chars "("⟩, ⟨.simpleSymbol, 1, chars "x"⟩] := by
-  refine ⟨determined_x_abc, ?_, ?_, ?_⟩
+  refine ⟨determined_x_abc, ⟨?_, ?_⟩, ?_⟩
   · intro rest ts h
     obtain ⟨more, rfl⟩ := determined_x_abc rest ts h
     exact ⟨_ :: more, rfl⟩
@@ -195,16 +196,16 @@ example : Determined .v2_7 (chars "(x |abc|")
     rcases htoken with rfl | rfl
     · exact Or.inl rfl
     · exact Or.inr (Or.inr (by decide))
-  · intro tokens' hd hfed
-    exact delimiterFed_bound (k := 2) (determined_prefix (rest := chars " ") hd tokenization_x_abc)
-      (by decide) (by simp [DelimiterFed] <;> decide) hfed
+  · rintro tokens' ⟨hd, hfed⟩
+    exact delimiterSeen_bound (k := 2) (determined_prefix (rest := chars " ") hd tokenization_x_abc)
+      (by decide) (by simp [DelimiterSeen] <;> decide) hfed
 
-/-- After `(x |abc| `, the settled tokens are `(`, `x` and `|abc|`: the space after `|abc|`
-has been fed. -/
-example : Settled .v2_7 (chars "(x |abc| ")
+/-- After `(x |abc| `, the tokens that can be handed over are `(`, `x` and `|abc|`: the space
+after `|abc|` has been read. -/
+example : HandoverMaximal .v2_7 (chars "(x |abc| ")
     [⟨.parenOpen, 0, chars "("⟩, ⟨.simpleSymbol, 1, chars "x"⟩,
       ⟨.quotedSymbol, 3, chars "|abc|"⟩] := by
-  refine ⟨?_, ?_, ?_⟩
+  refine ⟨⟨?_, ?_⟩, ?_⟩
   · rw [show chars "(x |abc| " = chars "(x |abc|" ++ chars " " by decide]
     exact determined_append determined_x_abc
   · intro token htoken
@@ -213,7 +214,7 @@ example : Settled .v2_7 (chars "(x |abc| ")
     · exact Or.inl rfl
     · exact Or.inr (Or.inr (by decide))
     · exact Or.inr (Or.inr (by decide))
-  · intro tokens' hd _
+  · rintro tokens' ⟨hd, -⟩
     exact (determined_prefix (rest := []) hd (by simpa using tokenization_x_abc)).length_le
 
 /-! ## `"ab"` in 2.7 and in 2.0 -/
@@ -247,20 +248,20 @@ theorem tokenization_ab_20 : Tokenization .v2_0 (chars "\"ab\"")
   exact done_spaces (by simp)
 
 /-- In 2.0, the string literal `"ab"` is determined by `"ab"`, since a `"` inside a string
-literal is escaped by a backslash, not doubled; but the empty list is settled, since the
-character after the string literal has not been fed yet. -/
+literal is escaped by a backslash, not doubled; but no token can be handed over yet, since the
+character after the string literal has not been read. -/
 example : Determined .v2_0 (chars "\"ab\"") [⟨.string, 0, chars "\"ab\""⟩] ∧
-    Settled .v2_0 (chars "\"ab\"") [] := by
-  refine ⟨?_, fun _ _ _ => ⟨_, rfl⟩, by simp, ?_⟩
+    HandoverMaximal .v2_0 (chars "\"ab\"") [] := by
+  refine ⟨?_, ⟨fun _ _ _ => ⟨_, rfl⟩, by simp⟩, ?_⟩
   · intro rest ts h
     rw [Tokenization, split (chars "\"ab\"") [] (chars "\"ab\"") [] (by decide)] at h
     obtain ⟨ts, -, -, rfl⟩ := tokenizationFrom_head (category := .string) whitespace_nil
       string_ab_20 (headOf_string20 string20_ab) h
     exact ⟨ts, rfl⟩
-  · intro tokens' hd hfed
-    exact delimiterFed_bound (k := 0)
+  · rintro tokens' ⟨hd, hfed⟩
+    exact delimiterSeen_bound (k := 0)
       (determined_prefix (rest := []) hd (by simpa using tokenization_ab_20))
-      (by decide) (by simp [DelimiterFed] <;> decide) hfed
+      (by decide) (by simp [DelimiterSeen] <;> decide) hfed
 
 /-! ## `|a|x` in 2.7 -/
 
@@ -285,14 +286,14 @@ example : ¬ Viable .v2_7 (chars "|a|x") ∧
     Determined .v2_7 (chars "|a|x") [⟨.numeral, 7, chars "42"⟩] :=
   ⟨not_viable_a_x, determined_of_not_viable not_viable_a_x⟩
 
-/-- No list of tokens is settled by `|a|x`: since it is not viable, every list of `(` is
-determined by it, and those lists are as long as one likes. `StreamingCorrect` asks for the
-settled tokens of viable characters only. -/
-example : ¬ ∃ tokens, Settled .v2_7 (chars "|a|x") tokens := by
-  rintro ⟨tokens, -, -, hmax⟩
+/-- No list of tokens is `HandoverMaximal` on `|a|x`: since it is not viable, every list of `(`
+is determined by it, and those lists are as long as one likes. `HandsOverCorrectly` asks for
+the maximal tokens of the longest viable start only. -/
+example : ¬ ∃ tokens, HandoverMaximal .v2_7 (chars "|a|x") tokens := by
+  rintro ⟨tokens, -, hmax⟩
   have h := hmax (List.replicate (tokens.length + 1) ⟨.parenOpen, 0, chars "("⟩)
-    (determined_of_not_viable not_viable_a_x)
-    (fun token htoken => Or.inl (List.eq_of_mem_replicate htoken ▸ rfl))
+    ⟨determined_of_not_viable not_viable_a_x,
+      fun token htoken => Or.inl (List.eq_of_mem_replicate htoken ▸ rfl)⟩
   rw [List.length_replicate] at h
   omega
 
