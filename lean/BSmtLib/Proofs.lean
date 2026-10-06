@@ -2,6 +2,9 @@ import BSmtLib.Proofs.Lexer.V1Naive
 import BSmtLib.Proofs.Lexer.V2Batched
 import BSmtLib.Proofs.Lexer.V3Runs
 import BSmtLib.Proofs.Lexer.V4FastPaths
+import BSmtLib.Proofs.Lexer.WRustPort
+import BSmtLib.Proofs.Lexer.X1BatchInCore
+import BSmtLib.Proofs.Lexer.X2Contents
 import BSmtLib.Proofs.Adapter
 import BSmtLib.Proofs.V1Naive
 import BSmtLib.Proofs.V2BatchedV3Runs

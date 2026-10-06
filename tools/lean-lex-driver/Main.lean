@@ -8,8 +8,11 @@ to the standard output, until the input ends.
 The environment variable `BLAZING_SMTLIB_LEAN_LEXER` chooses the lexer that answers: `v5`, the
 library's lexer `BSmtLib.Lexer`, which is the one when the variable is unset, `v1`, the naive
 lexer `BSmtLib.Proofs.Lexer.V1Naive`, `v2`, the batched lexer `BSmtLib.Proofs.Lexer.V2Batched`,
-`v3`, the lexer over runs `BSmtLib.Proofs.Lexer.V3Runs`, or `v4`, the lexer with fast paths
-`BSmtLib.Proofs.Lexer.V4FastPaths`. Any other value makes the driver exit at once with an error.
+`v3`, the lexer over runs `BSmtLib.Proofs.Lexer.V3Runs`, `v4`, the lexer with fast paths
+`BSmtLib.Proofs.Lexer.V4FastPaths`, `w`, the Rust lexer ported to Lean
+`BSmtLib.Proofs.Lexer.WRustPort`, `x1`, the lexer with the batch kept in its state
+`BSmtLib.Proofs.Lexer.X1BatchInCore`, or `x2`, the lexer with the content buffer
+`BSmtLib.Proofs.Lexer.X2Contents`. Any other value makes the driver exit at once with an error.
 -/
 import BSmtLib
 import BSmtLib.Proofs
@@ -557,6 +560,201 @@ def driveRecovering (request : Request) (lines : IO.Ref String) (slicer : Slicer
 
 end V1
 
+/-! The same for the lexers of the chain that have a lexer type of their own, as the library's
+lexer has: `BSmtLib.Proofs.Lexer.WRustPort`, `X1BatchInCore` and `X2Contents`. Each is given to
+the driver by its operations (`Ops`). -/
+
+namespace Own
+
+/-- The operations of a lexer with a lexer type of its own, with the scripted consumer. -/
+structure Ops (whitespace : Bool) where
+  /-- The lexer that stops at its first error. -/
+  Lexer : Type
+  /-- The recovering lexer. -/
+  Recovering : Type
+  /-- What a recovering lexer gives back after its end of the input failed. -/
+  AfterEof : Type
+  new : Scripted whitespace → Version → Lexer
+  newRecovering : Scripted whitespace → Version → Recovering
+  lexSlice : Lexer → ByteSlice →
+    IO (Except (LexError String × Unit) (ControlFlow (Located Unit) × Lexer))
+  lexEof : Lexer → IO (Except (LexError String × Unit) (ControlFlow (Located Unit) × Lexer))
+  currentLocation : Lexer → Location
+  version : Lexer → Version
+  recoveringLexSlice : Recovering → ByteSlice →
+    IO (Except (LexError String × Recovering) (ControlFlow (Located Unit) × Recovering))
+  recoveringLexEof : Recovering →
+    IO (Except (LexError String × AfterEof) (ControlFlow (Located Unit) × Recovering))
+  /-- The lexer after its end of the input failed, or the end of the input to lex again. -/
+  afterEof : AfterEof → Sum Recovering
+    (IO (Except (LexError String × Recovering) (ControlFlow (Located Unit) × Recovering)))
+  recoveringLocation : Recovering → Location
+  recoveringVersion : Recovering → Version
+
+/-- The lines that end the feed: where the lexer is, and its version if the consumer is scripted. -/
+def feedLines (request : Request) (location : Location) (version : Version) : String :=
+  let scripted := request.behaviour != .takeAll
+  s!"at {location.offset}:{location.line}:{location.column}\n" ++
+    if scripted then s!"v {versionName version}\n" else ""
+
+/--
+Applies the feeds of the request to the lexer that stops at its first error and writes the
+lines of the feeds themselves. Returns whether every feed was applied.
+-/
+def drive (ops : Ops whitespace) (request : Request) (lines : IO.Ref String) :
+    List (Option ByteArray) → ops.Lexer → ExceptT String IO Bool
+  | [], _ => return true
+  | feed :: feeds, lexer => do
+    let result ← match feed with
+      | some slice => ops.lexSlice lexer slice.toByteSlice
+      | none => ops.lexEof lexer
+    match result with
+    | .ok (flow, lexer) =>
+      lines.modify (· ++ flowLine flow ++
+        feedLines request (ops.currentLocation lexer) (ops.version lexer))
+      drive ops request lines feeds lexer
+    | .error (err, ()) =>
+      lines.modify (· ++ (← errorLine err false))
+      -- the lexer has stopped for good, and the response with it
+      return false
+
+/--
+Applies the feeds of the request to the recovering lexer and writes the lines of the feeds
+themselves. After an error on a slice, the rest of that slice is applied again, from where
+the input continues; after an error on the end of the input that continues, the end of the
+input is applied again.
+-/
+def driveRecovering (ops : Ops whitespace) (request : Request) (lines : IO.Ref String)
+    (lexer : ops.Recovering) : ExceptT String IO Unit := do
+  let mut lexer := lexer
+  for feed in request.feeds do
+    match feed with
+    | some slice =>
+      -- the part of a slice that the lexer has not taken yet
+      let mut from_ := 0
+      repeat
+        let before := (ops.recoveringLocation lexer).offset
+        match ← ops.recoveringLexSlice lexer (slice.toByteSlice from_) with
+        | .ok (flow, next) =>
+          lexer := next
+          lines.modify (· ++ flowLine flow)
+          break
+        | .error (err, next) =>
+          lexer := next
+          lines.modify (· ++ (← errorLine err true))
+          match err.continuesFrom with
+          -- the rest of the feed is applied again from there
+          | some continues => from_ := from_ + (continues.offset - before)
+          -- the input has ended with the error, the feed is done
+          | none => break
+    | none =>
+      match ← ops.recoveringLexEof lexer with
+      | .ok (flow, next) =>
+        lexer := next
+        lines.modify (· ++ flowLine flow)
+      | .error (err, after) =>
+        lines.modify (· ++ (← errorLine err true))
+        match ops.afterEof after with
+        | .inl next => lexer := next
+        | .inr pending =>
+          -- the end of the input continues, apply it again
+          match ← pending with
+          | .ok (flow, next) =>
+            lexer := next
+            lines.modify (· ++ flowLine flow)
+          | .error (err, next) =>
+            lexer := next
+            lines.modify (· ++ (← errorLine err true))
+    lines.modify (· ++
+      feedLines request (ops.recoveringLocation lexer) (ops.recoveringVersion lexer))
+
+/-- Answers one request line with the lexer, giving the response lines. -/
+def answer (ops : (whitespace : Bool) → Ops whitespace) (request : Request) :
+    ExceptT String IO String := do
+  -- the consumer writes into the response while the lexer owns it
+  let lines ← IO.mkRef ""
+  let version := request.version
+  let behaviour := request.behaviour
+  let complete ← match request.whitespace, request.recover with
+    | false, false =>
+      drive (ops false) request lines request.feeds.toList ((ops false).new
+        ({ behaviour, handed := 0, opened := 0, out := lines } : Scripted false) version)
+    | true, false =>
+      drive (ops true) request lines request.feeds.toList ((ops true).new
+        ({ behaviour, handed := 0, opened := 0, out := lines } : Scripted true) version)
+    | false, true =>
+      driveRecovering (ops false) request lines ((ops false).newRecovering
+        ({ behaviour, handed := 0, opened := 0, out := lines } : Scripted false) version)
+      pure true
+    | true, true =>
+      driveRecovering (ops true) request lines ((ops true).newRecovering
+        ({ behaviour, handed := 0, opened := 0, out := lines } : Scripted true) version)
+      pure true
+
+  let mut response ← lines.get
+  if complete then
+    response := response ++ "ok\n"
+  return response
+
+/-- The Rust lexer ported to Lean, `BSmtLib.Proofs.Lexer.WRustPort`. -/
+def w (whitespace : Bool) : Ops whitespace :=
+  { Lexer := Proofs.Lexer.WRustPort.Lexer (Scripted whitespace)
+    Recovering := Proofs.Lexer.WRustPort.Lexer (Scripted whitespace) .recovering
+    AfterEof := Proofs.Lexer.WRustPort.Lexer.AfterEof (Scripted whitespace)
+    new := Proofs.Lexer.WRustPort.Lexer.new
+    newRecovering := Proofs.Lexer.WRustPort.Lexer.newRecovering
+    lexSlice := Proofs.Lexer.WRustPort.Lexer.lexSlice
+    lexEof := Proofs.Lexer.WRustPort.Lexer.lexEof
+    currentLocation := Proofs.Lexer.WRustPort.Lexer.currentLocation
+    version := Proofs.Lexer.WRustPort.Lexer.version
+    recoveringLexSlice := Proofs.Lexer.WRustPort.Lexer.lexSlice
+    recoveringLexEof := Proofs.Lexer.WRustPort.Lexer.lexEof
+    afterEof := fun
+      | .lexer lexer => .inl lexer
+      | .pending pending => .inr pending.lexEof
+    recoveringLocation := Proofs.Lexer.WRustPort.Lexer.currentLocation
+    recoveringVersion := Proofs.Lexer.WRustPort.Lexer.version }
+
+/-- The lexer with the batch kept in its state, `BSmtLib.Proofs.Lexer.X1BatchInCore`. -/
+def x1 (whitespace : Bool) : Ops whitespace :=
+  { Lexer := Proofs.Lexer.X1BatchInCore.Lexer (Scripted whitespace)
+    Recovering := Proofs.Lexer.X1BatchInCore.Lexer (Scripted whitespace) .recovering
+    AfterEof := Proofs.Lexer.X1BatchInCore.Lexer.AfterEof (Scripted whitespace)
+    new := Proofs.Lexer.X1BatchInCore.Lexer.new
+    newRecovering := Proofs.Lexer.X1BatchInCore.Lexer.newRecovering
+    lexSlice := Proofs.Lexer.X1BatchInCore.Lexer.lexSlice
+    lexEof := Proofs.Lexer.X1BatchInCore.Lexer.lexEof
+    currentLocation := Proofs.Lexer.X1BatchInCore.Lexer.currentLocation
+    version := Proofs.Lexer.X1BatchInCore.Lexer.version
+    recoveringLexSlice := Proofs.Lexer.X1BatchInCore.Lexer.lexSlice
+    recoveringLexEof := Proofs.Lexer.X1BatchInCore.Lexer.lexEof
+    afterEof := fun
+      | .lexer lexer => .inl lexer
+      | .pending pending => .inr pending.lexEof
+    recoveringLocation := Proofs.Lexer.X1BatchInCore.Lexer.currentLocation
+    recoveringVersion := Proofs.Lexer.X1BatchInCore.Lexer.version }
+
+/-- The lexer with the content buffer, `BSmtLib.Proofs.Lexer.X2Contents`. -/
+def x2 (whitespace : Bool) : Ops whitespace :=
+  { Lexer := Proofs.Lexer.X2Contents.Lexer (Scripted whitespace)
+    Recovering := Proofs.Lexer.X2Contents.Lexer (Scripted whitespace) .recovering
+    AfterEof := Proofs.Lexer.X2Contents.Lexer.AfterEof (Scripted whitespace)
+    new := Proofs.Lexer.X2Contents.Lexer.new
+    newRecovering := Proofs.Lexer.X2Contents.Lexer.newRecovering
+    lexSlice := Proofs.Lexer.X2Contents.Lexer.lexSlice
+    lexEof := Proofs.Lexer.X2Contents.Lexer.lexEof
+    currentLocation := Proofs.Lexer.X2Contents.Lexer.currentLocation
+    version := Proofs.Lexer.X2Contents.Lexer.version
+    recoveringLexSlice := Proofs.Lexer.X2Contents.Lexer.lexSlice
+    recoveringLexEof := Proofs.Lexer.X2Contents.Lexer.lexEof
+    afterEof := fun
+      | .lexer lexer => .inl lexer
+      | .pending pending => .inr pending.lexEof
+    recoveringLocation := Proofs.Lexer.X2Contents.Lexer.currentLocation
+    recoveringVersion := Proofs.Lexer.X2Contents.Lexer.version }
+
+end Own
+
 /-- The lexer that answers the requests. -/
 inductive LexerChoice where
   /-- The naive lexer, `BSmtLib.Proofs.Lexer.V1Naive`. -/
@@ -567,6 +765,12 @@ inductive LexerChoice where
   | v3
   /-- The lexer with fast paths, `BSmtLib.Proofs.Lexer.V4FastPaths`. -/
   | v4
+  /-- The Rust lexer ported to Lean, `BSmtLib.Proofs.Lexer.WRustPort`. -/
+  | w
+  /-- The lexer with the batch kept in its state, `BSmtLib.Proofs.Lexer.X1BatchInCore`. -/
+  | x1
+  /-- The lexer with the content buffer, `BSmtLib.Proofs.Lexer.X2Contents`. -/
+  | x2
   /-- The library's lexer, `BSmtLib.Lexer`. -/
   | v5
 
@@ -577,8 +781,11 @@ def readLexerChoice : Option String → Except String LexerChoice
   | some "v2" => pure .v2
   | some "v3" => pure .v3
   | some "v4" => pure .v4
+  | some "w" => pure .w
+  | some "x1" => pure .x1
+  | some "x2" => pure .x2
   | some other => throw s!"unknown lexer {repr other} in BLAZING_SMTLIB_LEAN_LEXER, \
-      expected v1, v2, v3, v4 or v5"
+      expected v1, v2, v3, v4, w, x1, x2 or v5"
 
 /--
 Answers one request line with a lexer of the chain on the naive lexer's type, which lexes a
@@ -622,6 +829,9 @@ def answer (choice : LexerChoice) (line : String) : ExceptT String IO String := 
   | .v2 => return ← answerChain V1.Slicer.v2 request
   | .v3 => return ← answerChain V1.Slicer.v3 request
   | .v4 => return ← answerChain V1.Slicer.v4 request
+  | .w => return ← Own.answer Own.w request
+  | .x1 => return ← Own.answer Own.x1 request
+  | .x2 => return ← Own.answer Own.x2 request
   | .v5 => pure ()
 
   -- the consumer writes into the response while the lexer owns it
