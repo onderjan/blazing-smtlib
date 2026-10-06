@@ -875,15 +875,15 @@ theorem runFrom_append (version : Version) (st : St) (location : Location) (a b 
 theorem feed_eq {version : Version} (slices : List Spec.Lexicon.Chars) :
     ∀ {st : St} {location : Location} (handler : Collector) (core : Core),
       Agrees version st location core →
-      feed V1Naive.ops ⟨handler, core⟩ slices =
+      feedAll V1Naive.ops ⟨handler, core⟩ slices =
         (runFrom version st location slices.flatten).bind fun ls =>
           (handedAll version ls).map (handler.handed ++ ·) := by
   induction slices with
   | nil =>
     intro st location handler core h
     have he := lexEofStep_run h handler
-    simp only [feed, ops_lexEof, lexEof_eq, List.flatten_nil, runFrom, feedBytes, Option.bind_some,
-      List.nil_append]
+    simp only [feedAll, ops_lexEof, lexEof_eq, List.flatten_nil, runFrom, feedBytes,
+      Option.bind_some, List.nil_append]
     generalize (lexEofStep (H := Collector) false (fun _ => pure ()) (fun _ => pure ())
       core).run handler = r at he ⊢
     obtain ⟨⟨res, core'⟩, handler'⟩ := r
@@ -915,7 +915,7 @@ theorem feed_eq {version : Version} (slices : List Spec.Lexicon.Chars) :
   | cons slice slices ih =>
     intro st location handler core h
     have hf := lexSliceStep_run h slice handler
-    simp only [feed, ops_lexSlice, lexSlice_eq, List.flatten_cons, runFrom_append]
+    simp only [feedAll, ops_lexSlice, lexSlice_eq, List.flatten_cons, runFrom_append]
     generalize (lexSliceStep (H := Collector) false (fun _ => pure ()) (fun _ => pure ())
       slice.toByteArray.toByteSlice core).run handler = r at hf ⊢
     obtain ⟨⟨res, core'⟩, handler'⟩ := r

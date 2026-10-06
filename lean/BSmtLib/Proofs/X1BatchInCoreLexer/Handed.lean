@@ -17,7 +17,7 @@ which feeds the slices and then the end of the input, records then the same from
 namespace BSmtLib.Proofs.X1BatchInCoreLexer
 
 open BSmtLib.Proofs.Simulation (MCouple)
-open BSmtLib.Proofs.Adapter (Collector feed)
+open BSmtLib.Proofs.Adapter (Collector feedAll)
 open BSmtLib.Lexer.Internal (handler core ofParts)
 
 theorem new_eq {H : Type} (consumer : H) (version : Version) :
@@ -105,9 +105,9 @@ theorem runSlices_cutAll (slices : List Spec.Lexicon.Chars) (l : BSmtLib.Lexer C
 /-- The end of the input, from related lexers. -/
 theorem feed_nil_eq (l : BSmtLib.Lexer Collector) (x : Lexer.WRustPort.Lexer Collector)
     (hlx : LexerRel l x) :
-    feed Adapter.X1BatchInCore.ops x [] = feed Adapter.Lexer.ops l [] := by
+    feedAll Adapter.X1BatchInCore.ops x [] = feedAll Adapter.Lexer.ops l [] := by
   have e := lexEof_sim (m := Id) (R := Empty) (E := Unit) l x hlx.1 hlx.2
-  simp only [feed, Adapter.X1BatchInCore.ops, Adapter.Lexer.ops]
+  simp only [feedAll, Adapter.X1BatchInCore.ops, Adapter.Lexer.ops]
   generalize Lexer.X1BatchInCore.Lexer.lexEof x = rx at e ⊢
   generalize BSmtLib.Lexer.lexEof l = rz at e ⊢
   have e' : resultZb afterEofZb rx = resultMap afterEofMap rz := e
@@ -137,8 +137,8 @@ batch kept in its state hands over for their cut. -/
 theorem handed_eq_cutAll (version : Spec.Lexicon.Version) (slices : List Spec.Lexicon.Chars) :
     Adapter.handed Adapter.Lexer.ops version slices =
       Adapter.handed Adapter.X1BatchInCore.ops version (Chunks.cutAll slices) := by
-  show feed Adapter.Lexer.ops (BSmtLib.Lexer.new { handed := [] } (Adapter.toVersion version))
-      slices = feed Adapter.X1BatchInCore.ops
+  show feedAll Adapter.Lexer.ops (BSmtLib.Lexer.new { handed := [] } (Adapter.toVersion version))
+      slices = feedAll Adapter.X1BatchInCore.ops
         (Lexer.WRustPort.Lexer.new { handed := [] } (Adapter.toVersion version))
         (Chunks.cutAll slices)
   rw [feed_lexer, feed_x1]

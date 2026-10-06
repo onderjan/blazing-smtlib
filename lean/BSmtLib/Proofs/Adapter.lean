@@ -153,7 +153,7 @@ structure Ops where
 Feeds the lexer the slices and then the end of the input, and gives what the consumer has
 recorded, or none if a call fails. The consumer never finishes, so no call breaks.
 -/
-def feed (ops : Ops) (lexer : ops.Lexer) : List Spec.Lexicon.Chars → Option (List Handed)
+def feedAll (ops : Ops) (lexer : ops.Lexer) : List Spec.Lexicon.Chars → Option (List Handed)
   | [] =>
     match ops.lexEof lexer with
     | .ok (.continue, lexer) => some (ops.handler lexer).handed
@@ -161,7 +161,7 @@ def feed (ops : Ops) (lexer : ops.Lexer) : List Spec.Lexicon.Chars → Option (L
     | .error _ => none
   | slice :: slices =>
     match ops.lexSlice lexer slice.toByteArray.toByteSlice with
-    | .ok (.continue, lexer) => feed ops lexer slices
+    | .ok (.continue, lexer) => feedAll ops lexer slices
     | .ok (.break finished, _) => finished.value.elim
     | .error _ => none
 
@@ -171,7 +171,7 @@ version, or none if a call fails.
 -/
 def handed (ops : Ops) (version : Spec.Lexicon.Version) (slices : List Spec.Lexicon.Chars) :
     Option (List Handed) :=
-  feed ops (ops.new { handed := [] } (toVersion version)) slices
+  feedAll ops (ops.new { handed := [] } (toVersion version)) slices
 
 /--
 Feeds the lexer the slices, without the end of the input, by the step of `lexSlice`, and gives

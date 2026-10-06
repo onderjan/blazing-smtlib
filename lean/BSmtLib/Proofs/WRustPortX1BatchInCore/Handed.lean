@@ -35,14 +35,14 @@ theorem newRecovering_rel {H : Type} {m : Type → Type} [Recover H m] (consumer
 consumer, record the same tokens. -/
 theorem feed_eq (slices : List Spec.Lexicon.Chars) :
     ∀ (a : WRustPort.ops.Lexer) (b : X1BatchInCore.ops.Lexer), LexRel a b →
-      feed WRustPort.ops a slices = feed X1BatchInCore.ops b slices := by
+      feedAll WRustPort.ops a slices = feedAll X1BatchInCore.ops b slices := by
   induction slices with
   | nil =>
     intro a b h
     obtain ⟨y, h1, h2⟩ := lexEof_couple collector_consumesAlike a b h
     have e1 : WRustPort.ops.lexEof a = y.val.1 := h1
     have e2 : X1BatchInCore.ops.lexEof b = y.val.2 := h2
-    rw [feed, feed, e1, e2]
+    rw [feedAll, feedAll, e1, e2]
     obtain ⟨⟨r, r'⟩, hr⟩ := y
     dsimp only
     rcases r with ⟨e, x⟩ | ⟨f, l⟩ <;> rcases r' with ⟨e', x'⟩ | ⟨g, l'⟩
@@ -60,7 +60,7 @@ theorem feed_eq (slices : List Spec.Lexicon.Chars) :
       slice.toByteArray.toByteSlice
     have e1 : WRustPort.ops.lexSlice a slice.toByteArray.toByteSlice = y.val.1 := h1
     have e2 : X1BatchInCore.ops.lexSlice b slice.toByteArray.toByteSlice = y.val.2 := h2
-    rw [feed, feed, e1, e2]
+    rw [feedAll, feedAll, e1, e2]
     obtain ⟨⟨r, r'⟩, hr⟩ := y
     dsimp only
     rcases r with ⟨e, x⟩ | ⟨f, l⟩ <;> rcases r' with ⟨e', x'⟩ | ⟨g, l'⟩

@@ -461,9 +461,9 @@ theorem lexEof_ops (v : Version) (l : Lexer.WRustPort.Lexer Collector) (st : St)
 /-- The adapter's feeding of the slices is the step run's, and then the end of the input unless
 a call failed. -/
 theorem feed_eq_fedSteps (l : Lexer.WRustPort.Lexer Collector) (slices : List Spec.Lexicon.Chars) :
-    feed Adapter.WRustPort.ops l slices =
-      if (fedSteps l slices).2 then none else feed Adapter.WRustPort.ops (fedSteps l slices).1 [] :=
-          by
+    feedAll Adapter.WRustPort.ops l slices =
+      if (fedSteps l slices).2 then none
+      else feedAll Adapter.WRustPort.ops (fedSteps l slices).1 [] := by
   induction slices generalizing l with
   | nil => rfl
   | cons slice slices ih =>
@@ -471,10 +471,10 @@ theorem feed_eq_fedSteps (l : Lexer.WRustPort.Lexer Collector) (slices : List Sp
         Lexer.WRustPort.Lexer.lexSlice l slice.toByteArray.toByteSlice := rfl
     match hr : stepSlice l slice.toByteArray.toByteSlice with
     | (.error _, l') =>
-      simp only [feed, e, lexSlice_eq_stepSlice, fedSteps, hr]
+      simp only [feedAll, e, lexSlice_eq_stepSlice, fedSteps, hr]
       rfl
     | (.ok .continue, l') =>
-      simp only [feed, e, lexSlice_eq_stepSlice, fedSteps, hr]
+      simp only [feedAll, e, lexSlice_eq_stepSlice, fedSteps, hr]
       exact ih l'
     | (.ok (.break finished), _) => exact finished.value.elim
 
@@ -519,7 +519,7 @@ theorem handed_eq_run (version : Spec.Lexicon.Version) (slices : List Spec.Lexic
       subst hf
       simp only [Bool.false_eq_true, ↓reduceIte]
       have he := lexEof_ops (toVersion version) l' st' location' hag
-      simp only [feed]
+      simp only [feedAll]
       cases hx' : (endStep st' location').bind (handedAll (toVersion version)) with
       | none =>
         rw [hx'] at he
