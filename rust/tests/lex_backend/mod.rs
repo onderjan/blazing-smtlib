@@ -7,10 +7,10 @@
 //! `lean/driver-protocol.md`.
 //!
 //! The environment variable `BLAZING_SMTLIB_LEAN_LEXER` chooses the Lean
-//! lexer that the driver answers with: `v5`, the library's, if it is unset,
+//! lexer that the driver answers with: `z`, the library's, if it is unset,
 //! `w` or `x1`, the other lexers of the chain of proofs, which cut their
 //! hand-overs as the library's does, or
-//! `v1`, the naive lexer, which hands every token over alone. Under `v1` the
+//! `v`, the naive lexer, which hands every token over alone. Under `v` the
 //! tests whose expectations depend on where the hand-overs are cut, those that
 //! send a plan, are reported as not applicable (see
 //! `boundaries_not_applicable`); every other test runs unchanged.
@@ -110,7 +110,7 @@ pub fn lean_driver() -> Option<OsString> {
 
 /// The Lean lexers that hand every token over in a cursor of its own, so
 /// that their hand-overs are cut elsewhere than the Rust lexer's.
-const BOUNDARY_FREE_LEXERS: [&str; 1] = ["v1"];
+const BOUNDARY_FREE_LEXERS: [&str; 1] = ["v"];
 
 /// Whether the tests run against a Lean lexer that cuts its hand-overs
 /// elsewhere than the Rust lexer: the one the environment variable

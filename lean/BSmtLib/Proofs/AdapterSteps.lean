@@ -10,14 +10,14 @@ call fails: the lexer stops at its first error and is not given back.
 
 namespace BSmtLib.Proofs.Adapter
 
-theorem V1Naive.lexSlice_eq_lexSliceStep (lexer : V1Naive.ops.Lexer) (slice : ByteSlice) :
-    V1Naive.ops.lexSlice lexer slice =
-      match V1Naive.ops.lexSliceStep lexer slice with
+theorem VNaive.lexSlice_eq_lexSliceStep (lexer : VNaive.ops.Lexer) (slice : ByteSlice) :
+    VNaive.ops.lexSlice lexer slice =
+      match VNaive.ops.lexSliceStep lexer slice with
       | (.ok flow, lexer) => .ok (flow, lexer)
       | (.error e, _) => .error (e, ()) := by
-  show Lexer.V1Naive.Lexer.lexSlice lexer slice = _
-  unfold Lexer.V1Naive.Lexer.lexSlice
-  simp only [V1Naive.ops, bind, pure]
+  show Lexer.VNaive.Lexer.lexSlice lexer slice = _
+  unfold Lexer.VNaive.Lexer.lexSlice
+  simp only [VNaive.ops, bind, pure]
   split
   next result self heq =>
     rw [heq]

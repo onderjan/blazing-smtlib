@@ -5,9 +5,9 @@ The Rust tests run their lexer inputs through it to check the Lean port.
 Reads one request per line from the standard input and writes the response
 to the standard output, until the input ends.
 
-The environment variable `BLAZING_SMTLIB_LEAN_LEXER` chooses the lexer that answers: `v5`, the
-library's lexer `BSmtLib.Lexer`, which is the one when the variable is unset, `v1`, the naive
-lexer `BSmtLib.Proofs.Lexer.V1Naive`, `w`, the Rust lexer ported to Lean
+The environment variable `BLAZING_SMTLIB_LEAN_LEXER` chooses the lexer that answers: `z`, the
+library's lexer `BSmtLib.Lexer`, which is the one when the variable is unset, `v`, the naive
+lexer `BSmtLib.Proofs.Lexer.VNaive`, `w`, the Rust lexer ported to Lean
 `BSmtLib.Proofs.Lexer.WRustPort`, or `x1`, the lexer with the batch kept in its state
 `BSmtLib.Proofs.Lexer.X1BatchInCore`. Any other value makes the driver exit at once with an
 error.
@@ -442,14 +442,14 @@ def driveRecovering (request : Request) (lines : IO.Ref String)
             lines.modify (· ++ (← errorLine err true))
     lines.modify (· ++ feedLines request lexer)
 
-/-! The same for the naive lexer V1, `BSmtLib.Proofs.Lexer.V1Naive`, which has the operations of
+/-! The same for the naive lexer V, `BSmtLib.Proofs.Lexer.VNaive`, which has the operations of
 the library's lexer on a lexer type of its own. -/
 
-namespace V1
+namespace V
 
 /-- The naive lexer. -/
 abbrev NaiveLexer (H : Type) (recovery : Recovery := .failFast) :=
-  Proofs.Lexer.V1Naive.Lexer H recovery
+  Proofs.Lexer.VNaive.Lexer H recovery
 
 /-- The lines that end the feed: where the lexer is, and its version if the consumer is scripted. -/
 def feedLines (request : Request) (lexer : NaiveLexer (Scripted whitespace) recovery) : String :=
@@ -526,7 +526,7 @@ def driveRecovering (request : Request) (lines : IO.Ref String)
             lines.modify (· ++ (← errorLine err true))
     lines.modify (· ++ feedLines request lexer)
 
-end V1
+end V
 
 /-! The same for the lexers of the chain that have a lexer type of their own, as the library's
 lexer has: `BSmtLib.Proofs.Lexer.WRustPort`, and `X1BatchInCore`, which has the type of
@@ -707,23 +707,23 @@ end Own
 
 /-- The lexer that answers the requests. -/
 inductive LexerChoice where
-  /-- The naive lexer, `BSmtLib.Proofs.Lexer.V1Naive`. -/
-  | v1
+  /-- The naive lexer, `BSmtLib.Proofs.Lexer.VNaive`. -/
+  | v
   /-- The Rust lexer ported to Lean, `BSmtLib.Proofs.Lexer.WRustPort`. -/
   | w
   /-- The lexer with the batch kept in its state, `BSmtLib.Proofs.Lexer.X1BatchInCore`. -/
   | x1
   /-- The library's lexer, `BSmtLib.Lexer`. -/
-  | v5
+  | z
 
 /-- The lexer named by the value of `BLAZING_SMTLIB_LEAN_LEXER`, the library's if it is unset. -/
 def readLexerChoice : Option String → Except String LexerChoice
-  | none | some "v5" => pure .v5
-  | some "v1" => pure .v1
+  | none | some "z" => pure .z
+  | some "v" => pure .v
   | some "w" => pure .w
   | some "x1" => pure .x1
   | some other => throw s!"unknown lexer {repr other} in BLAZING_SMTLIB_LEAN_LEXER, \
-      expected v1, w, x1 or v5"
+      expected v, w, x1 or z"
 
 /--
 Answers one request line with the naive lexer, giving the response lines.
@@ -735,19 +735,19 @@ def answerNaive (request : Request) : ExceptT String IO String := do
   let behaviour := request.behaviour
   let complete ← match request.whitespace, request.recover with
     | false, false =>
-      V1.drive request lines request.feeds.toList (Proofs.Lexer.V1Naive.Lexer.new
+      V.drive request lines request.feeds.toList (Proofs.Lexer.VNaive.Lexer.new
         ({ behaviour, handed := 0, opened := 0, out := lines } : Scripted false) version)
     | true, false =>
-      V1.drive request lines request.feeds.toList (Proofs.Lexer.V1Naive.Lexer.new
+      V.drive request lines request.feeds.toList (Proofs.Lexer.VNaive.Lexer.new
         ({ behaviour, handed := 0, opened := 0, out := lines } : Scripted true) version)
     | false, true =>
-      V1.driveRecovering request lines
-        (Proofs.Lexer.V1Naive.Lexer.newRecovering
+      V.driveRecovering request lines
+        (Proofs.Lexer.VNaive.Lexer.newRecovering
           ({ behaviour, handed := 0, opened := 0, out := lines } : Scripted false) version)
       pure true
     | true, true =>
-      V1.driveRecovering request lines
-        (Proofs.Lexer.V1Naive.Lexer.newRecovering
+      V.driveRecovering request lines
+        (Proofs.Lexer.VNaive.Lexer.newRecovering
           ({ behaviour, handed := 0, opened := 0, out := lines } : Scripted true) version)
       pure true
 
@@ -761,10 +761,10 @@ def answer (choice : LexerChoice) (line : String) : ExceptT String IO String := 
   -- decode the whole request first, so that a malformed one produces no lines
   let request ← readRequest line
   match choice with
-  | .v1 => return ← answerNaive request
+  | .v => return ← answerNaive request
   | .w => return ← Own.answer Own.w request
   | .x1 => return ← Own.answer Own.x1 request
-  | .v5 => pure ()
+  | .z => pure ()
 
   -- the consumer writes into the response while the lexer owns it
   let lines ← IO.mkRef ""

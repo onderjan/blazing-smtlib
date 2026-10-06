@@ -1,4 +1,4 @@
-import BSmtLib.Proofs.Lexer.V1Naive
+import BSmtLib.Proofs.Lexer.VNaive
 import BSmtLib.Proofs.Lexer.WRustPort
 import BSmtLib.Proofs.Lexer.X1BatchInCore
 import BSmtLib.Token.Syntax
@@ -197,18 +197,18 @@ def fed (ops : Ops) (version : Spec.Lexicon.Version) (slices : List Spec.Lexicon
 
 /-! ## The lexers -/
 
-/-- The naive lexer `Lexer.V1Naive`. -/
-def V1Naive.ops : Ops where
-  Lexer := Lexer.V1Naive.Lexer Collector
-  AfterError := Lexer.V1Naive.Lexer.AfterError Collector .failFast
-  AfterEofError := Lexer.V1Naive.Lexer.AfterEofError Collector .failFast
-  new := Lexer.V1Naive.Lexer.new
-  lexSlice := Lexer.V1Naive.Lexer.lexSlice
-  lexEof := Lexer.V1Naive.Lexer.lexEof
+/-- The naive lexer `Lexer.VNaive`. -/
+def VNaive.ops : Ops where
+  Lexer := Lexer.VNaive.Lexer Collector
+  AfterError := Lexer.VNaive.Lexer.AfterError Collector .failFast
+  AfterEofError := Lexer.VNaive.Lexer.AfterEofError Collector .failFast
+  new := Lexer.VNaive.Lexer.new
+  lexSlice := Lexer.VNaive.Lexer.lexSlice
+  lexEof := Lexer.VNaive.Lexer.lexEof
   lexSliceStep lexer slice :=
-    lexer.run (Lexer.V1Naive.lexSliceStep (Recovery.failFast == .recovering)
+    lexer.run (Lexer.VNaive.lexSliceStep (Recovery.failFast == .recovering)
       (LexRecovery.abandon Recovery.failFast) (LexRecovery.recover Recovery.failFast) slice)
-  handler := Lexer.V1Naive.Lexer.handler
+  handler := Lexer.VNaive.Lexer.handler
 
 /-- The Rust lexer ported to Lean `Lexer.WRustPort`. -/
 def WRustPort.ops : Ops where

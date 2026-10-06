@@ -1,11 +1,11 @@
-import BSmtLib.Proofs.Lexer.V1Naive
+import BSmtLib.Proofs.Lexer.VNaive
 import BSmtLib.Proofs.Lexer.WRustPort
 import BSmtLib.Proofs.Lexer.X1BatchInCore
 import BSmtLib.Proofs.Adapter
 import BSmtLib.Proofs.AdapterSteps
 import BSmtLib.Proofs.Simulation
-import BSmtLib.Proofs.V1Naive
-import BSmtLib.Proofs.V1NaiveWRustPort
+import BSmtLib.Proofs.VNaive
+import BSmtLib.Proofs.VNaiveWRustPort
 import BSmtLib.Proofs.WRustPortX1BatchInCore
 import BSmtLib.Proofs.X1BatchInCoreLexer
 
@@ -31,30 +31,30 @@ open BSmtLib.Spec
 /-- The naive lexer, fed slices by the adapter with its consumer that takes every token and does
 not take whitespace and comments, before the end of the input, has failed exactly when the input
 is not viable, and has handed over the tokens maximal to hand over on its longest viable start. -/
-theorem Lexer.V1Naive.streamingInputCorrect (version : Lexicon.Version)
+theorem Lexer.VNaive.streamingInputCorrect (version : Lexicon.Version)
     (slices : List Lexicon.Chars) (start : Lexicon.Chars) :
-    Spec.Lexer.StreamingInputCorrect (Adapter.fed Adapter.V1Naive.ops) version slices start :=
-  Lexer.V1Naive.streaming_correct version slices start
+    Spec.Lexer.StreamingInputCorrect (Adapter.fed Adapter.VNaive.ops) version slices start :=
+  Lexer.VNaive.streaming_correct version slices start
 
 /--
-info: 'BSmtLib.Proofs.Lexer.V1Naive.streamingInputCorrect' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'BSmtLib.Proofs.Lexer.VNaive.streamingInputCorrect' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
-#print axioms Lexer.V1Naive.streamingInputCorrect
+#print axioms Lexer.VNaive.streamingInputCorrect
 
 /-- The naive lexer, run and fed slices by the adapter with its consumer that takes every token and
 does not take whitespace and comments, is correct on whole inputs and fed in slices. -/
-theorem Lexer.V1Naive.correct :
-    Spec.Lexer.Correct (Adapter.handed Adapter.V1Naive.ops) (Adapter.fed Adapter.V1Naive.ops) :=
+theorem Lexer.VNaive.correct :
+    Spec.Lexer.Correct (Adapter.handed Adapter.VNaive.ops) (Adapter.fed Adapter.VNaive.ops) :=
   fun version slices handed start =>
-    ⟨Lexer.V1Naive.lex_correct version slices handed,
-      Lexer.V1Naive.streamingInputCorrect version slices start⟩
+    ⟨Lexer.VNaive.lex_correct version slices handed,
+      Lexer.VNaive.streamingInputCorrect version slices start⟩
 
 /--
-info: 'BSmtLib.Proofs.Lexer.V1Naive.correct' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'BSmtLib.Proofs.Lexer.VNaive.correct' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
-#print axioms Lexer.V1Naive.correct
+#print axioms Lexer.VNaive.correct
 
 /-- The Rust port, run and fed slices by the adapter with its consumer that takes every token and
 does not take whitespace and comments, is correct on whole inputs and fed in slices: it hands
@@ -62,8 +62,8 @@ over what the naive lexer does, and fails where it does. -/
 theorem Lexer.WRustPort.correct :
     Spec.Lexer.Correct (Adapter.handed Adapter.WRustPort.ops)
       (Adapter.fed Adapter.WRustPort.ops) := by
-  rw [← Lexer.V1Naive.handed_eq_handed_wRustPort, ← Lexer.V1Naive.fed_eq_fed_wRustPort]
-  exact Lexer.V1Naive.correct
+  rw [← Lexer.VNaive.handed_eq_handed_wRustPort, ← Lexer.VNaive.fed_eq_fed_wRustPort]
+  exact Lexer.VNaive.correct
 
 /--
 info: 'BSmtLib.Proofs.Lexer.WRustPort.correct' depends on axioms: [propext, Classical.choice, Quot.sound]
