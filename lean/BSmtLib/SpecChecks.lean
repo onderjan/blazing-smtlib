@@ -4,6 +4,7 @@ import BSmtLib.SpecChecks.Reserved
 import BSmtLib.SpecChecks.Grammar
 import BSmtLib.SpecChecks.Unique
 import BSmtLib.SpecChecks.Streaming
+import BSmtLib.SpecChecks.StreamingFacts
 import BSmtLib.SpecChecks.Grammar.Unique
 import BSmtLib.SpecChecks.RoundTrip
 
@@ -12,14 +13,15 @@ import BSmtLib.SpecChecks.RoundTrip
 
 Proofs that the specification means what it says on the standard's own examples and lists,
 and that every input has at most one tokenisation, with examples of what a lexer fed in slices
-hands over; and that the grammar is unambiguous: every sequence of tokens of a term or of a
-command has at most one syntax tree, and every script has at most one parse; and that the
-tokens of an input can be printed back, exactly with the whitespace and comments between them
-and in a canonical layout without them, and are read back from what is printed; and that the
-syntax trees of terms and commands are printed as the tokens they are read from, that the
-commands of a script are printed as characters that are read back as them, and that these are
-the script's tokens in the canonical layout unless a 2.0 string literal has a backslash that
-does not start `\\` or `\"`.
+hands over; that what the properties of a lexer fed in slices ask for exists, and that a lexer
+that has them hands over more as it is fed more; and that the grammar is unambiguous: every
+sequence of tokens of a term or of a command has at most one syntax tree, and every script has
+at most one parse; and that the tokens of an input can be printed back, exactly with the
+whitespace and comments between them and in a canonical layout without them, and are read back
+from what is printed; and that the syntax trees of terms and commands are printed as the tokens
+they are read from, that the commands of a script are printed as characters that are read back
+as them, and that these are the script's tokens in the canonical layout unless a 2.0 string
+literal has a backslash that does not start `\\` or `\"`.
 They are not part of the specification and are not trusted.
 -/
 
@@ -44,6 +46,56 @@ info: 'BSmtLib.SpecChecks.Lexicon.unique' depends on axioms: [propext, Classical
 -/
 #guard_msgs in
 #print axioms Lexicon.unique
+
+/-!
+### A lexer fed in slices
+
+`Spec.Lexer.HandsOverCorrectly` asks for the tokens maximal to hand over on the longest viable
+start of the input; both exist and are unique, so it is not vacuous. `Spec.Lexer.Sequential` is not a part of
+`Spec.Lexer.Correct`, as it follows from `Spec.Lexer.StreamingInputCorrect`.
+-/
+
+/-- Every input has exactly one longest viable start. -/
+theorem Lexer.longestViableStart_existsUnique (version : Lexicon.Version)
+    (input : Lexicon.Chars) :
+    ∃ start, Spec.Lexer.LongestViableStart version input start ∧
+      ∀ start', Spec.Lexer.LongestViableStart version input start' → start' = start :=
+  let ⟨start, h⟩ := Lexer.exists_longestViableStart version input
+  ⟨start, h, fun _ h' => Lexer.longestViableStart_unique h' h⟩
+
+/--
+info: 'BSmtLib.SpecChecks.Lexer.longestViableStart_existsUnique' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms Lexer.longestViableStart_existsUnique
+
+/-- On a viable input, exactly one list of tokens is maximal to hand over. -/
+theorem Lexer.handoverMaximal_existsUnique {version : Lexicon.Version}
+    {input : Lexicon.Chars} (h : Lexicon.Viable version input) :
+    ∃ tokens, Spec.Lexer.HandoverMaximal version input tokens ∧
+      ∀ tokens', Spec.Lexer.HandoverMaximal version input tokens' → tokens' = tokens :=
+  let ⟨tokens, ht⟩ := Lexer.exists_handoverMaximal h
+  ⟨tokens, ht, fun _ h' => Lexer.handoverMaximal_unique h h' ht⟩
+
+/--
+info: 'BSmtLib.SpecChecks.Lexer.handoverMaximal_existsUnique' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms Lexer.handoverMaximal_existsUnique
+
+/-- A lexer that is `StreamingInputCorrect` on every version, slices and start is
+`Sequential`: fed more slices, it has handed over what it had and possibly more, and once it
+has failed, it stays failed. -/
+theorem Lexer.sequential {feed : Lexicon.Version → List Lexicon.Chars → Spec.Lexer.Fed}
+    (h : ∀ version slices start, Spec.Lexer.StreamingInputCorrect feed version slices start) :
+    ∀ version slices more, Spec.Lexer.Sequential feed version slices more :=
+  Lexer.sequential_of_streamingInputCorrect h
+
+/--
+info: 'BSmtLib.SpecChecks.Lexer.sequential' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms Lexer.sequential
 
 /-- The rules leave at most one syntax tree for every sequence of tokens of a term. -/
 theorem Grammar.termsUnique : Grammar.TermsUnique :=
