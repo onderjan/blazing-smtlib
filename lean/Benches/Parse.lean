@@ -25,14 +25,14 @@ Environment variables, as for the Rust benchmark:
 
 An environment variable of its own:
 
-- `SMT_BENCH_LEXER`: comma-separated lexers to measure, from `v1` to `v5` (default `v5`,
-  the library's lexer; `v1` to `v4` are the lexers of the proofs, `BSmtLib.Proofs.Lexer`).
+- `SMT_BENCH_LEXER`: comma-separated lexers to measure, `v1` or `v5` (default `v5`, the
+  library's lexer; `v1` is the naive lexer of the proofs, `BSmtLib.Proofs.Lexer.V1Naive`).
   The timed runs of a file alternate between the lexers, so that a drift of the machine affects
-  them alike. Each lexer gets its own line, and in `raw` format its own mode, `lex-v1` to
+  them alike. Each lexer gets its own line, and in `raw` format its own mode, `lex-v1` or
   `lex-v5`; with the default alone the mode stays `lex`, as in the Rust benchmark.
 -/
 import BSmtLib
-import BSmtLib.Proofs.Lexer.V4FastPaths
+import BSmtLib.Proofs.Lexer.V1Naive
 
 open BSmtLib
 
@@ -119,26 +119,17 @@ def checkLexed (result : Except (LexError Empty × β) α) (path : String) : IO 
 /-- A lexer of the chain from the specification to the library's lexer. -/
 inductive LexerChoice where
   | v1
-  | v2
-  | v3
-  | v4
   | v5
   deriving BEq
 
 /-- The name of the lexer, as `SMT_BENCH_LEXER` gives it. -/
 def LexerChoice.name : LexerChoice → String
   | .v1 => "v1"
-  | .v2 => "v2"
-  | .v3 => "v3"
-  | .v4 => "v4"
   | .v5 => "v5"
 
 /-- The lexer of the name, if any. -/
 def LexerChoice.ofName? : String → Option LexerChoice
   | "v1" => some .v1
-  | "v2" => some .v2
-  | "v3" => some .v3
-  | "v4" => some .v4
   | "v5" => some .v5
   | _ => none
 
@@ -148,9 +139,6 @@ def lexFromMemory (choice : LexerChoice) (data : ByteArray) (path : String) : IO
   let naive := Proofs.Lexer.V1Naive.Lexer.new handler .v2_7
   match choice with
   | .v1 => checkLexed (Id.run (naive.lexAll data.toByteSlice)) path
-  | .v2 => checkLexed (Id.run (Proofs.Lexer.V2Batched.lexAll naive data.toByteSlice)) path
-  | .v3 => checkLexed (Id.run (Proofs.Lexer.V3Runs.lexAll naive data.toByteSlice)) path
-  | .v4 => checkLexed (Id.run (Proofs.Lexer.V4FastPaths.lexAll naive data.toByteSlice)) path
   | .v5 => checkLexed (Id.run ((Lexer.new handler .v2_7).lexAll data.toByteSlice)) path
 
 /- LEAN: the lexer owns its handler and does not give it back, where the Rust benchmark lends
@@ -283,7 +271,7 @@ def main : IO UInt32 := do
         match LexerChoice.ofName? name with
         | some lexer => lexers := lexers.push lexer
         | none =>
-          stderr.putStrLn s!"Unknown lexer {repr name} in SMT_BENCH_LEXER; use v1 to v5"
+          stderr.putStrLn s!"Unknown lexer {repr name} in SMT_BENCH_LEXER; use v1 or v5"
           return 1
       pure lexers
   -- the mode names the lexer, except for the library's lexer measured alone, as in Rust

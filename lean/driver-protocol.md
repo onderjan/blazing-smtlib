@@ -394,10 +394,7 @@ library whatever the variable says.
 The environment variable `BLAZING_SMTLIB_LEAN_LEXER` chooses the Lean lexer
 that the driver answers with: `v5`, the library's, when it is unset; `v1`, the
 naive lexer of `lean/BSmtLib/Proofs/Lexer/V1Naive.lean`, which hands every
-token over alone; `v2`, the batched lexer of
-`lean/BSmtLib/Proofs/Lexer/V2Batched.lean`; `v3`, the lexer over runs of
-`lean/BSmtLib/Proofs/Lexer/V3Runs.lean`; `v4`, the lexer with fast paths of
-`lean/BSmtLib/Proofs/Lexer/V4FastPaths.lean`; `w`, the Rust lexer ported to Lean
+token over alone; `w`, the Rust lexer ported to Lean
 of `lean/BSmtLib/Proofs/Lexer/WRustPort.lean`; `x1`, the lexer with the batch
 kept in its state of `lean/BSmtLib/Proofs/Lexer/X1BatchInCore.lean`; or `x2`,
 the lexer with the content buffer of

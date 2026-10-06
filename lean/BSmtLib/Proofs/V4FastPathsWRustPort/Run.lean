@@ -13,7 +13,7 @@ end of the input (`lexEofStep_run`) finishes as the naive lexer's (`lexEofInner_
 
 namespace BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
 
-open BSmtLib.Proofs.Adapter V1Naive V1NaiveV2Batched V3Runs V2BatchedV3Runs
+open BSmtLib.Proofs.Adapter V1Naive
 
 /-- The Rust port's monad of a call, with the adapter's consumer. -/
 abbrev IM := Lexer.WRustPort.InnerM Collector Id

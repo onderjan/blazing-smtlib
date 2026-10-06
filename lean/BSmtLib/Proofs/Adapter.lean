@@ -1,7 +1,4 @@
 import BSmtLib.Proofs.Lexer.V1Naive
-import BSmtLib.Proofs.Lexer.V2Batched
-import BSmtLib.Proofs.Lexer.V3Runs
-import BSmtLib.Proofs.Lexer.V4FastPaths
 import BSmtLib.Proofs.Lexer.WRustPort
 import BSmtLib.Proofs.Lexer.X1BatchInCore
 import BSmtLib.Proofs.Lexer.X2Contents
@@ -175,36 +172,6 @@ def V1Naive.ops : Ops where
   AfterEofError := Lexer.V1Naive.Lexer.AfterEofError Collector .failFast
   new := Lexer.V1Naive.Lexer.new
   lexSlice := Lexer.V1Naive.Lexer.lexSlice
-  lexEof := Lexer.V1Naive.Lexer.lexEof
-  handler := Lexer.V1Naive.Lexer.handler
-
-/-- The batched lexer `Lexer.V2Batched`. -/
-def V2Batched.ops : Ops where
-  Lexer := Lexer.V1Naive.Lexer Collector
-  AfterError := Lexer.V1Naive.Lexer.AfterError Collector .failFast
-  AfterEofError := Lexer.V1Naive.Lexer.AfterEofError Collector .failFast
-  new := Lexer.V1Naive.Lexer.new
-  lexSlice := Lexer.V2Batched.lexSlice
-  lexEof := Lexer.V1Naive.Lexer.lexEof
-  handler := Lexer.V1Naive.Lexer.handler
-
-/-- The lexer over runs `Lexer.V3Runs`. -/
-def V3Runs.ops : Ops where
-  Lexer := Lexer.V1Naive.Lexer Collector
-  AfterError := Lexer.V1Naive.Lexer.AfterError Collector .failFast
-  AfterEofError := Lexer.V1Naive.Lexer.AfterEofError Collector .failFast
-  new := Lexer.V1Naive.Lexer.new
-  lexSlice := Lexer.V3Runs.lexSlice
-  lexEof := Lexer.V1Naive.Lexer.lexEof
-  handler := Lexer.V1Naive.Lexer.handler
-
-/-- The lexer with fast paths `Lexer.V4FastPaths`. -/
-def V4FastPaths.ops : Ops where
-  Lexer := Lexer.V1Naive.Lexer Collector
-  AfterError := Lexer.V1Naive.Lexer.AfterError Collector .failFast
-  AfterEofError := Lexer.V1Naive.Lexer.AfterEofError Collector .failFast
-  new := Lexer.V1Naive.Lexer.new
-  lexSlice := Lexer.V4FastPaths.lexSlice
   lexEof := Lexer.V1Naive.Lexer.lexEof
   handler := Lexer.V1Naive.Lexer.handler
 

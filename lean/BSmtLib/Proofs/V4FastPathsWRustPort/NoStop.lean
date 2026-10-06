@@ -11,7 +11,7 @@ batch as it was left.
 
 namespace BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
 
-open BSmtLib.Proofs.Adapter V1NaiveV2Batched
+open BSmtLib.Proofs.Adapter
 
 /-- Taking the rest of a cursor keeps its request to relex. -/
 theorem takeRest_relex {g : BatchTag} : ∀ (n : Nat) (c : BatchCursor g), c.remaining = n →

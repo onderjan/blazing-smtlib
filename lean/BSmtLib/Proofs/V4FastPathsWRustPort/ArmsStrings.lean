@@ -12,7 +12,7 @@ after its first byte, which the code reaches from several places, is proved once
 
 namespace BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
 
-open BSmtLib.Proofs.Adapter V1Naive V1NaiveV2Batched V3Runs V2BatchedV3Runs
+open BSmtLib.Proofs.Adapter V1Naive
 open Lexer.Slice (get? get)
 
 /-! ## The naive lexer in a string under version 2.0 -/
@@ -124,7 +124,7 @@ theorem legacySpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
     unfold jpRun
     dsimp -zeta only
     extract_lets index hidx1 hidx2
-    have hI : index = V3Runs.runEnd input isLegacyRun X.1 := runEndAll_legacy input X.1
+    have hI : index = runEnd input isLegacyRun X.1 := runEndAll_legacy input X.1
     have hle : X.1 ≤ index := hidx1
     have hle' : index ≤ input.size := hI ▸ runEnd_le input isLegacyRun X.1 hXs
     have hstop : ∀ (h : index < input.size), isLegacyRun input[index] = false := by
@@ -487,7 +487,7 @@ theorem stringSpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
     unfold jpRun
     dsimp -zeta only
     extract_lets index hidx1
-    have hI : index = V3Runs.runEnd input isStringRun X.1 := runEnd_eq endsRun_string _ _
+    have hI : index = runEnd input isStringRun X.1 := runEnd_eq endsRun_string _ _
     have hle : X.1 ≤ index := hidx1
     have hle' : index ≤ input.size := hI ▸ runEnd_le input isStringRun X.1 hXs
     have hstop : ∀ (h : index < input.size), isStringRun input[index] = false := by

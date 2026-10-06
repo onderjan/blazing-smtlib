@@ -1,5 +1,4 @@
 import BSmtLib.Proofs.V4FastPathsWRustPort.Step
-import BSmtLib.Proofs.V3RunsV4FastPaths.Tokens
 
 /-!
 # The naive lexer's pure run over the pieces of a token
@@ -12,7 +11,7 @@ raises an error (`feedFrom_end`).
 
 namespace BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
 
-open V1Naive V3Runs V2BatchedV3Runs V3RunsV4FastPaths
+open V1Naive
 
 theorem afterByte_eq_afterColumns' (location : Location) (c : UInt8) (h : c ≠ 10) :
     location.afterByte c = afterColumns location 1 := by
@@ -48,8 +47,8 @@ theorem feedFrom_mode (P : UInt8 → Bool) (hP10 : ∀ c, P c = true → c ≠ 1
       advance false q location c = .pending { q with content := q.content.push c })
     (i : Nat) (q : Pending) (location : Location) (hm : q.mode = mode) (hi : i ≤ s.size) :
     feedFrom v s (.token q) location i =
-      feedFrom v s (.token { q with content := q.content ++ bytesOf s i (V3Runs.runEnd s P i) })
-        (afterColumns location (V3Runs.runEnd s P i - i)) (V3Runs.runEnd s P i) :=
+      feedFrom v s (.token { q with content := q.content ++ bytesOf s i (runEnd s P i) })
+        (afterColumns location (runEnd s P i - i)) (runEnd s P i) :=
   feedFrom_tokenRun v s P hP10 mode
     (fun q location c hm hp => byteStep_token_pending v (hrun q location c hm hp)) _ i rfl q
     location hm hi
@@ -67,8 +66,8 @@ theorem feedFrom_startRun (P : UInt8 → Bool) (hP10 : ∀ c, P c = true → c �
     (h10 : s[i] ≠ 10) :
     feedFrom v s .idle location i =
       feedFrom v s
-        (.token { q with content := q.content ++ bytesOf s (i + 1) (V3Runs.runEnd s P (i + 1)) })
-        (afterColumns location (V3Runs.runEnd s P (i + 1) - i)) (V3Runs.runEnd s P (i + 1)) := by
+        (.token { q with content := q.content ++ bytesOf s (i + 1) (runEnd s P (i + 1)) })
+        (afterColumns location (runEnd s P (i + 1) - i)) (runEnd s P (i + 1)) := by
   rw [feedFrom_step hi (byteStep_idle_pending v hstart), prep_nil,
     feedFrom_mode v s P hP10 mode hrun (i + 1) q _ hm hi, afterByte_eq_afterColumns' _ _ h10,
     afterColumns_add]
@@ -80,13 +79,13 @@ theorem feedFrom_startRun (P : UInt8 → Bool) (hP10 : ∀ c, P c = true → c �
 theorem feedFrom_fraction (i : Nat) (q : Pending) (location : Location) (d : Bool)
     (hm : q.mode = .fraction d) (hi : i ≤ s.size) :
     feedFrom v s (.token q) location i =
-      feedFrom v s (.token ⟨.fraction (d || decide (i < V3Runs.runEnd s isDigit i)), q.start,
-          q.content ++ bytesOf s i (V3Runs.runEnd s isDigit i)⟩)
-        (afterColumns location (V3Runs.runEnd s isDigit i - i)) (V3Runs.runEnd s isDigit i) := by
+      feedFrom v s (.token ⟨.fraction (d || decide (i < runEnd s isDigit i)), q.start,
+          q.content ++ bytesOf s i (runEnd s isDigit i)⟩)
+        (afterColumns location (runEnd s isDigit i - i)) (runEnd s isDigit i) := by
   obtain ⟨mode, start, content⟩ := q
   simp only at hm
   subst hm
-  by_cases hlt : i < V3Runs.runEnd s isDigit i
+  by_cases hlt : i < runEnd s isDigit i
   · obtain ⟨his, hp⟩ := runEnd_start s isDigit i hlt
     have hr := runEnd_succ s isDigit i his hp
     have hadv : advance false ⟨.fraction d, start, content⟩ location s[i] =
@@ -101,8 +100,8 @@ theorem feedFrom_fraction (i : Nat) (q : Pending) (location : Location) (d : Boo
     simp only [← hr, hlt, decide_true, Bool.or_true]
     rw [push_append_bytesOf _ s his (by omega) (by omega),
       afterColumns_afterByte _ _ (isDigit_ne _ hp),
-      show V3Runs.runEnd s isDigit i - (i + 1) + 1 = V3Runs.runEnd s isDigit i - i by omega]
-  · have he : V3Runs.runEnd s isDigit i = i := by
+      show runEnd s isDigit i - (i + 1) + 1 = runEnd s isDigit i - i by omega]
+  · have he : runEnd s isDigit i = i := by
       have := le_runEnd s isDigit i
       omega
     rw [he, bytesOf_self s i hi, ByteArray.append_empty, Nat.sub_self, afterColumns_zero]
@@ -255,13 +254,13 @@ theorem bytesOf_get! (s : ByteSlice) {i j k : Nat} (hij : i ≤ j) (hj : j ≤ s
 
 theorem slice_size' (s : ByteSlice) {a b : Nat} (hab : a ≤ b) (hb : b ≤ s.size) :
     (s.slice a b).size = b - a := by
-  rw [← V1NaiveV2Batched.size_toByteArray]
+  rw [← size_toByteArray]
   exact bytesOf_size s hab hb
 
 /-- Every byte of a run passes its test. -/
 theorem runEnd_mem (s : ByteSlice) (P : UInt8 → Bool) (i : Nat) :
-    ∀ k (hk : k < s.size), i ≤ k → k < V3Runs.runEnd s P i → P s[k] = true := by
-  fun_induction V3Runs.runEnd s P i with
+    ∀ k (hk : k < s.size), i ≤ k → k < runEnd s P i → P s[k] = true := by
+  fun_induction runEnd s P i with
   | case1 i hi hp ih =>
     intro k hk hik hkr
     by_cases e : k = i

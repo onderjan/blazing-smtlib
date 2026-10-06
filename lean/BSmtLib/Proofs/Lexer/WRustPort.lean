@@ -3,7 +3,7 @@ import BSmtLib.Proofs.Lexer.Slice
 
 /-!
 The Rust lexer ported to Lean: a lexer of the chain that leads from the specification to the
-library's lexer, after the lexer with fast paths `V4FastPaths`.
+library's lexer, after the naive lexer `V1Naive`.
 
 It is the Rust lexer `rust/src/lexer.rs`, with the helpers of `rust/src/lexer/`, ported without
 the optimisations of the library's Lean lexer, and is to be read against the Rust source. It is

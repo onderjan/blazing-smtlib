@@ -9,7 +9,7 @@ path, keeps the correspondence with the naive lexer's pure run.
 
 namespace BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
 
-open BSmtLib.Proofs.Adapter V1Naive V1NaiveV2Batched V3Runs V2BatchedV3Runs V3RunsV4FastPaths
+open BSmtLib.Proofs.Adapter V1Naive
 open Lexer.WRustPort (lexNormalFrom FastState Frame Held Past)
 open Lexer.Slice (get? get)
 
@@ -33,14 +33,14 @@ local macro "string_stay" : tactic => `(tactic| (
   apply wp_pure
   refine ⟨.token ⟨.string, location, bytesOf input (index + 1)
       (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_STRING_PLAIN)⟩,
-    V3Runs.afterColumns location (Lexer.Slice.runEnd input (index + 1)
+    afterColumns location (Lexer.Slice.runEnd input (index + 1)
       Lexer.RUN_STRING_PLAIN - index), held, ⟨hfix.1, hfix.2, hfix.3, hfix.4⟩, Nat.le_refl _,
     ?_, ?_, hheld, hbytes, ?_⟩
   · dsimp only [StAgrees, TokenAgrees]
     refine ⟨?_, by simp [hv2'], ?_⟩
     · rw [locAt_eq hloc]; rfl
     · show _ = ByteArray.empty ++ _; rw [empty_append]; rfl
-  · dsimp only [LocAt, V3Runs.afterColumns, Past.from]
+  · dsimp only [LocAt, afterColumns, Past.from]
     refine ⟨?_, ?_, ?_⟩ <;> omega
   · rw [hA]; rfl))
 
@@ -61,7 +61,7 @@ local macro "borrow_push" cat:term:max lo:term:max hi:term:max : tactic => `(tac
     apply wp_bind; apply wp_bind; apply wp_getCore; apply wp_pure
     refine wp_recurse (f := fun (r : Past input origin) => r.1)
       (ih _ (by omega) r.val _ _ r.property origin _ s' coll' held'
-        (V3Runs.afterColumns location ($hi - index))
+        (afterColumns location ($hi - index))
         (fixed_of_key' hk ⟨hfix.1, hfix.2, hfix.3, hfix.4⟩) (hoff.trans k8.symm)
         (hbase.trans k9.symm) rfl rfl k2
         ((hloc.afterColumns hindex (by omega)).congr k10 k11) hH (hb.trans hbytes)) ?_
@@ -160,9 +160,9 @@ theorem LocAt.afterByte {c : WCore} {offset base i : Nat} {location : Location}
 
 theorem LocAt.afterColumns {c : WCore} {offset base i j : Nat} {location : Location}
     (h : LocAt c offset base i location) (hb : base ≤ i) (hij : i ≤ j) :
-    LocAt c offset base j (V3Runs.afterColumns location (j - i)) := by
+    LocAt c offset base j (afterColumns location (j - i)) := by
   obtain ⟨h1, h2, h3⟩ := h
-  refine ⟨?_, h2, ?_⟩ <;> simp only [V3Runs.afterColumns] <;> omega
+  refine ⟨?_, h2, ?_⟩ <;> simp only [V4FastPathsWRustPort.afterColumns] <;> omega
 
 theorem start_parenClose (v : Version) (location : Location) :
     start v false location 41 =
@@ -216,7 +216,7 @@ theorem wp_store {β : Type} {locals : FastState} {s : BS floor low} {coll : Col
 
 theorem slice_size (s : ByteSlice) {a b : Nat} (hab : a ≤ b) (hb : b ≤ s.size) :
     (s.slice a b).size = b - a := by
-  rw [← V1NaiveV2Batched.size_toByteArray]
+  rw [← size_toByteArray]
   show (bytesOf s a b).size = b - a
   have h1 := data_bytesOf s hab hb
   have h2 := s.stop_le_size_byteArray
@@ -424,15 +424,15 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
       have hmask : Lexer.fastFlags c &&& Lexer.FAST_RUN_MASK = Lexer.RUN_NON_LF_WHITESPACE := by
         rw [hf]; decide
       have hj : Lexer.Slice.runEnd input (index + 1) (Lexer.fastFlags c &&& Lexer.FAST_RUN_MASK) =
-          V3Runs.runEnd input isWhitespaceRun index := by
+          runEnd input isWhitespaceRun index := by
         rw [hmask, runEnd_eq endsRun_whitespace,
           ← runEnd_succ input _ index hi (by rw [hc]; exact hwsr)]
       have hle := le_runEnd input isWhitespaceRun (index + 1)
       rw [← runEnd_succ input _ index hi (by rw [hc]; exact hwsr)] at hle
       have hpure : feedFrom v input .idle location index =
           feedFrom v input .idle
-            (V3Runs.afterColumns location (V3Runs.runEnd input isWhitespaceRun index - index))
-            (V3Runs.runEnd input isWhitespaceRun index) :=
+            (afterColumns location (runEnd input isWhitespaceRun index - index))
+            (runEnd input isWhitespaceRun index) :=
         feedFrom_idleRun v input isWhitespaceRun isWhitespaceRun_ne
           (fun location c h => byteStep_idle_idle v (start_whitespaceRun v location h)) _ index rfl
           location (Nat.le_of_lt hi)
@@ -451,12 +451,12 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
         have hidx : (if (Lexer.fastFlags c &&& Lexer.FAST_PIPE != 0) = true then
               Lexer.Slice.runEnd input (index + 1) (Lexer.fastFlags c &&& Lexer.FAST_RUN_MASK) + 1
             else Lexer.Slice.runEnd input (index + 1) (Lexer.fastFlags c &&& Lexer.FAST_RUN_MASK)) =
-            V3Runs.runEnd input isWhitespaceRun index := by
+            runEnd input isWhitespaceRun index := by
           simp only [hpipe, Bool.false_eq_true, ↓reduceIte, hj]
         refine wp_recurse (f := fun (r : Past input origin) => r.1)
           (ih _ (by rw [hidx]; omega) r.val locals _ r.property origin _ s'
             coll' held'
-            (V3Runs.afterColumns location (V3Runs.runEnd input isWhitespaceRun index - index))
+            (afterColumns location (runEnd input isWhitespaceRun index - index))
             (fixed_of_key hfix hk) (hoff.trans k8.symm) (hbase.trans k9.symm)
             (hline.trans k10.symm) (hlineStart.trans k11.symm) (k2.trans hnormal)
             (by rw [hidx]; exact (hloc.afterColumns hindex (by omega)).congr k10 k11) hH
@@ -472,15 +472,15 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
       have hmask : Lexer.fastFlags c &&& Lexer.FAST_RUN_MASK = Lexer.RUN_QUOTED_PLAIN := by
         rw [hf]; decide
       have hj : Lexer.Slice.runEnd input (index + 1) (Lexer.fastFlags c &&& Lexer.FAST_RUN_MASK) =
-          V3Runs.runEnd input isQuotedRun (index + 1) := by
+          runEnd input isQuotedRun (index + 1) := by
         rw [hmask, runEnd_eq endsRun_quoted]
       have hle := le_runEnd input isQuotedRun (index + 1)
       have hA : feedFrom v input .idle location index =
           feedFrom v input
             (.token ⟨.quotedSymbol, location,
-              bytesOf input (index + 1) (V3Runs.runEnd input isQuotedRun (index + 1))⟩)
-            (V3Runs.afterColumns location (V3Runs.runEnd input isQuotedRun (index + 1) - index))
-            (V3Runs.runEnd input isQuotedRun (index + 1)) := by
+              bytesOf input (index + 1) (runEnd input isQuotedRun (index + 1))⟩)
+            (afterColumns location (runEnd input isQuotedRun (index + 1) - index))
+            (runEnd input isQuotedRun (index + 1)) := by
         rw [feedFrom_startRun v input isQuotedRun isQuotedRun_ne .quotedSymbol
           (fun q l c hm hc => advance_quotedSymbol_run false q l c hm hc) hi
           (q := ⟨.quotedSymbol, location, .empty⟩) (by rw [hc, hpipe]; exact start_quoted ..) rfl
@@ -509,7 +509,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
           apply wp_pure
           refine ⟨.token ⟨.quotedSymbol, location, bytesOf input (index + 1)
               (Lexer.Slice.runEnd input (index + 1) (Lexer.fastFlags c &&& Lexer.FAST_RUN_MASK))⟩,
-            V3Runs.afterColumns location (Lexer.Slice.runEnd input (index + 1)
+            afterColumns location (Lexer.Slice.runEnd input (index + 1)
               (Lexer.fastFlags c &&& Lexer.FAST_RUN_MASK) - index), held,
             ⟨hfix.1, hfix.2, hfix.3, hfix.4⟩, Nat.le_refl _, ?_, ?_, hheld, hbytes, ?_⟩
           · dsimp only [StAgrees, TokenAgrees]
@@ -517,7 +517,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
             · rw [locAt_eq hloc, hline, hlineStart]; rfl
             · rw [empty_append]; rfl
           · obtain ⟨h1, h2, h3⟩ := hloc
-            dsimp only [LocAt, V3Runs.afterColumns, Past.from]
+            dsimp only [LocAt, afterColumns, Past.from]
             refine ⟨?_, ?_, ?_⟩ <;> omega
           · rw [hA]; rfl
         · intro h'; exact absurd hpipeb h'
@@ -534,7 +534,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
             feedFrom v input
               (.token ⟨.quotedSymbolClosed, location, bytesOf input (index + 1)
                 (Lexer.Slice.runEnd input (index + 1) (Lexer.fastFlags c &&& Lexer.FAST_RUN_MASK))⟩)
-              (V3Runs.afterColumns location (Lexer.Slice.runEnd input (index + 1)
+              (afterColumns location (Lexer.Slice.runEnd input (index + 1)
                 (Lexer.fastFlags c &&& Lexer.FAST_RUN_MASK) + 1 - index))
               (Lexer.Slice.runEnd input (index + 1)
                 (Lexer.fastFlags c &&& Lexer.FAST_RUN_MASK) + 1) := by
@@ -552,7 +552,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
             have hC := feedFrom_end v input hJ1 (q := ⟨.quotedSymbolClosed, location,
               bytesOf input (index + 1)
                 (Lexer.Slice.runEnd input (index + 1) (Lexer.fastFlags c &&& Lexer.FAST_RUN_MASK))⟩)
-              (location := V3Runs.afterColumns location (Lexer.Slice.runEnd input (index + 1)
+              (location := afterColumns location (Lexer.Slice.runEnd input (index + 1)
                 (Lexer.fastFlags c &&& Lexer.FAST_RUN_MASK) + 1 - index))
               (advance_end_quotedSymbolClosed rfl)
             rw [← hB, hJ1c] at hC
@@ -603,7 +603,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
                   else []) =
                   [⟨.quotedSymbol, bytesOf input (index + 1) (Lexer.Slice.runEnd input (index + 1)
                       (Lexer.fastFlags c &&& Lexer.FAST_RUN_MASK)), location,
-                    V3Runs.afterColumns location (Lexer.Slice.runEnd input (index + 1)
+                    afterColumns location (Lexer.Slice.runEnd input (index + 1)
                       (Lexer.fastFlags c &&& Lexer.FAST_RUN_MASK) + 1 - index)⟩] := by
                 simp only [hpipeb, hemit, ↓reduceIte]
                 rw [hline, hlineStart, onLine_eq hloc hindex (by omega)]
@@ -617,7 +617,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
                 obtain ⟨k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11⟩ := key_fields hk
                 refine wp_recurse (f := fun (r : Past input origin) => r.1)
                   (ih _ (by rw [hidx]; omega) r.val locals _ r.property origin _ s' coll' held'
-                    (V3Runs.afterColumns location (Lexer.Slice.runEnd input (index + 1)
+                    (afterColumns location (Lexer.Slice.runEnd input (index + 1)
                       (Lexer.fastFlags c &&& Lexer.FAST_RUN_MASK) + 1 - index))
                     (fixed_of_key hfix hk) (hoff.trans k8.symm) (hbase.trans k9.symm)
                     (hline.trans k10.symm) (hlineStart.trans k11.symm) (k2.trans hnormal)
@@ -641,7 +641,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
             wp_walk
             refine ⟨.token ⟨.quotedSymbolClosed, location, bytesOf input (index + 1)
                 (Lexer.Slice.runEnd input (index + 1) (Lexer.fastFlags c &&& Lexer.FAST_RUN_MASK))⟩,
-              V3Runs.afterColumns location (Lexer.Slice.runEnd input (index + 1)
+              afterColumns location (Lexer.Slice.runEnd input (index + 1)
                 (Lexer.fastFlags c &&& Lexer.FAST_RUN_MASK) + 1 - index), held,
               ⟨hfix.1, hfix.2, hfix.3, hfix.4⟩, Nat.le_refl _, ?_, ?_, hheld, hbytes, ?_⟩
             · dsimp only [StAgrees, TokenAgrees]
@@ -649,7 +649,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
               · rw [locAt_eq hloc, hline, hlineStart]; rfl
               · simp only [hpipeb, ↓reduceIte]
                 rw [empty_append]; rfl
-            · dsimp only [LocAt, V3Runs.afterColumns, Past.from]
+            · dsimp only [LocAt, afterColumns, Past.from]
               simp only [hpipeb, ↓reduceIte]
               refine ⟨?_, ?_, ?_⟩ <;> omega
             · rw [hB]
@@ -663,7 +663,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
       have hmask : Lexer.fastFlags c &&& Lexer.FAST_RUN_MASK = Lexer.RUN_SIMPLE_SYMBOL := by
         rw [hf]; decide
       have hj : Lexer.Slice.runEnd input (index + 1) (Lexer.fastFlags c &&& Lexer.FAST_RUN_MASK) =
-          V3Runs.runEnd input isSymbolByte (index + 1) := by
+          runEnd input isSymbolByte (index + 1) := by
         rw [hmask, runEnd_eq endsRun_symbol]
       have hle := le_runEnd input isSymbolByte (index + 1)
       have hle' := runEnd_le input isSymbolByte (index + 1) hi
@@ -671,9 +671,9 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
       have hA : feedFrom v input .idle location index =
           feedFrom v input
             (.token ⟨.simpleSymbol, location,
-              bytesOf input index (V3Runs.runEnd input isSymbolByte (index + 1))⟩)
-            (V3Runs.afterColumns location (V3Runs.runEnd input isSymbolByte (index + 1) - index))
-            (V3Runs.runEnd input isSymbolByte (index + 1)) := by
+              bytesOf input index (runEnd input isSymbolByte (index + 1))⟩)
+            (afterColumns location (runEnd input isSymbolByte (index + 1) - index))
+            (runEnd input isSymbolByte (index + 1)) := by
         rw [feedFrom_startRun v input isSymbolByte isSymbolByte_ne .simpleSymbol
           (fun q l c hm hc => advance_simpleSymbol_run false q l c hm hc) hi
           (q := ⟨.simpleSymbol, location, ByteArray.empty.push input[index]⟩)
@@ -710,14 +710,14 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
           apply wp_pure
           refine ⟨.token ⟨.simpleSymbol, location, bytesOf input index
               (Lexer.Slice.runEnd input (index + 1) (Lexer.fastFlags c &&& Lexer.FAST_RUN_MASK))⟩,
-            V3Runs.afterColumns location (Lexer.Slice.runEnd input (index + 1)
+            afterColumns location (Lexer.Slice.runEnd input (index + 1)
               (Lexer.fastFlags c &&& Lexer.FAST_RUN_MASK) - index), held,
             ⟨hfix.1, hfix.2, hfix.3, hfix.4⟩, Nat.le_refl _, ?_, ?_, hheld, hbytes, ?_⟩
           · dsimp only [StAgrees, TokenAgrees]
             refine ⟨?_, rfl, ?_⟩
             · rw [locAt_eq hloc, hline, hlineStart]; rfl
             · rw [empty_append]; rfl
-          · dsimp only [LocAt, V3Runs.afterColumns, Past.from]
+          · dsimp only [LocAt, afterColumns, Past.from]
             refine ⟨?_, ?_, ?_⟩ <;> omega
           · rw [hA]; rfl
       · -- the symbol ends inside the slice
@@ -736,7 +736,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
         have hC := feedFrom_end v input hJ (q := ⟨.simpleSymbol, location,
             bytesOf input index
               (Lexer.Slice.runEnd input (index + 1) (Lexer.fastFlags c &&& Lexer.FAST_RUN_MASK))⟩)
-          (location := V3Runs.afterColumns location (Lexer.Slice.runEnd input (index + 1)
+          (location := afterColumns location (Lexer.Slice.runEnd input (index + 1)
             (Lexer.fastFlags c &&& Lexer.FAST_RUN_MASK) - index))
           (advance_end_simpleSymbol rfl hJs)
         rw [← hA] at hC
@@ -785,7 +785,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
                   else []) =
                   [⟨.unquotedSymbol, bytesOf input index (Lexer.Slice.runEnd input (index + 1)
                       (Lexer.fastFlags c &&& Lexer.FAST_RUN_MASK)), location,
-                    V3Runs.afterColumns location (Lexer.Slice.runEnd input (index + 1)
+                    afterColumns location (Lexer.Slice.runEnd input (index + 1)
                       (Lexer.fastFlags c &&& Lexer.FAST_RUN_MASK) - index)⟩] := by
                 simp only [hpipeb, hemit, Bool.false_and, Bool.false_eq_true, ↓reduceIte]
                 rw [hline, hlineStart, onLine_eq hloc hindex (by omega)]
@@ -800,7 +800,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
                 obtain ⟨k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11⟩ := key_fields hk
                 refine wp_recurse (f := fun (r : Past input origin) => r.1)
                   (ih _ (by rw [hidx]; omega) r.val locals _ r.property origin _ s' coll' held'
-                    (V3Runs.afterColumns location (Lexer.Slice.runEnd input (index + 1)
+                    (afterColumns location (Lexer.Slice.runEnd input (index + 1)
                       (Lexer.fastFlags c &&& Lexer.FAST_RUN_MASK) - index))
                     (fixed_of_key hfix hk) (hoff.trans k8.symm) (hbase.trans k9.symm)
                     (hline.trans k10.symm) (hlineStart.trans k11.symm) (k2.trans hnormal)
@@ -849,16 +849,16 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
     apply wp_bind; apply wp_modifyCore
     apply wp_pure
     have hE : Lexer.Slice.runEnd input (index + 1) Lexer.RUN_COMMENT_PLAIN =
-        V3Runs.runEnd input isCommentRun (index + 1) := runEnd_eq endsRun_comment _ _
+        runEnd input isCommentRun (index + 1) := runEnd_eq endsRun_comment _ _
     have hle := le_runEnd input isCommentRun (index + 1)
     have hle' := runEnd_le input isCommentRun (index + 1) hi
     have hstop := fun h => runEnd_stop input isCommentRun (index + 1) h
     have hA : feedFrom v input .idle location index =
         feedFrom v input
           (.token ⟨.comment, location,
-            bytesOf input (index + 1) (V3Runs.runEnd input isCommentRun (index + 1))⟩)
-          (V3Runs.afterColumns location (V3Runs.runEnd input isCommentRun (index + 1) - index))
-          (V3Runs.runEnd input isCommentRun (index + 1)) := by
+            bytesOf input (index + 1) (runEnd input isCommentRun (index + 1))⟩)
+          (afterColumns location (runEnd input isCommentRun (index + 1) - index))
+          (runEnd input isCommentRun (index + 1)) := by
       rw [feedFrom_startRun v input isCommentRun isCommentRun_ne .comment
         (fun q l c hm hc => advance_comment_run false q l c hm hc) hi
         (q := ⟨.comment, location, .empty⟩) (by rw [hc, h59]; rfl) rfl (by rw [hc, h59]; decide)]
@@ -872,12 +872,12 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
       rw [hEc] at hEs'
       have hB : feedFrom v input .idle location index =
           feedFrom v input .idle
-            ((V3Runs.afterColumns location (Lexer.Slice.runEnd input (index + 1)
+            ((afterColumns location (Lexer.Slice.runEnd input (index + 1)
               Lexer.RUN_COMMENT_PLAIN - index)).afterByte c')
             (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_COMMENT_PLAIN + 1) := by
         have hadv := advance_comment_end location (bytesOf input (index + 1)
           (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_COMMENT_PLAIN))
-          (V3Runs.afterColumns location (Lexer.Slice.runEnd input (index + 1)
+          (afterColumns location (Lexer.Slice.runEnd input (index + 1)
             Lexer.RUN_COMMENT_PLAIN - index)) hEs'
         rw [← hEc] at hadv
         rw [hA, feedFrom_step hEs (byteStep_token_idle v hadv), prep_nil, hEc]
@@ -892,7 +892,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
         apply wp_bind; apply wp_bind; apply wp_getCore; apply wp_pure
         refine wp_recurse (f := fun (r : Past input origin) => r.1)
           (ih _ (by omega) batch _ _ _ origin _ _ coll held
-            ((V3Runs.afterColumns location (Lexer.Slice.runEnd input (index + 1)
+            ((afterColumns location (Lexer.Slice.runEnd input (index + 1)
               Lexer.RUN_COMMENT_PLAIN - index)).afterByte 10)
             ⟨hfix.1, hfix.2, hfix.3, hfix.4⟩ hoff hbase rfl rfl rfl
             (LocAt.lineFeed (hloc.afterColumns hindex (by omega)) (by omega) rfl (by
@@ -908,7 +908,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
         apply wp_bind; apply wp_bind; apply wp_getCore; apply wp_pure
         refine wp_recurse (f := fun (r : Past input origin) => r.1)
           (ih _ (by omega) batch _ _ _ origin _ _ coll held
-            (V3Runs.afterColumns location (Lexer.Slice.runEnd input (index + 1)
+            (afterColumns location (Lexer.Slice.runEnd input (index + 1)
               Lexer.RUN_COMMENT_PLAIN + 1 - index))
             ⟨hfix.1, hfix.2, hfix.3, hfix.4⟩ hoff hbase rfl rfl rfl
             (hloc.afterColumns hindex (by omega)) hheld hbytes) ?_
@@ -923,13 +923,13 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
       apply wp_pure
       refine ⟨.token ⟨.comment, location, bytesOf input (index + 1)
           (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_COMMENT_PLAIN)⟩,
-        V3Runs.afterColumns location (Lexer.Slice.runEnd input (index + 1)
+        afterColumns location (Lexer.Slice.runEnd input (index + 1)
           Lexer.RUN_COMMENT_PLAIN - index), held,
         ⟨hfix.1, hfix.2, hfix.3, hfix.4⟩, Nat.le_refl _, ?_, ?_, hheld, hbytes, ?_⟩
       · dsimp only [StAgrees, TokenAgrees]
         refine ⟨?_, rfl⟩
         rw [locAt_eq hloc]; rfl
-      · dsimp only [LocAt, V3Runs.afterColumns, Past.from]
+      · dsimp only [LocAt, afterColumns, Past.from]
         refine ⟨?_, ?_, ?_⟩ <;> omega
       · rw [hA]; rfl
   · -- a hash: a hexadecimal or binary literal
@@ -976,17 +976,17 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
           · simp only [hy, Bool.false_eq_true, ↓reduceIte] at hsel
             cases hsel
       have hJ : Lexer.Slice.runEnd input (index + 1 + 1) run.flag =
-          V3Runs.runEnd input radix.allows (index + 1 + 1) := runEnd_eq hflag _ _
+          runEnd input radix.allows (index + 1 + 1) := runEnd_eq hflag _ _
       have hle := le_runEnd input radix.allows (index + 1 + 1)
       have hle' := runEnd_le input radix.allows (index + 1 + 1) hi1
       have hstop := fun h => runEnd_stop input radix.allows (index + 1 + 1) h
       have hB : feedFrom v input .idle location index =
           feedFrom v input
             (.token ⟨.digits radix, location,
-              bytesOf input (index + 1 + 1) (V3Runs.runEnd input radix.allows (index + 1 + 1))⟩)
-            (V3Runs.afterColumns location
-              (V3Runs.runEnd input radix.allows (index + 1 + 1) - index))
-            (V3Runs.runEnd input radix.allows (index + 1 + 1)) := by
+              bytesOf input (index + 1 + 1) (runEnd input radix.allows (index + 1 + 1))⟩)
+            (afterColumns location
+              (runEnd input radix.allows (index + 1 + 1) - index))
+            (runEnd input radix.allows (index + 1 + 1)) := by
         rw [hhash, feedFrom_step hi1 (byteStep_token_pending v hadv), prep_nil,
           feedFrom_mode v input radix.allows (allows_ne radix) (.digits radix)
             (fun q l c hm hc => advance_digits_run radix false q l c hm hc) (index + 1 + 1) _ _ rfl
@@ -1008,11 +1008,11 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
         apply wp_pure
         refine ⟨.token ⟨.digits radix, location, bytesOf input (index + 1 + 1)
             (Lexer.Slice.runEnd input (index + 1 + 1) run.flag)⟩,
-          V3Runs.afterColumns location (Lexer.Slice.runEnd input (index + 1 + 1) run.flag - index),
+          afterColumns location (Lexer.Slice.runEnd input (index + 1 + 1) run.flag - index),
           held, ⟨hfix.1, hfix.2, hfix.3, hfix.4⟩, Nat.le_refl _, ?_, ?_, hheld, hbytes, ?_⟩
         · exact hstate _ _ _ rfl (locAt_eq hloc)
             (by show _ = ByteArray.empty ++ _; rw [empty_append]; rfl)
-        · dsimp only [LocAt, V3Runs.afterColumns, Past.from]
+        · dsimp only [LocAt, afterColumns, Past.from]
           refine ⟨?_, ?_, ?_⟩ <;> omega
         · rw [hB]; rfl
       · intro hsz
@@ -1034,7 +1034,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
                 (Lexer.Slice.runEnd input (index + 1 + 1) run.flag)).size
                   (ByteArray.empty : ByteArray) = 0 := by simpa using hempty
             omega
-          obtain ⟨f, hf⟩ := advance_end_digits_empty (location := V3Runs.afterColumns location
+          obtain ⟨f, hf⟩ := advance_end_digits_empty (location := afterColumns location
             (Lexer.Slice.runEnd input (index + 1 + 1) run.flag - index))
             (q := ⟨.digits radix, location, bytesOf input (index + 1 + 1)
               (Lexer.Slice.runEnd input (index + 1 + 1) run.flag)⟩) rfl hstop'
@@ -1052,12 +1052,12 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
             have hpos : (bytesOf input (index + 1 + 1)
                 (Lexer.Slice.runEnd input (index + 1 + 1) run.flag)).size ≠ 0 := by
               show (input.slice _ _).toByteArray.size ≠ 0
-              rw [V1NaiveV2Batched.size_toByteArray]
+              rw [size_toByteArray]
               exact this
             simp [ByteArray.isEmpty, hpos]
           have hC := feedFrom_end v input hJs (q := ⟨.digits radix, location,
               bytesOf input (index + 1 + 1) (Lexer.Slice.runEnd input (index + 1 + 1) run.flag)⟩)
-            (location := V3Runs.afterColumns location
+            (location := afterColumns location
               (Lexer.Slice.runEnd input (index + 1 + 1) run.flag - index))
             (advance_end_digits rfl hstop' hne')
           rw [← hB] at hC
@@ -1092,7 +1092,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
               have hp' : pending v coll' held' = pending v coll (held ++
                   [⟨radix.category, bytesOf input (index + 1 + 1)
                     (Lexer.Slice.runEnd input (index + 1 + 1) run.flag), location,
-                    V3Runs.afterColumns location (Lexer.Slice.runEnd input (index + 1 + 1)
+                    afterColumns location (Lexer.Slice.runEnd input (index + 1 + 1)
                       run.flag - index)⟩]) := by
                 have := hp.trans (congrArg (fun l => pending v coll (held ++ [l])) hlex)
                 rw [htyp] at this; exact this
@@ -1101,7 +1101,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
               apply wp_bind; apply wp_bind; apply wp_getCore; apply wp_pure
               refine wp_recurse (f := fun (r : Past input origin) => r.1)
                 (ih _ (by omega) r.val _ _ r.property origin _ s' coll' held'
-                  (V3Runs.afterColumns location (Lexer.Slice.runEnd input (index + 1 + 1)
+                  (afterColumns location (Lexer.Slice.runEnd input (index + 1 + 1)
                     run.flag - index))
                   (fixed_of_key' hk ⟨hfix.1, hfix.2, hfix.3, hfix.4⟩) (hoff.trans k8.symm)
                   (hbase.trans k9.symm) rfl rfl k2
@@ -1112,7 +1112,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
               have hn' : pending v coll (held ++
                   [⟨radix.category, bytesOf input (index + 1 + 1)
                     (Lexer.Slice.runEnd input (index + 1 + 1) run.flag), location,
-                    V3Runs.afterColumns location (Lexer.Slice.runEnd input (index + 1 + 1)
+                    afterColumns location (Lexer.Slice.runEnd input (index + 1 + 1)
                       run.flag - index)⟩]) = none := by
                 have := (congrArg (fun l => pending v coll (held ++ [l])) hlex).symm.trans hn
                 rw [htyp] at this; exact this
@@ -1171,16 +1171,16 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
         have : (s.val.version == .v2_0) = false := by simpa using hv2
         rw [← hfix.version]; exact this
       have hS : Lexer.Slice.runEnd input (index + 1) Lexer.RUN_STRING_PLAIN =
-          V3Runs.runEnd input isStringRun (index + 1) := runEnd_eq endsRun_string _ _
+          runEnd input isStringRun (index + 1) := runEnd_eq endsRun_string _ _
       have hle := le_runEnd input isStringRun (index + 1)
       have hle' := runEnd_le input isStringRun (index + 1) hi
       have hstop := fun h => runEnd_stop input isStringRun (index + 1) h
       have hA : feedFrom v input .idle location index =
           feedFrom v input
             (.token ⟨.string, location,
-              bytesOf input (index + 1) (V3Runs.runEnd input isStringRun (index + 1))⟩)
-            (V3Runs.afterColumns location (V3Runs.runEnd input isStringRun (index + 1) - index))
-            (V3Runs.runEnd input isStringRun (index + 1)) := by
+              bytesOf input (index + 1) (runEnd input isStringRun (index + 1))⟩)
+            (afterColumns location (runEnd input isStringRun (index + 1) - index))
+            (runEnd input isStringRun (index + 1)) := by
         rw [feedFrom_startRun v input isStringRun isStringRun_ne .string
           (fun q l c hm hc => advance_string_run false q l c hm hc) hi
           (q := ⟨.string, location, .empty⟩)
@@ -1204,7 +1204,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
               feedFrom v input
                 (.token ⟨.stringQuote, location, bytesOf input (index + 1)
                   (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_STRING_PLAIN)⟩)
-                (V3Runs.afterColumns location (Lexer.Slice.runEnd input (index + 1)
+                (afterColumns location (Lexer.Slice.runEnd input (index + 1)
                   Lexer.RUN_STRING_PLAIN + 1 - index))
                 (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_STRING_PLAIN + 1) := by
             rw [hA, feedFrom_step hA1 (byteStep_token_pending v (by rw [hAc, hq34]; rfl)),
@@ -1215,7 +1215,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
           have hC := feedFrom_end v input hA2 (q := ⟨.stringQuote, location,
               bytesOf input (index + 1)
                 (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_STRING_PLAIN)⟩)
-            (location := V3Runs.afterColumns location (Lexer.Slice.runEnd input (index + 1)
+            (location := afterColumns location (Lexer.Slice.runEnd input (index + 1)
               Lexer.RUN_STRING_PLAIN + 1 - index))
             (advance_end_stringQuote rfl (by rw [hA2c]; exact hn34))
           rw [← hB, hA2c] at hC
@@ -1248,7 +1248,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
               have hp' : pending v coll' held' = pending v coll (held ++
                   [⟨.string, bytesOf input (index + 1)
                     (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_STRING_PLAIN), location,
-                    V3Runs.afterColumns location (Lexer.Slice.runEnd input (index + 1)
+                    afterColumns location (Lexer.Slice.runEnd input (index + 1)
                       Lexer.RUN_STRING_PLAIN + 1 - index)⟩]) :=
                 hp.trans (congrArg (fun l => pending v coll (held ++ [l])) hlex)
               obtain ⟨k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11⟩ := key_fields hk
@@ -1256,7 +1256,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
               apply wp_bind; apply wp_bind; apply wp_getCore; apply wp_pure
               refine wp_recurse (f := fun (r : Past input origin) => r.1)
                 (ih _ (by omega) r.val _ _ r.property origin _ s' coll' held'
-                  (V3Runs.afterColumns location (Lexer.Slice.runEnd input (index + 1)
+                  (afterColumns location (Lexer.Slice.runEnd input (index + 1)
                     Lexer.RUN_STRING_PLAIN + 1 - index))
                   (fixed_of_key' hk ⟨hfix.1, hfix.2, hfix.3, hfix.4⟩) (hoff.trans k8.symm)
                   (hbase.trans k9.symm) rfl rfl k2
@@ -1267,7 +1267,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
               have hn' : pending v coll (held ++
                   [⟨.string, bytesOf input (index + 1)
                     (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_STRING_PLAIN), location,
-                    V3Runs.afterColumns location (Lexer.Slice.runEnd input (index + 1)
+                    afterColumns location (Lexer.Slice.runEnd input (index + 1)
                       Lexer.RUN_STRING_PLAIN + 1 - index)⟩]) = none :=
                 (congrArg (fun l => pending v coll (held ++ [l])) hlex).symm.trans hn
               show outcome v _ _ = none
@@ -1285,16 +1285,16 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
     apply wp_bind; apply wp_modifyCore
     apply wp_pure
     have hK : Lexer.Slice.runEnd input (index + 1) Lexer.RUN_SIMPLE_SYMBOL =
-        V3Runs.runEnd input isSymbolByte (index + 1) := runEnd_eq endsRun_symbol _ _
+        runEnd input isSymbolByte (index + 1) := runEnd_eq endsRun_symbol _ _
     have hle := le_runEnd input isSymbolByte (index + 1)
     have hle' := runEnd_le input isSymbolByte (index + 1) hi
     have hstop := fun h => runEnd_stop input isSymbolByte (index + 1) h
     have hA : feedFrom v input .idle location index =
         feedFrom v input
           (.token ⟨.keyword, location,
-            bytesOf input (index + 1) (V3Runs.runEnd input isSymbolByte (index + 1))⟩)
-          (V3Runs.afterColumns location (V3Runs.runEnd input isSymbolByte (index + 1) - index))
-          (V3Runs.runEnd input isSymbolByte (index + 1)) := by
+            bytesOf input (index + 1) (runEnd input isSymbolByte (index + 1))⟩)
+          (afterColumns location (runEnd input isSymbolByte (index + 1) - index))
+          (runEnd input isSymbolByte (index + 1)) := by
       rw [feedFrom_startRun v input isSymbolByte isSymbolByte_ne .keyword
         (fun q l c hm hc => advance_keyword_run false q l c hm hc) hi
         (q := ⟨.keyword, location, .empty⟩) (by rw [hc, h58]; rfl) rfl
@@ -1313,14 +1313,14 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
       apply wp_pure
       refine ⟨.token ⟨.keyword, location, bytesOf input (index + 1)
           (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_SIMPLE_SYMBOL)⟩,
-        V3Runs.afterColumns location (Lexer.Slice.runEnd input (index + 1)
+        afterColumns location (Lexer.Slice.runEnd input (index + 1)
           Lexer.RUN_SIMPLE_SYMBOL - index),
         held, ⟨hfix.1, hfix.2, hfix.3, hfix.4⟩, Nat.le_refl _, ?_, ?_, hheld, hbytes, ?_⟩
       · dsimp only [StAgrees, TokenAgrees]
         refine ⟨?_, rfl, ?_⟩
         · rw [locAt_eq hloc]; rfl
         · show _ = ByteArray.empty ++ _; rw [empty_append]; rfl
-      · dsimp only [LocAt, V3Runs.afterColumns, Past.from]
+      · dsimp only [LocAt, afterColumns, Past.from]
         refine ⟨?_, ?_, ?_⟩ <;> omega
       · rw [hA]; rfl
     · intro hsz
@@ -1342,7 +1342,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
               (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_SIMPLE_SYMBOL)).size
                 (ByteArray.empty : ByteArray) = 0 := by simpa using hempty
           omega
-        obtain ⟨f, hf⟩ := advance_end_keyword_empty (location := V3Runs.afterColumns location
+        obtain ⟨f, hf⟩ := advance_end_keyword_empty (location := afterColumns location
           (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_SIMPLE_SYMBOL - index))
           (q := ⟨.keyword, location, bytesOf input (index + 1)
             (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_SIMPLE_SYMBOL)⟩) rfl hstop'
@@ -1360,13 +1360,13 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
           have hpos : (bytesOf input (index + 1)
               (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_SIMPLE_SYMBOL)).size ≠ 0 := by
             show (input.slice _ _).toByteArray.size ≠ 0
-            rw [V1NaiveV2Batched.size_toByteArray]
+            rw [size_toByteArray]
             exact this
           simp [ByteArray.isEmpty, hpos]
         have hC := feedFrom_end v input hJs (q := ⟨.keyword, location,
             bytesOf input (index + 1)
               (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_SIMPLE_SYMBOL)⟩)
-          (location := V3Runs.afterColumns location
+          (location := afterColumns location
             (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_SIMPLE_SYMBOL - index))
           (advance_end_keyword rfl hstop' hne')
         rw [← hA] at hC
@@ -1402,7 +1402,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
             have hp' : pending v coll' held' = pending v coll (held ++
                 [⟨.keyword, bytesOf input (index + 1)
                   (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_SIMPLE_SYMBOL), location,
-                  V3Runs.afterColumns location (Lexer.Slice.runEnd input (index + 1)
+                  afterColumns location (Lexer.Slice.runEnd input (index + 1)
                     Lexer.RUN_SIMPLE_SYMBOL - index)⟩]) :=
               hp.trans (congrArg (fun l => pending v coll (held ++ [l])) hlex)
             obtain ⟨k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11⟩ := key_fields hk
@@ -1410,7 +1410,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
             apply wp_bind; apply wp_bind; apply wp_getCore; apply wp_pure
             refine wp_recurse (f := fun (r : Past input origin) => r.1)
               (ih _ (by omega) r.val _ _ r.property origin _ s' coll' held'
-                (V3Runs.afterColumns location (Lexer.Slice.runEnd input (index + 1)
+                (afterColumns location (Lexer.Slice.runEnd input (index + 1)
                   Lexer.RUN_SIMPLE_SYMBOL - index))
                 (fixed_of_key' hk ⟨hfix.1, hfix.2, hfix.3, hfix.4⟩) (hoff.trans k8.symm)
                 (hbase.trans k9.symm) rfl rfl k2
@@ -1421,7 +1421,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
             have hn' : pending v coll (held ++
                 [⟨.keyword, bytesOf input (index + 1)
                   (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_SIMPLE_SYMBOL), location,
-                  V3Runs.afterColumns location (Lexer.Slice.runEnd input (index + 1)
+                  afterColumns location (Lexer.Slice.runEnd input (index + 1)
                     Lexer.RUN_SIMPLE_SYMBOL - index)⟩]) = none :=
               (congrArg (fun l => pending v coll (held ++ [l])) hlex).symm.trans hn
             show outcome v _ _ = none
@@ -1439,7 +1439,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
     apply wp_bind; apply wp_modifyCore
     apply wp_pure
     have hE : Lexer.Slice.runEnd input (index + 1) Lexer.RUN_DIGIT =
-        V3Runs.runEnd input isDigit (index + 1) := runEnd_eq endsRun_digit _ _
+        runEnd input isDigit (index + 1) := runEnd_eq endsRun_digit _ _
     have hle := le_runEnd input isDigit (index + 1)
     have hle' := runEnd_le input isDigit (index + 1) hi
     have hstop := fun h => runEnd_stop input isDigit (index + 1) h
@@ -1474,7 +1474,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
         feedFrom v input
           (.token ⟨.numeral (c == 48), location, bytesOf input index
             (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_DIGIT)⟩)
-          (V3Runs.afterColumns location
+          (afterColumns location
             (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_DIGIT - index))
           (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_DIGIT) := by
       rw [feedFrom_step hi (byteStep_idle_pending v hstart), prep_nil]
@@ -1502,7 +1502,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
         have hdot' : next = 46 := by simpa using hdot
         have hF : Lexer.Slice.runEnd input
             (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_DIGIT + 1) Lexer.RUN_DIGIT =
-            V3Runs.runEnd input isDigit
+            runEnd input isDigit
               (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_DIGIT + 1) :=
           runEnd_eq endsRun_digit _ _
         have hlf := le_runEnd input isDigit
@@ -1517,17 +1517,17 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
             feedFrom v input
               (.token ⟨.fraction (false || decide
                   (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_DIGIT + 1 <
-                    V3Runs.runEnd input isDigit
+                    runEnd input isDigit
                       (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_DIGIT + 1))),
-                location, bytesOf input index (V3Runs.runEnd input isDigit
+                location, bytesOf input index (runEnd input isDigit
                   (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_DIGIT + 1))⟩)
-              (V3Runs.afterColumns location (V3Runs.runEnd input isDigit
+              (afterColumns location (runEnd input isDigit
                 (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_DIGIT + 1) - index))
-              (V3Runs.runEnd input isDigit
+              (runEnd input isDigit
                 (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_DIGIT + 1)) := by
           have hadv : advance false ⟨.numeral (c == 48), location, bytesOf input index
               (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_DIGIT)⟩
-              (V3Runs.afterColumns location
+              (afterColumns location
                 (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_DIGIT - index))
               input[Lexer.Slice.runEnd input (index + 1) Lexer.RUN_DIGIT] =
               .pending ⟨.fraction false, location, (bytesOf input index
@@ -1580,7 +1580,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
                   Lexer.RUN_DIGIT)), location, bytesOf input index
               (Lexer.Slice.runEnd input (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_DIGIT + 1)
                 Lexer.RUN_DIGIT)⟩,
-            V3Runs.afterColumns location (Lexer.Slice.runEnd input
+            afterColumns location (Lexer.Slice.runEnd input
               (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_DIGIT + 1) Lexer.RUN_DIGIT - index),
             held, ⟨hfix.1, hfix.2, hfix.3, hfix.4⟩, Nat.le_refl _, ?_, ?_, hheld, hbytes, ?_⟩
           · dsimp only [StAgrees, TokenAgrees]
@@ -1596,7 +1596,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
                 intro x; cases h : x == 46 <;> simp_all
               rw [hs, hlastF, Bool.not_not]
             · show _ = ByteArray.empty ++ _; rw [empty_append]; rfl
-          · dsimp only [LocAt, V3Runs.afterColumns, Past.from]
+          · dsimp only [LocAt, afterColumns, Past.from]
             refine ⟨?_, ?_, ?_⟩ <;> omega
           · rw [hB]; rfl
         · intro hsz
@@ -1616,7 +1616,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
               have := hlastF
               simp only [hlt, decide_true, Bool.not_true] at this
               simp [this] at hnone
-            obtain ⟨f, hf⟩ := advance_end_fraction_none (location := V3Runs.afterColumns location
+            obtain ⟨f, hf⟩ := advance_end_fraction_none (location := afterColumns location
               (Lexer.Slice.runEnd input (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_DIGIT + 1)
                 Lexer.RUN_DIGIT - index))
               (q := ⟨.fraction (false || decide
@@ -1646,7 +1646,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
                     Lexer.RUN_DIGIT)), location, bytesOf input index
                 (Lexer.Slice.runEnd input (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_DIGIT + 1)
                   Lexer.RUN_DIGIT)⟩)
-              (location := V3Runs.afterColumns location (Lexer.Slice.runEnd input
+              (location := afterColumns location (Lexer.Slice.runEnd input
                 (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_DIGIT + 1) Lexer.RUN_DIGIT - index))
               (advance_end_fraction (by simp [hlt]) hstopF')
             rw [← hB] at hC
@@ -1677,7 +1677,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
         have hdot' : next ≠ 46 := by simpa using hdot
         have hC := feedFrom_end v input hEs (q := ⟨.numeral (c == 48), location,
             bytesOf input index (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_DIGIT)⟩)
-          (location := V3Runs.afterColumns location
+          (location := afterColumns location
             (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_DIGIT - index))
           (advance_end_numeral rfl (by rw [hEc]; exact hEd) (by rw [hEc]; exact hdot'))
         rw [← hA, hEc] at hC
@@ -1719,7 +1719,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
       apply wp_pure
       refine ⟨.token ⟨.numeral (c == 48), location, bytesOf input index
           (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_DIGIT)⟩,
-        V3Runs.afterColumns location
+        afterColumns location
           (Lexer.Slice.runEnd input (index + 1) Lexer.RUN_DIGIT - index),
         held, ⟨hfix.1, hfix.2, hfix.3, hfix.4⟩, Nat.le_refl _, ?_, ?_, hheld, hbytes, ?_⟩
       · dsimp only [StAgrees, TokenAgrees]
@@ -1734,7 +1734,7 @@ theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
           rw [empty_append, show ∀ a b, (input.slice a b).toByteArray = bytesOf input a b
             from fun _ _ => rfl, bytesOf_size input (by omega) hle']
           omega
-      · dsimp only [LocAt, V3Runs.afterColumns, Past.from]
+      · dsimp only [LocAt, afterColumns, Past.from]
         refine ⟨?_, ?_, ?_⟩ <;> omega
       · rw [hA]; rfl
   -- a byte that starts no token

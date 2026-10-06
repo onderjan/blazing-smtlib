@@ -14,7 +14,7 @@ is reported to the adapter's consumer as the naive lexer reports each lexeme alo
 namespace BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
 
 open BSmtLib.Lexer.Internal (intoBatch)
-open BSmtLib.Proofs.Adapter V1Naive V1NaiveV2Batched
+open BSmtLib.Proofs.Adapter V1Naive
 
 /-! ## Writing an entry -/
 

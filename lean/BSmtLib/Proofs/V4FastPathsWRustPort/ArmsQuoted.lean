@@ -12,7 +12,7 @@ lexer's pure run from where the step started anchored to the loop's index.
 
 namespace BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
 
-open BSmtLib.Proofs.Adapter V1Naive V1NaiveV2Batched V3Runs V2BatchedV3Runs
+open BSmtLib.Proofs.Adapter V1Naive
 open Lexer.Slice (get? get)
 
 section
@@ -62,7 +62,7 @@ theorem quotedSpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St
   intro consumed hn horigin hconsumed s locq hfix hbase0 hholds hbytes hloc hlow hb hts hstate h0
     hs0 hanchor
   have hJ : Lexer.Slice.runEnd input consumed Lexer.RUN_QUOTED_PLAIN =
-      V3Runs.runEnd input isQuotedRun consumed := runEnd_eq endsRun_quoted _ _
+      runEnd input isQuotedRun consumed := runEnd_eq endsRun_quoted _ _
   have hle := le_runEnd input isQuotedRun consumed
   have hle' := runEnd_le input isQuotedRun consumed hconsumed
   have hstop := fun h => runEnd_stop input isQuotedRun consumed h

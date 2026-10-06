@@ -1,4 +1,4 @@
-import BSmtLib.Proofs.Lexer.V3Runs
+import BSmtLib.Proofs.V4FastPathsWRustPort.Bytes
 import BSmtLib.Proofs.Lexer.WRustPort
 
 /-!
@@ -10,7 +10,7 @@ of the naive lexer's byte classes, checked by the kernel for every byte.
 
 namespace BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
 
-open V1Naive V3Runs
+open V1Naive
 open BSmtLib.Lexer (endsRun RUN_FLAGS RUN_DIGIT RUN_SIMPLE_SYMBOL RUN_HEX_DIGIT RUN_BINARY_DIGIT
   RUN_NON_LF_WHITESPACE RUN_QUOTED_PLAIN RUN_STRING_PLAIN RUN_COMMENT_PLAIN)
 

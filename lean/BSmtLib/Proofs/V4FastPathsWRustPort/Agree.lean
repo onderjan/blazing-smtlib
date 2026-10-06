@@ -30,7 +30,7 @@ comments, and the lexer stops at its first error.
 
 namespace BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
 
-open BSmtLib.Proofs.Adapter V1Naive V1NaiveV2Batched
+open BSmtLib.Proofs.Adapter V1Naive
 open BSmtLib.Lexer (LexerState)
 
 /-- The Rust port's lexer state is fixed as the adapter's consumer runs it, under the version. -/

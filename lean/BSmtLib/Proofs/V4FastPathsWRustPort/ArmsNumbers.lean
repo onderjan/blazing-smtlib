@@ -9,7 +9,7 @@ a numeral, which may go on to a fraction.
 
 namespace BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
 
-open BSmtLib.Proofs.Adapter V1Naive V1NaiveV2Batched V3Runs V2BatchedV3Runs
+open BSmtLib.Proofs.Adapter V1Naive
 open Lexer.Slice (get? get)
 
 section
@@ -127,7 +127,7 @@ theorem fractionFrom_wp (v : Version) (input : ByteSlice) (j : Nat) (hj : j ≤ 
         input j tokenStart base h) s coll
       (fun r s' coll' => ArmPost v input st0 loc0 start0 coll held r.1 s'.val coll')
       (fun _ _ _ => StepFails v input st0 loc0 start0 coll held) := by
-  have hJ : Lexer.Slice.runEnd input j Lexer.RUN_DIGIT = V3Runs.runEnd input isDigit j :=
+  have hJ : Lexer.Slice.runEnd input j Lexer.RUN_DIGIT = runEnd input isDigit j :=
     runEnd_eq endsRun_digit _ _
   have hle := le_runEnd input isDigit j
   have hle' := runEnd_le input isDigit j hj
@@ -298,7 +298,7 @@ theorem arm_numeralOrDecimal (v : Version) (input : ByteSlice) (start : Nat)
       (fun r s' coll' => ArmPost v input (.token p) location start coll held r.1 s'.val coll')
       (fun _ _ _ => StepFails v input (.token p) location start coll held) := by
   obtain ⟨hps, hm, hcont, hsz⟩ := token_agrees hpre.agrees hstate
-  have hJ : Lexer.Slice.runEnd input start Lexer.RUN_DIGIT = V3Runs.runEnd input isDigit start :=
+  have hJ : Lexer.Slice.runEnd input start Lexer.RUN_DIGIT = runEnd input isDigit start :=
     runEnd_eq endsRun_digit _ _
   have hle := le_runEnd input isDigit start
   have hle' := runEnd_le input isDigit start (Nat.le_of_lt hstart)

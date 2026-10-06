@@ -15,7 +15,7 @@ the adapter's consumer never stops a hand-over.
 
 namespace BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
 
-open BSmtLib.Proofs.Adapter V1Naive V1NaiveV2Batched V3Runs V2BatchedV3Runs
+open BSmtLib.Proofs.Adapter V1Naive
 
 section
 

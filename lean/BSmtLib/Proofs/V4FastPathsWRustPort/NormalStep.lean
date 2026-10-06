@@ -10,7 +10,7 @@ lexer's pure run.
 
 namespace BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
 
-open BSmtLib.Proofs.Adapter V1Naive V1NaiveV2Batched
+open BSmtLib.Proofs.Adapter V1Naive
 open Lexer.WRustPort (lexNormalFrom FastState Frame Held Past)
 
 section

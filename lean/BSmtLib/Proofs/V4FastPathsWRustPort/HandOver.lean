@@ -12,7 +12,7 @@ state as it was, under the version, and the consumer with the lexemes recorded, 
 namespace BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
 
 open BSmtLib.Lexer.Internal (intoBatch)
-open BSmtLib.Proofs.Adapter V1Naive V1NaiveV2Batched
+open BSmtLib.Proofs.Adapter V1Naive
 open Lexer.WRustPort (flushCursor callConsumer)
 
 section

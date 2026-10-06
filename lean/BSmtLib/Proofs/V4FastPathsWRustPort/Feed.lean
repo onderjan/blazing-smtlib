@@ -1,5 +1,5 @@
-import BSmtLib.Proofs.V1NaiveV2Batched.Run
-import BSmtLib.Proofs.V2BatchedV3Runs.Bytes
+import BSmtLib.Proofs.V4FastPathsWRustPort.Cursor
+import BSmtLib.Proofs.V4FastPathsWRustPort.Bytes
 
 /-!
 # The naive lexer's pure run over a slice from an index
@@ -126,13 +126,13 @@ theorem outcome_none_right (version : Version) (before : Option (List Spec.Lexer
 /-- Lexemes moved from the run to what the consumer will record. -/
 theorem outcome_prep (version : Version) (coll : Collector) (held ls : List Lexeme)
     (e : Option (St × Location × List Lexeme)) :
-    outcome version (V1NaiveV2Batched.pending version coll held) (Prep ls e) =
-      outcome version (V1NaiveV2Batched.pending version coll (held ++ ls)) e := by
+    outcome version (pending version coll held) (Prep ls e) =
+      outcome version (pending version coll (held ++ ls)) e := by
   cases e with
-  | none => simp [outcome, Prep, V1NaiveV2Batched.pending]
+  | none => simp [outcome, Prep, pending]
   | some e =>
     obtain ⟨st, location, ls'⟩ := e
-    simp only [outcome, V1NaiveV2Batched.pending, Prep, handedAll_append, Option.map_some,
+    simp only [outcome, pending, Prep, handedAll_append, Option.map_some,
       Option.bind_some]
     cases h1 : handedAll version held <;> cases h2 : handedAll version ls <;>
       cases h3 : handedAll version ls' <;> simp [List.append_assoc]

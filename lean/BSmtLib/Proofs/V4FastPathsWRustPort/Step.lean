@@ -15,7 +15,7 @@ or the naive lexer's run fails.
 
 namespace BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
 
-open BSmtLib.Proofs.Adapter V1Naive V1NaiveV2Batched
+open BSmtLib.Proofs.Adapter V1Naive
 
 /-- The lexer state at the index `start` of the slice is the naive lexer's pure state `st` at
 `location`, under the version, and its batch holds the lexemes `held`, with their contents in

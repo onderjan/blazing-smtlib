@@ -10,7 +10,7 @@ then the step goes on in the normal state (`afterStep_wp`).
 
 namespace BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
 
-open BSmtLib.Proofs.Adapter V1Naive V1NaiveV2Batched V3Runs V2BatchedV3Runs
+open BSmtLib.Proofs.Adapter V1Naive
 open Lexer.Slice (get? get)
 
 section

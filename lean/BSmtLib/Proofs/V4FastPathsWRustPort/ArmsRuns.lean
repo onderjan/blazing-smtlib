@@ -10,7 +10,7 @@ the token at the byte after the run, or leaves it in progress at the end of the 
 
 namespace BSmtLib.Proofs.Lexer.V4FastPathsWRustPort
 
-open BSmtLib.Proofs.Adapter V1Naive V1NaiveV2Batched V3Runs V2BatchedV3Runs
+open BSmtLib.Proofs.Adapter V1Naive
 open Lexer.Slice (get? get)
 
 section
@@ -31,7 +31,7 @@ theorem arm_simpleSymbol (v : Version) (input : ByteSlice) (start : Nat)
       (fun _ _ _ => StepFails v input (.token p) location start coll held) := by
   obtain ⟨hps, hm, hcont⟩ := token_agrees hpre.agrees hstate
   have hJ : Lexer.Slice.runEnd input start Lexer.RUN_SIMPLE_SYMBOL =
-      V3Runs.runEnd input isSymbolByte start := runEnd_eq endsRun_symbol _ _
+      runEnd input isSymbolByte start := runEnd_eq endsRun_symbol _ _
   have hle := le_runEnd input isSymbolByte start
   have hle' := runEnd_le input isSymbolByte start (Nat.le_of_lt hstart)
   have hstop := fun h => runEnd_stop input isSymbolByte start h
@@ -142,7 +142,7 @@ theorem arm_keyword (v : Version) (input : ByteSlice) (start : Nat)
       (fun _ _ _ => StepFails v input (.token p) location start coll held) := by
   obtain ⟨hps, hm, hcont⟩ := token_agrees hpre.agrees hstate
   have hJ : Lexer.Slice.runEnd input start Lexer.RUN_SIMPLE_SYMBOL =
-      V3Runs.runEnd input isSymbolByte start := runEnd_eq endsRun_symbol _ _
+      runEnd input isSymbolByte start := runEnd_eq endsRun_symbol _ _
   have hle := le_runEnd input isSymbolByte start
   have hle' := runEnd_le input isSymbolByte start (Nat.le_of_lt hstart)
   have hstop := fun h => runEnd_stop input isSymbolByte start h
@@ -283,7 +283,7 @@ theorem arm_digitRun (v : Version) (input : ByteSlice) (start : Nat)
       (fun _ _ _ => StepFails v input (.token p) location start coll held) := by
   obtain ⟨hps, hm, hcont⟩ := hinv _ _ _ hpre.agrees
   have hJ : Lexer.Slice.runEnd input start run.flag =
-      V3Runs.runEnd input radix.allows start := runEnd_eq hflag _ _
+      runEnd input radix.allows start := runEnd_eq hflag _ _
   have hle := le_runEnd input radix.allows start
   have hle' := runEnd_le input radix.allows start (Nat.le_of_lt hstart)
   have hstop := fun h => runEnd_stop input radix.allows start h
@@ -415,7 +415,7 @@ theorem arm_comment (v : Version) (input : ByteSlice) (start : Nat)
       (fun _ _ _ => StepFails v input (.token p) location start coll held) := by
   obtain ⟨hps, (hm : p.mode = .comment)⟩ := token_agrees hpre.agrees hstate
   have hJ : Lexer.Slice.runEnd input start Lexer.RUN_COMMENT_PLAIN =
-      V3Runs.runEnd input isCommentRun start := runEnd_eq endsRun_comment _ _
+      runEnd input isCommentRun start := runEnd_eq endsRun_comment _ _
   have hle := le_runEnd input isCommentRun start
   have hle' := runEnd_le input isCommentRun start (Nat.le_of_lt hstart)
   have hstop := fun h => runEnd_stop input isCommentRun start h
