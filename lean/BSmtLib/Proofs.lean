@@ -11,6 +11,7 @@ import BSmtLib.Proofs.V1Naive
 import BSmtLib.Proofs.V2BatchedV3Runs
 import BSmtLib.Proofs.V3RunsV4FastPaths
 import BSmtLib.Proofs.V1NaiveV2Batched
+import BSmtLib.Proofs.X2ContentsLexer
 import BSmtLib.Proofs.X1BatchInCoreX2Contents
 import BSmtLib.Proofs.WRustPortX1BatchInCore
 import BSmtLib.Proofs.V4FastPathsWRustPort
@@ -142,5 +143,25 @@ info: 'BSmtLib.Proofs.Lexer.X2Contents.lexerCorrect' depends on axioms: [propext
 -/
 #guard_msgs in
 #print axioms Lexer.X2Contents.lexerCorrect
+
+/-- The library's lexer, run by the adapter with its consumer that takes every token and does
+not take whitespace and comments, is correct on whole inputs, however they are cut into slices:
+it hands over for the slices what it hands over for them cut into chunks short enough for its
+positions, which is what the lexer with the content buffer hands over for the chunks, and the
+chunks make up the same input. -/
+theorem Lexer.lexerCorrect :
+    Spec.Lexer.LexerCorrect (Adapter.handed Adapter.Lexer.ops) := by
+  intro version slices handed
+  obtain ⟨e, hflat, hb⟩ := Lexer.handed_eq_handed_cutAll version slices
+  rw [e, ← Lexer.X2Contents.handed_eq_handed_lexer version _ hb]
+  have h := Lexer.X2Contents.lexerCorrect version (X2ContentsLexer.Chunks.cutAll slices) handed
+  simp only [hflat] at h
+  exact h
+
+/--
+info: 'BSmtLib.Proofs.Lexer.lexerCorrect' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms Lexer.lexerCorrect
 
 end BSmtLib.Proofs
