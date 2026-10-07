@@ -277,7 +277,10 @@ Appends a token with the type, its content from `contentStart` to `contentStop` 
 and the span given by the numbers of its two locations. The token starts at or after the end
 of the last one, and has a byte unless it is the end of file.
 -/
-@[inline]
+/- LEAN: not inlined. Inlined into the lexer's loop, the compiler does not reuse the batch's
+cell: every token frees the old cell and allocates a new one. As a call of its own, the cell is
+updated in place when nothing else refers to it. -/
+@[noinline]
 def push (self : TokenBatch) (ty : TokenCategory) (contentStart contentStop : Nat)
     (startOffset startLine startColumn endOffset endLine endColumn : Nat)
     (after : self.lastEnd ≤ startOffset)
