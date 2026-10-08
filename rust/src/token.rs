@@ -316,6 +316,7 @@ pub trait SmtProduce<'a> {
     /// If it returns [`Option::Some`], exactly the tokens it took are consumed.
     /// If it returns [`Option::None`], nothing is consumed.
     /// An extractor that runs out of tokens must return [`Option::None`].
+    /// The window may end after any token.
     ///
     /// This function can be provided for ultra-fast processing,
     /// and the caller must ensure that a successful attempt results in
@@ -325,6 +326,12 @@ pub trait SmtProduce<'a> {
     fn attempt<R>(&mut self, extract: impl Fn(&mut Self::Lookahead) -> Option<R>) -> Option<R> {
         let _ = extract;
         None
+    }
+
+    /// Consumes all tokens the producer has left to hand over.
+    #[inline]
+    fn consume_all(&mut self) {
+        while self.next().is_some() {}
     }
 
     /// The SMT-LIB version that applies for currently consumed tokens.
@@ -404,7 +411,7 @@ impl<'a> SmtBatchCursor<'a> {
     ///
     /// This can be used for parsing one token using a cursor-parsing function.
     #[inline]
-    pub fn single(version: SmtVersion, token: SmtToken<'a>) -> Self {
+    pub(crate) fn single(version: SmtVersion, token: SmtToken<'a>) -> Self {
         Self::new(
             version,
             std::slice::from_ref(token.entry),
@@ -414,24 +421,12 @@ impl<'a> SmtBatchCursor<'a> {
 
     /// Span of the last consumed token in this handover (if any).
     #[inline]
-    pub fn consumed_span(&self) -> Option<SmtSpan> {
+    pub(crate) fn consumed_span(&self) -> Option<SmtSpan> {
         if self.next > self.start {
             self.at(self.next - 1).map(|token| token.span())
         } else {
             None
         }
-    }
-
-    /// Consumes all tokens remaining in the cursor.
-    #[inline]
-    pub fn consume_all(&mut self) {
-        self.next = self.entries.len()
-    }
-
-    /// Whether every token has been consumed.
-    #[inline]
-    pub fn is_empty(&self) -> bool {
-        self.next >= self.entries.len()
     }
 
     /// Requests that the input is lexed again from the end of the last
@@ -482,6 +477,7 @@ impl<'a> SmtProduce<'a> for SmtBatchCursor<'a> {
         self.next += 1;
         Some(token)
     }
+
     #[inline]
     fn attempt<R>(&mut self, extract: impl Fn(&mut SmtTokenWindow<'a>) -> Option<R>) -> Option<R> {
         let mut window = SmtTokenWindow {
@@ -493,6 +489,16 @@ impl<'a> SmtProduce<'a> for SmtBatchCursor<'a> {
         // the extractor succeeded, consume what it took
         self.next = window.next;
         Some(result)
+    }
+
+    #[inline]
+    fn is_empty(&self) -> bool {
+        self.next >= self.entries.len()
+    }
+
+    #[inline]
+    fn consume_all(&mut self) {
+        self.next = self.entries.len()
     }
 
     fn version(&self) -> SmtVersion {
