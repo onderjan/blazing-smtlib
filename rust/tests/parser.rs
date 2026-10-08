@@ -535,6 +535,34 @@ fn set_info_with_s_expr_attribute_value() {
 // --- Behavior after (exit) ---
 
 #[test]
+fn a_rejected_version_declaration_is_handled_as_set_info_first() {
+    // a version declaration is a set-info command: the handler receives it
+    // at its closing parenthesis, and only then is the declared value checked,
+    // so the error comes after command_set_info, at that parenthesis
+    for value in [
+        // a decimal that names no version
+        "2.8", // a version the default posture does not allow
+        "2.0",
+    ] {
+        let input = format!("(check-sat)(set-info :smt-lib-version {value})");
+        let mut handler = Recording::default();
+        let err = parse_with(&mut handler, input.as_bytes())
+            .expect_err("the declared version must be rejected");
+        assert!(
+            matches!(
+                err.cause(),
+                SmtReadErrorCause::Syntax(SmtSyntaxErrorKind::UnsupportedVersion)
+            ),
+            "{value}: {:?}",
+            err.cause()
+        );
+        let close = input.len() as u64 - 1;
+        assert_error_span(&err, close, close + 1);
+        assert_eq!(handler.commands, ["check-sat", "set-info"], "{value}");
+    }
+}
+
+#[test]
 fn everything_after_exit_is_discarded() {
     // after (exit), reading stops: the rest of the input is not even lexed,
     // so garbage and unbalanced parentheses there raise no error
