@@ -8,7 +8,7 @@ use crate::{
     },
     token::{
         SmtBatchCursor, SmtGeneralReserved, SmtReserved, SmtSyntaxToken, SmtToken,
-        SmtTokenCategory, SmtVersion,
+        SmtTokenCategory, SmtProduce, SmtVersion,
     },
 };
 

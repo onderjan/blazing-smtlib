@@ -279,6 +279,64 @@ impl<'a> SmtToken<'a> {
     }
 }
 
+/// A sequential producer of tokens.
+pub trait SmtProduce<'a> {
+    /// Additional information carried by each produced token.
+    ///
+    /// For the tokens produced by the library lexer,
+    /// this is the token span.
+    type Meta;
+
+    /// Lookahead window, set to `()` if not implementing [`SmtProduce::attempt`].
+    type Lookahead: SmtLookahead<'a>;
+
+    /// Consumes the next token (if any).
+    fn next(&mut self) -> Option<SmtToken<'a>>;
+
+    /// Returns the next token (if any) without consuming it.
+    ///
+    /// Do not forget to consume the token later if it should be taken.
+    fn peek(&self) -> Option<SmtToken<'a>>;
+
+    /// Attempts to consume several tokens at once (lookahead).
+    ///
+    /// The extractor takes tokens from the window ahead of the cursor, in order.
+    /// If it returns [`Option::Some`], exactly the tokens it took are consumed.
+    /// If it returns [`Option::None`], nothing is consumed.
+    /// An extractor that runs out of tokens must return [`Option::None`].
+    ///
+    /// This function can be provided for ultra-fast processing,
+    /// and the caller must ensure that a successful attempt results in
+    /// the same observable behaviour as when it failed one.
+    /// Use standard [`SmtProduce::next`] processing unless
+    /// absolutely necessary and supported by measurements.
+    fn attempt<R>(&mut self, extract: impl Fn(&mut Self::Lookahead) -> Option<R>) -> Option<R> {
+        let _ = extract;
+        None
+    }
+
+    /// The SMT-LIB version that applies for currently consumed tokens.
+    ///
+    /// The version is guaranteed not to change during a call
+    /// to the consumer except as a result of the consumer calling
+    /// [`SmtProduce::set_version`].
+    fn version(&self) -> SmtVersion;
+
+    /// Sets the SMT-LIB version that should apply from now on.
+    ///
+    /// This can adjust the non-consumed tokens so they correspond
+    /// to the set version. There is no guarantee on their shape
+    /// or whether any remain at all; the caller must not use any
+    /// information gathered on them beforehand.
+    fn set_version(&mut self, version: SmtVersion);
+}
+
+/// A lookahead window for [SmtProduce::attempt].
+pub trait SmtLookahead<'a> {
+    /// Looks at the next token and advances the window.
+    fn next(&mut self) -> Option<SmtToken<'a>>;
+}
+
 /// A cursor into a batch of tokens, from which elements are consumed sequentially.
 ///
 /// A parser reads a batch through a cursor: it consumes the tokens one at
@@ -315,10 +373,6 @@ impl<'a> SmtBatchCursor<'a> {
         }
     }
 
-    pub fn version(&self) -> SmtVersion {
-        self.version
-    }
-
     /// The token at `index` of the batch, if any.
     #[inline]
     fn at(&self, index: usize) -> Option<SmtToken<'a>> {
@@ -338,48 +392,6 @@ impl<'a> SmtBatchCursor<'a> {
             std::slice::from_ref(token.entry),
             std::slice::from_ref(token.span),
         )
-    }
-
-    /// Returns the next token (if any) without consuming it.
-    #[inline]
-    pub fn peek(&self) -> Option<SmtToken<'a>> {
-        self.at(self.next)
-    }
-
-    /// Consumes the next token (if any).
-    // CLIPPY: do not warn on next() without implementing Iterator,
-    // as we implement an iterator-like but more powerful API
-    #[allow(clippy::should_implement_trait)]
-    #[inline]
-    pub fn next(&mut self) -> Option<SmtToken<'a>> {
-        let token = self.at(self.next)?;
-        self.next += 1;
-        Some(token)
-    }
-
-    /// Attempts to consume several tokens at once.
-    ///
-    /// The extractor takes tokens from the window ahead of the cursor, in order.
-    /// If it returns [`Option::Some`], exactly the tokens it took are consumed.
-    /// If it returns [`Option::None`], nothing is consumed.
-    ///
-    /// The window ends where the cursor does, which may be after any token.
-    /// An extractor that runs out of tokens must return [`Option::None`]; the
-    /// caller must then reach the same result by consuming token by token.
-    #[inline]
-    pub fn attempt<R>(
-        &mut self,
-        extract: impl Fn(&mut SmtTokenWindow<'a>) -> Option<R>,
-    ) -> Option<R> {
-        let mut window = SmtTokenWindow {
-            entries: self.entries,
-            spans: self.spans,
-            next: self.next,
-        };
-        let result = extract(&mut window)?;
-        // the extractor succeeded, consume what it took
-        self.next = window.next;
-        Some(result)
     }
 
     /// Span of the last consumed token in this handover (if any).
@@ -402,22 +414,6 @@ impl<'a> SmtBatchCursor<'a> {
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.next >= self.entries.len()
-    }
-
-    /// Sets the SMT-LIB version that should apply from now on.
-    ///
-    /// This will adjust the non-consumed tokens so they correspond
-    /// to the set version. There is no guarantee on their shape
-    /// or whether any remain at all; the caller must not use any
-    /// information gathered on them beforehand.
-    pub fn set_version(&mut self, version: SmtVersion) {
-        let is_current_2_0 = self.version == SmtVersion::V2_0;
-        let is_new_2_0 = version == SmtVersion::V2_0;
-        if is_current_2_0 != is_new_2_0 {
-            // we need to relex
-            self.relex();
-        }
-        self.version = version;
     }
 
     /// Requests that the input is lexed again from the end of the last
@@ -452,6 +448,50 @@ impl<'a> SmtBatchCursor<'a> {
     }
 }
 
+impl<'a> SmtProduce<'a> for SmtBatchCursor<'a> {
+    type Meta = SmtSpan;
+    type Lookahead = SmtTokenWindow<'a>;
+
+    #[inline]
+    fn peek(&self) -> Option<SmtToken<'a>> {
+        self.at(self.next)
+    }
+
+    #[allow(clippy::should_implement_trait)]
+    #[inline]
+    fn next(&mut self) -> Option<SmtToken<'a>> {
+        let token = self.at(self.next)?;
+        self.next += 1;
+        Some(token)
+    }
+    #[inline]
+    fn attempt<R>(&mut self, extract: impl Fn(&mut SmtTokenWindow<'a>) -> Option<R>) -> Option<R> {
+        let mut window = SmtTokenWindow {
+            entries: self.entries,
+            spans: self.spans,
+            next: self.next,
+        };
+        let result = extract(&mut window)?;
+        // the extractor succeeded, consume what it took
+        self.next = window.next;
+        Some(result)
+    }
+
+    fn version(&self) -> SmtVersion {
+        self.version
+    }
+
+    fn set_version(&mut self, version: SmtVersion) {
+        let is_current_2_0 = self.version == SmtVersion::V2_0;
+        let is_new_2_0 = version == SmtVersion::V2_0;
+        if is_current_2_0 != is_new_2_0 {
+            // we need to relex
+            self.relex();
+        }
+        self.version = version;
+    }
+}
+
 /// The tokens ahead of a cursor, as the extractor of [`SmtBatchCursor::attempt`]
 /// sees them: they can only be taken in order.
 pub struct SmtTokenWindow<'a> {
@@ -460,13 +500,8 @@ pub struct SmtTokenWindow<'a> {
     next: usize,
 }
 
-impl<'a> SmtTokenWindow<'a> {
-    /// Takes the next token of the window (if any).
-    // CLIPPY: do not warn on next() without implementing Iterator,
-    // as the window mirrors the cursor it belongs to
-    #[allow(clippy::should_implement_trait)]
-    #[inline]
-    pub fn next(&mut self) -> Option<SmtToken<'a>> {
+impl<'a> SmtLookahead<'a> for SmtTokenWindow<'a> {
+    fn next(&mut self) -> Option<SmtToken<'a>> {
         let token = match (self.entries.get(self.next), self.spans.get(self.next)) {
             (Some(entry), Some(span)) => SmtToken::new(entry, span),
             _ => return None,

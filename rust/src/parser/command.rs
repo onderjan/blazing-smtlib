@@ -3,7 +3,9 @@ use std::{convert::Infallible, ops::ControlFlow};
 use crate::{
     SmtCommandHandler, SmtSymbol,
     parser::{SmtParse, SmtParseError, SmtParseState, SmtSyntaxErrorKind, handle_err},
-    token::{SmtBatchCursor, SmtReserved, SmtSyntaxToken, SmtTokenCategory, SmtVersion},
+    token::{
+        SmtBatchCursor, SmtReserved, SmtSyntaxToken, SmtTokenCategory, SmtProduce, SmtVersion,
+    },
 };
 
 mod datatype;

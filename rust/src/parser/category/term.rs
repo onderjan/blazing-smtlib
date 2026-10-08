@@ -9,8 +9,8 @@ use crate::{
         handle_err,
     },
     token::{
-        SmtBatchCursor, SmtGeneralReserved, SmtReserved, SmtSyntaxToken, SmtToken,
-        SmtTokenCategory, SmtVersion,
+        SmtBatchCursor, SmtGeneralReserved, SmtLookahead, SmtProduce, SmtReserved, SmtSyntaxToken,
+        SmtToken, SmtTokenCategory, SmtVersion,
     },
 };
 

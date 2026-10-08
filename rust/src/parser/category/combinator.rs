@@ -6,7 +6,7 @@ use crate::{
         SmtCloseParenParser, SmtOpenParenParser, SmtParse, SmtParseError, SmtParseState,
         SmtSyntaxErrorKind,
     },
-    token::{SmtBatchCursor, SmtTokenCategory},
+    token::{SmtBatchCursor, SmtTokenCategory, SmtProduce},
 };
 
 /// Parses using the first parser, then the second, then returns the result tuple.

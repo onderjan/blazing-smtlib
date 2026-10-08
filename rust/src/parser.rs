@@ -14,7 +14,7 @@ pub use state::*;
 
 use crate::{
     SmtHandler,
-    token::{SmtBatchCursor, SmtToken, SmtTokenCategory, SmtVersion},
+    token::{SmtBatchCursor, SmtProduce, SmtToken, SmtTokenCategory, SmtVersion},
 };
 
 pub trait SmtParse<H: SmtHandler + ?Sized> {

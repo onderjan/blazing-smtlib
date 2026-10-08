@@ -6,7 +6,7 @@ use crate::{
         SmtCommandOutcome, SmtCommandParser, SmtParse, SmtParseError, SmtParseState,
         SmtSyntaxErrorKind,
     },
-    token::{SmtBatchCursor, SmtVersionPosture},
+    token::{SmtBatchCursor, SmtProduce, SmtVersionPosture},
 };
 
 /// Parses an SMT-LIB script: a sequence of commands, each delivered to the

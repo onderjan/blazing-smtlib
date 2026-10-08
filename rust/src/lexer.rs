@@ -23,7 +23,7 @@ use crate::{
             FAST_RUN_MASK, HEXADECIMAL_RUN, START, Start, TokenEnd,
         },
     },
-    token::{InnerCategory, SmtBatchCursor, SmtConsume, SmtRecover, SmtVersion},
+    token::{InnerCategory, SmtBatchCursor, SmtConsume, SmtRecover, SmtProduce, SmtVersion},
 };
 
 pub struct SmtLexer<C: SmtConsume, R: SmtLexRecovery<C> = SmtFailFast> {

@@ -4,7 +4,9 @@ use crate::{
     SmtHandler, SmtKeyword, SmtKeywordBuf, SmtNumeral, SmtNumeralBuf, SmtStringContent,
     SmtStringContentBuf, SmtSymbolBuf,
     parser::{SmtParse, SmtParseError, SmtParseState, SmtSyntaxErrorKind},
-    token::{SmtBatchCursor, SmtSyntaxToken, SmtToken, SmtTokenCategory, SmtVersion},
+    token::{
+        SmtBatchCursor, SmtSyntaxToken, SmtToken, SmtTokenCategory, SmtProduce, SmtVersion,
+    },
 };
 
 pub struct SmtSymbolParser;
