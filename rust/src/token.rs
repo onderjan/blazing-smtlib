@@ -507,16 +507,16 @@ pub trait SmtConsume {
     type Error;
     /// Whether the consumer consumes whitespace and comments.
     ///
-    /// If false, the consumer operates over abstract tokens:
-    /// it is not interested in whitespace and comments,
-    /// and the caller must not hand them over for consumption.
-    ///
     /// If true, the consumer operates over concrete tokens:
     /// it can reconstruct the byte stream precisely thanks
     /// to the whitespace and comments. The caller must hand
     /// over the whitespace and comment tokens present between
     /// true syntactic tokens.
-    const CONSUMES_WHITESPACE_AND_COMMENTS: bool;
+    ///
+    /// If false, the consumer operates over abstract tokens:
+    /// it is not interested in whitespace and comments,
+    /// and the caller must not hand them over for consumption.
+    const IS_CONCRETE: bool;
 
     /// Consumes the tokens handed over in the cursor, in order.
     ///
@@ -545,7 +545,7 @@ pub trait SmtConsume {
 impl<T: SmtConsume + ?Sized> SmtConsume for &mut T {
     type Result = T::Result;
     type Error = T::Error;
-    const CONSUMES_WHITESPACE_AND_COMMENTS: bool = T::CONSUMES_WHITESPACE_AND_COMMENTS;
+    const IS_CONCRETE: bool = T::IS_CONCRETE;
 
     #[inline]
     fn consume(

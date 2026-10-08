@@ -22,7 +22,7 @@ struct Probe<F>(F);
 impl<F: FnMut(&mut SmtBatchCursor<'_>)> SmtConsume for Probe<F> {
     type Result = ();
     type Error = Infallible;
-    const CONSUMES_WHITESPACE_AND_COMMENTS: bool = false;
+    const IS_CONCRETE: bool = false;
 
     fn consume(
         &mut self,

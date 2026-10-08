@@ -364,7 +364,7 @@ struct Drive<'h, H: SmtHandler, P: SmtParse<H>> {
 impl<H: SmtHandler, P: SmtParse<H>> SmtConsume for Drive<'_, H, P> {
     type Result = ();
     type Error = SmtParseError<H::Error>;
-    const CONSUMES_WHITESPACE_AND_COMMENTS: bool = false;
+    const IS_CONCRETE: bool = false;
 
     fn consume(&mut self, cursor: &mut SmtBatchCursor<'_>) -> Result<ControlFlow<()>, Self::Error> {
         while !cursor.is_empty() {

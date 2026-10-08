@@ -131,7 +131,7 @@ struct Recorder<'r> {
 impl SmtConsume for Recorder<'_> {
     type Result = ();
     type Error = ();
-    const CONSUMES_WHITESPACE_AND_COMMENTS: bool = false;
+    const IS_CONCRETE: bool = false;
 
     fn consume(
         &mut self,

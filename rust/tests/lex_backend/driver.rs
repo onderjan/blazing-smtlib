@@ -114,7 +114,7 @@ impl<const WHITESPACE: bool> SmtConsume for Scripted<WHITESPACE> {
     type Result = ();
     /// The name of what made the consumer fail.
     type Error = &'static str;
-    const CONSUMES_WHITESPACE_AND_COMMENTS: bool = WHITESPACE;
+    const IS_CONCRETE: bool = WHITESPACE;
 
     fn consume(
         &mut self,

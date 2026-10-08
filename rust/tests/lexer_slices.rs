@@ -699,7 +699,7 @@ struct RejectNth {
 impl SmtConsume for RejectNth {
     type Result = ();
     type Error = ();
-    const CONSUMES_WHITESPACE_AND_COMMENTS: bool = false;
+    const IS_CONCRETE: bool = false;
 
     fn consume(
         &mut self,

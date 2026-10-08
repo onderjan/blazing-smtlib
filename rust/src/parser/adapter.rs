@@ -45,7 +45,7 @@ impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtParseAdapter<'a, H, P> {
 impl<H: SmtHandler + ?Sized, P: SmtParse<H>> SmtConsume for SmtParseAdapter<'_, H, P> {
     type Result = P::Result;
     type Error = SmtParseError<H::Error>;
-    const CONSUMES_WHITESPACE_AND_COMMENTS: bool = false;
+    const IS_CONCRETE: bool = false;
 
     #[inline]
     fn consume(

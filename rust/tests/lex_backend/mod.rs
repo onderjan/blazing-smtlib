@@ -180,7 +180,7 @@ struct Collect<'a, const WHITESPACE: bool> {
 impl<const WHITESPACE: bool> SmtConsume for Collect<'_, WHITESPACE> {
     type Result = ();
     type Error = Infallible;
-    const CONSUMES_WHITESPACE_AND_COMMENTS: bool = WHITESPACE;
+    const IS_CONCRETE: bool = WHITESPACE;
 
     fn consume(
         &mut self,

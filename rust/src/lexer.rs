@@ -201,7 +201,7 @@ enum LexerState {
     /// Lexing whitespace.
     ///
     /// The lexer can only be set to this state if
-    /// [`SmtConsume::CONSUMES_WHITESPACE_AND_COMMENTS`] is true,
+    /// [`SmtConsume::IS_CONCRETE`] is true,
     /// otherwise the whitespace is eagerly discarded without combining it.
     Whitespace,
     /// A lexer or consumer error was returned; lexing cannot continue.
@@ -486,7 +486,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
             }
             LexerState::Comment => {
                 // only produce the comment if the consumer wants it
-                if C::CONSUMES_WHITESPACE_AND_COMMENTS {
+                if C::IS_CONCRETE {
                     self.sink_slice(
                         &mut batch,
                         InnerCategory::Comment,
@@ -709,7 +709,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
                 // We need to fall back if we have overrun the slice or encountered
                 // a line-feed which needs to update the location line/column.
                 let is_whitespace = fast_entry & RUN_NON_LF_WHITESPACE != 0;
-                if C::CONSUMES_WHITESPACE_AND_COMMENTS
+                if C::IS_CONCRETE
                     && is_whitespace
                     && matches!(slice.get(run_end_at), None | Some(b'\n'))
                 {
@@ -758,7 +758,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
                 // newlines. Whitespace is only emitted if the consumer wants it.
                 let entry = if is_quoted {
                     (InnerCategory::QuotedSymbol, &slice[after..run_end_at])
-                } else if C::CONSUMES_WHITESPACE_AND_COMMENTS && is_whitespace {
+                } else if C::IS_CONCRETE && is_whitespace {
                     // only emitted if the consumer takes whitespace
                     (InnerCategory::Whitespace, &slice[index..token_end])
                 } else {
@@ -790,7 +790,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
                     }
                 }
                 // whitespace needs no delimiter, it is emitted only if the consumer takes it
-                let emit = if C::CONSUMES_WHITESPACE_AND_COMMENTS {
+                let emit = if C::IS_CONCRETE {
                     emit | is_whitespace as usize
                 } else {
                     emit
@@ -807,7 +807,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
             // Fast path was not taken, use the slow path.
             match START[c as usize] {
                 Start::LineFeed => {
-                    if C::CONSUMES_WHITESPACE_AND_COMMENTS {
+                    if C::IS_CONCRETE {
                         // the line feed starts a whitespace token
                         index = self.start_whitespace(batch, slice, index)?;
                         if index == slice.len() {
@@ -839,7 +839,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
                         None => {
                             // we ran out of bytes while inside the comment
                             // extend the content if if should be emitted
-                            if C::CONSUMES_WHITESPACE_AND_COMMENTS {
+                            if C::IS_CONCRETE {
                                 self.token_content.extend_from_slice(&slice[after..]);
                             }
                             // update the state and return
@@ -850,7 +850,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
                     // we have reached the end of the comment, which includes
                     // the byte that ended it but not its semicolon
                     // sink the content if it should be emitted
-                    if C::CONSUMES_WHITESPACE_AND_COMMENTS {
+                    if C::IS_CONCRETE {
                         self.sink_slice(
                             batch,
                             InnerCategory::Comment,
@@ -1606,7 +1606,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
         let Some(c) = slice.get(index) else {
             // the comment continues; if we are producing comments,
             // extend the content from the whole slice
-            if C::CONSUMES_WHITESPACE_AND_COMMENTS {
+            if C::IS_CONCRETE {
                 self.token_content.extend_from_slice(slice);
             }
             // remain in comment state
@@ -1621,7 +1621,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
 
         let after_comment_end = index + 1;
 
-        if C::CONSUMES_WHITESPACE_AND_COMMENTS {
+        if C::IS_CONCRETE {
             // we need to produce the comment token
             // extend the comment content and finish the token
             self.token_content

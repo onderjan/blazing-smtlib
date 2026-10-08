@@ -23,7 +23,7 @@ struct TakeTokens;
 impl SmtConsume for TakeTokens {
     type Result = ();
     type Error = Infallible;
-    const CONSUMES_WHITESPACE_AND_COMMENTS: bool = false;
+    const IS_CONCRETE: bool = false;
 
     fn consume(
         &mut self,
@@ -591,7 +591,7 @@ struct RejectTokens;
 impl SmtConsume for RejectTokens {
     type Result = ();
     type Error = SmtSpan;
-    const CONSUMES_WHITESPACE_AND_COMMENTS: bool = false;
+    const IS_CONCRETE: bool = false;
 
     fn consume(
         &mut self,
@@ -823,7 +823,7 @@ struct RejectEof;
 impl SmtConsume for RejectEof {
     type Result = ();
     type Error = ();
-    const CONSUMES_WHITESPACE_AND_COMMENTS: bool = false;
+    const IS_CONCRETE: bool = false;
 
     fn consume(
         &mut self,
