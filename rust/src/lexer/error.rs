@@ -63,12 +63,17 @@ impl<E> SmtLexError<E> {
         self.cause
     }
 
-    /// The location the rest of the input is to be fed from (if the lexer continues).
+    /// Where the rest of the input is to be fed from if the lexer continues (EXPERIMENTAL).
     ///
     /// If present, the lexer is recovering: it expects the input from this
     /// location on, and the end of the input once none is left.
     /// If absent, the lexer does not continue this input: either it stops
     /// at its first error, or the input has ended.
+    ///
+    /// Lexer recovery is implemented but experimental
+    /// since the exact semantics have not yet been set in stone.
+    /// It can change or be removed in any version and should not be used.
+    #[doc(hidden)]
     pub fn continues_from(&self) -> Option<SmtLocation> {
         self.continues_from
     }

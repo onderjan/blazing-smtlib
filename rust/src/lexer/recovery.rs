@@ -8,11 +8,16 @@ use crate::{
 /// This is the default and can be used with any token consumer.
 pub enum SmtFailFast {}
 
-/// The lexer recovers from errors.
+/// The lexer recovers from errors (EXPERIMENTAL).
 ///
 /// For recovery to be possible not just on the side of the lexer
 /// but also the token consumer, the token consumer must be able
 /// to abandon unfinished work and recover (see [`SmtRecover`]).
+///
+/// Lexer recovery is implemented but experimental
+/// since the exact semantics have not yet been set in stone.
+/// It can change or be removed in any version and should not be used.
+#[doc(hidden)]
 pub enum SmtRecovering {}
 
 pub(super) mod sealed {
@@ -40,8 +45,13 @@ pub(super) mod sealed {
 
 /// Determines the lexer behaviour after an error occurs.
 ///
-/// Implemented by [`SmtFailFast`] for every token consumer, and by
-/// [`SmtRecovering`] for the token consumers that can abandon unfinished work.
+/// Currently, only fail-fast behaviour is supported,
+/// implemented by [`SmtFailFast`] for every token consumer.
+///
+/// Lexer error recovery is an experimental,
+/// documentation-hidden feature in this version,
+/// and may change or be removed in any version.
+///
 /// It cannot be implemented outside of this crate.
 pub trait SmtLexRecovery<C: SmtConsume>: sealed::Recovery<C> {}
 

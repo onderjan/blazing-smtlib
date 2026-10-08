@@ -556,14 +556,19 @@ impl<T: SmtConsume + ?Sized> SmtConsume for &mut T {
     }
 }
 
-/// A token consumer that can recover after an error.
+/// A token consumer that can recover after an error (EXPERIMENTAL).
 ///
-/// This is used in the library to implement SMT-LIB script processing
+/// This is an experimental feature for processing of SMT-LIB scripts
 /// with error recovery: after an error, the current command is abandoned
 /// and the lexer closes all open parentheses before announcing recovery.
 /// If the command remains unclosed at the end of input, recovery is made
 /// before the end of input is handed over (only the unclosed command is
 /// abandoned and dropped).
+///
+/// Lexer recovery is implemented but experimental
+/// since the exact semantics have not yet been set in stone.
+/// It can change or be removed in any version and should not be used.
+#[doc(hidden)]
 pub trait SmtRecover: SmtConsume {
     /// Abandons everything the consumer has not finished.
     ///

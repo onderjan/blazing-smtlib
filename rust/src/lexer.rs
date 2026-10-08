@@ -245,7 +245,12 @@ impl<C: SmtConsume> SmtLexer<C> {
 }
 
 impl<C: SmtRecover> SmtLexer<C, SmtRecovering> {
-    /// Constructs a lexer that recovers from errors.
+    /// Constructs a lexer that recovers from errors (EXPERIMENTAL).
+    ///
+    /// Lexer recovery is implemented but experimental
+    /// since the exact semantics have not yet been set in stone.
+    /// It can change or be removed in any version and should not be used.
+    #[doc(hidden)]
     pub fn new_recovering(consumer: C, version: SmtVersion) -> Self {
         // construct the lexer normally
         // recovering is selected by the implementation generics
@@ -296,11 +301,8 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
     /// If the token consumer returns [`ControlFlow::Continue`] on all tokens,
     /// the lexer is ready for further lexing.
     ///
-    /// If an error occurs, a lexer that stops at its first error moves into
-    /// a failure state and all further lexing calls panic. A recovering lexer
-    /// makes the consumer abandon its unfinished work and returns the error.
-    /// [`SmtLexError::continues_from`] determines the location from which
-    /// further lexing should be started for error recovery.
+    /// If an error occurs, the fail-fast lexer moves into
+    /// a failure state and all further lexing calls panic.
     pub fn lex_slice(
         &mut self,
         slice: &[u8],
@@ -374,11 +376,8 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
     /// If the token consumer returns [`ControlFlow::Continue`] on the EOF token,
     /// the lexer resets itself and returns [`ControlFlow::Continue`].
     ///
-    /// If an error occurs, a lexer that stops at its first error moves into
-    /// a failure state and all further lexing calls panic. A recovering lexer
-    /// makes the consumer abandon its unfinished work and returns the error.
-    /// [`SmtLexError::continues_from`] determines the location from which
-    /// further lexing should be started for error recovery.
+    /// If an error occurs, the fail-fast lexer moves into
+    /// a failure state and all further lexing calls panic.
     pub fn lex_eof(&mut self) -> Result<ControlFlow<SmtLocated<C::Result>>, SmtLexError<C::Error>> {
         if self.discard {
             // no need to feed anything, just reset the lexer
