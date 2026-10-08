@@ -9,8 +9,8 @@ use crate::{
         handle_err,
     },
     token::{
-        SmtBatchCursor, SmtGeneralReserved, SmtLookahead, SmtProduce, SmtReserved, SmtSyntaxToken,
-        SmtToken, SmtTokenCategory, SmtVersion,
+        SmtGeneralReserved, SmtLookahead, SmtProduce, SmtReserved, SmtSyntaxToken, SmtToken,
+        SmtTokenCategory, SmtVersion,
     },
 };
 
@@ -172,11 +172,11 @@ impl<H: SmtHandler> SmtParse<H> for SmtTermParser<H> {
     type Result = H::Term;
 
     #[inline(always)]
-    fn parse(
+    fn parse<'a, C: SmtProduce<'a>>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut SmtBatchCursor<'_>,
+        cursor: &mut C,
     ) -> Result<ControlFlow<H::Term>, SmtParseError<H::Error>> {
         // progress the slot with the cursor
         TermSlot::parse(handler, parse_state, cursor)
@@ -224,10 +224,10 @@ impl<H: SmtHandler + ?Sized> TermSlot<H> {
 
 impl<H: SmtHandler> TermSlot<H> {
     #[inline]
-    pub(crate) fn parse(
+    pub(crate) fn parse<'a, C: SmtProduce<'a>>(
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut SmtBatchCursor,
+        cursor: &mut C,
     ) -> Result<ControlFlow<H::Term>, SmtParseError<H::Error>> {
         let version = cursor.version();
         while let Some(token) = cursor.next() {

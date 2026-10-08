@@ -64,7 +64,7 @@ pub(crate) mod tests {
         NonstandardCommandError, SmtSyntaxChecker,
         lexer::SmtLexer,
         parser::{SmtParse, SmtParseError, SmtParseState},
-        token::{SmtBatchCursor, SmtConsume, SmtTokenCategory, SmtProduce, SmtVersion},
+        token::{SmtConsume, SmtProduce, SmtTokenCategory, SmtVersion},
     };
 
     /// Drives `parser` over `parse_state` through the whole input with the
@@ -90,9 +90,9 @@ pub(crate) mod tests {
             type Error = SmtParseError<NonstandardCommandError>;
             const IS_CONCRETE: bool = false;
 
-            fn consume(
+            fn consume<'a, C: SmtProduce<'a>>(
                 &mut self,
-                cursor: &mut SmtBatchCursor<'_>,
+                cursor: &mut C,
             ) -> Result<ControlFlow<()>, Self::Error> {
                 while !cursor.is_empty() {
                     if self.result.is_some() {

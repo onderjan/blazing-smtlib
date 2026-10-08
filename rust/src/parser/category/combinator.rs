@@ -6,7 +6,7 @@ use crate::{
         SmtCloseParenParser, SmtOpenParenParser, SmtParse, SmtParseError, SmtParseState,
         SmtSyntaxErrorKind,
     },
-    token::{SmtBatchCursor, SmtTokenCategory, SmtProduce},
+    token::{SmtProduce, SmtTokenCategory},
 };
 
 /// Parses using the first parser, then the second, then returns the result tuple.
@@ -41,11 +41,11 @@ impl<H: SmtHandler, P1: SmtParse<H>, P2: SmtParse<H>> SmtParse<H> for SmtPairPar
     type Result = (P1::Result, P2::Result);
 
     #[inline]
-    fn parse(
+    fn parse<'a, C: SmtProduce<'a>>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut SmtBatchCursor,
+        cursor: &mut C,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         // progress the first parser until it breaks or the tokens run out
         if self.first_result.is_none() {
@@ -93,15 +93,15 @@ impl<H: SmtHandler, P: SmtParse<H> + Default> Default for SmtClosedParser<H, P> 
     }
 }
 
-impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtClosedParser<H, P> {
-    type Result = P::Result;
+impl<H: SmtHandler, S: SmtParse<H>> SmtParse<H> for SmtClosedParser<H, S> {
+    type Result = S::Result;
 
     #[inline]
-    fn parse(
+    fn parse<'a, C: SmtProduce<'a>>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut SmtBatchCursor,
+        cursor: &mut C,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         Ok(self
             .inner
@@ -136,11 +136,11 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtOpenedParser<H, P> {
     type Result = P::Result;
 
     #[inline]
-    fn parse(
+    fn parse<'a, C: SmtProduce<'a>>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut SmtBatchCursor,
+        cursor: &mut C,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         Ok(self
             .inner
@@ -188,11 +188,11 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtClosedMultipleParser<H, P
     type Result = Vec<P::Result>;
 
     #[inline]
-    fn parse(
+    fn parse<'a, C: SmtProduce<'a>>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut SmtBatchCursor,
+        cursor: &mut C,
     ) -> Result<ControlFlow<Vec<P::Result>>, SmtParseError<H::Error>> {
         self.resource.parse(cursor, |cursor| {
             self.inner.parse(handler, parse_state, cursor)
@@ -214,10 +214,10 @@ impl<T> ClosedMultipleResource<T> {
         }
     }
 
-    pub(crate) fn parse<E>(
+    pub(crate) fn parse<'a, C: SmtProduce<'a>, E>(
         &mut self,
-        cursor: &mut SmtBatchCursor,
-        mut element: impl FnMut(&mut SmtBatchCursor) -> Result<ControlFlow<T>, SmtParseError<E>>,
+        cursor: &mut C,
+        mut element: impl FnMut(&mut C) -> Result<ControlFlow<T>, SmtParseError<E>>,
     ) -> Result<ControlFlow<Vec<T>>, SmtParseError<E>> {
         while let Some(token) = cursor.peek() {
             if self.outside {
@@ -294,11 +294,11 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtClosedMaximumParser<H, P> {
 impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtClosedMaximumParser<H, P> {
     type Result = Vec<P::Result>;
 
-    fn parse(
+    fn parse<'a, C: SmtProduce<'a>>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut SmtBatchCursor,
+        cursor: &mut C,
     ) -> Result<ControlFlow<Vec<P::Result>>, SmtParseError<H::Error>> {
         while let Some(peeked) = cursor.peek() {
             if self.outside {
@@ -372,11 +372,11 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParenMaximumParser<H, P> {
 impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtParenMaximumParser<H, P> {
     type Result = Vec<P::Result>;
 
-    fn parse(
+    fn parse<'a, C: SmtProduce<'a>>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut SmtBatchCursor,
+        cursor: &mut C,
     ) -> Result<ControlFlow<Vec<P::Result>>, SmtParseError<H::Error>> {
         loop {
             if self.is_opened {

@@ -7,7 +7,7 @@ use crate::{
         SmtParenSortedVarsParser, SmtParse, SmtParseError, SmtParseState, SmtSortParser,
         SmtSymbolParser, SmtSyntaxErrorKind, SmtTermParser, handle_err, parse_by_token,
     },
-    token::{SmtBatchCursor, SmtToken, SmtVersion},
+    token::{SmtBatchCursor, SmtProduce, SmtToken, SmtVersion},
 };
 
 /// Parses a function signature: name, parameters (name and sort), and result sort.
@@ -36,11 +36,11 @@ impl<H: SmtCommandHandler> Default for FunctionSignatureParser<H> {
 impl<H: SmtCommandHandler> SmtParse<H> for FunctionSignatureParser<H> {
     type Result = SmtFunctionSignature<H>;
 
-    fn parse(
+    fn parse<'a, C: SmtProduce<'a>>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut SmtBatchCursor,
+        cursor: &mut C,
     ) -> Result<ControlFlow<SmtFunctionSignature<H>>, SmtParseError<H::Error>> {
         Ok(self.inner.parse(handler, parse_state, cursor)?.map_break(
             |(name, (params, result_sort))| SmtFunctionSignature {
@@ -76,11 +76,11 @@ impl<H: SmtCommandHandler> Default for RecursiveBodyParser<H> {
 impl<H: SmtCommandHandler> SmtParse<H> for RecursiveBodyParser<H> {
     type Result = ();
 
-    fn parse(
+    fn parse<'a, C: SmtProduce<'a>>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut SmtBatchCursor,
+        cursor: &mut C,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         parse_by_token(cursor, |version, token| {
             self.progress(handler, parse_state, version, token)
@@ -157,11 +157,11 @@ impl<H: SmtCommandHandler> Default for DefineFunsRecParser<H> {
 impl<H: SmtCommandHandler> SmtParse<H> for DefineFunsRecParser<H> {
     type Result = ();
 
-    fn parse(
+    fn parse<'a, C: SmtProduce<'a>>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut SmtBatchCursor,
+        cursor: &mut C,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         parse_by_token(cursor, |version, token| {
             self.progress(handler, parse_state, version, token)

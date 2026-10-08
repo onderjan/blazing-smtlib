@@ -3,9 +3,7 @@ use std::{convert::Infallible, ops::ControlFlow};
 use crate::{
     SmtCommandHandler, SmtSymbol,
     parser::{SmtParse, SmtParseError, SmtParseState, SmtSyntaxErrorKind, handle_err},
-    token::{
-        SmtBatchCursor, SmtReserved, SmtSyntaxToken, SmtTokenCategory, SmtProduce, SmtVersion,
-    },
+    token::{SmtProduce, SmtReserved, SmtSyntaxToken, SmtTokenCategory, SmtVersion},
 };
 
 mod datatype;
@@ -82,11 +80,11 @@ impl<H: SmtCommandHandler> SmtParse<H> for SmtCommandParser<H> {
     type Result = SmtCommandOutcome;
 
     #[inline]
-    fn parse(
+    fn parse<'a, C: SmtProduce<'a>>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut SmtBatchCursor,
+        cursor: &mut C,
     ) -> Result<ControlFlow<SmtCommandOutcome>, SmtParseError<H::Error>> {
         // State machine:
         // 1. AwaitingCommand takes:
@@ -186,11 +184,11 @@ impl<H: SmtCommandHandler> SmtParse<H> for Infallible {
     type Result = ();
 
     #[inline]
-    fn parse(
+    fn parse<'a, C: SmtProduce<'a>>(
         &mut self,
         _handler: &mut H,
         _parse_state: &mut SmtParseState<H>,
-        _cursor: &mut SmtBatchCursor,
+        _cursor: &mut C,
     ) -> Result<ControlFlow<()>, SmtParseError<H::Error>> {
         match *self {}
     }
@@ -230,21 +228,21 @@ where
     }
 }
 
-impl<H: SmtCommandHandler, C: SmtCommandRule<H>> SmtParse<H> for SmtCommandPayloadParser<H, C> {
+impl<H: SmtCommandHandler, R: SmtCommandRule<H>> SmtParse<H> for SmtCommandPayloadParser<H, R> {
     type Result = ();
 
     #[inline]
-    fn parse(
+    fn parse<'a, C: SmtProduce<'a>>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut SmtBatchCursor,
+        cursor: &mut C,
     ) -> Result<ControlFlow<()>, SmtParseError<H::Error>> {
         match self.parser.parse(handler, parse_state, cursor)? {
             ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
             ControlFlow::Break(result) => {
                 // the command ends at the last consumed token
-                handle_err(C::handle(handler, result))?;
+                handle_err(R::handle(handler, result))?;
                 Ok(ControlFlow::Break(()))
             }
         }
@@ -256,7 +254,7 @@ mod tests {
     use super::*;
     use crate::{
         SmtSpan, SmtSyntaxChecker,
-        token::{InnerCategory, SmtToken},
+        token::{InnerCategory, SmtBatchCursor, SmtToken},
     };
 
     #[test]

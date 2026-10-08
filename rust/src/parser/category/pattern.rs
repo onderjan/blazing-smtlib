@@ -7,8 +7,8 @@ use crate::{
         SmtSyntaxErrorKind, TextHandle, parse_by_token,
     },
     token::{
-        SmtBatchCursor, SmtGeneralReserved, SmtReserved, SmtSyntaxToken, SmtToken,
-        SmtTokenCategory, SmtProduce, SmtVersion,
+        SmtGeneralReserved, SmtProduce, SmtReserved, SmtSyntaxToken, SmtToken, SmtTokenCategory,
+        SmtVersion,
     },
 };
 
@@ -69,11 +69,11 @@ impl Default for SmtSimplePatternParser {
 impl<H: SmtHandler> SmtParse<H> for SmtSimplePatternParser {
     type Result = SmtSimplePatternBuf;
 
-    fn parse(
+    fn parse<'a, C: SmtProduce<'a>>(
         &mut self,
         _handler: &mut H,
         _parse_state: &mut SmtParseState<H>,
-        cursor: &mut SmtBatchCursor,
+        cursor: &mut C,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         let Some(token) = cursor.next() else {
             return Ok(ControlFlow::Continue(()));
@@ -111,11 +111,11 @@ impl<H: SmtHandler> SmtParse<H> for SmtPatternParser<H> {
     type Result = SmtPatternBuf;
 
     #[inline]
-    fn parse(
+    fn parse<'a, C: SmtProduce<'a>>(
         &mut self,
         _handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut SmtBatchCursor,
+        cursor: &mut C,
     ) -> Result<ControlFlow<SmtPatternBuf, ()>, SmtParseError<H::Error>> {
         // progress the slot
         let SmtParseState {

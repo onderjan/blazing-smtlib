@@ -9,7 +9,8 @@ use crate::{
         category::SmtPairParser, handle_err, parse_by_token,
     },
     token::{
-        SmtBatchCursor, SmtGeneralReserved, SmtReserved, SmtSyntaxToken, SmtToken, SmtVersion,
+        SmtBatchCursor, SmtGeneralReserved, SmtProduce, SmtReserved, SmtSyntaxToken, SmtToken,
+        SmtVersion,
     },
 };
 
@@ -97,11 +98,11 @@ impl<H: SmtCommandHandler> Default for DatatypeParser<H> {
 impl<H: SmtCommandHandler> SmtParse<H> for DatatypeParser<H> {
     type Result = ();
 
-    fn parse(
+    fn parse<'a, C: SmtProduce<'a>>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut SmtBatchCursor,
+        cursor: &mut C,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         parse_by_token(cursor, |version, token| {
             self.progress(handler, parse_state, version, token)
@@ -268,11 +269,11 @@ impl<H: SmtCommandHandler> DeclareDatatypesParser<H> {
 impl<H: SmtCommandHandler> SmtParse<H> for DeclareDatatypesParser<H> {
     type Result = ();
 
-    fn parse(
+    fn parse<'a, C: SmtProduce<'a>>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut SmtBatchCursor,
+        cursor: &mut C,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         parse_by_token(cursor, |version, token| {
             self.progress(handler, parse_state, version, token)
@@ -370,11 +371,11 @@ impl<H: SmtCommandHandler> Default for DeclareDatatypeParser<H> {
 impl<H: SmtCommandHandler> SmtParse<H> for DeclareDatatypeParser<H> {
     type Result = ();
 
-    fn parse(
+    fn parse<'a, C: SmtProduce<'a>>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut SmtBatchCursor,
+        cursor: &mut C,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         parse_by_token(cursor, |version, token| {
             self.progress(handler, parse_state, version, token)

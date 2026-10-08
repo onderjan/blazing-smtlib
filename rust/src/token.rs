@@ -295,8 +295,20 @@ pub trait SmtProduce<'a> {
 
     /// Returns the next token (if any) without consuming it.
     ///
+    /// Peeking must return [`Option::Some`] containing
+    /// the next token that would be consumed if there
+    /// is some such token waiting.
+    ///
     /// Do not forget to consume the token later if it should be taken.
     fn peek(&self) -> Option<SmtToken<'a>>;
+
+    /// Returns whether the producer has no tokens left to consume.
+    ///
+    /// This must be true exactly if [`SmtProduce::peek`] or
+    /// [`SmtProduce::next`] would produce [`Option::None`].
+    fn is_empty(&self) -> bool {
+        self.peek().is_none()
+    }
 
     /// Attempts to consume several tokens at once (lookahead).
     ///
@@ -335,6 +347,12 @@ pub trait SmtProduce<'a> {
 pub trait SmtLookahead<'a> {
     /// Looks at the next token and advances the window.
     fn next(&mut self) -> Option<SmtToken<'a>>;
+}
+
+impl<'a> SmtLookahead<'a> for () {
+    fn next(&mut self) -> Option<SmtToken<'a>> {
+        None
+    }
 }
 
 /// A cursor into a batch of tokens, from which elements are consumed sequentially.
@@ -547,9 +565,9 @@ pub trait SmtConsume {
     ///
     /// If the consumer returns [`Result::Err`], it has failed at the last
     /// consumed token. The state of the consumer is unspecified.
-    fn consume(
+    fn consume<'a, C: SmtProduce<'a>>(
         &mut self,
-        cursor: &mut SmtBatchCursor<'_>,
+        cursor: &mut C,
     ) -> Result<ControlFlow<Self::Result>, Self::Error>;
 }
 
@@ -560,9 +578,9 @@ impl<T: SmtConsume + ?Sized> SmtConsume for &mut T {
     const IS_CONCRETE: bool = T::IS_CONCRETE;
 
     #[inline]
-    fn consume(
+    fn consume<'a, C: SmtProduce<'a>>(
         &mut self,
-        cursor: &mut SmtBatchCursor<'_>,
+        cursor: &mut C,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         (**self).consume(cursor)
     }

@@ -6,9 +6,7 @@ use crate::{
         Arena, IdentHandle, IdentSlot, SmtParse, SmtParseError, SmtParseState, SmtSyntaxErrorKind,
         handle_err, parse_by_token,
     },
-    token::{
-        SmtBatchCursor, SmtGeneralReserved, SmtReserved, SmtSyntaxToken, SmtToken, SmtVersion,
-    },
+    token::{SmtGeneralReserved, SmtProduce, SmtReserved, SmtSyntaxToken, SmtToken, SmtVersion},
 };
 
 /// A parser that reads an SMT-LIB sort.
@@ -37,11 +35,11 @@ impl<H: SmtHandler> SmtParse<H> for SmtSortParser<H> {
     type Result = H::Sort;
 
     #[inline]
-    fn parse(
+    fn parse<'a, C: SmtProduce<'a>>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut SmtBatchCursor,
+        cursor: &mut C,
     ) -> Result<ControlFlow<H::Sort>, SmtParseError<H::Error>> {
         // progress the slot, giving it the ident slot it delegates to
         let SmtParseState {

@@ -6,9 +6,7 @@ use crate::{
         Arena, IdentHandle, IndexHandle, SmtParse, SmtParseError, SmtParseState,
         SmtSyntaxErrorKind, TextHandle, parse_by_token,
     },
-    token::{
-        SmtBatchCursor, SmtGeneralReserved, SmtReserved, SmtSyntaxToken, SmtToken, SmtVersion,
-    },
+    token::{SmtGeneralReserved, SmtProduce, SmtReserved, SmtSyntaxToken, SmtToken, SmtVersion},
 };
 
 /// A parser that reads an SMT-LIB identifier.
@@ -35,11 +33,11 @@ impl<H: SmtHandler> SmtParse<H> for SmtIdentParser {
     type Result = SmtIdentBuf;
 
     #[inline]
-    fn parse(
+    fn parse<'a, C: SmtProduce<'a>>(
         &mut self,
         _handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut SmtBatchCursor,
+        cursor: &mut C,
     ) -> Result<ControlFlow<SmtIdentBuf, ()>, SmtParseError<H::Error>> {
         // progress the slot over the arena, returning an owned identifier
         let SmtParseState {

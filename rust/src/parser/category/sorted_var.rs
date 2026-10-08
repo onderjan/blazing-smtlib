@@ -6,7 +6,7 @@ use crate::{
         Arena, IdentSlot, SmtCloseParenParser, SmtOpenParenParser, SmtParse, SmtParseError,
         SmtParseState, SmtSyntaxErrorKind, SortSlot, TextHandle, parse_by_token,
     },
-    token::{SmtBatchCursor, SmtSyntaxToken, SmtToken, SmtVersion},
+    token::{SmtProduce, SmtSyntaxToken, SmtToken, SmtVersion},
 };
 
 /// Parses a sorted variable: parentheses-enclosed pair of a symbol and a sort.
@@ -35,11 +35,11 @@ impl<H: SmtHandler> SmtParse<H> for SmtSortedVarParser<H> {
     type Result = (SmtSymbolBuf, H::Sort);
 
     #[inline]
-    fn parse(
+    fn parse<'a, C: SmtProduce<'a>>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut SmtBatchCursor,
+        cursor: &mut C,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         // progress the slot, giving it the sort and ident slots it delegates to
         let SmtParseState {

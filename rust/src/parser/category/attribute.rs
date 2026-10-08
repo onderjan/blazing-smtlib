@@ -7,7 +7,7 @@ use crate::{
         SmtSyntaxErrorKind, TextHandle, category::parse_special_constant, handle_err,
         parse_by_token,
     },
-    token::{SmtBatchCursor, SmtSyntaxToken, SmtToken, SmtTokenCategory, SmtVersion},
+    token::{SmtProduce, SmtSyntaxToken, SmtToken, SmtTokenCategory, SmtVersion},
 };
 
 /// A parser that reads an SMT-LIB attribute followed by a closing parenthesis.
@@ -35,11 +35,11 @@ impl<H: SmtHandler> Default for SmtClosedAttributeParser<H> {
 impl<H: SmtHandler> SmtParse<H> for SmtClosedAttributeParser<H> {
     type Result = H::Attribute;
 
-    fn parse(
+    fn parse<'a, C: SmtProduce<'a>>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut SmtBatchCursor,
+        cursor: &mut C,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<<H as SmtHandler>::Error>> {
         let SmtParseState {
             attribute_slot,
@@ -84,11 +84,11 @@ impl<H: SmtHandler> Default for SmtClosedMultipleAttributeParser<H> {
 impl<H: SmtHandler> SmtParse<H> for SmtClosedMultipleAttributeParser<H> {
     type Result = Vec<H::Attribute>;
 
-    fn parse(
+    fn parse<'a, C: SmtProduce<'a>>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut SmtBatchCursor,
+        cursor: &mut C,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<<H as SmtHandler>::Error>> {
         let SmtParseState {
             attribute_slot,

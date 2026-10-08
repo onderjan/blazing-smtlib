@@ -4,9 +4,7 @@ use crate::{
     SmtHandler, SmtKeyword, SmtKeywordBuf, SmtNumeral, SmtNumeralBuf, SmtStringContent,
     SmtStringContentBuf, SmtSymbolBuf,
     parser::{SmtParse, SmtParseError, SmtParseState, SmtSyntaxErrorKind},
-    token::{
-        SmtBatchCursor, SmtSyntaxToken, SmtToken, SmtTokenCategory, SmtProduce, SmtVersion,
-    },
+    token::{SmtProduce, SmtSyntaxToken, SmtToken, SmtTokenCategory, SmtVersion},
 };
 
 pub struct SmtSymbolParser;
@@ -41,11 +39,11 @@ impl SmtSymbolParser {
 impl<H: SmtHandler> SmtParse<H> for SmtSymbolParser {
     type Result = SmtSymbolBuf;
 
-    fn parse(
+    fn parse<'a, C: SmtProduce<'a>>(
         &mut self,
         _handler: &mut H,
         _parse_state: &mut SmtParseState<H>,
-        cursor: &mut SmtBatchCursor,
+        cursor: &mut C,
     ) -> Result<ControlFlow<Self::Result, ()>, SmtParseError<H::Error>> {
         let Some(token) = cursor.next() else {
             return Ok(ControlFlow::Continue(()));
@@ -95,11 +93,11 @@ macro_rules! token_parser {
         impl<H: SmtHandler> SmtParse<H> for $parser {
             type Result = $result;
 
-            fn parse(
+            fn parse<'a, C: SmtProduce<'a>>(
                 &mut self,
                 _handler: &mut H,
                 _parse_state: &mut SmtParseState<H>,
-                cursor: &mut SmtBatchCursor,
+                cursor: &mut C,
             ) -> Result<ControlFlow<Self::Result, ()>, SmtParseError<H::Error>> {
                 let Some(token) = cursor.next() else {
                     return Ok(ControlFlow::Continue(()));
