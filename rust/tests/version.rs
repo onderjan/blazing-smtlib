@@ -295,32 +295,22 @@ fn only_the_set_info_attribute_declares_a_version() {
 #[test]
 fn a_version_that_is_not_supported_is_rejected() {
     // the value must be a decimal that names a version the posture allows;
-    // the error is at the value, or at what stands in its place, and is
-    // raised once the command is complete
-    for (value, end) in [
+    // the error is raised once the command is complete, so it is at the
+    // command's closing parenthesis, the last token consumed
+    for value in [
         // a version that is not allowed by default
-        ("2.0", 30),
-        // versions the library does not know, and decimals that are no versions
-        ("1.2", 30),
-        ("2.8", 30),
-        ("3.0", 30),
-        ("2.60", 31),
-        ("2.06", 31),
-        // a version in another token kind
-        ("2", 28),
-        ("\"2.6\"", 32),
-        ("|2.6|", 32),
-        ("v2.6", 31),
-        ("(2.6)", 28),
-        // no value at all
-        ("", 28),
+        "2.0", // versions the library does not know, and decimals that are no versions
+        "1.2", "2.8", "3.0", "2.60", "2.06", // a version in another token kind
+        "2", "\"2.6\"", "|2.6|", "v2.6", "(2.6)", // no value at all
+        "",
     ] {
         let input = format!("(set-info :smt-lib-version {value})");
+        let close = input.len() as u64 - 1;
         assert_syntax_error(
             read_default(&input),
             SmtSyntaxErrorKind::UnsupportedVersion,
-            27,
-            end,
+            close,
+            close + 1,
         );
     }
 
@@ -359,7 +349,7 @@ fn a_version_that_is_not_supported_is_rejected() {
             let input = format!("(set-info :smt-lib-version {declared})");
             let result = read(&input, SmtVersion::V2_7, without.clone());
             if declared == spelling {
-                assert_syntax_error(result, SmtSyntaxErrorKind::UnsupportedVersion, 27, 30);
+                assert_syntax_error(result, SmtSyntaxErrorKind::UnsupportedVersion, 30, 31);
             } else {
                 assert_eq!(result, Ok(()), "{declared} without {excluded:?}");
             }
@@ -369,7 +359,7 @@ fn a_version_that_is_not_supported_is_rejected() {
         builder.clear_allowed();
     });
     let result = read("(set-info :smt-lib-version 2.7)", SmtVersion::V2_7, none);
-    assert_syntax_error(result, SmtSyntaxErrorKind::UnsupportedVersion, 27, 30);
+    assert_syntax_error(result, SmtSyntaxErrorKind::UnsupportedVersion, 30, 31);
 }
 
 #[test]
@@ -390,8 +380,8 @@ fn the_number_of_declarations_is_limited() {
         assert_syntax_error(
             read_default(input),
             SmtSyntaxErrorKind::TooManyVersionDeclarations(1),
-            59,
             62,
+            63,
         );
     }
 
@@ -407,8 +397,8 @@ fn the_number_of_declarations_is_limited() {
     assert_syntax_error(
         result,
         SmtSyntaxErrorKind::TooManyVersionDeclarations(0),
-        27,
         30,
+        31,
     );
     assert_eq!(
         read("(set-info :status sat)", SmtVersion::V2_7, zero),
@@ -424,8 +414,8 @@ fn the_number_of_declarations_is_limited() {
     assert_syntax_error(
         read(&three, SmtVersion::V2_7, up_to_two),
         SmtSyntaxErrorKind::TooManyVersionDeclarations(2),
-        91,
         94,
+        95,
     );
     let unlimited = posture(|builder| {
         builder.set_max_declarations(None);
@@ -442,7 +432,7 @@ fn the_number_of_declarations_is_limited() {
 
     // a rejected version is reported before the limit
     let result = read_default("(set-info :smt-lib-version 2.6)(set-info :smt-lib-version 2.0)");
-    assert_syntax_error(result, SmtSyntaxErrorKind::UnsupportedVersion, 58, 61);
+    assert_syntax_error(result, SmtSyntaxErrorKind::UnsupportedVersion, 61, 62);
 }
 
 #[test]
@@ -485,7 +475,7 @@ fn the_version_and_the_declaration_count_reset_with_the_input() {
 #[test]
 fn a_command_parser_reports_the_declaration_without_applying_it() {
     // switching is the script parser's job: the one-command parser has nothing
-    // to switch, so it finishes with the declared version and its span, applies
+    // to switch, so it finishes with the declared version, applies
     // no posture, and the reader is back in its initial version for the next input
     let mut handler = SmtSyntaxChecker;
     let mut reader =
@@ -505,10 +495,7 @@ fn a_command_parser_reports_the_declaration_without_applying_it() {
         for _ in 0..2 {
             let input = format!("(set-info :smt-lib-version {spelling})");
             match stop(input.as_bytes()).expect("a declaration of a known version") {
-                SmtCommandOutcome::SetVersion(declared, span) => {
-                    assert_eq!(declared, version);
-                    assert_eq!((span.start().offset(), span.end().offset()), (27, 30));
-                }
+                SmtCommandOutcome::SetVersion(declared) => assert_eq!(declared, version),
                 other => panic!("expected a version declaration, got {other:?}"),
             }
         }

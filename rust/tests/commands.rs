@@ -1797,13 +1797,13 @@ fn declare_datatype_and_declare_datatypes_produce_identical_events() {
 
 #[test]
 fn declare_datatype_handler_errors_point_at_the_triggering_token() {
-    // start_declare_datatypes is deferred until the arity is known,
-    // but the error is about the name, so it points at the name
+    // start_declare_datatypes is deferred until the arity is known, so its error
+    // is at the token that determines it: the first constructor's opening parenthesis
     let handler = assert_handler_error(
         b"(declare-datatype Forbidden ((a)))",
         "forbidden datatype name",
-        18,
-        27,
+        29,
+        30,
     );
     assert!(handler.events.is_empty());
 

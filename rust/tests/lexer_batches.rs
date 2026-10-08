@@ -269,7 +269,7 @@ fn into_cause(err: SmtLexError<()>) -> RunError {
         "a lexer that stops at its first error does not continue the input"
     );
     match err.into_cause() {
-        SmtLexErrorCause::Lexical(err) => RunError::Lexical(*err.kind()),
+        SmtLexErrorCause::Lexical(kind) => RunError::Lexical(kind),
         SmtLexErrorCause::Consumer(()) => RunError::Consumer,
     }
 }

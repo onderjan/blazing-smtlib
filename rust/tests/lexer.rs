@@ -8,7 +8,7 @@ use std::ops::ControlFlow;
 
 use blazing_smtlib::{
     SmtSpan,
-    lexer::{SmtLexError, SmtLexErrorCause, SmtLexer, SmtLexicalError, SmtLexicalErrorKind},
+    lexer::{SmtLexError, SmtLexErrorCause, SmtLexer, SmtLexicalErrorKind},
     token::{
         SmtBatchCursor, SmtConsume, SmtGeneralReserved, SmtReserved, SmtTokenCategory, SmtVersion,
     },
@@ -34,10 +34,10 @@ impl SmtConsume for TakeTokens {
     }
 }
 
-/// Extracts the lexer error from a lex error whose handler cannot fail.
-fn into_lexer_error(err: SmtLexError<Infallible>) -> SmtLexicalError {
+/// Extracts the lexical error kind from a lex error whose handler cannot fail.
+fn into_lexer_error(err: SmtLexError<Infallible>) -> SmtLexicalErrorKind {
     match err.into_cause() {
-        SmtLexErrorCause::Lexical(err) => err,
+        SmtLexErrorCause::Lexical(kind) => kind,
         SmtLexErrorCause::Consumer(never) => match never {},
     }
 }

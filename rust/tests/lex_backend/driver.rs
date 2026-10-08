@@ -358,9 +358,9 @@ fn drive<const WHITESPACE: bool, R: SmtLexRecovery<Scripted<WHITESPACE>>>(
 
             let continues = err.continues_from();
             let mut line = match err.cause() {
-                SmtLexErrorCause::Lexical(err) => format!(
+                SmtLexErrorCause::Lexical(kind) => format!(
                     "err {:?} {} {}",
-                    err.kind(),
+                    kind,
                     location(err.span().start()),
                     location(err.span().end()),
                 ),

@@ -231,16 +231,16 @@ fn rust_lex_as<const WHITESPACE: bool>(version: SmtVersion, feeds: &[Feed<'_>]) 
             };
             match result {
                 Ok(_) => locations.push(loc(lexer.current_location())),
-                Err(err) => match err.into_cause() {
-                    SmtLexErrorCause::Lexical(err) => {
+                Err(err) => match (err.span(), err.into_cause()) {
+                    (span, SmtLexErrorCause::Lexical(kind)) => {
                         error = Some(LexedError {
-                            kind: *err.kind(),
-                            start: loc(err.span().start()),
-                            end: loc(err.span().end()),
+                            kind,
+                            start: loc(span.start()),
+                            end: loc(span.end()),
                         });
                         break;
                     }
-                    SmtLexErrorCause::Consumer(never) => match never {},
+                    (_, SmtLexErrorCause::Consumer(never)) => match never {},
                 },
             }
         }
@@ -267,15 +267,15 @@ pub fn rust_lex_all(version: SmtVersion, input: &[u8]) -> Lexed {
         );
         match lexer.lex_all(input) {
             Ok(_) => locations.push(loc(lexer.current_location())),
-            Err(err) => match err.into_cause() {
-                SmtLexErrorCause::Lexical(err) => {
+            Err(err) => match (err.span(), err.into_cause()) {
+                (span, SmtLexErrorCause::Lexical(kind)) => {
                     error = Some(LexedError {
-                        kind: *err.kind(),
-                        start: loc(err.span().start()),
-                        end: loc(err.span().end()),
+                        kind,
+                        start: loc(span.start()),
+                        end: loc(span.end()),
                     });
                 }
-                SmtLexErrorCause::Consumer(never) => match never {},
+                (_, SmtLexErrorCause::Consumer(never)) => match never {},
             },
         }
     }

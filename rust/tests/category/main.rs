@@ -411,22 +411,20 @@ fn run_count_from<H: SmtHandler<Error = Infallible>, P: SmtParse<H>>(
         unconsumed: 0,
     };
     let mut lexer = SmtLexer::new(&mut drive, SmtVersion::V2_7);
-    match lexer.lex_all(input).map_err(|err| err.into_cause()) {
+    match lexer
+        .lex_all(input)
+        .map_err(|err| (err.span(), err.into_cause()))
+    {
         Ok(_) => {}
-        Err(SmtLexErrorCause::Consumer(err)) => {
-            let span = err.span();
+        Err((span, SmtLexErrorCause::Consumer(err))) => {
             return Err(match err.into_cause() {
                 SmtParseErrorCause::Syntax(kind) => (kind, span),
                 // the handler never fails
                 SmtParseErrorCause::Handler(err) => match err {},
             });
         }
-        Err(SmtLexErrorCause::Lexical(err)) => {
-            panic!(
-                "test input {:?} must lex, got {:?}",
-                text(input),
-                err.kind()
-            )
+        Err((_, SmtLexErrorCause::Lexical(kind))) => {
+            panic!("test input {:?} must lex, got {kind:?}", text(input))
         }
     }
     drop(lexer);
