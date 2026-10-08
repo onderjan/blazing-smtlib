@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtAttributeValue, SmtHandler, SmtKeyword, SmtSpan,
+    SmtAttributeValue, SmtHandler, SmtKeyword,
     parser::{
         Arena, SExprSlot, SmtCloseParenParser, SmtParse, SmtParseError, SmtParseState,
         SmtSyntaxErrorKind, TextHandle, category::parse_special_constant, handle_err,
@@ -125,11 +125,7 @@ pub(crate) trait AttributeCollection<H: SmtHandler + ?Sized> {
     fn next_allowed(num_elements: usize) -> bool;
 
     /// Finishes the collection of the attributes stored in the arena from `start` onward.
-    fn finish(
-        arena: &mut Arena<H>,
-        start: usize,
-        span: SmtSpan,
-    ) -> Result<Self::Output, SmtParseError<H::Error>>;
+    fn finish(arena: &mut Arena<H>, start: usize) -> Result<Self::Output, SmtParseError<H::Error>>;
 }
 
 /// Attribute-parsing state.
@@ -185,11 +181,10 @@ impl AttributeSlot {
         version: SmtVersion,
         token: SmtToken,
     ) -> Result<ControlFlow<C::Output>, SmtParseError<H::Error>> {
-        let span = token.span();
         if !C::next_allowed(self.num_attributes) {
             // no more attributes are allowed, just expect a closing parenthesis
             SmtCloseParenParser::expect(token)?;
-            return Ok(ControlFlow::Break(self.finish::<H, C>(arena, span)?));
+            return Ok(ControlFlow::Break(self.finish::<H, C>(arena)?));
         }
 
         let mut state = State::Start;
@@ -205,7 +200,7 @@ impl AttributeSlot {
                 match token.syntax(version) {
                     SmtSyntaxToken::ParenClose => {
                         // finish the attribute
-                        return Ok(ControlFlow::Break(self.finish::<H, C>(arena, span)?));
+                        return Ok(ControlFlow::Break(self.finish::<H, C>(arena)?));
                     }
                     SmtSyntaxToken::Keyword(keyword) => {
                         // we received an attribute name, store it in the arena text
@@ -214,7 +209,6 @@ impl AttributeSlot {
                     _ => {
                         return Err(SmtParseError::category_error(
                             SmtSyntaxErrorKind::ExpectedAttribute,
-                            span,
                         ));
                     }
                 }
@@ -261,7 +255,6 @@ impl AttributeSlot {
                         } else {
                             return Err(SmtParseError::category_error(
                                 SmtSyntaxErrorKind::ExpectedAttribute,
-                                span,
                             ));
                         }
                     }
@@ -269,7 +262,7 @@ impl AttributeSlot {
 
                 // handle the attribute with its name handed over
                 let attribute = arena.hand_over_keyword(name, |name| {
-                    handle_err(handler.handle_attribute(name, value), span)
+                    handle_err(handler.handle_attribute(name, value))
                 })?;
                 // push the handled attribute to the arena
                 arena.attributes.push(attribute);
@@ -281,7 +274,7 @@ impl AttributeSlot {
                     }
                     Decision::Break => {
                         // break
-                        return Ok(ControlFlow::Break(self.finish::<H, C>(arena, span)?));
+                        return Ok(ControlFlow::Break(self.finish::<H, C>(arena)?));
                     }
                     Decision::StartNextAttribute(keyword) => {
                         // check if we actually can start a next keyword
@@ -289,7 +282,6 @@ impl AttributeSlot {
                             // it turns out that we actually expected a closing parenthesis
                             return Err(SmtParseError::category_error(
                                 SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose]),
-                                span,
                             ));
                         }
                         // move after name, stored in the arena text
@@ -311,7 +303,7 @@ impl AttributeSlot {
                         arena_s_exprs_start,
                         |name, s_exprs| {
                             let value = SmtAttributeValue::SExprs(s_exprs);
-                            handle_err(handler.handle_attribute(name, Some(value)), span)
+                            handle_err(handler.handle_attribute(name, Some(value)))
                         },
                     )?;
                     // no additional reset steps necessary, as the state has already been
@@ -345,10 +337,9 @@ impl AttributeSlot {
     fn finish<H: SmtHandler + ?Sized, C: AttributeCollection<H>>(
         &mut self,
         arena: &mut Arena<H>,
-        span: SmtSpan,
     ) -> Result<C::Output, SmtParseError<H::Error>> {
         self.num_attributes = 0;
-        C::finish(arena, self.arena_attributes_start, span)
+        C::finish(arena, self.arena_attributes_start)
     }
 }
 
@@ -361,11 +352,7 @@ impl<H: SmtHandler + ?Sized> AttributeCollection<H> for SingleAttribute {
         num_elements == 0
     }
 
-    fn finish(
-        arena: &mut Arena<H>,
-        start: usize,
-        span: SmtSpan,
-    ) -> Result<Self::Output, SmtParseError<H::Error>> {
+    fn finish(arena: &mut Arena<H>, start: usize) -> Result<Self::Output, SmtParseError<H::Error>> {
         debug_assert!(
             arena.attributes.len() <= start + 1,
             "at most one attribute should be parsed"
@@ -374,7 +361,6 @@ impl<H: SmtHandler + ?Sized> AttributeCollection<H> for SingleAttribute {
         if arena.attributes.len() == start {
             return Err(SmtParseError::category_error(
                 SmtSyntaxErrorKind::ExpectedAttribute,
-                span,
             ));
         }
         Ok(arena
@@ -397,7 +383,6 @@ impl<H: SmtHandler + ?Sized> AttributeCollection<H> for MultipleAttributes {
     fn finish(
         _arena: &mut Arena<H>,
         start: usize,
-        _span: SmtSpan,
     ) -> Result<Self::Output, SmtParseError<H::Error>> {
         Ok(start)
     }

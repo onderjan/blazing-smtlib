@@ -97,10 +97,9 @@ impl<H: SmtCommandHandler> RecursiveBodyParser<H> {
         version: SmtVersion,
         token: SmtToken,
     ) -> Result<ControlFlow<()>, SmtParseError<H::Error>> {
-        let span = token.span();
         if !self.is_inner {
             // signal the handler that we are starting a body term
-            handle_err(handler.start_recursive_body(), span)?;
+            handle_err(handler.start_recursive_body())?;
             self.is_inner = true;
         }
 
@@ -112,7 +111,7 @@ impl<H: SmtCommandHandler> RecursiveBodyParser<H> {
             ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
             ControlFlow::Break(term) => {
                 // signal the handler that the body term has ended
-                handle_err(handler.end_recursive_body(term), span)?;
+                handle_err(handler.end_recursive_body(term))?;
                 // reset and break
                 self.is_inner = false;
                 Ok(ControlFlow::Break(()))
@@ -179,7 +178,6 @@ impl<H: SmtCommandHandler> DefineFunsRecParser<H> {
         version: SmtVersion,
         token: SmtToken,
     ) -> Result<ControlFlow<()>, SmtParseError<H::Error>> {
-        let span = token.span();
         match self.state {
             DefineFunsRecState::Signatures => {
                 // parse the signatures
@@ -192,7 +190,6 @@ impl<H: SmtCommandHandler> DefineFunsRecParser<H> {
                     if signatures.is_empty() {
                         return Err(SmtParseError::category_error(
                             SmtSyntaxErrorKind::EmptyFunctionSignatures,
-                            span,
                         ));
                     }
 
@@ -200,7 +197,7 @@ impl<H: SmtCommandHandler> DefineFunsRecParser<H> {
                     self.bodies_parser.set_maximum(signatures.len());
 
                     // start recursive function bodies in the handler, passing the signatures
-                    handle_err(handler.start_define_funs_rec(signatures), span)?;
+                    handle_err(handler.start_define_funs_rec(signatures))?;
                     // move to parsing the bodies
                     self.state = DefineFunsRecState::Bodies;
                 }
@@ -218,14 +215,13 @@ impl<H: SmtCommandHandler> DefineFunsRecParser<H> {
                         // not enough bodies processed
                         return Err(SmtParseError::category_error(
                             SmtSyntaxErrorKind::ExpectedFunctionBody,
-                            span,
                         ));
                     }
 
                     // end the recursive function definitions in the handler, reset, and break
                     // the bodies parser can have a changed number of maximum elements,
                     // but it will be changed before it is used next time
-                    handle_err(handler.end_define_funs_rec(), span)?;
+                    handle_err(handler.end_define_funs_rec())?;
                     self.state = DefineFunsRecState::Signatures;
                     return Ok(ControlFlow::Break(()));
                 }

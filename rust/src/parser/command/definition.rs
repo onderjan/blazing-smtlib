@@ -72,12 +72,8 @@ impl<H: SmtCommandHandler, D: Definition<H>> SmtParse<H> for DefinitionParser<H,
             match self.signature_parser.parse(handler, parse_state, cursor)? {
                 ControlFlow::Continue(()) => return Ok(ControlFlow::Continue(())),
                 ControlFlow::Break(signature) => {
-                    let span = cursor
-                        .last_consumed()
-                        .expect("a finished signature parser must have consumed a token")
-                        .span();
                     // start the body in the handler and move to parsing the body
-                    handle_err(D::start(handler, signature), span)?;
+                    handle_err(D::start(handler, signature))?;
                     self.state = DefinitionParserState::Body;
                 }
             }
@@ -86,12 +82,8 @@ impl<H: SmtCommandHandler, D: Definition<H>> SmtParse<H> for DefinitionParser<H,
         match self.body_parser.parse(handler, parse_state, cursor)? {
             ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
             ControlFlow::Break(body) => {
-                let span = cursor
-                    .last_consumed()
-                    .expect("a finished body parser must have consumed a token")
-                    .span();
                 // end the body in the handler, reset, and break
-                handle_err(D::end(handler, body), span)?;
+                handle_err(D::end(handler, body))?;
                 self.state = DefinitionParserState::Signature;
                 Ok(ControlFlow::Break(()))
             }

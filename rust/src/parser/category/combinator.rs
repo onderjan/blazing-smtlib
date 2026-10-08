@@ -316,7 +316,6 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtClosedMaximumParser<H, P>
                     cursor.advance(1);
                     return Err(SmtParseError::category_error(
                         SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose]),
-                        peeked.span(),
                     ));
                 }
 

@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtCommandHandler, SmtFunctionSignature, SmtSpan, SmtSymbolBuf,
+    SmtCommandHandler, SmtFunctionSignature, SmtSymbolBuf,
     parser::{
         SmtCloseParenParser, SmtCommandPayloadParser, SmtKeywordParser, SmtNumeralParser,
         SmtParenMultipleParser, SmtParse, SmtParseError, SmtParseState, SmtStringParser,
@@ -121,7 +121,7 @@ macro_rules! standard_commands {
                 let result = match kind {
                     StandardCommandKind::SetInfo => {
                         match self.set_info.parser.take_declared_version() {
-                            Some((version, span)) => SmtCommandOutcome::SetVersion(version, span),
+                            Some(version) => SmtCommandOutcome::SetVersion(version),
                             None => SmtCommandOutcome::Command,
                         }
                     }
@@ -340,15 +340,10 @@ impl<H: SmtCommandHandler> SmtParse<H> for GetValueParser<H> {
         match self.inner.parse(handler, parse_state, cursor)? {
             ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
             ControlFlow::Break(terms) => {
-                // ensure there is at least one term; the list ends at the last consumed token
+                // ensure there is at least one term
                 if terms.is_empty() {
-                    let span = cursor
-                        .last_consumed()
-                        .expect("a finished term list parser must have consumed a token")
-                        .span();
                     return Err(SmtParseError::category_error(
                         SmtSyntaxErrorKind::EmptyGetValueTerms,
-                        span,
                     ));
                 }
                 Ok(ControlFlow::Break(terms))
@@ -365,9 +360,8 @@ impl<H: SmtCommandHandler> SmtParse<H> for GetValueParser<H> {
 /// `:smt-lib-version <version>`, where the version should be a decimal.
 pub(super) struct SetInfoParser {
     state: SetInfoState,
-    declared_version: Option<(SmtVersion, SmtSpan)>,
-    /// Where a value that names no version stands, if the payload declares one.
-    unsupported_version: Option<SmtSpan>,
+    declared_version: Option<SmtVersion>,
+    unsupported_version: bool,
 }
 
 enum SetInfoState {
@@ -385,12 +379,12 @@ impl SetInfoParser {
         Self {
             state: SetInfoState::Name,
             declared_version: None,
-            unsupported_version: None,
+            unsupported_version: false,
         }
     }
 
-    /// Takes the spanned version declared by the last parsed command if it exists.
-    pub(super) fn take_declared_version(&mut self) -> Option<(SmtVersion, SmtSpan)> {
+    /// Takes the version declared by the last parsed command if it exists.
+    pub(super) fn take_declared_version(&mut self) -> Option<SmtVersion> {
         self.declared_version.take()
     }
 }
@@ -448,8 +442,8 @@ impl<H: SmtCommandHandler> SmtParse<H> for SetInfoParser {
                         _ => None,
                     };
                     match declared {
-                        Some(declared) => self.declared_version = Some((declared, token.span())),
-                        None => self.unsupported_version = Some(token.span()),
+                        Some(declared) => self.declared_version = Some(declared),
+                        None => self.unsupported_version = true,
                     }
                     self.state = SetInfoState::Rest;
                 }
@@ -466,10 +460,12 @@ impl<H: SmtCommandHandler> SmtParse<H> for SetInfoParser {
             if flow.is_break() {
                 // the command has ended, the next payload starts with its attribute name
                 self.state = SetInfoState::Name;
-                if let Some(span) = self.unsupported_version.take() {
+                if self.unsupported_version {
+                    // TODO: this was take(), rewrite after tests are done
+                    self.unsupported_version = false;
+
                     return Err(SmtParseError::category_error(
                         SmtSyntaxErrorKind::UnsupportedVersion,
-                        span,
                     ));
                 }
             }
@@ -544,7 +540,6 @@ impl<H: SmtCommandHandler> SmtParse<H> for PropLiteralParser {
                 _ => {
                     return Err(SmtParseError::category_error(
                         SmtSyntaxErrorKind::ExpectedPropositionalLiteral,
-                        token.span(),
                     ));
                 }
             };

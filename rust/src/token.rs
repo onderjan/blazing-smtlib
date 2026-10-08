@@ -409,9 +409,16 @@ impl<'a> SmtBatchCursor<'a> {
         }
     }
 
+    /// Span of the last consumed token in this handover (if any).
+    #[inline]
+    pub fn consumed_span(&self) -> Option<SmtSpan> {
+        self.last_consumed().map(|token| token.span())
+    }
+
     /// Location of the end of the last consumed token in this handover (if any).
     #[inline]
     pub fn consumed_end(&self) -> Option<SmtLocation> {
+        // TODO: replace this by consumed_span
         self.last_consumed().map(|token| token.span().end())
     }
 

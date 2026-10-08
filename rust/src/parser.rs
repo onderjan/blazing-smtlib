@@ -13,7 +13,7 @@ pub use script::*;
 pub use state::*;
 
 use crate::{
-    SmtHandler, SmtSpan,
+    SmtHandler,
     token::{SmtBatchCursor, SmtToken, SmtTokenCategory, SmtVersion},
 };
 
@@ -69,9 +69,9 @@ pub(crate) fn parse_by_token<R, E>(
     Ok(ControlFlow::Continue(()))
 }
 
-/// Error emitted by a parser, including the error span.
+/// Error emitted by a parser.
 #[derive(Debug)]
-pub struct SmtParseError<E>(Box<SmtParseErrorInner<E>>);
+pub struct SmtParseError<E>(Box<SmtParseErrorCause<E>>);
 
 #[derive(Debug)]
 pub enum SmtParseErrorCause<E> {
@@ -125,44 +125,34 @@ pub enum SmtSyntaxErrorKind {
 impl<E> SmtParseError<E> {
     #[cold]
     #[inline(never)]
-    pub(crate) fn new(cause: SmtParseErrorCause<E>, span: SmtSpan) -> Self {
-        // PERFORMANCE: error cause and span are boxed
+    pub(crate) fn new(cause: SmtParseErrorCause<E>) -> Self {
+        // PERFORMANCE: error cause is boxed
         // so that parser results are not unnecessarily large
         // this method boxes them, which forces an allocation
         // so it is is marked cold and never-inline
-        Self(Box::new(SmtParseErrorInner { cause, span }))
+        Self(Box::new(cause))
     }
 
-    pub(crate) fn handler_error(err: E, span: SmtSpan) -> Self {
-        Self::new(SmtParseErrorCause::Handler(err), span)
+    pub(crate) fn handler_error(err: E) -> Self {
+        Self::new(SmtParseErrorCause::Handler(err))
     }
 
-    pub(crate) fn category_error(err: SmtSyntaxErrorKind, span: SmtSpan) -> Self {
-        Self::new(SmtParseErrorCause::Syntax(err), span)
+    pub(crate) fn category_error(err: SmtSyntaxErrorKind) -> Self {
+        Self::new(SmtParseErrorCause::Syntax(err))
     }
 
     pub fn cause(&self) -> &SmtParseErrorCause<E> {
-        &self.0.cause
-    }
-
-    pub fn span(&self) -> SmtSpan {
-        self.0.span
+        &self.0
     }
 
     pub fn into_cause(self) -> SmtParseErrorCause<E> {
-        self.0.cause
+        *self.0
     }
 }
 
-#[derive(Debug)]
-struct SmtParseErrorInner<E> {
-    cause: SmtParseErrorCause<E>,
-    span: SmtSpan,
-}
-
-fn handle_err<O, E>(handled: Result<O, E>, span: SmtSpan) -> Result<O, SmtParseError<E>> {
+fn handle_err<O, E>(handled: Result<O, E>) -> Result<O, SmtParseError<E>> {
     match handled {
         Ok(ok) => Ok(ok),
-        Err(err) => Err(SmtParseError::handler_error(err, span)),
+        Err(err) => Err(SmtParseError::handler_error(err)),
     }
 }

@@ -142,8 +142,6 @@ impl IdentSlot {
         version: SmtVersion,
         token: SmtToken,
     ) -> Result<ControlFlow<IdentHandle, ()>, SmtParseError<E>> {
-        let span = token.span();
-
         match self.state {
             State::Start => {
                 debug_assert!(self.is_pristine(), "must be pristine when starting");
@@ -157,7 +155,7 @@ impl IdentSlot {
                     }
                     _ => {
                         let kind = SmtSyntaxErrorKind::ExpectedIdent;
-                        return Err(SmtParseError::category_error(kind, span));
+                        return Err(SmtParseError::category_error(kind));
                     }
                 }
             }
@@ -171,7 +169,6 @@ impl IdentSlot {
                 } else {
                     return Err(SmtParseError::category_error(
                         SmtSyntaxErrorKind::ExpectedUnderscore,
-                        span,
                     ));
                 }
             }
@@ -184,7 +181,6 @@ impl IdentSlot {
                         } else {
                             return Err(SmtParseError::category_error(
                                 SmtSyntaxErrorKind::ExpectedSymbol,
-                                span,
                             ));
                         }
                     }
@@ -196,7 +192,7 @@ impl IdentSlot {
                                 let indices_start = self.arena_indices_start;
                                 if arena.indices.len() == indices_start {
                                     let kind = SmtSyntaxErrorKind::EmptyIdentIndices;
-                                    return Err(SmtParseError::category_error(kind, span));
+                                    return Err(SmtParseError::category_error(kind));
                                 }
                                 // reset to the starting state
                                 // we already took the name
@@ -220,7 +216,6 @@ impl IdentSlot {
                             _ => {
                                 return Err(SmtParseError::category_error(
                                     SmtSyntaxErrorKind::ExpectedIndexOrCloseParen,
-                                    span,
                                 ));
                             }
                         }

@@ -173,8 +173,6 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
         // The implementation tries to take stored identifiers first
         // so that nothing is taken and put back unnecessarily.
 
-        let span = token.span();
-
         if let Some(qualified_ident) = self.qualified_ident.take() {
             // step 6: after the sort, waiting for ")"
             SmtCloseParenParser::expect(token)?;
@@ -211,7 +209,6 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
                     _ => {
                         return Err(SmtParseError::category_error(
                             SmtSyntaxErrorKind::ExpectedIdent,
-                            span,
                         ));
                     }
                 }
@@ -231,7 +228,6 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
                 _ => {
                     return Err(SmtParseError::category_error(
                         SmtSyntaxErrorKind::ExpectedUnderscoreOrAs,
-                        span,
                     ));
                 }
             },

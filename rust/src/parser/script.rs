@@ -66,12 +66,11 @@ impl<H: SmtCommandHandler> SmtParse<H> for SmtScriptParser<H> {
                 ControlFlow::Break(SmtCommandOutcome::Command) => {
                     // a command has ended: parse the next one
                 }
-                ControlFlow::Break(SmtCommandOutcome::SetVersion(version, span)) => {
+                ControlFlow::Break(SmtCommandOutcome::SetVersion(version)) => {
                     // ensure the version is allowed by the posture
                     if !self.posture.allowed().contains(&version) {
                         return Err(SmtParseError::category_error(
                             SmtSyntaxErrorKind::UnsupportedVersion,
-                            span,
                         ));
                     }
                     if let Some(max_declarations) = self.posture.max_declarations()
@@ -79,7 +78,6 @@ impl<H: SmtCommandHandler> SmtParse<H> for SmtScriptParser<H> {
                     {
                         return Err(SmtParseError::category_error(
                             SmtSyntaxErrorKind::TooManyVersionDeclarations(max_declarations),
-                            span,
                         ));
                     }
                     // allowed, set version on the cursor

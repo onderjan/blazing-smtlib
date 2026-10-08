@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtCommandHandler, SmtDatatypeConstructor, SmtNumeralBuf, SmtSpan, SmtSymbolBuf,
+    SmtCommandHandler, SmtDatatypeConstructor, SmtNumeralBuf, SmtSymbolBuf,
     parser::{
         SmtCloseParenParser, SmtClosedMultipleParser, SmtNumeralParser, SmtOpenParenParser,
         SmtOpenedParser, SmtParenMaximumParser, SmtParenMultipleParser, SmtParenParser, SmtParse,
@@ -49,7 +49,7 @@ enum DatatypeState {
 /// Parser for a datatype.
 struct DatatypeParser<H: SmtCommandHandler> {
     state: DatatypeState,
-    single_introduction: Option<(SmtSymbolBuf, SmtSpan)>,
+    single_introduction: Option<SmtSymbolBuf>,
 
     symbols_parser: SmtParenMultipleParser<H, SmtSymbolParser>,
     constructors_parser: SmtClosedMultipleParser<H, ConstructorParser<H>>,
@@ -69,8 +69,8 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
     ///
     /// This mode calls `start_declare_datatypes` as per the definition of
     /// `declare-datatype`, which depends on the form of the single datatype.
-    fn set_single_datatype_mode(&mut self, name: SmtSymbolBuf, span: SmtSpan) {
-        self.single_introduction = Some((name, span))
+    fn set_single_datatype_mode(&mut self, name: SmtSymbolBuf) {
+        self.single_introduction = Some(name)
     }
 
     /// Starts a datatype, taking into account the "single datatype mode".
@@ -78,17 +78,13 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
         &mut self,
         handler: &mut H,
         params: Vec<SmtSymbolBuf>,
-        span: SmtSpan,
     ) -> Result<(), SmtParseError<H::Error>> {
-        if let Some((name, name_span)) = self.single_introduction.take() {
+        if let Some(name) = self.single_introduction.take() {
             // start declare datatypes with the arity equal to the number of parameters
             let arity = SmtNumeralBuf::from_usize(params.len());
-            handle_err(
-                handler.start_declare_datatypes(vec![(name, arity)]),
-                name_span,
-            )?;
+            handle_err(handler.start_declare_datatypes(vec![(name, arity)]))?;
         }
-        handle_err(handler.start_datatype_declaration(params), span)
+        handle_err(handler.start_datatype_declaration(params))
     }
 }
 
@@ -122,7 +118,6 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
         version: SmtVersion,
         token: SmtToken,
     ) -> Result<ControlFlow<()>, SmtParseError<H::Error>> {
-        let span = token.span();
         let constructors = match self.state {
             DatatypeState::Start => {
                 // expect opening parenthesis and move to deciding the kind
@@ -133,7 +128,7 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
             DatatypeState::Kind => match token.syntax(version) {
                 SmtSyntaxToken::ParenOpen => {
                     // simple constructors, start the datatype with no parameters
-                    self.start_datatype(handler, Vec::new(), span)?;
+                    self.start_datatype(handler, Vec::new())?;
                     self.state = DatatypeState::SimpleConstructors;
                     // this parenthesis already is the start of the constructor,
                     // so we will forward it
@@ -156,7 +151,6 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
                 _ => {
                     return Err(SmtParseError::category_error(
                         SmtSyntaxErrorKind::ExpectedDatatypeKind,
-                        span,
                     ));
                 }
             },
@@ -181,11 +175,10 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
                     if params.is_empty() {
                         return Err(SmtParseError::category_error(
                             SmtSyntaxErrorKind::EmptyDatatypeParameters,
-                            span,
                         ));
                     }
                     // start the datatype with the parameters
-                    self.start_datatype(handler, params, span)?;
+                    self.start_datatype(handler, params)?;
                     // move to parsing the opening parenthesis of parametric constructors
                     self.state = DatatypeState::ParametricOpen;
                 }
@@ -220,7 +213,6 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
             if constructors.is_empty() {
                 return Err(SmtParseError::category_error(
                     SmtSyntaxErrorKind::EmptyDatatypeConstructors,
-                    span,
                 ));
             }
 
@@ -230,7 +222,7 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
                 .map(|(name, selectors)| SmtDatatypeConstructor { name, selectors })
                 .collect();
             // end the datatype
-            handle_err(handler.end_datatype_declaration(constructors), span)?;
+            handle_err(handler.end_datatype_declaration(constructors))?;
             if matches!(self.state, DatatypeState::SimpleConstructors) {
                 // we have already parsed the closing parenthesis
                 // reset and break
@@ -297,7 +289,6 @@ impl<H: SmtCommandHandler> DeclareDatatypesParser<H> {
         version: SmtVersion,
         token: SmtToken,
     ) -> Result<ControlFlow<()>, SmtParseError<H::Error>> {
-        let span = token.span();
         match self.state {
             DeclareDatatypesState::Introductions => {
                 // parse datatype introductions
@@ -310,13 +301,12 @@ impl<H: SmtCommandHandler> DeclareDatatypesParser<H> {
                     if introductions.is_empty() {
                         return Err(SmtParseError::category_error(
                             SmtSyntaxErrorKind::EmptyDatatypeIntroductions,
-                            span,
                         ));
                     }
                     // ensure the datatypes parser is expecting the correct number of elements
                     self.datatypes_parser.set_maximum(introductions.len());
                     // start datatype declarations
-                    handle_err(handler.start_declare_datatypes(introductions), span)?;
+                    handle_err(handler.start_declare_datatypes(introductions))?;
                     self.state = DeclareDatatypesState::Declarations;
                 }
             }
@@ -332,14 +322,13 @@ impl<H: SmtCommandHandler> DeclareDatatypesParser<H> {
                     if datatypes.len() != self.datatypes_parser.max_elements() {
                         return Err(SmtParseError::category_error(
                             SmtSyntaxErrorKind::ExpectedDatatype,
-                            span,
                         ));
                     }
 
                     // end datatypes declarations, reset, and break
                     // the datatypes parser can have a changed number of maximum elements,
                     // but it will be changed before it is used next time
-                    handle_err(handler.end_declare_datatypes(), span)?;
+                    handle_err(handler.end_declare_datatypes())?;
                     self.state = DeclareDatatypesState::Introductions;
                     return Ok(ControlFlow::Break(()));
                 }
@@ -402,12 +391,11 @@ impl<H: SmtCommandHandler> DeclareDatatypeParser<H> {
         version: SmtVersion,
         token: SmtToken,
     ) -> Result<ControlFlow<()>, SmtParseError<H::Error>> {
-        let span = token.span();
         match self.state {
             DeclareDatatypeState::Name => {
                 // parse the datatype name
                 let name = SmtSymbolParser::expect::<H>(version, token)?;
-                self.datatype_parser.set_single_datatype_mode(name, span);
+                self.datatype_parser.set_single_datatype_mode(name);
                 self.state = DeclareDatatypeState::Datatype;
             }
             DeclareDatatypeState::Datatype => {
@@ -417,7 +405,7 @@ impl<H: SmtCommandHandler> DeclareDatatypeParser<H> {
                     &mut SmtBatchCursor::single(version, token),
                 )? {
                     // the single declaration ends the command
-                    handle_err(handler.end_declare_datatypes(), span)?;
+                    handle_err(handler.end_declare_datatypes())?;
                     self.state = DeclareDatatypeState::Name;
                     return Ok(ControlFlow::Break(()));
                 }

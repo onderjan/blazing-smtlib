@@ -54,7 +54,7 @@ impl SmtSimplePatternParser {
                     SmtSyntaxErrorKind::ExpectedSymbol
                 };
 
-                Err(SmtParseError::category_error(kind, token.span()))
+                Err(SmtParseError::category_error(kind))
             }
         }
     }
@@ -186,8 +186,6 @@ impl PatternSlot {
         // The function handles this in reverse order so that nothing
         // is taken and put back unnecessarily.
 
-        let span = token.span();
-
         if let Some(constructor) = self.constructor.take() {
             // step 3: parsing the arguments
             if matches!(token.category(), SmtTokenCategory::ParenClose) {
@@ -195,7 +193,6 @@ impl PatternSlot {
                 if arena.simple_patterns.len() == self.arena_args_start {
                     return Err(SmtParseError::category_error(
                         SmtSyntaxErrorKind::EmptyPatternArguments,
-                        span,
                     ));
                 }
                 // the slot is back in its initial state, the pattern is in the arena
@@ -221,7 +218,6 @@ impl PatternSlot {
             let SmtSyntaxToken::Symbol(constructor) = token.syntax(version) else {
                 return Err(SmtParseError::category_error(
                     SmtSyntaxErrorKind::ExpectedSymbol,
-                    span,
                 ));
             };
             // push the constructor to the arena text and start parsing arguments
@@ -262,7 +258,7 @@ impl PatternSlot {
                 } else {
                     SmtSyntaxErrorKind::ExpectedSymbolOrParenOpen
                 };
-                Err(SmtParseError::category_error(kind, span))
+                Err(SmtParseError::category_error(kind))
             }
         }
     }

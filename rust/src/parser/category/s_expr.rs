@@ -88,7 +88,6 @@ impl SExprSlot {
             debug_assert!(self.is_pristine(), "must be pristine when starting");
         }
 
-        let span = token.span();
         let s_expr = match token.syntax(version) {
             SmtSyntaxToken::Symbol(symbol) => SmtSExpr::Symbol(symbol),
             SmtSyntaxToken::Reserved(reserved) => {
@@ -98,7 +97,6 @@ impl SExprSlot {
                 } else {
                     return Err(SmtParseError::category_error(
                         SmtSyntaxErrorKind::ExpectedSExpr,
-                        span,
                     ));
                 }
             }
@@ -116,14 +114,13 @@ impl SExprSlot {
                     // no last level, all that we received was ")"
                     return Err(SmtParseError::category_error(
                         SmtSyntaxErrorKind::ExpectedSExpr,
-                        span,
                     ));
                 };
                 // the last level exists, we can close it, handing its S-expressions over
                 // (an empty list is allowed)
                 let s_expr = arena
                     .hand_over_s_exprs(last_level.arena_s_exprs_start, |s_exprs| {
-                        handle_err(handler.handle_s_expr(SmtSExpr::SExprs(s_exprs)), span)
+                        handle_err(handler.handle_s_expr(SmtSExpr::SExprs(s_exprs)))
                     })?;
                 return Ok(self.finish(arena, s_expr));
             }
@@ -133,14 +130,13 @@ impl SExprSlot {
                 } else {
                     return Err(SmtParseError::category_error(
                         SmtSyntaxErrorKind::ExpectedSExpr,
-                        span,
                     ));
                 }
             }
         };
 
         // an atom, handed over straight from the token
-        let s_expr = handle_err(handler.handle_s_expr(s_expr), span)?;
+        let s_expr = handle_err(handler.handle_s_expr(s_expr))?;
         Ok(self.finish(arena, s_expr))
     }
 

@@ -1,7 +1,7 @@
 use std::{convert::Infallible, ops::ControlFlow};
 
 use crate::{
-    SmtCommandHandler, SmtSpan, SmtSymbol,
+    SmtCommandHandler, SmtSymbol,
     parser::{SmtParse, SmtParseError, SmtParseState, SmtSyntaxErrorKind, handle_err},
     token::{SmtBatchCursor, SmtReserved, SmtSyntaxToken, SmtTokenCategory, SmtVersion},
 };
@@ -33,7 +33,7 @@ pub enum SmtCommandOutcome {
     /// A command other than special ones was parsed.
     Command,
     /// A version-switch command was parsed.
-    SetVersion(SmtVersion, SmtSpan),
+    SetVersion(SmtVersion),
     /// The exit command was parsed.
     Exit,
     /// The end of the input was reached before a command.
@@ -62,11 +62,10 @@ impl<H: SmtCommandHandler> SmtCommandParser<H> {
     fn start_nonstandard_command(
         handler: &mut H,
         name: SmtSymbol<'_>,
-        span: SmtSpan,
     ) -> Result<CommandParserState<H>, SmtParseError<H::Error>> {
         match handler.nonstandard_command(name) {
             Ok(parser) => Ok(CommandParserState::Nonstandard(parser)),
-            Err(err) => Err(SmtParseError::handler_error(err, span)),
+            Err(err) => Err(SmtParseError::handler_error(err)),
         }
     }
 }
@@ -112,7 +111,6 @@ impl<H: SmtCommandHandler> SmtParse<H> for SmtCommandParser<H> {
                         _ => {
                             return Err(SmtParseError::category_error(
                                 SmtSyntaxErrorKind::ExpectedCommand,
-                                peeked.span(),
                             ));
                         }
                     }
@@ -132,12 +130,11 @@ impl<H: SmtCommandHandler> SmtParse<H> for SmtCommandParser<H> {
                         SmtSyntaxToken::Symbol(name) => {
                             // a symbol (even a quoted one spelled like a standard command)
                             // can only name a nonstandard command
-                            Self::start_nonstandard_command(handler, name, peeked.span())?
+                            Self::start_nonstandard_command(handler, name)?
                         }
                         _ => {
                             return Err(SmtParseError::category_error(
                                 SmtSyntaxErrorKind::ExpectedCommandName,
-                                peeked.span(),
                             ));
                         }
                     };
@@ -244,12 +241,8 @@ impl<H: SmtCommandHandler, C: SmtCommandRule<H>> SmtParse<H> for SmtCommandPaylo
         match self.parser.parse(handler, parse_state, cursor)? {
             ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
             ControlFlow::Break(result) => {
-                // the command ends at the last consumed token, get its span
-                let span = cursor
-                    .last_consumed()
-                    .expect("a finished command parser has consumed a token")
-                    .span();
-                handle_err(C::handle(handler, result), span)?;
+                // the command ends at the last consumed token
+                handle_err(C::handle(handler, result))?;
                 Ok(ControlFlow::Break(()))
             }
         }

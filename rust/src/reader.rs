@@ -24,7 +24,7 @@ use std::{
 use crate::token::{SmtVersion, SmtVersionPosture};
 use crate::{
     SmtCommandHandler, SmtHandler, SmtLocated, SmtSpan,
-    lexer::{SmtLexError, SmtLexErrorCause, SmtLexer, SmtLexicalError, SmtLexicalErrorKind},
+    lexer::{SmtLexError, SmtLexErrorCause, SmtLexer, SmtLexicalErrorKind},
     parser::{
         SmtParse, SmtParseAdapter, SmtParseError, SmtParseErrorCause, SmtScriptParser,
         SmtSyntaxErrorKind,
@@ -77,32 +77,23 @@ impl<E> SmtReadError<E> {
     pub fn into_cause(self) -> SmtReadErrorCause<E> {
         self.cause
     }
-}
 
-impl<E> From<SmtLexError<SmtParseError<E>>> for SmtReadError<E> {
-    fn from(err: SmtLexError<SmtParseError<E>>) -> Self {
-        match err.into_cause() {
-            SmtLexErrorCause::Lexical(err) => err.into(),
-            SmtLexErrorCause::Consumer(err) => err.into(),
-        }
-    }
-}
-
-impl<E> From<SmtLexicalError> for SmtReadError<E> {
-    fn from(err: SmtLexicalError) -> Self {
-        let span = err.span();
-        SmtReadError::new(SmtReadErrorCause::Lexical(err.into_kind()), span)
-    }
-}
-
-impl<E> From<SmtParseError<E>> for SmtReadError<E> {
-    fn from(err: SmtParseError<E>) -> Self {
-        let span = err.span();
+    fn from_parse(err: SmtParseError<E>, span: SmtSpan) -> Self {
         let cause = match err.into_cause() {
             SmtParseErrorCause::Syntax(err) => SmtReadErrorCause::Syntax(err),
             SmtParseErrorCause::Handler(err) => SmtReadErrorCause::Handler(err),
         };
         SmtReadError::new(cause, span)
+    }
+}
+
+impl<E> From<SmtLexError<SmtParseError<E>>> for SmtReadError<E> {
+    fn from(err: SmtLexError<SmtParseError<E>>) -> Self {
+        let span = err.span();
+        match err.into_cause() {
+            SmtLexErrorCause::Lexical(err) => Self::new(SmtReadErrorCause::Lexical(err), span),
+            SmtLexErrorCause::Consumer(err) => Self::from_parse(err, span),
+        }
     }
 }
 

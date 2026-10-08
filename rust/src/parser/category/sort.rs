@@ -117,7 +117,6 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
         version: SmtVersion,
         token: SmtToken,
     ) -> Result<ControlFlow<H::Sort>, SmtParseError<H::Error>> {
-        let span = token.span();
         let flow = match self.state {
             State::Start => {
                 // the start state is also reached between applied sorts, so only
@@ -149,7 +148,6 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
                                 if arena.sorts.len() == last_level.arena_applied_start {
                                     return Err(SmtParseError::category_error(
                                         SmtSyntaxErrorKind::EmptySortApplication,
-                                        span,
                                     ));
                                 }
                                 ControlFlow::Break((
@@ -161,7 +159,6 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
                                 // we just received ")"
                                 return Err(SmtParseError::category_error(
                                     SmtSyntaxErrorKind::ExpectedSort,
-                                    span,
                                 ));
                             }
                         }
@@ -169,7 +166,6 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
                     _ => {
                         return Err(SmtParseError::category_error(
                             SmtSyntaxErrorKind::ExpectedSort,
-                            span,
                         ));
                     }
                 }
@@ -207,7 +203,6 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
                     _ => {
                         return Err(SmtParseError::category_error(
                             SmtSyntaxErrorKind::ExpectedSortInner,
-                            span,
                         ));
                     }
                 };
@@ -240,7 +235,7 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
         // we have parsed a sort, reset the state and hand the sort over
         self.state = State::Start;
         let sort = arena.hand_over_sort(ident, arena_applied_start, |sort| {
-            handle_err(handler.handle_sort(sort), span)
+            handle_err(handler.handle_sort(sort))
         })?;
 
         if !self.levels.is_empty() {

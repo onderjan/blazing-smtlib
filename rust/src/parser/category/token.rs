@@ -27,12 +27,10 @@ impl SmtSymbolParser {
         version: SmtVersion,
         token: SmtToken,
     ) -> Result<SmtSymbolBuf, SmtParseError<H::Error>> {
-        let span = token.span();
         match token.syntax(version) {
             SmtSyntaxToken::Symbol(symbol) => Ok(symbol.into_owned()),
             _ => Err(SmtParseError::category_error(
                 SmtSyntaxErrorKind::ExpectedSymbol,
-                span,
             )),
         }
     }
@@ -87,7 +85,6 @@ macro_rules! token_parser {
                 } else {
                     Err(SmtParseError::category_error(
                         SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::$ty]),
-                        token.span(),
                     ))
                 }
             }

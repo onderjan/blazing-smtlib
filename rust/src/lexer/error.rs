@@ -17,16 +17,11 @@ pub enum SmtLexicalErrorKind {
     MissingDelimiter,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SmtLexicalError {
-    kind: SmtLexicalErrorKind,
-    span: SmtSpan,
-}
-
 /// Error that caused lexing to stop.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SmtLexError<E> {
     cause: SmtLexErrorCause<E>,
+    span: SmtSpan,
     continues_from: Option<SmtLocation>,
 }
 
@@ -34,15 +29,20 @@ pub struct SmtLexError<E> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SmtLexErrorCause<E> {
     /// The input is lexically malformed.
-    Lexical(SmtLexicalError),
+    Lexical(SmtLexicalErrorKind),
     /// The token consumer returned an error.
     Consumer(E),
 }
 
 impl<E> SmtLexError<E> {
-    pub(super) fn new(cause: SmtLexErrorCause<E>, continues_from: Option<SmtLocation>) -> Self {
+    pub(super) fn new(
+        cause: SmtLexErrorCause<E>,
+        span: SmtSpan,
+        continues_from: Option<SmtLocation>,
+    ) -> Self {
         Self {
             cause,
+            span,
             continues_from,
         }
     }
@@ -63,6 +63,11 @@ impl<E> SmtLexError<E> {
         self.cause
     }
 
+    /// Location where the error occurred.
+    pub fn span(&self) -> SmtSpan {
+        self.span
+    }
+
     /// Where the rest of the input is to be fed from if the lexer continues (EXPERIMENTAL).
     ///
     /// If present, the lexer is recovering: it expects the input from this
@@ -76,23 +81,5 @@ impl<E> SmtLexError<E> {
     #[doc(hidden)]
     pub fn continues_from(&self) -> Option<SmtLocation> {
         self.continues_from
-    }
-}
-
-impl SmtLexicalError {
-    pub(super) fn new(kind: SmtLexicalErrorKind, span: SmtSpan) -> Self {
-        Self { kind, span }
-    }
-
-    pub fn kind(&self) -> &SmtLexicalErrorKind {
-        &self.kind
-    }
-
-    pub fn span(&self) -> SmtSpan {
-        self.span
-    }
-
-    pub fn into_kind(self) -> SmtLexicalErrorKind {
-        self.kind
     }
 }

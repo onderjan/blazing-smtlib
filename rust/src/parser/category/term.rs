@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtApplication, SmtHandler, SmtQualifiedIdent, SmtQuantifierKind, SmtSpan, SmtSymbol, SmtTerm,
+    SmtApplication, SmtHandler, SmtQualifiedIdent, SmtQuantifierKind, SmtSymbol, SmtTerm,
     parser::{
         Arena, QualifiedIdentHandle, SmtCloseParenParser, SmtOpenParenParser, SmtParse,
         SmtParseError, SmtParseState, SmtSyntaxErrorKind,
@@ -242,9 +242,9 @@ impl<H: SmtHandler> TermSlot<H> {
                                 ident: parse_state.arena.simple_ident_view(name),
                                 sort: None,
                             });
-                            let term = handle_err(handler.handle_term(term), token.span())?;
+                            let term = handle_err(handler.handle_term(term))?;
                             if let ControlFlow::Break(term) =
-                                Self::finish_term(handler, parse_state, term, token.span())?
+                                Self::finish_term(handler, parse_state, term)?
                             {
                                 return Ok(ControlFlow::Break(term));
                             }
@@ -339,7 +339,6 @@ impl<H: SmtHandler> TermSlot<H> {
         version: SmtVersion,
         token: SmtToken,
     ) -> Result<ControlFlow<H::Term>, SmtParseError<H::Error>> {
-        let span = token.span();
         let term = match parse_state.term_slot.pending.take() {
             Some(pending) => {
                 if pending.is_annotation {
@@ -364,12 +363,11 @@ impl<H: SmtHandler> TermSlot<H> {
                             if arena.attributes.len() == arena_attributes_start {
                                 return Err(SmtParseError::category_error(
                                     SmtSyntaxErrorKind::EmptyAnnotation,
-                                    span,
                                 ));
                             }
                             // produce the annotated term, the attributes are consumed
                             arena.hand_over_attributes(arena_attributes_start, |attributes| {
-                                handle_err(handler.annotate_term(pending.term, attributes), span)
+                                handle_err(handler.annotate_term(pending.term, attributes))
                             })?
                         }
                     }
@@ -389,7 +387,7 @@ impl<H: SmtHandler> TermSlot<H> {
             }
         };
 
-        Self::finish_term(handler, parse_state, term, span)
+        Self::finish_term(handler, parse_state, term)
     }
 }
 
@@ -400,7 +398,6 @@ impl<H: SmtHandler> TermSlot<H> {
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
         term: H::Term,
-        span: SmtSpan,
     ) -> Result<ControlFlow<H::Term>, SmtParseError<H::Error>> {
         // we have parsed a term, set state to start
         let slot = &mut parse_state.term_slot;
@@ -443,7 +440,7 @@ impl<H: SmtHandler> TermSlot<H> {
                         BinderEndKind::Lambda => handler.end_lambda(term),
                         BinderEndKind::Let => handler.end_let(term),
                     };
-                    term = handle_err(handled, span)?;
+                    term = handle_err(handled)?;
                 }
                 // wait for the closing parenthesis
                 slot.pending = Some(Pending {
@@ -462,14 +459,14 @@ impl<H: SmtHandler> TermSlot<H> {
             Level::MatchScrutinee => {
                 // the scrutinee has been parsed, start the match in the handler
                 slot.levels.pop();
-                handle_err(handler.start_match(term), span)?;
+                handle_err(handler.start_match(term))?;
                 // the case terms will be processed on a new level
                 slot.levels.push(Level::MatchCase { num_cases: 0 });
                 slot.state = State::MatchCasesOpen;
             }
             Level::MatchCase { num_cases } => {
                 // a case term has been parsed, end the case in the handler
-                handle_err(handler.end_match_case(term), span)?;
+                handle_err(handler.end_match_case(term))?;
                 // increment the number of cases and move to expect
                 // the closing match case parenthesis
                 *num_cases += 1;
@@ -512,12 +509,11 @@ impl<H: SmtHandler> TermSlot<H> {
                 )? {
                     ControlFlow::Break(qualified_ident) => {
                         // a term that is a qualified identifier, handle it and break
-                        let span = token.span();
                         let term = parse_state.arena.hand_over_qualified_ident(
                             qualified_ident,
                             |qualified_ident| {
                                 let term = SmtTerm::QualifiedIdent(qualified_ident);
-                                handle_err(handler.handle_term(term), span)
+                                handle_err(handler.handle_term(term))
                             },
                         )?;
                         Ok(ControlFlow::Break(term))
@@ -560,7 +556,6 @@ impl<H: SmtHandler> TermSlot<H> {
                 let SmtSyntaxToken::Symbol(name) = token.syntax(version) else {
                     return Err(SmtParseError::category_error(
                         SmtSyntaxErrorKind::ExpectedSymbol,
-                        token.span(),
                     ));
                 };
                 parse_state
@@ -576,8 +571,6 @@ impl<H: SmtHandler> TermSlot<H> {
                 Ok(ControlFlow::Continue(()))
             }
             State::SortedBinderVars(binder_kind) => {
-                let span = token.span();
-
                 let flow = SortedBindingsParser::progress_and_open(
                     handler,
                     parse_state,
@@ -605,7 +598,7 @@ impl<H: SmtHandler> TermSlot<H> {
                                 }
                                 SortedBinderKind::Lambda => SmtSyntaxErrorKind::EmptyLambdaBindings,
                             };
-                            return Err(SmtParseError::category_error(err_kind, span));
+                            return Err(SmtParseError::category_error(err_kind));
                         }
 
                         let end_kind = match binder_kind {
@@ -637,7 +630,6 @@ impl<H: SmtHandler> TermSlot<H> {
             }
             State::MatchPattern => {
                 // parse the match pattern
-                let span = token.span();
                 if let ControlFlow::Break(pattern) =
                     parse_state
                         .pattern_slot
@@ -645,7 +637,7 @@ impl<H: SmtHandler> TermSlot<H> {
                 {
                     // a match case is starting, call the handler with the pattern handed over
                     parse_state.arena.hand_over_pattern(pattern, |pattern| {
-                        handle_err(handler.start_match_case(pattern), span)
+                        handle_err(handler.start_match_case(pattern))
                     })?;
                     // move the start state to parse the case term
                     slot.state = State::Start;
@@ -669,7 +661,6 @@ impl<H: SmtHandler> TermSlot<H> {
         version: SmtVersion,
         token: SmtToken,
     ) -> Result<ControlFlow<H::Term>, SmtParseError<H::Error>> {
-        let span = token.span();
         let slot = &mut parse_state.term_slot;
         let term = match token.syntax(version) {
             SmtSyntaxToken::ParenOpen => {
@@ -688,7 +679,6 @@ impl<H: SmtHandler> TermSlot<H> {
                 else {
                     return Err(SmtParseError::category_error(
                         SmtSyntaxErrorKind::ExpectedTerm,
-                        span,
                     ));
                 };
                 let arena = &mut parse_state.arena;
@@ -696,13 +686,12 @@ impl<H: SmtHandler> TermSlot<H> {
                 if arena.terms.len() == arena_args_start {
                     return Err(SmtParseError::category_error(
                         SmtSyntaxErrorKind::EmptyTermApplication,
-                        span,
                     ));
                 }
                 // construct and handle the term, the head and the arguments are consumed
                 arena.hand_over_application(function, arena_args_start, |function, args| {
                     let term = SmtTerm::Application(SmtApplication { function, args });
-                    handle_err(handler.handle_term(term), span)
+                    handle_err(handler.handle_term(term))
                 })?
             }
             SmtSyntaxToken::Symbol(name) => {
@@ -712,7 +701,7 @@ impl<H: SmtHandler> TermSlot<H> {
                     ident: parse_state.arena.simple_ident_view(name),
                     sort: None,
                 });
-                handle_err(handler.handle_term(term), span)?
+                handle_err(handler.handle_term(term))?
             }
             kind => {
                 // handle special constants
@@ -720,12 +709,11 @@ impl<H: SmtHandler> TermSlot<H> {
                     Ok(special_constant) => {
                         // a term that is just a special constant
                         let term = SmtTerm::SpecialConstant(special_constant);
-                        handle_err(handler.handle_term(term), span)?
+                        handle_err(handler.handle_term(term))?
                     }
                     Err(_) => {
                         return Err(SmtParseError::category_error(
                             SmtSyntaxErrorKind::ExpectedTerm,
-                            span,
                         ));
                     }
                 }
@@ -740,7 +728,6 @@ impl<H: SmtHandler> TermSlot<H> {
         version: SmtVersion,
         token: SmtToken,
     ) -> Result<(), SmtParseError<H::Error>> {
-        let span = token.span();
         let slot = &mut parse_state.term_slot;
 
         let state = match token.syntax(version) {
@@ -806,7 +793,6 @@ impl<H: SmtHandler> TermSlot<H> {
             _ => {
                 return Err(SmtParseError::category_error(
                     SmtSyntaxErrorKind::ExpectedOperator,
-                    span,
                 ));
             }
         };
@@ -824,7 +810,6 @@ impl<H: SmtHandler> TermSlot<H> {
         version: SmtVersion,
         token: SmtToken,
     ) -> Result<(), SmtParseError<H::Error>> {
-        let span = token.span();
         let slot = &mut parse_state.term_slot;
         match token.syntax(version) {
             SmtSyntaxToken::ParenOpen => {
@@ -850,7 +835,6 @@ impl<H: SmtHandler> TermSlot<H> {
                 if arena.symbols.len() == arena_names_start {
                     return Err(SmtParseError::category_error(
                         SmtSyntaxErrorKind::EmptyLetBindings,
-                        span,
                     ));
                 }
 
@@ -859,7 +843,7 @@ impl<H: SmtHandler> TermSlot<H> {
                     arena_text_start,
                     arena_names_start,
                     arena_terms_start,
-                    |bindings| handle_err(handler.start_let(bindings), span),
+                    |bindings| handle_err(handler.start_let(bindings)),
                 )?;
 
                 // add a new level for the inner term in the let
@@ -877,7 +861,6 @@ impl<H: SmtHandler> TermSlot<H> {
                         SmtTokenCategory::ParenOpen,
                         SmtTokenCategory::ParenClose,
                     ]),
-                    span,
                 ))
             }
         }
@@ -893,7 +876,6 @@ impl<H: SmtHandler> TermSlot<H> {
         version: SmtVersion,
         token: SmtToken,
     ) -> Result<(), SmtParseError<H::Error>> {
-        let span = token.span();
         match token.syntax(version) {
             SmtSyntaxToken::ParenOpen => {
                 // a new case is being opened, we will parse the pattern next
@@ -909,12 +891,11 @@ impl<H: SmtHandler> TermSlot<H> {
                 if num_cases == 0 {
                     return Err(SmtParseError::category_error(
                         SmtSyntaxErrorKind::EmptyMatchCases,
-                        span,
                     ));
                 }
 
                 // call the handler to signal the end of the match
-                let term = handle_err(handler.end_match(), span)?;
+                let term = handle_err(handler.end_match())?;
                 // wait for the closing parenthesis of the match, we will break after that
                 self.pending = Some(Pending {
                     term,
@@ -927,7 +908,6 @@ impl<H: SmtHandler> TermSlot<H> {
                     SmtTokenCategory::ParenOpen,
                     SmtTokenCategory::ParenClose,
                 ]),
-                span,
             )),
         }
     }
@@ -1034,7 +1014,6 @@ impl SortedBindingsParser {
         };
 
         // parse the sorted variable
-        let span = token.span();
         match parse_state.sorted_var_slot.progress(
             handler,
             &mut parse_state.arena,
@@ -1049,7 +1028,7 @@ impl SortedBindingsParser {
                 parse_state
                     .arena
                     .hand_over_sorted_var(name, sort, |name, sort| {
-                        handle_err(open_fn(handler, name, sort), span)
+                        handle_err(open_fn(handler, name, sort))
                     })?;
                 this.num_opened += 1;
                 // go back to awaiting a binder

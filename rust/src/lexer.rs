@@ -3,7 +3,7 @@ mod error;
 mod helpers;
 mod recovery;
 
-pub use error::{SmtLexError, SmtLexErrorCause, SmtLexicalError, SmtLexicalErrorKind};
+pub use error::{SmtLexError, SmtLexErrorCause, SmtLexicalErrorKind};
 pub use recovery::{SmtFailFast, SmtLexRecovery, SmtRecovering};
 
 pub(crate) use char_class::CharClass;
@@ -1833,8 +1833,8 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
             // get the location where the cursor ended up
             // this will panic if no tokens were consumed,
             // which violates the consumer contract
-            let consumed_end = cursor
-                .consumed_end()
+            let consumed_span = cursor
+                .consumed_span()
                 .expect("token consumer must consume at least one token");
 
             // set our version to the cursor-requested version
@@ -1854,7 +1854,11 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
                     }
                 }
                 Ok(ControlFlow::Break(result)) => Ok(Stop::Finished(result)),
-                Err(err) => Err(SmtLexError::new(SmtLexErrorCause::Consumer(err), None)),
+                Err(err) => Err(SmtLexError::new(
+                    SmtLexErrorCause::Consumer(err),
+                    consumed_span,
+                    None,
+                )),
             };
             if R::RECOVERS {
                 // the consumer has not taken the whole batch
@@ -1874,7 +1878,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
             // the stop takes effect after the consumed tokens
             return Err(Interrupted {
                 result,
-                location: consumed_end,
+                location: consumed_span.end(),
             });
         }
         // everything was consumed without break or error
@@ -2029,7 +2033,8 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
         // that occurred during lexing
         Interrupted {
             result: Err(SmtLexError::new(
-                SmtLexErrorCause::Lexical(SmtLexicalError::new(kind, span)),
+                SmtLexErrorCause::Lexical(kind),
+                span,
                 None,
             )),
             location: self.location_at(failure),
@@ -2053,7 +2058,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
         } else {
             // start recovering from inside the string or quoted symbol if necessary
             match failure.error.cause() {
-                SmtLexErrorCause::Lexical(err) => match err.kind() {
+                SmtLexErrorCause::Lexical(kind) => match kind {
                     SmtLexicalErrorKind::ForbiddenCharInString => RecoveryState::String,
                     SmtLexicalErrorKind::BackslashInQuotedSymbol
                     | SmtLexicalErrorKind::ForbiddenCharInQuotedSymbol => {

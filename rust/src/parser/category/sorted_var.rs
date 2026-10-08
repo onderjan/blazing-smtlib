@@ -133,7 +133,6 @@ impl<H: SmtHandler + ?Sized> SortedVarSlot<H> {
             let SmtSyntaxToken::Symbol(name) = token.syntax(version) else {
                 return Err(SmtParseError::category_error(
                     SmtSyntaxErrorKind::ExpectedSymbol,
-                    token.span(),
                 ));
             };
             self.name = Some(arena.push_text(name.as_slice()));
