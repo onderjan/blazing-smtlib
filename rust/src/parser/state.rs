@@ -1,7 +1,6 @@
 use crate::{
-    SmtBindings, SmtHandler, SmtIdentView, SmtIndexView, SmtIndices, SmtKeywordView, SmtMultiple,
-    SmtNumeralView, SmtPatternView, SmtQualifiedIdentView, SmtSimplePatternView, SmtSimplePatterns,
-    SmtSort, SmtSymbolView,
+    SmtBindings, SmtHandler, SmtIdent, SmtIndex, SmtIndices, SmtKeyword, SmtMultiple, SmtNumeral,
+    SmtPattern, SmtQualifiedIdent, SmtSimplePattern, SmtSimplePatterns, SmtSort, SmtSymbol,
     parser::{
         AttributeSlot, IdentSlot, PatternSlot, QualifiedIdentSlot, SExprSlot, SortSlot,
         SortedVarSlot, TermSlot,
@@ -150,7 +149,7 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
     }
 
     /// Pushes a non-indexed identifier into the arena and returns its handle.
-    pub(crate) fn push_nonindexed_ident(&mut self, name: SmtSymbolView) -> IdentHandle {
+    pub(crate) fn push_nonindexed_ident(&mut self, name: SmtSymbol) -> IdentHandle {
         IdentHandle {
             name: self.push_text(name.as_slice()),
             indices_start: self.indices.len(),
@@ -164,10 +163,10 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
         &mut self,
         function: QualifiedIdentHandle<H>,
         args_start: usize,
-        f: impl FnOnce(SmtQualifiedIdentView<'_, H>, SmtMultiple<'_, H::Term>) -> R,
+        f: impl FnOnce(SmtQualifiedIdent<'_, H>, SmtMultiple<'_, H::Term>) -> R,
     ) -> R {
         let QualifiedIdentHandle { ident, sort } = function;
-        let function = SmtQualifiedIdentView {
+        let function = SmtQualifiedIdent {
             ident: ident_view(&self.text, &self.indices, ident),
             sort,
         };
@@ -181,8 +180,8 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
 
     /// Views a simple identifier: a name with no indices.
     #[inline]
-    pub(crate) fn simple_ident_view<'a>(&'a self, name: SmtSymbolView<'a>) -> SmtIdentView<'a> {
-        SmtIdentView {
+    pub(crate) fn simple_ident_view<'a>(&'a self, name: SmtSymbol<'a>) -> SmtIdent<'a> {
+        SmtIdent {
             name,
             indices: SmtIndices::new(ArenaAccess { _priv: () }, &self.text, &[]),
         }
@@ -213,7 +212,7 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
     pub(crate) fn hand_over_ident<R>(
         &mut self,
         ident: IdentHandle,
-        f: impl FnOnce(SmtIdentView<'_>) -> R,
+        f: impl FnOnce(SmtIdent<'_>) -> R,
     ) -> R {
         let result = f(ident_view(&self.text, &self.indices, ident));
         self.indices.truncate(ident.indices_start);
@@ -226,10 +225,10 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
     pub(crate) fn hand_over_qualified_ident<R>(
         &mut self,
         qualified_ident: QualifiedIdentHandle<H>,
-        f: impl FnOnce(SmtQualifiedIdentView<'_, H>) -> R,
+        f: impl FnOnce(SmtQualifiedIdent<'_, H>) -> R,
     ) -> R {
         let QualifiedIdentHandle { ident, sort } = qualified_ident;
-        let view = SmtQualifiedIdentView {
+        let view = SmtQualifiedIdent {
             ident: ident_view(&self.text, &self.indices, ident),
             sort,
         };
@@ -245,7 +244,7 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
         &mut self,
         name: TextHandle,
         sort: H::Sort,
-        f: impl FnOnce(SmtSymbolView<'_>, H::Sort) -> R,
+        f: impl FnOnce(SmtSymbol<'_>, H::Sort) -> R,
     ) -> R {
         let result = f(name.symbol_view(&self.text), sort);
         self.text.truncate(name.start);
@@ -289,7 +288,7 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
     pub(crate) fn hand_over_keyword<R>(
         &mut self,
         name: TextHandle,
-        f: impl FnOnce(SmtKeywordView<'_>) -> R,
+        f: impl FnOnce(SmtKeyword<'_>) -> R,
     ) -> R {
         let result = f(name.keyword_view(&self.text));
         self.text.truncate(name.start);
@@ -302,7 +301,7 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
         &mut self,
         name: TextHandle,
         start: usize,
-        f: impl FnOnce(SmtKeywordView<'_>, SmtMultiple<'_, H::SExpr>) -> R,
+        f: impl FnOnce(SmtKeyword<'_>, SmtMultiple<'_, H::SExpr>) -> R,
     ) -> R {
         let s_exprs = SmtMultiple::new(ArenaAccess { _priv: () }, &mut self.s_exprs, start);
         let result = f(name.keyword_view(&self.text), s_exprs);
@@ -329,15 +328,15 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
     pub(crate) fn hand_over_pattern<R>(
         &mut self,
         pattern: PatternHandle<'_>,
-        f: impl FnOnce(SmtPatternView<'_>) -> R,
+        f: impl FnOnce(SmtPattern<'_>) -> R,
     ) -> R {
         match pattern {
-            PatternHandle::Simple(simple) => f(SmtPatternView::Simple(simple)),
+            PatternHandle::Simple(simple) => f(SmtPattern::Simple(simple)),
             PatternHandle::Application {
                 constructor,
                 args_start,
             } => {
-                let pattern = SmtPatternView::Application {
+                let pattern = SmtPattern::Application {
                     constructor: constructor.symbol_view(&self.text),
                     args: SmtSimplePatterns::new(
                         ArenaAccess { _priv: () },
@@ -356,12 +355,8 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
 
 /// Views the identifier in the arena text and indices.
 #[inline]
-fn ident_view<'a>(
-    text: &'a [u8],
-    indices: &'a [IndexHandle],
-    ident: IdentHandle,
-) -> SmtIdentView<'a> {
-    SmtIdentView {
+fn ident_view<'a>(text: &'a [u8], indices: &'a [IndexHandle], ident: IdentHandle) -> SmtIdent<'a> {
+    SmtIdent {
         name: ident.name.symbol_view(text),
         indices: SmtIndices::new(
             ArenaAccess { _priv: () },
@@ -389,20 +384,20 @@ pub(crate) struct TextHandle {
 impl TextHandle {
     /// Views the bytes as a symbol.
     #[inline]
-    pub(crate) fn symbol_view(self, text: &[u8]) -> SmtSymbolView<'_> {
-        SmtSymbolView::new_unchecked(&text[self.start..self.start + self.len])
+    pub(crate) fn symbol_view(self, text: &[u8]) -> SmtSymbol<'_> {
+        SmtSymbol::new_unchecked(&text[self.start..self.start + self.len])
     }
 
     /// Views the bytes as a keyword.
     #[inline]
-    pub(crate) fn keyword_view(self, text: &[u8]) -> SmtKeywordView<'_> {
-        SmtKeywordView::new_unchecked(&text[self.start..self.start + self.len])
+    pub(crate) fn keyword_view(self, text: &[u8]) -> SmtKeyword<'_> {
+        SmtKeyword::new_unchecked(&text[self.start..self.start + self.len])
     }
 
     /// Views the bytes as a numeral.
     #[inline]
-    pub(crate) fn numeral_view(self, text: &[u8]) -> SmtNumeralView<'_> {
-        SmtNumeralView::new_unchecked(&text[self.start..self.start + self.len])
+    pub(crate) fn numeral_view(self, text: &[u8]) -> SmtNumeral<'_> {
+        SmtNumeral::new_unchecked(&text[self.start..self.start + self.len])
     }
 }
 
@@ -416,10 +411,10 @@ pub(crate) enum IndexHandle {
 impl IndexHandle {
     /// Views the index.
     #[inline]
-    pub(crate) fn view(self, text: &[u8]) -> SmtIndexView<'_> {
+    pub(crate) fn view(self, text: &[u8]) -> SmtIndex<'_> {
         match self {
-            IndexHandle::Numeral(handle) => SmtIndexView::Numeral(handle.numeral_view(text)),
-            IndexHandle::Symbol(handle) => SmtIndexView::Symbol(handle.symbol_view(text)),
+            IndexHandle::Numeral(handle) => SmtIndex::Numeral(handle.numeral_view(text)),
+            IndexHandle::Symbol(handle) => SmtIndex::Symbol(handle.symbol_view(text)),
         }
     }
 }
@@ -454,12 +449,12 @@ pub(crate) enum SimplePatternHandle {
 impl SimplePatternHandle {
     /// Views the simple pattern.
     #[inline]
-    pub(crate) fn view(self, text: &[u8]) -> SmtSimplePatternView<'_> {
+    pub(crate) fn view(self, text: &[u8]) -> SmtSimplePattern<'_> {
         match self {
             SimplePatternHandle::Symbol(handle) => {
-                SmtSimplePatternView::Symbol(handle.symbol_view(text))
+                SmtSimplePattern::Symbol(handle.symbol_view(text))
             }
-            SimplePatternHandle::Wildcard => SmtSimplePatternView::Wildcard,
+            SimplePatternHandle::Wildcard => SmtSimplePattern::Wildcard,
         }
     }
 }
@@ -468,7 +463,7 @@ impl SimplePatternHandle {
 /// application with the constructor in the arena text and the arguments in the
 /// arena simple patterns from the given position onward.
 pub(crate) enum PatternHandle<'t> {
-    Simple(SmtSimplePatternView<'t>),
+    Simple(SmtSimplePattern<'t>),
     Application {
         constructor: TextHandle,
         args_start: usize,

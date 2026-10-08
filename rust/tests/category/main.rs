@@ -24,10 +24,10 @@ use std::convert::Infallible;
 use std::ops::ControlFlow;
 
 use blazing_smtlib::{
-    SmtAttributeValue, SmtAttributes, SmtBindings, SmtHandler, SmtIdent, SmtIdentView, SmtIndex,
-    SmtIndexView, SmtKeywordView, SmtPatternView, SmtQualifiedIdent, SmtQualifiedIdentView,
-    SmtQuantifierKind, SmtSExpr, SmtSimplePatternView, SmtSort, SmtSpan, SmtSpecialConstantView,
-    SmtSymbolView, SmtTerm,
+    SmtAttributeValue, SmtAttributes, SmtBindings, SmtHandler, SmtIdent, SmtIdentBuf, SmtIndex,
+    SmtIndexBuf, SmtKeyword, SmtPattern, SmtQualifiedIdent, SmtQualifiedIdentBuf,
+    SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSort, SmtSpan, SmtSpecialConstant, SmtSymbol,
+    SmtTerm,
     lexer::{SmtLexErrorCause, SmtLexer},
     parser::{
         SmtCloseParenParser, SmtClosedAttributeParser, SmtClosedMultipleAttributeParser,
@@ -63,17 +63,17 @@ struct PrintingMatch {
     pattern: Option<String>,
 }
 
-fn render_simple_pattern(pattern: SmtSimplePatternView<'_>) -> String {
+fn render_simple_pattern(pattern: SmtSimplePattern<'_>) -> String {
     match pattern {
-        SmtSimplePatternView::Symbol(symbol) => render_symbol(symbol.as_slice()),
-        SmtSimplePatternView::Wildcard => "_".into(),
+        SmtSimplePattern::Symbol(symbol) => render_symbol(symbol.as_slice()),
+        SmtSimplePattern::Wildcard => "_".into(),
     }
 }
 
-fn render_pattern(pattern: SmtPatternView<'_>) -> String {
+fn render_pattern(pattern: SmtPattern<'_>) -> String {
     match pattern {
-        SmtPatternView::Simple(simple) => render_simple_pattern(simple),
-        SmtPatternView::Application { constructor, args } => {
+        SmtPattern::Simple(simple) => render_simple_pattern(simple),
+        SmtPattern::Application { constructor, args } => {
             let mut items = vec![render_symbol(constructor.as_slice())];
             items.extend(args.iter().map(render_simple_pattern));
             render_list(&items)
@@ -95,13 +95,30 @@ fn render_symbol(bytes: &[u8]) -> String {
     }
 }
 
-fn render_ident(ident: &SmtIdent) -> String {
+fn render_ident(ident: &SmtIdentBuf) -> String {
     let name = render_symbol(ident.name.as_slice());
     if ident.indices.is_empty() {
         return name;
     }
     let mut out = format!("(_ {name}");
     for index in &ident.indices {
+        out.push(' ');
+        match index {
+            SmtIndexBuf::Numeral(numeral) => out.push_str(&text(numeral.as_slice())),
+            SmtIndexBuf::Symbol(symbol) => out.push_str(&render_symbol(symbol.as_slice())),
+        }
+    }
+    out.push(')');
+    out
+}
+
+fn render_ident_view(ident: &SmtIdent) -> String {
+    let name = render_symbol(ident.name.as_slice());
+    if ident.indices.is_empty() {
+        return name;
+    }
+    let mut out = format!("(_ {name}");
+    for index in ident.indices.iter() {
         out.push(' ');
         match index {
             SmtIndex::Numeral(numeral) => out.push_str(&text(numeral.as_slice())),
@@ -112,24 +129,7 @@ fn render_ident(ident: &SmtIdent) -> String {
     out
 }
 
-fn render_ident_view(ident: &SmtIdentView) -> String {
-    let name = render_symbol(ident.name.as_slice());
-    if ident.indices.is_empty() {
-        return name;
-    }
-    let mut out = format!("(_ {name}");
-    for index in ident.indices.iter() {
-        out.push(' ');
-        match index {
-            SmtIndexView::Numeral(numeral) => out.push_str(&text(numeral.as_slice())),
-            SmtIndexView::Symbol(symbol) => out.push_str(&render_symbol(symbol.as_slice())),
-        }
-    }
-    out.push(')');
-    out
-}
-
-fn render_qualified_ident_view(qualified_ident: &SmtQualifiedIdentView<Printing>) -> String {
+fn render_qualified_ident_view(qualified_ident: &SmtQualifiedIdent<Printing>) -> String {
     let ident = render_ident_view(&qualified_ident.ident);
     match &qualified_ident.sort {
         Some(sort) => format!("(as {ident} {sort})"),
@@ -137,7 +137,7 @@ fn render_qualified_ident_view(qualified_ident: &SmtQualifiedIdentView<Printing>
     }
 }
 
-fn render_qualified_ident(qualified_ident: &SmtQualifiedIdent<Printing>) -> String {
+fn render_qualified_ident(qualified_ident: &SmtQualifiedIdentBuf<Printing>) -> String {
     let ident = render_ident(&qualified_ident.ident);
     match &qualified_ident.sort {
         Some(sort) => format!("(as {ident} {sort})"),
@@ -145,13 +145,13 @@ fn render_qualified_ident(qualified_ident: &SmtQualifiedIdent<Printing>) -> Stri
     }
 }
 
-fn render_constant(constant: SmtSpecialConstantView<'_>) -> String {
+fn render_constant(constant: SmtSpecialConstant<'_>) -> String {
     match constant {
-        SmtSpecialConstantView::Numeral(n) => text(n.as_slice()),
-        SmtSpecialConstantView::Decimal(d) => text(d.as_slice()),
-        SmtSpecialConstantView::Hexadecimal(h) => format!("#x{}", text(h.as_slice())),
-        SmtSpecialConstantView::Binary(b) => format!("#b{}", text(b.as_slice())),
-        SmtSpecialConstantView::String(s) => format!("\"{}\"", text(s.as_slice())),
+        SmtSpecialConstant::Numeral(n) => text(n.as_slice()),
+        SmtSpecialConstant::Decimal(d) => text(d.as_slice()),
+        SmtSpecialConstant::Hexadecimal(h) => format!("#x{}", text(h.as_slice())),
+        SmtSpecialConstant::Binary(b) => format!("#b{}", text(b.as_slice())),
+        SmtSpecialConstant::String(s) => format!("\"{}\"", text(s.as_slice())),
     }
 }
 
@@ -208,7 +208,7 @@ impl SmtHandler for Printing {
     fn start_quantifier(
         &mut self,
         kind: SmtQuantifierKind,
-        name: SmtSymbolView<'_>,
+        name: SmtSymbol<'_>,
         sort: String,
     ) -> Result<(), Infallible> {
         let keyword = match kind {
@@ -232,7 +232,7 @@ impl SmtHandler for Printing {
         Ok(format!("{prefix} {term})"))
     }
 
-    fn start_lambda(&mut self, name: SmtSymbolView<'_>, sort: String) -> Result<(), Infallible> {
+    fn start_lambda(&mut self, name: SmtSymbol<'_>, sort: String) -> Result<(), Infallible> {
         self.lambda_binders.push(format!(
             "(lambda (({} {}))",
             render_symbol(name.as_slice()),
@@ -258,7 +258,7 @@ impl SmtHandler for Printing {
         Ok(())
     }
 
-    fn start_match_case(&mut self, pattern: SmtPatternView<'_>) -> Result<(), Infallible> {
+    fn start_match_case(&mut self, pattern: SmtPattern<'_>) -> Result<(), Infallible> {
         let current = self
             .matches
             .last_mut()
@@ -309,7 +309,7 @@ impl SmtHandler for Printing {
 
     fn handle_attribute(
         &mut self,
-        name: SmtKeywordView<'_>,
+        name: SmtKeyword<'_>,
         value: Option<SmtAttributeValue<'_, Self>>,
     ) -> Result<String, Infallible> {
         let name = format!(":{}", text(name.as_slice()));

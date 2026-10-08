@@ -2,7 +2,7 @@
 
 use super::*;
 
-fn name(qualified_ident: &SmtQualifiedIdent<Printing>) -> &[u8] {
+fn name(qualified_ident: &SmtQualifiedIdentBuf<Printing>) -> &[u8] {
     qualified_ident.ident.name.as_slice()
 }
 

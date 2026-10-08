@@ -1,8 +1,8 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtBinDigitsView, SmtCommentView, SmtDecimalView, SmtHexDigitsView, SmtKeywordView,
-    SmtLocation, SmtNumeralView, SmtSpan, SmtStringContentView, SmtSymbolView, SmtWhitespaceView,
+    SmtBinDigits, SmtComment, SmtDecimal, SmtHexDigits, SmtKeyword, SmtLocation, SmtNumeral,
+    SmtSpan, SmtStringContent, SmtSymbol, SmtWhitespace,
 };
 
 mod reserved;
@@ -68,16 +68,16 @@ impl InnerCategory {
 pub enum SmtSyntaxToken<'a> {
     ParenOpen,
     ParenClose,
-    Numeral(SmtNumeralView<'a>),
-    Decimal(SmtDecimalView<'a>),
-    Hexadecimal(SmtHexDigitsView<'a>),
-    Binary(SmtBinDigitsView<'a>),
-    String(SmtStringContentView<'a>),
-    Keyword(SmtKeywordView<'a>),
-    Symbol(SmtSymbolView<'a>),
+    Numeral(SmtNumeral<'a>),
+    Decimal(SmtDecimal<'a>),
+    Hexadecimal(SmtHexDigits<'a>),
+    Binary(SmtBinDigits<'a>),
+    String(SmtStringContent<'a>),
+    Keyword(SmtKeyword<'a>),
+    Symbol(SmtSymbol<'a>),
     Reserved(SmtReserved),
-    Whitespace(SmtWhitespaceView<'a>),
-    Comment(SmtCommentView<'a>),
+    Whitespace(SmtWhitespace<'a>),
+    Comment(SmtComment<'a>),
     EndOfFile,
 }
 
@@ -192,39 +192,39 @@ impl<'a> SmtSyntaxToken<'a> {
             SmtTokenCategory::ParenOpen => SmtSyntaxToken::ParenOpen,
             SmtTokenCategory::ParenClose => SmtSyntaxToken::ParenClose,
             SmtTokenCategory::Numeral => {
-                SmtSyntaxToken::Numeral(SmtNumeralView::new_unchecked(content))
+                SmtSyntaxToken::Numeral(SmtNumeral::new_unchecked(content))
             }
             SmtTokenCategory::Decimal => {
-                SmtSyntaxToken::Decimal(SmtDecimalView::new_unchecked(content))
+                SmtSyntaxToken::Decimal(SmtDecimal::new_unchecked(content))
             }
             SmtTokenCategory::Hexadecimal => {
-                SmtSyntaxToken::Hexadecimal(SmtHexDigitsView::new_unchecked(content))
+                SmtSyntaxToken::Hexadecimal(SmtHexDigits::new_unchecked(content))
             }
             SmtTokenCategory::Binary => {
-                SmtSyntaxToken::Binary(SmtBinDigitsView::new_unchecked(content))
+                SmtSyntaxToken::Binary(SmtBinDigits::new_unchecked(content))
             }
             SmtTokenCategory::UnquotedSymbol => {
                 // only the words reserved in the version are reserved words
                 if let Some(reserved) = SmtReserved::from_bytes_opt(content, version) {
                     SmtSyntaxToken::Reserved(reserved)
                 } else {
-                    SmtSyntaxToken::Symbol(SmtSymbolView::new_unchecked(content))
+                    SmtSyntaxToken::Symbol(SmtSymbol::new_unchecked(content))
                 }
             }
             SmtTokenCategory::QuotedSymbol => {
-                SmtSyntaxToken::Symbol(SmtSymbolView::new_unchecked(content))
+                SmtSyntaxToken::Symbol(SmtSymbol::new_unchecked(content))
             }
             SmtTokenCategory::String => {
-                SmtSyntaxToken::String(SmtStringContentView::new_unchecked(content))
+                SmtSyntaxToken::String(SmtStringContent::new_unchecked(content))
             }
             SmtTokenCategory::Keyword => {
-                SmtSyntaxToken::Keyword(SmtKeywordView::new_unchecked(content))
+                SmtSyntaxToken::Keyword(SmtKeyword::new_unchecked(content))
             }
             SmtTokenCategory::Whitespace => {
-                SmtSyntaxToken::Whitespace(SmtWhitespaceView::new_unchecked(content))
+                SmtSyntaxToken::Whitespace(SmtWhitespace::new_unchecked(content))
             }
             SmtTokenCategory::Comment => {
-                SmtSyntaxToken::Comment(SmtCommentView::new_unchecked(content))
+                SmtSyntaxToken::Comment(SmtComment::new_unchecked(content))
             }
             SmtTokenCategory::EndOfFile => SmtSyntaxToken::EndOfFile,
         }

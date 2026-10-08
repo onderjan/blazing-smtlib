@@ -1,49 +1,49 @@
 use std::fmt::Debug;
 
 use crate::{
-    SmtBinDigits, SmtBinDigitsView, SmtDecimal, SmtDecimalView, SmtHandler, SmtHexDigits,
-    SmtHexDigitsView, SmtKeywordView, SmtMultiple, SmtNumeral, SmtNumeralView, SmtStringContent,
-    SmtStringContentView, SmtSymbol, SmtSymbolView,
+    SmtBinDigits, SmtBinDigitsBuf, SmtDecimal, SmtDecimalBuf, SmtHandler, SmtHexDigits,
+    SmtHexDigitsBuf, SmtKeyword, SmtMultiple, SmtNumeral, SmtNumeralBuf, SmtStringContent,
+    SmtStringContentBuf, SmtSymbol, SmtSymbolBuf,
     parser::{ArenaAccess, IndexHandle, SimplePatternHandle},
     token::SmtReserved,
 };
 
 #[derive(Debug, Clone)]
-pub enum SmtIndex {
-    Numeral(SmtNumeral),
-    Symbol(SmtSymbol),
+pub enum SmtIndexBuf {
+    Numeral(SmtNumeralBuf),
+    Symbol(SmtSymbolBuf),
 }
 
 #[derive(Debug, Clone)]
-pub struct SmtIdent {
-    pub name: SmtSymbol,
-    pub indices: Vec<SmtIndex>,
+pub struct SmtIdentBuf {
+    pub name: SmtSymbolBuf,
+    pub indices: Vec<SmtIndexBuf>,
 }
 
-impl SmtIdent {
-    pub fn new_simple(name: SmtSymbol) -> SmtIdent {
-        SmtIdent {
+impl SmtIdentBuf {
+    pub fn new_simple(name: SmtSymbolBuf) -> SmtIdentBuf {
+        SmtIdentBuf {
             name,
             indices: Vec::new(),
         }
     }
 }
 
-pub struct SmtQualifiedIdent<H: SmtHandler + ?Sized> {
-    pub ident: SmtIdent,
+pub struct SmtQualifiedIdentBuf<H: SmtHandler + ?Sized> {
+    pub ident: SmtIdentBuf,
     pub sort: Option<H::Sort>,
 }
 
-impl<H: SmtHandler + ?Sized> SmtQualifiedIdent<H> {
-    pub fn new_simple(name: SmtSymbol) -> Self {
-        Self::new_unqualified(SmtIdent::new_simple(name))
+impl<H: SmtHandler + ?Sized> SmtQualifiedIdentBuf<H> {
+    pub fn new_simple(name: SmtSymbolBuf) -> Self {
+        Self::new_unqualified(SmtIdentBuf::new_simple(name))
     }
 
-    pub fn new_unqualified(ident: SmtIdent) -> Self {
+    pub fn new_unqualified(ident: SmtIdentBuf) -> Self {
         Self { ident, sort: None }
     }
 
-    pub fn new_qualified(ident: SmtIdent, sort: H::Sort) -> Self {
+    pub fn new_qualified(ident: SmtIdentBuf, sort: H::Sort) -> Self {
         Self {
             ident,
             sort: Some(sort),
@@ -51,19 +51,19 @@ impl<H: SmtHandler + ?Sized> SmtQualifiedIdent<H> {
     }
 }
 
-impl<H: SmtHandler + ?Sized> Debug for SmtQualifiedIdent<H>
+impl<H: SmtHandler + ?Sized> Debug for SmtQualifiedIdentBuf<H>
 where
     H::Sort: Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SmtQualifiedIdent")
+        f.debug_struct("SmtQualifiedIdentBuf")
             .field("ident", &self.ident)
             .field("sort", &self.sort)
             .finish()
     }
 }
 
-impl<H: SmtHandler + ?Sized> Clone for SmtQualifiedIdent<H>
+impl<H: SmtHandler + ?Sized> Clone for SmtQualifiedIdentBuf<H>
 where
     H::Sort: Clone,
 {
@@ -77,16 +77,16 @@ where
 
 /// Index of an identifier to be handled.
 #[derive(Debug, Clone, Copy)]
-pub enum SmtIndexView<'a> {
-    Numeral(SmtNumeralView<'a>),
-    Symbol(SmtSymbolView<'a>),
+pub enum SmtIndex<'a> {
+    Numeral(SmtNumeral<'a>),
+    Symbol(SmtSymbol<'a>),
 }
 
-impl SmtIndexView<'_> {
-    pub fn into_owned(self) -> SmtIndex {
+impl SmtIndex<'_> {
+    pub fn into_owned(self) -> SmtIndexBuf {
         match self {
-            SmtIndexView::Numeral(numeral) => SmtIndex::Numeral(numeral.into_owned()),
-            SmtIndexView::Symbol(symbol) => SmtIndex::Symbol(symbol.into_owned()),
+            SmtIndex::Numeral(numeral) => SmtIndexBuf::Numeral(numeral.into_owned()),
+            SmtIndex::Symbol(symbol) => SmtIndexBuf::Symbol(symbol.into_owned()),
         }
     }
 }
@@ -114,11 +114,11 @@ impl<'a> SmtIndices<'a> {
     }
 
     #[inline]
-    pub fn get(&self, index: usize) -> Option<SmtIndexView<'a>> {
+    pub fn get(&self, index: usize) -> Option<SmtIndex<'a>> {
         Some(self.handles.get(index)?.view(self.text))
     }
 
-    pub fn iter(&self) -> impl ExactSizeIterator<Item = SmtIndexView<'a>> {
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = SmtIndex<'a>> {
         let text = self.text;
         self.handles.iter().map(move |handle| handle.view(text))
     }
@@ -132,48 +132,48 @@ impl Debug for SmtIndices<'_> {
 
 /// Identifier to be handled.
 #[derive(Debug, Clone, Copy)]
-pub struct SmtIdentView<'a> {
-    pub name: SmtSymbolView<'a>,
+pub struct SmtIdent<'a> {
+    pub name: SmtSymbol<'a>,
     pub indices: SmtIndices<'a>,
 }
 
-impl SmtIdentView<'_> {
-    pub fn into_owned(self) -> SmtIdent {
-        SmtIdent {
+impl SmtIdent<'_> {
+    pub fn into_owned(self) -> SmtIdentBuf {
+        SmtIdentBuf {
             name: self.name.into_owned(),
-            indices: self.indices.iter().map(SmtIndexView::into_owned).collect(),
+            indices: self.indices.iter().map(SmtIndex::into_owned).collect(),
         }
     }
 }
 
 /// A qualified identifier to be handled.
-pub struct SmtQualifiedIdentView<'a, H: SmtHandler + ?Sized> {
-    pub ident: SmtIdentView<'a>,
+pub struct SmtQualifiedIdent<'a, H: SmtHandler + ?Sized> {
+    pub ident: SmtIdent<'a>,
     pub sort: Option<H::Sort>,
 }
 
-impl<H: SmtHandler + ?Sized> SmtQualifiedIdentView<'_, H> {
-    pub fn into_owned(self) -> SmtQualifiedIdent<H> {
-        SmtQualifiedIdent {
+impl<H: SmtHandler + ?Sized> SmtQualifiedIdent<'_, H> {
+    pub fn into_owned(self) -> SmtQualifiedIdentBuf<H> {
+        SmtQualifiedIdentBuf {
             ident: self.ident.into_owned(),
             sort: self.sort,
         }
     }
 }
 
-impl<H: SmtHandler + ?Sized> Debug for SmtQualifiedIdentView<'_, H>
+impl<H: SmtHandler + ?Sized> Debug for SmtQualifiedIdent<'_, H>
 where
     H::Sort: Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SmtQualifiedIdentView")
+        f.debug_struct("SmtQualifiedIdent")
             .field("ident", &self.ident)
             .field("sort", &self.sort)
             .finish()
     }
 }
 
-impl<H: SmtHandler + ?Sized> Clone for SmtQualifiedIdentView<'_, H>
+impl<H: SmtHandler + ?Sized> Clone for SmtQualifiedIdent<'_, H>
 where
     H::Sort: Clone,
 {
@@ -190,7 +190,7 @@ pub type SmtSorts<'a, H> = SmtMultiple<'a, <H as SmtHandler>::Sort>;
 
 /// A sort to be handled.
 pub struct SmtSort<'a, H: SmtHandler + ?Sized> {
-    pub ident: SmtIdentView<'a>,
+    pub ident: SmtIdent<'a>,
     pub applied: SmtSorts<'a, H>,
 }
 
@@ -213,7 +213,7 @@ pub type SmtTerms<'a, H> = SmtMultiple<'a, <H as SmtHandler>::Term>;
 ///
 /// It is guaranteed that `args` are nonempty.
 pub struct SmtApplication<'a, H: SmtHandler + ?Sized> {
-    pub function: SmtQualifiedIdentView<'a, H>,
+    pub function: SmtQualifiedIdent<'a, H>,
     pub args: SmtTerms<'a, H>,
 }
 
@@ -231,40 +231,40 @@ where
 }
 
 #[derive(Debug, Clone)]
-pub enum SmtSpecialConstant {
-    Numeral(SmtNumeral),
-    Decimal(SmtDecimal),
-    Hexadecimal(SmtHexDigits),
-    Binary(SmtBinDigits),
-    String(SmtStringContent),
+pub enum SmtSpecialConstantBuf {
+    Numeral(SmtNumeralBuf),
+    Decimal(SmtDecimalBuf),
+    Hexadecimal(SmtHexDigitsBuf),
+    Binary(SmtBinDigitsBuf),
+    String(SmtStringContentBuf),
 }
 
 /// A special constant to be handled.
 #[derive(Debug, Clone, Copy)]
-pub enum SmtSpecialConstantView<'a> {
-    Numeral(SmtNumeralView<'a>),
-    Decimal(SmtDecimalView<'a>),
-    Hexadecimal(SmtHexDigitsView<'a>),
-    Binary(SmtBinDigitsView<'a>),
-    String(SmtStringContentView<'a>),
+pub enum SmtSpecialConstant<'a> {
+    Numeral(SmtNumeral<'a>),
+    Decimal(SmtDecimal<'a>),
+    Hexadecimal(SmtHexDigits<'a>),
+    Binary(SmtBinDigits<'a>),
+    String(SmtStringContent<'a>),
 }
 
-impl SmtSpecialConstantView<'_> {
-    pub fn into_owned(self) -> SmtSpecialConstant {
+impl SmtSpecialConstant<'_> {
+    pub fn into_owned(self) -> SmtSpecialConstantBuf {
         match self {
-            Self::Numeral(value) => SmtSpecialConstant::Numeral(value.into_owned()),
-            Self::Decimal(value) => SmtSpecialConstant::Decimal(value.into_owned()),
-            Self::Hexadecimal(value) => SmtSpecialConstant::Hexadecimal(value.into_owned()),
-            Self::Binary(value) => SmtSpecialConstant::Binary(value.into_owned()),
-            Self::String(value) => SmtSpecialConstant::String(value.into_owned()),
+            Self::Numeral(value) => SmtSpecialConstantBuf::Numeral(value.into_owned()),
+            Self::Decimal(value) => SmtSpecialConstantBuf::Decimal(value.into_owned()),
+            Self::Hexadecimal(value) => SmtSpecialConstantBuf::Hexadecimal(value.into_owned()),
+            Self::Binary(value) => SmtSpecialConstantBuf::Binary(value.into_owned()),
+            Self::String(value) => SmtSpecialConstantBuf::String(value.into_owned()),
         }
     }
 }
 
 /// A term to be handled.
 pub enum SmtTerm<'a, H: SmtHandler + ?Sized> {
-    SpecialConstant(SmtSpecialConstantView<'a>),
-    QualifiedIdent(SmtQualifiedIdentView<'a, H>),
+    SpecialConstant(SmtSpecialConstant<'a>),
+    QualifiedIdent(SmtQualifiedIdent<'a, H>),
     Application(SmtApplication<'a, H>),
 }
 
@@ -295,8 +295,8 @@ pub type SmtSExprs<'a, H> = SmtMultiple<'a, <H as SmtHandler>::SExpr>;
 pub type SmtAttributes<'a, H> = SmtMultiple<'a, <H as SmtHandler>::Attribute>;
 
 pub enum SmtAttributeValue<'a, H: SmtHandler + ?Sized> {
-    SpecialConstant(SmtSpecialConstantView<'a>),
-    Symbol(SmtSymbolView<'a>),
+    SpecialConstant(SmtSpecialConstant<'a>),
+    Symbol(SmtSymbol<'a>),
     SExprs(SmtSExprs<'a, H>),
 }
 
@@ -314,8 +314,8 @@ where
 }
 
 pub struct SmtFunctionSignature<H: SmtHandler + ?Sized> {
-    pub name: SmtSymbol,
-    pub params: Vec<(SmtSymbol, H::Sort)>,
+    pub name: SmtSymbolBuf,
+    pub params: Vec<(SmtSymbolBuf, H::Sort)>,
     pub result_sort: H::Sort,
 }
 
@@ -346,8 +346,8 @@ where
 }
 
 pub struct SmtDatatypeConstructor<H: SmtHandler + ?Sized> {
-    pub name: SmtSymbol,
-    pub selectors: Vec<(SmtSymbol, H::Sort)>,
+    pub name: SmtSymbolBuf,
+    pub selectors: Vec<(SmtSymbolBuf, H::Sort)>,
 }
 
 impl<H: SmtHandler + ?Sized> Debug for SmtDatatypeConstructor<H>
@@ -376,7 +376,7 @@ where
 
 /// Simple match pattern: a symbol or a wildcard.
 #[derive(Debug, Clone)]
-pub enum SmtSimplePattern {
+pub enum SmtSimplePatternBuf {
     /// A symbol as a pattern.
     ///
     /// In the match pattern position, the symbol should be
@@ -384,28 +384,28 @@ pub enum SmtSimplePattern {
     /// it is not possible to determine syntactically which one it is.
     /// In the constructor application argument position,
     /// it should be a variable.
-    Symbol(SmtSymbol),
+    Symbol(SmtSymbolBuf),
     /// A wildcard (reserved word underscore `_`) as a pattern.
     Wildcard,
 }
 
 /// Match pattern: a symbol, a wildcard, or a constructor application.
 #[derive(Debug, Clone)]
-pub enum SmtPattern {
+pub enum SmtPatternBuf {
     /// A simple match pattern, either a symbol or a wildcard.
-    Simple(SmtSimplePattern),
+    Simple(SmtSimplePatternBuf),
     /// A constructor applied to at least one variable or wildcard.
     Application {
-        constructor: SmtSymbol,
-        args: Vec<SmtSimplePattern>,
+        constructor: SmtSymbolBuf,
+        args: Vec<SmtSimplePatternBuf>,
     },
 }
 
 pub enum SmtSExpr<'a, H: SmtHandler + ?Sized> {
-    SpecialConstant(SmtSpecialConstantView<'a>),
-    Symbol(SmtSymbolView<'a>),
+    SpecialConstant(SmtSpecialConstant<'a>),
+    Symbol(SmtSymbol<'a>),
     Reserved(SmtReserved),
-    Keyword(SmtKeywordView<'a>),
+    Keyword(SmtKeyword<'a>),
     SExprs(SmtSExprs<'a, H>),
 }
 
@@ -426,16 +426,16 @@ where
 
 /// Simple match pattern to be handled: a symbol or a wildcard.
 #[derive(Debug, Clone, Copy)]
-pub enum SmtSimplePatternView<'a> {
-    Symbol(SmtSymbolView<'a>),
+pub enum SmtSimplePattern<'a> {
+    Symbol(SmtSymbol<'a>),
     Wildcard,
 }
 
-impl SmtSimplePatternView<'_> {
-    pub fn into_owned(self) -> SmtSimplePattern {
+impl SmtSimplePattern<'_> {
+    pub fn into_owned(self) -> SmtSimplePatternBuf {
         match self {
-            Self::Symbol(symbol) => SmtSimplePattern::Symbol(symbol.into_owned()),
-            Self::Wildcard => SmtSimplePattern::Wildcard,
+            Self::Symbol(symbol) => SmtSimplePatternBuf::Symbol(symbol.into_owned()),
+            Self::Wildcard => SmtSimplePatternBuf::Wildcard,
         }
     }
 }
@@ -467,11 +467,11 @@ impl<'a> SmtSimplePatterns<'a> {
     }
 
     #[inline]
-    pub fn get(&self, index: usize) -> Option<SmtSimplePatternView<'a>> {
+    pub fn get(&self, index: usize) -> Option<SmtSimplePattern<'a>> {
         Some(self.handles.get(index)?.view(self.text))
     }
 
-    pub fn iter(&self) -> impl ExactSizeIterator<Item = SmtSimplePatternView<'a>> {
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = SmtSimplePattern<'a>> {
         let text = self.text;
         self.handles.iter().map(move |handle| handle.view(text))
     }
@@ -485,23 +485,23 @@ impl Debug for SmtSimplePatterns<'_> {
 
 /// Match pattern to be handled: a symbol, a wildcard, or a constructor application.
 #[derive(Debug, Clone, Copy)]
-pub enum SmtPatternView<'a> {
+pub enum SmtPattern<'a> {
     /// A simple match pattern, either a symbol or a wildcard.
-    Simple(SmtSimplePatternView<'a>),
+    Simple(SmtSimplePattern<'a>),
     /// A constructor applied to at least one variable or wildcard.
     Application {
-        constructor: SmtSymbolView<'a>,
+        constructor: SmtSymbol<'a>,
         args: SmtSimplePatterns<'a>,
     },
 }
 
-impl SmtPatternView<'_> {
-    pub fn into_owned(self) -> SmtPattern {
+impl SmtPattern<'_> {
+    pub fn into_owned(self) -> SmtPatternBuf {
         match self {
-            Self::Simple(simple) => SmtPattern::Simple(simple.into_owned()),
-            Self::Application { constructor, args } => SmtPattern::Application {
+            Self::Simple(simple) => SmtPatternBuf::Simple(simple.into_owned()),
+            Self::Application { constructor, args } => SmtPatternBuf::Application {
                 constructor: constructor.into_owned(),
-                args: args.iter().map(SmtSimplePatternView::into_owned).collect(),
+                args: args.iter().map(SmtSimplePattern::into_owned).collect(),
             },
         }
     }

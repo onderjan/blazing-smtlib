@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtAttributeValue, SmtHandler, SmtKeywordView, SmtSpan,
+    SmtAttributeValue, SmtHandler, SmtKeyword, SmtSpan,
     parser::{
         Arena, SExprSlot, SmtCloseParenParser, SmtParse, SmtParseError, SmtParseState,
         SmtSyntaxErrorKind, TextHandle, category::parse_special_constant, handle_err,
@@ -222,7 +222,7 @@ impl AttributeSlot {
             State::AfterName(name) => {
                 enum Decision<'a> {
                     FinishAttribute,
-                    StartNextAttribute(SmtKeywordView<'a>),
+                    StartNextAttribute(SmtKeyword<'a>),
                     Break,
                 }
 

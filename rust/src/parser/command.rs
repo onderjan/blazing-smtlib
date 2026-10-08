@@ -1,7 +1,7 @@
 use std::{convert::Infallible, ops::ControlFlow};
 
 use crate::{
-    SmtCommandHandler, SmtSpan, SmtSymbolView,
+    SmtCommandHandler, SmtSpan, SmtSymbol,
     parser::{SmtParse, SmtParseError, SmtParseState, SmtSyntaxErrorKind, handle_err},
     token::{SmtBatchCursor, SmtReserved, SmtSyntaxToken, SmtTokenCategory, SmtVersion},
 };
@@ -61,7 +61,7 @@ impl<H: SmtCommandHandler> SmtCommandParser<H> {
     /// as standard command names are reserved words.
     fn start_nonstandard_command(
         handler: &mut H,
-        name: SmtSymbolView<'_>,
+        name: SmtSymbol<'_>,
         span: SmtSpan,
     ) -> Result<CommandParserState<H>, SmtParseError<H::Error>> {
         match handler.nonstandard_command(name) {

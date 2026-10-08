@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtCommandHandler, SmtDatatypeConstructor, SmtNumeral, SmtSpan, SmtSymbol,
+    SmtCommandHandler, SmtDatatypeConstructor, SmtNumeralBuf, SmtSpan, SmtSymbolBuf,
     parser::{
         SmtCloseParenParser, SmtClosedMultipleParser, SmtNumeralParser, SmtOpenParenParser,
         SmtOpenedParser, SmtParenMaximumParser, SmtParenMultipleParser, SmtParenParser, SmtParse,
@@ -49,7 +49,7 @@ enum DatatypeState {
 /// Parser for a datatype.
 struct DatatypeParser<H: SmtCommandHandler> {
     state: DatatypeState,
-    single_introduction: Option<(SmtSymbol, SmtSpan)>,
+    single_introduction: Option<(SmtSymbolBuf, SmtSpan)>,
 
     symbols_parser: SmtParenMultipleParser<H, SmtSymbolParser>,
     constructors_parser: SmtClosedMultipleParser<H, ConstructorParser<H>>,
@@ -69,7 +69,7 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
     ///
     /// This mode calls `start_declare_datatypes` as per the definition of
     /// `declare-datatype`, which depends on the form of the single datatype.
-    fn set_single_datatype_mode(&mut self, name: SmtSymbol, span: SmtSpan) {
+    fn set_single_datatype_mode(&mut self, name: SmtSymbolBuf, span: SmtSpan) {
         self.single_introduction = Some((name, span))
     }
 
@@ -77,12 +77,12 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
     fn start_datatype(
         &mut self,
         handler: &mut H,
-        params: Vec<SmtSymbol>,
+        params: Vec<SmtSymbolBuf>,
         span: SmtSpan,
     ) -> Result<(), SmtParseError<H::Error>> {
         if let Some((name, name_span)) = self.single_introduction.take() {
             // start declare datatypes with the arity equal to the number of parameters
-            let arity = SmtNumeral::from_usize(params.len());
+            let arity = SmtNumeralBuf::from_usize(params.len());
             handle_err(
                 handler.start_declare_datatypes(vec![(name, arity)]),
                 name_span,

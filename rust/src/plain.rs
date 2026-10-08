@@ -1,15 +1,15 @@
 use std::fmt::Debug;
 
-use crate::{SmtBytes, SmtBytesView, lexer::CharClass};
+use crate::{SmtBytes, SmtBytesBuf, lexer::CharClass};
 
 /// SMT-LIB string content.
 ///
 /// May be empty.
 /// Must contain only SMT-LIB printable or whitespace bytes.
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct SmtStringContent(SmtBytes);
+pub struct SmtStringContentBuf(SmtBytesBuf);
 
-impl SmtStringContent {
+impl SmtStringContentBuf {
     pub fn is_allowed(value: &[u8]) -> bool {
         value
             .iter()
@@ -23,9 +23,9 @@ impl SmtStringContent {
 /// May be empty.
 /// Must contain only SMT-LIB printable or whitespace bytes except for pipe (|) and backslash (\).
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct SmtSymbol(SmtBytes);
+pub struct SmtSymbolBuf(SmtBytesBuf);
 
-impl SmtSymbol {
+impl SmtSymbolBuf {
     pub fn is_allowed(value: &[u8]) -> bool {
         value
             .iter()
@@ -48,9 +48,9 @@ impl SmtSymbol {
 /// own keyword examples include `:56`, and there is no need to exclude
 /// reserved words as the colon already uniquely determines the category.
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct SmtKeyword(SmtBytes);
+pub struct SmtKeywordBuf(SmtBytesBuf);
 
-impl SmtKeyword {
+impl SmtKeywordBuf {
     pub fn is_allowed(value: &[u8]) -> bool {
         !value.is_empty()
             && value
@@ -66,9 +66,9 @@ impl SmtKeyword {
 /// Must contain only digits.
 /// Cannot contain any leading zeros except for the constant "0" itself.
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct SmtNumeral(SmtBytes);
+pub struct SmtNumeralBuf(SmtBytesBuf);
 
-impl SmtNumeral {
+impl SmtNumeralBuf {
     pub fn is_allowed(value: &[u8]) -> bool {
         if value.is_empty() {
             return false;
@@ -93,7 +93,7 @@ impl SmtNumeral {
         // convert the value into a string and get its bytes
         // this is allowed since it produces digits without leading zeros
         // or the allowed special case of constant "0"
-        Self(SmtBytes::from_vec(value.to_string().into_bytes()))
+        Self(SmtBytesBuf::from_vec(value.to_string().into_bytes()))
     }
 }
 
@@ -102,9 +102,9 @@ impl SmtNumeral {
 /// Cannot be empty.
 /// Must contain only digits, lower-case letters a-f or upper-case letters A-F.
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct SmtHexDigits(SmtBytes);
+pub struct SmtHexDigitsBuf(SmtBytesBuf);
 
-impl SmtHexDigits {
+impl SmtHexDigitsBuf {
     pub fn is_allowed(value: &[u8]) -> bool {
         !value.is_empty() && value.iter().all(|c| c.is_ascii_hexdigit())
     }
@@ -115,9 +115,9 @@ impl SmtHexDigits {
 /// Cannot be empty.
 /// Must contain only the digits 0, 1.
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct SmtBinDigits(SmtBytes);
+pub struct SmtBinDigitsBuf(SmtBytesBuf);
 
-impl SmtBinDigits {
+impl SmtBinDigitsBuf {
     pub fn is_allowed(value: &[u8]) -> bool {
         !value.is_empty() && value.iter().copied().all(|c| c == b'0' || c == b'1')
     }
@@ -134,9 +134,9 @@ impl SmtBinDigits {
 /// The fractional part cannot be empty and must contain only digits.
 ///
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct SmtDecimal(SmtBytes);
+pub struct SmtDecimalBuf(SmtBytesBuf);
 
-impl SmtDecimal {
+impl SmtDecimalBuf {
     pub fn is_allowed(value: &[u8]) -> bool {
         // split by the dot
         let mut dot_iter = value.split(|c| *c == b'.');
@@ -154,7 +154,7 @@ impl SmtDecimal {
             return false;
         }
         // the whole part must form a numeral
-        if !SmtNumeral::is_allowed(whole_part) {
+        if !SmtNumeralBuf::is_allowed(whole_part) {
             return false;
         }
 
@@ -168,9 +168,9 @@ impl SmtDecimal {
 /// Cannot be empty.
 /// Must contain only tabs, line feeds, carriage returns and spaces.
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct SmtWhitespace(SmtBytes);
+pub struct SmtWhitespaceBuf(SmtBytesBuf);
 
-impl SmtWhitespace {
+impl SmtWhitespaceBuf {
     pub fn is_allowed(value: &[u8]) -> bool {
         !value.is_empty()
             && value
@@ -187,9 +187,9 @@ impl SmtWhitespace {
 /// Only the last byte may be a carriage return (CR) or a line feed (LF).
 /// If the comment runs to the end of the input, there is no ending CR/LF.
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct SmtComment(SmtBytes);
+pub struct SmtCommentBuf(SmtBytesBuf);
 
-impl SmtComment {
+impl SmtCommentBuf {
     pub fn is_allowed(value: &[u8]) -> bool {
         if value.is_empty() {
             // empty content is allowed (starting semicolon at the end of input)
@@ -204,7 +204,7 @@ impl SmtComment {
 }
 
 #[derive(Debug)]
-pub struct SmtDisallowedByteVecError(SmtBytes);
+pub struct SmtDisallowedByteVecError(SmtBytesBuf);
 
 impl SmtDisallowedByteVecError {
     pub fn into_vec(self) -> Vec<u8> {
@@ -213,10 +213,10 @@ impl SmtDisallowedByteVecError {
 }
 
 macro_rules! string8_newtype {
-    ($name:ident, $view:ident) => {
-        impl $name {
+    ($buf:ident, $view:ident) => {
+        impl $buf {
             pub fn new(value: Vec<u8>) -> Result<Self, SmtDisallowedByteVecError> {
-                let value = SmtBytes::from_vec(value);
+                let value = SmtBytesBuf::from_vec(value);
                 if Self::is_allowed(value.as_slice()) {
                     Ok(Self(value))
                 } else {
@@ -230,7 +230,7 @@ macro_rules! string8_newtype {
             pub fn as_view(&self) -> $view<'_> {
                 $view(self.0.as_slice())
             }
-            pub fn into_string8(self) -> SmtBytes {
+            pub fn into_bytes_buf(self) -> SmtBytesBuf {
                 self.0
             }
             pub fn into_vec(self) -> Vec<u8> {
@@ -247,43 +247,43 @@ macro_rules! string8_newtype {
             }
         }
 
-        impl std::fmt::Debug for $name {
+        impl std::fmt::Debug for $buf {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 std::fmt::Debug::fmt(&self.0, f)
             }
         }
 
-        impl std::borrow::Borrow<[u8]> for $name {
+        impl std::borrow::Borrow<[u8]> for $buf {
             fn borrow(&self) -> &[u8] {
                 self.as_slice()
             }
         }
 
-        impl PartialEq<[u8]> for $name {
+        impl PartialEq<[u8]> for $buf {
             fn eq(&self, other: &[u8]) -> bool {
                 self.as_slice() == other
             }
         }
 
-        impl PartialEq<&[u8]> for $name {
+        impl PartialEq<&[u8]> for $buf {
             fn eq(&self, other: &&[u8]) -> bool {
                 self.as_slice() == *other
             }
         }
 
-        impl PartialEq<str> for $name {
+        impl PartialEq<str> for $buf {
             fn eq(&self, other: &str) -> bool {
                 self.as_slice() == other.as_bytes()
             }
         }
 
-        impl PartialEq<&str> for $name {
+        impl PartialEq<&str> for $buf {
             fn eq(&self, other: &&str) -> bool {
                 self.as_slice() == other.as_bytes()
             }
         }
 
-        impl PartialEq<$view<'_>> for $name {
+        impl PartialEq<$view<'_>> for $buf {
             fn eq(&self, other: &$view<'_>) -> bool {
                 self.as_slice() == other.as_slice()
             }
@@ -296,7 +296,7 @@ macro_rules! string8_newtype {
             #[inline]
             pub(crate) fn new_unchecked(value: &'a [u8]) -> Self {
                 debug_assert!(
-                    $name::is_allowed(value),
+                    $buf::is_allowed(value),
                     concat!("invalid ", stringify!($view), ": {:?}"),
                     value
                 );
@@ -308,8 +308,8 @@ macro_rules! string8_newtype {
                 self.0
             }
             #[inline]
-            pub fn into_owned(self) -> $name {
-                $name(SmtBytesView::new(self.0).into_owned())
+            pub fn into_owned(self) -> $buf {
+                $buf(SmtBytes::new(self.0).into_owned())
             }
             pub fn len(&self) -> usize {
                 self.0.len()
@@ -358,20 +358,20 @@ macro_rules! string8_newtype {
             }
         }
 
-        impl PartialEq<$name> for $view<'_> {
-            fn eq(&self, other: &$name) -> bool {
+        impl PartialEq<$buf> for $view<'_> {
+            fn eq(&self, other: &$buf) -> bool {
                 self.as_slice() == other.as_slice()
             }
         }
     };
 }
 
-string8_newtype!(SmtStringContent, SmtStringContentView);
-string8_newtype!(SmtSymbol, SmtSymbolView);
-string8_newtype!(SmtKeyword, SmtKeywordView);
-string8_newtype!(SmtNumeral, SmtNumeralView);
-string8_newtype!(SmtHexDigits, SmtHexDigitsView);
-string8_newtype!(SmtBinDigits, SmtBinDigitsView);
-string8_newtype!(SmtDecimal, SmtDecimalView);
-string8_newtype!(SmtWhitespace, SmtWhitespaceView);
-string8_newtype!(SmtComment, SmtCommentView);
+string8_newtype!(SmtStringContentBuf, SmtStringContent);
+string8_newtype!(SmtSymbolBuf, SmtSymbol);
+string8_newtype!(SmtKeywordBuf, SmtKeyword);
+string8_newtype!(SmtNumeralBuf, SmtNumeral);
+string8_newtype!(SmtHexDigitsBuf, SmtHexDigits);
+string8_newtype!(SmtBinDigitsBuf, SmtBinDigits);
+string8_newtype!(SmtDecimalBuf, SmtDecimal);
+string8_newtype!(SmtWhitespaceBuf, SmtWhitespace);
+string8_newtype!(SmtCommentBuf, SmtComment);

@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtHandler, SmtQualifiedIdent, SmtSymbolView,
+    SmtHandler, SmtQualifiedIdentBuf, SmtSymbol,
     parser::{
         Arena, IdentHandle, IdentSlot, QualifiedIdentHandle, SmtCloseParenParser, SmtParse,
         SmtParseError, SmtParseState, SmtSyntaxErrorKind, SortSlot, parse_by_token,
@@ -34,7 +34,7 @@ impl<H: SmtHandler> Default for SmtQualifiedIdentParser<H> {
 }
 
 impl<H: SmtHandler> SmtParse<H> for SmtQualifiedIdentParser<H> {
-    type Result = SmtQualifiedIdent<H>;
+    type Result = SmtQualifiedIdentBuf<H>;
 
     #[inline]
     fn parse(
@@ -42,7 +42,7 @@ impl<H: SmtHandler> SmtParse<H> for SmtQualifiedIdentParser<H> {
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
-    ) -> Result<ControlFlow<SmtQualifiedIdent<H>>, SmtParseError<H::Error>> {
+    ) -> Result<ControlFlow<SmtQualifiedIdentBuf<H>>, SmtParseError<H::Error>> {
         // progress the slot, giving it the ident and sort slots it delegates to
         let SmtParseState {
             ident_slot,
@@ -128,7 +128,7 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
         &mut self,
         ident_slot: &mut IdentSlot,
         arena: &mut Arena<H>,
-        name: SmtSymbolView,
+        name: SmtSymbol,
     ) {
         debug_assert!(
             self.is_pristine(),

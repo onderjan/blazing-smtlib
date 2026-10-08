@@ -18,10 +18,9 @@ use std::convert::Infallible;
 
 use blazing_smtlib::{
     NonstandardCommandError, SmtAttributeValue, SmtAttributes, SmtBindings, SmtCommandHandler,
-    SmtDatatypeConstructor, SmtFunctionSignature, SmtHandler, SmtIdentView, SmtIndexView,
-    SmtKeyword, SmtKeywordView, SmtNumeral, SmtPatternView, SmtQuantifierKind, SmtSExpr,
-    SmtSimplePatternView, SmtSort, SmtSpecialConstantView, SmtStringContent, SmtSymbol,
-    SmtSymbolView, SmtTerm,
+    SmtDatatypeConstructor, SmtFunctionSignature, SmtHandler, SmtIdent, SmtIndex, SmtKeyword,
+    SmtKeywordBuf, SmtNumeralBuf, SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSimplePattern,
+    SmtSort, SmtSpecialConstant, SmtStringContentBuf, SmtSymbol, SmtSymbolBuf, SmtTerm,
 };
 
 const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
@@ -136,60 +135,60 @@ impl TraceHash {
         }
     }
 
-    fn symbol(&mut self, symbol: &SmtSymbol) {
+    fn symbol(&mut self, symbol: &SmtSymbolBuf) {
         self.bytes(symbol.as_slice());
     }
 
-    fn numeral(&mut self, numeral: &SmtNumeral) {
+    fn numeral(&mut self, numeral: &SmtNumeralBuf) {
         self.bytes(numeral.as_slice());
     }
 
-    fn keyword(&mut self, keyword: &SmtKeyword) {
+    fn keyword(&mut self, keyword: &SmtKeywordBuf) {
         self.bytes(keyword.as_slice());
     }
 
-    fn symbols(&mut self, symbols: &[SmtSymbol]) {
+    fn symbols(&mut self, symbols: &[SmtSymbolBuf]) {
         self.count(symbols.len());
         for symbol in symbols {
             self.bytes(symbol.as_slice());
         }
     }
 
-    fn special_constant(&mut self, constant: SmtSpecialConstantView<'_>) {
+    fn special_constant(&mut self, constant: SmtSpecialConstant<'_>) {
         match constant {
-            SmtSpecialConstantView::Numeral(value) => {
+            SmtSpecialConstant::Numeral(value) => {
                 self.byte(1);
                 self.bytes(value.as_slice());
             }
-            SmtSpecialConstantView::Decimal(value) => {
+            SmtSpecialConstant::Decimal(value) => {
                 self.byte(2);
                 self.bytes(value.as_slice());
             }
-            SmtSpecialConstantView::Hexadecimal(value) => {
+            SmtSpecialConstant::Hexadecimal(value) => {
                 self.byte(3);
                 self.bytes(value.as_slice());
             }
-            SmtSpecialConstantView::Binary(value) => {
+            SmtSpecialConstant::Binary(value) => {
                 self.byte(4);
                 self.bytes(value.as_slice());
             }
-            SmtSpecialConstantView::String(value) => {
+            SmtSpecialConstant::String(value) => {
                 self.byte(5);
                 self.bytes(value.as_slice());
             }
         }
     }
 
-    fn ident_view(&mut self, ident: SmtIdentView<'_>) {
+    fn ident_view(&mut self, ident: SmtIdent<'_>) {
         self.bytes(ident.name.as_slice());
         self.count(ident.indices.len());
         for index in ident.indices.iter() {
             match index {
-                SmtIndexView::Numeral(value) => {
+                SmtIndex::Numeral(value) => {
                     self.byte(1);
                     self.bytes(value.as_slice());
                 }
-                SmtIndexView::Symbol(value) => {
+                SmtIndex::Symbol(value) => {
                     self.byte(2);
                     self.bytes(value.as_slice());
                 }
@@ -207,7 +206,7 @@ impl TraceHash {
         }
     }
 
-    fn sorted_vars(&mut self, vars: &[(SmtSymbol, u64)]) {
+    fn sorted_vars(&mut self, vars: &[(SmtSymbolBuf, u64)]) {
         self.count(vars.len());
         for (name, sort) in vars {
             self.symbol(name);
@@ -221,13 +220,13 @@ impl TraceHash {
         self.u64(signature.result_sort);
     }
 
-    fn simple_pattern(&mut self, pattern: SmtSimplePatternView<'_>) {
+    fn simple_pattern(&mut self, pattern: SmtSimplePattern<'_>) {
         match pattern {
-            SmtSimplePatternView::Symbol(symbol) => {
+            SmtSimplePattern::Symbol(symbol) => {
                 self.byte(1);
                 self.bytes(symbol.as_slice());
             }
-            SmtSimplePatternView::Wildcard => self.byte(2),
+            SmtSimplePattern::Wildcard => self.byte(2),
         }
     }
 
@@ -303,7 +302,7 @@ impl SmtHandler for TraceHash {
 
     fn handle_attribute(
         &mut self,
-        name: SmtKeywordView<'_>,
+        name: SmtKeyword<'_>,
         value: Option<SmtAttributeValue<'_, Self>>,
     ) -> Result<u64, Self::Error> {
         self.byte(tag::ATTRIBUTE);
@@ -356,7 +355,7 @@ impl SmtHandler for TraceHash {
     fn start_quantifier(
         &mut self,
         kind: SmtQuantifierKind,
-        name: SmtSymbolView<'_>,
+        name: SmtSymbol<'_>,
         sort: u64,
     ) -> Result<(), Self::Error> {
         self.byte(tag::START_QUANTIFIER);
@@ -375,7 +374,7 @@ impl SmtHandler for TraceHash {
         Ok(self.produce())
     }
 
-    fn start_lambda(&mut self, name: SmtSymbolView<'_>, sort: u64) -> Result<(), Self::Error> {
+    fn start_lambda(&mut self, name: SmtSymbol<'_>, sort: u64) -> Result<(), Self::Error> {
         self.byte(tag::START_LAMBDA);
         self.bytes(name.as_slice());
         self.u64(sort);
@@ -394,14 +393,14 @@ impl SmtHandler for TraceHash {
         Ok(())
     }
 
-    fn start_match_case(&mut self, pattern: SmtPatternView<'_>) -> Result<(), Self::Error> {
+    fn start_match_case(&mut self, pattern: SmtPattern<'_>) -> Result<(), Self::Error> {
         self.byte(tag::START_MATCH_CASE);
         match pattern {
-            SmtPatternView::Simple(simple) => {
+            SmtPattern::Simple(simple) => {
                 self.byte(1);
                 self.simple_pattern(simple);
             }
-            SmtPatternView::Application { constructor, args } => {
+            SmtPattern::Application { constructor, args } => {
                 self.byte(2);
                 self.bytes(constructor.as_slice());
                 self.count(args.len());
@@ -430,20 +429,20 @@ impl SmtCommandHandler for TraceHash {
 
     fn nonstandard_command(
         &mut self,
-        name: SmtSymbolView<'_>,
+        name: SmtSymbol<'_>,
     ) -> Result<Self::NonstandardParser, Self::Error> {
         // nonstandard commands are rejected, as by SmtSyntaxChecker, so the
         // sweep reports the same failure classes as the plain parse sweep
         Err(NonstandardCommandError(name.into_owned()))
     }
 
-    fn command_echo(&mut self, value: SmtStringContent) -> Result<(), Self::Error> {
+    fn command_echo(&mut self, value: SmtStringContentBuf) -> Result<(), Self::Error> {
         self.byte(tag::ECHO);
         self.bytes(value.as_slice());
         Ok(())
     }
 
-    fn command_get_option(&mut self, option: SmtKeyword) -> Result<(), Self::Error> {
+    fn command_get_option(&mut self, option: SmtKeywordBuf) -> Result<(), Self::Error> {
         self.byte(tag::GET_OPTION);
         self.keyword(&option);
         Ok(())
@@ -455,7 +454,7 @@ impl SmtCommandHandler for TraceHash {
         Ok(())
     }
 
-    fn command_get_info(&mut self, keyword: SmtKeyword) -> Result<(), Self::Error> {
+    fn command_get_info(&mut self, keyword: SmtKeywordBuf) -> Result<(), Self::Error> {
         self.byte(tag::GET_INFO);
         self.keyword(&keyword);
         Ok(())
@@ -467,7 +466,7 @@ impl SmtCommandHandler for TraceHash {
         Ok(())
     }
 
-    fn command_set_logic(&mut self, logic: SmtSymbol) -> Result<(), Self::Error> {
+    fn command_set_logic(&mut self, logic: SmtSymbolBuf) -> Result<(), Self::Error> {
         self.byte(tag::SET_LOGIC);
         self.symbol(&logic);
         Ok(())
@@ -511,8 +510,8 @@ impl SmtCommandHandler for TraceHash {
 
     fn command_declare_sort(
         &mut self,
-        name: SmtSymbol,
-        arity: SmtNumeral,
+        name: SmtSymbolBuf,
+        arity: SmtNumeralBuf,
     ) -> Result<(), Self::Error> {
         self.byte(tag::DECLARE_SORT);
         self.symbol(&name);
@@ -520,7 +519,7 @@ impl SmtCommandHandler for TraceHash {
         Ok(())
     }
 
-    fn command_declare_sort_parameter(&mut self, name: SmtSymbol) -> Result<(), Self::Error> {
+    fn command_declare_sort_parameter(&mut self, name: SmtSymbolBuf) -> Result<(), Self::Error> {
         self.byte(tag::DECLARE_SORT_PARAMETER);
         self.symbol(&name);
         Ok(())
@@ -528,7 +527,7 @@ impl SmtCommandHandler for TraceHash {
 
     fn command_declare_fun(
         &mut self,
-        name: SmtSymbol,
+        name: SmtSymbolBuf,
         param_sorts: Vec<u64>,
         result_sort: u64,
     ) -> Result<(), Self::Error> {
@@ -566,13 +565,13 @@ impl SmtCommandHandler for TraceHash {
         Ok(())
     }
 
-    fn command_push(&mut self, amount: SmtNumeral) -> Result<(), Self::Error> {
+    fn command_push(&mut self, amount: SmtNumeralBuf) -> Result<(), Self::Error> {
         self.byte(tag::PUSH);
         self.numeral(&amount);
         Ok(())
     }
 
-    fn command_pop(&mut self, amount: SmtNumeral) -> Result<(), Self::Error> {
+    fn command_pop(&mut self, amount: SmtNumeralBuf) -> Result<(), Self::Error> {
         self.byte(tag::POP);
         self.numeral(&amount);
         Ok(())
@@ -580,8 +579,8 @@ impl SmtCommandHandler for TraceHash {
 
     fn start_define_sort(
         &mut self,
-        name: SmtSymbol,
-        params: Vec<SmtSymbol>,
+        name: SmtSymbolBuf,
+        params: Vec<SmtSymbolBuf>,
     ) -> Result<(), Self::Error> {
         self.byte(tag::START_DEFINE_SORT);
         self.symbol(&name);
@@ -640,7 +639,7 @@ impl SmtCommandHandler for TraceHash {
 
     fn start_declare_datatypes(
         &mut self,
-        introductions: Vec<(SmtSymbol, SmtNumeral)>,
+        introductions: Vec<(SmtSymbolBuf, SmtNumeralBuf)>,
     ) -> Result<(), Self::Error> {
         self.byte(tag::START_DECLARE_DATATYPES);
         self.count(introductions.len());
@@ -653,7 +652,7 @@ impl SmtCommandHandler for TraceHash {
 
     fn start_datatype_declaration(
         &mut self,
-        sort_params: Vec<SmtSymbol>,
+        sort_params: Vec<SmtSymbolBuf>,
     ) -> Result<(), Self::Error> {
         self.byte(tag::START_DATATYPE_DECLARATION);
         self.symbols(&sort_params);

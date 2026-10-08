@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtCommandHandler, SmtFunctionSignature, SmtSpan, SmtSymbol,
+    SmtCommandHandler, SmtFunctionSignature, SmtSpan, SmtSymbolBuf,
     parser::{
         SmtCloseParenParser, SmtCommandPayloadParser, SmtKeywordParser, SmtNumeralParser,
         SmtParenMultipleParser, SmtParse, SmtParseError, SmtParseState, SmtStringParser,
@@ -250,7 +250,7 @@ impl<H: SmtCommandHandler> Definition<H> for DefineConst {
     type Signature = SmtPairParser<H, SmtSymbolParser, SmtSortParser<H>>;
     type Body = SmtTermParser<H>;
 
-    fn start(handler: &mut H, signature: (SmtSymbol, H::Sort)) -> Result<(), H::Error> {
+    fn start(handler: &mut H, signature: (SmtSymbolBuf, H::Sort)) -> Result<(), H::Error> {
         let (name, result_sort) = signature;
         let signature = SmtFunctionSignature {
             name,
@@ -282,7 +282,10 @@ impl<H: SmtCommandHandler> Definition<H> for DefineSort {
     type Signature = SmtPairParser<H, SmtSymbolParser, SmtParenMultipleParser<H, SmtSymbolParser>>;
     type Body = SmtSortParser<H>;
 
-    fn start(handler: &mut H, signature: (SmtSymbol, Vec<SmtSymbol>)) -> Result<(), H::Error> {
+    fn start(
+        handler: &mut H,
+        signature: (SmtSymbolBuf, Vec<SmtSymbolBuf>),
+    ) -> Result<(), H::Error> {
         let (name, params) = signature;
         handler.start_define_sort(name, params)
     }

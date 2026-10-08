@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtHandler, SmtPattern, SmtSimplePattern, SmtSimplePatternView,
+    SmtHandler, SmtPatternBuf, SmtSimplePattern, SmtSimplePatternBuf,
     parser::{
         Arena, PatternHandle, SimplePatternHandle, SmtParse, SmtParseError, SmtParseState,
         SmtSyntaxErrorKind, TextHandle, parse_by_token,
@@ -23,7 +23,7 @@ impl SmtSimplePatternParser {
     pub(crate) fn expect<H: SmtHandler + ?Sized>(
         version: SmtVersion,
         token: SmtToken,
-    ) -> Result<SmtSimplePattern, SmtParseError<H::Error>> {
+    ) -> Result<SmtSimplePatternBuf, SmtParseError<H::Error>> {
         Ok(Self::expect_view::<H>(version, token)?.into_owned())
     }
 
@@ -31,13 +31,13 @@ impl SmtSimplePatternParser {
     pub(crate) fn expect_view<'t, H: SmtHandler + ?Sized>(
         version: SmtVersion,
         token: SmtToken<'t>,
-    ) -> Result<SmtSimplePatternView<'t>, SmtParseError<H::Error>> {
+    ) -> Result<SmtSimplePattern<'t>, SmtParseError<H::Error>> {
         let result = match token.syntax(version) {
-            SmtSyntaxToken::Symbol(symbol) => Some(SmtSimplePatternView::Symbol(symbol)),
+            SmtSyntaxToken::Symbol(symbol) => Some(SmtSimplePattern::Symbol(symbol)),
             SmtSyntaxToken::Reserved(SmtReserved::General(SmtGeneralReserved::Underscore)) => {
                 // the underscore wildcard is not allowed in every version
                 if underscore_wildcard_allowed(version) {
-                    Some(SmtSimplePatternView::Wildcard)
+                    Some(SmtSimplePattern::Wildcard)
                 } else {
                     None
                 }
@@ -67,7 +67,7 @@ impl Default for SmtSimplePatternParser {
 }
 
 impl<H: SmtHandler> SmtParse<H> for SmtSimplePatternParser {
-    type Result = SmtSimplePattern;
+    type Result = SmtSimplePatternBuf;
 
     fn parse(
         &mut self,
@@ -108,7 +108,7 @@ impl<H: SmtHandler> Default for SmtPatternParser<H> {
 }
 
 impl<H: SmtHandler> SmtParse<H> for SmtPatternParser<H> {
-    type Result = SmtPattern;
+    type Result = SmtPatternBuf;
 
     #[inline]
     fn parse(
@@ -116,7 +116,7 @@ impl<H: SmtHandler> SmtParse<H> for SmtPatternParser<H> {
         _handler: &mut H,
         parse_state: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
-    ) -> Result<ControlFlow<SmtPattern, ()>, SmtParseError<H::Error>> {
+    ) -> Result<ControlFlow<SmtPatternBuf, ()>, SmtParseError<H::Error>> {
         // progress the slot
         let SmtParseState {
             pattern_slot,
@@ -206,10 +206,10 @@ impl PatternSlot {
             }
             // an argument is starting here, it will be stored in the arena
             let argument = match SmtSimplePatternParser::expect_view::<H>(version, token)? {
-                SmtSimplePatternView::Symbol(symbol) => {
+                SmtSimplePattern::Symbol(symbol) => {
                     SimplePatternHandle::Symbol(arena.push_text(symbol.as_slice()))
                 }
-                SmtSimplePatternView::Wildcard => SimplePatternHandle::Wildcard,
+                SmtSimplePattern::Wildcard => SimplePatternHandle::Wildcard,
             };
             arena.simple_patterns.push(argument);
             self.constructor = Some(constructor);
@@ -234,11 +234,11 @@ impl PatternSlot {
         // step 1: expecting a simple pattern or an opening parenthesis
         debug_assert!(self.is_pristine(), "must be pristine when starting");
         let result = match token.syntax(version) {
-            SmtSyntaxToken::Symbol(symbol) => Some(SmtSimplePatternView::Symbol(symbol)),
+            SmtSyntaxToken::Symbol(symbol) => Some(SmtSimplePattern::Symbol(symbol)),
             SmtSyntaxToken::Reserved(SmtReserved::General(SmtGeneralReserved::Underscore)) => {
                 // the underscore wildcard is not allowed in every version
                 if underscore_wildcard_allowed(version) {
-                    Some(SmtSimplePatternView::Wildcard)
+                    Some(SmtSimplePattern::Wildcard)
                 } else {
                     None
                 }

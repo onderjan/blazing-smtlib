@@ -9,11 +9,10 @@ use common::{assert_error_span, assert_parser_error, parse_with};
 
 use blazing_smtlib::{
     SmtAttributeValue, SmtAttributes, SmtBindings, SmtCommandHandler, SmtDatatypeConstructor,
-    SmtFunctionSignature, SmtHandler, SmtIdentView, SmtIndexView, SmtKeyword, SmtKeywordView,
-    SmtNumeral, SmtPatternView, SmtQuantifierKind, SmtSExpr, SmtSimplePatternView, SmtSort,
-    SmtSpecialConstantView, SmtStringContent, SmtSymbol, SmtSymbolView, SmtTerm,
-    lexer::SmtLexicalErrorKind, parser::SmtSyntaxErrorKind, reader::SmtReadErrorCause,
-    token::SmtTokenCategory,
+    SmtFunctionSignature, SmtHandler, SmtIdent, SmtIndex, SmtKeyword, SmtKeywordBuf, SmtNumeralBuf,
+    SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSort, SmtSpecialConstant,
+    SmtStringContentBuf, SmtSymbol, SmtSymbolBuf, SmtTerm, lexer::SmtLexicalErrorKind,
+    parser::SmtSyntaxErrorKind, reader::SmtReadErrorCause, token::SmtTokenCategory,
 };
 
 /// Handler that resolves body identifiers against the parameters of the
@@ -59,18 +58,18 @@ struct ResolvingMatch {
     case_vars: Option<Vec<String>>,
 }
 
-fn simple_pattern_text(pattern: SmtSimplePatternView<'_>) -> String {
+fn simple_pattern_text(pattern: SmtSimplePattern<'_>) -> String {
     match pattern {
-        SmtSimplePatternView::Symbol(symbol) => text(symbol.as_slice()),
-        SmtSimplePatternView::Wildcard => "_".into(),
+        SmtSimplePattern::Symbol(symbol) => text(symbol.as_slice()),
+        SmtSimplePattern::Wildcard => "_".into(),
     }
 }
 
 /// Renders a pattern as written, so that the events show it unclassified.
-fn pattern_text(pattern: SmtPatternView<'_>) -> String {
+fn pattern_text(pattern: SmtPattern<'_>) -> String {
     match pattern {
-        SmtPatternView::Simple(simple) => simple_pattern_text(simple),
-        SmtPatternView::Application { constructor, args } => {
+        SmtPattern::Simple(simple) => simple_pattern_text(simple),
+        SmtPattern::Application { constructor, args } => {
             let args: Vec<String> = args.iter().map(simple_pattern_text).collect();
             format!("({} {})", text(constructor.as_slice()), args.join(" "))
         }
@@ -82,7 +81,7 @@ impl Resolving {
     /// in progress, marked as `$name`, then against the parameters of the
     /// body in progress, marked as `[name]`, and otherwise against the
     /// functions of the define-funs-rec in progress, marked as `{name}`.
-    fn resolve_term_ident(&self, ident: SmtIdentView<'_>) -> String {
+    fn resolve_term_ident(&self, ident: SmtIdent<'_>) -> String {
         let name = ident_view_text(ident);
         let is_case_var = self
             .matches
@@ -107,7 +106,7 @@ fn text(bytes: &[u8]) -> String {
 
 /// Renders an identifier including its indices, so that stale indices
 /// leaking from a previously parsed command would show up in the events.
-fn ident_view_text(ident: SmtIdentView<'_>) -> String {
+fn ident_view_text(ident: SmtIdent<'_>) -> String {
     let name = text(ident.name.as_slice());
     if ident.indices.is_empty() {
         return name;
@@ -116,8 +115,8 @@ fn ident_view_text(ident: SmtIdentView<'_>) -> String {
         .indices
         .iter()
         .map(|index| match index {
-            SmtIndexView::Numeral(numeral) => text(numeral.as_slice()),
-            SmtIndexView::Symbol(symbol) => text(symbol.as_slice()),
+            SmtIndex::Numeral(numeral) => text(numeral.as_slice()),
+            SmtIndex::Symbol(symbol) => text(symbol.as_slice()),
         })
         .collect();
     format!("(_ {} {})", name, indices.join(" "))
@@ -149,7 +148,7 @@ impl SmtHandler for Resolving {
     fn handle_term(&mut self, term: SmtTerm<'_, Self>) -> Result<String, String> {
         Ok(match term {
             SmtTerm::SpecialConstant(constant) => match constant {
-                SmtSpecialConstantView::Numeral(numeral) => text(numeral.as_slice()),
+                SmtSpecialConstant::Numeral(numeral) => text(numeral.as_slice()),
                 _ => "<constant>".into(),
             },
             SmtTerm::QualifiedIdent(qualified_ident) => {
@@ -176,7 +175,7 @@ impl SmtHandler for Resolving {
 
     fn handle_attribute(
         &mut self,
-        _name: SmtKeywordView<'_>,
+        _name: SmtKeyword<'_>,
         _value: Option<SmtAttributeValue<'_, Self>>,
     ) -> Result<(), String> {
         Ok(())
@@ -193,7 +192,7 @@ impl SmtHandler for Resolving {
     fn start_quantifier(
         &mut self,
         _kind: SmtQuantifierKind,
-        _name: SmtSymbolView<'_>,
+        _name: SmtSymbol<'_>,
         _sort: String,
     ) -> Result<(), String> {
         Ok(())
@@ -201,7 +200,7 @@ impl SmtHandler for Resolving {
     fn end_quantifier(&mut self, term: String) -> Result<String, String> {
         Ok(term)
     }
-    fn start_lambda(&mut self, _name: SmtSymbolView<'_>, _sort: String) -> Result<(), String> {
+    fn start_lambda(&mut self, _name: SmtSymbol<'_>, _sort: String) -> Result<(), String> {
         Ok(())
     }
     fn end_lambda(&mut self, term: String) -> Result<String, String> {
@@ -220,7 +219,7 @@ impl SmtHandler for Resolving {
         Ok(())
     }
 
-    fn start_match_case(&mut self, pattern: SmtPatternView<'_>) -> Result<(), String> {
+    fn start_match_case(&mut self, pattern: SmtPattern<'_>) -> Result<(), String> {
         let current = self
             .matches
             .last_mut()
@@ -232,18 +231,18 @@ impl SmtHandler for Resolving {
         // a bare symbol is taken as a variable; a real handler would
         // first check whether it names a nullary constructor
         let vars: Vec<String> = match pattern {
-            SmtPatternView::Simple(SmtSimplePatternView::Symbol(symbol)) => {
+            SmtPattern::Simple(SmtSimplePattern::Symbol(symbol)) => {
                 vec![text(symbol.as_slice())]
             }
-            SmtPatternView::Simple(SmtSimplePatternView::Wildcard) => Vec::new(),
-            SmtPatternView::Application { constructor, args } => {
+            SmtPattern::Simple(SmtSimplePattern::Wildcard) => Vec::new(),
+            SmtPattern::Application { constructor, args } => {
                 if constructor.as_slice() == b"unstartable" {
                     return Err("unstartable case".into());
                 }
                 args.iter()
                     .filter_map(|arg| match arg {
-                        SmtSimplePatternView::Symbol(symbol) => Some(text(symbol.as_slice())),
-                        SmtSimplePatternView::Wildcard => None,
+                        SmtSimplePattern::Symbol(symbol) => Some(text(symbol.as_slice())),
+                        SmtSimplePattern::Wildcard => None,
                     })
                     .collect()
             }
@@ -293,27 +292,27 @@ impl SmtCommandHandler for Resolving {
 
     fn nonstandard_command(
         &mut self,
-        name: SmtSymbolView<'_>,
+        name: SmtSymbol<'_>,
     ) -> Result<Self::NonstandardParser, String> {
         Err(format!("nonstandard command {:?}", text(name.as_slice())))
     }
 
-    fn command_echo(&mut self, _value: SmtStringContent) -> Result<(), String> {
+    fn command_echo(&mut self, _value: SmtStringContentBuf) -> Result<(), String> {
         Ok(())
     }
-    fn command_get_option(&mut self, _option: SmtKeyword) -> Result<(), String> {
+    fn command_get_option(&mut self, _option: SmtKeywordBuf) -> Result<(), String> {
         Ok(())
     }
     fn command_set_option(&mut self, _option: ()) -> Result<(), String> {
         Ok(())
     }
-    fn command_get_info(&mut self, _keyword: SmtKeyword) -> Result<(), String> {
+    fn command_get_info(&mut self, _keyword: SmtKeywordBuf) -> Result<(), String> {
         Ok(())
     }
     fn command_set_info(&mut self, _attribute: ()) -> Result<(), String> {
         Ok(())
     }
-    fn command_set_logic(&mut self, _logic: SmtSymbol) -> Result<(), String> {
+    fn command_set_logic(&mut self, _logic: SmtSymbolBuf) -> Result<(), String> {
         Ok(())
     }
     fn command_get_value(&mut self, terms: Vec<String>) -> Result<(), String> {
@@ -347,7 +346,11 @@ impl SmtCommandHandler for Resolving {
         self.events.push("get-unsat-core".into());
         Ok(())
     }
-    fn command_declare_sort(&mut self, name: SmtSymbol, arity: SmtNumeral) -> Result<(), String> {
+    fn command_declare_sort(
+        &mut self,
+        name: SmtSymbolBuf,
+        arity: SmtNumeralBuf,
+    ) -> Result<(), String> {
         self.events.push(format!(
             "declare-sort {} {}",
             text(name.as_slice()),
@@ -355,14 +358,14 @@ impl SmtCommandHandler for Resolving {
         ));
         Ok(())
     }
-    fn command_declare_sort_parameter(&mut self, name: SmtSymbol) -> Result<(), String> {
+    fn command_declare_sort_parameter(&mut self, name: SmtSymbolBuf) -> Result<(), String> {
         self.events
             .push(format!("declare-sort-parameter {}", text(name.as_slice())));
         Ok(())
     }
     fn command_declare_fun(
         &mut self,
-        name: SmtSymbol,
+        name: SmtSymbolBuf,
         param_sorts: Vec<String>,
         result_sort: String,
     ) -> Result<(), String> {
@@ -400,17 +403,21 @@ impl SmtCommandHandler for Resolving {
     fn command_exit(&mut self) -> Result<(), String> {
         Ok(())
     }
-    fn command_push(&mut self, amount: SmtNumeral) -> Result<(), String> {
+    fn command_push(&mut self, amount: SmtNumeralBuf) -> Result<(), String> {
         self.events
             .push(format!("push {}", text(amount.as_slice())));
         Ok(())
     }
-    fn command_pop(&mut self, amount: SmtNumeral) -> Result<(), String> {
+    fn command_pop(&mut self, amount: SmtNumeralBuf) -> Result<(), String> {
         self.events.push(format!("pop {}", text(amount.as_slice())));
         Ok(())
     }
 
-    fn start_define_sort(&mut self, name: SmtSymbol, params: Vec<SmtSymbol>) -> Result<(), String> {
+    fn start_define_sort(
+        &mut self,
+        name: SmtSymbolBuf,
+        params: Vec<SmtSymbolBuf>,
+    ) -> Result<(), String> {
         let name = text(name.as_slice());
         if name == "forbidden" {
             return Err("forbidden sort name".into());
@@ -541,7 +548,7 @@ impl SmtCommandHandler for Resolving {
 
     fn start_declare_datatypes(
         &mut self,
-        sort_declarations: Vec<(SmtSymbol, SmtNumeral)>,
+        sort_declarations: Vec<(SmtSymbolBuf, SmtNumeralBuf)>,
     ) -> Result<(), String> {
         let mut rendered = Vec::new();
         self.datatype_sorts.clear();
@@ -559,7 +566,7 @@ impl SmtCommandHandler for Resolving {
         Ok(())
     }
 
-    fn start_datatype_declaration(&mut self, params: Vec<SmtSymbol>) -> Result<(), String> {
+    fn start_datatype_declaration(&mut self, params: Vec<SmtSymbolBuf>) -> Result<(), String> {
         // the datatypes arrive in sort-declaration order, so the handler
         // knows which sort is being started by counting
         let name = self

@@ -5,10 +5,10 @@ use std::fmt::Debug;
 
 use blazing_smtlib::{
     SmtApplication, SmtAttributeValue, SmtAttributes, SmtBindings, SmtDatatypeConstructor,
-    SmtFunctionSignature, SmtHandler, SmtIdent, SmtIdentView, SmtIndex, SmtIndexView, SmtIndices,
-    SmtKeywordView, SmtPattern, SmtPatternView, SmtQualifiedIdent, SmtQualifiedIdentView,
-    SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSimplePatternView, SmtSimplePatterns,
-    SmtSort, SmtSpecialConstant, SmtSpecialConstantView, SmtSymbolView, SmtTerm,
+    SmtFunctionSignature, SmtHandler, SmtIdent, SmtIdentBuf, SmtIndex, SmtIndexBuf, SmtIndices,
+    SmtKeyword, SmtPattern, SmtQualifiedIdent, SmtQualifiedIdentBuf, SmtQuantifierKind, SmtSExpr,
+    SmtSimplePattern, SmtSimplePatternBuf, SmtSimplePatterns, SmtSort, SmtSpecialConstant,
+    SmtSpecialConstantBuf, SmtSymbol, SmtTerm,
 };
 
 /// Handler that is deliberately neither `Debug` nor `Clone`,
@@ -39,7 +39,7 @@ impl SmtHandler for OpaqueHandler {
     }
     fn handle_attribute(
         &mut self,
-        _name: SmtKeywordView<'_>,
+        _name: SmtKeyword<'_>,
         _value: Option<SmtAttributeValue<'_, Self>>,
     ) -> Result<String, Infallible> {
         Ok(String::new())
@@ -54,7 +54,7 @@ impl SmtHandler for OpaqueHandler {
     fn start_quantifier(
         &mut self,
         _kind: SmtQuantifierKind,
-        _name: SmtSymbolView<'_>,
+        _name: SmtSymbol<'_>,
         _sort: String,
     ) -> Result<(), Infallible> {
         Ok(())
@@ -62,7 +62,7 @@ impl SmtHandler for OpaqueHandler {
     fn end_quantifier(&mut self, term: String) -> Result<String, Infallible> {
         Ok(term)
     }
-    fn start_lambda(&mut self, _name: SmtSymbolView<'_>, _sort: String) -> Result<(), Infallible> {
+    fn start_lambda(&mut self, _name: SmtSymbol<'_>, _sort: String) -> Result<(), Infallible> {
         Ok(())
     }
     fn end_lambda(&mut self, term: String) -> Result<String, Infallible> {
@@ -71,7 +71,7 @@ impl SmtHandler for OpaqueHandler {
     fn start_match(&mut self, _scrutinee: Self::Term) -> Result<(), Self::Error> {
         Ok(())
     }
-    fn start_match_case(&mut self, _pattern: SmtPatternView<'_>) -> Result<(), Self::Error> {
+    fn start_match_case(&mut self, _pattern: SmtPattern<'_>) -> Result<(), Self::Error> {
         Ok(())
     }
     fn end_match_case(&mut self, _term: Self::Term) -> Result<(), Self::Error> {
@@ -94,15 +94,15 @@ fn assert_debug<T: Debug>() {}
 /// associated types actually stored in the nodes.
 #[test]
 fn nodes_are_debug_and_clone_with_an_opaque_handler() {
-    assert_debug_and_clone::<SmtIndex>();
-    assert_debug_and_clone::<SmtIdent>();
-    assert_debug_and_clone::<SmtSpecialConstant>();
-    assert_debug_and_clone::<SmtSpecialConstantView<'static>>();
-    assert_debug_and_clone::<SmtQualifiedIdent<OpaqueHandler>>();
-    assert_debug_and_clone::<SmtIndexView<'static>>();
+    assert_debug_and_clone::<SmtIndexBuf>();
+    assert_debug_and_clone::<SmtIdentBuf>();
+    assert_debug_and_clone::<SmtSpecialConstantBuf>();
+    assert_debug_and_clone::<SmtSpecialConstant<'static>>();
+    assert_debug_and_clone::<SmtQualifiedIdentBuf<OpaqueHandler>>();
+    assert_debug_and_clone::<SmtIndex<'static>>();
     assert_debug_and_clone::<SmtIndices<'static>>();
-    assert_debug_and_clone::<SmtIdentView<'static>>();
-    assert_debug_and_clone::<SmtQualifiedIdentView<'static, OpaqueHandler>>();
+    assert_debug_and_clone::<SmtIdent<'static>>();
+    assert_debug_and_clone::<SmtQualifiedIdent<'static, OpaqueHandler>>();
     // the nodes handing values over cannot be cloned, but must still be debuggable
     assert_debug::<SmtSort<'static, OpaqueHandler>>();
     // the nodes handing values over cannot be cloned, but must still be debuggable
@@ -113,9 +113,9 @@ fn nodes_are_debug_and_clone_with_an_opaque_handler() {
     assert_debug::<SmtSExpr<'static, OpaqueHandler>>();
     assert_debug_and_clone::<SmtFunctionSignature<OpaqueHandler>>();
     assert_debug_and_clone::<SmtDatatypeConstructor<OpaqueHandler>>();
-    assert_debug_and_clone::<SmtSimplePattern>();
+    assert_debug_and_clone::<SmtSimplePatternBuf>();
     assert_debug_and_clone::<SmtPattern>();
-    assert_debug_and_clone::<SmtSimplePatternView<'static>>();
+    assert_debug_and_clone::<SmtSimplePattern<'static>>();
     assert_debug_and_clone::<SmtSimplePatterns<'static>>();
-    assert_debug_and_clone::<SmtPatternView<'static>>();
+    assert_debug_and_clone::<SmtPattern<'static>>();
 }

@@ -6,7 +6,7 @@ use std::{
 };
 
 use crate::{
-    SmtHandler, SmtSymbolView,
+    SmtHandler, SmtSymbol,
     parser::{ArenaAccess, TextHandle},
 };
 
@@ -184,18 +184,18 @@ impl<'a, H: SmtHandler + ?Sized> SmtBindings<'a, H> {
     }
 
     #[inline]
-    pub fn get(&self, index: usize) -> Option<(SmtSymbolView<'a>, &H::Term)> {
+    pub fn get(&self, index: usize) -> Option<(SmtSymbol<'a>, &H::Term)> {
         let name = self.names.get(index)?.symbol_view(self.text);
         Some((name, &self.terms[index]))
     }
 
     #[inline]
-    pub fn get_mut(&mut self, index: usize) -> Option<(SmtSymbolView<'a>, &mut H::Term)> {
+    pub fn get_mut(&mut self, index: usize) -> Option<(SmtSymbol<'a>, &mut H::Term)> {
         let name = self.names.get(index)?.symbol_view(self.text);
         Some((name, &mut self.terms[index]))
     }
 
-    pub fn iter(&self) -> impl ExactSizeIterator<Item = (SmtSymbolView<'a>, &H::Term)> {
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = (SmtSymbol<'a>, &H::Term)> {
         let text = self.text;
         self.names
             .iter()
@@ -203,7 +203,7 @@ impl<'a, H: SmtHandler + ?Sized> SmtBindings<'a, H> {
             .zip(self.terms.iter())
     }
 
-    pub fn iter_mut(&mut self) -> impl ExactSizeIterator<Item = (SmtSymbolView<'a>, &mut H::Term)> {
+    pub fn iter_mut(&mut self) -> impl ExactSizeIterator<Item = (SmtSymbol<'a>, &mut H::Term)> {
         let text = self.text;
         self.names
             .iter()
@@ -213,7 +213,7 @@ impl<'a, H: SmtHandler + ?Sized> SmtBindings<'a, H> {
 }
 
 impl<'a, H: SmtHandler + ?Sized> IntoIterator for SmtBindings<'a, H> {
-    type Item = (SmtSymbolView<'a>, H::Term);
+    type Item = (SmtSymbol<'a>, H::Term);
     type IntoIter = SmtBindingsIntoIter<'a, H>;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -233,7 +233,7 @@ pub struct SmtBindingsIntoIter<'a, H: SmtHandler + ?Sized> {
 }
 
 impl<'a, H: SmtHandler + ?Sized> Iterator for SmtBindingsIntoIter<'a, H> {
-    type Item = (SmtSymbolView<'a>, H::Term);
+    type Item = (SmtSymbol<'a>, H::Term);
 
     fn next(&mut self) -> Option<Self::Item> {
         let name = self.names.next()?.symbol_view(self.text);

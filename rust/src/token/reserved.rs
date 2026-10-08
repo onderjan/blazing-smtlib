@@ -1,4 +1,4 @@
-use crate::{SmtBytes, token::SmtVersion};
+use crate::{SmtBytesBuf, token::SmtVersion};
 
 /// Reserved words in SMT-LIB2, including standard command names.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -194,7 +194,7 @@ static RESERVED_TABLE: [(&[u8], SmtReserved, SmtVersion); RESERVED_SLOTS] = {
 impl SmtReserved {
     /// The reserved word that the symbol spells in the version, if any.
     #[inline]
-    pub fn from_symbol_opt(symbol: &SmtBytes, version: SmtVersion) -> Option<SmtReserved> {
+    pub fn from_symbol_opt(symbol: &SmtBytesBuf, version: SmtVersion) -> Option<SmtReserved> {
         Self::from_bytes_opt(symbol.as_slice(), version)
     }
 

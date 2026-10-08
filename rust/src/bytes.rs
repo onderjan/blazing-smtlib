@@ -1,12 +1,12 @@
 use std::fmt::{Debug, Write};
 
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct SmtBytes(Vec<u8>);
+pub struct SmtBytesBuf(Vec<u8>);
 
-impl SmtBytes {
+impl SmtBytesBuf {
     #[inline]
-    pub fn new() -> SmtBytes {
-        SmtBytes(Vec::new())
+    pub fn new() -> SmtBytesBuf {
+        SmtBytesBuf(Vec::new())
     }
 
     pub fn from_vec(vec: Vec<u8>) -> Self {
@@ -23,8 +23,8 @@ impl SmtBytes {
     }
 
     #[inline]
-    pub fn as_view<'a>(&'a self) -> SmtBytesView<'a> {
-        SmtBytesView(&self.0)
+    pub fn as_view<'a>(&'a self) -> SmtBytes<'a> {
+        SmtBytes(&self.0)
     }
 
     pub fn into_vec(self) -> Vec<u8> {
@@ -61,40 +61,40 @@ impl SmtBytes {
     }
 }
 
-impl std::borrow::Borrow<[u8]> for SmtBytes {
+impl std::borrow::Borrow<[u8]> for SmtBytesBuf {
     fn borrow(&self) -> &[u8] {
         self.as_slice()
     }
 }
 
-impl PartialEq<[u8]> for SmtBytes {
+impl PartialEq<[u8]> for SmtBytesBuf {
     fn eq(&self, other: &[u8]) -> bool {
         self.as_slice() == other
     }
 }
 
-impl PartialEq<SmtBytesView<'_>> for SmtBytes {
-    fn eq(&self, other: &SmtBytesView<'_>) -> bool {
+impl PartialEq<SmtBytes<'_>> for SmtBytesBuf {
+    fn eq(&self, other: &SmtBytes<'_>) -> bool {
         self.as_slice() == other.as_slice()
     }
 }
 
-impl Default for SmtBytes {
+impl Default for SmtBytesBuf {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Debug for SmtBytes {
+impl Debug for SmtBytesBuf {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Debug::fmt(&self.as_view(), f)
     }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub struct SmtBytesView<'a>(&'a [u8]);
+pub struct SmtBytes<'a>(&'a [u8]);
 
-impl<'a> SmtBytesView<'a> {
+impl<'a> SmtBytes<'a> {
     #[inline]
     pub(crate) fn new(slice: &'a [u8]) -> Self {
         Self(slice)
@@ -115,8 +115,8 @@ impl<'a> SmtBytesView<'a> {
         self.0
     }
 
-    pub fn into_owned(self) -> SmtBytes {
-        SmtBytes::from_vec(self.as_slice().to_vec())
+    pub fn into_owned(self) -> SmtBytesBuf {
+        SmtBytesBuf::from_vec(self.as_slice().to_vec())
     }
 
     pub fn iter(&self) -> impl Iterator<Item = u8> {
@@ -124,25 +124,25 @@ impl<'a> SmtBytesView<'a> {
     }
 }
 
-impl std::borrow::Borrow<[u8]> for SmtBytesView<'_> {
+impl std::borrow::Borrow<[u8]> for SmtBytes<'_> {
     fn borrow(&self) -> &[u8] {
         self.as_slice()
     }
 }
 
-impl PartialEq<[u8]> for SmtBytesView<'_> {
+impl PartialEq<[u8]> for SmtBytes<'_> {
     fn eq(&self, other: &[u8]) -> bool {
         self.as_slice() == other
     }
 }
 
-impl PartialEq<SmtBytes> for SmtBytesView<'_> {
-    fn eq(&self, other: &SmtBytes) -> bool {
+impl PartialEq<SmtBytesBuf> for SmtBytes<'_> {
+    fn eq(&self, other: &SmtBytesBuf) -> bool {
         self.as_slice() == other.as_slice()
     }
 }
 
-impl Debug for SmtBytesView<'_> {
+impl Debug for SmtBytes<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // print in the manner of Rust str/String,
         // use byte escapes instead of Unicode escapes

@@ -12,7 +12,7 @@ use std::marker::PhantomData;
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtBytes, SmtLocated, SmtLocation, SmtSpan,
+    SmtBytesBuf, SmtLocated, SmtLocation, SmtSpan,
     lexer::{
         char_class::{
             RUN_COMMENT_PLAIN, RUN_DIGIT, RUN_NON_LF_WHITESPACE, RUN_QUOTED_PLAIN,
@@ -64,7 +64,7 @@ pub struct SmtLexer<C: SmtConsume, R: SmtLexRecovery<C> = SmtFailFast> {
     token_start: SmtLocation,
 
     /// The currently-built string content of the currently-processed token.
-    token_content: SmtBytes,
+    token_content: SmtBytesBuf,
 
     /// Offset of the start of the byte being processed during lexing.
     ///
@@ -265,7 +265,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
             lexed_depth: 0,
             recovery_state: None,
             token_start: SmtLocation::initial(),
-            token_content: SmtBytes::new(),
+            token_content: SmtBytesBuf::new(),
             offset: 0,
             line: 0,
             line_start: 0,

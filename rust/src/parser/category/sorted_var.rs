@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtHandler, SmtSymbol,
+    SmtHandler, SmtSymbolBuf,
     parser::{
         Arena, IdentSlot, SmtCloseParenParser, SmtOpenParenParser, SmtParse, SmtParseError,
         SmtParseState, SmtSyntaxErrorKind, SortSlot, TextHandle, parse_by_token,
@@ -32,7 +32,7 @@ impl<H: SmtHandler> Default for SmtSortedVarParser<H> {
 }
 
 impl<H: SmtHandler> SmtParse<H> for SmtSortedVarParser<H> {
-    type Result = (SmtSymbol, H::Sort);
+    type Result = (SmtSymbolBuf, H::Sort);
 
     #[inline]
     fn parse(

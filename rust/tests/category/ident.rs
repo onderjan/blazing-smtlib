@@ -2,13 +2,13 @@
 
 use super::*;
 
-fn indices(ident: &SmtIdent) -> Vec<String> {
+fn indices(ident: &SmtIdentBuf) -> Vec<String> {
     ident
         .indices
         .iter()
         .map(|index| match index {
-            SmtIndex::Numeral(n) => String::from_utf8(n.as_slice().to_vec()).unwrap(),
-            SmtIndex::Symbol(s) => {
+            SmtIndexBuf::Numeral(n) => String::from_utf8(n.as_slice().to_vec()).unwrap(),
+            SmtIndexBuf::Symbol(s) => {
                 format!("'{}", String::from_utf8(s.as_slice().to_vec()).unwrap())
             }
         })

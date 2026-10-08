@@ -100,7 +100,7 @@ impl SmtHandler for Counting {
     }
     fn handle_attribute(
         &mut self,
-        _name: SmtKeywordView<'_>,
+        _name: SmtKeyword<'_>,
         _value: Option<SmtAttributeValue<'_, Self>>,
     ) -> Result<(), Infallible> {
         Ok(())
@@ -115,7 +115,7 @@ impl SmtHandler for Counting {
     fn start_quantifier(
         &mut self,
         _kind: SmtQuantifierKind,
-        _name: SmtSymbolView<'_>,
+        _name: SmtSymbol<'_>,
         _sort: (),
     ) -> Result<(), Infallible> {
         Ok(())
@@ -123,7 +123,7 @@ impl SmtHandler for Counting {
     fn end_quantifier(&mut self, _term: ()) -> Result<(), Infallible> {
         Ok(())
     }
-    fn start_lambda(&mut self, _name: SmtSymbolView<'_>, _sort: ()) -> Result<(), Infallible> {
+    fn start_lambda(&mut self, _name: SmtSymbol<'_>, _sort: ()) -> Result<(), Infallible> {
         Ok(())
     }
     fn end_lambda(&mut self, _term: ()) -> Result<(), Infallible> {
@@ -132,7 +132,7 @@ impl SmtHandler for Counting {
     fn start_match(&mut self, _scrutinee: Self::Term) -> Result<(), Self::Error> {
         Ok(())
     }
-    fn start_match_case(&mut self, _pattern: SmtPatternView<'_>) -> Result<(), Self::Error> {
+    fn start_match_case(&mut self, _pattern: SmtPattern<'_>) -> Result<(), Self::Error> {
         Ok(())
     }
     fn end_match_case(&mut self, _term: Self::Term) -> Result<(), Self::Error> {

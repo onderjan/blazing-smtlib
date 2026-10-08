@@ -11,7 +11,7 @@ use reserved_words::reserved_words;
 use std::ops::ControlFlow;
 
 use blazing_smtlib::{
-    NonstandardCommandError, SmtBytes, SmtSyntaxChecker,
+    NonstandardCommandError, SmtBytesBuf, SmtSyntaxChecker,
     parser::{SmtCommandOutcome, SmtCommandParser, SmtSExprParser, SmtSyntaxErrorKind},
     reader::{SmtReadError, SmtReadErrorCause, SmtReader},
     token::{
@@ -152,7 +152,7 @@ fn the_lookups_find_a_word_from_its_version_on() {
             // the word itself is known from the latest version
             let reserved = SmtReserved::from_bytes_opt(word.as_bytes(), SmtVersion::V2_7)
                 .unwrap_or_else(|| panic!("{word:?} should be reserved in the latest version"));
-            let symbol = SmtBytes::from_vec(word.as_bytes().to_vec());
+            let symbol = SmtBytesBuf::from_vec(word.as_bytes().to_vec());
             let group = match reserved {
                 SmtReserved::General(_) => {
                     SmtGeneralReserved::from_bytes_opt(word.as_bytes(), version).is_some()

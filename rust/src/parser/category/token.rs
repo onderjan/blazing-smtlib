@@ -1,8 +1,8 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtHandler, SmtKeyword, SmtKeywordView, SmtNumeral, SmtNumeralView, SmtStringContent,
-    SmtStringContentView, SmtSymbol,
+    SmtHandler, SmtKeyword, SmtKeywordBuf, SmtNumeral, SmtNumeralBuf, SmtStringContent,
+    SmtStringContentBuf, SmtSymbolBuf,
     parser::{SmtParse, SmtParseError, SmtParseState, SmtSyntaxErrorKind},
     token::{SmtBatchCursor, SmtSyntaxToken, SmtToken, SmtTokenCategory, SmtVersion},
 };
@@ -26,7 +26,7 @@ impl SmtSymbolParser {
     pub(crate) fn expect<H: SmtHandler + ?Sized>(
         version: SmtVersion,
         token: SmtToken,
-    ) -> Result<SmtSymbol, SmtParseError<H::Error>> {
+    ) -> Result<SmtSymbolBuf, SmtParseError<H::Error>> {
         let span = token.span();
         match token.syntax(version) {
             SmtSyntaxToken::Symbol(symbol) => Ok(symbol.into_owned()),
@@ -39,7 +39,7 @@ impl SmtSymbolParser {
 }
 
 impl<H: SmtHandler> SmtParse<H> for SmtSymbolParser {
-    type Result = SmtSymbol;
+    type Result = SmtSymbolBuf;
 
     fn parse(
         &mut self,
@@ -111,16 +111,16 @@ macro_rules! token_parser {
     };
 }
 
-token_parser!(SmtNumeralParser, SmtNumeral, Numeral, |content| {
-    SmtNumeralView::new_unchecked(content).into_owned()
+token_parser!(SmtNumeralParser, SmtNumeralBuf, Numeral, |content| {
+    SmtNumeral::new_unchecked(content).into_owned()
 });
 
 token_parser!(SmtOpenParenParser, (), ParenOpen, |_| ());
 token_parser!(SmtCloseParenParser, (), ParenClose, |_| ());
 
-token_parser!(SmtKeywordParser, SmtKeyword, Keyword, |content| {
-    SmtKeywordView::new_unchecked(content).into_owned()
+token_parser!(SmtKeywordParser, SmtKeywordBuf, Keyword, |content| {
+    SmtKeyword::new_unchecked(content).into_owned()
 });
-token_parser!(SmtStringParser, SmtStringContent, String, |content| {
-    SmtStringContentView::new_unchecked(content).into_owned()
+token_parser!(SmtStringParser, SmtStringContentBuf, String, |content| {
+    SmtStringContent::new_unchecked(content).into_owned()
 });

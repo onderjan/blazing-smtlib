@@ -1,4 +1,4 @@
-use crate::{SmtSpecialConstantView, token::SmtSyntaxToken};
+use crate::{SmtSpecialConstant, token::SmtSyntaxToken};
 
 mod attribute;
 mod combinator;
@@ -44,13 +44,13 @@ pub type SmtParenSortedVarsParser<H> = SmtParenMultipleParser<H, SmtSortedVarPar
 #[inline]
 fn parse_special_constant<'a>(
     kind: SmtSyntaxToken<'a>,
-) -> Result<SmtSpecialConstantView<'a>, SmtSyntaxToken<'a>> {
+) -> Result<SmtSpecialConstant<'a>, SmtSyntaxToken<'a>> {
     let constant = match kind {
-        SmtSyntaxToken::Numeral(value) => SmtSpecialConstantView::Numeral(value),
-        SmtSyntaxToken::Decimal(decimal) => SmtSpecialConstantView::Decimal(decimal),
-        SmtSyntaxToken::Hexadecimal(value) => SmtSpecialConstantView::Hexadecimal(value),
-        SmtSyntaxToken::Binary(value) => SmtSpecialConstantView::Binary(value),
-        SmtSyntaxToken::String(string) => SmtSpecialConstantView::String(string),
+        SmtSyntaxToken::Numeral(value) => SmtSpecialConstant::Numeral(value),
+        SmtSyntaxToken::Decimal(decimal) => SmtSpecialConstant::Decimal(decimal),
+        SmtSyntaxToken::Hexadecimal(value) => SmtSpecialConstant::Hexadecimal(value),
+        SmtSyntaxToken::Binary(value) => SmtSpecialConstant::Binary(value),
+        SmtSyntaxToken::String(string) => SmtSpecialConstant::String(string),
         kind => return Err(kind),
     };
     Ok(constant)

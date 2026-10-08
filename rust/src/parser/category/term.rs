@@ -1,8 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtApplication, SmtHandler, SmtQualifiedIdentView, SmtQuantifierKind, SmtSpan, SmtSymbolView,
-    SmtTerm,
+    SmtApplication, SmtHandler, SmtQualifiedIdent, SmtQuantifierKind, SmtSpan, SmtSymbol, SmtTerm,
     parser::{
         Arena, QualifiedIdentHandle, SmtCloseParenParser, SmtOpenParenParser, SmtParse,
         SmtParseError, SmtParseState, SmtSyntaxErrorKind,
@@ -239,7 +238,7 @@ impl<H: SmtHandler> TermSlot<H> {
                     SmtTokenCategory::UnquotedSymbol | SmtTokenCategory::QuotedSymbol => {
                         if let SmtSyntaxToken::Symbol(name) = token.syntax(cursor.version()) {
                             // this is an unqualified, non-indexed symbol, dispatch it
-                            let term = SmtTerm::QualifiedIdent(SmtQualifiedIdentView {
+                            let term = SmtTerm::QualifiedIdent(SmtQualifiedIdent {
                                 ident: parse_state.arena.simple_ident_view(name),
                                 sort: None,
                             });
@@ -709,7 +708,7 @@ impl<H: SmtHandler> TermSlot<H> {
             SmtSyntaxToken::Symbol(name) => {
                 // a term that is a qualified identifier that is just a symbol,
                 // handed over straight from the token
-                let term = SmtTerm::QualifiedIdent(SmtQualifiedIdentView {
+                let term = SmtTerm::QualifiedIdent(SmtQualifiedIdent {
                     ident: parse_state.arena.simple_ident_view(name),
                     sort: None,
                 });
@@ -934,7 +933,7 @@ impl<H: SmtHandler> TermSlot<H> {
     }
 
     #[inline]
-    fn push_binding_name(&mut self, arena: &mut Arena<H>, name: SmtSymbolView) {
+    fn push_binding_name(&mut self, arena: &mut Arena<H>, name: SmtSymbol) {
         // push the name into the arena
         // the binding term knows where the binding names start
         let name = arena.push_text(name.as_slice());
@@ -1007,7 +1006,7 @@ impl SortedBindingsParser {
         parse_state: &mut SmtParseState<H>,
         version: SmtVersion,
         token: SmtToken,
-        open_fn: impl Fn(&mut H, SmtSymbolView<'_>, H::Sort) -> Result<(), H::Error>,
+        open_fn: impl Fn(&mut H, SmtSymbol<'_>, H::Sort) -> Result<(), H::Error>,
     ) -> Result<ControlFlow<u64>, SmtParseError<H::Error>> {
         let this = &mut parse_state.term_slot.sorted_bindings_parser;
         let token = match this.state {

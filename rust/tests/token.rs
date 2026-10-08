@@ -2,7 +2,7 @@
 
 mod reserved_words;
 
-use blazing_smtlib::SmtBytes;
+use blazing_smtlib::SmtBytesBuf;
 use blazing_smtlib::token::{SmtCommandNameReserved, SmtGeneralReserved, SmtReserved, SmtVersion};
 
 /// Returns every `SmtGeneralReserved` variant, in declaration order.
@@ -91,7 +91,7 @@ fn all_reserved() -> Vec<SmtReserved> {
 #[test]
 fn reserved_as_str_round_trips_through_from_symbol_opt() {
     for reserved in all_reserved() {
-        let symbol = SmtBytes::from_vec(reserved.as_str().as_bytes().to_vec());
+        let symbol = SmtBytesBuf::from_vec(reserved.as_str().as_bytes().to_vec());
         assert_eq!(
             SmtReserved::from_symbol_opt(&symbol, SmtVersion::V2_7),
             Some(reserved),
@@ -143,7 +143,7 @@ fn non_reserved_symbols_are_rejected() {
         b"x",
     ];
     for text in near_misses {
-        let symbol = SmtBytes::from_vec(text.to_vec());
+        let symbol = SmtBytesBuf::from_vec(text.to_vec());
         assert_eq!(
             SmtReserved::from_symbol_opt(&symbol, SmtVersion::V2_7),
             None,
@@ -161,7 +161,7 @@ fn every_reserved_spelling_is_recognized() {
         let reserved = SmtReserved::from_bytes_opt(word.as_bytes(), SmtVersion::V2_7)
             .unwrap_or_else(|| panic!("{word:?} should be a reserved word"));
         assert_eq!(reserved.as_str(), word, "as_str of {reserved:?}");
-        let symbol = SmtBytes::from_vec(word.as_bytes().to_vec());
+        let symbol = SmtBytesBuf::from_vec(word.as_bytes().to_vec());
         assert_eq!(
             SmtReserved::from_symbol_opt(&symbol, SmtVersion::V2_7),
             Some(reserved),

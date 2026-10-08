@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtHandler, SmtIdent, SmtSymbolView,
+    SmtHandler, SmtIdentBuf, SmtSymbol,
     parser::{
         Arena, IdentHandle, IndexHandle, SmtParse, SmtParseError, SmtParseState,
         SmtSyntaxErrorKind, TextHandle, parse_by_token,
@@ -32,7 +32,7 @@ impl Default for SmtIdentParser {
 }
 
 impl<H: SmtHandler> SmtParse<H> for SmtIdentParser {
-    type Result = SmtIdent;
+    type Result = SmtIdentBuf;
 
     #[inline]
     fn parse(
@@ -40,7 +40,7 @@ impl<H: SmtHandler> SmtParse<H> for SmtIdentParser {
         _handler: &mut H,
         parse_state: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
-    ) -> Result<ControlFlow<SmtIdent, ()>, SmtParseError<H::Error>> {
+    ) -> Result<ControlFlow<SmtIdentBuf, ()>, SmtParseError<H::Error>> {
         // progress the slot over the arena, returning an owned identifier
         let SmtParseState {
             ident_slot, arena, ..
@@ -106,7 +106,7 @@ impl IdentSlot {
     pub(crate) fn move_after_indexed_name<H: SmtHandler + ?Sized>(
         &mut self,
         arena: &mut Arena<H>,
-        name: SmtSymbolView,
+        name: SmtSymbol,
     ) {
         debug_assert!(
             self.is_pristine(),
@@ -121,7 +121,7 @@ impl IdentSlot {
     fn push_name<H: SmtHandler + ?Sized>(
         &mut self,
         arena: &mut Arena<H>,
-        name: SmtSymbolView,
+        name: SmtSymbol,
     ) -> TextHandle {
         self.arena_indices_start = arena.indices.len();
         arena.push_text(name.as_slice())
@@ -239,15 +239,15 @@ impl IdentSlot {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{SmtIndex, SmtSyntaxChecker, parser::category::tests::parse_all_with};
+    use crate::{SmtIndexBuf, SmtSyntaxChecker, parser::category::tests::parse_all_with};
 
-    fn index_texts(ident: &SmtIdent) -> Vec<String> {
+    fn index_texts(ident: &SmtIdentBuf) -> Vec<String> {
         ident
             .indices
             .iter()
             .map(|index| match index {
-                SmtIndex::Numeral(n) => String::from_utf8(n.as_slice().to_vec()).unwrap(),
-                SmtIndex::Symbol(s) => {
+                SmtIndexBuf::Numeral(n) => String::from_utf8(n.as_slice().to_vec()).unwrap(),
+                SmtIndexBuf::Symbol(s) => {
                     format!("'{}", String::from_utf8(s.as_slice().to_vec()).unwrap())
                 }
             })
