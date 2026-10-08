@@ -641,6 +641,77 @@ fn lexing_after_a_handler_error_panics() {
     let _ = lexer.lex_slice(b"a");
 }
 
+// A consumer must take at least one token of every handover, whatever it
+// returns; the Rust lexer panics otherwise. These tests drive the Rust lexer
+// directly, as the Lean port makes this an obligation on the caller.
+
+/// What a consumer that takes no token returns.
+#[derive(Clone, Copy)]
+enum Outcome {
+    Continue,
+    Break,
+    Fail,
+}
+
+/// A token consumer that takes no token and returns the given outcome.
+///
+/// It panics on a second call, so that a lexer that keeps handing over the
+/// token it did not take makes the test fail instead of hang.
+struct TakeNothing {
+    outcome: Outcome,
+    called: bool,
+}
+
+impl SmtConsume for TakeNothing {
+    type Result = ();
+    type Error = ();
+    const IS_CONCRETE: bool = false;
+
+    fn consume(
+        &mut self,
+        _cursor: &mut SmtBatchCursor<'_>,
+    ) -> Result<ControlFlow<Self::Result>, Self::Error> {
+        assert!(
+            !self.called,
+            "the lexer handed over the untaken token again"
+        );
+        self.called = true;
+        match self.outcome {
+            Outcome::Continue => Ok(ControlFlow::Continue(())),
+            Outcome::Break => Ok(ControlFlow::Break(())),
+            Outcome::Fail => Err(()),
+        }
+    }
+}
+
+/// Hands the consumer a parenthesis token, which the lexer hands over at once.
+fn hand_over_one_token(outcome: Outcome) {
+    let consumer = TakeNothing {
+        outcome,
+        called: false,
+    };
+    let mut lexer = SmtLexer::new(consumer, SmtVersion::V2_7);
+    let _ = lexer.lex_slice(b"(");
+}
+
+#[test]
+#[should_panic(expected = "token consumer must consume at least one token")]
+fn a_consumer_that_continues_without_taking_a_token_panics() {
+    hand_over_one_token(Outcome::Continue);
+}
+
+#[test]
+#[should_panic(expected = "token consumer must consume at least one token")]
+fn a_consumer_that_breaks_without_taking_a_token_panics() {
+    hand_over_one_token(Outcome::Break);
+}
+
+#[test]
+#[should_panic(expected = "token consumer must consume at least one token")]
+fn a_consumer_that_fails_without_taking_a_token_panics() {
+    hand_over_one_token(Outcome::Fail);
+}
+
 // --- Reserved words against similar symbols ---
 //
 // The lexer produces every symbol alike; the reserved words are recognized
