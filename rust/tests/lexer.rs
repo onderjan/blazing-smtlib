@@ -10,7 +10,7 @@ use blazing_smtlib::{
     SmtSpan,
     lexer::{SmtLexError, SmtLexErrorCause, SmtLexer, SmtLexicalErrorKind},
     token::{
-        SmtBatchCursor, SmtConsume, SmtGeneralReserved, SmtReserved, SmtTokenCategory, SmtVersion,
+        SmtConsume, SmtGeneralReserved, SmtProduce, SmtReserved, SmtTokenCategory, SmtVersion,
     },
 };
 
@@ -25,9 +25,9 @@ impl SmtConsume for TakeTokens {
     type Error = Infallible;
     const IS_CONCRETE: bool = false;
 
-    fn consume(
+    fn consume<'a, P: SmtProduce<'a>>(
         &mut self,
-        cursor: &mut SmtBatchCursor<'_>,
+        cursor: &mut P,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         cursor.consume_all();
         Ok(ControlFlow::Continue(()))
@@ -593,9 +593,9 @@ impl SmtConsume for RejectTokens {
     type Error = SmtSpan;
     const IS_CONCRETE: bool = false;
 
-    fn consume(
+    fn consume<'a, P: SmtProduce<'a>>(
         &mut self,
-        cursor: &mut SmtBatchCursor<'_>,
+        cursor: &mut P,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         match cursor.next() {
             Some(token) => Err(token.span()),
@@ -667,9 +667,9 @@ impl SmtConsume for TakeNothing {
     type Error = ();
     const IS_CONCRETE: bool = false;
 
-    fn consume(
+    fn consume<'a, P: SmtProduce<'a>>(
         &mut self,
-        _cursor: &mut SmtBatchCursor<'_>,
+        _cursor: &mut P,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         assert!(
             !self.called,
@@ -896,9 +896,9 @@ impl SmtConsume for RejectEof {
     type Error = ();
     const IS_CONCRETE: bool = false;
 
-    fn consume(
+    fn consume<'a, P: SmtProduce<'a>>(
         &mut self,
-        cursor: &mut SmtBatchCursor<'_>,
+        cursor: &mut P,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         while let Some(token) = cursor.next() {
             if token.category() == SmtTokenCategory::EndOfFile {

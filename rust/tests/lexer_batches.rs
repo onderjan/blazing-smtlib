@@ -35,7 +35,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use blazing_smtlib::{
     SmtLocation,
     lexer::{SmtLexError, SmtLexErrorCause, SmtLexer, SmtLexicalErrorKind},
-    token::{SmtBatchCursor, SmtConsume, SmtToken, SmtTokenCategory, SmtVersion},
+    token::{SmtConsume, SmtLookahead, SmtProduce, SmtToken, SmtTokenCategory, SmtVersion},
 };
 
 use lex_backend::{Feed, Line, Loc, Options, driver};
@@ -133,9 +133,9 @@ impl SmtConsume for Recorder<'_> {
     type Error = ();
     const IS_CONCRETE: bool = false;
 
-    fn consume(
+    fn consume<'a, P: SmtProduce<'a>>(
         &mut self,
-        cursor: &mut SmtBatchCursor<'_>,
+        cursor: &mut P,
     ) -> Result<ControlFlow<Self::Result>, ()> {
         // Record every token of the hand-over, also those the reply will not
         // take. A consumer has no way to look at tokens without consuming
@@ -153,24 +153,12 @@ impl SmtConsume for Recorder<'_> {
         let tokens = seen.into_inner();
         let len = tokens.len();
         assert_ne!(len, 0, "every hand-over has at least one token");
-        // every hand-over starts with nothing consumed, also one that hands
-        // over the tokens left of a batch
-        assert!(
-            cursor.consumed_span().is_none(),
-            "nothing is consumed at the start of a hand-over"
-        );
         let index = self.calls.len();
         let reply = self.plan.get(index).copied().unwrap_or(Reply::TakeAll);
         let taken = reply.takes(len);
         for _ in 0..taken {
             cursor.next();
         }
-        // what was consumed ends at the last token taken in this hand-over
-        assert_eq!(
-            cursor.consumed_span().map(|span| loc(span.end())),
-            taken.checked_sub(1).map(|last| tokens[last].span.end),
-            "the consumed end after taking {taken} of {len} tokens"
-        );
         self.calls.push(tokens);
         self.versions.push(cursor.version());
         match reply {

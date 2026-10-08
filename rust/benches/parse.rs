@@ -44,7 +44,7 @@ use std::time::Instant;
 
 use blazing_smtlib::{
     lexer::SmtLexer,
-    token::{SmtBatchCursor, SmtConsume, SmtVersion},
+    token::{SmtConsume, SmtProduce, SmtVersion},
 };
 
 /// Default timed runs per file and mode; an additional first (warm-up) run
@@ -61,9 +61,9 @@ impl SmtConsume for DiscardTokens {
     type Error = Infallible;
     const IS_CONCRETE: bool = false;
 
-    fn consume(
+    fn consume<'a, P: SmtProduce<'a>>(
         &mut self,
-        cursor: &mut SmtBatchCursor<'_>,
+        cursor: &mut P,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         while cursor.next().is_some() {
             self.tokens += 1;

@@ -12,7 +12,7 @@ use blazing_smtlib::{
     SmtLocation,
     lexer::{SmtLexErrorCause, SmtLexRecovery, SmtLexer},
     token::{
-        SmtBatchCursor, SmtConsume, SmtRecover, SmtReserved, SmtSyntaxToken, SmtToken,
+        SmtConsume, SmtLookahead, SmtProduce, SmtRecover, SmtReserved, SmtSyntaxToken, SmtToken,
         SmtTokenCategory, SmtVersion,
     },
 };
@@ -116,9 +116,9 @@ impl<const WHITESPACE: bool> SmtConsume for Scripted<WHITESPACE> {
     type Error = &'static str;
     const IS_CONCRETE: bool = WHITESPACE;
 
-    fn consume(
+    fn consume<'a, P: SmtProduce<'a>>(
         &mut self,
-        cursor: &mut SmtBatchCursor<'_>,
+        cursor: &mut P,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         // the version the tokens of this hand-over were lexed under
         let version = cursor.version();
