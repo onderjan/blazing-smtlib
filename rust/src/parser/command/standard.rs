@@ -1,4 +1,4 @@
-use std::ops::ControlFlow;
+use std::ops::ControlFlow::{self, Break, Continue};
 
 use crate::{
     SmtCommandHandler, SmtFunctionSignature, SmtSymbolBuf,
@@ -113,22 +113,30 @@ macro_rules! standard_commands {
                         self.$old_field.parse(handler, parse_state, cursor)?
                     })*
                 };
-                let ControlFlow::Break(()) = flow else {
-                    return Ok(ControlFlow::Continue(()));
+                let Break(()) = flow else {
+                    return Ok(Continue(()));
                 };
 
-                // handle version-switch and exit specially
+                // handle version switch and exit specially
                 let result = match kind {
                     StandardCommandKind::SetInfo => {
                         match self.set_info.parser.take_declared_version() {
-                            Some(version) => SmtCommandOutcome::SetVersion(version),
+                            Some(VersionSwitch::Known(version)) => {
+                                SmtCommandOutcome::SetVersion(version)
+                            }
+                            Some(VersionSwitch::Unknown) => {
+                                // we were asked to switch to an unknown version
+                                return Err(SmtParseError::category_error(
+                                    SmtSyntaxErrorKind::UnsupportedVersion,
+                                ));
+                            }
                             None => SmtCommandOutcome::Command,
                         }
                     }
                     StandardCommandKind::Exit => SmtCommandOutcome::Exit,
                     _ => SmtCommandOutcome::Command,
                 };
-                Ok(ControlFlow::Break(result))
+                Ok(Break(result))
             }
         }
 
@@ -338,15 +346,15 @@ impl<H: SmtCommandHandler> SmtParse<H> for GetValueParser<H> {
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<Vec<H::Term>, ()>, SmtParseError<H::Error>> {
         match self.inner.parse(handler, parse_state, cursor)? {
-            ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
-            ControlFlow::Break(terms) => {
+            Continue(()) => Ok(Continue(())),
+            Break(terms) => {
                 // ensure there is at least one term
                 if terms.is_empty() {
                     return Err(SmtParseError::category_error(
                         SmtSyntaxErrorKind::EmptyGetValueTerms,
                     ));
                 }
-                Ok(ControlFlow::Break(terms))
+                Ok(Break(terms))
             }
         }
     }
@@ -360,8 +368,7 @@ impl<H: SmtCommandHandler> SmtParse<H> for GetValueParser<H> {
 /// `:smt-lib-version <version>`, where the version should be a decimal.
 pub(super) struct SetInfoParser {
     state: SetInfoState,
-    declared_version: Option<SmtVersion>,
-    unsupported_version: bool,
+    version_switch: Option<VersionSwitch>,
 }
 
 enum SetInfoState {
@@ -374,18 +381,27 @@ enum SetInfoState {
     Rest,
 }
 
+/// What version we are supposed to switch to.
+///
+/// This enum is used to avoid confusing two nested Options
+/// (whether we should switch, and whether the version is known).
+enum VersionSwitch {
+    Known(SmtVersion),
+    Unknown,
+}
+
 impl SetInfoParser {
     fn new() -> Self {
         Self {
             state: SetInfoState::Name,
-            declared_version: None,
-            unsupported_version: false,
+            version_switch: None,
         }
     }
 
     /// Takes the version declared by the last parsed command if it exists.
-    pub(super) fn take_declared_version(&mut self) -> Option<SmtVersion> {
-        self.declared_version.take()
+    fn take_declared_version(&mut self) -> Option<VersionSwitch> {
+        // return and clear the version-switch field
+        self.version_switch.take()
     }
 }
 
@@ -406,8 +422,8 @@ impl<H: SmtCommandHandler> SmtParse<H> for SetInfoParser {
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<H::Attribute, ()>, SmtParseError<H::Error>> {
         // The version declaration must be treated specially while parsing
-        // the attribute. We look at the set-info attribute name; if it's s
-        // :smt-lib-version we parse the version to be able to switch.
+        // the attribute. We look at the set-info attribute name; if it is
+        // :smt-lib-version, we parse the version to be able to switch.
         //
         // The state machine is as follows:
         // 1. Name: if the first token is :smt-lib-version, move to version handling;
@@ -416,8 +432,8 @@ impl<H: SmtCommandHandler> SmtParse<H> for SetInfoParser {
         //    it names, or that it names none, and moves to Rest.
         // 3. Rest looks at nothing more.
         //
-        // A value that names no version is an error of the command as a whole:
-        // it is raised once the payload has ended, at the closing parenthesis.
+        // The version we are supposed to switch to is remembered beyond Break,
+        // and the set-info parser takes it out manually and acts on it.
         let SmtParseState {
             attribute_slot,
             arena,
@@ -437,39 +453,37 @@ impl<H: SmtCommandHandler> SmtParse<H> for SetInfoParser {
                 }
                 SetInfoState::Version => {
                     // only a decimal that converts to a version names one
-                    let declared = match token.category() {
-                        SmtTokenCategory::Decimal => SmtVersion::from_decimal_opt(token.content()),
-                        _ => None,
+                    let version = if matches!(token.category(), SmtTokenCategory::Decimal) {
+                        SmtVersion::from_decimal_opt(token.content())
+                    } else {
+                        None
                     };
-                    match declared {
-                        Some(declared) => self.declared_version = Some(declared),
-                        None => self.unsupported_version = true,
-                    }
+                    let switch = match version {
+                        Some(version) => VersionSwitch::Known(version),
+                        None => VersionSwitch::Unknown,
+                    };
+                    self.version_switch = Some(switch);
+                    // parse the rest (closing parenthesis)
                     self.state = SetInfoState::Rest;
                 }
                 SetInfoState::Rest => {}
             }
 
-            let flow = attribute_slot.progress::<H, SingleAttribute>(
+            match attribute_slot.progress::<H, SingleAttribute>(
                 handler,
                 arena,
                 s_expr_slot,
                 version,
                 token,
-            )?;
-            if flow.is_break() {
-                // the command has ended, the next payload starts with its attribute name
-                self.state = SetInfoState::Name;
-                if self.unsupported_version {
-                    // TODO: this was take(), rewrite after tests are done
-                    self.unsupported_version = false;
-
-                    return Err(SmtParseError::category_error(
-                        SmtSyntaxErrorKind::UnsupportedVersion,
-                    ));
+            )? {
+                Continue(()) => Ok(Continue(())),
+                Break(attribute) => {
+                    // the command has ended, reset the state and keep the version-switch
+                    // so it can be taken later
+                    self.state = SetInfoState::Name;
+                    Ok(Break(attribute))
                 }
             }
-            Ok(flow)
         })
     }
 }
