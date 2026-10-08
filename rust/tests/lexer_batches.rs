@@ -155,9 +155,8 @@ impl SmtConsume for Recorder<'_> {
         assert_ne!(len, 0, "every hand-over has at least one token");
         // every hand-over starts with nothing consumed, also one that hands
         // over the tokens left of a batch
-        assert_eq!(
-            cursor.consumed_end(),
-            None,
+        assert!(
+            cursor.consumed_span().is_none(),
             "nothing is consumed at the start of a hand-over"
         );
         let index = self.calls.len();
@@ -168,7 +167,7 @@ impl SmtConsume for Recorder<'_> {
         }
         // what was consumed ends at the last token taken in this hand-over
         assert_eq!(
-            cursor.consumed_end().map(loc),
+            cursor.consumed_span().map(|span| loc(span.end())),
             taken.checked_sub(1).map(|last| tokens[last].span.end),
             "the consumed end after taking {taken} of {len} tokens"
         );

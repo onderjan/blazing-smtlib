@@ -104,18 +104,24 @@ fn cursor_walks_the_batch_in_order() {
         // at the start: nothing consumed, everything ahead
         assert!(!cursor.is_empty());
         assert_eq!(cursor.peek(), Some(tokens[0]));
-        assert_eq!(cursor.consumed_end(), None);
+        assert_eq!(cursor.consumed_span().map(|span| span.end()), None);
 
         // one token taken
         let first = cursor.next().expect("a token");
         assert_eq!(first, tokens[0]);
         assert_eq!(first.category(), SmtTokenCategory::ParenOpen);
-        assert_eq!(cursor.consumed_end(), Some(first.span().end()));
+        assert_eq!(
+            cursor.consumed_span().map(|span| span.end()),
+            Some(first.span().end())
+        );
         assert_eq!(cursor.peek(), Some(tokens[1]));
 
         // looking at the next token does not take it
         assert_eq!(cursor.peek(), Some(tokens[1]));
-        assert_eq!(cursor.consumed_end(), Some(first.span().end()));
+        assert_eq!(
+            cursor.consumed_span().map(|span| span.end()),
+            Some(first.span().end())
+        );
         assert_eq!(ahead(cursor), tokens[1..]);
 
         // to the end and past it
@@ -130,7 +136,7 @@ fn cursor_walks_the_batch_in_order() {
         assert_eq!(cursor.peek(), None);
         assert_eq!(cursor.next(), None);
         assert_eq!(
-            cursor.consumed_end(),
+            cursor.consumed_span().map(|span| span.end()),
             Some(tokens[4].span().end()),
             "taking past the end consumes nothing"
         );
@@ -162,12 +168,15 @@ fn single_token_cursor_holds_that_token_alone() {
             let mut single = SmtBatchCursor::single(SmtVersion::V2_7, token);
             assert!(!single.is_empty());
             assert_eq!(single.peek(), Some(token));
-            assert_eq!(single.consumed_end(), None);
+            assert_eq!(single.consumed_span().map(|span| span.end()), None);
             assert_eq!(ahead(&mut single), [token]);
             assert_eq!(single.next(), Some(token));
             assert!(single.is_empty());
             assert_eq!(single.next(), None);
-            assert_eq!(single.consumed_end(), Some(token.span().end()));
+            assert_eq!(
+                single.consumed_span().map(|span| span.end()),
+                Some(token.span().end())
+            );
         }
     });
 }
@@ -181,10 +190,16 @@ fn consuming_all_empties_the_cursor_at_its_end() {
         assert!(cursor.is_empty());
         assert_eq!(cursor.peek(), None);
         assert_eq!(cursor.next(), None);
-        assert_eq!(cursor.consumed_end(), Some(tokens[2].span().end()));
+        assert_eq!(
+            cursor.consumed_span().map(|span| span.end()),
+            Some(tokens[2].span().end())
+        );
         // consuming all of an empty cursor changes nothing
         cursor.consume_all();
-        assert_eq!(cursor.consumed_end(), Some(tokens[2].span().end()));
+        assert_eq!(
+            cursor.consumed_span().map(|span| span.end()),
+            Some(tokens[2].span().end())
+        );
     });
 
     // after a version with other lexical rules is set, there is nothing
@@ -193,7 +208,10 @@ fn consuming_all_empties_the_cursor_at_its_end() {
         let first = cursor.next().expect("a token");
         cursor.set_version(SmtVersion::V2_0);
         cursor.consume_all();
-        assert_eq!(cursor.consumed_end(), Some(first.span().end()));
+        assert_eq!(
+            cursor.consumed_span().map(|span| span.end()),
+            Some(first.span().end())
+        );
     });
 }
 
@@ -210,7 +228,10 @@ fn an_attempt_that_succeeds_consumes_exactly_what_it_took() {
             Some((first, second))
         });
         assert_eq!(taken, Some((tokens[0], tokens[1])));
-        assert_eq!(cursor.consumed_end(), Some(tokens[1].span().end()));
+        assert_eq!(
+            cursor.consumed_span().map(|span| span.end()),
+            Some(tokens[1].span().end())
+        );
         assert_eq!(cursor.peek(), Some(tokens[2]));
 
         // the next attempt starts at the next token
@@ -219,7 +240,10 @@ fn an_attempt_that_succeeds_consumes_exactly_what_it_took() {
 
         // an extractor that succeeds without taking a token consumes nothing
         assert_eq!(cursor.attempt(|_| Some(7)), Some(7));
-        assert_eq!(cursor.consumed_end(), Some(tokens[2].span().end()));
+        assert_eq!(
+            cursor.consumed_span().map(|span| span.end()),
+            Some(tokens[2].span().end())
+        );
         assert_eq!(cursor.peek(), Some(tokens[3]));
     });
 }
@@ -237,7 +261,11 @@ fn an_attempt_that_fails_consumes_nothing() {
                 None
             });
             assert_eq!(failed, None);
-            assert_eq!(cursor.consumed_end(), None, "after taking {take}");
+            assert_eq!(
+                cursor.consumed_span().map(|span| span.end()),
+                None,
+                "after taking {take}"
+            );
             assert_eq!(cursor.peek(), Some(tokens[0]), "after taking {take}");
             assert_eq!(ahead(cursor), tokens, "after taking {take}");
         }
@@ -249,7 +277,10 @@ fn an_attempt_that_fails_consumes_nothing() {
             None
         });
         assert_eq!(failed, None);
-        assert_eq!(cursor.consumed_end(), Some(tokens[0].span().end()));
+        assert_eq!(
+            cursor.consumed_span().map(|span| span.end()),
+            Some(tokens[0].span().end())
+        );
         assert_eq!(cursor.peek(), Some(tokens[1]));
     });
 }
@@ -367,7 +398,10 @@ fn a_version_with_other_lexical_rules_fixes_the_cursor_at_the_consumed_position(
         assert!(ahead(cursor).is_empty());
         assert_eq!(cursor.attempt(|window| window.next()), None);
         assert_eq!(second.content(), b"a");
-        assert_eq!(cursor.consumed_end(), Some(second.span().end()));
+        assert_eq!(
+            cursor.consumed_span().map(|span| span.end()),
+            Some(second.span().end())
+        );
     });
 }
 

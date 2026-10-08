@@ -399,27 +399,14 @@ impl<'a> SmtBatchCursor<'a> {
         self.next = self.next.saturating_add(count).min(self.entries.len());
     }
 
-    /// Returns the most recently consumed token in this handover (if any).
-    #[inline]
-    pub(crate) fn last_consumed(&self) -> Option<SmtToken<'a>> {
-        if self.next > self.start {
-            self.at(self.next - 1)
-        } else {
-            None
-        }
-    }
-
     /// Span of the last consumed token in this handover (if any).
     #[inline]
     pub fn consumed_span(&self) -> Option<SmtSpan> {
-        self.last_consumed().map(|token| token.span())
-    }
-
-    /// Location of the end of the last consumed token in this handover (if any).
-    #[inline]
-    pub fn consumed_end(&self) -> Option<SmtLocation> {
-        // TODO: replace this by consumed_span
-        self.last_consumed().map(|token| token.span().end())
+        if self.next > self.start {
+            self.at(self.next - 1).map(|token| token.span())
+        } else {
+            None
+        }
     }
 
     /// Consumes all tokens remaining in the cursor.
