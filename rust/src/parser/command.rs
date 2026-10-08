@@ -96,8 +96,8 @@ impl<H: SmtCommandHandler> SmtParse<H> for SmtCommandParser<H> {
         while let Some(peeked) = cursor.peek() {
             match &mut self.state {
                 CommandParserState::AwaitingCommand => {
-                    // we will handle the token here
-                    cursor.advance(1);
+                    // consume the peeked token
+                    let _ = cursor.next();
                     match peeked.category() {
                         SmtTokenCategory::ParenOpen => {
                             // open the command
@@ -116,8 +116,8 @@ impl<H: SmtCommandHandler> SmtParse<H> for SmtCommandParser<H> {
                     }
                 }
                 CommandParserState::CommandOpen => {
-                    // we will handle the token here
-                    cursor.advance(1);
+                    // consume the peeked token
+                    let _ = cursor.next();
                     // expect the command name
                     self.state = match peeked.syntax(cursor.version()) {
                         SmtSyntaxToken::Reserved(SmtReserved::CommandName(name)) => {

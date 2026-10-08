@@ -229,6 +229,7 @@ impl<H: SmtHandler> TermSlot<H> {
         parse_state: &mut SmtParseState<H>,
         cursor: &mut SmtBatchCursor,
     ) -> Result<ControlFlow<H::Term>, SmtParseError<H::Error>> {
+        let version = cursor.version();
         while let Some(token) = cursor.next() {
             if matches!(parse_state.term_slot.state, State::Start)
                 && parse_state.term_slot.pending.is_none()
@@ -236,7 +237,7 @@ impl<H: SmtHandler> TermSlot<H> {
                 // PERFORMANCE: dispatch common term idioms fast.
                 match token.category() {
                     SmtTokenCategory::UnquotedSymbol | SmtTokenCategory::QuotedSymbol => {
-                        if let SmtSyntaxToken::Symbol(name) = token.syntax(cursor.version()) {
+                        if let SmtSyntaxToken::Symbol(name) = token.syntax(version) {
                             // this is an unqualified, non-indexed symbol, dispatch it
                             let term = SmtTerm::QualifiedIdent(SmtQualifiedIdent {
                                 ident: parse_state.arena.simple_ident_view(name),
@@ -253,11 +254,18 @@ impl<H: SmtHandler> TermSlot<H> {
                     }
                     SmtTokenCategory::ParenOpen => {
                         if let Some(peeked) = cursor.peek() {
-                            match peeked.syntax(cursor.version()) {
+                            // Quickly dispatch common transitions after opening parenthesis:
+                            // 1. symbol starts an application
+                            // 2. let ((name opens the first let binding,
+                            //    look ahead to skip over the parentheses
+                            // 3. _ symbol opens an indexed identifier
+                            // 2 and 3 need an additional lookahead
+
+                            match peeked.syntax(version) {
                                 SmtSyntaxToken::Symbol(fn_name) => {
                                     // this is an application start
                                     // consume the peeked token and dispatch
-                                    cursor.advance(1);
+                                    let _ = cursor.next();
                                     let function = QualifiedIdentHandle::unqualified(
                                         parse_state.arena.push_nonindexed_ident(fn_name),
                                     );
@@ -271,17 +279,29 @@ impl<H: SmtHandler> TermSlot<H> {
                                 )) => {
                                     // the proper way to start a let binder is "(let((name"
                                     // we need two more opening parentheses and a symbol
-                                    if cursor.get(1).is_some_and(|t| {
-                                        matches!(t.category(), SmtTokenCategory::ParenOpen)
-                                    }) && cursor.get(2).is_some_and(|t| {
-                                        matches!(t.category(), SmtTokenCategory::ParenOpen)
-                                    }) && let Some(name_token) = cursor.get(3)
-                                        && let SmtSyntaxToken::Symbol(name) =
-                                            name_token.syntax(cursor.version())
-                                    {
+                                    let name = cursor.attempt(|window| {
+                                        // skip over the peeked "let"
+                                        window.next()?;
+                                        // skip over two parentheses
+                                        for _ in 0..2 {
+                                            if window.next().is_none_or(|t| {
+                                                !matches!(t.category(), SmtTokenCategory::ParenOpen)
+                                            }) {
+                                                return None;
+                                            };
+                                        }
+                                        // extract the symbol name
+                                        if let SmtSyntaxToken::Symbol(name) =
+                                            window.next()?.syntax(version)
+                                        {
+                                            Some(name)
+                                        } else {
+                                            None
+                                        }
+                                    });
+
+                                    if let Some(name) = name {
                                         // this is a let binder
-                                        // consume the four peeked tokens
-                                        cursor.advance(4);
                                         // dispatch the let and push the first binding name
                                         parse_state.term_slot.start_let(&mut parse_state.arena);
                                         parse_state
@@ -294,13 +314,21 @@ impl<H: SmtHandler> TermSlot<H> {
                                     SmtGeneralReserved::Underscore,
                                 )) => {
                                     // an indexed identifier starts with "(_ name"
-                                    if let Some(name_token) = cursor.get(1)
-                                        && let SmtSyntaxToken::Symbol(name) =
-                                            name_token.syntax(cursor.version())
-                                    {
+                                    let name = cursor.attempt(|window| {
+                                        // skip over the peeked "_"
+                                        window.next()?;
+                                        // extract the symbol name
+                                        if let SmtSyntaxToken::Symbol(name) =
+                                            window.next()?.syntax(version)
+                                        {
+                                            Some(name)
+                                        } else {
+                                            None
+                                        }
+                                    });
+
+                                    if let Some(name) = name {
                                         // this is an indexed identifier
-                                        // consume the two peeked tokens
-                                        cursor.advance(2);
                                         // move the qualified ident after the indexed name
                                         parse_state.qualified_ident_slot.move_after_indexed_name(
                                             &mut parse_state.ident_slot,

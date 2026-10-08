@@ -346,14 +346,6 @@ impl<'a> SmtBatchCursor<'a> {
         self.at(self.next)
     }
 
-    /// Returns the token `ahead` positions after the next one without consuming anything.
-    ///
-    /// `get(0)` is the next token, also available through `peek`.
-    #[inline]
-    pub(crate) fn get(&self, ahead: usize) -> Option<SmtToken<'a>> {
-        self.at(self.next + ahead)
-    }
-
     /// Consumes the next token (if any).
     // CLIPPY: do not warn on next() without implementing Iterator,
     // as we implement an iterator-like but more powerful API
@@ -388,15 +380,6 @@ impl<'a> SmtBatchCursor<'a> {
         // the extractor succeeded, consume what it took
         self.next = window.next;
         Some(result)
-    }
-
-    /// Consumes the next `count` tokens.
-    ///
-    /// Behaves as if [`SmtBatchCursor::next`] was called `count` times
-    /// with the results discarded, stopping at the end of the cursor.
-    #[inline]
-    pub(crate) fn advance(&mut self, count: usize) {
-        self.next = self.next.saturating_add(count).min(self.entries.len());
     }
 
     /// Span of the last consumed token in this handover (if any).

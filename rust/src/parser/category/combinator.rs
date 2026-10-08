@@ -223,7 +223,8 @@ impl<T> ClosedMultipleResource<T> {
             if self.outside {
                 // we are outside, a closing parenthesis ends processing
                 if matches!(token.category(), SmtTokenCategory::ParenClose) {
-                    cursor.advance(1);
+                    // consume the peeked closing parenthesis
+                    let _ = cursor.next();
                     return Ok(ControlFlow::Break(self.items.drain(..).collect()));
                 }
                 // we are no longer outside
@@ -303,17 +304,16 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtClosedMaximumParser<H, P>
             if self.outside {
                 // we are outside, a closing parenthesis ends processing
                 if matches!(peeked.category(), SmtTokenCategory::ParenClose) {
-                    cursor.advance(1);
+                    // consume the peeked closing parenthesis
+                    let _ = cursor.next();
                     let results = self.results.drain(..).collect();
                     return Ok(ControlFlow::Break(results));
                 }
 
                 if self.results.len() >= self.max_elements {
                     // we cannot allow this element
-                    // so the closing parenthesis was the only allowed choice here
-                    // as we decided to reject based on the peeked token,
-                    // it counts as consumed, so we need to advance
-                    cursor.advance(1);
+                    // consume the peeked closing parenthesis
+                    let _ = cursor.next();
                     return Err(SmtParseError::category_error(
                         SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose]),
                     ));
