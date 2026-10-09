@@ -183,12 +183,12 @@ def lastEnd (self : TokenBatch) : Nat :=
 /-- Writes the value at `index` of the array, which is at most its size. -/
 @[inline]
 private def write (array : Array Nat) (index value : Nat) : Array Nat :=
-  if index < array.size then array.set! index value else array.push value
+  if h : index < array.size then array.set index value else array.push value
 
 /-- Writes the byte at `index` of the array, which is at most its size. -/
 @[inline]
 private def writeByte (array : ByteArray) (index : Nat) (value : UInt8) : ByteArray :=
-  if index < array.size then array.set! index value else array.push value
+  if h : index < array.size then array.set index value else array.push value
 
 private theorem size_write (array : Array Nat) (index value : Nat) (h : index ≤ array.size) :
     index < (write array index value).size := by
