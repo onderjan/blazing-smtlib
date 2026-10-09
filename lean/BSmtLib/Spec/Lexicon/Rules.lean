@@ -73,7 +73,7 @@ Standard: 2.7 §3.1 Digits; App. B ⟨digit⟩.
 def digit : Regex := range 48 57
 
 /--
-Standard: 2.7 §3.1 Letters; App. B ⟨letter⟩. Correction F4: 2.5 App. B writes ⟨letter⟩ as `A |
+Standard: 2.7 §3.1 Letters; App. B ⟨letter⟩. Reading F4: 2.5 App. B writes ⟨letter⟩ as `A |
 ··· | A | a | ··· | z`; this follows §3.1, which gives 65 to 90.
 
 ⟨letter⟩: a character from 65 to 90 (`A` to `Z`) or from 97 to 122 (`a` to `z`).
@@ -218,7 +218,7 @@ def basicReservedWords (version : Version) : List String :=
 
 /--
 Standard: App. B Reserved Words, the command names of each version, given as what each version
-adds. Correction F1: `define-funs-rec` is included from 2.5 on.
+adds. Reading F1: `define-funs-rec` is included from 2.5 on.
 
 The command names each version adds to the scripting language; no version removes one.
 `define-funs-rec` is a command from 2.5 on, although the standard's own lists of reserved
@@ -259,8 +259,8 @@ The characters `~ ! @ $ % ^ & * _ - + = < > . ? /` allowed in simple symbols.
 def symbolPunctuation : Regex := oneOf "~!@$%^&*_-+=<>.?/"
 
 /--
-Standard: 2.7 §3.1 Symbols; App. B ⟨simple_symbol⟩. Correction F3: in 2.5 and 2.6, App. B lacks
-"and is not a reserved word", which §3.1 has; this follows §3.1.
+Standard: 2.7 §3.1 Symbols; App. B ⟨simple_symbol⟩. Reading F3: in 2.0, 2.5 and 2.6, App. B
+lacks "and is not a reserved word", which §3.1 has; this follows §3.1.
 
 A simple symbol: a non-empty sequence of letters, digits and the characters of
 `symbolPunctuation`, that does not start with a digit and is not a reserved word.
@@ -279,7 +279,7 @@ def quotedSymbol : Regex :=
   seq (lit "|") (seq (star (minus (alt whiteSpaceChar printableChar) (oneOf "|\\"))) (lit "|"))
 
 /--
-Correction K: 2.0 §3.1 Keywords and 2.0 App. B ⟨keyword⟩, for every version.
+Reading K: 2.0 §3.1 Keywords and 2.0 App. B ⟨keyword⟩, for every version.
 
 ⟨keyword⟩: `:` followed by a non-empty sequence of letters, digits and the characters of
 `symbolPunctuation`, as 2.0 states it. From 2.5 on the standard writes `:⟨simple_symbol⟩`,

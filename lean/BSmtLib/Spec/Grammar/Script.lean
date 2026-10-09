@@ -31,6 +31,10 @@ def Tree.Command.DeclaresVersion (command : Tree.Command) : Prop :=
 /--
 Standard: 2.7 §3.11 Scripts: a script is a sequence of commands. Reading P4: a version
 declaration starts its version at its first character. Reading P5: `exit` ends the script.
+Reading M3: `reset` keeps the version in force.
+
+TODO: disagrees with P4 in `BSmtLib.Spec`, under which a declaration is parsed in the version
+in force and its version applies after its closing parenthesis.
 
 `ScriptParseFrom version offset input commands`: starting in the version, the input, whose
 first character is at `offset`, has the commands as a parse.

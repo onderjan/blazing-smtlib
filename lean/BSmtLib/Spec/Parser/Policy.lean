@@ -22,8 +22,6 @@ def declaredVersion : Tree.Command → Option Version
   | _ => none
 
 /--
-Extension: version policies are this library's; the standard has none.
-
 A policy on the versions that a script declares: which versions it may declare, and how many
 declarations it may make, without a limit if there is none.
 -/
@@ -32,16 +30,12 @@ structure VersionPolicy where
   maxDeclarations : Option Nat
 
 /--
-Extension: as `VersionPolicy`.
-
 The policy that restricts nothing: every version may be declared, any number of times.
 -/
 def VersionPolicy.unrestricted : VersionPolicy :=
   { allowed := [.v2_0, .v2_5, .v2_6, .v2_7], maxDeclarations := none }
 
 /--
-Extension: as `VersionPolicy`.
-
 `ScriptParseUnder policy version input commands`: starting in the version, the input has the
 commands as a parse, and its version declarations keep to the policy. A policy only restricts
 `ScriptParse`, which is the parse under `VersionPolicy.unrestricted`.

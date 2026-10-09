@@ -15,8 +15,6 @@ open BSmtLib.Spec.Lexicon
 /-! ## What a lexer hands over -/
 
 /--
-Extension: where a lexer reports a token to be; not in the standard.
-
 A location in the input, all zero-based.
 -/
 structure Location where
@@ -26,8 +24,6 @@ structure Location where
   deriving DecidableEq, Repr
 
 /--
-Extension: locations are zero-based, and lines are counted by line feeds alone.
-
 The location of `offset` in the input: lines are counted by line feeds (10) alone, and
 columns by characters.
 -/
@@ -36,8 +32,6 @@ def locate (input : Chars) (offset : Nat) : Location :=
   { offset, line := before.count 10, column := (before.reverse.takeWhile (· ≠ 10)).length }
 
 /--
-Extension: the types of the tokens a lexer hands over.
-
 The token types of the implementation.
 -/
 inductive TokenType where
@@ -55,8 +49,6 @@ inductive TokenType where
   deriving DecidableEq, Repr
 
 /--
-Extension: which kind of reserved word a handed-over token is.
-
 Which kind of reserved word a token is.
 -/
 inductive ReservedKind where
@@ -65,8 +57,6 @@ inductive ReservedKind where
   deriving DecidableEq, Repr
 
 /--
-Extension: the common form of a token a lexer hands over.
-
 A token as the implementation hands it over.
 
 The form is a set of conventions, not a restriction on a lexer: a lexer that represents its
@@ -98,8 +88,6 @@ namespace BSmtLib.Spec.Lexicon
 open BSmtLib.Spec.Lexer
 
 /--
-Extension: the type of a handed-over token of each kind.
-
 The type of a token of each kind; a reserved word is an unquoted symbol.
 -/
 def Category.type : Category → TokenType
@@ -115,8 +103,6 @@ def Category.type : Category → TokenType
   | .keyword => .keyword
 
 /--
-Extension: as `ReservedKind`.
-
 Which kind of reserved word a token is, if it is one.
 -/
 def Token.reservedKind (version : Version) (token : Token) :
@@ -126,8 +112,6 @@ def Token.reservedKind (version : Version) (token : Token) :
   else some .command
 
 /--
-Extension: as `Handed`.
-
 The token as the implementation hands it over.
 -/
 def Token.handed (version : Version) (input : Chars) (token : Token) : Handed :=
@@ -144,8 +128,6 @@ namespace BSmtLib.Spec.Lexer
 open BSmtLib.Spec.Lexicon
 
 /--
-Extension: a lexer hands over an end-of-file token after the input.
-
 The end-of-file token after the input.
 -/
 def endOfFile (input : Chars) : Handed :=
@@ -164,15 +146,12 @@ They are stated for a consumer that takes every token handed over and always con
 lexer answers a consumer that finishes, leaves tokens, switches version or fails will be stated
 relative to them.
 
-Extension D: the properties do not require the input to be a `SourceFile`, so a lexer that
-has them accepts characters from 128 on in 2.0 as 2.5 and later do. 2.0 is used mainly
-to read old scripts into 2.5 and later, or to give a solver that reads 2.5 and later a legacy
-mode, where accepting these characters as 2.5 does is what is wanted.
+Reading D: the lexer does not perform the check for non-ASCII bytes.
 -/
 
 /--
-Extension: what a lexer has done after being fed slices: the tokens it handed over, in order,
-and whether it failed.
+What a lexer has done after being fed slices: the tokens it handed over, in order, and whether it
+failed.
 
 The standard knows only whole inputs; a lexer fed in slices is this library's.
 -/
@@ -199,8 +178,7 @@ can. While the input is `Viable`, `start` is all of it; once it is not, `start` 
 stopped being viable. Of `(a #q`, it is `(a #`: `#x1` could follow, but nothing can follow
 `(a #q`.
 
-Extension: the standard speaks only of whole inputs; a lexer fed in slices has read a start
-of one.
+The standard speaks only of whole inputs; a lexer fed in slices has read a start of one.
 -/
 def LongestViableStart (version : Version) (input start : Chars) : Prop :=
   start <+: input ∧ Viable version start ∧
@@ -214,8 +192,8 @@ These are tokens that a lexer fed the input in slices may hand over: they are `D
 and their delimiter has been read (`DelimiterSeen`). After `(x |abc|`, `(` and `x` are ready,
 but `|abc|` is not: it is determined, but the character after it has not been read.
 
-Extension: waiting for the delimiter of a token that is already determined is this library's;
-the standard does not speak of a lexer fed in slices.
+Waiting for the delimiter of a token that is already determined is this library's; the standard
+does not speak of a lexer fed in slices.
 -/
 def HandoverReady (version : Version) (input : Chars) (tokens : List Token) : Prop :=
   Determined version input tokens ∧ ∀ token ∈ tokens, DelimiterSeen input token
@@ -238,7 +216,7 @@ Property: a lexer fed the slices and then the end of the input hands over `hande
 `lex version slices` is what the lexer hands over, or `none` if it fails, so it fails exactly
 when the input has no tokenisation.
 
-Extension D: the input need not be a `SourceFile`.
+Reading D: the input need not be a `SourceFile`.
 -/
 def WholeInputCorrect (lex : Version → List Chars → Option (List Handed)) (version : Version)
     (slices : List Chars) (handed : List Handed) : Prop :=
@@ -253,7 +231,7 @@ Property: a lexer fed the slices has failed exactly when the input is not viable
 While the input is `Viable`, the characters that follow may still make a valid input of it, so
 the lexer must not fail; once it is not, none can, so the lexer must have failed.
 
-Extension D: the input need not be a `SourceFile`.
+Reading D: the input need not be a `SourceFile`.
 -/
 def FailsCorrectly (feed : Version → List Chars → Fed) (version : Version)
     (slices : List Chars) : Prop :=
@@ -267,7 +245,7 @@ the longest viable start of the input, and nothing else.
 viable. So the lexer holds no token back, hands none over before it is ready, and hands none
 over from where the input stopped being viable on.
 
-Extension D: the input need not be a `SourceFile`.
+Reading D: the input need not be a `SourceFile`.
 -/
 def HandsOverCorrectly (feed : Version → List Chars → Fed) (version : Version)
     (slices : List Chars) (start : Chars) : Prop :=

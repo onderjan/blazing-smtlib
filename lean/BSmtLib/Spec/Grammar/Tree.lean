@@ -16,7 +16,6 @@ namespace Tree
 
 /--
 Standard: 2.7 §3.1 Symbols: a simple symbol and its quoted form are the same symbol.
-Extension: the form it was written in is recorded.
 
 A symbol: its name, which is the symbol, and whether it was written quoted. The form is
 recorded for printing, not for identity: two symbols with the same name are the same symbol,
@@ -222,7 +221,7 @@ inductive PropLiteral where
   | negative (negation : Symbol) (symbol : Symbol)
 
 /--
-Standard: 2.7 §3.11 Scripts; App. B ⟨command⟩. Scope P6: the standard commands only.
+Standard: 2.7 §3.11 Scripts; App. B ⟨command⟩, the standard commands only.
 
 ⟨command⟩
 -/

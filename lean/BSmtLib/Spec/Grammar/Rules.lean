@@ -105,8 +105,8 @@ inductive Symbol : List SyntaxToken → Tree.Symbol → Prop
 /-! ## S-expressions, identifiers, sorts and attributes -/
 
 /--
-Standard: 2.7 §3.2 S-expressions; App. B ⟨s_expr⟩. Reading P3: a reserved word is an
-s-expression from 2.6 on.
+Standard: 2.7 §3.2 S-expressions; App. B ⟨s_expr⟩: a reserved word is an s-expression from
+2.6 release 2021-04-02 on.
 
 ⟨s_expr⟩ ::= ⟨spec_constant⟩ | ⟨symbol⟩ | ⟨reserved⟩ | ⟨keyword⟩ | `(` ⟨s_expr⟩∗ `)`;
 ⟨reserved⟩ is an s-expression from 2.6 on.
@@ -389,9 +389,11 @@ inductive PropLiteral : List SyntaxToken → Tree.PropLiteral → Prop
       PropLiteral (paren [.symbol negation, .symbol name]) (.negative negation name)
 
 /--
-Standard: 2.7 §3.11 Scripts; App. B ⟨command⟩ of each version. Reading P2: `set-option` takes
-any attribute and `get-info` any keyword. Reading P4: each version accepts only a declaration
-of itself. Scope P6: the standard commands only.
+Standard: 2.7 §3.11 Scripts; App. B ⟨command⟩, ⟨option⟩ and ⟨info_flag⟩ of each version, the
+standard commands only. Reading P4: each version accepts only a declaration of itself.
+
+TODO: disagrees with P4 in `BSmtLib.Spec`, under which a declaration is parsed in the version
+in force; each version is then to accept a declaration of any supported version.
 
 ⟨command⟩
 -/

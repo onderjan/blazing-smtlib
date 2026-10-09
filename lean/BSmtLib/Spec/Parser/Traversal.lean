@@ -17,8 +17,6 @@ open BSmtLib.Spec.Lexicon BSmtLib.Spec.Grammar
 namespace Traversal
 
 /--
-Extension: this library's handler contract.
-
 A term as the handler receives it, its parts already handled.
 -/
 inductive TermNode (HandledSort HandledTerm : Type) where
@@ -30,8 +28,6 @@ inductive TermNode (HandledSort HandledTerm : Type) where
       (arguments : List HandledTerm)
 
 /--
-Extension: this library's handler contract.
-
 An s-expression as the handler receives it, its items already handled.
 -/
 inductive SExprNode (HandledSExpr : Type) where
@@ -42,8 +38,6 @@ inductive SExprNode (HandledSExpr : Type) where
   | list (items : List HandledSExpr)
 
 /--
-Extension: this library's handler contract.
-
 An attribute value as the handler receives it, its s-expressions already handled.
 -/
 inductive AttributeValueNode (HandledSExpr : Type) where
@@ -52,8 +46,6 @@ inductive AttributeValueNode (HandledSExpr : Type) where
   | list (items : List HandledSExpr)
 
 /--
-Extension: this library's handler contract.
-
 The handler of the categories that terms are built from (`SmtHandler`).
 -/
 structure TermHandler (m : Type → Type)
@@ -75,8 +67,6 @@ structure TermHandler (m : Type → Type)
   endMatch : m HandledTerm
 
 /--
-Extension: this library's handler contract.
-
 The signature of a defined function, its sorts already handled.
 -/
 structure Signature (HandledSort : Type) where
@@ -85,8 +75,6 @@ structure Signature (HandledSort : Type) where
   result : HandledSort
 
 /--
-Extension: this library's handler contract.
-
 A datatype constructor, the sorts of its selectors already handled.
 -/
 structure Constructor (HandledSort : Type) where
@@ -94,8 +82,6 @@ structure Constructor (HandledSort : Type) where
   selectors : List (Chars × HandledSort)
 
 /--
-Extension: this library's handler contract.
-
 The handler of commands (`CommandHandler`).
 -/
 structure CommandHandler (m : Type → Type)
@@ -413,8 +399,6 @@ def command : Tree.Command → m Unit
   | .setOption option => do handler.setOption (← Traversal.attribute handler.toTermHandler option)
 
 /--
-Extension: this library's handler contract.
-
 A script: its commands, one after another.
 -/
 def script (commands : List Tree.Command) : m Unit :=
