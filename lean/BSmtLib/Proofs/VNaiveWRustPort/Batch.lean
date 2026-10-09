@@ -20,7 +20,7 @@ open BSmtLib.Proofs.Adapter VNaive BSmtLib.Proofs.Simulation
 
 /-- How the batch writes a number at an index of an array, at most its size. -/
 def wr (a : Array Nat) (i v : Nat) : Array Nat :=
-  if i < a.size then a.set! i v else a.push v
+  if h : i < a.size then a.set i v else a.push v
 
 /-- How the batch writes a byte at an index of an array, at most its size. -/
 def wrB (a : ByteArray) (i : Nat) (v : UInt8) : ByteArray :=
@@ -30,19 +30,18 @@ theorem size_wr (a : Array Nat) (i v : Nat) (h : i ≤ a.size) :
     i < (wr a i v).size ∧ a.size ≤ (wr a i v).size := by
   unfold wr
   split
-  · rw [Array.size_set!]; omega
+  · rw [Array.size_set]; omega
   · rw [Array.size_push]; omega
 
 theorem getElem!_wr (a : Array Nat) (i v j : Nat) (h : i ≤ a.size) :
     (wr a i v)[j]! = if j = i then v else a[j]! := by
   unfold wr
   by_cases hlt : i < a.size
-  · simp only [hlt, ↓reduceIte, getElem!_def, Array.set!_eq_setIfInBounds,
-      Array.getElem?_setIfInBounds]
+  · simp only [hlt, ↓reduceDIte, getElem!_def, Array.getElem?_set]
     by_cases e : j = i
     · simp [e]
     · simp [e, Ne.symm e]
-  · simp only [hlt, ↓reduceIte, getElem!_def, Array.getElem?_push]
+  · simp only [hlt, ↓reduceDIte, getElem!_def, Array.getElem?_push]
     by_cases e : j = i
     · simp [e, show i = a.size by omega]
     · simp [e, show j ≠ a.size by omega]
