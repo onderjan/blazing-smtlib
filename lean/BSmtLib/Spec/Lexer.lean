@@ -146,7 +146,7 @@ They are stated for a consumer that takes every token handed over and always con
 lexer answers a consumer that finishes, leaves tokens, switches version or fails will be stated
 relative to them.
 
-Reading D: the lexer does not perform the check for non-ASCII bytes.
+Reading L8: the lexer does not perform the check for non-ASCII bytes.
 -/
 
 /--
@@ -162,7 +162,7 @@ structure Fed where
 /--
 Property: the token is a parenthesis, or the character after it is in the input.
 
-A token other than a parenthesis needs a delimiter after it (`Delimited`, Reading R1), so a
+A token other than a parenthesis needs a delimiter after it (`Delimited`, Reading L1), so a
 lexer can tell that the token ends where it does only once it has read the character after it.
 A parenthesis needs no delimiter.
 -/
@@ -216,7 +216,7 @@ Property: a lexer fed the slices and then the end of the input hands over `hande
 `lex version slices` is what the lexer hands over, or `none` if it fails, so it fails exactly
 when the input has no tokenisation.
 
-Reading D: the input need not be a `SourceFile`.
+Reading L8: the input need not be a `SourceFile`.
 -/
 def WholeInputCorrect (lex : Version → List Chars → Option (List Handed)) (version : Version)
     (slices : List Chars) (handed : List Handed) : Prop :=
@@ -231,7 +231,7 @@ Property: a lexer fed the slices has failed exactly when the input is not viable
 While the input is `Viable`, the characters that follow may still make a valid input of it, so
 the lexer must not fail; once it is not, none can, so the lexer must have failed.
 
-Reading D: the input need not be a `SourceFile`.
+Reading L8: the input need not be a `SourceFile`.
 -/
 def FailsCorrectly (feed : Version → List Chars → Fed) (version : Version)
     (slices : List Chars) : Prop :=
@@ -245,7 +245,7 @@ the longest viable start of the input, and nothing else.
 viable. So the lexer holds no token back, hands none over before it is ready, and hands none
 over from where the input stopped being viable on.
 
-Reading D: the input need not be a `SourceFile`.
+Reading L8: the input need not be a `SourceFile`.
 -/
 def HandsOverCorrectly (feed : Version → List Chars → Fed) (version : Version)
     (slices : List Chars) (start : Chars) : Prop :=

@@ -390,9 +390,9 @@ inductive PropLiteral : List SyntaxToken → Tree.PropLiteral → Prop
 
 /--
 Standard: 2.7 §3.11 Scripts; App. B ⟨command⟩, ⟨option⟩ and ⟨info_flag⟩ of each version, the
-standard commands only. Reading P4: each version accepts only a declaration of itself.
+standard commands only. Reading M1: each version accepts only a declaration of itself.
 
-TODO: disagrees with P4 in `BSmtLib.Spec`, under which a declaration is parsed in the version
+TODO: disagrees with M1 in `BSmtLib.Spec`, under which a declaration is parsed in the version
 in force; each version is then to accept a declaration of any supported version.
 
 ⟨command⟩

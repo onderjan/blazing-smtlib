@@ -73,7 +73,7 @@ Standard: 2.7 §3.1 Digits; App. B ⟨digit⟩.
 def digit : Regex := range 48 57
 
 /--
-Standard: 2.7 §3.1 Letters; App. B ⟨letter⟩. Reading F4: 2.5 App. B writes ⟨letter⟩ as `A |
+Standard: 2.7 §3.1 Letters; App. B ⟨letter⟩. Reading L3: 2.5 App. B writes ⟨letter⟩ as `A |
 ··· | A | a | ··· | z`; this follows §3.1, which gives 65 to 90.
 
 ⟨letter⟩: a character from 65 to 90 (`A` to `Z`) or from 97 to 122 (`a` to `z`).
@@ -98,7 +98,7 @@ line-breaking character.
 def comment : Regex := seq (lit ";") (seq (star (minus anyChar lineBreak)) lineBreak)
 
 /--
-Reading C: a comment may run to the end of the input.
+Reading L2: a comment may run to the end of the input.
 
 A comment that runs to the end of the input. The line-breaking character terminates a
 comment; a comment need not be terminated to be one.
@@ -113,7 +113,7 @@ Whitespace: comments and white space characters, outside string literals and sym
 def whitespace : Regex := star (alt whiteSpaceChar comment)
 
 /--
-Reading C: whitespace at the end of the input may end with a comment that runs to the end.
+Reading L2: whitespace at the end of the input may end with a comment that runs to the end.
 
 Whitespace at the end of the input, which may end with a comment that runs to the end.
 -/
@@ -171,7 +171,7 @@ def unescape : Chars → Chars
   | x => x
 
 /--
-Standard: 2.0 §3.1 String literals; 2.0 App. B ⟨string⟩. Reading S: tab and the line-breaking
+Standard: 2.0 §3.1 String literals; 2.0 App. B ⟨string⟩. Reading L7: tab and the line-breaking
 characters are allowed, as below.
 
 ⟨string⟩ in 2.0: a sequence of printable characters delimited by `"`, possibly containing
@@ -218,7 +218,7 @@ def basicReservedWords (version : Version) : List String :=
 
 /--
 Standard: App. B Reserved Words, the command names of each version, given as what each version
-adds. Reading F1: `define-funs-rec` is included from 2.5 on.
+adds. Reading L6: `define-funs-rec` is included from 2.5 on.
 
 The command names each version adds to the scripting language; no version removes one.
 `define-funs-rec` is a command from 2.5 on, although the standard's own lists of reserved
@@ -259,7 +259,7 @@ The characters `~ ! @ $ % ^ & * _ - + = < > . ? /` allowed in simple symbols.
 def symbolPunctuation : Regex := oneOf "~!@$%^&*_-+=<>.?/"
 
 /--
-Standard: 2.7 §3.1 Symbols; App. B ⟨simple_symbol⟩. Reading F3: in 2.0, 2.5 and 2.6, App. B
+Standard: 2.7 §3.1 Symbols; App. B ⟨simple_symbol⟩. Reading L4: in 2.0, 2.5 and 2.6, App. B
 lacks "and is not a reserved word", which §3.1 has; this follows §3.1.
 
 A simple symbol: a non-empty sequence of letters, digits and the characters of
@@ -279,7 +279,7 @@ def quotedSymbol : Regex :=
   seq (lit "|") (seq (star (minus (alt whiteSpaceChar printableChar) (oneOf "|\\"))) (lit "|"))
 
 /--
-Reading K: 2.0 §3.1 Keywords and 2.0 App. B ⟨keyword⟩, for every version.
+Reading L5: 2.0 §3.1 Keywords and 2.0 App. B ⟨keyword⟩, for every version.
 
 ⟨keyword⟩: `:` followed by a non-empty sequence of letters, digits and the characters of
 `symbolPunctuation`, as 2.0 states it. From 2.5 on the standard writes `:⟨simple_symbol⟩`,

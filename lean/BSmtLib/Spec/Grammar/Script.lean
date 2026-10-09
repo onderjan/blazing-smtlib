@@ -21,7 +21,7 @@ def TokenizationExactly (version : Version) (offset : Nat) (input : Chars) (toke
     ∃ last, tokens.getLast? = some last ∧ last.offset + last.text.length = offset + input.length
 
 /--
-Reading P4: a version declaration is a `set-info` with the attribute `:smt-lib-version`.
+Reading M1: a version declaration is a `set-info` with the attribute `:smt-lib-version`.
 
 The command is a version declaration: `set-info` with the attribute `:smt-lib-version`.
 -/
@@ -29,11 +29,11 @@ def Tree.Command.DeclaresVersion (command : Tree.Command) : Prop :=
   ∃ value, command = .setInfo ⟨chars "smt-lib-version", value⟩
 
 /--
-Standard: 2.7 §3.11 Scripts: a script is a sequence of commands. Reading P4: a version
-declaration starts its version at its first character. Reading P5: `exit` ends the script.
+Standard: 2.7 §3.11 Scripts: a script is a sequence of commands. Reading M1: a version
+declaration starts its version at its first character. Reading M2: `exit` ends the script.
 Reading M3: `reset` keeps the version in force.
 
-TODO: disagrees with P4 in `BSmtLib.Spec`, under which a declaration is parsed in the version
+TODO: disagrees with M1 in `BSmtLib.Spec`, under which a declaration is parsed in the version
 in force and its version applies after its closing parenthesis.
 
 `ScriptParseFrom version offset input commands`: starting in the version, the input, whose
@@ -60,7 +60,7 @@ inductive ScriptParseFrom : Version → Nat → Chars → List Tree.Command → 
       ScriptParseFrom version offset (segment ++ rest) [.exit]
 
 /--
-Standard: 2.7 §3.11 Scripts. Readings P4 and P5, as `ScriptParseFrom`.
+Standard: 2.7 §3.11 Scripts. Readings M1 and M2, as `ScriptParseFrom`.
 
 `ScriptParse version input commands`: starting in the version, the input has the
 commands as a parse.

@@ -62,7 +62,7 @@ structure Token where
   deriving DecidableEq, Repr
 
 /--
-Reading R1: a token other than a parenthesis is followed by a delimiter.
+Reading L1: a token other than a parenthesis is followed by a delimiter.
 
 The delimitation rule: a token other than a parenthesis is followed by the end of the
 input, a white space character, a parenthesis or the `;` that starts a comment. The standard
@@ -75,7 +75,7 @@ def Delimited (category : Category) (rest : Chars) : Prop :=
 
 /--
 Standard: 2.7 §3.1: the only lexical function of whitespace is to break the source text into
-tokens. Readings R1 and C.
+tokens. Readings L1 and L2.
 
 `TokenizationFrom version offset input tokens`: in the version, the tokens are a tokenisation
 of the input, whose first character is at `offset`.
