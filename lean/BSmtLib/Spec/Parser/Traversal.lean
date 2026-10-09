@@ -1,143 +1,290 @@
 import BSmtLib.Spec.Grammar
+import BSmtLib.Spec.Parser.Policy
 
 /-!
 # The traversal
 
-The handler contract: which handler calls the parser makes for each syntax tree, with which
-arguments, in which order. A handler call receives the parts of its construct that are
-already handled, as the values the handler returned for them.
+The handler contract: which handler calls a parser makes for each syntax tree, with which
+arguments, in which order, and at which token. The standard has no parser; this is the
+library's.
 
-A draft, written after what the Rust parser does.
+## Calls
+
+A handler is told about a tree bottom-up: each call receives the parts of its construct that
+are already handled, as the values the handler returned for them, and the names and constants
+as they were written. A call that brings names into scope returns a scope value, which the call
+that ends the scope receives back. The calls are the constructors of `Call`; a handler answers
+each of them (`Handler`).
+
+No two constructs are reported with the same calls, so the calls determine the tree; and the
+calls come in an order in which a handler never has to keep anything back: it can build what it
+builds with a stack.
+
+## Tokens
+
+The traversal also marks two points of each token, through `Points`: its arrival, when the
+parser takes it from its producer, and its processing. Every call is placed between two such
+points:
+
+- A call comes after the processing of the token that determines it, never earlier. So two
+  inputs that agree on their first tokens agree on the calls up to the next token's arrival.
+- The last call of a construct with parentheses comes after its `)`, even where its parts are
+  complete earlier.
+- A call that opens a scope comes right after the token that completes its arguments, before the
+  first token of what it scopes arrives.
+- Only `startScript` comes at an arrival: when the script's first token arrives, before it is
+  processed.
+
+The tokens the traversal takes are exactly the tokens the tree is written as (`Tree.Command.tokens`
+and the others), followed by the end of the input unless the script ends with `exit`.
+
+## Failures
+
+A handler call can fail with the handler's error, the producer can refuse to switch the version,
+and a version declaration can break the version policy. A failure stops the traversal: no call
+and no token point follows it.
 -/
 
 namespace BSmtLib.Spec.Parser
 
 open BSmtLib.Spec.Lexicon BSmtLib.Spec.Grammar
 
+/--
+A propositional literal as the term it is written as: the symbol, or `not` applied to it.
+-/
+def _root_.BSmtLib.Spec.Grammar.Tree.PropLiteral.asTerm : Tree.PropLiteral → Tree.Term
+  | .positive symbol => .identifier (.plain ⟨symbol, []⟩)
+  | .negative negation symbol =>
+    .application (.plain ⟨negation, []⟩) [.identifier (.plain ⟨symbol, []⟩)]
+
 namespace Traversal
 
+/-! ## Calls -/
+
 /--
-A term as the handler receives it, its parts already handled.
+The types of the values a handler returns for what it is told about: handled s-expressions,
+attributes, sorts and terms, and scope values.
 -/
-inductive TermNode (HandledSort HandledTerm : Type) where
+structure Values where
+  sExpr : Type
+  «attribute» : Type
+  sort : Type
+  term : Type
+  scope : Type
+
+/-- What a call returns. -/
+inductive Returns where
+  | sExpr
+  | attribute
+  | sort
+  | term
+  | scope
+  | nothing
+
+/-- The type of what a call returns, in the handler's values. -/
+def Values.of (values : Values) : Returns → Type
+  | .sExpr => values.sExpr
+  | .attribute => values.«attribute»
+  | .sort => values.sort
+  | .term => values.term
+  | .scope => values.scope
+  | .nothing => Unit
+
+/-- A term as the handler receives it, its parts already handled. -/
+inductive TermNode (values : Values) where
   | constant (constant : Tree.SpecConstant)
   /-- A qualified identifier, with its sort if it is qualified by `as`. -/
-  | identifier (identifier : Tree.Identifier) (sort : Option HandledSort)
-  /-- An application of a qualified identifier to at least one argument. -/
-  | application (function : Tree.Identifier) (sort : Option HandledSort)
-      (arguments : List HandledTerm)
+  | identifier (identifier : Tree.Identifier) (sort : Option values.sort)
+  /-- An application of a qualified identifier to its arguments. -/
+  | application (function : Tree.Identifier) (sort : Option values.sort)
+      (arguments : List values.term)
 
-/--
-An s-expression as the handler receives it, its items already handled.
--/
-inductive SExprNode (HandledSExpr : Type) where
+/-- An s-expression as the handler receives it, its items already handled. -/
+inductive SExprNode (values : Values) where
   | constant (constant : Tree.SpecConstant)
-  | symbol (name : Chars)
+  | symbol (symbol : Tree.Symbol)
   | reserved (word : Chars)
   | keyword (name : Chars)
-  | list (items : List HandledSExpr)
+  | list (items : List values.sExpr)
 
 /--
-An attribute value as the handler receives it, its s-expressions already handled.
+The value of an attribute as the handler receives it, the s-expressions of a list value already
+handled. A list value is handed over as its items; the list itself is not an s-expression.
 -/
-inductive AttributeValueNode (HandledSExpr : Type) where
+inductive AttributeValueNode (values : Values) where
   | constant (constant : Tree.SpecConstant)
-  | symbol (name : Chars)
-  | list (items : List HandledSExpr)
+  | symbol (symbol : Tree.Symbol)
+  | list (items : List values.sExpr)
+
+/-- The signature of a defined function, its sorts already handled. -/
+structure Signature (values : Values) where
+  symbol : Tree.Symbol
+  parameters : List (Tree.Symbol × values.sort)
+  result : values.sort
+
+/-- A datatype constructor, the sorts of its selectors already handled. -/
+structure Constructor (values : Values) where
+  symbol : Tree.Symbol
+  selectors : List (Tree.Symbol × values.sort)
 
 /--
-The handler of the categories that terms are built from (`SmtHandler`).
+The calls a handler is told, each with what it returns: one constructor for each method of the
+library's handler traits.
 -/
-structure TermHandler (m : Type → Type)
-    (HandledSExpr HandledAttribute HandledSort HandledTerm : Type) where
-  handleSort : Tree.Identifier → List HandledSort → m HandledSort
-  handleTerm : TermNode HandledSort HandledTerm → m HandledTerm
-  handleSExpr : SExprNode HandledSExpr → m HandledSExpr
-  handleAttribute : Chars → Option (AttributeValueNode HandledSExpr) → m HandledAttribute
-  annotateTerm : HandledTerm → List HandledAttribute → m HandledTerm
-  startLet : List (Chars × HandledTerm) → m Unit
-  endLet : HandledTerm → m HandledTerm
-  startQuantifier : Tree.Quantifier → Chars → HandledSort → m Unit
-  endQuantifier : HandledTerm → m HandledTerm
-  startLambda : Chars → HandledSort → m Unit
-  endLambda : HandledTerm → m HandledTerm
-  startMatch : HandledTerm → m Unit
-  startMatchCase : Tree.Pattern → m Unit
-  endMatchCase : HandledTerm → m Unit
-  endMatch : m HandledTerm
+inductive Call (values : Values) : Returns → Type where
+  -- Sorts, s-expressions, attributes and terms (`SmtHandler`)
+  | handleSort (identifier : Tree.Identifier) (arguments : List values.sort) : Call values .sort
+  | handleSExpr (sExpr : SExprNode values) : Call values .sExpr
+  | handleAttribute (keyword : Chars) (value : Option (AttributeValueNode values)) :
+      Call values .attribute
+  | handleTerm (term : TermNode values) : Call values .term
+  | annotateTerm (term : values.term) (attributes : List values.«attribute») : Call values .term
+  | startLet (bindings : List (Tree.Symbol × values.term)) : Call values .scope
+  | endLet (scope : values.scope) (body : values.term) : Call values .term
+  | startQuantifier (quantifier : Tree.Quantifier) (variables : List (Tree.Symbol × values.sort)) :
+      Call values .scope
+  | endQuantifier (quantifier : Tree.Quantifier) (scope : values.scope) (body : values.term) :
+      Call values .term
+  | startLambda (variables : List (Tree.Symbol × values.sort)) : Call values .scope
+  | endLambda (scope : values.scope) (body : values.term) : Call values .term
+  /-- An early check of the scrutinee, before the first case. -/
+  | startMatch (scrutinee : values.term) : Call values .nothing
+  | startMatchCase (scrutinee : values.term) (pattern : Tree.Pattern) : Call values .scope
+  | endMatchCase (scope : values.scope) (body : values.term) : Call values .term
+  | handleMatch (scrutinee : values.term) (cases : List (Tree.Pattern × values.term)) :
+      Call values .term
+  -- Commands (`SmtCommandHandler`)
+  | commandAssert (term : values.term) : Call values .nothing
+  | commandCheckSat : Call values .nothing
+  | commandCheckSatAssuming (assumptions : List values.term) : Call values .nothing
+  | commandDeclareConst (symbol : Tree.Symbol) (sort : values.sort) : Call values .nothing
+  | startDeclareDatatype (symbol : Tree.Symbol) (parameters : List Tree.Symbol) :
+      Call values .nothing
+  | endDeclareDatatype (constructors : List (Constructor values)) : Call values .nothing
+  | startDeclareDatatypes (sorts : List (Tree.Symbol × Chars)) : Call values .nothing
+  | startDatatypeDeclaration (parameters : List Tree.Symbol) : Call values .nothing
+  | endDatatypeDeclaration (constructors : List (Constructor values)) : Call values .nothing
+  | endDeclareDatatypes : Call values .nothing
+  | commandDeclareFun (symbol : Tree.Symbol) (parameters : List values.sort)
+      (result : values.sort) : Call values .nothing
+  | commandDeclareSort (symbol : Tree.Symbol) (arity : Chars) : Call values .nothing
+  | commandDeclareSortParameter (symbol : Tree.Symbol) : Call values .nothing
+  | commandDefineConst (symbol : Tree.Symbol) (sort : values.sort) (body : values.term) :
+      Call values .nothing
+  | startDefineFun (signature : Signature values) : Call values .nothing
+  | endDefineFun (body : values.term) : Call values .nothing
+  | startDefineFunRec (signature : Signature values) : Call values .nothing
+  | endDefineFunRec (body : values.term) : Call values .nothing
+  | startDefineFunsRec (signatures : List (Signature values)) : Call values .nothing
+  | startRecursiveBody : Call values .nothing
+  | endRecursiveBody (body : values.term) : Call values .nothing
+  | endDefineFunsRec : Call values .nothing
+  | startDefineSort (symbol : Tree.Symbol) (parameters : List Tree.Symbol) : Call values .nothing
+  | endDefineSort (sort : values.sort) : Call values .nothing
+  | commandEcho (content : Chars) : Call values .nothing
+  | commandExit : Call values .nothing
+  | commandGetAssertions : Call values .nothing
+  | commandGetAssignment : Call values .nothing
+  | commandGetInfo (flag : Chars) : Call values .nothing
+  | commandGetModel : Call values .nothing
+  | commandGetOption (keyword : Chars) : Call values .nothing
+  | commandGetProof : Call values .nothing
+  | commandGetUnsatAssumptions : Call values .nothing
+  | commandGetUnsatCore : Call values .nothing
+  | commandGetValue (terms : List values.term) : Call values .nothing
+  | commandPop (count : Chars) : Call values .nothing
+  | commandPush (count : Chars) : Call values .nothing
+  | commandReset : Call values .nothing
+  | commandResetAssertions : Call values .nothing
+  | commandSetInfo (info : values.«attribute») : Call values .nothing
+  | commandSetLogic (symbol : Tree.Symbol) : Call values .nothing
+  | commandSetOption (option : values.«attribute») : Call values .nothing
+  /-- The handler's switch to the version a script declares, after the producer's. -/
+  | setVersion (version : Version) : Call values .nothing
 
 /--
-The signature of a defined function, its sorts already handled.
+A handler in a monad `m`, with errors of type `ε`: its answer to each call, and the start and the
+end of a script, which cannot fail.
 -/
-structure Signature (HandledSort : Type) where
-  symbol : Chars
-  parameters : List (Chars × HandledSort)
-  result : HandledSort
+structure Handler (m : Type → Type) (ε : Type) (values : Values) where
+  call : {returns : Returns} → Call values returns → ExceptT ε m (values.of returns)
+  startScript : m Unit
+  endScript : m Unit
+
+/-! ## Tokens and failures -/
+
+/-- What a parser takes from its producer: a token, or the end of the input. -/
+inductive Received where
+  | token (token : SyntaxToken)
+  | endOfInput
 
 /--
-A datatype constructor, the sorts of its selectors already handled.
+The two points of each token in a parse: the token arrives at the parser, which takes it from
+its producer; then the parser processes it. Between them come only the calls due at the token's
+arrival, which do not depend on the token.
 -/
-structure Constructor (HandledSort : Type) where
-  symbol : Chars
-  selectors : List (Chars × HandledSort)
+structure Points (m : Type → Type) where
+  arrive : Received → m Unit
+  process : Received → m Unit
 
-/--
-The handler of commands (`CommandHandler`).
--/
-structure CommandHandler (m : Type → Type)
-    (HandledSExpr HandledAttribute HandledSort HandledTerm : Type)
-    extends TermHandler m HandledSExpr HandledAttribute HandledSort HandledTerm where
-  echo : Chars → m Unit
-  getOption : Chars → m Unit
-  setOption : HandledAttribute → m Unit
-  getInfo : Chars → m Unit
-  setInfo : HandledAttribute → m Unit
-  setLogic : Chars → m Unit
-  getValue : List HandledTerm → m Unit
-  getAssertions : m Unit
-  getAssignment : m Unit
-  getModel : m Unit
-  getProof : m Unit
-  getUnsatAssumptions : m Unit
-  getUnsatCore : m Unit
-  declareSort : Chars → Chars → m Unit
-  declareSortParameter : Chars → m Unit
-  declareFun : Chars → List HandledSort → HandledSort → m Unit
-  assert : HandledTerm → m Unit
-  checkSat : List HandledTerm → m Unit
-  reset : m Unit
-  resetAssertions : m Unit
-  exit : m Unit
-  push : Chars → m Unit
-  pop : Chars → m Unit
-  startDefineSort : Chars → List Chars → m Unit
-  endDefineSort : HandledSort → m Unit
-  startDefineFun : Signature HandledSort → m Unit
-  endDefineFun : HandledTerm → m Unit
-  startDefineFunsRec : List (Signature HandledSort) → m Unit
-  startRecursiveBody : m Unit
-  endRecursiveBody : HandledTerm → m Unit
-  endDefineFunsRec : m Unit
-  startDeclareDatatypes : List (Chars × Chars) → m Unit
-  startDatatypeDeclaration : List Chars → m Unit
-  endDatatypeDeclaration : List (Constructor HandledSort) → m Unit
-  endDeclareDatatypes : m Unit
+/-- A producer's refusal to switch the version (`SmtVersionRefused`, a name not yet decided). -/
+structure VersionRefused where
+
+/-- The party that failed: the version policy, the handler, or the producer. -/
+inductive Cause (ε : Type) where
+  | policy (violation : PolicyViolation)
+  | handler (error : ε)
+  | producer (refusal : VersionRefused)
+
+/-- What the traversal does: it runs in `m`, and stops with the party that failed. -/
+abbrev Run (m : Type → Type) (ε α : Type) := ExceptT (Cause ε) m α
+
+/-! ## The traversal of each category -/
 
 section
 
-variable {m : Type → Type} [Monad m] {HandledSExpr HandledAttribute HandledSort HandledTerm : Type}
-variable (handler : TermHandler m HandledSExpr HandledAttribute HandledSort HandledTerm)
+variable {m : Type → Type} [Monad m] {ε : Type} {values : Values}
+variable (points : Points m) (handler : Handler m ε values)
+
+/-- The handler's answer to the call; its failure is the handler's. -/
+def call {returns : Returns} (request : Call values returns) : Run m ε (values.of returns) :=
+  ExceptT.adapt Cause.handler (handler.call request)
+
+/--
+The parser takes what it receives: it arrives, the calls due at its arrival are made, then the
+parser processes it.
+-/
+def receive (received : Received) (atArrival : Run m ε Unit := pure ()) : Run m ε Unit := do
+  ExceptT.lift (points.arrive received)
+  atArrival
+  ExceptT.lift (points.process received)
+
+/-- The parser takes the token. -/
+def take (token : SyntaxToken) : Run m ε Unit :=
+  receive points (.token token)
+
+/-- The parser takes the tokens, one after another, with no call between them. -/
+def takeAll (tokens : List SyntaxToken) : Run m ε Unit :=
+  tokens.forM (take points)
 
 mutual
 
-/-- A sort: its argument sorts, then the sort. -/
-def sort : Tree.Sort → m HandledSort
+/-- A sort: its argument sorts, then the sort, after its last token. -/
+def sort : Tree.Sort → Run m ε values.sort
+  /- ⟨identifier⟩ -/
+  | .mk identifier [] => do
+    takeAll points identifier.tokens
+    call handler (.handleSort identifier [])
+  /- `(` ⟨identifier⟩ ⟨sort⟩+ `)` -/
   | .mk identifier arguments => do
+    take points .parenOpen
+    takeAll points identifier.tokens
     let handled ← sorts arguments
-    handler.handleSort identifier handled
+    take points .parenClose
+    call handler (.handleSort identifier handled)
 
 /-- Sorts, one after another. -/
-def sorts : List Tree.Sort → m (List HandledSort)
+def sorts : List Tree.Sort → Run m ε (List values.sort)
   | [] => pure []
   | first :: rest => do
     let handled ← sort first
@@ -148,18 +295,28 @@ end
 
 mutual
 
-/-- An s-expression: a list's items, then the list. -/
-def sExpr : Tree.SExpr → m HandledSExpr
-  | .constant constant => handler.handleSExpr (.constant constant)
-  | .symbol symbol => handler.handleSExpr (.symbol symbol.name)
-  | .reserved word => handler.handleSExpr (.reserved word)
-  | .keyword name => handler.handleSExpr (.keyword name)
+/-- An s-expression: a list's items, then the list, after its `)`. -/
+def sExpr : Tree.SExpr → Run m ε values.sExpr
+  | .constant value => do
+    take points value.token
+    call handler (.handleSExpr (.constant value))
+  | .symbol name => do
+    take points (.symbol name)
+    call handler (.handleSExpr (.symbol name))
+  | .reserved w => do
+    take points (.reserved w)
+    call handler (.handleSExpr (.reserved w))
+  | .keyword name => do
+    take points (.keyword name)
+    call handler (.handleSExpr (.keyword name))
   | .list items => do
+    take points .parenOpen
     let handled ← sExprs items
-    handler.handleSExpr (.list handled)
+    take points .parenClose
+    call handler (.handleSExpr (.list handled))
 
 /-- S-expressions, one after another. -/
-def sExprs : List Tree.SExpr → m (List HandledSExpr)
+def sExprs : List Tree.SExpr → Run m ε (List values.sExpr)
   | [] => pure []
   | first :: rest => do
     let handled ← sExpr first
@@ -168,241 +325,541 @@ def sExprs : List Tree.SExpr → m (List HandledSExpr)
 
 end
 
-/--
-An attribute: the s-expressions of its value, then the attribute. A list value is handed
-over as its items; the list itself is not handled as an s-expression.
--/
-def «attribute» : Tree.Attribute → m HandledAttribute
-  | ⟨name, none⟩ => handler.handleAttribute name none
-  | ⟨name, some (.constant constant)⟩ => handler.handleAttribute name (some (.constant constant))
-  | ⟨name, some (.symbol symbol)⟩ => handler.handleAttribute name (some (.symbol symbol.name))
-  | ⟨name, some (.list items)⟩ => do
-    let handled ← sExprs handler items
-    handler.handleAttribute name (some (.list handled))
+/-- The value of an attribute: its tokens, and the s-expressions of a list value. -/
+def attributeValue : Tree.AttributeValue → Run m ε (AttributeValueNode values)
+  | .constant value => do
+    take points value.token
+    pure (.constant value)
+  | .symbol name => do
+    take points (.symbol name)
+    pure (.symbol name)
+  | .list items => do
+    take points .parenOpen
+    let handled ← sExprs points handler items
+    take points .parenClose
+    pure (.list handled)
 
-/-- Attributes, one after another. -/
-def attributes : List Tree.Attribute → m (List HandledAttribute)
-  | [] => pure []
-  | first :: rest => do
-    let handled ← Traversal.attribute handler first
-    let others ← attributes rest
+/--
+An attribute whose keyword is already taken, then the token after it, `following`: the keyword
+of the next attribute, or the `)` after the attributes.
+
+An attribute with a value is handled after the value's last token, before `following`. An
+attribute without a value is handled only after `following`, the token that shows it has no
+value.
+-/
+def attributeThen (keyword : Chars) (following : SyntaxToken) :
+    Option Tree.AttributeValue → Run m ε values.«attribute»
+  | some value => do
+    let node ← attributeValue points handler value
+    let handled ← call handler (.handleAttribute keyword (some node))
+    take points following
+    pure handled
+  | none => do
+    take points following
+    call handler (.handleAttribute keyword none)
+
+/--
+Attributes from the one whose keyword is already taken on, up to the `)` after them, each as in
+`attributeThen`.
+-/
+def attributesThen (keyword : Chars) (value : Option Tree.AttributeValue) :
+    List Tree.Attribute → Run m ε (List values.«attribute»)
+  | [] => do
+    let handled ← attributeThen points handler keyword .parenClose value
+    pure [handled]
+  | ⟨nextKeyword, nextValue⟩ :: rest => do
+    let handled ← attributeThen points handler keyword (.keyword nextKeyword) value
+    let others ← attributesThen nextKeyword nextValue rest
     pure (handled :: others)
 
-/-- A qualified identifier: its sort, if it has one. -/
-def qualIdentifier : Tree.QualIdentifier → m (Tree.Identifier × Option HandledSort)
-  | .plain identifier => pure (identifier, none)
+/-- A qualified identifier: its tokens and its sort, if it is qualified by `as`. -/
+def qualIdentifier : Tree.QualIdentifier → Run m ε (Tree.Identifier × Option values.sort)
+  /- ⟨identifier⟩ -/
+  | .plain identifier => do
+    takeAll points identifier.tokens
+    pure (identifier, none)
+  /- `(` `as` ⟨identifier⟩ ⟨sort⟩ `)` -/
   | .as identifier qualification => do
-    let handled ← sort handler qualification
+    takeAll points [.parenOpen, word "as"]
+    takeAll points identifier.tokens
+    let handled ← sort points handler qualification
+    take points .parenClose
     pure (identifier, some handled)
 
-/--
-The variables of a binder, one after another: the sort of a variable, then the start of the
-binder for it. A binder of several variables is started once for each of them.
--/
-def openVariables (start : Chars → HandledSort → m Unit) : List Tree.SortedVar → m Unit
-  | [] => pure ()
+/-- Sorted variables, one after another, each `(` ⟨symbol⟩ ⟨sort⟩ `)`: the sort of each. -/
+def sortedVars : List Tree.SortedVar → Run m ε (List (Tree.Symbol × values.sort))
+  | [] => pure []
   | ⟨symbol, variableSort⟩ :: rest => do
-    let handled ← sort handler variableSort
-    start symbol.name handled
-    openVariables start rest
-
-/-- Ends a binder as many times as it was started. -/
-def closeTimes (close : HandledTerm → m HandledTerm) : Nat → HandledTerm → m HandledTerm
-  | 0, term => pure term
-  | count + 1, term => do
-    let closed ← close term
-    closeTimes close count closed
+    takeAll points [.parenOpen, .symbol symbol]
+    let handled ← sort points handler variableSort
+    take points .parenClose
+    let others ← sortedVars rest
+    pure ((symbol, handled) :: others)
 
 mutual
 
 /-- A term. -/
-def term : Tree.Term → m HandledTerm
+def term : Tree.Term → Run m ε values.term
   /- ⟨spec_constant⟩ -/
-  | .constant constant => handler.handleTerm (.constant constant)
+  | .constant value => do
+    take points value.token
+    call handler (.handleTerm (.constant value))
 
   /- ⟨qual_identifier⟩: its sort, then the term -/
-  | .identifier identifier => do
-    let (identifier, qualification) ← qualIdentifier handler identifier
-    handler.handleTerm (.identifier identifier qualification)
+  | .identifier qualified => do
+    let (name, qualification) ← qualIdentifier points handler qualified
+    call handler (.handleTerm (.identifier name qualification))
 
-  /- an application: the sort of the function, its arguments, then the term -/
+  /- `(` ⟨qual_identifier⟩ ⟨term⟩+ `)`: the sort of the function, its arguments, then the term
+  after the `)` -/
   | .application function arguments => do
-    let (function, qualification) ← qualIdentifier handler function
+    take points .parenOpen
+    let (name, qualification) ← qualIdentifier points handler function
     let handled ← terms arguments
-    handler.handleTerm (.application function qualification handled)
+    take points .parenClose
+    call handler (.handleTerm (.application name qualification handled))
 
-  /- `let`: the terms of the bindings, the start, the body, then the end -/
+  /- `(` `let` `(` ⟨var_binding⟩+ `)` ⟨term⟩ `)`: the bound terms, the start after the `)` of
+  the bindings, the body, then the end after the `)` -/
   | .«let» bindingList body => do
+    takeAll points [.parenOpen, word "let", .parenOpen]
     let handled ← bindings bindingList
-    handler.startLet handled
+    take points .parenClose
+    let scope ← call handler (.startLet handled)
     let result ← term body
-    handler.endLet result
+    take points .parenClose
+    call handler (.endLet scope result)
 
-  /- `lambda`: the variables, the body, then an end for each variable -/
+  /- `(` `lambda` `(` ⟨sorted_var⟩+ `)` ⟨term⟩ `)`: the sorts of the variables, the start with
+  all of them after the `)` of the variables, the body, then the end after the `)` -/
   | .lambda variables body => do
-    openVariables handler handler.startLambda variables
+    takeAll points [.parenOpen, word "lambda", .parenOpen]
+    let handled ← sortedVars points handler variables
+    take points .parenClose
+    let scope ← call handler (.startLambda handled)
     let result ← term body
-    closeTimes handler.endLambda variables.length result
+    take points .parenClose
+    call handler (.endLambda scope result)
 
-  /- `forall`, `exists`: the variables, the body, then an end for each variable -/
+  /- `(` `forall` or `exists` `(` ⟨sorted_var⟩+ `)` ⟨term⟩ `)`: as `lambda`, with the quantifier
+  passed to the start and to the end -/
   | .quantified quantifier variables body => do
-    openVariables handler (handler.startQuantifier quantifier) variables
+    takeAll points [.parenOpen, quantifier.word, .parenOpen]
+    let handled ← sortedVars points handler variables
+    take points .parenClose
+    let scope ← call handler (.startQuantifier quantifier handled)
     let result ← term body
-    closeTimes handler.endQuantifier variables.length result
+    take points .parenClose
+    call handler (.endQuantifier quantifier scope result)
 
-  /- `match`: the scrutinee, the start, the cases, then the end -/
+  /- `(` `match` ⟨term⟩ `(` ⟨match_case⟩+ `)` `)`: the scrutinee, the start after its last
+  token, the cases, then the match with the scrutinee and the cases after the `)` -/
   | .«match» scrutinee caseList => do
+    takeAll points [.parenOpen, word "match"]
     let handled ← term scrutinee
-    handler.startMatch handled
-    cases caseList
-    handler.endMatch
+    call handler (.startMatch handled)
+    take points .parenOpen
+    let handledCases ← cases handled caseList
+    takeAll points [.parenClose, .parenClose]
+    call handler (.handleMatch handled handledCases)
 
-  /- an annotation: the term, its attributes, then the annotation -/
+  /- `(` `!` ⟨term⟩ ⟨attribute⟩+ `)`: the term, its attributes, then the annotation after the
+  `)` -/
   | .annotated annotated attributeList => do
+    takeAll points [.parenOpen, word "!"]
     let handled ← term annotated
-    let handledAttributes ← attributes handler attributeList
-    handler.annotateTerm handled handledAttributes
+    let handledAttributes ← match attributeList with
+      | [] => do
+        take points .parenClose
+        pure []
+      | ⟨keyword, value⟩ :: rest => do
+        take points (.keyword keyword)
+        attributesThen points handler keyword value rest
+    call handler (.annotateTerm handled handledAttributes)
 
 /-- Terms, one after another. -/
-def terms : List Tree.Term → m (List HandledTerm)
+def terms : List Tree.Term → Run m ε (List values.term)
   | [] => pure []
   | first :: rest => do
     let handled ← term first
     let others ← terms rest
     pure (handled :: others)
 
-/-- The bindings of a `let`, one after another: the term of each. -/
-def bindings : List (Tree.Symbol × Tree.Term) → m (List (Chars × HandledTerm))
+/-- The bindings of a `let`, one after another, each `(` ⟨symbol⟩ ⟨term⟩ `)`: the term of each. -/
+def bindings : List (Tree.Symbol × Tree.Term) → Run m ε (List (Tree.Symbol × values.term))
   | [] => pure []
   | (symbol, bound) :: rest => do
+    takeAll points [.parenOpen, .symbol symbol]
     let handled ← term bound
+    take points .parenClose
     let others ← bindings rest
-    pure ((symbol.name, handled) :: others)
+    pure ((symbol, handled) :: others)
 
-/-- The cases of a `match`, one after another: the start of each, its body, then its end. -/
-def cases : List (Tree.Pattern × Tree.Term) → m Unit
-  | [] => pure ()
+/--
+The cases of a `match`, one after another, each `(` ⟨pattern⟩ ⟨term⟩ `)`: the start with the
+scrutinee and the pattern after the pattern's last token, the body, then the end after the `)`.
+-/
+def cases (scrutinee : values.term) :
+    List (Tree.Pattern × Tree.Term) → Run m ε (List (Tree.Pattern × values.term))
+  | [] => pure []
   | (pattern, body) :: rest => do
-    handler.startMatchCase pattern
+    take points .parenOpen
+    takeAll points pattern.tokens
+    let scope ← call handler (.startMatchCase scrutinee pattern)
     let result ← term body
-    handler.endMatchCase result
-    cases rest
+    take points .parenClose
+    let handled ← call handler (.endMatchCase scope result)
+    let others ← cases scrutinee rest
+    pure ((pattern, handled) :: others)
 
 end
 
-end
+/-! ## The traversal of commands -/
 
-/-- A propositional literal as the term it is: the symbol, or `not` applied to it. -/
-def Tree.PropLiteral.asTerm : Tree.PropLiteral → Tree.Term
-  | .positive symbol => .identifier (.plain ⟨symbol, []⟩)
-  | .negative negation symbol =>
-    .application (.plain ⟨negation, []⟩) [.identifier (.plain ⟨symbol, []⟩)]
-
-section
-
-variable {m : Type → Type} [Monad m] {HandledSExpr HandledAttribute HandledSort HandledTerm : Type}
-variable (handler : CommandHandler m HandledSExpr HandledAttribute HandledSort HandledTerm)
-
-/-- The signature of a function: the sorts of its parameters, then its result sort. -/
+/--
+The signature of a function, ⟨symbol⟩ `(` ⟨sorted_var⟩∗ `)` ⟨sort⟩: the sorts of its parameters,
+then its result sort.
+-/
 def signature (symbol : Tree.Symbol) (parameters : List Tree.SortedVar) (result : Tree.Sort) :
-    m (Signature HandledSort) := do
-  let handledParameters ← parameters.mapM fun ⟨parameter, parameterSort⟩ => do
-    pure (parameter.name, ← sort handler.toTermHandler parameterSort)
-  let handledResult ← sort handler.toTermHandler result
-  pure ⟨symbol.name, handledParameters, handledResult⟩
+    Run m ε (Signature values) := do
+  takeAll points [.symbol symbol, .parenOpen]
+  let handledParameters ← sortedVars points handler parameters
+  take points .parenClose
+  let handledResult ← sort points handler result
+  pure ⟨symbol, handledParameters, handledResult⟩
+
+/-- Selectors, one after another, each `(` ⟨symbol⟩ ⟨sort⟩ `)`: the sort of each. -/
+def selectors : List Tree.SelectorDec → Run m ε (List (Tree.Symbol × values.sort))
+  | [] => pure []
+  | ⟨symbol, selectorSort⟩ :: rest => do
+    takeAll points [.parenOpen, .symbol symbol]
+    let handledSort ← sort points handler selectorSort
+    take points .parenClose
+    let others ← selectors rest
+    pure ((symbol, handledSort) :: others)
 
 /--
-A datatype declaration: the start with its sort parameters, the sorts of the selectors of its
-constructors, then the end with the constructors.
+A constructor, `(` ⟨symbol⟩ ⟨selector_dec⟩∗ `)`, whose `(` is already taken: the sorts of its
+selectors.
 -/
-def datatype (declaration : Tree.DatatypeDec) : m Unit := do
-  handler.startDatatypeDeclaration (declaration.parameters.map (·.name))
-  let constructors ← declaration.constructors.mapM fun constructor => do
-    let selectors ← constructor.selectors.mapM fun selector => do
-      pure (selector.symbol.name, ← sort handler.toTermHandler selector.sort)
-    pure (⟨constructor.symbol.name, selectors⟩ : Constructor HandledSort)
-  handler.endDatatypeDeclaration constructors
+def constructorAfterOpen (constructor : Tree.ConstructorDec) : Run m ε (Constructor values) := do
+  take points (.symbol constructor.symbol)
+  let handledSelectors ← selectors points handler constructor.selectors
+  take points .parenClose
+  pure ⟨constructor.symbol, handledSelectors⟩
 
-/-- The body of a recursive function: the start, the body, then the end. -/
-def recursiveBody (body : Tree.Term) : m Unit := do
-  handler.startRecursiveBody
-  let result ← term handler.toTermHandler body
-  handler.endRecursiveBody result
+/-- Constructors, one after another, each `(` ⟨symbol⟩ ⟨selector_dec⟩∗ `)`. -/
+def constructors (list : List Tree.ConstructorDec) : Run m ε (List (Constructor values)) :=
+  list.mapM fun constructor => do
+    take points .parenOpen
+    constructorAfterOpen points handler constructor
 
-/-- A command. -/
-def command : Tree.Command → m Unit
-  | .assert asserted => do handler.assert (← term handler.toTermHandler asserted)
-  /- `check-sat` is `check-sat-assuming` without assumptions -/
-  | .checkSat => handler.checkSat []
+/--
+A datatype declaration, given the start to make: the start with its sort parameters, then the
+sorts of the selectors of its constructors, up to the declaration's `)`. It returns the handled
+constructors, for the end that follows.
+
+The start comes when the tokens determine the sort parameters: in the form with `par`, after
+the `)` of the parameters; in the form without, after the `(` of the first constructor, the
+token after the declaration's `(`, which shows that the form has no `par`.
+-/
+def datatype (start : List Tree.Symbol → Run m ε Unit) (declaration : Tree.DatatypeDec) :
+    Run m ε (List (Constructor values)) :=
+  match declaration.parameters, declaration.constructors with
+  /- `(` ⟨constructor_dec⟩+ `)` -/
+  | [], first :: rest => do
+    takeAll points [.parenOpen, .parenOpen]
+    start []
+    let handledFirst ← constructorAfterOpen points handler first
+    let others ← constructors points handler rest
+    take points .parenClose
+    pure (handledFirst :: others)
+  /- `(` `)`: no datatype declaration of any version, written as the form without `par` -/
+  | [], [] => do
+    takeAll points [.parenOpen, .parenClose]
+    start []
+    pure []
+  /- `(` `par` `(` ⟨symbol⟩+ `)` `(` ⟨constructor_dec⟩+ `)` `)` -/
+  | parameters, list => do
+    takeAll points [.parenOpen, word "par", .parenOpen]
+    takeAll points (parameters.map .symbol)
+    take points .parenClose
+    start parameters
+    take points .parenOpen
+    let handled ← constructors points handler list
+    takeAll points [.parenClose, .parenClose]
+    pure handled
+
+/--
+The bodies of recursive functions, one after another, each between its start and its end. A
+body has no parentheses of its own: its start comes right after the token before it, and its
+end after its last token.
+-/
+def recursiveBodies : List Tree.Term → Run m ε Unit
+  | [] => pure ()
+  | body :: rest => do
+    call handler .startRecursiveBody
+    let handled ← term points handler body
+    call handler (.endRecursiveBody handled)
+    recursiveBodies rest
+
+/--
+The first two tokens of a command, `(` and its name, given the calls due when its `(` arrives.
+-/
+def opening (atArrival : Run m ε Unit) (name : String) : Run m ε Unit := do
+  receive points (.token .parenOpen) atArrival
+  take points (word name)
+
+/--
+A command, given the calls due when its first token arrives. Every command's last call comes
+after its `)`.
+
+A version declaration is a `set-info` like any other: the command switches nothing. The switch
+belongs to the script the command is in (`commands`).
+-/
+def command (atArrival : Run m ε Unit) : Tree.Command → Run m ε Unit
+  | .assert asserted => do
+    opening points atArrival "assert"
+    let handled ← term points handler asserted
+    take points .parenClose
+    call handler (.commandAssert handled)
+  | .checkSat => do
+    opening points atArrival "check-sat"
+    take points .parenClose
+    call handler .commandCheckSat
   | .checkSatAssuming assumptions => do
-    handler.checkSat (← terms handler.toTermHandler assumptions)
-  /- the literals of 2.5 and 2.6 are handled as the terms they are -/
+    opening points atArrival "check-sat-assuming"
+    take points .parenOpen
+    let handled ← terms points handler assumptions
+    takeAll points [.parenClose, .parenClose]
+    call handler (.commandCheckSatAssuming handled)
+  /- the literals of 2.5 and 2.6 are handled as the terms they are written as -/
   | .checkSatAssumingLiterals literals => do
-    handler.checkSat (← terms handler.toTermHandler (literals.map Tree.PropLiteral.asTerm))
-  /- `declare-const` is `declare-fun` without parameters -/
+    opening points atArrival "check-sat-assuming"
+    take points .parenOpen
+    let handled ← terms points handler (literals.map Tree.PropLiteral.asTerm)
+    takeAll points [.parenClose, .parenClose]
+    call handler (.commandCheckSatAssuming handled)
   | .declareConst symbol declaredSort => do
-    handler.declareFun symbol.name [] (← sort handler.toTermHandler declaredSort)
-  /- `declare-datatype` is `declare-datatypes` of one datatype, whose arity is the number of
-  its sort parameters -/
+    opening points atArrival "declare-const"
+    take points (.symbol symbol)
+    let handled ← sort points handler declaredSort
+    take points .parenClose
+    call handler (.commandDeclareConst symbol handled)
+  /- the start after the parameters, determined as in `datatype`, the end after the `)` -/
   | .declareDatatype symbol declaration => do
-    handler.startDeclareDatatypes [(symbol.name, chars (toString declaration.parameters.length))]
-    datatype handler declaration
-    handler.endDeclareDatatypes
+    opening points atArrival "declare-datatype"
+    take points (.symbol symbol)
+    let handled ← datatype points handler
+      (fun parameters => call handler (.startDeclareDatatype symbol parameters)) declaration
+    take points .parenClose
+    call handler (.endDeclareDatatype handled)
+  /- the start after the `)` of the sort declarations; each datatype; the end after the `)` -/
   | .declareDatatypes sortDecs declarations => do
-    handler.startDeclareDatatypes (sortDecs.map fun sortDec => (sortDec.symbol.name, sortDec.arity))
-    declarations.forM (datatype handler)
-    handler.endDeclareDatatypes
+    opening points atArrival "declare-datatypes"
+    take points .parenOpen
+    takeAll points (sortDecs.flatMap Tree.SortDec.tokens)
+    take points .parenClose
+    call handler
+      (.startDeclareDatatypes (sortDecs.map fun sortDec => (sortDec.symbol, sortDec.arity)))
+    take points .parenOpen
+    declarations.forM fun declaration => do
+      let handled ← datatype points handler
+        (fun parameters => call handler (.startDatatypeDeclaration parameters)) declaration
+      call handler (.endDatatypeDeclaration handled)
+    takeAll points [.parenClose, .parenClose]
+    call handler .endDeclareDatatypes
   | .declareFun symbol parameters result => do
-    let handledParameters ← sorts handler.toTermHandler parameters
-    let handledResult ← sort handler.toTermHandler result
-    handler.declareFun symbol.name handledParameters handledResult
-  | .declareSort symbol arity => handler.declareSort symbol.name arity
-  | .declareSortParameter symbol => handler.declareSortParameter symbol.name
-  /- `define-const` is `define-fun` without parameters -/
+    opening points atArrival "declare-fun"
+    takeAll points [.symbol symbol, .parenOpen]
+    let handledParameters ← sorts points handler parameters
+    take points .parenClose
+    let handledResult ← sort points handler result
+    take points .parenClose
+    call handler (.commandDeclareFun symbol handledParameters handledResult)
+  | .declareSort symbol arity => do
+    opening points atArrival "declare-sort"
+    takeAll points [.symbol symbol, .numeral arity, .parenClose]
+    call handler (.commandDeclareSort symbol arity)
+  | .declareSortParameter symbol => do
+    opening points atArrival "declare-sort-parameter"
+    takeAll points [.symbol symbol, .parenClose]
+    call handler (.commandDeclareSortParameter symbol)
+  /- the sort, the body, then the definition after the `)` -/
   | .defineConst symbol definedSort body => do
-    handler.startDefineFun ⟨symbol.name, [], ← sort handler.toTermHandler definedSort⟩
-    handler.endDefineFun (← term handler.toTermHandler body)
+    opening points atArrival "define-const"
+    take points (.symbol symbol)
+    let handledSort ← sort points handler definedSort
+    let handledBody ← term points handler body
+    take points .parenClose
+    call handler (.commandDefineConst symbol handledSort handledBody)
+  /- the start after the result sort's last token, the body, the end after the `)` -/
   | .defineFun ⟨symbol, parameters, result, body⟩ => do
-    handler.startDefineFun (← signature handler symbol parameters result)
-    handler.endDefineFun (← term handler.toTermHandler body)
-  /- `define-fun-rec` is `define-funs-rec` of one function -/
+    opening points atArrival "define-fun"
+    let handledSignature ← signature points handler symbol parameters result
+    call handler (.startDefineFun handledSignature)
+    let handledBody ← term points handler body
+    take points .parenClose
+    call handler (.endDefineFun handledBody)
+  /- as `define-fun` -/
   | .defineFunRec ⟨symbol, parameters, result, body⟩ => do
-    handler.startDefineFunsRec [← signature handler symbol parameters result]
-    recursiveBody handler body
-    handler.endDefineFunsRec
+    opening points atArrival "define-fun-rec"
+    let handledSignature ← signature points handler symbol parameters result
+    call handler (.startDefineFunRec handledSignature)
+    let handledBody ← term points handler body
+    take points .parenClose
+    call handler (.endDefineFunRec handledBody)
+  /- the start after the `)` of the declarations; the bodies, the first one's start after the
+  `(` before it; the end after the `)` -/
   | .defineFunsRec declarations bodies => do
-    let signatures ← declarations.mapM fun declaration =>
-      signature handler declaration.symbol declaration.parameters declaration.result
-    handler.startDefineFunsRec signatures
-    bodies.forM (recursiveBody handler)
-    handler.endDefineFunsRec
+    opening points atArrival "define-funs-rec"
+    take points .parenOpen
+    let signatures ← declarations.mapM fun declaration => do
+      take points .parenOpen
+      let handled ← signature points handler declaration.symbol declaration.parameters
+        declaration.result
+      take points .parenClose
+      pure handled
+    take points .parenClose
+    call handler (.startDefineFunsRec signatures)
+    take points .parenOpen
+    recursiveBodies points handler bodies
+    takeAll points [.parenClose, .parenClose]
+    call handler .endDefineFunsRec
+  /- the start after the `)` of the parameters, the sort, the end after the `)` -/
   | .defineSort symbol parameters definedSort => do
-    handler.startDefineSort symbol.name (parameters.map (·.name))
-    handler.endDefineSort (← sort handler.toTermHandler definedSort)
-  | .echo content => handler.echo content
-  | .exit => handler.exit
-  | .getAssertions => handler.getAssertions
-  | .getAssignment => handler.getAssignment
-  | .getInfo flag => handler.getInfo flag
-  | .getModel => handler.getModel
-  | .getOption keyword => handler.getOption keyword
-  | .getProof => handler.getProof
-  | .getUnsatAssumptions => handler.getUnsatAssumptions
-  | .getUnsatCore => handler.getUnsatCore
-  | .getValue values => do handler.getValue (← terms handler.toTermHandler values)
-  | .pop count => handler.pop count
-  | .push count => handler.push count
-  | .reset => handler.reset
-  | .resetAssertions => handler.resetAssertions
-  | .setInfo info => do handler.setInfo (← Traversal.attribute handler.toTermHandler info)
-  | .setLogic symbol => handler.setLogic symbol.name
-  | .setOption option => do handler.setOption (← Traversal.attribute handler.toTermHandler option)
+    opening points atArrival "define-sort"
+    takeAll points [.symbol symbol, .parenOpen]
+    takeAll points (parameters.map .symbol)
+    take points .parenClose
+    call handler (.startDefineSort symbol parameters)
+    let handled ← sort points handler definedSort
+    take points .parenClose
+    call handler (.endDefineSort handled)
+  | .echo content => do
+    opening points atArrival "echo"
+    takeAll points [.string content, .parenClose]
+    call handler (.commandEcho content)
+  | .exit => do
+    opening points atArrival "exit"
+    take points .parenClose
+    call handler .commandExit
+  | .getAssertions => do
+    opening points atArrival "get-assertions"
+    take points .parenClose
+    call handler .commandGetAssertions
+  | .getAssignment => do
+    opening points atArrival "get-assignment"
+    take points .parenClose
+    call handler .commandGetAssignment
+  | .getInfo flag => do
+    opening points atArrival "get-info"
+    takeAll points [.keyword flag, .parenClose]
+    call handler (.commandGetInfo flag)
+  | .getModel => do
+    opening points atArrival "get-model"
+    take points .parenClose
+    call handler .commandGetModel
+  | .getOption keyword => do
+    opening points atArrival "get-option"
+    takeAll points [.keyword keyword, .parenClose]
+    call handler (.commandGetOption keyword)
+  | .getProof => do
+    opening points atArrival "get-proof"
+    take points .parenClose
+    call handler .commandGetProof
+  | .getUnsatAssumptions => do
+    opening points atArrival "get-unsat-assumptions"
+    take points .parenClose
+    call handler .commandGetUnsatAssumptions
+  | .getUnsatCore => do
+    opening points atArrival "get-unsat-core"
+    take points .parenClose
+    call handler .commandGetUnsatCore
+  | .getValue valueTerms => do
+    opening points atArrival "get-value"
+    take points .parenOpen
+    let handled ← terms points handler valueTerms
+    takeAll points [.parenClose, .parenClose]
+    call handler (.commandGetValue handled)
+  | .pop count => do
+    opening points atArrival "pop"
+    takeAll points [.numeral count, .parenClose]
+    call handler (.commandPop count)
+  | .push count => do
+    opening points atArrival "push"
+    takeAll points [.numeral count, .parenClose]
+    call handler (.commandPush count)
+  | .reset => do
+    opening points atArrival "reset"
+    take points .parenClose
+    call handler .commandReset
+  | .resetAssertions => do
+    opening points atArrival "reset-assertions"
+    take points .parenClose
+    call handler .commandResetAssertions
+  | .setInfo ⟨keyword, value⟩ => do
+    opening points atArrival "set-info"
+    take points (.keyword keyword)
+    let handled ← attributeThen points handler keyword .parenClose value
+    call handler (.commandSetInfo handled)
+  | .setLogic symbol => do
+    opening points atArrival "set-logic"
+    takeAll points [.symbol symbol, .parenClose]
+    call handler (.commandSetLogic symbol)
+  | .setOption ⟨keyword, value⟩ => do
+    opening points atArrival "set-option"
+    take points (.keyword keyword)
+    let handled ← attributeThen points handler keyword .parenClose value
+    call handler (.commandSetOption handled)
+
+/-! ## The traversal of a script -/
 
 /--
-A script: its commands, one after another.
+The switch of a script to the version a declaration names, right after the declaration's
+`set-info`, given the producer's switch and the number of declarations the script made before
+it: the check against the policy, the producer's switch, which it may refuse, then the
+handler's switch. The new version holds from the next command.
 -/
-def script (commands : List Tree.Command) : m Unit :=
-  commands.forM (command handler)
+def switchVersion (producerSwitch : Version → ExceptT VersionRefused m Unit)
+    (policy : VersionPolicy) (declarations : Nat) (version : Version) : Run m ε Unit := do
+  match policy.check declarations version with
+  | .error violation => throw (.policy violation)
+  | .ok () => pure ()
+  ExceptT.adapt Cause.producer (producerSwitch version)
+  call handler (.setVersion version)
+
+/--
+The commands of a script, given the calls due when the next token arrives and the number of
+version declarations made before them, up to the end of the script: after `exit`, or at the end
+of the input, which the parser receives as well. After a version declaration, the script
+switches the version.
+-/
+def commands (producerSwitch : Version → ExceptT VersionRefused m Unit)
+    (policy : VersionPolicy) : Run m ε Unit → Nat → List Tree.Command → Run m ε Unit
+  | atArrival, _, [] => do
+    receive points .endOfInput atArrival
+    ExceptT.lift handler.endScript
+  | atArrival, _, .exit :: _ => do
+    command points handler atArrival .exit
+    ExceptT.lift handler.endScript
+  | atArrival, declarations, first :: rest => do
+    command points handler atArrival first
+    match first.declaredVersion with
+    | none => commands producerSwitch policy (pure ()) declarations rest
+    | some version => do
+      switchVersion handler producerSwitch policy declarations version
+      commands producerSwitch policy (pure ()) (declarations + 1) rest
+
+/--
+A script under a version policy, given the producer's switch of the version: the start, when its
+first token arrives, before the parser processes it; its commands, each version declaration
+followed by its check against the policy and the switches; then the end, after `exit` or at the
+end of the input.
+-/
+def script (producerSwitch : Version → ExceptT VersionRefused m Unit) (policy : VersionPolicy)
+    (commandList : List Tree.Command) : Run m ε Unit :=
+  commands points handler producerSwitch policy (ExceptT.lift handler.startScript) 0 commandList
 
 end
 

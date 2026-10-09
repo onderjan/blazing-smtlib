@@ -1,12 +1,15 @@
-import BSmtLib.Spec.Grammar.Script
+import BSmtLib.Spec.Grammar.File
 
 /-!
 # Properties of the grammar
 
-Properties of the syntactic rules: each states that the rules are unambiguous. They are
-properties of the specification alone, and `BSmtLib.SpecChecks` proves them.
-Properties of what the parser hands to the handler are stated once the handler interface is
-settled.
+Properties of the specification alone: that each sequence of tokens is at most one tree, and
+each file at most one sequence of commands. `BSmtLib.SpecChecks` proves them.
+
+Together with `tokens`, which writes every tree as exactly one sequence of tokens, the first two
+say that the valid trees of a version and the sequences of tokens they are written as
+correspond one to one: a tree can be read back from its tokens, and nothing is lost in either
+direction.
 -/
 
 namespace BSmtLib.Spec.Grammar
@@ -14,43 +17,37 @@ namespace BSmtLib.Spec.Grammar
 open BSmtLib.Spec.Lexicon
 
 /--
-Property: the rules leave at most one syntax tree for every sequence of tokens of a term.
+Property: two terms of a version that are written with the same tokens are the same term.
 
-This is a property of the specification alone. `BSmtLib.SpecChecks` proves it as
-`Grammar.termsUnique`. If it did not hold, one term would stand for two different trees, and a
-parser could not tell which one to hand over.
+So a sequence of tokens is a term of the version in at most one way (`IsTerm`). If it did not
+hold, one term would stand for two different trees, and a parser could not tell which one to
+hand over.
 -/
-def TermsUnique : Prop :=
-  ∀ version tokens term term',
-    Grammar.Term version tokens term → Grammar.Term version tokens term' → term = term'
+def TermsOneToOne : Prop :=
+  ∀ version (term term' : Tree.Term), term.Valid version → term'.Valid version →
+    term.tokens = term'.tokens → term = term'
 
 /--
-Property: the rules leave at most one syntax tree for every sequence of tokens of a command.
+Property: two commands of a version that are written with the same tokens are the same command.
 
-This is a property of the specification alone. `BSmtLib.SpecChecks` proves it as
-`Grammar.commandsUnique`. If it did not hold, one command would stand for two different trees.
-Two pairs of alternatives are kept apart only by a side condition: `check-sat-assuming` with
-a list of terms (2.7) and with a list of propositional literals (2.5 and 2.6) by their
-versions, and `set-info` and the declaration of a version by the keyword
-`:smt-lib-version`.
+So a sequence of tokens is a command of the version in at most one way (`IsCommand`). The
+version matters: `(check-sat-assuming (p))` is written the same as a command of 2.7 with a list
+of terms and as a command of 2.6 with a list of propositional literals, and only one of them is
+a command of each version.
 -/
-def CommandsUnique : Prop :=
-  ∀ version tokens command command',
-    Grammar.Command version tokens command → Grammar.Command version tokens command' →
-      command = command'
+def CommandsOneToOne : Prop :=
+  ∀ version (command command' : Tree.Command), command.Valid version →
+    command'.Valid version → command.tokens = command'.tokens → command = command'
 
 /--
-Property: every script has at most one parse.
+Property: every file has at most one reading.
 
-This is a property of the specification alone. `BSmtLib.SpecChecks` proves it as
-`Grammar.scriptsUnique`. If it did not hold, one script would stand for two different
-sequences of commands. A script can switch the version in which its later commands are read,
-so this does not follow from `CommandsUnique` alone: it also rests on a declaration of a
-version being read the same way in every version.
+This does not follow from `CommandsOneToOne` alone: a file can change the version in which the
+rest of it is read, so it also rests on the version after each command being determined by the
+command.
 -/
-def ScriptsUnique : Prop :=
-  ∀ version input commands commands',
-    ScriptParse version input commands → ScriptParse version input commands' →
-      commands = commands'
+def FilesUnique : Prop :=
+  ∀ version input (commands commands' : List Tree.Command),
+    File version input commands → File version input commands' → commands = commands'
 
 end BSmtLib.Spec.Grammar

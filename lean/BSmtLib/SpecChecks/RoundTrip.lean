@@ -1,7 +1,5 @@
 import BSmtLib.SpecChecks.RoundTrip.Tokens
 import BSmtLib.SpecChecks.RoundTrip.Lexical
-import BSmtLib.SpecChecks.RoundTrip.Trees
-import BSmtLib.SpecChecks.RoundTrip.Scripts
 
 /-!
 # Printing and reading back
@@ -10,10 +8,7 @@ Printers that go back the way the specification reads:
 
 - `RoundTrip.Tokens`: from lexicon tokens to characters, the concrete printer, which writes an
   input back exactly, and the canonical layout.
-- `RoundTrip.Trees`: from syntax trees to syntax tokens, for every category of the grammar.
 - `RoundTrip.Lexical`: from syntax tokens to lexicon tokens, in a version.
-- `RoundTrip.Scripts`: from the commands of a script to characters, each command in the
-  version in force at it.
 
 Reading what a printer writes gives back what it was printed from, for everything the
 specification can read.
