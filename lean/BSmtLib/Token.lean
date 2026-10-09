@@ -183,61 +183,75 @@ def lastEnd (self : TokenBatch) : Nat :=
 /-- Writes the value at `index` of the array, which is at most its size. -/
 @[inline]
 private def write (array : Array Nat) (index value : Nat) : Array Nat :=
-  if index < array.size then array.set! index value else array.push value
+  if h : index < array.size then array.set index value else array.push value
 
 /-- Writes the byte at `index` of the array, which is at most its size. -/
 @[inline]
 private def writeByte (array : ByteArray) (index : Nat) (value : UInt8) : ByteArray :=
-  if index < array.size then array.set! index value else array.push value
+  if h : index < array.size then array.set index value else array.push value
 
 private theorem size_write (array : Array Nat) (index value : Nat) (h : index ≤ array.size) :
     index < (write array index value).size := by
   unfold write
   split
-  · rw [Array.size_set!]; assumption
+  · rw [Array.size_set]; assumption
   · rw [Array.size_push]; omega
 
 private theorem getElem!_write (array : Array Nat) (index value i : Nat) (h : index ≤ array.size) :
     (write array index value)[i]! = if i = index then value else array[i]! := by
   unfold write
   by_cases hlt : index < array.size
-  · simp only [hlt, ↓reduceIte, getElem!_def, Array.set!_eq_setIfInBounds,
-      Array.getElem?_setIfInBounds]
+  · simp only [hlt, ↓reduceDIte, getElem!_def, Array.getElem?_set]
     by_cases e : i = index
     · simp [e]
     · simp [e, Ne.symm e]
-  · simp only [hlt, ↓reduceIte, getElem!_def, Array.getElem?_push]
+  · simp only [hlt, ↓reduceDIte, getElem!_def, Array.getElem?_push]
     by_cases e : i = index
     · simp [e, show index = array.size by omega]
     · simp [e, show i ≠ array.size by omega]
 
 private theorem size_writeByte (array : ByteArray) (index : Nat) (value : UInt8)
     (h : index ≤ array.size) : index < (writeByte array index value).size := by
+  obtain ⟨data⟩ := array
   unfold writeByte
   split
-  · show index < (array.data.set! index value).size
-    rw [Array.size_set!]; assumption
-  · show index < (array.data.push value).size
+  · show index < (data.set index value _).size
+    rw [Array.size_set]; assumption
+  · show index < (data.push value).size
     rw [Array.size_push]; simp only [ByteArray.size] at h; omega
 
 private theorem get!_writeByte (array : ByteArray) (index : Nat) (value : UInt8) (i : Nat)
     (h : index ≤ array.size) :
     (writeByte array index value).get! i = if i = index then value else array.get! i := by
   unfold writeByte
-  have hs : array.size = array.data.size := rfl
   by_cases hlt : index < array.size
-  · simp only [hlt, ↓reduceIte]
-    show (array.data.set! index value)[i]! = if i = index then value else array.data[i]!
-    simp only [getElem!_def, Array.set!_eq_setIfInBounds, Array.getElem?_setIfInBounds]
+  · simp only [hlt, ↓reduceDIte]
+    obtain ⟨data⟩ := array
+    show (data.set index value hlt)[i]! = if i = index then value else data[i]!
+    simp only [getElem!_def, Array.getElem?_set]
     by_cases e : i = index
-    · simp [e, hlt]
+    · simp [e]
     · simp [e, Ne.symm e]
-  · simp only [hlt, ↓reduceIte]
-    show (array.data.push value)[i]! = if i = index then value else array.data[i]!
+  · simp only [hlt, ↓reduceDIte]
+    obtain ⟨data⟩ := array
+    show (data.push value)[i]! = if i = index then value else data[i]!
+    simp only [ByteArray.size] at h hlt
     simp only [getElem!_def, Array.getElem?_push]
     by_cases e : i = index
-    · simp [e, show index = array.data.size by omega]
-    · simp [e, show i ≠ array.size by omega]
+    · simp [e, show index = data.size by omega]
+    · simp [e, show i ≠ data.size by omega]
+
+/-- The write of `push`, with the bounds checked by `set!`, is `writeByte`. -/
+private theorem writeByte_eq (array : ByteArray) (index : Nat) (value : UInt8) :
+    (if index < array.size then array.set! index value else array.push value) =
+      writeByte array index value := by
+  unfold writeByte
+  by_cases hlt : index < array.size
+  · simp only [hlt, ↓reduceIte, ↓reduceDIte]
+    obtain ⟨data⟩ := array
+    show ByteArray.mk (data.set! index value) = ByteArray.mk (data.set index value hlt)
+    simp [Array.set!_eq_setIfInBounds, Array.setIfInBounds, show index < data.size from hlt]
+  · simp only [hlt, ↓reduceIte, ↓reduceDIte]
 
 /-- A token appended after the last one, with a byte unless it is the end of file, keeps the
 tokens in order. -/
@@ -299,8 +313,9 @@ def push (self : TokenBatch) (ty : TokenCategory) (contentStart contentStop : Na
     endOffsets := write self.endOffsets index endOffset
     endLines := write self.endLines index endLine
     endColumns := write self.endColumns index endColumn
-    ordered := tokensInOrder_push self.ordered ty.toUInt8 startOffset endOffset after
-      (nonempty.imp_right fun h => ⟨by rw [h.1], h.2⟩) }
+    ordered := writeByte_eq .. ▸
+      tokensInOrder_push self.ordered ty.toUInt8 startOffset endOffset after
+        (nonempty.imp_right fun h => ⟨by rw [h.1], h.2⟩) }
 
 /--
 Appends a token with the type, its content from `contentStart` to `contentStop` in `bytes`,
@@ -403,7 +418,7 @@ theorem startsFrom_push {self : TokenBatch} {offset : Nat} (h : self.StartsFrom 
   have hs := self.ordered.2.1
   have ht := self.ordered.1
   have hw := get!_writeByte self.types self.len ty.toUInt8 i ht
-  simp only [writeByte] at hw
+  rw [← writeByte_eq] at hw
   rw [getElem!_write _ _ _ _ hs, hw]
   by_cases e : i = self.len
   · subst e

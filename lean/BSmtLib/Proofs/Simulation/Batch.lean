@@ -66,7 +66,7 @@ structure Agree (b c : TokenBatch) : Prop where
 
 /-- The array of the batch with the entry written at `index`, as `TokenBatch.push` writes it. -/
 def write (array : Array Nat) (index value : Nat) : Array Nat :=
-  if index < array.size then array.set! index value else array.push value
+  if h : index < array.size then array.set index value else array.push value
 
 /-- The array of bytes of the batch with the byte written at `index`, as `TokenBatch.push`
 writes it. -/
@@ -77,26 +77,25 @@ theorem size_write (array : Array Nat) (index value : Nat) (h : index ≤ array.
     index < (write array index value).size := by
   unfold write
   split
-  · rw [Array.size_set!]; assumption
+  · rw [Array.size_set]; assumption
   · rw [Array.size_push]; omega
 
 theorem size_write_ge (array : Array Nat) (index value : Nat) :
     array.size ≤ (write array index value).size := by
   unfold write
   split
-  · rw [Array.size_set!]; exact Nat.le_refl _
+  · rw [Array.size_set]; exact Nat.le_refl _
   · rw [Array.size_push]; omega
 
 theorem getElem!_write (array : Array Nat) (index value i : Nat) (h : index ≤ array.size) :
     (write array index value)[i]! = if i = index then value else array[i]! := by
   unfold write
   by_cases hlt : index < array.size
-  · simp only [hlt, ↓reduceIte, getElem!_def, Array.set!_eq_setIfInBounds,
-      Array.getElem?_setIfInBounds]
+  · simp only [hlt, ↓reduceDIte, getElem!_def, Array.getElem?_set]
     by_cases e : i = index
     · simp [e]
     · simp [e, Ne.symm e]
-  · simp only [hlt, ↓reduceIte, getElem!_def, Array.getElem?_push]
+  · simp only [hlt, ↓reduceDIte, getElem!_def, Array.getElem?_push]
     by_cases e : i = index
     · simp [e, show index = array.size by omega]
     · simp [e, show i ≠ array.size by omega]
