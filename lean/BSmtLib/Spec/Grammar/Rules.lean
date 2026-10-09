@@ -25,10 +25,10 @@ def versionNumber : Version → Chars
   | .v2_7 => chars "2.7"
 
 /--
-Standard: 2.7 §3.1 Symbols: a simple symbol and its quoted form are the same symbol.
-
 A token as the syntactic rules see it: what the lexical token stands for, and for a symbol
 whether it was quoted.
+
+Standard: 2.7 §3.1 Symbols: a simple symbol and its quoted form are the same symbol.
 -/
 inductive SyntaxToken where
   | parenOpen
@@ -47,9 +47,9 @@ inductive SyntaxToken where
   | reserved (word : Chars)
 
 /--
-Standard: 2.7 §3.1 Symbols, as `SyntaxToken`.
-
 What a lexical token of the version stands for, and for a symbol whether it was quoted.
+
+Standard: 2.7 §3.1 Symbols, as `SyntaxToken`.
 -/
 def SyntaxToken.ofToken (version : Version) (token : Token) : SyntaxToken :=
   match token.category with
@@ -83,9 +83,9 @@ inductive Each {α : Type} (rule : List SyntaxToken → α → Prop) : List Synt
 /-! ## Tokens -/
 
 /--
-Standard: 2.7 §3.2; App. B ⟨spec_constant⟩.
-
 ⟨spec_constant⟩ ::= ⟨numeral⟩ | ⟨decimal⟩ | ⟨hexadecimal⟩ | ⟨binary⟩ | ⟨string⟩
+
+Standard: 2.7 §3.2; App. B ⟨spec_constant⟩.
 -/
 inductive SpecConstant : List SyntaxToken → Tree.SpecConstant → Prop
   | numeral : SpecConstant [.numeral digits] (.numeral digits)
@@ -95,9 +95,9 @@ inductive SpecConstant : List SyntaxToken → Tree.SpecConstant → Prop
   | string : SpecConstant [.string content] (.string content)
 
 /--
-Standard: 2.7 §3.1 Symbols; App. B ⟨symbol⟩.
-
 ⟨symbol⟩
+
+Standard: 2.7 §3.1 Symbols; App. B ⟨symbol⟩.
 -/
 inductive Symbol : List SyntaxToken → Tree.Symbol → Prop
   | mk : Symbol [.symbol name] name
@@ -105,11 +105,11 @@ inductive Symbol : List SyntaxToken → Tree.Symbol → Prop
 /-! ## S-expressions, identifiers, sorts and attributes -/
 
 /--
-Standard: 2.7 §3.2 S-expressions; App. B ⟨s_expr⟩: a reserved word is an s-expression from
-2.6 release 2021-04-02 on.
-
 ⟨s_expr⟩ ::= ⟨spec_constant⟩ | ⟨symbol⟩ | ⟨reserved⟩ | ⟨keyword⟩ | `(` ⟨s_expr⟩∗ `)`;
 ⟨reserved⟩ is an s-expression from 2.6 on.
+
+Standard: 2.7 §3.2 S-expressions; App. B ⟨s_expr⟩: a reserved word is an s-expression from
+2.6 release 2021-04-02 on.
 -/
 inductive SExpr (version : Version) : List SyntaxToken → Tree.SExpr → Prop
   | constant : SpecConstant tokens constant → SExpr version tokens (.constant constant)
@@ -124,18 +124,18 @@ inductive SExpr (version : Version) : List SyntaxToken → Tree.SExpr → Prop
       SExpr version (paren tokens) (.list items)
 
 /--
-Standard: 2.7 §3.3 Identifiers; App. B ⟨index⟩.
-
 ⟨index⟩ ::= ⟨numeral⟩ | ⟨symbol⟩; a symbol is an index from 2.5 on.
+
+Standard: 2.7 §3.3 Identifiers; App. B ⟨index⟩.
 -/
 inductive Index (version : Version) : List SyntaxToken → Tree.Index → Prop
   | numeral : Index version [.numeral digits] (.numeral digits)
   | symbol : versionAtLeast version .v2_5 → Index version [.symbol name] (.symbol name)
 
 /--
-Standard: 2.7 §3.3 Identifiers; App. B ⟨identifier⟩.
-
 ⟨identifier⟩ ::= ⟨symbol⟩ | `(` `_` ⟨symbol⟩ ⟨index⟩+ `)`
+
+Standard: 2.7 §3.3 Identifiers; App. B ⟨identifier⟩.
 -/
 inductive Identifier (version : Version) : List SyntaxToken → Tree.Identifier → Prop
   | symbol : Identifier version [.symbol name] ⟨name, []⟩
@@ -144,9 +144,9 @@ inductive Identifier (version : Version) : List SyntaxToken → Tree.Identifier 
       Identifier version (paren (word "_" :: .symbol name :: tokens)) ⟨name, indices⟩
 
 /--
-Standard: 2.7 §3.5 Sorts; App. B ⟨sort⟩.
-
 ⟨sort⟩ ::= ⟨identifier⟩ | `(` ⟨identifier⟩ ⟨sort⟩+ `)`
+
+Standard: 2.7 §3.5 Sorts; App. B ⟨sort⟩.
 -/
 inductive «Sort» (version : Version) : List SyntaxToken → Tree.Sort → Prop
   | identifier : Identifier version tokens identifier →
@@ -157,9 +157,9 @@ inductive «Sort» (version : Version) : List SyntaxToken → Tree.Sort → Prop
       «Sort» version (paren (head ++ tokens)) (.mk identifier arguments)
 
 /--
-Standard: 2.7 §3.4 Attributes; App. B ⟨attribute_value⟩.
-
 ⟨attribute_value⟩ ::= ⟨spec_constant⟩ | ⟨symbol⟩ | `(` ⟨s_expr⟩∗ `)`
+
+Standard: 2.7 §3.4 Attributes; App. B ⟨attribute_value⟩.
 -/
 inductive AttributeValue (version : Version) : List SyntaxToken → Tree.AttributeValue → Prop
   | constant : SpecConstant tokens constant →
@@ -171,9 +171,9 @@ inductive AttributeValue (version : Version) : List SyntaxToken → Tree.Attribu
       AttributeValue version (paren tokens) (.list items)
 
 /--
-Standard: 2.7 §3.4 Attributes; App. B ⟨attribute⟩.
-
 ⟨attribute⟩ ::= ⟨keyword⟩ | ⟨keyword⟩ ⟨attribute_value⟩
+
+Standard: 2.7 §3.4 Attributes; App. B ⟨attribute⟩.
 -/
 inductive Attribute (version : Version) : List SyntaxToken → Tree.Attribute → Prop
   | keyword : Attribute version [.keyword name] ⟨name, none⟩
@@ -184,9 +184,9 @@ inductive Attribute (version : Version) : List SyntaxToken → Tree.Attribute �
 /-! ## Terms -/
 
 /--
-Standard: 2.7 §3.6 Terms and Formulas; App. B ⟨qual_identifier⟩.
-
 ⟨qual_identifier⟩ ::= ⟨identifier⟩ | `(` `as` ⟨identifier⟩ ⟨sort⟩ `)`
+
+Standard: 2.7 §3.6 Terms and Formulas; App. B ⟨qual_identifier⟩.
 -/
 inductive QualIdentifier (version : Version) : List SyntaxToken → Tree.QualIdentifier → Prop
   | plain : Identifier version tokens identifier →
@@ -198,27 +198,27 @@ inductive QualIdentifier (version : Version) : List SyntaxToken → Tree.QualIde
         (.as identifier sort)
 
 /--
-Standard: 2.7 §3.6 Terms and Formulas; App. B ⟨sorted_var⟩.
-
 ⟨sorted_var⟩ ::= `(` ⟨symbol⟩ ⟨sort⟩ `)`
+
+Standard: 2.7 §3.6 Terms and Formulas; App. B ⟨sorted_var⟩.
 -/
 inductive SortedVar (version : Version) : List SyntaxToken → Tree.SortedVar → Prop
   | mk : «Sort» version tokens sort →
       SortedVar version (paren (.symbol name :: tokens)) ⟨name, sort⟩
 
 /--
-Standard: 2.7 §3.6 Terms and Formulas; App. B ⟨pattern⟩.
-
 ⟨symbol_⟩ ::= ⟨symbol⟩ | `_`; the wildcard `_` is one from 2.7 on.
+
+Standard: 2.7 §3.6 Terms and Formulas; App. B ⟨pattern⟩.
 -/
 inductive SymbolOrWildcard (version : Version) : List SyntaxToken → Tree.SymbolOrWildcard → Prop
   | symbol : SymbolOrWildcard version [.symbol name] (.symbol name)
   | wildcard : versionAtLeast version .v2_7 → SymbolOrWildcard version [word "_"] .wildcard
 
 /--
-Standard: 2.7 §3.6 Terms and Formulas; App. B ⟨pattern⟩.
-
 ⟨pattern⟩ ::= ⟨symbol_⟩ | `(` ⟨symbol⟩ ⟨symbol_⟩+ `)`, from 2.6 on.
+
+Standard: 2.7 §3.6 Terms and Formulas; App. B ⟨pattern⟩.
 -/
 inductive Pattern (version : Version) : List SyntaxToken → Tree.Pattern → Prop
   | single : SymbolOrWildcard version tokens symbol →
@@ -230,9 +230,9 @@ inductive Pattern (version : Version) : List SyntaxToken → Tree.Pattern → Pr
 mutual
 
 /--
-Standard: 2.7 §3.6 Terms and Formulas; App. B ⟨term⟩.
-
 ⟨term⟩
+
+Standard: 2.7 §3.6 Terms and Formulas; App. B ⟨term⟩.
 -/
 inductive Term (version : Version) : List SyntaxToken → Tree.Term → Prop
   /-- ⟨spec_constant⟩ -/
@@ -285,9 +285,9 @@ inductive Term (version : Version) : List SyntaxToken → Tree.Term → Prop
         (.annotated term attributes)
 
 /--
-Standard: 2.7 §3.6 Terms and Formulas; App. B ⟨var_binding⟩.
-
 ⟨var_binding⟩∗, where ⟨var_binding⟩ ::= `(` ⟨symbol⟩ ⟨term⟩ `)`
+
+Standard: 2.7 §3.6 Terms and Formulas; App. B ⟨var_binding⟩.
 -/
 inductive Bindings (version : Version) :
     List SyntaxToken → List (Tree.Symbol × Tree.Term) → Prop
@@ -297,9 +297,9 @@ inductive Bindings (version : Version) :
       Bindings version (paren (.symbol name :: termTokens) ++ rest) ((name, term) :: bindings)
 
 /--
-Standard: 2.7 §3.6 Terms and Formulas; App. B ⟨match_case⟩.
-
 ⟨match_case⟩∗, where ⟨match_case⟩ ::= `(` ⟨pattern⟩ ⟨term⟩ `)`
+
+Standard: 2.7 §3.6 Terms and Formulas; App. B ⟨match_case⟩.
 -/
 inductive Cases (version : Version) :
     List SyntaxToken → List (Tree.Pattern × Tree.Term) → Prop
@@ -314,36 +314,36 @@ end
 /-! ## Commands -/
 
 /--
-Standard: 2.7 §3.11 Scripts; App. B ⟨sort_dec⟩.
-
 ⟨sort_dec⟩ ::= `(` ⟨symbol⟩ ⟨numeral⟩ `)`
+
+Standard: 2.7 §3.11 Scripts; App. B ⟨sort_dec⟩.
 -/
 inductive SortDec : List SyntaxToken → Tree.SortDec → Prop
   | mk : SortDec (paren [.symbol name, .numeral arity]) ⟨name, arity⟩
 
 /--
-Standard: 2.7 §3.11 Scripts; App. B ⟨selector_dec⟩.
-
 ⟨selector_dec⟩ ::= `(` ⟨symbol⟩ ⟨sort⟩ `)`
+
+Standard: 2.7 §3.11 Scripts; App. B ⟨selector_dec⟩.
 -/
 inductive SelectorDec (version : Version) : List SyntaxToken → Tree.SelectorDec → Prop
   | mk : «Sort» version tokens sort →
       SelectorDec version (paren (.symbol name :: tokens)) ⟨name, sort⟩
 
 /--
-Standard: 2.7 §3.11 Scripts; App. B ⟨constructor_dec⟩.
-
 ⟨constructor_dec⟩ ::= `(` ⟨symbol⟩ ⟨selector_dec⟩∗ `)`
+
+Standard: 2.7 §3.11 Scripts; App. B ⟨constructor_dec⟩.
 -/
 inductive ConstructorDec (version : Version) : List SyntaxToken → Tree.ConstructorDec → Prop
   | mk : Each (SelectorDec version) tokens selectors →
       ConstructorDec version (paren (.symbol name :: tokens)) ⟨name, selectors⟩
 
 /--
-Standard: 2.7 §3.11 Scripts; App. B ⟨datatype_dec⟩.
-
 ⟨datatype_dec⟩ ::= `(` ⟨constructor_dec⟩+ `)`
   | `(` `par` `(` ⟨symbol⟩+ `)` `(` ⟨constructor_dec⟩+ `)` `)`
+
+Standard: 2.7 §3.11 Scripts; App. B ⟨datatype_dec⟩.
 -/
 inductive DatatypeDec (version : Version) : List SyntaxToken → Tree.DatatypeDec → Prop
   | plain : Each (ConstructorDec version) tokens constructors → constructors ≠ [] →
@@ -355,9 +355,9 @@ inductive DatatypeDec (version : Version) : List SyntaxToken → Tree.DatatypeDe
         ⟨parameters, constructors⟩
 
 /--
-Standard: 2.7 §3.11 Scripts; App. B ⟨function_dec⟩.
-
 ⟨function_dec⟩ ::= `(` ⟨symbol⟩ `(` ⟨sorted_var⟩∗ `)` ⟨sort⟩ `)`
+
+Standard: 2.7 §3.11 Scripts; App. B ⟨function_dec⟩.
 -/
 inductive FunctionDec (version : Version) : List SyntaxToken → Tree.FunctionDec → Prop
   | mk : Each (SortedVar version) parameterTokens parameters →
@@ -366,9 +366,9 @@ inductive FunctionDec (version : Version) : List SyntaxToken → Tree.FunctionDe
         ⟨name, parameters, result⟩
 
 /--
-Standard: 2.7 §3.11 Scripts; App. B ⟨function_def⟩.
-
 ⟨function_def⟩ ::= ⟨symbol⟩ `(` ⟨sorted_var⟩∗ `)` ⟨sort⟩ ⟨term⟩
+
+Standard: 2.7 §3.11 Scripts; App. B ⟨function_def⟩.
 -/
 inductive FunctionDef (version : Version) : List SyntaxToken → Tree.FunctionDef → Prop
   | mk : Each (SortedVar version) parameterTokens parameters →
@@ -378,10 +378,10 @@ inductive FunctionDef (version : Version) : List SyntaxToken → Tree.FunctionDe
         ⟨name, parameters, result, body⟩
 
 /--
-Standard: 2.5 and 2.6 §3.9 Scripts; App. B ⟨prop_literal⟩.
-
 ⟨prop_literal⟩ ::= ⟨symbol⟩ | `(` `not` ⟨symbol⟩ `)`, where `not` is the symbol of that name,
 quoted or not.
+
+Standard: 2.5 and 2.6 §3.9 Scripts; App. B ⟨prop_literal⟩.
 -/
 inductive PropLiteral : List SyntaxToken → Tree.PropLiteral → Prop
   | positive : PropLiteral [.symbol name] (.positive name)
@@ -389,13 +389,13 @@ inductive PropLiteral : List SyntaxToken → Tree.PropLiteral → Prop
       PropLiteral (paren [.symbol negation, .symbol name]) (.negative negation name)
 
 /--
+⟨command⟩
+
 Standard: 2.7 §3.11 Scripts; App. B ⟨command⟩, ⟨option⟩ and ⟨info_flag⟩ of each version, the
 standard commands only. Reading M1: each version accepts only a declaration of itself.
 
 TODO: disagrees with M1 in `BSmtLib.Spec`, under which a declaration is parsed in the version
 in force; each version is then to accept a declaration of any supported version.
-
-⟨command⟩
 -/
 inductive Command (version : Version) : List SyntaxToken → Tree.Command → Prop
   /-- `(` `assert` ⟨term⟩ `)` -/

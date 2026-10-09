@@ -21,23 +21,23 @@ def TokenizationExactly (version : Version) (offset : Nat) (input : Chars) (toke
     ∃ last, tokens.getLast? = some last ∧ last.offset + last.text.length = offset + input.length
 
 /--
-Reading M1: a version declaration is a `set-info` with the attribute `:smt-lib-version`.
-
 The command is a version declaration: `set-info` with the attribute `:smt-lib-version`.
+
+Reading M1: a version declaration is a `set-info` with the attribute `:smt-lib-version`.
 -/
 def Tree.Command.DeclaresVersion (command : Tree.Command) : Prop :=
   ∃ value, command = .setInfo ⟨chars "smt-lib-version", value⟩
 
 /--
+`ScriptParseFrom version offset input commands`: starting in the version, the input, whose
+first character is at `offset`, has the commands as a parse.
+
 Standard: 2.7 §3.11 Scripts: a script is a sequence of commands. Reading M1: a version
 declaration starts its version at its first character. Reading M2: `exit` ends the script.
 Reading M3: `reset` keeps the version in force.
 
 TODO: disagrees with M1 in `BSmtLib.Spec`, under which a declaration is parsed in the version
 in force and its version applies after its closing parenthesis.
-
-`ScriptParseFrom version offset input commands`: starting in the version, the input, whose
-first character is at `offset`, has the commands as a parse.
 
 A version declaration starts the version it declares from its own first character: it is
 parsed in that version, which accepts only a declaration of itself, and so is the input after
@@ -60,10 +60,10 @@ inductive ScriptParseFrom : Version → Nat → Chars → List Tree.Command → 
       ScriptParseFrom version offset (segment ++ rest) [.exit]
 
 /--
-Standard: 2.7 §3.11 Scripts. Readings M1 and M2, as `ScriptParseFrom`.
-
 `ScriptParse version input commands`: starting in the version, the input has the
 commands as a parse.
+
+Standard: 2.7 §3.11 Scripts. Readings M1 and M2, as `ScriptParseFrom`.
 -/
 def ScriptParse (version : Version) (input : Chars) (commands : List Tree.Command) : Prop :=
   ScriptParseFrom version 0 input commands

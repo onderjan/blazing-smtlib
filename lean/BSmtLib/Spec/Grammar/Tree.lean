@@ -15,20 +15,20 @@ open BSmtLib.Spec.Lexicon
 namespace Tree
 
 /--
-Standard: 2.7 §3.1 Symbols: a simple symbol and its quoted form are the same symbol.
-
 A symbol: its name, which is the symbol, and whether it was written quoted. The form is
 recorded for printing, not for identity: two symbols with the same name are the same symbol,
 and wherever this specification compares symbols or matches a symbol, it compares names.
+
+Standard: 2.7 §3.1 Symbols: a simple symbol and its quoted form are the same symbol.
 -/
 structure Symbol where
   name : Chars
   quoted : Bool
 
 /--
-Standard: 2.7 §3.2; App. B ⟨spec_constant⟩.
-
 ⟨spec_constant⟩
+
+Standard: 2.7 §3.2; App. B ⟨spec_constant⟩.
 -/
 inductive SpecConstant where
   | numeral (digits : Chars)
@@ -38,9 +38,9 @@ inductive SpecConstant where
   | string (content : Chars)
 
 /--
-Standard: 2.7 §3.2 S-expressions; App. B ⟨s_expr⟩.
-
 ⟨s_expr⟩
+
+Standard: 2.7 §3.2 S-expressions; App. B ⟨s_expr⟩.
 -/
 inductive SExpr where
   | constant (constant : SpecConstant)
@@ -50,35 +50,35 @@ inductive SExpr where
   | list (items : List SExpr)
 
 /--
-Standard: 2.7 §3.3 Identifiers; App. B ⟨index⟩.
-
 ⟨index⟩
+
+Standard: 2.7 §3.3 Identifiers; App. B ⟨index⟩.
 -/
 inductive Index where
   | numeral (digits : Chars)
   | symbol (symbol : Symbol)
 
 /--
-Standard: 2.7 §3.3 Identifiers; App. B ⟨identifier⟩.
-
 ⟨identifier⟩: a symbol, with its indices if it is indexed.
+
+Standard: 2.7 §3.3 Identifiers; App. B ⟨identifier⟩.
 -/
 structure Identifier where
   symbol : Symbol
   indices : List Index
 
 /--
-Standard: 2.7 §3.5 Sorts; App. B ⟨sort⟩.
-
 ⟨sort⟩: an identifier, applied to the sorts if there are any.
+
+Standard: 2.7 §3.5 Sorts; App. B ⟨sort⟩.
 -/
 inductive «Sort» where
   | mk (identifier : Identifier) (arguments : List «Sort»)
 
 /--
-Standard: 2.7 §3.4 Attributes; App. B ⟨attribute_value⟩.
-
 ⟨attribute_value⟩
+
+Standard: 2.7 §3.4 Attributes; App. B ⟨attribute_value⟩.
 -/
 inductive AttributeValue where
   | constant (constant : SpecConstant)
@@ -86,63 +86,63 @@ inductive AttributeValue where
   | list (items : List SExpr)
 
 /--
-Standard: 2.7 §3.4 Attributes; App. B ⟨attribute⟩.
-
 ⟨attribute⟩: a keyword, with its value if it has one.
+
+Standard: 2.7 §3.4 Attributes; App. B ⟨attribute⟩.
 -/
 structure Attribute where
   keyword : Chars
   value : Option AttributeValue
 
 /--
-Standard: 2.7 §3.6 Terms and Formulas; App. B ⟨qual_identifier⟩.
-
 ⟨qual_identifier⟩
+
+Standard: 2.7 §3.6 Terms and Formulas; App. B ⟨qual_identifier⟩.
 -/
 inductive QualIdentifier where
   | plain (identifier : Identifier)
   | as (identifier : Identifier) (sort : «Sort»)
 
 /--
-Standard: 2.7 §3.6 Terms and Formulas; App. B ⟨sorted_var⟩.
-
 ⟨sorted_var⟩
+
+Standard: 2.7 §3.6 Terms and Formulas; App. B ⟨sorted_var⟩.
 -/
 structure SortedVar where
   symbol : Symbol
   sort : «Sort»
 
 /--
-Standard: 2.7 §3.6 Terms and Formulas; App. B ⟨pattern⟩.
-
 ⟨symbol_⟩: a symbol, or the wildcard `_`.
+
+Standard: 2.7 §3.6 Terms and Formulas; App. B ⟨pattern⟩.
 -/
 inductive SymbolOrWildcard where
   | symbol (symbol : Symbol)
   | wildcard
 
 /--
-Standard: 2.7 §3.6 Terms and Formulas; App. B ⟨pattern⟩.
-
 ⟨pattern⟩
+
+Standard: 2.7 §3.6 Terms and Formulas; App. B ⟨pattern⟩.
 -/
 inductive Pattern where
   | single (symbol : SymbolOrWildcard)
   | constructor (constructor : Symbol) (arguments : List SymbolOrWildcard)
 
 /--
-Standard: 2.7 §3.6 Terms and Formulas: the binders `forall` and `exists` of ⟨term⟩.
-
 The two quantifiers.
+
+Standard: 2.7 §3.6 Terms and Formulas: the binders `forall` and `exists` of ⟨term⟩.
 -/
 inductive Quantifier where
   | «forall»
   | «exists»
 
 /--
-Standard: 2.7 §3.6 Terms and Formulas; App. B ⟨term⟩.
-
 ⟨term⟩
+
+Standard: 2.7 §3.6 Terms and Formulas; App. B ⟨term⟩.
 -/
 inductive Term where
   | constant (constant : SpecConstant)
@@ -155,45 +155,45 @@ inductive Term where
   | annotated (term : Term) (attributes : List Attribute)
 
 /--
-Standard: 2.7 §3.11 Scripts; App. B ⟨sort_dec⟩.
-
 ⟨sort_dec⟩
+
+Standard: 2.7 §3.11 Scripts; App. B ⟨sort_dec⟩.
 -/
 structure SortDec where
   symbol : Symbol
   arity : Chars
 
 /--
-Standard: 2.7 §3.11 Scripts; App. B ⟨selector_dec⟩.
-
 ⟨selector_dec⟩
+
+Standard: 2.7 §3.11 Scripts; App. B ⟨selector_dec⟩.
 -/
 structure SelectorDec where
   symbol : Symbol
   sort : «Sort»
 
 /--
-Standard: 2.7 §3.11 Scripts; App. B ⟨constructor_dec⟩.
-
 ⟨constructor_dec⟩
+
+Standard: 2.7 §3.11 Scripts; App. B ⟨constructor_dec⟩.
 -/
 structure ConstructorDec where
   symbol : Symbol
   selectors : List SelectorDec
 
 /--
-Standard: 2.7 §3.11 Scripts; App. B ⟨datatype_dec⟩.
-
 ⟨datatype_dec⟩: the sort parameters, none unless it is parametric, and the constructors.
+
+Standard: 2.7 §3.11 Scripts; App. B ⟨datatype_dec⟩.
 -/
 structure DatatypeDec where
   parameters : List Symbol
   constructors : List ConstructorDec
 
 /--
-Standard: 2.7 §3.11 Scripts; App. B ⟨function_dec⟩.
-
 ⟨function_dec⟩
+
+Standard: 2.7 §3.11 Scripts; App. B ⟨function_dec⟩.
 -/
 structure FunctionDec where
   symbol : Symbol
@@ -201,9 +201,9 @@ structure FunctionDec where
   result : «Sort»
 
 /--
-Standard: 2.7 §3.11 Scripts; App. B ⟨function_def⟩.
-
 ⟨function_def⟩
+
+Standard: 2.7 §3.11 Scripts; App. B ⟨function_def⟩.
 -/
 structure FunctionDef where
   symbol : Symbol
@@ -212,18 +212,18 @@ structure FunctionDef where
   body : Term
 
 /--
-Standard: 2.5 and 2.6 §3.9 Scripts; App. B ⟨prop_literal⟩.
-
 ⟨prop_literal⟩: a symbol, or its negation, which records the symbol `not` it was written with.
+
+Standard: 2.5 and 2.6 §3.9 Scripts; App. B ⟨prop_literal⟩.
 -/
 inductive PropLiteral where
   | positive (symbol : Symbol)
   | negative (negation : Symbol) (symbol : Symbol)
 
 /--
-Standard: 2.7 §3.11 Scripts; App. B ⟨command⟩, the standard commands only.
-
 ⟨command⟩
+
+Standard: 2.7 §3.11 Scripts; App. B ⟨command⟩, the standard commands only.
 -/
 inductive Command where
   | assert (term : Term)
