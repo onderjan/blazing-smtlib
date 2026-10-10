@@ -1,0 +1,186 @@
+import BSmtLib.SpecChecks.Parser.Program
+
+/-!
+# Programs in a recording run
+
+What a program writes down in a recording run (`Spec.Parser.record`), as a list computed from
+the program and its items (`trace`), and that what it has written down before the arrival of an
+item, or before its processing, depends only on the items before it (`eventsBefore_trace`,
+`eventsBeforeProcessing_trace`): a program decides what to do next only from what it has
+received.
+
+Not trusted: everything here is proved.
+-/
+
+namespace BSmtLib.SpecChecks.Parser
+
+open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Grammar BSmtLib.Spec.Parser
+open BSmtLib.Spec.Parser.Traversal Program
+
+/-- A program run in a recording run. -/
+abbrev runRecording {α : Type} (p : Program Recorded α) (items : List Received) :
+    Run Recording Empty (α × List Received) :=
+  Program.run recordingPoints recordingHandler recordingSwitch VersionPolicy.unrestricted p items
+
+/-- The events a program writes down in a recording run on the items, in order, given the
+number of calls written down before. -/
+def trace {α : Type} : Program Recorded α → List Received → Nat → List Event
+  | .done _, _, _ => []
+  | .receive start next, item :: items, count =>
+    if start then
+      .arrive item :: .startScript :: .process item :: trace (next item) items (count + 1)
+    else .arrive item :: .process item :: trace (next item) items count
+  | .receive _ _, [], _ => []
+  | .call request next, items, count =>
+    .call _ request :: trace (next (recordedValue _ count)) items (count + 1)
+  | .endScript next, items, count => .endScript :: trace next items (count + 1)
+  | .switch _ version next, items, count =>
+    .producerSwitch version :: .call .nothing (.setVersion version) ::
+      trace next items (count + 1)
+  | .stuck, _, _ => []
+
+/-- The number of calls among events. -/
+abbrev calls (events : List Event) : Nat := events.countP Event.isCall
+
+theorem unrestricted_check (declarations : Nat) (version : Version) :
+    VersionPolicy.unrestricted.check declarations version = .ok () := by
+  cases version <;> rfl
+
+/-- A step of a recording run that succeeds goes on with what follows it. -/
+theorem bind_run {α β : Type} {x : Run Recording Empty α} {f : α → Run Recording Empty β}
+    {state state' : List Event} {a : α} (h : x.run.run state = (.ok a, state')) :
+    (x >>= f).run.run state = (f a).run.run state' := by
+  simp only [ExceptT.run_bind, StateT.run_bind, h]
+  rfl
+
+theorem receive_run (item : Received) (start : Bool) (state : List Event) :
+    (Traversal.receive (ε := Empty) recordingPoints item
+        (if start then ExceptT.lift recordingHandler.startScript else pure ())).run.run state =
+      (.ok (), (if start then [.process item, .startScript, .arrive item]
+        else [.process item, .arrive item]) ++ state) := by
+  cases start <;> rfl
+
+theorem call_run {returns : Returns} (request : Call Recorded returns) (state : List Event) :
+    (Traversal.call recordingHandler request).run.run state =
+      (.ok (recordedValue returns (calls state)), .call returns request :: state) := rfl
+
+theorem endScript_run (state : List Event) :
+    (ExceptT.lift recordingHandler.endScript : Run Recording Empty Unit).run.run state =
+      (.ok (), .endScript :: state) := rfl
+
+theorem switch_run (declarations : Nat) (version : Version) (state : List Event) :
+    (switchVersion recordingHandler recordingSwitch VersionPolicy.unrestricted declarations
+        version).run.run state =
+      (.ok (), .call .nothing (.setVersion version) :: .producerSwitch version :: state) := by
+  simp only [switchVersion, unrestricted_check]
+  rfl
+
+/-- A program run in a recording run writes down its trace. -/
+theorem runRecording_state {α : Type} (p : Program Recorded α) :
+    ∀ (items : List Received) (state : List Event),
+      ((runRecording p items).run.run state).2 =
+        (trace p items (calls state)).reverse ++ state := by
+  simp only [runRecording]
+  induction p with
+  | done => intro items state; rfl
+  | receive start next ih =>
+    intro items state
+    cases items with
+    | nil => rfl
+    | cons item items =>
+      rw [Program.run, bind_run (receive_run item start state), ih]
+      cases start <;> simp [trace, calls, Event.isCall, List.countP_cons]
+  | call request next ih =>
+    intro items state
+    rw [Program.run, bind_run (call_run request state), ih]
+    simp [trace, calls, Event.isCall, List.countP_cons]
+  | endScript next ih =>
+    intro items state
+    rw [Program.run, bind_run (endScript_run state), ih]
+    simp [trace, calls, Event.isCall, List.countP_cons]
+  | switch declarations version next ih =>
+    intro items state
+    rw [Program.run, bind_run (switch_run declarations version state), ih]
+    simp [trace, calls, Event.isCall, List.countP_cons]
+  | stuck => intro items state; rfl
+
+theorem recording_bind_run {α β : Type} (x : Run Recording Empty α) (f : α → Run Recording Empty β)
+    (events : List Event) :
+    (x >>= f).run.run events =
+      match x.run.run events with
+      | (.ok a, events') => (f a).run.run events'
+      | (.error e, events') => (.error e, events') := by
+  simp only [ExceptT.run_bind, StateT.run_bind]
+  rcases x.run.run events with ⟨e, events'⟩
+  cases e <;> rfl
+
+/-- A program whose recording run succeeds receives in its trace, arriving and then processed,
+the items it took, in order. -/
+theorem trace_items {α : Type} (p : Program Recorded α) :
+    ∀ (items : List Received) (events : List Event) (a : α) (rest : List Received),
+      ((runRecording p items).run.run events).1 = .ok (a, rest) →
+      (trace p items (calls events)).filterMap Event.arrived ++ rest = items ∧
+        (trace p items (calls events)).filterMap Event.processed ++ rest = items := by
+  simp only [runRecording]
+  induction p with
+  | done => intro items events a rest h; cases h; simp [trace]
+  | receive start next ih =>
+    intro items events a rest h
+    cases items with
+    | nil => cases h
+    | cons item items =>
+      rw [Program.run, recording_bind_run, receive_run item start events] at h
+      have := ih item items _ a rest h
+      cases start
+      · have hc : calls ([.process item, .arrive item] ++ events) = calls events := by
+          simp [calls, Event.isCall]
+        simp only [Bool.false_eq_true, ite_false] at this
+        rw [hc] at this
+        simp only [trace, ↓reduceIte, Bool.false_eq_true]
+        refine ⟨?_, ?_⟩ <;>
+          simp only [List.filterMap_cons, Event.arrived, Event.processed, List.cons_append] <;>
+          simp [this.1, this.2]
+      · have hc : calls ([.process item, .startScript, .arrive item] ++ events) =
+            calls events + 1 := by simp [calls, Event.isCall, List.countP_cons]
+        simp only [ite_true] at this
+        rw [hc] at this
+        simp only [trace, ↓reduceIte]
+        refine ⟨?_, ?_⟩ <;>
+          simp only [List.filterMap_cons, Event.arrived, Event.processed, List.cons_append] <;>
+          simp [this.1, this.2]
+  | call request next ih =>
+    intro items events a rest h
+    rw [Program.run, recording_bind_run, call_run request events] at h
+    have := ih _ items _ a rest h
+    have hc : calls (.call _ request :: events) = calls events + 1 := by
+      simp [calls, Event.isCall, List.countP_cons]
+    rw [hc] at this
+    simp only [trace]
+    refine ⟨?_, ?_⟩ <;>
+      simp only [List.filterMap_cons, Event.arrived, Event.processed] <;>
+      simp [this.1, this.2]
+  | endScript next ih =>
+    intro items events a rest h
+    rw [Program.run, recording_bind_run, endScript_run events] at h
+    have := ih items _ a rest h
+    have hc : calls (.endScript :: events) = calls events + 1 := by
+      simp [calls, Event.isCall, List.countP_cons]
+    rw [hc] at this
+    simp only [trace]
+    refine ⟨?_, ?_⟩ <;>
+      simp only [List.filterMap_cons, Event.arrived, Event.processed] <;>
+      simp [this.1, this.2]
+  | switch declarations version next ih =>
+    intro items events a rest h
+    rw [Program.run, recording_bind_run, switch_run declarations version events] at h
+    have := ih items _ a rest h
+    have hc : calls (.call .nothing (.setVersion version) :: .producerSwitch version :: events) =
+        calls events + 1 := by simp [calls, Event.isCall, List.countP_cons]
+    rw [hc] at this
+    simp only [trace]
+    refine ⟨?_, ?_⟩ <;>
+      simp only [List.filterMap_cons, Event.arrived, Event.processed] <;>
+      simp [this.1, this.2]
+  | stuck => intro items events a rest h; cases h
+
+end BSmtLib.SpecChecks.Parser
