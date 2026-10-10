@@ -136,11 +136,11 @@ def endOfFile (input : Chars) : Handed :=
 
 /-! ## About a lexer
 
-The properties are about two functions that an adapter makes of a lexer: `lex`, what the lexer
-hands over when fed slices and then the end of the input, and `feed`, what it has done after
-being fed slices, before the end of the input. The input is the slices joined, so how it is cut
-into slices does not matter. Each property is about one version and one input; `Correct` asks
-for them on every version and every input.
+The properties are about one function that an adapter makes of a lexer, `feed`: what the lexer
+has done after being fed slices and then, if the input has ended, the end of the input. The
+input is the slices joined, so how it is cut into slices does not matter. Each property is
+about one version, one input, and whether the input has ended; `Correct` asks for them on every
+version and every input, ended or not.
 
 They are stated for a consumer that takes every token handed over and always continues; how a
 lexer answers a consumer that finishes, leaves tokens, switches version or fails will be stated
@@ -150,8 +150,8 @@ Reading L8: the lexer does not perform the check for non-ASCII bytes.
 -/
 
 /--
-What a lexer has done after being fed slices: the tokens it handed over, in order, and whether it
-failed.
+What a lexer has done after being fed slices, and possibly the end of the input: the tokens it
+handed over, in order, and whether it failed.
 
 The standard knows only whole inputs; a lexer fed in slices is this library's.
 -/
@@ -210,81 +210,133 @@ def HandoverMaximal (version : Version) (input : Chars) (tokens : List Token) : 
     ∀ tokens', HandoverReady version input tokens' → tokens'.length ≤ tokens.length
 
 /--
-Property: a lexer fed the slices and then the end of the input hands over `handed` exactly when
-`handed` is the tokens of the tokenisation of the input followed by the end-of-file token.
+Property: the input has ended, and it has a tokenisation.
 
-`lex version slices` is what the lexer hands over, or `none` if it fails, so it fails exactly
-when the input has no tokenisation.
+The lexer has then read the input to its end without failing, and the end of the input
+delimits the last token, so every token of the tokenisation is ready. An input that has ended
+without a tokenisation of its own is not complete, even when it is `Viable`: on `(a "ab`, the
+end of the input does not complete the string literal.
+-/
+def Complete (version : Version) (input : Chars) (ended : Bool) : Prop :=
+  ended = true ∧ ∃ tokens, Tokenization version input tokens
+
+/--
+Property: a lexer fed the slices, and then the end of the input if it has ended, has failed
+exactly when the input can no longer be valid.
+
+Before the end, characters may still follow: while the input is `Viable`, they may make a valid
+input of it, so the lexer must not fail; once it is not, none can, so the lexer must have
+failed. After the end, nothing can follow, so the lexer must have failed exactly when the input
+has no tokenisation. `"ab` is viable, so a lexer fails on it only at the end.
 
 Reading L8: the input need not be a `SourceFile`.
 -/
-def WholeInputCorrect (lex : Version → List Chars → Option (List Handed)) (version : Version)
-    (slices : List Chars) (handed : List Handed) : Prop :=
+def FailsCorrectly (feed : Version → List Chars → Bool → Fed) (version : Version)
+    (slices : List Chars) (ended : Bool) : Prop :=
   let input := slices.flatten
-  lex version slices = some handed ↔
-    ∃ tokens, Tokenization version input tokens ∧
-      handed = tokens.map (·.handed version input) ++ [endOfFile input]
+  (feed version slices ended).failed ↔
+    if ended then ¬ ∃ tokens, Tokenization version input tokens else ¬ Viable version input
 
 /--
-Property: a lexer fed the slices has failed exactly when the input is not viable.
+Property: a lexer fed the slices and then the end of the input has handed over the tokens of
+the tokenisation of the input followed by the end-of-file token.
 
-While the input is `Viable`, the characters that follow may still make a valid input of it, so
-the lexer must not fail; once it is not, none can, so the lexer must have failed.
+It is what the lexer must have handed over when the input is `Complete`: the end of the input
+delimits the last token, so every token is ready.
 
 Reading L8: the input need not be a `SourceFile`.
 -/
-def FailsCorrectly (feed : Version → List Chars → Fed) (version : Version)
+def HandsOverAll (feed : Version → List Chars → Bool → Fed) (version : Version)
     (slices : List Chars) : Prop :=
-  (feed version slices).failed ↔ ¬ Viable version slices.flatten
+  let input := slices.flatten
+  ∃ tokens, Tokenization version input tokens ∧
+    (feed version slices true).handed = tokens.map (·.handed version input) ++ [endOfFile input]
 
 /--
-Property: a lexer fed the slices has handed over the tokens that are maximal to hand over on
-the longest viable start of the input, and nothing else.
+Property: a lexer fed the slices, and then the end of the input if it has ended, has handed
+over the tokens maximal to hand over on the longest viable start of the input, and nothing else.
 
-`start` is that longest viable start (`LongestViableStart`), all of the input while it is
-viable. So the lexer holds no token back, hands none over before it is ready, and hands none
-over from where the input stopped being viable on.
+It is what the lexer must have handed over when the input is not `Complete`. `start` is that
+longest viable start (`LongestViableStart`), all of the input while it is viable. So the lexer
+holds no token back, hands none over before it is ready, and hands none over from where the
+input stopped being viable on.
+
+The end of an input that is not complete releases no token: on `(a "ab`, the lexer has handed
+over `(` and `a`, at the end as before it. Nor does the end of the input delimit a token after
+the input stopped being viable: on `(a bc"`, the lexer has handed over `(` and `a`, and not
+`bc`, since it read `"` after `bc` and not the end.
 
 Reading L8: the input need not be a `SourceFile`.
 -/
-def HandsOverCorrectly (feed : Version → List Chars → Fed) (version : Version)
-    (slices : List Chars) (start : Chars) : Prop :=
+def HandsOverMaximal (feed : Version → List Chars → Bool → Fed) (version : Version)
+    (slices : List Chars) (ended : Bool) (start : Chars) : Prop :=
   let input := slices.flatten
   LongestViableStart version input start →
     ∃ tokens, HandoverMaximal version start tokens ∧
-      (feed version slices).handed = tokens.map (·.handed version input)
+      (feed version slices ended).handed = tokens.map (·.handed version input)
+
+open Classical in
+/--
+Property: a lexer fed the slices, and then the end of the input if it has ended, has handed
+over the tokens that are ready, and nothing else.
+
+It is `HandsOverAll` if the input is `Complete`, and `HandsOverMaximal` if it is not.
+-/
+def HandsOverCorrectly (feed : Version → List Chars → Bool → Fed) (version : Version)
+    (slices : List Chars) (ended : Bool) (start : Chars) : Prop :=
+  if Complete version slices.flatten ended then HandsOverAll feed version slices
+  else HandsOverMaximal feed version slices ended start
 
 /--
-Property: a lexer fed the slices fails when it should and hands over what it should.
+Property: a lexer is correct on every version and every input, ended or not.
 
 It is `FailsCorrectly` and `HandsOverCorrectly`.
 -/
-def StreamingInputCorrect (feed : Version → List Chars → Fed) (version : Version)
-    (slices : List Chars) (start : Chars) : Prop :=
-  FailsCorrectly feed version slices ∧ HandsOverCorrectly feed version slices start
+def Correct (feed : Version → List Chars → Bool → Fed) : Prop :=
+  ∀ version slices ended start,
+    FailsCorrectly feed version slices ended ∧ HandsOverCorrectly feed version slices ended start
+
+/-! ## Consequences of correctness
+
+Properties that are not a part of `Correct` because they follow from it. `BSmtLib.SpecChecks`
+proves `Sequential` and `WholeInputCorrect` as consequences of `Correct`, for every lexer at
+once.
+-/
 
 /--
-Property: a lexer fed more slices has handed over what it had and possibly more, and once it
-has failed, it stays failed.
+Property: `later` has handed over what `before` had, and possibly more, and has failed if
+`before` had.
+-/
+def Extends (before later : Fed) : Prop :=
+  before.handed <+: later.handed ∧ (before.failed → later.failed)
+
+/--
+Property: what a lexer has done extends as it is fed more slices, and as it is fed the end of
+the input.
 
 What a lexer hands over is never taken back, so what a consumer has done with the tokens of a
-command, a later command cannot change.
+command, a later command cannot change. The end of the input only releases what waited for it.
 -/
-def Sequential (feed : Version → List Chars → Fed) (version : Version)
+def Sequential (feed : Version → List Chars → Bool → Fed) (version : Version)
     (slices more : List Chars) : Prop :=
-  (feed version slices).handed <+: (feed version (slices ++ more)).handed ∧
-    ((feed version slices).failed → (feed version (slices ++ more)).failed)
+  Extends (feed version slices false) (feed version (slices ++ more) false) ∧
+    Extends (feed version slices false) (feed version slices true)
 
 /--
-Property: a lexer is correct on every version and every input, both on the whole input and fed
-in slices.
+Property: a lexer fed the slices and then the end of the input has not failed and has handed
+over `handed` exactly when `handed` is the tokens of the tokenisation of the input followed by
+the end-of-file token.
 
-It is `WholeInputCorrect` and `StreamingInputCorrect`, of `lex` and `feed` made of the same
-lexer.
+So it fails exactly when the input has no tokenisation. This is what the standard asks of a
+whole input.
+
+Reading L8: the input need not be a `SourceFile`.
 -/
-def Correct (lex : Version → List Chars → Option (List Handed))
-    (feed : Version → List Chars → Fed) : Prop :=
-  ∀ version slices handed start,
-    WholeInputCorrect lex version slices handed ∧ StreamingInputCorrect feed version slices start
+def WholeInputCorrect (feed : Version → List Chars → Bool → Fed) (version : Version)
+    (slices : List Chars) (handed : List Handed) : Prop :=
+  let input := slices.flatten
+  (¬ (feed version slices true).failed ∧ (feed version slices true).handed = handed) ↔
+    ∃ tokens, Tokenization version input tokens ∧
+      handed = tokens.map (·.handed version input) ++ [endOfFile input]
 
 end BSmtLib.Spec.Lexer
