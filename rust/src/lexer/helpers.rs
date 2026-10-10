@@ -1,5 +1,4 @@
 use crate::{
-    SmtBytesBuf,
     lexer::{
         LexerState, SmtLexicalErrorKind,
         char_class::{
@@ -225,12 +224,12 @@ pub(super) enum Content<'a> {
 }
 
 impl<'a> Content<'a> {
-    pub(super) fn bytes<'s>(self, stored: &'s SmtBytesBuf) -> &'s [u8]
+    pub(super) fn bytes<'s>(self, stored: &'s [u8]) -> &'s [u8]
     where
         'a: 's,
     {
         match self {
-            Content::Stored => stored.as_slice(),
+            Content::Stored => stored,
             Content::Borrowed(bytes) => bytes,
         }
     }

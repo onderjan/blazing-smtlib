@@ -1,34 +1,32 @@
 use std::fmt::{Debug, Write};
 
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct SmtBytesBuf(Vec<u8>);
+pub struct SmtBytesBuf(Box<[u8]>);
 
 impl SmtBytesBuf {
     #[inline]
     pub fn new() -> SmtBytesBuf {
-        SmtBytesBuf(Vec::new())
-    }
-
-    pub fn from_vec(vec: Vec<u8>) -> Self {
-        Self(vec)
+        SmtBytesBuf(Box::new([]))
     }
 
     pub fn from_byte(byte: u8) -> Self {
-        Self::from_vec(vec![byte])
+        Self(Box::new([byte]))
     }
 
-    #[inline]
-    pub fn as_slice(&self) -> &[u8] {
-        &self.0
+    pub fn from_boxed_slice(boxed: Box<[u8]>) -> Self {
+        Self(boxed)
     }
 
-    #[inline]
-    pub fn as_view<'a>(&'a self) -> SmtBytes<'a> {
-        SmtBytes(&self.0)
+    pub fn from_vec(vec: Vec<u8>) -> Self {
+        Self(vec.into_boxed_slice())
+    }
+
+    pub fn into_boxed_slice(self) -> Box<[u8]> {
+        self.0
     }
 
     pub fn into_vec(self) -> Vec<u8> {
-        self.0
+        self.0.into_vec()
     }
 
     #[inline]
@@ -42,18 +40,13 @@ impl SmtBytesBuf {
     }
 
     #[inline]
-    pub fn clear(&mut self) {
-        self.0.clear();
+    pub fn as_slice(&self) -> &[u8] {
+        &self.0
     }
 
     #[inline]
-    pub fn extend_from_slice(&mut self, slice: &[u8]) {
-        self.0.extend_from_slice(slice);
-    }
-
-    #[inline]
-    pub fn push(&mut self, byte: u8) {
-        self.0.push(byte);
+    pub fn as_view<'a>(&'a self) -> SmtBytes<'a> {
+        SmtBytes(&self.0)
     }
 
     pub fn iter(&self) -> impl Iterator<Item = u8> {
@@ -116,7 +109,7 @@ impl<'a> SmtBytes<'a> {
     }
 
     pub fn into_owned(self) -> SmtBytesBuf {
-        SmtBytesBuf::from_vec(self.as_slice().to_vec())
+        SmtBytesBuf::from_boxed_slice(self.as_slice().into())
     }
 
     pub fn iter(&self) -> impl Iterator<Item = u8> {
