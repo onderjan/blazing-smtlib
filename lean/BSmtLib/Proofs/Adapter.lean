@@ -7,30 +7,27 @@ import BSmtLib.Spec.Lexer
 /-!
 # The adapter from the lexers to the spec
 
-This module is trusted, as the spec is. `Spec.Lexer.Correct` is a property of functions that
-give what a lexer hands over in the spec's form; `handed`, for the slices and then the end of
-the input, and `fed`, for the slices alone, are those functions for each lexer of the chain. A
-theorem stated through them says only what they make of the lexer, so they are to be read like
-the spec: they have to run the lexer as a consumer would, and record what the lexer hands over
-as it is, or the theorem says nothing about the lexer.
+This module is trusted, as the spec is. `Spec.Lexer.Correct` is a property of a function that
+gives what a lexer has done in the spec's form; `fedInput` is that function for each lexer of the
+chain: what the lexer has handed over after being fed slices and then, if the input has ended,
+the end of the input, and whether a call failed. A theorem stated through it says only what it
+makes of the lexer, so it is to be read like the spec: it has to run the lexer as a consumer
+would, and record what the lexer hands over as it is, or the theorem says nothing about the
+lexer.
 
-So `handed` and `fed` fix nothing up. They feed the slices, and `handed` then the end of the
-input, with a consumer that takes every token of each cursor and records it. The consumer does
-not take whitespace and comments, never finishes and never switches the version. Each field of
-a recorded token is read from the cursor the lexer hands it over in, and is only converted from
-the library's types to the spec's, by one small function per type. Each lexer is given to
-`handed` and `fed` by its operations alone (`Ops`), which name the lexer's own functions and do
-nothing else.
+So `fedInput` fixes nothing up. It feeds the slices and then, if the input has ended and no call
+has failed, the end of the input, with a consumer that takes every token of each cursor and
+records it. The consumer does not take whitespace and comments, never finishes and never
+switches the version. Each field of a recorded token is read from the cursor the lexer hands it
+over in, and is only converted from the library's types to the spec's, by one small function per
+type. Each lexer is given to `fedInput` by its operations alone (`Ops`), which name the lexer's
+own functions and do nothing else.
 
 A lexer that stops at its first error does not give itself back from a call that fails, so its
-consumer cannot be read after it from the public calls. `fed` feeds the slices by the step that
-the public call runs (`Ops.lexSliceStep`), through the lexer's own entry point that gives the
-lexer back also when the step fails; the public call is that step followed by dropping the
-lexer on an error.
-
-`fedInput` takes whether the input has ended: it feeds the slices as `fed` does and then, if the
-input has ended and no call has failed, the end of the input, by the step that the public call
-runs (`Ops.lexEofStep`), through the same entry point. With the input not ended it is `fed`.
+consumer cannot be read after it from the public calls. `fedInput` feeds the slices and the end
+of the input by the steps that the public calls run (`Ops.lexSliceStep`, `Ops.lexEofStep`),
+through the lexer's own entry point that gives the lexer back also when the step fails; each
+public call is its step followed by dropping the lexer on an error.
 -/
 
 namespace BSmtLib.Proofs.Adapter
@@ -133,7 +130,9 @@ instance : Consume Collector Id Empty Unit where
 
 /-! ## Running a lexer -/
 
-/-- The operations of a lexer, with the consumer `Collector`, that `handed` runs. -/
+/-- The operations of a lexer, with the consumer `Collector`. `fedInput` runs the steps
+(`lexSliceStep`, `lexEofStep`); the public calls (`lexSlice`, `lexEof`) are those that run
+them. -/
 structure Ops where
   /-- The lexer with its consumer. -/
   Lexer : Type
@@ -155,52 +154,6 @@ structure Ops where
   lexEofStep : Lexer → Id (Except (LexError Unit) (ControlFlow (Located Empty)) × Lexer)
   /-- The consumer of the lexer. -/
   handler : Lexer → Collector
-
-/--
-Feeds the lexer the slices and then the end of the input, and gives what the consumer has
-recorded, or none if a call fails. The consumer never finishes, so no call breaks.
--/
-def feedAll (ops : Ops) (lexer : ops.Lexer) : List Spec.Lexicon.Chars → Option (List Handed)
-  | [] =>
-    match ops.lexEof lexer with
-    | .ok (.continue, lexer) => some (ops.handler lexer).handed
-    | .ok (.break finished, _) => finished.value.elim
-    | .error _ => none
-  | slice :: slices =>
-    match ops.lexSlice lexer slice.toByteArray.toByteSlice with
-    | .ok (.continue, lexer) => feedAll ops lexer slices
-    | .ok (.break finished, _) => finished.value.elim
-    | .error _ => none
-
-/--
-What the lexer hands over when fed the slices and then the end of the input, under the
-version, or none if a call fails.
--/
-def handed (ops : Ops) (version : Spec.Lexicon.Version) (slices : List Spec.Lexicon.Chars) :
-    Option (List Handed) :=
-  feedAll ops (ops.new { handed := [] } (toVersion version)) slices
-
-/--
-Feeds the lexer the slices, without the end of the input, by the step of `lexSlice`, and gives
-the consumer and whether a call failed. The feeding stops at the first call that fails, with
-the consumer as that call left it. The consumer never finishes, so no call breaks.
--/
-def feedSlices (ops : Ops) (lexer : ops.Lexer) : List Spec.Lexicon.Chars → Collector × Bool
-  | [] => (ops.handler lexer, false)
-  | slice :: slices =>
-    match ops.lexSliceStep lexer slice.toByteArray.toByteSlice with
-    | (.ok .continue, lexer) => feedSlices ops lexer slices
-    | (.ok (.break finished), _) => finished.value.elim
-    | (.error _, lexer) => (ops.handler lexer, true)
-
-/--
-What the lexer has done after being fed the slices under the version, before the end of the
-input: what it has handed over, and whether a call failed.
--/
-def fed (ops : Ops) (version : Spec.Lexicon.Version) (slices : List Spec.Lexicon.Chars) :
-    Spec.Lexer.Fed :=
-  let (collector, failed) := feedSlices ops (ops.new { handed := [] } (toVersion version)) slices
-  { handed := collector.handed, failed }
 
 /--
 Feeds the lexer the end of the input, by the step of `lexEof`, and gives the consumer and
