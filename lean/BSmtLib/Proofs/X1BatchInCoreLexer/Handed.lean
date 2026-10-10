@@ -10,14 +10,14 @@ adapter's consumer, give the same result and related lexers, where every slice e
 `USize.size` (`runSlices_rel`); and as the library's lexer gives for a list of slices what it
 gives for their cut (`Chunks.run_cutAll`), the library's lexer fed any slices gives what the
 lexer with the batch kept in its state gives fed their cut (`runSlices_cutAll`). The adapter,
-which feeds the slices and then the end of the input, records then the same from both
-(`handed_eq_cutAll`).
+which feeds the slices and then, if the input has ended, the end of the input, records then the
+same from both, and they fail alike (`feedInput_eq_cutAll`).
 -/
 
 namespace BSmtLib.Proofs.X1BatchInCoreLexer
 
 open BSmtLib.Proofs.Simulation (MCouple)
-open BSmtLib.Proofs.Adapter (Collector feedAll)
+open BSmtLib.Proofs.Adapter (Collector feedInput feedEnd)
 open BSmtLib.Lexer.Internal (handler core ofParts)
 
 theorem new_eq {H : Type} (consumer : H) (version : Version) :
@@ -102,47 +102,69 @@ theorem runSlices_cutAll (slices : List Spec.Lexicon.Chars) (l : BSmtLib.Lexer C
   rw [Chunks.run_cutAll slices l hl]
   exact runSlices_rel _ (fun _ h => Chunks.mem_cutAll h) l x hlx
 
-/-- The end of the input, from related lexers. -/
-theorem feed_nil_eq (l : BSmtLib.Lexer Collector) (x : Lexer.WRustPort.Lexer Collector)
+/-- The end of the input, fed by the adapter from related lexers. -/
+theorem feedEnd_eq (l : BSmtLib.Lexer Collector) (x : Lexer.WRustPort.Lexer Collector)
     (hlx : LexerRel l x) :
-    feedAll Adapter.X1BatchInCore.ops x [] = feedAll Adapter.Lexer.ops l [] := by
-  have e := lexEof_sim (m := Id) (R := Empty) (E := Unit) l x hlx.1 hlx.2
-  simp only [feedAll, Adapter.X1BatchInCore.ops, Adapter.Lexer.ops]
-  generalize Lexer.X1BatchInCore.Lexer.lexEof x = rx at e ⊢
-  generalize BSmtLib.Lexer.lexEof l = rz at e ⊢
-  have e' : resultZb afterEofZb rx = resultMap afterEofMap rz := e
-  rcases rz with ⟨ez, az⟩ | ⟨fz, lz⟩ <;> rcases rx with ⟨ex, ax⟩ | ⟨fx, lx⟩ <;>
-    simp only [resultMap, resultZb, reduceCtorEq, Except.ok.injEq, Prod.mk.injEq] at e'
-  · rfl
-  · obtain ⟨rfl, e2⟩ := e'
-    cases fx with
-    | «continue» => exact congrArg (fun y => some (y.handler).handed) e2
+    feedEnd Adapter.Lexer.ops l = feedEnd Adapter.X1BatchInCore.ops x := by
+  have hr := mcouple_id (run_lexEofStep (m := Id) (R := Empty) (E := Unit)
+    (LexRecovery.abandon .failFast) (LexRecovery.recover .failFast) l x hlx)
+  have e1 : Adapter.Lexer.ops.lexEofStep l = BSmtLib.Lexer.Internal.run l
+      (BSmtLib.Lexer.Internal.lexEofStep (LexRecovery.abandon .failFast)
+        (LexRecovery.recover .failFast)) := rfl
+  have e2 : Adapter.X1BatchInCore.ops.lexEofStep x =
+      x.run (Lexer.WRustPort.lexEofStep (ops := Lexer.X1BatchInCore.ops)
+        (LexRecovery.abandon .failFast) (LexRecovery.recover .failFast)) := rfl
+  simp only [feedEnd, e1, e2]
+  revert hr
+  generalize BSmtLib.Lexer.Internal.run l (BSmtLib.Lexer.Internal.lexEofStep (R := Empty)
+    (E := Unit) (LexRecovery.abandon .failFast) (LexRecovery.recover .failFast)) = rl
+  generalize x.run (Lexer.WRustPort.lexEofStep (ops := Lexer.X1BatchInCore.ops) (R := Empty)
+    (E := Unit) (LexRecovery.abandon .failFast) (LexRecovery.recover .failFast)) = rx
+  intro hr
+  obtain ⟨res, l'⟩ := rl
+  obtain ⟨res', x'⟩ := rx
+  obtain ⟨e, hl⟩ := hr
+  simp only at e hl
+  subst e
+  rcases res with err | flow
+  · show (handler l', true) = (x'.handler, true)
+    rw [hl.1]
+  · cases flow with
+    | «continue» =>
+      show (handler l', false) = (x'.handler, false)
+      rw [hl.1]
     | «break» f => exact f.value.elim
 
 /-- What the adapter records after the calls, from the same result and related lexers. -/
-theorem afterRun_eq (cl : Called (BSmtLib.Lexer Collector))
+theorem afterRun_eq (ended : Bool) (cl : Called (BSmtLib.Lexer Collector))
     (cx : Called (Lexer.WRustPort.Lexer Collector)) (e : cl.1 = cx.1) (hr : LexerRel cl.2 cx.2) :
-    afterRun Adapter.Lexer.ops cl = afterRun Adapter.X1BatchInCore.ops cx := by
+    afterRun Adapter.Lexer.ops ended cl = afterRun Adapter.X1BatchInCore.ops ended cx := by
   obtain ⟨r, l⟩ := cl
   obtain ⟨r', x⟩ := cx
   dsimp only at e hr
   subst e
   rcases r with _ | (_ | f)
-  · rfl
-  · exact (feed_nil_eq l x hr).symm
+  · show (handler l, true) = (x.handler, true)
+    rw [hr.1]
+  · cases ended with
+    | false =>
+      show (handler l, false) = (x.handler, false)
+      rw [hr.1]
+    | true => exact feedEnd_eq l x hr
   · exact f.value.elim
 
-/-- The library's lexer, run by the adapter, hands over for the slices what the lexer with the
-batch kept in its state hands over for their cut. -/
-theorem handed_eq_cutAll (version : Spec.Lexicon.Version) (slices : List Spec.Lexicon.Chars) :
-    Adapter.handed Adapter.Lexer.ops version slices =
-      Adapter.handed Adapter.X1BatchInCore.ops version (Chunks.cutAll slices) := by
-  show feedAll Adapter.Lexer.ops (BSmtLib.Lexer.new { handed := [] } (Adapter.toVersion version))
-      slices = feedAll Adapter.X1BatchInCore.ops
-        (Lexer.WRustPort.Lexer.new { handed := [] } (Adapter.toVersion version))
-        (Chunks.cutAll slices)
-  rw [feed_lexer, feed_x1]
+/-- The library's lexer, fed by the adapter, records for the slices what the lexer with the
+batch kept in its state records for their cut, and fails alike. -/
+theorem feedInput_eq_cutAll (version : Spec.Lexicon.Version) (ended : Bool)
+    (slices : List Spec.Lexicon.Chars) :
+    feedInput Adapter.Lexer.ops
+        (Adapter.Lexer.ops.new { handed := [] } (Adapter.toVersion version)) ended slices =
+      feedInput Adapter.X1BatchInCore.ops
+        (Adapter.X1BatchInCore.ops.new { handed := [] } (Adapter.toVersion version)) ended
+        (Chunks.cutAll slices) := by
+  rw [feedInput_eq_afterRun Adapter.Lexer.ops ended lexerStep (fun _ _ => rfl),
+    feedInput_eq_afterRun Adapter.X1BatchInCore.ops ended x1Step (fun _ _ => rfl)]
   obtain ⟨e, hr⟩ := runSlices_cutAll slices _ _ (lexerRel_new _ _) ⟨rfl, rfl⟩
-  exact afterRun_eq _ _ e hr
+  exact afterRun_eq ended _ _ e hr
 
 end BSmtLib.Proofs.X1BatchInCoreLexer

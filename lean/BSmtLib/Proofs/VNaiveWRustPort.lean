@@ -3,22 +3,21 @@ import BSmtLib.Proofs.VNaiveWRustPort.Run
 /-!
 # The naive lexer and the Rust port as the spec sees them
 
-`Lexer.VNaive.handed_eq_handed_wRustPort`: the naive lexer `VNaive` and the Rust port
-`WRustPort`, run by the adapter, hand over the same tokens, however the input is cut into
-slices. The two cut their hand-overs differently: the Rust port lexes a whole slice ahead into
-one batch, and hands a token in progress at a slice's end over alone. So only what the
-adapter's consumer records is equal; both record what the naive lexer's pure run `VNaive.run`
-finishes: the naive lexer by `VNaive.handed_eq_run`, the Rust port by
-`VNaiveWRustPort.handed_eq_run`.
+`Lexer.VNaive.fedInput_eq_fedInput_wRustPort`: the naive lexer `VNaive` and the Rust port
+`WRustPort`, fed by the adapter slices and then, if the input has ended, the end of the input,
+hand over the same tokens and fail alike, however the input is cut into slices. The two cut
+their hand-overs differently: the Rust port lexes a whole slice ahead into one batch, and hands
+a token in progress at a slice's end over alone. So only what the adapter's consumer records is
+equal; both record what the naive lexer's pure run over the bytes of the slices and then its end
+of the input give, also up to an error (`VNaive.fedOf`): the naive lexer by
+`VNaive.fedOf_fedInput`, the Rust port by `VNaiveWRustPort.fedInput_eq_run`.
 
-The Rust port's part is proved slice by slice: after any slices, before the end of the input,
-the Rust port fed them by its step run, which gives the lexer back also when a call fails, has
-handed over what the naive lexer's pure run over their bytes finishes, also up to an error, and
-has failed exactly when that run fails or the consumer fails on a lexeme
-(`VNaiveWRustPort.fedSteps_new`). So the two lexers fed slices by the adapter before the end
-of the input have done the same (`Lexer.VNaive.fed_eq_fed_wRustPort`), as the naive lexer has
-done what its pure run gives too (`VNaive.fedOf_fed`). The whole input follows from it with
-the end of the input.
+The Rust port's part is proved slice by slice: after any slices the Rust port fed them by its
+step run, which gives the lexer back also when a call fails, has handed over what the naive
+lexer's pure run over their bytes finishes, also up to an error, and has failed exactly when that
+run fails or the consumer fails on a lexeme (`VNaiveWRustPort.fedSteps_eq`). The end of the input
+then finishes as the naive lexer's end of the input, and when that fails, it hands over nothing
+more (`VNaiveWRustPort.feedEnd_ops`).
 
 The proof that the Rust port records the naive lexer's pure run compares the Rust port's code,
 run with the adapter's consumer, with the naive lexer's pure run over the bytes it consumes:
@@ -42,42 +41,26 @@ reached, with the lexemes of its batch still to be handed over. In parts:
 - `VNaiveWRustPort.Arms`, `ArmsRuns`, `ArmsNumbers`, `ArmsQuoted`, `ArmsStrings`,
   `LexStep`: the steps for a token in progress, and the step in every state;
 - `VNaiveWRustPort.Slice`, `Eof`, `Run`: the loop over a slice, the end of the input, the
-  calls of the step run and of the adapter, the feeding of the slices one at a time, and the
-  adapter's feeding of the whole input.
+  calls of the step run, the feeding of the slices one at a time, and the adapter's feeding of
+  the slices and the end of the input.
 -/
 
 namespace BSmtLib.Proofs.Lexer
 
 open BSmtLib.Proofs.Adapter
 
-/-- The naive lexer and the Rust port, run by the adapter, hand over the same tokens. -/
-theorem VNaive.handed_eq_handed_wRustPort :
-    handed Adapter.VNaive.ops = handed Adapter.WRustPort.ops := by
-  funext version slices
-  rw [VNaive.handed_eq_run, VNaiveWRustPort.handed_eq_run]
+/-- The naive lexer and the Rust port, fed by the adapter slices and then, if the input has
+ended, the end of the input, hand over the same tokens and fail alike. -/
+theorem VNaive.fedInput_eq_fedInput_wRustPort :
+    fedInput Adapter.VNaive.ops = fedInput Adapter.WRustPort.ops := by
+  funext version slices ended
+  rw [VNaiveWRustPort.fedInput_eq_run version slices ended _ _
+    (VNaive.fedOf_fedInput version slices ended)]
 
 /--
-info: 'BSmtLib.Proofs.Lexer.VNaive.handed_eq_handed_wRustPort' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'BSmtLib.Proofs.Lexer.VNaive.fedInput_eq_fedInput_wRustPort' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
-#print axioms VNaive.handed_eq_handed_wRustPort
-
-/--
-info: 'BSmtLib.Proofs.Lexer.VNaiveWRustPort.fedSteps_new' depends on axioms: [propext, Classical.choice, Quot.sound]
--/
-#guard_msgs in
-#print axioms VNaiveWRustPort.fedSteps_new
-
-/-- The naive lexer and the Rust port, fed slices by the adapter before the end of the input,
-hand over the same tokens and fail alike. -/
-theorem VNaive.fed_eq_fed_wRustPort : fed Adapter.VNaive.ops = fed Adapter.WRustPort.ops := by
-  funext version slices
-  rw [VNaiveWRustPort.fed_eq_run version slices _ _ (VNaive.fedOf_fed version slices)]
-
-/--
-info: 'BSmtLib.Proofs.Lexer.VNaive.fed_eq_fed_wRustPort' depends on axioms: [propext, Classical.choice, Quot.sound]
--/
-#guard_msgs in
-#print axioms VNaive.fed_eq_fed_wRustPort
+#print axioms VNaive.fedInput_eq_fedInput_wRustPort
 
 end BSmtLib.Proofs.Lexer

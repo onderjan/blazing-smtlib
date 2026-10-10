@@ -6,9 +6,10 @@ import BSmtLib.Proofs.Adapter
 The naive lexer of `VNaive` lexes an input by a pure step over one byte at a time, and hands
 each finished token over to its consumer in a monad. For the adapter's consumer `Collector`,
 which takes every token and does not take whitespace and comments, this module states the
-lexing as a pure run over the bytes of the whole input (`run`) and proves that
-`handed VNaive.ops` gives what the run gives, whatever slices the input is cut into
-(`handed_eq_run`).
+lexing as a pure run over the bytes, also up to an error (`lexBytes`), followed by the end of
+the input (`endStep`; `run` for the whole input), and proves that `fedInput VNaive.ops` gives
+what the run gives, before the end of the input and after it, whatever slices the input is cut
+into (`fedInput_eq_run`), if the consumer takes the lexemes.
 -/
 
 namespace BSmtLib.Proofs.Lexer.VNaive
@@ -673,12 +674,30 @@ theorem lexSliceStep_run {version : Version} {st : St} {location : Location} {co
   exact feeds_of_lexes (lexSliceStep_lexes h bytes coll)
 
 /-- The end of the input, run on the consumer `coll`, has the `result` that the pure run
-predicts with `expected`, as `Feeds` states for a slice. -/
+predicts with `expected`, as `Feeds` states for a slice. If the pure run fails, the call fails
+and the consumer has recorded nothing more. -/
 def Ends {ε : Type} (version : Version) (expected : Option (List Lexeme)) (coll : Collector)
     (result : (Except ε (ControlFlow (Located Empty)) × Core) × Collector) : Prop :=
-  match expected.bind (handedAll version) with
-  | some hs => result.1.1 = .ok .continue ∧ result.2.handed = coll.handed ++ hs
-  | none => ∃ f, result.1.1 = .error f
+  match expected with
+  | none => (∃ f, result.1.1 = .error f) ∧ result.2.handed = coll.handed
+  | some ls =>
+    match handedAll version ls with
+    | some hs => result.1.1 = .ok .continue ∧ result.2.handed = coll.handed ++ hs
+    | none => ∃ f, result.1.1 = .error f
+
+theorem ends_some_some {ε : Type} {version : Version} {ls : List Lexeme}
+    {hs : List Spec.Lexer.Handed} {coll : Collector}
+    {result : (Except ε (ControlFlow (Located Empty)) × Core) × Collector}
+    (h : handedAll version ls = some hs) :
+    Ends version (some ls) coll result ↔
+      result.1.1 = .ok .continue ∧ result.2.handed = coll.handed ++ hs := by
+  simp only [Ends, h]
+
+theorem ends_some_none {ε : Type} {version : Version} {ls : List Lexeme} {coll : Collector}
+    {result : (Except ε (ControlFlow (Located Empty)) × Core) × Collector}
+    (h : handedAll version ls = none) :
+    Ends version (some ls) coll result ↔ ∃ f, result.1.1 = .error f := by
+  simp only [Ends, h]
 
 theorem id_bind {α β : Type} (x : α) (f : α → Id β) : (x >>= f : Id β) = f x := rfl
 
@@ -711,16 +730,15 @@ theorem lexEnd_run {version : Version} {st : St} {location : Location} {core : C
       try dsimp only
       simp only [StateT.bind, StateT.pure, pure_bind]
       simp only [heof]
+      have e : endStep (.token p) core.location = some [eofLexeme core.location] := by
+        simp [endStep, hf]
+      rw [e]
       cases hx : lexemeHanded core.version (eofLexeme core.location) with
       | none =>
-        have e : (endStep (.token p) core.location).bind (handedAll core.version) = none := by
-          simp [endStep, hf, handedAll, hx]
-        unfold Ends; rw [e]
+        rw [ends_some_none (by simp [handedAll, hx])]
         exact ⟨_, rfl⟩
       | some x =>
-        have e : (endStep (.token p) core.location).bind (handedAll core.version) = some [x] := by
-          simp [endStep, hf, handedAll, hx]
-        unfold Ends; rw [e]
+        rw [ends_some_some (hs := [x]) (by simp [handedAll, hx])]
         exact ⟨rfl, rfl⟩
     | token l =>
       simp only [finishS, hf]
@@ -730,11 +748,12 @@ theorem lexEnd_run {version : Version} {st : St} {location : Location} {core : C
       try dsimp only
       simp only [StateT.bind]
       simp only [hl]
+      have e : endStep (.token p) core.location = some [l, eofLexeme core.location] := by
+        simp [endStep, hf]
+      rw [e]
       cases hy : lexemeHanded core.version l with
       | none =>
-        have e : (endStep (.token p) core.location).bind (handedAll core.version) = none := by
-          simp [endStep, hf, handedAll, hy]
-        unfold Ends; rw [e]
+        rw [ends_some_none (by simp [handedAll, hy])]
         exact ⟨_, rfl⟩
       | some y =>
         dsimp only
@@ -742,46 +761,47 @@ theorem lexEnd_run {version : Version} {st : St} {location : Location} {core : C
         simp only [StateT.bind, StateT.pure, id_bind, heof]
         cases hx : lexemeHanded core.version (eofLexeme core.location) with
         | none =>
-          have e : (endStep (.token p) core.location).bind (handedAll core.version) = none := by
-            simp [endStep, hf, handedAll, hx, hy]
-          unfold Ends; rw [e]
+          rw [ends_some_none (by simp [handedAll, hx, hy])]
           exact ⟨_, rfl⟩
         | some x =>
-          have e : (endStep (.token p) core.location).bind (handedAll core.version) =
-              some [y, x] := by
-            simp [endStep, hf, handedAll, hx, hy]
-          unfold Ends; rw [e]
+          rw [ends_some_some (hs := [y, x]) (by simp [handedAll, hx, hy])]
           exact ⟨rfl, List.append_assoc _ _ _⟩
     | error f =>
       simp only [finishS, hf]
       simp only [Ends, endStep, hf]
-      exact ⟨_, rfl⟩
+      exact ⟨⟨_, rfl⟩, rfl⟩
 
 /-- An end of the input that fails, whatever its error, as one that predictably fails. -/
 theorem ends_error {ε ε' : Type} {version : Version} {expected : Option (List Lexeme)}
-    {coll coll' coll'' : Collector} {core core' : Core} {f : ε} (f' : ε')
+    {coll coll' : Collector} {core core' : Core} {f : ε} (f' : ε')
     (h : Ends version expected coll ((.error f, core), coll')) :
-    Ends version expected coll ((.error f', core'), coll'') := by
-  unfold Ends at h ⊢
-  split
-  next heq =>
-    rw [heq] at h
-    exact absurd h.1 (by simp)
-  next => exact ⟨f', rfl⟩
+    Ends version expected coll ((.error f', core'), coll') := by
+  cases expected with
+  | none => exact ⟨⟨f', rfl⟩, h.2⟩
+  | some ls =>
+    cases hh : handedAll version ls with
+    | none => exact (ends_some_none hh).mpr ⟨f', rfl⟩
+    | some hs =>
+      have := ((ends_some_some hh).mp h).1
+      cases this
 
 /-- An end of the input that goes on, whatever its type of errors and its state after. -/
 theorem ends_ok {ε ε' : Type} {version : Version} {expected : Option (List Lexeme)}
     {coll coll' : Collector} {core core' : Core} {a : ControlFlow (Located Empty)}
     (h : Ends (ε := ε) version expected coll ((.ok a, core), coll')) :
     Ends (ε := ε') version expected coll ((.ok a, core'), coll') := by
-  unfold Ends at h ⊢
-  split
-  next heq =>
-    rw [heq] at h
-    exact ⟨by simpa using h.1, h.2⟩
-  next heq =>
-    rw [heq] at h
-    simp at h
+  cases expected with
+  | none =>
+    obtain ⟨f, hf⟩ := h.1
+    cases hf
+  | some ls =>
+    cases hh : handedAll version ls with
+    | none =>
+      obtain ⟨f, hf⟩ := (ends_some_none hh).mp h
+      cases hf
+    | some hs =>
+      have h' := (ends_some_some hh).mp h
+      exact (ends_some_some hh).mpr ⟨by simpa using h'.1, h'.2⟩
 
 theorem lexEofStep_run {version : Version} {st : St} {location : Location} {core : Core}
     (h : Agrees version st location core) (coll : Collector) :
@@ -811,49 +831,6 @@ theorem lexEofStep_run {version : Version} {st : St} {location : Location} {core
     | ok a => exact ends_ok he
     | error f => exact ends_error _ he
 
-/-! ## The lexer's calls -/
-
-theorem lexSlice_eq (handler : Collector) (core : Core) (slice : ByteSlice) :
-    (Lexer.lexSlice (⟨handler, core⟩ : Lexer Collector) slice : Id _) =
-      match (lexSliceStep (H := Collector) false (fun _ => pure ()) (fun _ => pure ()) slice
-          core).run handler with
-      | ((.ok flow, core), handler) => .ok (flow, { handler, core })
-      | ((.error err, _), _) => .error (err, ()) := by
-  unfold Lexer.lexSlice
-  delta Lexer.run Lexer.afterError Lexer.afterEofError
-  simp only [bind, pure, StateT.run]
-  rw [show (Recovery.failFast == Recovery.recovering) = false from rfl,
-    show LexRecovery.abandon (H := Collector) (m := Id) Recovery.failFast =
-      fun _ => StateT.pure () from rfl,
-    show LexRecovery.recover (H := Collector) (m := Id) Recovery.failFast =
-      fun _ => StateT.pure () from rfl]
-  generalize lexSliceStep (H := Collector) false (fun _ => StateT.pure ())
-    (fun _ => StateT.pure ()) slice core handler = r
-  obtain ⟨⟨res, core'⟩, h'⟩ := r
-  cases res <;> rfl
-
-theorem lexEof_eq (handler : Collector) (core : Core) :
-    (Lexer.lexEof (⟨handler, core⟩ : Lexer Collector) : Id _) =
-      match (lexEofStep (H := Collector) false (fun _ => pure ()) (fun _ => pure ())
-          core).run handler with
-      | ((.ok flow, core), handler) => .ok (flow, { handler, core })
-      | ((.error err, _), _) => .error (err, ()) := by
-  unfold Lexer.lexEof
-  delta Lexer.run Lexer.afterError Lexer.afterEofError
-  simp only [bind, pure, StateT.run]
-  rw [show (Recovery.failFast == Recovery.recovering) = false from rfl,
-    show LexRecovery.abandon (H := Collector) (m := Id) Recovery.failFast =
-      fun _ => StateT.pure () from rfl,
-    show LexRecovery.recover (H := Collector) (m := Id) Recovery.failFast =
-      fun _ => StateT.pure () from rfl]
-  generalize lexEofStep (H := Collector) false (fun _ => StateT.pure ())
-    (fun _ => StateT.pure ()) core handler = r
-  obtain ⟨⟨res, core'⟩, h'⟩ := r
-  cases res <;> rfl
-
-theorem ops_lexSlice : VNaive.ops.lexSlice = Lexer.lexSlice := rfl
-
-theorem ops_lexEof : VNaive.ops.lexEof = Lexer.lexEof := rfl
 
 theorem runFrom_append (version : Version) (st : St) (location : Location) (a b : List UInt8) :
     runFrom version st location (a ++ b) =
@@ -872,117 +849,45 @@ theorem runFrom_append (version : Version) (st : St) (location : Location) (a b 
       simp only [Option.map_some, Option.bind_some]
       cases endStep st'' location'' <;> simp [List.append_assoc]
 
-theorem feed_eq {version : Version} (slices : List Spec.Lexicon.Chars) :
-    ∀ {st : St} {location : Location} (handler : Collector) (core : Core),
-      Agrees version st location core →
-      feedAll VNaive.ops ⟨handler, core⟩ slices =
-        (runFrom version st location slices.flatten).bind fun ls =>
-          (handedAll version ls).map (handler.handed ++ ·) := by
-  induction slices with
-  | nil =>
-    intro st location handler core h
-    have he := lexEofStep_run h handler
-    simp only [feedAll, ops_lexEof, lexEof_eq, List.flatten_nil, runFrom, feedBytes,
-      Option.bind_some, List.nil_append]
-    generalize (lexEofStep (H := Collector) false (fun _ => pure ()) (fun _ => pure ())
-      core).run handler = r at he ⊢
-    obtain ⟨⟨res, core'⟩, handler'⟩ := r
-    unfold Ends at he
-    cases hx : (endStep st location).bind (handedAll version) with
-    | none =>
-      rw [hx] at he
-      obtain ⟨f, hf⟩ := he
-      simp only at hf
-      subst hf
-      cases hend : endStep st location with
-      | none => rfl
-      | some ls =>
-        rw [hend] at hx
-        simp only [Option.bind_some] at hx
-        simp [hx]
-    | some hs =>
-      rw [hx] at he
-      obtain ⟨hok, hhs⟩ := he
-      simp only at hok hhs
-      subst hok
-      cases hend : endStep st location with
-      | none => rw [hend] at hx; simp at hx
-      | some ls =>
-        rw [hend] at hx
-        simp only [Option.bind_some] at hx
-        simp [hx, ← hhs]
-        rfl
-  | cons slice slices ih =>
-    intro st location handler core h
-    have hf := lexSliceStep_run h slice handler
-    simp only [feedAll, ops_lexSlice, lexSlice_eq, List.flatten_cons, runFrom_append]
-    generalize (lexSliceStep (H := Collector) false (fun _ => pure ()) (fun _ => pure ())
-      slice.toByteArray.toByteSlice core).run handler = r at hf ⊢
-    obtain ⟨⟨res, core'⟩, handler'⟩ := r
-    unfold Feeds at hf
-    cases hx : feedBytes version st location slice with
-    | none =>
-      rw [hx] at hf
-      obtain ⟨f, hf⟩ := hf
-      simp only at hf
-      subst hf
-      rfl
-    | some e =>
-      obtain ⟨st', location', ls⟩ := e
-      rw [hx] at hf
-      simp only [Option.bind_some] at hf
-      cases hls : handedAll version ls with
-      | none =>
-        rw [hls] at hf
-        obtain ⟨f, hf⟩ := hf
-        subst hf
-        simp only [Option.bind_some]
-        cases runFrom version st' location' slices.flatten with
-        | none => rfl
-        | some ls' => simp [handedAll_append, hls]
-      | some hs =>
-        rw [hls] at hf
-        obtain ⟨hok, hag, hhs⟩ := hf
-        subst hok
-        simp only [Option.bind_some]
-        rw [ih handler' core' hag]
-        cases runFrom version st' location' slices.flatten with
-        | none => rfl
-        | some ls' =>
-          simp only [Option.bind_some, Option.map_some, handedAll_append, hls, hhs]
-          cases handedAll version ls' <;> simp [List.append_assoc]
+/-! ## The slices and the end of the input -/
 
-/-- `handed VNaive.ops` gives what the pure run of the whole input gives, as the consumer records
-it, however the input is cut into slices. -/
-theorem handed_eq_run (version : Spec.Lexicon.Version) (slices : List Spec.Lexicon.Chars) :
-    handed VNaive.ops version slices =
-      (run (toVersion version) slices.flatten).bind (handedAll (toVersion version)) := by
-  rw [handed, show VNaive.ops.new = Lexer.new from rfl, Lexer.new, run,
-    feed_eq (st := .idle) slices { handed := [] } (Core.initial (toVersion version))
-    ⟨rfl, rfl, rfl⟩]
-  simp only [Core.initial, List.nil_append]
-  cases runFrom (toVersion version) .idle Location.initial slices.flatten with
-  | none => rfl
-  | some ls => simp
-
-/-! ## The slices before the end of the input -/
-
-/-- What the consumer has recorded after the pure run, as it records the lexemes, and whether
+/-- What the consumer has recorded after the pure run over the bytes and then, if the input has
+ended and the run has not failed, the end of the input, as it records the lexemes, and whether
 the run failed; none if the consumer fails on a lexeme. -/
-def fedOf (version : Version) :
+def fedOf (version : Version) (ended : Bool) :
     Except (List Lexeme) (St × Location × List Lexeme) → Option (List Spec.Lexer.Handed × Bool)
-  | .ok (_, _, ls) => (handedAll version ls).map (·, false)
+  | .ok (st, location, ls) =>
+    if ended then
+      match endStep st location with
+      | some ls' => (handedAll version (ls ++ ls')).map (·, false)
+      | none => (handedAll version ls).map (·, true)
+    else
+      (handedAll version ls).map (·, false)
   | .error ls => (handedAll version ls).map (·, true)
 
-theorem fedOf_withBefore {version : Version} {ls : List Lexeme} {hs : List Spec.Lexer.Handed}
-    (hls : handedAll version ls = some hs)
+theorem fedOf_withBefore {version : Version} {ended : Bool} {ls : List Lexeme}
+    {hs : List Spec.Lexer.Handed} (hls : handedAll version ls = some hs)
     (e : Except (List Lexeme) (St × Location × List Lexeme)) :
-    fedOf version (withBefore ls e) = (fedOf version e).map fun (hs', b) => (hs ++ hs', b) := by
+    fedOf version ended (withBefore ls e) =
+      (fedOf version ended e).map fun (hs', b) => (hs ++ hs', b) := by
   cases e with
   | ok r =>
     obtain ⟨st, location, ls'⟩ := r
-    simp only [withBefore, fedOf, handedAll_append, hls, Option.bind_some]
-    cases handedAll version ls' <;> rfl
+    cases ended with
+    | false =>
+      simp only [withBefore, fedOf, Bool.false_eq_true, ↓reduceIte, handedAll_append, hls,
+        Option.bind_some]
+      cases handedAll version ls' <;> rfl
+    | true =>
+      simp only [withBefore, fedOf, ↓reduceIte]
+      cases endStep st location with
+      | none =>
+        simp only [handedAll_append, hls, Option.bind_some]
+        cases handedAll version ls' <;> rfl
+      | some ls'' =>
+        dsimp only
+        rw [List.append_assoc, handedAll_append version ls, hls, Option.bind_some]
+        cases handedAll version (ls' ++ ls'') <;> rfl
   | error ls' =>
     simp only [withBefore, fedOf, handedAll_append, hls, Option.bind_some]
     cases handedAll version ls' <;> rfl
@@ -993,26 +898,76 @@ theorem ops_lexSliceStep (handler : Collector) (core : Core) (slice : ByteSlice)
           core).run handler with
       | ((res, core), handler) => (res, ⟨handler, core⟩) := rfl
 
-/-- The naive lexer fed the slices by the step of `lexSlice`, from the pure state at
-`location`, has recorded what the pure run over their bytes finishes, also up to an error, and
-has failed exactly when the run fails, if the consumer takes the lexemes. -/
-theorem feedSlices_eq {version : Version} (slices : List Spec.Lexicon.Chars) :
+theorem ops_lexEofStep (handler : Collector) (core : Core) :
+    VNaive.ops.lexEofStep ⟨handler, core⟩ =
+      match (lexEofStep (H := Collector) false (fun _ => pure ()) (fun _ => pure ())
+          core).run handler with
+      | ((res, core), handler) => (res, ⟨handler, core⟩) := rfl
+
+/-- The naive lexer fed the end of the input by the step of `lexEof`, from the pure state at
+`location`, has recorded what the pure end of the input finishes, and has failed exactly when
+it fails, if the consumer takes the lexemes. -/
+theorem feedEnd_eq {version : Version} {st : St} {location : Location} (handler : Collector)
+    (core : Core) (hag : Agrees version st location core) (hs : List Spec.Lexer.Handed)
+    (failed : Bool)
+    (h : fedOf version true (.ok (st, location, [])) = some (hs, failed)) :
+    (feedEnd VNaive.ops ⟨handler, core⟩).1.handed = handler.handed ++ hs ∧
+      (feedEnd VNaive.ops ⟨handler, core⟩).2 = failed := by
+  have he := lexEofStep_run hag handler
+  simp only [feedEnd, ops_lexEofStep]
+  generalize (lexEofStep (H := Collector) false (fun _ => pure ()) (fun _ => pure ())
+    core).run handler = r at he ⊢
+  obtain ⟨⟨res, core'⟩, handler'⟩ := r
+  simp only [fedOf, ↓reduceIte, List.nil_append] at h
+  cases hend : endStep st location with
+  | none =>
+    rw [hend] at he h
+    dsimp only at h
+    simp only [handedAll_nil, Option.map_some, Option.some.injEq, Prod.mk.injEq] at h
+    obtain ⟨rfl, rfl⟩ := h
+    obtain ⟨⟨f, hf⟩, hh⟩ := he
+    simp only at hf
+    subst hf
+    exact ⟨by rw [List.append_nil]; exact hh, rfl⟩
+  | some ls =>
+    rw [hend] at he h
+    dsimp only at h
+    cases hls : handedAll version ls with
+    | none => rw [hls] at h; cases h
+    | some hs' =>
+      rw [hls] at h
+      simp only [Option.map_some, Option.some.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      obtain ⟨hok, hh⟩ := (ends_some_some hls).mp he
+      simp only at hok
+      subst hok
+      exact ⟨hh, rfl⟩
+
+/-- The naive lexer fed the slices by the step of `lexSlice` and then, if the input has ended,
+the end of the input by the step of `lexEof`, from the pure state at `location`, has recorded
+what the pure run over their bytes and then the pure end of the input finish, also up to an
+error, and has failed exactly when the run fails, if the consumer takes the lexemes. -/
+theorem feedInput_eq {version : Version} (ended : Bool) (slices : List Spec.Lexicon.Chars) :
     ∀ {st : St} {location : Location} (handler : Collector) (core : Core),
       Agrees version st location core → ∀ hs failed,
-      fedOf version (lexBytes version st location slices.flatten) = some (hs, failed) →
-      (feedSlices VNaive.ops ⟨handler, core⟩ slices).1.handed = handler.handed ++ hs ∧
-        (feedSlices VNaive.ops ⟨handler, core⟩ slices).2 = failed := by
+      fedOf version ended (lexBytes version st location slices.flatten) = some (hs, failed) →
+      (feedInput VNaive.ops ⟨handler, core⟩ ended slices).1.handed = handler.handed ++ hs ∧
+        (feedInput VNaive.ops ⟨handler, core⟩ ended slices).2 = failed := by
   induction slices with
   | nil =>
-    intro st location handler core _ hs failed h
-    simp only [List.flatten_nil, lexBytes, fedOf, handedAll_nil, Option.map_some,
-      Option.some.injEq, Prod.mk.injEq] at h
-    obtain ⟨rfl, rfl⟩ := h
-    exact ⟨by simp; rfl, rfl⟩
+    intro st location handler core hag hs failed h
+    simp only [List.flatten_nil, lexBytes] at h
+    cases ended with
+    | true => exact feedEnd_eq handler core hag hs failed h
+    | false =>
+      simp only [fedOf, Bool.false_eq_true, ↓reduceIte, handedAll_nil, Option.map_some,
+        Option.some.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      exact ⟨by simp; rfl, rfl⟩
   | cons slice slices ih =>
     intro st location handler core hag hs failed h
     have hf := lexSliceStep_lexes hag slice handler
-    simp only [feedSlices, ops_lexSliceStep]
+    simp only [feedInput, ops_lexSliceStep]
     rw [List.flatten_cons, lexBytes_append] at h
     generalize (lexSliceStep (H := Collector) false (fun _ => pure ()) (fun _ => pure ())
       slice.toByteArray.toByteSlice core).run handler = r at hf ⊢
@@ -1036,20 +991,27 @@ theorem feedSlices_eq {version : Version} (slices : List Spec.Lexicon.Chars) :
       simp only [Lexes] at hf
       cases hls : handedAll version ls with
       | none =>
-        cases e' : lexBytes version st' location' slices.flatten with
-        | ok r =>
-          obtain ⟨_, _, _⟩ := r
-          rw [e'] at h
-          simp [withBefore, fedOf, handedAll_append, hls] at h
-        | error _ =>
-          rw [e'] at h
-          simp [withBefore, fedOf, handedAll_append, hls] at h
+        have : ∀ e : Except (List Lexeme) (St × Location × List Lexeme),
+            fedOf version ended (withBefore ls e) = none := by
+          intro e
+          cases e with
+          | ok r =>
+            obtain ⟨st'', location'', ls'⟩ := r
+            cases ended with
+            | false => simp [withBefore, fedOf, handedAll_append, hls]
+            | true =>
+              simp only [withBefore, fedOf, ↓reduceIte]
+              cases endStep st'' location'' <;>
+                simp [List.append_assoc, handedAll_append, hls]
+          | error ls' => simp [withBefore, fedOf, handedAll_append, hls]
+        rw [this] at h
+        cases h
       | some hs1 =>
         simp only [hls] at hf
         obtain ⟨hres, hag', hh⟩ := hf
         subst hres
         rw [fedOf_withBefore hls] at h
-        cases e' : fedOf version (lexBytes version st' location' slices.flatten) with
+        cases e' : fedOf version ended (lexBytes version st' location' slices.flatten) with
         | none => rw [e'] at h; simp at h
         | some r =>
           obtain ⟨hs2, b⟩ := r
@@ -1060,15 +1022,18 @@ theorem feedSlices_eq {version : Version} (slices : List Spec.Lexicon.Chars) :
           refine ⟨?_, h2⟩
           rw [h1, hh, List.append_assoc]
 
-/-- `fed VNaive.ops` gives what the pure run of the bytes of the slices gives, also up to an
-error, if the consumer takes its lexemes. -/
-theorem fed_eq_run (version : Spec.Lexicon.Version) (slices : List Spec.Lexicon.Chars)
-    (hs : List Spec.Lexer.Handed) (failed : Bool)
-    (h : fedOf (toVersion version) (lexBytes (toVersion version) .idle Location.initial
+/-- `fedInput VNaive.ops` gives what the pure run of the bytes of the slices and then, if the
+input has ended, the pure end of the input give, also up to an error, if the consumer takes the
+lexemes. -/
+theorem fedInput_eq_run (version : Spec.Lexicon.Version) (slices : List Spec.Lexicon.Chars)
+    (ended : Bool) (hs : List Spec.Lexer.Handed) (failed : Bool)
+    (h : fedOf (toVersion version) ended (lexBytes (toVersion version) .idle Location.initial
       slices.flatten) = some (hs, failed)) :
-    fed VNaive.ops version slices = { handed := hs, failed } := by
-  have := feedSlices_eq (st := .idle) slices { handed := [] } (Core.initial (toVersion version))
-    ⟨rfl, rfl, rfl⟩ hs failed h
+    fedInput VNaive.ops version slices ended = { handed := hs, failed } := by
+  have := feedInput_eq (st := .idle) ended slices { handed := [] }
+    (Core.initial (toVersion version)) ⟨rfl, rfl, rfl⟩ hs failed h
   simp only [List.nil_append] at this
-  simp only [fed, show VNaive.ops.new = Lexer.new from rfl, Lexer.new]
+  simp only [fedInput, show VNaive.ops.new = Lexer.new from rfl, Lexer.new]
   rw [this.1, this.2]
+
+end BSmtLib.Proofs.Lexer.VNaive

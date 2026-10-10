@@ -2,26 +2,159 @@ import BSmtLib.Proofs.VNaive.Prefix
 import BSmtLib.SpecChecks.StreamingFacts
 
 /-!
-# The naive lexer fed in slices
+# The naive lexer is correct
 
-`streaming_correct`: the naive lexer, as the adapter feeds it slices without the end of the
-input (`Adapter.fed VNaive.ops`), has the property `Spec.Lexer.StreamingInputCorrect` on every
-version, slices and start.
+`fedInput_correct`: the naive lexer, as the adapter feeds it slices and then, if the input has
+ended, the end of the input (`Adapter.fedInput VNaive.ops`), has the property
+`Spec.Lexer.Correct`.
 
-What it has done is what the pure run over the bytes of the slices gives, also up to an error
-(`fed_eq_run`, `fedOf_isSome`). When the run gets through the bytes, they are viable, as some
-bytes complete them to an input that the run finishes (`runFrom_completes`), and the lexemes it
-has finished are the tokens maximal to hand over on them (`reached`): those of the tokenisation
-of every completion that end before a byte the run has read, as the run is the same over the
-bytes whatever follows them. When the run fails at a byte, the bytes before it are the longest
-viable start, and the run has finished their tokens maximal to hand over.
+What it has done is what the pure run over the bytes of the slices and then the end of the
+input gives, also up to an error (`fedInput_eq_run`, `fedOf_isSome`), and the consumer records
+the lexeme of a token as the spec hands the token over (`lexemeHanded_token`).
+
+Before the end of the input (`correct_unended`): when the run gets through the bytes, they are
+viable, as some bytes complete them to an input that the run finishes (`runFrom_completes`),
+and the lexemes it has finished are the tokens maximal to hand over on them (`reached`): those
+of the tokenisation of every completion that end before a byte the run has read, as the run is
+the same over the bytes whatever follows them. When the run fails at a byte, the bytes before
+it are the longest viable start, and the run has finished their tokens maximal to hand over.
+
+After the end of the input (`correct_ended`): the end of the input after the bytes finishes the
+run exactly when the input has a tokenisation (`run_sound`, `run_complete`), with the lexemes of
+its tokens and the end-of-file lexeme. Otherwise the lexer has failed, and has handed over
+nothing that it had not handed over before the end.
 -/
 
 namespace BSmtLib.Proofs.Lexer.VNaive
 
 open BSmtLib.Proofs.Adapter BSmtLib.Spec.Lexicon BSmtLib.SpecChecks.Lexicon
+open BSmtLib.Proofs.Simulation (byteArray_toList toByteArray_toByteSlice)
 open BSmtLib.SpecChecks.Lexer (handoverReady_within locate_append viable_of_prefix
-  longestViableStart_unique longestViableStart_viable exists_longestViableStart)
+  longestViableStart_unique longestViableStart_viable exists_longestViableStart
+  viable_of_tokenization not_complete_false)
+
+/-! ## What the consumer records of a lexeme -/
+
+/-- The kind of reserved word the consumer records for a lexeme of the category with the
+content, under the version. -/
+def lexemeReserved (version : Version) (category : TokenCategory) (content : ByteArray) :
+    Option Spec.Lexer.ReservedKind :=
+  match category with
+  | .unquotedSymbol => (Reserved.fromBytes? content.toByteSlice version).map reservedKindOf
+  | _ => none
+
+/-- What the consumer records of a lexeme, field by field. -/
+theorem lexemeHanded_eq (version : Version) (l : Lexeme) :
+    lexemeHanded version l = (toTokenType l.category).map fun type =>
+      { type, start := toLocation l.start, «end» := toLocation l.end,
+        reserved := lexemeReserved version l.category l.content,
+        content := l.content.data.toList } := by
+  unfold lexemeHanded
+  simp only [toContent, toByteArray_toByteSlice, byteArray_toList]
+  cases hc : l.category <;> simp [lexemeReserved] <;> rfl
+
+
+/-! ## What the consumer records of the tokens of a tokenisation -/
+
+/-- Every token of a tokenisation is a token of its kind, within the input. -/
+theorem tokenizationFrom_tokens {version : Spec.Lexicon.Version} {offset : Nat} {input : Chars}
+    {tokens : List Spec.Lexicon.Token} (h : TokenizationFrom version offset input tokens) :
+    ∀ token ∈ tokens, categoryRegex version token.category token.text ∧
+      offset ≤ token.offset ∧ token.offset + token.text.length ≤ offset + input.length := by
+  induction h with
+  | done => simp
+  | token hw hs hd hrest ih =>
+    rename_i offset w category s rest tokens
+    intro token htoken
+    rcases List.mem_cons.mp htoken with rfl | htoken
+    · refine ⟨hs, by simp, ?_⟩
+      simp only [List.length_append]
+      omega
+    · obtain ⟨hr, h1, h2⟩ := ih token htoken
+      refine ⟨hr, by omega, ?_⟩
+      simp only [List.length_append] at h2 ⊢
+      omega
+
+theorem toLocation_take {input : Chars} {n : Nat} (h : n ≤ input.length) :
+    toLocation (locAfter (input.take n)) = Spec.Lexer.locate input n := by
+  have := toLocation_locAfter_append (input.take n) (input.drop n)
+  rw [List.take_append_drop, List.length_take, Nat.min_eq_left h] at this
+  exact this
+
+theorem toTokenType_lexCategory (category : Category) :
+    toTokenType (lexCategory category) = some category.type := by
+  cases category <;> rfl
+
+/-- The consumer records the lexeme of a token of the input as the spec hands it over. -/
+theorem lexemeHanded_token {version : Spec.Lexicon.Version} {input : Chars}
+    {token : Spec.Lexicon.Token} (hr : categoryRegex version token.category token.text)
+    (hb : token.offset + token.text.length ≤ input.length) :
+    lexemeHanded (toVersion version) (lexemeOf version input token) =
+      some (token.handed version input) := by
+  rw [lexemeHanded_eq]
+  simp only [lexemeOf, toTokenType_lexCategory, Option.map_some, Option.some.injEq,
+    Spec.Lexicon.Token.handed]
+  obtain ⟨category, offset, text⟩ := token
+  simp only at hr hb ⊢
+  rw [toLocation_take (by omega), toLocation_take hb]
+  congr 1
+  cases category <;> simp only [lexCategory, lexemeReserved, Spec.Lexicon.Token.reservedKind]
+  case simpleSymbol =>
+    rw [fromBytes_kind]
+    obtain ⟨-, -, -, -, hnot⟩ := simpleSymbol_inv hr
+    simp only [reservedWords, List.map_append, List.mem_append, not_or] at hnot
+    simp [specReservedKind, Spec.Lexicon.Token.content, hnot.2]
+  case reserved =>
+    rw [fromBytes_kind]
+    have hmem := litOneOf_iff.mp hr
+    simp only [List.map_append, List.mem_append] at hmem
+    simp only [specReservedKind, Spec.Lexicon.Token.content, ne_eq, not_true_eq_false,
+      ↓reduceIte]
+    by_cases hbasic : text ∈ (basicReservedWords version).map chars
+    · have : ∃ w ∈ basicReservedWords version, text = chars w := by
+        obtain ⟨w, hw, e⟩ := List.mem_map.mp hbasic
+        exact ⟨w, hw, e.symm⟩
+      simp [hbasic, this]
+    · have : ¬ ∃ w ∈ basicReservedWords version, text = chars w := by
+        rintro ⟨w, hw, rfl⟩
+        exact hbasic (List.mem_map_of_mem hw)
+      have hcmd : text ∈ (commandNames version).map chars := hmem.resolve_left hbasic
+      simp [hbasic, this, hcmd]
+  all_goals simp
+
+theorem lexemeHanded_eof (version : Version) (input : Chars) :
+    lexemeHanded version (eofLexeme (locAfter input)) = some (Spec.Lexer.endOfFile input) := by
+  rw [lexemeHanded_eq]
+  simp only [eofLexeme, toTokenType, Option.map_some, toLocation_locAfter, lexemeReserved]
+  rfl
+
+/-- The consumer records the lexemes of tokens of the input and the end-of-file lexeme as the
+spec hands them over. -/
+theorem handedAll_of {version : Spec.Lexicon.Version} {input : Chars}
+    (tokens : List Spec.Lexicon.Token)
+    (h : ∀ token ∈ tokens, categoryRegex version token.category token.text ∧
+      token.offset + token.text.length ≤ input.length) :
+    handedAll (toVersion version)
+        (tokens.map (lexemeOf version input) ++ [eofLexeme (locAfter input)]) =
+      some (tokens.map (·.handed version input) ++ [Spec.Lexer.endOfFile input]) := by
+  induction tokens with
+  | nil => simp [handedAll, lexemeHanded_eof]
+  | cons token tokens ih =>
+    obtain ⟨hr, hb⟩ := h token (by simp)
+    have ih' := ih fun t ht => h t (by simp [ht])
+    unfold handedAll at ih' ⊢
+    simp [List.mapM_cons, lexemeHanded_token hr hb, ih']
+
+/-- The consumer records the lexemes of the tokens of a tokenisation and the end-of-file
+lexeme as the spec hands them over. -/
+theorem handedAll_tokens {version : Spec.Lexicon.Version} {input : Chars}
+    {tokens : List Spec.Lexicon.Token} (h : Tokenization version input tokens) :
+    handedAll (toVersion version)
+        (tokens.map (lexemeOf version input) ++ [eofLexeme (locAfter input)]) =
+      some (tokens.map (·.handed version input) ++ [Spec.Lexer.endOfFile input]) :=
+  handedAll_of tokens fun token htoken => by
+    obtain ⟨hr, -, hb⟩ := tokenizationFrom_tokens h token htoken
+    exact ⟨hr, by simpa using hb⟩
 
 /-! ## The lexemes of tokens -/
 
@@ -314,23 +447,27 @@ theorem lexBytes_of_feedBytes {version : Version} {st st' : St} {location locati
 
 /-! ## The lexer -/
 
-/-- `fed VNaive.ops` gives what the pure run of the bytes of the slices gives, also up to an
-error, as the consumer records it. -/
-theorem fedOf_fed (version : Spec.Lexicon.Version) (slices : List Spec.Lexicon.Chars) :
-    fedOf (toVersion version) (lexBytes (toVersion version) .idle Location.initial
+/-- `fedInput VNaive.ops` gives what the pure run of the bytes of the slices and then, if the
+input has ended, the end of the input give, also up to an error, as the consumer records it. -/
+theorem fedOf_fedInput (version : Spec.Lexicon.Version) (slices : List Spec.Lexicon.Chars)
+    (ended : Bool) :
+    fedOf (toVersion version) ended (lexBytes (toVersion version) .idle Location.initial
       slices.flatten) =
-      some ((fed VNaive.ops version slices).handed, (fed VNaive.ops version slices).failed) := by
-  obtain ⟨⟨hs, failed⟩, hf⟩ := fedOf_isSome (toVersion version) slices.flatten
-  rw [hf, fed_eq_run version slices hs failed hf]
+      some ((fedInput VNaive.ops version slices ended).handed,
+        (fedInput VNaive.ops version slices ended).failed) := by
+  obtain ⟨⟨hs, failed⟩, hf⟩ := fedOf_isSome (toVersion version) ended slices.flatten
+  rw [hf, fedInput_eq_run version slices ended hs failed hf]
 
 /-- The naive lexer fed slices, before the end of the input, fails exactly when the input is not
 viable, and hands over the tokens maximal to hand over on the longest viable start. -/
-theorem streaming_correct (version : Spec.Lexicon.Version) (slices : List Spec.Lexicon.Chars)
-    (start : Chars) : Spec.Lexer.StreamingInputCorrect (fed VNaive.ops) version slices start := by
-  have hf := fedOf_fed version slices
-  simp only [Spec.Lexer.StreamingInputCorrect, Spec.Lexer.FailsCorrectly,
-    Spec.Lexer.HandsOverCorrectly]
-  generalize fed VNaive.ops version slices = r at hf ⊢
+theorem correct_unended (version : Spec.Lexicon.Version) (slices : List Spec.Lexicon.Chars)
+    (start : Chars) :
+    Spec.Lexer.FailsCorrectly (fedInput VNaive.ops) version slices false ∧
+      Spec.Lexer.HandsOverMaximal (fedInput VNaive.ops) version slices false start := by
+  have hf := fedOf_fedInput version slices false
+  simp only [Spec.Lexer.FailsCorrectly, Spec.Lexer.HandsOverMaximal, Bool.false_eq_true,
+    ↓reduceIte]
+  generalize fedInput VNaive.ops version slices false = r at hf ⊢
   obtain ⟨hs, failed⟩ := r
   simp only at hf ⊢
   cases e : lexBytes (toVersion version) .idle Location.initial slices.flatten with
@@ -340,7 +477,8 @@ theorem streaming_correct (version : Spec.Lexicon.Version) (slices : List Spec.L
     cases hls : handedAll (toVersion version) ls with
     | none => simp [fedOf, hls] at hf
     | some hs' =>
-      simp only [fedOf, hls, Option.map_some, Option.some.injEq, Prod.mk.injEq] at hf
+      simp only [fedOf, Bool.false_eq_true, ↓reduceIte, hls, Option.map_some, Option.some.injEq,
+        Prod.mk.injEq] at hf
       obtain ⟨rfl, rfl⟩ := hf
       have hfb : feedBytes (toVersion version) .idle Location.initial slices.flatten =
           some (st, location, ls) := by
@@ -390,5 +528,121 @@ theorem streaming_correct (version : Spec.Lexicon.Version) (slices : List Spec.L
       have := hh _ hbefore
       rw [hls] at this
       exact Option.some.inj this
+
+/-- A lexer that has failed at the end of an input with no tokenisation, and has handed over
+then what it had before the end, is correct there if it was before the end. -/
+theorem correct_ended_of_unended {feed : Spec.Lexicon.Version → List Chars → Bool → Spec.Lexer.Fed}
+    {version : Spec.Lexicon.Version} {slices : List Chars} {start : Chars}
+    (hnt : ¬ ∃ tokens, Tokenization version slices.flatten tokens)
+    (hft : (feed version slices true).failed = true)
+    (hh : (feed version slices true).handed = (feed version slices false).handed)
+    (hu : Spec.Lexer.HandsOverMaximal feed version slices false start) :
+    Spec.Lexer.FailsCorrectly feed version slices true ∧
+      Spec.Lexer.HandsOverCorrectly feed version slices true start := by
+  refine ⟨by simp only [Spec.Lexer.FailsCorrectly, ↓reduceIte, hft, true_iff]; exact hnt, ?_⟩
+  have hc : ¬ Spec.Lexer.Complete version slices.flatten true := fun h => hnt h.2
+  unfold Spec.Lexer.HandsOverCorrectly
+  rw [ite_eq_right_of_eq_false _ _ (eq_false hc)]
+  unfold Spec.Lexer.HandsOverMaximal at hu ⊢
+  rw [hh]
+  exact hu
+
+/-- Lexer results that are recorded alike are equal. -/
+theorem fed_eq_of {a b : Spec.Lexer.Fed}
+    (h : some (a.handed, a.failed) = some (b.handed, b.failed)) : a = b := by
+  obtain ⟨ah, af⟩ := a
+  obtain ⟨bh, bf⟩ := b
+  simp only [Option.some.injEq, Prod.mk.injEq] at h
+  rw [h.1, h.2]
+
+/-- The naive lexer fed slices and then the end of the input fails exactly when the input has
+no tokenisation, hands over its tokens and the end-of-file token when it has one, and otherwise
+what it had handed over before the end of the input. -/
+theorem correct_ended (version : Spec.Lexicon.Version) (slices : List Spec.Lexicon.Chars)
+    (start : Chars) :
+    Spec.Lexer.FailsCorrectly (fedInput VNaive.ops) version slices true ∧
+      Spec.Lexer.HandsOverCorrectly (fedInput VNaive.ops) version slices true start := by
+  have hu := correct_unended version slices start
+  have hf := fedOf_fedInput version slices true
+  have hf' := fedOf_fedInput version slices false
+  cases e : lexBytes (toVersion version) .idle Location.initial slices.flatten with
+  | error ls =>
+    -- the run has failed before the end: the end changes nothing
+    rw [e] at hf hf'
+    simp only [fedOf] at hf hf'
+    have heq := fed_eq_of (hf.symm.trans hf')
+    have hft : (fedInput VNaive.ops version slices false).failed = true := by
+      cases hls : handedAll (toVersion version) ls with
+      | none => rw [hls] at hf'; cases hf'
+      | some hs =>
+        rw [hls] at hf'
+        simp only [Option.map_some, Option.some.injEq, Prod.mk.injEq] at hf'
+        exact hf'.2.symm
+    have hnv : ¬ Viable version slices.flatten := by
+      have := hu.1
+      simp only [Spec.Lexer.FailsCorrectly, Bool.false_eq_true, ↓reduceIte] at this
+      exact this.mp hft
+    exact correct_ended_of_unended (fun ⟨_, ht⟩ => hnv (viable_of_tokenization ht))
+      (by rw [heq]; exact hft) (by rw [heq]) hu.2
+  | ok r =>
+    obtain ⟨st, location, ls⟩ := r
+    rw [e] at hf hf'
+    have hfb : feedBytes (toVersion version) .idle Location.initial slices.flatten =
+        some (st, location, ls) := by
+      rw [← lexBytes_toOption, e]; rfl
+    simp only [fedOf, ↓reduceIte, Bool.false_eq_true] at hf hf'
+    cases hend : endStep st location with
+    | none =>
+      -- the end of the input fails: the input has no tokenisation
+      rw [hend] at hf
+      dsimp only at hf
+      have hnt : ¬ ∃ tokens, Tokenization version slices.flatten tokens := by
+        rintro ⟨tokens, ht⟩
+        have := run_complete ht
+        rw [run, runFrom, hfb, Option.bind_some] at this
+        dsimp only at this
+        rw [hend] at this
+        cases this
+      cases hls : handedAll (toVersion version) ls with
+      | none => rw [hls] at hf; cases hf
+      | some hs =>
+        rw [hls] at hf hf'
+        simp only [Option.map_some, Option.some.injEq, Prod.mk.injEq] at hf hf'
+        exact correct_ended_of_unended hnt hf.2.symm (by rw [← hf.1, ← hf'.1]) hu.2
+    | some ls' =>
+      -- the end of the input finishes the run: the input has a tokenisation
+      rw [hend] at hf
+      dsimp only at hf
+      have hrun : run (toVersion version) slices.flatten = some (ls ++ ls') := by
+        rw [run, runFrom, hfb, Option.bind_some]
+        dsimp only
+        rw [hend]
+        rfl
+      obtain ⟨tokens, ht, hm⟩ := run_sound hrun
+      simp only [Matches] at hm
+      rw [hm, handedAll_tokens ht] at hf
+      simp only [Option.map_some, Option.some.injEq, Prod.mk.injEq] at hf
+      have hc : Spec.Lexer.Complete version slices.flatten true := ⟨rfl, tokens, ht⟩
+      refine ⟨?_, ?_⟩
+      · unfold Spec.Lexer.FailsCorrectly
+        rw [← hf.2]
+        simp only [↓reduceIte, Bool.false_eq_true, false_iff]
+        exact fun h => h ⟨tokens, ht⟩
+      · unfold Spec.Lexer.HandsOverCorrectly
+        rw [ite_eq_left_of_eq_true _ _ (eq_true hc)]
+        exact ⟨tokens, ht, hf.1.symm⟩
+
+/-- The naive lexer, fed by the adapter slices and then, if the input has ended, the end of the
+input, is correct. -/
+theorem fedInput_correct : Spec.Lexer.Correct (fedInput VNaive.ops) := by
+  intro version slices ended start
+  cases ended with
+  | false =>
+    have hu := correct_unended version slices start
+    refine ⟨hu.1, ?_⟩
+    unfold Spec.Lexer.HandsOverCorrectly
+    rw [ite_eq_right_of_eq_false _ _ (eq_false (not_complete_false version slices.flatten))]
+    exact hu.2
+  | true => exact correct_ended version slices start
 
 end BSmtLib.Proofs.Lexer.VNaive

@@ -5,8 +5,8 @@ import BSmtLib.SpecChecks.Streaming
 
 The definitions of a lexer fed in slices ask for things that need not exist: the longest viable
 start of an input, and a list of tokens that are maximal to hand over. This module proves that
-they exist, so that `HandsOverCorrectly` is not vacuous; and that what a lexer that is
-`StreamingInputCorrect` hands over is `Sequential`. Not trusted: these are proofs.
+they exist, so that `HandsOverMaximal` is not vacuous; and that a lexer that is `Correct` is
+`Sequential` and `WholeInputCorrect`. Not trusted: these are proofs.
 -/
 
 namespace BSmtLib.SpecChecks.Lexer
@@ -205,46 +205,138 @@ theorem locate_append {input more : Chars} {offset : Nat} (h : offset ≤ input.
     locate (input ++ more) offset = locate input offset := by
   simp only [locate, List.take_append_of_le_length h]
 
-/-! ## A lexer fed more slices -/
+/-! ## A correct lexer -/
 
-/-- A lexer that fails when it should and hands over what it should hands over, when fed more
-slices, what it had and possibly more, and stays failed once it has failed. -/
-theorem sequential_of_streamingInputCorrect {feed : Version → List Chars → Fed}
-    (h : ∀ version slices start, StreamingInputCorrect feed version slices start) :
+/-- A tokenised input is viable. -/
+theorem viable_of_tokenization {version : Version} {input : Chars} {tokens : List Token}
+    (h : Tokenization version input tokens) : Viable version input :=
+  ⟨[], tokens, by simpa using h⟩
+
+/-- A correct lexer has failed exactly when the input can no longer be valid. -/
+theorem failsCorrectly_of_correct {feed : Version → List Chars → Bool → Fed} (h : Correct feed)
+    (version : Version) (slices : List Chars) (ended : Bool) :
+    FailsCorrectly feed version slices ended :=
+  (h version slices ended []).1
+
+/-- A correct lexer fed slices of a complete input has handed over all of its tokens. -/
+theorem handsOverAll_of_correct {feed : Version → List Chars → Bool → Fed} (h : Correct feed)
+    {version : Version} {slices : List Chars} {ended : Bool}
+    (hc : Complete version slices.flatten ended) : HandsOverAll feed version slices := by
+  have := (h version slices ended []).2
+  unfold HandsOverCorrectly at this
+  rwa [ite_eq_left_of_eq_true _ _ (eq_true hc)] at this
+
+/-- A correct lexer fed slices of an input that is not complete has handed over the tokens
+maximal to hand over on its longest viable start. -/
+theorem handsOverMaximal_of_correct {feed : Version → List Chars → Bool → Fed} (h : Correct feed)
+    {version : Version} {slices : List Chars} {ended : Bool}
+    (hc : ¬ Complete version slices.flatten ended) (start : Chars) :
+    HandsOverMaximal feed version slices ended start := by
+  have := (h version slices ended start).2
+  unfold HandsOverCorrectly at this
+  rwa [ite_eq_right_of_eq_false _ _ (eq_false hc)] at this
+
+/-- An input that has not ended is not complete. -/
+theorem not_complete_false (version : Version) (input : Chars) :
+    ¬ Complete version input false :=
+  fun h => Bool.false_ne_true h.1
+
+/-- What a correct lexer has handed over on a start of the input before the end, it has handed
+over on the whole input before the end. -/
+theorem handed_prefix_of_correct {feed : Version → List Chars → Bool → Fed} (h : Correct feed)
+    (version : Version) (slices more : List Chars) :
+    (feed version slices false).handed <+: (feed version (slices ++ more) false).handed := by
+  obtain ⟨s, hs⟩ := exists_longestViableStart version slices.flatten
+  obtain ⟨s', hs'⟩ := exists_longestViableStart version (slices ++ more).flatten
+  have hs'' := hs'
+  rw [List.flatten_append] at hs'
+  obtain ⟨tokens, hmax, he⟩ :=
+    handsOverMaximal_of_correct h (not_complete_false version slices.flatten) s hs
+  obtain ⟨tokens', hmax', he'⟩ :=
+    handsOverMaximal_of_correct h (not_complete_false version (slices ++ more).flatten) s' hs''
+  obtain ⟨d, rfl⟩ := longestViableStart_prefix hs hs'
+  -- the tokens maximal on the shorter start start those maximal on the longer one
+  obtain ⟨rest, all, ht⟩ := hs'.2.1
+  have hp : tokens <+: tokens' := by
+    have h1 := determined_prefix (handoverReady_append (more := d) hmax.1).1 ht
+    have h2 := determined_prefix hmax'.1.1 ht
+    have hle := hmax'.2 tokens (handoverReady_append hmax.1)
+    obtain ⟨a, ha⟩ := h1
+    obtain ⟨b, hb⟩ := h2
+    rw [← hb] at ha
+    exact List.prefix_iff_eq_take.mpr (by
+      rw [← List.prefix_iff_eq_take]
+      exact (List.prefix_of_prefix_length_le ⟨a, ha⟩ ⟨b, rfl⟩ hle))
+  obtain ⟨extra, rfl⟩ := hp
+  rw [he, he', List.flatten_append, List.map_append]
+  refine ⟨extra.map (·.handed version (slices.flatten ++ more.flatten)), ?_⟩
+  congr 1
+  refine List.map_congr_left fun token htoken => ?_
+  have hw := handoverReady_within hs.2.1 hmax.1 token htoken
+  have hsl := hs.1.length_le
+  simp only [Token.handed, locate_append (show token.offset ≤ slices.flatten.length by omega),
+    locate_append (show token.offset + token.text.length ≤ slices.flatten.length by omega)]
+
+/-- What a correct lexer has handed over before the end of the input, it has handed over at the
+end too. -/
+theorem handed_prefix_end_of_correct {feed : Version → List Chars → Bool → Fed} (h : Correct feed)
+    (version : Version) (slices : List Chars) :
+    (feed version slices false).handed <+: (feed version slices true).handed := by
+  obtain ⟨s, hs⟩ := exists_longestViableStart version slices.flatten
+  obtain ⟨tokens, hmax, he⟩ :=
+    handsOverMaximal_of_correct h (not_complete_false version slices.flatten) s hs
+  rw [he]
+  by_cases hc : Complete version slices.flatten true
+  · -- the tokens maximal on all of the input start its tokenisation
+    obtain ⟨all, ht, he'⟩ := handsOverAll_of_correct h hc
+    rw [he']
+    rw [longestViableStart_viable hs (viable_of_tokenization ht)] at hmax
+    obtain ⟨more, rfl⟩ :=
+      determined_prefix (rest := []) hmax.1.1 (by simpa only [List.append_nil] using ht)
+    rw [List.map_append, List.append_assoc]
+    exact List.prefix_append _ _
+  · -- the end of the input releases nothing: the same tokens are maximal
+    obtain ⟨tokens', hmax', he'⟩ := handsOverMaximal_of_correct h hc s hs
+    rw [he', handoverMaximal_unique hs.2.1 hmax hmax']
+    exact List.prefix_refl _
+
+/-- A lexer that is `Correct` is `Sequential`: fed more slices, or the end of the input, it has
+handed over what it had and possibly more, and once it has failed, it stays failed. -/
+theorem sequential_of_correct {feed : Version → List Chars → Bool → Fed} (h : Correct feed) :
     ∀ version slices more, Sequential feed version slices more := by
   intro version slices more
-  have hf := fun slices => (h version slices [] ).1
-  refine ⟨?_, fun hfailed => ?_⟩
-  · obtain ⟨s, hs⟩ := exists_longestViableStart version slices.flatten
-    obtain ⟨s', hs'⟩ := exists_longestViableStart version (slices ++ more).flatten
-    rw [List.flatten_append] at hs'
-    obtain ⟨tokens, hmax, he⟩ := (h version slices s).2 hs
-    obtain ⟨tokens', hmax', he'⟩ := (h version (slices ++ more) s').2
-      (by rw [List.flatten_append]; exact hs')
-    obtain ⟨d, rfl⟩ := longestViableStart_prefix hs hs'
-    -- the tokens maximal on the shorter start start those maximal on the longer one
-    obtain ⟨rest, all, ht⟩ := hs'.2.1
-    have hp : tokens <+: tokens' := by
-      have h1 := determined_prefix (handoverReady_append (more := d) hmax.1).1 ht
-      have h2 := determined_prefix hmax'.1.1 ht
-      have hle := hmax'.2 tokens (handoverReady_append hmax.1)
-      obtain ⟨a, ha⟩ := h1
-      obtain ⟨b, hb⟩ := h2
-      rw [← hb] at ha
-      exact List.prefix_iff_eq_take.mpr (by
-        rw [← List.prefix_iff_eq_take]
-        exact (List.prefix_of_prefix_length_le ⟨a, ha⟩ ⟨b, rfl⟩ hle))
-    obtain ⟨extra, rfl⟩ := hp
-    rw [he, he', List.flatten_append, List.map_append]
-    refine ⟨extra.map (·.handed version (slices.flatten ++ more.flatten)), ?_⟩
-    congr 1
-    refine List.map_congr_left fun token htoken => ?_
-    have hw := handoverReady_within hs.2.1 hmax.1 token htoken
-    have hsl := hs.1.length_le
-    simp only [Token.handed, locate_append (show token.offset ≤ slices.flatten.length by omega),
-      locate_append (show token.offset + token.text.length ≤ slices.flatten.length by omega)]
-  · refine (hf (slices ++ more)).mpr fun hv => (hf slices).mp hfailed ?_
+  have hf := failsCorrectly_of_correct h version
+  refine ⟨⟨handed_prefix_of_correct h version slices more, fun hfailed => ?_⟩,
+    ⟨handed_prefix_end_of_correct h version slices, fun hfailed => ?_⟩⟩
+  · have h1 := (hf slices false).mp hfailed
+    refine (hf (slices ++ more) false).mpr ?_
+    simp only [Bool.false_eq_true, ↓reduceIte] at h1 ⊢
+    intro hv
     rw [List.flatten_append] at hv
-    exact viable_of_prefix (List.prefix_append _ _) hv
+    exact h1 (viable_of_prefix (List.prefix_append _ _) hv)
+  · have h1 := (hf slices false).mp hfailed
+    refine (hf slices true).mpr ?_
+    simp only [Bool.false_eq_true, ↓reduceIte] at h1 ⊢
+    exact fun ⟨tokens, ht⟩ => h1 (viable_of_tokenization ht)
+
+/-- A lexer that is `Correct` is `WholeInputCorrect`: fed slices and the end of the input, it
+has not failed and has handed over the tokens of the tokenisation and the end-of-file token
+exactly when the input has a tokenisation. -/
+theorem wholeInputCorrect_of_correct {feed : Version → List Chars → Bool → Fed}
+    (h : Correct feed) : ∀ version slices handed, WholeInputCorrect feed version slices handed := by
+  intro version slices handed
+  have hf := failsCorrectly_of_correct h version slices true
+  simp only [FailsCorrectly, ↓reduceIte] at hf
+  simp only [WholeInputCorrect]
+  constructor
+  · rintro ⟨hnf, rfl⟩
+    have hc : Complete version slices.flatten true :=
+      ⟨rfl, Classical.not_not.mp fun hn => hnf (hf.mpr hn)⟩
+    exact handsOverAll_of_correct h hc
+  · rintro ⟨tokens, ht, rfl⟩
+    have hc : Complete version slices.flatten true := ⟨rfl, tokens, ht⟩
+    obtain ⟨tokens', ht', he⟩ := handsOverAll_of_correct h hc
+    refine ⟨fun hfailed => hf.mp hfailed ⟨tokens, ht⟩, ?_⟩
+    rw [he, BSmtLib.SpecChecks.Lexicon.tokenizationFrom_unique ht' ht]
 
 end BSmtLib.SpecChecks.Lexer

@@ -1,14 +1,14 @@
-import BSmtLib.Proofs.VNaive.Correct
+import BSmtLib.Proofs.VNaive.Complete
+import BSmtLib.Proofs.VNaive.Reserved
 
 /-!
 # The pure run over a start of the input
 
-Facts about the naive lexer's pure run over the bytes fed so far, before the end of the input,
-for `VNaive.Streaming`:
+Facts about the naive lexer's pure run over the bytes fed so far, for `VNaive.Streaming`:
 
-- the consumer takes every lexeme the run finishes, as the run never starts whitespace
-  (`St.Taken`, `lexBytes_taken`), and a byte that fails finishes no lexeme before it
-  (`failedBefore_nil`);
+- the consumer takes every lexeme the run and the end of the input finish, as the run never
+  starts whitespace (`St.Taken`, `lexBytes_taken`, `endStep_taken`), and a byte that fails
+  finishes no lexeme before it (`failedBefore_nil`);
 - where the lexemes end: a parenthesis just after its byte, any other lexeme at the byte that
   delimits it or at the end of the input (`feedBytes_ends`, `runFrom_ends`);
 - every state of the run can be completed to a whole input that the run finishes
@@ -205,9 +205,47 @@ theorem handedAll_taken (version : Version) (ls : List Lexeme) (h : ∀ l ∈ ls
         exact ⟨_, rfl⟩
       exact ⟨_, by rw [handedAll_cons_some hx, hhs]; rfl⟩
 
-/-- The pure run fed bytes from the start, also up to an error, as the consumer records it. -/
-theorem fedOf_isSome (version : Version) (bytes : List UInt8) :
-    ∃ r, fedOf version (lexBytes version .idle Location.initial bytes) = some r := by
+/-- The end of the input from a state whose token in progress the consumer takes finishes
+lexemes that the consumer takes. -/
+theorem endStep_taken {st : St} {location : Location} {ls : List Lexeme}
+    (h : endStep st location = some ls) (hst : st.Taken) : ∀ l ∈ ls, l.Taken := by
+  have heof : (eofLexeme location).Taken := rfl
+  cases st with
+  | idle =>
+    simp only [endStep, Option.some.injEq] at h
+    subst h
+    simpa using heof
+  | token p =>
+    simp only [St.Taken] at hst
+    simp only [endStep] at h
+    cases hf : finish false p location with
+    | none =>
+      rw [hf] at h
+      simp only [Option.some.injEq] at h
+      subst h
+      simpa using heof
+    | token l =>
+      rw [hf] at h
+      simp only [Option.some.injEq] at h
+      subst h
+      have hl : l.Taken := by
+        unfold finish at hf
+        cases hm : p.mode <;> simp only [hm] at hf hst <;> (repeat' split at hf) <;>
+          cases hf <;> first | rfl | exact radix_taken _ | contradiction
+      intro l' hl'
+      rcases List.mem_cons.mp hl' with rfl | hl'
+      · exact hl
+      · simp only [List.mem_singleton] at hl'
+        subst hl'
+        exact heof
+    | error _ =>
+      rw [hf] at h
+      cases h
+
+/-- The pure run fed bytes from the start, also up to an error, and then, if the input has
+ended, the end of the input, as the consumer records it. -/
+theorem fedOf_isSome (version : Version) (ended : Bool) (bytes : List UInt8) :
+    ∃ r, fedOf version ended (lexBytes version .idle Location.initial bytes) = some r := by
   have h := lexBytes_taken (version := version) (location := Location.initial) bytes
     (st := .idle) trivial
   cases e : lexBytes version .idle Location.initial bytes with
@@ -215,7 +253,17 @@ theorem fedOf_isSome (version : Version) (bytes : List UInt8) :
     obtain ⟨st, location, ls⟩ := r
     rw [e] at h
     obtain ⟨hs, hhs⟩ := handedAll_taken version ls h.2
-    exact ⟨(hs, false), by simp [fedOf, hhs]⟩
+    cases ended with
+    | false => exact ⟨(hs, false), by simp [fedOf, hhs]⟩
+    | true =>
+      cases hend : endStep st location with
+      | none => exact ⟨(hs, true), by simp [fedOf, hend, hhs]⟩
+      | some ls' =>
+        obtain ⟨hs', hhs'⟩ := handedAll_taken version (ls ++ ls') fun l hl => by
+          rcases List.mem_append.mp hl with hl | hl
+          · exact h.2 l hl
+          · exact endStep_taken hend h.1 l hl
+        exact ⟨(hs', false), by simp [fedOf, hend, hhs']⟩
   | error ls =>
     rw [e] at h
     obtain ⟨hs, hhs⟩ := handedAll_taken version ls h

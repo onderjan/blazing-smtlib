@@ -21,8 +21,8 @@ are not trusted.
 - Examples: the standard's own examples and lists, of the lexicon and of the grammar, what a
   lexer fed in slices hands over, and the calls the traversal makes for a few scripts.
 - The lexicon: every input has at most one tokenisation.
-- A lexer fed in slices: what its properties ask for exists, and a lexer that has them hands
-  over more as it is fed more.
+- A lexer fed in slices: what its properties ask for exists, and a lexer that is correct hands
+  over more as it is fed more or the end of the input, and is correct on whole inputs.
 - Composition: reading can stop at the `)` of a command and start again on the rest, possibly
   in another version.
 - Round trips: the tokens of an input can be printed back, exactly with the whitespace and
@@ -59,9 +59,10 @@ info: 'BSmtLib.SpecChecks.Lexicon.unique' depends on axioms: [propext, Classical
 /-!
 ### A lexer fed in slices
 
-`Spec.Lexer.HandsOverCorrectly` asks for the tokens maximal to hand over on the longest viable
+`Spec.Lexer.HandsOverMaximal` asks for the tokens maximal to hand over on the longest viable
 start of the input; both exist and are unique, so it is not vacuous. `Spec.Lexer.Sequential`
-is not a part of `Spec.Lexer.Correct`, as it follows from `Spec.Lexer.StreamingInputCorrect`.
+and `Spec.Lexer.WholeInputCorrect` are not a part of `Spec.Lexer.Correct`, as they follow from
+it, for every lexer.
 -/
 
 /-- Every input has exactly one longest viable start. -/
@@ -92,19 +93,33 @@ info: 'BSmtLib.SpecChecks.Lexer.handoverMaximal_existsUnique' depends on axioms:
 #guard_msgs in
 #print axioms Lexer.handoverMaximal_existsUnique
 
-/-- A lexer that is `StreamingInputCorrect` on every version, slices and start is
-`Sequential`: fed more slices, it has handed over what it had and possibly more, and once it
-has failed, it stays failed. -/
-theorem Lexer.sequential {feed : Lexicon.Version → List Lexicon.Chars → Spec.Lexer.Fed}
-    (h : ∀ version slices start, Spec.Lexer.StreamingInputCorrect feed version slices start) :
+/-- A lexer that is `Correct` is `Sequential`: fed more slices, or the end of the input, it has
+handed over what it had and possibly more, and once it has failed, it stays failed. -/
+theorem Lexer.sequential {feed : Lexicon.Version → List Lexicon.Chars → Bool → Spec.Lexer.Fed}
+    (h : Spec.Lexer.Correct feed) :
     ∀ version slices more, Spec.Lexer.Sequential feed version slices more :=
-  Lexer.sequential_of_streamingInputCorrect h
+  Lexer.sequential_of_correct h
 
 /--
 info: 'BSmtLib.SpecChecks.Lexer.sequential' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms Lexer.sequential
+
+/-- A lexer that is `Correct` is `WholeInputCorrect`: fed slices and then the end of the input,
+it has not failed and has handed over the tokens of the tokenisation of the input followed by
+the end-of-file token exactly when the input has a tokenisation. -/
+theorem Lexer.wholeInputCorrect
+    {feed : Lexicon.Version → List Lexicon.Chars → Bool → Spec.Lexer.Fed}
+    (h : Spec.Lexer.Correct feed) :
+    ∀ version slices handed, Spec.Lexer.WholeInputCorrect feed version slices handed :=
+  Lexer.wholeInputCorrect_of_correct h
+
+/--
+info: 'BSmtLib.SpecChecks.Lexer.wholeInputCorrect' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms Lexer.wholeInputCorrect
 
 /-!
 ### Composition at a closing parenthesis

@@ -287,7 +287,7 @@ example : ¬ Viable .v2_7 (chars "|a|x") ∧
   ⟨not_viable_a_x, determined_of_not_viable not_viable_a_x⟩
 
 /-- No list of tokens is `HandoverMaximal` on `|a|x`: since it is not viable, every list of `(`
-is determined by it, and those lists are as long as one likes. `HandsOverCorrectly` asks for
+is determined by it, and those lists are as long as one likes. `HandsOverMaximal` asks for
 the maximal tokens of the longest viable start only. -/
 example : ¬ ∃ tokens, HandoverMaximal .v2_7 (chars "|a|x") tokens := by
   rintro ⟨tokens, -, hmax⟩

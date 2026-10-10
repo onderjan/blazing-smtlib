@@ -29,12 +29,9 @@ have the same consumer, and their states are equal once the base is forgotten.
   state gives fed the slices with each slice too large for the positions cut into the chunks it
   lexes such a slice by (`X1BatchInCoreLexer.Chunks.cutAll`), and a lexer related to it, also
   after a failed call; the cut slices have the same bytes and end below `USize.size`.
-- `Lexer.handed_eq_handed_x1BatchInCore`: the spec's view of the whole input, run by the
-  adapter: the library's lexer hands over for the slices what the lexer with the batch kept in
-  its state hands over for their cut.
-- `Lexer.fed_eq_fed_x1BatchInCore`: the spec's view of the slices before the end of the input,
-  fed by the adapter: the library's lexer has done for the slices what the lexer with the batch
-  kept in its state has done for their cut.
+- `Lexer.fedInput_eq_fedInput_x1BatchInCore`: the spec's view of the slices and then, if the
+  input has ended, the end of the input, fed by the adapter: the library's lexer has done for
+  the slices what the lexer with the batch kept in its state has done for their cut.
 
 The proof, in parts:
 
@@ -151,25 +148,15 @@ theorem X1BatchInCore.runSlices_cutAll_lexer (slices : List Spec.Lexicon.Chars)
   ⟨runSlices_cutAll slices l x hlx hl, Chunks.flatten_cutAll slices,
     fun _ h => Chunks.mem_cutAll h⟩
 
-/-- The library's lexer, run by the adapter, hands over for the slices what the lexer with the
-batch kept in its state hands over for them with each slice too large for the positions of the
-library's lexer cut into its chunks; the cut slices have the same bytes. -/
-theorem handed_eq_handed_x1BatchInCore (version : Spec.Lexicon.Version)
-    (slices : List Spec.Lexicon.Chars) :
-    Adapter.handed Adapter.Lexer.ops version slices =
-        Adapter.handed Adapter.X1BatchInCore.ops version (Chunks.cutAll slices) ∧
+/-- The library's lexer, fed by the adapter slices and then, if the input has ended, the end of
+the input, has done for the slices what the lexer with the batch kept in its state has done for
+them with each slice too large for the positions of the library's lexer cut into its chunks; the
+cut slices have the same bytes. -/
+theorem fedInput_eq_fedInput_x1BatchInCore (version : Spec.Lexicon.Version)
+    (slices : List Spec.Lexicon.Chars) (ended : Bool) :
+    Adapter.fedInput Adapter.Lexer.ops version slices ended =
+        Adapter.fedInput Adapter.X1BatchInCore.ops version (Chunks.cutAll slices) ended ∧
       (Chunks.cutAll slices).flatten = slices.flatten :=
-  ⟨handed_eq_cutAll version slices, Chunks.flatten_cutAll slices⟩
-
-/-- The library's lexer, fed slices by the adapter before the end of the input, has done for the
-slices what the lexer with the batch kept in its state has done for them with each slice too
-large for the positions of the library's lexer cut into its chunks; the cut slices have the same
-bytes. -/
-theorem fed_eq_fed_x1BatchInCore (version : Spec.Lexicon.Version)
-    (slices : List Spec.Lexicon.Chars) :
-    Adapter.fed Adapter.Lexer.ops version slices =
-        Adapter.fed Adapter.X1BatchInCore.ops version (Chunks.cutAll slices) ∧
-      (Chunks.cutAll slices).flatten = slices.flatten :=
-  ⟨fed_eq_cutAll version slices, Chunks.flatten_cutAll slices⟩
+  ⟨fedInput_eq_cutAll version slices ended, Chunks.flatten_cutAll slices⟩
 
 end BSmtLib.Proofs.Lexer
