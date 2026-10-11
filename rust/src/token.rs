@@ -358,6 +358,11 @@ pub trait SmtProduce {
     /// the version set request. It guarantees that no changes
     /// were made, as if the method was never called.
     fn set_version(&mut self, version: SmtVersion) -> Result<(), SmtVersionRefused>;
+
+    /// Forces the producer to discard all tokens before an EOF token.
+    ///
+    /// It follows that the first produced token, if any, must be EOF.
+    fn discard_rest(&mut self);
 }
 
 /// A lookahead window for [SmtProduce::attempt].
@@ -380,6 +385,13 @@ impl<T> SmtLookahead<T> for () {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BatchCursorAction {
+    None,
+    Relex,
+    Discard,
+}
+
 /// A cursor into a batch of tokens, from which elements are consumed sequentially.
 ///
 /// A parser reads a batch through a cursor: it consumes the tokens one at
@@ -393,7 +405,7 @@ pub struct SmtBatchCursor<'a> {
     spans: &'a [SmtSpan],
     start: usize,
     next: usize,
-    relex: bool,
+    action: BatchCursorAction,
 }
 
 impl<'a> SmtBatchCursor<'a> {
@@ -412,7 +424,7 @@ impl<'a> SmtBatchCursor<'a> {
             spans,
             start: 0,
             next: 0,
-            relex: false,
+            action: BatchCursorAction::None,
         }
     }
 
@@ -435,23 +447,16 @@ impl<'a> SmtBatchCursor<'a> {
         }
     }
 
-    /// Requests that the input is lexed again from the end of the last
-    /// consumed token.
-    ///
-    /// The tokens not consumed through this cursor are discarded and will be
-    /// produced again by the lexer, so the cursor yields no more tokens:
-    /// it is empty from now on, and the consumed count stays where it is.
+    // Ensures no more tokens are produced.
     #[inline]
-    pub(crate) fn relex(&mut self) {
+    fn truncate(&mut self) {
         self.entries = &self.entries[..self.next];
         self.spans = &self.spans[..self.next];
-        self.relex = true;
     }
 
-    /// Whether [`SmtBatchCursor::relex`] has been called on this cursor.
     #[inline]
-    pub(crate) fn relex_requested(&self) -> bool {
-        self.relex
+    pub(crate) fn action(&self) -> BatchCursorAction {
+        self.action
     }
 
     /// The entries of the tokens of the batch consumed so far.
@@ -523,11 +528,20 @@ impl<'a> SmtProduce for SmtBatchCursor<'a> {
         let is_current_2_0 = self.version == SmtVersion::V2_0;
         let is_new_2_0 = version == SmtVersion::V2_0;
         if is_current_2_0 != is_new_2_0 {
-            // we need to relex
-            self.relex();
+            // we need to relex; if already relexing/discarding, do nothing
+            if matches!(self.action, BatchCursorAction::None) {
+                self.truncate();
+                self.action = BatchCursorAction::Relex;
+            }
         }
         self.version = version;
         Ok(())
+    }
+
+    fn discard_rest(&mut self) {
+        // just truncate and set to discard
+        self.truncate();
+        self.action = BatchCursorAction::Discard;
     }
 }
 
@@ -577,6 +591,10 @@ impl<'a, P: SmtProduce> SmtProduce for SingleTokenProducer<'a, P> {
     fn set_version(&mut self, _version: SmtVersion) -> Result<(), SmtVersionRefused> {
         // single-token producer does not support switching versions
         Err(SmtVersionRefused)
+    }
+
+    fn discard_rest(&mut self) {
+        panic!("single-token producer cannot discard the rest of the input")
     }
 }
 

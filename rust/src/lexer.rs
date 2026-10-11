@@ -24,8 +24,8 @@ use crate::{
         },
     },
     token::{
-        InnerCategory, SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtProduce, SmtRecover,
-        SmtVersion,
+        BatchCursorAction, InnerCategory, SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtProduce,
+        SmtRecover, SmtVersion,
     },
 };
 
@@ -42,11 +42,8 @@ pub struct SmtLexer<C, R = SmtFailFast> {
     /// Current lexer state.
     state: LexerState,
 
-    /// Whether the lexer should discard bytes until EOF is reached.
-    ///
-    /// This is set when the consumer breaks with a value:
-    /// it no longer wants any tokens from the current file.
-    discard: bool,
+    /// The location from which lexer discards bytes until EOF is reached.
+    discard_from: Option<SmtLocation>,
 
     /// The number of parentheses left open by the tokens the consumer has consumed.
     ///
@@ -107,6 +104,8 @@ struct Batch<'a> {
 enum Stop<R> {
     /// The consumer requested lexing again from the stop location.
     Relex,
+    /// The consumer requested to discard everything from the location.
+    Discard,
     /// The consumer finished with a result at the stop location.
     Finished(R),
 }
@@ -279,7 +278,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
             version,
             initial_version: version,
             state: LexerState::Normal,
-            discard: false,
+            discard_from: None,
             consumed_depth: 0,
             lexed_depth: 0,
             recovery_state: None,
@@ -305,6 +304,13 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
         self.location_at(0)
     }
 
+    /// The location after which bytes have been discarded (if any).
+    ///
+    /// Discarding is used to implement the behaviour after `(exit)`.
+    pub fn discarded_from(&self) -> Option<SmtLocation> {
+        self.discard_from
+    }
+
     /// Location of `position` in the current slice.
     ///
     /// Every line feed before `position` must be marked before calling this.
@@ -328,7 +334,7 @@ impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
     /// If an error occurs, the fail-fast lexer moves into
     /// a failure state and all further lexing calls panic.
     pub fn lex_slice(&mut self, slice: &[u8]) -> SmtLexResult<C> {
-        if self.discard {
+        if self.discard_from.is_some() {
             // we are discarding bytes
             // pretend that we lexed everything we were given
             self.discard_bytes(slice);
@@ -367,7 +373,7 @@ impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
         };
         // if the consumer has produced a result, remember to stop feeding it
         if let ControlFlow::Break(located) = &flow {
-            self.discard = true;
+            self.discard_from = Some(located.location());
             // discard the remaining bytes after break
             let lexed = (located.location().offset() - start) as usize;
             self.discard_bytes(&slice[lexed..]);
@@ -400,7 +406,7 @@ impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
     /// If an error occurs, the fail-fast lexer moves into
     /// a failure state and all further lexing calls panic.
     pub fn lex_eof(&mut self) -> SmtLexResult<C> {
-        if self.discard {
+        if self.discard_from.is_some() {
             // no need to feed anything, just reset the lexer
             self.reset();
             return Ok(ControlFlow::Continue(()));
@@ -524,11 +530,21 @@ impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
 
         // if we were told to relex, treat is as a normal continuation,
         // as there is nothing to relex (we are at the end of input)
+        // if we were told to discard, set the discard flag
+        // and treat it as a normal continuation (we must sink the EOF next)
         let pending = match pending {
             Err(Interrupted {
                 result: Ok(Stop::Relex),
                 ..
             }) => Ok(()),
+            Err(Interrupted {
+                result: Ok(Stop::Discard),
+                location,
+            }) => {
+                // remember that we are discarding and go on to sink the EOF
+                self.discard_from = Some(location);
+                Ok(())
+            }
             other => other,
         };
 
@@ -541,8 +557,8 @@ impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
         match result {
             Ok(()) => {}
             Err(interrupted) => match interrupted.result {
-                Ok(Stop::Relex) => {
-                    // we were asked to relex, but the file is ending anyway, nothing to relex
+                Ok(Stop::Relex) | Ok(Stop::Discard) => {
+                    // we were asked to relex / discard, but the file is ending anyway, nothing to do
                 }
                 Ok(Stop::Finished(result)) => {
                     // the consumer is done with the input
@@ -641,6 +657,12 @@ impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
                                     fn_result = Ok(ControlFlow::Continue(()));
                                     // continue consuming
                                     continue;
+                                }
+                                Stop::Discard => {
+                                    // make sure the rest is properly discarded and return
+                                    self.discard_bytes(&slice[index as usize..]);
+                                    self.discard_from = Some(location);
+                                    return Ok(ControlFlow::Continue(()));
                                 }
                                 Stop::Finished(result) => {
                                     // the consumer is done: the batch was handed over,
@@ -1831,14 +1853,21 @@ impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
             // process the result
             let result = match result {
                 Ok(ControlFlow::Continue(())) => {
-                    if cursor.relex_requested() {
-                        // we need to stop and relex here
-                        Ok(Stop::Relex)
-                    } else {
-                        // zero the number of consumed tokens in the cursor
-                        cursor.reset_consumed();
-                        // continue flushing until nothing remains
-                        continue;
+                    match cursor.action() {
+                        BatchCursorAction::None => {
+                            // zero the number of consumed tokens in the cursor
+                            cursor.reset_consumed();
+                            // continue flushing until nothing remains
+                            continue;
+                        }
+                        BatchCursorAction::Relex => {
+                            // we need to stop and relex here
+                            Ok(Stop::Relex)
+                        }
+                        BatchCursorAction::Discard => {
+                            // we need to discard from now on
+                            Ok(Stop::Discard)
+                        }
                     }
                 }
                 Ok(ControlFlow::Break(result)) => Ok(Stop::Finished(result)),
@@ -2153,7 +2182,7 @@ impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
     fn reset(&mut self) {
         self.version = self.initial_version;
         self.state = LexerState::Normal;
-        self.discard = false;
+        self.discard_from = None;
         self.consumed_depth = 0;
         self.lexed_depth = 0;
         self.recovery_state = None;
