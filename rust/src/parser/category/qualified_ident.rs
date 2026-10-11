@@ -6,7 +6,7 @@ use crate::{
         Arena, IdentHandle, IdentSlot, QualifiedIdentHandle, SmtCloseParenParser, SmtParse,
         SmtParseError, SmtParseState, SmtSyntaxErrorKind, SortSlot, parse_by_token,
     },
-    token::{SmtGeneralReserved, SmtProduce, SmtReserved, SmtSyntaxToken, SmtToken, SmtVersion},
+    token::{SmtGeneralReserved, SmtProduce, SmtReserved, SmtSyntaxToken},
 };
 
 /// A parser that reads an SMT-LIB qualified identifier.
@@ -35,7 +35,7 @@ impl<H: SmtHandler> SmtParse<H> for SmtQualifiedIdentParser<H> {
     type Result = SmtQualifiedIdentBuf<H>;
 
     #[inline]
-    fn parse<'a, C: SmtProduce<'a>>(
+    fn parse<C: SmtProduce>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
@@ -49,9 +49,9 @@ impl<H: SmtHandler> SmtParse<H> for SmtQualifiedIdentParser<H> {
             arena,
             ..
         } = parse_state;
-        parse_by_token(cursor, |version, token| {
+        parse_by_token(cursor, |cursor, token| {
             match qualified_ident_slot
-                .progress(handler, arena, sort_slot, ident_slot, version, token)?
+                .progress(handler, arena, sort_slot, ident_slot, cursor, token)?
             {
                 ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
                 ControlFlow::Break(qualified_ident) => Ok(ControlFlow::Break(
@@ -142,14 +142,14 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
     }
 
     #[inline]
-    pub(crate) fn progress(
+    pub(crate) fn progress<Z: SmtProduce>(
         &mut self,
         handler: &mut H,
         arena: &mut Arena<H>,
         sort_slot: &mut SortSlot<H>,
         ident_slot: &mut IdentSlot,
-        version: SmtVersion,
-        token: SmtToken,
+        cursor: &Z,
+        token: Z::Token,
     ) -> Result<ControlFlow<QualifiedIdentHandle<H>>, SmtParseError<H::Error>> {
         // The sequential progress is as follows:
         // 1. Start, expecting one of:
@@ -173,14 +173,14 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
 
         if let Some(qualified_ident) = self.qualified_ident.take() {
             // step 6: after the sort, waiting for ")"
-            SmtCloseParenParser::expect(token)?;
+            SmtCloseParenParser::expect(cursor, token)?;
             // the slot is back in its initial state
             return Ok(ControlFlow::Break(qualified_ident));
         }
 
         if let Some(ident) = self.ident.take() {
             // step 5: after the identifier of "(as", parsing the sort
-            match sort_slot.progress(handler, arena, ident_slot, version, token)? {
+            match sort_slot.progress(handler, arena, ident_slot, cursor, token)? {
                 ControlFlow::Continue(()) => self.ident = Some(ident),
                 ControlFlow::Break(sort) => {
                     self.qualified_ident = Some(QualifiedIdentHandle {
@@ -196,7 +196,7 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
             // step 1: expecting a symbol or an opening parenthesis
             State::Start => {
                 debug_assert!(self.is_pristine(), "must be pristine when starting");
-                match token.syntax(version) {
+                match cursor.syntax(&token) {
                     SmtSyntaxToken::Symbol(name) => {
                         // return a simple ident, the slot is in its initial state
                         return Ok(ControlFlow::Break(QualifiedIdentHandle::unqualified(
@@ -212,7 +212,7 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
                 }
             }
             // step 2: expecting an underscore or 'as'
-            State::Open => match token.syntax(version) {
+            State::Open => match cursor.syntax(&token) {
                 SmtSyntaxToken::Reserved(SmtReserved::General(SmtGeneralReserved::Underscore)) => {
                     // unqualified indexed ident
                     // move the ident slot after underscore
@@ -231,7 +231,7 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
             },
             // step 3: parsing an unqualified indexed identifier
             State::UnqualifiedIndexed => {
-                if let ControlFlow::Break(ident) = ident_slot.progress(arena, version, token)? {
+                if let ControlFlow::Break(ident) = ident_slot.progress(arena, cursor, token)? {
                     // the closing parenthesis was already consumed by the ident slot
                     // reset and return an unqualified but indexed ident
                     self.state = State::Start;
@@ -240,7 +240,7 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
             }
             // step 4: parsing the identifier of a qualified identifier
             State::QualifiedIdent => {
-                if let ControlFlow::Break(ident) = ident_slot.progress(arena, version, token)? {
+                if let ControlFlow::Break(ident) = ident_slot.progress(arena, cursor, token)? {
                     // store the identifier
                     // this moves us to step 5 where its sort is parsed next
                     self.ident = Some(ident);

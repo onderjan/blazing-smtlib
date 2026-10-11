@@ -3,7 +3,7 @@ use std::{convert::Infallible, ops::ControlFlow};
 use crate::{
     SmtCommandHandler, SmtSymbol,
     parser::{SmtParse, SmtParseError, SmtParseState, SmtSyntaxErrorKind, handle_err},
-    token::{SmtProduce, SmtReserved, SmtSyntaxToken, SmtTokenCategory, SmtVersion},
+    token::{SmtProduce, SmtReserved, SmtSyntaxToken, SmtVersion},
 };
 
 mod datatype;
@@ -80,7 +80,7 @@ impl<H: SmtCommandHandler> SmtParse<H> for SmtCommandParser<H> {
     type Result = SmtCommandOutcome;
 
     #[inline]
-    fn parse<'a, C: SmtProduce<'a>>(
+    fn parse<C: SmtProduce>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
@@ -98,12 +98,12 @@ impl<H: SmtCommandHandler> SmtParse<H> for SmtCommandParser<H> {
                 CommandParserState::AwaitingCommand => {
                     // consume the peeked token
                     let _ = cursor.next();
-                    match peeked.category() {
-                        SmtTokenCategory::ParenOpen => {
+                    match cursor.syntax(&peeked) {
+                        SmtSyntaxToken::ParenOpen => {
                             // open the command
                             self.state = CommandParserState::CommandOpen;
                         }
-                        SmtTokenCategory::EndOfFile => {
+                        SmtSyntaxToken::EndOfFile => {
                             // end of file here finishes the parser,
                             // which is already in its initial state
                             return Ok(ControlFlow::Break(SmtCommandOutcome::EndOfFile));
@@ -119,7 +119,7 @@ impl<H: SmtCommandHandler> SmtParse<H> for SmtCommandParser<H> {
                     // consume the peeked token
                     let _ = cursor.next();
                     // expect the command name
-                    self.state = match peeked.syntax(cursor.version()) {
+                    self.state = match cursor.syntax(&peeked) {
                         SmtSyntaxToken::Reserved(SmtReserved::CommandName(name)) => {
                             // a command-name reserved word names a standard command
                             CommandParserState::Standard(StandardCommandKind::from_reserved(
@@ -184,7 +184,7 @@ impl<H: SmtCommandHandler> SmtParse<H> for Infallible {
     type Result = ();
 
     #[inline]
-    fn parse<'a, C: SmtProduce<'a>>(
+    fn parse<C: SmtProduce>(
         &mut self,
         _handler: &mut H,
         _parse_state: &mut SmtParseState<H>,
@@ -232,7 +232,7 @@ impl<H: SmtCommandHandler, R: SmtCommandRule<H>> SmtParse<H> for SmtCommandPaylo
     type Result = ();
 
     #[inline]
-    fn parse<'a, C: SmtProduce<'a>>(
+    fn parse<C: SmtProduce>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
@@ -254,7 +254,7 @@ mod tests {
     use super::*;
     use crate::{
         SmtSpan, SmtSyntaxChecker,
-        token::{InnerCategory, SmtBatchCursor, SmtToken},
+        token::{InnerCategory, SingleTokenProducer, SmtBatchCursor, SmtToken},
     };
 
     #[test]
@@ -269,11 +269,12 @@ mod tests {
         for _ in 0..2 {
             let span = SmtSpan::new_zero();
             let close = SmtToken::new(&Some((InnerCategory::ParenClose, &[])), &span);
+            let cursor = SmtBatchCursor::new(SmtVersion::V2_7, &[], &[]);
             let flow = parser
                 .parse(
                     &mut handler,
                     &mut SmtParseState::new(),
-                    &mut SmtBatchCursor::single(SmtVersion::V2_7, close),
+                    &mut SingleTokenProducer::new(&cursor, close),
                 )
                 .expect("check-sat closing parenthesis must parse");
             assert!(matches!(flow, ControlFlow::Break(())));

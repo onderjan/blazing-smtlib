@@ -18,7 +18,7 @@ use crate::{
         },
         parse_by_token,
     },
-    token::{SmtCommandNameReserved, SmtProduce, SmtSyntaxToken, SmtTokenCategory, SmtVersion},
+    token::{SmtCommandNameReserved, SmtProduce, SmtSyntaxToken, SmtVersion},
 };
 
 /// Defines the rule of one standard command: its payload parser
@@ -100,7 +100,7 @@ macro_rules! standard_commands {
                     $($old_field: SmtCommandPayloadParser::default(),)*
                 }
             }
-            pub fn parse<'a, C: SmtProduce<'a>>(
+            pub fn parse<C: SmtProduce>(
                 &mut self,
                 kind: StandardCommandKind,
                 handler: &mut H,
@@ -339,7 +339,7 @@ impl<H: SmtCommandHandler> SmtParse<H> for GetValueParser<H> {
     type Result = Vec<H::Term>;
 
     #[inline]
-    fn parse<'a, C: SmtProduce<'a>>(
+    fn parse<C: SmtProduce>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
@@ -415,7 +415,7 @@ impl<H: SmtCommandHandler> SmtParse<H> for SetInfoParser {
     type Result = H::Attribute;
 
     #[inline]
-    fn parse<'a, C: SmtProduce<'a>>(
+    fn parse<C: SmtProduce>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
@@ -440,12 +440,12 @@ impl<H: SmtCommandHandler> SmtParse<H> for SetInfoParser {
             s_expr_slot,
             ..
         } = parse_state;
-        parse_by_token(cursor, |version, token| {
+        parse_by_token(cursor, |cursor, token| {
             match self.state {
                 SetInfoState::Name => {
-                    let declares_version = token.category() == SmtTokenCategory::Keyword
-                        && token.content() == b"smt-lib-version";
-                    self.state = if declares_version {
+                    self.state = if let SmtSyntaxToken::Keyword(keyword) = cursor.syntax(&token)
+                        && keyword.as_slice() == b"smt-lib-version"
+                    {
                         SetInfoState::Version
                     } else {
                         SetInfoState::Rest
@@ -453,8 +453,8 @@ impl<H: SmtCommandHandler> SmtParse<H> for SetInfoParser {
                 }
                 SetInfoState::Version => {
                     // only a decimal that converts to a version names one
-                    let version = if matches!(token.category(), SmtTokenCategory::Decimal) {
-                        SmtVersion::from_decimal_opt(token.content())
+                    let version = if let SmtSyntaxToken::Decimal(decimal) = cursor.syntax(&token) {
+                        SmtVersion::from_decimal_opt(decimal.as_slice())
                     } else {
                         None
                     };
@@ -469,11 +469,11 @@ impl<H: SmtCommandHandler> SmtParse<H> for SetInfoParser {
                 SetInfoState::Rest => {}
             }
 
-            match attribute_slot.progress::<H, SingleAttribute>(
+            match attribute_slot.progress::<H, C, SingleAttribute>(
                 handler,
                 arena,
                 s_expr_slot,
-                version,
+                cursor,
                 token,
             )? {
                 Continue(()) => Ok(Continue(())),
@@ -525,7 +525,7 @@ impl<H: SmtCommandHandler> SmtParse<H> for PropLiteralParser {
     type Result = H::Term;
 
     #[inline]
-    fn parse<'a, C: SmtProduce<'a>>(
+    fn parse<C: SmtProduce>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
@@ -540,8 +540,8 @@ impl<H: SmtCommandHandler> SmtParse<H> for PropLiteralParser {
         //    literal, move to Not.
         // 2. Not, Negated, Close: expect the symbol "not", any symbol and ")"
         //    in turn, then move back to Start.
-        parse_by_token(cursor, |version, token| {
-            self.state = match (&self.state, token.syntax(version)) {
+        parse_by_token(cursor, |cursor, token| {
+            self.state = match (&self.state, cursor.syntax(&token)) {
                 (PropLiteralState::Start, SmtSyntaxToken::Symbol(_)) => PropLiteralState::Start,
                 (PropLiteralState::Start, SmtSyntaxToken::ParenOpen) => PropLiteralState::Not,
                 (PropLiteralState::Not, SmtSyntaxToken::Symbol(symbol))
@@ -558,7 +558,7 @@ impl<H: SmtCommandHandler> SmtParse<H> for PropLiteralParser {
                 }
             };
 
-            let flow = TermSlot::progress(handler, parse_state, version, token)?;
+            let flow = TermSlot::progress(handler, parse_state, cursor, token)?;
             debug_assert_eq!(
                 flow.is_break(),
                 matches!(self.state, PropLiteralState::Start),

@@ -7,7 +7,7 @@ use crate::{
         SmtSyntaxErrorKind, TextHandle, category::parse_special_constant, handle_err,
         parse_by_token,
     },
-    token::{SmtProduce, SmtSyntaxToken, SmtToken, SmtTokenCategory, SmtVersion},
+    token::{SmtProduce, SmtSyntaxToken, SmtTokenCategory},
 };
 
 /// A parser that reads an SMT-LIB attribute followed by a closing parenthesis.
@@ -35,11 +35,11 @@ impl<H: SmtHandler> Default for SmtClosedAttributeParser<H> {
 impl<H: SmtHandler> SmtParse<H> for SmtClosedAttributeParser<H> {
     type Result = H::Attribute;
 
-    fn parse<'a, C: SmtProduce<'a>>(
+    fn parse<'a, Z: SmtProduce>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut C,
+        cursor: &mut Z,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<<H as SmtHandler>::Error>> {
         let SmtParseState {
             attribute_slot,
@@ -47,12 +47,12 @@ impl<H: SmtHandler> SmtParse<H> for SmtClosedAttributeParser<H> {
             s_expr_slot,
             ..
         } = parse_state;
-        parse_by_token(cursor, |version, token| {
-            attribute_slot.progress::<H, SingleAttribute>(
+        parse_by_token(cursor, |cursor, token| {
+            attribute_slot.progress::<H, Z, SingleAttribute>(
                 handler,
                 arena,
                 s_expr_slot,
-                version,
+                cursor,
                 token,
             )
         })
@@ -84,11 +84,11 @@ impl<H: SmtHandler> Default for SmtClosedMultipleAttributeParser<H> {
 impl<H: SmtHandler> SmtParse<H> for SmtClosedMultipleAttributeParser<H> {
     type Result = Vec<H::Attribute>;
 
-    fn parse<'a, C: SmtProduce<'a>>(
+    fn parse<Z: SmtProduce>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut C,
+        cursor: &mut Z,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<<H as SmtHandler>::Error>> {
         let SmtParseState {
             attribute_slot,
@@ -96,12 +96,12 @@ impl<H: SmtHandler> SmtParse<H> for SmtClosedMultipleAttributeParser<H> {
             s_expr_slot,
             ..
         } = parse_state;
-        parse_by_token(cursor, |version, token| {
-            match attribute_slot.progress::<H, MultipleAttributes>(
+        parse_by_token(cursor, |cursor, token| {
+            match attribute_slot.progress::<H, Z, MultipleAttributes>(
                 handler,
                 arena,
                 s_expr_slot,
-                version,
+                cursor,
                 token,
             )? {
                 ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
@@ -173,17 +173,17 @@ impl AttributeSlot {
         self.num_attributes = 0;
     }
 
-    pub(crate) fn progress<H: SmtHandler + ?Sized, C: AttributeCollection<H>>(
+    pub(crate) fn progress<H: SmtHandler + ?Sized, Z: SmtProduce, C: AttributeCollection<H>>(
         &mut self,
         handler: &mut H,
         arena: &mut Arena<H>,
         s_expr_slot: &mut SExprSlot,
-        version: SmtVersion,
-        token: SmtToken,
+        cursor: &Z,
+        token: Z::Token,
     ) -> Result<ControlFlow<C::Output>, SmtParseError<H::Error>> {
         if !C::next_allowed(self.num_attributes) {
             // no more attributes are allowed, just expect a closing parenthesis
-            SmtCloseParenParser::expect(token)?;
+            SmtCloseParenParser::expect(cursor, token)?;
             return Ok(ControlFlow::Break(self.finish::<H, C>(arena)?));
         }
 
@@ -197,7 +197,7 @@ impl AttributeSlot {
                     debug_assert!(self.is_pristine(), "must be pristine when starting");
                     self.arena_attributes_start = arena.attributes.len();
                 }
-                match token.syntax(version) {
+                match cursor.syntax(&token) {
                     SmtSyntaxToken::ParenClose => {
                         // finish the attribute
                         return Ok(ControlFlow::Break(self.finish::<H, C>(arena)?));
@@ -220,7 +220,7 @@ impl AttributeSlot {
                     Break,
                 }
 
-                let (value, decision) = match token.syntax(version) {
+                let (value, decision) = match cursor.syntax(&token) {
                     SmtSyntaxToken::Symbol(symbol) => (
                         Some(SmtAttributeValue::Symbol(symbol)),
                         Decision::FinishAttribute,
@@ -294,7 +294,7 @@ impl AttributeSlot {
                 arena_s_exprs_start,
                 outside,
             } => {
-                if outside && matches!(token.category(), SmtTokenCategory::ParenClose) {
+                if outside && matches!(cursor.syntax(&token), SmtSyntaxToken::ParenClose) {
                     // the s-expr closing parenthesis was consumed,
                     // the attribute closing parenthesis was not consumed yet
                     // handle the attribute with its name and S-expressions handed over
@@ -312,7 +312,7 @@ impl AttributeSlot {
                     self.num_attributes += 1;
                 } else {
                     // inside an S-expression, progress it
-                    let outside = match s_expr_slot.progress(handler, arena, version, token)? {
+                    let outside = match s_expr_slot.progress(handler, arena, cursor, token)? {
                         ControlFlow::Continue(()) => false,
                         ControlFlow::Break(s_expr) => {
                             // push the finished S-expression to its arena

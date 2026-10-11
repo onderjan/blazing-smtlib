@@ -23,10 +23,13 @@ use crate::{
             FAST_RUN_MASK, HEXADECIMAL_RUN, START, Start, TokenEnd,
         },
     },
-    token::{InnerCategory, SmtBatchCursor, SmtConsume, SmtProduce, SmtRecover, SmtVersion},
+    token::{
+        InnerCategory, SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtProduce, SmtRecover,
+        SmtVersion,
+    },
 };
 
-pub struct SmtLexer<C: SmtConsume, R: SmtLexRecovery<C> = SmtFailFast> {
+pub struct SmtLexer<C, R = SmtFailFast> {
     /// Consumer of produced tokens.
     consumer: C,
 
@@ -208,7 +211,7 @@ enum LexerState {
     Failed,
 }
 
-impl<C: SmtConsume> SmtLexer<C> {
+impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>> SmtLexer<C> {
     /// Constructs a lexer that stops at its first error.
     pub fn new(consumer: C, version: SmtVersion) -> Self {
         // construct the lexer normally
@@ -229,10 +232,7 @@ impl<C: SmtConsume> SmtLexer<C> {
     ///
     /// If an error occurs, the lexer moves into a failure state where
     /// all further lexing calls panic.
-    pub fn lex_all(
-        &mut self,
-        input: &[u8],
-    ) -> Result<ControlFlow<SmtLocated<C::Result>>, SmtLexError<C::Error>> {
+    pub fn lex_all(&mut self, input: &[u8]) -> SmtLexResult<C> {
         match self.lex_slice(input)? {
             ControlFlow::Break(result) => {
                 // reset the lexer as if we are at the start of a new file
@@ -258,6 +258,20 @@ impl<C: SmtRecover> SmtLexer<C, SmtRecovering> {
     }
 }
 
+pub type SmtLexResult<C> = Result<
+    ControlFlow<SmtLocated<<C as SmtConsume>::Result>>,
+    SmtLexError<<C as SmtConsume>::Error>,
+>;
+
+type InnerLexResult<C> =
+    Result<ControlFlow<<C as SmtConsume>::Result>, Failure<<C as SmtConsume>::Error>>;
+
+type ArmLexResult<C> =
+    Result<usize, Interrupted<<C as SmtConsume>::Result, SmtLexError<<C as SmtConsume>::Error>>>;
+
+type FinishLexResult<C> =
+    Result<(), Interrupted<<C as SmtConsume>::Result, SmtLexError<<C as SmtConsume>::Error>>>;
+
 impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
     fn construct(consumer: C, version: SmtVersion) -> Self {
         SmtLexer {
@@ -279,10 +293,6 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
         }
     }
 
-    pub fn current_location(&self) -> SmtLocation {
-        self.location_at(0)
-    }
-
     /// The SMT-LIB version currently in force.
     ///
     /// The version can change if the token consumer asks for it from the
@@ -291,6 +301,20 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
         self.version
     }
 
+    pub fn current_location(&self) -> SmtLocation {
+        self.location_at(0)
+    }
+
+    /// Location of `position` in the current slice.
+    ///
+    /// Every line feed before `position` must be marked before calling this.
+    fn location_at(&self, position: usize) -> SmtLocation {
+        let offset = self.offset + position as u64;
+        SmtLocation::new(offset, self.line, offset - self.line_start)
+    }
+}
+
+impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>, R: SmtLexRecovery<C>> SmtLexer<C, R> {
     /// Lexes the given slice, sending the lexed tokens to the consumer.
     ///
     /// If the token consumer returns [`ControlFlow::Break`] on some token,
@@ -303,10 +327,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
     ///
     /// If an error occurs, the fail-fast lexer moves into
     /// a failure state and all further lexing calls panic.
-    pub fn lex_slice(
-        &mut self,
-        slice: &[u8],
-    ) -> Result<ControlFlow<SmtLocated<C::Result>>, SmtLexError<C::Error>> {
+    pub fn lex_slice(&mut self, slice: &[u8]) -> SmtLexResult<C> {
         if self.discard {
             // we are discarding bytes
             // pretend that we lexed everything we were given
@@ -378,7 +399,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
     ///
     /// If an error occurs, the fail-fast lexer moves into
     /// a failure state and all further lexing calls panic.
-    pub fn lex_eof(&mut self) -> Result<ControlFlow<SmtLocated<C::Result>>, SmtLexError<C::Error>> {
+    pub fn lex_eof(&mut self) -> SmtLexResult<C> {
         if self.discard {
             // no need to feed anything, just reset the lexer
             self.reset();
@@ -408,7 +429,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
         }
     }
 
-    fn lex_eof_inner(&mut self) -> Result<ControlFlow<C::Result>, Failure<C::Error>> {
+    fn lex_eof_inner(&mut self) -> InnerLexResult<C> {
         // construct a batch for the tokens
         let mut batch: Batch = Batch {
             entries: [None; BATCH_CAPACITY],
@@ -541,10 +562,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
         Ok(ControlFlow::Continue(()))
     }
 
-    fn lex_slice_inner(
-        &mut self,
-        slice: &[u8],
-    ) -> Result<ControlFlow<C::Result>, Failure<C::Error>> {
+    fn lex_slice_inner(&mut self, slice: &[u8]) -> InnerLexResult<C> {
         let mut batch: Batch = Batch {
             entries: [None; BATCH_CAPACITY],
             len: 0,
@@ -645,11 +663,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
         }
     }
 
-    fn lex_normal<'a>(
-        &mut self,
-        batch: &mut Batch<'a>,
-        slice: &'a [u8],
-    ) -> Result<usize, Interrupted<C::Result, SmtLexError<C::Error>>> {
+    fn lex_normal<'a>(&mut self, batch: &mut Batch<'a>, slice: &'a [u8]) -> ArmLexResult<C> {
         let mut index = 0;
 
         // PERFORMANCE: use locals for variables commonly used on the fast path.
@@ -1048,7 +1062,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
         &mut self,
         batch: &mut Batch<'a>,
         slice: &[u8],
-    ) -> Result<usize, Interrupted<C::Result, SmtLexError<C::Error>>> {
+    ) -> ArmLexResult<C> {
         // find the first byte that is not a digit
         let index = run_end(slice, RUN_DIGIT);
 
@@ -1095,7 +1109,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
         batch: &mut Batch<'a>,
         slice: &[u8],
         start: usize,
-    ) -> Result<usize, Interrupted<C::Result, SmtLexError<C::Error>>> {
+    ) -> ArmLexResult<C> {
         // find the first byte in the remainder that is not a digit
         let end = start + run_end(&slice[start..], RUN_DIGIT);
         // extend the token from slice
@@ -1117,10 +1131,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
         Ok(end)
     }
 
-    fn lex_base_selection(
-        &mut self,
-        slice: &[u8],
-    ) -> Result<usize, Interrupted<C::Result, SmtLexError<C::Error>>> {
+    fn lex_base_selection(&mut self, slice: &[u8]) -> ArmLexResult<C> {
         let c = slice[0];
         self.state = match c {
             b'x' => LexerState::Hexadecimal,
@@ -1138,7 +1149,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
         batch: &mut Batch<'a>,
         slice: &[u8],
         run: DigitRun,
-    ) -> Result<usize, Interrupted<C::Result, SmtLexError<C::Error>>> {
+    ) -> ArmLexResult<C> {
         // find the first byte that is not allowed in the run
         let index = run_end(slice, run.flag);
         // extend the token from slice
@@ -1163,7 +1174,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
         &mut self,
         batch: &mut Batch<'a>,
         mut rest: &[u8],
-    ) -> Result<usize, Interrupted<C::Result, SmtLexError<C::Error>>> {
+    ) -> ArmLexResult<C> {
         if self.version == SmtVersion::V2_0 {
             // in 2.0 mode, the string literals are lexed differently,
             // hand over to the legacy lexing function
@@ -1251,7 +1262,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
         &mut self,
         batch: &mut Batch<'a>,
         mut rest: &[u8],
-    ) -> Result<usize, Interrupted<C::Result, SmtLexError<C::Error>>> {
+    ) -> ArmLexResult<C> {
         let mut consumed = 0;
         while !rest.is_empty() {
             match self.state {
@@ -1347,11 +1358,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
         Ok(consumed)
     }
 
-    fn lex_simple_symbol<'a>(
-        &mut self,
-        batch: &mut Batch<'a>,
-        slice: &[u8],
-    ) -> Result<usize, Interrupted<C::Result, SmtLexError<C::Error>>> {
+    fn lex_simple_symbol<'a>(&mut self, batch: &mut Batch<'a>, slice: &[u8]) -> ArmLexResult<C> {
         // find the first byte that is not a simple symbol
         let index = run_end(slice, RUN_SIMPLE_SYMBOL);
 
@@ -1369,11 +1376,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
         Ok(index)
     }
 
-    fn lex_quoted_symbol<'a>(
-        &mut self,
-        batch: &mut Batch<'a>,
-        mut rest: &[u8],
-    ) -> Result<usize, Interrupted<C::Result, SmtLexError<C::Error>>> {
+    fn lex_quoted_symbol<'a>(&mut self, batch: &mut Batch<'a>, mut rest: &[u8]) -> ArmLexResult<C> {
         let mut consumed = 0;
         loop {
             // find the first byte that is not a quoted symbol
@@ -1440,11 +1443,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
         }
     }
 
-    fn lex_keyword<'a>(
-        &mut self,
-        batch: &mut Batch<'a>,
-        slice: &[u8],
-    ) -> Result<usize, Interrupted<C::Result, SmtLexError<C::Error>>> {
+    fn lex_keyword<'a>(&mut self, batch: &mut Batch<'a>, slice: &[u8]) -> ArmLexResult<C> {
         // find the first byte that is not simple-symbol-like
         let index = run_end(slice, RUN_SIMPLE_SYMBOL);
 
@@ -1470,7 +1469,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
         &mut self,
         batch: &mut Batch<'a>,
         slice: &[u8],
-    ) -> Result<usize, Interrupted<C::Result, SmtLexError<C::Error>>> {
+    ) -> ArmLexResult<C> {
         // we expect a token delimiter to follow the closing pipe
         self.expect_delimiter(slice[0], 0)?;
         // all good, produce the quoted symbol token
@@ -1515,7 +1514,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
         batch: &mut Batch<'a>,
         slice: &'a [u8],
         index: usize,
-    ) -> Result<usize, Interrupted<C::Result, SmtLexError<C::Error>>> {
+    ) -> ArmLexResult<C> {
         self.start_token(index);
         let mut end = index;
         loop {
@@ -1546,11 +1545,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
         }
     }
 
-    fn lex_whitespace<'a>(
-        &mut self,
-        batch: &mut Batch<'a>,
-        mut rest: &[u8],
-    ) -> Result<usize, Interrupted<C::Result, SmtLexError<C::Error>>> {
+    fn lex_whitespace<'a>(&mut self, batch: &mut Batch<'a>, mut rest: &[u8]) -> ArmLexResult<C> {
         // we know that the consumer is interested in the whitespace
         // as it would otherwise be immediately discarded instead
         // of the state change
@@ -1595,11 +1590,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
         }
     }
 
-    fn lex_comment<'a>(
-        &mut self,
-        batch: &mut Batch<'a>,
-        slice: &[u8],
-    ) -> Result<usize, Interrupted<C::Result, SmtLexError<C::Error>>> {
+    fn lex_comment<'a>(&mut self, batch: &mut Batch<'a>, slice: &[u8]) -> ArmLexResult<C> {
         // run until comment end
         let index = run_end(slice, RUN_COMMENT_PLAIN);
         let Some(c) = slice.get(index) else {
@@ -1648,7 +1639,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
         end: TokenEnd,
         content: Content<'a>,
         next: Option<u8>,
-    ) -> Result<(), Interrupted<C::Result, SmtLexError<C::Error>>> {
+    ) -> FinishLexResult<C> {
         // decimals of the form 7. without any digit in fractional part are disallowed
         let value = content.bytes(&self.token_content);
         if value.last().is_none_or(|c| *c == b'.') {
@@ -1665,7 +1656,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
         batch: &mut Batch<'a>,
         end: TokenEnd,
         content: Content<'a>,
-    ) -> Result<(), Interrupted<C::Result, SmtLexError<C::Error>>> {
+    ) -> FinishLexResult<C> {
         self.sink_slice(batch, InnerCategory::Numeral, end, content)
     }
 
@@ -1680,7 +1671,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
         end: TokenEnd,
         content: Content<'a>,
         next: Option<u8>,
-    ) -> Result<(), Interrupted<C::Result, SmtLexError<C::Error>>> {
+    ) -> FinishLexResult<C> {
         // digit runs must not be empty
         let value = content.bytes(&self.token_content);
         if value.is_empty() {
@@ -1697,7 +1688,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
         batch: &mut Batch<'a>,
         end: TokenEnd,
         content: Content<'a>,
-    ) -> Result<(), Interrupted<C::Result, SmtLexError<C::Error>>> {
+    ) -> FinishLexResult<C> {
         self.sink_slice(batch, InnerCategory::UnquotedSymbol, end, content)
     }
 
@@ -1711,7 +1702,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
         end: TokenEnd,
         content: Content<'a>,
         next: Option<u8>,
-    ) -> Result<(), Interrupted<C::Result, SmtLexError<C::Error>>> {
+    ) -> FinishLexResult<C> {
         let value = content.bytes(&self.token_content);
         // ensure the keyword is not empty
         if value.is_empty() {
@@ -1728,7 +1719,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
         batch: &mut Batch<'a>,
         end: TokenEnd,
         content: Content<'a>,
-    ) -> Result<(), Interrupted<C::Result, SmtLexError<C::Error>>> {
+    ) -> FinishLexResult<C> {
         self.sink_slice(batch, InnerCategory::String, end, content)
     }
 
@@ -1737,7 +1728,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
         batch: &mut Batch<'a>,
         end: TokenEnd,
         content: Content<'a>,
-    ) -> Result<(), Interrupted<C::Result, SmtLexError<C::Error>>> {
+    ) -> FinishLexResult<C> {
         self.sink_slice(batch, InnerCategory::Whitespace, end, content)
     }
 
@@ -1749,7 +1740,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
         ty: InnerCategory,
         end: TokenEnd,
         content: Content<'a>,
-    ) -> Result<(), Interrupted<C::Result, SmtLexError<C::Error>>> {
+    ) -> FinishLexResult<C> {
         // the caller of this function is responsible
         // for ensuring that the constructed token is valid
 
@@ -1801,10 +1792,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
         self.token_content.clear();
     }
 
-    fn flush_batch(
-        &mut self,
-        batch: &mut Batch,
-    ) -> Result<(), Interrupted<C::Result, SmtLexError<C::Error>>> {
+    fn flush_batch(&mut self, batch: &mut Batch) -> FinishLexResult<C> {
         // the batch is spent once handed over, no matter what the consumer decides
         let len = std::mem::replace(&mut batch.len, 0);
         if len == 0 {
@@ -1825,7 +1813,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
         version: &mut SmtVersion,
         consumed_depth: &mut u64,
         lexed_depth: &mut u64,
-    ) -> Result<(), Interrupted<C::Result, SmtLexError<C::Error>>> {
+    ) -> FinishLexResult<C> {
         // flush the cursor until nothing remains
         while !cursor.is_empty() {
             let result = consumer.consume(&mut cursor);
@@ -1893,7 +1881,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
     }
 
     #[inline]
-    fn sink_eof(&mut self) -> Result<(), Interrupted<C::Result, SmtLexError<C::Error>>> {
+    fn sink_eof(&mut self) -> FinishLexResult<C> {
         // construct the span at the first position in the batch
         let end = self.location_at(0);
         self.spans[0] = SmtSpan::new_unchecked(self.token_start, end);
@@ -1953,7 +1941,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
         entry: (InnerCategory, &'a [u8]),
         range: std::ops::Range<usize>,
         emit: usize,
-    ) -> Result<(), Interrupted<C::Result, SmtLexError<C::Error>>> {
+    ) -> FinishLexResult<C> {
         batch.entries[local.len] = Some(entry);
         self.spans[local.len] = SmtSpan::on_line(
             local.line,
@@ -1983,14 +1971,6 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
         // the locations must only refer to positions after it afterwards
         self.line += 1;
         self.line_start = self.offset + position as u64 + 1;
-    }
-
-    /// Location of `position` in the current slice.
-    ///
-    /// Every line feed before `position` must be marked before calling this.
-    fn location_at(&self, position: usize) -> SmtLocation {
-        let offset = self.offset + position as u64;
-        SmtLocation::new(offset, self.line, offset - self.line_start)
     }
 
     /// Error spanning the token so far and, if it ended at a byte, that byte.
@@ -2155,7 +2135,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
     /// Called from the outer public functions.
     fn execute_step(
         &mut self,
-        step: impl FnOnce(&mut Self) -> Result<ControlFlow<C::Result>, Failure<C::Error>>,
+        step: impl FnOnce(&mut Self) -> InnerLexResult<C>,
     ) -> Result<ControlFlow<SmtLocated<C::Result>>, Failure<C::Error>> {
         match step(self)? {
             ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
@@ -2203,7 +2183,7 @@ struct FastState {
 
 impl FastState {
     #[inline(always)]
-    fn load<C: SmtConsume, R: SmtLexRecovery<C>>(lexer: &SmtLexer<C, R>, batch: &Batch) -> Self {
+    fn load<C, R>(lexer: &SmtLexer<C, R>, batch: &Batch) -> Self {
         Self {
             len: batch.len,
             line: lexer.line,

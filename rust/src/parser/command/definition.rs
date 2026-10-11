@@ -61,7 +61,7 @@ impl<H: SmtCommandHandler, D: Definition<H>> SmtParse<H> for DefinitionParser<H,
     type Result = ();
 
     #[inline]
-    fn parse<'a, C: SmtProduce<'a>>(
+    fn parse<C: SmtProduce>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,

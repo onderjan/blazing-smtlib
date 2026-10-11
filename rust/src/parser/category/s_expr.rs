@@ -6,7 +6,7 @@ use crate::{
         Arena, SmtParse, SmtParseError, SmtParseState, SmtSyntaxErrorKind,
         category::parse_special_constant, handle_err, parse_by_token,
     },
-    token::{SmtProduce, SmtSyntaxToken, SmtToken, SmtVersion},
+    token::{SmtProduce, SmtSyntaxToken, SmtVersion},
 };
 
 /// A parser that reads an SMT-LIB S-expression.
@@ -35,18 +35,18 @@ impl<H: SmtHandler> SmtParse<H> for SmtSExprParser<H> {
     type Result = H::SExpr;
 
     #[inline]
-    fn parse<'a, C: SmtProduce<'a>>(
+    fn parse<Z: SmtProduce>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut C,
+        cursor: &mut Z,
     ) -> Result<ControlFlow<H::SExpr>, SmtParseError<H::Error>> {
         // progress the slot over the arena
         let SmtParseState {
             s_expr_slot, arena, ..
         } = parse_state;
-        parse_by_token(cursor, |version, token| {
-            s_expr_slot.progress(handler, arena, version, token)
+        parse_by_token(cursor, |cursor, token| {
+            s_expr_slot.progress(handler, arena, cursor, token)
         })
     }
 }
@@ -75,12 +75,12 @@ impl SExprSlot {
     }
 
     #[inline]
-    pub(crate) fn progress<H: SmtHandler + ?Sized>(
+    pub(crate) fn progress<H: SmtHandler + ?Sized, Z: SmtProduce>(
         &mut self,
         handler: &mut H,
         arena: &mut Arena<H>,
-        version: SmtVersion,
-        token: SmtToken,
+        cursor: &Z,
+        token: Z::Token,
     ) -> Result<ControlFlow<H::SExpr>, SmtParseError<H::Error>> {
         // there is no state besides the levels, so an empty level stack
         // means the category is being entered
@@ -88,11 +88,11 @@ impl SExprSlot {
             debug_assert!(self.is_pristine(), "must be pristine when starting");
         }
 
-        let s_expr = match token.syntax(version) {
+        let s_expr = match cursor.syntax(&token) {
             SmtSyntaxToken::Symbol(symbol) => SmtSExpr::Symbol(symbol),
             SmtSyntaxToken::Reserved(reserved) => {
                 // reserved words are only allowed in S-expressions since SMT-LIB 2.6
-                if version >= SmtVersion::V2_6 {
+                if cursor.version() >= SmtVersion::V2_6 {
                     SmtSExpr::Reserved(reserved)
                 } else {
                     return Err(SmtParseError::category_error(

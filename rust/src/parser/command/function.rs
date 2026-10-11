@@ -7,7 +7,7 @@ use crate::{
         SmtParenSortedVarsParser, SmtParse, SmtParseError, SmtParseState, SmtSortParser,
         SmtSymbolParser, SmtSyntaxErrorKind, SmtTermParser, handle_err, parse_by_token,
     },
-    token::{SmtBatchCursor, SmtProduce, SmtToken, SmtVersion},
+    token::{SingleTokenProducer, SmtProduce},
 };
 
 /// Parses a function signature: name, parameters (name and sort), and result sort.
@@ -36,7 +36,7 @@ impl<H: SmtCommandHandler> Default for FunctionSignatureParser<H> {
 impl<H: SmtCommandHandler> SmtParse<H> for FunctionSignatureParser<H> {
     type Result = SmtFunctionSignature<H>;
 
-    fn parse<'a, C: SmtProduce<'a>>(
+    fn parse<C: SmtProduce>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
@@ -76,26 +76,26 @@ impl<H: SmtCommandHandler> Default for RecursiveBodyParser<H> {
 impl<H: SmtCommandHandler> SmtParse<H> for RecursiveBodyParser<H> {
     type Result = ();
 
-    fn parse<'a, C: SmtProduce<'a>>(
+    fn parse<C: SmtProduce>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
         cursor: &mut C,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
-        parse_by_token(cursor, |version, token| {
-            self.progress(handler, parse_state, version, token)
+        parse_by_token(cursor, |cursor, token| {
+            self.progress(handler, parse_state, cursor, token)
         })
     }
 }
 
 impl<H: SmtCommandHandler> RecursiveBodyParser<H> {
     /// Progresses the parser by one token.
-    fn progress(
+    fn progress<Z: SmtProduce>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        version: SmtVersion,
-        token: SmtToken,
+        cursor: &Z,
+        token: Z::Token,
     ) -> Result<ControlFlow<()>, SmtParseError<H::Error>> {
         if !self.is_inner {
             // signal the handler that we are starting a body term
@@ -106,7 +106,7 @@ impl<H: SmtCommandHandler> RecursiveBodyParser<H> {
         match self.term_parser.parse(
             handler,
             parse_state,
-            &mut SmtBatchCursor::single(version, token),
+            &mut SingleTokenProducer::new(cursor, token),
         )? {
             ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
             ControlFlow::Break(term) => {
@@ -157,26 +157,26 @@ impl<H: SmtCommandHandler> Default for DefineFunsRecParser<H> {
 impl<H: SmtCommandHandler> SmtParse<H> for DefineFunsRecParser<H> {
     type Result = ();
 
-    fn parse<'a, C: SmtProduce<'a>>(
+    fn parse<C: SmtProduce>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
         cursor: &mut C,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
-        parse_by_token(cursor, |version, token| {
-            self.progress(handler, parse_state, version, token)
+        parse_by_token(cursor, |cursor, token| {
+            self.progress(handler, parse_state, cursor, token)
         })
     }
 }
 
 impl<H: SmtCommandHandler> DefineFunsRecParser<H> {
     /// Progresses the parser by one token.
-    fn progress(
+    fn progress<Z: SmtProduce>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        version: SmtVersion,
-        token: SmtToken,
+        cursor: &Z,
+        token: Z::Token,
     ) -> Result<ControlFlow<()>, SmtParseError<H::Error>> {
         match self.state {
             DefineFunsRecState::Signatures => {
@@ -184,7 +184,7 @@ impl<H: SmtCommandHandler> DefineFunsRecParser<H> {
                 if let ControlFlow::Break(signatures) = self.signatures_parser.parse(
                     handler,
                     parse_state,
-                    &mut SmtBatchCursor::single(version, token),
+                    &mut SingleTokenProducer::new(cursor, token),
                 )? {
                     // there must be at least one signature
                     if signatures.is_empty() {
@@ -207,7 +207,7 @@ impl<H: SmtCommandHandler> DefineFunsRecParser<H> {
                 if let ControlFlow::Break(bodies) = self.bodies_parser.parse(
                     handler,
                     parse_state,
-                    &mut SmtBatchCursor::single(version, token),
+                    &mut SingleTokenProducer::new(cursor, token),
                 )? {
                     // the parser returned a vector of units corresponding to the number of bodies
                     // bounded by the maximum which is the number of signatures

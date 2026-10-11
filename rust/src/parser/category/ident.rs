@@ -6,7 +6,7 @@ use crate::{
         Arena, IdentHandle, IndexHandle, SmtParse, SmtParseError, SmtParseState,
         SmtSyntaxErrorKind, TextHandle, parse_by_token,
     },
-    token::{SmtGeneralReserved, SmtProduce, SmtReserved, SmtSyntaxToken, SmtToken, SmtVersion},
+    token::{SmtGeneralReserved, SmtProduce, SmtReserved, SmtSyntaxToken, SmtVersion},
 };
 
 /// A parser that reads an SMT-LIB identifier.
@@ -33,7 +33,7 @@ impl<H: SmtHandler> SmtParse<H> for SmtIdentParser {
     type Result = SmtIdentBuf;
 
     #[inline]
-    fn parse<'a, C: SmtProduce<'a>>(
+    fn parse<C: SmtProduce>(
         &mut self,
         _handler: &mut H,
         parse_state: &mut SmtParseState<H>,
@@ -43,8 +43,8 @@ impl<H: SmtHandler> SmtParse<H> for SmtIdentParser {
         let SmtParseState {
             ident_slot, arena, ..
         } = parse_state;
-        parse_by_token(cursor, |version, token| {
-            match ident_slot.progress(arena, version, token)? {
+        parse_by_token(cursor, |cursor, token| {
+            match ident_slot.progress(arena, cursor, token)? {
                 ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
                 ControlFlow::Break(ident) => Ok(ControlFlow::Break(
                     arena.hand_over_ident(ident, |ident| ident.into_owned()),
@@ -134,16 +134,16 @@ impl IdentSlot {
     }
 
     #[inline]
-    pub(crate) fn progress<H: SmtHandler + ?Sized, E>(
+    pub(crate) fn progress<H: SmtHandler + ?Sized, Z: SmtProduce, E>(
         &mut self,
         arena: &mut Arena<H>,
-        version: SmtVersion,
-        token: SmtToken,
+        cursor: &Z,
+        token: Z::Token,
     ) -> Result<ControlFlow<IdentHandle, ()>, SmtParseError<E>> {
         match self.state {
             State::Start => {
                 debug_assert!(self.is_pristine(), "must be pristine when starting");
-                match token.syntax(version) {
+                match cursor.syntax(&token) {
                     SmtSyntaxToken::Symbol(name) => {
                         // a simple identifier
                         return Ok(ControlFlow::Break(arena.push_nonindexed_ident(name)));
@@ -160,7 +160,7 @@ impl IdentSlot {
             State::Open => {
                 // this must be an underscore
                 if matches!(
-                    token.syntax(version),
+                    cursor.syntax(&token),
                     SmtSyntaxToken::Reserved(SmtReserved::General(SmtGeneralReserved::Underscore))
                 ) {
                     self.state = State::AfterUnderscore;
@@ -174,7 +174,7 @@ impl IdentSlot {
                 let name = match self.name.take() {
                     None => {
                         // we need to read the name, its indices will follow in the arena
-                        if let SmtSyntaxToken::Symbol(name) = token.syntax(version) {
+                        if let SmtSyntaxToken::Symbol(name) = cursor.syntax(&token) {
                             Some(self.push_name(arena, name))
                         } else {
                             return Err(SmtParseError::category_error(
@@ -185,7 +185,7 @@ impl IdentSlot {
                     Some(name) => {
                         // we have already read the name, so we will be reading an index
                         // and ending with closing parenthesis
-                        match token.syntax(version) {
+                        match cursor.syntax(&token) {
                             SmtSyntaxToken::ParenClose => {
                                 let indices_start = self.arena_indices_start;
                                 if arena.indices.len() == indices_start {
@@ -207,7 +207,9 @@ impl IdentSlot {
                             }
                             // symbol index is only allowed since SMT-LIB 2.5,
                             // otherwise the fallback is taken
-                            SmtSyntaxToken::Symbol(index_symbol) if version >= SmtVersion::V2_5 => {
+                            SmtSyntaxToken::Symbol(index_symbol)
+                                if cursor.version() >= SmtVersion::V2_5 =>
+                            {
                                 let index = arena.push_text(index_symbol.as_slice());
                                 arena.indices.push(IndexHandle::Symbol(index));
                             }

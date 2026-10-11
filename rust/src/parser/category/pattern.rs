@@ -6,10 +6,7 @@ use crate::{
         Arena, PatternHandle, SimplePatternHandle, SmtParse, SmtParseError, SmtParseState,
         SmtSyntaxErrorKind, TextHandle, parse_by_token,
     },
-    token::{
-        SmtGeneralReserved, SmtProduce, SmtReserved, SmtSyntaxToken, SmtToken, SmtTokenCategory,
-        SmtVersion,
-    },
+    token::{SmtGeneralReserved, SmtProduce, SmtReserved, SmtSyntaxToken, SmtVersion},
 };
 
 pub struct SmtSimplePatternParser;
@@ -20,23 +17,23 @@ impl SmtSimplePatternParser {
     }
 
     /// Consumes exactly one token, which must be a simple pattern.
-    pub(crate) fn expect<H: SmtHandler + ?Sized>(
-        version: SmtVersion,
-        token: SmtToken,
+    pub(crate) fn expect<H: SmtHandler + ?Sized, Z: SmtProduce>(
+        cursor: &Z,
+        token: Z::Token,
     ) -> Result<SmtSimplePatternBuf, SmtParseError<H::Error>> {
-        Ok(Self::expect_view::<H>(version, token)?.into_owned())
+        Ok(Self::expect_view::<H, Z>(cursor, &token)?.into_owned())
     }
 
     /// Consumes exactly one token, which must be a simple pattern, viewing it.
-    pub(crate) fn expect_view<'t, H: SmtHandler + ?Sized>(
-        version: SmtVersion,
-        token: SmtToken<'t>,
+    pub(crate) fn expect_view<'t, H: SmtHandler + ?Sized, Z: SmtProduce>(
+        cursor: &Z,
+        token: &'t Z::Token,
     ) -> Result<SmtSimplePattern<'t>, SmtParseError<H::Error>> {
-        let result = match token.syntax(version) {
+        let result = match cursor.syntax(token) {
             SmtSyntaxToken::Symbol(symbol) => Some(SmtSimplePattern::Symbol(symbol)),
             SmtSyntaxToken::Reserved(SmtReserved::General(SmtGeneralReserved::Underscore)) => {
                 // the underscore wildcard is not allowed in every version
-                if underscore_wildcard_allowed(version) {
+                if underscore_wildcard_allowed(cursor.version()) {
                     Some(SmtSimplePattern::Wildcard)
                 } else {
                     None
@@ -48,7 +45,7 @@ impl SmtSimplePatternParser {
             Some(view) => Ok(view),
             None => {
                 // the underscore wildcard is not allowed in every version
-                let kind = if underscore_wildcard_allowed(version) {
+                let kind = if underscore_wildcard_allowed(cursor.version()) {
                     SmtSyntaxErrorKind::ExpectedSymbolOrUnderscore
                 } else {
                     SmtSyntaxErrorKind::ExpectedSymbol
@@ -69,19 +66,16 @@ impl Default for SmtSimplePatternParser {
 impl<H: SmtHandler> SmtParse<H> for SmtSimplePatternParser {
     type Result = SmtSimplePatternBuf;
 
-    fn parse<'a, C: SmtProduce<'a>>(
+    fn parse<Z: SmtProduce>(
         &mut self,
         _handler: &mut H,
         _parse_state: &mut SmtParseState<H>,
-        cursor: &mut C,
+        cursor: &mut Z,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         let Some(token) = cursor.next() else {
             return Ok(ControlFlow::Continue(()));
         };
-        Ok(ControlFlow::Break(Self::expect::<H>(
-            cursor.version(),
-            token,
-        )?))
+        Ok(ControlFlow::Break(Self::expect::<H, Z>(cursor, token)?))
     }
 }
 
@@ -111,7 +105,7 @@ impl<H: SmtHandler> SmtParse<H> for SmtPatternParser<H> {
     type Result = SmtPatternBuf;
 
     #[inline]
-    fn parse<'a, C: SmtProduce<'a>>(
+    fn parse<C: SmtProduce>(
         &mut self,
         _handler: &mut H,
         parse_state: &mut SmtParseState<H>,
@@ -123,8 +117,8 @@ impl<H: SmtHandler> SmtParse<H> for SmtPatternParser<H> {
             arena,
             ..
         } = parse_state;
-        parse_by_token(cursor, |version, token| {
-            match pattern_slot.progress(arena, version, token)? {
+        parse_by_token(cursor, |cursor, token| {
+            match pattern_slot.progress(arena, cursor, &token)? {
                 ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
                 ControlFlow::Break(pattern) => {
                     // break with the owned pattern
@@ -167,11 +161,11 @@ impl PatternSlot {
     }
 
     #[inline]
-    pub(crate) fn progress<'t, H: SmtHandler + ?Sized>(
+    pub(crate) fn progress<'t, H: SmtHandler + ?Sized, Z: SmtProduce>(
         &mut self,
         arena: &mut Arena<H>,
-        version: SmtVersion,
-        token: SmtToken<'t>,
+        cursor: &Z,
+        token: &'t Z::Token,
     ) -> Result<ControlFlow<PatternHandle<'t>>, SmtParseError<H::Error>> {
         // The sequential progress is as follows:
         // 1. Not open, expect one of:
@@ -188,7 +182,7 @@ impl PatternSlot {
 
         if let Some(constructor) = self.constructor.take() {
             // step 3: parsing the arguments
-            if matches!(token.category(), SmtTokenCategory::ParenClose) {
+            if matches!(cursor.syntax(token), SmtSyntaxToken::ParenClose) {
                 // there must be at least one argument to the constructor
                 if arena.simple_patterns.len() == self.arena_args_start {
                     return Err(SmtParseError::category_error(
@@ -202,7 +196,7 @@ impl PatternSlot {
                 }));
             }
             // an argument is starting here, it will be stored in the arena
-            let argument = match SmtSimplePatternParser::expect_view::<H>(version, token)? {
+            let argument = match SmtSimplePatternParser::expect_view::<H, Z>(cursor, token)? {
                 SmtSimplePattern::Symbol(symbol) => {
                     SimplePatternHandle::Symbol(arena.push_text(symbol.as_slice()))
                 }
@@ -215,7 +209,7 @@ impl PatternSlot {
 
         if self.is_open {
             // step 2: expecting the constructor, which goes to the arena text
-            let SmtSyntaxToken::Symbol(constructor) = token.syntax(version) else {
+            let SmtSyntaxToken::Symbol(constructor) = cursor.syntax(token) else {
                 return Err(SmtParseError::category_error(
                     SmtSyntaxErrorKind::ExpectedSymbol,
                 ));
@@ -229,11 +223,11 @@ impl PatternSlot {
 
         // step 1: expecting a simple pattern or an opening parenthesis
         debug_assert!(self.is_pristine(), "must be pristine when starting");
-        let result = match token.syntax(version) {
+        let result = match cursor.syntax(token) {
             SmtSyntaxToken::Symbol(symbol) => Some(SmtSimplePattern::Symbol(symbol)),
             SmtSyntaxToken::Reserved(SmtReserved::General(SmtGeneralReserved::Underscore)) => {
                 // the underscore wildcard is not allowed in every version
-                if underscore_wildcard_allowed(version) {
+                if underscore_wildcard_allowed(cursor.version()) {
                     Some(SmtSimplePattern::Wildcard)
                 } else {
                     None
@@ -253,7 +247,7 @@ impl PatternSlot {
             }
             None => {
                 // the underscore wildcard is not allowed in every version
-                let kind = if underscore_wildcard_allowed(version) {
+                let kind = if underscore_wildcard_allowed(cursor.version()) {
                     SmtSyntaxErrorKind::ExpectedSymbolUnderscoreOrParenOpen
                 } else {
                     SmtSyntaxErrorKind::ExpectedSymbolOrParenOpen

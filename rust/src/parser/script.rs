@@ -51,7 +51,7 @@ impl<H: SmtCommandHandler> SmtParse<H> for SmtScriptParser<H> {
     type Result = SmtScriptEnd;
 
     #[inline]
-    fn parse<'a, C: SmtProduce<'a>>(
+    fn parse<C: SmtProduce>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,

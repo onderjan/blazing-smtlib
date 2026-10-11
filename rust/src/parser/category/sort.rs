@@ -6,7 +6,7 @@ use crate::{
         Arena, IdentHandle, IdentSlot, SmtParse, SmtParseError, SmtParseState, SmtSyntaxErrorKind,
         handle_err, parse_by_token,
     },
-    token::{SmtGeneralReserved, SmtProduce, SmtReserved, SmtSyntaxToken, SmtToken, SmtVersion},
+    token::{SmtGeneralReserved, SmtProduce, SmtReserved, SmtSyntaxToken},
 };
 
 /// A parser that reads an SMT-LIB sort.
@@ -35,7 +35,7 @@ impl<H: SmtHandler> SmtParse<H> for SmtSortParser<H> {
     type Result = H::Sort;
 
     #[inline]
-    fn parse<'a, C: SmtProduce<'a>>(
+    fn parse<C: SmtProduce>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
@@ -107,13 +107,13 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
     }
 
     #[inline]
-    pub(crate) fn progress(
+    pub(crate) fn progress<Z: SmtProduce>(
         &mut self,
         handler: &mut H,
         arena: &mut Arena<H>,
         ident_slot: &mut IdentSlot,
-        version: SmtVersion,
-        token: SmtToken,
+        cursor: &Z,
+        token: Z::Token,
     ) -> Result<ControlFlow<H::Sort>, SmtParseError<H::Error>> {
         let flow = match self.state {
             State::Start => {
@@ -122,7 +122,7 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
                 if self.levels.is_empty() {
                     debug_assert!(self.is_pristine(), "must be pristine when starting");
                 }
-                match token.syntax(version) {
+                match cursor.syntax(&token) {
                     SmtSyntaxToken::Symbol(name) => {
                         // the sort consists just of a single-symbol ident
                         let name = arena.push_text(name.as_slice());
@@ -170,7 +170,7 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
             }
             State::Open => {
                 // decide how to continue
-                let state = match token.syntax(version) {
+                let state = match cursor.syntax(&token) {
                     SmtSyntaxToken::Reserved(SmtReserved::General(
                         SmtGeneralReserved::Underscore,
                     )) => {
@@ -208,10 +208,10 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
                 ControlFlow::Continue(())
             }
             State::IdentOnly => ident_slot
-                .progress(arena, version, token)?
+                .progress(arena, cursor, token)?
                 .map_break(|ident| (ident, arena.sorts.len())),
             State::StartingIdent => {
-                match ident_slot.progress(arena, version, token)? {
+                match ident_slot.progress(arena, cursor, token)? {
                     ControlFlow::Continue(()) => ControlFlow::Continue(()),
                     ControlFlow::Break(ident) => {
                         // add a new level and start parsing the new sort

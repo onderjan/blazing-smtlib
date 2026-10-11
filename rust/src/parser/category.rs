@@ -64,7 +64,7 @@ pub(crate) mod tests {
         NonstandardCommandError, SmtSyntaxChecker,
         lexer::SmtLexer,
         parser::{SmtParse, SmtParseError, SmtParseState},
-        token::{SmtConsume, SmtProduce, SmtTokenCategory, SmtVersion},
+        token::{SmtConsume, SmtConsumeFrom, SmtProduce, SmtSyntaxToken, SmtVersion},
     };
 
     /// Drives `parser` over `parse_state` through the whole input with the
@@ -89,16 +89,15 @@ pub(crate) mod tests {
             type Result = ();
             type Error = SmtParseError<NonstandardCommandError>;
             const IS_CONCRETE: bool = false;
+        }
 
-            fn consume<'a, C: SmtProduce<'a>>(
-                &mut self,
-                cursor: &mut C,
-            ) -> Result<ControlFlow<()>, Self::Error> {
+        impl<P: SmtParse<SmtSyntaxChecker>, Z: SmtProduce> SmtConsumeFrom<Z> for Drive<'_, P> {
+            fn consume(&mut self, cursor: &mut Z) -> Result<ControlFlow<()>, Self::Error> {
                 while !cursor.is_empty() {
                     if self.result.is_some() {
                         // count the tokens left after the result, except the end of the input
                         while let Some(token) = cursor.next() {
-                            if !matches!(token.category(), SmtTokenCategory::EndOfFile) {
+                            if !matches!(cursor.syntax(&token), SmtSyntaxToken::EndOfFile) {
                                 self.unconsumed += 1;
                             }
                         }

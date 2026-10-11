@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler,
     parser::{SmtParse, SmtParseError, SmtParseState},
-    token::{SmtConsume, SmtProduce},
+    token::{SmtConsume, SmtConsumeFrom, SmtProduce},
 };
 
 /// Adapts a parser to the token consumer a lexer drives.
@@ -46,11 +46,15 @@ impl<H: SmtHandler + ?Sized, P: SmtParse<H>> SmtConsume for SmtParseAdapter<'_, 
     type Result = P::Result;
     type Error = SmtParseError<H::Error>;
     const IS_CONCRETE: bool = false;
+}
 
+impl<H: SmtHandler + ?Sized, P: SmtParse<H>, Z: SmtProduce> SmtConsumeFrom<Z>
+    for SmtParseAdapter<'_, H, P>
+{
     #[inline]
-    fn consume<'a, C: SmtProduce<'a>>(
+    fn consume(
         &mut self,
-        cursor: &mut C,
+        cursor: &mut Z,
     ) -> Result<ControlFlow<P::Result>, SmtParseError<H::Error>> {
         // provide the handler and resources to the parser
         let result = self

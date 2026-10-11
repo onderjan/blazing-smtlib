@@ -272,26 +272,24 @@ impl<'a> SmtToken<'a> {
     pub fn span(&self) -> SmtSpan {
         *self.span
     }
-
-    #[inline]
-    pub fn syntax(self, version: SmtVersion) -> SmtSyntaxToken<'a> {
-        SmtSyntaxToken::from_token(self, version)
-    }
 }
 
 /// A sequential producer of tokens.
-pub trait SmtProduce<'a> {
-    /// Additional information carried by each produced token.
+pub trait SmtProduce {
+    /// The user type of the token.
     ///
-    /// For the tokens produced by the library lexer,
-    /// this is the token span.
-    type Meta;
+    /// The producer must implement [`SmtProduce::syntax`] to view
+    /// the user token type as a library type.
+    type Token: Copy;
 
     /// Lookahead window, set to `()` if not implementing [`SmtProduce::attempt`].
-    type Lookahead: SmtLookahead<'a>;
+    type Lookahead: SmtLookahead<Self::Token>;
+
+    /// Views the user token as a library token.
+    fn syntax<'t>(&self, token: &'t Self::Token) -> SmtSyntaxToken<'t>;
 
     /// Consumes the next token (if any).
-    fn next(&mut self) -> Option<SmtToken<'a>>;
+    fn next(&mut self) -> Option<Self::Token>;
 
     /// Returns the next token (if any) without consuming it.
     ///
@@ -300,7 +298,7 @@ pub trait SmtProduce<'a> {
     /// is some such token waiting.
     ///
     /// Do not forget to consume the token later if it should be taken.
-    fn peek(&self) -> Option<SmtToken<'a>>;
+    fn peek(&self) -> Option<Self::Token>;
 
     /// Returns whether the producer has no tokens left to consume.
     ///
@@ -351,14 +349,22 @@ pub trait SmtProduce<'a> {
 }
 
 /// A lookahead window for [SmtProduce::attempt].
-pub trait SmtLookahead<'a> {
+pub trait SmtLookahead<T> {
     /// Looks at the next token and advances the window.
-    fn next(&mut self) -> Option<SmtToken<'a>>;
+    fn next(&mut self) -> Option<T>;
+
+    /// Views the user token as a library token.
+    fn syntax<'t>(&self, token: &'t T) -> SmtSyntaxToken<'t>;
 }
 
-impl<'a> SmtLookahead<'a> for () {
-    fn next(&mut self) -> Option<SmtToken<'a>> {
+impl<T> SmtLookahead<T> for () {
+    fn next(&mut self) -> Option<T> {
         None
+    }
+
+    /// Views the user token as a library token.
+    fn syntax<'t>(&self, _token: &'t T) -> SmtSyntaxToken<'t> {
+        panic!("unit lookahead cannot view user token as it produces no tokens")
     }
 }
 
@@ -407,18 +413,6 @@ impl<'a> SmtBatchCursor<'a> {
         }
     }
 
-    /// Returns a cursor over a single token.
-    ///
-    /// This can be used for parsing one token using a cursor-parsing function.
-    #[inline]
-    pub(crate) fn single(version: SmtVersion, token: SmtToken<'a>) -> Self {
-        Self::new(
-            version,
-            std::slice::from_ref(token.entry),
-            std::slice::from_ref(token.span),
-        )
-    }
-
     /// Span of the last consumed token in this handover (if any).
     #[inline]
     pub(crate) fn consumed_span(&self) -> Option<SmtSpan> {
@@ -461,9 +455,14 @@ impl<'a> SmtBatchCursor<'a> {
     }
 }
 
-impl<'a> SmtProduce<'a> for SmtBatchCursor<'a> {
-    type Meta = SmtSpan;
+impl<'a> SmtProduce for SmtBatchCursor<'a> {
+    type Token = SmtToken<'a>;
     type Lookahead = SmtTokenWindow<'a>;
+
+    #[inline]
+    fn syntax<'t>(&self, token: &'t SmtToken) -> SmtSyntaxToken<'t> {
+        SmtSyntaxToken::from_token(*token, self.version)
+    }
 
     #[inline]
     fn peek(&self) -> Option<SmtToken<'a>> {
@@ -481,6 +480,7 @@ impl<'a> SmtProduce<'a> for SmtBatchCursor<'a> {
     #[inline]
     fn attempt<R>(&mut self, extract: impl Fn(&mut SmtTokenWindow<'a>) -> Option<R>) -> Option<R> {
         let mut window = SmtTokenWindow {
+            version: self.version,
             entries: self.entries,
             spans: self.spans,
             next: self.next,
@@ -519,12 +519,52 @@ impl<'a> SmtProduce<'a> for SmtBatchCursor<'a> {
 /// The tokens ahead of a cursor, as the extractor of [`SmtBatchCursor::attempt`]
 /// sees them: they can only be taken in order.
 pub struct SmtTokenWindow<'a> {
+    version: SmtVersion,
     entries: &'a [Option<(InnerCategory, &'a [u8])>],
     spans: &'a [SmtSpan],
     next: usize,
 }
 
-impl<'a> SmtLookahead<'a> for SmtTokenWindow<'a> {
+pub(crate) struct SingleTokenProducer<'a, P: SmtProduce> {
+    cursor: &'a P,
+    token: Option<P::Token>,
+}
+
+impl<'a, P: SmtProduce> SingleTokenProducer<'a, P> {
+    pub fn new(cursor: &'a P, token: P::Token) -> Self {
+        Self {
+            cursor,
+            token: Some(token),
+        }
+    }
+}
+
+impl<'a, P: SmtProduce> SmtProduce for SingleTokenProducer<'a, P> {
+    type Token = P::Token;
+    type Lookahead = ();
+
+    fn syntax<'t>(&self, token: &'t Self::Token) -> SmtSyntaxToken<'t> {
+        self.cursor.syntax(token)
+    }
+
+    fn next(&mut self) -> Option<Self::Token> {
+        self.token.take()
+    }
+
+    fn peek(&self) -> Option<Self::Token> {
+        self.token
+    }
+
+    fn version(&self) -> SmtVersion {
+        self.cursor.version()
+    }
+
+    fn set_version(&mut self, _version: SmtVersion) {
+        panic!("single token producer cannot set version")
+    }
+}
+
+impl<'a> SmtLookahead<SmtToken<'a>> for SmtTokenWindow<'a> {
     fn next(&mut self) -> Option<SmtToken<'a>> {
         let token = match (self.entries.get(self.next), self.spans.get(self.next)) {
             (Some(entry), Some(span)) => SmtToken::new(entry, span),
@@ -532,6 +572,10 @@ impl<'a> SmtLookahead<'a> for SmtTokenWindow<'a> {
         };
         self.next += 1;
         Some(token)
+    }
+
+    fn syntax<'t>(&self, token: &'t SmtToken<'a>) -> SmtSyntaxToken<'t> {
+        SmtSyntaxToken::from_token(*token, self.version)
     }
 }
 
@@ -553,7 +597,10 @@ pub trait SmtConsume {
     /// it is not interested in whitespace and comments,
     /// and the caller must not hand them over for consumption.
     const IS_CONCRETE: bool;
+}
 
+/// A sequential consumer of tokens for given producers.
+pub trait SmtConsumeFrom<Z: SmtProduce>: SmtConsume {
     /// Consumes the tokens handed over in the cursor, in order.
     ///
     /// The caller must ensure that the cursor contains at least one token.
@@ -571,10 +618,7 @@ pub trait SmtConsume {
     ///
     /// If the consumer returns [`Result::Err`], it has failed at the last
     /// consumed token. The state of the consumer is unspecified.
-    fn consume<'a, C: SmtProduce<'a>>(
-        &mut self,
-        cursor: &mut C,
-    ) -> Result<ControlFlow<Self::Result>, Self::Error>;
+    fn consume(&mut self, cursor: &mut Z) -> Result<ControlFlow<Self::Result>, Self::Error>;
 }
 
 /// Mutable references over token consumers are token consumers.
@@ -582,12 +626,12 @@ impl<T: SmtConsume + ?Sized> SmtConsume for &mut T {
     type Result = T::Result;
     type Error = T::Error;
     const IS_CONCRETE: bool = T::IS_CONCRETE;
+}
 
+/// Mutable references over token consumers are token consumers.
+impl<Z: SmtProduce, T: SmtConsumeFrom<Z> + ?Sized> SmtConsumeFrom<Z> for &mut T {
     #[inline]
-    fn consume<'a, C: SmtProduce<'a>>(
-        &mut self,
-        cursor: &mut C,
-    ) -> Result<ControlFlow<Self::Result>, Self::Error> {
+    fn consume(&mut self, cursor: &mut Z) -> Result<ControlFlow<Self::Result>, Self::Error> {
         (**self).consume(cursor)
     }
 }

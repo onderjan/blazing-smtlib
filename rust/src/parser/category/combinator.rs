@@ -6,7 +6,7 @@ use crate::{
         SmtCloseParenParser, SmtOpenParenParser, SmtParse, SmtParseError, SmtParseState,
         SmtSyntaxErrorKind,
     },
-    token::{SmtProduce, SmtTokenCategory},
+    token::{SmtProduce, SmtSyntaxToken, SmtTokenCategory},
 };
 
 /// Parses using the first parser, then the second, then returns the result tuple.
@@ -41,11 +41,11 @@ impl<H: SmtHandler, P1: SmtParse<H>, P2: SmtParse<H>> SmtParse<H> for SmtPairPar
     type Result = (P1::Result, P2::Result);
 
     #[inline]
-    fn parse<'a, C: SmtProduce<'a>>(
+    fn parse<Z: SmtProduce>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut C,
+        cursor: &mut Z,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         // progress the first parser until it breaks or the tokens run out
         if self.first_result.is_none() {
@@ -97,11 +97,11 @@ impl<H: SmtHandler, S: SmtParse<H>> SmtParse<H> for SmtClosedParser<H, S> {
     type Result = S::Result;
 
     #[inline]
-    fn parse<'a, C: SmtProduce<'a>>(
+    fn parse<Z: SmtProduce>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut C,
+        cursor: &mut Z,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         Ok(self
             .inner
@@ -136,11 +136,11 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtOpenedParser<H, P> {
     type Result = P::Result;
 
     #[inline]
-    fn parse<'a, C: SmtProduce<'a>>(
+    fn parse<Z: SmtProduce>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut C,
+        cursor: &mut Z,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         Ok(self
             .inner
@@ -188,11 +188,11 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtClosedMultipleParser<H, P
     type Result = Vec<P::Result>;
 
     #[inline]
-    fn parse<'a, C: SmtProduce<'a>>(
+    fn parse<Z: SmtProduce>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut C,
+        cursor: &mut Z,
     ) -> Result<ControlFlow<Vec<P::Result>>, SmtParseError<H::Error>> {
         self.resource.parse(cursor, |cursor| {
             self.inner.parse(handler, parse_state, cursor)
@@ -214,15 +214,15 @@ impl<T> ClosedMultipleResource<T> {
         }
     }
 
-    pub(crate) fn parse<'a, C: SmtProduce<'a>, E>(
+    pub(crate) fn parse<Z: SmtProduce, E>(
         &mut self,
-        cursor: &mut C,
-        mut element: impl FnMut(&mut C) -> Result<ControlFlow<T>, SmtParseError<E>>,
+        cursor: &mut Z,
+        mut element: impl FnMut(&mut Z) -> Result<ControlFlow<T>, SmtParseError<E>>,
     ) -> Result<ControlFlow<Vec<T>>, SmtParseError<E>> {
         while let Some(token) = cursor.peek() {
             if self.outside {
                 // we are outside, a closing parenthesis ends processing
-                if matches!(token.category(), SmtTokenCategory::ParenClose) {
+                if matches!(cursor.syntax(&token), SmtSyntaxToken::ParenClose) {
                     // consume the peeked closing parenthesis
                     let _ = cursor.next();
                     return Ok(ControlFlow::Break(self.items.drain(..).collect()));
@@ -294,16 +294,16 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtClosedMaximumParser<H, P> {
 impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtClosedMaximumParser<H, P> {
     type Result = Vec<P::Result>;
 
-    fn parse<'a, C: SmtProduce<'a>>(
+    fn parse<Z: SmtProduce>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut C,
+        cursor: &mut Z,
     ) -> Result<ControlFlow<Vec<P::Result>>, SmtParseError<H::Error>> {
         while let Some(peeked) = cursor.peek() {
             if self.outside {
                 // we are outside, a closing parenthesis ends processing
-                if matches!(peeked.category(), SmtTokenCategory::ParenClose) {
+                if matches!(cursor.syntax(&peeked), SmtSyntaxToken::ParenClose) {
                     // consume the peeked closing parenthesis
                     let _ = cursor.next();
                     let results = self.results.drain(..).collect();
@@ -372,7 +372,7 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParenMaximumParser<H, P> {
 impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtParenMaximumParser<H, P> {
     type Result = Vec<P::Result>;
 
-    fn parse<'a, C: SmtProduce<'a>>(
+    fn parse<C: SmtProduce>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
@@ -393,7 +393,7 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtParenMaximumParser<H, P> 
                 let Some(token) = cursor.next() else {
                     return Ok(ControlFlow::Continue(()));
                 };
-                SmtOpenParenParser::expect(token)?;
+                SmtOpenParenParser::expect(cursor, token)?;
                 self.is_opened = true;
             }
         }

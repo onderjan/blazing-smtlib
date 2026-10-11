@@ -6,7 +6,7 @@ use crate::{
         Arena, IdentSlot, SmtCloseParenParser, SmtOpenParenParser, SmtParse, SmtParseError,
         SmtParseState, SmtSyntaxErrorKind, SortSlot, TextHandle, parse_by_token,
     },
-    token::{SmtProduce, SmtSyntaxToken, SmtToken, SmtVersion},
+    token::{SmtProduce, SmtSyntaxToken},
 };
 
 /// Parses a sorted variable: parentheses-enclosed pair of a symbol and a sort.
@@ -35,7 +35,7 @@ impl<H: SmtHandler> SmtParse<H> for SmtSortedVarParser<H> {
     type Result = (SmtSymbolBuf, H::Sort);
 
     #[inline]
-    fn parse<'a, C: SmtProduce<'a>>(
+    fn parse<C: SmtProduce>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
@@ -49,8 +49,8 @@ impl<H: SmtHandler> SmtParse<H> for SmtSortedVarParser<H> {
             arena,
             ..
         } = parse_state;
-        parse_by_token(cursor, |version, token| {
-            match sorted_var_slot.progress(handler, arena, sort_slot, ident_slot, version, token)? {
+        parse_by_token(cursor, |cursor, token| {
+            match sorted_var_slot.progress(handler, arena, sort_slot, ident_slot, cursor, token)? {
                 ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
                 ControlFlow::Break((name, sort)) => Ok(ControlFlow::Break(
                     arena.hand_over_sorted_var(name, sort, |name, sort| (name.into_owned(), sort)),
@@ -95,14 +95,14 @@ impl<H: SmtHandler + ?Sized> SortedVarSlot<H> {
     }
 
     #[inline]
-    pub(crate) fn progress(
+    pub(crate) fn progress<Z: SmtProduce>(
         &mut self,
         handler: &mut H,
         arena: &mut Arena<H>,
         sort_slot: &mut SortSlot<H>,
         ident_slot: &mut IdentSlot,
-        version: SmtVersion,
-        token: SmtToken,
+        cursor: &Z,
+        token: Z::Token,
     ) -> Result<ControlFlow<SortedVarHandle<H>>, SmtParseError<H::Error>> {
         // The sequential progress is as follows:
         // 1. Not open, expect an opening parenthesis.
@@ -114,14 +114,14 @@ impl<H: SmtHandler + ?Sized> SortedVarSlot<H> {
 
         if let Some(sorted_var) = self.sorted_var.take() {
             // after the sort, waiting for ")"
-            SmtCloseParenParser::expect(token)?;
+            SmtCloseParenParser::expect(cursor, token)?;
             // the slot is back in its initial state
             return Ok(ControlFlow::Break(sorted_var));
         }
 
         if let Some(name) = self.name.take() {
             // after the name, parsing the sort
-            match sort_slot.progress(handler, arena, ident_slot, version, token)? {
+            match sort_slot.progress(handler, arena, ident_slot, cursor, token)? {
                 ControlFlow::Continue(()) => self.name = Some(name),
                 ControlFlow::Break(sort) => self.sorted_var = Some((name, sort)),
             }
@@ -130,7 +130,7 @@ impl<H: SmtHandler + ?Sized> SortedVarSlot<H> {
 
         if self.is_open {
             // after "(", waiting for the name, which goes to the arena text
-            let SmtSyntaxToken::Symbol(name) = token.syntax(version) else {
+            let SmtSyntaxToken::Symbol(name) = cursor.syntax(&token) else {
                 return Err(SmtParseError::category_error(
                     SmtSyntaxErrorKind::ExpectedSymbol,
                 ));
@@ -140,7 +140,7 @@ impl<H: SmtHandler + ?Sized> SortedVarSlot<H> {
         } else {
             // waiting for "("
             debug_assert!(self.is_pristine(), "must be pristine when starting");
-            SmtOpenParenParser::expect(token)?;
+            SmtOpenParenParser::expect(cursor, token)?;
             self.is_open = true;
         }
         Ok(ControlFlow::Continue(()))
