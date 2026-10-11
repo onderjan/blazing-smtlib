@@ -6,7 +6,7 @@ use crate::{
         SmtCommandOutcome, SmtCommandParser, SmtParse, SmtParseError, SmtParseState,
         SmtSyntaxErrorKind,
     },
-    token::{SmtProduce, SmtVersionPosture},
+    token::{SmtProduce, SmtVersionPosture, SmtVersionRefused},
 };
 
 /// Parses an SMT-LIB script: a sequence of commands, each delivered to the
@@ -67,12 +67,8 @@ impl<H: SmtCommandHandler> SmtParse<H> for SmtScriptParser<H> {
                     // a command has ended: parse the next one
                 }
                 ControlFlow::Break(SmtCommandOutcome::SetVersion(version)) => {
-                    // ensure the version is allowed by the posture
-                    if !self.posture.allowed().contains(&version) {
-                        return Err(SmtParseError::category_error(
-                            SmtSyntaxErrorKind::UnsupportedVersion,
-                        ));
-                    }
+                    // ensure the posture allows setting a new version
+                    // do this before checking the version so the refusal is consistent
                     if let Some(max_declarations) = self.posture.max_declarations()
                         && self.num_version_declarations >= max_declarations
                     {
@@ -80,9 +76,25 @@ impl<H: SmtCommandHandler> SmtParse<H> for SmtScriptParser<H> {
                             SmtSyntaxErrorKind::TooManyVersionDeclarations(max_declarations),
                         ));
                     }
-                    // allowed, set version on the cursor
-                    cursor.set_version(version);
-                    self.num_version_declarations += 1;
+                    // ensure the version itself is allowed by the posture
+                    if !self.posture.allowed().contains(&version) {
+                        return Err(SmtParseError::category_error(
+                            SmtSyntaxErrorKind::UnsupportedVersion,
+                        ));
+                    }
+                    // allowed by the posture, try to set version on the cursor
+                    match cursor.set_version(version) {
+                        Ok(()) => {
+                            // success, increase the number of version declarations
+                            self.num_version_declarations += 1;
+                        }
+                        Err(SmtVersionRefused) => {
+                            // the producer itself does not support the version
+                            return Err(SmtParseError::category_error(
+                                SmtSyntaxErrorKind::UnsupportedVersion,
+                            ));
+                        }
+                    }
                 }
                 ControlFlow::Break(SmtCommandOutcome::Exit) => {
                     // the exit command ends the script: stop after it

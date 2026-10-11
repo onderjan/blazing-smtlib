@@ -171,11 +171,15 @@ impl<'a> SmtConsumeFrom<SmtBatchCursor<'a>> for Recorder<'_> {
             Reply::Fail { .. } => Err(()),
             Reply::Finish { .. } => Ok(ControlFlow::Break(())),
             Reply::Switch { version, .. } => {
-                cursor.set_version(version);
+                cursor
+                    .set_version(version)
+                    .expect("lexer should switch version");
                 Ok(ControlFlow::Continue(()))
             }
             Reply::SwitchAndFinish { version, .. } => {
-                cursor.set_version(version);
+                cursor
+                    .set_version(version)
+                    .expect("lexer should switch version");
                 Ok(ControlFlow::Break(()))
             }
         }

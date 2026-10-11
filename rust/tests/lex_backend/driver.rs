@@ -172,11 +172,15 @@ impl<'a, const WHITESPACE: bool> SmtConsumeFrom<SmtBatchCursor<'a>> for Scripted
                     Reply::Finish(_) => Ok(ControlFlow::Break(())),
                     Reply::Fail(_) => Err("plan"),
                     Reply::Switch(_, version) => {
-                        cursor.set_version(version);
+                        cursor
+                            .set_version(version)
+                            .expect("lexer should switch version");
                         Ok(ControlFlow::Continue(()))
                     }
                     Reply::SwitchAndFinish(_, version) => {
-                        cursor.set_version(version);
+                        cursor
+                            .set_version(version)
+                            .expect("lexer should switch version");
                         Ok(ControlFlow::Break(()))
                     }
                 }
@@ -201,7 +205,9 @@ impl<'a, const WHITESPACE: bool> SmtConsumeFrom<SmtBatchCursor<'a>> for Scripted
                             return Err("bad");
                         }
                         SmtTokenCategory::UnquotedSymbol if token.content() == b"to-2.0" => {
-                            cursor.set_version(SmtVersion::V2_0);
+                            cursor
+                                .set_version(SmtVersion::V2_0)
+                                .expect("lexer should switch version");
                         }
                         _ => {}
                     }

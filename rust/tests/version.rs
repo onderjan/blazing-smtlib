@@ -430,9 +430,14 @@ fn the_number_of_declarations_is_limited() {
     let input = format!("{two}(declare-const match Bool)");
     assert_eq!(read(&input, SmtVersion::V2_7, unlimited), Ok(()));
 
-    // a rejected version is reported before the limit
+    // the limit is reported before a rejected version
     let result = read_default("(set-info :smt-lib-version 2.6)(set-info :smt-lib-version 2.0)");
-    assert_syntax_error(result, SmtSyntaxErrorKind::UnsupportedVersion, 61, 62);
+    assert_syntax_error(
+        result,
+        SmtSyntaxErrorKind::TooManyVersionDeclarations(1),
+        61,
+        62,
+    );
 }
 
 #[test]

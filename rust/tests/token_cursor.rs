@@ -224,7 +224,9 @@ fn consuming_all_empties_the_cursor_at_its_end() {
         b"a b c ",
         check!(|cursor| {
             cursor.next().expect("a token");
-            cursor.set_version(SmtVersion::V2_0);
+            cursor
+                .set_version(SmtVersion::V2_0)
+                .expect("lexer should switch version");
             cursor.consume_all();
             assert!(cursor.is_empty());
             assert_eq!(cursor.next(), None);
@@ -391,7 +393,9 @@ fn a_version_with_the_same_lexical_rules_keeps_the_tokens_ahead() {
             let tokens = ahead(cursor);
             cursor.next();
             cursor.next();
-            cursor.set_version(SmtVersion::V2_5);
+            cursor
+                .set_version(SmtVersion::V2_5)
+                .expect("lexer should switch version");
             assert_eq!(cursor.version(), SmtVersion::V2_5);
             assert!(!cursor.is_empty());
             assert_eq!(ahead(cursor), tokens[2..]);
@@ -407,7 +411,9 @@ fn a_version_with_other_lexical_rules_fixes_the_cursor_at_the_consumed_position(
         check!(|cursor| {
             cursor.next();
             let second = cursor.next().expect("a token");
-            cursor.set_version(SmtVersion::V2_0);
+            cursor
+                .set_version(SmtVersion::V2_0)
+                .expect("lexer should switch version");
             assert_eq!(cursor.version(), SmtVersion::V2_0);
             // the tokens ahead were lexed under the old rules: nothing more comes
             // out of the cursor or of a window

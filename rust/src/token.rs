@@ -274,6 +274,10 @@ impl<'a> SmtToken<'a> {
     }
 }
 
+/// Producer refused to switch to a requested version.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SmtVersionRefused;
+
 /// A sequential producer of tokens.
 pub trait SmtProduce {
     /// The user type of the token.
@@ -285,7 +289,7 @@ pub trait SmtProduce {
     /// Lookahead window, set to `()` if not implementing [`SmtProduce::attempt`].
     type Lookahead: SmtLookahead<Self::Token>;
 
-    /// Views the user token as a library token.
+    /// Views the user token as a library token under the version in force.
     fn syntax<'t>(&self, token: &'t Self::Token) -> SmtSyntaxToken<'t>;
 
     /// Consumes the next token (if any).
@@ -336,16 +340,24 @@ pub trait SmtProduce {
     ///
     /// The version is guaranteed not to change during a call
     /// to the consumer except as a result of the consumer calling
-    /// [`SmtProduce::set_version`].
+    /// [`SmtProduce::set_version`] and the producer accepting.
     fn version(&self) -> SmtVersion;
 
     /// Sets the SMT-LIB version that should apply from now on.
     ///
-    /// This can adjust the non-consumed tokens so they correspond
-    /// to the set version. There is no guarantee on their shape
-    /// or whether any remain at all; the caller must not use any
-    /// information gathered on them beforehand.
-    fn set_version(&mut self, version: SmtVersion);
+    /// If the producer returns [`Result::Ok`], it has switched
+    /// to the new version, and will return it in subsequent
+    /// calls of [`SmtProduce::version`]. The version change
+    /// applies between the last consumed and first unconsumed
+    /// token, and the producer can adjust the non-consumed tokens
+    /// so they correspond to the set version. There is no guarantee
+    /// on their shape or whether any remain at all; the caller must
+    /// not use any information gathered on them beforehand.
+    ///
+    /// If the producer returns [`Result::Err`], it has refused
+    /// the version set request. It guarantees that no changes
+    /// were made, as if the method was never called.
+    fn set_version(&mut self, version: SmtVersion) -> Result<(), SmtVersionRefused>;
 }
 
 /// A lookahead window for [SmtProduce::attempt].
@@ -505,7 +517,9 @@ impl<'a> SmtProduce for SmtBatchCursor<'a> {
         self.version
     }
 
-    fn set_version(&mut self, version: SmtVersion) {
+    fn set_version(&mut self, version: SmtVersion) -> Result<(), SmtVersionRefused> {
+        // the lexer supports all versions,
+        // but needs to relex when switching between 2.0 and 2.5+
         let is_current_2_0 = self.version == SmtVersion::V2_0;
         let is_new_2_0 = version == SmtVersion::V2_0;
         if is_current_2_0 != is_new_2_0 {
@@ -513,6 +527,7 @@ impl<'a> SmtProduce for SmtBatchCursor<'a> {
             self.relex();
         }
         self.version = version;
+        Ok(())
     }
 }
 
@@ -559,8 +574,9 @@ impl<'a, P: SmtProduce> SmtProduce for SingleTokenProducer<'a, P> {
         self.cursor.version()
     }
 
-    fn set_version(&mut self, _version: SmtVersion) {
-        panic!("single token producer cannot set version")
+    fn set_version(&mut self, _version: SmtVersion) -> Result<(), SmtVersionRefused> {
+        // single-token producer does not support switching versions
+        Err(SmtVersionRefused)
     }
 }
 
