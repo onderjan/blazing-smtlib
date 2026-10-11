@@ -644,7 +644,8 @@ pub trait SmtConsumeFrom<Z: SmtProduce>: SmtConsume {
     /// If the consumer returns [`ControlFlow::Continue`], the consumer is
     /// not finished yet and is ready to consume more tokens. Tokens that
     /// remain unconsumed in the cursor must be handed over again before
-    /// any new ones.
+    /// any new ones. The consumer must not return [`ControlFlow::Continue`]
+    /// when an EOF token is encountered.
     ///
     /// If the consumer returns [`ControlFlow::Break`], it has finished
     /// consuming the current value, is returning a result, and is ready

@@ -225,12 +225,12 @@ impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>> SmtLexer<C> {
     /// Subsequent bytes are discarded until EOF, which resets
     /// the lexer.
     ///
-    /// If the token consumer returns [`ControlFlow::Continue`] on all tokens
-    /// including EOF, the lexer resets itself after EOF
-    /// and returns [`ControlFlow::Continue`].
-    ///
     /// If an error occurs, the lexer moves into a failure state where
     /// all further lexing calls panic.
+    ///
+    /// The contract of the token consumer forbids it from
+    /// returning [`ControlFlow::Continue`] on the EOF token,
+    /// and the lexer panics if it does.
     pub fn lex_all(&mut self, input: &[u8]) -> SmtLexResult<C> {
         match self.lex_slice(input)? {
             ControlFlow::Break(result) => {
@@ -397,14 +397,13 @@ impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
     ///
     /// If the token consumer returns [`ControlFlow::Break`] on the EOF token,
     /// the lexer passes it through, adding the break location.
-    /// Subsequent bytes are discarded until EOF, which resets
-    /// the lexer.
-    ///
-    /// If the token consumer returns [`ControlFlow::Continue`] on the EOF token,
-    /// the lexer resets itself and returns [`ControlFlow::Continue`].
     ///
     /// If an error occurs, the fail-fast lexer moves into
     /// a failure state and all further lexing calls panic.
+    ///
+    /// The contract of the token consumer forbids it from
+    /// returning [`ControlFlow::Continue`] on the EOF token,
+    /// and the lexer panics if it does.
     pub fn lex_eof(&mut self) -> SmtLexResult<C> {
         if self.discard_from.is_some() {
             // no need to feed anything, just reset the lexer
@@ -555,10 +554,12 @@ impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
         });
 
         match result {
-            Ok(()) => {}
+            Ok(()) => {
+                // no break out
+            }
             Err(interrupted) => match interrupted.result {
                 Ok(Stop::Relex) | Ok(Stop::Discard) => {
-                    // we were asked to relex / discard, but the file is ending anyway, nothing to do
+                    // no break out
                 }
                 Ok(Stop::Finished(result)) => {
                     // the consumer is done with the input
@@ -574,8 +575,8 @@ impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
             },
         }
         // everything processed, there was no break out
-        // the lexer will be reset outside, just continue
-        Ok(ControlFlow::Continue(()))
+        // the consumer has broken its contract by continuing on EOF
+        panic!("consumer must not continue on EOF")
     }
 
     fn lex_slice_inner(&mut self, slice: &[u8]) -> InnerLexResult<C> {
