@@ -12,8 +12,8 @@ use blazing_smtlib::{
     SmtLocation,
     lexer::{SmtLexErrorCause, SmtLexRecovery, SmtLexer},
     token::{
-        SmtConsume, SmtLookahead, SmtProduce, SmtRecover, SmtReserved, SmtSyntaxToken, SmtToken,
-        SmtTokenCategory, SmtVersion,
+        SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtLookahead, SmtProduce, SmtRecover,
+        SmtReserved, SmtSyntaxToken, SmtToken, SmtTokenCategory, SmtVersion,
     },
 };
 
@@ -115,10 +115,12 @@ impl<const WHITESPACE: bool> SmtConsume for Scripted<WHITESPACE> {
     /// The name of what made the consumer fail.
     type Error = &'static str;
     const IS_CONCRETE: bool = WHITESPACE;
+}
 
-    fn consume<'a, P: SmtProduce<'a>>(
+impl<'a, const WHITESPACE: bool> SmtConsumeFrom<SmtBatchCursor<'a>> for Scripted<WHITESPACE> {
+    fn consume(
         &mut self,
-        cursor: &mut P,
+        cursor: &mut SmtBatchCursor<'a>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         // the version the tokens of this hand-over were lexed under
         let version = cursor.version();

@@ -3,8 +3,8 @@
 //!
 //! A cursor over a batch can only come from the lexer, so every test lexes a
 //! small input and runs its checks inside the consumer, on each hand-over.
-//! The consumer sees the cursor only as a producer, so the checks go through
-//! the producer trait, as every consumer's do.
+//! The consumer is paired with the lexer and sees its cursor, so the checks
+//! can look at the lexer's tokens in full.
 
 use std::cell::RefCell;
 use std::convert::Infallible;
@@ -14,12 +14,15 @@ use blazing_smtlib::{
     SmtSyntaxChecker,
     lexer::SmtLexer,
     parser::{SmtParse, SmtParseState, SmtSortParser, SmtTermParser},
-    token::{SmtConsume, SmtLookahead, SmtProduce, SmtToken, SmtTokenCategory, SmtVersion},
+    token::{
+        SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtLookahead, SmtProduce, SmtToken,
+        SmtTokenCategory, SmtVersion,
+    },
 };
 
-/// A check run on a hand-over, generic over the producer as a consumer is.
+/// A check run on a hand-over of the lexer.
 trait Check {
-    fn check<'a, P: SmtProduce<'a>>(&mut self, cursor: &mut P);
+    fn check(&mut self, cursor: &mut SmtBatchCursor<'_>);
 }
 
 /// A check from a block over the cursor, for checks that keep no state
@@ -28,7 +31,7 @@ macro_rules! check {
     (|$cursor:ident| $body:block) => {{
         struct Body;
         impl Check for Body {
-            fn check<'a, P: SmtProduce<'a>>(&mut self, $cursor: &mut P) $body
+            fn check(&mut self, $cursor: &mut SmtBatchCursor<'_>) $body
         }
         Body
     }};
@@ -56,10 +59,12 @@ impl<C: Check> SmtConsume for Probe<C> {
     type Result = ();
     type Error = Infallible;
     const IS_CONCRETE: bool = false;
+}
 
-    fn consume<'a, P: SmtProduce<'a>>(
+impl<'a, C: Check> SmtConsumeFrom<SmtBatchCursor<'a>> for Probe<C> {
+    fn consume(
         &mut self,
-        cursor: &mut P,
+        cursor: &mut SmtBatchCursor<'a>,
     ) -> Result<ControlFlow<Self::Result>, Infallible> {
         let run = match self.which {
             Which::Every => true,
@@ -121,7 +126,7 @@ fn on_first_batch(input: &[u8], check: impl Check) {
 /// A consumer has no way to look at tokens without consuming them, so this
 /// goes through an attempt that takes every token and then fails, and
 /// carries the tokens out of the extractor in a cell.
-fn ahead<'a, P: SmtProduce<'a>>(cursor: &mut P) -> Vec<SmtToken<'a>> {
+fn ahead<'a>(cursor: &mut SmtBatchCursor<'a>) -> Vec<SmtToken<'a>> {
     let seen = RefCell::new(Vec::new());
     let failed: Option<()> = cursor.attempt(|window| {
         while let Some(token) = window.next() {
@@ -180,7 +185,7 @@ fn cursor_over_the_end_of_file_batch_yields_it_alone() {
         batches: usize,
     }
     impl Check for Second {
-        fn check<'a, P: SmtProduce<'a>>(&mut self, cursor: &mut P) {
+        fn check(&mut self, cursor: &mut SmtBatchCursor<'_>) {
             self.batches += 1;
             if self.batches == 2 {
                 assert_eq!(ahead(cursor).len(), 1);
@@ -338,7 +343,7 @@ fn an_extractor_can_choose_among_shapes_that_share_a_start() {
         Open(Vec<u8>),
         OpenOpen(Vec<u8>),
     }
-    fn shape<'a, P: SmtProduce<'a>>(cursor: &mut P) -> Option<Shape> {
+    fn shape(cursor: &mut SmtBatchCursor<'_>) -> Option<Shape> {
         cursor.attempt(|window| {
             if window.next()?.category() != SmtTokenCategory::ParenOpen {
                 return None;
@@ -432,10 +437,12 @@ impl<P: SmtParse<SmtSyntaxChecker>> SmtConsume for Drive<P> {
     type Result = ();
     type Error = Infallible;
     const IS_CONCRETE: bool = false;
+}
 
-    fn consume<'a, C: SmtProduce<'a>>(
+impl<'a, P: SmtParse<SmtSyntaxChecker>> SmtConsumeFrom<SmtBatchCursor<'a>> for Drive<P> {
+    fn consume(
         &mut self,
-        cursor: &mut C,
+        cursor: &mut SmtBatchCursor<'a>,
     ) -> Result<ControlFlow<Self::Result>, Infallible> {
         if !self.finished {
             let before = ahead(cursor).len();

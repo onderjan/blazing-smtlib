@@ -26,7 +26,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use blazing_smtlib::{
     lexer::SmtLexer,
-    token::{SmtConsume, SmtProduce, SmtSyntaxToken, SmtToken, SmtVersion},
+    token::{
+        SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtProduce, SmtSyntaxToken, SmtToken,
+        SmtVersion,
+    },
 };
 
 /// Global allocator that counts allocations and tracks the live heap.
@@ -105,10 +108,12 @@ impl SmtConsume for Census {
     type Result = ();
     type Error = Infallible;
     const IS_CONCRETE: bool = false;
+}
 
-    fn consume<'a, P: SmtProduce<'a>>(
+impl<'a> SmtConsumeFrom<SmtBatchCursor<'a>> for Census {
+    fn consume(
         &mut self,
-        cursor: &mut P,
+        cursor: &mut SmtBatchCursor<'a>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         while let Some(token) = cursor.next() {
             self.tally(token);

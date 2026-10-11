@@ -35,7 +35,10 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use blazing_smtlib::{
     SmtLocation,
     lexer::{SmtLexError, SmtLexErrorCause, SmtLexer, SmtLexicalErrorKind},
-    token::{SmtConsume, SmtLookahead, SmtProduce, SmtToken, SmtTokenCategory, SmtVersion},
+    token::{
+        SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtLookahead, SmtProduce, SmtToken,
+        SmtTokenCategory, SmtVersion,
+    },
 };
 
 use lex_backend::{Feed, Line, Loc, Options, driver};
@@ -132,10 +135,12 @@ impl SmtConsume for Recorder<'_> {
     type Result = ();
     type Error = ();
     const IS_CONCRETE: bool = false;
+}
 
-    fn consume<'a, P: SmtProduce<'a>>(
+impl<'a> SmtConsumeFrom<SmtBatchCursor<'a>> for Recorder<'_> {
+    fn consume(
         &mut self,
-        cursor: &mut P,
+        cursor: &mut SmtBatchCursor<'a>,
     ) -> Result<ControlFlow<Self::Result>, ()> {
         // Record every token of the hand-over, also those the reply will not
         // take. A consumer has no way to look at tokens without consuming

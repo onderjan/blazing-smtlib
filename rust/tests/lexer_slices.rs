@@ -15,7 +15,7 @@ use std::ops::ControlFlow;
 use blazing_smtlib::{
     SmtLocation,
     lexer::{SmtLexer, SmtLexicalErrorKind},
-    token::{SmtConsume, SmtProduce, SmtTokenCategory, SmtVersion},
+    token::{SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtProduce, SmtTokenCategory, SmtVersion},
 };
 
 use lex_backend::{Feed, LexedError, LexedToken, loc};
@@ -700,10 +700,12 @@ impl SmtConsume for RejectNth {
     type Result = ();
     type Error = ();
     const IS_CONCRETE: bool = false;
+}
 
-    fn consume<'a, P: SmtProduce<'a>>(
+impl<'a> SmtConsumeFrom<SmtBatchCursor<'a>> for RejectNth {
+    fn consume(
         &mut self,
-        cursor: &mut P,
+        cursor: &mut SmtBatchCursor<'a>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         while cursor.next().is_some() {
             if self.remaining == 0 {

@@ -36,7 +36,10 @@ use blazing_smtlib::{
         SmtParseError, SmtParseErrorCause, SmtParseState, SmtQualifiedIdentParser, SmtSExprParser,
         SmtSortParser, SmtStringParser, SmtSymbolParser, SmtSyntaxErrorKind, SmtTermParser,
     },
-    token::{SmtConsume, SmtProduce, SmtReserved, SmtTokenCategory, SmtVersion},
+    token::{
+        SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtProduce, SmtReserved, SmtTokenCategory,
+        SmtVersion,
+    },
 };
 
 // --- Test handler rendering everything it receives back into text ---
@@ -365,11 +368,10 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtConsume for Drive<'_, H, P> {
     type Result = ();
     type Error = SmtParseError<H::Error>;
     const IS_CONCRETE: bool = false;
+}
 
-    fn consume<'a, C: SmtProduce<'a>>(
-        &mut self,
-        cursor: &mut C,
-    ) -> Result<ControlFlow<()>, Self::Error> {
+impl<'a, H: SmtHandler, P: SmtParse<H>> SmtConsumeFrom<SmtBatchCursor<'a>> for Drive<'_, H, P> {
+    fn consume(&mut self, cursor: &mut SmtBatchCursor<'a>) -> Result<ControlFlow<()>, Self::Error> {
         while !cursor.is_empty() {
             if self.remaining == 0 {
                 // count the tokens left after the wanted results, except the end of the input

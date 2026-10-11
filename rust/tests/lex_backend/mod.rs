@@ -34,7 +34,10 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use blazing_smtlib::{
     SmtLocation,
     lexer::{SmtLexErrorCause, SmtLexer, SmtLexicalErrorKind},
-    token::{SmtConsume, SmtProduce, SmtReserved, SmtSyntaxToken, SmtTokenCategory, SmtVersion},
+    token::{
+        SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtProduce, SmtReserved, SmtSyntaxToken,
+        SmtTokenCategory, SmtVersion,
+    },
 };
 
 /// A location as `(offset, line, column)`, all zero-based.
@@ -179,10 +182,12 @@ impl<const WHITESPACE: bool> SmtConsume for Collect<'_, WHITESPACE> {
     type Result = ();
     type Error = Infallible;
     const IS_CONCRETE: bool = WHITESPACE;
+}
 
-    fn consume<'a, P: SmtProduce<'a>>(
+impl<'a, const WHITESPACE: bool> SmtConsumeFrom<SmtBatchCursor<'a>> for Collect<'_, WHITESPACE> {
+    fn consume(
         &mut self,
-        cursor: &mut P,
+        cursor: &mut SmtBatchCursor<'a>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         while let Some(token) = cursor.next() {
             let kind = match SmtSyntaxToken::from_token(token, self.version) {
