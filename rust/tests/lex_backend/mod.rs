@@ -148,7 +148,8 @@ pub fn boundaries_not_applicable() -> bool {
 }
 
 /// Runs a fresh lexer of the version over the feeds, stopping at the first
-/// error. The handler behind it takes every token and always continues.
+/// error. The consumer behind it takes every token and breaks only at the
+/// end-of-file token.
 pub fn lex(version: SmtVersion, feeds: &[Feed<'_>]) -> Lexed {
     match lean_driver() {
         Some(path) => lex_with_driver(&path, version, feeds),
@@ -171,8 +172,8 @@ pub fn lex_pieces(version: SmtVersion, pieces: &[&[u8]]) -> Lexed {
 
 // --- The Rust lexer ---
 
-/// Takes every token. `WHITESPACE` says whether it consumes whitespace and
-/// comments.
+/// Takes every token, and breaks at the end-of-file token, as every consumer
+/// must. `WHITESPACE` says whether it consumes whitespace and comments.
 struct Collect<'a, const WHITESPACE: bool> {
     version: SmtVersion,
     tokens: &'a mut Vec<LexedToken>,
@@ -204,6 +205,9 @@ impl<'a, const WHITESPACE: bool> SmtConsumeFrom<SmtBatchCursor<'a>> for Collect<
                 end: loc(token.span().end()),
                 kind,
             });
+            if token.category() == SmtTokenCategory::EndOfFile {
+                return Ok(ControlFlow::Break(()));
+            }
         }
         Ok(ControlFlow::Continue(()))
     }

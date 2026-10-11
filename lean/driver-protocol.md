@@ -42,9 +42,13 @@ lex <version> <option> ... <feed> <feed> ...
 The driver creates one lexer for the request and applies the feeds to it in
 order. The lexer keeps going after an `e`, as the Rust lexer does: the feeds
 after it are a new input, whose locations start again at the origin. Without
-options, the consumer behind the lexer takes every token and always
-continues: it never sets a version and never finishes or fails, and it does
-not take whitespace and comments.
+options, the consumer behind the lexer takes every token and continues: it
+never sets a version and never finishes or fails, and it does not take
+whitespace and comments.
+
+Every consumer breaks at the end-of-file token at the latest, as the library
+requires: whatever its options, where a consumer would continue on that token,
+it breaks instead. This break is not a finish and no line reports it.
 
 ## Response
 
@@ -252,7 +256,9 @@ without options.
 fin <location>
 ```
 
-The consumer finished, and this is where: after the last token it took. The
+The consumer finished by its plan, and this is where: after the last token it
+took. The break at the end-of-file token that every consumer makes is not
+reported. The
 lexer then discards the rest of the input: the feeds up to the next `e` hand
 nothing over, and that `e` hands over no end-of-file token. The `at` line of
 the feed follows as usual.

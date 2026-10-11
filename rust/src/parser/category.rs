@@ -95,11 +95,13 @@ pub(crate) mod tests {
             fn consume(&mut self, cursor: &mut Z) -> Result<ControlFlow<()>, Self::Error> {
                 while !cursor.is_empty() {
                     if self.result.is_some() {
-                        // count the tokens left after the result, except the end of the input
+                        // count the tokens left after the result, and break at
+                        // the end of the input, as every consumer must
                         while let Some(token) = cursor.next() {
-                            if !matches!(cursor.syntax(&token), SmtSyntaxToken::EndOfFile) {
-                                self.unconsumed += 1;
+                            if matches!(cursor.syntax(&token), SmtSyntaxToken::EndOfFile) {
+                                return Ok(ControlFlow::Break(()));
                             }
+                            self.unconsumed += 1;
                         }
                         return Ok(ControlFlow::Continue(()));
                     }

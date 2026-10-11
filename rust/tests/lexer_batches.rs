@@ -33,7 +33,7 @@ use std::ops::ControlFlow;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use blazing_smtlib::{
-    SmtLocation,
+    SmtLocated, SmtLocation,
     lexer::{SmtLexError, SmtLexErrorCause, SmtLexer, SmtLexicalErrorKind},
     token::{
         SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtLookahead, SmtProduce, SmtToken,
@@ -132,7 +132,10 @@ struct Recorder<'r> {
 }
 
 impl SmtConsume for Recorder<'_> {
-    type Result = ();
+    /// Whether the consumer finished by the plan, rather than only because
+    /// it was handed the end of the input, where every consumer breaks at
+    /// the latest.
+    type Result = bool;
     type Error = ();
     const IS_CONCRETE: bool = false;
 }
@@ -142,6 +145,22 @@ impl<'a> SmtConsumeFrom<SmtBatchCursor<'a>> for Recorder<'_> {
         &mut self,
         cursor: &mut SmtBatchCursor<'a>,
     ) -> Result<ControlFlow<Self::Result>, ()> {
+        // the end-of-file token is handed over alone
+        let at_end = cursor
+            .peek()
+            .is_some_and(|token| token.category() == SmtTokenCategory::EndOfFile);
+        match self.reply(cursor)? {
+            ControlFlow::Continue(()) if at_end => Ok(ControlFlow::Break(false)),
+            ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
+            ControlFlow::Break(()) => Ok(ControlFlow::Break(true)),
+        }
+    }
+}
+
+impl Recorder<'_> {
+    /// Records the hand-over, takes its tokens as the plan says, and answers
+    /// as it says.
+    fn reply(&mut self, cursor: &mut SmtBatchCursor<'_>) -> Result<ControlFlow<()>, ()> {
         // Record every token of the hand-over, also those the reply will not
         // take. A consumer has no way to look at tokens without consuming
         // them, so the recording goes through an attempt that takes every
@@ -240,6 +259,12 @@ fn location_after(bytes: &[u8]) -> (u64, u64, u64) {
     }))
 }
 
+/// Whether a call returned the break that the consumer makes at the end of
+/// the input, as every consumer must, rather than a finish by the plan.
+fn breaks_at_end(result: &Result<ControlFlow<SmtLocated<bool>>, SmtLexError<()>>) -> bool {
+    matches!(result, Ok(ControlFlow::Break(located)) if !*located.value())
+}
+
 fn assert_at_origin<C: SmtConsume>(lexer: &SmtLexer<C>) {
     assert_eq!(
         loc(lexer.current_location()),
@@ -289,6 +314,7 @@ fn run_direct_from(version: SmtVersion, chunks: &[&[u8]], plan: &[Reply]) -> Run
             match lexer.lex_slice(chunk) {
                 Ok(ControlFlow::Continue(())) => {}
                 Ok(ControlFlow::Break(located)) => {
+                    assert!(*located.value(), "a slice hands over no end-of-file token");
                     assert!(
                         finished_at.is_none(),
                         "a finished consumer is handed nothing more"
@@ -320,7 +346,11 @@ fn run_direct_from(version: SmtVersion, chunks: &[&[u8]], plan: &[Reply]) -> Run
                         finished_at.is_none(),
                         "a finished consumer is not handed the end of file"
                     );
-                    finished_at = Some(loc(located.location()));
+                    // the break that every consumer makes at the end of the
+                    // input is not a finish by the plan
+                    if *located.value() {
+                        finished_at = Some(loc(located.location()));
+                    }
                     assert_at_origin(&lexer);
                 }
                 Err(err) => error = Some(into_cause(err)),
@@ -885,7 +915,7 @@ fn the_input_after_a_finished_one_starts_at_the_origin() {
             Ok(ControlFlow::Continue(()))
         ));
         assert_eq!(loc(lexer.current_location()), (4, 1, 2));
-        assert!(matches!(lexer.lex_eof(), Ok(ControlFlow::Continue(()))));
+        assert!(breaks_at_end(&lexer.lex_eof()));
         assert_at_origin(&lexer);
     }
     assert_eq!(
@@ -926,7 +956,7 @@ fn a_finish_at_the_end_of_file_token_is_followed_by_a_new_input() {
         };
         assert_eq!(loc(located.location()), (4, 0, 4));
         assert_at_origin(&lexer);
-        assert!(matches!(lexer.lex_eof(), Ok(ControlFlow::Continue(()))));
+        assert!(breaks_at_end(&lexer.lex_eof()));
     }
     assert_eq!(calls.iter().map(Vec::len).collect::<Vec<_>>(), [2, 1, 1]);
     assert_eq!(calls[2][0].ty, SmtTokenCategory::EndOfFile);
@@ -1088,12 +1118,12 @@ fn a_version_lasts_until_the_end_of_the_input() {
                 Ok(ControlFlow::Continue(()))
             ));
         }
-        assert!(matches!(lexer.lex_eof(), Ok(ControlFlow::Continue(()))));
+        assert!(breaks_at_end(&lexer.lex_eof()));
         assert!(matches!(
             lexer.lex_slice(b"d "),
             Ok(ControlFlow::Continue(()))
         ));
-        assert!(matches!(lexer.lex_eof(), Ok(ControlFlow::Continue(()))));
+        assert!(breaks_at_end(&lexer.lex_eof()));
     }
     assert_eq!(
         versions,
@@ -1251,10 +1281,7 @@ fn a_finish_in_a_whole_input_ends_that_input() {
         };
         assert_eq!(loc(located.location()), (1, 0, 1));
         assert_at_origin(&lexer);
-        assert!(matches!(
-            lexer.lex_all(b"c\nd "),
-            Ok(ControlFlow::Continue(()))
-        ));
+        assert!(breaks_at_end(&lexer.lex_all(b"c\nd ")));
         assert_at_origin(&lexer);
     }
     assert_eq!(
@@ -1315,7 +1342,13 @@ fn the_lexer_tells_the_version_in_force() {
             Ok(ControlFlow::Continue(()))
         ));
         assert_eq!(lexer.version(), SmtVersion::V2_0, "{what}");
-        assert!(matches!(lexer.lex_eof(), Ok(ControlFlow::Continue(()))));
+        // a finished input ends without its end-of-file token, the other
+        // one with the break at it
+        let end = lexer.lex_eof();
+        assert!(
+            matches!(end, Ok(ControlFlow::Continue(()))) || breaks_at_end(&end),
+            "{what}"
+        );
         assert_eq!(lexer.version(), SmtVersion::V2_7, "{what}: after the input");
     }
 }

@@ -667,7 +667,7 @@ fn an_empty_slice_after_a_failed_end_of_the_input_is_allowed() {
     ));
     // the recovery only comes with the second end of the input
     assert_eq!(count_lines(&written, "rc"), 0);
-    assert!(matches!(lexer.lex_eof(), Ok(ControlFlow::Continue(()))));
+    assert!(matches!(lexer.lex_eof(), Ok(ControlFlow::Break(_))));
     assert_eq!(count_lines(&written, "ab"), 1);
     assert_eq!(count_lines(&written, "rc"), 1);
 }
@@ -683,7 +683,7 @@ fn a_mutable_reference_to_a_consumer_that_can_recover_can_recover() {
         lexer.lex_slice(b"q) b"),
         Ok(ControlFlow::Continue(()))
     ));
-    assert!(matches!(lexer.lex_eof(), Ok(ControlFlow::Continue(()))));
+    assert!(matches!(lexer.lex_eof(), Ok(ControlFlow::Break(_))));
     assert_eq!(count_lines(&written, "ab"), 1);
     assert_eq!(count_lines(&written, "rc"), 1);
 }

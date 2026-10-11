@@ -374,11 +374,13 @@ impl<'a, H: SmtHandler, P: SmtParse<H>> SmtConsumeFrom<SmtBatchCursor<'a>> for D
     fn consume(&mut self, cursor: &mut SmtBatchCursor<'a>) -> Result<ControlFlow<()>, Self::Error> {
         while !cursor.is_empty() {
             if self.remaining == 0 {
-                // count the tokens left after the wanted results, except the end of the input
+                // count the tokens left after the wanted results, and break at
+                // the end of the input, as every consumer must
                 while let Some(token) = cursor.next() {
-                    if token.category() != SmtTokenCategory::EndOfFile {
-                        self.unconsumed += 1;
+                    if token.category() == SmtTokenCategory::EndOfFile {
+                        return Ok(ControlFlow::Break(()));
                     }
+                    self.unconsumed += 1;
                 }
                 return Ok(ControlFlow::Continue(()));
             }

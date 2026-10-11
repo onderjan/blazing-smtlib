@@ -44,7 +44,7 @@ use std::time::Instant;
 
 use blazing_smtlib::{
     lexer::SmtLexer,
-    token::{SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtProduce, SmtVersion},
+    token::{SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtProduce, SmtTokenCategory, SmtVersion},
 };
 
 /// Default timed runs per file and mode; an additional first (warm-up) run
@@ -67,10 +67,19 @@ impl<'a> SmtConsumeFrom<SmtBatchCursor<'a>> for DiscardTokens {
         &mut self,
         cursor: &mut SmtBatchCursor<'a>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
+        // the end-of-file token is handed over alone
+        let at_end = cursor
+            .peek()
+            .is_some_and(|token| token.category() == SmtTokenCategory::EndOfFile);
         while cursor.next().is_some() {
             self.tokens += 1;
         }
-        Ok(ControlFlow::Continue(()))
+        // every consumer breaks at the end of the input at the latest
+        if at_end {
+            Ok(ControlFlow::Break(()))
+        } else {
+            Ok(ControlFlow::Continue(()))
+        }
     }
 }
 

@@ -66,13 +66,12 @@ impl<'a, C: Check> SmtConsumeFrom<SmtBatchCursor<'a>> for Probe<C> {
         &mut self,
         cursor: &mut SmtBatchCursor<'a>,
     ) -> Result<ControlFlow<Self::Result>, Infallible> {
+        // the end-of-file token is handed over alone
+        let at_end =
+            cursor.peek().map(|token| token.category()) == Some(SmtTokenCategory::EndOfFile);
         let run = match self.which {
             Which::Every => true,
-            Which::TokenBatch => {
-                let at_end = cursor.peek().map(|token| token.category())
-                    == Some(SmtTokenCategory::EndOfFile);
-                !at_end
-            }
+            Which::TokenBatch => !at_end,
             Which::First => self.seen == 0,
         };
         if run {
@@ -80,7 +79,12 @@ impl<'a, C: Check> SmtConsumeFrom<SmtBatchCursor<'a>> for Probe<C> {
         }
         self.seen += 1;
         cursor.consume_all();
-        Ok(ControlFlow::Continue(()))
+        // every consumer breaks at the end of the input at the latest
+        if at_end {
+            Ok(ControlFlow::Break(()))
+        } else {
+            Ok(ControlFlow::Continue(()))
+        }
     }
 }
 
@@ -450,6 +454,9 @@ impl<'a, P: SmtParse<SmtSyntaxChecker>> SmtConsumeFrom<SmtBatchCursor<'a>> for D
         &mut self,
         cursor: &mut SmtBatchCursor<'a>,
     ) -> Result<ControlFlow<Self::Result>, Infallible> {
+        // the end-of-file token is handed over alone
+        let at_end =
+            cursor.peek().map(|token| token.category()) == Some(SmtTokenCategory::EndOfFile);
         if !self.finished {
             let before = ahead(cursor).len();
             let flow = self
@@ -461,7 +468,12 @@ impl<'a, P: SmtParse<SmtSyntaxChecker>> SmtConsumeFrom<SmtBatchCursor<'a>> for D
                 .push((before - ahead(cursor).len(), self.finished));
         }
         cursor.consume_all();
-        Ok(ControlFlow::Continue(()))
+        // every consumer breaks at the end of the input at the latest
+        if at_end {
+            Ok(ControlFlow::Break(()))
+        } else {
+            Ok(ControlFlow::Continue(()))
+        }
     }
 }
 

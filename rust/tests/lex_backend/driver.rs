@@ -34,10 +34,11 @@ pub enum Reply {
     SwitchAndFinish(usize, SmtVersion),
 }
 
-/// How the consumer of a request behaves.
+/// How the consumer of a request behaves. Whatever the behaviour, where it
+/// would continue at the end-of-file token, the consumer breaks instead.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Behaviour {
-    /// It takes every token and always continues.
+    /// It takes every token and continues, except at the end of the input.
     TakeAll,
     /// It answers the hand-overs in order by the replies, and takes every
     /// token once they have run out.
@@ -111,7 +112,10 @@ fn token_line(token: SmtToken<'_>, version: SmtVersion) -> String {
 }
 
 impl<const WHITESPACE: bool> SmtConsume for Scripted<WHITESPACE> {
-    type Result = ();
+    /// Whether the consumer finished by its behaviour, rather than only
+    /// because it was handed the end of the input: every consumer breaks
+    /// there at the latest, and that break is not reported.
+    type Result = bool;
     /// The name of what made the consumer fail.
     type Error = &'static str;
     const IS_CONCRETE: bool = WHITESPACE;
@@ -122,6 +126,22 @@ impl<'a, const WHITESPACE: bool> SmtConsumeFrom<SmtBatchCursor<'a>> for Scripted
         &mut self,
         cursor: &mut SmtBatchCursor<'a>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
+        // the end-of-file token is handed over alone
+        let at_end = cursor
+            .peek()
+            .is_some_and(|token| token.category() == SmtTokenCategory::EndOfFile);
+        match self.take(cursor)? {
+            ControlFlow::Continue(()) if at_end => Ok(ControlFlow::Break(false)),
+            ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
+            ControlFlow::Break(()) => Ok(ControlFlow::Break(true)),
+        }
+    }
+}
+
+impl<const WHITESPACE: bool> Scripted<WHITESPACE> {
+    /// Takes the tokens of a hand-over as the behaviour says, and answers as
+    /// it says.
+    fn take(&mut self, cursor: &mut SmtBatchCursor<'_>) -> Result<ControlFlow<()>, &'static str> {
         // the version the tokens of this hand-over were lexed under
         let version = cursor.version();
         match &self.behaviour {
@@ -357,8 +377,11 @@ fn drive<const WHITESPACE: bool, R: SmtLexRecovery<Scripted<WHITESPACE>>>(
             let err = match result {
                 Ok(ControlFlow::Continue(())) => break,
                 Ok(ControlFlow::Break(located)) => {
-                    out.borrow_mut()
-                        .push_str(&format!("fin {}\n", location(located.location())));
+                    // only a finish by the behaviour is reported
+                    if *located.value() {
+                        out.borrow_mut()
+                            .push_str(&format!("fin {}\n", location(located.location())));
+                    }
                     break;
                 }
                 Err(err) => err,

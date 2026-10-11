@@ -28,7 +28,7 @@ use blazing_smtlib::{
     lexer::SmtLexer,
     token::{
         SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtProduce, SmtSyntaxToken, SmtToken,
-        SmtVersion,
+        SmtTokenCategory, SmtVersion,
     },
 };
 
@@ -115,10 +115,19 @@ impl<'a> SmtConsumeFrom<SmtBatchCursor<'a>> for Census {
         &mut self,
         cursor: &mut SmtBatchCursor<'a>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
+        // the end-of-file token is handed over alone
+        let at_end = cursor
+            .peek()
+            .is_some_and(|token| token.category() == SmtTokenCategory::EndOfFile);
         while let Some(token) = cursor.next() {
             self.tally(token);
         }
-        Ok(ControlFlow::Continue(()))
+        // every consumer breaks at the end of the input at the latest
+        if at_end {
+            Ok(ControlFlow::Break(()))
+        } else {
+            Ok(ControlFlow::Continue(()))
+        }
     }
 }
 
