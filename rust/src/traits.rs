@@ -368,7 +368,7 @@ pub trait SmtCommandHandler: SmtHandler {
 #[derive(Debug)]
 pub struct SmtSyntaxChecker;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct NonstandardCommandError(pub SmtSymbolBuf);
 
 impl SmtHandler for SmtSyntaxChecker {

@@ -945,7 +945,7 @@ impl<H: SmtHandler> TermSlot<H> {
     fn push_binding_name(&mut self, arena: &mut Arena<H>, name: SmtSymbol) {
         // push the name into the arena
         // the binding term knows where the binding names start
-        let name = arena.push_text(name.as_slice());
+        let name = arena.push_symbol(name);
         arena.symbols.push(name);
         // go to the start state to parse the binding term
         self.state = State::Start;

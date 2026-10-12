@@ -125,7 +125,7 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
                 match cursor.syntax(&token) {
                     SmtSyntaxToken::Symbol(name) => {
                         // the sort consists just of a single-symbol ident
-                        let name = arena.push_text(name.as_slice());
+                        let name = arena.push_symbol(name);
                         let ident = IdentHandle {
                             name,
                             indices_start: arena.indices.len(),
@@ -181,7 +181,7 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
                     }
                     SmtSyntaxToken::Symbol(name) => {
                         // non-indexed ident starting sort
-                        let name = arena.push_text(name.as_slice());
+                        let name = arena.push_symbol(name);
                         let ident = IdentHandle {
                             name,
                             indices_start: arena.indices.len(),

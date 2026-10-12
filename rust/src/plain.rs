@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::fmt::{Debug, Write};
 
 use crate::{SmtBytes, SmtBytesBuf, lexer::CharClass};
 
@@ -18,19 +18,190 @@ impl SmtStringContentBuf {
     }
 }
 
-/// SMT-LIB symbol, quoted or unquoted.
+/// An owned SMT-LIB symbol, quoted or unquoted.
 ///
-/// May be empty.
-/// Must contain only SMT-LIB printable or whitespace bytes except for pipe (|) and backslash (\).
-#[derive(Clone, PartialEq, Eq, Hash)]
-pub struct SmtSymbolBuf(SmtBytesBuf);
+/// The symbol carries its bytes and whether it is quoted.
+///
+/// May be empty if quoted.
+/// Must contain only SMT-LIB printable or whitespace bytes
+/// except for pipe (|) and backslash (\), with an additional
+/// restriction for unquoted symbols: they must contain
+/// a nonempty sequence of simple-symbol bytes not starting
+/// with a digit.
+///
+/// Equality and hash are intentionally not implemented:
+/// quoted and unquoted symbols refer to the same value semantically,
+/// so the value without the quoted flag should be compared in that case,
+/// obtained through [`SmtSymbolBuf::bytes`] or [`SmtSymbolBuf::into_bytes_buf`].
+#[derive(Clone)]
+pub struct SmtSymbolBuf {
+    is_quoted: bool,
+    value: SmtBytesBuf,
+}
 
 impl SmtSymbolBuf {
-    pub fn is_allowed(value: &[u8]) -> bool {
+    pub fn is_unquoted_allowed(value: &[u8]) -> bool {
+        !value.is_empty()
+            && !value[0].is_ascii_digit()
+            && value
+                .iter()
+                .all(|c| CharClass::from(*c).is_allowed_in_simple_symbol())
+    }
+
+    pub fn is_quoted_allowed(value: &[u8]) -> bool {
         value
             .iter()
             .copied()
             .all(|c| CharClass::from(c).is_printable_or_whitespace() && c != b'|' && c != b'\\')
+    }
+
+    /// Whether this is a quoted symbol enclosed in pipes, e.g. `|x|`, or a simple symbol, e.g. `x`.
+    pub fn is_quoted(&self) -> bool {
+        self.is_quoted
+    }
+
+    pub fn new_unquoted(value: Vec<u8>) -> Result<Self, SmtDisallowedByteVecError> {
+        let value = SmtBytesBuf::from_vec(value);
+        if Self::is_unquoted_allowed(value.as_slice()) {
+            Ok(Self {
+                is_quoted: false,
+                value,
+            })
+        } else {
+            Err(SmtDisallowedByteVecError(value))
+        }
+    }
+
+    pub fn new_quoted(value: Vec<u8>) -> Result<Self, SmtDisallowedByteVecError> {
+        let value = SmtBytesBuf::from_vec(value);
+        if Self::is_quoted_allowed(value.as_slice()) {
+            Ok(Self {
+                is_quoted: true,
+                value,
+            })
+        } else {
+            Err(SmtDisallowedByteVecError(value))
+        }
+    }
+
+    pub fn bytes(&self) -> SmtBytes<'_> {
+        self.value.as_view()
+    }
+
+    pub fn as_slice(&self) -> &[u8] {
+        self.bytes().as_slice()
+    }
+
+    pub fn as_view(&self) -> SmtSymbol<'_> {
+        SmtSymbol {
+            is_quoted: self.is_quoted,
+            value: self.bytes(),
+        }
+    }
+    pub fn into_bytes_buf(self) -> SmtBytesBuf {
+        self.value
+    }
+    pub fn into_vec(self) -> Vec<u8> {
+        self.value.into_vec()
+    }
+    pub fn len(&self) -> usize {
+        self.value.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.value.is_empty()
+    }
+    pub fn iter(&self) -> impl Iterator<Item = u8> {
+        self.value.iter()
+    }
+}
+
+impl Debug for SmtSymbolBuf {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Debug::fmt(&self.as_view(), f)
+    }
+}
+
+/// A view of an SMT-LIB symbol, quoted or unquoted.
+///
+/// The symbol carries its bytes and whether it is quoted.
+///
+/// May be empty if quoted.
+/// Must contain only SMT-LIB printable or whitespace bytes
+/// except for pipe (|) and backslash (\), with additional
+/// restrictions for unquoted symbols.
+///
+/// Equality and hash are intentionally not implemented:
+/// quoted and unquoted symbols refer to the same value semantically,
+/// so the value without the quoted flag should be compared in that case,
+/// obtained through [`SmtSymbol::bytes`].
+#[derive(Clone, Copy)]
+pub struct SmtSymbol<'a> {
+    is_quoted: bool,
+    value: SmtBytes<'a>,
+}
+
+impl<'a> SmtSymbol<'a> {
+    pub(crate) fn new_unchecked(is_quoted: bool, value: &'a [u8]) -> Self {
+        if is_quoted {
+            debug_assert!(
+                SmtSymbolBuf::is_quoted_allowed(value),
+                "invalid quoted symbol: {:?}",
+                value
+            );
+        } else {
+            debug_assert!(
+                SmtSymbolBuf::is_unquoted_allowed(value),
+                "invalid unquoted symbol: {:?}",
+                value
+            );
+        }
+        Self {
+            is_quoted,
+            value: SmtBytes::new(value),
+        }
+    }
+
+    pub fn is_quoted(&self) -> bool {
+        self.is_quoted
+    }
+
+    pub fn bytes(&self) -> &'a SmtBytes<'_> {
+        &self.value
+    }
+
+    pub fn as_slice(&self) -> &'a [u8] {
+        self.value.as_slice()
+    }
+
+    pub fn into_owned(self) -> SmtSymbolBuf {
+        SmtSymbolBuf {
+            is_quoted: self.is_quoted,
+            value: self.bytes().into_owned(),
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.value.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.value.is_empty()
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = u8> {
+        self.value.iter()
+    }
+}
+
+impl Debug for SmtSymbol<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.is_quoted {
+            f.write_char('|')?;
+            Debug::fmt(&self.value, f)?;
+            f.write_char('|')
+        } else {
+            Debug::fmt(&self.value, f)
+        }
     }
 }
 
@@ -367,7 +538,6 @@ macro_rules! string8_newtype {
 }
 
 string8_newtype!(SmtStringContentBuf, SmtStringContent);
-string8_newtype!(SmtSymbolBuf, SmtSymbol);
 string8_newtype!(SmtKeywordBuf, SmtKeyword);
 string8_newtype!(SmtNumeralBuf, SmtNumeral);
 string8_newtype!(SmtHexDigitsBuf, SmtHexDigits);

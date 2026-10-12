@@ -64,7 +64,7 @@ impl InnerCategory {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy)]
 pub enum SmtSyntaxToken<'a> {
     ParenOpen,
     ParenClose,
@@ -208,11 +208,11 @@ impl<'a> SmtSyntaxToken<'a> {
                 if let Some(reserved) = SmtReserved::from_bytes_opt(content, version) {
                     SmtSyntaxToken::Reserved(reserved)
                 } else {
-                    SmtSyntaxToken::Symbol(SmtSymbol::new_unchecked(content))
+                    SmtSyntaxToken::Symbol(SmtSymbol::new_unchecked(false, content))
                 }
             }
             SmtTokenCategory::QuotedSymbol => {
-                SmtSyntaxToken::Symbol(SmtSymbol::new_unchecked(content))
+                SmtSyntaxToken::Symbol(SmtSymbol::new_unchecked(true, content))
             }
             SmtTokenCategory::String => {
                 SmtSyntaxToken::String(SmtStringContent::new_unchecked(content))

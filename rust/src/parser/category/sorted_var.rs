@@ -135,7 +135,7 @@ impl<H: SmtHandler + ?Sized> SortedVarSlot<H> {
                     SmtSyntaxErrorKind::ExpectedSymbol,
                 ));
             };
-            self.name = Some(arena.push_text(name.as_slice()));
+            self.name = Some(arena.push_symbol(name));
             self.is_open = false;
         } else {
             // waiting for "("

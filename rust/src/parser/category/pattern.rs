@@ -198,7 +198,7 @@ impl PatternSlot {
             // an argument is starting here, it will be stored in the arena
             let argument = match SmtSimplePatternParser::expect_view::<H, Z>(cursor, token)? {
                 SmtSimplePattern::Symbol(symbol) => {
-                    SimplePatternHandle::Symbol(arena.push_text(symbol.as_slice()))
+                    SimplePatternHandle::Symbol(arena.push_symbol(symbol))
                 }
                 SmtSimplePattern::Wildcard => SimplePatternHandle::Wildcard,
             };
@@ -215,7 +215,7 @@ impl PatternSlot {
                 ));
             };
             // push the constructor to the arena text and start parsing arguments
-            self.constructor = Some(arena.push_text(constructor.as_slice()));
+            self.constructor = Some(arena.push_symbol(constructor));
             self.arena_args_start = arena.simple_patterns.len();
             self.is_open = false;
             return Ok(ControlFlow::Continue(()));

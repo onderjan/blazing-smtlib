@@ -122,7 +122,7 @@ impl IdentSlot {
         name: SmtSymbol,
     ) -> TextHandle {
         self.arena_indices_start = arena.indices.len();
-        arena.push_text(name.as_slice())
+        arena.push_symbol(name)
     }
 
     pub(crate) fn move_after_underscore(&mut self) {
@@ -210,7 +210,7 @@ impl IdentSlot {
                             SmtSyntaxToken::Symbol(index_symbol)
                                 if cursor.version() >= SmtVersion::V2_5 =>
                             {
-                                let index = arena.push_text(index_symbol.as_slice());
+                                let index = arena.push_symbol(index_symbol);
                                 arena.indices.push(IndexHandle::Symbol(index));
                             }
                             _ => {

@@ -148,10 +148,29 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
         }
     }
 
+    /// Appends the symbol to the text, returning its handle.
+    ///
+    /// A quoted symbol is pushed with a leading pipe.
+    #[inline]
+    pub(crate) fn push_symbol(&mut self, symbol: SmtSymbol) -> TextHandle {
+        let bytes = symbol.as_slice();
+        let start = self.text.len();
+        if symbol.is_quoted() {
+            // push a pipe first to identify the quoted symbol
+            self.text.push(b'|');
+        }
+        self.text.extend_from_slice(bytes);
+        // make sure the pipe is included in the handle
+        TextHandle {
+            start,
+            len: self.text.len() - start,
+        }
+    }
+
     /// Pushes a non-indexed identifier into the arena and returns its handle.
     pub(crate) fn push_nonindexed_ident(&mut self, name: SmtSymbol) -> IdentHandle {
         IdentHandle {
-            name: self.push_text(name.as_slice()),
+            name: self.push_symbol(name),
             indices_start: self.indices.len(),
         }
     }
@@ -385,7 +404,14 @@ impl TextHandle {
     /// Views the bytes as a symbol.
     #[inline]
     pub(crate) fn symbol_view(self, text: &[u8]) -> SmtSymbol<'_> {
-        SmtSymbol::new_unchecked(&text[self.start..self.start + self.len])
+        let end = self.start + self.len;
+        if text[self.start] == b'|' {
+            // quoted symbol, skip the marker pipe
+            SmtSymbol::new_unchecked(true, &text[self.start + 1..end])
+        } else {
+            // unquoted symbol
+            SmtSymbol::new_unchecked(false, &text[self.start..end])
+        }
     }
 
     /// Views the bytes as a keyword.
