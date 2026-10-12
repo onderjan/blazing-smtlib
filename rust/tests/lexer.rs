@@ -326,7 +326,7 @@ fn current_location_follows_consumed_bytes() {
     let mut lexer = SmtLexer::new(TakeTokens, SmtVersion::V2_7);
     assert_eq!(loc(lexer.current_location()), (0, 0, 0));
     for &c in b"ab\nc" {
-        let _ = lexer
+        lexer
             .lex_slice(&[c])
             .map_err(into_lexer_error)
             .expect("valid input");
@@ -628,7 +628,7 @@ fn handler_error_is_returned_with_the_handled_token() {
 #[should_panic(expected = "cannot lex after a lexer error")]
 fn lexing_after_an_error_panics() {
     let mut lexer = SmtLexer::new(TakeTokens, SmtVersion::V2_7);
-    let _ = lexer
+    lexer
         .lex_slice(b"7")
         .map_err(into_lexer_error)
         .expect("valid input");
@@ -924,7 +924,7 @@ fn lexing_after_a_handler_error_on_the_eof_token_panics() {
     // the EOF token is the last thing lex_eof does; a handler error there
     // must still leave the lexer failed like every other error
     let mut lexer = SmtLexer::new(RejectEof, SmtVersion::V2_7);
-    let _ = lexer.lex_slice(b"a").expect("valid input");
+    lexer.lex_slice(b"a").expect("valid input");
     assert!(lexer.lex_eof().is_err(), "expected a handler error");
     let _ = lexer.lex_slice(b"b");
 }
@@ -933,7 +933,7 @@ fn lexing_after_a_handler_error_on_the_eof_token_panics() {
 #[should_panic(expected = "cannot lex after a lexer error")]
 fn lexing_after_a_lexer_error_at_eof_panics() {
     let mut lexer = SmtLexer::new(TakeTokens, SmtVersion::V2_7);
-    let _ = lexer
+    lexer
         .lex_slice(b"\"unclosed")
         .map_err(into_lexer_error)
         .expect("valid so far");

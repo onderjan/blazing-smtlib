@@ -98,7 +98,7 @@ fn probe<C: Check>(chunks: &[&[u8]], which: Which, check: C) -> Probe<C> {
     };
     let mut lexer = SmtLexer::new(&mut probe, SmtVersion::V2_7);
     for chunk in chunks {
-        let _ = lexer.lex_slice(chunk).expect("valid input must lex");
+        lexer.lex_slice(chunk).expect("valid input must lex");
     }
     let _ = lexer.lex_eof().expect("valid input must lex");
     drop(lexer);
@@ -488,7 +488,7 @@ fn drive<P: SmtParse<SmtSyntaxChecker> + Default>(chunks: &[&[u8]]) -> Vec<(usiz
     };
     let mut lexer = SmtLexer::new(&mut drive, SmtVersion::V2_7);
     for chunk in chunks {
-        let _ = lexer.lex_slice(chunk).expect("valid input must lex");
+        lexer.lex_slice(chunk).expect("valid input must lex");
     }
     let _ = lexer.lex_eof().expect("valid input must lex");
     drop(lexer);

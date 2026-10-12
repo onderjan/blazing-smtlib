@@ -261,8 +261,17 @@ fn location_after(bytes: &[u8]) -> (u64, u64, u64) {
 
 /// Whether a call returned the break that the consumer makes at the end of
 /// the input, as every consumer must, rather than a finish by the plan.
-fn breaks_at_end(result: &Result<ControlFlow<SmtLocated<bool>>, SmtLexError<()>>) -> bool {
-    matches!(result, Ok(ControlFlow::Break(located)) if !*located.value())
+fn breaks_at_end(result: &Result<SmtLocated<bool>, SmtLexError<()>>) -> bool {
+    matches!(result, Ok(located) if !*located.value())
+}
+
+/// The location of a finish by the plan, which the end of the input returns.
+#[track_caller]
+fn finished_at(result: Result<SmtLocated<bool>, SmtLexError<()>>) -> (u64, u64, u64) {
+    match result {
+        Ok(located) if *located.value() => loc(located.location()),
+        other => panic!("expected a finish by the plan, got {other:?}"),
+    }
 }
 
 fn assert_at_origin<C: SmtConsume>(lexer: &SmtLexer<C>) {
@@ -273,14 +282,6 @@ fn assert_at_origin<C: SmtConsume>(lexer: &SmtLexer<C>) {
     );
 }
 
-/// Lexes the chunks, then end of file, from the given version, with the
-/// consumer replying by the plan.
-///
-/// After every successfully lexed chunk, the lexer's location is checked
-/// against the location computed independently from the bytes, which a
-/// rewind must restore correctly. After a finish, the lexer must be back
-/// at the origin.
-#[track_caller]
 /// What made the call fail. The lexer of these runs stops at its first error,
 /// so no error may say that the input continues.
 fn into_cause(err: SmtLexError<()>) -> RunError {
@@ -295,6 +296,14 @@ fn into_cause(err: SmtLexError<()>) -> RunError {
     }
 }
 
+/// Lexes the chunks, then end of file, from the given version, with the
+/// consumer replying by the plan.
+///
+/// After every successfully lexed chunk, the lexer's location is checked
+/// against the location computed independently from the bytes, which a
+/// rewind must restore correctly. After the end of the input, the lexer must
+/// be back at the origin.
+#[track_caller]
 fn run_direct_from(version: SmtVersion, chunks: &[&[u8]], plan: &[Reply]) -> Run {
     let mut calls = Vec::new();
     let mut versions = Vec::new();
@@ -311,20 +320,9 @@ fn run_direct_from(version: SmtVersion, chunks: &[&[u8]], plan: &[Reply]) -> Run
         );
         let mut expected = SmtLocation::initial();
         for chunk in chunks {
-            match lexer.lex_slice(chunk) {
-                Ok(ControlFlow::Continue(())) => {}
-                Ok(ControlFlow::Break(located)) => {
-                    assert!(*located.value(), "a slice hands over no end-of-file token");
-                    assert!(
-                        finished_at.is_none(),
-                        "a finished consumer is handed nothing more"
-                    );
-                    finished_at = Some(loc(located.location()));
-                }
-                Err(err) => {
-                    error = Some(into_cause(err));
-                    break;
-                }
+            if let Err(err) = lexer.lex_slice(chunk) {
+                error = Some(into_cause(err));
+                break;
             }
             // whatever the consumer did, the lexer is after everything it was
             // fed: once the consumer has finished, the rest is discarded
@@ -340,12 +338,7 @@ fn run_direct_from(version: SmtVersion, chunks: &[&[u8]], plan: &[Reply]) -> Run
         }
         if error.is_none() {
             match lexer.lex_eof() {
-                Ok(ControlFlow::Continue(())) => assert_at_origin(&lexer),
-                Ok(ControlFlow::Break(located)) => {
-                    assert!(
-                        finished_at.is_none(),
-                        "a finished consumer is not handed the end of file"
-                    );
+                Ok(located) => {
                     // the break that every consumer makes at the end of the
                     // input is not a finish by the plan
                     if *located.value() {
@@ -842,7 +835,8 @@ fn after_a_finish_the_rest_of_the_input_is_disregarded() {
     // the consumer finishes after the first token of the first hand-over, and
     // with that it has finished with the input: whatever is fed afterwards is
     // disregarded, also what would be a lexical error, and the end of the
-    // input hands nothing over, not even the end-of-file token
+    // input hands nothing over, not even the end-of-file token, but returns
+    // the result held since the finish
     let mut calls = Vec::new();
     let mut versions = Vec::new();
     let plan = [Reply::Finish { consumed: 1 }];
@@ -855,24 +849,19 @@ fn after_a_finish_the_rest_of_the_input_is_disregarded() {
             },
             SmtVersion::V2_7,
         );
-        let located = match lexer.lex_slice(b"a b ") {
-            Ok(ControlFlow::Break(located)) => located,
-            other => panic!("expected a finish, got {other:?}"),
-        };
-        assert_eq!(loc(located.location()), (1, 0, 1));
+        lexer.lex_slice(b"a b ").expect("the slice must lex");
         // the lexer is after the whole slice: its rest is the first to be discarded
         let mut fed = b"a b ".to_vec();
         assert_eq!(loc(lexer.current_location()), location_after(&fed));
         for disregarded in [&b"c\nd "[..], b"", b"#q \x00 \"open", b"\n\n"] {
-            assert!(matches!(
-                lexer.lex_slice(disregarded),
-                Ok(ControlFlow::Continue(()))
-            ));
+            lexer
+                .lex_slice(disregarded)
+                .expect("a slice after the finish must be disregarded");
             // the location advances over what is discarded, lines included
             fed.extend_from_slice(disregarded);
             assert_eq!(loc(lexer.current_location()), location_after(&fed));
         }
-        assert!(matches!(lexer.lex_eof(), Ok(ControlFlow::Continue(()))));
+        assert_eq!(finished_at(lexer.lex_eof()), (1, 0, 1));
         assert_at_origin(&lexer);
     }
     assert_eq!(
@@ -902,18 +891,11 @@ fn the_input_after_a_finished_one_starts_at_the_origin() {
             },
             SmtVersion::V2_7,
         );
-        let located = match lexer.lex_slice(b"a b ") {
-            Ok(ControlFlow::Break(located)) => located,
-            other => panic!("expected a finish, got {other:?}"),
-        };
-        assert_eq!(loc(located.location()), (1, 0, 1));
+        lexer.lex_slice(b"a b ").expect("the slice must lex");
         assert_eq!(loc(lexer.current_location()), (4, 0, 4));
-        assert!(matches!(lexer.lex_eof(), Ok(ControlFlow::Continue(()))));
+        assert_eq!(finished_at(lexer.lex_eof()), (1, 0, 1));
         assert_at_origin(&lexer);
-        assert!(matches!(
-            lexer.lex_slice(b"c\nd "),
-            Ok(ControlFlow::Continue(()))
-        ));
+        lexer.lex_slice(b"c\nd ").expect("the slice must lex");
         assert_eq!(loc(lexer.current_location()), (4, 1, 2));
         assert!(breaks_at_end(&lexer.lex_eof()));
         assert_at_origin(&lexer);
@@ -946,15 +928,8 @@ fn a_finish_at_the_end_of_file_token_is_followed_by_a_new_input() {
             },
             SmtVersion::V2_7,
         );
-        assert!(matches!(
-            lexer.lex_slice(b"a b "),
-            Ok(ControlFlow::Continue(()))
-        ));
-        let located = match lexer.lex_eof() {
-            Ok(ControlFlow::Break(located)) => located,
-            other => panic!("expected a finish, got {other:?}"),
-        };
-        assert_eq!(loc(located.location()), (4, 0, 4));
+        lexer.lex_slice(b"a b ").expect("the slice must lex");
+        assert_eq!(finished_at(lexer.lex_eof()), (4, 0, 4));
         assert_at_origin(&lexer);
         assert!(breaks_at_end(&lexer.lex_eof()));
     }
@@ -1113,16 +1088,10 @@ fn a_version_lasts_until_the_end_of_the_input() {
             SmtVersion::V2_7,
         );
         for chunk in [&b"a "[..], b"b ", b"c "] {
-            assert!(matches!(
-                lexer.lex_slice(chunk),
-                Ok(ControlFlow::Continue(()))
-            ));
+            lexer.lex_slice(chunk).expect("the slice must lex");
         }
         assert!(breaks_at_end(&lexer.lex_eof()));
-        assert!(matches!(
-            lexer.lex_slice(b"d "),
-            Ok(ControlFlow::Continue(()))
-        ));
+        lexer.lex_slice(b"d ").expect("the slice must lex");
         assert!(breaks_at_end(&lexer.lex_eof()));
     }
     assert_eq!(
@@ -1195,18 +1164,11 @@ fn a_version_set_while_finishing_has_no_effect() {
             },
             SmtVersion::V2_7,
         );
-        let located = match lexer.lex_slice(b"a b ") {
-            Ok(ControlFlow::Break(located)) => located,
-            other => panic!("expected a finish, got {other:?}"),
-        };
-        assert_eq!(loc(located.location()), (1, 0, 1));
+        lexer.lex_slice(b"a b ").expect("the slice must lex");
         assert_eq!(loc(lexer.current_location()), (4, 0, 4));
         // the end of the input ends the finished input, the next one follows
-        assert!(matches!(lexer.lex_eof(), Ok(ControlFlow::Continue(()))));
-        assert!(matches!(
-            lexer.lex_slice(b"c "),
-            Ok(ControlFlow::Continue(()))
-        ));
+        assert_eq!(finished_at(lexer.lex_eof()), (1, 0, 1));
+        lexer.lex_slice(b"c ").expect("the slice must lex");
     }
     assert_eq!(versions, [SmtVersion::V2_7, SmtVersion::V2_7]);
 }
@@ -1275,11 +1237,7 @@ fn a_finish_in_a_whole_input_ends_that_input() {
             },
             SmtVersion::V2_7,
         );
-        let located = match lexer.lex_all(b"a b ") {
-            Ok(ControlFlow::Break(located)) => located,
-            other => panic!("expected a finish, got {other:?}"),
-        };
-        assert_eq!(loc(located.location()), (1, 0, 1));
+        assert_eq!(finished_at(lexer.lex_all(b"a b ")), (1, 0, 1));
         assert_at_origin(&lexer);
         assert!(breaks_at_end(&lexer.lex_all(b"c\nd ")));
         assert_at_origin(&lexer);
@@ -1337,18 +1295,11 @@ fn the_lexer_tells_the_version_in_force() {
             continue;
         }
         // also while the rest of a finished input is discarded
-        assert!(matches!(
-            lexer.lex_slice(b"d "),
-            Ok(ControlFlow::Continue(()))
-        ));
+        lexer.lex_slice(b"d ").expect("the slice must lex");
         assert_eq!(lexer.version(), SmtVersion::V2_0, "{what}");
-        // a finished input ends without its end-of-file token, the other
-        // one with the break at it
-        let end = lexer.lex_eof();
-        assert!(
-            matches!(end, Ok(ControlFlow::Continue(()))) || breaks_at_end(&end),
-            "{what}"
-        );
+        // a finished input ends with its held result, the other one with the
+        // break at the end-of-file token
+        assert!(lexer.lex_eof().is_ok(), "{what}");
         assert_eq!(lexer.version(), SmtVersion::V2_7, "{what}: after the input");
     }
 }

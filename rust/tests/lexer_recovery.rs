@@ -16,7 +16,6 @@
 mod lex_backend;
 
 use std::cell::RefCell;
-use std::ops::ControlFlow;
 use std::rc::Rc;
 
 use blazing_smtlib::{
@@ -640,10 +639,7 @@ fn count_lines(written: &RefCell<String>, word: &str) -> usize {
 #[should_panic(expected = "cannot lex a slice after the end of the input")]
 fn a_slice_after_a_failed_end_of_the_input_panics() {
     let (mut lexer, _written) = rust_lexer();
-    assert!(matches!(
-        lexer.lex_slice(b"(a"),
-        Ok(ControlFlow::Continue(()))
-    ));
+    assert!(lexer.lex_slice(b"(a").is_ok());
     assert!(lexer.lex_eof().is_err());
     let _ = lexer.lex_slice(b"b");
 }
@@ -652,22 +648,16 @@ fn a_slice_after_a_failed_end_of_the_input_panics() {
 fn an_empty_slice_after_a_failed_end_of_the_input_is_allowed() {
     // an empty slice feeds nothing, as everywhere else
     let (mut lexer, written) = rust_lexer();
-    assert!(matches!(
-        lexer.lex_slice(b"(a"),
-        Ok(ControlFlow::Continue(()))
-    ));
+    assert!(lexer.lex_slice(b"(a").is_ok());
     let err = lexer.lex_eof().expect_err("the end is refused");
     assert_eq!(
         err.continues_from().map(|location| location.offset()),
         Some(2)
     );
-    assert!(matches!(
-        lexer.lex_slice(b""),
-        Ok(ControlFlow::Continue(()))
-    ));
+    assert!(lexer.lex_slice(b"").is_ok());
     // the recovery only comes with the second end of the input
     assert_eq!(count_lines(&written, "rc"), 0);
-    assert!(matches!(lexer.lex_eof(), Ok(ControlFlow::Break(_))));
+    assert!(lexer.lex_eof().is_ok());
     assert_eq!(count_lines(&written, "ab"), 1);
     assert_eq!(count_lines(&written, "rc"), 1);
 }
@@ -679,11 +669,8 @@ fn a_mutable_reference_to_a_consumer_that_can_recover_can_recover() {
         Scripted::<false>::new(Behaviour::Rules { refuse_end: false }, written.clone());
     let mut lexer = SmtLexer::new_recovering(&mut consumer, SmtVersion::V2_7);
     assert!(lexer.lex_slice(b"(a #q) b").is_err());
-    assert!(matches!(
-        lexer.lex_slice(b"q) b"),
-        Ok(ControlFlow::Continue(()))
-    ));
-    assert!(matches!(lexer.lex_eof(), Ok(ControlFlow::Break(_))));
+    assert!(lexer.lex_slice(b"q) b").is_ok());
+    assert!(lexer.lex_eof().is_ok());
     assert_eq!(count_lines(&written, "ab"), 1);
     assert_eq!(count_lines(&written, "rc"), 1);
 }

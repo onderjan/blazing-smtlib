@@ -258,10 +258,11 @@ fin <location>
 
 The consumer finished by its plan, and this is where: after the last token it
 took. The break at the end-of-file token that every consumer makes is not
-reported. The
-lexer then discards the rest of the input: the feeds up to the next `e` hand
-nothing over, and that `e` hands over no end-of-file token. The `at` line of
-the feed follows as usual.
+reported. The lexer holds the result back and discards the rest of the input:
+the feeds up to the next `e` hand nothing over, and that `e` hands over no
+end-of-file token but returns the held result. So the line stands in the
+response of that `e`, before its `at` line, whichever feed the consumer
+finished in. A request without that `e` has no `fin` line.
 
 ```
 ab <location>
@@ -296,7 +297,8 @@ lexer is in (the Rust `version`).
 A plan: leave after one token, then switch to 2.0 after one, then finish
 after one. The input is `a b c d `, then `e `, then its end. The switch makes
 the lexer lex the rest again under 2.0. After the finish, the second slice
-and the end hand nothing over, and the version lasts until the end.
+and the end hand nothing over, the end returns the finish, and the version
+lasts until the end.
 
 ```
 lex 2.7 plan=l1,v1:2.0,f1 s6120622063206420 s6520 e
@@ -312,11 +314,11 @@ t UnquotedSymbol 6:0:6 7:0:7 - x64
 h 2.0 2
 t UnquotedSymbol 4:0:4 5:0:5 - x63
 t UnquotedSymbol 6:0:6 7:0:7 - x64
-fin 5:0:5
 at 8:0:8
 v 2.0
 at 10:0:10
 v 2.0
+fin 5:0:5
 at 0:0:0
 v 2.7
 ok

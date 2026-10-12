@@ -370,13 +370,14 @@ fn drive<const WHITESPACE: bool, R: SmtLexRecovery<Scripted<WHITESPACE>>>(
         let mut from = 0;
         loop {
             let before = lexer.current_location().offset();
+            // a slice holds the result back, the end of the input returns it
             let result = match feed {
-                Some(slice) => lexer.lex_slice(&slice[from..]),
-                None => lexer.lex_eof(),
+                Some(slice) => lexer.lex_slice(&slice[from..]).map(|()| None),
+                None => lexer.lex_eof().map(Some),
             };
             let err = match result {
-                Ok(ControlFlow::Continue(())) => break,
-                Ok(ControlFlow::Break(located)) => {
+                Ok(None) => break,
+                Ok(Some(located)) => {
                     // only a finish by the behaviour is reported
                     if *located.value() {
                         out.borrow_mut()

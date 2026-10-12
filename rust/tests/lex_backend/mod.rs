@@ -234,7 +234,7 @@ fn rust_lex_as<const WHITESPACE: bool>(version: SmtVersion, feeds: &[Feed<'_>]) 
         for feed in feeds {
             let result = match feed {
                 Feed::Slice(slice) => lexer.lex_slice(slice),
-                Feed::Eof => lexer.lex_eof(),
+                Feed::Eof => lexer.lex_eof().map(|_| ()),
             };
             match result {
                 Ok(_) => locations.push(loc(lexer.current_location())),

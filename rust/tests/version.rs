@@ -8,8 +8,6 @@ mod reserved_words;
 
 use reserved_words::reserved_words;
 
-use std::ops::ControlFlow;
-
 use blazing_smtlib::{
     NonstandardCommandError, SmtBytesBuf, SmtSyntaxChecker,
     parser::{SmtCommandOutcome, SmtCommandParser, SmtSExprParser, SmtSyntaxErrorKind},
@@ -67,9 +65,7 @@ fn read_pieces(
     let mut handler = SmtSyntaxChecker;
     let mut reader = SmtReader::script(&mut handler, initial, posture);
     for piece in pieces {
-        if let ControlFlow::Break(_) = reader.read_slice(piece)? {
-            return Ok(());
-        }
+        reader.read_slice(piece)?;
     }
     reader.read_eof().map(|_| ())
 }
@@ -450,21 +446,11 @@ fn the_version_and_the_declaration_count_reset_with_the_input() {
             SmtReader::script(&mut handler, SmtVersion::V2_7, SmtVersionPosture::default());
         // every input may declare its version once: the count starts again
         for _ in 0..3 {
-            assert!(matches!(
-                reader.read_slice(declared),
-                Ok(ControlFlow::Continue(()))
-            ));
-            let finished = if ending.is_empty() {
-                reader.read_eof()
-            } else {
-                reader.read_slice(ending)
-            };
-            assert!(matches!(finished, Ok(ControlFlow::Break(_))));
-            if !ending.is_empty() {
-                // the exit command finished the reader before the end of the
-                // input, which is still to come
-                assert!(matches!(reader.read_eof(), Ok(ControlFlow::Continue(()))));
-            }
+            reader.read_slice(declared).expect("the script must read");
+            reader.read_slice(ending).expect("the script must read");
+            // the end of the input returns the result, also one held since the
+            // exit command finished the reader
+            reader.read_eof().expect("the script must end");
         }
         // and the declared version is gone: the next input starts in the initial one
         let err = reader
@@ -486,13 +472,10 @@ fn a_command_parser_reports_the_declaration_without_applying_it() {
     let mut reader =
         SmtReader::with_parser(&mut handler, SmtCommandParser::new(), SmtVersion::V2_7);
     let mut stop = |input: &[u8]| -> Result<SmtCommandOutcome, ReadError> {
-        let outcome = match reader.read_slice(input)? {
-            ControlFlow::Break(located) => *located.value(),
-            ControlFlow::Continue(()) => panic!("the command must finish the reader"),
-        };
-        // every command is an input of its own, which ends here
-        assert!(matches!(reader.read_eof(), Ok(ControlFlow::Continue(()))));
-        Ok(outcome)
+        // every command is an input of its own, which ends here and returns
+        // the outcome
+        reader.read_slice(input)?;
+        Ok(*reader.read_eof()?.value())
     };
 
     for (version, spelling) in VERSIONS {
@@ -707,8 +690,9 @@ fn a_reserved_word_alone_is_an_s_expression_since_2_6() {
                 (0, 3)
             );
         } else {
+            result.expect("a reserved word is an S-expression since 2.6");
             assert!(
-                matches!(result, Ok(ControlFlow::Break(_))),
+                reader.read_eof().is_ok(),
                 "a reserved word is an S-expression in {version:?}"
             );
         }
@@ -901,11 +885,8 @@ fn the_string_escapes_reset_with_the_input() {
     let mut reader = SmtReader::script(&mut handler, SmtVersion::V2_7, every_version_allowed());
     // every input can switch to the 2.0 strings ...
     for _ in 0..2 {
-        assert!(matches!(
-            reader.read_slice(declared),
-            Ok(ControlFlow::Continue(()))
-        ));
-        assert!(matches!(reader.read_eof(), Ok(ControlFlow::Break(_))));
+        reader.read_slice(declared).expect("the script must read");
+        reader.read_eof().expect("the script must end");
     }
     // ... and the next one starts with the strings of the initial version again
     let err = reader
@@ -921,18 +902,16 @@ fn the_reader_tells_the_version_in_force() {
         SmtReader::script(&mut handler, SmtVersion::V2_7, SmtVersionPosture::default());
     assert_eq!(reader.version(), SmtVersion::V2_7);
     // a declared version is in force once its command has been read
-    assert!(matches!(
-        reader.read_slice(b"(set-info :smt-lib-version 2.6)"),
-        Ok(ControlFlow::Continue(()))
-    ));
+    reader
+        .read_slice(b"(set-info :smt-lib-version 2.6)")
+        .expect("the declaration must read");
     assert_eq!(reader.version(), SmtVersion::V2_6);
     // also after the exit command, until the input ends
-    assert!(matches!(
-        reader.read_slice(b"(exit) (assert"),
-        Ok(ControlFlow::Break(_))
-    ));
+    reader
+        .read_slice(b"(exit) (assert")
+        .expect("the input after the exit command must be disregarded");
     assert_eq!(reader.version(), SmtVersion::V2_6);
     // the end of the input brings back the initial version
-    assert!(matches!(reader.read_eof(), Ok(ControlFlow::Continue(()))));
+    reader.read_eof().expect("the script must end");
     assert_eq!(reader.version(), SmtVersion::V2_7);
 }

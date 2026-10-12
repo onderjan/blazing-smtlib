@@ -12,8 +12,6 @@ mod reserved_words;
 use common::{assert_error_span, assert_parser_error, parse};
 use reserved_words::{COMMAND_NAMES, reserved_words};
 
-use std::ops::ControlFlow;
-
 use blazing_smtlib::{
     NonstandardCommandError, SmtSyntaxChecker,
     reader::{SmtReadError, SmtReader},
@@ -227,9 +225,7 @@ fn read_pieces(pieces: &[&[u8]]) -> Result<(), SmtReadError<NonstandardCommandEr
     let mut reader =
         SmtReader::script(&mut handler, SmtVersion::V2_7, SmtVersionPosture::default());
     for piece in pieces {
-        if let ControlFlow::Break(_) = reader.read_slice(piece)? {
-            return Ok(());
-        }
+        reader.read_slice(piece)?;
     }
     reader.read_eof().map(|_| ())
 }
