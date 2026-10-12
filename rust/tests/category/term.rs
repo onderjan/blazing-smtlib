@@ -922,3 +922,140 @@ fn application_arguments_are_handed_over_regardless_of_consumption() {
         assert_eq!(handler.applications, expected, "with {consumption:?}");
     }
 }
+
+/// Handler that records the calls of the binders and matches, by name.
+#[derive(Default)]
+struct Calls {
+    calls: Vec<&'static str>,
+}
+
+impl SmtHandler for Calls {
+    type Error = Infallible;
+    type SExpr = ();
+    type Attribute = ();
+    type Sort = ();
+    type Term = ();
+
+    fn handle_sort(&mut self, _sort: SmtSort<'_, Self>) -> Result<(), Infallible> {
+        Ok(())
+    }
+    fn handle_term(&mut self, _term: SmtTerm<'_, Self>) -> Result<(), Infallible> {
+        Ok(())
+    }
+    fn start_let(&mut self, _bindings: SmtBindings<'_, Self>) -> Result<(), Infallible> {
+        self.calls.push("start-let");
+        Ok(())
+    }
+    fn end_let(&mut self, _term: ()) -> Result<(), Infallible> {
+        self.calls.push("end-let");
+        Ok(())
+    }
+    fn handle_s_expr(&mut self, _expr: SmtSExpr<'_, Self>) -> Result<(), Infallible> {
+        Ok(())
+    }
+    fn handle_attribute(
+        &mut self,
+        _name: SmtKeyword<'_>,
+        _value: Option<SmtAttributeValue<'_, Self>>,
+    ) -> Result<(), Infallible> {
+        Ok(())
+    }
+    fn annotate_term(
+        &mut self,
+        _term: (),
+        _attributes: SmtAttributes<'_, Self>,
+    ) -> Result<(), Infallible> {
+        Ok(())
+    }
+    fn start_quantifier(
+        &mut self,
+        _kind: SmtQuantifierKind,
+        _name: SmtSymbol<'_>,
+        _sort: (),
+    ) -> Result<(), Infallible> {
+        self.calls.push("start-quantifier");
+        Ok(())
+    }
+    fn end_quantifier(&mut self, _term: ()) -> Result<(), Infallible> {
+        self.calls.push("end-quantifier");
+        Ok(())
+    }
+    fn start_lambda(&mut self, _name: SmtSymbol<'_>, _sort: ()) -> Result<(), Infallible> {
+        self.calls.push("start-lambda");
+        Ok(())
+    }
+    fn end_lambda(&mut self, _term: ()) -> Result<(), Infallible> {
+        self.calls.push("end-lambda");
+        Ok(())
+    }
+    fn start_match(&mut self, _scrutinee: ()) -> Result<(), Infallible> {
+        self.calls.push("start-match");
+        Ok(())
+    }
+    fn start_match_case(&mut self, _pattern: SmtPattern<'_>) -> Result<(), Infallible> {
+        self.calls.push("start-match-case");
+        Ok(())
+    }
+    fn end_match_case(&mut self, _term: ()) -> Result<(), Infallible> {
+        self.calls.push("end-match-case");
+        Ok(())
+    }
+    fn end_match(&mut self) -> Result<(), Infallible> {
+        self.calls.push("end-match");
+        Ok(())
+    }
+}
+
+#[test]
+fn no_end_call_comes_before_a_missing_closing_parenthesis() {
+    // each input has a stray token where a construct's closing parenthesis
+    // belongs; the construct is not ended before the error
+    let cases: [(&[u8], u64, u64, &[&str]); 6] = [
+        (b"(let ((x 1)) x y)", 15, 16, &["start-let"]),
+        (b"(forall ((x Int)) x y)", 20, 21, &["start-quantifier"]),
+        (
+            b"(exists ((x Int) (y Int)) x z)",
+            28,
+            29,
+            &["start-quantifier", "start-quantifier"],
+        ),
+        (b"(lambda ((x Int)) x y)", 20, 21, &["start-lambda"]),
+        // the case is not ended before its closing parenthesis
+        (
+            b"(match s ((x 1 2)))",
+            15,
+            16,
+            &["start-match", "start-match-case"],
+        ),
+        // the match is not ended before its closing parenthesis
+        (
+            b"(match s ((x 1)) y)",
+            17,
+            18,
+            &["start-match", "start-match-case", "end-match-case"],
+        ),
+    ];
+    for (input, start, end, calls) in cases {
+        let mut handler = Calls::default();
+        match run_with::<Calls, SmtTermParser<Calls>>(&mut handler, input) {
+            Ok(_) => panic!("expected a parser error in {:?}, got Ok", text(input)),
+            Err((kind, span)) => {
+                assert!(
+                    matches!(
+                        kind,
+                        SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
+                    ),
+                    "{kind:?} in {:?}",
+                    text(input)
+                );
+                assert_eq!(
+                    (span.start().offset(), span.end().offset()),
+                    (start, end),
+                    "error span mismatch (start, end) as byte offsets in {:?}",
+                    text(input)
+                );
+            }
+        }
+        assert_eq!(handler.calls, calls, "calls in {:?}", text(input));
+    }
+}

@@ -724,8 +724,8 @@ fn start_define_sort_error_points_at_last_signature_token() {
 }
 
 #[test]
-fn end_define_sort_error_points_at_last_body_token() {
-    let handler = assert_handler_error(b"(define-sort S () Boom)", "exploding sort", 18, 22);
+fn end_define_sort_error_points_at_the_closing_parenthesis() {
+    let handler = assert_handler_error(b"(define-sort S () Boom)", "exploding sort", 22, 23);
     assert_eq!(handler.events, ["start-sort S ()"]);
 }
 
@@ -1007,8 +1007,8 @@ fn define_const_signature_arrives_before_body() {
 }
 
 #[test]
-fn define_const_body_error_points_at_last_body_token() {
-    let handler = assert_handler_error(b"(define-const c Int boom)", "exploding body", 20, 24);
+fn define_const_body_error_points_at_the_closing_parenthesis() {
+    let handler = assert_handler_error(b"(define-const c Int boom)", "exploding body", 24, 25);
     assert_eq!(handler.events, ["start c () Int"]);
 }
 
@@ -1267,8 +1267,8 @@ fn start_define_fun_error_points_at_last_signature_token() {
 }
 
 #[test]
-fn end_define_fun_error_points_at_last_body_token() {
-    let handler = assert_handler_error(b"(define-fun f () Int boom)", "exploding body", 21, 25);
+fn end_define_fun_error_points_at_the_closing_parenthesis() {
+    let handler = assert_handler_error(b"(define-fun f () Int boom)", "exploding body", 25, 26);
     assert_eq!(handler.events, ["start f () Int"]);
 }
 
@@ -1593,25 +1593,26 @@ fn declare_datatypes_handler_errors_point_at_the_triggering_token() {
         ["start-datatypes ((A 0))", "start-datatype ()"]
     );
 
-    // end_datatype, parametric form: the closing parenthesis of the constructors,
-    // one before the parenthesis closing the declaration
+    // end_datatype, parametric form: the parenthesis closing the declaration,
+    // one after the closing parenthesis of the constructors
     let handler = assert_handler_error(
         b"(declare-datatypes ((A 1)) ((par (X) ((boom)))))",
         "exploding constructor",
-        44,
         45,
+        46,
     );
     assert_eq!(
         handler.events,
         ["start-datatypes ((A 1))", "start-datatype (X)"]
     );
 
-    // end_declare_datatypes: the closing parenthesis of the declaration list
+    // end_declare_datatypes: the closing parenthesis of the command,
+    // one after the closing parenthesis of the declaration list
     let handler = assert_handler_error(
         b"(declare-datatypes ((Unendable 0)) (((a))))",
         "unendable datatypes",
-        41,
         42,
+        43,
     );
     assert_eq!(
         handler.events,
@@ -1816,7 +1817,7 @@ fn declare_datatype_handler_errors_point_at_the_triggering_token() {
     );
     assert_eq!(handler.events, ["start-datatypes ((Unstartable 0))"]);
 
-    // end_datatype: the closing parenthesis of the constructors
+    // end_datatype, simple form: the closing parenthesis of the constructors
     let handler = assert_handler_error(
         b"(declare-datatype A ((boom)))",
         "exploding constructor",
@@ -1828,12 +1829,26 @@ fn declare_datatype_handler_errors_point_at_the_triggering_token() {
         ["start-datatypes ((A 0))", "start-datatype ()"]
     );
 
-    // end_declare_datatypes: the same token, as the single declaration ends the list
+    // end_datatype, parametric form: the parenthesis closing the par,
+    // one after the closing parenthesis of the constructors
+    let handler = assert_handler_error(
+        b"(declare-datatype A (par (X) ((boom))))",
+        "exploding constructor",
+        37,
+        38,
+    );
+    assert_eq!(
+        handler.events,
+        ["start-datatypes ((A 1))", "start-datatype (X)"]
+    );
+
+    // end_declare_datatypes: the closing parenthesis of the command,
+    // one after the closing parenthesis of the constructors
     let handler = assert_handler_error(
         b"(declare-datatype Unendable ((a)))",
         "unendable datatypes",
-        32,
         33,
+        34,
     );
     assert_eq!(
         handler.events,
@@ -2083,12 +2098,13 @@ fn define_funs_rec_handler_errors_point_at_the_triggering_token() {
         ["start-funs-rec ((f () Int))", "start-body"]
     );
 
-    // end_define_funs_rec: the closing parenthesis of the body list
+    // end_define_funs_rec: the closing parenthesis of the command,
+    // one after the closing parenthesis of the body list
     let handler = assert_handler_error(
         b"(define-funs-rec ((unendable () Int)) (1))",
         "unendable functions",
-        40,
         41,
+        42,
     );
     assert_eq!(
         handler.events,
@@ -2132,13 +2148,12 @@ fn define_fun_rec_handler_errors_point_at_the_triggering_token() {
         ["start-funs-rec ((f () Int))", "start-body"]
     );
 
-    // end_define_funs_rec: also the last token of the body,
-    // as the single body ends the definitions
+    // end_define_funs_rec: the closing parenthesis of the command
     let handler = assert_handler_error(
         b"(define-fun-rec unendable () Int 1)",
         "unendable functions",
-        33,
         34,
+        35,
     );
     assert_eq!(
         handler.events,
@@ -2473,24 +2488,25 @@ fn match_handler_errors_point_at_the_triggering_token() {
     );
     assert_eq!(handler.events, ["start-match s"]);
 
-    // end_match_case: the last token of the case body, whether a symbol
-    // or the closing parenthesis of a compound term
-    let handler = assert_handler_error(b"(assert (match s ((x boom))))", "exploding case", 21, 25);
+    // end_match_case: the closing parenthesis of the case, whether the
+    // case body is a symbol or a compound term
+    let handler = assert_handler_error(b"(assert (match s ((x boom))))", "exploding case", 25, 26);
     assert_eq!(handler.events, ["start-match s", "start-case x"]);
     let handler = assert_handler_error(
         b"(assert (match s ((x (let ((y 1)) boom)))))",
         "exploding case",
-        38,
         39,
+        40,
     );
     assert_eq!(handler.events, ["start-match s", "start-case x"]);
 
-    // end_match: the closing parenthesis of the case list
+    // end_match: the closing parenthesis of the match,
+    // one after the closing parenthesis of the case list
     let handler = assert_handler_error(
         b"(assert (match unendable ((x 1))))",
         "unendable match",
-        31,
         32,
+        33,
     );
     assert_eq!(
         handler.events,

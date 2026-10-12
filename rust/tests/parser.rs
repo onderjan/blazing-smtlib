@@ -14,6 +14,7 @@ use blazing_smtlib::{
         SmtClosedParser, SmtCommandPayloadParser, SmtCommandRule, SmtSyntaxErrorKind, SmtTermParser,
     },
     reader::SmtReadErrorCause,
+    token::SmtTokenCategory,
 };
 
 #[test]
@@ -621,6 +622,89 @@ fn define_fun_rec_produces_the_desugared_callbacks() {
             "check-sat",
         ]
     );
+}
+
+#[test]
+fn no_end_call_comes_before_a_missing_closing_parenthesis() {
+    // each input has a stray token where a closing parenthesis belongs;
+    // the definition or declaration it closes is not ended before the error
+    let cases: [(&[u8], u64, u64, &[&str]); 9] = [
+        (
+            b"(define-sort S () Int Int)",
+            22,
+            25,
+            &["start-define-sort"],
+        ),
+        (b"(define-const c Int 1 2)", 22, 23, &["start-define-fun"]),
+        (b"(define-fun f () Int 1 2)", 23, 24, &["start-define-fun"]),
+        (
+            b"(define-fun-rec f () Int 1 2)",
+            27,
+            28,
+            &[
+                "start-define-funs-rec",
+                "start-recursive-body",
+                "end-recursive-body",
+            ],
+        ),
+        (
+            b"(define-funs-rec ((f () Int)) (1) 2)",
+            34,
+            35,
+            &[
+                "start-define-funs-rec",
+                "start-recursive-body",
+                "end-recursive-body",
+            ],
+        ),
+        (
+            b"(declare-datatypes ((A 0)) (((a))) x)",
+            35,
+            36,
+            &["start-declare-datatypes", "start-datatype", "end-datatype"],
+        ),
+        (
+            b"(declare-datatype A ((a)) x)",
+            26,
+            27,
+            &["start-declare-datatypes", "start-datatype", "end-datatype"],
+        ),
+        // a parametric datatype is not ended before the parenthesis closing the par
+        (
+            b"(declare-datatypes ((A 1)) ((par (X) ((a)) x)))",
+            43,
+            44,
+            &["start-declare-datatypes", "start-datatype"],
+        ),
+        (
+            b"(declare-datatype A (par (X) ((a)) x))",
+            35,
+            36,
+            &["start-declare-datatypes", "start-datatype"],
+        ),
+    ];
+    for (input, start, end, calls) in cases {
+        let mut handler = Recording::default();
+        let err = parse_with(&mut handler, input).expect_err("expected a parser error");
+        assert_error_span(&err, start, end);
+        assert!(
+            matches!(
+                err.cause(),
+                SmtReadErrorCause::Syntax(SmtSyntaxErrorKind::ExpectedToken([
+                    SmtTokenCategory::ParenClose
+                ]))
+            ),
+            "{:?} in {:?}",
+            err.cause(),
+            String::from_utf8_lossy(input)
+        );
+        assert_eq!(
+            handler.commands,
+            calls,
+            "calls in {:?}",
+            String::from_utf8_lossy(input)
+        );
+    }
 }
 
 #[test]
