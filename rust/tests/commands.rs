@@ -101,6 +101,45 @@ impl Resolving {
     }
 }
 
+/// Renders a function signature as written, `f ((x Int)) Int`.
+fn render_signature(signature: &SmtFunctionSignature<Resolving>) -> String {
+    let params: Vec<String> = signature
+        .params
+        .iter()
+        .map(|(param, sort)| format!("({} {})", text(param.as_slice()), sort))
+        .collect();
+    format!(
+        "{} ({}) {}",
+        text(signature.name.as_slice()),
+        params.join(" "),
+        signature.result_sort
+    )
+}
+
+/// Renders datatype constructors as written, rejecting one named `boom`.
+fn render_constructors(
+    constructors: &[SmtDatatypeConstructor<Resolving>],
+) -> Result<String, String> {
+    let mut rendered = Vec::new();
+    for constructor in constructors {
+        let name = text(constructor.name.as_slice());
+        if name == "boom" {
+            return Err("exploding constructor".into());
+        }
+        let selectors: Vec<String> = constructor
+            .selectors
+            .iter()
+            .map(|(selector, sort)| format!("({} {})", text(selector.as_slice()), sort))
+            .collect();
+        rendered.push(if selectors.is_empty() {
+            format!("({name})")
+        } else {
+            format!("({name} {})", selectors.join(" "))
+        });
+    }
+    Ok(format!("({})", rendered.join(" ")))
+}
+
 fn text(bytes: &[u8]) -> String {
     String::from_utf8(bytes.to_vec()).expect("test inputs are ASCII")
 }
@@ -402,14 +441,38 @@ impl SmtCommandHandler for Resolving {
         Ok(())
     }
 
-    fn command_check_sat(&mut self, assumptions: Vec<String>) -> Result<(), String> {
-        // rendered as plain `check-sat` without assumptions, so that
-        // `check-sat` and `(check-sat-assuming ())` are indistinguishable
-        self.events.push(if assumptions.is_empty() {
-            "check-sat".into()
-        } else {
-            format!("check-sat ({})", assumptions.join(" "))
-        });
+    fn command_check_sat(&mut self) -> Result<(), String> {
+        self.events.push("check-sat".into());
+        Ok(())
+    }
+
+    fn command_check_sat_assuming(&mut self, assumptions: Vec<String>) -> Result<(), String> {
+        self.events
+            .push(format!("check-sat-assuming ({})", assumptions.join(" ")));
+        Ok(())
+    }
+
+    fn command_declare_const(&mut self, name: SmtSymbolBuf, sort: String) -> Result<(), String> {
+        self.events
+            .push(format!("declare-const {} {sort}", text(name.as_slice())));
+        Ok(())
+    }
+
+    fn command_define_const(
+        &mut self,
+        name: SmtSymbolBuf,
+        sort: String,
+        body: String,
+    ) -> Result<(), String> {
+        let name = text(name.as_slice());
+        if name == "forbidden" {
+            return Err("forbidden function name".into());
+        }
+        if body == "boom" {
+            return Err("exploding body".into());
+        }
+        self.events
+            .push(format!("define-const {name} {sort} {body}"));
         Ok(())
     }
 
@@ -552,6 +615,39 @@ impl SmtCommandHandler for Resolving {
         Ok(())
     }
 
+    fn start_define_fun_rec(
+        &mut self,
+        signature: SmtFunctionSignature<Self>,
+    ) -> Result<(), String> {
+        let name = text(signature.name.as_slice());
+        if name == "forbidden" {
+            return Err("forbidden recursive function name".into());
+        }
+        self.events
+            .push(format!("start-fun-rec {}", render_signature(&signature)));
+        // the function is in scope in its own body, and so are its parameters
+        self.rec_functions = vec![name];
+        self.params = signature
+            .params
+            .iter()
+            .map(|(param, _)| text(param.as_slice()))
+            .collect();
+        Ok(())
+    }
+
+    fn end_define_fun_rec(&mut self, body: String) -> Result<(), String> {
+        if body == "boom" {
+            return Err("exploding recursive body".into());
+        }
+        if self.rec_functions.iter().any(|name| name == "unendable") {
+            return Err("unendable functions".into());
+        }
+        self.events.push(format!("end-fun-rec {body}"));
+        self.rec_functions.clear();
+        self.params.clear();
+        Ok(())
+    }
+
     fn end_define_funs_rec(&mut self) -> Result<(), String> {
         if self.rec_functions.iter().any(|name| name == "unendable") {
             return Err("unendable functions".into());
@@ -607,27 +703,44 @@ impl SmtCommandHandler for Resolving {
         &mut self,
         constructors: Vec<SmtDatatypeConstructor<Self>>,
     ) -> Result<(), String> {
-        let mut rendered = Vec::new();
-        for constructor in &constructors {
-            let name = text(constructor.name.as_slice());
-            if name == "boom" {
-                return Err("exploding constructor".into());
-            }
-            let selectors: Vec<String> = constructor
-                .selectors
-                .iter()
-                .map(|(selector, sort)| format!("({} {})", text(selector.as_slice()), sort))
-                .collect();
-            rendered.push(if selectors.is_empty() {
-                format!("({name})")
-            } else {
-                format!("({name} {})", selectors.join(" "))
-            });
-        }
-        self.events
-            .push(format!("end-datatype ({})", rendered.join(" ")));
+        let rendered = render_constructors(&constructors)?;
+        self.events.push(format!("end-datatype {rendered}"));
         self.sort_params.clear();
         self.datatype_index += 1;
+        Ok(())
+    }
+
+    fn start_declare_datatype(
+        &mut self,
+        name: SmtSymbolBuf,
+        params: Vec<SmtSymbolBuf>,
+    ) -> Result<(), String> {
+        let name = text(name.as_slice());
+        if name == "Forbidden" {
+            return Err("forbidden datatype name".into());
+        }
+        let params: Vec<String> = params.iter().map(|param| text(param.as_slice())).collect();
+        self.events.push(format!(
+            "start-declare-datatype {name} ({})",
+            params.join(" ")
+        ));
+        // the sort is in scope in its own selectors, and so are its parameters
+        self.datatype_sorts = vec![name];
+        self.sort_params = params;
+        Ok(())
+    }
+
+    fn end_declare_datatype(
+        &mut self,
+        constructors: Vec<SmtDatatypeConstructor<Self>>,
+    ) -> Result<(), String> {
+        let rendered = render_constructors(&constructors)?;
+        if self.datatype_sorts.iter().any(|name| name == "Unendable") {
+            return Err("unendable datatypes".into());
+        }
+        self.events.push(format!("end-declare-datatype {rendered}"));
+        self.datatype_sorts.clear();
+        self.sort_params.clear();
         Ok(())
     }
 
@@ -970,15 +1083,14 @@ fn declare_fun_parameter_list() {
     );
 }
 
-// --- Syntax-sugar commands ---
+// --- Abbreviating commands ---
 //
-// `declare-const`, `define-const` and `check-sat` are abbreviations of
-// `declare-fun`, `define-fun` and `check-sat-assuming` respectively, and
-// share their handler callbacks. These tests check that the sugar form is
-// observationally identical to the spelled-out one, including callback order.
+// `declare-const`, `define-const` and `check-sat` abbreviate `declare-fun`,
+// `define-fun` and `check-sat-assuming`, but each has calls of its own, so
+// the calls tell the abbreviation from the spelled-out form.
 
 #[test]
-fn declare_const_is_declare_fun_without_params() {
+fn declare_const_and_declare_fun_without_params_stay_apart() {
     let mut handler = Resolving::default();
     parse_resolving(
         &mut handler,
@@ -987,15 +1099,17 @@ fn declare_const_is_declare_fun_without_params() {
     assert_eq!(
         handler.events,
         [
-            "declare-fun x () Int",
+            "declare-const x Int",
             "declare-fun y () Int",
-            "declare-fun a () (Array Int Bool)",
+            "declare-const a (Array Int Bool)",
         ]
     );
 }
 
 #[test]
-fn define_const_is_define_fun_without_params() {
+fn define_const_and_define_fun_without_params_stay_apart() {
+    // each command has calls of its own: define-const one at its `)`,
+    // define-fun a start and an end
     let mut handler = Resolving::default();
     parse_resolving(
         &mut handler,
@@ -1004,8 +1118,7 @@ fn define_const_is_define_fun_without_params() {
     assert_eq!(
         handler.events,
         [
-            "start c () Int",
-            "end (+ x 1)",
+            "define-const c Int (+ x 1)",
             "start d () Int",
             "end (+ x 1)",
         ]
@@ -1013,14 +1126,14 @@ fn define_const_is_define_fun_without_params() {
 }
 
 #[test]
-fn define_const_signature_arrives_before_body() {
-    // a handler error raised from start_define_fun must prevent the body
-    // from being handled at all, exactly as for define-fun
+fn define_const_is_handled_in_one_call_at_its_closing_parenthesis() {
+    // the name, the sort and the body arrive together, so a rejected name
+    // is reported at the `)`, after the body
     let handler = assert_handler_error(
         b"(define-const forbidden Int 5)",
         "forbidden function name",
-        24,
-        27,
+        29,
+        30,
     );
     assert!(handler.events.is_empty());
 }
@@ -1028,7 +1141,7 @@ fn define_const_signature_arrives_before_body() {
 #[test]
 fn define_const_body_error_points_at_the_closing_parenthesis() {
     let handler = assert_handler_error(b"(define-const c Int boom)", "exploding body", 24, 25);
-    assert_eq!(handler.events, ["start c () Int"]);
+    assert!(handler.events.is_empty());
 }
 
 #[test]
@@ -1045,8 +1158,7 @@ fn define_const_does_not_inherit_previous_scope() {
         [
             "start a ((x Int)) Int",
             "end [x]",
-            "start c () Int",
-            "end x",
+            "define-const c Int x",
             "start b ((x Int)) Int",
             "end [x]",
         ]
@@ -1087,15 +1199,20 @@ fn check_sat_assuming_passes_assumption_terms() {
     );
     assert_eq!(
         handler.events,
-        ["check-sat (a b)", "check-sat ((not a) (f 1 x))"]
+        [
+            "check-sat-assuming (a b)",
+            "check-sat-assuming ((not a) (f 1 x))"
+        ]
     );
 }
 
 #[test]
-fn check_sat_is_check_sat_assuming_without_assumptions() {
+fn check_sat_and_check_sat_assuming_without_assumptions_stay_apart() {
+    // each command has a call of its own, so the input can be told
+    // from the calls even where the two mean the same
     let mut handler = Resolving::default();
     parse_resolving(&mut handler, b"(check-sat) (check-sat-assuming ())");
-    assert_eq!(handler.events, ["check-sat", "check-sat"]);
+    assert_eq!(handler.events, ["check-sat", "check-sat-assuming ()"]);
 }
 
 #[test]
@@ -1109,10 +1226,10 @@ fn repeated_check_sat_assumings_reuse_the_persistent_parser() {
     assert_eq!(
         handler.events,
         [
-            "check-sat (a b c)",
+            "check-sat-assuming (a b c)",
             "check-sat",
-            "check-sat (d)",
-            "check-sat"
+            "check-sat-assuming (d)",
+            "check-sat-assuming ()"
         ]
     );
 }
@@ -1752,23 +1869,27 @@ fn declare_datatypes_errors_point_at_offending_token() {
     );
 }
 
-// --- declare-datatype (syntax sugar) ---
+// --- declare-datatype ---
 //
 // `(declare-datatype D dec)` abbreviates `(declare-datatypes ((D k)) (dec))`
-// with `k` the number of parameters of `dec` (zero for the simple form),
-// so the handler observes exactly the events of the desugared command.
+// with `k` the number of parameters of `dec`, but has calls of its own:
+// a start with the name and the parameters, and an end with the constructors.
 
 #[test]
-fn declare_datatype_is_declare_datatypes_with_one_sort() {
+fn declare_datatype_and_declare_datatypes_with_one_sort_stay_apart() {
+    // each command has calls of its own; in both, the sort is in scope
+    // in its own selectors
     let mut handler = Resolving::default();
     parse_resolving(
         &mut handler,
-        b"(declare-datatype Lst ((nil) (cons (hd Int) (tl Lst))))",
+        b"(declare-datatype Lst ((nil) (cons (hd Int) (tl Lst)))) \
+          (declare-datatypes ((Lst 0)) (((nil) (cons (hd Int) (tl Lst)))))",
     );
     assert_eq!(
         handler.events,
         [
-            // the arity of the simple form is zero
+            "start-declare-datatype Lst ()",
+            "end-declare-datatype ((nil) (cons (hd Int) (tl <Lst>)))",
             "start-datatypes ((Lst 0))",
             "start-datatype ()",
             "end-datatype ((nil) (cons (hd Int) (tl <Lst>)))",
@@ -1778,7 +1899,7 @@ fn declare_datatype_is_declare_datatypes_with_one_sort() {
 }
 
 #[test]
-fn parametric_declare_datatype_derives_arity_from_params() {
+fn parametric_declare_datatype_starts_with_its_parameters() {
     let mut handler = Resolving::default();
     parse_resolving(
         &mut handler,
@@ -1788,37 +1909,19 @@ fn parametric_declare_datatype_derives_arity_from_params() {
     assert_eq!(
         handler.events,
         [
-            "start-datatypes ((Tree 1))",
-            "start-datatype (X)",
-            "end-datatype ((leaf) (node (l (<Tree> [X])) (v [X]) (r (<Tree> [X]))))",
-            "end-datatypes",
-            "start-datatypes ((Pair 2))",
-            "start-datatype (X Y)",
-            "end-datatype ((pair (first [X]) (second [Y])))",
-            "end-datatypes",
+            "start-declare-datatype Tree (X)",
+            "end-declare-datatype ((leaf) (node (l (<Tree> [X])) (v [X]) (r (<Tree> [X]))))",
+            "start-declare-datatype Pair (X Y)",
+            "end-declare-datatype ((pair (first [X]) (second [Y])))",
         ]
     );
 }
 
 #[test]
-fn declare_datatype_and_declare_datatypes_produce_identical_events() {
-    let mut sugar = Resolving::default();
-    parse_resolving(
-        &mut sugar,
-        b"(declare-datatype Opt (par (X) ((none) (some (val X)))))",
-    );
-    let mut plain = Resolving::default();
-    parse_resolving(
-        &mut plain,
-        b"(declare-datatypes ((Opt 1)) ((par (X) ((none) (some (val X))))))",
-    );
-    assert_eq!(sugar.events, plain.events);
-}
-
-#[test]
 fn declare_datatype_handler_errors_point_at_the_triggering_token() {
-    // start_declare_datatypes is deferred until the arity is known, so its error
-    // is at the token that determines it: the first constructor's opening parenthesis
+    // start_declare_datatype waits for the parameters to be known, so its
+    // error is at the token that determines them: in the simple form the
+    // first constructor's opening parenthesis
     let handler = assert_handler_error(
         b"(declare-datatype Forbidden ((a)))",
         "forbidden datatype name",
@@ -1827,56 +1930,41 @@ fn declare_datatype_handler_errors_point_at_the_triggering_token() {
     );
     assert!(handler.events.is_empty());
 
-    // start_datatype: the opening parenthesis of the first constructor
+    // in the parametric form the closing parenthesis of the parameters
     let handler = assert_handler_error(
-        b"(declare-datatype Unstartable ((a)))",
-        "unstartable datatype",
-        31,
-        32,
+        b"(declare-datatype Forbidden (par (X) ((a))))",
+        "forbidden datatype name",
+        35,
+        36,
     );
-    assert_eq!(handler.events, ["start-datatypes ((Unstartable 0))"]);
+    assert!(handler.events.is_empty());
 
-    // end_datatype, simple form: the closing parenthesis of the constructors
+    // end_declare_datatype: the closing parenthesis of the command,
+    // in the simple form one after the closing parenthesis of the constructors
     let handler = assert_handler_error(
         b"(declare-datatype A ((boom)))",
         "exploding constructor",
-        27,
         28,
+        29,
     );
-    assert_eq!(
-        handler.events,
-        ["start-datatypes ((A 0))", "start-datatype ()"]
-    );
+    assert_eq!(handler.events, ["start-declare-datatype A ()"]);
 
-    // end_datatype, parametric form: the parenthesis closing the par,
-    // one after the closing parenthesis of the constructors
+    // in the parametric form one after the parenthesis closing the par
     let handler = assert_handler_error(
         b"(declare-datatype A (par (X) ((boom))))",
         "exploding constructor",
-        37,
         38,
+        39,
     );
-    assert_eq!(
-        handler.events,
-        ["start-datatypes ((A 1))", "start-datatype (X)"]
-    );
+    assert_eq!(handler.events, ["start-declare-datatype A (X)"]);
 
-    // end_declare_datatypes: the closing parenthesis of the command,
-    // one after the closing parenthesis of the constructors
     let handler = assert_handler_error(
         b"(declare-datatype Unendable ((a)))",
         "unendable datatypes",
         33,
         34,
     );
-    assert_eq!(
-        handler.events,
-        [
-            "start-datatypes ((Unendable 0))",
-            "start-datatype ()",
-            "end-datatype ((a))",
-        ]
-    );
+    assert_eq!(handler.events, ["start-declare-datatype Unendable ()"]);
 }
 
 #[test]
@@ -1981,36 +2069,26 @@ fn recursive_constant_refers_to_itself() {
 }
 
 #[test]
-fn define_fun_rec_is_define_funs_rec_with_one_function() {
+fn define_fun_rec_and_define_funs_rec_with_one_function_stay_apart() {
+    // each command has calls of its own; in both, the function is in scope
+    // in its body, and so are its parameters
     let mut handler = Resolving::default();
     parse_resolving(
         &mut handler,
-        b"(define-fun-rec fact ((n Int)) Int (ite (<= n 1) 1 (* n (fact (- n 1)))))",
+        b"(define-fun-rec fact ((n Int)) Int (ite (<= n 1) 1 (* n (fact (- n 1))))) \
+          (define-funs-rec ((fact ((n Int)) Int)) ((ite (<= n 1) 1 (* n (fact (- n 1))))))",
     );
     assert_eq!(
         handler.events,
         [
+            "start-fun-rec fact ((n Int)) Int",
+            "end-fun-rec (ite (<= [n] 1) 1 (* [n] ({fact} (- [n] 1))))",
             "start-funs-rec ((fact ((n Int)) Int))",
             "start-body",
             "end-body (ite (<= [n] 1) 1 (* [n] ({fact} (- [n] 1))))",
             "end-funs-rec",
         ]
     );
-}
-
-#[test]
-fn define_fun_rec_and_define_funs_rec_produce_identical_events() {
-    let mut sugar = Resolving::default();
-    parse_resolving(
-        &mut sugar,
-        b"(define-fun-rec sum ((n Int)) Int (ite (= n 0) 0 (+ n (sum (- n 1)))))",
-    );
-    let mut plain = Resolving::default();
-    parse_resolving(
-        &mut plain,
-        b"(define-funs-rec ((sum ((n Int)) Int)) ((ite (= n 0) 0 (+ n (sum (- n 1))))))",
-    );
-    assert_eq!(sugar.events, plain.events);
 }
 
 #[test]
@@ -2039,10 +2117,8 @@ fn repeated_recursive_definitions_reset_count_functions_and_scope() {
             "start-body",
             "end-body ({h} (f x))",
             "end-funs-rec",
-            "start-funs-rec ((k ((x Int)) Int))",
-            "start-body",
-            "end-body ({k} (h z))",
-            "end-funs-rec",
+            "start-fun-rec k ((x Int)) Int",
+            "end-fun-rec ({k} (h z))",
             // a define-fun body sees neither the functions nor the parameters
             "start m ((y Int)) Int",
             "end (k (g [y]))",
@@ -2137,7 +2213,7 @@ fn define_funs_rec_handler_errors_point_at_the_triggering_token() {
 
 #[test]
 fn define_fun_rec_handler_errors_point_at_the_triggering_token() {
-    // start_define_funs_rec: the last token of the signature
+    // start_define_fun_rec: the last token of the signature
     let handler = assert_handler_error(
         b"(define-fun-rec forbidden () Int 1)",
         "forbidden recursive function name",
@@ -2146,42 +2222,23 @@ fn define_fun_rec_handler_errors_point_at_the_triggering_token() {
     );
     assert!(handler.events.is_empty());
 
-    // start_recursive_body: the first token of the body
-    let handler = assert_handler_error(
-        b"(define-fun-rec unstartable () Int 1)",
-        "unstartable function",
-        35,
-        36,
-    );
-    assert_eq!(handler.events, ["start-funs-rec ((unstartable () Int))"]);
-
-    // end_recursive_body: the last token of the body
+    // end_define_fun_rec, rejecting the body: the closing parenthesis of the command
     let handler = assert_handler_error(
         b"(define-fun-rec f () Int boom)",
         "exploding recursive body",
-        25,
         29,
+        30,
     );
-    assert_eq!(
-        handler.events,
-        ["start-funs-rec ((f () Int))", "start-body"]
-    );
+    assert_eq!(handler.events, ["start-fun-rec f () Int"]);
 
-    // end_define_funs_rec: the closing parenthesis of the command
+    // end_define_fun_rec, rejecting the function: the same token
     let handler = assert_handler_error(
         b"(define-fun-rec unendable () Int 1)",
         "unendable functions",
         34,
         35,
     );
-    assert_eq!(
-        handler.events,
-        [
-            "start-funs-rec ((unendable () Int))",
-            "start-body",
-            "end-body 1",
-        ]
-    );
+    assert_eq!(handler.events, ["start-fun-rec unendable () Int"]);
 }
 
 #[test]
@@ -2301,10 +2358,9 @@ fn define_fun_rec_errors_point_at_offending_token() {
 }
 
 #[test]
-fn missing_recursive_body_is_started_only_in_the_sugar_form() {
-    // the sugar form has no body list, so the closing parenthesis reaches
-    // the body parser and starts the body before the missing term is
-    // detected; this is intended, as the two forms differ syntactically
+fn missing_recursive_body_starts_no_body() {
+    // define-fun-rec has no body calls: its body is a term between its
+    // start and its end, and the closing parenthesis is no term
     let mut handler = Resolving::default();
     let err = parse_with(&mut handler, b"(define-fun-rec f () Int)")
         .expect_err("expected a parser error");
@@ -2317,12 +2373,9 @@ fn missing_recursive_body_is_started_only_in_the_sugar_form() {
         "{:?}",
         err.cause()
     );
-    assert_eq!(
-        handler.events,
-        ["start-funs-rec ((f () Int))", "start-body"]
-    );
+    assert_eq!(handler.events, ["start-fun-rec f () Int"]);
 
-    // in the full form, the body list filters out the closing parenthesis
+    // in define-funs-rec, the body list filters out the closing parenthesis
     // before any body is started
     let mut handler = Resolving::default();
     let err = parse_with(&mut handler, b"(define-funs-rec ((f () Int)) ())")

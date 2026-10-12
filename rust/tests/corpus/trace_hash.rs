@@ -90,6 +90,13 @@ mod tag {
     pub const START_DATATYPE_DECLARATION: u8 = 64;
     pub const END_DATATYPE_DECLARATION: u8 = 65;
     pub const END_DECLARE_DATATYPES: u8 = 66;
+    pub const CHECK_SAT_ASSUMING: u8 = 67;
+    pub const DECLARE_CONST: u8 = 68;
+    pub const DEFINE_CONST: u8 = 69;
+    pub const START_DEFINE_FUN_REC: u8 = 70;
+    pub const END_DEFINE_FUN_REC: u8 = 71;
+    pub const START_DECLARE_DATATYPE: u8 = 72;
+    pub const END_DECLARE_DATATYPE: u8 = 73;
 }
 
 impl TraceHash {
@@ -212,6 +219,14 @@ impl TraceHash {
         for (name, sort) in vars {
             self.symbol(name);
             self.u64(*sort);
+        }
+    }
+
+    fn constructors(&mut self, constructors: &[SmtDatatypeConstructor<Self>]) {
+        self.count(constructors.len());
+        for constructor in constructors {
+            self.symbol(&constructor.name);
+            self.sorted_vars(&constructor.selectors);
         }
     }
 
@@ -589,9 +604,69 @@ impl SmtCommandHandler for TraceHash {
         Ok(())
     }
 
-    fn command_check_sat(&mut self, assumptions: Vec<u64>) -> Result<(), Self::Error> {
+    fn command_check_sat(&mut self) -> Result<(), Self::Error> {
         self.byte(tag::CHECK_SAT);
+        Ok(())
+    }
+
+    fn command_check_sat_assuming(&mut self, assumptions: Vec<u64>) -> Result<(), Self::Error> {
+        self.byte(tag::CHECK_SAT_ASSUMING);
         self.values(&assumptions);
+        Ok(())
+    }
+
+    fn command_declare_const(&mut self, name: SmtSymbolBuf, sort: u64) -> Result<(), Self::Error> {
+        self.byte(tag::DECLARE_CONST);
+        self.symbol(&name);
+        self.u64(sort);
+        Ok(())
+    }
+
+    fn command_define_const(
+        &mut self,
+        name: SmtSymbolBuf,
+        sort: u64,
+        body: u64,
+    ) -> Result<(), Self::Error> {
+        self.byte(tag::DEFINE_CONST);
+        self.symbol(&name);
+        self.u64(sort);
+        self.u64(body);
+        Ok(())
+    }
+
+    fn start_define_fun_rec(
+        &mut self,
+        signature: SmtFunctionSignature<Self>,
+    ) -> Result<(), Self::Error> {
+        self.byte(tag::START_DEFINE_FUN_REC);
+        self.signature(&signature);
+        Ok(())
+    }
+
+    fn end_define_fun_rec(&mut self, body: u64) -> Result<(), Self::Error> {
+        self.byte(tag::END_DEFINE_FUN_REC);
+        self.u64(body);
+        Ok(())
+    }
+
+    fn start_declare_datatype(
+        &mut self,
+        name: SmtSymbolBuf,
+        params: Vec<SmtSymbolBuf>,
+    ) -> Result<(), Self::Error> {
+        self.byte(tag::START_DECLARE_DATATYPE);
+        self.symbol(&name);
+        self.symbols(&params);
+        Ok(())
+    }
+
+    fn end_declare_datatype(
+        &mut self,
+        constructors: Vec<SmtDatatypeConstructor<Self>>,
+    ) -> Result<(), Self::Error> {
+        self.byte(tag::END_DECLARE_DATATYPE);
+        self.constructors(&constructors);
         Ok(())
     }
 
@@ -709,11 +784,7 @@ impl SmtCommandHandler for TraceHash {
         constructors: Vec<SmtDatatypeConstructor<Self>>,
     ) -> Result<(), Self::Error> {
         self.byte(tag::END_DATATYPE_DECLARATION);
-        self.count(constructors.len());
-        for constructor in &constructors {
-            self.symbol(&constructor.name);
-            self.sorted_vars(&constructor.selectors);
-        }
+        self.constructors(&constructors);
         Ok(())
     }
 

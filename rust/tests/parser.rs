@@ -303,12 +303,25 @@ impl SmtCommandHandler for Recording {
         self.commands.push("assert");
         Ok(())
     }
-    fn command_check_sat(&mut self, assumptions: Vec<()>) -> Result<(), Self::Error> {
-        self.commands.push(if assumptions.is_empty() {
-            "check-sat"
-        } else {
-            "check-sat-assuming"
-        });
+    fn command_check_sat(&mut self) -> Result<(), Self::Error> {
+        self.commands.push("check-sat");
+        Ok(())
+    }
+    fn command_check_sat_assuming(&mut self, _assumptions: Vec<()>) -> Result<(), Self::Error> {
+        self.commands.push("check-sat-assuming");
+        Ok(())
+    }
+    fn command_declare_const(&mut self, _name: SmtSymbolBuf, _sort: ()) -> Result<(), Self::Error> {
+        self.commands.push("declare-const");
+        Ok(())
+    }
+    fn command_define_const(
+        &mut self,
+        _name: SmtSymbolBuf,
+        _sort: (),
+        _body: (),
+    ) -> Result<(), Self::Error> {
+        self.commands.push("define-const");
         Ok(())
     }
     fn command_reset(&mut self) -> Result<(), Self::Error> {
@@ -371,6 +384,32 @@ impl SmtCommandHandler for Recording {
     }
     fn end_define_funs_rec(&mut self) -> Result<(), Self::Error> {
         self.commands.push("end-define-funs-rec");
+        Ok(())
+    }
+    fn start_define_fun_rec(
+        &mut self,
+        _signature: SmtFunctionSignature<Self>,
+    ) -> Result<(), Self::Error> {
+        self.commands.push("start-define-fun-rec");
+        Ok(())
+    }
+    fn end_define_fun_rec(&mut self, _body: ()) -> Result<(), Self::Error> {
+        self.commands.push("end-define-fun-rec");
+        Ok(())
+    }
+    fn start_declare_datatype(
+        &mut self,
+        _name: SmtSymbolBuf,
+        _params: Vec<SmtSymbolBuf>,
+    ) -> Result<(), Self::Error> {
+        self.commands.push("start-declare-datatype");
+        Ok(())
+    }
+    fn end_declare_datatype(
+        &mut self,
+        _constructors: Vec<SmtDatatypeConstructor<Self>>,
+    ) -> Result<(), Self::Error> {
+        self.commands.push("end-declare-datatype");
         Ok(())
     }
     fn start_declare_datatypes(
@@ -475,19 +514,16 @@ fn declare_datatypes_callbacks_surround_each_datatype() {
 }
 
 #[test]
-fn declare_datatype_produces_the_desugared_callbacks() {
-    // the sugar form is handled as declare-datatypes with one sort
+fn declare_datatype_has_calls_of_its_own() {
     let mut handler = Recording::default();
     parse_with(&mut handler, b"(declare-datatype A ((a))) (check-sat)")
         .unwrap_or_else(|err| panic!("unexpected error at {:?}", err.span()));
     assert_eq!(
         handler.commands,
         [
-            "start-declare-datatypes",
-            "start-datatype",
-            "end-datatype",
-            "end-declare-datatypes",
-            "check-sat",
+            "start-declare-datatype",
+            "end-declare-datatype",
+            "check-sat"
         ]
     );
 }
@@ -504,8 +540,7 @@ fn nonstandard_command_is_parsed_by_handler_parser() {
     .unwrap_or_else(|err| panic!("unexpected error at {:?}", err.span()));
     assert_eq!(
         handler.commands,
-        // declare-const is syntax sugar for declare-fun and shares its callback
-        ["declare-fun", "my-assert", "check-sat"]
+        ["declare-const", "my-assert", "check-sat"]
     );
 }
 
@@ -630,8 +665,8 @@ fn define_funs_rec_callbacks_surround_each_body() {
 }
 
 #[test]
-fn define_fun_rec_produces_the_desugared_callbacks() {
-    // the sugar form is handled as define-funs-rec with one function
+fn define_fun_rec_has_calls_of_its_own() {
+    // the body is a term between the start and the end, with no body calls
     let mut handler = Recording::default();
     parse_with(
         &mut handler,
@@ -640,13 +675,7 @@ fn define_fun_rec_produces_the_desugared_callbacks() {
     .unwrap_or_else(|err| panic!("unexpected error at {:?}", err.span()));
     assert_eq!(
         handler.commands,
-        [
-            "start-define-funs-rec",
-            "start-recursive-body",
-            "end-recursive-body",
-            "end-define-funs-rec",
-            "check-sat",
-        ]
+        ["start-define-fun-rec", "end-define-fun-rec", "check-sat"]
     );
 }
 
@@ -661,17 +690,14 @@ fn no_end_call_comes_before_a_missing_closing_parenthesis() {
             25,
             &["start-define-sort"],
         ),
-        (b"(define-const c Int 1 2)", 22, 23, &["start-define-fun"]),
+        // define-const has a single call, at its `)`
+        (b"(define-const c Int 1 2)", 22, 23, &[]),
         (b"(define-fun f () Int 1 2)", 23, 24, &["start-define-fun"]),
         (
             b"(define-fun-rec f () Int 1 2)",
             27,
             28,
-            &[
-                "start-define-funs-rec",
-                "start-recursive-body",
-                "end-recursive-body",
-            ],
+            &["start-define-fun-rec"],
         ),
         (
             b"(define-funs-rec ((f () Int)) (1) 2)",
@@ -693,7 +719,7 @@ fn no_end_call_comes_before_a_missing_closing_parenthesis() {
             b"(declare-datatype A ((a)) x)",
             26,
             27,
-            &["start-declare-datatypes", "start-datatype", "end-datatype"],
+            &["start-declare-datatype"],
         ),
         // a parametric datatype is not ended before the parenthesis closing the par
         (
@@ -706,7 +732,7 @@ fn no_end_call_comes_before_a_missing_closing_parenthesis() {
             b"(declare-datatype A (par (X) ((a)) x))",
             35,
             36,
-            &["start-declare-datatypes", "start-datatype"],
+            &["start-declare-datatype"],
         ),
     ];
     for (input, start, end, calls) in cases {
@@ -760,13 +786,12 @@ fn recursive_body_terms_are_handled_between_the_start_and_end_of_their_body() {
             "term",
             "end-recursive-body",
             "end-define-funs-rec",
-            // a body binding a variable, through define-fun-rec
-            "start-define-funs-rec",
-            "start-recursive-body",
+            // a body binding a variable, through define-fun-rec,
+            // whose body is a term between its start and its end
+            "start-define-fun-rec",
             "term",
             "term",
-            "end-recursive-body",
-            "end-define-funs-rec",
+            "end-define-fun-rec",
         ]
     );
 }
