@@ -165,8 +165,8 @@ impl<'a> SmtSymbol<'a> {
         self.is_quoted
     }
 
-    pub fn bytes(&self) -> &'a SmtBytes<'_> {
-        &self.value
+    pub fn bytes(&self) -> SmtBytes<'a> {
+        self.value
     }
 
     pub fn as_slice(&self) -> &'a [u8] {

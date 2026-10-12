@@ -222,7 +222,7 @@ fn symbols_key_maps_by_their_bytes_whether_quoted_or_not() {
     // and the bytes compare equal across the two spellings
     let unquoted_x = SmtSymbolBuf::new_unquoted(b"x".to_vec()).expect("a symbol");
     assert_eq!(quoted_x.bytes(), unquoted_x.bytes());
-    assert_eq!(*quoted_x.as_view().bytes(), *unquoted_x.as_view().bytes());
+    assert_eq!(quoted_x.as_view().bytes(), unquoted_x.as_view().bytes());
 }
 
 #[test]
