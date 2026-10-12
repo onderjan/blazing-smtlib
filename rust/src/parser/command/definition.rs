@@ -15,11 +15,13 @@ use crate::{
 pub(super) trait Definition<H: SmtCommandHandler> {
     type Signature: SmtParse<H> + Default;
     type Body: SmtParse<H> + Default;
+    type Buffer: Default;
 
     /// Start is invoked before the first definition body token.
     fn start(
         handler: &mut H,
         signature: <Self::Signature as SmtParse<H>>::Result,
+        buffer: &mut Self::Buffer,
     ) -> Result<(), H::Error>;
 }
 
@@ -36,6 +38,7 @@ pub(super) struct DefinitionParser<H: SmtCommandHandler, D: Definition<H>> {
     state: DefinitionParserState,
     signature_parser: D::Signature,
     body_parser: D::Body,
+    buffer: D::Buffer,
 }
 
 impl<H: SmtCommandHandler, D: Definition<H>> DefinitionParser<H, D> {
@@ -44,6 +47,7 @@ impl<H: SmtCommandHandler, D: Definition<H>> DefinitionParser<H, D> {
             state: DefinitionParserState::Signature,
             signature_parser: D::Signature::default(),
             body_parser: D::Body::default(),
+            buffer: D::Buffer::default(),
         }
     }
 }
@@ -70,7 +74,7 @@ impl<H: SmtCommandHandler, D: Definition<H>> SmtParse<H> for DefinitionParser<H,
                 ControlFlow::Continue(()) => return Ok(ControlFlow::Continue(())),
                 ControlFlow::Break(signature) => {
                     // start the body in the handler and move to parsing the body
-                    handle_err(D::start(handler, signature))?;
+                    handle_err(D::start(handler, signature, &mut self.buffer))?;
                     self.state = DefinitionParserState::Body;
                 }
             }

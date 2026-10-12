@@ -9,9 +9,10 @@ use common::{assert_error_span, assert_parser_error, parse_with};
 
 use blazing_smtlib::{
     SmtAttributeValue, SmtAttributes, SmtBindings, SmtCommandHandler, SmtDatatypeConstructor,
-    SmtFunctionSignature, SmtHandler, SmtIdent, SmtIndex, SmtKeyword, SmtKeywordBuf, SmtMatchCases,
-    SmtNumeralBuf, SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSort,
-    SmtSortedVars, SmtSpecialConstant, SmtStringContentBuf, SmtSymbol, SmtSymbolBuf, SmtTerm,
+    SmtFunctionSignature, SmtFunctionSignatures, SmtHandler, SmtIdent, SmtIndex, SmtKeyword,
+    SmtMatchCases, SmtMultiple, SmtNumeral, SmtNumeralBuf, SmtPattern, SmtQuantifierKind, SmtSExpr,
+    SmtSimplePattern, SmtSort, SmtSortedVars, SmtSpecialConstant, SmtStringContent, SmtSymbol,
+    SmtSymbolBuf, SmtSymbols, SmtTerm,
     lexer::SmtLexicalErrorKind,
     parser::SmtSyntaxErrorKind,
     reader::SmtReadErrorCause,
@@ -104,17 +105,16 @@ impl Resolving {
 }
 
 /// Renders a function signature as written, `f ((x Int)) Int`.
-fn render_signature(signature: &SmtFunctionSignature<Resolving>) -> String {
+fn render_signature(signature: SmtFunctionSignature<'_, String>) -> String {
     let params: Vec<String> = signature
-        .params
-        .iter()
+        .params()
         .map(|(param, sort)| format!("({} {})", text(param.as_slice()), sort))
         .collect();
     format!(
         "{} ({}) {}",
-        text(signature.name.as_slice()),
+        text(signature.name().as_slice()),
         params.join(" "),
-        signature.result_sort
+        signature.result_sort()
     )
 }
 
@@ -359,29 +359,30 @@ impl SmtCommandHandler for Resolving {
         Err(format!("nonstandard command {:?}", text(name.as_slice())))
     }
 
-    fn command_echo(&mut self, _value: SmtStringContentBuf) -> Result<(), String> {
+    fn command_echo(&mut self, _value: SmtStringContent<'_>) -> Result<(), String> {
         Ok(())
     }
-    fn command_get_option(&mut self, _option: SmtKeywordBuf) -> Result<(), String> {
+    fn command_get_option(&mut self, _option: SmtKeyword<'_>) -> Result<(), String> {
         Ok(())
     }
     fn command_set_option(&mut self, _option: ()) -> Result<(), String> {
         Ok(())
     }
-    fn command_get_info(&mut self, _keyword: SmtKeywordBuf) -> Result<(), String> {
+    fn command_get_info(&mut self, _keyword: SmtKeyword<'_>) -> Result<(), String> {
         Ok(())
     }
     fn command_set_info(&mut self, _attribute: ()) -> Result<(), String> {
         Ok(())
     }
-    fn command_set_logic(&mut self, _logic: SmtSymbolBuf) -> Result<(), String> {
+    fn command_set_logic(&mut self, _logic: SmtSymbol<'_>) -> Result<(), String> {
         Ok(())
     }
-    fn command_get_value(&mut self, terms: Vec<String>) -> Result<(), String> {
+    fn command_get_value(&mut self, terms: SmtMultiple<'_, String>) -> Result<(), String> {
         if terms.iter().any(|term| term == "boom") {
             return Err("exploding get-value".into());
         }
-        self.events.push(format!("get-value ({})", terms.join(" ")));
+        self.events
+            .push(format!("get-value ({})", terms.as_slice().join(" ")));
         Ok(())
     }
     fn command_get_assertions(&mut self) -> Result<(), String> {
@@ -410,8 +411,8 @@ impl SmtCommandHandler for Resolving {
     }
     fn command_declare_sort(
         &mut self,
-        name: SmtSymbolBuf,
-        arity: SmtNumeralBuf,
+        name: SmtSymbol<'_>,
+        arity: SmtNumeral<'_>,
     ) -> Result<(), String> {
         self.events.push(format!(
             "declare-sort {} {}",
@@ -420,21 +421,21 @@ impl SmtCommandHandler for Resolving {
         ));
         Ok(())
     }
-    fn command_declare_sort_parameter(&mut self, name: SmtSymbolBuf) -> Result<(), String> {
+    fn command_declare_sort_parameter(&mut self, name: SmtSymbol<'_>) -> Result<(), String> {
         self.events
             .push(format!("declare-sort-parameter {}", text(name.as_slice())));
         Ok(())
     }
     fn command_declare_fun(
         &mut self,
-        name: SmtSymbolBuf,
-        param_sorts: Vec<String>,
+        name: SmtSymbol<'_>,
+        param_sorts: SmtMultiple<'_, String>,
         result_sort: String,
     ) -> Result<(), String> {
         self.events.push(format!(
             "declare-fun {} ({}) {}",
             text(name.as_slice()),
-            param_sorts.join(" "),
+            param_sorts.as_slice().join(" "),
             result_sort
         ));
         Ok(())
@@ -450,13 +451,18 @@ impl SmtCommandHandler for Resolving {
         Ok(())
     }
 
-    fn command_check_sat_assuming(&mut self, assumptions: Vec<String>) -> Result<(), String> {
-        self.events
-            .push(format!("check-sat-assuming ({})", assumptions.join(" ")));
+    fn command_check_sat_assuming(
+        &mut self,
+        assumptions: SmtMultiple<'_, String>,
+    ) -> Result<(), String> {
+        self.events.push(format!(
+            "check-sat-assuming ({})",
+            assumptions.as_slice().join(" ")
+        ));
         Ok(())
     }
 
-    fn command_declare_const(&mut self, name: SmtSymbolBuf, sort: String) -> Result<(), String> {
+    fn command_declare_const(&mut self, name: SmtSymbol<'_>, sort: String) -> Result<(), String> {
         self.events
             .push(format!("declare-const {} {sort}", text(name.as_slice())));
         Ok(())
@@ -464,7 +470,7 @@ impl SmtCommandHandler for Resolving {
 
     fn command_define_const(
         &mut self,
-        name: SmtSymbolBuf,
+        name: SmtSymbol<'_>,
         sort: String,
         body: String,
     ) -> Result<(), String> {
@@ -489,20 +495,20 @@ impl SmtCommandHandler for Resolving {
     fn command_exit(&mut self) -> Result<(), String> {
         Ok(())
     }
-    fn command_push(&mut self, amount: SmtNumeralBuf) -> Result<(), String> {
+    fn command_push(&mut self, amount: SmtNumeral<'_>) -> Result<(), String> {
         self.events
             .push(format!("push {}", text(amount.as_slice())));
         Ok(())
     }
-    fn command_pop(&mut self, amount: SmtNumeralBuf) -> Result<(), String> {
+    fn command_pop(&mut self, amount: SmtNumeral<'_>) -> Result<(), String> {
         self.events.push(format!("pop {}", text(amount.as_slice())));
         Ok(())
     }
 
     fn start_define_sort(
         &mut self,
-        name: SmtSymbolBuf,
-        params: Vec<SmtSymbolBuf>,
+        name: SmtSymbol<'_>,
+        params: SmtSymbols<'_>,
     ) -> Result<(), String> {
         let name = text(name.as_slice());
         if name == "forbidden" {
@@ -524,24 +530,25 @@ impl SmtCommandHandler for Resolving {
         Ok(())
     }
 
-    fn start_define_fun(&mut self, signature: SmtFunctionSignature<Self>) -> Result<(), String> {
-        let name = text(signature.name.as_slice());
+    fn start_define_fun(
+        &mut self,
+        signature: SmtFunctionSignature<'_, String>,
+    ) -> Result<(), String> {
+        let name = text(signature.name().as_slice());
         if name == "forbidden" {
             return Err("forbidden function name".into());
         }
         let params: Vec<String> = signature
-            .params
-            .iter()
+            .params()
             .map(|(param, sort)| format!("({} {})", text(param.as_slice()), sort))
             .collect();
         self.events.push(format!(
             "start {name} ({}) {}",
             params.join(" "),
-            signature.result_sort
+            signature.result_sort()
         ));
         self.params = signature
-            .params
-            .iter()
+            .params()
             .map(|(param, _)| text(param.as_slice()))
             .collect();
         Ok(())
@@ -558,32 +565,30 @@ impl SmtCommandHandler for Resolving {
 
     fn start_define_funs_rec(
         &mut self,
-        signatures: Vec<SmtFunctionSignature<Self>>,
+        signatures: SmtFunctionSignatures<'_, String>,
     ) -> Result<(), String> {
         let mut rendered = Vec::new();
         self.rec_functions.clear();
         self.rec_params.clear();
         self.rec_index = 0;
-        for signature in &signatures {
-            let name = text(signature.name.as_slice());
+        for signature in signatures {
+            let name = text(signature.name().as_slice());
             if name == "forbidden" {
                 return Err("forbidden recursive function name".into());
             }
             let params: Vec<String> = signature
-                .params
-                .iter()
+                .params()
                 .map(|(param, sort)| format!("({} {})", text(param.as_slice()), sort))
                 .collect();
             rendered.push(format!(
                 "({name} ({}) {})",
                 params.join(" "),
-                signature.result_sort
+                signature.result_sort()
             ));
             self.rec_functions.push(name);
             self.rec_params.push(
                 signature
-                    .params
-                    .iter()
+                    .params()
                     .map(|(param, _)| text(param.as_slice()))
                     .collect(),
             );
@@ -621,19 +626,18 @@ impl SmtCommandHandler for Resolving {
 
     fn start_define_fun_rec(
         &mut self,
-        signature: SmtFunctionSignature<Self>,
+        signature: SmtFunctionSignature<'_, String>,
     ) -> Result<(), String> {
-        let name = text(signature.name.as_slice());
+        let name = text(signature.name().as_slice());
         if name == "forbidden" {
             return Err("forbidden recursive function name".into());
         }
         self.events
-            .push(format!("start-fun-rec {}", render_signature(&signature)));
+            .push(format!("start-fun-rec {}", render_signature(signature)));
         // the function is in scope in its own body, and so are its parameters
         self.rec_functions = vec![name];
         self.params = signature
-            .params
-            .iter()
+            .params()
             .map(|(param, _)| text(param.as_slice()))
             .collect();
         Ok(())

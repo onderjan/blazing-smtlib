@@ -1,7 +1,7 @@
 use std::ops::ControlFlow::{self, Break, Continue};
 
 use crate::{
-    SmtCommandHandler, SmtFunctionSignature, SmtSymbolBuf,
+    SmtCommandHandler, SmtFunctionSignaturesBuf, SmtMultiple, SmtSymbolBuf, SmtSymbolsBuf,
     parser::{
         SmtCloseParenParser, SmtCommandPayloadParser, SmtKeywordParser, SmtNumeralParser,
         SmtParenMultipleParser, SmtParse, SmtParseError, SmtParseState, SmtStringParser,
@@ -14,7 +14,7 @@ use crate::{
             SmtCommandOutcome, SmtCommandRule,
             datatype::{DeclareDatatypeParser, DeclareDatatypesParser},
             definition::{Definition, DefinitionParser},
-            function::{DefineFunsRecParser, FunctionSignatureParser},
+            function::{DefineFunsRecParser, FunctionSignature, FunctionSignatureParser},
         },
         parse_by_token,
     },
@@ -151,21 +151,21 @@ macro_rules! standard_commands {
 standard_commands! {
     set_logic: SetLogic(
         SmtClosedParser<H, SmtSymbolParser>,
-        |handler, logic| handler.command_set_logic(logic)),
+        |handler, logic| handler.command_set_logic(logic.as_view())),
     declare_sort: DeclareSort(
         SmtClosedParser<H, SmtPairParser<H, SmtSymbolParser, SmtNumeralParser>>,
-        |handler, (name, arity)| handler.command_declare_sort(name, arity)),
+        |handler, (name, arity)| handler.command_declare_sort(name.as_view(), arity.as_view())),
     declare_sort_parameter: DeclareSortParameter(
         SmtClosedParser<H, SmtSymbolParser>,
-        |handler, name| handler.command_declare_sort_parameter(name)),
+        |handler, name| handler.command_declare_sort_parameter(name.as_view())),
     declare_const: DeclareConst(
         SmtClosedParser<H, SmtPairParser<H, SmtSymbolParser, SmtSortParser<H>>>,
-        |handler, (name, sort)| handler.command_declare_const(name, sort)),
+        |handler, (name, sort)| handler.command_declare_const(name.as_view(), sort)),
     declare_fun: DeclareFun(
         SmtClosedParser<H, SmtPairParser<H, SmtSymbolParser,
             SmtPairParser<H, SmtParenMultipleParser<H, SmtSortParser<H>>, SmtSortParser<H>>>>,
-        |handler, (name, (param_sorts, result_sort))|
-            handler.command_declare_fun(name, param_sorts, result_sort)),
+        |handler, (name, (mut param_sorts, result_sort))|
+            handler.command_declare_fun(name.as_view(), SmtMultiple::new(&mut param_sorts), result_sort)),
     declare_datatype: DeclareDatatype(
         SmtClosedParser<H, DeclareDatatypeParser<H>>,
         |handler, constructors| handler.end_declare_datatype(constructors)),
@@ -178,7 +178,7 @@ standard_commands! {
     define_const: DefineConst(
         SmtClosedParser<H, SmtPairParser<H, SmtSymbolParser,
             SmtPairParser<H, SmtSortParser<H>, SmtTermParser<H>>>>,
-        |handler, (name, (sort, body))| handler.command_define_const(name, sort, body)),
+        |handler, (name, (sort, body))| handler.command_define_const(name.as_view(), sort, body)),
     define_fun: DefineFun(
         SmtClosedParser<H, DefinitionParser<H, DefineFun>>,
         |handler, body| handler.end_define_fun(body)),
@@ -196,34 +196,34 @@ standard_commands! {
         |handler, ()| handler.command_check_sat()),
     check_sat_assuming: CheckSatAssuming(
         SmtClosedParser<H, SmtParenMultipleParser<H, SmtTermParser<H>>>,
-        |handler, assumptions| handler.command_check_sat_assuming(assumptions)),
+        |handler, mut assumptions| handler.command_check_sat_assuming(SmtMultiple::new(&mut assumptions))),
     exit: Exit(
         SmtCloseParenParser,
         |handler, ()| handler.command_exit()),
     push: Push(
         SmtClosedParser<H,SmtNumeralParser>,
-        |handler, amount| handler.command_push(amount)),
+        |handler, amount| handler.command_push(amount.as_view())),
     pop: Pop(
         SmtClosedParser<H,SmtNumeralParser>,
-        |handler, amount| handler.command_pop(amount)),
+        |handler, amount| handler.command_pop(amount.as_view())),
     set_info: SetInfo(
         SetInfoParser,
         |handler, attribute| handler.command_set_info(attribute)),
     echo: Echo(
         SmtClosedParser<H, SmtStringParser>,
-        |handler, value| handler.command_echo(value)),
+        |handler, value| handler.command_echo(value.as_view())),
     get_option: GetOption(
         SmtClosedParser<H, SmtKeywordParser>,
-        |handler, option| handler.command_get_option(option)),
+        |handler, option| handler.command_get_option(option.as_view())),
     set_option: SetOption(
         SmtClosedAttributeParser<H>,
         |handler, option| handler.command_set_option(option)),
     get_info: GetInfo(
         SmtClosedParser<H, SmtKeywordParser>,
-        |handler, keyword| handler.command_get_info(keyword)),
+        |handler, keyword| handler.command_get_info(keyword.as_view())),
     get_value: GetValue(
         SmtClosedParser<H,GetValueParser<H>>,
-        |handler, terms| handler.command_get_value(terms)),
+        |handler, mut terms| handler.command_get_value(SmtMultiple::new(&mut terms))),
     reset: Reset(
         SmtCloseParenParser,
         |handler, ()| handler.command_reset()),
@@ -251,38 +251,63 @@ standard_commands! {
     ;
     check_sat_assuming_literals: CheckSatAssumingLiterals(
         SmtClosedParser<H, SmtParenMultipleParser<H, PropLiteralParser>>,
-        |handler, assumptions| handler.command_check_sat_assuming(assumptions))
+        |handler, mut assumptions| handler.command_check_sat_assuming(SmtMultiple::new(&mut assumptions)))
         replaces CheckSatAssuming before V2_7,
 }
 
 impl<H: SmtCommandHandler> Definition<H> for DefineFun {
     type Signature = FunctionSignatureParser<H>;
     type Body = SmtTermParser<H>;
+    type Buffer = SmtFunctionSignaturesBuf<H::Sort>;
 
-    fn start(handler: &mut H, signature: SmtFunctionSignature<H>) -> Result<(), H::Error> {
-        handler.start_define_fun(signature)
+    fn start(
+        handler: &mut H,
+        signature: FunctionSignature<H::Sort>,
+        buf: &mut Self::Buffer,
+    ) -> Result<(), H::Error> {
+        signature.push_into(buf);
+        let started = handler.start_define_fun(buf.get(0).expect("the signature was just pushed"));
+        // do not keep the handled sorts past the call
+        buf.clear();
+        started
     }
 }
 
 impl<H: SmtCommandHandler> Definition<H> for DefineSort {
     type Signature = SmtPairParser<H, SmtSymbolParser, SmtParenMultipleParser<H, SmtSymbolParser>>;
     type Body = SmtSortParser<H>;
+    type Buffer = SmtSymbolsBuf;
 
     fn start(
         handler: &mut H,
         signature: (SmtSymbolBuf, Vec<SmtSymbolBuf>),
+        buf: &mut Self::Buffer,
     ) -> Result<(), H::Error> {
         let (name, params) = signature;
-        handler.start_define_sort(name, params)
+        buf.clear();
+        for param in &params {
+            buf.push(param.as_view());
+        }
+        handler.start_define_sort(name.as_view(), buf.view())
     }
 }
 
 impl<H: SmtCommandHandler> Definition<H> for DefineFunRec {
     type Signature = FunctionSignatureParser<H>;
     type Body = SmtTermParser<H>;
+    type Buffer = SmtFunctionSignaturesBuf<H::Sort>;
 
-    fn start(handler: &mut H, signature: SmtFunctionSignature<H>) -> Result<(), H::Error> {
-        handler.start_define_fun_rec(signature)
+    fn start(
+        handler: &mut H,
+        signature: FunctionSignature<H::Sort>,
+        buf: &mut Self::Buffer,
+    ) -> Result<(), H::Error> {
+        signature.push_into(buf);
+        let started =
+            handler.start_define_fun_rec(buf.get(0).expect("the signature was just pushed"));
+        // do not keep the handled sorts past the call
+        buf.clear();
+        started
     }
 }
 

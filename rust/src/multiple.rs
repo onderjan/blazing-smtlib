@@ -439,3 +439,331 @@ impl<'a, H: SmtHandler + ?Sized> IntoIterator for SmtMatchCases<'a, H> {
         }
     }
 }
+
+/// Symbols to be handled, such as the parameters of a sort definition.
+#[derive(Clone, Copy)]
+pub struct SmtSymbols<'a> {
+    text: &'a [u8],
+    names: &'a [SymbolHandle],
+}
+
+impl<'a> SmtSymbols<'a> {
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.names.len()
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.names.is_empty()
+    }
+
+    #[inline]
+    pub fn get(&self, index: usize) -> Option<SmtSymbol<'a>> {
+        Some(self.names.get(index)?.symbol_view(self.text))
+    }
+
+    pub fn iter(&self) -> SmtSymbolsIter<'a> {
+        SmtSymbolsIter {
+            text: self.text,
+            names: self.names.iter(),
+        }
+    }
+}
+
+impl<'a> IntoIterator for SmtSymbols<'a> {
+    type Item = SmtSymbol<'a>;
+    type IntoIter = SmtSymbolsIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+/// Iterator over symbols.
+pub struct SmtSymbolsIter<'a> {
+    text: &'a [u8],
+    names: slice::Iter<'a, SymbolHandle>,
+}
+
+impl<'a> Iterator for SmtSymbolsIter<'a> {
+    type Item = SmtSymbol<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        Some(self.names.next()?.symbol_view(self.text))
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.names.size_hint()
+    }
+}
+
+impl ExactSizeIterator for SmtSymbolsIter<'_> {}
+
+impl Debug for SmtSymbols<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_list().entries(self.iter()).finish()
+    }
+}
+
+/// Owned symbols, from which [`SmtSymbols`] is viewed.
+pub struct SmtSymbolsBuf {
+    text: Vec<u8>,
+    names: Vec<SymbolHandle>,
+}
+
+impl SmtSymbolsBuf {
+    pub fn new() -> Self {
+        Self {
+            text: Vec::new(),
+            names: Vec::new(),
+        }
+    }
+
+    pub fn push(&mut self, name: SmtSymbol) {
+        let name = SymbolHandle::create_by_push(&mut self.text, name);
+        self.names.push(name);
+    }
+
+    pub fn clear(&mut self) {
+        self.text.clear();
+        self.names.clear();
+    }
+
+    pub fn view(&self) -> SmtSymbols<'_> {
+        SmtSymbols {
+            text: &self.text,
+            names: &self.names,
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.names.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.names.is_empty()
+    }
+}
+
+impl Default for SmtSymbolsBuf {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// A function signature to be handled: the name, the parameters
+/// with their sorts, and the result sort.
+///
+/// The sorts are handed over by reference.
+pub struct SmtFunctionSignature<'a, S> {
+    text: &'a [u8],
+    name: SymbolHandle,
+    param_names: &'a [SymbolHandle],
+    param_sorts: &'a [S],
+    result_sort: &'a S,
+}
+
+impl<S> Clone for SmtFunctionSignature<'_, S> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<S> Copy for SmtFunctionSignature<'_, S> {}
+
+impl<'a, S> SmtFunctionSignature<'a, S> {
+    #[inline]
+    pub fn name(&self) -> SmtSymbol<'a> {
+        self.name.symbol_view(self.text)
+    }
+
+    /// The parameters with their sorts, in order.
+    pub fn params(&self) -> impl ExactSizeIterator<Item = (SmtSymbol<'a>, &'a S)> + use<'a, S> {
+        let text = self.text;
+        self.param_names
+            .iter()
+            .map(move |name| name.symbol_view(text))
+            .zip(self.param_sorts.iter())
+    }
+
+    #[inline]
+    pub fn result_sort(&self) -> &'a S {
+        self.result_sort
+    }
+}
+
+impl<S: Debug> Debug for SmtFunctionSignature<'_, S> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SmtFunctionSignature")
+            .field("name", &self.name())
+            .field("params", &self.params().collect::<Vec<_>>())
+            .field("result_sort", self.result_sort)
+            .finish()
+    }
+}
+
+/// Function signatures to be handled, such as those of `define-funs-rec`.
+///
+/// The sorts are handed over by reference.
+pub struct SmtFunctionSignatures<'a, S> {
+    buf: &'a SmtFunctionSignaturesBuf<S>,
+}
+
+impl<S> Clone for SmtFunctionSignatures<'_, S> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<S> Copy for SmtFunctionSignatures<'_, S> {}
+
+impl<'a, S> SmtFunctionSignatures<'a, S> {
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.buf.len()
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.buf.is_empty()
+    }
+
+    #[inline]
+    pub fn get(&self, index: usize) -> Option<SmtFunctionSignature<'a, S>> {
+        self.buf.get(index)
+    }
+
+    pub fn iter(&self) -> SmtFunctionSignaturesIter<'a, S> {
+        SmtFunctionSignaturesIter {
+            buf: self.buf,
+            next: 0,
+        }
+    }
+}
+
+impl<'a, S> IntoIterator for SmtFunctionSignatures<'a, S> {
+    type Item = SmtFunctionSignature<'a, S>;
+    type IntoIter = SmtFunctionSignaturesIter<'a, S>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+/// Iterator over function signatures.
+pub struct SmtFunctionSignaturesIter<'a, S> {
+    buf: &'a SmtFunctionSignaturesBuf<S>,
+    next: usize,
+}
+
+impl<'a, S> Iterator for SmtFunctionSignaturesIter<'a, S> {
+    type Item = SmtFunctionSignature<'a, S>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let signature = self.buf.get(self.next)?;
+        self.next += 1;
+        Some(signature)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let remaining = self.buf.len() - self.next;
+        (remaining, Some(remaining))
+    }
+}
+
+impl<S> ExactSizeIterator for SmtFunctionSignaturesIter<'_, S> {}
+
+impl<S: Debug> Debug for SmtFunctionSignatures<'_, S> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_list().entries(self.iter()).finish()
+    }
+}
+
+/// Owned function signatures, from which [`SmtFunctionSignatures`]
+/// and each [`SmtFunctionSignature`] are viewed.
+pub struct SmtFunctionSignaturesBuf<S> {
+    text: Vec<u8>,
+    names: Vec<SymbolHandle>,
+    result_sorts: Vec<S>,
+    /// Where the parameters of each signature start.
+    param_starts: Vec<usize>,
+    param_names: Vec<SymbolHandle>,
+    param_sorts: Vec<S>,
+}
+
+impl<S> SmtFunctionSignaturesBuf<S> {
+    pub fn new() -> Self {
+        Self {
+            text: Vec::new(),
+            names: Vec::new(),
+            result_sorts: Vec::new(),
+            param_starts: Vec::new(),
+            param_names: Vec::new(),
+            param_sorts: Vec::new(),
+        }
+    }
+
+    /// Starts a signature with no parameters; [`Self::push_param`] adds them.
+    pub fn push(&mut self, name: SmtSymbol, result_sort: S) {
+        let name = SymbolHandle::create_by_push(&mut self.text, name);
+        self.names.push(name);
+        self.result_sorts.push(result_sort);
+        self.param_starts.push(self.param_names.len());
+    }
+
+    /// Adds a parameter to the last signature pushed.
+    pub fn push_param(&mut self, name: SmtSymbol, sort: S) {
+        assert!(
+            !self.names.is_empty(),
+            "a parameter must be pushed after its signature"
+        );
+        let name = SymbolHandle::create_by_push(&mut self.text, name);
+        self.param_names.push(name);
+        self.param_sorts.push(sort);
+    }
+
+    pub fn clear(&mut self) {
+        self.text.clear();
+        self.names.clear();
+        self.result_sorts.clear();
+        self.param_starts.clear();
+        self.param_names.clear();
+        self.param_sorts.clear();
+    }
+
+    pub fn view(&self) -> SmtFunctionSignatures<'_, S> {
+        SmtFunctionSignatures { buf: self }
+    }
+
+    pub fn get(&self, index: usize) -> Option<SmtFunctionSignature<'_, S>> {
+        let name = *self.names.get(index)?;
+        let start = self.param_starts[index];
+        let end = self
+            .param_starts
+            .get(index + 1)
+            .copied()
+            .unwrap_or(self.param_names.len());
+        Some(SmtFunctionSignature {
+            text: &self.text,
+            name,
+            param_names: &self.param_names[start..end],
+            param_sorts: &self.param_sorts[start..end],
+            result_sort: &self.result_sorts[index],
+        })
+    }
+
+    pub fn len(&self) -> usize {
+        self.names.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.names.is_empty()
+    }
+}
+
+impl<S> Default for SmtFunctionSignaturesBuf<S> {
+    fn default() -> Self {
+        Self::new()
+    }
+}

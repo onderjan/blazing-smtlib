@@ -7,9 +7,9 @@ use common::{assert_error_span, assert_parser_error, parse, parse_with};
 
 use blazing_smtlib::{
     NonstandardCommandError, SmtAttributeValue, SmtAttributes, SmtBindings, SmtCommandHandler,
-    SmtDatatypeConstructor, SmtFunctionSignature, SmtHandler, SmtKeyword, SmtKeywordBuf,
-    SmtMatchCases, SmtNumeralBuf, SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSort, SmtSortedVars,
-    SmtStringContentBuf, SmtSymbol, SmtSymbolBuf, SmtTerm,
+    SmtDatatypeConstructor, SmtFunctionSignature, SmtFunctionSignatures, SmtHandler, SmtKeyword,
+    SmtMatchCases, SmtMultiple, SmtNumeral, SmtNumeralBuf, SmtPattern, SmtQuantifierKind, SmtSExpr,
+    SmtSort, SmtSortedVars, SmtStringContent, SmtSymbol, SmtSymbolBuf, SmtSymbols, SmtTerm,
     parser::{
         SmtClosedParser, SmtCommandOutcome, SmtCommandParser, SmtCommandPayloadParser,
         SmtCommandRule, SmtSyntaxErrorKind, SmtTermParser,
@@ -240,11 +240,11 @@ impl SmtCommandHandler for Recording {
         }
     }
 
-    fn command_echo(&mut self, _value: SmtStringContentBuf) -> Result<(), Self::Error> {
+    fn command_echo(&mut self, _value: SmtStringContent<'_>) -> Result<(), Self::Error> {
         self.commands.push("echo");
         Ok(())
     }
-    fn command_get_option(&mut self, _option: SmtKeywordBuf) -> Result<(), Self::Error> {
+    fn command_get_option(&mut self, _option: SmtKeyword<'_>) -> Result<(), Self::Error> {
         self.commands.push("get-option");
         Ok(())
     }
@@ -252,7 +252,7 @@ impl SmtCommandHandler for Recording {
         self.commands.push("set-option");
         Ok(())
     }
-    fn command_get_info(&mut self, _keyword: SmtKeywordBuf) -> Result<(), Self::Error> {
+    fn command_get_info(&mut self, _keyword: SmtKeyword<'_>) -> Result<(), Self::Error> {
         self.commands.push("get-info");
         Ok(())
     }
@@ -260,11 +260,11 @@ impl SmtCommandHandler for Recording {
         self.commands.push("set-info");
         Ok(())
     }
-    fn command_set_logic(&mut self, _logic: SmtSymbolBuf) -> Result<(), Self::Error> {
+    fn command_set_logic(&mut self, _logic: SmtSymbol<'_>) -> Result<(), Self::Error> {
         self.commands.push("set-logic");
         Ok(())
     }
-    fn command_get_value(&mut self, _terms: Vec<()>) -> Result<(), Self::Error> {
+    fn command_get_value(&mut self, _terms: SmtMultiple<'_, ()>) -> Result<(), Self::Error> {
         self.commands.push("get-value");
         Ok(())
     }
@@ -294,20 +294,20 @@ impl SmtCommandHandler for Recording {
     }
     fn command_declare_sort(
         &mut self,
-        _name: SmtSymbolBuf,
-        _arity: SmtNumeralBuf,
+        _name: SmtSymbol<'_>,
+        _arity: SmtNumeral<'_>,
     ) -> Result<(), Self::Error> {
         self.commands.push("declare-sort");
         Ok(())
     }
-    fn command_declare_sort_parameter(&mut self, _name: SmtSymbolBuf) -> Result<(), Self::Error> {
+    fn command_declare_sort_parameter(&mut self, _name: SmtSymbol<'_>) -> Result<(), Self::Error> {
         self.commands.push("declare-sort-parameter");
         Ok(())
     }
     fn command_declare_fun(
         &mut self,
-        _name: SmtSymbolBuf,
-        _param_sorts: Vec<()>,
+        _name: SmtSymbol<'_>,
+        _param_sorts: SmtMultiple<'_, ()>,
         _result_sort: (),
     ) -> Result<(), Self::Error> {
         self.commands.push("declare-fun");
@@ -321,17 +321,24 @@ impl SmtCommandHandler for Recording {
         self.commands.push("check-sat");
         Ok(())
     }
-    fn command_check_sat_assuming(&mut self, _assumptions: Vec<()>) -> Result<(), Self::Error> {
+    fn command_check_sat_assuming(
+        &mut self,
+        _assumptions: SmtMultiple<'_, ()>,
+    ) -> Result<(), Self::Error> {
         self.commands.push("check-sat-assuming");
         Ok(())
     }
-    fn command_declare_const(&mut self, _name: SmtSymbolBuf, _sort: ()) -> Result<(), Self::Error> {
+    fn command_declare_const(
+        &mut self,
+        _name: SmtSymbol<'_>,
+        _sort: (),
+    ) -> Result<(), Self::Error> {
         self.commands.push("declare-const");
         Ok(())
     }
     fn command_define_const(
         &mut self,
-        _name: SmtSymbolBuf,
+        _name: SmtSymbol<'_>,
         _sort: (),
         _body: (),
     ) -> Result<(), Self::Error> {
@@ -350,18 +357,18 @@ impl SmtCommandHandler for Recording {
         self.commands.push("exit");
         Ok(())
     }
-    fn command_push(&mut self, _amount: SmtNumeralBuf) -> Result<(), Self::Error> {
+    fn command_push(&mut self, _amount: SmtNumeral<'_>) -> Result<(), Self::Error> {
         self.commands.push("push");
         Ok(())
     }
-    fn command_pop(&mut self, _amount: SmtNumeralBuf) -> Result<(), Self::Error> {
+    fn command_pop(&mut self, _amount: SmtNumeral<'_>) -> Result<(), Self::Error> {
         self.commands.push("pop");
         Ok(())
     }
     fn start_define_sort(
         &mut self,
-        _name: SmtSymbolBuf,
-        _params: Vec<SmtSymbolBuf>,
+        _name: SmtSymbol<'_>,
+        _params: SmtSymbols<'_>,
     ) -> Result<(), Self::Error> {
         self.commands.push("start-define-sort");
         Ok(())
@@ -372,7 +379,7 @@ impl SmtCommandHandler for Recording {
     }
     fn start_define_fun(
         &mut self,
-        _signature: SmtFunctionSignature<Self>,
+        _signature: SmtFunctionSignature<'_, ()>,
     ) -> Result<(), Self::Error> {
         self.commands.push("start-define-fun");
         Ok(())
@@ -383,7 +390,7 @@ impl SmtCommandHandler for Recording {
     }
     fn start_define_funs_rec(
         &mut self,
-        _signatures: Vec<SmtFunctionSignature<Self>>,
+        _signatures: SmtFunctionSignatures<'_, ()>,
     ) -> Result<(), Self::Error> {
         self.commands.push("start-define-funs-rec");
         Ok(())
@@ -402,7 +409,7 @@ impl SmtCommandHandler for Recording {
     }
     fn start_define_fun_rec(
         &mut self,
-        _signature: SmtFunctionSignature<Self>,
+        _signature: SmtFunctionSignature<'_, ()>,
     ) -> Result<(), Self::Error> {
         self.commands.push("start-define-fun-rec");
         Ok(())

@@ -5,10 +5,11 @@ use std::fmt::Debug;
 
 use blazing_smtlib::{
     SmtApplication, SmtAttributeValue, SmtAttributes, SmtBindings, SmtDatatypeConstructor,
-    SmtFunctionSignature, SmtHandler, SmtIdent, SmtIdentBuf, SmtIndex, SmtIndexBuf, SmtIndices,
-    SmtKeyword, SmtMatchCases, SmtPattern, SmtQualifiedIdent, SmtQualifiedIdentBuf,
-    SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSimplePatternBuf, SmtSimplePatterns, SmtSort,
-    SmtSortedVars, SmtSpecialConstant, SmtSpecialConstantBuf, SmtTerm, token::SmtVersion,
+    SmtFunctionSignature, SmtFunctionSignatures, SmtHandler, SmtIdent, SmtIdentBuf, SmtIndex,
+    SmtIndexBuf, SmtIndices, SmtKeyword, SmtMatchCases, SmtPattern, SmtQualifiedIdent,
+    SmtQualifiedIdentBuf, SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSimplePatternBuf,
+    SmtSimplePatterns, SmtSort, SmtSortedVars, SmtSpecialConstant, SmtSpecialConstantBuf,
+    SmtSymbols, SmtTerm, token::SmtVersion,
 };
 
 /// Handler that is deliberately neither `Debug` nor `Clone`,
@@ -131,7 +132,10 @@ fn nodes_are_debug_and_clone_with_an_opaque_handler() {
     assert_debug::<SmtBindings<'static, String>>();
     assert_debug::<SmtAttributeValue<'static, OpaqueHandler>>();
     assert_debug::<SmtSExpr<'static, OpaqueHandler>>();
-    assert_debug_and_clone::<SmtFunctionSignature<OpaqueHandler>>();
+    // the signature views hand their sorts over by reference, so they can be copied
+    assert_debug_and_clone::<SmtFunctionSignature<'static, String>>();
+    assert_debug_and_clone::<SmtFunctionSignatures<'static, String>>();
+    assert_debug_and_clone::<SmtSymbols<'static>>();
     assert_debug_and_clone::<SmtDatatypeConstructor<OpaqueHandler>>();
     assert_debug_and_clone::<SmtSimplePatternBuf>();
     assert_debug_and_clone::<SmtPattern>();

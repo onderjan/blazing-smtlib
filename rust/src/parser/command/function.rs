@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtCommandHandler, SmtFunctionSignature,
+    SmtCommandHandler, SmtFunctionSignaturesBuf, SmtSymbolBuf,
     parser::{
         SmtPairParser, SmtParenMaximumParser, SmtParenMultipleParser, SmtParenParser,
         SmtParenSortedVarsParser, SmtParse, SmtParseError, SmtParseState, SmtSortParser,
@@ -9,6 +9,23 @@ use crate::{
     },
     token::{SingleTokenProducer, SmtProduce},
 };
+
+/// A function signature as parsed, owned until it is handed over.
+pub(crate) struct FunctionSignature<S> {
+    pub(crate) name: SmtSymbolBuf,
+    pub(crate) params: Vec<(SmtSymbolBuf, S)>,
+    pub(crate) result_sort: S,
+}
+
+impl<S> FunctionSignature<S> {
+    /// Pushes the signature into `signatures`, from which it is viewed.
+    pub(crate) fn push_into(self, signatures: &mut SmtFunctionSignaturesBuf<S>) {
+        signatures.push(self.name.as_view(), self.result_sort);
+        for (name, sort) in self.params {
+            signatures.push_param(name.as_view(), sort);
+        }
+    }
+}
 
 /// Parses a function signature: name, parameters (name and sort), and result sort.
 pub(super) struct FunctionSignatureParser<H: SmtCommandHandler> {
@@ -34,16 +51,16 @@ impl<H: SmtCommandHandler> Default for FunctionSignatureParser<H> {
 }
 
 impl<H: SmtCommandHandler> SmtParse<H> for FunctionSignatureParser<H> {
-    type Result = SmtFunctionSignature<H>;
+    type Result = FunctionSignature<H::Sort>;
 
     fn parse<C: SmtProduce>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
         cursor: &mut C,
-    ) -> Result<ControlFlow<SmtFunctionSignature<H>>, SmtParseError<H::Error>> {
+    ) -> Result<ControlFlow<FunctionSignature<H::Sort>>, SmtParseError<H::Error>> {
         Ok(self.inner.parse(handler, parse_state, cursor)?.map_break(
-            |(name, (params, result_sort))| SmtFunctionSignature {
+            |(name, (params, result_sort))| FunctionSignature {
                 name,
                 params,
                 result_sort,
@@ -129,6 +146,8 @@ pub(super) struct DefineFunsRecParser<H: SmtCommandHandler> {
 
     signatures_parser: SmtParenMultipleParser<H, SmtParenParser<H, FunctionSignatureParser<H>>>,
     bodies_parser: SmtParenMaximumParser<H, RecursiveBodyParser<H>>,
+    /// The signatures handed over, reused across commands.
+    signatures: SmtFunctionSignaturesBuf<H::Sort>,
 }
 
 enum DefineFunsRecState {
@@ -144,6 +163,7 @@ impl<H: SmtCommandHandler> DefineFunsRecParser<H> {
             state: DefineFunsRecState::Signatures,
             signatures_parser: SmtParenMultipleParser::default(),
             bodies_parser: SmtParenMaximumParser::new(RecursiveBodyParser::new(), 0),
+            signatures: SmtFunctionSignaturesBuf::new(),
         }
     }
 }
@@ -197,7 +217,14 @@ impl<H: SmtCommandHandler> DefineFunsRecParser<H> {
                     self.bodies_parser.set_maximum(signatures.len());
 
                     // start recursive function bodies in the handler, passing the signatures
-                    handle_err(handler.start_define_funs_rec(signatures))?;
+                    self.signatures.clear();
+                    for signature in signatures {
+                        signature.push_into(&mut self.signatures);
+                    }
+                    let started = handler.start_define_funs_rec(self.signatures.view());
+                    // do not keep the handled sorts past the call
+                    self.signatures.clear();
+                    handle_err(started)?;
                     // move to parsing the bodies
                     self.state = DefineFunsRecState::Bodies;
                 }

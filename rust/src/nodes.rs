@@ -313,38 +313,6 @@ where
     }
 }
 
-pub struct SmtFunctionSignature<H: SmtHandler + ?Sized> {
-    pub name: SmtSymbolBuf,
-    pub params: Vec<(SmtSymbolBuf, H::Sort)>,
-    pub result_sort: H::Sort,
-}
-
-impl<H: SmtHandler + ?Sized> Debug for SmtFunctionSignature<H>
-where
-    H::Sort: Debug,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SmtFunctionSignature")
-            .field("name", &self.name)
-            .field("params", &self.params)
-            .field("result_sort", &self.result_sort)
-            .finish()
-    }
-}
-
-impl<H: SmtHandler + ?Sized> Clone for SmtFunctionSignature<H>
-where
-    H::Sort: Clone,
-{
-    fn clone(&self) -> Self {
-        Self {
-            name: self.name.clone(),
-            params: self.params.clone(),
-            result_sort: self.result_sort.clone(),
-        }
-    }
-}
-
 pub struct SmtDatatypeConstructor<H: SmtHandler + ?Sized> {
     pub name: SmtSymbolBuf,
     pub selectors: Vec<(SmtSymbolBuf, H::Sort)>,

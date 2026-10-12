@@ -2,9 +2,9 @@ use std::{convert::Infallible, fmt::Debug};
 
 use crate::{
     SmtAttributeValue, SmtAttributes, SmtBindings, SmtDatatypeConstructor, SmtFunctionSignature,
-    SmtKeyword, SmtKeywordBuf, SmtMatchCases, SmtNumeralBuf, SmtPattern, SmtQuantifierKind,
-    SmtSExpr, SmtSort, SmtSortedVars, SmtStringContentBuf, SmtSymbol, SmtSymbolBuf, SmtTerm,
-    parser::SmtParse, token::SmtVersion,
+    SmtFunctionSignatures, SmtKeyword, SmtMatchCases, SmtMultiple, SmtNumeral, SmtNumeralBuf,
+    SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSort, SmtSortedVars, SmtStringContent, SmtSymbol,
+    SmtSymbolBuf, SmtSymbols, SmtTerm, parser::SmtParse, token::SmtVersion,
 };
 
 pub trait SmtHandler {
@@ -160,16 +160,16 @@ pub trait SmtCommandHandler: SmtHandler {
         name: SmtSymbol<'_>,
     ) -> Result<Self::NonstandardParser, Self::Error>;
 
-    fn command_echo(&mut self, value: SmtStringContentBuf) -> Result<(), Self::Error>;
+    fn command_echo(&mut self, value: SmtStringContent<'_>) -> Result<(), Self::Error>;
 
-    fn command_get_option(&mut self, option: SmtKeywordBuf) -> Result<(), Self::Error>;
+    fn command_get_option(&mut self, option: SmtKeyword<'_>) -> Result<(), Self::Error>;
     fn command_set_option(&mut self, option: Self::Attribute) -> Result<(), Self::Error>;
-    fn command_get_info(&mut self, keyword: SmtKeywordBuf) -> Result<(), Self::Error>;
+    fn command_get_info(&mut self, keyword: SmtKeyword<'_>) -> Result<(), Self::Error>;
     fn command_set_info(&mut self, attribute: Self::Attribute) -> Result<(), Self::Error>;
 
-    fn command_set_logic(&mut self, logic: SmtSymbolBuf) -> Result<(), Self::Error>;
+    fn command_set_logic(&mut self, logic: SmtSymbol<'_>) -> Result<(), Self::Error>;
 
-    fn command_get_value(&mut self, terms: Vec<Self::Term>) -> Result<(), Self::Error>;
+    fn command_get_value(&mut self, terms: SmtMultiple<'_, Self::Term>) -> Result<(), Self::Error>;
     fn command_get_assertions(&mut self) -> Result<(), Self::Error>;
     fn command_get_assignment(&mut self) -> Result<(), Self::Error>;
     fn command_get_model(&mut self) -> Result<(), Self::Error>;
@@ -183,8 +183,8 @@ pub trait SmtCommandHandler: SmtHandler {
     /// is a sort symbol or parameter that is already present in the current signature.
     fn command_declare_sort(
         &mut self,
-        name: SmtSymbolBuf,
-        arity: SmtNumeralBuf,
+        name: SmtSymbol<'_>,
+        arity: SmtNumeral<'_>,
     ) -> Result<(), Self::Error>;
 
     /// Adds a global sort parameter `name` to the current signature.
@@ -192,7 +192,7 @@ pub trait SmtCommandHandler: SmtHandler {
     /// As per the standard, the handler should return an error
     /// if `name` is a sort symbol, sort parameter, or theory symbol
     /// that is already present in the current signature.
-    fn command_declare_sort_parameter(&mut self, name: SmtSymbolBuf) -> Result<(), Self::Error>;
+    fn command_declare_sort_parameter(&mut self, name: SmtSymbol<'_>) -> Result<(), Self::Error>;
 
     /// Declares a constant (`declare-const`).
     ///
@@ -200,15 +200,15 @@ pub trait SmtCommandHandler: SmtHandler {
     /// `declare-fun` without any parameters.
     fn command_declare_const(
         &mut self,
-        name: SmtSymbolBuf,
+        name: SmtSymbol<'_>,
         sort: Self::Sort,
     ) -> Result<(), Self::Error>;
 
     /// Declares a function (`declare-fun`).
     fn command_declare_fun(
         &mut self,
-        name: SmtSymbolBuf,
-        param_sorts: Vec<Self::Sort>,
+        name: SmtSymbol<'_>,
+        param_sorts: SmtMultiple<'_, Self::Sort>,
         result_sort: Self::Sort,
     ) -> Result<(), Self::Error>;
 
@@ -227,7 +227,7 @@ pub trait SmtCommandHandler: SmtHandler {
     /// and additional assumptions given within the command.
     fn command_check_sat_assuming(
         &mut self,
-        assumptions: Vec<Self::Term>,
+        assumptions: SmtMultiple<'_, Self::Term>,
     ) -> Result<(), Self::Error>;
 
     fn command_reset(&mut self) -> Result<(), Self::Error>;
@@ -239,7 +239,7 @@ pub trait SmtCommandHandler: SmtHandler {
     /// Pushes `amount` of empty assertion levels onto the assertion stack.
     ///
     /// If `amount` is 0, no levels are pushed (i.e. successful no-op).
-    fn command_push(&mut self, amount: SmtNumeralBuf) -> Result<(), Self::Error>;
+    fn command_push(&mut self, amount: SmtNumeral<'_>) -> Result<(), Self::Error>;
 
     /// Pops `amount` of assertion levels from the assertion stack.
     ///
@@ -248,7 +248,7 @@ pub trait SmtCommandHandler: SmtHandler {
     /// As per the standard, the handler should return an error
     /// when popping more than the amount of remaining assertion levels
     /// beyond the inherent first assertion level.
-    fn command_pop(&mut self, amount: SmtNumeralBuf) -> Result<(), Self::Error>;
+    fn command_pop(&mut self, amount: SmtNumeral<'_>) -> Result<(), Self::Error>;
 
     /// Starts sort definition (in `define-sort`).
     ///
@@ -262,8 +262,8 @@ pub trait SmtCommandHandler: SmtHandler {
     /// 2. if a theory sort symbol is used as a sort parameter.
     fn start_define_sort(
         &mut self,
-        name: SmtSymbolBuf,
-        params: Vec<SmtSymbolBuf>,
+        name: SmtSymbol<'_>,
+        params: SmtSymbols<'_>,
     ) -> Result<(), Self::Error>;
 
     /// Ends sort definition (in `define-sort`).
@@ -276,7 +276,7 @@ pub trait SmtCommandHandler: SmtHandler {
     /// Starts function definition body (in `define-fun`).
     fn start_define_fun(
         &mut self,
-        signature: SmtFunctionSignature<Self>,
+        signature: SmtFunctionSignature<'_, Self::Sort>,
     ) -> Result<(), Self::Error>;
 
     /// Defines a constant (`define-const`).
@@ -285,7 +285,7 @@ pub trait SmtCommandHandler: SmtHandler {
     /// without parameters.
     fn command_define_const(
         &mut self,
-        name: SmtSymbolBuf,
+        name: SmtSymbol<'_>,
         sort: Self::Sort,
         body: Self::Term,
     ) -> Result<(), Self::Error>;
@@ -296,7 +296,7 @@ pub trait SmtCommandHandler: SmtHandler {
     /// Starts a recursive function definition (`define-fun-rec`).
     fn start_define_fun_rec(
         &mut self,
-        signature: SmtFunctionSignature<Self>,
+        signature: SmtFunctionSignature<'_, Self::Sort>,
     ) -> Result<(), Self::Error>;
 
     /// Ends a recursive function definition (`define-fun-rec`).
@@ -324,7 +324,7 @@ pub trait SmtCommandHandler: SmtHandler {
     /// Consult the standard for proper handling.
     fn start_define_funs_rec(
         &mut self,
-        signatures: Vec<SmtFunctionSignature<Self>>,
+        signatures: SmtFunctionSignatures<'_, Self::Sort>,
     ) -> Result<(), Self::Error>;
 
     /// Ends recursive function definitions (in `define-funs-rec`).
@@ -578,11 +578,11 @@ impl SmtCommandHandler for SmtSyntaxChecker {
         Err(NonstandardCommandError(name.into_owned()))
     }
 
-    fn command_echo(&mut self, _value: SmtStringContentBuf) -> Result<(), Self::Error> {
+    fn command_echo(&mut self, _value: SmtStringContent<'_>) -> Result<(), Self::Error> {
         Ok(())
     }
 
-    fn command_get_option(&mut self, _option: SmtKeywordBuf) -> Result<(), Self::Error> {
+    fn command_get_option(&mut self, _option: SmtKeyword<'_>) -> Result<(), Self::Error> {
         Ok(())
     }
 
@@ -590,7 +590,7 @@ impl SmtCommandHandler for SmtSyntaxChecker {
         Ok(())
     }
 
-    fn command_get_info(&mut self, _keyword: SmtKeywordBuf) -> Result<(), Self::Error> {
+    fn command_get_info(&mut self, _keyword: SmtKeyword<'_>) -> Result<(), Self::Error> {
         Ok(())
     }
 
@@ -598,11 +598,14 @@ impl SmtCommandHandler for SmtSyntaxChecker {
         Ok(())
     }
 
-    fn command_set_logic(&mut self, _logic: SmtSymbolBuf) -> Result<(), Self::Error> {
+    fn command_set_logic(&mut self, _logic: SmtSymbol<'_>) -> Result<(), Self::Error> {
         Ok(())
     }
 
-    fn command_get_value(&mut self, _terms: Vec<Self::Term>) -> Result<(), Self::Error> {
+    fn command_get_value(
+        &mut self,
+        _terms: SmtMultiple<'_, Self::Term>,
+    ) -> Result<(), Self::Error> {
         Ok(())
     }
 
@@ -632,20 +635,20 @@ impl SmtCommandHandler for SmtSyntaxChecker {
 
     fn command_declare_sort(
         &mut self,
-        _name: SmtSymbolBuf,
-        _arity: SmtNumeralBuf,
+        _name: SmtSymbol<'_>,
+        _arity: SmtNumeral<'_>,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
 
-    fn command_declare_sort_parameter(&mut self, _name: SmtSymbolBuf) -> Result<(), Self::Error> {
+    fn command_declare_sort_parameter(&mut self, _name: SmtSymbol<'_>) -> Result<(), Self::Error> {
         Ok(())
     }
 
     fn command_declare_fun(
         &mut self,
-        _name: SmtSymbolBuf,
-        _param_sorts: Vec<Self::Sort>,
+        _name: SmtSymbol<'_>,
+        _param_sorts: SmtMultiple<'_, Self::Sort>,
         _result_sort: Self::Sort,
     ) -> Result<(), Self::Error> {
         Ok(())
@@ -671,18 +674,18 @@ impl SmtCommandHandler for SmtSyntaxChecker {
         Ok(())
     }
 
-    fn command_push(&mut self, _amount: SmtNumeralBuf) -> Result<(), Self::Error> {
+    fn command_push(&mut self, _amount: SmtNumeral<'_>) -> Result<(), Self::Error> {
         Ok(())
     }
 
-    fn command_pop(&mut self, _amount: SmtNumeralBuf) -> Result<(), Self::Error> {
+    fn command_pop(&mut self, _amount: SmtNumeral<'_>) -> Result<(), Self::Error> {
         Ok(())
     }
 
     fn start_define_sort(
         &mut self,
-        _name: SmtSymbolBuf,
-        _params: Vec<SmtSymbolBuf>,
+        _name: SmtSymbol<'_>,
+        _params: SmtSymbols<'_>,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -693,7 +696,7 @@ impl SmtCommandHandler for SmtSyntaxChecker {
 
     fn start_define_fun(
         &mut self,
-        _signature: SmtFunctionSignature<Self>,
+        _signature: SmtFunctionSignature<'_, Self::Sort>,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -704,7 +707,7 @@ impl SmtCommandHandler for SmtSyntaxChecker {
 
     fn start_define_funs_rec(
         &mut self,
-        _signatures: Vec<SmtFunctionSignature<Self>>,
+        _signatures: SmtFunctionSignatures<'_, Self::Sort>,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -748,7 +751,7 @@ impl SmtCommandHandler for SmtSyntaxChecker {
 
     fn command_declare_const(
         &mut self,
-        _name: SmtSymbolBuf,
+        _name: SmtSymbol<'_>,
         _sort: Self::Sort,
     ) -> Result<(), Self::Error> {
         Ok(())
@@ -756,14 +759,14 @@ impl SmtCommandHandler for SmtSyntaxChecker {
 
     fn command_check_sat_assuming(
         &mut self,
-        _assumptions: Vec<Self::Term>,
+        _assumptions: SmtMultiple<'_, Self::Term>,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
 
     fn command_define_const(
         &mut self,
-        _name: SmtSymbolBuf,
+        _name: SmtSymbol<'_>,
         _sort: Self::Sort,
         _body: Self::Term,
     ) -> Result<(), Self::Error> {
@@ -772,7 +775,7 @@ impl SmtCommandHandler for SmtSyntaxChecker {
 
     fn start_define_fun_rec(
         &mut self,
-        _signature: SmtFunctionSignature<Self>,
+        _signature: SmtFunctionSignature<'_, Self::Sort>,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
