@@ -223,7 +223,7 @@ fn keywords_spelled_like_reserved_words_are_keywords() {
 fn read_pieces(pieces: &[&[u8]]) -> Result<(), SmtReadError<NonstandardCommandError>> {
     let mut handler = SmtSyntaxChecker;
     let mut reader =
-        SmtReader::script(&mut handler, SmtVersion::V2_7, SmtVersionPosture::default());
+        SmtReader::script(&mut handler, SmtVersionPosture::default(), SmtVersion::V2_7);
     for piece in pieces {
         reader.read_slice(piece)?;
     }
