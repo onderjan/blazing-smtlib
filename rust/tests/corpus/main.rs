@@ -3,15 +3,13 @@
 //!
 //! Expects the SMT-LIB corpus under `benchmarks/2025` in the repository root;
 //! set the environment variable `SMT_BENCHMARKS_DIR` to use a corpus root
-//! elsewhere. Both sweeps are ignored by default.
-//!
-//! `parse_corpus` parses every file and reports the failures:
-//! `cargo test --release parse_corpus -- --ignored`.
+//! elsewhere. The sweeps are ignored by default.
 //!
 //! `trace_corpus` parses every file with a handler that hashes every callback
 //! it receives (see `trace_hash.rs` beside this file), producing one line per file, so
 //! that two revisions of the parser can be compared on the whole corpus:
-//! `cargo test --release trace_corpus -- --ignored`. Environment variables:
+//! `cargo test --release trace_corpus -- --ignored`. It fails if any file fails to
+//! parse, reporting the failures by class. Environment variables:
 //!
 //! - `SMT_TRACE_OUT`: path of a file to write the lines to, sorted by path:
 //!   the hash as 16 hex digits, or `ERR: ` and the error description for a
@@ -23,7 +21,13 @@
 //!
 //! Without either variable the test only prints the digest of all lines,
 //! which is enough for a quick same-or-different check between two runs.
+//!
+//! `roundtrip_tokens_corpus` and `roundtrip_bytes_corpus` check that the handler
+//! calls determine every file apart from whitespace and comments (see
+//! `roundtrip.rs`): printing the calls back gives the file's tokens, and with the
+//! file's own whitespace and comments its bytes, up to a top-level `(exit)`.
 
+mod roundtrip;
 mod trace_hash;
 
 use std::cell::RefCell;
@@ -36,7 +40,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use blazing_smtlib::{
-    NonstandardCommandError, SmtSyntaxChecker,
+    NonstandardCommandError,
     reader::{SmtReadError, SmtReadErrorCause, read_smt_file},
 };
 use rayon::ThreadPoolBuilder;
@@ -79,11 +83,6 @@ fn collect_smt2_files(root: &Path) -> (Vec<(PathBuf, u64)>, u64) {
 struct FailureRecord {
     path: PathBuf,
     error: String,
-}
-
-fn parse_file(path: &Path) -> Result<(), SmtReadError<NonstandardCommandError>> {
-    read_smt_file(&mut SmtSyntaxChecker, path)?;
-    Ok(())
 }
 
 /// Parses the file with the hashing handler, returning the digest.
@@ -323,17 +322,6 @@ impl Corpus {
     }
 }
 
-#[test]
-#[ignore]
-fn parse_corpus() {
-    let corpus = Corpus::locate();
-    let (_, failures) = corpus.sweep(|path| try_run_file(path, parse_file));
-    corpus.report_failures(&failures);
-    if !failures.is_empty() {
-        panic!("{} failures parsing the corpus", failures.len());
-    }
-}
-
 /// Reads a trace file into a map from relative path to line content.
 fn read_trace(path: &Path) -> BTreeMap<String, String> {
     let content = fs::read_to_string(path)
@@ -347,6 +335,53 @@ fn read_trace(path: &Path) -> BTreeMap<String, String> {
             (path.to_string(), content.to_string())
         })
         .collect()
+}
+
+/// Runs a check on a file, turning a panic into a failure description.
+fn try_check(path: &Path, check: impl FnOnce(&Path) -> Result<(), String>) -> Result<(), String> {
+    match std::panic::catch_unwind(AssertUnwindSafe(|| check(path))) {
+        Ok(result) => result,
+        Err(cause) => {
+            let msg = match cause.downcast_ref::<&'static str>() {
+                Some(s) => s.to_string(),
+                None => cause.downcast_ref::<String>().cloned().unwrap_or_default(),
+            };
+            let location = LAST_PANIC_LOCATION.with(|l| l.borrow_mut().take());
+            Err(format!("Panic: {msg} at {location:?}"))
+        }
+    }
+}
+
+/// Checks that the handler calls determine every file apart from whitespace
+/// and comments: printing the calls back gives the tokens of the file, up to
+/// a top-level `(exit)`.
+#[test]
+#[ignore]
+fn roundtrip_tokens_corpus() {
+    let corpus = Corpus::locate();
+    let (_, failures) = corpus.sweep(|path| try_check(path, roundtrip::roundtrip_file));
+    corpus.report_failures(&failures);
+    assert!(
+        failures.is_empty(),
+        "{} files do not round-trip",
+        failures.len()
+    );
+}
+
+/// Checks that every file is rebuilt byte for byte from its own whitespace
+/// and comments and the tokens printed back from the handler calls, up to a
+/// top-level `(exit)`.
+#[test]
+#[ignore]
+fn roundtrip_bytes_corpus() {
+    let corpus = Corpus::locate();
+    let (_, failures) = corpus.sweep(|path| try_check(path, roundtrip::bytes_file));
+    corpus.report_failures(&failures);
+    assert!(
+        failures.is_empty(),
+        "{} files are not rebuilt",
+        failures.len()
+    );
 }
 
 #[test]
@@ -391,8 +426,23 @@ fn trace_corpus() {
         eprintln!("Trace written to {}", out.display());
     }
 
+    let num_differences = compare_with_baseline(&lines);
+    assert!(
+        failures.is_empty(),
+        "{} files fail to parse",
+        failures.len()
+    );
+    assert!(
+        num_differences == 0,
+        "{num_differences} files differ from the baseline trace"
+    );
+}
+
+/// Compares the lines with a baseline trace, if `SMT_TRACE_BASE` names one,
+/// printing examples of each kind of difference; returns the number of differences.
+fn compare_with_baseline(lines: &BTreeMap<String, String>) -> usize {
     let Some(base) = std::env::var_os("SMT_TRACE_BASE") else {
-        return;
+        return 0;
     };
     let base = PathBuf::from(base);
     let baseline = read_trace(&base);
@@ -405,7 +455,7 @@ fn trace_corpus() {
     let mut missing_in_base = Vec::new();
     let mut missing_in_current = Vec::new();
     let mut different = Vec::new();
-    for (path, content) in &lines {
+    for (path, content) in lines {
         match baseline.get(path) {
             None => missing_in_base.push(path),
             Some(base_content) if base_content != content => {
@@ -423,7 +473,7 @@ fn trace_corpus() {
     let num_differences = missing_in_base.len() + missing_in_current.len() + different.len();
     if num_differences == 0 {
         eprintln!("No differences from the baseline");
-        return;
+        return 0;
     }
     eprintln!(
         "{} files differ from the baseline: {} only in this run, {} only in the baseline, \
@@ -442,5 +492,5 @@ fn trace_corpus() {
     for (path, base_content, content) in different.iter().take(EXAMPLES) {
         eprintln!("  {path}\n    baseline: {base_content}\n    this run: {content}");
     }
-    panic!("{} files differ from the baseline trace", num_differences);
+    num_differences
 }
