@@ -258,6 +258,16 @@ impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>> SmtLexer<C> {
         self.lex_slice(input)?;
         self.lex_eof()
     }
+
+    /// Returns a reference to the token consumer.
+    pub fn consumer(&self) -> &C {
+        &self.consumer
+    }
+
+    /// Returns a mutable reference to the token consumer.
+    pub fn consumer_mut(&mut self) -> &mut C {
+        &mut self.consumer
+    }
 }
 
 impl<C: SmtRecover> SmtLexer<C, SmtRecovering> {

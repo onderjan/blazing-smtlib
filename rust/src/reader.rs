@@ -311,4 +311,14 @@ impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtReader<'a, H, P> {
     pub fn discarded_from(&self) -> Option<SmtLocation> {
         self.lexer.discarded_from()
     }
+
+    /// Returns a reference to the handler.
+    pub fn handler(&self) -> &H {
+        self.lexer.consumer().handler()
+    }
+
+    /// Returns a mutable reference to the handler.
+    pub fn handler_mut(&mut self) -> &mut H {
+        self.lexer.consumer_mut().handler_mut()
+    }
 }

@@ -38,6 +38,16 @@ impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtParseAdapter<'a, H, P> {
         &mut self.parser
     }
 
+    /// Returns a reference to the handler.
+    pub fn handler(&self) -> &H {
+        self.handler
+    }
+
+    /// Returns a mutable reference to the handler.
+    pub fn handler_mut(&mut self) -> &mut H {
+        self.handler
+    }
+
     /// Takes the parser back out of the adapter.
     pub fn into_parser(self) -> P {
         self.parser
