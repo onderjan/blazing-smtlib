@@ -107,6 +107,8 @@ fn reserved_word_other_than_a_command_name_is_no_command_name() {
 #[derive(Default)]
 struct Recording {
     commands: Vec<&'static str>,
+    /// Whether handled terms and attributes are recorded too, as `term` and `attribute`.
+    records_terms_and_attributes: bool,
 }
 
 struct MyAssert;
@@ -131,6 +133,9 @@ impl SmtHandler for Recording {
         Ok(())
     }
     fn handle_term(&mut self, _term: SmtTerm<'_, Self>) -> Result<(), Self::Error> {
+        if self.records_terms_and_attributes {
+            self.commands.push("term");
+        }
         Ok(())
     }
     fn start_let(&mut self, _bindings: SmtBindings<'_, Self>) -> Result<(), Self::Error> {
@@ -147,6 +152,9 @@ impl SmtHandler for Recording {
         _name: SmtKeyword<'_>,
         _value: Option<SmtAttributeValue<'_, Self>>,
     ) -> Result<(), Self::Error> {
+        if self.records_terms_and_attributes {
+            self.commands.push("attribute");
+        }
         Ok(())
     }
     fn annotate_term(
@@ -702,6 +710,138 @@ fn no_end_call_comes_before_a_missing_closing_parenthesis() {
             handler.commands,
             calls,
             "calls in {:?}",
+            String::from_utf8_lossy(input)
+        );
+    }
+}
+
+#[test]
+fn recursive_body_terms_are_handled_between_the_start_and_end_of_their_body() {
+    let mut handler = Recording {
+        records_terms_and_attributes: true,
+        ..Recording::default()
+    };
+    parse_with(
+        &mut handler,
+        b"(define-funs-rec ((f () Int) (g ((x Int)) Int)) (1 (+ x 2))) \
+          (define-fun-rec h () Int (let ((y 1)) y))",
+    )
+    .unwrap_or_else(|err| panic!("unexpected error at {:?}", err.span()));
+    assert_eq!(
+        handler.commands,
+        [
+            "start-define-funs-rec",
+            // a body of one token
+            "start-recursive-body",
+            "term",
+            "end-recursive-body",
+            // a compound body
+            "start-recursive-body",
+            "term",
+            "term",
+            "term",
+            "end-recursive-body",
+            "end-define-funs-rec",
+            // a body binding a variable, through define-fun-rec
+            "start-define-funs-rec",
+            "start-recursive-body",
+            "term",
+            "term",
+            "end-recursive-body",
+            "end-define-funs-rec",
+        ]
+    );
+}
+
+#[test]
+fn define_funs_rec_makes_no_call_for_a_missing_or_an_extra_body() {
+    // the input, the error span and kind, and the calls made before the error
+    type Case = (
+        &'static [u8],
+        u64,
+        u64,
+        SmtSyntaxErrorKind,
+        &'static [&'static str],
+    );
+    let cases: [Case; 2] = [
+        // too few bodies: the shortfall is found at the closing parenthesis
+        // of the bodies, and no start is made for the missing body
+        (
+            b"(define-funs-rec ((f () Int) (g () Int)) (1))",
+            43,
+            44,
+            SmtSyntaxErrorKind::ExpectedFunctionBody,
+            &[
+                "start-define-funs-rec",
+                "start-recursive-body",
+                "end-recursive-body",
+            ],
+        ),
+        // too many bodies: the excess is found at the first token of the extra body,
+        // and no start is made for it
+        (
+            b"(define-funs-rec ((f () Int)) (1 2))",
+            33,
+            34,
+            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose]),
+            &[
+                "start-define-funs-rec",
+                "start-recursive-body",
+                "end-recursive-body",
+            ],
+        ),
+    ];
+    for (input, start, end, kind, calls) in cases {
+        let mut handler = Recording::default();
+        let err = parse_with(&mut handler, input).expect_err("expected a parser error");
+        assert_error_span(&err, start, end);
+        match err.into_cause() {
+            SmtReadErrorCause::Syntax(actual) => {
+                assert_eq!(actual, kind, "in {:?}", String::from_utf8_lossy(input))
+            }
+            _ => panic!(
+                "expected a parser error in {:?}",
+                String::from_utf8_lossy(input)
+            ),
+        }
+        assert_eq!(
+            handler.commands,
+            calls,
+            "calls in {:?}",
+            String::from_utf8_lossy(input)
+        );
+    }
+}
+
+#[test]
+fn a_second_option_or_info_attribute_is_rejected_before_the_first_is_handled() {
+    // a valueless attribute is ended by the next token; in set-option and set-info
+    // a second keyword is rejected at once, so the first is not handled
+    for (input, start, end) in [
+        (&b"(set-option :a :b)"[..], 15, 17),
+        (&b"(set-info :a :b)"[..], 13, 15),
+    ] {
+        let mut handler = Recording {
+            records_terms_and_attributes: true,
+            ..Recording::default()
+        };
+        let err = parse_with(&mut handler, input).expect_err("expected a parser error");
+        assert_error_span(&err, start, end);
+        assert!(
+            matches!(
+                err.cause(),
+                SmtReadErrorCause::Syntax(SmtSyntaxErrorKind::ExpectedToken([
+                    SmtTokenCategory::ParenClose
+                ]))
+            ),
+            "{:?} in {:?}",
+            err.cause(),
+            String::from_utf8_lossy(input)
+        );
+        assert!(
+            handler.commands.is_empty(),
+            "calls {:?} in {:?}",
+            handler.commands,
             String::from_utf8_lossy(input)
         );
     }

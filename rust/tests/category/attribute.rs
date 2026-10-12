@@ -215,3 +215,37 @@ fn multiple_attribute_errors() {
         "{err:?}"
     );
 }
+
+#[test]
+fn a_second_attribute_is_rejected_before_the_first_is_handled() {
+    // a valueless attribute is ended by the next token; a second keyword ends it
+    // and is rejected at once, so the first is not handled before the error
+    let cases: [(&[u8], u64, u64, &[&str]); 2] = [
+        (b":a :b)", 3, 5, &[]),
+        // a valued attribute is handled at its value, before the second keyword
+        (b":a 5 :b 6)", 5, 7, &["handle-attribute"]),
+    ];
+    for (input, start, end, calls) in cases {
+        let mut handler = Calls::default();
+        match run_with::<Calls, SmtClosedAttributeParser<Calls>>(&mut handler, input) {
+            Ok(_) => panic!("expected a parser error in {:?}, got Ok", text(input)),
+            Err((kind, span)) => {
+                assert!(
+                    matches!(
+                        kind,
+                        SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
+                    ),
+                    "{kind:?} in {:?}",
+                    text(input)
+                );
+                assert_eq!(
+                    (span.start().offset(), span.end().offset()),
+                    (start, end),
+                    "error span mismatch (start, end) as byte offsets in {:?}",
+                    text(input)
+                );
+            }
+        }
+        assert_eq!(handler.calls, calls, "calls in {:?}", text(input));
+    }
+}

@@ -368,6 +368,93 @@ impl SmtHandler for Printing {
     }
 }
 
+// --- Test handler recording the calls of binders, matches and attributes ---
+
+/// Handler that records the calls of the binders, matches and attributes, by name.
+#[derive(Default)]
+struct Calls {
+    calls: Vec<&'static str>,
+}
+
+impl SmtHandler for Calls {
+    type Error = Infallible;
+    type SExpr = ();
+    type Attribute = ();
+    type Sort = ();
+    type Term = ();
+
+    fn handle_sort(&mut self, _sort: SmtSort<'_, Self>) -> Result<(), Infallible> {
+        Ok(())
+    }
+    fn handle_term(&mut self, _term: SmtTerm<'_, Self>) -> Result<(), Infallible> {
+        Ok(())
+    }
+    fn start_let(&mut self, _bindings: SmtBindings<'_, Self>) -> Result<(), Infallible> {
+        self.calls.push("start-let");
+        Ok(())
+    }
+    fn end_let(&mut self, _term: ()) -> Result<(), Infallible> {
+        self.calls.push("end-let");
+        Ok(())
+    }
+    fn handle_s_expr(&mut self, _expr: SmtSExpr<'_, Self>) -> Result<(), Infallible> {
+        Ok(())
+    }
+    fn handle_attribute(
+        &mut self,
+        _name: SmtKeyword<'_>,
+        _value: Option<SmtAttributeValue<'_, Self>>,
+    ) -> Result<(), Infallible> {
+        self.calls.push("handle-attribute");
+        Ok(())
+    }
+    fn annotate_term(
+        &mut self,
+        _term: (),
+        _attributes: SmtAttributes<'_, Self>,
+    ) -> Result<(), Infallible> {
+        self.calls.push("annotate-term");
+        Ok(())
+    }
+    fn start_quantifier(
+        &mut self,
+        _kind: SmtQuantifierKind,
+        _name: SmtSymbol<'_>,
+        _sort: (),
+    ) -> Result<(), Infallible> {
+        self.calls.push("start-quantifier");
+        Ok(())
+    }
+    fn end_quantifier(&mut self, _term: ()) -> Result<(), Infallible> {
+        self.calls.push("end-quantifier");
+        Ok(())
+    }
+    fn start_lambda(&mut self, _name: SmtSymbol<'_>, _sort: ()) -> Result<(), Infallible> {
+        self.calls.push("start-lambda");
+        Ok(())
+    }
+    fn end_lambda(&mut self, _term: ()) -> Result<(), Infallible> {
+        self.calls.push("end-lambda");
+        Ok(())
+    }
+    fn start_match(&mut self, _scrutinee: ()) -> Result<(), Infallible> {
+        self.calls.push("start-match");
+        Ok(())
+    }
+    fn start_match_case(&mut self, _pattern: SmtPattern<'_>) -> Result<(), Infallible> {
+        self.calls.push("start-match-case");
+        Ok(())
+    }
+    fn end_match_case(&mut self, _term: ()) -> Result<(), Infallible> {
+        self.calls.push("end-match-case");
+        Ok(())
+    }
+    fn end_match(&mut self) -> Result<(), Infallible> {
+        self.calls.push("end-match");
+        Ok(())
+    }
+}
+
 // --- Driver ---
 
 /// A parse failure, as the error kind and the span it carries.

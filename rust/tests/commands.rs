@@ -2283,10 +2283,9 @@ fn define_fun_rec_errors_point_at_offending_token() {
 
 #[test]
 fn missing_recursive_body_is_started_only_in_the_sugar_form() {
-    // the callbacks received before a parser error are an expectation of
-    // the current implementation, not a contract: the sugar form has no
-    // body list, so the closing parenthesis reaches the body parser and
-    // starts the body before the missing term is detected
+    // the sugar form has no body list, so the closing parenthesis reaches
+    // the body parser and starts the body before the missing term is
+    // detected; this is intended, as the two forms differ syntactically
     let mut handler = Resolving::default();
     let err = parse_with(&mut handler, b"(define-fun-rec f () Int)")
         .expect_err("expected a parser error");
