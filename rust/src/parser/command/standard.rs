@@ -168,25 +168,25 @@ standard_commands! {
             handler.command_declare_fun(name, param_sorts, result_sort)),
     declare_datatype: DeclareDatatype(
         SmtClosedParser<H, DeclareDatatypeParser<H>>,
-        |_handler, ()| Ok(())),
+        |handler, ()| handler.end_declare_datatypes()),
     declare_datatypes: DeclareDatatypes(
         SmtClosedParser<H, DeclareDatatypesParser<H>>,
-        |_handler, ()| Ok(())),
+        |handler, ()| handler.end_declare_datatypes()),
     define_sort: DefineSort(
         SmtClosedParser<H, DefinitionParser<H, DefineSort>>,
-        |_handler, ()| Ok(())),
+        |handler, sort| handler.end_define_sort(sort)),
     define_const: DefineConst(
         SmtClosedParser<H, DefinitionParser<H, DefineConst>>,
-        |_handler, ()| Ok(())),
+        |handler, body| handler.end_define_fun(body)),
     define_fun: DefineFun(
         SmtClosedParser<H, DefinitionParser<H, DefineFun>>,
-        |_handler, ()| Ok(())),
+        |handler, body| handler.end_define_fun(body)),
     define_fun_rec: DefineFunRec(
         SmtClosedParser<H, DefinitionParser<H, DefineFunRec>>,
-        |_handler, ()| Ok(())),
+        |handler, ()| handler.end_define_funs_rec()),
     define_funs_rec: DefineFunsRec(
         SmtClosedParser<H, DefineFunsRecParser<H>>,
-        |_handler, ()| Ok(())),
+        |handler, ()| handler.end_define_funs_rec()),
     assert: Assert(
         SmtClosedParser<H, SmtTermParser<H>>,
         |handler, term| handler.command_assert(term)),
@@ -267,10 +267,6 @@ impl<H: SmtCommandHandler> Definition<H> for DefineConst {
         };
         handler.start_define_fun(signature)
     }
-
-    fn end(handler: &mut H, term: H::Term) -> Result<(), H::Error> {
-        handler.end_define_fun(term)
-    }
 }
 
 impl<H: SmtCommandHandler> Definition<H> for DefineFun {
@@ -279,10 +275,6 @@ impl<H: SmtCommandHandler> Definition<H> for DefineFun {
 
     fn start(handler: &mut H, signature: SmtFunctionSignature<H>) -> Result<(), H::Error> {
         handler.start_define_fun(signature)
-    }
-
-    fn end(handler: &mut H, term: H::Term) -> Result<(), H::Error> {
-        handler.end_define_fun(term)
     }
 }
 
@@ -297,10 +289,6 @@ impl<H: SmtCommandHandler> Definition<H> for DefineSort {
         let (name, params) = signature;
         handler.start_define_sort(name, params)
     }
-
-    fn end(handler: &mut H, sort: H::Sort) -> Result<(), H::Error> {
-        handler.end_define_sort(sort)
-    }
 }
 
 impl<H: SmtCommandHandler> Definition<H> for DefineFunRec {
@@ -309,10 +297,6 @@ impl<H: SmtCommandHandler> Definition<H> for DefineFunRec {
 
     fn start(handler: &mut H, signature: SmtFunctionSignature<H>) -> Result<(), H::Error> {
         handler.start_define_funs_rec(vec![signature])
-    }
-
-    fn end(handler: &mut H, _: ()) -> Result<(), H::Error> {
-        handler.end_define_funs_rec()
     }
 }
 

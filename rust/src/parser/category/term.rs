@@ -138,19 +138,24 @@ enum Level<H: SmtHandler + ?Sized> {
     /// A match waiting for a case term.
     ///
     /// It is closed by a closing parenthesis instead of the inner term.
-    MatchCase { num_cases: u64 },
+    /// If `body` is set, the term has finished.
+    MatchCase {
+        num_cases: u64,
+        body: Option<H::Term>,
+    },
 }
 
 /// A pending term has been processed.
 ///
 /// This has priority over the state and levels.
-struct Pending<H: SmtHandler + ?Sized> {
-    term: H::Term,
-    /// Determines if the term we are creating is an annotation.
-    ///
-    /// True: we are parsing attributes after the inner term.
-    /// False: we are just waiting for a closing parenthesis.
-    is_annotation: bool,
+enum Pending<H: SmtHandler + ?Sized> {
+    Annotation(H::Term),
+    Binder {
+        body: H::Term,
+        end_kind: BinderEndKind,
+        num_close: u64,
+    },
+    Match,
 }
 
 impl<H: SmtHandler> SmtTermParser<H> {
@@ -370,41 +375,66 @@ impl<H: SmtHandler> TermSlot<H> {
     ) -> Result<ControlFlow<H::Term>, SmtParseError<H::Error>> {
         let term = match parse_state.term_slot.pending.take() {
             Some(pending) => {
-                if pending.is_annotation {
-                    // we are parsing attributes
-                    match parse_state
-                        .attribute_slot
-                        .progress::<H, Z, MultipleAttributes>(
-                            handler,
-                            &mut parse_state.arena,
-                            &mut parse_state.s_expr_slot,
-                            cursor,
-                            token,
-                        )? {
-                        ControlFlow::Continue(()) => {
-                            // put the pending term back
-                            parse_state.term_slot.pending = Some(pending);
-                            return Ok(ControlFlow::Continue(()));
-                        }
-                        ControlFlow::Break(arena_attributes_start) => {
-                            let arena = &mut parse_state.arena;
-                            // check that there is at least one attribute
-                            if arena.attributes.len() == arena_attributes_start {
-                                return Err(SmtParseError::category_error(
-                                    SmtSyntaxErrorKind::EmptyAnnotation,
-                                ));
+                match pending {
+                    Pending::Annotation(term) => {
+                        // we are parsing attributes
+                        match parse_state
+                            .attribute_slot
+                            .progress::<H, Z, MultipleAttributes>(
+                                handler,
+                                &mut parse_state.arena,
+                                &mut parse_state.s_expr_slot,
+                                cursor,
+                                token,
+                            )? {
+                            ControlFlow::Continue(()) => {
+                                // put the pending term back
+                                parse_state.term_slot.pending = Some(Pending::Annotation(term));
+                                return Ok(ControlFlow::Continue(()));
                             }
-                            // produce the annotated term, the attributes are consumed
-                            arena.hand_over_attributes(arena_attributes_start, |attributes| {
-                                handle_err(handler.annotate_term(pending.term, attributes))
-                            })?
+                            ControlFlow::Break(arena_attributes_start) => {
+                                let arena = &mut parse_state.arena;
+                                // check that there is at least one attribute
+                                if arena.attributes.len() == arena_attributes_start {
+                                    return Err(SmtParseError::category_error(
+                                        SmtSyntaxErrorKind::EmptyAnnotation,
+                                    ));
+                                }
+                                // produce the annotated term, the attributes are consumed
+                                arena.hand_over_attributes(
+                                    arena_attributes_start,
+                                    |attributes| {
+                                        handle_err(handler.annotate_term(term, attributes))
+                                    },
+                                )?
+                            }
                         }
                     }
-                } else {
-                    // we are waiting for a closing parenthesis
-                    SmtCloseParenParser::expect(cursor, token)?;
-                    // produce the term
-                    pending.term
+                    Pending::Binder {
+                        body,
+                        end_kind,
+                        num_close,
+                    } => {
+                        // we are waiting for a closing parenthesis
+                        SmtCloseParenParser::expect(cursor, token)?;
+                        // call the handler repeatedly to close all desugared binders
+                        let mut term = body;
+                        for _ in 0..num_close {
+                            let handled = match end_kind {
+                                BinderEndKind::Quantifier => handler.end_quantifier(term),
+                                BinderEndKind::Lambda => handler.end_lambda(term),
+                                BinderEndKind::Let => handler.end_let(term),
+                            };
+                            term = handle_err(handled)?;
+                        }
+                        term
+                    }
+                    Pending::Match => {
+                        // we are waiting for a closing parenthesis
+                        SmtCloseParenParser::expect(cursor, token)?;
+                        // end the match
+                        handle_err(handler.end_match())?
+                    }
                 }
             }
             None => {
@@ -457,48 +487,39 @@ impl<H: SmtHandler> TermSlot<H> {
                 end_kind,
                 num_close,
             } => {
-                // end the binder
+                // pop the binder
                 let (end_kind, num_close) = (*end_kind, *num_close);
                 slot.levels.pop();
-
-                // call the handler repeatedly to close all desugared binders
-                let mut term = term;
-                for _ in 0..num_close {
-                    let handled = match end_kind {
-                        BinderEndKind::Quantifier => handler.end_quantifier(term),
-                        BinderEndKind::Lambda => handler.end_lambda(term),
-                        BinderEndKind::Let => handler.end_let(term),
-                    };
-                    term = handle_err(handled)?;
-                }
-                // wait for the closing parenthesis
-                slot.pending = Some(Pending {
-                    term,
-                    is_annotation: false,
-                });
+                // wait for the closing parenthesis to handle end
+                slot.pending = Some(Pending::Binder {
+                    body: term,
+                    end_kind,
+                    num_close,
+                })
             }
             Level::Annotation => {
                 // put the term into pending and start parsing attributes
                 slot.levels.pop();
-                slot.pending = Some(Pending {
-                    term,
-                    is_annotation: true,
-                });
+                slot.pending = Some(Pending::Annotation(term));
             }
             Level::MatchScrutinee => {
                 // the scrutinee has been parsed, start the match in the handler
                 slot.levels.pop();
                 handle_err(handler.start_match(term))?;
                 // the case terms will be processed on a new level
-                slot.levels.push(Level::MatchCase { num_cases: 0 });
+                slot.levels.push(Level::MatchCase {
+                    num_cases: 0,
+                    body: None,
+                });
                 slot.state = State::MatchCasesOpen;
             }
-            Level::MatchCase { num_cases } => {
-                // a case term has been parsed, end the case in the handler
-                handle_err(handler.end_match_case(term))?;
-                // increment the number of cases and move to expect
-                // the closing match case parenthesis
+            Level::MatchCase { num_cases, body } => {
+                // a case term has ended
+                // put it in case body and increment the number of cases
+                // move to expect the closing match case parenthesis
+                // do not handle the match case yet
                 *num_cases += 1;
+                *body = Some(term);
                 slot.state = State::MatchCaseClose;
             }
         }
@@ -654,7 +675,7 @@ impl<H: SmtHandler> TermSlot<H> {
             }
             State::MatchCaseOpen => {
                 // parse the match case and continue
-                slot.parse_match_case_open(handler, cursor, token)?;
+                slot.parse_match_case_open(cursor, token)?;
                 Ok(ControlFlow::Continue(()))
             }
             State::MatchPattern => {
@@ -674,11 +695,22 @@ impl<H: SmtHandler> TermSlot<H> {
                 Ok(ControlFlow::Continue(()))
             }
             State::MatchCaseClose => {
-                // expect a closing parenthesis
-                SmtCloseParenParser::expect(cursor, token)?;
-                // move to await a match case or a closing parenthesis
-                slot.state = State::MatchCaseOpen;
-                Ok(ControlFlow::Continue(()))
+                // take the term out of the match-case level
+                if let Some(Level::MatchCase { num_cases: _, body }) = slot.levels.last_mut()
+                    && let Some(term) = body.take()
+                {
+                    // expect a closing parenthesis
+                    SmtCloseParenParser::expect(cursor, token)?;
+                    // call the handler
+                    handle_err(handler.end_match_case(term))?;
+                    // move to await a match case or a closing parenthesis
+                    slot.state = State::MatchCaseOpen;
+                    Ok(ControlFlow::Continue(()))
+                } else {
+                    panic!(
+                        "last level should be a match case with a body when closing a match case"
+                    )
+                }
             }
         }
     }
@@ -901,7 +933,6 @@ impl<H: SmtHandler> TermSlot<H> {
     /// that closes the match cases followed by the rest of the term.
     fn parse_match_case_open<Z: SmtProduce>(
         &mut self,
-        handler: &mut H,
         cursor: &Z,
         token: Z::Token,
     ) -> Result<(), SmtParseError<H::Error>> {
@@ -913,8 +944,12 @@ impl<H: SmtHandler> TermSlot<H> {
             }
             SmtSyntaxToken::ParenClose => {
                 // the match cases are done
-                let Some(Level::MatchCase { num_cases }) = self.levels.pop() else {
-                    panic!("last level should be a match case when closing cases")
+                let Some(Level::MatchCase {
+                    num_cases,
+                    body: None,
+                }) = self.levels.pop()
+                else {
+                    panic!("last level should be a match case with no body when closing cases")
                 };
                 // there must be at least one case
                 if num_cases == 0 {
@@ -923,13 +958,9 @@ impl<H: SmtHandler> TermSlot<H> {
                     ));
                 }
 
-                // call the handler to signal the end of the match
-                let term = handle_err(handler.end_match())?;
-                // wait for the closing parenthesis of the match, we will break after that
-                self.pending = Some(Pending {
-                    term,
-                    is_annotation: false,
-                });
+                // wait for the closing parenthesis of the match
+                // we will call the handler and break after that
+                self.pending = Some(Pending::Match);
                 Ok(())
             }
             _ => Err(SmtParseError::category_error(

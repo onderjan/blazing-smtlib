@@ -21,9 +21,6 @@ pub(super) trait Definition<H: SmtCommandHandler> {
         handler: &mut H,
         signature: <Self::Signature as SmtParse<H>>::Result,
     ) -> Result<(), H::Error>;
-
-    /// End is invoked when the last definition body token is processed.
-    fn end(handler: &mut H, body: <Self::Body as SmtParse<H>>::Result) -> Result<(), H::Error>;
 }
 
 enum DefinitionParserState {
@@ -58,7 +55,7 @@ impl<H: SmtCommandHandler, D: Definition<H>> Default for DefinitionParser<H, D> 
 }
 
 impl<H: SmtCommandHandler, D: Definition<H>> SmtParse<H> for DefinitionParser<H, D> {
-    type Result = ();
+    type Result = <D::Body as SmtParse<H>>::Result;
 
     #[inline]
     fn parse<C: SmtProduce>(
@@ -82,10 +79,11 @@ impl<H: SmtCommandHandler, D: Definition<H>> SmtParse<H> for DefinitionParser<H,
         match self.body_parser.parse(handler, parse_state, cursor)? {
             ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
             ControlFlow::Break(body) => {
-                // end the body in the handler, reset, and break
-                handle_err(D::end(handler, body))?;
+                // reset and break
                 self.state = DefinitionParserState::Signature;
-                Ok(ControlFlow::Break(()))
+                // the definition end will be processed
+                // after the last closing parenthesis
+                Ok(ControlFlow::Break(body))
             }
         }
     }

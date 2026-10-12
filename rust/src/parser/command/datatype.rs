@@ -51,6 +51,7 @@ struct DatatypeParser<H: SmtCommandHandler> {
 
     symbols_parser: SmtParenMultipleParser<H, SmtSymbolParser>,
     constructors_parser: SmtClosedMultipleParser<H, ConstructorParser<H>>,
+    constructors: Option<Vec<SmtDatatypeConstructor<H>>>,
 }
 
 impl<H: SmtCommandHandler> DatatypeParser<H> {
@@ -60,6 +61,7 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
             single_introduction: None,
             symbols_parser: SmtParenMultipleParser::default(),
             constructors_parser: SmtClosedMultipleParser::default(),
+            constructors: None,
         }
     }
 
@@ -199,8 +201,13 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
                     .break_value()
             }
             DatatypeState::Close => {
-                // expect closing parenthesis, reset and break
+                let Some(constructors) = self.constructors.take() else {
+                    panic!("constructors should be present when closing parametric datatype")
+                };
+                // expect closing parenthesis
                 SmtCloseParenParser::expect(cursor, token)?;
+                // end the datatype, reset and break
+                handle_err(handler.end_datatype_declaration(constructors))?;
                 self.state = DatatypeState::Start;
                 return Ok(ControlFlow::Break(()));
             }
@@ -219,15 +226,16 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
                 .into_iter()
                 .map(|(name, selectors)| SmtDatatypeConstructor { name, selectors })
                 .collect();
-            // end the datatype
-            handle_err(handler.end_datatype_declaration(constructors))?;
             if matches!(self.state, DatatypeState::SimpleConstructors) {
                 // we have already parsed the closing parenthesis
-                // reset and break
+                // end the datatype declaration, reset and break
+                handle_err(handler.end_datatype_declaration(constructors))?;
                 self.state = DatatypeState::Start;
                 return Ok(ControlFlow::Break(()));
             }
-            // we still need to wait for the closing parenthesis
+            // we still need to wait for the closing parenthesis,
+            // do not end the datatype before it
+            self.constructors = Some(constructors);
             self.state = DatatypeState::Close
         }
 
@@ -323,11 +331,12 @@ impl<H: SmtCommandHandler> DeclareDatatypesParser<H> {
                         ));
                     }
 
-                    // end datatypes declarations, reset, and break
+                    // we are done, reset and break
                     // the datatypes parser can have a changed number of maximum elements,
                     // but it will be changed before it is used next time
-                    handle_err(handler.end_declare_datatypes())?;
                     self.state = DeclareDatatypesState::Introductions;
+                    // the call to end datatypes declarations
+                    // will be done after the closing parenthesis
                     return Ok(ControlFlow::Break(()));
                 }
             }
@@ -402,8 +411,9 @@ impl<H: SmtCommandHandler> DeclareDatatypeParser<H> {
                     parse_state,
                     &mut SingleTokenProducer::new(cursor, token),
                 )? {
-                    // the single declaration ends the command
-                    handle_err(handler.end_declare_datatypes())?;
+                    // the single declaration ends the command, reset and break
+                    // the call to end datatypes declarations
+                    // will be done after the closing parenthesis
                     self.state = DeclareDatatypeState::Name;
                     return Ok(ControlFlow::Break(()));
                 }

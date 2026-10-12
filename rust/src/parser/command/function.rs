@@ -218,11 +218,12 @@ impl<H: SmtCommandHandler> DefineFunsRecParser<H> {
                         ));
                     }
 
-                    // end the recursive function definitions in the handler, reset, and break
+                    // done, reset and break
                     // the bodies parser can have a changed number of maximum elements,
                     // but it will be changed before it is used next time
-                    handle_err(handler.end_define_funs_rec())?;
                     self.state = DefineFunsRecState::Signatures;
+                    // the recursive function definitions end call
+                    // will be made after the command-end parenthesis
                     return Ok(ControlFlow::Break(()));
                 }
             }
