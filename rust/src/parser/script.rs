@@ -75,18 +75,17 @@ impl<H: SmtCommandHandler> SmtParse<H> for SmtScriptParser<H> {
                         ));
                     }
                     // allowed by the posture, try to set version on the cursor
-                    match cursor.set_version(version) {
-                        Ok(()) => {
-                            // success, increase the number of version declarations
-                            self.num_version_declarations += 1;
-                        }
-                        Err(SmtVersionRefused) => {
-                            // the producer itself does not support the version
-                            return Err(SmtParseError::category_error(
-                                SmtSyntaxErrorKind::UnsupportedVersion,
-                            ));
-                        }
+                    if let Err(SmtVersionRefused) = cursor.set_version(version) {
+                        // the producer rejected the version
+                        return Err(SmtParseError::category_error(
+                            SmtSyntaxErrorKind::UnsupportedVersion,
+                        ));
                     }
+                    // allowed by the producer, set version on the handler
+                    handler.set_version(version);
+
+                    // success, increase the number of version declarations
+                    self.num_version_declarations += 1;
                 }
                 ControlFlow::Break(SmtCommandOutcome::Exit) => {
                     // tell the cursor to discard the rest of the input

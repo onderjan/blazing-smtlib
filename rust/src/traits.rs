@@ -4,7 +4,7 @@ use crate::{
     SmtAttributeValue, SmtAttributes, SmtBindings, SmtDatatypeConstructor, SmtFunctionSignature,
     SmtKeyword, SmtKeywordBuf, SmtMatchCases, SmtNumeralBuf, SmtPattern, SmtQuantifierKind,
     SmtSExpr, SmtSort, SmtSortedVars, SmtStringContentBuf, SmtSymbol, SmtSymbolBuf, SmtTerm,
-    parser::SmtParse,
+    parser::SmtParse, token::SmtVersion,
 };
 
 pub trait SmtHandler {
@@ -16,6 +16,21 @@ pub trait SmtHandler {
     type Term;
 
     type Scope;
+
+    /// Informs the handler of the SMT-LIB version in force.
+    ///
+    /// The caller must set the version before calling
+    /// other methods so the handler can process them
+    /// according to the version semantics.
+    ///
+    /// The handler should start in [`SmtVersion::default`].
+    ///
+    /// In the library,
+    /// [`SmtParseAdapter`](crate::parser::SmtParseAdapter)
+    /// calls this method before any other calls, and
+    /// [`SmtScriptParser`](crate::parser::SmtScriptParser)
+    /// calls this method when switching versions.
+    fn set_version(&mut self, version: SmtVersion);
 
     fn handle_sort(&mut self, sort: SmtSort<'_, Self>) -> Result<Self::Sort, Self::Error>;
     fn handle_term(&mut self, term: SmtTerm<'_, Self>) -> Result<Self::Term, Self::Error>;
@@ -442,6 +457,8 @@ impl SmtHandler for SmtSyntaxChecker {
     type Term = ();
 
     type Scope = ();
+
+    fn set_version(&mut self, _version: SmtVersion) {}
 
     fn handle_sort(&mut self, _sort: SmtSort<'_, Self>) -> Result<Self::Sort, Self::Error> {
         Ok(())

@@ -14,6 +14,7 @@ pub struct SmtParseAdapter<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> {
     handler: &'a mut H,
     parse_state: SmtParseState<H>,
     parser: P,
+    version_set: bool,
 }
 
 impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtParseAdapter<'a, H, P> {
@@ -23,6 +24,7 @@ impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtParseAdapter<'a, H, P> {
             handler,
             parse_state: SmtParseState::new(),
             parser,
+            version_set: false,
         }
     }
 
@@ -56,11 +58,19 @@ impl<H: SmtHandler + ?Sized, P: SmtParse<H>, Z: SmtProduce> SmtConsumeFrom<Z>
         &mut self,
         cursor: &mut Z,
     ) -> Result<ControlFlow<P::Result>, SmtParseError<H::Error>> {
+        // set the version before starting to consume
+        if !self.version_set {
+            self.handler.set_version(cursor.version());
+            self.version_set = true;
+        }
+
         // provide the handler and resources to the parser
         let result = self
             .parser
             .parse(self.handler, &mut self.parse_state, cursor)?;
         if result.is_break() {
+            // set the version before starting to consume the next time
+            self.version_set = false;
             debug_assert!(
                 self.parse_state.is_pristine(),
                 "resources should be pristine after the top-level parser finishes"
