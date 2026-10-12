@@ -95,7 +95,7 @@ here: the feeds after it are not applied and there is no closing line.
 `BaseSelectionExpected`, `UnclosedStringLiteral`, `ForbiddenCharInString`,
 `ForbiddenKeywordName`, `BackslashInQuotedSymbol`,
 `ForbiddenCharInQuotedSymbol`, `UnclosedQuotedSymbol`, `NumeralLeadingZero`,
-`MissingDelimiter`.
+`MissingDelimiter`, `UnexpectedTrailingToken`.
 
 ```
 ok
@@ -258,11 +258,13 @@ fin <location>
 
 The consumer finished by its plan, and this is where: after the last token it
 took. The break at the end-of-file token that every consumer makes is not
-reported. The lexer holds the result back and discards the rest of the input:
-the feeds up to the next `e` hand nothing over, and that `e` hands over no
-end-of-file token but returns the held result. So the line stands in the
-response of that `e`, before its `at` line, whichever feed the consumer
-finished in. A request without that `e` has no `fin` line.
+reported. The lexer holds the result back and goes on lexing: the feeds up to
+the next `e` hand nothing over, and that `e` hands over no end-of-file token
+but returns the held result. So the line stands in the response of that `e`,
+before its `at` line, whichever feed the consumer finished in. A request
+without that `e` has no `fin` line. A token after the finish, also one the
+consumer left in its last hand-over, is an `err UnexpectedTrailingToken`
+spanning that token; with `ws`, whitespace and comments are such tokens too.
 
 ```
 ab <location>
@@ -295,13 +297,14 @@ lexer is in (the Rust `version`).
 ## Examples with options
 
 A plan: leave after one token, then switch to 2.0 after one, then finish
-after one. The input is `a b c d `, then `e `, then its end. The switch makes
-the lexer lex the rest again under 2.0. After the finish, the second slice
-and the end hand nothing over, the end returns the finish, and the version
-lasts until the end.
+after two. The input is `a b c d `, then two spaces, then its end. The switch
+makes the lexer lex the rest again under 2.0. After the finish, the second
+slice and the end hand nothing over, the end returns the finish, and the
+version lasts until the end. Had the second slice been `e `, its symbol would
+have been a trailing token.
 
 ```
-lex 2.7 plan=l1,v1:2.0,f1 s6120622063206420 s6520 e
+lex 2.7 plan=l1,v1:2.0,f2 s6120622063206420 s2020 e
 h 2.7 4
 t UnquotedSymbol 0:0:0 1:0:1 - x61
 t UnquotedSymbol 2:0:2 3:0:3 - x62
@@ -318,7 +321,7 @@ at 8:0:8
 v 2.0
 at 10:0:10
 v 2.0
-fin 5:0:5
+fin 7:0:7
 at 0:0:0
 v 2.7
 ok

@@ -376,20 +376,27 @@ fn one_reader_reads_several_inputs_in_turn_each_from_the_origin() {
 #[test]
 fn a_reader_over_another_top_level_parser_finishes_where_that_parser_does() {
     // a term parser as the top-level parser: the reader finishes after one
-    // term with that parser's result, whatever follows in the piece, and
+    // term with that parser's result, the layout after it is allowed, and
     // the end of the input returns the location after the term
     let mut handler = SmtSyntaxChecker;
     let mut reader = SmtReader::with_parser(&mut handler, SmtTermParser::new(), SmtVersion::V2_7);
     reader
-        .read_slice(b"(f a b) (check-sat)")
+        .read_slice(b"(f a b) ; done\n")
         .expect("valid up to the term");
     let located = reader.read_eof().expect("the term finishes the reader");
     assert_eq!(loc(located.location()), (7, 0, 7));
 
-    // reading the whole input stops there as well, without an error for the rest
+    // a token after the term is a trailing token, also when read whole
     let mut handler = SmtSyntaxChecker;
     let mut reader = SmtReader::with_parser(&mut handler, SmtTermParser::new(), SmtVersion::V2_7);
-    assert!(reader.read_all(&b"(f a b) ) ("[..]).is_ok());
+    let err = reader
+        .read_all(&b"(f a b) ) ("[..])
+        .expect_err("a token after the term is an error");
+    assert!(matches!(
+        err.cause(),
+        SmtReadErrorCause::Lexical(SmtLexicalErrorKind::UnexpectedTrailingToken)
+    ));
+    assert_span(&err, (8, 0, 8), (9, 0, 9));
 
     // a term cut off by the end of the input is that parser's error
     let mut handler = SmtSyntaxChecker;
@@ -401,43 +408,52 @@ fn a_reader_over_another_top_level_parser_finishes_where_that_parser_does() {
 }
 
 #[test]
-fn a_reader_over_a_command_parser_reads_one_command_per_break() {
-    // every command finishes the reader, and the reader disregards what it
-    // is fed until the input ends, which returns the location after the
-    // command; the rest of the piece is then a new input, fed from that
-    // location, so each command's location counts from the end of the
-    // previous one, until an input with no command in it
+fn a_reader_over_a_command_parser_reads_one_command_per_input() {
+    // every command finishes the reader, and the end of the input returns
+    // the location after it; an input with no command in it finishes the
+    // reader at its end
     let mut handler = SmtSyntaxChecker;
     let mut reader =
         SmtReader::with_parser(&mut handler, SmtCommandParser::new(), SmtVersion::V2_7);
-    let mut rest: &[u8] = b"(set-logic QF_UF)\n(check-sat)\n(exit)\n";
     let mut stops = Vec::new();
-    loop {
-        reader.read_slice(rest).expect("valid input");
+    for input in [
+        &b"(set-logic QF_UF)\n"[..],
+        b" (check-sat)",
+        b"(exit)",
+        b"\n",
+    ] {
+        reader.read_slice(input).expect("valid input");
         let located = reader.read_eof().expect("valid input");
         stops.push((*located.value(), loc(located.location())));
-        if *located.value() == SmtCommandOutcome::EndOfFile {
-            break;
-        }
-        rest = &rest[located.location().offset() as usize..];
     }
-    // the end of the input before a command finishes the reader too
     assert_eq!(
         stops,
         [
             (SmtCommandOutcome::Command, (17, 0, 17)),
-            (SmtCommandOutcome::Command, (12, 1, 11)),
-            (SmtCommandOutcome::Exit, (7, 1, 6)),
+            (SmtCommandOutcome::Command, (12, 0, 12)),
+            (SmtCommandOutcome::Exit, (6, 0, 6)),
             (SmtCommandOutcome::EndOfFile, (1, 1, 0)),
         ]
     );
-    assert_eq!(rest, b"\n");
 
     // inside a command, the end of the input is a syntax error
     reader
         .read_slice(b"(check-sat")
         .expect("valid up to the end of the input");
     assert!(reader.read_eof().is_err());
+
+    // a second command in the same input is a trailing token
+    let mut handler = SmtSyntaxChecker;
+    let mut reader =
+        SmtReader::with_parser(&mut handler, SmtCommandParser::new(), SmtVersion::V2_7);
+    let err = reader
+        .read_slice(b"(check-sat)\n(exit)")
+        .expect_err("a second command is an error");
+    assert!(matches!(
+        err.cause(),
+        SmtReadErrorCause::Lexical(SmtLexicalErrorKind::UnexpectedTrailingToken)
+    ));
+    assert_span(&err, (12, 1, 0), (13, 1, 1));
 }
 
 /// A buffered reader over bytes that panics when it is asked for its buffer

@@ -212,6 +212,9 @@ enum RunError {
     Consumer,
 }
 
+/// The start and end of an error span, each as `(offset, line, column)`.
+type ErrorSpan = ((u64, u64, u64), (u64, u64, u64));
+
 /// Everything observable about one lexer run.
 #[derive(Debug, PartialEq, Eq)]
 struct Run {
@@ -221,6 +224,8 @@ struct Run {
     versions: Vec<SmtVersion>,
     /// The error that ended the run, if any.
     error: Option<RunError>,
+    /// The span of the error, if it was a lexical one.
+    error_span: Option<ErrorSpan>,
     /// The location returned with the result if the consumer finished.
     finished_at: Option<(u64, u64, u64)>,
 }
@@ -250,15 +255,6 @@ impl Run {
     }
 }
 
-/// The lexer is at the origin, as it must be after a finish or an end of file.
-#[track_caller]
-/// The location after the bytes, counted from the origin.
-fn location_after(bytes: &[u8]) -> (u64, u64, u64) {
-    loc(bytes.iter().fold(SmtLocation::initial(), |location, &c| {
-        location.after_byte(c)
-    }))
-}
-
 /// Whether a call returned the break that the consumer makes at the end of
 /// the input, as every consumer must, rather than a finish by the plan.
 fn breaks_at_end(result: &Result<SmtLocated<bool>, SmtLexError<()>>) -> bool {
@@ -274,6 +270,8 @@ fn finished_at(result: Result<SmtLocated<bool>, SmtLexError<()>>) -> (u64, u64, 
     }
 }
 
+/// The lexer is at the origin, as it must be after the end of the input.
+#[track_caller]
 fn assert_at_origin<C: SmtConsume>(lexer: &SmtLexer<C>) {
     assert_eq!(
         loc(lexer.current_location()),
@@ -282,17 +280,21 @@ fn assert_at_origin<C: SmtConsume>(lexer: &SmtLexer<C>) {
     );
 }
 
-/// What made the call fail. The lexer of these runs stops at its first error,
-/// so no error may say that the input continues.
-fn into_cause(err: SmtLexError<()>) -> RunError {
+/// What made the call fail, and the span of a lexical error. The lexer of
+/// these runs stops at its first error, so no error may say that the input
+/// continues.
+type Failed = (RunError, Option<ErrorSpan>);
+
+fn into_cause(err: SmtLexError<()>) -> Failed {
     assert_eq!(
         err.continues_from(),
         None,
         "a lexer that stops at its first error does not continue the input"
     );
+    let span = (loc(err.span().start()), loc(err.span().end()));
     match err.into_cause() {
-        SmtLexErrorCause::Lexical(kind) => RunError::Lexical(kind),
-        SmtLexErrorCause::Consumer(()) => RunError::Consumer,
+        SmtLexErrorCause::Lexical(kind) => (RunError::Lexical(kind), Some(span)),
+        SmtLexErrorCause::Consumer(()) => (RunError::Consumer, None),
     }
 }
 
@@ -308,6 +310,7 @@ fn run_direct_from(version: SmtVersion, chunks: &[&[u8]], plan: &[Reply]) -> Run
     let mut calls = Vec::new();
     let mut versions = Vec::new();
     let mut error = None;
+    let mut error_span = None;
     let mut finished_at = None;
     {
         let mut lexer = SmtLexer::new(
@@ -321,11 +324,12 @@ fn run_direct_from(version: SmtVersion, chunks: &[&[u8]], plan: &[Reply]) -> Run
         let mut expected = SmtLocation::initial();
         for chunk in chunks {
             if let Err(err) = lexer.lex_slice(chunk) {
-                error = Some(into_cause(err));
+                let (cause, span) = into_cause(err);
+                error = Some(cause);
+                error_span = span;
                 break;
             }
-            // whatever the consumer did, the lexer is after everything it was
-            // fed: once the consumer has finished, the rest is discarded
+            // whatever the consumer did, the lexer is after everything it was fed
             expected = chunk
                 .iter()
                 .fold(expected, |location, &c| location.after_byte(c));
@@ -346,7 +350,11 @@ fn run_direct_from(version: SmtVersion, chunks: &[&[u8]], plan: &[Reply]) -> Run
                     }
                     assert_at_origin(&lexer);
                 }
-                Err(err) => error = Some(into_cause(err)),
+                Err(err) => {
+                    let (cause, span) = into_cause(err);
+                    error = Some(cause);
+                    error_span = span;
+                }
             }
         }
     }
@@ -354,6 +362,7 @@ fn run_direct_from(version: SmtVersion, chunks: &[&[u8]], plan: &[Reply]) -> Run
         calls,
         versions,
         error,
+        error_span,
         finished_at,
     }
 }
@@ -390,6 +399,7 @@ fn run_from(version: SmtVersion, chunks: &[&[u8]], plan: &[Reply]) -> Run {
         calls: Vec::new(),
         versions: Vec::new(),
         error: None,
+        error_span: None,
         finished_at: None,
     };
     let mut locations = Vec::new();
@@ -427,6 +437,7 @@ fn run_from(version: SmtVersion, chunks: &[&[u8]], plan: &[Reply]) -> Run {
             Line::LexicalError { error, continues } => {
                 assert_eq!(continues, None, "the lexer stops at its first error");
                 run.error = Some(RunError::Lexical(error.kind));
+                run.error_span = Some((error.start, error.end));
             }
             Line::ConsumerError { continues, .. } => {
                 assert_eq!(continues, None, "the lexer stops at its first error");
@@ -785,35 +796,143 @@ fn a_stop_without_a_consumed_token_panics() {
 // --- Finishing ---
 
 #[test]
-fn a_finish_stop_takes_a_prefix_and_ends_lexing() {
+fn tokens_left_by_a_finish_are_trailing_tokens() {
     if lex_backend::boundaries_not_applicable() {
         return;
     }
-    // the consumer finishes after three tokens of the first hand-over: nothing
-    // more is handed over, not even the end of file, and the stop is located
-    // after the third token
+    // the consumer finishes after three tokens of the first hand-over: the
+    // fourth is handed over to nobody, and is an error spanning that token
     let plan = [Reply::Finish { consumed: 3 }];
     let run = run(&[REWIND_INPUT], &plan);
-    assert!(run.error.is_none());
+    assert_eq!(
+        run.error,
+        Some(RunError::Lexical(
+            SmtLexicalErrorKind::UnexpectedTrailingToken
+        ))
+    );
+    let fourth = run.calls[0][3].span;
+    assert_eq!(run.error_span, Some((fourth.start, fourth.end)));
     assert_eq!(run.sizes(), [7]);
     assert_eq!(run.taken(&plan), reference(REWIND_INPUT)[..3]);
-    assert_eq!(run.finished_at, Some(run.calls[0][2].span.end));
+    assert_eq!(run.finished_at, None);
 }
 
 #[test]
-fn a_finish_stop_across_chunks_discards_the_rest() {
+fn a_finish_holds_its_result_over_the_layout_after_it() {
     if lex_backend::boundaries_not_applicable() {
         return;
     }
-    // the second chunk finishes the consumer after its first token: the
-    // third chunk is fed but discarded
-    let chunks: &[&[u8]] = &[b"a b ", b"c d ", b"e f "];
+    // the second chunk finishes the consumer at its only token: the layout
+    // after it, also in a later chunk, is no token, and the end of the input
+    // returns the result without handing over the end of file
+    let chunks: &[&[u8]] = &[b"a b ", b"c ", b" ; d\n "];
     let plan = [Reply::TakeAll, Reply::Finish { consumed: 1 }];
     let run = run(chunks, &plan);
-    assert!(run.error.is_none());
-    assert_eq!(run.sizes(), [2, 2]);
+    assert!(run.error.is_none(), "{:?}", run.error);
+    assert_eq!(run.sizes(), [2, 1]);
     assert_eq!(run.taken(&plan), reference(b"a b c ")[..3]);
     assert_eq!(run.finished_at, Some((5, 0, 5)));
+}
+
+#[test]
+fn a_token_in_a_later_chunk_after_a_finish_is_a_trailing_token() {
+    if lex_backend::boundaries_not_applicable() {
+        return;
+    }
+    // the token after the finish is an error, whether a later slice ends it
+    // or the end of the input does
+    let plan = [Reply::TakeAll, Reply::Finish { consumed: 1 }];
+    for last in [&b" d "[..], b" d"] {
+        let run = run(&[b"a b ", b"c ", last], &plan);
+        assert_eq!(
+            run.error,
+            Some(RunError::Lexical(
+                SmtLexicalErrorKind::UnexpectedTrailingToken
+            )),
+            "{:?}",
+            String::from_utf8_lossy(last)
+        );
+        assert_eq!(run.error_span, Some(((7, 0, 7), (8, 0, 8))));
+        assert_eq!(run.sizes(), [2, 1]);
+        assert_eq!(run.finished_at, None);
+    }
+}
+
+#[test]
+fn a_lexical_error_after_a_finish_is_reported_as_itself() {
+    if lex_backend::boundaries_not_applicable() {
+        return;
+    }
+    // the bytes after a finish are still lexed: a malformed token among them
+    // is the lexical error it is, as no token reaches a hand-over
+    let plan = [Reply::Finish { consumed: 1 }];
+    let run = run(&[b"a ", b"#q "], &plan);
+    assert_eq!(
+        run.error,
+        Some(RunError::Lexical(
+            SmtLexicalErrorKind::BaseSelectionExpected
+        ))
+    );
+    assert_eq!(run.sizes(), [1]);
+    assert_eq!(run.finished_at, None);
+}
+
+#[test]
+fn layout_after_a_finish_is_a_trailing_token_for_a_concrete_consumer() {
+    if lex_backend::boundaries_not_applicable() {
+        return;
+    }
+    // a consumer that takes whitespace and comments is handed them as tokens,
+    // so after its finish they are trailing tokens like any other
+    let options = Options {
+        whitespace: true,
+        behaviour: driver::Behaviour::Plan(vec![driver::Reply::Finish(1)]),
+        ..Options::default()
+    };
+    for (input, trailing) in [
+        (&b"a b"[..], ((1, 0, 1), (2, 0, 2))),
+        (b"a;c\n", ((1, 0, 1), (4, 1, 0))),
+    ] {
+        let lines = lex_backend::run(SmtVersion::V2_7, &options, &[Feed::Slice(input), Feed::Eof]);
+        let error = lines.iter().find_map(|line| match line {
+            Line::LexicalError { error, .. } => Some((error.kind, (error.start, error.end))),
+            _ => None,
+        });
+        assert_eq!(
+            error,
+            Some((SmtLexicalErrorKind::UnexpectedTrailingToken, trailing)),
+            "{:?}",
+            String::from_utf8_lossy(input)
+        );
+        assert!(
+            !lines.iter().any(|line| matches!(line, Line::Finish(_))),
+            "a run with trailing tokens has no result"
+        );
+    }
+}
+
+#[test]
+fn a_finish_with_a_version_set_reports_trailing_tokens_under_that_version() {
+    if lex_backend::boundaries_not_applicable() {
+        return;
+    }
+    // the consumer takes the symbol, sets 2.6 and finishes: the rest is lexed
+    // again under 2.6, where the doubled quote is inside one string literal,
+    // and that whole literal is the trailing token, not the error 2.0 would
+    // have met
+    let plan = [Reply::SwitchAndFinish {
+        consumed: 1,
+        version: SmtVersion::V2_6,
+    }];
+    let run = run_from(SmtVersion::V2_0, &[DOUBLED_QUOTE], &plan);
+    assert_eq!(
+        run.error,
+        Some(RunError::Lexical(
+            SmtLexicalErrorKind::UnexpectedTrailingToken
+        ))
+    );
+    assert_eq!(run.error_span, Some(((2, 0, 2), (8, 0, 8))));
+    assert_eq!(run.sizes(), [1]);
 }
 
 #[test]
@@ -831,54 +950,12 @@ fn a_finish_stop_at_the_end_of_file_token_is_returned_by_lex_eof() {
 }
 
 #[test]
-fn after_a_finish_the_rest_of_the_input_is_disregarded() {
-    // the consumer finishes after the first token of the first hand-over, and
-    // with that it has finished with the input: whatever is fed afterwards is
-    // disregarded, also what would be a lexical error, and the end of the
-    // input hands nothing over, not even the end-of-file token, but returns
-    // the result held since the finish
-    let mut calls = Vec::new();
-    let mut versions = Vec::new();
-    let plan = [Reply::Finish { consumed: 1 }];
-    {
-        let mut lexer = SmtLexer::new(
-            Recorder {
-                calls: &mut calls,
-                versions: &mut versions,
-                plan: &plan,
-            },
-            SmtVersion::V2_7,
-        );
-        lexer.lex_slice(b"a b ").expect("the slice must lex");
-        // the lexer is after the whole slice: its rest is the first to be discarded
-        let mut fed = b"a b ".to_vec();
-        assert_eq!(loc(lexer.current_location()), location_after(&fed));
-        for disregarded in [&b"c\nd "[..], b"", b"#q \x00 \"open", b"\n\n"] {
-            lexer
-                .lex_slice(disregarded)
-                .expect("a slice after the finish must be disregarded");
-            // the location advances over what is discarded, lines included
-            fed.extend_from_slice(disregarded);
-            assert_eq!(loc(lexer.current_location()), location_after(&fed));
-        }
-        assert_eq!(finished_at(lexer.lex_eof()), (1, 0, 1));
-        assert_at_origin(&lexer);
-    }
-    assert_eq!(
-        calls.iter().map(Vec::len).collect::<Vec<_>>(),
-        [2],
-        "nothing is handed over after the finish"
-    );
-}
-
-#[test]
 fn the_input_after_a_finished_one_starts_at_the_origin() {
     if lex_backend::boundaries_not_applicable() {
         return;
     }
     // once the end of the input has ended the finished input, the bytes fed
-    // are a new input: the rest of the finished one is not seen again, and
-    // the new tokens are located from the origin
+    // are a new input, whose tokens are located from the origin
     let mut calls = Vec::new();
     let mut versions = Vec::new();
     let plan = [Reply::Finish { consumed: 1 }];
@@ -891,8 +968,8 @@ fn the_input_after_a_finished_one_starts_at_the_origin() {
             },
             SmtVersion::V2_7,
         );
-        lexer.lex_slice(b"a b ").expect("the slice must lex");
-        assert_eq!(loc(lexer.current_location()), (4, 0, 4));
+        lexer.lex_slice(b"a  ").expect("the slice must lex");
+        assert_eq!(loc(lexer.current_location()), (3, 0, 3));
         assert_eq!(finished_at(lexer.lex_eof()), (1, 0, 1));
         assert_at_origin(&lexer);
         lexer.lex_slice(b"c\nd ").expect("the slice must lex");
@@ -902,7 +979,7 @@ fn the_input_after_a_finished_one_starts_at_the_origin() {
     }
     assert_eq!(
         calls.iter().map(Vec::len).collect::<Vec<_>>(),
-        [2, 2, 1],
+        [1, 2, 1],
         "the second hand-over is the new input, the third its end of file"
     );
     let mut expected = reference(b"c\nd ");
@@ -1164,8 +1241,8 @@ fn a_version_set_while_finishing_has_no_effect() {
             },
             SmtVersion::V2_7,
         );
-        lexer.lex_slice(b"a b ").expect("the slice must lex");
-        assert_eq!(loc(lexer.current_location()), (4, 0, 4));
+        lexer.lex_slice(b"a  ").expect("the slice must lex");
+        assert_eq!(loc(lexer.current_location()), (3, 0, 3));
         // the end of the input ends the finished input, the next one follows
         assert_eq!(finished_at(lexer.lex_eof()), (1, 0, 1));
         lexer.lex_slice(b"c ").expect("the slice must lex");
@@ -1223,8 +1300,8 @@ fn a_finish_in_a_whole_input_ends_that_input() {
     if lex_backend::boundaries_not_applicable() {
         return;
     }
-    // an input lexed whole ends with its slice: nothing is left to
-    // disregard after a finish, and the next call lexes a new input
+    // an input lexed whole ends with its slice, and the next call lexes a
+    // new input
     let mut calls = Vec::new();
     let mut versions = Vec::new();
     let plan = [Reply::Finish { consumed: 1 }];
@@ -1237,14 +1314,14 @@ fn a_finish_in_a_whole_input_ends_that_input() {
             },
             SmtVersion::V2_7,
         );
-        assert_eq!(finished_at(lexer.lex_all(b"a b ")), (1, 0, 1));
+        assert_eq!(finished_at(lexer.lex_all(b"a  ")), (1, 0, 1));
         assert_at_origin(&lexer);
         assert!(breaks_at_end(&lexer.lex_all(b"c\nd ")));
         assert_at_origin(&lexer);
     }
     assert_eq!(
         calls.iter().map(Vec::len).collect::<Vec<_>>(),
-        [2, 2, 1],
+        [1, 2, 1],
         "the second hand-over is the new input, the third its end of file"
     );
     let mut expected = reference(b"c\nd ");
@@ -1270,7 +1347,7 @@ fn the_lexer_tells_the_version_in_force() {
         (&[switch, Reply::Fail { consumed: 1 }], "the consumer fails"),
         (
             &[Reply::SwitchAndFinish {
-                consumed: 1,
+                consumed: 2,
                 version: SmtVersion::V2_0,
             }],
             "the consumer finishes with the switch",
@@ -1288,14 +1365,16 @@ fn the_lexer_tells_the_version_in_force() {
             SmtVersion::V2_7,
         );
         assert_eq!(lexer.version(), SmtVersion::V2_7, "before the input");
-        let result = lexer.lex_slice(b"a b c ");
+        // every consumer that finishes takes the last token, so that no
+        // trailing token ends the input with an error
+        let result = lexer.lex_slice(b"a b ");
         assert_eq!(lexer.version(), SmtVersion::V2_0, "{what}");
         if result.is_err() {
             // the lexer has stopped at its first error, the input cannot end
             continue;
         }
-        // also while the rest of a finished input is discarded
-        lexer.lex_slice(b"d ").expect("the slice must lex");
+        // also over the layout after a finish
+        lexer.lex_slice(b" ;d\n").expect("the slice must lex");
         assert_eq!(lexer.version(), SmtVersion::V2_0, "{what}");
         // a finished input ends with its held result, the other one with the
         // break at the end-of-file token

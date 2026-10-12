@@ -345,7 +345,7 @@ const TOKEN_TYPES: [SmtTokenCategory; 13] = [
     SmtTokenCategory::EndOfFile,
 ];
 
-const ERROR_KINDS: [SmtLexicalErrorKind; 13] = [
+const ERROR_KINDS: [SmtLexicalErrorKind; 14] = [
     SmtLexicalErrorKind::UnexpectedCharacter,
     SmtLexicalErrorKind::FractionDigitExpected,
     SmtLexicalErrorKind::HexadecimalDigitExpected,
@@ -359,6 +359,7 @@ const ERROR_KINDS: [SmtLexicalErrorKind; 13] = [
     SmtLexicalErrorKind::UnclosedQuotedSymbol,
     SmtLexicalErrorKind::NumeralLeadingZero,
     SmtLexicalErrorKind::MissingDelimiter,
+    SmtLexicalErrorKind::UnexpectedTrailingToken,
 ];
 
 fn version_name(version: SmtVersion) -> &'static str {
