@@ -17,7 +17,7 @@ fn attribute_with_value() {
     assert_eq!(parse_all::<P>(b":mask #xff)"), ":mask #xff");
     assert_eq!(parse_all::<P>(b":bits #b01)"), ":bits #b01");
     assert_eq!(parse_all::<P>(b":source \"me\")"), ":source \"me\"");
-    assert_eq!(parse_all::<P>(b":name |a b|)"), ":name a b");
+    assert_eq!(parse_all::<P>(b":name |a b|)"), ":name |a b|");
 }
 
 #[test]

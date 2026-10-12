@@ -2,7 +2,7 @@
 //! like a reserved word is an ordinary symbol, while the unquoted word keeps
 //! its role in the grammar.
 //!
-//! `Printing` renders a symbol spelled like a reserved word quoted, so the
+//! `Printing` renders a symbol quoted when it was written quoted, so the
 //! expected strings tell such a symbol apart from the reserved word itself.
 
 use super::*;
@@ -11,7 +11,7 @@ use super::*;
 fn s_expressions_tell_reserved_words_from_quoted_symbols() {
     assert_eq!(
         parse_all::<SmtSExprParser<Printing>>(b"(let |let| _ |_| ! |!| STRING |STRING| x |x|)"),
-        "(let |let| _ |_| ! |!| STRING |STRING| x x)"
+        "(let |let| _ |_| ! |!| STRING |STRING| x |x|)"
     );
 }
 

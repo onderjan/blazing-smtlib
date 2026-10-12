@@ -14,7 +14,7 @@ fn atoms() {
     assert_eq!(parse_all::<P>(b"\"str\""), "\"str\"");
     // symbols
     assert_eq!(parse_all::<P>(b"sym"), "sym");
-    assert_eq!(parse_all::<P>(b"|quoted sym|"), "quoted sym");
+    assert_eq!(parse_all::<P>(b"|quoted sym|"), "|quoted sym|");
     // reserved words are ordinary atoms in an s-expression
     assert_eq!(parse_all::<P>(b"let"), "let");
     assert_eq!(parse_all::<P>(b"_"), "_");

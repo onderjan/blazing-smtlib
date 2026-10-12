@@ -15,7 +15,7 @@ fn special_constants() {
 #[test]
 fn identifiers() {
     assert_eq!(parse_all::<SmtTermParser<Printing>>(b"x"), "x");
-    assert_eq!(parse_all::<SmtTermParser<Printing>>(b"|x y|"), "x y");
+    assert_eq!(parse_all::<SmtTermParser<Printing>>(b"|x y|"), "|x y|");
     assert_eq!(
         parse_all::<SmtTermParser<Printing>>(b"(_ bv5 8)"),
         "(_ bv5 8)"

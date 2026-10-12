@@ -1,7 +1,7 @@
 //! Public-API tests of the plain string-like value types.
 
 use blazing_smtlib::{
-    SmtBinDigitsBuf, SmtDecimalBuf, SmtHexDigitsBuf, SmtKeywordBuf, SmtNumeralBuf,
+    SmtBinDigitsBuf, SmtBytesBuf, SmtDecimalBuf, SmtHexDigitsBuf, SmtKeywordBuf, SmtNumeralBuf,
     SmtStringContentBuf, SmtSymbolBuf,
 };
 
@@ -25,21 +25,65 @@ fn string_content_accepts_any_printable_or_whitespace_bytes() {
 }
 
 #[test]
-fn symbol_accepts_everything_a_string_does_except_pipe_and_backslash() {
-    assert!(SmtSymbolBuf::is_allowed(b""));
-    assert!(SmtSymbolBuf::is_allowed(
+fn quoted_symbol_accepts_everything_a_string_does_except_pipe_and_backslash() {
+    assert!(SmtSymbolBuf::is_quoted_allowed(b""));
+    assert!(SmtSymbolBuf::is_quoted_allowed(
         b"a-simple-symbol~!@$%^&*_-+=<>.?/"
     ));
-    assert!(SmtSymbolBuf::is_allowed(
+    assert!(SmtSymbolBuf::is_quoted_allowed(
         b"A quick brown fox jumps over a lazy dog."
     ));
-    assert!(SmtSymbolBuf::is_allowed(
+    assert!(SmtSymbolBuf::is_quoted_allowed(
         "Příšerně žluťoučký kůň úpěl ďábelské ódy.".as_bytes()
     ));
-    assert!(SmtSymbolBuf::is_allowed(b"\xFF"));
+    assert!(SmtSymbolBuf::is_quoted_allowed(b"\xFF"));
+    assert!(SmtSymbolBuf::is_quoted_allowed(b"0abc"));
 
-    assert!(!SmtSymbolBuf::is_allowed(b"a|b"));
-    assert!(!SmtSymbolBuf::is_allowed(b"a\\b"));
+    assert!(!SmtSymbolBuf::is_quoted_allowed(b"a|b"));
+    assert!(!SmtSymbolBuf::is_quoted_allowed(b"a\\b"));
+}
+
+#[test]
+fn unquoted_symbol_accepts_only_nonempty_simple_symbol_bytes_not_starting_with_a_digit() {
+    assert!(SmtSymbolBuf::is_unquoted_allowed(
+        b"a-simple-symbol~!@$%^&*_-+=<>.?/"
+    ));
+    assert!(SmtSymbolBuf::is_unquoted_allowed(b"x0"));
+    // whether a word is reserved depends on the version, which a symbol
+    // does not know
+    assert!(SmtSymbolBuf::is_unquoted_allowed(b"let"));
+
+    assert!(!SmtSymbolBuf::is_unquoted_allowed(b""));
+    assert!(!SmtSymbolBuf::is_unquoted_allowed(b"0"));
+    assert!(!SmtSymbolBuf::is_unquoted_allowed(b"0abc"));
+    assert!(!SmtSymbolBuf::is_unquoted_allowed(b"quoted name"));
+    assert!(!SmtSymbolBuf::is_unquoted_allowed("žluťoučký".as_bytes()));
+    assert!(!SmtSymbolBuf::is_unquoted_allowed(b"\xFF"));
+    assert!(!SmtSymbolBuf::is_unquoted_allowed(b"a|b"));
+    assert!(!SmtSymbolBuf::is_unquoted_allowed(b"a\\b"));
+}
+
+#[test]
+fn a_symbol_is_built_quoted_or_unquoted_under_its_own_rule() {
+    let quoted = SmtSymbolBuf::new_quoted(b"quoted name".to_vec()).expect("a quoted symbol");
+    assert!(quoted.is_quoted() && quoted.as_view().is_quoted());
+    let unquoted = SmtSymbolBuf::new_unquoted(b"x".to_vec()).expect("an unquoted symbol");
+    assert!(!unquoted.is_quoted() && !unquoted.as_view().is_quoted());
+    assert!(SmtSymbolBuf::new_quoted(b"".to_vec()).is_ok());
+    assert!(SmtSymbolBuf::new_unquoted(b"quoted name".to_vec()).is_err());
+    assert!(SmtSymbolBuf::new_unquoted(b"".to_vec()).is_err());
+    // the flag survives into the view and back
+    assert!(quoted.as_view().into_owned().is_quoted());
+    assert!(!unquoted.as_view().into_owned().is_quoted());
+}
+
+#[test]
+fn a_symbol_prints_its_pipes_when_debugged() {
+    let quoted = SmtSymbolBuf::new_quoted(b"a b".to_vec()).expect("a quoted symbol");
+    let unquoted = SmtSymbolBuf::new_unquoted(b"ab".to_vec()).expect("an unquoted symbol");
+    assert_eq!(format!("{quoted:?}"), "|\"a b\"|");
+    assert_eq!(format!("{:?}", quoted.as_view()), "|\"a b\"|");
+    assert_eq!(format!("{unquoted:?}"), "\"ab\"");
 }
 
 #[test]
@@ -70,7 +114,8 @@ fn keyword_accepts_only_nonempty_simple_symbol_bytes() {
 #[test]
 fn del_is_rejected_everywhere() {
     assert!(!SmtStringContentBuf::is_allowed(b"a\x7Fb"));
-    assert!(!SmtSymbolBuf::is_allowed(b"a\x7Fb"));
+    assert!(!SmtSymbolBuf::is_quoted_allowed(b"a\x7Fb"));
+    assert!(!SmtSymbolBuf::is_unquoted_allowed(b"a\x7Fb"));
     assert!(!SmtKeywordBuf::is_allowed(b"a\x7Fb"));
 }
 
@@ -160,29 +205,33 @@ fn decimals_with_trailing_fractional_zeros_are_distinct() {
 }
 
 #[test]
-fn owned_newtypes_key_maps_looked_up_by_bytes() {
+fn symbols_key_maps_by_their_bytes_whether_quoted_or_not() {
     use std::collections::HashMap;
 
-    let mut map: HashMap<SmtSymbolBuf, u32> = HashMap::new();
-    map.insert(SmtSymbolBuf::new(b"x".to_vec()).expect("a symbol"), 1);
-    map.insert(
-        SmtSymbolBuf::new(b"quoted name".to_vec()).expect("a symbol"),
-        2,
-    );
-    assert_eq!(map.get(b"x".as_slice()), Some(&1));
+    // a symbol is the same symbol quoted or not, so its bytes are the key
+    let mut map: HashMap<SmtBytesBuf, u32> = HashMap::new();
+    let x = SmtSymbolBuf::new_unquoted(b"x".to_vec()).expect("a symbol");
+    map.insert(x.into_bytes_buf(), 1);
+    let name = SmtSymbolBuf::new_quoted(b"quoted name".to_vec()).expect("a symbol");
+    map.insert(name.into_bytes_buf(), 2);
+    let quoted_x = SmtSymbolBuf::new_quoted(b"x".to_vec()).expect("a symbol");
+    assert_eq!(map.get(quoted_x.as_slice()), Some(&1));
+    assert_eq!(map.get(quoted_x.as_view().as_slice()), Some(&1));
     assert_eq!(map.get(b"quoted name".as_slice()), Some(&2));
     assert_eq!(map.get(b"y".as_slice()), None);
+    // and the bytes compare equal across the two spellings
+    let unquoted_x = SmtSymbolBuf::new_unquoted(b"x".to_vec()).expect("a symbol");
+    assert_eq!(quoted_x.bytes(), unquoted_x.bytes());
+    assert_eq!(*quoted_x.as_view().bytes(), *unquoted_x.as_view().bytes());
 }
 
 #[test]
 fn newtypes_compare_with_bytes_strings_and_each_other() {
-    let owned = SmtSymbolBuf::new(b"bvadd".to_vec()).expect("a symbol");
+    let owned = SmtNumeralBuf::new(b"32".to_vec()).expect("a numeral");
     let view = owned.as_view();
-    assert!(owned == "bvadd" && owned == b"bvadd"[..] && owned == b"bvadd".as_slice());
-    assert!(view == "bvadd" && view == b"bvadd"[..] && view == b"bvadd".as_slice());
+    assert!(owned == "32" && owned == b"32"[..] && owned == b"32".as_slice());
+    assert!(view == "32" && view == b"32"[..] && view == b"32".as_slice());
     assert!(owned == view);
     assert!(view == owned);
-    assert!(owned != "bvsub" && view != "bvsub");
-    let numeral = SmtNumeralBuf::new(b"32".to_vec()).expect("a numeral");
-    assert!(numeral == "32" && numeral.as_view() == "32" && numeral != "3");
+    assert!(owned != "3" && view != "3");
 }

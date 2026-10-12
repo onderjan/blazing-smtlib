@@ -7,7 +7,7 @@ fn simple_sort() {
     assert_eq!(parse_all::<SmtSortParser<Printing>>(b"Bool"), "Bool");
     assert_eq!(
         parse_all::<SmtSortParser<Printing>>(b"|my sort|"),
-        "my sort"
+        "|my sort|"
     );
 
     let (sort, left) = run::<SmtSortParser<Printing>>(b"Int Bool").expect("valid");
