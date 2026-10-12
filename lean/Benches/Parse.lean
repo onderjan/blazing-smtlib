@@ -85,7 +85,9 @@ structure DiscardTokens where
   tokens : Nat
 
 /- LEAN: the Rust `while cursor.next().is_some()` loop, carrying the proof that the tokens were
-consumed; it ends as every step consumes a token. -/
+consumed; it ends as every step consumes a token. The loop is tail recursive, so it accumulates
+the proof from the origin rather than extending it on return; the first token is taken before
+the loop, as consuming nothing is no `Consumed`. -/
 /--
 Takes every token remaining in the cursor, which has one, running `step` for each.
 -/
@@ -95,13 +97,20 @@ def takeEach [Monad m] {batch : BatchTag} (step : m Unit) (cursor : BatchCursor 
     m { c : BatchCursor batch // c.Consumed cursor } := do
   let (_, ⟨next, consumed⟩) := cursor.next h
   step
-  if h : next.HasNext then
-    have : next.remaining < cursor.remaining := consumed.remaining_lt
-    let ⟨last, taken⟩ ← takeEach step next h
-    return ⟨last, taken.trans consumed⟩
-  else
-    return ⟨next, consumed⟩
-termination_by cursor.remaining
+  go next consumed
+where
+  /-- Takes every token remaining in `current`, which has consumed from `cursor`. -/
+  @[specialize step]
+  go (current : BatchCursor batch) (consumed : current.Consumed cursor) :
+      m { c : BatchCursor batch // c.Consumed cursor } := do
+    if h : current.HasNext then
+      let (_, ⟨next, taken⟩) := current.next h
+      have : next.remaining < current.remaining := taken.remaining_lt
+      step
+      go next (taken.trans consumed)
+    else
+      return ⟨current, consumed⟩
+  termination_by current.remaining
 
 instance : Consume DiscardTokens Id Unit Empty where
   consumesWhitespaceAndComments := false
