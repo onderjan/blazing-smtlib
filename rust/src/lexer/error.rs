@@ -15,6 +15,7 @@ pub enum SmtLexicalErrorKind {
     UnclosedQuotedSymbol,
     NumeralLeadingZero,
     MissingDelimiter,
+    UnexpectedTrailingToken,
 }
 
 /// Error that caused lexing to stop.
