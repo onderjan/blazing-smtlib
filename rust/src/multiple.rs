@@ -6,8 +6,8 @@ use std::{
 };
 
 use crate::{
-    SmtHandler, SmtSymbol,
-    parser::{ArenaAccess, SymbolHandle},
+    SmtHandler, SmtPattern, SmtSymbol,
+    parser::{Arena, ArenaAccess, PatternHandleBuf, SimplePatternHandle, SymbolHandle},
 };
 
 /// Multiple values to be handled.
@@ -146,6 +146,179 @@ impl<'b, T> IntoIterator for &'b mut SmtMultiple<'_, T> {
 impl<T: Debug> Debug for SmtMultiple<'_, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_list().entries(self.iter()).finish()
+    }
+}
+
+pub struct SmtSortedVars<'a, H: SmtHandler + ?Sized> {
+    text: &'a [u8],
+    names: SmtMultiple<'a, SymbolHandle>,
+    sorts: SmtMultiple<'a, H::Sort>,
+}
+
+impl<'a, H: SmtHandler + ?Sized> SmtSortedVars<'a, H> {
+    pub(crate) fn new(
+        _access: ArenaAccess,
+        text: &'a [u8],
+        names: SmtMultiple<'a, SymbolHandle>,
+        sorts: SmtMultiple<'a, H::Sort>,
+    ) -> Self {
+        debug_assert!(
+            names.len() == sorts.len(),
+            "variable names and sorts must be aligned"
+        );
+        Self { text, names, sorts }
+    }
+
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.sorts.len()
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.sorts.is_empty()
+    }
+
+    #[inline]
+    pub fn get(&self, index: usize) -> Option<(SmtSymbol<'a>, &H::Sort)> {
+        let name = self.names.get(index)?.symbol_view(self.text);
+        Some((name, &self.sorts[index]))
+    }
+
+    #[inline]
+    pub fn get_mut(&mut self, index: usize) -> Option<(SmtSymbol<'a>, &mut H::Sort)> {
+        let name = self.names.get(index)?.symbol_view(self.text);
+        Some((name, &mut self.sorts[index]))
+    }
+
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = (SmtSymbol<'a>, &H::Sort)> {
+        let text = self.text;
+        self.names
+            .iter()
+            .map(move |name| name.symbol_view(text))
+            .zip(self.sorts.iter())
+    }
+
+    pub fn iter_mut(&mut self) -> impl ExactSizeIterator<Item = (SmtSymbol<'a>, &mut H::Sort)> {
+        let text = self.text;
+        self.names
+            .iter()
+            .map(move |name| name.symbol_view(text))
+            .zip(self.sorts.iter_mut())
+    }
+}
+
+pub struct SmtMatchCases<'a, H: SmtHandler + ?Sized> {
+    text: &'a [u8],
+    simple_patterns: &'a [SimplePatternHandle],
+    patterns: SmtMultiple<'a, PatternHandleBuf>,
+    terms: SmtMultiple<'a, H::Term>,
+}
+
+impl<'a, H: SmtHandler + ?Sized> SmtMatchCases<'a, H> {
+    pub(crate) fn new(
+        _access: ArenaAccess,
+        text: &'a [u8],
+        simple_patterns: &'a [SimplePatternHandle],
+        patterns: SmtMultiple<'a, PatternHandleBuf>,
+        terms: SmtMultiple<'a, H::Term>,
+    ) -> Self {
+        debug_assert!(
+            patterns.len() == terms.len(),
+            "match term patterns and terms must be aligned"
+        );
+        Self {
+            text,
+            simple_patterns,
+            patterns,
+            terms,
+        }
+    }
+
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.terms.len()
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.terms.is_empty()
+    }
+
+    #[inline]
+    pub fn get(&self, index: usize) -> Option<(SmtPattern<'a>, &H::Term)> {
+        let pattern =
+            Arena::<H>::pattern_view(self.text, self.simple_patterns, self.patterns.get(index)?);
+        Some((pattern, &self.terms[index]))
+    }
+
+    #[inline]
+    pub fn get_mut(&mut self, index: usize) -> Option<(SmtPattern<'a>, &mut H::Term)> {
+        let pattern =
+            Arena::<H>::pattern_view(self.text, self.simple_patterns, self.patterns.get(index)?);
+        Some((pattern, &mut self.terms[index]))
+    }
+
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = (SmtPattern<'a>, &H::Term)> {
+        self.patterns
+            .iter()
+            .map(|pattern| Arena::<H>::pattern_view(self.text, self.simple_patterns, pattern))
+            .zip(self.terms.iter())
+    }
+
+    pub fn iter_mut(&mut self) -> impl ExactSizeIterator<Item = (SmtPattern<'a>, &mut H::Term)> {
+        self.patterns
+            .iter()
+            .map(|pattern| Arena::<H>::pattern_view(self.text, self.simple_patterns, pattern))
+            .zip(self.terms.iter_mut())
+    }
+}
+
+/// Iterator over let bindings.
+pub struct SmtMatchCasesIntoIter<'a, H: SmtHandler + ?Sized> {
+    text: &'a [u8],
+    simple_patterns: &'a [SimplePatternHandle],
+    patterns: SmtMultipleIntoIter<'a, PatternHandleBuf>,
+    terms: SmtMultipleIntoIter<'a, H::Term>,
+}
+
+impl<'a, H: SmtHandler + ?Sized> Iterator for SmtMatchCasesIntoIter<'a, H> {
+    type Item = (SmtPattern<'a>, H::Term);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let pattern =
+            Arena::<H>::pattern_view(self.text, self.simple_patterns, &self.patterns.next()?);
+        let term = self.terms.next()?;
+        Some((pattern, term))
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.terms.size_hint()
+    }
+}
+
+impl<H: SmtHandler + ?Sized> ExactSizeIterator for SmtMatchCasesIntoIter<'_, H> {}
+
+impl<H: SmtHandler + ?Sized> Debug for SmtMatchCases<'_, H>
+where
+    H::Term: Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_list().entries(self.iter()).finish()
+    }
+}
+
+impl<'a, H: SmtHandler + ?Sized> IntoIterator for SmtMatchCases<'a, H> {
+    type Item = (SmtPattern<'a>, H::Term);
+    type IntoIter = SmtMatchCasesIntoIter<'a, H>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        SmtMatchCasesIntoIter {
+            text: self.text,
+            simple_patterns: self.simple_patterns,
+            patterns: self.patterns.into_iter(),
+            terms: self.terms.into_iter(),
+        }
     }
 }
 

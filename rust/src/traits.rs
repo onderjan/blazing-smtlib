@@ -2,8 +2,9 @@ use std::{convert::Infallible, fmt::Debug};
 
 use crate::{
     SmtAttributeValue, SmtAttributes, SmtBindings, SmtDatatypeConstructor, SmtFunctionSignature,
-    SmtKeyword, SmtKeywordBuf, SmtNumeralBuf, SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSort,
-    SmtStringContentBuf, SmtSymbol, SmtSymbolBuf, SmtTerm, parser::SmtParse,
+    SmtKeyword, SmtKeywordBuf, SmtMatchCases, SmtNumeralBuf, SmtPattern, SmtQuantifierKind,
+    SmtSExpr, SmtSort, SmtSortedVars, SmtStringContentBuf, SmtSymbol, SmtSymbolBuf, SmtTerm,
+    parser::SmtParse,
 };
 
 pub trait SmtHandler {
@@ -13,6 +14,8 @@ pub trait SmtHandler {
     type Attribute;
     type Sort;
     type Term;
+
+    type Scope;
 
     fn handle_sort(&mut self, sort: SmtSort<'_, Self>) -> Result<Self::Sort, Self::Error>;
     fn handle_term(&mut self, term: SmtTerm<'_, Self>) -> Result<Self::Term, Self::Error>;
@@ -29,19 +32,27 @@ pub trait SmtHandler {
         attributes: SmtAttributes<'_, Self>,
     ) -> Result<Self::Term, Self::Error>;
 
-    fn start_let(&mut self, bindings: SmtBindings<'_, Self>) -> Result<(), Self::Error>;
-    fn end_let(&mut self, term: Self::Term) -> Result<Self::Term, Self::Error>;
+    fn start_let(&mut self, bindings: SmtBindings<'_, Self>) -> Result<Self::Scope, Self::Error>;
+    fn end_let(&mut self, scope: Self::Scope, body: Self::Term) -> Result<Self::Term, Self::Error>;
 
     fn start_quantifier(
         &mut self,
         kind: SmtQuantifierKind,
-        name: SmtSymbol<'_>,
-        sort: Self::Sort,
-    ) -> Result<(), Self::Error>;
-    fn end_quantifier(&mut self, term: Self::Term) -> Result<Self::Term, Self::Error>;
+        vars: SmtSortedVars<'_, Self>,
+    ) -> Result<Self::Scope, Self::Error>;
+    fn end_quantifier(
+        &mut self,
+        kind: SmtQuantifierKind,
+        scope: Self::Scope,
+        body: Self::Term,
+    ) -> Result<Self::Term, Self::Error>;
 
-    fn start_lambda(&mut self, name: SmtSymbol<'_>, sort: Self::Sort) -> Result<(), Self::Error>;
-    fn end_lambda(&mut self, term: Self::Term) -> Result<Self::Term, Self::Error>;
+    fn start_lambda(&mut self, vars: SmtSortedVars<'_, Self>) -> Result<Self::Scope, Self::Error>;
+    fn end_lambda(
+        &mut self,
+        scope: Self::Scope,
+        body: Self::Term,
+    ) -> Result<Self::Term, Self::Error>;
 
     /// Starts a match term.
     ///
@@ -59,7 +70,7 @@ pub trait SmtHandler {
     /// There are no other guarantees, including on the sort of the scrutinee.
     ///
     /// Consult the standard for proper handling.
-    fn start_match(&mut self, scrutinee: Self::Term) -> Result<(), Self::Error>;
+    fn start_match(&mut self, scrutinee: &Self::Term) -> Result<(), Self::Error>;
 
     /// Starts a match case.
     ///
@@ -78,7 +89,11 @@ pub trait SmtHandler {
     /// or distinctness of pattern variables.
     ///
     /// Consult the standard for proper handling.
-    fn start_match_case(&mut self, pattern: SmtPattern<'_>) -> Result<(), Self::Error>;
+    fn start_match_case(
+        &mut self,
+        scrutinee: &Self::Term,
+        pattern: SmtPattern<'_>,
+    ) -> Result<Self::Scope, Self::Error>;
 
     /// Ends a match case.
     ///
@@ -90,7 +105,12 @@ pub trait SmtHandler {
     ///    to which this method semantically belongs.
     ///
     /// Consult the standard for proper handling.
-    fn end_match_case(&mut self, term: Self::Term) -> Result<(), Self::Error>;
+    fn end_match_case(
+        &mut self,
+        scope: Self::Scope,
+        scrutinee: &Self::Term,
+        term: Self::Term,
+    ) -> Result<Self::Term, Self::Error>;
 
     /// Ends a match term.
     ///
@@ -103,7 +123,11 @@ pub trait SmtHandler {
     /// The result of this method should be the handled match term.
     ///
     /// Consult the standard for proper handling.
-    fn end_match(&mut self) -> Result<Self::Term, Self::Error>;
+    fn end_match(
+        &mut self,
+        scrutinee: Self::Term,
+        cases: SmtMatchCases<'_, Self>,
+    ) -> Result<Self::Term, Self::Error>;
 }
 
 pub trait SmtCommandHandler: SmtHandler {
@@ -379,6 +403,8 @@ impl SmtHandler for SmtSyntaxChecker {
     type Sort = ();
     type Term = ();
 
+    type Scope = ();
+
     fn handle_sort(&mut self, _sort: SmtSort<'_, Self>) -> Result<Self::Sort, Self::Error> {
         Ok(())
     }
@@ -412,44 +438,67 @@ impl SmtHandler for SmtSyntaxChecker {
         Ok(())
     }
 
-    fn end_let(&mut self, _term: Self::Term) -> Result<Self::Term, Self::Error> {
+    fn end_let(
+        &mut self,
+        _scope: Self::Scope,
+        _body: Self::Term,
+    ) -> Result<Self::Term, Self::Error> {
         Ok(())
     }
 
     fn start_quantifier(
         &mut self,
         _kind: SmtQuantifierKind,
-        _name: SmtSymbol<'_>,
-        _sort: Self::Sort,
+        _vars: SmtSortedVars<'_, Self>,
+    ) -> Result<Self::Scope, Self::Error> {
+        Ok(())
+    }
+    fn end_quantifier(
+        &mut self,
+        _kind: SmtQuantifierKind,
+        _scope: Self::Scope,
+        _body: Self::Term,
+    ) -> Result<Self::Term, Self::Error> {
+        Ok(())
+    }
+
+    fn start_lambda(&mut self, _vars: SmtSortedVars<'_, Self>) -> Result<Self::Scope, Self::Error> {
+        Ok(())
+    }
+    fn end_lambda(
+        &mut self,
+        _scope: Self::Scope,
+        _body: Self::Term,
+    ) -> Result<Self::Term, Self::Error> {
+        Ok(())
+    }
+
+    fn start_match(&mut self, _scrutinee: &Self::Term) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn start_match_case(
+        &mut self,
+        _scrutinee: &Self::Term,
+        _pattern: SmtPattern<'_>,
+    ) -> Result<Self::Scope, Self::Error> {
+        Ok(())
+    }
+
+    fn end_match_case(
+        &mut self,
+        _scope: Self::Scope,
+        _scrutinee: &Self::Term,
+        _term: Self::Term,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
 
-    fn end_quantifier(&mut self, _term: Self::Term) -> Result<Self::Term, Self::Error> {
-        Ok(())
-    }
-
-    fn start_lambda(&mut self, _name: SmtSymbol<'_>, _sort: Self::Sort) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
-    fn end_lambda(&mut self, _term: Self::Term) -> Result<Self::Term, Self::Error> {
-        Ok(())
-    }
-
-    fn start_match(&mut self, _scrutinee: Self::Term) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
-    fn start_match_case(&mut self, _pattern: SmtPattern<'_>) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
-    fn end_match_case(&mut self, _term: Self::Term) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
-    fn end_match(&mut self) -> Result<Self::Term, Self::Error> {
+    fn end_match(
+        &mut self,
+        _scrutinee: Self::Term,
+        _cases: SmtMatchCases<'_, Self>,
+    ) -> Result<Self::Term, Self::Error> {
         Ok(())
     }
 }

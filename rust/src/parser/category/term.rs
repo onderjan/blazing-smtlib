@@ -1,10 +1,12 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtApplication, SmtHandler, SmtQualifiedIdent, SmtQuantifierKind, SmtSymbol, SmtTerm,
+    SmtApplication, SmtHandler, SmtQualifiedIdent, SmtQuantifierKind, SmtSimplePattern,
+    SmtSortedVars, SmtSymbol, SmtTerm,
     parser::{
-        Arena, QualifiedIdentHandle, SmtCloseParenParser, SmtOpenParenParser, SmtParse,
-        SmtParseError, SmtParseState, SmtSyntaxErrorKind,
+        Arena, MatchCasesStarts, PatternHandle, PatternHandleBuf, QualifiedIdentHandle,
+        SimplePatternHandle, SmtCloseParenParser, SmtOpenParenParser, SmtParse, SmtParseError,
+        SmtParseState, SmtSyntaxErrorKind,
         category::{attribute::MultipleAttributes, parse_special_constant},
         handle_err,
     },
@@ -30,7 +32,8 @@ enum SortedBinderKind {
 
 #[derive(Clone, Copy)]
 enum BinderEndKind {
-    Quantifier,
+    Exists,
+    Forall,
     Lambda,
     Let,
 }
@@ -118,11 +121,11 @@ enum Level<H: SmtHandler + ?Sized> {
     },
     /// A binder (lambda/let/forall/exists) waiting for the inner term.
     ///
-    /// After consuming the term, we close all desugared binders.
+    /// After consuming the term, we close the binder.
     /// Then, we must also consume a closing parenthesis.
     BinderInner {
+        scope: H::Scope,
         end_kind: BinderEndKind,
-        num_close: u64,
     },
 
     /// An annotation waiting for the inner term.
@@ -138,10 +141,14 @@ enum Level<H: SmtHandler + ?Sized> {
     /// A match waiting for a case term.
     ///
     /// It is closed by a closing parenthesis instead of the inner term.
-    /// If `body` is set, the term has finished.
     MatchCase {
-        num_cases: u64,
+        scrutinee: H::Term,
+        /// Current scope (after start_match_case).
+        scope: Option<H::Scope>,
+        /// Case body (after it is processed).
         body: Option<H::Term>,
+        /// Where the cases start in the arena.
+        starts: MatchCasesStarts,
     },
 }
 
@@ -151,11 +158,14 @@ enum Level<H: SmtHandler + ?Sized> {
 enum Pending<H: SmtHandler + ?Sized> {
     Annotation(H::Term),
     Binder {
+        scope: H::Scope,
         body: H::Term,
         end_kind: BinderEndKind,
-        num_close: u64,
     },
-    Match,
+    Match {
+        scrutinee: H::Term,
+        starts: MatchCasesStarts,
+    },
 }
 
 impl<H: SmtHandler> SmtTermParser<H> {
@@ -411,29 +421,32 @@ impl<H: SmtHandler> TermSlot<H> {
                         }
                     }
                     Pending::Binder {
+                        scope,
                         body,
                         end_kind,
-                        num_close,
                     } => {
                         // we are waiting for a closing parenthesis
                         SmtCloseParenParser::expect(cursor, token)?;
-                        // call the handler repeatedly to close all desugared binders
-                        let mut term = body;
-                        for _ in 0..num_close {
-                            let handled = match end_kind {
-                                BinderEndKind::Quantifier => handler.end_quantifier(term),
-                                BinderEndKind::Lambda => handler.end_lambda(term),
-                                BinderEndKind::Let => handler.end_let(term),
-                            };
-                            term = handle_err(handled)?;
-                        }
-                        term
+                        // call the handler to close the binder
+                        let handled = match end_kind {
+                            BinderEndKind::Exists => {
+                                handler.end_quantifier(SmtQuantifierKind::Exists, scope, body)
+                            }
+                            BinderEndKind::Forall => {
+                                handler.end_quantifier(SmtQuantifierKind::Forall, scope, body)
+                            }
+                            BinderEndKind::Lambda => handler.end_lambda(scope, body),
+                            BinderEndKind::Let => handler.end_let(scope, body),
+                        };
+                        handle_err(handled)?
                     }
-                    Pending::Match => {
+                    Pending::Match { scrutinee, starts } => {
                         // we are waiting for a closing parenthesis
                         SmtCloseParenParser::expect(cursor, token)?;
-                        // end the match
-                        handle_err(handler.end_match())?
+                        // hand over the match
+                        parse_state.arena.hand_over_match_cases(starts, |cases| {
+                            handle_err(handler.end_match(scrutinee, cases))
+                        })?
                     }
                 }
             }
@@ -483,18 +496,16 @@ impl<H: SmtHandler> TermSlot<H> {
                 parse_state.arena.terms.push(term);
                 slot.state = State::LetBindingClose;
             }
-            Level::BinderInner {
-                end_kind,
-                num_close,
-            } => {
+            Level::BinderInner { .. } => {
                 // pop the binder
-                let (end_kind, num_close) = (*end_kind, *num_close);
-                slot.levels.pop();
+                let Some(Level::BinderInner { scope, end_kind }) = slot.levels.pop() else {
+                    panic!("last level should be a binder when its body ended")
+                };
                 // wait for the closing parenthesis to handle end
                 slot.pending = Some(Pending::Binder {
+                    scope,
                     body: term,
                     end_kind,
-                    num_close,
                 })
             }
             Level::Annotation => {
@@ -505,20 +516,25 @@ impl<H: SmtHandler> TermSlot<H> {
             Level::MatchScrutinee => {
                 // the scrutinee has been parsed, start the match in the handler
                 slot.levels.pop();
-                handle_err(handler.start_match(term))?;
+                handle_err(handler.start_match(&term))?;
                 // the case terms will be processed on a new level
                 slot.levels.push(Level::MatchCase {
-                    num_cases: 0,
+                    scrutinee: term,
+                    scope: None,
                     body: None,
+                    starts: MatchCasesStarts {
+                        text: parse_state.arena.text.len(),
+                        simple_patterns: parse_state.arena.simple_patterns.len(),
+                        patterns: parse_state.arena.patterns.len(),
+                        terms: parse_state.arena.terms.len(),
+                    },
                 });
                 slot.state = State::MatchCasesOpen;
             }
-            Level::MatchCase { num_cases, body } => {
-                // a case term has ended
-                // put it in case body and increment the number of cases
+            Level::MatchCase { body, .. } => {
+                // a case term has ended, put it in case body
                 // move to expect the closing match case parenthesis
                 // do not handle the match case yet
-                *num_cases += 1;
                 *body = Some(term);
                 slot.state = State::MatchCaseClose;
             }
@@ -626,22 +642,22 @@ impl<H: SmtHandler> TermSlot<H> {
                     parse_state,
                     cursor,
                     token,
-                    |handler, name, sort| match binder_kind {
+                    |handler, vars| match binder_kind {
                         SortedBinderKind::Exists => {
-                            handler.start_quantifier(SmtQuantifierKind::Exists, name, sort)
+                            handler.start_quantifier(SmtQuantifierKind::Exists, vars)
                         }
                         SortedBinderKind::Forall => {
-                            handler.start_quantifier(SmtQuantifierKind::Forall, name, sort)
+                            handler.start_quantifier(SmtQuantifierKind::Forall, vars)
                         }
-                        SortedBinderKind::Lambda => handler.start_lambda(name, sort),
+                        SortedBinderKind::Lambda => handler.start_lambda(vars),
                     },
                 )?;
 
                 match flow {
                     ControlFlow::Continue(()) => {}
-                    ControlFlow::Break(num_opened) => {
+                    ControlFlow::Break(scope) => {
                         // there must be at least one sorted variable in the binder
-                        if num_opened == 0 {
+                        let Some(scope) = scope else {
                             let err_kind: SmtSyntaxErrorKind = match binder_kind {
                                 SortedBinderKind::Exists | SortedBinderKind::Forall => {
                                     SmtSyntaxErrorKind::EmptyQuantifierBindings
@@ -649,19 +665,18 @@ impl<H: SmtHandler> TermSlot<H> {
                                 SortedBinderKind::Lambda => SmtSyntaxErrorKind::EmptyLambdaBindings,
                             };
                             return Err(SmtParseError::category_error(err_kind));
-                        }
+                        };
 
                         let end_kind = match binder_kind {
-                            SortedBinderKind::Exists => BinderEndKind::Quantifier,
-                            SortedBinderKind::Forall => BinderEndKind::Quantifier,
+                            SortedBinderKind::Exists => BinderEndKind::Exists,
+                            SortedBinderKind::Forall => BinderEndKind::Forall,
                             SortedBinderKind::Lambda => BinderEndKind::Lambda,
                         };
 
-                        // push a level to handle the inner term and then properly close all opened binders
-                        parse_state.term_slot.start_level(Level::BinderInner {
-                            end_kind,
-                            num_close: num_opened,
-                        });
+                        // push a level to handle the inner term
+                        parse_state
+                            .term_slot
+                            .start_level(Level::BinderInner { scope, end_kind });
                     }
                 }
                 Ok(ControlFlow::Continue(()))
@@ -675,7 +690,7 @@ impl<H: SmtHandler> TermSlot<H> {
             }
             State::MatchCaseOpen => {
                 // parse the match case and continue
-                slot.parse_match_case_open(cursor, token)?;
+                slot.parse_match_case_open(&mut parse_state.arena, cursor, token)?;
                 Ok(ControlFlow::Continue(()))
             }
             State::MatchPattern => {
@@ -685,10 +700,48 @@ impl<H: SmtHandler> TermSlot<H> {
                         .pattern_slot
                         .progress(&mut parse_state.arena, cursor, &token)?
                 {
-                    // a match case is starting, call the handler with the pattern handed over
-                    parse_state.arena.hand_over_pattern(pattern, |pattern| {
-                        handle_err(handler.start_match_case(pattern))
-                    })?;
+                    // a match case is starting, push the pattern it into arena
+                    let Some(Level::MatchCase {
+                        scrutinee, scope, ..
+                    }) = slot.levels.last_mut()
+                    else {
+                        panic!("last level should be a match case when its pattern has ended")
+                    };
+
+                    let pattern = match pattern {
+                        PatternHandle::Simple(SmtSimplePattern::Symbol(symbol)) => {
+                            // store into simple patterns
+                            let symbol = parse_state.arena.push_symbol(symbol);
+                            PatternHandleBuf::Simple(SimplePatternHandle::Symbol(symbol))
+                        }
+                        PatternHandle::Simple(SmtSimplePattern::Wildcard) => {
+                            // store into simple patterns
+                            PatternHandleBuf::Simple(SimplePatternHandle::Wildcard)
+                        }
+                        PatternHandle::Application {
+                            constructor,
+                            args_start,
+                            args_end,
+                        } => PatternHandleBuf::Application {
+                            constructor,
+                            args_start,
+                            args_end,
+                        },
+                    };
+                    parse_state.arena.patterns.push(pattern);
+
+                    // handle the match case start
+                    let arena = &parse_state.arena;
+                    let view = Arena::<H>::pattern_view(
+                        &arena.text,
+                        &arena.simple_patterns,
+                        arena
+                            .patterns
+                            .last()
+                            .expect("the pattern was already pushed"),
+                    );
+                    *scope = Some(handle_err(handler.start_match_case(scrutinee, view))?);
+
                     // move the start state to parse the case term
                     slot.state = State::Start;
                 }
@@ -696,13 +749,19 @@ impl<H: SmtHandler> TermSlot<H> {
             }
             State::MatchCaseClose => {
                 // take the term out of the match-case level
-                if let Some(Level::MatchCase { num_cases: _, body }) = slot.levels.last_mut()
-                    && let Some(term) = body.take()
+                if let Some(Level::MatchCase {
+                    scrutinee,
+                    scope,
+                    body,
+                    ..
+                }) = slot.levels.last_mut()
+                    && let (Some(scope), Some(body)) = (scope.take(), body.take())
                 {
                     // expect a closing parenthesis
                     SmtCloseParenParser::expect(cursor, token)?;
-                    // call the handler
-                    handle_err(handler.end_match_case(term))?;
+                    // handle the term and add it to the arena
+                    let term = handle_err(handler.end_match_case(scope, scrutinee, body))?;
+                    parse_state.arena.terms.push(term);
                     // move to await a match case or a closing parenthesis
                     slot.state = State::MatchCaseOpen;
                     Ok(ControlFlow::Continue(()))
@@ -900,7 +959,7 @@ impl<H: SmtHandler> TermSlot<H> {
                 }
 
                 // tell the handler we are starting a let, the bindings are consumed
-                arena.hand_over_bindings(
+                let scope = arena.hand_over_bindings(
                     arena_text_start,
                     arena_names_start,
                     arena_terms_start,
@@ -910,8 +969,8 @@ impl<H: SmtHandler> TermSlot<H> {
                 // add a new level for the inner term in the let
                 // we open it once, so we also need to close it once
                 slot.start_level(Level::BinderInner {
+                    scope,
                     end_kind: BinderEndKind::Let,
-                    num_close: 1,
                 });
                 Ok(())
             }
@@ -933,6 +992,7 @@ impl<H: SmtHandler> TermSlot<H> {
     /// that closes the match cases followed by the rest of the term.
     fn parse_match_case_open<Z: SmtProduce>(
         &mut self,
+        arena: &mut Arena<H>,
         cursor: &Z,
         token: Z::Token,
     ) -> Result<(), SmtParseError<H::Error>> {
@@ -945,14 +1005,18 @@ impl<H: SmtHandler> TermSlot<H> {
             SmtSyntaxToken::ParenClose => {
                 // the match cases are done
                 let Some(Level::MatchCase {
-                    num_cases,
+                    scrutinee,
+                    starts,
+                    scope: None,
                     body: None,
                 }) = self.levels.pop()
                 else {
-                    panic!("last level should be a match case with no body when closing cases")
+                    panic!(
+                        "last level should be a match case with no body and scope when closing cases"
+                    )
                 };
                 // there must be at least one case
-                if num_cases == 0 {
+                if arena.patterns.len() == starts.patterns {
                     return Err(SmtParseError::category_error(
                         SmtSyntaxErrorKind::EmptyMatchCases,
                     ));
@@ -960,7 +1024,7 @@ impl<H: SmtHandler> TermSlot<H> {
 
                 // wait for the closing parenthesis of the match
                 // we will call the handler and break after that
-                self.pending = Some(Pending::Match);
+                self.pending = Some(Pending::Match { scrutinee, starts });
                 Ok(())
             }
             _ => Err(SmtParseError::category_error(
@@ -1017,26 +1081,44 @@ enum SortedBindingsParserState {
     ParsingBinder,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct SortedBindingsStarts {
+    names: usize,
+    sorts: usize,
+    text: usize,
+}
+
+impl SortedBindingsStarts {
+    fn new() -> Self {
+        Self {
+            names: 0,
+            sorts: 0,
+            text: 0,
+        }
+    }
+}
+
 struct SortedBindingsParser {
     state: SortedBindingsParserState,
-    num_opened: u64,
+    starts: SortedBindingsStarts,
 }
 
 impl SortedBindingsParser {
     fn new() -> Self {
         Self {
             state: SortedBindingsParserState::Start,
-            num_opened: 0,
+            starts: SortedBindingsStarts::new(),
         }
     }
 
     fn is_pristine(&self) -> bool {
-        matches!(self.state, SortedBindingsParserState::Start) && self.num_opened == 0
+        matches!(self.state, SortedBindingsParserState::Start)
+            && self.starts == SortedBindingsStarts::new()
     }
 
     fn clear(&mut self) {
         self.state = SortedBindingsParserState::Start;
-        self.num_opened = 0;
+        self.starts = SortedBindingsStarts::new();
     }
 }
 
@@ -1046,13 +1128,19 @@ impl SortedBindingsParser {
         parse_state: &mut SmtParseState<H>,
         cursor: &Z,
         token: Z::Token,
-        open_fn: impl Fn(&mut H, SmtSymbol<'_>, H::Sort) -> Result<(), H::Error>,
-    ) -> Result<ControlFlow<u64>, SmtParseError<H::Error>> {
+        open_fn: impl Fn(&mut H, SmtSortedVars<H>) -> Result<H::Scope, H::Error>,
+    ) -> Result<ControlFlow<Option<H::Scope>>, SmtParseError<H::Error>> {
         let this = &mut parse_state.term_slot.sorted_bindings_parser;
         let token = match this.state {
             SortedBindingsParserState::Start => {
                 // expect an opening parenthesis
                 SmtOpenParenParser::expect(cursor, token)?;
+                // record the starts
+                this.starts = SortedBindingsStarts {
+                    names: parse_state.arena.symbols.len(),
+                    sorts: parse_state.arena.sorts.len(),
+                    text: parse_state.arena.text.len(),
+                };
                 this.state = SortedBindingsParserState::AwaitingBinder;
                 return Ok(ControlFlow::Continue(()));
             }
@@ -1060,11 +1148,21 @@ impl SortedBindingsParser {
                 // either a new sorted variable
                 // or a closing parenthesis ending binders
                 if matches!(cursor.syntax(&token), SmtSyntaxToken::ParenClose) {
-                    let num_opened = this.num_opened;
+                    // process if there is at least one variable
+                    let result = if this.starts.names < parse_state.arena.symbols.len() {
+                        Some(parse_state.arena.hand_over_sorted_vars(
+                            this.starts.text,
+                            this.starts.names,
+                            this.starts.sorts,
+                            |vars| handle_err(open_fn(handler, vars)),
+                        )?)
+                    } else {
+                        None
+                    };
                     // reset before break
                     this.state = SortedBindingsParserState::Start;
-                    this.num_opened = 0;
-                    return Ok(ControlFlow::Break(num_opened));
+                    this.starts = SortedBindingsStarts::new();
+                    return Ok(ControlFlow::Break(result));
                 }
                 // parse the binder
                 this.state = SortedBindingsParserState::ParsingBinder;
@@ -1084,13 +1182,9 @@ impl SortedBindingsParser {
         )? {
             ControlFlow::Continue(()) => {}
             ControlFlow::Break((name, sort)) => {
-                // start the binder with the name handed over, and increment opened
-                parse_state
-                    .arena
-                    .hand_over_sorted_var(name, sort, |name, sort| {
-                        handle_err(open_fn(handler, name, sort))
-                    })?;
-                this.num_opened += 1;
+                // push into arena
+                parse_state.arena.symbols.push(name);
+                parse_state.arena.sorts.push(sort);
                 // go back to awaiting a binder
                 this.state = SortedBindingsParserState::AwaitingBinder;
             }

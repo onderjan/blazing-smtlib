@@ -184,7 +184,8 @@ impl PatternSlot {
             // step 3: parsing the arguments
             if matches!(cursor.syntax(token), SmtSyntaxToken::ParenClose) {
                 // there must be at least one argument to the constructor
-                if arena.simple_patterns.len() == self.arena_args_start {
+                let args_end = arena.simple_patterns.len();
+                if args_end == self.arena_args_start {
                     return Err(SmtParseError::category_error(
                         SmtSyntaxErrorKind::EmptyPatternArguments,
                     ));
@@ -193,6 +194,7 @@ impl PatternSlot {
                 return Ok(ControlFlow::Break(PatternHandle::Application {
                     constructor,
                     args_start: self.arena_args_start,
+                    args_end,
                 }));
             }
             // an argument is starting here, it will be stored in the arena

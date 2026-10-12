@@ -1,6 +1,7 @@
 use crate::{
-    SmtBindings, SmtHandler, SmtIdent, SmtIndex, SmtIndices, SmtKeyword, SmtMultiple, SmtNumeral,
-    SmtPattern, SmtQualifiedIdent, SmtSimplePattern, SmtSimplePatterns, SmtSort, SmtSymbol,
+    SmtBindings, SmtHandler, SmtIdent, SmtIndex, SmtIndices, SmtKeyword, SmtMatchCases,
+    SmtMultiple, SmtNumeral, SmtPattern, SmtQualifiedIdent, SmtSimplePattern, SmtSimplePatterns,
+    SmtSort, SmtSortedVars, SmtSymbol,
     parser::{
         AttributeSlot, IdentSlot, PatternSlot, QualifiedIdentSlot, SExprSlot, SortSlot,
         SortedVarSlot, TermSlot,
@@ -95,10 +96,20 @@ pub(crate) struct Arena<H: SmtHandler + ?Sized> {
     pub(crate) attributes: Vec<H::Attribute>,
     /// Simple patterns waiting to be consumed, as constructor pattern arguments.
     pub(crate) simple_patterns: Vec<SimplePatternHandle>,
+    /// Patterns waiting to be consumed.
+    pub(crate) patterns: Vec<PatternHandleBuf>,
     /// Handled sorts waiting to be consumed.
     pub(crate) sorts: Vec<H::Sort>,
     /// Handled terms, waiting to be consumed.
     pub(crate) terms: Vec<H::Term>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct MatchCasesStarts {
+    pub(crate) text: usize,
+    pub(crate) simple_patterns: usize,
+    pub(crate) patterns: usize,
+    pub(crate) terms: usize,
 }
 
 impl<H: SmtHandler + ?Sized> Arena<H> {
@@ -110,6 +121,7 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
             s_exprs: Vec::new(),
             attributes: Vec::new(),
             simple_patterns: Vec::new(),
+            patterns: Vec::new(),
             sorts: Vec::new(),
             terms: Vec::new(),
         }
@@ -122,6 +134,7 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
             && self.s_exprs.is_empty()
             && self.attributes.is_empty()
             && self.simple_patterns.is_empty()
+            && self.patterns.is_empty()
             && self.sorts.is_empty()
             && self.terms.is_empty()
     }
@@ -133,6 +146,7 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
         self.s_exprs.clear();
         self.attributes.clear();
         self.simple_patterns.clear();
+        self.patterns.clear();
         self.sorts.clear();
         self.terms.clear();
     }
@@ -222,6 +236,24 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
         let result = f(bindings);
         self.symbols.truncate(names_start);
         self.terms.truncate(terms_start);
+        self.text.truncate(text_start);
+        result
+    }
+
+    /// Hands the sorted variables to `f`, removing them afterwards.
+    pub(crate) fn hand_over_sorted_vars<R>(
+        &mut self,
+        text_start: usize,
+        names_start: usize,
+        sorts_start: usize,
+        f: impl FnOnce(SmtSortedVars<'_, H>) -> R,
+    ) -> R {
+        let names = SmtMultiple::new(ArenaAccess { _priv: () }, &mut self.symbols, names_start);
+        let sorts = SmtMultiple::new(ArenaAccess { _priv: () }, &mut self.sorts, sorts_start);
+        let sorted_vars = SmtSortedVars::new(ArenaAccess { _priv: () }, &self.text, names, sorts);
+        let result = f(sorted_vars);
+        self.symbols.truncate(names_start);
+        self.sorts.truncate(sorts_start);
         self.text.truncate(text_start);
         result
     }
@@ -342,6 +374,34 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
         result
     }
 
+    /// Hands the match cases from `starts` onward to `f`, removing them afterwards.
+    #[inline]
+    pub(crate) fn hand_over_match_cases<R>(
+        &mut self,
+        starts: MatchCasesStarts,
+        f: impl FnOnce(SmtMatchCases<'_, H>) -> R,
+    ) -> R {
+        let patterns = SmtMultiple::new(
+            ArenaAccess { _priv: () },
+            &mut self.patterns,
+            starts.patterns,
+        );
+        let terms = SmtMultiple::new(ArenaAccess { _priv: () }, &mut self.terms, starts.terms);
+        let match_cases = SmtMatchCases::new(
+            ArenaAccess { _priv: () },
+            &self.text,
+            &self.simple_patterns,
+            patterns,
+            terms,
+        );
+        let result = f(match_cases);
+        self.text.truncate(starts.text);
+        self.simple_patterns.truncate(starts.simple_patterns);
+        self.patterns.truncate(starts.patterns);
+        self.terms.truncate(starts.terms);
+        result
+    }
+
     /// Hands a match pattern to `f`, removing it afterwards.
     #[inline]
     pub(crate) fn hand_over_pattern<R>(
@@ -354,13 +414,14 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
             PatternHandle::Application {
                 constructor,
                 args_start,
+                args_end,
             } => {
                 let pattern = SmtPattern::Application {
                     constructor: constructor.symbol_view(&self.text),
                     args: SmtSimplePatterns::new(
                         ArenaAccess { _priv: () },
                         &self.text,
-                        &self.simple_patterns[args_start..],
+                        &self.simple_patterns[args_start..args_end],
                     ),
                 };
                 let result = f(pattern);
@@ -368,6 +429,30 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
                 self.text.truncate(constructor.start());
                 result
             }
+        }
+    }
+
+    /// Views a match pattern.
+    #[inline]
+    pub(crate) fn pattern_view<'a>(
+        text: &'a [u8],
+        simple_patterns: &'a [SimplePatternHandle],
+        pattern: &PatternHandleBuf,
+    ) -> SmtPattern<'a> {
+        match pattern {
+            PatternHandleBuf::Simple(simple) => SmtPattern::Simple(simple.view(text)),
+            PatternHandleBuf::Application {
+                constructor,
+                args_start,
+                args_end,
+            } => SmtPattern::Application {
+                constructor: constructor.symbol_view(text),
+                args: SmtSimplePatterns::new(
+                    ArenaAccess { _priv: () },
+                    text,
+                    &simple_patterns[*args_start..*args_end],
+                ),
+            },
         }
     }
 }
@@ -514,5 +599,14 @@ pub(crate) enum PatternHandle<'t> {
     Application {
         constructor: SymbolHandle,
         args_start: usize,
+        args_end: usize,
+    },
+}
+pub(crate) enum PatternHandleBuf {
+    Simple(SimplePatternHandle),
+    Application {
+        constructor: SymbolHandle,
+        args_start: usize,
+        args_end: usize,
     },
 }
