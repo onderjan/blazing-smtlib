@@ -29,7 +29,7 @@ use crate::{
     },
 };
 
-pub struct SmtLexer<C, R = SmtFailFast> {
+pub struct SmtLexer<C: SmtConsume, R: SmtLexRecovery<C> = SmtFailFast> {
     /// Consumer of produced tokens.
     consumer: C,
 
@@ -41,6 +41,9 @@ pub struct SmtLexer<C, R = SmtFailFast> {
 
     /// Current lexer state.
     state: LexerState,
+
+    /// Held-back consumer break result, to be returned when EOF is reached.
+    held: Option<SmtLocated<C::Result>>,
 
     /// The location from which lexer discards bytes until EOF is reached.
     discard_from: Option<SmtLocation>,
@@ -220,26 +223,21 @@ impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>> SmtLexer<C> {
 
     /// Lexes the whole input including EOF at the end.
     ///
-    /// If the token consumer returns [`ControlFlow::Break`] on some token,
-    /// the lexer passes it through, adding the break location.
-    /// Subsequent bytes are discarded until EOF, which resets
-    /// the lexer.
+    /// If successful, the lexer is reset before returning
+    /// the token consumer result.
     ///
-    /// If an error occurs, the lexer moves into a failure state where
-    /// all further lexing calls panic.
+    /// If an error occurs, the lexer moves into a failure state
+    /// where all further lexing calls panic.
     ///
     /// The contract of the token consumer forbids it from
     /// returning [`ControlFlow::Continue`] on the EOF token,
     /// and the lexer panics if it does.
-    pub fn lex_all(&mut self, input: &[u8]) -> SmtLexResult<C> {
-        match self.lex_slice(input)? {
-            ControlFlow::Break(result) => {
-                // reset the lexer as if we are at the start of a new file
-                self.reset();
-                Ok(ControlFlow::Break(result))
-            }
-            ControlFlow::Continue(()) => self.lex_eof(),
-        }
+    pub fn lex_all(
+        &mut self,
+        input: &[u8],
+    ) -> Result<SmtLocated<C::Result>, SmtLexError<C::Error>> {
+        self.lex_slice(input)?;
+        self.lex_eof()
     }
 }
 
@@ -257,11 +255,6 @@ impl<C: SmtRecover> SmtLexer<C, SmtRecovering> {
     }
 }
 
-pub type SmtLexResult<C> = Result<
-    ControlFlow<SmtLocated<<C as SmtConsume>::Result>>,
-    SmtLexError<<C as SmtConsume>::Error>,
->;
-
 type InnerLexResult<C> =
     Result<ControlFlow<<C as SmtConsume>::Result>, Failure<<C as SmtConsume>::Error>>;
 
@@ -278,6 +271,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
             version,
             initial_version: version,
             state: LexerState::Normal,
+            held: None,
             discard_from: None,
             consumed_depth: 0,
             lexed_depth: 0,
@@ -323,22 +317,16 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
 impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>, R: SmtLexRecovery<C>> SmtLexer<C, R> {
     /// Lexes the given slice, sending the lexed tokens to the consumer.
     ///
-    /// If the token consumer returns [`ControlFlow::Break`] on some token,
-    /// the lexer passes it through, adding the break location.
-    /// Subsequent bytes are discarded until EOF, which resets
-    /// the lexer.
-    ///
-    /// If the token consumer returns [`ControlFlow::Continue`] on all tokens,
-    /// the lexer is ready for further lexing.
+    /// If the consumer produces a result, the result is held back until EOF.
     ///
     /// If an error occurs, the fail-fast lexer moves into
     /// a failure state and all further lexing calls panic.
-    pub fn lex_slice(&mut self, slice: &[u8]) -> SmtLexResult<C> {
-        if self.discard_from.is_some() {
-            // we are discarding bytes
+    pub fn lex_slice(&mut self, slice: &[u8]) -> Result<(), SmtLexError<C::Error>> {
+        if self.held.is_some() || self.discard_from.is_some() {
+            // we are either holding a result or discarding bytes
             // pretend that we lexed everything we were given
             self.discard_bytes(slice);
-            return Ok(ControlFlow::Continue(()));
+            return Ok(());
         }
 
         // a recovering lexer must skip until out of the root-level expression
@@ -351,11 +339,11 @@ impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
                     slice.is_empty(),
                     "cannot lex a slice after the end of the input"
                 );
-                return Ok(ControlFlow::Continue(()));
+                return Ok(());
             }
             let Some(skipped) = self.skip_slice(slice, skip) else {
                 // the whole slice was skipped
-                return Ok(ControlFlow::Continue(()));
+                return Ok(());
             };
             // the lexing goes on from here, tell the consumer before any token
             self.recovery_state = None;
@@ -371,14 +359,19 @@ impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
             Ok(flow) => flow,
             Err(failure) => return Err(self.fail(failure, false)),
         };
-        // if the consumer has produced a result, remember to stop feeding it
-        if let ControlFlow::Break(located) = &flow {
-            self.discard_from = Some(located.location());
-            // discard the remaining bytes after break
-            let lexed = (located.location().offset() - start) as usize;
-            self.discard_bytes(&slice[lexed..]);
+        match flow {
+            ControlFlow::Continue(_) => Ok(()),
+            ControlFlow::Break(located) => {
+                let location = located.location();
+                // hold back the result to be produced on EOF
+                self.held = Some(located);
+                // discard the remaining bytes after break
+                self.discard_from = Some(location);
+                let lexed = (location.offset() - start) as usize;
+                self.discard_bytes(&slice[lexed..]);
+                Ok(())
+            }
         }
-        Ok(flow)
     }
 
     /// Discards the bytes while keeping the location correct.
@@ -393,10 +386,15 @@ impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
         self.offset += bytes.len() as u64;
     }
 
-    /// Lexes end-of-file, sending the lexed tokens to the consumer.
+    /// Lexes the end of file, sending the lexed tokens to the consumer.
     ///
-    /// If the token consumer returns [`ControlFlow::Break`] on the EOF token,
-    /// the lexer passes it through, adding the break location.
+    /// If the consumer already broke with a result which was held back
+    /// by the lexer, the lexer returns the held-back consumer result
+    /// and does not call the consumer at all.
+    /// Otherwise, it processes the pending token if any.
+    /// The EOF token is only processed if nothing was held back
+    /// and the consumer did not break when processing the pending token.
+    /// In any case, the lexer is reset before returning the result.
     ///
     /// If an error occurs, the fail-fast lexer moves into
     /// a failure state and all further lexing calls panic.
@@ -404,12 +402,13 @@ impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
     /// The contract of the token consumer forbids it from
     /// returning [`ControlFlow::Continue`] on the EOF token,
     /// and the lexer panics if it does.
-    pub fn lex_eof(&mut self) -> SmtLexResult<C> {
-        if self.discard_from.is_some() {
-            // no need to feed anything, just reset the lexer
+    pub fn lex_eof(&mut self) -> Result<SmtLocated<C::Result>, SmtLexError<C::Error>> {
+        if let Some(held) = self.held.take() {
+            // a result is already held, reset the lexer and return it
             self.reset();
-            return Ok(ControlFlow::Continue(()));
+            return Ok(held);
         }
+
         // the end of the input forces recovery
         let recovered = self.recovery_state.take().is_some();
         if recovered {
@@ -418,11 +417,15 @@ impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
         }
 
         // call inner EOF lexing
-        match self.execute_step(|lexer| lexer.lex_eof_inner()) {
-            Ok(flow) => {
+        match self.lex_eof_inner() {
+            Ok(result) => {
+                // add the result location before resetting
+                let located = SmtLocated::new(result, self.current_location());
+
                 // the input has ended, reset the lexer
                 self.reset();
-                Ok(flow)
+
+                Ok(located)
             }
             Err(failure) if recovered => {
                 // the consumer has refused the EOF token with nothing left to abandon:
@@ -434,7 +437,7 @@ impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
         }
     }
 
-    fn lex_eof_inner(&mut self) -> InnerLexResult<C> {
+    fn lex_eof_inner(&mut self) -> Result<C::Result, Failure<C::Error>> {
         // construct a batch for the tokens
         let mut batch: Batch = Batch {
             entries: [None; BATCH_CAPACITY],
@@ -563,8 +566,7 @@ impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
                 }
                 Ok(Stop::Finished(result)) => {
                     // the consumer is done with the input
-                    // the lexer will be reset as a consequence of the Break result
-                    return Ok(ControlFlow::Break(result));
+                    return Ok(result);
                 }
                 Err(error) => {
                     return Err(Failure {
@@ -579,7 +581,10 @@ impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
         panic!("consumer must not continue on EOF")
     }
 
-    fn lex_slice_inner(&mut self, slice: &[u8]) -> InnerLexResult<C> {
+    fn lex_slice_inner(
+        &mut self,
+        slice: &[u8],
+    ) -> Result<ControlFlow<C::Result>, Failure<C::Error>> {
         let mut batch: Batch = Batch {
             entries: [None; BATCH_CAPACITY],
             len: 0,
@@ -2183,6 +2188,7 @@ impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
     fn reset(&mut self) {
         self.version = self.initial_version;
         self.state = LexerState::Normal;
+        self.held = None;
         self.discard_from = None;
         self.consumed_depth = 0;
         self.lexed_depth = 0;
@@ -2213,7 +2219,7 @@ struct FastState {
 
 impl FastState {
     #[inline(always)]
-    fn load<C, R>(lexer: &SmtLexer<C, R>, batch: &Batch) -> Self {
+    fn load<C: SmtConsume, R: SmtLexRecovery<C>>(lexer: &SmtLexer<C, R>, batch: &Batch) -> Self {
         Self {
             len: batch.len,
             line: lexer.line,

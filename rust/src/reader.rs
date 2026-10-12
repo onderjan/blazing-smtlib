@@ -14,7 +14,6 @@
 //! resources should serve several reads. The [`lexer`](crate::lexer) and [`parser`](crate::parser)
 //! modules can also be used on their own.
 
-use std::ops::ControlFlow;
 use std::{
     fs::File,
     io::{BufRead, BufReader},
@@ -115,11 +114,14 @@ pub fn read_smt_file<H: SmtCommandHandler>(
         .map(|_| ())
 }
 
-/// Reads SMT-LIB input from `buf_reader` to its end, delivering its content
+/// Reads SMT-LIB input from `buf_reader`, delivering its content
 /// to `handler`.
 ///
 /// The input is considered to end when the buffered reader returns
 /// a zero-length buffer.
+///
+/// No guarantees are made on how the buffered reader is read,
+/// including how many bytes are read.
 ///
 /// This is a convenience function over [`SmtReader`]: the parser
 /// is dropped after reading, so its resources cannot be preserved
@@ -146,10 +148,8 @@ pub fn read_smt<H: SmtCommandHandler>(
 /// [`read_slice`](Self::read_slice) sequentially, followed by [`read_eof`](Self::read_eof)
 /// once the input has ended. A piece may end anywhere, even inside a token.
 ///
-/// The reader may be used even after [`read_eof`](Self::read_eof).
-/// In case the underlying parser returns a result, the parser immediately
-/// resets and can be reused. In case of a reading error,
-/// every subsequent read call panics.
+/// After a call of [`read_all`](Self::read_all) or [`read_eof`](Self::read_eof)
+/// that does not return an error, the reader is reset and can be reused.
 ///
 /// For whole inputs, consider [`read_smt_file`] and [`read_smt`].
 pub struct SmtReader<'a, H: SmtHandler + ?Sized, P: SmtParse<H> = SmtScriptParser<H>> {
@@ -182,23 +182,17 @@ impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtReader<'a, H, P> {
         self.lexer.version()
     }
 
-    /// Opens the file at `path` and reads it to its end, including an EOF token.
+    /// Opens the file at `path` and reads it.
+    ///
+    /// Returns the parser result if successful.
     ///
     /// A failure to open the file is reported as an I/O error with an empty
     /// span at the start of the input. An I/O read error is reported as
     /// an empty span at the respective position.
     ///
-    /// Reading stops either when the parser returns a result,
-    /// in which case it is returned within [`Option::Some`],
-    /// or when all tokens including the EOF have been parsed,
-    /// in which case [`Option::None`] is returned.
-    ///
-    /// For the common case of reading SMT-LIB scripts, the parser returns
-    /// exactly when either `(exit)` or an EOF in a valid position
-    /// is encountered, identifying the reason in the result.
-    ///
-    /// Panics if a previous call on this reader returned an error.
-    pub fn read_file(&mut self, path: &Path) -> Result<Option<P::Result>, SmtReadError<H::Error>> {
+    /// May panic if a previous call on this reader returned an error
+    /// or if the parser breaks its contract.
+    pub fn read_file(&mut self, path: &Path) -> Result<P::Result, SmtReadError<H::Error>> {
         let file = File::open(path)
             .map_err(|err| SmtReadError::new(SmtReadErrorCause::Io(err), SmtSpan::new_zero()))?;
 
@@ -209,67 +203,62 @@ impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtReader<'a, H, P> {
         self.read_all(buf_reader)
     }
 
-    /// Reads `buf_reader` to its end, including an EOF token.
+    /// Reads the content of the buffered reader.
+    ///
+    /// Returns the parser result if successful.
     ///
     /// The input is considered to end when the buffered reader returns
     /// a zero-length buffer. A failure while reading is reported as
     /// an I/O error with an empty span at the position reached.
     ///
-    /// Reading stops either when the parser returns a result,
-    /// in which case it is returned within [`Option::Some`] and
-    /// the buffered reader is positioned after it,
-    /// or when all tokens including the EOF have been parsed,
-    /// in which case [`Option::None`] is returned.
+    /// No guarantees are made on how the buffered reader is read,
+    /// including how many bytes are read.
     ///
-    /// For the common case of reading SMT-LIB scripts, the parser returns
-    /// exactly when either `(exit)` or an EOF in a valid position
-    /// is encountered, identifying the reason in the result.
-    ///
-    /// Panics if a previous call on this reader returned an error.
+    /// May panic if a previous call on this reader returned an error
+    /// or if the parser breaks its contract.
     pub fn read_all<R: BufRead>(
         &mut self,
         mut buf_reader: R,
-    ) -> Result<Option<P::Result>, SmtReadError<H::Error>> {
+    ) -> Result<P::Result, SmtReadError<H::Error>> {
         loop {
-            match buf_reader.fill_buf() {
-                Ok(buffer) => {
-                    if !buffer.is_empty() {
-                        // process the buffer and mark consumed what the lexer took:
-                        // the whole buffer, or up to where the parser finished
-                        let start = self.lexer.current_location().offset();
-                        match self.read_slice(buffer)? {
-                            ControlFlow::Continue(()) => {
-                                // all bytes were read, consume them
-                                let len = buffer.len();
-                                buf_reader.consume(len)
-                            }
-                            ControlFlow::Break(located) => {
-                                // the parser finished, the rest of the input is not read
-                                // consume the bytes up to the end location to fulfil the contract
-                                // we cannot use the current lexer location: the lexer has
-                                // discarded the rest of the buffer and is after it
-                                let consumed = (located.location().offset() - start) as usize;
-                                buf_reader.consume(consumed);
-                                // reset the lexer by reading EOF
-                                let _ = self.read_eof()?;
-                                return Ok(Some(located.into_value()));
-                            }
-                        }
-                    } else {
-                        // end of stream, process End of File and return the break value
-                        // if no break occurs even at the end of the file, return None
-                        return Ok(self.read_eof()?.break_value().map(SmtLocated::into_value));
-                    }
-                }
+            if self.lexer.discarded_from().is_some() {
+                // the lexer does not care about any subsequent bytes, break
+                // this will make the EOF location unreliable
+                break;
+            }
+
+            let buffer = match buf_reader.fill_buf() {
+                Ok(buffer) => buffer,
                 Err(err) => {
+                    // I/O error
                     // return an empty span on the current lexer location
                     let location = self.lexer.current_location();
                     let span = SmtSpan::new_empty(location);
                     let cause = SmtReadErrorCause::Io(err);
                     return Err(SmtReadError::new(cause, span));
                 }
+            };
+
+            if buffer.is_empty() {
+                // end of file reached
+                break;
             }
+
+            // process the buffer
+            self.read_slice(buffer)?;
+
+            // all bytes were read, consume them
+            let len = buffer.len();
+            buf_reader.consume(len);
         }
+
+        // end of stream, process EOF
+        // this will reset the lexer and return the break value
+        let result = self.read_eof()?;
+
+        // the result location is unreliable due to our choice where to discard
+        // do not return the result location
+        Ok(result.into_value())
     }
 
     /// Processes a byte slice as one piece of the input.
@@ -277,41 +266,25 @@ impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtReader<'a, H, P> {
     /// The piece may end anywhere, even inside a token: whatever is
     /// unfinished carries over to the next call.
     ///
-    /// After processing the whole input using this function,
-    /// call [`read_eof`](Self::read_eof) so the whole input
-    /// is fully processed.
-    ///
-    /// Returns [`ControlFlow::Break`] with the parser's result if the parser
-    /// finished inside the piece (which for a script is the command `(exit)`):
-    /// the rest of the piece is not read, and the reader resets.
-    /// [`SmtLocated::location()`] then identifies the location
-    /// where the parser finished.
-    ///
-    /// Panics if a previous call on this reader returned an error.
-    pub fn read_slice(
-        &mut self,
-        slice: &[u8],
-    ) -> Result<ControlFlow<SmtLocated<P::Result>>, SmtReadError<H::Error>> {
+    /// May panic if a previous call on this reader returned an error
+    /// or if the parser breaks its contract.
+    pub fn read_slice(&mut self, slice: &[u8]) -> Result<(), SmtReadError<H::Error>> {
         // parsing goes through lexing, so just call the lexer
-        Ok(self.lexer.lex_slice(slice)?)
+        self.lexer.lex_slice(slice).map_err(|err| err.into())
     }
 
     /// Processes the end of the input.
+    ///
+    /// Returns the located parser result if successful.
     ///
     /// Call this once after the last [`read_slice`](Self::read_slice);
     /// [`read_file`](Self::read_file) and [`read_all`](Self::read_all) call
     /// it themselves.
     ///
-    /// Returns [`ControlFlow::Break`] with the parser's result if the parser
-    /// finished due to the EOF token (which for a script is the end of the input
-    /// between commands), and the reader resets. [`SmtLocated::location()`]
-    /// then identifies the location where the parser finished.
-    ///
-    /// Panics if a previous call on this reader returned an error.
-    pub fn read_eof(
-        &mut self,
-    ) -> Result<ControlFlow<SmtLocated<P::Result>>, SmtReadError<H::Error>> {
+    /// May panic if a previous call on this reader returned an error
+    /// or if the parser breaks its contract.
+    pub fn read_eof(&mut self) -> Result<SmtLocated<P::Result>, SmtReadError<H::Error>> {
         // parsing goes through lexing, so just call the lexer
-        Ok(self.lexer.lex_eof()?)
+        self.lexer.lex_eof().map_err(|err| err.into())
     }
 }
