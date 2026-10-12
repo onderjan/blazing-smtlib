@@ -241,6 +241,15 @@ impl AttributeSlot {
                         (None, Decision::Break)
                     }
                     SmtSyntaxToken::Keyword(keyword) => {
+                        // check if we actually can start a next keyword
+                        // the current attribute is not handled and counted yet,
+                        // so we need to add it to `num_attributes`
+                        if !C::next_allowed(self.num_attributes + 1) {
+                            // it turns out that we actually expected a closing parenthesis
+                            return Err(SmtParseError::category_error(
+                                SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose]),
+                            ));
+                        }
                         // the current attribute was just a name
                         // the new state will be after the new name given by the keyword
                         // push the previous attribute to the collection,
@@ -277,13 +286,6 @@ impl AttributeSlot {
                         return Ok(ControlFlow::Break(self.finish::<H, C>(arena)?));
                     }
                     Decision::StartNextAttribute(keyword) => {
-                        // check if we actually can start a next keyword
-                        if !C::next_allowed(self.num_attributes) {
-                            // it turns out that we actually expected a closing parenthesis
-                            return Err(SmtParseError::category_error(
-                                SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose]),
-                            ));
-                        }
                         // move after name, stored in the arena text
                         self.state = State::AfterName(arena.push_text(keyword.as_slice()));
                     }
