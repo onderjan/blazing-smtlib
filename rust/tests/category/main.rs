@@ -26,9 +26,9 @@ use std::ops::ControlFlow;
 
 use blazing_smtlib::{
     SmtAttributeValue, SmtAttributes, SmtBindings, SmtHandler, SmtIdent, SmtIdentBuf, SmtIndex,
-    SmtIndexBuf, SmtKeyword, SmtPattern, SmtQualifiedIdent, SmtQualifiedIdentBuf,
-    SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSort, SmtSpan, SmtSpecialConstant, SmtSymbol,
-    SmtSymbolBuf, SmtTerm,
+    SmtIndexBuf, SmtKeyword, SmtMatchCases, SmtPattern, SmtQualifiedIdent, SmtQualifiedIdentBuf,
+    SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSort, SmtSortedVars, SmtSpan,
+    SmtSpecialConstant, SmtSymbol, SmtSymbolBuf, SmtTerm,
     lexer::{SmtLexErrorCause, SmtLexer},
     parser::{
         SmtCloseParenParser, SmtClosedAttributeParser, SmtClosedMultipleAttributeParser,
@@ -44,24 +44,14 @@ use blazing_smtlib::{
 
 /// Handler that renders every sort, term, s-expression and attribute
 /// it is given back into SMT-LIB text, so parser results can be checked as strings.
+///
+/// A binder's scope value is its rendered opening, given back at its end.
+/// The scrutinees of the matches open are kept to check that each case and
+/// each match end is given back the scrutinee of its own match.
 #[derive(Default)]
 struct Printing {
-    /// Rendered binding lists of the lets currently being parsed, innermost last.
-    let_bindings: Vec<String>,
-    /// Rendered prefixes of the quantifiers currently open, innermost last.
-    quantifier_binders: Vec<String>,
-    /// Rendered prefixes of the lambdas currently open, innermost last.
-    lambda_binders: Vec<String>,
-    /// Matches currently open, innermost last.
-    matches: Vec<PrintingMatch>,
-}
-
-/// A match being rendered: its scrutinee, the finished cases,
-/// and the pattern of the case in progress.
-struct PrintingMatch {
-    scrutinee: String,
-    cases: Vec<String>,
-    pattern: Option<String>,
+    /// Scrutinees of the matches currently open, innermost last.
+    scrutinees: Vec<String>,
 }
 
 fn render_simple_pattern(pattern: SmtSimplePattern<'_>) -> String {
@@ -80,6 +70,15 @@ fn render_pattern(pattern: SmtPattern<'_>) -> String {
             render_list(&items)
         }
     }
+}
+
+/// Renders sorted variables as written, `((x Int) (y Bool))`.
+fn render_sorted_vars(vars: &SmtSortedVars<'_, Printing>) -> String {
+    let vars: Vec<String> = vars
+        .iter()
+        .map(|(name, sort)| format!("({} {})", render_symbol(&name), sort))
+        .collect();
+    render_list(&vars)
 }
 
 fn text(bytes: &[u8]) -> String {
@@ -200,6 +199,7 @@ impl SmtHandler for Printing {
     type Attribute = String;
     type Sort = String;
     type Term = String;
+    type Scope = String;
 
     fn handle_sort(&mut self, sort: SmtSort<'_, Self>) -> Result<String, Infallible> {
         let ident = render_ident_view(&sort.ident);
@@ -226,107 +226,107 @@ impl SmtHandler for Printing {
         })
     }
 
-    fn start_let(&mut self, bindings: SmtBindings<'_, Self>) -> Result<(), Infallible> {
+    fn start_let(&mut self, bindings: SmtBindings<'_, Self>) -> Result<String, Infallible> {
         let bindings: Vec<String> = bindings
             .into_iter()
             .map(|(name, term)| format!("({} {})", render_symbol(&name), term))
             .collect();
-        self.let_bindings.push(render_list(&bindings));
-        Ok(())
+        Ok(format!("(let {}", render_list(&bindings)))
     }
 
-    fn end_let(&mut self, term: String) -> Result<String, Infallible> {
-        let bindings = self.let_bindings.pop().expect("end_let without start_let");
-        Ok(format!("(let {bindings} {term})"))
+    fn end_let(&mut self, scope: String, body: String) -> Result<String, Infallible> {
+        Ok(format!("{scope} {body})"))
     }
 
     fn start_quantifier(
         &mut self,
+        _kind: SmtQuantifierKind,
+        vars: SmtSortedVars<'_, Self>,
+    ) -> Result<String, Infallible> {
+        // the keyword is rendered at the end, from the kind given back there
+        Ok(render_sorted_vars(&vars))
+    }
+
+    fn end_quantifier(
+        &mut self,
         kind: SmtQuantifierKind,
-        name: SmtSymbol<'_>,
-        sort: String,
-    ) -> Result<(), Infallible> {
+        scope: String,
+        body: String,
+    ) -> Result<String, Infallible> {
         let keyword = match kind {
             SmtQuantifierKind::Forall => "forall",
             SmtQuantifierKind::Exists => "exists",
         };
-        self.quantifier_binders.push(format!(
-            "({} (({} {}))",
-            keyword,
-            render_symbol(&name),
-            sort
-        ));
+        Ok(format!("({keyword} {scope} {body})"))
+    }
+
+    fn start_lambda(&mut self, vars: SmtSortedVars<'_, Self>) -> Result<String, Infallible> {
+        Ok(format!("(lambda {}", render_sorted_vars(&vars)))
+    }
+
+    fn end_lambda(&mut self, scope: String, body: String) -> Result<String, Infallible> {
+        Ok(format!("{scope} {body})"))
+    }
+
+    fn start_match(&mut self, scrutinee: &String) -> Result<(), Infallible> {
+        self.scrutinees.push(scrutinee.clone());
         Ok(())
     }
 
-    fn end_quantifier(&mut self, term: String) -> Result<String, Infallible> {
-        let prefix = self
-            .quantifier_binders
-            .pop()
-            .expect("end_quantifier without matching start_quantifier");
-        Ok(format!("{prefix} {term})"))
-    }
-
-    fn start_lambda(&mut self, name: SmtSymbol<'_>, sort: String) -> Result<(), Infallible> {
-        self.lambda_binders
-            .push(format!("(lambda (({} {}))", render_symbol(&name), sort));
-        Ok(())
-    }
-
-    fn end_lambda(&mut self, term: String) -> Result<String, Infallible> {
-        let prefix = self
-            .lambda_binders
-            .pop()
-            .expect("end_lambda without matching start_lambda");
-        Ok(format!("{prefix} {term})"))
-    }
-
-    fn start_match(&mut self, scrutinee: String) -> Result<(), Infallible> {
-        self.matches.push(PrintingMatch {
-            scrutinee,
-            cases: Vec::new(),
-            pattern: None,
-        });
-        Ok(())
-    }
-
-    fn start_match_case(&mut self, pattern: SmtPattern<'_>) -> Result<(), Infallible> {
-        let current = self
-            .matches
-            .last_mut()
-            .expect("start_match_case without start_match");
-        assert!(
-            current.pattern.is_none(),
-            "start_match_case while a case is still open"
+    fn start_match_case(
+        &mut self,
+        scrutinee: &String,
+        pattern: SmtPattern<'_>,
+    ) -> Result<String, Infallible> {
+        assert_eq!(
+            self.scrutinees.last(),
+            Some(scrutinee),
+            "start_match_case is given the scrutinee of its own match"
         );
-        current.pattern = Some(render_pattern(pattern));
-        Ok(())
+        Ok(render_pattern(pattern))
     }
 
-    fn end_match_case(&mut self, term: String) -> Result<(), Infallible> {
-        let current = self
-            .matches
-            .last_mut()
-            .expect("end_match_case without start_match");
-        let pattern = current
-            .pattern
-            .take()
-            .expect("end_match_case without start_match_case");
-        current.cases.push(format!("({pattern} {term})"));
-        Ok(())
-    }
-
-    fn end_match(&mut self) -> Result<String, Infallible> {
-        let current = self.matches.pop().expect("end_match without start_match");
-        assert!(
-            current.pattern.is_none(),
-            "end_match while a case is still open"
+    fn end_match_case(
+        &mut self,
+        scope: String,
+        scrutinee: &String,
+        body: String,
+    ) -> Result<String, Infallible> {
+        assert_eq!(
+            self.scrutinees.last(),
+            Some(scrutinee),
+            "end_match_case is given the scrutinee of its own match"
         );
-        Ok(format!(
-            "(match {} {})",
-            current.scrutinee,
-            render_list(&current.cases)
-        ))
+        Ok(format!("({scope} {body})"))
+    }
+
+    fn end_match(
+        &mut self,
+        scrutinee: String,
+        cases: SmtMatchCases<'_, Self>,
+    ) -> Result<String, Infallible> {
+        let open = self
+            .scrutinees
+            .pop()
+            .expect("end_match without start_match");
+        assert_eq!(
+            open, scrutinee,
+            "end_match is given the scrutinee of its own match"
+        );
+        // each case term was rendered with the pattern its case started with,
+        // which must be the pattern handed over with it
+        let cases: Vec<String> = cases
+            .into_iter()
+            .map(|(pattern, term)| {
+                let pattern = render_pattern(pattern);
+                assert!(
+                    term.starts_with(&format!("({pattern} ")),
+                    "case {term} is handed over with the pattern {pattern}"
+                );
+                term
+            })
+            .collect();
+        Ok(format!("(match {scrutinee} {})", render_list(&cases)))
     }
 
     fn handle_s_expr(&mut self, expr: SmtSExpr<'_, Self>) -> Result<String, Infallible> {
@@ -382,6 +382,7 @@ impl SmtHandler for Calls {
     type Attribute = ();
     type Sort = ();
     type Term = ();
+    type Scope = ();
 
     fn handle_sort(&mut self, _sort: SmtSort<'_, Self>) -> Result<(), Infallible> {
         Ok(())
@@ -393,7 +394,7 @@ impl SmtHandler for Calls {
         self.calls.push("start-let");
         Ok(())
     }
-    fn end_let(&mut self, _term: ()) -> Result<(), Infallible> {
+    fn end_let(&mut self, _scope: (), _body: ()) -> Result<(), Infallible> {
         self.calls.push("end-let");
         Ok(())
     }
@@ -419,37 +420,49 @@ impl SmtHandler for Calls {
     fn start_quantifier(
         &mut self,
         _kind: SmtQuantifierKind,
-        _name: SmtSymbol<'_>,
-        _sort: (),
+        _vars: SmtSortedVars<'_, Self>,
     ) -> Result<(), Infallible> {
         self.calls.push("start-quantifier");
         Ok(())
     }
-    fn end_quantifier(&mut self, _term: ()) -> Result<(), Infallible> {
+    fn end_quantifier(
+        &mut self,
+        _kind: SmtQuantifierKind,
+        _scope: (),
+        _body: (),
+    ) -> Result<(), Infallible> {
         self.calls.push("end-quantifier");
         Ok(())
     }
-    fn start_lambda(&mut self, _name: SmtSymbol<'_>, _sort: ()) -> Result<(), Infallible> {
+    fn start_lambda(&mut self, _vars: SmtSortedVars<'_, Self>) -> Result<(), Infallible> {
         self.calls.push("start-lambda");
         Ok(())
     }
-    fn end_lambda(&mut self, _term: ()) -> Result<(), Infallible> {
+    fn end_lambda(&mut self, _scope: (), _body: ()) -> Result<(), Infallible> {
         self.calls.push("end-lambda");
         Ok(())
     }
-    fn start_match(&mut self, _scrutinee: ()) -> Result<(), Infallible> {
+    fn start_match(&mut self, _scrutinee: &()) -> Result<(), Infallible> {
         self.calls.push("start-match");
         Ok(())
     }
-    fn start_match_case(&mut self, _pattern: SmtPattern<'_>) -> Result<(), Infallible> {
+    fn start_match_case(
+        &mut self,
+        _scrutinee: &(),
+        _pattern: SmtPattern<'_>,
+    ) -> Result<(), Infallible> {
         self.calls.push("start-match-case");
         Ok(())
     }
-    fn end_match_case(&mut self, _term: ()) -> Result<(), Infallible> {
+    fn end_match_case(&mut self, _scope: (), _scrutinee: &(), _body: ()) -> Result<(), Infallible> {
         self.calls.push("end-match-case");
         Ok(())
     }
-    fn end_match(&mut self) -> Result<(), Infallible> {
+    fn end_match(
+        &mut self,
+        _scrutinee: (),
+        _cases: SmtMatchCases<'_, Self>,
+    ) -> Result<(), Infallible> {
         self.calls.push("end-match");
         Ok(())
     }

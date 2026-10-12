@@ -9,10 +9,11 @@ use common::{assert_error_span, assert_parser_error, parse_with};
 
 use blazing_smtlib::{
     SmtAttributeValue, SmtAttributes, SmtBindings, SmtCommandHandler, SmtDatatypeConstructor,
-    SmtFunctionSignature, SmtHandler, SmtIdent, SmtIndex, SmtKeyword, SmtKeywordBuf, SmtNumeralBuf,
-    SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSort, SmtSpecialConstant,
-    SmtStringContentBuf, SmtSymbol, SmtSymbolBuf, SmtTerm, lexer::SmtLexicalErrorKind,
-    parser::SmtSyntaxErrorKind, reader::SmtReadErrorCause, token::SmtTokenCategory,
+    SmtFunctionSignature, SmtHandler, SmtIdent, SmtIndex, SmtKeyword, SmtKeywordBuf, SmtMatchCases,
+    SmtNumeralBuf, SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSort,
+    SmtSortedVars, SmtSpecialConstant, SmtStringContentBuf, SmtSymbol, SmtSymbolBuf, SmtTerm,
+    lexer::SmtLexicalErrorKind, parser::SmtSyntaxErrorKind, reader::SmtReadErrorCause,
+    token::SmtTokenCategory,
 };
 
 /// Handler that resolves body identifiers against the parameters of the
@@ -128,6 +129,7 @@ impl SmtHandler for Resolving {
     type Attribute = ();
     type Sort = String;
     type Term = String;
+    type Scope = ();
 
     fn handle_sort(&mut self, sort: SmtSort<'_, Self>) -> Result<String, String> {
         let name = ident_view_text(sort.ident);
@@ -165,8 +167,8 @@ impl SmtHandler for Resolving {
         Ok(())
     }
 
-    fn end_let(&mut self, term: String) -> Result<String, String> {
-        Ok(term)
+    fn end_let(&mut self, _scope: (), body: String) -> Result<String, String> {
+        Ok(body)
     }
 
     fn handle_s_expr(&mut self, _expr: SmtSExpr<'_, Self>) -> Result<(), String> {
@@ -192,34 +194,42 @@ impl SmtHandler for Resolving {
     fn start_quantifier(
         &mut self,
         _kind: SmtQuantifierKind,
-        _name: SmtSymbol<'_>,
-        _sort: String,
+        _vars: SmtSortedVars<'_, Self>,
     ) -> Result<(), String> {
         Ok(())
     }
-    fn end_quantifier(&mut self, term: String) -> Result<String, String> {
-        Ok(term)
+    fn end_quantifier(
+        &mut self,
+        _kind: SmtQuantifierKind,
+        _scope: (),
+        body: String,
+    ) -> Result<String, String> {
+        Ok(body)
     }
-    fn start_lambda(&mut self, _name: SmtSymbol<'_>, _sort: String) -> Result<(), String> {
+    fn start_lambda(&mut self, _vars: SmtSortedVars<'_, Self>) -> Result<(), String> {
         Ok(())
     }
-    fn end_lambda(&mut self, term: String) -> Result<String, String> {
-        Ok(term)
+    fn end_lambda(&mut self, _scope: (), body: String) -> Result<String, String> {
+        Ok(body)
     }
 
-    fn start_match(&mut self, scrutinee: String) -> Result<(), String> {
+    fn start_match(&mut self, scrutinee: &String) -> Result<(), String> {
         if scrutinee == "forbidden" {
             return Err("forbidden scrutinee".into());
         }
         self.events.push(format!("start-match {scrutinee}"));
         self.matches.push(ResolvingMatch {
-            scrutinee,
+            scrutinee: scrutinee.clone(),
             case_vars: None,
         });
         Ok(())
     }
 
-    fn start_match_case(&mut self, pattern: SmtPattern<'_>) -> Result<(), String> {
+    fn start_match_case(
+        &mut self,
+        _scrutinee: &String,
+        pattern: SmtPattern<'_>,
+    ) -> Result<(), String> {
         let current = self
             .matches
             .last_mut()
@@ -256,7 +266,12 @@ impl SmtHandler for Resolving {
         Ok(())
     }
 
-    fn end_match_case(&mut self, term: String) -> Result<(), String> {
+    fn end_match_case(
+        &mut self,
+        _scope: (),
+        _scrutinee: &String,
+        term: String,
+    ) -> Result<String, String> {
         if term == "boom" {
             return Err("exploding case".into());
         }
@@ -270,10 +285,14 @@ impl SmtHandler for Resolving {
         );
         self.events.push(format!("end-case {term}"));
         current.case_vars = None;
-        Ok(())
+        Ok(term)
     }
 
-    fn end_match(&mut self) -> Result<String, String> {
+    fn end_match(
+        &mut self,
+        _scrutinee: String,
+        _cases: SmtMatchCases<'_, Self>,
+    ) -> Result<String, String> {
         let current = self.matches.pop().expect("end_match without start_match");
         assert!(
             current.case_vars.is_none(),

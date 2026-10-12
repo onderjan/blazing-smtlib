@@ -6,9 +6,9 @@ use std::fmt::Debug;
 use blazing_smtlib::{
     SmtApplication, SmtAttributeValue, SmtAttributes, SmtBindings, SmtDatatypeConstructor,
     SmtFunctionSignature, SmtHandler, SmtIdent, SmtIdentBuf, SmtIndex, SmtIndexBuf, SmtIndices,
-    SmtKeyword, SmtPattern, SmtQualifiedIdent, SmtQualifiedIdentBuf, SmtQuantifierKind, SmtSExpr,
-    SmtSimplePattern, SmtSimplePatternBuf, SmtSimplePatterns, SmtSort, SmtSpecialConstant,
-    SmtSpecialConstantBuf, SmtSymbol, SmtTerm,
+    SmtKeyword, SmtMatchCases, SmtPattern, SmtQualifiedIdent, SmtQualifiedIdentBuf,
+    SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSimplePatternBuf, SmtSimplePatterns, SmtSort,
+    SmtSortedVars, SmtSpecialConstant, SmtSpecialConstantBuf, SmtTerm,
 };
 
 /// Handler that is deliberately neither `Debug` nor `Clone`,
@@ -21,6 +21,7 @@ impl SmtHandler for OpaqueHandler {
     type Attribute = String;
     type Sort = String;
     type Term = String;
+    type Scope = ();
 
     fn handle_sort(&mut self, _sort: SmtSort<'_, Self>) -> Result<String, Infallible> {
         Ok(String::new())
@@ -31,8 +32,8 @@ impl SmtHandler for OpaqueHandler {
     fn start_let(&mut self, _bindings: SmtBindings<'_, Self>) -> Result<(), Infallible> {
         Ok(())
     }
-    fn end_let(&mut self, term: String) -> Result<String, Infallible> {
-        Ok(term)
+    fn end_let(&mut self, _scope: (), body: String) -> Result<String, Infallible> {
+        Ok(body)
     }
     fn handle_s_expr(&mut self, _expr: SmtSExpr<'_, Self>) -> Result<String, Infallible> {
         Ok(String::new())
@@ -54,30 +55,47 @@ impl SmtHandler for OpaqueHandler {
     fn start_quantifier(
         &mut self,
         _kind: SmtQuantifierKind,
-        _name: SmtSymbol<'_>,
-        _sort: String,
+        _vars: SmtSortedVars<'_, Self>,
     ) -> Result<(), Infallible> {
         Ok(())
     }
-    fn end_quantifier(&mut self, term: String) -> Result<String, Infallible> {
-        Ok(term)
+    fn end_quantifier(
+        &mut self,
+        _kind: SmtQuantifierKind,
+        _scope: (),
+        body: String,
+    ) -> Result<String, Infallible> {
+        Ok(body)
     }
-    fn start_lambda(&mut self, _name: SmtSymbol<'_>, _sort: String) -> Result<(), Infallible> {
+    fn start_lambda(&mut self, _vars: SmtSortedVars<'_, Self>) -> Result<(), Infallible> {
         Ok(())
     }
-    fn end_lambda(&mut self, term: String) -> Result<String, Infallible> {
-        Ok(term)
+    fn end_lambda(&mut self, _scope: (), body: String) -> Result<String, Infallible> {
+        Ok(body)
     }
-    fn start_match(&mut self, _scrutinee: Self::Term) -> Result<(), Self::Error> {
+    fn start_match(&mut self, _scrutinee: &Self::Term) -> Result<(), Self::Error> {
         Ok(())
     }
-    fn start_match_case(&mut self, _pattern: SmtPattern<'_>) -> Result<(), Self::Error> {
+    fn start_match_case(
+        &mut self,
+        _scrutinee: &Self::Term,
+        _pattern: SmtPattern<'_>,
+    ) -> Result<Self::Scope, Self::Error> {
         Ok(())
     }
-    fn end_match_case(&mut self, _term: Self::Term) -> Result<(), Self::Error> {
-        Ok(())
+    fn end_match_case(
+        &mut self,
+        _scope: Self::Scope,
+        _scrutinee: &Self::Term,
+        body: Self::Term,
+    ) -> Result<Self::Term, Self::Error> {
+        Ok(body)
     }
-    fn end_match(&mut self) -> Result<Self::Term, Self::Error> {
+    fn end_match(
+        &mut self,
+        _scrutinee: Self::Term,
+        _cases: SmtMatchCases<'_, Self>,
+    ) -> Result<Self::Term, Self::Error> {
         Ok(String::new())
     }
 }

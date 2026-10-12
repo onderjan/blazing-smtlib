@@ -32,7 +32,7 @@ fn binders_keep_the_quoting_of_their_names() {
     );
     assert_eq!(
         parse_all::<P>(b"(forall ((|v| |S|) (w T)) |v|)"),
-        "(forall ((|v| |S|)) (forall ((w T)) |v|))"
+        "(forall ((|v| |S|) (w T)) |v|)"
     );
 }
 

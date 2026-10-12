@@ -19,8 +19,9 @@ use std::convert::Infallible;
 use blazing_smtlib::{
     NonstandardCommandError, SmtAttributeValue, SmtAttributes, SmtBindings, SmtCommandHandler,
     SmtDatatypeConstructor, SmtFunctionSignature, SmtHandler, SmtIdent, SmtIndex, SmtKeyword,
-    SmtKeywordBuf, SmtNumeralBuf, SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSimplePattern,
-    SmtSort, SmtSpecialConstant, SmtStringContentBuf, SmtSymbol, SmtSymbolBuf, SmtTerm,
+    SmtKeywordBuf, SmtMatchCases, SmtNumeralBuf, SmtPattern, SmtQuantifierKind, SmtSExpr,
+    SmtSimplePattern, SmtSort, SmtSortedVars, SmtSpecialConstant, SmtStringContentBuf, SmtSymbol,
+    SmtSymbolBuf, SmtTerm,
 };
 
 const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
@@ -230,6 +231,37 @@ impl TraceHash {
         }
     }
 
+    fn quantifier_kind(&mut self, kind: SmtQuantifierKind) {
+        self.byte(match kind {
+            SmtQuantifierKind::Exists => 1,
+            SmtQuantifierKind::Forall => 2,
+        });
+    }
+
+    fn binder_vars(&mut self, vars: &SmtSortedVars<'_, Self>) {
+        self.count(vars.len());
+        for (name, sort) in vars.iter() {
+            self.bytes(name.as_slice());
+            self.u64(*sort);
+        }
+    }
+
+    fn pattern(&mut self, pattern: SmtPattern<'_>) {
+        match pattern {
+            SmtPattern::Simple(simple) => {
+                self.byte(1);
+                self.simple_pattern(simple);
+            }
+            SmtPattern::Application { constructor, args } => {
+                self.byte(2);
+                self.bytes(constructor.as_slice());
+                self.count(args.len());
+                for arg in args.iter() {
+                    self.simple_pattern(arg);
+                }
+            }
+        }
+    }
     /// Returns the current state as the handled value of the callback.
     fn produce(&self) -> u64 {
         self.state
@@ -243,6 +275,7 @@ impl SmtHandler for TraceHash {
     type Attribute = u64;
     type Sort = u64;
     type Term = u64;
+    type Scope = u64;
 
     fn handle_sort(&mut self, sort: SmtSort<'_, Self>) -> Result<u64, Self::Error> {
         self.byte(tag::SORT);
@@ -336,90 +369,102 @@ impl SmtHandler for TraceHash {
         Ok(self.produce())
     }
 
-    fn start_let(&mut self, bindings: SmtBindings<'_, Self>) -> Result<(), Self::Error> {
+    fn start_let(&mut self, bindings: SmtBindings<'_, Self>) -> Result<u64, Self::Error> {
         self.byte(tag::START_LET);
         self.count(bindings.len());
         for (name, term) in bindings.iter() {
             self.bytes(name.as_slice());
             self.u64(*term);
         }
-        Ok(())
+        Ok(self.produce())
     }
 
-    fn end_let(&mut self, term: u64) -> Result<u64, Self::Error> {
+    fn end_let(&mut self, scope: u64, body: u64) -> Result<u64, Self::Error> {
         self.byte(tag::END_LET);
-        self.u64(term);
+        self.u64(scope);
+        self.u64(body);
         Ok(self.produce())
     }
 
     fn start_quantifier(
         &mut self,
         kind: SmtQuantifierKind,
-        name: SmtSymbol<'_>,
-        sort: u64,
-    ) -> Result<(), Self::Error> {
+        vars: SmtSortedVars<'_, Self>,
+    ) -> Result<u64, Self::Error> {
         self.byte(tag::START_QUANTIFIER);
-        self.byte(match kind {
-            SmtQuantifierKind::Exists => 1,
-            SmtQuantifierKind::Forall => 2,
-        });
-        self.bytes(name.as_slice());
-        self.u64(sort);
-        Ok(())
+        self.quantifier_kind(kind);
+        self.binder_vars(&vars);
+        Ok(self.produce())
     }
 
-    fn end_quantifier(&mut self, term: u64) -> Result<u64, Self::Error> {
+    fn end_quantifier(
+        &mut self,
+        kind: SmtQuantifierKind,
+        scope: u64,
+        body: u64,
+    ) -> Result<u64, Self::Error> {
         self.byte(tag::END_QUANTIFIER);
-        self.u64(term);
+        self.quantifier_kind(kind);
+        self.u64(scope);
+        self.u64(body);
         Ok(self.produce())
     }
 
-    fn start_lambda(&mut self, name: SmtSymbol<'_>, sort: u64) -> Result<(), Self::Error> {
+    fn start_lambda(&mut self, vars: SmtSortedVars<'_, Self>) -> Result<u64, Self::Error> {
         self.byte(tag::START_LAMBDA);
-        self.bytes(name.as_slice());
-        self.u64(sort);
-        Ok(())
-    }
-
-    fn end_lambda(&mut self, term: u64) -> Result<u64, Self::Error> {
-        self.byte(tag::END_LAMBDA);
-        self.u64(term);
+        self.binder_vars(&vars);
         Ok(self.produce())
     }
 
-    fn start_match(&mut self, scrutinee: u64) -> Result<(), Self::Error> {
+    fn end_lambda(&mut self, scope: u64, body: u64) -> Result<u64, Self::Error> {
+        self.byte(tag::END_LAMBDA);
+        self.u64(scope);
+        self.u64(body);
+        Ok(self.produce())
+    }
+
+    fn start_match(&mut self, scrutinee: &u64) -> Result<(), Self::Error> {
         self.byte(tag::START_MATCH);
-        self.u64(scrutinee);
+        self.u64(*scrutinee);
         Ok(())
     }
 
-    fn start_match_case(&mut self, pattern: SmtPattern<'_>) -> Result<(), Self::Error> {
+    fn start_match_case(
+        &mut self,
+        scrutinee: &u64,
+        pattern: SmtPattern<'_>,
+    ) -> Result<u64, Self::Error> {
         self.byte(tag::START_MATCH_CASE);
-        match pattern {
-            SmtPattern::Simple(simple) => {
-                self.byte(1);
-                self.simple_pattern(simple);
-            }
-            SmtPattern::Application { constructor, args } => {
-                self.byte(2);
-                self.bytes(constructor.as_slice());
-                self.count(args.len());
-                for arg in args.iter() {
-                    self.simple_pattern(arg);
-                }
-            }
-        }
-        Ok(())
+        self.u64(*scrutinee);
+        self.pattern(pattern);
+        Ok(self.produce())
     }
 
-    fn end_match_case(&mut self, term: u64) -> Result<(), Self::Error> {
+    fn end_match_case(
+        &mut self,
+        scope: u64,
+        scrutinee: &u64,
+        body: u64,
+    ) -> Result<u64, Self::Error> {
         self.byte(tag::END_MATCH_CASE);
-        self.u64(term);
-        Ok(())
+        self.u64(scope);
+        self.u64(*scrutinee);
+        self.u64(body);
+        Ok(self.produce())
     }
 
-    fn end_match(&mut self) -> Result<u64, Self::Error> {
+    fn end_match(
+        &mut self,
+        scrutinee: u64,
+        cases: SmtMatchCases<'_, Self>,
+    ) -> Result<u64, Self::Error> {
         self.byte(tag::END_MATCH);
+        self.u64(scrutinee);
+        self.count(cases.len());
+        for (pattern, term) in cases.iter() {
+            self.pattern(pattern);
+            self.u64(*term);
+        }
         Ok(self.produce())
     }
 }

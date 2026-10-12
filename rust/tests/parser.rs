@@ -8,8 +8,8 @@ use common::{assert_error_span, assert_parser_error, parse, parse_with};
 use blazing_smtlib::{
     NonstandardCommandError, SmtAttributeValue, SmtAttributes, SmtBindings, SmtCommandHandler,
     SmtDatatypeConstructor, SmtFunctionSignature, SmtHandler, SmtKeyword, SmtKeywordBuf,
-    SmtNumeralBuf, SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSort, SmtStringContentBuf,
-    SmtSymbol, SmtSymbolBuf, SmtTerm,
+    SmtMatchCases, SmtNumeralBuf, SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSort, SmtSortedVars,
+    SmtStringContentBuf, SmtSymbol, SmtSymbolBuf, SmtTerm,
     parser::{
         SmtClosedParser, SmtCommandPayloadParser, SmtCommandRule, SmtSyntaxErrorKind, SmtTermParser,
     },
@@ -128,6 +128,7 @@ impl SmtHandler for Recording {
     type Attribute = ();
     type Sort = ();
     type Term = ();
+    type Scope = ();
 
     fn handle_sort(&mut self, _sort: SmtSort<'_, Self>) -> Result<(), Self::Error> {
         Ok(())
@@ -141,7 +142,7 @@ impl SmtHandler for Recording {
     fn start_let(&mut self, _bindings: SmtBindings<'_, Self>) -> Result<(), Self::Error> {
         Ok(())
     }
-    fn end_let(&mut self, _term: ()) -> Result<(), Self::Error> {
+    fn end_let(&mut self, _scope: (), _body: ()) -> Result<(), Self::Error> {
         Ok(())
     }
     fn handle_s_expr(&mut self, _expr: SmtSExpr<'_, Self>) -> Result<(), Self::Error> {
@@ -167,30 +168,47 @@ impl SmtHandler for Recording {
     fn start_quantifier(
         &mut self,
         _kind: SmtQuantifierKind,
-        _name: SmtSymbol<'_>,
-        _sort: (),
+        _vars: SmtSortedVars<'_, Self>,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
-    fn end_quantifier(&mut self, _term: ()) -> Result<(), Self::Error> {
+    fn end_quantifier(
+        &mut self,
+        _kind: SmtQuantifierKind,
+        _scope: (),
+        _body: (),
+    ) -> Result<(), Self::Error> {
         Ok(())
     }
-    fn start_lambda(&mut self, _name: SmtSymbol<'_>, _sort: ()) -> Result<(), Self::Error> {
+    fn start_lambda(&mut self, _vars: SmtSortedVars<'_, Self>) -> Result<(), Self::Error> {
         Ok(())
     }
-    fn end_lambda(&mut self, _term: ()) -> Result<(), Self::Error> {
+    fn end_lambda(&mut self, _scope: (), _body: ()) -> Result<(), Self::Error> {
         Ok(())
     }
-    fn start_match(&mut self, _scrutinee: Self::Term) -> Result<(), Self::Error> {
+    fn start_match(&mut self, _scrutinee: &Self::Term) -> Result<(), Self::Error> {
         Ok(())
     }
-    fn start_match_case(&mut self, _pattern: SmtPattern<'_>) -> Result<(), Self::Error> {
+    fn start_match_case(
+        &mut self,
+        _scrutinee: &Self::Term,
+        _pattern: SmtPattern<'_>,
+    ) -> Result<Self::Scope, Self::Error> {
         Ok(())
     }
-    fn end_match_case(&mut self, _term: Self::Term) -> Result<(), Self::Error> {
-        Ok(())
+    fn end_match_case(
+        &mut self,
+        _scope: Self::Scope,
+        _scrutinee: &Self::Term,
+        body: Self::Term,
+    ) -> Result<Self::Term, Self::Error> {
+        Ok(body)
     }
-    fn end_match(&mut self) -> Result<Self::Term, Self::Error> {
+    fn end_match(
+        &mut self,
+        _scrutinee: Self::Term,
+        _cases: SmtMatchCases<'_, Self>,
+    ) -> Result<Self::Term, Self::Error> {
         Ok(())
     }
 }

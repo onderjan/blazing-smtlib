@@ -276,10 +276,10 @@ fn quantifiers() {
         parse_all::<SmtTermParser<Printing>>(b"(exists ((x Int)) (f x 1))"),
         "(exists ((x Int)) (f x 1))"
     );
-    // multiple variables desugar into nested single-variable binders
+    // multiple variables are handed over together, in one start
     assert_eq!(
         parse_all::<SmtTermParser<Printing>>(b"(forall ((x Int) (y Bool)) (f x y))"),
-        "(forall ((x Int)) (forall ((y Bool)) (f x y)))"
+        "(forall ((x Int) (y Bool)) (f x y))"
     );
     // complex sorts flow through the sort parser
     assert_eq!(
@@ -289,18 +289,22 @@ fn quantifiers() {
 }
 
 #[test]
-fn multi_variable_binder_is_equivalent_to_nested_binders() {
-    // the handler cannot distinguish the sugared multi-variable form
-    // from the explicitly nested form; this is the contract a streaming
-    // rewrite of the variable handling must preserve
-    let sugared = parse_all::<SmtTermParser<Printing>>(b"(exists ((x Int) (y Bool) (z Real)) x)");
+fn binder_variables_are_handed_over_as_one_group() {
+    // the variables of one binder arrive in one start, in order, so the
+    // handler can tell a binder of several variables from nested binders
+    let grouped = parse_all::<SmtTermParser<Printing>>(b"(exists ((x Int) (y Bool) (z Real)) x)");
     let nested = parse_all::<SmtTermParser<Printing>>(
         b"(exists ((x Int)) (exists ((y Bool)) (exists ((z Real)) x)))",
     );
-    assert_eq!(sugared, nested);
+    assert_eq!(grouped, "(exists ((x Int) (y Bool) (z Real)) x)");
     assert_eq!(
-        sugared,
+        nested,
         "(exists ((x Int)) (exists ((y Bool)) (exists ((z Real)) x)))"
+    );
+    // a repeated name is handed over again, in its place
+    assert_eq!(
+        parse_all::<SmtTermParser<Printing>>(b"(lambda ((x Int) (x Bool)) x)"),
+        "(lambda ((x Int) (x Bool)) x)"
     );
 }
 
@@ -310,10 +314,10 @@ fn lambdas() {
         parse_all::<SmtTermParser<Printing>>(b"(lambda ((x Int)) x)"),
         "(lambda ((x Int)) x)"
     );
-    // multiple variables desugar by currying
+    // multiple variables are handed over together, in one start
     assert_eq!(
         parse_all::<SmtTermParser<Printing>>(b"(lambda ((x Int) (y Int)) (+ x y))"),
-        "(lambda ((x Int)) (lambda ((y Int)) (+ x y)))"
+        "(lambda ((x Int) (y Int)) (+ x y))"
     );
 }
 
@@ -374,7 +378,7 @@ fn binder_term_parser_is_reusable() {
         b"(forall ((x Int)) x) (forall ((y Bool) (z Real)) y)",
     );
     assert_eq!(first, "(forall ((x Int)) x)");
-    assert_eq!(second, "(forall ((y Bool)) (forall ((z Real)) y))");
+    assert_eq!(second, "(forall ((y Bool) (z Real)) y)");
 }
 
 #[test]
@@ -443,6 +447,7 @@ impl SmtHandler for Counting {
     type Attribute = ();
     type Sort = ();
     type Term = ();
+    type Scope = ();
 
     fn handle_sort(&mut self, _sort: SmtSort<'_, Self>) -> Result<(), Infallible> {
         Ok(())
@@ -454,7 +459,7 @@ impl SmtHandler for Counting {
     fn start_let(&mut self, _bindings: SmtBindings<'_, Self>) -> Result<(), Infallible> {
         Ok(())
     }
-    fn end_let(&mut self, _term: ()) -> Result<(), Infallible> {
+    fn end_let(&mut self, _scope: (), _body: ()) -> Result<(), Infallible> {
         Ok(())
     }
     fn handle_s_expr(&mut self, _expr: SmtSExpr<'_, Self>) -> Result<(), Infallible> {
@@ -477,30 +482,47 @@ impl SmtHandler for Counting {
     fn start_quantifier(
         &mut self,
         _kind: SmtQuantifierKind,
-        _name: SmtSymbol<'_>,
-        _sort: (),
+        _vars: SmtSortedVars<'_, Self>,
     ) -> Result<(), Infallible> {
         Ok(())
     }
-    fn end_quantifier(&mut self, _term: ()) -> Result<(), Infallible> {
+    fn end_quantifier(
+        &mut self,
+        _kind: SmtQuantifierKind,
+        _scope: (),
+        _body: (),
+    ) -> Result<(), Infallible> {
         Ok(())
     }
-    fn start_lambda(&mut self, _name: SmtSymbol<'_>, _sort: ()) -> Result<(), Infallible> {
+    fn start_lambda(&mut self, _vars: SmtSortedVars<'_, Self>) -> Result<(), Infallible> {
         Ok(())
     }
-    fn end_lambda(&mut self, _term: ()) -> Result<(), Infallible> {
+    fn end_lambda(&mut self, _scope: (), _body: ()) -> Result<(), Infallible> {
         Ok(())
     }
-    fn start_match(&mut self, _scrutinee: Self::Term) -> Result<(), Self::Error> {
+    fn start_match(&mut self, _scrutinee: &Self::Term) -> Result<(), Self::Error> {
         Ok(())
     }
-    fn start_match_case(&mut self, _pattern: SmtPattern<'_>) -> Result<(), Self::Error> {
+    fn start_match_case(
+        &mut self,
+        _scrutinee: &Self::Term,
+        _pattern: SmtPattern<'_>,
+    ) -> Result<Self::Scope, Self::Error> {
         Ok(())
     }
-    fn end_match_case(&mut self, _term: Self::Term) -> Result<(), Self::Error> {
-        Ok(())
+    fn end_match_case(
+        &mut self,
+        _scope: Self::Scope,
+        _scrutinee: &Self::Term,
+        body: Self::Term,
+    ) -> Result<Self::Term, Self::Error> {
+        Ok(body)
     }
-    fn end_match(&mut self) -> Result<Self::Term, Self::Error> {
+    fn end_match(
+        &mut self,
+        _scrutinee: Self::Term,
+        _cases: SmtMatchCases<'_, Self>,
+    ) -> Result<Self::Term, Self::Error> {
         Ok(())
     }
 }
@@ -567,8 +589,8 @@ fn deep_binder_nesting_does_not_overflow_the_stack() {
 
 #[test]
 fn binder_with_many_variables_does_not_overflow_the_stack() {
-    // a single binder with a huge variable list exercises the desugared
-    // start/end calls: one pair per variable, iteratively
+    // a single binder with a huge variable list is stored in the arena
+    // and handed over in one start
     const VARIABLES: usize = 100_000;
     let mut input = Vec::with_capacity(VARIABLES * 8 + 12);
     input.extend_from_slice(b"(exists (");
@@ -813,6 +835,7 @@ impl SmtHandler for Consuming {
     type Attribute = ();
     type Sort = ();
     type Term = String;
+    type Scope = ();
 
     fn handle_sort(&mut self, _sort: SmtSort<'_, Self>) -> Result<(), Infallible> {
         Ok(())
@@ -842,8 +865,8 @@ impl SmtHandler for Consuming {
     fn start_let(&mut self, _bindings: SmtBindings<'_, Self>) -> Result<(), Infallible> {
         Ok(())
     }
-    fn end_let(&mut self, term: String) -> Result<String, Infallible> {
-        Ok(term)
+    fn end_let(&mut self, _scope: (), body: String) -> Result<String, Infallible> {
+        Ok(body)
     }
     fn handle_s_expr(&mut self, _expr: SmtSExpr<'_, Self>) -> Result<(), Infallible> {
         Ok(())
@@ -865,30 +888,47 @@ impl SmtHandler for Consuming {
     fn start_quantifier(
         &mut self,
         _kind: SmtQuantifierKind,
-        _name: SmtSymbol<'_>,
-        _sort: (),
+        _vars: SmtSortedVars<'_, Self>,
     ) -> Result<(), Infallible> {
         Ok(())
     }
-    fn end_quantifier(&mut self, term: String) -> Result<String, Infallible> {
-        Ok(term)
+    fn end_quantifier(
+        &mut self,
+        _kind: SmtQuantifierKind,
+        _scope: (),
+        body: String,
+    ) -> Result<String, Infallible> {
+        Ok(body)
     }
-    fn start_lambda(&mut self, _name: SmtSymbol<'_>, _sort: ()) -> Result<(), Infallible> {
+    fn start_lambda(&mut self, _vars: SmtSortedVars<'_, Self>) -> Result<(), Infallible> {
         Ok(())
     }
-    fn end_lambda(&mut self, term: String) -> Result<String, Infallible> {
-        Ok(term)
+    fn end_lambda(&mut self, _scope: (), body: String) -> Result<String, Infallible> {
+        Ok(body)
     }
-    fn start_match(&mut self, _scrutinee: String) -> Result<(), Infallible> {
+    fn start_match(&mut self, _scrutinee: &String) -> Result<(), Infallible> {
         Ok(())
     }
-    fn start_match_case(&mut self, _pattern: SmtPattern<'_>) -> Result<(), Infallible> {
+    fn start_match_case(
+        &mut self,
+        _scrutinee: &String,
+        _pattern: SmtPattern<'_>,
+    ) -> Result<(), Infallible> {
         Ok(())
     }
-    fn end_match_case(&mut self, _term: String) -> Result<(), Infallible> {
-        Ok(())
+    fn end_match_case(
+        &mut self,
+        _scope: (),
+        _scrutinee: &String,
+        body: String,
+    ) -> Result<String, Infallible> {
+        Ok(body)
     }
-    fn end_match(&mut self) -> Result<String, Infallible> {
+    fn end_match(
+        &mut self,
+        _scrutinee: String,
+        _cases: SmtMatchCases<'_, Self>,
+    ) -> Result<String, Infallible> {
         Ok(String::from("<match>"))
     }
 }
@@ -934,7 +974,7 @@ fn no_end_call_comes_before_a_missing_closing_parenthesis() {
             b"(exists ((x Int) (y Int)) x z)",
             28,
             29,
-            &["start-quantifier", "start-quantifier"],
+            &["start-quantifier"],
         ),
         (b"(lambda ((x Int)) x y)", 20, 21, &["start-lambda"]),
         // the case is not ended before its closing parenthesis
@@ -975,4 +1015,181 @@ fn no_end_call_comes_before_a_missing_closing_parenthesis() {
         }
         assert_eq!(handler.calls, calls, "calls in {:?}", text(input));
     }
+}
+
+#[test]
+fn match_cases_keep_their_patterns_and_scrutinee_across_nested_matches() {
+    // the cases of the outer match are stored while a nested match in a case
+    // body stores and hands over its own; `Printing` checks that every case
+    // and match end is given the scrutinee of its own match, and that the
+    // patterns handed over with the cases are the ones the cases started with
+    assert_eq!(
+        parse_all::<SmtTermParser<Printing>>(
+            b"(match l (((cons h t) (match t (((cons h2 t2) h2) (nil h)))) \
+              (nil (match m ((_ 0) ((pair a b) a))))))"
+        ),
+        "(match l (((cons h t) (match t (((cons h2 t2) h2) (nil h)))) \
+         (nil (match m ((_ 0) ((pair a b) a))))))"
+    );
+    // two constructor cases at each level: each case's arguments end where
+    // the next case's begin
+    assert_eq!(
+        parse_all::<SmtTermParser<Printing>>(
+            b"(match p (((pair a b) (match a (((pair c d) c) ((single e) e)))) ((single f) f)))"
+        ),
+        "(match p (((pair a b) (match a (((pair c d) c) ((single e) e)))) ((single f) f)))"
+    );
+    // a nested match as the scrutinee of a case's own match
+    assert_eq!(
+        parse_all::<SmtTermParser<Printing>>(
+            b"(match x (((c u v) (match (match u ((w w))) ((z (f z v)))))))"
+        ),
+        "(match x (((c u v) (match (match u ((w w))) ((z (f z v)))))))"
+    );
+}
+
+/// Handler that numbers every scope it opens and checks that each end call
+/// is given back the scope of its own construct, the innermost one open.
+#[derive(Default)]
+struct ScopeIds {
+    /// The number of the next scope.
+    next: u64,
+    /// The scopes open, innermost last.
+    open: Vec<u64>,
+    /// The starts and ends, with their scopes.
+    calls: Vec<String>,
+}
+
+impl ScopeIds {
+    fn open(&mut self, call: &str) -> u64 {
+        self.next += 1;
+        self.open.push(self.next);
+        self.calls.push(format!("{call} {}", self.next));
+        self.next
+    }
+
+    fn close(&mut self, call: &str, scope: u64) {
+        assert_eq!(
+            self.open.pop(),
+            Some(scope),
+            "{call} is given back the scope of its own construct"
+        );
+        self.calls.push(format!("{call} {scope}"));
+    }
+}
+
+impl SmtHandler for ScopeIds {
+    type Error = Infallible;
+    type SExpr = ();
+    type Attribute = ();
+    type Sort = ();
+    type Term = ();
+    type Scope = u64;
+
+    fn handle_sort(&mut self, _sort: SmtSort<'_, Self>) -> Result<(), Infallible> {
+        Ok(())
+    }
+    fn handle_term(&mut self, _term: SmtTerm<'_, Self>) -> Result<(), Infallible> {
+        Ok(())
+    }
+    fn handle_s_expr(&mut self, _expr: SmtSExpr<'_, Self>) -> Result<(), Infallible> {
+        Ok(())
+    }
+    fn handle_attribute(
+        &mut self,
+        _name: SmtKeyword<'_>,
+        _value: Option<SmtAttributeValue<'_, Self>>,
+    ) -> Result<(), Infallible> {
+        Ok(())
+    }
+    fn annotate_term(
+        &mut self,
+        _term: (),
+        _attributes: SmtAttributes<'_, Self>,
+    ) -> Result<(), Infallible> {
+        Ok(())
+    }
+    fn start_let(&mut self, _bindings: SmtBindings<'_, Self>) -> Result<u64, Infallible> {
+        Ok(self.open("start-let"))
+    }
+    fn end_let(&mut self, scope: u64, _body: ()) -> Result<(), Infallible> {
+        self.close("end-let", scope);
+        Ok(())
+    }
+    fn start_quantifier(
+        &mut self,
+        _kind: SmtQuantifierKind,
+        _vars: SmtSortedVars<'_, Self>,
+    ) -> Result<u64, Infallible> {
+        Ok(self.open("start-quantifier"))
+    }
+    fn end_quantifier(
+        &mut self,
+        _kind: SmtQuantifierKind,
+        scope: u64,
+        _body: (),
+    ) -> Result<(), Infallible> {
+        self.close("end-quantifier", scope);
+        Ok(())
+    }
+    fn start_lambda(&mut self, _vars: SmtSortedVars<'_, Self>) -> Result<u64, Infallible> {
+        Ok(self.open("start-lambda"))
+    }
+    fn end_lambda(&mut self, scope: u64, _body: ()) -> Result<(), Infallible> {
+        self.close("end-lambda", scope);
+        Ok(())
+    }
+    fn start_match(&mut self, _scrutinee: &()) -> Result<(), Infallible> {
+        Ok(())
+    }
+    fn start_match_case(
+        &mut self,
+        _scrutinee: &(),
+        _pattern: SmtPattern<'_>,
+    ) -> Result<u64, Infallible> {
+        Ok(self.open("start-match-case"))
+    }
+    fn end_match_case(&mut self, scope: u64, _scrutinee: &(), _body: ()) -> Result<(), Infallible> {
+        self.close("end-match-case", scope);
+        Ok(())
+    }
+    fn end_match(
+        &mut self,
+        _scrutinee: (),
+        _cases: SmtMatchCases<'_, Self>,
+    ) -> Result<(), Infallible> {
+        Ok(())
+    }
+}
+
+#[test]
+fn every_scope_is_given_back_at_its_own_end() {
+    let mut handler = ScopeIds::default();
+    let ((), left) = run_with::<ScopeIds, SmtTermParser<ScopeIds>>(
+        &mut handler,
+        b"(let ((a 1)) (forall ((x Int) (y Int)) \
+          (match a ((b (lambda ((z Int)) (exists ((w Int)) z))) (_ (let ((c 2)) c))))))",
+    )
+    .unwrap_or_else(|(kind, span)| panic!("{kind:?} at {span:?}"));
+    assert_eq!(left, 0);
+    assert!(handler.open.is_empty(), "every scope is closed");
+    assert_eq!(
+        handler.calls,
+        [
+            "start-let 1",
+            "start-quantifier 2",
+            "start-match-case 3",
+            "start-lambda 4",
+            "start-quantifier 5",
+            "end-quantifier 5",
+            "end-lambda 4",
+            "end-match-case 3",
+            "start-match-case 6",
+            "start-let 7",
+            "end-let 7",
+            "end-match-case 6",
+            "end-quantifier 2",
+            "end-let 1",
+        ]
+    );
 }
