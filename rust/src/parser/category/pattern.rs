@@ -4,7 +4,7 @@ use crate::{
     SmtHandler, SmtPatternBuf, SmtSimplePattern, SmtSimplePatternBuf,
     parser::{
         Arena, PatternHandle, SimplePatternHandle, SmtParse, SmtParseError, SmtParseState,
-        SmtSyntaxErrorKind, TextHandle, parse_by_token,
+        SmtSyntaxErrorKind, SymbolHandle, parse_by_token,
     },
     token::{SmtGeneralReserved, SmtProduce, SmtReserved, SmtSyntaxToken, SmtVersion},
 };
@@ -137,7 +137,7 @@ pub(crate) struct PatternSlot {
     /// This only matters if not storing anything yet.
     is_open: bool,
     /// The constructor, stored in the arena text while its arguments are being parsed.
-    constructor: Option<TextHandle>,
+    constructor: Option<SymbolHandle>,
     /// The constructor arguments are stored in the arena starting at this position.
     arena_args_start: usize,
 }

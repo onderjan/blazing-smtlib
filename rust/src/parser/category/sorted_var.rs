@@ -4,7 +4,7 @@ use crate::{
     SmtHandler, SmtSymbolBuf,
     parser::{
         Arena, IdentSlot, SmtCloseParenParser, SmtOpenParenParser, SmtParse, SmtParseError,
-        SmtParseState, SmtSyntaxErrorKind, SortSlot, TextHandle, parse_by_token,
+        SmtParseState, SmtSyntaxErrorKind, SortSlot, SymbolHandle, parse_by_token,
     },
     token::{SmtProduce, SmtSyntaxToken},
 };
@@ -62,7 +62,7 @@ impl<H: SmtHandler> SmtParse<H> for SmtSortedVarParser<H> {
 
 /// A parsed sorted variable: the variable name and its sort.
 /// A parsed sorted variable: the name in the arena text and its handled sort.
-type SortedVarHandle<H> = (TextHandle, <H as SmtHandler>::Sort);
+type SortedVarHandle<H> = (SymbolHandle, <H as SmtHandler>::Sort);
 
 pub(crate) struct SortedVarSlot<H: SmtHandler + ?Sized> {
     /// Whether "(" has been read.
@@ -70,7 +70,7 @@ pub(crate) struct SortedVarSlot<H: SmtHandler + ?Sized> {
     /// This only matters if not storing anything yet.
     is_open: bool,
     /// The name, stored in the arena text while its sort is being parsed.
-    name: Option<TextHandle>,
+    name: Option<SymbolHandle>,
     /// The sorted variable, stored while waiting for ")".
     sorted_var: Option<SortedVarHandle<H>>,
 }

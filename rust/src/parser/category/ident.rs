@@ -4,7 +4,7 @@ use crate::{
     SmtHandler, SmtIdentBuf, SmtSymbol,
     parser::{
         Arena, IdentHandle, IndexHandle, SmtParse, SmtParseError, SmtParseState,
-        SmtSyntaxErrorKind, TextHandle, parse_by_token,
+        SmtSyntaxErrorKind, SymbolHandle, parse_by_token,
     },
     token::{SmtGeneralReserved, SmtProduce, SmtReserved, SmtSyntaxToken, SmtVersion},
 };
@@ -68,7 +68,7 @@ enum State {
 pub(crate) struct IdentSlot {
     state: State,
     /// The name, stored in the arena text while the indices are read.
-    name: Option<TextHandle>,
+    name: Option<SymbolHandle>,
     /// Where the indices of the currently-read identifier start in the arena.
     arena_indices_start: usize,
 }
@@ -120,7 +120,7 @@ impl IdentSlot {
         &mut self,
         arena: &mut Arena<H>,
         name: SmtSymbol,
-    ) -> TextHandle {
+    ) -> SymbolHandle {
         self.arena_indices_start = arena.indices.len();
         arena.push_symbol(name)
     }

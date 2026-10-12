@@ -88,7 +88,7 @@ pub(crate) struct Arena<H: SmtHandler + ?Sized> {
     /// Identifier indices waiting to be consumed, as handles into the text.
     pub(crate) indices: Vec<IndexHandle>,
     /// Let binding names waiting to be consumed, as handles into the text.
-    pub(crate) symbols: Vec<TextHandle>,
+    pub(crate) symbols: Vec<SymbolHandle>,
     /// Handled S-expressions waiting to be consumed, inside S-expression lists.
     pub(crate) s_exprs: Vec<H::SExpr>,
     /// Handled attributes waiting to be consumed, inside attribute lists.
@@ -152,7 +152,7 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
     ///
     /// A quoted symbol is pushed with a leading pipe.
     #[inline]
-    pub(crate) fn push_symbol(&mut self, symbol: SmtSymbol) -> TextHandle {
+    pub(crate) fn push_symbol(&mut self, symbol: SmtSymbol) -> SymbolHandle {
         let bytes = symbol.as_slice();
         let start = self.text.len();
         if symbol.is_quoted() {
@@ -161,10 +161,10 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
         }
         self.text.extend_from_slice(bytes);
         // make sure the pipe is included in the handle
-        TextHandle {
+        SymbolHandle(TextHandle {
             start,
             len: self.text.len() - start,
-        }
+        })
     }
 
     /// Pushes a non-indexed identifier into the arena and returns its handle.
@@ -193,7 +193,7 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
         let result = f(function, args);
         self.terms.truncate(args_start);
         self.indices.truncate(ident.indices_start);
-        self.text.truncate(ident.name.start);
+        self.text.truncate(ident.name.start());
         result
     }
 
@@ -235,7 +235,7 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
     ) -> R {
         let result = f(ident_view(&self.text, &self.indices, ident));
         self.indices.truncate(ident.indices_start);
-        self.text.truncate(ident.name.start);
+        self.text.truncate(ident.name.start());
         result
     }
 
@@ -253,7 +253,7 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
         };
         let result = f(view);
         self.indices.truncate(ident.indices_start);
-        self.text.truncate(ident.name.start);
+        self.text.truncate(ident.name.start());
         result
     }
 
@@ -261,12 +261,12 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
     #[inline]
     pub(crate) fn hand_over_sorted_var<R>(
         &mut self,
-        name: TextHandle,
+        name: SymbolHandle,
         sort: H::Sort,
         f: impl FnOnce(SmtSymbol<'_>, H::Sort) -> R,
     ) -> R {
         let result = f(name.symbol_view(&self.text), sort);
-        self.text.truncate(name.start);
+        self.text.truncate(name.start());
         result
     }
 
@@ -285,7 +285,7 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
         let result = f(sort);
         self.sorts.truncate(applied_start);
         self.indices.truncate(ident.indices_start);
-        self.text.truncate(ident.name.start);
+        self.text.truncate(ident.name.start());
         result
     }
 
@@ -365,7 +365,7 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
                 };
                 let result = f(pattern);
                 self.simple_patterns.truncate(args_start);
-                self.text.truncate(constructor.start);
+                self.text.truncate(constructor.start());
                 result
             }
         }
@@ -401,19 +401,6 @@ pub(crate) struct TextHandle {
 }
 
 impl TextHandle {
-    /// Views the bytes as a symbol.
-    #[inline]
-    pub(crate) fn symbol_view(self, text: &[u8]) -> SmtSymbol<'_> {
-        let end = self.start + self.len;
-        if text[self.start] == b'|' {
-            // quoted symbol, skip the marker pipe
-            SmtSymbol::new_unchecked(true, &text[self.start + 1..end])
-        } else {
-            // unquoted symbol
-            SmtSymbol::new_unchecked(false, &text[self.start..end])
-        }
-    }
-
     /// Views the bytes as a keyword.
     #[inline]
     pub(crate) fn keyword_view(self, text: &[u8]) -> SmtKeyword<'_> {
@@ -427,11 +414,45 @@ impl TextHandle {
     }
 }
 
+/// A symbol with is-quoted information in the arena text.
+///
+/// The quoted symbols are stored with a non-content pipe
+/// at the start of the arena. This type makes sure that
+/// the symbols are not produced as text, which could
+/// silently convert a quoted symbol into an unquoted one.
+///
+/// This type is created by [`Arena::push_symbol`],
+/// and returns the proper symbol view.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct SymbolHandle(TextHandle);
+
+impl SymbolHandle {
+    /// Start of the symbol in the text arena, including the quoting pipe if present.
+    #[inline]
+    pub(crate) fn start(self) -> usize {
+        self.0.start
+    }
+
+    /// Views the bytes as a symbol.
+    #[inline]
+    pub(crate) fn symbol_view(self, text: &[u8]) -> SmtSymbol<'_> {
+        let TextHandle { start, len } = self.0;
+        let end = start + len;
+        if text[start] == b'|' {
+            // quoted symbol, skip the marker pipe
+            SmtSymbol::new_unchecked(true, &text[start + 1..end])
+        } else {
+            // unquoted symbol
+            SmtSymbol::new_unchecked(false, &text[start..end])
+        }
+    }
+}
+
 /// An identifier index in the arena text.
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum IndexHandle {
     Numeral(TextHandle),
-    Symbol(TextHandle),
+    Symbol(SymbolHandle),
 }
 
 impl IndexHandle {
@@ -449,7 +470,7 @@ impl IndexHandle {
 /// in the arena indices starting at the given position.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct IdentHandle {
-    pub(crate) name: TextHandle,
+    pub(crate) name: SymbolHandle,
     pub(crate) indices_start: usize,
 }
 
@@ -468,7 +489,7 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentHandle<H> {
 /// A simple pattern: a symbol in the arena text, or a wildcard.
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum SimplePatternHandle {
-    Symbol(TextHandle),
+    Symbol(SymbolHandle),
     Wildcard,
 }
 
@@ -491,7 +512,7 @@ impl SimplePatternHandle {
 pub(crate) enum PatternHandle<'t> {
     Simple(SmtSimplePattern<'t>),
     Application {
-        constructor: TextHandle,
+        constructor: SymbolHandle,
         args_start: usize,
     },
 }

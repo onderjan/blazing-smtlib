@@ -7,7 +7,7 @@ use std::{
 
 use crate::{
     SmtHandler, SmtSymbol,
-    parser::{ArenaAccess, TextHandle},
+    parser::{ArenaAccess, SymbolHandle},
 };
 
 /// Multiple values to be handled.
@@ -155,7 +155,7 @@ impl<T: Debug> Debug for SmtMultiple<'_, T> {
 /// moves them out in order.
 pub struct SmtBindings<'a, H: SmtHandler + ?Sized> {
     text: &'a [u8],
-    names: SmtMultiple<'a, TextHandle>,
+    names: SmtMultiple<'a, SymbolHandle>,
     terms: SmtMultiple<'a, H::Term>,
 }
 
@@ -163,7 +163,7 @@ impl<'a, H: SmtHandler + ?Sized> SmtBindings<'a, H> {
     pub(crate) fn new(
         _access: ArenaAccess,
         text: &'a [u8],
-        names: SmtMultiple<'a, TextHandle>,
+        names: SmtMultiple<'a, SymbolHandle>,
         terms: SmtMultiple<'a, H::Term>,
     ) -> Self {
         debug_assert!(
@@ -228,7 +228,7 @@ impl<'a, H: SmtHandler + ?Sized> IntoIterator for SmtBindings<'a, H> {
 /// Iterator over let bindings.
 pub struct SmtBindingsIntoIter<'a, H: SmtHandler + ?Sized> {
     text: &'a [u8],
-    names: SmtMultipleIntoIter<'a, TextHandle>,
+    names: SmtMultipleIntoIter<'a, SymbolHandle>,
     terms: SmtMultipleIntoIter<'a, H::Term>,
 }
 
