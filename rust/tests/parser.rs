@@ -153,7 +153,7 @@ impl SmtHandler for Recording {
         }
         Ok(())
     }
-    fn start_let(&mut self, _bindings: SmtBindings<'_, Self>) -> Result<(), Self::Error> {
+    fn start_let(&mut self, _bindings: SmtBindings<'_, Self::Term>) -> Result<(), Self::Error> {
         Ok(())
     }
     fn end_let(&mut self, _scope: (), _body: ()) -> Result<(), Self::Error> {
@@ -182,7 +182,7 @@ impl SmtHandler for Recording {
     fn start_quantifier(
         &mut self,
         _kind: SmtQuantifierKind,
-        _vars: SmtSortedVars<'_, Self>,
+        _vars: SmtSortedVars<'_, Self::Sort>,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -194,7 +194,7 @@ impl SmtHandler for Recording {
     ) -> Result<(), Self::Error> {
         Ok(())
     }
-    fn start_lambda(&mut self, _vars: SmtSortedVars<'_, Self>) -> Result<(), Self::Error> {
+    fn start_lambda(&mut self, _vars: SmtSortedVars<'_, Self::Sort>) -> Result<(), Self::Error> {
         Ok(())
     }
     fn end_lambda(&mut self, _scope: (), _body: ()) -> Result<(), Self::Error> {

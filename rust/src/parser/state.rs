@@ -1,7 +1,7 @@
 use crate::{
     SmtBindings, SmtHandler, SmtIdent, SmtIndex, SmtIndices, SmtKeyword, SmtMatchCases,
-    SmtMultiple, SmtNumeral, SmtPattern, SmtQualifiedIdent, SmtSimplePattern, SmtSimplePatterns,
-    SmtSort, SmtSortedVars, SmtSymbol,
+    SmtMultiple, SmtNamed, SmtNumeral, SmtPattern, SmtQualifiedIdent, SmtSimplePattern,
+    SmtSimplePatterns, SmtSort, SmtSortedVars, SmtSymbol,
     parser::{
         AttributeSlot, IdentSlot, PatternSlot, QualifiedIdentSlot, SExprSlot, SortSlot,
         SortedVarSlot, TermSlot,
@@ -217,11 +217,11 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
         text_start: usize,
         names_start: usize,
         terms_start: usize,
-        f: impl FnOnce(SmtBindings<'_, H>) -> R,
+        f: impl FnOnce(SmtBindings<'_, H::Term>) -> R,
     ) -> R {
         let names = SmtMultiple::new_starting(&mut self.symbols, names_start);
         let terms = SmtMultiple::new_starting(&mut self.terms, terms_start);
-        let bindings = SmtBindings::new(ArenaAccess { _priv: () }, &self.text, names, terms);
+        let bindings = SmtNamed::new(&self.text, names, terms);
         let result = f(bindings);
         self.symbols.truncate(names_start);
         self.terms.truncate(terms_start);
@@ -235,11 +235,11 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
         text_start: usize,
         names_start: usize,
         sorts_start: usize,
-        f: impl FnOnce(SmtSortedVars<'_, H>) -> R,
+        f: impl FnOnce(SmtSortedVars<'_, H::Sort>) -> R,
     ) -> R {
         let names = SmtMultiple::new_starting(&mut self.symbols, names_start);
         let sorts = SmtMultiple::new_starting(&mut self.sorts, sorts_start);
-        let sorted_vars = SmtSortedVars::new(ArenaAccess { _priv: () }, &self.text, names, sorts);
+        let sorted_vars = SmtNamed::new(&self.text, names, sorts);
         let result = f(sorted_vars);
         self.symbols.truncate(names_start);
         self.sorts.truncate(sorts_start);

@@ -31,7 +31,7 @@ impl SmtHandler for OpaqueHandler {
     fn handle_term(&mut self, _term: SmtTerm<'_, Self>) -> Result<String, Infallible> {
         Ok(String::new())
     }
-    fn start_let(&mut self, _bindings: SmtBindings<'_, Self>) -> Result<(), Infallible> {
+    fn start_let(&mut self, _bindings: SmtBindings<'_, Self::Term>) -> Result<(), Infallible> {
         Ok(())
     }
     fn end_let(&mut self, _scope: (), body: String) -> Result<String, Infallible> {
@@ -57,7 +57,7 @@ impl SmtHandler for OpaqueHandler {
     fn start_quantifier(
         &mut self,
         _kind: SmtQuantifierKind,
-        _vars: SmtSortedVars<'_, Self>,
+        _vars: SmtSortedVars<'_, Self::Sort>,
     ) -> Result<(), Infallible> {
         Ok(())
     }
@@ -69,7 +69,7 @@ impl SmtHandler for OpaqueHandler {
     ) -> Result<String, Infallible> {
         Ok(body)
     }
-    fn start_lambda(&mut self, _vars: SmtSortedVars<'_, Self>) -> Result<(), Infallible> {
+    fn start_lambda(&mut self, _vars: SmtSortedVars<'_, Self::Sort>) -> Result<(), Infallible> {
         Ok(())
     }
     fn end_lambda(&mut self, _scope: (), body: String) -> Result<String, Infallible> {
@@ -128,7 +128,7 @@ fn nodes_are_debug_and_clone_with_an_opaque_handler() {
     // the nodes handing values over cannot be cloned, but must still be debuggable
     assert_debug::<SmtApplication<'static, OpaqueHandler>>();
     assert_debug::<SmtTerm<'static, OpaqueHandler>>();
-    assert_debug::<SmtBindings<'static, OpaqueHandler>>();
+    assert_debug::<SmtBindings<'static, String>>();
     assert_debug::<SmtAttributeValue<'static, OpaqueHandler>>();
     assert_debug::<SmtSExpr<'static, OpaqueHandler>>();
     assert_debug_and_clone::<SmtFunctionSignature<OpaqueHandler>>();

@@ -254,7 +254,7 @@ impl TraceHash {
         });
     }
 
-    fn binder_vars(&mut self, vars: &SmtSortedVars<'_, Self>) {
+    fn binder_vars(&mut self, vars: &SmtSortedVars<'_, u64>) {
         self.count(vars.len());
         for (name, sort) in vars.iter() {
             self.bytes(name.as_slice());
@@ -395,7 +395,7 @@ impl SmtHandler for TraceHash {
         Ok(self.produce())
     }
 
-    fn start_let(&mut self, bindings: SmtBindings<'_, Self>) -> Result<u64, Self::Error> {
+    fn start_let(&mut self, bindings: SmtBindings<'_, Self::Term>) -> Result<u64, Self::Error> {
         self.byte(tag::START_LET);
         self.count(bindings.len());
         for (name, term) in bindings.iter() {
@@ -415,7 +415,7 @@ impl SmtHandler for TraceHash {
     fn start_quantifier(
         &mut self,
         kind: SmtQuantifierKind,
-        vars: SmtSortedVars<'_, Self>,
+        vars: SmtSortedVars<'_, Self::Sort>,
     ) -> Result<u64, Self::Error> {
         self.byte(tag::START_QUANTIFIER);
         self.quantifier_kind(kind);
@@ -436,7 +436,7 @@ impl SmtHandler for TraceHash {
         Ok(self.produce())
     }
 
-    fn start_lambda(&mut self, vars: SmtSortedVars<'_, Self>) -> Result<u64, Self::Error> {
+    fn start_lambda(&mut self, vars: SmtSortedVars<'_, Self::Sort>) -> Result<u64, Self::Error> {
         self.byte(tag::START_LAMBDA);
         self.binder_vars(&vars);
         Ok(self.produce())

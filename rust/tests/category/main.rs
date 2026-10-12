@@ -73,7 +73,7 @@ fn render_pattern(pattern: SmtPattern<'_>) -> String {
 }
 
 /// Renders sorted variables as written, `((x Int) (y Bool))`.
-fn render_sorted_vars(vars: &SmtSortedVars<'_, Printing>) -> String {
+fn render_sorted_vars(vars: &SmtSortedVars<'_, String>) -> String {
     let vars: Vec<String> = vars
         .iter()
         .map(|(name, sort)| format!("({} {})", render_symbol(&name), sort))
@@ -228,7 +228,7 @@ impl SmtHandler for Printing {
         })
     }
 
-    fn start_let(&mut self, bindings: SmtBindings<'_, Self>) -> Result<String, Infallible> {
+    fn start_let(&mut self, bindings: SmtBindings<'_, Self::Term>) -> Result<String, Infallible> {
         let bindings: Vec<String> = bindings
             .into_iter()
             .map(|(name, term)| format!("({} {})", render_symbol(&name), term))
@@ -243,7 +243,7 @@ impl SmtHandler for Printing {
     fn start_quantifier(
         &mut self,
         _kind: SmtQuantifierKind,
-        vars: SmtSortedVars<'_, Self>,
+        vars: SmtSortedVars<'_, Self::Sort>,
     ) -> Result<String, Infallible> {
         // the keyword is rendered at the end, from the kind given back there
         Ok(render_sorted_vars(&vars))
@@ -262,7 +262,7 @@ impl SmtHandler for Printing {
         Ok(format!("({keyword} {scope} {body})"))
     }
 
-    fn start_lambda(&mut self, vars: SmtSortedVars<'_, Self>) -> Result<String, Infallible> {
+    fn start_lambda(&mut self, vars: SmtSortedVars<'_, Self::Sort>) -> Result<String, Infallible> {
         Ok(format!("(lambda {}", render_sorted_vars(&vars)))
     }
 
@@ -394,7 +394,7 @@ impl SmtHandler for Calls {
     fn handle_term(&mut self, _term: SmtTerm<'_, Self>) -> Result<(), Infallible> {
         Ok(())
     }
-    fn start_let(&mut self, _bindings: SmtBindings<'_, Self>) -> Result<(), Infallible> {
+    fn start_let(&mut self, _bindings: SmtBindings<'_, Self::Term>) -> Result<(), Infallible> {
         self.calls.push("start-let");
         Ok(())
     }
@@ -424,7 +424,7 @@ impl SmtHandler for Calls {
     fn start_quantifier(
         &mut self,
         _kind: SmtQuantifierKind,
-        _vars: SmtSortedVars<'_, Self>,
+        _vars: SmtSortedVars<'_, Self::Sort>,
     ) -> Result<(), Infallible> {
         self.calls.push("start-quantifier");
         Ok(())
@@ -438,7 +438,7 @@ impl SmtHandler for Calls {
         self.calls.push("end-quantifier");
         Ok(())
     }
-    fn start_lambda(&mut self, _vars: SmtSortedVars<'_, Self>) -> Result<(), Infallible> {
+    fn start_lambda(&mut self, _vars: SmtSortedVars<'_, Self::Sort>) -> Result<(), Infallible> {
         self.calls.push("start-lambda");
         Ok(())
     }

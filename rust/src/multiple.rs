@@ -154,102 +154,165 @@ impl<T: Debug> Debug for SmtMultiple<'_, T> {
     }
 }
 
-pub struct SmtSortedVars<'a, H: SmtHandler + ?Sized> {
+/// Named values to be handled: each a symbol with a value,
+/// such as let bindings or sorted variables.
+///
+/// The values can be inspected and modified in place, and [`IntoIterator`]
+/// moves them out in order.
+pub struct SmtNamed<'a, V> {
     text: &'a [u8],
     names: SmtMultiple<'a, SymbolHandle>,
-    sorts: SmtMultiple<'a, H::Sort>,
+    values: SmtMultiple<'a, V>,
 }
 
-impl<'a, H: SmtHandler + ?Sized> SmtSortedVars<'a, H> {
+/// Let bindings to be handled: the names with their terms.
+pub type SmtBindings<'a, T> = SmtNamed<'a, T>;
+
+/// Sorted variables to be handled: the names with their sorts.
+pub type SmtSortedVars<'a, S> = SmtNamed<'a, S>;
+
+impl<'a, V> SmtNamed<'a, V> {
     pub(crate) fn new(
-        _access: ArenaAccess,
         text: &'a [u8],
         names: SmtMultiple<'a, SymbolHandle>,
-        sorts: SmtMultiple<'a, H::Sort>,
+        values: SmtMultiple<'a, V>,
     ) -> Self {
         debug_assert!(
-            names.len() == sorts.len(),
-            "variable names and sorts must be aligned"
+            names.len() == values.len(),
+            "names and values must be aligned"
         );
-        Self { text, names, sorts }
+        Self {
+            text,
+            names,
+            values,
+        }
     }
 
     #[inline]
     pub fn len(&self) -> usize {
-        self.sorts.len()
+        self.values.len()
     }
 
     #[inline]
     pub fn is_empty(&self) -> bool {
-        self.sorts.is_empty()
+        self.values.is_empty()
     }
 
     #[inline]
-    pub fn get(&self, index: usize) -> Option<(SmtSymbol<'a>, &H::Sort)> {
+    pub fn get(&self, index: usize) -> Option<(SmtSymbol<'a>, &V)> {
         let name = self.names.get(index)?.symbol_view(self.text);
-        Some((name, &self.sorts[index]))
+        Some((name, &self.values[index]))
     }
 
     #[inline]
-    pub fn get_mut(&mut self, index: usize) -> Option<(SmtSymbol<'a>, &mut H::Sort)> {
+    pub fn get_mut(&mut self, index: usize) -> Option<(SmtSymbol<'a>, &mut V)> {
         let name = self.names.get(index)?.symbol_view(self.text);
-        Some((name, &mut self.sorts[index]))
+        Some((name, &mut self.values[index]))
     }
 
-    pub fn iter(&self) -> impl ExactSizeIterator<Item = (SmtSymbol<'a>, &H::Sort)> {
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = (SmtSymbol<'a>, &V)> {
         let text = self.text;
         self.names
             .iter()
             .map(move |name| name.symbol_view(text))
-            .zip(self.sorts.iter())
+            .zip(self.values.iter())
     }
 
-    pub fn iter_mut(&mut self) -> impl ExactSizeIterator<Item = (SmtSymbol<'a>, &mut H::Sort)> {
+    pub fn iter_mut(&mut self) -> impl ExactSizeIterator<Item = (SmtSymbol<'a>, &mut V)> {
         let text = self.text;
         self.names
             .iter()
             .map(move |name| name.symbol_view(text))
-            .zip(self.sorts.iter_mut())
+            .zip(self.values.iter_mut())
     }
 }
 
-pub struct SmtSortedVarsBuf<S> {
+impl<'a, V> IntoIterator for SmtNamed<'a, V> {
+    type Item = (SmtSymbol<'a>, V);
+    type IntoIter = SmtNamedIntoIter<'a, V>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        SmtNamedIntoIter {
+            text: self.text,
+            names: self.names.into_iter(),
+            values: self.values.into_iter(),
+        }
+    }
+}
+
+/// Iterator moving named values out in order.
+pub struct SmtNamedIntoIter<'a, V> {
+    text: &'a [u8],
+    names: SmtMultipleIntoIter<'a, SymbolHandle>,
+    values: SmtMultipleIntoIter<'a, V>,
+}
+
+impl<'a, V> Iterator for SmtNamedIntoIter<'a, V> {
+    type Item = (SmtSymbol<'a>, V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let name = self.names.next()?.symbol_view(self.text);
+        let value = self.values.next()?;
+        Some((name, value))
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.values.size_hint()
+    }
+}
+
+impl<V> ExactSizeIterator for SmtNamedIntoIter<'_, V> {}
+
+impl<V: Debug> Debug for SmtNamed<'_, V> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_list().entries(self.iter()).finish()
+    }
+}
+
+/// Owned named values, from which [`SmtNamed`] is viewed.
+pub struct SmtNamedBuf<V> {
     text: Vec<u8>,
     names: Vec<SymbolHandle>,
-    sorts: Vec<S>,
+    values: Vec<V>,
 }
 
-impl<S> SmtSortedVarsBuf<S> {
+/// Owned let bindings.
+pub type SmtBindingsBuf<T> = SmtNamedBuf<T>;
+
+/// Owned sorted variables.
+pub type SmtSortedVarsBuf<S> = SmtNamedBuf<S>;
+
+impl<V> SmtNamedBuf<V> {
     pub fn new() -> Self {
         Self {
             text: Vec::new(),
             names: Vec::new(),
-            sorts: Vec::new(),
+            values: Vec::new(),
         }
     }
 
-    pub fn push(&mut self, name: SmtSymbol, sort: S) {
+    pub fn push(&mut self, name: SmtSymbol, value: V) {
         let name = SymbolHandle::create_by_push(&mut self.text, name);
         self.names.push(name);
-        self.sorts.push(sort);
+        self.values.push(value);
     }
 
     pub fn clear(&mut self) {
         self.text.clear();
         self.names.clear();
-        self.sorts.clear();
+        self.values.clear();
     }
 
-    pub fn view<H: SmtHandler<Sort = S>>(&mut self) -> SmtSortedVars<'_, H> {
-        SmtSortedVars {
-            text: &self.text,
-            names: SmtMultiple::new(&mut self.names),
-            sorts: SmtMultiple::new(&mut self.sorts),
-        }
+    pub fn view(&mut self) -> SmtNamed<'_, V> {
+        SmtNamed::new(
+            &self.text,
+            SmtMultiple::new(&mut self.names),
+            SmtMultiple::new(&mut self.values),
+        )
     }
 
     pub fn len(&self) -> usize {
-        self.sorts.len()
+        self.values.len()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -257,7 +320,7 @@ impl<S> SmtSortedVarsBuf<S> {
     }
 }
 
-impl<S> Default for SmtSortedVarsBuf<S> {
+impl<V> Default for SmtNamedBuf<V> {
     fn default() -> Self {
         Self::new()
     }
@@ -374,113 +437,5 @@ impl<'a, H: SmtHandler + ?Sized> IntoIterator for SmtMatchCases<'a, H> {
             patterns: self.patterns.into_iter(),
             terms: self.terms.into_iter(),
         }
-    }
-}
-
-/// Let bindings to be handled.
-///
-/// The values can be inspected and modified in place, and [`IntoIterator`]
-/// moves them out in order.
-pub struct SmtBindings<'a, H: SmtHandler + ?Sized> {
-    text: &'a [u8],
-    names: SmtMultiple<'a, SymbolHandle>,
-    terms: SmtMultiple<'a, H::Term>,
-}
-
-impl<'a, H: SmtHandler + ?Sized> SmtBindings<'a, H> {
-    pub(crate) fn new(
-        _access: ArenaAccess,
-        text: &'a [u8],
-        names: SmtMultiple<'a, SymbolHandle>,
-        terms: SmtMultiple<'a, H::Term>,
-    ) -> Self {
-        debug_assert!(
-            names.len() == terms.len(),
-            "binding names and terms must be aligned"
-        );
-        Self { text, names, terms }
-    }
-
-    #[inline]
-    pub fn len(&self) -> usize {
-        self.terms.len()
-    }
-
-    #[inline]
-    pub fn is_empty(&self) -> bool {
-        self.terms.is_empty()
-    }
-
-    #[inline]
-    pub fn get(&self, index: usize) -> Option<(SmtSymbol<'a>, &H::Term)> {
-        let name = self.names.get(index)?.symbol_view(self.text);
-        Some((name, &self.terms[index]))
-    }
-
-    #[inline]
-    pub fn get_mut(&mut self, index: usize) -> Option<(SmtSymbol<'a>, &mut H::Term)> {
-        let name = self.names.get(index)?.symbol_view(self.text);
-        Some((name, &mut self.terms[index]))
-    }
-
-    pub fn iter(&self) -> impl ExactSizeIterator<Item = (SmtSymbol<'a>, &H::Term)> {
-        let text = self.text;
-        self.names
-            .iter()
-            .map(move |name| name.symbol_view(text))
-            .zip(self.terms.iter())
-    }
-
-    pub fn iter_mut(&mut self) -> impl ExactSizeIterator<Item = (SmtSymbol<'a>, &mut H::Term)> {
-        let text = self.text;
-        self.names
-            .iter()
-            .map(move |name| name.symbol_view(text))
-            .zip(self.terms.iter_mut())
-    }
-}
-
-impl<'a, H: SmtHandler + ?Sized> IntoIterator for SmtBindings<'a, H> {
-    type Item = (SmtSymbol<'a>, H::Term);
-    type IntoIter = SmtBindingsIntoIter<'a, H>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        SmtBindingsIntoIter {
-            text: self.text,
-            names: self.names.into_iter(),
-            terms: self.terms.into_iter(),
-        }
-    }
-}
-
-/// Iterator over let bindings.
-pub struct SmtBindingsIntoIter<'a, H: SmtHandler + ?Sized> {
-    text: &'a [u8],
-    names: SmtMultipleIntoIter<'a, SymbolHandle>,
-    terms: SmtMultipleIntoIter<'a, H::Term>,
-}
-
-impl<'a, H: SmtHandler + ?Sized> Iterator for SmtBindingsIntoIter<'a, H> {
-    type Item = (SmtSymbol<'a>, H::Term);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let name = self.names.next()?.symbol_view(self.text);
-        let term = self.terms.next()?;
-        Some((name, term))
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        self.terms.size_hint()
-    }
-}
-
-impl<H: SmtHandler + ?Sized> ExactSizeIterator for SmtBindingsIntoIter<'_, H> {}
-
-impl<H: SmtHandler + ?Sized> Debug for SmtBindings<'_, H>
-where
-    H::Term: Debug,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_list().entries(self.iter()).finish()
     }
 }

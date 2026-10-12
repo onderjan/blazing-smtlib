@@ -458,7 +458,7 @@ impl SmtHandler for Counting {
         self.terms += 1;
         Ok(())
     }
-    fn start_let(&mut self, _bindings: SmtBindings<'_, Self>) -> Result<(), Infallible> {
+    fn start_let(&mut self, _bindings: SmtBindings<'_, Self::Term>) -> Result<(), Infallible> {
         Ok(())
     }
     fn end_let(&mut self, _scope: (), _body: ()) -> Result<(), Infallible> {
@@ -484,7 +484,7 @@ impl SmtHandler for Counting {
     fn start_quantifier(
         &mut self,
         _kind: SmtQuantifierKind,
-        _vars: SmtSortedVars<'_, Self>,
+        _vars: SmtSortedVars<'_, Self::Sort>,
     ) -> Result<(), Infallible> {
         Ok(())
     }
@@ -496,7 +496,7 @@ impl SmtHandler for Counting {
     ) -> Result<(), Infallible> {
         Ok(())
     }
-    fn start_lambda(&mut self, _vars: SmtSortedVars<'_, Self>) -> Result<(), Infallible> {
+    fn start_lambda(&mut self, _vars: SmtSortedVars<'_, Self::Sort>) -> Result<(), Infallible> {
         Ok(())
     }
     fn end_lambda(&mut self, _scope: (), _body: ()) -> Result<(), Infallible> {
@@ -866,7 +866,7 @@ impl SmtHandler for Consuming {
             }
         })
     }
-    fn start_let(&mut self, _bindings: SmtBindings<'_, Self>) -> Result<(), Infallible> {
+    fn start_let(&mut self, _bindings: SmtBindings<'_, Self::Term>) -> Result<(), Infallible> {
         Ok(())
     }
     fn end_let(&mut self, _scope: (), body: String) -> Result<String, Infallible> {
@@ -892,7 +892,7 @@ impl SmtHandler for Consuming {
     fn start_quantifier(
         &mut self,
         _kind: SmtQuantifierKind,
-        _vars: SmtSortedVars<'_, Self>,
+        _vars: SmtSortedVars<'_, Self::Sort>,
     ) -> Result<(), Infallible> {
         Ok(())
     }
@@ -904,7 +904,7 @@ impl SmtHandler for Consuming {
     ) -> Result<String, Infallible> {
         Ok(body)
     }
-    fn start_lambda(&mut self, _vars: SmtSortedVars<'_, Self>) -> Result<(), Infallible> {
+    fn start_lambda(&mut self, _vars: SmtSortedVars<'_, Self::Sort>) -> Result<(), Infallible> {
         Ok(())
     }
     fn end_lambda(&mut self, _scope: (), body: String) -> Result<String, Infallible> {
@@ -1115,7 +1115,7 @@ impl SmtHandler for ScopeIds {
     ) -> Result<(), Infallible> {
         Ok(())
     }
-    fn start_let(&mut self, _bindings: SmtBindings<'_, Self>) -> Result<u64, Infallible> {
+    fn start_let(&mut self, _bindings: SmtBindings<'_, Self::Term>) -> Result<u64, Infallible> {
         Ok(self.open("start-let"))
     }
     fn end_let(&mut self, scope: u64, _body: ()) -> Result<(), Infallible> {
@@ -1125,7 +1125,7 @@ impl SmtHandler for ScopeIds {
     fn start_quantifier(
         &mut self,
         _kind: SmtQuantifierKind,
-        _vars: SmtSortedVars<'_, Self>,
+        _vars: SmtSortedVars<'_, Self::Sort>,
     ) -> Result<u64, Infallible> {
         Ok(self.open("start-quantifier"))
     }
@@ -1138,7 +1138,7 @@ impl SmtHandler for ScopeIds {
         self.close("end-quantifier", scope);
         Ok(())
     }
-    fn start_lambda(&mut self, _vars: SmtSortedVars<'_, Self>) -> Result<u64, Infallible> {
+    fn start_lambda(&mut self, _vars: SmtSortedVars<'_, Self::Sort>) -> Result<u64, Infallible> {
         Ok(self.open("start-lambda"))
     }
     fn end_lambda(&mut self, scope: u64, _body: ()) -> Result<(), Infallible> {

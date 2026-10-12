@@ -47,13 +47,16 @@ pub trait SmtHandler {
         attributes: SmtAttributes<'_, Self>,
     ) -> Result<Self::Term, Self::Error>;
 
-    fn start_let(&mut self, bindings: SmtBindings<'_, Self>) -> Result<Self::Scope, Self::Error>;
+    fn start_let(
+        &mut self,
+        bindings: SmtBindings<'_, Self::Term>,
+    ) -> Result<Self::Scope, Self::Error>;
     fn end_let(&mut self, scope: Self::Scope, body: Self::Term) -> Result<Self::Term, Self::Error>;
 
     fn start_quantifier(
         &mut self,
         kind: SmtQuantifierKind,
-        vars: SmtSortedVars<'_, Self>,
+        vars: SmtSortedVars<'_, Self::Sort>,
     ) -> Result<Self::Scope, Self::Error>;
     fn end_quantifier(
         &mut self,
@@ -62,7 +65,10 @@ pub trait SmtHandler {
         body: Self::Term,
     ) -> Result<Self::Term, Self::Error>;
 
-    fn start_lambda(&mut self, vars: SmtSortedVars<'_, Self>) -> Result<Self::Scope, Self::Error>;
+    fn start_lambda(
+        &mut self,
+        vars: SmtSortedVars<'_, Self::Sort>,
+    ) -> Result<Self::Scope, Self::Error>;
     fn end_lambda(
         &mut self,
         scope: Self::Scope,
@@ -489,7 +495,7 @@ impl SmtHandler for SmtSyntaxChecker {
         Ok(())
     }
 
-    fn start_let(&mut self, _bindings: SmtBindings<'_, Self>) -> Result<(), Self::Error> {
+    fn start_let(&mut self, _bindings: SmtBindings<'_, Self::Term>) -> Result<(), Self::Error> {
         Ok(())
     }
 
@@ -504,7 +510,7 @@ impl SmtHandler for SmtSyntaxChecker {
     fn start_quantifier(
         &mut self,
         _kind: SmtQuantifierKind,
-        _vars: SmtSortedVars<'_, Self>,
+        _vars: SmtSortedVars<'_, Self::Sort>,
     ) -> Result<Self::Scope, Self::Error> {
         Ok(())
     }
@@ -517,7 +523,10 @@ impl SmtHandler for SmtSyntaxChecker {
         Ok(())
     }
 
-    fn start_lambda(&mut self, _vars: SmtSortedVars<'_, Self>) -> Result<Self::Scope, Self::Error> {
+    fn start_lambda(
+        &mut self,
+        _vars: SmtSortedVars<'_, Self::Sort>,
+    ) -> Result<Self::Scope, Self::Error> {
         Ok(())
     }
     fn end_lambda(

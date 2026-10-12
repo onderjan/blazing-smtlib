@@ -206,7 +206,7 @@ impl SmtHandler for Resolving {
         })
     }
 
-    fn start_let(&mut self, _bindings: SmtBindings<'_, Self>) -> Result<(), String> {
+    fn start_let(&mut self, _bindings: SmtBindings<'_, Self::Term>) -> Result<(), String> {
         Ok(())
     }
 
@@ -237,7 +237,7 @@ impl SmtHandler for Resolving {
     fn start_quantifier(
         &mut self,
         _kind: SmtQuantifierKind,
-        _vars: SmtSortedVars<'_, Self>,
+        _vars: SmtSortedVars<'_, Self::Sort>,
     ) -> Result<(), String> {
         Ok(())
     }
@@ -249,7 +249,7 @@ impl SmtHandler for Resolving {
     ) -> Result<String, String> {
         Ok(body)
     }
-    fn start_lambda(&mut self, _vars: SmtSortedVars<'_, Self>) -> Result<(), String> {
+    fn start_lambda(&mut self, _vars: SmtSortedVars<'_, Self::Sort>) -> Result<(), String> {
         Ok(())
     }
     fn end_lambda(&mut self, _scope: (), body: String) -> Result<String, String> {

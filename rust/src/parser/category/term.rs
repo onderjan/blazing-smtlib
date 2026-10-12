@@ -1128,7 +1128,7 @@ impl SortedBindingsParser {
         parse_state: &mut SmtParseState<H>,
         cursor: &Z,
         token: Z::Token,
-        open_fn: impl Fn(&mut H, SmtSortedVars<H>) -> Result<H::Scope, H::Error>,
+        open_fn: impl Fn(&mut H, SmtSortedVars<H::Sort>) -> Result<H::Scope, H::Error>,
     ) -> Result<ControlFlow<Option<H::Scope>>, SmtParseError<H::Error>> {
         let this = &mut parse_state.term_slot.sorted_bindings_parser;
         let token = match this.state {
