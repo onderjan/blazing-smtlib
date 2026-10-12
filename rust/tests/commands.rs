@@ -8,11 +8,11 @@ use std::convert::Infallible;
 use common::{assert_error_span, assert_parser_error, parse_with};
 
 use blazing_smtlib::{
-    SmtAttributeValue, SmtAttributes, SmtBindings, SmtCommandHandler, SmtDatatypeConstructor,
+    SmtAttributeValue, SmtAttributes, SmtBindings, SmtCommandHandler, SmtConstructors,
     SmtFunctionSignature, SmtFunctionSignatures, SmtHandler, SmtIdent, SmtIndex, SmtKeyword,
-    SmtMatchCases, SmtMultiple, SmtNumeral, SmtNumeralBuf, SmtPattern, SmtQuantifierKind, SmtSExpr,
-    SmtSimplePattern, SmtSort, SmtSortedVars, SmtSpecialConstant, SmtStringContent, SmtSymbol,
-    SmtSymbolBuf, SmtSymbols, SmtTerm,
+    SmtMatchCases, SmtMultiple, SmtNumeral, SmtPattern, SmtQuantifierKind, SmtSExpr,
+    SmtSimplePattern, SmtSort, SmtSortArities, SmtSortedVars, SmtSpecialConstant, SmtStringContent,
+    SmtSymbol, SmtSymbols, SmtTerm,
     lexer::SmtLexicalErrorKind,
     parser::SmtSyntaxErrorKind,
     reader::SmtReadErrorCause,
@@ -119,18 +119,16 @@ fn render_signature(signature: SmtFunctionSignature<'_, String>) -> String {
 }
 
 /// Renders datatype constructors as written, rejecting one named `boom`.
-fn render_constructors(
-    constructors: &[SmtDatatypeConstructor<Resolving>],
-) -> Result<String, String> {
+fn render_constructors(constructors: SmtConstructors<'_, String>) -> Result<String, String> {
     let mut rendered = Vec::new();
-    for constructor in constructors {
-        let name = text(constructor.name.as_slice());
+    for (name, selectors) in constructors {
+        let name = text(name.as_slice());
         if name == "boom" {
             return Err("exploding constructor".into());
         }
-        let selectors: Vec<String> = constructor
-            .selectors
-            .iter()
+        // the selector sorts are moved out
+        let selectors: Vec<String> = selectors
+            .into_iter()
             .map(|(selector, sort)| format!("({} {})", text(selector.as_slice()), sort))
             .collect();
         rendered.push(if selectors.is_empty() {
@@ -685,12 +683,12 @@ impl SmtCommandHandler for Resolving {
 
     fn start_declare_datatypes(
         &mut self,
-        sort_declarations: Vec<(SmtSymbolBuf, SmtNumeralBuf)>,
+        sort_declarations: SmtSortArities<'_>,
     ) -> Result<(), String> {
         let mut rendered = Vec::new();
         self.datatype_sorts.clear();
         self.datatype_index = 0;
-        for (name, arity) in &sort_declarations {
+        for (name, arity) in sort_declarations {
             let name = text(name.as_slice());
             if name == "Forbidden" {
                 return Err("forbidden datatype name".into());
@@ -703,7 +701,7 @@ impl SmtCommandHandler for Resolving {
         Ok(())
     }
 
-    fn start_datatype_declaration(&mut self, params: Vec<SmtSymbolBuf>) -> Result<(), String> {
+    fn start_datatype_declaration(&mut self, params: SmtSymbols<'_>) -> Result<(), String> {
         // the datatypes arrive in sort-declaration order, so the handler
         // knows which sort is being started by counting
         let name = self
@@ -723,9 +721,9 @@ impl SmtCommandHandler for Resolving {
 
     fn end_datatype_declaration(
         &mut self,
-        constructors: Vec<SmtDatatypeConstructor<Self>>,
+        constructors: SmtConstructors<'_, String>,
     ) -> Result<(), String> {
-        let rendered = render_constructors(&constructors)?;
+        let rendered = render_constructors(constructors)?;
         self.events.push(format!("end-datatype {rendered}"));
         self.sort_params.clear();
         self.datatype_index += 1;
@@ -734,8 +732,8 @@ impl SmtCommandHandler for Resolving {
 
     fn start_declare_datatype(
         &mut self,
-        name: SmtSymbolBuf,
-        params: Vec<SmtSymbolBuf>,
+        name: SmtSymbol<'_>,
+        params: SmtSymbols<'_>,
     ) -> Result<(), String> {
         let name = text(name.as_slice());
         if name == "Forbidden" {
@@ -754,9 +752,9 @@ impl SmtCommandHandler for Resolving {
 
     fn end_declare_datatype(
         &mut self,
-        constructors: Vec<SmtDatatypeConstructor<Self>>,
+        constructors: SmtConstructors<'_, String>,
     ) -> Result<(), String> {
-        let rendered = render_constructors(&constructors)?;
+        let rendered = render_constructors(constructors)?;
         if self.datatype_sorts.iter().any(|name| name == "Unendable") {
             return Err("unendable datatypes".into());
         }

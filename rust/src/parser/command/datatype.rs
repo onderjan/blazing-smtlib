@@ -1,7 +1,8 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtCommandHandler, SmtDatatypeConstructor, SmtSymbolBuf,
+    SmtCommandHandler, SmtConstructors, SmtConstructorsBuf, SmtSortAritiesBuf, SmtSymbolBuf,
+    SmtSymbolsBuf,
     parser::{
         SmtCloseParenParser, SmtClosedMultipleParser, SmtNumeralParser, SmtOpenParenParser,
         SmtOpenedParser, SmtParenMaximumParser, SmtParenMultipleParser, SmtParenParser, SmtParse,
@@ -13,6 +14,28 @@ use crate::{
 
 /// Parser for a single datatype introduction (name and arity in parentheses).
 type IntroductionParser<H> = SmtParenParser<H, SmtPairParser<H, SmtSymbolParser, SmtNumeralParser>>;
+
+/// Datatype constructors as parsed, owned until they are handed over:
+/// each a name with its selectors.
+pub(crate) type OwnedConstructors<S> = Vec<(SmtSymbolBuf, Vec<(SmtSymbolBuf, S)>)>;
+
+/// Hands the constructors to `f` as a view, through `buf`, which is cleared afterwards.
+pub(crate) fn hand_over_constructors<S, R>(
+    buf: &mut SmtConstructorsBuf<S>,
+    constructors: OwnedConstructors<S>,
+    f: impl FnOnce(SmtConstructors<'_, S>) -> R,
+) -> R {
+    for (name, selectors) in constructors {
+        buf.push(name.as_view());
+        for (selector, sort) in selectors {
+            buf.push_selector(selector.as_view(), sort);
+        }
+    }
+    let result = f(buf.view());
+    // do not keep the handled sorts past the call
+    buf.clear();
+    result
+}
 
 /// Parser for a single datatype constructor.
 type ConstructorParser<H> = SmtOpenedParser<
@@ -56,7 +79,11 @@ struct DatatypeParser<H: SmtCommandHandler> {
 
     symbols_parser: SmtParenMultipleParser<H, SmtSymbolParser>,
     constructors_parser: SmtClosedMultipleParser<H, ConstructorParser<H>>,
-    constructors: Option<Vec<SmtDatatypeConstructor<H>>>,
+    constructors: Option<OwnedConstructors<H::Sort>>,
+    /// The parameters handed over, reused across datatypes.
+    params_buf: SmtSymbolsBuf,
+    /// The constructors handed over, reused across datatypes.
+    constructors_buf: SmtConstructorsBuf<H::Sort>,
 }
 
 impl<H: SmtCommandHandler> DatatypeParser<H> {
@@ -67,6 +94,8 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
             symbols_parser: SmtParenMultipleParser::default(),
             constructors_parser: SmtClosedMultipleParser::default(),
             constructors: None,
+            params_buf: SmtSymbolsBuf::new(),
+            constructors_buf: SmtConstructorsBuf::new(),
         }
     }
 
@@ -81,12 +110,18 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
         handler: &mut H,
         params: Vec<SmtSymbolBuf>,
     ) -> Result<(), SmtParseError<H::Error>> {
+        self.params_buf.clear();
+        for param in &params {
+            self.params_buf.push(param.as_view());
+        }
         match &mut self.mode {
             DatatypeMode::Single(name) => {
                 let name = name.take().expect("datatype should be only started once");
-                handle_err(handler.start_declare_datatype(name, params))
+                handle_err(handler.start_declare_datatype(name.as_view(), self.params_buf.view()))
             }
-            DatatypeMode::Multiple => handle_err(handler.start_datatype_declaration(params)),
+            DatatypeMode::Multiple => {
+                handle_err(handler.start_datatype_declaration(self.params_buf.view()))
+            }
         }
     }
 }
@@ -98,7 +133,7 @@ impl<H: SmtCommandHandler> Default for DatatypeParser<H> {
 }
 
 impl<H: SmtCommandHandler> SmtParse<H> for DatatypeParser<H> {
-    type Result = Option<Vec<SmtDatatypeConstructor<H>>>;
+    type Result = Option<OwnedConstructors<H::Sort>>;
 
     fn parse<C: SmtProduce>(
         &mut self,
@@ -121,7 +156,7 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
         parse_state: &mut SmtParseState<H>,
         cursor: &Z,
         token: Z::Token,
-    ) -> Result<ControlFlow<Option<Vec<SmtDatatypeConstructor<H>>>>, SmtParseError<H::Error>> {
+    ) -> Result<ControlFlow<Option<OwnedConstructors<H::Sort>>>, SmtParseError<H::Error>> {
         let constructors = match self.state {
             DatatypeState::Start => {
                 // expect opening parenthesis and move to deciding the kind
@@ -225,11 +260,6 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
                 ));
             }
 
-            // TODO: do not retype the constructors
-            let constructors = constructors
-                .into_iter()
-                .map(|(name, selectors)| SmtDatatypeConstructor { name, selectors })
-                .collect();
             if matches!(self.state, DatatypeState::SimpleConstructors) {
                 // end the datatype, this will reset
                 let result = self.end_datatype(handler, constructors)?;
@@ -247,8 +277,8 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
     fn end_datatype(
         &mut self,
         handler: &mut H,
-        constructors: Vec<SmtDatatypeConstructor<H>>,
-    ) -> Result<Option<Vec<SmtDatatypeConstructor<H>>>, SmtParseError<H::Error>> {
+        constructors: OwnedConstructors<H::Sort>,
+    ) -> Result<Option<OwnedConstructors<H::Sort>>, SmtParseError<H::Error>> {
         // process the datatype
         let result = match self.mode {
             DatatypeMode::Single(_) => {
@@ -257,7 +287,11 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
             }
             DatatypeMode::Multiple => {
                 // end the datatype declaration
-                handle_err(handler.end_datatype_declaration(constructors))?;
+                handle_err(hand_over_constructors(
+                    &mut self.constructors_buf,
+                    constructors,
+                    |constructors| handler.end_datatype_declaration(constructors),
+                ))?;
                 Ok(None)
             }
         };
@@ -282,6 +316,8 @@ pub(super) struct DeclareDatatypesParser<H: SmtCommandHandler> {
 
     introductions_parser: SmtParenMultipleParser<H, IntroductionParser<H>>,
     datatypes_parser: SmtParenMaximumParser<H, DatatypeParser<H>>,
+    /// The introductions handed over, reused across commands.
+    arities_buf: SmtSortAritiesBuf,
 }
 
 impl<H: SmtCommandHandler> DeclareDatatypesParser<H> {
@@ -292,6 +328,7 @@ impl<H: SmtCommandHandler> DeclareDatatypesParser<H> {
             state: DeclareDatatypesState::Introductions,
             introductions_parser: SmtParenMultipleParser::default(),
             datatypes_parser: SmtParenMaximumParser::new(DatatypeParser::new(), 0),
+            arities_buf: SmtSortAritiesBuf::new(),
         }
     }
 }
@@ -337,7 +374,11 @@ impl<H: SmtCommandHandler> DeclareDatatypesParser<H> {
                     // ensure the datatypes parser is expecting the correct number of elements
                     self.datatypes_parser.set_maximum(introductions.len());
                     // start datatype declarations
-                    handle_err(handler.start_declare_datatypes(introductions))?;
+                    self.arities_buf.clear();
+                    for (name, arity) in &introductions {
+                        self.arities_buf.push(name.as_view(), arity.as_view());
+                    }
+                    handle_err(handler.start_declare_datatypes(self.arities_buf.view()))?;
                     self.state = DeclareDatatypesState::Declarations;
                 }
             }
@@ -398,7 +439,7 @@ impl<H: SmtCommandHandler> Default for DeclareDatatypeParser<H> {
 }
 
 impl<H: SmtCommandHandler> SmtParse<H> for DeclareDatatypeParser<H> {
-    type Result = Vec<SmtDatatypeConstructor<H>>;
+    type Result = OwnedConstructors<H::Sort>;
 
     fn parse<C: SmtProduce>(
         &mut self,
@@ -420,7 +461,7 @@ impl<H: SmtCommandHandler> DeclareDatatypeParser<H> {
         parse_state: &mut SmtParseState<H>,
         cursor: &Z,
         token: Z::Token,
-    ) -> Result<ControlFlow<Vec<SmtDatatypeConstructor<H>>>, SmtParseError<H::Error>> {
+    ) -> Result<ControlFlow<OwnedConstructors<H::Sort>>, SmtParseError<H::Error>> {
         match self.state {
             DeclareDatatypeState::Name => {
                 // parse the datatype name

@@ -313,35 +313,6 @@ where
     }
 }
 
-pub struct SmtDatatypeConstructor<H: SmtHandler + ?Sized> {
-    pub name: SmtSymbolBuf,
-    pub selectors: Vec<(SmtSymbolBuf, H::Sort)>,
-}
-
-impl<H: SmtHandler + ?Sized> Debug for SmtDatatypeConstructor<H>
-where
-    H::Sort: Debug,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SmtDatatypeConstructor")
-            .field("name", &self.name)
-            .field("selectors", &self.selectors)
-            .finish()
-    }
-}
-
-impl<H: SmtHandler + ?Sized> Clone for SmtDatatypeConstructor<H>
-where
-    H::Sort: Clone,
-{
-    fn clone(&self) -> Self {
-        Self {
-            name: self.name.clone(),
-            selectors: self.selectors.clone(),
-        }
-    }
-}
-
 /// Simple match pattern: a symbol or a wildcard.
 #[derive(Debug, Clone)]
 pub enum SmtSimplePatternBuf {

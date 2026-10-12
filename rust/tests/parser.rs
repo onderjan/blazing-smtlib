@@ -7,9 +7,9 @@ use common::{assert_error_span, assert_parser_error, parse, parse_with};
 
 use blazing_smtlib::{
     NonstandardCommandError, SmtAttributeValue, SmtAttributes, SmtBindings, SmtCommandHandler,
-    SmtDatatypeConstructor, SmtFunctionSignature, SmtFunctionSignatures, SmtHandler, SmtKeyword,
-    SmtMatchCases, SmtMultiple, SmtNumeral, SmtNumeralBuf, SmtPattern, SmtQuantifierKind, SmtSExpr,
-    SmtSort, SmtSortedVars, SmtStringContent, SmtSymbol, SmtSymbolBuf, SmtSymbols, SmtTerm,
+    SmtConstructors, SmtFunctionSignature, SmtFunctionSignatures, SmtHandler, SmtKeyword,
+    SmtMatchCases, SmtMultiple, SmtNumeral, SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSort,
+    SmtSortArities, SmtSortedVars, SmtStringContent, SmtSymbol, SmtSymbols, SmtTerm,
     parser::{
         SmtClosedParser, SmtCommandOutcome, SmtCommandParser, SmtCommandPayloadParser,
         SmtCommandRule, SmtSyntaxErrorKind, SmtTermParser,
@@ -423,36 +423,33 @@ impl SmtCommandHandler for Recording {
     }
     fn start_declare_datatype(
         &mut self,
-        _name: SmtSymbolBuf,
-        _params: Vec<SmtSymbolBuf>,
+        _name: SmtSymbol<'_>,
+        _params: SmtSymbols<'_>,
     ) -> Result<(), Self::Error> {
         self.commands.push("start-declare-datatype");
         Ok(())
     }
     fn end_declare_datatype(
         &mut self,
-        _constructors: Vec<SmtDatatypeConstructor<Self>>,
+        _constructors: SmtConstructors<'_, ()>,
     ) -> Result<(), Self::Error> {
         self.commands.push("end-declare-datatype");
         Ok(())
     }
     fn start_declare_datatypes(
         &mut self,
-        _sort_declarations: Vec<(SmtSymbolBuf, SmtNumeralBuf)>,
+        _sort_declarations: SmtSortArities<'_>,
     ) -> Result<(), Self::Error> {
         self.commands.push("start-declare-datatypes");
         Ok(())
     }
-    fn start_datatype_declaration(
-        &mut self,
-        _params: Vec<SmtSymbolBuf>,
-    ) -> Result<(), Self::Error> {
+    fn start_datatype_declaration(&mut self, _params: SmtSymbols<'_>) -> Result<(), Self::Error> {
         self.commands.push("start-datatype");
         Ok(())
     }
     fn end_datatype_declaration(
         &mut self,
-        _constructors: Vec<SmtDatatypeConstructor<Self>>,
+        _constructors: SmtConstructors<'_, ()>,
     ) -> Result<(), Self::Error> {
         self.commands.push("end-datatype");
         Ok(())

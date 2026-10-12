@@ -1,7 +1,8 @@
 use std::ops::ControlFlow::{self, Break, Continue};
 
 use crate::{
-    SmtCommandHandler, SmtFunctionSignaturesBuf, SmtMultiple, SmtSymbolBuf, SmtSymbolsBuf,
+    SmtCommandHandler, SmtConstructorsBuf, SmtFunctionSignaturesBuf, SmtMultiple, SmtSymbolBuf,
+    SmtSymbolsBuf,
     parser::{
         SmtCloseParenParser, SmtCommandPayloadParser, SmtKeywordParser, SmtNumeralParser,
         SmtParenMultipleParser, SmtParse, SmtParseError, SmtParseState, SmtStringParser,
@@ -12,7 +13,7 @@ use crate::{
         },
         command::{
             SmtCommandOutcome, SmtCommandRule,
-            datatype::{DeclareDatatypeParser, DeclareDatatypesParser},
+            datatype::{DeclareDatatypeParser, DeclareDatatypesParser, hand_over_constructors},
             definition::{Definition, DefinitionParser},
             function::{DefineFunsRecParser, FunctionSignature, FunctionSignatureParser},
         },
@@ -168,7 +169,8 @@ standard_commands! {
             handler.command_declare_fun(name.as_view(), SmtMultiple::new(&mut param_sorts), result_sort)),
     declare_datatype: DeclareDatatype(
         SmtClosedParser<H, DeclareDatatypeParser<H>>,
-        |handler, constructors| handler.end_declare_datatype(constructors)),
+        |handler, constructors| hand_over_constructors(&mut SmtConstructorsBuf::new(), constructors,
+            |constructors| handler.end_declare_datatype(constructors))),
     declare_datatypes: DeclareDatatypes(
         SmtClosedParser<H, DeclareDatatypesParser<H>>,
         |handler, ()| handler.end_declare_datatypes()),

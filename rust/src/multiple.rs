@@ -6,8 +6,8 @@ use std::{
 };
 
 use crate::{
-    SmtHandler, SmtPattern, SmtSymbol,
-    parser::{Arena, ArenaAccess, PatternHandleBuf, SimplePatternHandle, SymbolHandle},
+    SmtHandler, SmtNumeral, SmtPattern, SmtSymbol,
+    parser::{Arena, ArenaAccess, PatternHandleBuf, SimplePatternHandle, SymbolHandle, TextHandle},
 };
 
 /// Multiple values to be handled.
@@ -317,6 +317,15 @@ impl<V> SmtNamedBuf<V> {
 
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    /// The names with their values, read in place.
+    pub(crate) fn entries(&self) -> impl Iterator<Item = (SmtSymbol<'_>, &V)> {
+        let text = &self.text;
+        self.names
+            .iter()
+            .map(move |name| name.symbol_view(text))
+            .zip(self.values.iter())
     }
 }
 
@@ -763,6 +772,285 @@ impl<S> SmtFunctionSignaturesBuf<S> {
 }
 
 impl<S> Default for SmtFunctionSignaturesBuf<S> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Sort names with their arities to be handled, such as those
+/// declared by `declare-datatypes`.
+#[derive(Clone, Copy)]
+pub struct SmtSortArities<'a> {
+    text: &'a [u8],
+    names: &'a [SymbolHandle],
+    arities: &'a [TextHandle],
+}
+
+impl<'a> SmtSortArities<'a> {
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.names.len()
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.names.is_empty()
+    }
+
+    #[inline]
+    pub fn get(&self, index: usize) -> Option<(SmtSymbol<'a>, SmtNumeral<'a>)> {
+        let name = self.names.get(index)?.symbol_view(self.text);
+        Some((name, self.arities[index].numeral_view(self.text)))
+    }
+
+    pub fn iter(&self) -> SmtSortAritiesIter<'a> {
+        SmtSortAritiesIter {
+            arities: *self,
+            next: 0,
+        }
+    }
+}
+
+impl<'a> IntoIterator for SmtSortArities<'a> {
+    type Item = (SmtSymbol<'a>, SmtNumeral<'a>);
+    type IntoIter = SmtSortAritiesIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+/// Iterator over sort names with their arities.
+pub struct SmtSortAritiesIter<'a> {
+    arities: SmtSortArities<'a>,
+    next: usize,
+}
+
+impl<'a> Iterator for SmtSortAritiesIter<'a> {
+    type Item = (SmtSymbol<'a>, SmtNumeral<'a>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let item = self.arities.get(self.next)?;
+        self.next += 1;
+        Some(item)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let remaining = self.arities.len() - self.next;
+        (remaining, Some(remaining))
+    }
+}
+
+impl ExactSizeIterator for SmtSortAritiesIter<'_> {}
+
+impl Debug for SmtSortArities<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_list().entries(self.iter()).finish()
+    }
+}
+
+/// Owned sort names with their arities, from which [`SmtSortArities`] is viewed.
+pub struct SmtSortAritiesBuf {
+    text: Vec<u8>,
+    names: Vec<SymbolHandle>,
+    arities: Vec<TextHandle>,
+}
+
+impl SmtSortAritiesBuf {
+    pub fn new() -> Self {
+        Self {
+            text: Vec::new(),
+            names: Vec::new(),
+            arities: Vec::new(),
+        }
+    }
+
+    pub fn push(&mut self, name: SmtSymbol, arity: SmtNumeral) {
+        let name = SymbolHandle::create_by_push(&mut self.text, name);
+        let start = self.text.len();
+        self.text.extend_from_slice(arity.as_slice());
+        self.names.push(name);
+        self.arities.push(TextHandle {
+            start,
+            len: self.text.len() - start,
+        });
+    }
+
+    pub fn clear(&mut self) {
+        self.text.clear();
+        self.names.clear();
+        self.arities.clear();
+    }
+
+    pub fn view(&self) -> SmtSortArities<'_> {
+        SmtSortArities {
+            text: &self.text,
+            names: &self.names,
+            arities: &self.arities,
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.names.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.names.is_empty()
+    }
+}
+
+impl Default for SmtSortAritiesBuf {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Datatype constructors to be handled: each a name with its selectors,
+/// the selectors as sorted variables.
+///
+/// [`IntoIterator`] hands over each constructor with its selectors,
+/// whose sorts can be moved out.
+pub struct SmtConstructors<'a, S> {
+    text: &'a [u8],
+    names: &'a [SymbolHandle],
+    selectors: &'a mut [SmtNamedBuf<S>],
+}
+
+impl<'a, S> SmtConstructors<'a, S> {
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.names.len()
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.names.is_empty()
+    }
+
+    /// The constructors with their selectors, which can be modified in place.
+    pub fn iter_mut(&mut self) -> SmtConstructorsIter<'_, S> {
+        SmtConstructorsIter {
+            text: self.text,
+            names: self.names.iter(),
+            selectors: self.selectors.iter_mut(),
+        }
+    }
+}
+
+impl<'a, S> IntoIterator for SmtConstructors<'a, S> {
+    type Item = (SmtSymbol<'a>, SmtSortedVars<'a, S>);
+    type IntoIter = SmtConstructorsIter<'a, S>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        SmtConstructorsIter {
+            text: self.text,
+            names: self.names.iter(),
+            selectors: self.selectors.iter_mut(),
+        }
+    }
+}
+
+/// Iterator over datatype constructors with their selectors.
+pub struct SmtConstructorsIter<'a, S> {
+    text: &'a [u8],
+    names: slice::Iter<'a, SymbolHandle>,
+    selectors: slice::IterMut<'a, SmtNamedBuf<S>>,
+}
+
+impl<'a, S> Iterator for SmtConstructorsIter<'a, S> {
+    type Item = (SmtSymbol<'a>, SmtSortedVars<'a, S>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let name = self.names.next()?.symbol_view(self.text);
+        let selectors = self.selectors.next()?.view();
+        Some((name, selectors))
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.names.size_hint()
+    }
+}
+
+impl<S> ExactSizeIterator for SmtConstructorsIter<'_, S> {}
+
+impl<S: Debug> Debug for SmtConstructors<'_, S> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut list = f.debug_list();
+        for (name, selectors) in self.names.iter().zip(self.selectors.iter()) {
+            let selectors: Vec<_> = selectors.entries().collect();
+            list.entry(&(name.symbol_view(self.text), selectors));
+        }
+        list.finish()
+    }
+}
+
+/// Owned datatype constructors, from which [`SmtConstructors`] is viewed.
+///
+/// Each constructor's selectors are kept in storage of their own,
+/// which is reused when the constructors are cleared.
+pub struct SmtConstructorsBuf<S> {
+    text: Vec<u8>,
+    names: Vec<SymbolHandle>,
+    /// Selector storage, the first `names.len()` in use.
+    selectors: Vec<SmtNamedBuf<S>>,
+}
+
+impl<S> SmtConstructorsBuf<S> {
+    pub fn new() -> Self {
+        Self {
+            text: Vec::new(),
+            names: Vec::new(),
+            selectors: Vec::new(),
+        }
+    }
+
+    /// Starts a constructor with no selectors; [`Self::push_selector`] adds them.
+    pub fn push(&mut self, name: SmtSymbol) {
+        let index = self.names.len();
+        let name = SymbolHandle::create_by_push(&mut self.text, name);
+        self.names.push(name);
+        if index == self.selectors.len() {
+            self.selectors.push(SmtNamedBuf::new());
+        }
+    }
+
+    /// Adds a selector to the last constructor pushed.
+    pub fn push_selector(&mut self, name: SmtSymbol, sort: S) {
+        let index = self
+            .names
+            .len()
+            .checked_sub(1)
+            .expect("a selector must be pushed after its constructor");
+        self.selectors[index].push(name, sort);
+    }
+
+    pub fn clear(&mut self) {
+        for selectors in &mut self.selectors[..self.names.len()] {
+            selectors.clear();
+        }
+        self.text.clear();
+        self.names.clear();
+    }
+
+    pub fn view(&mut self) -> SmtConstructors<'_, S> {
+        let len = self.names.len();
+        SmtConstructors {
+            text: &self.text,
+            names: &self.names,
+            selectors: &mut self.selectors[..len],
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.names.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.names.is_empty()
+    }
+}
+
+impl<S> Default for SmtConstructorsBuf<S> {
     fn default() -> Self {
         Self::new()
     }

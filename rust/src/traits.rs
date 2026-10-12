@@ -1,10 +1,10 @@
 use std::{convert::Infallible, fmt::Debug};
 
 use crate::{
-    SmtAttributeValue, SmtAttributes, SmtBindings, SmtDatatypeConstructor, SmtFunctionSignature,
-    SmtFunctionSignatures, SmtKeyword, SmtMatchCases, SmtMultiple, SmtNumeral, SmtNumeralBuf,
-    SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSort, SmtSortedVars, SmtStringContent, SmtSymbol,
-    SmtSymbolBuf, SmtSymbols, SmtTerm, parser::SmtParse, token::SmtVersion,
+    SmtAttributeValue, SmtAttributes, SmtBindings, SmtConstructors, SmtFunctionSignature,
+    SmtFunctionSignatures, SmtKeyword, SmtMatchCases, SmtMultiple, SmtNumeral, SmtPattern,
+    SmtQuantifierKind, SmtSExpr, SmtSort, SmtSortArities, SmtSortedVars, SmtStringContent,
+    SmtSymbol, SmtSymbolBuf, SmtSymbols, SmtTerm, parser::SmtParse, token::SmtVersion,
 };
 
 pub trait SmtHandler {
@@ -371,14 +371,14 @@ pub trait SmtCommandHandler: SmtHandler {
     /// Starts a datatype declaration (`declare-datatype`).
     fn start_declare_datatype(
         &mut self,
-        name: SmtSymbolBuf,
-        params: Vec<SmtSymbolBuf>,
+        name: SmtSymbol<'_>,
+        params: SmtSymbols<'_>,
     ) -> Result<(), Self::Error>;
 
     /// Ends a datatype declaration (`declare-datatype`).
     fn end_declare_datatype(
         &mut self,
-        constructors: Vec<SmtDatatypeConstructor<Self>>,
+        constructors: SmtConstructors<'_, Self::Sort>,
     ) -> Result<(), Self::Error>;
 
     /// Starts datatype declarations (`declare-datatypes`).
@@ -404,7 +404,7 @@ pub trait SmtCommandHandler: SmtHandler {
     /// Consult the standard for proper handling.
     fn start_declare_datatypes(
         &mut self,
-        introductions: Vec<(SmtSymbolBuf, SmtNumeralBuf)>,
+        introductions: SmtSortArities<'_>,
     ) -> Result<(), Self::Error>;
 
     /// Ends datatype declarations (`declare-datatypes`).
@@ -432,7 +432,7 @@ pub trait SmtCommandHandler: SmtHandler {
     /// Consult the standard for proper handling.
     fn start_datatype_declaration(
         &mut self,
-        sort_params: Vec<SmtSymbolBuf>,
+        sort_params: SmtSymbols<'_>,
     ) -> Result<(), Self::Error>;
 
     /// Ends a datatype declaration (in `declare-datatypes` / `declare-datatype`).
@@ -447,7 +447,7 @@ pub trait SmtCommandHandler: SmtHandler {
     /// Consult the standard for proper handling.
     fn end_datatype_declaration(
         &mut self,
-        constructors: Vec<SmtDatatypeConstructor<Self>>,
+        constructors: SmtConstructors<'_, Self::Sort>,
     ) -> Result<(), Self::Error>;
 }
 
@@ -730,23 +730,20 @@ impl SmtCommandHandler for SmtSyntaxChecker {
         Ok(())
     }
 
-    fn start_declare_datatypes(
-        &mut self,
-        _sorts: Vec<(SmtSymbolBuf, SmtNumeralBuf)>,
-    ) -> Result<(), Self::Error> {
+    fn start_declare_datatypes(&mut self, _sorts: SmtSortArities<'_>) -> Result<(), Self::Error> {
         Ok(())
     }
 
     fn start_datatype_declaration(
         &mut self,
-        _sort_params: Vec<SmtSymbolBuf>,
+        _sort_params: SmtSymbols<'_>,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
 
     fn end_datatype_declaration(
         &mut self,
-        _constructors: Vec<SmtDatatypeConstructor<Self>>,
+        _constructors: SmtConstructors<'_, Self::Sort>,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -792,15 +789,15 @@ impl SmtCommandHandler for SmtSyntaxChecker {
 
     fn start_declare_datatype(
         &mut self,
-        _name: SmtSymbolBuf,
-        _params: Vec<SmtSymbolBuf>,
+        _name: SmtSymbol<'_>,
+        _params: SmtSymbols<'_>,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
 
     fn end_declare_datatype(
         &mut self,
-        _constructors: Vec<SmtDatatypeConstructor<Self>>,
+        _constructors: SmtConstructors<'_, Self::Sort>,
     ) -> Result<(), Self::Error> {
         Ok(())
     }

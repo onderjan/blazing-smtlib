@@ -18,10 +18,10 @@ use std::convert::Infallible;
 
 use blazing_smtlib::{
     NonstandardCommandError, SmtAttributeValue, SmtAttributes, SmtBindings, SmtCommandHandler,
-    SmtDatatypeConstructor, SmtFunctionSignature, SmtFunctionSignatures, SmtHandler, SmtIdent,
-    SmtIndex, SmtKeyword, SmtMatchCases, SmtMultiple, SmtNumeral, SmtNumeralBuf, SmtPattern,
-    SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSort, SmtSortedVars, SmtSpecialConstant,
-    SmtStringContent, SmtSymbol, SmtSymbolBuf, SmtSymbols, SmtTerm, token::SmtVersion,
+    SmtConstructors, SmtFunctionSignature, SmtFunctionSignatures, SmtHandler, SmtIdent, SmtIndex,
+    SmtKeyword, SmtMatchCases, SmtMultiple, SmtNumeral, SmtPattern, SmtQuantifierKind, SmtSExpr,
+    SmtSimplePattern, SmtSort, SmtSortArities, SmtSortedVars, SmtSpecialConstant, SmtStringContent,
+    SmtSymbol, SmtSymbols, SmtTerm, token::SmtVersion,
 };
 
 const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
@@ -156,13 +156,6 @@ impl TraceHash {
         self.bytes(keyword.as_slice());
     }
 
-    fn symbols(&mut self, symbols: &[SmtSymbolBuf]) {
-        self.count(symbols.len());
-        for symbol in symbols {
-            self.bytes(symbol.as_slice());
-        }
-    }
-
     fn special_constant(&mut self, constant: SmtSpecialConstant<'_>) {
         match constant {
             SmtSpecialConstant::Numeral(value) => {
@@ -215,19 +208,15 @@ impl TraceHash {
         }
     }
 
-    fn sorted_vars(&mut self, vars: &[(SmtSymbolBuf, u64)]) {
-        self.count(vars.len());
-        for (name, sort) in vars {
-            self.symbol(name.as_view());
-            self.u64(*sort);
-        }
-    }
-
-    fn constructors(&mut self, constructors: &[SmtDatatypeConstructor<Self>]) {
+    fn constructors(&mut self, constructors: SmtConstructors<'_, u64>) {
         self.count(constructors.len());
-        for constructor in constructors {
-            self.symbol(constructor.name.as_view());
-            self.sorted_vars(&constructor.selectors);
+        for (name, selectors) in constructors {
+            self.symbol(name);
+            self.count(selectors.len());
+            for (selector, sort) in selectors.iter() {
+                self.symbol(selector);
+                self.u64(*sort);
+            }
         }
     }
 
@@ -677,21 +666,21 @@ impl SmtCommandHandler for TraceHash {
 
     fn start_declare_datatype(
         &mut self,
-        name: SmtSymbolBuf,
-        params: Vec<SmtSymbolBuf>,
+        name: SmtSymbol<'_>,
+        params: SmtSymbols<'_>,
     ) -> Result<(), Self::Error> {
         self.byte(tag::START_DECLARE_DATATYPE);
-        self.symbol(name.as_view());
-        self.symbols(&params);
+        self.symbol(name);
+        self.symbol_list(params);
         Ok(())
     }
 
     fn end_declare_datatype(
         &mut self,
-        constructors: Vec<SmtDatatypeConstructor<Self>>,
+        constructors: SmtConstructors<'_, u64>,
     ) -> Result<(), Self::Error> {
         self.byte(tag::END_DECLARE_DATATYPE);
-        self.constructors(&constructors);
+        self.constructors(constructors);
         Ok(())
     }
 
@@ -788,32 +777,32 @@ impl SmtCommandHandler for TraceHash {
 
     fn start_declare_datatypes(
         &mut self,
-        introductions: Vec<(SmtSymbolBuf, SmtNumeralBuf)>,
+        introductions: SmtSortArities<'_>,
     ) -> Result<(), Self::Error> {
         self.byte(tag::START_DECLARE_DATATYPES);
         self.count(introductions.len());
-        for (name, arity) in &introductions {
-            self.symbol(name.as_view());
-            self.numeral(arity.as_view());
+        for (name, arity) in introductions {
+            self.symbol(name);
+            self.numeral(arity);
         }
         Ok(())
     }
 
     fn start_datatype_declaration(
         &mut self,
-        sort_params: Vec<SmtSymbolBuf>,
+        sort_params: SmtSymbols<'_>,
     ) -> Result<(), Self::Error> {
         self.byte(tag::START_DATATYPE_DECLARATION);
-        self.symbols(&sort_params);
+        self.symbol_list(sort_params);
         Ok(())
     }
 
     fn end_datatype_declaration(
         &mut self,
-        constructors: Vec<SmtDatatypeConstructor<Self>>,
+        constructors: SmtConstructors<'_, u64>,
     ) -> Result<(), Self::Error> {
         self.byte(tag::END_DATATYPE_DECLARATION);
-        self.constructors(&constructors);
+        self.constructors(constructors);
         Ok(())
     }
 
