@@ -66,8 +66,8 @@ pub struct SmtLexer<C: SmtConsume, R: SmtLexRecovery<C> = SmtFailFast> {
     /// Held-back consumer break result, to be returned when EOF is reached.
     held: Option<SmtLocated<C::Result>>,
 
-    /// The location from which lexer discards bytes until EOF is reached.
-    discard_from: Option<SmtLocation>,
+    /// Whether the lexer discards bytes until EOF is reached.
+    discard: bool,
 
     /// The number of parentheses left open by the tokens the consumer has consumed.
     ///
@@ -285,7 +285,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
             initial_version: version,
             state: LexerState::Normal,
             held: None,
-            discard_from: None,
+            discard: false,
             consumed_depth: 0,
             lexed_depth: 0,
             recovery_state: None,
@@ -307,6 +307,10 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
         self.version
     }
 
+    /// Returns the current lexer location.
+    ///
+    /// While discarding, the lexer location does not change
+    /// and stays where discarding began.
     pub fn current_location(&self) -> SmtLocation {
         self.location_at(0)
     }
@@ -315,7 +319,11 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
     ///
     /// Discarding is used to implement the behaviour after `(exit)`.
     pub fn discarded_from(&self) -> Option<SmtLocation> {
-        self.discard_from
+        if self.discard {
+            Some(self.current_location())
+        } else {
+            None
+        }
     }
 
     /// Location of `position` in the current slice.
@@ -335,10 +343,8 @@ impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
     /// If an error occurs, the fail-fast lexer moves into
     /// a failure state and all further lexing calls panic.
     pub fn lex_slice(&mut self, slice: &[u8]) -> Result<(), SmtLexError<C::Error>> {
-        if self.discard_from.is_some() {
-            // we are discarding bytes
+        if self.discard {
             // pretend that we lexed everything we were given
-            self.discard_bytes(slice);
             return Ok(());
         }
 
@@ -374,18 +380,6 @@ impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
                 Err(self.fail(failure, false))
             }
         }
-    }
-
-    /// Discards the bytes while keeping the location correct.
-    fn discard_bytes(&mut self, bytes: &[u8]) {
-        // the line feeds must be counted for the location to stay correct
-        // get the last LF position; if it exists, count all line feeds,
-        // and compute the line and line offset
-        if let Some(last) = bytes.iter().rposition(|&c| c == b'\n') {
-            self.line += bytes.iter().filter(|&&c| c == b'\n').count() as u64;
-            self.line_start = self.offset + last as u64 + 1;
-        }
-        self.offset += bytes.len() as u64;
     }
 
     /// Lexes the end of file, sending the lexed tokens to the consumer.
@@ -637,9 +631,8 @@ impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
                                     continue;
                                 }
                                 Stop::Discard => {
-                                    // make sure the rest is properly discarded and return
-                                    self.discard_bytes(&slice[index as usize..]);
-                                    self.discard_from = Some(location);
+                                    // make sure the rest is discarded and return
+                                    self.discard = true;
                                     return Ok(());
                                 }
                             }
@@ -2170,7 +2163,7 @@ impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
         self.version = self.initial_version;
         self.state = LexerState::Normal;
         self.held = None;
-        self.discard_from = None;
+        self.discard = false;
         self.consumed_depth = 0;
         self.lexed_depth = 0;
         self.recovery_state = None;

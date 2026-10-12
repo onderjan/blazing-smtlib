@@ -20,7 +20,6 @@ use std::{
     path::Path,
 };
 
-use crate::token::{SmtVersion, SmtVersionPosture};
 use crate::{
     SmtCommandHandler, SmtHandler, SmtLocated, SmtSpan,
     lexer::{SmtLexError, SmtLexErrorCause, SmtLexer, SmtLexicalErrorKind},
@@ -28,6 +27,10 @@ use crate::{
         SmtParse, SmtParseAdapter, SmtParseError, SmtParseErrorCause, SmtScriptParser,
         SmtSyntaxErrorKind,
     },
+};
+use crate::{
+    SmtLocation,
+    token::{SmtVersion, SmtVersionPosture},
 };
 
 /// Determines why reading has failed.
@@ -109,7 +112,7 @@ pub fn read_smt_file<H: SmtCommandHandler>(
     handler: &mut H,
     path: &Path,
 ) -> Result<(), SmtReadError<H::Error>> {
-    SmtReader::script(handler, SmtVersion::default(), SmtVersionPosture::default())
+    SmtReader::script(handler, SmtVersionPosture::default(), SmtVersion::default())
         .read_file(path)
         .map(|_| ())
 }
@@ -120,8 +123,8 @@ pub fn read_smt_file<H: SmtCommandHandler>(
 /// The input is considered to end when the buffered reader returns
 /// a zero-length buffer.
 ///
-/// No guarantees are made on how the buffered reader is read,
-/// including how many bytes are read.
+/// The buffer content is consumed up to where the parser requests
+/// discarding the rest or fully if no such request was made.
 ///
 /// This is a convenience function over [`SmtReader`]: the parser
 /// is dropped after reading, so its resources cannot be preserved
@@ -131,7 +134,7 @@ pub fn read_smt<H: SmtCommandHandler>(
     handler: &mut H,
     buf_reader: impl BufRead,
 ) -> Result<(), SmtReadError<H::Error>> {
-    SmtReader::script(handler, SmtVersion::default(), SmtVersionPosture::default())
+    SmtReader::script(handler, SmtVersionPosture::default(), SmtVersion::default())
         .read_all(buf_reader)
         .map(|_| ())
 }
@@ -139,9 +142,8 @@ pub fn read_smt<H: SmtCommandHandler>(
 /// Streams SMT-LIB input from bytes to a [`SmtCommandHandler`].
 ///
 /// A reader owns its lexer, its parser, and the parser resources, and borrows
-/// the handler. By default it parses a script with a [`SmtScriptParser`]; a reader
-/// created with [`with_parser`](Self::with_parser) adapts another top-level
-/// parser, for other SMT-LIB input such as solver responses.
+/// the handler. Any parser can be used, and a convenience method
+/// [`Self::script`] is provided for the common case of reading SMT-LIB scripts.
 ///
 /// The input is read either whole, through [`read_file`](Self::read_file)
 /// or [`read_all`](Self::read_all), or in pieces, using
@@ -158,19 +160,29 @@ pub struct SmtReader<'a, H: SmtHandler + ?Sized, P: SmtParse<H> = SmtScriptParse
 
 impl<'a, H: SmtCommandHandler> SmtReader<'a, H> {
     /// Creates a reader of an SMT-LIB script, whose commands are delivered to `handler`.
+    ///
+    /// The version under which the script is read can be changed
+    /// by `set-info` commands. Therefore, the version-change posture
+    /// and the initial version used before any commands are read
+    /// must be provided.
     pub fn script(
         handler: &'a mut H,
-        initial_version: SmtVersion,
         posture: SmtVersionPosture,
+        initial_version: SmtVersion,
     ) -> Self {
-        Self::with_parser(handler, SmtScriptParser::new(posture), initial_version)
+        Self::new(handler, SmtScriptParser::new(posture), initial_version)
     }
 }
 
 impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtReader<'a, H, P> {
     /// Creates a reader of the input `parser` accepts, over `handler`.
-    pub fn with_parser(handler: &'a mut H, parser: P, initial_version: SmtVersion) -> Self {
-        let lexer = SmtLexer::new(SmtParseAdapter::new(handler, parser), initial_version);
+    ///
+    /// The version passed is the initial one.
+    /// Parsers may request the lexer to change versions,
+    /// and the lexer will always comply.
+    /// No standard parser changes versions except for [`SmtScriptParser`].
+    pub fn new(handler: &'a mut H, parser: P, version: SmtVersion) -> Self {
+        let lexer = SmtLexer::new(SmtParseAdapter::new(handler, parser), version);
         Self { lexer }
     }
 
@@ -211,8 +223,8 @@ impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtReader<'a, H, P> {
     /// a zero-length buffer. A failure while reading is reported as
     /// an I/O error with an empty span at the position reached.
     ///
-    /// No guarantees are made on how the buffered reader is read,
-    /// including how many bytes are read.
+    /// The buffer content is consumed up to where the parser requests
+    /// discarding the rest or fully if no such request was made.
     ///
     /// May panic if a previous call on this reader returned an error
     /// or if the parser breaks its contract.
@@ -223,7 +235,6 @@ impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtReader<'a, H, P> {
         loop {
             if self.lexer.discarded_from().is_some() {
                 // the lexer does not care about any subsequent bytes, break
-                // this will make the EOF location unreliable
                 break;
             }
 
@@ -244,11 +255,17 @@ impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtReader<'a, H, P> {
                 break;
             }
 
-            // process the buffer
+            // remember the current offset and process the buffer
+            let start_offset = self.lexer.current_location().offset();
             self.read_slice(buffer)?;
-
-            // all bytes were read, consume them
-            let len = buffer.len();
+            // we need to consume the bytes read
+            // this might not be all bytes when discarding is set
+            // use the current lexer location offset minus our start offset
+            let len = self
+                .lexer
+                .current_location()
+                .offset()
+                .saturating_sub(start_offset) as usize;
             buf_reader.consume(len);
         }
 
@@ -256,8 +273,7 @@ impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtReader<'a, H, P> {
         // this will reset the lexer and return the break value
         let result = self.read_eof()?;
 
-        // the result location is unreliable due to our choice where to discard
-        // do not return the result location
+        // do not return the result location as most callers will not want it
         Ok(result.into_value())
     }
 
@@ -286,5 +302,13 @@ impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtReader<'a, H, P> {
     pub fn read_eof(&mut self) -> Result<SmtLocated<P::Result>, SmtReadError<H::Error>> {
         // parsing goes through lexing, so just call the lexer
         self.lexer.lex_eof().map_err(|err| err.into())
+    }
+
+    /// The location from which the input has been discarded, if set.
+    ///
+    /// [`SmtScriptParser`] discards input after the `(exit)` command.
+    /// No other standard parsers discard.
+    pub fn discarded_from(&self) -> Option<SmtLocation> {
+        self.lexer.discarded_from()
     }
 }

@@ -12,23 +12,15 @@ use crate::{
 /// Parses an SMT-LIB script: a sequence of commands, each delivered to the
 /// command handler as it is parsed.
 ///
-/// The parser is a loop over a [`SmtCommandParser`]. It finishes after the
-/// command `(exit)` or at the end of the input between commands, returning
-/// [`ControlFlow::Break`] with a [`SmtScriptEnd`], and is then back at
-/// its start.
+/// The parser is a loop over a [`SmtCommandParser`]. If the `(exit)` command
+/// is encountered, the parser requests the producer to discard everything
+/// after its closing parenthesis.
+///
+/// The parser always resets and returns a unit result on EOF.
 pub struct SmtScriptParser<H: SmtCommandHandler> {
     command: SmtCommandParser<H>,
     posture: SmtVersionPosture,
     num_version_declarations: u64,
-}
-
-/// Why the script parser finished.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SmtScriptEnd {
-    /// Finished due to an exit command.
-    Exit,
-    /// Finished due to reaching the end of file.
-    EndOfFile,
 }
 
 impl<H: SmtCommandHandler> SmtScriptParser<H> {
@@ -48,7 +40,7 @@ impl<H: SmtCommandHandler> Default for SmtScriptParser<H> {
 }
 
 impl<H: SmtCommandHandler> SmtParse<H> for SmtScriptParser<H> {
-    type Result = SmtScriptEnd;
+    type Result = ();
 
     #[inline]
     fn parse<C: SmtProduce>(
@@ -56,7 +48,7 @@ impl<H: SmtCommandHandler> SmtParse<H> for SmtScriptParser<H> {
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
         cursor: &mut C,
-    ) -> Result<ControlFlow<SmtScriptEnd>, SmtParseError<H::Error>> {
+    ) -> Result<ControlFlow<()>, SmtParseError<H::Error>> {
         loop {
             match self.command.parse(handler, parse_state, cursor)? {
                 ControlFlow::Continue(()) => {
@@ -97,16 +89,16 @@ impl<H: SmtCommandHandler> SmtParse<H> for SmtScriptParser<H> {
                     }
                 }
                 ControlFlow::Break(SmtCommandOutcome::Exit) => {
-                    // the exit command ends the script: stop after it
-                    // reset the number of version declarations before breaking
-                    self.num_version_declarations = 0;
-                    return Ok(ControlFlow::Break(SmtScriptEnd::Exit));
+                    // tell the cursor to discard the rest of the input
+                    // and continue until EOF
+                    cursor.discard_rest();
+                    return Ok(ControlFlow::Continue(()));
                 }
                 ControlFlow::Break(SmtCommandOutcome::EndOfFile) => {
                     // the end of the input between commands ends the script
                     // reset the number of version declarations before breaking
                     self.num_version_declarations = 0;
-                    return Ok(ControlFlow::Break(SmtScriptEnd::EndOfFile));
+                    return Ok(ControlFlow::Break(()));
                 }
             }
         }
