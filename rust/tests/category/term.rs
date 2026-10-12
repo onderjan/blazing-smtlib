@@ -449,6 +449,8 @@ impl SmtHandler for Counting {
     type Term = ();
     type Scope = ();
 
+    fn set_version(&mut self, _version: SmtVersion) {}
+
     fn handle_sort(&mut self, _sort: SmtSort<'_, Self>) -> Result<(), Infallible> {
         Ok(())
     }
@@ -837,6 +839,8 @@ impl SmtHandler for Consuming {
     type Term = String;
     type Scope = ();
 
+    fn set_version(&mut self, _version: SmtVersion) {}
+
     fn handle_sort(&mut self, _sort: SmtSort<'_, Self>) -> Result<(), Infallible> {
         Ok(())
     }
@@ -1085,6 +1089,8 @@ impl SmtHandler for ScopeIds {
     type Sort = ();
     type Term = ();
     type Scope = u64;
+
+    fn set_version(&mut self, _version: SmtVersion) {}
 
     fn handle_sort(&mut self, _sort: SmtSort<'_, Self>) -> Result<(), Infallible> {
         Ok(())

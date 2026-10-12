@@ -155,6 +155,8 @@ impl SmtHandler for Counting {
     type Term = ();
     type Scope = ();
 
+    fn set_version(&mut self, _version: SmtVersion) {}
+
     fn handle_sort(&mut self, _sort: SmtSort<'_, Self>) -> Result<(), Infallible> {
         self.sorts += 1;
         Ok(())

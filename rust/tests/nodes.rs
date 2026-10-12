@@ -8,7 +8,7 @@ use blazing_smtlib::{
     SmtFunctionSignature, SmtHandler, SmtIdent, SmtIdentBuf, SmtIndex, SmtIndexBuf, SmtIndices,
     SmtKeyword, SmtMatchCases, SmtPattern, SmtQualifiedIdent, SmtQualifiedIdentBuf,
     SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSimplePatternBuf, SmtSimplePatterns, SmtSort,
-    SmtSortedVars, SmtSpecialConstant, SmtSpecialConstantBuf, SmtTerm,
+    SmtSortedVars, SmtSpecialConstant, SmtSpecialConstantBuf, SmtTerm, token::SmtVersion,
 };
 
 /// Handler that is deliberately neither `Debug` nor `Clone`,
@@ -22,6 +22,8 @@ impl SmtHandler for OpaqueHandler {
     type Sort = String;
     type Term = String;
     type Scope = ();
+
+    fn set_version(&mut self, _version: SmtVersion) {}
 
     fn handle_sort(&mut self, _sort: SmtSort<'_, Self>) -> Result<String, Infallible> {
         Ok(String::new())

@@ -12,8 +12,10 @@ use blazing_smtlib::{
     SmtFunctionSignature, SmtHandler, SmtIdent, SmtIndex, SmtKeyword, SmtKeywordBuf, SmtMatchCases,
     SmtNumeralBuf, SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSort,
     SmtSortedVars, SmtSpecialConstant, SmtStringContentBuf, SmtSymbol, SmtSymbolBuf, SmtTerm,
-    lexer::SmtLexicalErrorKind, parser::SmtSyntaxErrorKind, reader::SmtReadErrorCause,
-    token::SmtTokenCategory,
+    lexer::SmtLexicalErrorKind,
+    parser::SmtSyntaxErrorKind,
+    reader::SmtReadErrorCause,
+    token::{SmtTokenCategory, SmtVersion},
 };
 
 /// Handler that resolves body identifiers against the parameters of the
@@ -169,6 +171,8 @@ impl SmtHandler for Resolving {
     type Sort = String;
     type Term = String;
     type Scope = ();
+
+    fn set_version(&mut self, _version: SmtVersion) {}
 
     fn handle_sort(&mut self, sort: SmtSort<'_, Self>) -> Result<String, String> {
         let name = ident_view_text(sort.ident);

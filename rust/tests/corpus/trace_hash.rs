@@ -21,7 +21,7 @@ use blazing_smtlib::{
     SmtDatatypeConstructor, SmtFunctionSignature, SmtHandler, SmtIdent, SmtIndex, SmtKeyword,
     SmtKeywordBuf, SmtMatchCases, SmtNumeralBuf, SmtPattern, SmtQuantifierKind, SmtSExpr,
     SmtSimplePattern, SmtSort, SmtSortedVars, SmtSpecialConstant, SmtStringContentBuf, SmtSymbol,
-    SmtSymbolBuf, SmtTerm,
+    SmtSymbolBuf, SmtTerm, token::SmtVersion,
 };
 
 const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
@@ -97,6 +97,7 @@ mod tag {
     pub const END_DEFINE_FUN_REC: u8 = 71;
     pub const START_DECLARE_DATATYPE: u8 = 72;
     pub const END_DECLARE_DATATYPE: u8 = 73;
+    pub const SET_VERSION: u8 = 74;
 }
 
 impl TraceHash {
@@ -291,6 +292,16 @@ impl SmtHandler for TraceHash {
     type Sort = u64;
     type Term = u64;
     type Scope = u64;
+
+    fn set_version(&mut self, version: SmtVersion) {
+        self.byte(tag::SET_VERSION);
+        self.byte(match version {
+            SmtVersion::V2_0 => 0,
+            SmtVersion::V2_5 => 5,
+            SmtVersion::V2_6 => 6,
+            SmtVersion::V2_7 => 7,
+        });
+    }
 
     fn handle_sort(&mut self, sort: SmtSort<'_, Self>) -> Result<u64, Self::Error> {
         self.byte(tag::SORT);

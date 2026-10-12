@@ -201,6 +201,8 @@ impl SmtHandler for Printing {
     type Term = String;
     type Scope = String;
 
+    fn set_version(&mut self, _version: SmtVersion) {}
+
     fn handle_sort(&mut self, sort: SmtSort<'_, Self>) -> Result<String, Infallible> {
         let ident = render_ident_view(&sort.ident);
         Ok(if sort.applied.is_empty() {
@@ -383,6 +385,8 @@ impl SmtHandler for Calls {
     type Sort = ();
     type Term = ();
     type Scope = ();
+
+    fn set_version(&mut self, _version: SmtVersion) {}
 
     fn handle_sort(&mut self, _sort: SmtSort<'_, Self>) -> Result<(), Infallible> {
         Ok(())

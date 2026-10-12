@@ -11,10 +11,11 @@ use blazing_smtlib::{
     SmtMatchCases, SmtNumeralBuf, SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSort, SmtSortedVars,
     SmtStringContentBuf, SmtSymbol, SmtSymbolBuf, SmtTerm,
     parser::{
-        SmtClosedParser, SmtCommandPayloadParser, SmtCommandRule, SmtSyntaxErrorKind, SmtTermParser,
+        SmtClosedParser, SmtCommandOutcome, SmtCommandParser, SmtCommandPayloadParser,
+        SmtCommandRule, SmtSyntaxErrorKind, SmtTermParser,
     },
-    reader::SmtReadErrorCause,
-    token::SmtTokenCategory,
+    reader::{SmtReadErrorCause, SmtReader},
+    token::{SmtTokenCategory, SmtVersion, SmtVersionPosture},
 };
 
 #[test]
@@ -109,6 +110,8 @@ struct Recording {
     commands: Vec<&'static str>,
     /// Whether handled terms and attributes are recorded too, as `term` and `attribute`.
     records_terms_and_attributes: bool,
+    /// Whether the versions the handler is set to are recorded too, as `set-version 2.x`.
+    records_versions: bool,
 }
 
 struct MyAssert;
@@ -129,6 +132,17 @@ impl SmtHandler for Recording {
     type Sort = ();
     type Term = ();
     type Scope = ();
+
+    fn set_version(&mut self, version: SmtVersion) {
+        if self.records_versions {
+            self.commands.push(match version {
+                SmtVersion::V2_0 => "set-version 2.0",
+                SmtVersion::V2_5 => "set-version 2.5",
+                SmtVersion::V2_6 => "set-version 2.6",
+                SmtVersion::V2_7 => "set-version 2.7",
+            });
+        }
+    }
 
     fn handle_sort(&mut self, _sort: SmtSort<'_, Self>) -> Result<(), Self::Error> {
         Ok(())
@@ -919,4 +933,80 @@ fn argument_free_queries_reach_their_handler_methods() {
             "check-sat",
         ]
     );
+}
+
+/// A recording handler that also records the versions it is set to.
+fn recording_versions() -> Recording {
+    Recording {
+        records_versions: true,
+        ..Recording::default()
+    }
+}
+
+#[test]
+fn the_handler_is_told_the_version_before_anything_else_in_each_input() {
+    let mut handler = recording_versions();
+    {
+        // a reader starting in a version other than the default
+        let mut reader =
+            SmtReader::script(&mut handler, SmtVersionPosture::default(), SmtVersion::V2_6);
+        reader
+            .read_all(&b"(check-sat) (check-sat)"[..])
+            .unwrap_or_else(|err| panic!("unexpected error at {:?}", err.span()));
+        // an empty input is told the version too
+        reader
+            .read_all(&b""[..])
+            .unwrap_or_else(|err| panic!("unexpected error at {:?}", err.span()));
+        reader
+            .read_all(&b"(exit)"[..])
+            .unwrap_or_else(|err| panic!("unexpected error at {:?}", err.span()));
+    }
+    assert_eq!(
+        handler.commands,
+        [
+            "set-version 2.6",
+            "check-sat",
+            "check-sat",
+            "set-version 2.6",
+            "set-version 2.6",
+            "exit",
+        ]
+    );
+}
+
+#[test]
+fn a_version_declaration_sets_the_handler_after_the_command() {
+    let mut handler = recording_versions();
+    parse_with(
+        &mut handler,
+        b"(check-sat) (set-info :smt-lib-version 2.6) (check-sat)",
+    )
+    .unwrap_or_else(|err| panic!("unexpected error at {:?}", err.span()));
+    assert_eq!(
+        handler.commands,
+        [
+            "set-version 2.7",
+            "check-sat",
+            "set-info",
+            "set-version 2.6",
+            "check-sat",
+        ]
+    );
+}
+
+#[test]
+fn a_command_parser_outside_a_script_switches_nothing() {
+    let mut handler = recording_versions();
+    let outcome = {
+        let mut reader = SmtReader::new(&mut handler, SmtCommandParser::new(), SmtVersion::V2_7);
+        reader
+            .read_all(&b"(set-info :smt-lib-version 2.6)"[..])
+            .unwrap_or_else(|err| panic!("unexpected error at {:?}", err.span()))
+    };
+    assert!(
+        matches!(outcome, SmtCommandOutcome::SetVersion(SmtVersion::V2_6)),
+        "{outcome:?}"
+    );
+    // only the version in force at the start of the input
+    assert_eq!(handler.commands, ["set-version 2.7", "set-info"]);
 }
