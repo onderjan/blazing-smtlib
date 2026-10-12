@@ -173,10 +173,17 @@ pub trait SmtCommandHandler: SmtHandler {
     /// that is already present in the current signature.
     fn command_declare_sort_parameter(&mut self, name: SmtSymbolBuf) -> Result<(), Self::Error>;
 
-    /// Performs function declaration (`declare-fun` / `declare-const`).
+    /// Declares a constant (`declare-const`).
     ///
-    /// The command `declare-const` is just syntax sugar for
-    /// `declare-fun` without parameters.
+    /// Semantically, `declare-const` is syntax sugar for
+    /// `declare-fun` without any parameters.
+    fn command_declare_const(
+        &mut self,
+        name: SmtSymbolBuf,
+        sort: Self::Sort,
+    ) -> Result<(), Self::Error>;
+
+    /// Declares a function (`declare-fun`).
     fn command_declare_fun(
         &mut self,
         name: SmtSymbolBuf,
@@ -186,15 +193,21 @@ pub trait SmtCommandHandler: SmtHandler {
 
     fn command_assert(&mut self, term: Self::Term) -> Result<(), Self::Error>;
 
-    /// Checks satisfiability (`check-sat` / `check-sat-assuming`).
+    /// Checks satisfiability (`check-sat`).
+    ///
+    /// Semantically, command `check-sat` is syntax sugar for
+    /// `check-sat-assuming` without additional assumptions.
+    fn command_check_sat(&mut self) -> Result<(), Self::Error>;
+
+    /// Checks satisfiability with additional assumptions (`check-sat-assuming`).
     ///
     /// The command `check-sat-assuming` triggers checking satisfiability
     /// of the conjunction of the assertions in the current context
     /// and additional assumptions given within the command.
-    ///
-    /// The command `check-sat` is just syntax sugar for
-    /// `check-sat-assuming` without additional assumptions.
-    fn command_check_sat(&mut self, assumptions: Vec<Self::Term>) -> Result<(), Self::Error>;
+    fn command_check_sat_assuming(
+        &mut self,
+        assumptions: Vec<Self::Term>,
+    ) -> Result<(), Self::Error>;
 
     fn command_reset(&mut self) -> Result<(), Self::Error>;
 
@@ -239,22 +252,36 @@ pub trait SmtCommandHandler: SmtHandler {
     /// current signature extended with the sort parameters.
     fn end_define_sort(&mut self, sort: Self::Sort) -> Result<(), Self::Error>;
 
-    /// Starts function definition body (in `define-fun` / `define-const`).
-    ///
-    /// The command `define-const` is just syntax sugar for
-    /// `define-fun` without parameters. It is desugared before being handled.
+    /// Starts function definition body (in `define-fun`).
     fn start_define_fun(
         &mut self,
         signature: SmtFunctionSignature<Self>,
     ) -> Result<(), Self::Error>;
 
-    /// Ends function definition body (in `define-fun` / `define-const`).
+    /// Defines a constant (`define-const`).
     ///
-    /// The command `define-const` is just syntax sugar for
-    /// `define-fun` without parameters. It is desugared before being handled.
+    /// The command `define-const` is syntax sugar for `define-fun`
+    /// without parameters.
+    fn command_define_const(
+        &mut self,
+        name: SmtSymbolBuf,
+        sort: Self::Sort,
+        body: Self::Term,
+    ) -> Result<(), Self::Error>;
+
+    /// Ends function definition body (in `define-fun`).
     fn end_define_fun(&mut self, term: Self::Term) -> Result<(), Self::Error>;
 
-    /// Starts recursive function definitions (in `define-funs-rec` / `define-fun-rec`).
+    /// Starts a recursive function definition (`define-fun-rec`).
+    fn start_define_fun_rec(
+        &mut self,
+        signature: SmtFunctionSignature<Self>,
+    ) -> Result<(), Self::Error>;
+
+    /// Ends a recursive function definition (`define-fun-rec`).
+    fn end_define_fun_rec(&mut self, body: Self::Term) -> Result<(), Self::Error>;
+
+    /// Starts recursive function definitions (`define-funs-rec`).
     ///
     /// The parser guarantees:
     /// 1. This method is never nested before the corresponding `end_define_funs_rec`.
@@ -279,7 +306,19 @@ pub trait SmtCommandHandler: SmtHandler {
         signatures: Vec<SmtFunctionSignature<Self>>,
     ) -> Result<(), Self::Error>;
 
-    /// Starts the body of a recursive function (in `define-funs-rec` / `define-fun-rec`).
+    /// Ends recursive function definitions (in `define-funs-rec`).
+    ///
+    /// The parser guarantees:
+    /// 1. There is a pending unended `start_define_funs_rec`.
+    /// 2. There is no pending unended `start_recursive_body`.
+    ///
+    /// The command `define-fun-rec` is just syntax sugar for
+    /// `define-funs-rec` with a single function. It is desugared before being handled.
+    ///
+    /// Consult the standard for proper handling.
+    fn end_define_funs_rec(&mut self) -> Result<(), Self::Error>;
+
+    /// Starts the body of a recursive function (in `define-fun-rec` / `define-funs-rec`).
     ///
     /// The parser guarantees:
     /// 1. This method is only called between `start_define_funs_rec` and `end_define_funs_rec`.
@@ -294,7 +333,7 @@ pub trait SmtCommandHandler: SmtHandler {
     /// Consult the standard for proper handling.
     fn start_recursive_body(&mut self) -> Result<(), Self::Error>;
 
-    /// Ends the body of a recursive function (in `define-funs-rec` / `define-fun-rec`).
+    /// Ends the body of a recursive function (in `define-funs-rec`).
     ///
     /// The parameter `term` is the result term of the function definition body.
     ///
@@ -302,25 +341,23 @@ pub trait SmtCommandHandler: SmtHandler {
     /// 1. This method is only called between `start_define_funs_rec` and `end_define_funs_rec`.
     /// 2. There is a pending unended `start_recursive_body`.
     ///
-    /// The command `define-fun-rec` is just syntax sugar for
-    /// `define-funs-rec` with a single function. It is desugared before being handled.
-    ///
     /// Consult the standard for proper handling.
     fn end_recursive_body(&mut self, term: Self::Term) -> Result<(), Self::Error>;
 
-    /// Ends recursive function definitions (in `define-funs-rec` / `define-fun-rec`).
-    ///
-    /// The parser guarantees:
-    /// 1. There is a pending unended `start_define_funs_rec`.
-    /// 2. There is no pending unended `start_recursive_body`.
-    ///
-    /// The command `define-fun-rec` is just syntax sugar for
-    /// `define-funs-rec` with a single function. It is desugared before being handled.
-    ///
-    /// Consult the standard for proper handling.
-    fn end_define_funs_rec(&mut self) -> Result<(), Self::Error>;
+    /// Starts a datatype declaration (`declare-datatype`).
+    fn start_declare_datatype(
+        &mut self,
+        name: SmtSymbolBuf,
+        params: Vec<SmtSymbolBuf>,
+    ) -> Result<(), Self::Error>;
 
-    /// Starts datatype declarations (in `declare-datatypes` / `declare-datatype`).
+    /// Ends a datatype declaration (`declare-datatype`).
+    fn end_declare_datatype(
+        &mut self,
+        constructors: Vec<SmtDatatypeConstructor<Self>>,
+    ) -> Result<(), Self::Error>;
+
+    /// Starts datatype declarations (`declare-datatypes`).
     ///
     /// The parameter `introductions` contains ordered introductions of
     /// the name and arity of datatypes. The parser calls this method before any
@@ -346,12 +383,22 @@ pub trait SmtCommandHandler: SmtHandler {
         introductions: Vec<(SmtSymbolBuf, SmtNumeralBuf)>,
     ) -> Result<(), Self::Error>;
 
-    /// Starts a datatype declaration (in `declare-datatypes` / `declare-datatype`).
+    /// Ends datatype declarations (`declare-datatypes`).
+    ///
+    /// The parser guarantees:
+    /// 1. There is a pending unended `start_declare_datatypes`.
+    /// 2. There is no pending unended `start_datatype_declaration`.
+    ///
+    /// Consult the standard for proper handling.
+    fn end_declare_datatypes(&mut self) -> Result<(), Self::Error>;
+
+    /// Starts a datatype declaration (in `declare-datatypes`).
     ///
     /// The parser guarantees:
     /// 1. This method is only called between `start_declare_datatypes` and `end_declare_datatypes`.
     /// 2. This method is never nested before the corresponding `end_datatype_declaration`.
-    /// 3. This declaration corresponds to the introduction at the same index in `start_declare_datatypes`.
+    /// 3. This declaration corresponds to the introduction at the same index
+    ///    in `start_declare_datatypes`.
     /// 4. The sort parameters (`sort_params`) are nonempty exactly when the datatype is parametric.
     /// 5. The selector sorts of the datatype declaration are handled after this method is called
     ///    and before the respective `end_datatype_declaration` is called.
@@ -378,15 +425,6 @@ pub trait SmtCommandHandler: SmtHandler {
         &mut self,
         constructors: Vec<SmtDatatypeConstructor<Self>>,
     ) -> Result<(), Self::Error>;
-
-    /// Ends datatype declarations (in `declare-datatypes` / `declare-datatype`).
-    ///
-    /// The parser guarantees:
-    /// 1. There is a pending unended `start_declare_datatypes`.
-    /// 2. There is no pending unended `start_datatype_declaration`.
-    ///
-    /// Consult the standard for proper handling.
-    fn end_declare_datatypes(&mut self) -> Result<(), Self::Error>;
 }
 
 #[derive(Debug)]
@@ -591,7 +629,7 @@ impl SmtCommandHandler for SmtSyntaxChecker {
         Ok(())
     }
 
-    fn command_check_sat(&mut self, _assumptions: Vec<Self::Term>) -> Result<(), Self::Error> {
+    fn command_check_sat(&mut self) -> Result<(), Self::Error> {
         Ok(())
     }
 
@@ -679,6 +717,56 @@ impl SmtCommandHandler for SmtSyntaxChecker {
     }
 
     fn end_declare_datatypes(&mut self) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn command_declare_const(
+        &mut self,
+        _name: SmtSymbolBuf,
+        _sort: Self::Sort,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn command_check_sat_assuming(
+        &mut self,
+        _assumptions: Vec<Self::Term>,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn command_define_const(
+        &mut self,
+        _name: SmtSymbolBuf,
+        _sort: Self::Sort,
+        _body: Self::Term,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn start_define_fun_rec(
+        &mut self,
+        _signature: SmtFunctionSignature<Self>,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn end_define_fun_rec(&mut self, _body: Self::Term) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn start_declare_datatype(
+        &mut self,
+        _name: SmtSymbolBuf,
+        _params: Vec<SmtSymbolBuf>,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn end_declare_datatype(
+        &mut self,
+        _constructors: Vec<SmtDatatypeConstructor<Self>>,
+    ) -> Result<(), Self::Error> {
         Ok(())
     }
 }

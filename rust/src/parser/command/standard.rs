@@ -14,7 +14,7 @@ use crate::{
             SmtCommandOutcome, SmtCommandRule,
             datatype::{DeclareDatatypeParser, DeclareDatatypesParser},
             definition::{Definition, DefinitionParser},
-            function::{DefineFunsRecParser, FunctionSignatureParser, RecursiveBodyParser},
+            function::{DefineFunsRecParser, FunctionSignatureParser},
         },
         parse_by_token,
     },
@@ -160,7 +160,7 @@ standard_commands! {
         |handler, name| handler.command_declare_sort_parameter(name)),
     declare_const: DeclareConst(
         SmtClosedParser<H, SmtPairParser<H, SmtSymbolParser, SmtSortParser<H>>>,
-        |handler, (name, sort)| handler.command_declare_fun(name, Vec::new(), sort)),
+        |handler, (name, sort)| handler.command_declare_const(name, sort)),
     declare_fun: DeclareFun(
         SmtClosedParser<H, SmtPairParser<H, SmtSymbolParser,
             SmtPairParser<H, SmtParenMultipleParser<H, SmtSortParser<H>>, SmtSortParser<H>>>>,
@@ -168,7 +168,7 @@ standard_commands! {
             handler.command_declare_fun(name, param_sorts, result_sort)),
     declare_datatype: DeclareDatatype(
         SmtClosedParser<H, DeclareDatatypeParser<H>>,
-        |handler, ()| handler.end_declare_datatypes()),
+        |handler, constructors| handler.end_declare_datatype(constructors)),
     declare_datatypes: DeclareDatatypes(
         SmtClosedParser<H, DeclareDatatypesParser<H>>,
         |handler, ()| handler.end_declare_datatypes()),
@@ -176,14 +176,15 @@ standard_commands! {
         SmtClosedParser<H, DefinitionParser<H, DefineSort>>,
         |handler, sort| handler.end_define_sort(sort)),
     define_const: DefineConst(
-        SmtClosedParser<H, DefinitionParser<H, DefineConst>>,
-        |handler, body| handler.end_define_fun(body)),
+        SmtClosedParser<H, SmtPairParser<H, SmtSymbolParser,
+            SmtPairParser<H, SmtSortParser<H>, SmtTermParser<H>>>>,
+        |handler, (name, (sort, body))| handler.command_define_const(name, sort, body)),
     define_fun: DefineFun(
         SmtClosedParser<H, DefinitionParser<H, DefineFun>>,
         |handler, body| handler.end_define_fun(body)),
     define_fun_rec: DefineFunRec(
         SmtClosedParser<H, DefinitionParser<H, DefineFunRec>>,
-        |handler, ()| handler.end_define_funs_rec()),
+        |handler, body| handler.end_define_fun_rec(body)),
     define_funs_rec: DefineFunsRec(
         SmtClosedParser<H, DefineFunsRecParser<H>>,
         |handler, ()| handler.end_define_funs_rec()),
@@ -192,10 +193,10 @@ standard_commands! {
         |handler, term| handler.command_assert(term)),
     check_sat: CheckSat(
         SmtCloseParenParser,
-        |handler, ()| handler.command_check_sat(Vec::new())),
+        |handler, ()| handler.command_check_sat()),
     check_sat_assuming: CheckSatAssuming(
         SmtClosedParser<H, SmtParenMultipleParser<H, SmtTermParser<H>>>,
-        |handler, assumptions| handler.command_check_sat(assumptions)),
+        |handler, assumptions| handler.command_check_sat_assuming(assumptions)),
     exit: Exit(
         SmtCloseParenParser,
         |handler, ()| handler.command_exit()),
@@ -250,23 +251,8 @@ standard_commands! {
     ;
     check_sat_assuming_literals: CheckSatAssumingLiterals(
         SmtClosedParser<H, SmtParenMultipleParser<H, PropLiteralParser>>,
-        |handler, assumptions| handler.command_check_sat(assumptions))
+        |handler, assumptions| handler.command_check_sat_assuming(assumptions))
         replaces CheckSatAssuming before V2_7,
-}
-
-impl<H: SmtCommandHandler> Definition<H> for DefineConst {
-    type Signature = SmtPairParser<H, SmtSymbolParser, SmtSortParser<H>>;
-    type Body = SmtTermParser<H>;
-
-    fn start(handler: &mut H, signature: (SmtSymbolBuf, H::Sort)) -> Result<(), H::Error> {
-        let (name, result_sort) = signature;
-        let signature = SmtFunctionSignature {
-            name,
-            params: Vec::new(),
-            result_sort,
-        };
-        handler.start_define_fun(signature)
-    }
 }
 
 impl<H: SmtCommandHandler> Definition<H> for DefineFun {
@@ -293,10 +279,10 @@ impl<H: SmtCommandHandler> Definition<H> for DefineSort {
 
 impl<H: SmtCommandHandler> Definition<H> for DefineFunRec {
     type Signature = FunctionSignatureParser<H>;
-    type Body = RecursiveBodyParser<H>;
+    type Body = SmtTermParser<H>;
 
     fn start(handler: &mut H, signature: SmtFunctionSignature<H>) -> Result<(), H::Error> {
-        handler.start_define_funs_rec(vec![signature])
+        handler.start_define_fun_rec(signature)
     }
 }
 

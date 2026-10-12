@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtCommandHandler, SmtDatatypeConstructor, SmtNumeralBuf, SmtSymbolBuf,
+    SmtCommandHandler, SmtDatatypeConstructor, SmtSymbolBuf,
     parser::{
         SmtCloseParenParser, SmtClosedMultipleParser, SmtNumeralParser, SmtOpenParenParser,
         SmtOpenedParser, SmtParenMaximumParser, SmtParenMultipleParser, SmtParenParser, SmtParse,
@@ -44,10 +44,15 @@ enum DatatypeState {
     Close,
 }
 
+enum DatatypeMode {
+    Single(Option<SmtSymbolBuf>),
+    Multiple,
+}
+
 /// Parser for a datatype.
 struct DatatypeParser<H: SmtCommandHandler> {
     state: DatatypeState,
-    single_introduction: Option<SmtSymbolBuf>,
+    mode: DatatypeMode,
 
     symbols_parser: SmtParenMultipleParser<H, SmtSymbolParser>,
     constructors_parser: SmtClosedMultipleParser<H, ConstructorParser<H>>,
@@ -58,7 +63,7 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
     fn new() -> Self {
         Self {
             state: DatatypeState::Start,
-            single_introduction: None,
+            mode: DatatypeMode::Multiple,
             symbols_parser: SmtParenMultipleParser::default(),
             constructors_parser: SmtClosedMultipleParser::default(),
             constructors: None,
@@ -66,11 +71,8 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
     }
 
     /// Switches this datatype to "single datatype mode".
-    ///
-    /// This mode calls `start_declare_datatypes` as per the definition of
-    /// `declare-datatype`, which depends on the form of the single datatype.
     fn set_single_datatype_mode(&mut self, name: SmtSymbolBuf) {
-        self.single_introduction = Some(name)
+        self.mode = DatatypeMode::Single(Some(name))
     }
 
     /// Starts a datatype, taking into account the "single datatype mode".
@@ -79,12 +81,13 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
         handler: &mut H,
         params: Vec<SmtSymbolBuf>,
     ) -> Result<(), SmtParseError<H::Error>> {
-        if let Some(name) = self.single_introduction.take() {
-            // start declare datatypes with the arity equal to the number of parameters
-            let arity = SmtNumeralBuf::from_usize(params.len());
-            handle_err(handler.start_declare_datatypes(vec![(name, arity)]))?;
+        match &mut self.mode {
+            DatatypeMode::Single(name) => {
+                let name = name.take().expect("datatype should be only started once");
+                handle_err(handler.start_declare_datatype(name, params))
+            }
+            DatatypeMode::Multiple => handle_err(handler.start_datatype_declaration(params)),
         }
-        handle_err(handler.start_datatype_declaration(params))
     }
 }
 
@@ -95,7 +98,7 @@ impl<H: SmtCommandHandler> Default for DatatypeParser<H> {
 }
 
 impl<H: SmtCommandHandler> SmtParse<H> for DatatypeParser<H> {
-    type Result = ();
+    type Result = Option<Vec<SmtDatatypeConstructor<H>>>;
 
     fn parse<C: SmtProduce>(
         &mut self,
@@ -111,13 +114,14 @@ impl<H: SmtCommandHandler> SmtParse<H> for DatatypeParser<H> {
 
 impl<H: SmtCommandHandler> DatatypeParser<H> {
     /// Progresses the parser by one token.
+    #[allow(clippy::type_complexity)]
     fn progress<Z: SmtProduce>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
         cursor: &Z,
         token: Z::Token,
-    ) -> Result<ControlFlow<()>, SmtParseError<H::Error>> {
+    ) -> Result<ControlFlow<Option<Vec<SmtDatatypeConstructor<H>>>>, SmtParseError<H::Error>> {
         let constructors = match self.state {
             DatatypeState::Start => {
                 // expect opening parenthesis and move to deciding the kind
@@ -206,10 +210,10 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
                 };
                 // expect closing parenthesis
                 SmtCloseParenParser::expect(cursor, token)?;
-                // end the datatype, reset and break
-                handle_err(handler.end_datatype_declaration(constructors))?;
-                self.state = DatatypeState::Start;
-                return Ok(ControlFlow::Break(()));
+
+                // end the datatype, this will reset
+                let result = self.end_datatype(handler, constructors)?;
+                return Ok(ControlFlow::Break(result));
             }
         };
 
@@ -227,11 +231,9 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
                 .map(|(name, selectors)| SmtDatatypeConstructor { name, selectors })
                 .collect();
             if matches!(self.state, DatatypeState::SimpleConstructors) {
-                // we have already parsed the closing parenthesis
-                // end the datatype declaration, reset and break
-                handle_err(handler.end_datatype_declaration(constructors))?;
-                self.state = DatatypeState::Start;
-                return Ok(ControlFlow::Break(()));
+                // end the datatype, this will reset
+                let result = self.end_datatype(handler, constructors)?;
+                return Ok(ControlFlow::Break(result));
             }
             // we still need to wait for the closing parenthesis,
             // do not end the datatype before it
@@ -240,6 +242,29 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
         }
 
         Ok(ControlFlow::Continue(()))
+    }
+
+    fn end_datatype(
+        &mut self,
+        handler: &mut H,
+        constructors: Vec<SmtDatatypeConstructor<H>>,
+    ) -> Result<Option<Vec<SmtDatatypeConstructor<H>>>, SmtParseError<H::Error>> {
+        // process the datatype
+        let result = match self.mode {
+            DatatypeMode::Single(_) => {
+                // return the datatype
+                Ok(Some(constructors))
+            }
+            DatatypeMode::Multiple => {
+                // end the datatype declaration
+                handle_err(handler.end_datatype_declaration(constructors))?;
+                Ok(None)
+            }
+        };
+        // reset and return
+        self.state = DatatypeState::Start;
+        self.mode = DatatypeMode::Multiple;
+        result
     }
 }
 
@@ -335,8 +360,6 @@ impl<H: SmtCommandHandler> DeclareDatatypesParser<H> {
                     // the datatypes parser can have a changed number of maximum elements,
                     // but it will be changed before it is used next time
                     self.state = DeclareDatatypesState::Introductions;
-                    // the call to end datatypes declarations
-                    // will be done after the closing parenthesis
                     return Ok(ControlFlow::Break(()));
                 }
             }
@@ -375,7 +398,7 @@ impl<H: SmtCommandHandler> Default for DeclareDatatypeParser<H> {
 }
 
 impl<H: SmtCommandHandler> SmtParse<H> for DeclareDatatypeParser<H> {
-    type Result = ();
+    type Result = Vec<SmtDatatypeConstructor<H>>;
 
     fn parse<C: SmtProduce>(
         &mut self,
@@ -397,7 +420,7 @@ impl<H: SmtCommandHandler> DeclareDatatypeParser<H> {
         parse_state: &mut SmtParseState<H>,
         cursor: &Z,
         token: Z::Token,
-    ) -> Result<ControlFlow<()>, SmtParseError<H::Error>> {
+    ) -> Result<ControlFlow<Vec<SmtDatatypeConstructor<H>>>, SmtParseError<H::Error>> {
         match self.state {
             DeclareDatatypeState::Name => {
                 // parse the datatype name
@@ -406,16 +429,16 @@ impl<H: SmtCommandHandler> DeclareDatatypeParser<H> {
                 self.state = DeclareDatatypeState::Datatype;
             }
             DeclareDatatypeState::Datatype => {
-                if let ControlFlow::Break(()) = self.datatype_parser.parse(
+                if let ControlFlow::Break(constructors) = self.datatype_parser.parse(
                     handler,
                     parse_state,
                     &mut SingleTokenProducer::new(cursor, token),
                 )? {
                     // the single declaration ends the command, reset and break
-                    // the call to end datatypes declarations
-                    // will be done after the closing parenthesis
                     self.state = DeclareDatatypeState::Name;
-                    return Ok(ControlFlow::Break(()));
+                    let constructors =
+                        constructors.expect("single datatype should produce constructors");
+                    return Ok(ControlFlow::Break(constructors));
                 }
             }
         }
