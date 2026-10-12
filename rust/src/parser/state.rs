@@ -167,18 +167,7 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
     /// A quoted symbol is pushed with a leading pipe.
     #[inline]
     pub(crate) fn push_symbol(&mut self, symbol: SmtSymbol) -> SymbolHandle {
-        let bytes = symbol.as_slice();
-        let start = self.text.len();
-        if symbol.is_quoted() {
-            // push a pipe first to identify the quoted symbol
-            self.text.push(b'|');
-        }
-        self.text.extend_from_slice(bytes);
-        // make sure the pipe is included in the handle
-        SymbolHandle(TextHandle {
-            start,
-            len: self.text.len() - start,
-        })
+        SymbolHandle::create_by_push(&mut self.text, symbol)
     }
 
     /// Pushes a non-indexed identifier into the arena and returns its handle.
@@ -203,7 +192,7 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
             ident: ident_view(&self.text, &self.indices, ident),
             sort,
         };
-        let args = SmtMultiple::new(ArenaAccess { _priv: () }, &mut self.terms, args_start);
+        let args = SmtMultiple::new_starting(&mut self.terms, args_start);
         let result = f(function, args);
         self.terms.truncate(args_start);
         self.indices.truncate(ident.indices_start);
@@ -230,8 +219,8 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
         terms_start: usize,
         f: impl FnOnce(SmtBindings<'_, H>) -> R,
     ) -> R {
-        let names = SmtMultiple::new(ArenaAccess { _priv: () }, &mut self.symbols, names_start);
-        let terms = SmtMultiple::new(ArenaAccess { _priv: () }, &mut self.terms, terms_start);
+        let names = SmtMultiple::new_starting(&mut self.symbols, names_start);
+        let terms = SmtMultiple::new_starting(&mut self.terms, terms_start);
         let bindings = SmtBindings::new(ArenaAccess { _priv: () }, &self.text, names, terms);
         let result = f(bindings);
         self.symbols.truncate(names_start);
@@ -248,8 +237,8 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
         sorts_start: usize,
         f: impl FnOnce(SmtSortedVars<'_, H>) -> R,
     ) -> R {
-        let names = SmtMultiple::new(ArenaAccess { _priv: () }, &mut self.symbols, names_start);
-        let sorts = SmtMultiple::new(ArenaAccess { _priv: () }, &mut self.sorts, sorts_start);
+        let names = SmtMultiple::new_starting(&mut self.symbols, names_start);
+        let sorts = SmtMultiple::new_starting(&mut self.sorts, sorts_start);
         let sorted_vars = SmtSortedVars::new(ArenaAccess { _priv: () }, &self.text, names, sorts);
         let result = f(sorted_vars);
         self.symbols.truncate(names_start);
@@ -312,7 +301,7 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
     ) -> R {
         let sort = SmtSort {
             ident: ident_view(&self.text, &self.indices, ident),
-            applied: SmtMultiple::new(ArenaAccess { _priv: () }, &mut self.sorts, applied_start),
+            applied: SmtMultiple::new_starting(&mut self.sorts, applied_start),
         };
         let result = f(sort);
         self.sorts.truncate(applied_start);
@@ -328,7 +317,7 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
         start: usize,
         f: impl FnOnce(SmtMultiple<'_, H::SExpr>) -> R,
     ) -> R {
-        let s_exprs = SmtMultiple::new(ArenaAccess { _priv: () }, &mut self.s_exprs, start);
+        let s_exprs = SmtMultiple::new_starting(&mut self.s_exprs, start);
         let result = f(s_exprs);
         self.s_exprs.truncate(start);
         result
@@ -354,7 +343,7 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
         start: usize,
         f: impl FnOnce(SmtKeyword<'_>, SmtMultiple<'_, H::SExpr>) -> R,
     ) -> R {
-        let s_exprs = SmtMultiple::new(ArenaAccess { _priv: () }, &mut self.s_exprs, start);
+        let s_exprs = SmtMultiple::new_starting(&mut self.s_exprs, start);
         let result = f(name.keyword_view(&self.text), s_exprs);
         self.s_exprs.truncate(start);
         self.text.truncate(name.start);
@@ -368,7 +357,7 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
         start: usize,
         f: impl FnOnce(SmtMultiple<'_, H::Attribute>) -> R,
     ) -> R {
-        let attributes = SmtMultiple::new(ArenaAccess { _priv: () }, &mut self.attributes, start);
+        let attributes = SmtMultiple::new_starting(&mut self.attributes, start);
         let result = f(attributes);
         self.attributes.truncate(start);
         result
@@ -381,12 +370,8 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
         starts: MatchCasesStarts,
         f: impl FnOnce(SmtMatchCases<'_, H>) -> R,
     ) -> R {
-        let patterns = SmtMultiple::new(
-            ArenaAccess { _priv: () },
-            &mut self.patterns,
-            starts.patterns,
-        );
-        let terms = SmtMultiple::new(ArenaAccess { _priv: () }, &mut self.terms, starts.terms);
+        let patterns = SmtMultiple::new_starting(&mut self.patterns, starts.patterns);
+        let terms = SmtMultiple::new_starting(&mut self.terms, starts.terms);
         let match_cases = SmtMatchCases::new(
             ArenaAccess { _priv: () },
             &self.text,
@@ -506,7 +491,7 @@ impl TextHandle {
 /// the symbols are not produced as text, which could
 /// silently convert a quoted symbol into an unquoted one.
 ///
-/// This type is created by [`Arena::push_symbol`],
+/// This type is created by [`SymbolHandle::create_by_push`],
 /// and returns the proper symbol view.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct SymbolHandle(TextHandle);
@@ -530,6 +515,21 @@ impl SymbolHandle {
             // unquoted symbol
             SmtSymbol::new_unchecked(false, &text[start..end])
         }
+    }
+
+    /// Pushes the symbol into `text`.
+    ///
+    /// A quoted symbol is represented with a leading pipe.
+    pub(crate) fn create_by_push(text: &mut Vec<u8>, symbol: SmtSymbol) -> SymbolHandle {
+        let start = text.len();
+        if symbol.is_quoted() {
+            text.push(b'|');
+        }
+        text.extend_from_slice(symbol.as_slice());
+        SymbolHandle(TextHandle {
+            start,
+            len: text.len() - start,
+        })
     }
 }
 

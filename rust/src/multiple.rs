@@ -20,13 +20,18 @@ pub struct SmtMultiple<'a, T> {
 }
 
 impl<'a, T> SmtMultiple<'a, T> {
+    #[inline]
+    pub fn new(stack: &'a mut Vec<T>) -> Self {
+        Self { stack, start: 0 }
+    }
+
     /// Hands over the values of `stack` above `start`.
     ///
     /// The values may or may not be removed from the vector.
     /// The caller must ensure that the vector is truncated
     /// after the handling returns.
     #[inline]
-    pub(crate) fn new(_access: ArenaAccess, stack: &'a mut Vec<T>, start: usize) -> Self {
+    pub(crate) fn new_starting(stack: &'a mut Vec<T>, start: usize) -> Self {
         debug_assert!(
             start <= stack.len(),
             "start of multiple values must not exceed stack length"
@@ -205,6 +210,56 @@ impl<'a, H: SmtHandler + ?Sized> SmtSortedVars<'a, H> {
             .iter()
             .map(move |name| name.symbol_view(text))
             .zip(self.sorts.iter_mut())
+    }
+}
+
+pub struct SmtSortedVarsBuf<S> {
+    text: Vec<u8>,
+    names: Vec<SymbolHandle>,
+    sorts: Vec<S>,
+}
+
+impl<S> SmtSortedVarsBuf<S> {
+    pub fn new() -> Self {
+        Self {
+            text: Vec::new(),
+            names: Vec::new(),
+            sorts: Vec::new(),
+        }
+    }
+
+    pub fn push(&mut self, name: SmtSymbol, sort: S) {
+        let name = SymbolHandle::create_by_push(&mut self.text, name);
+        self.names.push(name);
+        self.sorts.push(sort);
+    }
+
+    pub fn clear(&mut self) {
+        self.text.clear();
+        self.names.clear();
+        self.sorts.clear();
+    }
+
+    pub fn view<H: SmtHandler<Sort = S>>(&mut self) -> SmtSortedVars<'_, H> {
+        SmtSortedVars {
+            text: &self.text,
+            names: SmtMultiple::new(&mut self.names),
+            sorts: SmtMultiple::new(&mut self.sorts),
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.sorts.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
+impl<S> Default for SmtSortedVarsBuf<S> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
