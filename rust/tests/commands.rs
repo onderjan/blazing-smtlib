@@ -598,19 +598,33 @@ impl SmtCommandHandler for Resolving {
         Ok(())
     }
 
-    fn start_recursive_body(&mut self) -> Result<(), String> {
-        // the bodies arrive in signature order, so the handler
-        // knows which function is being started by counting
-        let name = self
-            .rec_functions
-            .get(self.rec_index)
-            .cloned()
-            .unwrap_or_else(|| panic!("body {} started without a signature", self.rec_index));
+    fn start_recursive_body(
+        &mut self,
+        signature: SmtFunctionSignature<'_, String>,
+    ) -> Result<(), String> {
+        // the bodies arrive in signature order, and each start is given
+        // its signature again: it must be the one counted to
+        let name = text(signature.name().as_slice());
+        let params: Vec<String> = signature
+            .params()
+            .map(|(param, _)| text(param.as_slice()))
+            .collect();
+        assert_eq!(
+            self.rec_functions.get(self.rec_index),
+            Some(&name),
+            "body {} is given the signature of its function",
+            self.rec_index
+        );
+        assert_eq!(
+            params, self.rec_params[self.rec_index],
+            "body {} is given the parameters of its function",
+            self.rec_index
+        );
         if name == "unstartable" {
             return Err("unstartable function".into());
         }
         self.events.push("start-body".into());
-        self.params = self.rec_params[self.rec_index].clone();
+        self.params = params;
         Ok(())
     }
 

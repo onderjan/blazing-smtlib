@@ -289,6 +289,11 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtClosedMaximumParser<H, P> {
     pub fn max_elements(&self) -> usize {
         self.max_elements
     }
+
+    /// The parser of each item.
+    pub(crate) fn inner_mut(&mut self) -> &mut P {
+        &mut self.inner
+    }
 }
 
 impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtClosedMaximumParser<H, P> {
@@ -366,6 +371,11 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParenMaximumParser<H, P> {
 
     pub fn max_elements(&self) -> usize {
         self.inner.max_elements()
+    }
+
+    /// The parser of each item.
+    pub(crate) fn inner_mut(&mut self) -> &mut P {
+        self.inner.inner_mut()
     }
 }
 

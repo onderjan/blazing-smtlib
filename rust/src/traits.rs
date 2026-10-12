@@ -352,7 +352,10 @@ pub trait SmtCommandHandler: SmtHandler {
     /// `define-funs-rec` with a single function. It is desugared before being handled.
     ///
     /// Consult the standard for proper handling.
-    fn start_recursive_body(&mut self) -> Result<(), Self::Error>;
+    fn start_recursive_body(
+        &mut self,
+        signature: SmtFunctionSignature<'_, Self::Sort>,
+    ) -> Result<(), Self::Error>;
 
     /// Ends the body of a recursive function (in `define-funs-rec`).
     ///
@@ -712,7 +715,10 @@ impl SmtCommandHandler for SmtSyntaxChecker {
         Ok(())
     }
 
-    fn start_recursive_body(&mut self) -> Result<(), Self::Error> {
+    fn start_recursive_body(
+        &mut self,
+        _signature: SmtFunctionSignature<'_, Self::Sort>,
+    ) -> Result<(), Self::Error> {
         Ok(())
     }
 

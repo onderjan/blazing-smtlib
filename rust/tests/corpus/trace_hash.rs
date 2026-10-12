@@ -766,8 +766,12 @@ impl SmtCommandHandler for TraceHash {
         Ok(())
     }
 
-    fn start_recursive_body(&mut self) -> Result<(), Self::Error> {
+    fn start_recursive_body(
+        &mut self,
+        signature: SmtFunctionSignature<'_, u64>,
+    ) -> Result<(), Self::Error> {
         self.byte(tag::START_RECURSIVE_BODY);
+        self.signature(signature);
         Ok(())
     }
 

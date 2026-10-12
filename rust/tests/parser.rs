@@ -395,7 +395,10 @@ impl SmtCommandHandler for Recording {
         self.commands.push("start-define-funs-rec");
         Ok(())
     }
-    fn start_recursive_body(&mut self) -> Result<(), Self::Error> {
+    fn start_recursive_body(
+        &mut self,
+        _signature: SmtFunctionSignature<'_, ()>,
+    ) -> Result<(), Self::Error> {
         self.commands.push("start-recursive-body");
         Ok(())
     }

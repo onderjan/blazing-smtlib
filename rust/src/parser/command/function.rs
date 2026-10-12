@@ -69,10 +69,17 @@ impl<H: SmtCommandHandler> SmtParse<H> for FunctionSignatureParser<H> {
     }
 }
 
-/// Parses a function body inside `define-funs-rec` or `define-fun-rec`, calling the handler for its start and end.
+/// Parses a function body inside `define-funs-rec`, calling the handler for its start and end.
+///
+/// The start is given the signature of the body, which this parser keeps
+/// for all the bodies of the command.
 pub(super) struct RecursiveBodyParser<H: SmtCommandHandler> {
     is_inner: bool,
     term_parser: SmtTermParser<H>,
+    /// The signatures of the command, one per body, in order.
+    signatures: SmtFunctionSignaturesBuf<H::Sort>,
+    /// The index of the body being parsed or about to be.
+    index: usize,
 }
 
 impl<H: SmtCommandHandler> RecursiveBodyParser<H> {
@@ -80,7 +87,16 @@ impl<H: SmtCommandHandler> RecursiveBodyParser<H> {
         Self {
             is_inner: false,
             term_parser: SmtTermParser::new(),
+            signatures: SmtFunctionSignaturesBuf::new(),
+            index: 0,
         }
+    }
+
+    /// Takes the signatures of a command; the first body comes next.
+    fn reset_signatures(&mut self) -> &mut SmtFunctionSignaturesBuf<H::Sort> {
+        self.signatures.clear();
+        self.index = 0;
+        &mut self.signatures
     }
 }
 
@@ -115,8 +131,13 @@ impl<H: SmtCommandHandler> RecursiveBodyParser<H> {
         token: Z::Token,
     ) -> Result<ControlFlow<()>, SmtParseError<H::Error>> {
         if !self.is_inner {
-            // signal the handler that we are starting a body term
-            handle_err(handler.start_recursive_body())?;
+            // signal the handler that we are starting a body term,
+            // giving it the signature of the body again
+            let signature = self
+                .signatures
+                .get(self.index)
+                .expect("there is a signature for every body");
+            handle_err(handler.start_recursive_body(signature))?;
             self.is_inner = true;
         }
 
@@ -129,8 +150,9 @@ impl<H: SmtCommandHandler> RecursiveBodyParser<H> {
             ControlFlow::Break(term) => {
                 // signal the handler that the body term has ended
                 handle_err(handler.end_recursive_body(term))?;
-                // reset and break
+                // reset and break, the next body has the next signature
                 self.is_inner = false;
+                self.index += 1;
                 Ok(ControlFlow::Break(()))
             }
         }
@@ -146,8 +168,6 @@ pub(super) struct DefineFunsRecParser<H: SmtCommandHandler> {
 
     signatures_parser: SmtParenMultipleParser<H, SmtParenParser<H, FunctionSignatureParser<H>>>,
     bodies_parser: SmtParenMaximumParser<H, RecursiveBodyParser<H>>,
-    /// The signatures handed over, reused across commands.
-    signatures: SmtFunctionSignaturesBuf<H::Sort>,
 }
 
 enum DefineFunsRecState {
@@ -163,7 +183,6 @@ impl<H: SmtCommandHandler> DefineFunsRecParser<H> {
             state: DefineFunsRecState::Signatures,
             signatures_parser: SmtParenMultipleParser::default(),
             bodies_parser: SmtParenMaximumParser::new(RecursiveBodyParser::new(), 0),
-            signatures: SmtFunctionSignaturesBuf::new(),
         }
     }
 }
@@ -216,15 +235,13 @@ impl<H: SmtCommandHandler> DefineFunsRecParser<H> {
                     // remember how many signatures we have and set it as a maximum for bodies
                     self.bodies_parser.set_maximum(signatures.len());
 
-                    // start recursive function bodies in the handler, passing the signatures
-                    self.signatures.clear();
+                    // start recursive function bodies in the handler, passing the signatures;
+                    // the body parser keeps them, as each body start is given its own again
+                    let buf = self.bodies_parser.inner_mut().reset_signatures();
                     for signature in signatures {
-                        signature.push_into(&mut self.signatures);
+                        signature.push_into(buf);
                     }
-                    let started = handler.start_define_funs_rec(self.signatures.view());
-                    // do not keep the handled sorts past the call
-                    self.signatures.clear();
-                    handle_err(started)?;
+                    handle_err(handler.start_define_funs_rec(buf.view()))?;
                     // move to parsing the bodies
                     self.state = DefineFunsRecState::Bodies;
                 }
@@ -248,6 +265,8 @@ impl<H: SmtCommandHandler> DefineFunsRecParser<H> {
                     // done, reset and break
                     // the bodies parser can have a changed number of maximum elements,
                     // but it will be changed before it is used next time
+                    // do not keep the handled sorts past the bodies
+                    self.bodies_parser.inner_mut().reset_signatures();
                     self.state = DefineFunsRecState::Signatures;
                     // the recursive function definitions end call
                     // will be made after the command-end parenthesis
