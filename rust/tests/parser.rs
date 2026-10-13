@@ -3,19 +3,26 @@
 
 mod common;
 
+use std::ops::ControlFlow;
+
 use common::{assert_error_span, assert_parser_error, parse, parse_with};
 
 use blazing_smtlib::{
     NonstandardCommandError, SmtAttributeValue, SmtAttributes, SmtBindings, SmtCommandHandler,
     SmtConstructors, SmtFunctionSignature, SmtFunctionSignatures, SmtHandler, SmtKeyword,
     SmtMatchCases, SmtMultiple, SmtNumeral, SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSort,
-    SmtSortArities, SmtSortedVars, SmtStringContent, SmtSymbol, SmtSymbols, SmtTerm,
+    SmtSortArities, SmtSortedVars, SmtSpan, SmtStringContent, SmtSymbol, SmtSymbols, SmtTerm,
+    lexer::SmtLexer,
     parser::{
         SmtClosedParser, SmtCommandOutcome, SmtCommandParser, SmtCommandPayloadParser,
-        SmtCommandRule, SmtSyntaxErrorKind, SmtTermParser,
+        SmtCommandRule, SmtParse, SmtParseError, SmtParseState, SmtScriptParser,
+        SmtSyntaxErrorKind, SmtTermParser,
     },
     reader::{SmtReadErrorCause, SmtReader},
-    token::{SmtTokenCategory, SmtVersion, SmtVersionPosture},
+    token::{
+        SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtProduce, SmtSyntaxToken, SmtTokenCategory,
+        SmtVersion, SmtVersionPosture, SmtVersionPostureBuilder, SmtVersionRefused,
+    },
 };
 
 #[test]
@@ -1016,4 +1023,202 @@ fn a_command_parser_outside_a_script_switches_nothing() {
     );
     // only the version in force at the start of the input
     assert_eq!(handler.commands, ["set-version 2.7", "set-info"]);
+}
+
+// --- A token-observing consumer built by a user ---
+//
+// The library offers no handler that receives whitespace and comments: a user
+// who needs them (a formatter that keeps comments, for one) builds a concrete
+// consumer of their own, which observes every token and hands the others to a
+// parser one at a time. These tests check that the public interface allows
+// it: the consumer below uses nothing a user cannot write.
+
+/// A producer offering the parser one token of another producer, with no
+/// lookahead, and forwarding the version and the discarding to it.
+struct OneToken<'z, Z> {
+    inner: &'z mut Z,
+    taken: bool,
+}
+
+impl<Z: SmtProduce> SmtProduce for OneToken<'_, Z> {
+    type Token = Z::Token;
+    type Lookahead = ();
+
+    fn syntax<'t>(&self, token: &'t Z::Token) -> SmtSyntaxToken<'t> {
+        self.inner.syntax(token)
+    }
+
+    fn next(&mut self) -> Option<Z::Token> {
+        if self.taken {
+            return None;
+        }
+        let token = self.inner.next()?;
+        self.taken = true;
+        Some(token)
+    }
+
+    fn peek(&self) -> Option<Z::Token> {
+        if self.taken { None } else { self.inner.peek() }
+    }
+
+    fn version(&self) -> SmtVersion {
+        self.inner.version()
+    }
+
+    fn set_version(&mut self, version: SmtVersion) -> Result<(), SmtVersionRefused> {
+        self.inner.set_version(version)
+    }
+
+    fn discard_rest(&mut self) {
+        self.inner.discard_rest()
+    }
+}
+
+/// A concrete consumer that records the span of every token handed over,
+/// records each comment in the handler's log as `comment`, and parses a
+/// script from the other tokens.
+struct Observing<'h> {
+    handler: &'h mut Recording,
+    parse_state: SmtParseState<Recording>,
+    parser: SmtScriptParser<Recording>,
+    version_set: bool,
+    spans: Vec<SmtSpan>,
+}
+
+impl SmtConsume for Observing<'_> {
+    type Result = ();
+    type Error = SmtParseError<NonstandardCommandError>;
+    const IS_CONCRETE: bool = true;
+}
+
+impl<'a> SmtConsumeFrom<SmtBatchCursor<'a>> for Observing<'_> {
+    fn consume(&mut self, cursor: &mut SmtBatchCursor<'a>) -> Result<ControlFlow<()>, Self::Error> {
+        // the handler learns the version at the start of every input
+        if !self.version_set {
+            self.handler.set_version(cursor.version());
+            self.version_set = true;
+        }
+        while let Some(token) = cursor.peek() {
+            self.spans.push(token.span());
+            match cursor.syntax(&token) {
+                SmtSyntaxToken::Whitespace(_) => {
+                    cursor.next();
+                    continue;
+                }
+                SmtSyntaxToken::Comment(_) => {
+                    self.handler.commands.push("comment");
+                    cursor.next();
+                    continue;
+                }
+                _ => {}
+            }
+            let mut one = OneToken {
+                inner: &mut *cursor,
+                taken: false,
+            };
+            let flow = self
+                .parser
+                .parse(self.handler, &mut self.parse_state, &mut one)?;
+            if flow.is_break() {
+                self.version_set = false;
+                return Ok(flow);
+            }
+        }
+        Ok(ControlFlow::Continue(()))
+    }
+}
+
+/// A posture that allows a switch from 2.7 to 2.0.
+fn posture_with_2_0() -> SmtVersionPosture {
+    let mut builder = SmtVersionPostureBuilder::new();
+    builder.add_allowed(SmtVersion::V2_0);
+    builder.build()
+}
+
+#[test]
+fn a_user_built_consumer_observes_every_token_and_parses_the_rest() {
+    // the string is lexed differently in 2.0, where `\"` is an escape, so the
+    // switch must reach the lexer; the input after (exit) is discarded
+    let input = b"; header\n(set-info :smt-lib-version 2.0) ; switch\n\
+        (set-info :source \"a\\\" b\")\n(assert (and x ; inside\n  true))\n\
+        ; before exit\n(exit) x ) ( 1 (check-sat";
+    let exit_end = input
+        .windows(6)
+        .position(|window| window == b"(exit)")
+        .expect("the input has an exit")
+        + 6;
+
+    let mut plain = Recording {
+        records_terms_and_attributes: true,
+        records_versions: true,
+        ..Recording::default()
+    };
+    SmtReader::script(&mut plain, posture_with_2_0(), SmtVersion::V2_7)
+        .read_all(&input[..])
+        .unwrap_or_else(|err| panic!("unexpected error at {:?}", err.span()));
+
+    let mut observed = Recording {
+        records_terms_and_attributes: true,
+        records_versions: true,
+        ..Recording::default()
+    };
+    let mut lexer = SmtLexer::new(
+        Observing {
+            handler: &mut observed,
+            parse_state: SmtParseState::new(),
+            parser: SmtScriptParser::new(posture_with_2_0()),
+            version_set: false,
+            spans: Vec::new(),
+        },
+        SmtVersion::V2_7,
+    );
+    lexer
+        .lex_all(input)
+        .unwrap_or_else(|err| panic!("unexpected error at {:?}", err.span()));
+    let spans = std::mem::take(&mut lexer.consumer_mut().spans);
+    drop(lexer);
+
+    // the tokens observed tile the input up to the exit, then the end of input
+    let (eof, tokens) = spans.split_last().expect("the end of input is observed");
+    let mut offset = 0;
+    for span in tokens {
+        assert_eq!(
+            span.start().offset(),
+            offset,
+            "a gap or overlap at {span:?}"
+        );
+        offset = span.end().offset();
+    }
+    assert_eq!(offset, exit_end as u64, "the tokens end at the exit");
+    assert_eq!(eof.start().offset(), eof.end().offset(), "{eof:?}");
+
+    // the calls are those of the library's own adapter, with the comments
+    // observed in their places among them
+    assert_eq!(
+        observed.commands,
+        [
+            "set-version 2.7",
+            "comment",
+            "attribute",
+            "set-info",
+            "set-version 2.0",
+            "comment",
+            "attribute",
+            "set-info",
+            "term",
+            "comment",
+            "term",
+            "term",
+            "assert",
+            "comment",
+            "exit",
+        ]
+    );
+    let without_comments: Vec<_> = observed
+        .commands
+        .iter()
+        .copied()
+        .filter(|call| *call != "comment")
+        .collect();
+    assert_eq!(without_comments, plain.commands);
 }
