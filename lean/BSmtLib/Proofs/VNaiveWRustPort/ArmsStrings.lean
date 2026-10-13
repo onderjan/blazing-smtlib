@@ -13,7 +13,7 @@ after its first byte, which the code reaches from several places, is proved once
 namespace BSmtLib.Proofs.Lexer.VNaiveWRustPort
 
 open BSmtLib.Proofs.Adapter VNaive BSmtLib.Proofs.Simulation
-open Spec.Lexer (Handed)
+open BSmtLibSpec.Lexer (Handed)
 open Lexer.Slice (get? get)
 
 /-! ## The naive lexer in a string under version 2.0 -/
@@ -65,13 +65,13 @@ theorem version_beq_iff {a b : Version} : (a == b) = true ↔ a = b := by
 section
 
 variable {floor : Option Nat} {low : Nat}
-variable {C : Spec.Lexer.Consumer} {hd : Bool} {iv : Version}
+variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Version}
 
 /-- What the loop of a string under version 2.0 keeps, from the index `consumed`: if the lexer
 state is in the string from `tokenStart`, and the naive lexer's run from the step's index
 `start0` is its run from the string `q` at `consumed`, then the loop ends the step as the naive
 lexer does. -/
-def LegacySpec (C : Spec.Lexer.Consumer) (v : Version) (hd : Bool) (iv : Version) (ver : Version)
+def LegacySpec (C : BSmtLibSpec.Lexer.Consumer) (v : Version) (hd : Bool) (iv : Version) (ver : Version)
     (input : ByteSlice) (start0 : Nat) (st0 : St) (loc0 : Location)
     (coll : List Handed) (held : List Lexeme) (tokenStart : Location) (base : Nat)
     (h : Lexer.WRustPort.Started floor low tokenStart) (origin consumed : Nat) : Prop :=
@@ -472,7 +472,7 @@ theorem legacySpec_lt (v : Version) (ver : Version) (input : ByteSlice) (start0 
 if the lexer state is in the string from `tokenStart`, and the naive lexer's run from the
 step's index `start0` is its run from the string `q` at `consumed`, then the loop ends the step
 as the naive lexer does. -/
-def StringSpec (C : Spec.Lexer.Consumer) (v : Version) (hd : Bool) (iv : Version) (ver : Version)
+def StringSpec (C : BSmtLibSpec.Lexer.Consumer) (v : Version) (hd : Bool) (iv : Version) (ver : Version)
     (input : ByteSlice) (start0 : Nat) (st0 : St) (loc0 : Location)
     (coll : List Handed) (held : List Lexeme) (tokenStart : Location) (base : Nat)
     (h : Lexer.WRustPort.Started floor low tokenStart) (origin consumed : Nat) : Prop :=

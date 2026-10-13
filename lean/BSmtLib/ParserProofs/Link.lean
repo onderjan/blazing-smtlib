@@ -13,8 +13,9 @@ holds for every spec handler.
 
 namespace BSmtLib.ParserProofs
 
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 
 section
 

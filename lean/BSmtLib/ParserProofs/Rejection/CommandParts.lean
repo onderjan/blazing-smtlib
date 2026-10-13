@@ -13,9 +13,11 @@ input can lead to only where the two agree (`LiteralSync`), and only such a stat
 
 namespace BSmtLib.ParserProofs.Rejection
 
-open BSmtLib.Spec.Grammar
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 open BSmtLib.Parser (Input PM Step TermState TermMode TermLevel termStep termComplete ListState
   SortDecState LiteralShape LiteralState literalStep SignatureState signatureStep
   FunctionDecState functionDecStep ConstructorState constructorStep DatatypeState datatypeStep
@@ -87,7 +89,7 @@ theorem sortDecStep_advances (version : BSmtLib.Version) :
 /-! ## Propositional literals -/
 
 /-- The symbol `not`, quoted or not. -/
-def NotLang : Lang := fun u => ∃ s : Tree.Symbol, s.name = Spec.Lexicon.chars "not" ∧
+def NotLang : Lang := fun u => ∃ s : Tree.Symbol, s.name = BSmtLibSpec.Regex.chars "not" ∧
   u = [.token (.symbol s)]
 
 /-- A propositional literal. -/
@@ -121,7 +123,7 @@ theorem notLang_symbol {s : Parser.Symbol} (h : s.isNot = true) :
   rw [slice_beq_utf8 _ _ utf8_not] at h
   exact of_decide_eq_true h
 
-theorem notLang_nonempty : ∃ u, NotLang u := ⟨_, ⟨⟨Spec.Lexicon.chars "not", false⟩, rfl, rfl⟩⟩
+theorem notLang_nonempty : ∃ u, NotLang u := ⟨_, ⟨⟨BSmtLibSpec.Regex.chars "not", false⟩, rfl, rfl⟩⟩
 
 theorem literalRem_init : ∀ u, literalRem .init u → LiteralLang u := fun _ h => h.2
 
@@ -225,7 +227,7 @@ theorem literalStep_advances (version : BSmtLib.Version) :
 
 section
 
-variable (version : Spec.Lexicon.Version)
+variable (version : BSmtLibSpec.Lexicon.Version)
 
 /-- The sorted variables of a signature, their `)` and the result sort. -/
 def paramsTail : Lang := cat (tok closeItem) (SortLang version)
@@ -376,7 +378,7 @@ end
 
 section
 
-variable (version : Spec.Lexicon.Version)
+variable (version : BSmtLibSpec.Lexicon.Version)
 
 /-- A constructor declaration of the version. -/
 def ConstructorLang : Lang :=
@@ -445,7 +447,7 @@ theorem constructorStep_advances (version : BSmtLib.Version) :
 
 section
 
-variable (version : Spec.Lexicon.Version)
+variable (version : BSmtLibSpec.Lexicon.Version)
 
 /-- A datatype declaration of the version. -/
 def DatatypeLang : Lang :=
@@ -651,13 +653,13 @@ theorem bodyStep_advances (version : BSmtLib.Version) :
     call_step
     exact Sound.pure hr
 
-theorem termRem_init {version : Spec.Lexicon.Version} :
+theorem termRem_init {version : BSmtLibSpec.Lexicon.Version} :
     ∀ u, termRem version Parser.TermState.init u → TermLang version u := by
   intro u hu
   obtain ⟨t, _, ht, rfl, rfl⟩ := hu
   simpa using ht
 
-theorem termRem_init_nonempty (version : Spec.Lexicon.Version) :
+theorem termRem_init_nonempty (version : BSmtLibSpec.Lexicon.Version) :
     ∃ u, termRem version Parser.TermState.init u :=
   termRem_nonempty version _ trivial
 

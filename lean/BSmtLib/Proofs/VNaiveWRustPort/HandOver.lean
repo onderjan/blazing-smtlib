@@ -17,7 +17,7 @@ namespace BSmtLib.Proofs.Lexer.VNaiveWRustPort
 
 open BSmtLib.Lexer.Internal (intoBatch)
 open BSmtLib.Proofs.Adapter VNaive BSmtLib.Proofs.Simulation
-open Spec.Lexer (Handed)
+open BSmtLibSpec.Lexer (Handed)
 open Lexer.WRustPort (callConsumer)
 open Lexer.WRustPort.Rust (flushCursor)
 
@@ -60,7 +60,7 @@ def stepLocation (c : WCore) (low base position : Nat) : Location :=
 
 section
 
-variable {C : Spec.Lexer.Consumer} {floor : Option Nat}
+variable {C : BSmtLibSpec.Lexer.Consumer} {floor : Option Nat}
 
 /-- The interruption is the error that the entry at the location is trailing input. -/
 def IsTrailingAt (location : Location) (e : Intr C floor) : Prop :=
@@ -82,7 +82,7 @@ end
 
 section
 
-variable {C : Spec.Lexer.Consumer} {floor : Option Nat} {low : Nat} {g : BatchTag}
+variable {C : BSmtLibSpec.Lexer.Consumer} {floor : Option Nat} {low : Nat} {g : BatchTag}
 
 /-- The call of the consumer. -/
 theorem wp_callConsumer {cursor : BatchCursor g} {h : cursor.HasNext} {s : BS floor low}
@@ -107,7 +107,7 @@ end
 
 section
 
-variable {C : Spec.Lexer.Consumer} {floor : Option Nat} {low : Nat} {g : BatchTag}
+variable {C : BSmtLibSpec.Lexer.Consumer} {floor : Option Nat} {low : Nat} {g : BatchTag}
 
 /-- The state with the version. -/
 def withVersion (s : BS floor low) (v : Version) : BS floor low :=
@@ -127,7 +127,7 @@ noncomputable def yields (c : BatchCursor g) (ls : List Lexeme) : List Lexeme :=
   (ls.take (cStop c)).drop (cNext c)
 
 /-- What the hand-over of a cursor leaves, as `pending` says. -/
-def FlushPost (C : Spec.Lexer.Consumer) (hd : Bool) (ver : Version) (coll : List Handed)
+def FlushPost (C : BSmtLibSpec.Lexer.Consumer) (hd : Bool) (ver : Version) (coll : List Handed)
     (xs : List Lexeme) (s : BS floor low) (Q : Unit → BS floor low → List Handed → Prop)
     (QE : Intr C floor → BS floor low → List Handed → Prop) : Prop :=
   match pending C hd ver coll xs with
@@ -371,11 +371,11 @@ end
 
 section
 
-variable {C : Spec.Lexer.Consumer} {floor : Option Nat} {low : Nat} {g : BatchTag}
+variable {C : BSmtLibSpec.Lexer.Consumer} {floor : Option Nat} {low : Nat} {g : BatchTag}
 
 /-- The interruption `e` is where the consumer stops on the lexemes, with `p` what it has done
 then, and `d` where the stop makes the lexer discard from, if it does. -/
-def Stops (C : Spec.Lexer.Consumer) (hd : Bool) (ver : Version) (coll : List Handed)
+def Stops (C : BSmtLibSpec.Lexer.Consumer) (hd : Bool) (ver : Version) (coll : List Handed)
     (ls : List Lexeme) (e : Intr C floor) (p : Prog) (d : Option Location) : Prop :=
   match pending C hd ver coll ls with
   | .cont _ => False

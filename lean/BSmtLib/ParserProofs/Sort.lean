@@ -16,10 +16,12 @@ is decided by the shape of the program, not by its result.
 
 namespace BSmtLib.ParserProofs
 
-open BSmtLib.Spec.Grammar
+open BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
 open BSmtLib.Parser (Input PM Step IdentState SortState SortMode SortLevel sortStep sortComplete)
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 open BSmtLib.SpecChecks.Parser (sort_nil sort_cons)
 
 section

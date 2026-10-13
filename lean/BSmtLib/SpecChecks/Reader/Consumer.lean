@@ -21,8 +21,12 @@ Not trusted: everything here is proved.
 
 namespace BSmtLib.SpecChecks.Reader
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Lexer BSmtLib.Spec.Grammar
-open BSmtLib.Spec.Parser BSmtLib.Spec.Reader
+open BSmtLibSpec BSmtLibSpec.Lexicon BSmtLibSpec.Lexer BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
+open BSmtLibSpec.Parser BSmtLibSpec.Reader
+open BSmtLibSpec.Parser.Properties
 
 /-- The location at the start of an input. -/
 def origin : Location := ⟨0, 0, 0⟩
@@ -112,7 +116,7 @@ theorem parse_of_takes (hF : FollowsTheTraversal parser) (hI : StandsFor parser 
 
 /-- The consumer's answer, given the run of the parser. -/
 theorem answer_eq (version : Version) (taken : List Handed) :
-    (parser.consumer item version).answer taken =
+    (Reader.consumer parser item version).answer taken =
       match (parser.parse version (taken.map item)).2 with
       | .finished => .break ()
       | .waiting =>
@@ -121,7 +125,7 @@ theorem answer_eq (version : Version) (taken : List Handed) :
 
 /-- A parser as a lexer's consumer breaks at the end of the input at the latest. -/
 theorem consumer_breaksAtEnd (version : Version) :
-    (parser.consumer item version).BreaksAtEnd := by
+    (Reader.consumer parser item version).BreaksAtEnd := by
   intro taken token htype
   rw [answer_eq]
   split <;> simp [htype]
@@ -136,7 +140,7 @@ theorem answer_of_takes {version : Version} {commands : List Tree.Command}
     {taken : List Handed} (hs : stood parser item taken = all.take taken.length)
     (hl : taken.length < all.length)
     (hend : taken.getLast?.map (·.type) ≠ some .endOfFile) :
-    (parser.consumer item version).answer taken = .continue := by
+    (Reader.consumer parser item version).answer taken = .continue := by
   rw [answer_eq, parse_of_takes hF hI ht hs (Nat.le_of_lt hl)]
   simp [hl, hend]
 
@@ -144,7 +148,7 @@ theorem answer_of_takes {version : Version} {commands : List Tree.Command}
 theorem answer_of_script {version : Version} {commands : List Tree.Command}
     {all : List Traversal.Received} (ht : Takes version commands all .finished)
     {taken : List Handed} (hs : stood parser item taken = all) :
-    (parser.consumer item version).answer taken = .break () := by
+    (Reader.consumer parser item version).answer taken = .break () := by
   have hl : taken.length = all.length := by rw [← hs]; simp
   rw [answer_eq, parse_of_takes hF hI ht (by rw [hs, hl, List.take_length]) (by omega)]
   simp [hl]
@@ -155,7 +159,7 @@ theorem switchTo_of_takes {version : Version} {commands : List Tree.Command}
     {all : List Traversal.Received} {ending : Ending} (ht : Takes version commands all ending)
     {taken : List Handed} (hs : stood parser item taken = all.take taken.length)
     (h₁ : 1 ≤ taken.length) (hl : taken.length ≤ all.length) :
-    (parser.consumer item version).switchTo taken = (requestsAt commands taken.length).1 := by
+    (Reader.consumer parser item version).switchTo taken = (requestsAt commands taken.length).1 := by
   show (requestsAfterLast (parser.parse version (taken.map item)).1).1 = _
   rw [parse_of_takes hF hI ht hs hl, requestsAfterLast_record ht h₁]
 
@@ -165,7 +169,7 @@ theorem discards_of_takes {version : Version} {commands : List Tree.Command}
     {all : List Traversal.Received} {ending : Ending} (ht : Takes version commands all ending)
     {taken : List Handed} (hs : stood parser item taken = all.take taken.length)
     (h₁ : 1 ≤ taken.length) (hl : taken.length ≤ all.length) :
-    (parser.consumer item version).discards taken = (requestsAt commands taken.length).2 := by
+    (Reader.consumer parser item version).discards taken = (requestsAt commands taken.length).2 := by
   show (requestsAfterLast (parser.parse version (taken.map item)).1).2 = _
   rw [parse_of_takes hF hI ht hs hl, requestsAfterLast_record ht h₁]
 

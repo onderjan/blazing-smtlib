@@ -13,7 +13,7 @@ slice's bytes (`lexSliceStep_vBytes`).
 namespace BSmtLib.Proofs.Lexer.VNaive
 
 open BSmtLib.Proofs.Adapter
-open Spec.Lexer (Handed)
+open BSmtLibSpec.Lexer (Handed)
 
 /-- The activity of a lexer that stops at its first error: lexing, or discarding. -/
 def Core.Plain (core : Core) : Prop :=
@@ -29,7 +29,7 @@ theorem Core.IdleOrDiscarding.plain {core : Core} (h : core.IdleOrDiscarding) : 
   rcases h with h | ⟨s, h⟩ <;> simp [Core.Plain, h]
 
 section
-variable (consumer : Spec.Lexer.Consumer)
+variable (consumer : BSmtLibSpec.Lexer.Consumer)
 
 /-- The hand-over of a lexeme leaves the lexer in its activity, or discarding. -/
 theorem handOverAt_activity (core : Core) (l : Lexeme) (hl : l.Valid) (taken : List Handed) :
@@ -224,8 +224,8 @@ def discardedOf (core : Core) : Option Location :=
 
 /-- The session of the naive lexer, in the spec's form: the tokens taken, where it stands, and
 its version and discarding. -/
-def sessionOf (taken : List Handed) (outcome : Spec.Lexer.Outcome consumer.Result consumer.Error)
-    (core : Core) : Spec.Lexer.Session consumer.Result consumer.Error :=
+def sessionOf (taken : List Handed) (outcome : BSmtLibSpec.Lexer.Outcome consumer.Result consumer.Error)
+    (core : Core) : BSmtLibSpec.Lexer.Session consumer.Result consumer.Error :=
   { taken, outcome, version := fromVersion core.version
     discardedFrom := (discardedOf core).map toLocation }
 
@@ -233,7 +233,7 @@ def sessionOf (taken : List Handed) (outcome : Spec.Lexer.Outcome consumer.Resul
 held result, fed the bytes and then, if the input has ended, the end of the input, after the
 tokens taken. -/
 def vSession (core : Core) (held : Option (Located consumer.Result)) (bytes : List UInt8)
-    (ended : Bool) (taken : List Handed) : Spec.Lexer.Session consumer.Result consumer.Error :=
+    (ended : Bool) (taken : List Handed) : BSmtLibSpec.Lexer.Session consumer.Result consumer.Error :=
   match vBytes consumer core held bytes taken with
   | ((.error f, core'), taken') =>
     sessionOf consumer taken' (.failed (failureOf ⟨f.cause, f.span, none⟩)) core'
@@ -293,7 +293,7 @@ theorem lexOps_lexEofStep (core : Core) (held : Option (Located consumer.Result)
 
 /-- The adapter's feeding of the naive lexer is the loop over the bytes of the slices, and then,
 if the input has ended, the end of the input. -/
-theorem runInput_vSession (ended : Bool) (slices : List Spec.Lexicon.Chars) :
+theorem runInput_vSession (ended : Bool) (slices : List BSmtLibSpec.Regex.Chars) :
     ∀ (core : Core) (held : Option (Located consumer.Result)) (taken : List Handed), core.Plain →
       let r := (VNaive.lexOps.runInput (consumer := consumer) ⟨{}, core, held⟩ ended slices).run
         taken
@@ -338,7 +338,7 @@ theorem runInput_vSession (ended : Bool) (slices : List Spec.Lexicon.Chars) :
 theorem initial_plain (version : Version) : (Core.initial version).Plain := trivial
 
 /-- What the adapter makes of the naive lexer with the consumer, on its first input. -/
-theorem lexing_vNaive (version : Spec.Lexicon.Version) (slices : List Spec.Lexicon.Chars)
+theorem lexing_vNaive (version : BSmtLibSpec.Lexicon.Version) (slices : List BSmtLibSpec.Regex.Chars)
     (ended : Bool) :
     lexing VNaive.lexOps consumer version [] slices ended =
       vSession consumer (Core.initial (toVersion version)) none slices.flatten ended [] := by

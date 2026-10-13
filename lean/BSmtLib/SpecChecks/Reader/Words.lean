@@ -1,4 +1,5 @@
-import BSmtLib.Spec.Parser
+import BSmtLibSpec.Parser
+import BSmtLibSpec.Grammar.Properties
 import BSmtLib.SpecChecks.Lemmas
 
 /-!
@@ -17,8 +18,12 @@ Not trusted: everything here is proved.
 
 namespace BSmtLib.SpecChecks.Reader
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Grammar BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec BSmtLibSpec.Lexicon BSmtLibSpec.Grammar BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
+open BSmtLibSpec.Parser.Traversal
 
 /-- The reserved words of 2.7. -/
 private abbrev words27 : List String := basicReservedWords .v2_7 ++ commandNames .v2_7

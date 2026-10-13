@@ -8,7 +8,7 @@ name = "BSmtLib"
 # the trusted specification of SMT-LIB
 [[lean_lib]]
 name = "BSmtLibSpec"
-roots = ["BSmtLib.Spec"]
+roots = ["BSmtLibSpec"]
 
 # checks of the specification against the standard's examples; not trusted
 [[lean_lib]]

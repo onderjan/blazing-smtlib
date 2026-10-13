@@ -16,7 +16,10 @@ Not trusted: everything here is proved.
 
 namespace BSmtLib.SpecChecks.Lexicon
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Lexicon.Regex BSmtLib.Spec.Grammar
+open BSmtLibSpec BSmtLibSpec.Lexicon BSmtLibSpec.Regex BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
 
 /-- The category and characters the token is written back as: those of what it stands for. -/
 def rewriteForm (version : Version) (token : Token) : Category × Chars :=
@@ -74,7 +77,7 @@ theorem rewriteForm_head {version : Version} {token : Token}
 
 /-- Delimitation looks only at the first character after a token. -/
 theorem delimited_of_head {category : Category} {rest rest' : Chars}
-    (h : Delimited category rest) (he : rest'.head? = rest.head?) : Delimited category rest' := by
+    (h : Tokenization.Delimited category rest) (he : rest'.head? = rest.head?) : Tokenization.Delimited category rest' := by
   rcases h with h | h | rfl | ⟨c, more, rfl, hc⟩
   · exact Or.inl h
   · exact Or.inr (Or.inl h)
@@ -105,7 +108,7 @@ theorem readConcreteFrom_token {offset : Nat} {w s rest : Chars} {category : Cat
 
 /-- The rewritten input starts with the character the input starts with. -/
 theorem rewrite_head {version : Version} {offset : Nat} {input : Chars} {tokens : List Token}
-    (h : TokenizationFrom version offset input tokens) (out : Nat) :
+    (h : Tokenization.From version offset input tokens) (out : Nat) :
     (printConcrete (rewrite version out (readConcreteFrom offset input tokens))).head? =
       input.head? := by
   cases h with
@@ -130,21 +133,21 @@ theorem rewrite_head {version : Version} {offset : Nat} {input : Chars} {tokens 
 
 /-- The rewritten input has a tokenisation: the tokens written back, where they then stand. -/
 theorem rewrite_tokenization {version : Version} {offset : Nat} {input : Chars}
-    {tokens : List Token} (h : TokenizationFrom version offset input tokens) (out : Nat) :
-    TokenizationFrom version out
+    {tokens : List Token} (h : Tokenization.From version offset input tokens) (out : Nat) :
+    Tokenization.From version out
       (printConcrete (rewrite version out (readConcreteFrom offset input tokens)))
       (rewrite version out (readConcreteFrom offset input tokens)).tokens := by
   induction h generalizing out with
   | done hw =>
     simpa [readConcreteFrom, rewrite, rewritePieces, printConcrete, Concrete.tokens] using
-      TokenizationFrom.done hw
+      Tokenization.From.done hw
   | @token w category s rest offset tokens hw hs hd hrest ih =>
     rw [readConcreteFrom_token]
     simp only [rewrite, rewritePieces, printConcrete_cons, Concrete.tokens, List.map_cons]
     have ih' := ih (out + w.length +
       (rewriteForm version ⟨category, offset + w.length, s⟩).2.length)
     simp only [rewrite, Concrete.tokens] at ih'
-    refine TokenizationFrom.token hw (lexForm_regex hs) ?_ ih'
+    refine Tokenization.From.token hw (lexForm_regex hs) ?_ ih'
     have hhead := rewrite_head hrest
       (out + w.length + (rewriteForm version ⟨category, offset + w.length, s⟩).2.length)
     simp only [rewrite] at hhead
@@ -281,7 +284,7 @@ theorem printConcrete_rewritePieces_similar (version : Version) :
 
 /-- The concrete reading of an input that ends with its last token has nothing after it. -/
 theorem readConcreteFrom_final_nil {version : Version} {offset : Nat} {input : Chars}
-    {tokens : List Token} (h : TokenizationFrom version offset input tokens)
+    {tokens : List Token} (h : Tokenization.From version offset input tokens)
     (hend : ∃ last, tokens.getLast? = some last ∧
       last.offset + last.text.length = offset + input.length) :
     (readConcreteFrom offset input tokens).final = [] := by

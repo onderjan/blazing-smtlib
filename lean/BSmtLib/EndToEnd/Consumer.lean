@@ -6,7 +6,7 @@ import BSmtLib.EndToEnd.Adapters
 /-!
 # The library's script parser as a consumer of the lexer spec
 
-`scriptConsumer version` is a consumer as `Spec.Lexer` states consumers (`Spec.Lexer.Consumer`):
+`scriptConsumer version` is a consumer as `BSmtLibSpec.Lexer` states consumers (`BSmtLibSpec.Lexer.Consumer`):
 what it answers after each token is what the library's script parser does in its recording run
 on the tokens taken so far (`Rejection.libraryParser`), each read as the parser's token that
 stands for it (`itemOf`); it asks the producer for what that run asks for after the last token's
@@ -20,9 +20,13 @@ declaration and discards after `exit` (`answer_takes`, `switchTo_takes`, `discar
 
 namespace BSmtLib.EndToEnd
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Grammar BSmtLib.Spec.Parser
-open BSmtLib.Spec.Lexer (Handed Consumer Answer)
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec BSmtLibSpec.Lexicon BSmtLibSpec.Grammar BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
+open BSmtLibSpec.Lexer (Handed Consumer Answer)
+open BSmtLibSpec.Parser.Traversal
 open BSmtLib.ParserProofs
 open BSmtLib.ParserProofs.Rejection
 open BSmtLib.Parser (Input)
@@ -34,12 +38,12 @@ theorem received_itemOf_ne (handed : Handed) : Bridge.received (itemOf handed) �
   split <;> (try split) <;> simp [Bridge.received]
 
 /-- The end of the input stands for the end of the input. -/
-theorem rcv_itemOf_endOfFile (input : Chars) : rcv (itemOf (Spec.Lexer.endOfFile input)) =
+theorem rcv_itemOf_endOfFile (input : Chars) : rcv (itemOf (BSmtLibSpec.Lexer.endOfFile input)) =
     .endOfInput := rfl
 
 /-- The end of the input located anywhere stands for the end of the input. -/
-theorem rcv_itemOf_endOfFileAt (location : Spec.Lexer.Location) :
-    rcv (itemOf (Spec.Lexer.endOfFileAt location)) = .endOfInput := rfl
+theorem rcv_itemOf_endOfFileAt (location : BSmtLibSpec.Lexer.Location) :
+    rcv (itemOf (BSmtLibSpec.Lexer.endOfFileAt location)) = .endOfInput := rfl
 
 /-- A token of a tokenisation, handed over, stands for what it is in the grammar. -/
 theorem rcv_itemOf_handed {version : Lexicon.Version} (input : Chars) {token : Lexicon.Token}
@@ -110,11 +114,11 @@ theorem scriptConsumer_concrete (version : Lexicon.Version) :
 
 /-- For a consumer that does not take whitespace and comments, the entries ready from an offset
 are the tokens of the input from there, read on its own. -/
-theorem readyFrom_false (feed : Lexicon.Version → List Lexicon.Chars → Bool → Spec.Lexer.Fed)
-    (version : Lexicon.Version) (input : Lexicon.Chars) (ended : Bool) (offset : Nat) :
-    Spec.Lexer.readyFrom feed false version input ended offset =
-      Spec.Lexer.segment feed version input ended offset := by
-  simp [Spec.Lexer.readyFrom, Spec.Lexer.withLayout]
+theorem readyFrom_false (feed : Lexicon.Version → List Regex.Chars → Bool → BSmtLibSpec.Lexer.Fed)
+    (version : Lexicon.Version) (input : Regex.Chars) (ended : Bool) (offset : Nat) :
+    BSmtLibSpec.Lexer.readyFrom feed false version input ended offset =
+      BSmtLibSpec.Lexer.segment feed version input ended offset := by
+  simp [BSmtLibSpec.Lexer.readyFrom, BSmtLibSpec.Lexer.withLayout]
 
 theorem scriptConsumer_breaksAtEnd (version : Lexicon.Version) :
     (scriptConsumer version).BreaksAtEnd := by

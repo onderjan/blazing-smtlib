@@ -12,11 +12,13 @@ and at the `)`, after `set-info`, it fails.
 
 namespace BSmtLib.ParserProofs
 
-open BSmtLib.Spec.Grammar
+open BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
 open BSmtLib.Parser (Input PM Step Payload CommandOutcome FinalCall payloadStep commandStep
   AttributeState AttributeMode attributeStep Declaration CommandState)
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 open BSmtLib.SpecChecks.Parser (Program.callUnit)
 
 section
@@ -48,7 +50,7 @@ def NamesNoVersion (value : Option Tree.AttributeValue) : Prop :=
   ∀ decimal, value = some (.constant (.decimal decimal)) → versionOfNumber decimal = none
 
 /-- After the keyword `:smt-lib-version`, a token that is no supported version's number. -/
-theorem keyword_next {token : Input} {first : Spec.Grammar.SyntaxToken}
+theorem keyword_next {token : Input} {first : BSmtLibSpec.Grammar.SyntaxToken}
     (hfirst : ∀ text, first = .decimal text → versionOfNumber text = none)
     (htoken : Bridge.received token = some (.token first)) :
     Declaration.next .keyword token = .value none := by
@@ -68,15 +70,15 @@ include hA
 /-- A `set-info` of `:smt-lib-version` whose value names no supported version: `set-info` at its
 `)`, then the failure. -/
 theorem setInfo_payload_refused (value : Option Tree.AttributeValue) (hvalue : NamesNoVersion value)
-    (hvalid : (⟨Spec.Lexicon.chars "smt-lib-version", value⟩ : Tree.Attribute).Valid
+    (hvalid : (⟨BSmtLibSpec.Regex.chars "smt-lib-version", value⟩ : Tree.Attribute).Valid
       (Bridge.version version))
     {payload : List Input}
-    (hs : Stands payload (Tree.Attribute.tokens ⟨Spec.Lexicon.chars "smt-lib-version", value⟩)) :
+    (hs : Stands payload (Tree.Attribute.tokens ⟨BSmtLibSpec.Regex.chars "smt-lib-version", value⟩)) :
     PayloadRuns points version (Payload.init .setInfo version)
       (payload ++ [.parenClose])
       (adaptRun (do
-        take points (.keyword (Spec.Lexicon.chars "smt-lib-version"))
-        let handled ← attributeThen points h (Spec.Lexicon.chars "smt-lib-version") .parenClose
+        take points (.keyword (BSmtLibSpec.Regex.chars "smt-lib-version"))
+        let handled ← attributeThen points h (BSmtLibSpec.Regex.chars "smt-lib-version") .parenClose
           value
         Program.callUnit h (.commandSetInfo handled)))
       fun _ => Parser.syntaxError .unsupportedVersion := by
@@ -107,7 +109,7 @@ theorem setInfo_payload_refused (value : Option Tree.AttributeValue) (hvalue : N
       ∃ keywordToken second others first,
         payload ++ [.parenClose] = keywordToken :: second :: others ∧
         Bridge.received keywordToken =
-          some (.token (.keyword (Spec.Lexicon.chars "smt-lib-version"))) ∧
+          some (.token (.keyword (BSmtLibSpec.Regex.chars "smt-lib-version"))) ∧
         Bridge.received second = some (.token first) ∧
         ∀ text, first = .decimal text → versionOfNumber text = none := by
     cases value with
@@ -154,7 +156,7 @@ variable {h : Traversal.Handler (StateT H m) (Parser.Handler.Error H) (valuesOf 
 
 /-- The frame of a command whose payload parser fails at its end (see `command_frame`). -/
 theorem command_frame_throw {name : CommandNameReserved} {s : String}
-    (hname : Bridge.reserved (.commandName name) = Spec.Lexicon.chars s)
+    (hname : Bridge.reserved (.commandName name) = BSmtLibSpec.Regex.chars s)
     {payload : List Input} {program : PM H Unit}
     {e : Parser.ParseErrorCause (Parser.Handler.Error H)}
     (hruns : PayloadRuns points version (Payload.init name version) payload program
@@ -185,26 +187,26 @@ theorem command_runs_refused (hA : Agrees h) (command : Tree.Command)
       (do
         adaptRun (Traversal.command points h command)
         (throw (.syntax .unsupportedVersion) : PM H (Option (CommandOutcome × List Input)))) := by
-  obtain ⟨value, rfl, hvalue⟩ : ∃ value, command = .setInfo ⟨Spec.Lexicon.chars "smt-lib-version",
+  obtain ⟨value, rfl, hvalue⟩ : ∃ value, command = .setInfo ⟨BSmtLibSpec.Regex.chars "smt-lib-version",
       value⟩ ∧ NamesNoVersion value := by
     cases command with
     | setInfo info =>
       obtain ⟨keyword, value⟩ := info
       simp only [Tree.Command.modeAfter] at hmode
-      by_cases hk : keyword = Spec.Lexicon.chars "smt-lib-version"
+      by_cases hk : keyword = BSmtLibSpec.Regex.chars "smt-lib-version"
       · subst hk
         refine ⟨value, rfl, fun decimal hv => ?_⟩
         subst hv
         simpa using hmode
       · simp [hk] at hmode
     | _ => simp [Tree.Command.modeAfter] at hmode
-  have htokens : (Tree.Command.setInfo ⟨Spec.Lexicon.chars "smt-lib-version", value⟩).tokens =
-      commandTokens "set-info" (Tree.Attribute.tokens ⟨Spec.Lexicon.chars "smt-lib-version",
+  have htokens : (Tree.Command.setInfo ⟨BSmtLibSpec.Regex.chars "smt-lib-version", value⟩).tokens =
+      commandTokens "set-info" (Tree.Attribute.tokens ⟨BSmtLibSpec.Regex.chars "smt-lib-version",
         value⟩) := rfl
   rw [htokens] at hs
   obtain ⟨inner, rfl, hinner⟩ := Stands.split_paren hs
   obtain ⟨nameToken, payload, rfl, hnameToken, hpayloadTokens⟩ := Stands.split_cons hinner
-  have hname : Bridge.reserved (.commandName .setInfo) = Spec.Lexicon.chars "set-info" := rfl
+  have hname : Bridge.reserved (.commandName .setInfo) = BSmtLibSpec.Regex.chars "set-info" := rfl
   rw [Input.received_commandName hname hnameToken, SpecChecks.Parser.command_setInfo, adaptRun_bind]
   have := command_frame_throw (points := points) hname
     (setInfo_payload_refused hA value hvalue hvalid hpayloadTokens) rest
@@ -221,7 +223,7 @@ failure. -/
 theorem commands_refused {m : Type → Type} [Monad m] {ε : Type} {values : Values}
     {points : Points m} {handler : Traversal.Handler m ε values}
     (producer : Producer m) (policy : VersionPolicy)
-    (declarations : Nat) {version : Spec.Lexicon.Version} {command : Tree.Command}
+    (declarations : Nat) {version : BSmtLibSpec.Lexicon.Version} {command : Tree.Command}
     (hmode : command.modeAfter version = none) (rest : List Tree.Command) :
     Traversal.commands points handler producer policy declarations (command :: rest) =
       (Traversal.command points handler command >>= fun _ =>
@@ -230,13 +232,13 @@ theorem commands_refused {m : Type → Type} [Monad m] {ε : Type} {values : Val
   | setInfo info =>
     obtain ⟨keyword, value⟩ := info
     simp only [Tree.Command.modeAfter] at hmode
-    by_cases hk : keyword = Spec.Lexicon.chars "smt-lib-version"
+    by_cases hk : keyword = BSmtLibSpec.Regex.chars "smt-lib-version"
     · subst hk
-      have hd : (Tree.Command.setInfo ⟨Spec.Lexicon.chars "smt-lib-version", value⟩).declaredVersion
+      have hd : (Tree.Command.setInfo ⟨BSmtLibSpec.Regex.chars "smt-lib-version", value⟩).declaredVersion
           = none := by
         rcases value with _ | ⟨⟨_ | decimal | _ | _ | _⟩ | _ | _⟩ <;>
           simp_all [Tree.Command.declaredVersion]
-      have hn : (Tree.Command.setInfo ⟨Spec.Lexicon.chars "smt-lib-version", value⟩).namesNoVersion
+      have hn : (Tree.Command.setInfo ⟨BSmtLibSpec.Regex.chars "smt-lib-version", value⟩).namesNoVersion
           = true := by
         rcases value with _ | ⟨⟨_ | decimal | _ | _ | _⟩ | _ | _⟩ <;>
           simp_all [Tree.Command.namesNoVersion]
@@ -256,7 +258,7 @@ any rest: the spec's commands under the policy of the posture. Where a declarati
 supported version ends the commands, both fail after it.
 -/
 theorem takes_runs (hA : Agrees h) (producer : Producer (StateT H m))
-    (posture : Parser.VersionPosture) {start : Spec.Lexicon.Version} {commands : List Tree.Command}
+    (posture : Parser.VersionPosture) {start : BSmtLibSpec.Lexicon.Version} {commands : List Tree.Command}
     {taken : List Received} {ending : Ending} (htakes : Takes start commands taken ending) :
     ∀ (version : BSmtLib.Version), Bridge.version version = start →
     ∀ (declarations : Nat) {inputs : List Input},

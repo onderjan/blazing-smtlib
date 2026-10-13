@@ -9,7 +9,7 @@ the tokens of the file's commands, each command read in the version in force, an
 takes them, switches the version after each version declaration and has the rest discarded after
 `exit`, and finishes at the end of the input (`files_runs`).
 
-The lexer reads the input after a switch of the version on its own (`Spec.Lexer.segment`); until
+The lexer reads the input after a switch of the version on its own (`BSmtLibSpec.Lexer.segment`); until
 the next switch, the commands it reads are a block whose characters end with a `)`, so the
 lexer has handed their tokens over whatever follows (`command_block`).
 
@@ -18,8 +18,12 @@ Not trusted: everything here is proved.
 
 namespace BSmtLib.SpecChecks.Reader
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Lexer BSmtLib.Spec.Grammar
-open BSmtLib.Spec.Parser BSmtLib.Spec.Reader
+open BSmtLibSpec BSmtLibSpec.Lexicon BSmtLibSpec.Lexer BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
+open BSmtLibSpec.Parser BSmtLibSpec.Reader
+open BSmtLibSpec.Parser.Properties
 open BSmtLib.SpecChecks.Lexicon BSmtLib.SpecChecks.Lexer BSmtLib.SpecChecks.Grammar
 
 /-! ## Runs of a consumer that continues -/
@@ -102,7 +106,7 @@ theorem blockHanded_append (version : Version) (input : Chars) (offset : Nat)
 
 /-- A tokenisation with no tokens is one from any offset. -/
 theorem tokenizationFrom_nil_offset {version : Version} {offset offset' : Nat} {input : Chars}
-    (h : TokenizationFrom version offset input []) : TokenizationFrom version offset' input [] := by
+    (h : Tokenization.From version offset input []) : Tokenization.From version offset' input [] := by
   cases h with
   | done hw => exact .done hw
 
@@ -140,9 +144,9 @@ theorem command_block (hL : Correct lexing.fed) (hI : StandsFor parser item)
     (hdrop : input.drop stop = segment ++ rest) (hos : offset ≤ stop)
     (hblock : Tokenization version ((input.drop offset).take (stop - offset)) block)
     (hclosed : stop = offset ∧ block = [] ∨ EndsWithClose block (stop - offset))
-    (htok : TokenizationExactly version stop segment tokens)
+    (htok : Tokenization.Exactly version stop segment tokens)
     (hic : IsCommand version (tokens.map (SyntaxToken.ofToken version)) command) :
-    ∃ rel more, (Spec.Lexer.segment lexing.fed version input true offset).handed =
+    ∃ rel more, (BSmtLibSpec.Lexer.segment lexing.fed version input true offset).handed =
         blockHanded version input offset (block ++ rel) ++ more ∧
       stood parser item (blockHanded version input offset rel) =
         command.tokens.map .token ∧
@@ -162,7 +166,7 @@ theorem command_block (hL : Correct lexing.fed) (hI : StandsFor parser item)
     exact hne (List.append_eq_nil_iff.mp hdrop.symm).1
   -- the command's tokens, read from the offset
   have hst : stop = (stop - offset) + offset := by omega
-  have htok₁ : TokenizationFrom version ((stop - offset) + offset) segment tokens := by
+  have htok₁ : Tokenization.From version ((stop - offset) + offset) segment tokens := by
     rw [← hst]; exact htok.1
   obtain ⟨rel, hrel, htrel⟩ := tokenizationFrom_moveBy_inv htok₁
   have hclose := endsWithClose_of_command htok hic
@@ -193,7 +197,7 @@ theorem command_block (hL : Correct lexing.fed) (hI : StandsFor parser item)
     exact endsWithClose_append (tokens := block) hcloseRel
   obtain ⟨more, hmore⟩ := handed_close_prefix hL hall hallClose rest
   refine ⟨rel, more.map (Handed.after (input.take offset)), ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · simp only [Spec.Lexer.segment, hsplit]
+  · simp only [BSmtLibSpec.Lexer.segment, hsplit]
     rw [hmore]
     simp [blockHanded, hsplit, Function.comp_def]
   · simp only [stood, blockHanded, List.map_map, hic.2, hrel]
@@ -225,10 +229,10 @@ theorem command_block (hL : Correct lexing.fed) (hI : StandsFor parser item)
 handed over its tokens and the end of the file, and has not failed. -/
 theorem segment_complete (hL : Correct lexing.fed) {version : Version} {input : Chars}
     {offset : Nat} {tokens : List Token} (ht : Tokenization version (input.drop offset) tokens) :
-    Spec.Lexer.segment lexing.fed version input true offset =
+    BSmtLibSpec.Lexer.segment lexing.fed version input true offset =
       ⟨blockHanded version input offset tokens ++
         [(endOfFile (input.drop offset)).after (input.take offset)], false⟩ := by
-  simp [Spec.Lexer.segment, fed_complete hL ht, blockHanded, Function.comp_def]
+  simp [BSmtLibSpec.Lexer.segment, fed_complete hL ht, blockHanded, Function.comp_def]
 
 /-- The empty input has no tokens. -/
 theorem tokenization_nil (version : Version) : Tokenization version [] [] :=
@@ -255,10 +259,10 @@ theorem command_steps {start : Version} {all : List Tree.Command} {command : Tre
     (hstood : stood parser item tokens = command.tokens.map .token)
     (htype : ∀ handed ∈ tokens, handed.type ≠ .endOfFile) :
     ∀ i, 1 ≤ i → i ≤ tokens.length →
-      (parser.consumer item start).answer (taken ++ tokens.take i) = .continue ∧
-      (parser.consumer item start).switchTo (taken ++ tokens.take i) =
+      (Reader.consumer parser item start).answer (taken ++ tokens.take i) = .continue ∧
+      (Reader.consumer parser item start).switchTo (taken ++ tokens.take i) =
         (requestsAt (command :: commands) i).1 ∧
-      (parser.consumer item start).discards (taken ++ tokens.take i) =
+      (Reader.consumer parser item start).discards (taken ++ tokens.take i) =
         (requestsAt (command :: commands) i).2 := by
   intro i h₁ h₂
   have hl : tokens.length = command.tokens.length := by
@@ -325,16 +329,16 @@ the parser having taken what a parser takes for the whole script.
 -/
 theorem files_runs (hL : Correct lexing.fed) {start : Version} {input : Chars}
     {all : List Tree.Command} (hS : Takes start all (received all) .finished) :
-    ∀ {version stop rest commands}, FileFrom version stop rest commands →
+    ∀ {version stop rest commands}, File.From version stop rest commands →
     ∀ (taken : List Handed) (offset : Nat) (block : List Token),
       received all = stood parser item taken ++ received commands →
       (∀ i, 1 ≤ i → requestsAt all (taken.length + i) = requestsAt commands i) →
       input.drop stop = rest → stop ≤ input.length → offset ≤ stop →
       Tokenization version ((input.drop offset).take (stop - offset)) block →
       (stop = offset ∧ block = [] ∨ EndsWithClose block (stop - offset)) →
-      ∃ more location, Runs lexing.fed (parser.consumer item start) start input true version
-        ((Spec.Lexer.segment lexing.fed version input true offset).handed.drop block.length)
-        (Spec.Lexer.segment lexing.fed version input true offset).failed taken
+      ∃ more location, Runs lexing.fed (Reader.consumer parser item start) start input true version
+        ((BSmtLibSpec.Lexer.segment lexing.fed version input true offset).handed.drop block.length)
+        (BSmtLibSpec.Lexer.segment lexing.fed version input true offset).failed taken
         ⟨taken ++ more, .finished () location, start, none⟩ ∧
         stood parser item (taken ++ more) = received all := by
   intro version stop rest commands h
@@ -382,10 +386,10 @@ theorem files_runs (hL : Correct lexing.fed) {start : Version} {input : Chars}
     generalize blockHanded version input offset rel = toks at *
     have hl : toks.length = command.tokens.length := by
       simpa [stood] using congrArg List.length hstood
-    have hdrop₁ : (Spec.Lexer.segment lexing.fed version input true offset).handed.drop
+    have hdrop₁ : (BSmtLibSpec.Lexer.segment lexing.fed version input true offset).handed.drop
         block.length = toks ++ more := by
       rw [hseg, List.drop_left' (by simp [blockHanded])]
-    have hdrop₂ : (Spec.Lexer.segment lexing.fed version input true offset).handed.drop
+    have hdrop₂ : (BSmtLibSpec.Lexer.segment lexing.fed version input true offset).handed.drop
         (block ++ rel).length = more := by
       rw [hseg, ← List.append_assoc, List.drop_left' (by simp [blockHanded, hrl])]
     -- what holds after the command
@@ -412,9 +416,9 @@ theorem files_runs (hL : Correct lexing.fed) {start : Version} {input : Chars}
     have hlastEnd : last.«end».offset = stop + segment.length := by
       simpa using hlast
     have hinit : ∀ i, 1 ≤ i → i ≤ init.length →
-        (parser.consumer item start).answer (taken ++ (init ++ [last]).take i) = .continue ∧
-        (parser.consumer item start).discards (taken ++ (init ++ [last]).take i) = false ∧
-        (parser.consumer item start).switchTo (taken ++ (init ++ [last]).take i) = none := by
+        (Reader.consumer parser item start).answer (taken ++ (init ++ [last]).take i) = .continue ∧
+        (Reader.consumer parser item start).discards (taken ++ (init ++ [last]).take i) = false ∧
+        (Reader.consumer parser item start).switchTo (taken ++ (init ++ [last]).take i) = none := by
       intro i h₁ h₂
       obtain ⟨ha, hs, hd⟩ := steps i h₁ (by simp; omega)
       have hlt : i < command.tokens.length := by simp at hl; omega
@@ -449,7 +453,7 @@ theorem files_runs (hL : Correct lexing.fed) {start : Version} {input : Chars}
       refine runs_through hinit htypeInit (Runs.continues htypeLast ?_ (by rw [List.append_assoc]; exact hd) ?_)
       · simpa using ha
       · rw [List.append_assoc, hs]
-        simpa [following, readyFrom, withLayout, hlastEnd, List.append_assoc, RecordingParser.consumer] using hruns
+        simpa [following, readyFrom, withLayout, hlastEnd, List.append_assoc, Reader.consumer] using hruns
   | @stop version stop segment tokens command rest htok hic hm =>
     intro taken offset block hrec hreq hdrop hle hos hblock hclosed
     obtain rfl := Parser.modeAfter_unparsed hm
@@ -463,7 +467,7 @@ theorem files_runs (hL : Correct lexing.fed) {start : Version} {input : Chars}
     generalize blockHanded version input offset rel = toks at *
     have hl : toks.length = Tree.Command.exit.tokens.length := by
       simpa [stood] using congrArg List.length hstood
-    have hdrop₁ : (Spec.Lexer.segment lexing.fed version input true offset).handed.drop
+    have hdrop₁ : (BSmtLibSpec.Lexer.segment lexing.fed version input true offset).handed.drop
         block.length = toks ++ more := by
       rw [hseg, List.drop_left' (by simp [blockHanded])]
     have hne' : toks ≠ [] := by
@@ -471,9 +475,9 @@ theorem files_runs (hL : Correct lexing.fed) {start : Version} {input : Chars}
     obtain ⟨init, last, rfl⟩ : ∃ init last, toks = init ++ [last] :=
       ⟨_, _, (List.dropLast_concat_getLast hne').symm⟩
     have hinit : ∀ i, 1 ≤ i → i ≤ init.length →
-        (parser.consumer item start).answer (taken ++ (init ++ [last]).take i) = .continue ∧
-        (parser.consumer item start).discards (taken ++ (init ++ [last]).take i) = false ∧
-        (parser.consumer item start).switchTo (taken ++ (init ++ [last]).take i) = none := by
+        (Reader.consumer parser item start).answer (taken ++ (init ++ [last]).take i) = .continue ∧
+        (Reader.consumer parser item start).discards (taken ++ (init ++ [last]).take i) = false ∧
+        (Reader.consumer parser item start).switchTo (taken ++ (init ++ [last]).take i) = none := by
       intro i h₁ h₂
       obtain ⟨ha, hs, hd⟩ := steps i h₁ (by simp; omega)
       have hlt : i < Tree.Command.exit.tokens.length := by simp at hl; omega
@@ -499,7 +503,7 @@ theorem files_runs (hL : Correct lexing.fed) {start : Version} {input : Chars}
     refine runs_through hinit htypeInit ?_
     have := Runs.discardsToEnd (feed := lexing.fed) (start := start) (input := input)
       (version := version) (ready := more)
-      (failed := (Spec.Lexer.segment lexing.fed version input true offset).failed)
+      (failed := (BSmtLibSpec.Lexer.segment lexing.fed version input true offset).failed)
       htypeLast (by simpa using ha) (by simpa using hd) rfl
       (answer_of_script hF hI hS hstoodAll)
     simpa [settle, Outcome.isFinished, List.append_assoc] using this

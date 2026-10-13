@@ -9,23 +9,26 @@ the tokens of a tokenisation of the input, followed by the end-of-file lexeme.
 
 namespace BSmtLib.Proofs.Lexer.VNaive
 
-open BSmtLib.Spec.Lexicon BSmtLib.Spec.Lexicon.Regex BSmtLib.SpecChecks.Lexicon
+open BSmtLibSpec.Lexicon BSmtLibSpec.Regex BSmtLib.SpecChecks.Lexicon
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
+open BSmtLibSpec (Regex)
 
 /-! ## The lexemes of tokens -/
 
 /-- The lexeme of the token of the input. -/
-def lexemeOf (version : Spec.Lexicon.Version) (input : Chars) (token : Spec.Lexicon.Token) :
+def lexemeOf (version : BSmtLibSpec.Lexicon.Version) (input : Chars) (token : BSmtLibSpec.Lexicon.Token) :
     Lexeme :=
   { category := lexCategory token.category
-    content := ⟨(Spec.Lexicon.Token.content version token).toArray⟩
+    content := ⟨(BSmtLibSpec.Lexicon.Token.content version token).toArray⟩
     start := locAfter (input.take token.offset)
     «end» := locAfter (input.take (token.offset + token.text.length)) }
 
-theorem lexemeIs_eq {version : Spec.Lexicon.Version} {category : Category}
+theorem lexemeIs_eq {version : BSmtLibSpec.Lexicon.Version} {category : Category}
     {start «end» : Location} {text : Chars} {l : Lexeme}
     (h : LexemeIs version category start «end» text l) :
     l = { category := lexCategory category,
-          content := ⟨(Spec.Lexicon.Token.content version ⟨category, 0, text⟩).toArray⟩,
+          content := ⟨(BSmtLibSpec.Lexicon.Token.content version ⟨category, 0, text⟩).toArray⟩,
           start, «end» } := by
   obtain ⟨h1, h2, h3, h4⟩ := h
   obtain ⟨cat, ⟨data⟩, s, e⟩ := l
@@ -35,13 +38,13 @@ theorem lexemeIs_eq {version : Spec.Lexicon.Version} {category : Category}
 
 /-- The lexemes `ls` are the lexemes of the tokens of the input and then the end-of-file
 lexeme. -/
-def Matches (version : Spec.Lexicon.Version) (input : Chars) (tokens : List Spec.Lexicon.Token)
+def Matches (version : BSmtLibSpec.Lexicon.Version) (input : Chars) (tokens : List BSmtLibSpec.Lexicon.Token)
     (ls : List Lexeme) : Prop :=
   ls = tokens.map (lexemeOf version input) ++ [eofLexeme (locAfter input)]
 
 /-- The lexemes `ls` are the tokens of a tokenisation of `input`, which follows `before`. -/
-def Sound (version : Spec.Lexicon.Version) (before input : Chars) (ls : List Lexeme) : Prop :=
-  ∃ tokens, TokenizationFrom version before.length input tokens ∧
+def Sound (version : BSmtLibSpec.Lexicon.Version) (before input : Chars) (ls : List Lexeme) : Prop :=
+  ∃ tokens, Tokenization.From version before.length input tokens ∧
     Matches version (before ++ input) tokens ls
 
 /-! ## Tokenisations -/
@@ -56,10 +59,10 @@ theorem star_append {r : Regex} {a b : Chars} (ha : star r a) (hb : star r b) :
   · exact hpb p hp
 
 /-- Whitespace before a tokenisation. -/
-theorem tokenizationFrom_ws {version : Spec.Lexicon.Version} {offset : Nat} {w r : Chars}
-    {tokens : List Spec.Lexicon.Token} (hw : whitespace w)
-    (h : TokenizationFrom version (offset + w.length) r tokens) :
-    TokenizationFrom version offset (w ++ r) tokens := by
+theorem tokenizationFrom_ws {version : BSmtLibSpec.Lexicon.Version} {offset : Nat} {w r : Chars}
+    {tokens : List BSmtLibSpec.Lexicon.Token} (hw : whitespace w)
+    (h : Tokenization.From version (offset + w.length) r tokens) :
+    Tokenization.From version offset (w ++ r) tokens := by
   cases h with
   | done he =>
     obtain ⟨w', z, rfl, hw', hz⟩ := he
@@ -69,23 +72,23 @@ theorem tokenizationFrom_ws {version : Spec.Lexicon.Version} {offset : Nat} {w r
     have e : offset + w.length + w'.length = offset + (w ++ w').length := by
       simp [Nat.add_assoc]
     rw [e] at hrest ⊢
-    have := TokenizationFrom.token (offset := offset) (star_append hw hw') hs hd hrest
+    have := Tokenization.From.token (offset := offset) (star_append hw hw') hs hd hrest
     simpa [List.append_assoc] using this
 
-theorem sound_ws {version : Spec.Lexicon.Version} {before w rest : Chars} {ls : List Lexeme}
+theorem sound_ws {version : BSmtLibSpec.Lexicon.Version} {before w rest : Chars} {ls : List Lexeme}
     (hw : whitespace w) (h : Sound version (before ++ w) rest ls) :
     Sound version before (w ++ rest) ls := by
   obtain ⟨tokens, ht, hm⟩ := h
   exact ⟨tokens, tokenizationFrom_ws hw (by simpa using ht), by simpa using hm⟩
 
-theorem sound_token {version : Spec.Lexicon.Version} {before s rest : Chars}
+theorem sound_token {version : BSmtLibSpec.Lexicon.Version} {before s rest : Chars}
     {ls : List Lexeme} {l : Lexeme} {category : Category}
-    (hs : categoryRegex version category s) (hd : Delimited category rest)
+    (hs : categoryRegex version category s) (hd : Tokenization.Delimited category rest)
     (hl : LexemeIs version category (locAfter before) (locAfter (before ++ s)) s l)
     (h : Sound version (before ++ s) rest ls) : Sound version before (s ++ rest) (l :: ls) := by
   obtain ⟨tokens, ht, hm⟩ := h
   refine ⟨⟨category, before.length, s⟩ :: tokens, ?_, ?_⟩
-  · have := TokenizationFrom.token (offset := before.length) (w := []) whitespace_nil hs hd
+  · have := Tokenization.From.token (offset := before.length) (w := []) whitespace_nil hs hd
       (by simpa using ht)
     simpa using this
   · rw [Matches] at hm ⊢
@@ -105,7 +108,7 @@ theorem whitespace_comment {t : Chars} (h : comment t) : whitespace t := by
 
 
 theorem delimited_of_delim {category : Category} {c : UInt8} {r : Chars} (h : Delim c.toNat) :
-    Delimited category (c :: r) := by
+    Tokenization.Delimited category (c :: r) := by
   refine delimited_by ?_
   simp only [Delim] at h
   rcases h with h | h | h | h | h | h | h
@@ -118,14 +121,14 @@ theorem delimited_of_delim {category : Category} {c : UInt8} {r : Chars} (h : De
        rw [hc, h]
        decide)
 
-theorem delimited_end {category : Category} : Delimited category [] :=
+theorem delimited_end {category : Category} : Tokenization.Delimited category [] :=
   Or.inr (Or.inr (Or.inl rfl))
 
 /-! ## The pure run -/
 
 /-- The state of the pure run, after the input `before` and the characters `text` of the
 token in progress. -/
-def StInv (version : Spec.Lexicon.Version) : St → Chars → Chars → Prop
+def StInv (version : BSmtLibSpec.Lexicon.Version) : St → Chars → Chars → Prop
   | .idle, _, text => text = []
   | .token p, before, text =>
     p.start = locAfter before ∧ ModeInv version p.mode text p.content.data.toList
@@ -153,13 +156,13 @@ theorem runFrom_cons (version : Version) (st : St) (location : Location) (c : UI
       simp only [Option.map_some, Option.bind_some]
       cases endStep st'' location'' <;> simp
 
-theorem eof_sound {version : Spec.Lexicon.Version} (before : Chars) :
+theorem eof_sound {version : BSmtLibSpec.Lexicon.Version} (before : Chars) :
     Sound version before [] [eofLexeme (locAfter before)] :=
   ⟨[], .done ⟨[], [], rfl, whitespace_nil, Or.inl rfl⟩, by simp [Matches]⟩
 
 /-- The pure run is sound from a state with no token in progress, once it is sound after the
 first byte. -/
-theorem idle_sound {version : Spec.Lexicon.Version} {c : UInt8} {r : Chars}
+theorem idle_sound {version : BSmtLibSpec.Lexicon.Version} {c : UInt8} {r : Chars}
     (ih : ∀ (st : St) (before text : Chars) (ls : List Lexeme), StInv version st before text →
       runFrom (Adapter.toVersion version) st (locAfter (before ++ text)) r = some ls →
       Sound version before (text ++ r) ls)
@@ -197,7 +200,7 @@ theorem idle_sound {version : Spec.Lexicon.Version} {c : UInt8} {r : Chars}
     simp at h
 
 /-- The pure run is sound from any state that keeps `StInv`. -/
-theorem runFrom_sound (version : Spec.Lexicon.Version) (r : Chars) :
+theorem runFrom_sound (version : BSmtLibSpec.Lexicon.Version) (r : Chars) :
     ∀ (st : St) (before text : Chars) (ls : List Lexeme), StInv version st before text →
       runFrom (Adapter.toVersion version) st (locAfter (before ++ text)) r = some ls →
       Sound version before (text ++ r) ls := by
@@ -290,7 +293,7 @@ theorem runFrom_sound (version : Spec.Lexicon.Version) (r : Chars) :
 
 /-- When the pure run finishes an input, its lexemes are the tokens of a tokenisation of the
 input and then the end-of-file lexeme. -/
-theorem run_sound {version : Spec.Lexicon.Version} {input : Chars} {ls : List Lexeme}
+theorem run_sound {version : BSmtLibSpec.Lexicon.Version} {input : Chars} {ls : List Lexeme}
     (h : run (Adapter.toVersion version) input = some ls) :
     ∃ tokens, Tokenization version input tokens ∧ Matches version input tokens ls := by
   have := runFrom_sound version input .idle [] [] ls rfl h

@@ -13,7 +13,10 @@ Not trusted: everything here is proved.
 
 namespace BSmtLib.SpecChecks.Grammar
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Grammar
+open BSmtLibSpec BSmtLibSpec.Lexicon BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
 
 theorem readIndices_tokens (indices : List Tree.Index) (rest : List SyntaxToken) :
     readIndices (indices.flatMap Tree.Index.tokens ++ .parenClose :: rest) =

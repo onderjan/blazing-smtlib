@@ -17,9 +17,11 @@ tokens taken leaves the parser (`AdapterAtG`), also where both fail.
 
 namespace BSmtLib.EndToEnd.Param
 
-open BSmtLib.Spec BSmtLib.Spec.Grammar BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
-open BSmtLib.Spec.Lexer (Handed)
+open BSmtLibSpec BSmtLibSpec.Grammar BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Parser.Traversal
+open BSmtLibSpec.Lexer (Handed)
 open BSmtLib.ParserProofs BSmtLib.ParserProofs.Rejection
 open BSmtLib.Parser (Input ScriptParser Parse ParseAdapter)
 open BSmtLib.Proofs.Adapter (toVersion Answering AnswerM toHanded)

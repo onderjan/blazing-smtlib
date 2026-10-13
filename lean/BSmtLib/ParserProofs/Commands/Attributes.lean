@@ -13,11 +13,13 @@ at its `)`, `set-info`, and the command parser ends with the version.
 
 namespace BSmtLib.ParserProofs
 
-open BSmtLib.Spec.Grammar
+open BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
 open BSmtLib.Parser (Input PM Step Payload CommandOutcome FinalCall payloadStep finalCall
   AttributeState AttributeMode attributeStep Declaration)
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 open BSmtLib.SpecChecks.Parser (Program.callUnit attributeThen_some)
 
 section
@@ -26,8 +28,8 @@ variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Parser.Comman
 variable {points : Points (StateT H m)} {version : BSmtLib.Version}
 variable {h : Traversal.Handler (StateT H m) (Parser.Handler.Error H) (valuesOf H)}
 
-theorem outcomeOf_setInfo_other {keyword : Spec.Lexicon.Chars}
-    (hkeyword : keyword ≠ Spec.Lexicon.chars "smt-lib-version")
+theorem outcomeOf_setInfo_other {keyword : BSmtLibSpec.Regex.Chars}
+    (hkeyword : keyword ≠ BSmtLibSpec.Regex.chars "smt-lib-version")
     (value : Option Tree.AttributeValue) : outcomeOf (.setInfo ⟨keyword, value⟩) = .command := by
   rcases value with _ | ⟨⟨_ | _ | _ | _ | _⟩ | _ | _⟩ <;>
     simp [outcomeOf, Tree.Command.declaredVersion, hkeyword]
@@ -35,7 +37,7 @@ theorem outcomeOf_setInfo_other {keyword : Spec.Lexicon.Chars}
 variable (hA : Agrees h)
 include hA
 
-theorem setOption_payload (keyword : Spec.Lexicon.Chars) (value : Option Tree.AttributeValue)
+theorem setOption_payload (keyword : BSmtLibSpec.Regex.Chars) (value : Option Tree.AttributeValue)
     (hvalid : (⟨keyword, value⟩ : Tree.Attribute).Valid (Bridge.version version))
     {payload : List Input} (hs : Stands payload (Tree.Attribute.tokens ⟨keyword, value⟩)) :
     PayloadRuns points version (Payload.init .setOption version)
@@ -60,8 +62,8 @@ theorem setOption_payload (keyword : Spec.Lexicon.Chars) (value : Option Tree.At
   simp [hA.commandSetOption]
 
 /-- `set-info` with a keyword other than `:smt-lib-version`. -/
-theorem setInfo_payload_other (keyword : Spec.Lexicon.Chars) (value : Option Tree.AttributeValue)
-    (hkeyword : keyword ≠ Spec.Lexicon.chars "smt-lib-version")
+theorem setInfo_payload_other (keyword : BSmtLibSpec.Regex.Chars) (value : Option Tree.AttributeValue)
+    (hkeyword : keyword ≠ BSmtLibSpec.Regex.chars "smt-lib-version")
     (hvalid : (⟨keyword, value⟩ : Tree.Attribute).Valid (Bridge.version version))
     {payload : List Input} (hs : Stands payload (Tree.Attribute.tokens ⟨keyword, value⟩)) :
     PayloadRuns points version (Payload.init .setInfo version)
@@ -110,15 +112,15 @@ theorem setInfo_payload_other (keyword : Spec.Lexicon.Chars) (value : Option Tre
   simp [hA.commandSetInfo]
 
 /-- A version declaration: `set-info` of `:smt-lib-version` with a version's number. -/
-theorem setInfo_payload_declaration (decimal : Spec.Lexicon.Chars) (declared : Spec.Lexicon.Version)
+theorem setInfo_payload_declaration (decimal : BSmtLibSpec.Regex.Chars) (declared : BSmtLibSpec.Lexicon.Version)
     (hdeclared : versionOfNumber decimal = some declared) {payload : List Input}
-    (hs : Stands payload (Tree.Attribute.tokens ⟨Spec.Lexicon.chars "smt-lib-version",
+    (hs : Stands payload (Tree.Attribute.tokens ⟨BSmtLibSpec.Regex.chars "smt-lib-version",
       some (.constant (.decimal decimal))⟩)) :
     PayloadRuns points version (Payload.init .setInfo version)
       (payload ++ [.parenClose])
       (adaptRun (do
-        take points (.keyword (Spec.Lexicon.chars "smt-lib-version"))
-        let handled ← attributeThen points h (Spec.Lexicon.chars "smt-lib-version") .parenClose
+        take points (.keyword (BSmtLibSpec.Regex.chars "smt-lib-version"))
+        let handled ← attributeThen points h (BSmtLibSpec.Regex.chars "smt-lib-version") .parenClose
           (some (.constant (.decimal decimal)))
         Program.callUnit h (.commandSetInfo handled)))
       fun _ => pure (.done (.setVersion (Bridge.libVersion declared))) := by

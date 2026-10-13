@@ -11,9 +11,11 @@ answer and the same cursor, while the tokens taken stand for a start of the scri
 
 namespace BSmtLib.EndToEnd.Param
 
-open BSmtLib.Spec BSmtLib.Spec.Grammar BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
-open BSmtLib.Spec.Lexer (Handed)
+open BSmtLibSpec BSmtLibSpec.Grammar BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Parser.Traversal
+open BSmtLibSpec.Lexer (Handed)
 open BSmtLib.ParserProofs BSmtLib.ParserProofs.Rejection
 open BSmtLib.Parser (Input ScriptParser Parse ParseAdapter)
 open BSmtLib.Proofs.Adapter (toVersion Answering AnswerM toHanded)
@@ -43,7 +45,7 @@ def AdapterAt (version : Lexicon.Version) (items : List LibItem) (v : Version)
 abbrev Shape {ε ε' α α' : Type} : Except ε (ControlFlow α) → Except ε' (ControlFlow α') → Prop :=
   ERel (fun _ _ => True) (FlowRel (fun _ _ => True))
 
-theorem requests_eq (consumer : Spec.Lexer.Consumer) (taken : List Handed) {b : BatchTag}
+theorem requests_eq (consumer : BSmtLibSpec.Lexer.Consumer) (taken : List Handed) {b : BatchTag}
     (cursor : BatchCursor b) :
     (Answering.requests consumer taken cursor).val =
       applyRequests cursor (consumer.switchTo taken) (consumer.discards taken) := by

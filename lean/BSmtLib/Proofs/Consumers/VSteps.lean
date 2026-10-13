@@ -12,15 +12,15 @@ lexeme handed over alone (`reply`, `consume_single`), the hand-over (`handOverAt
 namespace BSmtLib.Proofs.Lexer.VNaive
 
 open BSmtLib.Proofs.Adapter
-open Spec.Lexer (Handed)
+open BSmtLibSpec.Lexer (Handed)
 
-theorem answering_eq {consumer : Spec.Lexer.Consumer} (a b : Answering consumer) : a = b := by
+theorem answering_eq {consumer : BSmtLibSpec.Lexer.Consumer} (a b : Answering consumer) : a = b := by
   cases a; cases b; rfl
 
 section
 variable {g : BatchTag}
 
-theorem switched_eq (consumer : Spec.Lexer.Consumer) (taken : List Handed)
+theorem switched_eq (consumer : BSmtLibSpec.Lexer.Consumer) (taken : List Handed)
     (cursor : BatchCursor g) :
     (Answering.switched consumer taken cursor).val.version =
         ((consumer.switchTo taken).map toVersion).getD cursor.version ∧
@@ -41,7 +41,7 @@ theorem switched_eq (consumer : Spec.Lexer.Consumer) (taken : List Handed)
     · rename_i hn
       simp [BatchCursor.setVersion] at hn
 
-theorem requests_eq (consumer : Spec.Lexer.Consumer) (taken : List Handed)
+theorem requests_eq (consumer : BSmtLibSpec.Lexer.Consumer) (taken : List Handed)
     (cursor : BatchCursor g) :
     (Answering.requests consumer taken cursor).val.version =
         ((consumer.switchTo taken).map toVersion).getD cursor.version ∧
@@ -61,7 +61,7 @@ end
 /-- What the consumer does with the lexeme handed over alone under the version, after the entries
 `taken`: its answer, the version after it, whether it has the rest discarded, and the entries
 taken after it. -/
-def reply (consumer : Spec.Lexer.Consumer) (version : Version) (taken : List Handed)
+def reply (consumer : BSmtLibSpec.Lexer.Consumer) (version : Version) (taken : List Handed)
     (l : Lexeme) :
     Except (Option consumer.Error) (ControlFlow consumer.Result) × Version × Bool × List Handed :=
   match lexemeEntry consumer.concrete version l with
@@ -78,7 +78,7 @@ def reply (consumer : Spec.Lexer.Consumer) (version : Version) (taken : List Han
         consumer.discards (taken ++ [h]), taken ++ [h])
 
 /-- The consumer takes the lexeme handed over alone as `reply` says. -/
-theorem consume_single (consumer : Spec.Lexer.Consumer) (version : Version) (l : Lexeme)
+theorem consume_single (consumer : BSmtLibSpec.Lexer.Consumer) (version : Version) (l : Lexeme)
     (hl : l.Valid) (taken : List Handed) :
     let r := (Answering.consume consumer (BatchCursor.new version (l.batch hl))
       (l.hasNext hl version)).run taken
@@ -144,7 +144,7 @@ theorem consume_single (consumer : Spec.Lexer.Consumer) (version : Version) (l :
           rw [hd, hdi]
 
 section
-variable (consumer : Spec.Lexer.Consumer)
+variable (consumer : BSmtLibSpec.Lexer.Consumer)
 
 /-- A result of the naive lexer's steps with the consumer `Answering consumer`: the result and
 the lexer state, and the tokens taken. -/

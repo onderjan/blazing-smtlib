@@ -11,10 +11,10 @@ held, after the token in progress that the end of the input ends.
 namespace BSmtLib.Proofs.Lexer.VNaive
 
 open BSmtLib.Proofs.Adapter
-open Spec.Lexer (Handed)
+open BSmtLibSpec.Lexer (Handed)
 
 section
-variable (consumer : Spec.Lexer.Consumer)
+variable (consumer : BSmtLibSpec.Lexer.Consumer)
 
 /-- The naive lexer's step at the end of the input. -/
 def vEnd (core : Core) (taken : List Handed) :

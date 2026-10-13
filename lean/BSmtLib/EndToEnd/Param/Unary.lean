@@ -25,15 +25,15 @@ open BSmtLib.Proofs.Adapter
 
 section
 
-variable {consumer : Spec.Lexer.Consumer} {floor : Option Nat} {low : Nat} {α β : Type}
+variable {consumer : BSmtLibSpec.Lexer.Consumer} {floor : Option Nat} {low : Nat} {α β : Type}
 
 /-- The lexer's monad on the consumer `Flagged consumer`. -/
-abbrev FM (consumer : Spec.Lexer.Consumer) (floor : Option Nat) (low : Nat) (α : Type) :=
+abbrev FM (consumer : BSmtLibSpec.Lexer.Consumer) (floor : Option Nat) (low : Nat) (α : Type) :=
   LexM (Flagged consumer) AnswerM consumer.Result (Option consumer.Error) floor low α
 
 /-- The run of a step from the lexer's state, the consumer's and the tokens taken. -/
 abbrev frun (f : FM consumer floor low α) (s : {c : LexerCore // c.Bound floor low})
-    (fl : Flagged consumer) (l : List Spec.Lexer.Handed) :=
+    (fl : Flagged consumer) (l : List BSmtLibSpec.Lexer.Handed) :=
   ((f.run.run s).run fl).run l
 
 /-- The step is interrupted by an error of the consumer: the error `none` if the call at which

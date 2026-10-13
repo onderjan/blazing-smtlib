@@ -1,4 +1,5 @@
-import BSmtLib.Spec.Reader
+import BSmtLibSpec.Reader
+import BSmtLibSpec.Grammar.Properties
 import BSmtLib.SpecChecks.StreamingFacts
 import BSmtLib.SpecChecks.Compose
 import BSmtLib.SpecChecks.Consumers
@@ -21,8 +22,12 @@ Not trusted: everything here is proved.
 
 namespace BSmtLib.SpecChecks.Reader
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Lexer BSmtLib.Spec.Grammar
-open BSmtLib.Spec.Parser
+open BSmtLibSpec BSmtLibSpec.Lexicon BSmtLibSpec.Lexer BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
 open BSmtLib.SpecChecks.Lexicon BSmtLib.SpecChecks.Lexer
 
 /-! ## Slices -/
@@ -160,7 +165,7 @@ def Readout (version : Version) (input : Chars) (tokens : List Token) : Prop :=
 
 /-- The tokens of a tokenisation end within its input. -/
 theorem tokenizationFrom_within {version : Version} {offset : Nat} {input : Chars}
-    {tokens : List Token} (h : TokenizationFrom version offset input tokens) :
+    {tokens : List Token} (h : Tokenization.From version offset input tokens) :
     ∀ token ∈ tokens, token.offset + token.text.length ≤ offset + input.length := by
   induction h with
   | done => simp

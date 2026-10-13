@@ -15,12 +15,12 @@ interruption of the stop (`ExitMatches`). It is proved by induction on the bytes
 namespace BSmtLib.Proofs.Lexer.VNaiveWRustPort
 
 open BSmtLib.Proofs.Adapter VNaive BSmtLib.Proofs.Simulation
-open Spec.Lexer (Handed)
+open BSmtLibSpec.Lexer (Handed)
 open BSmtLib.Lexer (Stop)
 
 section
 
-variable {C : Spec.Lexer.Consumer} {floor : Option Nat}
+variable {C : BSmtLibSpec.Lexer.Consumer} {floor : Option Nat}
 
 theorem answering_eq' (a b : Answering C) : a = b := by
   cases a; cases b; rfl
@@ -135,7 +135,7 @@ theorem exitMatches_of {s : Stop C} {e : Intr C floor} (h : Matches s e) :
 /-- What the loop over a slice from the naive lexer's pure state `st` at `location` at the
 index `position`, under the version `ver`, with the tokens taken `coll` and the lexemes `held`
 in the batch, ends with. -/
-def SliceOut (C : Spec.Lexer.Consumer) (v : Version) (hd : Bool) (iv : Version)
+def SliceOut (C : BSmtLibSpec.Lexer.Consumer) (v : Version) (hd : Bool) (iv : Version)
     (input : ByteSlice) (st : St) (location : Location) (position : Nat) (ver : Version)
     (coll : List Handed) (held : List Lexeme)
     (r : (Lexer.WRustPort.SliceExit C.Result (Option C.Error) floor × BS floor 0) ×

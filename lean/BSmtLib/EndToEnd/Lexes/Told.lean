@@ -17,9 +17,11 @@ took (`calls_of_invG`), none before the first token (`feed_told`).
 namespace BSmtLib.EndToEnd.Param
 
 open BSmtLib.Lexer BSmtLib.Lexer.Internal
-open BSmtLib.Spec BSmtLib.Spec.Grammar BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
-open BSmtLib.Spec.Lexer (Handed)
+open BSmtLibSpec BSmtLibSpec.Grammar BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Parser.Traversal
+open BSmtLibSpec.Lexer (Handed)
 open BSmtLib.ParserProofs BSmtLib.ParserProofs.Rejection
 open BSmtLib.Parser (Input ScriptParser Parse ParseAdapter)
 open BSmtLib.Proofs.Adapter (toVersion Answering AnswerM LexOps)
@@ -28,15 +30,15 @@ open BSmtLib.Proofs.Adapter (toVersion Answering AnswerM LexOps)
 
 /-- The library's lexer with the adapter's consumer for the consumer of the spec, with the
 fields and the held result. -/
-abbrev zLexer (consumer : Spec.Lexer.Consumer) (c : LexerCore)
+abbrev zLexer (consumer : BSmtLibSpec.Lexer.Consumer) (c : LexerCore)
     (held : Option (Located consumer.Result)) : Proofs.Adapter.Lexer.lexOps.Lexer consumer :=
   ofParts {} c held
 
 /-- The states of the library's lexer, with the adapter's consumer for the consumer of the spec,
 that it reaches from its construction with the version by calls on slices that do not fail. -/
-inductive Reach (consumer : Spec.Lexer.Consumer) (version : Version) : LexerCore → Prop
+inductive Reach (consumer : BSmtLibSpec.Lexer.Consumer) (version : Version) : LexerCore → Prop
   | new : Reach consumer version (core (Proofs.Adapter.Lexer.lexOps.new consumer {} version))
-  | step {c : LexerCore} {held : Option (Located consumer.Result)} {slice : Lexicon.Chars}
+  | step {c : LexerCore} {held : Option (Located consumer.Result)} {slice : Regex.Chars}
       {taken : List Handed} {r : Option (Located consumer.Result)} :
       Reach consumer version c →
       ((Proofs.Adapter.Lexer.lexOps.lexSliceStep (zLexer consumer c held)
@@ -48,9 +50,9 @@ inductive Reach (consumer : Spec.Lexer.Consumer) (version : Version) : LexerCore
 /-- From every state the library's lexer reaches with the adapter's consumer, no call fails with
 the adapter's error `none`: the consumer is never handed whitespace or a comment it does not
 take. -/
-def NoLayout (consumer : Spec.Lexer.Consumer) (version : Version) : Prop :=
+def NoLayout (consumer : BSmtLibSpec.Lexer.Consumer) (version : Version) : Prop :=
   ∀ c, Reach consumer version c →
-    (∀ held (slice : Lexicon.Chars) taken e,
+    (∀ held (slice : Regex.Chars) taken e,
       ((Proofs.Adapter.Lexer.lexOps.lexSliceStep (zLexer consumer c held)
         slice.toByteArray.toByteSlice).run taken).1.1 = .error e → e.cause ≠ .consumer none) ∧
     (∀ held taken e,
@@ -61,7 +63,7 @@ def NoLayout (consumer : Spec.Lexer.Consumer) (version : Version) : Prop :=
 
 section
 
-variable {consumer : Spec.Lexer.Consumer}
+variable {consumer : BSmtLibSpec.Lexer.Consumer}
 
 theorem answering_slice_alike (slice : ByteSlice) (c : LexerCore) (fl : Flagged consumer)
     (taken : List Handed) :
@@ -149,7 +151,7 @@ parse adapter, the lexers are again related and the state is reached; where it f
 with the parse adapter, which then stands where the recording run over the tokens taken leaves
 the parser. -/
 theorem slice_stepT (hnl : NoLayout (scriptConsumer version) (toVersion version))
-    (slice : ByteSlice) (hslice : ∃ bytes : Lexicon.Chars, slice = bytes.toByteArray.toByteSlice)
+    (slice : ByteSlice) (hslice : ∃ bytes : Regex.Chars, slice = bytes.toByteArray.toByteSlice)
     (a : FLexer version) (p : PLexer) (taken : List Handed)
     (hI : InvF version a p taken)
     (hR : Reach (scriptConsumer version) (toVersion version) (core a))
@@ -375,7 +377,7 @@ theorem calls_of_invG {fl : Flagged (scriptConsumer version)} {taken : List Hand
     rw [hat, List.filter_reverse]
 
 theorem runInput_extendsT :
-    ∀ (ended : Bool) (slices : List Lexicon.Chars) (a : FLexer version) (taken : List Handed),
+    ∀ (ended : Bool) (slices : List Regex.Chars) (a : FLexer version) (taken : List Handed),
       ∃ more, ((flaggedOps.runInput a ended slices).run taken).2 = taken ++ more
   | false, [], a, taken => ⟨[], by simp [LexOps.runInput]; rfl⟩
   | true, [], a, taken => runInputG_extends [] a taken
@@ -399,7 +401,7 @@ handler holds, in order, what the parse adapter's handler holds where it stands 
 recording run over the tokens taken leaves the parser, and the reader finishes exactly where the
 first lexer does. -/
 theorem feed_told (hnl : NoLayout (scriptConsumer version) (toVersion version)) :
-    ∀ (ended : Bool) (slices : List Lexicon.Chars) (a : FLexer version) (p : PLexer)
+    ∀ (ended : Bool) (slices : List Regex.Chars) (a : FLexer version) (p : PLexer)
       (taken : List Handed), InvF version a p taken →
       Reach (scriptConsumer version) (toVersion version) (core a) →
       Good version ((flaggedOps.runInput a ended slices).run taken).2 →

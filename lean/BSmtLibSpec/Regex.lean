@@ -9,16 +9,16 @@ The standard counts characters in an 8-bit encoding, with codes from 0 to 255, s
 character is a byte.
 -/
 
-namespace BSmtLib.Spec.Lexicon
+namespace BSmtLibSpec
 
 /-- A sequence of characters. -/
-abbrev Chars := List UInt8
+abbrev Regex.Chars := List UInt8
 
 /-- The characters of an ASCII string. Only ASCII strings are used. -/
-def chars (s : String) : Chars := s.toList.map Char.toUInt8
+def Regex.chars (s : String) : Chars := s.toList.map Char.toUInt8
 
 /-- A regular expression: the set of character sequences it matches. -/
-def Regex := Chars → Prop
+def Regex := Regex.Chars → Prop
 
 namespace Regex
 
@@ -66,4 +66,4 @@ def startsWith (r : Regex) : Regex := seq r anything
 
 end Regex
 
-end BSmtLib.Spec.Lexicon
+end BSmtLibSpec

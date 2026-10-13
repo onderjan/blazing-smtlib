@@ -12,11 +12,11 @@ takes the lexemes of the run one after another, as `hand1` says, under the versi
 namespace BSmtLib.Proofs.Lexer.VNaiveWRustPort
 
 open BSmtLib.Proofs.Adapter BSmtLib.Proofs.Lexer.VNaive
-open Spec.Lexer (Handed)
+open BSmtLibSpec.Lexer (Handed)
 
 section
 
-variable {C : Spec.Lexer.Consumer} {hd : Bool}
+variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool}
 
 theorem handAll_wait (r : C.Result) (l : Lexeme) (p : Prog) : ∀ ls,
     handAll C hd (.wait r l p) ls = .wait r l p ∨
@@ -105,7 +105,7 @@ end
 
 section
 
-variable (C : Spec.Lexer.Consumer) (v : Version)
+variable (C : BSmtLibSpec.Lexer.Consumer) (v : Version)
 
 theorem lexBytesW_tokenBefore {ws : Bool} {p : Pending} {location : Location} {b : UInt8}
     {l : Lexeme} (rest : List UInt8) (h : advance ws p location b = .tokenBefore l) :

@@ -1,5 +1,5 @@
-import BSmtLib.Spec.Lexer
-import BSmtLib.Spec.Parser
+import BSmtLibSpec.Lexer
+import BSmtLibSpec.Parser
 
 /-!
 # Readers
@@ -15,16 +15,18 @@ file's commands and the reader finishes; on any other input it does not finish (
 
 A reader can have a parser of any syntactic category; only the reader of scripts is specified
 here. It reads under the policy that allows every version, and is seen through a recording
-handler, as in `Parser.record`. Where its tokens are located, and where the discarding
+handler, as in `Parser.Properties.record`. Where its tokens are located, and where the discarding
 after `exit` began, are stated by the lexer (`Lexer.Runs`) and not again here.
 
 The standard has no reader; all of this is the library's.
 -/
 
-namespace BSmtLib.Spec.Reader
+namespace BSmtLibSpec.Reader
 
-open BSmtLib.Spec.Lexicon BSmtLib.Spec.Grammar BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Lexicon BSmtLibSpec.Grammar BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
+open Regex (Chars)
 
 /-! ## Reading an input -/
 
@@ -84,7 +86,7 @@ What a lexer hands over, as a parser receives it, if it does: the end of the fil
 the input, whitespace and comments not at all, and every other token as the syntax token it
 stands for.
 -/
-def _root_.BSmtLib.Spec.Lexer.Handed.received (handed : Lexer.Handed) : Option Received :=
+def _root_.BSmtLibSpec.Lexer.Handed.received (handed : Lexer.Handed) : Option Received :=
   match handed.type with
   | .parenOpen => some (.token .parenOpen)
   | .parenClose => some (.token .parenClose)
@@ -120,7 +122,7 @@ failing when it has rejected or failed; at the end of the input it fails rather 
 asks for the switch of the version and the discarding that its run asked of its producer after
 the last token.
 -/
-def _root_.BSmtLib.Spec.Parser.RecordingParser.consumer (parser : RecordingParser)
+def consumer (parser : RecordingParser)
     (item : Lexer.Handed → parser.Item) (version : Version) : Lexer.Consumer where
   Result := Unit
   Error := Unit
@@ -149,10 +151,10 @@ def LexesThenParses (reader : RecordingReader) : Prop :=
     (∀ handed received version, handed.received = some received →
       received.OfVersion version → parser.stands (item handed) = received) ∧
     ∀ version slices ended,
-      let session := lexing (parser.consumer item version) version [] slices ended
+      let session := lexing (consumer parser item version) version [] slices ended
       reader.read version slices ended =
         (if session.taken = [] then []
           else (parser.parse version (session.taken.map item)).1.filter Event.isCall,
           session.outcome.isFinished)
 
-end BSmtLib.Spec.Reader
+end BSmtLibSpec.Reader

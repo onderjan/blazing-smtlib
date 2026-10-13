@@ -4,7 +4,7 @@ import BSmtLib.EndToEnd.Valid
 /-!
 # A lexer correct with every consumer, with the script consumer, on any input
 
-A lexer that is `Spec.Lexer.CorrectWithConsumers`, fed any slices and then the end of the input,
+A lexer that is `BSmtLibSpec.Lexer.CorrectWithConsumers`, fed any slices and then the end of the input,
 with the script consumer, ends as `Classified` says (`lexing_classified`); with the parser
 properties, the parser's recording run on the tokens taken is then the one the specification
 gives (`lexing_session`):
@@ -19,23 +19,24 @@ gives (`lexing_session`):
   its arrival, and no call at it (`RejectsFirstUnviable`);
   an end of the input that comes too early is such a token;
 - **lexical**: the run waits, having made the traversal's events before the next item; the lexer
-  failed as `Spec.Lexer` states on the input read from where the last version declaration
+  failed as `BSmtLibSpec.Lexer` states on the input read from where the last version declaration
   ended, in its version: that input has no tokenisation, and the tokens taken from it are those
   maximal to hand over on its longest viable start.
 -/
 
 namespace BSmtLib.EndToEnd
 
-open BSmtLib.Spec BSmtLib.Spec.Grammar BSmtLib.Spec.Lexer
-open BSmtLib.Spec.Parser (Takes Ending versionAt record received eventsBefore eventsBeforeProcessing
+open BSmtLibSpec BSmtLibSpec.Grammar BSmtLibSpec.Lexer
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Parser.Properties (Takes Ending versionAt record received eventsBefore eventsBeforeProcessing
   eventsBeforeProcessingOf Event)
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Parser.Traversal
 open BSmtLib.ParserProofs (isArrival)
 open BSmtLib.ParserProofs.Rejection (libraryParser rcv rejects_items)
 
 /-- A lexer correct with every consumer, with the script consumer, ends as `Classified` says. -/
 theorem lexing_classified (lexing : Lexing) (h : CorrectWithConsumers lexing)
-    (version : Lexicon.Version) (slices : List Lexicon.Chars) :
+    (version : Lexicon.Version) (slices : List Regex.Chars) :
     Classified lexing.fed version slices.flatten
       (lexing (scriptConsumer version) version [] slices true) := by
   have hruns := h.2.1 (scriptConsumer version) version slices true
@@ -47,8 +48,8 @@ theorem lexing_classified (lexing : Lexing) (h : CorrectWithConsumers lexing)
 
 /-- What a correct lexer has done where it failed after handing over the tokens: the input has
 no tokenisation, and the tokens are those maximal to hand over on its longest viable start. -/
-theorem segment_failed {feed : Lexicon.Version → List Lexicon.Chars → Bool → Fed}
-    (hc : Correct feed) {version : Lexicon.Version} {input : Lexicon.Chars} {offset : Nat}
+theorem segment_failed {feed : Lexicon.Version → List Regex.Chars → Bool → Fed}
+    (hc : Correct feed) {version : Lexicon.Version} {input : Regex.Chars} {offset : Nat}
     {current : List Handed} (hseg : segment feed version input true offset = ⟨current, true⟩) :
     (¬ ∃ tokens, Lexicon.Tokenization version (input.drop offset) tokens) ∧
       ∀ start, LongestViableStart version (input.drop offset) start →
@@ -105,7 +106,7 @@ script consumer: the session and the parser's recording run on the tokens taken 
 four ways of the module's documentation.
 -/
 theorem lexing_session (lexing : Lexing) (h : CorrectWithConsumers lexing)
-    (version : Lexicon.Version) (slices : List Lexicon.Chars) :
+    (version : Lexicon.Version) (slices : List Regex.Chars) :
     let session := lexing (scriptConsumer version) version [] slices true
     let input := slices.flatten
     let items := session.taken.map (rcv ∘ itemOf)
@@ -120,7 +121,7 @@ theorem lexing_session (lexing : Lexing) (h : CorrectWithConsumers lexing)
       (session.outcome = .failed (.consumer .rejected) ∧
         ∃ commands taken ending, Takes version commands taken ending ∧
           items.dropLast <+: taken ∧ items.dropLast.length < taken.length ∧
-          ¬ Spec.Parser.Viable version items ∧
+          ¬ BSmtLibSpec.Parser.Properties.Viable version items ∧
           run.2 = .rejected ∧ run.1.filterMap Event.processed = items ∧
           run.1.getLast? = items.getLast?.map .process ∧
           ∃ last, items.getLast? = some last ∧
@@ -180,7 +181,7 @@ theorem lexing_session (lexing : Lexing) (h : CorrectWithConsumers lexing)
       rw [← hitem]
       exact hof
     have hlen : items.length = before.length + 1 := by rw [hitems]; simp
-    have h₃ : ¬ Spec.Parser.Viable version ((((session.taken.map libItem :
+    have h₃ : ¬ BSmtLibSpec.Parser.Properties.Viable version ((((session.taken.map libItem :
         List ParserProofs.Rejection.LibItem).map (rcv ∘ Subtype.val))).take
           (before.length + 1)) := by
       rw [hmap, List.take_of_length_le (by omega)]
@@ -216,7 +217,7 @@ theorem lexing_session (lexing : Lexing) (h : CorrectWithConsumers lexing)
 /-- A lexer correct with every consumer, with the script consumer, finishes on an input exactly
 when the input reads as a file. -/
 theorem lexing_finishes_iff (lexing : Lexing) (h : CorrectWithConsumers lexing)
-    (version : Lexicon.Version) (slices : List Lexicon.Chars) :
+    (version : Lexicon.Version) (slices : List Regex.Chars) :
     (lexing (scriptConsumer version) version [] slices true).outcome.isFinished = true ↔
       ∃ commands, File version slices.flatten commands := by
   constructor
@@ -237,7 +238,7 @@ version, at the first token no script continues with, or with a lexical error, a
 `lexing_session` states.
 -/
 theorem lexing_fails (lexing : Lexing) (h : CorrectWithConsumers lexing)
-    (version : Lexicon.Version) (slices : List Lexicon.Chars)
+    (version : Lexicon.Version) (slices : List Regex.Chars)
     (hnot : ¬ ∃ commands, File version slices.flatten commands) :
     let session := lexing (scriptConsumer version) version [] slices true
     let input := slices.flatten
@@ -250,7 +251,7 @@ theorem lexing_fails (lexing : Lexing) (h : CorrectWithConsumers lexing)
       (session.outcome = .failed (.consumer .rejected) ∧
         ∃ commands taken ending, Takes version commands taken ending ∧
           items.dropLast <+: taken ∧ items.dropLast.length < taken.length ∧
-          ¬ Spec.Parser.Viable version items ∧
+          ¬ BSmtLibSpec.Parser.Properties.Viable version items ∧
           run.2 = .rejected ∧ run.1.filterMap Event.processed = items ∧
           run.1.getLast? = items.getLast?.map .process ∧
           ∃ last, items.getLast? = some last ∧

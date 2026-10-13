@@ -15,8 +15,10 @@ recording handler with the calls of the traversal (`adapter_feed_file`).
 namespace BSmtLib.EndToEnd.Param
 
 open BSmtLib.Lexer BSmtLib.Lexer.Internal
-open BSmtLib.Spec BSmtLib.Spec.Grammar BSmtLib.Spec.Parser
-open BSmtLib.Spec.Lexer (Handed)
+open BSmtLibSpec BSmtLibSpec.Grammar BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Lexer (Handed)
 open BSmtLib.ParserProofs BSmtLib.ParserProofs.Rejection
 open BSmtLib.Parser (Input ScriptParser Parse ParseAdapter)
 open BSmtLib.Proofs.Adapter (toVersion Answering AnswerM LexOps lexing)
@@ -42,7 +44,7 @@ theorem recRun_nil (version : Lexicon.Version) :
 /-- The library's lexer with the parse adapter, fed a file of commands cut into any slices and
 then the end of the input: it returns a result at the end of the input, and the adapter's
 recording handler has recorded the calls of the traversal of the script, in order. -/
-theorem adapter_feed_file (version : Lexicon.Version) (slices : List Lexicon.Chars)
+theorem adapter_feed_file (version : Lexicon.Version) (slices : List Regex.Chars)
     {commands : List Tree.Command} (hfile : File version slices.flatten commands) :
     ∃ result lexer,
       paFeed (Lexer.new recordingAdapter (toVersion version)) slices = .ok (some result, lexer) ∧

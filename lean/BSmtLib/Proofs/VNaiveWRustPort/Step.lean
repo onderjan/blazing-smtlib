@@ -17,11 +17,11 @@ stopped, and the interruption is that stop (`StepFails`).
 namespace BSmtLib.Proofs.Lexer.VNaiveWRustPort
 
 open BSmtLib.Proofs.Adapter VNaive BSmtLib.Proofs.Simulation
-open Spec.Lexer (Handed)
+open BSmtLibSpec.Lexer (Handed)
 
 /-- The lexer state at the index `start` of the slice is the naive lexer's pure state `st` at
 `location`, and its batch holds the lexemes `held`, with their contents in the slice. -/
-structure StepPre (C : Spec.Lexer.Consumer) (v : Version) (hd : Bool) (iv : Version)
+structure StepPre (C : BSmtLibSpec.Lexer.Consumer) (v : Version) (hd : Bool) (iv : Version)
     (input : ByteSlice) (st : St) (location : Location) (held : List Lexeme) (start : Nat)
     (c : WCore) : Prop where
   fixed : Fixed v hd iv c
@@ -32,13 +32,13 @@ structure StepPre (C : Spec.Lexer.Consumer) (v : Version) (hd : Bool) (iv : Vers
   bytes : c.batch.bytes = input.byteArray
 
 /-- The interruption is a lexical error other than trailing input. -/
-def IsLexical {C : Spec.Lexer.Consumer} {floor : Option Nat} (e : Intr C floor) : Prop :=
+def IsLexical {C : BSmtLibSpec.Lexer.Consumer} {floor : Option Nat} (e : Intr C floor) : Prop :=
   ∃ kind : LexicalErrorKind, e.result = .error (.lexical kind) ∧ kind ≠ .unexpectedTrailingToken
 
 /-- The lexer state at the index `next` and the tokens taken are, after a step from the naive
 lexer's pure state `st` at `location` at the index `start`, under the version `ver`, with the
 tokens taken `coll` and the lexemes `held`, as the naive lexer's run from there leaves them. -/
-def StepPost (C : Spec.Lexer.Consumer) (v : Version) (hd : Bool) (iv : Version)
+def StepPost (C : BSmtLibSpec.Lexer.Consumer) (v : Version) (hd : Bool) (iv : Version)
     (input : ByteSlice) (st : St) (location : Location) (start : Nat) (ver : Version)
     (coll : List Handed) (held : List Lexeme) (next : Nat) (c : WCore) (coll' : List Handed) :
     Prop :=
@@ -54,7 +54,7 @@ the version `ver`, with the tokens taken `coll` and the lexemes `held`, interrup
 the lexer state `c` and the tokens taken `coll'`: the naive lexer's run fails with a lexical
 error, and what is left to do is to hand over the lexemes of the batch of the lexer state; or the
 consumer stopped, at the stop `e` is, which leaves the lexer discarding if it makes it discard. -/
-def StepFails (C : Spec.Lexer.Consumer) {floor : Option Nat} (v : Version) (hd : Bool)
+def StepFails (C : BSmtLibSpec.Lexer.Consumer) {floor : Option Nat} (v : Version) (hd : Bool)
     (iv : Version) (input : ByteSlice) (st : St) (location : Location) (start : Nat)
     (ver : Version) (coll : List Handed) (held : List Lexeme) (e : Intr C floor) (c : WCore)
     (coll' : List Handed) : Prop :=
@@ -69,7 +69,7 @@ def StepFails (C : Spec.Lexer.Consumer) {floor : Option Nat} (v : Version) (hd :
 
 section
 
-variable {C : Spec.Lexer.Consumer} {floor : Option Nat}
+variable {C : BSmtLibSpec.Lexer.Consumer} {floor : Option Nat}
 
 /-- What the consumer does after a stop on lexemes, whatever follows. -/
 theorem outcome_of_stops {hd : Bool} {ver : Version} {coll : List Handed} {ls : List Lexeme}

@@ -16,16 +16,18 @@ the inner parser's initial state does (`Runs.first`), since it is no `)`.
 
 namespace BSmtLib.ParserProofs
 
-open BSmtLib.Spec.Grammar
+open BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
 open BSmtLib.Parser (Input PM Step ListState)
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 
 /-! ## First tokens -/
 
 /-- Tokens that stand for tokens starting with one other than `)` start with one other than `)`. -/
-theorem Stands.first_ne {tokens : List Input} {first : Spec.Grammar.SyntaxToken}
-    {rest : List Spec.Grammar.SyntaxToken}
+theorem Stands.first_ne {tokens : List Input} {first : BSmtLibSpec.Grammar.SyntaxToken}
+    {rest : List BSmtLibSpec.Grammar.SyntaxToken}
     (hs : Stands tokens (first :: rest)) (hfirst : first ≠ .parenClose) :
     ∃ token tokens', tokens = token :: tokens' ∧ token ≠ .parenClose := by
   obtain ⟨token, tokens', rfl, htoken, -⟩ := Stands.split_cons hs
@@ -55,7 +57,7 @@ theorem term_first (term : Tree.Term) :
   | .identifier (.as _ _) | .application _ _ | .let _ _ | .lambda _ _ | .quantified _ _ _
   | .match _ _ | .annotated _ _ => exact ⟨_, _, rfl, by simp⟩
 
-theorem Stands.first_of {tokens : List Input} {syntaxTokens : List Spec.Grammar.SyntaxToken}
+theorem Stands.first_of {tokens : List Input} {syntaxTokens : List BSmtLibSpec.Grammar.SyntaxToken}
     (hfirst : ∃ first rest, syntaxTokens = first :: rest ∧ first ≠ .parenClose)
     (hs : Stands tokens syntaxTokens) :
     ∃ token tokens', tokens = token :: tokens' ∧ token ≠ .parenClose := by
@@ -138,7 +140,7 @@ than `)`, and from the initial state the inner parser reads them with a program 
 bridged, are the spec program's.
 -/
 def ElementRuns (points : Points (StateT H m)) (inner : σ → Input → PM H (Step σ ρ)) (init : σ)
-    (tokensOf : X → List Spec.Grammar.SyntaxToken) (valid : X → Prop) (spec : X → PM H Y)
+    (tokensOf : X → List BSmtLibSpec.Grammar.SyntaxToken) (valid : X → Prop) (spec : X → PM H Y)
     (bridge : ρ → Y) :
     Prop :=
   ∀ element, valid element → ∀ {tokens : List Input}, Stands tokens (tokensOf element) →
@@ -147,7 +149,7 @@ def ElementRuns (points : Points (StateT H m)) (inner : σ → Input → PM H (S
       Runs points inner init tokens program fun r => pure (.done r)
 
 variable {init : σ} {inner : σ → Input → PM H (Step σ ρ)} {maximum : Option Nat}
-variable {tokensOf : X → List Spec.Grammar.SyntaxToken} {valid : X → Prop} {spec : X → PM H Y}
+variable {tokensOf : X → List BSmtLibSpec.Grammar.SyntaxToken} {valid : X → Prop} {spec : X → PM H Y}
 variable {bridge : ρ → Y}
 
 /-- The elements, from between elements: appended to those found so far. -/

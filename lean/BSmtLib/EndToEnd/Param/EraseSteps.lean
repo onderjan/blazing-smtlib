@@ -10,8 +10,9 @@ handler calls and results apart.
 
 namespace BSmtLib.EndToEnd.Param
 
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 open BSmtLib.Parser
 open BSmtLib.ParserProofs
 

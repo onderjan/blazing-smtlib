@@ -1,6 +1,7 @@
 import BSmtLib.SpecChecks.Grammar.OneToOne
 import BSmtLib.SpecChecks.Examples
-import BSmtLib.Spec.Parser
+import BSmtLibSpec.Parser
+import BSmtLibSpec.Grammar.Properties
 
 /-!
 # The standard's examples of syntax
@@ -12,8 +13,12 @@ scripts, pinned by their recordings. Not trusted: these are proofs.
 
 namespace BSmtLib.SpecChecks.Grammar
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Grammar BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal BSmtLib.SpecChecks.Lexicon
+open BSmtLibSpec BSmtLibSpec.Lexicon BSmtLibSpec.Grammar BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
+open BSmtLibSpec.Parser.Traversal BSmtLib.SpecChecks.Lexicon
 
 /-- The symbol `s`, written simple. -/
 abbrev simple (s : String) : Tree.Symbol := ⟨chars s, false⟩
@@ -150,20 +155,20 @@ example : Tree.Command.modeAfter .v2_7 .exit = some .unparsed := rfl
 /-- `(exit)` followed by what is not even lexable is a file of one command: what follows `exit`
 is not read. -/
 example : File .v2_7 (chars "(exit)" ++ chars " \"") [.exit] := by
-  refine FileFrom.stop (tokens := [⟨.parenOpen, 0, chars "("⟩, ⟨.reserved, 1, chars "exit"⟩,
+  refine File.From.stop (tokens := [⟨.parenOpen, 0, chars "("⟩, ⟨.reserved, 1, chars "exit"⟩,
     ⟨.parenClose, 5, chars ")"⟩]) ⟨?_, ⟨.parenClose, 5, chars ")"⟩, rfl, rfl⟩ ⟨trivial, rfl⟩ rfl
-  apply TokenizationFrom.token (category := .parenOpen) (w := []) (s := chars "(")
+  apply Tokenization.From.token (category := .parenOpen) (w := []) (s := chars "(")
     (rest := chars "exit)") whitespace_nil rfl (Or.inl rfl)
-  apply TokenizationFrom.token (category := .reserved) (w := []) (s := chars "exit")
+  apply Tokenization.From.token (category := .reserved) (w := []) (s := chars "exit")
     (rest := chars ")") whitespace_nil (litOneOf_iff.mpr (by decide))
     (delimited_by (Or.inr (oneOf_one.mpr (by decide))))
-  apply TokenizationFrom.token (category := .parenClose) (w := []) (s := chars ")") (rest := [])
+  apply Tokenization.From.token (category := .parenClose) (w := []) (s := chars ")") (rest := [])
     whitespace_nil rfl (Or.inr (Or.inl rfl))
-  exact TokenizationFrom.done ⟨[], [], rfl, whitespace_nil, Or.inl rfl⟩
+  exact Tokenization.From.done ⟨[], [], rfl, whitespace_nil, Or.inl rfl⟩
 
 /-! ## The calls the traversal makes
 
-The calls of the recording of a script (`Spec.Parser.record`), each handled value the number of
+The calls of the recording of a script (`BSmtLibSpec.Parser.Properties.record`), each handled value the number of
 calls before it, the handler's switch to the starting version counted.
 -/
 

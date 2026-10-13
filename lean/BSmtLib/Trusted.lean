@@ -3,7 +3,7 @@ import Lean
 /-!
 # The trusted adapters of the root theorems
 
-A root theorem of a proof library is stated with the specification (`BSmtLib.Spec`), the library,
+A root theorem of a proof library is stated with the specification (`BSmtLibSpec`), the library,
 Lean, and definitions of the proof libraries that put the library into the specification's
 shapes: the adapters. A theorem stated with a wrong adapter is a theorem about the wrong thing,
 so the adapters are trusted together with the specification and the statements.
@@ -31,7 +31,7 @@ open Lean Elab Command
 inductive Side where
   /-- Lean's standard library. -/
   | lean
-  /-- The trusted specification: `BSmtLib.Spec` and the modules below it. -/
+  /-- The trusted specification: `BSmtLibSpec` and the modules below it. -/
   | spec
   /-- The library: `BSmtLib` and the modules below it that are none of the others. -/
   | library
@@ -44,16 +44,16 @@ inductive Side where
 
 /-- The modules right below `BSmtLib` that are not the library. -/
 def notLibrary : List Name :=
-  [`Spec, `SpecChecks, `Proofs, `ParserProofs, `EndToEnd, `Trusted]
+  [`SpecChecks, `Proofs, `ParserProofs, `EndToEnd, `Trusted]
 
 /-- The side of the module named `module`. -/
 def sideOf (module : Name) : Side :=
   match module.components with
+  | `BSmtLibSpec :: _ => .spec
   | [`BSmtLib] => .library
   | `BSmtLib :: `Proofs :: `Lexer :: _ => .chain
   | `BSmtLib :: part :: _ =>
-    if part == `Spec then .spec
-    else if notLibrary.contains part then .other
+    if notLibrary.contains part then .other
     else .library
   | root :: _ => if [`Init, `Std, `Lean].contains root then .lean else .other
   | [] => .other

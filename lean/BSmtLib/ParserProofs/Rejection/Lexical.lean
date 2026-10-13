@@ -12,23 +12,26 @@ that a lexer of the version in force can hand over (`takes_ofVersion`).
 
 namespace BSmtLib.ParserProofs.Rejection
 
-open BSmtLib.Spec.Lexicon (chars basicReservedWords commandNames addedBasicReservedWords
+open BSmtLibSpec.Regex (chars)
+open BSmtLibSpec.Lexicon (basicReservedWords commandNames addedBasicReservedWords
   addedCommandNames)
-open BSmtLib.Spec.Grammar
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 
 /-- The word is a reserved word of the version. -/
-def ReservedIn (version : Spec.Lexicon.Version) (w : Spec.Lexicon.Chars) : Prop :=
+def ReservedIn (version : BSmtLibSpec.Lexicon.Version) (w : BSmtLibSpec.Regex.Chars) : Prop :=
   w ∈ (basicReservedWords version ++ commandNames version).map chars
 
 /-- Every reserved word among the tokens is one of the version. -/
-def LexicalIn (version : Spec.Lexicon.Version) (tokens : List Spec.Grammar.SyntaxToken) : Prop :=
-  ∀ w, Spec.Grammar.SyntaxToken.reserved w ∈ tokens → ReservedIn version w
+def LexicalIn (version : BSmtLibSpec.Lexicon.Version) (tokens : List BSmtLibSpec.Grammar.SyntaxToken) : Prop :=
+  ∀ w, BSmtLibSpec.Grammar.SyntaxToken.reserved w ∈ tokens → ReservedIn version w
 
-variable {version : Spec.Lexicon.Version}
+variable {version : BSmtLibSpec.Lexicon.Version}
 
-theorem reservedIn_word {first : Spec.Lexicon.Version} (h : versionAtLeast version first)
+theorem reservedIn_word {first : BSmtLibSpec.Lexicon.Version} (h : versionAtLeast version first)
     {w : String}
     (hw : w ∈ addedBasicReservedWords first ∨ w ∈ addedCommandNames first) :
     ReservedIn version (chars w) := by
@@ -38,11 +41,11 @@ theorem reservedIn_word {first : Spec.Lexicon.Version} (h : versionAtLeast versi
   · exact List.mem_append_left _ (List.mem_flatMap.mpr ⟨first, h, hw⟩)
   · exact List.mem_append_right _ (List.mem_flatMap.mpr ⟨first, h, hw⟩)
 
-theorem atLeast_v2_0 (version : Spec.Lexicon.Version) : versionAtLeast version .v2_0 := by
-  cases version <;> simp [versionAtLeast, Spec.Lexicon.Version.upTo]
+theorem atLeast_v2_0 (version : BSmtLibSpec.Lexicon.Version) : versionAtLeast version .v2_0 := by
+  cases version <;> simp [versionAtLeast, BSmtLibSpec.Lexicon.Version.upTo]
 
 theorem atLeast_v2_5_of_v2_7 (h : versionAtLeast version .v2_7) : versionAtLeast version .v2_5 := by
-  cases version <;> simp_all [versionAtLeast, Spec.Lexicon.Version.upTo]
+  cases version <;> simp_all [versionAtLeast, BSmtLibSpec.Lexicon.Version.upTo]
 
 /-- A word of 2.0. -/
 theorem reservedIn_v2_0 {w : String}
@@ -54,13 +57,13 @@ theorem reservedIn_v2_0 {w : String}
 theorem lexicalIn_nil : LexicalIn version [] := by
   simp [LexicalIn]
 
-theorem lexicalIn_append {a b : List Spec.Grammar.SyntaxToken} :
+theorem lexicalIn_append {a b : List BSmtLibSpec.Grammar.SyntaxToken} :
     LexicalIn version (a ++ b) ↔ LexicalIn version a ∧ LexicalIn version b := by
   simp only [LexicalIn, List.mem_append]
   exact ⟨fun h => ⟨fun w hw => h w (.inl hw), fun w hw => h w (.inr hw)⟩,
     fun h w hw => hw.elim (h.1 w) (h.2 w)⟩
 
-theorem lexicalIn_cons {t : Spec.Grammar.SyntaxToken} {ts : List Spec.Grammar.SyntaxToken} :
+theorem lexicalIn_cons {t : BSmtLibSpec.Grammar.SyntaxToken} {ts : List BSmtLibSpec.Grammar.SyntaxToken} :
     LexicalIn version (t :: ts) ↔
       (∀ w, t = .reserved w → ReservedIn version w) ∧ LexicalIn version ts := by
   simp only [LexicalIn, List.mem_cons]
@@ -72,7 +75,7 @@ theorem lexicalIn_cons {t : Spec.Grammar.SyntaxToken} {ts : List Spec.Grammar.Sy
     · exact h.1 w hw.symm
     · exact h.2 w hw
 
-theorem lexicalIn_flatMap {α : Type} {l : List α} {f : α → List Spec.Grammar.SyntaxToken} :
+theorem lexicalIn_flatMap {α : Type} {l : List α} {f : α → List BSmtLibSpec.Grammar.SyntaxToken} :
     LexicalIn version (l.flatMap f) ↔ ∀ x ∈ l, LexicalIn version (f x) := by
   simp only [LexicalIn, List.mem_flatMap]
   constructor
@@ -86,16 +89,16 @@ theorem lexicalIn_map_symbol {l : List Tree.Symbol} :
   intro w hw
   simp at hw
 
-theorem lexicalIn_paren {tokens : List Spec.Grammar.SyntaxToken} :
+theorem lexicalIn_paren {tokens : List BSmtLibSpec.Grammar.SyntaxToken} :
     LexicalIn version (paren tokens) ↔ LexicalIn version tokens := by
   simp [paren, lexicalIn_cons, lexicalIn_append]
 
-theorem lexicalIn_word {w : String} {tokens : List Spec.Grammar.SyntaxToken}
+theorem lexicalIn_word {w : String} {tokens : List BSmtLibSpec.Grammar.SyntaxToken}
     (hw : ReservedIn version (chars w)) (h : LexicalIn version tokens) :
     LexicalIn version (word w :: tokens) :=
   lexicalIn_cons.mpr ⟨fun _ e => by cases e; exact hw, h⟩
 
-theorem lexicalIn_command {name : String} {tokens : List Spec.Grammar.SyntaxToken}
+theorem lexicalIn_command {name : String} {tokens : List BSmtLibSpec.Grammar.SyntaxToken}
     (hw : ReservedIn version (chars name)) (h : LexicalIn version tokens) :
     LexicalIn version (commandTokens name tokens) :=
   lexicalIn_paren.mpr (lexicalIn_word hw h)
@@ -106,7 +109,7 @@ theorem lexicalIn_constant (c : Tree.SpecConstant) : LexicalIn version [c.token]
 theorem lexicalIn_symbol (s : Tree.Symbol) : LexicalIn version [.symbol s] := by
   simp [lexicalIn_cons]
 
-theorem lexicalIn_keyword (k : Spec.Lexicon.Chars) : LexicalIn version [.keyword k] := by
+theorem lexicalIn_keyword (k : BSmtLibSpec.Regex.Chars) : LexicalIn version [.keyword k] := by
   simp [lexicalIn_cons]
 
 attribute [local simp] lexicalIn_append lexicalIn_paren lexicalIn_flatMap lexicalIn_constant
@@ -222,7 +225,7 @@ theorem pattern_lexical (pattern : Tree.Pattern) : LexicalIn version pattern.tok
     obtain ⟨x, hx, e⟩ := hw
     exact symbolOrWildcard_lexical x w (by rw [e]; exact List.mem_singleton_self _)
 
-theorem quantifier_lexical (quantifier : Tree.Quantifier) {tokens : List Spec.Grammar.SyntaxToken}
+theorem quantifier_lexical (quantifier : Tree.Quantifier) {tokens : List BSmtLibSpec.Grammar.SyntaxToken}
     (h : LexicalIn version tokens) : LexicalIn version (quantifier.word :: tokens) := by
   cases quantifier <;> exact lexicalIn_word (reservedIn_v2_0 (by decide)) h
 
@@ -412,7 +415,7 @@ theorem ofVersion_command {command : Tree.Command} (h : command.Valid version) {
 
 /-- Every item of what a parser takes for commands is one that a lexer of the version in force
 there can hand over. -/
-theorem takes_ofVersion {start : Spec.Lexicon.Version} {commands : List Tree.Command}
+theorem takes_ofVersion {start : BSmtLibSpec.Lexicon.Version} {commands : List Tree.Command}
     {taken : List Received} {ending : Ending} (h : Takes start commands taken ending) :
     ∀ position (item : Received), taken[position]? = some item →
       item.OfVersion (versionAt start commands position) := by

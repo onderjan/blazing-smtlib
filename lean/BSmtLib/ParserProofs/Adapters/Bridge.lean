@@ -1,5 +1,6 @@
 import BSmtLib.Parser
-import BSmtLib.Spec.Parser
+import BSmtLibSpec.Parser
+import BSmtLibSpec.Grammar.Properties
 
 /-!
 # From the parser's values to the spec's
@@ -19,10 +20,12 @@ These definitions are adapters: the root theorems of `BSmtLib.ParserProofs` and
 
 namespace BSmtLib.ParserProofs
 
-open BSmtLib.Spec.Lexicon (Chars)
-open BSmtLib.Spec.Grammar
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Regex (Chars)
+open BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 
 namespace Bridge
 
@@ -53,7 +56,7 @@ def constant : Parser.SpecConstant → Tree.SpecConstant
 def keyword (k : KeywordView) : Chars := chars k.asSlice
 
 /-- The characters the spec spells a reserved word with. -/
-def reserved (w : Reserved) : Chars := Spec.Lexicon.chars w.asStr
+def reserved (w : Reserved) : Chars := BSmtLibSpec.Regex.chars w.asStr
 
 /-- The spec's symbol or wildcard for the parser's. -/
 def symbolOrWildcard : Parser.SymbolOrWildcard → Tree.SymbolOrWildcard
@@ -71,7 +74,7 @@ def quantifier : Parser.Quantifier → Tree.Quantifier
   | .exists => .exists
 
 /-- The spec's version for a version of the library. -/
-def version : BSmtLib.Version → Spec.Lexicon.Version
+def version : BSmtLib.Version → BSmtLibSpec.Lexicon.Version
   | .v2_0 => .v2_0
   | .v2_5 => .v2_5
   | .v2_6 => .v2_6
@@ -96,7 +99,7 @@ def received : Parser.Input → Option Received
 end Bridge
 
 /-- The parser's tokens stand for the spec's tokens, one by one. -/
-def Stands (inputs : List Parser.Input) (tokens : List Spec.Grammar.SyntaxToken) : Prop :=
+def Stands (inputs : List Parser.Input) (tokens : List BSmtLibSpec.Grammar.SyntaxToken) : Prop :=
   inputs.map Bridge.received = tokens.map fun token => some (.token token)
 
 section
@@ -328,7 +331,7 @@ def causeOf {ε : Type} : Cause ε → Parser.ParseErrorCause ε
 namespace Bridge
 
 /-- The library's version for a version of the spec. -/
-def libVersion : Spec.Lexicon.Version → BSmtLib.Version
+def libVersion : BSmtLibSpec.Lexicon.Version → BSmtLib.Version
   | .v2_0 => .v2_0
   | .v2_5 => .v2_5
   | .v2_6 => .v2_6
@@ -358,7 +361,7 @@ def allReserved : List Reserved :=
   GeneralReserved.all.toList.map .general ++ CommandNameReserved.all.toList.map .commandName
 
 /-- The reserved word the spec spells with the characters, if there is one. -/
-def decodeReserved (c : Spec.Lexicon.Chars) : Option Reserved :=
+def decodeReserved (c : BSmtLibSpec.Regex.Chars) : Option Reserved :=
   allReserved.find? fun r => decide (Bridge.reserved r = c)
 
 namespace Rejection
@@ -367,7 +370,7 @@ namespace Rejection
 def rcv (token : Parser.Input) : Received := (Bridge.received token).getD .endOfInput
 
 /-- A view of the characters. -/
-def bytesOf (c : Spec.Lexicon.Chars) : ByteSlice := (ByteArray.mk c.toArray).toByteSlice
+def bytesOf (c : BSmtLibSpec.Regex.Chars) : ByteSlice := (ByteArray.mk c.toArray).toByteSlice
 
 end Rejection
 

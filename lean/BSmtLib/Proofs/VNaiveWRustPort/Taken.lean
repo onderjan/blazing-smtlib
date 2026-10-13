@@ -16,9 +16,9 @@ never raises the adapter's error `none` there (`matches_none`).
 namespace BSmtLib.Proofs.Lexer.VNaiveWRustPort
 
 open BSmtLib.Proofs.Adapter VNaive
-open Spec.Lexer (Handed)
+open BSmtLibSpec.Lexer (Handed)
 
-variable {C : Spec.Lexer.Consumer}
+variable {C : BSmtLibSpec.Lexer.Consumer}
 
 /-- The naive lexer's pure state that the Rust port's state agrees with, for a consumer that does
 not take whitespace, has no whitespace in progress. -/

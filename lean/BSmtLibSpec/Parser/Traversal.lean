@@ -1,5 +1,5 @@
-import BSmtLib.Spec.Grammar
-import BSmtLib.Spec.Parser.Policy
+import BSmtLibSpec.Grammar.File
+import BSmtLibSpec.Parser.VersionPolicy
 
 /-!
 # The traversal
@@ -67,17 +67,10 @@ rejects a version the policy does not allow: the commands it is the last of are 
 takes before it fails.
 -/
 
-namespace BSmtLib.Spec.Parser
+namespace BSmtLibSpec.Parser
 
-open BSmtLib.Spec.Lexicon BSmtLib.Spec.Grammar
-
-/--
-A propositional literal as the term it is written as: the symbol, or `not` applied to it.
--/
-def _root_.BSmtLib.Spec.Grammar.Tree.PropLiteral.asTerm : Tree.PropLiteral → Tree.Term
-  | .positive symbol => .identifier (.plain ⟨symbol, []⟩)
-  | .negative negation symbol =>
-    .application (.plain ⟨negation, []⟩) [.identifier (.plain ⟨symbol, []⟩)]
+open BSmtLibSpec.Lexicon BSmtLibSpec.Grammar
+open Regex (Chars chars)
 
 namespace Traversal
 
@@ -241,6 +234,16 @@ inductive Received where
   | endOfInput
 
 /--
+The item is one that a lexer of the version can hand over, as far as a parser can tell: a
+reserved word is a reserved word of the version.
+
+Standard: 2.7 §3.1 Reserved words; ⟨reserved⟩ of each version.
+-/
+def Received.OfVersion (version : Version) : Received → Prop
+  | .token (.reserved word) => word ∈ (basicReservedWords version ++ commandNames version).map chars
+  | _ => True
+
+/--
 The two points of each token in a parse: the token arrives at the parser, which takes it from
 its producer; then the parser processes it. Between them come only the calls due at the token's
 arrival, which depend on the token only in that a `)` gets none of them.
@@ -263,7 +266,7 @@ structure Producer (m : Type → Type) where
 
 /-- The party that failed: the parse, with a syntax error, or the handler. -/
 inductive Cause (ε : Type) where
-  | syntax (error : VersionError)
+  | syntax (error : VersionPolicy.Error)
   | handler (error : ε)
 
 /-- What the traversal does: it runs in `m`, and stops with the party that failed. -/
@@ -857,22 +860,6 @@ def command : Tree.Command → Run m ε Unit
 /-! ## The traversal of a script -/
 
 /--
-Whether the command is a version declaration that names no supported version: a `set-info` of
-`:smt-lib-version` whose value is not the number of a supported version, a decimal of no
-supported version, a symbol, a list, or no value at all. No script has such a command
-(`Tree.Command.modeAfter` gives `none` for it); a parser rejects it after its `)`.
-
-Reading M1: the value of a declaration is the number of a supported version.
--/
-def _root_.BSmtLib.Spec.Grammar.Tree.Command.namesNoVersion : Tree.Command → Bool
-  | .setInfo ⟨keyword, value⟩ =>
-    decide (keyword = chars "smt-lib-version") &&
-      match value with
-      | some (.constant (.decimal decimal)) => (versionOfNumber decimal).isNone
-      | _ => true
-  | _ => false
-
-/--
 The switch of a script to the version a declaration names, right after the declaration's
 `set-info`, given the producer and the number of declarations the script made before it: the
 check against the policy, the producer's switch, which it may refuse, then the handler's switch.
@@ -926,4 +913,4 @@ end
 
 end Traversal
 
-end BSmtLib.Spec.Parser
+end BSmtLibSpec.Parser

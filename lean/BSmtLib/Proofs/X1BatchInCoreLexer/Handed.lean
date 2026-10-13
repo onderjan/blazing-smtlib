@@ -42,7 +42,7 @@ theorem lexerRel_newRecovering {H R E : Type} [Consume H R E] {m : Type → Type
 
 /-- The slice of the bytes of a list of characters ends below `USize.size` if the list is that
 short. -/
-theorem stop_toByteSlice_lt {s : Spec.Lexicon.Chars} (h : s.length < USize.size) :
+theorem stop_toByteSlice_lt {s : BSmtLibSpec.Regex.Chars} (h : s.length < USize.size) :
     (s.toByteArray.toByteSlice).stop < USize.size := by
   unfold ByteArray.toByteSlice
   simp only [Nat.le_refl, dite_true, Nat.zero_le]

@@ -15,8 +15,10 @@ run leaves the parser (`InvB`).
 namespace BSmtLib.EndToEnd.Param
 
 open BSmtLib.Lexer BSmtLib.Lexer.Internal
-open BSmtLib.Spec BSmtLib.Spec.Grammar BSmtLib.Spec.Parser
-open BSmtLib.Spec.Lexer (Handed)
+open BSmtLibSpec BSmtLibSpec.Grammar BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Lexer (Handed)
 open BSmtLib.ParserProofs BSmtLib.ParserProofs.Rejection
 open BSmtLib.Parser (Input ScriptParser Parse ParseAdapter)
 open BSmtLib.Proofs.Adapter (toVersion Answering AnswerM LexOps)
@@ -214,7 +216,7 @@ theorem eof_step (hscript : Script version commands) (a : FLexer version) (p : P
   | some _, some _, h => exact h
 
 theorem runInput_extends (hscript : Script version commands) :
-    ∀ (slices : List Lexicon.Chars) (a : FLexer version) (taken : List Handed),
+    ∀ (slices : List Regex.Chars) (a : FLexer version) (taken : List Handed),
       ∃ more, ((flaggedOps.runInput a true slices).run taken).2 = taken ++ more
   | [], a, taken => by
     obtain ⟨more, hmore⟩ := eofStep_extends hscript a taken
@@ -250,7 +252,7 @@ variable {version : Lexicon.Version} {commands : List Tree.Command}
 script, the run with the parse adapter finishes with a result, and the adapter stands where the
 recording run over items standing for the tokens leaves the parser. -/
 theorem feed_agree (hscript : Script version commands) :
-    ∀ (slices : List Lexicon.Chars) (a : FLexer version) (p : PLexer) (taken : List Handed),
+    ∀ (slices : List Regex.Chars) (a : FLexer version) (p : PLexer) (taken : List Handed),
       Inv version commands a p taken →
       ((flaggedOps.runInput a true slices).run taken).1.1.isFinished = true →
       Viable commands ((flaggedOps.runInput a true slices).run taken).2 →

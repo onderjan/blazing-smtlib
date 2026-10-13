@@ -1,15 +1,18 @@
-import BSmtLib.Spec.Lexicon.Regex
+import BSmtLibSpec.Regex
 
 /-!
-# The lexicon
+# Lexicon
 
-The lexical tokens of SMT-LIB and the categories they are built from, in the versions 2.0,
-2.5, 2.6 and 2.7, in the order the standard defines them. Each definition states the rule it
-formalises. Where the standard is silent or contradicts itself, the definition says so and
-which reading it takes.
+The lexicon of SMT-LIB as the standard defines it, in the versions 2.0, 2.5, 2.6 and 2.7: the
+characters, the lexical tokens of each version and the categories they are built from, in the
+order the standard defines them. How an input is broken into a sequence of tokens is in
+`Lexicon.Tokenization`. It depends on no implementation.
+
+Each definition states the rule it formalises. Where the standard is silent or contradicts
+itself, the definition says so and which reading it takes.
 -/
 
-namespace BSmtLib.Spec.Lexicon
+namespace BSmtLibSpec.Lexicon
 
 open Regex
 
@@ -289,4 +292,85 @@ Reading L5: 2.0 §3.1 Keywords and 2.0 App. B ⟨keyword⟩, for every version.
 -/
 def keyword : Regex := seq (lit ":") (plus (altAll [letter, digit, symbolPunctuation]))
 
-end BSmtLib.Spec.Lexicon
+/--
+The kinds of lexical token: the parentheses, the token categories and the reserved words.
+
+Standard: 2.7 §3.1: the lexical tokens are the parentheses, the elements of the token
+categories and the reserved words.
+-/
+inductive Category where
+  | parenOpen
+  | parenClose
+  | numeral
+  | decimal
+  | hexadecimal
+  | binary
+  | string
+  | simpleSymbol
+  | quotedSymbol
+  | keyword
+  | reserved
+  deriving DecidableEq, Repr
+
+/--
+The expression of each kind of token in the version.
+
+Standard: 2.7 §3.1, as `Category`.
+-/
+def categoryRegex (version : Version) : Category → Regex
+  | .parenOpen => lit "("
+  | .parenClose => lit ")"
+  | .numeral => numeral
+  | .decimal => decimal
+  | .hexadecimal => hexadecimal
+  | .binary => binary
+  | .string => if version = .v2_0 then string20 else string
+  | .simpleSymbol => simpleSymbol version
+  | .quotedSymbol => quotedSymbol
+  | .keyword => keyword
+  | .reserved => reserved version
+
+/--
+A token of an input: its kind, the offset of its first character, and its characters.
+
+Standard: 2.7 §3.1 lexical tokens; the offset and the characters are how the spec records a
+token.
+-/
+structure Token where
+  category : Category
+  offset : Nat
+  text : Chars
+  deriving DecidableEq, Repr
+
+/--
+The content of a token: what a string literal stands for, the name of a quoted symbol
+without its bars, a keyword without its colon, the digits of a hexadecimal or binary without
+`#x` or `#b`, and otherwise the characters of the token.
+
+Standard: 2.7 §3.1 String literals and Symbols, for what a string literal and a quoted symbol
+stand for. Dropping the colon of a keyword and the `#x` and `#b` of a hexadecimal and a binary
+is a convention of the spec.
+-/
+def Token.content (version : Version) (token : Token) : Chars :=
+  match token.category with
+  | .string => (if version = .v2_0 then unescape20 else unescape) (token.text.drop 1).dropLast
+  | .quotedSymbol => (token.text.drop 1).dropLast
+  | .keyword => token.text.drop 1
+  | .hexadecimal | .binary => token.text.drop 2
+  | _ => token.text
+
+/--
+The token moved by `k` characters to the right: the same kind and characters, at an offset
+larger by `k`.
+-/
+def Token.moveBy (k : Nat) (token : Token) : Token :=
+  ⟨token.category, token.offset + k, token.text⟩
+
+/--
+The tokens end with a `)` whose last character is just before the offset `stop`.
+-/
+def EndsWithClose (tokens : List Token) (stop : Nat) : Prop :=
+  ∃ last, tokens.getLast? = some last ∧ last.category = .parenClose ∧
+    last.offset + last.text.length = stop
+
+end BSmtLibSpec.Lexicon

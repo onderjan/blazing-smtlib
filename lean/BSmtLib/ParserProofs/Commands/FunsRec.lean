@@ -14,11 +14,13 @@ first token's arrival (`term_runs_first_init`).
 
 namespace BSmtLib.ParserProofs
 
-open BSmtLib.Spec.Grammar
+open BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
 open BSmtLib.Parser (Input PM Step Payload CommandOutcome FinalCall payloadStep finalCall
   ListState TermState bodyStep bodiesStep bodiesArrive functionDecStep)
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 open BSmtLib.SpecChecks.Parser (Program.callUnit recursiveBodies_cons)
 
 section

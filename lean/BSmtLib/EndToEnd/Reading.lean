@@ -5,18 +5,21 @@ import BSmtLib.EndToEnd.Outcome
 
 The converse of `Feed`: where a correct lexer, read from an offset in a version, hands over tokens
 that stand for the tokens of commands, the characters from that offset start with those commands,
-each the whitespace before it and its tokens, as a file reads them (`Spec.Grammar.FileFrom`).
+each the whitespace before it and its tokens, as a file reads them (`BSmtLibSpec.Grammar.File.From`).
 
 A tokenisation is split after each command's `)` (`tokenizationFrom_split_close`), which needs no
 delimiter, so the characters before it are a tokenisation of their own that ends with the `)`
-(`TokenizationExactly`).
+(`Tokenization.Exactly`).
 -/
 
 namespace BSmtLib.EndToEnd
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Grammar BSmtLib.Spec.Lexer
+open BSmtLibSpec BSmtLibSpec.Lexicon BSmtLibSpec.Grammar BSmtLibSpec.Lexer
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
 open BSmtLib.ParserProofs.Rejection (rcv)
-open BSmtLib.Spec.Parser.Traversal (Received)
+open BSmtLibSpec.Parser.Traversal (Received)
 
 /-! ## Splitting a tokenisation after a `)` -/
 
@@ -35,10 +38,10 @@ characters up to the `)` are tokenised by those tokens, ending with it, and the 
 rest. -/
 theorem tokenizationFrom_split_close {version : Lexicon.Version} :
     ∀ {A : List Lexicon.Token} {o : Nat} {S : Chars} {B : List Lexicon.Token}
-      {last : Lexicon.Token}, TokenizationFrom version o S (A ++ B) → A.getLast? = some last →
+      {last : Lexicon.Token}, Tokenization.From version o S (A ++ B) → A.getLast? = some last →
       last.category = .parenClose →
-      ∃ S₁ S₂, S = S₁ ++ S₂ ∧ TokenizationExactly version o S₁ A ∧
-        TokenizationFrom version (o + S₁.length) S₂ B
+      ∃ S₁ S₂, S = S₁ ++ S₂ ∧ Tokenization.Exactly version o S₁ A ∧
+        Tokenization.From version (o + S₁.length) S₂ B
   | [], _, _, _, _, _, hlast, _ => by simp at hlast
   | a :: A, o, S, B, last, h, hlast, hcat => by
     rcases SpecChecks.Lexicon.tokenizationFrom_inv h with ⟨he, -⟩ |
@@ -51,7 +54,7 @@ theorem tokenizationFrom_split_close {version : Lexicon.Version} :
         simp only [List.getLast?_singleton, Option.some.injEq] at hlast
         subst hlast
         refine ⟨w ++ s, rest, by simp, ⟨?_, _, rfl, by simp; omega⟩, ?_⟩
-        · have := TokenizationFrom.token (version := version) (offset := o) (rest := [])
+        · have := Tokenization.From.token (version := version) (offset := o) (rest := [])
             (tokens := []) hw hs (Or.inr (Or.inl hcat))
             (.done ⟨[], [], rfl, SpecChecks.Lexicon.whitespace_nil, Or.inl rfl⟩)
           simpa using this
@@ -62,7 +65,7 @@ theorem tokenizationFrom_split_close {version : Lexicon.Version} :
         obtain ⟨S₁, S₂, rfl, ⟨hte, l, hl, hend⟩, hS₂⟩ :=
           tokenizationFrom_split_close (A := a' :: A') hrest hlast' hcat
         have hne : S₁ ≠ [] := SpecChecks.Lexicon.tokenizationFrom_ne_nil hte (by simp)
-        have hd' : Delimited category S₁ := by
+        have hd' : Tokenization.Delimited category S₁ := by
           have := SpecChecks.Lexer.delimited_take S₁.length hd
           simpa using this
         refine ⟨w ++ s ++ S₁, S₂, by simp, ⟨.token hw hs hd' hte, l, ?_, ?_⟩, ?_⟩
@@ -76,13 +79,13 @@ theorem tokenizationFrom_split_close {version : Lexicon.Version} :
 characters start with them, as a file reads them. -/
 theorem file_of_tokens {version : Lexicon.Version} :
     ∀ (commands : List Tree.Command) {o : Nat} {S : Chars} {A more : List Lexicon.Token},
-      TokenizationFrom version o S (A ++ more) →
+      Tokenization.From version o S (A ++ more) →
       A.map (SyntaxToken.ofToken version) = commands.flatMap Tree.Command.tokens →
       (∀ c ∈ commands, c.Valid version ∧ c.modeAfter version = some (.read version)) →
-      ∃ S₁ S₂, S = S₁ ++ S₂ ∧ TokenizationFrom version (o + S₁.length) S₂ more ∧
+      ∃ S₁ S₂, S = S₁ ++ S₂ ∧ Tokenization.From version (o + S₁.length) S₂ more ∧
         (∀ t ∈ A, t.offset + t.text.length ≤ o + S₁.length) ∧
-        ∀ rest cs, FileFrom version (o + S₁.length) rest cs →
-          FileFrom version o (S₁ ++ rest) (commands ++ cs)
+        ∀ rest cs, File.From version (o + S₁.length) rest cs →
+          File.From version o (S₁ ++ rest) (commands ++ cs)
   | [], o, S, A, more, h, hmap, _ => by
     have hA : A = [] := by simpa using hmap
     subst hA
@@ -114,12 +117,12 @@ theorem file_of_tokens {version : Lexicon.Version} :
         simp only [List.length_append]; omega
     · intro rest cs hf
       have hf' := hcont rest cs (by simpa [Nat.add_assoc] using hf)
-      have := FileFrom.command hte ⟨(hvalid c (by simp)).1, h₁.symm⟩ (hvalid c (by simp)).2 hf'
+      have := File.From.command hte ⟨(hvalid c (by simp)).1, h₁.symm⟩ (hvalid c (by simp)).2 hf'
       simpa using this
 
 /-! ## What a correct lexer hands over from an offset -/
 
-variable {feed : Lexicon.Version → List Lexicon.Chars → Bool → Fed}
+variable {feed : Lexicon.Version → List Regex.Chars → Bool → Fed}
 
 theorem handed_type_ne (version : Lexicon.Version) (input : Chars) (token : Lexicon.Token) :
     (token.handed version input).type ≠ .endOfFile := by
@@ -207,10 +210,10 @@ theorem reading_split (hc : Correct feed) {version : Lexicon.Version} {input : C
     ∃ S₁ D₂, input.drop offset = S₁ ++ D₂ ∧
       Y.getLast?.map (·.«end».offset) = some (offset + S₁.length) ∧
       (∀ next cs, last.modeAfter version = some (.read next) →
-        FileFrom next (offset + S₁.length) D₂ cs →
-        FileFrom version offset (input.drop offset) (commands ++ last :: cs)) ∧
+        File.From next (offset + S₁.length) D₂ cs →
+        File.From version offset (input.drop offset) (commands ++ last :: cs)) ∧
       (last.modeAfter version = some .unparsed →
-        FileFrom version offset (input.drop offset) (commands ++ [last])) := by
+        File.From version offset (input.drop offset) (commands ++ [last])) := by
   obtain ⟨L, E, s, ext, all, hseg, hs, hall, hLall, hwithin, hE⟩ :=
     segment_structure hc version hoff (feed := feed)
   rw [hseg] at hY
@@ -311,13 +314,13 @@ theorem reading_split (hc : Correct feed) {version : Lexicon.Version} {input : C
     simp only [List.length_append] at hend ⊢
     omega
   · intro next cs hm hf
-    have hcmd := FileFrom.command (rest := D₂) (commands := cs) hte ⟨hlast, h₂.symm⟩ hm
+    have hcmd := File.From.command (rest := D₂) (commands := cs) hte ⟨hlast, h₂.symm⟩ hm
       (by simpa [Nat.add_assoc] using hf)
     have := hconta (Sl ++ D₂) (last :: cs) hcmd
     rw [← hD₂]
     simpa using this
   · intro hm
-    have hcmd := FileFrom.stop (rest := D₂) hte ⟨hlast, h₂.symm⟩ hm
+    have hcmd := File.From.stop (rest := D₂) hte ⟨hlast, h₂.symm⟩ hm
     have := hconta (Sl ++ D₂) [last] hcmd
     rw [← hD₂]
     simpa using this
@@ -333,7 +336,7 @@ theorem reading_end (hc : Correct feed) {version : Lexicon.Version} {input : Cha
     {commands : List Tree.Command}
     (hitems : current.map (rcv ∘ itemOf) = (commands.flatMap Tree.Command.tokens).map .token)
     (hvalid : ∀ c ∈ commands, c.Valid version ∧ c.modeAfter version = some (.read version)) :
-    FileFrom version offset (input.drop offset) commands := by
+    File.From version offset (input.drop offset) commands := by
   obtain ⟨L, E, s, ext, all, hseg', hs, hall, hLall, hwithin, hE⟩ :=
     segment_structure hc version hoff (feed := feed)
   rw [hseg'] at hseg

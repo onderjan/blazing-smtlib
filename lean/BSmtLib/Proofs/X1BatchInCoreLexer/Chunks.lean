@@ -1,5 +1,5 @@
 import BSmtLib.Proofs.Simulation
-import BSmtLib.Spec.Lexicon
+import BSmtLibSpec.Lexicon.Properties
 
 /-!
 # The library's lexer on a slice too large for its positions
@@ -21,21 +21,21 @@ open BSmtLib.Lexer.Internal
 /-! ### The chunks -/
 
 /-- The chunk of the input from `p` on, as `lexChunks` lexes it. -/
-def chunkAt (s : Spec.Lexicon.Chars) (p : Nat) : Spec.Lexicon.Chars :=
+def chunkAt (s : BSmtLibSpec.Regex.Chars) (p : Nat) : BSmtLibSpec.Regex.Chars :=
   (s.drop p).take CHUNK_SIZE
 
 /-- The chunks of the input from `p` on. -/
-def chunksFrom (s : Spec.Lexicon.Chars) (p : Nat) : List Spec.Lexicon.Chars :=
+def chunksFrom (s : BSmtLibSpec.Regex.Chars) (p : Nat) : List BSmtLibSpec.Regex.Chars :=
   if p < s.length then chunkAt s p :: chunksFrom s (p + CHUNK_SIZE) else []
 termination_by s.length - p
 decreasing_by simp only [CHUNK_SIZE]; omega
 
 /-- The input cut into slices that are not too large for the library's lexer: itself if it is
 not, and its chunks if it is. -/
-def cut (s : Spec.Lexicon.Chars) : List Spec.Lexicon.Chars :=
+def cut (s : BSmtLibSpec.Regex.Chars) : List BSmtLibSpec.Regex.Chars :=
   if s.length < USize.size then [s] else chunksFrom s 0
 
-theorem flatten_chunksFrom (s : Spec.Lexicon.Chars) (p : Nat) :
+theorem flatten_chunksFrom (s : BSmtLibSpec.Regex.Chars) (p : Nat) :
     (chunksFrom s p).flatten = s.drop p := by
   fun_induction chunksFrom s p with
   | case1 p hp ih =>
@@ -44,13 +44,13 @@ theorem flatten_chunksFrom (s : Spec.Lexicon.Chars) (p : Nat) :
     simp only [List.flatten_nil]
     exact (List.drop_eq_nil_of_le (by omega)).symm
 
-theorem flatten_cut (s : Spec.Lexicon.Chars) : (cut s).flatten = s := by
+theorem flatten_cut (s : BSmtLibSpec.Regex.Chars) : (cut s).flatten = s := by
   unfold cut
   split
   · simp
   · rw [flatten_chunksFrom, List.drop_zero]
 
-theorem length_chunkAt (s : Spec.Lexicon.Chars) (p : Nat) : (chunkAt s p).length ≤ CHUNK_SIZE := by
+theorem length_chunkAt (s : BSmtLibSpec.Regex.Chars) (p : Nat) : (chunkAt s p).length ≤ CHUNK_SIZE := by
   simp only [chunkAt, List.length_take]; omega
 
 theorem chunk_lt_size : CHUNK_SIZE < USize.size := by
@@ -70,7 +70,7 @@ theorem toByteSlice_stop (a : ByteArray) : a.toByteSlice.stop = a.size := by
 theorem toByteSlice_size (a : ByteArray) : a.toByteSlice.size = a.size := by
   simp [ByteSlice.size, toByteSlice_start, toByteSlice_stop]
 
-theorem toByteArray_chunkAt (s : Spec.Lexicon.Chars) (p : Nat) :
+theorem toByteArray_chunkAt (s : BSmtLibSpec.Regex.Chars) (p : Nat) :
     (chunkAt s p).toByteArray =
       s.toByteArray.extract (0 + p) (min (0 + p + CHUNK_SIZE) s.toByteArray.size) := by
   apply ByteArray.ext
@@ -83,10 +83,10 @@ theorem toByteArray_chunkAt (s : Spec.Lexicon.Chars) (p : Nat) :
   omega
 
 /-- Every slice of the list cut, as `cut` cuts it. -/
-def cutAll (slices : List Spec.Lexicon.Chars) : List Spec.Lexicon.Chars :=
+def cutAll (slices : List BSmtLibSpec.Regex.Chars) : List BSmtLibSpec.Regex.Chars :=
   slices.flatMap cut
 
-theorem flatten_cutAll (slices : List Spec.Lexicon.Chars) :
+theorem flatten_cutAll (slices : List BSmtLibSpec.Regex.Chars) :
     (cutAll slices).flatten = slices.flatten := by
   induction slices with
   | nil => rfl
@@ -100,14 +100,14 @@ theorem stop_toByteSlice (a : ByteArray) : a.toByteSlice.stop = a.size := by
   simp [ByteArray.toByteSlice, ByteSlice.stop]
 
 /-- The view of the chunk of the bytes of the input from `p` on, as `lexChunks` makes it. -/
-theorem chunk_eq (s : Spec.Lexicon.Chars) (p : Nat) :
+theorem chunk_eq (s : BSmtLibSpec.Regex.Chars) (p : Nat) :
     (s.toByteArray.toByteSlice.byteArray.extract (s.toByteArray.toByteSlice.start + p)
       (min (s.toByteArray.toByteSlice.start + p + CHUNK_SIZE)
         s.toByteArray.toByteSlice.stop)).toByteSlice =
       (chunkAt s p).toByteArray.toByteSlice := by
   rw [toByteArray_chunkAt, toByteSlice_byteArray, toByteSlice_start, toByteSlice_stop]
 
-theorem chunk_stop_lt (s : Spec.Lexicon.Chars) (p : Nat) :
+theorem chunk_stop_lt (s : BSmtLibSpec.Regex.Chars) (p : Nat) :
     (chunkAt s p).toByteArray.toByteSlice.stop < USize.size := by
   rw [stop_toByteSlice, List.size_toByteArray]
   exact Nat.lt_of_le_of_lt (length_chunkAt s p) chunk_lt_size

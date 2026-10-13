@@ -11,10 +11,10 @@ leaves it as it was constructed (`resetsAtEnd_vNaive`).
 namespace BSmtLib.Proofs.Lexer.VNaive
 
 open BSmtLib.Proofs.Adapter
-open Spec.Lexer (Handed)
+open BSmtLibSpec.Lexer (Handed)
 
 section
-variable (consumer : Spec.Lexer.Consumer)
+variable (consumer : BSmtLibSpec.Lexer.Consumer)
 
 theorem handOverAt_iv (X : Core) (l : Lexeme) (hl : l.Valid) (taken : List Handed) :
     (vRun consumer (handOverAt (H := Answering consumer) X l hl) taken).1.2.initialVersion =
@@ -246,7 +246,7 @@ theorem vEnd_inv (core : Core) (taken : List Handed) (hp : core.Plain) :
 
 /-- An input fed to the end keeps the lexer lexing or discarding, under its initial version, and
 resets it when it finishes. -/
-theorem runInput_reset (slices : List Spec.Lexicon.Chars) :
+theorem runInput_reset (slices : List BSmtLibSpec.Regex.Chars) :
     ∀ (core : Core) (held : Option (Located consumer.Result)) (taken : List Handed), core.Plain →
       let r := (VNaive.lexOps.runInput (consumer := consumer) ⟨{}, core, held⟩ true slices).run
         taken
@@ -287,15 +287,15 @@ theorem runInput_reset (slices : List Spec.Lexicon.Chars) :
 
 end
 
-theorem vLexer_eta {consumer : Spec.Lexer.Consumer} (L : VNaive.lexOps.Lexer consumer) :
+theorem vLexer_eta {consumer : BSmtLibSpec.Lexer.Consumer} (L : VNaive.lexOps.Lexer consumer) :
     L = ⟨{}, L.core, L.held⟩ := by
   obtain ⟨h, c, d⟩ := L
   rw [answering_eq h {}]
 
 /-- The earlier inputs keep the lexer lexing or discarding, under the version it was constructed
 with. -/
-theorem foldl_inputs_inv {consumer : Spec.Lexer.Consumer} (version : Version)
-    (inputs : List (List Spec.Lexicon.Chars)) :
+theorem foldl_inputs_inv {consumer : BSmtLibSpec.Lexer.Consumer} (version : Version)
+    (inputs : List (List BSmtLibSpec.Regex.Chars)) :
     ∀ (L : VNaive.lexOps.Lexer consumer), L.core.Plain → L.core.initialVersion = version →
       (inputs.foldl (VNaive.lexOps.next consumer version) L).core.Plain ∧
       (inputs.foldl (VNaive.lexOps.next consumer version) L).core.initialVersion = version := by
@@ -315,7 +315,7 @@ theorem foldl_inputs_inv {consumer : Spec.Lexer.Consumer} (version : Version)
     all_goals first | exact trivial | exact rfl | assumption | exact h2.trans hv
 
 /-- The end of the input resets the naive lexer. -/
-theorem resetsAtEnd_vNaive : Spec.Lexer.ResetsAtEnd (lexing VNaive.lexOps) := by
+theorem resetsAtEnd_vNaive : BSmtLibSpec.Lexer.ResetsAtEnd (lexing VNaive.lexOps) := by
   intro consumer version earlier first slices ended hfin
   unfold lexing at hfin ⊢
   simp only [List.foldl_append, List.foldl_cons, List.foldl_nil]
@@ -336,6 +336,6 @@ theorem resetsAtEnd_vNaive : Spec.Lexer.ResetsAtEnd (lexing VNaive.lexOps) := by
     simp only
     rw [h3 rfl, hiv]
     rfl
-  | _ => simp [Spec.Lexer.Outcome.isFinished] at hfin
+  | _ => simp [BSmtLibSpec.Lexer.Outcome.isFinished] at hfin
 
 end BSmtLib.Proofs.Lexer.VNaive

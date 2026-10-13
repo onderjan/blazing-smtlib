@@ -12,10 +12,10 @@ the adapter reads from a lexer after a failed call: its version and where it dis
 
 namespace BSmtLib.Proofs.Adapter
 
-open Spec.Lexer (Handed)
+open BSmtLibSpec.Lexer (Handed)
 
 section
-variable (ops₁ ops₂ : LexOps) {consumer : Spec.Lexer.Consumer}
+variable (ops₁ ops₂ : LexOps) {consumer : BSmtLibSpec.Lexer.Consumer}
   (Rel Weak : ops₁.Lexer consumer → ops₂.Lexer consumer → Prop)
 
 /-- Steps that give results the spec does not tell apart, the same tokens taken, lexers related
@@ -55,14 +55,14 @@ theorem mapError_error {ε ε' β : Type} {f : ε → ε'} {x y : Except ε β}
 and whose related lexers hold the same result, stand alike after the same input, take the same
 tokens, and are weakly related, and related if they have not failed. -/
 theorem runInput_alikeF
-    (hslice : ∀ slice : Spec.Lexicon.Chars, StepsAlikeF ops₁ ops₂ Rel Weak
+    (hslice : ∀ slice : BSmtLibSpec.Regex.Chars, StepsAlikeF ops₁ ops₂ Rel Weak
       (fun a => ops₁.lexSliceStep a slice.toByteArray.toByteSlice)
       (fun b => ops₂.lexSliceStep b slice.toByteArray.toByteSlice))
     (heof : StepsAlikeF ops₁ ops₂ Rel Weak ops₁.lexEofStep ops₂.lexEofStep)
     (hheld : ∀ a b, Rel a b → ops₁.held a = ops₂.held b)
     (hwith : ∀ a b held, Rel a b → Rel (ops₁.withHeld a held) (ops₂.withHeld b held))
     (hweak : ∀ a b, Rel a b → Weak a b)
-    (ended : Bool) (slices : List Spec.Lexicon.Chars) :
+    (ended : Bool) (slices : List BSmtLibSpec.Regex.Chars) :
     ∀ a b (taken : List Handed), Rel a b →
       ((ops₁.runInput a ended slices).run taken).1.1 =
           ((ops₂.runInput b ended slices).run taken).1.1 ∧
@@ -137,11 +137,11 @@ end
 apart, as `StepsAlikeF` says, do the same with every consumer of the spec: what the adapter
 makes of them is equal. -/
 theorem lexing_alikeF (ops₁ ops₂ : LexOps)
-    (Rel Weak : ∀ consumer : Spec.Lexer.Consumer,
+    (Rel Weak : ∀ consumer : BSmtLibSpec.Lexer.Consumer,
       ops₁.Lexer consumer → ops₂.Lexer consumer → Prop)
     (hnew : ∀ consumer version,
       Rel consumer (ops₁.new consumer {} version) (ops₂.new consumer {} version))
-    (hslice : ∀ consumer (slice : Spec.Lexicon.Chars), StepsAlikeF ops₁ ops₂ (Rel consumer)
+    (hslice : ∀ consumer (slice : BSmtLibSpec.Regex.Chars), StepsAlikeF ops₁ ops₂ (Rel consumer)
       (Weak consumer) (fun a => ops₁.lexSliceStep a slice.toByteArray.toByteSlice)
       (fun b => ops₂.lexSliceStep b slice.toByteArray.toByteSlice))
     (heof : ∀ consumer,

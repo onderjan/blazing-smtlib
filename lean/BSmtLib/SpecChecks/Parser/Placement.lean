@@ -15,8 +15,12 @@ Not trusted: everything here is proved.
 
 namespace BSmtLib.SpecChecks.Parser
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Grammar BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec BSmtLibSpec.Lexicon BSmtLibSpec.Grammar BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
+open BSmtLibSpec.Parser.Traversal
 
 theorem take_cons_succ {x x' : Received} {s s' : List Received} {k : Nat}
     (h : (x :: s).take (k + 1) = (x' :: s').take (k + 1)) : x = x' ∧ s.take k = s'.take k := by

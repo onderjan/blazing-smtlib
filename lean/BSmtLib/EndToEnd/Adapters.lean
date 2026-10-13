@@ -1,6 +1,7 @@
 import BSmtLib.Reader
 import BSmtLib.Parser.Adapter
-import BSmtLib.Spec.Reader
+import BSmtLibSpec.Reader
+import BSmtLibSpec.Grammar.Properties
 import BSmtLib.Proofs.Adapters
 import BSmtLib.ParserProofs.Adapters
 
@@ -25,7 +26,9 @@ lexers of the chain and Lean.
 
 namespace BSmtLib.EndToEnd.Param
 
-open BSmtLib.Spec BSmtLib.Spec.Grammar BSmtLib.Spec.Parser
+open BSmtLibSpec BSmtLibSpec.Grammar BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
 open BSmtLib.ParserProofs BSmtLib.ParserProofs.Rejection
 open BSmtLib.Parser (ScriptParser ParseAdapter)
 
@@ -43,7 +46,7 @@ def recordingAdapter : RecAdapter :=
 /-- The library's lexer with the parse adapter, fed the slices and then the end of the input by
 its public calls: the result at the end of the input and the lexer, or the first error. -/
 def paFeed (lexer : PLexer) :
-    List Lexicon.Chars →
+    List Regex.Chars →
       Except (LexError (Parser.ParseErrorCause Unit)) (Option (Located Unit) × PLexer)
   | [] =>
     match (Lexer.lexEof lexer : Id _) with
@@ -58,9 +61,13 @@ end BSmtLib.EndToEnd.Param
 
 namespace BSmtLib.EndToEnd
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Grammar BSmtLib.Spec.Parser
-open BSmtLib.Spec.Lexer (Handed Consumer Answer)
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec BSmtLibSpec.Lexicon BSmtLibSpec.Grammar BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
+open BSmtLibSpec.Lexer (Handed Consumer Answer)
+open BSmtLibSpec.Parser.Traversal
 open BSmtLib.ParserProofs
 open BSmtLib.ParserProofs.Rejection
 open BSmtLib.Parser (Input)
@@ -103,7 +110,7 @@ inductive ScriptError where
   /-- The parser rejected the token. -/
   | rejected
   /-- The parser failed on a version declaration, with the error. -/
-  | failed (error : VersionError)
+  | failed (error : VersionPolicy.Error)
 
 /-- The answer to a parser's run that ends as given, at a token that is or is not the end of the
 input. -/
@@ -136,7 +143,9 @@ namespace BSmtLib.EndToEnd
 
 
 open BSmtLib.Lexer.Internal
-open BSmtLib.Spec BSmtLib.Spec.Grammar BSmtLib.Spec.Parser
+open BSmtLibSpec BSmtLibSpec.Grammar BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
 open BSmtLib.ParserProofs BSmtLib.ParserProofs.Rejection
 open BSmtLib.Parser (ScriptParser ParseAdapter)
 open BSmtLib.Proofs.Adapter (toVersion)
@@ -177,7 +186,7 @@ Where a call fails, the library gives no reader back, so the reader's public cal
 what its handler holds then. The calls are then read from inside the library: from the handler of
 the lexer that the failed call's step leaves (`sliceStepped`, `eofStepped`, `lexerCalls`), which
 the library's public calls discard. -/
-def readerRun : RecReader → List Lexicon.Chars → Bool → List Event × Bool
+def readerRun : RecReader → List Regex.Chars → Bool → List Event × Bool
   | reader, [], false => (reader.handler.reverse, false)
   | reader, [], true =>
     match (reader.readEof : Id _) with
@@ -190,7 +199,7 @@ def readerRun : RecReader → List Lexicon.Chars → Bool → List Event × Bool
 
 /-- The library's script reader, with the recording handler and the posture that allows every
 version, as a recording reader. -/
-def libraryReader : Spec.Reader.RecordingReader where
+def libraryReader : BSmtLibSpec.Reader.RecordingReader where
   read version slices ended := readerRun (readerOf version) slices ended
 
 end BSmtLib.EndToEnd

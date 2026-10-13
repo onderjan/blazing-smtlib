@@ -13,8 +13,12 @@ Not trusted: everything here is proved.
 
 namespace BSmtLib.SpecChecks.Reader
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Lexer BSmtLib.Spec.Grammar
-open BSmtLib.Spec.Parser BSmtLib.Spec.Reader
+open BSmtLibSpec BSmtLibSpec.Lexicon BSmtLibSpec.Lexer BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
+open BSmtLibSpec.Parser BSmtLibSpec.Reader
+open BSmtLibSpec.Parser.Properties
 open BSmtLib.SpecChecks.Lexicon BSmtLib.SpecChecks.Lexer BSmtLib.SpecChecks.Grammar
 
 /-- The end of the input after nothing. -/
@@ -24,10 +28,10 @@ theorem whitespaceAtEnd_nil : whitespaceAtEnd [] := ⟨[], [], by simp, whitespa
 of that `)`, and the tokens after it that of the characters after it. -/
 theorem tokenizationFrom_split {version : Version} :
     ∀ {offset : Nat} {input : Chars} {first : List Token} {rest : List Token} {stop : Nat},
-      TokenizationFrom version offset input (first ++ rest) → EndsWithClose first stop →
+      Tokenization.From version offset input (first ++ rest) → EndsWithClose first stop →
       offset ≤ stop ∧ stop ≤ offset + input.length ∧
-        TokenizationFrom version offset (input.take (stop - offset)) first ∧
-        TokenizationFrom version stop (input.drop (stop - offset)) rest := by
+        Tokenization.From version offset (input.take (stop - offset)) first ∧
+        Tokenization.From version stop (input.drop (stop - offset)) rest := by
   intro offset input first
   induction first generalizing offset input with
   | nil => intro rest stop _ hc; obtain ⟨_, h, -⟩ := hc; simp at h
@@ -51,7 +55,7 @@ theorem tokenizationFrom_split {version : Version} :
           rw [List.drop_left' (by simp; omega)]
         refine ⟨by omega, by simp; omega, ?_, ?_⟩
         · rw [e₁]
-          simpa using TokenizationFrom.token (rest := []) hw hs (Or.inr (Or.inl rfl))
+          simpa using Tokenization.From.token (rest := []) hw hs (Or.inr (Or.inl rfl))
             (.done whitespaceAtEnd_nil)
         · rw [e₂, ← hend]; simpa [Nat.add_assoc] using hmore
       | cons token' first =>
@@ -280,12 +284,12 @@ theorem command_of_handed (hI : StandsFor parser item) {version : Version} {inpu
     (hblockEq : block = tokens.take block.length) (hos : offset ≤ stop)
     (hle : stop ≤ input.length)
     (hclosed : stop = offset ∧ block = [] ∨ EndsWithClose block (stop - offset))
-    (htoks : ((Spec.Lexer.segment lexing.fed version input true offset).handed.drop
+    (htoks : ((BSmtLibSpec.Lexer.segment lexing.fed version input true offset).handed.drop
       block.length).take command.tokens.length = handed)
     (hstood : stood parser item handed = command.tokens.map .token)
     (hv : command.Valid version) :
     ∃ segment rel, input.drop stop = segment ++ input.drop (stop + segment.length) ∧
-      TokenizationExactly version stop segment (rel.map (Token.moveBy offset)) ∧
+      Tokenization.Exactly version stop segment (rel.map (Token.moveBy offset)) ∧
       IsCommand version ((rel.map (Token.moveBy offset)).map (SyntaxToken.ofToken version))
         command ∧
       handed = blockHanded version input offset rel ∧
@@ -299,15 +303,15 @@ theorem command_of_handed (hI : StandsFor parser item) {version : Version} {inpu
     simpa [stood] using congrArg List.length hstood
   have hk₁ : 1 ≤ command.tokens.length :=
     List.length_pos_iff.mpr (tokens_ne_nil command)
-  have hseg : (Spec.Lexer.segment lexing.fed version input true offset).handed =
+  have hseg : (BSmtLibSpec.Lexer.segment lexing.fed version input true offset).handed =
       blockHanded version input offset tokens ∨
       (Tokenization version (input.drop offset) tokens ∧
-        (Spec.Lexer.segment lexing.fed version input true offset).handed =
+        (BSmtLibSpec.Lexer.segment lexing.fed version input true offset).handed =
           blockHanded version input offset tokens ++
             [(endOfFile (input.drop offset)).after (input.take offset)]) := by
     rcases hfed with h | ⟨ht, h⟩
-    · left; simp [Spec.Lexer.segment, h, blockHanded, Function.comp_def]
-    · right; exact ⟨ht, by simp [Spec.Lexer.segment, h, blockHanded, Function.comp_def]⟩
+    · left; simp [BSmtLibSpec.Lexer.segment, h, blockHanded, Function.comp_def]
+    · right; exact ⟨ht, by simp [BSmtLibSpec.Lexer.segment, h, blockHanded, Function.comp_def]⟩
   -- the command's tokens are tokens of the readout
   have hfit : block.length + command.tokens.length ≤ tokens.length := by
     refine Nat.le_of_not_lt fun hlt => ?_
@@ -383,7 +387,7 @@ theorem command_of_handed (hI : StandsFor parser item) {version : Version} {inpu
     simp only [List.length_take] at this
     omega
   -- the command's characters, after the block
-  have hcmd : stop - offset ≤ stop' ∧ TokenizationFrom version (stop - offset)
+  have hcmd : stop - offset ≤ stop' ∧ Tokenization.From version (stop - offset)
       (((input.drop offset).take stop').drop (stop - offset)) rel := by
     rcases hclosed with ⟨he, hb⟩ | hc
     · subst hb

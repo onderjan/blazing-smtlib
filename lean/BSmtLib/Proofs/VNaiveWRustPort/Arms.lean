@@ -11,17 +11,17 @@ then the step goes on in the normal state (`afterStep_wp`).
 namespace BSmtLib.Proofs.Lexer.VNaiveWRustPort
 
 open BSmtLib.Proofs.Adapter VNaive BSmtLib.Proofs.Simulation
-open Spec.Lexer (Handed)
+open BSmtLibSpec.Lexer (Handed)
 open Lexer.Slice (get? get)
 
 section
 
 variable {floor : Option Nat} {low : Nat}
-variable {C : Spec.Lexer.Consumer} {hd : Bool} {iv : Version}
+variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Version}
 
 /-- What an arm of `lexStep` keeps: the step's postcondition, with the lexer's index of its
 offset unchanged, and the normal state if the arm consumed nothing. -/
-def ArmPost (C : Spec.Lexer.Consumer) (v : Version) (hd : Bool) (iv : Version)
+def ArmPost (C : BSmtLibSpec.Lexer.Consumer) (v : Version) (hd : Bool) (iv : Version)
     (input : ByteSlice) (st : St) (location : Location) (start : Nat) (ver : Version)
     (coll : List Handed) (held : List Lexeme) (next : Nat) (c : WCore) (coll' : List Handed) :
     Prop :=

@@ -1,8 +1,19 @@
-import BSmtLib.Spec.Lexicon
-import BSmtLib.Spec.Grammar
-import BSmtLib.Spec.Lexer
-import BSmtLib.Spec.Parser
-import BSmtLib.Spec.Reader
+import BSmtLibSpec.Regex
+import BSmtLibSpec.Lexicon
+import BSmtLibSpec.Lexicon.Tokenization
+import BSmtLibSpec.Lexicon.Properties
+import BSmtLibSpec.Grammar
+import BSmtLibSpec.Grammar.Tree
+import BSmtLibSpec.Grammar.Syntax
+import BSmtLibSpec.Grammar.File
+import BSmtLibSpec.Grammar.Script
+import BSmtLibSpec.Grammar.Properties
+import BSmtLibSpec.Lexer
+import BSmtLibSpec.Parser
+import BSmtLibSpec.Parser.VersionPolicy
+import BSmtLibSpec.Parser.Traversal
+import BSmtLibSpec.Parser.Properties
+import BSmtLibSpec.Reader
 
 /-!
 # Our reading of the SMT-LIB 2 standard
@@ -11,6 +22,7 @@ Our formalised reading of the SMT-LIB standard, versions 2.0, 2.5, 2.6 and 2.7,
 against which a lexer and a parser can be proved correct.
 Its sources of truth are the specification files of the respective versions.
 
+- `Regex` is the formalism the lexicon is written in.
 - `Lexicon` formalises the lexicon (lexical categories, tokens, and tokenisation).
 - `Grammar` formalises the grammar for syntactic categories and commands.
   It does not include the syntax of theories, logics, and command responses,

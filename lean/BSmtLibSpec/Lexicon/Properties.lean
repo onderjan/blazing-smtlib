@@ -1,4 +1,4 @@
-import BSmtLib.Spec.Lexicon.Tokenization
+import BSmtLibSpec.Lexicon.Tokenization
 
 /-!
 # Properties of tokenisation
@@ -14,7 +14,9 @@ definitions are trusted as much as the rules of the standard, and are to be read
 same care.
 -/
 
-namespace BSmtLib.Spec.Lexicon
+namespace BSmtLibSpec.Lexicon.Properties
+
+open Regex (Chars)
 
 /-! ## About the spec -/
 
@@ -60,7 +62,7 @@ this property, where they stand in the whole input could change their tokens.
 -/
 def ReadsOnItsOwn : Prop :=
   ∀ version offset input tokens,
-    TokenizationFrom version offset input tokens ↔
+    Tokenization.From version offset input tokens ↔
       ∃ tokens₀, tokens = tokens₀.map (Token.moveBy offset) ∧ Tokenization version input tokens₀
 
-end BSmtLib.Spec.Lexicon
+end BSmtLibSpec.Lexicon.Properties

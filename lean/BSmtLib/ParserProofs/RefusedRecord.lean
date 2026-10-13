@@ -14,10 +14,12 @@ by command, each run is the other with its errors mapped (`command_U`), as the r
 
 namespace BSmtLib.ParserProofs
 
-open BSmtLib.Spec.Grammar
+open BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
 open BSmtLib.Parser (Input ScriptParser)
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 open BSmtLib.SpecChecks.Parser (afterOf commandFirst run_command)
 
 theorem bind_unit_cancel {ε σ β : Type} {x y : ExceptT ε (StateM σ) Unit} (b : β)
@@ -28,7 +30,7 @@ theorem bind_unit_cancel {ε σ β : Type} {x y : ExceptT ε (StateM σ) Unit} (
 
 /-- A valid command's recording run with the library's handler is the spec's, its errors
 mapped. -/
-theorem command_U {version : Spec.Lexicon.Version} {command : Tree.Command}
+theorem command_U {version : BSmtLibSpec.Lexicon.Version} {command : Tree.Command}
     (hvalid : command.Valid version) :
     Traversal.command recordingPoints recordingHandlerU command =
       ExceptT.adapt mapCause (Traversal.command recordingPoints recordingHandler command) := by
@@ -47,7 +49,7 @@ theorem command_U {version : Spec.Lexicon.Version} {command : Tree.Command}
 
 /-- The recording run with the library's handler of what a parser takes is the spec's, its errors
 mapped. -/
-theorem commands_U {start : Spec.Lexicon.Version} {commands : List Tree.Command}
+theorem commands_U {start : BSmtLibSpec.Lexicon.Version} {commands : List Tree.Command}
     {taken : List Received} {ending : Ending} (htakes : Takes start commands taken ending) :
     ∀ (declarations : Nat),
     Traversal.commands recordingPoints recordingHandlerU recordingProducer
@@ -85,9 +87,9 @@ theorem commands_U {start : Spec.Lexicon.Version} {commands : List Tree.Command}
 
 /-- The recording run with the library's handler of a script read from the version is the spec's,
 its errors mapped. -/
-theorem script_U {start : Spec.Lexicon.Version} {commands : List Tree.Command}
+theorem script_U {start : BSmtLibSpec.Lexicon.Version} {commands : List Tree.Command}
     {taken : List Received} {ending : Ending} (htakes : Takes start commands taken ending)
-    (version : Spec.Lexicon.Version) :
+    (version : BSmtLibSpec.Lexicon.Version) :
     Traversal.script recordingPoints recordingHandlerU recordingProducer
         VersionPolicy.unrestricted version commands =
       ExceptT.adapt mapCause (Traversal.script recordingPoints recordingHandler recordingProducer
@@ -97,9 +99,9 @@ theorem script_U {start : Spec.Lexicon.Version} {commands : List Tree.Command}
 
 /-- The records of the recording run with the library's handler on what a parser takes are those
 of `record`. -/
-theorem record_eq_U_takes {start : Spec.Lexicon.Version} {commands : List Tree.Command}
+theorem record_eq_U_takes {start : BSmtLibSpec.Lexicon.Version} {commands : List Tree.Command}
     {taken : List Received} {ending : Ending} (htakes : Takes start commands taken ending)
-    (version : Spec.Lexicon.Version) :
+    (version : BSmtLibSpec.Lexicon.Version) :
     ((Traversal.script recordingPoints recordingHandlerU recordingProducer
       VersionPolicy.unrestricted version commands).run.run []).2.reverse =
         record version commands := by
@@ -107,9 +109,9 @@ theorem record_eq_U_takes {start : Spec.Lexicon.Version} {commands : List Tree.C
   rw [script_U htakes, state_adapt]
 
 /-- An error of the recording run with the library's handler is a syntax error. -/
-theorem commands_U_error {start : Spec.Lexicon.Version} {commands : List Tree.Command}
+theorem commands_U_error {start : BSmtLibSpec.Lexicon.Version} {commands : List Tree.Command}
     {taken : List Received} {ending : Ending} (htakes : Takes start commands taken ending)
-    {version : Spec.Lexicon.Version} {e : Cause Unit} {events : List Event}
+    {version : BSmtLibSpec.Lexicon.Version} {e : Cause Unit} {events : List Event}
     (h : ((Traversal.script recordingPoints recordingHandlerU recordingProducer
       VersionPolicy.unrestricted version commands).run.run []) = (.error e, events)) :
     ∃ error, e = .syntax error := by
@@ -134,7 +136,7 @@ theorem commands_U_error {start : Spec.Lexicon.Version} {commands : List Tree.Co
 
 /-- The recording run of a script with the library's handler: the handler's switch to the
 version, then the commands. -/
-theorem script_U_run (version : Spec.Lexicon.Version) (commands : List Tree.Command) :
+theorem script_U_run (version : BSmtLibSpec.Lexicon.Version) (commands : List Tree.Command) :
     (Traversal.script recordingPoints recordingHandlerU recordingProducer
       VersionPolicy.unrestricted version commands).run.run [] =
       (Traversal.commands recordingPoints recordingHandlerU recordingProducer

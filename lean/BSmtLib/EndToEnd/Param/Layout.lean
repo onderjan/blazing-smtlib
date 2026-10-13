@@ -10,7 +10,8 @@ stops with an error at it, the cursor after the token (`takeOne_layout`).
 
 namespace BSmtLib.EndToEnd.Param
 
-open BSmtLib.Spec.Parser
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
 open BSmtLib.ParserProofs
 open BSmtLib.Parser
 

@@ -19,9 +19,11 @@ every failure `Q`; a step's lemma is a `Sound` with `Advances` for its results.
 
 namespace BSmtLib.ParserProofs.Rejection
 
-open BSmtLib.Spec.Grammar
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 open BSmtLib.Parser (Input PM Step ParseErrorCause SyntaxErrorKind)
 
 /-! ## Sets of item lists -/
@@ -56,7 +58,7 @@ def union (A B : Lang) : Lang := fun u => A u ∨ B u
 
 
 /-- The lists of tokens, as items. -/
-abbrev toks (tokens : List Spec.Grammar.SyntaxToken) : List Received := tokens.map .token
+abbrev toks (tokens : List BSmtLibSpec.Grammar.SyntaxToken) : List Received := tokens.map .token
 
 theorem cat_intro {A B : Lang} {a b : List Received} (ha : A a) (hb : B b) : cat A B (a ++ b) :=
   ⟨a, b, ha, hb, rfl⟩
@@ -498,22 +500,22 @@ variable {version : BSmtLib.Version}
 
 theorem atLeast_v2_5_of_ge (h : version ≥ .v2_5) :
     versionAtLeast (Bridge.version version) .v2_5 := by
-  cases version <;> simp_all [versionAtLeast, Bridge.version, Spec.Lexicon.Version.upTo] <;>
+  cases version <;> simp_all [versionAtLeast, Bridge.version, BSmtLibSpec.Lexicon.Version.upTo] <;>
     exact absurd h (by decide)
 
 theorem atLeast_v2_6_of_ge (h : version ≥ .v2_6) :
     versionAtLeast (Bridge.version version) .v2_6 := by
-  cases version <;> simp_all [versionAtLeast, Bridge.version, Spec.Lexicon.Version.upTo] <;>
+  cases version <;> simp_all [versionAtLeast, Bridge.version, BSmtLibSpec.Lexicon.Version.upTo] <;>
     exact absurd h (by decide)
 
 theorem atLeast_v2_7_of_ge' (h : version ≥ .v2_7) :
     versionAtLeast (Bridge.version version) .v2_7 := by
-  cases version <;> simp_all [versionAtLeast, Bridge.version, Spec.Lexicon.Version.upTo] <;>
+  cases version <;> simp_all [versionAtLeast, Bridge.version, BSmtLibSpec.Lexicon.Version.upTo] <;>
     exact absurd h (by decide)
 
 theorem not_atLeast_v2_7_of_lt (h : ¬ version ≥ .v2_7) :
     ¬ versionAtLeast (Bridge.version version) .v2_7 := by
-  cases version <;> simp_all [versionAtLeast, Bridge.version, Spec.Lexicon.Version.upTo] <;>
+  cases version <;> simp_all [versionAtLeast, Bridge.version, BSmtLibSpec.Lexicon.Version.upTo] <;>
     exact h (by decide)
 
 end

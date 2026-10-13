@@ -11,14 +11,16 @@ whatever follows them), so the readings split the items into the same commands.
 
 namespace BSmtLib.ParserProofs.Rejection
 
-open BSmtLib.Spec.Grammar
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 open Lang
 
 /-- A command's tokens that start another's of the same version are that command's. -/
-theorem command_prefix {version : Spec.Lexicon.Version} {c c' : Tree.Command}
-    (hc : c.Valid version) (hc' : c'.Valid version) {r : List Spec.Grammar.SyntaxToken}
+theorem command_prefix {version : BSmtLibSpec.Lexicon.Version} {c c' : Tree.Command}
+    (hc : c.Valid version) (hc' : c'.Valid version) {r : List BSmtLibSpec.Grammar.SyntaxToken}
     (h : c'.tokens = c.tokens ++ r) : c = c' ∧ r = [] := by
   have h₁ := SpecChecks.Grammar.readCommand_tokens version c r (n := sizeOf c + sizeOf c' + 1) hc
     (by omega)
@@ -29,7 +31,7 @@ theorem command_prefix {version : Spec.Lexicon.Version} {c c' : Tree.Command}
   exact h₂
 
 /-- The items of a command that start another's of the same version are that command's. -/
-theorem toks_prefix {version : Spec.Lexicon.Version} {c c' : Tree.Command}
+theorem toks_prefix {version : BSmtLibSpec.Lexicon.Version} {c c' : Tree.Command}
     (hc : c.Valid version) (hc' : c'.Valid version) {r : List Received}
     (h : toks c'.tokens = toks c.tokens ++ r) : c = c' ∧ r = [] := by
   obtain ⟨a, b, hab, ha, hb⟩ := List.map_eq_append_iff.mp h
@@ -58,7 +60,7 @@ theorem toks_split {c c' : Tree.Command} {items items' : List Received} {j : Nat
 
 /-- Two commands of the same version whose items, each followed by more, agree on as many items
 as either has, are the same command. -/
-theorem commands_agree {version : Spec.Lexicon.Version} {c c' : Tree.Command}
+theorem commands_agree {version : BSmtLibSpec.Lexicon.Version} {c c' : Tree.Command}
     (hc : c.Valid version) (hc' : c'.Valid version) {items items' : List Received} {j : Nat}
     (hj : (toks c.tokens).length ≤ j) (hj' : (toks c'.tokens).length ≤ j)
     (h : (toks c.tokens ++ items).take j = (toks c'.tokens ++ items').take j) : c = c' := by
@@ -68,7 +70,7 @@ theorem commands_agree {version : Spec.Lexicon.Version} {c c' : Tree.Command}
 
 /-- A command's items, followed by more, do not agree with a longer command's of the same
 version on as many items as the first command has. -/
-theorem command_not_shorter {version : Spec.Lexicon.Version} {c c' : Tree.Command}
+theorem command_not_shorter {version : BSmtLibSpec.Lexicon.Version} {c c' : Tree.Command}
     (hc : c.Valid version) (hc' : c'.Valid version) {items items' : List Received} {j : Nat}
     (hj : (toks c.tokens).length ≤ j) (hj' : j < (toks c'.tokens).length)
     (h : (toks c.tokens ++ items).take j = (toks c'.tokens ++ items').take j) : False := by
@@ -88,7 +90,7 @@ theorem take_cancel {l a a' : List Received} {j : Nat} (hj : l.length ≤ j)
 
 /-- Two commands of the same version whose items, each followed by more, agree before a position
 in both: both go on past it, or they are the same command and end before it. -/
-theorem split_agree {version : Spec.Lexicon.Version} {c c' : Tree.Command}
+theorem split_agree {version : BSmtLibSpec.Lexicon.Version} {c c' : Tree.Command}
     (hc : c.Valid version) (hc' : c'.Valid version) {items items' : List Received} {j : Nat}
     (h : (toks c.tokens ++ items).take j = (toks c'.tokens ++ items').take j) :
     (j < c.tokens.length ∧ j < c'.tokens.length) ∨ (c = c' ∧ c.tokens.length ≤ j) := by
@@ -102,16 +104,16 @@ theorem split_agree {version : Spec.Lexicon.Version} {c c' : Tree.Command}
 
 theorem exit_tokens_length : Tree.Command.exit.tokens.length = 3 := rfl
 
-theorem toks_length (tokens : List Spec.Grammar.SyntaxToken) :
+theorem toks_length (tokens : List BSmtLibSpec.Grammar.SyntaxToken) :
     (toks tokens).length = tokens.length :=
   List.length_map ..
 
 /-- Where the items before a position of what a parser takes are those of commands, each followed
 by more in a version, and then those of `exit`, the commands are those and `exit`, and the end of
 the input is all that follows. -/
-theorem takes_after_exit {version : Spec.Lexicon.Version} {cs : List Tree.Command}
+theorem takes_after_exit {version : BSmtLibSpec.Lexicon.Version} {cs : List Tree.Command}
     {taken : List Received} {ending : Ending} (h : Takes version cs taken ending) :
-    ∀ {done : List Tree.Command} {last : Spec.Lexicon.Version} {j : Nat},
+    ∀ {done : List Tree.Command} {last : BSmtLibSpec.Lexicon.Version} {j : Nat},
     Chain version done last → j < taken.length →
     taken.take j = cmdToks done ++ toks Tree.Command.exit.tokens →
     cs = done ++ [.exit] ∧
@@ -216,7 +218,7 @@ theorem takes_after_exit {version : Spec.Lexicon.Version} {cs : List Tree.Comman
 
 /-- Where the items before a position of what a parser takes are those of commands, each followed
 by more in a version, and then those of `exit`, the item there is the end of the input. -/
-theorem takes_afterExit {version : Spec.Lexicon.Version} {cs : List Tree.Command}
+theorem takes_afterExit {version : BSmtLibSpec.Lexicon.Version} {cs : List Tree.Command}
     {taken : List Received} {ending : Ending} (h : Takes version cs taken ending) {j : Nat}
     (hj : j < taken.length) (hafter : AfterExit version (taken.take j)) :
     taken[j]? = some .endOfInput := by
@@ -227,14 +229,14 @@ theorem takes_afterExit {version : Spec.Lexicon.Version} {cs : List Tree.Command
   rw [htaken, List.getElem?_append_right (by omega)]
   simp [hlen]
 
-theorem versionAt_head {version : Spec.Lexicon.Version} {c : Tree.Command}
+theorem versionAt_head {version : BSmtLibSpec.Lexicon.Version} {c : Tree.Command}
     {rest : List Tree.Command} {j : Nat} (hj : j < c.tokens.length) :
     versionAt version (c :: rest) j = version := by
   simp [versionAt, hj]
 
 /-- Two readings of items as what a parser takes, from the same version, agree on the version
 in force at an item of both where they agree on the items before it. -/
-theorem versionAt_unique {version : Spec.Lexicon.Version} {cs : List Tree.Command}
+theorem versionAt_unique {version : BSmtLibSpec.Lexicon.Version} {cs : List Tree.Command}
     {taken : List Received} {ending : Ending} (h : Takes version cs taken ending) :
     ∀ {cs' : List Tree.Command} {taken' : List Received} {ending' : Ending} {j : Nat},
     Takes version cs' taken' ending' → j < taken.length → j < taken'.length →
@@ -341,7 +343,7 @@ theorem not_endOfInput_prefix (c : Tree.Command) (items : List Received) :
 
 /-- What a parser takes for some commands is no proper start of what it takes for others, read
 from the same version. -/
-theorem takes_prefix {version : Spec.Lexicon.Version} {cs : List Tree.Command}
+theorem takes_prefix {version : BSmtLibSpec.Lexicon.Version} {cs : List Tree.Command}
     {taken : List Received} {ending : Ending} (h : Takes version cs taken ending) :
     ∀ {cs' : List Tree.Command} {taken' : List Received} {ending' : Ending},
     Takes version cs' taken' ending' → taken' <+: taken → taken' = taken ∧ ending' = ending := by

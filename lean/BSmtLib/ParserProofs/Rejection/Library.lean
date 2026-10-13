@@ -6,7 +6,7 @@ import BSmtLib.ParserProofs.RefusedRecord
 # The library's parser as a recording parser
 
 The library's script parser, run by its driver in a recording run under the posture that
-restricts nothing, as a `Spec.Parser.RecordingParser`: its items are the parser's tokens other
+restricts nothing, as a `BSmtLibSpec.Parser.Properties.RecordingParser`: its items are the parser's tokens other
 than whitespace and comments, each standing for what `Bridge.received` says, and its run ends as
 its result says: waiting where the items run out, finished, failed on a version declaration, or
 rejected with any other cause.
@@ -20,9 +20,11 @@ of what it takes for others (`takes_prefix`) ties the two together.
 
 namespace BSmtLib.ParserProofs.Rejection
 
-open BSmtLib.Spec.Grammar
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 open BSmtLib.Parser (Input ScriptParser)
 
 theorem libEnding_benign {e : Parser.ParseErrorCause Unit} (h : Benign e) :
@@ -172,7 +174,7 @@ theorem driveScript_processed : ∀ (items : List Input), NoLayout items →
 
 /-- The reserved words of the items before a position are those of the version in force, as
 every reading of the items says, where they are as one reading says. -/
-theorem lexical_of_witness {start : Spec.Lexicon.Version} {commands : List Tree.Command}
+theorem lexical_of_witness {start : BSmtLibSpec.Lexicon.Version} {commands : List Tree.Command}
     {taken : List Received} {ending : Ending} (htakes : Takes start commands taken ending)
     {items : List Input} (hlen : items.length ≤ taken.length)
     (hagree : items.map rcv = taken.take items.length)
@@ -199,7 +201,7 @@ theorem lexical_of_witness {start : Spec.Lexicon.Version} {commands : List Tree.
 
 /-- After `exit`, the item of the items, where they are as one reading of what a parser takes
 says, is the end of the input. -/
-theorem afterExit_of_witness {start : Spec.Lexicon.Version} {commands : List Tree.Command}
+theorem afterExit_of_witness {start : BSmtLibSpec.Lexicon.Version} {commands : List Tree.Command}
     {taken : List Received} {ending : Ending} (htakes : Takes start commands taken ending)
     {items : List Input} (hlen : items.length ≤ taken.length)
     (hagree : items.map rcv = taken.take items.length) :
@@ -219,11 +221,11 @@ theorem afterExit_of_witness {start : Spec.Lexicon.Version} {commands : List Tre
   rw [hitem] at this
   exact Option.some.inj this
 
-theorem not_benign_causeOf (error : VersionError) : ¬ Benign (causeOf (.syntax error)) := by
+theorem not_benign_causeOf (error : VersionPolicy.Error) : ¬ Benign (causeOf (.syntax error)) := by
   cases error <;> exact id
 
 /-- What a parser takes for some commands is no shorter start of it for others. -/
-theorem takes_prefix_length {start : Spec.Lexicon.Version} {commands commands' : List Tree.Command}
+theorem takes_prefix_length {start : BSmtLibSpec.Lexicon.Version} {commands commands' : List Tree.Command}
     {taken : List Received} {ending ending' : Ending} (htakes : Takes start commands taken ending)
     {j : Nat} (h : Takes start commands' (taken.take j) ending') :
     taken.length ≤ j ∧ ending' = ending := by
@@ -523,7 +525,7 @@ theorem recAfter_close_fails {parser : ScriptParser (List Event)} {token : Input
   rfl
 
 /-- `library_rejects`, for items of the parser's own type. -/
-theorem rejects_core (version : Spec.Lexicon.Version) (commands : List Tree.Command)
+theorem rejects_core (version : BSmtLibSpec.Lexicon.Version) (commands : List Tree.Command)
     (taken : List Received) (ending : Ending) (all items : List LibItem) (count : Nat)
     (htakes : Takes version commands taken ending)
     (hstands : all.map (rcv ∘ Subtype.val) = taken) (hcount : count < taken.length)
@@ -756,22 +758,22 @@ theorem rejects_core (version : Spec.Lexicon.Version) (commands : List Tree.Comm
 
 /-! ## Items for what a parser takes -/
 
-open BSmtLib.Spec.Lexicon (basicReservedWords commandNames)
+open BSmtLibSpec.Lexicon (basicReservedWords commandNames)
 
 /-- Every reserved word of a version is one of the library's. -/
-theorem decodeReserved_isSome : ∀ v : Spec.Lexicon.Version,
+theorem decodeReserved_isSome : ∀ v : BSmtLibSpec.Lexicon.Version,
     ∀ s ∈ basicReservedWords v ++ commandNames v,
-    (decodeReserved (Spec.Lexicon.chars s)).isSome := by
+    (decodeReserved (BSmtLibSpec.Regex.chars s)).isSome := by
   intro v
   cases v <;> decide
 
-theorem decodeReserved_spec {w : Spec.Lexicon.Chars} {r : Reserved}
+theorem decodeReserved_spec {w : BSmtLibSpec.Regex.Chars} {r : Reserved}
     (h : decodeReserved w = some r) : Bridge.reserved r = w := by
   unfold decodeReserved at h
   have := List.find?_some h
   simpa using this
 
-theorem chars_bytesOf (c : Spec.Lexicon.Chars) : Bridge.chars (bytesOf c) = c := by
+theorem chars_bytesOf (c : BSmtLibSpec.Regex.Chars) : Bridge.chars (bytesOf c) = c := by
   simp [Bridge.chars, bytesOf, BSmtLib.Proofs.Simulation.toByteArray_toByteSlice,
     BSmtLib.Proofs.Simulation.byteArray_toList]
 
@@ -833,7 +835,7 @@ theorem received_inputOf {r : Received} {t : Input} (h : inputOf r = some t) :
     subst h
     rfl
 
-theorem inputOf_isSome {v : Spec.Lexicon.Version} {r : Received} (h : r.OfVersion v) :
+theorem inputOf_isSome {v : BSmtLibSpec.Lexicon.Version} {r : Received} (h : r.OfVersion v) :
     (inputOf r).isSome := by
   rcases r with t | _
   · cases t
@@ -858,7 +860,7 @@ theorem items_for : ∀ l : List Received, (∀ (i : Nat) r, l[i]? = some r → 
 
 /-- `library_rejects`, for items of the parser's own type that stand for what a parser takes
 before the rejected one, where they do not end with `exit`. -/
-theorem rejects_items (version : Spec.Lexicon.Version) (commands : List Tree.Command)
+theorem rejects_items (version : BSmtLibSpec.Lexicon.Version) (commands : List Tree.Command)
     (taken : List Received) (ending : Ending) (items : List LibItem) (count : Nat)
     (htakes : Takes version commands taken ending) (hcount : count < taken.length)
     (rejected : LibItem) (hrejected : items[count]? = some rejected)
@@ -903,9 +905,9 @@ theorem rejects_items (version : Spec.Lexicon.Version) (commands : List Tree.Com
 /-! ## What the parser has done before an item is processed -/
 
 /-- A parser takes for a valid script what it receives for it, and finishes. -/
-theorem takes_of_script {version : Spec.Lexicon.Version} {commands : List Tree.Command}
+theorem takes_of_script {version : BSmtLibSpec.Lexicon.Version} {commands : List Tree.Command}
     (h : Script version commands) :
-    Takes version commands (Spec.Parser.received commands) .finished := by
+    Takes version commands (BSmtLibSpec.Parser.Properties.received commands) .finished := by
   induction h with
   | done => exact .done
   | command hv hm _ ih =>
@@ -925,7 +927,7 @@ either: a body due there would fail the script's run at its `)`.
 -/
 theorem placement_processingOf {version : BSmtLib.Version} {commands : List Tree.Command}
     (hscript : Script (Bridge.version version) commands) {inputs : List Input}
-    (hs : inputs.map Bridge.received = (Spec.Parser.received commands).map some)
+    (hs : inputs.map Bridge.received = (BSmtLibSpec.Parser.Properties.received commands).map some)
     {items : List Input} (hlayout : NoLayout items) (k : Nat) {item : Input}
     (hitem : items[k]? = some item) {stands : Received}
     (hstands : Bridge.received item = some stands) (hk : k < inputs.length)
@@ -933,9 +935,9 @@ theorem placement_processingOf {version : BSmtLib.Version} {commands : List Tree
     eventsBeforeProcessing k (parserRecord version items) =
       eventsBeforeProcessingOf stands k (record (Bridge.version version) commands) := by
   have htakes := takes_of_script hscript
-  have hlength : inputs.length = (Spec.Parser.received commands).length := by
+  have hlength : inputs.length = (BSmtLibSpec.Parser.Properties.received commands).length := by
     simpa using congrArg List.length hs
-  have hcount : k < (Spec.Parser.received commands).length := by omega
+  have hcount : k < (BSmtLibSpec.Parser.Properties.received commands).length := by omega
   have hof := takes_ofVersion htakes
   -- the items before the one at `k` keep the parser going
   obtain ⟨version', parser', events₁, hrun₁, -⟩ := prefix_goes_on htakes hs hcount

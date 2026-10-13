@@ -10,7 +10,7 @@ path, keeps the correspondence with the naive lexer's pure run.
 namespace BSmtLib.Proofs.Lexer.VNaiveWRustPort
 
 open BSmtLib.Proofs.Adapter VNaive BSmtLib.Proofs.Simulation
-open Spec.Lexer (Handed)
+open BSmtLibSpec.Lexer (Handed)
 open Lexer.WRustPort (lexNormalFrom FastState Frame Held Past)
 open Lexer.Slice (get? get)
 
@@ -83,7 +83,7 @@ section
 
 variable {floor : Option Nat} {low : Nat}
 
-variable {C : Spec.Lexer.Consumer} {hd : Bool} {iv : Version}
+variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Version}
 
 theorem push_append' (a b : ByteArray) (c : UInt8) : (a ++ b).push c = a ++ b.push c := by
   apply ByteArray.ext
@@ -167,7 +167,7 @@ theorem wp_store {β : Type} {locals : FastState} {s : BS floor low} {coll : Lis
 /-- What the loop of the normal state keeps, from the index `index`: if the lexer state is in
 the normal state at `location`, with the loop's copies of its offset, index of the offset and
 line, and the loop holds a batch of lexemes, then the loop keeps the correspondence. -/
-def NormalSpec (C : Spec.Lexer.Consumer) (v : Version) (hd : Bool) (iv : Version)
+def NormalSpec (C : BSmtLibSpec.Lexer.Consumer) (v : Version) (hd : Bool) (iv : Version)
     (input : ByteSlice) (offset base : Nat)
     (hframe : Frame floor low offset) (index : Nat) : Prop :=
   ∀ (batch : TokenBatch) (locals : FastState) (hindex : base ≤ index)

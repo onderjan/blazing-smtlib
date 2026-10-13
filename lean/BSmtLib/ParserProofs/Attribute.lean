@@ -12,19 +12,21 @@ parser, run inside the attribute parser's `inside` mode.
 
 namespace BSmtLib.ParserProofs
 
-open BSmtLib.Spec.Grammar
+open BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
 open BSmtLib.Parser (Input PM Step AttributeState AttributeMode attributeStep SExprState sExprStep
   sExprComplete)
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 open BSmtLib.SpecChecks.Parser (attributeThen_some attributeThen_none)
 
 /-- The tokens of an attribute's value, none if it has no value. -/
-def valueTokens : Option Tree.AttributeValue → List Spec.Grammar.SyntaxToken
+def valueTokens : Option Tree.AttributeValue → List BSmtLibSpec.Grammar.SyntaxToken
   | some value => value.tokens
   | none => []
 
-theorem attribute_tokens (keyword : Spec.Lexicon.Chars) (value : Option Tree.AttributeValue) :
+theorem attribute_tokens (keyword : BSmtLibSpec.Regex.Chars) (value : Option Tree.AttributeValue) :
     Tree.Attribute.tokens ⟨keyword, value⟩ = .keyword keyword :: valueTokens value := by
   cases value <;> rfl
 
@@ -159,7 +161,7 @@ def afterNext (token : Input) (attributes : Array (Parser.Handler.Attribute H)) 
   | _ => .done attributes
 
 /-- The spec's token after an attribute, and the parser's token standing for it. -/
-def FollowsAttribute (token : Input) (following : Spec.Grammar.SyntaxToken) : Prop :=
+def FollowsAttribute (token : Input) (following : BSmtLibSpec.Grammar.SyntaxToken) : Prop :=
   (token = .parenClose ∧ following = .parenClose) ∨
     ∃ name, token = .keyword name ∧ following = .keyword (Bridge.keyword name)
 
@@ -170,7 +172,7 @@ parser handles it with the traversal's effects, and is then where that token lea
 theorem attributeThen_runs (hA : TermAgrees h) (value : Option Tree.AttributeValue)
     (hvalid : ∀ v, value = some v → v.Valid (Bridge.version version))
     {tokens : List Input} (hs : Stands tokens (valueTokens value)) (keyword : KeywordView)
-    {next : Input} {following : Spec.Grammar.SyntaxToken} (hnext : FollowsAttribute next following)
+    {next : Input} {following : BSmtLibSpec.Grammar.SyntaxToken} (hnext : FollowsAttribute next following)
     (attributes : Array (Parser.Handler.Attribute H)) :
     Runs points (attributeStep false version) { mode := .afterName keyword, attributes }
       (tokens ++ [next])
@@ -200,7 +202,7 @@ theorem attributeThen_runs (hA : TermAgrees h) (value : Option Tree.AttributeVal
     simp [attributeThen_some, adaptRun_take hreceived]
 
 /-- The keyword of an attribute, as the parser takes it, and the tokens of its value. -/
-theorem Stands.attribute {keyword : Spec.Lexicon.Chars} {value : Option Tree.AttributeValue}
+theorem Stands.attribute {keyword : BSmtLibSpec.Regex.Chars} {value : Option Tree.AttributeValue}
     {tokens : List Input} (hs : Stands tokens (Tree.Attribute.tokens ⟨keyword, value⟩)) :
     ∃ name rest, tokens = .keyword name :: rest ∧ Bridge.keyword name = keyword ∧
       Stands rest (valueTokens value) := by
@@ -309,7 +311,7 @@ theorem attributes_runs_init (hA : TermAgrees h) (first : Tree.Attribute)
 From its start, the parser of a single attribute reads an attribute and the `)` after it, and
 ends with the handled attribute, as `set-info` and `set-option` read it.
 -/
-theorem attributeSingle_runs (hA : TermAgrees h) (keyword : Spec.Lexicon.Chars)
+theorem attributeSingle_runs (hA : TermAgrees h) (keyword : BSmtLibSpec.Regex.Chars)
     (value : Option Tree.AttributeValue)
     (hvalid : (⟨keyword, value⟩ : Tree.Attribute).Valid (Bridge.version version))
     {tokens : List Input}

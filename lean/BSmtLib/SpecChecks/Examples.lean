@@ -9,7 +9,9 @@ trusted: these are proofs.
 
 namespace BSmtLib.SpecChecks.Lexicon
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Lexicon.Regex
+open BSmtLibSpec BSmtLibSpec.Lexicon BSmtLibSpec.Regex
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
 
 /-! ## Hexadecimals and binaries -/
 
@@ -111,30 +113,30 @@ example : unescape (chars "She said: \"\"Bye bye\"\" and left.") =
 example : Tokenization .v2_7 (chars "(assert x)")
     [⟨.parenOpen, 0, chars "("⟩, ⟨.reserved, 1, chars "assert"⟩,
       ⟨.simpleSymbol, 8, chars "x"⟩, ⟨.parenClose, 9, chars ")"⟩] := by
-  apply TokenizationFrom.token (category := .parenOpen) (w := []) (s := chars "(")
+  apply Tokenization.From.token (category := .parenOpen) (w := []) (s := chars "(")
     (rest := chars "assert x)") whitespace_nil rfl (Or.inl rfl)
-  apply TokenizationFrom.token (category := .reserved) (w := []) (s := chars "assert")
+  apply Tokenization.From.token (category := .reserved) (w := []) (s := chars "assert")
     (rest := chars " x)") whitespace_nil (litOneOf_iff.mpr (by decide))
     (delimited_by (Or.inl (whiteSpaceChar_one.mpr (by decide))))
-  apply TokenizationFrom.token (category := .simpleSymbol) (w := chars " ") (s := chars "x")
+  apply Tokenization.From.token (category := .simpleSymbol) (w := chars " ") (s := chars "x")
     (rest := chars ")") (whitespace_spaces (by decide))
     (simpleSymbol_of (by simp [simpleSymbolChar_one]; decide) (by decide) (by decide))
     (delimited_by (Or.inr (oneOf_one.mpr (by decide))))
-  apply TokenizationFrom.token (category := .parenClose) (w := []) (s := chars ")") (rest := [])
+  apply Tokenization.From.token (category := .parenClose) (w := []) (s := chars ")") (rest := [])
     whitespace_nil rfl (Or.inr (Or.inl rfl))
-  exact TokenizationFrom.done ⟨[], [], rfl, whitespace_nil, Or.inl rfl⟩
+  exact Tokenization.From.done ⟨[], [], rfl, whitespace_nil, Or.inl rfl⟩
 
 /-- A comment that runs to the end of the input, without a line feed, has a tokenisation. -/
 example : Tokenization .v2_7 (chars ";c") [] :=
-  TokenizationFrom.done ⟨[], chars ";c", rfl, whitespace_nil,
+  Tokenization.From.done ⟨[], chars ";c", rfl, whitespace_nil,
     Or.inr (seq_intro (a := chars ";") rfl (star_each (by
       simp [minus, anyChar, lineBreak, alt, code, range_one]; decide)))⟩
 
 /-- A tab is allowed in a 2.0 string literal. -/
 example : Tokenization .v2_0 (chars "\"a\tb\"") [⟨.string, 0, chars "\"a\tb\""⟩] := by
-  apply TokenizationFrom.token (category := .string) (w := []) (s := chars "\"a\tb\"") (rest := [])
+  apply Tokenization.From.token (category := .string) (w := []) (s := chars "\"a\tb\"") (rest := [])
     whitespace_nil ?_ (Or.inr (Or.inr (Or.inl rfl)))
-  · exact TokenizationFrom.done ⟨[], [], rfl, whitespace_nil, Or.inl rfl⟩
+  · exact Tokenization.From.done ⟨[], [], rfl, whitespace_nil, Or.inl rfl⟩
   · show string20 (chars "\"" ++ (chars "a\tb" ++ chars "\""))
     refine seq_intro rfl (seq_intro (star_each fun c hc => Or.inl ⟨?_, ?_⟩) rfl)
     · simp [chars] at hc
@@ -147,9 +149,9 @@ def stringE : Chars := [34, 195, 169, 34]
 
 /-- Characters from 128 on are allowed in a 2.0 string literal. -/
 example : Tokenization .v2_0 stringE [⟨.string, 0, stringE⟩] := by
-  apply TokenizationFrom.token (category := .string) (w := []) (s := stringE) (rest := [])
+  apply Tokenization.From.token (category := .string) (w := []) (s := stringE) (rest := [])
     whitespace_nil ?_ (Or.inr (Or.inr (Or.inl rfl)))
-  · exact TokenizationFrom.done ⟨[], [], rfl, whitespace_nil, Or.inl rfl⟩
+  · exact Tokenization.From.done ⟨[], [], rfl, whitespace_nil, Or.inl rfl⟩
   · show string20 (chars "\"" ++ ([195, 169] ++ chars "\""))
     refine seq_intro rfl (seq_intro (star_each fun c hc => Or.inl ⟨?_, ?_⟩) rfl)
     · simp at hc

@@ -15,14 +15,15 @@ cursor as the recording log says the run asked its producer to (`takeOne_rec`).
 
 namespace BSmtLib.EndToEnd.Param
 
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 open BSmtLib.ParserProofs
 open BSmtLib.Parser
 open BSmtLib.Proofs.Adapter (toVersion)
 
 /-- The cursor after the requests: the switch of the version, then discarding. -/
-def applyRequests {b : BatchTag} (cursor : BatchCursor b) (switch : Option Spec.Lexicon.Version)
+def applyRequests {b : BatchTag} (cursor : BatchCursor b) (switch : Option BSmtLibSpec.Lexicon.Version)
     (discard : Bool) : BatchCursor b :=
   let switched := match switch with
     | none => cursor
@@ -142,7 +143,7 @@ theorem requests_none {added : List Event} (h : ∀ e ∈ added, e.isCall = true
       cases e <;> first | rfl | exact absurd he (by simp [Event.isCall])) h'⟩
 
 theorem requests_switch {added added' : List Event} (h : ∀ e ∈ added, e.isCall = true)
-    (h' : ∀ e ∈ added', e.isCall = true) (version : Spec.Lexicon.Version) (received : Received)
+    (h' : ∀ e ∈ added', e.isCall = true) (version : BSmtLibSpec.Lexicon.Version) (received : Received)
     (rest : List Event) :
     ParserProofs.switchOf
           ((added' ++ .producerSwitch version :: (added ++ .process received :: rest)).reverse) =

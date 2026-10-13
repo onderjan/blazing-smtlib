@@ -2,7 +2,7 @@ import BSmtLib.Proofs.Lexer.VNaive
 import BSmtLib.Proofs.Lexer.WRustPort
 import BSmtLib.Proofs.Lexer.X1BatchInCore
 import BSmtLib.Token.Syntax
-import BSmtLib.Spec.Lexer
+import BSmtLibSpec.Lexer
 
 /-!
 # The adapters of the lexer proofs
@@ -14,8 +14,8 @@ the wrong thing, so these definitions are trusted: they are to be read with the 
 `#adapters` in `BSmtLib.Proofs` checks that the root theorems need no other definition outside
 the specification, the library, the lexers of the chain and Lean.
 
-`Spec.Lexer.CorrectWithConsumers` is a property of a function that gives what a lexer has done
-with a consumer of the spec, in the spec's form (`Spec.Lexer.Lexing`); `lexing` is that function
+`BSmtLibSpec.Lexer.CorrectWithConsumers` is a property of a function that gives what a lexer has done
+with a consumer of the spec, in the spec's form (`BSmtLibSpec.Lexer.Lexing`); `lexing` is that function
 for each lexer of the chain. A theorem stated through it says only what it makes of the lexer, so
 it has to run the lexer as a consumer would, and record what the lexer hands over and how its
 calls end as they are, or the theorem says nothing about the lexer.
@@ -40,19 +40,19 @@ result, and by dropping the lexer on an error.
 
 namespace BSmtLib.Proofs.Adapter
 
-open BSmtLib.Spec.Lexer (Handed TokenType ReservedKind)
+open BSmtLibSpec.Lexer (Handed TokenType ReservedKind)
 
 /-! ## Conversions to the spec's types -/
 
 /-- The library's version for a version of the spec. -/
-def toVersion : Spec.Lexicon.Version → Version
+def toVersion : BSmtLibSpec.Lexicon.Version → Version
   | .v2_0 => .v2_0
   | .v2_5 => .v2_5
   | .v2_6 => .v2_6
   | .v2_7 => .v2_7
 
 /-- The spec's location for a location of the library. -/
-def toLocation (location : Location) : Spec.Lexer.Location :=
+def toLocation (location : Location) : BSmtLibSpec.Lexer.Location :=
   { offset := location.offset, line := location.line, column := location.column }
 
 /-- The spec's token type for a category of the library; none for whitespace and comments,
@@ -77,7 +77,7 @@ def toReservedKind : SyntaxToken → Option ReservedKind
   | _ => none
 
 /-- The spec's content for the content of a token of the library. -/
-def toContent (content : ByteSlice) : Spec.Lexicon.Chars :=
+def toContent (content : ByteSlice) : BSmtLibSpec.Regex.Chars :=
   content.toByteArray.toList
 
 /-- A token as the cursor reports it, in the spec's form; none for whitespace and comments. -/
@@ -100,7 +100,7 @@ def toLayout {batch : BatchTag} (cursor : BatchCursor batch) (token : Token batc
 
 /-! ## The consumer
 
-`Spec.Lexer.Consumer` is a consumer as the spec states it: what it answers and asks for after
+`BSmtLibSpec.Lexer.Consumer` is a consumer as the spec states it: what it answers and asks for after
 each entry, given the entries it has taken in the input so far. `Answering consumer` is that
 consumer as a consumer of the library: it takes the entries of a cursor one at a time, records
 each in the spec's form, and answers and asks as the spec's consumer does, until it breaks, fails
@@ -117,18 +117,18 @@ abbrev AnswerM := StateM (List Handed)
 
 /-- The consumer that answers as the spec's consumer does. It has no state of its own; the
 entries it has taken are the state of its monad `AnswerM`. -/
-structure Answering (consumer : Spec.Lexer.Consumer) : Type where
+structure Answering (consumer : BSmtLibSpec.Lexer.Consumer) : Type where
 
 /-- `Answering consumer` is a consumer of the library with the spec consumer's result and, as its
 error, the spec consumer's error or `none`; it is concrete if the spec's consumer is. -/
-instance (consumer : Spec.Lexer.Consumer) : Consume (Answering consumer) consumer.Result
+instance (consumer : BSmtLibSpec.Lexer.Consumer) : Consume (Answering consumer) consumer.Result
     (Option consumer.Error) where
   isConcrete := consumer.concrete
 
 /-- The entry the consumer takes for the token of the cursor, in the spec's form: the token, or a
 piece of whitespace or a comment if the consumer is concrete; none for whitespace or a comment
 handed to a consumer that is not concrete. -/
-def Answering.entry (consumer : Spec.Lexer.Consumer) {batch : BatchTag}
+def Answering.entry (consumer : BSmtLibSpec.Lexer.Consumer) {batch : BatchTag}
     (cursor : BatchCursor batch) (token : Token batch) : Option Handed :=
   match toHanded cursor token with
   | some handed => some handed
@@ -136,7 +136,7 @@ def Answering.entry (consumer : Spec.Lexer.Consumer) {batch : BatchTag}
 
 /-- The cursor after the switch of the version that the consumer asks for at the last of the
 entries `taken`, if it asks for one. The lexer's cursor never refuses a version. -/
-def Answering.switched (consumer : Spec.Lexer.Consumer) {batch : BatchTag}
+def Answering.switched (consumer : BSmtLibSpec.Lexer.Consumer) {batch : BatchTag}
     (taken : List Handed) (cursor : BatchCursor batch) :
     {c : BatchCursor batch // c.Follows cursor} :=
   match consumer.switchTo taken with
@@ -148,7 +148,7 @@ def Answering.switched (consumer : Spec.Lexer.Consumer) {batch : BatchTag}
 
 /-- The cursor after the requests of the consumer at the last of the entries `taken`: the version
 it switches to, and then discarding. -/
-def Answering.requests (consumer : Spec.Lexer.Consumer) {batch : BatchTag}
+def Answering.requests (consumer : BSmtLibSpec.Lexer.Consumer) {batch : BatchTag}
     (taken : List Handed) (cursor : BatchCursor batch) :
     {c : BatchCursor batch // c.Follows cursor} :=
   let switched := Answering.switched consumer taken cursor
@@ -163,7 +163,7 @@ consumer does: at each entry, given the entries taken so far and this one, it fa
 goes on, and makes the requests the spec's consumer makes at it; it stops taking at an entry
 where it asks for a version or for discarding, and when the cursor has no entry left.
 -/
-def Answering.consume (consumer : Spec.Lexer.Consumer) {batch : BatchTag}
+def Answering.consume (consumer : BSmtLibSpec.Lexer.Consumer) {batch : BatchTag}
     (cursor : BatchCursor batch) (h : cursor.HasNext) :
     AnswerM (Except (Option consumer.Error) (ControlFlow consumer.Result) ×
       {c : BatchCursor batch // c.Consumed cursor}) :=
@@ -196,14 +196,14 @@ termination_by cursor.remaining
 decreasing_by exact consumed.remaining_lt
 
 /-- `Answering consumer` takes the entries of a cursor by `Answering.consume`. -/
-instance (consumer : Spec.Lexer.Consumer) {batch : BatchTag} :
+instance (consumer : BSmtLibSpec.Lexer.Consumer) {batch : BatchTag} :
     ConsumeFrom (Answering consumer) (BatchCursor batch) AnswerM where
   consume cursor h := Answering.consume consumer cursor h
 
 /-! ## Running a lexer -/
 
 /-- The spec's version for a version of the library. -/
-def fromVersion : Version → Spec.Lexicon.Version
+def fromVersion : Version → BSmtLibSpec.Lexicon.Version
   | .v2_0 => .v2_0
   | .v2_5 => .v2_5
   | .v2_6 => .v2_6
@@ -213,7 +213,7 @@ def fromVersion : Version → Spec.Lexicon.Version
 its span, with another lexical error, or with the consumer's error. The adapter's own error
 `none`, which its consumer raises if it is handed whitespace or a comment it does not take, is
 given as a lexical error. -/
-def failureOf {ε : Type} (error : LexError (Option ε)) : Spec.Lexer.Failure ε :=
+def failureOf {ε : Type} (error : LexError (Option ε)) : BSmtLibSpec.Lexer.Failure ε :=
   match error.cause with
   | .lexical kind =>
     if kind == .unexpectedTrailingToken then .trailing (toLocation error.span.start)
@@ -235,42 +235,42 @@ spec. `lexing` runs the steps (`lexSliceStep`, `lexEofStep`) and keeps the held 
 public calls (`lexSlice`, `lexEof`) do. -/
 structure LexOps where
   /-- The lexer with the consumer. -/
-  Lexer : Spec.Lexer.Consumer → Type
+  Lexer : BSmtLibSpec.Lexer.Consumer → Type
   /-- What a failed lexing of a slice gives back besides the error. -/
-  AfterError : Spec.Lexer.Consumer → Type
+  AfterError : BSmtLibSpec.Lexer.Consumer → Type
   /-- What a failed lexing of the end of the input gives back besides the error. -/
-  AfterEofError : Spec.Lexer.Consumer → Type
+  AfterEofError : BSmtLibSpec.Lexer.Consumer → Type
   /-- Constructs the lexer, which stops at its first error. -/
-  new : (consumer : Spec.Lexer.Consumer) → Answering consumer → Version → Lexer consumer
-  lexSlice : {consumer : Spec.Lexer.Consumer} → Lexer consumer → ByteSlice →
+  new : (consumer : BSmtLibSpec.Lexer.Consumer) → Answering consumer → Version → Lexer consumer
+  lexSlice : {consumer : BSmtLibSpec.Lexer.Consumer} → Lexer consumer → ByteSlice →
     AnswerM (Except (LexError (Option consumer.Error) × AfterError consumer) (Lexer consumer))
-  lexEof : {consumer : Spec.Lexer.Consumer} → Lexer consumer →
+  lexEof : {consumer : BSmtLibSpec.Lexer.Consumer} → Lexer consumer →
     AnswerM (Except (LexError (Option consumer.Error) × AfterEofError consumer)
       (Option (Located consumer.Result) × Lexer consumer))
   /-- The step that `lexSlice` runs, run by the lexer's entry point that gives the lexer back
   also when the step fails. -/
-  lexSliceStep : {consumer : Spec.Lexer.Consumer} → Lexer consumer → ByteSlice →
+  lexSliceStep : {consumer : BSmtLibSpec.Lexer.Consumer} → Lexer consumer → ByteSlice →
     AnswerM (Except (LexError (Option consumer.Error)) (Option (Located consumer.Result)) ×
       Lexer consumer)
   /-- The step that `lexEof` runs, run by the lexer's entry point that gives the lexer back
   also when the step fails. -/
-  lexEofStep : {consumer : Spec.Lexer.Consumer} → Lexer consumer →
+  lexEofStep : {consumer : BSmtLibSpec.Lexer.Consumer} → Lexer consumer →
     AnswerM (Except (LexError (Option consumer.Error)) (ControlFlow (Located consumer.Result)) ×
       Lexer consumer)
   /-- The result the lexer holds. -/
-  held : {consumer : Spec.Lexer.Consumer} → Lexer consumer → Option (Located consumer.Result)
+  held : {consumer : BSmtLibSpec.Lexer.Consumer} → Lexer consumer → Option (Located consumer.Result)
   /-- The lexer with the held result. -/
-  withHeld : {consumer : Spec.Lexer.Consumer} → Lexer consumer →
+  withHeld : {consumer : BSmtLibSpec.Lexer.Consumer} → Lexer consumer →
     Option (Located consumer.Result) → Lexer consumer
   /-- The version in force. -/
-  version : {consumer : Spec.Lexer.Consumer} → Lexer consumer → Version
+  version : {consumer : BSmtLibSpec.Lexer.Consumer} → Lexer consumer → Version
   /-- Where the lexer began to discard, if it discards. -/
-  discardedFrom : {consumer : Spec.Lexer.Consumer} → Lexer consumer → Option Location
+  discardedFrom : {consumer : BSmtLibSpec.Lexer.Consumer} → Lexer consumer → Option Location
 
 /-- Where the lexer stands, in the spec's form, after the slices if no call failed: holding the
 result it holds, or waiting. -/
-def LexOps.standing (ops : LexOps) {consumer : Spec.Lexer.Consumer} (lexer : ops.Lexer consumer) :
-    Spec.Lexer.Outcome consumer.Result consumer.Error :=
+def LexOps.standing (ops : LexOps) {consumer : BSmtLibSpec.Lexer.Consumer} (lexer : ops.Lexer consumer) :
+    BSmtLibSpec.Lexer.Outcome consumer.Result consumer.Error :=
   match ops.held lexer with
   | some held => .holding held.value (toLocation held.location)
   | none => .running
@@ -281,10 +281,10 @@ of the public calls, and keeps the held result as they do; the feeding stops at 
 that fails. Gives where the lexer stands, in the spec's form, and the lexer, also after a failed
 call.
 -/
-def LexOps.runInput (ops : LexOps) {consumer : Spec.Lexer.Consumer} (lexer : ops.Lexer consumer)
+def LexOps.runInput (ops : LexOps) {consumer : BSmtLibSpec.Lexer.Consumer} (lexer : ops.Lexer consumer)
     (ended : Bool) :
-    List Spec.Lexicon.Chars →
-      AnswerM (Spec.Lexer.Outcome consumer.Result consumer.Error × ops.Lexer consumer)
+    List BSmtLibSpec.Regex.Chars →
+      AnswerM (BSmtLibSpec.Lexer.Outcome consumer.Result consumer.Error × ops.Lexer consumer)
   | [] =>
     if ended then do
       match ← ops.lexEofStep lexer with
@@ -307,20 +307,20 @@ The lexer that the next input is fed to after an earlier input, fed as slices an
 of the input: the lexer the last call gave back, or, if a call failed, a lexer constructed anew
 with the version, as a lexer that stops at its first error is gone after a failed call.
 -/
-def LexOps.next (ops : LexOps) (consumer : Spec.Lexer.Consumer) (version : Version)
-    (lexer : ops.Lexer consumer) (input : List Spec.Lexicon.Chars) : ops.Lexer consumer :=
+def LexOps.next (ops : LexOps) (consumer : BSmtLibSpec.Lexer.Consumer) (version : Version)
+    (lexer : ops.Lexer consumer) (input : List BSmtLibSpec.Regex.Chars) : ops.Lexer consumer :=
   match ((ops.runInput lexer true input).run []).1 with
   | (.failed _, _) => ops.new consumer {} version
   | (_, lexer) => lexer
 
 /--
-What the lexer has done with a consumer of the spec, in the spec's form (`Spec.Lexer.Lexing`):
+What the lexer has done with a consumer of the spec, in the spec's form (`BSmtLibSpec.Lexer.Lexing`):
 constructed with the version, fed each earlier input as slices and then the end of the input
 (`LexOps.next`), and then fed the slices and, if the input has ended, the end of the input, with
 the consumer `Answering consumer`. The entries taken are those the consumer has taken in the last
 input; the version and where the discarding began are the lexer's after the last call.
 -/
-def lexing (ops : LexOps) : Spec.Lexer.Lexing := fun consumer version earlier slices ended =>
+def lexing (ops : LexOps) : BSmtLibSpec.Lexer.Lexing := fun consumer version earlier slices ended =>
   let lexer := earlier.foldl (ops.next consumer (toVersion version))
     (ops.new consumer {} (toVersion version))
   let ((outcome, lexer), taken) := (ops.runInput lexer ended slices).run []

@@ -13,12 +13,12 @@ import BSmtLib.Proofs.VNaiveWRustPort.ArmsStrings
 namespace BSmtLib.Proofs.Lexer.VNaiveWRustPort
 
 open BSmtLib.Proofs.Adapter VNaive BSmtLib.Proofs.Simulation
-open Spec.Lexer (Handed)
+open BSmtLibSpec.Lexer (Handed)
 
 section
 
 variable {floor : Option Nat} {low : Nat}
-variable {C : Spec.Lexer.Consumer} {hd : Bool} {iv : Version}
+variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Version}
 
 /-- The naive lexer's pure state that agrees with a lexer state other than the normal one is a
 token in progress. -/

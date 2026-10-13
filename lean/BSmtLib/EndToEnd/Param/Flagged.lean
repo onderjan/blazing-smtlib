@@ -22,7 +22,7 @@ open BSmtLib.Lexer BSmtLib.Lexer.Internal
 open BSmtLib.Proofs.Adapter
 
 /-- The adapter's consumer with a record of what went wrong. -/
-structure Flagged (consumer : Spec.Lexer.Consumer) : Type where
+structure Flagged (consumer : BSmtLibSpec.Lexer.Consumer) : Type where
   /-- Whether the consumer has answered an error, or been handed a cursor in another version than
   the one of the last cursor it gave back. -/
   errored : Bool
@@ -46,12 +46,12 @@ def isLayoutAnswer {ε α : Type} : Except (Option ε) α → Bool
   | .error none => true
   | _ => false
 
-instance (consumer : Spec.Lexer.Consumer) : Consume (Flagged consumer) consumer.Result
+instance (consumer : BSmtLibSpec.Lexer.Consumer) : Consume (Flagged consumer) consumer.Result
     (Option consumer.Error) where
   isConcrete := consumer.concrete
 
 /-- Takes the tokens as `Answering consumer` does, and records what went wrong. -/
-def Flagged.consume (consumer : Spec.Lexer.Consumer) {batch : BatchTag}
+def Flagged.consume (consumer : BSmtLibSpec.Lexer.Consumer) {batch : BatchTag}
     (cursor : BatchCursor batch) (h : cursor.HasNext) :
     StateT (Flagged consumer) AnswerM
       (Except (Option consumer.Error) (ControlFlow consumer.Result) ×
@@ -65,7 +65,7 @@ def Flagged.consume (consumer : Spec.Lexer.Consumer) {batch : BatchTag}
     Flagged consumer)
   return (answer, next)
 
-instance (consumer : Spec.Lexer.Consumer) {batch : BatchTag} :
+instance (consumer : BSmtLibSpec.Lexer.Consumer) {batch : BatchTag} :
     ConsumeFrom (Flagged consumer) (BatchCursor batch) AnswerM where
   consume cursor h := Flagged.consume consumer cursor h
 
@@ -73,7 +73,7 @@ instance (consumer : Spec.Lexer.Consumer) {batch : BatchTag} :
 
 section
 
-variable (consumer : Spec.Lexer.Consumer)
+variable (consumer : BSmtLibSpec.Lexer.Consumer)
 
 /-- The relator of the two consumers: run from the same tokens taken, related values and the same
 tokens taken, whatever the states of the consumers. -/
@@ -176,7 +176,7 @@ variable {H : Type} {R E : Type} [Consume H R E] {α : Type}
 
 /-- A run of a step on the library's lexer in the adapter's monad, by the parts of the lexer. -/
 theorem run_answerM (lexer : BSmtLib.Lexer H) (step : InnerM H AnswerM α)
-    (taken : List Spec.Lexer.Handed) :
+    (taken : List BSmtLibSpec.Lexer.Handed) :
     (BSmtLib.Lexer.Internal.run lexer step).run taken =
       let r := ((step.run (core lexer)).run (handler lexer)).run taken
       ((r.1.1.1, ofParts r.1.2 r.1.1.2 (held lexer)), r.2) := rfl
@@ -190,17 +190,17 @@ theorem held_ofParts (h : H) (c : LexerCore) (d : Option (Located R)) :
 end
 
 /-- Lexers with the two consumers with the same state and the same held result. -/
-def AlikeLexers (consumer : Spec.Lexer.Consumer) (a : Lexer.lexOps.Lexer consumer)
+def AlikeLexers (consumer : BSmtLibSpec.Lexer.Consumer) (a : Lexer.lexOps.Lexer consumer)
     (b : flaggedOps.Lexer consumer) : Prop :=
   core a = core b ∧ held a = held b
 
-theorem recovery_alike (consumer : Spec.Lexer.Consumer) (l : Location) :
+theorem recovery_alike (consumer : BSmtLibSpec.Lexer.Consumer) (l : Location) :
     (alikeLink consumer).rc.rel (· = ·)
       (LexRecovery.abandon (H := Answering consumer) (m := AnswerM) Recovery.failFast l)
       (LexRecovery.abandon (H := Flagged consumer) (m := AnswerM) Recovery.failFast l) :=
   fun _ _ _ => ⟨rfl, rfl⟩
 
-theorem recover_alike (consumer : Spec.Lexer.Consumer) (l : Location) :
+theorem recover_alike (consumer : BSmtLibSpec.Lexer.Consumer) (l : Location) :
     (alikeLink consumer).rc.rel (· = ·)
       (LexRecovery.recover (H := Answering consumer) (m := AnswerM) Recovery.failFast l)
       (LexRecovery.recover (H := Flagged consumer) (m := AnswerM) Recovery.failFast l) :=

@@ -3,7 +3,7 @@ import BSmtLib.EndToEnd.Lexes.Requests
 /-!
 # Lexers with consumers that answer alike
 
-`Spec.Lexer.Runs` reads a consumer only through the kind of its answer after each entry, the
+`BSmtLibSpec.Lexer.Runs` reads a consumer only through the kind of its answer after each entry, the
 switch and the discarding it asks for, and whether it takes whitespace and comments. So with two
 consumers that answer alike (`AnswersAlike`), a lexer correct with every consumer takes the same
 tokens and finishes alike (`lexing_congr`).
@@ -11,7 +11,7 @@ tokens and finishes alike (`lexing_congr`).
 
 namespace BSmtLib.EndToEnd.Param
 
-open BSmtLib.Spec BSmtLib.Spec.Lexer
+open BSmtLibSpec BSmtLibSpec.Lexer
 
 /-- The kind of an answer. -/
 def answerKind {α ε : Type} : Answer α ε → Nat
@@ -31,12 +31,12 @@ theorem AnswersAlike.kind {c₁ c₂ : Consumer} (h : AnswersAlike c₁ c₂) (t
     rw [he']; rfl
 
 theorem settle_taken {α ε : Type} (start : Lexicon.Version) (taken : List Handed)
-    (outcome : Outcome α ε) (version : Lexicon.Version) (d : Option Spec.Lexer.Location) :
+    (outcome : Outcome α ε) (version : Lexicon.Version) (d : Option BSmtLibSpec.Lexer.Location) :
     (settle start taken outcome version d).taken = taken := by
   unfold settle; split <;> rfl
 
 theorem settle_outcome {α ε : Type} (start : Lexicon.Version) (taken : List Handed)
-    (outcome : Outcome α ε) (version : Lexicon.Version) (d : Option Spec.Lexer.Location) :
+    (outcome : Outcome α ε) (version : Lexicon.Version) (d : Option BSmtLibSpec.Lexer.Location) :
     (settle start taken outcome version d).outcome = outcome := by
   unfold settle; split <;> rfl
 
@@ -44,7 +44,7 @@ theorem settle_outcome {α ε : Type} (start : Lexicon.Version) (taken : List Ha
 def SameRun {α₁ ε₁ α₂ ε₂ : Type} (s₁ : Session α₁ ε₁) (s₂ : Session α₂ ε₂) : Prop :=
   s₁.taken = s₂.taken ∧ s₁.outcome.isFinished = s₂.outcome.isFinished
 
-theorem afterBreak_finished {α ε : Type} {result : α} {location : Spec.Lexer.Location}
+theorem afterBreak_finished {α ε : Type} {result : α} {location : BSmtLibSpec.Lexer.Location}
     {ready : List Handed}
     {failed : Bool} {outcome : Outcome α ε} (h : AfterBreak result location ready failed outcome) :
     outcome.isFinished = (ready.head?.map (·.type) = some .endOfFile : Bool) := by
@@ -56,8 +56,8 @@ theorem afterBreak_finished {α ε : Type} {result : α} {location : Spec.Lexer.
 
 /-- A lexer that does what `Runs` states with two consumers that answer alike takes the same
 tokens with both and finishes alike. -/
-theorem runs_congr {feed : Lexicon.Version → List Lexicon.Chars → Bool → Fed} {c₁ c₂ : Consumer}
-    (h : AnswersAlike c₁ c₂) {start : Lexicon.Version} {input : Lexicon.Chars} {ended : Bool}
+theorem runs_congr {feed : Lexicon.Version → List Regex.Chars → Bool → Fed} {c₁ c₂ : Consumer}
+    (h : AnswersAlike c₁ c₂) {start : Lexicon.Version} {input : Regex.Chars} {ended : Bool}
     {version : Lexicon.Version} {ready : List Handed} {failed : Bool} {taken : List Handed}
     {s₁ : Session c₁.Result c₁.Error}
     (h₁ : Runs feed c₁ start input ended version ready failed taken s₁) :
@@ -146,7 +146,7 @@ theorem runs_congr {feed : Lexicon.Version → List Lexicon.Chars → Bool → F
 alike and break at the end of the input, and finishes alike. -/
 theorem lexing_congr (lexing : Lexing) (hc : CorrectWithConsumers lexing) {c₁ c₂ : Consumer}
     (h : AnswersAlike c₁ c₂) (hb₁ : c₁.BreaksAtEnd) (hb₂ : c₂.BreaksAtEnd)
-    (version : Lexicon.Version) (slices : List Lexicon.Chars) (ended : Bool) :
+    (version : Lexicon.Version) (slices : List Regex.Chars) (ended : Bool) :
     SameRun (lexing c₁ version [] slices ended) (lexing c₂ version [] slices ended) := by
   have h₁ := hc.2.1 c₁ version slices ended hb₁
   have h₂ := hc.2.1 c₂ version slices ended hb₂

@@ -1,5 +1,5 @@
 import BSmtLib.SpecChecks.Unique
-import BSmtLib.Spec.Lexer
+import BSmtLibSpec.Lexer
 
 /-!
 # Tokenisation across a closing parenthesis
@@ -18,11 +18,13 @@ Not trusted: everything here is proved.
 
 namespace BSmtLib.SpecChecks.Lexicon
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Lexicon.Regex
+open BSmtLibSpec BSmtLibSpec.Lexicon BSmtLibSpec.Regex
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
 
 /-- A tokenisation with a token has a non-empty input. -/
 theorem tokenizationFrom_ne_nil {version : Version} {offset : Nat} {input : Chars}
-    {tokens : List Token} (h : TokenizationFrom version offset input tokens) (hne : tokens ≠ []) :
+    {tokens : List Token} (h : Tokenization.From version offset input tokens) (hne : tokens ≠ []) :
     input ≠ [] := by
   cases h with
   | done => exact absurd rfl hne
@@ -32,7 +34,7 @@ theorem tokenizationFrom_ne_nil {version : Version} {offset : Nat} {input : Char
 
 /-- A token delimited by a non-empty rest is delimited by the rest followed by anything. -/
 theorem delimited_append {category : Category} {rest : Chars} (more : Chars)
-    (h : Delimited category rest) (hne : rest ≠ []) : Delimited category (rest ++ more) := by
+    (h : Tokenization.Delimited category rest) (hne : rest ≠ []) : Tokenization.Delimited category (rest ++ more) := by
   rcases h with h | h | h | ⟨c, m, rfl, hc⟩
   · exact Or.inl h
   · exact Or.inr (Or.inl h)
@@ -42,11 +44,11 @@ theorem delimited_append {category : Category} {rest : Chars} (more : Chars)
 /-- Every tokenisation of an input that starts with characters whose tokenisation ends with a
 `)` at their end starts with that tokenisation, and goes on with one of the rest. -/
 theorem tokenizationFrom_close_prefix {version : Version} {offset : Nat} {start : Chars}
-    {tokens : List Token} (h : TokenizationFrom version offset start tokens)
+    {tokens : List Token} (h : Tokenization.From version offset start tokens)
     (hclose : EndsWithClose tokens (offset + start.length)) {more : Chars}
-    {tokens' : List Token} (h' : TokenizationFrom version offset (start ++ more) tokens') :
+    {tokens' : List Token} (h' : Tokenization.From version offset (start ++ more) tokens') :
     ∃ others, tokens' = tokens ++ others ∧
-      TokenizationFrom version (offset + start.length) more others := by
+      Tokenization.From version (offset + start.length) more others := by
   induction h generalizing tokens' with
   | done => obtain ⟨_, h, -⟩ := hclose; simp at h
   | @token w category s rest offset tokens hw hs hd hrest ih =>
@@ -79,10 +81,10 @@ theorem tokenizationFrom_close_prefix {version : Version} {offset : Nat} {start 
 /-- The tokens of characters whose tokenisation ends with a `)` at their end, followed by a
 tokenisation of more characters, are a tokenisation of the two. -/
 theorem tokenizationFrom_close_append {version : Version} {offset : Nat} {start : Chars}
-    {tokens : List Token} (h : TokenizationFrom version offset start tokens)
+    {tokens : List Token} (h : Tokenization.From version offset start tokens)
     (hclose : EndsWithClose tokens (offset + start.length)) {more : Chars}
-    {others : List Token} (h' : TokenizationFrom version (offset + start.length) more others) :
-    TokenizationFrom version offset (start ++ more) (tokens ++ others) := by
+    {others : List Token} (h' : Tokenization.From version (offset + start.length) more others) :
+    Tokenization.From version offset (start ++ more) (tokens ++ others) := by
   induction h with
   | done => obtain ⟨_, h, -⟩ := hclose; simp at h
   | @token w category s rest offset tokens hw hs hd hrest ih =>
@@ -105,19 +107,19 @@ theorem tokenizationFrom_close_append {version : Version} {offset : Nat} {start 
         · simpa [List.getLast?_cons_cons] using hlast
         · simp only [List.length_append] at hend
           omega
-      have h'' : TokenizationFrom version (offset + w.length + s.length + rest.length) more
+      have h'' : Tokenization.From version (offset + w.length + s.length + rest.length) more
           others := by simpa [List.length_append, Nat.add_assoc] using h'
       exact .token hw hs (delimited_append more hd hne) (ih hclose' h'')
 
 /-- The tokenisations of characters whose tokenisation ends with a `)` at their end, followed
 by more, are its tokens followed by the tokenisations of the more on their own. -/
 theorem tokenizationFrom_close_iff {version : Version} {offset : Nat} {start : Chars}
-    {tokens : List Token} (h : TokenizationFrom version offset start tokens)
+    {tokens : List Token} (h : Tokenization.From version offset start tokens)
     (hclose : EndsWithClose tokens (offset + start.length)) (more : Chars)
     (tokens' : List Token) :
-    TokenizationFrom version offset (start ++ more) tokens' ↔
+    Tokenization.From version offset (start ++ more) tokens' ↔
       ∃ others, tokens' = tokens ++ others ∧
-        TokenizationFrom version (offset + start.length) more others := by
+        Tokenization.From version (offset + start.length) more others := by
   constructor
   · exact tokenizationFrom_close_prefix h hclose
   · rintro ⟨others, rfl, h'⟩
@@ -126,7 +128,7 @@ theorem tokenizationFrom_close_iff {version : Version} {offset : Nat} {start : C
 /-- Every token of a tokenisation that ends with a `)` at the end of the input but that `)`
 ends before the end of the input. -/
 theorem close_delimiterSeen {version : Version} {offset : Nat} {start : Chars}
-    {tokens : List Token} (h : TokenizationFrom version offset start tokens)
+    {tokens : List Token} (h : Tokenization.From version offset start tokens)
     (hclose : EndsWithClose tokens (offset + start.length)) :
     ∀ token ∈ tokens, token.category = .parenClose ∨
       token.offset + token.text.length < offset + start.length := by
@@ -164,9 +166,9 @@ theorem close_delimiterSeen {version : Version} {offset : Nat} {start : Chars}
 their tokens, and no more: it holds nothing back. -/
 theorem close_handoverMaximal {version : Version} {start : Chars} {tokens : List Token}
     (h : Tokenization version start tokens) (hclose : EndsWithClose tokens start.length) :
-    Spec.Lexer.HandoverMaximal version start tokens := by
+    BSmtLibSpec.Lexer.HandoverMaximal version start tokens := by
   have hclose' : EndsWithClose tokens (0 + start.length) := by simpa using hclose
-  have hready : Spec.Lexer.HandoverReady version start tokens := by
+  have hready : BSmtLibSpec.Lexer.HandoverReady version start tokens := by
     refine ⟨fun rest tokens' h' => tokenizationFrom_close_prefix h hclose' h' |>.imp
       fun _ h => h.1, fun token htoken => ?_⟩
     rcases close_delimiterSeen h hclose' token htoken with hc | hc
@@ -180,23 +182,23 @@ theorem close_handoverMaximal {version : Version} {start : Chars} {tokens : List
 
 /-- A tokenisation of characters read further to the right. -/
 theorem tokenizationFrom_moveBy {version : Version} {offset : Nat} {input : Chars}
-    {tokens : List Token} (h : TokenizationFrom version offset input tokens) (k : Nat) :
-    TokenizationFrom version (offset + k) input (tokens.map (Token.moveBy k)) := by
+    {tokens : List Token} (h : Tokenization.From version offset input tokens) (k : Nat) :
+    Tokenization.From version (offset + k) input (tokens.map (Token.moveBy k)) := by
   induction h with
   | done hw => exact .done hw
   | @token w category s rest offset tokens hw hs hd hrest ih =>
     have e : offset + k + w.length = offset + w.length + k := by omega
-    have ih' : TokenizationFrom version (offset + k + w.length + s.length) rest
+    have ih' : Tokenization.From version (offset + k + w.length + s.length) rest
         (tokens.map (Token.moveBy k)) := by
       rw [show offset + k + w.length + s.length = offset + w.length + s.length + k by omega]
       exact ih
-    simpa [Token.moveBy, e] using TokenizationFrom.token hw hs hd ih'
+    simpa [Token.moveBy, e] using Tokenization.From.token hw hs hd ih'
 
 /-- A tokenisation of characters read from `offset + k` is one read from `offset`, moved. -/
 theorem tokenizationFrom_moveBy_inv {version : Version} {offset k : Nat} {input : Chars}
-    {tokens : List Token} (h : TokenizationFrom version (offset + k) input tokens) :
+    {tokens : List Token} (h : Tokenization.From version (offset + k) input tokens) :
     ∃ tokens₀, tokens = tokens₀.map (Token.moveBy k) ∧
-      TokenizationFrom version offset input tokens₀ := by
+      Tokenization.From version offset input tokens₀ := by
   generalize ho : offset + k = o at h
   induction h generalizing offset with
   | done hw => exact ⟨[], rfl, .done hw⟩

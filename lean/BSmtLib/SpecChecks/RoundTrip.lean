@@ -18,7 +18,9 @@ Not trusted: everything here is proved.
 
 namespace BSmtLib.SpecChecks.Lexicon
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon
+open BSmtLibSpec BSmtLibSpec.Lexicon
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
 
 /-! ## Examples -/
 

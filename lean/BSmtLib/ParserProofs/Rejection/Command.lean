@@ -14,9 +14,11 @@ A `set-info` ends as its keyword and its value say (`setInfoEnd`), which the par
 
 namespace BSmtLib.ParserProofs.Rejection
 
-open BSmtLib.Spec.Grammar
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 open BSmtLib.Parser (Input PM Step TermState ListState SortDecState LiteralState SignatureState
   FunctionDecState DatatypeState Payload NamedCommand FinalCall DefinitionEnd Declaration
   CommandState CommandOutcome AttributeState SortState)
@@ -27,7 +29,7 @@ open Lang
 /-- How a command ends, as far as what follows it goes. -/
 inductive CmdEnd where
   /-- The script goes on, in the version. -/
-  | next (version : Spec.Lexicon.Version)
+  | next (version : BSmtLibSpec.Lexicon.Version)
   /-- `exit`: the end of the input follows. -/
   | exit
   /-- A version declaration that names no supported version: a parser stops. -/
@@ -36,14 +38,14 @@ inductive CmdEnd where
   | endOfInput
 
 /-- How the command ends, read in the version. -/
-def cmdEnd (version : Spec.Lexicon.Version) (command : Tree.Command) : CmdEnd :=
+def cmdEnd (version : BSmtLibSpec.Lexicon.Version) (command : Tree.Command) : CmdEnd :=
   match command.modeAfter version with
   | some (.read next) => .next next
   | some .unparsed => .exit
   | none => .refused
 
 /-- How the command parser's outcome ends the command, in the version. -/
-def outcomeEnd (version : Spec.Lexicon.Version) : CommandOutcome → CmdEnd
+def outcomeEnd (version : BSmtLibSpec.Lexicon.Version) : CommandOutcome → CmdEnd
   | .command => .next version
   | .setVersion declared => .next (Bridge.version declared)
   | .exit => .exit
@@ -60,9 +62,9 @@ def declarationEnd : List Received → CmdEnd
 
 /-- How a `set-info` ends, from what its tokens so far tell of a version declaration and the
 rest of its tokens. -/
-def setInfoEnd (version : Spec.Lexicon.Version) : Declaration → List Received → CmdEnd
+def setInfoEnd (version : BSmtLibSpec.Lexicon.Version) : Declaration → List Received → CmdEnd
   | .start, .token (.keyword name) :: rest =>
-    if name = Spec.Lexicon.chars "smt-lib-version" then declarationEnd rest else .next version
+    if name = BSmtLibSpec.Regex.chars "smt-lib-version" then declarationEnd rest else .next version
   | .start, _ => .next version
   | .other, _ => .next version
   | .keyword, rest => declarationEnd rest
@@ -73,7 +75,7 @@ def setInfoEnd (version : Spec.Lexicon.Version) : Declaration → List Received 
 
 section
 
-variable (version : Spec.Lexicon.Version) (follows : CmdEnd → Lang)
+variable (version : BSmtLibSpec.Lexicon.Version) (follows : CmdEnd → Lang)
 
 /-- A keyword, any. -/
 def KeywordLang : Lang := fun u => ∃ name, u = [.token (.keyword name)]

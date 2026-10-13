@@ -1,4 +1,4 @@
-import BSmtLib.Spec.Grammar
+import BSmtLibSpec.Grammar
 
 /-!
 # Version policies
@@ -9,9 +9,9 @@ policy after the declaration's `set-info`, when the declaration is complete; a d
 breaks the policy stops the parse there.
 -/
 
-namespace BSmtLib.Spec.Parser
+namespace BSmtLibSpec.Parser
 
-open BSmtLib.Spec.Lexicon BSmtLib.Spec.Grammar
+open BSmtLibSpec.Lexicon BSmtLibSpec.Grammar
 
 /--
 A policy on the versions that a script declares: which versions it may declare, and how many
@@ -33,7 +33,7 @@ The syntax errors with which a parse rejects a version declaration.
 A version that the policy does not allow and a version that the producer refuses to switch to
 are the same error: what refused the version is not told.
 -/
-inductive VersionError where
+inductive VersionPolicy.Error where
   /-- The version is not among those the policy allows, or the producer refused it
   (`UnsupportedVersion`). -/
   | unsupportedVersion
@@ -48,11 +48,11 @@ the script made before it: first the number of declarations, then the version.
 A declaration that breaks both rules is rejected for the number of declarations.
 -/
 def VersionPolicy.check (policy : VersionPolicy) (declarations : Nat) (version : Version) :
-    Except VersionError Unit :=
+    Except VersionPolicy.Error Unit :=
   match policy.maxDeclarations with
   | some limit =>
     if limit ≤ declarations then .error (.tooManyDeclarations limit)
     else if version ∉ policy.allowed then .error .unsupportedVersion else .ok ()
   | none => if version ∉ policy.allowed then .error .unsupportedVersion else .ok ()
 
-end BSmtLib.Spec.Parser
+end BSmtLibSpec.Parser

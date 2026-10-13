@@ -3,7 +3,7 @@ import BSmtLib.SpecChecks.Streaming
 import BSmtLib.SpecChecks.StreamingFacts
 import BSmtLib.SpecChecks.Compose
 import BSmtLib.SpecChecks.Unique
-import BSmtLib.Spec.Grammar.File
+import BSmtLibSpec.Grammar.Script
 import BSmtLib.SpecChecks.Parser.Rebuild
 
 /-!
@@ -11,15 +11,18 @@ import BSmtLib.SpecChecks.Parser.Rebuild
 
 A file is read in readings: from where a version is in force, its commands up to the first
 version declaration or `exit`, or up to the end of the input (`Group`). What a lexer that is
-`Spec.Lexer.Correct` hands over, read from the start of a reading in its version
-(`Spec.Lexer.segment`), starts with the tokens of the reading's commands, and if the reading runs
+`BSmtLibSpec.Lexer.Correct` hands over, read from the start of a reading in its version
+(`BSmtLibSpec.Lexer.segment`), starts with the tokens of the reading's commands, and if the reading runs
 to the end of the input, is those tokens and the end of the input (`segment_group`). A command
 ends with a `)`, which needs no delimiter, so its tokens are handed over whole, whatever follows.
 -/
 
 namespace BSmtLib.EndToEnd
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Grammar BSmtLib.Spec.Lexer
+open BSmtLibSpec BSmtLibSpec.Lexicon BSmtLibSpec.Grammar BSmtLibSpec.Lexer
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
 open BSmtLib.SpecChecks.Lexer (locate_after handed_prefix_of_correct handed_prefix_end_of_correct
   handsOverAll_of_correct handsOverMaximal_of_correct failsCorrectly_of_correct
   exists_longestViableStart longestViableStart_unique longestViableStart_viable
@@ -117,20 +120,20 @@ input if none comes (`eof`), where only whitespace follows.
 inductive Group (version : Lexicon.Version) :
     Nat → Chars → List Tree.Command → List Lexicon.Token → Bool → Prop
   /-- The end of the input, after whitespace. -/
-  | done : TokenizationFrom version offset rest [] → Group version offset rest [] [] true
+  | done : Tokenization.From version offset rest [] → Group version offset rest [] [] true
   /-- `exit`: the reading stops. -/
-  | stop : TokenizationExactly version offset part tokens →
+  | stop : Tokenization.Exactly version offset part tokens →
       IsCommand version (tokens.map (SyntaxToken.ofToken version)) command →
       command.modeAfter version = some .unparsed →
       Group version offset (part ++ rest) [command] tokens false
   /-- A version declaration: the next reading starts after it, in its version. -/
-  | switch : TokenizationExactly version offset part tokens →
+  | switch : Tokenization.Exactly version offset part tokens →
       IsCommand version (tokens.map (SyntaxToken.ofToken version)) command →
       command.modeAfter version = some (.read next) → command.declaredVersion = some next →
-      FileFrom next (offset + part.length) rest commands →
+      File.From next (offset + part.length) rest commands →
       Group version offset (part ++ rest) (command :: commands) tokens false
   /-- A command that keeps the version: the reading goes on after it. -/
-  | keep : TokenizationExactly version offset part tokens →
+  | keep : Tokenization.Exactly version offset part tokens →
       IsCommand version (tokens.map (SyntaxToken.ofToken version)) command →
       command.modeAfter version = some (.read version) → command.declaredVersion = none →
       Group version (offset + part.length) rest commands others eof →
@@ -138,7 +141,7 @@ inductive Group (version : Lexicon.Version) :
 
 /-- A file starts with a reading. -/
 theorem group_of_file {version : Lexicon.Version} {offset : Nat} {chars : Chars}
-    {commands : List Tree.Command} (h : FileFrom version offset chars commands) :
+    {commands : List Tree.Command} (h : File.From version offset chars commands) :
     ∃ tokens eof, Group version offset chars commands tokens eof := by
   induction h with
   | done ht => exact ⟨[], true, .done ht⟩
@@ -159,7 +162,7 @@ theorem command_tokens_last (command : Tree.Command) :
 /-- The tokens of a command end with its `)`. -/
 theorem close_of_command {version : Lexicon.Version} {offset : Nat} {segment : Chars}
     {tokens : List Lexicon.Token} {command : Tree.Command}
-    (hte : TokenizationExactly version offset segment tokens)
+    (hte : Tokenization.Exactly version offset segment tokens)
     (hic : IsCommand version (tokens.map (SyntaxToken.ofToken version)) command) :
     EndsWithClose tokens (offset + segment.length) := by
   obtain ⟨-, last, hlast, hend⟩ := hte
@@ -182,9 +185,9 @@ input, and otherwise of a start of the rest, ending with a `)` at its end. -/
 theorem group_tokens {version : Lexicon.Version} {offset : Nat} {chars : Chars}
     {commands : List Tree.Command} {tokens : List Lexicon.Token} {eof : Bool}
     (h : Group version offset chars commands tokens eof) :
-    (eof = true → TokenizationFrom version offset chars tokens) ∧
+    (eof = true → Tokenization.From version offset chars tokens) ∧
       (eof = false → ∃ start more, chars = start ++ more ∧
-        TokenizationFrom version offset start tokens ∧
+        Tokenization.From version offset start tokens ∧
         EndsWithClose tokens (offset + start.length)) := by
   induction h with
   | done ht => exact ⟨fun _ => ht, fun h => by cases h⟩
@@ -202,7 +205,7 @@ theorem group_tokens {version : Lexicon.Version} {offset : Nat} {chars : Chars}
 
 /-- The tokens of a tokenisation end within its characters. -/
 theorem tokenizationFrom_within {version : Lexicon.Version} {offset : Nat} {chars : Chars}
-    {tokens : List Lexicon.Token} (h : TokenizationFrom version offset chars tokens) :
+    {tokens : List Lexicon.Token} (h : Tokenization.From version offset chars tokens) :
     ∀ token ∈ tokens, token.offset + token.text.length ≤ offset + chars.length := by
   induction h with
   | done => simp
@@ -239,7 +242,7 @@ theorem segment_group (h : Correct feed) {version : Lexicon.Version} {input : Ch
   obtain ⟨hfull, hpart⟩ := group_tokens hg
   cases eof with
   | true =>
-    have ht : TokenizationFrom version (0 + offset) (input.drop offset) tokens := by
+    have ht : Tokenization.From version (0 + offset) (input.drop offset) tokens := by
       simpa using hfull rfl
     obtain ⟨t₀, rfl, ht₀⟩ := tokenizationFrom_moveBy_inv ht
     have hc : Complete version [input.drop offset].flatten true :=
@@ -259,7 +262,7 @@ theorem segment_group (h : Correct feed) {version : Lexicon.Version} {input : Ch
     · rw [endOfFile_after, ← hinput]
   | false =>
     obtain ⟨start, more, hsplit, ht, hc⟩ := hpart rfl
-    have ht' : TokenizationFrom version (0 + offset) start tokens := by simpa using ht
+    have ht' : Tokenization.From version (0 + offset) start tokens := by simpa using ht
     obtain ⟨t₀, rfl, ht₀⟩ := tokenizationFrom_moveBy_inv ht'
     have hc₀ : EndsWithClose t₀ start.length := endsWithClose_moveBy (by simpa using hc)
     have hpre := handed_close_prefix h version start more

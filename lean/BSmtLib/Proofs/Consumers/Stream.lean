@@ -11,7 +11,7 @@ of the input (`stream`). Of it:
 - after a lexeme other than the end of file, the run goes on as the run from nothing in progress
   at the end of the lexeme (`lexBytesW_restart`, `streamFrom_restart`);
 - what the pure run hands over (`fedRun`) from an offset on, read on its own and located in the
-  whole input (`Spec.Lexer.segment`), is the tokens of the run from the boundary at the offset
+  whole input (`BSmtLibSpec.Lexer.segment`), is the tokens of the run from the boundary at the offset
   (`segment_fedRun`).
 -/
 
@@ -325,7 +325,7 @@ def stream (version : Version) (ws : Bool) (input : List UInt8) (ended : Bool) (
 
 /-- The tokens of the lexemes, as the consumer is handed them: whitespace and comments left
 out. -/
-def handedOf (version : Version) (ls : List Lexeme) : List Spec.Lexer.Handed :=
+def handedOf (version : Version) (ls : List Lexeme) : List BSmtLibSpec.Lexer.Handed :=
   ls.filterMap (lexemeHanded version)
 
 theorem handedAll_eq_handedOf {version : Version} {ls : List Lexeme} (h : ∀ l ∈ ls, l.Taken) :
@@ -368,14 +368,14 @@ theorem shiftRun_streamFrom (version : Version) (ws ended : Bool) (base location
 
 theorem lexemeHanded_shift (version : Version) (before : List UInt8) (l : Lexeme) :
     lexemeHanded version (l.shift (locAfter before)) =
-      (lexemeHanded version l).map (Spec.Lexer.Handed.after before) := by
+      (lexemeHanded version l).map (BSmtLibSpec.Lexer.Handed.after before) := by
   unfold lexemeHanded Lexeme.shift
   cases toTokenType l.category <;>
-    simp [toLocation_shift, Spec.Lexer.Handed.after]
+    simp [toLocation_shift, BSmtLibSpec.Lexer.Handed.after]
 
 theorem handedOf_shift (version : Version) (before : List UInt8) (ls : List Lexeme) :
     handedOf version (ls.map (Lexeme.shift (locAfter before))) =
-      (handedOf version ls).map (Spec.Lexer.Handed.after before) := by
+      (handedOf version ls).map (BSmtLibSpec.Lexer.Handed.after before) := by
   induction ls with
   | nil => rfl
   | cons l ls ih =>
@@ -418,20 +418,20 @@ theorem fedOf_eq_streamFrom (version : Version) (ended : Bool) (location : Locat
 theorem toVersion_fromVersion (version : Version) : toVersion (fromVersion version) = version := by
   cases version <;> rfl
 
-theorem fromVersion_toVersion (version : Spec.Lexicon.Version) :
+theorem fromVersion_toVersion (version : BSmtLibSpec.Lexicon.Version) :
     fromVersion (toVersion version) = version := by
   cases version <;> rfl
 
 /-- What the pure run hands over (`fedRun`) from the offset `o` of the input on, read on its own
 and located in the whole input, is the tokens of the run from the boundary at `o`. -/
-theorem segment_fedRun (version : Spec.Lexicon.Version) (input : List UInt8) (ended : Bool)
+theorem segment_fedRun (version : BSmtLibSpec.Lexicon.Version) (input : List UInt8) (ended : Bool)
     (o : Nat) :
-    Spec.Lexer.segment fedRun version input ended o =
+    BSmtLibSpec.Lexer.segment fedRun version input ended o =
       { handed := handedOf (toVersion version) (stream (toVersion version) false input ended o).1
         failed := (stream (toVersion version) false input ended o).2 } := by
   have h := fedRun_eq_run version [input.drop o] ended _ _
     (by rw [List.flatten_singleton]; exact fedOf_eq_streamFrom _ ended Location.initial _)
-  unfold Spec.Lexer.segment
+  unfold BSmtLibSpec.Lexer.segment
   rw [h]
   simp only [stream]
   have hs := shiftRun_streamFrom (toVersion version) false ended (locAfter (input.take o))

@@ -9,10 +9,10 @@ import BSmtLib.Proofs.Consumers.Ports
 
 The chain of lexers that leads from the specification to the library's lexer, and what is
 proved of them against the specification: each, as the adapter feeds it with the consumer that
-answers as a consumer of the spec does (`Adapter.lexing`), is `Spec.Lexer.CorrectWithConsumers`:
+answers as a consumer of the spec does (`Adapter.lexing`), is `BSmtLibSpec.Lexer.CorrectWithConsumers`:
 it is correct with the collector of the spec, handles every consumer that breaks at the end of
-the input, and is reset by the end of the input. That each is then also `Spec.Lexer.Sequential`
-and `Spec.Lexer.WholeInputCorrect` follows by `BSmtLib.SpecChecks`, which proves both of every
+the input, and is reset by the end of the input. That each is then also `BSmtLibSpec.Lexer.Sequential`
+and `BSmtLibSpec.Lexer.WholeInputCorrect` follows by `BSmtLib.SpecChecks`, which proves both of every
 lexer that is correct.
 -/
 
@@ -26,14 +26,14 @@ standard library, no `sorry` and no axiom of its own. The build fails if that ch
 
 namespace BSmtLib.Proofs
 
-open BSmtLib.Spec
+open BSmtLibSpec
 
 /-! ### With every consumer -/
 
 /-- The naive lexer, fed by the adapter with every consumer of the spec, is correct with every
 consumer. -/
 theorem Lexer.VNaive.correctWithConsumers :
-    Spec.Lexer.CorrectWithConsumers (Adapter.lexing Adapter.VNaive.lexOps) :=
+    BSmtLibSpec.Lexer.CorrectWithConsumers (Adapter.lexing Adapter.VNaive.lexOps) :=
   Lexer.VNaive.correctWithConsumers_vNaive
 
 /--
@@ -45,7 +45,7 @@ info: 'BSmtLib.Proofs.Lexer.VNaive.correctWithConsumers' depends on axioms: [pro
 /-- The Rust port, fed by the adapter with every consumer of the spec, is correct with every
 consumer: it does with every consumer what the naive lexer does. -/
 theorem Lexer.WRustPort.correctWithConsumers :
-    Spec.Lexer.CorrectWithConsumers (Adapter.lexing Adapter.WRustPort.lexOps) :=
+    BSmtLibSpec.Lexer.CorrectWithConsumers (Adapter.lexing Adapter.WRustPort.lexOps) :=
   Adapter.correctWithConsumers_wRustPort
 
 /--
@@ -57,7 +57,7 @@ info: 'BSmtLib.Proofs.Lexer.WRustPort.correctWithConsumers' depends on axioms: [
 /-- The lexer with the batch kept in its state, fed by the adapter with every consumer of the
 spec, is correct with every consumer: it does with every consumer what the Rust port does. -/
 theorem Lexer.X1BatchInCore.correctWithConsumers :
-    Spec.Lexer.CorrectWithConsumers (Adapter.lexing Adapter.X1BatchInCore.lexOps) :=
+    BSmtLibSpec.Lexer.CorrectWithConsumers (Adapter.lexing Adapter.X1BatchInCore.lexOps) :=
   Adapter.correctWithConsumers_x1BatchInCore
 
 /--
@@ -71,7 +71,7 @@ every consumer: it does with every consumer what the lexer with the batch kept i
 with each slice too large for the positions of the library's lexer cut into chunks, and the
 naive lexer does not tell how its input is cut. -/
 theorem Lexer.correctWithConsumers :
-    Spec.Lexer.CorrectWithConsumers (Adapter.lexing Adapter.Lexer.lexOps) :=
+    BSmtLibSpec.Lexer.CorrectWithConsumers (Adapter.lexing Adapter.Lexer.lexOps) :=
   Adapter.correctWithConsumers_lexer
 
 /--
@@ -84,14 +84,14 @@ info: 'BSmtLib.Proofs.Lexer.correctWithConsumers' depends on axioms: [propext, C
 
 Each theorem below is the first part of the one above for the same lexer: the lexer, fed by the
 adapter slices and then, if the input has ended, the end of the input, with the collector of the
-spec (`Spec.Lexer.Lexing.fed`), which takes every token, does not take whitespace and comments,
+spec (`BSmtLibSpec.Lexer.Lexing.fed`), which takes every token, does not take whitespace and comments,
 and breaks at the end of the input, is correct.
 -/
 
 /-- The naive lexer, fed by the adapter slices and then, if the input has ended, the end of the
 input, with the collector of the spec, is correct. -/
 theorem Lexer.VNaive.correct :
-    Spec.Lexer.Correct (Adapter.lexing Adapter.VNaive.lexOps).fed :=
+    BSmtLibSpec.Lexer.Correct (Adapter.lexing Adapter.VNaive.lexOps).fed :=
   Lexer.VNaive.correctWithConsumers.1
 
 /--
@@ -103,7 +103,7 @@ info: 'BSmtLib.Proofs.Lexer.VNaive.correct' depends on axioms: [propext, Classic
 /-- The Rust port, fed by the adapter slices and then, if the input has ended, the end of the
 input, with the collector of the spec, is correct. -/
 theorem Lexer.WRustPort.correct :
-    Spec.Lexer.Correct (Adapter.lexing Adapter.WRustPort.lexOps).fed :=
+    BSmtLibSpec.Lexer.Correct (Adapter.lexing Adapter.WRustPort.lexOps).fed :=
   Lexer.WRustPort.correctWithConsumers.1
 
 /--
@@ -115,7 +115,7 @@ info: 'BSmtLib.Proofs.Lexer.WRustPort.correct' depends on axioms: [propext, Clas
 /-- The lexer with the batch kept in its state, fed by the adapter slices and then, if the input
 has ended, the end of the input, with the collector of the spec, is correct. -/
 theorem Lexer.X1BatchInCore.correct :
-    Spec.Lexer.Correct (Adapter.lexing Adapter.X1BatchInCore.lexOps).fed :=
+    BSmtLibSpec.Lexer.Correct (Adapter.lexing Adapter.X1BatchInCore.lexOps).fed :=
   Lexer.X1BatchInCore.correctWithConsumers.1
 
 /--
@@ -126,7 +126,7 @@ info: 'BSmtLib.Proofs.Lexer.X1BatchInCore.correct' depends on axioms: [propext, 
 
 /-- The library's lexer, fed by the adapter slices and then, if the input has ended, the end of
 the input, with the collector of the spec, is correct. -/
-theorem Lexer.correct : Spec.Lexer.Correct (Adapter.lexing Adapter.Lexer.lexOps).fed :=
+theorem Lexer.correct : BSmtLibSpec.Lexer.Correct (Adapter.lexing Adapter.Lexer.lexOps).fed :=
   Lexer.correctWithConsumers.1
 
 /--
@@ -137,7 +137,7 @@ info: 'BSmtLib.Proofs.Lexer.correct' depends on axioms: [propext, Classical.choi
 
 /-! ## What is trusted
 
-A reader of the theorems above trusts the specification (`BSmtLib.Spec`), the statements in this
+A reader of the theorems above trusts the specification (`BSmtLibSpec`), the statements in this
 file, and the definitions in `BSmtLib.Proofs.Adapters`, which put the lexers into the spec's
 shapes: the adapters. The lexers of the chain are what the theorems are about and need no trust;
 everything else Lean checks. The check below lists the adapters, every definition that the

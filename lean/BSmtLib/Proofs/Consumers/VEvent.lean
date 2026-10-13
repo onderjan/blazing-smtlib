@@ -4,18 +4,18 @@ import BSmtLib.Proofs.Consumers.Ready
 # What the consumer does at an entry, as `Runs` states it
 
 The session of the naive lexer that discards (`discardSession`, `discard_session`), and what
-follows a break as `Spec.Lexer.AfterBreak` states it (`afterBreak_hold`). `event`: what the
+follows a break as `BSmtLibSpec.Lexer.AfterBreak` states it (`afterBreak_hold`). `event`: what the
 consumer does at an entry that the naive lexer hands over at a boundary, holding no result, is
-what `Spec.Lexer.Runs` states, given what the lexer does after it in each case.
+what `BSmtLibSpec.Lexer.Runs` states, given what the lexer does after it in each case.
 -/
 
 namespace BSmtLib.Proofs.Lexer.VNaive
 
 open BSmtLib.Proofs.Adapter
-open Spec.Lexer (Handed)
+open BSmtLibSpec.Lexer (Handed)
 
 section
-variable (consumer : Spec.Lexer.Consumer) (sv : Spec.Lexicon.Version) (input : List UInt8)
+variable (consumer : BSmtLibSpec.Lexer.Consumer) (sv : BSmtLibSpec.Lexicon.Version) (input : List UInt8)
   (ended : Bool)
 
 /-- The session of a lexer that discards from `s` under the version, holding the result `held`
@@ -24,23 +24,23 @@ at the end, it returns the held result, or else hands the end-of-file token over
 `s`, at which a consumer that fails leaves the version it switches to. -/
 def discardSession (version : Version) (s : Location) (holding : Bool)
     (held : Option (Located consumer.Result)) (taken : List Handed) :
-    Spec.Lexer.Session consumer.Result consumer.Error :=
+    BSmtLibSpec.Lexer.Session consumer.Result consumer.Error :=
   if ended then
     if holding then
       match held with
       | some result => ⟨taken, .finished result.value (toLocation result.location), sv, none⟩
       | none => ⟨taken, .running, sv, none⟩
     else
-      match consumer.answer (taken ++ [Spec.Lexer.endOfFileAt (toLocation s)]) with
+      match consumer.answer (taken ++ [BSmtLibSpec.Lexer.endOfFileAt (toLocation s)]) with
       | .break result =>
-        ⟨taken ++ [Spec.Lexer.endOfFileAt (toLocation s)], .finished result (toLocation s), sv,
+        ⟨taken ++ [BSmtLibSpec.Lexer.endOfFileAt (toLocation s)], .finished result (toLocation s), sv,
           none⟩
       | .fail error =>
-        ⟨taken ++ [Spec.Lexer.endOfFileAt (toLocation s)], .failed (.consumer error),
-          fromVersion (((consumer.switchTo (taken ++ [Spec.Lexer.endOfFileAt (toLocation s)])).map
+        ⟨taken ++ [BSmtLibSpec.Lexer.endOfFileAt (toLocation s)], .failed (.consumer error),
+          fromVersion (((consumer.switchTo (taken ++ [BSmtLibSpec.Lexer.endOfFileAt (toLocation s)])).map
             toVersion).getD version),
           some (toLocation s)⟩
-      | .continue => ⟨taken ++ [Spec.Lexer.endOfFileAt (toLocation s)], .running, sv, none⟩
+      | .continue => ⟨taken ++ [BSmtLibSpec.Lexer.endOfFileAt (toLocation s)], .running, sv, none⟩
   else
     ⟨taken, match held with
       | some result => .holding result.value (toLocation result.location)
@@ -78,10 +78,10 @@ theorem discard_session {s : Location} {version : Version} {holding : Bool} (D :
       have hr := handOverAt_reply consumer core' (eofAt core'.location) (eofAt_valid _)
         (hh'.trans hh) taken
       have heof : lexemeEntry consumer.concrete core'.version (eofAt core'.location) =
-          some (Spec.Lexer.endOfFileAt (toLocation s)) := by
+          some (BSmtLibSpec.Lexer.endOfFileAt (toLocation s)) := by
         rw [hl']; exact lexemeEntry_of_handed (lexemeHanded_eofAt_location _ s)
       simp only [reply, heof] at hr
-      cases hans : consumer.answer (taken ++ [Spec.Lexer.endOfFileAt (toLocation s)]) with
+      cases hans : consumer.answer (taken ++ [BSmtLibSpec.Lexer.endOfFileAt (toLocation s)]) with
       | fail e =>
         simp only [hans] at hr
         rw [vEnd_eof consumer core' taken (.inr ⟨s, ha'⟩) (hh'.trans hh) hr]
@@ -106,7 +106,7 @@ theorem toLocation_take_offset {input : List UInt8} {o : Nat} (h : o ≤ input.l
     (toLocation (locAfter (input.take o))).offset = o := by
   simp [toLocation, locAfter_offset', h]
 
-theorem fromVersion_getD (s : Option Spec.Lexicon.Version) (version : Version) :
+theorem fromVersion_getD (s : Option BSmtLibSpec.Lexicon.Version) (version : Version) :
     fromVersion ((s.map toVersion).getD version) = s.getD (fromVersion version) := by
   cases s <;> simp [fromVersion_toVersion]
 
@@ -116,9 +116,9 @@ def BoundaryRuns (o : Nat) : Prop :=
   ∀ (version : Version) (core : Core) (taken : List Handed),
     core.version = version → core.activity = .idle → core.location = locAfter (input.take o) →
     core.holding = false → core.initialVersion = toVersion sv →
-    Spec.Lexer.Runs fedRun consumer sv input ended (fromVersion version)
-      (Spec.Lexer.readyFrom fedRun consumer.concrete (fromVersion version) input ended o).handed
-      (Spec.Lexer.readyFrom fedRun consumer.concrete (fromVersion version) input ended o).failed
+    BSmtLibSpec.Lexer.Runs fedRun consumer sv input ended (fromVersion version)
+      (BSmtLibSpec.Lexer.readyFrom fedRun consumer.concrete (fromVersion version) input ended o).handed
+      (BSmtLibSpec.Lexer.readyFrom fedRun consumer.concrete (fromVersion version) input ended o).failed
       taken (vSession consumer core none (input.drop o) ended taken)
 
 theorem streamFrom_false_taken (version : Version) (ended : Bool) (location : Location)
@@ -144,18 +144,18 @@ theorem streamFrom_false_taken (version : Version) (ended : Bool) (location : Lo
         · exact hls l hl
         · exact endStep_taken he hst l hl
 
-theorem settle_not_finished {α ε : Type} (start : Spec.Lexicon.Version) (taken : List Handed)
-    (outcome : Spec.Lexer.Outcome α ε) (h : outcome.isFinished = false)
-    (version : Spec.Lexicon.Version) (d : Option Spec.Lexer.Location) :
-    Spec.Lexer.settle start taken outcome version d = ⟨taken, outcome, version, d⟩ := by
-  simp [Spec.Lexer.settle, h]
+theorem settle_not_finished {α ε : Type} (start : BSmtLibSpec.Lexicon.Version) (taken : List Handed)
+    (outcome : BSmtLibSpec.Lexer.Outcome α ε) (h : outcome.isFinished = false)
+    (version : BSmtLibSpec.Lexicon.Version) (d : Option BSmtLibSpec.Lexer.Location) :
+    BSmtLibSpec.Lexer.settle start taken outcome version d = ⟨taken, outcome, version, d⟩ := by
+  simp [BSmtLibSpec.Lexer.settle, h]
 
-theorem settle_finished {α ε : Type} (start : Spec.Lexicon.Version) (taken : List Handed)
-    (result : α) (location : Spec.Lexer.Location)
-    (version : Spec.Lexicon.Version) (d : Option Spec.Lexer.Location) :
-    Spec.Lexer.settle (ε := ε) start taken (.finished result location) version d =
+theorem settle_finished {α ε : Type} (start : BSmtLibSpec.Lexicon.Version) (taken : List Handed)
+    (result : α) (location : BSmtLibSpec.Lexer.Location)
+    (version : BSmtLibSpec.Lexicon.Version) (d : Option BSmtLibSpec.Lexer.Location) :
+    BSmtLibSpec.Lexer.settle (ε := ε) start taken (.finished result location) version d =
       ⟨taken, .finished result location, start, none⟩ := by
-  simp [Spec.Lexer.settle, Spec.Lexer.Outcome.isFinished]
+  simp [BSmtLibSpec.Lexer.settle, BSmtLibSpec.Lexer.Outcome.isFinished]
 
 theorem lexemeEntry_some {concrete : Bool} {version : Version} {l : Lexeme} {hd : Handed}
     (h : lexemeEntry concrete version l = some hd) :
@@ -209,12 +209,12 @@ the result (`holdSession`). -/
 theorem afterBreak_hold (version : Version) (o : Nat) (ho : o ≤ input.length)
     (taken : List Handed) (x : Located consumer.Result)
     (hx : x.location = locAfter (input.take o)) :
-    ∃ outcome, Spec.Lexer.AfterBreak x.value (toLocation (locAfter (input.take o)))
-        (Spec.Lexer.readyFrom fedRun consumer.concrete (fromVersion version) input ended o).handed
-        (Spec.Lexer.readyFrom fedRun consumer.concrete (fromVersion version) input ended o).failed
+    ∃ outcome, BSmtLibSpec.Lexer.AfterBreak x.value (toLocation (locAfter (input.take o)))
+        (BSmtLibSpec.Lexer.readyFrom fedRun consumer.concrete (fromVersion version) input ended o).handed
+        (BSmtLibSpec.Lexer.readyFrom fedRun consumer.concrete (fromVersion version) input ended o).failed
         outcome ∧
       holdSession consumer sv version taken x (stream version consumer.concrete input ended o) =
-        Spec.Lexer.settle sv taken outcome (fromVersion version) none := by
+        BSmtLibSpec.Lexer.settle sv taken outcome (fromVersion version) none := by
   rw [ready_stream consumer.concrete version input ended o ho]
   have hent := stream_entry consumer input ended version o
   generalize hS : stream version consumer.concrete input ended o = S at hent
@@ -252,7 +252,7 @@ theorem event (hb : consumer.BreaksAtEnd) {version : Version} {l : Lexeme} {hd :
     (hne : (l.category == .endOfFile) = false)
     (hend : l.end = locAfter (input.take o)) (ho : o ≤ input.length)
     (IH : BoundaryRuns consumer sv input ended o)
-    (sess : Spec.Lexer.Session consumer.Result consumer.Error)
+    (sess : BSmtLibSpec.Lexer.Session consumer.Result consumer.Error)
     (hfail : ∀ e, consumer.answer (taken ++ [hd]) = .fail e →
       sess = ⟨taken ++ [hd], .failed (.consumer e),
         fromVersion (((consumer.switchTo (taken ++ [hd])).map toVersion).getD version),
@@ -281,35 +281,35 @@ theorem event (hb : consumer.BreaksAtEnd) {version : Version} {l : Lexeme} {hd :
       sess = discardSession consumer sv ended
         (((consumer.switchTo (taken ++ [hd])).map toVersion).getD version) l.end true
         (some ⟨r, l.end⟩) (taken ++ [hd])) :
-    Spec.Lexer.Runs fedRun consumer sv input ended (fromVersion version)
-      (hd :: (Spec.Lexer.readyFrom fedRun consumer.concrete (fromVersion version) input ended
+    BSmtLibSpec.Lexer.Runs fedRun consumer sv input ended (fromVersion version)
+      (hd :: (BSmtLibSpec.Lexer.readyFrom fedRun consumer.concrete (fromVersion version) input ended
         o).handed)
-      (Spec.Lexer.readyFrom fedRun consumer.concrete (fromVersion version) input ended o).failed
+      (BSmtLibSpec.Lexer.readyFrom fedRun consumer.concrete (fromVersion version) input ended o).failed
       taken sess := by
   obtain ⟨hs, he, htype⟩ := lexemeEntry_some hl
   have hne' : hd.type ≠ .endOfFile := fun h => by rw [htype.mp h] at hne; cases hne
   have hoff : hd.end.offset = o := by rw [he, hend]; exact toLocation_take_offset ho
-  have hfol : ∀ s : Option Spec.Lexicon.Version,
-      Spec.Lexer.following fedRun consumer.concrete input ended hd.end.offset s
-          (Spec.Lexer.readyFrom fedRun consumer.concrete (fromVersion version) input ended
+  have hfol : ∀ s : Option BSmtLibSpec.Lexicon.Version,
+      BSmtLibSpec.Lexer.following fedRun consumer.concrete input ended hd.end.offset s
+          (BSmtLibSpec.Lexer.readyFrom fedRun consumer.concrete (fromVersion version) input ended
             o).handed
-          (Spec.Lexer.readyFrom fedRun consumer.concrete (fromVersion version) input ended
+          (BSmtLibSpec.Lexer.readyFrom fedRun consumer.concrete (fromVersion version) input ended
             o).failed =
-        Spec.Lexer.readyFrom fedRun consumer.concrete (s.getD (fromVersion version)) input ended
+        BSmtLibSpec.Lexer.readyFrom fedRun consumer.concrete (s.getD (fromVersion version)) input ended
           o := by
     intro s
-    cases s <;> simp [Spec.Lexer.following, hoff]
-  have hv : ∀ s : Option Spec.Lexicon.Version,
+    cases s <;> simp [BSmtLibSpec.Lexer.following, hoff]
+  have hv : ∀ s : Option BSmtLibSpec.Lexicon.Version,
       s.getD (fromVersion version) = fromVersion ((s.map toVersion).getD version) :=
     fun s => (fromVersion_getD s version).symm
   cases hans : consumer.answer (taken ++ [hd]) with
   | fail e =>
     rw [hfail e hans]
-    have := Spec.Lexer.Runs.fails (feed := fedRun) (consumer := consumer)
+    have := BSmtLibSpec.Lexer.Runs.fails (feed := fedRun) (consumer := consumer)
       (start := sv) (input := input) (ended := ended) (version := fromVersion version)
-      (ready := (Spec.Lexer.readyFrom fedRun consumer.concrete (fromVersion version) input ended
+      (ready := (BSmtLibSpec.Lexer.readyFrom fedRun consumer.concrete (fromVersion version) input ended
         o).handed)
-      (failed := (Spec.Lexer.readyFrom fedRun consumer.concrete (fromVersion version) input ended
+      (failed := (BSmtLibSpec.Lexer.readyFrom fedRun consumer.concrete (fromVersion version) input ended
         o).failed)
       (taken := taken) (token := hd) hans
     rwa [settle_not_finished _ _ _ rfl, hv, he] at this
@@ -318,7 +318,7 @@ theorem event (hb : consumer.BreaksAtEnd) {version : Version} {l : Lexeme} {hd :
     | false =>
       obtain ⟨B, hB1, hB2, hB3, hB4, hB5, hsess⟩ := hcont hans hdi
       rw [hsess]
-      refine Spec.Lexer.Runs.continues hne' hans hdi ?_
+      refine BSmtLibSpec.Lexer.Runs.continues hne' hans hdi ?_
       rw [hfol, hv]
       rw [← hB1]
       exact IH B.version B (taken ++ [hd]) rfl hB2 hB3 hB4 hB5
@@ -327,42 +327,42 @@ theorem event (hb : consumer.BreaksAtEnd) {version : Version} {l : Lexeme} {hd :
       unfold discardSession
       cases ended with
       | false =>
-        have := Spec.Lexer.Runs.discardsWaiting (feed := fedRun)
+        have := BSmtLibSpec.Lexer.Runs.discardsWaiting (feed := fedRun)
           (consumer := consumer) (start := sv) (input := input) (version := fromVersion version)
-          (ready := (Spec.Lexer.readyFrom fedRun consumer.concrete (fromVersion version) input
+          (ready := (BSmtLibSpec.Lexer.readyFrom fedRun consumer.concrete (fromVersion version) input
             false o).handed)
-          (failed := (Spec.Lexer.readyFrom fedRun consumer.concrete (fromVersion version) input
+          (failed := (BSmtLibSpec.Lexer.readyFrom fedRun consumer.concrete (fromVersion version) input
             false o).failed) (taken := taken) (token := hd) hne' hans hdi rfl
         rw [settle_not_finished _ _ _ rfl, hv, he] at this
         exact this
       | true =>
         simp only [ite_true, Bool.false_eq_true, ite_false, ← he]
-        have hab : (taken ++ [hd]) ++ [Spec.Lexer.endOfFileAt hd.end] =
-            taken ++ [hd, Spec.Lexer.endOfFileAt hd.end] := by simp
-        cases hans2 : consumer.answer (taken ++ [hd, Spec.Lexer.endOfFileAt hd.end]) with
+        have hab : (taken ++ [hd]) ++ [BSmtLibSpec.Lexer.endOfFileAt hd.end] =
+            taken ++ [hd, BSmtLibSpec.Lexer.endOfFileAt hd.end] := by simp
+        cases hans2 : consumer.answer (taken ++ [hd, BSmtLibSpec.Lexer.endOfFileAt hd.end]) with
         | «break» r =>
           rw [hab, hans2]
-          have := Spec.Lexer.Runs.discardsToEnd (feed := fedRun)
+          have := BSmtLibSpec.Lexer.Runs.discardsToEnd (feed := fedRun)
             (consumer := consumer) (start := sv) (input := input) (version := fromVersion version)
-            (ready := (Spec.Lexer.readyFrom fedRun consumer.concrete (fromVersion version) input
+            (ready := (BSmtLibSpec.Lexer.readyFrom fedRun consumer.concrete (fromVersion version) input
               true o).handed)
-            (failed := (Spec.Lexer.readyFrom fedRun consumer.concrete (fromVersion version) input
+            (failed := (BSmtLibSpec.Lexer.readyFrom fedRun consumer.concrete (fromVersion version) input
               true o).failed) (taken := taken) (token := hd) hne' hans hdi rfl hans2
           rw [settle_finished] at this
           exact this
         | fail e =>
           rw [hab, hans2]
-          have := Spec.Lexer.Runs.discardsFailsAtEnd (feed := fedRun)
+          have := BSmtLibSpec.Lexer.Runs.discardsFailsAtEnd (feed := fedRun)
             (consumer := consumer) (start := sv) (input := input) (version := fromVersion version)
-            (ready := (Spec.Lexer.readyFrom fedRun consumer.concrete (fromVersion version) input
+            (ready := (BSmtLibSpec.Lexer.readyFrom fedRun consumer.concrete (fromVersion version) input
               true o).handed)
-            (failed := (Spec.Lexer.readyFrom fedRun consumer.concrete (fromVersion version) input
+            (failed := (BSmtLibSpec.Lexer.readyFrom fedRun consumer.concrete (fromVersion version) input
               true o).failed) (taken := taken) (token := hd) hne' hans hdi rfl hans2
           rw [settle_not_finished _ _ _ rfl, ← fromVersion_getD, ← fromVersion_getD] at this
           exact this
         | «continue» =>
           exfalso
-          exact hb (taken ++ [hd]) (Spec.Lexer.endOfFileAt hd.end) rfl (by rw [hab]; exact hans2)
+          exact hb (taken ++ [hd]) (BSmtLibSpec.Lexer.endOfFileAt hd.end) rfl (by rw [hab]; exact hans2)
   | «break» r =>
     cases hdi : consumer.discards (taken ++ [hd]) with
     | false =>
@@ -371,7 +371,7 @@ theorem event (hb : consumer.BreaksAtEnd) {version : Version} {l : Lexeme} {hd :
         (((consumer.switchTo (taken ++ [hd])).map toVersion).getD version) o ho (taken ++ [hd])
         ⟨r, l.end⟩ hend
       rw [hset, ← hv]
-      refine Spec.Lexer.Runs.breaks hne' hans hdi ?_
+      refine BSmtLibSpec.Lexer.Runs.breaks hne' hans hdi ?_
       rw [hfol, hv, he, hend]
       exact hafter
     | true =>
@@ -379,20 +379,20 @@ theorem event (hb : consumer.BreaksAtEnd) {version : Version} {l : Lexeme} {hd :
       unfold discardSession
       cases ended with
       | false =>
-        have := Spec.Lexer.Runs.discardsHeld (feed := fedRun)
+        have := BSmtLibSpec.Lexer.Runs.discardsHeld (feed := fedRun)
           (consumer := consumer) (start := sv) (input := input) (version := fromVersion version)
-          (ready := (Spec.Lexer.readyFrom fedRun consumer.concrete (fromVersion version) input
+          (ready := (BSmtLibSpec.Lexer.readyFrom fedRun consumer.concrete (fromVersion version) input
             false o).handed)
-          (failed := (Spec.Lexer.readyFrom fedRun consumer.concrete (fromVersion version) input
+          (failed := (BSmtLibSpec.Lexer.readyFrom fedRun consumer.concrete (fromVersion version) input
             false o).failed) (taken := taken) (token := hd) hne' hans hdi rfl
         rw [settle_not_finished _ _ _ rfl, hv, he] at this
         exact this
       | true =>
-        have := Spec.Lexer.Runs.discardsEnds (feed := fedRun)
+        have := BSmtLibSpec.Lexer.Runs.discardsEnds (feed := fedRun)
           (consumer := consumer) (start := sv) (input := input) (version := fromVersion version)
-          (ready := (Spec.Lexer.readyFrom fedRun consumer.concrete (fromVersion version) input
+          (ready := (BSmtLibSpec.Lexer.readyFrom fedRun consumer.concrete (fromVersion version) input
             true o).handed)
-          (failed := (Spec.Lexer.readyFrom fedRun consumer.concrete (fromVersion version) input
+          (failed := (BSmtLibSpec.Lexer.readyFrom fedRun consumer.concrete (fromVersion version) input
             true o).failed) (taken := taken) (token := hd) hne' hans hdi rfl
         rw [settle_finished, he] at this
         exact this

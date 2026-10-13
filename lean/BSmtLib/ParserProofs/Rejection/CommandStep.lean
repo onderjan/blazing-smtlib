@@ -11,9 +11,11 @@ hands it over.
 
 namespace BSmtLib.ParserProofs.Rejection
 
-open BSmtLib.Spec.Grammar
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 open BSmtLib.Parser (Input PM Step TermState ListState SortDecState LiteralState SignatureState
   FunctionDecState DatatypeState Payload NamedCommand FinalCall DefinitionEnd Declaration
   CommandState CommandOutcome AttributeState SortState payloadStep commandStep)
@@ -22,7 +24,7 @@ open Lang
 /-! ## Command names -/
 
 /-- The version a command first appears in. -/
-def commandAddedIn : BSmtLib.CommandNameReserved → Spec.Lexicon.Version
+def commandAddedIn : BSmtLib.CommandNameReserved → BSmtLibSpec.Lexicon.Version
   | .checkSatAssuming | .declareConst | .defineFunRec | .defineFunsRec | .echo | .getModel
   | .getUnsatAssumptions | .reset | .resetAssertions => .v2_5
   | .declareDatatype | .declareDatatypes => .v2_6
@@ -41,11 +43,11 @@ theorem commandName_lexical {version : BSmtLib.Version} {name : BSmtLib.CommandN
   cases version <;> cases name <;> decide
 
 /-- How a `set-info` ends, from its tokens. -/
-theorem cmdEnd_setInfo (v : Spec.Lexicon.Version) (keyword : Spec.Lexicon.Chars)
+theorem cmdEnd_setInfo (v : BSmtLibSpec.Lexicon.Version) (keyword : BSmtLibSpec.Regex.Chars)
     (value : Option Tree.AttributeValue) :
     cmdEnd v (.setInfo ⟨keyword, value⟩) =
       setInfoEnd v .start (toks (Tree.Attribute.tokens ⟨keyword, value⟩) ++ [closeItem]) := by
-  by_cases hk : keyword = Spec.Lexicon.chars "smt-lib-version"
+  by_cases hk : keyword = BSmtLibSpec.Regex.chars "smt-lib-version"
   · subst hk
     rcases value with _ | ((_ | d | _ | _ | _) | s | items) <;>
       simp [cmdEnd, Tree.Command.modeAfter, Tree.Attribute.tokens, setInfoEnd, declarationEnd,
@@ -72,7 +74,7 @@ macro "command_tokens" : tactic => `(tactic|
     termTokensAll_eq, sortTokensAll_eq] <;> rfl))
 
 /-- The remainder of a command that ends at its next token, a `)`. -/
-theorem closeNext_split {v : Spec.Lexicon.Version} {u : List Received}
+theorem closeNext_split {v : BSmtLibSpec.Lexicon.Version} {u : List Received}
     (h : closeNext v follows u) : ∃ w, follows (.next v) w ∧ u = closeItem :: w := by
   obtain ⟨_, w, rfl, hw, rfl⟩ := h
   exact ⟨w, hw, rfl⟩
@@ -304,7 +306,7 @@ theorem payloadInit_nonempty (name : BSmtLib.CommandNameReserved) :
     refine ⟨_, rfl, [.token (.keyword []), closeItem], b, ?_, ?_, rfl⟩
     · simp only [attrRem, ite_true, Parser.AttributeState.init, Array.isEmpty_empty]
       exact cat_intro' ⟨⟨[], none⟩, trivial, rfl⟩ (tok_intro _) rfl
-    · have hne : Spec.Lexicon.chars "smt-lib-version" ≠ [] := by decide
+    · have hne : BSmtLibSpec.Regex.chars "smt-lib-version" ≠ [] := by decide
       simpa [setInfoEnd, hne] using hb
   case setLogic => exact cat_nonempty hsym hnext
   case setOption =>

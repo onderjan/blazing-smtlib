@@ -5,10 +5,10 @@ import BSmtLib.SpecChecks.Consumers
 # The naive lexer with every consumer of the spec
 
 `correctWithConsumers_vNaive`: the naive lexer, with the adapter's consumer for every consumer
-of the spec (`Adapter.lexing VNaive.lexOps`), is `Spec.Lexer.CorrectWithConsumers`. What it
+of the spec (`Adapter.lexing VNaive.lexOps`), is `BSmtLibSpec.Lexer.CorrectWithConsumers`. What it
 hands over to the collector of the spec is what its pure run hands over (`lexing_fed_vNaive`,
 `VNaive.fedRun`), as the collector takes every token ready (`runs_collector`); so it is
-`Spec.Lexer.Correct` with it, which `VNaive.fedRun_correct` proves; it handles every consumer
+`BSmtLibSpec.Lexer.Correct` with it, which `VNaive.fedRun_correct` proves; it handles every consumer
 that breaks at the end of the input (`vNaive_runs`, from `walk`), and the end of the input
 resets it (`resetsAtEnd_vNaive`).
 -/
@@ -16,7 +16,7 @@ resets it (`resetsAtEnd_vNaive`).
 namespace BSmtLib.Proofs.Lexer.VNaive
 
 open BSmtLib.Proofs.Adapter
-open Spec.Lexer (Handed)
+open BSmtLibSpec.Lexer (Handed)
 
 /-- Tokens that the collector takes all of: tokens other than the end of file, followed, if the
 lexer does not fail, possibly by the end of file. -/
@@ -26,18 +26,18 @@ def CollectorReady (ready : List Handed) (failed : Bool) : Prop :=
 
 /-- The collector takes every token ready and fails exactly where the lexer fails. -/
 theorem runs_collector
-    {feed : Spec.Lexicon.Version → List Spec.Lexicon.Chars → Bool → Spec.Lexer.Fed}
-    {start : Spec.Lexicon.Version} {input : Spec.Lexicon.Chars} {ended : Bool}
-    {version : Spec.Lexicon.Version} {ready : List Handed} {failed : Bool} {taken : List Handed}
-    {S : Spec.Lexer.Session Spec.Lexer.collector.Result Spec.Lexer.collector.Error}
-    (h : Spec.Lexer.Runs feed Spec.Lexer.collector start input ended version ready failed taken S)
+    {feed : BSmtLibSpec.Lexicon.Version → List BSmtLibSpec.Regex.Chars → Bool → BSmtLibSpec.Lexer.Fed}
+    {start : BSmtLibSpec.Lexicon.Version} {input : BSmtLibSpec.Regex.Chars} {ended : Bool}
+    {version : BSmtLibSpec.Lexicon.Version} {ready : List Handed} {failed : Bool} {taken : List Handed}
+    {S : BSmtLibSpec.Lexer.Session BSmtLibSpec.Lexer.collector.Result BSmtLibSpec.Lexer.collector.Error}
+    (h : BSmtLibSpec.Lexer.Runs feed BSmtLibSpec.Lexer.collector start input ended version ready failed taken S)
     (hready : CollectorReady ready failed) :
     S.taken = taken ++ ready ∧ S.outcome.isFailed = failed := by
   induction h with
   | waiting => rw [settle_not_finished _ _ _ rfl]; exact ⟨by simp, rfl⟩
   | lexical => rw [settle_not_finished _ _ _ rfl]; exact ⟨by simp, rfl⟩
   | fails hans =>
-    simp only [Spec.Lexer.collector] at hans
+    simp only [BSmtLibSpec.Lexer.collector] at hans
     split at hans <;> cases hans
   | ends hty hans =>
     obtain ⟨tokens, eof, he, ht, hl⟩ := hready
@@ -56,7 +56,7 @@ theorem runs_collector
         rw [settle_finished]
         exact ⟨by simp, hf.symm⟩
   | continues hty hans hdi hrun ih =>
-    refine (ih ?_).imp (fun h => by rw [h]; simp [Spec.Lexer.following, Spec.Lexer.collector]) id
+    refine (ih ?_).imp (fun h => by rw [h]; simp [BSmtLibSpec.Lexer.following, BSmtLibSpec.Lexer.collector]) id
     show CollectorReady _ _
     obtain ⟨tokens, eof, he, ht, hl⟩ := hready
 
@@ -74,15 +74,15 @@ theorem runs_collector
         obtain ⟨rfl, -⟩ := he
         exact absurd he2 hty
   | breaks hty hans =>
-    simp only [Spec.Lexer.collector, List.getLast?_append, List.getLast?_singleton] at hans
+    simp only [BSmtLibSpec.Lexer.collector, List.getLast?_append, List.getLast?_singleton] at hans
     split at hans
     · simp_all
     · cases hans
-  | discardsHeld _ _ hdi => simp [Spec.Lexer.collector] at hdi
-  | discardsEnds _ _ hdi => simp [Spec.Lexer.collector] at hdi
-  | discardsWaiting _ _ hdi => simp [Spec.Lexer.collector] at hdi
-  | discardsToEnd _ _ hdi => simp [Spec.Lexer.collector] at hdi
-  | discardsFailsAtEnd _ _ hdi => simp [Spec.Lexer.collector] at hdi
+  | discardsHeld _ _ hdi => simp [BSmtLibSpec.Lexer.collector] at hdi
+  | discardsEnds _ _ hdi => simp [BSmtLibSpec.Lexer.collector] at hdi
+  | discardsWaiting _ _ hdi => simp [BSmtLibSpec.Lexer.collector] at hdi
+  | discardsToEnd _ _ hdi => simp [BSmtLibSpec.Lexer.collector] at hdi
+  | discardsFailsAtEnd _ _ hdi => simp [BSmtLibSpec.Lexer.collector] at hdi
 
 theorem handedOf_noEof {version : Version} {ls : List Lexeme} (h : NoEof ls) :
     ∀ t ∈ handedOf version ls, t.type ≠ .endOfFile := by
@@ -151,11 +151,11 @@ theorem streamFrom_collectorReady (version : Version) (ended : Bool) (location :
 /-- What the naive lexer has done with a consumer that breaks at the end of the input, on its
 first input, is what `Runs` states, from the entries ready as the spec gives them from what the
 pure run hands over (`fedRun`). -/
-theorem vNaive_runs (consumer : Spec.Lexer.Consumer) (hb : consumer.BreaksAtEnd)
-    (version : Spec.Lexicon.Version) (slices : List Spec.Lexicon.Chars) (ended : Bool) :
-    Spec.Lexer.Runs fedRun consumer version slices.flatten ended version
-      (Spec.Lexer.readyFrom fedRun consumer.concrete version slices.flatten ended 0).handed
-      (Spec.Lexer.readyFrom fedRun consumer.concrete version slices.flatten ended 0).failed []
+theorem vNaive_runs (consumer : BSmtLibSpec.Lexer.Consumer) (hb : consumer.BreaksAtEnd)
+    (version : BSmtLibSpec.Lexicon.Version) (slices : List BSmtLibSpec.Regex.Chars) (ended : Bool) :
+    BSmtLibSpec.Lexer.Runs fedRun consumer version slices.flatten ended version
+      (BSmtLibSpec.Lexer.readyFrom fedRun consumer.concrete version slices.flatten ended 0).handed
+      (BSmtLibSpec.Lexer.readyFrom fedRun consumer.concrete version slices.flatten ended 0).failed []
       (lexing VNaive.lexOps consumer version [] slices ended) := by
   rw [lexing_vNaive]
   have hw := walk consumer version slices.flatten ended hb _ slices.flatten .idle (Nat.le_refl _)
@@ -168,18 +168,18 @@ theorem vNaive_runs (consumer : Spec.Lexer.Consumer) (hb : consumer.BreaksAtEnd)
   simpa [stream, streamFrom_eq] using hw
 
 /-- The naive lexer hands over to the collector of the spec what its pure run hands over. -/
-theorem lexing_fed_vNaive : Spec.Lexer.Lexing.fed (lexing VNaive.lexOps) = fedRun := by
+theorem lexing_fed_vNaive : BSmtLibSpec.Lexer.Lexing.fed (lexing VNaive.lexOps) = fedRun := by
   funext version slices ended
-  have hr := vNaive_runs Spec.Lexer.collector SpecChecks.Lexer.collector_breaksAtEnd version slices
+  have hr := vNaive_runs BSmtLibSpec.Lexer.collector SpecChecks.Lexer.collector_breaksAtEnd version slices
     ended
   have hready : CollectorReady
-      (Spec.Lexer.segment fedRun version slices.flatten ended 0).handed
-      (Spec.Lexer.segment fedRun version slices.flatten ended 0).failed := by
+      (BSmtLibSpec.Lexer.segment fedRun version slices.flatten ended 0).handed
+      (BSmtLibSpec.Lexer.segment fedRun version slices.flatten ended 0).failed := by
     rw [← fromVersion_toVersion version, segment_stream (toVersion version) false]
     exact streamFrom_collectorReady _ _ _ _
-  rw [show Spec.Lexer.collector.concrete = false from rfl, readyFrom_plain] at hr
+  rw [show BSmtLibSpec.Lexer.collector.concrete = false from rfl, readyFrom_plain] at hr
   obtain ⟨h1, h2⟩ := runs_collector hr hready
-  unfold Spec.Lexer.Lexing.fed Spec.Lexer.Session.fed
+  unfold BSmtLibSpec.Lexer.Lexing.fed BSmtLibSpec.Lexer.Session.fed
   rw [h1, h2, List.nil_append, SpecChecks.Lexer.segment_zero]
   -- the pure run depends only on the bytes of the slices
   obtain ⟨r, hr'⟩ := fedOf_isSome (toVersion version) ended slices.flatten
@@ -191,7 +191,7 @@ theorem lexing_fed_vNaive : Spec.Lexer.Lexing.fed (lexing VNaive.lexOps) = fedRu
 
 /-- The naive lexer is correct with every consumer of the spec. -/
 theorem correctWithConsumers_vNaive :
-    Spec.Lexer.CorrectWithConsumers (lexing VNaive.lexOps) := by
+    BSmtLibSpec.Lexer.CorrectWithConsumers (lexing VNaive.lexOps) := by
   refine ⟨?_, fun consumer version slices ended hb => ?_, resetsAtEnd_vNaive⟩
   · rw [lexing_fed_vNaive]
     exact fedRun_correct

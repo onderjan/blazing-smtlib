@@ -16,9 +16,11 @@ which it does only on a file (`lexing_finishes_iff`): `adapter_finishes_only_on_
 namespace BSmtLib.EndToEnd.Param
 
 open BSmtLib.Lexer BSmtLib.Lexer.Internal
-open BSmtLib.Spec BSmtLib.Spec.Grammar BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
-open BSmtLib.Spec.Lexer (Handed)
+open BSmtLibSpec BSmtLibSpec.Grammar BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Parser.Traversal
+open BSmtLibSpec.Lexer (Handed)
 open BSmtLib.ParserProofs BSmtLib.ParserProofs.Rejection
 open BSmtLib.Parser (Input ScriptParser Parse ParseAdapter)
 open BSmtLib.Proofs.Adapter (toVersion Answering AnswerM LexOps lexing)
@@ -33,7 +35,7 @@ variable {version : Lexicon.Version} {commands : List Tree.Command} {taken : Lis
 /-- Every start of tokens that stand for a start of what a parser takes stands for one too. -/
 theorem viable_take (htakes : Takes version commands taken ending) {handed : List Handed}
     (hpre : handed.map (rcv ∘ itemOf) <+: taken) (n : Nat) :
-    Spec.Parser.Viable version ((handed.take n).map (rcv ∘ itemOf)) :=
+    BSmtLibSpec.Parser.Properties.Viable version ((handed.take n).map (rcv ∘ itemOf)) :=
   ⟨commands, taken, ending, htakes, by
     rw [List.map_take]
     exact (List.take_prefix n _).trans hpre⟩
@@ -66,9 +68,9 @@ end
 
 /-- The tokens a session with the stand-in consumer takes, ending as `Classified` says, are
 good. -/
-theorem good_of_classified {feed : Lexicon.Version → List Lexicon.Chars → Bool → Spec.Lexer.Fed}
-    {version : Lexicon.Version} {input : Lexicon.Chars}
-    {session : Spec.Lexer.Session Unit ScriptError}
+theorem good_of_classified {feed : Lexicon.Version → List Regex.Chars → Bool → BSmtLibSpec.Lexer.Fed}
+    {version : Lexicon.Version} {input : Regex.Chars}
+    {session : BSmtLibSpec.Lexer.Session Unit ScriptError}
     (h : Classified feed version input session) : Good version session.taken := by
   rcases h with ⟨-, commands, htakes, -⟩ | ⟨-, commands, htakes⟩ |
       ⟨-, commands, taken, ending, before, last, htaken, htakes, hpre, hlt, hof, hnot, hne⟩ |
@@ -98,7 +100,7 @@ theorem good_of_classified {feed : Lexicon.Version → List Lexicon.Chars → Bo
 that allows every version, fed the characters of an input cut into any slices, by its public
 calls, and then the end of the input: where the end of the input returns a result, the input reads
 as a file. -/
-theorem adapter_finishes_only_on_files (version : Lexicon.Version) (slices : List Lexicon.Chars)
+theorem adapter_finishes_only_on_files (version : Lexicon.Version) (slices : List Regex.Chars)
     {result : Located Unit} {lexer : PLexer}
     (hfeed : paFeed (Lexer.new recordingAdapter (toVersion version)) slices =
       .ok (some result, lexer)) :

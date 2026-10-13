@@ -11,13 +11,13 @@ the token at the byte after the run, or leaves it in progress at the end of the 
 namespace BSmtLib.Proofs.Lexer.VNaiveWRustPort
 
 open BSmtLib.Proofs.Adapter VNaive BSmtLib.Proofs.Simulation
-open Spec.Lexer (Handed)
+open BSmtLibSpec.Lexer (Handed)
 open Lexer.Slice (get? get)
 
 section
 
 variable {floor : Option Nat} {low : Nat}
-variable {C : Spec.Lexer.Consumer} {hd : Bool} {iv : Version}
+variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Version}
 
 /-- The arm of `lexStep` for a simple symbol. -/
 theorem arm_simpleSymbol (v : Version) (input : ByteSlice) (start : Nat)

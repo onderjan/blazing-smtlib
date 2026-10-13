@@ -11,7 +11,10 @@ that finishes the token's lexeme at the delimiter or the end of the input after 
 
 namespace BSmtLib.Proofs.Lexer.VNaive
 
-open BSmtLib.Spec.Lexicon BSmtLib.Spec.Lexicon.Regex BSmtLib.SpecChecks.Lexicon
+open BSmtLibSpec.Lexicon BSmtLibSpec.Regex BSmtLib.SpecChecks.Lexicon
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
+open BSmtLibSpec (Regex)
 
 /-! ## Runs that finish no lexeme -/
 
@@ -142,15 +145,15 @@ theorem runFrom_whitespaceAtEnd {version : Version} {e : Chars} (h : whitespaceA
 /-! ## Tokens -/
 
 /-- The lexeme of a token of the kind with the characters `text`, from `start` to `end`. -/
-def lexemeFor (version : Spec.Lexicon.Version) (category : Category) (start «end» : Location)
+def lexemeFor (version : BSmtLibSpec.Lexicon.Version) (category : Category) (start «end» : Location)
     (text : Chars) : Lexeme :=
   { category := lexCategory category,
-    content := ⟨(Spec.Lexicon.Token.content version ⟨category, 0, text⟩).toArray⟩,
+    content := ⟨(BSmtLibSpec.Lexicon.Token.content version ⟨category, 0, text⟩).toArray⟩,
     start, «end» }
 
 /-- From no token in progress at any location, the characters `text` of a token of the kind,
 followed by what may follow such a token, finish the token's lexeme before the rest. -/
-def TokenRun (version : Spec.Lexicon.Version) (category : Category) (text : Chars) : Prop :=
+def TokenRun (version : BSmtLibSpec.Lexicon.Version) (category : Category) (text : Chars) : Prop :=
   ∀ location rest, DelimRest rest →
     runFrom (Adapter.toVersion version) .idle location (text ++ rest) =
       (runFrom (Adapter.toVersion version) .idle (advanceLoc location text) rest).map
@@ -158,14 +161,14 @@ def TokenRun (version : Spec.Lexicon.Version) (category : Category) (text : Char
 
 /-- The token in progress `p` finishes as the token of the kind with the characters `text`
 from `start`, at a delimiter or at the end of the input. -/
-def Closes (version : Spec.Lexicon.Version) (category : Category) (start : Location)
+def Closes (version : BSmtLibSpec.Lexicon.Version) (category : Category) (start : Location)
     (text : Chars) (p : Pending) : Prop :=
   (∀ location d, Delim d.toNat → ∃ l, advance false p location d = .tokenBefore l ∧
     LexemeIs version category start location text l) ∧
   (∀ location, ∃ l, finish false p location = .token l ∧
     LexemeIs version category start location text l)
 
-theorem tokenRun_of_closes {version : Spec.Lexicon.Version} {category : Category}
+theorem tokenRun_of_closes {version : BSmtLibSpec.Lexicon.Version} {category : Category}
     {text : Chars}
     (h : ∀ location, ∃ p, Reaches (Adapter.toVersion version) .idle location text (.token p) ∧
       Closes version category location text p) :
@@ -202,7 +205,7 @@ theorem delim_facts {d : UInt8} (h : Delim d.toNat) :
 
 /-! ## Closing the token in progress -/
 
-theorem closes_numeral {version : Spec.Lexicon.Version} {start : Location} {s : Chars}
+theorem closes_numeral {version : BSmtLibSpec.Lexicon.Version} {start : Location} {s : Chars}
     {p : Pending} {zero : Bool} (hm : p.mode = .numeral zero) (hs : p.start = start)
     (hk : p.content.data.toList = s) :
     Closes version .numeral start s p := by
@@ -211,7 +214,7 @@ theorem closes_numeral {version : Spec.Lexicon.Version} {start : Location} {s : 
     exact ⟨⟨_, p.content, p.start, loc⟩, by simp [advance, hm, h1, h2, h7], rfl, hk, hs, rfl⟩
   · exact ⟨⟨_, p.content, p.start, loc⟩, by simp [finish, hm], rfl, hk, hs, rfl⟩
 
-theorem closes_decimal {version : Spec.Lexicon.Version} {start : Location} {s : Chars}
+theorem closes_decimal {version : BSmtLibSpec.Lexicon.Version} {start : Location} {s : Chars}
     {p : Pending} (hm : p.mode = .fraction true) (hs : p.start = start)
     (hk : p.content.data.toList = s) :
     Closes version .decimal start s p := by
@@ -220,7 +223,7 @@ theorem closes_decimal {version : Spec.Lexicon.Version} {start : Location} {s : 
     exact ⟨⟨_, p.content, p.start, loc⟩, by simp [advance, hm, h1, h7], rfl, hk, hs, rfl⟩
   · exact ⟨⟨_, p.content, p.start, loc⟩, by simp [finish, hm], rfl, hk, hs, rfl⟩
 
-theorem closes_hexadecimal {version : Spec.Lexicon.Version} {start : Location} {s : Chars}
+theorem closes_hexadecimal {version : BSmtLibSpec.Lexicon.Version} {start : Location} {s : Chars}
     {p : Pending} (hm : p.mode = .digits .hexadecimal) (hs : p.start = start)
     (hne : p.content.data.toList ≠ []) (hk : s = 35 :: 120 :: p.content.data.toList) :
     Closes version .hexadecimal start s p := by
@@ -237,7 +240,7 @@ theorem closes_hexadecimal {version : Spec.Lexicon.Version} {start : Location} {
   · exact ⟨⟨_, p.content, p.start, loc⟩, by simp [finish, hm, he, Radix.category],
       rfl, rfl, hs, rfl⟩
 
-theorem closes_binary {version : Spec.Lexicon.Version} {start : Location} {s : Chars}
+theorem closes_binary {version : BSmtLibSpec.Lexicon.Version} {start : Location} {s : Chars}
     {p : Pending} (hm : p.mode = .digits .binary) (hs : p.start = start)
     (hne : p.content.data.toList ≠ []) (hk : s = 35 :: 98 :: p.content.data.toList) :
     Closes version .binary start s p := by
@@ -254,7 +257,7 @@ theorem closes_binary {version : Spec.Lexicon.Version} {start : Location} {s : C
   · exact ⟨⟨_, p.content, p.start, loc⟩, by simp [finish, hm, he, Radix.category],
       rfl, rfl, hs, rfl⟩
 
-theorem closes_keyword {version : Spec.Lexicon.Version} {start : Location} {s : Chars}
+theorem closes_keyword {version : BSmtLibSpec.Lexicon.Version} {start : Location} {s : Chars}
     {p : Pending} (hm : p.mode = .keyword) (hs : p.start = start)
     (hne : p.content.data.toList ≠ []) (hk : s = 58 :: p.content.data.toList) :
     Closes version .keyword start s p := by
@@ -268,12 +271,12 @@ theorem closes_keyword {version : Spec.Lexicon.Version} {start : Location} {s : 
     exact ⟨⟨_, p.content, p.start, loc⟩, by simp [advance, hm, he, h3, h7], rfl, rfl, hs, rfl⟩
   · exact ⟨⟨_, p.content, p.start, loc⟩, by simp [finish, hm, he], rfl, rfl, hs, rfl⟩
 
-theorem closes_symbol {version : Spec.Lexicon.Version} {start : Location} {s : Chars}
+theorem closes_symbol {version : BSmtLibSpec.Lexicon.Version} {start : Location} {s : Chars}
     {p : Pending} {category : Category} (hc : category = .simpleSymbol ∨ category = .reserved)
     (hm : p.mode = .simpleSymbol) (hs : p.start = start) (hk : p.content.data.toList = s) :
     Closes version category start s p := by
   have hcat : lexCategory category = .unquotedSymbol := by rcases hc with rfl | rfl <;> rfl
-  have hcon : Spec.Lexicon.Token.content version ⟨category, 0, s⟩ = s := by
+  have hcon : BSmtLibSpec.Lexicon.Token.content version ⟨category, 0, s⟩ = s := by
     rcases hc with rfl | rfl <;> rfl
   refine ⟨fun loc d hd => ?_, fun loc => ?_⟩
   · obtain ⟨-, -, h3, -, -, -, h7⟩ := delim_facts hd
@@ -282,11 +285,11 @@ theorem closes_symbol {version : Spec.Lexicon.Version} {start : Location} {s : C
   · exact ⟨⟨_, p.content, p.start, loc⟩, by simp [finish, hm], hcat.symm,
       hk.trans hcon.symm, hs, rfl⟩
 
-theorem closes_quoted {version : Spec.Lexicon.Version} {start : Location} {s : Chars}
+theorem closes_quoted {version : BSmtLibSpec.Lexicon.Version} {start : Location} {s : Chars}
     {p : Pending} (hm : p.mode = .quotedSymbolClosed) (hs : p.start = start)
     (hk : s = 124 :: (p.content.data.toList ++ [124])) :
     Closes version .quotedSymbol start s p := by
-  have hcon : Spec.Lexicon.Token.content version ⟨.quotedSymbol, 0, s⟩ =
+  have hcon : BSmtLibSpec.Lexicon.Token.content version ⟨.quotedSymbol, 0, s⟩ =
       p.content.data.toList := by
     show ((s.drop 1).dropLast) = _
     rw [hk]
@@ -296,9 +299,9 @@ theorem closes_quoted {version : Spec.Lexicon.Version} {start : Location} {s : C
     exact ⟨⟨_, p.content, p.start, loc⟩, by simp [advance, hm, h7], rfl, hcon.symm, hs, rfl⟩
   · exact ⟨⟨_, p.content, p.start, loc⟩, by simp [finish, hm], rfl, hcon.symm, hs, rfl⟩
 
-theorem closes_string {version : Spec.Lexicon.Version} {start : Location} {s : Chars}
+theorem closes_string {version : BSmtLibSpec.Lexicon.Version} {start : Location} {s : Chars}
     {p : Pending} (hm : p.mode = .stringQuote ∨ p.mode = .legacyQuote) (hs : p.start = start)
-    (hk : p.content.data.toList = Spec.Lexicon.Token.content version ⟨.string, 0, s⟩) :
+    (hk : p.content.data.toList = BSmtLibSpec.Lexicon.Token.content version ⟨.string, 0, s⟩) :
     Closes version .string start s p := by
   refine ⟨fun loc d hd => ?_, fun loc => ?_⟩
   · obtain ⟨-, -, -, -, -, h6, h7⟩ := delim_facts hd
@@ -404,14 +407,14 @@ theorem reaches_numeral {version : Version} {s : Chars} (hs : numeral s) (locati
     exact ⟨p', reaches_append (a := [d]) (reaches_start (start_digit hd)) hr, ⟨_, hm⟩, hst,
       hk⟩
 
-theorem run_numeral (version : Spec.Lexicon.Version) {s : Chars} (hs : numeral s) :
+theorem run_numeral (version : BSmtLibSpec.Lexicon.Version) {s : Chars} (hs : numeral s) :
     TokenRun version .numeral s := by
   refine tokenRun_of_closes fun location => ?_
   obtain ⟨p, hr, ⟨zero, hm⟩, hst, hk⟩ := reaches_numeral (version := Adapter.toVersion version)
     hs location
   exact ⟨p, hr, closes_numeral hm hst hk⟩
 
-theorem run_decimal (version : Spec.Lexicon.Version) {s : Chars} (hs : decimal s) :
+theorem run_decimal (version : BSmtLibSpec.Lexicon.Version) {s : Chars} (hs : decimal s) :
     TokenRun version .decimal s := by
   refine tokenRun_of_closes fun location => ?_
   obtain ⟨n, r1, rfl, hn, dot, r2, rfl, hdot, z, n', rfl, hz, hn'⟩ := hs
@@ -502,7 +505,7 @@ theorem hexChar_single {p : Chars} (h : altAll [digit, range 65 70, range 97 102
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hr
   rcases hr with rfl | rfl | rfl <;> obtain ⟨c, rfl, -⟩ := hp <;> exact ⟨c, rfl⟩
 
-theorem run_hexadecimal (version : Spec.Lexicon.Version) {s : Chars} (hs : hexadecimal s) :
+theorem run_hexadecimal (version : BSmtLibSpec.Lexicon.Version) {s : Chars} (hs : hexadecimal s) :
     TokenRun version .hexadecimal s := by
   refine tokenRun_of_closes fun location => ?_
   obtain ⟨ds, rfl, hds⟩ := seq_lit hs
@@ -524,7 +527,7 @@ theorem run_hexadecimal (version : Spec.Lexicon.Version) {s : Chars} (hs : hexad
   rw [show chars "#x" = [35, 120] from rfl]
   simpa using this
 
-theorem run_binary (version : Spec.Lexicon.Version) {s : Chars} (hs : binary s) :
+theorem run_binary (version : BSmtLibSpec.Lexicon.Version) {s : Chars} (hs : binary s) :
     TokenRun version .binary s := by
   refine tokenRun_of_closes fun location => ?_
   obtain ⟨ds, rfl, hds⟩ := seq_lit hs
@@ -549,7 +552,7 @@ theorem run_binary (version : Spec.Lexicon.Version) {s : Chars} (hs : binary s) 
   rw [show chars "#b" = [35, 98] from rfl]
   simpa using this
 
-theorem run_keyword (version : Spec.Lexicon.Version) {s : Chars} (hs : keyword s) :
+theorem run_keyword (version : BSmtLibSpec.Lexicon.Version) {s : Chars} (hs : keyword s) :
     TokenRun version .keyword s := by
   refine tokenRun_of_closes fun location => ?_
   obtain ⟨ds, rfl, hall⟩ := keyword_inv hs
@@ -572,13 +575,13 @@ theorem run_keyword (version : Spec.Lexicon.Version) {s : Chars} (hs : keyword s
 
 /-- Every reserved word is a non-empty sequence of characters of simple symbols that does not
 start with a digit. -/
-theorem reservedWords_shape' (version : Spec.Lexicon.Version) :
+theorem reservedWords_shape' (version : BSmtLibSpec.Lexicon.Version) :
     ∀ w ∈ reservedWords version, w ≠ [] ∧ ¬ IsDigit (w.headD 0).toNat ∧
       ∀ x ∈ w, SymChar x.toNat := by
   unfold SymChar IsDigit
   cases version <;> decide
 
-theorem reservedWords_shape (version : Spec.Lexicon.Version) :
+theorem reservedWords_shape (version : BSmtLibSpec.Lexicon.Version) :
     ∀ w ∈ reservedWords version, ∃ c t, w = c :: t ∧ ¬ IsDigit c.toNat ∧
       ∀ x ∈ w, SymChar x.toNat := by
   intro w hw
@@ -586,7 +589,7 @@ theorem reservedWords_shape (version : Spec.Lexicon.Version) :
   obtain ⟨c, t, rfl⟩ := List.exists_cons_of_ne_nil hne
   exact ⟨c, t, rfl, hd, hall⟩
 
-theorem run_symbol (version : Spec.Lexicon.Version) {s : Chars} {category : Category}
+theorem run_symbol (version : BSmtLibSpec.Lexicon.Version) {s : Chars} {category : Category}
     (hc : category = .simpleSymbol ∨ category = .reserved) (hs : categoryRegex version category s) :
     TokenRun version category s := by
   refine tokenRun_of_closes fun location => ?_
@@ -605,7 +608,7 @@ theorem run_symbol (version : Spec.Lexicon.Version) {s : Chars} {category : Cate
   refine ⟨p', ?_, closes_symbol hc hm hst (by simp [hk])⟩
   exact reaches_append (a := [c]) (reaches_start (start_symbol (hall c (by simp)) hd)) hr
 
-theorem run_quoted (version : Spec.Lexicon.Version) {s : Chars} (hs : quotedSymbol s) :
+theorem run_quoted (version : BSmtLibSpec.Lexicon.Version) {s : Chars} (hs : quotedSymbol s) :
     TokenRun version .quotedSymbol s := by
   refine tokenRun_of_closes fun location => ?_
   obtain ⟨t, rfl, b, e, rfl, hb, rfl⟩ := seq_lit hs
@@ -634,7 +637,7 @@ theorem run_quoted (version : Spec.Lexicon.Version) {s : Chars} (hs : quotedSymb
   rw [show chars "|" = [124] from rfl]
   simpa using this
 
-theorem run_paren (version : Spec.Lexicon.Version) {s : Chars} {category : Category}
+theorem run_paren (version : BSmtLibSpec.Lexicon.Version) {s : Chars} {category : Category}
     (hc : category = .parenOpen ∨ category = .parenClose) (hs : categoryRegex version category s) :
     ∀ location rest,
       runFrom (Adapter.toVersion version) .idle location (s ++ rest) =
@@ -658,7 +661,7 @@ theorem run_paren (version : Spec.Lexicon.Version) {s : Chars} {category : Categ
     rfl
 
 
-theorem run_string (version : Spec.Lexicon.Version) (hv : version ≠ .v2_0) {s : Chars}
+theorem run_string (version : BSmtLibSpec.Lexicon.Version) (hv : version ≠ .v2_0) {s : Chars}
     (hs : string s) : TokenRun version .string s := by
   refine tokenRun_of_closes fun location => ?_
   obtain ⟨b, rfl, hb⟩ := string_inv hs
@@ -703,7 +706,7 @@ theorem run_string (version : Spec.Lexicon.Version) (hv : version ≠ .v2_0) {s 
     simp only [hv, ↓reduceIte]
     simpa using hk
 
-theorem run_string20 (version : Spec.Lexicon.Version) (hv : version = .v2_0) {s : Chars}
+theorem run_string20 (version : BSmtLibSpec.Lexicon.Version) (hv : version = .v2_0) {s : Chars}
     (hs : string20 s) : TokenRun version .string s := by
   refine tokenRun_of_closes fun location => ?_
   obtain ⟨b, rfl, hb⟩ := string20_inv hs
@@ -781,8 +784,8 @@ theorem run_string20 (version : Spec.Lexicon.Version) (hv : version = .v2_0) {s 
 
 /-- From no token in progress, a token and what follows it finish the token's lexeme before
 the rest. -/
-theorem token_run {version : Spec.Lexicon.Version} {category : Category} {s rest : Chars}
-    (hs : categoryRegex version category s) (hd : Delimited category rest)
+theorem token_run {version : BSmtLibSpec.Lexicon.Version} {category : Category} {s rest : Chars}
+    (hs : categoryRegex version category s) (hd : Tokenization.Delimited category rest)
     (location : Location) :
     runFrom (Adapter.toVersion version) .idle location (s ++ rest) =
       (runFrom (Adapter.toVersion version) .idle (advanceLoc location s) rest).map
@@ -809,8 +812,8 @@ theorem token_run {version : Spec.Lexicon.Version} {category : Category} {s rest
     exact run_symbol version (Or.inr rfl) hs location rest (delimRest_of hd (by simp) (by simp))
 
 /-- The pure run finishes every tokenisation, after any input before it. -/
-theorem runFrom_complete {version : Spec.Lexicon.Version} {offset : Nat} {input : Chars}
-    {tokens : List Spec.Lexicon.Token} (h : TokenizationFrom version offset input tokens) :
+theorem runFrom_complete {version : BSmtLibSpec.Lexicon.Version} {offset : Nat} {input : Chars}
+    {tokens : List BSmtLibSpec.Lexicon.Token} (h : Tokenization.From version offset input tokens) :
     ∀ before, offset = before.length →
       runFrom (Adapter.toVersion version) .idle (locAfter before) input =
         some (tokens.map (lexemeOf version (before ++ input)) ++
@@ -842,8 +845,8 @@ theorem runFrom_complete {version : Spec.Lexicon.Version} {offset : Nat} {input 
 
 /-- The pure run finishes every tokenisation of the input with the lexemes of its tokens and
 then the end-of-file lexeme. -/
-theorem run_complete {version : Spec.Lexicon.Version} {input : Chars}
-    {tokens : List Spec.Lexicon.Token} (h : Tokenization version input tokens) :
+theorem run_complete {version : BSmtLibSpec.Lexicon.Version} {input : Chars}
+    {tokens : List BSmtLibSpec.Lexicon.Token} (h : Tokenization version input tokens) :
     run (Adapter.toVersion version) input =
       some (tokens.map (lexemeOf version input) ++ [eofLexeme (locAfter input)]) := by
   have := runFrom_complete h [] rfl

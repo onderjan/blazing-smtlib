@@ -17,8 +17,9 @@ These definitions are adapters: the root theorems of `BSmtLib.ParserProofs` and
 
 namespace BSmtLib.ParserProofs
 
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 
 /-- The library handler that asks the spec's handler `h₀`; it holds nothing. -/
 structure Bridged {m : Type → Type} {ε : Type} {values : Values}

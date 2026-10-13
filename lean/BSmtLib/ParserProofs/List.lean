@@ -17,7 +17,7 @@ not be a `)`, and why the list must be below its maximum.
 namespace BSmtLib.ParserProofs
 
 open BSmtLib.Parser (Input PM Step ListState)
-open BSmtLib.Spec.Parser.Traversal (Points)
+open BSmtLibSpec.Parser.Traversal (Points)
 
 section
 

@@ -6,24 +6,25 @@ import BSmtLib.EndToEnd.Lexes.Congr
 
 `Param.good_of_classified` says that the tokens a lexer correct with every consumer takes with
 the script consumer are `Param.Good` once the input has ended. Here the same is proved whether or
-not the input has ended, by a lighter walk of `Spec.Lexer.Runs` than `runs_classified`: the tokens
+not the input has ended, by a lighter walk of `BSmtLibSpec.Lexer.Runs` than `runs_classified`: the tokens
 taken stand for a proper start of what a parser takes, the version is the one in force there,
 and every token ready stands for an item of that version (`runs_good`, `lexing_good`).
 -/
 
 namespace BSmtLib.EndToEnd.Param
 
-open BSmtLib.Spec BSmtLib.Spec.Grammar BSmtLib.Spec.Lexer
-open BSmtLib.Spec.Parser (Takes Ending versionAt)
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec BSmtLibSpec.Grammar BSmtLibSpec.Lexer
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Parser.Properties (Takes Ending versionAt)
+open BSmtLibSpec.Parser.Traversal
 open BSmtLib.ParserProofs.Rejection (rcv)
 
-variable {feed : Lexicon.Version → List Lexicon.Chars → Bool → Fed}
+variable {feed : Lexicon.Version → List Regex.Chars → Bool → Fed}
 
 /-- A token a correct lexer hands over from an offset on, the input ended or not, stands for an
 item of the version. -/
 theorem segment_ofVersion' (hc : Correct feed) (version : Lexicon.Version)
-    (input : Lexicon.Chars) (ended : Bool) (offset : Nat) :
+    (input : Regex.Chars) (ended : Bool) (offset : Nat) :
     ∀ h ∈ (segment feed version input ended offset).handed,
       (rcv (itemOf h)).OfVersion version := by
   cases ended with
@@ -71,7 +72,7 @@ version is the one in force there, every token ready stands for an item of that 
 consumer did not have the rest discarded at the last token taken: the tokens the session takes
 are good.
 -/
-theorem runs_good (hc : Correct feed) {v₀ : Lexicon.Version} {input : Lexicon.Chars}
+theorem runs_good (hc : Correct feed) {v₀ : Lexicon.Version} {input : Regex.Chars}
     {ended : Bool} {version : Lexicon.Version} {ready : List Handed} {failed : Bool}
     {pre : List Handed}
     {session : Session (scriptConsumer v₀).Result (scriptConsumer v₀).Error}
@@ -243,7 +244,7 @@ theorem runs_good (hc : Correct feed) {v₀ : Lexicon.Version} {input : Lexicon.
 /-- A lexer correct with every consumer takes good tokens with the script consumer, whether or
 not the input has ended. -/
 theorem lexing_good (lexing : Lexing) (h : CorrectWithConsumers lexing)
-    (version : Lexicon.Version) (slices : List Lexicon.Chars) (ended : Bool) :
+    (version : Lexicon.Version) (slices : List Regex.Chars) (ended : Bool) :
     Good version (lexing (scriptConsumer version) version [] slices ended).taken := by
   have hruns := h.2.1 (scriptConsumer version) version slices ended
     (scriptConsumer_breaksAtEnd version)

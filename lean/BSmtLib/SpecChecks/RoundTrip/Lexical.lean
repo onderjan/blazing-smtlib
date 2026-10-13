@@ -1,6 +1,7 @@
 import BSmtLib.SpecChecks.Unique
 import BSmtLib.SpecChecks.RoundTrip.Tokens
-import BSmtLib.Spec.Grammar
+import BSmtLibSpec.Grammar.Script
+import BSmtLibSpec.Grammar.Properties
 
 /-!
 # Writing syntax tokens as lexical tokens
@@ -17,7 +18,10 @@ Not trusted: everything here is proved.
 
 namespace BSmtLib.SpecChecks.Lexicon
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Lexicon.Regex BSmtLib.Spec.Grammar
+open BSmtLibSpec BSmtLibSpec.Lexicon BSmtLibSpec.Regex BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
 
 /-! ## The writer -/
 

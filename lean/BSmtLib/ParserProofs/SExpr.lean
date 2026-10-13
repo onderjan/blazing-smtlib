@@ -18,10 +18,12 @@ on top of the stack.
 
 namespace BSmtLib.ParserProofs
 
-open BSmtLib.Spec.Grammar
+open BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
 open BSmtLib.Parser (Input PM Step SExprState sExprStep sExprComplete)
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 open BSmtLib.SpecChecks.Parser (sExpr_constant sExpr_symbol sExpr_reserved sExpr_keyword
   sExpr_list)
 
@@ -31,17 +33,17 @@ variable {version : BSmtLib.Version}
 
 theorem versionAtLeast_v2_5 (h : versionAtLeast (Bridge.version version) .v2_5) :
     version ≥ .v2_5 := by
-  cases version <;> simp_all [versionAtLeast, Bridge.version, Spec.Lexicon.Version.upTo] <;>
+  cases version <;> simp_all [versionAtLeast, Bridge.version, BSmtLibSpec.Lexicon.Version.upTo] <;>
     decide
 
 theorem versionAtLeast_v2_6 (h : versionAtLeast (Bridge.version version) .v2_6) :
     version ≥ .v2_6 := by
-  cases version <;> simp_all [versionAtLeast, Bridge.version, Spec.Lexicon.Version.upTo] <;>
+  cases version <;> simp_all [versionAtLeast, Bridge.version, BSmtLibSpec.Lexicon.Version.upTo] <;>
     decide
 
 theorem versionAtLeast_v2_7 (h : versionAtLeast (Bridge.version version) .v2_7) :
     version ≥ .v2_7 := by
-  cases version <;> simp_all [versionAtLeast, Bridge.version, Spec.Lexicon.Version.upTo] <;>
+  cases version <;> simp_all [versionAtLeast, Bridge.version, BSmtLibSpec.Lexicon.Version.upTo] <;>
     decide
 
 end

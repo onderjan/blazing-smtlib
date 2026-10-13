@@ -172,11 +172,11 @@ read after `before`. -/
 theorem toLocation_shift (before : List UInt8) (location : Location) :
     toLocation (locShift (locAfter before) location) = (toLocation location).after before := by
   have h := toLocation_locAfter before
-  have h1 := congrArg Spec.Lexer.Location.line h
-  have h2 := congrArg Spec.Lexer.Location.column h
+  have h1 := congrArg BSmtLibSpec.Lexer.Location.line h
+  have h2 := congrArg BSmtLibSpec.Lexer.Location.column h
   simp only [toLocation] at h1 h2
-  simp only [toLocation, locShift, Spec.Lexer.Location.after, locAfter_offset',
-    Spec.Lexer.Location.mk.injEq]
+  simp only [toLocation, locShift, BSmtLibSpec.Lexer.Location.after, locAfter_offset',
+    BSmtLibSpec.Lexer.Location.mk.injEq]
   rw [← h1, ← h2]
   exact ⟨trivial, rfl, rfl⟩
 

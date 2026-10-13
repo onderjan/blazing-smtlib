@@ -17,7 +17,10 @@ Not trusted: everything here is proved.
 
 namespace BSmtLib.SpecChecks.Grammar
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Grammar
+open BSmtLibSpec BSmtLibSpec.Lexicon BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
 open BSmtLib.SpecChecks.Lexicon
 
 /-- The tokens of a command end with `)`. -/
@@ -32,7 +35,7 @@ theorem command_getLast (command : Tree.Command) :
 /-- The characters of a command, read in a version, end with a `)` at their end. -/
 theorem endsWithClose_of_command {version : Version} {offset : Nat} {segment : Chars}
     {tokens : List Token} {command : Tree.Command}
-    (h : TokenizationExactly version offset segment tokens)
+    (h : Tokenization.Exactly version offset segment tokens)
     (hc : IsCommand version (tokens.map (SyntaxToken.ofToken version)) command) :
     EndsWithClose tokens (offset + segment.length) := by
   obtain ⟨-, last, hlast, hend⟩ := h
@@ -48,9 +51,9 @@ theorem endsWithClose_of_command {version : Version} {offset : Nat} {segment : C
 command, from the same characters. -/
 theorem segment_prefix {version : Version} {offset : Nat} {segment more : Chars}
     {tokens tokens' : List Token} {command command' : Tree.Command}
-    (h : TokenizationExactly version offset segment tokens)
+    (h : Tokenization.Exactly version offset segment tokens)
     (hc : IsCommand version (tokens.map (SyntaxToken.ofToken version)) command)
-    (h' : TokenizationExactly version offset (segment ++ more) tokens')
+    (h' : Tokenization.Exactly version offset (segment ++ more) tokens')
     (hc' : IsCommand version (tokens'.map (SyntaxToken.ofToken version)) command') :
     more = [] ∧ command = command' := by
   obtain ⟨others, rfl, -⟩ :=
@@ -74,9 +77,9 @@ theorem segment_prefix {version : Version} {offset : Nat} {segment more : Chars}
 from the same characters. -/
 theorem segment_eq {version : Version} {offset : Nat} {segment segment' rest rest' : Chars}
     {tokens tokens' : List Token} {command command' : Tree.Command}
-    (h : TokenizationExactly version offset segment tokens)
+    (h : Tokenization.Exactly version offset segment tokens)
     (hc : IsCommand version (tokens.map (SyntaxToken.ofToken version)) command)
-    (h' : TokenizationExactly version offset segment' tokens')
+    (h' : Tokenization.Exactly version offset segment' tokens')
     (hc' : IsCommand version (tokens'.map (SyntaxToken.ofToken version)) command')
     (heq : segment ++ rest = segment' ++ rest') :
     segment = segment' ∧ rest = rest' ∧ command = command' := by
@@ -89,9 +92,9 @@ theorem segment_eq {version : Version} {offset : Nat} {segment segment' rest res
 /-- A file that is only whitespace has no command. -/
 theorem not_command_of_done {version : Version} {offset : Nat} {segment rest : Chars}
     {tokens : List Token} {command : Tree.Command}
-    (h : TokenizationExactly version offset segment tokens)
+    (h : Tokenization.Exactly version offset segment tokens)
     (hc : IsCommand version (tokens.map (SyntaxToken.ofToken version)) command)
-    (hdone : TokenizationFrom version offset (segment ++ rest) []) : False := by
+    (hdone : Tokenization.From version offset (segment ++ rest) []) : False := by
   obtain ⟨others, heq, -⟩ :=
     tokenizationFrom_close_prefix h.1 (endsWithClose_of_command h hc) hdone
   obtain ⟨last, hlast, -⟩ := endsWithClose_of_command h hc
@@ -99,17 +102,17 @@ theorem not_command_of_done {version : Version} {offset : Nat} {segment rest : C
   rw [heq.1] at hlast
   simp at hlast
 
-/-- What `FileFrom` holds of an input, taken apart. -/
+/-- What `File.From` holds of an input, taken apart. -/
 theorem fileFrom_inv {version : Version} {offset : Nat} {input : Chars}
-    {commands : List Tree.Command} (h : FileFrom version offset input commands) :
-    (commands = [] ∧ TokenizationFrom version offset input []) ∨
+    {commands : List Tree.Command} (h : File.From version offset input commands) :
+    (commands = [] ∧ Tokenization.From version offset input []) ∨
     (∃ segment rest tokens command others next, input = segment ++ rest ∧
-      TokenizationExactly version offset segment tokens ∧
+      Tokenization.Exactly version offset segment tokens ∧
       IsCommand version (tokens.map (SyntaxToken.ofToken version)) command ∧
       command.modeAfter version = some (.read next) ∧
-      FileFrom next (offset + segment.length) rest others ∧ commands = command :: others) ∨
+      File.From next (offset + segment.length) rest others ∧ commands = command :: others) ∨
     (∃ segment rest tokens command, input = segment ++ rest ∧
-      TokenizationExactly version offset segment tokens ∧
+      Tokenization.Exactly version offset segment tokens ∧
       IsCommand version (tokens.map (SyntaxToken.ofToken version)) command ∧
       command.modeAfter version = some .unparsed ∧ commands = [command]) := by
   cases h with
@@ -119,8 +122,8 @@ theorem fileFrom_inv {version : Version} {offset : Nat} {input : Chars}
 
 /-- A file read from a version at an offset has at most one reading. -/
 theorem fileFrom_unique {version : Version} {offset : Nat} {input : Chars}
-    {commands commands' : List Tree.Command} (h : FileFrom version offset input commands)
-    (h' : FileFrom version offset input commands') : commands = commands' := by
+    {commands commands' : List Tree.Command} (h : File.From version offset input commands)
+    (h' : File.From version offset input commands') : commands = commands' := by
   induction h generalizing commands' with
   | done hdone =>
     rcases fileFrom_inv h' with ⟨rfl, -⟩ | ⟨_, _, _, _, _, _, rfl, h₁, h₂, -⟩ |

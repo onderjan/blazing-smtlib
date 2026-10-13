@@ -3,7 +3,7 @@ import BSmtLib.SpecChecks.Lemmas
 /-!
 # Every input has at most one tokenisation
 
-A proof of the property `Unique`. The induction over `TokenizationFrom` in
+A proof of the property `Unique`. The induction over `Tokenization.From` in
 `tokenizationFrom_unique` takes one token at a time:
 
 - `ws_eq` shows that the whitespace before a token is determined: a token starts with a
@@ -19,7 +19,9 @@ Not trusted: everything here is proved.
 
 namespace BSmtLib.SpecChecks.Lexicon
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Lexicon.Regex
+open BSmtLibSpec BSmtLibSpec.Lexicon BSmtLibSpec.Regex
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
 
 /-! ## Classes of character codes -/
 
@@ -389,7 +391,7 @@ theorem token_shape {version : Version} {category : Category} {s : Chars}
 delimiter. -/
 def DelimRest (r : Chars) : Prop := r = [] ∨ ∃ c m, r = c :: m ∧ Delim c.toNat
 
-theorem delimRest_of {category : Category} {r : Chars} (h : Delimited category r)
+theorem delimRest_of {category : Category} {r : Chars} (h : Tokenization.Delimited category r)
     (h₀ : category ≠ .parenOpen) (h₁ : category ≠ .parenClose) : DelimRest r := by
   rcases h with h | h | h | ⟨c, m, rfl, hc⟩
   · exact absurd h h₀
@@ -573,11 +575,11 @@ theorem string_text {version : Version} {s₁ s₂ r₁ r₂ : Chars}
       true_and] at h
     rw [string_body_eq hb₁ hb₂ (delimRest_head hr₁) (delimRest_head hr₂) h]
 
-/-- Two tokens that one input starts with, each followed by what `Delimited` allows, have
+/-- Two tokens that one input starts with, each followed by what `Tokenization.Delimited` allows, have
 the same characters. -/
 theorem text_eq {version : Version} {cat₁ cat₂ : Category} {s₁ s₂ r₁ r₂ : Chars}
     (hs₁ : categoryRegex version cat₁ s₁) (hs₂ : categoryRegex version cat₂ s₂)
-    (hd₁ : Delimited cat₁ r₁) (hd₂ : Delimited cat₂ r₂) (h : s₁ ++ r₁ = s₂ ++ r₂) :
+    (hd₁ : Tokenization.Delimited cat₁ r₁) (hd₂ : Tokenization.Delimited cat₂ r₂) (h : s₁ ++ r₁ = s₂ ++ r₂) :
     s₁ = s₂ := by
   obtain ⟨c₁, t₁, hst₁, -, hg₁⟩ := token_shape hs₁
   obtain ⟨c₂, t₂, hst₂, -, hg₂⟩ := token_shape hs₂
@@ -604,11 +606,11 @@ theorem text_eq {version : Version} {cat₁ cat₂ : Category} {s₁ s₂ r₁ r
       | exact string_text hs₁ hs₂ (delimRest_of hd₁ (by decide) (by decide))
           (delimRest_of hd₂ (by decide) (by decide)) h
 
-/-- Two tokens that one input starts with, each followed by what `Delimited` allows, are
+/-- Two tokens that one input starts with, each followed by what `Tokenization.Delimited` allows, are
 equal in category and characters. -/
 theorem token_eq {version : Version} {cat₁ cat₂ : Category} {s₁ s₂ r₁ r₂ : Chars}
     (hs₁ : categoryRegex version cat₁ s₁) (hs₂ : categoryRegex version cat₂ s₂)
-    (hd₁ : Delimited cat₁ r₁) (hd₂ : Delimited cat₂ r₂) (h : s₁ ++ r₁ = s₂ ++ r₂) :
+    (hd₁ : Tokenization.Delimited cat₁ r₁) (hd₂ : Tokenization.Delimited cat₂ r₂) (h : s₁ ++ r₁ = s₂ ++ r₂) :
     cat₁ = cat₂ ∧ s₁ = s₂ := by
   have hs := text_eq hs₁ hs₂ hd₁ hd₂ h
   subst hs
@@ -730,11 +732,11 @@ theorem not_atEnd {w e x : Chars} {c : UInt8} (hw : whitespace w) (he : whitespa
 /-! ## The tokenisation -/
 
 theorem tokenizationFrom_inv {version : Version} {offset : Nat} {input : Chars}
-    {tokens : List Token} (h : TokenizationFrom version offset input tokens) :
+    {tokens : List Token} (h : Tokenization.From version offset input tokens) :
     (tokens = [] ∧ whitespaceAtEnd input) ∨
       ∃ w category s rest ts, input = w ++ s ++ rest ∧ whitespace w ∧
-        categoryRegex version category s ∧ Delimited category rest ∧
-        TokenizationFrom version (offset + w.length + s.length) rest ts ∧
+        categoryRegex version category s ∧ Tokenization.Delimited category rest ∧
+        Tokenization.From version (offset + w.length + s.length) rest ts ∧
         tokens = ⟨category, offset + w.length, s⟩ :: ts := by
   cases h with
   | done hw => exact Or.inl ⟨rfl, hw⟩
@@ -742,8 +744,8 @@ theorem tokenizationFrom_inv {version : Version} {offset : Nat} {input : Chars}
 
 /-- A tokenisation from any offset is unique. -/
 theorem tokenizationFrom_unique {version : Version} {offset : Nat} {input : Chars}
-    {t₁ t₂ : List Token} (h₁ : TokenizationFrom version offset input t₁)
-    (h₂ : TokenizationFrom version offset input t₂) : t₁ = t₂ := by
+    {t₁ t₂ : List Token} (h₁ : Tokenization.From version offset input t₁)
+    (h₂ : Tokenization.From version offset input t₂) : t₁ = t₂ := by
   induction h₁ generalizing t₂ with
   | done hw =>
     rcases tokenizationFrom_inv h₂ with ⟨rfl, -⟩ | ⟨w, cat, s, rest, ts, hin, hw', hs, -⟩
@@ -771,9 +773,9 @@ theorem tokenizationFrom_unique {version : Version} {offset : Nat} {input : Char
 /-! ## The first token of an input -/
 
 /-- `HeadOf version s x`: every token that an input `s ++ x` starts with, followed by what
-`Delimited` allows, has the characters `s`. -/
+`Tokenization.Delimited` allows, has the characters `s`. -/
 def HeadOf (version : Version) (s x : Chars) : Prop :=
-  ∀ category s' r, categoryRegex version category s' → Delimited category r →
+  ∀ category s' r, categoryRegex version category s' → Tokenization.Delimited category r →
     s' ++ r = s ++ x → s' = s
 
 /-- A tokenisation of an input that starts with whitespace and a token, where the token is
@@ -783,9 +785,9 @@ characters. The rest of the input is delimited and has a tokenisation of its own
 theorem tokenizationFrom_head {version : Version} {offset : Nat} {w s x : Chars}
     {category : Category} {tokens : List Token} (hw : whitespace w)
     (hs : categoryRegex version category s) (hhead : HeadOf version s x)
-    (h : TokenizationFrom version offset (w ++ s ++ x) tokens) :
-    ∃ ts, Delimited category x ∧
-      TokenizationFrom version (offset + w.length + s.length) x ts ∧
+    (h : Tokenization.From version offset (w ++ s ++ x) tokens) :
+    ∃ ts, Tokenization.Delimited category x ∧
+      Tokenization.From version (offset + w.length + s.length) x ts ∧
       tokens = ⟨category, offset + w.length, s⟩ :: ts := by
   obtain ⟨c, t, hct, hc, -⟩ := token_shape hs
   rcases tokenizationFrom_inv h with ⟨-, hend⟩ |
@@ -809,7 +811,7 @@ theorem tokenizationFrom_head {version : Version} {offset : Nat} {w s x : Chars}
 /-- A token that is delimited by what follows it is the only token the input can start
 with. -/
 theorem headOf_delimited {version : Version} {category : Category} {s x : Chars}
-    (hs : categoryRegex version category s) (hd : Delimited category x) : HeadOf version s x :=
+    (hs : categoryRegex version category s) (hd : Tokenization.Delimited category x) : HeadOf version s x :=
   fun _ _ _ hs' hd' h => text_eq hs' hs hd' hd h
 
 /-- The category of a token that starts with `|` is a quoted symbol. -/

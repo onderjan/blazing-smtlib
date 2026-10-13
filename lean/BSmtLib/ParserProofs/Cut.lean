@@ -4,7 +4,7 @@ import BSmtLib.ParserProofs.Script
 /-!
 # What the parser has done before an item
 
-The placement of the calls among the items (`Spec.Parser.PlacementDetermined`) for the
+The placement of the calls among the items (`BSmtLibSpec.Parser.Properties.PlacementDetermined`) for the
 library's parser: in a recording run, what the script parser has done before an item arrives,
 and before it is processed, is what the traversal of any valid script that agrees with the input
 up to that item has done (`placement_arrival`, `placement_processing`); and where its input
@@ -17,9 +17,11 @@ functions of the spec pass over the items before the cut alike in two runs that 
 
 namespace BSmtLib.ParserProofs
 
-open BSmtLib.Spec.Grammar
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 open BSmtLib.Parser (Input PM Step Flow Parse ScriptParser VersionPosture)
 
 /-! ## One item at a time -/
@@ -127,7 +129,7 @@ theorem run_bind_ok {α β : Type} {x : RPM α} {f : α → RPM β} {events even
   rw [h]
   rfl
 
-theorem silent_setVersion (version : Spec.Lexicon.Version) :
+theorem silent_setVersion (version : BSmtLibSpec.Lexicon.Version) :
     Silent (ExceptT.lift (recordingProducer.setVersion version).run :
       RPM (Except Traversal.VersionRefused Unit)) := by
   constructor
@@ -576,7 +578,7 @@ theorem noLayout_of_stands {inputs : List Input} {items : List Received}
 
 theorem parserRecord_script {version : BSmtLib.Version} {commands : List Tree.Command}
     (hscript : Script (Bridge.version version) commands) {inputs : List Input}
-    (hs : inputs.map Bridge.received = (Spec.Parser.received commands).map some) :
+    (hs : inputs.map Bridge.received = (BSmtLibSpec.Parser.Properties.received commands).map some) :
     parserRecord version inputs = record (Bridge.version version) commands := by
   have hrun := script_correct (H := List Event) (m := Id) (points := recordingPoints)
     (h := (recordingHandlerU :
@@ -631,7 +633,7 @@ script has done before it.
 -/
 theorem placement_arrival {version : BSmtLib.Version} {commands : List Tree.Command}
     (hscript : Script (Bridge.version version) commands) {inputs : List Input}
-    (hs : inputs.map Bridge.received = (Spec.Parser.received commands).map some)
+    (hs : inputs.map Bridge.received = (BSmtLibSpec.Parser.Properties.received commands).map some)
     {items : List Input} (hlayout : NoLayout items) (k : Nat)
     (htake : items.take k = inputs.take k) :
     eventsBefore k (parserRecord version items) =
@@ -649,7 +651,7 @@ script has done before that item is processed.
 -/
 theorem placement_processing {version : BSmtLib.Version} {commands : List Tree.Command}
     (hscript : Script (Bridge.version version) commands) {inputs : List Input}
-    (hs : inputs.map Bridge.received = (Spec.Parser.received commands).map some)
+    (hs : inputs.map Bridge.received = (BSmtLibSpec.Parser.Properties.received commands).map some)
     {items : List Input} (hlayout : NoLayout items) (k : Nat) (hk : k < items.length)
     (hk' : k < inputs.length) (htake : items.take k = inputs.take k)
     (hclass : items[k]? = some .parenClose ↔ inputs[k]? = some .parenClose) :
@@ -667,7 +669,7 @@ script, the parser has done what the traversal of the script does before that it
 -/
 theorem placement_prefix {version : BSmtLib.Version} {commands : List Tree.Command}
     (hscript : Script (Bridge.version version) commands) {inputs : List Input}
-    (hs : inputs.map Bridge.received = (Spec.Parser.received commands).map some) (k : Nat) :
+    (hs : inputs.map Bridge.received = (BSmtLibSpec.Parser.Properties.received commands).map some) (k : Nat) :
     parserRecord version (inputs.take k) =
       eventsBefore k (record (Bridge.version version) commands) := by
   have hlayout : NoLayout (inputs.take k) := fun t ht =>

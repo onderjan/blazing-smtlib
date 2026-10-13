@@ -1,6 +1,6 @@
-import BSmtLib.Spec.Parser.Traversal
-import BSmtLib.Spec.Parser.Policy
-import BSmtLib.Spec.Parser.Properties
+import BSmtLibSpec.Parser.Traversal
+import BSmtLibSpec.Parser.VersionPolicy
+import BSmtLibSpec.Parser.Properties
 
 /-!
 # Parsers

@@ -12,9 +12,9 @@ pure run's state, or that discards, gives what `EofRes` states for what the cons
 namespace BSmtLib.Proofs.Lexer.VNaiveWRustPort
 
 open BSmtLib.Proofs.Adapter BSmtLib.Proofs.Lexer.VNaive
-open Spec.Lexer (Handed)
+open BSmtLibSpec.Lexer (Handed)
 
-variable (C : Spec.Lexer.Consumer)
+variable (C : BSmtLibSpec.Lexer.Consumer)
 
 /-- What the naive lexer's end of the input gives after the hand-over of the end-of-file token
 gave `r`. -/

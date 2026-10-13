@@ -1,5 +1,6 @@
 import BSmtLib.EndToEnd.Param.Link
-import BSmtLib.Spec.Reader
+import BSmtLibSpec.Reader
+import BSmtLibSpec.Grammar.Properties
 
 /-!
 # The parser as a consumer of the specification, and the script consumer
@@ -7,22 +8,23 @@ import BSmtLib.Spec.Reader
 After each item, the library's parser asks its producer for at most one thing: a switch of the
 version or discarding (`recAfter_single`). So what its run asked for after its last item is read
 alike whether the first request or the last one counts (`requests_parse`), and the parser as a
-consumer of the lexer specification (`Spec.Parser.RecordingParser.consumer`, with the item
+consumer of the lexer specification (`BSmtLibSpec.Reader.consumer`, with the item
 `libItem` for each token) answers and asks as the script consumer `scriptConsumer` does
 (`consumer_agrees`).
 -/
 
 namespace BSmtLib.EndToEnd.Param
 
-open BSmtLib.Spec BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
-open BSmtLib.Spec.Lexer (Handed)
+open BSmtLibSpec BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
+open BSmtLibSpec.Lexer (Handed)
 open BSmtLib.ParserProofs BSmtLib.ParserProofs.Rejection
 open BSmtLib.Parser (Input ScriptParser Parse)
 
 /-! ## Reading the requests -/
 
-/-- One event of the fold in `Spec.Reader.requestsAfterLast`. -/
+/-- One event of the fold in `BSmtLibSpec.Reader.requestsAfterLast`. -/
 def reqStep (event : Event) (requests : Option Lexicon.Version × Bool) :
     Option Lexicon.Version × Bool :=
   match event with
@@ -36,9 +38,9 @@ theorem processed_isNone_eq : (fun event : Event => event.processed.isNone) =
   cases event <;> rfl
 
 theorem requestsAfterLast_eq (events : List Event) :
-    Spec.Reader.requestsAfterLast events =
+    BSmtLibSpec.Reader.requestsAfterLast events =
       (afterLastProcess events).foldl (fun acc e => reqStep e acc) (none, false) := by
-  unfold Spec.Reader.requestsAfterLast afterLastProcess
+  unfold BSmtLibSpec.Reader.requestsAfterLast afterLastProcess
   rw [processed_isNone_eq, List.foldl_reverse]
   rfl
 
@@ -102,7 +104,7 @@ theorem foldl_reqStep : ∀ (L : List Event) (acc : Option Lexicon.Version × Bo
 the same. -/
 theorem requestsAfterLast_of_single {events : List Event}
     (h : ((afterLastProcess events).filter isProducer).length ≤ 1) :
-    Spec.Reader.requestsAfterLast events = (switchOf events, discardOf events) := by
+    BSmtLibSpec.Reader.requestsAfterLast events = (switchOf events, discardOf events) := by
   rw [requestsAfterLast_eq, foldl_reqStep _ _ h, switchOf_eq_switchIn, discardOf_eq_discardIn]
   simp
 
@@ -267,7 +269,7 @@ theorem parse_single (version : Lexicon.Version) (items : List LibItem) :
 /-- What the library's parser's run asked of its producer after its last item, read with the
 last request counting, is what the first request says. -/
 theorem requests_parse (version : Lexicon.Version) (items : List LibItem) :
-    Spec.Reader.requestsAfterLast (libraryParser.parse version items).1 =
+    BSmtLibSpec.Reader.requestsAfterLast (libraryParser.parse version items).1 =
       (switchOf (libraryParser.parse version items).1,
         discardOf (libraryParser.parse version items).1) :=
   requestsAfterLast_of_single (parse_single version items)
@@ -275,12 +277,12 @@ theorem requests_parse (version : Lexicon.Version) (items : List LibItem) :
 /-! ## The two consumers -/
 
 /-- The library's parser as a consumer of the lexer specification. -/
-abbrev specConsumer (version : Lexicon.Version) : Spec.Lexer.Consumer :=
-  libraryParser.consumer libItem version
+abbrev specConsumer (version : Lexicon.Version) : BSmtLibSpec.Lexer.Consumer :=
+  Reader.consumer libraryParser libItem version
 
 /-- Two consumers of the lexer specification that answer alike: the same kind of answer, the
 same switch and discarding, and both take whitespace and comments or neither. -/
-structure AnswersAlike (c₁ c₂ : Spec.Lexer.Consumer) : Prop where
+structure AnswersAlike (c₁ c₂ : BSmtLibSpec.Lexer.Consumer) : Prop where
   concrete : c₁.concrete = c₂.concrete
   switchTo : c₁.switchTo = c₂.switchTo
   discards : c₁.discards = c₂.discards
@@ -296,13 +298,13 @@ alike. -/
 theorem consumer_agrees (version : Lexicon.Version) :
     AnswersAlike (scriptConsumer version) (specConsumer version) := by
   have hreq : ∀ taken : List Handed,
-      Spec.Reader.requestsAfterLast (libraryParser.parse version (taken.map libItem)).1 =
+      BSmtLibSpec.Reader.requestsAfterLast (libraryParser.parse version (taken.map libItem)).1 =
         ((scriptConsumer version).switchTo taken, (scriptConsumer version).discards taken) :=
     fun taken => requests_parse version (taken.map libItem)
   refine ⟨rfl, funext fun taken => ?_, funext fun taken => ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · show _ = (Spec.Reader.requestsAfterLast _).1
+  · show _ = (BSmtLibSpec.Reader.requestsAfterLast _).1
     rw [hreq]
-  · show _ = (Spec.Reader.requestsAfterLast _).2
+  · show _ = (BSmtLibSpec.Reader.requestsAfterLast _).2
     rw [hreq]
   all_goals
     intro taken

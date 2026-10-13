@@ -12,9 +12,11 @@ last item before what follows a refused declaration (`CmdFailure`).
 
 namespace BSmtLib.ParserProofs.Rejection
 
-open BSmtLib.Spec.Grammar
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 open BSmtLib.Parser (Input PM Step TermState ListState SortDecState LiteralState SignatureState
   FunctionDecState DatatypeState Payload NamedCommand FinalCall DefinitionEnd Declaration
   CommandState CommandOutcome AttributeState SortState payloadStep finalCall)
@@ -64,16 +66,16 @@ theorem payload_closing (final : FinalCall Nat Nat Nat) :
     cases final <;> exact Sound.pure fun _ w hw => cat_intro' (tok_intro _) hw rfl
   all_goals fail_step
 
-theorem closing_rem {v : Spec.Lexicon.Version} {follows : CmdEnd → Lang}
+theorem closing_rem {v : BSmtLibSpec.Lexicon.Version} {follows : CmdEnd → Lang}
     {final : FinalCall Nat Nat Nat}
     (h : final ≠ .exit) : payloadRem v follows (.closing final) = closeNext v follows := by
   cases final <;> first | rfl | exact absurd rfl h
 
-theorem sortRem_init {v : Spec.Lexicon.Version} :
+theorem sortRem_init {v : BSmtLibSpec.Lexicon.Version} :
     ∀ u, sortRem v Parser.SortState.init u → SortLang v u := fun _ h => by
   simpa [sortRem, Parser.SortState.init] using h
 
-theorem sortRem_init_nonempty (v : Spec.Lexicon.Version) :
+theorem sortRem_init_nonempty (v : BSmtLibSpec.Lexicon.Version) :
     ∃ u, sortRem v Parser.SortState.init u := sortRem_nonempty v _
 
 include hitem hfollows in
@@ -594,12 +596,12 @@ end
 
 /-! ## `set-info` -/
 
-theorem version_libVersion (v : Spec.Lexicon.Version) :
+theorem version_libVersion (v : BSmtLibSpec.Lexicon.Version) :
     Bridge.version (Bridge.libVersion v) = v := by
   cases v <;> rfl
 
 /-- A single attribute's remainder of one item is its `)`. -/
-theorem attrRem_single_one {v : Spec.Lexicon.Version} {state : AttributeState Nat Nat}
+theorem attrRem_single_one {v : BSmtLibSpec.Lexicon.Version} {state : AttributeState Nat Nat}
     {x : Received} (h : attrRem v true false state [x]) : x = closeItem := by
   obtain ⟨mode, attributes⟩ := state
   have hrest : ∀ u, valueRest v true u → 2 ≤ u.length := by
@@ -643,7 +645,7 @@ theorem attrRem_single_one {v : Spec.Lexicon.Version} {state : AttributeState Na
 /-- The tracker of a version declaration follows how a `set-info` ends: after the item a token
 stands for, the end from the new tracker on the rest is the end from the old one on the item and
 the rest. -/
-theorem setInfoEnd_next (v : Spec.Lexicon.Version) (declaration : Declaration) {token : Input}
+theorem setInfoEnd_next (v : BSmtLibSpec.Lexicon.Version) (declaration : Declaration) {token : Input}
     {x : Received} (hx : Bridge.received token = some x) (rest : List Received)
     (hvalue : declaration = .keyword → ∀ d, token = .constant (.decimal d) → rest = [closeItem]) :
     setInfoEnd v (declaration.next token) rest = setInfoEnd v declaration (x :: rest) := by
@@ -655,7 +657,7 @@ theorem setInfoEnd_next (v : Spec.Lexicon.Version) (declaration : Declaration) {
       item_of hx
       simp only [Declaration.next]
       rw [isVersionKeyword_eq]
-      by_cases hk : Bridge.keyword k = Spec.Lexicon.chars "smt-lib-version"
+      by_cases hk : Bridge.keyword k = BSmtLibSpec.Regex.chars "smt-lib-version"
       · simp [hk, setInfoEnd]
       · simp [hk, setInfoEnd]
     case constant c => item_of hx; cases c <;> rfl

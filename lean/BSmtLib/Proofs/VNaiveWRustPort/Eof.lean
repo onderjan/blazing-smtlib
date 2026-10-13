@@ -18,11 +18,11 @@ consumer is handed no whitespace or comment (`Taken`).
 namespace BSmtLib.Proofs.Lexer.VNaiveWRustPort
 
 open BSmtLib.Proofs.Adapter VNaive BSmtLib.Proofs.Simulation
-open Spec.Lexer (Handed)
+open BSmtLibSpec.Lexer (Handed)
 
 section
 
-variable {C : Spec.Lexer.Consumer} {floor : Option Nat} {low : Nat} {α : Type}
+variable {C : BSmtLibSpec.Lexer.Consumer} {floor : Option Nat} {low : Nat} {α : Type}
 
 /-- A step whose interruptions are caught by the handler. -/
 theorem wp_tryCatch {x : M C floor low α} {h : Intr C floor → M C floor low α} {s : BS floor low}
@@ -69,8 +69,8 @@ structure EofSame (c c' : WCore) : Prop where
   initial : c'.initialVersion = c.initialVersion
 
 /-- The result the end of the input gives after the interruption. -/
-def intrRes {C : Spec.Lexer.Consumer} {floor : Option Nat} (location : Location)
-    (e : Intr C floor) : Except (Spec.Lexer.Failure C.Error) (ControlFlow (Located C.Result)) :=
+def intrRes {C : BSmtLibSpec.Lexer.Consumer} {floor : Option Nat} (location : Location)
+    (e : Intr C floor) : Except (BSmtLibSpec.Lexer.Failure C.Error) (ControlFlow (Located C.Result)) :=
   match e.result with
   | .error cause => .error (causeFailure cause e.span)
   | .ok .relex => .ok .continue
@@ -79,7 +79,7 @@ def intrRes {C : Spec.Lexer.Consumer} {floor : Option Nat} (location : Location)
   | .ok (.discarded (some r)) => .ok (.break ⟨r, location⟩)
 
 /-- No hand-over of at most one lexeme stops at a break with a lexeme after it. -/
-theorem hand1_ne_brk {C : Spec.Lexer.Consumer} {hd : Bool} {p p' : Prog} {l l0 : Lexeme}
+theorem hand1_ne_brk {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {p p' : Prog} {l l0 : Lexeme}
     {r : C.Result} {nx : Option Lexeme} : hand1 C hd (.cont p) l ≠ .stop (.brk r l0 nx) p' := by
   intro h
   simp only [hand1] at h
@@ -88,18 +88,18 @@ theorem hand1_ne_brk {C : Spec.Lexer.Consumer} {hd : Bool} {p p' : Prog} {l l0 :
 
 section
 
-variable {C : Spec.Lexer.Consumer}
+variable {C : BSmtLibSpec.Lexer.Consumer}
 
 /-- What the token in progress at the end of the input leaves when it goes on: the lexemes the
 end finishes are handed over. -/
-def PendQ (C : Spec.Lexer.Consumer) (hd : Bool) (c : WCore) (coll : List Handed) (st : St)
+def PendQ (C : BSmtLibSpec.Lexer.Consumer) (hd : Bool) (c : WCore) (coll : List Handed) (st : St)
     (location : Location) (s' : WCore) (coll' : List Handed) : Prop :=
   ∃ ls, finishLs C.concrete st location = some ls ∧
     pending C hd s'.version coll' [] = pending C hd c.version coll ls ∧ EofSame c s'
 
 /-- What the token in progress at the end of the input leaves when it is interrupted: finishing
 it fails, or the consumer stopped at it. -/
-def PendQE (C : Spec.Lexer.Consumer) (hd : Bool) (c : WCore) (coll : List Handed) (st : St)
+def PendQE (C : BSmtLibSpec.Lexer.Consumer) (hd : Bool) (c : WCore) (coll : List Handed) (st : St)
     (location : Location) (e : Intr C none) (s' : WCore) (coll' : List Handed) : Prop :=
   (finishLs C.concrete st location = none ∧ IsLexical e ∧ s'.version = c.version ∧
     EofSame c s' ∧ coll' = coll) ∨
@@ -175,7 +175,7 @@ end
 
 section
 
-variable {C : Spec.Lexer.Consumer}
+variable {C : BSmtLibSpec.Lexer.Consumer}
 
 /-- What running a call from the lexer state and the tokens taken gives; the consumer itself has
 no state. -/
@@ -186,7 +186,7 @@ def runIA {α : Type} (x : Lexer.WRustPort.InnerM (Answering C) AnswerM α) (c :
 /-- The result of the end of the input before it is located, in the spec's form. -/
 def innerRes (location : Location) :
     Except (Lexer.Failure (Option C.Error)) (ControlFlow C.Result) →
-      Except (Spec.Lexer.Failure C.Error) (ControlFlow (Located C.Result))
+      Except (BSmtLibSpec.Lexer.Failure C.Error) (ControlFlow (Located C.Result))
   | .ok .continue => .ok .continue
   | .ok (.break r) => .ok (.break ⟨r, location⟩)
   | .error f => .error (causeFailure f.cause f.span)
@@ -202,9 +202,9 @@ structure LocKeep (c c' : WCore) : Prop where
 
 /-- What the step at the end of the input leaves: the result, the version and discarding, the
 tokens taken, as `EofRes` says, and the location kept. -/
-def EofFin (C : Spec.Lexer.Consumer) (c : WCore) (coll : List Handed) (st : St)
+def EofFin (C : BSmtLibSpec.Lexer.Consumer) (c : WCore) (coll : List Handed) (st : St)
     (location : Location)
-    (res : Except (Spec.Lexer.Failure C.Error) (ControlFlow (Located C.Result))) (c' : WCore)
+    (res : Except (BSmtLibSpec.Lexer.Failure C.Error) (ControlFlow (Located C.Result))) (c' : WCore)
     (coll' : List Handed) : Prop :=
   EofRes C (eofOut C c.holding C.concrete c.version coll st location) c.discardedFrom c.version
     coll location res c'.version c'.discardedFrom coll' ∧ LocKeep c c'

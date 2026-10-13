@@ -19,10 +19,10 @@ again (`Restarts`), and the loop goes on by induction on the bytes left after th
 namespace BSmtLib.Proofs.Lexer.VNaiveWRustPort
 
 open BSmtLib.Proofs.Adapter VNaive BSmtLib.Proofs.Simulation
-open Spec.Lexer (Handed)
+open BSmtLibSpec.Lexer (Handed)
 open BSmtLib.Lexer (Stop)
 
-variable {C : Spec.Lexer.Consumer}
+variable {C : BSmtLibSpec.Lexer.Consumer}
 
 theorem afterByte_valid {location : Location} (h : location.column ≤ location.offset)
     (c : UInt8) : (location.afterByte c).column ≤ (location.afterByte c).offset := by
@@ -63,7 +63,7 @@ theorem resume_pre {input : ByteSlice} {iv : Version} {hd' : Bool} {p : Prog} {c
 /-- What the Rust port's loop over a slice and the naive lexer leave when they go on: the Rust
 port's lexer state is the naive lexer's pure state at the end of the slice, or both discard from
 the same location, where both lexers stand. -/
-structure LoopOk (C : Spec.Lexer.Consumer) (c : WCore) (n : Core) : Prop where
+structure LoopOk (C : BSmtLibSpec.Lexer.Consumer) (c : WCore) (n : Core) : Prop where
   version : c.version = n.version
   initial : c.initialVersion = n.initialVersion
   holding : c.holding = n.holding
@@ -76,7 +76,7 @@ structure LoopOk (C : Spec.Lexer.Consumer) (c : WCore) (n : Core) : Prop where
 
 /-- What the Rust port's loop over a slice and the naive lexer give alike: the same tokens taken,
 the same version, and the same result, or failures the spec does not tell apart. -/
-def LoopRel (C : Spec.Lexer.Consumer)
+def LoopRel (C : BSmtLibSpec.Lexer.Consumer)
     (rW : (Except (BSmtLib.Lexer.Failure (Option C.Error)) (Option (Located C.Result)) × WCore) ×
       List Handed)
     (rV : VRes (Except (VNaive.Failure (Option C.Error)) (Option (Located C.Result)))) : Prop :=

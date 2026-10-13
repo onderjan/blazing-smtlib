@@ -19,11 +19,13 @@ parser's lemma (`command_runs`) and composes it over a script.
 
 namespace BSmtLib.ParserProofs
 
-open BSmtLib.Spec.Grammar
+open BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
 open BSmtLib.Parser (Input PM Step Flow Parse CommandOutcome CommandState VersionPosture
   ScriptParser commandStep)
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 
 /-! ## Versions -/
 
@@ -32,7 +34,7 @@ theorem Bridge.version_injective {a b : BSmtLib.Version}
   cases a <;> cases b <;> first | rfl | cases h
 
 @[simp]
-theorem Bridge.version_libVersion (version : Spec.Lexicon.Version) :
+theorem Bridge.version_libVersion (version : BSmtLibSpec.Lexicon.Version) :
     Bridge.version (Bridge.libVersion version) = version := by
   cases version <;> rfl
 
@@ -169,13 +171,13 @@ end
 /-! ## Commands of a script -/
 
 /-- Only `exit` stops the reading. -/
-theorem modeAfter_unparsed {version : Spec.Lexicon.Version} {command : Tree.Command}
+theorem modeAfter_unparsed {version : BSmtLibSpec.Lexicon.Version} {command : Tree.Command}
     (h : command.modeAfter version = some .unparsed) : command = .exit := by
   cases command with
   | exit => rfl
   | setInfo info =>
     obtain ⟨keyword, value⟩ := info
-    by_cases hk : keyword = Spec.Lexicon.chars "smt-lib-version"
+    by_cases hk : keyword = BSmtLibSpec.Regex.chars "smt-lib-version"
     · rcases value with _ | ((_ | d | _ | _ | _) | _ | _) <;>
         simp [Tree.Command.modeAfter, hk] at h
     · simp [Tree.Command.modeAfter, hk] at h
@@ -185,7 +187,7 @@ theorem modeAfter_unparsed {version : Spec.Lexicon.Version} {command : Tree.Comm
 A command after which the script goes on in a version is not `exit`, and the version is the one
 it declares, or the one it is read in if it declares none.
 -/
-theorem modeAfter_read {version next : Spec.Lexicon.Version} {command : Tree.Command}
+theorem modeAfter_read {version next : BSmtLibSpec.Lexicon.Version} {command : Tree.Command}
     (h : command.modeAfter version = some (.read next)) :
     command ≠ .exit ∧ next = (command.declaredVersion.getD version) := by
   cases command with
@@ -193,7 +195,7 @@ theorem modeAfter_read {version next : Spec.Lexicon.Version} {command : Tree.Com
   | setInfo info =>
     obtain ⟨keyword, value⟩ := info
     refine ⟨nofun, ?_⟩
-    by_cases hk : keyword = Spec.Lexicon.chars "smt-lib-version"
+    by_cases hk : keyword = BSmtLibSpec.Regex.chars "smt-lib-version"
     · rcases value with _ | ((_ | d | _ | _ | _) | _ | _) <;>
         simp [Tree.Command.modeAfter, Tree.Command.declaredVersion, hk] at h ⊢
       cases h' : versionOfNumber d <;> simp_all
@@ -207,14 +209,14 @@ theorem modeAfter_read {version next : Spec.Lexicon.Version} {command : Tree.Com
 
 /-- A command after which a script goes on is no declaration of a version that is not
 supported. -/
-theorem namesNoVersion_of_read {version next : Spec.Lexicon.Version} {command : Tree.Command}
+theorem namesNoVersion_of_read {version next : BSmtLibSpec.Lexicon.Version} {command : Tree.Command}
     (h : command.modeAfter version = some (.read next)) : command.namesNoVersion = false := by
   cases command with
   | setInfo info =>
     obtain ⟨keyword, value⟩ := info
     simp only [Tree.Command.modeAfter] at h
     simp only [Tree.Command.namesNoVersion]
-    by_cases hk : keyword = Spec.Lexicon.chars "smt-lib-version"
+    by_cases hk : keyword = BSmtLibSpec.Regex.chars "smt-lib-version"
     · simp only [hk, ite_true] at h
       simp only [hk]
       rcases value with _ | ((_ | decimal | _ | _ | _) | _ | _) <;> simp_all
@@ -327,7 +329,7 @@ theorem step_endOfInput (posture : VersionPosture) (version : BSmtLib.Version)
 
 /-- Tokens whose spec items are one item stand for it. -/
 theorem map_received_split {inputs : List Input} {items : List Received}
-    {tokens : List Spec.Grammar.SyntaxToken}
+    {tokens : List BSmtLibSpec.Grammar.SyntaxToken}
     (hs : inputs.map Bridge.received = (tokens.map Received.token ++ items).map some) :
     ∃ first second, inputs = first ++ second ∧ Stands first tokens ∧
       second.map Bridge.received = items.map some := by
@@ -350,7 +352,7 @@ The script parser under the posture before a command, over what a parser receive
 commands of a script and any rest: the spec's commands under the policy of the posture.
 -/
 theorem commands_runs (hA : Agrees h) (producer : Producer (StateT H m))
-    (posture : VersionPosture) {start : Spec.Lexicon.Version} {commands : List Tree.Command}
+    (posture : VersionPosture) {start : BSmtLibSpec.Lexicon.Version} {commands : List Tree.Command}
     (hscript : Script start commands) :
     ∀ (version : BSmtLib.Version), Bridge.version version = start →
     ∀ (declarations : Nat) {inputs : List Input},
@@ -425,7 +427,7 @@ theorem script_correct [Parser.CommandHandler H m] [LawfulMonad m] {points : Poi
     (producer : Producer (StateT H m)) (posture : Parser.VersionPosture)
     {version : BSmtLib.Version} {commands : List Tree.Command}
     (hscript : Script (Bridge.version version) commands) {inputs : List Parser.Input}
-    (hs : inputs.map Bridge.received = (Spec.Parser.received commands).map some)
+    (hs : inputs.map Bridge.received = (BSmtLibSpec.Parser.Properties.received commands).map some)
     (rest : List Parser.Input) :
     driveInput points producer version (Parser.ScriptParser.new (H := H) posture)
         (inputs ++ rest) =

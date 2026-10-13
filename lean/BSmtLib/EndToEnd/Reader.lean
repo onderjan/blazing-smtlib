@@ -1,5 +1,6 @@
 import BSmtLib.Reader
-import BSmtLib.Spec.Reader
+import BSmtLibSpec.Reader
+import BSmtLibSpec.Grammar.Properties
 import BSmtLib.EndToEnd.Param.Only
 import BSmtLib.EndToEnd.Adapters
 
@@ -7,7 +8,7 @@ import BSmtLib.EndToEnd.Adapters
 # The library's reader as a recording reader
 
 `libraryReader` is the library's script reader (`Reader.script`), with the recording handler and
-the posture that allows every version, as the specification's `Spec.Reader.RecordingReader` sees
+the posture that allows every version, as the specification's `BSmtLibSpec.Reader.RecordingReader` sees
 it: fed the slices by `Reader.readSlice`, and then the end of the input by `Reader.readEof` if
 the input has ended, it gives the calls its handler was told, in order, and whether the end of
 the input returned a result. Where a call fails, the reader is not given back; the calls are then
@@ -25,7 +26,9 @@ happens only on a file (`Param.adapter_finishes_only_on_files`).
 namespace BSmtLib.EndToEnd
 
 open BSmtLib.Lexer.Internal
-open BSmtLib.Spec BSmtLib.Spec.Grammar BSmtLib.Spec.Parser
+open BSmtLibSpec BSmtLibSpec.Grammar BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
 open BSmtLib.ParserProofs BSmtLib.ParserProofs.Rejection
 open BSmtLib.Parser (ScriptParser ParseAdapter)
 open BSmtLib.Proofs.Adapter (toVersion)
@@ -60,7 +63,7 @@ theorem handler_ofLexer (lexer : PLexer) :
 
 /-- Where the lexer's public calls with the parse adapter do not fail, the reader's run is theirs:
 the calls the handler holds after them, and whether the end of the input returned a result. -/
-theorem readerRun_paFeed : ∀ (slices : List Lexicon.Chars) (lexer : PLexer)
+theorem readerRun_paFeed : ∀ (slices : List Regex.Chars) (lexer : PLexer)
     {result : Option (Located Unit)} {lexer' : PLexer},
     paFeed lexer slices = .ok (result, lexer') →
     readerRun (Reader.Internal.ofLexer lexer) slices true = (lexerCalls lexer', result.isSome)
@@ -86,7 +89,7 @@ theorem readerRun_paFeed : ∀ (slices : List Lexicon.Chars) (lexer : PLexer)
 
 /-- The library's reader, fed a file in any slices and then the end of the input, tells the
 handler the calls for the file's commands and finishes. -/
-theorem libraryReader_readsFiles : Spec.Reader.ReadsFiles libraryReader := by
+theorem libraryReader_readsFiles : BSmtLibSpec.Reader.ReadsFiles libraryReader := by
   intro version slices commands hfile
   obtain ⟨result, lexer, hfeed, hcalls⟩ := Param.adapter_feed_file version slices hfile
   show readerRun (readerOf version) slices true = _
@@ -97,7 +100,7 @@ theorem libraryReader_readsFiles : Spec.Reader.ReadsFiles libraryReader := by
 
 /-- Where the reader's run finishes, the lexer's public calls with the parse adapter do not fail
 and the end of the input returns a result. -/
-theorem paFeed_of_readerRun : ∀ (slices : List Lexicon.Chars) (lexer : PLexer),
+theorem paFeed_of_readerRun : ∀ (slices : List Regex.Chars) (lexer : PLexer),
     (readerRun (Reader.Internal.ofLexer lexer) slices true).2 = true →
     ∃ result lexer', paFeed lexer slices = .ok (some result, lexer')
   | [], lexer, h => by
@@ -121,7 +124,7 @@ theorem paFeed_of_readerRun : ∀ (slices : List Lexicon.Chars) (lexer : PLexer)
 
 /-- The library's reader, fed an input in any slices and then the end of the input, finishes only
 if the input is a file. -/
-theorem libraryReader_finishesOnlyOnFiles : Spec.Reader.FinishesOnlyOnFiles libraryReader := by
+theorem libraryReader_finishesOnlyOnFiles : BSmtLibSpec.Reader.FinishesOnlyOnFiles libraryReader := by
   intro version slices h
   change (readerRun (readerOf version) slices true).2 = true at h
   rw [readerOf_eq] at h

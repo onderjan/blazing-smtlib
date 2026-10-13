@@ -4,11 +4,11 @@ import BSmtLib.EndToEnd.Split
 /-!
 # How a session with the script consumer ends, on any input
 
-A lexer that does what `Spec.Lexer.Runs` states with the script consumer, fed any input and then
+A lexer that does what `BSmtLibSpec.Lexer.Runs` states with the script consumer, fed any input and then
 the end of the input, ends in one of four ways (`runs_classified`):
 
 - **finished**: the tokens it handed over stand for what a parser takes for a script, and the
-  input reads as a file of that script's commands (`Spec.Grammar.File`);
+  input reads as a file of that script's commands (`BSmtLibSpec.Grammar.File`);
 - **refused**: they stand for commands that a declaration naming no supported version ends, and
   the consumer failed at that declaration's `)`;
 - **rejected**: all but the last stand for a start of what a parser takes, and with the last they
@@ -19,7 +19,7 @@ the end of the input, ends in one of four ways (`runs_classified`):
 
 The proof walks `Runs` with an invariant: the tokens taken stand for a start of what a parser
 takes, the lexer's version is the one in force there (`versionAt`), and the tokens ready are the
-rest of what the lexer hands over from where the last declaration ended (`Spec.Lexer.segment`).
+rest of what the lexer hands over from where the last declaration ended (`BSmtLibSpec.Lexer.segment`).
 For the file it also carries the readings before the current one (`Hist`): for every reading of
 the tokens taken as what a parser takes, the commands they stand for and how the characters of
 the input before the current reading read as those commands.
@@ -27,13 +27,14 @@ the input before the current reading read as those commands.
 
 namespace BSmtLib.EndToEnd
 
-open BSmtLib.Spec BSmtLib.Spec.Grammar BSmtLib.Spec.Lexer
-open BSmtLib.Spec.Parser (Takes Ending versionAt)
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec BSmtLibSpec.Grammar BSmtLibSpec.Lexer
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Parser.Properties (Takes Ending versionAt)
+open BSmtLibSpec.Parser.Traversal
 open BSmtLib.ParserProofs.Rejection (rcv)
 open BSmtLib.ParserProofs (requestsAt)
 
-variable {feed : Lexicon.Version → List Lexicon.Chars → Bool → Fed}
+variable {feed : Lexicon.Version → List Regex.Chars → Bool → Fed}
 
 /-! ## The readings before the current one -/
 
@@ -43,21 +44,21 @@ every reading of what a parser takes that they start, for whole commands, after 
 goes on in `version`; and the characters from `offset` that read as some commands make the input
 read, from `start`, as the commands before followed by those.
 -/
-def Hist (start : Lexicon.Version) (input : Lexicon.Chars) (before : List Handed)
+def Hist (start : Lexicon.Version) (input : Regex.Chars) (before : List Handed)
     (version : Lexicon.Version) (offset : Nat) : Prop :=
   ∀ commands taken ending, Takes start commands taken ending →
     before.map (rcv ∘ itemOf) <+: taken →
     ∃ done rest, commands = done ++ rest ∧
       (doneTokens done).map .token = before.map (rcv ∘ itemOf) ∧
       Takes version rest (taken.drop before.length) ending ∧
-      ∀ more, FileFrom version offset (input.drop offset) more → File start input (done ++ more)
+      ∀ more, File.From version offset (input.drop offset) more → File start input (done ++ more)
 
 /-- No switch of the version was asked for at the tokens taken since `before`. -/
 def Quiet (start : Lexicon.Version) (before taken : List Handed) : Prop :=
   ∀ k, before.length ≤ k → k < taken.length →
     (scriptConsumer start).switchTo (taken.take (k + 1)) = none
 
-theorem hist_init (start : Lexicon.Version) (input : Lexicon.Chars) :
+theorem hist_init (start : Lexicon.Version) (input : Regex.Chars) :
     Hist start input [] start 0 := by
   intro commands taken ending ht _
   exact ⟨[], commands, rfl, by simp [doneTokens], by simpa using ht,
@@ -113,7 +114,7 @@ theorem quiet_requests {start : Lexicon.Version} {before current : List Handed}
 
 /-- A token a correct lexer hands over from an offset within the input, other than the end of
 file, ends within the input. -/
-theorem segment_end_le (hc : Correct feed) {version : Lexicon.Version} {input : Lexicon.Chars}
+theorem segment_end_le (hc : Correct feed) {version : Lexicon.Version} {input : Regex.Chars}
     {offset : Nat} (hoff : offset ≤ input.length) {h : Handed}
     (hh : h ∈ (segment feed version input true offset).handed) (htype : h.type ≠ .endOfFile) :
     h.«end».offset ≤ input.length := by
@@ -135,7 +136,7 @@ theorem segment_end_le (hc : Correct feed) {version : Lexicon.Version} {input : 
 
 /-- At a token where the consumer goes on and switches the version, the reading ends: the
 readings before the next one are those before the current one and the current one. -/
-theorem hist_switch (hc : Correct feed) {start : Lexicon.Version} {input : Lexicon.Chars}
+theorem hist_switch (hc : Correct feed) {start : Lexicon.Version} {input : Regex.Chars}
     {version declared : Lexicon.Version} {offset : Nat} (hoff : offset ≤ input.length)
     {before current ready : List Handed} {token : Handed} {failed : Bool}
     (hhist : Hist start input before version offset)
@@ -220,7 +221,7 @@ theorem hist_switch (hc : Correct feed) {start : Lexicon.Version} {input : Lexic
 
 /-- At the end of the input, handed over after a reading: the input reads as the file whose
 script the tokens taken stand for. -/
-theorem file_ends (hc : Correct feed) {start : Lexicon.Version} {input : Lexicon.Chars}
+theorem file_ends (hc : Correct feed) {start : Lexicon.Version} {input : Regex.Chars}
     {version : Lexicon.Version} {offset : Nat} (hoff : offset ≤ input.length)
     {before current ready : List Handed} {token : Handed} {failed : Bool}
     (hhist : Hist start input before version offset)
@@ -252,7 +253,7 @@ theorem file_ends (hc : Correct feed) {start : Lexicon.Version} {input : Lexicon
 
 /-- At `exit`, after which the rest of the input is discarded: the input reads as the file whose
 script the tokens taken stand for. -/
-theorem file_exit (hc : Correct feed) {start : Lexicon.Version} {input : Lexicon.Chars}
+theorem file_exit (hc : Correct feed) {start : Lexicon.Version} {input : Regex.Chars}
     {version : Lexicon.Version} {offset : Nat} (hoff : offset ≤ input.length)
     {before current ready : List Handed} {token : Handed} {failed : Bool}
     (hhist : Hist start input before version offset)
@@ -314,8 +315,8 @@ How a session with the script consumer, read from the version, ends on the input
 the input: as one of the four ways of the module's documentation. `feed` is what the lexer hands
 over to the collector.
 -/
-def Classified (feed : Lexicon.Version → List Lexicon.Chars → Bool → Fed)
-    (version : Lexicon.Version) (input : Lexicon.Chars)
+def Classified (feed : Lexicon.Version → List Regex.Chars → Bool → Fed)
+    (version : Lexicon.Version) (input : Regex.Chars)
     (session : Session Unit ScriptError) : Prop :=
   (session.outcome.isFinished = true ∧
       ∃ commands, Takes version commands (session.taken.map (rcv ∘ itemOf)) .finished ∧
@@ -328,7 +329,7 @@ def Classified (feed : Lexicon.Version → List Lexicon.Chars → Bool → Fed)
         Takes version commands taken ending ∧ before.map (rcv ∘ itemOf) <+: taken ∧
         before.length < taken.length ∧
         (rcv (itemOf last)).OfVersion (versionAt version commands before.length) ∧
-        ¬ Spec.Parser.Viable version (session.taken.map (rcv ∘ itemOf)) ∧
+        ¬ BSmtLibSpec.Parser.Properties.Viable version (session.taken.map (rcv ∘ itemOf)) ∧
         ¬ ParserProofs.Rejection.AfterExit version (before.map (rcv ∘ itemOf))) ∨
     (session.outcome = .failed .lexical ∧
       ∃ commands taken ending, Takes version commands taken ending ∧
@@ -346,7 +347,7 @@ last version declaration ended, the readings before are as `Hist` states, and th
 not have the rest discarded at the last token taken: the session ends as
 `Classified` says.
 -/
-theorem runs_classified (hc : Correct feed) {v₀ : Lexicon.Version} {input : Lexicon.Chars}
+theorem runs_classified (hc : Correct feed) {v₀ : Lexicon.Version} {input : Regex.Chars}
     {version : Lexicon.Version} {ready : List Handed} {failed : Bool} {pre : List Handed}
     {session : Session (scriptConsumer v₀).Result (scriptConsumer v₀).Error}
     (hruns : Runs feed (scriptConsumer v₀) v₀ input true version ready failed pre session) :

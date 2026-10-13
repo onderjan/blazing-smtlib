@@ -19,7 +19,10 @@ Not trusted: everything here is proved.
 
 namespace BSmtLib.SpecChecks.Grammar
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Grammar
+open BSmtLibSpec BSmtLibSpec.Lexicon BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
 open BSmtLib.SpecChecks.Lexicon
 
 /-- The version in force after the command, read in the version. -/
@@ -50,22 +53,22 @@ the last command: whitespace, or the unparsed rest after `exit`.
 -/
 inductive FileReadingFrom : Version → Nat → Chars → List Tree.Command →
     List (Version × Concrete) → Chars → Prop
-  | done : TokenizationFrom version offset input [] →
+  | done : Tokenization.From version offset input [] →
       FileReadingFrom version offset input [] [] input
-  | command : TokenizationExactly version offset segment tokens →
+  | command : Tokenization.Exactly version offset segment tokens →
       IsCommand version (tokens.map (SyntaxToken.ofToken version)) command →
       command.modeAfter version = some (.read next) →
       FileReadingFrom next (offset + segment.length) rest commands segments final →
       FileReadingFrom version offset (segment ++ rest) (command :: commands)
         ((version, readConcreteFrom offset segment tokens) :: segments) final
-  | stop : TokenizationExactly version offset segment tokens →
+  | stop : Tokenization.Exactly version offset segment tokens →
       IsCommand version (tokens.map (SyntaxToken.ofToken version)) command →
       command.modeAfter version = some .unparsed →
       FileReadingFrom version offset (segment ++ rest) [command]
         [(version, readConcreteFrom offset segment tokens)] rest
 
 theorem exists_fileReading {version : Version} {offset : Nat} {input : Chars}
-    {commands : List Tree.Command} (h : FileFrom version offset input commands) :
+    {commands : List Tree.Command} (h : File.From version offset input commands) :
     ∃ segments final, FileReadingFrom version offset input commands segments final := by
   induction h with
   | done h => exact ⟨[], _, .done h⟩
@@ -77,7 +80,7 @@ theorem exists_fileReading {version : Version} {offset : Nat} {input : Chars}
 theorem FileReadingFrom.file {version : Version} {offset : Nat} {input : Chars}
     {commands : List Tree.Command} {segments : List (Version × Concrete)} {final : Chars}
     (h : FileReadingFrom version offset input commands segments final) :
-    FileFrom version offset input commands := by
+    File.From version offset input commands := by
   induction h with
   | done h => exact .done h
   | command h₁ h₂ h₃ _ ih => exact .command h₁ h₂ h₃ ih
@@ -118,7 +121,7 @@ theorem command_tokens_pieces {version : Version} {offset : Nat} {segment : Char
 
 /-- The tokens of the concrete reading of a tokenisation are tokens of the version. -/
 theorem pieces_regex {version : Version} {offset : Nat} {input : Chars} {tokens : List Token}
-    (h : TokenizationFrom version offset input tokens) :
+    (h : Tokenization.From version offset input tokens) :
     ∀ piece ∈ (readConcreteFrom offset input tokens).pieces,
       categoryRegex version piece.2.category piece.2.text := by
   intro piece hp
@@ -158,7 +161,7 @@ theorem reproduce_similar {version : Version} {offset : Nat} {input : Chars}
 /-- With no 2.0 string literal that has a lone backslash, the tokens of a reading are written
 back as themselves. -/
 theorem pieces_exact {version : Version} {offset : Nat} {input : Chars} {tokens : List Token}
-    (h : TokenizationFrom version offset input tokens)
+    (h : Tokenization.From version offset input tokens)
     (hl : NoLoneBackslash version (readConcreteFrom offset input tokens).tokens) :
     ∀ piece ∈ (readConcreteFrom offset input tokens).pieces,
       (rewriteForm version piece.2).2 = piece.2.text := by
@@ -174,7 +177,7 @@ theorem pieces_exact {version : Version} {offset : Nat} {input : Chars} {tokens 
 /-- The rewritten reading of an input with no 2.0 string literal that has a lone backslash is
 the input. -/
 theorem rewrite_segment_eq {version : Version} {offset : Nat} {segment : Chars}
-    {tokens : List Token} (h : TokenizationFrom version offset segment tokens)
+    {tokens : List Token} (h : Tokenization.From version offset segment tokens)
     (hl : NoLoneBackslash version (readConcreteFrom offset segment tokens).tokens) :
     printConcrete ⟨rewritePieces version offset (readConcreteFrom offset segment tokens).pieces,
       (readConcreteFrom offset segment tokens).final⟩ = segment := by
@@ -225,7 +228,7 @@ theorem readConcreteFrom_rewritePieces (version : Version) :
     rw [readConcreteFrom_rewritePieces version _ pieces final]
 
 theorem tokenizationFrom_offset_nil {version : Version} {offset offset' : Nat} {input : Chars}
-    (h : TokenizationFrom version offset input []) : TokenizationFrom version offset' input [] := by
+    (h : Tokenization.From version offset input []) : Tokenization.From version offset' input [] := by
   cases h with
   | done hw => exact .done hw
 
@@ -233,9 +236,9 @@ theorem tokenizationFrom_offset_nil {version : Version} {offset offset' : Nat} {
 token. -/
 theorem segment_rewrite {version : Version} {offset : Nat} {segment : Chars}
     {tokens : List Token} {command : Tree.Command}
-    (h₁ : TokenizationExactly version offset segment tokens)
+    (h₁ : Tokenization.Exactly version offset segment tokens)
     (h₂ : IsCommand version (tokens.map (SyntaxToken.ofToken version)) command) (out : Nat) :
-    TokenizationExactly version out
+    Tokenization.Exactly version out
       (printConcrete ⟨rewritePieces version out (readConcreteFrom offset segment tokens).pieces,
         (readConcreteFrom offset segment tokens).final⟩)
       ((rewritePieces version out (readConcreteFrom offset segment tokens).pieces).map
@@ -307,16 +310,16 @@ theorem reproduce_reading {version : Version} {offset : Nat} {input : Chars}
 theorem fileReadingFrom_inv {version : Version} {offset : Nat} {input : Chars}
     {commands : List Tree.Command} {segments : List (Version × Concrete)} {final : Chars}
     (h : FileReadingFrom version offset input commands segments final) :
-    (commands = [] ∧ segments = [] ∧ final = input ∧ TokenizationFrom version offset input []) ∨
+    (commands = [] ∧ segments = [] ∧ final = input ∧ Tokenization.From version offset input []) ∨
     (∃ segment rest tokens command commands' segments' next, input = segment ++ rest ∧
-      TokenizationExactly version offset segment tokens ∧
+      Tokenization.Exactly version offset segment tokens ∧
       IsCommand version (tokens.map (SyntaxToken.ofToken version)) command ∧
       command.modeAfter version = some (.read next) ∧
       FileReadingFrom next (offset + segment.length) rest commands' segments' final ∧
       commands = command :: commands' ∧
       segments = (version, readConcreteFrom offset segment tokens) :: segments') ∨
     (∃ segment tokens command, input = segment ++ final ∧
-      TokenizationExactly version offset segment tokens ∧
+      Tokenization.Exactly version offset segment tokens ∧
       IsCommand version (tokens.map (SyntaxToken.ofToken version)) command ∧
       command.modeAfter version = some .unparsed ∧ commands = [command] ∧
       segments = [(version, readConcreteFrom offset segment tokens)]) := by

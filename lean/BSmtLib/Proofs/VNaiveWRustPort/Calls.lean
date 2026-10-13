@@ -21,9 +21,9 @@ adapter's consumer answers when it is handed one (`slice_step_noNone`, `eof_step
 namespace BSmtLib.Proofs.Lexer.VNaiveWRustPort
 
 open BSmtLib.Proofs.Adapter VNaive BSmtLib.Proofs.Simulation
-open Spec.Lexer (Handed)
+open BSmtLibSpec.Lexer (Handed)
 
-variable {C : Spec.Lexer.Consumer}
+variable {C : BSmtLibSpec.Lexer.Consumer}
 
 theorem runIA_bind {α β : Type} (x : Lexer.WRustPort.InnerM (Answering C) AnswerM α)
     (f : α → Lexer.WRustPort.InnerM (Answering C) AnswerM β) (c : WCore) (coll : List Handed) :
@@ -47,7 +47,7 @@ theorem runIA_modifyThe (f : WCore → WCore) (c : WCore) (coll : List Handed) :
 /-- The Rust port's lexer state is the naive lexer's between two calls: the same version,
 holding, and the naive lexer's pure state at its location, or both discard from the same
 location. -/
-structure CR (C : Spec.Lexer.Consumer) (c : WCore) (n : Core) : Prop where
+structure CR (C : BSmtLibSpec.Lexer.Consumer) (c : WCore) (n : Core) : Prop where
   version : c.version = n.version
   initial : c.initialVersion = n.initialVersion
   holding : c.holding = n.holding
@@ -113,7 +113,7 @@ theorem inner_loop (c : WCore) (n : Core) (st : St) (bytes : List UInt8) (taken 
 /-- What a call of the Rust port and one of the naive lexer give alike: results the spec does
 not tell apart, the same tokens taken, lexer states that correspond again when the call does not
 fail, and the same version and discarding always. -/
-def CallAlike (C : Spec.Lexer.Consumer) {β : Type}
+def CallAlike (C : BSmtLibSpec.Lexer.Consumer) {β : Type}
     (rW : (Except (LexError (Option C.Error)) β × WCore) × List Handed)
     (rV : VRes (Except (LexError (Option C.Error)) β)) : Prop :=
   rW.1.1.mapError failureOf = rV.1.1.mapError failureOf ∧ rW.2 = rV.2 ∧

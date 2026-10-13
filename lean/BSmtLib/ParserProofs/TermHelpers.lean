@@ -12,13 +12,15 @@ that the recursive proof (`ParserProofs.Term`) only joins them.
 
 namespace BSmtLib.ParserProofs
 
-open BSmtLib.Spec.Grammar
+open BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
 open BSmtLib.Parser (Input PM Step TermState TermMode TermLevel TermStateOf TermLevelOf termStep
   termOpened termComplete startBinder endBinder SortedBinder BinderKind QualIdentState ListState
   SortedVarState PatternState AttributeState attributeStep sortedVarStep qualIdentStep
   syntaxError)
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 open BSmtLib.SpecChecks.Parser (term_constant term_identifier Program.callScope)
 
 section
@@ -358,7 +360,7 @@ From after a binder's `(`, the parser reads its word and its sorted variables, a
 binder with all of them at their `)`.
 -/
 theorem binderStart_runs (hA : TermAgrees h) (binder : SortedBinder) {word : Input}
-    {wordToken : Spec.Grammar.SyntaxToken}
+    {wordToken : BSmtLibSpec.Grammar.SyntaxToken}
     (hwordToken : Bridge.received word = some (.token wordToken))
     (hword : ∀ levels : List (TermLevelOf H),
       termStep version ({ mode := .opened, levels } : TermStateOf H) word =

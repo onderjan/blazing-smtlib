@@ -18,8 +18,12 @@ Not trusted: everything here is proved.
 
 namespace BSmtLib.SpecChecks.Reader
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Lexer BSmtLib.Spec.Grammar
-open BSmtLib.Spec.Parser BSmtLib.Spec.Reader
+open BSmtLibSpec BSmtLibSpec.Lexicon BSmtLibSpec.Lexer BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
+open BSmtLibSpec.Parser BSmtLibSpec.Reader
+open BSmtLibSpec.Parser.Properties
 open BSmtLib.SpecChecks.Lexicon BSmtLib.SpecChecks.Lexer BSmtLib.SpecChecks.Grammar
 
 /-! ## Scripts among what a parser takes -/
@@ -84,7 +88,7 @@ variable {lexing : Lexing} {parser : RecordingParser} {item : Handed → parser.
 stands for an item that a lexer of that version hands over. -/
 theorem segment_ofVersion (hL : Correct lexing.fed) (version : Version) (input : Chars)
     (offset : Nat) :
-    ∀ handed ∈ (Spec.Lexer.segment lexing.fed version input true offset).handed,
+    ∀ handed ∈ (BSmtLibSpec.Lexer.segment lexing.fed version input true offset).handed,
       ∃ received, handed.received = some received ∧ received.OfVersion version := by
   obtain ⟨tokens, ⟨other, all, _, hall, hp, -, -⟩, he⟩ :=
     fed_readout hL version (input.drop offset)
@@ -97,7 +101,7 @@ theorem segment_ofVersion (hL : Correct lexing.fed) (version : Version) (input :
     exact ⟨_, (received_handed hreg (input.drop offset)).1,
       (received_handed hreg (input.drop offset)).2⟩
   intro handed hh
-  simp only [Spec.Lexer.segment, List.mem_map] at hh
+  simp only [BSmtLibSpec.Lexer.segment, List.mem_map] at hh
   obtain ⟨handed, hh, rfl⟩ := hh
   rcases he with he | ⟨-, he⟩ <;> rw [he] at hh <;> simp only [List.mem_append, List.mem_map,
     List.mem_singleton] at hh
@@ -173,7 +177,7 @@ theorem type_of_received_endOfInput {handed : Handed}
 omit hF hR hI in
 /-- A parser that breaks as a consumer has finished. -/
 theorem parse_of_break {start : Version} {taken : List Handed} {result : Unit}
-    (h : (parser.consumer item start).answer taken = .break result) :
+    (h : (Reader.consumer parser item start).answer taken = .break result) :
     (parser.parse start (taken.map item)).2 = .finished := by
   rw [answer_eq] at h
   revert h
@@ -183,7 +187,7 @@ theorem parse_of_break {start : Version} {taken : List Handed} {result : Unit}
 omit hF hR hI in
 /-- A parser that continues as a consumer waits. -/
 theorem parse_of_continue {start : Version} {taken : List Handed}
-    (h : (parser.consumer item start).answer taken = .continue) :
+    (h : (Reader.consumer parser item start).answer taken = .continue) :
     (parser.parse start (taken.map item)).2 = .waiting := by
   rw [answer_eq] at h
   revert h
@@ -193,7 +197,7 @@ omit hF hR hI in
 /-- A parser that rejects as a consumer fails. -/
 theorem answer_of_rejected {start : Version} {taken : List Handed}
     (h : (parser.parse start (taken.map item)).2 = .rejected) :
-    (parser.consumer item start).answer taken = .fail () := by
+    (Reader.consumer parser item start).answer taken = .fail () := by
   rw [answer_eq, h]
 
 include hF hI in
@@ -203,7 +207,7 @@ theorem foldVersion_of_takes {start : Version} {commands : List Tree.Command}
     {all : List Traversal.Received} {ending : Ending} (ht : Takes start commands all ending)
     {taken : List Handed} (hs : stood parser item taken = all.take taken.length)
     (hl : taken.length ≤ all.length) :
-    foldVersion start (fun j => (parser.consumer item start).switchTo (taken.take j))
+    foldVersion start (fun j => (Reader.consumer parser item start).switchTo (taken.take j))
       taken.length = versionAt start commands taken.length := by
   rw [← foldVersion_requestsAt]
   refine foldVersion_congr_le start _ fun j h₁ h₂ => ?_
@@ -224,15 +228,15 @@ taken what a parser takes for a script.
 -/
 theorem finishes_script (hL : Correct lexing.fed) {start : Version} {input : Chars} :
     ∀ {version ready failed taken session},
-      Runs lexing.fed (parser.consumer item start) start input true version ready failed taken
+      Runs lexing.fed (Reader.consumer parser item start) start input true version ready failed taken
         session →
       (∃ commands all ending, Takes start commands all ending ∧
         stood parser item taken = all.take taken.length ∧ taken.length < all.length) →
       version = foldVersion start
-        (fun j => (parser.consumer item start).switchTo (taken.take j)) taken.length →
+        (fun j => (Reader.consumer parser item start).switchTo (taken.take j)) taken.length →
       (∀ handed ∈ ready, ∃ received, handed.received = some received ∧
         received.OfVersion version) →
-      (taken = [] ∨ (parser.consumer item start).discards taken = false) →
+      (taken = [] ∨ (Reader.consumer parser item start).discards taken = false) →
       session.outcome.isFinished = true →
       ∃ commands, Script start commands ∧ stood parser item session.taken = received commands := by
   intro version ready failed taken session hruns
@@ -241,10 +245,10 @@ theorem finishes_script (hL : Correct lexing.fed) {start : Version} {input : Cha
       (∃ commands all ending, Takes start commands all ending ∧
         stood parser item taken = all.take taken.length ∧ taken.length < all.length) →
       (∃ received, handed.received = some received ∧ received.OfVersion (foldVersion start
-        (fun j => (parser.consumer item start).switchTo (taken.take j)) taken.length)) →
-      (taken = [] ∨ (parser.consumer item start).discards taken = false ∨
+        (fun j => (Reader.consumer parser item start).switchTo (taken.take j)) taken.length)) →
+      (taken = [] ∨ (Reader.consumer parser item start).discards taken = false ∨
         handed.received = some .endOfInput) →
-      (parser.consumer item start).answer (taken ++ [handed]) ≠ .fail () →
+      (Reader.consumer parser item start).answer (taken ++ [handed]) ≠ .fail () →
       ∃ commands' all' ending', Takes start commands' all' ending' ∧
         stood parser item (taken ++ [handed]) = all'.take (taken.length + 1) ∧
         taken.length + 1 ≤ all'.length ∧
@@ -308,10 +312,10 @@ theorem finishes_script (hL : Correct lexing.fed) {start : Version} {input : Cha
       (∃ commands all ending, Takes start commands all ending ∧
         stood parser item taken = all.take taken.length ∧ taken.length < all.length) →
       (∃ received, handed.received = some received ∧ received.OfVersion (foldVersion start
-        (fun j => (parser.consumer item start).switchTo (taken.take j)) taken.length)) →
-      (taken = [] ∨ (parser.consumer item start).discards taken = false) →
+        (fun j => (Reader.consumer parser item start).switchTo (taken.take j)) taken.length)) →
+      (taken = [] ∨ (Reader.consumer parser item start).discards taken = false) →
       handed.type ≠ .endOfFile →
-      (parser.consumer item start).answer (taken ++ [handed]) = .break result → False := by
+      (Reader.consumer parser item start).answer (taken ++ [handed]) = .break result → False := by
     intro taken handed result hinv hrec hd0 htype hans
     obtain ⟨commands', all', ending', ht', hs', hle', hp⟩ :=
       next hinv hrec (hd0.imp_right Or.inl) (by rw [hans]; simp)
@@ -357,7 +361,7 @@ theorem finishes_script (hL : Correct lexing.fed) {start : Version} {input : Cha
       congr 1
       exact foldVersion_congr_le start _ fun j _ h₂ => by
         rw [List.take_append_of_le_length h₂]
-    · cases hsw : (parser.consumer item start).switchTo (taken ++ [token]) with
+    · cases hsw : (Reader.consumer parser item start).switchTo (taken ++ [token]) with
       | none =>
         simp only [following, Option.getD_none]
         exact fun handed hh => hready handed (by simp [hh])
@@ -371,7 +375,7 @@ theorem finishes_script (hL : Correct lexing.fed) {start : Version} {input : Cha
     have hlen : (taken ++ [token]).length = taken.length + 1 := by simp
     have hlt := waiting ht' (by simpa using hp) (parse_of_continue hans)
     rw [hlen] at hlt
-    have hans'' : (parser.consumer item start).answer
+    have hans'' : (Reader.consumer parser item start).answer
         ((taken ++ [token]) ++ [endOfFileAt token.«end»]) = .break result := by
       rw [List.append_assoc, List.singleton_append]; exact hans'
     obtain ⟨commands'', all'', ending'', ht'', hs'', hle'', hp''⟩ :=
@@ -414,14 +418,14 @@ handed over its tokens, after the block it reads, the parser continued on them, 
 tokens of characters that follow the block and are the command.
 -/
 theorem next_command {start : Version} {input : Chars} {all : List Tree.Command}
-    {session : Session (parser.consumer item start).Result (parser.consumer item start).Error}
+    {session : Session (Reader.consumer parser item start).Result (Reader.consumer parser item start).Error}
     (hS : Takes start all (received all) .finished)
     (hfull : stood parser item session.taken = received all)
     {version : Version} {command : Tree.Command} {commands : List Tree.Command}
     {taken : List Handed} {offset stop : Nat} {block tokens : List Token}
-    (hruns : Runs lexing.fed (parser.consumer item start) start input true version
-      ((Spec.Lexer.segment lexing.fed version input true offset).handed.drop block.length)
-      (Spec.Lexer.segment lexing.fed version input true offset).failed taken session)
+    (hruns : Runs lexing.fed (Reader.consumer parser item start) start input true version
+      ((BSmtLibSpec.Lexer.segment lexing.fed version input true offset).handed.drop block.length)
+      (BSmtLibSpec.Lexer.segment lexing.fed version input true offset).failed taken session)
     (hrec : received all = stood parser item taken ++ command.tokens.map .token ++
       received commands)
     (hreq : ∀ i, 1 ≤ i → requestsAt all (taken.length + i) = requestsAt (command :: commands) i)
@@ -433,16 +437,16 @@ theorem next_command {start : Version} {input : Chars} {all : List Tree.Command}
     ∃ handed last more segment rel,
       stood parser item handed = command.tokens.map .token ∧
       handed = handed.dropLast ++ [last] ∧ last.type ≠ .endOfFile ∧
-      Runs lexing.fed (parser.consumer item start) start input true version (last :: more)
-        (Spec.Lexer.segment lexing.fed version input true offset).failed
+      Runs lexing.fed (Reader.consumer parser item start) start input true version (last :: more)
+        (BSmtLibSpec.Lexer.segment lexing.fed version input true offset).failed
         (taken ++ handed.dropLast) session ∧
-      (Spec.Lexer.segment lexing.fed version input true offset).handed.drop
+      (BSmtLibSpec.Lexer.segment lexing.fed version input true offset).handed.drop
         (block ++ rel).length = more ∧
-      (parser.consumer item start).answer (taken ++ handed) = .continue ∧
-      (parser.consumer item start).switchTo (taken ++ handed) = command.declaredVersion ∧
-      (parser.consumer item start).discards (taken ++ handed) = exitFlag command ∧
+      (Reader.consumer parser item start).answer (taken ++ handed) = .continue ∧
+      (Reader.consumer parser item start).switchTo (taken ++ handed) = command.declaredVersion ∧
+      (Reader.consumer parser item start).discards (taken ++ handed) = exitFlag command ∧
       input.drop stop = segment ++ input.drop (stop + segment.length) ∧
-      TokenizationExactly version stop segment (rel.map (Token.moveBy offset)) ∧
+      Tokenization.Exactly version stop segment (rel.map (Token.moveBy offset)) ∧
       IsCommand version ((rel.map (Token.moveBy offset)).map (SyntaxToken.ofToken version))
         command ∧
       block ++ rel = tokens.take (block ++ rel).length ∧
@@ -518,14 +522,14 @@ from `stop` on is a file with the rest of the commands.
 -/
 theorem finishes_file (hL : Correct lexing.fed) {start : Version} {input : Chars}
     {all : List Tree.Command}
-    {session : Session (parser.consumer item start).Result (parser.consumer item start).Error}
+    {session : Session (Reader.consumer parser item start).Result (Reader.consumer parser item start).Error}
     (hS : Takes start all (received all) .finished)
     (hfull : stood parser item session.taken = received all) :
     ∀ {version commands}, Script version commands →
     ∀ (taken : List Handed) (offset stop : Nat) (block tokens : List Token),
-      Runs lexing.fed (parser.consumer item start) start input true version
-        ((Spec.Lexer.segment lexing.fed version input true offset).handed.drop block.length)
-        (Spec.Lexer.segment lexing.fed version input true offset).failed taken session →
+      Runs lexing.fed (Reader.consumer parser item start) start input true version
+        ((BSmtLibSpec.Lexer.segment lexing.fed version input true offset).handed.drop block.length)
+        (BSmtLibSpec.Lexer.segment lexing.fed version input true offset).failed taken session →
       received all = stood parser item taken ++ received commands →
       (∀ i, 1 ≤ i → requestsAt all (taken.length + i) = requestsAt commands i) →
       offset ≤ stop → stop ≤ input.length →
@@ -534,7 +538,7 @@ theorem finishes_file (hL : Correct lexing.fed) {start : Version} {input : Chars
       Readout version (input.drop offset) tokens →
       ReadoutFed lexing version (input.drop offset) tokens →
       block = tokens.take block.length →
-      FileFrom version stop (input.drop stop) commands := by
+      File.From version stop (input.drop stop) commands := by
   intro version commands hscript
   induction hscript with
   | @done version =>
@@ -553,17 +557,17 @@ theorem finishes_file (hL : Correct lexing.fed) {start : Version} {input : Chars
         | nil => exact ⟨handed, rfl⟩
         | cons _ _ => simp [stood] at hstoodRest
     have hend : parser.stands (item handed) = .endOfInput := by simpa [stood] using hstoodRest
-    have hseg : (Spec.Lexer.segment lexing.fed version input true offset).handed =
+    have hseg : (BSmtLibSpec.Lexer.segment lexing.fed version input true offset).handed =
         blockHanded version input offset tokens ∨
         (Tokenization version (input.drop offset) tokens ∧
-          (Spec.Lexer.segment lexing.fed version input true offset).handed =
+          (BSmtLibSpec.Lexer.segment lexing.fed version input true offset).handed =
             blockHanded version input offset tokens ++
               [(endOfFile (input.drop offset)).after (input.take offset)]) := by
       rcases hfed with h | ⟨ht, h⟩
-      · left; simp [Spec.Lexer.segment, h, blockHanded, Function.comp_def]
-      · right; exact ⟨ht, by simp [Spec.Lexer.segment, h, blockHanded, Function.comp_def]⟩
+      · left; simp [BSmtLibSpec.Lexer.segment, h, blockHanded, Function.comp_def]
+      · right; exact ⟨ht, by simp [BSmtLibSpec.Lexer.segment, h, blockHanded, Function.comp_def]⟩
     -- the token the parser took last is the end of the file, after the whole block
-    cases hready : (Spec.Lexer.segment lexing.fed version input true offset).handed.drop
+    cases hready : (BSmtLibSpec.Lexer.segment lexing.fed version input true offset).handed.drop
         block.length with
     | nil =>
       rw [hready] at hruns
@@ -626,7 +630,7 @@ theorem finishes_file (hL : Correct lexing.fed) {start : Version} {input : Chars
       have h₂ : ¬ (command.tokens.length + i = command.tokens.length) := by omega
       simp only [requestsAt, h₁, h₂, ite_false, Nat.add_sub_cancel_left]
     rw [hdropc]
-    refine FileFrom.command htokEx hic hm ?_
+    refine File.From.command htokEx hic hm ?_
     obtain ⟨hnext, -⟩ := read_next hm
     cases hdecl : command.declaredVersion with
     | none =>
@@ -643,7 +647,7 @@ theorem finishes_file (hL : Correct lexing.fed) {start : Version} {input : Chars
       obtain ⟨tokens', hread', hfed'⟩ := fed_readout hL next
         (input.drop (stop + segment.length))
       exact ih (taken ++ handed) (stop + segment.length) (stop + segment.length) [] tokens'
-        (by simpa [RecordingParser.consumer] using hinv) hrec'' hreq'' (Nat.le_refl _) hleNew
+        (by simpa [Reader.consumer] using hinv) hrec'' hreq'' (Nat.le_refl _) hleNew
         (by simpa using tokenization_nil next) (Or.inl ⟨rfl, rfl⟩) hread' hfed' (by simp)
   | @stop version command hv hm =>
     intro taken offset stop block tokens hruns hrec hreq hos hle hblock hclosed hread hfed
@@ -656,6 +660,6 @@ theorem finishes_file (hL : Correct lexing.fed) {start : Version} {input : Chars
       hdropc, htokEx, hic, -⟩ :=
       next_command hF hI hS hfull hruns hrec' hreq hos hle hclosed hread hfed hblockEq hv
     rw [hdropc]
-    exact FileFrom.stop htokEx hic hm
+    exact File.From.stop htokEx hic hm
 
 end BSmtLib.SpecChecks.Reader

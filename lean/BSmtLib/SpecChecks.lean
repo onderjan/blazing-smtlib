@@ -50,10 +50,10 @@ Each is followed by the axioms its proof uses: only those of Lean's standard lib
 
 namespace BSmtLib.SpecChecks
 
-open BSmtLib.Spec
+open BSmtLibSpec
 
 /-- Every input has at most one tokenisation. -/
-theorem Lexicon.unique : Lexicon.Unique :=
+theorem Lexicon.unique : Lexicon.Properties.Unique :=
   fun _ _ _ _ h₁ h₂ => Lexicon.tokenizationFrom_unique h₁ h₂
 
 /--
@@ -65,17 +65,17 @@ info: 'BSmtLib.SpecChecks.Lexicon.unique' depends on axioms: [propext, Classical
 /-!
 ### A lexer fed in slices
 
-`Spec.Lexer.HandsOverMaximal` asks for the tokens maximal to hand over on the longest viable
-start of the input; both exist and are unique, so it is not vacuous. `Spec.Lexer.Sequential`
-and `Spec.Lexer.WholeInputCorrect` are not a part of `Spec.Lexer.Correct`, as they follow from
+`BSmtLibSpec.Lexer.HandsOverMaximal` asks for the tokens maximal to hand over on the longest viable
+start of the input; both exist and are unique, so it is not vacuous. `BSmtLibSpec.Lexer.Sequential`
+and `BSmtLibSpec.Lexer.WholeInputCorrect` are not a part of `BSmtLibSpec.Lexer.Correct`, as they follow from
 it, for every lexer.
 -/
 
 /-- Every input has exactly one longest viable start. -/
 theorem Lexer.longestViableStart_existsUnique (version : Lexicon.Version)
-    (input : Lexicon.Chars) :
-    ∃ start, Spec.Lexer.LongestViableStart version input start ∧
-      ∀ start', Spec.Lexer.LongestViableStart version input start' → start' = start :=
+    (input : Regex.Chars) :
+    ∃ start, BSmtLibSpec.Lexer.LongestViableStart version input start ∧
+      ∀ start', BSmtLibSpec.Lexer.LongestViableStart version input start' → start' = start :=
   let ⟨start, h⟩ := Lexer.exists_longestViableStart version input
   ⟨start, h, fun _ h' => Lexer.longestViableStart_unique h' h⟩
 
@@ -87,9 +87,9 @@ info: 'BSmtLib.SpecChecks.Lexer.longestViableStart_existsUnique' depends on axio
 
 /-- On a viable input, exactly one list of tokens is maximal to hand over. -/
 theorem Lexer.handoverMaximal_existsUnique {version : Lexicon.Version}
-    {input : Lexicon.Chars} (h : Lexicon.Viable version input) :
-    ∃ tokens, Spec.Lexer.HandoverMaximal version input tokens ∧
-      ∀ tokens', Spec.Lexer.HandoverMaximal version input tokens' → tokens' = tokens :=
+    {input : Regex.Chars} (h : Lexicon.Properties.Viable version input) :
+    ∃ tokens, BSmtLibSpec.Lexer.HandoverMaximal version input tokens ∧
+      ∀ tokens', BSmtLibSpec.Lexer.HandoverMaximal version input tokens' → tokens' = tokens :=
   let ⟨tokens, ht⟩ := Lexer.exists_handoverMaximal h
   ⟨tokens, ht, fun _ h' => Lexer.handoverMaximal_unique h h' ht⟩
 
@@ -101,9 +101,9 @@ info: 'BSmtLib.SpecChecks.Lexer.handoverMaximal_existsUnique' depends on axioms:
 
 /-- A lexer that is `Correct` is `Sequential`: fed more slices, or the end of the input, it has
 handed over what it had and possibly more, and once it has failed, it stays failed. -/
-theorem Lexer.sequential {feed : Lexicon.Version → List Lexicon.Chars → Bool → Spec.Lexer.Fed}
-    (h : Spec.Lexer.Correct feed) :
-    ∀ version slices more, Spec.Lexer.Sequential feed version slices more :=
+theorem Lexer.sequential {feed : Lexicon.Version → List Regex.Chars → Bool → BSmtLibSpec.Lexer.Fed}
+    (h : BSmtLibSpec.Lexer.Correct feed) :
+    ∀ version slices more, BSmtLibSpec.Lexer.Sequential feed version slices more :=
   Lexer.sequential_of_correct h
 
 /--
@@ -116,9 +116,9 @@ info: 'BSmtLib.SpecChecks.Lexer.sequential' depends on axioms: [propext, Classic
 it has not failed and has handed over the tokens of the tokenisation of the input followed by
 the end-of-file token exactly when the input has a tokenisation. -/
 theorem Lexer.wholeInputCorrect
-    {feed : Lexicon.Version → List Lexicon.Chars → Bool → Spec.Lexer.Fed}
-    (h : Spec.Lexer.Correct feed) :
-    ∀ version slices handed, Spec.Lexer.WholeInputCorrect feed version slices handed :=
+    {feed : Lexicon.Version → List Regex.Chars → Bool → BSmtLibSpec.Lexer.Fed}
+    (h : BSmtLibSpec.Lexer.Correct feed) :
+    ∀ version slices handed, BSmtLibSpec.Lexer.WholeInputCorrect feed version slices handed :=
   Lexer.wholeInputCorrect_of_correct h
 
 /--
@@ -139,7 +139,7 @@ read on their own, and the more read on their own from any offset are the same t
 
 /-- Characters whose tokenisation ends with a `)` at their end are handed over whole, and the
 characters followed by more are tokenised as the two parts read on their own. -/
-theorem Lexicon.composeAtClose : Spec.Lexer.ComposesAtClose := by
+theorem Lexicon.composeAtClose : BSmtLibSpec.Lexer.ComposesAtClose := by
   intro version start tokens h hclose
   have hclose' : Lexicon.EndsWithClose tokens (0 + start.length) := by simpa using hclose
   refine ⟨Lexicon.close_handoverMaximal h hclose, fun more tokens' => ?_⟩
@@ -160,7 +160,7 @@ info: 'BSmtLib.SpecChecks.Lexicon.composeAtClose' depends on axioms: [propext, C
 
 /-- Characters read from any offset, in any version, are tokenised as they are on their own,
 moved to that offset. -/
-theorem Lexicon.readOnItsOwn : Lexicon.ReadsOnItsOwn := by
+theorem Lexicon.readOnItsOwn : Lexicon.Properties.ReadsOnItsOwn := by
   intro version offset input tokens
   constructor
   · intro h
@@ -178,7 +178,7 @@ info: 'BSmtLib.SpecChecks.Lexicon.readOnItsOwn' depends on axioms: [propext, Cla
 /-!
 ### A lexer and its consumers
 
-`Spec.Lexer.Runs` states what a lexer does with a consumer relative to what it hands over to the
+`BSmtLibSpec.Lexer.Runs` states what a lexer does with a consumer relative to what it hands over to the
 collector. What it does is determined by the input and the consumer, so the result it holds or
 returns, where its discarding began and the version in force are too. The input after a switch
 of the version is read on its own and located in the whole input; locating it so agrees with
@@ -188,13 +188,13 @@ consumer.
 -/
 
 /-- What a lexer does with a consumer, from any point on, is determined. -/
-theorem Lexer.runsDetermined {feed : Lexicon.Version → List Lexicon.Chars → Bool → Spec.Lexer.Fed}
-    {consumer : Spec.Lexer.Consumer} {start : Lexicon.Version} {input : Lexicon.Chars}
-    {ended : Bool} {version : Lexicon.Version} {ready : List Spec.Lexer.Handed} {failed : Bool}
-    {taken : List Spec.Lexer.Handed}
-    {session session' : Spec.Lexer.Session consumer.Result consumer.Error}
-    (h : Spec.Lexer.Runs feed consumer start input ended version ready failed taken session)
-    (h' : Spec.Lexer.Runs feed consumer start input ended version ready failed taken session') :
+theorem Lexer.runsDetermined {feed : Lexicon.Version → List Regex.Chars → Bool → BSmtLibSpec.Lexer.Fed}
+    {consumer : BSmtLibSpec.Lexer.Consumer} {start : Lexicon.Version} {input : Regex.Chars}
+    {ended : Bool} {version : Lexicon.Version} {ready : List BSmtLibSpec.Lexer.Handed} {failed : Bool}
+    {taken : List BSmtLibSpec.Lexer.Handed}
+    {session session' : BSmtLibSpec.Lexer.Session consumer.Result consumer.Error}
+    (h : BSmtLibSpec.Lexer.Runs feed consumer start input ended version ready failed taken session)
+    (h' : BSmtLibSpec.Lexer.Runs feed consumer start input ended version ready failed taken session') :
     session = session' :=
   Lexer.runs_unique h h'
 
@@ -206,9 +206,9 @@ info: 'BSmtLib.SpecChecks.Lexer.runsDetermined' depends on axioms: [propext, Cla
 
 /-- Locating characters of an input read on its own after `before`, then moving the location
 past `before`, is locating them in the whole input. -/
-theorem Lexer.locateAfter (before input : Lexicon.Chars) (offset : Nat) :
-    Spec.Lexer.locate (before ++ input) (before.length + offset) =
-      (Spec.Lexer.locate input offset).after before :=
+theorem Lexer.locateAfter (before input : Regex.Chars) (offset : Nat) :
+    BSmtLibSpec.Lexer.locate (before ++ input) (before.length + offset) =
+      (BSmtLibSpec.Lexer.locate input offset).after before :=
   Lexer.locate_after before input offset
 
 /--
@@ -219,9 +219,9 @@ info: 'BSmtLib.SpecChecks.Lexer.locateAfter' depends on axioms: [propext, Quot.s
 
 /-- From the start of the input, the tokens ready are those the lexer hands over to the
 collector. -/
-theorem Lexer.segmentAtStart (feed : Lexicon.Version → List Lexicon.Chars → Bool → Spec.Lexer.Fed)
-    (version : Lexicon.Version) (input : Lexicon.Chars) (ended : Bool) :
-    Spec.Lexer.segment feed version input ended 0 = feed version [input] ended :=
+theorem Lexer.segmentAtStart (feed : Lexicon.Version → List Regex.Chars → Bool → BSmtLibSpec.Lexer.Fed)
+    (version : Lexicon.Version) (input : Regex.Chars) (ended : Bool) :
+    BSmtLibSpec.Lexer.segment feed version input ended 0 = feed version [input] ended :=
   Lexer.segment_zero feed version input ended
 
 /--
@@ -231,7 +231,7 @@ info: 'BSmtLib.SpecChecks.Lexer.segmentAtStart' depends on axioms: [propext, Quo
 #print axioms Lexer.segmentAtStart
 
 /-- The collector breaks at the end of the input. -/
-theorem Lexer.collectorBreaksAtEnd : Spec.Lexer.collector.BreaksAtEnd :=
+theorem Lexer.collectorBreaksAtEnd : BSmtLibSpec.Lexer.collector.BreaksAtEnd :=
   Lexer.collector_breaksAtEnd
 
 /--
@@ -251,7 +251,7 @@ and before `)`; `Lexicon.place` gives the offsets at which it puts them.
 -/
 
 /-- The concrete printer writes the input of a tokenisation back exactly. -/
-theorem Lexicon.concrete_print_read {version : Lexicon.Version} {input : Lexicon.Chars}
+theorem Lexicon.concrete_print_read {version : Lexicon.Version} {input : Regex.Chars}
     {tokens : List Lexicon.Token} (h : Lexicon.Tokenization version input tokens) :
     Lexicon.printConcrete (Lexicon.readConcrete input tokens) = input :=
   Lexicon.printConcrete_readConcreteFrom h
@@ -263,7 +263,7 @@ info: 'BSmtLib.SpecChecks.Lexicon.concrete_print_read' depends on axioms: [prope
 #print axioms Lexicon.concrete_print_read
 
 /-- The tokens of a concrete reading are the tokens it was read with. -/
-theorem Lexicon.concrete_tokens (input : Lexicon.Chars) (tokens : List Lexicon.Token) :
+theorem Lexicon.concrete_tokens (input : Regex.Chars) (tokens : List Lexicon.Token) :
     (Lexicon.readConcrete input tokens).tokens = tokens :=
   Lexicon.readConcreteFrom_tokens 0 input tokens
 
@@ -277,7 +277,7 @@ info: 'BSmtLib.SpecChecks.Lexicon.concrete_tokens' depends on axioms: [propext]
 The concrete printing of the concrete reading of an input has the tokens of the reading as its
 tokenisation, and no other.
 -/
-theorem Lexicon.concrete_read {version : Lexicon.Version} {input : Lexicon.Chars}
+theorem Lexicon.concrete_read {version : Lexicon.Version} {input : Regex.Chars}
     {tokens tokens' : List Lexicon.Token} (h : Lexicon.Tokenization version input tokens) :
     Lexicon.Tokenization version (Lexicon.printConcrete (Lexicon.readConcrete input tokens))
       tokens' ↔ tokens' = (Lexicon.readConcrete input tokens).tokens := by
@@ -294,7 +294,7 @@ info: 'BSmtLib.SpecChecks.Lexicon.concrete_read' depends on axioms: [propext, Cl
 The gaps of the concrete reading of a tokenisation are whitespace, and the last one is
 whitespace at the end of the input.
 -/
-theorem Lexicon.concrete_gaps {version : Lexicon.Version} {input : Lexicon.Chars}
+theorem Lexicon.concrete_gaps {version : Lexicon.Version} {input : Regex.Chars}
     {tokens : List Lexicon.Token} (h : Lexicon.Tokenization version input tokens) :
     (∀ piece ∈ (Lexicon.readConcrete input tokens).pieces, Lexicon.whitespace piece.1) ∧
       Lexicon.whitespaceAtEnd (Lexicon.readConcrete input tokens).final :=
@@ -310,7 +310,7 @@ info: 'BSmtLib.SpecChecks.Lexicon.concrete_gaps' depends on axioms: [propext, Cl
 Print-read for the canonical layout: the tokens of an input are the tokenisation of their
 layout, with the same categories and characters, at the offsets at which the layout puts them.
 -/
-theorem Lexicon.layout_read {version : Lexicon.Version} {input : Lexicon.Chars}
+theorem Lexicon.layout_read {version : Lexicon.Version} {input : Regex.Chars}
     {tokens : List Lexicon.Token} (h : Lexicon.Tokenization version input tokens) :
     Lexicon.Tokenization version (Lexicon.layout tokens) (Lexicon.place tokens) :=
   Lexicon.layout_tokenization (Lexicon.tokenizationFrom_regex h)
@@ -336,7 +336,7 @@ info: 'BSmtLib.SpecChecks.Lexicon.place_keeps' depends on axioms: [propext]
 Print-read for the canonical layout, completed by `Lexicon.unique`: the layout of the tokens of
 an input has no other tokenisation.
 -/
-theorem Lexicon.layout_read_only {version : Lexicon.Version} {input : Lexicon.Chars}
+theorem Lexicon.layout_read_only {version : Lexicon.Version} {input : Regex.Chars}
     {tokens tokens' : List Lexicon.Token} (h : Lexicon.Tokenization version input tokens) :
     Lexicon.Tokenization version (Lexicon.layout tokens) tokens' ↔
       tokens' = Lexicon.place tokens :=
@@ -360,7 +360,7 @@ with it the mode in which the rest is read.
 -/
 
 /-- Two terms of a version that are written with the same tokens are the same term. -/
-theorem Grammar.termsOneToOne : Spec.Grammar.TermsOneToOne := by
+theorem Grammar.termsOneToOne : BSmtLibSpec.Grammar.Properties.TermsOneToOne := by
   intro _ term term' _ _ h
   have h₁ := Grammar.readTerm_tokens term [] (n := sizeOf term + sizeOf term' + 1) (by omega)
   have h₂ := Grammar.readTerm_tokens term' [] (n := sizeOf term + sizeOf term' + 1) (by omega)
@@ -374,7 +374,7 @@ info: 'BSmtLib.SpecChecks.Grammar.termsOneToOne' depends on axioms: [propext, Cl
 #print axioms Grammar.termsOneToOne
 
 /-- Two commands of a version that are written with the same tokens are the same command. -/
-theorem Grammar.commandsOneToOne : Spec.Grammar.CommandsOneToOne := by
+theorem Grammar.commandsOneToOne : BSmtLibSpec.Grammar.Properties.CommandsOneToOne := by
   intro version command command' hv hv' h
   have h₁ := Grammar.readCommand_tokens version command [] hv
     (n := sizeOf command + sizeOf command' + 1) (by omega)
@@ -390,7 +390,7 @@ info: 'BSmtLib.SpecChecks.Grammar.commandsOneToOne' depends on axioms: [propext,
 #print axioms Grammar.commandsOneToOne
 
 /-- Every file has at most one reading. -/
-theorem Grammar.filesUnique : Spec.Grammar.FilesUnique :=
+theorem Grammar.filesUnique : BSmtLibSpec.Grammar.Properties.FilesUnique :=
   fun _ _ _ _ h h' => Grammar.fileFrom_unique h h'
 
 /--
@@ -401,7 +401,7 @@ info: 'BSmtLib.SpecChecks.Grammar.filesUnique' depends on axioms: [propext, Clas
 
 /-- A lexer fed the characters of a command has handed over all its tokens and holds nothing
 back, so the next command can be read in the version the command switches to. -/
-theorem Grammar.commandHandedOver : Spec.Grammar.CommandsHandedOverWhole :=
+theorem Grammar.commandHandedOver : BSmtLibSpec.Grammar.Properties.CommandsHandedOverWhole :=
   fun _ _ _ _ h hc =>
     Lexicon.close_handoverMaximal h.1 (by simpa using Grammar.endsWithClose_of_command h hc)
 
@@ -423,7 +423,7 @@ content (`Lexicon.SameButStrings20`).
 
 /-- Every file is reproduced from its reading and its commands but for the spelling of 2.0
 string literals that stand for the same content. -/
-theorem Grammar.reproduceSimilar {version : Lexicon.Version} {input : Lexicon.Chars}
+theorem Grammar.reproduceSimilar {version : Lexicon.Version} {input : Regex.Chars}
     {commands : List Grammar.Tree.Command} (h : Grammar.File version input commands) :
     ∃ segments final, Grammar.FileReadingFrom version 0 input commands segments final ∧
       Lexicon.SameButStrings20 (Grammar.reproduce version commands (segments.map Prod.snd) final)
@@ -438,9 +438,9 @@ info: 'BSmtLib.SpecChecks.Grammar.reproduceSimilar' depends on axioms: [propext,
 #print axioms Grammar.reproduceSimilar
 
 /-- A file has at most one reading. -/
-theorem Grammar.readingUnique {version : Lexicon.Version} {input : Lexicon.Chars}
+theorem Grammar.readingUnique {version : Lexicon.Version} {input : Regex.Chars}
     {commands commands' : List Grammar.Tree.Command}
-    {segments segments' : List (Lexicon.Version × Lexicon.Concrete)} {final final' : Lexicon.Chars}
+    {segments segments' : List (Lexicon.Version × Lexicon.Concrete)} {final final' : Regex.Chars}
     (h : Grammar.FileReadingFrom version 0 input commands segments final)
     (h' : Grammar.FileReadingFrom version 0 input commands' segments' final') :
     commands = commands' ∧ segments = segments' ∧ final = final' :=
@@ -453,9 +453,9 @@ info: 'BSmtLib.SpecChecks.Grammar.readingUnique' depends on axioms: [propext, Cl
 #print axioms Grammar.readingUnique
 
 /-- A file in which no 2.0 string literal has a lone backslash is reproduced exactly. -/
-theorem Grammar.reproduceExact {version : Lexicon.Version} {input : Lexicon.Chars}
+theorem Grammar.reproduceExact {version : Lexicon.Version} {input : Regex.Chars}
     {commands : List Grammar.Tree.Command}
-    {segments : List (Lexicon.Version × Lexicon.Concrete)} {final : Lexicon.Chars}
+    {segments : List (Lexicon.Version × Lexicon.Concrete)} {final : Regex.Chars}
     (h : Grammar.FileReadingFrom version 0 input commands segments final)
     (hl : ∀ segment ∈ segments, Lexicon.NoLoneBackslash segment.1 segment.2.tokens) :
     Grammar.reproduce version commands (segments.map Prod.snd) final = input :=
@@ -468,9 +468,9 @@ info: 'BSmtLib.SpecChecks.Grammar.reproduceExact' depends on axioms: [propext, C
 #print axioms Grammar.reproduceExact
 
 /-- A reproduced file is a file with the same commands, and it is reproduced exactly. -/
-theorem Grammar.reproduceIdempotent {version : Lexicon.Version} {input : Lexicon.Chars}
+theorem Grammar.reproduceIdempotent {version : Lexicon.Version} {input : Regex.Chars}
     {commands : List Grammar.Tree.Command}
-    {segments : List (Lexicon.Version × Lexicon.Concrete)} {final : Lexicon.Chars}
+    {segments : List (Lexicon.Version × Lexicon.Concrete)} {final : Regex.Chars}
     (h : Grammar.FileReadingFrom version 0 input commands segments final) :
     Grammar.File version (Grammar.reproduce version commands (segments.map Prod.snd) final)
         commands ∧
@@ -505,15 +505,15 @@ script makes what `Parser.parseScript` makes run on what a parser receives for t
 fuel larger than ten times the size of the script; whatever follows is left untouched.
 -/
 theorem Parser.script_eq_parse {m : Type → Type} [Monad m] [LawfulMonad m] {ε : Type}
-    {values : Spec.Parser.Traversal.Values} (points : Spec.Parser.Traversal.Points m)
-    (handler : Spec.Parser.Traversal.Handler m ε values)
-    (producer : Spec.Parser.Traversal.Producer m)
-    (policy : Spec.Parser.VersionPolicy) {version : Lexicon.Version}
+    {values : BSmtLibSpec.Parser.Traversal.Values} (points : BSmtLibSpec.Parser.Traversal.Points m)
+    (handler : BSmtLibSpec.Parser.Traversal.Handler m ε values)
+    (producer : BSmtLibSpec.Parser.Traversal.Producer m)
+    (policy : BSmtLibSpec.Parser.VersionPolicy) {version : Lexicon.Version}
     {commands : List Grammar.Tree.Command} (h : Grammar.Script version commands)
-    (rest : List Spec.Parser.Traversal.Received) {n : Nat} (hn : 10 * sizeOf commands < n) :
+    (rest : List BSmtLibSpec.Parser.Traversal.Received) {n : Nat} (hn : 10 * sizeOf commands < n) :
     Parser.Program.run points handler producer policy (Parser.parseScript n version)
-        (Spec.Parser.received commands ++ rest) =
-      (Spec.Parser.Traversal.script points handler producer policy version commands >>= fun _ =>
+        (BSmtLibSpec.Parser.Properties.received commands ++ rest) =
+      (BSmtLibSpec.Parser.Traversal.script points handler producer policy version commands >>= fun _ =>
         pure ((), rest)) :=
   Parser.run_script version commands rest h hn
 
@@ -533,7 +533,7 @@ stand for.
 
 /-- The traversal of a script takes exactly what a parser receives for it, each item arriving
 and then processed, in order. -/
-theorem Parser.takesItsTokens : Spec.Parser.TakesItsTokens :=
+theorem Parser.takesItsTokens : BSmtLibSpec.Parser.Properties.TakesItsTokens :=
   fun _ _ h => Parser.record_items h
 
 /--
@@ -546,7 +546,7 @@ info: 'BSmtLib.SpecChecks.Parser.takesItsTokens' depends on axioms: [propext, Cl
 theorem Parser.recoverRebuilds {version : Lexicon.Version} {commands : List Grammar.Tree.Command}
     (h : Grammar.Script version commands) :
     Parser.Recovery.recover version
-      ((Spec.Parser.record version commands).filter Spec.Parser.Event.isCall) = some commands :=
+      ((BSmtLibSpec.Parser.Properties.record version commands).filter BSmtLibSpec.Parser.Properties.Event.isCall) = some commands :=
   Parser.recover_record h
 
 /--
@@ -557,7 +557,7 @@ info: 'BSmtLib.SpecChecks.Parser.recoverRebuilds' depends on axioms: [propext, C
 
 /-- Two scripts from the same version whose traversals make the same calls are the same
 script. -/
-theorem Parser.callsDetermineScript : Spec.Parser.CallsDetermineScript := by
+theorem Parser.callsDetermineScript : BSmtLibSpec.Parser.Properties.CallsDetermineScript := by
   intro version commands commands' h h' hcalls
   have := Parser.recover_record h
   rw [hcalls, Parser.recover_record h'] at this
@@ -571,7 +571,7 @@ info: 'BSmtLib.SpecChecks.Parser.callsDetermineScript' depends on axioms: [prope
 
 /-- What the traversal of a script has done before an item arrives, and before it is processed,
 depends only on the items before it. -/
-theorem Parser.placementDetermined : Spec.Parser.PlacementDetermined := by
+theorem Parser.placementDetermined : BSmtLibSpec.Parser.Properties.PlacementDetermined := by
   intro version commands commands' count h h' ht
   let n := 10 * (sizeOf commands + sizeOf commands') + 1
   rw [Parser.record_eq_trace h (n := n) (by omega), Parser.record_eq_trace h' (n := n) (by omega)]
@@ -590,7 +590,7 @@ info: 'BSmtLib.SpecChecks.Parser.placementDetermined' depends on axioms: [propex
 The properties of the traversal are stated on recordings. `Parser.cutRun` is the traversal of a
 script with any handler, points, producer and policy, stopped at the arrival of the item
 at a given position: what such a run has done before that item arrives. The two theorems below
-carry `Spec.Parser.PlacementDetermined` over to every handler: the cut runs of two scripts from
+carry `BSmtLibSpec.Parser.Properties.PlacementDetermined` over to every handler: the cut runs of two scripts from
 the same version are equal when what a parser receives for them agrees before the cut, and the
 cut runs of two scripts are equal when their recordings do.
 They are checks of the specification, not properties stated in it.
@@ -602,14 +602,14 @@ two valid scripts from the same version have done before the item at position `c
 is the same when what a parser receives for them agrees before that item.
 -/
 theorem Parser.cutRunsAgree {m : Type → Type} [Monad m] [LawfulMonad m] {ε : Type}
-    {values : Spec.Parser.Traversal.Values} (points : Spec.Parser.Traversal.Points m)
-    (handler : Spec.Parser.Traversal.Handler m ε values)
-    (producer : Spec.Parser.Traversal.Producer m)
-    (policy : Spec.Parser.VersionPolicy) (count : Nat) {version : Lexicon.Version}
+    {values : BSmtLibSpec.Parser.Traversal.Values} (points : BSmtLibSpec.Parser.Traversal.Points m)
+    (handler : BSmtLibSpec.Parser.Traversal.Handler m ε values)
+    (producer : BSmtLibSpec.Parser.Traversal.Producer m)
+    (policy : BSmtLibSpec.Parser.VersionPolicy) (count : Nat) {version : Lexicon.Version}
     {commands commands' : List Grammar.Tree.Command} (h : Grammar.Script version commands)
     (h' : Grammar.Script version commands')
-    (ht : (Spec.Parser.received commands).take count =
-      (Spec.Parser.received commands').take count) :
+    (ht : (BSmtLibSpec.Parser.Properties.received commands).take count =
+      (BSmtLibSpec.Parser.Properties.received commands').take count) :
     Parser.cutRun points handler producer policy count version commands =
       Parser.cutRun points handler producer policy count version commands' :=
   Parser.cutRun_eq points handler producer policy count h h' ht
@@ -626,14 +626,14 @@ two valid scripts have done before the item at position `count` arrives is the s
 recordings agree before that item: a recording stands for the run with every handler.
 -/
 theorem Parser.cutRunsAgreeByRecord {m : Type → Type} [Monad m] [LawfulMonad m] {ε : Type}
-    {values : Spec.Parser.Traversal.Values} (points : Spec.Parser.Traversal.Points m)
-    (handler : Spec.Parser.Traversal.Handler m ε values)
-    (producer : Spec.Parser.Traversal.Producer m)
-    (policy : Spec.Parser.VersionPolicy) (count : Nat) {version version' : Lexicon.Version}
+    {values : BSmtLibSpec.Parser.Traversal.Values} (points : BSmtLibSpec.Parser.Traversal.Points m)
+    (handler : BSmtLibSpec.Parser.Traversal.Handler m ε values)
+    (producer : BSmtLibSpec.Parser.Traversal.Producer m)
+    (policy : BSmtLibSpec.Parser.VersionPolicy) (count : Nat) {version version' : Lexicon.Version}
     {commands commands' : List Grammar.Tree.Command} (h : Grammar.Script version commands)
     (h' : Grammar.Script version' commands')
-    (he : Spec.Parser.eventsBefore count (Spec.Parser.record version commands) =
-      Spec.Parser.eventsBefore count (Spec.Parser.record version' commands')) :
+    (he : BSmtLibSpec.Parser.Properties.eventsBefore count (BSmtLibSpec.Parser.Properties.record version commands) =
+      BSmtLibSpec.Parser.Properties.eventsBefore count (BSmtLibSpec.Parser.Properties.record version' commands')) :
     Parser.cutRun points handler producer policy count version commands =
       Parser.cutRun points handler producer policy count version' commands' :=
   Parser.cutRun_eq_of_record points handler producer policy count h h' he
@@ -651,14 +651,14 @@ processed and without its own arrival, is the same when their recordings agree b
 processing of that item.
 -/
 theorem Parser.processingCutRunsAgreeByRecord {m : Type → Type} [Monad m] [LawfulMonad m]
-    {ε : Type} {values : Spec.Parser.Traversal.Values} (points : Spec.Parser.Traversal.Points m)
-    (handler : Spec.Parser.Traversal.Handler m ε values)
-    (producer : Spec.Parser.Traversal.Producer m)
-    (policy : Spec.Parser.VersionPolicy) (count : Nat) {version version' : Lexicon.Version}
+    {ε : Type} {values : BSmtLibSpec.Parser.Traversal.Values} (points : BSmtLibSpec.Parser.Traversal.Points m)
+    (handler : BSmtLibSpec.Parser.Traversal.Handler m ε values)
+    (producer : BSmtLibSpec.Parser.Traversal.Producer m)
+    (policy : BSmtLibSpec.Parser.VersionPolicy) (count : Nat) {version version' : Lexicon.Version}
     {commands commands' : List Grammar.Tree.Command} (h : Grammar.Script version commands)
     (h' : Grammar.Script version' commands')
-    (he : Spec.Parser.eventsBeforeProcessing count (Spec.Parser.record version commands) =
-      Spec.Parser.eventsBeforeProcessing count (Spec.Parser.record version' commands')) :
+    (he : BSmtLibSpec.Parser.Properties.eventsBeforeProcessing count (BSmtLibSpec.Parser.Properties.record version commands) =
+      BSmtLibSpec.Parser.Properties.eventsBeforeProcessing count (BSmtLibSpec.Parser.Properties.record version' commands')) :
     Parser.processingCutRun points handler producer policy count version commands =
       Parser.processingCutRun points handler producer policy count version' commands' :=
   Parser.processingCutRun_eq_of_record points handler producer policy count h h' he
@@ -673,16 +673,16 @@ info: 'BSmtLib.SpecChecks.Parser.processingCutRunsAgreeByRecord' depends on axio
 ### Readers
 
 The calls a reader makes on a file determine the file, but for its layout, what follows `exit`
-and the spelling of strings in 2.0 (`Spec.Reader.CallsDetermineCommands`). A reader that is a
+and the spelling of strings in 2.0 (`BSmtLibSpec.Reader.CallsDetermineCommands`). A reader that is a
 correct lexer with a parser that follows the traversal as its consumer
-(`Spec.Reader.LexesThenParses`) tells its handler the calls for the commands of every file and
-finishes on it (`Spec.Reader.ReadsFiles`), and finishes on nothing else
-(`Spec.Reader.FinishesOnlyOnFiles`).
+(`BSmtLibSpec.Reader.LexesThenParses`) tells its handler the calls for the commands of every file and
+finishes on it (`BSmtLibSpec.Reader.ReadsFiles`), and finishes on nothing else
+(`BSmtLibSpec.Reader.FinishesOnlyOnFiles`).
 -/
 
 /-- The calls for the commands of a file determine the version the file is read from and its
 commands. -/
-theorem Reader.callsDetermineCommands : Spec.Reader.CallsDetermineCommands :=
+theorem Reader.callsDetermineCommands : BSmtLibSpec.Reader.CallsDetermineCommands :=
   fun _ _ _ _ _ _ h h' hc => Reader.calls_determine h h' hc
 
 /--
@@ -693,8 +693,8 @@ info: 'BSmtLib.SpecChecks.Reader.callsDetermineCommands' depends on axioms: [pro
 
 /-- A reader that lexes then parses reads files and finishes only on files. -/
 theorem Reader.lexesThenParsesReads :
-    ∀ reader, Spec.Reader.LexesThenParses reader →
-      Spec.Reader.ReadsFiles reader ∧ Spec.Reader.FinishesOnlyOnFiles reader :=
+    ∀ reader, BSmtLibSpec.Reader.LexesThenParses reader →
+      BSmtLibSpec.Reader.ReadsFiles reader ∧ BSmtLibSpec.Reader.FinishesOnlyOnFiles reader :=
   Reader.lexesThenParses_reads
 
 /--

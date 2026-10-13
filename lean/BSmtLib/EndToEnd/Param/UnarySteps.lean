@@ -16,7 +16,7 @@ open BSmtLib.Proofs.Adapter
 
 section
 
-variable {consumer : Spec.Lexer.Consumer} {floor : Option Nat} {low : Nat}
+variable {consumer : BSmtLibSpec.Lexer.Consumer} {floor : Option Nat} {low : Nat}
 
 theorem getCore_usim : UL (getCore : FM consumer floor low LexerCore) := by
   unfold getCore; usim
@@ -106,7 +106,7 @@ end
 
 section
 
-variable {consumer : Spec.Lexer.Consumer} {floor : Option Nat} {low : Nat}
+variable {consumer : BSmtLibSpec.Lexer.Consumer} {floor : Option Nat} {low : Nat}
 
 theorem bne_self_version (v : Version) : (v != v) = false := by
   cases v <;> rfl

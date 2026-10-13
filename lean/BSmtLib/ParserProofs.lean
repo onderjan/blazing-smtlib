@@ -10,7 +10,7 @@ import BSmtLib.ParserProofs.Rejection.Discard
 # The parser against the specification's traversal
 
 Proofs that the library's parser (`BSmtLib.Parser`) makes the calls of the specification's
-traversal (`Spec.Parser.Traversal`), at the places among the tokens that the traversal states.
+traversal (`BSmtLibSpec.Parser.Traversal`), at the places among the tokens that the traversal states.
 
 - The handler: a library handler is a class instance, the spec's handler a structure. `Agrees h`
   says that the instance answers every call as the spec's handler `h` answers it, the views and
@@ -53,9 +53,11 @@ fails if that changes.
 
 namespace BSmtLib.ParserProofs
 
-open BSmtLib.Spec.Grammar
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 
 /-- Every spec handler, in any monad, is answered alike by a library handler. -/
 theorem every_handler_linked {m : Type → Type} [Monad m] {ε : Type} {values : Values}
@@ -126,7 +128,7 @@ theorem script_follows_traversal {H : Type} {m : Type → Type} [Monad m] [Lawfu
     (producer : Producer (StateT H m)) (posture : Parser.VersionPosture)
     {version : BSmtLib.Version} {commands : List Tree.Command}
     (hscript : Script (Bridge.version version) commands) {inputs : List Parser.Input}
-    (hs : inputs.map Bridge.received = (Spec.Parser.received commands).map some)
+    (hs : inputs.map Bridge.received = (BSmtLibSpec.Parser.Properties.received commands).map some)
     (rest : List Parser.Input) :
     driveInput points producer version (Parser.ScriptParser.new (H := H) posture)
         (inputs ++ rest) =
@@ -145,7 +147,7 @@ info: 'BSmtLib.ParserProofs.script_follows_traversal' depends on axioms: [propex
 /-- The parser's recording run on what a parser receives for a valid script is `record`. -/
 theorem recording_is_record {version : BSmtLib.Version} {commands : List Tree.Command}
     (hscript : Script (Bridge.version version) commands) {inputs : List Parser.Input}
-    (hs : inputs.map Bridge.received = (Spec.Parser.received commands).map some) :
+    (hs : inputs.map Bridge.received = (BSmtLibSpec.Parser.Properties.received commands).map some) :
     parserRecord version inputs = record (Bridge.version version) commands :=
   parserRecord_script hscript hs
 
@@ -162,7 +164,7 @@ traversal of the script has.
 -/
 theorem placement_before_arrival {version : BSmtLib.Version} {commands : List Tree.Command}
     (hscript : Script (Bridge.version version) commands) {inputs : List Parser.Input}
-    (hs : inputs.map Bridge.received = (Spec.Parser.received commands).map some)
+    (hs : inputs.map Bridge.received = (BSmtLibSpec.Parser.Properties.received commands).map some)
     {items : List Parser.Input} (hlayout : NoLayout items) (k : Nat)
     (htake : items.take k = inputs.take k) :
     eventsBefore k (parserRecord version items) =
@@ -183,7 +185,7 @@ of the calls due at its arrival.
 -/
 theorem placement_before_processing {version : BSmtLib.Version} {commands : List Tree.Command}
     (hscript : Script (Bridge.version version) commands) {inputs : List Parser.Input}
-    (hs : inputs.map Bridge.received = (Spec.Parser.received commands).map some)
+    (hs : inputs.map Bridge.received = (BSmtLibSpec.Parser.Properties.received commands).map some)
     {items : List Parser.Input} (hlayout : NoLayout items) (k : Nat) {item : Parser.Input}
     (hitem : items[k]? = some item) {stands : Received}
     (hstands : Bridge.received item = some stands) (hk : k < inputs.length)
@@ -205,7 +207,7 @@ item arrives.
 -/
 theorem placement_where_input_stops {version : BSmtLib.Version} {commands : List Tree.Command}
     (hscript : Script (Bridge.version version) commands) {inputs : List Parser.Input}
-    (hs : inputs.map Bridge.received = (Spec.Parser.received commands).map some) (k : Nat) :
+    (hs : inputs.map Bridge.received = (BSmtLibSpec.Parser.Properties.received commands).map some) (k : Nat) :
     parserRecord version (inputs.take k) =
       eventsBefore k (record (Bridge.version version) commands) :=
   placement_prefix hscript hs k
@@ -247,7 +249,7 @@ info: 'BSmtLib.ParserProofs.rejects_first_unviable' depends on axioms: [propext,
 
 /-! ## What is trusted
 
-A reader of the theorems above trusts the specification (`BSmtLib.Spec`), the statements in this
+A reader of the theorems above trusts the specification (`BSmtLibSpec`), the statements in this
 file, and the definitions in `BSmtLib.ParserProofs.Adapters` and the modules below it, which put
 the parser and its handlers into the spec's shapes: the adapters. Everything else Lean checks.
 The check below lists the adapters, every definition that the statements of the theorems in this

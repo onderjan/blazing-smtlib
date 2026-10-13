@@ -15,7 +15,7 @@ namespace BSmtLib.Proofs.Lexer.VNaiveWRustPort
 
 open BSmtLib.Lexer.Internal (intoBatch)
 open BSmtLib.Proofs.Adapter VNaive BSmtLib.Proofs.Simulation
-open Spec.Lexer (Handed)
+open BSmtLibSpec.Lexer (Handed)
 open Lexer.WRustPort.Rust (flushCursor)
 
 /-- The lexer state `c` after a hand-over from the lexer state `s` stopped with the consumer
@@ -37,7 +37,7 @@ structure StopState (s : WCore) (p : Prog) (d : Option Location) (c : WCore) (by
 
 section
 
-variable {C : Spec.Lexer.Consumer} {floor : Option Nat} {low : Nat}
+variable {C : BSmtLibSpec.Lexer.Consumer} {floor : Option Nat} {low : Nat}
 
 theorem withVersion_key {s : BS floor low} {p : Prog}
     (h : (p.ver == .v2_0) = (s.val.version == .v2_0)) :

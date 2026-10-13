@@ -11,13 +11,13 @@ lexer's pure run.
 namespace BSmtLib.Proofs.Lexer.VNaiveWRustPort
 
 open BSmtLib.Proofs.Adapter VNaive BSmtLib.Proofs.Simulation
-open Spec.Lexer (Handed)
+open BSmtLibSpec.Lexer (Handed)
 open Lexer.WRustPort (lexNormalFrom FastState Frame Held Past)
 
 section
 
 variable {floor : Option Nat} {low : Nat}
-variable {C : Spec.Lexer.Consumer} {hd : Bool} {iv : Version}
+variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Version}
 
 /-- The loop of the normal state keeps the correspondence. -/
 theorem lexNormalFrom_wp (v : Version) (input : ByteSlice) (offset base : Nat)

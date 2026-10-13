@@ -5,7 +5,7 @@ import BSmtLib.ParserProofs.Lemmas
 /-!
 # The recording run as a run of the library's parser
 
-The spec states the placement of the calls on a recording run (`Spec.Parser.record`), whose
+The spec states the placement of the calls on a recording run (`BSmtLibSpec.Parser.Properties.record`), whose
 handler writes down every call in the log that is the state of the monad `Recording`. A library
 handler whose state is that log (`List Event`) runs the parser in the same monad. Its error type
 is `Unit`, since a library handler must be able to fail on a non-standard command; it agrees with
@@ -15,8 +15,9 @@ the recording handler with its errors (of which it has none) mapped into `Unit`
 
 namespace BSmtLib.ParserProofs
 
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 
 /-- The recording handler, with its errors (of which it has none) in `Unit`. -/
 def recordingHandlerU : Traversal.Handler Recording Unit Recorded where
@@ -123,7 +124,7 @@ theorem adapt_callUnit_U (request : Call Recorded .nothing) :
   adapt_call_U request
 
 theorem adapt_switch_U (policy : VersionPolicy) (declarations : Nat)
-    (version : Spec.Lexicon.Version) :
+    (version : BSmtLibSpec.Lexicon.Version) :
     ExceptT.adapt mapCause
         (switchVersion recordingHandler recordingProducer policy declarations version) =
       switchVersion recordingHandlerU recordingProducer policy declarations version := by
@@ -171,8 +172,8 @@ theorem state_adapt {ε ε' σ α : Type} (f : ε → ε') (x : ExceptT ε (Stat
   rfl
 
 /-- The records of a run of the traversal with `recordingHandlerU` are those of `record`. -/
-theorem record_eq_U {version : Spec.Lexicon.Version} {commands : List Spec.Grammar.Tree.Command}
-    (hscript : Spec.Grammar.Script version commands) :
+theorem record_eq_U {version : BSmtLibSpec.Lexicon.Version} {commands : List BSmtLibSpec.Grammar.Tree.Command}
+    (hscript : BSmtLibSpec.Grammar.Script version commands) :
     ((Traversal.script recordingPoints recordingHandlerU recordingProducer
       VersionPolicy.unrestricted version commands).run.run []).2.reverse =
       record version commands := by

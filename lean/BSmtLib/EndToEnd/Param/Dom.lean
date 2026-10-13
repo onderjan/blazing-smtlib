@@ -20,9 +20,11 @@ takes, and so what the parse adapter and the stand-in consumer need to answer al
 
 namespace BSmtLib.EndToEnd.Param
 
-open BSmtLib.Spec BSmtLib.Spec.Grammar BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
-open BSmtLib.Spec.Lexer (Handed)
+open BSmtLibSpec BSmtLibSpec.Grammar BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Parser.Traversal
+open BSmtLibSpec.Lexer (Handed)
 open BSmtLib.ParserProofs BSmtLib.ParserProofs.Rejection
 
 /-- What a parser receives, on which the library's parser's run depends only on what its items
@@ -30,11 +32,11 @@ stand for: a start of what a parser takes, or such a start followed by the first
 script continues with, an item of the version in force, where the start does not end with
 `exit`. -/
 def Dom (version : Lexicon.Version) (items : List Received) : Prop :=
-  Spec.Parser.Viable version items ∨
+  BSmtLibSpec.Parser.Properties.Viable version items ∨
     ∃ commands taken ending pre last, Takes version commands taken ending ∧
       items = pre ++ [last] ∧ pre <+: taken ∧ pre.length < taken.length ∧
       last.OfVersion (versionAt version commands pre.length) ∧
-      ¬ Spec.Parser.Viable version items ∧ ¬ AfterExit version pre
+      ¬ BSmtLibSpec.Parser.Properties.Viable version items ∧ ¬ AfterExit version pre
 
 /-- What is read of a recording run: its calls, its ending, and what it asked of its producer
 after its last processing. -/
@@ -160,7 +162,7 @@ theorem obs_first_unviable {version : Lexicon.Version} {commands : List Tree.Com
     {pre : List Received} {last : Received} (hpre : pre <+: taken)
     (hlt : pre.length < taken.length)
     (hof : last.OfVersion (versionAt version commands pre.length))
-    (hnot : ¬ Spec.Parser.Viable version (pre ++ [last])) (hne : ¬ AfterExit version pre)
+    (hnot : ¬ BSmtLibSpec.Parser.Properties.Viable version (pre ++ [last])) (hne : ¬ AfterExit version pre)
     {zs : List LibItem}
     (hz : zs.map (rcv ∘ Subtype.val) = pre ++ [last]) :
     Obs (libraryParser.parse version zs) =
@@ -188,7 +190,7 @@ theorem obs_first_unviable {version : Lexicon.Version} {commands : List Tree.Com
     simp only [List.getElem?_cons_zero, Option.some.injEq] at hitem
     rw [← hitem]
     exact hof
-  have hunv : ¬ Spec.Parser.Viable version
+  have hunv : ¬ BSmtLibSpec.Parser.Properties.Viable version
       ((zs.map libraryParser.stands).take (pre.length + 1)) := by
     rw [hstands, List.take_of_length_le (by simp)]
     exact hnot

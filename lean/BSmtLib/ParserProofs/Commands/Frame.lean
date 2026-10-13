@@ -11,11 +11,13 @@ the tokens after the name, the command parser does the traversal's command.
 
 namespace BSmtLib.ParserProofs
 
-open BSmtLib.Spec.Grammar
+open BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
 open BSmtLib.Parser (Input PM Step CommandState Payload CommandOutcome FinalCall commandStep
   payloadStep finalCall)
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 
 section
 
@@ -47,7 +49,7 @@ abbrev PayloadRuns {α : Type} (state : Parser.PayloadOf H) (tokens : List Input
 
 /-- A token standing for a command's name is that name. -/
 theorem Input.received_commandName {token : Input} {name : CommandNameReserved} {s : String}
-    (hname : Bridge.reserved (.commandName name) = Spec.Lexicon.chars s)
+    (hname : Bridge.reserved (.commandName name) = BSmtLibSpec.Regex.chars s)
     (h : Bridge.received token = some (.token (word s))) :
     token = .reserved (.commandName name) := by
   apply Input.received_word
@@ -60,7 +62,7 @@ tokens after the name with the effects of `program`, the command parser reads th
 with the opening's ticks, then `program`.
 -/
 theorem command_frame {name : CommandNameReserved} {s : String}
-    (hname : Bridge.reserved (.commandName name) = Spec.Lexicon.chars s)
+    (hname : Bridge.reserved (.commandName name) = BSmtLibSpec.Regex.chars s)
     {payload : List Input} {program : PM H Unit} {outcome : CommandOutcome}
     (hruns : PayloadRuns points version (Payload.init name version) payload program
       fun _ => pure (.done outcome))
@@ -87,8 +89,8 @@ the rest; and the payload parser, from the command's initial payload, reads the 
 for the payload's and the `)` with the rest's effects.
 -/
 theorem command_of_payload (command : Tree.Command) {name : CommandNameReserved} {s : String}
-    (hname : Bridge.reserved (.commandName name) = Spec.Lexicon.chars s)
-    {payloadSyntax : List Spec.Grammar.SyntaxToken}
+    (hname : Bridge.reserved (.commandName name) = BSmtLibSpec.Regex.chars s)
+    {payloadSyntax : List BSmtLibSpec.Grammar.SyntaxToken}
     (htokens : command.tokens = commandTokens s payloadSyntax)
     {rest : Run (StateT H m) (Parser.Handler.Error H) Unit}
     (hcommand : Traversal.command points h command = (do opening points s; rest))

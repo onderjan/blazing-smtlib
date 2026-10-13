@@ -12,9 +12,11 @@ for `set-info` and `set-option`, any number for an annotation, which wants at le
 
 namespace BSmtLib.ParserProofs.Rejection
 
-open BSmtLib.Spec.Grammar
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 open BSmtLib.Parser (Input PM Step SExprState sExprStep sExprComplete AttributeState AttributeMode
   attributeStep)
 open Lang
@@ -23,7 +25,7 @@ open Lang
 
 section
 
-variable (version : Spec.Lexicon.Version)
+variable (version : BSmtLibSpec.Lexicon.Version)
 
 /-- An s-expression of the version. -/
 def SExprLang : Lang :=
@@ -75,7 +77,7 @@ theorem sExprTokensAll_eq (items : List Tree.SExpr) :
   | nil => rfl
   | cons first rest ih => simp [Tree.SExpr.tokensAll, ih]
 
-theorem sExprValidAll_of {version : Spec.Lexicon.Version} {items : List Tree.SExpr}
+theorem sExprValidAll_of {version : BSmtLibSpec.Lexicon.Version} {items : List Tree.SExpr}
     (h : ∀ item ∈ items, item.Valid version) : Tree.SExpr.ValidAll version items := by
   induction items with
   | nil => trivial
@@ -83,7 +85,7 @@ theorem sExprValidAll_of {version : Spec.Lexicon.Version} {items : List Tree.SEx
     exact ⟨h first (by simp), ih fun item hitem => h item (by simp [hitem])⟩
 
 /-- S-expressions, one after another, as a repetition. -/
-theorem sExprs_rep {version : Spec.Lexicon.Version} {lo : Nat} {hi : Option Nat}
+theorem sExprs_rep {version : BSmtLibSpec.Lexicon.Version} {lo : Nat} {hi : Option Nat}
     {u : List Received} (h : rep (SExprLang version) lo hi u) :
     ∃ items : List Tree.SExpr, Tree.SExpr.ValidAll version items ∧ lo ≤ items.length ∧
       u = toks (Tree.SExpr.tokensAll items) := by
@@ -91,14 +93,14 @@ theorem sExprs_rep {version : Spec.Lexicon.Version} {lo : Nat} {hi : Option Nat}
   exact ⟨items, sExprValidAll_of hvalid, hlo, by simp [sExprTokensAll_eq, Function.comp_def]⟩
 
 /-- A list's items and its `)`, after its `(`, are an s-expression. -/
-theorem sExprLang_list {version : Spec.Lexicon.Version} {a : List Received}
+theorem sExprLang_list {version : BSmtLibSpec.Lexicon.Version} {a : List Received}
     (h : star (SExprLang version) a) : SExprLang version (openItem :: (a ++ [closeItem])) := by
   obtain ⟨items, hvalid, -, rfl⟩ := sExprs_rep h
   exact ⟨.list items, hvalid, by simp [Tree.SExpr.tokens, paren, toks]⟩
 
 /-- The s-expression parser's step at the end of an s-expression: it is the result, or the next
 item of the innermost open list. -/
-theorem sExprComplete_advances {version : Spec.Lexicon.Version} {state : SExprState Nat}
+theorem sExprComplete_advances {version : BSmtLibSpec.Lexicon.Version} {state : SExprState Nat}
     {item : Received} (levels : SExprState Nat) (handled : Nat)
     (h : ∀ v, sExprAfter version levels v → sExprRem version state (item :: v)) :
     Advances (sExprRem version) (fun state _ => sExprRem version state) state item
@@ -154,7 +156,7 @@ theorem sExprStep_advances (version : BSmtLib.Version) :
 
 section
 
-variable (version : Spec.Lexicon.Version)
+variable (version : BSmtLibSpec.Lexicon.Version)
 
 /-- An attribute value of the version. -/
 def ValueLang : Lang :=
@@ -241,7 +243,7 @@ theorem attrTail_cons {a u : List Received} (ha : AttrLang version a)
   exact cat_intro (star_cons ha hs) hc
 
 /-- A keyword and its value, if it has one, are an attribute. -/
-theorem attrLang_keyword (name : Spec.Lexicon.Chars) {v : List Received}
+theorem attrLang_keyword (name : BSmtLibSpec.Regex.Chars) {v : List Received}
     (hv : union (ValueLang version) eps v) : AttrLang version (.token (.keyword name) :: v) := by
   rcases hv with ⟨value, hvalid, rfl⟩ | rfl
   · exact ⟨⟨name, some value⟩, hvalid, rfl⟩
@@ -295,7 +297,7 @@ theorem inside_advances (version : BSmtLib.Version) (single need : Bool)
       exact cat_intro (star_cons hw hs) ht
 
 /-- After an attribute: the remainders of the parser in its start state. -/
-theorem attrRem_after_iff (version : Spec.Lexicon.Version) (single need : Bool)
+theorem attrRem_after_iff (version : BSmtLibSpec.Lexicon.Version) (single need : Bool)
     (attributes : Array Nat) (handled : Nat) {u : List Received}
     (h : attrRem version single need ⟨.start, attributes.push handled⟩ u) :
     attrTail version single u := by

@@ -13,16 +13,16 @@ over alone, or leaves it in progress at the end of the slice.
 namespace BSmtLib.Proofs.Lexer.VNaiveWRustPort
 
 open BSmtLib.Proofs.Adapter VNaive BSmtLib.Proofs.Simulation
-open Spec.Lexer (Handed)
+open BSmtLibSpec.Lexer (Handed)
 
 section
 
-variable {C : Spec.Lexer.Consumer} {floor : Option Nat} {low : Nat} {hd : Bool} {iv : Version}
+variable {C : BSmtLibSpec.Lexer.Consumer} {floor : Option Nat} {low : Nat} {hd : Bool} {iv : Version}
 
 /-- What the loop of `lexWhitespace` from the index `j` keeps: the step from `start0` in the
 pure state `st0` at `loc0` is, at `j`, whitespace in progress with the content of the lexer
 state. -/
-def WsSpec (C : Spec.Lexer.Consumer) (v : Version) (hd : Bool) (iv : Version) (ver : Version)
+def WsSpec (C : BSmtLibSpec.Lexer.Consumer) (v : Version) (hd : Bool) (iv : Version) (ver : Version)
     (input : ByteSlice) (start0 : Nat) (st0 : St) (loc0 : Location)
     (coll : List Handed) (held : List Lexeme) (tokenStart : Location) (base : Nat)
     (h : Lexer.WRustPort.Started floor low tokenStart) (origin j : Nat) : Prop :=

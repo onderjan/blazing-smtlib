@@ -4,7 +4,7 @@ import BSmtLib.ParserProofs.Cut
 /-!
 # Where the traversal of a script asks its producer
 
-In the recording run of a script (`Spec.Parser.record`), the producer's events, a switch of the
+In the recording run of a script (`BSmtLibSpec.Parser.Properties.record`), the producer's events, a switch of the
 version and the discarding, come right after a command: the switch after a version declaration,
 the discarding after `exit`. Nothing a command does itself is the producer's: the traversal of a
 command is not given the producer. That is shown without going through the commands one by one:
@@ -18,8 +18,12 @@ for a script, as the events after the item's processing and before the next item
 
 namespace BSmtLib.ParserProofs
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Grammar BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec BSmtLibSpec.Lexicon BSmtLibSpec.Grammar BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
+open BSmtLibSpec.Parser.Traversal
 open BSmtLib.SpecChecks.Parser
 
 /-! ## The producer's events -/

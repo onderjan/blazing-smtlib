@@ -16,8 +16,9 @@ how it is built, by the closure lemmas below and the tactic `erasing_step`.
 
 namespace BSmtLib.EndToEnd.Param
 
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 open BSmtLib.ParserProofs
 open BSmtLib.Parser
 
@@ -114,7 +115,7 @@ theorem erases_call {returns : Returns} (request : Call Recorded returns) :
   · intro _ _ _; trivial
 
 /-- The recording handler's switch of the version writes one call. -/
-theorem erases_setVersion (version : Spec.Lexicon.Version) :
+theorem erases_setVersion (version : BSmtLibSpec.Lexicon.Version) :
     Erases (ExceptT.lift (recordingHandler.setVersion version) : RPM Unit) := by
   constructor
   · intro events

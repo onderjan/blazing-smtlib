@@ -14,9 +14,11 @@ the command ends (`markers`), from which a completed command is read back exactl
 
 namespace BSmtLib.ParserProofs.Rejection
 
-open BSmtLib.Spec.Grammar
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 open BSmtLib.Parser (Input PM Step Flow Parse ScriptParser VersionPosture
   CommandState CommandOutcome commandStep)
 open Lang
@@ -25,7 +27,7 @@ open Lang
 
 /-- What a parser takes from a version on: a script, or commands that a refused declaration
 ends. -/
-def TakenFrom (version : Spec.Lexicon.Version) : Lang :=
+def TakenFrom (version : BSmtLibSpec.Lexicon.Version) : Lang :=
   fun u => ∃ commands ending, Takes version commands u ending
 
 /-- What follows a command in a script, as the command ends. -/
@@ -36,7 +38,7 @@ def scriptFollows : CmdEnd → Lang
   | .endOfInput => eps
 
 /-- The number that marks how a command ends. -/
-def endCode : CmdEnd → Spec.Lexicon.Chars
+def endCode : CmdEnd → BSmtLibSpec.Regex.Chars
   | .next .v2_0 => [0]
   | .next .v2_5 => [1]
   | .next .v2_6 => [2]
@@ -55,7 +57,7 @@ theorem markerItem_injective {e e' : CmdEnd} (h : markerItem e = markerItem e') 
   rcases e with (_ | _ | _ | _) | _ | _ | _ <;> rcases e' with (_ | _ | _ | _) | _ | _ | _ <;>
     first | rfl | (simp [markerItem, endCode] at h)
 
-theorem takenFrom_nonempty (version : Spec.Lexicon.Version) : ∃ u, TakenFrom version u :=
+theorem takenFrom_nonempty (version : BSmtLibSpec.Lexicon.Version) : ∃ u, TakenFrom version u :=
   ⟨_, [], .finished, .done⟩
 
 theorem scriptFollows_nonempty (e : CmdEnd) : ∃ u, scriptFollows e u := by
@@ -69,7 +71,7 @@ theorem markers_nonempty (e : CmdEnd) : ∃ u, markers e u := ⟨_, tok_intro _�
 
 /-- What a parser takes from a version on is what the command parser takes before a command,
 with what follows a command in a script. -/
-theorem takenFrom_iff (version : Spec.Lexicon.Version) (u : List Received) :
+theorem takenFrom_iff (version : BSmtLibSpec.Lexicon.Version) (u : List Received) :
     TakenFrom version u ↔ commandRem version scriptFollows .awaiting u := by
   constructor
   · rintro ⟨commands, ending, h⟩
@@ -100,7 +102,7 @@ theorem takenFrom_iff (version : Spec.Lexicon.Version) (u : List Received) :
 
 /-- Commands read one after another from a version, each valid in the version in force and
 followed by more commands in a version, with the version they leave. -/
-inductive Chain : Spec.Lexicon.Version → List Tree.Command → Spec.Lexicon.Version → Prop
+inductive Chain : BSmtLibSpec.Lexicon.Version → List Tree.Command → BSmtLibSpec.Lexicon.Version → Prop
   | nil : Chain version [] version
   | cons {first : Tree.Command} : first.Valid version →
       first.modeAfter version = some (.read next) → Chain next rest last →
@@ -120,14 +122,14 @@ theorem cmdToks_append (cs cs' : List Tree.Command) :
     cmdToks (cs ++ cs') = cmdToks cs ++ cmdToks cs' := by
   simp [cmdToks]
 
-theorem chain_snoc {version last next : Spec.Lexicon.Version} {cs : List Tree.Command}
+theorem chain_snoc {version last next : BSmtLibSpec.Lexicon.Version} {cs : List Tree.Command}
     {c : Tree.Command} (h : Chain version cs last) (hc : c.Valid last)
     (hmode : c.modeAfter last = some (.read next)) : Chain version (cs ++ [c]) next := by
   induction h with
   | nil => exact .cons hc hmode .nil
   | cons hv hm _ ih => exact .cons hv hm (ih hc hmode)
 
-theorem takes_of_chain {version last : Spec.Lexicon.Version} {cs : List Tree.Command}
+theorem takes_of_chain {version last : BSmtLibSpec.Lexicon.Version} {cs : List Tree.Command}
     (h : Chain version cs last) {rest : List Tree.Command} {taken : List Received}
     {ending : Ending} (hrest : Takes last rest taken ending) :
     Takes version (cs ++ rest) (cmdToks cs ++ taken) ending := by
@@ -137,7 +139,7 @@ theorem takes_of_chain {version last : Spec.Lexicon.Version} {cs : List Tree.Com
     rw [List.cons_append, cmdToks_cons, List.append_assoc]
     exact .command hv hm (ih hrest)
 
-theorem takenFrom_of_chain {version last : Spec.Lexicon.Version} {cs : List Tree.Command}
+theorem takenFrom_of_chain {version last : BSmtLibSpec.Lexicon.Version} {cs : List Tree.Command}
     (h : Chain version cs last) {u : List Received} (hu : TakenFrom last u) :
     TakenFrom version (cmdToks cs ++ u) := by
   obtain ⟨rest, ending, hrest⟩ := hu
@@ -145,10 +147,10 @@ theorem takenFrom_of_chain {version last : Spec.Lexicon.Version} {cs : List Tree
 
 /-- The items are those of commands read from the version, each followed by more commands in a
 version, and then those of `exit`: after them, the producer is asked to discard the rest. -/
-def AfterExit (version : Spec.Lexicon.Version) (items : List Received) : Prop :=
+def AfterExit (version : BSmtLibSpec.Lexicon.Version) (items : List Received) : Prop :=
   ∃ done last, Chain version done last ∧ items = cmdToks done ++ toks Tree.Command.exit.tokens
 
-theorem versionAt_chain {version last : Spec.Lexicon.Version} {cs : List Tree.Command}
+theorem versionAt_chain {version last : BSmtLibSpec.Lexicon.Version} {cs : List Tree.Command}
     (h : Chain version cs last) (rest : List Tree.Command) (k : Nat) :
     versionAt version (cs ++ rest) ((cmdToks cs).length + k) = versionAt last rest k := by
   induction h generalizing k with
@@ -171,19 +173,19 @@ theorem versionAt_chain {version last : Spec.Lexicon.Version} {cs : List Tree.Co
 
 /-- The command parser's state, after the items of the command so far: each remainder of the
 state completes them as one before a command, and the state has a remainder. -/
-def CmdInv (version : Spec.Lexicon.Version) (follows : CmdEnd → Lang) (items : List Received)
+def CmdInv (version : BSmtLibSpec.Lexicon.Version) (follows : CmdEnd → Lang) (items : List Received)
     (state : CommandState Nat Nat Nat Nat Nat) : Prop :=
   (∀ u, commandRem version follows state u → commandRem version follows .awaiting (items ++ u)) ∧
     ∃ u, commandRem version follows state u
 
-theorem cmdInv_awaiting (version : Spec.Lexicon.Version) (follows : CmdEnd → Lang)
+theorem cmdInv_awaiting (version : BSmtLibSpec.Lexicon.Version) (follows : CmdEnd → Lang)
     (hfollows : ∀ e, ∃ w, follows e w) : CmdInv version follows [] .awaiting :=
   ⟨fun _ h => h, by
     obtain ⟨w, hw⟩ := hfollows .endOfInput
     exact ⟨_, Or.inr (cat_tok hw)⟩⟩
 
 /-- A command completed before its marker is a command, or the end of the input. -/
-theorem awaiting_marked {version : Spec.Lexicon.Version} {q : List Received} {e : CmdEnd}
+theorem awaiting_marked {version : BSmtLibSpec.Lexicon.Version} {q : List Received} {e : CmdEnd}
     (h : commandRem version markers .awaiting (q ++ [markerItem e])) :
     (e = .endOfInput ∧ q = [.endOfInput]) ∨
       ∃ c, c.Valid version ∧ q = toks c.tokens ∧ cmdEnd version c = e := by
@@ -197,7 +199,7 @@ theorem awaiting_marked {version : Spec.Lexicon.Version} {q : List Received} {e 
     simp only [List.cons.injEq, and_true] at hm
     exact Or.inl ⟨markerItem_injective hm, hq⟩
 
-theorem cmdInv_more {version : Spec.Lexicon.Version} {follows : CmdEnd → Lang}
+theorem cmdInv_more {version : BSmtLibSpec.Lexicon.Version} {follows : CmdEnd → Lang}
     {items : List Received} {state state' : CommandState Nat Nat Nat Nat Nat} {x : Received}
     (hinv : CmdInv version follows items state)
     {fin : CommandState Nat Nat Nat Nat Nat → CommandOutcome → Lang}
@@ -207,7 +209,7 @@ theorem cmdInv_more {version : Spec.Lexicon.Version} {follows : CmdEnd → Lang}
   exact ⟨fun u hu => by simpa using hinv.1 _ (himpl u hu), hne⟩
 
 /-- A completed command's items, read back with its marker. -/
-theorem cmdInv_done {version : Spec.Lexicon.Version} {items : List Received}
+theorem cmdInv_done {version : BSmtLibSpec.Lexicon.Version} {items : List Received}
     {state : CommandState Nat Nat Nat Nat Nat} {x : Received} {e : CmdEnd}
     (hinv : CmdInv version markers items state)
     (hdone : (∃ u, commandRem version markers state u) →
@@ -223,22 +225,22 @@ theorem unrestricted_check (declarations : Nat) (declared : BSmtLib.Version) :
     unrestrictedPosture.check declarations declared = none := by
   cases declared <;> simp [VersionPosture.check, unrestrictedPosture] <;> decide
 
-theorem cmdEnd_next {version next : Spec.Lexicon.Version} {c : Tree.Command}
+theorem cmdEnd_next {version next : BSmtLibSpec.Lexicon.Version} {c : Tree.Command}
     (h : cmdEnd version c = .next next) : c.modeAfter version = some (.read next) := by
   unfold cmdEnd at h
   split at h <;> simp_all
 
-theorem cmdEnd_exit {version : Spec.Lexicon.Version} {c : Tree.Command}
+theorem cmdEnd_exit {version : BSmtLibSpec.Lexicon.Version} {c : Tree.Command}
     (h : cmdEnd version c = .exit) : c.modeAfter version = some .unparsed := by
   unfold cmdEnd at h
   split at h <;> simp_all
 
-theorem cmdEnd_refused {version : Spec.Lexicon.Version} {c : Tree.Command}
+theorem cmdEnd_refused {version : BSmtLibSpec.Lexicon.Version} {c : Tree.Command}
     (h : cmdEnd version c = .refused) : c.modeAfter version = none := by
   unfold cmdEnd at h
   split at h <;> simp_all
 
-theorem cmdEnd_ne_endOfInput {version : Spec.Lexicon.Version} {c : Tree.Command} :
+theorem cmdEnd_ne_endOfInput {version : BSmtLibSpec.Lexicon.Version} {c : Tree.Command} :
     cmdEnd version c ≠ .endOfInput := by
   unfold cmdEnd
   split <;> simp
@@ -248,7 +250,7 @@ theorem cmdEnd_ne_endOfInput {version : Spec.Lexicon.Version} {c : Tree.Command}
 /-- What the script parser has taken, from the version `start` on: the items `pre`, in the
 parser's state, which it is in with the version `version`. Either it is in a command, or it has
 taken `exit`, after which it waits for a command again. -/
-def ScriptInv (start : Spec.Lexicon.Version) (pre : List Received) (version : BSmtLib.Version)
+def ScriptInv (start : BSmtLibSpec.Lexicon.Version) (pre : List Received) (version : BSmtLib.Version)
     (parser : ScriptParser (List Event)) : Prop :=
   parser.posture = unrestrictedPosture ∧
   ((∃ done items, Chain start done (Bridge.version version) ∧
@@ -258,14 +260,14 @@ def ScriptInv (start : Spec.Lexicon.Version) (pre : List Received) (version : BS
       pre = cmdToks done ++ toks Tree.Command.exit.tokens))
 
 /-- What follows a step of the script parser on an item, from what it has taken. -/
-def ScriptPost (start : Spec.Lexicon.Version) (pre : List Received) (x : Received) :
+def ScriptPost (start : BSmtLibSpec.Lexicon.Version) (pre : List Received) (x : Received) :
     (BSmtLib.Version × ScriptParser (List Event)) ⊕ Unit → Prop
   | .inl (version, parser) => ScriptInv start (pre ++ [x]) version parser
   | .inr () => ∃ commands, Takes start commands (pre ++ [x]) .finished
 
 /-- A failure of a step of the script parser: no rejection of a version declaration, or one of a
 declaration that names no supported version, whose `)` the item is. -/
-def ScriptFailure (start : Spec.Lexicon.Version) (pre : List Received) (x : Received)
+def ScriptFailure (start : BSmtLibSpec.Lexicon.Version) (pre : List Received) (x : Received)
     (e : Parser.ParseErrorCause Unit) : Prop :=
   Benign e ∨ e = .syntax .unsupportedVersion ∧
     ∃ commands, Takes start commands (pre ++ [x]) (.failed .unsupportedVersion)
@@ -273,14 +275,14 @@ def ScriptFailure (start : Spec.Lexicon.Version) (pre : List Received) (x : Rece
 /-! ## A step of the script parser -/
 
 theorem producerSetVersion_sound {Q : Parser.ParseErrorCause Unit → Prop}
-    (version : Spec.Lexicon.Version) :
+    (version : BSmtLibSpec.Lexicon.Version) :
     Sound (fun r => r = .ok ()) Q
       (ExceptT.lift (recordingProducer.setVersion version).run :
         RPM (Except Traversal.VersionRefused Unit)) :=
   ⟨fun _ _ _ h => (by cases h; rfl), fun _ _ _ h => (by cases h), fun _ _ _ h => (by cases h)⟩
 
 /-- The items of a refused declaration completed: what a parser takes before it fails. -/
-theorem refused_taken {start version : Spec.Lexicon.Version} {done : List Tree.Command}
+theorem refused_taken {start version : BSmtLibSpec.Lexicon.Version} {done : List Tree.Command}
     (hchain : Chain start done version) {items : List Received} {x : Received}
     {state : CommandState Nat Nat Nat Nat Nat} (hm : CmdInv version markers items state)
     (hrefused : (∃ u, commandRem version markers state u) →
@@ -297,7 +299,7 @@ theorem refused_taken {start version : Spec.Lexicon.Version} {done : List Tree.C
 /-- Every step of the script parser, after an item's arrival, goes on in a state that says what
 it has taken, or finishes the script, or fails: no rejection of a version declaration, or the
 rejection of one that names no supported version at its `)`. -/
-theorem afterProcessing_post {start : Spec.Lexicon.Version} {pre : List Received}
+theorem afterProcessing_post {start : BSmtLibSpec.Lexicon.Version} {pre : List Received}
     {version : BSmtLib.Version} {parser : ScriptParser (List Event)} {token : Input}
     {x : Received} (hinv : ScriptInv start pre version parser)
     (hitem : Bridge.received token = some x) (hlex : x.OfVersion (Bridge.version version))
@@ -384,7 +386,7 @@ theorem arrive_sound (parser : ScriptParser (List Event)) (token : Input) :
     cases hrun
 
 /-- Every step of the script parser on an item, from its arrival on. -/
-theorem recAfter_post {start : Spec.Lexicon.Version} {pre : List Received}
+theorem recAfter_post {start : BSmtLibSpec.Lexicon.Version} {pre : List Received}
     {version : BSmtLib.Version} {parser : ScriptParser (List Event)} {token : Input}
     {x : Received} (hinv : ScriptInv start pre version parser)
     (hitem : Bridge.received token = some x) (hlex : x.OfVersion (Bridge.version version))
@@ -400,7 +402,7 @@ theorem recAfter_post {start : Spec.Lexicon.Version} {pre : List Received}
 
 /-- A step of the script parser that rejects an item makes no call at it: the item's processing
 is the last event of its run. -/
-theorem recAfter_rejects_quiet {start : Spec.Lexicon.Version} {pre : List Received}
+theorem recAfter_rejects_quiet {start : BSmtLibSpec.Lexicon.Version} {pre : List Received}
     {version : BSmtLib.Version} {parser : ScriptParser (List Event)} {token : Input}
     {x : Received} (hinv : ScriptInv start pre version parser)
     (hitem : Bridge.received token = some x) (hlex : x.OfVersion (Bridge.version version))
@@ -440,7 +442,7 @@ theorem noEmpty_tok (x : Received) : NoEmpty (tok x) := by
   rintro _ rfl h
   cases h
 
-theorem noEmpty_closeNext (v : Spec.Lexicon.Version) (follows : CmdEnd → Lang) :
+theorem noEmpty_closeNext (v : BSmtLibSpec.Lexicon.Version) (follows : CmdEnd → Lang) :
     NoEmpty (closeNext v follows) :=
   fun u hu h => by
     obtain ⟨_, _, rfl, _, rfl⟩ := hu
@@ -449,7 +451,7 @@ theorem noEmpty_closeNext (v : Spec.Lexicon.Version) (follows : CmdEnd → Lang)
 theorem noEmpty_union {A B : Lang} (hA : NoEmpty A) (hB : NoEmpty B) : NoEmpty (union A B) :=
   fun u hu => hu.elim (hA u) (hB u)
 
-theorem noEmpty_attrRem (v : Spec.Lexicon.Version) (need : Bool)
+theorem noEmpty_attrRem (v : BSmtLibSpec.Lexicon.Version) (need : Bool)
     (state : Parser.AttributeState Nat Nat) :
     NoEmpty (attrRem v true need state) := by
   have htail : NoEmpty (attrTail v true) := by
@@ -480,13 +482,13 @@ theorem endsFollowed_cat {follows : CmdEnd → Lang} {A B : Lang} (hB : EndsFoll
   obtain ⟨c, e, w, hc, hw, rfl⟩ := hB b hb
   exact ⟨a ++ c, e, w, by simp [hc], hw, by simp⟩
 
-theorem endsFollowed_closeNext (v : Spec.Lexicon.Version) (follows : CmdEnd → Lang) :
+theorem endsFollowed_closeNext (v : BSmtLibSpec.Lexicon.Version) (follows : CmdEnd → Lang) :
     EndsFollowed follows (closeNext v follows) := by
   rintro _ ⟨_, w, rfl, hw, rfl⟩
   exact ⟨[closeItem], _, w, by simp, hw, rfl⟩
 
 /-- Every remainder of a command parser's state is some items, then what follows the command. -/
-theorem commandRem_endsFollowed (v : Spec.Lexicon.Version) (follows : CmdEnd → Lang)
+theorem commandRem_endsFollowed (v : BSmtLibSpec.Lexicon.Version) (follows : CmdEnd → Lang)
     (state : CommandState Nat Nat Nat Nat Nat) :
     EndsFollowed follows (commandRem v follows state) := by
   have hc := endsFollowed_closeNext v follows
@@ -532,14 +534,14 @@ theorem commandRem_endsFollowed (v : Spec.Lexicon.Version) (follows : CmdEnd →
     all_goals repeat (first | exact hc | apply endsFollowed_cat)
 
 /-- No remainder of a command parser's state is empty. -/
-theorem commandRem_noEmpty (v : Spec.Lexicon.Version) (follows : CmdEnd → Lang)
+theorem commandRem_noEmpty (v : BSmtLibSpec.Lexicon.Version) (follows : CmdEnd → Lang)
     (state : CommandState Nat Nat Nat Nat Nat) : NoEmpty (commandRem v follows state) := by
   intro u hu h
   obtain ⟨a, e, w, ha, -, rfl⟩ := commandRem_endsFollowed v follows state u hu
   exact ha (List.append_eq_nil_iff.mp h).1
 
 /-- A command of the version, then what a parser takes as the command ends. -/
-theorem takes_command {version : Spec.Lexicon.Version} {c : Tree.Command} (hc : c.Valid version) :
+theorem takes_command {version : BSmtLibSpec.Lexicon.Version} {c : Tree.Command} (hc : c.Valid version) :
     ∃ tail ending, Takes version [c] (toks c.tokens ++ tail) ending := by
   cases hmode : c.modeAfter version with
   | none => exact ⟨[], _, by simpa using Takes.refused hc hmode⟩
@@ -550,7 +552,7 @@ theorem takes_command {version : Spec.Lexicon.Version} {c : Tree.Command} (hc : 
 
 /-- What the script parser has taken is the start of what a parser takes for some commands, and
 the version the parser is in is the one in force at the next item. -/
-theorem scriptInv_witness {start : Spec.Lexicon.Version} {pre : List Received}
+theorem scriptInv_witness {start : BSmtLibSpec.Lexicon.Version} {pre : List Received}
     {version : BSmtLib.Version} {parser : ScriptParser (List Event)}
     (hinv : ScriptInv start pre version parser) :
     ∃ commands taken ending, Takes start commands taken ending ∧ pre.length < taken.length ∧
@@ -656,7 +658,7 @@ theorem received_rcv {token : Input} (h : Bridge.received token ≠ none) :
 
 /-- What a run of the script parser over items ends in: going on in a state that says what it
 has taken, or finished at an item after which a script ends, with the items after it. -/
-def RunPost (start : Spec.Lexicon.Version) (pre : List Received) (items : List Input) :
+def RunPost (start : BSmtLibSpec.Lexicon.Version) (pre : List Received) (items : List Input) :
     (BSmtLib.Version × ScriptParser (List Event)) ⊕ (Unit × List Input) → Prop
   | .inl (version, parser) => ScriptInv start (pre ++ items.map rcv) version parser
   | .inr (_, rest) => ∃ j commands, j < items.length ∧ rest = items.drop (j + 1) ∧
@@ -664,7 +666,7 @@ def RunPost (start : Spec.Lexicon.Version) (pre : List Received) (items : List I
 
 /-- A failure of a run of the script parser over items: no rejection of a version declaration,
 or the rejection of a declaration that names no supported version at its `)`. -/
-def RunFailure (start : Spec.Lexicon.Version) (pre : List Received) (items : List Input)
+def RunFailure (start : BSmtLibSpec.Lexicon.Version) (pre : List Received) (items : List Input)
     (e : Parser.ParseErrorCause Unit) : Prop :=
   Benign e ∨ e = .syntax .unsupportedVersion ∧ ∃ j commands, j < items.length ∧
     Takes start commands (pre ++ (items.take (j + 1)).map rcv) (.failed .unsupportedVersion)
@@ -673,7 +675,7 @@ def RunFailure (start : Spec.Lexicon.Version) (pre : List Received) (items : Lis
 each item's reserved words are ones of the version in force there, as every reading of the
 items before it says; or it finishes, or fails, at an item after which a parser takes no
 more. -/
-theorem script_runs (start : Spec.Lexicon.Version) :
+theorem script_runs (start : BSmtLibSpec.Lexicon.Version) :
     ∀ (items : List Input) (pre : List Received) (version : BSmtLib.Version)
       (parser : ScriptParser (List Event)), ScriptInv start pre version parser →
     NoLayout items →

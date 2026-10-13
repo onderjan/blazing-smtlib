@@ -1,4 +1,4 @@
-import BSmtLib.Spec.Grammar.Tree
+import BSmtLibSpec.Grammar
 
 /-!
 # The syntax of each category
@@ -19,75 +19,10 @@ How each production is written is the standard's; the trees and the split into `
 `Valid` are how this specification records it.
 -/
 
-namespace BSmtLib.Spec.Grammar
+namespace BSmtLibSpec.Grammar
 
-open BSmtLib.Spec.Lexicon
-
-/-- The version is `first` or a later one. -/
-def versionAtLeast (version first : Version) : Prop :=
-  first ∈ version.upTo
-
-/-- The number of the version, as a decimal. -/
-def versionNumber : Version → Chars
-  | .v2_0 => chars "2.0"
-  | .v2_5 => chars "2.5"
-  | .v2_6 => chars "2.6"
-  | .v2_7 => chars "2.7"
-
-/-- The version whose number the decimal is, if it is one. -/
-def versionOfNumber (decimal : Chars) : Option Version :=
-  [Version.v2_0, .v2_5, .v2_6, .v2_7].find? (versionNumber · = decimal)
-
-/--
-A token as the syntactic rules see it: what the lexical token stands for, and for a symbol
-whether it was quoted.
-
-Standard: 2.7 §3.1 Symbols: a simple symbol and its quoted form are the same symbol.
--/
-inductive SyntaxToken where
-  | parenOpen
-  | parenClose
-  | numeral (digits : Chars)
-  | decimal (text : Chars)
-  | hexadecimal (digits : Chars)
-  | binary (digits : Chars)
-  | string (content : Chars)
-  /--
-  A simple or a quoted symbol: `abc` and `|abc|` are the same symbol. Whether it was quoted
-  is recorded for printing, not for identity.
-  -/
-  | symbol (symbol : Tree.Symbol)
-  | keyword (name : Chars)
-  | reserved (word : Chars)
-
-/--
-What a lexical token of the version stands for, and for a symbol whether it was quoted.
-
-Standard: 2.7 §3.1 Symbols, as `SyntaxToken`.
--/
-def SyntaxToken.ofToken (version : Version) (token : Token) : SyntaxToken :=
-  match token.category with
-  | .parenOpen => .parenOpen
-  | .parenClose => .parenClose
-  | .numeral => .numeral token.text
-  | .decimal => .decimal token.text
-  | .hexadecimal => .hexadecimal (token.content version)
-  | .binary => .binary (token.content version)
-  | .string => .string (token.content version)
-  | .simpleSymbol => .symbol ⟨token.content version, false⟩
-  | .quotedSymbol => .symbol ⟨token.content version, true⟩
-  | .keyword => .keyword (token.content version)
-  | .reserved => .reserved token.text
-
-/-- `(`, the tokens, `)`. -/
-def paren (tokens : List SyntaxToken) : List SyntaxToken := .parenOpen :: tokens ++ [.parenClose]
-
-/-- The reserved word `w`. -/
-def word (w : String) : SyntaxToken := .reserved (chars w)
-
-/-- `(`, the command name, the tokens, `)`. -/
-def commandTokens (name : String) (tokens : List SyntaxToken) : List SyntaxToken :=
-  paren (word name :: tokens)
+open BSmtLibSpec.Lexicon
+open Regex (Chars chars)
 
 namespace Tree
 
@@ -655,6 +590,8 @@ def Command.Valid (version : Version) : Command → Prop
 
 end Tree
 
+namespace Syntax
+
 /-! ## Sequences of tokens of a category -/
 
 /--
@@ -677,4 +614,6 @@ Standard: 2.7 §3.11 Scripts; App. B ⟨command⟩, as `Tree.Command.tokens` and
 def IsCommand (version : Version) (tokens : List SyntaxToken) (command : Tree.Command) : Prop :=
   command.Valid version ∧ command.tokens = tokens
 
-end BSmtLib.Spec.Grammar
+end Syntax
+
+end BSmtLibSpec.Grammar

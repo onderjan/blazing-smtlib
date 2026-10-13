@@ -10,11 +10,13 @@ and those of a symbol, a numeral, a string or a keyword. Each payload lemma is s
 
 namespace BSmtLib.ParserProofs
 
-open BSmtLib.Spec.Grammar
+open BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
 open BSmtLib.Parser (Input PM Step CommandState Payload CommandOutcome FinalCall commandStep
   payloadStep finalCall)
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 open BSmtLib.SpecChecks.Parser (Program.callUnit)
 
 section
@@ -72,7 +74,7 @@ theorem single_payload {payload : Parser.PayloadOf H} {token : Input}
 variable (hA : Agrees h)
 include hA
 
-theorem echo_payload (content : Spec.Lexicon.Chars) {payload : List Input}
+theorem echo_payload (content : BSmtLibSpec.Regex.Chars) {payload : List Input}
     (hs : Stands payload [.string content]) :
     PayloadRuns points version (Payload.init .echo version) (payload ++ [.parenClose])
       (adaptRun (do
@@ -85,7 +87,7 @@ theorem echo_payload (content : Spec.Lexicon.Chars) {payload : List Input}
     Parser.expectString]) (by simp [finalCall, hA.commandEcho]) rfl).congr ?_ rfl
   simp [takeAll, adaptRun_take htoken, adaptRun_take (token := .parenClose) rfl]
 
-theorem getInfo_payload (flag : Spec.Lexicon.Chars) {payload : List Input}
+theorem getInfo_payload (flag : BSmtLibSpec.Regex.Chars) {payload : List Input}
     (hs : Stands payload [.keyword flag]) :
     PayloadRuns points version (Payload.init .getInfo version) (payload ++ [.parenClose])
       (adaptRun (do
@@ -98,7 +100,7 @@ theorem getInfo_payload (flag : Spec.Lexicon.Chars) {payload : List Input}
     Parser.expectKeyword]) (by simp [finalCall, hA.commandGetInfo]) rfl).congr ?_ rfl
   simp [takeAll, adaptRun_take htoken, adaptRun_take (token := .parenClose) rfl]
 
-theorem getOption_payload (keyword : Spec.Lexicon.Chars) {payload : List Input}
+theorem getOption_payload (keyword : BSmtLibSpec.Regex.Chars) {payload : List Input}
     (hs : Stands payload [.keyword keyword]) :
     PayloadRuns points version (Payload.init .getOption version) (payload ++ [.parenClose])
       (adaptRun (do
@@ -111,7 +113,7 @@ theorem getOption_payload (keyword : Spec.Lexicon.Chars) {payload : List Input}
     Parser.expectKeyword]) (by simp [finalCall, hA.commandGetOption]) rfl).congr ?_ rfl
   simp [takeAll, adaptRun_take htoken, adaptRun_take (token := .parenClose) rfl]
 
-theorem pop_payload (count : Spec.Lexicon.Chars) {payload : List Input}
+theorem pop_payload (count : BSmtLibSpec.Regex.Chars) {payload : List Input}
     (hs : Stands payload [.numeral count]) :
     PayloadRuns points version (Payload.init .pop version) (payload ++ [.parenClose])
       (adaptRun (do
@@ -124,7 +126,7 @@ theorem pop_payload (count : Spec.Lexicon.Chars) {payload : List Input}
     Parser.expectNumeral]) (by simp [finalCall, hA.commandPop]) rfl).congr ?_ rfl
   simp [takeAll, adaptRun_take htoken, adaptRun_take (token := .parenClose) rfl]
 
-theorem push_payload (count : Spec.Lexicon.Chars) {payload : List Input}
+theorem push_payload (count : BSmtLibSpec.Regex.Chars) {payload : List Input}
     (hs : Stands payload [.numeral count]) :
     PayloadRuns points version (Payload.init .push version) (payload ++ [.parenClose])
       (adaptRun (do
@@ -166,7 +168,7 @@ theorem declareSortParameter_payload (name : Tree.Symbol) {payload : List Input}
     rfl).congr ?_ rfl
   simp [takeAll, adaptRun_take htoken, adaptRun_take (token := .parenClose) rfl]
 
-theorem declareSort_payload (name : Tree.Symbol) (arity : Spec.Lexicon.Chars) {payload : List Input}
+theorem declareSort_payload (name : Tree.Symbol) (arity : BSmtLibSpec.Regex.Chars) {payload : List Input}
     (hs : Stands payload [.symbol name, .numeral arity]) :
     PayloadRuns points version (Payload.init .declareSort version) (payload ++ [.parenClose])
       (adaptRun (do

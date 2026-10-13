@@ -11,9 +11,11 @@ application come its further arguments and its `)`, then what follows that appli
 
 namespace BSmtLib.ParserProofs.Rejection
 
-open BSmtLib.Spec.Grammar
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 open BSmtLib.Parser (Input PM Step IdentState SortState SortMode SortLevel sortStep sortComplete)
 open Lang
 
@@ -32,42 +34,42 @@ abbrev wordItem (w : String) : Received := .token (word w)
 def SymbolLang : Lang := fun u => ∃ name, u = [.token (.symbol name)]
 
 /-- An index of the version. -/
-def IndexLang (version : Spec.Lexicon.Version) : Lang :=
+def IndexLang (version : BSmtLibSpec.Lexicon.Version) : Lang :=
   fun u => ∃ index : Tree.Index, index.Valid version ∧ u = toks index.tokens
 
 /-- An identifier of the version. -/
-def IdentLang (version : Spec.Lexicon.Version) : Lang :=
+def IdentLang (version : BSmtLibSpec.Lexicon.Version) : Lang :=
   fun u => ∃ identifier : Tree.Identifier, identifier.Valid version ∧ u = toks identifier.tokens
 
 /-- A sort of the version. -/
-def SortLang (version : Spec.Lexicon.Version) : Lang :=
+def SortLang (version : BSmtLibSpec.Lexicon.Version) : Lang :=
   fun u => ∃ sort : Tree.Sort, sort.Valid version ∧ u = toks sort.tokens
 
 theorem symbolLang_intro (name : Tree.Symbol) : SymbolLang [.token (.symbol name)] := ⟨name, rfl⟩
 
 theorem symbolLang_nonempty : ∃ u, SymbolLang u := ⟨_, symbolLang_intro ⟨[], false⟩⟩
 
-theorem identLang_symbol (version : Spec.Lexicon.Version) (name : Tree.Symbol) :
+theorem identLang_symbol (version : BSmtLibSpec.Lexicon.Version) (name : Tree.Symbol) :
     IdentLang version [.token (.symbol name)] :=
   ⟨⟨name, []⟩, by simp [Tree.Identifier.Valid], rfl⟩
 
-theorem sortLang_symbol (version : Spec.Lexicon.Version) (name : Tree.Symbol) :
+theorem sortLang_symbol (version : BSmtLibSpec.Lexicon.Version) (name : Tree.Symbol) :
     SortLang version [.token (.symbol name)] :=
   ⟨⟨⟨name, []⟩, []⟩, by simp [Tree.Sort.Valid, Tree.Sort.ValidAll, Tree.Identifier.Valid], rfl⟩
 
-theorem sortLang_nonempty (version : Spec.Lexicon.Version) : ∃ u, SortLang version u :=
+theorem sortLang_nonempty (version : BSmtLibSpec.Lexicon.Version) : ∃ u, SortLang version u :=
   ⟨_, sortLang_symbol version ⟨[], false⟩⟩
 
-theorem identLang_nonempty (version : Spec.Lexicon.Version) : ∃ u, IdentLang version u :=
+theorem identLang_nonempty (version : BSmtLibSpec.Lexicon.Version) : ∃ u, IdentLang version u :=
   ⟨_, identLang_symbol version ⟨[], false⟩⟩
 
-theorem indexLang_nonempty (version : Spec.Lexicon.Version) : ∃ u, IndexLang version u :=
+theorem indexLang_nonempty (version : BSmtLibSpec.Lexicon.Version) : ∃ u, IndexLang version u :=
   ⟨_, ⟨.numeral [], trivial, rfl⟩⟩
 
 /-! ## Identifiers -/
 
 /-- The remainders of the identifier parser's states. -/
-def identRem (version : Spec.Lexicon.Version) : IdentState → Lang
+def identRem (version : BSmtLibSpec.Lexicon.Version) : IdentState → Lang
   | .start => IdentLang version
   | .opened => cat (tok (wordItem "_")) (cat SymbolLang
       (cat (plus (IndexLang version)) (tok closeItem)))
@@ -75,7 +77,7 @@ def identRem (version : Spec.Lexicon.Version) : IdentState → Lang
   | .indices _ found =>
     cat (rep (IndexLang version) (if found.isEmpty then 1 else 0) none) (tok closeItem)
 
-theorem identRem_nonempty (version : Spec.Lexicon.Version) (state : IdentState) :
+theorem identRem_nonempty (version : BSmtLibSpec.Lexicon.Version) (state : IdentState) :
     ∃ u, identRem version state u := by
   have hplus := rep_nonempty (indexLang_nonempty version) 1 none (by simp)
   cases state with
@@ -90,7 +92,7 @@ theorem identRem_nonempty (version : Spec.Lexicon.Version) (state : IdentState) 
       ⟨_, tok_intro _⟩
 
 /-- An indexed identifier, after its `(`: `_`, its symbol, its indices and its `)`. -/
-theorem identLang_indexed {version : Spec.Lexicon.Version} {u : List Received}
+theorem identLang_indexed {version : BSmtLibSpec.Lexicon.Version} {u : List Received}
     (h : identRem version .opened u) : IdentLang version (openItem :: u) := by
   obtain ⟨_, _, rfl, ⟨_, _, ⟨name, rfl⟩, ⟨_, _, hindices, rfl, rfl⟩, rfl⟩, rfl⟩ := h
   obtain ⟨indices, hvalid, hlen, -, rfl⟩ := rep_trees hindices
@@ -188,7 +190,7 @@ theorem identStep_advances (version : BSmtLib.Version) :
 
 section
 
-variable (version : Spec.Lexicon.Version)
+variable (version : BSmtLibSpec.Lexicon.Version)
 
 /-- What follows a sort that is an argument of the innermost open application: the application's
 further arguments and its `)`, then what follows the application, outwards. -/
@@ -258,7 +260,7 @@ end
 
 /-- The sort parser's step at the end of a sort: the sort is the result, or the next argument
 of the innermost open application. -/
-theorem sortComplete_advances {version : Spec.Lexicon.Version} {state : SortState Nat}
+theorem sortComplete_advances {version : BSmtLibSpec.Lexicon.Version} {state : SortState Nat}
     {item : Received} {levels : List (SortLevel Nat)} (head : Parser.Identifier)
     (arguments : Array Nat)
     {Q : Parser.ParseErrorCause Unit → Prop}
@@ -279,7 +281,7 @@ theorem sortTokensAll_eq (sorts : List Tree.Sort) :
   | nil => rfl
   | cons first rest ih => simp [Tree.Sort.tokensAll, ih]
 
-theorem sortValidAll_of {version : Spec.Lexicon.Version} {sorts : List Tree.Sort}
+theorem sortValidAll_of {version : BSmtLibSpec.Lexicon.Version} {sorts : List Tree.Sort}
     (h : ∀ sort ∈ sorts, sort.Valid version) : Tree.Sort.ValidAll version sorts := by
   induction sorts with
   | nil => trivial
@@ -287,7 +289,7 @@ theorem sortValidAll_of {version : Spec.Lexicon.Version} {sorts : List Tree.Sort
     exact ⟨h first (by simp), ih fun sort hsort => h sort (by simp [hsort])⟩
 
 /-- Sorts, one after another, as a repetition. -/
-theorem sorts_rep {version : Spec.Lexicon.Version} {lo : Nat} {hi : Option Nat}
+theorem sorts_rep {version : BSmtLibSpec.Lexicon.Version} {lo : Nat} {hi : Option Nat}
     {u : List Received} (h : rep (SortLang version) lo hi u) :
     ∃ sorts : List Tree.Sort, Tree.Sort.ValidAll version sorts ∧ lo ≤ sorts.length ∧
       u = toks (Tree.Sort.tokensAll sorts) := by
@@ -295,7 +297,7 @@ theorem sorts_rep {version : Spec.Lexicon.Version} {lo : Nat} {hi : Option Nat}
   exact ⟨sorts, sortValidAll_of hvalid, hlo, by simp [sortTokensAll_eq, Function.comp_def]⟩
 
 /-- After a sort's `(`, the rest of the sort. -/
-theorem sortLang_of_opened {version : Spec.Lexicon.Version} {a : List Received}
+theorem sortLang_of_opened {version : BSmtLibSpec.Lexicon.Version} {a : List Received}
     (h : union (identRem version .opened)
       (cat (IdentLang version) (cat (plus (SortLang version)) (tok closeItem))) a) :
     SortLang version (openItem :: a) := by

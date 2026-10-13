@@ -15,7 +15,7 @@ an error, the version in force and where the lexer discards from.
 namespace BSmtLib.Proofs.Lexer.VNaiveWRustPort
 
 open BSmtLib.Proofs.Adapter VNaive
-open Spec.Lexer (Handed)
+open BSmtLibSpec.Lexer (Handed)
 
 /-- The lexemes the end of the input finishes before the end-of-file one, or none on an
 error. -/
@@ -30,7 +30,7 @@ def finishLs (ws : Bool) (st : St) (location : Location) : Option (List Lexeme) 
 
 section
 
-variable (C : Spec.Lexer.Consumer)
+variable (C : BSmtLibSpec.Lexer.Consumer)
 
 /-- What the consumer does with the end-of-file token, after it has done `h` with the lexemes
 the end of the input finishes, while the lexer holds a result if `hd`: also where the lexer
@@ -53,7 +53,7 @@ end
 
 /-- The spec's failure for the cause of an error and its span. -/
 def causeFailure {ε : Type} (cause : LexErrorCause (Option ε)) (span : Span) :
-    Spec.Lexer.Failure ε :=
+    BSmtLibSpec.Lexer.Failure ε :=
   failureOf { cause, span, continuesFrom := none }
 
 theorem failureOf_eq {ε : Type} (e : LexError (Option ε)) :
@@ -70,7 +70,7 @@ theorem causeFailure_lexical {ε : Type} {k : LexicalErrorKind} {span : Span}
   rfl
 
 /-- The spec's failure at a stop of the consumer that fails the lexer. -/
-def stopFailure {C : Spec.Lexer.Consumer} : Stop C → Spec.Lexer.Failure C.Error
+def stopFailure {C : BSmtLibSpec.Lexer.Consumer} : Stop C → BSmtLibSpec.Lexer.Failure C.Error
   | .trailing l => .trailing (toLocation l.start)
   | .fail e _ _ => .consumer e
   | _ => .lexical
@@ -80,9 +80,9 @@ lexer discards from `d'` after it and the tokens taken `coll'`, where the consum
 with the lexemes the end of the input finishes and the end-of-file token, a request to discard
 at a finished lexeme made the lexer discard from `d`, and it discarded from `d0` before, at
 `location`. -/
-def EofTail (C : Spec.Lexer.Consumer) (h : HandOut C) (d d0 : Option Location)
+def EofTail (C : BSmtLibSpec.Lexer.Consumer) (h : HandOut C) (d d0 : Option Location)
     (location : Location)
-    (res : Except (Spec.Lexer.Failure C.Error) (ControlFlow (Located C.Result))) (ver' : Version)
+    (res : Except (BSmtLibSpec.Lexer.Failure C.Error) (ControlFlow (Located C.Result))) (ver' : Version)
     (d' : Option Location) (coll' : List Handed) : Prop :=
   match h with
   | .cont p => res = .ok .continue ∧ coll' = p.taken
@@ -101,9 +101,9 @@ def EofTail (C : Spec.Lexer.Consumer) (h : HandOut C) (d d0 : Option Location)
 lexer discards from `d'` after it and the tokens taken `coll'`, as `o`, what the consumer does at
 the end of the input, says, from the tokens `coll` taken under the version `ver`, where the lexer
 discarded from `d0`, at `location`. -/
-def EofRes (C : Spec.Lexer.Consumer) (o : Option (HandOut C × Option Location))
+def EofRes (C : BSmtLibSpec.Lexer.Consumer) (o : Option (HandOut C × Option Location))
     (d0 : Option Location) (ver : Version) (coll : List Handed) (location : Location)
-    (res : Except (Spec.Lexer.Failure C.Error) (ControlFlow (Located C.Result))) (ver' : Version)
+    (res : Except (BSmtLibSpec.Lexer.Failure C.Error) (ControlFlow (Located C.Result))) (ver' : Version)
     (d' : Option Location) (coll' : List Handed) : Prop :=
   match o with
   | none => res = .error .lexical ∧ ver' = ver ∧ d' = d0 ∧ coll' = coll
@@ -111,9 +111,9 @@ def EofRes (C : Spec.Lexer.Consumer) (o : Option (HandOut C × Option Location))
 
 /-- What two ends of the input that satisfy `EofRes` for the same `o` give alike: the same
 result, the same tokens taken, and after an error, the same version and discarding. -/
-theorem eofRes_unique {C : Spec.Lexer.Consumer} {o : Option (HandOut C × Option Location)}
+theorem eofRes_unique {C : BSmtLibSpec.Lexer.Consumer} {o : Option (HandOut C × Option Location)}
     {d0 : Option Location} {ver : Version} {coll : List Handed} {location : Location}
-    {res₁ res₂ : Except (Spec.Lexer.Failure C.Error) (ControlFlow (Located C.Result))}
+    {res₁ res₂ : Except (BSmtLibSpec.Lexer.Failure C.Error) (ControlFlow (Located C.Result))}
     {ver₁ ver₂ : Version} {d₁ d₂ : Option Location} {coll₁ coll₂ : List Handed}
     (h₁ : EofRes C o d0 ver coll location res₁ ver₁ d₁ coll₁)
     (h₂ : EofRes C o d0 ver coll location res₂ ver₂ d₂ coll₂) :

@@ -11,7 +11,7 @@ The Rust port `WRustPort` (`VNaiveWRustPort.lexing_wRustPort_vNaive`), the lexer
 in its state `X1BatchInCore` (`lexing_wRustPort_x1BatchInCore`) and the library's lexer
 (`lexing_cut`, with `lexing_flatten` of the naive lexer, as the library's lexer cuts slices into
 chunks) do with every consumer of the spec what the naive lexer does (`Adapter.lexing`), so each
-is `Spec.Lexer.CorrectWithConsumers` as the naive lexer is (`correctWithConsumers_vNaive`).
+is `BSmtLibSpec.Lexer.CorrectWithConsumers` as the naive lexer is (`correctWithConsumers_vNaive`).
 -/
 
 namespace BSmtLib.Proofs.Adapter
@@ -34,16 +34,16 @@ theorem lexing_lexer_vNaive : lexing Lexer.lexOps = lexing VNaive.lexOps := by
   simp only [Function.comp, X1BatchInCoreLexer.Chunks.flatten_cutAll]
 
 theorem correctWithConsumers_wRustPort :
-    Spec.Lexer.CorrectWithConsumers (lexing WRustPort.lexOps) := by
+    BSmtLibSpec.Lexer.CorrectWithConsumers (lexing WRustPort.lexOps) := by
   rw [lexing_wRustPort_vNaive]
   exact correctWithConsumers_vNaive
 
 theorem correctWithConsumers_x1BatchInCore :
-    Spec.Lexer.CorrectWithConsumers (lexing X1BatchInCore.lexOps) := by
+    BSmtLibSpec.Lexer.CorrectWithConsumers (lexing X1BatchInCore.lexOps) := by
   rw [lexing_x1BatchInCore_vNaive]
   exact correctWithConsumers_vNaive
 
-theorem correctWithConsumers_lexer : Spec.Lexer.CorrectWithConsumers (lexing Lexer.lexOps) := by
+theorem correctWithConsumers_lexer : BSmtLibSpec.Lexer.CorrectWithConsumers (lexing Lexer.lexOps) := by
   rw [lexing_lexer_vNaive]
   exact correctWithConsumers_vNaive
 

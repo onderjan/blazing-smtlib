@@ -4,7 +4,7 @@ import BSmtLib.Proofs.Consumers.Stream
 # What follows a boundary
 
 The run from a boundary for a consumer that takes whitespace and comments, and the layout the spec
-gives there (`Spec.Lexer.layoutFrom`, `stream_layout`): either the spec gives none, and the first
+gives there (`BSmtLibSpec.Lexer.layoutFrom`, `stream_layout`): either the spec gives none, and the first
 lexeme of the run, if any, is a token; or the first lexeme is whitespace or a comment from the
 boundary, which is the first piece the spec gives; or the layout there is not complete yet, and
 the run has finished nothing and not failed.
@@ -12,7 +12,9 @@ the run has finished nothing and not failed.
 
 namespace BSmtLib.Proofs.Lexer.VNaive
 
-open BSmtLib.Proofs.Adapter BSmtLib.Spec.Lexicon BSmtLib.SpecChecks.Lexicon
+open BSmtLib.Proofs.Adapter BSmtLibSpec.Lexicon BSmtLib.SpecChecks.Lexicon
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
 
 /-- The whitespace lexeme in progress `p` that ends at `location`. -/
 def wsLexeme (p : Pending) (location : Location) : Lexeme :=
@@ -230,13 +232,13 @@ theorem decide_notLineBreak :
 
 theorem layoutFrom_ws {input : List UInt8} {ended : Bool} {o : Nat} {c : UInt8}
     {rest : List UInt8} (h : input.drop o = c :: rest) (hw : isWhitespace c = true) :
-    Spec.Lexer.layoutFrom input ended o =
+    BSmtLibSpec.Lexer.layoutFrom input ended o =
       if ended = true ∨ o + (c :: rest.takeWhile isWhitespace).length < input.length then
-        Spec.Lexer.layoutEntry input .whitespace o (c :: rest.takeWhile isWhitespace).length
+        BSmtLibSpec.Lexer.layoutEntry input .whitespace o (c :: rest.takeWhile isWhitespace).length
             (c :: rest.takeWhile isWhitespace) ::
-          Spec.Lexer.layoutFrom input ended (o + (c :: rest.takeWhile isWhitespace).length)
+          BSmtLibSpec.Lexer.layoutFrom input ended (o + (c :: rest.takeWhile isWhitespace).length)
       else [] := by
-  rw [Spec.Lexer.layoutFrom]
+  rw [BSmtLibSpec.Lexer.layoutFrom]
   split
   · rename_i h'; rw [h] at h'; cases h'
   · rename_i c' rest' h'
@@ -246,18 +248,18 @@ theorem layoutFrom_ws {input : List UInt8} {ended : Bool} {o : Nat} {c : UInt8}
 
 theorem layoutFrom_semi {input : List UInt8} {ended : Bool} {o : Nat} {rest : List UInt8}
     (h : input.drop o = 59 :: rest) :
-    Spec.Lexer.layoutFrom input ended o =
+    BSmtLibSpec.Lexer.layoutFrom input ended o =
       match rest.dropWhile notLineBreak with
       | lb :: _ =>
-        Spec.Lexer.layoutEntry input .comment o ((rest.takeWhile notLineBreak).length + 2)
+        BSmtLibSpec.Lexer.layoutEntry input .comment o ((rest.takeWhile notLineBreak).length + 2)
             (rest.takeWhile notLineBreak ++ [lb]) ::
-          Spec.Lexer.layoutFrom input ended (o + ((rest.takeWhile notLineBreak).length + 2))
+          BSmtLibSpec.Lexer.layoutFrom input ended (o + ((rest.takeWhile notLineBreak).length + 2))
       | [] =>
         if ended then
-          [Spec.Lexer.layoutEntry input .comment o ((rest.takeWhile notLineBreak).length + 1)
+          [BSmtLibSpec.Lexer.layoutEntry input .comment o ((rest.takeWhile notLineBreak).length + 1)
             (rest.takeWhile notLineBreak)]
         else [] := by
-  rw [Spec.Lexer.layoutFrom]
+  rw [BSmtLibSpec.Lexer.layoutFrom]
   split
   · rename_i h'; rw [h] at h'; cases h'
   · rename_i c' rest' h'
@@ -270,8 +272,8 @@ theorem layoutFrom_semi {input : List UInt8} {ended : Bool} {o : Nat} {rest : Li
 
 theorem layoutFrom_other {input : List UInt8} {ended : Bool} {o : Nat} {c : UInt8}
     {rest : List UInt8} (h : input.drop o = c :: rest) (hw : isWhitespace c = false)
-    (hc : c ≠ 59) : Spec.Lexer.layoutFrom input ended o = [] := by
-  rw [Spec.Lexer.layoutFrom]
+    (hc : c ≠ 59) : BSmtLibSpec.Lexer.layoutFrom input ended o = [] := by
+  rw [BSmtLibSpec.Lexer.layoutFrom]
   split
   · rfl
   · rename_i c' rest' h'
@@ -282,8 +284,8 @@ theorem layoutFrom_other {input : List UInt8} {ended : Bool} {o : Nat} {c : UInt
     rw [ite_eq_right hw', ite_eq_right hc']
 
 theorem layoutFrom_nil {input : List UInt8} {ended : Bool} {o : Nat} (h : input.drop o = []) :
-    Spec.Lexer.layoutFrom input ended o = [] := by
-  rw [Spec.Lexer.layoutFrom]
+    BSmtLibSpec.Lexer.layoutFrom input ended o = [] := by
+  rw [BSmtLibSpec.Lexer.layoutFrom]
   split
   · rfl
   · rename_i c' rest' h'; rw [h] at h'; cases h'
@@ -328,18 +330,18 @@ theorem drop_length_le {input : List UInt8} {o : Nat} {piece more : List UInt8}
 and ends after it. -/
 theorem lexemeLayout_eq {input : List UInt8} {o : Nat} {piece more : List UInt8}
     (h : input.drop o = piece ++ more) (hp : piece ≠ []) {l : Lexeme}
-    {type : Spec.Lexer.TokenType}
-    (hcat : (if l.category == .comment then Spec.Lexer.TokenType.comment else .whitespace) = type)
+    {type : BSmtLibSpec.Lexer.TokenType}
+    (hcat : (if l.category == .comment then BSmtLibSpec.Lexer.TokenType.comment else .whitespace) = type)
     (hs : l.start = locAfter (input.take o))
     (he : l.end = advanceLoc (locAfter (input.take o)) piece)
     {content : List UInt8} (hc : l.content.toList = content) :
-    lexemeLayout l = Spec.Lexer.layoutEntry input type o piece.length content ∧
+    lexemeLayout l = BSmtLibSpec.Lexer.layoutEntry input type o piece.length content ∧
       (toLocation l.end).offset = o + piece.length := by
   have hlen := drop_length_le h hp
-  have hend : toLocation l.end = Spec.Lexer.locate input (o + piece.length) := by
+  have hend : toLocation l.end = BSmtLibSpec.Lexer.locate input (o + piece.length) := by
     rw [he, ← locAfter_take_add h, toLocation_take (by omega)]
   refine ⟨?_, by rw [hend]; rfl⟩
-  unfold lexemeLayout Spec.Lexer.layoutEntry
+  unfold lexemeLayout BSmtLibSpec.Lexer.layoutEntry
   rw [hcat, hs, toLocation_take (by omega), hend, toContent_toByteSlice, hc]
 
 theorem takeWhile_all {p : UInt8 → Bool} {l : List UInt8} (h : ∀ x ∈ l, p x = true) :
@@ -372,13 +374,13 @@ token; or the first lexeme is whitespace or a comment, the first piece the spec 
 which the spec goes on from its end; or the layout there is not complete yet, and the run has
 finished nothing and not failed. -/
 theorem stream_layout (version : Version) (input : List UInt8) (ended : Bool) (o : Nat) :
-    (Spec.Lexer.layoutFrom input ended o = [] ∧
+    (BSmtLibSpec.Lexer.layoutFrom input ended o = [] ∧
       ∀ l ∈ (stream version true input ended o).1.head?, l.Taken) ∨
     (∃ l rest, (stream version true input ended o).1 = l :: rest ∧ ¬ l.Taken ∧
       o < (toLocation l.end).offset ∧
-      Spec.Lexer.layoutFrom input ended o =
-        lexemeLayout l :: Spec.Lexer.layoutFrom input ended (toLocation l.end).offset) ∨
-    (Spec.Lexer.layoutFrom input ended o = [] ∧
+      BSmtLibSpec.Lexer.layoutFrom input ended o =
+        lexemeLayout l :: BSmtLibSpec.Lexer.layoutFrom input ended (toLocation l.end).offset) ∨
+    (BSmtLibSpec.Lexer.layoutFrom input ended o = [] ∧
       stream version true input ended o = ([], false)) := by
   unfold stream
   generalize hloc : locAfter (input.take o) = loc

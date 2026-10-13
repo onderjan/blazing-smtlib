@@ -13,14 +13,14 @@ The composition of the lexer proofs (`BSmtLib.Proofs`) with the parser proofs
 (`BSmtLib.ParserProofs`) at the level of the specification.
 
 - The consumer: `EndToEnd.scriptConsumer version` is the library's script parser as a consumer of
-  the lexer spec (`Spec.Lexer.Consumer`): after each token it answers as the parser's recording
+  the lexer spec (`BSmtLibSpec.Lexer.Consumer`): after each token it answers as the parser's recording
   run (`Rejection.libraryParser`) on the tokens taken so far ends, each token read as the parser's
   token that stands for it, and it asks for the switch of the version and the discarding that the
   run asks of its producer after the last token's processing.
 - The lexer: `Proofs.Lexer.correctWithConsumers` states that the library's lexer, fed by the
-  adapter with every consumer of the spec, does what `Spec.Lexer.Runs` states, relative to what it
-  hands over to the collector, which is `Spec.Lexer.Correct`.
-- The file: `Spec.Grammar.File` reads the characters of a file as commands, each in the version
+  adapter with every consumer of the spec, does what `BSmtLibSpec.Lexer.Runs` states, relative to what it
+  hands over to the collector, which is `BSmtLibSpec.Lexer.Correct`.
+- The file: `BSmtLibSpec.Grammar.File` reads the characters of a file as commands, each in the version
   in force, from its version declarations on (Reading M1) up to `exit` (Reading M2).
 
 So the library's lexer, fed the characters of a file cut into any slices and then the end of the
@@ -65,7 +65,9 @@ that changes.
 
 namespace BSmtLib.EndToEnd
 
-open BSmtLib.Spec BSmtLib.Spec.Grammar BSmtLib.Spec.Parser
+open BSmtLibSpec BSmtLibSpec.Grammar BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
 open BSmtLib.ParserProofs.Rejection (libraryParser rcv)
 
 /--
@@ -75,7 +77,7 @@ spec: the input ends with the parser's result returned; the tokens the parser to
 parser receives for the script, version switches and `exit` included; and the parser's recording
 run on them has the traversal's events.
 -/
-theorem library_lexes_file (version : Lexicon.Version) (slices : List Lexicon.Chars)
+theorem library_lexes_file (version : Lexicon.Version) (slices : List Regex.Chars)
     {commands : List Tree.Command} (hfile : File version slices.flatten commands) :
     (Proofs.Adapter.lexing Proofs.Adapter.Lexer.lexOps (scriptConsumer version) version [] slices
         true).outcome.isFinished = true ∧
@@ -112,9 +114,9 @@ gives it:
   parser takes, the parser waiting with the traversal's events before the next item: read from
   the end of the last version declaration on, in its version, the input has no tokenisation, and
   the tokens taken from there are those maximal to hand over on its longest viable start
-  (`Spec.Lexer.Correct`).
+  (`BSmtLibSpec.Lexer.Correct`).
 -/
-theorem library_session (version : Lexicon.Version) (slices : List Lexicon.Chars) :
+theorem library_session (version : Lexicon.Version) (slices : List Regex.Chars) :
     let session := Proofs.Adapter.lexing Proofs.Adapter.Lexer.lexOps (scriptConsumer version)
       version [] slices true
     let input := slices.flatten
@@ -130,7 +132,7 @@ theorem library_session (version : Lexicon.Version) (slices : List Lexicon.Chars
       (session.outcome = .failed (.consumer .rejected) ∧
         ∃ commands taken ending, Takes version commands taken ending ∧
           items.dropLast <+: taken ∧ items.dropLast.length < taken.length ∧
-          ¬ Parser.Viable version items ∧
+          ¬ Parser.Properties.Viable version items ∧
           run.2 = .rejected ∧ run.1.filterMap Event.processed = items ∧
           run.1.getLast? = items.getLast?.map .process ∧
           ∃ last, items.getLast? = some last ∧
@@ -163,7 +165,7 @@ slices, and then the end of the input, with the library's script parser as a con
 lexer spec: the session fails, on a declaration that names no supported version, at the first
 token that no script continues with, or with a lexical error, as `library_session` states.
 -/
-theorem library_fails (version : Lexicon.Version) (slices : List Lexicon.Chars)
+theorem library_fails (version : Lexicon.Version) (slices : List Regex.Chars)
     (hnot : ¬ ∃ commands, File version slices.flatten commands) :
     let session := Proofs.Adapter.lexing Proofs.Adapter.Lexer.lexOps (scriptConsumer version)
       version [] slices true
@@ -177,7 +179,7 @@ theorem library_fails (version : Lexicon.Version) (slices : List Lexicon.Chars)
       (session.outcome = .failed (.consumer .rejected) ∧
         ∃ commands taken ending, Takes version commands taken ending ∧
           items.dropLast <+: taken ∧ items.dropLast.length < taken.length ∧
-          ¬ Parser.Viable version items ∧
+          ¬ Parser.Properties.Viable version items ∧
           run.2 = .rejected ∧ run.1.filterMap Event.processed = items ∧
           run.1.getLast? = items.getLast?.map .process ∧
           ∃ last, items.getLast? = some last ∧
@@ -209,7 +211,7 @@ The library's lexer, with the library's script parser as a consumer of the lexer
 parser's result at the end of an input, however cut into slices, exactly when the input reads as a
 file.
 -/
-theorem library_finishes_iff_file (version : Lexicon.Version) (slices : List Lexicon.Chars) :
+theorem library_finishes_iff_file (version : Lexicon.Version) (slices : List Regex.Chars) :
     (Proofs.Adapter.lexing Proofs.Adapter.Lexer.lexOps (scriptConsumer version) version [] slices
         true).outcome.isFinished = true ↔
       ∃ commands, File version slices.flatten commands :=
@@ -228,7 +230,7 @@ from the version, cut into any slices, by its public calls (`Param.paFeed`: `Lex
 each slice, then `Lexer.lexEof`): no call fails, the end of the input returns the parser's
 result, and the handler has recorded the calls of the traversal of the script, in order.
 -/
-theorem library_parses_file (version : Lexicon.Version) (slices : List Lexicon.Chars)
+theorem library_parses_file (version : Lexicon.Version) (slices : List Regex.Chars)
     {commands : List Tree.Command} (hfile : File version slices.flatten commands) :
     ∃ result lexer,
       Param.paFeed (Lexer.new Param.recordingAdapter (Proofs.Adapter.toVersion version)) slices =
@@ -249,7 +251,7 @@ The library's script reader (`Reader.script`), with the recording handler and th
 allows every version, fed a file in any slices by `Reader.readSlice` and then the end of the input
 by `Reader.readEof`, tells the handler the calls for the file's commands and finishes.
 -/
-theorem reader_reads_files : Spec.Reader.ReadsFiles libraryReader :=
+theorem reader_reads_files : BSmtLibSpec.Reader.ReadsFiles libraryReader :=
   libraryReader_readsFiles
 
 /--
@@ -263,7 +265,7 @@ The library's script reader (`Reader.script`), with the recording handler and th
 allows every version, fed an input in any slices by `Reader.readSlice` and then the end of the
 input by `Reader.readEof`, finishes only if the input is a file.
 -/
-theorem reader_finishes_only_on_files : Spec.Reader.FinishesOnlyOnFiles libraryReader :=
+theorem reader_finishes_only_on_files : BSmtLibSpec.Reader.FinishesOnlyOnFiles libraryReader :=
   libraryReader_finishesOnlyOnFiles
 
 /--
@@ -280,7 +282,7 @@ with every consumer, does with the library's script parser as its consumer: it t
 the parser's calls on the tokens the lexer hands over, nothing before the first token, and
 finishes exactly where the lexer does.
 -/
-theorem reader_lexes_then_parses : Spec.Reader.LexesThenParses libraryReader :=
+theorem reader_lexes_then_parses : BSmtLibSpec.Reader.LexesThenParses libraryReader :=
   libraryReader_lexesThenParses
 
 /--
@@ -291,7 +293,7 @@ info: 'BSmtLib.EndToEnd.reader_lexes_then_parses' depends on axioms: [propext, C
 
 /-! ## What is trusted
 
-A reader of the theorems above trusts the specification (`BSmtLib.Spec`), the statements in this
+A reader of the theorems above trusts the specification (`BSmtLibSpec`), the statements in this
 file, and the definitions in `BSmtLib.EndToEnd.Adapters`, `BSmtLib.ParserProofs.Adapters` and
 `BSmtLib.Proofs.Adapters`, which put the lexer, the parser, the parse adapter and the reader into
 the spec's shapes: the adapters. Everything else Lean checks. The check below lists the adapters,

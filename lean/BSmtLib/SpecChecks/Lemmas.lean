@@ -1,4 +1,4 @@
-import BSmtLib.Spec.Lexicon
+import BSmtLibSpec.Lexicon.Properties
 
 /-!
 # Lemmas for checking the spec
@@ -9,7 +9,9 @@ proved.
 
 namespace BSmtLib.SpecChecks.Lexicon
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Lexicon.Regex
+open BSmtLibSpec BSmtLibSpec.Lexicon BSmtLibSpec.Regex
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
 
 theorem range_one {lo hi : Nat} {c : UInt8} : range lo hi [c] ↔ lo ≤ c.toNat ∧ c.toNat ≤ hi := by
   simp [range]
@@ -99,7 +101,9 @@ end BSmtLib.SpecChecks.Lexicon
 
 namespace BSmtLib.SpecChecks.Lexicon
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Lexicon.Regex
+open BSmtLibSpec BSmtLibSpec.Lexicon BSmtLibSpec.Regex
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
 
 theorem whiteSpaceChar_one {c : UInt8} :
     whiteSpaceChar [c] ↔ c.toNat = 9 ∨ c.toNat = 10 ∨ c.toNat = 13 ∨ c.toNat = 32 := by
@@ -107,7 +111,7 @@ theorem whiteSpaceChar_one {c : UInt8} :
   omega
 
 theorem delimited_by {category : Category} {c : UInt8} {more : Chars}
-    (h : whiteSpaceChar [c] ∨ oneOf "();" [c]) : Delimited category (c :: more) :=
+    (h : whiteSpaceChar [c] ∨ oneOf "();" [c]) : Tokenization.Delimited category (c :: more) :=
   Or.inr (Or.inr (Or.inr ⟨c, more, rfl, h⟩))
 
 theorem whitespace_spaces {s : Chars} (h : ∀ c ∈ s, c.toNat = 32) : whitespace s :=
@@ -119,7 +123,9 @@ end BSmtLib.SpecChecks.Lexicon
 
 namespace BSmtLib.SpecChecks.Lexicon
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Lexicon.Regex
+open BSmtLibSpec BSmtLibSpec.Lexicon BSmtLibSpec.Regex
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
 
 /-- A part of the body of a string literal from 2.5 on, checked by computation. -/
 def stringPartOk (p : Chars) : Bool :=
@@ -153,7 +159,9 @@ end BSmtLib.SpecChecks.Lexicon
 
 namespace BSmtLib.SpecChecks.Lexicon
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Lexicon.Regex
+open BSmtLibSpec BSmtLibSpec.Lexicon BSmtLibSpec.Regex
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
 
 /-! ## Taking matches apart -/
 

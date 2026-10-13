@@ -20,7 +20,9 @@ Not trusted: everything here is proved.
 
 namespace BSmtLib.SpecChecks.Lexicon
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Lexicon.Regex
+open BSmtLibSpec BSmtLibSpec.Lexicon BSmtLibSpec.Regex
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
 
 /-! ## Concrete readings -/
 
@@ -74,7 +76,7 @@ theorem readConcreteFrom_tokens (offset : Nat) (input : Chars) (tokens : List To
 
 /-- The concrete printer writes back the input of a tokenisation. -/
 theorem printConcrete_readConcreteFrom {version : Version} {offset : Nat} {input : Chars}
-    {tokens : List Token} (h : TokenizationFrom version offset input tokens) :
+    {tokens : List Token} (h : Tokenization.From version offset input tokens) :
     printConcrete (readConcreteFrom offset input tokens) = input := by
   induction h with
   | done => simp [readConcreteFrom, printConcrete]
@@ -92,7 +94,7 @@ theorem printConcrete_readConcreteFrom {version : Version} {offset : Nat} {input
 /-- The gaps of the concrete reading of a tokenisation are whitespace, and the final one is
 whitespace at the end of the input. -/
 theorem readConcreteFrom_gaps {version : Version} {offset : Nat} {input : Chars}
-    {tokens : List Token} (h : TokenizationFrom version offset input tokens) :
+    {tokens : List Token} (h : Tokenization.From version offset input tokens) :
     (∀ piece ∈ (readConcreteFrom offset input tokens).pieces, whitespace piece.1) ∧
       whitespaceAtEnd (readConcreteFrom offset input tokens).final := by
   induction h with
@@ -180,7 +182,7 @@ theorem layout_eq {tokens tokens' : List Token} (h : tokens.map form = tokens'.m
 
 /-- Every token of a tokenisation is a token of its category. -/
 theorem tokenizationFrom_regex {version : Version} {offset : Nat} {input : Chars}
-    {tokens : List Token} (h : TokenizationFrom version offset input tokens) :
+    {tokens : List Token} (h : Tokenization.From version offset input tokens) :
     ∀ token ∈ tokens, categoryRegex version token.category token.text := by
   induction h with
   | done => simp
@@ -251,7 +253,7 @@ theorem paren_text {version : Version} {category : Category} {s : Chars}
 /-- What the canonical layout writes after a token delimits it. -/
 theorem delimited_canonicalFrom {version : Version} (category : Category) {tokens : List Token}
     (hall : ∀ token ∈ tokens, categoryRegex version token.category token.text) :
-    Delimited category (printConcrete ⟨canonicalFrom (some category) tokens, []⟩) := by
+    Tokenization.Delimited category (printConcrete ⟨canonicalFrom (some category) tokens, []⟩) := by
   cases tokens with
   | nil => exact Or.inr (Or.inr (Or.inl rfl))
   | cons next tokens =>
@@ -275,12 +277,12 @@ theorem delimited_canonicalFrom {version : Version} (category : Category) {token
 theorem canonicalFrom_tokenization {version : Version} {tokens : List Token}
     (hall : ∀ token ∈ tokens, categoryRegex version token.category token.text)
     (previous : Option Category) (offset : Nat) {w : Chars} (hw : whitespace w) :
-    TokenizationFrom version offset (w ++ printConcrete ⟨canonicalFrom previous tokens, []⟩)
+    Tokenization.From version offset (w ++ printConcrete ⟨canonicalFrom previous tokens, []⟩)
       (placeFrom previous (offset + w.length) tokens) := by
   induction tokens generalizing previous offset w with
   | nil =>
     simpa [canonicalFrom, printConcrete, placeFrom] using
-      TokenizationFrom.done (version := version) (offset := offset) (whitespaceAtEnd_of hw)
+      Tokenization.From.done (version := version) (offset := offset) (whitespaceAtEnd_of hw)
   | cons token tokens ih =>
     have hrest : ∀ t ∈ tokens, categoryRegex version t.category t.text :=
       fun t ht => hall t (List.mem_cons_of_mem _ ht)
@@ -289,7 +291,7 @@ theorem canonicalFrom_tokenization {version : Version} {tokens : List Token}
       (offset + (w ++ separator previous token.category).length + token.text.length)
       whitespace_nil
     simp only [List.nil_append, List.length_nil, Nat.add_zero] at htail
-    have := TokenizationFrom.token hw' (hall token (by simp))
+    have := Tokenization.From.token hw' (hall token (by simp))
       (delimited_canonicalFrom token.category hrest) htail
     simpa [canonicalFrom, printConcrete_cons, placeFrom, List.append_assoc, Nat.add_assoc]
       using this

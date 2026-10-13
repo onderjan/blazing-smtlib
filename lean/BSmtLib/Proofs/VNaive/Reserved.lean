@@ -10,8 +10,9 @@ reads the table `Reserved.Internal.reservedTable`, whose entries the kernel chec
 -/
 
 open BSmtLib.Proofs BSmtLib.SpecChecks.Lexicon
-open BSmtLib.Spec.Lexicon (chars basicReservedWords commandNames)
-open BSmtLib.Spec.Lexer (ReservedKind)
+open BSmtLibSpec.Lexicon (basicReservedWords commandNames)
+open BSmtLibSpec.Regex (chars)
+open BSmtLibSpec.Lexer (ReservedKind)
 open BSmtLib.Proofs.Simulation (toByteArray_toByteSlice toByteSlice_beq size_toByteSlice')
 
 namespace BSmtLib.Proofs.Lexer.VNaive
@@ -21,7 +22,7 @@ def reservedKindOf (word : Reserved) : ReservedKind :=
   if word.isCommandName then .command else .general
 
 /-- The kind of reserved word the spec gives the characters in the version, if they are one. -/
-def specReservedKind (version : Spec.Lexicon.Version) (x : List UInt8) : Option ReservedKind :=
+def specReservedKind (version : BSmtLibSpec.Lexicon.Version) (x : List UInt8) : Option ReservedKind :=
   if x ∈ (basicReservedWords version).map chars then some .general
   else if x ∈ (commandNames version).map chars then some .command
   else none
@@ -54,7 +55,7 @@ theorem fromBytes_eq (s : ByteSlice) (v : Version) (h : s.size ≠ 0) :
     getElem!_pos BSmtLib.Reserved.Internal.reservedTable _ hlt]
   simp only [Reserved.fromBytes?, h, ↓reduceDIte]
 
-theorem fromBytes_kind (version : Spec.Lexicon.Version) (a : ByteArray) :
+theorem fromBytes_kind (version : BSmtLibSpec.Lexicon.Version) (a : ByteArray) :
     (Reserved.fromBytes? a.toByteSlice (Adapter.toVersion version)).map reservedKindOf =
       specReservedKind version a.data.toList := by
   have hgood : ∀ e ∈ BSmtLib.Reserved.Internal.reservedTable.toList, e.1.size = 0 ∨

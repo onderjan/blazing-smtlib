@@ -9,9 +9,11 @@ a `)`, with at least `lo` and at most `hi` of them.
 
 namespace BSmtLib.ParserProofs.Rejection
 
-open BSmtLib.Spec.Grammar
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 open BSmtLib.Parser (Input PM Step PatternState QualIdentState SortedVarState ListState
   qualIdentStep sortedVarStep sortStep)
 open Lang
@@ -20,7 +22,7 @@ open Lang
 
 section
 
-variable (version : Spec.Lexicon.Version)
+variable (version : BSmtLibSpec.Lexicon.Version)
 
 /-- A symbol or the wildcard, in the version. -/
 def SymbolOrWildcardLang : Lang :=
@@ -127,7 +129,7 @@ theorem patternStep_advances (version : BSmtLib.Version) :
 
 section
 
-variable (version : Spec.Lexicon.Version)
+variable (version : BSmtLibSpec.Lexicon.Version)
 
 /-- A qualified identifier of the version. -/
 def QualLang : Lang :=
@@ -237,7 +239,7 @@ theorem qualIdentStep_advances (version : BSmtLib.Version) :
 
 section
 
-variable (version : Spec.Lexicon.Version)
+variable (version : BSmtLibSpec.Lexicon.Version)
 
 /-- A sorted variable of the version. -/
 def SortedVarLang : Lang :=

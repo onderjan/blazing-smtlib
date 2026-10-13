@@ -13,7 +13,7 @@ while it discards, it drops the bytes (`vBytes_discarding`).
 namespace BSmtLib.Proofs.Lexer.VNaive
 
 open BSmtLib.Proofs.Adapter
-open Spec.Lexer (Handed)
+open BSmtLibSpec.Lexer (Handed)
 
 /-- The run from the state at the location over the bytes, and then, if the input has ended,
 the end of the input: the lexemes it finishes, and whether it fails. -/
@@ -126,13 +126,13 @@ theorem failureOf_lexical {ε : Type} {k : LexicalErrorKind} {span : Span}
 /-! ## The end of file -/
 
 theorem lexemeHanded_eofAt (version : Version) (input : List UInt8) :
-    lexemeHanded version (eofAt (locAfter input)) = some (Spec.Lexer.endOfFile input) :=
+    lexemeHanded version (eofAt (locAfter input)) = some (BSmtLibSpec.Lexer.endOfFile input) :=
   lexemeHanded_eof version input
 
 /-- The end-of-file lexeme at a location is handed over as the end-of-file token there. -/
 theorem lexemeHanded_eofAt_location (version : Version) (location : Location) :
     lexemeHanded version (eofAt location) =
-      some (Spec.Lexer.endOfFileAt (toLocation location)) := by
+      some (BSmtLibSpec.Lexer.endOfFileAt (toLocation location)) := by
   rw [lexemeHanded_eq]
   simp only [toTokenType, Option.map_some, lexemeReserved]
   rfl
@@ -206,7 +206,7 @@ located in the whole input, is the tokens of the run from the boundary at `o`, f
 of either kind. -/
 theorem segment_stream (version : Version) (ws : Bool) (input : List UInt8) (ended : Bool)
     (o : Nat) :
-    Spec.Lexer.segment fedRun (fromVersion version) input ended o =
+    BSmtLibSpec.Lexer.segment fedRun (fromVersion version) input ended o =
       { handed := handedOf version (stream version ws input ended o).1
         failed := (stream version ws input ended o).2 } := by
   rw [segment_fedRun, toVersion_fromVersion]
@@ -219,7 +219,7 @@ theorem segment_stream (version : Version) (ws : Bool) (input : List UInt8) (end
     rw [h1, h2]
 
 section
-variable (consumer : Spec.Lexer.Consumer)
+variable (consumer : BSmtLibSpec.Lexer.Consumer)
 
 /-- A lexer that discards drops the bytes, and its location stays. -/
 theorem vBytes_discarding {s : Location} (bytes : List UInt8) :
@@ -249,9 +249,9 @@ def St.weight : St → Nat
 lexeme of the run after it decides: trailing input at its start, or the end of the input, which
 returns the result; with no lexeme, a lexical error if the run fails, and otherwise the result
 held. -/
-def holdSession (start : Spec.Lexicon.Version) (version : Version) (taken : List Handed)
+def holdSession (start : BSmtLibSpec.Lexicon.Version) (version : Version) (taken : List Handed)
     (held : Located consumer.Result) :
-    List Lexeme × Bool → Spec.Lexer.Session consumer.Result consumer.Error
+    List Lexeme × Bool → BSmtLibSpec.Lexer.Session consumer.Result consumer.Error
   | (l :: _, _) =>
     if l.category == .endOfFile then
       ⟨taken, .finished held.value (toLocation held.location), start, none⟩
@@ -288,7 +288,7 @@ theorem drop_length_eq_nil {input : List UInt8} {j : Nat} (h : input.drop j = []
   rw [List.take_of_length_le h]
 
 section
-variable (consumer : Spec.Lexer.Consumer) (sv : Spec.Lexicon.Version) (input : List UInt8)
+variable (consumer : BSmtLibSpec.Lexer.Consumer) (sv : BSmtLibSpec.Lexicon.Version) (input : List UInt8)
   (ended : Bool)
 
 theorem finish_token_ne_eof {ws : Bool} {p : Pending} {location : Location} {l : Lexeme}
@@ -302,7 +302,7 @@ theorem discardedOf_of_activity {core : Core} {st : St} (h : core.activity = st.
     discardedOf core = none := by
   cases st <;> simp [discardedOf, h, St.activity]
 
-theorem reset_version (core : Core) (sv : Spec.Lexicon.Version)
+theorem reset_version (core : Core) (sv : BSmtLibSpec.Lexicon.Version)
     (hi : core.initialVersion = toVersion sv) : fromVersion core.reset.version = sv := by
   simp [Core.reset, Core.initial, hi, fromVersion_toVersion]
 
@@ -370,7 +370,7 @@ theorem advance_lexeme_ne_eof {ws : Bool} {p : Pending} {location : Location} {c
     all_goals cases h
     all_goals first | rfl | (cases ‹Radix› <;> rfl)
 
-theorem lexStart_error' (consumer : Spec.Lexer.Consumer) (core : Core) (c : UInt8)
+theorem lexStart_error' (consumer : BSmtLibSpec.Lexer.Consumer) (core : Core) (c : UInt8)
     (taken : List Handed) {f : LexFailure}
     (hs : start core.version consumer.concrete core.location c = .error f) :
     vRun consumer (lexStart (H := Answering consumer) core c) taken =

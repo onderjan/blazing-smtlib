@@ -13,9 +13,11 @@ the levels. In the start mode, an open application on top takes its further argu
 
 namespace BSmtLib.ParserProofs.Rejection
 
-open BSmtLib.Spec.Grammar
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 open BSmtLib.Parser (Input PM Step TermState TermMode TermLevel termStep termComplete termOpened
   startBinder endBinder BinderKind SortedBinder ListState AttributeState)
 open Lang
@@ -24,7 +26,7 @@ open Lang
 
 section
 
-variable (version : Spec.Lexicon.Version)
+variable (version : BSmtLibSpec.Lexicon.Version)
 
 /-- A term of the version. -/
 def TermLang : Lang := fun u => ∃ term : Tree.Term, term.Valid version ∧ u = toks term.tokens
@@ -110,7 +112,7 @@ end
 
 section
 
-variable {version : Spec.Lexicon.Version}
+variable {version : BSmtLibSpec.Lexicon.Version}
 
 theorem termTokensAll_eq (terms : List Tree.Term) :
     Tree.Term.tokensAll terms = (terms.map Tree.Term.tokens).flatten := by
@@ -212,7 +214,7 @@ end
 
 section
 
-variable (version : Spec.Lexicon.Version)
+variable (version : BSmtLibSpec.Lexicon.Version)
 
 /-- A term written as one numeral. -/
 def zeroTerm : Tree.Term := .constant (.numeral [])
@@ -337,7 +339,7 @@ theorem termRem_nonempty (state : TermState Nat Nat Nat Nat Nat)
 end
 
 /-- A term, then what follows it, is a remainder in the start mode. -/
-theorem startRem_term {version : Spec.Lexicon.Version} {levels : List (TermLevel Nat Nat Nat)}
+theorem startRem_term {version : BSmtLibSpec.Lexicon.Version} {levels : List (TermLevel Nat Nat Nat)}
     {w v : List Received} (hw : TermLang version w) (hv : termAfterAll version levels v) :
     startRem version levels (w ++ v) := by
   match levels, hv with
@@ -375,7 +377,7 @@ theorem match_lexical {version : BSmtLib.Version}
 
 section
 
-variable {version : Spec.Lexicon.Version}
+variable {version : BSmtLibSpec.Lexicon.Version}
 
 theorem opened_app {w p : List Received} (hw : QualLang version w)
     (hp : plus (TermLang version) p) : OpenedLang version (w ++ (p ++ [closeItem])) := by
@@ -392,7 +394,7 @@ theorem opened_let {b t : List Received} (hb : plus (BindingLang version) b)
   refine ⟨.let bindings body, ⟨by rintro rfl; simp at hlen, hvalid, hbody⟩, ?_⟩
   simp [Tree.Term.tokens, paren, toks, word]
 
-theorem opened_sorted (binder : Spec.Grammar.SyntaxToken) {vars t : List Received}
+theorem opened_sorted (binder : BSmtLibSpec.Grammar.SyntaxToken) {vars t : List Received}
     (hvars : plus (SortedVarLang version) vars) (ht : TermLang version t)
     (hterm : ∀ (variables : List Tree.SortedVar) (body : Tree.Term), variables ≠ [] →
       (∀ v ∈ variables, v.Valid version) → body.Valid version →
@@ -438,7 +440,7 @@ end
 
 /-- The term parser's step at the end of a term: it is the result, or goes to the innermost
 construct. -/
-theorem termComplete_advances {version : Spec.Lexicon.Version}
+theorem termComplete_advances {version : BSmtLibSpec.Lexicon.Version}
     {state : TermState Nat Nat Nat Nat Nat} {item : Received}
     (levels : List (TermLevel Nat Nat Nat)) (term : Nat) {Q : Parser.ParseErrorCause Unit → Prop}
     (h : ∀ v, termAfterAll version levels v → termRem version state (item :: v)) :

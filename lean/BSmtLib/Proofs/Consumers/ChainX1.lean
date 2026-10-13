@@ -34,7 +34,7 @@ theorem toLayout_eq {c : BatchCursor g} {d : BatchCursor g'} (h : CursorAgree c 
   rw [h.category et ht, h.span et ht, h.content et ht]
 
 /-- An entry below the length of the batches is taken alike. -/
-theorem entry_eq (consumer : Spec.Lexer.Consumer) {c : BatchCursor g} {d : BatchCursor g'}
+theorem entry_eq (consumer : BSmtLibSpec.Lexer.Consumer) {c : BatchCursor g} {d : BatchCursor g'}
     (h : CursorAgree c d) {t : Token g} {t' : Token g'} (et : tokenIndex t = tokenIndex t')
     (ht : tokenIndex t < (intoBatch c).len) :
     Answering.entry consumer c t = Answering.entry consumer d t' := by
@@ -71,7 +71,7 @@ theorem CursorAgree.setVersion {c : BatchCursor g} {d : BatchCursor g'}
   · exact ⟨rfl, hb, rfl, rfl, rfl, hr, hdc, hbd⟩
 
 theorem CursorAgree.switched {c : BatchCursor g} {d : BatchCursor g'} (h : CursorAgree c d)
-    (consumer : Spec.Lexer.Consumer) (taken : List Spec.Lexer.Handed) :
+    (consumer : BSmtLibSpec.Lexer.Consumer) (taken : List BSmtLibSpec.Lexer.Handed) :
     CursorAgree (Answering.switched consumer taken c).val
       (Answering.switched consumer taken d).val := by
   unfold Answering.switched
@@ -86,7 +86,7 @@ theorem CursorAgree.switched {c : BatchCursor g} {d : BatchCursor g'} (h : Curso
     · rename_i hc; simp [BatchCursor.setVersion] at hc
 
 theorem CursorAgree.requests {c : BatchCursor g} {d : BatchCursor g'} (h : CursorAgree c d)
-    (consumer : Spec.Lexer.Consumer) (taken : List Spec.Lexer.Handed) :
+    (consumer : BSmtLibSpec.Lexer.Consumer) (taken : List BSmtLibSpec.Lexer.Handed) :
     CursorAgree (Answering.requests consumer taken c).val
       (Answering.requests consumer taken d).val := by
   unfold Answering.requests
@@ -105,9 +105,9 @@ variable {g g' : BatchTag}
 
 /-- The adapter's consumer for a consumer of the spec reads the cursors only below the length of
 their batches: on cursors that agree it takes the same tokens and gives cursors that agree. -/
-theorem answering_consume_agree (consumer : Spec.Lexer.Consumer) : ∀ (n : Nat)
+theorem answering_consume_agree (consumer : BSmtLibSpec.Lexer.Consumer) : ∀ (n : Nat)
     (c : BatchCursor g) (d : BatchCursor g') (hc : c.HasNext) (hd : d.HasNext),
-    c.remaining = n → CursorAgree c d → ∀ taken : List Spec.Lexer.Handed,
+    c.remaining = n → CursorAgree c d → ∀ taken : List BSmtLibSpec.Lexer.Handed,
     ((Answering.consume consumer c hc).run taken).1.1 =
         ((Answering.consume consumer d hd).run taken).1.1 ∧
       CursorAgree ((Answering.consume consumer c hc).run taken).1.2.val
@@ -151,7 +151,7 @@ theorem answering_consume_agree (consumer : Spec.Lexer.Consumer) : ∀ (n : Nat)
 
 /-- The adapter's consumer for a consumer of the spec reads the cursors only below the length of
 their batches. -/
-theorem answering_consumesAlike (consumer : Spec.Lexer.Consumer) :
+theorem answering_consumesAlike (consumer : BSmtLibSpec.Lexer.Consumer) :
     ConsumesAlike (Answering consumer) AnswerM consumer.Result (Option consumer.Error) := by
   intro _ _ c d hc hd h s
   have hag := fun taken => answering_consume_agree consumer _ c d hc hd rfl h taken
@@ -167,7 +167,7 @@ theorem answering_consumesAlike (consumer : Spec.Lexer.Consumer) :
     rw [← (hag taken).2.2]
     rfl
 
-theorem slice_alike (consumer : Spec.Lexer.Consumer) (slice : ByteSlice) :
+theorem slice_alike (consumer : BSmtLibSpec.Lexer.Consumer) (slice : ByteSlice) :
     StepsAlike WRustPort.lexOps X1BatchInCore.lexOps (consumer := consumer) LexRel
       (fun a => WRustPort.lexOps.lexSliceStep a slice)
       (fun b => X1BatchInCore.lexOps.lexSliceStep b slice) := by
@@ -179,7 +179,7 @@ theorem slice_alike (consumer : Spec.Lexer.Consumer) (slice : ByteSlice) :
   obtain ⟨hr, ht⟩ := mcouple_answerM hc taken
   exact ⟨hr.1, hr.2, ht⟩
 
-theorem eof_alike (consumer : Spec.Lexer.Consumer) :
+theorem eof_alike (consumer : BSmtLibSpec.Lexer.Consumer) :
     StepsAlike WRustPort.lexOps X1BatchInCore.lexOps (consumer := consumer) LexRel
       WRustPort.lexOps.lexEofStep X1BatchInCore.lexOps.lexEofStep := by
   intro a b taken h

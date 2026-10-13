@@ -14,11 +14,13 @@ bridge maps it to the tree's.
 
 namespace BSmtLib.ParserProofs
 
-open BSmtLib.Spec.Grammar
+open BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
 open BSmtLib.Parser (Input PM Step IdentState SortState SortedVarState PatternState QualIdentState
   ListState sortStep sortedVarStep qualIdentStep)
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 
 /-- The sorted variables as the spec hands them over, from the parser's. -/
 def Bridge.specPairs {S : Type} (variables : List (Parser.Symbol × S)) : List (Tree.Symbol × S) :=

@@ -15,7 +15,7 @@ the interruption; the lemmas below take a step apart along the code.
 namespace BSmtLib.Proofs.Lexer.VNaiveWRustPort
 
 open BSmtLib.Proofs.Adapter
-open Spec.Lexer (Handed)
+open BSmtLibSpec.Lexer (Handed)
 
 /- The Rust port runs its code with the Rust lexer's operations, which every function of
 its code takes as an instance. -/
@@ -28,16 +28,16 @@ abbrev WCore := Lexer.WRustPort.LexerCore
 abbrev BS (floor : Option Nat) (low : Nat) := {c : WCore // c.Bound floor low}
 
 /-- The Rust port's monad with the adapter's consumer for `C`. -/
-abbrev M (C : Spec.Lexer.Consumer) (floor : Option Nat) (low : Nat) :=
+abbrev M (C : BSmtLibSpec.Lexer.Consumer) (floor : Option Nat) (low : Nat) :=
   Lexer.WRustPort.LexM (Answering C) AnswerM C.Result (Option C.Error) floor low
 
 /-- An interruption of a step. -/
-abbrev Intr (C : Spec.Lexer.Consumer) (floor : Option Nat) :=
+abbrev Intr (C : BSmtLibSpec.Lexer.Consumer) (floor : Option Nat) :=
   BSmtLib.Lexer.Interrupted C.Result (Option C.Error) floor
 
 section
 
-variable {C : Spec.Lexer.Consumer}
+variable {C : BSmtLibSpec.Lexer.Consumer}
 
 /-- What running the step from the state and the tokens taken gives; the consumer itself has
 no state. -/
@@ -143,7 +143,7 @@ the function of the Rust port of the same name.
 
 section
 
-variable {C : Spec.Lexer.Consumer} {floor : Option Nat} {low : Nat}
+variable {C : BSmtLibSpec.Lexer.Consumer} {floor : Option Nat} {low : Nat}
 
 open Lexer.WRustPort (Ops FastState)
 

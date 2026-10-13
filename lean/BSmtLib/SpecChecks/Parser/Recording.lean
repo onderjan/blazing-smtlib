@@ -3,7 +3,7 @@ import BSmtLib.SpecChecks.Parser.Program
 /-!
 # Programs in a recording run
 
-What a program writes down in a recording run (`Spec.Parser.record`), as a list computed from
+What a program writes down in a recording run (`BSmtLibSpec.Parser.Properties.record`), as a list computed from
 the program and its items (`trace`), and that what it has written down before the arrival of an
 item, or before its processing, depends only on the items before it (`eventsBefore_trace`,
 `eventsBeforeProcessing_trace`): a program decides what to do next only from what it has
@@ -14,8 +14,12 @@ Not trusted: everything here is proved.
 
 namespace BSmtLib.SpecChecks.Parser
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Grammar BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal Program
+open BSmtLibSpec BSmtLibSpec.Lexicon BSmtLibSpec.Grammar BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
+open BSmtLibSpec.Parser.Traversal Program
 
 /-- A program run in a recording run. -/
 abbrev runRecording {α : Type} (p : Program Recorded α) (items : List Received) :

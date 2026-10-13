@@ -1,4 +1,5 @@
-import BSmtLib.Spec.Reader
+import BSmtLibSpec.Reader
+import BSmtLibSpec.Grammar.Properties
 import BSmtLib.SpecChecks.Parser.Bridge
 import BSmtLib.SpecChecks.Reader.Finishes
 
@@ -10,7 +11,7 @@ of a file make a script (`script_of_file`), the first call is the switch to the 
 is read from, and the calls of a script's recording rebuild the script
 (`Parser.recover_record`).
 
-That a reader which lexes then parses (`Spec.Reader.LexesThenParses`) reads files and finishes
+That a reader which lexes then parses (`BSmtLibSpec.Reader.LexesThenParses`) reads files and finishes
 only on files is `lexesThenParses_reads`. On a file, the lexer hands over the tokens of the
 file's commands, each read in the version in force, and the parser takes what a parser receives
 for the script (`files_runs`). If the reader finishes, the parser has taken what a parser takes
@@ -22,12 +23,16 @@ Not trusted: this is a check of the specification.
 
 namespace BSmtLib.SpecChecks.Reader
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Grammar BSmtLib.Spec.Parser
-open BSmtLib.Spec.Reader
+open BSmtLibSpec BSmtLibSpec.Lexicon BSmtLibSpec.Grammar BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
+open BSmtLibSpec.Reader
 
 /-- The commands of a file make a script. -/
 theorem script_of_file {version : Version} {offset : Nat} {input : Chars}
-    {commands : List Tree.Command} (h : FileFrom version offset input commands) :
+    {commands : List Tree.Command} (h : File.From version offset input commands) :
     Script version commands := by
   induction h with
   | done => exact .done
@@ -104,13 +109,13 @@ theorem eventsBefore_of_le : ∀ (count : Nat) (events : List Event),
 does with the parser from the start of the input. -/
 theorem lexes_runs {lexing : Lexer.Lexing} {parser : RecordingParser} {item : Lexer.Handed → parser.Item}
     (hL : Lexer.CorrectWithConsumers lexing) (version : Version) (slices : List Chars) :
-    Lexer.Runs lexing.fed (parser.consumer item version) version slices.flatten true version
+    Lexer.Runs lexing.fed (Reader.consumer parser item version) version slices.flatten true version
       ((Lexer.segment lexing.fed version slices.flatten true 0).handed.drop ([] : List Token).length)
       (Lexer.segment lexing.fed version slices.flatten true 0).failed []
-      (lexing (parser.consumer item version) version [] slices true) := by
-  have := hL.2.1 (parser.consumer item version) version slices true
+      (lexing (Reader.consumer parser item version) version [] slices true) := by
+  have := hL.2.1 (Reader.consumer parser item version) version slices true
     (consumer_breaksAtEnd version)
-  simpa [Lexer.readyFrom, Lexer.withLayout, RecordingParser.consumer] using this
+  simpa [Lexer.readyFrom, Lexer.withLayout, Reader.consumer] using this
 
 /-- A reader that lexes then parses reads files and finishes only on files. -/
 theorem lexesThenParses_reads (reader : RecordingReader) (h : LexesThenParses reader) :

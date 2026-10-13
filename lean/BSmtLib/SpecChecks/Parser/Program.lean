@@ -1,4 +1,5 @@
-import BSmtLib.Spec.Parser
+import BSmtLibSpec.Parser
+import BSmtLibSpec.Grammar.Properties
 
 /-!
 # Programs that read what a parser receives
@@ -19,8 +20,12 @@ Not trusted: everything here is proved.
 
 namespace BSmtLib.SpecChecks.Parser
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Grammar BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec BSmtLibSpec.Lexicon BSmtLibSpec.Grammar BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
+open BSmtLibSpec.Parser.Traversal
 
 /-- What a parser does, as data, with the handler's values `values` and the result `α`. -/
 inductive Program (values : Values) (α : Type) : Type where

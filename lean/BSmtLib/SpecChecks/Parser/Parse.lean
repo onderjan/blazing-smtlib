@@ -3,7 +3,7 @@ import BSmtLib.SpecChecks.Parser.Program
 /-!
 # The traversal as a parser
 
-The traversal of `Spec.Parser.Traversal` goes by the syntax tree. `parseScript` makes the same
+The traversal of `BSmtLibSpec.Parser.Traversal` goes by the syntax tree. `parseScript` makes the same
 handler calls among the same items, but goes by the items: it is a `Program`, which decides
 what to do next from what it has received. `Parser.Simulation` proves that it makes the calls of
 the traversal of every script on the items of the script.
@@ -19,8 +19,12 @@ Not trusted: everything here is proved.
 
 namespace BSmtLib.SpecChecks.Parser
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Grammar BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal Program
+open BSmtLibSpec BSmtLibSpec.Lexicon BSmtLibSpec.Grammar BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
+open BSmtLibSpec.Parser.Traversal Program
 
 variable {values : Values}
 

@@ -10,13 +10,13 @@ a numeral, which may go on to a fraction.
 namespace BSmtLib.Proofs.Lexer.VNaiveWRustPort
 
 open BSmtLib.Proofs.Adapter VNaive BSmtLib.Proofs.Simulation
-open Spec.Lexer (Handed)
+open BSmtLibSpec.Lexer (Handed)
 open Lexer.Slice (get? get)
 
 section
 
 variable {floor : Option Nat} {low : Nat}
-variable {C : Spec.Lexer.Consumer} {hd : Bool} {iv : Version}
+variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Version}
 
 /-- The arm of `lexStep` for the base selection after a `#`. -/
 theorem arm_baseSelection (v : Version) (input : ByteSlice) (start : Nat)

@@ -1,9 +1,9 @@
-import BSmtLib.Spec.Lexer
+import BSmtLibSpec.Lexer
 
 /-!
 # A lexer and its consumers
 
-Checks of what `Spec.Lexer` says about a lexer and its consumers: what a lexer does with a
+Checks of what `BSmtLibSpec.Lexer` says about a lexer and its consumers: what a lexer does with a
 consumer is determined (`runs_unique`), so a held result, where discarding began, and the
 version in force are each determined by the input and the consumer; locating a token of an input
 read on its own after what came before agrees with locating it in the whole input
@@ -15,7 +15,9 @@ Not trusted: everything here is proved.
 
 namespace BSmtLib.SpecChecks.Lexer
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Lexer
+open BSmtLibSpec BSmtLibSpec.Lexicon BSmtLibSpec.Lexer
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
 
 /-! ## Locations -/
 

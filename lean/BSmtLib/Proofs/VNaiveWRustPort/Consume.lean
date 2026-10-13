@@ -14,9 +14,9 @@ namespace BSmtLib.Proofs.Lexer.VNaiveWRustPort
 
 open BSmtLib.Lexer.Internal (intoBatch)
 open BSmtLib.Proofs.Adapter VNaive BSmtLib.Proofs.Simulation
-open Spec.Lexer (Handed)
+open BSmtLibSpec.Lexer (Handed)
 
-variable {g : BatchTag} (C : Spec.Lexer.Consumer)
+variable {g : BatchTag} (C : BSmtLibSpec.Lexer.Consumer)
 
 /-- What one call of the consumer on the cursor `c` gives, with the lexemes `xs` it took: the
 answer, the cursor after it, and the tokens taken, as `pending` says from `p`. -/

@@ -11,7 +11,10 @@ the relation, and that a lexeme it finishes is a token of the spec's `categoryRe
 
 namespace BSmtLib.Proofs.Lexer.VNaive
 
-open BSmtLib.Spec.Lexicon BSmtLib.Spec.Lexicon.Regex BSmtLib.SpecChecks.Lexicon
+open BSmtLibSpec.Lexicon BSmtLibSpec.Regex BSmtLib.SpecChecks.Lexicon
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
+open BSmtLibSpec (Regex)
 
 /-! ## Helpers -/
 
@@ -29,7 +32,7 @@ theorem isEmpty_iff (a : ByteArray) : a.isEmpty = true ↔ a.data.toList = [] :=
   rw [← Array.length_toList]
   exact List.length_eq_zero_iff
 
-theorem toVersion_beq (version : Spec.Lexicon.Version) :
+theorem toVersion_beq (version : BSmtLibSpec.Lexicon.Version) :
     (Adapter.toVersion version == .v2_0) = true ↔ version = .v2_0 := by
   cases version <;> decide
 
@@ -177,17 +180,17 @@ def lexCategory : Category → TokenCategory
 
 /-- The lexeme `l` is the token of the kind with the characters `text`, from `start` to
 `end`. -/
-def LexemeIs (version : Spec.Lexicon.Version) (category : Category) (start «end» : Location)
+def LexemeIs (version : BSmtLibSpec.Lexicon.Version) (category : Category) (start «end» : Location)
     (text : Chars) (l : Lexeme) : Prop :=
   l.category = lexCategory category ∧
-    l.content.data.toList = Spec.Lexicon.Token.content version ⟨category, 0, text⟩ ∧
+    l.content.data.toList = BSmtLibSpec.Lexicon.Token.content version ⟨category, 0, text⟩ ∧
     l.start = start ∧ l.end = «end»
 
 /--
 `ModeInv version mode text content`: a token in progress in the mode, whose characters so far
 are `text`, has the content `content`.
 -/
-def ModeInv (version : Spec.Lexicon.Version) : Mode → Chars → Chars → Prop
+def ModeInv (version : BSmtLibSpec.Lexicon.Version) : Mode → Chars → Chars → Prop
   | .numeral zero, text, content =>
     content = text ∧ numeral text ∧ (zero = true ↔ text = [48])
   | .fraction digits, text, content =>
@@ -218,7 +221,7 @@ def ModeInv (version : Spec.Lexicon.Version) : Mode → Chars → Chars → Prop
   | .whitespace, _, _ => False
 
 /-- What a byte with no token in progress does, as the spec sees it. -/
-def StartSound (version : Spec.Lexicon.Version) (location : Location) (c : UInt8) :
+def StartSound (version : BSmtLibSpec.Lexicon.Version) (location : Location) (c : UInt8) :
     Started → Prop
   | .idle => whiteSpaceChar [c]
   | .pending p => p.start = location ∧ ModeInv version p.mode [c] p.content.data.toList
@@ -229,7 +232,7 @@ def StartSound (version : Spec.Lexicon.Version) (location : Location) (c : UInt8
 
 /-- What a byte does to a token in progress with the characters `text`, as the spec sees
 it. -/
-def AdvanceSound (version : Spec.Lexicon.Version) (p : Pending) (text : Chars)
+def AdvanceSound (version : BSmtLibSpec.Lexicon.Version) (p : Pending) (text : Chars)
     (location : Location) (c : UInt8) : Advanced → Prop
   | .pending p' => p'.start = p.start ∧ ModeInv version p'.mode (text ++ [c]) p'.content.data.toList
   | .idle => comment (text ++ [c])
@@ -240,7 +243,7 @@ def AdvanceSound (version : Spec.Lexicon.Version) (p : Pending) (text : Chars)
 
 /-- What the end of the input does to a token in progress with the characters `text`, as the
 spec sees it. -/
-def FinishSound (version : Spec.Lexicon.Version) (p : Pending) (text : Chars)
+def FinishSound (version : BSmtLibSpec.Lexicon.Version) (p : Pending) (text : Chars)
     (location : Location) : Finished → Prop
   | .none => commentAtEnd text
   | .token l => ∃ category, categoryRegex version category text ∧
@@ -249,7 +252,7 @@ def FinishSound (version : Spec.Lexicon.Version) (p : Pending) (text : Chars)
 
 /-! ## The steps keep the relation -/
 
-theorem start_sound (version : Spec.Lexicon.Version) (location : Location) (c : UInt8) :
+theorem start_sound (version : BSmtLibSpec.Lexicon.Version) (location : Location) (c : UInt8) :
     StartSound version location c (start (Adapter.toVersion version) false location c) := by
   unfold start
   by_cases hw : isWhitespace c = true
@@ -310,10 +313,10 @@ theorem start_sound (version : Spec.Lexicon.Version) (location : Location) (c : 
   trivial
 
 /-- A token that the byte delimits, if it is a delimiter. -/
-theorem delimited_sound {version : Spec.Lexicon.Version} {p : Pending} {text : Chars}
+theorem delimited_sound {version : BSmtLibSpec.Lexicon.Version} {p : Pending} {text : Chars}
     {location : Location} {c : UInt8} {kind : LexicalErrorKind} (category : Category)
     (hr : categoryRegex version category text)
-    (hk : p.content.data.toList = Spec.Lexicon.Token.content version ⟨category, 0, text⟩) :
+    (hk : p.content.data.toList = BSmtLibSpec.Lexicon.Token.content version ⟨category, 0, text⟩) :
     AdvanceSound version p text location c
       (if isDelimiter c = true then
         .tokenBefore
@@ -326,7 +329,7 @@ theorem delimited_sound {version : Spec.Lexicon.Version} {p : Pending} {text : C
   · simp only [hd, Bool.false_eq_true, ite_false]
     trivial
 
-theorem advance_numeral {version : Spec.Lexicon.Version} {p : Pending} {text : Chars}
+theorem advance_numeral {version : BSmtLibSpec.Lexicon.Version} {p : Pending} {text : Chars}
     {location : Location} {c : UInt8} {zero : Bool} (hm : p.mode = .numeral zero)
     (h : ModeInv version (.numeral zero) text p.content.data.toList) :
     AdvanceSound version p text location c (advance false p location c) := by
@@ -355,7 +358,7 @@ theorem advance_numeral {version : Spec.Lexicon.Version} {p : Pending} {text : C
   exact delimited_sound .numeral hn hk
 
 
-theorem advance_fraction {version : Spec.Lexicon.Version} {p : Pending} {text : Chars}
+theorem advance_fraction {version : BSmtLibSpec.Lexicon.Version} {p : Pending} {text : Chars}
     {location : Location} {c : UInt8} {digits : Bool} (hm : p.mode = .fraction digits)
     (h : ModeInv version (.fraction digits) text p.content.data.toList) :
     AdvanceSound version p text location c (advance false p location c) := by
@@ -378,7 +381,7 @@ theorem advance_fraction {version : Spec.Lexicon.Version} {p : Pending} {text : 
     show decimal (n ++ 46 :: ds)
     exact ⟨n, [46] ++ ds, rfl, hn, ⟨[46], ds, rfl, rfl, zeros_numeral hne hds⟩⟩
 
-theorem advance_hash {version : Spec.Lexicon.Version} {p : Pending} {text : Chars}
+theorem advance_hash {version : BSmtLibSpec.Lexicon.Version} {p : Pending} {text : Chars}
     {location : Location} {c : UInt8} (hm : p.mode = .hash)
     (h : ModeInv version .hash text p.content.data.toList) :
     AdvanceSound version p text location c (advance false p location c) := by
@@ -396,7 +399,7 @@ theorem advance_hash {version : Spec.Lexicon.Version} {p : Pending} {text : Char
   simp only [h98, ite_false]
   trivial
 
-theorem advance_digits {version : Spec.Lexicon.Version} {p : Pending} {text : Chars}
+theorem advance_digits {version : BSmtLibSpec.Lexicon.Version} {p : Pending} {text : Chars}
     {location : Location} {c : UInt8} {radix : Radix} (hm : p.mode = .digits radix)
     (h : ModeInv version (.digits radix) text p.content.data.toList) :
     AdvanceSound version p text location c (advance false p location c) := by
@@ -441,7 +444,7 @@ theorem symChar_regex {x : UInt8} (h : SymChar x.toNat) :
     altAll [letter, digit, symbolPunctuation] [x] :=
   (symbolByte_iff x).mp ((isSymbolByte_iff x).mpr h)
 
-theorem advance_keyword {version : Spec.Lexicon.Version} {p : Pending} {text : Chars}
+theorem advance_keyword {version : BSmtLibSpec.Lexicon.Version} {p : Pending} {text : Chars}
     {location : Location} {c : UInt8} (hm : p.mode = .keyword)
     (h : ModeInv version .keyword text p.content.data.toList) :
     AdvanceSound version p text location c (advance false p location c) := by
@@ -465,10 +468,10 @@ theorem advance_keyword {version : Spec.Lexicon.Version} {p : Pending} {text : C
     ⟨[58], _, rfl, rfl, plus_of_chars hne fun x hx => symChar_regex (hall x hx)⟩ rfl
 
 /-- The category of a simple symbol or reserved word with the characters. -/
-def symbolCategory (version : Spec.Lexicon.Version) (text : Chars) : Category :=
+def symbolCategory (version : BSmtLibSpec.Lexicon.Version) (text : Chars) : Category :=
   if text ∈ reservedWords version then .reserved else .simpleSymbol
 
-theorem symbolCategory_regex {version : Spec.Lexicon.Version} {c : UInt8} {rest : Chars}
+theorem symbolCategory_regex {version : BSmtLibSpec.Lexicon.Version} {c : UInt8} {rest : Chars}
     (hd : ¬ IsDigit c.toNat) (hall : ∀ x ∈ c :: rest, SymChar x.toNat) :
     categoryRegex version (symbolCategory version (c :: rest)) (c :: rest) := by
   unfold symbolCategory
@@ -478,17 +481,17 @@ theorem symbolCategory_regex {version : Spec.Lexicon.Version} {c : UInt8} {rest 
   · simp only [hr, ite_false, categoryRegex]
     exact simpleSymbol_of (fun x hx => symChar_regex (hall x hx)) hd hr
 
-theorem lexCategory_symbol (version : Spec.Lexicon.Version) (text : Chars) :
+theorem lexCategory_symbol (version : BSmtLibSpec.Lexicon.Version) (text : Chars) :
     lexCategory (symbolCategory version text) = .unquotedSymbol := by
   unfold symbolCategory
   split <;> rfl
 
-theorem content_symbol (version : Spec.Lexicon.Version) (text : Chars) :
-    Spec.Lexicon.Token.content version ⟨symbolCategory version text, 0, text⟩ = text := by
+theorem content_symbol (version : BSmtLibSpec.Lexicon.Version) (text : Chars) :
+    BSmtLibSpec.Lexicon.Token.content version ⟨symbolCategory version text, 0, text⟩ = text := by
   unfold symbolCategory
   split <;> rfl
 
-theorem advance_simpleSymbol {version : Spec.Lexicon.Version} {p : Pending} {text : Chars}
+theorem advance_simpleSymbol {version : BSmtLibSpec.Lexicon.Version} {p : Pending} {text : Chars}
     {location : Location} {c : UInt8} (hm : p.mode = .simpleSymbol)
     (h : ModeInv version .simpleSymbol text p.content.data.toList) :
     AdvanceSound version p text location c (advance false p location c) := by
@@ -522,7 +525,7 @@ theorem quotedChar_of {c : UInt8} (ht : isTextByte c = true) (h124 : c ≠ 124) 
   · exact h124 h
   · exact h92 h
 
-theorem advance_quotedSymbol {version : Spec.Lexicon.Version} {p : Pending} {text : Chars}
+theorem advance_quotedSymbol {version : BSmtLibSpec.Lexicon.Version} {p : Pending} {text : Chars}
     {location : Location} {c : UInt8} (hm : p.mode = .quotedSymbol)
     (h : ModeInv version .quotedSymbol text p.content.data.toList) :
     AdvanceSound version p text location c (advance false p location c) := by
@@ -548,7 +551,7 @@ theorem advance_quotedSymbol {version : Spec.Lexicon.Version} {p : Pending} {tex
   simp only [ht, Bool.false_eq_true, ite_false]
   trivial
 
-theorem advance_quotedSymbolClosed {version : Spec.Lexicon.Version} {p : Pending}
+theorem advance_quotedSymbolClosed {version : BSmtLibSpec.Lexicon.Version} {p : Pending}
     {text : Chars} {location : Location} {c : UInt8} (hm : p.mode = .quotedSymbolClosed)
     (h : ModeInv version .quotedSymbolClosed text p.content.data.toList) :
     AdvanceSound version p text location c (advance false p location c) := by
@@ -565,7 +568,7 @@ theorem stringUnit_of {c : UInt8} (ht : isTextByte c = true) (h34 : c ≠ 34) :
   have : [c] = [34] := h
   simpa using this
 
-theorem advance_string {version : Spec.Lexicon.Version} {p : Pending} {text : Chars}
+theorem advance_string {version : BSmtLibSpec.Lexicon.Version} {p : Pending} {text : Chars}
     {location : Location} {c : UInt8} (hm : p.mode = .string)
     (h : ModeInv version .string text p.content.data.toList) :
     AdvanceSound version p text location c (advance false p location c) := by
@@ -585,7 +588,7 @@ theorem advance_string {version : Spec.Lexicon.Version} {p : Pending} {text : Ch
   simp only [ht, Bool.false_eq_true, ite_false]
   trivial
 
-theorem advance_stringQuote {version : Spec.Lexicon.Version} {p : Pending} {text : Chars}
+theorem advance_stringQuote {version : BSmtLibSpec.Lexicon.Version} {p : Pending} {text : Chars}
     {location : Location} {c : UInt8} (hm : p.mode = .stringQuote)
     (h : ModeInv version .stringQuote text p.content.data.toList) :
     AdvanceSound version p text location c (advance false p location c) := by
@@ -627,7 +630,7 @@ theorem stringUnit20_escape {c : UInt8} (ht : isTextByte c = true) :
       (seq (lit "\\") (alt printableChar whiteSpaceChar)) [92, c] :=
   Or.inr ⟨[92], [c], rfl, rfl, (text_iff c).mp ht⟩
 
-theorem legacyStringByte_sound {version : Spec.Lexicon.Version} {p : Pending} {b : Chars}
+theorem legacyStringByte_sound {version : BSmtLibSpec.Lexicon.Version} {p : Pending} {b : Chars}
     {location : Location} {c : UInt8} (hv : version = .v2_0) (hb : StringBody20 b)
     (hk : p.content.data.toList = unescape20 b) :
     AdvanceSound version p (34 :: b) location c (legacyStringByte p location c) := by
@@ -650,7 +653,7 @@ theorem legacyStringByte_sound {version : Spec.Lexicon.Version} {p : Pending} {b
   simp only [ht, Bool.false_eq_true, ite_false]
   trivial
 
-theorem advance_legacyString {version : Spec.Lexicon.Version} {p : Pending} {text : Chars}
+theorem advance_legacyString {version : BSmtLibSpec.Lexicon.Version} {p : Pending} {text : Chars}
     {location : Location} {c : UInt8} (hm : p.mode = .legacyString)
     (h : ModeInv version .legacyString text p.content.data.toList) :
     AdvanceSound version p text location c (advance false p location c) := by
@@ -658,7 +661,7 @@ theorem advance_legacyString {version : Spec.Lexicon.Version} {p : Pending} {tex
   simp only [advance, hm]
   exact legacyStringByte_sound hv hb hk
 
-theorem advance_legacyEscape {version : Spec.Lexicon.Version} {p : Pending} {text : Chars}
+theorem advance_legacyEscape {version : BSmtLibSpec.Lexicon.Version} {p : Pending} {text : Chars}
     {location : Location} {c : UInt8} (hm : p.mode = .legacyEscape)
     (h : ModeInv version .legacyEscape text p.content.data.toList) :
     AdvanceSound version p text location c (advance false p location c) := by
@@ -687,7 +690,7 @@ theorem advance_legacyEscape {version : Spec.Lexicon.Version} {p : Pending} {tex
     simp only [ht, Bool.false_eq_true, ite_false]
     trivial
 
-theorem advance_legacyQuote {version : Spec.Lexicon.Version} {p : Pending} {text : Chars}
+theorem advance_legacyQuote {version : BSmtLibSpec.Lexicon.Version} {p : Pending} {text : Chars}
     {location : Location} {c : UInt8} (hm : p.mode = .legacyQuote)
     (h : ModeInv version .legacyQuote text p.content.data.toList) :
     AdvanceSound version p text location c (advance false p location c) := by
@@ -702,7 +705,7 @@ theorem advance_legacyQuote {version : Spec.Lexicon.Version} {p : Pending} {text
     simp only [hv, ↓reduceIte, hk]
     simp
 
-theorem advance_comment {version : Spec.Lexicon.Version} {p : Pending} {text : Chars}
+theorem advance_comment {version : BSmtLibSpec.Lexicon.Version} {p : Pending} {text : Chars}
     {location : Location} {c : UInt8} (hm : p.mode = .comment)
     (h : ModeInv version .comment text p.content.data.toList) :
     AdvanceSound version p text location c (advance false p location c) := by
@@ -723,7 +726,7 @@ theorem advance_comment {version : Spec.Lexicon.Version} {p : Pending} {text : C
 
 /-- A byte keeps the relation of the token in progress, and a lexeme it finishes is a token of
 the spec. -/
-theorem advance_sound {version : Spec.Lexicon.Version} {p : Pending} {text : Chars}
+theorem advance_sound {version : BSmtLibSpec.Lexicon.Version} {p : Pending} {text : Chars}
     (location : Location) (c : UInt8)
     (h : ModeInv version p.mode text p.content.data.toList) :
     AdvanceSound version p text location c (advance false p location c) := by
@@ -747,7 +750,7 @@ theorem advance_sound {version : Spec.Lexicon.Version} {p : Pending} {text : Cha
 
 /-- The end of the input keeps the relation of the token in progress: a lexeme it finishes is
 a token of the spec, and a comment it ends runs to the end of the input. -/
-theorem finish_sound {version : Spec.Lexicon.Version} {p : Pending} {text : Chars}
+theorem finish_sound {version : BSmtLibSpec.Lexicon.Version} {p : Pending} {text : Chars}
     (location : Location) (h : ModeInv version p.mode text p.content.data.toList) :
     FinishSound version p text location (finish false p location) := by
   unfold finish

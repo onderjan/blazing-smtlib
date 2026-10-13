@@ -1,4 +1,5 @@
-import BSmtLib.Spec.Parser.Traversal
+import BSmtLibSpec.Grammar.Script
+import BSmtLibSpec.Parser.Traversal
 
 /-!
 # Properties of the traversal
@@ -18,9 +19,9 @@ a handler returns, it only hands it on to later calls, so the run with any handl
 recorded calls with that handler's values in place of the numbers.
 -/
 
-namespace BSmtLib.Spec.Parser
+namespace BSmtLibSpec.Parser.Properties
 
-open BSmtLib.Spec.Lexicon BSmtLib.Spec.Grammar Traversal
+open BSmtLibSpec.Lexicon BSmtLibSpec.Grammar Traversal
 
 /-! ## A recording run -/
 
@@ -213,7 +214,7 @@ inductive Ending where
   /-- The parser rejected the last item it took: no script continues with it. -/
   | rejected
   /-- The parser failed after the last item it took, on a version declaration. -/
-  | failed (error : VersionError)
+  | failed (error : VersionPolicy.Error)
 
 /--
 `Takes version commands items ending`: read from the version, a parser takes the items for the
@@ -257,16 +258,6 @@ def versionAt (version : Version) : List Tree.Command → Nat → Version
   | first :: rest, count =>
     if count < first.tokens.length then version
     else versionAt (first.declaredVersion.getD version) rest (count - first.tokens.length)
-
-/--
-The item is one that a lexer of the version can hand over, as far as a parser can tell: a
-reserved word is a reserved word of the version.
-
-Standard: 2.7 §3.1 Reserved words; ⟨reserved⟩ of each version.
--/
-def Traversal.Received.OfVersion (version : Version) : Received → Prop
-  | .token (.reserved word) => word ∈ (basicReservedWords version ++ commandNames version).map chars
-  | _ => True
 
 /--
 A parser as its recording runs show it. It takes items of its own type, each of which stands for
@@ -333,4 +324,4 @@ def RejectsFirstUnviable (parser : RecordingParser) : Prop :=
       eventsBeforeProcessing count (parser.parse version items).1 =
         eventsBeforeProcessingOf (parser.stands rejected) count (record version commands)
 
-end BSmtLib.Spec.Parser
+end BSmtLibSpec.Parser.Properties

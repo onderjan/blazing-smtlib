@@ -1,16 +1,18 @@
-import BSmtLib.Spec.Lexicon
+import BSmtLibSpec.Lexicon
 
 /-!
 # Syntax trees
 
 What the syntactic rules build: one type per syntactic category of SMT-LIB scripts. Names,
 keywords and the contents of literals are characters, as the tokens give them; a symbol also
-records whether it was written quoted.
+records whether it was written quoted. A propositional literal also has the term it is written as
+(`PropLiteral.asTerm`).
 -/
 
-namespace BSmtLib.Spec.Grammar
+namespace BSmtLibSpec.Grammar
 
-open BSmtLib.Spec.Lexicon
+open BSmtLibSpec.Lexicon
+open Regex (Chars)
 
 namespace Tree
 
@@ -221,6 +223,14 @@ inductive PropLiteral where
   | negative (negation : Symbol) (symbol : Symbol)
 
 /--
+A propositional literal as the term it is written as: the symbol, or `not` applied to it.
+-/
+def PropLiteral.asTerm : Tree.PropLiteral → Tree.Term
+  | .positive symbol => .identifier (.plain ⟨symbol, []⟩)
+  | .negative negation symbol =>
+    .application (.plain ⟨negation, []⟩) [.identifier (.plain ⟨symbol, []⟩)]
+
+/--
 ⟨command⟩
 
 Standard: 2.7 §3.11 Scripts; App. B ⟨command⟩, the standard commands only.
@@ -262,4 +272,4 @@ inductive Command where
 
 end Tree
 
-end BSmtLib.Spec.Grammar
+end BSmtLibSpec.Grammar

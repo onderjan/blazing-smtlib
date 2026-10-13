@@ -12,9 +12,10 @@ the producer is asked for after each item (`requestsAt`).
 
 namespace BSmtLib.EndToEnd
 
-open BSmtLib.Spec BSmtLib.Spec.Grammar
-open BSmtLib.Spec.Parser (Takes Ending)
-open BSmtLib.Spec.Parser.Traversal (Received)
+open BSmtLibSpec BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Parser.Properties (Takes Ending)
+open BSmtLibSpec.Parser.Traversal (Received)
 open BSmtLib.ParserProofs (requestsAt)
 
 theorem requestsAt_cons_inner {c : Tree.Command} {rest : List Tree.Command} {k : Nat}

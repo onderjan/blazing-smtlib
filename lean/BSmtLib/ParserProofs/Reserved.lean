@@ -9,7 +9,8 @@ reserved word of the spec is that word.
 
 namespace BSmtLib.ParserProofs
 
-open BSmtLib.Spec.Grammar
+open BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
 open BSmtLib.Parser (Input)
 
 theorem decodeReserved_reserved (r : Reserved) : decodeReserved (Bridge.reserved r) = some r := by

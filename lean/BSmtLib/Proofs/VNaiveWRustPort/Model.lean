@@ -22,7 +22,7 @@ the end of the slice, or when the run fails, or where it stopped.
 namespace BSmtLib.Proofs.Lexer.VNaiveWRustPort
 
 open BSmtLib.Proofs.Adapter VNaive
-open Spec.Lexer (Handed)
+open BSmtLibSpec.Lexer (Handed)
 
 /-- What the consumer has done while it goes on: the tokens it has taken and the version in
 force. -/
@@ -32,7 +32,7 @@ structure Prog where
 
 section
 
-variable (C : Spec.Lexer.Consumer)
+variable (C : BSmtLibSpec.Lexer.Consumer)
 
 /-- Where a hand-over stops, at the lexeme `l`. -/
 inductive Stop where
@@ -74,13 +74,13 @@ end
 def crosses (a b : Version) : Bool := (a == .v2_0) != (b == .v2_0)
 
 /-- The version in force after the consumer asked for `o`, if it did. -/
-def switchedTo (ver : Version) : Option Spec.Lexicon.Version → Version
+def switchedTo (ver : Version) : Option BSmtLibSpec.Lexicon.Version → Version
   | some v => toVersion v
   | none => ver
 
 section
 
-variable (C : Spec.Lexer.Consumer) (hd : Bool)
+variable (C : BSmtLibSpec.Lexer.Consumer) (hd : Bool)
 
 /-- What the consumer does with the lexeme, from where it is. -/
 def hand1 : HandOut C → Lexeme → HandOut C
@@ -200,7 +200,7 @@ namespace BSmtLib.Proofs.Lexer.VNaiveWRustPort
 open BSmtLib.Proofs.Adapter VNaive
 
 /-- The lexeme a hand-over stopped at. -/
-def Stop.lex {C : Spec.Lexer.Consumer} : Stop C → Lexeme
+def Stop.lex {C : BSmtLibSpec.Lexer.Consumer} : Stop C → Lexeme
   | .trailing l | .fail _ _ l | .layout l | .brk _ l _ | .brkX _ l | .discard _ l | .relex l => l
 
 end BSmtLib.Proofs.Lexer.VNaiveWRustPort
@@ -209,7 +209,7 @@ namespace BSmtLib.Proofs.Lexer.VNaiveWRustPort
 
 /-- Where the lexer discards from after the stop, if the stop makes it discard though it does
 not go on: a failure of the consumer at an entry where it had the rest discarded. -/
-def Stop.discards {C : Spec.Lexer.Consumer} : Stop C → Option Location
+def Stop.discards {C : BSmtLibSpec.Lexer.Consumer} : Stop C → Option Location
   | .fail _ true l => some l.end
   | _ => none
 

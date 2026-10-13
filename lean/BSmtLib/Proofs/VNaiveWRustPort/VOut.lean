@@ -14,7 +14,7 @@ stop (`Restarts`).
 namespace BSmtLib.Proofs.Lexer.VNaiveWRustPort
 
 open BSmtLib.Proofs.Adapter BSmtLib.Proofs.Lexer.VNaive
-open Spec.Lexer (Handed)
+open BSmtLibSpec.Lexer (Handed)
 
 theorem start_legacy {v1 v2 : Version} (hv : (v1 == .v2_0) = (v2 == .v2_0)) :
     start v1 = start v2 := by
@@ -38,7 +38,7 @@ theorem lexBytesW_legacy {v1 v2 : Version} (hv : (v1 == .v2_0) = (v2 == .v2_0)) 
   | nil => rfl
   | cons c bs ih => simp only [lexBytesW, byteStepW_legacy hv, ih]
 
-variable (C : Spec.Lexer.Consumer)
+variable (C : BSmtLibSpec.Lexer.Consumer)
 
 /-- The lexer state `c'` is the naive lexer's state at the end of a run that went on: the
 activity, the version, holding and the version it was created with. -/

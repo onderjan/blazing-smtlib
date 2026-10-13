@@ -13,7 +13,7 @@ start of every input.
 
 `parserRecord` is the recording run of the script parser, under the posture that restricts
 nothing, and `Rejection.libraryParser` is that run as a recording parser of the spec
-(`Spec.Parser.RecordingParser`). `switchOf` and `discardOf` read what a recording run asks of
+(`BSmtLibSpec.Parser.Properties.RecordingParser`). `switchOf` and `discardOf` read what a recording run asks of
 its producer after its last processing.
 
 These definitions are adapters: the root theorems of `BSmtLib.ParserProofs` and
@@ -25,8 +25,9 @@ namespace BSmtLib.ParserProofs
 section
 
 open BSmtLib.Parser
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 
 variable {H : Type} {m : Type → Type} [Monad m] [Parser.Handler H m] {σ ρ τ χ α β : Type}
 variable (points : Points (StateT H m))
@@ -77,8 +78,9 @@ end
 section
 
 open BSmtLib.Parser
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 
 variable {H P R : Type} {m : Type → Type} [Monad m] [Parser.Handler H m]
 variable [Parse P H m (Parser.Handler.Error H) R]
@@ -123,9 +125,11 @@ end
 
 section
 
-open BSmtLib.Spec.Grammar
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 open BSmtLib.Parser (Input PM Step Flow Parse ScriptParser VersionPosture)
 
 /-- The event is a processing. -/
@@ -157,8 +161,12 @@ end
 
 section
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Grammar BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec BSmtLibSpec.Lexicon BSmtLibSpec.Grammar BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
+open BSmtLibSpec.Parser.Traversal
 
 /-- The events after the last processing. -/
 def afterLastProcess (events : List Event) : List Event :=
@@ -180,9 +188,11 @@ end
 
 namespace Rejection
 
-open BSmtLib.Spec.Grammar
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 open BSmtLib.Parser (Input ScriptParser)
 
 /-- How the library's run ends, by its result. -/

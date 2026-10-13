@@ -11,7 +11,9 @@ they exist, so that `HandsOverMaximal` is not vacuous; and that a lexer that is 
 
 namespace BSmtLib.SpecChecks.Lexer
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Lexer
+open BSmtLibSpec BSmtLibSpec.Lexicon BSmtLibSpec.Lexer
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
 open BSmtLib.SpecChecks.Lexicon
 
 /-! ## Greatest numbers -/
@@ -112,7 +114,7 @@ theorem handoverReady_append {version : Version} {input more : Chars} {tokens : 
 
 /-- Every token of a tokenisation is a token of its kind, at or after its offset. -/
 theorem tokenizationFrom_mem {version : Version} {offset : Nat} {input : Chars}
-    {tokens : List Token} (h : TokenizationFrom version offset input tokens) :
+    {tokens : List Token} (h : Tokenization.From version offset input tokens) :
     ∀ token ∈ tokens, categoryRegex version token.category token.text ∧ offset ≤ token.offset := by
   induction h with
   | done => simp
@@ -125,7 +127,7 @@ theorem tokenizationFrom_mem {version : Version} {offset : Nat} {input : Chars}
 
 /-- Taking the characters that follow a token keeps it delimited. -/
 theorem delimited_take {category : Category} {rest : Chars} (n : Nat)
-    (h : Delimited category rest) : Delimited category (rest.take n) := by
+    (h : Tokenization.Delimited category rest) : Tokenization.Delimited category (rest.take n) := by
   rcases h with h | h | h | ⟨c, more, rfl, hc⟩
   · exact Or.inl h
   · exact Or.inr (Or.inl h)
@@ -142,8 +144,8 @@ theorem take_append_ge {α : Type} {xs ys : List α} {n : Nat} (h : xs.length �
 /-- The characters up to a token of a tokenisation are tokenised by the tokens before it. -/
 theorem tokenizationFrom_take {version : Version} {offset : Nat} {input : Chars}
     {before : List Token} {token : Token} {after : List Token}
-    (h : TokenizationFrom version offset input (before ++ token :: after)) :
-    TokenizationFrom version offset (input.take (token.offset - offset)) before := by
+    (h : Tokenization.From version offset input (before ++ token :: after)) :
+    Tokenization.From version offset (input.take (token.offset - offset)) before := by
   induction before generalizing offset input with
   | nil =>
     rcases tokenizationFrom_inv h with ⟨he, -⟩ | ⟨w, category, s, rest, ts, rfl, hw, -, -, -, he⟩
@@ -191,7 +193,7 @@ theorem handoverReady_within {version : Version} {input : Chars} {tokens : List 
     rw [hlen]
     refine Nat.succ_le_of_lt (Nat.lt_of_not_le fun hge => ?_)
     -- the input followed by the characters up to the token is tokenised without it
-    have ht' : TokenizationFrom version 0 (input ++ rest) (before ++ token :: (after ++ more)) := by
+    have ht' : Tokenization.From version 0 (input ++ rest) (before ++ token :: (after ++ more)) := by
       simpa only [Tokenization, List.append_assoc, List.cons_append] using ht
     have hcut := tokenizationFrom_take ht'
     rw [Nat.sub_zero, take_append_ge hge] at hcut

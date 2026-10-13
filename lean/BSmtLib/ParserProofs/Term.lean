@@ -18,12 +18,14 @@ joined.
 
 namespace BSmtLib.ParserProofs
 
-open BSmtLib.Spec.Grammar
+open BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
 open BSmtLib.Parser (Input PM Step TermState TermMode TermLevel TermStateOf TermLevelOf termStep
   termOpened termComplete startBinder endBinder SortedBinder BinderKind AttributeState
   attributeStep)
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 open BSmtLib.SpecChecks.Parser (term_constant term_application term_let term_lambda
   term_quantified term_match term_annotated cases_cons)
 
@@ -58,7 +60,7 @@ variable {points : Points (StateT H m)} {version : BSmtLib.Version}
 variable {h : Traversal.Handler (StateT H m) (Parser.Handler.Error H) (valuesOf H)}
 
 /-- The token after the first of the attributes: the next keyword, or the `)` after them. -/
-def followingOf : List Tree.Attribute → Spec.Grammar.SyntaxToken
+def followingOf : List Tree.Attribute → BSmtLibSpec.Grammar.SyntaxToken
   | [] => .parenClose
   | next :: _ => .keyword next.keyword
 
@@ -71,7 +73,7 @@ def othersOf (points : Points (StateT H m))
   | next :: rest => attributesThen points h next.keyword next.value rest
 
 /-- The attributes of an annotation: the first, then the others. -/
-theorem attributesThen_eq (keyword : Spec.Lexicon.Chars) (value : Option Tree.AttributeValue)
+theorem attributesThen_eq (keyword : BSmtLibSpec.Regex.Chars) (value : Option Tree.AttributeValue)
     (rest : List Tree.Attribute) :
     attributesThen points h keyword value rest =
       (fun (pair : Parser.Handler.Attribute H × List (Parser.Handler.Attribute H)) =>

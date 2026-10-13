@@ -3,7 +3,7 @@ import BSmtLib.EndToEnd.Lexes.NoLayout
 /-!
 # The library's reader lexes, then parses
 
-`Spec.Reader.LexesThenParses` for the library's reader (`libraryReader_lexesThenParses`), with the
+`BSmtLibSpec.Reader.LexesThenParses` for the library's reader (`libraryReader_lexesThenParses`), with the
 library's lexer (`Proofs.Lexer.correctWithConsumers`), the library's parser
 (`Rejection.libraryParser`, with `Rejection.library_follows` and `Rejection.library_rejects`) and
 the parser's item for each token (`libItem`, which stands for what the token stands for:
@@ -21,9 +21,13 @@ script consumer does (`Param.feed_told`, `Param.calls_of_invG`).
 namespace BSmtLib.EndToEnd
 
 open BSmtLib.Lexer BSmtLib.Lexer.Internal
-open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Grammar BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
-open BSmtLib.Spec.Lexer (Handed)
+open BSmtLibSpec BSmtLibSpec.Lexicon BSmtLibSpec.Grammar BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
+open BSmtLibSpec.Parser.Traversal
+open BSmtLibSpec.Lexer (Handed)
 open BSmtLib.ParserProofs BSmtLib.ParserProofs.Rejection
 open BSmtLib.Proofs.Adapter (toVersion LexOps lexing)
 open BSmtLib.EndToEnd.Param
@@ -72,13 +76,13 @@ theorem libItem_stands (handed : Handed) (received : Received) (version : Lexico
   | unquotedSymbol =>
     cases reserved with
     | none =>
-      simp only [Spec.Lexer.Handed.received, Option.isSome_none, Bool.false_eq_true, ite_false,
+      simp only [BSmtLibSpec.Lexer.Handed.received, Option.isSome_none, Bool.false_eq_true, ite_false,
         Option.some.injEq] at h
       subst h
       show Received.token (.symbol ⟨Bridge.chars (bytesOf content), false⟩) = _
       rw [chars_bytesOf]
     | some kind =>
-      simp only [Spec.Lexer.Handed.received, Option.isSome_some, ite_true,
+      simp only [BSmtLibSpec.Lexer.Handed.received, Option.isSome_some, ite_true,
         Option.some.injEq] at h
       subst h
       have hmem : content ∈ (basicReservedWords version ++ commandNames version).map chars := hof
@@ -104,7 +108,7 @@ theorem specConsumer_breaksAtEnd (version : Lexicon.Version) :
 
 /-- What the library's reader tells its handler and whether it finishes, given that the lexer
 hands no whitespace or comment to the adapter's consumer for the script consumer. -/
-theorem libraryReader_read (version : Lexicon.Version) (slices : List Lexicon.Chars)
+theorem libraryReader_read (version : Lexicon.Version) (slices : List Regex.Chars)
     (ended : Bool) (hnl : NoLayout (scriptConsumer version) (toVersion version)) :
     let session := lexing Proofs.Adapter.Lexer.lexOps (specConsumer version) version [] slices
       ended
@@ -140,7 +144,7 @@ theorem libraryReader_read (version : Lexicon.Version) (slices : List Lexicon.Ch
   rw [readerOf_eq, hread, hcalls, hfin, htk, ← lexing_flagged]
 
 /-- The library's reader lexes, then parses. -/
-theorem libraryReader_lexesThenParses : Spec.Reader.LexesThenParses libraryReader :=
+theorem libraryReader_lexesThenParses : BSmtLibSpec.Reader.LexesThenParses libraryReader :=
   ⟨lexing Proofs.Adapter.Lexer.lexOps, libraryParser, libItem, Proofs.Lexer.correctWithConsumers,
     library_follows, library_rejects, libItem_stands,
     fun version slices ended => libraryReader_read version slices ended

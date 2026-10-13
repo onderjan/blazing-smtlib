@@ -13,8 +13,10 @@ related (`link_consumers`), so step 1 relates the library's lexer's steps on the
 
 namespace BSmtLib.EndToEnd.Param
 
-open BSmtLib.Spec BSmtLib.Spec.Grammar BSmtLib.Spec.Parser
-open BSmtLib.Spec.Lexer (Handed)
+open BSmtLibSpec BSmtLibSpec.Grammar BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Lexer (Handed)
 open BSmtLib.ParserProofs BSmtLib.ParserProofs.Rejection
 open BSmtLib.Parser (Input ScriptParser Parse ParseAdapter)
 open BSmtLib.Proofs.Adapter (toVersion Answering AnswerM toHanded)
@@ -115,7 +117,7 @@ theorem recRun_inr_full {version : Lexicon.Version} {commands : List Tree.Comman
   simp only [hlt, ite_true] at hend
   simp [libEnding] at hend
 
-theorem flagged_run (consumer : Spec.Lexer.Consumer) {b : BatchTag} (cursor : BatchCursor b)
+theorem flagged_run (consumer : BSmtLibSpec.Lexer.Consumer) {b : BatchTag} (cursor : BatchCursor b)
     (h : cursor.HasNext) (flagged : Flagged consumer) (taken : List Handed) :
     ((Flagged.consume consumer cursor h).run flagged).run taken =
       ((((Answering.consume consumer cursor h).run taken).1,

@@ -1,4 +1,4 @@
-import BSmtLib.Spec.Lexicon
+import BSmtLibSpec.Lexicon.Properties
 
 /-!
 # The reserved words as the standard lists them
@@ -11,7 +11,9 @@ that the two agree.
 
 namespace BSmtLib.SpecChecks.Lexicon
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon
+open BSmtLibSpec BSmtLibSpec.Lexicon
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
 
 /-- The basic set of reserved words, as each version lists it. -/
 def listedBasicReservedWords : Version → List String

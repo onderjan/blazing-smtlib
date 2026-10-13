@@ -4,7 +4,7 @@ import BSmtLib.EndToEnd.Feed
 /-!
 # A file, read by a correct lexer with the script consumer
 
-On the input of a file of commands, a lexer that handles consumers as `Spec.Lexer.Runs` states,
+On the input of a file of commands, a lexer that handles consumers as `BSmtLibSpec.Lexer.Runs` states,
 given the script consumer, goes through the readings of the file: the consumer takes every token
 of every command, goes on at each, switches the version after each version declaration, has the
 rest discarded after `exit`, and breaks at the end of the input, which the lexer then returns
@@ -14,9 +14,13 @@ script.
 
 namespace BSmtLib.EndToEnd
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Grammar BSmtLib.Spec.Lexer
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec BSmtLibSpec.Lexicon BSmtLibSpec.Grammar BSmtLibSpec.Lexer
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 open BSmtLib.ParserProofs
 open BSmtLib.ParserProofs.Rejection
 
@@ -134,7 +138,7 @@ theorem received_cons_length (command : Tree.Command) (commands : List Tree.Comm
 /-- The handed tokens of a command of a reading. -/
 theorem command_handed {version : Lexicon.Version} (input : Chars) {offset : Nat}
     {part : Chars} {tokens : List Lexicon.Token} {command : Tree.Command}
-    (hte : TokenizationExactly version offset part tokens)
+    (hte : Tokenization.Exactly version offset part tokens)
     (hic : IsCommand version (tokens.map (SyntaxToken.ofToken version)) command) :
     (tokens.map (·.handed version input)).map (rcv ∘ itemOf) = command.tokens.map .token ∧
       (∀ h ∈ tokens.map (·.handed version input), h.type ≠ .endOfFile) ∧
@@ -449,7 +453,7 @@ end
 
 /-- The commands of a file make a script. -/
 theorem script_of_file {version : Lexicon.Version} {offset : Nat} {chars : Chars}
-    {commands : List Tree.Command} (h : FileFrom version offset chars commands) :
+    {commands : List Tree.Command} (h : File.From version offset chars commands) :
     Script version commands := by
   induction h with
   | done => exact .done

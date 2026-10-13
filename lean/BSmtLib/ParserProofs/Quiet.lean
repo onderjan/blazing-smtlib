@@ -15,8 +15,9 @@ built, by the closure lemmas below and the tactic `quiet`.
 
 namespace BSmtLib.ParserProofs
 
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 open BSmtLib.Parser (PM Input Step Flow)
 
 /-- The event is a token's arrival or processing. -/
@@ -87,7 +88,7 @@ theorem silent_call {returns : Returns} (request : Call Recorded returns) :
   rfl
 
 /-- The handler's switch of the version is silent. -/
-theorem silent_handlerSetVersion (version : Spec.Lexicon.Version) :
+theorem silent_handlerSetVersion (version : BSmtLibSpec.Lexicon.Version) :
     Silent (ExceptT.lift (recordingHandler.setVersion version) : RPM Unit) := by
   constructor
   intro events

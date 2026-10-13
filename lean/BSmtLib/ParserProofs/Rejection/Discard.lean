@@ -15,13 +15,15 @@ an item (`rejects_items`).
 
 namespace BSmtLib.ParserProofs.Rejection
 
-open BSmtLib.Spec.Grammar
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 open Lang
 
 /-- Commands, each followed by more in a version, and then `exit`, are a script. -/
-theorem script_of_chain_exit {version last : Spec.Lexicon.Version} {done : List Tree.Command}
+theorem script_of_chain_exit {version last : BSmtLibSpec.Lexicon.Version} {done : List Tree.Command}
     (h : Chain version done last) : Script version (done ++ [.exit]) := by
   induction h with
   | nil => exact .stop trivial rfl
@@ -29,7 +31,7 @@ theorem script_of_chain_exit {version last : Spec.Lexicon.Version} {done : List 
 
 /-- What a parser receives for commands, each followed by more in a version, and then `exit`:
 their items, then the end of the input. -/
-theorem received_chain_exit {version last : Spec.Lexicon.Version} {done : List Tree.Command}
+theorem received_chain_exit {version last : BSmtLibSpec.Lexicon.Version} {done : List Tree.Command}
     (h : Chain version done last) :
     received (done ++ [.exit]) =
       cmdToks done ++ toks Tree.Command.exit.tokens ++ [.endOfInput] := by
@@ -40,7 +42,7 @@ theorem received_chain_exit {version last : Spec.Lexicon.Version} {done : List T
     simp [toks]
 
 /-- After the `)` of `exit`, the traversal asks for the discarding. -/
-theorem requestsAt_exit {version last : Spec.Lexicon.Version} {done : List Tree.Command}
+theorem requestsAt_exit {version last : BSmtLibSpec.Lexicon.Version} {done : List Tree.Command}
     (h : Chain version done last) :
     (requestsAt (done ++ [.exit]) ((cmdToks done).length + 2)).2 = true := by
   induction h with
@@ -66,7 +68,7 @@ theorem mem_of_discardOf {events : List Event} (h : discardOf events = true) :
 
 /-- Where the items before a position of what a parser takes end with `exit`, the traversal has
 asked for the discarding before the item there arrives. -/
-theorem discard_afterExit {version : Spec.Lexicon.Version} {commands : List Tree.Command}
+theorem discard_afterExit {version : BSmtLibSpec.Lexicon.Version} {commands : List Tree.Command}
     {taken : List Received} {ending : Ending} (htakes : Takes version commands taken ending)
     {count : Nat} (hcount : count < taken.length) (hafter : AfterExit version (taken.take count)) :
     .producerDiscard ∈ eventsBefore count (record version commands) := by

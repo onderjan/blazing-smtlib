@@ -1,5 +1,5 @@
-import BSmtLib.Spec.Grammar.File
-import BSmtLib.Spec.Lexer
+import BSmtLibSpec.Grammar.File
+import BSmtLibSpec.Lexer
 
 /-!
 # Properties of the grammar
@@ -14,14 +14,14 @@ correspond one to one: a tree can be read back from its tokens, and nothing is l
 direction.
 -/
 
-namespace BSmtLib.Spec.Grammar
+namespace BSmtLibSpec.Grammar.Properties
 
-open BSmtLib.Spec.Lexicon
+open BSmtLibSpec.Lexicon
 
 /--
 Property: two terms of a version that are written with the same tokens are the same term.
 
-So a sequence of tokens is a term of the version in at most one way (`IsTerm`). If it did not
+So a sequence of tokens is a term of the version in at most one way (`Syntax.IsTerm`). If it did not
 hold, one term would stand for two different trees, and a parser could not tell which one to
 hand over.
 -/
@@ -32,7 +32,7 @@ def TermsOneToOne : Prop :=
 /--
 Property: two commands of a version that are written with the same tokens are the same command.
 
-So a sequence of tokens is a command of the version in at most one way (`IsCommand`). The
+So a sequence of tokens is a command of the version in at most one way (`Syntax.IsCommand`). The
 version matters: `(check-sat-assuming (p))` is written the same as a command of 2.7 with a list
 of terms and as a command of 2.6 with a list of propositional literals, and only one of them is
 a command of each version.
@@ -61,8 +61,8 @@ switches to, without a token of the command waiting for what follows it. A comma
 `)`, which needs no delimiter.
 -/
 def CommandsHandedOverWhole : Prop :=
-  ∀ version segment tokens command, TokenizationExactly version 0 segment tokens →
-    IsCommand version (tokens.map (SyntaxToken.ofToken version)) command →
+  ∀ version segment tokens command, Tokenization.Exactly version 0 segment tokens →
+    Syntax.IsCommand version (tokens.map (SyntaxToken.ofToken version)) command →
       Lexer.HandoverMaximal version segment tokens
 
-end BSmtLib.Spec.Grammar
+end BSmtLibSpec.Grammar.Properties

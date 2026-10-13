@@ -10,8 +10,9 @@ handler calls and results apart.
 
 namespace BSmtLib.ParserProofs
 
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 open BSmtLib.Parser
 
 theorem expectOpen_silent (token : Input) : Silent (expectOpen (H := List Event) token) := by

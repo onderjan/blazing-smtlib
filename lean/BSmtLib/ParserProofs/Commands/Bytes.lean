@@ -11,7 +11,8 @@ data's, and two byte arrays are equal as `==` says exactly when their lists are.
 
 namespace BSmtLib.ParserProofs
 
-open BSmtLib.Spec.Grammar
+open BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
 
 theorem ByteArray.toList_loop_eq (a : ByteArray) (i : Nat) (r : List UInt8) :
     ByteArray.toList.loop a i r = r.reverse ++ a.data.toList.drop i := by
@@ -45,8 +46,8 @@ theorem ByteArray.beq_eq_decide (a b : ByteArray) : (a == b) = decide (a.toList 
 
 /-- A view against a string's bytes, as the bridge reads the view. -/
 theorem slice_beq_utf8 (bytes : ByteSlice) (s : String)
-    (hutf8 : s.toUTF8.toList = Spec.Lexicon.chars s) :
-    (bytes.toByteArray == s.toUTF8) = decide (Bridge.chars bytes = Spec.Lexicon.chars s) := by
+    (hutf8 : s.toUTF8.toList = BSmtLibSpec.Regex.chars s) :
+    (bytes.toByteArray == s.toUTF8) = decide (Bridge.chars bytes = BSmtLibSpec.Regex.chars s) := by
   rw [ByteArray.beq_eq_decide, hutf8]
   rfl
 
@@ -58,31 +59,31 @@ theorem toByteArray_toByteSlice (a : ByteArray) : a.toByteSlice.toByteArray = a 
 
 /-- A view against a view of a string's bytes, as the bridge reads the first view. -/
 theorem slice_beq_slice_utf8 (bytes : ByteSlice) (s : String)
-    (hutf8 : s.toUTF8.toList = Spec.Lexicon.chars s) :
-    (bytes == s.toUTF8.toByteSlice) = decide (Bridge.chars bytes = Spec.Lexicon.chars s) := by
+    (hutf8 : s.toUTF8.toList = BSmtLibSpec.Regex.chars s) :
+    (bytes == s.toUTF8.toByteSlice) = decide (Bridge.chars bytes = BSmtLibSpec.Regex.chars s) := by
   show ByteSlice.beq _ _ = _
   unfold ByteSlice.beq
   rw [toByteArray_toByteSlice]
   exact slice_beq_utf8 bytes s hutf8
 
-theorem utf8_not : "not".toUTF8.toList = Spec.Lexicon.chars "not" := by
+theorem utf8_not : "not".toUTF8.toList = BSmtLibSpec.Regex.chars "not" := by
   rw [ByteArray.toList_eq_data]; decide
 
 theorem utf8_smtLibVersion :
-    "smt-lib-version".toUTF8.toList = Spec.Lexicon.chars "smt-lib-version" := by
+    "smt-lib-version".toUTF8.toList = BSmtLibSpec.Regex.chars "smt-lib-version" := by
   rw [ByteArray.toList_eq_data]; decide
 
-theorem utf8_2_0 : "2.0".toUTF8.toList = Spec.Lexicon.chars "2.0" := by
+theorem utf8_2_0 : "2.0".toUTF8.toList = BSmtLibSpec.Regex.chars "2.0" := by
   rw [ByteArray.toList_eq_data]; decide
-theorem utf8_2_5 : "2.5".toUTF8.toList = Spec.Lexicon.chars "2.5" := by
+theorem utf8_2_5 : "2.5".toUTF8.toList = BSmtLibSpec.Regex.chars "2.5" := by
   rw [ByteArray.toList_eq_data]; decide
-theorem utf8_2_6 : "2.6".toUTF8.toList = Spec.Lexicon.chars "2.6" := by
+theorem utf8_2_6 : "2.6".toUTF8.toList = BSmtLibSpec.Regex.chars "2.6" := by
   rw [ByteArray.toList_eq_data]; decide
-theorem utf8_2_7 : "2.7".toUTF8.toList = Spec.Lexicon.chars "2.7" := by
+theorem utf8_2_7 : "2.7".toUTF8.toList = BSmtLibSpec.Regex.chars "2.7" := by
   rw [ByteArray.toList_eq_data]; decide
 
 /-- A symbol the spec names `not` is `not` to the literal parser. -/
-theorem Symbol.isNot_of_name {s : Parser.Symbol} (h : (Bridge.symbol s).name = Spec.Lexicon.chars "not") :
+theorem Symbol.isNot_of_name {s : Parser.Symbol} (h : (Bridge.symbol s).name = BSmtLibSpec.Regex.chars "not") :
     s.isNot = true := by
   unfold Parser.Symbol.isNot
   rw [slice_beq_utf8 _ _ utf8_not]
@@ -90,7 +91,7 @@ theorem Symbol.isNot_of_name {s : Parser.Symbol} (h : (Bridge.symbol s).name = S
 
 /-- The parser's test for `smt-lib-version` is the spec's. -/
 theorem isVersionKeyword_eq (k : KeywordView) :
-    Parser.isVersionKeyword k = decide (Bridge.keyword k = Spec.Lexicon.chars "smt-lib-version") := by
+    Parser.isVersionKeyword k = decide (Bridge.keyword k = BSmtLibSpec.Regex.chars "smt-lib-version") := by
   unfold Parser.isVersionKeyword
   exact slice_beq_utf8 _ _ utf8_smtLibVersion
 
@@ -101,13 +102,13 @@ theorem fromDecimal_eq (d : ByteSlice) :
   rw [slice_beq_slice_utf8 _ _ utf8_2_0, slice_beq_slice_utf8 _ _ utf8_2_5,
     slice_beq_slice_utf8 _ _ utf8_2_6, slice_beq_slice_utf8 _ _ utf8_2_7]
   simp only [versionOfNumber, List.find?, versionNumber]
-  by_cases h0 : Bridge.chars d = Spec.Lexicon.chars "2.0"
+  by_cases h0 : Bridge.chars d = BSmtLibSpec.Regex.chars "2.0"
   · simp [h0, Bridge.libVersion]
-  by_cases h5 : Bridge.chars d = Spec.Lexicon.chars "2.5"
+  by_cases h5 : Bridge.chars d = BSmtLibSpec.Regex.chars "2.5"
   · simp +decide [h5, Bridge.libVersion]
-  by_cases h6 : Bridge.chars d = Spec.Lexicon.chars "2.6"
+  by_cases h6 : Bridge.chars d = BSmtLibSpec.Regex.chars "2.6"
   · simp +decide [h6, Bridge.libVersion]
-  by_cases h7 : Bridge.chars d = Spec.Lexicon.chars "2.7"
+  by_cases h7 : Bridge.chars d = BSmtLibSpec.Regex.chars "2.7"
   · simp +decide [h7, Bridge.libVersion]
   simp [h0, h5, h6, h7, Ne.symm h0, Ne.symm h5, Ne.symm h6, Ne.symm h7]
 
@@ -115,7 +116,7 @@ theorem fromDecimal_eq (d : ByteSlice) :
 
 theorem versionAtLeast_v2_7_of_ge {version : BSmtLib.Version} (h : version ≥ .v2_7) :
     versionAtLeast (Bridge.version version) .v2_7 := by
-  cases version <;> simp_all [versionAtLeast, Bridge.version, Spec.Lexicon.Version.upTo] <;>
+  cases version <;> simp_all [versionAtLeast, Bridge.version, BSmtLibSpec.Lexicon.Version.upTo] <;>
     exact absurd h (by decide)
 
 end BSmtLib.ParserProofs

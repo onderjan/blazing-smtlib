@@ -11,9 +11,11 @@ monad's operations; the traversal's tokens and handler calls are the parser's ti
 namespace BSmtLib.ParserProofs
 
 open BSmtLib.Parser
-open BSmtLib.Spec.Grammar
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 
 section
 
@@ -63,19 +65,19 @@ theorem adapt_throw (f : ε → ε') (e : ε) :
 omit [LawfulMonad m] in
 /-- Tokens taken with no call due at the first one's arrival are taken plainly. -/
 @[simp]
-theorem takeAllArriving_pure (points : Points m) (tokens : List Spec.Grammar.SyntaxToken) :
+theorem takeAllArriving_pure (points : Points m) (tokens : List BSmtLibSpec.Grammar.SyntaxToken) :
     takeAllArriving points (pure () : Run m ε Unit) tokens = takeAll points tokens := by
   cases tokens <;> rfl
 
 omit [LawfulMonad m] in
 /-- A token received with no call due at its arrival is taken plainly. -/
 @[simp]
-theorem receive_token_pure (points : Points m) (token : Spec.Grammar.SyntaxToken) :
+theorem receive_token_pure (points : Points m) (token : BSmtLibSpec.Grammar.SyntaxToken) :
     receive points (.token token) (pure () : Run m ε Unit) = take points token := rfl
 
 omit [LawfulMonad m] in
 theorem takeAllArriving_cons (points : Points m) (atArrival : Run m ε Unit)
-    (token : Spec.Grammar.SyntaxToken) (tokens : List Spec.Grammar.SyntaxToken) :
+    (token : BSmtLibSpec.Grammar.SyntaxToken) (tokens : List BSmtLibSpec.Grammar.SyntaxToken) :
     takeAllArriving points atArrival (token :: tokens) =
       (do receive points (.token token) atArrival; takeAll points tokens) := rfl
 
@@ -127,14 +129,14 @@ theorem adaptRun_call {values : Values} {returns : Returns}
   simp [adaptRun, Traversal.call, call_eq]
 
 /-- The traversal's token, as the parser's tick of a token standing for it. -/
-theorem adaptRun_take {token : Input} {syntaxToken : Spec.Grammar.SyntaxToken}
+theorem adaptRun_take {token : Input} {syntaxToken : BSmtLibSpec.Grammar.SyntaxToken}
     (h : Bridge.received token = some (.token syntaxToken)) :
     adaptRun (take points syntaxToken : Run (StateT H m) (Parser.Handler.Error H) Unit) =
       tick points token := by
   simp [take, receive, tick, arriveAt, processAt, h]
 
 /-- The traversal's token with calls due at its arrival, as the parser's tick with those calls. -/
-theorem adaptRun_receive {token : Input} {syntaxToken : Spec.Grammar.SyntaxToken}
+theorem adaptRun_receive {token : Input} {syntaxToken : BSmtLibSpec.Grammar.SyntaxToken}
     (h : Bridge.received token = some (.token syntaxToken))
     (atArrival : Run (StateT H m) (Parser.Handler.Error H) Unit) :
     adaptRun (receive points (.token syntaxToken) atArrival) =
@@ -142,7 +144,7 @@ theorem adaptRun_receive {token : Input} {syntaxToken : Spec.Grammar.SyntaxToken
   simp [receive, tickFirst, arriveAt, processAt, h]
 
 /-- The traversal's tokens, as the parser's ticks of the tokens standing for them. -/
-theorem adaptRun_takeAll {tokens : List Input} {syntaxTokens : List Spec.Grammar.SyntaxToken}
+theorem adaptRun_takeAll {tokens : List Input} {syntaxTokens : List BSmtLibSpec.Grammar.SyntaxToken}
     (h : Stands tokens syntaxTokens) :
     adaptRun (takeAll points syntaxTokens : Run (StateT H m) (Parser.Handler.Error H) Unit) =
       ticks points tokens := by

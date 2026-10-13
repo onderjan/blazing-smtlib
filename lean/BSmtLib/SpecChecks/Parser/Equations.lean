@@ -3,7 +3,7 @@ import BSmtLib.SpecChecks.Parser.Program
 /-!
 # Equations of the traversal
 
-Equations of the functions of `Spec.Parser.Traversal` for each form of their argument, which
+Equations of the functions of `BSmtLibSpec.Parser.Traversal` for each form of their argument, which
 hold by definition. Lean does not derive all of them itself: it cannot for functions that
 match a list against `[]` in one case and against any list in the next.
 
@@ -12,8 +12,12 @@ Not trusted: everything here is proved.
 
 namespace BSmtLib.SpecChecks.Parser
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Grammar BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec BSmtLibSpec.Lexicon BSmtLibSpec.Grammar BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
+open BSmtLibSpec.Parser.Traversal
 
 variable {m : Type → Type} [Monad m] {ε : Type} {values : Values}
 variable {points : Points m} {handler : Handler m ε values}

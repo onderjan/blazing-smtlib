@@ -14,7 +14,7 @@ open BSmtLib.Proofs.Adapter
 
 section
 
-variable {consumer : Spec.Lexer.Consumer} {floor : Option Nat} {low : Nat}
+variable {consumer : BSmtLibSpec.Lexer.Consumer} {floor : Option Nat} {low : Nat}
 
 theorem flushBatch_usim : UL (flushBatch : FM consumer floor low Unit) := by
   unfold flushBatch; usim

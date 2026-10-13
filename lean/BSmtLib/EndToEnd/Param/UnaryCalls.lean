@@ -17,11 +17,11 @@ open BSmtLib.Proofs.Adapter
 
 section
 
-variable {consumer : Spec.Lexer.Consumer}
+variable {consumer : BSmtLibSpec.Lexer.Consumer}
 
 /-- The run of a computation of the consumer's monad from its state and the tokens taken. -/
 abbrev crun {α : Type} (x : StateT (Flagged consumer) AnswerM α) (fl : Flagged consumer)
-    (l : List Spec.Lexer.Handed) := (x.run fl).run l
+    (l : List BSmtLibSpec.Lexer.Handed) := (x.run fl).run l
 
 theorem crun_bind {α β : Type} (x : StateT (Flagged consumer) AnswerM α)
     (k : α → StateT (Flagged consumer) AnswerM β) (fl l) :
@@ -59,7 +59,7 @@ theorem crun_bind_UL {floor : Option Nat} {low : Nat} {α β : Type} {f : FM con
     {s : {c : LexerCore // c.Bound floor low}}
     {k : Except (Interrupted consumer.Result (Option consumer.Error) floor) α ×
       {c : LexerCore // c.Bound floor low} → StateT (Flagged consumer) AnswerM β} {fl l}
-    (P : (β × Flagged consumer) × List Spec.Lexer.Handed → Prop) (hf : UL f)
+    (P : (β × Flagged consumer) × List BSmtLibSpec.Lexer.Handed → Prop) (hf : UL f)
     (he : fl.errored = false) (hv : s.val.version = fl.version)
     (hk : ∀ res s' (fl' : Flagged consumer) l',
       (fl'.errored = false → s'.val.version = fl'.version) →
@@ -75,7 +75,7 @@ theorem crun_bind_UL {floor : Option Nat} {low : Nat} {α β : Type} {f : FM con
 answered an error the loop failed, and whether the consumer was spoiled is `spoiled`. -/
 def SliceOk {floor : Option Nat} (spoiled : Bool)
     (r : ((SliceExit consumer.Result (Option consumer.Error) floor ×
-      {c : LexerCore // c.Bound floor 0}) × Flagged consumer) × List Spec.Lexer.Handed) : Prop :=
+      {c : LexerCore // c.Bound floor 0}) × Flagged consumer) × List BSmtLibSpec.Lexer.Handed) : Prop :=
   (r.1.2.errored = false → r.1.1.2.val.version = r.1.2.version) ∧
     (r.1.2.errored = true → exitFails r.1.2.layout r.1.1.1) ∧ r.1.2.spoiled = spoiled
 
@@ -196,7 +196,7 @@ def FailsBy {α β : Type} (cause : α → LexErrorCause (Option consumer.Error)
 an error the step failed, by the consumer's error `none` if the consumer was handed whitespace or a
 comment there, and whether the consumer was spoiled is `spoiled`. -/
 def StepOk {α β : Type} (cause : α → LexErrorCause (Option consumer.Error)) (spoiled : Bool)
-    (r : ((Except α β × LexerCore) × Flagged consumer) × List Spec.Lexer.Handed) : Prop :=
+    (r : ((Except α β × LexerCore) × Flagged consumer) × List BSmtLibSpec.Lexer.Handed) : Prop :=
   (r.1.2.errored = false → r.1.1.2.version = r.1.2.version) ∧
     (r.1.2.errored = true → FailsBy cause r.1.2.layout r.1.1.1) ∧ r.1.2.spoiled = spoiled
 
@@ -254,7 +254,7 @@ theorem lexSliceFrom_flag_lt (input : Input) (initialOffset : Nat) :
 
 /-- The run of an action on the lexer's state from it, the consumer's state and the tokens. -/
 abbrev irun {α : Type} (f : InnerM (Flagged consumer) AnswerM α) (c : LexerCore)
-    (fl : Flagged consumer) (l : List Spec.Lexer.Handed) := ((f.run c).run fl).run l
+    (fl : Flagged consumer) (l : List BSmtLibSpec.Lexer.Handed) := ((f.run c).run fl).run l
 
 theorem lexSliceInner_flag (input : Input) (c : LexerCore) (fl : Flagged consumer) (l)
     (he : fl.errored = false) (hv : c.version = fl.version) :
@@ -317,7 +317,7 @@ theorem irun_pure {α : Type} (a : α) (c : LexerCore) (fl : Flagged consumer) (
 /-- An inert action, then the rest. -/
 theorem irun_inert_bind {α β : Type} {x : InnerM (Flagged consumer) AnswerM α}
     (hx : Inert x) (k : α → InnerM (Flagged consumer) AnswerM β) (c fl l)
-    (P : ((β × LexerCore) × Flagged consumer) × List Spec.Lexer.Handed → Prop)
+    (P : ((β × LexerCore) × Flagged consumer) × List BSmtLibSpec.Lexer.Handed → Prop)
     (hk : ∀ a c', c'.version = c.version → P (irun (k a) c' fl l)) :
     P (irun (x >>= k) c fl l) := by
   rw [irun_bind]
@@ -383,7 +383,7 @@ theorem irun_bind_step {α β γ : Type} {cause : α → LexErrorCause (Option c
     {x : InnerM (Flagged consumer) AnswerM (Except α β)}
     {k : Except α β → InnerM (Flagged consumer) AnswerM γ} {c : LexerCore}
     {fl : Flagged consumer} {l} {spoiled : Bool}
-    (P : ((γ × LexerCore) × Flagged consumer) × List Spec.Lexer.Handed → Prop)
+    (P : ((γ × LexerCore) × Flagged consumer) × List BSmtLibSpec.Lexer.Handed → Prop)
     (hx : StepOk cause spoiled (irun x c fl l))
     (hk : ∀ res c' (fl' : Flagged consumer) l', (fl'.errored = false → c'.version = fl'.version) →
       (fl'.errored = true → FailsBy cause fl'.layout res) → fl'.spoiled = spoiled →
@@ -481,7 +481,7 @@ theorem UL.tryCatch {floor : Option Nat} {low : Nat} {α : Type} {x : FM consume
 consumer's error `none` if the consumer was handed whitespace or a comment there; and whether the
 consumer was spoiled is `spoiled`. -/
 def EofOk {α β : Type} (cause : α → LexErrorCause (Option consumer.Error)) (spoiled : Bool)
-    (r : ((Except α β × LexerCore) × Flagged consumer) × List Spec.Lexer.Handed) : Prop :=
+    (r : ((Except α β × LexerCore) × Flagged consumer) × List BSmtLibSpec.Lexer.Handed) : Prop :=
   (r.1.2.errored = true → FailsBy cause r.1.2.layout r.1.1.1) ∧ r.1.2.spoiled = spoiled
 
 theorem lexEofInner_flag (c : LexerCore) (fl : Flagged consumer) (l) (he : fl.errored = false)

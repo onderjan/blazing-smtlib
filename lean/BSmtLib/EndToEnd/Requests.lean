@@ -17,8 +17,12 @@ So the script consumer, on tokens that stand for a start of what a parser takes,
 
 namespace BSmtLib.EndToEnd
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Grammar BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec BSmtLibSpec.Lexicon BSmtLibSpec.Grammar BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
+open BSmtLibSpec.Parser.Traversal
 open BSmtLib.SpecChecks.Parser
 open BSmtLib.ParserProofs (isArrival isProcessing eventsBefore_append command_trace_quiet
   requestEvents afterLastProcess switchOf discardOf afterLastProcess_append_proc

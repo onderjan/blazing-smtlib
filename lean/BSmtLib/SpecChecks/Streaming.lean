@@ -1,4 +1,4 @@
-import BSmtLib.Spec.Lexer
+import BSmtLibSpec.Lexer
 import BSmtLib.SpecChecks.Unique
 
 /-!
@@ -11,7 +11,9 @@ hands over, and when it fails. Not trusted: these are proofs.
 
 namespace BSmtLib.SpecChecks.Lexer
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Lexicon.Regex BSmtLib.Spec.Lexer
+open BSmtLibSpec BSmtLibSpec.Lexicon BSmtLibSpec.Regex BSmtLibSpec.Lexer
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
 open BSmtLib.SpecChecks.Lexicon
 
 /-! ## Facts about the tokens handed over -/
@@ -82,27 +84,27 @@ theorem string_ab_20 : categoryRegex .v2_0 .string (chars "\"ab\"") := string20_
 
 /-- The space after a token delimits it. -/
 theorem delimited_space {category : Category} {more : Chars} :
-    Delimited category (chars " " ++ more) :=
+    Tokenization.Delimited category (chars " " ++ more) :=
   delimited_by (Or.inl (whiteSpaceChar_one.mpr (by decide)))
 
 /-- The end of the input delimits a token. -/
-theorem delimited_end {category : Category} : Delimited category [] := Or.inr (Or.inr (Or.inl rfl))
+theorem delimited_end {category : Category} : Tokenization.Delimited category [] := Or.inr (Or.inr (Or.inl rfl))
 
 /-- The end of the input after whitespace. -/
 theorem done_spaces {version : Version} {offset : Nat} {w : Chars} (h : ∀ c ∈ w, c.toNat = 32) :
-    TokenizationFrom version offset w [] :=
-  TokenizationFrom.done ⟨w, [], by simp, whitespace_spaces h, Or.inl rfl⟩
+    Tokenization.From version offset w [] :=
+  Tokenization.From.done ⟨w, [], by simp, whitespace_spaces h, Or.inl rfl⟩
 
 /-! ## `(a 12` in 2.7 -/
 
 /-- `(a 123` is tokenised as `(`, `a` and `123`. -/
 theorem tokenization_a_123 : Tokenization .v2_7 (chars "(a 123")
     [⟨.parenOpen, 0, chars "("⟩, ⟨.simpleSymbol, 1, chars "a"⟩, ⟨.numeral, 3, chars "123"⟩] := by
-  apply TokenizationFrom.token (w := []) (s := chars "(") (rest := chars "a 123")
+  apply Tokenization.From.token (w := []) (s := chars "(") (rest := chars "a 123")
     whitespace_nil paren_open (Or.inl rfl)
-  apply TokenizationFrom.token (w := []) (s := chars "a") (rest := chars " 123")
+  apply Tokenization.From.token (w := []) (s := chars "a") (rest := chars " 123")
     whitespace_nil symbol_a (delimited_space (more := chars "123"))
-  apply TokenizationFrom.token (w := chars " ") (s := chars "123") (rest := [])
+  apply Tokenization.From.token (w := chars " ") (s := chars "123") (rest := [])
     (whitespace_spaces (by decide)) numeral_123 delimited_end
   exact done_spaces (by simp)
 
@@ -155,11 +157,11 @@ example : ∀ tokens, HandoverMaximal .v2_7 (chars "(a 12") tokens ↔
 theorem tokenization_x_abc : Tokenization .v2_7 (chars "(x |abc| ")
     [⟨.parenOpen, 0, chars "("⟩, ⟨.simpleSymbol, 1, chars "x"⟩,
       ⟨.quotedSymbol, 3, chars "|abc|"⟩] := by
-  apply TokenizationFrom.token (w := []) (s := chars "(") (rest := chars "x |abc| ")
+  apply Tokenization.From.token (w := []) (s := chars "(") (rest := chars "x |abc| ")
     whitespace_nil paren_open (Or.inl rfl)
-  apply TokenizationFrom.token (w := []) (s := chars "x") (rest := chars " |abc| ")
+  apply Tokenization.From.token (w := []) (s := chars "x") (rest := chars " |abc| ")
     whitespace_nil symbol_x (delimited_space (more := chars "|abc| "))
-  apply TokenizationFrom.token (category := .quotedSymbol) (w := chars " ") (s := chars "|abc|")
+  apply Tokenization.From.token (category := .quotedSymbol) (w := chars " ") (s := chars "|abc|")
     (rest := chars " ") (whitespace_spaces (by decide)) quoted_abc (delimited_space (more := []))
   exact done_spaces (by decide)
 
@@ -222,7 +224,7 @@ example : HandoverMaximal .v2_7 (chars "(x |abc| ")
 /-- In 2.7, `"ab""c"` is one string literal. -/
 theorem tokenization_ab_c : Tokenization .v2_7 (chars "\"ab\"\"c\"")
     [⟨.string, 0, chars "\"ab\"\"c\""⟩] := by
-  apply TokenizationFrom.token (category := .string) (w := []) (s := chars "\"ab\"\"c\"")
+  apply Tokenization.From.token (category := .string) (w := []) (s := chars "\"ab\"\"c\"")
     (rest := []) whitespace_nil ?_ delimited_end
   · exact done_spaces (by simp)
   · have body := star_parts (r := alt (minus (alt printableChar whiteSpaceChar) (lit "\""))
@@ -243,7 +245,7 @@ example : ¬ Determined .v2_7 (chars "\"ab\"") [⟨.string, 0, chars "\"ab\""⟩
 /-- In 2.0, `"ab"` is one string literal. -/
 theorem tokenization_ab_20 : Tokenization .v2_0 (chars "\"ab\"")
     [⟨.string, 0, chars "\"ab\""⟩] := by
-  apply TokenizationFrom.token (category := .string) (w := []) (s := chars "\"ab\"")
+  apply Tokenization.From.token (category := .string) (w := []) (s := chars "\"ab\"")
     (rest := []) whitespace_nil string_ab_20 delimited_end
   exact done_spaces (by simp)
 

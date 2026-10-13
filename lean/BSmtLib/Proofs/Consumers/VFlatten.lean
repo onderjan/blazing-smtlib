@@ -13,10 +13,10 @@ over its bytes, and the loop over two pieces is the loop over the first and then
 namespace BSmtLib.Proofs.Lexer.VNaive
 
 open BSmtLib.Proofs.Adapter
-open Spec.Lexer (Handed)
+open BSmtLibSpec.Lexer (Handed)
 
 section
-variable (consumer : Spec.Lexer.Consumer)
+variable (consumer : BSmtLibSpec.Lexer.Consumer)
 
 /-- A call on a slice, as the loop over its bytes, from a lexer that lexes or discards. -/
 theorem lexSliceStep_ops (core : Core) (hp : core.Plain) (held : Option (Located consumer.Result))
@@ -42,19 +42,19 @@ theorem held_v (core : Core) (held : Option (Located consumer.Result)) :
 
 /-- Two feedings of the naive lexer that stand alike, take the same tokens and leave the same
 lexer state, and the same lexer if they have not failed. -/
-def WeakEq (r₁ r₂ : (Spec.Lexer.Outcome consumer.Result consumer.Error ×
+def WeakEq (r₁ r₂ : (BSmtLibSpec.Lexer.Outcome consumer.Result consumer.Error ×
     VNaive.lexOps.Lexer consumer) × List Handed) : Prop :=
   r₁.1.1 = r₂.1.1 ∧ r₁.2 = r₂.2 ∧ r₁.1.2.core = r₂.1.2.core ∧
     (r₁.1.1.isFailed = false → r₁.1.2 = r₂.1.2)
 
-theorem WeakEq.trans {r₁ r₂ r₃ : (Spec.Lexer.Outcome consumer.Result consumer.Error ×
+theorem WeakEq.trans {r₁ r₂ r₃ : (BSmtLibSpec.Lexer.Outcome consumer.Result consumer.Error ×
     VNaive.lexOps.Lexer consumer) × List Handed} (h₁ : WeakEq consumer r₁ r₂)
     (h₂ : WeakEq consumer r₂ r₃) : WeakEq consumer r₁ r₃ :=
   ⟨h₁.1.trans h₂.1, h₁.2.1.trans h₂.2.1, h₁.2.2.1.trans h₂.2.2.1,
     fun hf => (h₁.2.2.2 hf).trans (h₂.2.2.2 (h₁.1 ▸ hf))⟩
 
 /-- Feeding the naive lexer the slices is feeding it their bytes as one slice. -/
-theorem runInput_flatten (ended : Bool) (slices : List Spec.Lexicon.Chars) :
+theorem runInput_flatten (ended : Bool) (slices : List BSmtLibSpec.Regex.Chars) :
     ∀ (core : Core) (held : Option (Located consumer.Result)) (taken : List Handed), core.Plain →
       WeakEq consumer
         ((VNaive.lexOps.runInput (consumer := consumer) ⟨{}, core, held⟩ ended slices).run taken)
@@ -101,8 +101,8 @@ end
 
 /-- The lexer the naive lexer gives the next input, after an input cut into slices, is the one
 after the input as one slice. -/
-theorem next_flatten {consumer : Spec.Lexer.Consumer} (version : Version)
-    (L : VNaive.lexOps.Lexer consumer) (hp : L.core.Plain) (input : List Spec.Lexicon.Chars) :
+theorem next_flatten {consumer : BSmtLibSpec.Lexer.Consumer} (version : Version)
+    (L : VNaive.lexOps.Lexer consumer) (hp : L.core.Plain) (input : List BSmtLibSpec.Regex.Chars) :
     VNaive.lexOps.next consumer version L input =
       VNaive.lexOps.next consumer version L [input.flatten] := by
   unfold LexOps.next
@@ -120,12 +120,12 @@ theorem next_flatten {consumer : Spec.Lexer.Consumer} (version : Version)
   | _ => simp only [e4 rfl]
 
 /-- What the adapter makes of the naive lexer depends only on the bytes of each input. -/
-theorem lexing_flatten (consumer : Spec.Lexer.Consumer) (version : Spec.Lexicon.Version)
-    (earlier : List (List Spec.Lexicon.Chars)) (slices : List Spec.Lexicon.Chars) (ended : Bool) :
+theorem lexing_flatten (consumer : BSmtLibSpec.Lexer.Consumer) (version : BSmtLibSpec.Lexicon.Version)
+    (earlier : List (List BSmtLibSpec.Regex.Chars)) (slices : List BSmtLibSpec.Regex.Chars) (ended : Bool) :
     lexing VNaive.lexOps consumer version earlier slices ended =
       lexing VNaive.lexOps consumer version (earlier.map fun input => [input.flatten])
         [slices.flatten] ended := by
-  have hfold : ∀ (inputs : List (List Spec.Lexicon.Chars)) (L : VNaive.lexOps.Lexer consumer),
+  have hfold : ∀ (inputs : List (List BSmtLibSpec.Regex.Chars)) (L : VNaive.lexOps.Lexer consumer),
       L.core.Plain → L.core.initialVersion = toVersion version →
       inputs.foldl (VNaive.lexOps.next consumer (toVersion version)) L =
         (inputs.map fun input => [input.flatten]).foldl

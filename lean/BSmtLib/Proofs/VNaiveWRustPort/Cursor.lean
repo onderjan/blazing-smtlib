@@ -130,7 +130,7 @@ theorem toHanded_at {ls : List Lexeme} (c : BatchCursor g) (h : c.HasNext)
 
 /-- The next token of a cursor over a batch that holds the lexemes is taken as the entry the naive
 lexer reports for the lexeme at its index alone. -/
-theorem entry_at (C : Spec.Lexer.Consumer) {ls : List Lexeme} (c : BatchCursor g) (h : c.HasNext)
+theorem entry_at (C : BSmtLibSpec.Lexer.Consumer) {ls : List Lexeme} (c : BatchCursor g) (h : c.HasNext)
     (hb : Holds (intoBatch c) ls) (hj : cNext c < ls.length) :
     Answering.entry C c (c.next h).1 = lexemeEntry C.concrete c.version ls[cNext c] := by
   have hcontent : (c.content (c.next h).1).toByteArray = ls[cNext c].content := by
@@ -169,10 +169,10 @@ namespace BSmtLib.Proofs.Lexer.VNaiveWRustPort
 open BSmtLib.Lexer.Internal (intoBatch)
 open BSmtLib.Proofs.Adapter VNaive BSmtLib.Proofs.Simulation
 
-variable {g : BatchTag} (C : Spec.Lexer.Consumer)
+variable {g : BatchTag} (C : BSmtLibSpec.Lexer.Consumer)
 
 /-- The cursor after the switch the consumer asks for at the last of the tokens `taken`. -/
-theorem switched_eq (taken : List Spec.Lexer.Handed) (c : BatchCursor g) :
+theorem switched_eq (taken : List BSmtLibSpec.Lexer.Handed) (c : BatchCursor g) :
     (Answering.switched C taken c).val.version = switchedTo c.version (C.switchTo taken) ∧
       cNext (Answering.switched C taken c).val = cNext c ∧
       (Answering.switched C taken c).val.discardRequested = c.discardRequested ∧

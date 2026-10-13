@@ -4,7 +4,7 @@ import BSmtLib.Proofs.Consumers.VHold
 # The entries ready from a boundary
 
 What the spec says is ready for a consumer from a boundary of the input
-(`Spec.Lexer.readyFrom`): the tokens of the pure run from the boundary on, read on its own, and
+(`BSmtLibSpec.Lexer.readyFrom`): the tokens of the pure run from the boundary on, read on its own, and
 for a consumer that takes whitespace and comments also the layout the spec gives around them, is
 what the run from the boundary with whitespace and comments hands over as the consumer is handed
 it (`ready_stream`). After a lexeme other than the end of file, the run goes on as the run from
@@ -15,7 +15,7 @@ of the input (`stream_eof_head`).
 namespace BSmtLib.Proofs.Lexer.VNaive
 
 open BSmtLib.Proofs.Adapter
-open Spec.Lexer (Handed)
+open BSmtLibSpec.Lexer (Handed)
 
 /-- Whether no lexeme of the list is the end of file. -/
 def NoEof (ls : List Lexeme) : Prop := ∀ l ∈ ls, (l.category == .endOfFile) = false
@@ -154,7 +154,7 @@ theorem stream_restart {version : Version} {ws : Bool} {input : List UInt8} {end
     rw [he, ← locAfter_take_add (piece := (input.drop o).take k) (more := (input.drop o).drop k)
       (by rw [List.take_append_drop])]
     rw [toLocation_take (by simp; omega)]
-    simp [Spec.Lexer.locate]
+    simp [BSmtLibSpec.Lexer.locate]
     omega
   have hst :
       stream version ws input ended (o + k) = (rest, (stream version ws input ended o).2) := by
@@ -230,7 +230,7 @@ theorem stream_eof_head {version : Version} {ws : Bool} {input : List UInt8} {en
             refine ⟨rfl, ?_⟩
             simp only [eofLexeme, hloc]
             rw [← locAfter_append, List.take_append_drop, toLocation_locAfter]
-            simp [Spec.Lexer.locate]
+            simp [BSmtLibSpec.Lexer.locate]
           · exfalso
             rw [h1] at h hend
             simp only [List.cons.injEq] at h
@@ -252,8 +252,8 @@ theorem stream_eof_head {version : Version} {ws : Bool} {input : List UInt8} {en
 lexemes of the run from it. -/
 theorem ready_stream_true (version : Version) (input : List UInt8) (ended : Bool) :
     ∀ n o, input.length - o < n → o ≤ input.length →
-      (Spec.Lexer.withLayout true input ended o
-          (Spec.Lexer.segment fedRun (fromVersion version) input ended o)).handed =
+      (BSmtLibSpec.Lexer.withLayout true input ended o
+          (BSmtLibSpec.Lexer.segment fedRun (fromVersion version) input ended o)).handed =
         entriesOf true version (stream version true input ended o).1 := by
   intro n
   induction n with
@@ -261,7 +261,7 @@ theorem ready_stream_true (version : Version) (input : List UInt8) (ended : Bool
   | succ n ih =>
     intro o hn ho
     rw [segment_stream version true input ended o]
-    simp only [Spec.Lexer.withLayout, ite_true]
+    simp only [BSmtLibSpec.Lexer.withLayout, ite_true]
     rcases stream_layout version input ended o with ⟨hlay, hhead⟩ |
       ⟨l, rest, hs, ht, hlt, hlay⟩ | ⟨hlay, hs⟩
     · rw [hlay, List.nil_append]
@@ -290,7 +290,7 @@ theorem ready_stream_true (version : Version) (input : List UInt8) (ended : Bool
             (by intro hc; rw [hc] at hcat; cases hcat) ho
           have := ih _ (by omega) hle
           rw [segment_stream version true input ended _, hst] at this
-          simp only [Spec.Lexer.withLayout, ite_true] at this
+          simp only [BSmtLibSpec.Lexer.withLayout, ite_true] at this
           rw [hdend, ← this]
     · have hne : (l.category == .endOfFile) = false := by
         cases hc : l.category == .endOfFile with
@@ -304,7 +304,7 @@ theorem ready_stream_true (version : Version) (input : List UInt8) (ended : Bool
       obtain ⟨hlt', hle, hst⟩ := stream_restart hs (by intro hc; rw [hc] at hne; cases hne) ho
       have := ih _ (by omega) hle
       rw [segment_stream version true input ended _, hst] at this
-      simp only [Spec.Lexer.withLayout, ite_true] at this
+      simp only [BSmtLibSpec.Lexer.withLayout, ite_true] at this
       have hh : handedOf version (l :: rest) = handedOf version rest := by
         simp [handedOf, lexemeHanded_none_of_not_taken ht]
       have he : entriesOf true version (l :: rest) =
@@ -318,7 +318,7 @@ theorem ready_stream_true (version : Version) (input : List UInt8) (ended : Bool
 handed them. -/
 theorem ready_stream (concrete : Bool) (version : Version) (input : List UInt8) (ended : Bool)
     (o : Nat) (ho : o ≤ input.length) :
-    Spec.Lexer.readyFrom fedRun concrete (fromVersion version) input ended o =
+    BSmtLibSpec.Lexer.readyFrom fedRun concrete (fromVersion version) input ended o =
       { handed := entriesOf concrete version (stream version concrete input ended o).1
         failed := (stream version concrete input ended o).2 } := by
   cases concrete with
@@ -327,18 +327,18 @@ theorem ready_stream (concrete : Bool) (version : Version) (input : List UInt8) 
     exact segment_stream version false input ended o
   | true =>
     have h := ready_stream_true version input ended _ o (Nat.lt_succ_self _) ho
-    unfold Spec.Lexer.readyFrom
+    unfold BSmtLibSpec.Lexer.readyFrom
     rw [← h]
-    simp only [Spec.Lexer.withLayout, ite_true]
+    simp only [BSmtLibSpec.Lexer.withLayout, ite_true]
     rw [segment_stream version true input ended o]
 
 
 /-- For a consumer that does not take whitespace and comments, the entries ready from an offset
 are the tokens of the input from there, read on its own. -/
-theorem readyFrom_plain (feed : Spec.Lexicon.Version → List Spec.Lexicon.Chars → Bool →
-      Spec.Lexer.Fed) (version : Spec.Lexicon.Version) (input : List UInt8) (ended : Bool)
+theorem readyFrom_plain (feed : BSmtLibSpec.Lexicon.Version → List BSmtLibSpec.Regex.Chars → Bool →
+      BSmtLibSpec.Lexer.Fed) (version : BSmtLibSpec.Lexicon.Version) (input : List UInt8) (ended : Bool)
     (o : Nat) :
-    Spec.Lexer.readyFrom feed false version input ended o =
-      Spec.Lexer.segment feed version input ended o := by
-  simp [Spec.Lexer.readyFrom, Spec.Lexer.withLayout]
+    BSmtLibSpec.Lexer.readyFrom feed false version input ended o =
+      BSmtLibSpec.Lexer.segment feed version input ended o := by
+  simp [BSmtLibSpec.Lexer.readyFrom, BSmtLibSpec.Lexer.withLayout]
 end BSmtLib.Proofs.Lexer.VNaive

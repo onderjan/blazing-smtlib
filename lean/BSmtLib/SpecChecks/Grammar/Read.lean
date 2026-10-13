@@ -1,4 +1,5 @@
-import BSmtLib.Spec.Grammar
+import BSmtLibSpec.Grammar.Script
+import BSmtLibSpec.Grammar.Properties
 
 /-!
 # Reading trees back from their tokens
@@ -19,7 +20,10 @@ Not trusted: everything here is proved.
 
 namespace BSmtLib.SpecChecks.Grammar
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Grammar
+open BSmtLibSpec BSmtLibSpec.Lexicon BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
 
 /-- A reader: from tokens to what they start with and the tokens after it, if they start with
 one. -/

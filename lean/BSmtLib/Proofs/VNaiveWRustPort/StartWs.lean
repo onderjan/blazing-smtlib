@@ -14,7 +14,7 @@ does what the naive lexer's run does with the whitespace (`WsStartSpec`).
 namespace BSmtLib.Proofs.Lexer.VNaiveWRustPort
 
 open BSmtLib.Proofs.Adapter VNaive BSmtLib.Proofs.Simulation
-open Spec.Lexer (Handed)
+open BSmtLibSpec.Lexer (Handed)
 open Lexer.WRustPort (FastState Frame Held Past)
 open Lexer.Slice (get? get)
 
@@ -55,7 +55,7 @@ theorem bytesOf_append (s : ByteSlice) {i j k : Nat} (hij : i ≤ j) (hjk : j �
 
 section
 
-variable {C : Spec.Lexer.Consumer} {floor : Option Nat} {low : Nat} {hd : Bool} {iv : Version}
+variable {C : BSmtLibSpec.Lexer.Consumer} {floor : Option Nat} {low : Nat} {hd : Bool} {iv : Version}
 
 theorem outcome_pending_congr {ver1 ver2 : Version} {c1 c2 : List Handed} {h1 h2 : List Lexeme}
     (h : pending C hd ver1 c1 h1 = pending C hd ver2 c2 h2)
@@ -88,7 +88,7 @@ structure SameLine (s c : WCore) : Prop where
 at `location` from the lexer state `s` with the tokens taken `coll` and the batch of the lexemes
 `held` the loop holds: the lexer state `s1` it runs in is `s` but for the line, and the naive
 lexer's run from `index` is, at `«end»`, the whitespace in progress at `locE`. -/
-def WsStartSpec (C : Spec.Lexer.Consumer) (v : Version)
+def WsStartSpec (C : BSmtLibSpec.Lexer.Consumer) (v : Version)
     (input : ByteSlice) (offset base index : Nat) (start : Location) (batch : TokenBatch)
     (hframe : Frame floor low offset) (hstart : start.offset = offset + (index - base))
     (hbatch : Held floor offset base index batch) (s : BS floor low) (coll : List Handed)

@@ -15,7 +15,7 @@ namespace BSmtLib.Proofs.Adapter
 /-- The public call on a slice is its step followed by keeping the held result: the one of the
 step, else the one the lexer held; where the step fails, the call fails with its error. -/
 def LexOps.SliceCallAgrees (ops : LexOps) : Prop :=
-  ∀ (consumer : Spec.Lexer.Consumer) (lexer : ops.Lexer consumer) (slice : ByteSlice),
+  ∀ (consumer : BSmtLibSpec.Lexer.Consumer) (lexer : ops.Lexer consumer) (slice : ByteSlice),
     Except.mapError Prod.fst <$> ops.lexSlice lexer slice =
       (fun r => match r with
         | (.ok held, lexer) => .ok (ops.withHeld lexer (held.or (ops.held lexer)))
@@ -25,7 +25,7 @@ def LexOps.SliceCallAgrees (ops : LexOps) : Prop :=
 else the one the consumer broke with (`eofResult`), with the lexer holding none; where the step
 fails, the call fails with its error. -/
 def LexOps.EofCallAgrees (ops : LexOps) : Prop :=
-  ∀ (consumer : Spec.Lexer.Consumer) (lexer : ops.Lexer consumer),
+  ∀ (consumer : BSmtLibSpec.Lexer.Consumer) (lexer : ops.Lexer consumer),
     Except.mapError Prod.fst <$> ops.lexEof lexer =
       (fun r => match r with
         | (.ok flow, lexer) => .ok (eofResult (ops.held lexer) flow, ops.withHeld lexer none)

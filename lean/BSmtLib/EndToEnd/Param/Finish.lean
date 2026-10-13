@@ -15,8 +15,10 @@ with the first, it returns none with the second (`feed_finishes`).
 namespace BSmtLib.EndToEnd.Param
 
 open BSmtLib.Lexer BSmtLib.Lexer.Internal
-open BSmtLib.Spec BSmtLib.Spec.Grammar BSmtLib.Spec.Parser
-open BSmtLib.Spec.Lexer (Handed)
+open BSmtLibSpec BSmtLibSpec.Grammar BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Lexer (Handed)
 open BSmtLib.ParserProofs BSmtLib.ParserProofs.Rejection
 open BSmtLib.Parser (Input ScriptParser Parse ParseAdapter)
 open BSmtLib.Proofs.Adapter (toVersion Answering AnswerM LexOps)
@@ -83,7 +85,7 @@ theorem eofStepG_extends (a : FLexer version) (taken : List Handed) :
   exact hext
 
 theorem runInputG_extends :
-    ∀ (slices : List Lexicon.Chars) (a : FLexer version) (taken : List Handed),
+    ∀ (slices : List Regex.Chars) (a : FLexer version) (taken : List Handed),
       ∃ more, ((flaggedOps.runInput a true slices).run taken).2 = taken ++ more
   | [], a, taken => by
     obtain ⟨more, hmore⟩ := eofStepG_extends a taken
@@ -208,7 +210,7 @@ theorem eof_stepG (a : FLexer version) (p : PLexer) (taken : List Handed)
 /-- Where the run with the parse adapter returns a result at the end of the input, and the tokens
 the run with the first consumer takes are `Good`, the run with the first consumer finishes. -/
 theorem feed_finishes :
-    ∀ (slices : List Lexicon.Chars) (a : FLexer version) (p : PLexer) (taken : List Handed),
+    ∀ (slices : List Regex.Chars) (a : FLexer version) (p : PLexer) (taken : List Handed),
       InvF version a p taken →
       Good version ((flaggedOps.runInput a true slices).run taken).2 →
       ∀ {result : Located Unit} {p' : PLexer}, paFeed p slices = .ok (some result, p') →

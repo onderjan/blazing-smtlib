@@ -21,8 +21,9 @@ parser's lemma over by `Runs.embed`.
 namespace BSmtLib.ParserProofs
 
 open BSmtLib.Parser
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 
 section
 
@@ -320,8 +321,9 @@ end BSmtLib.ParserProofs
 namespace BSmtLib.ParserProofs
 
 open BSmtLib.Parser
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 
 section
 

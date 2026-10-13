@@ -13,19 +13,19 @@ lexer's pure run from where the step started anchored to the loop's index.
 namespace BSmtLib.Proofs.Lexer.VNaiveWRustPort
 
 open BSmtLib.Proofs.Adapter VNaive BSmtLib.Proofs.Simulation
-open Spec.Lexer (Handed)
+open BSmtLibSpec.Lexer (Handed)
 open Lexer.Slice (get? get)
 
 section
 
 variable {floor : Option Nat} {low : Nat}
-variable {C : Spec.Lexer.Consumer} {hd : Bool} {iv : Version}
+variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Version}
 
 /-- What the loop of a quoted symbol keeps, from the index `consumed`: if the lexer state is in
 the quoted symbol from `tokenStart`, and the naive lexer's run from the step's index `start0`
 is its run from the quoted symbol at `consumed`, then the loop ends the step as the naive lexer
 does. -/
-def QuotedSpec (C : Spec.Lexer.Consumer) (v : Version) (hd : Bool) (iv : Version)
+def QuotedSpec (C : BSmtLibSpec.Lexer.Consumer) (v : Version) (hd : Bool) (iv : Version)
     (input : ByteSlice) (start0 : Nat) (st0 : St) (loc0 : Location)
     (coll : List Handed) (held : List Lexeme) (tokenStart : Location) (base : Nat)
     (h : Lexer.WRustPort.Started floor low tokenStart) (origin consumed : Nat) : Prop :=

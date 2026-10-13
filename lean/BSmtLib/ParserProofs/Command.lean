@@ -12,10 +12,12 @@ version it declares: the command parser switches nothing, as the traversal's com
 
 namespace BSmtLib.ParserProofs
 
-open BSmtLib.Spec.Grammar
+open BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
 open BSmtLib.Parser
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 open BSmtLib.SpecChecks.Parser
 
 section
@@ -160,7 +162,7 @@ theorem command_runs (hA : Agrees h) (command : Tree.Command)
         (by simp [finalCall, hA.commandResetAssertions]) rfl hp) hs rest
   | setInfo info =>
     obtain ⟨keyword, value⟩ := info
-    by_cases hkeyword : keyword = Spec.Lexicon.chars "smt-lib-version"
+    by_cases hkeyword : keyword = BSmtLibSpec.Regex.chars "smt-lib-version"
     · subst hkeyword
       obtain ⟨decimal, declared, rfl, hdeclared⟩ : ∃ decimal declared,
           value = some (.constant (.decimal decimal)) ∧ versionOfNumber decimal = some declared := by
@@ -169,7 +171,7 @@ theorem command_runs (hA : Agrees h) (command : Tree.Command)
         cases hversion : versionOfNumber decimal with
         | none => simp [hversion] at hmode
         | some declared => exact ⟨decimal, declared, rfl, hversion⟩
-      have houtcome : outcomeOf (.setInfo ⟨Spec.Lexicon.chars "smt-lib-version",
+      have houtcome : outcomeOf (.setInfo ⟨BSmtLibSpec.Regex.chars "smt-lib-version",
           some (.constant (.decimal decimal))⟩) = .setVersion (Bridge.libVersion declared) := by
         simp [outcomeOf, Tree.Command.declaredVersion, hdeclared]
       exact command_of_payload _ (name := .setInfo) rfl rfl

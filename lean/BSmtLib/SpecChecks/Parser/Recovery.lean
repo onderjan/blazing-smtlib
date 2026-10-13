@@ -1,4 +1,5 @@
-import BSmtLib.Spec.Parser
+import BSmtLibSpec.Parser
+import BSmtLibSpec.Grammar.Properties
 
 /-!
 # Rebuilding a script from its calls
@@ -16,8 +17,12 @@ Not trusted: this is a check of the specification.
 
 namespace BSmtLib.SpecChecks.Parser.Recovery
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Grammar BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec BSmtLibSpec.Lexicon BSmtLibSpec.Grammar BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
+open BSmtLibSpec.Parser.Traversal
 
 /-- What a call stands for. -/
 inductive Fragment where

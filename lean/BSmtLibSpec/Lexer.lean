@@ -1,4 +1,4 @@
-import BSmtLib.Spec.Lexicon
+import BSmtLibSpec.Lexicon.Properties
 
 /-!
 # Lexers
@@ -8,9 +8,10 @@ and what it means for a lexer to be correct. The properties are trusted as much 
 a proof shows that a property holds, so the property has to say what is meant.
 -/
 
-namespace BSmtLib.Spec.Lexer
+namespace BSmtLibSpec.Lexer
 
-open BSmtLib.Spec.Lexicon
+open BSmtLibSpec.Lexicon
+open Regex (Chars)
 
 /-! ## What a lexer hands over -/
 
@@ -79,7 +80,7 @@ structure Handed where
   content : Chars
   deriving DecidableEq, Repr
 
-end BSmtLib.Spec.Lexer
+end BSmtLibSpec.Lexer
 
 /-
 The three definitions below belong to the lexicon's types, so they are in the lexicon's
@@ -87,9 +88,10 @@ namespace, where dot notation finds them (`token.handed version input`). They ar
 and not in the lexicon's modules because they build the types above, and a Lean module can use
 only what is declared before it.
 -/
-namespace BSmtLib.Spec.Lexicon
+namespace BSmtLibSpec.Lexicon
 
-open BSmtLib.Spec.Lexer
+open BSmtLibSpec.Lexer
+open Regex (Chars chars)
 
 /--
 The type of a token of each kind; a reserved word is an unquoted symbol.
@@ -125,11 +127,12 @@ def Token.handed (version : Version) (input : Chars) (token : Token) : Handed :=
     reserved := token.reservedKind version
     content := token.content version }
 
-end BSmtLib.Spec.Lexicon
+end BSmtLibSpec.Lexicon
 
-namespace BSmtLib.Spec.Lexer
+namespace BSmtLibSpec.Lexer
 
-open BSmtLib.Spec.Lexicon
+open BSmtLibSpec.Lexicon BSmtLibSpec.Lexicon.Properties
+open Regex (Chars chars)
 
 /--
 The end-of-file token after the input.
@@ -173,9 +176,9 @@ structure Fed where
 /--
 Property: the token is a parenthesis, or the character after it is in the input.
 
-A token other than a parenthesis needs a delimiter after it (`Delimited`, Reading L1), so a
-lexer can tell that the token ends where it does only once it has read the character after it.
-A parenthesis needs no delimiter.
+A token other than a parenthesis needs a delimiter after it (`Tokenization.Delimited`, Reading
+L1), so a lexer can tell that the token ends where it does only once it has read the character
+after it. A parenthesis needs no delimiter.
 -/
 def DelimiterSeen (input : Chars) (token : Token) : Prop :=
   token.category = .parenOpen ∨ token.category = .parenClose ∨
@@ -831,4 +834,4 @@ def DropsHeldOnError (lexing : RecoveringLexing) : Prop :=
     lexing consumer version slices ended = some recovered → 0 < recovered.errorsSinceBreak →
       recovered.held = none
 
-end BSmtLib.Spec.Lexer
+end BSmtLibSpec.Lexer

@@ -149,7 +149,7 @@ def run (version : Version) (bytes : List UInt8) : Option (List Lexeme) :=
 /-- The lexeme in the spec's form, as the adapter records it (`toHanded`) when it is handed
 over alone in a cursor under the version (see `toHanded_batch`); none for whitespace and
 comments. -/
-def lexemeHanded (version : Version) (l : Lexeme) : Option Spec.Lexer.Handed :=
+def lexemeHanded (version : Version) (l : Lexeme) : Option BSmtLibSpec.Lexer.Handed :=
   (toTokenType l.category).map fun type =>
     { type
       start := toLocation l.start
@@ -184,7 +184,7 @@ theorem toHanded_batch (version : Version) (l : Lexeme) (h : l.Valid) :
   cases Reserved.fromBytes? l.content.toByteSlice version <;> rfl
 
 /-- The lexeme in the spec's form as a piece of layout, as the adapter records it (`toLayout`). -/
-def lexemeLayout (l : Lexeme) : Spec.Lexer.Handed :=
+def lexemeLayout (l : Lexeme) : BSmtLibSpec.Lexer.Handed :=
   { type := if l.category == .comment then .comment else .whitespace
     start := toLocation l.start
     «end» := toLocation l.end
@@ -194,14 +194,14 @@ def lexemeLayout (l : Lexeme) : Spec.Lexer.Handed :=
 /-- The entry a consumer takes for the lexeme, as the adapter records it (`Answering.entry`): the
 token, or whitespace or a comment for a concrete consumer; none for whitespace or a comment
 otherwise. -/
-def lexemeEntry (concrete : Bool) (version : Version) (l : Lexeme) : Option Spec.Lexer.Handed :=
+def lexemeEntry (concrete : Bool) (version : Version) (l : Lexeme) : Option BSmtLibSpec.Lexer.Handed :=
   match lexemeHanded version l with
   | some handed => some handed
   | none => if concrete then some (lexemeLayout l) else none
 
 /-- The adapter's consumer takes the lexeme handed over alone in a cursor as `lexemeEntry`
 gives it. -/
-theorem entry_batch (consumer : Spec.Lexer.Consumer) (version : Version) (l : Lexeme)
+theorem entry_batch (consumer : BSmtLibSpec.Lexer.Consumer) (version : Version) (l : Lexeme)
     (h : l.Valid) :
     Answering.entry consumer (BatchCursor.new version (l.batch h))
       ((BatchCursor.new version (l.batch h)).peek (l.hasNext h version)) =
@@ -266,10 +266,10 @@ theorem runFrom_append (version : Version) (st : St) (location : Location) (a b 
 /-! ## The lexemes in the spec's form -/
 
 /-- The lexemes in the spec's form, or none if one of them is whitespace or a comment. -/
-def handedAll (version : Version) (ls : List Lexeme) : Option (List Spec.Lexer.Handed) :=
+def handedAll (version : Version) (ls : List Lexeme) : Option (List BSmtLibSpec.Lexer.Handed) :=
   ls.mapM (lexemeHanded version)
 
-theorem handedAll_cons_some {version : Version} {l : Lexeme} {x : Spec.Lexer.Handed}
+theorem handedAll_cons_some {version : Version} {l : Lexeme} {x : BSmtLibSpec.Lexer.Handed}
     (hl : lexemeHanded version l = some x) (ls : List Lexeme) :
     handedAll version (l :: ls) = (handedAll version ls).map (x :: ·) := by
   simp only [handedAll, List.mapM_cons, hl]
@@ -298,7 +298,7 @@ theorem id_bind {α β : Type} (x : α) (f : α → Id β) : (x >>= f : Id β) =
 not failed, of the end of the input, in the spec's form, and whether the run failed; none if a
 lexeme is whitespace or a comment. -/
 def fedOf (version : Version) (ended : Bool) :
-    Except (List Lexeme) (St × Location × List Lexeme) → Option (List Spec.Lexer.Handed × Bool)
+    Except (List Lexeme) (St × Location × List Lexeme) → Option (List BSmtLibSpec.Lexer.Handed × Bool)
   | .ok (st, location, ls) =>
     if ended then
       match endStep st location with
@@ -314,8 +314,8 @@ has ended, the end of the input, as the pure run gives it: what it has handed ov
 it has failed. `fedOf` gives this for every input (`fedOf_isSome`); the `none` case is never
 taken.
 -/
-def fedRun (version : Spec.Lexicon.Version) (slices : List Spec.Lexicon.Chars) (ended : Bool) :
-    Spec.Lexer.Fed :=
+def fedRun (version : BSmtLibSpec.Lexicon.Version) (slices : List BSmtLibSpec.Regex.Chars) (ended : Bool) :
+    BSmtLibSpec.Lexer.Fed :=
   match fedOf (toVersion version) ended
       (lexBytes (toVersion version) .idle Location.initial slices.flatten) with
   | some (handed, failed) => { handed, failed }
@@ -323,8 +323,8 @@ def fedRun (version : Spec.Lexicon.Version) (slices : List Spec.Lexicon.Chars) (
 
 /-- `fedRun` gives what the pure run of the bytes of the slices and then, if the input has ended,
 the pure end of the input give, also up to an error. -/
-theorem fedRun_eq_run (version : Spec.Lexicon.Version) (slices : List Spec.Lexicon.Chars)
-    (ended : Bool) (hs : List Spec.Lexer.Handed) (failed : Bool)
+theorem fedRun_eq_run (version : BSmtLibSpec.Lexicon.Version) (slices : List BSmtLibSpec.Regex.Chars)
+    (ended : Bool) (hs : List BSmtLibSpec.Lexer.Handed) (failed : Bool)
     (h : fedOf (toVersion version) ended (lexBytes (toVersion version) .idle Location.initial
       slices.flatten) = some (hs, failed)) :
     fedRun version slices ended = { handed := hs, failed } := by

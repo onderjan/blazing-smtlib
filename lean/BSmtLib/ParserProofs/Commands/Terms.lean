@@ -10,11 +10,13 @@ command's `)` and last call (`part_then_close`).
 
 namespace BSmtLib.ParserProofs
 
-open BSmtLib.Spec.Grammar
+open BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
 open BSmtLib.Parser (Input PM Step CommandState Payload CommandOutcome FinalCall commandStep
   payloadStep finalCall ListState DefinitionEnd)
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 open BSmtLib.SpecChecks.Parser (Program.callUnit)
 
 /-- The payload parser's step into a part's parser and on, in one of its modes. -/

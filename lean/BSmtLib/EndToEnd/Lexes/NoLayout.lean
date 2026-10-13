@@ -18,12 +18,12 @@ namespace BSmtLib.EndToEnd.Param
 
 open BSmtLib.Lexer.Internal (core held handler run ofParts)
 open BSmtLib.Proofs.Adapter (Answering AnswerM LexOps)
-open BSmtLib.Spec.Lexer (Handed)
+open BSmtLibSpec.Lexer (Handed)
 
 /-- The states of the library's lexer that the chain of lexers relates to a state of the naive
 lexer: a state of the lexer with the batch kept in its state that corresponds to it, one of the
 Rust port that corresponds to that, and one of the naive lexer that corresponds to that. -/
-def ZOK (C : Spec.Lexer.Consumer) (c : BSmtLib.Lexer.LexerCore) : Prop :=
+def ZOK (C : BSmtLibSpec.Lexer.Consumer) (c : BSmtLib.Lexer.LexerCore) : Prop :=
   ∃ (x : Proofs.Adapter.X1BatchInCore.lexOps.Lexer C)
     (w : Proofs.Adapter.WRustPort.lexOps.Lexer C) (n : Proofs.Lexer.VNaive.Core),
     Proofs.X1BatchInCoreLexer.Rel c x.core ∧ Proofs.WRustPortX1BatchInCore.LexRel w x ∧
@@ -31,7 +31,7 @@ def ZOK (C : Spec.Lexer.Consumer) (c : BSmtLib.Lexer.LexerCore) : Prop :=
 
 section
 
-variable {C : Spec.Lexer.Consumer}
+variable {C : BSmtLibSpec.Lexer.Consumer}
 
 theorem answering_unique (a b : Answering C) : a = b := by
   cases a; cases b; rfl
@@ -47,7 +47,7 @@ theorem wLexer_eq (w : Proofs.Adapter.WRustPort.lexOps.Lexer C) :
 not fail with the adapter's error `none` for a consumer that does not take whitespace and
 comments, and where it does not fail, the chain relates the state after it. -/
 theorem zok_fit (hc : C.concrete = false) {c : BSmtLib.Lexer.LexerCore} (hz : ZOK C c)
-    (l : Proofs.Adapter.Lexer.lexOps.Lexer C) (hl : core l = c) (bytes : Spec.Lexicon.Chars)
+    (l : Proofs.Adapter.Lexer.lexOps.Lexer C) (hl : core l = c) (bytes : BSmtLibSpec.Regex.Chars)
     (hs : bytes.toByteArray.toByteSlice.stop < USize.size) (taken : List Handed) :
     (∀ e, ((Proofs.Adapter.Lexer.lexOps.lexSliceStep l bytes.toByteArray.toByteSlice).run
         taken).1.1 = .error e → e.cause ≠ .consumer none) ∧
@@ -92,7 +92,7 @@ open BSmtLib.Lexer.Internal (lexChunks lexSliceStep CHUNK_SIZE) in
 /-- The chunks of a slice too large for the positions of the library's lexer, from a state that
 the chain relates: no failure with the adapter's error `none`, and where the chunks do not fail,
 the chain relates the state after them. -/
-theorem zok_chunks (hc : C.concrete = false) (s : Spec.Lexicon.Chars) (p : Nat) :
+theorem zok_chunks (hc : C.concrete = false) (s : BSmtLibSpec.Regex.Chars) (p : Nat) :
     ∀ (acc : Option (Located C.Result)) (l : Proofs.Adapter.Lexer.lexOps.Lexer C)
       (t : List Handed), ZOK C (core l) →
       ∀ r (l' : Proofs.Adapter.Lexer.lexOps.Lexer C) t',
@@ -133,7 +133,7 @@ open BSmtLib.Lexer.Internal (lexChunks lexSliceStep) in
 /-- A call on a slice, from a state that the chain relates: no failure with the adapter's error
 `none`, and where the call does not fail, the chain relates the state after it. -/
 theorem zok_slice (hc : C.concrete = false) {c : BSmtLib.Lexer.LexerCore} (hz : ZOK C c)
-    (l : Proofs.Adapter.Lexer.lexOps.Lexer C) (hl : core l = c) (bytes : Spec.Lexicon.Chars)
+    (l : Proofs.Adapter.Lexer.lexOps.Lexer C) (hl : core l = c) (bytes : BSmtLibSpec.Regex.Chars)
     (taken : List Handed) :
     (∀ e, ((Proofs.Adapter.Lexer.lexOps.lexSliceStep l bytes.toByteArray.toByteSlice).run
         taken).1.1 = .error e → e.cause ≠ .consumer none) ∧
@@ -212,7 +212,7 @@ end
 
 /-- The library's lexer hands no whitespace or comment to the adapter's consumer for a consumer
 of the spec that does not take them. -/
-theorem noLayout (C : Spec.Lexer.Consumer) (hc : C.concrete = false) (version : Version) :
+theorem noLayout (C : BSmtLibSpec.Lexer.Consumer) (hc : C.concrete = false) (version : Version) :
     NoLayout C version :=
   fun _ hR =>
     ⟨fun held bytes taken e he =>

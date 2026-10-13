@@ -5,7 +5,7 @@ import BSmtLib.ParserProofs.Rejection.Discard
 /-!
 # The script consumer at a token, and what a correct lexer hands over
 
-The pieces of the walk through `Spec.Lexer.Runs` in `Classify`:
+The pieces of the walk through `BSmtLibSpec.Lexer.Runs` in `Classify`:
 
 - what a correct lexer hands over from an offset, read on its own after the end of the input:
   tokens of the version, located in the whole input, and the end-of-file token last unless it
@@ -21,16 +21,17 @@ The pieces of the walk through `Spec.Lexer.Runs` in `Classify`:
 
 namespace BSmtLib.EndToEnd
 
-open BSmtLib.Spec BSmtLib.Spec.Grammar BSmtLib.Spec.Lexer
-open BSmtLib.Spec.Parser (Takes Ending versionAt RejectsFirstUnviable)
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec BSmtLibSpec.Grammar BSmtLibSpec.Lexer
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Parser.Properties (Takes Ending versionAt RejectsFirstUnviable)
+open BSmtLibSpec.Parser.Traversal
 open BSmtLib.ParserProofs.Rejection (libraryParser rcv rejects_items versionAt_unique AfterExit)
 open BSmtLib.ParserProofs (requestsAt)
 
 /-! ## The tokens a correct lexer hands over -/
 
 /-- A token relocated stands for the same parser token. -/
-theorem itemOf_after (before : Lexicon.Chars) (handed : Handed) :
+theorem itemOf_after (before : Regex.Chars) (handed : Handed) :
     itemOf (handed.after before) = itemOf handed := by
   cases handed
   rfl
@@ -42,11 +43,11 @@ theorem rcv_itemOf_endOfInput_iff (handed : Handed) :
   cases type <;> simp only [itemOf] <;> (try split) <;>
     simp [rcv, ParserProofs.Bridge.received]
 
-variable {feed : Lexicon.Version → List Lexicon.Chars → Bool → Fed}
+variable {feed : Lexicon.Version → List Regex.Chars → Bool → Fed}
 
 /-- What a correct lexer hands over from an offset on, read on its own after the end of the
 input: the end-of-file token, or tokens of the version located in the whole input. -/
-theorem segment_mem (hc : Correct feed) (version : Lexicon.Version) (input : Lexicon.Chars)
+theorem segment_mem (hc : Correct feed) (version : Lexicon.Version) (input : Regex.Chars)
     (offset : Nat) :
     ∀ h ∈ (segment feed version input true offset).handed, h.type = .endOfFile ∨
       ∃ token : Lexicon.Token, Lexicon.categoryRegex version token.category token.text ∧
@@ -76,7 +77,7 @@ theorem segment_mem (hc : Correct feed) (version : Lexicon.Version) (input : Lex
 
 /-- A token a correct lexer hands over from an offset on stands for an item of the version. -/
 theorem segment_ofVersion (hc : Correct feed) (version : Lexicon.Version)
-    (input : Lexicon.Chars) (offset : Nat) :
+    (input : Regex.Chars) (offset : Nat) :
     ∀ h ∈ (segment feed version input true offset).handed,
       (rcv (itemOf h)).OfVersion version := by
   intro h hh
@@ -90,7 +91,7 @@ theorem segment_ofVersion (hc : Correct feed) (version : Lexicon.Version)
 
 /-- A correct lexer that has not failed after the end of the input has handed over the
 end-of-file token last. -/
-theorem segment_ends (hc : Correct feed) (version : Lexicon.Version) (input : Lexicon.Chars)
+theorem segment_ends (hc : Correct feed) (version : Lexicon.Version) (input : Regex.Chars)
     (offset : Nat) (hf : (segment feed version input true offset).failed = false) :
     ∃ init last, (segment feed version input true offset).handed = init ++ [last] ∧
       last.type = .endOfFile := by
@@ -254,7 +255,7 @@ theorem consumer_step {v₀ : Lexicon.Version} {commands : List Tree.Command}
     (hlt : pre.length < taken.length) (token : Handed)
     (hof : (rcv (itemOf token)).OfVersion (versionAt v₀ commands pre.length))
     (hnd : pre = [] ∨ (scriptConsumer v₀).discards pre = false) :
-    (¬ Spec.Parser.Viable v₀ ((pre ++ [token]).map (rcv ∘ itemOf)) ∧
+    (¬ BSmtLibSpec.Parser.Properties.Viable v₀ ((pre ++ [token]).map (rcv ∘ itemOf)) ∧
         (scriptConsumer v₀).answer (pre ++ [token]) = .fail .rejected) ∨
       (∃ commands' taken' ending', Takes v₀ commands' taken' ending' ∧
         (pre ++ [token]).map (rcv ∘ itemOf) <+: taken' ∧ pre.length + 1 < taken'.length ∧
@@ -270,7 +271,7 @@ theorem consumer_step {v₀ : Lexicon.Version} {commands : List Tree.Command}
   have hpre' : pre.map (rcv ∘ itemOf) = taken.take pre.length := by
     have := List.prefix_iff_eq_take.mp hpre
     simpa using this
-  by_cases hv : Spec.Parser.Viable v₀ ((pre ++ [token]).map (rcv ∘ itemOf))
+  by_cases hv : BSmtLibSpec.Parser.Properties.Viable v₀ ((pre ++ [token]).map (rcv ∘ itemOf))
   · obtain ⟨commands', taken', ending', ht', hp'⟩ := hv
     have hst : (pre ++ [token]).map (rcv ∘ itemOf) = taken'.take (pre ++ [token]).length := by
       have := List.prefix_iff_eq_take.mp hp'
@@ -329,7 +330,7 @@ theorem consumer_step {v₀ : Lexicon.Version} {commands : List Tree.Command}
         Function.comp_apply] at hitem
       rw [← hitem]
       exact hof
-    have h₃ : ¬ Spec.Parser.Viable v₀ ((((pre ++ [token]).map libItem :
+    have h₃ : ¬ BSmtLibSpec.Parser.Properties.Viable v₀ ((((pre ++ [token]).map libItem :
         List ParserProofs.Rejection.LibItem).map (rcv ∘ Subtype.val)).take (pre.length + 1)) := by
       rw [hmap, List.take_of_length_le (by simp)]
       exact hv

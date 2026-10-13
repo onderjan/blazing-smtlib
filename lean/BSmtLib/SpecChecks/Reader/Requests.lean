@@ -1,4 +1,5 @@
-import BSmtLib.Spec.Reader
+import BSmtLibSpec.Reader
+import BSmtLibSpec.Grammar.Properties
 import BSmtLib.SpecChecks.Parser.Bridge
 
 /-!
@@ -16,8 +17,12 @@ Not trusted: everything here is proved.
 
 namespace BSmtLib.SpecChecks.Reader
 
-open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Grammar BSmtLib.Spec.Parser
-open BSmtLib.Spec.Reader BSmtLib.Spec.Parser.Traversal BSmtLib.SpecChecks.Parser
+open BSmtLibSpec BSmtLibSpec.Lexicon BSmtLibSpec.Grammar BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
+open BSmtLibSpec.Lexicon.Properties
+open BSmtLibSpec.Regex (Chars chars)
+open BSmtLibSpec.Reader BSmtLibSpec.Parser.Traversal BSmtLib.SpecChecks.Parser
 
 /-- Whether the command is `exit`. -/
 def exitFlag : Tree.Command → Bool

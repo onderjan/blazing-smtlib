@@ -11,11 +11,13 @@ of a literal are few and fixed, so the lemma follows the term parser token by to
 
 namespace BSmtLib.ParserProofs
 
-open BSmtLib.Spec.Grammar
+open BSmtLibSpec.Grammar
+open BSmtLibSpec.Grammar.Syntax BSmtLibSpec.Grammar.File BSmtLibSpec.Grammar.Properties
 open BSmtLib.Parser (Input PM Step Payload CommandOutcome FinalCall payloadStep finalCall
   ListState LiteralState LiteralShape literalStep termStep TermState TermLevel)
-open BSmtLib.Spec.Parser
-open BSmtLib.Spec.Parser.Traversal
+open BSmtLibSpec.Parser
+open BSmtLibSpec.Parser.Properties
+open BSmtLibSpec.Parser.Traversal
 open BSmtLib.SpecChecks.Parser (Program.callUnit term_identifier term_application)
 
 section
@@ -24,7 +26,7 @@ variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Parser.Handle
 variable {points : Points (StateT H m)} {version : BSmtLib.Version}
 variable {h : Traversal.Handler (StateT H m) (Parser.Handler.Error H) (valuesOf H)}
 
-theorem asTerm_valid (literal : Tree.PropLiteral) (v : Spec.Lexicon.Version) :
+theorem asTerm_valid (literal : Tree.PropLiteral) (v : BSmtLibSpec.Lexicon.Version) :
     literal.asTerm.Valid v := by
   cases literal with
   | positive symbol =>
