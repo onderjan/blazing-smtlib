@@ -36,6 +36,8 @@ are not trusted.
   from which it is reproduced.
 - The traversal: it makes the calls of a parser that goes by the items it receives, its calls
   rebuild the script, and they are placed by the items before them, for every handler.
+- Readers: the calls on a file determine the file, and a reader that lexes then parses reads
+  files and finishes only on files.
 -/
 
 /-!
@@ -671,7 +673,11 @@ info: 'BSmtLib.SpecChecks.Parser.processingCutRunsAgreeByRecord' depends on axio
 ### Readers
 
 The calls a reader makes on a file determine the file, but for its layout, what follows `exit`
-and the spelling of strings in 2.0 (`Spec.Reader.CallsDetermineCommands`).
+and the spelling of strings in 2.0 (`Spec.Reader.CallsDetermineCommands`). A reader that is a
+correct lexer with a parser that follows the traversal as its consumer
+(`Spec.Reader.LexesThenParses`) tells its handler the calls for the commands of every file and
+finishes on it (`Spec.Reader.ReadsFiles`), and finishes on nothing else
+(`Spec.Reader.FinishesOnlyOnFiles`).
 -/
 
 /-- The calls for the commands of a file determine the version the file is read from and its
@@ -684,5 +690,17 @@ info: 'BSmtLib.SpecChecks.Reader.callsDetermineCommands' depends on axioms: [pro
 -/
 #guard_msgs in
 #print axioms Reader.callsDetermineCommands
+
+/-- A reader that lexes then parses reads files and finishes only on files. -/
+theorem Reader.lexesThenParsesReads :
+    ∀ reader, Spec.Reader.LexesThenParses reader →
+      Spec.Reader.ReadsFiles reader ∧ Spec.Reader.FinishesOnlyOnFiles reader :=
+  Reader.lexesThenParses_reads
+
+/--
+info: 'BSmtLib.SpecChecks.Reader.lexesThenParsesReads' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms Reader.lexesThenParsesReads
 
 end BSmtLib.SpecChecks

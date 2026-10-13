@@ -194,9 +194,9 @@ def PlacementDetermined : Prop :=
 
 /-! ## Where a parser rejects its input
 
-The properties above are about scripts. The two below are about a parser on any input: it
-takes what a parser takes for a script as the traversal does, and it rejects the first item
-that no script continues with.
+The properties above are about scripts. The two below are about a parser on any input that a
+producer can hand it: it takes what a parser takes for a script as the traversal does, and it
+rejects the first item that no script continues with.
 
 A declaration of a version that is not supported is no command of a script, but a parser takes
 it as `set-info` up to its `)` and only then fails, as on a version its policy does not allow
@@ -310,6 +310,11 @@ is the last event of the run.
 A lexer hands over a reserved word only if it is one of the version in force, and a parser
 relies on that; so the rejected item is taken to be such. The items before it are such, as they
 stand for items of a valid script.
+
+After `exit`, a parser asks its producer to discard the rest of the input, and relies on that
+too: a producer that honours the request hands over nothing after it but the end of the input. So
+where the traversal has asked for the discarding before the rejected item, that item is taken to
+be the end of the input.
 -/
 def RejectsFirstUnviable (parser : RecordingParser) : Prop :=
   ∀ version commands taken ending (items : List parser.Item) count rejected,
@@ -318,6 +323,8 @@ def RejectsFirstUnviable (parser : RecordingParser) : Prop :=
     (items.map parser.stands).take count = taken.take count →
     (∀ item, (items.map parser.stands)[count]? = some item →
       item.OfVersion (versionAt version commands count)) →
+    (.producerDiscard ∈ eventsBefore count (record version commands) →
+      (items.map parser.stands)[count]? = some .endOfInput) →
     ¬ Viable version ((items.map parser.stands).take (count + 1)) →
     (parser.parse version items).2 = .rejected ∧
       (parser.parse version items).1.filterMap Event.processed =
