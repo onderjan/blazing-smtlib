@@ -255,10 +255,11 @@ theorem tokenEnd_facts {slice : ByteSlice} (h : slice.stop < USize.size) (index 
 
 section
 
-variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Consume H m R E]
+variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Consume H R E]
+  [∀ batch, ConsumeFrom H (BatchCursor batch) m]
   {floor : Option Nat} {low : Nat} (b : USize)
 
-omit [Consume H m R E] in
+omit [Consume H R E] [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 /-- `fail_bind_sim`, with the token end of the second lexer given by an equation. -/
 theorem fail_bind_sim' {α β γ δ : Type} (start : Nat) (ψ : γ → δ) (kind : LexicalErrorKind)
     (te : BSmtLib.Lexer.TokenEnd) (te' : Lexer.Slice.TokenEnd) (e : endMap start te = te')
@@ -272,7 +273,7 @@ theorem fail_bind_sim' {α β γ δ : Type} (start : Nat) (ψ : γ → δ) (kind
   subst e
   exact fail_bind_sim start ψ b kind te hb hp hno Q k k'
 
-omit [Consume H m R E] in
+omit [Consume H R E] [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 /-- `storeUnfinishedSymbolRun`, with the indices of the second lexer given by equations. -/
 theorem storeUnfinishedSymbolRun_sim' (slice : ByteSlice) (h : slice.stop < USize.size)
     (entry : UInt8) (offset : Nat) (base index after runEndAt : USize) (batch : TokenBatch)
@@ -615,7 +616,7 @@ theorem lexNormalFrom_sim (slice : ByteSlice) (h : slice.stop < USize.size) (off
               have hst2 := runEnd_le_stop h (index + 1 + 1) (by omega)
                 (by simp only [ix] at hA1; omega) run.flag
               try dsimp only
-              refine SimP.ite (by rw [beq_stop (h := h) hrd.1, hrd2]) (fun _ => ?_) fun hne => ?_
+              refine SimP.dite (by rw [beq_stop (h := h) hrd.1, hrd2]) (fun _ _ => ?_) fun hne _ => ?_
               · refine SimP.seq (extendContent_sim' (H := H) (m := m) (R := R) (E := E) b slice h
                   _ _ _ _ ea2 hrd2 (by omega) hrd.1) fun _ => ?_
                 refine SimP.bind (leavePending_sim' (H := H) (m := m) (R := R) (E := E)
@@ -631,7 +632,8 @@ theorem lexNormalFrom_sim (slice : ByteSlice) (h : slice.stop < USize.size) (off
                 have hsz' : slice.size = slice.stop - slice.start := rfl
                 omega
               refine getCore_bind _ _ fun core _ => ?_
-              refine SimP.ite (by rw [borrow_eq (h := h) _ _ (by omega) hrd.1, ea2, hrd2]; rfl)
+              refine SimP.ite
+                (by rw [borrow_eq (h := h) _ _ (by omega) hrd.1]; simp only [ea2, hrd2]; rfl)
                 (fun _ => ?_) fun _ => ?_
               · refine SimP.bind (leave_sim' (H := H) (m := m) (R := R) (E := E) slice.start b
                   offset b index batch _ _ rfl rfl ⟨hb, hbi⟩ _ _ _ _) fun _ => ?_
@@ -640,7 +642,7 @@ theorem lexNormalFrom_sim (slice : ByteSlice) (h : slice.stop < USize.size) (off
                   _ _ _ (by rw [← hrd2]; rfl) hi
                   (by dsimp only [BSmtLib.Lexer.TokenEnd.mkAtByte]; omega)
                   (by dsimp only [BSmtLib.Lexer.TokenEnd.mkAtByte]; omega) _ _ _
-              refine SimP.ite (by rw [get_eq (h := h) _ hrd.1, hrd2]) (fun _ => ?_) fun _ => ?_
+              refine SimP.ite (by rw [get_eq (h := h) _ hrd.1 hrd2]) (fun _ => ?_) fun _ => ?_
               · refine SimP.bind (leave_sim' (H := H) (m := m) (R := R) (E := E) slice.start b
                   offset b index batch _ _ rfl rfl ⟨hb, hbi⟩ _ _ _ _) fun _ => ?_
                 exact failAt_bind_sim' (H := H) (m := m) (R := R) (E := E) index
@@ -758,7 +760,7 @@ theorem lexNormalFrom_sim (slice : ByteSlice) (h : slice.stop < USize.size) (off
             rw [← ea]; exact hrd.2
           have hle2 := Lexer.le_runEnd (inputOf slice h) (index + 1) Lexer.RUN_SIMPLE_SYMBOL
           have hst2 := runEnd_le_stop h (index + 1) (by omega) (by omega) Lexer.RUN_SIMPLE_SYMBOL
-          refine SimP.ite (by rw [beq_stop (h := h) hrd.1, hrd2]) (fun _ => ?_) fun hne => ?_
+          refine SimP.dite (by rw [beq_stop (h := h) hrd.1, hrd2]) (fun _ _ => ?_) fun hne _ => ?_
           · refine SimP.seq (extendContent_sim' (H := H) (m := m) (R := R) (E := E) b slice h
               _ _ _ _ ea hrd2 (by omega) hrd.1) fun _ => ?_
             refine SimP.bind (leavePending_sim' (H := H) (m := m) (R := R) (E := E)
@@ -773,7 +775,8 @@ theorem lexNormalFrom_sim (slice : ByteSlice) (h : slice.stop < USize.size) (off
             simp only [beq_iff_eq, ix] at hne
             omega
           refine getCore_bind _ _ fun core _ => ?_
-          refine SimP.ite (by rw [borrow_eq (h := h) _ _ (by omega) hrd.1, ea, hrd2]; rfl)
+          refine SimP.ite
+            (by rw [borrow_eq (h := h) _ _ (by omega) hrd.1]; simp only [ea, hrd2]; rfl)
             (fun _ => ?_) fun _ => ?_
           · refine SimP.bind (leave_sim' (H := H) (m := m) (R := R) (E := E) slice.start b
               offset b index batch _ _ rfl rfl ⟨hb, hbi⟩ _ _ _ _) fun _ => ?_
@@ -782,7 +785,7 @@ theorem lexNormalFrom_sim (slice : ByteSlice) (h : slice.stop < USize.size) (off
               _ _ _ (by rw [← hrd2]; rfl) hi
               (by dsimp only [BSmtLib.Lexer.TokenEnd.mkAtByte]; omega)
               (by dsimp only [BSmtLib.Lexer.TokenEnd.mkAtByte]; omega) _ _ _
-          refine SimP.ite (by rw [get_eq (h := h) _ hrd.1, hrd2]) (fun _ => ?_) fun _ => ?_
+          refine SimP.ite (by rw [get_eq (h := h) _ hrd.1 hrd2]) (fun _ => ?_) fun _ => ?_
           · refine SimP.bind (leave_sim' (H := H) (m := m) (R := R) (E := E) slice.start b
               offset b index batch _ _ rfl rfl ⟨hb, hbi⟩ _ _ _ _) fun _ => ?_
             exact failAt_bind_sim' (H := H) (m := m) (R := R) (E := E) index
@@ -851,8 +854,8 @@ theorem lexNormalFrom_sim (slice : ByteSlice) (h : slice.stop < USize.size) (off
                   (Lexer.runEnd (inputOf slice h) (index + 1) Lexer.RUN_DIGIT + 1) Lexer.RUN_DIGIT
                 have hsf := runEnd_le_stop h (Lexer.runEnd (inputOf slice h) (index + 1)
                   Lexer.RUN_DIGIT + 1) (by omega) (by omega) Lexer.RUN_DIGIT
-                refine SimP.ite (by rw [beq_stop (h := h) hrf.1, hrf2]) (fun _ => ?_)
-                  fun hne => ?_
+                refine SimP.dite (by rw [beq_stop (h := h) hrf.1, hrf2]) (fun _ _ => ?_)
+                  fun hne _ => ?_
                 · refine SimP.seq (extendContent_sim' (H := H) (m := m) (R := R) (E := E) b
                     slice h _ _ _ _ rfl hrf2 hi hrf.1) fun _ => ?_
                   refine SimP.bind (leavePending_sim' (H := H) (m := m) (R := R) (E := E)
@@ -868,7 +871,7 @@ theorem lexNormalFrom_sim (slice : ByteSlice) (h : slice.stop < USize.size) (off
                   simp only [beq_iff_eq, ix] at hne
                   omega
                 refine getCore_bind _ _ fun core _ => ?_
-                refine SimP.ite (by rw [borrow_eq (h := h) _ _ hi hrf.1, hrf2]; rfl)
+                refine SimP.ite (by rw [borrow_eq (h := h) _ _ hi hrf.1]; simp only [hrf2]; rfl)
                   (fun _ => ?_) fun _ => ?_
                 · refine SimP.bind (leave_sim' (H := H) (m := m) (R := R) (E := E) slice.start b
                     offset b index batch _ _ rfl rfl ⟨hb, hbi⟩ _ _ _ _) fun _ => ?_
@@ -877,7 +880,7 @@ theorem lexNormalFrom_sim (slice : ByteSlice) (h : slice.stop < USize.size) (off
                     _ _ _ (by rw [← hrf2]; rfl) hi
                     (by dsimp only [BSmtLib.Lexer.TokenEnd.mkAtByte]; omega)
                     (by dsimp only [BSmtLib.Lexer.TokenEnd.mkAtByte]; omega) _ _ _
-                refine SimP.ite (by rw [get_eq (h := h) _ hrf.1, hrf2]) (fun _ => ?_) fun _ => ?_
+                refine SimP.ite (by rw [get_eq (h := h) _ hrf.1 hrf2]) (fun _ => ?_) fun _ => ?_
                 · refine SimP.bind (leave_sim' (H := H) (m := m) (R := R) (E := E) slice.start b
                     offset b index batch _ _ rfl rfl ⟨hb, hbi⟩ _ _ _ _) fun _ => ?_
                   exact failAt_bind_sim' (H := H) (m := m) (R := R) (E := E) index

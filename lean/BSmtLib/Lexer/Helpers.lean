@@ -43,10 +43,14 @@ end Start
 def START : Array Start :=
   (Array.range 256).map fun i => Start.classify i.toUInt8
 
+/-- The dispatch table has an entry for every byte. -/
+theorem size_START : START.size = 256 := by
+  simp [START]
+
 /-- What the byte does in the normal state. -/
 @[inline]
 def startOf (c : UInt8) : Start :=
-  START[c.toNat]!
+  START[c.toNat]'(size_START ▸ c.toNat_lt)
 
 /-- Bits not used by fast masks, kept so that `FAST_MASKS` partition the byte. -/
 def FAST_RESERVED : UInt8 := 0b0000_0010
@@ -118,10 +122,14 @@ def FAST : ByteArray :=
     else
       0⟩
 
+/-- The table of fast flags has an entry for every byte. -/
+theorem size_FAST : FAST.size = 256 := by
+  simp [FAST, ByteArray.size]
+
 /-- The fast flags of the byte. -/
 @[inline]
 def fastFlags (c : UInt8) : UInt8 :=
-  FAST.get! c.toNat
+  FAST[c.toNat]'(size_FAST ▸ c.toNat_lt)
 
 -- a byte carries the delimiter flag exactly when it is whitespace, a parenthesis, or a semicolon
 #guard (List.range 256).all fun i =>
@@ -254,18 +262,21 @@ and the length of the content in use: clearing it only resets the length,
 and the bytes after it are overwritten as the content grows again.
 -/
 /- LEAN: Rust keeps the content in a `Bytes` and clears it, keeping its allocation. Lean
-cannot shorten a `ByteArray` in place, so the lexer keeps its own buffer with a length. -/
+cannot shorten a `ByteArray` in place, so the lexer keeps its own buffer with a length, and the
+proof that the length is within the array, so that the content's bytes are read without a
+bounds check. -/
 structure ContentBuffer where
   bytes : ByteArray
   len : Nat
+  fits : len ≤ bytes.size
 
 namespace ContentBuffer
 
-def empty : ContentBuffer := { bytes := ByteArray.empty, len := 0 }
+def empty : ContentBuffer := { bytes := ByteArray.empty, len := 0, fits := Nat.le_refl _ }
 
 @[inline]
 def clear (self : ContentBuffer) : ContentBuffer :=
-  { self with len := 0 }
+  { self with len := 0, fits := Nat.zero_le _ }
 
 @[inline]
 def isEmpty (self : ContentBuffer) : Bool :=
@@ -276,54 +287,86 @@ def isEmpty (self : ContentBuffer) : Bool :=
 def view (self : ContentBuffer) : ByteSlice :=
   self.bytes.toByteSlice 0 self.len
 
+/-- The number of bytes that `extendFrom` copies from `source`: those from `start` to `stop`
+that are in it. -/
+@[inline]
+def copiedCount (source : ByteArray) (start stop : Nat) : Nat :=
+  min (stop - start) (source.size - start)
+
+/-- A copy of bytes into the array after the length keeps the length within the array. -/
+theorem fits_copySlice {bytes : ByteArray} {len : Nat} (fits : len ≤ bytes.size)
+    (source : ByteArray) (start stop : Nat) :
+    len + copiedCount source start stop ≤
+      (source.copySlice start bytes len (stop - start) false).size := by
+  simp only [ByteArray.copySlice_eq_append, ByteArray.size_append, ByteArray.size_extract,
+    copiedCount, ByteArray.size_data]
+  omega
+
 /- LEAN: the fields are taken out of `self` before the array is changed. Changing
-`self.bytes` while `self` still refers to it would find the array shared and copy it. -/
+`self.bytes` while `self` still refers to it would find the array shared and copy it. The
+length grows by the bytes copied, which are all from `start` to `stop` when `stop` is within
+`source`, as it is wherever the lexer extends the content. -/
 /-- Appends the bytes of `source` from `start` to `stop`. -/
 @[inline]
 def extendFrom (self : ContentBuffer) (source : ByteArray) (start stop : Nat) : ContentBuffer :=
-  let { bytes, len } := self
+  let { bytes, len, fits } := self
   { bytes := source.copySlice start bytes len (stop - start) false,
-    len := len + (stop - start) }
+    len := len + copiedCount source start stop,
+    fits := fits_copySlice fits source start stop }
+
+/-- A write of a byte within the array keeps its size. -/
+theorem size_set_byte (bytes : ByteArray) (index : Nat) (value : UInt8) (h : index < bytes.size) :
+    (bytes.set index value h).size = bytes.size := by
+  cases bytes; simp [ByteArray.set, ByteArray.size]
 
 @[inline]
 def push (self : ContentBuffer) (byte : UInt8) : ContentBuffer :=
-  let { bytes, len } := self
-  if len < bytes.size then
-    { bytes := bytes.set! len byte, len := len + 1 }
+  let { bytes, len, fits } := self
+  if h : len < bytes.size then
+    { bytes := bytes.set len byte h, len := len + 1,
+      fits := by rw [size_set_byte]; exact h }
   else
-    { bytes := bytes.push byte, len := len + 1 }
+    { bytes := bytes.push byte, len := len + 1,
+      fits := by rw [ByteArray.size_push]; exact Nat.succ_le_succ fits }
 
 end ContentBuffer
 
 /-- Where the bytes of a finished token are. -/
 /- LEAN: Rust borrows a sub-slice; here the content is the slice's array with the positions
-in it, from which the token is built without allocating a view. -/
+in it, from which the token is built without allocating a view. The positions come with the
+proof that they are in order and within the array, so that the content's bytes are read without
+a bounds check. -/
 inductive Content where
   /-- Accumulated in the lexer's token content. -/
   | stored
   /-- Still in the input slice: its array from `start` to `stop`. -/
-  | borrowed (bytes : ByteArray) (start stop : Nat)
+  | borrowed (bytes : ByteArray) (start stop : Nat) (ordered : start ≤ stop)
+    (within : stop ≤ bytes.size)
 
 namespace Content
 
-/-- The bytes of the input from `start` to `stop`. -/
+/-- The bytes of the input from `start` to `stop`, which are in order and within the slice. -/
 @[inline]
-def borrow (input : Input) (start stop : USize) : Content :=
-  .borrowed input.bytes start.toNat stop.toNat
+def borrow (input : Input) (start stop : USize) (ordered : start.toNat ≤ stop.toNat)
+    (within : stop.toNat ≤ input.stop.toNat) : Content :=
+  .borrowed input.bytes start.toNat stop.toNat ordered (Nat.le_trans within input.stop_le)
 
 /-- The number of bytes of the content. -/
 @[inline]
 def size (self : Content) (stored : ContentBuffer) : Nat :=
   match self with
   | .stored => stored.len
-  | .borrowed _ start stop => stop - start
+  | .borrowed _ start stop _ _ => stop - start
 
 /-- The last byte of the content, if any. -/
 @[inline]
 def last? (self : Content) (stored : ContentBuffer) : Option UInt8 :=
   match self with
-  | .stored => if stored.len == 0 then none else some (stored.bytes.get! (stored.len - 1))
-  | .borrowed bytes start stop => if stop == start then none else some (bytes.get! (stop - 1))
+  | .stored =>
+    if h : stored.len = 0 then none
+    else some (stored.bytes[stored.len - 1]'(by have := stored.fits; omega))
+  | .borrowed bytes start stop ordered within =>
+    if h : stop = start then none else some (bytes[stop - 1]'(by omega))
 
 end Content
 

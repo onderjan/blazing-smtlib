@@ -35,20 +35,35 @@ theorem getElem!_mem {α : Type} [Inhabited α] (T : Array α) (i : Nat) :
   · right
     rw [getElem!_neg T i h]
 
+/-- The slot of the slice in the table of reserved words, if it has a byte. -/
+def slotOf (s : ByteSlice) : Nat :=
+  if h : 0 < s.size then (BSmtLib.Reserved.Internal.reservedSlot s h).val else 0
+
+/-- The lookup reads the table at the slot of a slice with a byte. -/
+theorem fromBytes_eq (s : ByteSlice) (v : Version) (h : s.size ≠ 0) :
+    Reserved.fromBytes? s v =
+      (let e := BSmtLib.Reserved.Internal.reservedTable[slotOf s]!
+       if e.1.toByteSlice == s && v ≥ e.2.2 then some e.2.1 else none) := by
+  have hpos : 0 < s.size := Nat.pos_of_ne_zero h
+  have hlt : (BSmtLib.Reserved.Internal.reservedSlot s hpos).val <
+      BSmtLib.Reserved.Internal.reservedTable.size := by
+    rw [BSmtLib.Reserved.Internal.size_reservedTable]
+    exact Fin.isLt _
+  rw [show slotOf s = (BSmtLib.Reserved.Internal.reservedSlot s hpos).val from
+      dite_eq_left_of_eq_true (eq_true hpos),
+    getElem!_pos BSmtLib.Reserved.Internal.reservedTable _ hlt]
+  simp only [Reserved.fromBytes?, h, ↓reduceDIte]
+
 theorem fromBytes_kind (version : Spec.Lexicon.Version) (a : ByteArray) :
     (Reserved.fromBytes? a.toByteSlice (Adapter.toVersion version)).map reservedKindOf =
       specReservedKind version a.data.toList := by
-  unfold Reserved.fromBytes?
-  generalize hT : BSmtLib.Reserved.Internal.reservedTable = T
-  generalize hslot : BSmtLib.Reserved.Internal.reservedSlot = slot
-  have hgood : ∀ e ∈ T.toList, e.1.size = 0 ∨
+  have hgood : ∀ e ∈ BSmtLib.Reserved.Internal.reservedTable.toList, e.1.size = 0 ∨
       (if Adapter.toVersion version ≥ e.2.2 then some (reservedKindOf e.2.1) else none) =
         specReservedKind version e.1.data.toList := by
-    subst hT
     cases version <;> decide +kernel
   have hfound : ∀ x ∈ reservedWords version,
-      (T[slot x.toByteArray.toByteSlice]!).1.data.toList = x := by
-    subst hT hslot
+      (BSmtLib.Reserved.Internal.reservedTable[slotOf x.toByteArray.toByteSlice]!).1.data.toList =
+        x := by
     cases version <;> decide +kernel
   have hempty : specReservedKind version [] = none := by
     cases version <;> decide
@@ -56,8 +71,10 @@ theorem fromBytes_kind (version : Spec.Lexicon.Version) (a : ByteArray) :
   · have : a.data.toList = [] := by
       rw [size_toByteSlice'] at h0
       exact List.eq_nil_of_length_eq_zero h0
-    simp [h0, this, hempty]
-  · simp only [h0, beq_iff_eq, ite_false]
+    simp [Reserved.fromBytes?, h0, this, hempty]
+  · rw [fromBytes_eq _ _ h0]
+    generalize hT : BSmtLib.Reserved.Internal.reservedTable = T at hgood hfound ⊢
+    generalize hslot : slotOf = slot at hfound ⊢
     generalize he : T[slot a.toByteSlice]! = e
     obtain ⟨word, r, since⟩ := e
     simp only

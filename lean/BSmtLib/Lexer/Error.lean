@@ -16,28 +16,26 @@ inductive LexicalErrorKind where
   | unclosedQuotedSymbol
   | numeralLeadingZero
   | missingDelimiter
-  deriving BEq, Repr, Inhabited
-
-/- LEAN: the fields are readable as `error.kind` and `error.span`, replacing the getters. -/
-structure LexicalError where
-  kind : LexicalErrorKind
-  span : Span
+  /-- An entry was to be handed over after the value the consumer broke with. -/
+  | unexpectedTrailingToken
   deriving BEq, Repr, Inhabited
 
 /-- The reason why a lexer call failed: a lexical error or a consumer error. -/
 inductive LexErrorCause (E : Type) where
   /-- The input is lexically malformed. -/
-  | lexical (error : LexicalError)
+  | lexical (kind : LexicalErrorKind)
   /-- The token consumer returned an error. -/
   | consumer (error : E)
   deriving BEq, Repr
 
-/- LEAN: the fields are readable as `error.cause` and `error.continuesFrom`, replacing the
-getters. -/
+/- LEAN: the fields are readable as `error.cause`, `error.span` and `error.continuesFrom`,
+replacing the getters. -/
 /-- Error that caused lexing to stop. -/
 structure LexError (E : Type) where
   /-- The reason why the lexer call failed: a lexical error or a consumer error. -/
   cause : LexErrorCause E
+  /-- Location where the error occurred. -/
+  span : Span
   /--
   The location the rest of the input is to be fed from (if the lexer continues).
 

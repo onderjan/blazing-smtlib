@@ -10,10 +10,11 @@ open BSmtLib.Proofs.Simulation
 
 section
 
-variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Consume H m R E]
+variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Consume H R E]
+  [∀ batch, ConsumeFrom H (BatchCursor batch) m]
   {floor : Option Nat} {low : Nat} (start : Nat) (b : USize)
 
-omit [Consume H m R E] in
+omit [Consume H R E] [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 theorem locationFrom_sim (base position : USize) (hb : start ≤ base.toNat)
     (hp : base.toNat ≤ position.toNat) :
     SimP (BaseIs b) (fun _ => BaseIs b) (boundMap start (floor := floor) (low := low)) id

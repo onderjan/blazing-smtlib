@@ -128,7 +128,7 @@ private def RUN_FLAG_BITS : Array UInt8 :=
 /- LEAN: `#guard` checks the condition when the module is built, as the Rust `assert!` in a
 `const` block does. -/
 -- the run flags partition the byte into single bits, each at its own place
-#guard (List.range 8).all fun i => RUN_FLAG_BITS[i]! == (1 : UInt8) <<< i.toUInt8
+#guard (List.range 8).all fun i => RUN_FLAG_BITS[i]? == some ((1 : UInt8) <<< i.toUInt8)
 #guard RUN_FLAG_BITS.foldl (· ||| ·) 0 == 0xFF
 
 namespace CharClass
@@ -166,6 +166,15 @@ compile time. -/
 def RUN_FLAGS : ByteArray :=
   ⟨(Array.range 256).map fun i => CharClass.runFlags i.toUInt8⟩
 
+/-- The table of run flags has an entry for every byte. -/
+theorem size_RUN_FLAGS : RUN_FLAGS.size = 256 := by
+  simp [RUN_FLAGS, ByteArray.size]
+
+/-- The run flags of the byte. -/
+@[inline]
+def runFlagsOf (c : UInt8) : UInt8 :=
+  RUN_FLAGS[c.toNat]'(size_RUN_FLAGS ▸ c.toNat_lt)
+
 /- LEAN: Rust's lexer reads a `&[u8]` with `usize` indices. Here the lexer reads the slice's
 array with `USize` positions in the array, from `start` to `stop`: a `Nat` would be checked
 for being small at every operation, and the functions of the standard library's `ByteSlice`
@@ -188,20 +197,16 @@ namespace Input
 
 /-
 LEAN: that the end of an array is below `USize.size` holds for every array in memory, but
-Lean's standard library states no lemma for it, so it is checked here, once per slice.
+Lean's standard library states no lemma for it, so the lexer checks it, once per slice.
 -/
-/-- The input over the slice, if its end is below `USize.size`. -/
-def ofSlice? (slice : ByteSlice) : Option Input :=
-  if h : slice.stop < USize.size then
-    some {
-      bytes := slice.byteArray
-      start := USize.ofNat slice.start
-      stop := USize.ofNatLT slice.stop h
-      stop_le := by
-        simp only [USize.toNat_ofNatLT]
-        exact slice.stop_le_size_byteArray }
-  else
-    none
+/-- The input over the slice, whose end is below `USize.size`. -/
+def ofSlice (slice : ByteSlice) (h : slice.stop < USize.size) : Input :=
+  { bytes := slice.byteArray
+    start := USize.ofNat slice.start
+    stop := USize.ofNatLT slice.stop h
+    stop_le := by
+      simp only [USize.toNat_ofNatLT]
+      exact slice.stop_le_size_byteArray }
 
 /-- The byte at `position`, if it is below the end of the slice. -/
 @[inline]
@@ -216,15 +221,29 @@ def get? (input : Input) (position : USize) : Option UInt8 :=
 
 /-- The byte at `position`, which is below the end of the slice. -/
 @[inline]
-def get (input : Input) (position : USize) : UInt8 :=
-  (input.get? position).getD 0
+def get (input : Input) (position : USize) (h : position.toNat < input.stop.toNat) : UInt8 :=
+  input.bytes.uget position (by have := input.stop_le; omega)
+
+/-- The byte at a position below the end of the slice is the one `get?` gives. -/
+theorem get?_eq_some_get (input : Input) {position : USize}
+    (h : position.toNat < input.stop.toNat) : input.get? position = some (input.get position h) := by
+  unfold get? get
+  simp only [USize.lt_iff_toNat_lt.mpr h, dite_true]
+
+/-- A position within the slice that is not its end is below the end. -/
+theorem lt_stop_of_ne {input : Input} {position : USize}
+    (hle : position.toNat ≤ input.stop.toNat) (hne : ¬ (position == input.stop) = true) :
+    position.toNat < input.stop.toNat := by
+  rcases Nat.lt_or_eq_of_le hle with h | h
+  · exact h
+  · exact absurd (beq_iff_eq.mpr (USize.toNat_inj.mp h)) hne
 
 end Input
 
 /-- Whether the byte ends a run as it carries no flags from the mask. -/
 @[inline]
 def endsRun (c : UInt8) (mask : UInt8) : Bool :=
-  RUN_FLAGS.get! c.toNat &&& mask == 0
+  runFlagsOf c &&& mask == 0
 
 /- LEAN: Rust calls `start + run_end(&slice[start..], mask)`; taking `start` here avoids
 building a sub-slice. The scan is a recursive function: Lean has no `while` that it can prove
@@ -282,7 +301,7 @@ the mask.
 -/
 @[inline]
 def runEndAll (input : Input) (start : USize) (mask : UInt8) : USize :=
-  runEndIn (fun bytes position h => RUN_FLAGS.get! (bytes.uget position h).toNat &&& mask != mask)
+  runEndIn (fun bytes position h => runFlagsOf (bytes.uget position h) &&& mask != mask)
     input.bytes start input.stop input.stop_le
 
 /- LEAN: the facts below are what the loops of the lexer are shown to end by: a loop goes on
@@ -342,6 +361,29 @@ theorem le_runEnd (input : Input) (start : USize) (mask : UInt8) :
 theorem le_runEndAll (input : Input) (start : USize) (mask : UInt8) :
     start.toNat ≤ (runEndAll input start mask).toNat :=
   le_runEndIn _ _ _ _ _
+
+private theorem runEndIn_le (test : RunTest) (bytes : ByteArray) (position stop : USize)
+    (hstop : stop.toNat ≤ bytes.size) (h : position.toNat ≤ stop.toNat) :
+    (runEndIn test bytes position stop hstop).toNat ≤ stop.toNat := by
+  fun_induction runEndIn test bytes position stop hstop with
+  | case1 => exact h
+  | case2 position hlt _ ih =>
+    apply ih
+    have := USize.lt_iff_toNat_lt.mp hlt
+    rw [toNat_add_one_of_lt this]
+    omega
+  | case3 => exact h
+
+/-- A run from a position within the slice ends within it. -/
+theorem runEnd_le (input : Input) {start : USize} (mask : UInt8)
+    (h : start.toNat ≤ input.stop.toNat) : (runEnd input start mask).toNat ≤ input.stop.toNat :=
+  runEndIn_le _ _ _ _ _ h
+
+/-- A run from a position within the slice ends within it. -/
+theorem runEndAll_le (input : Input) {start : USize} (mask : UInt8)
+    (h : start.toNat ≤ input.stop.toNat) :
+    (runEndAll input start mask).toNat ≤ input.stop.toNat :=
+  runEndIn_le _ _ _ _ _ h
 
 /-- A run ends after its start if the byte at the start does not end it. -/
 theorem lt_runEnd {input : Input} {start : USize} {c : UInt8} (mask : UInt8)

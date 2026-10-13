@@ -4,13 +4,12 @@ import BSmtLib.SpecChecks.StreamingFacts
 /-!
 # The naive lexer is correct
 
-`fedInput_correct`: the naive lexer, as the adapter feeds it slices and then, if the input has
-ended, the end of the input (`Adapter.fedInput VNaive.ops`), has the property
-`Spec.Lexer.Correct`.
+`fedRun_correct`: what the pure run of the naive lexer hands over after the slices and then, if
+the input has ended, the end of the input (`fedRun`), has the property `Spec.Lexer.Correct`.
 
-What it has done is what the pure run over the bytes of the slices and then the end of the
-input gives, also up to an error (`fedInput_eq_run`, `fedOf_isSome`), and the consumer records
-the lexeme of a token as the spec hands the token over (`lexemeHanded_token`).
+`fedRun` is what the pure run over the bytes of the slices and then the end of the input gives,
+also up to an error (`fedRun_eq_run`, `fedOf_isSome`), and the lexeme of a token is in the form
+in which the spec hands the token over (`lexemeHanded_token`).
 
 Before the end of the input (`correct_unended`): when the run gets through the bytes, they are
 viable, as some bytes complete them to an input that the run finishes (`runFrom_completes`),
@@ -447,27 +446,27 @@ theorem lexBytes_of_feedBytes {version : Version} {st st' : St} {location locati
 
 /-! ## The lexer -/
 
-/-- `fedInput VNaive.ops` gives what the pure run of the bytes of the slices and then, if the
-input has ended, the end of the input give, also up to an error, as the consumer records it. -/
-theorem fedOf_fedInput (version : Spec.Lexicon.Version) (slices : List Spec.Lexicon.Chars)
+/-- `fedRun` gives what the pure run of the bytes of the slices and then, if the input has ended,
+the end of the input give, also up to an error. -/
+theorem fedOf_fedRun (version : Spec.Lexicon.Version) (slices : List Spec.Lexicon.Chars)
     (ended : Bool) :
     fedOf (toVersion version) ended (lexBytes (toVersion version) .idle Location.initial
       slices.flatten) =
-      some ((fedInput VNaive.ops version slices ended).handed,
-        (fedInput VNaive.ops version slices ended).failed) := by
+      some ((fedRun version slices ended).handed,
+        (fedRun version slices ended).failed) := by
   obtain ⟨⟨hs, failed⟩, hf⟩ := fedOf_isSome (toVersion version) ended slices.flatten
-  rw [hf, fedInput_eq_run version slices ended hs failed hf]
+  rw [hf, fedRun_eq_run version slices ended hs failed hf]
 
 /-- The naive lexer fed slices, before the end of the input, fails exactly when the input is not
 viable, and hands over the tokens maximal to hand over on the longest viable start. -/
 theorem correct_unended (version : Spec.Lexicon.Version) (slices : List Spec.Lexicon.Chars)
     (start : Chars) :
-    Spec.Lexer.FailsCorrectly (fedInput VNaive.ops) version slices false ∧
-      Spec.Lexer.HandsOverMaximal (fedInput VNaive.ops) version slices false start := by
-  have hf := fedOf_fedInput version slices false
+    Spec.Lexer.FailsCorrectly fedRun version slices false ∧
+      Spec.Lexer.HandsOverMaximal fedRun version slices false start := by
+  have hf := fedOf_fedRun version slices false
   simp only [Spec.Lexer.FailsCorrectly, Spec.Lexer.HandsOverMaximal, Bool.false_eq_true,
     ↓reduceIte]
-  generalize fedInput VNaive.ops version slices false = r at hf ⊢
+  generalize fedRun version slices false = r at hf ⊢
   obtain ⟨hs, failed⟩ := r
   simp only at hf ⊢
   cases e : lexBytes (toVersion version) .idle Location.initial slices.flatten with
@@ -560,18 +559,18 @@ no tokenisation, hands over its tokens and the end-of-file token when it has one
 what it had handed over before the end of the input. -/
 theorem correct_ended (version : Spec.Lexicon.Version) (slices : List Spec.Lexicon.Chars)
     (start : Chars) :
-    Spec.Lexer.FailsCorrectly (fedInput VNaive.ops) version slices true ∧
-      Spec.Lexer.HandsOverCorrectly (fedInput VNaive.ops) version slices true start := by
+    Spec.Lexer.FailsCorrectly fedRun version slices true ∧
+      Spec.Lexer.HandsOverCorrectly fedRun version slices true start := by
   have hu := correct_unended version slices start
-  have hf := fedOf_fedInput version slices true
-  have hf' := fedOf_fedInput version slices false
+  have hf := fedOf_fedRun version slices true
+  have hf' := fedOf_fedRun version slices false
   cases e : lexBytes (toVersion version) .idle Location.initial slices.flatten with
   | error ls =>
     -- the run has failed before the end: the end changes nothing
     rw [e] at hf hf'
     simp only [fedOf] at hf hf'
     have heq := fed_eq_of (hf.symm.trans hf')
-    have hft : (fedInput VNaive.ops version slices false).failed = true := by
+    have hft : (fedRun version slices false).failed = true := by
       cases hls : handedAll (toVersion version) ls with
       | none => rw [hls] at hf'; cases hf'
       | some hs =>
@@ -632,9 +631,9 @@ theorem correct_ended (version : Spec.Lexicon.Version) (slices : List Spec.Lexic
         rw [ite_eq_left_of_eq_true _ _ (eq_true hc)]
         exact ⟨tokens, ht, hf.1.symm⟩
 
-/-- The naive lexer, fed by the adapter slices and then, if the input has ended, the end of the
-input, is correct. -/
-theorem fedInput_correct : Spec.Lexer.Correct (fedInput VNaive.ops) := by
+/-- The pure run of the naive lexer, over the slices and then, if the input has ended, the end
+of the input, is correct. -/
+theorem fedRun_correct : Spec.Lexer.Correct fedRun := by
   intro version slices ended start
   cases ended with
   | false =>

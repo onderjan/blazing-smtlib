@@ -57,8 +57,19 @@ structure LexerCore where
   initialVersion : Version
   /-- Current lexer state. -/
   state : LexerState
-  /-- Whether the lexer should discard bytes until EOF is reached. -/
-  discard : Bool
+  /--
+  Where the lexer began to discard bytes until the end of the input, if it discards.
+
+  The consumer asks for discarding through its cursor.
+  -/
+  discardedFrom : Option Location
+  /--
+  Whether the lexer holds the result the consumer broke with.
+
+  The result itself is kept by the lexer outside its state; any entry handed over while it is
+  held is trailing input.
+  -/
+  holding : Bool
   /- LEAN: Rust chooses by its type parameter `R`; the constructors set this to match the
   `recovery` of the lexer. -/
   /-- Whether the lexer recovers from errors. -/
@@ -121,10 +132,13 @@ structure LexerCore where
   batchEnded : batch.lastEnd ≤ offset
 
 /-- The lexer with its consumer. -/
-structure Lexer (H : Type) (recovery : Recovery := .failFast) where
+structure Lexer (H : Type) {R E : Type} [Consume H R E] (recovery : Recovery := .failFast) where
   /-- Consumer of produced tokens. -/
   handler : H
   core : LexerCore
+  /-- The result the consumer broke with, located where it broke, held until the end of the
+  input. -/
+  held : Option (Located R)
 
 /- LEAN: not in Rust. What a step of the lexer keeps true of its state, from which the loop over
 a slice is shown to end: the offset only grows from `low`, its value when the step started; and
@@ -222,7 +236,8 @@ theorem LexerCore.Bound.weaken {self : LexerCore} {floor : Option Nat} {low : Na
 
 section
 
-variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [Consume H m R E]
+variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [Consume H R E]
+  [∀ batch, ConsumeFrom H (BatchCursor batch) m]
   {floor : Option Nat} {low : Nat}
 
 /- LEAN: `getThe` and `modifyThe` name the state they access, as there are two. Reading the
@@ -270,10 +285,10 @@ def setTokenState (state : LexerState) (start : Location) (h : Started floor low
       ⟨hc.1, fun p hp =>
         ⟨(hc.2 p hp).1, .inr (.inr (Nat.lt_of_lt_of_le (h.2 p hp) hc.1)), (hc.2 p hp).2.2⟩⟩⟩
 
-/- LEAN: Rust's `C::CONSUMES_WHITESPACE_AND_COMMENTS`, read from the consumer's instance. -/
+/- LEAN: Rust's `C::IS_CONCRETE`, read from the consumer's instance. -/
 @[inline]
 def consumesWhitespaceAndComments : LexM H m R E floor low Bool :=
-  pure (Consume.consumesWhitespaceAndComments (H := H))
+  pure (Consume.isConcrete (H := H))
 
 /- LEAN: the content buffer is taken out of the state before it is changed:
 changing `c.tokenContent` while `c` still refers to it would find it shared and copy it,
@@ -342,7 +357,8 @@ def errorWith (kind : LexicalErrorKind) (position failure : Nat) :
   -- no tokens have been consumed, as this is an error
   -- that occurred during lexing
   return {
-    result := .error (.lexical { kind, span })
+    result := .error (.lexical kind)
+    span
     location := c.locationAt failure
     stopAfter := fun _ _ _ h => nomatch h }
 
@@ -386,7 +402,7 @@ def callConsumer {batch : BatchTag} (cursor : BatchCursor batch) (h : cursor.Has
       (Except E (ControlFlow R) × { c : BatchCursor batch // c.Consumed cursor }) := do
   let action : StateT H m
       (Except E (ControlFlow R) × { c : BatchCursor batch // c.Consumed cursor }) :=
-    Consume.consume (H := H) cursor h
+    ConsumeFrom.consume (H := H) cursor h
   action
 
 /- LEAN: the batch that the loop of `lexNormal` holds, and how it goes back into the lexer
@@ -404,66 +420,113 @@ theorem Held.mono {floor : Option Nat} {offset : Nat} {base index next : Nat}
     (_hindex : base ≤ index) (hnext : index ≤ next) : Held floor offset base next batch :=
   ⟨by have := h.1; omega, h.2⟩
 
+/-- The error that the entry at the span is trailing input, after the value the consumer broke
+with. -/
+@[inline]
+def trailingAt (span : Span) : Interrupted R E floor :=
+  { result := .error (.lexical .unexpectedTrailingToken)
+    span
+    location := span.start
+    stopAfter := fun _ _ _ h => nomatch h }
+
+/-- Stops the hand-over of the cursor: a recovering lexer counts the parentheses the consumer
+has taken, then the stop is thrown. -/
+def Rust.stopWith {batch : BatchTag} (cursor : BatchCursor batch) (stop : Interrupted R E floor) :
+    LexM H m R E floor low Unit := do
+  if (← getCore).recovers then
+    -- the consumer has not taken the whole batch
+    -- count the actually consumed parentheses only
+    -- and reset the lexed depth to them
+    modifyCore fun c =>
+      let consumedDepth := cursor.foldConsumedCategories c.consumedDepth fun depth category =>
+        match category with
+        | .parenOpen => depth + 1
+        -- saturate to avoid going below zero depth
+        | .parenClose => depth - 1
+        | _ => depth
+      { c with consumedDepth, lexedDepth := consumedDepth }
+  -- the stop takes effect after the consumed tokens
+  throw stop
+
 /- LEAN: Rust's `flush_cursor` loops while the cursor is not empty; here the loop is the
 recursion, which ends as every call of the consumer consumes a token, by the proof the
 consumer returns. Rust passes the consumer, the version and the depths by `&mut`; here they are
 in the lexer's monad. A stop is after the floor, as every token of the cursor ends after it
 (`BatchCursor.Consumed.lt_consumedEndOf`). -/
+/--
+Hands the cursor over to the consumer until nothing remains in it or the consumer stops.
+
+While the lexer holds a result, the first token is trailing input, and is not handed over. When
+the consumer breaks, the tokens it left in the cursor are trailing input.
+-/
 def Rust.flushCursor {batch : BatchTag} (cursor : BatchCursor batch)
     (hfloor : ∀ p, floor = some p → cursor.EndsAfter p) : LexM H m R E floor low Unit := do
   -- flush the cursor until nothing remains
   if h : cursor.HasNext then
-    let (result, ⟨cursor', consumed⟩) ← callConsumer cursor h
+    if (← getCore).holding then
+      -- a result is held: what follows it is trailing input
+      Rust.stopWith cursor (trailingAt (cursor.span (cursor.peek h)))
+    else
+      let (result, ⟨cursor', consumed⟩) ← callConsumer cursor h
 
-    -- get the location where the cursor ended up
-    /- LEAN: Rust panics if no tokens were consumed; here the consumer returns the proof that
-    it consumed one. -/
-    let consumedEnd := cursor'.consumedEndOf consumed
-    have after : ∀ p, floor = some p → p < consumedEnd.offset := fun p hp =>
-      consumed.lt_consumedEndOf (hfloor p hp)
+      -- get the location where the cursor ended up
+      /- LEAN: Rust panics if no tokens were consumed; here the consumer returns the proof that
+      it consumed one. -/
+      let consumedSpan := cursor'.consumedSpanOf consumed
+      let consumedEnd := cursor'.consumedEndOf consumed
+      have after : ∀ p, floor = some p → p < consumedEnd.offset := fun p hp =>
+        consumed.lt_consumedEndOf (hfloor p hp)
 
-    -- set our version to the cursor-requested version
-    modifyCore fun c => { c with version := cursor'.version }
+      -- set our version to the cursor-requested version
+      modifyCore fun c => { c with version := cursor'.version }
 
-    /- LEAN: Rust computes the stop in a `match` and then acts on it; here the action on a stop
-    is the local function `stopWith`, as the `match` also continues the loop. -/
-    let stopWith (stop : Interrupted R E floor) : LexM H m R E floor low Unit := do
-      if (← getCore).recovers then
-        -- the consumer has not taken the whole batch
-        -- count the actually consumed parentheses only
-        -- and reset the lexed depth to them
-        modifyCore fun c =>
-          let consumedDepth := cursor'.foldConsumedCategories c.consumedDepth fun depth category =>
-            match category with
-            | .parenOpen => depth + 1
-            -- saturate to avoid going below zero depth
-            | .parenClose => depth - 1
-            | _ => depth
-          { c with consumedDepth, lexedDepth := consumedDepth }
-      -- the stop takes effect after the consumed tokens
-      throw stop
-
-    -- process the result
-    match result with
-    | .ok .continue =>
-      if cursor'.relexRequested then
-        -- we need to stop and relex here
-        stopWith { result := .ok .relex, location := consumedEnd, stopAfter :=
-          (fun p hp _ _ => after p hp) }
-      else
-        -- zero the number of consumed tokens in the cursor
-        -- continue flushing until nothing remains
-        have : cursor'.resetConsumed.remaining < cursor.remaining := by
-          rw [BatchCursor.remaining_resetConsumed]
-          exact consumed.remaining_lt
-        flushCursor cursor'.resetConsumed fun p hp =>
-          BatchCursor.endsAfter_resetConsumed (consumed.follows.endsAfter (hfloor p hp))
-    | .ok (.break result) =>
-      stopWith { result := .ok (.finished result), location := consumedEnd, stopAfter :=
-        (fun p hp _ _ => after p hp) }
-    | .error err =>
-      stopWith { result := .error (.consumer err), location := consumedEnd, stopAfter :=
-        (fun _ _ _ h => nomatch h) }
+      -- process the result
+      match result with
+      | .ok flow =>
+        if cursor'.discardRequested then
+          -- the rest is to be discarded, whatever the consumer answered
+          let held := match flow with
+            | .continue => none
+            | .break result => some result
+          Rust.stopWith cursor'
+            { result := .ok (.discarded held), span := consumedSpan
+              location := consumedEnd
+              stopAfter := fun p hp _ _ => after p hp }
+        else
+          match flow with
+          | .continue =>
+            if cursor'.relexRequested then
+              -- we need to stop and relex here
+              Rust.stopWith cursor'
+                { result := .ok .relex, span := consumedSpan
+                  location := consumedEnd
+                  stopAfter := fun p hp _ _ => after p hp }
+            else
+              -- zero the number of consumed tokens in the cursor
+              -- continue flushing until nothing remains
+              have : cursor'.resetConsumed.remaining < cursor.remaining := by
+                rw [BatchCursor.remaining_resetConsumed]
+                exact consumed.remaining_lt
+              flushCursor cursor'.resetConsumed fun p hp =>
+                BatchCursor.endsAfter_resetConsumed (consumed.follows.endsAfter (hfloor p hp))
+          | .break result =>
+            if h : cursor'.HasNext then
+              -- the tokens the consumer left are trailing input
+              Rust.stopWith cursor' (trailingAt (cursor'.span (cursor'.peek h)))
+            else
+              Rust.stopWith cursor'
+                { result := .ok (.finished result), span := consumedSpan
+                  location := consumedEnd
+                  stopAfter := fun p hp _ _ => after p hp }
+      | .error err =>
+        if cursor'.discardRequested then
+          -- the consumer fails where it has had the rest discarded: the discarding stands,
+          -- from where it began
+          modifyCore fun c => { c with discardedFrom := c.discardedFrom.or (some consumedEnd) }
+        Rust.stopWith cursor'
+          { result := .error (.consumer err), span := consumedSpan
+            location := consumedEnd
+            stopAfter := fun _ _ _ h => nomatch h }
   else
     -- everything was consumed without break or error
     -- the consumer has taken every token lexed so far
@@ -516,11 +579,15 @@ def Rust.sinkStoredAt (ty : TokenCategory) (start «end» : Location)
     BatchCursor.endsAfter_new (TokenBatch.endsAfter_pushLocated
       (fun _ h => absurd h (Nat.not_lt_zero _)) (hfloor p hp)) _
 
-/-- Hands over the end-of-file token, at the location. -/
+/-- Hands over the end-of-file token, at the location, unless a result is held, which the end
+of the input confirms instead. -/
 /- LEAN: the end of file has no content; Rust's entry `None`, which the cursor gives as `&[]`.
 Here the content is the empty view at the start of the content buffer's array, as a token handed
 over alone has its content in that array (`Rust.sinkStoredAt`). -/
 def Rust.sinkEof (location : Location) : LexM H m R E none low Unit := do
+  if (← getCore).holding then
+    -- the held result is returned without the end of the input handed over
+    return
   -- construct the span at the first position in the batch
   -- the end of file has entry None
   let c ← getCore
@@ -653,7 +720,7 @@ class Ops (H : Type) (m : Type → Type) (R E : Type) : Type 1 where
   sinkStoredAt {floor : Option Nat} {low : Nat} (ty : TokenCategory)
     (start «end» : Location) (hend : start.offset < «end».offset)
     (hfloor : ∀ p, floor = some p → p < «end».offset) : LexM H m R E floor low Unit
-  /-- Hands over the end-of-file token, at the location. -/
+  /-- Hands over the end-of-file token, at the location, unless a result is held. -/
   sinkEof {low : Nat} (location : Location) : LexM H m R E none low Unit
   /-- The batch whose storage the tokens of a slice go into, given the batch in the lexer
   state. -/
@@ -663,7 +730,8 @@ class Ops (H : Type) (m : Type → Type) (R E : Type) : Type 1 where
 
 section
 
-variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [Consume H m R E]
+variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [Consume H R E]
+  [∀ batch, ConsumeFrom H (BatchCursor batch) m]
   {floor : Option Nat} {low : Nat}
 
 /-- The operations of the Rust lexer: a fresh batch for every slice and for the end of the
@@ -1096,7 +1164,7 @@ def lexNormalFrom (input : ByteSlice) (offset : Nat) (base index : Nat)
     return ← lexNormalFrom input offset base after batch locals hframe
       (by decreasing_position) hbatch origin
       (Nat.le_trans horigin (Nat.le_of_lt hafter))
-  /- LEAN: Rust's `C::CONSUMES_WHITESPACE_AND_COMMENTS`. -/
+  /- LEAN: Rust's `C::IS_CONCRETE`. -/
   let consumes ← consumesWhitespaceAndComments
   -- Handle whitespace and symbols in a fast path.
   let fastEntry := fastFlags c
@@ -1303,7 +1371,7 @@ def lexNormalFrom (input : ByteSlice) (offset : Nat) (base index : Nat)
     let afterEnd := runEnd input start run.flag
     have : start ≤ afterEnd := le_runEnd input start _
     have hlt : index < afterEnd := by decreasing_position
-    if afterEnd == input.size then
+    if hend : afterEnd == input.size then
       -- we ran out of bytes
       -- update the content and the state and return
       extendContent input start afterEnd
@@ -1311,14 +1379,20 @@ def lexNormalFrom (input : ByteSlice) (offset : Nat) (base index : Nat)
         (hbatch.mono hindex (Nat.le_of_lt hlt)) (started_lt hts hindex hlt)
         (started_floor hts hframe)
       return Past.from horigin ⟨afterEnd, Nat.le_of_lt hlt, fun _ => hlt⟩
+    else
     -- dispatch a token with borrowed content
     /- LEAN: Rust's `finish_digit_run` with borrowed content, written out here, as the token
     goes into the batch the loop holds: its checks, then the token. -/
     -- digit runs must not be empty
-    if (borrow input start afterEnd).size (← getCore).tokenContent == 0 then
+    have hwithin : afterEnd ≤ input.size := runEnd_le input _ (by
+      have ⟨_, hselection, _⟩ := Option.bind_eq_some_iff.mp hrun
+      have := lt_size_of_get? hselection
+      decreasing_position)
+    if (borrow input start afterEnd (by decreasing_position) hwithin).size
+        (← getCore).tokenContent == 0 then
       leave offset base index batch hframe hbatch
       throw (← error run.emptyError (.mkAtByte afterEnd))
-    let next := get input afterEnd
+    let next := get input afterEnd (lt_size_of_ne hwithin hend)
     if !isDelimiter next then
       leave offset base index batch hframe hbatch
       throw (← errorAt .missingDelimiter (afterEnd + 1))
@@ -1393,7 +1467,7 @@ def lexNormalFrom (input : ByteSlice) (offset : Nat) (base index : Nat)
     let afterEnd := runEnd input after RUN_SIMPLE_SYMBOL
     have : after ≤ afterEnd := le_runEnd input after _
     have hlt : index < afterEnd := by decreasing_position
-    if afterEnd == input.size then
+    if hend : afterEnd == input.size then
       -- we ran out of bytes
       -- update the content and state and return
       extendContent input after afterEnd
@@ -1401,14 +1475,17 @@ def lexNormalFrom (input : ByteSlice) (offset : Nat) (base index : Nat)
         (hbatch.mono hindex (Nat.le_of_lt hlt)) (started_lt hts hindex hlt)
         (started_floor hts hframe)
       return Past.from horigin ⟨afterEnd, Nat.le_of_lt hlt, fun _ => hlt⟩
+    else
     -- dispatch a token with borrowed content
     /- LEAN: Rust's `finish_keyword` with borrowed content, written out here, as the token
     goes into the batch the loop holds: its checks, then the token. -/
     -- ensure the keyword is not empty
-    if (borrow input after afterEnd).size (← getCore).tokenContent == 0 then
+    have hwithin : afterEnd ≤ input.size := runEnd_le input _ (by decreasing_position)
+    if (borrow input after afterEnd (by decreasing_position) hwithin).size
+        (← getCore).tokenContent == 0 then
       leave offset base index batch hframe hbatch
       throw (← error .forbiddenKeywordName (.mkAtByte afterEnd))
-    let next := get input afterEnd
+    let next := get input afterEnd (lt_size_of_ne hwithin hend)
     if !isDelimiter next then
       leave offset base index batch hframe hbatch
       throw (← errorAt .missingDelimiter (afterEnd + 1))
@@ -1441,7 +1518,7 @@ def lexNormalFrom (input : ByteSlice) (offset : Nat) (base index : Nat)
         let afterFractionEnd := runEnd input (afterEnd + 1) RUN_DIGIT
         have : afterEnd + 1 ≤ afterFractionEnd := le_runEnd input _ _
         have hfraction : index < afterFractionEnd := by decreasing_position
-        if afterFractionEnd == input.size then
+        if hend : afterFractionEnd == input.size then
           -- we ran out of bytes
           -- update the content and state and return
           extendContent input index afterFractionEnd
@@ -1449,15 +1526,19 @@ def lexNormalFrom (input : ByteSlice) (offset : Nat) (base index : Nat)
             (hbatch.mono hindex (Nat.le_of_lt hfraction)) (started_lt hts hindex hfraction)
             (started_floor hts hframe)
           return Past.from horigin ⟨afterFractionEnd, Nat.le_of_lt hfraction, fun _ => hfraction⟩
+        else
         -- dispatch a decimal token with borrowed content
         /- LEAN: Rust's `finish_decimal` with borrowed content, written out here, as the token
         goes into the batch the loop holds: its checks, then the token. -/
         -- decimals of the form 7. without any digit in fractional part are disallowed
-        let last := (borrow input index afterFractionEnd).last? (← getCore).tokenContent
+        have hwithin : afterFractionEnd ≤ input.size :=
+          runEnd_le input _ (by have := lt_size_of_get? hnext; decreasing_position)
+        let last := (borrow input index afterFractionEnd (by decreasing_position) hwithin).last?
+          (← getCore).tokenContent
         if last.isNone || last == some (byte! '.') then
           leave offset base index batch hframe hbatch
           throw (← error .fractionDigitExpected (.mkAtByte afterFractionEnd))
-        let following := get input afterFractionEnd
+        let following := get input afterFractionEnd (lt_size_of_ne hwithin hend)
         if !isDelimiter following then
           leave offset base index batch hframe hbatch
           throw (← errorAt .missingDelimiter (afterFractionEnd + 1))
@@ -1543,9 +1624,10 @@ def lexFractionFrom (input : ByteSlice) (start : Nat) (tokenStart : Location) (b
   let «end» := runEnd input start RUN_DIGIT
   -- extend the token from slice
   extendContent input start «end»
-  if «end» < input.size then
+  if hlt : «end» < input.size then
     -- we have successfully consumed the fraction, finish the decimal
-    finishDecimal (.mkAtByte «end») (some (get input «end»)) tokenStart base h
+    finishDecimal (.mkAtByte «end») (some (get input «end» hlt))
+      tokenStart base h
     setNormal
   else
     -- we ran out of bytes for now
@@ -1568,7 +1650,9 @@ def lexNumeralOrDecimal (input : ByteSlice) (start : Nat) (tokenStart : Location
   -- 1. at least one additional digit has been consumed
   -- 2. the content lexed previously is exactly "0"
   let content := (← getCore).tokenContent
-  let isZero := content.len == 1 && content.bytes.get! 0 == byte! '0'
+  let isZero :=
+    if h : content.len = 1 then content.bytes[0]'(by have := content.fits; omega) == byte! '0'
+    else false
   if index > start && isZero then
     throw (← errorAt .numeralLeadingZero (start + 1))
 
@@ -1594,10 +1678,11 @@ def lexNumeralOrDecimal (input : ByteSlice) (start : Nat) (tokenStart : Location
     -- we have run out of bytes for now
     return ⟨index, this⟩
 
-def lexBaseSelection (input : ByteSlice) (start : Nat) (tokenStart : Location)
+def lexBaseSelection (input : ByteSlice) (start : Nat) (hstart : start < input.size)
+    (tokenStart : Location)
     (h : Started floor low tokenStart) :
     LexM H m R E floor low {next : Nat // start ≤ next} := do
-  let c := get input start
+  let c := get input start hstart
   if c == byte! 'x' then
     setTokenState .hexadecimal tokenStart h
   else if c == byte! 'b' then
@@ -1615,9 +1700,10 @@ def lexDigitRun (input : ByteSlice) (start : Nat) (run : DigitRun)
   let index := runEnd input start run.flag
   -- extend the token from slice
   extendContent input start index
-  if index < input.size then
+  if hlt : index < input.size then
     -- we have successfully consumed the digit run, finish it
-    finishDigitRun run (.mkAtByte index) (some (get input index)) tokenStart base h
+    finishDigitRun run (.mkAtByte index) (some (get input index hlt))
+      tokenStart base h
     setNormal
   return ⟨index, le_runEnd input start _⟩
 
@@ -1801,9 +1887,9 @@ def lexSimpleSymbol (input : ByteSlice) (start : Nat) (tokenStart : Location) (b
   let index := runEnd input start RUN_SIMPLE_SYMBOL
   -- extend the token from slice
   extendContent input start index
-  if index < input.size then
+  if hlt : index < input.size then
     -- we have successfully consumed the symbol, finish it
-    expectDelimiter (get input index) index
+    expectDelimiter (get input index hlt) index
     finishSimpleSymbol (.mkAtByte index) tokenStart base h
     setNormal
   return ⟨index, le_runEnd input start _⟩
@@ -1869,17 +1955,19 @@ def lexKeyword (input : ByteSlice) (start : Nat) (tokenStart : Location) (base :
   -- extend the token from slice
   extendContent input start index
 
-  if index < input.size then
+  if hlt : index < input.size then
     -- we have successfully consumed the keyword, finish it
-    finishKeyword (.mkAtByte index) (some (get input index)) tokenStart base h
+    finishKeyword (.mkAtByte index) (some (get input index hlt))
+      tokenStart base h
     setNormal
   return ⟨index, le_runEnd input start _⟩
 
-def lexQuotedSymbolClosed (input : ByteSlice) (start : Nat) (tokenStart : Location)
+def lexQuotedSymbolClosed (input : ByteSlice) (start : Nat) (hstart : start < input.size)
+    (tokenStart : Location)
     (base : Nat) (h : Started floor low tokenStart) :
     LexM H m R E floor low {next : Nat // start ≤ next} := do
   -- we expect a token delimiter to follow the closing pipe
-  expectDelimiter (get input start) start
+  expectDelimiter (get input start hstart) start
   -- all good, produce the quoted symbol token
   sinkStored .quotedSymbol (.mkAtByte start) tokenStart base h
   -- the delimiter is not consumed
@@ -1996,7 +2084,7 @@ def lexStep (input : ByteSlice) (start : Nat) (hstart : start < input.size)
       (← lexFractionFrom input start tokenStart base (h.resolve_left nofun))
   | .baseSelection, h =>
     afterStep input start hstart
-      (← lexBaseSelection input start tokenStart (h.resolve_left nofun))
+      (← lexBaseSelection input start hstart tokenStart (h.resolve_left nofun))
   | .hexadecimal, h =>
     afterStep input start hstart
       (← lexDigitRun input start HEXADECIMAL_RUN tokenStart base
@@ -2028,7 +2116,7 @@ def lexStep (input : ByteSlice) (start : Nat) (hstart : start < input.size)
         (h.resolve_left nofun))
   | .quotedSymbolClosed, h =>
     afterStep input start hstart
-      (← lexQuotedSymbolClosed input start tokenStart base (h.resolve_left nofun))
+      (← lexQuotedSymbolClosed input start hstart tokenStart base (h.resolve_left nofun))
 
 /-- How lexing a slice from an index ends. -/
 inductive SliceExit (R E : Type) (floor : Option Nat) where
@@ -2059,12 +2147,12 @@ def lexSliceRun (input : ByteSlice) (position : Nat)
       return (.done fnResult, core)
     | .error interrupted =>
       match interrupted with
-      | { result := .ok stop, location, stopAfter } =>
+      | { result := .ok stop, location, stopAfter, .. } =>
         return (.stopped stop location fun p hp => stopAfter p hp stop rfl, core)
-      | { result := .error cause, location, .. } =>
+      | { result := .error cause, span, location, .. } =>
         /- LEAN: Rust's loop makes another pass, which hands over the batch, empty now; here
         the error is returned at once. -/
-        return (.done (.error { cause, location }), core)
+        return (.done (.error { cause, span, location }), core)
   else
     have hposition : position < input.size := by
       simp only [Bool.or_eq_true, decide_eq_true_eq, not_or] at hflush
@@ -2089,11 +2177,11 @@ def lexSliceRun (input : ByteSlice) (position : Nat)
       lexSliceRun input next fnResult ⟨core.val.advance next, core.property.advance next⟩
     | .error interrupted =>
       match interrupted with
-      | { result := .ok stop, location, stopAfter } =>
+      | { result := .ok stop, location, stopAfter, .. } =>
         return (.stopped stop location fun p hp => stopAfter p hp stop rfl, core)
-      | { result := .error cause, location, .. } =>
+      | { result := .error cause, span, location, .. } =>
         -- make sure the tokens before the error get handed over
-        lexSliceRun input position (.error { cause, location }) core
+        lexSliceRun input position (.error { cause, span, location }) core
 termination_by (input.size - position, match fnResult with | .ok _ => 1 | .error _ => 0)
 decreasing_by
   · apply Prod.Lex.left
@@ -2103,18 +2191,27 @@ decreasing_by
 
 /- LEAN: the loop over the stops of the consumer in the slice. Every stop goes back to the end
 of a token the consumer took, which is after the floor (see `Interrupted`): at or after the
-start of the slice, and after the last relex in the slice, so that the loop ends. `floor` is
-the offset before the first byte of the slice at first, and the location of the last relex
-after it; the lexer state is passed along by hand, and the other arguments are those of
-`lexSliceRun`. -/
+start of the slice, and after the last relex or break in the slice, so that the loop ends.
+`floor` is the offset before the first byte of the slice at first, and the location of the last
+relex or break after it; the lexer state is passed along by hand, and the other arguments are
+those of `lexSliceRun`, with `held`, the result the consumer broke with in the slice, if it
+did. -/
+/--
+Lexes the slice from `position` on, going back to the end of the last token the consumer took
+at each of its stops: to relex there, or after a break, to go on lexing what follows the held
+result, as trailing input. A request to discard ends the lexing, with the location in
+`discardedFrom`: the caller discards the rest of the slice.
+
+Returns the result the consumer broke with in the slice, if it did, and the lexer state.
+-/
 def lexSliceFrom (input : ByteSlice) (initialOffset : Nat) (floor : Nat)
     (hfloor : initialOffset ≤ floor + 1) (position : Nat)
-    (fnResult : Except (Failure E) (ControlFlow R))
+    (fnResult : Except (Failure E) (ControlFlow R)) (held : Option (Located R))
     (core : {c : LexerCore // c.Bound (some floor) 0}) :
-    StateT H m (Except (Failure E) (ControlFlow R) × LexerCore) := do
+    StateT H m (Except (Failure E) (Option (Located R)) × LexerCore) := do
   let (exit, core) ← lexSliceRun input position fnResult core
   match exit with
-  | .done result => return (result, core.val)
+  | .done result => return (result.map fun _ => held, core.val)
   | .stopped stop location after =>
     -- every handed-over token ends in this slice
     -- so the location is at or after the initial offset
@@ -2129,23 +2226,38 @@ def lexSliceFrom (input : ByteSlice) (initialOffset : Nat) (floor : Nat)
         -- everything up to the index was already consumed
         -- continue from there
         lexSliceFrom input initialOffset location.offset (Nat.le_succ_of_le hlocation)
-          resumed (.ok .continue) ⟨core, core.bound_resumeAt location resumed⟩
+          resumed (.ok .continue) held ⟨core, core.bound_resumeAt location resumed⟩
       else
         /- LEAN: the location is at the end of the slice, where Rust's loop ends, as no bytes
         are left; the batch was handed over. -/
-        return (.ok .continue, core)
+        return (.ok held, core)
     | .finished result =>
-      -- the consumer is done: the batch was handed over,
-      -- the rest of the slice stays unlexed
-      -- the lexer discards it and everything fed until the end of the input
-      return (.ok (.break result), core)
+      -- the consumer is done: hold its result, which the end of the input confirms,
+      -- and go on lexing the rest of the slice, which is trailing input
+      let held := some { value := result, location }
+      let core := { core with holding := true }
+      if hresumed : resumed < input.size then
+        lexSliceFrom input initialOffset location.offset (Nat.le_succ_of_le hlocation)
+          resumed (.ok .continue) held ⟨core, core.bound_resumeAt location resumed⟩
+      else
+        return (.ok held, core)
+    | .discarded result =>
+      -- the rest of the input is discarded from the location, the rest of the slice by the
+      -- caller; if the consumer is done, its result is held
+      let core := { core with discardedFrom := some location }
+      match result with
+      | some result =>
+        return (.ok (some { value := result, location }), { core with holding := true })
+      | none => return (.ok held, core)
 termination_by input.size + 1 - (floor + 1 - initialOffset)
 decreasing_by
-  have := after floor rfl
-  omega
+  all_goals
+    have := after floor rfl
+    omega
 
+/-- Lexes the slice, returning the result the consumer broke with in it, if it did. -/
 def lexSliceInner (input : ByteSlice) :
-    InnerM H m (Except (Failure E) (ControlFlow R)) := fun c =>
+    InnerM H m (Except (Failure E) (Option (Located R))) := fun c =>
   -- construct a batch for the tokens
   /- LEAN: the batch is in the lexer state, see `LexerCore.batch`; the tokens borrowed from the
   slice have their contents in its array. Its storage is given by the operations
@@ -2164,7 +2276,7 @@ def lexSliceInner (input : ByteSlice) :
   have hpending :
       c.state = .normal ∨ initialOffset - 1 ≤ c.tokenStart.offset ∨ initialOffset - 1 < c.offset :=
     c.tokenStarted.imp_right fun h => .inr (Nat.sub_one_lt_of_lt h)
-  lexSliceFrom input initialOffset (initialOffset - 1) (by omega) 0 (.ok .continue)
+  lexSliceFrom input initialOffset (initialOffset - 1) (by omega) 0 (.ok .continue) none
     ⟨c, ⟨Nat.zero_le _, fun p hp => by
       cases hp
       exact ⟨Nat.sub_le _ _, hpending, fun _ h => absurd h (Nat.not_lt_zero _)⟩⟩⟩
@@ -2175,7 +2287,8 @@ def reset : InnerM H m Unit :=
     { c with
       version := c.initialVersion
       state := .normal
-      discard := false
+      discardedFrom := none
+      holding := false
       consumedDepth := 0
       lexedDepth := 0
       recoveryState := none
@@ -2254,10 +2367,15 @@ def lexEofInner : InnerM H m (Except (Failure E) (ControlFlow R)) := fun c => do
           ⟨h.resolve_left nofun, fun _ h => nomatch h⟩
   let step : LexM H m R E none offset Unit := do
     -- if we were told to relex, treat it as a normal continuation,
-    -- as there is nothing to relex (we are at the end of input)
+    -- as there is nothing to relex (we are at the end of input);
+    -- the end of the input is handed over also while discarding
     tryCatch pending fun interrupted =>
       match interrupted.result with
       | .ok .relex => pure ()
+      | .ok (.discarded none) =>
+        -- the consumer had the rest discarded at the token: the lexer discards from there, and
+        -- hands the end of the input over as it does while discarding
+        modifyCore fun c => { c with discardedFrom := some interrupted.location }
       | _ => throw interrupted
     -- everything has been processed, start the EOF token and sink it
     let ⟨location, _⟩ ← startToken offset 0 0 ⟨Nat.le_refl _, fun _ h => nomatch h⟩
@@ -2271,11 +2389,13 @@ def lexEofInner : InnerM H m (Except (Failure E) (ControlFlow R)) := fun c => do
     return (.ok .continue, core.val)
   | .error interrupted =>
     match interrupted.result with
-    | .error cause => return (.error { cause, location := interrupted.location }, core.val)
-    | .ok .relex =>
-      -- we were asked to relex, but the file is ending anyway, nothing to relex
+    | .error cause =>
+      return (.error { cause, span := interrupted.span, location := interrupted.location },
+        core.val)
+    | .ok .relex | .ok (.discarded none) =>
+      -- we were asked to relex or to discard, but the file is ending anyway
       return (.ok .continue, core.val)
-    | .ok (.finished result) =>
+    | .ok (.finished result) | .ok (.discarded (some result)) =>
       -- the consumer is done with the input
       -- the lexer will be reset outside
       return (.ok (.break result), core.val)
@@ -2302,7 +2422,10 @@ recovery is made.
 def fail (abandon : Location → StateT H m Unit) (failure : Failure E) (atEnd : Bool) :
     InnerM H m (LexError E) := do
   if !(← getThe LexerCore).recovers then
-    return { cause := failure.cause, continuesFrom := none }
+    return { cause := failure.cause, span := failure.span, continuesFrom := none }
+
+  -- a value is confirmed only at the end of the input: an error after a break drops it
+  modifyThe LexerCore fun c => { c with holding := false }
 
   let skip : RecoveryState := if atEnd then
       -- the input has ended, nothing is left to skip
@@ -2310,7 +2433,7 @@ def fail (abandon : Location → StateT H m Unit) (failure : Failure E) (atEnd :
     else
       -- start recovering from inside the string or quoted symbol if necessary
       match failure.cause with
-      | .lexical err => match err.kind with
+      | .lexical kind => match kind with
         | .forbiddenCharInString => .string
         | .backslashInQuotedSymbol | .forbiddenCharInQuotedSymbol => .quotedSymbol
         | _ => .plain
@@ -2322,7 +2445,7 @@ def fail (abandon : Location → StateT H m Unit) (failure : Failure E) (atEnd :
   modifyThe LexerCore (·.resumeAt failure.location 0)
   abandon failure.location
   modifyThe LexerCore fun c => { c with recoveryState := some skip }
-  return { cause := failure.cause, continuesFrom := some failure.location }
+  return { cause := failure.cause, span := failure.span, continuesFrom := some failure.location }
 
 /-- What skipping goes through, see `skipBytes`. -/
 structure Skipping where
@@ -2425,43 +2548,19 @@ def skipSlice (slice : ByteSlice) (skip : RecoveryState) : InnerM H m (Option Na
       batchEnded := Nat.le_trans c.batchEnded (Nat.le_add_right _ _) }
     return none
 
-/- LEAN: Rust finds the last line feed with `rposition` and counts the line feeds in a second
-pass; here one pass does both. -/
-/-- The number of line feeds in the bytes, and the index after the last one, if any. -/
-def countLineFeeds (bytes : ByteSlice) : Nat × Option Nat :=
-  let rec loop (i count : Nat) (afterLast : Option Nat) : Nat × Option Nat :=
-    if h : i < bytes.size then
-      if bytes[i] == byte! '\n' then loop (i + 1) (count + 1) (some (i + 1))
-      else loop (i + 1) count afterLast
-    else
-      (count, afterLast)
-  termination_by bytes.size - i
-  loop 0 0 none
-
-/-- Discards the bytes while keeping the location correct. -/
-def discardBytes (bytes : ByteSlice) : InnerM H m Unit :=
-  -- the line feeds must be counted for the location to stay correct
-  -- if there is a line feed, the line starts after the last one
-  modifyThe LexerCore fun c =>
-    let c := match countLineFeeds bytes with
-      | (lineFeeds, some afterLast) =>
-        { c with line := c.line + lineFeeds, lineStart := c.offset + afterLast }
-      | (_, none) => c
-    { c with
-      offset := c.offset + bytes.size
-      tokenStarted := c.tokenStarted.imp_right fun h => Nat.lt_of_lt_of_le h (Nat.le_add_right _ _)
-      batchEnded := Nat.le_trans c.batchEnded (Nat.le_add_right _ _) }
-
 /- LEAN: the consumer's recovery methods are passed in, those of `LexRecovery`; they are only
 called by a recovering lexer. -/
-/-- Lexes the slice, or discards it if the consumer has finished. -/
+/--
+Lexes the slice, or discards it if the consumer has had the rest discarded.
+
+Returns the result the consumer broke with in the slice, if it did.
+-/
 def lexSliceStep (abandon recover : Location → StateT H m Unit) (slice : ByteSlice) :
-    InnerM H m (Except (LexError E) (ControlFlow (Located R))) := do
-  if (← getThe LexerCore).discard then
+    InnerM H m (Except (LexError E) (Option (Located R))) := do
+  if (← getThe LexerCore).discardedFrom.isSome then
     -- we are discarding bytes
     -- pretend that we lexed everything we were given
-    discardBytes slice
-    return .ok .continue
+    return .ok none
 
   -- a recovering lexer must skip until out of the root-level expression
   -- in which the error occurred
@@ -2471,36 +2570,28 @@ def lexSliceStep (abandon recover : Location → StateT H m Unit) (slice : ByteS
     Only a `PendingEof` holds a lexer in this state, and it offers no `lexSlice`. -/
     if skip == .end then
       -- the input has ended, there is nothing to skip to
-      return .ok .continue
+      return .ok none
     let some skipped ← skipSlice slice skip
       -- the whole slice was skipped
-      | return .ok .continue
+      | return .ok none
     -- the lexing goes on from here, tell the consumer before any token
     modifyThe LexerCore fun c => { c with recoveryState := none, lexedDepth := c.consumedDepth }
     recover (← getThe LexerCore).currentLocation
     slice := slice.slice skipped
 
-  let start := (← getThe LexerCore).offset
-  -- call inner lexing and fail on error
-  let result ← executeStep (lexSliceInner slice)
-  match result with
+  -- execute the inner lexing step, and fail on error
+  match ← lexSliceInner slice with
   | .error failure => return .error (← fail abandon failure false)
-  | .ok flow =>
-    -- if the consumer has produced a result, remember to stop feeding it
-    if let .break located := flow then
-      modifyThe LexerCore fun c => { c with discard := true }
-      -- discard the remaining bytes after break
-      discardBytes (slice.slice (located.location.offset - start))
-    return .ok flow
+  | .ok held => return .ok held
 
-/-- Lexes the end of the input, which resets the lexer unless it fails and recovers. -/
+/--
+Lexes the end of the input, which resets the lexer unless it fails and recovers.
+
+Hands the end of the input over unless a result is held, also while discarding. Returns the
+result the consumer broke with at the end of the input, if it did.
+-/
 def lexEofStep (abandon recover : Location → StateT H m Unit) :
     InnerM H m (Except (LexError E) (ControlFlow (Located R))) := do
-  if (← getThe LexerCore).discard then
-    -- no need to feed anything, just reset the lexer
-    reset
-    return .ok .continue
-
   -- the end of the input forces recovery
   let recovered := (← getThe LexerCore).recoveryState.isSome
   if recovered then
@@ -2518,12 +2609,16 @@ def lexEofStep (abandon recover : Location → StateT H m Unit) :
       -- the consumer has refused the EOF token with nothing left to abandon:
       -- the error is final and the input has ended, reset the lexer
       reset
-      return .error { cause := failure.cause, continuesFrom := none }
+      return .error { cause := failure.cause, span := failure.span, continuesFrom := none }
     return .error (← fail abandon failure true)
 
 end
 
 namespace Lexer
+
+section
+
+variable {H : Type} {R E : Type} [Consume H R E]
 
 /--
 Constructs the lexer.
@@ -2536,7 +2631,8 @@ def new (consumer : H) (version : Version) : Lexer H :=
       version
       initialVersion := version
       state := .normal
-      discard := false
+      discardedFrom := none
+      holding := false
       recovers := false
       consumedDepth := 0
       lexedDepth := 0
@@ -2549,14 +2645,15 @@ def new (consumer : H) (version : Version) : Lexer H :=
       lineStart := 0
       batch := TokenBatch.empty BATCH_CAPACITY
       tokenStarted := .inl rfl
-      batchEnded := Nat.zero_le _ } }
+      batchEnded := Nat.zero_le _ }
+    held := none }
 
 /- LEAN: Rust requires the consumer to recover by the bound `C: SmtRecover`; here by the
 instance argument, which the construction itself does not use. -/
 /-- Constructs a lexer that recovers from errors. -/
 def newRecovering [Recover H m] (consumer : H) (version : Version) : Lexer H .recovering :=
-  let { handler, core } := new consumer version
-  { handler, core := { core with recovers := true } }
+  let { handler, core, held } := new consumer version
+  { handler, core := { core with recovers := true }, held }
 
 def currentLocation (self : Lexer H recovery) : Location :=
   self.core.currentLocation
@@ -2570,15 +2667,24 @@ cursor. The end of the input resets the version to the initial one.
 def version (self : Lexer H recovery) : Version :=
   self.core.version
 
+/--
+Where the lexer began to discard the input, if it discards.
+
+The consumer asks for discarding through its cursor. The lexer then drops everything it is fed
+and hands over nothing but the end of the input. The end of the input ends discarding.
+-/
+def discardedFrom (self : Lexer H recovery) : Option Location :=
+  self.core.discardedFrom
+
 /- LEAN: takes the lexer apart so that the consumer and the fields are each held once, runs
 the step on them, and puts the lexer together again; Rust does the same through
 `&mut self`. -/
 @[inline]
 def run [Monad m] (self : Lexer H recovery) (step : InnerM H m α) :
     m (α × Lexer H recovery) := do
-  let { handler, core } := self
+  let { handler, core, held } := self
   let ((result, core), handler) ← (step.run core).run handler
-  return (result, { handler, core })
+  return (result, { handler, core, held })
 
 /- LEAN: what Rust's `&mut self` leaves usable after a call that failed: the type of the
 recovering lexer, and nothing for a lexer that stops at its first error, whose further calls
@@ -2588,7 +2694,7 @@ What a lexer call that failed gives back: nothing for a lexer that stops
 at its first error, which cannot be used again, and the lexer itself for a
 recovering one, from which the rest of the input is to be fed.
 -/
-def AfterError (H : Type) : Recovery → Type
+def AfterError (H : Type) [Consume H R E] : Recovery → Type
   | .failFast => Unit
   | .recovering => Lexer H .recovering
 
@@ -2598,7 +2704,7 @@ A recovering lexer whose end of the input raised an error.
 The input has ended, so only the end of the input can be lexed again,
 which completes the recovery.
 -/
-structure PendingEof (H : Type) where
+structure PendingEof (H : Type) [Consume H R E] where
   lexer : Lexer H .recovering
 
 /- LEAN: what Rust's `&mut self` leaves usable after `lex_eof` failed. Rust panics on a
@@ -2608,7 +2714,7 @@ What a recovering lexer gives back after its end of the input failed: the
 lexer, if the error is final, or the lexer that can only lex the end of the
 input again, if the error continues at the end.
 -/
-inductive AfterEof (H : Type) where
+inductive AfterEof (H : Type) [Consume H R E] where
   | lexer (lexer : Lexer H .recovering)
   | pending (pending : PendingEof H)
 
@@ -2616,7 +2722,7 @@ inductive AfterEof (H : Type) where
 What a lexer gives back after its end of the input failed: nothing for a
 lexer that stops at its first error, and what remains of a recovering one.
 -/
-def AfterEofError (H : Type) : Recovery → Type
+def AfterEofError (H : Type) [Consume H R E] : Recovery → Type
   | .failFast => Unit
   | .recovering => AfterEof H
 
@@ -2630,99 +2736,107 @@ def afterEofError : {recovery : Recovery} → Lexer H recovery → (continues : 
   | .recovering, lexer, true => .pending ⟨lexer⟩
   | .recovering, lexer, false => .lexer lexer
 
+/- LEAN: what Rust's `lex_eof` returns, or panics on where the consumer continues at the end of
+the input, a broken contract. Here the broken contract is an obligation on the caller, who does
+not give the lexer such a consumer: it is answered by `none` rather than a panic. -/
+/-- The result to return at the end of the input: the held one, else the one the consumer broke
+with at the end of the input. -/
+def eofResult (held : Option (Located R)) (flow : ControlFlow (Located R)) :
+    Option (Located R) :=
+  match held, flow with
+  | some held, _ => some held
+  | none, .break located => some located
+  | none, .continue => none
+
 /- LEAN: the Rust methods take `&mut self`; these take the lexer and return it updated along
 with the result. If the caller does not keep the old lexer, it is updated in place. -/
 
 /--
 Lexes the given slice, sending the lexed tokens to the consumer.
 
-If the token consumer returns `ControlFlow.break` on some token,
-the lexer passes it through, adding the break location.
-Subsequent bytes are discarded until EOF, which resets
-the lexer.
+If the token consumer returns `ControlFlow.break` on some token, the
+lexer holds the result, located where the consumer broke, and goes on
+lexing what it is fed. Any token handed over after it, including those
+the consumer left in its cursor, is the error `UnexpectedTrailingToken`.
+The result is returned by `lexEof`.
 
-If the token consumer returns `ControlFlow.continue` on all tokens,
-the lexer is ready for further lexing.
+If the consumer has the rest discarded, the lexer drops everything it is
+fed until the end of the input (see `discardedFrom`).
 
 If an error occurs, a lexer that stops at its first error is not given
-back. A recovering lexer makes the consumer abandon its unfinished work
-and returns the error. `LexError.continuesFrom` determines the location
-from which further lexing should be started for error recovery.
+back. A recovering lexer makes the consumer abandon its unfinished work,
+drops the held result, and returns the error. `LexError.continuesFrom`
+determines the location from which further lexing should be started for
+error recovery.
 -/
-def lexSlice [Monad m] [Consume H m R E] [LexRecovery recovery H m] (self : Lexer H recovery)
-    (slice : ByteSlice) :
-    m (Except (LexError E × AfterError H recovery)
-      (ControlFlow (Located R) × Lexer H recovery)) := do
+def lexSlice [Monad m] [∀ batch, ConsumeFrom H (BatchCursor batch) m]
+    [LexRecovery recovery H m] (self : Lexer H recovery) (slice : ByteSlice) :
+    m (Except (LexError E × AfterError H recovery) (Lexer H recovery)) := do
   let step := lexSliceStep (ops := Rust.ops) (LexRecovery.abandon recovery)
     (LexRecovery.recover recovery) slice
   let (result, self) ← self.run step
   return match result with
-    | .ok flow => .ok (flow, self)
-    | .error err => .error (err, afterError self)
+    | .ok held => .ok { self with held := held.or self.held }
+    | .error err => .error (err, afterError { self with held := none })
 
 /--
 Lexes end-of-file, sending the lexed tokens to the consumer.
 
-If the token consumer returns `ControlFlow.break` on the EOF token,
-the lexer passes it through, adding the break location.
-Subsequent bytes are discarded until EOF, which resets
-the lexer.
+If the lexer holds a result, the end of the input is not handed over and
+the held result is returned. Otherwise the end-of-file token is handed
+over, also while the lexer discards, and the consumer must break on it:
+the result it breaks with is returned, with its location. A consumer
+that continues on the end-of-file token breaks its contract; the lexer
+then returns `none`.
 
-If the token consumer returns `ControlFlow.continue` on the EOF token,
-the lexer resets itself and returns `ControlFlow.continue`.
+The end of the input resets the lexer: the version to the initial one,
+discarding, the held result, and any partial token.
 
 If an error occurs, a lexer that stops at its first error is not given
 back. A recovering lexer makes the consumer abandon its unfinished work
 and returns the error. `LexError.continuesFrom` determines the location
 from which further lexing should be started for error recovery.
 -/
-def lexEof [Monad m] [Consume H m R E] [LexRecovery recovery H m] (self : Lexer H recovery) :
-    m (Except (LexError E × AfterEofError H recovery)
-      (ControlFlow (Located R) × Lexer H recovery)) := do
+def lexEof [Monad m] [∀ batch, ConsumeFrom H (BatchCursor batch) m]
+    [LexRecovery recovery H m] (self : Lexer H recovery) :
+    m (Except (LexError E × AfterEofError H recovery) (Option (Located R) × Lexer H recovery)) := do
   let step := lexEofStep (ops := Rust.ops) (LexRecovery.abandon recovery)
     (LexRecovery.recover recovery)
   let (result, self) ← self.run step
   return match result with
-    | .ok flow => .ok (flow, self)
-    | .error err => .error (err, afterEofError self err.continuesFrom.isSome)
+    | .ok flow => .ok (eofResult self.held flow, { self with held := none })
+    | .error err => .error (err, afterEofError { self with held := none } err.continuesFrom.isSome)
 
 /--
 Lexes the end of the input again, which completes the recovery.
 
-The lexer hands over the end-of-file token. An error is final: the
-lexer resets itself and does not continue.
+The lexer hands over the end-of-file token, and returns what `lexEof`
+does. An error is final: the lexer resets itself and does not continue.
 -/
-def PendingEof.lexEof [Monad m] [Consume H m R E] [Recover H m] (self : PendingEof H) :
-    m (Except (LexError E × Lexer H .recovering)
-      (ControlFlow (Located R) × Lexer H .recovering)) := do
+def PendingEof.lexEof [Monad m] [∀ batch, ConsumeFrom H (BatchCursor batch) m] [Recover H m]
+    (self : PendingEof H) :
+    m (Except (LexError E × Lexer H .recovering) (Option (Located R) × Lexer H .recovering)) := do
   let step := lexEofStep (ops := Rust.ops) (Recover.abandon (H := H)) (Recover.recover (H := H))
   let (result, lexer) ← self.lexer.run step
   return match result with
-    | .ok flow => .ok (flow, lexer)
-    | .error err => .error (err, lexer)
+    | .ok flow => .ok (eofResult lexer.held flow, { lexer with held := none })
+    | .error err => .error (err, { lexer with held := none })
 
 /--
 Lexes the whole input including EOF at the end.
 
-If the token consumer returns `ControlFlow.break` on some token,
-the lexer passes it through, adding the break location, and
-resets itself as if at the start of a new input.
-
-If the token consumer returns `ControlFlow.continue` on all tokens
-including EOF, the lexer resets itself after EOF
-and returns `ControlFlow.continue`.
+Returns what `lexEof` does, and the lexer reset by the end of the input.
 
 If an error occurs, the lexer is not given back.
 -/
-def lexAll [Monad m] [Consume H m R E] (self : Lexer H) (input : ByteSlice) :
-    m (Except (LexError E × AfterError H .failFast) (ControlFlow (Located R) × Lexer H)) := do
+def lexAll [Monad m] [∀ batch, ConsumeFrom H (BatchCursor batch) m] (self : Lexer H)
+    (input : ByteSlice) :
+    m (Except (LexError E × AfterError H .failFast) (Option (Located R) × Lexer H)) := do
   match ← self.lexSlice input with
-  | .ok (.break result, self) =>
-    -- reset the lexer as if we are at the start of a new file
-    let ((), self) ← self.run (reset (H := H) (m := m))
-    return .ok (.break result, self)
-  | .ok (.continue, self) => self.lexEof
+  | .ok self => self.lexEof
   | .error err => return .error err
+
+end
 
 end Lexer
 

@@ -23,13 +23,8 @@ def inputOf (slice : ByteSlice) (h : slice.stop < USize.size) : Input :=
       simp only [USize.toNat_ofNatLT]
       exact slice.stop_le_size_byteArray }
 
-theorem ofSlice?_eq (slice : ByteSlice) (h : slice.stop < USize.size) :
-    Input.ofSlice? slice = some (inputOf slice h) := by
-  simp [Input.ofSlice?, h, inputOf]
-
-theorem ofSlice?_none (slice : ByteSlice) (h : ¬slice.stop < USize.size) :
-    Input.ofSlice? slice = none := by
-  simp [Input.ofSlice?, h]
+theorem ofSlice_eq (slice : ByteSlice) (h : slice.stop < USize.size) :
+    Input.ofSlice slice h = inputOf slice h := rfl
 
 section
 

@@ -45,14 +45,24 @@ theorem ix_stop : ix slice.start (inputOf slice h).stop = slice.size := by
   simp only [ix, inputOf_stop]
   rfl
 
-theorem get_eq (p : USize) (hp : slice.start ≤ p.toNat) :
-    (inputOf slice h).get p = Lexer.Slice.get slice (ix slice.start p) := by
-  unfold Lexer.Input.get Lexer.Slice.get
-  rw [get?_eq p hp]
+/-- The byte at a position below the end of the input is the byte at its index. -/
+theorem get_eq (p : USize) (hp : slice.start ≤ p.toNat) {i : Nat} (hi : ix slice.start p = i)
+    (h1 : p.toNat < (inputOf slice h).stop.toNat) (h2 : i < slice.size) :
+    (inputOf slice h).get p h1 = Lexer.Slice.get slice i h2 := by
+  have e := get?_eq (h := h) p hp
+  rw [Lexer.Input.get?_eq_some_get _ h1, show idx slice p = i from hi,
+    Lexer.Slice.get?_eq_some_get h2] at e
+  exact Option.some.inj e
 
-theorem borrow_eq (p q : USize) (hp : slice.start ≤ p.toNat) (hq : slice.start ≤ q.toNat) :
-    Lexer.Content.borrow (inputOf slice h) p q =
-      Lexer.Slice.borrow slice (ix slice.start p) (ix slice.start q) := by
+theorem borrow_eq (p q : USize) (hp : slice.start ≤ p.toNat) (hq : slice.start ≤ q.toNat)
+    (h1 : p.toNat ≤ q.toNat) (h2 : q.toNat ≤ (inputOf slice h).stop.toNat) :
+    Lexer.Content.borrow (inputOf slice h) p q h1 h2 =
+      Lexer.Slice.borrow slice (ix slice.start p) (ix slice.start q) (by simp only [ix]; omega)
+        (by
+          rw [inputOf_stop] at h2
+          have : slice.size = slice.stop - slice.start := rfl
+          simp only [ix]
+          omega) := by
   unfold Lexer.Content.borrow Lexer.Slice.borrow
   simp only [inputOf_bytes, start_add_ix hp, start_add_ix hq]
 
@@ -91,10 +101,11 @@ def nextMap (s0 : Nat) {lo : USize} {lo' : Nat} (e : ix s0 lo = lo')
 
 section
 
-variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Consume H m R E]
+variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Consume H R E]
+  [∀ batch, ConsumeFrom H (BatchCursor batch) m]
   {floor : Option Nat} {low : Nat} (b : USize)
 
-omit [Consume H m R E] in
+omit [Consume H R E] [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 theorem extendContent_sim' (slice : ByteSlice) (h : slice.stop < USize.size)
     (p q : USize) (p' q' : Nat) (ep : ix slice.start p = p') (eq : ix slice.start q = q')
     (hp : slice.start ≤ p.toNat) (hq : slice.start ≤ q.toNat) :
@@ -105,7 +116,7 @@ theorem extendContent_sim' (slice : ByteSlice) (h : slice.stop < USize.size)
   subst ep eq
   exact extendContent_sim b slice h p q hp hq
 
-omit [Consume H m R E] in
+omit [Consume H R E] [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 theorem markLineFeedAt_sim' (start : Nat) (position : USize) (position' : Nat)
     (ep : ix start position = position') (hb : start ≤ b.toNat)
     (hp : b.toNat ≤ position.toNat) :
@@ -116,7 +127,7 @@ theorem markLineFeedAt_sim' (start : Nat) (position : USize) (position' : Nat)
   subst ep
   exact markLineFeedAt_sim start b position hb hp
 
-omit [Consume H m R E] in
+omit [Consume H R E] [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 theorem failAt_sim' {α β : Type} (start : Nat) (ψ : α → β) (kind : LexicalErrorKind)
     (position : USize) (position' : Nat) (ep : ix start position = position')
     (hb : start ≤ b.toNat) (hp : b.toNat < position.toNat) (Q : α → ZS floor low → Prop) :
@@ -126,7 +137,7 @@ theorem failAt_sim' {α β : Type} (start : Nat) (ψ : α → β) (kind : Lexica
   subst ep
   exact failAt_sim start ψ b kind position hb hp Q
 
-omit [Consume H m R E] in
+omit [Consume H R E] [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 theorem failAt_bind_sim' {α β γ δ : Type} (start : Nat) (ψ : γ → δ) (kind : LexicalErrorKind)
     (position : USize) (position' : Nat) (ep : ix start position = position')
     (hb : start ≤ b.toNat) (hp : b.toNat < position.toNat) (Q : γ → ZS floor low → Prop)
@@ -138,7 +149,7 @@ theorem failAt_bind_sim' {α β γ δ : Type} (start : Nat) (ψ : γ → δ) (ki
   subst ep
   exact failAt_bind_sim start ψ b kind position hb hp Q k k'
 
-omit [Consume H m R E] in
+omit [Consume H R E] [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 theorem expectDelimiter_sim' (start : Nat) (next : UInt8) (position : USize) (position' : Nat)
     (ep : ix start position = position') (hb : start ≤ b.toNat) (hp : b.toNat ≤ position.toNat)
     (hno : position.toNat + 1 < USize.size) :
@@ -245,7 +256,8 @@ end
 
 section
 
-variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Consume H m R E]
+variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Consume H R E]
+  [∀ batch, ConsumeFrom H (BatchCursor batch) m]
   {floor : Option Nat} {low : Nat} (b : USize)
 
 theorem lexFractionFrom_sim (slice : ByteSlice) (h : slice.stop < USize.size) (start : USize)
@@ -263,10 +275,10 @@ theorem lexFractionFrom_sim (slice : ByteSlice) (h : slice.stop < USize.size) (s
   refine SimP.seq (extendContent_sim' b slice h start _ start' _ es hr2 (by omega) hr1)
     fun _ => ?_
   dsimp only
-  refine SimP.ite ((lt_stop_iff hr1).trans (by rw [hr2])) (fun hlt => ?_) fun _ => ?_
+  refine SimP.dite ((lt_stop_iff hr1).trans (by rw [hr2])) (fun hlt _ => ?_) fun _ _ => ?_
   · have hlt' := USize.lt_iff_toNat_lt.mp hlt
     refine SimP.seq (finishDecimal_sim' b slice.start _ _ (endMap_mkAtByte _ _ _ hr2) _ _
-      (by rw [get_eq _ hr1, hr2]) _ _ (endOk_mkAtByte b hb (by omega) hlt') _ _) fun _ => ?_
+      (by rw [get_eq _ hr1 hr2]) _ _ (endOk_mkAtByte b hb (by omega) hlt') _ _) fun _ => ?_
     refine SimP.seq (setNormal_sim slice.start b) fun _ => ?_
     exact SimP.pure (fun _ h => h) (Subtype.ext hr2)
   · refine SimP.seq (setTokenState_sim slice.start b _ _ _ _) fun _ => ?_
@@ -289,10 +301,10 @@ theorem lexDigitRun_sim (slice : ByteSlice) (h : slice.stop < USize.size) (start
   refine SimP.seq (extendContent_sim' b slice h start _ start' _ es hr2 (by omega) hr1)
     fun _ => ?_
   dsimp only
-  refine SimP.ite ((lt_stop_iff hr1).trans (by rw [hr2])) (fun hlt => ?_) fun _ => ?_
+  refine SimP.dite ((lt_stop_iff hr1).trans (by rw [hr2])) (fun hlt _ => ?_) fun _ _ => ?_
   · have hlt' := USize.lt_iff_toNat_lt.mp hlt
     refine SimP.seq (finishDigitRun_sim' b slice.start _ _ _ (endMap_mkAtByte _ _ _ hr2) _ _
-      (by rw [get_eq _ hr1, hr2]) _ _ (endOk_mkAtByte b hb (by omega) hlt') _ _) fun _ => ?_
+      (by rw [get_eq _ hr1 hr2]) _ _ (endOk_mkAtByte b hb (by omega) hlt') _ _) fun _ => ?_
     refine SimP.seq (setNormal_sim slice.start b) fun _ => ?_
     exact SimP.pure (fun _ h => h) (Subtype.ext hr2)
   · exact SimP.pure (fun _ h => h) (Subtype.ext hr2)
@@ -312,10 +324,10 @@ theorem lexSimpleSymbol_sim (slice : ByteSlice) (h : slice.stop < USize.size) (s
   refine SimP.seq (extendContent_sim' b slice h start _ start' _ es hr2 (by omega) hr1)
     fun _ => ?_
   dsimp only
-  refine SimP.ite ((lt_stop_iff hr1).trans (by rw [hr2])) (fun hlt => ?_) fun _ => ?_
+  refine SimP.dite ((lt_stop_iff hr1).trans (by rw [hr2])) (fun hlt _ => ?_) fun _ _ => ?_
   · have hlt' := USize.lt_iff_toNat_lt.mp hlt
     have hst := (inputOf_stop (h := h)) ▸ hlt'
-    refine SimP.seq (SimP.congr_g (by rw [get_eq _ hr1, hr2])
+    refine SimP.seq (SimP.congr_g (by rw [get_eq _ hr1 hr2])
       (expectDelimiter_sim' b slice.start _ _ _ hr2 hb (by omega) (by omega))) fun _ => ?_
     refine SimP.seq (finishSimpleSymbol_sim' b slice.start _ _ (endMap_mkAtByte _ _ _ hr2) _ _
       (endOk_mkAtByte b hb (by omega) hlt') _ _) fun _ => ?_
@@ -338,10 +350,10 @@ theorem lexKeyword_sim (slice : ByteSlice) (h : slice.stop < USize.size) (start 
   refine SimP.seq (extendContent_sim' b slice h start _ start' _ es hr2 (by omega) hr1)
     fun _ => ?_
   dsimp only
-  refine SimP.ite ((lt_stop_iff hr1).trans (by rw [hr2])) (fun hlt => ?_) fun _ => ?_
+  refine SimP.dite ((lt_stop_iff hr1).trans (by rw [hr2])) (fun hlt _ => ?_) fun _ _ => ?_
   · have hlt' := USize.lt_iff_toNat_lt.mp hlt
     refine SimP.seq (finishKeyword_sim' b slice.start _ _ (endMap_mkAtByte _ _ _ hr2) _ _
-      (by rw [get_eq _ hr1, hr2]) _ _ (endOk_mkAtByte b hb (by omega) hlt') _ _) fun _ => ?_
+      (by rw [get_eq _ hr1 hr2]) _ _ (endOk_mkAtByte b hb (by omega) hlt') _ _) fun _ => ?_
     refine SimP.seq (setNormal_sim slice.start b) fun _ => ?_
     exact SimP.pure (fun _ h => h) (Subtype.ext hr2)
   · exact SimP.pure (fun _ h => h) (Subtype.ext hr2)
@@ -349,37 +361,38 @@ theorem lexKeyword_sim (slice : ByteSlice) (h : slice.stop < USize.size) (start 
 theorem lexQuotedSymbolClosed_sim (slice : ByteSlice) (h : slice.stop < USize.size)
     (start : USize) (start' : Nat) (es : ix slice.start start = start') (tokenStart : Location)
     (base : USize) (hbase : b = base) (hb : slice.start ≤ b.toNat) (hbs : b.toNat ≤ start.toNat)
-    (hstart : start.toNat < slice.stop) (hh hh') :
+    (hstart : start.toNat < slice.stop) (hz hw) (hh hh') :
     SimP (BaseIs b) (fun _ => BaseIs b) (boundMap slice.start (floor := floor) (low := low))
       (nextMap slice.start es)
       (BSmtLib.Lexer.Internal.lexQuotedSymbolClosed (H := H) (m := m) (R := R) (E := E)
-        (inputOf slice h) start tokenStart base hh)
-      (Lexer.WRustPort.lexQuotedSymbolClosed slice start' tokenStart (ix slice.start base)
+        (inputOf slice h) start hz tokenStart base hh)
+      (Lexer.WRustPort.lexQuotedSymbolClosed slice start' hw tokenStart (ix slice.start base)
         hh') := by
   subst hbase
   unfold BSmtLib.Lexer.Internal.lexQuotedSymbolClosed Lexer.WRustPort.lexQuotedSymbolClosed
-  refine SimP.seq (SimP.congr_g (by rw [get_eq _ (by omega), es])
+  refine SimP.seq (SimP.congr_g (by rw [get_eq _ (by omega) es])
     (expectDelimiter_sim' b slice.start _ _ _ es hb (by omega) (by omega))) fun _ => ?_
   refine SimP.seq (sinkStored_sim' b slice.start _ _ _ (endMap_mkAtByte _ _ _ es) _ _ hb
     hbs _ _) fun _ => ?_
   refine SimP.seq (setNormal_sim slice.start b) fun _ => ?_
   exact SimP.pure (fun _ h => h) (Subtype.ext es)
 
-omit [Consume H m R E] in
+omit [Consume H R E] [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 theorem lexBaseSelection_sim (slice : ByteSlice) (h : slice.stop < USize.size) (start : USize)
-    (start' : Nat) (es : ix slice.start start = start') (hstart) (tokenStart : Location)
+    (start' : Nat) (es : ix slice.start start = start') (hstart) (hw)
+    (tokenStart : Location)
     (hb : slice.start ≤ b.toNat) (hbs : b.toNat ≤ start.toNat) (hh hh') :
     SimP (BaseIs b) (fun _ => BaseIs b) (boundMap slice.start (floor := floor) (low := low))
       (nextMap slice.start es)
       (BSmtLib.Lexer.Internal.lexBaseSelection (H := H) (m := m) (R := R) (E := E)
         (inputOf slice h) start hstart tokenStart hh)
-      (Lexer.WRustPort.lexBaseSelection slice start' tokenStart hh') := by
+      (Lexer.WRustPort.lexBaseSelection slice start' hw tokenStart hh') := by
   unfold BSmtLib.Lexer.Internal.lexBaseSelection Lexer.WRustPort.lexBaseSelection
   have e1 := ix_add_one (h := h) (p := start) (by omega) hstart
   have e1' : ix slice.start (start + 1) = start' + 1 := by rw [e1, es]
   have hn := Lexer.toNat_add_one_of_lt hstart
-  have eg : (inputOf slice h).get start = Lexer.Slice.get slice start' := by
-    rw [get_eq _ (by omega), es]
+  have eg : (inputOf slice h).get start hstart = Lexer.Slice.get slice start' hw := by
+    rw [get_eq _ (by omega) es]
   dsimp only
   rw [eg]
   refine SimP.ite Iff.rfl (fun _ => ?_) fun _ => ?_
@@ -390,6 +403,7 @@ theorem lexBaseSelection_sim (slice : ByteSlice) (h : slice.stop < USize.size) (
     exact SimP.pure (fun _ h => h) (Subtype.ext e1')
   · exact failAt_bind_sim' b slice.start _ _ _ _ e1' hb (by omega) _ _ _
 
+omit [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 theorem consumes_sim (start : Nat) :
     SimP (BaseIs b) (fun _ => BaseIs b) (boundMap start (floor := floor) (low := low)) id
       (BSmtLib.Lexer.Internal.consumesWhitespaceAndComments (H := H) (m := m) (R := R) (E := E))
@@ -459,7 +473,7 @@ theorem lexComment_sim (slice : ByteSlice) (h : slice.stop < USize.size) (start 
         exact SimP.pure (fun _ h => h) (Subtype.ext (by simp only [nextMap]; exact e1))
 
 
-omit [LawfulMonad m] [Consume H m R E] in
+omit [LawfulMonad m] [Consume H R E] [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 /-- The position after one with a position after it has the index after its index. -/
 theorem ix_add_one_of_lt_size {s0 : Nat} {p : USize} (hp : s0 ≤ p.toNat)
     (hlt : p.toNat + 1 < USize.size) : ix s0 (p + 1) = ix s0 p + 1 := by
@@ -677,7 +691,7 @@ theorem lexQuotedSymbol_sim (slice : ByteSlice) (h : slice.stop < USize.size) (o
         (by simp only [inputOf_stop]; have := slice.start_le_stop; omega)) fun _ => ?_
       exact SimP.pure (fun _ h => h) (Subtype.ext ix_stop)
 
-omit [LawfulMonad m] [Consume H m R E] in
+omit [LawfulMonad m] [Consume H R E] [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 /-- A branch of the first lexer, by cases on its condition. -/
 theorem SimP.ite_left {start : Nat} {α β : Type} {Q : α → ZS floor low → Prop} {ψ : α → β}
     {P : ZS floor low → Prop} {c : Prop} [Decidable c]
@@ -688,7 +702,7 @@ theorem SimP.ite_left {start : Nat} {α β : Type} {Q : α → ZS floor low → 
   · simp only [hc, ↓reduceIte]; exact h₁ hc
   · simp only [hc, ↓reduceIte]; exact h₂ hc
 
-omit [LawfulMonad m] [Consume H m R E] in
+omit [LawfulMonad m] [Consume H R E] [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 theorem runEnd_ix3 {slice : ByteSlice} {h : slice.stop < USize.size} {p : USize} {p' : Nat}
     (ep : ix slice.start p = p') (hp : slice.start ≤ p.toNat) (mask : UInt8) :
     p.toNat ≤ (Lexer.runEnd (inputOf slice h) p mask).toNat ∧
@@ -800,7 +814,7 @@ theorem lexStringLiteralFrom_sim (slice : ByteSlice) (h : slice.stop < USize.siz
       exact SimP.pure (fun _ h => h) (Subtype.ext es)
     · exact absurd (hg0.trans hX) (fun hs => hnone first' hs (attach_of_eq hs))
 
-omit [LawfulMonad m] [Consume H m R E] in
+omit [LawfulMonad m] [Consume H R E] [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 theorem runEndAll_ix3 {slice : ByteSlice} {h : slice.stop < USize.size} {p : USize} {p' : Nat}
     (ep : ix slice.start p = p') (hp : slice.start ≤ p.toNat) (mask : UInt8) :
     p.toNat ≤ (Lexer.runEndAll (inputOf slice h) p mask).toNat ∧

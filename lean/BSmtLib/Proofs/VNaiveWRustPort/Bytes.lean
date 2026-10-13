@@ -1,7 +1,7 @@
 import BSmtLib.Proofs.VNaive
 
 /-!
-# Runs and bytes of a slice
+# Runs and bytes of a slice, cursors and contents
 
 What the Rust port's run scans are compared with: the end of a run of bytes that pass a test
 (`runEnd`), the bytes of a slice between two indices (`bytesOf`), the location after a run of
@@ -9,6 +9,12 @@ bytes other than line feeds (`afterColumns`), and the byte classes of the runs t
 progress takes as they are. The naive lexer's step `advance` takes each byte of such a run as it
 is (`advance_*_run`), and its step `start` starts the tokens of the fast paths as stated by
 `start_symbol`, `start_space` and `start_quoted`.
+
+A step of a cursor keeps its batch and its requests (`intoBatch_next`, `version_next`,
+`discard_next`, `relex_next`), and the lookup of reserved words reads only the bytes of a content
+(`fromBytes_toByteArray`). A step of the Rust port that consumes the bytes from one index to
+another is compared with the naive lexer's pure run by an equation between the run from the first
+index and the run from the second, with the lexemes finished between them before it (`Prep`).
 -/
 
 namespace BSmtLib.Proofs.Lexer.VNaiveWRustPort
@@ -293,5 +299,71 @@ theorem start_space (version : Version) (ws : Bool) (location : Location) (c : U
 
 theorem start_quoted (version : Version) (ws : Bool) (location : Location) :
     start version ws location 124 = .pending ⟨.quotedSymbol, location, .empty⟩ := rfl
+
+/-! ## Cursors -/
+
+section
+
+open BSmtLib.Lexer.Internal (intoBatch)
+
+variable {g : BatchTag}
+
+theorem intoBatch_next (c : BatchCursor g) (h : c.HasNext) :
+    intoBatch (c.next h).2.1 = intoBatch c := rfl
+
+theorem version_next (c : BatchCursor g) (h : c.HasNext) :
+    (c.next h).2.1.version = c.version := rfl
+
+theorem discard_next (c : BatchCursor g) (h : c.HasNext) :
+    (c.next h).2.1.discardRequested = c.discardRequested := rfl
+
+theorem relex_next (c : BatchCursor g) (h : c.HasNext) :
+    (c.next h).2.1.relexRequested = c.relexRequested := rfl
+
+end
+
+/-! ## Contents -/
+
+theorem ofUInt8_toUInt8 (c : TokenCategory) : TokenCategory.ofUInt8 c.toUInt8 = c := by
+  cases c <;> rfl
+
+theorem reservedSlot_toByteArray (s : ByteSlice) (h : 0 < s.toByteArray.toByteSlice.size) :
+    Reserved.Internal.reservedSlot s.toByteArray.toByteSlice h =
+      Reserved.Internal.reservedSlot s (by rwa [size_toByteArray_toByteSlice] at h) := by
+  apply Fin.ext
+  simp only [Reserved.Internal.reservedSlot, getElem_toByteArray, size_toByteArray_toByteSlice]
+
+theorem slotOf_toByteArray (s : ByteSlice) : slotOf s.toByteArray.toByteSlice = slotOf s := by
+  unfold slotOf
+  by_cases h : 0 < s.size
+  · have h' : 0 < s.toByteArray.toByteSlice.size := by rwa [size_toByteArray_toByteSlice]
+    rw [dite_eq_left_of_eq_true (eq_true h'), dite_eq_left_of_eq_true (eq_true h),
+      reservedSlot_toByteArray]
+  · have h' : ¬ 0 < s.toByteArray.toByteSlice.size := by rwa [size_toByteArray_toByteSlice]
+    simp only [h, h', dite_false]
+
+/-- The lookup of reserved words reads only the bytes of the slice. -/
+theorem fromBytes_toByteArray (s : ByteSlice) (v : Version) :
+    Reserved.fromBytes? s.toByteArray.toByteSlice v = Reserved.fromBytes? s v := by
+  by_cases h0 : s.size = 0
+  · have h0' : s.toByteArray.toByteSlice.size = 0 := by rw [size_toByteArray_toByteSlice]; exact h0
+    simp only [Reserved.fromBytes?, h0, h0', dite_true]
+  · have h0' : s.toByteArray.toByteSlice.size ≠ 0 := by rw [size_toByteArray_toByteSlice]; exact h0
+    rw [fromBytes_eq _ _ h0', fromBytes_eq _ _ h0, slotOf_toByteArray]
+    simp only [beq_toByteArray]
+
+/-! ## The run with lexemes before it -/
+
+/-- The run with the lexemes `ls` before the ones it finishes, also before an error. -/
+abbrev Prep (ls : List Lexeme) (e : Except (List Lexeme) (St × Location × List Lexeme)) :
+    Except (List Lexeme) (St × Location × List Lexeme) :=
+  withBefore ls e
+
+theorem prep_nil (e : Except (List Lexeme) (St × Location × List Lexeme)) : Prep [] e = e :=
+  withBefore_nil e
+
+theorem prep_prep (ls ls' : List Lexeme) (e : Except (List Lexeme) (St × Location × List Lexeme)) :
+    Prep ls (Prep ls' e) = Prep (ls ++ ls') e :=
+  withBefore_withBefore ls ls' e
 
 end BSmtLib.Proofs.Lexer.VNaiveWRustPort

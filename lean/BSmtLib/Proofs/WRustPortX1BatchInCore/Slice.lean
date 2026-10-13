@@ -36,7 +36,8 @@ theorem coreRel_resumeAt {w x : Core} (h : CoreRel w x) (location : Location)
 
 section
 
-variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Consume H m R E]
+variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Consume H R E]
+  [∀ batch, ConsumeFrom H (BatchCursor batch) m]
   {o₁ o₂ : Ops H m R E}
   {LRel : Ops.Locals H m R E (self := o₁) → Ops.Locals H m R E (self := o₂) → Nat → Nat → Prop}
 
@@ -70,6 +71,7 @@ def StepRel {floor : Option Nat} {lo lo' start : Nat}
 
 variable {floor : Option Nat}
 
+omit [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 /-- A step of the two runs from states that correspond, with the same arrays of contents, in the
 same lexer state. -/
 theorem lexStep_couple (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (start : Nat)
@@ -100,6 +102,7 @@ def runMeasure (input : ByteSlice) (position : Nat)
     | .ok _ => 1
     | .error _ => 0
 
+omit [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 theorem lexSliceRun_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) :
     ∀ k position (fnResult : Except (Failure E) (ControlFlow R)),
       runMeasure input position fnResult = k →
@@ -123,7 +126,7 @@ theorem lexSliceRun_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) :
     cases r <;> cases r' <;> simp only [GoodR'] at hab
     · obtain ⟨rfl, ⟨hcr, hby⟩, hlen⟩ := hab
       rename_i i
-      obtain ⟨result, location, stopAfter⟩ := i
+      obtain ⟨result, span, location, stopAfter⟩ := i
       cases result with
       | ok stop => exact Couple.pure ⟨⟨rfl, rfl⟩, ⟨hcr, hby rfl⟩, trivial⟩
       | error cause => exact Couple.pure ⟨rfl, ⟨hcr, hby rfl⟩, hlen⟩
@@ -160,7 +163,7 @@ theorem lexSliceRun_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) :
       | error e' =>
         simp only at hr
         subst hr
-        obtain ⟨result, location, stopAfter⟩ := e
+        obtain ⟨result, span, location, stopAfter⟩ := e
         cases result with
         | ok stop => exact Couple.pure ⟨⟨rfl, rfl⟩, ⟨hcr, hby⟩, trivial⟩
         | error cause =>
@@ -172,23 +175,25 @@ theorem lexSliceRun_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) :
 
 /-- What the two loops over the stops in a slice give back correspond: the same result, and
 states that correspond with batches without tokens. -/
-def FromRel (a b : Except (Failure E) (ControlFlow R) × Core) : Prop :=
+def FromRel (a b : Except (Failure E) (Option (Located R)) × Core) : Prop :=
   a.1 = b.1 ∧ CoreRel a.2 b.2 ∧ a.2.batch.len = 0
 
+omit [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 theorem lexSliceFrom_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice)
     (initialOffset : Nat) :
     ∀ k (floor : Nat), input.size + 1 - (floor + 1 - initialOffset) = k →
       ∀ hfloor position (fnResult : Except (Failure E) (ControlFlow R))
+      (held : Option (Located R))
       (w x : {c : Core // c.Bound (some floor) 0}), CoreRelB w.val x.val →
       Couple FromRel
         (Lexer.WRustPort.lexSliceFrom (ops := o₁) (H := H) (m := m) input initialOffset floor
-          hfloor position fnResult w)
+          hfloor position fnResult held w)
         (Lexer.WRustPort.lexSliceFrom (ops := o₂) input initialOffset floor hfloor position
-          fnResult x) := by
+          fnResult held x) := by
   intro k
   induction k using Nat.strongRecOn with
   | ind k ih =>
-  intro floor hk hfloor position fnResult w x hwx
+  intro floor hk hfloor position fnResult held w x hwx
   rw [Lexer.WRustPort.lexSliceFrom.eq_def (ops := o₁),
     Lexer.WRustPort.lexSliceFrom.eq_def (ops := o₂)]
   dsimp only
@@ -211,39 +216,55 @@ theorem lexSliceFrom_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice)
     | stopped stop' location' after' =>
       obtain ⟨rfl, rfl⟩ := hex
       have hafter := after floor rfl
+      have hres := coreRel_resumeAt hcr.1 location (location.offset - initialOffset)
+      have hby : (c.val.resumeAt location (location.offset - initialOffset)).batch.bytes =
+          (c'.val.resumeAt location (location.offset - initialOffset)).batch.bytes := by
+        simp only [Lexer.WRustPort.LexerCore.resumeAt, TokenBatch.clear]
+        exact hcr.2
       dsimp only
       cases stop with
       | relex =>
-        refine Couple.dite (fun hres => ?_) fun _ => ?_
-        · refine ih _ ?_ location.offset rfl _ _ _ _ _ ⟨coreRel_resumeAt hcr.1 _ _, ?_⟩
-          · subst hk
-            omega
-          · simp only [Lexer.WRustPort.LexerCore.resumeAt, TokenBatch.clear]
-            exact hcr.2
-        · exact Couple.pure ⟨rfl, coreRel_resumeAt hcr.1 _ _, rfl⟩
-      | finished result => exact Couple.pure ⟨rfl, coreRel_resumeAt hcr.1 _ _, rfl⟩
+        refine Couple.dite (fun hres' => ?_) fun _ => ?_
+        · refine ih _ ?_ location.offset rfl _ _ _ _ _ _ ⟨hres, hby⟩
+          subst hk
+          omega
+        · exact Couple.pure ⟨rfl, hres, rfl⟩
+      | finished result =>
+        refine Couple.dite (fun hres' => ?_) fun _ => ?_
+        · refine ih _ ?_ location.offset rfl _ _ _ _ _ _ ⟨{ hres with holding := rfl }, hby⟩
+          subst hk
+          omega
+        · exact Couple.pure ⟨rfl, { hres with holding := rfl }, rfl⟩
+      | discarded result =>
+        cases result with
+        | some result =>
+          exact Couple.pure ⟨rfl, { hres with discardedFrom := rfl, holding := rfl }, rfl⟩
+        | none => exact Couple.pure ⟨rfl, { hres with discardedFrom := rfl }, rfl⟩
 
+omit [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 /-- `lexSliceFrom_sim` with the offsets of the two runs given by equations. -/
 theorem lexSliceFrom_sim' (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice)
     (initialOffset initialOffset' : Nat) (ei : initialOffset = initialOffset') (floor floor' : Nat)
     (ef : floor = floor') (hfloor hfloor') (position : Nat)
-    (fnResult : Except (Failure E) (ControlFlow R)) (w : {c : Core // c.Bound (some floor) 0})
+    (fnResult : Except (Failure E) (ControlFlow R)) (held : Option (Located R))
+    (w : {c : Core // c.Bound (some floor) 0})
     (x : {c : Core // c.Bound (some floor') 0}) (hwx : CoreRelB w.val x.val) :
     Couple FromRel
       (Lexer.WRustPort.lexSliceFrom (ops := o₁) (H := H) (m := m) input initialOffset floor
-        hfloor position fnResult w)
+        hfloor position fnResult held w)
       (Lexer.WRustPort.lexSliceFrom (ops := o₂) input initialOffset' floor' hfloor' position
-        fnResult x) := by
+        fnResult held x) := by
   subst ei ef
-  exact lexSliceFrom_sim ho input initialOffset _ floor rfl hfloor position fnResult w x hwx
+  exact lexSliceFrom_sim ho input initialOffset _ floor rfl hfloor position fnResult held w x hwx
 
+omit [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 theorem lexSliceInner_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (w x : Core)
     (hwx : CoreRel w x) :
     Couple FromRel (Lexer.WRustPort.lexSliceInner (ops := o₁) (H := H) (m := m) input w)
       (Lexer.WRustPort.lexSliceInner (ops := o₂) input x) := by
   unfold Lexer.WRustPort.lexSliceInner
   dsimp only
-  exact lexSliceFrom_sim' ho input _ _ hwx.offset _ _ (by rw [hwx.offset]) _ _ _ _ _ _
+  exact lexSliceFrom_sim' ho input _ _ hwx.offset _ _ (by rw [hwx.offset]) _ _ _ _ _ _ _
     ⟨{ hwx with
       base := rfl, batch := agree_of_len_zero rfl rfl, capacity := zero_lt_capacity }, rfl⟩
 

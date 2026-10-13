@@ -195,6 +195,11 @@ The reserved-word table and its hash. They are public, in `Internal`, only so th
 of the lexers can read them; they are not a part of the library's interface.
 -/
 
+/-- Every reserved word has a byte. -/
+private theorem reservedWords_nonempty :
+    ∀ entry ∈ reservedWords, 0 < entry.1.toByteSlice.size := by
+  decide +kernel
+
 namespace Internal
 
 /--
@@ -205,12 +210,12 @@ middle byte: no two reserved words share a slot, which a check after
 `reservedTable` ensures when the module is built.
 -/
 @[inline]
-def reservedSlot (symbol : ByteSlice) : Nat :=
+def reservedSlot (symbol : ByteSlice) (nonempty : 0 < symbol.size) : Fin reservedSlots :=
   let len := symbol.size
-  let first := (symbol.get! 0).toNat
-  let last := (symbol.get! (len - 1)).toNat
-  let mid := (symbol.get! (len / 2)).toNat
-  (first + last * 4 + len * 34 + mid * 54) % reservedSlots
+  let first := symbol[0].toNat
+  let last := symbol[len - 1].toNat
+  let mid := symbol[len / 2]'(Nat.div_lt_self nonempty (by decide)) |>.toNat
+  ⟨(first + last * 4 + len * 34 + mid * 54) % reservedSlots, Nat.mod_lt _ (by decide)⟩
 
 /--
 The reserved words by slot, each with the version that made it reserved.
@@ -218,13 +223,20 @@ The reserved words by slot, each with the version that made it reserved.
 The empty word is used as a sentinel value for empty slots.
 -/
 /- LEAN: Rust computes the table in a `static` at compile time. A Lean definition without
-arguments is computed once, when the module is loaded. `Id.run do` runs imperative-looking
-code (`let mut`, `for`) that has no side effects. -/
-def reservedTable : Array (ByteArray × Reserved × Version) := Id.run do
-  let mut table := Array.replicate reservedSlots (ByteArray.empty, Reserved.general .underscore, Version.v2_5)
-  for (word, reserved) in reservedWords do
-    table := table.set! (reservedSlot word.toByteSlice) (word, reserved, reserved.since)
-  table
+arguments is computed once, when the module is loaded. The table is built as a vector of its
+fixed size, so that every write is within it; each word comes with the proof that it has a byte,
+which its slot needs. -/
+def reservedTable : Array (ByteArray × Reserved × Version) :=
+  let empty : Vector (ByteArray × Reserved × Version) reservedSlots :=
+    Vector.replicate reservedSlots (ByteArray.empty, Reserved.general .underscore, Version.v2_5)
+  let table := reservedWords.attach.foldl (init := empty) fun table ⟨(word, reserved), member⟩ =>
+    table.set (reservedSlot word.toByteSlice (reservedWords_nonempty _ member)).val
+      (word, reserved, reserved.since) (Fin.isLt _)
+  table.toArray
+
+/-- The table has a slot for every hash. -/
+theorem size_reservedTable : reservedTable.size = reservedSlots := by
+  simp [reservedTable]
 
 end Internal
 
@@ -235,17 +247,22 @@ it is false; it stands in for the Rust `assert!` in a `const` context. A word th
 a slot would have been overwritten in the table by a later one. -/
 -- the reserved-word hash must be perfect: every word lands in a slot of its own
 #guard reservedWords.all fun (word, _) =>
-  (reservedTable[reservedSlot word.toByteSlice]!).1 == word
+  if h : 0 < word.toByteSlice.size then
+    reservedTable[(reservedSlot word.toByteSlice h).val]?.map (·.1) == some word
+  else
+    false
 
 /-- The reserved word that the symbol spells in the version, if any. -/
 @[inline]
 def fromBytes? (symbol : ByteSlice) (version : Version) : Option Reserved :=
   -- make sure that the symbol is not an empty word, which is a sentinel
-  if symbol.size == 0 then
+  if h : symbol.size = 0 then
     none
   else
     -- the slot holds a reserved word or a sentinel
-    let (word, reserved, since) := reservedTable[reservedSlot symbol]!
+    let slot := reservedSlot symbol (Nat.pos_of_ne_zero h)
+    let (word, reserved, since) :=
+      reservedTable[slot.val]'(by rw [size_reservedTable]; exact slot.isLt)
     -- if the symbol is equal to the reserved word and the version has it, return it
     if word.toByteSlice == symbol && version ≥ since then some reserved else none
 

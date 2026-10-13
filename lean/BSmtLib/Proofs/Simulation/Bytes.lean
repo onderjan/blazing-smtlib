@@ -103,17 +103,20 @@ theorem get!_contentBytes {buf : ContentBuffer} (h : Fits buf) {i : Nat} (hi : i
     Nat.zero_add]
 
 theorem len_push (buf : ContentBuffer) (x : UInt8) : (buf.push x).len = buf.len + 1 := by
-  obtain ⟨bytes, len⟩ := buf
+  obtain ⟨bytes, len, fits⟩ := buf
   simp only [ContentBuffer.push]
   split <;> rfl
 
-theorem fits_push {buf : ContentBuffer} (h : Fits buf) (x : UInt8) : Fits (buf.push x) := by
-  obtain ⟨bytes, len⟩ := buf
-  unfold Fits at h ⊢
-  simp only [ContentBuffer.push] at h ⊢
-  split
-  · simp only [ByteArray.size_set!]; omega
-  · simp only [ByteArray.size_push]; omega
+theorem fits_push {buf : ContentBuffer} (_ : Fits buf) (x : UInt8) : Fits (buf.push x) :=
+  (buf.push x).fits
+
+/-- A write of a byte within the array is the write that checks the bounds. -/
+theorem set_eq_set! (bytes : ByteArray) (i : Nat) (v : UInt8) (h : i < bytes.size) :
+    bytes.set i v h = bytes.set! i v := by
+  obtain ⟨data⟩ := bytes
+  simp only [ByteArray.set, ByteArray.set!, Array.set!_eq_setIfInBounds, Array.setIfInBounds]
+  simp only [ByteArray.size] at h
+  simp [h]
 
 theorem contentBytes_push {buf : ContentBuffer} (h : Fits buf) (x : UInt8) :
     contentBytes (buf.push x) = (contentBytes buf).push x := by
@@ -126,20 +129,20 @@ theorem contentBytes_push {buf : ContentBuffer} (h : Fits buf) (x : UInt8) :
       size_contentBytes h]
     have h' := h
     unfold Fits at h'
-    obtain ⟨bytes, len⟩ := buf
+    obtain ⟨bytes, len, fits⟩ := buf
     simp only at h' hi ⊢
     by_cases hil : i = len
     · subst hil
       simp only [ContentBuffer.push, ite_true]
       split
-      · exact ByteArray.getElem!_set!_self _ _ _ ‹_›
-      · rw [show i = bytes.size by omega]; exact ByteArray.getElem!_push_eq _ _
+      · dsimp only; rw [set_eq_set!]; exact ByteArray.getElem!_set!_self _ _ _ ‹_›
+      · dsimp only; rw [show i = bytes.size by omega]; exact ByteArray.getElem!_push_eq _ _
     · simp only [hil, ite_false]
       rw [get!_contentBytes h (by simp only; omega)]
       simp only [ContentBuffer.push]
       split
-      · exact ByteArray.getElem!_set!_ne _ _ _ _ (Ne.symm hil)
-      · exact ByteArray.getElem!_push_lt _ _ _ (by omega)
+      · dsimp only; rw [set_eq_set!]; exact ByteArray.getElem!_set!_ne _ _ _ _ (Ne.symm hil)
+      · dsimp only; exact ByteArray.getElem!_push_lt _ _ _ (by omega)
 
 /-- What a range of an array that the content is extended from must satisfy: it ends within the
 array, or it is empty. -/
@@ -160,15 +163,25 @@ theorem size_extract_of_rangeOk {source : ByteArray} {start stop : Nat}
   unfold RangeOk at h
   omega
 
-theorem len_extendFrom (buf : ContentBuffer) (source : ByteArray) (start stop : Nat) :
-    (buf.extendFrom source start stop).len = buf.len + (stop - start) := rfl
+/-- Over a range that is within the array or empty, every byte of it is copied. -/
+theorem copiedCount_of_rangeOk {source : ByteArray} {start stop : Nat}
+    (h : RangeOk source start stop) :
+    ContentBuffer.copiedCount source start stop = stop - start := by
+  unfold ContentBuffer.copiedCount
+  unfold RangeOk at h
+  omega
+
+theorem len_extendFrom (buf : ContentBuffer) {source : ByteArray} {start stop : Nat}
+    (hr : RangeOk source start stop) :
+    (buf.extendFrom source start stop).len = buf.len + (stop - start) :=
+  congrArg (buf.len + ·) (copiedCount_of_rangeOk hr)
 
 theorem bytes_extendFrom {buf : ContentBuffer} {source : ByteArray}
     {start stop : Nat} (hr : RangeOk source start stop) :
     (buf.extendFrom source start stop).bytes =
       contentBytes buf ++ source.extract start stop ++
         buf.bytes.extract (buf.len + (stop - start)) buf.bytes.size := by
-  obtain ⟨bytes, len⟩ := buf
+  obtain ⟨bytes, len, fits⟩ := buf
   simp only [ContentBuffer.extendFrom, ByteArray.copySlice_eq_append, contentBytes,
     extract_sub]
   congr 2
@@ -178,20 +191,17 @@ theorem bytes_extendFrom {buf : ContentBuffer} {source : ByteArray}
     omega
   rw [this]
 
-theorem fits_extendFrom {buf : ContentBuffer} (h : Fits buf) {source : ByteArray}
-    {start stop : Nat} (hr : RangeOk source start stop) :
-    Fits (buf.extendFrom source start stop) := by
-  unfold Fits
-  rw [bytes_extendFrom hr, len_extendFrom, ByteArray.size_append, ByteArray.size_append,
-    size_contentBytes h, size_extract_of_rangeOk hr]
-  omega
+theorem fits_extendFrom {buf : ContentBuffer} (_ : Fits buf) {source : ByteArray}
+    {start stop : Nat} (_ : RangeOk source start stop) :
+    Fits (buf.extendFrom source start stop) :=
+  (buf.extendFrom source start stop).fits
 
 theorem contentBytes_extendFrom {buf : ContentBuffer} (h : Fits buf) {source : ByteArray}
     {start stop : Nat} (hr : RangeOk source start stop) :
     contentBytes (buf.extendFrom source start stop) =
       contentBytes buf ++ source.extract start stop := by
   conv => lhs; unfold contentBytes
-  rw [bytes_extendFrom hr, len_extendFrom]
+  rw [bytes_extendFrom hr, len_extendFrom _ hr]
   apply ByteArray.extract_append_eq_left
   rw [ByteArray.size_append, size_contentBytes h, size_extract_of_rangeOk hr]
 
@@ -340,6 +350,13 @@ theorem get!_toByteArray (s : ByteSlice) (i : Nat) :
       ByteSlice.size, ByteSlice.stop, ByteArray.getElem_extract]
   · have h' : ¬ i < s.toByteArray.toByteSlice.size := by omega
     simp only [h, h', dite_false]
+
+theorem getElem_toByteArray (s : ByteSlice) (i : Nat) (h : i < s.toByteArray.toByteSlice.size) :
+    s.toByteArray.toByteSlice[i] = s[i]'(by rwa [size_toByteArray_toByteSlice] at h) := by
+  have e := get!_toByteArray s i
+  have h' : i < s.size := by rwa [size_toByteArray_toByteSlice] at h
+  simp only [ByteSlice.get!, ByteSlice.getD, h, h', dite_true] at e
+  exact e
 
 theorem beq_toByteArray (w s : ByteSlice) : (w == s.toByteArray.toByteSlice) = (w == s) := by
   show ByteSlice.beq _ _ = ByteSlice.beq _ _

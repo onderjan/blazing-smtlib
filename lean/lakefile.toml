@@ -1,5 +1,6 @@
 name = "blazing-smtlib"
-defaultTargets = ["BSmtLib", "BSmtLibSpec", "BSmtLibSpecChecks", "BSmtLibProofs"]
+defaultTargets = ["BSmtLib", "BSmtLibSpec", "BSmtLibSpecChecks", "BSmtLibProofs", "BSmtLibParserProofs",
+  "BSmtLibEndToEnd"]
 
 [[lean_lib]]
 name = "BSmtLib"
@@ -23,3 +24,13 @@ roots = ["BSmtLib.Proofs"]
 [[lean_exe]]
 name = "bench-parse"
 root = "Benches.Parse"
+
+# the proofs of the parser against the specification's traversal
+[[lean_lib]]
+name = "BSmtLibParserProofs"
+roots = ["BSmtLib.ParserProofs"]
+
+# the composition of the lexer and parser proofs, from characters to the traversal's calls
+[[lean_lib]]
+name = "BSmtLibEndToEnd"
+roots = ["BSmtLib.EndToEnd"]

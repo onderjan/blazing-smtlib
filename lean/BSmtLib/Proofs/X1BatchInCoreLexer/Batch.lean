@@ -48,10 +48,11 @@ theorem pushLocated_congr {batch : TokenBatch} {ty : TokenCategory} {a a' b b' :
 
 section
 
-variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Consume H m R E]
+variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Consume H R E]
+  [∀ batch, ConsumeFrom H (BatchCursor batch) m]
   {floor : Option Nat} {low : Nat} (start : Nat) (b : USize)
 
-omit [Consume H m R E] in
+omit [Consume H R E] [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 theorem leave_sim (offset : Nat) (base position : USize) (batch : TokenBatch)
     (ok : PosOk start base position) (hframe hframe' hbatch hbatch') :
     SimP (BaseIs b) (fun _ => BaseIs position) (boundMap start (floor := floor) (low := low)) id
@@ -63,7 +64,7 @@ theorem leave_sim (offset : Nat) (base position : USize) (batch : TokenBatch)
   refine modifyBound_sim start _ _ (fun c _ => ?_) fun _ _ => rfl
   simp only [coreMap, ok.sub]
 
-omit [Consume H m R E] in
+omit [Consume H R E] [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 theorem leavePending_sim (state : Lexer.LexerState) (s : Location) (offset : Nat)
     (base position : USize) (batch : TokenBatch) (ok : PosOk start base position)
     (hframe hframe' hbatch hbatch' hstart hstart' hfloor hfloor') :
@@ -162,7 +163,7 @@ theorem pushBorrowed_sim (slice : ByteSlice) (batch : TokenBatch) (offset : Nat)
     dsimp only [heldMap]
     exact pushLocated_congr (start_add_ix hcs).symm (start_add_ix hce).symm el
 
-omit [Consume H m R E] in
+omit [Consume H R E] [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 /-- `leave`, with the indices of the second lexer given by equations. -/
 theorem leave_sim' (offset : Nat) (base position : USize) (batch : TokenBatch)
     (base' position' : Nat) (eb : ix start base = base') (ep : ix start position = position')
@@ -174,7 +175,7 @@ theorem leave_sim' (offset : Nat) (base position : USize) (batch : TokenBatch)
   subst eb ep
   exact leave_sim start b offset base position batch ok _ _ _ _
 
-omit [Consume H m R E] in
+omit [Consume H R E] [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 /-- `leavePending`, with the indices of the second lexer given by equations. -/
 theorem leavePending_sim' (state : Lexer.LexerState) (s : Location) (offset : Nat)
     (base position : USize) (batch : TokenBatch) (base' position' : Nat)
@@ -225,7 +226,7 @@ theorem pushFast_sim' (slice : ByteSlice) (batch : TokenBatch) (u : Unit) (offse
   exact pushFast_sim b slice batch u offset base ty cs ce s e emit _ _ hcs hce oks oke
     _ _ _ _ _ _ _ _
 
-omit [Consume H m R E] in
+omit [Consume H R E] [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 theorem storeUnfinishedSymbolRun_sim (slice : ByteSlice) (h : slice.stop < USize.size)
     (entry : UInt8) (offset : Nat) (base index after runEndAt : USize) (batch : TokenBatch)
     (oki : PosOk slice.start base index) (oka : PosOk slice.start base after)

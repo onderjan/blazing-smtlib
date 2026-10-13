@@ -44,15 +44,16 @@ theorem eq_wb {c : ZCore} {x : XCore} (h : Rel c x) : x = wb x.base c := by
 /-- The states are related if their fields other than the base are equal. -/
 theorem rel_mk {c : ZCore} {x : XCore} (h1 : x.version = c.version)
     (h2 : x.initialVersion = c.initialVersion) (h3 : x.state = c.state)
-    (h4 : x.discard = c.discard) (h5 : x.recovers = c.recovers)
+    (h4 : x.discardedFrom = c.discardedFrom) (h4' : x.holding = c.holding)
+    (h5 : x.recovers = c.recovers)
     (h6 : x.consumedDepth = c.consumedDepth) (h7 : x.lexedDepth = c.lexedDepth)
     (h8 : x.recoveryState = c.recoveryState) (h9 : x.tokenStart = c.tokenStart)
     (h10 : x.tokenContent = c.tokenContent) (h11 : x.offset = c.offset) (h12 : x.line = c.line)
     (h13 : x.lineStart = c.lineStart) (h14 : x.batch = c.batch) : Rel c x := by
   obtain ⟨⟩ := x
   obtain ⟨⟩ := c
-  simp only at h1 h2 h3 h4 h5 h6 h7 h8 h9 h10 h11 h12 h13 h14
-  subst h1 h2 h3 h4 h5 h6 h7 h8 h9 h10 h11 h12 h13 h14
+  simp only at h1 h2 h3 h4 h4' h5 h6 h7 h8 h9 h10 h11 h12 h13 h14
+  subst h1 h2 h3 h4 h4' h5 h6 h7 h8 h9 h10 h11 h12 h13 h14
   rfl
 
 theorem rel_of_eq {c : ZCore} {x x' : XCore} (h : Rel c x) (e : zb x' = zb x) : Rel c x' :=

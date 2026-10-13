@@ -1,4 +1,4 @@
-import BSmtLib.Proofs.WRustPortX1BatchInCore.Fed
+import BSmtLib.Proofs.WRustPortX1BatchInCore.Handed
 
 /-!
 # The Rust port and the lexer with the batch in its state lex alike
@@ -38,8 +38,6 @@ length of their batches (`Simulation.ConsumesAlike`), as the adapter's consumer 
   `Lexer.WRustPort.pendingLexEof_sim_x1BatchInCore`: the constructed lexers correspond, and the
   calls of the two lexers on lexers that correspond give the same results with lexers that
   correspond again.
-- `Lexer.WRustPort.fedInput_eq_fedInput_x1BatchInCore`: the spec's view, of slices and then, if
-  the input has ended, the end of the input.
 
 The proof, in parts:
 
@@ -53,9 +51,7 @@ The proof, in parts:
 - `WRustPortX1BatchInCore.HandOver`, `Flush`, `Instance`: the operations of the two lexers
   simulate each other;
 - `WRustPortX1BatchInCore.Api`: the calls of the two lexers;
-- `WRustPortX1BatchInCore.Collector`, `WRustPortX1BatchInCore.Handed` and
-  `WRustPortX1BatchInCore.Fed`: the adapter's consumer reads only below the length, the
-  constructed lexers, and what the adapter records.
+- `WRustPortX1BatchInCore.Handed`: the constructed lexers.
 -/
 
 namespace BSmtLib.Proofs.Lexer
@@ -65,9 +61,11 @@ open BSmtLib.Proofs.Simulation (ConsumesAlike MCouple)
 
 section
 
-variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Consume H m R E]
+variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Consume H R E]
+  [∀ batch, ConsumeFrom H (BatchCursor batch) m]
   {recovery : Recovery}
 
+omit [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 /-- The code of the Rust port over two structures of operations that simulate each other runs
 alike: the step of a call on a slice and the step of a call at the end of the input, run on
 lexers that correspond, give the same result with lexers that correspond again, whether the call
@@ -124,13 +122,15 @@ end
 
 /-- A lexer constructed for the Rust port and the lexer with the batch in its state, which have
 the same constructor, corresponds to itself. -/
-theorem WRustPort.new_sim_x1BatchInCore {H : Type} (consumer : H) (version : Version) :
+theorem WRustPort.new_sim_x1BatchInCore {H R E : Type} [Consume H R E] (consumer : H)
+    (version : Version) :
     LexRel (WRustPort.Lexer.new consumer version) (WRustPort.Lexer.new consumer version) :=
   new_rel consumer version
 
 /-- A lexer that recovers constructed for the Rust port and the lexer with the batch in its
 state corresponds to itself. -/
-theorem WRustPort.newRecovering_sim_x1BatchInCore {H : Type} {m : Type → Type} [Recover H m]
+theorem WRustPort.newRecovering_sim_x1BatchInCore {H R E : Type} [Consume H R E] {m : Type → Type}
+    [Recover H m]
     (consumer : H) (version : Version) :
     LexRel (WRustPort.Lexer.newRecovering (m := m) consumer version)
       (WRustPort.Lexer.newRecovering (m := m) consumer version) :=
@@ -138,7 +138,8 @@ theorem WRustPort.newRecovering_sim_x1BatchInCore {H : Type} {m : Type → Type}
 
 section
 
-variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Consume H m R E]
+variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Consume H R E]
+  [∀ batch, ConsumeFrom H (BatchCursor batch) m]
   {recovery : Recovery}
 
 /-- The Rust port and the lexer with the batch in its state, with the same consumer, which reads
@@ -147,7 +148,7 @@ correspond: the same result, with lexers that correspond again. -/
 theorem WRustPort.lexSlice_sim_x1BatchInCore (hcons : ConsumesAlike H m R E)
     [LexRecovery recovery H m] (w x : WRustPort.Lexer H recovery) (h : LexRel w x)
     (slice : ByteSlice) :
-    MCouple (ResRel (AfterRel recovery)) (WRustPort.Lexer.lexSlice (R := R) (E := E) w slice)
+    MCouple (ResRel LexRel (AfterRel recovery)) (WRustPort.Lexer.lexSlice w slice)
       (X1BatchInCore.Lexer.lexSlice x slice) :=
   lexSlice_couple hcons w x h slice
 
@@ -156,7 +157,7 @@ the cursors only below the length of their batches, lex the end of the input ali
 that correspond: the same result, with lexers that correspond again. -/
 theorem WRustPort.lexEof_sim_x1BatchInCore (hcons : ConsumesAlike H m R E)
     [LexRecovery recovery H m] (w x : WRustPort.Lexer H recovery) (h : LexRel w x) :
-    MCouple (ResRel (AfterEofRel recovery)) (WRustPort.Lexer.lexEof (R := R) (E := E) w)
+    MCouple (ResRel EofRel (AfterEofRel recovery)) (WRustPort.Lexer.lexEof w)
       (X1BatchInCore.Lexer.lexEof x) :=
   lexEof_couple hcons w x h
 
@@ -164,19 +165,11 @@ theorem WRustPort.lexEof_sim_x1BatchInCore (hcons : ConsumesAlike H m R E)
 lex the end of the input again alike. -/
 theorem WRustPort.pendingLexEof_sim_x1BatchInCore (hcons : ConsumesAlike H m R E) [Recover H m]
     (w x : WRustPort.Lexer.PendingEof H) (h : LexRel w.lexer x.lexer) :
-    MCouple (ResRel (recovery := .recovering) LexRel)
-      (WRustPort.Lexer.PendingEof.lexEof (R := R) (E := E) w)
+    MCouple (ResRel (EofRel (recovery := .recovering)) LexRel)
+      (WRustPort.Lexer.PendingEof.lexEof w)
       (X1BatchInCore.Lexer.PendingEof.lexEof x) :=
   pendingLexEof_couple hcons w x h
 
 end
-
-/-- The Rust port and the lexer with the batch in its state, fed by the adapter slices and then,
-if the input has ended, the end of the input, hand over the same tokens and fail alike. -/
-theorem WRustPort.fedInput_eq_fedInput_x1BatchInCore (version : Spec.Lexicon.Version)
-    (slices : List Spec.Lexicon.Chars) (ended : Bool) :
-    Adapter.fedInput Adapter.WRustPort.ops version slices ended =
-      Adapter.fedInput Adapter.X1BatchInCore.ops version slices ended :=
-  fedInput_eq version slices ended
 
 end BSmtLib.Proofs.Lexer

@@ -14,7 +14,8 @@ namespace BSmtLib.Proofs.X1BatchInCoreLexer
 
 section
 
-variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] {R E : Type} [Consume H m R E]
+variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] {R E : Type} [Consume H R E]
+  [∀ batch, ConsumeFrom H (BatchCursor batch) m]
 
 theorem lexEofInner_couple :
     Coupled Eq (BSmtLib.Lexer.Internal.lexEofInner (H := H) (m := m) (R := R) (E := E))
@@ -38,10 +39,6 @@ theorem lexEofStep_couple (abandon recover : Location → StateT H m Unit) :
   unfold BSmtLib.Lexer.Internal.lexEofStep Lexer.WRustPort.lexEofStep
   refine Coupled.bind Coupled.get fun c x hx => ?_
   rw [eq_wb hx]
-  refine Coupled.ite Iff.rfl (fun _ => Coupled.bind reset_couple fun _ _ _ => Coupled.pure rfl)
-    fun _ => ?_
-  refine Coupled.bind Coupled.get fun c x hx => ?_
-  rw [eq_wb hx]
   dsimp only
   refine Coupled.ite Iff.rfl (fun _ => ?_) fun _ => ?_
   refine Coupled.bind (Coupled.modify fun c x hx => ?_) fun _ _ _ => ?_
@@ -58,9 +55,9 @@ end
 
 section
 
-variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] {R E : Type} [Consume H m R E]
+variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] {R E : Type} [Consume H R E]
+  [∀ batch, ConsumeFrom H (BatchCursor batch) m]
 
-/-- A part of a slice ends where the slice does or before. -/
 theorem stop_slice_lt {slice : ByteSlice} (h : slice.stop < USize.size) (k : Nat) :
     (slice.slice k).stop < USize.size := by
   have := slice.start_le_stop
@@ -78,29 +75,26 @@ theorem stop_slice_lt {slice : ByteSlice} (h : slice.stop < USize.size) (k : Nat
 
 set_option hygiene false in
 /-- The end of `lexSliceStep`: the inner step on the slice, which ends below `USize.size` by
-`hb`, then the failure or the discarding after a break. -/
+`hb`, then the failure, if it fails. -/
 local macro "slice_tail " hb:term:max : tactic => `(tactic| (
-  refine Coupled.bind Coupled.get fun c x hx => ?_
-  rw [eq_wb hx, ofSlice?_eq _ $hb]
-  dsimp only
-  refine Coupled.bind (executeStep_couple (lexSliceInner_couple _ $hb)) fun a b e => ?_
+  unfold BSmtLib.Lexer.Internal.lexFitting
+  rw [ofSlice_eq _ $hb]
+  refine Coupled.bind (lexSliceInner_couple _ $hb) fun a b e => ?_
   subst e
-  rcases a with failure | flow
+  rcases a with failure | held
   · exact Coupled.bind (failCall_couple _ _ _) fun _ _ e => Coupled.pure (by rw [e])
-  · cases flow
-    · exact Coupled.pure rfl
-    · refine Coupled.bind (Coupled.modify fun c x hx => by rw [eq_wb hx]; rfl) fun _ _ _ => ?_
-      exact Coupled.bind (discardBytes_couple _) fun _ _ _ => Coupled.pure rfl))
+  · exact Coupled.pure rfl))
 
 theorem lexSliceStep_couple (abandon recover : Location → StateT H m Unit) (slice : ByteSlice)
     (h : slice.stop < USize.size) :
     Coupled Eq (BSmtLib.Lexer.Internal.lexSliceStep (R := R) (E := E) abandon recover slice)
       (Lexer.WRustPort.lexSliceStep abandon recover slice) := by
-  unfold BSmtLib.Lexer.Internal.lexSliceStep Lexer.WRustPort.lexSliceStep
+  unfold BSmtLib.Lexer.Internal.lexSliceStep
+  rw [dite_eq_left_of_eq_true (eq_true h)]
+  unfold BSmtLib.Lexer.Internal.lexSliceFitting Lexer.WRustPort.lexSliceStep
   refine Coupled.bind Coupled.get fun c x hx => ?_
   rw [eq_wb hx]
-  refine Coupled.ite Iff.rfl (fun _ => Coupled.bind (discardBytes_couple _) fun _ _ _ =>
-    Coupled.pure rfl) fun _ => ?_
+  refine Coupled.ite Iff.rfl (fun _ => Coupled.pure rfl) fun _ => ?_
   refine Coupled.bind Coupled.get fun c x hx => ?_
   rw [eq_wb hx]
   dsimp only

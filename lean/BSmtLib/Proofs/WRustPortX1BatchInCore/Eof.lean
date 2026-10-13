@@ -18,11 +18,12 @@ open BSmtLib.Proofs.Lexer.WRustPort (Ops)
 
 section
 
-variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Consume H m R E]
+variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Consume H R E]
+  [∀ batch, ConsumeFrom H (BatchCursor batch) m]
   {o₁ o₂ : Ops H m R E}
   {LRel : Ops.Locals H m R E (self := o₁) → Ops.Locals H m R E (self := o₂) → Nat → Nat → Prop}
 
-omit [Consume H m R E] in
+omit [Consume H R E] [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 /-- From states that correspond, whose batches have no tokens, with any line and line start. -/
 theorem SimR.of_sr0 {floor : Option Nat} {low : Nat} {α β : Type}
     {Er : St floor low → St floor low → Prop} {Q : α → β → St floor low → St floor low → Prop}
@@ -48,14 +49,17 @@ batches without tokens. -/
 def CallRel (a b : Except (Failure E) (ControlFlow R) × Core) : Prop :=
   a.1 = b.1 ∧ CoreRel a.2 b.2 ∧ a.2.batch.len = 0
 
+omit [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 theorem lexEofInner_sim (ho : OpsSim o₁ o₂ LRel) (w x : Core) (hwx : CoreRel w x)
     (hlen : w.batch.len = 0) :
     Couple CallRel (Lexer.WRustPort.lexEofInner (ops := o₁) (H := H) (m := m) (R := R) (E := E) w)
       (Lexer.WRustPort.lexEofInner (ops := o₂) x) := by
-  obtain ⟨version, initialVersion, state, discard, recovers, consumedDepth, lexedDepth,
+  obtain ⟨version, initialVersion, state, discardedFrom, holding, recovers, consumedDepth,
+    lexedDepth,
     recoveryState, tokenStart, tokenContent, offset, base, line, lineStart, batch, tokenStarted,
     batchEnded⟩ := w
-  obtain ⟨version', initialVersion', state', discard', recovers', consumedDepth', lexedDepth',
+  obtain ⟨version', initialVersion', state', discardedFrom', holding', recovers', consumedDepth',
+    lexedDepth',
     recoveryState', tokenStart', tokenContent', offset', base', line', lineStart', batch',
     tokenStarted', batchEnded'⟩ := x
   have hoffset : offset = offset' := hwx.offset
@@ -75,7 +79,7 @@ theorem lexEofInner_sim (ho : OpsSim o₁ o₂ LRel) (w x : Core) (hwx : CoreRel
     · cases state <;> dsimp only
       case comment =>
         simp only [Lexer.WRustPort.consumesWhitespaceAndComments, pure_bind]
-        generalize Consume.consumesWhitespaceAndComments (H := H) = cw
+        generalize Consume.isConcrete (H := H) = cw
         cases cw <;> simp only [Bool.false_eq_true, ↓reduceIte]
         · exact SimR.pure fun _ _ h => h
         · eof_stored
@@ -95,9 +99,10 @@ theorem lexEofInner_sim (ho : OpsSim o₁ o₂ LRel) (w x : Core) (hwx : CoreRel
         unfold Lexer.WRustPort.finishSimpleSymbol
         eof_stored
       case whitespace | quotedSymbolClosed => eof_stored
-    · split
-      · exact SimR.pure fun _ _ h => ⟨h.1.1, h.2⟩
-      · exact SimR.throw rfl fun _ _ h => h
+    · split <;> first
+      | exact SimR.pure fun _ _ h => ⟨h.1.1, h.2⟩
+      | exact SimR.throw rfl fun _ _ h => h
+      | exact modifyCore_sim _ _ fun _ _ h => ⟨{ h.1.1 with discardedFrom := rfl }, h.2⟩
     · refine SimR.intro fun s₀ t₀ hst => SimR.pre (fun _ _ h => ?_)
         (P := SRE s₀.val.line s₀.val.lineStart) (SimR.bind (startToken_sim s₀.val.line
           s₀.val.lineStart NoTokens _ _ _ _ _) fun a b => ?_)
@@ -121,7 +126,7 @@ theorem lexEofInner_sim (ho : OpsSim o₁ o₂ LRel) (w x : Core) (hwx : CoreRel
     cases r <;> cases r' <;> simp only [GoodR'] at hab
     · obtain ⟨rfl, ⟨hcr, -⟩, hz⟩ := hab
       rename_i i
-      obtain ⟨result, location, stopAfter⟩ := i
+      obtain ⟨result, span, location, stopAfter⟩ := i
       dsimp only
       cases result with
       | error cause => exact Couple.pure ⟨rfl, hcr, hz⟩
@@ -129,6 +134,7 @@ theorem lexEofInner_sim (ho : OpsSim o₁ o₂ LRel) (w x : Core) (hwx : CoreRel
         cases stop with
         | relex => exact Couple.pure ⟨rfl, hcr, hz⟩
         | finished r => exact Couple.pure ⟨rfl, hcr, hz⟩
+        | discarded r => cases r <;> exact Couple.pure ⟨rfl, hcr, hz⟩
     · exact Couple.pure ⟨rfl, hab.1, hab.2⟩
 
 end

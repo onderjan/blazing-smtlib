@@ -10,23 +10,28 @@ a numeral, which may go on to a fraction.
 namespace BSmtLib.Proofs.Lexer.VNaiveWRustPort
 
 open BSmtLib.Proofs.Adapter VNaive BSmtLib.Proofs.Simulation
+open Spec.Lexer (Handed)
 open Lexer.Slice (get? get)
 
 section
 
 variable {floor : Option Nat} {low : Nat}
+variable {C : Spec.Lexer.Consumer} {hd : Bool} {iv : Version}
 
 /-- The arm of `lexStep` for the base selection after a `#`. -/
 theorem arm_baseSelection (v : Version) (input : ByteSlice) (start : Nat)
     (hstart : start < input.size) (tokenStart : Location)
-    (h : Lexer.WRustPort.Started floor low tokenStart) (s : BS floor low) (coll : Collector)
+    (h : Lexer.WRustPort.Started floor low tokenStart) (s : BS floor low) (coll : List Handed)
     (p : Pending) (location : Location) (held : List Lexeme)
-    (hpre : StepPre v input (.token p) location held start s.val)
+    (hpre : StepPre C v hd iv input (.token p) location held start s.val)
     (hts : tokenStart = s.val.tokenStart) (hstate : s.val.state = .baseSelection) :
-    WP (Lexer.WRustPort.lexBaseSelection (H := Collector) (m := Id) (R := Empty) (E := Unit)
-        input start tokenStart h) s coll
-      (fun r s' coll' => ArmPost v input (.token p) location start coll held r.1 s'.val coll')
-      (fun _ s' coll' => StepFails v input (.token p) location start coll held s'.val coll') := by
+    WP (Lexer.WRustPort.lexBaseSelection (H := Answering C) (m := AnswerM) (R := C.Result)
+        (E := Option C.Error)
+        input start hstart tokenStart h) s coll
+      (fun r s' coll' => ArmPost C v hd iv input (.token p) location start s.val.version coll held
+          r.1 s'.val coll')
+      (fun e s' coll' => StepFails C v hd iv input (.token p) location start s.val.version coll held
+          e s'.val coll') := by
   obtain ⟨hps, hm, hcont⟩ := token_agrees hpre.agrees hstate
   have hloc := hpre.loc
   obtain ⟨mode, pstart, pcontent⟩ := p
@@ -46,7 +51,7 @@ theorem arm_baseSelection (v : Version) (input : ByteSlice) (start : Nat)
       ⟨⟨by show pstart = tokenStart; rw [hps, hts], rfl, hcont⟩, (show Fits s.val.tokenContent from
           token_fits hpre.agrees)⟩
       (hloc.afterByte (Nat.le_of_eq hpre.base) (b := input[start]) (by rw [hx']; decide)) ?_
-    rw [feedFrom_step hstart (byteStep_token_pending v (by rw [hx']; rfl)), prep_nil]
+    rw [feedFrom_step hstart (byteStep_token_pending v C.concrete (by rw [hx']; rfl)), prep_nil]
   · intro hx
     apply wp_ite
     · intro hb'
@@ -59,18 +64,20 @@ theorem arm_baseSelection (v : Version) (input : ByteSlice) (start : Nat)
         ⟨⟨by show pstart = tokenStart; rw [hps, hts], rfl, hcont⟩, (show Fits s.val.tokenContent
             from token_fits hpre.agrees)⟩
         (hloc.afterByte (Nat.le_of_eq hpre.base) (b := input[start]) (by rw [hb'']; decide)) ?_
-      rw [feedFrom_step hstart (byteStep_token_pending v (by rw [hb'']; rfl)), prep_nil]
+      rw [feedFrom_step hstart (byteStep_token_pending v C.concrete (by rw [hb'']; rfl)), prep_nil]
     · intro hb'
       have hx' : input[start] ≠ 120 := by simpa using hx
       have hb'' : input[start] ≠ 98 := by simpa using hb'
-      have herr : ∃ f, advance false ⟨.hash, pstart, pcontent⟩ location input[start] = .error f :=
+      have herr : ∃ f, advance C.concrete ⟨.hash, pstart, pcontent⟩ location
+          input[start] = .error f :=
         by
         simp [advance, hx', hb'']
       obtain ⟨f, hf⟩ := herr
       unfold Lexer.WRustPort.errorAt Lexer.WRustPort.errorWith
       wp_walk
-      refine stepFails_here ?_ hpre.holds hpre.fixed.1 hpre.fixed.2
-      rw [feedFrom_advance_error v input hstart hf]
+      refine stepFails_here ?_ hpre.holds
+        ⟨hpre.fixed.1, hpre.fixed.2, hpre.fixed.3, hpre.fixed.4, hpre.fixed.5, hpre.fixed.6⟩ rfl
+      rw [feedFrom_advance_error v C.concrete input hstart hf]
 
 theorem stored_last_append (a b : ByteArray) (hb : b.size ≠ 0) :
     lastOf (a ++ b) = lastOf b := by
@@ -117,26 +124,30 @@ was at the fraction `q` at `locq`. -/
 theorem fractionFrom_wp (v : Version) (input : ByteSlice) (j : Nat) (hj : j ≤ input.size)
     (start0 : Nat) (hstart0 : start0 < input.size) (hj0 : start0 ≤ j) (tokenStart : Location)
     (base : Nat) (h : Lexer.WRustPort.Started floor low tokenStart) (s : BS floor low)
-    (coll : Collector) (st0 : St) (loc0 : Location) (held : List Lexeme) (q : Pending)
-    (locq : Location) (hfix : Fixed v s.val) (hbase0 : s.val.base = start0)
+    (coll : List Handed) (st0 : St) (loc0 : Location) (held : List Lexeme) (q : Pending)
+    (locq : Location) (hfix : Fixed v hd iv s.val) (hbase0 : s.val.base = start0)
     (hholds : Holds s.val.batch held) (hbytes : s.val.batch.bytes = input.byteArray)
     (hloc : LocAt s.val s.val.offset s.val.base j locq) (hlow : low = s.val.offset)
     (hb : base = s.val.base)
     (hq : q.mode = .fraction (fractionChecks (contentBytes s.val.tokenContent))) (hqs : q.start =
         tokenStart)
     (hqc : q.content = contentBytes s.val.tokenContent) (hfits : Fits s.val.tokenContent)
-    (hanchor : feedFrom v input st0 loc0 start0 = feedFrom v input (.token q) locq j) :
-    WP (Lexer.WRustPort.lexFractionFrom (H := Collector) (m := Id) (R := Empty) (E := Unit)
+    (hanchor : feedFrom v C.concrete input st0 loc0 start0 = feedFrom v C.concrete input
+        (.token q) locq j) :
+    WP (Lexer.WRustPort.lexFractionFrom (H := Answering C) (m := AnswerM) (R := C.Result)
+        (E := Option C.Error)
         input j tokenStart base h) s coll
-      (fun r s' coll' => ArmPost v input st0 loc0 start0 coll held r.1 s'.val coll')
-      (fun _ s' coll' => StepFails v input st0 loc0 start0 coll held s'.val coll') := by
+      (fun r s' coll' => ArmPost C v hd iv input st0 loc0 start0 s.val.version coll held
+          r.1 s'.val coll')
+      (fun e s' coll' => StepFails C v hd iv input st0 loc0 start0 s.val.version coll held e
+          s'.val coll') := by
   have hJ : Lexer.Slice.runEnd input j Lexer.RUN_DIGIT = runEnd input isDigit j :=
     runEnd_eq endsRun_digit _ _
   have hle := le_runEnd input isDigit j
   have hle' := runEnd_le input isDigit j hj
   have hstop := fun h => runEnd_stop input isDigit j h
   have hmem := runEnd_mem input isDigit j
-  have hA := feedFrom_fraction v input j q locq _ hq hj
+  have hA := feedFrom_fraction v C.concrete input j q locq _ hq hj
   rw [← hJ] at hA hle hle' hstop hmem
   have hext : contentBytes (s.val.tokenContent.extendFrom input.byteArray (input.start + j)
       (input.start + Lexer.Slice.runEnd input j Lexer.RUN_DIGIT)) =
@@ -145,8 +156,9 @@ theorem fractionFrom_wp (v : Version) (input : ByteSlice) (j : Nat) (hj : j ≤ 
     contentBytes_extendSlice input hfits (.inl hle')
   have hfits' := fits_extendSlice input hfits (a := j) (.inl hle')
   have hfc := fractionChecks_run input (contentBytes s.val.tokenContent) hle hle' hmem
-  have hA' : feedFrom v input st0 loc0 start0 =
-      feedFrom v input (.token ⟨.fraction (fractionChecks (contentBytes s.val.tokenContent ++
+  have hA' : feedFrom v C.concrete input st0 loc0 start0 =
+      feedFrom v C.concrete input (.token ⟨.fraction (fractionChecks
+          (contentBytes s.val.tokenContent ++
           bytesOf input j (Lexer.Slice.runEnd input j Lexer.RUN_DIGIT))), tokenStart,
           contentBytes s.val.tokenContent ++ bytesOf input j (Lexer.Slice.runEnd input j
               Lexer.RUN_DIGIT)⟩)
@@ -157,7 +169,7 @@ theorem fractionFrom_wp (v : Version) (input : ByteSlice) (j : Nat) (hj : j ≤ 
   unfold Lexer.WRustPort.lexFractionFrom Lexer.WRustPort.extendContent Lexer.WRustPort.modifyContent
   apply wp_bind; apply wp_modifyCore
   dsimp only
-  apply wp_ite
+  apply wp_dite
   · -- the digits end inside the slice: the decimal is finished
     intro hEs
     have hEs' := hstop hEs
@@ -182,15 +194,16 @@ theorem fractionFrom_wp (v : Version) (input : ByteSlice) (j : Nat) (hj : j ≤ 
         (by rw [hfc']) hEs'
       unfold Lexer.WRustPort.error Lexer.WRustPort.errorWith
       wp_walk
-      refine stepFails_here ?_ hholds hfix.1 hfix.2
-      rw [hA', feedFrom_advance_error v input hEs hf]
+      refine stepFails_here ?_ hholds
+        ⟨hfix.1, hfix.2, hfix.3, hfix.4, hfix.5, hfix.6⟩ rfl
+      rw [hA', feedFrom_advance_error v C.concrete input hEs hf]
     · intro hgood
       have hfc' : fractionChecks (contentBytes s.val.tokenContent ++
           bytesOf input j (Lexer.Slice.runEnd input j Lexer.RUN_DIGIT)) = true := by
         simp only [fractionChecks, Bool.not_eq_true']
         rw [← hext, ← last?_stored hfits']
         exact Bool.eq_false_iff.mpr hgood
-      have hC := feedFrom_end v input hEs
+      have hC := feedFrom_end v C.concrete input hEs
         (q := ⟨.fraction (fractionChecks (contentBytes s.val.tokenContent ++
           bytesOf input j (Lexer.Slice.runEnd input j Lexer.RUN_DIGIT))), tokenStart,
           contentBytes s.val.tokenContent ++ bytesOf input j (Lexer.Slice.runEnd input j
@@ -209,7 +222,8 @@ theorem fractionFrom_wp (v : Version) (input : ByteSlice) (j : Nat) (hj : j ≤ 
         rw [hnd'] at hC
         unfold Lexer.WRustPort.errorAt Lexer.WRustPort.errorWith
         wp_walk
-        refine stepFails_here ?_ hholds hfix.1 hfix.2
+        refine stepFails_here ?_ hholds
+          ⟨hfix.1, hfix.2, hfix.3, hfix.4, hfix.5, hfix.6⟩ rfl
         rw [hC]
         simp only [Bool.false_eq_true, ↓reduceIte]
       · intro hd
@@ -219,11 +233,10 @@ theorem fractionFrom_wp (v : Version) (input : ByteSlice) (j : Nat) (hj : j ≤ 
         rw [hd'] at hC
         simp only [↓reduceIte] at hC
         apply wp_pure
-        refine sinkStored_wp v .decimal (.mkAtByte _) tokenStart base h held _ ?_ coll ?_ ?_
-          ?_ ?_ ?_
+        refine sinkStored_wp .decimal (.mkAtByte _) tokenStart base h held _ ?_ coll ?_ ?_
+          ?_ ?_
         · exact hholds
         · exact hfix.recovers
-        · exact hfix.version
         · exact hfits'
         · intro s1 coll1 hk1 hb1 hc1
           obtain ⟨k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11⟩ := key_fields hk1
@@ -232,7 +245,7 @@ theorem fractionFrom_wp (v : Version) (input : ByteSlice) (j : Nat) (hj : j ≤ 
           apply wp_pure
           have hstep := stepLocation_eq' (pos := Lexer.Slice.runEnd input j Lexer.RUN_DIGIT)
             hloc (by rw [hbase0]; exact hj0) hb hlow hle
-          refine armPost_finish (s0 := _) ⟨hfix.1, hfix.2, hfix.3, hfix.4⟩
+          refine armPost_finish (s0 := _) ⟨hfix.1, hfix.2, hfix.3, hfix.4, hfix.5, hfix.6⟩
             hbase0 (show start0 ≤ Lexer.Slice.runEnd input j Lexer.RUN_DIGIT by omega) hbytes
             ⟨k1, k4, k3, k5, rfl, k8, k9, k10, k11, hb1⟩
             hLJ hc1 ?_
@@ -241,22 +254,25 @@ theorem fractionFrom_wp (v : Version) (input : ByteSlice) (j : Nat) (hj : j ≤ 
               (input.start + j)
             (input.start + (Lexer.Slice.runEnd input j Lexer.RUN_DIGIT))), tokenStart,
             stepLocation s.val low base (Lexer.Slice.runEnd input j Lexer.RUN_DIGIT)⟩]
-            (feedFrom v input .idle (afterColumns locq (Lexer.Slice.runEnd input j
+            (feedFrom v C.concrete input .idle (afterColumns locq (Lexer.Slice.runEnd input j
               Lexer.RUN_DIGIT - j)) (Lexer.Slice.runEnd input j Lexer.RUN_DIGIT))
           rw [hext, hstep]
-        · intro hn e s' coll'
-          apply stepFails_of_none
-          show outcome v _ _ = none
-          rw [hC, outcome_prep]
+        · intro e s' p d hn hss
           have hstep := stepLocation_eq' (pos := Lexer.Slice.runEnd input j Lexer.RUN_DIGIT)
             hloc (by rw [hbase0]; exact hj0) hb hlow hle
-          have hn' : pending v coll (held ++ [⟨.decimal, contentBytes (s.val.tokenContent.extendFrom
+          have hn' : Stops C s.val.holding s.val.version coll
+              (held ++ [⟨.decimal, contentBytes (s.val.tokenContent.extendFrom
               input.byteArray (input.start + j)
             (input.start + (Lexer.Slice.runEnd input j Lexer.RUN_DIGIT))), tokenStart,
-              stepLocation s.val low base (Lexer.Slice.runEnd input j Lexer.RUN_DIGIT)⟩]) =
-              none := hn
+              stepLocation s.val low base (Lexer.Slice.runEnd input j Lexer.RUN_DIGIT)⟩]) e p d :=
+            hn
           rw [hext, hstep] at hn'
-          exact (congrArg (fun x => outcome v x _) hn').trans (outcome_none_left v _)
+          exact stepFails_of_stops' (hbytes := by first | assumption | exact hpre.bytes) hss (by
+              first
+              | exact ⟨hfix.1, hfix.2, hfix.3, hfix.4, hfix.5, hfix.6⟩
+              | exact ⟨hpre.fixed.1, hpre.fixed.2, hpre.fixed.3, hpre.fixed.4, hpre.fixed.5,
+                  hpre.fixed.6⟩)
+            ⟨_, by rw [hC, outcome_pending_prep] <;> rfl⟩ hn'
   · -- the digits run to the end of the slice: the fraction is left in progress
     intro hEs
     unfold Lexer.WRustPort.setTokenState
@@ -266,7 +282,7 @@ theorem fractionFrom_wp (v : Version) (input : ByteSlice) (j : Nat) (hj : j ≤ 
       (show start0 < Lexer.Slice.runEnd input j Lexer.RUN_DIGIT by omega) hholds hbytes
       ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩ ?_ hLJ hA'
     refine ⟨?_, hfits'⟩
-    show TokenAgrees v .fraction tokenStart (contentBytes (s.val.tokenContent.extendFrom
+    show TokenAgrees v C.concrete .fraction tokenStart (contentBytes (s.val.tokenContent.extendFrom
       input.byteArray (input.start + j) (input.start + Lexer.Slice.runEnd input j Lexer.RUN_DIGIT)))
       _
     rw [hext]
@@ -278,14 +294,17 @@ abbrev isZero (content : ByteArray) : Bool :=
 
 /-- The check of the numeral arm reads the content buffer as its content. -/
 theorem isZero_contentBytes {buf : BSmtLib.Lexer.ContentBuffer} (h : Fits buf) :
-    isZero (contentBytes buf) = (buf.len == 1 && buf.bytes.get! 0 == byte! '0') := by
+    isZero (contentBytes buf) =
+      (if h : buf.len = 1 then buf.bytes[0]'(by have := buf.fits; omega) == byte! '0'
+       else false) := by
   unfold isZero
   rw [size_contentBytes h]
   by_cases h1 : buf.len = 1
-  · simp only [h1, beq_self_eq_true, Bool.true_and, get!_eq_getElem!,
-      get!_contentBytes h (show 0 < buf.len by omega)]
+  · have h0 : 0 < buf.bytes.size := by have := buf.fits; omega
+    simp only [h1, beq_self_eq_true, Bool.true_and, get!_eq_getElem!,
+      get!_contentBytes h (show 0 < buf.len by omega), ↓reduceDIte, getElem!_pos buf.bytes 0 h0]
   · have h1' : (buf.len == 1) = false := by simpa using h1
-    simp [h1']
+    simp [h1', h1]
 
 theorem isZero_append (c b : ByteArray) (hc : c.size ≠ 0) (hz : isZero c = false) :
     isZero (c ++ b) = false := by
@@ -315,18 +334,23 @@ theorem fractionChecks_dot (c : ByteArray) : fractionChecks (c.push 46) = false 
   rw [Array.getElem_push_eq]
   rfl
 
+set_option maxHeartbeats 400000 in
 /-- The arm of `lexStep` for a numeral, which may go on to a fraction. -/
 theorem arm_numeralOrDecimal (v : Version) (input : ByteSlice) (start : Nat)
     (hstart : start < input.size) (tokenStart : Location) (base : Nat)
-    (h : Lexer.WRustPort.Started floor low tokenStart) (s : BS floor low) (coll : Collector)
+    (h : Lexer.WRustPort.Started floor low tokenStart) (s : BS floor low) (coll : List Handed)
     (p : Pending) (location : Location) (held : List Lexeme)
-    (hpre : StepPre v input (.token p) location held start s.val) (hlow : low = s.val.offset)
+    (hpre : StepPre C v hd iv input (.token p) location held start s.val)
+        (hlow : low = s.val.offset)
     (hts : tokenStart = s.val.tokenStart) (hb : base = s.val.base)
     (hstate : s.val.state = .numeralOrDecimal) :
-    WP (Lexer.WRustPort.lexNumeralOrDecimal (H := Collector) (m := Id) (R := Empty) (E := Unit)
+    WP (Lexer.WRustPort.lexNumeralOrDecimal (H := Answering C) (m := AnswerM) (R := C.Result)
+        (E := Option C.Error)
         input start tokenStart base h) s coll
-      (fun r s' coll' => ArmPost v input (.token p) location start coll held r.1 s'.val coll')
-      (fun _ s' coll' => StepFails v input (.token p) location start coll held s'.val coll') := by
+      (fun r s' coll' => ArmPost C v hd iv input (.token p) location start s.val.version coll held
+          r.1 s'.val coll')
+      (fun e s' coll' => StepFails C v hd iv input (.token p) location start s.val.version coll held
+          e s'.val coll') := by
   obtain ⟨hps, hm, hcont, hsz⟩ := token_agrees hpre.agrees hstate
   have hJ : Lexer.Slice.runEnd input start Lexer.RUN_DIGIT = runEnd input isDigit start :=
     runEnd_eq endsRun_digit _ _
@@ -352,7 +376,7 @@ theorem arm_numeralOrDecimal (v : Version) (input : ByteSlice) (start : Nat)
     simp only [Bool.and_eq_true, decide_eq_true_eq] at hz
     obtain ⟨hlt, hzero⟩ := hz
     have hd := hmem start hstart (Nat.le_refl _) hlt
-    have hf : ∃ f, advance false p location input[start] = .error f := by
+    have hf : ∃ f, advance C.concrete p location input[start] = .error f := by
       obtain ⟨mode, pstart, pcontent⟩ := p
       simp only at hm
       subst hm
@@ -361,17 +385,19 @@ theorem arm_numeralOrDecimal (v : Version) (input : ByteSlice) (start : Nat)
         have e := isZero_contentBytes hfits
         unfold isZero at e
         rw [e]
-        exact Bool.and_eq_true _ _ ▸ hzero
+        exact hzero
       simp [advance, this, hd]
     obtain ⟨f, hf⟩ := hf
     unfold Lexer.WRustPort.errorAt Lexer.WRustPort.errorWith
     wp_walk
-    refine stepFails_here ?_ hpre.holds hpre.fixed.1 hpre.fixed.2
-    rw [feedFrom_advance_error v input hstart hf]
+    refine stepFails_here ?_ hpre.holds
+      ⟨hpre.fixed.1, hpre.fixed.2, hpre.fixed.3, hpre.fixed.4, hpre.fixed.5, hpre.fixed.6⟩ rfl
+    rw [feedFrom_advance_error v C.concrete input hstart hf]
   intro hz
   rw [← isZero_contentBytes hfits] at hz
-  have hA : feedFrom v input (.token p) location start =
-      feedFrom v input (.token ⟨.numeral (isZero (contentBytes s.val.tokenContent)), p.start,
+  have hA : feedFrom v C.concrete input (.token p) location start =
+      feedFrom v C.concrete input (.token ⟨.numeral (isZero (contentBytes
+          s.val.tokenContent)), p.start,
           p.content ++ bytesOf input start (Lexer.Slice.runEnd input start Lexer.RUN_DIGIT)⟩)
         (afterColumns location (Lexer.Slice.runEnd input start Lexer.RUN_DIGIT - start))
         (Lexer.Slice.runEnd input start Lexer.RUN_DIGIT) := by
@@ -389,8 +415,8 @@ theorem arm_numeralOrDecimal (v : Version) (input : ByteSlice) (start : Nat)
     · have hz0' : ((contentBytes s.val.tokenContent).size == 1 &&
           (contentBytes s.val.tokenContent).get! 0 == 48) = false := by
         simpa using hz0
-      have := feedFrom_mode v input isDigit isDigit_ne (.numeral false)
-        (fun q l c hm hc => advance_numeral_run false q l c hm hc) start
+      have := feedFrom_mode v C.concrete input isDigit isDigit_ne (.numeral false)
+        (fun q l c hm hc => advance_numeral_run C.concrete q l c hm hc) start
         ⟨Mode.numeral ((contentBytes s.val.tokenContent).size == 1 &&
           (contentBytes s.val.tokenContent).get! 0 == 48), pstart,
           pcontent⟩ location (by rw [hz0']) (Nat.le_of_lt hstart)
@@ -422,25 +448,29 @@ theorem arm_numeralOrDecimal (v : Version) (input : ByteSlice) (start : Nat)
     · -- a dot: the fraction follows
       intro hdot
       have hdot' : next = 46 := by simpa using hdot
-      have hB : feedFrom v input (.token p) location start =
-          feedFrom v input (.token ⟨.fraction false, p.start, (p.content ++ bytesOf input start
+      have hB : feedFrom v C.concrete input (.token p) location start =
+          feedFrom v C.concrete input (.token ⟨.fraction false, p.start,
+              (p.content ++ bytesOf input start
             (Lexer.Slice.runEnd input start Lexer.RUN_DIGIT)).push 46⟩)
             (afterColumns location (Lexer.Slice.runEnd input start Lexer.RUN_DIGIT + 1 - start))
             (Lexer.Slice.runEnd input start Lexer.RUN_DIGIT + 1) := by
-        rw [hA, feedFrom_step hEs (byteStep_token_pending v (by rw [hEc, hdot']; rfl)), prep_nil,
+        rw [hA, feedFrom_step hEs (byteStep_token_pending v C.concrete
+            (by rw [hEc, hdot']; rfl)), prep_nil,
           hEc, hdot', afterByte_eq_afterColumns' _ _ (by decide), afterColumns_add]
         congr 3
         omega
       unfold Lexer.WRustPort.pushContent Lexer.WRustPort.modifyContent
       apply wp_bind; apply wp_modifyCore
       apply wp_bind
-      refine wp_mono (fractionFrom_wp v input (Lexer.Slice.runEnd input start Lexer.RUN_DIGIT + 1)
+      refine wp_mono (fractionFrom_wp (hd := hd) (iv := iv) v input
+          (Lexer.Slice.runEnd input start Lexer.RUN_DIGIT + 1)
         (by omega) start hstart (by omega) tokenStart base h _ coll (.token p) location held
         ⟨.fraction false, p.start, (p.content ++ bytesOf input start
           (Lexer.Slice.runEnd input start Lexer.RUN_DIGIT)).push 46⟩
         (afterColumns location (Lexer.Slice.runEnd input start Lexer.RUN_DIGIT + 1 - start))
         ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ hB) ?_ ?_
-      · exact ⟨hpre.fixed.1, hpre.fixed.2, hpre.fixed.3, hpre.fixed.4⟩
+      · exact ⟨hpre.fixed.1, hpre.fixed.2, hpre.fixed.3, hpre.fixed.4,
+            hpre.fixed.5, hpre.fixed.6⟩
       · exact hpre.base
       · exact hpre.holds
       · exact hpre.bytes
@@ -465,7 +495,7 @@ theorem arm_numeralOrDecimal (v : Version) (input : ByteSlice) (start : Nat)
     · -- the numeral ends before the byte
       intro hdot
       have hdot' : next ≠ 46 := by simpa using hdot
-      have hC := feedFrom_end v input hEs (q := ⟨.numeral (isZero (contentBytes
+      have hC := feedFrom_end v C.concrete input hEs (q := ⟨.numeral (isZero (contentBytes
           s.val.tokenContent)), p.start,
           p.content ++ bytesOf input start (Lexer.Slice.runEnd input start Lexer.RUN_DIGIT)⟩)
         (location := afterColumns location (Lexer.Slice.runEnd input start Lexer.RUN_DIGIT - start))
@@ -480,7 +510,8 @@ theorem arm_numeralOrDecimal (v : Version) (input : ByteSlice) (start : Nat)
         rw [hnd'] at hC
         unfold Lexer.WRustPort.errorAt Lexer.WRustPort.errorWith
         wp_walk
-        refine stepFails_here ?_ hpre.holds hpre.fixed.1 hpre.fixed.2
+        refine stepFails_here ?_ hpre.holds
+          ⟨hpre.fixed.1, hpre.fixed.2, hpre.fixed.3, hpre.fixed.4, hpre.fixed.5, hpre.fixed.6⟩ rfl
         rw [hC]
         simp only [Bool.false_eq_true, ↓reduceIte]
       · intro hd
@@ -490,11 +521,10 @@ theorem arm_numeralOrDecimal (v : Version) (input : ByteSlice) (start : Nat)
         simp only [↓reduceIte] at hC
         apply wp_pure
         apply wp_bind
-        refine sinkStored_wp v .numeral (.mkAtByte _) tokenStart base h held _ ?_ coll ?_ ?_
-          ?_ ?_ ?_
+        refine sinkStored_wp .numeral (.mkAtByte _) tokenStart base h held _ ?_ coll ?_ ?_
+          ?_ ?_
         · exact hpre.holds
         · exact hpre.fixed.recovers
-        · exact hpre.fixed.version
         · exact hfits'
         · intro s1 coll1 hk1 hb1 hc1
           obtain ⟨k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11⟩ := key_fields hk1
@@ -503,29 +533,34 @@ theorem arm_numeralOrDecimal (v : Version) (input : ByteSlice) (start : Nat)
           apply wp_pure
           have hstep := stepLocation_eq (pos := Lexer.Slice.runEnd input start
             Lexer.RUN_DIGIT) hloc hpre.base hb hlow hle
-          refine armPost_finish (s0 := _) ⟨hpre.fixed.1, hpre.fixed.2, hpre.fixed.3, hpre.fixed.4⟩
+          refine armPost_finish (s0 := _) ⟨hpre.fixed.1, hpre.fixed.2, hpre.fixed.3, hpre.fixed.4,
+            hpre.fixed.5, hpre.fixed.6⟩
             hpre.base hle hpre.bytes ⟨k1, k4, k3, k5, rfl, k8, k9, k10, k11, hb1⟩ hLE hc1 ?_
           rw [hC]
           show _ = Prep [⟨.numeral, contentBytes (s.val.tokenContent.extendFrom input.byteArray
               (input.start + start)
             (input.start + (Lexer.Slice.runEnd input start Lexer.RUN_DIGIT))), tokenStart,
             stepLocation s.val low base (Lexer.Slice.runEnd input start Lexer.RUN_DIGIT)⟩]
-            (feedFrom v input .idle (afterColumns location (Lexer.Slice.runEnd input start
+            (feedFrom v C.concrete input .idle (afterColumns location
+                (Lexer.Slice.runEnd input start
               Lexer.RUN_DIGIT - start)) (Lexer.Slice.runEnd input start Lexer.RUN_DIGIT))
           rw [hext, hstep, hts, ← hps, ← hcont]
-        · intro hn e s' coll'
-          apply stepFails_of_none
-          show outcome v _ _ = none
-          rw [hC, outcome_prep]
+        · intro e s' p d hn hss
           have hstep := stepLocation_eq (pos := Lexer.Slice.runEnd input start
             Lexer.RUN_DIGIT) hloc hpre.base hb hlow hle
-          have hn' : pending v coll (held ++ [⟨.numeral, contentBytes (s.val.tokenContent.extendFrom
+          have hn' : Stops C s.val.holding s.val.version coll
+              (held ++ [⟨.numeral, contentBytes (s.val.tokenContent.extendFrom
               input.byteArray (input.start + start)
             (input.start + (Lexer.Slice.runEnd input start Lexer.RUN_DIGIT))), tokenStart,
               stepLocation s.val low base (Lexer.Slice.runEnd input start
-                Lexer.RUN_DIGIT)⟩]) = none := hn
+                Lexer.RUN_DIGIT)⟩]) e p d := hn
           rw [hext, hstep, hts, ← hps, ← hcont] at hn'
-          exact (congrArg (fun x => outcome v x _) hn').trans (outcome_none_left v _)
+          exact stepFails_of_stops' (hbytes := by first | assumption | exact hpre.bytes) hss (by
+              first
+              | exact ⟨hfix.1, hfix.2, hfix.3, hfix.4, hfix.5, hfix.6⟩
+              | exact ⟨hpre.fixed.1, hpre.fixed.2, hpre.fixed.3, hpre.fixed.4, hpre.fixed.5,
+                  hpre.fixed.6⟩)
+            ⟨_, by rw [hC, outcome_pending_prep] <;> rfl⟩ hn'
   · -- the digits run to the end of the slice: the numeral is left in progress
     rename_i hgetE
     have hsz' := Lexer.Slice.size_le_of_get?_none hgetE
@@ -534,7 +569,7 @@ theorem arm_numeralOrDecimal (v : Version) (input : ByteSlice) (start : Nat)
       (show start < Lexer.Slice.runEnd input start Lexer.RUN_DIGIT by omega) hpre.holds hpre.bytes
       ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩ ?_ hLE hA
     refine ⟨?_, hfits'⟩
-    show TokenAgrees v s.val.state s.val.tokenStart
+    show TokenAgrees v C.concrete s.val.state s.val.tokenStart
       (contentBytes (s.val.tokenContent.extendFrom input.byteArray (input.start + start)
             (input.start + (Lexer.Slice.runEnd input start Lexer.RUN_DIGIT)))) _
     rw [hext, hstate]

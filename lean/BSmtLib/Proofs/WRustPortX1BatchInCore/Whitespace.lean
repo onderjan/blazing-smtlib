@@ -17,7 +17,8 @@ open BSmtLib.Proofs.Lexer.WRustPort (Ops)
 
 section
 
-variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Consume H m R E]
+variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Consume H R E]
+  [∀ batch, ConsumeFrom H (BatchCursor batch) m]
   {floor : Option Nat} {low : Nat} {strict : Bool} {o₁ o₂ : Ops H m R E}
   {LRel : Ops.Locals H m R E (self := o₁) → Ops.Locals H m R E (self := o₂) → Nat → Nat → Prop}
 
@@ -31,7 +32,7 @@ def WsQ (strict : Bool) {α β : Type} (val : α → Nat × TokenBatch) (val' : 
   | some x, some y => (val x).1 = (val' y).1 ∧ HR (val x).2 (val' y).2 ∧ SR0 s t
   | _, _ => False
 
-omit [Consume H m R E] in
+omit [Consume H R E] [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 theorem startWhitespaceFrom_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice)
     (offset base index : Nat) (start : Location) :
     ∀ k (b b' : TokenBatch) («end» : Nat), input.size - «end» = k → HR b b' →
@@ -62,7 +63,7 @@ theorem startWhitespaceFrom_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice)
       (leavePending_sim l ls _ _ _ _ _ _ _ hb _ _ _ _ _ _ _ _))
       (SimR.pure fun s t h => ⟨h.1.1, h.2⟩))
 
-omit [Consume H m R E] in
+omit [Consume H R E] [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 theorem startWhitespace_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice)
     (offset base index : Nat) (b b' : TokenBatch) (hb : HR b b')
     (hrun hframe hindex hbatch hbatch') :

@@ -17,7 +17,8 @@ open BSmtLib.Lexer (BATCH_CAPACITY Interrupted)
 
 section
 
-variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Consume H m R E]
+variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Consume H R E]
+  [∀ batch, ConsumeFrom H (BatchCursor batch) m]
   {floor : Option Nat} {low : Nat} {strict : Bool} {Er : St floor low → St floor low → Prop}
 
 /-- A hand-over of batches that agree, in the version of the lexers, from states whose batches
@@ -65,7 +66,7 @@ theorem handOver_simS (hcons : ConsumesAlike H m R E) (l ls : Nat) (v : Version)
   SimR.mono (fun _ _ h => h) (fun _ _ _ _ h => h) (fun _ _ h => h.1)
     (handOver_sim' hcons l ls v b b' hb bytesAfter hf hf')
 
-omit [Consume H m R E] in
+omit [Consume H R E] [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 /-- The lexer with the batch in its state puts the batch back, from states with `SRE`. -/
 theorem storeSpent_right {α : Type} (l ls : Nat) (a : α) (spent : TokenBatch) :
     SimR (m := m) (H := H) (ε := Interrupted R E floor) Er
@@ -177,6 +178,22 @@ theorem handOverEof_simZ (hcons : ConsumesAlike H m R E) (l ls : Nat) (location 
   · obtain ⟨-, rfl⟩ := h'
     rw [← hst.batch.len]
     exact hlen
+  refine getCore_bind_right fun s' t' h' => ?_
+  obtain ⟨hs', ht'⟩ := h'
+  subst s' t'
+  have hh' : s.val.holding = t.val.holding := hst.holding
+  by_cases hh : s.val.holding = true
+  · -- a result is held: the end of the input is not handed over
+    have hh'' : t.val.holding = true := hh' ▸ hh
+    rw [ite_eq_left hh, ite_eq_left hh'']
+    exact SimR.pure fun s' t' h' => by
+      obtain ⟨rfl, rfl⟩ := h'
+      exact ⟨⟨hst, hl, hls⟩, hlen⟩
+  have hh'' : ¬t.val.holding = true := hh' ▸ hh
+  rw [ite_eq_right hh, ite_eq_right hh'']
+  refine getCore_bind_left fun s' t' h' => ?_
+  obtain ⟨hs', ht'⟩ := h'
+  subst s' t'
   refine SimR.modifyGet_bind_right fun s' t' h' => ?_
   obtain ⟨hs', ht'⟩ := h'
   subst s' t'

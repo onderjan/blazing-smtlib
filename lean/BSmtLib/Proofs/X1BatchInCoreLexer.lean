@@ -1,4 +1,4 @@
-import BSmtLib.Proofs.X1BatchInCoreLexer.Fed
+import BSmtLib.Proofs.X1BatchInCoreLexer.Handed
 
 /-!
 # The lexer with the batch kept in its state and the library's lexer lex alike
@@ -24,14 +24,10 @@ have the same consumer, and their states are equal once the base is forgotten.
   `USize.size`; the library's lexer lexes a larger slice in chunks, which the lexer with the
   batch kept in its state does not. `lexSlice_sim_lexer` and `lexEof_sim_lexer` are the same of
   the calls themselves.
-- `Lexer.X1BatchInCore.runSlices_cutAll_lexer`: the library's lexer, fed slices one call after
-  another with the adapter's consumer, gives the result that the lexer with the batch kept in its
-  state gives fed the slices with each slice too large for the positions cut into the chunks it
-  lexes such a slice by (`X1BatchInCoreLexer.Chunks.cutAll`), and a lexer related to it, also
-  after a failed call; the cut slices have the same bytes and end below `USize.size`.
-- `Lexer.fedInput_eq_fedInput_x1BatchInCore`: the spec's view of the slices and then, if the
-  input has ended, the end of the input, fed by the adapter: the library's lexer has done for
-  the slices what the lexer with the batch kept in its state has done for their cut.
+
+The library's lexer lexes a slice too large for its positions in chunks: `Chunks.cutAll` cuts
+every such slice of a list into the chunks it lexes it by, with the same bytes
+(`Chunks.flatten_cutAll`).
 
 The proof, in parts:
 
@@ -51,11 +47,9 @@ The proof, in parts:
 - `X1BatchInCoreLexer.Outer`, `Recovery`, `Eof`, `Calls`: the steps between the calls, coupled
   from related states;
 - `X1BatchInCoreLexer.Top`: the calls, and their steps run by `run`;
-- `X1BatchInCoreLexer.Run`: the calls on slices one after another (`runSlices`), and what the
-  adapter records of them;
-- `X1BatchInCoreLexer.Chunks`: the library's lexer on a slice too large for its positions;
-- `X1BatchInCoreLexer.Handed` and `X1BatchInCoreLexer.Fed`: the calls on slices one after
-  another, and what the adapter records.
+- `X1BatchInCoreLexer.Chunks`: the chunks of a slice too large for the positions of the library's
+  lexer;
+- `X1BatchInCoreLexer.Handed`: the constructed lexers.
 -/
 
 namespace BSmtLib.Proofs.Lexer
@@ -66,24 +60,29 @@ open BSmtLib.Lexer.Internal (handler core)
 
 /-- The lexer with the batch kept in its state is constructed as the library's lexer is, with
 its state mapped. -/
-theorem X1BatchInCore.new_eq_new_lexer {H : Type} (consumer : H) (version : Version) :
+theorem X1BatchInCore.new_eq_new_lexer {H R E : Type} [Consume H R E] (consumer : H)
+    (version : Version) :
     WRustPort.Lexer.new consumer version =
       { handler := handler (BSmtLib.Lexer.new consumer version)
-        core := coreMap 0 (core (BSmtLib.Lexer.new consumer version)) } :=
+        core := coreMap 0 (core (BSmtLib.Lexer.new consumer version))
+        held := BSmtLib.Lexer.Internal.held (BSmtLib.Lexer.new consumer version) } :=
   new_eq consumer version
 
 /-- The lexer with the batch kept in its state that recovers is constructed as the library's
 lexer that recovers is, with its state mapped. -/
-theorem X1BatchInCore.newRecovering_eq_newRecovering_lexer {H : Type} {m : Type → Type}
-    [Recover H m] (consumer : H) (version : Version) :
+theorem X1BatchInCore.newRecovering_eq_newRecovering_lexer {H R E : Type} [Consume H R E]
+    {m : Type → Type} [Recover H m] (consumer : H) (version : Version) :
     WRustPort.Lexer.newRecovering (m := m) consumer version =
       { handler := handler (BSmtLib.Lexer.newRecovering (m := m) consumer version)
-        core := coreMap 0 (core (BSmtLib.Lexer.newRecovering (m := m) consumer version)) } :=
+        core := coreMap 0 (core (BSmtLib.Lexer.newRecovering (m := m) consumer version))
+        held := BSmtLib.Lexer.Internal.held
+          (BSmtLib.Lexer.newRecovering (m := m) consumer version) } :=
   newRecovering_eq consumer version
 
 section
 
-variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Consume H m R E]
+variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Consume H R E]
+  [∀ batch, ConsumeFrom H (BatchCursor batch) m]
 
 /-- The step of a call on a slice that ends below `USize.size`, run by `run` on related lexers
 (`LexerRel`), gives the same result in the library's lexer and in the lexer with the batch kept
@@ -110,53 +109,29 @@ theorem X1BatchInCore.lexEofStep_sim_lexer (abandon recover : Location → State
       (x.run (WRustPort.lexEofStep (ops := X1BatchInCore.ops) abandon recover)) :=
   run_lexEofStep abandon recover l x hlx
 
-/-- The lexer with the batch kept in its state and the library's lexer, with the same consumer
-and states equal but for the base, lex a slice that ends below `USize.size` alike: the results
-are equal once the base is forgotten. -/
+/-- The lexer with the batch kept in its state and the library's lexer, with the same consumer,
+the same held result and states equal but for the base, lex a slice that ends below
+`USize.size` alike: the results are equal once the base is forgotten. -/
 theorem X1BatchInCore.lexSlice_sim_lexer {recovery : Recovery} [LexRecovery recovery H m]
     (x : WRustPort.Lexer H recovery) (l : BSmtLib.Lexer H recovery)
-    (hh : x.handler = handler l) (hx : Rel (core l) x.core) (slice : ByteSlice)
+    (hh : x.handler = handler l) (hx : Rel (core l) x.core)
+    (hd : x.held = BSmtLib.Lexer.Internal.held l) (slice : ByteSlice)
     (hs : slice.stop < USize.size) :
-    resultZb afterErrorZb <$> X1BatchInCore.Lexer.lexSlice (R := R) (E := E) x slice =
-      resultMap afterErrorMap <$> BSmtLib.Lexer.lexSlice l slice :=
-  lexSlice_sim l x hh hx slice hs
+    resultMap afterErrorZb lexerZb <$> X1BatchInCore.Lexer.lexSlice x slice =
+      resultMap afterErrorMap lexerMap <$> BSmtLib.Lexer.lexSlice l slice :=
+  lexSlice_sim l x hh hx hd slice hs
 
-/-- The lexer with the batch kept in its state and the library's lexer, with the same consumer
-and states equal but for the base, lex the end of the input alike: the results are equal once
-the base is forgotten. -/
+/-- The lexer with the batch kept in its state and the library's lexer, with the same consumer,
+the same held result and states equal but for the base, lex the end of the input alike: the
+results are equal once the base is forgotten. -/
 theorem X1BatchInCore.lexEof_sim_lexer {recovery : Recovery} [LexRecovery recovery H m]
     (x : WRustPort.Lexer H recovery) (l : BSmtLib.Lexer H recovery)
-    (hh : x.handler = handler l) (hx : Rel (core l) x.core) :
-    resultZb afterEofZb <$> X1BatchInCore.Lexer.lexEof (R := R) (E := E) x =
-      resultMap afterEofMap <$> BSmtLib.Lexer.lexEof l :=
-  lexEof_sim l x hh hx
+    (hh : x.handler = handler l) (hx : Rel (core l) x.core)
+    (hd : x.held = BSmtLib.Lexer.Internal.held l) :
+    resultMap afterEofZb (fun p => (p.1, lexerZb p.2)) <$> X1BatchInCore.Lexer.lexEof x =
+      resultMap afterEofMap (fun p => (p.1, lexerMap p.2)) <$> BSmtLib.Lexer.lexEof l :=
+  lexEof_sim l x hh hx hd
 
 end
-
-/-- The library's lexer, fed the slices one call after another with the adapter's consumer,
-gives the result that the lexer with the batch kept in its state gives fed their cut, and a
-lexer related to it, also after a failed call, from related lexers that neither discard nor
-recover, as the constructed ones do; the cut slices have the same bytes and end below
-`USize.size`. -/
-theorem X1BatchInCore.runSlices_cutAll_lexer (slices : List Spec.Lexicon.Chars)
-    (l : BSmtLib.Lexer Adapter.Collector) (x : WRustPort.Lexer Adapter.Collector)
-    (hlx : LexerRel l x) (hl : Chunks.Inv (core l)) :
-    ((runSlices lexerStep l slices).1 = (runSlices x1Step x (Chunks.cutAll slices)).1 ∧
-      LexerRel (runSlices lexerStep l slices).2 (runSlices x1Step x (Chunks.cutAll slices)).2) ∧
-      (Chunks.cutAll slices).flatten = slices.flatten ∧
-      ∀ s ∈ Chunks.cutAll slices, s.length < USize.size :=
-  ⟨runSlices_cutAll slices l x hlx hl, Chunks.flatten_cutAll slices,
-    fun _ h => Chunks.mem_cutAll h⟩
-
-/-- The library's lexer, fed by the adapter slices and then, if the input has ended, the end of
-the input, has done for the slices what the lexer with the batch kept in its state has done for
-them with each slice too large for the positions of the library's lexer cut into its chunks; the
-cut slices have the same bytes. -/
-theorem fedInput_eq_fedInput_x1BatchInCore (version : Spec.Lexicon.Version)
-    (slices : List Spec.Lexicon.Chars) (ended : Bool) :
-    Adapter.fedInput Adapter.Lexer.ops version slices ended =
-        Adapter.fedInput Adapter.X1BatchInCore.ops version (Chunks.cutAll slices) ended ∧
-      (Chunks.cutAll slices).flatten = slices.flatten :=
-  ⟨fedInput_eq_cutAll version slices ended, Chunks.flatten_cutAll slices⟩
 
 end BSmtLib.Proofs.Lexer

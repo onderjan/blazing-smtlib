@@ -38,7 +38,8 @@ abbrev Core := BSmtLib.Proofs.Lexer.WRustPort.LexerCore
 structure SameBut (w x : Core) : Prop where
   initialVersion : w.initialVersion = x.initialVersion
   state : w.state = x.state
-  discard : w.discard = x.discard
+  discardedFrom : w.discardedFrom = x.discardedFrom
+  holding : w.holding = x.holding
   recovers : w.recovers = x.recovers
   consumedDepth : w.consumedDepth = x.consumedDepth
   lexedDepth : w.lexedDepth = x.lexedDepth

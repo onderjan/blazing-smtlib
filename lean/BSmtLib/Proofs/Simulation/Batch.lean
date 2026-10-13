@@ -1,4 +1,5 @@
 import BSmtLib.Token
+import BSmtLib.Token.Produce
 
 /-!
 # Batches that agree, and cursors over them
@@ -71,7 +72,7 @@ def write (array : Array Nat) (index value : Nat) : Array Nat :=
 /-- The array of bytes of the batch with the byte written at `index`, as `TokenBatch.push`
 writes it. -/
 def writeByte (array : ByteArray) (index : Nat) (value : UInt8) : ByteArray :=
-  if index < array.size then array.set! index value else array.push value
+  if h : index < array.size then array.set index value else array.push value
 
 theorem size_write (array : Array Nat) (index value : Nat) (h : index ≤ array.size) :
     index < (write array index value).size := by
@@ -104,8 +105,8 @@ theorem size_writeByte (array : ByteArray) (index : Nat) (value : UInt8)
     (h : index ≤ array.size) : index < (writeByte array index value).size := by
   unfold writeByte
   split
-  · show index < (array.data.set! index value).size
-    rw [Array.size_set!]; assumption
+  · show index < (array.data.set index value _).size
+    rw [Array.size_set]; assumption
   · show index < (array.data.push value).size
     rw [Array.size_push]; simp only [ByteArray.size] at h; omega
 
@@ -115,13 +116,13 @@ theorem get!_writeByte (array : ByteArray) (index : Nat) (value : UInt8) (i : Na
   unfold writeByte
   have hs : array.size = array.data.size := rfl
   by_cases hlt : index < array.size
-  · simp only [hlt, ↓reduceIte]
-    show (array.data.set! index value)[i]! = if i = index then value else array.data[i]!
-    simp only [getElem!_def, Array.set!_eq_setIfInBounds, Array.getElem?_setIfInBounds]
+  · simp only [hlt, ↓reduceDIte]
+    show (array.data.set index value hlt)[i]! = if i = index then value else array.data[i]!
+    simp only [getElem!_def, Array.getElem?_set]
     by_cases e : i = index
-    · simp [e, hlt]
+    · simp [e]
     · simp [e, Ne.symm e]
-  · simp only [hlt, ↓reduceIte]
+  · simp only [hlt, ↓reduceDIte]
     show (array.data.push value)[i]! = if i = index then value else array.data[i]!
     simp only [getElem!_def, Array.getElem?_push]
     by_cases e : i = index
@@ -283,19 +284,19 @@ theorem Agree.pushLocated {b c : TokenBatch} (h : Agree b c) (hbytes : b.bytes =
 variable {g g' g₀ g₀' : BatchTag}
 
 /-- The index of the token in its batch. -/
-noncomputable def tokenIndex (t : Token g) : Nat := Token.rec (fun i => i) t
+noncomputable def tokenIndex (t : Token g) : Nat := Token.rec (fun i _ => i) t
 
 /-- The index of the first token of the cursor's hand-over. -/
 noncomputable def cFirst (c : BatchCursor g) : Nat :=
-  BatchCursor.rec (fun _ _ _ f _ _ _ _ => f) c
+  BatchCursor.rec (fun _ _ _ f _ _ _ _ _ => f) c
 
 /-- The index after the last token the cursor yields. -/
 noncomputable def cStop (c : BatchCursor g) : Nat :=
-  BatchCursor.rec (fun _ _ _ _ s _ _ _ => s) c
+  BatchCursor.rec (fun _ _ _ _ s _ _ _ _ => s) c
 
 /-- The index of the cursor's next token. -/
 noncomputable def cNext (c : BatchCursor g) : Nat :=
-  BatchCursor.rec (fun _ _ _ _ _ n _ _ => n) c
+  BatchCursor.rec (fun _ _ _ _ _ n _ _ _ => n) c
 
 /-- The two cursors are the same but for their batches, which agree, and yield no token beyond
 the length of their batch. -/
@@ -306,11 +307,12 @@ structure CursorAgree (c : BatchCursor g) (d : BatchCursor g') : Prop where
   stop : cStop c = cStop d
   next : cNext c = cNext d
   relex : c.relexRequested = d.relexRequested
+  discard : c.discardRequested = d.discardRequested
   bounded : cStop c ≤ (intoBatch c).len
 
 theorem cNext_le_cStop (c : BatchCursor g) : cNext c ≤ cStop c := by
   cases c with
-  | _ v b tg f s n r bd => exact bd.2
+  | _ v b tg f s n r dc bd => exact bd.2.1
 
 theorem hasNext_iff (c : BatchCursor g) : c.HasNext ↔ cNext c < cStop c := by
   cases c
@@ -322,7 +324,7 @@ theorem CursorAgree.hasNext_iff {c : BatchCursor g} {d : BatchCursor g'} (h : Cu
 
 theorem cursorAgree_new (v : Version) {b c : TokenBatch} (h : Agree b c) :
     CursorAgree (BatchCursor.new v b) (BatchCursor.new v c) :=
-  ⟨rfl, h, rfl, h.len, rfl, rfl, Nat.le_refl _⟩
+  ⟨rfl, h, rfl, h.len, rfl, rfl, rfl, Nat.le_refl _⟩
 
 theorem CursorAgree.takeNext {c : BatchCursor g} {d : BatchCursor g'} (h : CursorAgree c d)
     (hc : c.HasNext) (hd : d.HasNext) :
@@ -330,19 +332,19 @@ theorem CursorAgree.takeNext {c : BatchCursor g} {d : BatchCursor g'} (h : Curso
       CursorAgree (c.next hc).2.1 (d.next hd).2.1 := by
   cases c
   cases d
-  obtain ⟨hv, hb, hf, hs, hn, hr, hbd⟩ := h
+  obtain ⟨hv, hb, hf, hs, hn, hr, hdc, hbd⟩ := h
   simp only [cFirst, cStop, cNext] at hf hs hn hbd
   subst hf hs hn
-  exact ⟨rfl, hv, hb, rfl, rfl, rfl, hr, hbd⟩
+  exact ⟨rfl, hv, hb, rfl, rfl, rfl, hr, hdc, hbd⟩
 
 theorem CursorAgree.resetConsumed {c : BatchCursor g} {d : BatchCursor g'}
     (h : CursorAgree c d) : CursorAgree c.resetConsumed d.resetConsumed := by
   cases c
   cases d
-  obtain ⟨hv, hb, hf, hs, hn, hr, hbd⟩ := h
+  obtain ⟨hv, hb, hf, hs, hn, hr, hdc, hbd⟩ := h
   simp only [cFirst, cStop, cNext] at hf hs hn hbd
   subst hf hs hn
-  exact ⟨hv, hb, rfl, rfl, rfl, hr, hbd⟩
+  exact ⟨hv, hb, rfl, rfl, rfl, hr, hdc, hbd⟩
 
 /-- Cursors with the same tag are over the same batch. -/
 theorem intoBatch_eq (c d : BatchCursor g) : intoBatch c = intoBatch d :=
@@ -382,15 +384,15 @@ def spanAt (b : TokenBatch) (i : Nat) : Span :=
 
 theorem category_eq (c : BatchCursor g) (t : Token g) :
     c.category t = categoryAt (intoBatch c) (tokenIndex t) := by
-  cases t; rfl
+  cases t; exact TokenBatch.categoryOf_eq ..
 
 theorem content_eq (c : BatchCursor g) (t : Token g) :
     c.content t = contentAt (intoBatch c) (tokenIndex t) := by
-  cases t; rfl
+  cases t; exact TokenBatch.contentOf_eq ..
 
 theorem span_eq (c : BatchCursor g) (t : Token g) :
     c.span t = spanAt (intoBatch c) (tokenIndex t) := by
-  cases t; rfl
+  cases t; exact TokenBatch.spanOf_eq ..
 
 theorem Agree.categoryAt {b c : TokenBatch} (h : Agree b c) {i : Nat} (hi : i < b.len) :
     categoryAt b i = categoryAt c i := by
@@ -437,9 +439,23 @@ theorem tokenIndex_next_lt {c : BatchCursor g} (hc : c.HasNext)
   rw [tokenIndex_next]
   omega
 
+/-- The token the cursor has next is at the index of its next token. -/
+theorem tokenIndex_peek (c : BatchCursor g) (hc : c.HasNext) :
+    tokenIndex (c.peek hc) = cNext c := by
+  cases c; rfl
+
+/-- The span of the token the cursors have next agrees. -/
+theorem CursorAgree.span_peek {c : BatchCursor g} {d : BatchCursor g'} (h : CursorAgree c d)
+    (hc : c.HasNext) (hd : d.HasNext) : c.span (c.peek hc) = d.span (d.peek hd) := by
+  have := (Simulation.hasNext_iff c).mp hc
+  have := h.bounded
+  refine h.span (by rw [tokenIndex_peek, tokenIndex_peek, h.next]) ?_
+  rw [tokenIndex_peek]
+  omega
+
 theorem consumedEndOf_eq {c c₀ : BatchCursor g} (hc : c.Consumed c₀) :
     c.consumedEndOf hc = (spanAt (intoBatch c) (cNext c - 1)).end := by
-  cases c; rfl
+  cases c; exact congrArg Span.end (TokenBatch.spanOf_eq ..)
 
 /-- The end of the last token consumed agrees. -/
 theorem CursorAgree.consumedEndOf {c c₀ : BatchCursor g} {d d₀ : BatchCursor g'}
@@ -450,6 +466,20 @@ theorem CursorAgree.consumedEndOf {c c₀ : BatchCursor g} {d d₀ : BatchCursor
   have hbd := h.bounded
   have hi : cNext c - 1 < (intoBatch c).len := by omega
   rw [consumedEndOf_eq, consumedEndOf_eq, ← h.next, h.batch.spanAt hi]
+
+theorem consumedSpanOf_eq {c c₀ : BatchCursor g} (hc : c.Consumed c₀) :
+    c.consumedSpanOf hc = spanAt (intoBatch c) (cNext c - 1) := by
+  cases c; exact TokenBatch.spanOf_eq ..
+
+/-- The span of the last token consumed agrees. -/
+theorem CursorAgree.consumedSpanOf {c c₀ : BatchCursor g} {d d₀ : BatchCursor g'}
+    (h : CursorAgree c d) (hc : c.Consumed c₀) (hd : d.Consumed d₀) :
+    c.consumedSpanOf hc = d.consumedSpanOf hd := by
+  have hlt := cNext_lt_of_consumed hc
+  have hle := cNext_le_cStop c
+  have hbd := h.bounded
+  have hi : cNext c - 1 < (intoBatch c).len := by omega
+  rw [consumedSpanOf_eq, consumedSpanOf_eq, ← h.next, h.batch.spanAt hi]
 
 theorem foldl_congr {α β : Type} {f g : β → α → β} :
     ∀ (l : List α) (init : β), (∀ b a, a ∈ l → f b a = g b a) → l.foldl f init = l.foldl g init
@@ -463,7 +493,7 @@ theorem foldConsumedCategories_eq {β : Type} (c : BatchCursor g) (init : β)
     (f : β → TokenCategory → β) : c.foldConsumedCategories init f =
       (List.range (cNext c)).foldl (fun acc index => f acc (categoryAt (intoBatch c) index))
         init := by
-  cases c; rfl
+  cases c; exact BatchCursor.foldConsumedCategories_eq ..
 
 theorem CursorAgree.foldConsumedCategories {β : Type} {c : BatchCursor g} {d : BatchCursor g'}
     (h : CursorAgree c d) (init : β) (f : β → TokenCategory → β) :
@@ -490,13 +520,14 @@ The consumer reads the cursors it is handed only below the length of their batch
 that agree, from the same consumer state, it gives the same result and consumer state, and
 cursors that agree. Both runs are the projections of one computation of such pairs.
 -/
-def ConsumesAlike (H : Type) (m : Type → Type) (R E : Type) [Monad m] [Consume H m R E] : Prop :=
+def ConsumesAlike (H : Type) (m : Type → Type) (R E : Type) [Monad m] [Consume H R E]
+    [∀ batch, ConsumeFrom H (BatchCursor batch) m] : Prop :=
   ∀ {g g' : BatchTag} (c : BatchCursor g) (d : BatchCursor g') (hc : c.HasNext)
     (hd : d.HasNext), CursorAgree c d → ∀ s : H,
     ∃ y : m {z : (Except E (ControlFlow R) × {c' // c'.Consumed c}) ×
         (Except E (ControlFlow R) × {d' // d'.Consumed d}) × H //
         z.1.1 = z.2.1.1 ∧ CursorAgree z.1.2.val z.2.1.2.val},
-      (Consume.consume c hc).run s = (fun z => (z.val.1, z.val.2.2)) <$> y ∧
-        (Consume.consume d hd).run s = (fun z => (z.val.2.1, z.val.2.2)) <$> y
+      (ConsumeFrom.consume c hc).run s = (fun z => (z.val.1, z.val.2.2)) <$> y ∧
+        (ConsumeFrom.consume d hd).run s = (fun z => (z.val.2.1, z.val.2.2)) <$> y
 
 end BSmtLib.Proofs.Simulation

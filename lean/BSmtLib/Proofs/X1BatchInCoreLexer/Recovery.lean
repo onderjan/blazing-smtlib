@@ -3,11 +3,10 @@ import BSmtLib.Proofs.X1BatchInCoreLexer.Outer
 /-!
 # The steps between calls of the library's lexer and of `X1BatchInCore`
 
-The resetting, the discarding and the skipping of bytes while recovering, the turning of a
-failure into the error of a call, and the adding of the break location are coupled: they read
-the base only through the current location, which is the offset in both lexers, and set it only
-to zero. The two lexers have copies of their own of the functions on bytes (`skipBytes`,
-`countLineFeeds`), which agree.
+The resetting and the skipping of bytes while recovering, the turning of a failure into the
+error of a call, and the adding of the break location are coupled: they read the base only
+through the current location, which is the offset in both lexers, and set it only to zero. The
+two lexers have copies of their own of the function that skips bytes (`skipBytes`), which agree.
 -/
 
 namespace BSmtLib.Proofs.X1BatchInCoreLexer
@@ -15,16 +14,6 @@ namespace BSmtLib.Proofs.X1BatchInCoreLexer
 /-- The skipping state of `X1BatchInCore` for that of the library's lexer. -/
 def skMap (s : BSmtLib.Lexer.Internal.Skipping) : Lexer.WRustPort.Skipping :=
   { skip := s.skip, depth := s.depth, line := s.line, lineStart := s.lineStart }
-
-theorem countLineFeeds_loop_eq (bytes : ByteSlice) (i count : Nat) (afterLast : Option Nat) :
-    BSmtLib.Lexer.Internal.countLineFeeds.loop bytes i count afterLast =
-      Lexer.WRustPort.countLineFeeds.loop bytes i count afterLast := by
-  fun_induction BSmtLib.Lexer.Internal.countLineFeeds.loop bytes i count afterLast <;>
-    rw [Lexer.WRustPort.countLineFeeds.loop] <;> simp_all <;> intro h <;> omega
-
-theorem countLineFeeds_eq (bytes : ByteSlice) :
-    BSmtLib.Lexer.Internal.countLineFeeds bytes = Lexer.WRustPort.countLineFeeds bytes :=
-  countLineFeeds_loop_eq bytes 0 0 none
 
 -- Splits on a condition, reduces the branches that test it and closes the goals of a recursive
 -- call.
@@ -63,15 +52,6 @@ section
 
 variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] {R E : Type}
 
-theorem discardBytes_couple (bytes : ByteSlice) :
-    Coupled (fun _ _ => True) (BSmtLib.Lexer.Internal.discardBytes (H := H) (m := m) bytes)
-      (Lexer.WRustPort.discardBytes bytes) := by
-  unfold BSmtLib.Lexer.Internal.discardBytes Lexer.WRustPort.discardBytes
-  refine Coupled.modify fun c x hx => ?_
-  rw [eq_wb hx]
-  apply rel_mk <;> dsimp only <;> rw [countLineFeeds_eq] <;>
-    generalize Lexer.WRustPort.countLineFeeds bytes = r <;> obtain ⟨n, _ | a⟩ := r <;> rfl
-
 theorem reset_couple :
     Coupled (fun _ _ => True) (BSmtLib.Lexer.Internal.reset (H := H) (m := m))
       (Lexer.WRustPort.reset) := by
@@ -94,11 +74,11 @@ theorem skipSlice_couple (slice : ByteSlice) (skip : Lexer.RecoveryState) :
     simp only [Prod.mk.injEq, reduceCtorEq, Option.some.injEq, false_and, true_and] at e1
   · obtain ⟨rfl, rfl⟩ := e1
     exact Coupled.bind
-      (Coupled.set (rel_mk rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl))
+      (Coupled.set (rel_mk rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl))
       fun _ _ _ => Coupled.pure rfl
   · obtain rfl := e1
     exact Coupled.bind
-      (Coupled.set (rel_mk rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl))
+      (Coupled.set (rel_mk rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl))
       fun _ _ _ => Coupled.pure rfl
 
 /-- The current location of related states is the same: the offset. -/
@@ -131,6 +111,9 @@ theorem failCall_couple (abandon : Location → StateT H m Unit) (failure : Lexe
   refine Coupled.bind Coupled.get fun c x hx => ?_
   rw [eq_wb hx]
   refine Coupled.ite Iff.rfl (fun _ => Coupled.pure rfl) fun _ => ?_
+  refine Coupled.bind (Coupled.modify fun c x hx => ?_) fun _ _ _ => ?_
+  · rw [eq_wb hx]
+    rfl
   refine Coupled.bind (Coupled.modify fun c x hx => ?_) fun _ _ _ => ?_
   · rw [eq_wb hx]
     rfl

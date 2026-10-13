@@ -36,7 +36,8 @@ theorem reset_sim :
   unfold Lexer.WRustPort.reset
   refine ISim.modify _ _ fun w x h => ⟨?_, rfl⟩
   exact { h with
-    version := h.initialVersion, state := rfl, discard := rfl, consumedDepth := rfl
+    version := h.initialVersion, state := rfl, discardedFrom := rfl, holding := rfl
+    consumedDepth := rfl
     lexedDepth := rfl, recoveryState := rfl, tokenStart := rfl, offset := rfl, line := rfl
     tokenContent := by simp only [h.tokenContent], base := rfl, lineStart := rfl
     batch := agree_clear _ _ _ _, capacity := zero_lt_capacity }
@@ -45,18 +46,6 @@ theorem reset_sim' :
     ISim (H := H) (m := m) TopRel (fun _ _ => TopRel) Lexer.WRustPort.reset
       Lexer.WRustPort.reset :=
   ISim.mono (fun _ _ h => h.1) (fun _ _ _ _ h => h) reset_sim
-
-/-- The bytes are discarded alike. -/
-theorem discardBytes_sim (bytes : ByteSlice) :
-    ISim (H := H) (m := m) TopRel (fun _ _ => TopRel) (Lexer.WRustPort.discardBytes bytes)
-      (Lexer.WRustPort.discardBytes bytes) := by
-  unfold Lexer.WRustPort.discardBytes
-  refine ISim.modify _ _ fun w x h => ?_
-  obtain ⟨⟨⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13⟩, hv, hb, hcap⟩, hz⟩ := h
-  refine ⟨⟨⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩, ?_, ?_, ?_⟩, ?_⟩
-  all_goals
-    dsimp only
-    split <;> (try dsimp only) <;> first | assumption | (simp only [*]; done)
 
 /-- The bytes are skipped alike while recovering. -/
 theorem skipSlice_sim (slice : ByteSlice) (skip : RecoveryState) :
@@ -89,7 +78,8 @@ end
 
 section
 
-variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Consume H m R E]
+variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Consume H R E]
+  [∀ batch, ConsumeFrom H (BatchCursor batch) m]
   {o₁ o₂ : Ops H m R E}
   {LRel : Ops.Locals H m R E (self := o₁) → Ops.Locals H m R E (self := o₂) → Nat → Nat → Prop}
 
@@ -97,7 +87,7 @@ variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [
 abbrev TopQ {α : Type} (a b : α) (w x : Core) : Prop :=
   a = b ∧ TopRel w x
 
-omit [Consume H m R E] in
+omit [Consume H R E] [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 theorem executeStep_sim {step step' : Lexer.WRustPort.InnerM H m (Except (Failure E)
       (ControlFlow R))}
     (hs : ISim TopRel TopQ step step') :
@@ -116,7 +106,7 @@ theorem executeStep_sim {step step' : Lexer.WRustPort.InnerM H m (Except (Failur
     obtain ⟨rfl, rfl⟩ := h
     exact ⟨by rw [currentLocation_eq ht.1], ht⟩
 
-omit [Consume H m R E] in
+omit [Consume H R E] [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 theorem fail_sim (abandon : Location → StateT H m Unit) (failure : Failure E) (atEnd : Bool) :
     ISim TopRel TopQ (Lexer.WRustPort.fail abandon failure atEnd)
       (Lexer.WRustPort.fail abandon failure atEnd) := by
@@ -124,16 +114,20 @@ theorem fail_sim (abandon : Location → StateT H m Unit) (failure : Failure E) 
   refine ISim.get_bind fun w x h => ?_
   refine ISim.ite (by rw [h.1.recovers]) (fun _ => ISim.pure fun _ _ h => ⟨rfl, h⟩) fun _ => ?_
   dsimp only
+  refine ISim.seq (P' := TopRel)
+    (ISim.modify _ _ fun w x h => ⟨{ h.1 with holding := rfl }, h.2⟩) ?_
   refine ISim.seq (P' := TopRel) (ISim.modify _ _ fun w x h => ⟨coreRel_resumeAt h.1 _ _, rfl⟩) ?_
   refine ISim.bind (ISim.lift _) fun _ _ => ?_
   refine ISim.seq (P' := TopRel) (ISim.modify _ _ fun w x h => ?_) (ISim.pure fun _ _ h => ⟨rfl, h⟩)
   exact ⟨{ h.2.1 with recoveryState := rfl }, h.2.2⟩
 
+omit [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 theorem lexSliceInner_isim (ho : OpsSim o₁ o₂ LRel) (slice : ByteSlice) :
     ISim TopRel TopQ (Lexer.WRustPort.lexSliceInner (ops := o₁) (H := H) (m := m) (R := R) (E := E)
       slice) (Lexer.WRustPort.lexSliceInner (ops := o₂) slice) := fun w x h =>
   Couple.mono (fun _ _ hab => ⟨hab.1, hab.2.1, hab.2.2⟩) (lexSliceInner_sim ho slice w x h.1)
 
+omit [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 theorem lexEofInner_isim (ho : OpsSim o₁ o₂ LRel) :
     ISim TopRel TopQ (Lexer.WRustPort.lexEofInner (ops := o₁) (H := H) (m := m) (R := R) (E := E))
       (Lexer.WRustPort.lexEofInner (ops := o₂)) := fun w x h =>
@@ -143,32 +137,25 @@ set_option hygiene false in
 /-- The lexing of the slice after the skipping, in a call. The names are those of
 `lexSliceStep_sim`. -/
 local macro "slice_tail" : tactic => `(tactic| (
-  refine ISim.get_bind fun w₁ x₁ h₁ => ?_
-  try dsimp only
-  refine ISim.bind (executeStep_sim (lexSliceInner_isim ho _)) fun a b =>
-    ISim.intro fun w₂ x₂ h₂ => ?_
+  refine ISim.bind (lexSliceInner_isim ho _) fun a b => ISim.intro fun w₂ x₂ h₂ => ?_
   obtain ⟨rfl, ht⟩ := h₂
   have hpre : ∀ w' x', w' = w₂ ∧ x' = x₂ → TopRel w' x' := fun _ _ h => by
     obtain ⟨rfl, rfl⟩ := h
     exact ht
-  rcases a with f | _ | located
+  rcases a with f | held
   · exact ISim.bind (ISim.mono hpre (fun _ _ _ _ h => h) (fail_sim abandon f false))
       fun _ _ => ISim.pure fun _ _ hh => ⟨by rw [hh.1], hh.2⟩
-  · exact ISim.pure fun w' x' h => ⟨rfl, hpre w' x' h⟩
-  · refine ISim.mono hpre (fun _ _ _ _ h => h) ?_
-    refine ISim.seq (P' := TopRel) (ISim.modify _ _ fun w x h => ⟨{ h.1 with discard := rfl },
-      h.2⟩) ?_
-    rw [← h₁.1.offset]
-    exact ISim.bind (discardBytes_sim _) fun _ _ => ISim.pure fun _ _ hh => ⟨rfl, hh⟩))
+  · exact ISim.mono hpre (fun _ _ _ _ h => h) (ISim.pure fun w' x' h => ⟨rfl, h⟩)))
 
+omit [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 theorem lexSliceStep_sim (ho : OpsSim o₁ o₂ LRel) (abandon recover : Location → StateT H m Unit)
     (slice : ByteSlice) :
     ISim TopRel TopQ (Lexer.WRustPort.lexSliceStep (ops := o₁) (R := R) (E := E) abandon recover
       slice) (Lexer.WRustPort.lexSliceStep (ops := o₂) abandon recover slice) := by
   unfold Lexer.WRustPort.lexSliceStep
   refine ISim.get_bind fun w x h => ?_
-  refine ISim.ite (by rw [h.1.discard]) (fun _ => ISim.seq (discardBytes_sim slice)
-    (ISim.pure fun _ _ h => ⟨rfl, h⟩)) fun _ => ?_
+  refine ISim.ite (by rw [h.1.discardedFrom]) (fun _ => ISim.pure fun _ _ h => ⟨rfl, h⟩)
+    fun _ => ?_
   dsimp only
   refine ISim.get_bind fun w x h => ?_
   rw [h.1.recoveryState]
@@ -208,14 +195,11 @@ local macro "eof_tail" : tactic => `(tactic| (
         fun _ _ => ISim.pure fun _ _ hh => ⟨by rw [hh.1], hh.2⟩
   · exact ISim.seq reset_sim' (ISim.pure fun _ _ hh => ⟨rfl, hh⟩)))
 
+omit [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 theorem lexEofStep_sim (ho : OpsSim o₁ o₂ LRel) (abandon recover : Location → StateT H m Unit) :
     ISim TopRel TopQ (Lexer.WRustPort.lexEofStep (ops := o₁) (R := R) (E := E) abandon recover)
       (Lexer.WRustPort.lexEofStep (ops := o₂) abandon recover) := by
   unfold Lexer.WRustPort.lexEofStep
-  refine ISim.get_bind fun w x h => ?_
-  refine ISim.ite (by rw [h.1.discard]) (fun _ => ISim.seq reset_sim'
-    (ISim.pure fun _ _ h => ⟨rfl, h⟩)) fun _ => ?_
-  dsimp only
   refine ISim.get_bind fun w x h => ?_
   rw [h.1.recoveryState]
   generalize x.recoveryState.isSome = recovered

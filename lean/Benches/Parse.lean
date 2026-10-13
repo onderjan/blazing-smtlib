@@ -1,19 +1,23 @@
 /-
-Lex-throughput benchmark over pinned SMT-LIB benchmark files: the lexing mode of
-`rust/benches/parse.rs`, measured the same way so that the two can be compared.
+Parse-throughput benchmark over pinned SMT-LIB benchmark files: the lexing and the full
+lex-and-parse modes of `rust/benches/parse.rs`, measured the same way so that the two can be
+compared.
 
 Expects the SMT-LIB corpus under `../benchmarks/2025` relative to the current
 directory, which is the repository root when run from `lean/`; set the
 environment variable `SMT_BENCHMARKS_DIR` to use a corpus root elsewhere. Each
-file is loaded into memory first, so the numbers measure lexing only, not disk
-I/O. Tokens are discarded by a counting handler.
+file is loaded into memory first, so the numbers measure lexing and parsing only, not disk
+I/O. In the lexing mode, tokens are discarded by a counting handler; in the full mode, a
+script parser runs over the tokens with a handler that keeps nothing (`SyntaxChecker`), as
+the Rust benchmark's `read_smt` with `SmtSyntaxChecker` does.
 
 Run with `lake exe bench-parse` from `lean/`. The table reports throughput in
-MB/s and nanoseconds per token.
+MB/s and nanoseconds per token; nanoseconds per token count the tokens of the lexing mode in
+both modes.
 
 Environment variables, as for the Rust benchmark:
 
-- `SMT_BENCH_MODE`: only `lex` is available, which is also the default.
+- `SMT_BENCH_MODE`: `lex`, `full`, or `both` (default) selects the measured modes.
 - `SMT_BENCH_FILES`: comma-separated labels (see `files`) restricting the
   measured files, in the order given.
 - `SMT_BENCH_ITERATIONS`: timed runs per file (default `defaultIterations`);
@@ -27,7 +31,8 @@ An environment variable of its own:
 
 - `SMT_BENCH_LEXER`: comma-separated lexers to measure, `v` or `z` (default `z`, the
   library's lexer; `v` is the naive lexer of the proofs, `BSmtLib.Proofs.Lexer.VNaive`).
-  The timed runs of a file alternate between the lexers, so that a drift of the machine affects
+  The lexers apply to the lexing mode; the full mode uses the library's lexer. The timed runs
+  of a file alternate between the lexers and the modes, so that a drift of the machine affects
   them alike. Each lexer gets its own line, and in `raw` format its own mode, `lex-v` or
   `lex-z`; with the default alone the mode stays `lex`, as in the Rust benchmark.
 -/
@@ -112,18 +117,115 @@ where
       return ⟨current, consumed⟩
   termination_by current.remaining
 
-instance : Consume DiscardTokens Id Unit Empty where
-  consumesWhitespaceAndComments := false
+instance : Consume DiscardTokens Unit Empty where
+  isConcrete := false
+
+instance {batch : BatchTag} : ConsumeFrom DiscardTokens (BatchCursor batch) Id where
   consume cursor h := do
     let step := modify fun (handler : DiscardTokens) => { tokens := handler.tokens + 1 }
     return (.ok .continue, ← takeEach step cursor h)
+
+/- LEAN: the Rust benchmark parses with the library's `SmtSyntaxChecker`, which the Lean port does
+not have; this handler is its counterpart. Every handled value is `Unit`, every call succeeds,
+and a non-standard command is its error. -/
+/-- Command handler that accepts every standard command and keeps nothing. -/
+structure SyntaxChecker where
+
+instance : Parser.Handler SyntaxChecker Id where
+  Error := Parser.Symbol
+  SExpr := Unit
+  Attribute := Unit
+  «Sort» := Unit
+  Term := Unit
+  Scope := Unit
+  setVersion _ := pure ()
+  handleSort _ _ := pure ()
+  handleTerm _ := pure ()
+  handleSExpr _ := pure ()
+  handleAttribute _ _ := pure ()
+  annotateTerm _ _ := pure ()
+  startLet _ := pure ()
+  endLet _ _ := pure ()
+  startQuantifier _ _ := pure ()
+  endQuantifier _ _ _ := pure ()
+  startLambda _ := pure ()
+  endLambda _ _ := pure ()
+  startMatch _ := pure ()
+  startMatchCase _ _ := pure ()
+  endMatchCase _ _ _ := pure ()
+  endMatch _ _ := pure ()
+
+instance : Parser.CommandHandler SyntaxChecker Id where
+  nonstandardCommand name := name
+  commandAssert _ := pure ()
+  commandCheckSat := pure ()
+  commandCheckSatAssuming _ := pure ()
+  commandDeclareConst _ _ := pure ()
+  startDeclareDatatype _ _ := pure ()
+  endDeclareDatatype _ := pure ()
+  startDeclareDatatypes _ := pure ()
+  startDatatypeDeclaration _ := pure ()
+  endDatatypeDeclaration _ := pure ()
+  endDeclareDatatypes := pure ()
+  commandDeclareFun _ _ _ := pure ()
+  commandDeclareSort _ _ := pure ()
+  commandDeclareSortParameter _ := pure ()
+  commandDefineConst _ _ _ := pure ()
+  startDefineFun _ := pure ()
+  endDefineFun _ := pure ()
+  startDefineFunRec _ := pure ()
+  endDefineFunRec _ := pure ()
+  startDefineFunsRec _ := pure ()
+  startRecursiveBody _ := pure ()
+  endRecursiveBody _ := pure ()
+  endDefineFunsRec := pure ()
+  startDefineSort _ _ := pure ()
+  endDefineSort _ := pure ()
+  commandEcho _ := pure ()
+  commandExit := pure ()
+  commandGetAssertions := pure ()
+  commandGetAssignment := pure ()
+  commandGetInfo _ := pure ()
+  commandGetModel := pure ()
+  commandGetOption _ := pure ()
+  commandGetProof := pure ()
+  commandGetUnsatAssumptions := pure ()
+  commandGetUnsatCore := pure ()
+  commandGetValue _ := pure ()
+  commandPop _ := pure ()
+  commandPush _ := pure ()
+  commandReset := pure ()
+  commandResetAssertions := pure ()
+  commandSetInfo _ := pure ()
+  commandSetLogic _ := pure ()
+  commandSetOption _ := pure ()
+
+/-- The script reader of the Rust benchmark's `read_smt`: a script parser under the default
+posture, over the syntax checker, lexing from the default version. -/
+abbrev CheckingAdapter :=
+  Parser.ParseAdapter SyntaxChecker (Parser.ScriptParser SyntaxChecker)
+
+/-- Lexes and parses the in-memory file, failing unless it parsed without an error. -/
+def parseFromMemory (data : ByteArray) (path : String) : IO Unit := do
+  let adapter : CheckingAdapter :=
+    Parser.ParseAdapter.new {} (Parser.ScriptParser.new Parser.VersionPosture.default)
+  match Id.run ((Lexer.new adapter default).lexAll data.toByteSlice) with
+  | .ok _ => pure ()
+  | .error ({ cause := .lexical kind, span, .. }, _) =>
+    throw <| IO.userError s!"benchmark file {path} must parse, got lexer error \
+      {repr kind} at {repr span}"
+  | .error ({ cause := .consumer (.syntax kind), .. }, _) =>
+    throw <| IO.userError s!"benchmark file {path} must parse, got parser error {repr kind}"
+  | .error ({ cause := .consumer (.handler name), .. }, _) =>
+    throw <| IO.userError s!"benchmark file {path} must parse, got nonstandard command \
+      {(String.fromUTF8? name.content.asSlice.toByteArray).getD "(not UTF-8)"}"
 
 /-- Fails unless the file lexed without an error. -/
 def checkLexed (result : Except (LexError Empty × β) α) (path : String) : IO Unit :=
   match result with
   | .ok _ => pure ()
-  | .error ({ cause := .lexical err, .. }, _) =>
-    throw <| IO.userError s!"benchmark file {path} must lex, got {repr err}"
+  | .error ({ cause := .lexical kind, span, .. }, _) =>
+    throw <| IO.userError s!"benchmark file {path} must lex, got {repr kind} at {repr span}"
   | .error ({ cause := .consumer never, .. }, _) => nomatch never
 
 /-- A lexer of the chain from the specification to the library's lexer. -/
@@ -158,8 +260,10 @@ outside the timed runs, by a handler that adds to a reference. -/
 structure CountTokens where
   tokens : IO.Ref Nat
 
-instance : Consume CountTokens IO Unit Empty where
-  consumesWhitespaceAndComments := false
+instance : Consume CountTokens Unit Empty where
+  isConcrete := false
+
+instance {batch : BatchTag} : ConsumeFrom CountTokens (BatchCursor batch) IO where
   consume cursor h := do
     let tokens := (← get).tokens
     return (.ok .continue, ← takeEach (tokens.modify (· + 1)) cursor h)
@@ -239,11 +343,13 @@ def main : IO UInt32 := do
   let stdout ← IO.getStdout
   let benchmarksDir ← benchmarksDir
 
-  match ← IO.getEnv "SMT_BENCH_MODE" with
-  | none | some "" | some "lex" => pure ()
-  | some other =>
-    stderr.putStrLn s!"Unknown SMT_BENCH_MODE {repr other}; only \"lex\" is available"
-    return 1
+  let (lexMode, fullMode) ← match ← IO.getEnv "SMT_BENCH_MODE" with
+    | none | some "" | some "both" => pure (true, true)
+    | some "lex" => pure (true, false)
+    | some "full" => pure (false, true)
+    | some other =>
+      stderr.putStrLn s!"Unknown SMT_BENCH_MODE {repr other}; use \"lex\", \"full\", or \"both\""
+      return 1
 
   let format ← match ← IO.getEnv "SMT_BENCH_FORMAT" with
     | none | some "" | some "table" => pure Format.table
@@ -307,10 +413,16 @@ def main : IO UInt32 := do
     -- the token count turns run times into nanoseconds per token
     let tokens := (max (← countFromMemory data path.toString) 1).toFloat
 
-    let times ← timeRuns iterations (lexers.map fun lexer => lexFromMemory lexer data path.toString)
+    -- the measured modes, each with its run: the lexers' in turn, then the full pipeline's
+    let mut measured : Array (String × IO Unit) := #[]
+    if lexMode then
+      measured := measured ++ lexers.map fun lexer =>
+        (modeOf lexer, lexFromMemory lexer data path.toString)
+    if fullMode then
+      measured := measured.push ("full", parseFromMemory data path.toString)
+    let times ← timeRuns iterations (measured.map (·.2))
 
-    for (lexer, times) in lexers.zip times do
-      let mode := modeOf lexer
+    for ((mode, _), times) in measured.zip times do
       match format with
       | .table =>
         let (min, median) := minAndMedian times

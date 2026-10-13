@@ -17,11 +17,12 @@ open BSmtLib.Proofs.Lexer.WRustPort (Ops)
 
 section
 
-variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Consume H m R E]
+variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Consume H R E]
+  [∀ batch, ConsumeFrom H (BatchCursor batch) m]
   {floor : Option Nat} {low : Nat} {strict : Bool} {o₁ o₂ : Ops H m R E}
   {LRel : Ops.Locals H m R E (self := o₁) → Ops.Locals H m R E (self := o₂) → Nat → Nat → Prop}
 
-omit [Consume H m R E] in
+omit [Consume H R E] [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 theorem sinkStored_simZ (ho : OpsSim o₁ o₂ LRel) (l ls : Nat) (ty : TokenCategory)
     (tokenEnd : Lexer.Slice.TokenEnd) (start : Location) (base : Nat)
     (h : Lexer.WRustPort.Started floor low start) :
@@ -37,7 +38,7 @@ theorem sinkStored_simZ (ho : OpsSim o₁ o₂ LRel) (l ls : Nat) (ty : TokenCat
   subst e
   exact ho.sinkStoredAt l ls ty start a _ _
 
-omit [Consume H m R E] in
+omit [Consume H R E] [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 theorem sinkStored_sim (ho : OpsSim o₁ o₂ LRel) (l ls : Nat) (ty : TokenCategory)
     (tokenEnd : Lexer.Slice.TokenEnd) (start : Location) (base : Nat)
     (h : Lexer.WRustPort.Started floor low start) :
@@ -59,7 +60,7 @@ local macro "finish_checked" : tactic => `(tactic| (
     exact SimR.seq (expectDelimiter_sim _ _ _ _) (sinkStored_sim ‹_› _ _ _ _ _ _ _)
   | none => exact sinkStored_sim ‹_› _ _ _ _ _ _ _))
 
-omit [Consume H m R E] in
+omit [Consume H R E] [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 theorem finishDecimal_sim (ho : OpsSim o₁ o₂ LRel) (l ls : Nat)
     (tokenEnd : Lexer.Slice.TokenEnd) (next : Option UInt8) (start : Location) (base : Nat)
     (h : Lexer.WRustPort.Started floor low start) :
@@ -69,7 +70,7 @@ theorem finishDecimal_sim (ho : OpsSim o₁ o₂ LRel) (l ls : Nat)
   unfold Lexer.WRustPort.finishDecimal
   finish_checked
 
-omit [Consume H m R E] in
+omit [Consume H R E] [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 theorem finishDigitRun_sim (ho : OpsSim o₁ o₂ LRel) (l ls : Nat) (run : Lexer.DigitRun)
     (tokenEnd : Lexer.Slice.TokenEnd) (next : Option UInt8) (start : Location) (base : Nat)
     (h : Lexer.WRustPort.Started floor low start) :
@@ -79,7 +80,7 @@ theorem finishDigitRun_sim (ho : OpsSim o₁ o₂ LRel) (l ls : Nat) (run : Lexe
   unfold Lexer.WRustPort.finishDigitRun
   finish_checked
 
-omit [Consume H m R E] in
+omit [Consume H R E] [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 theorem finishKeyword_sim (ho : OpsSim o₁ o₂ LRel) (l ls : Nat)
     (tokenEnd : Lexer.Slice.TokenEnd) (next : Option UInt8) (start : Location) (base : Nat)
     (h : Lexer.WRustPort.Started floor low start) :
@@ -100,7 +101,7 @@ local macro "finish_eof" : tactic => `(tactic| (
   refine SimR.ite (by rw [hst.1.1.1.tokenContent]) (fun _ => error_simZ _ _ _ _ _)
     fun _ => SimR.pre (fun _ _ h => h.1) (sinkStored_simZ ‹_› _ _ _ _ _ _ _)))
 
-omit [Consume H m R E] in
+omit [Consume H R E] [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 theorem finishDecimal_simZ (ho : OpsSim o₁ o₂ LRel) (l ls : Nat)
     (tokenEnd : Lexer.Slice.TokenEnd) (start : Location) (base : Nat)
     (h : Lexer.WRustPort.Started floor low start) :
@@ -111,7 +112,7 @@ theorem finishDecimal_simZ (ho : OpsSim o₁ o₂ LRel) (l ls : Nat)
   unfold Lexer.WRustPort.finishDecimal
   finish_eof
 
-omit [Consume H m R E] in
+omit [Consume H R E] [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 theorem finishDigitRun_simZ (ho : OpsSim o₁ o₂ LRel) (l ls : Nat) (run : Lexer.DigitRun)
     (tokenEnd : Lexer.Slice.TokenEnd) (start : Location) (base : Nat)
     (h : Lexer.WRustPort.Started floor low start) :
@@ -122,7 +123,7 @@ theorem finishDigitRun_simZ (ho : OpsSim o₁ o₂ LRel) (l ls : Nat) (run : Lex
   unfold Lexer.WRustPort.finishDigitRun
   finish_eof
 
-omit [Consume H m R E] in
+omit [Consume H R E] [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 theorem finishKeyword_simZ (ho : OpsSim o₁ o₂ LRel) (l ls : Nat)
     (tokenEnd : Lexer.Slice.TokenEnd) (start : Location) (base : Nat)
     (h : Lexer.WRustPort.Started floor low start) :

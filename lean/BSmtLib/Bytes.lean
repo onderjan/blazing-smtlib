@@ -27,8 +27,8 @@ instead of Unicode escapes as the bytes need not be UTF-8.
 class, whose instances below call this. -/
 private def reprBytes (bytes : ByteSlice) : String := Id.run do
   let mut out := "\""
-  for i in [0:bytes.size] do
-    let c := bytes.get! i
+  for h : i in [0:bytes.size] do
+    let c := bytes[i]'h.upper
     -- specially escape the same characters Rust does
     let escape : Option String := match c.toNat with
       | 0x0A => some "\\n"

@@ -23,7 +23,8 @@ abbrev StepPost (start : Nat) {floor : Option Nat} {low : Nat} {lo : USize}
 
 section
 
-variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Consume H m R E]
+variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Consume H R E]
+  [∀ batch, ConsumeFrom H (BatchCursor batch) m]
   {floor : Option Nat} {low : Nat} (b : USize)
 
 theorem afterStep_sim (slice : ByteSlice) (h : slice.stop < USize.size) (start : USize)
@@ -73,8 +74,9 @@ theorem lexStep_sim (slice : ByteSlice) (h : slice.stop < USize.size) (start : U
     exact SimP.bind (lexFractionFrom_sim b slice h start start' es tokenStart base hbase hb
       hbs' _ _) fun r => afterStep_sim b slice h start start' es hb hbs hstart hstart' r
   case baseSelection =>
-    exact SimP.bind (lexBaseSelection_sim b slice h start start' es hstart tokenStart hb
-      hbs' _ _) fun r => afterStep_sim b slice h start start' es hb hbs hstart hstart' r
+    exact SimP.bind (lexBaseSelection_sim b slice h start start' es hstart hstart'
+      tokenStart hb hbs' _ _) fun r =>
+        afterStep_sim b slice h start start' es hb hbs hstart hstart' r
   case hexadecimal =>
     exact SimP.bind (lexDigitRun_sim b slice h start start' es _ tokenStart base hbase hb
       hbs' _ _) fun r => afterStep_sim b slice h start start' es hb hbs hstart hstart' r
@@ -109,7 +111,8 @@ theorem lexStep_sim (slice : ByteSlice) (h : slice.stop < USize.size) (start : U
         afterStep_sim b slice h start start' es hb hbs hstart hstart' r
   case quotedSymbolClosed =>
     exact SimP.bind (lexQuotedSymbolClosed_sim b slice h start start' es tokenStart base hbase
-      hb hbs' hlt _ _) fun r => afterStep_sim b slice h start start' es hb hbs hstart hstart' r
+      hb hbs' hlt hstart hstart' _ _) fun r =>
+        afterStep_sim b slice h start start' es hb hbs hstart hstart' r
 
 end
 

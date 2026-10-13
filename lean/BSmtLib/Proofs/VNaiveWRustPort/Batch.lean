@@ -1,14 +1,12 @@
 import BSmtLib.Proofs.VNaiveWRustPort.WP
-import BSmtLib.Proofs.VNaiveWRustPort.Feed
+import BSmtLib.Proofs.VNaiveWRustPort.Bytes
 
 /-!
 # The Rust port's batches
 
 The Rust port writes its tokens into a batch whose storage it keeps from one hand-over to the
 next: the arrays may be longer than the tokens in use. `Holds T ls` says that the batch `T`
-holds the lexemes `ls`: its first tokens are theirs, field by field. A cursor over such a batch
-is reported to the adapter's consumer as the naive lexer reports each lexeme alone
-(`toHanded_holds`), and the consumer records the lexemes of the cursor (`consume_holds`).
+holds the lexemes `ls`: its first tokens are theirs, field by field.
 -/
 
 namespace BSmtLib.Proofs.Lexer.VNaiveWRustPort
@@ -24,7 +22,7 @@ def wr (a : Array Nat) (i v : Nat) : Array Nat :=
 
 /-- How the batch writes a byte at an index of an array, at most its size. -/
 def wrB (a : ByteArray) (i : Nat) (v : UInt8) : ByteArray :=
-  if i < a.size then a.set! i v else a.push v
+  if h : i < a.size then a.set i v else a.push v
 
 theorem size_wr (a : Array Nat) (i v : Nat) (h : i ≤ a.size) :
     i < (wr a i v).size ∧ a.size ≤ (wr a i v).size := by
@@ -50,8 +48,8 @@ theorem size_wrB (a : ByteArray) (i : Nat) (v : UInt8) (h : i ≤ a.size) :
     i < (wrB a i v).size ∧ a.size ≤ (wrB a i v).size := by
   unfold wrB
   split
-  · show i < (a.data.set! i v).size ∧ a.data.size ≤ (a.data.set! i v).size
-    rw [Array.size_set!]; exact ⟨‹_›, Nat.le_refl _⟩
+  · show i < (a.data.set i v _).size ∧ a.data.size ≤ (a.data.set i v _).size
+    rw [Array.size_set]; exact ⟨‹_›, Nat.le_refl _⟩
   · show i < (a.data.push v).size ∧ a.data.size ≤ (a.data.push v).size
     rw [Array.size_push]; simp only [ByteArray.size] at h; omega
 
@@ -60,15 +58,14 @@ theorem get!_wrB (a : ByteArray) (i : Nat) (v : UInt8) (j : Nat) (h : i ≤ a.si
   unfold wrB
   have hs : a.size = a.data.size := rfl
   by_cases hlt : i < a.size
-  · simp only [hlt, ↓reduceIte]
-    show (a.data.set! i v)[j]! = if j = i then v else a.data[j]!
-    simp only [getElem!_def, Array.set!_eq_setIfInBounds, Array.getElem?_setIfInBounds]
+  · simp only [hlt, ↓reduceDIte]
+    show (a.data.set i v hlt)[j]! = if j = i then v else a.data[j]!
+    simp only [getElem!_def, Array.getElem?_set]
     by_cases e : j = i
     · subst e
-      simp only [↓reduceIte]
-      rw [ite_eq_left_of_eq_true _ _ (eq_true (show j < a.data.size by omega))]
+      simp
     · simp [e, Ne.symm e]
-  · simp only [hlt, ↓reduceIte]
+  · simp only [hlt, ↓reduceDIte]
     show (a.data.push v)[j]! = if j = i then v else a.data[j]!
     simp only [getElem!_def, Array.getElem?_push]
     by_cases e : j = i
@@ -105,24 +102,6 @@ structure Holds (T : TokenBatch) (ls : List Lexeme) : Prop where
 theorem holds_clear (T : TokenBatch) (origin : Nat) : Holds (T.clear origin) [] := by
   refine ⟨rfl, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
     first | exact Nat.zero_le _ | (intro j hj; simp at hj)
-
-theorem holds_empty (n : Nat) : Holds (TokenBatch.empty n) [] := by
-  refine ⟨rfl, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
-    first | exact Nat.zero_le _ | (intro j hj; simp at hj)
-
-theorem holds_default : Holds (default : TokenBatch) [] := holds_empty 0
-
-/-- A batch with its contents in another array holds the same lexemes if their contents are
-there too. -/
-theorem Holds.bytes_congr {T : TokenBatch} {ls : List Lexeme} (h : Holds T ls)
-    (bytes : ByteArray) (hb : ∀ j (hj : j < ls.length),
-      T.contentStops[j]! ≤ bytes.size ∧
-      bytes.extract (T.contentStarts[j]!) (T.contentStops[j]!) = ls[j].content) :
-    Holds { T with bytes } ls := by
-  obtain ⟨h0, h1, h2, h3, h4, h5, h6, h7, h8, h9, he⟩ := h
-  refine ⟨h0, h1, h2, h3, h4, h5, h6, h7, h8, h9, fun j hj => ?_⟩
-  obtain ⟨e1, e2, -, -, e5, e6, e7, e8, e9, e10⟩ := he j hj
-  exact ⟨e1, e2, (hb j hj).1, (hb j hj).2, e5, e6, e7, e8, e9, e10⟩
 
 /-- A token pushed onto a batch that holds the lexemes, with the fields of the lexeme `l`. -/
 theorem holds_push {T : TokenBatch} {ls : List Lexeme} (h : Holds T ls) (l : Lexeme)
@@ -192,114 +171,5 @@ theorem holds_push {T : TokenBatch} {ls : List Lexeme} (h : Holds T ls) (l : Lex
     have hlt : j < ls.length := by omega
     rw [List.getElem_append_left hlt]
     exact hentry j hlt
-
-/-! ## Cursors over a batch -/
-
-/-- A token of a batch that holds the lexemes is reported as the naive lexer reports its lexeme
-alone. -/
-theorem toHanded_holds {g : BatchTag} {ls : List Lexeme} (c : BatchCursor g) (h : c.HasNext)
-    (hb : Holds (intoBatch c) ls) (hj : idx c < ls.length) :
-    toHanded c (c.next h).1 = lexemeHanded c.version ls[idx c] := by
-  obtain ⟨e1, e2, e3, e4, e5, e6, e7, e8, e9, e10⟩ := hb.entry (idx c) hj
-  rw [lexemeHanded_eq]
-  have hcontent : (c.content (c.next h).1).toByteArray = ls[idx c].content := by
-    rw [content_next, toByteArray_toByteSlice_range _ e2 e3, e4]
-  have hcat : c.category (c.next h).1 = ls[idx c].category := by
-    rw [category_next, e1, ofUInt8_toUInt8]
-  have hstart : (c.span (c.next h).1).start = ls[idx c].start := by
-    rw [span_next, e5, e6, e7]; rfl
-  have hend : (c.span (c.next h).1).end = ls[idx c].end := by
-    rw [span_next, e8, e9, e10]; rfl
-  unfold toHanded
-  simp only [BatchCursor.syntax, SyntaxToken.fromToken, hcat, hstart, hend, toContent, hcontent,
-    byteArray_toList]
-  cases hc : ls[idx c].category <;> simp [toTokenType, lexemeReserved, toReservedKind]
-  · rw [← hcontent, fromBytes_toByteArray]
-    cases Reserved.fromBytes? (c.content (c.next h).1) c.version <;> rfl
-
-theorem takeRest_holds {g : BatchTag} (ls : List Lexeme) :
-    ∀ n (c : BatchCursor g), c.remaining = n →
-    Holds (intoBatch c) ls → idx c + c.remaining = ls.length →
-    (takeRest c).1 = (ls.drop (idx c)).mapM (lexemeHanded c.version) ∧
-    ((takeRest c).1 ≠ none → (takeRest c).2.1.remaining = 0) ∧
-    (takeRest c).2.1.version = c.version ∧
-    (takeRest c).2.1.relexRequested = c.relexRequested := by
-  intro n
-  induction n with
-  | zero =>
-    intro c hn hb hs
-    have hnh : ¬ c.HasNext := by rw [hasNext_iff]; omega
-    rw [takeRest]
-    simp only [hnh, dite_false]
-    rw [List.drop_eq_nil_of_le (by omega)]
-    simp [hn]
-  | succ n ih =>
-    intro c hn hb hs
-    have hh : c.HasNext := by rw [hasNext_iff]; omega
-    have hr := remaining_next c hh
-    have hi := idx_next c hh
-    have hj : idx c < ls.length := by omega
-    obtain ⟨i1, i2, i3, i4⟩ := ih (c.next hh).2.1 (by omega) (by rw [intoBatch_next]; exact hb)
-      (by omega)
-    rw [takeRest]
-    simp only [hh, dite_true]
-    rw [toHanded_holds c hh hb hj, List.drop_eq_getElem_cons hj, List.mapM_cons]
-    cases hl : lexemeHanded c.version ls[idx c] with
-    | none =>
-      exact ⟨rfl, fun h => absurd rfl h, rfl, rfl⟩
-    | some x =>
-      rw [version_next, hi] at i1
-      rw [version_next] at i3
-      rw [relex_next] at i4
-      refine ⟨?_, ?_, i3, i4⟩
-      · rw [i1]
-        cases (ls.drop (idx c + 1)).mapM (lexemeHanded c.version) <;> rfl
-      · intro hne
-        apply i2
-        intro hn'
-        rw [hn'] at hne
-        exact hne rfl
-
-/-- What the adapter's consumer does with a cursor over a batch that holds the lexemes. -/
-theorem consume_holds {g : BatchTag} (ls : List Lexeme) (c : BatchCursor g) (h : c.HasNext)
-    (hb : Holds (intoBatch c) ls) (hs : idx c + c.remaining = ls.length) (coll : Collector) :
-    (∀ hs', (ls.drop (idx c)).mapM (lexemeHanded c.version) = some hs' →
-      ((Consume.consume (H := Collector) c h).run coll).1.1 = .ok .continue ∧
-      ((Consume.consume (H := Collector) c h).run coll).2.handed = coll.handed ++ hs' ∧
-      ((Consume.consume (H := Collector) c h).run coll).1.2.1.remaining = 0 ∧
-      ((Consume.consume (H := Collector) c h).run coll).1.2.1.version = c.version ∧
-      ((Consume.consume (H := Collector) c h).run coll).1.2.1.relexRequested =
-        c.relexRequested) ∧
-    ((ls.drop (idx c)).mapM (lexemeHanded c.version) = none →
-      ((Consume.consume (H := Collector) c h).run coll).1.1 = .error ()) := by
-  have hr := remaining_next c h
-  have hi := idx_next c h
-  have hj : idx c < ls.length := by rw [hasNext_iff] at h; omega
-  obtain ⟨i1, i2, i3, i4⟩ := takeRest_holds ls _ (c.next h).2.1 rfl
-    (by rw [intoBatch_next]; exact hb) (by omega)
-  rw [version_next, hi] at i1
-  rw [version_next] at i3
-  rw [relex_next] at i4
-  simp only [Consume.consume]
-  rw [toHanded_holds c h hb hj, List.drop_eq_getElem_cons hj, List.mapM_cons]
-  cases hl : lexemeHanded c.version ls[idx c] with
-  | none =>
-    refine ⟨fun hs' h' => ?_, fun _ => rfl⟩
-    simp at h'
-  | some x =>
-    generalize hrest : takeRest (c.next h).2.1 = rest at i1 i2 i3 i4
-    obtain ⟨res, last, hf⟩ := rest
-    simp only at i1 i2 i3 i4
-    subst i1
-    cases hm : (ls.drop (idx c + 1)).mapM (lexemeHanded c.version) with
-    | none =>
-      refine ⟨fun hs' h' => ?_, fun _ => rfl⟩
-      simp at h'
-    | some ys =>
-      refine ⟨fun hs' h' => ?_, fun h' => ?_⟩
-      · have h'' : x :: ys = hs' := by simpa using h'
-        subst h''
-        exact ⟨rfl, rfl, i2 (by simp [hm]), i3, i4⟩
-      · simp at h'
 
 end BSmtLib.Proofs.Lexer.VNaiveWRustPort

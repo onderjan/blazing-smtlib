@@ -58,7 +58,8 @@ end
 
 section
 
-variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] {R E : Type} [Consume H m R E]
+variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] {R E : Type} [Consume H R E]
+  [∀ batch, ConsumeFrom H (BatchCursor batch) m]
 
 theorem lexEofInner_exact (c : ZCore) (h : H) :
     (fun r => ((r.1.1, coreMap 0 r.1.2), r.2)) <$>
@@ -70,7 +71,7 @@ theorem lexEofInner_exact (c : ZCore) (h : H) :
   refine bind_post_sim (φ := boundMap 0) (Q := fun _ _ => True) _ _ _ ?_ (rfl : BaseIs 0 _) _ _
     (fun a s h => ?_) h
   · refine SimP.bind (SimP.tryCatch (ψ := id) (Q := fun _ _ => True) ?_ fun e => ?_) fun _ => ?_
-    · obtain ⟨v, iv, st, d, rc, cd, ld, rs, ts, tc, off, bs, ln, ls, bt, tsd, be⟩ := c
+    · obtain ⟨v, iv, st, df, hd, rc, cd, ld, rs, ts, tc, off, bs, ln, ls, bt, tsd, be⟩ := c
       have ok : EndOk 0 0 0 BSmtLib.Lexer.TokenEnd.EOF :=
         ⟨by simp, by simp, by simp [BSmtLib.Lexer.TokenEnd.EOF],
           by simp [BSmtLib.Lexer.TokenEnd.EOF],
@@ -78,7 +79,7 @@ theorem lexEofInner_exact (c : ZCore) (h : H) :
       cases st <;> dsimp only
       case comment =>
         refine SimP.bind (Q := fun x s => BaseIs 0 s ∧
-          x = Consume.consumesWhitespaceAndComments (H := H)) (ψ := id) ?_ fun x => ?_
+          x = Consume.isConcrete (H := H)) (ψ := id) ?_ fun x => ?_
         · unfold BSmtLib.Lexer.Internal.consumesWhitespaceAndComments
             Lexer.WRustPort.consumesWhitespaceAndComments
           exact SimP.pure (fun _ h => ⟨h, rfl⟩) rfl
@@ -114,15 +115,18 @@ theorem lexEofInner_exact (c : ZCore) (h : H) :
         exact SimP.mono (Q := fun _ => BaseIs 0) (fun _ h => h) (fun _ _ _ => trivial)
           (sinkStored_sim 0 0 _ _ _ 0 ok.hbase ok.hbp _ _)
       all_goals exact fail_sim 0 id 0 _ _ ok.hb ok.hp ok.hno _
-    · rcases e with ⟨_ | _ | _, _, _⟩ <;>
-        first | exact SimP.pure (fun _ _ => trivial) rfl | exact SimP.throw _
+    · rcases e with ⟨_ | _ | _ | _ | _, _, _⟩ <;> dsimp only <;>
+        try (first | exact SimP.pure (fun _ _ => trivial) rfl | exact SimP.throw _)
+      all_goals
+        refine modifyCore_sim (H := H) (m := m) (R := R) (E := E) 0 _ _ ?_ fun _ _ => trivial
+      all_goals intro _ _; rfl
     · refine SimP.bind (simP_true_of_base fun b => SimP.mono (fun _ h => h)
         (fun _ _ _ => trivial) (startToken_sim 0 b _ 0 0 (by simp) (by simp) _ _)) fun x => ?_
       exact simP_true_of_base fun b => SimP.mono (fun _ h => h) (fun _ _ _ => trivial)
         (handOverEof_sim 0 b x.val)
   · cases a with
     | ok u => simp [boundMap]
-    | error e => rcases e with ⟨_ | _ | _, _, _⟩ <;> simp [boundMap]
+    | error e => rcases e with ⟨_ | _ | _ | _ | _, _, _⟩ <;> simp [boundMap]
 
 end
 

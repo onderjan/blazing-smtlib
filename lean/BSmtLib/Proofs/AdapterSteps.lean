@@ -1,119 +1,125 @@
-import BSmtLib.Proofs.Adapter
+import BSmtLib.Proofs.Adapters
 
 /-!
 # The adapter's steps and the public calls
 
-`Adapter.fedInput` feeds a lexer by the steps of its public calls `lexSlice` and `lexEof`
-(`Ops.lexSliceStep`, `Ops.lexEofStep`). For each lexer of the chain, each public call is its
-step followed by dropping the lexer when the call fails: the lexer stops at its first error and
-is not given back.
+`Adapter.lexing` feeds a lexer by the steps of its public calls `lexSlice` and `lexEof`
+(`LexOps.lexSliceStep`, `LexOps.lexEofStep`), and keeps the held result as they do. For each
+lexer of the chain, each public call is its step followed by keeping the held result as `lexing`
+keeps it, and fails with the step's error where the step fails (`LexOps.SliceCallAgrees`,
+`LexOps.EofCallAgrees`); the lexer, which stops at its first error, is then not given back.
 -/
 
 namespace BSmtLib.Proofs.Adapter
 
-theorem VNaive.lexSlice_eq_lexSliceStep (lexer : VNaive.ops.Lexer) (slice : ByteSlice) :
-    VNaive.ops.lexSlice lexer slice =
-      match VNaive.ops.lexSliceStep lexer slice with
-      | (.ok flow, lexer) => .ok (flow, lexer)
-      | (.error e, _) => .error (e, ()) := by
-  show Lexer.VNaive.Lexer.lexSlice lexer slice = _
+/-- The public call on a slice is its step followed by keeping the held result: the one of the
+step, else the one the lexer held; where the step fails, the call fails with its error. -/
+def LexOps.SliceCallAgrees (ops : LexOps) : Prop :=
+  ∀ (consumer : Spec.Lexer.Consumer) (lexer : ops.Lexer consumer) (slice : ByteSlice),
+    Except.mapError Prod.fst <$> ops.lexSlice lexer slice =
+      (fun r => match r with
+        | (.ok held, lexer) => .ok (ops.withHeld lexer (held.or (ops.held lexer)))
+        | (.error e, _) => .error e) <$> ops.lexSliceStep lexer slice
+
+/-- The public call at the end of the input is its step followed by returning the held result,
+else the one the consumer broke with (`eofResult`), with the lexer holding none; where the step
+fails, the call fails with its error. -/
+def LexOps.EofCallAgrees (ops : LexOps) : Prop :=
+  ∀ (consumer : Spec.Lexer.Consumer) (lexer : ops.Lexer consumer),
+    Except.mapError Prod.fst <$> ops.lexEof lexer =
+      (fun r => match r with
+        | (.ok flow, lexer) => .ok (eofResult (ops.held lexer) flow, ops.withHeld lexer none)
+        | (.error e, _) => .error e) <$> ops.lexEofStep lexer
+
+theorem VNaive.sliceCallAgrees : VNaive.lexOps.SliceCallAgrees := by
+  intro consumer lexer slice
+  show Except.mapError Prod.fst <$> Lexer.VNaive.Lexer.lexSlice lexer slice = _
   unfold Lexer.VNaive.Lexer.lexSlice
-  simp only [VNaive.ops, bind, pure]
-  split
-  next result self heq =>
-    rw [heq]
-    cases result <;> rfl
+  simp only [map_bind, map_pure]
+  rw [map_eq_pure_bind]
+  apply bind_congr
+  intro r
+  rcases r with ⟨_ | _, _⟩ <;> rfl
 
-theorem WRustPort.lexSlice_eq_lexSliceStep (lexer : WRustPort.ops.Lexer) (slice : ByteSlice) :
-    WRustPort.ops.lexSlice lexer slice =
-      match WRustPort.ops.lexSliceStep lexer slice with
-      | (.ok flow, lexer) => .ok (flow, lexer)
-      | (.error e, _) => .error (e, ()) := by
-  show Lexer.WRustPort.Lexer.lexSlice lexer slice = _
+theorem WRustPort.sliceCallAgrees : WRustPort.lexOps.SliceCallAgrees := by
+  intro consumer lexer slice
+  show Except.mapError Prod.fst <$> Lexer.WRustPort.Lexer.lexSlice lexer slice = _
   unfold Lexer.WRustPort.Lexer.lexSlice
-  simp only [WRustPort.ops, bind, pure]
-  split
-  next result self heq =>
-    rw [heq]
-    cases result <;> rfl
+  simp only [map_bind, map_pure]
+  rw [map_eq_pure_bind]
+  apply bind_congr
+  intro r
+  rcases r with ⟨_ | _, _⟩ <;> rfl
 
-theorem X1BatchInCore.lexSlice_eq_lexSliceStep (lexer : X1BatchInCore.ops.Lexer)
-    (slice : ByteSlice) :
-    X1BatchInCore.ops.lexSlice lexer slice =
-      match X1BatchInCore.ops.lexSliceStep lexer slice with
-      | (.ok flow, lexer) => .ok (flow, lexer)
-      | (.error e, _) => .error (e, ()) := by
-  show Lexer.X1BatchInCore.Lexer.lexSlice lexer slice = _
+theorem X1BatchInCore.sliceCallAgrees : X1BatchInCore.lexOps.SliceCallAgrees := by
+  intro consumer lexer slice
+  show Except.mapError Prod.fst <$> Lexer.X1BatchInCore.Lexer.lexSlice lexer slice = _
   unfold Lexer.X1BatchInCore.Lexer.lexSlice
-  simp only [X1BatchInCore.ops, bind, pure]
-  split
-  next result self heq =>
-    rw [heq]
-    cases result <;> rfl
+  simp only [map_bind, map_pure]
+  rw [map_eq_pure_bind]
+  apply bind_congr
+  intro r
+  rcases r with ⟨_ | _, _⟩ <;> rfl
 
-theorem Lexer.lexSlice_eq_lexSliceStep (lexer : Lexer.ops.Lexer) (slice : ByteSlice) :
-    Lexer.ops.lexSlice lexer slice =
-      match Lexer.ops.lexSliceStep lexer slice with
-      | (.ok flow, lexer) => .ok (flow, lexer)
-      | (.error e, _) => .error (e, ()) := by
-  show BSmtLib.Lexer.lexSlice lexer slice = _
+theorem Lexer.sliceCallAgrees : Lexer.lexOps.SliceCallAgrees := by
+  intro consumer lexer slice
+  show Except.mapError Prod.fst <$> BSmtLib.Lexer.lexSlice lexer slice = _
   unfold BSmtLib.Lexer.lexSlice
-  simp only [Lexer.ops, bind, pure]
-  split
-  next result self heq =>
-    rw [heq]
-    cases result <;> rfl
+  simp only [map_bind, map_pure]
+  rw [map_eq_pure_bind]
+  apply bind_congr
+  intro r
+  rcases r with ⟨_ | _, _⟩ <;> rfl
 
-theorem VNaive.lexEof_eq_lexEofStep (lexer : VNaive.ops.Lexer) :
-    VNaive.ops.lexEof lexer =
-      match VNaive.ops.lexEofStep lexer with
-      | (.ok flow, lexer) => .ok (flow, lexer)
-      | (.error e, _) => .error (e, ()) := by
-  show Lexer.VNaive.Lexer.lexEof lexer = _
+theorem VNaive.eofCallAgrees : VNaive.lexOps.EofCallAgrees := by
+  intro consumer lexer
+  show Except.mapError Prod.fst <$> Lexer.VNaive.Lexer.lexEof lexer = _
   unfold Lexer.VNaive.Lexer.lexEof
-  simp only [VNaive.ops, bind, pure]
-  split
-  next result self heq =>
-    rw [heq]
-    cases result <;> rfl
+  simp only [map_bind, map_pure]
+  rw [map_eq_pure_bind]
+  apply bind_congr
+  intro r
+  rcases r with ⟨_ | flow, l⟩
+  · rfl
+  · rcases l with ⟨_, _, held⟩
+    cases held <;> cases flow <;> rfl
 
-theorem WRustPort.lexEof_eq_lexEofStep (lexer : WRustPort.ops.Lexer) :
-    WRustPort.ops.lexEof lexer =
-      match WRustPort.ops.lexEofStep lexer with
-      | (.ok flow, lexer) => .ok (flow, lexer)
-      | (.error e, _) => .error (e, ()) := by
-  show Lexer.WRustPort.Lexer.lexEof lexer = _
+theorem WRustPort.eofCallAgrees : WRustPort.lexOps.EofCallAgrees := by
+  intro consumer lexer
+  show Except.mapError Prod.fst <$> Lexer.WRustPort.Lexer.lexEof lexer = _
   unfold Lexer.WRustPort.Lexer.lexEof
-  simp only [WRustPort.ops, bind, pure]
-  split
-  next result self heq =>
-    rw [heq]
-    cases result <;> rfl
+  simp only [map_bind, map_pure]
+  rw [map_eq_pure_bind]
+  apply bind_congr
+  intro r
+  rcases r with ⟨_ | flow, l⟩
+  · rfl
+  · rcases l with ⟨_, _, held⟩
+    cases held <;> cases flow <;> rfl
 
-theorem X1BatchInCore.lexEof_eq_lexEofStep (lexer : X1BatchInCore.ops.Lexer) :
-    X1BatchInCore.ops.lexEof lexer =
-      match X1BatchInCore.ops.lexEofStep lexer with
-      | (.ok flow, lexer) => .ok (flow, lexer)
-      | (.error e, _) => .error (e, ()) := by
-  show Lexer.X1BatchInCore.Lexer.lexEof lexer = _
+theorem X1BatchInCore.eofCallAgrees : X1BatchInCore.lexOps.EofCallAgrees := by
+  intro consumer lexer
+  show Except.mapError Prod.fst <$> Lexer.X1BatchInCore.Lexer.lexEof lexer = _
   unfold Lexer.X1BatchInCore.Lexer.lexEof
-  simp only [X1BatchInCore.ops, bind, pure]
-  split
-  next result self heq =>
-    rw [heq]
-    cases result <;> rfl
+  simp only [map_bind, map_pure]
+  rw [map_eq_pure_bind]
+  apply bind_congr
+  intro r
+  rcases r with ⟨_ | flow, l⟩
+  · rfl
+  · rcases l with ⟨_, _, held⟩
+    cases held <;> cases flow <;> rfl
 
-theorem Lexer.lexEof_eq_lexEofStep (lexer : Lexer.ops.Lexer) :
-    Lexer.ops.lexEof lexer =
-      match Lexer.ops.lexEofStep lexer with
-      | (.ok flow, lexer) => .ok (flow, lexer)
-      | (.error e, _) => .error (e, ()) := by
-  show BSmtLib.Lexer.lexEof lexer = _
+theorem Lexer.eofCallAgrees : Lexer.lexOps.EofCallAgrees := by
+  intro consumer lexer
+  show Except.mapError Prod.fst <$> BSmtLib.Lexer.lexEof lexer = _
   unfold BSmtLib.Lexer.lexEof
-  simp only [Lexer.ops, bind, pure]
-  split
-  next result self heq =>
-    rw [heq]
-    cases result <;> rfl
+  simp only [map_bind, map_pure]
+  rw [map_eq_pure_bind]
+  apply bind_congr
+  intro r
+  rcases r with ⟨_ | flow, l⟩
+  · rfl
+  · cases h : BSmtLib.Lexer.Internal.held l <;> cases flow <;> rfl
 
 end BSmtLib.Proofs.Adapter

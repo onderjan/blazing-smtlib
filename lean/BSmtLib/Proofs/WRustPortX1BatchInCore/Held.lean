@@ -18,11 +18,12 @@ open BSmtLib.Proofs.Lexer.WRustPort (Ops)
 
 section
 
-variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Consume H m R E]
+variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Consume H R E]
+  [∀ batch, ConsumeFrom H (BatchCursor batch) m]
   {floor : Option Nat} {low : Nat} {strict : Bool} {o₁ o₂ : Ops H m R E}
   {LRel : Ops.Locals H m R E (self := o₁) → Ops.Locals H m R E (self := o₂) → Nat → Nat → Prop}
 
-omit [Consume H m R E] in
+omit [Consume H R E] [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 theorem pushBorrowed_sim (ho : OpsSim o₁ o₂ LRel) (l ls : Nat) (input : ByteSlice)
     (b b' : TokenBatch) (hb : HR b b') (offset base : Nat) (ty : TokenCategory)
     (contentStart contentStop : Nat) (start : Location) (tokenEnd : Nat)

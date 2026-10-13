@@ -18,15 +18,15 @@ open BSmtLib.Lexer.Internal (handler core ofParts)
 
 section
 
-variable {H : Type} {recovery : Recovery}
+variable {H R E : Type} [Consume H R E] {recovery : Recovery}
 
 /-- The library's lexer as `X1BatchInCore`, with its base forgotten. -/
 def lexerMap (l : BSmtLib.Lexer H recovery) : Lexer.WRustPort.Lexer H recovery :=
-  { handler := handler l, core := zm (core l) }
+  { handler := handler l, core := zm (core l), held := BSmtLib.Lexer.Internal.held l }
 
 /-- `X1BatchInCore` with its base forgotten. -/
 def lexerZb (x : Lexer.WRustPort.Lexer H recovery) : Lexer.WRustPort.Lexer H recovery :=
-  { handler := x.handler, core := zb x.core }
+  { handler := x.handler, core := zb x.core, held := x.held }
 
 /-- What a failed call of the library's lexer gives back, mapped by `lexerMap`. -/
 def afterErrorMap : {recovery : Recovery} → BSmtLib.Lexer.AfterError H recovery →
@@ -60,66 +60,62 @@ def afterEofZb : {recovery : Recovery} → Lexer.WRustPort.Lexer.AfterEofError H
   | .recovering, .lexer x => .lexer (lexerZb x)
   | .recovering, .pending p => .pending ⟨lexerZb p.lexer⟩
 
-/-- The result of a call of the library's lexer, mapped by `lexerMap`. -/
-def resultMap {α A : Type} {A' : Type} (after : A → A') :
-    Except (α × A) (ControlFlow (Located R) × BSmtLib.Lexer H recovery) →
-      Except (α × A') (ControlFlow (Located R) × Lexer.WRustPort.Lexer H recovery)
-  | .ok (flow, l) => .ok (flow, lexerMap l)
-  | .error (e, a) => .error (e, after a)
-
-/-- The result of a call of `X1BatchInCore`, with the base forgotten. -/
-def resultZb {α A : Type} (after : A → A) :
-    Except (α × A) (ControlFlow (Located R) × Lexer.WRustPort.Lexer H recovery) →
-      Except (α × A) (ControlFlow (Located R) × Lexer.WRustPort.Lexer H recovery)
-  | .ok (flow, x) => .ok (flow, lexerZb x)
+/-- The result of a call, with what it gives back mapped by `f` and what a failure gives back
+mapped by `after`. -/
+def resultMap {α A A' β β' : Type} (after : A → A') (f : β → β') :
+    Except (α × A) β → Except (α × A') β'
+  | .ok b => .ok (f b)
   | .error (e, a) => .error (e, after a)
 
 end
 
 section
 
-variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] {R E : Type} [Consume H m R E]
+variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] {R E : Type} [Consume H R E]
+  [∀ batch, ConsumeFrom H (BatchCursor batch) m]
 
 theorem lexSlice_sim {recovery : Recovery} [LexRecovery recovery H m]
     (l : BSmtLib.Lexer H recovery)
     (x : Lexer.WRustPort.Lexer H recovery) (hh : x.handler = handler l)
-    (hx : Rel (core l) x.core) (slice : ByteSlice) (hs : slice.stop < USize.size) :
-    resultZb afterErrorZb <$> Lexer.X1BatchInCore.Lexer.lexSlice (R := R) (E := E) x slice =
-      resultMap afterErrorMap <$> BSmtLib.Lexer.lexSlice l slice := by
+    (hx : Rel (core l) x.core) (hd : x.held = BSmtLib.Lexer.Internal.held l) (slice : ByteSlice)
+    (hs : slice.stop < USize.size) :
+    resultMap afterErrorZb lexerZb <$> Lexer.X1BatchInCore.Lexer.lexSlice x slice =
+      resultMap afterErrorMap lexerMap <$> BSmtLib.Lexer.lexSlice l slice := by
   have hc := lexSliceStep_couple (H := H) (m := m) (R := R) (E := E)
     (LexRecovery.abandon recovery)
     (LexRecovery.recover recovery) slice hs
-  obtain ⟨xh, xc⟩ := x
-  simp only at hh hx
-  subst hh
-  rw [show l = ofParts (handler l) (core l) from rfl]
+  obtain ⟨xh, xc, xd⟩ := x
+  simp only at hh hx hd
+  subst hh hd
+  rw [show l = ofParts (handler l) (core l) (BSmtLib.Lexer.Internal.held l) from rfl]
   simp only [Lexer.X1BatchInCore.Lexer.lexSlice, BSmtLib.Lexer.lexSlice, Lexer.WRustPort.Lexer.run,
     BSmtLib.Lexer.Internal.run, ofParts, bind_pure_comp,
     Functor.map_map]
   refine (Coupled.map_eq _ _ (fun a c h b x e hcx => ?_) hc hx (handler l)).symm
   subst e
-  rcases a with err | flow
+  rcases a with err | held
   · cases recovery
     · rfl
     · exact congrArg (fun y => (Except.error (err,
-        ({ handler := h, core := y } : Lexer.WRustPort.Lexer H .recovering)) :
+        ({ handler := h, core := y, held := none } : Lexer.WRustPort.Lexer H .recovering)) :
           Except (LexError E × Lexer.WRustPort.Lexer H .recovering)
-            (ControlFlow (Located R) × Lexer.WRustPort.Lexer H .recovering))) hcx.symm
-  · simp only [resultMap, resultZb, lexerMap, lexerZb]
+            (Lexer.WRustPort.Lexer H .recovering))) hcx.symm
+  · simp only [resultMap, lexerMap, lexerZb, BSmtLib.Lexer.Internal.withHeld,
+      BSmtLib.Lexer.Internal.handler, BSmtLib.Lexer.Internal.core, BSmtLib.Lexer.Internal.held]
     rw [hcx]
-    rfl
 
 theorem lexEof_sim {recovery : Recovery} [LexRecovery recovery H m]
     (l : BSmtLib.Lexer H recovery) (x : Lexer.WRustPort.Lexer H recovery)
-    (hh : x.handler = handler l) (hx : Rel (core l) x.core) :
-    resultZb afterEofZb <$> Lexer.X1BatchInCore.Lexer.lexEof (R := R) (E := E) x =
-      resultMap afterEofMap <$> BSmtLib.Lexer.lexEof l := by
+    (hh : x.handler = handler l) (hx : Rel (core l) x.core)
+    (hd : x.held = BSmtLib.Lexer.Internal.held l) :
+    resultMap afterEofZb (fun p => (p.1, lexerZb p.2)) <$> Lexer.X1BatchInCore.Lexer.lexEof x =
+      resultMap afterEofMap (fun p => (p.1, lexerMap p.2)) <$> BSmtLib.Lexer.lexEof l := by
   have hc := lexEofStep_couple (H := H) (m := m) (R := R) (E := E)
     (LexRecovery.abandon recovery) (LexRecovery.recover recovery)
-  obtain ⟨xh, xc⟩ := x
-  simp only at hh hx
-  subst hh
-  rw [show l = ofParts (handler l) (core l) from rfl]
+  obtain ⟨xh, xc, xd⟩ := x
+  simp only at hh hx hd
+  subst hh hd
+  rw [show l = ofParts (handler l) (core l) (BSmtLib.Lexer.Internal.held l) from rfl]
   simp only [Lexer.X1BatchInCore.Lexer.lexEof, BSmtLib.Lexer.lexEof, Lexer.WRustPort.Lexer.run,
     BSmtLib.Lexer.Internal.run, ofParts, bind_pure_comp, Functor.map_map]
   refine (Coupled.map_eq _ _ (fun a c h b x e hcx => ?_) hc hx (handler l)).symm
@@ -128,16 +124,16 @@ theorem lexEof_sim {recovery : Recovery} [LexRecovery recovery H m]
   · cases recovery
     · rfl
     · dsimp only
-      rcases hk : err.continuesFrom.isSome
-      · exact congrArg (fun y => (Except.error (err, .lexer
-          ({ handler := h, core := y } : Lexer.WRustPort.Lexer H .recovering)) :
-            Except (LexError E × Lexer.WRustPort.Lexer.AfterEof H)
-              (ControlFlow (Located R) × Lexer.WRustPort.Lexer H .recovering))) hcx.symm
-      · exact congrArg (fun y => (Except.error (err, .pending ⟨
-          ({ handler := h, core := y } : Lexer.WRustPort.Lexer H .recovering)⟩) :
-            Except (LexError E × Lexer.WRustPort.Lexer.AfterEof H)
-              (ControlFlow (Located R) × Lexer.WRustPort.Lexer H .recovering))) hcx.symm
-  · simp only [resultMap, resultZb, lexerMap, lexerZb]
+      rcases err.continuesFrom.isSome
+      all_goals
+        simp only [resultMap, afterEofMap, afterEofZb, lexerMap, lexerZb,
+          BSmtLib.Lexer.Internal.withHeld, BSmtLib.Lexer.Internal.handler,
+          BSmtLib.Lexer.Internal.core, BSmtLib.Lexer.Internal.held,
+          Lexer.WRustPort.Lexer.afterEofError]
+        rw [hcx]
+        rfl
+  · simp only [resultMap, lexerMap, lexerZb, BSmtLib.Lexer.Internal.withHeld,
+      BSmtLib.Lexer.Internal.handler, BSmtLib.Lexer.Internal.core, BSmtLib.Lexer.Internal.held]
     rw [hcx]
     rfl
 
@@ -147,19 +143,21 @@ end
 
 section
 
-variable {H : Type} {recovery : Recovery}
+variable {H R E : Type} [Consume H R E] {recovery : Recovery}
 
-/-- The library's lexer and `X1BatchInCore` are related: they have
-the same consumer, and their states are equal once the base is forgotten. -/
+/-- The library's lexer and `X1BatchInCore` are related: they have the same consumer and the same
+held result, and their states are equal once the base is forgotten. -/
 def LexerRel (l : BSmtLib.Lexer H recovery) (x : Lexer.WRustPort.Lexer H recovery) : Prop :=
-  x.handler = handler l ∧ Rel (core l) x.core
+  x.handler = handler l ∧ Rel (core l) x.core ∧ x.held = BSmtLib.Lexer.Internal.held l
 
 end
 
 section
 
-variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] {R E : Type} [Consume H m R E]
+variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] {R E : Type} [Consume H R E]
+  [∀ batch, ConsumeFrom H (BatchCursor batch) m]
 
+omit [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 /-- Steps that are coupled, run on related lexers by `run`, give results related as the
 coupling relates them, and related lexers. -/
 theorem run_couple {recovery : Recovery} {α β : Type} {Rr : α → β → Prop}
@@ -168,18 +166,18 @@ theorem run_couple {recovery : Recovery} {α β : Type} {Rr : α → β → Prop
     (hlx : LexerRel l x) :
     MCouple (fun a b => Rr a.1 b.1 ∧ LexerRel a.2 b.2) (BSmtLib.Lexer.Internal.run l f)
       (x.run g) := by
-  obtain ⟨xh, xc⟩ := x
-  obtain ⟨hh, hx⟩ := hlx
-  simp only at hh hx
-  subst hh
-  rw [show l = ofParts (handler l) (core l) from rfl]
+  obtain ⟨xh, xc, xd⟩ := x
+  obtain ⟨hh, hx, hd⟩ := hlx
+  simp only at hh hx hd
+  subst hh hd
+  rw [show l = ofParts (handler l) (core l) (BSmtLib.Lexer.Internal.held l) from rfl]
   simp only [Lexer.WRustPort.Lexer.run, BSmtLib.Lexer.Internal.run, ofParts, bind_pure_comp]
   have hm : MCouple (fun a b => (Rr a.1.1 b.1.1 ∧ Rel a.1.2 b.1.2) ∧ a.2 = b.2)
       ((f.run (core l)).run (handler l)) ((g.run xc).run (handler l)) :=
     hc (core l) xc hx (handler l)
   refine MCouple.map _ _ hm fun p q hpq => ?_
   obtain ⟨⟨hr, hcx⟩, e⟩ := hpq
-  exact ⟨hr, e.symm, hcx⟩
+  exact ⟨hr, e.symm, hcx, rfl⟩
 
 /-- The step of a call on a slice that ends below `USize.size`, run on related lexers: the two
 give the same result, and related lexers, also where the call fails. -/

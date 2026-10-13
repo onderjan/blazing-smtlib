@@ -60,7 +60,8 @@ end
 
 section
 
-variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Consume H m R E]
+variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Consume H R E]
+  [∀ batch, ConsumeFrom H (BatchCursor batch) m]
   {floor : Option Nat}
 
 /-- What `lexSliceRun` measures its progress by: the bytes left, and whether no lexical error was
@@ -172,7 +173,8 @@ end
 
 section
 
-variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Consume H m R E]
+variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Consume H R E]
+  [∀ batch, ConsumeFrom H (BatchCursor batch) m]
 
 /-- The index of the position the loop goes back to after a stop below the end of the slice. -/
 theorem ix_resumed {slice : ByteSlice} (h : slice.stop < USize.size) {resumed : Nat}
@@ -191,7 +193,8 @@ theorem ix_resumed {slice : ByteSlice} (h : slice.stop < USize.size) {resumed : 
 theorem lexSliceFrom_couple (slice : ByteSlice) (h : slice.stop < USize.size)
     (initialOffset : Nat) :
     ∀ k (floor : Nat) hfloor hfloor' (position : USize) (position' : Nat)
-      (fnResult : Except (BSmtLib.Lexer.Failure E) (ControlFlow R)) (c : ZS (some floor) 0)
+      (fnResult : Except (BSmtLib.Lexer.Failure E) (ControlFlow R))
+      (held : Option (Located R)) (c : ZS (some floor) 0)
       (x : XS (some floor) 0),
       slice.size + 1 - (floor + 1 - initialOffset) = k →
       ix slice.start position = position' → boundMap slice.start c = x →
@@ -199,13 +202,13 @@ theorem lexSliceFrom_couple (slice : ByteSlice) (h : slice.stop < USize.size)
       ∀ hh : H,
       CoupleAt
         (BSmtLib.Lexer.Internal.lexSliceFrom (m := m) (inputOf slice h) initialOffset floor
-          hfloor position fnResult c)
-        (Lexer.WRustPort.lexSliceFrom slice initialOffset floor hfloor' position' fnResult x)
+          hfloor position fnResult held c)
+        (Lexer.WRustPort.lexSliceFrom slice initialOffset floor hfloor' position' fnResult held x)
         hh := by
   intro k
   induction k using Nat.strongRecOn with
   | ind k ih =>
-  intro floor hfloor hfloor' position position' fnResult c x hk ep ex hpos hbase hh
+  intro floor hfloor hfloor' position position' fnResult held c x hk ep ex hpos hbase hh
   subst ep ex
   rw [BSmtLib.Lexer.Internal.lexSliceFrom.eq_def, Lexer.WRustPort.lexSliceFrom.eq_def]
   refine CoupleAt.bind_exact _ _ (fun r => (exitMap r.1, boundMap slice.start r.2)) _ _ hh
@@ -217,24 +220,39 @@ theorem lexSliceFrom_couple (slice : ByteSlice) (h : slice.stop < USize.size)
   | done result => exact CoupleAt.pure (rel_coreMap _ _) h'
   | stopped stop location after =>
     dsimp only [exitMap]
+    have hcond : location.offset - initialOffset <
+        (inputOf slice h).stop.toNat - (inputOf slice h).start.toNat ↔
+        location.offset - initialOffset < slice.size := by
+      rw [inputOf_stop, inputOf_start]
+      exact Iff.rfl
     cases stop with
+    | discarded result =>
+      dsimp only
+      cases result <;> exact CoupleAt.pure (by rfl) h'
     | finished result =>
       dsimp only
-      exact CoupleAt.pure (by rfl) h'
-    | relex =>
-      dsimp only
-      have hcond : location.offset - initialOffset <
-          (inputOf slice h).stop.toNat - (inputOf slice h).start.toNat ↔
-          location.offset - initialOffset < slice.size := by
-        rw [inputOf_stop, inputOf_start]
-        exact Iff.rfl
       by_cases hr : location.offset - initialOffset < slice.size
       · rw [dite_eq_left (hcond.mpr hr), dite_eq_left hr]
         obtain ⟨er, hs⟩ := ix_resumed h hr
         have er' : ((inputOf slice h).start + USize.ofNat (location.offset - initialOffset)).toNat -
             slice.start = location.offset - initialOffset := er
         have := after floor rfl
-        exact ih _ (by omega) location.offset _ _ _ _ (.ok .continue) _ _ rfl er
+        exact ih _ (by omega) location.offset _ _ _ _ (.ok .continue) _ _ _ rfl er
+          (Subtype.ext (by
+            simp only [boundMap, coreMap, BSmtLib.Lexer.LexerCore.resumeAt,
+              Lexer.WRustPort.LexerCore.resumeAt]
+            rw [er'])) hs (fun _ _ => rfl) h'
+      · rw [dite_eq_right (fun h => hr (hcond.mp h)), dite_eq_right hr]
+        exact CoupleAt.pure (by rfl) h'
+    | relex =>
+      dsimp only
+      by_cases hr : location.offset - initialOffset < slice.size
+      · rw [dite_eq_left (hcond.mpr hr), dite_eq_left hr]
+        obtain ⟨er, hs⟩ := ix_resumed h hr
+        have er' : ((inputOf slice h).start + USize.ofNat (location.offset - initialOffset)).toNat -
+            slice.start = location.offset - initialOffset := er
+        have := after floor rfl
+        exact ih _ (by omega) location.offset _ _ _ _ (.ok .continue) _ _ _ rfl er
           (Subtype.ext (by
             simp only [boundMap, coreMap, BSmtLib.Lexer.LexerCore.resumeAt,
               Lexer.WRustPort.LexerCore.resumeAt]
@@ -251,7 +269,7 @@ theorem lexSliceInner_couple (slice : ByteSlice) (h : slice.stop < USize.size) :
   rw [eq_wb hx]
   have hst : ix slice.start (inputOf slice h).start = 0 := by
     simp only [ix, inputOf_start, Nat.sub_self]
-  exact lexSliceFrom_couple slice h c.offset _ (c.offset - 1) _ _ _ 0 _ _ _ rfl hst
+  exact lexSliceFrom_couple slice h c.offset _ (c.offset - 1) _ _ _ 0 _ _ _ _ rfl hst
     (Subtype.ext (by
       simp only [boundMap, coreMap, inputOf_start, Nat.sub_self]
       rfl))

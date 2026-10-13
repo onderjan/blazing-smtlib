@@ -25,7 +25,8 @@ abbrev XCore := BSmtLib.Proofs.Lexer.WRustPort.LexerCore
 that starts at `start` in its array. -/
 def coreMap (start : Nat) (c : ZCore) : XCore :=
   { version := c.version, initialVersion := c.initialVersion, state := c.state
-    discard := c.discard, recovers := c.recovers, consumedDepth := c.consumedDepth
+    discardedFrom := c.discardedFrom, holding := c.holding, recovers := c.recovers
+    consumedDepth := c.consumedDepth
     lexedDepth := c.lexedDepth, recoveryState := c.recoveryState, tokenStart := c.tokenStart
     tokenContent := c.tokenContent, offset := c.offset, base := c.base.toNat - start
     line := c.line, lineStart := c.lineStart, batch := c.batch
@@ -74,7 +75,8 @@ theorem coreMap_locationAt {start : Nat} {c : ZCore} {p : USize} (hb : start ≤
 
 section
 
-variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [Consume H m R E]
+variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [Consume H R E]
+  [∀ batch, ConsumeFrom H (BatchCursor batch) m]
   {floor : Option Nat} {low : Nat}
 
 /-! The operations of `X1BatchInCore`, as the Rust port's code calls
@@ -91,16 +93,18 @@ theorem loadLocals_eq :
       (low := low) : Lexer.WRustPort.LexM H m R E floor low Unit) = pure () :=
   rfl
 
+omit [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 /-- Whether the consumer takes whitespace and comments, read by the library's lexer. -/
 theorem consumes_eq_lexer :
     BSmtLib.Lexer.Internal.consumesWhitespaceAndComments (H := H) (m := m) (R := R) (E := E)
-      (floor := floor) (low := low) = pure (Consume.consumesWhitespaceAndComments (H := H)) :=
+      (floor := floor) (low := low) = pure (Consume.isConcrete (H := H)) :=
   rfl
 
+omit [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 /-- Whether the consumer takes whitespace and comments, read by the Rust port. -/
 theorem consumes_eq_x1 :
     Lexer.WRustPort.consumesWhitespaceAndComments (H := H) (m := m) (R := R) (E := E)
-      (floor := floor) (low := low) = pure (Consume.consumesWhitespaceAndComments (H := H)) :=
+      (floor := floor) (low := low) = pure (Consume.isConcrete (H := H)) :=
   rfl
 
 /-! The operations of the batch, as the Rust port's code calls them, are those of the lexer with
@@ -108,27 +112,27 @@ the batch kept in its state. -/
 
 theorem pushFast_eq :
     @Lexer.WRustPort.Ops.pushFast H m R E Lexer.X1BatchInCore.ops floor low =
-      @Lexer.X1BatchInCore.pushFast H m R E _ _ floor low :=
+      @Lexer.X1BatchInCore.pushFast H m R E _ _ _ floor low :=
   rfl
 
 theorem flushHeld_eq :
     @Lexer.WRustPort.Ops.flushHeld H m R E Lexer.X1BatchInCore.ops floor low =
-      @Lexer.X1BatchInCore.flushHeld H m R E _ _ floor low :=
+      @Lexer.X1BatchInCore.flushHeld H m R E _ _ _ floor low :=
   rfl
 
 theorem flushBatch_eq :
     @Lexer.WRustPort.Ops.flushBatch H m R E Lexer.X1BatchInCore.ops floor low =
-      @Lexer.X1BatchInCore.flushBatch H m R E _ _ floor low :=
+      @Lexer.X1BatchInCore.flushBatch H m R E _ _ _ floor low :=
   rfl
 
 theorem sinkStoredAt_eq :
     @Lexer.WRustPort.Ops.sinkStoredAt H m R E Lexer.X1BatchInCore.ops floor low =
-      @Lexer.X1BatchInCore.handOverStored H m R E _ _ floor low :=
+      @Lexer.X1BatchInCore.handOverStored H m R E _ _ _ floor low :=
   rfl
 
 theorem sinkEof_eq :
     @Lexer.WRustPort.Ops.sinkEof H m R E Lexer.X1BatchInCore.ops low =
-      @Lexer.X1BatchInCore.handOverEof H m R E _ _ low :=
+      @Lexer.X1BatchInCore.handOverEof H m R E _ _ _ low :=
   rfl
 
 theorem eofBatch_eq (c : XCore) :

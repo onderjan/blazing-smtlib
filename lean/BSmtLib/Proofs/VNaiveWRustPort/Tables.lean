@@ -58,10 +58,11 @@ def isLegacyRun (c : UInt8) : Bool :=
   isLegacyStringRun c && c != byte! '|'
 
 theorem endsRunAll_legacy (c : UInt8) :
-    (RUN_FLAGS.get! c.toNat &&& (RUN_STRING_PLAIN ||| RUN_QUOTED_PLAIN) !=
+    (BSmtLib.Lexer.runFlagsOf c &&& (RUN_STRING_PLAIN ||| RUN_QUOTED_PLAIN) !=
       (RUN_STRING_PLAIN ||| RUN_QUOTED_PLAIN)) = !isLegacyRun c :=
-  byte_table (P := fun c => (RUN_FLAGS.get! c.toNat &&& (RUN_STRING_PLAIN ||| RUN_QUOTED_PLAIN) !=
-      (RUN_STRING_PLAIN ||| RUN_QUOTED_PLAIN)) = !isLegacyRun c) (by decide +kernel) c
+  byte_table (P := fun c =>
+      (BSmtLib.Lexer.runFlagsOf c &&& (RUN_STRING_PLAIN ||| RUN_QUOTED_PLAIN) !=
+        (RUN_STRING_PLAIN ||| RUN_QUOTED_PLAIN)) = !isLegacyRun c) (by decide +kernel) c
 
 open BSmtLib.Lexer (fastFlags FAST_ON FAST_DELIM FAST_EMIT FAST_PIPE) in
 /-- The fast flags of a byte: none for a byte off the fast path, and otherwise those of

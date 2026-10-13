@@ -13,7 +13,9 @@ lexer `BSmtLib.Proofs.Lexer.VNaive`, `w`, the Rust lexer ported to Lean
 error.
 -/
 import BSmtLib
-import BSmtLib.Proofs
+import BSmtLib.Proofs.Lexer.VNaive
+import BSmtLib.Proofs.Lexer.WRustPort
+import BSmtLib.Proofs.Lexer.X1BatchInCore
 
 open BSmtLib
 
@@ -67,11 +69,12 @@ def errorKindName : LexicalErrorKind → String
   | .unclosedQuotedSymbol => "UnclosedQuotedSymbol"
   | .numeralLeadingZero => "NumeralLeadingZero"
   | .missingDelimiter => "MissingDelimiter"
+  | .unexpectedTrailingToken => "UnexpectedTrailingToken"
 
 /-- The response line of a token of the cursor, under the version. -/
 def tokenLine {batch : BatchTag} (cursor : BatchCursor batch) (token : Token batch)
     (version : Version) : String :=
-  let reserved := match cursor.syntax token version with
+  let reserved := match SyntaxToken.fromToken cursor token version with
     | .reserved (.general _) => "general"
     | .reserved (.commandName _) => "command"
     | _ => "-"
@@ -198,7 +201,8 @@ def readRequest (line : String) : Except String Request := do
         else (replies.splitOn ",").toArray.mapM readReply
       request := { request with behaviour := .plan replies }
     else if word.startsWith "s" then
-      request := { request with feeds := request.feeds.push (some (← unhex (word.drop 1).toString)) }
+      let bytes ← unhex (word.drop 1).toString
+      request := { request with feeds := request.feeds.push (some bytes) }
     else
       throw s!"unknown operation {repr word}"
   return request
@@ -259,6 +263,15 @@ def takeSome {batch : BatchTag} (cursor : BatchCursor batch) (h : cursor.HasNext
       ⟨next, consumed⟩
   | 0 => ⟨next, consumed⟩
 
+/-- The cursor after a switch of the version, which the lexer's cursor never refuses; a refusal
+would leave it as it is. -/
+def switchVersion {batch : BatchTag} {origin : BatchCursor batch}
+    (next : { c : BatchCursor batch // c.Consumed origin }) (version : Version) :
+    { c : BatchCursor batch // c.Consumed origin } :=
+  match h : next.1.setVersion version with
+  | .ok switched => ⟨switched, (BatchCursor.setVersion_follows h).trans_consumed next.2⟩
+  | .error _ => next
+
 /--
 Takes the tokens of the cursor, which has one, by the rules: fails on the symbol `bad`, on
 a closing parenthesis that closes nothing, and on the end-of-file token inside a parenthesis,
@@ -267,7 +280,7 @@ or on every one if `refuseEnd` is set; the symbol `to-2.0` sets the version.
 def takeByRules {batch : BatchTag} (refuseEnd : Bool) (version : Version)
     (cursor : BatchCursor batch) (h : cursor.HasNext) :
     StateT (Scripted whitespace) IO
-      (Except String (ControlFlow Unit) × { c : BatchCursor batch // c.Consumed cursor }) := do
+      (Except String (ControlFlow Bool) × { c : BatchCursor batch // c.Consumed cursor }) := do
   let (token, ⟨next, consumed⟩) := cursor.next h
   let state : Scripted whitespace ← get
   state.out.modify (· ++ tokenLine cursor token version)
@@ -286,7 +299,7 @@ def takeByRules {batch : BatchTag} (refuseEnd : Bool) (version : Version)
     if content == "bad".toUTF8.toByteSlice then
       return (.error "bad", next)
     if content == "to-2.0".toUTF8.toByteSlice then
-      next := ⟨next.1.setVersion .v2_0, (next.1.setVersion_follows .v2_0).trans_consumed next.2⟩
+      next := switchVersion next .v2_0
   | _ => pure ()
   if h : next.1.HasNext then
     have : next.1.remaining < cursor.remaining := next.2.remaining_lt
@@ -296,39 +309,54 @@ def takeByRules {batch : BatchTag} (refuseEnd : Bool) (version : Version)
     return (.ok .continue, next)
 termination_by cursor.remaining
 
-/- LEAN: the Rust error type is `&'static str`, the name of what made the consumer fail. -/
-instance : Consume (Scripted whitespace) IO Unit String where
-  consumesWhitespaceAndComments := whitespace
+/- LEAN: the Rust error type is `&'static str`, the name of what made the consumer fail. The
+result says whether the consumer finished by its script (`true`) or only because it was handed
+the end of the input (`false`): every consumer breaks there at the latest, and the second kind
+is not reported. -/
+instance : Consume (Scripted whitespace) Bool String where
+  isConcrete := whitespace
+
+/-- The answer of the consumer, which breaks on the end-of-file token where it would continue. -/
+def breakAtEnd {batch : BatchTag} (cursor : BatchCursor batch) (h : cursor.HasNext)
+    (result : Except String (ControlFlow Bool)) : Except String (ControlFlow Bool) :=
+  match result with
+  | .ok .continue =>
+    -- the end-of-file token is handed over alone
+    if cursor.category (cursor.peek h) == .endOfFile then .ok (.break false) else result
+  | _ => result
+
+instance {batch : BatchTag} : ConsumeFrom (Scripted whitespace) (BatchCursor batch) IO where
   consume cursor h := do
     let state : Scripted whitespace ← get
     -- the version the tokens of this hand-over were lexed under
     let version := cursor.version
-    match state.behaviour with
-    | .takeAll =>
-      return (.ok .continue, ← takeAll state.out version cursor h)
-    | .plan replies =>
-      let reply := replies[state.handed]?.getD .takeAll
-      set ({ state with handed := state.handed + 1 } : Scripted whitespace)
+    let (result, next) ← match state.behaviour with
+      | .takeAll =>
+        pure (.ok .continue, ← takeAll state.out version cursor h)
+      | .plan replies => do
+        let reply := replies[state.handed]?.getD .takeAll
+        set ({ state with handed := state.handed + 1 } : Scripted whitespace)
 
-      -- report every token of the hand-over, also those the reply will not take
-      let (lines, count) := describeAll cursor version
-      state.out.modify (· ++ s!"h {versionName version} {count}\n" ++ lines)
+        -- report every token of the hand-over, also those the reply will not take
+        let (lines, count) := describeAll cursor version
+        state.out.modify (· ++ s!"h {versionName version} {count}\n" ++ lines)
 
-      let taken := match reply with
-        | .takeAll => count
-        | .leave taken | .finish taken | .fail taken | .switch taken _
-        | .switchAndFinish taken _ => min taken count
-      -- every reply takes a token, and the cursor has one
-      let ⟨next, consumed⟩ := takeSome cursor h (taken - 1)
-      let switched (version : Version) : { c : BatchCursor _ // c.Consumed cursor } :=
-        ⟨next.setVersion version, (next.setVersion_follows version).trans_consumed consumed⟩
-      return match reply with
-        | .takeAll | .leave _ => (.ok .continue, ⟨next, consumed⟩)
-        | .finish _ => (.ok (.break ()), ⟨next, consumed⟩)
-        | .fail _ => (.error "plan", ⟨next, consumed⟩)
-        | .switch _ version => (.ok .continue, switched version)
-        | .switchAndFinish _ version => (.ok (.break ()), switched version)
-    | .rules refuseEnd => takeByRules refuseEnd version cursor h
+        let taken := match reply with
+          | .takeAll => count
+          | .leave taken | .finish taken | .fail taken | .switch taken _
+          | .switchAndFinish taken _ => min taken count
+        -- every reply takes a token, and the cursor has one
+        let ⟨next, consumed⟩ := takeSome cursor h (taken - 1)
+        let switched (version : Version) : { c : BatchCursor _ // c.Consumed cursor } :=
+          switchVersion ⟨next, consumed⟩ version
+        pure <| match reply with
+          | .takeAll | .leave _ => (.ok .continue, ⟨next, consumed⟩)
+          | .finish _ => (.ok (.break true), ⟨next, consumed⟩)
+          | .fail _ => (.error "plan", ⟨next, consumed⟩)
+          | .switch _ version => (.ok .continue, switched version)
+          | .switchAndFinish _ version => (.ok (.break true), switched version)
+      | .rules refuseEnd => takeByRules refuseEnd version cursor h
+    return (breakAtEnd cursor h result, next)
 
 instance : Recover (Scripted whitespace) IO where
   abandon place := do
@@ -346,7 +374,7 @@ does.
 -/
 def errorLine (err : LexError String) (recover : Bool) : Except String String := do
   let line ← match err.cause with
-    | .lexical err => pure s!"err {errorKindName err.kind} {location err.span.start} \
+    | .lexical kind => pure s!"err {errorKindName kind} {location err.span.start} \
         {location err.span.end}"
     | .consumer name => pure s!"cerr {name}"
   if !recover then
@@ -357,11 +385,12 @@ def errorLine (err : LexError String) (recover : Bool) : Except String String :=
     | none => "-"
   return s!"{line} {continues}\n"
 
-/-- The line of the flow the lexer returned, if it has one. -/
-def flowLine (flow : ControlFlow (Located Unit)) : String :=
-  match flow with
-  | .continue => ""
-  | .break located => s!"fin {location located.location}\n"
+/-- The line of the result the lexer returned at the end of the input, if it has one: the
+consumer finished by its script. -/
+def resultLine (result : Option (Located Bool)) : String :=
+  match result with
+  | some { value := true, location := place } => s!"fin {location place}\n"
+  | _ => ""
 
 /-- The lines that end the feed: where the lexer is, and its version if the consumer is scripted. -/
 def feedLines (request : Request) (lexer : Lexer (Scripted whitespace) recovery) : String :=
@@ -380,11 +409,11 @@ def drive (request : Request) (lines : IO.Ref String) :
   | [], _ => return true
   | feed :: feeds, lexer => do
     let result ← match feed with
-      | some slice => lexer.lexSlice slice.toByteSlice
-      | none => lexer.lexEof
+      | some slice => (·.map (("", ·))) <$> lexer.lexSlice slice.toByteSlice
+      | none => (·.map fun (result, lexer) => (resultLine result, lexer)) <$> lexer.lexEof
     match result with
-    | .ok (flow, lexer) =>
-      lines.modify (· ++ flowLine flow ++ feedLines request lexer)
+    | .ok (line, lexer) =>
+      lines.modify (· ++ line ++ feedLines request lexer)
       drive request lines feeds lexer
     | .error (err, ()) =>
       lines.modify (· ++ (← errorLine err false))
@@ -410,9 +439,8 @@ def driveRecovering (request : Request) (lines : IO.Ref String)
       repeat
         let before := lexer.currentLocation.offset
         match ← lexer.lexSlice (slice.toByteSlice from_) with
-        | .ok (flow, next) =>
+        | .ok next =>
           lexer := next
-          lines.modify (· ++ flowLine flow)
           break
         | .error (err, next) =>
           lexer := next
@@ -424,9 +452,9 @@ def driveRecovering (request : Request) (lines : IO.Ref String)
           | none => break
     | none =>
       match ← lexer.lexEof with
-      | .ok (flow, next) =>
+      | .ok (result, next) =>
         lexer := next
-        lines.modify (· ++ flowLine flow)
+        lines.modify (· ++ resultLine result)
       | .error (err, after) =>
         lines.modify (· ++ (← errorLine err true))
         match after with
@@ -434,9 +462,9 @@ def driveRecovering (request : Request) (lines : IO.Ref String)
         | .pending pending =>
           -- the end of the input continues, apply it again
           match ← pending.lexEof with
-          | .ok (flow, next) =>
+          | .ok (result, next) =>
             lexer := next
-            lines.modify (· ++ flowLine flow)
+            lines.modify (· ++ resultLine result)
           | .error (err, next) =>
             lexer := next
             lines.modify (· ++ (← errorLine err true))
@@ -448,7 +476,7 @@ the library's lexer on a lexer type of its own. -/
 namespace V
 
 /-- The naive lexer. -/
-abbrev NaiveLexer (H : Type) (recovery : Recovery := .failFast) :=
+abbrev NaiveLexer (H : Type) {R E : Type} [Consume H R E] (recovery : Recovery := .failFast) :=
   Proofs.Lexer.VNaive.Lexer H recovery
 
 /-- The lines that end the feed: where the lexer is, and its version if the consumer is scripted. -/
@@ -466,11 +494,11 @@ def drive (request : Request) (lines : IO.Ref String) :
   | [], _ => return true
   | feed :: feeds, lexer => do
     let result ← match feed with
-      | some slice => lexer.lexSlice slice.toByteSlice
-      | none => lexer.lexEof
+      | some slice => (·.map (("", ·))) <$> lexer.lexSlice slice.toByteSlice
+      | none => (·.map fun (result, lexer) => (resultLine result, lexer)) <$> lexer.lexEof
     match result with
-    | .ok (flow, lexer) =>
-      lines.modify (· ++ flowLine flow ++ feedLines request lexer)
+    | .ok (line, lexer) =>
+      lines.modify (· ++ line ++ feedLines request lexer)
       drive request lines feeds lexer
     | .error (err, ()) =>
       lines.modify (· ++ (← errorLine err false))
@@ -494,9 +522,8 @@ def driveRecovering (request : Request) (lines : IO.Ref String)
       repeat
         let before := lexer.currentLocation.offset
         match ← lexer.lexSlice (slice.toByteSlice from_) with
-        | .ok (flow, next) =>
+        | .ok next =>
           lexer := next
-          lines.modify (· ++ flowLine flow)
           break
         | .error (err, next) =>
           lexer := next
@@ -508,9 +535,9 @@ def driveRecovering (request : Request) (lines : IO.Ref String)
           | none => break
     | none =>
       match ← lexer.lexEof with
-      | .ok (flow, next) =>
+      | .ok (result, next) =>
         lexer := next
-        lines.modify (· ++ flowLine flow)
+        lines.modify (· ++ resultLine result)
       | .error (err, after) =>
         lines.modify (· ++ (← errorLine err true))
         match after with
@@ -518,9 +545,9 @@ def driveRecovering (request : Request) (lines : IO.Ref String)
         | .pending pending =>
           -- the end of the input continues, apply it again
           match ← pending.lexEof with
-          | .ok (flow, next) =>
+          | .ok (result, next) =>
             lexer := next
-            lines.modify (· ++ flowLine flow)
+            lines.modify (· ++ resultLine result)
           | .error (err, next) =>
             lexer := next
             lines.modify (· ++ (← errorLine err true))
@@ -545,17 +572,17 @@ structure Ops (whitespace : Bool) where
   new : Scripted whitespace → Version → Lexer
   newRecovering : Scripted whitespace → Version → Recovering
   lexSlice : Lexer → ByteSlice →
-    IO (Except (LexError String × Unit) (ControlFlow (Located Unit) × Lexer))
-  lexEof : Lexer → IO (Except (LexError String × Unit) (ControlFlow (Located Unit) × Lexer))
+    IO (Except (LexError String × Unit) Lexer)
+  lexEof : Lexer → IO (Except (LexError String × Unit) (Option (Located Bool) × Lexer))
   currentLocation : Lexer → Location
   version : Lexer → Version
   recoveringLexSlice : Recovering → ByteSlice →
-    IO (Except (LexError String × Recovering) (ControlFlow (Located Unit) × Recovering))
+    IO (Except (LexError String × Recovering) Recovering)
   recoveringLexEof : Recovering →
-    IO (Except (LexError String × AfterEof) (ControlFlow (Located Unit) × Recovering))
+    IO (Except (LexError String × AfterEof) (Option (Located Bool) × Recovering))
   /-- The lexer after its end of the input failed, or the end of the input to lex again. -/
   afterEof : AfterEof → Sum Recovering
-    (IO (Except (LexError String × Recovering) (ControlFlow (Located Unit) × Recovering)))
+    (IO (Except (LexError String × Recovering) (Option (Located Bool) × Recovering)))
   recoveringLocation : Recovering → Location
   recoveringVersion : Recovering → Version
 
@@ -574,11 +601,11 @@ def drive (ops : Ops whitespace) (request : Request) (lines : IO.Ref String) :
   | [], _ => return true
   | feed :: feeds, lexer => do
     let result ← match feed with
-      | some slice => ops.lexSlice lexer slice.toByteSlice
-      | none => ops.lexEof lexer
+      | some slice => (·.map (("", ·))) <$> ops.lexSlice lexer slice.toByteSlice
+      | none => (·.map fun (result, lexer) => (resultLine result, lexer)) <$> ops.lexEof lexer
     match result with
-    | .ok (flow, lexer) =>
-      lines.modify (· ++ flowLine flow ++
+    | .ok (line, lexer) =>
+      lines.modify (· ++ line ++
         feedLines request (ops.currentLocation lexer) (ops.version lexer))
       drive ops request lines feeds lexer
     | .error (err, ()) =>
@@ -603,9 +630,8 @@ def driveRecovering (ops : Ops whitespace) (request : Request) (lines : IO.Ref S
       repeat
         let before := (ops.recoveringLocation lexer).offset
         match ← ops.recoveringLexSlice lexer (slice.toByteSlice from_) with
-        | .ok (flow, next) =>
+        | .ok next =>
           lexer := next
-          lines.modify (· ++ flowLine flow)
           break
         | .error (err, next) =>
           lexer := next
@@ -617,9 +643,9 @@ def driveRecovering (ops : Ops whitespace) (request : Request) (lines : IO.Ref S
           | none => break
     | none =>
       match ← ops.recoveringLexEof lexer with
-      | .ok (flow, next) =>
+      | .ok (result, next) =>
         lexer := next
-        lines.modify (· ++ flowLine flow)
+        lines.modify (· ++ resultLine result)
       | .error (err, after) =>
         lines.modify (· ++ (← errorLine err true))
         match ops.afterEof after with
@@ -627,9 +653,9 @@ def driveRecovering (ops : Ops whitespace) (request : Request) (lines : IO.Ref S
         | .inr pending =>
           -- the end of the input continues, apply it again
           match ← pending with
-          | .ok (flow, next) =>
+          | .ok (result, next) =>
             lexer := next
-            lines.modify (· ++ flowLine flow)
+            lines.modify (· ++ resultLine result)
           | .error (err, next) =>
             lexer := next
             lines.modify (· ++ (← errorLine err true))

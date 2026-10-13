@@ -149,9 +149,10 @@ structure Lexeme where
   start : Location
   «end» : Location
 
-/-- A lexical error and its failure point: where the error takes effect. -/
+/-- A lexical error, its span and its failure point: where the error takes effect. -/
 structure LexFailure where
-  error : LexicalError
+  kind : LexicalErrorKind
+  span : Span
   location : Location
 
 /-- What a byte does when no token is in progress. -/
@@ -190,14 +191,14 @@ token and the byte, and takes effect just before the byte.
 -/
 def failAtByte (kind : LexicalErrorKind) (start location : Location) : LexFailure :=
   -- the end of the span counts the byte as a column, also a line feed
-  { error := { kind, span := Span.newUnchecked start location.afterColumn }, location }
+  { kind, span := Span.newUnchecked start location.afterColumn, location }
 
 /--
 The failure at the end of the input at `location`, for the token from `start`: the error spans
 the token, and takes effect at the end.
 -/
 def failAtEnd (kind : LexicalErrorKind) (start location : Location) : LexFailure :=
-  { error := { kind, span := Span.newUnchecked start location }, location }
+  { kind, span := Span.newUnchecked start location, location }
 
 /--
 Lexes the byte `c` at `location` with no token in progress, under `version`. `whitespace` says
@@ -533,13 +534,20 @@ inductive Activity where
   /-- Recovering: the end of the input raised the error, so only the end of the input can be
   lexed again. -/
   | ended
-  /-- The consumer has finished: the input is discarded up to its end. -/
-  | discarding
+  /-- The consumer has had the rest discarded, from the location: the input is discarded up to
+  its end. -/
+  | discarding (start : Location)
 
 /-- Whether the token in progress, if any, starts before the location. -/
 abbrev Activity.StartsBefore : Activity → Location → Prop
   | .token p, location => p.start.offset < location.offset
   | _, _ => True
+
+/-- Where discarding begins when the consumer asks for it at a lexeme that ends at `location`:
+where the lexer began to discard, if it discards already. -/
+def Activity.discardStart : Activity → Location → Location
+  | .discarding start, _ => start
+  | _, location => location
 
 /- The fields are public, so that proofs about the lexer can read them. -/
 /-- The state of the lexer, apart from its consumer. -/
@@ -559,13 +567,16 @@ structure Core where
   /-- The token in progress, if any, starts before the next byte to be fed, so that the token
   has a byte when it ends. -/
   startedBefore : activity.StartsBefore location
+  /-- Whether the lexer holds the result the consumer broke with, which it keeps outside its
+  state: any token handed over while it is held is trailing input. -/
+  holding : Bool
 
 namespace Core
 
 /-- The state at the start of an input. -/
 def initial (version : Version) : Core :=
   { version, initialVersion := version, location := Location.initial, activity := .idle,
-    depth := 0, startedBefore := trivial }
+    depth := 0, startedBefore := trivial, holding := false }
 
 /-- The state after the end of the input: as at the start, under the initial version. -/
 def reset (self : Core) : Core :=
@@ -595,6 +606,11 @@ def depthAfter (depth : Nat) : TokenCategory → Nat
 /-- A lexing error with the location where it takes effect. -/
 structure Failure (E : Type) where
   cause : LexErrorCause E
+  /-- The span of the error: that of the bytes that raised a lexical error, and for an error of
+  the consumer, the empty span where it takes effect. The naive lexer does not keep the span of
+  the token the consumer failed at; it agrees with the other lexers on the error's cause, not on
+  its span. -/
+  span : Span
   location : Location
 
 /-- The token in progress, which starts before the next byte, starts before the byte after
@@ -639,7 +655,8 @@ theorem Core.frontier_le (core : Core) : core.frontier ≤ core.location.offset 
 
 section
 
-variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [Consume H m R E]
+variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [Consume H R E]
+  [∀ batch, ConsumeFrom H (BatchCursor batch) m]
 
 /- The functions below thread the lexer state `Core` through by hand, each taking it and
 giving it back, while the consumer is the state of the monad `StateT H m`, in which the
@@ -648,34 +665,52 @@ decided by the pure step above. -/
 
 /--
 Hands the lexeme over to the consumer, alone in a cursor under the version in force, and
-takes its answer. The version on the cursor the consumer gives back is in force from then on.
+takes its answer, with whether the consumer had the rest discarded. The version on the cursor
+the consumer gives back is in force from then on.
 -/
 def handOver (core : Core) (l : Lexeme) (h : l.Valid) :
-    StateT H m (Except E (ControlFlow R) × Core) := do
+    StateT H m (Except E (ControlFlow R) × Bool × Core) := do
   let cursor := BatchCursor.new core.version (l.batch h)
-  let (answer, ⟨after, _⟩) ← Consume.consume (H := H) cursor (l.hasNext h core.version)
+  let (answer, ⟨after, _⟩) ← ConsumeFrom.consume (H := H) cursor (l.hasNext h core.version)
   -- the consumer has consumed at least one token, and the cursor has just this one
-  return (answer, { core with version := after.version, depth := depthAfter core.depth l.category })
+  return (answer, after.discardRequested,
+    { core with version := after.version, depth := depthAfter core.depth l.category })
 
 /--
 Hands the lexeme over and turns the consumer's answer into what lexing does next: go on
-(`none`), stop as the consumer has finished (`some`, located at the end of the lexeme, and the
-input is discarded from then on), or fail after the lexeme.
+(`none`), go on holding the result the consumer finished with (`some`, located at the end of
+the lexeme), or fail after the lexeme. While a result is held, the lexeme is not handed over:
+it is trailing input. If the consumer has the rest discarded, the input is discarded from the
+end of the lexeme on.
 -/
 def handOverAt (core : Core) (l : Lexeme) (h : l.Valid) :
     StateT H m (Except (Failure E) (Option (Located R)) × Core) := do
-  let (answer, core) ← handOver core l h
+  if core.holding then
+    -- a result is held: what follows it is trailing input
+    return (.error { cause := .lexical .unexpectedTrailingToken
+                     span := Span.newUnchecked l.start l.end, location := l.start }, core)
+  let (answer, discards, core) ← handOver core l h
   return match answer with
-    | .ok .continue => (.ok none, core)
-    | .ok (.break value) =>
-      (.ok (some { value, location := l.end }),
-        { core with activity := .discarding, startedBefore := trivial })
-    | .error err => (.error { cause := .consumer err, location := l.end }, core)
+    | .ok flow =>
+      let core := if discards then
+          { core with activity := .discarding l.end, startedBefore := trivial }
+        else core
+      match flow with
+      | .continue => (.ok none, core)
+      | .break value => (.ok (some { value, location := l.end }), { core with holding := true })
+    | .error err =>
+      -- the discarding stands, from where it began
+      let core := if discards then
+          { core with activity := .discarding (core.activity.discardStart l.end)
+                      startedBefore := trivial }
+        else core
+      (.error { cause := .consumer err, span := Span.newUnchecked l.end l.end
+                location := l.end }, core)
 
 /-- Lexes the byte `c` with no token in progress. -/
 def lexStart (core : Core) (c : UInt8) :
     StateT H m (Except (Failure E) (Option (Located R)) × Core) := do
-  let whitespace := Consume.consumesWhitespaceAndComments (H := H)
+  let whitespace := Consume.isConcrete (H := H)
   let after := core.location.afterByte c
   match startS core.version whitespace core.location c with
   | ⟨.idle, _⟩ =>
@@ -689,7 +724,8 @@ def lexStart (core : Core) (c : UInt8) :
   | ⟨.token l, hl⟩ =>
     handOverAt { core with activity := .idle, location := after, startedBefore := trivial } l hl.1
   | ⟨.error failure, _⟩ =>
-    return (.error { cause := .lexical failure.error, location := failure.location }, core)
+    return (.error { cause := .lexical failure.kind, span := failure.span
+                     location := failure.location }, core)
 
 /--
 Lexes the byte `c`, at the lexer's location, and gives back the lexer state after it. Returns
@@ -702,9 +738,8 @@ def lexByte (recover : Location → StateT H m Unit) (core : Core) (c : UInt8) :
     StateT H m (Except (Failure E) (Option (Located R)) × Core) := do
   let location := core.location
   match withEq core.activity with
-  | ⟨.discarding, _⟩ =>
-    return (.ok none, { core with
-      location := location.afterByte c, activity := .discarding, startedBefore := trivial })
+  -- the byte is discarded, and the location stays where the discarding began
+  | ⟨.discarding _, _⟩ => return (.ok none, core)
   -- only the end of the input can follow, there is nothing to lex
   | ⟨.ended, _⟩ => return (.ok none, core)
   | ⟨.recovered, _⟩ =>
@@ -728,7 +763,7 @@ def lexByte (recover : Location → StateT H m Unit) (core : Core) (c : UInt8) :
         location, activity := .idle, depth := 0, startedBefore := trivial })
   | ⟨.idle, _⟩ => lexStart core c
   | ⟨.token p, ha⟩ =>
-    let whitespace := Consume.consumesWhitespaceAndComments (H := H)
+    let whitespace := Consume.isConcrete (H := H)
     let after := location.afterByte c
     have hp : p.start.offset < location.offset := core.started ha
     match advanceS whitespace p location c with
@@ -750,32 +785,44 @@ def lexByte (recover : Location → StateT H m Unit) (core : Core) (c : UInt8) :
       let (result, core) ← handOverAt { core with activity := .idle, startedBefore := trivial } l
         (.inl (by
           rw [show l.start = p.start from h.1, show l.end = location from h.2]; exact hp))
+      -- the consumer has had the rest discarded: the byte is the first one discarded, and the
+      -- location stays where the discarding began
+      let discard (held : Option (Located R)) (start : Location) :
+          StateT H m (Except (Failure E) (Option (Located R)) × Core) :=
+        return (.ok held, { core with activity := .discarding start, startedBefore := trivial })
       match result with
-      -- the byte is lexed under the version the consumer has left in force
-      | .ok none => lexStart core c
-      -- the consumer has finished: the byte is the first one discarded
+      | .ok none =>
+        match core.activity with
+        | .discarding start => discard none start
+        -- the byte is lexed under the version the consumer has left in force
+        | _ => lexStart core c
       | .ok (some located) =>
-        return (.ok (some located), { core with
-          location := after, activity := .discarding, startedBefore := trivial })
+        match core.activity with
+        | .discarding start => discard (some located) start
+        -- the consumer has finished: the byte is lexed as trailing input
+        | _ => do
+          let (result, core) ← lexStart core c
+          return (result.map fun _ => some located, core)
       | .error failure => return (.error failure, core)
     | ⟨.error failure, _⟩ =>
-      return (.error { cause := .lexical failure.error, location := failure.location }, core)
+      return (.error { cause := .lexical failure.kind, span := failure.span
+                       location := failure.location }, core)
 
 /--
-Lexes the bytes of the slice from `index` on. `flow` is the consumer's finish, if it has
-finished on an earlier byte of the slice.
+Lexes the bytes of the slice from `index` on. `held` is the result the consumer finished with,
+if it has finished on an earlier byte of the slice.
 -/
 def lexFrom (recover : Location → StateT H m Unit) (slice : ByteSlice) (index : Nat)
-    (core : Core) (flow : ControlFlow (Located R)) :
-    StateT H m (Except (Failure E) (ControlFlow (Located R)) × Core) := do
+    (core : Core) (held : Option (Located R)) :
+    StateT H m (Except (Failure E) (Option (Located R)) × Core) := do
   if h : index < slice.size then
     let (result, core) ← lexByte recover core slice[index]
     match result with
-    | .ok none => lexFrom recover slice (index + 1) core flow
-    | .ok (some located) => lexFrom recover slice (index + 1) core (.break located)
+    | .ok none => lexFrom recover slice (index + 1) core held
+    | .ok (some located) => lexFrom recover slice (index + 1) core (some located)
     | .error failure => return (.error failure, core)
   else
-    return (.ok flow, core)
+    return (.ok held, core)
 termination_by slice.size - index
 
 /--
@@ -786,29 +833,33 @@ the end of the input raised the failure.
 def failCall (recovers : Bool) (abandon : Location → StateT H m Unit) (failure : Failure E)
     (atEnd : Bool) (core : Core) : StateT H m (LexError E × Core) := do
   if !recovers then
-    return ({ cause := failure.cause, continuesFrom := none }, core)
+    return ({ cause := failure.cause, span := failure.span, continuesFrom := none }, core)
   let activity : Activity := if atEnd then
       -- the input has ended, nothing is left to skip
       .ended
     else
       -- the skipping starts inside the string or quoted symbol the error was in
       match failure.cause with
-      | .lexical err => match err.kind with
+      | .lexical kind => match kind with
         | .forbiddenCharInString => .skipping .string
         | .backslashInQuotedSymbol | .forbiddenCharInQuotedSymbol => .skipping .quotedSymbol
         | _ => .skipping .plain
       -- the consumer fails after a whole token: with nothing open, nothing is skipped
       | .consumer _ => if core.depth == 0 then .recovered else .skipping .plain
   abandon failure.location
-  return ({ cause := failure.cause, continuesFrom := some failure.location },
+  return ({ cause := failure.cause, span := failure.span,
+            continuesFrom := some failure.location },
     { core with
       location := failure.location, activity
+      -- a value is confirmed only at the end of the input: an error after a break drops it
+      holding := false
       startedBefore := by simp only [activity]; split <;> (repeat' split) <;> trivial })
 
-/-- Lexes the slice, or discards it if the consumer has finished. -/
+/-- Lexes the slice, or discards it if the consumer has had the rest discarded. Returns the result
+the consumer broke with in the slice, if it did. -/
 def lexSliceStep (recovers : Bool) (abandon recover : Location → StateT H m Unit)
     (slice : ByteSlice) (core : Core) :
-    StateT H m (Except (LexError E) (ControlFlow (Located R)) × Core) := do
+    StateT H m (Except (LexError E) (Option (Located R)) × Core) := do
   let core ← match core.activity with
     -- the consumer failed after a whole token with nothing open: the recovery is made here,
     -- even if the slice is empty
@@ -818,21 +869,22 @@ def lexSliceStep (recovers : Bool) (abandon recover : Location → StateT H m Un
     | _ => pure core
   match core.activity with
   -- the input has ended with the error, there is nothing to lex
-  | .ended => return (.ok .continue, core)
+  | .ended => return (.ok none, core)
   | _ =>
-    let (result, core) ← lexFrom recover slice 0 core .continue
+    let (result, core) ← lexFrom recover slice 0 core none
     match result with
-    | .ok flow => return (.ok flow, core)
+    | .ok held => return (.ok held, core)
     | .error failure =>
       let (err, core) ← failCall recovers abandon failure false core
       return (.error err, core)
 
 /--
-Lexes the end of the input: ends the token in progress, and hands over the end-of-file token.
+Lexes the end of the input: ends the token in progress, and hands over the end-of-file token
+unless a result is held.
 -/
 def lexEnd (core : Core) :
     StateT H m (Except (Failure E) (ControlFlow (Located R)) × Core) := do
-  let whitespace := Consume.consumesWhitespaceAndComments (H := H)
+  let whitespace := Consume.isConcrete (H := H)
   let location := core.location
   let (result, core) ← match withEq core.activity with
     | ⟨.token p, ha⟩ => match finishS whitespace p location with
@@ -843,14 +895,18 @@ def lexEnd (core : Core) :
             rw [show l.start = p.start from h.1, show l.end = location from h.2]
             exact core.started ha))
       | ⟨.error failure, _⟩ =>
-        pure (.error { cause := .lexical failure.error, location := failure.location }, core)
-    | ⟨.idle, _⟩ | ⟨.recovered, _⟩ | ⟨.skipping _, _⟩ | ⟨.ended, _⟩ | ⟨.discarding, _⟩ =>
+        pure (.error { cause := .lexical failure.kind, span := failure.span
+                       location := failure.location }, core)
+    | ⟨.idle, _⟩ | ⟨.recovered, _⟩ | ⟨.skipping _, _⟩ | ⟨.ended, _⟩ | ⟨.discarding _, _⟩ =>
       pure (.ok none, core)
   match result with
   | .error failure => return (.error failure, core)
   -- the consumer has finished on the token, the end-of-file token is not handed over
   | .ok (some located) => return (.ok (.break located), core)
   | .ok none =>
+    -- a held result is returned without the end of the input handed over
+    if core.holding then
+      return (.ok .continue, core)
     let eof : Lexeme :=
       { category := .endOfFile, content := .empty, start := location, «end» := location }
     let (result, core) ← handOverAt core eof (.inr ⟨rfl, rfl⟩)
@@ -862,45 +918,49 @@ def lexEnd (core : Core) :
 /-- Lexes the end of the input, which resets the lexer unless it fails and recovers. -/
 def lexEofStep (recovers : Bool) (abandon recover : Location → StateT H m Unit) (core : Core) :
     StateT H m (Except (LexError E) (ControlFlow (Located R)) × Core) := do
-  match core.activity with
-  -- the consumer has finished, nothing is handed over
-  | .discarding => return (.ok .continue, core.reset)
-  | _ =>
-    -- the end of the input ends any skipping
-    let recovered := match core.activity with
-      | .recovered | .skipping _ | .ended => true
-      | _ => false
-    let core ← if recovered then do
-        recover core.location
-        pure { core with activity := .idle, startedBefore := trivial }
-      else
-        pure core
-    let (result, core) ← lexEnd core
-    match result with
-    | .ok flow => return (.ok flow, core.reset)
-    | .error failure =>
-      if recovered then
-        -- the consumer has refused the end of the input with nothing left to abandon:
-        -- the error is final, and the input has ended
-        return (.error { cause := failure.cause, continuesFrom := none }, core.reset)
-      let (err, core) ← failCall recovers abandon failure true core
-      return (.error err, core)
+  -- the end of the input ends any skipping
+  let recovered := match core.activity with
+    | .recovered | .skipping _ | .ended => true
+    | _ => false
+  let core ← if recovered then do
+      recover core.location
+      pure { core with activity := .idle, startedBefore := trivial }
+    else
+      pure core
+  let (result, core) ← lexEnd core
+  match result with
+  | .ok flow => return (.ok flow, core.reset)
+  | .error failure =>
+    if recovered then
+      -- the consumer has refused the end of the input with nothing left to abandon:
+      -- the error is final, and the input has ended
+      return (.error { cause := failure.cause, span := failure.span, continuesFrom := none },
+        core.reset)
+    let (err, core) ← failCall recovers abandon failure true core
+    return (.error err, core)
 
 end
 
 /-! ## The lexer -/
 
 /-- The naive lexer, with its consumer `H`; `recovery` says whether it recovers from errors. -/
-structure Lexer (H : Type) (recovery : Recovery := .failFast) where
+structure Lexer (H : Type) {R E : Type} [Consume H R E] (recovery : Recovery := .failFast) where
   handler : H
   core : Core
+  /-- The result the consumer broke with, located where it broke, held until the end of the
+  input. -/
+  held : Option (Located R)
+
+section
+
+variable {H : Type} {R E : Type} [Consume H R E]
 
 /--
 What a lexer call that failed gives back: nothing for a lexer that stops at its first error,
 which cannot be used again, and the lexer itself for a recovering one, from which the rest of
 the input is to be fed.
 -/
-def Lexer.AfterError (H : Type) : Recovery → Type
+def Lexer.AfterError (H : Type) [Consume H R E] : Recovery → Type
   | .failFast => Unit
   | .recovering => Lexer H .recovering
 
@@ -910,7 +970,7 @@ A recovering lexer whose end of the input raised an error.
 The input has ended, so only the end of the input can be lexed again, which completes the
 recovery.
 -/
-structure Lexer.PendingEof (H : Type) where
+structure Lexer.PendingEof (H : Type) [Consume H R E] where
   private mk ::
   private lexer : Lexer H .recovering
 
@@ -919,7 +979,7 @@ What a recovering lexer gives back after its end of the input failed: the lexer,
 is final, or the lexer that can only lex the end of the input again, if the error continues at
 the end.
 -/
-inductive Lexer.AfterEof (H : Type) where
+inductive Lexer.AfterEof (H : Type) [Consume H R E] where
   | lexer (lexer : Lexer H .recovering)
   | pending (pending : Lexer.PendingEof H)
 
@@ -927,7 +987,7 @@ inductive Lexer.AfterEof (H : Type) where
 What a lexer gives back after its end of the input failed: nothing for a lexer that stops at
 its first error, and what remains of a recovering one.
 -/
-def Lexer.AfterEofError (H : Type) : Recovery → Type
+def Lexer.AfterEofError (H : Type) [Consume H R E] : Recovery → Type
   | .failFast => Unit
   | .recovering => Lexer.AfterEof H
 
@@ -935,11 +995,11 @@ namespace Lexer
 
 /-- Constructs the lexer. The lexer stops at its first error. -/
 def new (consumer : H) (version : Version) : Lexer H :=
-  { handler := consumer, core := Core.initial version }
+  { handler := consumer, core := Core.initial version, held := none }
 
 /-- Constructs a lexer that recovers from errors. -/
 def newRecovering [Recover H m] (consumer : H) (version : Version) : Lexer H .recovering :=
-  { handler := consumer, core := Core.initial version }
+  { handler := consumer, core := Core.initial version, held := none }
 
 /-- The location of the next byte to be fed. -/
 def currentLocation (self : Lexer H recovery) : Location :=
@@ -953,6 +1013,17 @@ input resets the version to the initial one.
 -/
 def version (self : Lexer H recovery) : Version :=
   self.core.version
+
+/--
+Where the lexer began to discard the input, if it discards.
+
+The consumer asks for discarding through its cursor. The lexer then drops everything it is fed
+and hands over nothing but the end of the input. The end of the input ends discarding.
+-/
+def discardedFrom (self : Lexer H recovery) : Option Location :=
+  match self.core.activity with
+  | .discarding start => some start
+  | _ => none
 
 /-- What a failed call gives back: nothing for a lexer that stops at its first error, the lexer
 for a recovering one. -/
@@ -972,92 +1043,100 @@ def afterEofError : {recovery : Recovery} → Lexer H recovery → (continues : 
 /-- Runs a step on the lexer's state with its consumer, and puts the lexer together again. -/
 def run [Monad m] (self : Lexer H recovery)
     (step : Core → StateT H m (α × Core)) : m (α × Lexer H recovery) := do
-  let { handler, core } := self
+  let { handler, core, held } := self
   let ((result, core), handler) ← (step core).run handler
-  return (result, { handler, core })
+  return (result, { handler, core, held })
+
+/-- The result to return at the end of the input: the held one, else the one the consumer broke
+with at the end of the input; none if the consumer continued there, breaking its contract. -/
+def eofResult (held : Option (Located R)) (flow : ControlFlow (Located R)) :
+    Option (Located R) :=
+  match held, flow with
+  | some held, _ => some held
+  | none, .break located => some located
+  | none, .continue => none
 
 /--
 Lexes the given slice, sending the lexed tokens to the consumer.
 
-If the token consumer returns `ControlFlow.break` on some token, the lexer passes it through,
-adding the break location. Subsequent bytes are discarded until EOF, which resets the lexer.
+If the token consumer returns `ControlFlow.break` on some token, the lexer holds the result,
+located where the consumer broke, and goes on lexing what it is fed. Any token handed over
+after it is the error `UnexpectedTrailingToken`. The result is returned by `lexEof`.
 
-If the token consumer returns `ControlFlow.continue` on all tokens, the lexer is ready for
-further lexing.
+If the consumer has the rest discarded, the lexer drops everything it is fed until the end of
+the input (see `discardedFrom`).
 
 If an error occurs, a lexer that stops at its first error is not given back. A recovering lexer
-makes the consumer abandon its unfinished work and returns the error. `LexError.continuesFrom`
-determines the location from which further lexing should be started for error recovery.
+makes the consumer abandon its unfinished work, drops the held result, and returns the error.
+`LexError.continuesFrom` determines the location from which further lexing should be started
+for error recovery.
 -/
-def lexSlice [Monad m] [Consume H m R E] [LexRecovery recovery H m] (self : Lexer H recovery)
-    (slice : ByteSlice) :
-    m (Except (LexError E × AfterError H recovery)
-      (ControlFlow (Located R) × Lexer H recovery)) := do
+def lexSlice [Monad m] [∀ batch, ConsumeFrom H (BatchCursor batch) m]
+    [LexRecovery recovery H m] (self : Lexer H recovery) (slice : ByteSlice) :
+    m (Except (LexError E × AfterError H recovery) (Lexer H recovery)) := do
   let step := lexSliceStep (recovery == .recovering) (LexRecovery.abandon recovery)
     (LexRecovery.recover recovery) slice
   let (result, self) ← self.run step
   return match result with
-    | .ok flow => .ok (flow, self)
-    | .error err => .error (err, afterError self)
+    | .ok held => .ok { self with held := held.or self.held }
+    | .error err => .error (err, afterError { self with held := none })
 
 /--
 Lexes end-of-file, sending the lexed tokens to the consumer.
 
-If the token consumer returns `ControlFlow.break` on the EOF token, the lexer passes it
-through, adding the break location.
+If the lexer holds a result, the end of the input is not handed over and the held result is
+returned. Otherwise the end-of-file token is handed over, also while the lexer discards, and the
+consumer must break on it: the result it breaks with is returned, with its location. A consumer
+that continues on the end-of-file token breaks its contract; the lexer then returns `none`.
 
-If the token consumer returns `ControlFlow.continue` on the EOF token, the lexer resets itself
-and returns `ControlFlow.continue`.
+The end of the input resets the lexer: the version to the initial one, discarding, the held
+result, and any partial token.
 
 If an error occurs, a lexer that stops at its first error is not given back. A recovering lexer
 makes the consumer abandon its unfinished work and returns the error. `LexError.continuesFrom`
 determines the location from which further lexing should be started for error recovery.
 -/
-def lexEof [Monad m] [Consume H m R E] [LexRecovery recovery H m] (self : Lexer H recovery) :
-    m (Except (LexError E × AfterEofError H recovery)
-      (ControlFlow (Located R) × Lexer H recovery)) := do
+def lexEof [Monad m] [∀ batch, ConsumeFrom H (BatchCursor batch) m]
+    [LexRecovery recovery H m] (self : Lexer H recovery) :
+    m (Except (LexError E × AfterEofError H recovery) (Option (Located R) × Lexer H recovery)) := do
   let step := lexEofStep (recovery == .recovering) (LexRecovery.abandon recovery)
     (LexRecovery.recover recovery)
   let (result, self) ← self.run step
   return match result with
-    | .ok flow => .ok (flow, self)
-    | .error err => .error (err, afterEofError self err.continuesFrom.isSome)
+    | .ok flow => .ok (eofResult self.held flow, { self with held := none })
+    | .error err => .error (err, afterEofError { self with held := none } err.continuesFrom.isSome)
 
 /--
 Lexes the end of the input again, which completes the recovery.
 
-The lexer hands over the end-of-file token. An error is final: the lexer resets itself and
-does not continue.
+The lexer hands over the end-of-file token, and returns what `lexEof` does. An error is final:
+the lexer resets itself and does not continue.
 -/
-def PendingEof.lexEof [Monad m] [Consume H m R E] [Recover H m] (self : PendingEof H) :
-    m (Except (LexError E × Lexer H .recovering)
-      (ControlFlow (Located R) × Lexer H .recovering)) := do
+def PendingEof.lexEof [Monad m] [∀ batch, ConsumeFrom H (BatchCursor batch) m] [Recover H m]
+    (self : PendingEof H) :
+    m (Except (LexError E × Lexer H .recovering) (Option (Located R) × Lexer H .recovering)) := do
   let step := lexEofStep true (Recover.abandon (H := H)) (Recover.recover (H := H))
   let (result, lexer) ← self.lexer.run step
   return match result with
-    | .ok flow => .ok (flow, lexer)
-    | .error err => .error (err, lexer)
+    | .ok flow => .ok (eofResult lexer.held flow, { lexer with held := none })
+    | .error err => .error (err, { lexer with held := none })
 
 /--
 Lexes the whole input including EOF at the end.
 
-If the token consumer returns `ControlFlow.break` on some token, the lexer passes it through,
-adding the break location, and resets itself as if at the start of a new input.
-
-If the token consumer returns `ControlFlow.continue` on all tokens including EOF, the lexer
-resets itself after EOF and returns `ControlFlow.continue`.
+Returns what `lexEof` does, and the lexer reset by the end of the input.
 
 If an error occurs, the lexer is not given back.
 -/
-def lexAll [Monad m] [Consume H m R E] (self : Lexer H) (input : ByteSlice) :
-    m (Except (LexError E × AfterError H .failFast) (ControlFlow (Located R) × Lexer H)) := do
+def lexAll [Monad m] [∀ batch, ConsumeFrom H (BatchCursor batch) m] (self : Lexer H)
+    (input : ByteSlice) :
+    m (Except (LexError E × AfterError H .failFast) (Option (Located R) × Lexer H)) := do
   match ← self.lexSlice input with
-  | .ok (.break result, self) =>
-    -- reset the lexer as if we are at the start of a new file
-    return .ok (.break result, { self with core := self.core.reset })
-  | .ok (.continue, self) => self.lexEof
+  | .ok self => self.lexEof
   | .error err => return .error err
 
 end Lexer
+
+end
 
 end BSmtLib.Proofs.Lexer.VNaive

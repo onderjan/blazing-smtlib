@@ -61,10 +61,12 @@ local macro "store" : tactic => `(tactic|
 
 section
 
-variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Consume H m R E]
+variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Consume H R E]
+  [∀ batch, ConsumeFrom H (BatchCursor batch) m]
   {floor : Option Nat} {low : Nat} {strict : Bool} {o₁ o₂ : Ops H m R E}
   {LRel : Ops.Locals H m R E (self := o₁) → Ops.Locals H m R E (self := o₂) → Nat → Nat → Prop}
 
+omit [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 theorem lexNormalFrom_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (offset base : Nat)
     (origin : Nat) :
     ∀ k (index : Nat) (b b' : TokenBatch) (l ls : Nat) (a : Ops.Locals H m R E (self := o₁))
@@ -105,7 +107,7 @@ theorem lexNormalFrom_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (offs
       push_loop
     · push_loop
   simp only [Lexer.WRustPort.consumesWhitespaceAndComments, pure_bind]
-  generalize Consume.consumesWhitespaceAndComments (H := H) = cw
+  generalize Consume.isConcrete (H := H) = cw
   refine SimR.ite Iff.rfl (fun hf => ?_) fun hf => ?_
   · -- the fast path
     refine SimR.dite Iff.rfl (fun hws _ => ?_) fun hws _ => ?_
@@ -201,7 +203,7 @@ theorem lexNormalFrom_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (offs
       split
       · rename_i run hrun h3
         have := Lexer.Slice.le_runEnd input (index + 1 + 1) run.flag
-        refine SimR.ite Iff.rfl (fun _ => ?_) fun hne => ?_
+        refine SimR.dite Iff.rfl (fun _ _ => ?_) fun hne _ => ?_
         · refine SimR.seq (extendContent_sim _ _ _ _ _ _) ?_
           refine SimR.seq (SimR.pre (fun s t h => h.1) (leavePending_sim _ _ _ _ _ _ _ _ _ hb
             _ _ _ _ _ _ _ _)) ?_
@@ -263,7 +265,7 @@ theorem lexNormalFrom_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (offs
       subst e
       dsimp only
       have := Lexer.Slice.le_runEnd input (index + 1) Lexer.RUN_SIMPLE_SYMBOL
-      refine SimR.ite Iff.rfl (fun _ => ?_) fun _ => ?_
+      refine SimR.dite Iff.rfl (fun _ _ => ?_) fun _ _ => ?_
       · refine SimR.seq (extendContent_sim _ _ _ _ _ _) ?_
         refine SimR.seq (SimR.pre (fun s t h => h.1) (leavePending_sim _ _ _ _ _ _ _ _ _ hb
           _ _ _ _ _ _ _ _)) ?_
@@ -298,7 +300,7 @@ theorem lexNormalFrom_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (offs
         refine SimR.ite Iff.rfl (fun _ => ?_) fun _ => ?_
         · have := Lexer.Slice.le_runEnd input (runEnd input (index + 1) Lexer.RUN_DIGIT + 1)
             Lexer.RUN_DIGIT
-          refine SimR.ite Iff.rfl (fun _ => ?_) fun _ => ?_
+          refine SimR.dite Iff.rfl (fun _ _ => ?_) fun _ _ => ?_
           · refine SimR.seq (extendContent_sim _ _ _ _ _ _) ?_
             refine SimR.seq (SimR.pre (fun s t h => h.1) (leavePending_sim _ _ _ _ _ _ _ _ _ hb
               _ _ _ _ _ _ _ _)) ?_
@@ -335,6 +337,7 @@ theorem lexNormalFrom_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (offs
       exact errorAt_sim _ _ _ _ _
 
 
+omit [∀ batch, ConsumeFrom H (BatchCursor batch) m] in
 /-- The normal state, from states whose batches have the same array of contents: the loops take
 the batches out of the states and run from `start`. -/
 theorem lexNormal_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (start : Nat)
