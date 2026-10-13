@@ -399,13 +399,16 @@ def Command.tokens : Command → List SyntaxToken
 mutual
 
 /--
-The s-expression is one of the version: a reserved word is an s-expression from 2.6 on.
+The s-expression is one of the version: a reserved word is an s-expression from 2.6 on, and
+only a reserved word of the version is one.
 
 Standard: 2.7 §3.2 S-expressions; App. B ⟨s_expr⟩: a reserved word is an s-expression from
-2.6 release 2021-04-02 on.
+2.6 release 2021-04-02 on; ⟨reserved⟩ of each version.
 -/
 def SExpr.Valid (version : Version) : SExpr → Prop
-  | .reserved _ => versionAtLeast version .v2_6
+  | .reserved w =>
+    versionAtLeast version .v2_6 ∧
+      w ∈ (basicReservedWords version ++ commandNames version).map chars
   | .list items => SExpr.ValidAll version items
   | _ => True
 
