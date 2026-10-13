@@ -12,6 +12,7 @@ import BSmtLib.SpecChecks.Compose
 import BSmtLib.SpecChecks.Consumers
 import BSmtLib.SpecChecks.Grammar.Examples
 import BSmtLib.SpecChecks.Parser.Bridge
+import BSmtLib.SpecChecks.Reader
 
 /-!
 # Checks of the specification
@@ -665,5 +666,23 @@ info: 'BSmtLib.SpecChecks.Parser.processingCutRunsAgreeByRecord' depends on axio
 -/
 #guard_msgs in
 #print axioms Parser.processingCutRunsAgreeByRecord
+
+/-!
+### Readers
+
+The calls a reader makes on a file determine the file, but for its layout, what follows `exit`
+and the spelling of strings in 2.0 (`Spec.Reader.CallsDetermineCommands`).
+-/
+
+/-- The calls for the commands of a file determine the version the file is read from and its
+commands. -/
+theorem Reader.callsDetermineCommands : Spec.Reader.CallsDetermineCommands :=
+  fun _ _ _ _ _ _ h h' hc => Reader.calls_determine h h' hc
+
+/--
+info: 'BSmtLib.SpecChecks.Reader.callsDetermineCommands' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms Reader.callsDetermineCommands
 
 end BSmtLib.SpecChecks

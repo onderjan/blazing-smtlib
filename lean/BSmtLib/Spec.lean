@@ -2,6 +2,7 @@ import BSmtLib.Spec.Lexicon
 import BSmtLib.Spec.Grammar
 import BSmtLib.Spec.Lexer
 import BSmtLib.Spec.Parser
+import BSmtLib.Spec.Reader
 
 /-!
 # Our reading of the SMT-LIB 2 standard
@@ -18,6 +19,7 @@ Its sources of truth are the specification files of the respective versions.
   fed in slices, and how it answers a consumer that breaks, switches the version or has
   the rest of the input discarded.
 - `Parser` formalises the expected observable behaviour of a parser under our reading.
+- `Reader` formalises what a reader, a lexer with a parser as its consumer, tells its handler.
 
 ## Version releases
 
