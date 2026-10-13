@@ -239,7 +239,7 @@ def caseAt (termAt : Received → Program values values.term) (n : Nat)
     let scope ← emitScope (.startMatchCase scrutinee pattern)
     let body ← parseWith termAt
     expectClose
-    let handled ← emitTerm (.endMatchCase scope body)
+    let handled ← emitTerm (.endMatchCase scope scrutinee body)
     pure (pattern, handled)
   | _ => .stuck
 
@@ -281,7 +281,7 @@ def termAfterWord (termAt : Received → Program values values.term) (n : Nat) (
     expectOpen
     let handled ← untilClose (caseAt termAt n scrutinee) n
     expectClose
-    emitTerm (.handleMatch scrutinee handled)
+    emitTerm (.endMatch scrutinee handled)
   else if w = chars "!" then do
     let term ← parseWith termAt
     let attributes ← do
@@ -408,14 +408,14 @@ def functionDecAt (n : Nat) : Received → Program values (Signature values)
     pure handled
   | _ => .stuck
 
-/-- The given number of recursive bodies, each between its start and its end. -/
-def recursiveBodies (n : Nat) : Nat → Program values Unit
-  | 0 => pure ()
-  | count + 1 => do
-    emitUnit .startRecursiveBody
-    let handled ← parseTerm n
+/-- The recursive bodies, one for each of the signatures, each between its start with its
+signature, at the arrival of its first item, and its end. -/
+def recursiveBodies (n : Nat) : List (Signature values) → Program values Unit
+  | [] => pure ()
+  | signature :: signatures => do
+    let handled ← Program.receive (some (.startRecursiveBody signature)) (termAt n)
     emitUnit (.endRecursiveBody handled)
-    recursiveBodies n count
+    recursiveBodies n signatures
 
 /-! ## Commands -/
 
@@ -491,7 +491,7 @@ def commandAfter (n : Nat) (w : Chars) : Program values After :=
     let signatures ← untilClose (functionDecAt n) n
     emitUnit (.startDefineFunsRec signatures)
     expectOpen
-    recursiveBodies n signatures.length
+    recursiveBodies n signatures
     expectClose
     bare .endDefineFunsRec
   else if w = chars "define-sort" then expectSymbol fun name => do
@@ -567,32 +567,33 @@ def commandAfterOpen (n : Nat) : Program values After := do
 
 /-- After `exit`: the end of the input, and nothing else. -/
 def endAfterExit : Program values Unit := do
-  match ← Program.receive false .done with
+  match ← Program.receive none .done with
   | .endOfInput => pure ()
   | _ => .stuck
 
-/-- The commands of a script from the next item on, given whether that item is the script's
-first and the number of version declarations before it, and the reader of the commands after
-the next one. -/
-def commandsStep (commandsFrom : Bool → Nat → Program values Unit) (n : Nat) (start : Bool)
-    (declarations : Nat) : Program values Unit := do
-  match ← Program.receive start .done with
-  | .endOfInput => .endScript (pure ())
+/-- The commands of a script from the next item on, given the number of version declarations
+before it, and the reader of the commands after the next one. -/
+def commandsStep (commandsFrom : Nat → Program values Unit) (n : Nat) (declarations : Nat) :
+    Program values Unit := do
+  match ← Program.receive none .done with
+  | .endOfInput => pure ()
   | .token .parenOpen => do
     match ← commandAfterOpen n with
-    | .exit => .discard (.endScript endAfterExit)
-    | .continue none => commandsFrom false declarations
+    | .exit => .discard endAfterExit
+    | .continue none => commandsFrom declarations
     | .continue (some version) =>
-      .switch declarations version (commandsFrom false (declarations + 1))
+      .switch declarations version (commandsFrom (declarations + 1))
   | _ => .stuck
 
-/-- The commands of a script from the next item on, given whether that item is the script's
-first and the number of version declarations before it. -/
-def commandsFrom : Nat → Bool → Nat → Program values Unit
-  | 0, _, _ => .stuck
-  | n + 1, start, declarations => commandsStep (commandsFrom n) n start declarations
+/-- The commands of a script from the next item on, given the number of version declarations
+before it. -/
+def commandsFrom : Nat → Nat → Program values Unit
+  | 0, _ => .stuck
+  | n + 1, declarations => commandsStep (commandsFrom n) n declarations
 
-/-- A script, with fuel `n`. -/
-def parseScript (n : Nat) : Program values Unit := commandsFrom n true 0
+/-- A script read from the version, with fuel `n`: the handler is told the version, then the
+commands. -/
+def parseScript (n : Nat) (version : Version) : Program values Unit :=
+  .setVersion version (commandsFrom n 0)
 
 end BSmtLib.SpecChecks.Parser

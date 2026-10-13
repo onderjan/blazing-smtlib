@@ -45,8 +45,7 @@ def cutPoints (points : Points m) (count : Nat) : Points (Cut m) where
 /-- The handler in the monad of a cut run. -/
 def cutHandler (handler : Handler m ε values) : Handler (Cut m) ε values where
   call request := ExceptT.mk (monadLift (handler.call request).run)
-  startScript := monadLift handler.startScript
-  endScript := monadLift handler.endScript
+  setVersion version := monadLift (handler.setVersion version)
 
 /-- The producer in the monad of a cut run. -/
 def cutProducer (producer : Producer m) : Producer (Cut m) where
@@ -61,9 +60,10 @@ the traversal's result and the number of items that arrived.
 -/
 def cutRun (points : Points m) (handler : Handler m ε values)
     (producer : Producer m) (policy : VersionPolicy)
-    (count : Nat) (commands : List Tree.Command) : m (Except Unit (Except (Cause ε) Unit × Nat)) :=
+    (count : Nat) (version : Version) (commands : List Tree.Command) :
+    m (Except Unit (Except (Cause ε) Unit × Nat)) :=
   (((script (cutPoints points count) (cutHandler handler) (cutProducer producer) policy
-    commands).run).run 0).run
+    version commands).run).run 0).run
 
 end
 /-! ## Runs that do not count -/
@@ -152,9 +152,15 @@ theorem noCount_switch (handler : Handler m ε values)
   simp only [switchVersion]
   split
   · exact noCount_bind (noCount_throw _) fun _ =>
-      noCount_bind (noCount_adaptSwitch producer version) fun _ => noCount_call handler _
-  · exact noCount_bind (noCount_adaptSwitch producer version) fun _ =>
-      noCount_call handler _
+      noCount_bind (noCount_adaptSwitch producer version) fun _ => noCount_lift _
+  · exact noCount_bind (noCount_adaptSwitch producer version) fun _ => noCount_lift _
+
+theorem noCount_arrival (handler : Handler m ε values)
+    (atArrival : Option (Call values .nothing)) :
+    NoCount (Program.arrival (cutHandler handler) atArrival) := by
+  cases atArrival with
+  | none => exact noCount_pure ()
+  | some request => exact noCount_call handler request
 
 /-- Taking an item without counting it. -/
 def receivePlain (points : Points m) (item : Received) (atArrival : Run (Cut m) ε Unit) :
@@ -223,7 +229,7 @@ theorem cut_program {α : Type} (p : Program values α) :
         R (Prod.fst <$> runCut points handler producer policy count p items') k := by
   induction p with
   | done a => intros; simp [runCut, Program.run]
-  | receive start next ih =>
+  | receive atArrival next ih =>
     intro items items' k hk ht hl hl'
     cases items with
     | nil => simp at hl
@@ -239,18 +245,14 @@ theorem cut_program {α : Type} (p : Program values α) :
           have hpos : count - k = (count - (k + 1)) + 1 := by omega
           rw [hpos] at ht
           obtain ⟨rfl, ht'⟩ := take_cons_succ ht
-          have ha : NoCount (if start then ExceptT.lift (cutHandler handler).startScript
-              else (pure () : Run (Cut m) ε Unit)) := by
-            cases start
-            · exact noCount_pure ()
-            · exact noCount_lift _
-          refine congr_noCount (noCount_receivePlain points x ha) fun _ => ?_
+          refine congr_noCount (noCount_receivePlain points x (noCount_arrival handler atArrival))
+            fun _ => ?_
           exact ih x s s' (k + 1) (by omega) ht' (by simp at hl; omega) (by simp at hl'; omega)
   | call request next ih =>
     intro items items' k hk ht hl hl'
     simp only [runCut, Program.run, map_bind]
     exact congr_noCount (noCount_call handler request) fun v => ih v items items' k hk ht hl hl'
-  | endScript next ih =>
+  | setVersion version next ih =>
     intro items items' k hk ht hl hl'
     simp only [runCut, Program.run, map_bind]
     exact congr_noCount (noCount_lift _) fun _ => ih items items' k hk ht hl hl'
@@ -269,8 +271,8 @@ theorem cut_program {α : Type} (p : Program values α) :
 receives for it. -/
 theorem cutRun_eq_parse {version : Version} {commands : List Tree.Command}
     (h : Script version commands) {n : Nat} (hn : 10 * sizeOf commands < n) :
-    cutRun points handler producer policy count commands =
-      R (Prod.fst <$> runCut points handler producer policy count (parseScript n)
+    cutRun points handler producer policy count version commands =
+      R (Prod.fst <$> runCut points handler producer policy count (parseScript n version)
         (received commands)) 0 := by
   have hm := run_script (points := cutPoints points count) (handler := cutHandler handler)
     (producer := cutProducer producer) (policy := policy) version commands [] h hn
@@ -280,13 +282,13 @@ theorem cutRun_eq_parse {version : Version} {commands : List Tree.Command}
     funext fun u => by cases u; rfl, bind_pure]
   rfl
 
-/-- The cut runs of two valid scripts are equal when what a parser receives for them agrees
-before the cut. -/
-theorem cutRun_eq {version version' : Version} {commands commands' : List Tree.Command}
-    (h : Script version commands) (h' : Script version' commands')
+/-- The cut runs of two valid scripts from the same version are equal when what a parser
+receives for them agrees before the cut. -/
+theorem cutRun_eq {version : Version} {commands commands' : List Tree.Command}
+    (h : Script version commands) (h' : Script version commands')
     (ht : (received commands).take count = (received commands').take count) :
-    cutRun points handler producer policy count commands =
-      cutRun points handler producer policy count commands' := by
+    cutRun points handler producer policy count version commands =
+      cutRun points handler producer policy count version commands' := by
   let n := 10 * (sizeOf commands + sizeOf commands') + 1
   rw [cutRun_eq_parse points handler producer policy count h (n := n) (by omega),
     cutRun_eq_parse points handler producer policy count h' (n := n) (by omega)]
@@ -331,13 +333,33 @@ theorem processed_eventsBeforeProcessing : ∀ (k : Nat) (events : List Event),
     cases event <;> simp only [eventsBeforeProcessing, List.filterMap_cons, Event.processed,
       ih₀, ih₁, List.take_succ_cons]
 
+/-- A recording begins with the handler's switch to the version the script is read from. -/
+theorem record_head {version : Version} {commands : List Tree.Command}
+    (h : Script version commands) :
+    ∃ rest, record version commands = .handlerSwitch version :: rest :=
+  ⟨_, record_eq_trace h (Nat.lt_succ_self _)⟩
+
+/-- Two recordings that agree before an item are of scripts from the same version. -/
+theorem version_eq_of_record {version version' : Version}
+    {commands commands' : List Tree.Command} (h : Script version commands)
+    (h' : Script version' commands')
+    (he : eventsBefore count (record version commands) =
+      eventsBefore count (record version' commands')) : version = version' := by
+  obtain ⟨r, hr⟩ := record_head h
+  obtain ⟨r', hr'⟩ := record_head h'
+  rw [hr, hr'] at he
+  cases count <;> simp only [eventsBefore, List.cons.injEq, Event.handlerSwitch.injEq] at he <;>
+    exact he.1
+
 /-- The cut runs of two valid scripts are equal when their recordings agree before the cut. -/
 theorem cutRun_eq_of_record {version version' : Version}
     {commands commands' : List Tree.Command} (h : Script version commands)
     (h' : Script version' commands')
-    (he : eventsBefore count (record commands) = eventsBefore count (record commands')) :
-    cutRun points handler producer policy count commands =
-      cutRun points handler producer policy count commands' := by
+    (he : eventsBefore count (record version commands) =
+      eventsBefore count (record version' commands')) :
+    cutRun points handler producer policy count version commands =
+      cutRun points handler producer policy count version' commands' := by
+  obtain rfl := version_eq_of_record count h h' he
   refine cutRun_eq points handler producer policy count h h' ?_
   have := congrArg (List.filterMap Event.arrived) he
   rwa [arrived_eventsBefore, arrived_eventsBefore, (record_items h).1, (record_items h').1]
@@ -370,9 +392,10 @@ without the item's own arrival.
 -/
 def processingCutRun (points : Points m) (handler : Handler m ε values)
     (producer : Producer m) (policy : VersionPolicy)
-    (count : Nat) (commands : List Tree.Command) : m (Except Unit (Except (Cause ε) Unit × Nat)) :=
+    (count : Nat) (version : Version) (commands : List Tree.Command) :
+    m (Except Unit (Except (Cause ε) Unit × Nat)) :=
   (((script (processingCutPoints points count) (cutHandler handler) (cutProducer producer)
-    policy commands).run).run 0).run
+    policy version commands).run).run 0).run
 
 end
 
@@ -457,7 +480,7 @@ theorem processingCut_program {α : Type} (p : Program values α) :
           k := by
   induction p with
   | done a => intros; simp [runProcessingCut, Program.run]
-  | receive start next ih =>
+  | receive atArrival next ih =>
     intro items items' k hk ht hl hl'
     cases items with
     | nil => simp at hl
@@ -466,11 +489,7 @@ theorem processingCut_program {α : Type} (p : Program values α) :
       | nil => simp at hl'
       | cons x' s' =>
         simp only [runProcessingCut, Program.run, map_bind]
-        have ha : NoCount (if start then ExceptT.lift (cutHandler handler).startScript
-            else (pure () : Run (Cut m) ε Unit)) := by
-          cases start
-          · exact noCount_pure ()
-          · exact noCount_lift _
+        have ha := noCount_arrival handler atArrival
         by_cases hc : k = count
         · subst hc
           rw [R_receive_stop_processing points k x ha,
@@ -486,7 +505,7 @@ theorem processingCut_program {α : Type} (p : Program values α) :
     intro items items' k hk ht hl hl'
     simp only [runProcessingCut, Program.run, map_bind]
     exact congr_noCount (noCount_call handler request) fun v => ih v items items' k hk ht hl hl'
-  | endScript next ih =>
+  | setVersion version next ih =>
     intro items items' k hk ht hl hl'
     simp only [runProcessingCut, Program.run, map_bind]
     exact congr_noCount (noCount_lift _) fun _ => ih items items' k hk ht hl hl'
@@ -503,9 +522,9 @@ theorem processingCut_program {α : Type} (p : Program values α) :
 
 theorem processingCutRun_eq_parse {version : Version} {commands : List Tree.Command}
     (h : Script version commands) {n : Nat} (hn : 10 * sizeOf commands < n) :
-    processingCutRun points handler producer policy count commands =
+    processingCutRun points handler producer policy count version commands =
       R (Prod.fst <$> runProcessingCut points handler producer policy count
-        (parseScript n) (received commands)) 0 := by
+        (parseScript n version) (received commands)) 0 := by
   have hm := run_script (points := processingCutPoints points count)
     (handler := cutHandler handler) (producer := cutProducer producer)
     (policy := policy) version commands [] h hn
@@ -515,14 +534,14 @@ theorem processingCutRun_eq_parse {version : Version} {commands : List Tree.Comm
     funext fun u => by cases u; rfl, bind_pure]
   rfl
 
-/-- The processing-cut runs of two valid scripts are equal when what a parser receives for them
-agrees before the cut. -/
-theorem processingCutRun_eq {version version' : Version}
+/-- The processing-cut runs of two valid scripts from the same version are equal when what a
+parser receives for them agrees before the cut. -/
+theorem processingCutRun_eq {version : Version}
     {commands commands' : List Tree.Command} (h : Script version commands)
-    (h' : Script version' commands')
+    (h' : Script version commands')
     (ht : (received commands).take count = (received commands').take count) :
-    processingCutRun points handler producer policy count commands =
-      processingCutRun points handler producer policy count commands' := by
+    processingCutRun points handler producer policy count version commands =
+      processingCutRun points handler producer policy count version commands' := by
   let n := 10 * (sizeOf commands + sizeOf commands') + 1
   rw [processingCutRun_eq_parse points handler producer policy count h (n := n)
       (by omega),
@@ -543,10 +562,18 @@ the processing of the item at the cut. -/
 theorem processingCutRun_eq_of_record {version version' : Version}
     {commands commands' : List Tree.Command} (h : Script version commands)
     (h' : Script version' commands')
-    (he : eventsBeforeProcessing count (record commands) =
-      eventsBeforeProcessing count (record commands')) :
-    processingCutRun points handler producer policy count commands =
-      processingCutRun points handler producer policy count commands' := by
+    (he : eventsBeforeProcessing count (record version commands) =
+      eventsBeforeProcessing count (record version' commands')) :
+    processingCutRun points handler producer policy count version commands =
+      processingCutRun points handler producer policy count version' commands' := by
+  have hv : version = version' := by
+    obtain ⟨r, hr⟩ := record_head h
+    obtain ⟨r', hr'⟩ := record_head h'
+    rw [hr, hr'] at he
+    cases count <;>
+      simp only [eventsBeforeProcessing, List.cons.injEq, Event.handlerSwitch.injEq] at he <;>
+      exact he.1
+  obtain rfl := hv
   refine processingCutRun_eq points handler producer policy count h h' ?_
   have := congrArg (List.filterMap Event.processed) he
   rwa [processed_eventsBeforeProcessing, processed_eventsBeforeProcessing,

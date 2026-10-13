@@ -26,18 +26,18 @@ abbrev runRecording {α : Type} (p : Program Recorded α) (items : List Received
 number of calls written down before. -/
 def trace {α : Type} : Program Recorded α → List Received → Nat → List Event
   | .done _, _, _ => []
-  | .receive start next, item :: items, count =>
-    if start then
-      .arrive item :: .startScript :: .process item :: trace (next item) items (count + 1)
-    else .arrive item :: .process item :: trace (next item) items count
+  | .receive none next, item :: items, count =>
+    .arrive item :: .process item :: trace (next item) items count
+  | .receive (some request) next, item :: items, count =>
+    .arrive item :: .call .nothing request :: .process item :: trace (next item) items (count + 1)
   | .receive _ _, [], _ => []
   | .call request next, items, count =>
     .call _ request :: trace (next (recordedValue _ count)) items (count + 1)
-  | .endScript next, items, count => .endScript :: trace next items (count + 1)
+  | .setVersion version next, items, count =>
+    .handlerSwitch version :: trace next items (count + 1)
   | .discard next, items, count => .producerDiscard :: trace next items count
   | .switch _ version next, items, count =>
-    .producerSwitch version :: .call .nothing (.setVersion version) ::
-      trace next items (count + 1)
+    .producerSwitch version :: .handlerSwitch version :: trace next items (count + 1)
   | .stuck, _, _ => []
 
 /-- The number of calls among events. -/
@@ -54,20 +54,23 @@ theorem bind_run {α β : Type} {x : Run Recording Empty α} {f : α → Run Rec
   simp only [ExceptT.run_bind, StateT.run_bind, h]
   rfl
 
-theorem receive_run (item : Received) (start : Bool) (state : List Event) :
+theorem receive_run (item : Received) (atArrival : Option (Call Recorded .nothing))
+    (state : List Event) :
     (Traversal.receive (ε := Empty) recordingPoints item
-        (if start then ExceptT.lift recordingHandler.startScript else pure ())).run.run state =
-      (.ok (), (if start then [.process item, .startScript, .arrive item]
-        else [.process item, .arrive item]) ++ state) := by
-  cases start <;> rfl
+        (arrival recordingHandler atArrival)).run.run state =
+      (.ok (), (match atArrival with
+        | none => [.process item, .arrive item]
+        | some request => [.process item, .call .nothing request, .arrive item]) ++ state) := by
+  cases atArrival <;> rfl
 
 theorem call_run {returns : Returns} (request : Call Recorded returns) (state : List Event) :
     (Traversal.call recordingHandler request).run.run state =
       (.ok (recordedValue returns (calls state)), .call returns request :: state) := rfl
 
-theorem endScript_run (state : List Event) :
-    (ExceptT.lift recordingHandler.endScript : Run Recording Empty Unit).run.run state =
-      (.ok (), .endScript :: state) := rfl
+theorem setVersion_run (version : Version) (state : List Event) :
+    (ExceptT.lift (recordingHandler.setVersion version) : Run Recording Empty Unit).run.run
+        state =
+      (.ok (), .handlerSwitch version :: state) := rfl
 
 theorem discard_run (state : List Event) :
     (ExceptT.lift recordingProducer.discardRest : Run Recording Empty Unit).run.run state =
@@ -76,7 +79,7 @@ theorem discard_run (state : List Event) :
 theorem switch_run (declarations : Nat) (version : Version) (state : List Event) :
     (switchVersion recordingHandler recordingProducer VersionPolicy.unrestricted declarations
         version).run.run state =
-      (.ok (), .call .nothing (.setVersion version) :: .producerSwitch version :: state) := by
+      (.ok (), .handlerSwitch version :: .producerSwitch version :: state) := by
   simp only [switchVersion, unrestricted_check]
   rfl
 
@@ -88,20 +91,20 @@ theorem runRecording_state {α : Type} (p : Program Recorded α) :
   simp only [runRecording]
   induction p with
   | done => intro items state; rfl
-  | receive start next ih =>
+  | receive atArrival next ih =>
     intro items state
     cases items with
-    | nil => rfl
+    | nil => cases atArrival <;> rfl
     | cons item items =>
-      rw [Program.run, bind_run (receive_run item start state), ih]
-      cases start <;> simp [trace, calls, Event.isCall, List.countP_cons]
+      rw [Program.run, bind_run (receive_run item atArrival state), ih]
+      cases atArrival <;> simp [trace, calls, Event.isCall, List.countP_cons]
   | call request next ih =>
     intro items state
     rw [Program.run, bind_run (call_run request state), ih]
     simp [trace, calls, Event.isCall, List.countP_cons]
-  | endScript next ih =>
+  | setVersion version next ih =>
     intro items state
-    rw [Program.run, bind_run (endScript_run state), ih]
+    rw [Program.run, bind_run (setVersion_run version state), ih]
     simp [trace, calls, Event.isCall, List.countP_cons]
   | discard next ih =>
     intro items state
@@ -133,27 +136,27 @@ theorem trace_items {α : Type} (p : Program Recorded α) :
   simp only [runRecording]
   induction p with
   | done => intro items events a rest h; cases h; simp [trace]
-  | receive start next ih =>
+  | receive atArrival next ih =>
     intro items events a rest h
     cases items with
-    | nil => cases h
+    | nil => cases atArrival <;> cases h
     | cons item items =>
-      rw [Program.run, recording_bind_run, receive_run item start events] at h
+      rw [Program.run, recording_bind_run, receive_run item atArrival events] at h
       have := ih item items _ a rest h
-      cases start
-      · have hc : calls ([.process item, .arrive item] ++ events) = calls events := by
+      cases atArrival with
+      | none =>
+        have hc : calls ([.process item, .arrive item] ++ events) = calls events := by
           simp [calls, Event.isCall]
-        simp only [Bool.false_eq_true, ite_false] at this
         rw [hc] at this
-        simp only [trace, ↓reduceIte, Bool.false_eq_true]
+        simp only [trace]
         refine ⟨?_, ?_⟩ <;>
           simp only [List.filterMap_cons, Event.arrived, Event.processed, List.cons_append] <;>
           simp [this.1, this.2]
-      · have hc : calls ([.process item, .startScript, .arrive item] ++ events) =
+      | some request =>
+        have hc : calls ([.process item, .call .nothing request, .arrive item] ++ events) =
             calls events + 1 := by simp [calls, Event.isCall, List.countP_cons]
-        simp only [ite_true] at this
         rw [hc] at this
-        simp only [trace, ↓reduceIte]
+        simp only [trace]
         refine ⟨?_, ?_⟩ <;>
           simp only [List.filterMap_cons, Event.arrived, Event.processed, List.cons_append] <;>
           simp [this.1, this.2]
@@ -168,11 +171,11 @@ theorem trace_items {α : Type} (p : Program Recorded α) :
     refine ⟨?_, ?_⟩ <;>
       simp only [List.filterMap_cons, Event.arrived, Event.processed] <;>
       simp [this.1, this.2]
-  | endScript next ih =>
+  | setVersion version next ih =>
     intro items events a rest h
-    rw [Program.run, recording_bind_run, endScript_run events] at h
+    rw [Program.run, recording_bind_run, setVersion_run version events] at h
     have := ih items _ a rest h
-    have hc : calls (.endScript :: events) = calls events + 1 := by
+    have hc : calls (.handlerSwitch version :: events) = calls events + 1 := by
       simp [calls, Event.isCall, List.countP_cons]
     rw [hc] at this
     simp only [trace]
@@ -194,7 +197,7 @@ theorem trace_items {α : Type} (p : Program Recorded α) :
     intro items events a rest h
     rw [Program.run, recording_bind_run, switch_run declarations version events] at h
     have := ih items _ a rest h
-    have hc : calls (.call .nothing (.setVersion version) :: .producerSwitch version :: events) =
+    have hc : calls (.handlerSwitch version :: .producerSwitch version :: events) =
         calls events + 1 := by simp [calls, Event.isCall, List.countP_cons]
     rw [hc] at this
     simp only [trace]

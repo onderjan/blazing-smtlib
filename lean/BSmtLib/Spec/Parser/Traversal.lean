@@ -32,12 +32,20 @@ points:
   complete earlier.
 - A call that opens a scope comes right after the token that completes its arguments, before the
   first token of what it scopes arrives.
-- Only `startScript` comes at an arrival: when the script's first token arrives, before it is
-  processed.
+- Only `startRecursiveBody` comes at an arrival: a recursive body has no parentheses of its own,
+  and its start comes when the body's first token arrives, before it is processed. A call due at
+  an arrival is made for whatever item arrives there but a `)`, which begins nothing: a parser
+  that receives a `)` where a body is due makes no start for it.
 
 The tokens the traversal takes are exactly the tokens the tree is written as (`Tree.Command.tokens`
 and the others), followed by the end of the input. After `exit`, the producer discards the rest
 of the input, so the parser receives the end of the input right after the `)` of `exit`.
+
+## Versions
+
+The handler is told the version in force: at the start of the traversal, before anything else,
+the version the script is read from, and after each version declaration, the version it
+declares, after the producer's switch.
 
 ## The producer
 
@@ -47,9 +55,10 @@ the input after `exit`. Each comes after the handler's call for the same `)`.
 
 ## Failures
 
-A handler call can fail with the handler's error, and a version declaration can be rejected: if
-it breaks the version policy, or if the producer refuses to switch to it. A failure stops the
-traversal: no call and no token point follows it.
+A handler call can fail with the handler's error, except the switch of the version, which
+cannot fail. A version declaration can be rejected: if it breaks the version policy, or if the
+producer refuses to switch to it. A failure stops the traversal: no call and no token point
+follows it.
 
 A version declaration that names no supported version cannot stand in a script (Reading M1), but
 a parser only knows it at the declaration's `)`. The traversal takes such a declaration as
@@ -141,8 +150,9 @@ structure Constructor (values : Values) where
   selectors : List (Tree.Symbol × values.sort)
 
 /--
-The calls a handler is told, each with what it returns: one constructor for each method of the
-library's handler traits.
+The calls a handler is told that can fail, each with what it returns: one constructor for each
+method of the library's handler traits but the switch of the version, which cannot fail
+(`Handler.setVersion`).
 -/
 inductive Call (values : Values) : Returns → Type where
   -- Sorts, s-expressions, attributes and terms (`SmtHandler`)
@@ -163,8 +173,9 @@ inductive Call (values : Values) : Returns → Type where
   /-- An early check of the scrutinee, before the first case. -/
   | startMatch (scrutinee : values.term) : Call values .nothing
   | startMatchCase (scrutinee : values.term) (pattern : Tree.Pattern) : Call values .scope
-  | endMatchCase (scope : values.scope) (body : values.term) : Call values .term
-  | handleMatch (scrutinee : values.term) (cases : List (Tree.Pattern × values.term)) :
+  | endMatchCase (scope : values.scope) (scrutinee : values.term) (body : values.term) :
+      Call values .term
+  | endMatch (scrutinee : values.term) (cases : List (Tree.Pattern × values.term)) :
       Call values .term
   -- Commands (`SmtCommandHandler`)
   | commandAssert (term : values.term) : Call values .nothing
@@ -189,7 +200,8 @@ inductive Call (values : Values) : Returns → Type where
   | startDefineFunRec (signature : Signature values) : Call values .nothing
   | endDefineFunRec (body : values.term) : Call values .nothing
   | startDefineFunsRec (signatures : List (Signature values)) : Call values .nothing
-  | startRecursiveBody : Call values .nothing
+  /-- The start of a recursive body, with the signature of its function. -/
+  | startRecursiveBody (signature : Signature values) : Call values .nothing
   | endRecursiveBody (body : values.term) : Call values .nothing
   | endDefineFunsRec : Call values .nothing
   | startDefineSort (symbol : Tree.Symbol) (parameters : List Tree.Symbol) : Call values .nothing
@@ -212,17 +224,14 @@ inductive Call (values : Values) : Returns → Type where
   | commandSetInfo (info : values.«attribute») : Call values .nothing
   | commandSetLogic (symbol : Tree.Symbol) : Call values .nothing
   | commandSetOption (option : values.«attribute») : Call values .nothing
-  /-- The handler's switch to the version a script declares, after the producer's. -/
-  | setVersion (version : Version) : Call values .nothing
 
 /--
-A handler in a monad `m`, with errors of type `ε`: its answer to each call, and the start and the
-end of a script, which cannot fail.
+A handler in a monad `m`, with errors of type `ε`: its answer to each call, and its switch to
+the version in force, which cannot fail.
 -/
 structure Handler (m : Type → Type) (ε : Type) (values : Values) where
   call : {returns : Returns} → Call values returns → ExceptT ε m (values.of returns)
-  startScript : m Unit
-  endScript : m Unit
+  setVersion : Version → m Unit
 
 /-! ## Tokens and failures -/
 
@@ -234,7 +243,7 @@ inductive Received where
 /--
 The two points of each token in a parse: the token arrives at the parser, which takes it from
 its producer; then the parser processes it. Between them come only the calls due at the token's
-arrival, which do not depend on the token.
+arrival, which depend on the token only in that a `)` gets none of them.
 -/
 structure Points (m : Type → Type) where
   arrive : Received → m Unit
@@ -287,6 +296,15 @@ def take (token : SyntaxToken) : Run m ε Unit :=
 /-- The parser takes the tokens, one after another, with no call between them. -/
 def takeAll (tokens : List SyntaxToken) : Run m ε Unit :=
   tokens.forM (take points)
+
+/--
+The parser takes the tokens, one after another, given the calls due when the first one arrives.
+-/
+def takeAllArriving (atArrival : Run m ε Unit) : List SyntaxToken → Run m ε Unit
+  | [] => pure ()
+  | first :: rest => do
+    receive points (.token first) atArrival
+    takeAll points rest
 
 mutual
 
@@ -393,15 +411,19 @@ def attributesThen (keyword : Chars) (value : Option Tree.AttributeValue) :
     let others ← attributesThen nextKeyword nextValue rest
     pure (handled :: others)
 
-/-- A qualified identifier: its tokens and its sort, if it is qualified by `as`. -/
-def qualIdentifier : Tree.QualIdentifier → Run m ε (Tree.Identifier × Option values.sort)
+/--
+A qualified identifier, given the calls due when its first token arrives, none unless given: its
+tokens and its sort, if it is qualified by `as`.
+-/
+def qualIdentifier : Tree.QualIdentifier → (atArrival : Run m ε Unit := pure ()) →
+    Run m ε (Tree.Identifier × Option values.sort)
   /- ⟨identifier⟩ -/
-  | .plain identifier => do
-    takeAll points identifier.tokens
+  | .plain identifier, atArrival => do
+    takeAllArriving points atArrival identifier.tokens
     pure (identifier, none)
   /- `(` `as` ⟨identifier⟩ ⟨sort⟩ `)` -/
-  | .as identifier qualification => do
-    takeAll points [.parenOpen, word "as"]
+  | .as identifier qualification, atArrival => do
+    takeAllArriving points atArrival [.parenOpen, word "as"]
     takeAll points identifier.tokens
     let handled ← sort points handler qualification
     take points .parenClose
@@ -419,22 +441,22 @@ def sortedVars : List Tree.SortedVar → Run m ε (List (Tree.Symbol × values.s
 
 mutual
 
-/-- A term. -/
-def term : Tree.Term → Run m ε values.term
+/-- A term, given the calls due when its first token arrives, none unless given. -/
+def term : Tree.Term → (atArrival : Run m ε Unit := pure ()) → Run m ε values.term
   /- ⟨spec_constant⟩ -/
-  | .constant value => do
-    take points value.token
+  | .constant value, atArrival => do
+    receive points (.token value.token) atArrival
     call handler (.handleTerm (.constant value))
 
   /- ⟨qual_identifier⟩: its sort, then the term -/
-  | .identifier qualified => do
-    let (name, qualification) ← qualIdentifier points handler qualified
+  | .identifier qualified, atArrival => do
+    let (name, qualification) ← qualIdentifier points handler qualified atArrival
     call handler (.handleTerm (.identifier name qualification))
 
   /- `(` ⟨qual_identifier⟩ ⟨term⟩+ `)`: the sort of the function, its arguments, then the term
   after the `)` -/
-  | .application function arguments => do
-    take points .parenOpen
+  | .application function arguments, atArrival => do
+    receive points (.token .parenOpen) atArrival
     let (name, qualification) ← qualIdentifier points handler function
     let handled ← terms arguments
     take points .parenClose
@@ -442,8 +464,8 @@ def term : Tree.Term → Run m ε values.term
 
   /- `(` `let` `(` ⟨var_binding⟩+ `)` ⟨term⟩ `)`: the bound terms, the start after the `)` of
   the bindings, the body, then the end after the `)` -/
-  | .«let» bindingList body => do
-    takeAll points [.parenOpen, word "let", .parenOpen]
+  | .«let» bindingList body, atArrival => do
+    takeAllArriving points atArrival [.parenOpen, word "let", .parenOpen]
     let handled ← bindings bindingList
     take points .parenClose
     let scope ← call handler (.startLet handled)
@@ -453,8 +475,8 @@ def term : Tree.Term → Run m ε values.term
 
   /- `(` `lambda` `(` ⟨sorted_var⟩+ `)` ⟨term⟩ `)`: the sorts of the variables, the start with
   all of them after the `)` of the variables, the body, then the end after the `)` -/
-  | .lambda variables body => do
-    takeAll points [.parenOpen, word "lambda", .parenOpen]
+  | .lambda variables body, atArrival => do
+    takeAllArriving points atArrival [.parenOpen, word "lambda", .parenOpen]
     let handled ← sortedVars points handler variables
     take points .parenClose
     let scope ← call handler (.startLambda handled)
@@ -464,8 +486,8 @@ def term : Tree.Term → Run m ε values.term
 
   /- `(` `forall` or `exists` `(` ⟨sorted_var⟩+ `)` ⟨term⟩ `)`: as `lambda`, with the quantifier
   passed to the start and to the end -/
-  | .quantified quantifier variables body => do
-    takeAll points [.parenOpen, quantifier.word, .parenOpen]
+  | .quantified quantifier variables body, atArrival => do
+    takeAllArriving points atArrival [.parenOpen, quantifier.word, .parenOpen]
     let handled ← sortedVars points handler variables
     take points .parenClose
     let scope ← call handler (.startQuantifier quantifier handled)
@@ -474,20 +496,20 @@ def term : Tree.Term → Run m ε values.term
     call handler (.endQuantifier quantifier scope result)
 
   /- `(` `match` ⟨term⟩ `(` ⟨match_case⟩+ `)` `)`: the scrutinee, the start after its last
-  token, the cases, then the match with the scrutinee and the cases after the `)` -/
-  | .«match» scrutinee caseList => do
-    takeAll points [.parenOpen, word "match"]
+  token, the cases, then the end with the scrutinee and the cases after the `)` -/
+  | .«match» scrutinee caseList, atArrival => do
+    takeAllArriving points atArrival [.parenOpen, word "match"]
     let handled ← term scrutinee
     call handler (.startMatch handled)
     take points .parenOpen
     let handledCases ← cases handled caseList
     takeAll points [.parenClose, .parenClose]
-    call handler (.handleMatch handled handledCases)
+    call handler (.endMatch handled handledCases)
 
   /- `(` `!` ⟨term⟩ ⟨attribute⟩+ `)`: the term, its attributes, then the annotation after the
   `)` -/
-  | .annotated annotated attributeList => do
-    takeAll points [.parenOpen, word "!"]
+  | .annotated annotated attributeList, atArrival => do
+    takeAllArriving points atArrival [.parenOpen, word "!"]
     let handled ← term annotated
     let handledAttributes ← match attributeList with
       | [] => do
@@ -518,7 +540,8 @@ def bindings : List (Tree.Symbol × Tree.Term) → Run m ε (List (Tree.Symbol �
 
 /--
 The cases of a `match`, one after another, each `(` ⟨pattern⟩ ⟨term⟩ `)`: the start with the
-scrutinee and the pattern after the pattern's last token, the body, then the end after the `)`.
+scrutinee and the pattern after the pattern's last token, the body, then the end with the
+scrutinee after the `)`.
 -/
 def cases (scrutinee : values.term) :
     List (Tree.Pattern × Tree.Term) → Run m ε (List (Tree.Pattern × values.term))
@@ -529,7 +552,7 @@ def cases (scrutinee : values.term) :
     let scope ← call handler (.startMatchCase scrutinee pattern)
     let result ← term body
     take points .parenClose
-    let handled ← call handler (.endMatchCase scope result)
+    let handled ← call handler (.endMatchCase scope scrutinee result)
     let others ← cases scrutinee rest
     pure ((pattern, handled) :: others)
 
@@ -612,64 +635,61 @@ def datatype (start : List Tree.Symbol → Run m ε Unit) (declaration : Tree.Da
     pure handled
 
 /--
-The bodies of recursive functions, one after another, each between its start and its end. A
-body has no parentheses of its own: its start comes right after the token before it, and its
-end after its last token.
+The bodies of recursive functions, each with the signature of its function, one after another,
+each between its start and its end. A body has no parentheses of its own: its start, with the
+signature, is due when the body's first token arrives, before it is processed, and its end comes
+after its last token.
 -/
-def recursiveBodies : List Tree.Term → Run m ε Unit
+def recursiveBodies : List (Signature values × Tree.Term) → Run m ε Unit
   | [] => pure ()
-  | body :: rest => do
-    call handler .startRecursiveBody
-    let handled ← term points handler body
+  | (signature, body) :: rest => do
+    let handled ← term points handler body (call handler (.startRecursiveBody signature))
     call handler (.endRecursiveBody handled)
     recursiveBodies rest
 
-/--
-The first two tokens of a command, `(` and its name, given the calls due when its `(` arrives.
--/
-def opening (atArrival : Run m ε Unit) (name : String) : Run m ε Unit := do
-  receive points (.token .parenOpen) atArrival
+/-- The first two tokens of a command, `(` and its name. -/
+def opening (name : String) : Run m ε Unit := do
+  take points .parenOpen
   take points (word name)
 
 /--
-A command, given the calls due when its first token arrives. Every command's last call comes
-after its `)`.
+A command. Every command's last call comes after its `)`.
 
 A version declaration is a `set-info` like any other: the command switches nothing. The switch
 belongs to the script the command is in (`commands`).
 -/
-def command (atArrival : Run m ε Unit) : Tree.Command → Run m ε Unit
+def command : Tree.Command → Run m ε Unit
   | .assert asserted => do
-    opening points atArrival "assert"
+    opening points "assert"
     let handled ← term points handler asserted
     take points .parenClose
     call handler (.commandAssert handled)
   | .checkSat => do
-    opening points atArrival "check-sat"
+    opening points "check-sat"
     take points .parenClose
     call handler .commandCheckSat
   | .checkSatAssuming assumptions => do
-    opening points atArrival "check-sat-assuming"
+    opening points "check-sat-assuming"
     take points .parenOpen
     let handled ← terms points handler assumptions
     takeAll points [.parenClose, .parenClose]
     call handler (.commandCheckSatAssuming handled)
   /- the literals of 2.5 and 2.6 are handled as the terms they are written as -/
   | .checkSatAssumingLiterals literals => do
-    opening points atArrival "check-sat-assuming"
+    opening points "check-sat-assuming"
     take points .parenOpen
     let handled ← terms points handler (literals.map Tree.PropLiteral.asTerm)
     takeAll points [.parenClose, .parenClose]
     call handler (.commandCheckSatAssuming handled)
   | .declareConst symbol declaredSort => do
-    opening points atArrival "declare-const"
+    opening points "declare-const"
     take points (.symbol symbol)
     let handled ← sort points handler declaredSort
     take points .parenClose
     call handler (.commandDeclareConst symbol handled)
   /- the start after the parameters, determined as in `datatype`, the end after the `)` -/
   | .declareDatatype symbol declaration => do
-    opening points atArrival "declare-datatype"
+    opening points "declare-datatype"
     take points (.symbol symbol)
     let handled ← datatype points handler
       (fun parameters => call handler (.startDeclareDatatype symbol parameters)) declaration
@@ -677,7 +697,7 @@ def command (atArrival : Run m ε Unit) : Tree.Command → Run m ε Unit
     call handler (.endDeclareDatatype handled)
   /- the start after the `)` of the sort declarations; each datatype; the end after the `)` -/
   | .declareDatatypes sortDecs declarations => do
-    opening points atArrival "declare-datatypes"
+    opening points "declare-datatypes"
     take points .parenOpen
     takeAll points (sortDecs.flatMap Tree.SortDec.tokens)
     take points .parenClose
@@ -691,7 +711,7 @@ def command (atArrival : Run m ε Unit) : Tree.Command → Run m ε Unit
     takeAll points [.parenClose, .parenClose]
     call handler .endDeclareDatatypes
   | .declareFun symbol parameters result => do
-    opening points atArrival "declare-fun"
+    opening points "declare-fun"
     takeAll points [.symbol symbol, .parenOpen]
     let handledParameters ← sorts points handler parameters
     take points .parenClose
@@ -699,16 +719,16 @@ def command (atArrival : Run m ε Unit) : Tree.Command → Run m ε Unit
     take points .parenClose
     call handler (.commandDeclareFun symbol handledParameters handledResult)
   | .declareSort symbol arity => do
-    opening points atArrival "declare-sort"
+    opening points "declare-sort"
     takeAll points [.symbol symbol, .numeral arity, .parenClose]
     call handler (.commandDeclareSort symbol arity)
   | .declareSortParameter symbol => do
-    opening points atArrival "declare-sort-parameter"
+    opening points "declare-sort-parameter"
     takeAll points [.symbol symbol, .parenClose]
     call handler (.commandDeclareSortParameter symbol)
   /- the sort, the body, then the definition after the `)` -/
   | .defineConst symbol definedSort body => do
-    opening points atArrival "define-const"
+    opening points "define-const"
     take points (.symbol symbol)
     let handledSort ← sort points handler definedSort
     let handledBody ← term points handler body
@@ -716,7 +736,7 @@ def command (atArrival : Run m ε Unit) : Tree.Command → Run m ε Unit
     call handler (.commandDefineConst symbol handledSort handledBody)
   /- the start after the result sort's last token, the body, the end after the `)` -/
   | .defineFun ⟨symbol, parameters, result, body⟩ => do
-    opening points atArrival "define-fun"
+    opening points "define-fun"
     let handledSignature ← signature points handler symbol parameters result
     call handler (.startDefineFun handledSignature)
     let handledBody ← term points handler body
@@ -724,16 +744,16 @@ def command (atArrival : Run m ε Unit) : Tree.Command → Run m ε Unit
     call handler (.endDefineFun handledBody)
   /- as `define-fun` -/
   | .defineFunRec ⟨symbol, parameters, result, body⟩ => do
-    opening points atArrival "define-fun-rec"
+    opening points "define-fun-rec"
     let handledSignature ← signature points handler symbol parameters result
     call handler (.startDefineFunRec handledSignature)
     let handledBody ← term points handler body
     take points .parenClose
     call handler (.endDefineFunRec handledBody)
-  /- the start after the `)` of the declarations; the bodies, the first one's start after the
-  `(` before it; the end after the `)` -/
+  /- the start after the `)` of the declarations; the bodies, the i-th with the i-th signature,
+  each one's start when its first token arrives; the end after the `)` -/
   | .defineFunsRec declarations bodies => do
-    opening points atArrival "define-funs-rec"
+    opening points "define-funs-rec"
     take points .parenOpen
     let signatures ← declarations.mapM fun declaration => do
       take points .parenOpen
@@ -744,12 +764,12 @@ def command (atArrival : Run m ε Unit) : Tree.Command → Run m ε Unit
     take points .parenClose
     call handler (.startDefineFunsRec signatures)
     take points .parenOpen
-    recursiveBodies points handler bodies
+    recursiveBodies points handler (signatures.zip bodies)
     takeAll points [.parenClose, .parenClose]
     call handler .endDefineFunsRec
   /- the start after the `)` of the parameters, the sort, the end after the `)` -/
   | .defineSort symbol parameters definedSort => do
-    opening points atArrival "define-sort"
+    opening points "define-sort"
     takeAll points [.symbol symbol, .parenOpen]
     takeAll points (parameters.map .symbol)
     take points .parenClose
@@ -758,78 +778,78 @@ def command (atArrival : Run m ε Unit) : Tree.Command → Run m ε Unit
     take points .parenClose
     call handler (.endDefineSort handled)
   | .echo content => do
-    opening points atArrival "echo"
+    opening points "echo"
     takeAll points [.string content, .parenClose]
     call handler (.commandEcho content)
   | .exit => do
-    opening points atArrival "exit"
+    opening points "exit"
     take points .parenClose
     call handler .commandExit
   | .getAssertions => do
-    opening points atArrival "get-assertions"
+    opening points "get-assertions"
     take points .parenClose
     call handler .commandGetAssertions
   | .getAssignment => do
-    opening points atArrival "get-assignment"
+    opening points "get-assignment"
     take points .parenClose
     call handler .commandGetAssignment
   | .getInfo flag => do
-    opening points atArrival "get-info"
+    opening points "get-info"
     takeAll points [.keyword flag, .parenClose]
     call handler (.commandGetInfo flag)
   | .getModel => do
-    opening points atArrival "get-model"
+    opening points "get-model"
     take points .parenClose
     call handler .commandGetModel
   | .getOption keyword => do
-    opening points atArrival "get-option"
+    opening points "get-option"
     takeAll points [.keyword keyword, .parenClose]
     call handler (.commandGetOption keyword)
   | .getProof => do
-    opening points atArrival "get-proof"
+    opening points "get-proof"
     take points .parenClose
     call handler .commandGetProof
   | .getUnsatAssumptions => do
-    opening points atArrival "get-unsat-assumptions"
+    opening points "get-unsat-assumptions"
     take points .parenClose
     call handler .commandGetUnsatAssumptions
   | .getUnsatCore => do
-    opening points atArrival "get-unsat-core"
+    opening points "get-unsat-core"
     take points .parenClose
     call handler .commandGetUnsatCore
   | .getValue valueTerms => do
-    opening points atArrival "get-value"
+    opening points "get-value"
     take points .parenOpen
     let handled ← terms points handler valueTerms
     takeAll points [.parenClose, .parenClose]
     call handler (.commandGetValue handled)
   | .pop count => do
-    opening points atArrival "pop"
+    opening points "pop"
     takeAll points [.numeral count, .parenClose]
     call handler (.commandPop count)
   | .push count => do
-    opening points atArrival "push"
+    opening points "push"
     takeAll points [.numeral count, .parenClose]
     call handler (.commandPush count)
   | .reset => do
-    opening points atArrival "reset"
+    opening points "reset"
     take points .parenClose
     call handler .commandReset
   | .resetAssertions => do
-    opening points atArrival "reset-assertions"
+    opening points "reset-assertions"
     take points .parenClose
     call handler .commandResetAssertions
   | .setInfo ⟨keyword, value⟩ => do
-    opening points atArrival "set-info"
+    opening points "set-info"
     take points (.keyword keyword)
     let handled ← attributeThen points handler keyword .parenClose value
     call handler (.commandSetInfo handled)
   | .setLogic symbol => do
-    opening points atArrival "set-logic"
+    opening points "set-logic"
     takeAll points [.symbol symbol, .parenClose]
     call handler (.commandSetLogic symbol)
   | .setOption ⟨keyword, value⟩ => do
-    opening points atArrival "set-option"
+    opening points "set-option"
     take points (.keyword keyword)
     let handled ← attributeThen points handler keyword .parenClose value
     call handler (.commandSetOption handled)
@@ -865,45 +885,42 @@ def switchVersion (producer : Producer m) (policy : VersionPolicy) (declarations
   | .error error => throw (.syntax error)
   | .ok () => pure ()
   ExceptT.adapt (fun _ => Cause.syntax .unsupportedVersion) (producer.setVersion version)
-  call handler (.setVersion version)
+  ExceptT.lift (handler.setVersion version)
 
 /--
-The commands of a script, given the producer, the calls due when the next token arrives and the
-number of version declarations made before them, up to the end of the input, which the parser
-receives as well. After a version declaration, the script switches the version. After `exit`,
-the producer discards the rest of the input and the script ends; the parser then receives the
-end of the input alone. A version declaration that names no supported version is rejected
-after its `set-info`, as a version that is not supported.
+The commands of a script, given the producer and the number of version declarations made
+before them, up to the end of the input, which the parser receives as well. After a version
+declaration, the script switches the version. After `exit`, the producer discards the rest of
+the input; the parser then receives the end of the input alone. A version declaration that
+names no supported version is rejected after its `set-info`, as a version that is not
+supported.
 -/
 def commands (producer : Producer m) (policy : VersionPolicy) :
-    Run m ε Unit → Nat → List Tree.Command → Run m ε Unit
-  | atArrival, _, [] => do
-    receive points .endOfInput atArrival
-    ExceptT.lift handler.endScript
-  | atArrival, _, .exit :: _ => do
-    command points handler atArrival .exit
+    Nat → List Tree.Command → Run m ε Unit
+  | _, [] => receive points .endOfInput
+  | _, .exit :: _ => do
+    command points handler .exit
     ExceptT.lift producer.discardRest
-    ExceptT.lift handler.endScript
     receive points .endOfInput
-  | atArrival, declarations, first :: rest => do
-    command points handler atArrival first
+  | declarations, first :: rest => do
+    command points handler first
     match first.declaredVersion with
     | none =>
       if first.namesNoVersion then throw (.syntax .unsupportedVersion)
-      else commands producer policy (pure ()) declarations rest
+      else commands producer policy declarations rest
     | some version => do
       switchVersion handler producer policy declarations version
-      commands producer policy (pure ()) (declarations + 1) rest
+      commands producer policy (declarations + 1) rest
 
 /--
-A script under a version policy, given the producer: the start, when its first token arrives,
-before the parser processes it; its commands, each version declaration followed by its check
-against the policy and the switches; then the end, at the end of the input or, after `exit`,
-after the producer's discarding and before the end of the input.
+A script read from the version, under a version policy, given the producer: the handler's switch
+to the version, before anything else; then its commands, each version declaration followed by
+its check against the policy and the switches.
 -/
-def script (producer : Producer m) (policy : VersionPolicy) (commandList : List Tree.Command) :
-    Run m ε Unit :=
-  commands points handler producer policy (ExceptT.lift handler.startScript) 0 commandList
+def script (producer : Producer m) (policy : VersionPolicy) (version : Version)
+    (commandList : List Tree.Command) : Run m ε Unit := do
+  ExceptT.lift (handler.setVersion version)
+  commands points handler producer policy 0 commandList
 
 end
 

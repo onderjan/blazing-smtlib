@@ -449,7 +449,7 @@ def caseRun (scrutinee : values.term) (matchCase : Tree.Pattern × Tree.Term) :
   let scope ← callScope handler (.startMatchCase scrutinee matchCase.1)
   let result ← term points handler matchCase.2
   take points .parenClose
-  let handled ← callTerm handler (.endMatchCase scope result)
+  let handled ← callTerm handler (.endMatchCase scope scrutinee result)
   pure (matchCase.1, handled)
 
 theorem cases_eq (scrutinee : values.term) (list : List (Tree.Pattern × Tree.Term)) :
@@ -542,14 +542,29 @@ macro "term_simp" "[" extra:Lean.Parser.Tactic.simpLemma,* "]" : tactic =>
   `(tactic| simp +decide [termAt, termStep.eq_def, termAfterWord, applicationAt, Tree.Term.tokens,
     Tree.QualIdentifier.tokens, Tree.Quantifier.word, quantifierOf,
     paren, word, expectOpen, expectClose, qualIdentifier, run_next, run_parseWith, run_bind,
-    run_emitTerm, run_emitScope, run_emitUnit, takeAll, take, $extra,*])
+    run_emitTerm, run_emitScope, run_emitUnit, run_receive, takeAllArriving, takeAll, take,
+    $extra,*])
 
-theorem run_term : ∀ n, TermsRead (points := points) (handler := handler)
+/-- What `run_termArriving` proves for terms with less fuel: with a call due at the arrival
+of the term's first item. -/
+def TermsReadArriving (n : Nat) : Prop :=
+  ∀ (atArrival : Option (Call values .nothing)) (t : Tree.Term) rest, sizeOf t < n →
+    runP (Program.receive atArrival (termAt n)) (items t.tokens ++ rest) =
+      (term points handler t (arrival handler atArrival) >>= fun a => pure (a, rest))
+
+omit [LawfulMonad m] in
+theorem termsRead_of {n : Nat} (h : TermsReadArriving (points := points) (handler := handler)
+    (producer := producer) (policy := policy) n) :
+    TermsRead (points := points) (handler := handler) (producer := producer) (policy := policy)
+      n :=
+  fun t rest ht => h none t rest ht
+
+theorem run_termArriving : ∀ n, TermsReadArriving (points := points) (handler := handler)
     (producer := producer) (policy := policy) n
-  | 0 => fun _ _ h => absurd h (Nat.not_lt_zero _)
+  | 0 => fun _ _ _ h => absurd h (Nat.not_lt_zero _)
   | n + 1 => by
-    have ih := run_term n
-    intro t rest h
+    have ih := termsRead_of (run_termArriving n)
+    intro atArrival t rest h
     cases t with
     | constant constant =>
       cases constant <;> term_simp [constantOf, Tree.SpecConstant.token, term_constant]
@@ -667,6 +682,10 @@ theorem run_term : ∀ n, TermsRead (points := points) (handler := handler)
         simp at ht
         simp only [items, List.map_append, List.append_assoc] at ha
         term_simp [term_annotated, attribute_tokens, ht, ha]
+
+theorem run_term (n : Nat) : TermsRead (points := points) (handler := handler)
+    (producer := producer) (policy := policy) n :=
+  termsRead_of (run_termArriving n)
 
 /-! ## The parts of commands -/
 
@@ -872,20 +891,34 @@ theorem run_functionDecs (list : List Tree.FunctionDec) (rest : List Received) {
   simp [Tree.FunctionDec.tokens, paren, functionDecAt, expectSymbol, expectClose, signature,
     run_parseWith, run_next, run_bind, hs, takeAll, take]
 
-theorem run_recursiveBodies : ∀ (bodies : List Tree.Term) (rest : List Received) {n : Nat},
-    sizeOf bodies < n →
-    runP (recursiveBodies n bodies.length) (items (Tree.Term.tokensAll bodies) ++ rest) =
-      (Traversal.recursiveBodies points handler bodies >>= fun _ => pure ((), rest))
-  | [], rest, _, _ => by simp [recursiveBodies, Traversal.recursiveBodies, Tree.Term.tokensAll]
-  | body :: bodies, rest, n, h => by
+theorem run_recursiveBodies : ∀ (signatures : List (Signature values)) (bodies : List Tree.Term)
+    (rest : List Received) {n : Nat}, signatures.length = bodies.length → sizeOf bodies < n →
+    runP (recursiveBodies n signatures) (items (Tree.Term.tokensAll bodies) ++ rest) =
+      (Traversal.recursiveBodies points handler (signatures.zip bodies) >>=
+        fun _ => pure ((), rest))
+  | [], [], rest, _, _, _ => by
+    simp [recursiveBodies, Traversal.recursiveBodies, Tree.Term.tokensAll]
+  | [], _ :: _, _, _, hl, _ => by simp at hl
+  | _ :: _, [], _, _, hl, _ => by simp at hl
+  | signature :: signatures, body :: bodies, rest, n, hl, h => by
     simp only [List.cons.sizeOf_spec] at h
-    have hb := run_term (points := points) (handler := handler)
-      (producer := producer) (policy := policy) n body
+    simp only [List.length_cons, Nat.add_right_cancel_iff] at hl
+    have hb := run_termArriving (points := points) (handler := handler)
+      (producer := producer) (policy := policy) n (some (.startRecursiveBody signature)) body
       (items (Tree.Term.tokensAll bodies) ++ rest) (by omega)
-    have ih := run_recursiveBodies bodies rest (n := n) (by omega)
-    simp at hb
-    simp [recursiveBodies, Tree.Term.tokensAll, recursiveBodies_cons, parseTerm, run_bind,
-      run_emitUnit, hb, ih]
+    have ih := run_recursiveBodies signatures bodies rest (n := n) hl (by omega)
+    have hp : (recursiveBodies n (signature :: signatures) : Program values Unit) =
+        (Program.receive (some (.startRecursiveBody signature)) (termAt n) >>= fun handled =>
+          emitUnit (.endRecursiveBody handled) >>= fun _ => recursiveBodies n signatures) := rfl
+    have hi : items (Tree.Term.tokensAll (body :: bodies)) ++ rest =
+        items body.tokens ++ (items (Tree.Term.tokensAll bodies) ++ rest) := by
+      simp [Tree.Term.tokensAll]
+    have hb' : runP (Program.receive (some (Call.startRecursiveBody signature)) (termAt n))
+        (items body.tokens ++ (items (Tree.Term.tokensAll bodies) ++ rest)) =
+        (term points handler body (callUnit handler (.startRecursiveBody signature)) >>= fun a =>
+          pure (a, items (Tree.Term.tokensAll bodies) ++ rest)) := hb
+    rw [hp, run_bind, hi, hb', List.zip_cons_cons, recursiveBodies_cons]
+    simp [run_bind, run_emitUnit, ih]
 
 theorem literals_tokens (literals : List Tree.PropLiteral) :
     literals.flatMap Tree.PropLiteral.tokens =
@@ -948,18 +981,14 @@ theorem mapM_bind_congr {β γ δ : Type} (f : β → Run m ε γ) (list : List 
 
 /-! ## Commands -/
 
-/-- The calls due at the arrival of a command's `(`: the start of the script at its first. -/
-def atArrivalOf (start : Bool) : Run m ε Unit :=
-  if start then ExceptT.lift handler.startScript else pure ()
-
 /-- How the reading goes on after the command. -/
 def afterOf : Tree.Command → After
   | .exit => .exit
   | command => .continue command.declaredVersion
 
-/-- A command, from its `(` on, given whether that is the script's first item. -/
-def commandFirst (n : Nat) (start : Bool) : Program values After := do
-  match ← Program.receive start .done with
+/-- A command, from its `(` on. -/
+def commandFirst (n : Nat) : Program values After := do
+  match ← Program.receive none .done with
   | .token .parenOpen => commandAfterOpen n
   | _ => .stuck
 
@@ -968,15 +997,15 @@ set_option hygiene false in
 macro "command_simp" "[" extra:Lean.Parser.Tactic.simpLemma,* "]" : tactic =>
   `(tactic| simp +decide [commandFirst, commandAfterOpen, commandAfter, bare, expectSymbol,
     expectOpen, expectClose, Tree.Command.tokens, commandTokens, paren, word, opening,
-    atArrivalOf, afterOf, Tree.Command.declaredVersion, parseTerm, run_receive, run_next,
+    afterOf, Tree.Command.declaredVersion, parseTerm, run_receive, run_next,
     run_parseWith, run_bind, run_emitUnit, takeAll, take, $extra,*])
 
 set_option maxHeartbeats 4000000 in
-theorem run_command (version : Version) (command : Tree.Command) (start : Bool)
+theorem run_command (version : Version) (command : Tree.Command)
     (rest : List Received) {n : Nat} (hv : command.Valid version)
     (h : 10 * sizeOf command < n) :
-    runP (commandFirst n start) (items command.tokens ++ rest) =
-      (Traversal.command points handler (atArrivalOf (handler := handler) start) command >>=
+    runP (commandFirst n) (items command.tokens ++ rest) =
+      (Traversal.command points handler command >>=
         fun _ => pure (afterOf command, rest)) := by
   cases command with
   | assert t =>
@@ -1148,15 +1177,16 @@ theorem run_command (version : Version) (command : Tree.Command) (start : Bool)
       (producer := producer) (policy := policy) declarations
       (.token .parenOpen :: (items (Tree.Term.tokensAll bodies) ++
         .token .parenClose :: .token .parenClose :: rest)) (n := n) (by omega)
-    have hb := run_recursiveBodies (points := points) (handler := handler)
-      (producer := producer) (policy := policy) bodies
-      (.token .parenClose :: .token .parenClose :: rest) (n := n) (by omega)
+    have hb := fun signatures (hs : signatures.length = bodies.length) =>
+      run_recursiveBodies (points := points) (handler := handler)
+        (producer := producer) (policy := policy) signatures bodies
+        (.token .parenClose :: .token .parenClose :: rest) (n := n) hs (by omega)
     simp [take] at hd
     command_simp [command_defineFunsRec, hd]
     congr 1; funext; congr 1; funext; congr 1; funext
     apply mapM_bind_congr
     intro results hr
-    rw [hr, hlen, hb]
+    rw [hb results (by rw [hr, hlen])]
     simp [run_next]
 
 /-! ## Scripts -/
@@ -1203,39 +1233,36 @@ theorem namesNoVersion_eq_false {version : Version} {command : Tree.Command} {mo
     · simp [hk]
   | _ => rfl
 
-theorem run_commandsStep (rec : Bool → Nat → Program values Unit) (n : Nat) (start : Bool)
-    (declarations : Nat) (command : Tree.Command) (rest : List Received) :
-    runP (commandsStep rec n start declarations) (items command.tokens ++ rest) =
+theorem run_commandsStep (rec : Nat → Program values Unit) (n : Nat) (declarations : Nat)
+    (command : Tree.Command) (rest : List Received) :
+    runP (commandsStep rec n declarations) (items command.tokens ++ rest) =
       runP (do
-        match ← commandFirst n start with
-        | .exit => .discard (.endScript endAfterExit)
-        | .continue none => rec false declarations
+        match ← commandFirst n with
+        | .exit => .discard endAfterExit
+        | .continue none => rec declarations
         | .continue (some version) =>
-          .switch declarations version (rec false (declarations + 1)))
+          .switch declarations version (rec (declarations + 1)))
         (items command.tokens ++ rest) := by
   obtain ⟨inner, hc⟩ := command_tokens_open command
   rw [hc]
   simp [commandsStep, commandFirst, run_receive, run_bind]
   rfl
 
-theorem run_commands : ∀ (commands : List Tree.Command) (version : Version) (start : Bool)
+theorem run_commands : ∀ (commands : List Tree.Command) (version : Version)
     (declarations : Nat) (rest : List Received) {n : Nat}, Script version commands →
     10 * sizeOf commands < n →
-    runP (commandsFrom n start declarations) (received commands ++ rest) =
-      (Traversal.commands points handler producer policy
-        (atArrivalOf (handler := handler) start) declarations commands >>= fun _ =>
+    runP (commandsFrom n declarations) (received commands ++ rest) =
+      (Traversal.commands points handler producer policy declarations commands >>= fun _ =>
           pure ((), rest))
-  | [], _, start, declarations, rest, n + 1, _, _ => by
-    cases start <;>
-      simp [commandsFrom, commandsStep, received, atArrivalOf, Traversal.commands, run_receive,
-        run]
-  | command :: commands, version, start, declarations, rest, n + 1, hs, h => by
+  | [], _, declarations, rest, n + 1, _, _ => by
+    simp [commandsFrom, commandsStep, received, Traversal.commands, run_receive, run]
+  | command :: commands, version, declarations, rest, n + 1, hs, h => by
     simp only [List.cons.sizeOf_spec] at h
     cases hs with
     | stop hv hm =>
       obtain rfl := modeAfter_unparsed hm
       have hc := run_command (points := points) (handler := handler)
-        (producer := producer) (policy := policy) version .exit start (.endOfInput :: rest)
+        (producer := producer) (policy := policy) version .exit (.endOfInput :: rest)
         (n := n) hv (by omega)
       simp only [commandsFrom, received]
       rw [List.append_assoc, List.singleton_append, run_commandsStep, run_bind, hc]
@@ -1246,9 +1273,9 @@ theorem run_commands : ∀ (commands : List Tree.Command) (version : Version) (s
         rintro rfl
         simp [Tree.Command.modeAfter] at hm
       have hc := run_command (points := points) (handler := handler)
-        (producer := producer) (policy := policy) version command start
+        (producer := producer) (policy := policy) version command
         (received commands ++ rest) (n := n) hv (by omega)
-      have ih := fun start declarations => run_commands commands next start declarations rest
+      have ih := fun declarations => run_commands commands next declarations rest
         (n := n) hrest (by omega)
       rw [received_cons hne, List.append_assoc]
       simp only [commandsFrom]
@@ -1257,16 +1284,17 @@ theorem run_commands : ∀ (commands : List Tree.Command) (version : Version) (s
         cases command <;> first | exact absurd rfl hne | rfl
       cases hd : command.declaredVersion with
       | none =>
-        simp [ha, hd, ih, atArrivalOf, Traversal.commands, namesNoVersion_eq_false hm]
+        simp [ha, hd, ih, Traversal.commands, namesNoVersion_eq_false hm]
       | some v =>
-        simp [ha, hd, ih, atArrivalOf, Traversal.commands, run]
+        simp [ha, hd, ih, Traversal.commands, run]
 
 /-- The script's traversal is `parseScript` run on what a parser receives for it. -/
 theorem run_script (version : Version) (commands : List Tree.Command) (rest : List Received)
     {n : Nat} (h : Script version commands) (hn : 10 * sizeOf commands < n) :
-    runP (parseScript n) (received commands ++ rest) =
-      (script points handler producer policy commands >>= fun _ => pure ((), rest)) :=
-  run_commands commands version true 0 rest h hn
+    runP (parseScript n version) (received commands ++ rest) =
+      (script points handler producer policy version commands >>= fun _ => pure ((), rest)) := by
+  simp only [parseScript, Program.run, run_commands commands version 0 rest h hn,
+    Traversal.script, bind_assoc]
 
 end
 

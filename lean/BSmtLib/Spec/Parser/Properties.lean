@@ -32,8 +32,8 @@ inductive Event where
   | arrive (received : Received)
   | process (received : Received)
   | call (returns : Returns) (request : Call Recorded returns)
-  | startScript
-  | endScript
+  /-- The handler's switch of the version. -/
+  | handlerSwitch (version : Version)
   /-- The producer's switch of the version. -/
   | producerSwitch (version : Version)
   /-- The producer's discarding of the rest of the input. -/
@@ -41,7 +41,7 @@ inductive Event where
 
 /-- The event is a call of the handler. -/
 def Event.isCall : Event → Bool
-  | .call _ _ | .startScript | .endScript => true
+  | .call _ _ | .handlerSwitch _ => true
   | _ => false
 
 /-- What arrived, if the event is an arrival. -/
@@ -81,8 +81,7 @@ def recordingHandler : Handler Recording Empty Recorded where
     let count := (← get).countP Event.isCall
     emit (.call returns request)
     pure (recordedValue returns count)
-  startScript := emit .startScript
-  endScript := emit .endScript
+  setVersion version := emit (.handlerSwitch version)
 
 /--
 The producer of a recording run, which never refuses to switch the version and writes down its
@@ -93,11 +92,12 @@ def recordingProducer : Producer Recording where
   discardRest := emit .producerDiscard
 
 /--
-The events of the traversal of a script, in order, under the policy that restricts nothing.
+The events of the traversal of a script read from the version, in order, under the policy that
+restricts nothing.
 -/
-def record (commands : List Tree.Command) : List Event :=
+def record (version : Version) (commands : List Tree.Command) : List Event :=
   let run := script recordingPoints recordingHandler recordingProducer VersionPolicy.unrestricted
-    commands
+    version commands
   (Id.run ((ExceptT.run run).run [])).2.reverse
 
 /-! ## What a parser of a script receives -/
@@ -135,6 +135,18 @@ def eventsBeforeProcessing : Nat → List Event → List Event
   | count + 1, .process item :: rest => .process item :: eventsBeforeProcessing count rest
   | count, event :: rest => event :: eventsBeforeProcessing count rest
 
+/--
+The events before the processing of the item at the position `count` (from zero), when the item
+that arrives there is `item`, without its arrival: what a parser has done when it rejects that
+item. They are those before the processing of the item at that position (`eventsBeforeProcessing`),
+except that a `)` gets none of the calls due at its arrival, as it begins nothing: for a `)`, they
+are those before the arrival (`eventsBefore`).
+-/
+def eventsBeforeProcessingOf (item : Received) (count : Nat) (events : List Event) : List Event :=
+  match item with
+  | .token .parenClose => eventsBefore count events
+  | _ => eventsBeforeProcessing count events
+
 /-! ## Properties -/
 
 /--
@@ -146,8 +158,8 @@ nothing in the traversal repeats the grammar without the grammar checking it.
 -/
 def TakesItsTokens : Prop :=
   ∀ version (commands : List Tree.Command), Script version commands →
-    (record commands).filterMap Event.arrived = received commands ∧
-      (record commands).filterMap Event.processed = received commands
+    (record version commands).filterMap Event.arrived = received commands ∧
+      (record version commands).filterMap Event.processed = received commands
 
 /--
 Property: two scripts from the same version whose traversals make the same calls are the same
@@ -159,7 +171,7 @@ the script can be rebuilt. Only the whitespace between the tokens is not told.
 def CallsDetermineScript : Prop :=
   ∀ version (commands commands' : List Tree.Command), Script version commands →
     Script version commands' →
-    (record commands).filter Event.isCall = (record commands').filter Event.isCall →
+    (record version commands).filter Event.isCall = (record version commands').filter Event.isCall →
     commands = commands'
 
 /--
@@ -176,9 +188,9 @@ def PlacementDetermined : Prop :=
   ∀ version (commands commands' : List Tree.Command) count, Script version commands →
     Script version commands' →
     (received commands).take count = (received commands').take count →
-    eventsBefore count (record commands) = eventsBefore count (record commands') ∧
-      eventsBeforeProcessing count (record commands) =
-        eventsBeforeProcessing count (record commands')
+    eventsBefore count (record version commands) = eventsBefore count (record version commands') ∧
+      eventsBeforeProcessing count (record version commands) =
+        eventsBeforeProcessing count (record version commands')
 
 /-! ## Where a parser rejects its input
 
@@ -283,7 +295,7 @@ def FollowsTheTraversal (parser : RecordingParser) : Prop :=
     Takes version commands taken ending → all.map parser.stands = taken →
     ∀ count ≤ taken.length,
       parser.parse version (all.take count) =
-        (eventsBefore count (record commands),
+        (eventsBefore count (record version commands),
           if count < taken.length then .waiting else ending)
 
 /--
@@ -291,17 +303,18 @@ Property: a parser rejects the first item that no script continues with. On item
 before the item at position `count`, for what a parser takes for a script, or for commands that a
 declaration of a version that is not supported ends, where the items have an item there that no
 script continues with, the parser takes the items up to that one and rejects it, having made the
-traversal's events before the item's processing; processing the item makes no call, so the
-item's processing is the last event of the run.
+traversal's events before the item's processing, where a `)` gets none of the calls due at its
+arrival (`eventsBeforeProcessingOf`); processing the item makes no call, so the item's processing
+is the last event of the run.
 
 A lexer hands over a reserved word only if it is one of the version in force, and a parser
 relies on that; so the rejected item is taken to be such. The items before it are such, as they
 stand for items of a valid script.
 -/
 def RejectsFirstUnviable (parser : RecordingParser) : Prop :=
-  ∀ version commands taken ending (items : List parser.Item) count,
+  ∀ version commands taken ending (items : List parser.Item) count rejected,
     Takes version commands taken ending →
-    count < taken.length → count < items.length →
+    count < taken.length → items[count]? = some rejected →
     (items.map parser.stands).take count = taken.take count →
     (∀ item, (items.map parser.stands)[count]? = some item →
       item.OfVersion (versionAt version commands count)) →
@@ -311,6 +324,6 @@ def RejectsFirstUnviable (parser : RecordingParser) : Prop :=
         (items.map parser.stands).take (count + 1) ∧
       (parser.parse version items).1.getLast? = ((items.map parser.stands)[count]?).map .process ∧
       eventsBeforeProcessing count (parser.parse version items).1 =
-        eventsBeforeProcessing count (record commands)
+        eventsBeforeProcessingOf (parser.stands rejected) count (record version commands)
 
 end BSmtLib.Spec.Parser

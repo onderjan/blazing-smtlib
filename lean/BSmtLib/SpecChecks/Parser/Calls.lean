@@ -81,35 +81,45 @@ theorem rebuild_trace {α : Type} (p : Program Recorded α) :
     simp only [runRebuild, Program.run] at h
     cases h
     exact ⟨rfl, fun _ _ => rfl⟩
-  | receive start next ih =>
+  | receive atArrival next ih =>
     intro items state state' result h
     cases items with
     | nil => exact absurd h throw_not_ok
     | cons item items =>
       simp only [runRebuild, Program.run] at h ih
       obtain ⟨u, s₁, h₁, h₂⟩ := bind_ok_inv h
-      cases start
-      · simp only [↓reduceIte, Bool.false_eq_true] at h₁
-        rw [yields_receive_at item (yields_pure () state)] at h₁
+      cases atArrival with
+      | none =>
+        simp only [Program.arrival_none] at h₁
+        rw [yields_receive item state] at h₁
         cases h₁
         obtain ⟨hf, hrec⟩ := ih item items _ _ _ h₂
         refine ⟨by simpa [trace, List.foldlM_cons, step] using hf, fun events he => ?_⟩
         simp only [runRecording, Program.run]
-        rw [bind_run (receive_run item false events)]
+        rw [bind_run (receive_run item none events)]
         exact hrec _ (by simpa [calls, List.countP_cons, Event.isCall] using he)
-      · simp only [↓reduceIte] at h₁
-        rw [yields_receive_at item (yields_startScript state)] at h₁
-        cases h₁
-        obtain ⟨hf, hrec⟩ := ih item items _ _ _ h₂
-        have hl : (state.push .none).env.length = state.env.length + 1 := by simp [State.push]
-        rw [hl] at hf hrec
-        refine ⟨by simpa [trace, List.foldlM_cons, step] using hf, fun events he => ?_⟩
-        have hr : (Traversal.receive (ε := Empty) recordingPoints item
-            (ExceptT.lift recordingHandler.startScript)).run.run events =
-            (.ok (), [.process item, .startScript, .arrive item] ++ events) := rfl
-        simp only [runRecording, Program.run, ↓reduceIte]
-        rw [bind_run hr]
-        exact hrec _ (by simp [calls, List.countP_cons, Event.isCall] at he ⊢; omega)
+      | some request =>
+        rw [receive_rebuild] at h₁
+        change (Traversal.call rebuildHandler request).run.run state = _ at h₁
+        cases hc : state.call request with
+        | none =>
+          have : (Traversal.call rebuildHandler request).run.run state = (.error (.handler ()),
+            state) := by
+            unfold Traversal.call ExceptT.adapt
+            simp only [rebuildHandler, ExceptT.run, ExceptT.mk, StateT.run, Functor.map,
+              StateT.map, hc]
+            rfl
+          rw [this] at h₁
+          cases h₁
+        | some s₁' =>
+          rw [yields_call request hc] at h₁
+          cases h₁
+          obtain ⟨hf, hrec⟩ := ih item items _ _ _ h₂
+          rw [call_length hc] at hf hrec
+          refine ⟨by simpa [trace, List.foldlM_cons, step, hc] using hf, fun events he => ?_⟩
+          simp only [runRecording, Program.run]
+          rw [bind_run (receive_run item (some request) events)]
+          exact hrec _ (by simp [calls, List.countP_cons, Event.isCall] at he ⊢; omega)
   | call request next ih =>
     intro items state state' result h
     simp only [runRebuild, Program.run] at h ih
@@ -133,18 +143,19 @@ theorem rebuild_trace {α : Type} (p : Program Recorded α) :
       rw [bind_run (call_run request events), he]
       rw [call_length hc] at hrec
       exact hrec _ (by simp [calls, List.countP_cons, Event.isCall] at he ⊢; omega)
-  | endScript next ih =>
+  | setVersion version next ih =>
     intro items state state' result h
     simp only [runRebuild, Program.run] at h ih
     obtain ⟨u, s₁, h₁, h₂⟩ := bind_ok_inv h
-    rw [yields_endScript state] at h₁
+    rw [yields_setVersion version state] at h₁
     cases h₁
     obtain ⟨hf, hrec⟩ := ih items _ _ _ h₂
-    have hl : (state.push .none).env.length = state.env.length + 1 := by simp [State.push]
+    have hl : ({ state.push .none with version } : Recovery.State).env.length =
+        state.env.length + 1 := by simp [State.push]
     rw [hl] at hf hrec
     refine ⟨by simpa [trace, List.foldlM_cons, step] using hf, fun events he => ?_⟩
     simp only [runRecording, Program.run]
-    rw [bind_run (endScript_run events)]
+    rw [bind_run (setVersion_run version events)]
     exact hrec _ (by simp [calls, List.countP_cons, Event.isCall] at he ⊢; omega)
   | discard next ih =>
     intro items state state' result h
@@ -188,12 +199,12 @@ theorem recording_bind_pure_state {α β : Type} (x : Run Recording Empty α) (b
 /-- The recording of a script is the trace of `parseScript` on what a parser receives for it. -/
 theorem record_eq_trace {version : Version} {commands : List Tree.Command}
     (h : Script version commands) {n : Nat} (hn : 10 * sizeOf commands < n) :
-    record commands = trace (parseScript n) (received commands) 0 := by
+    record version commands = trace (parseScript n version) (received commands) 0 := by
   have hm := run_script (points := recordingPoints) (handler := recordingHandler)
     (producer := recordingProducer) (policy := VersionPolicy.unrestricted)
     version commands [] h hn
   rw [List.append_nil] at hm
-  have hs := runRecording_state (parseScript n) (received commands) []
+  have hs := runRecording_state (parseScript n version) (received commands) []
   simp only [runRecording] at hs
   rw [hm, recording_bind_pure_state] at hs
   simp only [record, Id.run]
@@ -204,15 +215,16 @@ theorem record_eq_trace {version : Version} {commands : List Tree.Command}
 every item, and its trace rebuilds the script. -/
 theorem parse_rebuilds {version : Version} {commands : List Tree.Command}
     (h : Script version commands) {n : Nat} (hn : 10 * sizeOf commands < n) :
-    (∃ s', (trace (parseScript n) (received commands) 0).foldlM step (initial version) = some s' ∧
+    (∃ s', (trace (parseScript n version) (received commands) 0).foldlM step (initial version) =
+        some s' ∧
       s'.commands = commands) ∧
-    ((runRecording (parseScript n) (received commands)).run.run []).1 = .ok ((), []) := by
+    ((runRecording (parseScript n version) (received commands)).run.run []).1 = .ok ((), []) := by
   obtain ⟨s', h', c'⟩ := built_script version commands h
   have hm := run_script (points := rebuildPoints) (handler := rebuildHandler)
     (producer := rebuildProducer) (policy := VersionPolicy.unrestricted)
     version commands [] h hn
   rw [List.append_nil] at hm
-  have hr : (runRebuild (parseScript n) (received commands)).run.run (initial version) =
+  have hr : (runRebuild (parseScript n version) (received commands)).run.run (initial version) =
       (.ok ((), []), s') := by
     simp only [runRebuild, hm]
     exact yields_bind h' (yields_pure _ _)
@@ -230,7 +242,7 @@ theorem foldlM_filter (events : List Event) (state : Recovery.State) :
 /-- The calls of a script's recording rebuild the script. -/
 theorem recover_record {version : Version} {commands : List Tree.Command}
     (h : Script version commands) :
-    recover version ((record commands).filter Event.isCall) = some commands := by
+    recover version ((record version commands).filter Event.isCall) = some commands := by
   obtain ⟨⟨s', hf, c'⟩, -⟩ := parse_rebuilds h (Nat.lt_succ_self (10 * sizeOf commands))
   rw [record_eq_trace h (Nat.lt_succ_self _), recover, foldlM_filter, hf]
   simp [c']
@@ -239,8 +251,8 @@ theorem recover_record {version : Version} {commands : List Tree.Command}
 processed. -/
 theorem record_items {version : Version} {commands : List Tree.Command}
     (h : Script version commands) :
-    (record commands).filterMap Event.arrived = received commands ∧
-      (record commands).filterMap Event.processed = received commands := by
+    (record version commands).filterMap Event.arrived = received commands ∧
+      (record version commands).filterMap Event.processed = received commands := by
   obtain ⟨-, hok⟩ := parse_rebuilds h (Nat.lt_succ_self (10 * sizeOf commands))
   have := trace_items _ _ [] () [] hok
   rw [record_eq_trace h (Nat.lt_succ_self _)]

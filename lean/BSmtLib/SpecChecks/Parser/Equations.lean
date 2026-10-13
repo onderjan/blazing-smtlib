@@ -69,27 +69,27 @@ theorem attributeThen_none (keyword) (following) :
       take points following
       Program.callAttribute handler (.handleAttribute keyword none)) := rfl
 
-theorem term_constant (value) :
-    term points handler (.constant value) = (do
-      take points value.token
+theorem term_constant (value) (atArrival : Run m ε Unit) :
+    term points handler (.constant value) atArrival = (do
+      receive points (.token value.token) atArrival
       Program.callTerm handler (.handleTerm (.constant value))) := rfl
 
-theorem term_identifier (qualified) :
-    term points handler (.identifier qualified) = (do
-      let (name, qualification) ← qualIdentifier points handler qualified
+theorem term_identifier (qualified) (atArrival : Run m ε Unit) :
+    term points handler (.identifier qualified) atArrival = (do
+      let (name, qualification) ← qualIdentifier points handler qualified atArrival
       Program.callTerm handler (.handleTerm (.identifier name qualification))) := rfl
 
-theorem term_application (function) (arguments) :
-    term points handler (.application function arguments) = (do
-      take points .parenOpen
+theorem term_application (function) (arguments) (atArrival : Run m ε Unit) :
+    term points handler (.application function arguments) atArrival = (do
+      receive points (.token .parenOpen) atArrival
       let (name, qualification) ← qualIdentifier points handler function
       let handled ← terms points handler arguments
       take points .parenClose
       Program.callTerm handler (.handleTerm (.application name qualification handled))) := rfl
 
-theorem term_let (bindingList) (body) :
-    term points handler (.«let» bindingList body) = (do
-      takeAll points [.parenOpen, word "let", .parenOpen]
+theorem term_let (bindingList) (body) (atArrival : Run m ε Unit) :
+    term points handler (.«let» bindingList body) atArrival = (do
+      takeAllArriving points atArrival [.parenOpen, word "let", .parenOpen]
       let handled ← bindings points handler bindingList
       take points .parenClose
       let scope ← Program.callScope handler (.startLet handled)
@@ -97,9 +97,9 @@ theorem term_let (bindingList) (body) :
       take points .parenClose
       Program.callTerm handler (.endLet scope result)) := rfl
 
-theorem term_lambda (variables) (body) :
-    term points handler (.lambda variables body) = (do
-      takeAll points [.parenOpen, word "lambda", .parenOpen]
+theorem term_lambda (variables) (body) (atArrival : Run m ε Unit) :
+    term points handler (.lambda variables body) atArrival = (do
+      takeAllArriving points atArrival [.parenOpen, word "lambda", .parenOpen]
       let handled ← sortedVars points handler variables
       take points .parenClose
       let scope ← Program.callScope handler (.startLambda handled)
@@ -107,9 +107,9 @@ theorem term_lambda (variables) (body) :
       take points .parenClose
       Program.callTerm handler (.endLambda scope result)) := rfl
 
-theorem term_quantified (quantifier) (variables) (body) :
-    term points handler (.quantified quantifier variables body) = (do
-      takeAll points [.parenOpen, quantifier.word, .parenOpen]
+theorem term_quantified (quantifier) (variables) (body) (atArrival : Run m ε Unit) :
+    term points handler (.quantified quantifier variables body) atArrival = (do
+      takeAllArriving points atArrival [.parenOpen, quantifier.word, .parenOpen]
       let handled ← sortedVars points handler variables
       take points .parenClose
       let scope ← Program.callScope handler (.startQuantifier quantifier handled)
@@ -117,19 +117,19 @@ theorem term_quantified (quantifier) (variables) (body) :
       take points .parenClose
       Program.callTerm handler (.endQuantifier quantifier scope result)) := rfl
 
-theorem term_match (scrutinee) (caseList) :
-    term points handler (.«match» scrutinee caseList) = (do
-      takeAll points [.parenOpen, word "match"]
+theorem term_match (scrutinee) (caseList) (atArrival : Run m ε Unit) :
+    term points handler (.«match» scrutinee caseList) atArrival = (do
+      takeAllArriving points atArrival [.parenOpen, word "match"]
       let handled ← term points handler scrutinee
       Program.callUnit handler (.startMatch handled)
       take points .parenOpen
       let handledCases ← cases points handler handled caseList
       takeAll points [.parenClose, .parenClose]
-      Program.callTerm handler (.handleMatch handled handledCases)) := rfl
+      Program.callTerm handler (.endMatch handled handledCases)) := rfl
 
-theorem term_annotated (annotated) (attributeList) :
-    term points handler (.annotated annotated attributeList) = (do
-      takeAll points [.parenOpen, word "!"]
+theorem term_annotated (annotated) (attributeList) (atArrival : Run m ε Unit) :
+    term points handler (.annotated annotated attributeList) atArrival = (do
+      takeAllArriving points atArrival [.parenOpen, word "!"]
       let handled ← term points handler annotated
       let handledAttributes ← match attributeList with
         | [] => do
@@ -148,14 +148,15 @@ theorem cases_cons (scrutinee : values.term) (pattern : Tree.Pattern) (body : Tr
       let scope ← Program.callScope handler (.startMatchCase scrutinee pattern)
       let result ← term points handler body
       take points .parenClose
-      let handled ← Program.callTerm handler (.endMatchCase scope result)
+      let handled ← Program.callTerm handler (.endMatchCase scope scrutinee result)
       let others ← cases points handler scrutinee rest
       pure ((pattern, handled) :: others)) := rfl
 
-theorem recursiveBodies_cons (body : Tree.Term) (rest : List Tree.Term) :
-    recursiveBodies points handler (body :: rest) = (do
-      Program.callUnit handler .startRecursiveBody
+theorem recursiveBodies_cons (signature : Signature values) (body : Tree.Term)
+    (rest : List (Signature values × Tree.Term)) :
+    recursiveBodies points handler ((signature, body) :: rest) = (do
       let handled ← term points handler body
+        (Program.callUnit handler (.startRecursiveBody signature))
       Program.callUnit handler (.endRecursiveBody handled)
       recursiveBodies points handler rest) := rfl
 
@@ -166,48 +167,48 @@ theorem switchVersion_eq (producer : Producer m)
       | .error error => throw (.syntax error)
       | .ok () => pure ()
       ExceptT.adapt (fun _ => Cause.syntax .unsupportedVersion) (producer.setVersion version)
-      Program.callUnit handler (.setVersion version)) := rfl
+      ExceptT.lift (handler.setVersion version)) := rfl
 
-theorem command_assert (atArrival : Run m ε Unit) (asserted) :
-    command points handler atArrival (.assert asserted) = (do
-      opening points atArrival "assert"
+theorem command_assert (asserted) :
+    command points handler (.assert asserted) = (do
+      opening points "assert"
       let handled ← term points handler asserted
       take points .parenClose
       Program.callUnit handler (.commandAssert handled)) := rfl
 
-theorem command_checkSat (atArrival : Run m ε Unit) :
-    command points handler atArrival (.checkSat) = (do
-      opening points atArrival "check-sat"
+theorem command_checkSat :
+    command points handler (.checkSat) = (do
+      opening points "check-sat"
       take points .parenClose
       Program.callUnit handler .commandCheckSat) := rfl
 
-theorem command_checkSatAssuming (atArrival : Run m ε Unit) (assumptions) :
-    command points handler atArrival (.checkSatAssuming assumptions) = (do
-      opening points atArrival "check-sat-assuming"
+theorem command_checkSatAssuming (assumptions) :
+    command points handler (.checkSatAssuming assumptions) = (do
+      opening points "check-sat-assuming"
       take points .parenOpen
       let handled ← terms points handler assumptions
       takeAll points [.parenClose, .parenClose]
       Program.callUnit handler (.commandCheckSatAssuming handled)) := rfl
 
-theorem command_checkSatAssumingLiterals (atArrival : Run m ε Unit) (literals) :
-    command points handler atArrival (.checkSatAssumingLiterals literals) = (do
-      opening points atArrival "check-sat-assuming"
+theorem command_checkSatAssumingLiterals (literals) :
+    command points handler (.checkSatAssumingLiterals literals) = (do
+      opening points "check-sat-assuming"
       take points .parenOpen
       let handled ← terms points handler (literals.map Tree.PropLiteral.asTerm)
       takeAll points [.parenClose, .parenClose]
       Program.callUnit handler (.commandCheckSatAssuming handled)) := rfl
 
-theorem command_declareConst (atArrival : Run m ε Unit) (symbol) (declaredSort) :
-    command points handler atArrival (.declareConst symbol declaredSort) = (do
-      opening points atArrival "declare-const"
+theorem command_declareConst (symbol) (declaredSort) :
+    command points handler (.declareConst symbol declaredSort) = (do
+      opening points "declare-const"
       take points (.symbol symbol)
       let handled ← sort points handler declaredSort
       take points .parenClose
       Program.callUnit handler (.commandDeclareConst symbol handled)) := rfl
 
-theorem command_declareDatatype (atArrival : Run m ε Unit) (symbol) (declaration) :
-    command points handler atArrival (.declareDatatype symbol declaration) = (do
-      opening points atArrival "declare-datatype"
+theorem command_declareDatatype (symbol) (declaration) :
+    command points handler (.declareDatatype symbol declaration) = (do
+      opening points "declare-datatype"
       take points (.symbol symbol)
       let handled ← datatype points handler
         (fun parameters => Program.callUnit handler (.startDeclareDatatype symbol parameters))
@@ -215,9 +216,9 @@ theorem command_declareDatatype (atArrival : Run m ε Unit) (symbol) (declaratio
       take points .parenClose
       Program.callUnit handler (.endDeclareDatatype handled)) := rfl
 
-theorem command_declareDatatypes (atArrival : Run m ε Unit) (sortDecs) (declarations) :
-    command points handler atArrival (.declareDatatypes sortDecs declarations) = (do
-      opening points atArrival "declare-datatypes"
+theorem command_declareDatatypes (sortDecs) (declarations) :
+    command points handler (.declareDatatypes sortDecs declarations) = (do
+      opening points "declare-datatypes"
       take points .parenOpen
       takeAll points (sortDecs.flatMap Tree.SortDec.tokens)
       take points .parenClose
@@ -232,9 +233,9 @@ theorem command_declareDatatypes (atArrival : Run m ε Unit) (sortDecs) (declara
       takeAll points [.parenClose, .parenClose]
       Program.callUnit handler .endDeclareDatatypes) := rfl
 
-theorem command_declareFun (atArrival : Run m ε Unit) (symbol) (parameters) (result) :
-    command points handler atArrival (.declareFun symbol parameters result) = (do
-      opening points atArrival "declare-fun"
+theorem command_declareFun (symbol) (parameters) (result) :
+    command points handler (.declareFun symbol parameters result) = (do
+      opening points "declare-fun"
       takeAll points [.symbol symbol, .parenOpen]
       let handledParameters ← sorts points handler parameters
       take points .parenClose
@@ -242,48 +243,48 @@ theorem command_declareFun (atArrival : Run m ε Unit) (symbol) (parameters) (re
       take points .parenClose
       Program.callUnit handler (.commandDeclareFun symbol handledParameters handledResult)) := rfl
 
-theorem command_declareSort (atArrival : Run m ε Unit) (symbol) (arity) :
-    command points handler atArrival (.declareSort symbol arity) = (do
-      opening points atArrival "declare-sort"
+theorem command_declareSort (symbol) (arity) :
+    command points handler (.declareSort symbol arity) = (do
+      opening points "declare-sort"
       takeAll points [.symbol symbol, .numeral arity, .parenClose]
       Program.callUnit handler (.commandDeclareSort symbol arity)) := rfl
 
-theorem command_declareSortParameter (atArrival : Run m ε Unit) (symbol) :
-    command points handler atArrival (.declareSortParameter symbol) = (do
-      opening points atArrival "declare-sort-parameter"
+theorem command_declareSortParameter (symbol) :
+    command points handler (.declareSortParameter symbol) = (do
+      opening points "declare-sort-parameter"
       takeAll points [.symbol symbol, .parenClose]
       Program.callUnit handler (.commandDeclareSortParameter symbol)) := rfl
 
-theorem command_defineConst (atArrival : Run m ε Unit) (symbol) (definedSort) (body) :
-    command points handler atArrival (.defineConst symbol definedSort body) = (do
-      opening points atArrival "define-const"
+theorem command_defineConst (symbol) (definedSort) (body) :
+    command points handler (.defineConst symbol definedSort body) = (do
+      opening points "define-const"
       take points (.symbol symbol)
       let handledSort ← sort points handler definedSort
       let handledBody ← term points handler body
       take points .parenClose
       Program.callUnit handler (.commandDefineConst symbol handledSort handledBody)) := rfl
 
-theorem command_defineFun (atArrival : Run m ε Unit) (symbol) (parameters) (result) (body) :
-    command points handler atArrival (.defineFun ⟨symbol, parameters, result, body⟩) = (do
-      opening points atArrival "define-fun"
+theorem command_defineFun (symbol) (parameters) (result) (body) :
+    command points handler (.defineFun ⟨symbol, parameters, result, body⟩) = (do
+      opening points "define-fun"
       let handledSignature ← signature points handler symbol parameters result
       Program.callUnit handler (.startDefineFun handledSignature)
       let handledBody ← term points handler body
       take points .parenClose
       Program.callUnit handler (.endDefineFun handledBody)) := rfl
 
-theorem command_defineFunRec (atArrival : Run m ε Unit) (symbol) (parameters) (result) (body) :
-    command points handler atArrival (.defineFunRec ⟨symbol, parameters, result, body⟩) = (do
-      opening points atArrival "define-fun-rec"
+theorem command_defineFunRec (symbol) (parameters) (result) (body) :
+    command points handler (.defineFunRec ⟨symbol, parameters, result, body⟩) = (do
+      opening points "define-fun-rec"
       let handledSignature ← signature points handler symbol parameters result
       Program.callUnit handler (.startDefineFunRec handledSignature)
       let handledBody ← term points handler body
       take points .parenClose
       Program.callUnit handler (.endDefineFunRec handledBody)) := rfl
 
-theorem command_defineFunsRec (atArrival : Run m ε Unit) (declarations) (bodies) :
-    command points handler atArrival (.defineFunsRec declarations bodies) = (do
-      opening points atArrival "define-funs-rec"
+theorem command_defineFunsRec (declarations) (bodies) :
+    command points handler (.defineFunsRec declarations bodies) = (do
+      opening points "define-funs-rec"
       take points .parenOpen
       let signatures ← declarations.mapM fun declaration => do
         take points .parenOpen
@@ -294,13 +295,13 @@ theorem command_defineFunsRec (atArrival : Run m ε Unit) (declarations) (bodies
       take points .parenClose
       Program.callUnit handler (.startDefineFunsRec signatures)
       take points .parenOpen
-      recursiveBodies points handler bodies
+      recursiveBodies points handler (signatures.zip bodies)
       takeAll points [.parenClose, .parenClose]
       Program.callUnit handler .endDefineFunsRec) := rfl
 
-theorem command_defineSort (atArrival : Run m ε Unit) (symbol) (parameters) (definedSort) :
-    command points handler atArrival (.defineSort symbol parameters definedSort) = (do
-      opening points atArrival "define-sort"
+theorem command_defineSort (symbol) (parameters) (definedSort) :
+    command points handler (.defineSort symbol parameters definedSort) = (do
+      opening points "define-sort"
       takeAll points [.symbol symbol, .parenOpen]
       takeAll points (parameters.map .symbol)
       take points .parenClose
@@ -309,114 +310,114 @@ theorem command_defineSort (atArrival : Run m ε Unit) (symbol) (parameters) (de
       take points .parenClose
       Program.callUnit handler (.endDefineSort handled)) := rfl
 
-theorem command_echo (atArrival : Run m ε Unit) (content) :
-    command points handler atArrival (.echo content) = (do
-      opening points atArrival "echo"
+theorem command_echo (content) :
+    command points handler (.echo content) = (do
+      opening points "echo"
       takeAll points [.string content, .parenClose]
       Program.callUnit handler (.commandEcho content)) := rfl
 
-theorem command_exit (atArrival : Run m ε Unit) :
-    command points handler atArrival (.exit) = (do
-      opening points atArrival "exit"
+theorem command_exit :
+    command points handler (.exit) = (do
+      opening points "exit"
       take points .parenClose
       Program.callUnit handler .commandExit) := rfl
 
-theorem command_getAssertions (atArrival : Run m ε Unit) :
-    command points handler atArrival (.getAssertions) = (do
-      opening points atArrival "get-assertions"
+theorem command_getAssertions :
+    command points handler (.getAssertions) = (do
+      opening points "get-assertions"
       take points .parenClose
       Program.callUnit handler .commandGetAssertions) := rfl
 
-theorem command_getAssignment (atArrival : Run m ε Unit) :
-    command points handler atArrival (.getAssignment) = (do
-      opening points atArrival "get-assignment"
+theorem command_getAssignment :
+    command points handler (.getAssignment) = (do
+      opening points "get-assignment"
       take points .parenClose
       Program.callUnit handler .commandGetAssignment) := rfl
 
-theorem command_getInfo (atArrival : Run m ε Unit) (flag) :
-    command points handler atArrival (.getInfo flag) = (do
-      opening points atArrival "get-info"
+theorem command_getInfo (flag) :
+    command points handler (.getInfo flag) = (do
+      opening points "get-info"
       takeAll points [.keyword flag, .parenClose]
       Program.callUnit handler (.commandGetInfo flag)) := rfl
 
-theorem command_getModel (atArrival : Run m ε Unit) :
-    command points handler atArrival (.getModel) = (do
-      opening points atArrival "get-model"
+theorem command_getModel :
+    command points handler (.getModel) = (do
+      opening points "get-model"
       take points .parenClose
       Program.callUnit handler .commandGetModel) := rfl
 
-theorem command_getOption (atArrival : Run m ε Unit) (keyword) :
-    command points handler atArrival (.getOption keyword) = (do
-      opening points atArrival "get-option"
+theorem command_getOption (keyword) :
+    command points handler (.getOption keyword) = (do
+      opening points "get-option"
       takeAll points [.keyword keyword, .parenClose]
       Program.callUnit handler (.commandGetOption keyword)) := rfl
 
-theorem command_getProof (atArrival : Run m ε Unit) :
-    command points handler atArrival (.getProof) = (do
-      opening points atArrival "get-proof"
+theorem command_getProof :
+    command points handler (.getProof) = (do
+      opening points "get-proof"
       take points .parenClose
       Program.callUnit handler .commandGetProof) := rfl
 
-theorem command_getUnsatAssumptions (atArrival : Run m ε Unit) :
-    command points handler atArrival (.getUnsatAssumptions) = (do
-      opening points atArrival "get-unsat-assumptions"
+theorem command_getUnsatAssumptions :
+    command points handler (.getUnsatAssumptions) = (do
+      opening points "get-unsat-assumptions"
       take points .parenClose
       Program.callUnit handler .commandGetUnsatAssumptions) := rfl
 
-theorem command_getUnsatCore (atArrival : Run m ε Unit) :
-    command points handler atArrival (.getUnsatCore) = (do
-      opening points atArrival "get-unsat-core"
+theorem command_getUnsatCore :
+    command points handler (.getUnsatCore) = (do
+      opening points "get-unsat-core"
       take points .parenClose
       Program.callUnit handler .commandGetUnsatCore) := rfl
 
-theorem command_getValue (atArrival : Run m ε Unit) (valueTerms) :
-    command points handler atArrival (.getValue valueTerms) = (do
-      opening points atArrival "get-value"
+theorem command_getValue (valueTerms) :
+    command points handler (.getValue valueTerms) = (do
+      opening points "get-value"
       take points .parenOpen
       let handled ← terms points handler valueTerms
       takeAll points [.parenClose, .parenClose]
       Program.callUnit handler (.commandGetValue handled)) := rfl
 
-theorem command_pop (atArrival : Run m ε Unit) (count) :
-    command points handler atArrival (.pop count) = (do
-      opening points atArrival "pop"
+theorem command_pop (count) :
+    command points handler (.pop count) = (do
+      opening points "pop"
       takeAll points [.numeral count, .parenClose]
       Program.callUnit handler (.commandPop count)) := rfl
 
-theorem command_push (atArrival : Run m ε Unit) (count) :
-    command points handler atArrival (.push count) = (do
-      opening points atArrival "push"
+theorem command_push (count) :
+    command points handler (.push count) = (do
+      opening points "push"
       takeAll points [.numeral count, .parenClose]
       Program.callUnit handler (.commandPush count)) := rfl
 
-theorem command_reset (atArrival : Run m ε Unit) :
-    command points handler atArrival (.reset) = (do
-      opening points atArrival "reset"
+theorem command_reset :
+    command points handler (.reset) = (do
+      opening points "reset"
       take points .parenClose
       Program.callUnit handler .commandReset) := rfl
 
-theorem command_resetAssertions (atArrival : Run m ε Unit) :
-    command points handler atArrival (.resetAssertions) = (do
-      opening points atArrival "reset-assertions"
+theorem command_resetAssertions :
+    command points handler (.resetAssertions) = (do
+      opening points "reset-assertions"
       take points .parenClose
       Program.callUnit handler .commandResetAssertions) := rfl
 
-theorem command_setInfo (atArrival : Run m ε Unit) (keyword) (value) :
-    command points handler atArrival (.setInfo ⟨keyword, value⟩) = (do
-      opening points atArrival "set-info"
+theorem command_setInfo (keyword) (value) :
+    command points handler (.setInfo ⟨keyword, value⟩) = (do
+      opening points "set-info"
       take points (.keyword keyword)
       let handled ← attributeThen points handler keyword .parenClose value
       Program.callUnit handler (.commandSetInfo handled)) := rfl
 
-theorem command_setLogic (atArrival : Run m ε Unit) (symbol) :
-    command points handler atArrival (.setLogic symbol) = (do
-      opening points atArrival "set-logic"
+theorem command_setLogic (symbol) :
+    command points handler (.setLogic symbol) = (do
+      opening points "set-logic"
       takeAll points [.symbol symbol, .parenClose]
       Program.callUnit handler (.commandSetLogic symbol)) := rfl
 
-theorem command_setOption (atArrival : Run m ε Unit) (keyword) (value) :
-    command points handler atArrival (.setOption ⟨keyword, value⟩) = (do
-      opening points atArrival "set-option"
+theorem command_setOption (keyword) (value) :
+    command points handler (.setOption ⟨keyword, value⟩) = (do
+      opening points "set-option"
       take points (.keyword keyword)
       let handled ← attributeThen points handler keyword .parenClose value
       Program.callUnit handler (.commandSetOption handled)) := rfl

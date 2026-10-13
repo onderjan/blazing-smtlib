@@ -8,8 +8,8 @@ through the calls in order and keeps, for each call, what it stands for (`Fragme
 that returns a handled value stands for the tree it reports, built from what the earlier calls
 it names stand for. A recorded call names an earlier call by its number, which is the position
 of that call's fragment. A command made of several calls waits in `Pending` until its last call.
-`setVersion` changes the version in force, which tells the literals of 2.5 and 2.6 from terms
-in `check-sat-assuming`.
+The handler's switch of the version changes the version in force, which tells the literals of
+2.5 and 2.6 from terms in `check-sat-assuming`.
 
 Not trusted: this is a check of the specification.
 -/
@@ -146,8 +146,8 @@ def fragment : {returns : Returns} → Call Recorded returns → Option Fragment
     let body ← env.term body
     pure (.term (.lambda variables body))
   | _, .startMatchCase _ pattern => some (.pattern pattern)
-  | _, .endMatchCase _ body => (env.term body).map .term
-  | _, .handleMatch scrutinee cases => do
+  | _, .endMatchCase _ _ body => (env.term body).map .term
+  | _, .endMatch scrutinee cases => do
     let scrutinee ← env.term scrutinee
     let cases ← cases.mapM fun ((pattern, i) : Tree.Pattern × Nat) =>
       (env.term i).map (pattern, ·)
@@ -263,7 +263,7 @@ def command : Call Recorded .nothing → Option State
   | .startDefineFunsRec signatures =>
     (signatures.mapM state.env.signature).map fun declarations =>
       { state with pending := .defineFunsRec declarations [] }
-  | .startRecursiveBody => some state
+  | .startRecursiveBody _ => some state
   | .endRecursiveBody body =>
     match state.pending with
     | .defineFunsRec declarations bodies =>
@@ -303,7 +303,6 @@ def command : Call Recorded .nothing → Option State
   | .commandSetLogic symbol => some (state.add (.setLogic symbol))
   | .commandSetOption option =>
     (state.env.«attribute» option).map fun option => state.add (.setOption option)
-  | .setVersion version => some { state with version }
   | .startMatch _ => some state
 
 /-- The state with the fragment of a call added at the call's number. -/
@@ -317,11 +316,11 @@ def call : {returns : Returns} → Call Recorded returns → Option State
 
 end State
 
-/-- What an event does: a call acts, the start and the end of the script stand for nothing,
-and every other event is not a call. -/
+/-- What an event does: a call acts, the handler's switch of the version stands for nothing and
+changes the version in force, and every other event is not a call. -/
 def step (state : State) : Event → Option State
   | .call _ request => state.call request
-  | .startScript | .endScript => some (state.push .none)
+  | .handlerSwitch version => some { state.push .none with version }
   | _ => some state
 
 /-- The state where the rebuilding of a script from the version starts. -/

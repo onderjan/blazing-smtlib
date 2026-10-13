@@ -164,7 +164,7 @@ example : File .v2_7 (chars "(exit)" ++ chars " \"") [.exit] := by
 /-! ## The calls the traversal makes
 
 The calls of the recording of a script (`Spec.Parser.record`), each handled value the number of
-calls before it, the start of the script counted.
+calls before it, the handler's switch to the starting version counted.
 -/
 
 instance (n : Nat) : OfNat Recorded.sort n := inferInstanceAs (OfNat Nat n)
@@ -173,107 +173,134 @@ instance (n : Nat) : OfNat Recorded.«attribute» n := inferInstanceAs (OfNat Na
 instance (n : Nat) : OfNat Recorded.term n := inferInstanceAs (OfNat Nat n)
 instance (n : Nat) : OfNat Recorded.scope n := inferInstanceAs (OfNat Nat n)
 
+/-- An empty script: the handler's switch to the starting version, then the end of the input. -/
+example : record .v2_7 [] = [.handlerSwitch .v2_7, .arrive .endOfInput, .process .endOfInput] :=
+  rfl
+
 /-- A version declaration: the `set-info` is handled as any other; the producer's switch, which
 is not a call, then the handler's switch follow it. -/
-example : (record [.setInfo ⟨chars "smt-lib-version", some (.constant (.decimal (chars "2.6")))⟩,
+example : (record .v2_7
+      [.setInfo ⟨chars "smt-lib-version", some (.constant (.decimal (chars "2.6")))⟩,
       .checkSat]).filter Event.isCall =
-    [.startScript,
+    [.handlerSwitch .v2_7,
       .call .attribute (.handleAttribute (chars "smt-lib-version")
         (some (.constant (.decimal (chars "2.6"))))),
       .call .nothing (.commandSetInfo 1),
-      .call .nothing (.setVersion .v2_6),
-      .call .nothing .commandCheckSat,
-      .endScript] := rfl
+      .handlerSwitch .v2_6,
+      .call .nothing .commandCheckSat] := rfl
 
 /-- `(exit)`: after its `)` and the handler's call for it, the producer discards the rest of the
-input and the script ends; the end of the input arrives after that, and nothing else. -/
-example : (record [.exit, .checkSat]).drop 7 =
-    [.call .nothing .commandExit, .producerDiscard, .endScript, .arrive .endOfInput,
+input; the end of the input arrives after that, and nothing else. -/
+example : (record .v2_7 [.exit, .checkSat]).drop 7 =
+    [.call .nothing .commandExit, .producerDiscard, .arrive .endOfInput,
       .process .endOfInput] := rfl
 
 /-- `(assert (let ((x 1)) x))`: the bound term, the start of the scope with the bindings, the
 body, the end of the scope. -/
-example : (record [.assert (.«let» [(simple "x", numeral "1")] (var "x"))]).filter Event.isCall =
-    [.startScript,
+example : (record .v2_7 [.assert (.«let» [(simple "x", numeral "1")] (var "x"))]).filter
+      Event.isCall =
+    [.handlerSwitch .v2_7,
       .call .term (.handleTerm (.constant (.numeral (chars "1")))),
       .call .scope (.startLet [(simple "x", 1)]),
       .call .term (.handleTerm (.identifier (ident "x") none)),
       .call .term (.endLet 2 3),
-      .call .nothing (.commandAssert 4),
-      .endScript] := rfl
+      .call .nothing (.commandAssert 4)] := rfl
 
 /-- `(assert (match l ((nil 0) ((cons h t) h))))`: the scrutinee and its early check, each case
-in its scope, then the match. -/
-example : (record [.assert (.«match» (var "l")
+in its scope, its end with the scrutinee again, then the end of the match. -/
+example : (record .v2_7 [.assert (.«match» (var "l")
       [(.single (.symbol (simple "nil")), numeral "0"),
         (.constructor (simple "cons") [.symbol (simple "h"), .symbol (simple "t")], var "h")])]
       ).filter Event.isCall =
-    [.startScript,
+    [.handlerSwitch .v2_7,
       .call .term (.handleTerm (.identifier (ident "l") none)),
       .call .nothing (.startMatch 1),
       .call .scope (.startMatchCase 1 (.single (.symbol (simple "nil")))),
       .call .term (.handleTerm (.constant (.numeral (chars "0")))),
-      .call .term (.endMatchCase 3 4),
+      .call .term (.endMatchCase 3 1 4),
       .call .scope (.startMatchCase 1
         (.constructor (simple "cons") [.symbol (simple "h"), .symbol (simple "t")])),
       .call .term (.handleTerm (.identifier (ident "h") none)),
-      .call .term (.endMatchCase 6 7),
-      .call .term (.handleMatch 1 [(.single (.symbol (simple "nil")), 5),
+      .call .term (.endMatchCase 6 1 7),
+      .call .term (.endMatch 1 [(.single (.symbol (simple "nil")), 5),
         (.constructor (simple "cons") [.symbol (simple "h"), .symbol (simple "t")], 8)]),
-      .call .nothing (.commandAssert 9),
-      .endScript] := rfl
+      .call .nothing (.commandAssert 9)] := rfl
 
 /-- `(assert (! p :a :b 1))`: the attribute `:a`, which has no value, is handled only after
 `:b`, the token that shows it has none; `:b` with its value right after the value. -/
-example : (record [.assert (.annotated (var "p")
+example : (record .v2_7 [.assert (.annotated (var "p")
       [⟨chars "a", none⟩, ⟨chars "b", some (.constant (.numeral (chars "1")))⟩])]).filter
         Event.isCall =
-    [.startScript,
+    [.handlerSwitch .v2_7,
       .call .term (.handleTerm (.identifier (ident "p") none)),
       .call .attribute (.handleAttribute (chars "a") none),
       .call .attribute (.handleAttribute (chars "b") (some (.constant (.numeral (chars "1"))))),
       .call .term (.annotateTerm 1 [2, 3]),
-      .call .nothing (.commandAssert 4),
-      .endScript] := rfl
+      .call .nothing (.commandAssert 4)] := rfl
 
 /-- The same script: before `:b` arrives, the item at position 6, `:a` is not handled yet;
 before the item after it arrives, it is. -/
 example :
-    (eventsBefore 6 (record [.assert (.annotated (var "p")
+    (eventsBefore 6 (record .v2_7 [.assert (.annotated (var "p")
       [⟨chars "a", none⟩, ⟨chars "b", some (.constant (.numeral (chars "1")))⟩])])).filter
         Event.isCall =
-      [.startScript, .call .term (.handleTerm (.identifier (ident "p") none))] ∧
-    (eventsBefore 7 (record [.assert (.annotated (var "p")
+      [.handlerSwitch .v2_7, .call .term (.handleTerm (.identifier (ident "p") none))] ∧
+    (eventsBefore 7 (record .v2_7 [.assert (.annotated (var "p")
       [⟨chars "a", none⟩, ⟨chars "b", some (.constant (.numeral (chars "1")))⟩])])).filter
         Event.isCall =
-      [.startScript, .call .term (.handleTerm (.identifier (ident "p") none)),
+      [.handlerSwitch .v2_7, .call .term (.handleTerm (.identifier (ident "p") none)),
         .call .attribute (.handleAttribute (chars "a") none)] := ⟨rfl, rfl⟩
 
 /-- `(define-funs-rec ((f () Int) (g () Int)) (1 2))`: the signatures, then each body between its
-start and its end; the start of the second body right after the end of the first. -/
-example : (record [.defineFunsRec [⟨simple "f", [], sortOf "Int"⟩, ⟨simple "g", [], sortOf "Int"⟩]
+start, with its signature, and its end. -/
+example : (record .v2_7
+      [.defineFunsRec [⟨simple "f", [], sortOf "Int"⟩, ⟨simple "g", [], sortOf "Int"⟩]
       [numeral "1", numeral "2"]]).filter Event.isCall =
-    [.startScript,
+    [.handlerSwitch .v2_7,
       .call .sort (.handleSort (ident "Int") []),
       .call .sort (.handleSort (ident "Int") []),
       .call .nothing (.startDefineFunsRec [⟨simple "f", [], 1⟩, ⟨simple "g", [], 2⟩]),
-      .call .nothing .startRecursiveBody,
+      .call .nothing (.startRecursiveBody ⟨simple "f", [], 1⟩),
       .call .term (.handleTerm (.constant (.numeral (chars "1")))),
       .call .nothing (.endRecursiveBody 5),
-      .call .nothing .startRecursiveBody,
+      .call .nothing (.startRecursiveBody ⟨simple "g", [], 2⟩),
       .call .term (.handleTerm (.constant (.numeral (chars "2")))),
       .call .nothing (.endRecursiveBody 8),
-      .call .nothing .endDefineFunsRec,
-      .endScript] := rfl
+      .call .nothing .endDefineFunsRec] := rfl
+
+/-- The same script: the start of the second body comes when its first token, `2`, the item at
+position 18, arrives: not before that arrival, and before its processing. -/
+example :
+    (eventsBefore 18 (record .v2_7
+      [.defineFunsRec [⟨simple "f", [], sortOf "Int"⟩, ⟨simple "g", [], sortOf "Int"⟩]
+      [numeral "1", numeral "2"]])).filter Event.isCall =
+      [.handlerSwitch .v2_7,
+        .call .sort (.handleSort (ident "Int") []),
+        .call .sort (.handleSort (ident "Int") []),
+        .call .nothing (.startDefineFunsRec [⟨simple "f", [], 1⟩, ⟨simple "g", [], 2⟩]),
+        .call .nothing (.startRecursiveBody ⟨simple "f", [], 1⟩),
+        .call .term (.handleTerm (.constant (.numeral (chars "1")))),
+        .call .nothing (.endRecursiveBody 5)] ∧
+    (eventsBeforeProcessing 18 (record .v2_7
+      [.defineFunsRec [⟨simple "f", [], sortOf "Int"⟩, ⟨simple "g", [], sortOf "Int"⟩]
+      [numeral "1", numeral "2"]])).filter Event.isCall =
+      [.handlerSwitch .v2_7,
+        .call .sort (.handleSort (ident "Int") []),
+        .call .sort (.handleSort (ident "Int") []),
+        .call .nothing (.startDefineFunsRec [⟨simple "f", [], 1⟩, ⟨simple "g", [], 2⟩]),
+        .call .nothing (.startRecursiveBody ⟨simple "f", [], 1⟩),
+        .call .term (.handleTerm (.constant (.numeral (chars "1")))),
+        .call .nothing (.endRecursiveBody 5),
+        .call .nothing (.startRecursiveBody ⟨simple "g", [], 2⟩)] := ⟨rfl, rfl⟩
 
 /-- The list datatype of the standard: the sorts declared, then the datatype with its parameter,
 the sorts of its selectors, its end, and the end of the declarations. -/
-example : (record [.declareDatatypes [⟨simple "List", chars "1"⟩]
+example : (record .v2_7 [.declareDatatypes [⟨simple "List", chars "1"⟩]
       [⟨[simple "T"], [⟨simple "nil", []⟩,
         ⟨simple "cons",
           [⟨simple "head", sortOf "T"⟩, ⟨simple "tail", .mk (ident "List") [sortOf "T"]⟩]⟩]⟩]]
       ).filter Event.isCall =
-    [.startScript,
+    [.handlerSwitch .v2_7,
       .call .nothing (.startDeclareDatatypes [(simple "List", chars "1")]),
       .call .nothing (.startDatatypeDeclaration [simple "T"]),
       .call .sort (.handleSort (ident "T") []),
@@ -281,7 +308,6 @@ example : (record [.declareDatatypes [⟨simple "List", chars "1"⟩]
       .call .sort (.handleSort (ident "List") [4]),
       .call .nothing (.endDatatypeDeclaration [⟨simple "nil", []⟩,
         ⟨simple "cons", [(simple "head", 3), (simple "tail", 5)]⟩]),
-      .call .nothing .endDeclareDatatypes,
-      .endScript] := rfl
+      .call .nothing .endDeclareDatatypes] := rfl
 
 end BSmtLib.SpecChecks.Grammar

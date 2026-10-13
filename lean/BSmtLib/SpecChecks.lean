@@ -508,9 +508,9 @@ theorem Parser.script_eq_parse {m : Type → Type} [Monad m] [LawfulMonad m] {ε
     (policy : Spec.Parser.VersionPolicy) {version : Lexicon.Version}
     {commands : List Grammar.Tree.Command} (h : Grammar.Script version commands)
     (rest : List Spec.Parser.Traversal.Received) {n : Nat} (hn : 10 * sizeOf commands < n) :
-    Parser.Program.run points handler producer policy (Parser.parseScript n)
+    Parser.Program.run points handler producer policy (Parser.parseScript n version)
         (Spec.Parser.received commands ++ rest) =
-      (Spec.Parser.Traversal.script points handler producer policy commands >>= fun _ =>
+      (Spec.Parser.Traversal.script points handler producer policy version commands >>= fun _ =>
         pure ((), rest)) :=
   Parser.run_script version commands rest h hn
 
@@ -543,7 +543,7 @@ info: 'BSmtLib.SpecChecks.Parser.takesItsTokens' depends on axioms: [propext, Cl
 theorem Parser.recoverRebuilds {version : Lexicon.Version} {commands : List Grammar.Tree.Command}
     (h : Grammar.Script version commands) :
     Parser.Recovery.recover version
-      ((Spec.Parser.record commands).filter Spec.Parser.Event.isCall) = some commands :=
+      ((Spec.Parser.record version commands).filter Spec.Parser.Event.isCall) = some commands :=
   Parser.recover_record h
 
 /--
@@ -587,27 +587,28 @@ info: 'BSmtLib.SpecChecks.Parser.placementDetermined' depends on axioms: [propex
 The properties of the traversal are stated on recordings. `Parser.cutRun` is the traversal of a
 script with any handler, points, producer and policy, stopped at the arrival of the item
 at a given position: what such a run has done before that item arrives. The two theorems below
-carry `Spec.Parser.PlacementDetermined` over to every handler: the cut runs of two scripts are
-equal when what a parser receives for them agrees before the cut, and when their recordings do.
+carry `Spec.Parser.PlacementDetermined` over to every handler: the cut runs of two scripts from
+the same version are equal when what a parser receives for them agrees before the cut, and the
+cut runs of two scripts are equal when their recordings do.
 They are checks of the specification, not properties stated in it.
 -/
 
 /--
 For every handler in a lawful monad, points, producer and policy, what the traversals of
-two valid scripts have done before the item at position `count` arrives is the same when what a
-parser receives for them agrees before that item.
+two valid scripts from the same version have done before the item at position `count` arrives
+is the same when what a parser receives for them agrees before that item.
 -/
 theorem Parser.cutRunsAgree {m : Type → Type} [Monad m] [LawfulMonad m] {ε : Type}
     {values : Spec.Parser.Traversal.Values} (points : Spec.Parser.Traversal.Points m)
     (handler : Spec.Parser.Traversal.Handler m ε values)
     (producer : Spec.Parser.Traversal.Producer m)
-    (policy : Spec.Parser.VersionPolicy) (count : Nat) {version version' : Lexicon.Version}
+    (policy : Spec.Parser.VersionPolicy) (count : Nat) {version : Lexicon.Version}
     {commands commands' : List Grammar.Tree.Command} (h : Grammar.Script version commands)
-    (h' : Grammar.Script version' commands')
+    (h' : Grammar.Script version commands')
     (ht : (Spec.Parser.received commands).take count =
       (Spec.Parser.received commands').take count) :
-    Parser.cutRun points handler producer policy count commands =
-      Parser.cutRun points handler producer policy count commands' :=
+    Parser.cutRun points handler producer policy count version commands =
+      Parser.cutRun points handler producer policy count version commands' :=
   Parser.cutRun_eq points handler producer policy count h h' ht
 
 /--
@@ -628,10 +629,10 @@ theorem Parser.cutRunsAgreeByRecord {m : Type → Type} [Monad m] [LawfulMonad m
     (policy : Spec.Parser.VersionPolicy) (count : Nat) {version version' : Lexicon.Version}
     {commands commands' : List Grammar.Tree.Command} (h : Grammar.Script version commands)
     (h' : Grammar.Script version' commands')
-    (he : Spec.Parser.eventsBefore count (Spec.Parser.record commands) =
-      Spec.Parser.eventsBefore count (Spec.Parser.record commands')) :
-    Parser.cutRun points handler producer policy count commands =
-      Parser.cutRun points handler producer policy count commands' :=
+    (he : Spec.Parser.eventsBefore count (Spec.Parser.record version commands) =
+      Spec.Parser.eventsBefore count (Spec.Parser.record version' commands')) :
+    Parser.cutRun points handler producer policy count version commands =
+      Parser.cutRun points handler producer policy count version' commands' :=
   Parser.cutRun_eq_of_record points handler producer policy count h h' he
 
 /--
@@ -653,10 +654,10 @@ theorem Parser.processingCutRunsAgreeByRecord {m : Type → Type} [Monad m] [Law
     (policy : Spec.Parser.VersionPolicy) (count : Nat) {version version' : Lexicon.Version}
     {commands commands' : List Grammar.Tree.Command} (h : Grammar.Script version commands)
     (h' : Grammar.Script version' commands')
-    (he : Spec.Parser.eventsBeforeProcessing count (Spec.Parser.record commands) =
-      Spec.Parser.eventsBeforeProcessing count (Spec.Parser.record commands')) :
-    Parser.processingCutRun points handler producer policy count commands =
-      Parser.processingCutRun points handler producer policy count commands' :=
+    (he : Spec.Parser.eventsBeforeProcessing count (Spec.Parser.record version commands) =
+      Spec.Parser.eventsBeforeProcessing count (Spec.Parser.record version' commands')) :
+    Parser.processingCutRun points handler producer policy count version commands =
+      Parser.processingCutRun points handler producer policy count version' commands' :=
   Parser.processingCutRun_eq_of_record points handler producer policy count h h' he
 
 /--

@@ -26,8 +26,7 @@ def rebuildHandler : Handler Rebuilding Unit Recorded where
     match state.call request with
     | some next => (.ok (recordedValue returns state.env.length), next)
     | none => (.error (), state)
-  startScript := modify (·.push .none)
-  endScript := modify (·.push .none)
+  setVersion version := modify fun state => { state.push .none with version }
 
 /-- The points of a rebuilding run, which do nothing. -/
 def rebuildPoints : Points Rebuilding := ⟨fun _ => pure (), fun _ => pure ()⟩
@@ -79,6 +78,26 @@ theorem yields_takeAll (tokens : List SyntaxToken) (s : Recovery.State) :
   | cons token tokens ih =>
     simp only [takeAll] at ih ⊢
     exact yields_bind (yields_take token s) ih
+
+/-- The points of a rebuilding run do nothing, so an item's arrival makes only the calls due at
+it. -/
+theorem receive_rebuild (item : Received) (atArrival : RRun Unit) :
+    Traversal.receive rebuildPoints item atArrival = atArrival := by
+  simp [Traversal.receive, rebuildPoints]
+
+theorem takeAllArriving_rebuild (atArrival : RRun Unit) (first : SyntaxToken)
+    (rest : List SyntaxToken) :
+    takeAllArriving rebuildPoints atArrival (first :: rest) =
+      (atArrival >>= fun _ => takeAll rebuildPoints rest) := by
+  simp [takeAllArriving, receive_rebuild]
+
+theorem yields_takeAllArriving_pure (tokens : List SyntaxToken) (s : Recovery.State) :
+    Yields (takeAllArriving rebuildPoints (pure ()) tokens) s () s := by
+  cases tokens with
+  | nil => rfl
+  | cons token tokens =>
+    rw [takeAllArriving_rebuild, pure_bind]
+    exact yields_takeAll tokens s
 
 theorem yields_call {returns : Returns} (request : Call Recorded returns) {s s' : Recovery.State}
     (h : s.call request = some s') :
@@ -217,6 +236,24 @@ theorem built_sort : ∀ n (t : Tree.Sort) (s : Recovery.State), sizeOf t < n �
 /-! ## Lists -/
 
 /-- A run over a list, each element of which rebuilds to what it denotes, rebuilds the list. -/
+theorem mapM_some_length {α β : Type} {f : α → Option β} :
+    ∀ {l : List α} {l' : List β}, l.mapM f = some l' → l.length = l'.length
+  | [], l', h => by
+    simp only [List.mapM_nil] at h
+    cases h
+    rfl
+  | a :: l, l', h => by
+    simp only [List.mapM_cons] at h
+    cases hb : f a with
+    | none => simp [hb] at h
+    | some b =>
+      cases hl : l.mapM f with
+      | none => simp [hb, hl] at h
+      | some bs =>
+        simp [hb, hl] at h
+        subst h
+        simp [mapM_some_length hl]
+
 theorem built_mapM {α β γ : Type} (F : β → RRun α) (look : Env → α → Option γ)
     (hmono : ∀ env more a x, look env a = some x → look (env ++ more) a = some x)
     (denote : β → γ) :
@@ -392,13 +429,14 @@ theorem built_qualIdentifier (qualified : Tree.QualIdentifier) (s : Recovery.Sta
         Extends s s' ∧ s'.env.qualIdentifier result.1 result.2 = some qualified := by
   cases qualified with
   | plain identifier =>
-    exact ⟨(identifier, none), s, yields_bind (yields_takeAll _ s) (yields_pure _ _),
+    exact ⟨(identifier, none), s,
+      yields_bind (yields_takeAllArriving_pure _ s) (yields_pure _ _),
       Extends.refl s, rfl⟩
   | as identifier sort =>
     obtain ⟨i, s₁, h₁, e₁, d₁⟩ := built_sort (sizeOf sort + 1) sort s (by omega)
     refine ⟨(identifier, some i), s₁, ?_, e₁, by simp [Env.qualIdentifier, d₁]⟩
     simp only [qualIdentifier]
-    exact yields_bind (yields_takeAll _ s) (yields_bind (yields_takeAll _ s)
+    exact yields_bind (yields_takeAllArriving_pure _ s) (yields_bind (yields_takeAll _ s)
       (yields_bind h₁ (yields_bind (yields_take _ s₁) (yields_pure _ _))))
 
 /-- What a sorted variable is in an environment, from its symbol and the number of its sort. -/
@@ -817,12 +855,10 @@ def Adds (s s' : Recovery.State) (command : Tree.Command) : Prop :=
   s'.commands = s.commands ++ [command] ∧ s'.pending = .none ∧ s'.version = s.version ∧
     ∃ more, s'.env = s.env ++ more
 
-theorem yields_opening {atArrival : RRun Unit} {s s₀ : Recovery.State}
-    (ha : Yields atArrival s () s₀) (name : String) :
-    Yields (opening rebuildPoints atArrival name) s () s₀ := by
-  simp only [opening, Traversal.receive]
-  exact yields_bind (yields_bind (yields_pure () s) (yields_bind ha (yields_pure () s₀)))
-    (yields_take _ s₀)
+theorem yields_opening {s s₀ : Recovery.State} (ha : Yields (pure ()) s () s₀) (name : String) :
+    Yields (opening rebuildPoints name) s () s₀ := by
+  obtain rfl : s = s₀ := congrArg Prod.snd ha
+  exact yields_bind (yields_take _ s) (yields_take _ s)
 
 theorem yields_command_call (request : Call Recorded .nothing) {t t' : Recovery.State}
     (h : (t.push .none).command request = some t') :
@@ -887,23 +923,47 @@ theorem push_attribute {t : Recovery.State} {i : Nat} {x : Tree.Attribute}
 theorem push_sort {t : Recovery.State} {i : Nat} {x : Tree.Sort} (h : t.env.sort i = some x) :
     (t.push .none).env.sort i = some x := Env.sort_append h
 
-theorem built_recursiveBodies : ∀ (bodies : List Tree.Term) (t : Recovery.State)
-    (declarations : List Tree.FunctionDec) (done : List Tree.Term),
+theorem qualIdentifier_rebuild (qualified : Tree.QualIdentifier) (atArrival : RRun Unit) :
+    qualIdentifier (ε := Unit) rebuildPoints rebuildHandler qualified atArrival =
+      (atArrival >>= fun _ => qualIdentifier rebuildPoints rebuildHandler qualified) := by
+  cases qualified with
+  | plain identifier =>
+    obtain ⟨symbol, indices⟩ := identifier
+    cases indices <;>
+      simp [qualIdentifier, Tree.Identifier.tokens, paren, takeAllArriving_rebuild]
+  | as identifier sort => simp [qualIdentifier, takeAllArriving_rebuild]
+
+/-- In a rebuilding run, the calls due at the arrival of a term's first item come before the
+term. -/
+theorem term_rebuild (t : Tree.Term) (atArrival : RRun Unit) :
+    term (ε := Unit) rebuildPoints rebuildHandler t atArrival =
+      (atArrival >>= fun _ => term rebuildPoints rebuildHandler t) := by
+  cases t with
+  | identifier qualified =>
+    simp only [term_identifier]
+    rw [qualIdentifier_rebuild qualified atArrival, bind_assoc]
+  | _ =>
+    simp only [term_constant, term_application, term_let, term_lambda, term_quantified,
+      term_match, term_annotated, receive_rebuild, takeAllArriving_rebuild, bind_assoc,
+      pure_bind]
+
+theorem built_recursiveBodies : ∀ (pairs : List (Signature Recorded × Tree.Term))
+    (t : Recovery.State) (declarations : List Tree.FunctionDec) (done : List Tree.Term),
     t.pending = .defineFunsRec declarations done →
     ∃ t',
-    Yields (Traversal.recursiveBodies (ε := Unit) rebuildPoints rebuildHandler bodies) t () t' ∧
-      Same t t' ∧ t'.pending = .defineFunsRec declarations (done ++ bodies)
+    Yields (Traversal.recursiveBodies (ε := Unit) rebuildPoints rebuildHandler pairs) t () t' ∧
+      Same t t' ∧ t'.pending = .defineFunsRec declarations (done ++ pairs.map Prod.snd)
   | [], t, _, _, hp => ⟨t, rfl, ⟨rfl, rfl, [], by simp⟩, by simpa using hp⟩
-  | body :: bodies, t, declarations, done, hp => by
+  | (signature, body) :: pairs, t, declarations, done, hp => by
     obtain ⟨i, s₁, h₁, e₁, d₁⟩ := built_term (sizeOf body + 1) body (t.push .none) (by omega)
     have hp₁ : (s₁.push .none).pending = .defineFunsRec declarations done := by
       rw [← hp]; exact e₁.2.1
-    obtain ⟨t', h₂, m₂, p₂⟩ := built_recursiveBodies bodies
+    obtain ⟨t', h₂, m₂, p₂⟩ := built_recursiveBodies pairs
       { (s₁.push .none) with pending := .defineFunsRec declarations (done ++ [body]) }
       declarations (done ++ [body]) rfl
     refine ⟨t', ?_, (Same.push ⟨rfl, rfl, [], by simp⟩).trans (e₁.same.trans
       ((Same.pending ⟨rfl, rfl, [], by simp⟩ _).trans m₂)), by simpa using p₂⟩
-    rw [recursiveBodies_cons]
+    rw [recursiveBodies_cons, term_rebuild, bind_assoc]
     refine yields_bind (yields_command_call _ (t' := t.push .none) rfl) (yields_bind h₁
       (yields_bind (yields_command_call _ ?_) h₂))
     simp [State.command, hp₁, push_term d₁]
@@ -950,10 +1010,10 @@ theorem sortDecs_roundTrip (sorts : List Tree.SortDec) :
   | cons s sorts ih => simpa using ih
 
 set_option maxHeartbeats 4000000 in
-theorem built_command (command : Tree.Command) (s : Recovery.State)
-    (hp : s.pending = .none) (hv : command.Valid s.version) {atArrival : RRun Unit}
-    {s₀ : Recovery.State} (ha : Yields atArrival s () s₀) (he : Extends s s₀) :
-    ∃ s', Yields (Traversal.command rebuildPoints rebuildHandler atArrival command) s () s' ∧
+theorem built_command' (command : Tree.Command) (s : Recovery.State)
+    (hp : s.pending = .none) (hv : command.Valid s.version)
+    {s₀ : Recovery.State} (ha : Yields (pure ()) s () s₀) (he : Extends s s₀) :
+    ∃ s', Yields (Traversal.command rebuildPoints rebuildHandler command) s () s' ∧
       Adds s s' command := by
   cases command with
   | checkSat =>
@@ -1208,6 +1268,7 @@ theorem built_command (command : Tree.Command) (s : Recovery.State)
     · simp only [State.command, hsorts]
     · simp [State.command, State.push, p₁]
   | defineFunsRec declarations bodies =>
+    obtain ⟨-, -, hlen, -⟩ := hv
     obtain ⟨sigs, s₁, h₁, e₁, d₁⟩ := built_mapM (α := Signature Recorded)
       (fun declaration => do
         take (ε := Unit) rebuildPoints .parenOpen
@@ -1220,7 +1281,10 @@ theorem built_command (command : Tree.Command) (s : Recovery.State)
         obtain ⟨handled, s₁, h₁, e₁, d₁⟩ := built_signature symbol parameters result s
         exact ⟨handled, s₁, yields_bind (yields_take _ s) (yields_bind h₁
           (yields_bind (yields_take _ s₁) (yields_pure _ _))), e₁, d₁⟩) s₀
-    obtain ⟨t', h₂, m₂, p₂⟩ := built_recursiveBodies bodies
+    have hz : (sigs.zip bodies).map Prod.snd = bodies :=
+      List.map_snd_zip
+        (by rw [mapM_some_length d₁, List.length_map, hlen]; exact Nat.le_refl _)
+    obtain ⟨t', h₂, m₂, p₂⟩ := built_recursiveBodies (sigs.zip bodies)
       { s₁.push .none with pending := .defineFunsRec declarations [] } declarations [] rfl
     refine ⟨{ (t'.push .none).add (.defineFunsRec declarations bodies) with pending := .none },
       ?_, adds_end ((he.same.trans e₁.same |>.pending _).trans m₂) _⟩
@@ -1237,25 +1301,24 @@ theorem built_command (command : Tree.Command) (s : Recovery.State)
     · simp only [State.command]
       erw [d₁']
       rfl
-    · simp [State.command, State.push, p₂]
+    · simp [State.command, State.push, p₂, hz]
 
+
+/-- A command, with the rebuilding handler, adds itself to the commands. -/
+theorem built_command (command : Tree.Command) (s : Recovery.State)
+    (hp : s.pending = .none) (hv : command.Valid s.version) :
+    ∃ s', Yields (Traversal.command rebuildPoints rebuildHandler command) s () s' ∧
+      Adds s s' command :=
+  built_command' command s hp hv (yields_pure () s) (Extends.refl s)
 
 /-! ## Scripts -/
 
-theorem yields_endScript (s : Recovery.State) :
-    Yields (ExceptT.lift rebuildHandler.endScript) s () (s.push .none) := rfl
-
-theorem yields_startScript (s : Recovery.State) :
-    Yields (ExceptT.lift rebuildHandler.startScript) s () (s.push .none) := rfl
+theorem yields_setVersion (version : Version) (s : Recovery.State) :
+    Yields (ExceptT.lift (rebuildHandler.setVersion version)) s () { s.push .none with version } :=
+  rfl
 
 theorem yields_discard (s : Recovery.State) :
     Yields (ExceptT.lift rebuildProducer.discardRest) s () s := rfl
-
-theorem yields_receive_at (item : Received) {atArrival : RRun Unit} {s s₀ : Recovery.State}
-    (ha : Yields atArrival s () s₀) :
-    Yields (Traversal.receive rebuildPoints item atArrival) s () s₀ := by
-  simp only [Traversal.receive]
-  exact yields_bind (yields_pure () s) (yields_bind ha (yields_pure () s₀))
 
 theorem unrestricted_ok (declarations : Nat) (version : Version) :
     VersionPolicy.unrestricted.check declarations version = .ok () := by
@@ -1268,7 +1331,7 @@ theorem yields_switch (declarations : Nat) (version : Version) (s : Recovery.Sta
   exact yields_bind
     (x := ExceptT.adapt (fun _ => Cause.syntax .unsupportedVersion)
       (rebuildProducer.setVersion version)) rfl
-    (yields_command_call _ rfl)
+    (yields_setVersion version s)
 
 theorem modeAfter_read {version next : Version} {command : Tree.Command}
     (h : command.modeAfter version = some (.read next)) :
@@ -1297,62 +1360,59 @@ theorem modeAfter_read {version next : Version} {command : Tree.Command}
 
 theorem commands_cons_none {command : Tree.Command} (hne : command ≠ .exit)
     (hd : command.declaredVersion = none) (hn : command.namesNoVersion = false)
-    (atArrival : RRun Unit) (declarations : Nat)
-    (commands : List Tree.Command) :
+    (declarations : Nat) (commands : List Tree.Command) :
     Traversal.commands rebuildPoints rebuildHandler rebuildProducer VersionPolicy.unrestricted
-        atArrival declarations (command :: commands) =
-      (Traversal.command rebuildPoints rebuildHandler atArrival command >>= fun _ =>
+        declarations (command :: commands) =
+      (Traversal.command rebuildPoints rebuildHandler command >>= fun _ =>
         Traversal.commands rebuildPoints rebuildHandler rebuildProducer
-          VersionPolicy.unrestricted (pure ()) declarations commands) := by
+          VersionPolicy.unrestricted declarations commands) := by
   cases command <;> first | exact absurd rfl hne | simp [Traversal.commands, hd, hn]
 
 theorem commands_cons_some {command : Tree.Command} (hne : command ≠ .exit) {version : Version}
-    (hd : command.declaredVersion = some version) (atArrival : RRun Unit) (declarations : Nat)
+    (hd : command.declaredVersion = some version) (declarations : Nat)
     (commands : List Tree.Command) :
     Traversal.commands rebuildPoints rebuildHandler rebuildProducer VersionPolicy.unrestricted
-        atArrival declarations (command :: commands) =
-      (Traversal.command rebuildPoints rebuildHandler atArrival command >>= fun _ =>
+        declarations (command :: commands) =
+      (Traversal.command rebuildPoints rebuildHandler command >>= fun _ =>
         switchVersion rebuildHandler rebuildProducer VersionPolicy.unrestricted declarations
           version >>= fun _ =>
         Traversal.commands rebuildPoints rebuildHandler rebuildProducer
-          VersionPolicy.unrestricted (pure ()) (declarations + 1) commands) := by
+          VersionPolicy.unrestricted (declarations + 1) commands) := by
   cases command <;> first | exact absurd rfl hne | simp [Traversal.commands, hd]
 
 theorem built_commands : ∀ (commands : List Tree.Command) (version : Version)
-    (s : Recovery.State) {atArrival : RRun Unit} {s₀ : Recovery.State} (declarations : Nat),
+    (s : Recovery.State) (declarations : Nat),
     Script version commands → s.version = version → s.pending = .none →
-    Yields atArrival s () s₀ → Extends s s₀ →
     ∃ s', Yields (Traversal.commands rebuildPoints rebuildHandler rebuildProducer
-      VersionPolicy.unrestricted atArrival declarations commands) s () s' ∧
+      VersionPolicy.unrestricted declarations commands) s () s' ∧
       s'.commands = s.commands ++ commands
-  | [], _, s, _, s₀, _, _, _, _, ha, he => by
-    refine ⟨s₀.push .none, ?_, by simp [State.push, he.2.2.1]⟩
+  | [], _, s, _, _, _, _ => by
+    refine ⟨s, ?_, by simp⟩
     simp only [Traversal.commands]
-    exact yields_bind (yields_receive_at _ ha) (yields_endScript s₀)
-  | command :: commands, version, s, atArrival, s₀, declarations, hs, hver, hp, ha, he => by
+    exact yields_receive _ s
+  | command :: commands, version, s, declarations, hs, hver, hp => by
     cases hs with
     | stop hv hm =>
       obtain rfl := modeAfter_unparsed hm
-      obtain ⟨s', h', a'⟩ := built_command .exit s hp (hver ▸ hv) ha he
-      refine ⟨s'.push .none, ?_, by simp [State.push, a'.1]⟩
+      obtain ⟨s', h', a'⟩ := built_command .exit s hp (hver ▸ hv)
+      refine ⟨s', ?_, a'.1⟩
       simp only [Traversal.commands]
-      exact yields_bind h' (yields_bind (yields_discard s')
-        (yields_bind (yields_endScript s') (yields_receive_at _ (yields_pure () _))))
+      exact yields_bind h' (yields_bind (yields_discard s') (yields_receive _ s'))
     | command hv hm hrest =>
       rename_i next
       have hne : command ≠ .exit := by
         rintro rfl
         simp [Tree.Command.modeAfter] at hm
-      obtain ⟨s', h', a'⟩ := built_command command s hp (hver ▸ hv) ha he
+      obtain ⟨s', h', a'⟩ := built_command command s hp (hver ▸ hv)
       rcases modeAfter_read hm with ⟨hd, hn⟩ | hd
       · obtain ⟨s'', h'', c''⟩ := built_commands commands next s' declarations hrest
-          (a'.2.2.1.trans (hver.trans hn.symm)) a'.2.1 (yields_pure () s') (Extends.refl s')
+          (a'.2.2.1.trans (hver.trans hn.symm)) a'.2.1
         refine ⟨s'', ?_, by simp [c'', a'.1]⟩
         rw [commands_cons_none hne hd (namesNoVersion_eq_false hm)]
         exact yields_bind h' h''
       · obtain ⟨s'', h'', c''⟩ := built_commands commands next
           { s'.push .none with version := next } (declarations + 1) hrest rfl
-          (by simp [State.push, a'.2.1]) (yields_pure () _) (Extends.refl _)
+          (by simp [State.push, a'.2.1])
         refine ⟨s'', ?_, by simp [c'', State.push, a'.1]⟩
         rw [commands_cons_some hne hd]
         exact yields_bind h' (yields_bind (yields_switch declarations next s') h'')
@@ -1363,9 +1423,10 @@ leaves the script's commands. -/
 theorem built_script (version : Version) (commands : List Tree.Command)
     (h : Script version commands) :
     ∃ s', Yields (script rebuildPoints rebuildHandler rebuildProducer VersionPolicy.unrestricted
-      commands) (initial version) () s' ∧ s'.commands = commands := by
-  obtain ⟨s', h', c'⟩ := built_commands commands version (initial version) 0 h rfl rfl
-    (yields_startScript _) (extends_push _ _)
-  exact ⟨s', h', by simpa [initial] using c'⟩
+      version commands) (initial version) () s' ∧ s'.commands = commands := by
+  obtain ⟨s', h', c'⟩ := built_commands commands version
+    { (initial version).push .none with version } 0 h rfl rfl
+  exact ⟨s', yields_bind (yields_setVersion version _) h',
+    by simpa [initial, State.push] using c'⟩
 
 end BSmtLib.SpecChecks.Parser

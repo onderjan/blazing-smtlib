@@ -27,7 +27,7 @@ theorem eventsBefore_trace {α : Type} (p : Program Recorded α) :
       eventsBefore k (trace p items count) = eventsBefore k (trace p items' count) := by
   induction p with
   | done => intros; rfl
-  | receive start next ih =>
+  | receive atArrival next ih =>
     intro items items' count k h
     cases items with
     | nil =>
@@ -35,24 +35,24 @@ theorem eventsBefore_trace {α : Type} (p : Program Recorded α) :
       | nil => rfl
       | cons x' s' =>
         cases k with
-        | zero => cases start <;> simp [trace, eventsBefore]
+        | zero => cases atArrival <;> simp [trace, eventsBefore]
         | succ k => simp at h
     | cons x s =>
       cases items' with
       | nil =>
         cases k with
-        | zero => cases start <;> simp [trace, eventsBefore]
+        | zero => cases atArrival <;> simp [trace, eventsBefore]
         | succ k => simp at h
       | cons x' s' =>
         cases k with
-        | zero => cases start <;> simp [trace, eventsBefore]
+        | zero => cases atArrival <;> simp [trace, eventsBefore]
         | succ k =>
           obtain ⟨rfl, h'⟩ := take_cons_succ h
-          cases start <;> simp [trace, eventsBefore, ih x s s' _ k h']
+          cases atArrival <;> simp [trace, eventsBefore, ih x s s' _ k h']
   | call request next ih =>
     intro items items' count k h
     cases k <;> simp [trace, eventsBefore, ih _ items items' _ _ h]
-  | endScript next ih =>
+  | setVersion version next ih =>
     intro items items' count k h
     cases k <;> simp [trace, eventsBefore, ih items items' _ _ h]
   | discard next ih =>
@@ -70,7 +70,7 @@ theorem eventsBeforeProcessing_trace {α : Type} (p : Program Recorded α) :
         eventsBeforeProcessing k (trace p items' count) := by
   induction p with
   | done => intros; rfl
-  | receive start next ih =>
+  | receive atArrival next ih =>
     intro items items' count k h hl
     cases items with
     | nil =>
@@ -82,15 +82,15 @@ theorem eventsBeforeProcessing_trace {α : Type} (p : Program Recorded α) :
       | nil => cases k <;> simp at h hl
       | cons x' s' =>
         cases k with
-        | zero => cases start <;> simp [trace, eventsBeforeProcessing]
+        | zero => cases atArrival <;> simp [trace, eventsBeforeProcessing]
         | succ k =>
           obtain ⟨rfl, h'⟩ := take_cons_succ h
           simp only [List.length_cons, Nat.add_lt_add_iff_right] at hl
-          cases start <;> simp [trace, eventsBeforeProcessing, ih x s s' _ k h' hl]
+          cases atArrival <;> simp [trace, eventsBeforeProcessing, ih x s s' _ k h' hl]
   | call request next ih =>
     intro items items' count k h hl
     cases k <;> simp [trace, eventsBeforeProcessing, ih _ items items' _ _ h hl]
-  | endScript next ih =>
+  | setVersion version next ih =>
     intro items items' count k h hl
     cases k <;> simp [trace, eventsBeforeProcessing, ih items items' _ _ h hl]
   | discard next ih =>
@@ -101,27 +101,25 @@ theorem eventsBeforeProcessing_trace {α : Type} (p : Program Recorded α) :
     cases k <;> simp [trace, eventsBeforeProcessing, ih items items' _ _ h hl]
   | stuck => intros; rfl
 
-/-- The recording run of `parseScript` on what a parser receives for a script, followed by
-anything, succeeds and leaves what follows. -/
+/-- The recording run of the commands of `parseScript`, after the handler's switch to the starting
+version, on what a parser receives for a script, followed by anything, succeeds from any events
+with one call and leaves what follows. -/
 theorem parse_leaves {version : Version} {commands : List Tree.Command}
     (h : Script version commands) {n : Nat} (hn : 10 * sizeOf commands < n)
-    (rest : List Received) :
-    ((runRecording (parseScript n) (received commands ++ rest)).run.run []).1 = .ok ((), rest) := by
-  have hm := fun rest => run_script (points := recordingPoints) (handler := recordingHandler)
-    (producer := recordingProducer) (policy := VersionPolicy.unrestricted)
-    version commands rest h hn
-  obtain ⟨-, hok⟩ := parse_rebuilds h hn
-  have h₀ := hm []
-  rw [List.append_nil] at h₀
-  simp only [runRecording] at hok ⊢
-  rw [h₀, recording_bind_run] at hok
-  rw [hm rest, recording_bind_run]
-  revert hok
-  rcases (script recordingPoints recordingHandler recordingProducer VersionPolicy.unrestricted
-    commands).run.run [] with ⟨e, events⟩
-  cases e with
-  | error e => intro hok; cases hok
-  | ok u => intro _; rfl
+    (rest : List Received) (events : List Event) (he : calls events = 1) :
+    ((runRecording (commandsFrom n 0) (received commands ++ rest)).run.run events).1 =
+      .ok ((), rest) := by
+  obtain ⟨s', h', -⟩ := built_commands commands version
+    { (Recovery.initial version).push .none with version } 0 h rfl rfl
+  have hm := run_commands (points := rebuildPoints) (handler := rebuildHandler)
+    (producer := rebuildProducer) (policy := VersionPolicy.unrestricted)
+    commands version 0 rest h hn
+  have hr : (runRebuild (commandsFrom n 0) (received commands ++ rest)).run.run
+      { (Recovery.initial version).push .none with version } = (.ok ((), rest), s') := by
+    simp only [runRebuild, hm]
+    exact yields_bind h' (yields_pure _ _)
+  obtain ⟨-, hrec⟩ := rebuild_trace _ _ _ _ _ hr
+  exact hrec events (by simp [he, Recovery.initial, Recovery.State.push])
 
 /-- What a parser receives for a valid script is not a proper start of what it receives for
 another valid script. -/
@@ -129,8 +127,9 @@ theorem received_not_prefix {version version' : Version} {commands commands' : L
     (h : Script version commands) (h' : Script version' commands') {rest : List Received}
     (heq : received commands = received commands' ++ rest) : rest = [] := by
   let n := 10 * (sizeOf commands + sizeOf commands') + 1
-  have h₁ := parse_leaves h (n := n) (by omega) []
-  have h₂ := parse_leaves h' (n := n) (by omega) rest
+  have he : calls [.handlerSwitch version] = 1 := rfl
+  have h₁ := parse_leaves h (n := n) (by omega) [] _ he
+  have h₂ := parse_leaves h' (n := n) (by omega) rest _ he
   rw [List.append_nil, heq, h₂] at h₁
   simpa using h₁.symm
 
