@@ -565,6 +565,12 @@ def commandAfterOpen (n : Nat) : Program values After := do
   | .token (.reserved w) => commandAfter n w
   | _ => .stuck
 
+/-- After `exit`: the end of the input, and nothing else. -/
+def endAfterExit : Program values Unit := do
+  match ← Program.receive false .done with
+  | .endOfInput => pure ()
+  | _ => .stuck
+
 /-- The commands of a script from the next item on, given whether that item is the script's
 first and the number of version declarations before it, and the reader of the commands after
 the next one. -/
@@ -574,7 +580,7 @@ def commandsStep (commandsFrom : Bool → Nat → Program values Unit) (n : Nat)
   | .endOfInput => .endScript (pure ())
   | .token .parenOpen => do
     match ← commandAfterOpen n with
-    | .exit => .endScript (pure ())
+    | .exit => .discard (.endScript endAfterExit)
     | .continue none => commandsFrom false declarations
     | .continue (some version) =>
       .switch declarations version (commandsFrom false (declarations + 1))

@@ -20,11 +20,6 @@ namespace BSmtLib.SpecChecks.Lexicon
 
 open BSmtLib.Spec BSmtLib.Spec.Lexicon BSmtLib.Spec.Lexicon.Regex
 
-/-- The tokens end with a `)` that ends at `stop`. -/
-def EndsWithClose (tokens : List Token) (stop : Nat) : Prop :=
-  ∃ last, tokens.getLast? = some last ∧ last.category = .parenClose ∧
-    last.offset + last.text.length = stop
-
 /-- A tokenisation with a token has a non-empty input. -/
 theorem tokenizationFrom_ne_nil {version : Version} {offset : Nat} {input : Chars}
     {tokens : List Token} (h : TokenizationFrom version offset input tokens) (hne : tokens ≠ []) :
@@ -182,10 +177,6 @@ theorem close_handoverMaximal {version : Version} {start : Chars} {tokens : List
   simp
 
 /-! ## Reading the rest on its own -/
-
-/-- The token moved by `k` characters to the right. -/
-def Token.moveBy (k : Nat) (token : Token) : Token :=
-  ⟨token.category, token.offset + k, token.text⟩
 
 /-- A tokenisation of characters read further to the right. -/
 theorem tokenizationFrom_moveBy {version : Version} {offset : Nat} {input : Chars}

@@ -32,8 +32,8 @@ def rebuildHandler : Handler Rebuilding Unit Recorded where
 /-- The points of a rebuilding run, which do nothing. -/
 def rebuildPoints : Points Rebuilding := ⟨fun _ => pure (), fun _ => pure ()⟩
 
-/-- The producer's switch of a rebuilding run, which never refuses. -/
-def rebuildSwitch (_ : Version) : ExceptT VersionRefused Rebuilding Unit := pure ()
+/-- The producer of a rebuilding run, which never refuses and does nothing. -/
+def rebuildProducer : Producer Rebuilding := ⟨fun _ => pure (), pure ()⟩
 
 /-- A run of the rebuilding handler. -/
 abbrev RRun (α : Type) := Run Rebuilding Unit α
@@ -1248,6 +1248,9 @@ theorem yields_endScript (s : Recovery.State) :
 theorem yields_startScript (s : Recovery.State) :
     Yields (ExceptT.lift rebuildHandler.startScript) s () (s.push .none) := rfl
 
+theorem yields_discard (s : Recovery.State) :
+    Yields (ExceptT.lift rebuildProducer.discardRest) s () s := rfl
+
 theorem yields_receive_at (item : Received) {atArrival : RRun Unit} {s s₀ : Recovery.State}
     (ha : Yields atArrival s () s₀) :
     Yields (Traversal.receive rebuildPoints item atArrival) s () s₀ := by
@@ -1259,10 +1262,12 @@ theorem unrestricted_ok (declarations : Nat) (version : Version) :
   cases version <;> rfl
 
 theorem yields_switch (declarations : Nat) (version : Version) (s : Recovery.State) :
-    Yields (switchVersion rebuildHandler rebuildSwitch VersionPolicy.unrestricted declarations
+    Yields (switchVersion rebuildHandler rebuildProducer VersionPolicy.unrestricted declarations
       version) s () { s.push .none with version } := by
   simp only [switchVersion, unrestricted_ok]
-  exact yields_bind (x := ExceptT.adapt Cause.producer (rebuildSwitch version)) rfl
+  exact yields_bind
+    (x := ExceptT.adapt (fun _ => Cause.syntax .unsupportedVersion)
+      (rebuildProducer.setVersion version)) rfl
     (yields_command_call _ rfl)
 
 theorem modeAfter_read {version next : Version} {command : Tree.Command}
@@ -1291,24 +1296,25 @@ theorem modeAfter_read {version next : Version} {command : Tree.Command}
     exact ⟨rfl, h.symm⟩
 
 theorem commands_cons_none {command : Tree.Command} (hne : command ≠ .exit)
-    (hd : command.declaredVersion = none) (atArrival : RRun Unit) (declarations : Nat)
+    (hd : command.declaredVersion = none) (hn : command.namesNoVersion = false)
+    (atArrival : RRun Unit) (declarations : Nat)
     (commands : List Tree.Command) :
-    Traversal.commands rebuildPoints rebuildHandler rebuildSwitch VersionPolicy.unrestricted
+    Traversal.commands rebuildPoints rebuildHandler rebuildProducer VersionPolicy.unrestricted
         atArrival declarations (command :: commands) =
       (Traversal.command rebuildPoints rebuildHandler atArrival command >>= fun _ =>
-        Traversal.commands rebuildPoints rebuildHandler rebuildSwitch
+        Traversal.commands rebuildPoints rebuildHandler rebuildProducer
           VersionPolicy.unrestricted (pure ()) declarations commands) := by
-  cases command <;> first | exact absurd rfl hne | simp [Traversal.commands, hd]
+  cases command <;> first | exact absurd rfl hne | simp [Traversal.commands, hd, hn]
 
 theorem commands_cons_some {command : Tree.Command} (hne : command ≠ .exit) {version : Version}
     (hd : command.declaredVersion = some version) (atArrival : RRun Unit) (declarations : Nat)
     (commands : List Tree.Command) :
-    Traversal.commands rebuildPoints rebuildHandler rebuildSwitch VersionPolicy.unrestricted
+    Traversal.commands rebuildPoints rebuildHandler rebuildProducer VersionPolicy.unrestricted
         atArrival declarations (command :: commands) =
       (Traversal.command rebuildPoints rebuildHandler atArrival command >>= fun _ =>
-        switchVersion rebuildHandler rebuildSwitch VersionPolicy.unrestricted declarations
+        switchVersion rebuildHandler rebuildProducer VersionPolicy.unrestricted declarations
           version >>= fun _ =>
-        Traversal.commands rebuildPoints rebuildHandler rebuildSwitch
+        Traversal.commands rebuildPoints rebuildHandler rebuildProducer
           VersionPolicy.unrestricted (pure ()) (declarations + 1) commands) := by
   cases command <;> first | exact absurd rfl hne | simp [Traversal.commands, hd]
 
@@ -1316,7 +1322,7 @@ theorem built_commands : ∀ (commands : List Tree.Command) (version : Version)
     (s : Recovery.State) {atArrival : RRun Unit} {s₀ : Recovery.State} (declarations : Nat),
     Script version commands → s.version = version → s.pending = .none →
     Yields atArrival s () s₀ → Extends s s₀ →
-    ∃ s', Yields (Traversal.commands rebuildPoints rebuildHandler rebuildSwitch
+    ∃ s', Yields (Traversal.commands rebuildPoints rebuildHandler rebuildProducer
       VersionPolicy.unrestricted atArrival declarations commands) s () s' ∧
       s'.commands = s.commands ++ commands
   | [], _, s, _, s₀, _, _, _, _, ha, he => by
@@ -1330,7 +1336,8 @@ theorem built_commands : ∀ (commands : List Tree.Command) (version : Version)
       obtain ⟨s', h', a'⟩ := built_command .exit s hp (hver ▸ hv) ha he
       refine ⟨s'.push .none, ?_, by simp [State.push, a'.1]⟩
       simp only [Traversal.commands]
-      exact yields_bind h' (yields_endScript s')
+      exact yields_bind h' (yields_bind (yields_discard s')
+        (yields_bind (yields_endScript s') (yields_receive_at _ (yields_pure () _))))
     | command hv hm hrest =>
       rename_i next
       have hne : command ≠ .exit := by
@@ -1341,7 +1348,7 @@ theorem built_commands : ∀ (commands : List Tree.Command) (version : Version)
       · obtain ⟨s'', h'', c''⟩ := built_commands commands next s' declarations hrest
           (a'.2.2.1.trans (hver.trans hn.symm)) a'.2.1 (yields_pure () s') (Extends.refl s')
         refine ⟨s'', ?_, by simp [c'', a'.1]⟩
-        rw [commands_cons_none hne hd]
+        rw [commands_cons_none hne hd (namesNoVersion_eq_false hm)]
         exact yields_bind h' h''
       · obtain ⟨s'', h'', c''⟩ := built_commands commands next
           { s'.push .none with version := next } (declarations + 1) hrest rfl
@@ -1355,7 +1362,7 @@ theorem built_commands : ∀ (commands : List Tree.Command) (version : Version)
 leaves the script's commands. -/
 theorem built_script (version : Version) (commands : List Tree.Command)
     (h : Script version commands) :
-    ∃ s', Yields (script rebuildPoints rebuildHandler rebuildSwitch VersionPolicy.unrestricted
+    ∃ s', Yields (script rebuildPoints rebuildHandler rebuildProducer VersionPolicy.unrestricted
       commands) (initial version) () s' ∧ s'.commands = commands := by
   obtain ⟨s', h', c'⟩ := built_commands commands version (initial version) 0 h rfl rfl
     (yields_startScript _) (extends_push _ _)

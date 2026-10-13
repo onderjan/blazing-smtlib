@@ -185,6 +185,12 @@ example : (record [.setInfo ⟨chars "smt-lib-version", some (.constant (.decima
       .call .nothing .commandCheckSat,
       .endScript] := rfl
 
+/-- `(exit)`: after its `)` and the handler's call for it, the producer discards the rest of the
+input and the script ends; the end of the input arrives after that, and nothing else. -/
+example : (record [.exit, .checkSat]).drop 7 =
+    [.call .nothing .commandExit, .producerDiscard, .endScript, .arrive .endOfInput,
+      .process .endOfInput] := rfl
+
 /-- `(assert (let ((x 1)) x))`: the bound term, the start of the scope with the bindings, the
 body, the end of the scope. -/
 example : (record [.assert (.«let» [(simple "x", numeral "1")] (var "x"))]).filter Event.isCall =

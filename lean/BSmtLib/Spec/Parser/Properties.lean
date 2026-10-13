@@ -7,8 +7,8 @@ Properties of the handler contract alone: that the traversal takes exactly the t
 is written as, that its calls determine the script, and that what it has done before a token
 arrives depends only on the tokens before it. `BSmtLib.SpecChecks` proves them.
 
-They are stated on a recording run (`record`): the traversal of a script with a handler and
-token points that write down every event, in order, and a handler that returns as each handled
+They are stated on a recording run (`record`): the traversal of a script with a handler, token
+points and a producer that write down every event, in order, and a handler that returns as each handled
 value the number of calls before it, so that a call names the earlier calls whose results it
 receives. A recording run never fails: the policy restricts nothing, the producer never
 refuses, and the handler never fails.
@@ -36,6 +36,8 @@ inductive Event where
   | endScript
   /-- The producer's switch of the version. -/
   | producerSwitch (version : Version)
+  /-- The producer's discarding of the rest of the input. -/
+  | producerDiscard
 
 /-- The event is a call of the handler. -/
 def Event.isCall : Event → Bool
@@ -82,15 +84,19 @@ def recordingHandler : Handler Recording Empty Recorded where
   startScript := emit .startScript
   endScript := emit .endScript
 
-/-- The producer's switch of the version in a recording run, which never refuses. -/
-def recordingSwitch (version : Version) : ExceptT VersionRefused Recording Unit :=
-  ExceptT.lift (emit (.producerSwitch version))
+/--
+The producer of a recording run, which never refuses to switch the version and writes down its
+switches and its discarding.
+-/
+def recordingProducer : Producer Recording where
+  setVersion version := ExceptT.lift (emit (.producerSwitch version))
+  discardRest := emit .producerDiscard
 
 /--
 The events of the traversal of a script, in order, under the policy that restricts nothing.
 -/
 def record (commands : List Tree.Command) : List Event :=
-  let run := script recordingPoints recordingHandler recordingSwitch VersionPolicy.unrestricted
+  let run := script recordingPoints recordingHandler recordingProducer VersionPolicy.unrestricted
     commands
   (Id.run ((ExceptT.run run).run [])).2.reverse
 
@@ -98,11 +104,12 @@ def record (commands : List Tree.Command) : List Event :=
 
 /--
 What a parser receives for the commands: the tokens each is written as, then the end of the
-input, unless the commands end with `exit`, after which nothing is read.
+input. After `exit`, the rest of the input is discarded, so the end of the input comes right
+after the tokens of `exit`.
 -/
 def received : List Tree.Command → List Received
   | [] => [.endOfInput]
-  | .exit :: _ => Tree.Command.exit.tokens.map .token
+  | .exit :: _ => Tree.Command.exit.tokens.map .token ++ [.endOfInput]
   | first :: rest => first.tokens.map .token ++ received rest
 
 /--
@@ -172,5 +179,138 @@ def PlacementDetermined : Prop :=
     eventsBefore count (record commands) = eventsBefore count (record commands') ∧
       eventsBeforeProcessing count (record commands) =
         eventsBeforeProcessing count (record commands')
+
+/-! ## Where a parser rejects its input
+
+The properties above are about scripts. The two below are about a parser on any input: it
+takes what a parser takes for a script as the traversal does, and it rejects the first item
+that no script continues with.
+
+A declaration of a version that is not supported is no command of a script, but a parser takes
+it as `set-info` up to its `)` and only then fails, as on a version its policy does not allow
+(`Traversal.commands`). So what a parser takes is a script, or commands that such a declaration
+ends (`Takes`).
+-/
+
+/-- How a parser's run over the items it is given ends. -/
+inductive Ending where
+  /-- The parser took every item and waits for the next. -/
+  | waiting
+  /-- The script ended: the parser finished, and takes no item after it. -/
+  | finished
+  /-- The parser rejected the last item it took: no script continues with it. -/
+  | rejected
+  /-- The parser failed after the last item it took, on a version declaration. -/
+  | failed (error : VersionError)
+
+/--
+`Takes version commands items ending`: read from the version, a parser takes the items for the
+commands, and then ends as `ending` says. Either the commands are a script, the items what a
+parser receives for it (`received`), and the parser finishes; or the commands are valid up to a
+version declaration that names no supported version, which ends them, the items are their tokens
+up to that declaration's `)`, and the parser fails there with `unsupportedVersion`.
+
+Standard: 2.7 §3.11 Scripts. Readings M1, M2 and M3, as `Tree.Command.modeAfter`.
+-/
+inductive Takes : Version → List Tree.Command → List Received → Ending → Prop
+  /-- The end of the input. -/
+  | done : Takes version [] [.endOfInput] .finished
+  /-- A command after which the commands go on in a version. -/
+  | command {first : Tree.Command} : first.Valid version →
+      first.modeAfter version = some (.read next) → Takes next rest items ending →
+      Takes version (first :: rest) (first.tokens.map .token ++ items) ending
+  /-- A command after which nothing is read: `exit`, then the end of the input. -/
+  | stop {last : Tree.Command} : last.Valid version → last.modeAfter version = some .unparsed →
+      Takes version [last] (last.tokens.map .token ++ [.endOfInput]) .finished
+  /-- A version declaration that names no supported version, at whose `)` a parser fails. -/
+  | refused {last : Tree.Command} : last.Valid version → last.modeAfter version = none →
+      Takes version [last] (last.tokens.map .token) (.failed .unsupportedVersion)
+
+/--
+A parser can go on after the items: they are the start of what a parser takes for a script or
+for commands that a declaration of a version that is not supported ends.
+-/
+def Viable (version : Version) (items : List Received) : Prop :=
+  ∃ commands taken ending, Takes version commands taken ending ∧ items <+: taken
+
+/--
+The version in force at the item at position `count` (from zero) of what a parser takes for the
+commands, read from the version: the version a declaration declares holds from the item after
+its `)` on.
+
+Reading M1: a version declaration changes the mode after its `)`.
+-/
+def versionAt (version : Version) : List Tree.Command → Nat → Version
+  | [], _ => version
+  | first :: rest, count =>
+    if count < first.tokens.length then version
+    else versionAt (first.declaredVersion.getD version) rest (count - first.tokens.length)
+
+/--
+The item is one that a lexer of the version can hand over, as far as a parser can tell: a
+reserved word is a reserved word of the version.
+
+Standard: 2.7 §3.1 Reserved words; ⟨reserved⟩ of each version.
+-/
+def Traversal.Received.OfVersion (version : Version) : Received → Prop
+  | .token (.reserved word) => word ∈ (basicReservedWords version ++ commandNames version).map chars
+  | _ => True
+
+/--
+A parser as its recording runs show it. It takes items of its own type, each of which stands for
+a token or the end of the input (`stands`); from the version to start in and the items it is
+given, it records the events of its run, with a handler, token points and a producer that write
+them down as in `record`, and ends as `Ending` says.
+-/
+structure RecordingParser where
+  Item : Type
+  stands : Item → Received
+  parse : Version → List Item → List Event × Ending
+
+/--
+Property: a parser takes what a parser takes for a script, or for commands that a declaration of
+a version that is not supported ends, as the traversal does. On items that stand for those
+items, given any start of them, it has made the traversal's events before the next item
+arrives; when it has all of them, it ends as `Takes` says, and otherwise it waits for the next
+item.
+
+So a parser rejects no item that some script continues with, and it rejects a declaration of a
+version that is not supported after its `set-info`, as it rejects a version that its policy does
+not allow.
+-/
+def FollowsTheTraversal (parser : RecordingParser) : Prop :=
+  ∀ version commands taken ending (all : List parser.Item),
+    Takes version commands taken ending → all.map parser.stands = taken →
+    ∀ count ≤ taken.length,
+      parser.parse version (all.take count) =
+        (eventsBefore count (record commands),
+          if count < taken.length then .waiting else ending)
+
+/--
+Property: a parser rejects the first item that no script continues with. On items that stand,
+before the item at position `count`, for what a parser takes for a script, or for commands that a
+declaration of a version that is not supported ends, where the items have an item there that no
+script continues with, the parser takes the items up to that one and rejects it, having made the
+traversal's events before the item's processing; processing the item makes no call, so the
+item's processing is the last event of the run.
+
+A lexer hands over a reserved word only if it is one of the version in force, and a parser
+relies on that; so the rejected item is taken to be such. The items before it are such, as they
+stand for items of a valid script.
+-/
+def RejectsFirstUnviable (parser : RecordingParser) : Prop :=
+  ∀ version commands taken ending (items : List parser.Item) count,
+    Takes version commands taken ending →
+    count < taken.length → count < items.length →
+    (items.map parser.stands).take count = taken.take count →
+    (∀ item, (items.map parser.stands)[count]? = some item →
+      item.OfVersion (versionAt version commands count)) →
+    ¬ Viable version ((items.map parser.stands).take (count + 1)) →
+    (parser.parse version items).2 = .rejected ∧
+      (parser.parse version items).1.filterMap Event.processed =
+        (items.map parser.stands).take (count + 1) ∧
+      (parser.parse version items).1.getLast? = ((items.map parser.stands)[count]?).map .process ∧
+      eventsBeforeProcessing count (parser.parse version items).1 =
+        eventsBeforeProcessing count (record commands)
 
 end BSmtLib.Spec.Parser

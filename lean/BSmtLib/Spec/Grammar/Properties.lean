@@ -1,10 +1,12 @@
 import BSmtLib.Spec.Grammar.File
+import BSmtLib.Spec.Lexer
 
 /-!
 # Properties of the grammar
 
-Properties of the specification alone: that each sequence of tokens is at most one tree, and
-each file at most one sequence of commands. `BSmtLib.SpecChecks` proves them.
+Properties of the specification alone: that each sequence of tokens is at most one tree, that
+each file is at most one sequence of commands, and that a lexer fed a command holds none of its
+tokens back. `BSmtLib.SpecChecks` proves them.
 
 Together with `tokens`, which writes every tree as exactly one sequence of tokens, the first two
 say that the valid trees of a version and the sequences of tokens they are written as
@@ -49,5 +51,18 @@ command.
 def FilesUnique : Prop :=
   ∀ version input (commands commands' : List Tree.Command),
     File version input commands → File version input commands' → commands = commands'
+
+/--
+Property: a lexer fed the characters of a command, up to its `)`, has handed over all its
+tokens and holds nothing back.
+
+So reading can stop at the end of a command and start again, possibly in the version the command
+switches to, without a token of the command waiting for what follows it. A command ends with its
+`)`, which needs no delimiter.
+-/
+def CommandsHandedOverWhole : Prop :=
+  ∀ version segment tokens command, TokenizationExactly version 0 segment tokens →
+    IsCommand version (tokens.map (SyntaxToken.ofToken version)) command →
+      Lexer.HandoverMaximal version segment tokens
 
 end BSmtLib.Spec.Grammar

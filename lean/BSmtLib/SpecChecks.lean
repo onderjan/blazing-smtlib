@@ -9,6 +9,7 @@ import BSmtLib.SpecChecks.Grammar.OneToOne
 import BSmtLib.SpecChecks.Grammar.Files
 import BSmtLib.SpecChecks.RoundTrip.Files
 import BSmtLib.SpecChecks.Compose
+import BSmtLib.SpecChecks.Consumers
 import BSmtLib.SpecChecks.Grammar.Examples
 import BSmtLib.SpecChecks.Parser.Bridge
 
@@ -25,6 +26,8 @@ are not trusted.
   over more as it is fed more or the end of the input, and is correct on whole inputs.
 - Composition: reading can stop at the `)` of a command and start again on the rest, possibly
   in another version.
+- A lexer and its consumers: what a lexer does with a consumer is determined, and the input
+  after a switch of the version is located as in the whole input.
 - Round trips: the tokens of an input can be printed back, exactly with the whitespace and
   comments between them and in a canonical layout without them, and are read back from what is
   printed.
@@ -133,13 +136,8 @@ read on their own, and the more read on their own from any offset are the same t
 
 /-- Characters whose tokenisation ends with a `)` at their end are handed over whole, and the
 characters followed by more are tokenised as the two parts read on their own. -/
-theorem Lexicon.composeAtClose {version : Lexicon.Version} {start : Lexicon.Chars}
-    {tokens : List Lexicon.Token} (h : Lexicon.Tokenization version start tokens)
-    (hclose : Lexicon.EndsWithClose tokens start.length) :
-    Spec.Lexer.HandoverMaximal version start tokens ∧
-      ∀ more tokens', Lexicon.Tokenization version (start ++ more) tokens' ↔
-        ∃ others, tokens' = tokens ++ others.map (Lexicon.Token.moveBy start.length) ∧
-          Lexicon.Tokenization version more others := by
+theorem Lexicon.composeAtClose : Spec.Lexer.ComposesAtClose := by
+  intro version start tokens h hclose
   have hclose' : Lexicon.EndsWithClose tokens (0 + start.length) := by simpa using hclose
   refine ⟨Lexicon.close_handoverMaximal h hclose, fun more tokens' => ?_⟩
   rw [Lexicon.Tokenization, Lexicon.tokenizationFrom_close_iff h hclose' more tokens']
@@ -159,11 +157,8 @@ info: 'BSmtLib.SpecChecks.Lexicon.composeAtClose' depends on axioms: [propext, C
 
 /-- Characters read from any offset, in any version, are tokenised as they are on their own,
 moved to that offset. -/
-theorem Lexicon.readOnItsOwn (version : Lexicon.Version) (offset : Nat) (input : Lexicon.Chars)
-    (tokens : List Lexicon.Token) :
-    Lexicon.TokenizationFrom version offset input tokens ↔
-      ∃ tokens₀, tokens = tokens₀.map (Lexicon.Token.moveBy offset) ∧
-        Lexicon.Tokenization version input tokens₀ := by
+theorem Lexicon.readOnItsOwn : Lexicon.ReadsOnItsOwn := by
+  intro version offset input tokens
   constructor
   · intro h
     rw [← Nat.zero_add offset] at h
@@ -176,6 +171,71 @@ info: 'BSmtLib.SpecChecks.Lexicon.readOnItsOwn' depends on axioms: [propext, Cla
 -/
 #guard_msgs in
 #print axioms Lexicon.readOnItsOwn
+
+/-!
+### A lexer and its consumers
+
+`Spec.Lexer.Runs` states what a lexer does with a consumer relative to what it hands over to the
+collector. What it does is determined by the input and the consumer, so the result it holds or
+returns, where its discarding began and the version in force are too. The input after a switch
+of the version is read on its own and located in the whole input; locating it so agrees with
+locating its characters in the whole input, and from the start of the input, the tokens ready
+are those the lexer hands over to the collector. The collector meets the obligation of every
+consumer.
+-/
+
+/-- What a lexer does with a consumer, from any point on, is determined. -/
+theorem Lexer.runsDetermined {feed : Lexicon.Version → List Lexicon.Chars → Bool → Spec.Lexer.Fed}
+    {consumer : Spec.Lexer.Consumer} {start : Lexicon.Version} {input : Lexicon.Chars}
+    {ended : Bool} {version : Lexicon.Version} {ready : List Spec.Lexer.Handed} {failed : Bool}
+    {taken : List Spec.Lexer.Handed}
+    {session session' : Spec.Lexer.Session consumer.Result consumer.Error}
+    (h : Spec.Lexer.Runs feed consumer start input ended version ready failed taken session)
+    (h' : Spec.Lexer.Runs feed consumer start input ended version ready failed taken session') :
+    session = session' :=
+  Lexer.runs_unique h h'
+
+/--
+info: 'BSmtLib.SpecChecks.Lexer.runsDetermined' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms Lexer.runsDetermined
+
+/-- Locating characters of an input read on its own after `before`, then moving the location
+past `before`, is locating them in the whole input. -/
+theorem Lexer.locateAfter (before input : Lexicon.Chars) (offset : Nat) :
+    Spec.Lexer.locate (before ++ input) (before.length + offset) =
+      (Spec.Lexer.locate input offset).after before :=
+  Lexer.locate_after before input offset
+
+/--
+info: 'BSmtLib.SpecChecks.Lexer.locateAfter' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in
+#print axioms Lexer.locateAfter
+
+/-- From the start of the input, the tokens ready are those the lexer hands over to the
+collector. -/
+theorem Lexer.segmentAtStart (feed : Lexicon.Version → List Lexicon.Chars → Bool → Spec.Lexer.Fed)
+    (version : Lexicon.Version) (input : Lexicon.Chars) (ended : Bool) :
+    Spec.Lexer.segment feed version input ended 0 = feed version [input] ended :=
+  Lexer.segment_zero feed version input ended
+
+/--
+info: 'BSmtLib.SpecChecks.Lexer.segmentAtStart' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in
+#print axioms Lexer.segmentAtStart
+
+/-- The collector breaks at the end of the input. -/
+theorem Lexer.collectorBreaksAtEnd : Spec.Lexer.collector.BreaksAtEnd :=
+  Lexer.collector_breaksAtEnd
+
+/--
+info: 'BSmtLib.SpecChecks.Lexer.collectorBreaksAtEnd' depends on axioms: [propext]
+-/
+#guard_msgs in
+#print axioms Lexer.collectorBreaksAtEnd
 
 
 /-!
@@ -338,12 +398,9 @@ info: 'BSmtLib.SpecChecks.Grammar.filesUnique' depends on axioms: [propext, Clas
 
 /-- A lexer fed the characters of a command has handed over all its tokens and holds nothing
 back, so the next command can be read in the version the command switches to. -/
-theorem Grammar.commandHandedOver {version : Lexicon.Version} {segment : Lexicon.Chars}
-    {tokens : List Lexicon.Token} {command : Grammar.Tree.Command}
-    (h : Grammar.TokenizationExactly version 0 segment tokens)
-    (hc : Grammar.IsCommand version (tokens.map (Grammar.SyntaxToken.ofToken version)) command) :
-    Spec.Lexer.HandoverMaximal version segment tokens :=
-  Lexicon.close_handoverMaximal h.1 (by simpa using Grammar.endsWithClose_of_command h hc)
+theorem Grammar.commandHandedOver : Spec.Grammar.CommandsHandedOverWhole :=
+  fun _ _ _ _ h hc =>
+    Lexicon.close_handoverMaximal h.1 (by simpa using Grammar.endsWithClose_of_command h hc)
 
 /--
 info: 'BSmtLib.SpecChecks.Grammar.commandHandedOver' depends on axioms: [propext, Classical.choice, Quot.sound]
@@ -440,21 +497,20 @@ every handler, so the traversal can be carried out by a parser that has only the
 -/
 
 /--
-For every handler in a lawful monad, points, producer switch and policy, the traversal of a
+For every handler in a lawful monad, points, producer and policy, the traversal of a
 script makes what `Parser.parseScript` makes run on what a parser receives for the script, given
 fuel larger than ten times the size of the script; whatever follows is left untouched.
 -/
 theorem Parser.script_eq_parse {m : Type → Type} [Monad m] [LawfulMonad m] {ε : Type}
     {values : Spec.Parser.Traversal.Values} (points : Spec.Parser.Traversal.Points m)
     (handler : Spec.Parser.Traversal.Handler m ε values)
-    (producerSwitch : Lexicon.Version →
-      ExceptT Spec.Parser.Traversal.VersionRefused m Unit)
+    (producer : Spec.Parser.Traversal.Producer m)
     (policy : Spec.Parser.VersionPolicy) {version : Lexicon.Version}
     {commands : List Grammar.Tree.Command} (h : Grammar.Script version commands)
     (rest : List Spec.Parser.Traversal.Received) {n : Nat} (hn : 10 * sizeOf commands < n) :
-    Parser.Program.run points handler producerSwitch policy (Parser.parseScript n)
+    Parser.Program.run points handler producer policy (Parser.parseScript n)
         (Spec.Parser.received commands ++ rest) =
-      (Spec.Parser.Traversal.script points handler producerSwitch policy commands >>= fun _ =>
+      (Spec.Parser.Traversal.script points handler producer policy commands >>= fun _ =>
         pure ((), rest)) :=
   Parser.run_script version commands rest h hn
 
@@ -529,7 +585,7 @@ info: 'BSmtLib.SpecChecks.Parser.placementDetermined' depends on axioms: [propex
 ### Every handler is placed as the recording
 
 The properties of the traversal are stated on recordings. `Parser.cutRun` is the traversal of a
-script with any handler, points, producer switch and policy, stopped at the arrival of the item
+script with any handler, points, producer and policy, stopped at the arrival of the item
 at a given position: what such a run has done before that item arrives. The two theorems below
 carry `Spec.Parser.PlacementDetermined` over to every handler: the cut runs of two scripts are
 equal when what a parser receives for them agrees before the cut, and when their recordings do.
@@ -537,23 +593,22 @@ They are checks of the specification, not properties stated in it.
 -/
 
 /--
-For every handler in a lawful monad, points, producer switch and policy, what the traversals of
+For every handler in a lawful monad, points, producer and policy, what the traversals of
 two valid scripts have done before the item at position `count` arrives is the same when what a
 parser receives for them agrees before that item.
 -/
 theorem Parser.cutRunsAgree {m : Type → Type} [Monad m] [LawfulMonad m] {ε : Type}
     {values : Spec.Parser.Traversal.Values} (points : Spec.Parser.Traversal.Points m)
     (handler : Spec.Parser.Traversal.Handler m ε values)
-    (producerSwitch : Lexicon.Version →
-      ExceptT Spec.Parser.Traversal.VersionRefused m Unit)
+    (producer : Spec.Parser.Traversal.Producer m)
     (policy : Spec.Parser.VersionPolicy) (count : Nat) {version version' : Lexicon.Version}
     {commands commands' : List Grammar.Tree.Command} (h : Grammar.Script version commands)
     (h' : Grammar.Script version' commands')
     (ht : (Spec.Parser.received commands).take count =
       (Spec.Parser.received commands').take count) :
-    Parser.cutRun points handler producerSwitch policy count commands =
-      Parser.cutRun points handler producerSwitch policy count commands' :=
-  Parser.cutRun_eq points handler producerSwitch policy count h h' ht
+    Parser.cutRun points handler producer policy count commands =
+      Parser.cutRun points handler producer policy count commands' :=
+  Parser.cutRun_eq points handler producer policy count h h' ht
 
 /--
 info: 'BSmtLib.SpecChecks.Parser.cutRunsAgree' depends on axioms: [propext, Classical.choice, Quot.sound]
@@ -562,23 +617,22 @@ info: 'BSmtLib.SpecChecks.Parser.cutRunsAgree' depends on axioms: [propext, Clas
 #print axioms Parser.cutRunsAgree
 
 /--
-For every handler in a lawful monad, points, producer switch and policy, what the traversals of
+For every handler in a lawful monad, points, producer and policy, what the traversals of
 two valid scripts have done before the item at position `count` arrives is the same when their
 recordings agree before that item: a recording stands for the run with every handler.
 -/
 theorem Parser.cutRunsAgreeByRecord {m : Type → Type} [Monad m] [LawfulMonad m] {ε : Type}
     {values : Spec.Parser.Traversal.Values} (points : Spec.Parser.Traversal.Points m)
     (handler : Spec.Parser.Traversal.Handler m ε values)
-    (producerSwitch : Lexicon.Version →
-      ExceptT Spec.Parser.Traversal.VersionRefused m Unit)
+    (producer : Spec.Parser.Traversal.Producer m)
     (policy : Spec.Parser.VersionPolicy) (count : Nat) {version version' : Lexicon.Version}
     {commands commands' : List Grammar.Tree.Command} (h : Grammar.Script version commands)
     (h' : Grammar.Script version' commands')
     (he : Spec.Parser.eventsBefore count (Spec.Parser.record commands) =
       Spec.Parser.eventsBefore count (Spec.Parser.record commands')) :
-    Parser.cutRun points handler producerSwitch policy count commands =
-      Parser.cutRun points handler producerSwitch policy count commands' :=
-  Parser.cutRun_eq_of_record points handler producerSwitch policy count h h' he
+    Parser.cutRun points handler producer policy count commands =
+      Parser.cutRun points handler producer policy count commands' :=
+  Parser.cutRun_eq_of_record points handler producer policy count h h' he
 
 /--
 info: 'BSmtLib.SpecChecks.Parser.cutRunsAgreeByRecord' depends on axioms: [propext, Classical.choice, Quot.sound]
@@ -587,7 +641,7 @@ info: 'BSmtLib.SpecChecks.Parser.cutRunsAgreeByRecord' depends on axioms: [prope
 #print axioms Parser.cutRunsAgreeByRecord
 
 /--
-For every handler in a lawful monad, points, producer switch and policy, what the traversals of
+For every handler in a lawful monad, points, producer and policy, what the traversals of
 two valid scripts have done when the item at position `count` is rejected, before it is
 processed and without its own arrival, is the same when their recordings agree before the
 processing of that item.
@@ -595,16 +649,15 @@ processing of that item.
 theorem Parser.processingCutRunsAgreeByRecord {m : Type → Type} [Monad m] [LawfulMonad m]
     {ε : Type} {values : Spec.Parser.Traversal.Values} (points : Spec.Parser.Traversal.Points m)
     (handler : Spec.Parser.Traversal.Handler m ε values)
-    (producerSwitch : Lexicon.Version →
-      ExceptT Spec.Parser.Traversal.VersionRefused m Unit)
+    (producer : Spec.Parser.Traversal.Producer m)
     (policy : Spec.Parser.VersionPolicy) (count : Nat) {version version' : Lexicon.Version}
     {commands commands' : List Grammar.Tree.Command} (h : Grammar.Script version commands)
     (h' : Grammar.Script version' commands')
     (he : Spec.Parser.eventsBeforeProcessing count (Spec.Parser.record commands) =
       Spec.Parser.eventsBeforeProcessing count (Spec.Parser.record commands')) :
-    Parser.processingCutRun points handler producerSwitch policy count commands =
-      Parser.processingCutRun points handler producerSwitch policy count commands' :=
-  Parser.processingCutRun_eq_of_record points handler producerSwitch policy count h h' he
+    Parser.processingCutRun points handler producer policy count commands =
+      Parser.processingCutRun points handler producer policy count commands' :=
+  Parser.processingCutRun_eq_of_record points handler producer policy count h h' he
 
 /--
 info: 'BSmtLib.SpecChecks.Parser.processingCutRunsAgreeByRecord' depends on axioms: [propext, Classical.choice, Quot.sound]

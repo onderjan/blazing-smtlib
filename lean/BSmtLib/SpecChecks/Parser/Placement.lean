@@ -55,6 +55,9 @@ theorem eventsBefore_trace {α : Type} (p : Program Recorded α) :
   | endScript next ih =>
     intro items items' count k h
     cases k <;> simp [trace, eventsBefore, ih items items' _ _ h]
+  | discard next ih =>
+    intro items items' count k h
+    cases k <;> simp [trace, eventsBefore, ih items items' _ _ h]
   | switch declarations version next ih =>
     intro items items' count k h
     cases k <;> simp [trace, eventsBefore, ih items items' _ _ h]
@@ -90,6 +93,9 @@ theorem eventsBeforeProcessing_trace {α : Type} (p : Program Recorded α) :
   | endScript next ih =>
     intro items items' count k h hl
     cases k <;> simp [trace, eventsBeforeProcessing, ih items items' _ _ h hl]
+  | discard next ih =>
+    intro items items' count k h hl
+    cases k <;> simp [trace, eventsBeforeProcessing, ih items items' _ _ h hl]
   | switch declarations version next ih =>
     intro items items' count k h hl
     cases k <;> simp [trace, eventsBeforeProcessing, ih items items' _ _ h hl]
@@ -102,7 +108,7 @@ theorem parse_leaves {version : Version} {commands : List Tree.Command}
     (rest : List Received) :
     ((runRecording (parseScript n) (received commands ++ rest)).run.run []).1 = .ok ((), rest) := by
   have hm := fun rest => run_script (points := recordingPoints) (handler := recordingHandler)
-    (producerSwitch := recordingSwitch) (policy := VersionPolicy.unrestricted)
+    (producer := recordingProducer) (policy := VersionPolicy.unrestricted)
     version commands rest h hn
   obtain ⟨-, hok⟩ := parse_rebuilds h hn
   have h₀ := hm []
@@ -111,7 +117,7 @@ theorem parse_leaves {version : Version} {commands : List Tree.Command}
   rw [h₀, recording_bind_run] at hok
   rw [hm rest, recording_bind_run]
   revert hok
-  rcases (script recordingPoints recordingHandler recordingSwitch VersionPolicy.unrestricted
+  rcases (script recordingPoints recordingHandler recordingProducer VersionPolicy.unrestricted
     commands).run.run [] with ⟨e, events⟩
   cases e with
   | error e => intro hok; cases hok

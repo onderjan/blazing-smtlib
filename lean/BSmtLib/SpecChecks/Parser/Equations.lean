@@ -159,13 +159,13 @@ theorem recursiveBodies_cons (body : Tree.Term) (rest : List Tree.Term) :
       Program.callUnit handler (.endRecursiveBody handled)
       recursiveBodies points handler rest) := rfl
 
-theorem switchVersion_eq (producerSwitch : Version → ExceptT VersionRefused m Unit)
+theorem switchVersion_eq (producer : Producer m)
     (policy : VersionPolicy) (declarations : Nat) (version : Version) :
-    switchVersion handler producerSwitch policy declarations version = (do
+    switchVersion handler producer policy declarations version = (do
       match policy.check declarations version with
-      | .error violation => throw (.policy violation)
+      | .error error => throw (.syntax error)
       | .ok () => pure ()
-      ExceptT.adapt Cause.producer (producerSwitch version)
+      ExceptT.adapt (fun _ => Cause.syntax .unsupportedVersion) (producer.setVersion version)
       Program.callUnit handler (.setVersion version)) := rfl
 
 theorem command_assert (atArrival : Run m ε Unit) (asserted) :

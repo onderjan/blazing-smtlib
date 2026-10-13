@@ -50,4 +50,17 @@ the given characters are not `Viable`, every list does.
 def Determined (version : Version) (start : Chars) (tokens : List Token) : Prop :=
   ∀ rest tokens', Tokenization version (start ++ rest) tokens' → ∃ more, tokens' = tokens ++ more
 
+/--
+Property: characters read from any offset, in any version, are tokenised as they are on their
+own, their tokens moved to that offset.
+
+This is a property of the specification alone. Where reading stops and starts again, possibly
+in another version, the characters after the stop are read as an input of their own; without
+this property, where they stand in the whole input could change their tokens.
+-/
+def ReadsOnItsOwn : Prop :=
+  ∀ version offset input tokens,
+    TokenizationFrom version offset input tokens ↔
+      ∃ tokens₀, tokens = tokens₀.map (Token.moveBy offset) ∧ Tokenization version input tokens₀
+
 end BSmtLib.Spec.Lexicon

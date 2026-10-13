@@ -27,22 +27,32 @@ The policy that restricts nothing: every version may be declared, any number of 
 def VersionPolicy.unrestricted : VersionPolicy :=
   { allowed := [.v2_0, .v2_5, .v2_6, .v2_7], maxDeclarations := none }
 
-/-- How a version declaration breaks a version policy. -/
-inductive PolicyViolation where
-  /-- The version is not among those the policy allows. -/
-  | notAllowed (version : Version)
-  /-- The script has already made as many declarations as the policy allows. -/
+/--
+The syntax errors with which a parse rejects a version declaration.
+
+A version that the policy does not allow and a version that the producer refuses to switch to
+are the same error: what refused the version is not told.
+-/
+inductive VersionError where
+  /-- The version is not among those the policy allows, or the producer refused it
+  (`UnsupportedVersion`). -/
+  | unsupportedVersion
+  /-- The script has already made as many declarations as the policy allows
+  (`TooManyVersionDeclarations`). -/
   | tooManyDeclarations (limit : Nat)
 
 /--
 The check of a declaration of the version against the policy, given the number of declarations
-the script made before it.
+the script made before it: first the number of declarations, then the version.
+
+A declaration that breaks both rules is rejected for the number of declarations.
 -/
 def VersionPolicy.check (policy : VersionPolicy) (declarations : Nat) (version : Version) :
-    Except PolicyViolation Unit :=
-  if version ∉ policy.allowed then .error (.notAllowed version)
-  else match policy.maxDeclarations with
-    | some limit => if limit ≤ declarations then .error (.tooManyDeclarations limit) else .ok ()
-    | none => .ok ()
+    Except VersionError Unit :=
+  match policy.maxDeclarations with
+  | some limit =>
+    if limit ≤ declarations then .error (.tooManyDeclarations limit)
+    else if version ∉ policy.allowed then .error .unsupportedVersion else .ok ()
+  | none => if version ∉ policy.allowed then .error .unsupportedVersion else .ok ()
 
 end BSmtLib.Spec.Parser

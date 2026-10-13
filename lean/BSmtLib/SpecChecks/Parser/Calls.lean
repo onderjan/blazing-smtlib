@@ -65,7 +65,7 @@ theorem throw_not_ok {α : Type} {s s' : Recovery.State} {r : α} :
 /-- The rebuilding run of a program. -/
 abbrev runRebuild {α : Type} (p : Program Recorded α) (items : List Received) :
     RRun (α × List Received) :=
-  Program.run rebuildPoints rebuildHandler rebuildSwitch VersionPolicy.unrestricted p items
+  Program.run rebuildPoints rebuildHandler rebuildProducer VersionPolicy.unrestricted p items
 
 /-- A rebuilding run that succeeds is what the steps of the recovery do with the program's
 trace, and the program's recording run succeeds with it. -/
@@ -146,6 +146,17 @@ theorem rebuild_trace {α : Type} (p : Program Recorded α) :
     simp only [runRecording, Program.run]
     rw [bind_run (endScript_run events)]
     exact hrec _ (by simp [calls, List.countP_cons, Event.isCall] at he ⊢; omega)
+  | discard next ih =>
+    intro items state state' result h
+    simp only [runRebuild, Program.run] at h ih
+    obtain ⟨u, s₁, h₁, h₂⟩ := bind_ok_inv h
+    rw [yields_discard state] at h₁
+    cases h₁
+    obtain ⟨hf, hrec⟩ := ih items _ _ _ h₂
+    refine ⟨by simpa [trace, List.foldlM_cons, step] using hf, fun events he => ?_⟩
+    simp only [runRecording, Program.run]
+    rw [bind_run (discard_run events)]
+    exact hrec _ (by simpa [calls, List.countP_cons, Event.isCall] using he)
   | switch declarations version next ih =>
     intro items state state' result h
     simp only [runRebuild, Program.run] at h ih
@@ -179,7 +190,7 @@ theorem record_eq_trace {version : Version} {commands : List Tree.Command}
     (h : Script version commands) {n : Nat} (hn : 10 * sizeOf commands < n) :
     record commands = trace (parseScript n) (received commands) 0 := by
   have hm := run_script (points := recordingPoints) (handler := recordingHandler)
-    (producerSwitch := recordingSwitch) (policy := VersionPolicy.unrestricted)
+    (producer := recordingProducer) (policy := VersionPolicy.unrestricted)
     version commands [] h hn
   rw [List.append_nil] at hm
   have hs := runRecording_state (parseScript n) (received commands) []
@@ -198,7 +209,7 @@ theorem parse_rebuilds {version : Version} {commands : List Tree.Command}
     ((runRecording (parseScript n) (received commands)).run.run []).1 = .ok ((), []) := by
   obtain ⟨s', h', c'⟩ := built_script version commands h
   have hm := run_script (points := rebuildPoints) (handler := rebuildHandler)
-    (producerSwitch := rebuildSwitch) (policy := VersionPolicy.unrestricted)
+    (producer := rebuildProducer) (policy := VersionPolicy.unrestricted)
     version commands [] h hn
   rw [List.append_nil] at hm
   have hr : (runRebuild (parseScript n) (received commands)).run.run (initial version) =

@@ -20,7 +20,7 @@ open BSmtLib.Spec.Parser.Traversal Program
 /-- A program run in a recording run. -/
 abbrev runRecording {α : Type} (p : Program Recorded α) (items : List Received) :
     Run Recording Empty (α × List Received) :=
-  Program.run recordingPoints recordingHandler recordingSwitch VersionPolicy.unrestricted p items
+  Program.run recordingPoints recordingHandler recordingProducer VersionPolicy.unrestricted p items
 
 /-- The events a program writes down in a recording run on the items, in order, given the
 number of calls written down before. -/
@@ -34,6 +34,7 @@ def trace {α : Type} : Program Recorded α → List Received → Nat → List E
   | .call request next, items, count =>
     .call _ request :: trace (next (recordedValue _ count)) items (count + 1)
   | .endScript next, items, count => .endScript :: trace next items (count + 1)
+  | .discard next, items, count => .producerDiscard :: trace next items count
   | .switch _ version next, items, count =>
     .producerSwitch version :: .call .nothing (.setVersion version) ::
       trace next items (count + 1)
@@ -68,8 +69,12 @@ theorem endScript_run (state : List Event) :
     (ExceptT.lift recordingHandler.endScript : Run Recording Empty Unit).run.run state =
       (.ok (), .endScript :: state) := rfl
 
+theorem discard_run (state : List Event) :
+    (ExceptT.lift recordingProducer.discardRest : Run Recording Empty Unit).run.run state =
+      (.ok (), .producerDiscard :: state) := rfl
+
 theorem switch_run (declarations : Nat) (version : Version) (state : List Event) :
-    (switchVersion recordingHandler recordingSwitch VersionPolicy.unrestricted declarations
+    (switchVersion recordingHandler recordingProducer VersionPolicy.unrestricted declarations
         version).run.run state =
       (.ok (), .call .nothing (.setVersion version) :: .producerSwitch version :: state) := by
   simp only [switchVersion, unrestricted_check]
@@ -98,6 +103,10 @@ theorem runRecording_state {α : Type} (p : Program Recorded α) :
     intro items state
     rw [Program.run, bind_run (endScript_run state), ih]
     simp [trace, calls, Event.isCall, List.countP_cons]
+  | discard next ih =>
+    intro items state
+    rw [Program.run, bind_run (discard_run state), ih]
+    simp [trace, calls, Event.isCall]
   | switch declarations version next ih =>
     intro items state
     rw [Program.run, bind_run (switch_run declarations version state), ih]
@@ -165,6 +174,17 @@ theorem trace_items {α : Type} (p : Program Recorded α) :
     have := ih items _ a rest h
     have hc : calls (.endScript :: events) = calls events + 1 := by
       simp [calls, Event.isCall, List.countP_cons]
+    rw [hc] at this
+    simp only [trace]
+    refine ⟨?_, ?_⟩ <;>
+      simp only [List.filterMap_cons, Event.arrived, Event.processed] <;>
+      simp [this.1, this.2]
+  | discard next ih =>
+    intro items events a rest h
+    rw [Program.run, recording_bind_run, discard_run events] at h
+    have := ih items _ a rest h
+    have hc : calls (.producerDiscard :: events) = calls events := by
+      simp [calls, Event.isCall]
     rw [hc] at this
     simp only [trace]
     refine ⟨?_, ?_⟩ <;>

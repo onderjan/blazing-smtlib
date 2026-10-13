@@ -14,7 +14,9 @@ Its sources of truth are the specification files of the respective versions.
 - `Grammar` formalises the grammar for syntactic categories and commands.
   It does not include the syntax of theories, logics, and command responses,
   and considers restrictions for info flags and command options semantic.
-- `Lexer` formalises the expected observable behaviour of a lexer under our reading.
+- `Lexer` formalises the expected observable behaviour of a lexer under our reading,
+  fed in slices, and how it answers a consumer that breaks, switches the version or has
+  the rest of the input discarded.
 - `Parser` formalises the expected observable behaviour of a parser under our reading.
 
 ## Version releases
@@ -44,7 +46,7 @@ on the standard, except where documented otherwise in the file-level documentati
 
 Additionally, we use the following comment with a defined meaning:
 
-- **Property:** a proposition that can be proven about the formalised reading
+- **Property:** a proposition that can be proved about the formalised reading
   or an implementation against the formalised reading. Properties are devised
   by us to formalise expectations about the implementation behaviour under SMT-LIB,
   and to form correctness theorems.
@@ -64,7 +66,8 @@ Lexicon:
 
 Syntactic modes:
 - **M1**: a version declaration changes the syntax mode between commands after
-  the closing parenthesis of the `set-info` command.
+  the closing parenthesis of the `set-info` command; a declaration of a version
+  that is not supported (such as 3.0) cannot stand in a file.
 - **M2**: `exit` ends a script; the input after it is not parsed.
 - **M3**: `reset` does not return to the initial version.
 
@@ -117,9 +120,13 @@ unnecessary and was removed in later versions.
 to change the syntactic mode (including lexing) exactly after the closing parenthesis
 of the `set-info` command: the command ends first, then the version switch occurs,
 then new commands can be read in under a new version declaration.
+The standard defines the syntax of the versions it specifies, and none for any other,
+so a declaration of a version that is not one of them (such as 3.0) names no mode in which
+the rest could be read: it cannot stand in a file.
 
 **M2**: We consider `(exit)` to change the syntactic mode to a mode where all further
-bytes are discarded, exactly after the closing parenthesis.
+bytes are discarded, exactly after the closing parenthesis. The end of the input is not one
+of those bytes: it still follows them, and ends the script as it ends any other.
 
 **M3**: We consider `(reset)` to be a reset of the semantic state, not the syntactic mode,
 so a previous version declaration using `set-info` is still honoured after reset.

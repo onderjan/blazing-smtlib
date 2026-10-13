@@ -113,4 +113,18 @@ def Token.content (version : Version) (token : Token) : Chars :=
   | .hexadecimal | .binary => token.text.drop 2
   | _ => token.text
 
+/--
+The token moved by `k` characters to the right: the same kind and characters, at an offset
+larger by `k`.
+-/
+def Token.moveBy (k : Nat) (token : Token) : Token :=
+  ⟨token.category, token.offset + k, token.text⟩
+
+/--
+The tokens end with a `)` whose last character is just before the offset `stop`.
+-/
+def EndsWithClose (tokens : List Token) (stop : Nat) : Prop :=
+  ∃ last, tokens.getLast? = some last ∧ last.category = .parenClose ∧
+    last.offset + last.text.length = stop
+
 end BSmtLib.Spec.Lexicon

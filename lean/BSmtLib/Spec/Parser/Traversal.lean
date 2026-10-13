@@ -36,13 +36,26 @@ points:
   processed.
 
 The tokens the traversal takes are exactly the tokens the tree is written as (`Tree.Command.tokens`
-and the others), followed by the end of the input unless the script ends with `exit`.
+and the others), followed by the end of the input. After `exit`, the producer discards the rest
+of the input, so the parser receives the end of the input right after the `)` of `exit`.
+
+## The producer
+
+Besides the handler, the traversal tells the producer of the tokens two things (`Producer`): to
+switch the version after a version declaration, which it may refuse, and to discard the rest of
+the input after `exit`. Each comes after the handler's call for the same `)`.
 
 ## Failures
 
-A handler call can fail with the handler's error, the producer can refuse to switch the version,
-and a version declaration can break the version policy. A failure stops the traversal: no call
-and no token point follows it.
+A handler call can fail with the handler's error, and a version declaration can be rejected: if
+it breaks the version policy, or if the producer refuses to switch to it. A failure stops the
+traversal: no call and no token point follows it.
+
+A version declaration that names no supported version cannot stand in a script (Reading M1), but
+a parser only knows it at the declaration's `)`. The traversal takes such a declaration as
+`set-info`, like any other, and then rejects it as a version that is not supported, as it
+rejects a version the policy does not allow: the commands it is the last of are what a parser
+takes before it fails.
 -/
 
 namespace BSmtLib.Spec.Parser
@@ -227,14 +240,22 @@ structure Points (m : Type → Type) where
   arrive : Received → m Unit
   process : Received → m Unit
 
-/-- A producer's refusal to switch the version (`SmtVersionRefused`, a name not yet decided). -/
+/-- A producer's refusal to switch the version (`SmtVersionRefused`). -/
 structure VersionRefused where
 
-/-- The party that failed: the version policy, the handler, or the producer. -/
+/--
+The producer of the tokens in a monad `m`, as far as the traversal tells it anything: its switch
+of the version, which it may refuse, and its discarding of the rest of the input, which cannot
+fail.
+-/
+structure Producer (m : Type → Type) where
+  setVersion : Version → ExceptT VersionRefused m Unit
+  discardRest : m Unit
+
+/-- The party that failed: the parse, with a syntax error, or the handler. -/
 inductive Cause (ε : Type) where
-  | policy (violation : PolicyViolation)
+  | syntax (error : VersionError)
   | handler (error : ε)
-  | producer (refusal : VersionRefused)
 
 /-- What the traversal does: it runs in `m`, and stops with the party that failed. -/
 abbrev Run (m : Type → Type) (ε α : Type) := ExceptT (Cause ε) m α
@@ -816,50 +837,73 @@ def command (atArrival : Run m ε Unit) : Tree.Command → Run m ε Unit
 /-! ## The traversal of a script -/
 
 /--
-The switch of a script to the version a declaration names, right after the declaration's
-`set-info`, given the producer's switch and the number of declarations the script made before
-it: the check against the policy, the producer's switch, which it may refuse, then the
-handler's switch. The new version holds from the next command.
+Whether the command is a version declaration that names no supported version: a `set-info` of
+`:smt-lib-version` whose value is not the number of a supported version, a decimal of no
+supported version, a symbol, a list, or no value at all. No script has such a command
+(`Tree.Command.modeAfter` gives `none` for it); a parser rejects it after its `)`.
+
+Reading M1: the value of a declaration is the number of a supported version.
 -/
-def switchVersion (producerSwitch : Version → ExceptT VersionRefused m Unit)
-    (policy : VersionPolicy) (declarations : Nat) (version : Version) : Run m ε Unit := do
+def _root_.BSmtLib.Spec.Grammar.Tree.Command.namesNoVersion : Tree.Command → Bool
+  | .setInfo ⟨keyword, value⟩ =>
+    decide (keyword = chars "smt-lib-version") &&
+      match value with
+      | some (.constant (.decimal decimal)) => (versionOfNumber decimal).isNone
+      | _ => true
+  | _ => false
+
+/--
+The switch of a script to the version a declaration names, right after the declaration's
+`set-info`, given the producer and the number of declarations the script made before it: the
+check against the policy, the producer's switch, which it may refuse, then the handler's switch.
+A refusal is rejected as a version the policy does not allow. The new version holds from the
+next command.
+-/
+def switchVersion (producer : Producer m) (policy : VersionPolicy) (declarations : Nat)
+    (version : Version) : Run m ε Unit := do
   match policy.check declarations version with
-  | .error violation => throw (.policy violation)
+  | .error error => throw (.syntax error)
   | .ok () => pure ()
-  ExceptT.adapt Cause.producer (producerSwitch version)
+  ExceptT.adapt (fun _ => Cause.syntax .unsupportedVersion) (producer.setVersion version)
   call handler (.setVersion version)
 
 /--
-The commands of a script, given the calls due when the next token arrives and the number of
-version declarations made before them, up to the end of the script: after `exit`, or at the end
-of the input, which the parser receives as well. After a version declaration, the script
-switches the version.
+The commands of a script, given the producer, the calls due when the next token arrives and the
+number of version declarations made before them, up to the end of the input, which the parser
+receives as well. After a version declaration, the script switches the version. After `exit`,
+the producer discards the rest of the input and the script ends; the parser then receives the
+end of the input alone. A version declaration that names no supported version is rejected
+after its `set-info`, as a version that is not supported.
 -/
-def commands (producerSwitch : Version → ExceptT VersionRefused m Unit)
-    (policy : VersionPolicy) : Run m ε Unit → Nat → List Tree.Command → Run m ε Unit
+def commands (producer : Producer m) (policy : VersionPolicy) :
+    Run m ε Unit → Nat → List Tree.Command → Run m ε Unit
   | atArrival, _, [] => do
     receive points .endOfInput atArrival
     ExceptT.lift handler.endScript
   | atArrival, _, .exit :: _ => do
     command points handler atArrival .exit
+    ExceptT.lift producer.discardRest
     ExceptT.lift handler.endScript
+    receive points .endOfInput
   | atArrival, declarations, first :: rest => do
     command points handler atArrival first
     match first.declaredVersion with
-    | none => commands producerSwitch policy (pure ()) declarations rest
+    | none =>
+      if first.namesNoVersion then throw (.syntax .unsupportedVersion)
+      else commands producer policy (pure ()) declarations rest
     | some version => do
-      switchVersion handler producerSwitch policy declarations version
-      commands producerSwitch policy (pure ()) (declarations + 1) rest
+      switchVersion handler producer policy declarations version
+      commands producer policy (pure ()) (declarations + 1) rest
 
 /--
-A script under a version policy, given the producer's switch of the version: the start, when its
-first token arrives, before the parser processes it; its commands, each version declaration
-followed by its check against the policy and the switches; then the end, after `exit` or at the
-end of the input.
+A script under a version policy, given the producer: the start, when its first token arrives,
+before the parser processes it; its commands, each version declaration followed by its check
+against the policy and the switches; then the end, at the end of the input or, after `exit`,
+after the producer's discarding and before the end of the input.
 -/
-def script (producerSwitch : Version → ExceptT VersionRefused m Unit) (policy : VersionPolicy)
-    (commandList : List Tree.Command) : Run m ε Unit :=
-  commands points handler producerSwitch policy (ExceptT.lift handler.startScript) 0 commandList
+def script (producer : Producer m) (policy : VersionPolicy) (commandList : List Tree.Command) :
+    Run m ε Unit :=
+  commands points handler producer policy (ExceptT.lift handler.startScript) 0 commandList
 
 end
 
