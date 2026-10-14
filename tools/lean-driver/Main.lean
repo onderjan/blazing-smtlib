@@ -1,9 +1,13 @@
 /-
-The lexer driver protocol, answered by the Lean lexer, see `lean/driver-protocol.md`.
-The Rust tests run their lexer inputs through it to check the Lean port.
+The driver protocol, answered by the Lean lexer and parser, see `lean/driver-protocol.md`.
+The Rust tests run their lexer inputs, and their parser and reader inputs, through it to check the
+Lean port.
 
 Reads one request per line from the standard input and writes the response
-to the standard output, until the input ends.
+to the standard output, until the input ends. The lexer requests (`lex`) are answered here; the
+parser requests are answered by `ParseRequests` (`Parse.lean`), which also reads the answers to
+the handler's calls from the standard input while it answers a request, and keeps the reader of
+`reader` for the requests after it.
 
 The environment variable `BLAZING_SMTLIB_LEAN_LEXER` chooses the lexer that answers: `z`, the
 library's lexer `BSmtLib.Lexer`, which is the one when the variable is unset, `v`, the naive
@@ -16,63 +20,13 @@ import BSmtLib
 import BSmtLib.Lexer.Internal.VNaive
 import BSmtLib.Lexer.Internal.WRustPort
 import BSmtLib.Lexer.Internal.X1BatchInCore
+import Protocol
+import Parse
 
 open BSmtLib
 open BSmtLib.Token
 open BSmtLib.Lexer (Recovery)
 open BSmtLib.Lexer.Error (LexError LexicalErrorKind)
-
-def location (location : Location) : String :=
-  s!"{location.offset}:{location.line}:{location.column}"
-
-def hexDigit (n : Nat) : Char :=
-  if n < 10 then Char.ofNat (48 + n) else Char.ofNat (87 + n)
-
-def hex (bytes : ByteSlice) : String := Id.run do
-  let mut out := ""
-  for i in [0:bytes.size] do
-    let byte := (bytes.get! i).toNat
-    out := (out.push (hexDigit (byte / 16))).push (hexDigit (byte % 16))
-  out
-
-def versionName : Version → String
-  | .v2_0 => "2.0"
-  | .v2_5 => "2.5"
-  | .v2_6 => "2.6"
-  | .v2_7 => "2.7"
-
-/-- The token type, spelled as the Rust variant. -/
-def tokenTypeName : TokenCategory → String
-  | .parenOpen => "ParenOpen"
-  | .parenClose => "ParenClose"
-  | .numeral => "Numeral"
-  | .decimal => "Decimal"
-  | .hexadecimal => "Hexadecimal"
-  | .binary => "Binary"
-  | .string => "String"
-  | .keyword => "Keyword"
-  | .unquotedSymbol => "UnquotedSymbol"
-  | .quotedSymbol => "QuotedSymbol"
-  | .whitespace => "Whitespace"
-  | .comment => "Comment"
-  | .endOfFile => "EndOfFile"
-
-/-- The lexer error kind, spelled as the Rust variant. -/
-def errorKindName : LexicalErrorKind → String
-  | .unexpectedCharacter => "UnexpectedCharacter"
-  | .fractionDigitExpected => "FractionDigitExpected"
-  | .hexadecimalDigitExpected => "HexadecimalDigitExpected"
-  | .binaryDigitExpected => "BinaryDigitExpected"
-  | .baseSelectionExpected => "BaseSelectionExpected"
-  | .unclosedStringLiteral => "UnclosedStringLiteral"
-  | .forbiddenCharInString => "ForbiddenCharInString"
-  | .forbiddenKeywordName => "ForbiddenKeywordName"
-  | .backslashInQuotedSymbol => "BackslashInQuotedSymbol"
-  | .forbiddenCharInQuotedSymbol => "ForbiddenCharInQuotedSymbol"
-  | .unclosedQuotedSymbol => "UnclosedQuotedSymbol"
-  | .numeralLeadingZero => "NumeralLeadingZero"
-  | .missingDelimiter => "MissingDelimiter"
-  | .unexpectedTrailingToken => "UnexpectedTrailingToken"
 
 /-- The response line of a token of the cursor, under the version. -/
 def tokenLine {batch : BatchTag} (cursor : BatchCursor batch) (token : Token batch)
@@ -84,23 +38,6 @@ def tokenLine {batch : BatchTag} (cursor : BatchCursor batch) (token : Token bat
   let span := cursor.span token
   s!"t {tokenTypeName (cursor.category token)} {location span.start} {location span.end} \
     {reserved} x{hex (cursor.content token)}\n"
-
-/-- Decodes the hexadecimal digits of a slice operand. -/
-def unhex (digits : String) : Except String ByteArray := do
-  let chars := digits.toList.toArray
-  if chars.size % 2 != 0 then
-    throw s!"odd number of hexadecimal digits in {repr digits}"
-  let digit (c : Char) : Except String Nat :=
-    if '0' ≤ c && c ≤ '9' then pure (c.toNat - '0'.toNat)
-    else if 'a' ≤ c && c ≤ 'f' then pure (c.toNat - 'a'.toNat + 10)
-    else if 'A' ≤ c && c ≤ 'F' then pure (c.toNat - 'A'.toNat + 10)
-    else throw s!"bad hexadecimal digits in {repr digits}"
-  let mut bytes := ByteArray.emptyWithCapacity (chars.size / 2)
-  for i in [0:chars.size / 2] do
-    let high ← digit chars[2 * i]!
-    let low ← digit chars[2 * i + 1]!
-    bytes := bytes.push (high * 16 + low).toUInt8
-  return bytes
 
 /-- What the consumer of a request does with one hand-over, by its plan. -/
 inductive Reply where
@@ -139,11 +76,6 @@ structure Request where
   recover : Bool
   behaviour : Behaviour
   feeds : Array (Option ByteArray)
-
-def readVersion (word : String) : Except String Version :=
-  match Version.fromDecimal? word.toUTF8.toByteSlice with
-  | some version => pure version
-  | none => throw s!"unknown version {repr word}"
 
 def readReply (word : String) : Except String Reply := do
   let bad := s!"unknown reply {repr word}"
@@ -734,26 +666,6 @@ def x1 (whitespace : Bool) : Ops whitespace :=
 
 end Own
 
-/-- The lexer that answers the requests. -/
-inductive LexerChoice where
-  /-- The naive lexer, `BSmtLib.Lexer.Internal.VNaive`. -/
-  | v
-  /-- The Rust lexer ported to Lean, `BSmtLib.Lexer.Internal.WRustPort`. -/
-  | w
-  /-- The lexer with the batch kept in its state, `BSmtLib.Lexer.Internal.X1BatchInCore`. -/
-  | x1
-  /-- The library's lexer, `BSmtLib.Lexer`. -/
-  | z
-
-/-- The lexer named by the value of `BLAZING_SMTLIB_LEAN_LEXER`, the library's if it is unset. -/
-def readLexerChoice : Option String → Except String LexerChoice
-  | none | some "z" => pure .z
-  | some "v" => pure .v
-  | some "w" => pure .w
-  | some "x1" => pure .x1
-  | some other => throw s!"unknown lexer {repr other} in BLAZING_SMTLIB_LEAN_LEXER, \
-      expected v, w, x1 or z"
-
 /--
 Answers one request line with the naive lexer, giving the response lines.
 -/
@@ -820,25 +732,37 @@ def answer (choice : LexerChoice) (line : String) : ExceptT String IO String := 
     response := response ++ "ok\n"
   return response
 
-partial def serve (choice : LexerChoice) (stdin : IO.FS.Stream) (stdout : IO.FS.Stream) :
-    IO Unit := do
+/-- Serves the requests until the input ends, with the reader of the last `reader` request. -/
+partial def serve (choice : LexerChoice) (stdin : IO.FS.Stream) (stdout : IO.FS.Stream)
+    (session : Option ParseRequests.Session) : IO Unit := do
   let line ← stdin.getLine
   -- the input has ended
   if line.isEmpty then
     return
-  let request := (line.dropEndWhile (· == '\n')).toString
-  let request := (request.dropEndWhile (· == '\r')).toString
-  let out ← match ← (answer choice request).run with
-    | .ok out => pure out
-    | .error message => pure s!"fail {message}\n"
-  stdout.putStr out
+  let request := lineContent line
+  let words := request.splitOn " "
+  let session ← if words.head?.any (ParseRequests.requestNames.contains ·) then
+      -- a parser request writes its response itself, as it talks to the Rust side meanwhile
+      try
+        ParseRequests.answer choice { stdin, stdout } session words
+      catch err =>
+        -- the message on one line
+        let message := (toString err).map fun c => if c == '\n' || c == '\r' then ' ' else c
+        stdout.putStr s!"fail {message}\n"
+        pure session
+    else
+      let out ← match ← (answer choice request).run with
+        | .ok out => pure out
+        | .error message => pure s!"fail {message}\n"
+      stdout.putStr out
+      pure session
   stdout.flush
-  serve choice stdin stdout
+  serve choice stdin stdout session
 
 def main : IO UInt32 := do
   match readLexerChoice (← IO.getEnv "BLAZING_SMTLIB_LEAN_LEXER") with
   | .ok choice =>
-    serve choice (← IO.getStdin) (← IO.getStdout)
+    serve choice (← IO.getStdin) (← IO.getStdout) none
     return 0
   | .error message =>
     IO.eprintln message

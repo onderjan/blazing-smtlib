@@ -1,13 +1,15 @@
-# The lexer driver protocol
+# The driver protocol
 
 The Rust tests are the only set of tests. To run them against the Lean port,
-the Lean side provides a driver: an executable that runs the Lean lexer on
-request and prints what it produced. The Rust test helpers
-(`rust/tests/lex_backend`) start it, send the input of a test, and compare the
-answer with the same expectations they use for the Rust lexer.
+the Lean side provides a driver: an executable that runs the Lean lexer or
+parser on request and prints what it produced. The Rust test helpers
+(`rust/tests/lex_backend` for the lexer, `rust/tests/parse_backend` for the
+parser and the reader) start it, send the input of a test, and compare the
+answer with the same expectations they use for the Rust library.
 
-This document is the contract between the two sides. It covers the lexer.
-The parser will add request kinds of its own later; nothing here is to be
+This document is the contract between the two sides. The sections up to
+"How the Rust tests select the driver" cover the lexer; the section "The
+parser" after them covers the parser and the reader. Nothing here is to be
 changed without the maintainer.
 
 ## The executable
@@ -380,9 +382,10 @@ ok
 
 The tests of the token cursor, of the panics that answer a broken contract
 (a consumer that takes no token, a slice fed after a failed end of the
-input, a call after an error of a lexer that stops at its first error), of
-the calls that lex a whole input at once and of the reader test the Rust
-interface in process. They stay Rust-only.
+input, a call after an error of a lexer that stops at its first error) and of
+the calls that lex a whole input at once test the Rust interface in process.
+They stay Rust-only. The tests of the reader go through the parser requests
+described in "The parser".
 
 ## How the Rust tests select the driver
 
@@ -396,11 +399,12 @@ cd rust
 BLAZING_SMTLIB_LEAN_DRIVER=/path/to/the/driver cargo test
 ```
 
-The tests that go through the driver are those of `tests/lexer.rs`,
+The lexer tests that go through the driver are those of `tests/lexer.rs`,
 `tests/lexer_slices.rs`, `tests/lexer_symbols.rs`, `tests/lexer_v2_0.rs`,
 `tests/lexer_whitespace.rs`, `tests/lexer_batches.rs` and
-`tests/lexer_recovery.rs` that do not use the Rust lexer's own interface. Everything else in the suite tests the Rust
-library whatever the variable says.
+`tests/lexer_recovery.rs` that do not use the Rust lexer's own interface. The
+parser tests that go through it are described in "The parser". Everything else
+in the suite tests the Rust library whatever the variable says.
 
 The environment variable `BLAZING_SMTLIB_LEAN_LEXER` chooses the Lean lexer
 that the driver answers with: `z`, the library's, when it is unset; `v`, the
@@ -424,3 +428,336 @@ BLAZING_SMTLIB_LEAN_DRIVER=/path/to/the/driver BLAZING_SMTLIB_LEAN_LEXER=v cargo
 
 The answers of the Rust lexer come from `rust/tests/lex_backend/driver.rs`,
 which the tests call in process and `tools/rust-lex-driver` prints.
+
+## The parser
+
+The parser tests run a parser over an input with a handler of their own, and
+check the handler calls, the results and the errors. Their handlers are
+written once, in Rust, and keep their state there: the Rust side holds the
+handler, and the driver runs the Lean parser with a handler that asks the Rust
+side for every call. So a parser request is a conversation: while the driver
+answers it, it writes a line for each handler call and reads the answer to
+that call from its standard input before it goes on.
+
+All the general rules of "The executable" hold. A parser request runs the
+parser of the Lean library through its public interface, as a user would: the
+reader (`BSmtLib.Reader`), the parsers (`BSmtLib.Parser`) and the parse
+adapter.
+
+### Values
+
+The values the handler makes of what it is told (sorts, terms,
+s-expressions, attributes and scopes) stay on the Rust side. The Rust side
+answers a call that makes a value with a number that stands for it, and the
+driver hands the number back where the parser hands the value over: the Lean
+handler's types of values are numbers. Errors of the handler are numbers the
+same way. The numbers mean nothing to the driver.
+
+The Rust handlers take some values by reference and some by move, as the Rust
+handler interface says. The driver may name a value in several calls only
+where every call but at most the last takes it by reference: the scrutinee of
+a `match` (its start, the start and end of each case, and the match's end,
+which takes it), and the sorts of the signatures of `define-fun`,
+`define-fun-rec` and `define-funs-rec`, which are only ever taken by
+reference. A value named again after a call took it, or never made, is a
+broken contract, on which the Rust side panics.
+
+### Fields
+
+A request or a line is a sequence of fields separated by single spaces.
+Besides the fields of the lexer protocol (hexadecimal bytes, locations,
+versions):
+
+- `<sym>`: a symbol, `u<hex>` if it was written unquoted and `q<hex>` if it
+  was written quoted, with its content without the bars.
+- `x<hex>`: bytes, as a keyword's name (without the colon), a numeral's
+  digits or a string's content (with a doubled quote taken as one quote)
+  carries them.
+- `<n>`: a count, in decimal: the number of the items that follow.
+- `<id>`: the number of a value or of an error, in decimal.
+- `<opt-id>`: `-` for no value, or an `<id>`.
+- `<constant>`: `N<hex>` a numeral's digits, `D<hex>` a decimal as written,
+  `X<hex>` the digits of a hexadecimal without `#x`, `B<hex>` the digits of a
+  binary without `#b`, `S<hex>` a string's content.
+- `<ident>`: `<sym> <n> <index>...`: the symbol and its indices, each a
+  `<sym>` or `n<hex>` for a numeral's digits.
+- `<sow>`: a `<sym>`, or `_` for the wildcard.
+- `<pattern>`: `p <sow>` for a pattern of a symbol or the wildcard, or
+  `c <sym> <n> <sow>...` for a constructor applied to its arguments.
+- `<sig>`: `<sym> <n> (<sym> <id>)... <id>`: a function's name, its
+  parameters each with its sort, and its result sort.
+- `<constructors>`: `<n> (<sym> <n> (<sym> <id>)...)...`: datatype
+  constructors, each with its selectors and their sorts.
+- `<quantifier>`: `forall` or `exists`.
+- `<result>`: what a parser finished with: `-` for the script parser; for the
+  command parser `command`, `exit`, `end` (the end of the input before a
+  command) or `set-version <version>`; for the parsers of sorts, terms and
+  s-expressions an `<id>`.
+
+### Requests
+
+```
+reader <parser> <version>
+```
+
+Creates a reader (`Reader.new`, or `Reader.script` for a script) that starts
+in the version, over the handler that asks the Rust side. It replaces the
+reader of an earlier request, if there is one. `<parser>` is `command`,
+`term`, `sort`, `s-expr`, or `script:<versions>;<limit>`: the script parser
+under the posture that allows the versions, separated by commas and maybe
+none, and the number of declarations, or `-` for no limit. The default
+posture is `script:2.5,2.6,2.7;1`. The response is `ready`.
+
+The following requests act on that reader. A request when there is none,
+also after a request that ended with an error, which gives no reader back, is
+answered with `fail`.
+
+```
+slice <hex>
+```
+
+`Reader.readSlice`. The response is `ok`.
+
+```
+eof
+```
+
+`Reader.readEof`. The response is `done <result> <location>`, or `none` if
+the parser broke its contract by continuing on the end of the input.
+
+```
+all
+```
+
+`Reader.readAll` over a buffered reader that asks the Rust side for the
+bytes (see "Calls of the buffered reader"). The response is `done <result>`,
+or `none` as for `eof`.
+
+```
+file <hex>
+```
+
+`Reader.readFile` of the path, given as its bytes. The response is
+`done <result>` or `none`.
+
+```
+discarded
+```
+
+`Reader.discardedFrom`. The response is `at <location>`, or `at -` if the
+input is not being discarded.
+
+```
+version
+```
+
+`Reader.version`. The response is `version <version>`.
+
+```
+read-smt
+read-smt-file <hex>
+```
+
+`read-smt` is `readSmt` over a buffered reader that asks the Rust side; the
+bytes consumed last are reported from the buffered reader that `readSmt`
+gives back. `read-smt-file` is `readSmtFile` of the path. Neither needs a
+reader; each has its own handler. The response is `ok`.
+
+```
+drive <parser> <version> <count> <feed>...
+```
+
+Runs a parser of a category alone, as the Rust category tests do: a lexer of
+the version, whose consumer takes the tokens one at a time and hands them to
+the parser, again after each time it finished, until it has finished `count`
+times; from then on it counts the tokens that are not the end-of-file token,
+and breaks at the end-of-file token. The consumer does not tell the handler
+the version. The feeds are those of `lex`, applied as there. `<parser>` is
+`sort`, `s-expr` or `term`; the Rust tests send the names of the other parsers
+of the Rust library too, which the driver answers with `fail unsupported
+parser <name>` while the Lean library has no parser of that name. The
+response has a line `result <result>` for each time the parser finished, in
+order, and ends with `ok <count>`, the number of the tokens counted after the
+last result. The `result` lines are written as the parser finishes, so a
+request that ends with an error may have some before it.
+
+### Errors
+
+Any request that reads or drives may end with an error instead:
+
+```
+error <start> <end> <cause>
+```
+
+The span of the error and its cause:
+
+- `lexical <kind>`: a lexer error, of the kind spelled as in `err`.
+- `syntax <kind>`: a syntax error, of the kind spelled as the Rust
+  `SmtSyntaxErrorKind` variant; `ExpectedToken` is followed by its token
+  types, spelled as in `t` and separated by commas, and
+  `TooManyVersionDeclarations` by its limit.
+- `handler <id>`: the handler's error that the Rust side answered a call with.
+- `nonstandard <sym>`: the error of a command named by the symbol, which the
+  Lean handler names without asking (`CommandHandler.nonstandardCommand`). The
+  Rust side asks its handler then.
+- `io <hex>`: an error while reading, with its message as bytes.
+
+### Calls of the handler
+
+```
+call <method> <argument>...
+```
+
+A call of the handler: the driver waits for its answer, one line, before it
+reads or writes anything else. The method is spelled as the Rust method of
+`SmtHandler` or `SmtCommandHandler`:
+
+```
+call set_version <version>
+call handle_sort <ident> <n> <id>...
+call handle_term c <constant>
+call handle_term i <ident> <opt-id>
+call handle_term a <ident> <opt-id> <n> <id>...
+call handle_s_expr c <constant>
+call handle_s_expr s <sym>
+call handle_s_expr r <word>
+call handle_s_expr k x<hex>
+call handle_s_expr l <n> <id>...
+call handle_attribute x<hex> -
+call handle_attribute x<hex> c <constant>
+call handle_attribute x<hex> s <sym>
+call handle_attribute x<hex> l <n> <id>...
+call annotate_term <id> <n> <id>...
+call start_let <n> (<sym> <id>)...
+call end_let <id> <id>
+call start_quantifier <quantifier> <n> (<sym> <id>)...
+call end_quantifier <quantifier> <id> <id>
+call start_lambda <n> (<sym> <id>)...
+call end_lambda <id> <id>
+call start_match <id>
+call start_match_case <id> <pattern>
+call end_match_case <id> <id> <id>
+call end_match <id> <n> (<pattern> <id>)...
+```
+
+The ident of a term is followed by the sort it is qualified with by `as`; an
+application ends with its arguments. `r` is a reserved word, by its
+spelling. The value of an attribute is none (`-`), a constant, a symbol or a
+list of s-expressions. The ends of binders and of cases name the scope first,
+then the scrutinee, if any, then the body. Every call but `set_version` and
+`start_match` makes a value.
+
+```
+call command_assert <id>
+call command_check_sat
+call command_check_sat_assuming <n> <id>...
+call command_declare_const <sym> <id>
+call start_declare_datatype <sym> <n> <sym>...
+call end_declare_datatype <constructors>
+call start_declare_datatypes <n> (<sym> x<hex>)...
+call start_datatype_declaration <n> <sym>...
+call end_datatype_declaration <constructors>
+call end_declare_datatypes
+call command_declare_fun <sym> <n> <id>... <id>
+call command_declare_sort <sym> x<hex>
+call command_declare_sort_parameter <sym>
+call command_define_const <sym> <id> <id>
+call start_define_fun <sig>
+call end_define_fun <id>
+call start_define_fun_rec <sig>
+call end_define_fun_rec <id>
+call start_define_funs_rec <n> <sig>...
+call start_recursive_body <sig>
+call end_recursive_body <id>
+call end_define_funs_rec
+call start_define_sort <sym> <n> <sym>...
+call end_define_sort <id>
+call command_echo x<hex>
+call command_exit
+call command_get_assertions
+call command_get_assignment
+call command_get_info x<hex>
+call command_get_model
+call command_get_option x<hex>
+call command_get_proof
+call command_get_unsat_assumptions
+call command_get_unsat_core
+call command_get_value <n> <id>...
+call command_pop x<hex>
+call command_push x<hex>
+call command_reset
+call command_reset_assertions
+call command_set_info <id>
+call command_set_logic <sym>
+call command_set_option <id>
+```
+
+The sort arities of `declare-datatypes` are numerals. `command_declare_fun`
+names the parameter sorts, then the result sort. No command call makes a
+value.
+
+The answer is one of:
+
+- `ok <id>`: the call made the value of that number;
+- `ok`: the call succeeded, for a call that makes no value;
+- `err <id>`: the call failed with the handler's error of that number.
+
+### Calls of the buffered reader
+
+`all` and `read-smt` read through a buffered reader whose bytes are on the
+Rust side. Its operations are calls too:
+
+```
+call fill
+call consume <n>
+```
+
+`call fill` asks for the bytes buffered and not consumed yet (`BufRead.fillBuf`);
+the answer is `bytes <hex>`, no bytes at the end of the input, or
+`ioerr <hex>`, a failure with its message. The bytes consumed
+(`BufRead.consume`) are reported with `call consume <n>`, answered by `ok`:
+the driver adds them up and reports them before its next `call fill` and
+before the line that ends the request, if they are more than zero.
+
+### The lexer under the parser
+
+The parser requests read with the lexer that `BLAZING_SMTLIB_LEAN_LEXER`
+chooses. With `z` the driver uses the reader and the functions of the library
+as they are. The other lexers have no reader of their own: the driver builds
+the lexer over the library's parse adapter and does what the reader does with
+it, step for step. Where the hand-overs are cut changes nothing a parser
+request reports, with one exception: the naive lexer `v` gives an error of
+its consumer (`syntax`, `handler`, `nonstandard`) an empty span at the end of
+the token it failed on, where the other lexers give the span of the token.
+Under `v` the parser tests that check the span of such an error report
+themselves as not applicable on the standard error and end, as the lexer tests
+that send a plan do; every other test runs unchanged.
+
+### An example
+
+`(assert (f 1))` read whole by a script, with a handler that makes values
+numbered from 0 and fails nothing. `>` marks the lines the Rust side sends,
+`<` those of the driver.
+
+```
+> reader script:2.5,2.6,2.7;1 2.7
+< ready
+> slice 28617373657274202866203129290a
+< call set_version 2.7
+> ok
+< call handle_term c N31
+> ok 0
+< call handle_term a u66 0 - 1 0
+> ok 1
+< call command_assert 1
+> ok
+< ok
+> eof
+< done - 15:1:0
+```
+
+### How the Rust tests select the driver for the parser
+
+The parser tests select the driver as the lexer tests do, by
+`BLAZING_SMTLIB_LEAN_DRIVER`; the same driver serves both. The tests that go
+through it are listed in `rust/tests/parse_backend/mod.rs`.
