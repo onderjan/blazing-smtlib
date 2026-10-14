@@ -1,5 +1,9 @@
-import BSmtLibSpec.Grammar.File
-import BSmtLibSpec.Lexer
+module
+
+public import BSmtLibSpec.Grammar.File
+public import BSmtLibSpec.Lexer
+
+@[expose] public section
 
 /-!
 # Properties of the grammar

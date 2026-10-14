@@ -1,4 +1,8 @@
-import BSmtLibSpec.Grammar.File
+module
+
+public import BSmtLibSpec.Grammar.File
+
+@[expose] public section
 
 /-!
 # Scripts

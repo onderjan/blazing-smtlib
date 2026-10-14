@@ -1,4 +1,8 @@
-import BSmtLibSpec.Lexicon.Properties
+module
+
+public import BSmtLibSpec.Lexicon.Properties
+
+@[expose] public section
 
 /-!
 # Lexers

@@ -1,5 +1,9 @@
-import BSmtLibSpec.Lexicon
-import BSmtLibSpec.Grammar.Tree
+module
+
+public import BSmtLibSpec.Lexicon
+public import BSmtLibSpec.Grammar.Tree
+
+@[expose] public section
 
 /-!
 # Grammar

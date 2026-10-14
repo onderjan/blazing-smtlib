@@ -1,5 +1,9 @@
-import BSmtLibSpec.Lexer
-import BSmtLibSpec.Parser
+module
+
+public import BSmtLibSpec.Lexer
+public import BSmtLibSpec.Parser
+
+@[expose] public section
 
 /-!
 # Readers

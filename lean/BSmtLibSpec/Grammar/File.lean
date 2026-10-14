@@ -1,5 +1,9 @@
-import BSmtLibSpec.Grammar.Syntax
-import BSmtLibSpec.Lexicon.Tokenization
+module
+
+public import BSmtLibSpec.Grammar.Syntax
+public import BSmtLibSpec.Lexicon.Tokenization
+
+@[expose] public section
 
 /-!
 # Reading a file

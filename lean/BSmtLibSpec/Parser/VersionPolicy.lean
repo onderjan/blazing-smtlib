@@ -1,4 +1,8 @@
-import BSmtLibSpec.Grammar
+module
+
+public import BSmtLibSpec.Grammar
+
+@[expose] public section
 
 /-!
 # Version policies

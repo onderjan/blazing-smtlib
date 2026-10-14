@@ -1,5 +1,9 @@
-import BSmtLibSpec.Grammar.Script
-import BSmtLibSpec.Parser.Traversal
+module
+
+public import BSmtLibSpec.Grammar.Script
+public import BSmtLibSpec.Parser.Traversal
+
+@[expose] public section
 
 /-!
 # Properties of the traversal

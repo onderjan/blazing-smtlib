@@ -1,19 +1,23 @@
-import BSmtLibSpec.Regex
-import BSmtLibSpec.Lexicon
-import BSmtLibSpec.Lexicon.Tokenization
-import BSmtLibSpec.Lexicon.Properties
-import BSmtLibSpec.Grammar
-import BSmtLibSpec.Grammar.Tree
-import BSmtLibSpec.Grammar.Syntax
-import BSmtLibSpec.Grammar.File
-import BSmtLibSpec.Grammar.Script
-import BSmtLibSpec.Grammar.Properties
-import BSmtLibSpec.Lexer
-import BSmtLibSpec.Parser
-import BSmtLibSpec.Parser.VersionPolicy
-import BSmtLibSpec.Parser.Traversal
-import BSmtLibSpec.Parser.Properties
-import BSmtLibSpec.Reader
+module
+
+public import BSmtLibSpec.Regex
+public import BSmtLibSpec.Lexicon
+public import BSmtLibSpec.Lexicon.Tokenization
+public import BSmtLibSpec.Lexicon.Properties
+public import BSmtLibSpec.Grammar
+public import BSmtLibSpec.Grammar.Tree
+public import BSmtLibSpec.Grammar.Syntax
+public import BSmtLibSpec.Grammar.File
+public import BSmtLibSpec.Grammar.Script
+public import BSmtLibSpec.Grammar.Properties
+public import BSmtLibSpec.Lexer
+public import BSmtLibSpec.Parser
+public import BSmtLibSpec.Parser.VersionPolicy
+public import BSmtLibSpec.Parser.Traversal
+public import BSmtLibSpec.Parser.Properties
+public import BSmtLibSpec.Reader
+
+@[expose] public section
 
 /-!
 # Our reading of the SMT-LIB 2 standard

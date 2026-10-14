@@ -1,4 +1,8 @@
-import BSmtLibSpec.Lexicon.Tokenization
+module
+
+public import BSmtLibSpec.Lexicon.Tokenization
+
+@[expose] public section
 
 /-!
 # Properties of tokenisation

@@ -1,4 +1,8 @@
-import BSmtLibSpec.Regex
+module
+
+public import BSmtLibSpec.Regex
+
+@[expose] public section
 
 /-!
 # Lexicon

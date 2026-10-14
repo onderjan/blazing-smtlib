@@ -1,4 +1,8 @@
-import BSmtLibSpec.Lexicon
+module
+
+public import BSmtLibSpec.Lexicon
+
+@[expose] public section
 
 /-!
 # Tokenising an input
