@@ -1,0 +1,480 @@
+module
+
+public import BSmtLib.Parser.Internal.Fused.Category
+
+public section
+
+/-!
+# The fused script reader
+
+The script parser with the same state (`Parser.Script.ScriptParser`), run by one tail-recursive
+loop over a batch cursor that holds the state of the term parser of `assert` and of definitions
+in arguments of its own while the term is read: the command around the term (`TermContext`), the
+term's mode and its levels. The parser's state is put back together from them when the loop
+stops (`assemble`). Each step takes the loop's continuation and calls it with its outcome, so
+that after inlining every outcome is a tail call in the loop, in every monad.
+
+Fused: terms (without `match`, annotations and `as`), indexed identifiers, and the commands
+`assert`, `declare-fun`, `declare-const`, `define-fun`, `define-fun-rec`, `define-const`, `push`,
+`pop` and every command's last `)`; sorts, sorted variables and signatures by the functions of
+`Parser.Internal.Fused.Category`. Every other state is stepped by the port's own steps.
+-/
+
+namespace BSmtLib.Parser.Internal.Fused
+
+open BSmtLib.Nodes BSmtLib.Traits
+open BSmtLib.Parser.Adapter (ParseAdapter)
+open BSmtLib.Parser.Category.Combinator (ListState)
+open BSmtLib.Parser.Category.Term (TermLevel TermLevelOf TermStateOf)
+open BSmtLib.Parser.Command (CommandStateOf)
+open BSmtLib.Parser.Command.Definition (DefinitionEnd)
+open BSmtLib.Parser.Command.Standard (FinalCall Payload)
+open BSmtLib.Parser.Internal.Fused.Basic
+open BSmtLib.Parser.Script (ScriptParser)
+open BSmtLib.Plain (SymbolView NumeralView)
+open BSmtLib.Token (BatchTag BatchCursor VersionPosture)
+
+section
+
+variable {H : Type} {m : Type → Type} [Monad m] [CommandHandler H m]
+
+/-- The command state of a command around a term, with the term's state. -/
+@[inline]
+def withTerm (context : TermContext (Handler.«Sort» H)) (term : TermStateOf H) :
+    CommandStateOf H :=
+  match context with
+  | .assert => .payload (.assert term)
+  | .definition definition => .payload (.defineBody definition term)
+
+/-- The command state before the `)` of a command, whose last call it makes. -/
+@[inline]
+def closing (final : FinalCall (Handler.Attribute H) (Handler.«Sort» H) (Handler.Term H)) :
+    CommandStateOf H :=
+  .payload (.closing final)
+
+/-- The command state after the command's term. -/
+@[inline]
+def finishTerm (context : TermContext (Handler.«Sort» H)) (term : Handler.Term H) :
+    CommandStateOf H :=
+  match context with
+  | .assert => closing (.assert term)
+  | .definition definition =>
+    closing (match definition with
+      | .defineConst symbol sort => .defineConst symbol sort term
+      | .defineFun => .endDefineFun term
+      | .defineFunRec => .endDefineFunRec term)
+
+/-- A term is complete: it goes to the innermost level's construct, or completes the command's
+term. As `Parser.Category.Term.termComplete`. -/
+@[inline]
+def termComplete {batch : BatchTag} (posture : VersionPosture) (next : BatchCursor batch)
+    (h : H) (declarations : Nat) (context : TermContext (Handler.«Sort» H))
+    (levels : List (TermLevelOf H)) (term : Handler.Term H) {β : Type}
+    (k : OutcomeOf H next → m β) : m β :=
+  match levels with
+  | [] => k <| .command h declarations (finishTerm context term)
+  | .application function sort arguments :: outer =>
+    k <| .term h declarations context .start
+      (.application function sort (arguments.push term) :: outer)
+  | .letBinding bindings symbol :: outer =>
+    k <| .term h declarations context (.letBindingClose (bindings.push (symbol, term))) outer
+  | .binder kind scope :: outer =>
+    k <| .term h declarations context (.binderClose kind scope term) outer
+  | .annotation :: outer => k <| .term h declarations context (.annotating term .init) outer
+  | .matchScrutinee :: outer => do
+    match ← runHandler (Handler.startMatch term) h with
+    | (.error e, h) => fail posture next h (.handler e) k
+    | (.ok (), h) => k <| .term h declarations context (.matchCasesOpen term) outer
+  | .matchCase scrutinee cases pattern scope :: outer =>
+    k <| .term h declarations context (.matchCaseClose scrutinee cases pattern scope term) outer
+
+/-- A term without binders handed to the handler, then complete. -/
+@[inline]
+def handleTerm {batch : BatchTag} (posture : VersionPosture) (next : BatchCursor batch)
+    (h : H) (declarations : Nat) (context : TermContext (Handler.«Sort» H))
+    (levels : List (TermLevelOf H)) (node : TermNode (Handler.«Sort» H) (Handler.Term H))
+    {β : Type} (k : OutcomeOf H next → m β) : m β := do
+  match ← runHandler (Handler.handleTerm node) h with
+  | (.error e, h) => fail posture next h (.handler e) k
+  | (.ok term, h) => termComplete posture next h declarations context levels term k
+
+/-- The step of the port's term parser, for the modes the fused step does not cover. -/
+@[inline]
+def portTermStep {batch : BatchTag} (posture : VersionPosture) (h : H) (declarations : Nat)
+    (context : TermContext (Handler.«Sort» H)) (term : TermStateOf H) (token : Token batch)
+    (next : BatchCursor batch) {β : Type} (k : OutcomeOf H next → m β) : m β := do
+  let input := Input.ofSyntax (Token.Produce.«syntax» next token)
+  match ← runParser (Category.Term.termStep next.version term input) h with
+  | (.error e, h) => fail posture next h e k
+  | (.ok (.more term), h) => k <| .term h declarations context term.mode term.levels
+  | (.ok (.done term), h) => k <| .command h declarations (finishTerm context term)
+
+/--
+A step of the term parser of the command, in the mode with the levels, fused for its common
+modes; the others go through the port's term step. `context` is the command around the term.
+-/
+@[inline]
+def termStep {batch : BatchTag} (posture : VersionPosture) (h : H) (declarations : Nat)
+    (context : TermContext (Handler.«Sort» H)) (mode : TermModeOf H)
+    (levels : List (TermLevelOf H)) (token : Token batch) (next : BatchCursor batch) {β : Type}
+    (k : OutcomeOf H next → m β) : m β := do
+  let version := next.version
+  let category := next.category token
+  match mode with
+  | .start =>
+    match category with
+    | .parenOpen => k <| .term h declarations context .opened levels
+    | .parenClose =>
+      match levels with
+      | .application function sort arguments :: outer =>
+        if arguments.isEmpty then fail posture next h (.syntax .emptyTermApplication) k
+        else
+          handleTerm posture next h declarations context outer
+            (.application function sort arguments) k
+      | _ => fail posture next h (.syntax .expectedTerm) k
+    | .unquotedSymbol =>
+      let content := contentOf next token
+      match reservedAt? version next token with
+      | none =>
+        handleTerm posture next h declarations context levels
+          (.identifier ⟨⟨SymbolView.newUnchecked content, false⟩, #[]⟩ none) k
+      | some _ => fail posture next h (.syntax .expectedTerm) k
+    | .quotedSymbol =>
+      handleTerm posture next h declarations context levels
+        (.identifier ⟨⟨SymbolView.newUnchecked (contentOf next token), true⟩, #[]⟩ none) k
+    | .numeral | .decimal | .hexadecimal | .binary | .string =>
+      handleTerm posture next h declarations context levels
+        (.constant (constantOf category (contentOf next token))) k
+    | _ => fail posture next h (.syntax .expectedTerm) k
+  | .opened =>
+    match category with
+    | .unquotedSymbol =>
+      let content := contentOf next token
+      match reservedAt? version next token with
+      | none =>
+        let level :=
+          TermLevel.application ⟨⟨SymbolView.newUnchecked content, false⟩, #[]⟩ none #[]
+        k <| .term h declarations context .start (level :: levels)
+      | some (.general word) =>
+        match word with
+        | .let => k <| .term h declarations context .letBindingsOpen levels
+        | .lambda =>
+          k <| .term h declarations context (.sortedVars .lambda (ListState.paren .start))
+            levels
+        | .forall =>
+          k <| .term h declarations context
+            (.sortedVars (.quantifier .forall) (ListState.paren .start)) levels
+        | .exists =>
+          k <| .term h declarations context
+            (.sortedVars (.quantifier .exists) (ListState.paren .start)) levels
+        | .match => k <| .term h declarations context .start (.matchScrutinee :: levels)
+        | .exclamationMark => k <| .term h declarations context .start (.annotation :: levels)
+        | .underscore =>
+          k <| .term h declarations context (.qualIdent (.indexed .afterUnderscore)) levels
+        | .as => k <| .term h declarations context (.qualIdent (.qualifiedIdent .start)) levels
+        | _ => fail posture next h (.syntax .expectedOperator) k
+      | some (.commandName _) => fail posture next h (.syntax .expectedOperator) k
+    | .quotedSymbol =>
+      let level := TermLevel.application
+        ⟨⟨SymbolView.newUnchecked (contentOf next token), true⟩, #[]⟩ none #[]
+      k <| .term h declarations context .start (level :: levels)
+    | .parenOpen => k <| .term h declarations context (.applicationHead .opened) levels
+    | _ => fail posture next h (.syntax .expectedOperator) k
+  | .qualIdent state =>
+    match Category.qualIdentStep version state category next token with
+    | some (.more state) => k <| .term h declarations context (.qualIdent state) levels
+    | some (.done identifier) =>
+      handleTerm posture next h declarations context levels (.identifier identifier none) k
+    | some (.error kind) => fail posture next h (.syntax kind) k
+    | none => portTermStep posture h declarations context { mode, levels } token next k
+  | .applicationHead state =>
+    match Category.qualIdentStep version state category next token with
+    | some (.more state) => k <| .term h declarations context (.applicationHead state) levels
+    | some (.done function) =>
+      k <| .term h declarations context .start (.application function none #[] :: levels)
+    | some (.error kind) => fail posture next h (.syntax kind) k
+    | none => portTermStep posture h declarations context { mode, levels } token next k
+  | .letBindingsOpen =>
+    match category with
+    | .parenOpen => k <| .term h declarations context (.letBindingOpen #[]) levels
+    | _ => fail posture next h (.syntax (.expectedToken #[.parenOpen])) k
+  | .letBindingOpen bindings =>
+    match category with
+    | .parenOpen => k <| .term h declarations context (.letBindingSymbol bindings) levels
+    | .parenClose =>
+      if bindings.isEmpty then fail posture next h (.syntax .emptyLetBindings) k
+      else
+        match ← runHandler (Handler.startLet bindings) h with
+        | (.error e, h) => fail posture next h (.handler e) k
+        | (.ok scope, h) =>
+          k <| .term h declarations context .start (.binder .let scope :: levels)
+    | _ => fail posture next h (.syntax (.expectedToken #[.parenOpen, .parenClose])) k
+  | .letBindingSymbol bindings =>
+    match Category.symbolOf? version category next token with
+    | some symbol =>
+      k <| .term h declarations context .start (.letBinding bindings symbol :: levels)
+    | none => fail posture next h (.syntax .expectedSymbol) k
+  | .letBindingClose bindings =>
+    match category with
+    | .parenClose => k <| .term h declarations context (.letBindingOpen bindings) levels
+    | _ => fail posture next h (.syntax (.expectedToken #[.parenClose])) k
+  | .sortedVars binder state =>
+    match ← Category.sortedVarsStepOutlined version h state category next token with
+    | .more h state => k <| .term h declarations context (.sortedVars binder state) levels
+    | .done h variables =>
+      if variables.isEmpty then
+        fail posture next h (.syntax (match binder with
+          | .lambda => .emptyLambdaBindings
+          | _ => .emptyQuantifierBindings)) k
+      else
+        let started := match binder with
+          | .quantifier quantifier => Handler.startQuantifier quantifier variables
+          | .lambda => Handler.startLambda variables
+        match ← runHandler started h with
+        | (.error e, h) => fail posture next h (.handler e) k
+        | (.ok scope, h) =>
+          k <| .term h declarations context .start (.binder (.sorted binder) scope :: levels)
+    | .error h cause => fail posture next h cause k
+  | .binderClose kind scope body =>
+    match category with
+    | .parenClose =>
+      let ended := match kind with
+        | .let => Handler.endLet scope body
+        | .sorted (.quantifier quantifier) => Handler.endQuantifier quantifier scope body
+        | .sorted .lambda => Handler.endLambda scope body
+      match ← runHandler ended h with
+      | (.error e, h) => fail posture next h (.handler e) k
+      | (.ok term, h) => termComplete posture next h declarations context levels term k
+    | _ => fail posture next h (.syntax (.expectedToken #[.parenClose])) k
+  | _ => portTermStep posture h declarations context { mode, levels } token next k
+
+/-- The step of a command's last `)`. -/
+@[inline]
+def closingStep {batch : BatchTag} (posture : VersionPosture) (h : H) (declarations : Nat)
+    (final : FinalCall (Handler.Attribute H) (Handler.«Sort» H) (Handler.Term H))
+    (token : Token batch) (next : BatchCursor batch) {β : Type} (k : OutcomeOf H next → m β) :
+    m β := do
+  match next.category token with
+  | .parenClose =>
+    match ← runParser (Command.Standard.finalCall final) h with
+    | (.error e, h) => fail posture next h e k
+    | (.ok (), h) =>
+      match final with
+      | .exit =>
+        -- the producer discards the rest of the input, and the script goes on to its end
+        k <| .stop (.ok .continue) { posture, command := .awaiting, declarations }
+          next.discardRest (BatchCursor.discardRest_follows next) h
+      | _ => k <| .command h declarations .awaiting
+  | _ => fail posture next h (.syntax (.expectedToken #[.parenClose])) k
+
+/-- The command around a term that starts. -/
+@[inline]
+def startTerm {batch : BatchTag} {next : BatchCursor batch} (h : H) (declarations : Nat)
+    (context : TermContext (Handler.«Sort» H)) : OutcomeOf H next :=
+  .term h declarations context .start []
+
+/-- The step of the token at the command level, fused for the common states. -/
+@[inline]
+def commandStep {batch : BatchTag} (posture : VersionPosture) (h : H) (declarations : Nat)
+    (command : CommandStateOf H) (token : Token batch) (next : BatchCursor batch) {β : Type}
+    (k : OutcomeOf H next → m β) : m β := do
+  match command with
+  | .awaiting =>
+    match next.category token with
+    | .parenOpen => k <| .command h declarations .opened
+    | .endOfFile => k <| .stop (.ok (.break ())) (ScriptParser.new posture) next (.refl _) h
+    | _ => fail posture next h (.syntax .expectedCommand) k
+  | .opened =>
+    match next.category token with
+    | .unquotedSymbol =>
+      let content := contentOf next token
+      match reservedAt? next.version next token with
+      | some (.commandName name) =>
+        match name with
+        | .assert => k <| startTerm h declarations .assert
+        | name => k <| .command h declarations (.payload (Payload.init name next.version))
+      | some (.general _) => fail posture next h (.syntax .expectedCommandName) k
+      | none =>
+        fail posture next h
+          (.handler (CommandHandler.nonstandardCommand (H := H)
+            ⟨SymbolView.newUnchecked content, false⟩)) k
+    | .quotedSymbol =>
+      fail posture next h
+        (.handler (CommandHandler.nonstandardCommand (H := H)
+          ⟨SymbolView.newUnchecked (contentOf next token), true⟩)) k
+    | _ => fail posture next h (.syntax .expectedCommandName) k
+  | .payload (.closing final) => closingStep posture h declarations final token next k
+  | .payload (.named named) =>
+    match Category.symbolOf? next.version (next.category token) next token with
+    | none => fail posture next h (.syntax .expectedSymbol) k
+    | some symbol =>
+      k <| .command h declarations (match named with
+        | .declareConst => .payload (.declareConst symbol .init)
+        | .declareDatatype => .payload (.declareDatatype symbol .start)
+        | .declareFun => .payload (.declareFunParameters symbol (ListState.paren .init))
+        | .declareSort => .payload (.declareSort symbol)
+        | .declareSortParameter => closing (.declareSortParameter symbol)
+        | .defineConst => .payload (.defineConstSort symbol .init)
+        | .defineSort => .payload (.defineSortParameters symbol (ListState.paren ()))
+        | .setLogic => closing (.setLogic symbol))
+  | .payload (.declareConst symbol state) =>
+    match ← Category.sortStepOutlined next.version h state (next.category token) next token with
+    | .more h state => k <| .command h declarations (.payload (.declareConst symbol state))
+    | .done h sort => k <| .command h declarations (closing (.declareConst symbol sort))
+    | .error h cause => fail posture next h cause k
+  | .payload (.declareFunParameters symbol state) =>
+    match ← Category.sortsStepOutlined next.version h state (next.category token) next token
+        with
+    | .more h state =>
+      k <| .command h declarations (.payload (.declareFunParameters symbol state))
+    | .done h parameters =>
+      k <| .command h declarations (.payload (.declareFunResult symbol parameters .init))
+    | .error h cause => fail posture next h cause k
+  | .payload (.declareFunResult symbol parameters state) =>
+    match ← Category.sortStepOutlined next.version h state (next.category token) next token with
+    | .more h state =>
+      k <| .command h declarations (.payload (.declareFunResult symbol parameters state))
+    | .done h result =>
+      k <| .command h declarations (closing (.declareFun symbol parameters result))
+    | .error h cause => fail posture next h cause k
+  | .payload (.defineConstSort symbol state) =>
+    match ← Category.sortStepOutlined next.version h state (next.category token) next token with
+    | .more h state => k <| .command h declarations (.payload (.defineConstSort symbol state))
+    | .done h sort => k <| startTerm h declarations (.definition (.defineConst symbol sort))
+    | .error h cause => fail posture next h cause k
+  | .payload (.defineSignature definition state) =>
+    match ← Category.signatureStepOutlined next.version h state (next.category token) next
+        token with
+    | .more h state =>
+      k <| .command h declarations (.payload (.defineSignature definition state))
+    | .done h signature =>
+      let started := match definition with
+        | .defineFunRec => CommandHandler.startDefineFunRec signature
+        | _ => CommandHandler.startDefineFun signature
+      match ← runHandler started h with
+      | (.error e, h) => fail posture next h (.handler e) k
+      | (.ok (), h) => k <| startTerm h declarations (.definition definition)
+    | .error h cause => fail posture next h cause k
+  | .payload .push =>
+    match next.category token with
+    | .numeral =>
+      k <| .command h declarations
+        (closing (.push (NumeralView.newUnchecked (contentOf next token))))
+    | _ => fail posture next h (.syntax (.expectedToken #[.numeral])) k
+  | .payload .pop =>
+    match next.category token with
+    | .numeral =>
+      k <| .command h declarations
+        (closing (.pop (NumeralView.newUnchecked (contentOf next token))))
+    | _ => fail posture next h (.syntax (.expectedToken #[.numeral])) k
+  | _ => portStep posture h declarations command token next k
+
+/-- The step of the token: in the command's term, or at the command level. -/
+@[inline]
+def step {batch : BatchTag} (posture : VersionPosture) (h : H) (declarations : Nat)
+    (command : CommandStateOf H) (inTerm : Bool) (context : TermContext (Handler.«Sort» H))
+    (mode : TermModeOf H) (levels : List (TermLevelOf H)) (token : Token batch)
+    (next : BatchCursor batch) {β : Type} (k : OutcomeOf H next → m β) : m β :=
+  if inTerm then termStep posture h declarations context mode levels token next k
+  else commandStep posture h declarations command token next k
+
+/-- The parser the loop's arguments stand for: the command state, or, in a term, the command
+around it with the term's state. -/
+@[inline]
+def assemble (posture : VersionPosture) (declarations : Nat) (command : CommandStateOf H)
+    (inTerm : Bool) (context : TermContext (Handler.«Sort» H)) (mode : TermModeOf H)
+    (levels : List (TermLevelOf H)) : ScriptParser H :=
+  { posture, declarations,
+    command := if inTerm then withTerm context { mode, levels } else command }
+
+/--
+Has the parser take `token`, taken from a cursor that leaves `next`, which has consumed from
+`origin`, then the tokens after it, until there are none or the hand-over stops. The parser is
+the one `assemble` makes of the arguments.
+-/
+@[specialize]
+def loop {batch : BatchTag} (posture : VersionPosture) (origin : BatchCursor batch) (h : H)
+    (declarations : Nat) (command : CommandStateOf H) (inTerm : Bool)
+    (context : TermContext (Handler.«Sort» H)) (mode : TermModeOf H)
+    (levels : List (TermLevelOf H)) (token : Token batch) (next : BatchCursor batch)
+    (consumed : next.Consumed origin) : m (LoopResult H origin) :=
+  step posture h declarations command inTerm context mode levels token next fun outcome =>
+  match outcome with
+  | .command h declarations command =>
+    if hn : next.HasNext then
+      let (token', ⟨after, taken⟩) := next.next hn
+      have : after.remaining < next.remaining := taken.remaining_lt
+      -- a command state that reads a term goes on with the term in the loop's arguments
+      match command with
+      | .payload (.assert term) =>
+        loop posture origin h declarations .awaiting true .assert term.mode term.levels token'
+          after (taken.trans consumed)
+      | .payload (.defineBody definition term) =>
+        loop posture origin h declarations .awaiting true (.definition definition) term.mode
+          term.levels token' after (taken.trans consumed)
+      | command =>
+        loop posture origin h declarations command false .assert .start [] token' after
+          (taken.trans consumed)
+    else
+      return (.ok .continue, { posture, command, declarations }, ⟨next, consumed⟩, h)
+  | .term h declarations context mode levels =>
+    if hn : next.HasNext then
+      let (token', ⟨after, taken⟩) := next.next hn
+      have : after.remaining < next.remaining := taken.remaining_lt
+      loop posture origin h declarations .awaiting true context mode levels token' after
+        (taken.trans consumed)
+    else
+      return (.ok .continue, assemble posture declarations .awaiting true context mode levels,
+        ⟨next, consumed⟩, h)
+  | .stop answer parser cursor follows h =>
+    return (answer, parser, ⟨cursor, follows.trans_consumed consumed⟩, h)
+termination_by next.remaining
+
+/-- The loop from the first token of a hand-over, with the parser's state in its arguments. -/
+@[inline]
+def start {batch : BatchTag} (parser : ScriptParser H) (h : H) (token : Token batch)
+    (producer next : BatchCursor batch) (consumed : next.Consumed producer) :
+    m (LoopResult H producer) :=
+  -- a command state that reads a term goes on with the term in the loop's arguments
+  match parser.command with
+  | .payload (.assert term) =>
+    loop parser.posture producer h parser.declarations .awaiting true .assert term.mode
+      term.levels token next consumed
+  | .payload (.defineBody definition term) =>
+    loop parser.posture producer h parser.declarations .awaiting true (.definition definition)
+      term.mode term.levels token next consumed
+  | command =>
+    loop parser.posture producer h parser.declarations command false .assert .start [] token
+      next consumed
+
+end
+
+/-- The parse adapter of a script parser, as a consumer whose tokens the fused loop takes. -/
+structure ScriptAdapter (H : Type) {m : Type → Type} [Handler H m] where
+  adapter : ParseAdapter H (ScriptParser H)
+
+/-- The fused reader of a script under the posture, over the handler. -/
+def ScriptAdapter.new {H : Type} {m : Type → Type} [Monad m] [CommandHandler H m] (handler : H)
+    (posture : VersionPosture) : ScriptAdapter H :=
+  ⟨ParseAdapter.new handler (ScriptParser.new posture)⟩
+
+instance {H : Type} {m : Type → Type} [Monad m] [CommandHandler H m] :
+    Token.Consume (ScriptAdapter H) Unit (Cause H) where
+  isConcrete := false
+
+instance {H : Type} {m : Type → Type} [Monad m] [CommandHandler H m] {batch : BatchTag} :
+    Token.ConsumeFrom (ScriptAdapter H) (BatchCursor batch) m where
+  consume producer hp := do
+    let ⟨adapter⟩ ← get
+    -- the handler is told the version in force before the first token of every input
+    let ((), h) ← (show StateT H m Unit from
+      if adapter.versionSet then pure ()
+      else Handler.setVersion (Token.Produce.version producer)).run adapter.handler
+    let (token, ⟨next, consumed⟩) := producer.next hp
+    let (answer, parser, done, h) ← (start adapter.parser h token producer next consumed : m _)
+    set ({ adapter :=
+        { handler := h, parser, versionSet := ParseAdapter.versionSetAfter answer } } :
+      ScriptAdapter H)
+    return (answer, done)
+
+end BSmtLib.Parser.Internal.Fused

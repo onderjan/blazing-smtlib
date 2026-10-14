@@ -7,6 +7,7 @@ public import BSmtLib.Facts.Proofs.Parser.Script
 public import BSmtLib.Facts.Proofs.Parser.Link
 public import BSmtLib.Facts.Proofs.Parser.Cut
 public import BSmtLib.Facts.Proofs.Parser.Rejection.Discard
+public import BSmtLib.Facts.Proofs.Parser.Fused.Step
 
 @[expose] public section
 
@@ -47,6 +48,11 @@ states.
   what it has taken viable, the first on that and on the valid input above. After `exit`, the
   parser goes back to reading commands; only the end of the input keeps what it has taken
   viable there, and the traversal asks for the discarding exactly there.
+- The fused reader: the fused script reader (`Parser.Internal.Fused`), which runs the script
+  parser in one loop over a cursor and falls back to the parser's own steps for rare constructs,
+  consumes the tokens of a cursor as the parse adapter of the script parser does, in every
+  lawful monad and with every handler (`fused_consumes_as_adapter`). So what holds of that
+  adapter's consumer holds of the fused reader's.
 -/
 
 /-!
@@ -278,6 +284,31 @@ info: 'BSmtLib.Facts.Parser.rejects_first_unviable' depends on axioms: [propext,
 #guard_msgs in
 #print axioms rejects_first_unviable
 
+/--
+The fused script reader (`Parser.Internal.Fused`) consumes as the parse adapter of the script
+parser does: on every cursor that has a token, from every adapter state, it gives the same
+answer and cursor, and leaves the same handler, parser and adapter state, in every lawful monad
+and with every handler. So every theorem about the parse adapter's consumer holds of the fused
+reader's.
+-/
+theorem fused_consumes_as_adapter {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m]
+    [Traits.CommandHandler H m] {batch : Token.BatchTag} (producer : Token.BatchCursor batch)
+    (hp : Token.Produce.HasNext producer)
+    (adapter : BSmtLib.Parser.Adapter.ParseAdapter H (BSmtLib.Parser.Script.ScriptParser H)) :
+    (Token.ConsumeFrom.consume (H := BSmtLib.Parser.Internal.Fused.ScriptAdapter H) (m := m)
+        producer hp).run ⟨adapter⟩ =
+      (fun result => (result.1, (⟨result.2⟩ : BSmtLib.Parser.Internal.Fused.ScriptAdapter H))) <$>
+        (Token.ConsumeFrom.consume
+          (H := BSmtLib.Parser.Adapter.ParseAdapter H (BSmtLib.Parser.Script.ScriptParser H))
+          (m := m) producer hp).run adapter := by
+  rw [Proofs.Parser.Fused.Step.consume_eq]
+
+/--
+info: 'BSmtLib.Facts.Parser.fused_consumes_as_adapter' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms fused_consumes_as_adapter
+
 /-! ## What is trusted
 
 A reader of the theorems above trusts the specification (`BSmtLibSpec`), the statements in this
@@ -289,7 +320,7 @@ the build if one of them is declared outside `BSmtLib.Facts.Parser.Adapters`.
 -/
 
 /--
-info: 10 theorems, stated with 61 adapters:
+info: 11 theorems, stated with 61 adapters:
 BSmtLib.Facts.Parser.Adapters.Bridge:
   BSmtLib.Facts.Parser.Adapters.Bridge.Agrees
   BSmtLib.Facts.Parser.Adapters.Bridge.Bridge.attributeValue

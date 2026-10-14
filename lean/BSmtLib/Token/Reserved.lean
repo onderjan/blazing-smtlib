@@ -192,9 +192,11 @@ private def reservedWords : Array (ByteArray × Reserved) :=
   GeneralReserved.all.map (fun word => (word.asStr.toUTF8, Reserved.general word))
     ++ CommandNameReserved.all.map (fun word => (word.asStr.toUTF8, Reserved.commandName word))
 
-/- LEAN: public, in `Internal`, as the type of `Internal.reservedSlot` names it. -/
+/- LEAN: public, in `Internal`, as the type of `Internal.reservedSlot` names it. Its value is
+exposed for the fused reader (`Parser.Internal.Fused.Reserved`), which hashes into the table
+with the number itself. -/
 /-- Number of slots of the reserved-word table. -/
-def Internal.reservedSlots : Nat := 128
+@[expose] def Internal.reservedSlots : Nat := 128
 
 /-!
 The reserved-word table and its hash. They are public, in `Internal`, only so that the proofs

@@ -22,7 +22,7 @@ fails the build.
 declared where `SyntaxToken` is, which `Token.lean` cannot import. -/
 
 /--
-info: 5953 declarations in 341 modules; 87 add to a sibling's type:
+info: 6067 declarations in 353 modules; 87 add to a sibling's type:
 BSmtLib.Facts.Proofs.Lexer.VNaive.Prefix:
   BSmtLib.Facts.Proofs.Lexer.VNaive.Run.St.Taken
 BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Pure:

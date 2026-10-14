@@ -34,3 +34,9 @@ root = "Benches.Parse"
 [[lean_exe]]
 name = "reexports"
 root = "BSmtLib.Facts.WriteReexports"
+
+# the fused script reader against the port: timing and differential checks, run with
+# `lake exe bench-fused-parser`
+[[lean_exe]]
+name = "bench-fused-parser"
+root = "Benches.FusedParser"

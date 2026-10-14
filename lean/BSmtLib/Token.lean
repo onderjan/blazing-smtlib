@@ -1237,6 +1237,39 @@ def span (self : BatchCursor batch) (token : Token batch) : Span :=
 
 end BatchCursor
 
+/- LEAN: not in Rust. The parts of a token's content, read without the content's slice, which is
+made by a call that the compiler does not inline: for a reader of the bytes that needs no slice.
+They are declared here, where the cursor's fields are visible. -/
+namespace Internal
+
+variable {batch : BatchTag}
+
+/-- The bytes that the token's content is a slice of. -/
+@[inline]
+def contentBytes (cursor : BatchCursor batch) (_ : Token batch) : ByteArray :=
+  cursor.batch.bytes
+
+/-- Where the token's content starts in `contentBytes`. -/
+@[inline]
+def contentStart (cursor : BatchCursor batch) (token : Token batch) : Nat :=
+  cursor.batch.contentStarts[token.index]'(Nat.lt_of_lt_of_le (cursor.lt_len token)
+    cursor.batch.fit.1)
+
+/-- Where the token's content stops in `contentBytes`. -/
+@[inline]
+def contentStop (cursor : BatchCursor batch) (token : Token batch) : Nat :=
+  cursor.batch.contentStops[token.index]'(Nat.lt_of_lt_of_le (cursor.lt_len token)
+    cursor.batch.fit.2.1)
+
+/-- The content is the slice of its bytes between its start and its stop. -/
+theorem content_eq_parts (cursor : BatchCursor batch) (token : Token batch) :
+    cursor.content token =
+      (contentBytes cursor token).toByteSlice (contentStart cursor token)
+        (contentStop cursor token) :=
+  (rfl)
+
+end Internal
+
 /- LEAN: a class is Lean's trait. The Rust associated types `Result` and `Error` are parameters
 marked `outParam`: the consumer type determines them, as an `impl` determines associated types.
 The method `consume` is in `ConsumeFrom` (`BSmtLib.Token.Produce`), which is stated for a
