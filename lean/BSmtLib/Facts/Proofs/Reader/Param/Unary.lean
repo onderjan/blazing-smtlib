@@ -3,19 +3,22 @@ import BSmtLib.Facts.Proofs.Reader.Param.Flagged
 /-!
 # What the lexer does after its consumer fails
 
-On the consumer `Flagged consumer`, a step of the library's lexer keeps three facts (`UL`):
+The walk is over any consumer that keeps a record of what went wrong (`Watched`), as
+`Flagged consumer` does for the adapter's consumer; `Flagged` is an instance of it
+(`UnarySteps`). On such a consumer, a step of the library's lexer keeps three facts (`UL`):
 - while nothing went wrong, the lexer's version is the version of the last cursor the consumer
   gave back, so every cursor it hands over is in that version;
 - once the consumer has answered an error, the step is interrupted by that error, the error
-  `none` if the consumer was handed whitespace or a comment there (`Flagged.layout`), with the
+  `none` if the consumer was handed whitespace or a comment there (`Watched.layout`), with the
   batch empty, so that the loop over the slice hands nothing over again and fails;
 - the consumer is not called after it went wrong, nor handed a cursor in another version than
-  its own (`Flagged.spoiled` stays as it was).
+  its own (`Watched.spoiled` stays as it was).
 
 So a call of the lexer whose consumer answered an error fails (`lexSliceStep_flag`,
 `lexEofStep_flag`): a call that does not fail has a consumer that answered no error and was
 handed cursors in the version it asked for. The facts are proved for each function of the lexer
-from how it is built, as in step 1, by the rules below and the tactic `usim`.
+from how it is built, as in step 1, by the rules below and the tactic `usim`. The consumer enters
+only where the lexer calls it, in `flushCursor`, through `Watched.call`.
 -/
 
 namespace BSmtLib.Facts.Proofs.Reader.Param.Unary
@@ -23,17 +26,44 @@ namespace BSmtLib.Facts.Proofs.Reader.Param.Unary
 open BSmtLib.Lexer BSmtLib.Lexer.Internal
 open BSmtLib.Facts.Lexer.Adapters
 
+/-- A consumer in `StateM σ` with a record of what went wrong: whether it has answered an error
+or been handed a cursor in another version than the one of the last cursor it gave back
+(`errored`), that version (`version`), whether it has been called after something went wrong or
+handed such a cursor (`spoiled`), and whether the call at which it went wrong was handed
+whitespace or a comment and answered the error `none` (`layout`). -/
+class Watched (F : Type) (σ R E : outParam Type) [Token.Consume F R (Option E)]
+    [∀ b, Token.ConsumeFrom F (Token.BatchCursor b) (StateM σ)] where
+  /-- Whether something went wrong. -/
+  errored : F → Bool
+  /-- The version of the last cursor the consumer gave back, or the one it started with. -/
+  version : F → Token.Version
+  /-- Whether the consumer has been called after something went wrong. -/
+  spoiled : F → Bool
+  /-- Whether the call at which the consumer went wrong answered the error `none`. -/
+  layout : F → Bool
+  /-- A call from a record where nothing went wrong, on a cursor in the record's version, records
+  whether it answered an error, the error `none`, and the version of the cursor it gave back, and
+  leaves `spoiled` as it was. -/
+  call {b : Token.BatchTag} (cursor : Token.BatchCursor b) (h : cursor.HasNext) (fl : F) (l : σ) :
+    errored fl = false → cursor.version = version fl →
+      let r := ((Token.ConsumeFrom.consume cursor h : StateT F (StateM σ) _).run fl).run l
+      errored r.1.2 = Flagged.isError r.1.1.1 ∧ version r.1.2 = r.1.1.2.val.version ∧
+        spoiled r.1.2 = spoiled fl ∧ layout r.1.2 = Flagged.isLayoutAnswer r.1.1.1
+
 section
 
-variable {consumer : BSmtLibSpec.Lexer.Consumer} {floor : Option Nat} {low : Nat} {α β : Type}
+variable {F σ R E : Type} [Token.Consume F R (Option E)]
+  [∀ b, Token.ConsumeFrom F (Token.BatchCursor b) (StateM σ)] [Watched F σ R E]
+  {floor : Option Nat} {low : Nat} {α β : Type}
 
-/-- The lexer's monad on the consumer `Flagged consumer`. -/
-abbrev FM (consumer : BSmtLibSpec.Lexer.Consumer) (floor : Option Nat) (low : Nat) (α : Type) :=
-  LexM (Flagged consumer) AnswerM consumer.Result (Option consumer.Error) floor low α
+/-- The lexer's monad on the consumer `F`, which runs in `StateM σ`. -/
+abbrev FM (F σ : Type) {R E : Type} [Token.Consume F R (Option E)] (floor : Option Nat) (low : Nat)
+    (α : Type) :=
+  LexM F (StateM σ) R (Option E) floor low α
 
-/-- The run of a step from the lexer's state, the consumer's and the tokens taken. -/
-abbrev frun (f : FM consumer floor low α) (s : {c : LexerCore // c.Bound floor low})
-    (fl : Flagged consumer) (l : List BSmtLibSpec.Lexer.Handed) :=
+/-- The run of a step from the lexer's state, the consumer's and the state of its monad. -/
+abbrev frun (f : FM F σ floor low α) (s : {c : LexerCore // c.Bound floor low})
+    (fl : F) (l : σ) :=
   ((f.run.run s).run fl).run l
 
 /-- The step is interrupted by an error of the consumer: the error `none` if the call at which
@@ -46,16 +76,17 @@ def ConsumerThrow {R E : Type} {floor : Option Nat} {α : Type} (layout : Bool)
 the versions agree; if the consumer answered an error, the step is interrupted by it with the
 batch empty; and the consumer was neither called after that nor handed a cursor in another
 version. -/
-def UL (f : FM consumer floor low α) : Prop :=
-  ∀ s fl l, fl.errored = false → s.val.version = fl.version →
-    ((frun f s fl l).1.2.errored = false →
-        (frun f s fl l).1.1.2.val.version = (frun f s fl l).1.2.version) ∧
-    ((frun f s fl l).1.2.errored = true →
-        ConsumerThrow (frun f s fl l).1.2.layout (frun f s fl l).1.1.1 ∧
+def UL (f : FM F σ floor low α) : Prop :=
+  ∀ s fl l, Watched.errored fl = false → s.val.version = Watched.version fl →
+    (Watched.errored (frun f s fl l).1.2 = false →
+        (frun f s fl l).1.1.2.val.version = Watched.version (frun f s fl l).1.2) ∧
+    (Watched.errored (frun f s fl l).1.2 = true →
+        ConsumerThrow (Watched.layout (frun f s fl l).1.2) (frun f s fl l).1.1.1 ∧
           (frun f s fl l).1.1.2.val.batch.len = 0) ∧
-    (frun f s fl l).1.2.spoiled = fl.spoiled
+    Watched.spoiled (frun f s fl l).1.2 = Watched.spoiled fl
 
-theorem frun_bind (x : FM consumer floor low α) (k : α → FM consumer floor low β) (s fl l) :
+omit [∀ b, Token.ConsumeFrom F (Token.BatchCursor b) (StateM σ)] [Watched F σ R E] in
+theorem frun_bind (x : FM F σ floor low α) (k : α → FM F σ floor low β) (s fl l) :
     frun (x >>= k) s fl l =
       match frun x s fl l with
       | (((.ok a, s'), fl'), l') => frun (k a) s' fl' l'
@@ -64,18 +95,18 @@ theorem frun_bind (x : FM consumer floor low α) (k : α → FM consumer floor l
   rcases ((x.run.run s).run fl).run l with ⟨⟨⟨r, s'⟩, fl'⟩, l'⟩
   cases r <;> rfl
 
-theorem UL.pure (a : α) : UL (Pure.pure a : FM consumer floor low α) :=
+theorem UL.pure (a : α) : UL (Pure.pure a : FM F σ floor low α) :=
   fun _ _ _ he hv => ⟨fun _ => hv, fun h => (by
     have h' : true = false := h.symm.trans he; cases h'),
     rfl⟩
 
-theorem UL.throw (i : Interrupted consumer.Result (Option consumer.Error) floor) :
-    UL (MonadExcept.throw i : FM consumer floor low α) :=
+theorem UL.throw (i : Interrupted R (Option E) floor) :
+    UL (MonadExcept.throw i : FM F σ floor low α) :=
   fun _ _ _ he hv => ⟨fun _ => hv, fun h => (by
     have h' : true = false := h.symm.trans he; cases h'),
     rfl⟩
 
-theorem UL.bind {x : FM consumer floor low α} {k : α → FM consumer floor low β} (hx : UL x)
+theorem UL.bind {x : FM F σ floor low α} {k : α → FM F σ floor low β} (hx : UL x)
     (hk : ∀ a, UL (k a)) : UL (x >>= k) := by
   intro s fl l he hv
   rw [frun_bind]
@@ -89,7 +120,7 @@ theorem UL.bind {x : FM consumer floor low α} {k : α → FM consumer floor low
     cases hi
     exact ⟨⟨_, rfl, hc⟩, hb⟩
   | ok a =>
-    cases he' : fl'.errored with
+    cases he' : Watched.errored fl' with
     | true =>
       obtain ⟨⟨i, hi, -⟩, -⟩ := h₂ he'
       cases hi
@@ -98,32 +129,32 @@ theorem UL.bind {x : FM consumer floor low α} {k : α → FM consumer floor low
       exact ⟨k₁, k₂, k₃.trans h₃⟩
 
 theorem UL.getThe : UL (getThe {c : LexerCore // c.Bound floor low} :
-    FM consumer floor low {c : LexerCore // c.Bound floor low}) :=
+    FM F σ floor low {c : LexerCore // c.Bound floor low}) :=
   fun _ _ _ he hv => ⟨fun _ => hv, fun h => (by
     have h' : true = false := h.symm.trans (by assumption); cases h'), rfl⟩
 
 theorem UL.modifyThe
     (f : {c : LexerCore // c.Bound floor low} → {c : LexerCore // c.Bound floor low})
     (hf : ∀ c, (f c).val.version = c.val.version) :
-    UL (modifyThe {c : LexerCore // c.Bound floor low} f : FM consumer floor low PUnit) :=
+    UL (modifyThe {c : LexerCore // c.Bound floor low} f : FM F σ floor low PUnit) :=
   fun s _ _ he hv => ⟨fun _ => (hf s).trans hv, fun h => (by
     have h' : true = false := h.symm.trans (by assumption); cases h'), rfl⟩
 
 theorem UL.modifyGetThe
     (f : {c : LexerCore // c.Bound floor low} → α × {c : LexerCore // c.Bound floor low})
     (hf : ∀ c, (f c).2.val.version = c.val.version) :
-    UL (modifyGetThe {c : LexerCore // c.Bound floor low} f : FM consumer floor low α) :=
+    UL (modifyGetThe {c : LexerCore // c.Bound floor low} f : FM F σ floor low α) :=
   fun s _ _ he hv => ⟨fun _ => (hf s).trans hv, fun h => (by
     have h' : true = false := h.symm.trans (by assumption); cases h'), rfl⟩
 
-theorem UL.ite {c : Prop} [Decidable c] {a b : FM consumer floor low α} (ha : c → UL a)
+theorem UL.ite {c : Prop} [Decidable c] {a b : FM F σ floor low α} (ha : c → UL a)
     (hb : ¬c → UL b) : UL (if c then a else b) := by
   by_cases h : c
   · rw [ite_eq_left h]; exact ha h
   · rw [ite_eq_right h]; exact hb h
 
-theorem UL.dite {c : Prop} [Decidable c] {a : c → FM consumer floor low α}
-    {b : ¬c → FM consumer floor low α} (ha : ∀ h, UL (a h)) (hb : ∀ h, UL (b h)) :
+theorem UL.dite {c : Prop} [Decidable c] {a : c → FM F σ floor low α}
+    {b : ¬c → FM F σ floor low α} (ha : ∀ h, UL (a h)) (hb : ∀ h, UL (b h)) :
     UL (if h : c then a h else b h) := by
   by_cases h : c
   · rw [dite_eq_left_of_eq_true (eq_true h)]; exact ha h

@@ -20,23 +20,25 @@ open BSmtLib.Lexer.Error BSmtLib.Lexer.Helpers
 
 section
 
-variable {consumer : BSmtLibSpec.Lexer.Consumer}
+variable {F σ R E : Type} [Token.Consume F R (Option E)]
+  [∀ b, Token.ConsumeFrom F (Token.BatchCursor b) (StateM σ)] [Watched F σ R E]
 
-/-- The run of a computation of the consumer's monad from its state and the tokens taken. -/
-abbrev crun {α : Type} (x : StateT (Flagged consumer) AnswerM α) (fl : Flagged consumer)
-    (l : List BSmtLibSpec.Lexer.Handed) := (x.run fl).run l
+/-- The run of a computation of the consumer's monad from its state and the monad's state. -/
+abbrev crun {α : Type} (x : StateT F (StateM σ) α) (fl : F)
+    (l : σ) := (x.run fl).run l
 
-theorem crun_bind {α β : Type} (x : StateT (Flagged consumer) AnswerM α)
-    (k : α → StateT (Flagged consumer) AnswerM β) (fl l) :
+theorem crun_bind {α β : Type} (x : StateT F (StateM σ) α)
+    (k : α → StateT F (StateM σ) β) (fl l) :
     crun (x >>= k) fl l = crun (k (crun x fl l).1.1) (crun x fl l).1.2 (crun x fl l).2 := rfl
 
-theorem crun_pure {α : Type} (a : α) (fl : Flagged consumer) (l) :
-    crun (Pure.pure a : StateT (Flagged consumer) AnswerM α) fl l = ((a, fl), l) := rfl
+theorem crun_pure {α : Type} (a : α) (fl : F) (l) :
+    crun (Pure.pure a : StateT F (StateM σ) α) fl l = ((a, fl), l) := rfl
 
-theorem crun_bind_frun {floor : Option Nat} {low : Nat} {α β : Type} (f : FM consumer floor low α)
+omit [∀ b, Token.ConsumeFrom F (Token.BatchCursor b) (StateM σ)] [Watched F σ R E] in
+theorem crun_bind_frun {floor : Option Nat} {low : Nat} {α β : Type} (f : FM F σ floor low α)
     (s : {c : LexerCore // c.Bound floor low})
-    (k : Except (Interrupted consumer.Result (Option consumer.Error) floor) α ×
-      {c : LexerCore // c.Bound floor low} → StateT (Flagged consumer) AnswerM β) (fl l) :
+    (k : Except (Interrupted R (Option E) floor) α ×
+      {c : LexerCore // c.Bound floor low} → StateT F (StateM σ) β) (fl l) :
     crun (StateT.run (ExceptT.run f) s >>= k) fl l =
       crun (k (frun f s fl l).1.1) (frun f s fl l).1.2 (frun f s fl l).2 := rfl
 
@@ -47,10 +49,11 @@ def exitFails {R ε : Type} {floor : Option Nat} (layout : Bool) :
   | .done (.error failure) => layout = true → failure.cause = .consumer none
   | _ => False
 
+omit [Watched F σ R E] in
 /-- An empty batch is handed over without the consumer. -/
 theorem flushBatch_empty {floor : Option Nat} (s : {c : LexerCore // c.Bound floor 0})
-    (hs : s.val.batch.len = 0) (fl : Flagged consumer) (l) :
-    frun (flushBatch : FM consumer floor 0 Unit) s fl l = (((.ok (), s), fl), l) := by
+    (hs : s.val.batch.len = 0) (fl : F) (l) :
+    frun (flushBatch : FM F σ floor 0 Unit) s fl l = (((.ok (), s), fl), l) := by
   unfold flushBatch
   rw [frun_bind, frun_getCore]
   simp only [hs, beq_self_eq_true, ite_true]
@@ -58,16 +61,16 @@ theorem flushBatch_empty {floor : Option Nat} (s : {c : LexerCore // c.Bound flo
 
 /-- A computation of the consumer's monad that starts with a step of the lexer: what follows the
 step, from where the step leaves the lexer and the consumer, as `UL` says. -/
-theorem crun_bind_UL {floor : Option Nat} {low : Nat} {α β : Type} {f : FM consumer floor low α}
+theorem crun_bind_UL {floor : Option Nat} {low : Nat} {α β : Type} {f : FM F σ floor low α}
     {s : {c : LexerCore // c.Bound floor low}}
-    {k : Except (Interrupted consumer.Result (Option consumer.Error) floor) α ×
-      {c : LexerCore // c.Bound floor low} → StateT (Flagged consumer) AnswerM β} {fl l}
-    (P : (β × Flagged consumer) × List BSmtLibSpec.Lexer.Handed → Prop) (hf : UL f)
-    (he : fl.errored = false) (hv : s.val.version = fl.version)
-    (hk : ∀ res s' (fl' : Flagged consumer) l',
-      (fl'.errored = false → s'.val.version = fl'.version) →
-      (fl'.errored = true → ConsumerThrow fl'.layout res ∧ s'.val.batch.len = 0) →
-      fl'.spoiled = fl.spoiled →
+    {k : Except (Interrupted R (Option E) floor) α ×
+      {c : LexerCore // c.Bound floor low} → StateT F (StateM σ) β} {fl l}
+    (P : (β × F) × σ → Prop) (hf : UL f)
+    (he : Watched.errored fl = false) (hv : s.val.version = Watched.version fl)
+    (hk : ∀ res s' (fl' : F) l',
+      (Watched.errored fl' = false → s'.val.version = Watched.version fl') →
+      (Watched.errored fl' = true → ConsumerThrow (Watched.layout fl') res ∧ s'.val.batch.len = 0) →
+      Watched.spoiled fl' = Watched.spoiled fl →
       P (crun (k (res, s')) fl' l')) :
     P (crun (StateT.run (ExceptT.run f) s >>= k) fl l) := by
   rw [crun_bind_frun]
@@ -77,19 +80,20 @@ theorem crun_bind_UL {floor : Option Nat} {low : Nat} {α β : Type} {f : FM con
 /-- After the loop over a slice: while nothing went wrong the versions agree, once the consumer
 answered an error the loop failed, and whether the consumer was spoiled is `spoiled`. -/
 def SliceOk {floor : Option Nat} (spoiled : Bool)
-    (r : ((SliceExit consumer.Result (Option consumer.Error) floor ×
-      {c : LexerCore // c.Bound floor 0}) × Flagged consumer) × List BSmtLibSpec.Lexer.Handed) :
+    (r : ((SliceExit R (Option E) floor ×
+      {c : LexerCore // c.Bound floor 0}) × F) × σ) :
           Prop :=
-  (r.1.2.errored = false → r.1.1.2.val.version = r.1.2.version) ∧
-    (r.1.2.errored = true → exitFails r.1.2.layout r.1.1.1) ∧ r.1.2.spoiled = spoiled
+  (Watched.errored r.1.2 = false → r.1.1.2.val.version = Watched.version r.1.2) ∧
+    (Watched.errored r.1.2 = true → exitFails (Watched.layout r.1.2) r.1.1.1) ∧
+      Watched.spoiled r.1.2 = spoiled
 
 theorem lexSliceRun_flag_lt {floor : Option Nat} (input : CharClass.Input) :
-    ∀ (n : Nat) (position : USize) (fnResult : Except (Failure (Option consumer.Error))
-      (ControlFlow consumer.Result)) (core : {c : LexerCore // c.Bound floor 0})
-      (fl : Flagged consumer) (l), runMeasure input position fnResult < n →
-      (fl.errored = false → core.val.version = fl.version →
-        SliceOk fl.spoiled (crun (lexSliceRun input position fnResult core) fl l)) ∧
-      (fl.errored = true → (∃ e, fnResult = .error e) → core.val.batch.len = 0 →
+    ∀ (n : Nat) (position : USize) (fnResult : Except (Failure (Option E))
+      (ControlFlow R)) (core : {c : LexerCore // c.Bound floor 0})
+      (fl : F) (l), runMeasure input position fnResult < n →
+      (Watched.errored fl = false → core.val.version = Watched.version fl →
+        SliceOk (Watched.spoiled fl) (crun (lexSliceRun input position fnResult core) fl l)) ∧
+      (Watched.errored fl = true → (∃ e, fnResult = .error e) → core.val.batch.len = 0 →
         crun (lexSliceRun input position fnResult core) fl l = (((.done fnResult, core), fl), l))
   | 0, _, _, _, _, _, hn => absurd hn (Nat.not_lt_zero _)
   | n + 1, position, fnResult, core, fl, l, hn => by
@@ -98,7 +102,7 @@ theorem lexSliceRun_flag_lt {floor : Option Nat} (input : CharClass.Input) :
     · -- a failure is still to be returned: the batch is handed over
       simp only [Bool.or_true, dite_true]
       refine ⟨fun he hv => ?_, fun he _ hb => ?_⟩
-      · refine crun_bind_UL (SliceOk fl.spoiled) flushBatch_usim he hv ?_
+      · refine crun_bind_UL (SliceOk (Watched.spoiled fl)) flushBatch_usim he hv ?_
         intro res s' fl' l' h₁ h₂ h₃
         rcases res with ⟨result, span, location, stopAfter⟩ | ⟨⟩
         · cases result with
@@ -122,7 +126,7 @@ theorem lexSliceRun_flag_lt {floor : Option Nat} (input : CharClass.Input) :
       refine ⟨fun he hv => ?_, fun _ ⟨_, h⟩ _ => by cases h⟩
       by_cases hflush : position ≥ input.stop
       · rw [dite_eq_left_of_eq_true (by simpa using hflush)]
-        refine crun_bind_UL (SliceOk fl.spoiled) flushBatch_usim he hv ?_
+        refine crun_bind_UL (SliceOk (Watched.spoiled fl)) flushBatch_usim he hv ?_
         intro res s' fl' l' h₁ h₂ h₃
         rcases res with ⟨result, span, location, stopAfter⟩ | ⟨⟩
         · cases result with
@@ -145,7 +149,7 @@ theorem lexSliceRun_flag_lt {floor : Option Nat} (input : CharClass.Input) :
           simp only [ge_iff_le, USize.le_iff_toNat_le] at hflush
           omega
         try dsimp only
-        refine crun_bind_UL (SliceOk fl.spoiled) (lexStep_usim _ _ _ _ _ _ _) he hv ?_
+        refine crun_bind_UL (SliceOk (Watched.spoiled fl)) (lexStep_usim _ _ _ _ _ _ _) he hv ?_
         intro res s' fl' l' h₁ h₂ h₃
         rcases res with ⟨result, span, location, stopAfter⟩ | ⟨next, hnext⟩
         · cases result with
@@ -155,7 +159,7 @@ theorem lexSliceRun_flag_lt {floor : Option Nat} (input : CharClass.Input) :
               cases he), h₃⟩
           | error cause =>
             dsimp only
-            cases hfl : fl'.errored with
+            cases hfl : Watched.errored fl' with
             | false =>
               rw [← h₃]
               refine (lexSliceRun_flag_lt input n position _ _ fl' l' ?_).1 hfl (h₁ hfl)
@@ -171,7 +175,7 @@ theorem lexSliceRun_flag_lt {floor : Option Nat} (input : CharClass.Input) :
               exact ⟨fun h => absurd (h.symm.trans hfl) Bool.false_ne_true,
                 fun _ hlay => by rw [hl hlay], h₃⟩
         · dsimp only
-          cases hfl : fl'.errored with
+          cases hfl : Watched.errored fl' with
           | false =>
             rw [← h₃]
             refine (lexSliceRun_flag_lt input n next _ _ fl' l' ?_).1 hfl ?_
@@ -183,15 +187,15 @@ theorem lexSliceRun_flag_lt {floor : Option Nat} (input : CharClass.Input) :
             cases hi
 
 theorem lexSliceRun_flag {floor : Option Nat} (input : CharClass.Input) (position : USize)
-    (fnResult : Except (Failure (Option consumer.Error)) (ControlFlow consumer.Result))
-    (core : {c : LexerCore // c.Bound floor 0}) (fl : Flagged consumer) (l)
-    (he : fl.errored = false) (hv : core.val.version = fl.version) :
-    SliceOk fl.spoiled (crun (lexSliceRun input position fnResult core) fl l) :=
+    (fnResult : Except (Failure (Option E)) (ControlFlow R))
+    (core : {c : LexerCore // c.Bound floor 0}) (fl : F) (l)
+    (he : Watched.errored fl = false) (hv : core.val.version = Watched.version fl) :
+    SliceOk (Watched.spoiled fl) (crun (lexSliceRun input position fnResult core) fl l) :=
   (lexSliceRun_flag_lt input _ position fnResult core fl l (Nat.lt_succ_self _)).1 he hv
 
 /-- Whether the result is an error: by the consumer's error `none`, as its cause says, if
 `layout`. -/
-def FailsBy {α β : Type} (cause : α → LexErrorCause (Option consumer.Error)) (layout : Bool) :
+def FailsBy {α β : Type} (cause : α → LexErrorCause (Option E)) (layout : Bool) :
     Except α β → Prop
   | .error a => layout = true → cause a = .consumer none
   | .ok _ => False
@@ -199,19 +203,20 @@ def FailsBy {α β : Type} (cause : α → LexErrorCause (Option consumer.Error)
 /-- After a call's step: while nothing went wrong the versions agree, once the consumer answered
 an error the step failed, by the consumer's error `none` if the consumer was handed whitespace or a
 comment there, and whether the consumer was spoiled is `spoiled`. -/
-def StepOk {α β : Type} (cause : α → LexErrorCause (Option consumer.Error)) (spoiled : Bool)
-    (r : ((Except α β × LexerCore) × Flagged consumer) × List BSmtLibSpec.Lexer.Handed) : Prop :=
-  (r.1.2.errored = false → r.1.1.2.version = r.1.2.version) ∧
-    (r.1.2.errored = true → FailsBy cause r.1.2.layout r.1.1.1) ∧ r.1.2.spoiled = spoiled
+def StepOk {α β : Type} (cause : α → LexErrorCause (Option E)) (spoiled : Bool)
+    (r : ((Except α β × LexerCore) × F) × σ) : Prop :=
+  (Watched.errored r.1.2 = false → r.1.1.2.version = Watched.version r.1.2) ∧
+    (Watched.errored r.1.2 = true → FailsBy cause (Watched.layout r.1.2) r.1.1.1) ∧
+      Watched.spoiled r.1.2 = spoiled
 
 theorem lexSliceFrom_flag_lt (input : CharClass.Input) (initialOffset : Nat) :
     ∀ (n floor : Nat) (hfloor : initialOffset ≤ floor + 1) (position : USize)
-      (fnResult : Except (Failure (Option consumer.Error)) (ControlFlow consumer.Result))
-      (held : Option (Span.Located consumer.Result))
+      (fnResult : Except (Failure (Option E)) (ControlFlow R))
+      (held : Option (Span.Located R))
           (core : {c : LexerCore // c.Bound (some floor) 0})
-      (fl : Flagged consumer) (l), fromMeasure input initialOffset floor < n →
-      fl.errored = false → core.val.version = fl.version →
-      StepOk Failure.cause fl.spoiled
+      (fl : F) (l), fromMeasure input initialOffset floor < n →
+      Watched.errored fl = false → core.val.version = Watched.version fl →
+      StepOk Failure.cause (Watched.spoiled fl)
         (crun (lexSliceFrom input initialOffset floor hfloor position fnResult held core) fl l)
   | 0, _, _, _, _, _, _, _, _, hn, _, _ => absurd hn (Nat.not_lt_zero _)
   | n + 1, floor, hfloor, position, fnResult, held, core, fl, l, hn, he, hv => by
@@ -228,7 +233,7 @@ theorem lexSliceFrom_flag_lt (input : CharClass.Input) (initialOffset : Nat) :
       | error _ => exact this
       | ok _ => exact absurd this id
     | stopped stop location after =>
-      cases hfl : fl'.errored with
+      cases hfl : Watched.errored fl' with
       | true => exact absurd (h₂ hfl) id
       | false =>
         have hafter := after floor rfl
@@ -257,36 +262,37 @@ theorem lexSliceFrom_flag_lt (input : CharClass.Input) (initialOffset : Nat) :
           | some _ => exact ⟨fun _ => h₁ hfl, fun h => absurd (h.symm.trans hfl) (by decide), h₃⟩
           | none => exact ⟨fun _ => h₁ hfl, fun h => absurd (h.symm.trans hfl) (by decide), h₃⟩
 
-/-- The run of an action on the lexer's state from it, the consumer's state and the tokens. -/
-abbrev irun {α : Type} (f : InnerM (Flagged consumer) AnswerM α) (c : LexerCore)
-    (fl : Flagged consumer) (l : List BSmtLibSpec.Lexer.Handed) := ((f.run c).run fl).run l
+/-- The run of an action on the lexer's state from it, the consumer's state and the monad's
+state. -/
+abbrev irun {α : Type} (f : InnerM F (StateM σ) α) (c : LexerCore)
+    (fl : F) (l : σ) := ((f.run c).run fl).run l
 
-theorem lexSliceInner_flag (input : CharClass.Input) (c : LexerCore) (fl : Flagged consumer) (l)
-    (he : fl.errored = false) (hv : c.version = fl.version) :
-    StepOk Failure.cause fl.spoiled (irun (lexSliceInner input) c fl l) :=
+theorem lexSliceInner_flag (input : CharClass.Input) (c : LexerCore) (fl : F) (l)
+    (he : Watched.errored fl = false) (hv : c.version = Watched.version fl) :
+    StepOk Failure.cause (Watched.spoiled fl) (irun (lexSliceInner input) c fl l) :=
   lexSliceFrom_flag_lt input _ _ _ _ _ _ _ _ fl l (Nat.lt_succ_self _) he hv
 
-/-- An action that leaves the consumer's state and the tokens taken as they are and keeps the
+/-- An action that leaves the consumer's state and the monad's state as they are and keeps the
 lexer's version. -/
-def Inert {α : Type} (f : InnerM (Flagged consumer) AnswerM α) : Prop :=
+def Inert {α : Type} (f : InnerM F (StateM σ) α) : Prop :=
   ∀ c fl l, (irun f c fl l).1.2 = fl ∧ (irun f c fl l).2 = l ∧
     (irun f c fl l).1.1.2.version = c.version
 
-theorem irun_getThe_bind {α : Type} (k : LexerCore → InnerM (Flagged consumer) AnswerM α)
-    (c : LexerCore) (fl : Flagged consumer) (l) :
+theorem irun_getThe_bind {α : Type} (k : LexerCore → InnerM F (StateM σ) α)
+    (c : LexerCore) (fl : F) (l) :
     irun (getThe LexerCore >>= k) c fl l = irun (k c) c fl l := rfl
 
-theorem irun_bind {α β : Type} (x : InnerM (Flagged consumer) AnswerM α)
-    (k : α → InnerM (Flagged consumer) AnswerM β) (c : LexerCore) (fl : Flagged consumer) (l) :
+theorem irun_bind {α β : Type} (x : InnerM F (StateM σ) α)
+    (k : α → InnerM F (StateM σ) β) (c : LexerCore) (fl : F) (l) :
     irun (x >>= k) c fl l =
       irun (k (irun x c fl l).1.1.1) (irun x c fl l).1.1.2 (irun x c fl l).1.2 (irun x c fl l).2 :=
   rfl
 
-theorem irun_modifyThe (f : LexerCore → LexerCore) (c : LexerCore) (fl : Flagged consumer) (l) :
+theorem irun_modifyThe (f : LexerCore → LexerCore) (c : LexerCore) (fl : F) (l : σ) :
     irun (modifyThe LexerCore f) c fl l = (((PUnit.unit, f c), fl), l) := rfl
 
 theorem skipSlice_inert (slice : ByteSlice) (skip : RecoveryState) :
-    Inert (skipSlice slice skip : InnerM (Flagged consumer) AnswerM (Option Nat)) := by
+    Inert (skipSlice slice skip : InnerM F (StateM σ) (Option Nat)) := by
   intro c fl l
   unfold skipSlice
   rw [irun_getThe_bind]
@@ -295,10 +301,10 @@ theorem skipSlice_inert (slice : ByteSlice) (skip : RecoveryState) :
   · dsimp only
     split <;> exact ⟨rfl, rfl, rfl⟩
 
-theorem failCall_inert (failure : Failure (Option consumer.Error)) (atEnd : Bool) :
-    Inert (failCall (Recovery.LexRecovery.abandon (H := Flagged consumer)
-        (m := AnswerM) Recovery.failFast)
-      failure atEnd : InnerM (Flagged consumer) AnswerM (LexError (Option consumer.Error))) := by
+theorem failCall_inert (failure : Failure (Option E)) (atEnd : Bool) :
+    Inert (failCall (Recovery.LexRecovery.abandon (H := F)
+        (m := StateM σ) Recovery.failFast)
+      failure atEnd : InnerM F (StateM σ) (LexError (Option E))) := by
   intro c fl l
   unfold failCall
   rw [irun_getThe_bind]
@@ -307,10 +313,10 @@ theorem failCall_inert (failure : Failure (Option consumer.Error)) (atEnd : Bool
   · exact ⟨rfl, rfl, rfl⟩
 
 /-- The error a failure turns into has the failure's cause. -/
-theorem failCall_cause (failure : Failure (Option consumer.Error)) (atEnd : Bool) (c fl l) :
-    (irun (failCall (Recovery.LexRecovery.abandon (H := Flagged consumer)
-    (m := AnswerM) Recovery.failFast)
-      failure atEnd : InnerM (Flagged consumer) AnswerM (LexError (Option consumer.Error)))
+theorem failCall_cause (failure : Failure (Option E)) (atEnd : Bool) (c fl l) :
+    (irun (failCall (Recovery.LexRecovery.abandon (H := F)
+    (m := StateM σ) Recovery.failFast)
+      failure atEnd : InnerM F (StateM σ) (LexError (Option E)))
       c fl l).1.1.1.cause = failure.cause := by
   unfold failCall
   rw [irun_getThe_bind]
@@ -318,13 +324,13 @@ theorem failCall_cause (failure : Failure (Option consumer.Error)) (atEnd : Bool
   · rfl
   · rfl
 
-theorem irun_pure {α : Type} (a : α) (c : LexerCore) (fl : Flagged consumer) (l) :
-    irun (Pure.pure a : InnerM (Flagged consumer) AnswerM α) c fl l = (((a, c), fl), l) := rfl
+theorem irun_pure {α : Type} (a : α) (c : LexerCore) (fl : F) (l) :
+    irun (Pure.pure a : InnerM F (StateM σ) α) c fl l = (((a, c), fl), l) := rfl
 
 /-- An inert action, then the rest. -/
-theorem irun_inert_bind {α β : Type} {x : InnerM (Flagged consumer) AnswerM α}
-    (hx : Inert x) (k : α → InnerM (Flagged consumer) AnswerM β) (c fl l)
-    (P : ((β × LexerCore) × Flagged consumer) × List BSmtLibSpec.Lexer.Handed → Prop)
+theorem irun_inert_bind {α β : Type} {x : InnerM F (StateM σ) α}
+    (hx : Inert x) (k : α → InnerM F (StateM σ) β) (c fl l)
+    (P : ((β × LexerCore) × F) × σ → Prop)
     (hk : ∀ a c', c'.version = c.version → P (irun (k a) c' fl l)) :
     P (irun (x >>= k) c fl l) := by
   rw [irun_bind]
@@ -333,9 +339,9 @@ theorem irun_inert_bind {α β : Type} {x : InnerM (Flagged consumer) AnswerM α
   exact hk _ _ h₃
 
 theorem lexFitting_flag (slice : ByteSlice) (h : slice.stop < USize.size) (c : LexerCore)
-    (fl : Flagged consumer) (l) (he : fl.errored = false) (hv : c.version = fl.version) :
-    StepOk LexError.cause fl.spoiled (irun (lexFitting (Recovery.LexRecovery.abandon
-      (H := Flagged consumer) (m := AnswerM) Recovery.failFast) slice h) c fl l) := by
+    (fl : F) (l) (he : Watched.errored fl = false) (hv : c.version = Watched.version fl) :
+    StepOk LexError.cause (Watched.spoiled fl) (irun (lexFitting (Recovery.LexRecovery.abandon
+      (H := F) (m := StateM σ) Recovery.failFast) slice h) c fl l) := by
   unfold lexFitting
   rw [irun_bind]
   obtain ⟨h₁, h₂, h₃⟩ := lexSliceInner_flag (CharClass.Input.ofSlice slice h) c fl l he hv
@@ -350,7 +356,7 @@ theorem lexFitting_flag (slice : ByteSlice) (h : slice.stop < USize.size) (c : L
     rw [irun_bind]
     obtain ⟨e₁, e₂, e₃⟩ := failCall_inert failure false c' fl' l'
     have e₄ := failCall_cause failure false c' fl' l'
-    generalize irun (failCall (Recovery.LexRecovery.abandon (H := Flagged consumer) (m := AnswerM)
+    generalize irun (failCall (Recovery.LexRecovery.abandon (H := F) (m := StateM σ)
       Recovery.failFast) failure false) c' fl' l' = q at e₁ e₂ e₃ e₄
     obtain ⟨⟨⟨err, c''⟩, fl''⟩, l''⟩ := q
     dsimp only at e₁ e₂ e₃ e₄
@@ -359,10 +365,10 @@ theorem lexFitting_flag (slice : ByteSlice) (h : slice.stop < USize.size) (c : L
     exact ⟨fun h => e₃.trans (h₁ h), fun h hl => by rw [e₄]; exact h₂ h hl, h₃⟩
 
 theorem lexSliceFitting_flag (slice : ByteSlice) (h : slice.stop < USize.size) (c : LexerCore)
-    (fl : Flagged consumer) (l) (he : fl.errored = false) (hv : c.version = fl.version) :
-    StepOk LexError.cause fl.spoiled (irun (lexSliceFitting
-      (Recovery.LexRecovery.abandon (H := Flagged consumer) (m := AnswerM) Recovery.failFast)
-      (Recovery.LexRecovery.recover (H := Flagged consumer) (m := AnswerM) Recovery.failFast) slice
+    (fl : F) (l) (he : Watched.errored fl = false) (hv : c.version = Watched.version fl) :
+    StepOk LexError.cause (Watched.spoiled fl) (irun (lexSliceFitting
+      (Recovery.LexRecovery.abandon (H := F) (m := StateM σ) Recovery.failFast)
+      (Recovery.LexRecovery.recover (H := F) (m := StateM σ) Recovery.failFast) slice
           h)
       c fl l) := by
   unfold lexSliceFitting
@@ -375,7 +381,8 @@ theorem lexSliceFitting_flag (slice : ByteSlice) (h : slice.stop < USize.size) (
     · split
       · rw [irun_pure]
         exact ⟨fun _ => hv, fun h => absurd (h.symm.trans he) (by decide), rfl⟩
-      · refine irun_inert_bind (skipSlice_inert _ _) _ c fl l (StepOk LexError.cause fl.spoiled)
+      · refine irun_inert_bind (skipSlice_inert _ _) _ c fl l
+          (StepOk LexError.cause (Watched.spoiled fl))
           fun skipped c' hc => ?_
         split
         · rw [irun_bind, irun_modifyThe]
@@ -387,36 +394,37 @@ theorem lexSliceFitting_flag (slice : ByteSlice) (h : slice.stop < USize.size) (
     · exact lexFitting_flag _ _ _ fl l he hv
 
 /-- A step of a call, then the rest. -/
-theorem irun_bind_step {α β γ : Type} {cause : α → LexErrorCause (Option consumer.Error)}
-    {x : InnerM (Flagged consumer) AnswerM (Except α β)}
-    {k : Except α β → InnerM (Flagged consumer) AnswerM γ} {c : LexerCore}
-    {fl : Flagged consumer} {l} {spoiled : Bool}
-    (P : ((γ × LexerCore) × Flagged consumer) × List BSmtLibSpec.Lexer.Handed → Prop)
+theorem irun_bind_step {α β γ : Type} {cause : α → LexErrorCause (Option E)}
+    {x : InnerM F (StateM σ) (Except α β)}
+    {k : Except α β → InnerM F (StateM σ) γ} {c : LexerCore}
+    {fl : F} {l} {spoiled : Bool}
+    (P : ((γ × LexerCore) × F) × σ → Prop)
     (hx : StepOk cause spoiled (irun x c fl l))
-    (hk : ∀ res c' (fl' : Flagged consumer) l', (fl'.errored = false → c'.version = fl'.version) →
-      (fl'.errored = true → FailsBy cause fl'.layout res) → fl'.spoiled = spoiled →
+    (hk : ∀ res c' (fl' : F) l', (Watched.errored fl' = false → c'.version = Watched.version fl') →
+      (Watched.errored fl' = true → FailsBy cause (Watched.layout fl') res) →
+      Watched.spoiled fl' = spoiled →
       P (irun (k res) c' fl' l')) :
     P (irun (x >>= k) c fl l) := by
   rw [irun_bind]
   exact hk _ _ _ _ hx.1 hx.2.1 hx.2.2
 
 theorem lexChunks_flag (slice : ByteSlice) (position : Nat)
-    (held : Option (Span.Located consumer.Result)) (c : LexerCore) (fl : Flagged consumer) (l)
-    (he : fl.errored = false) (hv : c.version = fl.version) :
-    StepOk LexError.cause fl.spoiled (irun (lexChunks
-      (Recovery.LexRecovery.abandon (H := Flagged consumer) (m := AnswerM) Recovery.failFast)
-      (Recovery.LexRecovery.recover (H := Flagged consumer) (m := AnswerM) Recovery.failFast) slice
+    (held : Option (Span.Located R)) (c : LexerCore) (fl : F) (l)
+    (he : Watched.errored fl = false) (hv : c.version = Watched.version fl) :
+    StepOk LexError.cause (Watched.spoiled fl) (irun (lexChunks
+      (Recovery.LexRecovery.abandon (H := F) (m := StateM σ) Recovery.failFast)
+      (Recovery.LexRecovery.recover (H := F) (m := StateM σ) Recovery.failFast) slice
       position held) c fl l) := by
   rw [lexChunks.eq_def]
   split
   · rename_i hlt
     dsimp only
-    refine irun_bind_step (StepOk LexError.cause fl.spoiled)
+    refine irun_bind_step (StepOk LexError.cause (Watched.spoiled fl))
       (lexSliceFitting_flag _ _ c fl l he hv) ?_
     intro res c' fl' l' h₁ h₂ h₃
     cases res with
     | ok chunkHeld =>
-      cases hfl : fl'.errored with
+      cases hfl : Watched.errored fl' with
       | true => exact absurd (h₂ hfl) id
       | false =>
         rw [← h₃]
@@ -433,11 +441,11 @@ decreasing_by simp only [CHUNK_SIZE] at *; omega
 agreeing: if nothing went wrong after, the versions agree; if the consumer answered an error, the
 call fails, with the error `none` if the consumer was handed whitespace or a comment there; the
 consumer is not spoiled by it. -/
-theorem lexSliceStep_flag (slice : ByteSlice) (c : LexerCore) (fl : Flagged consumer) (l)
-    (he : fl.errored = false) (hv : c.version = fl.version) :
-    StepOk LexError.cause fl.spoiled (irun (lexSliceStep
-      (Recovery.LexRecovery.abandon (H := Flagged consumer) (m := AnswerM) Recovery.failFast)
-      (Recovery.LexRecovery.recover (H := Flagged consumer) (m := AnswerM) Recovery.failFast) slice)
+theorem lexSliceStep_flag (slice : ByteSlice) (c : LexerCore) (fl : F) (l)
+    (he : Watched.errored fl = false) (hv : c.version = Watched.version fl) :
+    StepOk LexError.cause (Watched.spoiled fl) (irun (lexSliceStep
+      (Recovery.LexRecovery.abandon (H := F) (m := StateM σ) Recovery.failFast)
+      (Recovery.LexRecovery.recover (H := F) (m := StateM σ) Recovery.failFast) slice)
       c fl l) := by
   unfold lexSliceStep
   split
@@ -446,8 +454,9 @@ theorem lexSliceStep_flag (slice : ByteSlice) (c : LexerCore) (fl : Flagged cons
 
 /-! ## At the end of the input -/
 
-theorem frun_tryCatch {floor : Option Nat} {low : Nat} {α : Type} (x : FM consumer floor low α)
-    (h : Interrupted consumer.Result (Option consumer.Error) floor → FM consumer floor low α)
+omit [∀ b, Token.ConsumeFrom F (Token.BatchCursor b) (StateM σ)] [Watched F σ R E] in
+theorem frun_tryCatch {floor : Option Nat} {low : Nat} {α : Type} (x : FM F σ floor low α)
+    (h : Interrupted R (Option E) floor → FM F σ floor low α)
     (s fl l) :
     frun (tryCatch x h) s fl l =
       match frun x s fl l with
@@ -461,8 +470,8 @@ theorem frun_tryCatch {floor : Option Nat} {low : Nat} {α : Type} (x : FM consu
 
 /-- A failing action with a handler that throws the consumer's errors again. -/
 theorem _root_.BSmtLib.Facts.Proofs.Reader.Param.Unary.UL.tryCatch {floor : Option Nat} {low : Nat}
-    {α : Type} {x : FM consumer floor low α}
-    {h : Interrupted consumer.Result (Option consumer.Error) floor → FM consumer floor low α}
+    {α : Type} {x : FM F σ floor low α}
+    {h : Interrupted R (Option E) floor → FM F σ floor low α}
     (hx : UL x) (hh : ∀ i, UL (h i))
     (hrethrow : ∀ i e, i.result = .error (.consumer e) → h i = MonadExcept.throw i) :
     UL (tryCatch x h) := by
@@ -475,7 +484,7 @@ theorem _root_.BSmtLib.Facts.Proofs.Reader.Param.Unary.UL.tryCatch {floor : Opti
   | ok a => exact ⟨h₁, h₂, h₃⟩
   | error i =>
     dsimp only
-    cases hfl : fl'.errored with
+    cases hfl : Watched.errored fl' with
     | false =>
       obtain ⟨k₁, k₂, k₃⟩ := hh i s' fl' l' hfl (h₁ hfl)
       exact ⟨k₁, k₂, k₃.trans h₃⟩
@@ -489,18 +498,19 @@ theorem _root_.BSmtLib.Facts.Proofs.Reader.Param.Unary.UL.tryCatch {floor : Opti
 /-- After the end of the input: once the consumer answered an error, the call failed, by the
 consumer's error `none` if the consumer was handed whitespace or a comment there; and whether the
 consumer was spoiled is `spoiled`. -/
-def EofOk {α β : Type} (cause : α → LexErrorCause (Option consumer.Error)) (spoiled : Bool)
-    (r : ((Except α β × LexerCore) × Flagged consumer) × List BSmtLibSpec.Lexer.Handed) : Prop :=
-  (r.1.2.errored = true → FailsBy cause r.1.2.layout r.1.1.1) ∧ r.1.2.spoiled = spoiled
+def EofOk {α β : Type} (cause : α → LexErrorCause (Option E)) (spoiled : Bool)
+    (r : ((Except α β × LexerCore) × F) × σ) : Prop :=
+  (Watched.errored r.1.2 = true → FailsBy cause (Watched.layout r.1.2) r.1.1.1) ∧
+    Watched.spoiled r.1.2 = spoiled
 
-theorem lexEofInner_flag (c : LexerCore) (fl : Flagged consumer) (l) (he : fl.errored = false)
-    (hv : c.version = fl.version) :
-    EofOk Failure.cause fl.spoiled (irun (lexEofInner (H := Flagged consumer) (m := AnswerM)
-      (R := consumer.Result) (E := Option consumer.Error)) c fl l) := by
-  show EofOk Failure.cause fl.spoiled (crun (lexEofInner c) fl l)
+theorem lexEofInner_flag (c : LexerCore) (fl : F) (l) (he : Watched.errored fl = false)
+    (hv : c.version = Watched.version fl) :
+    EofOk Failure.cause (Watched.spoiled fl) (irun (lexEofInner (H := F) (m := StateM σ)
+      (R := R) (E := Option E)) c fl l) := by
+  show EofOk Failure.cause (Watched.spoiled fl) (crun (lexEofInner c) fl l)
   unfold lexEofInner
   dsimp only
-  refine crun_bind_UL (EofOk Failure.cause fl.spoiled) ?_ he hv ?_
+  refine crun_bind_UL (EofOk Failure.cause (Watched.spoiled fl)) ?_ he hv ?_
   · refine UL.bind (UL.tryCatch ?_ ?_ ?_) fun _ => ?_
     · usim
     · intro i
@@ -528,9 +538,9 @@ theorem lexEofInner_flag (c : LexerCore) (fl : Flagged consumer) (l) (he : fl.er
       obtain ⟨⟨i, hi, -⟩, -⟩ := h₂ hfl
       cases hi
 
-theorem executeStep_flag (step : InnerM (Flagged consumer) AnswerM
-      (Except (Failure (Option consumer.Error)) (ControlFlow consumer.Result)))
-    (c : LexerCore) (fl : Flagged consumer) (l) {spoiled : Bool}
+theorem executeStep_flag (step : InnerM F (StateM σ)
+      (Except (Failure (Option E)) (ControlFlow R)))
+    (c : LexerCore) (fl : F) (l) {spoiled : Bool}
     (hstep : EofOk Failure.cause spoiled (irun step c fl l)) :
     EofOk Failure.cause spoiled (irun (executeStep step) c fl l) := by
   unfold executeStep
@@ -546,16 +556,16 @@ theorem executeStep_flag (step : InnerM (Flagged consumer) AnswerM
 failing and without touching the consumer, a failure gives an error of the same cause without
 touching it. -/
 theorem eofBind_flag
-    (k : Except (Failure (Option consumer.Error)) (ControlFlow (Span.Located consumer.Result)) →
-      InnerM (Flagged consumer) AnswerM
-        (Except (LexError (Option consumer.Error)) (ControlFlow (Span.Located consumer.Result))))
+    (k : Except (Failure (Option E)) (ControlFlow (Span.Located R)) →
+      InnerM F (StateM σ)
+        (Except (LexError (Option E)) (ControlFlow (Span.Located R))))
     (hok : ∀ flow c fl l, (irun (k (.ok flow)) c fl l).1.2 = fl ∧
       Flagged.isError (irun (k (.ok flow)) c fl l).1.1.1 = false)
     (herr : ∀ f c fl l, (irun (k (.error f)) c fl l).1.2 = fl ∧
       ∃ err, (irun (k (.error f)) c fl l).1.1.1 = .error err ∧ err.cause = f.cause)
-    (c : LexerCore) (fl : Flagged consumer) (l) (he : fl.errored = false)
-    (hv : c.version = fl.version) :
-    EofOk LexError.cause fl.spoiled (irun (executeStep lexEofInner >>= k) c fl l) := by
+    (c : LexerCore) (fl : F) (l) (he : Watched.errored fl = false)
+    (hv : c.version = Watched.version fl) :
+    EofOk LexError.cause (Watched.spoiled fl) (irun (executeStep lexEofInner >>= k) c fl l) := by
   rw [irun_bind]
   have h₁ := executeStep_flag lexEofInner c fl l (lexEofInner_flag c fl l he hv)
   generalize irun (executeStep lexEofInner) c fl l = r at h₁ ⊢
@@ -579,20 +589,20 @@ theorem eofBind_flag
       exact h₁.2
 
 theorem irun_recover_bind {β : Type} (location : Span.Location)
-    (k : PUnit → InnerM (Flagged consumer) AnswerM β) (c : LexerCore) (fl : Flagged consumer) (l) :
-    irun (liftM (Recovery.LexRecovery.recover (H := Flagged consumer)
-        (m := AnswerM) Recovery.failFast
+    (k : PUnit → InnerM F (StateM σ) β) (c : LexerCore) (fl : F) (l) :
+    irun (liftM (Recovery.LexRecovery.recover (H := F)
+        (m := StateM σ) Recovery.failFast
       location) >>= k) c fl l = irun (k ()) c fl l := rfl
 
 /-- At the end of the input, the step of the public call, run while nothing went wrong and with
 the versions agreeing: if the consumer answered an error, the call fails, with the error `none` if
 the consumer was handed whitespace or a comment there; the consumer is not spoiled by it. -/
-theorem lexEofStep_flag (c : LexerCore) (fl : Flagged consumer) (l) (he : fl.errored = false)
-    (hv : c.version = fl.version) :
-    EofOk LexError.cause fl.spoiled (irun (lexEofStep (R := consumer.Result)
-      (E := Option consumer.Error)
-      (Recovery.LexRecovery.abandon (H := Flagged consumer) (m := AnswerM) Recovery.failFast)
-      (Recovery.LexRecovery.recover (H := Flagged consumer) (m := AnswerM) Recovery.failFast)) c fl
+theorem lexEofStep_flag (c : LexerCore) (fl : F) (l) (he : Watched.errored fl = false)
+    (hv : c.version = Watched.version fl) :
+    EofOk LexError.cause (Watched.spoiled fl) (irun (lexEofStep (R := R)
+      (E := Option E)
+      (Recovery.LexRecovery.abandon (H := F) (m := StateM σ) Recovery.failFast)
+      (Recovery.LexRecovery.recover (H := F) (m := StateM σ) Recovery.failFast)) c fl
           l) := by
   unfold lexEofStep
   rw [irun_getThe_bind]

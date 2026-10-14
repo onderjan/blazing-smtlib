@@ -20,6 +20,12 @@ what the root theorems of `BSmtLib.Facts.Lexer` are about, as the library is wha
 about: a theorem says that its subject meets the specification, so its subject need not be
 trusted.
 
+`#trusts` is the same walk for theorems stated with the library's public API rather than the
+specification (`BSmtLib.Facts.PublicApi`): for each theorem it lists the small definitions its
+statement reaches, and every constant of the specification, of the library's internals, of the
+lexers of the chain or of another module that it names, so that a statement that rests on more
+than its small definitions and the public API shows so in the pinned list.
+
 This module is a tool of the proof libraries, not a part of any of them, and not trusted: it only
 lists, and `#guard_msgs` around it pins the list.
 -/
@@ -158,5 +164,98 @@ def elabAdapters : CommandElab := fun stx => do
     unless allowed.any (·.isPrefixOf adapter.module) do
       logError m!"the adapter {adapter.name}, reached from {adapter.reachedFrom}, is declared in \
         {adapter.module}, outside the modules of adapters {allowed.toList}"
+
+/-! ## What a statement rests on beside the public API -/
+
+/-- Whether a name of the library is one of its internals. -/
+def internal (name : Name) : Bool :=
+  name.components.contains `Internal || isPrivateName name
+
+/-- What a theorem's statement rests on, by where it is declared. -/
+structure Reached where
+  /-- The small definitions: the adapters of the modules given to `#trusts`. -/
+  small : Array Name := #[]
+  /-- The constants of the specification. -/
+  spec : Array Name := #[]
+  /-- The library's internals. -/
+  internals : Array Name := #[]
+  /-- The constants of the lexers of the chain. -/
+  chain : Array Name := #[]
+  /-- The constants of other modules. -/
+  other : Array Name := #[]
+
+/-- What the constants `roots` rest on, the small definitions being those declared in the
+modules `small` and below them. -/
+def reach (env : Environment) (small : Array Name) (roots : Array Name) : Reached := Id.run do
+  let mut seen : NameSet := {}
+  let mut todo := roots
+  let mut found : Reached := {}
+  while 0 < todo.size do
+    let name := todo.back!
+    todo := todo.pop
+    if seen.contains name then continue
+    seen := seen.insert name
+    let some info := env.find? name | continue
+    if info matches .thmInfo _ then continue
+    let module := moduleOf env name
+    match sideOf module with
+    | .lean => pure ()
+    | .spec =>
+      if declared env name then found := { found with spec := found.spec.push name }
+    | .library =>
+      if internal name then found := { found with internals := found.internals.push name }
+    | .chain =>
+      if declared env name then found := { found with chain := found.chain.push name }
+    | .other =>
+      if small.any (·.isPrefixOf module) then
+        if declared env name then found := { found with small := found.small.push name }
+        todo := todo ++ dependencies env info
+      else if declared env name then found := { found with other := found.other.push name }
+  return found
+
+/-- The line of a list of names, `none` if there are none; each name without the longest of the
+prefixes `strip` that it has. -/
+def line (label : String) (strip : Array Name) (names : Array Name) : Option String :=
+  if names.isEmpty then none
+  else
+    let shown := (sortNames names).toList.map fun name =>
+      let prefix_ := strip.foldl (init := Name.anonymous) fun best p =>
+        if p.isPrefixOf name && best.getNumParts < p.getNumParts then p else best
+      (name.replacePrefix prefix_ .anonymous).toString
+    -- the lines wrapped at 100 columns
+    let (lines, last) := shown.foldl (init := (#[], s!"  {label}:")) fun (lines, current) name =>
+      if current.length + name.length + 2 ≤ 100 then
+        (lines, if current.endsWith ":" then current ++ " " ++ name else current ++ ", " ++ name)
+      else (lines.push (current ++ ","), "    " ++ name)
+    some ("\n".intercalate (lines.push last).toList)
+
+/--
+`#trusts within M₁ M₂ …` lists, for each theorem declared in the current module, in the order of
+their names, what its statement rests on beside Lean and the library's public API: the small
+definitions it reaches, those declared in the modules `M₁ M₂ …` and below them, shown without
+their module's path, whose types and bodies it follows as `#adapters` follows adapters; and the
+constants of the specification, of the library's internals (a name with a component `Internal`,
+or a private name), of the lexers of the chain and of other modules that its statement or a
+small definition names.
+-/
+syntax (name := trustsCmd) "#trusts" " within" (ppSpace ident)+ : command
+
+@[command_elab trustsCmd]
+def elabTrusts : CommandElab := fun stx => do
+  let small := stx[2].getArgs.map (·.getId)
+  let env ← getEnv
+  let theorems := sortNames (localTheorems env)
+  let mut lines : Array String := #[]
+  for thm in theorems do
+    let some info := env.find? thm | continue
+    let reached := reach env small info.type.getUsedConstants
+    lines := lines.push s!"{thm}:"
+    let parts := [line "small" small reached.small, line "spec" #[] reached.spec,
+      line "internal" #[] reached.internals, line "chain" #[] reached.chain,
+      line "other" #[] reached.other]
+    let parts := parts.filterMap id
+    if parts.isEmpty then lines := lines.push "  public API only"
+    lines := lines ++ parts.toArray
+  logInfo (String.intercalate "\n" lines.toList)
 
 end BSmtLib.Facts.Trusted

@@ -17,7 +17,8 @@ name = "BSmtLibSpecFacts"
 roots = ["BSmtLibSpec.Facts"]
 
 # what the library satisfies with respect to the specification: the lexers, the parsers and the
-# readers; the chain of lexers from the specification to the library's lexer is built with it
+# readers, and what its public API satisfies, stated without the specification; the chain of
+# lexers from the specification to the library's lexer is built with it
 [[lean_lib]]
 name = "BSmtLibFacts"
 roots = ["BSmtLib.Facts", "BSmtLib.Facts.Names"]

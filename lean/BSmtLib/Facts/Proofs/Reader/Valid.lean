@@ -241,9 +241,9 @@ theorem walk_init (hscript : Script v₀ allCmds) {done : List Tree.Command}
     {handed : List Handed} (hhs : handed.map (rcv ∘ itemOf) = command.tokens.map .token)
     (htypes : ∀ h ∈ handed, h.type ≠ .endOfFile) {version : Lexicon.Version}
     {ready : List Handed} {failed : Bool} {session : Session Unit ScriptError}
-    (hruns : Runs feed (scriptConsumer v₀) v₀ input true version (handed ++ ready) failed pre
+    (hruns : Runs feed (scriptConsumer v₀) v₀ input ended version (handed ++ ready) failed pre
       session) :
-    ∃ (hne' : handed ≠ []), Runs feed (scriptConsumer v₀) v₀ input true version
+    ∃ (hne' : handed ≠ []), Runs feed (scriptConsumer v₀) v₀ input ended version
       (handed.getLast hne' :: ready) failed (pre ++ handed.dropLast) session := by
   have hlhs : handed.length = command.tokens.length := by simpa using congrArg List.length hhs
   have hpos := command_tokens_pos command

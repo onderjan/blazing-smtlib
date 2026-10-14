@@ -10,7 +10,9 @@ A file is read in readings: from where a version is in force, its commands up to
 version declaration or `exit`, or up to the end of the input (`Group`). What a lexer that is
 `BSmtLibSpec.Lexer.Correct` hands over, read from the start of a reading in its version
 (`BSmtLibSpec.Lexer.segment`), starts with the tokens of the reading's commands, and if the reading
-runs to the end of the input, is those tokens and the end of the input (`segment_group`). A command
+runs to the end of the input, is those tokens and the end of the input (`segment_group`). Before
+the end of the input, it starts with the same tokens, and is only those if the reading runs to the
+end (`segment_group_open`): it never hands over the end of the input before it. A command
 ends with a `)`, which needs no delimiter, so its tokens are handed over whole, whatever follows.
 -/
 
@@ -275,5 +277,97 @@ theorem segment_group (h : Correct feed) {version : Lexicon.Version} {input : Ch
     have := handed_after (version := version) (input.take offset) (input.drop offset) start token
       ⟨more, hsplit.symm⟩ (by have := tokenizationFrom_within ht₀ token htoken; omega)
     rw [this, hbefore, ← hinput]
+
+/-! ## Before the end of the input -/
+
+/-- The tokens of a reading are a tokenisation of a start of the rest, which is empty if there
+are none and otherwise ends with a `)` at its end. -/
+theorem group_tokens_open {version : Lexicon.Version} {offset : Nat} {chars : Chars}
+    {commands : List Tree.Command} {tokens : List Lexicon.Token} {eof : Bool}
+    (h : Group version offset chars commands tokens eof) :
+    ∃ start more, chars = start ++ more ∧ Tokenization.From version offset start tokens ∧
+      ((tokens = [] ∧ start = []) ∨ EndsWithClose tokens (offset + start.length)) := by
+  induction h with
+  | done _ =>
+    exact ⟨[], _, rfl,
+      .done ⟨[], [], by simp, Facts.Proofs.Lexicon.Lemmas.whitespace_nil, Or.inl rfl⟩,
+      .inl ⟨rfl, rfl⟩⟩
+  | stop hte hic _ => exact ⟨_, _, rfl, hte.1, .inr (close_of_command hte hic)⟩
+  | switch hte hic _ _ _ => exact ⟨_, _, rfl, hte.1, .inr (close_of_command hte hic)⟩
+  | keep hte hic _ _ _ ih =>
+    have hc := close_of_command hte hic
+    obtain ⟨start, more, rfl, ht, hc'⟩ := ih
+    refine ⟨_ ++ start, more, by simp, tokenizationFrom_close_append hte.1 hc ht, .inr ?_⟩
+    rcases hc' with ⟨rfl, rfl⟩ | hc'
+    · simpa using hc
+    · rw [List.length_append, ← Nat.add_assoc]
+      exact endsWithClose_append hc'
+
+/-- Before the end of the input, a correct lexer hands over no end of file. -/
+theorem handed_open_not_endOfFile (h : Correct feed) (version : Lexicon.Version)
+    (slices : List Chars) : ∀ x ∈ (feed version slices false).handed, x.type ≠ .endOfFile := by
+  obtain ⟨s, hs⟩ := exists_longestViableStart version slices.flatten
+  obtain ⟨tokens, -, e⟩ := handsOverMaximal_of_correct h
+    (Facts.Proofs.Lexer.StreamingFacts.not_complete_false version slices.flatten) s hs
+  intro x hx
+  rw [e] at hx
+  obtain ⟨⟨category, offset, text⟩, -, rfl⟩ := List.mem_map.mp hx
+  cases category <;> simp [Lexicon.Token.handed, Category.type]
+
+/-- Before the end of the input, a correct lexer read from the start of a reading, in its
+version, hands over the reading's tokens first; if the reading runs to the end of the input,
+it hands over only those. -/
+theorem segment_group_open (h : Correct feed) {version : Lexicon.Version} {input : Chars}
+    {offset : Nat} {commands : List Tree.Command} {tokens : List Lexicon.Token} {eof : Bool}
+    (hg : Group version offset (input.drop offset) commands tokens eof)
+    (hoff : offset ≤ input.length) :
+    ∃ tail, (segment feed version input false offset).handed =
+        tokens.map (·.handed version input) ++ tail ∧
+      (eof = true → tail = []) := by
+  have hbefore : (input.take offset).length = offset := by simp; omega
+  have hinput : input = input.take offset ++ input.drop offset := (List.take_append_drop _ _).symm
+  have hfirst : tokens.map (·.handed version input) <+:
+      (segment feed version input false offset).handed := by
+    obtain ⟨start, more, hsplit, ht, hc⟩ := group_tokens_open hg
+    rcases hc with ⟨rfl, -⟩ | hc
+    · exact List.nil_prefix
+    have ht' : Tokenization.From version (0 + offset) start tokens := by simpa using ht
+    obtain ⟨t₀, rfl, ht₀⟩ := tokenizationFrom_moveBy_inv ht'
+    have hc₀ : EndsWithClose t₀ start.length := endsWithClose_moveBy (by simpa using hc)
+    have hpre : (feed version [start] false).handed <+:
+        (feed version [start ++ more] false).handed := by
+      have h₁ := handed_prefix_of_correct h version [start] [more]
+      rw [handed_flatten h version ([start] ++ [more]) false] at h₁
+      simpa using h₁
+    rw [handed_close h ht₀ hc₀, ← hsplit] at hpre
+    obtain ⟨tail₀, htail⟩ := hpre
+    refine ⟨tail₀.map (Handed.after (input.take offset)), ?_⟩
+    simp only [segment, ← htail, List.map_append, List.map_map]
+    congr 1
+    refine List.map_congr_left fun token htoken => ?_
+    simp only [Function.comp_apply]
+    have := handed_after (version := version) (input.take offset) (input.drop offset) start token
+      ⟨more, hsplit.symm⟩ (by have := tokenizationFrom_within ht₀ token htoken; omega)
+    rw [this, hbefore, ← hinput]
+  obtain ⟨tail, htail⟩ := hfirst
+  refine ⟨tail, htail.symm, fun he => ?_⟩
+  subst he
+  obtain ⟨tail', hseg, ht'⟩ := segment_group h hg hoff
+  rw [ht' rfl] at hseg
+  have hpre : (segment feed version input false offset).handed <+:
+      (segment feed version input true offset).handed :=
+    (handed_prefix_end_of_correct h version [input.drop offset]).map _
+  rw [← htail, hseg, List.prefix_append_right_inj] at hpre
+  obtain ⟨rest, hrest⟩ := hpre
+  rcases List.append_eq_singleton_iff.mp hrest with ⟨rfl, -⟩ | ⟨rfl, -⟩
+  · rfl
+  · exfalso
+    have hmem : endOfFile input ∈ (segment feed version input false offset).handed := by
+      rw [← htail]; simp
+    simp only [segment] at hmem
+    obtain ⟨y, hy, hye⟩ := List.mem_map.mp hmem
+    have e := congrArg Handed.type hye
+    simp only [Handed.after, endOfFile] at e
+    exact handed_open_not_endOfFile h version _ y hy e
 
 end BSmtLib.Facts.Proofs.Reader.Feed
