@@ -8,6 +8,6 @@
    "inherited": false,
    "dir": "../../lean",
    "configFile": "lakefile.toml"}],
- "name": "«lean-lex-driver»",
+ "name": "«lean-driver»",
  "lakeDir": ".lake",
  "fixedToolchain": false}

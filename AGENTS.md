@@ -88,7 +88,7 @@ are how agents follow it.
   approves another.
 - The toolchain is the Lean release pinned in `lean/lean-toolchain`. Do not
   change it, not even to a newer release, unless the maintainer asks.
-  `tools/lean-lex-driver/lean-toolchain` is a copy of it, since elan looks for
+  `tools/lean-driver/lean-toolchain` is a copy of it, since elan looks for
   the toolchain file only in a package's directory and the directories above
   it; the two stay identical.
 - There is one set of tests, the Rust one. The tests are not translated to
