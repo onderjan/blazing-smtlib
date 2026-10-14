@@ -1,5 +1,10 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Pure
-import BSmtLib.Facts.Proofs.Lexer.Consumers.Pure
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Pure
+public import BSmtLib.Facts.Proofs.Lexer.Consumers.Pure
+import all BSmtLib.Lexer.Internal.VNaive
+
+@[expose] public section
 
 /-!
 # The naive lexer's pure run over a slice from an index, for every consumer

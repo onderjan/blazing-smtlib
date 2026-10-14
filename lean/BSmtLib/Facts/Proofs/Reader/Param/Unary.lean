@@ -1,4 +1,8 @@
-import BSmtLib.Facts.Proofs.Reader.Param.Flagged
+module
+
+public import BSmtLib.Facts.Proofs.Reader.Param.Flagged
+
+@[expose] public section
 
 /-!
 # What the lexer does after its consumer fails
@@ -23,7 +27,7 @@ only where the lexer calls it, in `flushCursor`, through `Watched.call`.
 
 namespace BSmtLib.Facts.Proofs.Reader.Param.Unary
 
-open BSmtLib.Lexer BSmtLib.Lexer.Internal
+open BSmtLib.Lexer
 open BSmtLib.Facts.Lexer.Adapters
 
 /-- A consumer in `StateM σ` with a record of what went wrong: whether it has answered an error
@@ -166,12 +170,12 @@ end
 
 open Lean Meta Elab Tactic in
 /-- The goal's computation, the last argument. -/
-def usimSide (target : Expr) : Option Expr :=
+meta def usimSide (target : Expr) : Option Expr :=
   target.getAppArgs.back?
 
 open Lean Meta Elab Tactic in
 /-- The goal with its computation replaced. -/
-def usimWith (target f : Expr) : Expr :=
+meta def usimWith (target f : Expr) : Expr :=
   let args := target.getAppArgs
   mkAppN target.getAppFn (args.set! (args.size - 1) f)
 

@@ -1,4 +1,8 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Calls
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Calls
+
+@[expose] public section
 
 /-!
 # The naive lexer and the Rust port with every consumer

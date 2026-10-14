@@ -1,6 +1,10 @@
-import BSmtLib.Facts.Proofs.Reader.Requests
-import BSmtLib.Facts.Proofs.Reader.Feed
-import BSmtLib.Facts.Proofs.Parser.Rejection.Discard
+module
+
+public import BSmtLib.Facts.Proofs.Reader.Requests
+public import BSmtLib.Facts.Proofs.Reader.Feed
+public import BSmtLib.Facts.Proofs.Parser.Rejection.Discard
+
+@[expose] public section
 
 /-!
 # The script consumer at a token, and what a correct lexer hands over

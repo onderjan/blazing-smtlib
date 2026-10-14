@@ -1,4 +1,8 @@
-import BSmtLib.Facts.Proofs.Lexer.Consumers.Layout
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.Consumers.Layout
+
+@[expose] public section
 
 /-!
 # The run from a boundary

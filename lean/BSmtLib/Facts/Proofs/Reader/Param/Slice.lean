@@ -1,4 +1,9 @@
-import BSmtLib.Facts.Proofs.Reader.Param.Steps
+module
+
+public import BSmtLib.Facts.Proofs.Reader.Param.Steps
+import all BSmtLib.Lexer
+
+@[expose] public section
 
 /-!
 # The loop over a slice on two consumers
@@ -11,7 +16,7 @@ its relation of errors.
 
 namespace BSmtLib.Facts.Proofs.Reader.Param.Slice
 
-open BSmtLib.Lexer BSmtLib.Lexer.Internal
+open BSmtLib.Lexer
 open BSmtLib.Facts.Proofs.Reader.Param.Basic BSmtLib.Facts.Proofs.Reader.Param.HandOver
 open BSmtLib.Facts.Proofs.Reader.Param.Steps
 
@@ -26,7 +31,7 @@ abbrev FlowLRel (L : Link H₁ m₁ R₁ E₁ H₂ m₂ R₂ E₂) :
 
 /-- The same exit of the loop over a slice, with related results and failures. -/
 def ExitRel (L : Link H₁ m₁ R₁ E₁ H₂ m₂ R₂ E₂) {floor : Option Nat} :
-    SliceExit R₁ E₁ floor → SliceExit R₂ E₂ floor → Prop
+    Internal.SliceExit R₁ E₁ floor → Internal.SliceExit R₂ E₂ floor → Prop
   | .done r, .done r' => FlowLRel L r r'
   | .stopped s l _, .stopped s' l' _ => StopRel L.rr s s' ∧ l = l'
   | _, _ => False
@@ -53,10 +58,11 @@ theorem lexSliceRun_sim_lt (hc : Consumers L) {floor : Option Nat} (input : Char
       (fnResult₂ : Except (Failure E₂) (ControlFlow R₂)) (_ : FlowLRel L fnResult₁ fnResult₂)
       (core : {c : LexerCore // c.Bound floor 0}), runMeasure input position fnResult₁ < n →
       L.rc.rel (fun a b => ExitRel L a.1 b.1 ∧ a.2 = b.2)
-        (lexSliceRun input position fnResult₁ core) (lexSliceRun input position fnResult₂ core)
+        (Internal.lexSliceRun input position fnResult₁ core)
+            (Internal.lexSliceRun input position fnResult₂ core)
   | 0, _, _, _, _, _, hn => absurd hn (Nat.not_lt_zero _)
   | n + 1, position, fnResult₁, fnResult₂, hf, core, hn => by
-    rw [lexSliceRun.eq_def, lexSliceRun.eq_def]
+    rw [Internal.lexSliceRun.eq_def, Internal.lexSliceRun.eq_def]
     rcases fnResult₁ with e₁ | f₁ <;> rcases fnResult₂ with e₂ | f₂ <;> try exact absurd hf id
     all_goals
       dsimp only
@@ -101,8 +107,9 @@ theorem lexSliceRun_sim (hc : Consumers L) {floor : Option Nat} (input : CharCla
     (position : USize) (fnResult₁ : Except (Failure E₁) (ControlFlow R₁))
     (fnResult₂ : Except (Failure E₂) (ControlFlow R₂)) (hf : FlowLRel L fnResult₁ fnResult₂)
     (core : {c : LexerCore // c.Bound floor 0}) :
-    L.rc.rel (fun a b => ExitRel L a.1 b.1 ∧ a.2 = b.2) (lexSliceRun input position fnResult₁ core)
-      (lexSliceRun input position fnResult₂ core) :=
+    L.rc.rel (fun a b => ExitRel L a.1 b.1 ∧ a.2 = b.2)
+        (Internal.lexSliceRun input position fnResult₁ core)
+      (Internal.lexSliceRun input position fnResult₂ core) :=
   lexSliceRun_sim_lt hc input _ position fnResult₁ fnResult₂ hf core (Nat.lt_succ_self _)
 /-- What the loop over the stops in a slice descends by: the bytes after the floor. -/
 def fromMeasure (input : CharClass.Input) (initialOffset floor : Nat) : Nat :=
@@ -117,11 +124,11 @@ theorem lexSliceFrom_sim_lt (hc : Consumers L) (input : CharClass.Input) (initia
       (core : {c : LexerCore // c.Bound (some floor) 0}),
       fromMeasure input initialOffset floor < n →
       L.rc.rel (fun a b => HeldRel L a.1 b.1 ∧ a.2 = b.2)
-        (lexSliceFrom input initialOffset floor hfloor position fnResult₁ held₁ core)
-        (lexSliceFrom input initialOffset floor hfloor position fnResult₂ held₂ core)
+        (Internal.lexSliceFrom input initialOffset floor hfloor position fnResult₁ held₁ core)
+        (Internal.lexSliceFrom input initialOffset floor hfloor position fnResult₂ held₂ core)
   | 0, _, _, _, _, _, _, _, _, _, _, hn => absurd hn (Nat.not_lt_zero _)
   | n + 1, floor, hfloor, position, fnResult₁, fnResult₂, hf, held₁, held₂, hh, core, hn => by
-    rw [lexSliceFrom.eq_def, lexSliceFrom.eq_def]
+    rw [Internal.lexSliceFrom.eq_def, Internal.lexSliceFrom.eq_def]
     refine L.rc.bind (lexSliceRun_sim hc input position fnResult₁ fnResult₂ hf core) ?_
     rintro ⟨ex₁, c₁⟩ ⟨ex₂, c₂⟩ ⟨hex, hcore⟩
     cases hcore
@@ -161,14 +168,14 @@ theorem lexSliceFrom_sim (hc : Consumers L) (input : CharClass.Input) (initialOf
     (hh : ORel (LocRel L.rr) held₁ held₂)
     (core : {c : LexerCore // c.Bound (some floor) 0}) :
     L.rc.rel (fun a b => HeldRel L a.1 b.1 ∧ a.2 = b.2)
-      (lexSliceFrom input initialOffset floor hfloor position fnResult₁ held₁ core)
-      (lexSliceFrom input initialOffset floor hfloor position fnResult₂ held₂ core) :=
+      (Internal.lexSliceFrom input initialOffset floor hfloor position fnResult₁ held₁ core)
+      (Internal.lexSliceFrom input initialOffset floor hfloor position fnResult₂ held₂ core) :=
   lexSliceFrom_sim_lt hc input initialOffset _ floor hfloor position fnResult₁ fnResult₂ hf held₁
     held₂ hh core (Nat.lt_succ_self _)
 
 theorem lexSliceInner_sim (hc : Consumers L) (input : CharClass.Input) :
-    SSim L (HeldRel L) (lexSliceInner (H := H₁) (m := m₁) (R := R₁) (E := E₁) input)
-      (lexSliceInner input) := fun _ =>
+    SSim L (HeldRel L) (Internal.lexSliceInner (H := H₁) (m := m₁) (R := R₁) (E := E₁) input)
+      (Internal.lexSliceInner input) := fun _ =>
   lexSliceFrom_sim hc input _ _ _ _ (.ok .continue) (.ok .continue) trivial none none trivial _
 
 end

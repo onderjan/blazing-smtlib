@@ -1,5 +1,9 @@
-import BSmtLib.Traits
-import BSmtLib.Token.SyntaxToken
+module
+
+public import BSmtLib.Traits
+public import BSmtLib.Token.SyntaxToken
+
+public section
 
 /-!
 # The parser

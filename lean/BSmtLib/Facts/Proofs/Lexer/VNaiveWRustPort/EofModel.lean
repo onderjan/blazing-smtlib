@@ -1,4 +1,9 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Model
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Model
+import all BSmtLib.Lexer.Error
+
+@[expose] public section
 
 /-!
 # What the consumer does at the end of the input

@@ -1,6 +1,10 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Agree
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.EofModel
-import BSmtLib.Facts.Proofs.Lexer.Consumers.Pure
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Agree
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.EofModel
+public import BSmtLib.Facts.Proofs.Lexer.Consumers.Pure
+
+@[expose] public section
 
 /-!
 # No whitespace or comment for a consumer that does not take them

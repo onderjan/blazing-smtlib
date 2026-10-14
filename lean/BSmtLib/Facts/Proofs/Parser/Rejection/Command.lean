@@ -1,4 +1,8 @@
-import BSmtLib.Facts.Proofs.Parser.Rejection.CommandParts
+module
+
+public import BSmtLib.Facts.Proofs.Parser.Rejection.CommandParts
+
+@[expose] public section
 
 /-!
 # What commands can still take

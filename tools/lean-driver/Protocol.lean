@@ -3,7 +3,11 @@ The fields of the driver protocol that the lexer and the parser requests share, 
 `lean/driver-protocol.md`: bytes in hexadecimal, locations, versions and the names of token types
 and lexer errors; and the lexer that answers the requests.
 -/
-import BSmtLib
+module
+
+public import BSmtLib
+
+public section
 
 open BSmtLib
 open BSmtLib.Token (Version TokenCategory)

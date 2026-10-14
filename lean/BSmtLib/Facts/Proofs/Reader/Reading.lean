@@ -1,4 +1,8 @@
-import BSmtLib.Facts.Proofs.Reader.Outcome
+module
+
+public import BSmtLib.Facts.Proofs.Reader.Outcome
+
+@[expose] public section
 
 /-!
 # Reading the characters of the commands a correct lexer handed over

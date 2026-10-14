@@ -1,5 +1,9 @@
-import BSmtLibSpec.Facts
-import BSmtLib.Facts.Proofs.Parser.Lemmas
+module
+
+public import BSmtLibSpec.Facts
+public import BSmtLib.Facts.Proofs.Parser.Lemmas
+
+@[expose] public section
 
 /-!
 # The recording run as a run of the library's parser

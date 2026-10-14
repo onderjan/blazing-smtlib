@@ -1,4 +1,9 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.LexStep
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.LexStep
+import all BSmtLib.Lexer.Internal.WRustPort
+
+@[expose] public section
 
 /-!
 # The Rust port's loop over a slice, up to a stop of the consumer, with every consumer

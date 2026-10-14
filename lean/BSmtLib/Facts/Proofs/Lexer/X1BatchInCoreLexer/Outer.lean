@@ -1,4 +1,8 @@
-import BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Finish
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Finish
+
+@[expose] public section
 
 /-!
 # The outer steps of the library's lexer and of `X1BatchInCore`

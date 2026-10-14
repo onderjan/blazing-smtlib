@@ -1,4 +1,11 @@
-import BSmtLib.Facts.Proofs.Parser.SExpr
+module
+
+public import BSmtLib.Facts.Proofs.Parser.SExpr
+import all BSmtLib.Parser.Category.Ident
+import all BSmtLib.Parser.Category.Sort
+import all BSmtLib.Token.Reserved
+
+@[expose] public section
 
 /-!
 # The identifier and sort parsers against the traversal

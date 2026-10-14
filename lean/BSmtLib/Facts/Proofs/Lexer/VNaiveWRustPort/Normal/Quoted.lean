@@ -1,4 +1,12 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Normal.Basic
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Normal.Basic
+import all BSmtLib.Lexer.Helpers
+import all BSmtLib.Lexer.Internal.WRustPort
+import all BSmtLib.Lexer.Internal.WRustPort.Slice
+import all BSmtLib.Lexer.Internal.VNaive
+
+@[expose] public section
 
 /-!
 # The normal state on a quoted symbol
@@ -31,7 +39,7 @@ variable {floor : Option Nat} {low : Nat}
 
 variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Token.Version}
 
-set_option maxHeartbeats 400000 in
+set_option maxHeartbeats 500000 in
 set_option maxRecDepth 2048 in
 /-- `normalSpec_lt` at the pipe that starts a quoted symbol, on the fast path. -/
 theorem normalSpec_quoted (v : Token.Version) (input : ByteSlice) (offset base : Nat)

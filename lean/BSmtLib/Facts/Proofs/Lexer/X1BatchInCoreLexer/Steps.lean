@@ -1,4 +1,12 @@
-import BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Whitespace
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Whitespace
+import all BSmtLib.Lexer
+import all BSmtLib.Lexer.Helpers
+import all BSmtLib.Lexer.Internal.WRustPort
+import all BSmtLib.Lexer.Internal.WRustPort.Slice
+
+@[expose] public section
 
 /-!
 # The steps per state of the library's lexer and of `X1BatchInCore`

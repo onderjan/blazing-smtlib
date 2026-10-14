@@ -1,5 +1,10 @@
-import BSmtLib.Facts.Proofs.Lexer.Consumers.VReset
-import BSmtLib.Facts.Proofs.Lexer.Consumers.Alike
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.Consumers.VReset
+public import BSmtLib.Facts.Proofs.Lexer.Consumers.Alike
+import all BSmtLib.Lexer.Internal.VNaive
+
+@[expose] public section
 
 /-!
 # The naive lexer does not tell how its input is cut into slices

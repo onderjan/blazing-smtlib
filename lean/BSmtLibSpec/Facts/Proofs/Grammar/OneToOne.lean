@@ -1,4 +1,8 @@
-import BSmtLibSpec.Facts.Proofs.Grammar.Read
+module
+
+public import BSmtLibSpec.Facts.Proofs.Grammar.Read
+
+@[expose] public section
 
 /-!
 # Trees are read back from their tokens

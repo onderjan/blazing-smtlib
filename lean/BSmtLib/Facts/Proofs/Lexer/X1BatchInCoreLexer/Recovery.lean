@@ -1,4 +1,10 @@
-import BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Outer
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Outer
+import all BSmtLib.Lexer
+import all BSmtLib.Lexer.Internal.WRustPort
+
+@[expose] public section
 
 /-!
 # The steps between calls of the library's lexer and of `X1BatchInCore`
@@ -25,6 +31,7 @@ local macro "bc " t:term:max : tactic =>
   `(tactic| (by_cases hc : $t = true <;>
     (try simp only [hc, ↓reduceIte, Bool.false_eq_true]) <;> try exact IH _))
 
+set_option maxHeartbeats 300000 in
 theorem skipBytes_eq (bytes : ByteSlice) (legacy : Bool) (offset index : Nat)
     (s : BSmtLib.Lexer.Internal.Skipping) :
     (fun r => (r.1, skMap r.2)) (BSmtLib.Lexer.Internal.skipBytes bytes legacy offset index s) =

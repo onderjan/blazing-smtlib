@@ -1,5 +1,17 @@
-import BSmtLib.Facts.Proofs.Parser.Rejection.Term
-import BSmtLib.Facts.Proofs.Parser.Commands.Bytes
+module
+
+public import BSmtLib.Facts.Proofs.Parser.Rejection.Term
+public import BSmtLib.Facts.Proofs.Parser.Commands.Bytes
+import all BSmtLib.Parser.Category.Combinator
+import all BSmtLib.Parser.Category.Sort
+import all BSmtLib.Parser.Category.Term
+import all BSmtLib.Parser.Category.Token
+import all BSmtLib.Parser.Command.Datatype
+import all BSmtLib.Parser.Command.Function
+import all BSmtLib.Parser.Command.Standard
+import all BSmtLib.Token.Reserved
+
+@[expose] public section
 
 /-!
 # What the parts of commands can still take

@@ -1,4 +1,26 @@
-import BSmtLib.Facts.Proofs.Reader.Param.Adapter
+module
+
+public import BSmtLib.Facts.Proofs.Reader.Param.Adapter
+import all BSmtLib.Parser
+import all BSmtLib.Parser.Adapter
+import all BSmtLib.Parser.Category.Attribute
+import all BSmtLib.Parser.Category.Combinator
+import all BSmtLib.Parser.Category.Ident
+import all BSmtLib.Parser.Category.Pattern
+import all BSmtLib.Parser.Category.QualifiedIdent
+import all BSmtLib.Parser.Category.SExpr
+import all BSmtLib.Parser.Category.Sort
+import all BSmtLib.Parser.Category.SortedVar
+import all BSmtLib.Parser.Category.Term
+import all BSmtLib.Parser.Category.Token
+import all BSmtLib.Parser.Command
+import all BSmtLib.Parser.Command.Datatype
+import all BSmtLib.Parser.Command.Function
+import all BSmtLib.Parser.Command.Standard
+import all BSmtLib.Parser.Script
+import all BSmtLib.Token.SyntaxToken
+
+@[expose] public section
 
 /-!
 # The parser rejects whitespace and comments

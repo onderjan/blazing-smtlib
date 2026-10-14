@@ -1,4 +1,8 @@
-import BSmtLibSpec.Facts.Proofs.Reader.Files
+module
+
+public import BSmtLibSpec.Facts.Proofs.Reader.Files
+
+@[expose] public section
 
 /-!
 # The commands a lexer has handed over

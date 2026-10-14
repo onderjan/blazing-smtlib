@@ -1,5 +1,9 @@
-import BSmtLibSpec.Facts.Proofs.Parser.Rebuild
-import BSmtLibSpec.Facts.Proofs.Parser.Recording
+module
+
+public import BSmtLibSpec.Facts.Proofs.Parser.Rebuild
+public import BSmtLibSpec.Facts.Proofs.Parser.Recording
+
+@[expose] public section
 
 /-!
 # What a recording shows

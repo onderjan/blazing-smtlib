@@ -1,4 +1,8 @@
-import BSmtLib.Parser.Category.Term
+module
+
+public import BSmtLib.Parser.Category.Term
+
+public section
 
 /-!
 # Functions

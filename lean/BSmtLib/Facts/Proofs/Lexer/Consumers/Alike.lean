@@ -1,5 +1,9 @@
-import BSmtLib.Facts.Lexer.Adapters
-import BSmtLib.Facts.Proofs.Lexer.Simulation.Couple
+module
+
+public import BSmtLib.Facts.Lexer.Adapters
+public import BSmtLib.Facts.Proofs.Lexer.Simulation.Couple
+
+@[expose] public section
 
 /-!
 # Lexers that do alike with every consumer of the spec

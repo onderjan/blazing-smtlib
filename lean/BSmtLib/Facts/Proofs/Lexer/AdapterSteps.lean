@@ -1,4 +1,12 @@
-import BSmtLib.Facts.Lexer.Adapters
+module
+
+public import BSmtLib.Facts.Lexer.Adapters
+import all BSmtLib.Lexer
+import all BSmtLib.Lexer.Internal.VNaive
+import all BSmtLib.Lexer.Internal.WRustPort
+import all BSmtLib.Lexer.Internal.X1BatchInCore
+
+@[expose] public section
 
 /-!
 # The adapter's steps and the public calls

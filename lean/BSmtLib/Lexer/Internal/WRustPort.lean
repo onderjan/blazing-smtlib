@@ -1,5 +1,9 @@
-import BSmtLib.Lexer
-import BSmtLib.Lexer.Internal.WRustPort.Slice
+module
+
+public import BSmtLib.Lexer
+public import BSmtLib.Lexer.Internal.WRustPort.Slice
+
+public section
 
 /-!
 The Rust lexer ported to Lean: a lexer of the chain that leads from the specification to the
@@ -154,6 +158,7 @@ The lexer state is within the bounds: its offset is at or after `low`; and if th
 floor, the offset is at or after it, the lexer is between tokens or the token start is at or
 after the floor or the offset after it, and every token of the batch starts at or after it.
 -/
+@[expose]
 def LexerCore.Bound (floor : Option Nat) (low : Nat) (c : LexerCore) : Prop :=
   low ≤ c.offset ∧
     ∀ p, floor = some p → p ≤ c.offset ∧
@@ -745,7 +750,7 @@ variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [Token.Consume H 
 
 /-- The operations of the Rust lexer: a fresh batch for every slice and for the end of the
 input, and the line counters in the locals of the loop of `lexNormal`. -/
-@[instance_reducible]
+@[expose, instance_reducible]
 def Rust.ops : Ops H m R E where
   Locals := FastState
   loadLocals := FastState.load
@@ -2710,6 +2715,7 @@ What a lexer call that failed gives back: nothing for a lexer that stops
 at its first error, which cannot be used again, and the lexer itself for a
 recovering one, from which the rest of the input is to be fed.
 -/
+@[expose]
 def AfterError (H : Type) [Token.Consume H R E] : Recovery → Type
   | .failFast => Unit
   | .recovering => Lexer H .recovering
@@ -2738,6 +2744,7 @@ inductive AfterEof (H : Type) [Token.Consume H R E] where
 What a lexer gives back after its end of the input failed: nothing for a
 lexer that stops at its first error, and what remains of a recovering one.
 -/
+@[expose]
 def AfterEofError (H : Type) [Token.Consume H R E] : Recovery → Type
   | .failFast => Unit
   | .recovering => AfterEof H

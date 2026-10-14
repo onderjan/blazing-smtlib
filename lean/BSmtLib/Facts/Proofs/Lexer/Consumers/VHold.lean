@@ -1,4 +1,12 @@
-import BSmtLib.Facts.Proofs.Lexer.Consumers.VSession
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.Consumers.VSession
+import all BSmtLib.Lexer.Error
+import all BSmtLib.Lexer.Internal.VNaive
+import all BSmtLib.Span
+import all BSmtLib.Token
+
+@[expose] public section
 
 /-!
 # The run from a lexer state, and the naive lexer while it holds a result
@@ -316,7 +324,7 @@ theorem reset_version (core : Core) (sv : BSmtLibSpec.Lexicon.Version)
     (hi : core.initialVersion = toVersion sv) : fromVersion core.reset.version = sv := by
   simp [Core.reset, Core.initial, hi, fromVersion_toVersion]
 
-theorem discardedOf_reset (core : Core) : discardedOf core.reset = none := rfl
+theorem discardedOf_reset (core : Core) : discardedOf core.reset = none := (rfl)
 
 /-- While a result is held, the end of the input returns it, unless the token in progress is
 trailing input or fails. -/

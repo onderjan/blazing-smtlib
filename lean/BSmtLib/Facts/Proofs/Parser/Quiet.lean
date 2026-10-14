@@ -1,4 +1,9 @@
-import BSmtLib.Facts.Proofs.Parser.Recording
+module
+
+public import BSmtLib.Facts.Proofs.Parser.Recording
+import all BSmtLib.Parser
+
+@[expose] public section
 
 /-!
 # The parser's steps write no token points

@@ -1,4 +1,8 @@
-import BSmtLib
+module
+
+public import BSmtLib
+
+@[expose] public section
 
 /-!
 # The small definitions of the theorems about the public API

@@ -1,4 +1,10 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaive.Facts
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaive.Facts
+import all BSmtLib.Lexer.Internal.VNaive
+import all BSmtLib.Token
+
+@[expose] public section
 
 /-!
 # What the modes of the naive lexer stand for

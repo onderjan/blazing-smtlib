@@ -1,4 +1,8 @@
-import Lean
+module
+
+public meta import Lean
+
+@[expose] public meta section
 
 /-!
 # The naming rule, checked

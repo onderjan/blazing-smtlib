@@ -1,4 +1,11 @@
-import BSmtLib.Facts.Proofs.Parser.List
+module
+
+public import BSmtLib.Facts.Proofs.Parser.List
+import all BSmtLib.Parser.Category.Attribute
+import all BSmtLib.Parser.Category.SExpr
+import all BSmtLib.Parser.Category.Token
+
+@[expose] public section
 
 /-!
 # The attribute parser against the traversal

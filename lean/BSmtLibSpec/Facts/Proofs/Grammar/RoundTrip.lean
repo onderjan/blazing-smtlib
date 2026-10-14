@@ -1,5 +1,9 @@
-import BSmtLibSpec.Facts.Proofs.Lexicon.RoundTrip.Rewrite
-import BSmtLibSpec.Facts.Proofs.Grammar.Files
+module
+
+public import BSmtLibSpec.Facts.Proofs.Lexicon.RoundTrip.Rewrite
+public import BSmtLibSpec.Facts.Proofs.Grammar.Files
+
+@[expose] public section
 
 /-!
 # Reproducing a file

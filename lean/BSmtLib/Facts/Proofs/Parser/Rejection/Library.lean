@@ -1,6 +1,18 @@
-import BSmtLib.Facts.Proofs.Parser.Rejection.Lexical
-import BSmtLib.Facts.Proofs.Lexer.Simulation.Bytes
-import BSmtLib.Facts.Proofs.Parser.RefusedRecord
+module
+
+public import BSmtLib.Facts.Proofs.Parser.Rejection.Lexical
+public import BSmtLib.Facts.Proofs.Lexer.Simulation.Bytes
+public import BSmtLib.Facts.Proofs.Parser.RefusedRecord
+import all BSmtLib.Parser
+import all BSmtLib.Parser.Category.Combinator
+import all BSmtLib.Parser.Command
+import all BSmtLib.Parser.Command.Function
+import all BSmtLib.Parser.Command.Standard
+import all BSmtLib.Parser.Script
+import all BSmtLib.Plain
+import all BSmtLib.Token.Reserved
+
+@[expose] public section
 
 /-!
 # The library's parser as a recording parser

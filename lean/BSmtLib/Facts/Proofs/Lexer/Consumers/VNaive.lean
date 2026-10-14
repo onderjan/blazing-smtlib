@@ -1,5 +1,11 @@
-import BSmtLib.Facts.Proofs.Lexer.Consumers.VReset
-import BSmtLibSpec.Facts.Proofs.Lexer.Consumers
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.Consumers.VReset
+public import BSmtLibSpec.Facts.Proofs.Lexer.Consumers
+import all BSmtLib.Lexer.Internal.VNaive
+import all BSmtLib.Token
+
+@[expose] public section
 
 /-!
 # The naive lexer with every consumer of the spec

@@ -1,6 +1,10 @@
-import BSmtLibSpec.Facts.Proofs.Parser.Parse
-import BSmtLibSpec.Facts.Proofs.Parser.Equations
-import BSmtLibSpec.Facts.Proofs.Grammar.OneToOne
+module
+
+public import BSmtLibSpec.Facts.Proofs.Parser.Parse
+public import BSmtLibSpec.Facts.Proofs.Parser.Equations
+public import BSmtLibSpec.Facts.Proofs.Grammar.OneToOne
+
+@[expose] public section
 
 /-!
 # The traversal and the parser make the same calls

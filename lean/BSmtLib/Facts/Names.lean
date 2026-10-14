@@ -1,9 +1,13 @@
-import BSmtLib
-import BSmtLib.Lexer.Internal.VNaive
-import BSmtLib.Lexer.Internal.X1BatchInCore
-import BSmtLib.Facts
-import BSmtLibSpec.Facts
-import BSmtLib.Facts.Reexports
+module
+
+public import BSmtLib
+public import BSmtLib.Lexer.Internal.VNaive
+public import BSmtLib.Lexer.Internal.X1BatchInCore
+public import BSmtLib.Facts
+public import BSmtLibSpec.Facts
+public import BSmtLib.Facts.Reexports
+
+@[expose] public section
 
 /-!
 # The naming rule and the re-exports, checked
@@ -14,12 +18,11 @@ in the wrong place, a stale or missing re-export, or a name that resolves elsewh
 fails the build.
 -/
 
-/-! The naming rule, with its exceptions: the lexer's access to the batch of a cursor, declared
-where the cursor's private fields are visible, and the views of the cursor's tokens as syntax
-tokens, declared where `SyntaxToken` is. -/
+/-! The naming rule, with its exceptions: the views of the cursor's tokens as syntax tokens,
+declared where `SyntaxToken` is, which `Token.lean` cannot import. -/
 
 /--
-info: 5948 declarations in 341 modules; 87 add to a sibling's type:
+info: 5953 declarations in 341 modules; 87 add to a sibling's type:
 BSmtLib.Facts.Proofs.Lexer.VNaive.Prefix:
   BSmtLib.Facts.Proofs.Lexer.VNaive.Run.St.Taken
 BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Pure:
@@ -121,15 +124,12 @@ BSmtLibSpec.Lexer:
   BSmtLibSpec.Lexicon.Token.reservedKind
 BSmtLibSpec.Reader:
   BSmtLibSpec.Lexer.Handed.received
-4 exceptions:
-  BSmtLib.Lexer.Internal.intoBatch in BSmtLib.Token
-  BSmtLib.Lexer.Internal.tag_intoBatch in BSmtLib.Token
+2 exceptions:
   BSmtLib.Token.BatchCursor.TokenWindow.syntax in BSmtLib.Token.SyntaxToken
   BSmtLib.Token.BatchCursor.syntax in BSmtLib.Token.SyntaxToken
 -/
 #guard_msgs in
-#naming except BSmtLib.Lexer.Internal.intoBatch BSmtLib.Lexer.Internal.tag_intoBatch
-  BSmtLib.Token.BatchCursor.syntax BSmtLib.Token.BatchCursor.TokenWindow.syntax
+#naming except BSmtLib.Token.BatchCursor.syntax BSmtLib.Token.BatchCursor.TokenWindow.syntax
 
 /-! The re-exports, for the `pub use` lines of the Rust crate: the generated module
 `BSmtLib.Reexports` is what `BSmtLib.Facts.Reexports.render` makes now, and every second name

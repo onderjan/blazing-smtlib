@@ -1,5 +1,9 @@
-import BSmtLibSpec.Facts.Proofs.Reader.Consumer
-import BSmtLibSpec.Facts.Proofs.Grammar.Files
+module
+
+public import BSmtLibSpec.Facts.Proofs.Reader.Consumer
+public import BSmtLibSpec.Facts.Proofs.Grammar.Files
+
+@[expose] public section
 
 /-!
 # A lexer with a parser reads a file

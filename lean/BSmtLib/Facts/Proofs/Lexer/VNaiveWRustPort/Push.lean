@@ -1,4 +1,11 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Step
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Step
+import all BSmtLib.Lexer
+import all BSmtLib.Lexer.Internal.WRustPort
+import all BSmtLib.Token
+
+@[expose] public section
 
 /-!
 # The Rust port's hand-overs of batches and tokens, with every consumer
@@ -13,7 +20,6 @@ the consumer is where `pending` says; if it stops, the interruption is where it 
 
 namespace BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Push
 
-open BSmtLib.Lexer.Internal (intoBatch)
 open BSmtLib.Facts.Lexer.Adapters BSmtLib.Facts.Proofs.Lexer.Simulation.Bytes
 open BSmtLibSpec.Lexer (Handed)
 open BSmtLib.Lexer.Internal.WRustPort.Rust (flushCursor)

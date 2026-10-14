@@ -1,4 +1,9 @@
-import BSmtLib.Lexer.Helpers
+module
+
+public import BSmtLib.Lexer.Helpers
+import all Std.Data.ByteSlice
+
+public section
 
 /-!
 Reading a slice by indices, for the lexers of the chain that read their input as the Rust lexer

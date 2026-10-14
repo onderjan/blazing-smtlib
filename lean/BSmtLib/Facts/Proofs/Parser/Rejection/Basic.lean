@@ -1,4 +1,9 @@
-import BSmtLib.Facts.Proofs.Parser.Quiet
+module
+
+public import BSmtLib.Facts.Proofs.Parser.Quiet
+import all BSmtLib.Parser
+
+@[expose] public section
 
 /-!
 # What a parser state can still take

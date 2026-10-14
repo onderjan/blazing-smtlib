@@ -1,5 +1,13 @@
-import BSmtLib.Facts.Proofs.Reader.Looser
-import BSmtLib.Facts.Proofs.Parser.QuietSteps
+module
+
+public import BSmtLib.Facts.Proofs.Reader.Looser
+public import BSmtLib.Facts.Proofs.Parser.QuietSteps
+import all BSmtLib.Parser
+import all BSmtLib.Parser.Adapter
+import all BSmtLib.Parser.Script
+import all BSmtLib.Token
+
+@[expose] public section
 
 /-!
 # A handler under a posture is told only versions the posture allows
@@ -184,7 +192,7 @@ theorem looser_refl (posture : Token.VersionPosture) : Looser posture posture :=
   ⟨rfl, fun _ h => h⟩
 
 theorem next_version {b : Token.BatchTag} (cursor : Token.BatchCursor b) (h : cursor.HasNext) :
-    (cursor.next h).2.val.version = cursor.version := rfl
+    (cursor.next h).2.val.version = cursor.version := (rfl)
 
 /-- The adapter's loop over a cursor in a version the posture allows, under the posture, tells its
 handler only versions the posture allows and leaves the cursor in such a version, unless it

@@ -1,4 +1,13 @@
-import BSmtLib.Facts.Lexer.Adapters
+module
+
+public import BSmtLib.Facts.Lexer.Adapters
+import all BSmtLib.Lexer.Internal.VNaive
+import all BSmtLib.Span
+import all BSmtLib.Token
+import all BSmtLib.Token.Reserved
+import all BSmtLib.Token.SyntaxToken
+
+@[expose] public section
 
 /-!
 # The pure run of the naive lexer

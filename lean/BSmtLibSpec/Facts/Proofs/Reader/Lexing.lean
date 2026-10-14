@@ -1,8 +1,12 @@
-import BSmtLibSpec.Reader
-import BSmtLibSpec.Grammar.Properties
-import BSmtLibSpec.Facts.Proofs.Lexer.StreamingFacts
-import BSmtLibSpec.Facts.Proofs.Lexicon.Compose
-import BSmtLibSpec.Facts.Proofs.Lexer.Consumers
+module
+
+public import BSmtLibSpec.Reader
+public import BSmtLibSpec.Grammar.Properties
+public import BSmtLibSpec.Facts.Proofs.Lexer.StreamingFacts
+public import BSmtLibSpec.Facts.Proofs.Lexicon.Compose
+public import BSmtLibSpec.Facts.Proofs.Lexer.Consumers
+
+@[expose] public section
 
 /-!
 # What a correct lexer hands over to a parser

@@ -1,4 +1,10 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.Basic
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.Basic
+import all BSmtLib.Lexer.Helpers
+import all BSmtLib.Lexer.Internal.VNaive
+
+@[expose] public section
 
 /-!
 # The start table for literals

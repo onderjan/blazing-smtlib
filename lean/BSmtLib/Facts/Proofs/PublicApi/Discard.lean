@@ -1,6 +1,13 @@
-import BSmtLib.Facts.PublicApi.Adapters
-import BSmtLib.Facts.Reader
-import BSmtLib.Facts.Proofs.Reader.ValidOpen
+module
+
+public import BSmtLib.Facts.PublicApi.Adapters
+public import BSmtLib.Facts.Reader
+public import BSmtLib.Facts.Proofs.Reader.ValidOpen
+import all BSmtLib.Lexer
+import all BSmtLib.Parser.Adapter
+import all BSmtLib.Reader
+
+@[expose] public section
 
 /-!
 # Where the reader began to discard
@@ -27,7 +34,7 @@ open BSmtLib.Facts.PublicApi.Adapters BSmtLib.Facts.Reader.Adapters
 
 namespace BSmtLib.Facts.Proofs.PublicApi.Discard
 
-open BSmtLib.Lexer BSmtLib.Lexer.Internal
+open BSmtLib.Lexer
 open BSmtLibSpec BSmtLibSpec.Grammar BSmtLibSpec.Parser
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Lexer (Handed)
@@ -45,11 +52,11 @@ the script consumer ends, where it does not fail, with the fields that lexer end
 theorem feed_core (hnl : NoLayout (scriptConsumer version) (toVersion version)) :
     ∀ (slices : List Regex.Chars) (a : FLexer version) (p : PLexer) (taken : List Handed),
       InvF version a p taken →
-      Reach (scriptConsumer version) (toVersion version) (core a) →
+      Reach (scriptConsumer version) (toVersion version) (Internal.core a) →
       Reader.Param.Dom.Good version ((flaggedOps.runInput a false slices).run taken).2 →
       ∀ reader, feed (Reader.Internal.ofLexer p : RecReader) slices = .ok reader →
-        core (Reader.Internal.lexer reader) =
-          core ((flaggedOps.runInput a false slices).run taken).1.2
+        Internal.core (Reader.Internal.lexer reader) =
+          Internal.core ((flaggedOps.runInput a false slices).run taken).1.2
   | [], a, p, taken, hI, _, _, reader, hfeed => by
     simp only [feed, Except.ok.injEq] at hfeed
     subst hfeed
@@ -98,7 +105,7 @@ theorem reader_discardedFrom (version : BSmtLibSpec.Lexicon.Version) (slices : L
     unfold AdapterAtG
     rw [recRun_nil]
     exact ⟨toVersion_eq_libVersion version, rfl, by rw [toVersion_eq_libVersion]; rfl, rfl⟩
-  have hR : Reach (scriptConsumer version) (toVersion version) (core a₀) := Reach.new
+  have hR : Reach (scriptConsumer version) (toVersion version) (Internal.core a₀) := Reach.new
   have hnl := noLayout (scriptConsumer version) (scriptConsumer_concrete version)
       (toVersion version)
   have hcore := feed_core hnl slices a₀ _ [] hI hR hgood reader
@@ -107,7 +114,7 @@ theorem reader_discardedFrom (version : BSmtLibSpec.Lexicon.Version) (slices : L
       (flaggedOps.discardedFrom ((flaggedOps.runInput a₀ false slices).run []).1.2).map
         toLocation := rfl
   rw [e]
-  show (core (Reader.Internal.lexer reader)).discardedFrom.map toLocation = _
+  show (Internal.core (Reader.Internal.lexer reader)).discardedFrom.map toLocation = _
   rw [hcore]
   rfl
 

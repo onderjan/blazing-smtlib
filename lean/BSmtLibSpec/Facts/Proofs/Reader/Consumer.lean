@@ -1,6 +1,10 @@
-import BSmtLibSpec.Facts.Proofs.Reader.Lexing
-import BSmtLibSpec.Facts.Proofs.Reader.Words
-import BSmtLibSpec.Facts.Proofs.Reader.Requests
+module
+
+public import BSmtLibSpec.Facts.Proofs.Reader.Lexing
+public import BSmtLibSpec.Facts.Proofs.Reader.Words
+public import BSmtLibSpec.Facts.Proofs.Reader.Requests
+
+@[expose] public section
 
 /-!
 # A parser as a lexer's consumer

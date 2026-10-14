@@ -1,5 +1,9 @@
-import BSmtLib.Facts.Proofs.Reader.Outcome
-import BSmtLib.Facts.Proofs.Reader.Valid
+module
+
+public import BSmtLib.Facts.Proofs.Reader.Outcome
+public import BSmtLib.Facts.Proofs.Reader.Valid
+
+@[expose] public section
 
 /-!
 # The commands of a reading, split off what a parser takes

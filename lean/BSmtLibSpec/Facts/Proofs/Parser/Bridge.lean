@@ -1,4 +1,8 @@
-import BSmtLibSpec.Facts.Proofs.Parser.Placement
+module
+
+public import BSmtLibSpec.Facts.Proofs.Parser.Placement
+
+@[expose] public section
 
 /-!
 # Every handler's run is placed as the recording's

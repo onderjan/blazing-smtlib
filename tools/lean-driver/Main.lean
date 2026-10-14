@@ -16,6 +16,8 @@ lexer `BSmtLib.Lexer.Internal.VNaive`, `w`, the Rust lexer ported to Lean
 `BSmtLib.Lexer.Internal.X1BatchInCore`. Any other value makes the driver exit at once with an
 error.
 -/
+module
+
 import BSmtLib
 import BSmtLib.Lexer.Internal.VNaive
 import BSmtLib.Lexer.Internal.WRustPort
@@ -759,7 +761,7 @@ partial def serve (choice : LexerChoice) (stdin : IO.FS.Stream) (stdout : IO.FS.
   stdout.flush
   serve choice stdin stdout session
 
-def main : IO UInt32 := do
+public def main : IO UInt32 := do
   match readLexerChoice (← IO.getEnv "BLAZING_SMTLIB_LEAN_LEXER") with
   | .ok choice =>
     serve choice (← IO.getStdin) (← IO.getStdout) none

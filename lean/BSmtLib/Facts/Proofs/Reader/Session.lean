@@ -1,4 +1,8 @@
-import BSmtLib.Facts.Proofs.Reader.Classify
+module
+
+public import BSmtLib.Facts.Proofs.Reader.Classify
+
+@[expose] public section
 
 /-!
 # A lexer correct with every consumer, with the script consumer, on any input

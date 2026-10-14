@@ -1,4 +1,12 @@
-import BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Finish
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Finish
+import all BSmtLib.Lexer
+import all BSmtLib.Lexer.Internal.WRustPort
+import all BSmtLib.Lexer.Internal.X1BatchInCore
+import all BSmtLib.Token
+
+@[expose] public section
 
 /-!
 # The batch held by the loop of the normal state, in both lexers

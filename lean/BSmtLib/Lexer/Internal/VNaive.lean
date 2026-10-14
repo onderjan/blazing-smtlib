@@ -1,4 +1,8 @@
-import BSmtLib.Lexer
+module
+
+public import BSmtLib.Lexer
+
+public section
 
 /-!
 The naive lexer: the first of the chain of lexers that leads from the specification to the
@@ -600,7 +604,9 @@ def Lexeme.batch (l : Lexeme) (h : l.Valid) : Token.TokenBatch :=
 /-- A cursor over the batch of a lexeme alone has a token. -/
 theorem Lexeme.hasNext (l : Lexeme) (h : l.Valid) (version : Token.Version) :
     (Token.BatchCursor.new version (l.batch h)).HasNext :=
-  Nat.zero_lt_one
+  Token.BatchCursor.hasNext_new version (by
+    rw [Lexeme.batch]
+    exact Nat.lt_of_lt_of_eq (Nat.zero_lt_succ _) (Token.TokenBatch.len_push ..).symm)
 
 /-- The number of parentheses open after a token of the category. -/
 def depthAfter (depth : Nat) : Token.TokenCategory → Nat
@@ -967,6 +973,7 @@ What a lexer call that failed gives back: nothing for a lexer that stops at its 
 which cannot be used again, and the lexer itself for a recovering one, from which the rest of
 the input is to be fed.
 -/
+@[expose]
 def Lexer.AfterError (H : Type) [Token.Consume H R E] : Recovery → Type
   | .failFast => Unit
   | .recovering => Lexer H .recovering
@@ -994,6 +1001,7 @@ inductive Lexer.AfterEof (H : Type) [Token.Consume H R E] where
 What a lexer gives back after its end of the input failed: nothing for a lexer that stops at
 its first error, and what remains of a recovering one.
 -/
+@[expose]
 def Lexer.AfterEofError (H : Type) [Token.Consume H R E] : Recovery → Type
   | .failFast => Unit
   | .recovering => Lexer.AfterEof H

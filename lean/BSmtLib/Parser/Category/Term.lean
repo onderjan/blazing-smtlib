@@ -1,8 +1,12 @@
-import BSmtLib.Parser.Category.Combinator
-import BSmtLib.Parser.Category.Attribute
-import BSmtLib.Parser.Category.Pattern
-import BSmtLib.Parser.Category.QualifiedIdent
-import BSmtLib.Parser.Category.SortedVar
+module
+
+public import BSmtLib.Parser.Category.Combinator
+public import BSmtLib.Parser.Category.Attribute
+public import BSmtLib.Parser.Category.Pattern
+public import BSmtLib.Parser.Category.QualifiedIdent
+public import BSmtLib.Parser.Category.SortedVar
+
+public section
 
 /-!
 # The term parser

@@ -1,5 +1,11 @@
-import BSmtLib.Facts.Proofs.Parser.Rejection.CommandStep
-import BSmtLib.Facts.Proofs.Parser.Cut
+module
+
+public import BSmtLib.Facts.Proofs.Parser.Rejection.CommandStep
+public import BSmtLib.Facts.Proofs.Parser.Cut
+import all BSmtLib.Parser.Command
+import all BSmtLib.Parser.Script
+
+@[expose] public section
 
 /-!
 # What the script parser has taken

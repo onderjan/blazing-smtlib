@@ -1,4 +1,10 @@
-import BSmtLib.Facts.Proofs.Parser.Commands.Attributes
+module
+
+public import BSmtLib.Facts.Proofs.Parser.Commands.Attributes
+import all BSmtLib.Parser.Command.Standard
+import all BSmtLib.Token.Reserved
+
+@[expose] public section
 
 /-!
 # The command parser against the traversal

@@ -1,5 +1,9 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.WP
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Bytes
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.WP
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Bytes
+
+@[expose] public section
 
 /-!
 # What the adapter's consumer does with the lexemes handed over

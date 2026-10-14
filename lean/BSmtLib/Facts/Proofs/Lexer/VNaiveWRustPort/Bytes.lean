@@ -1,4 +1,12 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaive
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaive
+import all BSmtLib.Lexer.Internal.VNaive
+import all BSmtLib.Token
+import all BSmtLib.Token.Reserved
+import all BSmtLib.Lexer
+
+@[expose] public section
 
 /-!
 # Runs and bytes of a slice, cursors and contents
@@ -300,27 +308,25 @@ theorem start_space (version : Token.Version) (ws : Bool) (location : Span.Locat
   simp [start, this]
 
 theorem start_quoted (version : Token.Version) (ws : Bool) (location : Span.Location) :
-    start version ws location 124 = .pending ⟨.quotedSymbol, location, .empty⟩ := rfl
+    start version ws location 124 = .pending ⟨.quotedSymbol, location, .empty⟩ := (rfl)
 
 /-! ## Cursors -/
 
 section
 
-open BSmtLib.Lexer.Internal (intoBatch)
-
 variable {g : Token.BatchTag}
 
 theorem intoBatch_next (c : Token.BatchCursor g) (h : c.HasNext) :
-    intoBatch (c.next h).2.1 = intoBatch c := rfl
+    BSmtLib.Lexer.Internal.intoBatch (c.next h).2.1 = BSmtLib.Lexer.Internal.intoBatch c := (rfl)
 
 theorem version_next (c : Token.BatchCursor g) (h : c.HasNext) :
-    (c.next h).2.1.version = c.version := rfl
+    (c.next h).2.1.version = c.version := (rfl)
 
 theorem discard_next (c : Token.BatchCursor g) (h : c.HasNext) :
-    (c.next h).2.1.discardRequested = c.discardRequested := rfl
+    (c.next h).2.1.discardRequested = c.discardRequested := (rfl)
 
 theorem relex_next (c : Token.BatchCursor g) (h : c.HasNext) :
-    (c.next h).2.1.relexRequested = c.relexRequested := rfl
+    (c.next h).2.1.relexRequested = c.relexRequested := (rfl)
 
 end
 

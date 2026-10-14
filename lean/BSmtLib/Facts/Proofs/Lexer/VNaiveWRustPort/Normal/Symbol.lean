@@ -1,4 +1,10 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Normal.Basic
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Normal.Basic
+import all BSmtLib.Lexer.Helpers
+import all BSmtLib.Lexer.Internal.WRustPort
+
+@[expose] public section
 
 /-!
 # The normal state on a simple symbol

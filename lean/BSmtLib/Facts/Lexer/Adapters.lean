@@ -1,6 +1,10 @@
-import BSmtLib.Lexer.Internal.VNaive
-import BSmtLib.Lexer.Internal.X1BatchInCore
-import BSmtLibSpec.Lexer
+module
+
+public import BSmtLib.Lexer.Internal.VNaive
+public import BSmtLib.Lexer.Internal.X1BatchInCore
+public import BSmtLibSpec.Lexer
+
+@[expose] public section
 
 /-!
 # The adapters of the lexer proofs

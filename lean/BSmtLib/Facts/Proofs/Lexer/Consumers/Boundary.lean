@@ -1,4 +1,10 @@
-import BSmtLib.Facts.Proofs.Lexer.Consumers.Stream
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.Consumers.Stream
+import all BSmtLib.Lexer.Internal.VNaive
+import all BSmtLib.Token
+
+@[expose] public section
 
 /-!
 # What follows a boundary

@@ -1,5 +1,9 @@
-import BSmtLibSpec.Parser
-import BSmtLibSpec.Grammar.Properties
+module
+
+public import BSmtLibSpec.Parser
+public import BSmtLibSpec.Grammar.Properties
+
+@[expose] public section
 
 /-!
 # Rebuilding a script from its calls

@@ -1,4 +1,8 @@
-import BSmtLib.Facts.Proofs.Lexer.Simulation.Couple
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.Simulation.Couple
+
+@[expose] public section
 
 /-!
 # Simulation of one lexer's steps by another's under a relation of states

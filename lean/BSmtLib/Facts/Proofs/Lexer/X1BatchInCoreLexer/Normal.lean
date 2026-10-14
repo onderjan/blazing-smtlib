@@ -1,4 +1,12 @@
-import BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Steps
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Steps
+import all BSmtLib.Lexer
+import all BSmtLib.Lexer.Helpers
+import all BSmtLib.Lexer.Internal.WRustPort
+import all BSmtLib.Lexer.Internal.WRustPort.Slice
+
+@[expose] public section
 
 /-!
 # The loop of the normal state of the library's lexer and of `X1BatchInCore`

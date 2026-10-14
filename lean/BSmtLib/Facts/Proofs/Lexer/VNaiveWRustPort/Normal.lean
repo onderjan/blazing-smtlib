@@ -1,12 +1,17 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Normal.Single
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Normal.Whitespace
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Normal.Quoted
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Normal.Symbol
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Normal.Comment
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Normal.Hash
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Normal.String
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Normal.Keyword
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Normal.Digits
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Normal.Single
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Normal.Whitespace
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Normal.Quoted
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Normal.Symbol
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Normal.Comment
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Normal.Hash
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Normal.String
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Normal.Keyword
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Normal.Digits
+import all BSmtLib.Lexer.Helpers
+
+@[expose] public section
 
 /-!
 # The Rust port's normal state against the naive lexer

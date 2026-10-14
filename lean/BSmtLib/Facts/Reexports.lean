@@ -1,4 +1,8 @@
-import BSmtLib.Facts.Naming
+module
+
+public meta import BSmtLib.Facts.Naming
+
+@[expose] public meta section
 
 /-!
 # The re-exports, generated and checked
@@ -202,7 +206,9 @@ def commentLines (text : String) : Array String := Id.run do
 /-- The generated module, from `uses` and the library in `env`; `tokens` are those of Lean's
 built-in syntax. -/
 def render (tokens : Parser.TokenTable) (env : Environment) : String := Id.run do
-  let mut lines := sources.toArray.map (s!"import {·}") ++ #["",
+  let mut lines := #["module", ""] ++ sources.toArray.map (s!"public import {·}") ++ #["",
+    "public section",
+    "",
     "/-!",
     "# The re-exports",
     "",

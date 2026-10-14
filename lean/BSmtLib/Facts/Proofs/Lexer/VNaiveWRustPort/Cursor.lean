@@ -1,6 +1,13 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Model
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Batch
-import BSmtLib.Facts.Proofs.Lexer.Simulation.Batch
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Model
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Batch
+public import BSmtLib.Facts.Proofs.Lexer.Simulation.Batch
+import all BSmtLib.Span
+import all BSmtLib.Token
+import all BSmtLib.Token.SyntaxToken
+
+@[expose] public section
 
 /-!
 # Cursors over a batch that holds lexemes
@@ -19,7 +26,6 @@ open BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Model BSmtLib.Lexer.Internal.VNa
 
 namespace BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Cursor
 
-open BSmtLib.Lexer.Internal (intoBatch)
 open BSmtLib.Facts.Lexer.Adapters
 
 variable {g : Token.BatchTag}
@@ -46,19 +52,19 @@ theorem discard_resetConsumed (c : Token.BatchCursor g) :
   cases c; rfl
 
 theorem cNext_new (v : Token.Version) (b : Token.TokenBatch) : cNext
-    (Token.BatchCursor.new v b) = 0 := rfl
+    (Token.BatchCursor.new v b) = 0 := (rfl)
 
 theorem cStop_new (v : Token.Version) (b : Token.TokenBatch) : cStop
-    (Token.BatchCursor.new v b) = b.len := rfl
+    (Token.BatchCursor.new v b) = b.len := (rfl)
 
 theorem relex_new (v : Token.Version) (b : Token.TokenBatch) :
-    (Token.BatchCursor.new v b).relexRequested = false := rfl
+    (Token.BatchCursor.new v b).relexRequested = false := (rfl)
 
 theorem discard_new (v : Token.Version) (b : Token.TokenBatch) :
-    (Token.BatchCursor.new v b).discardRequested = false := rfl
+    (Token.BatchCursor.new v b).discardRequested = false := (rfl)
 
 theorem version_new (v : Token.Version) (b : Token.TokenBatch) :
-    (Token.BatchCursor.new v b).version = v := rfl
+    (Token.BatchCursor.new v b).version = v := (rfl)
 
 theorem cNext_discardRest (c : Token.BatchCursor g) : cNext c.discardRest = cNext c := by
   cases c; rfl
@@ -120,7 +126,7 @@ theorem holds_contentAt {T : Token.TokenBatch} {ls : List Lexeme} (h : Holds T l
 /-- The next token of a cursor over a batch that holds the lexemes is reported as the naive
 lexer reports the lexeme at its index alone. -/
 theorem toHanded_at {ls : List Lexeme} (c : Token.BatchCursor g) (h : c.HasNext)
-    (hb : Holds (intoBatch c) ls) (hj : cNext c < ls.length) :
+    (hb : Holds (BSmtLib.Lexer.Internal.intoBatch c) ls) (hj : cNext c < ls.length) :
     toHanded c (c.next h).1 = lexemeHanded c.version ls[cNext c] := by
   rw [lexemeHanded_eq]
   have hcontent : (c.content (c.next h).1).toByteArray = ls[cNext c].content := by
@@ -143,7 +149,7 @@ theorem toHanded_at {ls : List Lexeme} (c : Token.BatchCursor g) (h : c.HasNext)
 lexer reports for the lexeme at its index alone. -/
 theorem entry_at (C : BSmtLibSpec.Lexer.Consumer) {ls : List Lexeme} (c : Token.BatchCursor g)
     (h : c.HasNext)
-    (hb : Holds (intoBatch c) ls) (hj : cNext c < ls.length) :
+    (hb : Holds (BSmtLib.Lexer.Internal.intoBatch c) ls) (hj : cNext c < ls.length) :
     Answering.entry C c (c.next h).1 = lexemeEntry C.concrete c.version ls[cNext c] := by
   have hcontent : (c.content (c.next h).1).toByteArray = ls[cNext c].content := by
     rw [Simulation.Batch.content_eq, tokenIndex_next, holds_contentAt hb hj]
@@ -164,13 +170,13 @@ theorem entry_at (C : BSmtLibSpec.Lexer.Consumer) {ls : List Lexeme} (c : Token.
 /-- The span of the next token of a cursor over a batch that holds the lexemes starts where the
 lexeme at its index starts. -/
 theorem span_peek_start {ls : List Lexeme} (c : Token.BatchCursor g) (h : c.HasNext)
-    (hb : Holds (intoBatch c) ls) (hj : cNext c < ls.length) :
+    (hb : Holds (BSmtLib.Lexer.Internal.intoBatch c) ls) (hj : cNext c < ls.length) :
     (c.span (c.peek h)).start = ls[cNext c].start := by
   rw [Simulation.Batch.span_eq, tokenIndex_peek, holds_spanAt_start hb hj]
 
 /-- The end of the last token consumed from a cursor over a batch that holds the lexemes. -/
 theorem consumedEndOf_at {ls : List Lexeme} {c c₀ : Token.BatchCursor g} (hc : c.Consumed c₀)
-    (hb : Holds (intoBatch c) ls) (hj : cNext c - 1 < ls.length) :
+    (hb : Holds (BSmtLib.Lexer.Internal.intoBatch c) ls) (hj : cNext c - 1 < ls.length) :
     c.consumedEndOf hc = ls[cNext c - 1].end := by
   rw [consumedEndOf_eq, holds_spanAt_end hb hj]
 
@@ -178,7 +184,6 @@ end BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Cursor
 
 namespace BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Cursor
 
-open BSmtLib.Lexer.Internal (intoBatch)
 open BSmtLib.Facts.Lexer.Adapters
 
 variable {g : Token.BatchTag} (C : BSmtLibSpec.Lexer.Consumer)

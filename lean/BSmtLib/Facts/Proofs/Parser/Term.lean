@@ -1,4 +1,11 @@
-import BSmtLib.Facts.Proofs.Parser.TermHelpers
+module
+
+public import BSmtLib.Facts.Proofs.Parser.TermHelpers
+import all BSmtLib.Parser.Category.Term
+import all BSmtLib.Token.Reserved
+import all BSmtLib.Parser.Category.Token
+
+@[expose] public section
 
 /-!
 # The term parser against the traversal

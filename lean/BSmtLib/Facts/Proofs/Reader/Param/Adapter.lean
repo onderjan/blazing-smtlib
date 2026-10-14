@@ -1,5 +1,11 @@
-import BSmtLib.Facts.Proofs.Reader.Param.EraseSteps
-import BSmtLib.Facts.Proofs.Reader.Consumer
+module
+
+public import BSmtLib.Facts.Proofs.Reader.Param.EraseSteps
+public import BSmtLib.Facts.Proofs.Reader.Consumer
+import all BSmtLib.Parser.Adapter
+import all BSmtLib.Token
+
+@[expose] public section
 
 /-!
 # The parse adapter's token against the recording run's

@@ -1,5 +1,13 @@
-import BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Core
-import BSmtLib.Lexer.Internal.X1BatchInCore
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Core
+public import BSmtLib.Lexer.Internal.X1BatchInCore
+import all BSmtLib.Lexer
+import all BSmtLib.Lexer.Internal.WRustPort
+import all BSmtLib.Lexer.Internal.X1BatchInCore
+import all BSmtLib.Token
+
+@[expose] public section
 
 /-!
 # The hand-overs
@@ -16,7 +24,6 @@ batches have no tokens (`ErZ`).
 
 namespace BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.HandOver
 
-open BSmtLib.Lexer.Internal (intoBatch)
 open BSmtLib.Lexer (BATCH_CAPACITY Interrupted)
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Batch BSmtLib.Facts.Proofs.Lexer.Simulation.Relation
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Steps
@@ -62,7 +69,8 @@ def handOverTail (bytesAfter : ByteArray) :
     | none =>
       Lexer.Internal.WRustPort.modifyCore fun c => { c with consumedDepth := c.lexedDepth }
   Lexer.Internal.WRustPort.modifyCore fun c => { c with version := cursor.version }
-  let spent : Token.TokenBatch := { intoBatch cursor with bytes := bytesAfter }
+  let spent : Token.TokenBatch :=
+      { BSmtLib.Lexer.Internal.intoBatch cursor with bytes := bytesAfter }
   if let some interrupted := stop then
     Lexer.Internal.X1BatchInCore.storeSpent spent
     throw interrupted
@@ -170,7 +178,8 @@ theorem stop_sim {α : Type} (bytesAfter : ByteArray) (i i' : Interrupted R E fl
       w.batch.len = 0 → (strict = true → w.batch.bytes = bytesAfter) → ∀ hb hb',
       Core.CoreRel w { x with
         version := cur'.version
-        batch := ({ intoBatch cur' with bytes := bytesAfter } : Token.TokenBatch).clear x.offset
+        batch := ({ BSmtLib.Lexer.Internal.intoBatch cur' with bytes := bytesAfter } :
+            Token.TokenBatch).clear x.offset
         tokenStarted := hb
         batchEnded := hb' } ∧ (strict = true → w.batch.bytes = bytesAfter) := by
     intro w x hs hv hl hby _ _
@@ -223,7 +232,7 @@ theorem finish_sim (l ls : Nat) (Bw Bx : Token.TokenBatch) (bytesAfter : ByteArr
     (cur : Token.BatchCursor g) (cur' : Token.BatchCursor g') (hag : CursorAgree cur cur') (hd) :
     SimR Er (FlushRel l ls Bw Bx cur)
       (fun _ spent s t => FlushedRel l ls Bw Bx s t ∧
-        spent = { intoBatch cur' with bytes := bytesAfter })
+        spent = { BSmtLib.Lexer.Internal.intoBatch cur' with bytes := bytesAfter })
       (Lexer.Internal.WRustPort.getCore (H := H) (m := m) (R := R) (E := E) (floor := floor)
           (low := low)
         >>= fun lift =>
@@ -277,7 +286,7 @@ theorem flushCursor_sim (hcons : ConsumesAlike H m R E) (l ls : Nat) (Bw Bx : To
         hf hf',
     SimR (Core.ErZ strict) (FlushRel l ls Bw Bx c)
       (fun _ spent s t => FlushedRel l ls Bw Bx s t ∧
-        spent = { intoBatch d with bytes := bytesAfter })
+        spent = { BSmtLib.Lexer.Internal.intoBatch d with bytes := bytesAfter })
       (Lexer.Internal.WRustPort.Rust.flushCursor (H := H) (m := m) (R := R) (E := E)
           (floor := floor)
         (low := low) c hf)
@@ -324,12 +333,13 @@ theorem flushCursor_sim (hcons : ConsumesAlike H m R E) (l ls : Nat) (Bw Bx : To
       hag.consumedSpanOf consumed consumed'
     have hloc : cursor'.consumedEndOf consumed = next.consumedEndOf consumed' :=
       hag.consumedEndOf consumed consumed'
-    have hbatch : intoBatch next = intoBatch d := intoBatch_eq next d
+    have hbatch : BSmtLib.Lexer.Internal.intoBatch next = BSmtLib.Lexer.Internal.intoBatch d :=
+        intoBatch_eq next d
     have stop : ∀ (i i' : Interrupted R E floor), i = i' →
         SimR (Core.ErZ strict) (fun s' t' => s'.val =
             { s.val with version := cursor'.version } ∧ t' = t)
           (fun _ spent s t => FlushedRel l ls Bw Bx s t ∧
-            spent = { intoBatch d with bytes := bytesAfter })
+            spent = { BSmtLib.Lexer.Internal.intoBatch d with bytes := bytesAfter })
           (Lexer.Internal.WRustPort.Rust.stopWith (H := H) (m := m) (R := R) (E := E) cursor' i)
           (pure (f := Lexer.Internal.WRustPort.LexM H m R E floor low) (some i', next) >>=
             handOverTail bytesAfter) := fun i i' hi => by
@@ -382,7 +392,7 @@ theorem flushCursor_sim (hcons : ConsumesAlike H m R E) (l ls : Nat) (Bw Bx : To
           (strict = true → sS.val.batch.bytes = bytesAfter) →
           SimR (Core.ErZ strict) (fun s' t' => s' = sS ∧ t' = tt)
             (fun _ spent s t => FlushedRel l ls Bw Bx s t ∧
-              spent = { intoBatch d with bytes := bytesAfter })
+              spent = { BSmtLib.Lexer.Internal.intoBatch d with bytes := bytesAfter })
             (Lexer.Internal.WRustPort.Rust.stopWith (H := H) (m := m) (R := R) (E := E) cursor' i)
             (pure (f := Lexer.Internal.WRustPort.LexM H m R E floor low) (some i', next) >>=
               handOverTail bytesAfter) := fun i i' hi sS tt hs hv hl hb => by

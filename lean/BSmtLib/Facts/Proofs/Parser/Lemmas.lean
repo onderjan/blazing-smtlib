@@ -1,5 +1,10 @@
-import BSmtLib.Facts.Proofs.Parser.Drive
-import BSmtLibSpec.Facts.Proofs.Parser.Equations
+module
+
+public import BSmtLib.Facts.Proofs.Parser.Drive
+public import BSmtLibSpec.Facts.Proofs.Parser.Equations
+import all BSmtLib.Parser
+
+@[expose] public section
 
 /-!
 # Lemmas about the monads, the spec's tokens and calls
@@ -96,7 +101,7 @@ theorem causeOf_comp_handler :
 omit [LawfulMonad m] in
 /-- A handler call in a parse is the handler's action, its failure the handler's. -/
 theorem call_eq (action : ExceptT (Traits.Handler.Error H) (StateT H m) α) :
-    Parser.call action = ExceptT.adapt ParseErrorCause.handler action := rfl
+    Parser.call action = ExceptT.adapt ParseErrorCause.handler action := (rfl)
 
 @[simp]
 theorem adaptRun_pure (a : α) :

@@ -1,5 +1,9 @@
-import BSmtLibSpec.Grammar.Script
-import BSmtLibSpec.Grammar.Properties
+module
+
+public import BSmtLibSpec.Grammar.Script
+public import BSmtLibSpec.Grammar.Properties
+
+@[expose] public section
 
 /-!
 # Reading trees back from their tokens

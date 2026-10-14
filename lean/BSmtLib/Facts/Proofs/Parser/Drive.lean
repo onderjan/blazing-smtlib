@@ -1,4 +1,8 @@
-import BSmtLib.Facts.Parser.Adapters
+module
+
+public import BSmtLib.Facts.Parser.Adapters
+
+@[expose] public section
 
 /-!
 # Running a parser over tokens, with the spec's token points

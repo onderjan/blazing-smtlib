@@ -1,7 +1,11 @@
-import BSmtLib.Facts.PublicApi.Adapters
-import BSmtLib.Lexer.Internal.VNaive
-import BSmtLib.Lexer.Internal.WRustPort
-import BSmtLib.Lexer.Internal.X1BatchInCore
+module
+
+public import BSmtLib.Facts.PublicApi.Adapters
+public import BSmtLib.Lexer.Internal.VNaive
+public import BSmtLib.Lexer.Internal.WRustPort
+public import BSmtLib.Lexer.Internal.X1BatchInCore
+
+@[expose] public section
 
 /-!
 # The lexers of the chain with the collector
@@ -13,7 +17,6 @@ input. The lexers are what the agreement theorem is about; the definitions here 
 
 namespace BSmtLib.Facts.PublicApi.Adapters.Chain
 
-open BSmtLib.Lexer.Internal
 open BSmtLib.Lexer.Error
 
 /-- A lexer with the collector, given by its calls, fed the slices by its call for a slice and
@@ -34,24 +37,26 @@ def collectBy {L A B : Type}
 /-- The naive lexer with the collector, as `collect` runs the library's lexer. -/
 def collectV (version : Token.Version) (slices : List ByteList) :
     Except (LexError Empty) (Option (Span.Located Unit)) × List Entry :=
-  (collectBy (fun lexer slice => VNaive.Lexer.lexSlice lexer slice)
-    (fun lexer => VNaive.Lexer.lexEof lexer) (VNaive.Lexer.new Collector.mk version) slices).run []
+  (collectBy (fun lexer slice => Lexer.Internal.VNaive.Lexer.lexSlice lexer slice)
+    (fun lexer => Lexer.Internal.VNaive.Lexer.lexEof lexer)
+    (Lexer.Internal.VNaive.Lexer.new Collector.mk version) slices).run []
 
 /-- The Rust port with the collector, as `collect` runs the library's lexer. -/
 def collectW (version : Token.Version) (slices : List ByteList) :
     Except (LexError Empty) (Option (Span.Located Unit)) × List Entry :=
-  (collectBy (fun lexer slice => WRustPort.Lexer.lexSlice lexer slice)
-    (fun lexer => WRustPort.Lexer.lexEof lexer) (WRustPort.Lexer.new Collector.mk version)
+  (collectBy (fun lexer slice => Lexer.Internal.WRustPort.Lexer.lexSlice lexer slice)
+    (fun lexer => Lexer.Internal.WRustPort.Lexer.lexEof lexer)
+    (Lexer.Internal.WRustPort.Lexer.new Collector.mk version)
     slices).run []
 
 /-- The lexer with the batch kept in its state with the collector, as `collect` runs the
 library's lexer. -/
 def collectX1 (version : Token.Version) (slices : List ByteList) :
     Except (LexError Empty) (Option (Span.Located Unit)) × List Entry :=
-  (collectBy (fun lexer slice => X1BatchInCore.Lexer.lexSlice lexer slice)
-    (fun lexer => X1BatchInCore.Lexer.lexEof lexer) (WRustPort.Lexer.new Collector.mk version)
+  (collectBy (fun lexer slice => Lexer.Internal.X1BatchInCore.Lexer.lexSlice lexer slice)
+    (fun lexer => Lexer.Internal.X1BatchInCore.Lexer.lexEof lexer)
+    (Lexer.Internal.WRustPort.Lexer.new Collector.mk version)
     slices).run []
-
 
 /-- A run's result with an error's cause only, and its entries. -/
 def causeOnly {α : Type} (run : Except (LexError Empty) α × List Entry) :

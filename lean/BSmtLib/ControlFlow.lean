@@ -1,3 +1,7 @@
+module
+
+public section
+
 namespace BSmtLib
 
 /-- Whether an operation should go on or stop early with a value. -/

@@ -1,4 +1,8 @@
-import BSmtLib.Facts.Proofs.Parser.Lemmas
+module
+
+public import BSmtLib.Facts.Proofs.Parser.Lemmas
+
+@[expose] public section
 
 /-!
 # Which tokens of the parser stand for which tokens of the spec

@@ -1,4 +1,8 @@
-import BSmtLib.Facts.Proofs.Reader.Consumer
+module
+
+public import BSmtLib.Facts.Proofs.Reader.Consumer
+
+@[expose] public section
 
 /-!
 # Where the traversal asks its producer, along what a parser takes

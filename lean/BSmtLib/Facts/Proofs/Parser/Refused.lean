@@ -1,4 +1,14 @@
-import BSmtLib.Facts.Proofs.Parser.Script
+module
+
+public import BSmtLib.Facts.Proofs.Parser.Script
+import all BSmtLib.Parser
+import all BSmtLib.Parser.Category.Attribute
+import all BSmtLib.Parser.Command
+import all BSmtLib.Parser.Command.Standard
+import all BSmtLib.Parser.Script
+import all BSmtLib.Token.Reserved
+
+@[expose] public section
 
 /-!
 # A declaration of a version that is not supported, against the traversal

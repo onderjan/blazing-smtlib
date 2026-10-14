@@ -1,5 +1,9 @@
-import BSmtLib.Facts.PublicApi.Adapters
-import BSmtLibSpec.Facts
+module
+
+public import BSmtLib.Facts.PublicApi.Adapters
+public import BSmtLibSpec.Facts
+
+@[expose] public section
 
 /-!
 # Files as tokens with layout between them

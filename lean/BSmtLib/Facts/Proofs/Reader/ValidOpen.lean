@@ -1,6 +1,10 @@
-import BSmtLib.Facts.Proofs.Reader.Valid
-import BSmtLibSpec.Facts.Proofs.Grammar.RoundTrip
-import BSmtLibSpec.Facts.Proofs.Grammar.Files
+module
+
+public import BSmtLib.Facts.Proofs.Reader.Valid
+public import BSmtLibSpec.Facts.Proofs.Grammar.RoundTrip
+public import BSmtLibSpec.Facts.Proofs.Grammar.Files
+
+@[expose] public section
 
 /-!
 # From characters to the calls of the traversal, before the end of the input

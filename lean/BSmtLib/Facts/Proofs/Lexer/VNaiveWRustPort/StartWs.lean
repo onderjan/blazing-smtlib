@@ -1,5 +1,11 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Push
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.FastRuns
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Push
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.FastRuns
+import all BSmtLib.Lexer.Internal.VNaive
+import all BSmtLib.Lexer.Internal.WRustPort
+
+@[expose] public section
 
 /-!
 # The Rust port's whitespace from the normal state, with a consumer that takes it

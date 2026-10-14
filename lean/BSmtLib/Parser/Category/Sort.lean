@@ -1,4 +1,8 @@
-import BSmtLib.Parser.Category.Ident
+module
+
+public import BSmtLib.Parser.Category.Ident
+
+public section
 
 /-!
 # Sorts

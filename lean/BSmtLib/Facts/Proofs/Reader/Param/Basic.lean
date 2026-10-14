@@ -1,4 +1,8 @@
-import BSmtLib.Lexer
+module
+
+public import BSmtLib.Lexer
+
+@[expose] public section
 
 /-!
 # Runs of the library's lexer with two consumers

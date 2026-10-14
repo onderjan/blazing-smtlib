@@ -1,4 +1,15 @@
-import BSmtLib.Facts.Proofs.Parser.Rejection.SExpr
+module
+
+public import BSmtLib.Facts.Proofs.Parser.Rejection.SExpr
+import all BSmtLib.Parser.Category.Combinator
+import all BSmtLib.Parser.Category.Pattern
+import all BSmtLib.Parser.Category.QualifiedIdent
+import all BSmtLib.Parser.Category.Sort
+import all BSmtLib.Parser.Category.SortedVar
+import all BSmtLib.Parser.Category.Token
+import all BSmtLib.Token.Reserved
+
+@[expose] public section
 
 /-!
 # What patterns, qualified identifiers, sorted variables and lists can still take

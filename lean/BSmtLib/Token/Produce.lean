@@ -1,5 +1,9 @@
-import BSmtLib.Token
-import BSmtLib.Token.SyntaxToken
+module
+
+public import BSmtLib.Token
+public import BSmtLib.Token.SyntaxToken
+
+public section
 
 /- LEAN: in Rust, `SmtProduce` and `SmtConsumeFrom` are in `token` with the cursor. The producer
 views its tokens as `SyntaxToken`s, whose module imports `BSmtLib.Token`, so the two classes
@@ -98,7 +102,7 @@ instance {batch : BatchTag} : Produce (BatchCursor batch) where
   version := BatchCursor.version
   setVersion := BatchCursor.setVersion
   discardRest := BatchCursor.discardRest
-  next?_isSome h := by simp [BatchCursor.next?, h]
+  next?_isSome := BatchCursor.isSome_next?
   consumed_trans := BatchCursor.Consumed.trans
   consumed_wf :=
     Subrelation.wf (fun h => BatchCursor.Consumed.remaining_lt h) (measure BatchCursor.remaining).wf

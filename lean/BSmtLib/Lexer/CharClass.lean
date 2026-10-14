@@ -1,4 +1,8 @@
-import Std.Data.ByteSlice
+module
+
+public import Std.Data.ByteSlice
+
+public section
 
 namespace BSmtLib.Lexer.CharClass
 
@@ -60,7 +64,7 @@ inductive _root_.BSmtLib.Lexer.CharClass where
   | otherAsciiPrintable
   /-- any character greater or equal to 128 -/
   | nonAscii
-  deriving BEq, Repr, Inhabited
+  deriving @[expose] BEq, Repr, Inhabited
 
 /- LEAN: Lean has no byte literals like `b'('`; `byte! '('` stands for one. It is a macro, so
 that the byte is a constant in the compiled code: converting the character with a function
@@ -71,6 +75,7 @@ macro "byte! " c:char : term =>
 
 /- LEAN: Lean's `match` cannot match a byte against character patterns and ranges as Rust
 does, so the classification is a chain of comparisons in the order of the Rust arms. -/
+@[expose]
 def classify (c : UInt8) : CharClass :=
   let n := c.toNat
   if (65 ≤ n && n ≤ 90) || (97 ≤ n && n ≤ 122) then
@@ -97,23 +102,31 @@ def classify (c : UInt8) : CharClass :=
   else if n < 32 then .otherNonPrintable
   else .otherAsciiPrintable
 
-@[inline]
+@[expose, inline]
 def isPrintableOrWhitespace (self : CharClass) : Bool :=
   -- everything except other non-printable and DEL
   !(self == .otherNonPrintable || self == .del)
 
-@[inline]
+@[expose, inline]
 def isAllowedInSimpleSymbol (self : CharClass) : Bool :=
   -- letters, digits, special, dot
   self == .letter || self == .digit || self == .special || self == .dot
 
+@[expose]
 def RUN_STRING_PLAIN : UInt8 := (1 : UInt8) <<< 0
+@[expose]
 def RUN_DIGIT : UInt8 := (1 : UInt8) <<< 1
+@[expose]
 def RUN_HEX_DIGIT : UInt8 := (1 : UInt8) <<< 2
+@[expose]
 def RUN_BINARY_DIGIT : UInt8 := (1 : UInt8) <<< 3
+@[expose]
 def RUN_NON_LF_WHITESPACE : UInt8 := (1 : UInt8) <<< 4
+@[expose]
 def RUN_QUOTED_PLAIN : UInt8 := (1 : UInt8) <<< 5
+@[expose]
 def RUN_SIMPLE_SYMBOL : UInt8 := (1 : UInt8) <<< 6
+@[expose]
 def RUN_COMMENT_PLAIN : UInt8 := (1 : UInt8) <<< 7
 
 /-- The run flags, one per bit of the byte. -/
@@ -121,12 +134,10 @@ private def RUN_FLAG_BITS : Array UInt8 :=
   #[RUN_STRING_PLAIN, RUN_DIGIT, RUN_HEX_DIGIT, RUN_BINARY_DIGIT, RUN_NON_LF_WHITESPACE,
     RUN_QUOTED_PLAIN, RUN_SIMPLE_SYMBOL, RUN_COMMENT_PLAIN]
 
-/- LEAN: `#guard` checks the condition when the module is built, as the Rust `assert!` in a
-`const` block does. -/
--- the run flags partition the byte into single bits, each at its own place
-#guard (List.range 8).all fun i => RUN_FLAG_BITS[i]? == some ((1 : UInt8) <<< i.toUInt8)
-#guard RUN_FLAG_BITS.foldl (· ||| ·) 0 == 0xFF
+/- LEAN: the Rust `assert!` in a `const` block that the run flags partition the byte is a
+`#guard` in `BSmtLib.Facts.Asserts`, checked when the facts are built. -/
 
+@[expose]
 def runFlags (c : UInt8) : UInt8 := Id.run do
   let class_ := classify c
   let mut flags : UInt8 := 0
@@ -155,6 +166,7 @@ def runFlags (c : UInt8) : UInt8 := Id.run do
 /- LEAN: computed once when the module is loaded, where Rust computes the `static` at
 compile time. -/
 /-- The run flags of every byte. -/
+@[expose]
 def RUN_FLAGS : ByteArray :=
   ⟨(Array.range 256).map fun i => CharClass.runFlags i.toUInt8⟩
 
@@ -163,7 +175,7 @@ theorem size_RUN_FLAGS : RUN_FLAGS.size = 256 := by
   simp [RUN_FLAGS, ByteArray.size]
 
 /-- The run flags of the byte. -/
-@[inline]
+@[expose, inline]
 def runFlagsOf (c : UInt8) : UInt8 :=
   RUN_FLAGS[c.toNat]'(size_RUN_FLAGS ▸ c.toNat_lt)
 
@@ -201,7 +213,7 @@ def ofSlice (slice : ByteSlice) (h : slice.stop < USize.size) : Input :=
       exact slice.stop_le_size_byteArray }
 
 /-- The byte at `position`, if it is below the end of the slice. -/
-@[inline]
+@[expose, inline]
 def get? (input : Input) (position : USize) : Option UInt8 :=
   if h : position < input.stop then
     some (input.bytes.uget position (by
@@ -234,7 +246,7 @@ theorem lt_stop_of_ne {input : Input} {position : USize}
 end Input
 
 /-- Whether the byte ends a run as it carries no flags from the mask. -/
-@[inline]
+@[expose, inline]
 def endsRun (c : UInt8) (mask : UInt8) : Bool :=
   runFlagsOf c &&& mask == 0
 
@@ -274,8 +286,6 @@ decreasing_by
 
 end Internal
 
-open Internal
-
 /--
 Position of the first byte at `start` or after it carrying no flags from the
 mask, the end of the slice if none, or `start` if it is at the end or after it.
@@ -285,7 +295,7 @@ at least one flag from the mask.
 -/
 @[inline]
 def runEnd (input : Input) (start : USize) (mask : UInt8) : USize :=
-  runEndIn (fun bytes position h => endsRun (bytes.uget position h) mask) input.bytes start
+  Internal.runEndIn (fun bytes position h => endsRun (bytes.uget position h) mask) input.bytes start
     input.stop input.stop_le
 
 /--
@@ -294,7 +304,7 @@ the mask.
 -/
 @[inline]
 def runEndAll (input : Input) (start : USize) (mask : UInt8) : USize :=
-  runEndIn (fun bytes position h => runFlagsOf (bytes.uget position h) &&& mask != mask)
+  Internal.runEndIn (fun bytes position h => runFlagsOf (bytes.uget position h) &&& mask != mask)
     input.bytes start input.stop input.stop_le
 
 /- LEAN: the facts below are what the loops of the lexer are shown to end by: a loop goes on
@@ -325,21 +335,21 @@ theorem toNat_add_one_of_get? {input : Input} {position : USize} {c : UInt8}
 
 end Input
 
-private theorem le_runEndIn (test : RunTest) (bytes : ByteArray) (position stop : USize)
+private theorem le_runEndIn (test : Internal.RunTest) (bytes : ByteArray) (position stop : USize)
     (hstop : stop.toNat ≤ bytes.size) :
-    position.toNat ≤ (runEndIn test bytes position stop hstop).toNat := by
-  fun_induction runEndIn test bytes position stop hstop with
+    position.toNat ≤ (Internal.runEndIn test bytes position stop hstop).toNat := by
+  fun_induction Internal.runEndIn test bytes position stop hstop with
   | case1 => exact Nat.le_refl _
   | case2 position h _ ih =>
     rw [toNat_add_one_of_lt (USize.lt_iff_toNat_lt.mp h)] at ih
     omega
   | case3 => exact Nat.le_refl _
 
-private theorem lt_runEndIn (test : RunTest) (bytes : ByteArray) (position stop : USize)
+private theorem lt_runEndIn (test : Internal.RunTest) (bytes : ByteArray) (position stop : USize)
     (hstop : stop.toNat ≤ bytes.size) (h : position < stop)
     (hcontinues : test bytes position (by have := USize.lt_iff_toNat_lt.mp h; omega) = false) :
-    position.toNat < (runEndIn test bytes position stop hstop).toNat := by
-  rw [runEndIn]
+    position.toNat < (Internal.runEndIn test bytes position stop hstop).toNat := by
+  rw [Internal.runEndIn]
   simp only [h, hcontinues, dite_true, Bool.false_eq_true, ite_false]
   have := le_runEndIn test bytes (position + 1) stop hstop
   rw [toNat_add_one_of_lt (USize.lt_iff_toNat_lt.mp h)] at this
@@ -355,10 +365,10 @@ theorem le_runEndAll (input : Input) (start : USize) (mask : UInt8) :
     start.toNat ≤ (runEndAll input start mask).toNat :=
   le_runEndIn _ _ _ _ _
 
-private theorem runEndIn_le (test : RunTest) (bytes : ByteArray) (position stop : USize)
+private theorem runEndIn_le (test : Internal.RunTest) (bytes : ByteArray) (position stop : USize)
     (hstop : stop.toNat ≤ bytes.size) (h : position.toNat ≤ stop.toNat) :
-    (runEndIn test bytes position stop hstop).toNat ≤ stop.toNat := by
-  fun_induction runEndIn test bytes position stop hstop with
+    (Internal.runEndIn test bytes position stop hstop).toNat ≤ stop.toNat := by
+  fun_induction Internal.runEndIn test bytes position stop hstop with
   | case1 => exact h
   | case2 position hlt _ ih =>
     apply ih

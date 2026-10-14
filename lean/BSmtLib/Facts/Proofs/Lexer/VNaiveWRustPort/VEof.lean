@@ -1,5 +1,12 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.VBytes
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.EofModel
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.VBytes
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.EofModel
+import all BSmtLib.Lexer.Error
+import all BSmtLib.Lexer.Internal.VNaive
+import all BSmtLib.Span
+
+@[expose] public section
 
 /-!
 # The naive lexer at the end of the input, as `eofOut` says
@@ -41,7 +48,7 @@ def ResetOk (iv : Token.Version)
 theorem failureOf_trailing (l : Lexeme) :
     failureOf (ε := C.Error) ⟨.lexical .unexpectedTrailingToken, trailingSpan l, none⟩ =
       .trailing (toLocation l.start) :=
-  rfl
+  (rfl)
 
 theorem failureOf_lexical {k : LexicalErrorKind} {span : Span}
     (h : k ≠ .unexpectedTrailingToken) :

@@ -1,4 +1,8 @@
-import BSmtLib.Token
+module
+
+public import BSmtLib.Token
+
+public section
 
 /-!
 # How a command ended

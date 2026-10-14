@@ -1,4 +1,8 @@
-import BSmtLib.Facts.Parser.Adapters.Bridge
+module
+
+public import BSmtLib.Facts.Parser.Adapters.Bridge
+
+@[expose] public section
 
 /-!
 # Library handlers for spec handlers

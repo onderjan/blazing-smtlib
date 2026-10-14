@@ -1,4 +1,10 @@
-import BSmtLib.Facts.Proofs.Lexer.Consumers.Boundary
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.Consumers.Boundary
+import all BSmtLib.Lexer.Internal.VNaive
+import all BSmtLib.Token
+
+@[expose] public section
 
 /-!
 # The naive lexer's steps with a consumer of the spec

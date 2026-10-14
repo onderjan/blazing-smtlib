@@ -1,5 +1,9 @@
-import BSmtLib.Bytes
-import BSmtLib.Lexer.CharClass
+module
+
+public import BSmtLib.Bytes
+public import BSmtLib.Lexer.CharClass
+
+public section
 
 namespace BSmtLib.Plain
 
@@ -238,7 +242,7 @@ namespace DisallowedByteVecError
 def intoByteArray (self : DisallowedByteVecError) : ByteArray :=
   self.bytes.intoByteArray
 
-instance : Repr DisallowedByteVecError := ⟨fun s p => reprPrec s.bytes p⟩
+@[no_expose] instance : Repr DisallowedByteVecError := ⟨fun s p => reprPrec s.bytes p⟩
 
 end DisallowedByteVecError
 
@@ -272,11 +276,11 @@ local macro "plain_newtype " name:ident view:ident : command => do
 
     def isEmpty (self : $name) : Bool := self.bytes.isEmpty
 
-    instance : Repr $name := ⟨fun s p => reprPrec s.bytes p⟩
+    @[no_expose] instance : Repr $name := ⟨fun s p => reprPrec s.bytes p⟩
 
-    instance : BEq $name := ⟨fun a b => a.bytes == b.bytes⟩
+    @[no_expose] instance : BEq $name := ⟨fun a b => a.bytes == b.bytes⟩
 
-    instance : Hashable $name := ⟨fun s => hash s.bytes⟩
+    @[no_expose] instance : Hashable $name := ⟨fun s => hash s.bytes⟩
 
     end $name)
   let viewMethods ← `(
@@ -296,9 +300,9 @@ local macro "plain_newtype " name:ident view:ident : command => do
 
     def isEmpty (self : $view) : Bool := self.len == 0
 
-    instance : Repr $view := ⟨fun s p => reprPrec (Bytes.BytesView.new s.slice) p⟩
+    @[no_expose] instance : Repr $view := ⟨fun s p => reprPrec (Bytes.BytesView.new s.slice) p⟩
 
-    instance : BEq $view := ⟨fun a b => a.slice == b.slice⟩
+    @[no_expose] instance : BEq $view := ⟨fun a b => a.slice == b.slice⟩
 
     end $view)
   return ⟨Lean.mkNullNode #[viewStructure, ownedMethods, viewMethods]⟩

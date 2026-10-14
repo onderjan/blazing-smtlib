@@ -1,4 +1,9 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Normal
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Normal
+import all BSmtLib.Lexer.Internal.WRustPort
+
+@[expose] public section
 
 /-!
 # The Rust port's step in the normal state

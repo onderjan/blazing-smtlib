@@ -1,4 +1,9 @@
-import BSmtLib.Facts.Lexer.Adapters
+module
+
+public import BSmtLib.Facts.Lexer.Adapters
+import all BSmtLib.Lexer.Internal.WRustPort
+
+@[expose] public section
 
 /-!
 # Weakest preconditions in the Rust port's monad, with a consumer of the spec

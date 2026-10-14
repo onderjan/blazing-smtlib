@@ -1,4 +1,8 @@
-import BSmtLib.Facts.Proofs.Reader.Param.Link
+module
+
+public import BSmtLib.Facts.Proofs.Reader.Param.Link
+
+@[expose] public section
 
 /-!
 # The parser as a consumer of the specification, and the script consumer

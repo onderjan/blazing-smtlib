@@ -1,4 +1,8 @@
-import BSmtLibSpec.Facts.Proofs.Parser.Bridge
+module
+
+public import BSmtLibSpec.Facts.Proofs.Parser.Bridge
+
+@[expose] public section
 
 /-!
 # Facts of the parser

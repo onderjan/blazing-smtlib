@@ -1,6 +1,12 @@
-import BSmtLib.Facts.Proofs.Reader.Param.Finish
-import BSmtLib.Facts.Proofs.Reader.Param.Final
-import BSmtLib.Facts.Proofs.Reader.Session
+module
+
+public import BSmtLib.Facts.Proofs.Reader.Param.Finish
+public import BSmtLib.Facts.Proofs.Reader.Param.Final
+public import BSmtLib.Facts.Proofs.Reader.Session
+import all BSmtLib.Lexer
+import all BSmtLib.Parser.Adapter
+
+@[expose] public section
 
 /-!
 # The library's lexer with the parse adapter finishes only on files
@@ -15,7 +21,7 @@ which it does only on a file (`lexing_finishes_iff`): `adapter_finishes_only_on_
 
 namespace BSmtLib.Facts.Proofs.Reader.Param.Only
 
-open BSmtLib.Lexer BSmtLib.Lexer.Internal
+open BSmtLib.Lexer
 open BSmtLibSpec BSmtLibSpec.Grammar
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Parser.Traversal

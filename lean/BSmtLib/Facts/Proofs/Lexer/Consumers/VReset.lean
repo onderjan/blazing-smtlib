@@ -1,4 +1,9 @@
-import BSmtLib.Facts.Proofs.Lexer.Consumers.VWalk
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.Consumers.VWalk
+import all BSmtLib.Lexer.Internal.VNaive
+
+@[expose] public section
 
 /-!
 # The end of the input resets the naive lexer

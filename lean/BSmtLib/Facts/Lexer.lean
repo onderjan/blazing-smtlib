@@ -1,8 +1,12 @@
-import BSmtLib.Facts.Trusted
-import BSmtLib.Facts.Lexer.Adapters
-import BSmtLib.Facts.Proofs.Lexer.AdapterSteps
-import BSmtLib.Facts.Proofs.Lexer.Consumers.VNaive
-import BSmtLib.Facts.Proofs.Lexer.Consumers.Ports
+module
+
+public import BSmtLib.Facts.Trusted
+public import BSmtLib.Facts.Lexer.Adapters
+public import BSmtLib.Facts.Proofs.Lexer.AdapterSteps
+public import BSmtLib.Facts.Proofs.Lexer.Consumers.VNaive
+public import BSmtLib.Facts.Proofs.Lexer.Consumers.Ports
+
+@[expose] public section
 
 /-!
 # Proofs about the lexers

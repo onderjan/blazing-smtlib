@@ -1,5 +1,11 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.StartWs
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.StartWs
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables
+import all BSmtLib.Lexer.Internal.VNaive
+import all BSmtLib.Lexer.Internal.WRustPort
+
+@[expose] public section
 
 /-!
 # The normal state's invariant and the helpers of its proof
@@ -76,11 +82,11 @@ theorem answering_concrete : Token.Consume.isConcrete (H := Answering C) = C.con
 
 theorem start_parenClose (v : Token.Version) (ws : Bool) (location : Span.Location) :
     start v ws location 41 =
-      .token ⟨.parenClose, ByteArray.empty.push 41, location, location.afterByte 41⟩ := rfl
+      .token ⟨.parenClose, ByteArray.empty.push 41, location, location.afterByte 41⟩ := (rfl)
 
 theorem start_parenOpen (v : Token.Version) (ws : Bool) (location : Span.Location) :
     start v ws location 40 =
-      .token ⟨.parenOpen, ByteArray.empty.push 40, location, location.afterByte 40⟩ := rfl
+      .token ⟨.parenOpen, ByteArray.empty.push 40, location, location.afterByte 40⟩ := (rfl)
 
 /-- The rest of a step, from a later state whose outcome is that of the earlier one. -/
 theorem wp_recurse {α : Type} {x : WP.M C floor low α} {f : α → Nat} {v : Token.Version}

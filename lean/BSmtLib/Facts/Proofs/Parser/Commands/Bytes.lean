@@ -1,4 +1,12 @@
-import BSmtLib.Facts.Proofs.Parser.Term
+module
+
+public import BSmtLib.Facts.Proofs.Parser.Term
+import all BSmtLib.Parser.Command.Standard
+import all BSmtLib.Token
+import all Std.Data.ByteSlice
+import all Init.Data.String.Defs
+
+@[expose] public section
 
 /-!
 # Bytes compared with a string's, and versions

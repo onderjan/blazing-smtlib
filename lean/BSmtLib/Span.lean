@@ -1,3 +1,7 @@
+module
+
+public section
+
 namespace BSmtLib.Span
 
 /--
@@ -35,15 +39,15 @@ def max (self other : Location) : Location :=
   if self.offset ≥ other.offset then self else other
 
 /-- Location directly at the byte stream start. -/
-@[inline]
+@[expose, inline]
 def initial : Location :=
   { offset := 0, line := 0, column := 0 }
 
-@[inline]
+@[expose, inline]
 def afterColumn (self : Location) : Location :=
   { offset := self.offset + 1, line := self.line, column := self.column + 1 }
 
-@[inline]
+@[expose, inline]
 def afterByte (self : Location) (c : UInt8) : Location :=
   /- LEAN: Lean has no byte literals like `b'\n'`; a character literal is converted with
   `Char.toUInt8`, which keeps the low byte and is exact for ASCII. -/
@@ -106,6 +110,20 @@ A span given by the numbers of its two locations.
 @[inline]
 def ofNumbers (startOffset startLine startColumn endOffset endLine endColumn : Nat) : Span :=
   { startOffset, startLine, startColumn, endOffset, endLine, endColumn }
+
+/- LEAN: the fields of a span are private to this module, so the modules that build a span with
+`ofNumbers` read its locations back through these. -/
+/-- The start of a span given by its numbers. -/
+theorem start_ofNumbers (startOffset startLine startColumn endOffset endLine endColumn : Nat) :
+    (ofNumbers startOffset startLine startColumn endOffset endLine endColumn).start =
+      { offset := startOffset, line := startLine, column := startColumn } :=
+  (rfl)
+
+/-- The end of a span given by its numbers. -/
+theorem end_ofNumbers (startOffset startLine startColumn endOffset endLine endColumn : Nat) :
+    (ofNumbers startOffset startLine startColumn endOffset endLine endColumn).end =
+      { offset := endOffset, line := endLine, column := endColumn } :=
+  (rfl)
 
 /--
 A span within one line: the line, the offset of its start, and the

@@ -1,5 +1,9 @@
-import BSmtLib.Facts.PublicApi.Adapters.Content
-import BSmtLib.Facts.Parser.Adapters
+module
+
+public import BSmtLib.Facts.PublicApi.Adapters.Content
+public import BSmtLib.Facts.Parser.Adapters
+
+@[expose] public section
 
 /-!
 # The recording handler, told contents only

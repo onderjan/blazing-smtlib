@@ -1,4 +1,8 @@
-import BSmtLib.Facts.PublicApi.Adapters.Content
+module
+
+public import BSmtLib.Facts.PublicApi.Adapters.Content
+
+@[expose] public section
 
 /-!
 # Reprinters and span layers

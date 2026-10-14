@@ -1,4 +1,9 @@
-import BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Held
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Held
+import all BSmtLib.Lexer.Internal.WRustPort
+
+@[expose] public section
 
 /-!
 # The tokens finished from the content buffer

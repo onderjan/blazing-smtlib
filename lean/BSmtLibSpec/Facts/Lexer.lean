@@ -1,6 +1,10 @@
-import BSmtLibSpec.Facts.Proofs.Lexer.Streaming
-import BSmtLibSpec.Facts.Proofs.Lexer.StreamingFacts
-import BSmtLibSpec.Facts.Proofs.Lexer.Consumers
+module
+
+public import BSmtLibSpec.Facts.Proofs.Lexer.Streaming
+public import BSmtLibSpec.Facts.Proofs.Lexer.StreamingFacts
+public import BSmtLibSpec.Facts.Proofs.Lexer.Consumers
+
+@[expose] public section
 
 /-!
 # Facts of a lexer

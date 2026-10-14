@@ -1,5 +1,11 @@
-import BSmtLib.Facts.Proofs.Reader.Reader
-import BSmtLib.Facts.Proofs.Reader.Lexes.Good
+module
+
+public import BSmtLib.Facts.Proofs.Reader.Reader
+public import BSmtLib.Facts.Proofs.Reader.Lexes.Good
+import all BSmtLib.Lexer
+import all BSmtLib.Reader
+
+@[expose] public section
 
 /-!
 # What the reader tells its handler, on every input
@@ -16,7 +22,7 @@ took (`calls_of_invG`), none before the first token (`feed_told`).
 
 namespace BSmtLib.Facts.Proofs.Reader.Lexes.Told
 
-open BSmtLib.Lexer BSmtLib.Lexer.Internal
+open BSmtLib.Lexer
 open BSmtLibSpec
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Lexer (Handed)
@@ -40,19 +46,20 @@ open BSmtLib.Facts.Reader.Adapters BSmtLib.Lexer.Error
 fields and the held result. -/
 abbrev zLexer (consumer : BSmtLibSpec.Lexer.Consumer) (c : LexerCore)
     (held : Option (Span.Located consumer.Result)) : Lexer.Adapters.Lexer.lexOps.Lexer consumer :=
-  ofParts {} c held
+  Internal.ofParts {} c held
 
 /-- The states of the library's lexer, with the adapter's consumer for the consumer of the spec,
 that it reaches from its construction with the version by calls on slices that do not fail. -/
 inductive Reach (consumer : BSmtLibSpec.Lexer.Consumer) (version : Token.Version) : LexerCore → Prop
-  | new : Reach consumer version (core (Lexer.Adapters.Lexer.lexOps.new consumer {} version))
+  | new : Reach consumer version (Internal.core (Lexer.Adapters.Lexer.lexOps.new consumer
+      {} version))
   | step {c : LexerCore} {held : Option (Span.Located consumer.Result)} {slice : Regex.Chars}
       {taken : List Handed} {r : Option (Span.Located consumer.Result)} :
       Reach consumer version c →
       ((Lexer.Adapters.Lexer.lexOps.lexSliceStep (zLexer consumer c held)
         slice.toByteArray.toByteSlice).run taken).1.1 = .ok r →
       Reach consumer version
-        (core ((Lexer.Adapters.Lexer.lexOps.lexSliceStep (zLexer consumer c held)
+        (Internal.core ((Lexer.Adapters.Lexer.lexOps.lexSliceStep (zLexer consumer c held)
           slice.toByteArray.toByteSlice).run taken).1.2)
 
 /-- From every state the library's lexer reaches with the adapter's consumer, no call fails with
@@ -76,27 +83,27 @@ variable {consumer : BSmtLibSpec.Lexer.Consumer}
 theorem answering_slice_alike (slice : ByteSlice) (c : LexerCore) (fl : Flagged consumer)
     (taken : List Handed) :
     ERel (LexErrRel (· = ·)) (ORel (LocRel (· = ·)))
-      (((lexSliceStep (H := Answering consumer) (m := AnswerM)
+      (((Internal.lexSliceStep (H := Answering consumer) (m := AnswerM)
         (Recovery.LexRecovery.abandon Recovery.failFast)
             (Recovery.LexRecovery.recover Recovery.failFast)
         slice).run c).run {} |>.run taken).1.1.1
-      (((lexSliceStep (H := Flagged consumer) (m := AnswerM)
+      (((Internal.lexSliceStep (H := Flagged consumer) (m := AnswerM)
         (Recovery.LexRecovery.abandon Recovery.failFast)
             (Recovery.LexRecovery.recover Recovery.failFast)
         slice).run c).run fl |>.run taken).1.1.1 ∧
-    (((lexSliceStep (H := Answering consumer) (m := AnswerM)
+    (((Internal.lexSliceStep (H := Answering consumer) (m := AnswerM)
         (Recovery.LexRecovery.abandon Recovery.failFast)
             (Recovery.LexRecovery.recover Recovery.failFast)
         slice).run c).run {} |>.run taken).1.1.2 =
-      (((lexSliceStep (H := Flagged consumer) (m := AnswerM)
+      (((Internal.lexSliceStep (H := Flagged consumer) (m := AnswerM)
         (Recovery.LexRecovery.abandon Recovery.failFast)
             (Recovery.LexRecovery.recover Recovery.failFast)
         slice).run c).run fl |>.run taken).1.1.2 ∧
-    (((lexSliceStep (H := Answering consumer) (m := AnswerM)
+    (((Internal.lexSliceStep (H := Answering consumer) (m := AnswerM)
         (Recovery.LexRecovery.abandon Recovery.failFast)
             (Recovery.LexRecovery.recover Recovery.failFast)
         slice).run c).run {} |>.run taken).2 =
-      (((lexSliceStep (H := Flagged consumer) (m := AnswerM)
+      (((Internal.lexSliceStep (H := Flagged consumer) (m := AnswerM)
         (Recovery.LexRecovery.abandon Recovery.failFast)
             (Recovery.LexRecovery.recover Recovery.failFast)
         slice).run c).run fl |>.run taken).2 := by
@@ -112,12 +119,12 @@ theorem answering_slice_alike (slice : ByteSlice) (c : LexerCore) (fl : Flagged 
 
 theorem answering_eof_alike (c : LexerCore) (fl : Flagged consumer) (taken : List Handed) :
     ERel (LexErrRel (· = ·)) (FlowRel (LocRel (· = ·)))
-      (((lexEofStep (H := Answering consumer) (m := AnswerM) (R := consumer.Result)
+      (((Internal.lexEofStep (H := Answering consumer) (m := AnswerM) (R := consumer.Result)
         (E := Option consumer.Error)
         (Recovery.LexRecovery.abandon Recovery.failFast)
             (Recovery.LexRecovery.recover Recovery.failFast)).run c).run
           {} |>.run taken).1.1.1
-      (((lexEofStep (H := Flagged consumer) (m := AnswerM) (R := consumer.Result)
+      (((Internal.lexEofStep (H := Flagged consumer) (m := AnswerM) (R := consumer.Result)
         (E := Option consumer.Error)
         (Recovery.LexRecovery.abandon Recovery.failFast)
             (Recovery.LexRecovery.recover Recovery.failFast)).run c).run
@@ -141,7 +148,7 @@ variable {version : Lexicon.Version}
 
 /-- The parse adapter's lexer after the step of a call on a slice, also where it fails. -/
 def slicedP (p : PLexer) (slice : ByteSlice) : PLexer :=
-  (Lexer.Internal.run p (lexSliceStep (H := RecAdapter) (m := Id)
+  (Lexer.Internal.run p (Internal.lexSliceStep (H := RecAdapter) (m := Id)
     (Recovery.LexRecovery.abandon Recovery.failFast)
     (Recovery.LexRecovery.recover Recovery.failFast) slice) :
     Id _).2
@@ -149,7 +156,7 @@ def slicedP (p : PLexer) (slice : ByteSlice) : PLexer :=
 /-- The parse adapter's lexer after the step of a call at the end of the input, also where it
 fails. -/
 def eofedP (p : PLexer) : PLexer :=
-  (Lexer.Internal.run p (lexEofStep (H := RecAdapter) (m := Id) (R := Unit)
+  (Lexer.Internal.run p (Internal.lexEofStep (H := RecAdapter) (m := Id) (R := Unit)
     (E := Parser.ParseErrorCause Unit)
     (Recovery.LexRecovery.abandon Recovery.failFast)
     (Recovery.LexRecovery.recover Recovery.failFast)) : Id _).2
@@ -173,40 +180,43 @@ theorem slice_stepT (hnl : NoLayout (scriptConsumer version) (toVersion version)
     (slice : ByteSlice) (hslice : ∃ bytes : Regex.Chars, slice = bytes.toByteArray.toByteSlice)
     (a : FLexer version) (p : PLexer) (taken : List Handed)
     (hI : InvF version a p taken)
-    (hR : Reach (scriptConsumer version) (toVersion version) (core a))
+    (hR : Reach (scriptConsumer version) (toVersion version) (Internal.core a))
     {res : Except (LexError (Option (scriptConsumer version).Error))
       (Option (Span.Located (scriptConsumer version).Result))} {a' : FLexer version}
     {taken' : List Handed}
     (hr : (Param.Flagged.flaggedOps.lexSliceStep a slice).run taken = ((res, a'), taken'))
     (hgood : Param.Dom.Good version taken') :
     (∃ held₁, res = .ok held₁ ∧ ∃ (p' : PLexer) (held₂ : Option (Span.Located Unit)),
-      (Lexer.lexSlice p slice : Id _) = .ok (withHeld p' (held₂.or (held p'))) ∧
-      InvF version (withHeld a' (held₁.or (held a'))) (withHeld p' (held₂.or (held p'))) taken' ∧
-      Reach (scriptConsumer version) (toVersion version) (core a')) ∨
+      (Lexer.lexSlice p slice : Id _) = .ok (Internal.withHeld p' (held₂.or (Internal.held p'))) ∧
+      InvF version (Internal.withHeld a' (held₁.or (Internal.held a')))
+          (Internal.withHeld p' (held₂.or (Internal.held p'))) taken' ∧
+      Reach (scriptConsumer version) (toVersion version) (Internal.core a')) ∨
     (∃ e, res = .error e ∧ (∃ e₂ x, (Lexer.lexSlice p slice : Id _) = .error (e₂, x)) ∧
-      InvG version (handler a') taken' (handler (slicedP p slice))) := by
+      InvG version (Internal.handler a') taken' (Internal.handler (slicedP p slice))) := by
   obtain ⟨hcore, hheld, herr, hsp, hver, hinv⟩ := hI
   obtain ⟨bytes, hb⟩ := hslice
-  have h2 := (sliceStepG_sim slice (core a)).2.1 (handler a) taken (handler p) herr hinv
-  have hok := lexSliceStep_flag slice (core a) (handler a) taken herr hver
-  have halike := answering_slice_alike slice (core a) (handler a) taken
-  have hA : ∀ e, (((lexSliceStep (H := Answering (scriptConsumer version)) (m := AnswerM)
+  have h2 := (sliceStepG_sim slice (Internal.core a)).2.1 (Internal.handler a) taken
+      (Internal.handler p) herr hinv
+  have hok := lexSliceStep_flag slice (Internal.core a) (Internal.handler a) taken herr hver
+  have halike := answering_slice_alike slice (Internal.core a) (Internal.handler a) taken
+  have hA : ∀ e, (((Internal.lexSliceStep (H := Answering (scriptConsumer version)) (m := AnswerM)
       (Recovery.LexRecovery.abandon Recovery.failFast)
           (Recovery.LexRecovery.recover Recovery.failFast)
-      slice).run (core a)).run {} |>.run taken).1.1.1 = .error e →
+      slice).run (Internal.core a)).run {} |>.run taken).1.1.1 = .error e →
       e.cause ≠ .consumer none :=
-    fun e he => (hnl _ hR).1 (held a) bytes taken e (by rw [← hb]; exact he)
-  have hreach : ∀ r, (((lexSliceStep (H := Answering (scriptConsumer version)) (m := AnswerM)
+    fun e he => (hnl _ hR).1 (Internal.held a) bytes taken e (by rw [← hb]; exact he)
+  have hreach : ∀ r, (((Internal.lexSliceStep (H := Answering (scriptConsumer version))
+      (m := AnswerM)
       (Recovery.LexRecovery.abandon Recovery.failFast)
           (Recovery.LexRecovery.recover Recovery.failFast)
-      slice).run (core a)).run {} |>.run taken).1.1.1 = .ok r →
+      slice).run (Internal.core a)).run {} |>.run taken).1.1.1 = .ok r →
       Reach (scriptConsumer version) (toVersion version)
-        (((lexSliceStep (H := Answering (scriptConsumer version)) (m := AnswerM)
+        (((Internal.lexSliceStep (H := Answering (scriptConsumer version)) (m := AnswerM)
           (Recovery.LexRecovery.abandon Recovery.failFast)
               (Recovery.LexRecovery.recover Recovery.failFast)
-          slice).run (core a)).run {} |>.run taken).1.1.2 :=
+          slice).run (Internal.core a)).run {} |>.run taken).1.1.2 :=
     fun r hr' => by
-      have h := Reach.step (held := held a) (slice := bytes) (taken := taken) hR
+      have h := Reach.step (held := Internal.held a) (slice := bytes) (taken := taken) hR
         (by rw [← hb]; exact hr')
       rwa [← hb] at h
   unfold irun at hok
@@ -215,18 +225,20 @@ theorem slice_stepT (hnl : NoLayout (scriptConsumer version) (toVersion version)
   unfold slicedP
   simp only [Lexer.lexSlice]
   rw [run_id, ← hcore]
-  generalize ((StateT.run (lexSliceStep (H := Answering (scriptConsumer version)) (m := AnswerM)
+  generalize ((StateT.run (Internal.lexSliceStep (H := Answering (scriptConsumer version))
+      (m := AnswerM)
     (Recovery.LexRecovery.abandon Recovery.failFast)
     (Recovery.LexRecovery.recover Recovery.failFast) slice)
-    (core a)).run {}).run taken = RA at halike hA hreach
-  generalize ((StateT.run (lexSliceStep (H := Flagged (scriptConsumer version)) (m := AnswerM)
+    (Internal.core a)).run {}).run taken = RA at halike hA hreach
+  generalize ((StateT.run (Internal.lexSliceStep (H := Flagged (scriptConsumer version))
+      (m := AnswerM)
     (Recovery.LexRecovery.abandon Recovery.failFast)
     (Recovery.LexRecovery.recover Recovery.failFast) slice)
-    (core a)).run (handler a)).run taken = R at hr h2 hok halike
-  generalize (StateT.run (lexSliceStep (H := RecAdapter) (m := Id)
+    (Internal.core a)).run (Internal.handler a)).run taken = R at hr h2 hok halike
+  generalize (StateT.run (Internal.lexSliceStep (H := RecAdapter) (m := Id)
     (Recovery.LexRecovery.abandon Recovery.failFast)
     (Recovery.LexRecovery.recover Recovery.failFast) slice)
-    (core a)).run (handler p) = R₂ at h2 ⊢
+    (Internal.core a)).run (Internal.handler p) = R₂ at h2 ⊢
   obtain ⟨⟨⟨res', core'⟩, fl'⟩, taken''⟩ := R
   obtain ⟨⟨⟨resA, coreA⟩, _⟩, _⟩ := RA
   obtain ⟨⟨res₂, core₂⟩, adapter₂⟩ := R₂
@@ -266,50 +278,53 @@ with the parse adapter, which stands there too. -/
 theorem eof_stepT (hnl : NoLayout (scriptConsumer version) (toVersion version))
     (a : FLexer version) (p : PLexer) (taken : List Handed)
     (hI : InvF version a p taken)
-    (hR : Reach (scriptConsumer version) (toVersion version) (core a))
+    (hR : Reach (scriptConsumer version) (toVersion version) (Internal.core a))
     {res : Except (LexError (Option (scriptConsumer version).Error))
       (ControlFlow (Span.Located (scriptConsumer version).Result))} {a' : FLexer version}
     {taken' : List Handed}
     (hr : (Param.Flagged.flaggedOps.lexEofStep a).run taken = ((res, a'), taken'))
     (hgood : Param.Dom.Good version taken') :
     (∃ flow, res = .ok flow ∧ ∃ (p' : PLexer) (result : Option (Span.Located Unit)),
-      (Lexer.lexEof p : Id _) = .ok (result, withHeld p' none) ∧
+      (Lexer.lexEof p : Id _) = .ok (result, Internal.withHeld p' none) ∧
       HeldRel' (Lexer.Adapters.eofResult (Param.Flagged.flaggedOps.held a') flow) result ∧
-      InvG version (handler a') taken' (handler p')) ∨
+      InvG version (Internal.handler a') taken' (Internal.handler p')) ∨
     (∃ e, res = .error e ∧ (∃ e₂ x, (Lexer.lexEof p : Id _) = .error (e₂, x)) ∧
-      InvG version (handler a') taken' (handler (eofedP p))) := by
+      InvG version (Internal.handler a') taken' (Internal.handler (eofedP p))) := by
   obtain ⟨hcore, hheld, herr, hsp, hver, hinv⟩ := hI
-  have h2 := (eofStepG_sim (core a)).2.1 (handler a) taken (handler p) herr hinv
-  have hok := lexEofStep_flag (core a) (handler a) taken herr hver
-  have halike := answering_eof_alike (core a) (handler a) taken
-  have hA : ∀ e, (((lexEofStep (H := Answering (scriptConsumer version)) (m := AnswerM)
+  have h2 := (eofStepG_sim (Internal.core a)).2.1 (Internal.handler a) taken
+      (Internal.handler p) herr hinv
+  have hok := lexEofStep_flag (Internal.core a) (Internal.handler a) taken herr hver
+  have halike := answering_eof_alike (Internal.core a) (Internal.handler a) taken
+  have hA : ∀ e, (((Internal.lexEofStep (H := Answering (scriptConsumer version)) (m := AnswerM)
       (R := (scriptConsumer version).Result) (E := Option (scriptConsumer version).Error)
       (Recovery.LexRecovery.abandon Recovery.failFast)
           (Recovery.LexRecovery.recover Recovery.failFast)).run
-        (core a)).run {} |>.run taken).1.1.1 = .error e →
+        (Internal.core a)).run {} |>.run taken).1.1.1 = .error e →
       e.cause ≠ .consumer none :=
-    fun e he => (hnl _ hR).2 (held a) taken e he
+    fun e he => (hnl _ hR).2 (Internal.held a) taken e he
   unfold irun at hok
   simp only [Param.Flagged.flaggedOps] at hr
   rw [Param.Flagged.run_answerM] at hr
   unfold eofedP
   simp only [Lexer.lexEof]
   rw [run_id, ← hcore]
-  generalize ((StateT.run (lexEofStep (H := Answering (scriptConsumer version)) (m := AnswerM)
+  generalize ((StateT.run (Internal.lexEofStep (H := Answering (scriptConsumer version))
+      (m := AnswerM)
     (R := (scriptConsumer version).Result) (E := Option (scriptConsumer version).Error)
     (Recovery.LexRecovery.abandon Recovery.failFast)
     (Recovery.LexRecovery.recover Recovery.failFast))
-    (core a)).run {}).run taken = RA at halike hA
-  generalize ((StateT.run (lexEofStep (H := Flagged (scriptConsumer version)) (m := AnswerM)
+    (Internal.core a)).run {}).run taken = RA at halike hA
+  generalize ((StateT.run (Internal.lexEofStep (H := Flagged (scriptConsumer version))
+      (m := AnswerM)
     (R := (scriptConsumer version).Result) (E := Option (scriptConsumer version).Error)
     (Recovery.LexRecovery.abandon Recovery.failFast)
     (Recovery.LexRecovery.recover Recovery.failFast))
-    (core a)).run (handler a)).run taken = R at hr h2 hok halike
-  generalize (StateT.run (lexEofStep (H := RecAdapter) (m := Id) (R := Unit)
+    (Internal.core a)).run (Internal.handler a)).run taken = R at hr h2 hok halike
+  generalize (StateT.run (Internal.lexEofStep (H := RecAdapter) (m := Id) (R := Unit)
     (E := Parser.ParseErrorCause Unit)
     (Recovery.LexRecovery.abandon Recovery.failFast)
     (Recovery.LexRecovery.recover Recovery.failFast))
-    (core a)).run (handler p) = R₂ at h2 ⊢
+    (Internal.core a)).run (Internal.handler p) = R₂ at h2 ⊢
   obtain ⟨⟨⟨res', core'⟩, fl'⟩, taken''⟩ := R
   obtain ⟨⟨⟨resA, coreA⟩, _⟩, _⟩ := RA
   obtain ⟨⟨res₂, core₂⟩, adapter₂⟩ := R₂
@@ -325,10 +340,11 @@ theorem eof_stepT (hnl : NoLayout (scriptConsumer version) (toVersion version))
       cases h : fl'.errored
       · rfl
       · exact absurd (he₁ h) id
-    refine .inl ⟨flow, rfl, ofParts adapter₂ core' (held p), _, rfl, ?_, hinv' hfl⟩
+    refine .inl ⟨flow, rfl, Internal.ofParts adapter₂ core'
+        (Internal.held p), _, rfl, ?_, hinv' hfl⟩
     dsimp only [Param.Flagged.flaggedOps, Param.Flagged.held_ofParts]
-    generalize held p = hp at hheld ⊢
-    generalize held a = ha at hheld ⊢
+    generalize Internal.held p = hp at hheld ⊢
+    generalize Internal.held a = ha at hheld ⊢
     match ha, hp, hheld with
     | none, none, _ =>
       match flow, flow₂, hh with
@@ -434,7 +450,7 @@ first lexer does. -/
 theorem feed_told (hnl : NoLayout (scriptConsumer version) (toVersion version)) :
     ∀ (ended : Bool) (slices : List Regex.Chars) (a : FLexer version) (p : PLexer)
       (taken : List Handed), InvF version a p taken →
-      Reach (scriptConsumer version) (toVersion version) (core a) →
+      Reach (scriptConsumer version) (toVersion version) (Internal.core a) →
       Param.Dom.Good version ((Param.Flagged.flaggedOps.runInput a ended slices).run taken).2 →
       ∃ (fl : Flagged (scriptConsumer version)) (adapter : RecAdapter),
         readerRun (Reader.Internal.ofLexer p) slices ended =
@@ -442,7 +458,7 @@ theorem feed_told (hnl : NoLayout (scriptConsumer version) (toVersion version)) 
             ((Param.Flagged.flaggedOps.runInput a ended slices).run taken).1.1.isFinished) ∧
         InvG version fl ((Param.Flagged.flaggedOps.runInput a ended slices).run taken).2 adapter
   | false, [], a, p, taken, hI, _, _ =>
-    ⟨handler a, handler p, by
+    ⟨Internal.handler a, Internal.handler p, by
       simp only [readerRun, LexOps.runInput, Bool.false_eq_true, ite_false]
       refine Prod.ext rfl ?_
       show false = (Param.Flagged.flaggedOps.standing a).isFinished
@@ -463,7 +479,7 @@ theorem feed_told (hnl : NoLayout (scriptConsumer version) (toVersion version)) 
     rcases eof_stepT hnl a p taken hI hR hr hgood' with
         ⟨flow, rfl, p₂, r₂, hp, hrel, hinv⟩ | ⟨e, rfl, ⟨e₂, x, hp⟩, hinv⟩
     · rw [hp]
-      refine ⟨handler a', handler p₂, ?_, ?_⟩
+      refine ⟨Internal.handler a', Internal.handler p₂, ?_, ?_⟩
       · dsimp only
         refine Prod.ext rfl ?_
         dsimp only
@@ -477,7 +493,7 @@ theorem feed_told (hnl : NoLayout (scriptConsumer version) (toVersion version)) 
         generalize Lexer.Adapters.eofResult (Param.Flagged.flaggedOps.held a') flow = o
         cases o <;> exact hinv
     · rw [hp]
-      exact ⟨handler a', handler (eofedP p), rfl, hinv⟩
+      exact ⟨Internal.handler a', Internal.handler (eofedP p), rfl, hinv⟩
   | ended, slice :: slices, a, p, taken, hI, hR, hgood => by
     simp only [LexOps.runInput, StateT.run_bind] at hgood ⊢
     generalize hr : (Param.Flagged.flaggedOps.lexSliceStep a slice.toByteArray.toByteSlice).run
@@ -500,7 +516,8 @@ theorem feed_told (hnl : NoLayout (scriptConsumer version) (toVersion version)) 
     · rw [hp]
       exact feed_told hnl ended slices _ _ taken' hI' hR' hgood
     · rw [hp]
-      exact ⟨handler a', handler (slicedP p slice.toByteArray.toByteSlice), rfl, hinv⟩
+      exact ⟨Internal.handler a', Internal.handler (slicedP p slice.toByteArray.toByteSlice), rfl,
+          hinv⟩
 
 end
 

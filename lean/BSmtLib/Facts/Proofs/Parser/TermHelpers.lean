@@ -1,4 +1,13 @@
-import BSmtLib.Facts.Proofs.Parser.TermParts
+module
+
+public import BSmtLib.Facts.Proofs.Parser.TermParts
+import all BSmtLib.Parser
+import all BSmtLib.Parser.Category.QualifiedIdent
+import all BSmtLib.Parser.Category.Term
+import all BSmtLib.Parser.Category.Token
+import all BSmtLib.Token.Reserved
+
+@[expose] public section
 
 /-!
 # The term parser's steps, one construct at a time

@@ -1,10 +1,14 @@
-import BSmtLib.Facts.Trusted
-import BSmtLib.Facts.Lexer
-import BSmtLib.Facts.Proofs.Reader.Valid
-import BSmtLib.Facts.Proofs.Reader.Session
-import BSmtLib.Facts.Proofs.Reader.Param.Final
-import BSmtLib.Facts.Proofs.Reader.Reader
-import BSmtLib.Facts.Proofs.Reader.Lexes.Reader
+module
+
+public import BSmtLib.Facts.Trusted
+public import BSmtLib.Facts.Lexer
+public import BSmtLib.Facts.Proofs.Reader.Valid
+public import BSmtLib.Facts.Proofs.Reader.Session
+public import BSmtLib.Facts.Proofs.Reader.Param.Final
+public import BSmtLib.Facts.Proofs.Reader.Reader
+public import BSmtLib.Facts.Proofs.Reader.Lexes.Reader
+
+@[expose] public section
 
 /-!
 # From characters to the calls of the traversal

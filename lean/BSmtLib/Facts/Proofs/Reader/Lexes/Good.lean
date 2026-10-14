@@ -1,5 +1,9 @@
-import BSmtLib.Facts.Proofs.Reader.Param.Only
-import BSmtLib.Facts.Proofs.Reader.Lexes.Congr
+module
+
+public import BSmtLib.Facts.Proofs.Reader.Param.Only
+public import BSmtLib.Facts.Proofs.Reader.Lexes.Congr
+
+@[expose] public section
 
 /-!
 # The tokens a run with the script consumer takes are good, ended or not

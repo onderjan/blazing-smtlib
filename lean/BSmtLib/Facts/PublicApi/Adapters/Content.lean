@@ -1,4 +1,8 @@
-import BSmtLib.Facts.PublicApi.Adapters
+module
+
+public import BSmtLib.Facts.PublicApi.Adapters
+
+@[expose] public section
 
 /-!
 # Handlers that see contents only

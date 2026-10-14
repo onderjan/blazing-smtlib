@@ -1,4 +1,10 @@
-import BSmtLib.Facts.Proofs.Parser.Commands.Terms
+module
+
+public import BSmtLib.Facts.Proofs.Parser.Commands.Terms
+import all BSmtLib.Parser.Category.Term
+import all BSmtLib.Parser.Command.Standard
+
+@[expose] public section
 
 /-!
 # Propositional literals against the traversal

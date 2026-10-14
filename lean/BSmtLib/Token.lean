@@ -1,6 +1,10 @@
-import Std.Data.ByteSlice
-import BSmtLib.ControlFlow
-import BSmtLib.Span
+module
+
+public import Std.Data.ByteSlice
+public import BSmtLib.ControlFlow
+public import BSmtLib.Span
+
+public section
 
 /- LEAN: the public items of the Rust crate are in the namespace `BSmtLib`, without the prefix
 `Smt`: `SmtToken` is `BSmtLib.Token`. The internals of the lexer are in `BSmtLib.Lexer`.
@@ -39,23 +43,27 @@ namespace Version
 instance : Inhabited Version := ⟨.v2_7⟩
 
 /- LEAN: Lean cannot derive `PartialOrd`/`Ord` for comparison with `≤` from the order of the
-variants, so the order is spelled out as a rank, and `≤` and `<` compare the ranks. -/
+variants, so the order is spelled out as a rank, and `≤` and `<` compare the ranks. The rank is
+public, in `Internal`, only so that the bodies of these instances, which importing modules see,
+can name it. -/
 /-- The position of the version in the order of releases. -/
-private def rank : Version → Nat
+@[expose] def Internal.rank : Version → Nat
   | .v2_0 => 0
   | .v2_5 => 1
   | .v2_6 => 2
   | .v2_7 => 3
 
-instance : LE Version := ⟨fun a b => a.rank ≤ b.rank⟩
+instance : LE Version := ⟨fun a b => Internal.rank a ≤ Internal.rank b⟩
 
-instance : LT Version := ⟨fun a b => a.rank < b.rank⟩
+instance : LT Version := ⟨fun a b => Internal.rank a < Internal.rank b⟩
 
 /- LEAN: in Lean, `a ≤ b` is a proposition, not a boolean. To use it in an `if`, Lean
 needs a `Decidable` instance that computes its truth; these reuse the one of `Nat`. -/
-instance (a b : Version) : Decidable (a ≤ b) := inferInstanceAs (Decidable (a.rank ≤ b.rank))
+instance (a b : Version) : Decidable (a ≤ b) :=
+  inferInstanceAs (Decidable (Internal.rank a ≤ Internal.rank b))
 
-instance (a b : Version) : Decidable (a < b) := inferInstanceAs (Decidable (a.rank < b.rank))
+instance (a b : Version) : Decidable (a < b) :=
+  inferInstanceAs (Decidable (Internal.rank a < Internal.rank b))
 
 def fromDecimal? (decimal : ByteSlice) : Option Version :=
   if decimal == "2.0".toUTF8.toByteSlice then some .v2_0
@@ -117,10 +125,8 @@ def ofUInt8 : UInt8 → TokenCategory
   | 11 => .comment
   | _ => .endOfFile
 
--- the types are read back from the batch as they were written to it
-#guard [TokenCategory.parenOpen, .parenClose, .numeral, .decimal, .hexadecimal, .binary, .string,
-    .keyword, .unquotedSymbol, .quotedSymbol, .whitespace, .comment, .endOfFile].all
-  fun ty => ofUInt8 ty.toUInt8 == ty
+/- LEAN: that the types are read back from the batch as they were written to it is a `#guard`
+in `BSmtLib.Facts.Asserts`, checked when the facts are built. -/
 
 end TokenCategory
 
@@ -130,6 +136,7 @@ end, are in input order from the offset `origin` on: each token starts at or aft
 the token before it, the first one at or after `origin`, and each token ends after it starts,
 except the end of file, which is empty. The arrays hold an entry for each of the tokens.
 -/
+@[expose]
 def TokensInOrder (origin len : Nat) (types : ByteArray) (starts ends : Array Nat) : Prop :=
   ∃ (_ : len ≤ types.size) (_ : len ≤ starts.size) (_ : len ≤ ends.size),
     ∀ i (_ : i < len),
@@ -175,6 +182,7 @@ theorem tokensInOrder_iff {origin len : Nat} {types : ByteArray} {starts ends : 
 Whether the arrays of the fields that `TokensInOrder` does not cover hold an entry for each of
 the first `len` tokens.
 -/
+@[expose]
 def EntriesFit (len : Nat) (contentStarts contentStops startLines startColumns endLines endColumns :
     Array Nat) : Prop :=
   len ≤ contentStarts.size ∧ len ≤ contentStops.size ∧ len ≤ startLines.size ∧
@@ -216,11 +224,12 @@ structure TokenBatch where
 namespace TokenBatch
 
 /-- No tokens are in input order from any origin on. -/
-private theorem tokensInOrder_zero (origin : Nat) (types : ByteArray) (starts ends : Array Nat) :
+theorem tokensInOrder_zero (origin : Nat) (types : ByteArray) (starts ends : Array Nat) :
     TokensInOrder origin 0 types starts ends :=
   ⟨Nat.zero_le _, Nat.zero_le _, Nat.zero_le _, fun _ h => absurd h (Nat.not_lt_zero _)⟩
 
 /-- An empty batch with room for `capacity` tokens. -/
+@[expose]
 def empty (capacity : Nat) : TokenBatch :=
   { len := 0, bytes := ByteArray.empty, types := ByteArray.emptyWithCapacity capacity,
     contentStarts := Array.emptyWithCapacity capacity,
@@ -239,6 +248,7 @@ def empty (capacity : Nat) : TokenBatch :=
 instance : Inhabited TokenBatch := ⟨empty 0⟩
 
 /-- The offset where the last token ends, or the origin if the batch has no token. -/
+@[expose]
 def lastEnd (self : TokenBatch) : Nat :=
   if h : self.len = 0 then self.origin
   else self.endOffsets[self.len - 1]'(by have := self.ordered.2.2.1; omega)
@@ -405,7 +415,7 @@ Appends a token with the type, its content from `contentStart` to `contentStop` 
 spanning from `start` to `end`. The token starts at or after the end of the last one, and has
 a byte unless it is the end of file.
 -/
-@[inline]
+@[expose, inline]
 def pushLocated (self : TokenBatch) (ty : TokenCategory) (contentStart contentStop : Nat)
     (start «end» : Span.Location) (after : self.lastEnd ≤ start.offset)
     (nonempty : start.offset < «end».offset ∨ ty = .endOfFile ∧ start.offset = «end».offset) :
@@ -415,7 +425,7 @@ def pushLocated (self : TokenBatch) (ty : TokenCategory) (contentStart contentSt
 
 /-- Empties the batch, keeping its storage; the tokens appended next start at or after
 `origin`. -/
-@[inline]
+@[expose, inline]
 def clear (self : TokenBatch) (origin : Nat) : TokenBatch :=
   { self with
     len := 0
@@ -463,7 +473,7 @@ theorem len_push (self : TokenBatch) (ty : TokenCategory) (contentStart contentS
     (nonempty : startOffset < endOffset ∨ ty = .endOfFile ∧ startOffset = endOffset) :
     (self.push ty contentStart contentStop startOffset startLine startColumn endOffset endLine
       endColumn after nonempty).len = self.len + 1 :=
-  rfl
+  (rfl)
 
 /-- Each token of the batch has an entry in `types`. -/
 theorem len_le_types (self : TokenBatch) : self.len ≤ self.types.size :=
@@ -481,6 +491,7 @@ theorem len_le_endOffsets (self : TokenBatch) : self.len ≤ self.endOffsets.siz
 Whether every token of the batch starts at or after the offset and is not the end of file, so
 that it ends after the offset.
 -/
+@[expose]
 def StartsFrom (self : TokenBatch) (offset : Nat) : Prop :=
   ∀ i (hi : i < self.len),
     offset ≤ self.startOffsets[i]'(Nat.lt_of_lt_of_le hi self.len_le_startOffsets) ∧
@@ -560,6 +571,7 @@ theorem start_lt_end (self : TokenBatch) {i : Nat} (hi : i < self.len)
   · exact absurd h.1 hty
 
 /-- Whether every token of the batch ends after the offset. -/
+@[expose]
 def EndsAfter (self : TokenBatch) (offset : Nat) : Prop :=
   ∀ i (hi : i < self.len),
     offset < self.endOffsets[i]'(Nat.lt_of_lt_of_le hi self.len_le_endOffsets)
@@ -624,11 +636,11 @@ function to propositions but not a batch: a batch as the parameter would be pass
 references counted, at every call that takes a cursor or a token, and a tag is not. The tag
 of a batch is unique to it (`TokenBatch.tag_injective`). -/
 /-- The name of a batch of tokens, by which the types of its tokens and cursors refer to it. -/
-def BatchTag : Type :=
+@[expose] def BatchTag : Type :=
   TokenBatch → Prop
 
 /-- The name of the batch. -/
-def TokenBatch.tag (batch : TokenBatch) : BatchTag :=
+@[expose] def TokenBatch.tag (batch : TokenBatch) : BatchTag :=
   (· = batch)
 
 /-- Batches with the same name are the same. -/
@@ -658,7 +670,7 @@ structure _root_.BSmtLib.Token (batch : Token.BatchTag) where
   check; the proof is not stored, and the token stays a number. -/
   private valid : ∀ b, batch b → index < b.len
 
-instance {batch : BatchTag} : BEq (Token batch) := ⟨fun a b => a.index == b.index⟩
+@[no_expose] instance {batch : BatchTag} : BEq (Token batch) := ⟨fun a b => a.index == b.index⟩
 
 namespace TokenBatch
 
@@ -690,12 +702,12 @@ private def spanOf (self : TokenBatch) (index : Nat) (h : index < self.len) : Sp
     (self.endColumns[index]'(Nat.lt_of_lt_of_le h self.fit.2.2.2.2.2))
 
 /-- The category of the token at the index, as the entries of the batch give it. -/
-theorem categoryOf_eq (self : TokenBatch) (index : Nat) (h : index < self.len) :
+private theorem categoryOf_eq (self : TokenBatch) (index : Nat) (h : index < self.len) :
     self.categoryOf index h = TokenCategory.ofUInt8 (self.types.get! index) := by
   simp only [categoryOf, get!_eq_getElem _ (Nat.lt_of_lt_of_le h self.ordered.1)]
 
 /-- The content of the token at the index, as the entries of the batch give it. -/
-theorem contentOf_eq (self : TokenBatch) (index : Nat) (h : index < self.len) :
+private theorem contentOf_eq (self : TokenBatch) (index : Nat) (h : index < self.len) :
     self.contentOf index h =
       self.bytes.toByteSlice (self.contentStarts[index]!) (self.contentStops[index]!) := by
   have := Nat.lt_of_lt_of_le h self.fit.1
@@ -703,7 +715,7 @@ theorem contentOf_eq (self : TokenBatch) (index : Nat) (h : index < self.len) :
   simp only [contentOf, getElem!_pos, *]
 
 /-- The span of the token at the index, as the entries of the batch give it. -/
-theorem spanOf_eq (self : TokenBatch) (index : Nat) (h : index < self.len) :
+private theorem spanOf_eq (self : TokenBatch) (index : Nat) (h : index < self.len) :
     self.spanOf index h =
       Span.ofNumbers self.startOffsets[index]! self.startLines[index]! self.startColumns[index]!
         self.endOffsets[index]! self.endLines[index]! self.endColumns[index]! := by
@@ -757,19 +769,16 @@ structure BatchCursor (tag : BatchTag) where
   private discardFlag : Bool
   private bounded : first ≤ nextIndex ∧ nextIndex ≤ stop ∧ stop ≤ batch.len
 
-/- LEAN: not in Rust. The lexer takes the batch back after the consumer is done with the
-cursor; if nothing else refers to it, its storage is overwritten by the next batch, as the
-Rust lexer overwrites its fixed arrays. It is in the lexer's namespace, as only the lexer
-uses it; it is defined here, where the cursor's fields are visible. -/
-/-- The batch of the cursor, for reuse of its storage once the cursor is spent. -/
+/- LEAN: not in Rust, where the lexer reads the cursor's crate-private fields. The cursor's
+fields are private to this module; the lexer reads the batch through this accessor. -/
+/-- The batch of the cursor. -/
 @[inline]
-def _root_.BSmtLib.Lexer.Internal.intoBatch {batch : Token.BatchTag}
-    (cursor : Token.BatchCursor batch) : Token.TokenBatch :=
+def BatchCursor.Internal.batch {batch : BatchTag} (cursor : BatchCursor batch) : TokenBatch :=
   cursor.batch
 
-theorem _root_.BSmtLib.Lexer.Internal.tag_intoBatch {batch : Token.BatchTag}
-    (cursor : Token.BatchCursor batch) :
-    (Lexer.Internal.intoBatch cursor).tag = batch :=
+/-- The batch of the cursor has the cursor's tag. -/
+theorem BatchCursor.Internal.tag_batch {batch : BatchTag} (cursor : BatchCursor batch) :
+    (BatchCursor.Internal.batch cursor).tag = batch :=
   cursor.tagged.symm
 
 namespace BatchCursor
@@ -824,8 +833,13 @@ def single (self : BatchCursor batch) (version : Version) (token : Token batch) 
 def HasNext (self : BatchCursor batch) : Prop :=
   self.nextIndex < self.stop
 
-instance (self : BatchCursor batch) : Decidable self.HasNext :=
+@[no_expose] instance (self : BatchCursor batch) : Decidable self.HasNext :=
   inferInstanceAs (Decidable (self.nextIndex < self.stop))
+
+/-- A cursor at the start of a batch with a token has a token remaining. -/
+theorem hasNext_new {b : TokenBatch} (version : Version) (h : 0 < b.len) :
+    (new version b).HasNext :=
+  h
 
 /--
 Whether `self` comes from `origin` through the consumer's operations: it is the
@@ -892,6 +906,10 @@ def next (self : BatchCursor batch) (h : self.HasNext) :
 def next? (self : BatchCursor batch) :
     Option (Token batch × { c : BatchCursor batch // c.Consumed self }) :=
   if h : self.HasNext then some (self.next h) else none
+
+/-- A cursor with a token remaining gives it. -/
+theorem isSome_next? {self : BatchCursor batch} (h : self.HasNext) : self.next?.isSome := by
+  simp [next?, h]
 
 /--
 The tokens ahead of a cursor, as the extractor of `BatchCursor.attempt` sees them: they can
@@ -1038,7 +1056,8 @@ theorem Consumed.lt_consumedEndOf {self origin : BatchCursor batch} (h : self.Co
     have := hs.1
     omega
   have h2 := TokenBatch.endsAfter_iff.mp hs.2 _ hlt
-  rwa [getElem!_pos self.batch.endOffsets _ (Nat.lt_of_lt_of_le hlt self.batch.ordered.2.2.1)] at h2
+  rw [getElem!_pos self.batch.endOffsets _ (Nat.lt_of_lt_of_le hlt self.batch.ordered.2.2.1)] at h2
+  simpa only [consumedEndOf, TokenBatch.spanOf, Span.end_ofNumbers] using h2
 
 /-- Consumes all tokens remaining in the cursor. -/
 @[inline]
@@ -1152,7 +1171,7 @@ private theorem foldCategories_eq (b : TokenBatch) (count : Nat) (h : count ≤ 
       (List.range count).foldl
         (fun acc index => f acc (TokenCategory.ofUInt8 (b.types.get! index))) init := by
   induction count with
-  | zero => rfl
+  | zero => simp [foldCategories]
   | succ n ih =>
     unfold foldCategories at ih ⊢
     rw [Nat.fold_succ, List.range_succ, List.foldl_append, ← ih (by omega),
@@ -1166,7 +1185,7 @@ def foldConsumedCategories (self : BatchCursor batch) (init : β) (f : β → To
   foldCategories self.batch self.nextIndex (by have := self.bounded; omega) init f
 
 /-- The fold over the consumed categories, as the entries of the batch give them. -/
-theorem foldConsumedCategories_eq (self : BatchCursor batch) (init : β)
+private theorem foldConsumedCategories_eq (self : BatchCursor batch) (init : β)
     (f : β → TokenCategory → β) :
     self.foldConsumedCategories init f =
       (List.range self.nextIndex).foldl
@@ -1187,7 +1206,7 @@ theorem Consumed.remaining_lt {self origin : BatchCursor batch} (h : self.Consum
 
 theorem remaining_resetConsumed (self : BatchCursor batch) :
     self.resetConsumed.remaining = self.remaining :=
-  rfl
+  (rfl)
 
 theorem endsAfter_resetConsumed {self : BatchCursor batch} {offset : Nat}
     (h : self.EndsAfter offset) : self.resetConsumed.EndsAfter offset :=

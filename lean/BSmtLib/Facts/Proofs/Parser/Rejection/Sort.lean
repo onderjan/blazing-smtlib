@@ -1,4 +1,12 @@
-import BSmtLib.Facts.Proofs.Parser.Rejection.Basic
+module
+
+public import BSmtLib.Facts.Proofs.Parser.Rejection.Basic
+import all BSmtLib.Parser
+import all BSmtLib.Parser.Category.Ident
+import all BSmtLib.Parser.Category.Sort
+import all BSmtLib.Token.Reserved
+
+@[expose] public section
 
 /-!
 # What identifiers and sorts can still take

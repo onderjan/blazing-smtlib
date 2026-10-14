@@ -1,4 +1,10 @@
-import BSmtLib.Lexer
+module
+
+public import BSmtLib.Lexer
+import all BSmtLib.Lexer.Helpers
+import all Std.Data.ByteSlice
+
+@[expose] public section
 
 /-!
 # Byte arrays, views of them, and the content buffer
@@ -82,7 +88,7 @@ def contentBytes (buf : ContentBuffer) : ByteArray :=
 def Fits (buf : ContentBuffer) : Prop :=
   buf.len ≤ buf.bytes.size
 
-theorem contentBytes_empty : contentBytes ContentBuffer.empty = ByteArray.empty := rfl
+theorem contentBytes_empty : contentBytes ContentBuffer.empty = ByteArray.empty := (rfl)
 
 theorem contentBytes_clear (buf : ContentBuffer) : contentBytes buf.clear = ByteArray.empty := by
   simp [contentBytes, ContentBuffer.clear, ByteArray.extract_same]
@@ -310,7 +316,7 @@ theorem start_add_lt (s : ByteSlice) {i : Nat} (h : i < s.size) :
   omega
 
 theorem getElem_slice (s : ByteSlice) (i : Nat) (h : i < s.size) :
-    s[i] = s.byteArray.data[s.start + i]'(start_add_lt s h) := rfl
+    s[i] = s.byteArray.data[s.start + i]'(start_add_lt s h) := (rfl)
 
 theorem toByteArray_toByteSlice_range (a : ByteArray) {i j : Nat} (hij : i ≤ j) (hj : j ≤ a.size) :
     (a.toByteSlice i j).toByteArray = a.extract i j := by
@@ -330,7 +336,7 @@ theorem size_toByteSlice_full (a : ByteArray) : a.toByteSlice.size = a.size := b
 
 theorem getElem_slice_byteArray (s : ByteSlice) (i : Nat) (h : i < s.size) :
     s[i] = s.byteArray[s.start + i]'(by
-      have := s.stop_le_size_byteArray; simp only [ByteSlice.size] at h; omega) := rfl
+      have := s.stop_le_size_byteArray; simp only [ByteSlice.size] at h; omega) := (rfl)
 
 theorem size_toByteArray_toByteSlice (s : ByteSlice) :
     s.toByteArray.toByteSlice.size = s.size := by

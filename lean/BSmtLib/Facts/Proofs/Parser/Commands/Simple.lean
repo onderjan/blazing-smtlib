@@ -1,4 +1,10 @@
-import BSmtLib.Facts.Proofs.Parser.Commands.Frame
+module
+
+public import BSmtLib.Facts.Proofs.Parser.Commands.Frame
+import all BSmtLib.Parser.Category.Token
+import all BSmtLib.Parser.Command.Standard
+
+@[expose] public section
 
 /-!
 # Commands of single tokens against the traversal

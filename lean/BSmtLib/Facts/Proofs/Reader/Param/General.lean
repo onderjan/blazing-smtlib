@@ -1,6 +1,13 @@
-import BSmtLib.Facts.Proofs.Reader.Param.Dom
-import BSmtLib.Facts.Proofs.Reader.Param.Layout
-import BSmtLib.Facts.Proofs.Reader.Param.Relate
+module
+
+public import BSmtLib.Facts.Proofs.Reader.Param.Dom
+public import BSmtLib.Facts.Proofs.Reader.Param.Layout
+public import BSmtLib.Facts.Proofs.Reader.Param.Relate
+import all BSmtLib.Parser.Adapter
+import all BSmtLib.Token
+import all BSmtLib.Token.SyntaxToken
+
+@[expose] public section
 
 /-!
 # The parse adapter against the stand-in consumer, on any tokens

@@ -1,5 +1,14 @@
-import BSmtLib.Facts.Proofs.Parser.QuietSteps
-import BSmtLib.Facts.Proofs.Parser.Script
+module
+
+public import BSmtLib.Facts.Proofs.Parser.QuietSteps
+public import BSmtLib.Facts.Proofs.Parser.Script
+import all BSmtLib.Parser
+import all BSmtLib.Parser.Command
+import all BSmtLib.Parser.Command.Function
+import all BSmtLib.Parser.Command.Standard
+import all BSmtLib.Parser.Script
+
+@[expose] public section
 
 /-!
 # What the parser has done before an item

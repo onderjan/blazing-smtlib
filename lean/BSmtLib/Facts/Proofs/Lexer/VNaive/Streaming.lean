@@ -1,5 +1,9 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaive.Prefix
-import BSmtLibSpec.Facts.Proofs.Lexer.StreamingFacts
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaive.Prefix
+public import BSmtLibSpec.Facts.Proofs.Lexer.StreamingFacts
+
+@[expose] public section
 
 /-!
 # The naive lexer is correct

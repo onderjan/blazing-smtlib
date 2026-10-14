@@ -1,5 +1,10 @@
-import BSmtLib.Facts.Proofs.Reader.Param.Calls
-import BSmtLib.Facts.Proofs.Lexer.Consumers.AlikeF
+module
+
+public import BSmtLib.Facts.Proofs.Reader.Param.Calls
+public import BSmtLib.Facts.Proofs.Lexer.Consumers.AlikeF
+import all BSmtLib.Lexer
+
+@[expose] public section
 
 /-!
 # The adapter's consumer with a record of what went wrong
@@ -18,7 +23,7 @@ with the other (`lexing_flagged`, from step 1, `lexSliceStep_sim` and `lexEofSte
 
 namespace BSmtLib.Facts.Proofs.Reader.Param.Flagged
 
-open BSmtLib.Lexer BSmtLib.Lexer.Internal
+open BSmtLib.Lexer
 open BSmtLib.Facts.Lexer.Adapters BSmtLib.Facts.Proofs.Lexer.Consumers.AlikeF
 open BSmtLib.Facts.Proofs.Reader.Param.Basic BSmtLib.Facts.Proofs.Reader.Param.Calls
 open BSmtLib.Facts.Proofs.Reader.Param.HandOver BSmtLib.Lexer.Error
@@ -183,21 +188,21 @@ variable {H : Type} {R E : Type} [Token.Consume H R E] {α : Type}
 theorem run_answerM (lexer : BSmtLib.Lexer H) (step : InnerM H AnswerM α)
     (taken : List BSmtLibSpec.Lexer.Handed) :
     (BSmtLib.Lexer.Internal.run lexer step).run taken =
-      let r := ((step.run (core lexer)).run (handler lexer)).run taken
-      ((r.1.1.1, ofParts r.1.2 r.1.1.2 (held lexer)), r.2) := rfl
+      let r := ((step.run (Internal.core lexer)).run (Internal.handler lexer)).run taken
+      ((r.1.1.1, Internal.ofParts r.1.2 r.1.1.2 (Internal.held lexer)), r.2) := (rfl)
 
 theorem core_ofParts (h : H) (c : LexerCore) (d : Option (Span.Located R)) :
-    core (ofParts h c d : BSmtLib.Lexer H) = c := rfl
+    Internal.core (Internal.ofParts h c d : BSmtLib.Lexer H) = c := (rfl)
 
 theorem held_ofParts (h : H) (c : LexerCore) (d : Option (Span.Located R)) :
-    held (ofParts h c d : BSmtLib.Lexer H) = d := rfl
+    Internal.held (Internal.ofParts h c d : BSmtLib.Lexer H) = d := (rfl)
 
 end
 
 /-- Lexers with the two consumers with the same state and the same held result. -/
 def AlikeLexers (consumer : BSmtLibSpec.Lexer.Consumer) (a : Lexer.lexOps.Lexer consumer)
     (b : flaggedOps.Lexer consumer) : Prop :=
-  core a = core b ∧ held a = held b
+  Internal.core a = Internal.core b ∧ Internal.held a = Internal.held b
 
 theorem recovery_alike (consumer : BSmtLibSpec.Lexer.Consumer) (l : Span.Location) :
     (alikeLink consumer).rc.rel (· = ·)
@@ -214,7 +219,8 @@ theorem recover_alike (consumer : BSmtLibSpec.Lexer.Consumer) (l : Span.Location
 /-- The library's lexer does with `Flagged consumer` what it does with `Answering consumer`, for
 every consumer of the spec. -/
 theorem lexing_flagged : lexing Lexer.lexOps = lexing flaggedOps := by
-  refine lexing_alikeF Lexer.lexOps flaggedOps AlikeLexers (fun _ a b => core a = core b)
+  refine lexing_alikeF Lexer.lexOps flaggedOps AlikeLexers
+      (fun _ a b => Internal.core a = Internal.core b)
     (fun _ _ => ⟨rfl, rfl⟩) ?_ ?_ (fun _ _ _ h => h.2) (fun _ _ _ _ h => ⟨h.1, rfl⟩)
     (fun _ _ _ h => h.1)
     (fun _ _ _ h => congrArg LexerCore.version h)
@@ -225,8 +231,9 @@ theorem lexing_flagged : lexing Lexer.lexOps = lexing flaggedOps := by
       (Recovery.LexRecovery.recover (H := Answering consumer) (m := AnswerM) Recovery.failFast)
       (Recovery.LexRecovery.abandon (H := Flagged consumer) (m := AnswerM) Recovery.failFast)
       (Recovery.LexRecovery.recover (H := Flagged consumer) (m := AnswerM) Recovery.failFast)
-      (recovery_alike consumer) (recover_alike consumer) slice.toByteArray.toByteSlice (core a)
-      (handler a) (handler b)
+      (recovery_alike consumer) (recover_alike consumer) slice.toByteArray.toByteSlice
+          (Internal.core a)
+      (Internal.handler a) (Internal.handler b)
       taken
     obtain ⟨⟨hr, hc⟩, ht⟩ := hsim
     simp only [Lexer.lexOps, flaggedOps]
@@ -239,7 +246,8 @@ theorem lexing_flagged : lexing Lexer.lexOps = lexing flaggedOps := by
       (Recovery.LexRecovery.recover (H := Answering consumer) (m := AnswerM) Recovery.failFast)
       (Recovery.LexRecovery.abandon (H := Flagged consumer) (m := AnswerM) Recovery.failFast)
       (Recovery.LexRecovery.recover (H := Flagged consumer) (m := AnswerM) Recovery.failFast)
-      (recovery_alike consumer) (recover_alike consumer) (core a) (handler a) (handler b) taken
+      (recovery_alike consumer) (recover_alike consumer) (Internal.core a) (Internal.handler a)
+          (Internal.handler b) taken
     obtain ⟨⟨hr, hc⟩, ht⟩ := hsim
     simp only [Lexer.lexOps, flaggedOps]
     rw [run_answerM (H := Answering consumer) a, run_answerM (H := Flagged consumer) b,

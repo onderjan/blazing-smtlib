@@ -1,4 +1,8 @@
-import BSmtLib.Facts.Proofs.Parser.Rejection.Unique
+module
+
+public import BSmtLib.Facts.Proofs.Parser.Rejection.Unique
+
+@[expose] public section
 
 /-!
 # The reserved words of what a parser takes

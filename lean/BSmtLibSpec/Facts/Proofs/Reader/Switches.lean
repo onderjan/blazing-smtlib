@@ -1,5 +1,9 @@
-import BSmtLibSpec.Facts.Proofs.Reader
-import BSmtLibSpec.Facts.Proofs.Reader.Requests
+module
+
+public import BSmtLibSpec.Facts.Proofs.Reader
+public import BSmtLibSpec.Facts.Proofs.Reader.Requests
+
+@[expose] public section
 
 /-!
 # A declared version among the calls

@@ -1,26 +1,30 @@
-import BSmtLib.Reexports
-import BSmtLib.ControlFlow
-import BSmtLib.Bytes
-import BSmtLib.Plain
-import BSmtLib.Span
-import BSmtLib.Nodes
-import BSmtLib.Traits
-import BSmtLib.Token
-import BSmtLib.Token.Reserved
-import BSmtLib.Token.SyntaxToken
-import BSmtLib.Token.Produce
-import BSmtLib.Token.ConsumeFrom
-import BSmtLib.Lexer.CharClass
-import BSmtLib.Lexer.Error
-import BSmtLib.Lexer.Helpers
-import BSmtLib.Lexer.Recovery
-import BSmtLib.Lexer
-import BSmtLib.Parser
-import BSmtLib.Parser.Category
-import BSmtLib.Parser.Command
-import BSmtLib.Parser.Script
-import BSmtLib.Parser.Adapter
-import BSmtLib.Reader
+module
+
+public import BSmtLib.Reexports
+public import BSmtLib.ControlFlow
+public import BSmtLib.Bytes
+public import BSmtLib.Plain
+public import BSmtLib.Span
+public import BSmtLib.Nodes
+public import BSmtLib.Traits
+public import BSmtLib.Token
+public import BSmtLib.Token.Reserved
+public import BSmtLib.Token.SyntaxToken
+public import BSmtLib.Token.Produce
+public import BSmtLib.Token.ConsumeFrom
+public import BSmtLib.Lexer.CharClass
+public import BSmtLib.Lexer.Error
+public import BSmtLib.Lexer.Helpers
+public import BSmtLib.Lexer.Recovery
+public import BSmtLib.Lexer
+public import BSmtLib.Parser
+public import BSmtLib.Parser.Category
+public import BSmtLib.Parser.Command
+public import BSmtLib.Parser.Script
+public import BSmtLib.Parser.Adapter
+public import BSmtLib.Reader
+
+public section
 
 /-!
 # The library

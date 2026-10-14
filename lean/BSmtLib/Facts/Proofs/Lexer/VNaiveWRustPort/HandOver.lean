@@ -1,4 +1,11 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Consume
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Consume
+import all BSmtLib.Lexer
+import all BSmtLib.Lexer.Internal.WRustPort
+import all BSmtLib.Token
+
+@[expose] public section
 
 /-!
 # The Rust port's hand-overs to the adapter's consumer
@@ -15,7 +22,6 @@ trailing input.
 
 namespace BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.HandOver
 
-open BSmtLib.Lexer.Internal (intoBatch)
 open BSmtLib.Facts.Lexer.Adapters
 open BSmtLibSpec.Lexer (Handed)
 open BSmtLib.Lexer.Internal.WRustPort (callConsumer)
@@ -178,7 +184,8 @@ theorem withVersion_self (s : WP.BS floor low) : withVersion s s.val.version = s
 as `pending` says of the lexemes the cursor yields (`FlushPost`). -/
 theorem flushCursor_wp : ∀ (n : Nat) (cursor : Token.BatchCursor g), cStop cursor - cNext cursor =
     n →
-    ∀ (ls : List Lexeme), Holds (intoBatch cursor) ls → cStop cursor ≤ ls.length →
+    ∀ (ls : List Lexeme), Holds (BSmtLib.Lexer.Internal.intoBatch cursor) ls → cStop cursor ≤
+        ls.length →
     cursor.relexRequested = false → cursor.discardRequested = false →
     ∀ (hfloor : ∀ p, floor = some p → cursor.EndsAfter p) (s : WP.BS floor low) (coll : List Handed)
       (Q : Unit → WP.BS floor low → List Handed → Prop)
@@ -235,7 +242,8 @@ theorem flushCursor_wp : ∀ (n : Nat) (cursor : Token.BatchCursor g), cStop cur
       apply WP.wp_bind
       apply WP.wp_modifyCore
       unfold ConsumeSpec at k3
-      have hb' : Holds (intoBatch cursor') ls := by rw [intoBatch_eq cursor' cursor]; exact hb
+      have hb' : Holds (BSmtLib.Lexer.Internal.intoBatch cursor') ls
+          := by rw [intoBatch_eq cursor' cursor]; exact hb
       have hlast := getLast?_take_drop ls k1 (by omega)
       cases hp : pending C false cursor.version coll ((ls.take (cNext cursor')).drop (cNext cursor))
         with
@@ -477,7 +485,7 @@ theorem pending_cont {hd : Bool} {ver : Token.Version} {coll : List Handed} {ls 
 
 /-- The hand-over of a cursor over a batch that holds lexemes, as two cases. -/
 theorem flushCursor_wp' (cursor : Token.BatchCursor g) (ls : List Lexeme)
-    (hb : Holds (intoBatch cursor) ls) (hs : cStop cursor ≤ ls.length)
+    (hb : Holds (BSmtLib.Lexer.Internal.intoBatch cursor) ls) (hs : cStop cursor ≤ ls.length)
     (hrel : cursor.relexRequested = false) (hdis : cursor.discardRequested = false)
     (hfloor : ∀ p, floor = some p → cursor.EndsAfter p) (s : WP.BS floor low) (coll : List Handed)
     {Q : Unit → WP.BS floor low → List Handed → Prop}

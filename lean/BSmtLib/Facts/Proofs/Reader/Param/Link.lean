@@ -1,6 +1,14 @@
-import BSmtLib.Facts.Proofs.Reader.Param.Adapter
-import BSmtLib.Facts.Proofs.Reader.Param.UnaryCalls
-import BSmtLib.Facts.Proofs.Lexer.VNaive.Reserved
+module
+
+public import BSmtLib.Facts.Proofs.Reader.Param.Adapter
+public import BSmtLib.Facts.Proofs.Reader.Param.UnaryCalls
+public import BSmtLib.Facts.Proofs.Lexer.VNaive.Reserved
+import all BSmtLib.Parser
+import all BSmtLib.Plain
+import all BSmtLib.Token.Reserved
+import all BSmtLib.Token.SyntaxToken
+
+@[expose] public section
 
 /-!
 # The parse adapter answers as the stand-in consumer on a script

@@ -1,4 +1,8 @@
-import BSmtLib.Facts.Proofs.Lexer.Simulation.Steps
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.Simulation.Steps
+
+@[expose] public section
 
 /-!
 # Coupled computations

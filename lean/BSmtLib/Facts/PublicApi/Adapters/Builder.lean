@@ -1,5 +1,9 @@
-import BSmtLib.Facts.PublicApi.Adapters
-import BSmtLibSpec.Grammar.File
+module
+
+public import BSmtLib.Facts.PublicApi.Adapters
+public import BSmtLibSpec.Grammar.File
+
+@[expose] public section
 
 /-!
 # Versions of the specification and of the library

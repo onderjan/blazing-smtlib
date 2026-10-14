@@ -1,4 +1,8 @@
-import Std.Data.ByteSlice
+module
+
+public import Std.Data.ByteSlice
+
+public section
 
 namespace BSmtLib.Bytes
 
@@ -87,11 +91,11 @@ def extendFromSlice (self : Bytes) (slice : ByteSlice) : Bytes :=
 @[inline]
 def push (self : Bytes) (byte : UInt8) : Bytes := ⟨self.bytes.push byte⟩
 
-instance : BEq Bytes := ⟨fun a b => a.bytes == b.bytes⟩
+@[no_expose] instance : BEq Bytes := ⟨fun a b => a.bytes == b.bytes⟩
 
-instance : Hashable Bytes := ⟨fun s => hash s.bytes⟩
+@[no_expose] instance : Hashable Bytes := ⟨fun s => hash s.bytes⟩
 
-instance : Repr Bytes := ⟨fun s _ => reprBytes s.asSlice⟩
+@[no_expose] instance : Repr Bytes := ⟨fun s _ => reprBytes s.asSlice⟩
 
 namespace BytesView
 
@@ -109,9 +113,9 @@ def asSlice (self : BytesView) : ByteSlice := self.slice
 
 def intoOwned (self : BytesView) : Bytes := ⟨self.slice.toByteArray⟩
 
-instance : BEq BytesView := ⟨fun a b => a.slice == b.slice⟩
+@[no_expose] instance : BEq BytesView := ⟨fun a b => a.slice == b.slice⟩
 
-instance : Repr BytesView := ⟨fun s _ => reprBytes s.slice⟩
+@[no_expose] instance : Repr BytesView := ⟨fun s _ => reprBytes s.slice⟩
 
 end BytesView
 

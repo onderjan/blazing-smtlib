@@ -1,4 +1,8 @@
-import BSmtLib.Span
+module
+
+public import BSmtLib.Span
+
+public section
 
 namespace BSmtLib.Lexer.Error
 

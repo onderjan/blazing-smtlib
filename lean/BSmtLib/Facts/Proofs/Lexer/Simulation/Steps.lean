@@ -1,4 +1,8 @@
-import BSmtLib.Token
+module
+
+public import BSmtLib.Token
+
+@[expose] public section
 
 /-!
 # Simulation of one lexer's steps by another's, by a map of the states

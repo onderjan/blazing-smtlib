@@ -1,7 +1,11 @@
-import BSmtLib.Parser.Command.CommandOutcome
-import BSmtLib.Parser.Command.Datatype
-import BSmtLib.Parser.Command.Definition
-import BSmtLib.Parser.Command.Function
+module
+
+public import BSmtLib.Parser.Command.CommandOutcome
+public import BSmtLib.Parser.Command.Datatype
+public import BSmtLib.Parser.Command.Definition
+public import BSmtLib.Parser.Command.Function
+
+public section
 
 /-!
 # The standard commands

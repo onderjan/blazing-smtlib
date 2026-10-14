@@ -1,10 +1,14 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.Delimiters
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.FastRuns
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.NumeralRuns
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.TextRuns
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.Legacy
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.StartLiterals
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.Start
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.Delimiters
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.FastRuns
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.NumeralRuns
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.TextRuns
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.Legacy
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.StartLiterals
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.Start
+
+@[expose] public section
 
 /-!
 # The Rust port's byte tables against the naive lexer's byte classes

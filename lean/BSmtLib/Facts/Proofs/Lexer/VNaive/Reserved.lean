@@ -1,5 +1,10 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaive.Facts
-import BSmtLib.Facts.Proofs.Lexer.Simulation.Bytes
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaive.Facts
+public import BSmtLib.Facts.Proofs.Lexer.Simulation.Bytes
+import all BSmtLib.Token.Reserved
+
+@[expose] public section
 
 /-!
 # Reserved words

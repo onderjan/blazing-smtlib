@@ -1,4 +1,11 @@
-import BSmtLib.Facts.Proofs.Parser.Commands.Literals
+module
+
+public import BSmtLib.Facts.Proofs.Parser.Commands.Literals
+import all BSmtLib.Parser.Category.Combinator
+import all BSmtLib.Parser.Command.Standard
+import all BSmtLib.Parser.Category.Token
+
+@[expose] public section
 
 /-!
 # Datatype commands against the traversal

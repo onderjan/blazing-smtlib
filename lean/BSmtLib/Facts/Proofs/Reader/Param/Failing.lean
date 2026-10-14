@@ -1,4 +1,8 @@
-import BSmtLib.Facts.Proofs.Reader.Param.General
+module
+
+public import BSmtLib.Facts.Proofs.Reader.Param.General
+
+@[expose] public section
 
 /-!
 # The link of the stand-in consumer and the parse adapter, on runs that fail

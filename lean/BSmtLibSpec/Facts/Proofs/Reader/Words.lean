@@ -1,6 +1,10 @@
-import BSmtLibSpec.Parser
-import BSmtLibSpec.Grammar.Properties
-import BSmtLibSpec.Facts.Proofs.Lexicon.Lemmas
+module
+
+public import BSmtLibSpec.Parser
+public import BSmtLibSpec.Grammar.Properties
+public import BSmtLibSpec.Facts.Proofs.Lexicon.Lemmas
+
+@[expose] public section
 
 /-!
 # The reserved words that a parser takes

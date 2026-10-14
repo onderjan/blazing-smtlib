@@ -1,6 +1,10 @@
-import BSmtLibSpec.Facts.Proofs.Grammar.OneToOne
-import BSmtLibSpec.Facts.Lexicon.Examples
-import BSmtLibSpec.Parser
+module
+
+public import BSmtLibSpec.Facts.Proofs.Grammar.OneToOne
+public import BSmtLibSpec.Facts.Lexicon.Examples
+public import BSmtLibSpec.Parser
+
+@[expose] public section
 
 /-!
 # The standard's examples of syntax

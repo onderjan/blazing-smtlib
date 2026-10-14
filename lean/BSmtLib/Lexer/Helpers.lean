@@ -1,6 +1,12 @@
-import BSmtLib.Lexer.CharClass
-import BSmtLib.Lexer.Error
-import BSmtLib.Token
+module
+
+public import BSmtLib.Lexer.CharClass
+public import BSmtLib.Lexer.Error
+public import BSmtLib.Token
+import all Init.Data.Array.Basic
+import all Init.Data.Nat.Bitwise.Basic
+
+public section
 
 open BSmtLib.Lexer.Error
 
@@ -90,20 +96,9 @@ def FAST_PIPE : UInt8 := 0b1000_0000
 def FAST_MASKS : Array UInt8 :=
   #[FAST_RESERVED, FAST_DELIM, FAST_ON, FAST_EMIT, FAST_RUN_MASK, FAST_PIPE]
 
-/- LEAN: the `#guard` checks below run when the module is built, as the Rust `assert!`s in
-`const` blocks do. -/
--- fast masks partition u8 and are pairwise distinct
-#guard (FAST_MASKS.foldl (init := some (0 : UInt8)) fun union mask =>
-    union.bind fun union => if union &&& mask == 0 then some (union ||| mask) else none)
-  == some 0xFF
-
--- fast run flags contain exactly the three run flags we need
-#guard (CharClass.RUN_SIMPLE_SYMBOL ||| CharClass.RUN_NON_LF_WHITESPACE |||
-    CharClass.RUN_QUOTED_PLAIN) &&& FAST_RUN_MASK
-    == FAST_RUN_MASK
-  && (CharClass.RUN_STRING_PLAIN ||| CharClass.RUN_DIGIT ||| CharClass.RUN_HEX_DIGIT |||
-      CharClass.RUN_BINARY_DIGIT ||| CharClass.RUN_COMMENT_PLAIN)
-    &&& FAST_RUN_MASK == 0
+/- LEAN: the Rust `assert!`s in `const` blocks that the fast masks partition the byte and
+carry the three run flags are `#guard`s in `BSmtLib.Facts.Asserts`, checked when the facts are
+built; so are the checks of the fast flags of every byte below. -/
 
 /--
 Fast dispatch bitmasks for every input byte.
@@ -134,20 +129,6 @@ theorem size_FAST : FAST.size = 256 := by
 @[inline]
 def fastFlags (c : UInt8) : UInt8 :=
   FAST[c.toNat]'(size_FAST ▸ c.toNat_lt)
-
--- a byte carries the delimiter flag exactly when it is whitespace, a parenthesis, or a semicolon
-#guard (List.range 256).all fun i =>
-  let c := i.toUInt8
-  (fastFlags c &&& FAST_DELIM != 0)
-    == (c == byte! ' ' || c == byte! '\t' || c == byte! '\n' || c == byte! '\r'
-      || c == byte! '(' || c == byte! ')' || c == byte! ';')
-
--- a byte is fast exactly when its START class is one the fast path replaces; parentheses
--- are dispatched by byte tests ahead of the table, so they are neither fast nor covered here
-#guard (List.range 256).all fun i =>
-  let start := startOf i.toUInt8
-  (fastFlags i.toUInt8 &&& FAST_ON != 0)
-    == (start == .whitespace || start == .pipe || start == .symbol)
 
 /--
 Whether the byte delimits a token: whitespace, a parenthesis, or the start
@@ -234,10 +215,12 @@ structure DigitRun where
   tokenType : Token.TokenCategory
   emptyError : LexicalErrorKind
 
+@[expose]
 def HEXADECIMAL_RUN : DigitRun :=
   { flag := CharClass.RUN_HEX_DIGIT, state := .hexadecimal, tokenType := .hexadecimal,
     emptyError := .hexadecimalDigitExpected }
 
+@[expose]
 def BINARY_RUN : DigitRun :=
   { flag := CharClass.RUN_BINARY_DIGIT, state := .binary, tokenType := .binary,
     emptyError := .binaryDigitExpected }

@@ -1,4 +1,9 @@
-import BSmtLib.Facts.Proofs.Reader.Param.Slice
+module
+
+public import BSmtLib.Facts.Proofs.Reader.Param.Slice
+import all BSmtLib.Lexer
+
+@[expose] public section
 
 /-!
 # The steps of the calls on two consumers
@@ -11,7 +16,7 @@ state, and the consumers' states related as the relator says.
 
 namespace BSmtLib.Facts.Proofs.Reader.Param.Calls
 
-open BSmtLib.Lexer BSmtLib.Lexer.Internal
+open BSmtLib.Lexer
 open BSmtLib.Facts.Proofs.Reader.Param.Basic BSmtLib.Facts.Proofs.Reader.Param.HandOver
 open BSmtLib.Facts.Proofs.Reader.Param.Slice BSmtLib.Lexer.Error
 
@@ -41,18 +46,20 @@ abbrev EofRel (L : Link H₁ m₁ R₁ E₁ H₂ m₂ R₂ E₂) :
 
 variable {L : Link H₁ m₁ R₁ E₁ H₂ m₂ R₂ E₂}
 
-theorem reset_sim : SSim L (· = ·) (reset (H := H₁) (m := m₁)) (reset (H := H₂) (m := m₂)) := by
-  unfold reset; lsim
+theorem reset_sim : SSim L (· = ·) (Internal.reset (H := H₁) (m := m₁))
+    (Internal.reset (H := H₂) (m := m₂)) := by
+  unfold Internal.reset; lsim
 
 theorem skipSlice_sim (slice skip) :
-    SSim L (· = ·) (skipSlice (H := H₁) (m := m₁) slice skip) (skipSlice slice skip) := by
-  unfold skipSlice; lsim
+    SSim L (· = ·) (Internal.skipSlice (H := H₁) (m := m₁) slice skip)
+        (Internal.skipSlice slice skip) := by
+  unfold Internal.skipSlice; lsim
 
 theorem executeStep_sim (step₁ : InnerM H₁ m₁ (Except (Failure E₁) (ControlFlow R₁)))
     (step₂ : InnerM H₂ m₂ (Except (Failure E₂) (ControlFlow R₂)))
     (h : SSim L (FlowLRel L) step₁ step₂) :
-    SSim L (EofFlowRel L) (executeStep step₁) (executeStep step₂) := by
-  unfold executeStep
+    SSim L (EofFlowRel L) (Internal.executeStep step₁) (Internal.executeStep step₂) := by
+  unfold Internal.executeStep
   refine SSim.bind h ?_
   intro r₁ r₂ hr
   match r₁, r₂, hr with
@@ -66,14 +73,14 @@ theorem failCall_sim (abandon₁ : Span.Location → StateT H₁ m₁ Unit)
     (habandon : ∀ l, L.rc.rel (· = ·) (abandon₁ l) (abandon₂ l))
     (failure₁ : Failure E₁) (failure₂ : Failure E₂) (hf : FailRel L.re failure₁ failure₂)
     (atEnd : Bool) :
-    SSim L (LexErrRel L.re) (failCall abandon₁ failure₁ atEnd)
-      (failCall abandon₂ failure₂ atEnd) := by
+    SSim L (LexErrRel L.re) (Internal.failCall abandon₁ failure₁ atEnd)
+      (Internal.failCall abandon₂ failure₂ atEnd) := by
   obtain ⟨c₁, s₁, l₁⟩ := failure₁
   obtain ⟨c₂, s₂, l₂⟩ := failure₂
   obtain ⟨hcause, hs, hl⟩ := hf
   cases hs
   cases hl
-  unfold failCall
+  unfold Internal.failCall
   refine SSim.bind_eq SSim.getThe fun core => ?_
   refine SSim.ite (fun _ => SSim.pure ⟨hcause, rfl, rfl⟩) (fun _ => ?_)
   match c₁, c₂, hcause with
@@ -90,10 +97,11 @@ variable [Token.Consume H₁ R₁ E₁] [Token.Consume H₂ R₂ E₂] [∀ b, T
   [∀ b, Token.ConsumeFrom H₂ (Token.BatchCursor b) m₂]
 
 theorem lexEofInner_sim (hc : Consumers L) :
-    SSim L (FlowLRel L) (lexEofInner (H := H₁) (m := m₁) (R := R₁) (E := E₁)) lexEofInner := by
+    SSim L (FlowLRel L) (Internal.lexEofInner (H := H₁) (m := m₁) (R := R₁) (E := E₁))
+        Internal.lexEofInner := by
   intro c
-  show L.rc.rel _ (lexEofInner c) (lexEofInner c)
-  unfold lexEofInner
+  show L.rc.rel _ (Internal.lexEofInner c) (Internal.lexEofInner c)
+  unfold Internal.lexEofInner
   dsimp only
   refine L.rc.bind (XSim.run_rel (Qe := IRel L.rr L.re) (Q := (· = ·)) ?_ _) ?_
   · refine XSim.bind_eq (XSim.tryCatch ?_ ?_ (fun _ => rfl)) fun _ => ?_
@@ -134,29 +142,30 @@ theorem lexEofStep_sim (hc : Consumers L) (abandon₁ recover₁ : Span.Location
     (abandon₂ recover₂ : Span.Location → StateT H₂ m₂ Unit)
     (habandon : ∀ l, L.rc.rel (· = ·) (abandon₁ l) (abandon₂ l))
     (hrecover : ∀ l, L.rc.rel (· = ·) (recover₁ l) (recover₂ l)) :
-    SSim L (EofRel L) (lexEofStep abandon₁ recover₁) (lexEofStep abandon₂ recover₂) := by
-  unfold lexEofStep
+    SSim L (EofRel L) (Internal.lexEofStep abandon₁ recover₁)
+        (Internal.lexEofStep abandon₂ recover₂) := by
+  unfold Internal.lexEofStep
   refine SSim.bind_eq SSim.getThe fun core => ?_
   dsimp only
   have hrest : SSim L (EofRel L)
       (do
-        match ← executeStep lexEofInner with
-        | .ok flow => do reset; pure (.ok flow)
+        match ← Internal.executeStep Internal.lexEofInner with
+        | .ok flow => do Internal.reset; pure (.ok flow)
         | .error failure =>
           if core.recoveryState.isSome = true then do
-            reset
+            Internal.reset
             pure (.error { cause := failure.cause, span := failure.span, continuesFrom := none })
           else do
-            pure (.error (← failCall abandon₁ failure true)))
+            pure (.error (← Internal.failCall abandon₁ failure true)))
       (do
-        match ← executeStep lexEofInner with
-        | .ok flow => do reset; pure (.ok flow)
+        match ← Internal.executeStep Internal.lexEofInner with
+        | .ok flow => do Internal.reset; pure (.ok flow)
         | .error failure =>
           if core.recoveryState.isSome = true then do
-            reset
+            Internal.reset
             pure (.error { cause := failure.cause, span := failure.span, continuesFrom := none })
           else do
-            pure (.error (← failCall abandon₂ failure true))) := by
+            pure (.error (← Internal.failCall abandon₂ failure true))) := by
     refine SSim.bind (executeStep_sim _ _ (lexEofInner_sim hc)) ?_
     intro r₁ r₂ hr
     match r₁, r₂, hr with
@@ -174,8 +183,9 @@ theorem lexEofStep_sim (hc : Consumers L) (abandon₁ recover₁ : Span.Location
 theorem lexFitting_sim (hc : Consumers L) (abandon₁ : Span.Location → StateT H₁ m₁ Unit)
     (abandon₂ : Span.Location → StateT H₂ m₂ Unit)
     (habandon : ∀ l, L.rc.rel (· = ·) (abandon₁ l) (abandon₂ l)) (slice h) :
-    SSim L (SliceRel L) (lexFitting abandon₁ slice h) (lexFitting abandon₂ slice h) := by
-  unfold lexFitting
+    SSim L (SliceRel L) (Internal.lexFitting abandon₁ slice h)
+        (Internal.lexFitting abandon₂ slice h) := by
+  unfold Internal.lexFitting
   refine SSim.bind (lexSliceInner_sim hc _) ?_
   intro r₁ r₂ hr
   match r₁, r₂, hr with
@@ -189,9 +199,9 @@ theorem lexSliceFitting_sim (hc : Consumers L) (abandon₁ recover₁ : Span.Loc
     (abandon₂ recover₂ : Span.Location → StateT H₂ m₂ Unit)
     (habandon : ∀ l, L.rc.rel (· = ·) (abandon₁ l) (abandon₂ l))
     (hrecover : ∀ l, L.rc.rel (· = ·) (recover₁ l) (recover₂ l)) (slice h) :
-    SSim L (SliceRel L) (lexSliceFitting abandon₁ recover₁ slice h)
-      (lexSliceFitting abandon₂ recover₂ slice h) := by
-  unfold lexSliceFitting
+    SSim L (SliceRel L) (Internal.lexSliceFitting abandon₁ recover₁ slice h)
+      (Internal.lexSliceFitting abandon₂ recover₂ slice h) := by
+  unfold Internal.lexSliceFitting
   refine SSim.bind_eq SSim.getThe fun core => ?_
   refine SSim.ite (fun _ => SSim.pure trivial)
     (fun _ => ?_)
@@ -210,9 +220,9 @@ theorem lexChunks_sim (hc : Consumers L) (abandon₁ recover₁ : Span.Location 
     (hrecover : ∀ l, L.rc.rel (· = ·) (recover₁ l) (recover₂ l)) (slice : ByteSlice)
     (position : Nat) (held₁ : Option (Span.Located R₁)) (held₂ : Option (Span.Located R₂))
     (hh : ORel (LocRel L.rr) held₁ held₂) :
-    SSim L (SliceRel L) (lexChunks abandon₁ recover₁ slice position held₁)
-      (lexChunks abandon₂ recover₂ slice position held₂) := by
-  rw [lexChunks.eq_def, lexChunks.eq_def]
+    SSim L (SliceRel L) (Internal.lexChunks abandon₁ recover₁ slice position held₁)
+      (Internal.lexChunks abandon₂ recover₂ slice position held₂) := by
+  rw [Internal.lexChunks.eq_def, Internal.lexChunks.eq_def]
   refine SSim.dite (fun hlt => ?_) (fun _ => SSim.pure hh)
   refine SSim.bind (lexSliceFitting_sim hc abandon₁ recover₁ abandon₂ recover₂ habandon hrecover
     _ _) ?_
@@ -225,15 +235,15 @@ theorem lexChunks_sim (hc : Consumers L) (abandon₁ recover₁ : Span.Location 
     | none, none, _ => exact hh
   | .error e₁, .error e₂, he => exact SSim.pure he
 termination_by slice.size - position
-decreasing_by simp only [CHUNK_SIZE] at *; omega
+decreasing_by simp only [Internal.CHUNK_SIZE] at *; omega
 
 theorem lexSliceStep_sim (hc : Consumers L) (abandon₁ recover₁ : Span.Location → StateT H₁ m₁ Unit)
     (abandon₂ recover₂ : Span.Location → StateT H₂ m₂ Unit)
     (habandon : ∀ l, L.rc.rel (· = ·) (abandon₁ l) (abandon₂ l))
     (hrecover : ∀ l, L.rc.rel (· = ·) (recover₁ l) (recover₂ l)) (slice : ByteSlice) :
-    SSim L (SliceRel L) (lexSliceStep abandon₁ recover₁ slice)
-      (lexSliceStep abandon₂ recover₂ slice) := by
-  unfold lexSliceStep
+    SSim L (SliceRel L) (Internal.lexSliceStep abandon₁ recover₁ slice)
+      (Internal.lexSliceStep abandon₂ recover₂ slice) := by
+  unfold Internal.lexSliceStep
   exact SSim.dite (fun _ => lexSliceFitting_sim hc abandon₁ recover₁ abandon₂ recover₂ habandon
       hrecover _ _)
     (fun _ => lexChunks_sim hc abandon₁ recover₁ abandon₂ recover₂ habandon hrecover _ _ none none

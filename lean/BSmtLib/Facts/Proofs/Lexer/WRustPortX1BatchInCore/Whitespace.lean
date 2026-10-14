@@ -1,4 +1,9 @@
-import BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Finish
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Finish
+import all BSmtLib.Lexer.Internal.WRustPort
+
+@[expose] public section
 
 /-!
 # The whitespace run

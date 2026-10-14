@@ -1,5 +1,10 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaive.Complete
-import BSmtLib.Facts.Proofs.Lexer.VNaive.Reserved
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaive.Complete
+public import BSmtLib.Facts.Proofs.Lexer.VNaive.Reserved
+import all BSmtLib.Lexer.Internal.VNaive
+
+@[expose] public section
 
 /-!
 # The pure run over a start of the input

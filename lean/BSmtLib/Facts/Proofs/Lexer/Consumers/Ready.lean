@@ -1,4 +1,9 @@
-import BSmtLib.Facts.Proofs.Lexer.Consumers.VHold
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.Consumers.VHold
+import all BSmtLib.Token
+
+@[expose] public section
 
 /-!
 # The entries ready from a boundary

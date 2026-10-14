@@ -1,5 +1,9 @@
-import BSmtLibSpec.Reader
-import BSmtLibSpec.Facts.Proofs.Parser.Bridge
+module
+
+public import BSmtLibSpec.Reader
+public import BSmtLibSpec.Facts.Proofs.Parser.Bridge
+
+@[expose] public section
 
 /-!
 # What the traversal asks of its producer

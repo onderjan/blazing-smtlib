@@ -1,7 +1,11 @@
-import BSmtLibSpec.Facts.Grammar.Examples
-import BSmtLibSpec.Facts.Proofs.Grammar.OneToOne
-import BSmtLibSpec.Facts.Proofs.Grammar.Files
-import BSmtLibSpec.Facts.Proofs.Grammar.RoundTrip
+module
+
+public import BSmtLibSpec.Facts.Grammar.Examples
+public import BSmtLibSpec.Facts.Proofs.Grammar.OneToOne
+public import BSmtLibSpec.Facts.Proofs.Grammar.Files
+public import BSmtLibSpec.Facts.Proofs.Grammar.RoundTrip
+
+@[expose] public section
 
 /-!
 # Facts of the grammar

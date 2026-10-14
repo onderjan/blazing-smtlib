@@ -1,4 +1,9 @@
-import BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Normal
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Normal
+import all BSmtLib.Lexer.Internal.WRustPort
+
+@[expose] public section
 
 /-!
 # The steps per state

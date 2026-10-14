@@ -1,4 +1,8 @@
-import BSmtLibSpec.Facts.Proofs.Parser.Program
+module
+
+public import BSmtLibSpec.Facts.Proofs.Parser.Program
+
+@[expose] public section
 
 /-!
 # Programs in a recording run

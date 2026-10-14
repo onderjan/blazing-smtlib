@@ -1,7 +1,13 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Loop
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Eof
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.VEof
-import BSmtLib.Facts.Proofs.Lexer.Consumers.AlikeF
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Loop
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Eof
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.VEof
+public import BSmtLib.Facts.Proofs.Lexer.Consumers.AlikeF
+import all BSmtLib.Lexer.Internal.VNaive
+import all BSmtLib.Lexer.Internal.WRustPort
+
+@[expose] public section
 
 /-!
 # The Rust port with every consumer, against the naive lexer

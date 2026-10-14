@@ -1,4 +1,12 @@
-import BSmtLib.Facts.Proofs.Parser.Rejection.Payload
+module
+
+public import BSmtLib.Facts.Proofs.Parser.Rejection.Payload
+import all BSmtLib.Parser.Command
+import all BSmtLib.Parser.Command.Standard
+import all BSmtLib.Token.Reserved
+import all BSmtLib.Parser.Category.Attribute
+
+@[expose] public section
 
 /-!
 # The steps of the command parser advance

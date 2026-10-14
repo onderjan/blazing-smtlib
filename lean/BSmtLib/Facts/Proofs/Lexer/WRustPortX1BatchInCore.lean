@@ -1,4 +1,8 @@
-import BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Handed
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Handed
+
+@[expose] public section
 
 /-!
 # The Rust port and the lexer with the batch in its state lex alike

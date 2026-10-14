@@ -1,6 +1,10 @@
-import BSmtLib.Parser.Script
-import BSmtLib.Token.Produce
-import BSmtLib.Token.ConsumeFrom
+module
+
+public import BSmtLib.Parser.Script
+public import BSmtLib.Token.Produce
+public import BSmtLib.Token.ConsumeFrom
+
+public section
 
 /-!
 # The parse adapter

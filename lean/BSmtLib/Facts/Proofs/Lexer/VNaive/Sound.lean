@@ -1,4 +1,8 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaive.Modes
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaive.Modes
+
+@[expose] public section
 
 /-!
 # What the naive lexer finishes is a tokenisation

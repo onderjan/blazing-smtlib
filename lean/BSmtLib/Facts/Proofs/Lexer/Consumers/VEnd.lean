@@ -1,4 +1,9 @@
-import BSmtLib.Facts.Proofs.Lexer.Consumers.VSteps
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.Consumers.VSteps
+import all BSmtLib.Lexer.Internal.VNaive
+
+@[expose] public section
 
 /-!
 # The naive lexer's end of the input with a consumer of the spec

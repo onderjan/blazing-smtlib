@@ -1,4 +1,10 @@
-import BSmtLib.Facts.Proofs.Reader.Param.Only
+module
+
+public import BSmtLib.Facts.Proofs.Reader.Param.Only
+import all BSmtLib.Lexer
+import all BSmtLib.Reader
+
+@[expose] public section
 
 /-!
 # The library's reader as a recording reader
@@ -21,7 +27,6 @@ happens only on a file (`Param.adapter_finishes_only_on_files`).
 
 namespace BSmtLib.Facts.Proofs.Reader.Reader
 
-open BSmtLib.Lexer.Internal
 open BSmtLibSpec
 open BSmtLib.Parser.Script (ScriptParser)
 open BSmtLib.Parser.Adapter (ParseAdapter)
@@ -33,7 +38,7 @@ open BSmtLib.Facts.Reader.Adapters
 
 theorem readerOf_eq (version : Lexicon.Version) :
     readerOf version = Reader.Internal.ofLexer (Lexer.new recordingAdapter (toVersion version)) :=
-  rfl
+  (rfl)
 
 theorem readSlice_ofLexer (lexer : PLexer) (slice : ByteSlice) :
     ((Reader.Internal.ofLexer lexer : RecReader).readSlice slice : Id _) =
@@ -54,7 +59,8 @@ theorem readEof_ofLexer (lexer : PLexer) :
   rcases r with ⟨e, ⟨⟩⟩ | ⟨res, l⟩ <;> rfl
 
 theorem handler_ofLexer (lexer : PLexer) :
-    (Reader.Internal.ofLexer lexer : RecReader).handler = (handler lexer).handler := rfl
+    (Reader.Internal.ofLexer lexer : RecReader).handler = (Lexer.Internal.handler lexer).handler :=
+    (rfl)
 
 /-- Where the lexer's public calls with the parse adapter do not fail, the reader's run is theirs:
 the calls the handler holds after them, and whether the end of the input returned a result. -/

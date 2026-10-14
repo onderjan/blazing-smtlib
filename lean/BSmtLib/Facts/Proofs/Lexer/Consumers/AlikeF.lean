@@ -1,4 +1,8 @@
-import BSmtLib.Facts.Proofs.Lexer.Consumers.Alike
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.Consumers.Alike
+
+@[expose] public section
 
 /-!
 # Lexers that do alike with every consumer of the spec, up to how they fail

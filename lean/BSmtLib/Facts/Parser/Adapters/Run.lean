@@ -1,4 +1,8 @@
-import BSmtLib.Facts.Parser.Adapters.Handler
+module
+
+public import BSmtLib.Facts.Parser.Adapters.Handler
+
+@[expose] public section
 
 /-!
 # Running the library's parser as the spec runs a parser

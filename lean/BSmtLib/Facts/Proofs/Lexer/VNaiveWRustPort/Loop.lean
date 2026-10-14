@@ -1,6 +1,14 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Slice
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.VBytes
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Taken
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Slice
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.VBytes
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Taken
+import all BSmtLib.Lexer.Error
+import all BSmtLib.Lexer.Internal.WRustPort
+import all BSmtLib.Span
+import all BSmtLib.Token
+
+@[expose] public section
 
 /-!
 # The Rust port's loop over the stops in a slice, against the naive lexer
@@ -124,7 +132,7 @@ theorem discardedOf_none {n : Core} (h : ∀ s, n.activity ≠ .discarding s) :
 
 theorem causeFailure_trailing {ε : Type} {span : Span} :
     causeFailure (ε := ε) (.lexical .unexpectedTrailingToken) span =
-      .trailing (toLocation span.start) := rfl
+      .trailing (toLocation span.start) := (rfl)
 
 theorem loop (bytes : List UInt8) (initialOffset : Nat) :
     ∀ (N floor : Nat) (hfloor : initialOffset ≤ floor + 1) (position : Nat)

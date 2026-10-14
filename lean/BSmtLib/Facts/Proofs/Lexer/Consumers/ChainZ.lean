@@ -1,5 +1,11 @@
-import BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer
-import BSmtLib.Facts.Proofs.Lexer.Consumers.ChainX1
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer
+public import BSmtLib.Facts.Proofs.Lexer.Consumers.ChainX1
+import all BSmtLib.Lexer
+import all BSmtLib.Lexer.Internal.WRustPort
+
+@[expose] public section
 
 /-!
 # The library's lexer and `X1BatchInCore` with every consumer of the spec
@@ -18,7 +24,6 @@ of `X1BatchInCore` fed each input cut (`lexing_cut`).
 
 namespace BSmtLib.Facts.Proofs.Lexer.Consumers.ChainZ
 
-open BSmtLib.Lexer.Internal (handler core held run)
 open BSmtLib.Facts.Lexer.Adapters BSmtLib.Facts.Proofs.Lexer.Consumers.Alike
 open BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer
 open BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Handed
@@ -30,20 +35,23 @@ variable {consumer : BSmtLibSpec.Lexer.Consumer}
 
 theorem zrun_held {α : Type} (l : Lexer.lexOps.Lexer consumer)
     (f : BSmtLib.Lexer.InnerM (Answering consumer) AnswerM α) (t : List BSmtLibSpec.Lexer.Handed) :
-    held ((run l f).run t).1.2 = held l := rfl
+    BSmtLib.Lexer.Internal.held ((BSmtLib.Lexer.Internal.run l f).run t).1.2 =
+        BSmtLib.Lexer.Internal.held l := (rfl)
 
 theorem xrun_held {α : Type} (x : X1BatchInCore.lexOps.Lexer consumer)
     (f : Lexer.Internal.WRustPort.InnerM (Answering consumer) AnswerM α)
     (t : List BSmtLibSpec.Lexer.Handed) :
-    ((x.run f).run t).1.2.held = x.held := rfl
+    ((x.run f).run t).1.2.held = x.held := (rfl)
 
 theorem zrun_bind {α β : Type} (l : Lexer.lexOps.Lexer consumer)
     (f : BSmtLib.Lexer.InnerM (Answering consumer) AnswerM α)
     (k : α → BSmtLib.Lexer.InnerM (Answering consumer) AnswerM β) :
-    run l (f >>= k) = (run l f >>= fun p => run p.2 (k p.1)) := rfl
+    BSmtLib.Lexer.Internal.run l (f >>= k) = (BSmtLib.Lexer.Internal.run l f >>= fun p =>
+        BSmtLib.Lexer.Internal.run p.2 (k p.1)) := (rfl)
 
 theorem zrun_pure {α : Type} (l : Lexer.lexOps.Lexer consumer) (a : α) :
-    run l (pure a : BSmtLib.Lexer.InnerM (Answering consumer) AnswerM α) = pure (a, l) := rfl
+    BSmtLib.Lexer.Internal.run l (pure a : BSmtLib.Lexer.InnerM (Answering consumer) AnswerM α) =
+        pure (a, l) := (rfl)
 
 theorem xrun_withHeld {α : Type} (x : X1BatchInCore.lexOps.Lexer consumer)
     (d : Option (Span.Located consumer.Result))
@@ -55,19 +63,20 @@ theorem xrun_withHeld {α : Type} (x : X1BatchInCore.lexOps.Lexer consumer)
             t).1.2 with
           held := x.held }),
         ((({ x with held := d } : Lexer.Internal.WRustPort.Lexer _ .failFast).run f).run t).2) :=
-            rfl
+            (rfl)
 
 /-- The library's lexer and `X1BatchInCore` with the same consumer and related states, whatever
 results they hold. -/
 def LooseRel (l : Lexer.lexOps.Lexer consumer) (x : X1BatchInCore.lexOps.Lexer consumer) :
     Prop :=
-  x.handler = handler l ∧ Rel (core l) x.core
+  x.handler = BSmtLib.Lexer.Internal.handler l ∧ Rel (BSmtLib.Lexer.Internal.core l) x.core
 
 theorem LooseRel.of {l : Lexer.lexOps.Lexer consumer} {x : X1BatchInCore.lexOps.Lexer consumer}
     (h : LexerRel l x) : LooseRel l x := ⟨h.1, h.2.1⟩
 
 theorem LexerRel.of {l : Lexer.lexOps.Lexer consumer} {x : X1BatchInCore.lexOps.Lexer consumer}
-    (h : LooseRel l x) (hd : x.held = held l) : LexerRel l x := ⟨h.1, h.2, hd⟩
+    (h : LooseRel l x) (hd : x.held = BSmtLib.Lexer.Internal.held l) : LexerRel l x :=
+    ⟨h.1, h.2, hd⟩
 
 /-- A call on a slice that ends below `USize.size`, on lexers with related states: the two give
 the same result, take the same tokens, keep the results they hold and have related states. -/
@@ -83,41 +92,43 @@ theorem step_fit (l : Lexer.lexOps.Lexer consumer) (x : X1BatchInCore.lexOps.Lex
   have hc := run_lexSliceStep (m := AnswerM) (R := consumer.Result) (E := Option consumer.Error)
     (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.failFast)
     (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.failFast) l
-    { x with held := held l } (LexerRel.of h rfl) slice hs
+    { x with held := BSmtLib.Lexer.Internal.held l } (LexerRel.of h rfl) slice hs
   obtain ⟨⟨e1, e2⟩, e3⟩ := mcouple_answerM hc t
   simp only [X1BatchInCore.lexOps, Lexer.lexOps]
-  rw [xrun_withHeld x (held l)]
+  rw [xrun_withHeld x (BSmtLib.Lexer.Internal.held l)]
   exact ⟨e1, ⟨e2.1, e2.2.1⟩, e3⟩
 
-open BSmtLib.Lexer.Internal (lexChunks lexSliceFitting lexSliceStep CHUNK_SIZE) in
 /-- `lexChunks` from `p`, on the library's lexer, lexes the chunk at `p` as a call on it does and
 goes on from the next chunk, with the result held from it, if the call continues. -/
 theorem run_lexChunks_lt (l : Lexer.lexOps.Lexer consumer) (s : BSmtLibSpec.Regex.Chars) (p : Nat)
     (hp : p < s.length) (acc : Option (Span.Located consumer.Result)) :
-    run l (lexChunks (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.failFast)
+    BSmtLib.Lexer.Internal.run l (BSmtLib.Lexer.Internal.lexChunks
+        (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.failFast)
         (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.failFast) s.toByteArray.toByteSlice p
             acc) =
       (Lexer.lexOps.lexSliceStep l (Chunks.chunkAt s p).toByteArray.toByteSlice >>= fun q =>
         match q.1 with
-        | .ok ch => run q.2 (lexChunks (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.failFast)
+        | .ok ch => BSmtLib.Lexer.Internal.run q.2
+            (BSmtLib.Lexer.Internal.lexChunks (Lexer.Recovery.LexRecovery.abandon
+                Lexer.Recovery.failFast)
             (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.failFast) s.toByteArray.toByteSlice
-            (p + CHUNK_SIZE) (ch.or acc))
+            (p + BSmtLib.Lexer.Internal.CHUNK_SIZE) (ch.or acc))
         | .error err => pure (.error err, q.2)) := by
   have hp' : p < s.toByteArray.toByteSlice.size := by
     rw [Chunks.toByteSlice_size, List.size_toByteArray]; exact hp
-  rw [lexChunks, dite_eq_left_of_eq_true (eq_true hp'), zrun_bind]
-  have hfit : ∀ h, lexSliceFitting (H := Answering consumer) (m := AnswerM)
+  rw [BSmtLib.Lexer.Internal.lexChunks, dite_eq_left_of_eq_true (eq_true hp'), zrun_bind]
+  have hfit : ∀ h, BSmtLib.Lexer.Internal.lexSliceFitting (H := Answering consumer) (m := AnswerM)
       (R := consumer.Result) (E := Option consumer.Error)
       (Lexer.Recovery.LexRecovery.abandon .failFast) (Lexer.Recovery.LexRecovery.recover .failFast)
       (s.toByteArray.toByteSlice.byteArray.extract (s.toByteArray.toByteSlice.start + p)
-        (min (s.toByteArray.toByteSlice.start + p + CHUNK_SIZE)
+        (min (s.toByteArray.toByteSlice.start + p + BSmtLib.Lexer.Internal.CHUNK_SIZE)
           s.toByteArray.toByteSlice.stop)).toByteSlice h =
-      lexSliceStep (Lexer.Recovery.LexRecovery.abandon .failFast)
+      BSmtLib.Lexer.Internal.lexSliceStep (Lexer.Recovery.LexRecovery.abandon .failFast)
           (Lexer.Recovery.LexRecovery.recover .failFast)
         (Chunks.chunkAt s p).toByteArray.toByteSlice := by
     rw [Chunks.chunk_eq s p]
     intro h
-    unfold lexSliceStep
+    unfold BSmtLib.Lexer.Internal.lexSliceStep
     rw [dite_eq_left_of_eq_true (eq_true h)]
   rw [hfit]
   refine congrArg (_ >>= ·) (funext fun q => ?_)
@@ -135,19 +146,18 @@ theorem runInput_cons (ops : LexOps) (lexer : ops.Lexer consumer) (ended : Bool)
   simp only [LexOps.runInput, StateT.run_bind]
   rcases (ops.lexSliceStep lexer slice.toByteArray.toByteSlice).run t with ⟨⟨_ | _, _⟩, _⟩ <;> rfl
 
-open BSmtLib.Lexer.Internal (lexChunks CHUNK_SIZE) in
 theorem run_lexChunks_ge (l : Lexer.lexOps.Lexer consumer) (s : BSmtLibSpec.Regex.Chars) (p : Nat)
     (hp : ¬ p < s.length) (acc : Option (Span.Located consumer.Result)) :
-    run l (lexChunks (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.failFast)
+    BSmtLib.Lexer.Internal.run l (BSmtLib.Lexer.Internal.lexChunks
+        (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.failFast)
         (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.failFast) s.toByteArray.toByteSlice p
             acc) =
       pure (.ok acc, l) := by
   have hp' : ¬ p < s.toByteArray.toByteSlice.size := by
     rw [Chunks.toByteSlice_size, List.size_toByteArray]; exact hp
-  rw [lexChunks, dite_eq_right_of_eq_false (eq_false hp')]
+  rw [BSmtLib.Lexer.Internal.lexChunks, dite_eq_right_of_eq_false (eq_false hp')]
   rfl
 
-open BSmtLib.Lexer.Internal (lexChunks) in
 /-- `lexChunks` from `p` on the library's lexer, and the calls of `X1BatchInCore` on the chunks
 from `p` on, from lexers with related states, the second holding what the first holds after the
 result held from the chunks before: the two give the same result, take the same tokens, and have
@@ -157,15 +167,16 @@ theorem chunks_rel (s : BSmtLibSpec.Regex.Chars) (rest : List BSmtLibSpec.Regex.
     (p : Nat) :
     ∀ (acc : Option (Span.Located consumer.Result)) (l : Lexer.lexOps.Lexer consumer)
       (x : X1BatchInCore.lexOps.Lexer consumer) (t : List BSmtLibSpec.Lexer.Handed),
-      LooseRel l x → x.held = acc.or (held l) →
+      LooseRel l x → x.held = acc.or (BSmtLib.Lexer.Internal.held l) →
       ∀ r (l' : Lexer.lexOps.Lexer consumer) t',
-        (run l (lexChunks (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.failFast)
+        (BSmtLib.Lexer.Internal.run l (BSmtLib.Lexer.Internal.lexChunks
+            (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.failFast)
           (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.failFast) s.toByteArray.toByteSlice p
               acc)).run t =
           ((r, l'), t') →
         ∃ x' : X1BatchInCore.lexOps.Lexer consumer, LooseRel l' x' ∧
           match r with
-          | .ok h => x'.held = h.or (held l) ∧
+          | .ok h => x'.held = h.or (BSmtLib.Lexer.Internal.held l) ∧
               (X1BatchInCore.lexOps.runInput x ended (Chunks.chunksFrom s p ++ rest)).run t =
                 (X1BatchInCore.lexOps.runInput x' ended rest).run t'
           | .error err =>
@@ -176,8 +187,9 @@ theorem chunks_rel (s : BSmtLibSpec.Regex.Chars) (rest : List BSmtLibSpec.Regex.
     intro acc l x t hL hd r l' t' hz
     rw [run_lexChunks_lt l s p hp acc, StateT.run_bind] at hz
     obtain ⟨e1, e2, e3⟩ := step_fit l x hL _ (Chunks.chunk_stop_lt s p) t
-    have hzh : held ((Lexer.lexOps.lexSliceStep l
-        (Chunks.chunkAt s p).toByteArray.toByteSlice).run t).1.2 = held l := rfl
+    have hzh : BSmtLib.Lexer.Internal.held ((Lexer.lexOps.lexSliceStep l
+        (Chunks.chunkAt s p).toByteArray.toByteSlice).run t).1.2 = BSmtLib.Lexer.Internal.held l :=
+            rfl
     have hxh : ((X1BatchInCore.lexOps.lexSliceStep x
         (Chunks.chunkAt s p).toByteArray.toByteSlice).run t).1.2.held = x.held := rfl
     rw [List.cons_append]
@@ -201,7 +213,7 @@ theorem chunks_rel (s : BSmtLibSpec.Regex.Chars) (rest : List BSmtLibSpec.Regex.
       obtain ⟨x', h1, h2⟩ := ih (ch.or acc) la
         (X1BatchInCore.lexOps.withHeld xb (ch.or (X1BatchInCore.lexOps.held xb))) ta e2
         (by
-          show ch.or xb.held = (ch.or acc).or (held la)
+          show ch.or xb.held = (ch.or acc).or (BSmtLib.Lexer.Internal.held la)
           rw [hxh, hd, hzh, Option.or_assoc])
         r l' t' hz
       refine ⟨x', h1, ?_⟩
@@ -237,7 +249,6 @@ theorem runInput_nil_true (ops : LexOps) (lexer : ops.Lexer consumer)
     dsimp only
     cases eofResult (ops.held l) flow <;> rfl
 
-open BSmtLib.Lexer.Internal (lexSliceStep) in
 /-- A call of the library's lexer on a slice, and the calls of `X1BatchInCore` on its cut, from
 related lexers: the two give the same result, take the same tokens and have related states, the
 second holding then what the first holds after the call. -/
@@ -248,7 +259,7 @@ theorem slice_cut (s : BSmtLibSpec.Regex.Chars) (rest : List BSmtLibSpec.Regex.C
       (Lexer.lexOps.lexSliceStep l s.toByteArray.toByteSlice).run t = ((r, l'), t') →
       ∃ x' : X1BatchInCore.lexOps.Lexer consumer, LooseRel l' x' ∧
         match r with
-        | .ok h => x'.held = h.or (held l) ∧
+        | .ok h => x'.held = h.or (BSmtLib.Lexer.Internal.held l) ∧
             (X1BatchInCore.lexOps.runInput x ended (Chunks.cut s ++ rest)).run t =
               (X1BatchInCore.lexOps.runInput x' ended rest).run t'
         | .error err =>
@@ -272,19 +283,19 @@ theorem slice_cut (s : BSmtLibSpec.Regex.Chars) (rest : List BSmtLibSpec.Regex.C
     | error err => exact ⟨xb, e2, rfl⟩
     | ok d =>
       refine ⟨X1BatchInCore.lexOps.withHeld xb (d.or (X1BatchInCore.lexOps.held xb)), e2, ?_, rfl⟩
-      show d.or xb.held = d.or (held l)
+      show d.or xb.held = d.or (BSmtLib.Lexer.Internal.held l)
       rw [hxh, h.2.2]
   · rw [ite_eq_right_of_eq_false _ _ (eq_false hs)]
     have hs' : ¬ s.toByteArray.toByteSlice.stop < USize.size := by
       rw [Chunks.stop_toByteSlice, List.size_toByteArray]; exact hs
-    have hz' : (run l (BSmtLib.Lexer.Internal.lexChunks
+    have hz' : (BSmtLib.Lexer.Internal.run l (BSmtLib.Lexer.Internal.lexChunks
         (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.failFast)
         (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.failFast) s.toByteArray.toByteSlice 0
             none)).run t =
         ((r, l'), t') := by
       rw [← hz]
-      show _ = (run l (lexSliceStep _ _ _)).run t
-      unfold lexSliceStep
+      show _ = (BSmtLib.Lexer.Internal.run l (BSmtLib.Lexer.Internal.lexSliceStep _ _ _)).run t
+      unfold BSmtLib.Lexer.Internal.lexSliceStep
       rw [dite_eq_right_of_eq_false (eq_false hs')]
     exact chunks_rel s rest ended 0 none l x t (LooseRel.of h) h.2.2 r l' t' hz'
 
@@ -342,8 +353,9 @@ theorem runInput_cut (ended : Bool) : ∀ (slices : List BSmtLibSpec.Regex.Chars
         | none => exact ⟨rfl, rfl, LooseRel.of hw, fun _ => hw⟩
   | s :: rest, l, x, t, h => by
     rw [Chunks.cutAll, List.flatMap_cons, ← Chunks.cutAll, runInput_cons]
-    have hzh : held ((Lexer.lexOps.lexSliceStep l s.toByteArray.toByteSlice).run t).1.2 =
-      held l := rfl
+    have hzh : BSmtLib.Lexer.Internal.held ((Lexer.lexOps.lexSliceStep l
+        s.toByteArray.toByteSlice).run t).1.2 =
+      BSmtLib.Lexer.Internal.held l := rfl
     generalize hz : (Lexer.lexOps.lexSliceStep l s.toByteArray.toByteSlice).run t = A at hzh
     obtain ⟨⟨r, l'⟩, t'⟩ := A
     obtain ⟨x', hL, hx⟩ := slice_cut s (Chunks.cutAll rest) ended l x t h r l' t' hz
@@ -354,7 +366,7 @@ theorem runInput_cut (ended : Bool) : ∀ (slices : List BSmtLibSpec.Regex.Chars
     | ok d =>
       rw [hx.2]
       exact runInput_cut ended rest _ x' t'
-        ⟨hL.1, hL.2, by rw [hx.1]; show _ = d.or (held l'); rw [hzh]⟩
+        ⟨hL.1, hL.2, by rw [hx.1]; show _ = d.or (BSmtLib.Lexer.Internal.held l'); rw [hzh]⟩
 
 theorem LooseRel.version {l : Lexer.lexOps.Lexer consumer}
     {x : X1BatchInCore.lexOps.Lexer consumer} (h : LooseRel l x) :

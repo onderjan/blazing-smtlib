@@ -1,5 +1,9 @@
-import BSmtLibSpec.Facts.Proofs.Parser.Recovery
-import BSmtLibSpec.Facts.Proofs.Parser.Simulation
+module
+
+public import BSmtLibSpec.Facts.Proofs.Parser.Recovery
+public import BSmtLibSpec.Facts.Proofs.Parser.Simulation
+
+@[expose] public section
 
 /-!
 # The traversal with a rebuilding handler

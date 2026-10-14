@@ -1,4 +1,9 @@
-import BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Whitespace
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Whitespace
+import all BSmtLib.Lexer.Internal.WRustPort
+
+@[expose] public section
 
 /-!
 # The loop of the normal state

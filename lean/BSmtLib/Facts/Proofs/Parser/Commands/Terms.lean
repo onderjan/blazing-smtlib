@@ -1,4 +1,12 @@
-import BSmtLib.Facts.Proofs.Parser.Commands.Simple
+module
+
+public import BSmtLib.Facts.Proofs.Parser.Commands.Simple
+import all BSmtLib.Parser.Category.Combinator
+import all BSmtLib.Parser.Category.Sort
+import all BSmtLib.Parser.Command.Standard
+import all BSmtLib.Parser.Category.Token
+
+@[expose] public section
 
 /-!
 # Commands of sorts and terms against the traversal

@@ -1,10 +1,15 @@
-import BSmtLib.Lexer.CharClass
-import BSmtLib.Lexer.Error
-import BSmtLib.Lexer.Helpers
-import BSmtLib.Lexer.Recovery
-import BSmtLib.Token
-import BSmtLib.Token.Produce
-import BSmtLib.Token.ConsumeFrom
+module
+
+public import BSmtLib.Lexer.CharClass
+public import BSmtLib.Lexer.Error
+public import BSmtLib.Lexer.Helpers
+public import BSmtLib.Lexer.Recovery
+public import BSmtLib.Token
+public import BSmtLib.Token.Produce
+public import BSmtLib.Token.ConsumeFrom
+import all Std.Data.ByteSlice
+
+public section
 
 namespace BSmtLib.Lexer
 
@@ -166,6 +171,7 @@ The lexer state is within the bounds: its offset is at or after `low`; and if th
 floor, the offset is at or after it, the lexer is between tokens or the token start is at or
 after the floor or the offset after it, and every token of the batch starts at or after it.
 -/
+@[expose]
 def LexerCore.Bound (floor : Option Nat) (low : Nat) (c : LexerCore) : Prop :=
   low ≤ c.offset ∧
     ∀ p, floor = some p → p ≤ c.offset ∧
@@ -257,6 +263,18 @@ can read them; they are not a part of the library's interface.
 -/
 
 namespace Internal
+
+/- LEAN: not in Rust. The lexer takes the batch back after the consumer is done with the
+cursor; if nothing else refers to it, its storage is overwritten by the next batch, as the
+Rust lexer overwrites its fixed arrays. -/
+/-- The batch of the cursor, for reuse of its storage once the cursor is spent. -/
+@[inline]
+def intoBatch {batch : Token.BatchTag} (cursor : Token.BatchCursor batch) : Token.TokenBatch :=
+  Token.BatchCursor.Internal.batch cursor
+
+theorem tag_intoBatch {batch : Token.BatchTag} (cursor : Token.BatchCursor batch) :
+    (intoBatch cursor).tag = batch :=
+  Token.BatchCursor.Internal.tag_batch cursor
 
 section
 
@@ -2648,8 +2666,6 @@ end
 
 end Internal
 
-open Internal
-
 section
 
 variable {H : Type} {R E : Type} [Token.Consume H R E]
@@ -2775,6 +2791,7 @@ What a lexer call that failed gives back: nothing for a lexer that stops
 at its first error, which cannot be used again, and the lexer itself for a
 recovering one, from which the rest of the input is to be fed.
 -/
+@[expose]
 def Lexer.AfterError (H : Type) [Token.Consume H R E] : Recovery → Type
   | .failFast => Unit
   | .recovering => Lexer H .recovering
@@ -2809,13 +2826,12 @@ inductive Lexer.AfterEof (H : Type) [Token.Consume H R E] where
 What a lexer gives back after its end of the input failed: nothing for a
 lexer that stops at its first error, and what remains of a recovering one.
 -/
+@[expose]
 def Lexer.AfterEofError (H : Type) [Token.Consume H R E] : Recovery → Type
   | .failFast => Unit
   | .recovering => Lexer.AfterEof H
 
 namespace Lexer
-
-open Internal
 
 private def afterError : {recovery : Recovery} → Lexer H recovery → AfterError H recovery
   | .failFast, _ => ()
@@ -2863,12 +2879,12 @@ error recovery.
 def lexSlice [Monad m] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m]
     [Recovery.LexRecovery recovery H m] (self : Lexer H recovery) (slice : ByteSlice) :
     m (Except (Error.LexError E × AfterError H recovery) (Lexer H recovery)) := do
-  let step := lexSliceStep (Recovery.LexRecovery.abandon recovery)
+  let step := Internal.lexSliceStep (Recovery.LexRecovery.abandon recovery)
       (Recovery.LexRecovery.recover recovery) slice
   let (result, self) ← Internal.run self step
   return match result with
-    | .ok held => .ok (withHeld self (held.or self.held))
-    | .error err => .error (err, afterError (withHeld self none))
+    | .ok held => .ok (Internal.withHeld self (held.or self.held))
+    | .error err => .error (err, afterError (Internal.withHeld self none))
 
 /--
 Lexes end-of-file, sending the lexed tokens to the consumer.
@@ -2892,12 +2908,13 @@ def lexEof [Monad m] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m
     [Recovery.LexRecovery recovery H m] (self : Lexer H recovery) :
     m (Except (Error.LexError E × AfterEofError H recovery)
         (Option (Span.Located R) × Lexer H recovery)) := do
-  let step := lexEofStep (Recovery.LexRecovery.abandon recovery)
+  let step := Internal.lexEofStep (Recovery.LexRecovery.abandon recovery)
       (Recovery.LexRecovery.recover recovery)
   let (result, self) ← Internal.run self step
   return match result with
-    | .ok flow => .ok (eofResult self.held flow, withHeld self none)
-    | .error err => .error (err, afterEofError (withHeld self none) err.continuesFrom.isSome)
+    | .ok flow => .ok (eofResult self.held flow, Internal.withHeld self none)
+    | .error err => .error (err, afterEofError (Internal.withHeld self none)
+        err.continuesFrom.isSome)
 
 /--
 Lexes the end of the input again, which completes the recovery.
@@ -2910,11 +2927,11 @@ def PendingEof.lexEof [Monad m] [∀ batch, Token.ConsumeFrom H
     (self : PendingEof H) :
     m (Except (Error.LexError E × Lexer H .recovering)
         (Option (Span.Located R) × Lexer H .recovering)) := do
-  let step := lexEofStep (Token.Recover.abandon (H := H)) (Token.Recover.recover (H := H))
+  let step := Internal.lexEofStep (Token.Recover.abandon (H := H)) (Token.Recover.recover (H := H))
   let (result, lexer) ← Internal.run self.lexer step
   return match result with
-    | .ok flow => .ok (eofResult lexer.held flow, withHeld lexer none)
-    | .error err => .error (err, withHeld lexer none)
+    | .ok flow => .ok (eofResult lexer.held flow, Internal.withHeld lexer none)
+    | .error err => .error (err, Internal.withHeld lexer none)
 
 /--
 Lexes the whole input including EOF at the end.

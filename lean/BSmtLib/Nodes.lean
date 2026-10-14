@@ -1,5 +1,9 @@
-import BSmtLib.Plain
-import BSmtLib.Token.Reserved
+module
+
+public import BSmtLib.Plain
+public import BSmtLib.Token.Reserved
+
+public section
 
 /-!
 # What the parser hands over

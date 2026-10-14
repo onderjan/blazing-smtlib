@@ -1,4 +1,8 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Feed
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Feed
+
+@[expose] public section
 
 /-!
 # What a step of the Rust port keeps, with every consumer

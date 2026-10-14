@@ -1,5 +1,9 @@
-import BSmtLib.Facts.Proofs.Reader.Param.Link
-import BSmtLib.Facts.Proofs.Reader.Outcome
+module
+
+public import BSmtLib.Facts.Proofs.Reader.Param.Link
+public import BSmtLib.Facts.Proofs.Reader.Outcome
+
+@[expose] public section
 
 /-!
 # Where the parser's run depends only on what its items stand for

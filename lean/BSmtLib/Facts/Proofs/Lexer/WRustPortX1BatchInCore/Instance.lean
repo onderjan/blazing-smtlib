@@ -1,5 +1,12 @@
-import BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Flush
-import BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Ops
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Flush
+public import BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Ops
+import all BSmtLib.Lexer.Internal.WRustPort
+import all BSmtLib.Lexer.Internal.X1BatchInCore
+import all BSmtLib.Token
+
+@[expose] public section
 
 /-!
 # The operations of the Rust port and of the lexer with the batch in its state

@@ -1,4 +1,10 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.NormalStep
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.NormalStep
+import all BSmtLib.Lexer.Internal.WRustPort
+import all BSmtLib.Lexer.Internal.WRustPort.Slice
+
+@[expose] public section
 
 /-!
 # The Rust port's steps for a token in progress

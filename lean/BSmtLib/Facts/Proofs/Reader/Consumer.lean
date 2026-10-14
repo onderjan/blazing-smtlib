@@ -1,6 +1,11 @@
-import BSmtLib.Facts.Proofs.Parser.Trace
-import BSmtLib.Facts.Proofs.Parser.Rejection.Library
-import BSmtLib.Facts.Reader.Adapters
+module
+
+public import BSmtLib.Facts.Proofs.Parser.Trace
+public import BSmtLib.Facts.Proofs.Parser.Rejection.Library
+public import BSmtLib.Facts.Reader.Adapters
+import all BSmtLib.Plain
+
+@[expose] public section
 
 /-!
 # The library's script parser as a consumer of the lexer spec

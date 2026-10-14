@@ -1,4 +1,8 @@
-import BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Handed
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Handed
+
+@[expose] public section
 
 /-!
 # The lexer with the batch kept in its state and the library's lexer lex alike
@@ -55,15 +59,14 @@ The proof, in parts:
 namespace BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer
 
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Couple (MCouple)
-open BSmtLib.Lexer.Internal (handler core)
 
 /-- The lexer with the batch kept in its state is constructed as the library's lexer is, with
 its state mapped. -/
 theorem X1BatchInCore.new_eq_new_lexer {H R E : Type} [Token.Consume H R E] (consumer : H)
     (version : Token.Version) :
     Lexer.Internal.WRustPort.Lexer.new consumer version =
-      { handler := handler (BSmtLib.Lexer.new consumer version)
-        core := Core.coreMap 0 (core (BSmtLib.Lexer.new consumer version))
+      { handler := BSmtLib.Lexer.Internal.handler (BSmtLib.Lexer.new consumer version)
+        core := Core.coreMap 0 (BSmtLib.Lexer.Internal.core (BSmtLib.Lexer.new consumer version))
         held := BSmtLib.Lexer.Internal.held (BSmtLib.Lexer.new consumer version) } :=
   Handed.new_eq consumer version
 
@@ -72,8 +75,10 @@ lexer that recovers is, with its state mapped. -/
 theorem X1BatchInCore.newRecovering_eq_newRecovering_lexer {H R E : Type} [Token.Consume H R E]
     {m : Type → Type} [Token.Recover H m] (consumer : H) (version : Token.Version) :
     Lexer.Internal.WRustPort.Lexer.newRecovering (m := m) consumer version =
-      { handler := handler (BSmtLib.Lexer.newRecovering (m := m) consumer version)
-        core := Core.coreMap 0 (core (BSmtLib.Lexer.newRecovering (m := m) consumer version))
+      { handler := BSmtLib.Lexer.Internal.handler (BSmtLib.Lexer.newRecovering
+          (m := m) consumer version)
+        core := Core.coreMap 0 (BSmtLib.Lexer.Internal.core
+            (BSmtLib.Lexer.newRecovering (m := m) consumer version))
         held := BSmtLib.Lexer.Internal.held
           (BSmtLib.Lexer.newRecovering (m := m) consumer version) } :=
   Handed.newRecovering_eq consumer version
@@ -118,7 +123,8 @@ the same held result and states equal but for the base, lex a slice that ends be
 theorem X1BatchInCore.lexSlice_sim_lexer {recovery : Lexer.Recovery} [Lexer.Recovery.LexRecovery
     recovery H m]
     (x : Lexer.Internal.WRustPort.Lexer H recovery) (l : BSmtLib.Lexer H recovery)
-    (hh : x.handler = handler l) (hx : Outer.Rel (core l) x.core)
+    (hh : x.handler = BSmtLib.Lexer.Internal.handler l)
+    (hx : Outer.Rel (BSmtLib.Lexer.Internal.core l) x.core)
     (hd : x.held = BSmtLib.Lexer.Internal.held l) (slice : ByteSlice)
     (hs : slice.stop < USize.size) :
     Top.resultMap Top.afterErrorZb Top.lexerZb <$> Lexer.Internal.X1BatchInCore.Lexer.lexSlice x
@@ -132,7 +138,8 @@ results are equal once the base is forgotten. -/
 theorem X1BatchInCore.lexEof_sim_lexer {recovery : Lexer.Recovery} [Lexer.Recovery.LexRecovery
     recovery H m]
     (x : Lexer.Internal.WRustPort.Lexer H recovery) (l : BSmtLib.Lexer H recovery)
-    (hh : x.handler = handler l) (hx : Outer.Rel (core l) x.core)
+    (hh : x.handler = BSmtLib.Lexer.Internal.handler l)
+    (hx : Outer.Rel (BSmtLib.Lexer.Internal.core l) x.core)
     (hd : x.held = BSmtLib.Lexer.Internal.held l) :
     Top.resultMap Top.afterEofZb (fun p => (p.1, Top.lexerZb p.2)) <$>
         Lexer.Internal.X1BatchInCore.Lexer.lexEof x =

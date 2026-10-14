@@ -1,4 +1,8 @@
-import BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Core
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Core
+
+@[expose] public section
 
 /-!
 # Operations that simulate each other

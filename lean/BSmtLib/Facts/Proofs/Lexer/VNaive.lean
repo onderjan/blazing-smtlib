@@ -1,4 +1,8 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaive.Streaming
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaive.Streaming
+
+@[expose] public section
 
 /-!
 # The naive lexer against the specification

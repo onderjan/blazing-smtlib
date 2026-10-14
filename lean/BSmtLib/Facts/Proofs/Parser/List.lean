@@ -1,4 +1,10 @@
-import BSmtLib.Facts.Proofs.Parser.Sort
+module
+
+public import BSmtLib.Facts.Proofs.Parser.Sort
+import all BSmtLib.Parser.Category.Combinator
+import all BSmtLib.Parser.Category.Token
+
+@[expose] public section
 
 /-!
 # The list combinator against the traversal

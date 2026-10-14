@@ -1,4 +1,8 @@
-import BSmtLibSpec.Facts.Proofs.Lexer.Streaming
+module
+
+public import BSmtLibSpec.Facts.Proofs.Lexer.Streaming
+
+@[expose] public section
 
 /-!
 # Facts about a lexer fed in slices

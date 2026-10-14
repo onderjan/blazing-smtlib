@@ -1,5 +1,9 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Model
-import BSmtLib.Facts.Proofs.Lexer.Consumers.VEnd
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Model
+public import BSmtLib.Facts.Proofs.Lexer.Consumers.VEnd
+
+@[expose] public section
 
 /-!
 # The naive lexer's hand-over of a lexeme, as `hand1` says

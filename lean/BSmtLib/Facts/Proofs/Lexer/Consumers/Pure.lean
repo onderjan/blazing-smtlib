@@ -1,4 +1,10 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaive
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaive
+import all BSmtLib.Lexer.Internal.VNaive
+import all BSmtLib.Span
+
+@[expose] public section
 
 /-!
 # The naive lexer's pure run for every consumer

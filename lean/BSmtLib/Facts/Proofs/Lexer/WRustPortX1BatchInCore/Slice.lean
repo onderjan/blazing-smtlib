@@ -1,4 +1,9 @@
-import BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Steps
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Steps
+import all BSmtLib.Lexer.Internal.WRustPort
+
+@[expose] public section
 
 /-!
 # The loops over a slice

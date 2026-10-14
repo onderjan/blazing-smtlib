@@ -1,5 +1,9 @@
-import BSmtLibSpec.Facts.Proofs.Lexicon.Compose
-import BSmtLibSpec.Facts.Proofs.Grammar.OneToOne
+module
+
+public import BSmtLibSpec.Facts.Proofs.Lexicon.Compose
+public import BSmtLibSpec.Facts.Proofs.Grammar.OneToOne
+
+@[expose] public section
 
 /-!
 # Every file has at most one reading

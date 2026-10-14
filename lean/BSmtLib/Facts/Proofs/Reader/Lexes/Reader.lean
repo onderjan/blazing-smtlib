@@ -1,4 +1,11 @@
-import BSmtLib.Facts.Proofs.Reader.Lexes.NoLayout
+module
+
+public import BSmtLib.Facts.Proofs.Reader.Lexes.NoLayout
+import all BSmtLib.Lexer
+import all BSmtLib.Parser.Adapter
+import all BSmtLib.Plain
+
+@[expose] public section
 
 /-!
 # The library's reader lexes, then parses
@@ -20,7 +27,7 @@ script consumer does (`Param.feed_told`, `Param.calls_of_invG`).
 
 namespace BSmtLib.Facts.Proofs.Reader.Lexes.Reader
 
-open BSmtLib.Lexer BSmtLib.Lexer.Internal
+open BSmtLib.Lexer
 open BSmtLibSpec BSmtLibSpec.Lexicon
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Regex (chars)
@@ -142,7 +149,7 @@ theorem libraryReader_read (version : Lexicon.Version) (slices : List Regex.Char
     unfold AdapterAtG
     rw [recRun_nil]
     exact ⟨toVersion_eq_libVersion version, rfl, by rw [toVersion_eq_libVersion]; rfl, rfl⟩
-  have hR : Reach (scriptConsumer version) (toVersion version) (core a₀) := Reach.new
+  have hR : Reach (scriptConsumer version) (toVersion version) (Internal.core a₀) := Reach.new
   obtain ⟨fl, adapter, hread, hinv⟩ := feed_told hnl ended slices a₀ _ [] hI hR hgood
   have hcalls := calls_of_invG hinv hgood
   obtain ⟨htk, hfin⟩ := hsame

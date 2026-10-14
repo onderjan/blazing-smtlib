@@ -1,4 +1,9 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaive.Sound
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaive.Sound
+import all BSmtLib.Lexer.Internal.VNaive
+
+@[expose] public section
 
 /-!
 # The naive lexer finishes every tokenisation

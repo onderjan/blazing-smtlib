@@ -1,4 +1,9 @@
-import BSmtLib.Facts.Reexports
+module
+
+public meta import BSmtLib.Facts.Reexports
+-- Lean for the run too: a module imported with `meta` alone is not initialized when the
+-- executable runs
+import Lean
 -- the modules the generated module is made from, so that they are built before it is written
 import BSmtLib.ControlFlow
 import BSmtLib.Bytes
@@ -35,7 +40,7 @@ a stale module does not stand in the way.
 open Lean BSmtLib.Facts.Reexports
 
 /-- Writes the generated module. -/
-def main : IO Unit := do
+public meta def main : IO Unit := do
   initSearchPath (← findSysroot)
   let env ← importModules (sources.toArray.map ({ module := · })) {}
   IO.FS.writeFile path (render (← Parser.builtinTokenTable.get) env)

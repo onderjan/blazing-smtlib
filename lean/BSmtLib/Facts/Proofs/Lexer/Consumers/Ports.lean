@@ -1,7 +1,11 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort
-import BSmtLib.Facts.Proofs.Lexer.Consumers.ChainZ
-import BSmtLib.Facts.Proofs.Lexer.Consumers.VNaive
-import BSmtLib.Facts.Proofs.Lexer.Consumers.VFlatten
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort
+public import BSmtLib.Facts.Proofs.Lexer.Consumers.ChainZ
+public import BSmtLib.Facts.Proofs.Lexer.Consumers.VNaive
+public import BSmtLib.Facts.Proofs.Lexer.Consumers.VFlatten
+
+@[expose] public section
 
 /-!
 # The ports with every consumer

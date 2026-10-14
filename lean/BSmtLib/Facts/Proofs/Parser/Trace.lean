@@ -1,4 +1,8 @@
-import BSmtLib.Facts.Proofs.Parser.Cut
+module
+
+public import BSmtLib.Facts.Proofs.Parser.Cut
+
+@[expose] public section
 
 /-!
 # Where the traversal of a script asks its producer

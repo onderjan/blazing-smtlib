@@ -1,5 +1,9 @@
-import BSmtLib.Lexer
-import BSmtLib.Parser.Adapter
+module
+
+public import BSmtLib.Lexer
+public import BSmtLib.Parser.Adapter
+
+public section
 
 /-!
 # Reading SMT-LIB input: lexing and parsing
@@ -127,7 +131,7 @@ structure BufReader where
 def BufReader.new (stream : IO.FS.Stream) (capacity : Nat) : BufReader :=
   { stream, capacity, buffer := ByteArray.empty, position := 0 }
 
-instance {n : Type → Type} [Monad n] [MonadLiftT IO n] : BufRead BufReader n where
+@[no_expose] instance {n : Type → Type} [Monad n] [MonadLiftT IO n] : BufRead BufReader n where
   fillBuf self := do
     if self.position < self.buffer.size then
       return .ok (self.buffer.toByteSlice self.position, self)

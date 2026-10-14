@@ -1,4 +1,8 @@
-import BSmtLib.Facts.Proofs.Reader.Param.UnaryCalls
+module
+
+public import BSmtLib.Facts.Proofs.Reader.Param.UnaryCalls
+
+@[expose] public section
 
 /-!
 # Any consumer with a record of what went wrong
@@ -24,7 +28,7 @@ same lexer state, and the state of `C` in the record.
 
 namespace BSmtLib.Facts.Proofs.Reader.Param.Watch
 
-open BSmtLib.Lexer BSmtLib.Lexer.Internal
+open BSmtLib.Lexer
 open BSmtLib.Facts.Proofs.Reader.Param.Basic (Relator Link ERel FlowRel)
 open BSmtLib.Facts.Proofs.Reader.Param.HandOver (Consumers)
 open BSmtLib.Facts.Proofs.Reader.Param.Flagged (isError isLayoutAnswer)

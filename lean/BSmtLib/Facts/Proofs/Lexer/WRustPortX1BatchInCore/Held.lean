@@ -1,4 +1,10 @@
-import BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Ops
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Ops
+import all BSmtLib.Lexer.Internal.WRustPort
+import all BSmtLib.Token
+
+@[expose] public section
 
 /-!
 # The batch held by the loop of the normal state

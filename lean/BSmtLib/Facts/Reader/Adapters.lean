@@ -1,7 +1,11 @@
-import BSmtLib.Reader
-import BSmtLibSpec.Reader
-import BSmtLib.Facts.Lexer.Adapters
-import BSmtLib.Facts.Parser.Adapters
+module
+
+public import BSmtLib.Reader
+public import BSmtLibSpec.Reader
+public import BSmtLib.Facts.Lexer.Adapters
+public import BSmtLib.Facts.Parser.Adapters
+
+@[expose] public section
 
 /-!
 # The adapters of the composition
@@ -136,8 +140,6 @@ end BSmtLib.Facts.Reader.Adapters
 
 namespace BSmtLib.Facts.Reader.Adapters
 
-
-open BSmtLib.Lexer.Internal
 open BSmtLibSpec
 open BSmtLibSpec.Parser.Properties
 open BSmtLib.Parser.Script (ScriptParser)
@@ -155,7 +157,7 @@ def readerOf (version : Lexicon.Version) : RecReader :=
 
 /-- The calls the handler of the reader's lexer holds, in order. -/
 def lexerCalls (lexer : PLexer) : List Event :=
-  (handler lexer).handler.reverse
+  (Lexer.Internal.handler lexer).handler.reverse
 
 /-- The reader's lexer after the step of `Reader.readSlice` on the slice, also where it fails. -/
 def sliceStepped (reader : RecReader) (slice : ByteSlice) : PLexer :=

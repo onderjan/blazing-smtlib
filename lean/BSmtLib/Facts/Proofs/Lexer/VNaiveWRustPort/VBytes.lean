@@ -1,5 +1,11 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.VOut
-import BSmtLib.Facts.Proofs.Lexer.Consumers.VWalk
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.VOut
+public import BSmtLib.Facts.Proofs.Lexer.Consumers.VWalk
+import all BSmtLib.Lexer.Error
+import all BSmtLib.Lexer.Internal.VNaive
+
+@[expose] public section
 
 /-!
 # What the naive lexer does with bytes, as the outcome of the pure run says

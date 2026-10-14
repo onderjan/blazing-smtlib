@@ -1,8 +1,12 @@
-import BSmtLib.Facts.Trusted
-import BSmtLib.Facts.PublicApi.Adapters.Chain
-import BSmtLib.Facts.PublicApi.Adapters.Builder
-import BSmtLib.Facts.PublicApi.Adapters.Constructs
-import BSmtLib.Facts.Proofs.PublicApi.Reprinting
+module
+
+public import BSmtLib.Facts.Trusted
+public import BSmtLib.Facts.PublicApi.Adapters.Chain
+public import BSmtLib.Facts.PublicApi.Adapters.Builder
+public import BSmtLib.Facts.PublicApi.Adapters.Constructs
+public import BSmtLib.Facts.Proofs.PublicApi.Reprinting
+
+@[expose] public section
 
 /-!
 # What holds without the specification

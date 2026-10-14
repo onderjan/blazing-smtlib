@@ -1,4 +1,10 @@
-import BSmtLib.Facts.Proofs.Lexer.Consumers.Ready
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.Consumers.Ready
+import all BSmtLib.Lexer.Internal.VNaive
+import all BSmtLib.Token
+
+@[expose] public section
 
 /-!
 # What the consumer does at an entry, as `Runs` states it

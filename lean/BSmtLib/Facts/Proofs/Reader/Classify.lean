@@ -1,5 +1,9 @@
-import BSmtLib.Facts.Proofs.Reader.Reading
-import BSmtLib.Facts.Proofs.Reader.Split
+module
+
+public import BSmtLib.Facts.Proofs.Reader.Reading
+public import BSmtLib.Facts.Proofs.Reader.Split
+
+@[expose] public section
 
 /-!
 # How a session with the script consumer ends, on any input

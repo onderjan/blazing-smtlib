@@ -1,5 +1,13 @@
-import BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore
-import BSmtLib.Facts.Proofs.Lexer.Consumers.Alike
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore
+public import BSmtLib.Facts.Proofs.Lexer.Consumers.Alike
+import all BSmtLib.Token
+import all BSmtLib.Lexer
+import all BSmtLib.Lexer.Internal.WRustPort
+import all BSmtLib.Token.SyntaxToken
+
+@[expose] public section
 
 /-!
 # The Rust port and `X1BatchInCore` with every consumer of the spec
@@ -20,21 +28,21 @@ open BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Instance
 
 namespace BSmtLib.Facts.Proofs.Lexer.Consumers.ChainX1
 
-open BSmtLib.Lexer.Internal (intoBatch)
-
 variable {g g' : Token.BatchTag}
 
 /-- A token below the length of the batches is recorded alike. -/
 theorem toHanded_eq {c : Token.BatchCursor g} {d : Token.BatchCursor g'} (h : CursorAgree c d)
     {t : Token g} {t' : Token g'} (et : tokenIndex t = tokenIndex t')
-    (ht : tokenIndex t < (intoBatch c).len) : toHanded c t = toHanded d t' := by
+    (ht : tokenIndex t < (BSmtLib.Lexer.Internal.intoBatch c).len) : toHanded c t = toHanded d t'
+    := by
   unfold toHanded Token.BatchCursor.«syntax» Token.SyntaxToken.fromToken Token.SyntaxToken.fromParts
   rw [h.category et ht, h.span et ht, h.content et ht, h.version]
 
 /-- A piece of layout below the length of the batches is recorded alike. -/
 theorem toLayout_eq {c : Token.BatchCursor g} {d : Token.BatchCursor g'} (h : CursorAgree c d)
     {t : Token g} {t' : Token g'} (et : tokenIndex t = tokenIndex t')
-    (ht : tokenIndex t < (intoBatch c).len) : toLayout c t = toLayout d t' := by
+    (ht : tokenIndex t < (BSmtLib.Lexer.Internal.intoBatch c).len) : toLayout c t = toLayout d t'
+    := by
   unfold toLayout
   rw [h.category et ht, h.span et ht, h.content et ht]
 
@@ -42,7 +50,7 @@ theorem toLayout_eq {c : Token.BatchCursor g} {d : Token.BatchCursor g'} (h : Cu
 theorem entry_eq (consumer : BSmtLibSpec.Lexer.Consumer) {c : Token.BatchCursor g}
     {d : Token.BatchCursor g'}
     (h : CursorAgree c d) {t : Token g} {t' : Token g'} (et : tokenIndex t = tokenIndex t')
-    (ht : tokenIndex t < (intoBatch c).len) :
+    (ht : tokenIndex t < (BSmtLib.Lexer.Internal.intoBatch c).len) :
     Answering.entry consumer c t = Answering.entry consumer d t' := by
   unfold Answering.entry
   rw [toHanded_eq h et ht, toLayout_eq h et ht]

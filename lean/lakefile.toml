@@ -18,10 +18,11 @@ roots = ["BSmtLibSpec.Facts"]
 
 # what the library satisfies with respect to the specification: the lexers, the parsers and the
 # readers, and what its public API satisfies, stated without the specification; the chain of
-# lexers from the specification to the library's lexer is built with it
+# lexers from the specification to the library's lexer is built with it, and the checks that the
+# Rust crate makes with `assert!` on its tables (`BSmtLib.Facts.Asserts`)
 [[lean_lib]]
 name = "BSmtLibFacts"
-roots = ["BSmtLib.Facts", "BSmtLib.Facts.Names"]
+roots = ["BSmtLib.Facts", "BSmtLib.Facts.Names", "BSmtLib.Facts.Asserts"]
 
 # the lexing mode of rust/benches/parse.rs, run with `lake exe bench-parse`
 [[lean_exe]]

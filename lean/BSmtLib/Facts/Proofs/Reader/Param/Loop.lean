@@ -1,4 +1,11 @@
-import BSmtLib.Facts.Proofs.Reader.Param.Link
+module
+
+public import BSmtLib.Facts.Proofs.Reader.Param.Link
+import all BSmtLib.Parser.Adapter
+import all BSmtLib.Token
+import all BSmtLib.Token.SyntaxToken
+
+@[expose] public section
 
 /-!
 # A call of the parse adapter against a call of the stand-in consumer

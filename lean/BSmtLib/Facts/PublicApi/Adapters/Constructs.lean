@@ -1,5 +1,9 @@
-import BSmtLib.Facts.PublicApi.Adapters.Reprinter
-import BSmtLib.Facts.PublicApi.Adapters.Builder
+module
+
+public import BSmtLib.Facts.PublicApi.Adapters.Reprinter
+public import BSmtLib.Facts.PublicApi.Adapters.Builder
+
+@[expose] public section
 
 /-!
 # Where constructs are

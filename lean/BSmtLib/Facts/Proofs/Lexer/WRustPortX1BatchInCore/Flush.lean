@@ -1,4 +1,12 @@
-import BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.HandOver
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.HandOver
+import all BSmtLib.Lexer
+import all BSmtLib.Lexer.Internal.WRustPort
+import all BSmtLib.Lexer.Internal.X1BatchInCore
+import all BSmtLib.Token
+
+@[expose] public section
 
 /-!
 # The hand-overs of a batch, of a token alone and of the end of the input

@@ -1,4 +1,12 @@
-import BSmtLib.Facts.Proofs.Parser.Command
+module
+
+public import BSmtLib.Facts.Proofs.Parser.Command
+import all BSmtLib.Parser
+import all BSmtLib.Parser.Command
+import all BSmtLib.Parser.Script
+import all BSmtLib.Token
+
+@[expose] public section
 
 /-!
 # The script parser against the traversal
@@ -129,7 +137,7 @@ omit [LawfulMonad m] in
 theorem arrive_scriptAt (command : Parser.Command.CommandStateOf H) (declarations : Nat)
     (token : Input) :
     Parse.arrive (scriptAt posture command declarations) token =
-      Parser.Command.commandArrive command token := rfl
+      Parser.Command.commandArrive command token := (rfl)
 
 omit [LawfulMonad m] in
 theorem step_commands (version : Token.Version) (command : Parser.Command.CommandStateOf H)

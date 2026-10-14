@@ -1,4 +1,11 @@
-import BSmtLib.Facts.Proofs.Parser.Commands.FunsRec
+module
+
+public import BSmtLib.Facts.Proofs.Parser.Commands.FunsRec
+import all BSmtLib.Parser.Category.Attribute
+import all BSmtLib.Parser.Category.Token
+import all BSmtLib.Parser.Command.Standard
+
+@[expose] public section
 
 /-!
 # `set-option`, `set-info` and version declarations against the traversal

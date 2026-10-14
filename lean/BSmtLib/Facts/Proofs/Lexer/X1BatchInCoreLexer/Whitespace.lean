@@ -1,4 +1,10 @@
-import BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Batch
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Batch
+import all BSmtLib.Lexer
+import all BSmtLib.Lexer.Internal.WRustPort
+
+@[expose] public section
 
 /-!
 # The whitespace run of the normal state, in both lexers

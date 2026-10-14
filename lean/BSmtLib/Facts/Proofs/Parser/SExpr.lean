@@ -1,4 +1,9 @@
-import BSmtLib.Facts.Proofs.Parser.Reserved
+module
+
+public import BSmtLib.Facts.Proofs.Parser.Reserved
+import all BSmtLib.Parser.Category.SExpr
+
+@[expose] public section
 
 /-!
 # The s-expression parser against the traversal

@@ -1,8 +1,12 @@
-import BSmtLibSpec.Facts.Lexicon.Examples
-import BSmtLibSpec.Facts.Proofs.Lexicon.Reserved
-import BSmtLibSpec.Facts.Proofs.Lexicon.Unique
-import BSmtLibSpec.Facts.Proofs.Lexicon.Compose
-import BSmtLibSpec.Facts.Proofs.Lexicon.RoundTrip
+module
+
+public import BSmtLibSpec.Facts.Lexicon.Examples
+public import BSmtLibSpec.Facts.Proofs.Lexicon.Reserved
+public import BSmtLibSpec.Facts.Proofs.Lexicon.Unique
+public import BSmtLibSpec.Facts.Proofs.Lexicon.Compose
+public import BSmtLibSpec.Facts.Proofs.Lexicon.RoundTrip
+
+@[expose] public section
 
 /-!
 # Facts of the lexicon

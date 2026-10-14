@@ -1,4 +1,12 @@
-import BSmtLib.Facts.Proofs.Parser.Rejection.Sort
+module
+
+public import BSmtLib.Facts.Proofs.Parser.Rejection.Sort
+import all BSmtLib.Parser
+import all BSmtLib.Parser.Category.Attribute
+import all BSmtLib.Parser.Category.SExpr
+import all BSmtLib.Parser.Category.Token
+
+@[expose] public section
 
 /-!
 # What s-expressions and attributes can still take

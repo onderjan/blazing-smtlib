@@ -1,7 +1,11 @@
-import BSmtLib.Facts.Lexer
-import BSmtLib.Facts.Parser
-import BSmtLib.Facts.Reader
-import BSmtLib.Facts.PublicApi
+module
+
+public import BSmtLib.Facts.Lexer
+public import BSmtLib.Facts.Parser
+public import BSmtLib.Facts.Reader
+public import BSmtLib.Facts.PublicApi
+
+@[expose] public section
 
 /-!
 # Facts of the library

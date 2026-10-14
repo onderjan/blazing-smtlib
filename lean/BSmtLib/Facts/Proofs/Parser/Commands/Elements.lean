@@ -1,4 +1,12 @@
-import BSmtLib.Facts.Proofs.Parser.Commands.Bytes
+module
+
+public import BSmtLib.Facts.Proofs.Parser.Commands.Bytes
+import all BSmtLib.Parser.Category.Combinator
+import all BSmtLib.Parser.Category.Sort
+import all BSmtLib.Parser.Category.Token
+import all BSmtLib.Parser.Command.Datatype
+
+@[expose] public section
 
 /-!
 # Lists of elements against the traversal

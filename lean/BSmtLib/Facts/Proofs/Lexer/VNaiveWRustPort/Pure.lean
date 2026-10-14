@@ -1,5 +1,12 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Agree
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Runs
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Agree
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Runs
+import all BSmtLib.Lexer.Helpers
+import all BSmtLib.Lexer.Internal.VNaive
+import all BSmtLib.Lexer.Internal.WRustPort.Slice
+
+@[expose] public section
 
 /-!
 # The pieces of a slice and their locations
@@ -145,7 +152,7 @@ theorem _root_.BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Agree.LocAt.afterColum
   refine ⟨?_, h2, ?_⟩ <;> simp only [Bytes.afterColumns] <;> omega
 
 theorem get_eq {s : ByteSlice} {i : Nat} (h : i < s.size) : Lexer.Internal.WRustPort.Slice.get s i
-    h = s[i] := rfl
+    h = s[i] := (rfl)
 
 /-- The location after a line feed, on the line that the lexer state marked after it. -/
 theorem _root_.BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Agree.LocAt.lineFeed {c c' : WP.WCore}

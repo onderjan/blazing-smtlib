@@ -1,4 +1,8 @@
-import BSmtLibSpec.Facts.Proofs.Reader
+module
+
+public import BSmtLibSpec.Facts.Proofs.Reader
+
+@[expose] public section
 
 /-!
 # Facts of readers

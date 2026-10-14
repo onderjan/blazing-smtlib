@@ -1,4 +1,8 @@
-import BSmtLib.Parser
+module
+
+public import BSmtLib.Parser
+
+public section
 
 /-!
 # S-expressions

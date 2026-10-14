@@ -1,5 +1,11 @@
-import BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Calls
-import BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Instance
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Calls
+public import BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Instance
+import all BSmtLib.Lexer.Internal.WRustPort
+import all BSmtLib.Lexer.Internal.X1BatchInCore
+
+@[expose] public section
 
 /-!
 # The calls of the Rust port and of the lexer with the batch in its state

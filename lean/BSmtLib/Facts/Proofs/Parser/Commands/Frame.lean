@@ -1,4 +1,9 @@
-import BSmtLib.Facts.Proofs.Parser.Commands.Datatypes
+module
+
+public import BSmtLib.Facts.Proofs.Parser.Commands.Datatypes
+import all BSmtLib.Parser.Command
+
+@[expose] public section
 
 /-!
 # The frame of a command
@@ -43,7 +48,7 @@ omit [LawfulMonad m] in
 /-- The command parser in a payload mode has the payload parser's calls due at an arrival. -/
 theorem commandArrive_payload (payload : Parser.Command.Standard.PayloadOf H) (token : Input) :
     Parser.Command.commandArrive (.payload payload) token = Parser.Command.Standard.payloadArrive
-        payload token := rfl
+        payload token := (rfl)
 
 variable (points version) in
 /-- `Runs` of the payload parser, with its calls due at a token's arrival. -/

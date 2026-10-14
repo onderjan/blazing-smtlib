@@ -1,5 +1,9 @@
-import Lean.Elab.Tactic
-import BSmtLib.Facts.Proofs.Reader.Param.Basic
+module
+
+public meta import Lean.Elab.Tactic
+public import BSmtLib.Facts.Proofs.Reader.Param.Basic
+
+@[expose] public section
 
 /-!
 # Walking the lexer's code on two consumers
@@ -172,13 +176,13 @@ then related by that hypothesis (`lsim_hyp`), and the bodies by unfolding them (
 
 open Lean Meta Elab Tactic in
 /-- The goal's two computations, if the goal relates two computations. -/
-def lsimSides (target : Expr) : Option (Expr × Expr) :=
+meta def lsimSides (target : Expr) : Option (Expr × Expr) :=
   let args := target.getAppArgs
   if 2 ≤ args.size then some (args[args.size - 2]!, args[args.size - 1]!) else none
 
 open Lean Meta Elab Tactic in
 /-- The goal with its two computations replaced. -/
-def lsimWith (target f g : Expr) : Expr :=
+meta def lsimWith (target f g : Expr) : Expr :=
   let args := target.getAppArgs
   mkAppN target.getAppFn ((args.set! (args.size - 2) f).set! (args.size - 1) g)
 
@@ -329,7 +333,7 @@ elab_rules : tactic
 
 open Lean Meta in
 /-- The expression with the values of the local definitions of the context put in. -/
-def lsimZetaDelta (e : Expr) : MetaM Expr :=
+meta def lsimZetaDelta (e : Expr) : MetaM Expr :=
   Meta.transform e (pre := fun e => do
     if let .fvar x := e then
       if let some value := (← x.getDecl).value? then
@@ -339,7 +343,7 @@ def lsimZetaDelta (e : Expr) : MetaM Expr :=
 open Lean Meta in
 /-- The expression with the definitions of the context put in and the projections of
 constructors reduced. -/
-def lsimNormalize (e : Expr) : MetaM Expr := do
+meta def lsimNormalize (e : Expr) : MetaM Expr := do
   Meta.transform (← lsimZetaDelta (← instantiateMVars e)) (post := fun e => do
     let .const name _ := e.getAppFn | return .continue
     let some info := (← getEnv).getProjectionFnInfo? name | return .continue
@@ -353,7 +357,7 @@ def lsimNormalize (e : Expr) : MetaM Expr := do
 
 open Lean in
 /-- The applications of `g` to `n` arguments in the expression, without loose bound variables. -/
-def lsimApps (g : Name) (n : Nat) : Expr → Array Expr → Array Expr
+meta def lsimApps (g : Name) (n : Nat) : Expr → Array Expr → Array Expr
   | e@(.app f a), acc =>
     let acc := lsimApps g n a (lsimApps g n f acc)
     if e.isAppOfArity g n && !e.hasLooseBVars then acc.push e else acc
@@ -366,7 +370,7 @@ open Lean Meta in
 /-- The facts that the lemma states for every application of its function in the expressions: a
 lemma for every `x₁ … xₙ` about `g x₁ … xₙ` is put in for every application of `g` to `n`
 arguments. -/
-def lsimFacts (lemma : Name) (exprs : Array Expr) : MetaM (Array (Expr × Expr)) := do
+meta def lsimFacts (lemma : Name) (exprs : Array Expr) : MetaM (Array (Expr × Expr)) := do
   let info ← getConstInfo lemma
   forallTelescope info.type fun xs conclusion => do
     let some app := conclusion.find? fun e => e.getAppArgs == xs && e.getAppFn.isConst

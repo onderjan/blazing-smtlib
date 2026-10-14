@@ -1,6 +1,10 @@
-import BSmtLib.Parser.Adapter
-import BSmtLibSpec.Parser
-import BSmtLibSpec.Grammar.Properties
+module
+
+public import BSmtLib.Parser.Adapter
+public import BSmtLibSpec.Parser
+public import BSmtLibSpec.Grammar.Properties
+
+@[expose] public section
 
 /-!
 # From the parser's values to the spec's

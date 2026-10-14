@@ -1,6 +1,10 @@
-import BSmtLib.Facts.Parser.Adapters.Bridge
-import BSmtLib.Facts.Parser.Adapters.Handler
-import BSmtLib.Facts.Parser.Adapters.Run
+module
+
+public import BSmtLib.Facts.Parser.Adapters.Bridge
+public import BSmtLib.Facts.Parser.Adapters.Handler
+public import BSmtLib.Facts.Parser.Adapters.Run
+
+@[expose] public section
 
 /-!
 # The adapters of the parser proofs

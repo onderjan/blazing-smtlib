@@ -1,5 +1,9 @@
-import BSmtLibSpec.Facts.Proofs.Lexicon.Unique
-import BSmtLibSpec.Lexer
+module
+
+public import BSmtLibSpec.Facts.Proofs.Lexicon.Unique
+public import BSmtLibSpec.Lexer
+
+@[expose] public section
 
 /-!
 # Tokenisation across a closing parenthesis

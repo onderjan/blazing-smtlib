@@ -1,5 +1,9 @@
-import BSmtLib.Parser.Category.Sort
-import BSmtLib.Parser.Category.Token
+module
+
+public import BSmtLib.Parser.Category.Sort
+public import BSmtLib.Parser.Category.Token
+
+public section
 
 /-!
 # Qualified identifiers

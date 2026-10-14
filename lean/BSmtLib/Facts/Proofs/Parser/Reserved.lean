@@ -1,4 +1,10 @@
-import BSmtLib.Facts.Proofs.Parser.Tokens
+module
+
+public import BSmtLib.Facts.Proofs.Parser.Tokens
+import all BSmtLib.Parser
+import all BSmtLib.Token.Reserved
+
+@[expose] public section
 
 /-!
 # Reserved words as the spec spells them

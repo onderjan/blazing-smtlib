@@ -1,6 +1,10 @@
-import BSmtLib.Plain
-import BSmtLib.Token
-import BSmtLib.Token.Reserved
+module
+
+public import BSmtLib.Plain
+public import BSmtLib.Token
+public import BSmtLib.Token.Reserved
+
+public section
 
 /- LEAN: in Rust, `SmtSyntaxToken` is in `token` with the token it classifies. It needs
 `Reserved`, whose module imports `BSmtLib.Token`, so it has a module of its own here; the root

@@ -1,5 +1,11 @@
-import BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Top
-import BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Chunks
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Top
+public import BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Chunks
+import all BSmtLib.Lexer
+import all BSmtLib.Lexer.Internal.WRustPort
+
+@[expose] public section
 
 /-!
 # The constructed lexers
@@ -12,26 +18,27 @@ state mapped (`new_eq`, `newRecovering_eq`), so the constructed lexers are relat
 
 namespace BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Handed
 
-open BSmtLib.Lexer.Internal (handler core ofParts)
 open BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Core
 open BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Outer
 open BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Top
 
 theorem new_eq {H R E : Type} [Token.Consume H R E] (consumer : H) (version : Token.Version) :
     Lexer.Internal.WRustPort.Lexer.new consumer version =
-      { handler := handler (BSmtLib.Lexer.new consumer version)
-        core := coreMap 0 (core (BSmtLib.Lexer.new consumer version))
+      { handler := BSmtLib.Lexer.Internal.handler (BSmtLib.Lexer.new consumer version)
+        core := coreMap 0 (BSmtLib.Lexer.Internal.core (BSmtLib.Lexer.new consumer version))
         held := BSmtLib.Lexer.Internal.held (BSmtLib.Lexer.new consumer version) } :=
-  rfl
+  (rfl)
 
 theorem newRecovering_eq {H R E : Type} [Token.Consume H R E] {m : Type → Type} [Token.Recover H m]
     (consumer : H) (version : Token.Version) :
     Lexer.Internal.WRustPort.Lexer.newRecovering (m := m) consumer version =
-      { handler := handler (BSmtLib.Lexer.newRecovering (m := m) consumer version)
-        core := coreMap 0 (core (BSmtLib.Lexer.newRecovering (m := m) consumer version))
+      { handler := BSmtLib.Lexer.Internal.handler (BSmtLib.Lexer.newRecovering
+          (m := m) consumer version)
+        core := coreMap 0 (BSmtLib.Lexer.Internal.core
+            (BSmtLib.Lexer.newRecovering (m := m) consumer version))
         held := BSmtLib.Lexer.Internal.held
           (BSmtLib.Lexer.newRecovering (m := m) consumer version) } :=
-  rfl
+  (rfl)
 
 theorem lexerRel_new {H R E : Type} [Token.Consume H R E] (consumer : H) (version : Token.Version) :
     LexerRel (BSmtLib.Lexer.new consumer version) (Lexer.Internal.WRustPort.Lexer.new consumer

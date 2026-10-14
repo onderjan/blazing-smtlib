@@ -1,4 +1,8 @@
-import BSmtLibSpec.Facts.Proofs.Lexicon.RoundTrip.Lexical
+module
+
+public import BSmtLibSpec.Facts.Proofs.Lexicon.RoundTrip.Lexical
+
+@[expose] public section
 
 /-!
 # Writing the tokens of a concrete reading back

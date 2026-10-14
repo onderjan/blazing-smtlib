@@ -1,4 +1,8 @@
-import BSmtLibSpec.Facts.Proofs.Lexicon.Lemmas
+module
+
+public import BSmtLibSpec.Facts.Proofs.Lexicon.Lemmas
+
+@[expose] public section
 
 /-!
 # Printing tokens

@@ -1,4 +1,8 @@
-import BSmtLib.Token.Produce
+module
+
+public import BSmtLib.Token.Produce
+
+public section
 
 /-!
 # Consumers of a producer

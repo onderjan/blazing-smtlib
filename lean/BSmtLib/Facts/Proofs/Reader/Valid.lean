@@ -1,5 +1,9 @@
-import BSmtLib.Facts.Proofs.Reader.Consumer
-import BSmtLib.Facts.Proofs.Reader.Feed
+module
+
+public import BSmtLib.Facts.Proofs.Reader.Consumer
+public import BSmtLib.Facts.Proofs.Reader.Feed
+
+@[expose] public section
 
 /-!
 # A file, read by a correct lexer with the script consumer

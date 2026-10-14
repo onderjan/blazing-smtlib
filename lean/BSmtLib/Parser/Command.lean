@@ -1,4 +1,8 @@
-import BSmtLib.Parser.Command.Standard
+module
+
+public import BSmtLib.Parser.Command.Standard
+
+public section
 
 /-!
 # The command parser

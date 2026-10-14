@@ -1,4 +1,10 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.Basic
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.Basic
+import all BSmtLib.Lexer.Internal.VNaive
+import all Init.Data.Array.Basic
+
+@[expose] public section
 
 /-!
 # The run table of strings under version 2.0

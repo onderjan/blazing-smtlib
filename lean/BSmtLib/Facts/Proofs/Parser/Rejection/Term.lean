@@ -1,4 +1,13 @@
-import BSmtLib.Facts.Proofs.Parser.Rejection.Parts
+module
+
+public import BSmtLib.Facts.Proofs.Parser.Rejection.Parts
+import all BSmtLib.Parser
+import all BSmtLib.Parser.Category.Attribute
+import all BSmtLib.Parser.Category.Term
+import all BSmtLib.Token.Reserved
+import all BSmtLib.Parser.Category.Token
+
+@[expose] public section
 
 /-!
 # What terms can still take

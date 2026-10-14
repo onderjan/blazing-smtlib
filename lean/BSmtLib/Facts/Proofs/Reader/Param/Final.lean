@@ -1,6 +1,12 @@
-import BSmtLib.Facts.Proofs.Reader.Param.Run
-import BSmtLib.Facts.Proofs.Reader.Valid
-import BSmtLib.Facts.Lexer
+module
+
+public import BSmtLib.Facts.Proofs.Reader.Param.Run
+public import BSmtLib.Facts.Proofs.Reader.Valid
+public import BSmtLib.Facts.Lexer
+import all BSmtLib.Lexer
+import all BSmtLib.Parser.Adapter
+
+@[expose] public section
 
 /-!
 # The library's lexer with the parse adapter on a file
@@ -15,7 +21,7 @@ input, and leaves the adapter's recording handler with the calls of the traversa
 
 namespace BSmtLib.Facts.Proofs.Reader.Param.Final
 
-open BSmtLib.Lexer BSmtLib.Lexer.Internal
+open BSmtLib.Lexer
 open BSmtLibSpec BSmtLibSpec.Grammar
 open BSmtLibSpec.Parser.Properties
 open BSmtLib.Parser (Input Parse)
@@ -55,7 +61,7 @@ theorem adapter_feed_file (version : Lexicon.Version) (slices : List Regex.Chars
     {commands : List Tree.Command} (hfile : File version slices.flatten commands) :
     ∃ result lexer,
       paFeed (Lexer.new recordingAdapter (toVersion version)) slices = .ok (some result, lexer) ∧
-      (handler lexer).handler.reverse = (record version commands).filter Event.isCall := by
+      (Internal.handler lexer).handler.reverse = (record version commands).filter Event.isCall := by
   have hscript := script_of_file hfile
   obtain ⟨hfin, htaken, -⟩ := lexing_file _ Facts.Lexer.correctWithConsumers version slices hfile
   rw [Flagged.lexing_flagged] at hfin htaken

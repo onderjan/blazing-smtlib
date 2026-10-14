@@ -1,4 +1,8 @@
-import BSmtLibSpec.Lexer
+module
+
+public import BSmtLibSpec.Lexer
+
+@[expose] public section
 
 /-!
 # A lexer and its consumers

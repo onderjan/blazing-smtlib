@@ -1,4 +1,10 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Arms
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Arms
+import all BSmtLib.Lexer.Internal.WRustPort
+import all BSmtLib.Lexer.Internal.WRustPort.Slice
+
+@[expose] public section
 
 /-!
 # The Rust port's arm for whitespace in progress, with a consumer that takes it

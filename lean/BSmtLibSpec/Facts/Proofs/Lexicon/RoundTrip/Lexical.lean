@@ -1,7 +1,11 @@
-import BSmtLibSpec.Facts.Proofs.Lexicon.Unique
-import BSmtLibSpec.Facts.Proofs.Lexicon.RoundTrip.Tokens
-import BSmtLibSpec.Grammar.Script
-import BSmtLibSpec.Grammar.Properties
+module
+
+public import BSmtLibSpec.Facts.Proofs.Lexicon.Unique
+public import BSmtLibSpec.Facts.Proofs.Lexicon.RoundTrip.Tokens
+public import BSmtLibSpec.Grammar.Script
+public import BSmtLibSpec.Grammar.Properties
+
+@[expose] public section
 
 /-!
 # Writing syntax tokens as lexical tokens

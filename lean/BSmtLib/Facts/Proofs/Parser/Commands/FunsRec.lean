@@ -1,4 +1,12 @@
-import BSmtLib.Facts.Proofs.Parser.Commands.Declarations
+module
+
+public import BSmtLib.Facts.Proofs.Parser.Commands.Declarations
+import all BSmtLib.Parser.Category.Combinator
+import all BSmtLib.Parser.Command.Function
+import all BSmtLib.Parser.Command.Standard
+import all BSmtLib.Parser.Category.Token
+
+@[expose] public section
 
 /-!
 # `define-funs-rec` against the traversal

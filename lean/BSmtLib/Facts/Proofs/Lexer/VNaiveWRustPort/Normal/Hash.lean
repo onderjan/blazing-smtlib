@@ -1,4 +1,12 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Normal.Basic
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Normal.Basic
+import all BSmtLib.Lexer.Helpers
+import all BSmtLib.Lexer.Internal.VNaive
+import all BSmtLib.Lexer.Internal.WRustPort
+import all BSmtLib.Lexer.Internal.WRustPort.Slice
+
+@[expose] public section
 
 /-!
 # The normal state on a hexadecimal or binary literal
@@ -30,7 +38,7 @@ variable {floor : Option Nat} {low : Nat}
 
 variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Token.Version}
 
-set_option maxHeartbeats 250000 in
+set_option maxHeartbeats 350000 in
 /-- `normalSpec_lt` at the hash that starts a hexadecimal or binary literal. -/
 theorem normalSpec_hash (v : Token.Version) (input : ByteSlice) (offset base : Nat)
     (hframe : Frame floor low offset) (n index : Nat)

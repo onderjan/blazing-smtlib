@@ -1,5 +1,10 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.WP
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Bytes
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.WP
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Bytes
+import all BSmtLib.Token
+
+@[expose] public section
 
 /-!
 # The Rust port's batches
@@ -11,7 +16,6 @@ holds the lexemes `ls`: its first tokens are theirs, field by field.
 
 namespace BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Batch
 
-open BSmtLib.Lexer.Internal (intoBatch)
 open BSmtLib.Lexer.Internal.VNaive
 
 /-! ## Writing an entry -/

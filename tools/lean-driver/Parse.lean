@@ -12,11 +12,15 @@ With the library's lexer the requests use `Reader`, `readSmt` and `readSmtFile`.
 have no reader: the driver runs them over the library's parse adapter and does what the reader
 does, step for step (`Emulated`).
 -/
-import BSmtLib
-import BSmtLib.Lexer.Internal.VNaive
-import BSmtLib.Lexer.Internal.WRustPort
-import BSmtLib.Lexer.Internal.X1BatchInCore
-import Protocol
+module
+
+public import BSmtLib
+public import BSmtLib.Lexer.Internal.VNaive
+public import BSmtLib.Lexer.Internal.WRustPort
+public import BSmtLib.Lexer.Internal.X1BatchInCore
+public import Protocol
+
+public section
 
 open BSmtLib
 open BSmtLib.Token (Version VersionPosture Consume ConsumeFrom Produce SyntaxToken BatchCursor)

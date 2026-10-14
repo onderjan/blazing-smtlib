@@ -1,4 +1,10 @@
-import BSmtLib.Facts.Proofs.Reader.Param.Unary
+module
+
+public import BSmtLib.Facts.Proofs.Reader.Param.Unary
+import all BSmtLib.Lexer
+import all BSmtLib.Token
+
+@[expose] public section
 
 /-!
 # The facts of `UL` for each function of the lexer
@@ -11,7 +17,7 @@ empty. Every other function is taken apart by `usim`.
 
 namespace BSmtLib.Facts.Proofs.Reader.Param.UnarySteps
 
-open BSmtLib.Lexer BSmtLib.Lexer.Internal
+open BSmtLib.Lexer
 open BSmtLib.Facts.Lexer.Adapters
 open BSmtLib.Facts.Proofs.Reader.Param.Unary
 
@@ -21,88 +27,88 @@ variable {F σ R E : Type} [Token.Consume F R (Option E)]
   [∀ b, Token.ConsumeFrom F (Token.BatchCursor b) (StateM σ)] [Watched F σ R E]
   {floor : Option Nat} {low : Nat}
 
-theorem getCore_usim : UL (getCore : FM F σ floor low LexerCore) := by
-  unfold getCore; usim
+theorem getCore_usim : UL (Internal.getCore : FM F σ floor low LexerCore) := by
+  unfold Internal.getCore; usim
 
 theorem modifyCore_usim (f : LexerCore → LexerCore) (h)
     (hf : ∀ c, (f c).version = c.version) :
-    UL (modifyCore f h : FM F σ floor low Unit) := by
-  unfold modifyCore
+    UL (Internal.modifyCore f h : FM F σ floor low Unit) := by
+  unfold Internal.modifyCore
   exact UL.modifyThe _ fun c => hf c.val
 
 theorem modifyBound_usim (f) (hf : ∀ c h, (f c h).val.version = c.version) :
-    UL (modifyBound f : FM F σ floor low Unit) := by
-  unfold modifyBound
+    UL (Internal.modifyBound f : FM F σ floor low Unit) := by
+  unfold Internal.modifyBound
   exact UL.modifyThe _ fun c => hf c.val c.property
 
-theorem setNormal_usim : UL (setNormal : FM F σ floor low Unit) := by
-  unfold setNormal; usim
+theorem setNormal_usim : UL (Internal.setNormal : FM F σ floor low Unit) := by
+  unfold Internal.setNormal; usim
 
 theorem setTokenState_usim (state start h) :
-    UL (setTokenState state start h : FM F σ floor low Unit) := by
-  unfold setTokenState; usim
+    UL (Internal.setTokenState state start h : FM F σ floor low Unit) := by
+  unfold Internal.setTokenState; usim
 
-theorem modifyContent_usim (f) : UL (modifyContent f : FM F σ floor low Unit) := by
-  unfold modifyContent; usim
+theorem modifyContent_usim (f) : UL (Internal.modifyContent f : FM F σ floor low Unit) := by
+  unfold Internal.modifyContent; usim
 
 theorem extendContent_usim (input start stop) :
-    UL (extendContent input start stop : FM F σ floor low Unit) := by
-  unfold extendContent; usim
+    UL (Internal.extendContent input start stop : FM F σ floor low Unit) := by
+  unfold Internal.extendContent; usim
 
-theorem pushContent_usim (c) : UL (pushContent c : FM F σ floor low Unit) := by
-  unfold pushContent; usim
+theorem pushContent_usim (c) : UL (Internal.pushContent c : FM F σ floor low Unit) := by
+  unfold Internal.pushContent; usim
 
 theorem startToken_usim (offset base position hframe) :
-    UL (startToken offset base position hframe :
+    UL (Internal.startToken offset base position hframe :
       FM F σ floor low
         {start : Span.Location // start.offset = offset + (position - base).toNat}) := by
-  unfold startToken; usim
+  unfold Internal.startToken; usim
 
 theorem markLineFeedAt_usim (position) :
-    UL (markLineFeedAt position : FM F σ floor low Unit) := by
-  unfold markLineFeedAt; usim
+    UL (Internal.markLineFeedAt position : FM F σ floor low Unit) := by
+  unfold Internal.markLineFeedAt; usim
 
 theorem failWith_usim {α : Type} (kind position failure) :
-    UL (failWith kind position failure : FM F σ floor low α) := by
-  unfold failWith; usim
+    UL (Internal.failWith kind position failure : FM F σ floor low α) := by
+  unfold Internal.failWith; usim
 
 theorem failAt_usim {α : Type} (kind position) :
-    UL (failAt kind position : FM F σ floor low α) := by
-  unfold failAt; usim
+    UL (Internal.failAt kind position : FM F σ floor low α) := by
+  unfold Internal.failAt; usim
 
 theorem fail_usim {α : Type} (kind tokenEnd) :
-    UL (fail kind tokenEnd : FM F σ floor low α) := by
-  unfold fail; usim
+    UL (Internal.fail kind tokenEnd : FM F σ floor low α) := by
+  unfold Internal.fail; usim
 
 theorem expectDelimiter_usim (next position) :
-    UL (expectDelimiter next position : FM F σ floor low Unit) := by
-  unfold expectDelimiter; usim
+    UL (Internal.expectDelimiter next position : FM F σ floor low Unit) := by
+  unfold Internal.expectDelimiter; usim
 
-theorem storeSpent_usim (spent) : UL (storeSpent spent : FM F σ floor low Unit) := by
-  unfold storeSpent; usim
+theorem storeSpent_usim (spent) : UL (Internal.storeSpent spent : FM F σ floor low Unit) := by
+  unfold Internal.storeSpent; usim
 
 theorem takeBatch_usim :
-    UL (takeBatch : FM F σ floor low
+    UL (Internal.takeBatch : FM F σ floor low
       {batch : Token.TokenBatch // ∀ p, floor = some p → batch.StartsFrom p}) := by
-  unfold takeBatch; usim
+  unfold Internal.takeBatch; usim
 
 theorem locationFrom_usim (base position) :
-    UL (locationFrom base position :
+    UL (Internal.locationFrom base position :
       FM F σ floor low {location : Span.Location // low ≤ location.offset}) := by
-  unfold locationFrom; usim
+  unfold Internal.locationFrom; usim
 
 theorem consumesWhitespaceAndComments_usim :
-    UL (consumesWhitespaceAndComments : FM F σ floor low Bool) := by
-  unfold consumesWhitespaceAndComments; usim
+    UL (Internal.consumesWhitespaceAndComments : FM F σ floor low Bool) := by
+  unfold Internal.consumesWhitespaceAndComments; usim
 
 theorem leave_usim (offset base position batch hframe hbatch) :
-    UL (leave offset base position batch hframe hbatch : FM F σ floor low Unit) := by
-  unfold leave; usim
+    UL (Internal.leave offset base position batch hframe hbatch : FM F σ floor low Unit) := by
+  unfold Internal.leave; usim
 
 theorem leavePending_usim (state start offset base position batch hframe hbatch hstart hfloor) :
-    UL (leavePending state start offset base position batch hframe hbatch hstart hfloor :
+    UL (Internal.leavePending state start offset base position batch hframe hbatch hstart hfloor :
       FM F σ floor low Unit) := by
-  unfold leavePending; usim
+  unfold Internal.leavePending; usim
 
 end
 /-! ## The handover -/
@@ -142,13 +148,13 @@ instance (consumer : BSmtLibSpec.Lexer.Consumer) :
 omit [Watched F σ R E] in
 theorem frun_callConsumer {b : Token.BatchTag} (cursor : Token.BatchCursor b) (h : cursor.HasNext)
     (s fl l) :
-    frun (callConsumer cursor h : FM F σ floor low _) s fl l =
+    frun (Internal.callConsumer cursor h : FM F σ floor low _) s fl l =
       let r := ((Token.ConsumeFrom.consume cursor h : StateT F (StateM σ) _).run fl).run l
-      (((.ok r.1.1, s), r.1.2), r.2) := rfl
+      (((.ok r.1.1, s), r.1.2), r.2) := (rfl)
 
 omit [∀ b, Token.ConsumeFrom F (Token.BatchCursor b) (StateM σ)] [Watched F σ R E] in
 theorem frun_getCore (s : {c : LexerCore // c.Bound floor low}) (fl : F) (l) :
-    frun (getCore : FM F σ floor low LexerCore) s fl l = (((.ok s.val, s), fl), l) := rfl
+    frun (Internal.getCore : FM F σ floor low LexerCore) s fl l = (((.ok s.val, s), fl), l) := (rfl)
 
 omit [∀ b, Token.ConsumeFrom F (Token.BatchCursor b) (StateM σ)] [Watched F σ R E] in
 theorem frun_pure {α : Type} (a : α) (s : {c : LexerCore // c.Bound floor low})
@@ -158,8 +164,8 @@ theorem frun_pure {α : Type} (a : α) (s : {c : LexerCore // c.Bound floor low}
 omit [∀ b, Token.ConsumeFrom F (Token.BatchCursor b) (StateM σ)] [Watched F σ R E] in
 theorem frun_modifyCore (f : LexerCore → LexerCore) (h) (s : {c : LexerCore // c.Bound floor low})
     (fl : F) (l) :
-    frun (modifyCore f h : FM F σ floor low Unit) s fl l =
-      (((.ok (), ⟨f s.val, h s.val s.property⟩), fl), l) := rfl
+    frun (Internal.modifyCore f h : FM F σ floor low Unit) s fl l =
+      (((.ok (), ⟨f s.val, h s.val s.property⟩), fl), l) := (rfl)
 
 /-- What a handover of a cursor in the consumer's version gives: a stop, if any, and the cursor
 the consumer left, the lexer's version as it was; while nothing went wrong, the consumer's version
@@ -168,17 +174,18 @@ theorem flushCursor_flag {b : Token.BatchTag} :
     ∀ (n : Nat) (cursor : Token.BatchCursor b) (hfloor) (s : {c : LexerCore // c.Bound floor low})
       (fl : F) (l), cursor.remaining < n → Watched.errored fl = false →
       cursor.version = Watched.version fl →
-      ∃ stop cur, (frun (flushCursor cursor hfloor) s fl l).1.1.1 = .ok (stop, cur) ∧
-        (frun (flushCursor cursor hfloor) s fl l).1.1.2.val.version = s.val.version ∧
-        (Watched.errored (frun (flushCursor cursor hfloor) s fl l).1.2 = false →
-          Watched.version (frun (flushCursor cursor hfloor) s fl l).1.2 = cur.version) ∧
-        (Watched.errored (frun (flushCursor cursor hfloor) s fl l).1.2 = true →
+      ∃ stop cur, (frun (Internal.flushCursor cursor hfloor) s fl l).1.1.1 = .ok (stop, cur) ∧
+        (frun (Internal.flushCursor cursor hfloor) s fl l).1.1.2.val.version = s.val.version ∧
+        (Watched.errored (frun (Internal.flushCursor cursor hfloor) s fl l).1.2 = false →
+          Watched.version (frun (Internal.flushCursor cursor hfloor) s fl l).1.2 = cur.version) ∧
+        (Watched.errored (frun (Internal.flushCursor cursor hfloor) s fl l).1.2 = true →
           ∃ i, stop = some i ∧ ∃ e, i.result = .error (.consumer e) ∧
-            (Watched.layout (frun (flushCursor cursor hfloor) s fl l).1.2 = true → e = none)) ∧
-        Watched.spoiled (frun (flushCursor cursor hfloor) s fl l).1.2 = Watched.spoiled fl
+            (Watched.layout (frun (Internal.flushCursor cursor hfloor) s fl l).1.2 = true → e =
+                none)) ∧
+        Watched.spoiled (frun (Internal.flushCursor cursor hfloor) s fl l).1.2 = Watched.spoiled fl
   | 0, _, _, _, _, _, hn, _, _ => absurd hn (Nat.not_lt_zero _)
   | n + 1, cursor, hfloor, s, fl, l, hn, he, hv => by
-    rw [flushCursor.eq_1]
+    rw [Internal.flushCursor.eq_1]
     by_cases h : cursor.HasNext
     · rw [dite_eq_left_of_eq_true (eq_true h), frun_bind, frun_getCore]
       dsimp only
@@ -254,21 +261,22 @@ theorem frun_throw {α : Type} (i : Interrupted R (Option E) floor)
 omit [∀ b, Token.ConsumeFrom F (Token.BatchCursor b) (StateM σ)] [Watched F σ R E] in
 theorem storeSpent_run (spent : Token.TokenBatch) (s : {c : LexerCore // c.Bound floor low})
     (fl : F) (l) :
-    ∃ s', frun (storeSpent spent : FM F σ floor low Unit) s fl l = (((.ok (), s'), fl), l) ∧
+    ∃ s', frun (Internal.storeSpent spent : FM F σ floor low Unit) s fl l =
+        (((.ok (), s'), fl), l) ∧
       s'.val.batch.len = 0 ∧ s'.val.version = s.val.version :=
   ⟨_, rfl, rfl, rfl⟩
 
 theorem handOver_usim (batch bytesAfter hfloor) :
-    UL (handOver batch bytesAfter hfloor : FM F σ floor low Token.TokenBatch) := by
+    UL (Internal.handOver batch bytesAfter hfloor : FM F σ floor low Token.TokenBatch) := by
   intro s fl l he hv
-  unfold handOver
+  unfold Internal.handOver
   rw [frun_bind, frun_getCore]
   dsimp only
   rw [frun_bind]
   obtain ⟨stop, cur, hres, hs, hok, herr, hsp⟩ :=
     flushCursor_flag _ (Token.BatchCursor.new s.val.version batch) _ s fl l
         (Nat.lt_succ_self _) he hv
-  generalize frun (flushCursor (Token.BatchCursor.new s.val.version batch) _) s fl l = r
+  generalize frun (Internal.flushCursor (Token.BatchCursor.new s.val.version batch) _) s fl l = r
     at hres hs hok herr hsp
   obtain ⟨⟨⟨res, s'⟩, fl'⟩, l'⟩ := r
   simp only at hres hs hok herr hsp
@@ -284,7 +292,8 @@ theorem handOver_usim (batch bytesAfter hfloor) :
       · obtain ⟨_, hi, _⟩ := herr h; cases hi
     have hrest := fun s₁ hv₁ =>
       let h := (UL.pure (F := F) (floor := floor) (low := low)
-        ({ intoBatch cur with bytes := bytesAfter } : Token.TokenBatch)) s₁ fl' l' hfalse hv₁
+        ({ Internal.intoBatch cur with bytes := bytesAfter } : Token.TokenBatch)) s₁ fl' l' hfalse
+            hv₁
       And.intro h.1 (And.intro h.2.1 (h.2.2.trans hsp))
     by_cases hrec : s'.val.recovers = true
     · rw [ite_eq_left hrec, frun_bind]
@@ -301,9 +310,10 @@ theorem handOver_usim (batch bytesAfter hfloor) :
   | some i =>
     have hrest : ∀ s₁ : {c : LexerCore // c.Bound floor low}, s₁.val.version = cur.version →
         let r := frun (do
-            storeSpent ({ intoBatch cur with bytes := bytesAfter } : Token.TokenBatch)
+            Internal.storeSpent ({ Internal.intoBatch cur with bytes := bytesAfter } :
+                Token.TokenBatch)
             MonadExcept.throw i
-            pure ({ intoBatch cur with bytes := bytesAfter } : Token.TokenBatch) :
+            pure ({ Internal.intoBatch cur with bytes := bytesAfter } : Token.TokenBatch) :
             FM F σ floor low Token.TokenBatch) s₁ fl' l'
         (Watched.errored r.1.2 = false → r.1.1.2.val.version = Watched.version r.1.2) ∧
         (Watched.errored r.1.2 = true →
@@ -313,7 +323,7 @@ theorem handOver_usim (batch bytesAfter hfloor) :
       dsimp only
       rw [frun_bind]
       obtain ⟨s₂, hs₂, hlen, hver⟩ := storeSpent_run
-        ({ intoBatch cur with bytes := bytesAfter } : Token.TokenBatch) s₁ fl' l'
+        ({ Internal.intoBatch cur with bytes := bytesAfter } : Token.TokenBatch) s₁ fl' l'
       rw [hs₂]
       dsimp only
       rw [frun_bind, frun_throw]

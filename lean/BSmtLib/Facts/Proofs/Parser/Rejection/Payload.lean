@@ -1,4 +1,13 @@
-import BSmtLib.Facts.Proofs.Parser.Rejection.Command
+module
+
+public import BSmtLib.Facts.Proofs.Parser.Rejection.Command
+import all BSmtLib.Parser
+import all BSmtLib.Parser.Category.Attribute
+import all BSmtLib.Parser.Category.Sort
+import all BSmtLib.Parser.Category.Token
+import all BSmtLib.Parser.Command.Standard
+
+@[expose] public section
 
 /-!
 # The steps of the payload parser advance

@@ -1,4 +1,11 @@
-import BSmtLib.Facts.Proofs.Reader.Lexes.Told
+module
+
+public import BSmtLib.Facts.Proofs.Reader.Lexes.Told
+import all BSmtLib.Lexer
+import all BSmtLib.Lexer.Internal.VNaive
+import all BSmtLib.Lexer.Internal.WRustPort
+
+@[expose] public section
 
 /-!
 # The library's lexer hands no whitespace or comment to a consumer that does not take them
@@ -16,7 +23,6 @@ does not take whitespace and comments (`VNaiveWRustPort.slice_step_noNone`,
 
 namespace BSmtLib.Facts.Proofs.Reader.Lexes.NoLayout
 
-open BSmtLib.Lexer.Internal (core held handler run ofParts)
 open BSmtLib.Facts.Lexer.Adapters (Answering AnswerM LexOps)
 open BSmtLibSpec.Lexer (Handed)
 open BSmtLib.Facts.Proofs.Reader.Lexes.Told
@@ -48,13 +54,14 @@ theorem wLexer_eq (w : Lexer.Adapters.WRustPort.lexOps.Lexer C) :
 not fail with the adapter's error `none` for a consumer that does not take whitespace and
 comments, and where it does not fail, the chain relates the state after it. -/
 theorem zok_fit (hc : C.concrete = false) {c : BSmtLib.Lexer.LexerCore} (hz : ZOK C c)
-    (l : Lexer.Adapters.Lexer.lexOps.Lexer C) (hl : core l = c) (bytes : BSmtLibSpec.Regex.Chars)
+    (l : Lexer.Adapters.Lexer.lexOps.Lexer C) (hl : Lexer.Internal.core l = c)
+    (bytes : BSmtLibSpec.Regex.Chars)
     (hs : bytes.toByteArray.toByteSlice.stop < USize.size) (taken : List Handed) :
     (∀ e, ((Lexer.Adapters.Lexer.lexOps.lexSliceStep l bytes.toByteArray.toByteSlice).run
         taken).1.1 = .error e → e.cause ≠ .consumer none) ∧
       (∀ r, ((Lexer.Adapters.Lexer.lexOps.lexSliceStep l bytes.toByteArray.toByteSlice).run
         taken).1.1 = .ok r →
-        ZOK C (core ((Lexer.Adapters.Lexer.lexOps.lexSliceStep l
+        ZOK C (Lexer.Internal.core ((Lexer.Adapters.Lexer.lexOps.lexSliceStep l
           bytes.toByteArray.toByteSlice).run taken).1.2)) := by
   obtain ⟨x, w, n, hx, hw, hcr⟩ := hz
   have hL : Lexer.Consumers.ChainZ.LooseRel l x :=
@@ -89,20 +96,20 @@ theorem zok_fit (hc : C.concrete = false) {c : BSmtLib.Lexer.LexerCore} (hz : ZO
   subst hr
   exact ⟨lx, _, _, e2.2, f2, hok rfl⟩
 
-open BSmtLib.Lexer.Internal (lexChunks lexSliceStep CHUNK_SIZE) in
 /-- The chunks of a slice too large for the positions of the library's lexer, from a state that
 the chain relates: no failure with the adapter's error `none`, and where the chunks do not fail,
 the chain relates the state after them. -/
 theorem zok_chunks (hc : C.concrete = false) (s : BSmtLibSpec.Regex.Chars) (p : Nat) :
     ∀ (acc : Option (Span.Located C.Result)) (l : Lexer.Adapters.Lexer.lexOps.Lexer C)
-      (t : List Handed), ZOK C (core l) →
+      (t : List Handed), ZOK C (Lexer.Internal.core l) →
       ∀ r (l' : Lexer.Adapters.Lexer.lexOps.Lexer C) t',
-        (run l (lexChunks (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.failFast)
+        (Lexer.Internal.run l (Lexer.Internal.lexChunks
+            (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.failFast)
           (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.failFast) s.toByteArray.toByteSlice p
               acc)).run t =
           ((r, l'), t') →
         (∀ e, r = .error e → e.cause ≠ .consumer none) ∧
-          (∀ h, r = .ok h → ZOK C (core l')) := by
+          (∀ h, r = .ok h → ZOK C (Lexer.Internal.core l')) := by
   fun_induction Lexer.X1BatchInCoreLexer.Chunks.chunksFrom s p with
   | case1 p hp ih =>
     intro acc l t hz r l' t' hrun
@@ -131,30 +138,31 @@ theorem zok_chunks (hc : C.concrete = false) (s : BSmtLibSpec.Regex.Chars) (p : 
     obtain ⟨⟨rfl, rfl⟩, rfl⟩ := hrun
     exact ⟨fun e he => (nomatch he), fun _ _ => hz⟩
 
-open BSmtLib.Lexer.Internal (lexChunks lexSliceStep) in
 /-- A call on a slice, from a state that the chain relates: no failure with the adapter's error
 `none`, and where the call does not fail, the chain relates the state after it. -/
 theorem zok_slice (hc : C.concrete = false) {c : BSmtLib.Lexer.LexerCore} (hz : ZOK C c)
-    (l : Lexer.Adapters.Lexer.lexOps.Lexer C) (hl : core l = c) (bytes : BSmtLibSpec.Regex.Chars)
+    (l : Lexer.Adapters.Lexer.lexOps.Lexer C) (hl : Lexer.Internal.core l = c)
+    (bytes : BSmtLibSpec.Regex.Chars)
     (taken : List Handed) :
     (∀ e, ((Lexer.Adapters.Lexer.lexOps.lexSliceStep l bytes.toByteArray.toByteSlice).run
         taken).1.1 = .error e → e.cause ≠ .consumer none) ∧
       (∀ r, ((Lexer.Adapters.Lexer.lexOps.lexSliceStep l bytes.toByteArray.toByteSlice).run
         taken).1.1 = .ok r →
-        ZOK C (core ((Lexer.Adapters.Lexer.lexOps.lexSliceStep l
+        ZOK C (Lexer.Internal.core ((Lexer.Adapters.Lexer.lexOps.lexSliceStep l
           bytes.toByteArray.toByteSlice).run taken).1.2)) := by
   by_cases hs : bytes.length < USize.size
   · exact zok_fit hc hz l hl bytes (Lexer.X1BatchInCoreLexer.Handed.stop_toByteSlice_lt hs) taken
   · have hs' : ¬ bytes.toByteArray.toByteSlice.stop < USize.size := by
       rw [Lexer.X1BatchInCoreLexer.Chunks.stop_toByteSlice, List.size_toByteArray]
       exact hs
-    have hz' : (run l (lexChunks (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.failFast)
+    have hz' : (Lexer.Internal.run l (Lexer.Internal.lexChunks
+        (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.failFast)
         (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.failFast) bytes.toByteArray.toByteSlice
             0 none)).run
           taken =
         (Lexer.Adapters.Lexer.lexOps.lexSliceStep l bytes.toByteArray.toByteSlice).run taken := by
-      show _ = (run l (lexSliceStep _ _ _)).run taken
-      unfold lexSliceStep
+      show _ = (Lexer.Internal.run l (Lexer.Internal.lexSliceStep _ _ _)).run taken
+      unfold Lexer.Internal.lexSliceStep
       rw [dite_eq_right_of_eq_false (eq_false hs')]
     generalize (Lexer.Adapters.Lexer.lexOps.lexSliceStep l bytes.toByteArray.toByteSlice).run
       taken = R at hz' ⊢
@@ -165,12 +173,13 @@ theorem zok_slice (hc : C.concrete = false) {c : BSmtLib.Lexer.LexerCore} (hz : 
 /-- The end of the input, from a state that the chain relates: no failure with the adapter's
 error `none`. -/
 theorem zok_eof (hc : C.concrete = false) {c : BSmtLib.Lexer.LexerCore} (hz : ZOK C c)
-    (l : Lexer.Adapters.Lexer.lexOps.Lexer C) (hl : core l = c) (taken : List Handed) :
+    (l : Lexer.Adapters.Lexer.lexOps.Lexer C) (hl : Lexer.Internal.core l = c)
+    (taken : List Handed) :
     ∀ e, ((Lexer.Adapters.Lexer.lexOps.lexEofStep l).run taken).1.1 = .error e →
       e.cause ≠ .consumer none := by
   obtain ⟨x, w, n, hx, hw, hcr⟩ := hz
-  let x' : Lexer.Adapters.X1BatchInCore.lexOps.Lexer C := { x with held := held l }
-  let w' : Lexer.Adapters.WRustPort.lexOps.Lexer C := { w with held := held l }
+  let x' : Lexer.Adapters.X1BatchInCore.lexOps.Lexer C := { x with held := Lexer.Internal.held l }
+  let w' : Lexer.Adapters.WRustPort.lexOps.Lexer C := { w with held := Lexer.Internal.held l }
   have hLR : Lexer.X1BatchInCoreLexer.Top.LexerRel l x' :=
     ⟨answering_unique _ _, by rw [hl]; exact hx, rfl⟩
   have hWR : Lexer.WRustPortX1BatchInCore.Calls.LexRel w' x' := ⟨hw.1, hw.2.1, rfl⟩
@@ -196,7 +205,7 @@ theorem zok_eof (hc : C.concrete = false) {c : BSmtLib.Lexer.LexerCore} (hz : ZO
 
 /-- The state of the library's lexer constructed with the version is related by the chain. -/
 theorem zok_new (version : Token.Version) :
-    ZOK C (core (Lexer.Adapters.Lexer.lexOps.new C {} version)) :=
+    ZOK C (Lexer.Internal.core (Lexer.Adapters.Lexer.lexOps.new C {} version)) :=
   ⟨Lexer.Adapters.X1BatchInCore.lexOps.new C {} version,
     Lexer.Adapters.WRustPort.lexOps.new C {} version,
     Lexer.Internal.VNaive.Core.initial version,

@@ -36,6 +36,8 @@ An environment variable of its own:
   them alike. Each lexer gets its own line, and in `raw` format its own mode, `lex-v` or
   `lex-z`; with the default alone the mode stays `lex`, as in the Rust benchmark.
 -/
+module
+
 import BSmtLib
 import BSmtLib.Lexer.Internal.VNaive
 
@@ -340,7 +342,7 @@ inductive Format where
   | raw
   | list
 
-def main : IO UInt32 := do
+public def main : IO UInt32 := do
   let stderr ← IO.getStderr
   let stdout ← IO.getStdout
   let benchmarksDir ← benchmarksDir

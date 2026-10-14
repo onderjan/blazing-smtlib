@@ -1,4 +1,8 @@
-import BSmtLib.Facts.Proofs.Reader.Lexes.Requests
+module
+
+public import BSmtLib.Facts.Proofs.Reader.Lexes.Requests
+
+@[expose] public section
 
 /-!
 # Lexers with consumers that answer alike

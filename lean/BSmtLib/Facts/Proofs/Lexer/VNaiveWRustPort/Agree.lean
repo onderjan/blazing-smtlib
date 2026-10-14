@@ -1,4 +1,9 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.HandOver
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.HandOver
+import all BSmtLib.Lexer.Helpers
+
+@[expose] public section
 
 /-!
 # The Rust port's state against the naive lexer's pure state

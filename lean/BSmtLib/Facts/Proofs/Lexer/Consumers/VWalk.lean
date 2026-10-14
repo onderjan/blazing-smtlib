@@ -1,4 +1,10 @@
-import BSmtLib.Facts.Proofs.Lexer.Consumers.VEvent
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.Consumers.VEvent
+import all BSmtLib.Lexer.Internal.VNaive
+import all BSmtLib.Token
+
+@[expose] public section
 
 /-!
 # The naive lexer with a consumer of the spec, as `Runs` states

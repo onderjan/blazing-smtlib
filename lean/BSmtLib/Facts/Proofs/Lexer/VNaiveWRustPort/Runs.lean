@@ -1,4 +1,9 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.Legacy
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.Legacy
+import all BSmtLib.Lexer.Internal.WRustPort.Slice
+
+@[expose] public section
 
 /-!
 # The Rust port's run scans against the naive lexer's bytes

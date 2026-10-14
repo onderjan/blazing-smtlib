@@ -1,5 +1,10 @@
-import BSmtLib.Facts.Proofs.Parser.Refused
-import BSmtLib.Facts.Proofs.Parser.Cut
+module
+
+public import BSmtLib.Facts.Proofs.Parser.Refused
+public import BSmtLib.Facts.Proofs.Parser.Cut
+import all BSmtLib.Parser.Script
+
+@[expose] public section
 
 /-!
 # The recording run on what a parser takes

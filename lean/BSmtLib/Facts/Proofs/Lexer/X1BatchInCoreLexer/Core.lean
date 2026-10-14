@@ -1,5 +1,11 @@
-import BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Positions
-import BSmtLib.Facts.Proofs.Lexer.Simulation
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Positions
+public import BSmtLib.Facts.Proofs.Lexer.Simulation
+import all BSmtLib.Lexer
+import all BSmtLib.Lexer.Internal.WRustPort
+
+@[expose] public section
 
 /-!
 # The states of the library's lexer and of `X1BatchInCore`
@@ -103,14 +109,14 @@ omit [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
 theorem consumes_eq_lexer :
     BSmtLib.Lexer.Internal.consumesWhitespaceAndComments (H := H) (m := m) (R := R) (E := E)
       (floor := floor) (low := low) = pure (Token.Consume.isConcrete (H := H)) :=
-  rfl
+  (rfl)
 
 omit [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
 /-- Whether the consumer takes whitespace and comments, read by the Rust port. -/
 theorem consumes_eq_x1 :
     Lexer.Internal.WRustPort.consumesWhitespaceAndComments (H := H) (m := m) (R := R) (E := E)
       (floor := floor) (low := low) = pure (Token.Consume.isConcrete (H := H)) :=
-  rfl
+  (rfl)
 
 /-! The operations of the batch, as the Rust port's code calls them, are those of the lexer with
 the batch kept in its state. -/

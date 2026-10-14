@@ -1,4 +1,10 @@
-import BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.HandOver
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.HandOver
+import all BSmtLib.Lexer
+import all BSmtLib.Lexer.Internal.WRustPort
+
+@[expose] public section
 
 /-!
 # The finishing of a stored token by the library's lexer and `X1BatchInCore`

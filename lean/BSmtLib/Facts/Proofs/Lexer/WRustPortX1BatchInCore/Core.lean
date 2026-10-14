@@ -1,5 +1,12 @@
-import BSmtLib.Lexer.Internal.WRustPort
-import BSmtLib.Facts.Proofs.Lexer.Simulation
+module
+
+public import BSmtLib.Lexer.Internal.WRustPort
+public import BSmtLib.Facts.Proofs.Lexer.Simulation
+import all BSmtLib.Lexer
+import all BSmtLib.Lexer.Helpers
+import all BSmtLib.Lexer.Internal.WRustPort
+
+@[expose] public section
 
 /-!
 # The lexer states of two runs of the Rust port's code

@@ -1,4 +1,8 @@
-import BSmtLibSpec.Facts.Proofs.Reader.Commands
+module
+
+public import BSmtLibSpec.Facts.Proofs.Reader.Commands
+
+@[expose] public section
 
 /-!
 # A lexer with a parser finishes only on a file

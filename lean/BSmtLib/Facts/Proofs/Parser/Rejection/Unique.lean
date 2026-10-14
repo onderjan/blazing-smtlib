@@ -1,4 +1,8 @@
-import BSmtLib.Facts.Proofs.Parser.Rejection.Script
+module
+
+public import BSmtLib.Facts.Proofs.Parser.Rejection.Script
+
+@[expose] public section
 
 /-!
 # The version in force at an item does not depend on the reading

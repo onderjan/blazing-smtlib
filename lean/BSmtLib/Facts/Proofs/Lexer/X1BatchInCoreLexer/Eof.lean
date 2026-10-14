@@ -1,4 +1,12 @@
-import BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Recovery
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Recovery
+import all BSmtLib.Lexer
+import all BSmtLib.Lexer.Helpers
+import all BSmtLib.Lexer.Internal.WRustPort
+import all BSmtLib.Lexer.Internal.WRustPort.Slice
+
+@[expose] public section
 
 /-!
 # The end of the input, in the library's lexer and `X1BatchInCore`

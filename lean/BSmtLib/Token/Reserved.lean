@@ -1,5 +1,12 @@
-import BSmtLib.Bytes
-import BSmtLib.Token
+module
+
+public import BSmtLib.Bytes
+public import BSmtLib.Token
+import all Init.Data.Array.Basic
+import all Init.Data.String.Defs
+import all Std.Data.ByteSlice
+
+public section
 
 /- LEAN: in Rust, `token` declares `reserved` as a submodule and re-exports its types, while
 `reserved` uses `Version` from `token`. Lean modules cannot import each other, so this
@@ -185,8 +192,9 @@ private def reservedWords : Array (ByteArray × Reserved) :=
   GeneralReserved.all.map (fun word => (word.asStr.toUTF8, Reserved.general word))
     ++ CommandNameReserved.all.map (fun word => (word.asStr.toUTF8, Reserved.commandName word))
 
+/- LEAN: public, in `Internal`, as the type of `Internal.reservedSlot` names it. -/
 /-- Number of slots of the reserved-word table. -/
-private def reservedSlots : Nat := 128
+def Internal.reservedSlots : Nat := 128
 
 /-!
 The reserved-word table and its hash. They are public, in `Internal`, only so that the proofs
@@ -238,17 +246,9 @@ theorem size_reservedTable : reservedTable.size = reservedSlots := by
 
 end Internal
 
-open Internal
-
-/- LEAN: `#guard` evaluates the condition when the module is built and fails the build if
-it is false; it stands in for the Rust `assert!` in a `const` context. A word that shared
-a slot would have been overwritten in the table by a later one. -/
--- the reserved-word hash must be perfect: every word lands in a slot of its own
-#guard reservedWords.all fun (word, _) =>
-  if h : 0 < word.toByteSlice.size then
-    reservedTable[(reservedSlot word.toByteSlice h).val]?.map (·.1) == some word
-  else
-    false
+/- LEAN: the Rust `assert!` in a `const` context that the hash is perfect, every word in a slot
+of its own, is a `#guard` in `BSmtLib.Facts.Asserts`, checked when the facts are built. A word
+that shared a slot would have been overwritten in the table by a later one. -/
 
 /-- The reserved word that the symbol spells in the version, if any. -/
 @[inline]
@@ -258,9 +258,9 @@ def fromBytes? (symbol : ByteSlice) (version : Version) : Option Reserved :=
     none
   else
     -- the slot holds a reserved word or a sentinel
-    let slot := reservedSlot symbol (Nat.pos_of_ne_zero h)
+    let slot := Internal.reservedSlot symbol (Nat.pos_of_ne_zero h)
     let (word, reserved, since) :=
-      reservedTable[slot.val]'(by rw [size_reservedTable]; exact slot.isLt)
+      Internal.reservedTable[slot.val]'(by rw [Internal.size_reservedTable]; exact slot.isLt)
     -- if the symbol is equal to the reserved word and the version has it, return it
     if word.toByteSlice == symbol && version ≥ since then some reserved else none
 

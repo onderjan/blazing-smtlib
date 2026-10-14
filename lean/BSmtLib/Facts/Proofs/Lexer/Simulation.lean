@@ -1,6 +1,10 @@
-import BSmtLib.Facts.Proofs.Lexer.Simulation.Relation
-import BSmtLib.Facts.Proofs.Lexer.Simulation.Batch
-import BSmtLib.Facts.Proofs.Lexer.Simulation.Bytes
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.Simulation.Relation
+public import BSmtLib.Facts.Proofs.Lexer.Simulation.Batch
+public import BSmtLib.Facts.Proofs.Lexer.Simulation.Bytes
+
+@[expose] public section
 
 /-!
 # Simulation of one lexer's steps by another's

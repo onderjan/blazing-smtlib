@@ -1,4 +1,9 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Cursor
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Cursor
+import all BSmtLib.Token
+
+@[expose] public section
 
 /-!
 # The adapter's consumer on a cursor over a batch that holds lexemes
@@ -12,7 +17,6 @@ cursor and the answer it gives back say which.
 
 namespace BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Consume
 
-open BSmtLib.Lexer.Internal (intoBatch)
 open BSmtLib.Facts.Lexer.Adapters BSmtLib.Facts.Proofs.Lexer.Simulation.Batch
 open BSmtLibSpec.Lexer (Handed)
 open BSmtLib.Facts.Proofs.Lexer.VNaive.Run BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Batch
@@ -85,7 +89,7 @@ theorem take_drop_single {α : Type} (ls : List α) {i : Nat} (hi : i < ls.lengt
 /-- One call of the consumer on a cursor over a batch that holds the lexemes takes at least one
 token, and does what `pending` says with the lexemes it took. -/
 theorem consume_spec : ∀ (n : Nat) (c : Token.BatchCursor g) (h : c.HasNext) (ls : List Lexeme),
-    cStop c - cNext c = n → Holds (intoBatch c) ls → cStop c ≤ ls.length →
+    cStop c - cNext c = n → Holds (BSmtLib.Lexer.Internal.intoBatch c) ls → cStop c ≤ ls.length →
     ∀ (p : Prog), p.ver = c.version →
       cNext c < cNext ((Answering.consume C c h).run p.taken).1.2.val ∧
       cNext ((Answering.consume C c h).run p.taken).1.2.val ≤ cStop c ∧
@@ -106,7 +110,8 @@ theorem consume_spec : ∀ (n : Nat) (c : Token.BatchCursor g) (h : c.HasNext) (
   have hv1 := version_next c h
   have hr1 := relex_next c h
   have hd1 := discard_next c h
-  have hb1 : Holds (intoBatch (c.next h).2.1) ls := by rw [intoBatch_next]; exact hb
+  have hb1 : Holds (BSmtLib.Lexer.Internal.intoBatch (c.next h).2.1) ls
+      := by rw [intoBatch_next]; exact hb
   rw [Answering.consume]
   generalize hq : c.next h = q at ht hn1 hs1 hv1 hr1 hd1 hb1
   obtain ⟨token, next, consumed⟩ := q

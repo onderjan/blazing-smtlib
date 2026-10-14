@@ -1,4 +1,24 @@
-import BSmtLib.Facts.Proofs.Reader.Param.Erase
+module
+
+public import BSmtLib.Facts.Proofs.Reader.Param.Erase
+import all BSmtLib.Parser
+import all BSmtLib.Parser.Category.Attribute
+import all BSmtLib.Parser.Category.Combinator
+import all BSmtLib.Parser.Category.Ident
+import all BSmtLib.Parser.Category.Pattern
+import all BSmtLib.Parser.Category.QualifiedIdent
+import all BSmtLib.Parser.Category.SExpr
+import all BSmtLib.Parser.Category.Sort
+import all BSmtLib.Parser.Category.SortedVar
+import all BSmtLib.Parser.Category.Term
+import all BSmtLib.Parser.Category.Token
+import all BSmtLib.Parser.Command
+import all BSmtLib.Parser.Command.Datatype
+import all BSmtLib.Parser.Command.Function
+import all BSmtLib.Parser.Command.Standard
+import all BSmtLib.Parser.Script
+
+@[expose] public section
 
 /-!
 # Each step of the parser reads the log only by its calls

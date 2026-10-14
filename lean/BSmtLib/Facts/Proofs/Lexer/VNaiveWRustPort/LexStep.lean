@@ -1,8 +1,14 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.ArmsNumbers
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.ArmsQuoted
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.ArmsRuns
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.ArmsStrings
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.ArmsWs
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.ArmsNumbers
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.ArmsQuoted
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.ArmsRuns
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.ArmsStrings
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.ArmsWs
+import all BSmtLib.Lexer.Internal.VNaive
+import all BSmtLib.Lexer.Internal.WRustPort
+
+@[expose] public section
 
 /-!
 # A step of the Rust port's loop over a slice

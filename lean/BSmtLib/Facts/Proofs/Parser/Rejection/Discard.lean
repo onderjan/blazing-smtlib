@@ -1,5 +1,9 @@
-import BSmtLib.Facts.Proofs.Parser.Rejection.Library
-import BSmtLib.Facts.Proofs.Parser.Trace
+module
+
+public import BSmtLib.Facts.Proofs.Parser.Rejection.Library
+public import BSmtLib.Facts.Proofs.Parser.Trace
+
+@[expose] public section
 
 /-!
 # Where the traversal asks for the discarding

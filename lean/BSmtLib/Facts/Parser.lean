@@ -1,10 +1,14 @@
-import BSmtLib.Facts.Trusted
-import BSmtLib.Facts.Proofs.Parser.Term
-import BSmtLib.Facts.Proofs.Parser.Command
-import BSmtLib.Facts.Proofs.Parser.Script
-import BSmtLib.Facts.Proofs.Parser.Link
-import BSmtLib.Facts.Proofs.Parser.Cut
-import BSmtLib.Facts.Proofs.Parser.Rejection.Discard
+module
+
+public import BSmtLib.Facts.Trusted
+public import BSmtLib.Facts.Proofs.Parser.Term
+public import BSmtLib.Facts.Proofs.Parser.Command
+public import BSmtLib.Facts.Proofs.Parser.Script
+public import BSmtLib.Facts.Proofs.Parser.Link
+public import BSmtLib.Facts.Proofs.Parser.Cut
+public import BSmtLib.Facts.Proofs.Parser.Rejection.Discard
+
+@[expose] public section
 
 /-!
 # The parser against the specification's traversal

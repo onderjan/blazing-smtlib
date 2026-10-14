@@ -1,4 +1,8 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Bytes
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Bytes
+
+@[expose] public section
 
 /-!
 # Byte tables checked byte by byte

@@ -1,5 +1,9 @@
-import BSmtLib.Parser.Category.SortedVar
-import BSmtLib.Parser.Category.Combinator
+module
+
+public import BSmtLib.Parser.Category.SortedVar
+public import BSmtLib.Parser.Category.Combinator
+
+public section
 
 /-!
 # Datatypes

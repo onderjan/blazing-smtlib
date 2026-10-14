@@ -1,4 +1,10 @@
-import BSmtLib.Lexer.Internal.X1BatchInCore
+module
+
+public import BSmtLib.Lexer.Internal.X1BatchInCore
+import all BSmtLib.Lexer.CharClass
+import all BSmtLib.Lexer.Internal.WRustPort.Slice
+
+@[expose] public section
 
 /-!
 # Positions of the library's lexer and indices of `X1BatchInCore`
@@ -25,7 +31,7 @@ def inputOf (slice : ByteSlice) (h : slice.stop < USize.size) : Input :=
       exact slice.stop_le_size_byteArray }
 
 theorem ofSlice_eq (slice : ByteSlice) (h : slice.stop < USize.size) :
-    Input.ofSlice slice h = inputOf slice h := rfl
+    Input.ofSlice slice h = inputOf slice h := (rfl)
 
 section
 

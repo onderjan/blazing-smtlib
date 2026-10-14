@@ -1,4 +1,9 @@
-import BSmtLib.Facts.Proofs.Parser.QuietSteps
+module
+
+public import BSmtLib.Facts.Proofs.Parser.QuietSteps
+import all BSmtLib.Parser
+
+@[expose] public section
 
 /-!
 # The parser's steps read the log only by its calls

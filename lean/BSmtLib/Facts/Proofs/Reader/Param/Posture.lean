@@ -1,4 +1,11 @@
-import BSmtLib.Facts.Proofs.Reader.Param.Adapter
+module
+
+public import BSmtLib.Facts.Proofs.Reader.Param.Adapter
+import all BSmtLib.Parser
+import all BSmtLib.Parser.Adapter
+import all BSmtLib.Parser.Script
+
+@[expose] public section
 
 /-!
 # Two postures, one looser than the other

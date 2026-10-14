@@ -1,5 +1,9 @@
-import BSmtLibSpec.Lexer
-import BSmtLibSpec.Facts.Proofs.Lexicon.Unique
+module
+
+public import BSmtLibSpec.Lexer
+public import BSmtLibSpec.Facts.Proofs.Lexicon.Unique
+
+@[expose] public section
 
 /-!
 # Examples of a lexer fed in slices

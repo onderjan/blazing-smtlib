@@ -1,4 +1,8 @@
-import BSmtLibSpec.Facts.Proofs.Parser.Calls
+module
+
+public import BSmtLibSpec.Facts.Proofs.Parser.Calls
+
+@[expose] public section
 
 /-!
 # What a parser has done before an item

@@ -1,4 +1,8 @@
-import BSmtLib.Nodes
+module
+
+public import BSmtLib.Nodes
+
+public section
 
 /-!
 # The handler

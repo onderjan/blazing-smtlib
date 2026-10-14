@@ -1,4 +1,10 @@
-import BSmtLib.Facts.Proofs.Lexer.Consumers.VEnd
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.Consumers.VEnd
+import all BSmtLib.Lexer.Internal.VNaive
+import all BSmtLib.Lexer.Recovery
+
+@[expose] public section
 
 /-!
 # What the adapter makes of the naive lexer with a consumer of the spec
@@ -259,7 +265,7 @@ def vSession (core : Core) (held : Option (Span.Located consumer.Result)) (bytes
           | none => .running) core'
 
 
-theorem recovers_failFast : (Lexer.Recovery.failFast == Lexer.Recovery.recovering) = false := rfl
+theorem recovers_failFast : (Lexer.Recovery.failFast == Lexer.Recovery.recovering) = false := (rfl)
 
 theorem abandon_failFast :
     (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.failFast : Span.Location → StateT

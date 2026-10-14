@@ -1,4 +1,8 @@
-import BSmtLib.Lexer.Internal.WRustPort
+module
+
+public import BSmtLib.Lexer.Internal.WRustPort
+
+public section
 
 /-!
 The lexer with the batch kept in the lexer's state: a lexer of the chain that leads from the
@@ -279,7 +283,7 @@ from one slice to the next; it is empty whenever lexing returns. A slice starts 
 Rust's starts with an empty batch, a local of the call; the end of the input keeps it. -/
 /-- The operations of the lexer with the batch kept in its state: the batch is reused, and the
 line counters stay in the lexer state. -/
-@[instance_reducible]
+@[expose, instance_reducible]
 def ops : Ops H m R E where
   Locals := Unit
   loadLocals := pure ()

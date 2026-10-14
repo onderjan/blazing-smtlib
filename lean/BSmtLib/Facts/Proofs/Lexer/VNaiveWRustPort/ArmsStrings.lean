@@ -1,4 +1,13 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Arms
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Arms
+import all BSmtLib.Lexer.Helpers
+import all BSmtLib.Lexer.Internal.VNaive
+import all BSmtLib.Lexer.Internal.WRustPort
+import all BSmtLib.Lexer.Internal.WRustPort.Slice
+import all BSmtLib.Token
+
+@[expose] public section
 
 /-!
 # The arms of the Rust port's `lexStep` for a string literal

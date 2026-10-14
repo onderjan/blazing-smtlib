@@ -1,8 +1,12 @@
-import BSmtLibSpec.Facts.Lexicon
-import BSmtLibSpec.Facts.Lexer
-import BSmtLibSpec.Facts.Grammar
-import BSmtLibSpec.Facts.Parser
-import BSmtLibSpec.Facts.Reader
+module
+
+public import BSmtLibSpec.Facts.Lexicon
+public import BSmtLibSpec.Facts.Lexer
+public import BSmtLibSpec.Facts.Grammar
+public import BSmtLibSpec.Facts.Parser
+public import BSmtLibSpec.Facts.Reader
+
+@[expose] public section
 
 /-!
 # Checks of the specification

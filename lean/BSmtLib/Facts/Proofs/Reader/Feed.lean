@@ -1,7 +1,11 @@
-import BSmtLibSpec.Facts.Proofs.Lexer.Consumers
-import BSmtLibSpec.Facts.Proofs.Lexer.StreamingFacts
-import BSmtLibSpec.Facts.Proofs.Lexicon.Compose
-import BSmtLibSpec.Facts.Proofs.Parser.Rebuild
+module
+
+public import BSmtLibSpec.Facts.Proofs.Lexer.Consumers
+public import BSmtLibSpec.Facts.Proofs.Lexer.StreamingFacts
+public import BSmtLibSpec.Facts.Proofs.Lexicon.Compose
+public import BSmtLibSpec.Facts.Proofs.Parser.Rebuild
+
+@[expose] public section
 
 /-!
 # What a correct lexer hands over for the commands of a file

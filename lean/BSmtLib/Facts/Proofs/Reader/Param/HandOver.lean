@@ -1,4 +1,9 @@
-import BSmtLib.Facts.Proofs.Reader.Param.Walk
+module
+
+public import BSmtLib.Facts.Proofs.Reader.Param.Walk
+import all BSmtLib.Lexer
+
+@[expose] public section
 
 /-!
 # The handover to the two consumers
@@ -12,7 +17,7 @@ helpers of the lexer's state and for the handover (`flushCursor`, `handOver`, `f
 
 namespace BSmtLib.Facts.Proofs.Reader.Param.HandOver
 
-open BSmtLib.Lexer BSmtLib.Lexer.Internal
+open BSmtLib.Lexer
 open BSmtLib.Facts.Proofs.Reader.Param.Basic
 
 section
@@ -40,79 +45,87 @@ variable {H₁ H₂ : Type} {m₁ m₂ : Type → Type} [Monad m₁] [Monad m₂
 
 /-! ## The helpers of the lexer's state -/
 
-theorem getCore_sim : LSim L (· = ·) (getCore (floor := floor) (low := low)) getCore := by
-  unfold getCore; lsim
+theorem getCore_sim : LSim L (· = ·) (Internal.getCore (floor := floor) (low := low))
+    Internal.getCore := by
+  unfold Internal.getCore; lsim
 
 theorem modifyCore_sim (f : LexerCore → LexerCore) (h) :
-    LSim L (· = ·) (modifyCore (floor := floor) (low := low) f h) (modifyCore f h) := by
-  unfold modifyCore; lsim
+    LSim L (· = ·) (Internal.modifyCore (floor := floor) (low := low) f h)
+        (Internal.modifyCore f h) := by
+  unfold Internal.modifyCore; lsim
 
 theorem modifyBound_sim (f) :
-    LSim L (· = ·) (modifyBound (floor := floor) (low := low) f) (modifyBound f) := by
-  unfold modifyBound; lsim
+    LSim L (· = ·) (Internal.modifyBound (floor := floor) (low := low) f)
+        (Internal.modifyBound f) := by
+  unfold Internal.modifyBound; lsim
 
-theorem setNormal_sim : LSim L (· = ·) (setNormal (floor := floor) (low := low)) setNormal := by
-  unfold setNormal; lsim
+theorem setNormal_sim : LSim L (· = ·) (Internal.setNormal (floor := floor) (low := low))
+    Internal.setNormal := by
+  unfold Internal.setNormal; lsim
 
 theorem setTokenState_sim (state start h) :
-    LSim L (· = ·) (setTokenState (floor := floor) (low := low) state start h)
-      (setTokenState state start h) := by
-  unfold setTokenState; lsim
+    LSim L (· = ·) (Internal.setTokenState (floor := floor) (low := low) state start h)
+      (Internal.setTokenState state start h) := by
+  unfold Internal.setTokenState; lsim
 
 theorem modifyContent_sim (f) :
-    LSim L (· = ·) (modifyContent (floor := floor) (low := low) f) (modifyContent f) := by
-  unfold modifyContent; lsim
+    LSim L (· = ·) (Internal.modifyContent (floor := floor) (low := low) f)
+        (Internal.modifyContent f) := by
+  unfold Internal.modifyContent; lsim
 
 theorem extendContent_sim (input start stop) :
-    LSim L (· = ·) (extendContent (floor := floor) (low := low) input start stop)
-      (extendContent input start stop) := by
-  unfold extendContent; lsim
+    LSim L (· = ·) (Internal.extendContent (floor := floor) (low := low) input start stop)
+      (Internal.extendContent input start stop) := by
+  unfold Internal.extendContent; lsim
 
 theorem pushContent_sim (c) :
-    LSim L (· = ·) (pushContent (floor := floor) (low := low) c) (pushContent c) := by
-  unfold pushContent; lsim
+    LSim L (· = ·) (Internal.pushContent (floor := floor) (low := low) c)
+        (Internal.pushContent c) := by
+  unfold Internal.pushContent; lsim
 
 theorem startToken_sim (offset base position hframe) :
-    LSim L (· = ·) (startToken (floor := floor) (low := low) offset base position hframe)
-      (startToken offset base position hframe) := by
-  unfold startToken; lsim
+    LSim L (· = ·) (Internal.startToken (floor := floor) (low := low) offset base position hframe)
+      (Internal.startToken offset base position hframe) := by
+  unfold Internal.startToken; lsim
 
 theorem markLineFeedAt_sim (position) :
-    LSim L (· = ·) (markLineFeedAt (floor := floor) (low := low) position)
-      (markLineFeedAt position) := by
-  unfold markLineFeedAt; lsim
+    LSim L (· = ·) (Internal.markLineFeedAt (floor := floor) (low := low) position)
+      (Internal.markLineFeedAt position) := by
+  unfold Internal.markLineFeedAt; lsim
 
 theorem failWith_sim {α : Type} (kind position failure) :
-    LSim L (· = ·) (failWith (floor := floor) (low := low) (α := α) kind position failure)
-      (failWith kind position failure) := by
-  unfold failWith; lsim
+    LSim L (· = ·) (Internal.failWith (floor := floor) (low := low) (α := α) kind position failure)
+      (Internal.failWith kind position failure) := by
+  unfold Internal.failWith; lsim
 
 theorem failAt_sim {α : Type} (kind position) :
-    LSim L (· = ·) (failAt (floor := floor) (low := low) (α := α) kind position)
-      (failAt kind position) := by
-  unfold failAt; lsim
+    LSim L (· = ·) (Internal.failAt (floor := floor) (low := low) (α := α) kind position)
+      (Internal.failAt kind position) := by
+  unfold Internal.failAt; lsim
 
 theorem fail_sim {α : Type} (kind tokenEnd) :
-    LSim L (· = ·) (fail (floor := floor) (low := low) (α := α) kind tokenEnd)
-      (fail kind tokenEnd) := by
-  unfold fail; lsim
+    LSim L (· = ·) (Internal.fail (floor := floor) (low := low) (α := α) kind tokenEnd)
+      (Internal.fail kind tokenEnd) := by
+  unfold Internal.fail; lsim
 
 theorem expectDelimiter_sim (next position) :
-    LSim L (· = ·) (expectDelimiter (floor := floor) (low := low) next position)
-      (expectDelimiter next position) := by
-  unfold expectDelimiter; lsim
+    LSim L (· = ·) (Internal.expectDelimiter (floor := floor) (low := low) next position)
+      (Internal.expectDelimiter next position) := by
+  unfold Internal.expectDelimiter; lsim
 
 theorem storeSpent_sim (spent) :
-    LSim L (· = ·) (storeSpent (floor := floor) (low := low) spent) (storeSpent spent) := by
-  unfold storeSpent; lsim
+    LSim L (· = ·) (Internal.storeSpent (floor := floor) (low := low) spent)
+        (Internal.storeSpent spent) := by
+  unfold Internal.storeSpent; lsim
 
-theorem takeBatch_sim : LSim L (· = ·) (takeBatch (floor := floor) (low := low)) takeBatch := by
-  unfold takeBatch; lsim
+theorem takeBatch_sim : LSim L (· = ·) (Internal.takeBatch (floor := floor) (low := low))
+    Internal.takeBatch := by
+  unfold Internal.takeBatch; lsim
 
 theorem locationFrom_sim (base position) :
-    LSim L (· = ·) (locationFrom (floor := floor) (low := low) base position)
-      (locationFrom base position) := by
-  unfold locationFrom; lsim
+    LSim L (· = ·) (Internal.locationFrom (floor := floor) (low := low) base position)
+      (Internal.locationFrom base position) := by
+  unfold Internal.locationFrom; lsim
 
 end State
 section Consumer
@@ -128,7 +141,8 @@ variable {H₁ H₂ : Type} {m₁ m₂ : Type → Type} [Monad m₁] [Monad m₂
 theorem callConsumer_sim (hc : Consumers L) {b : Token.BatchTag} (cursor : Token.BatchCursor b)
     (h : cursor.HasNext) :
     LSim L (fun a b => ERel L.re (FlowRel L.rr) a.1 b.1 ∧ a.2 = b.2)
-      (callConsumer (floor := floor) (low := low) cursor h) (callConsumer cursor h) :=
+      (Internal.callConsumer (floor := floor) (low := low) cursor h)
+          (Internal.callConsumer cursor h) :=
   XSim.lift (SSim.lift (hc.consume cursor h))
 
 /-- What the handover of a cursor gives: related stops, if any, and the same cursor. -/
@@ -139,11 +153,11 @@ abbrev FlushRel (L : Link H₁ m₁ R₁ E₁ H₂ m₂ R₂ E₂) {b : Token.Ba
 
 theorem flushCursor_sim (hc : Consumers L) {b : Token.BatchTag} :
     ∀ (n : Nat) (cursor : Token.BatchCursor b) (hfloor), cursor.remaining < n →
-      LSim L (FlushRel L) (flushCursor (floor := floor) (low := low) cursor hfloor)
-        (flushCursor cursor hfloor)
+      LSim L (FlushRel L) (Internal.flushCursor (floor := floor) (low := low) cursor hfloor)
+        (Internal.flushCursor cursor hfloor)
   | 0, _, _, hn => absurd hn (Nat.not_lt_zero _)
   | n + 1, cursor, hfloor, hn => by
-    rw [flushCursor.eq_1, flushCursor.eq_1]
+    rw [Internal.flushCursor.eq_1, Internal.flushCursor.eq_1]
     refine XSim.dite (fun h => ?_) (fun _ => XSim.pure ⟨trivial, rfl⟩)
     refine XSim.bind_eq getCore_sim fun core => ?_
     refine XSim.ite (fun _ => XSim.pure ⟨⟨rfl, rfl, rfl⟩, rfl⟩) (fun _ => ?_)
@@ -175,9 +189,9 @@ theorem flushCursor_sim (hc : Consumers L) {b : Token.BatchTag} :
           exact XSim.dite (fun _ => XSim.pure ⟨⟨rfl, rfl, rfl⟩, rfl⟩)
             (fun _ => XSim.pure ⟨⟨rfl, rfl, hf⟩, rfl⟩)
 theorem handOver_sim (hc : Consumers L) (batch bytesAfter hfloor) :
-    LSim L (· = ·) (handOver (floor := floor) (low := low) batch bytesAfter hfloor)
-      (handOver batch bytesAfter hfloor) := by
-  unfold handOver
+    LSim L (· = ·) (Internal.handOver (floor := floor) (low := low) batch bytesAfter hfloor)
+      (Internal.handOver batch bytesAfter hfloor) := by
+  unfold Internal.handOver
   refine XSim.bind_eq getCore_sim fun core => ?_
   refine XSim.bind (flushCursor_sim hc _ _ _ (Nat.lt_succ_self _)) ?_
   rintro ⟨stop₁, cursor⟩ ⟨stop₂, cursor'⟩ ⟨hs, he⟩
@@ -190,17 +204,19 @@ theorem handOver_sim (hc : Consumers L) (batch bytesAfter hfloor) :
     lsim
 
 theorem flushBatch_sim (hc : Consumers L) :
-    LSim L (· = ·) (flushBatch (floor := floor) (low := low)) flushBatch := by
-  unfold flushBatch; lsim
+    LSim L (· = ·) (Internal.flushBatch (floor := floor) (low := low)) Internal.flushBatch := by
+  unfold Internal.flushBatch; lsim
 
 theorem handOverStored_sim (hc : Consumers L) (ty start «end» hend hfloor) :
-    LSim L (· = ·) (handOverStored (floor := floor) (low := low) ty start «end» hend hfloor)
-      (handOverStored ty start «end» hend hfloor) := by
-  unfold handOverStored; lsim
+    LSim L (· = ·) (Internal.handOverStored (floor := floor)
+        (low := low) ty start «end» hend hfloor)
+      (Internal.handOverStored ty start «end» hend hfloor) := by
+  unfold Internal.handOverStored; lsim
 
 theorem handOverEof_sim (hc : Consumers L) (location) :
-    LSim L (· = ·) (handOverEof (low := low) location) (handOverEof location) := by
-  unfold handOverEof; lsim
+    LSim L (· = ·) (Internal.handOverEof (low := low) location)
+        (Internal.handOverEof location) := by
+  unfold Internal.handOverEof; lsim
 
 end Consumer
 

@@ -1,4 +1,8 @@
-import Lean
+module
+
+public meta import Lean
+
+@[expose] public meta section
 
 /-!
 # The trusted adapters of the root theorems
@@ -13,7 +17,10 @@ of the theorems declared in the current module, it follows the types and the bod
 definitions it reaches, the constructors of the inductive types and structures, and the types of
 everything, and stops at the constants of the specification, of the library, of the lexers of the
 chain and of Lean. Every other constant it reaches is an adapter. A theorem reached in a body is a
-proof and is not followed: only what a statement means is trusted.
+proof and is not followed: only what a statement means is trusted. A module sees an imported
+definition whose body its module does not expose without the body, and does not see a private
+declaration of another module at all; the walk cannot follow such a constant, so it fails on it
+instead of passing over it.
 
 The lexers of the chain (`BSmtLib.Lexer.Internal.VNaive`, `WRustPort` and `X1BatchInCore`) are
 what the root theorems of `BSmtLib.Facts.Lexer` are about, as the library is what the others are
@@ -98,11 +105,26 @@ structure Adapter where
   /-- The constant it was first reached from: a theorem, by its statement, or another adapter. -/
   reachedFrom : Name
 
-/-- The adapters reached from the constants `roots`, each paired with the constant it is in. -/
-def adaptersFrom (env : Environment) (roots : Array (Name × Name)) : Array Adapter := Id.run do
+/-- A constant that the walk reaches but cannot read: one that the environment does not hold,
+such as a private declaration of another module, or one whose body it does not hold, such as a
+definition that its module does not expose, which an importing module sees as an axiom. -/
+structure Unseen where
+  /-- The constant. -/
+  name : Name
+  /-- The module that declares it, the current module if the environment does not hold it. -/
+  module : Name
+  /-- The constant it was first reached from. -/
+  reachedFrom : Name
+
+/-- The adapters reached from the constants `roots`, each paired with the constant it is in, and
+the constants reached that are neither of the specification, the library, the chain nor Lean
+and whose meaning the walk cannot read. -/
+def adaptersFrom (env : Environment) (roots : Array (Name × Name)) :
+    MetaM (Array Adapter × Array Unseen) := do
   let mut seen : NameSet := {}
   let mut todo := roots
   let mut found : Array Adapter := #[]
+  let mut unseen : Array Unseen := #[]
   while 0 < todo.size do
     let (name, parent) := todo.back!
     todo := todo.pop
@@ -110,11 +132,16 @@ def adaptersFrom (env : Environment) (roots : Array (Name × Name)) : Array Adap
     seen := seen.insert name
     let module := moduleOf env name
     if sideOf module != .other then continue
-    let some info := env.find? name | continue
+    let some info := env.find? name
+      | unseen := unseen.push { name, module, reachedFrom := parent }; continue
     if info matches .thmInfo _ then continue
+    -- an auxiliary proof is seen as an axiom: a proof, which is not followed
+    if info matches .axiomInfo _ then
+      if ← Meta.isProp info.type then continue
+      unseen := unseen.push { name, module, reachedFrom := parent }; continue
     found := found.push { name, module, reachedFrom := parent }
     todo := todo ++ (dependencies env info).map (·, name)
-  return found
+  return (found, unseen)
 
 /-- The theorems declared in the current module, internal ones left out. -/
 def localTheorems (env : Environment) : Array Name :=
@@ -137,7 +164,9 @@ def sortNames (names : Array Name) : Array Name :=
 `#adapters within M₁ M₂ …` lists the adapters of the theorems declared in the current module,
 the declarations of their own (`declared`), grouped by the module that declares them; and fails
 with an error for each adapter, of its own or derived, declared in a module that is none of
-`M₁ M₂ …` and below none of them.
+`M₁ M₂ …` and below none of them, and for each constant it reaches outside the specification,
+the library, the chain and Lean that it cannot read: one the environment does not hold or holds
+without its body.
 -/
 syntax (name := adaptersCmd) "#adapters" " within" (ppSpace ident)+ : command
 
@@ -150,7 +179,7 @@ def elabAdapters : CommandElab := fun stx => do
     match env.find? thm with
     | some info => acc ++ info.type.getUsedConstants.map (·, thm)
     | none => acc
-  let found := adaptersFrom env roots
+  let (found, unseen) ← liftTermElabM (adaptersFrom env roots)
   let shown := found.filter fun adapter => declared env adapter.name
   let modules := sortNames (shown.map (·.module)).toList.eraseDups.toArray
   let mut lines : Array String :=
@@ -164,6 +193,10 @@ def elabAdapters : CommandElab := fun stx => do
     unless allowed.any (·.isPrefixOf adapter.module) do
       logError m!"the adapter {adapter.name}, reached from {adapter.reachedFrom}, is declared in \
         {adapter.module}, outside the modules of adapters {allowed.toList}"
+  for constant in unseen do
+    logError m!"the constant {constant.name}, reached from {constant.reachedFrom} and declared in \
+      {constant.module}, cannot be read here: its module keeps it private or does not expose \
+      its body, so the adapters it rests on cannot be listed"
 
 /-! ## What a statement rests on beside the public API -/
 
@@ -183,21 +216,29 @@ structure Reached where
   chain : Array Name := #[]
   /-- The constants of other modules. -/
   other : Array Name := #[]
+  /-- The constants it reaches but cannot read, as `adaptersFrom` reports them. -/
+  unseen : Array Unseen := #[]
 
 /-- What the constants `roots` rest on, the small definitions being those declared in the
-modules `small` and below them. -/
-def reach (env : Environment) (small : Array Name) (roots : Array Name) : Reached := Id.run do
+modules `small` and below them; a small definition or another constant outside the specification,
+the library, the chain and Lean that it cannot read is reported in `unseen`. -/
+def reach (env : Environment) (small : Array Name) (thm : Name) (roots : Array Name) :
+    MetaM Reached := do
   let mut seen : NameSet := {}
-  let mut todo := roots
+  let mut todo := roots.map (·, thm)
   let mut found : Reached := {}
   while 0 < todo.size do
-    let name := todo.back!
+    let (name, parent) := todo.back!
     todo := todo.pop
     if seen.contains name then continue
     seen := seen.insert name
-    let some info := env.find? name | continue
-    if info matches .thmInfo _ then continue
     let module := moduleOf env name
+    let some info := env.find? name
+      | if sideOf module == .other then
+          found := { found with
+            unseen := found.unseen.push { name, module, reachedFrom := parent } }
+        continue
+    if info matches .thmInfo _ then continue
     match sideOf module with
     | .lean => pure ()
     | .spec =>
@@ -208,8 +249,14 @@ def reach (env : Environment) (small : Array Name) (roots : Array Name) : Reache
       if declared env name then found := { found with chain := found.chain.push name }
     | .other =>
       if small.any (·.isPrefixOf module) then
+        -- an auxiliary proof is seen as an axiom: a proof, which is not followed
+        if info matches .axiomInfo _ then
+          unless ← Meta.isProp info.type do
+            found := { found with
+              unseen := found.unseen.push { name, module, reachedFrom := parent } }
+          continue
         if declared env name then found := { found with small := found.small.push name }
-        todo := todo ++ dependencies env info
+        todo := todo ++ (dependencies env info).map (·, name)
       else if declared env name then found := { found with other := found.other.push name }
   return found
 
@@ -236,7 +283,9 @@ definitions it reaches, those declared in the modules `M₁ M₂ …` and below 
 their module's path, whose types and bodies it follows as `#adapters` follows adapters; and the
 constants of the specification, of the library's internals (a name with a component `Internal`,
 or a private name), of the lexers of the chain and of other modules that its statement or a
-small definition names.
+small definition names; and fails with an error for each small definition whose body it cannot
+read and for each constant outside the specification, the library, the chain and Lean that the
+environment does not hold.
 -/
 syntax (name := trustsCmd) "#trusts" " within" (ppSpace ident)+ : command
 
@@ -248,7 +297,11 @@ def elabTrusts : CommandElab := fun stx => do
   let mut lines : Array String := #[]
   for thm in theorems do
     let some info := env.find? thm | continue
-    let reached := reach env small info.type.getUsedConstants
+    let reached ← liftTermElabM (reach env small thm info.type.getUsedConstants)
+    for constant in reached.unseen do
+      logError m!"the constant {constant.name}, reached from {constant.reachedFrom} and declared \
+        in {constant.module}, cannot be read here: its module keeps it private or does not \
+        expose its body, so what {thm} rests on cannot be listed"
     lines := lines.push s!"{thm}:"
     let parts := [line "small" small reached.small, line "spec" #[] reached.spec,
       line "internal" #[] reached.internals, line "chain" #[] reached.chain,

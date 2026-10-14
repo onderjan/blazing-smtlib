@@ -1,5 +1,14 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Slice
-import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Taken
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Slice
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Taken
+import all BSmtLib.Lexer.Error
+import all BSmtLib.Lexer.Helpers
+import all BSmtLib.Lexer.Internal.VNaive
+import all BSmtLib.Lexer.Internal.WRustPort
+import all BSmtLib.Lexer.Internal.WRustPort.Slice
+
+@[expose] public section
 
 /-!
 # The Rust port at the end of the input, with every consumer

@@ -1,5 +1,10 @@
-import BSmtLib.Facts.Proofs.Lexer.VNaive.Run
-import BSmtLibSpec.Facts.Proofs.Lexicon.Unique
+module
+
+public import BSmtLib.Facts.Proofs.Lexer.VNaive.Run
+public import BSmtLibSpec.Facts.Proofs.Lexicon.Unique
+import all BSmtLib.Lexer.Internal.VNaive
+
+@[expose] public section
 
 /-!
 # Facts about the bytes and locations of the naive lexer

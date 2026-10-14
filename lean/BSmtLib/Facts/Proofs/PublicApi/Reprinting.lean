@@ -1,10 +1,17 @@
-import BSmtLib.Facts.PublicApi.Adapters.Reprinter
-import BSmtLib.Facts.Proofs.PublicApi.Recorder
-import BSmtLib.Facts.Proofs.PublicApi.Discard
-import BSmtLib.Facts.Proofs.PublicApi.Files
-import BSmtLib.Facts.Reader
-import BSmtLib.Facts.Proofs.Reader.Declared
-import BSmtLibSpec.Facts.Proofs.Reader.Switches
+module
+
+public import BSmtLib.Facts.PublicApi.Adapters.Reprinter
+public import BSmtLib.Facts.Proofs.PublicApi.Recorder
+public import BSmtLib.Facts.Proofs.PublicApi.Discard
+public import BSmtLib.Facts.Proofs.PublicApi.Files
+public import BSmtLib.Facts.Reader
+public import BSmtLib.Facts.Proofs.Reader.Declared
+public import BSmtLibSpec.Facts.Proofs.Reader.Switches
+import all BSmtLib.Lexer
+import all BSmtLib.Parser.Adapter
+import all BSmtLib.Reader
+
+@[expose] public section
 
 /-!
 # Reprinting
