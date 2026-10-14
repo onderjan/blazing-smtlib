@@ -1,4 +1,4 @@
-namespace BSmtLib
+namespace BSmtLib.Span
 
 /--
 A location in an SMT-LIB stream.
@@ -74,7 +74,7 @@ The span is a half-open range `[start, end)` between locations.
 as a pointer to a separate object, so a span of two `Location` fields would take three
 allocations. The span therefore holds the six numbers itself, and `start` and `end` are
 functions that build the locations when asked. -/
-structure Span where
+structure _root_.BSmtLib.Span where
   private mk ::
   private startOffset : Nat
   private startLine : Nat
@@ -83,8 +83,6 @@ structure Span where
   private endLine : Nat
   private endColumn : Nat
   deriving BEq, Hashable, Inhabited
-
-namespace Span
 
 @[inline]
 def start (self : Span) : Location :=
@@ -133,6 +131,4 @@ def join (self other : Span) : Span :=
 instance : Repr Span where
   reprPrec span _ := s!"\{ start := {repr span.start}, end := {repr span.end} }"
 
-end Span
-
-end BSmtLib
+end BSmtLib.Span

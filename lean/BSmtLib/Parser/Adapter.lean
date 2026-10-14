@@ -1,5 +1,6 @@
 import BSmtLib.Parser.Script
 import BSmtLib.Token.Produce
+import BSmtLib.Token.ConsumeFrom
 
 /-!
 # The parse adapter
@@ -11,23 +12,9 @@ version, and acts on the producer as the parser asks. It is the only part of the
 reads a producer.
 -/
 
-namespace BSmtLib.Parser
+open BSmtLib.Traits
 
-/-- What the token, viewed under its producer's version, stands for. -/
-@[inline]
-def Input.ofSyntax : SyntaxToken → Input
-  | .parenOpen => .parenOpen
-  | .parenClose => .parenClose
-  | .numeral value => .constant (.numeral value)
-  | .decimal value => .constant (.decimal value)
-  | .hexadecimal value => .constant (.hexadecimal value)
-  | .binary value => .constant (.binary value)
-  | .string value => .constant (.string value)
-  | .keyword value => .keyword value
-  | .symbol value quoted => .symbol ⟨value, quoted⟩
-  | .reserved word => .reserved word
-  | .whitespace _ | .comment _ => .layout
-  | .endOfFile => .endOfInput
+namespace BSmtLib.Parser.Adapter
 
 /- LEAN: Rust's `SmtParseAdapter`. It holds the handler, which is read back from the adapter
 after a run, also after a failure. The adapter is never concrete: it does not take whitespace
@@ -60,7 +47,7 @@ def resumed (fresh : P) : Step P R → After P R E
   | .more parser => .stop (.ok .continue) parser
   | .done result => .stop (.ok (.break result)) fresh
 
-variable {Z : Type} [Produce Z]
+variable {Z : Type} [Token.Produce Z]
 
 /- LEAN: Rust's parsers act on the producer themselves; here the step asks, and the adapter acts.
 After an action on the producer the hand-over stops, so that the producer hands the rest over
@@ -77,29 +64,30 @@ what the step asks of the producer. A refused switch of the version fails with
 `unsupportedVersion`.
 -/
 @[inline]
-def takeOne (parser : P) (cursor : Z) (token : Produce.Token Z) (next : Z)
-    (consumed : Produce.Consumed next cursor) :
-    StateT H m (After P R E × { z : Z // Produce.Consumed z cursor }) := do
+def takeOne (parser : P) (cursor : Z) (token : Token.Produce.Token Z) (next : Z)
+    (consumed : Token.Produce.Consumed next cursor) :
+    StateT H m (After P R E × { z : Z // Token.Produce.Consumed z cursor }) := do
   let fresh := Parse.reset parser
-  let input := Input.ofSyntax (Produce.syntax next token)
-  match ← (do Parse.arrive parser input; Parse.step (Produce.version next) parser input).run with
+  let input := Input.ofSyntax (Token.Produce.«syntax» next token)
+  match ← (do Parse.arrive parser input; Parse.step (Token.Produce.version next) parser input).run
+      with
   | .error error => return (.stop (.error error) fresh, ⟨next, consumed⟩)
   | .ok (.more parser) => return (.goOn parser, ⟨next, consumed⟩)
   | .ok (.done result) =>
     return (.stop (.ok (.break result)) fresh, ⟨next, consumed⟩)
   | .ok (.switchVersion declared resume) =>
-    match switch : Produce.setVersion next declared with
+    match switch : Token.Produce.setVersion next declared with
     | .error _ => return (.stop (.error (.syntax .unsupportedVersion)) fresh, ⟨next, consumed⟩)
     | .ok switched =>
-      let after := Produce.setVersion_consumed consumed switch
+      let after := Token.Produce.setVersion_consumed consumed switch
       match ← resume.run with
       | .error error => return (.stop (.error error) fresh, ⟨switched, after⟩)
       | .ok step => return (resumed fresh step, ⟨switched, after⟩)
   | .ok (.discardRest resume) =>
-    let after := Produce.discardRest_consumed consumed
+    let after := Token.Produce.discardRest_consumed consumed
     match ← resume.run with
-    | .error error => return (.stop (.error error) fresh, ⟨Produce.discardRest next, after⟩)
-    | .ok step => return (resumed fresh step, ⟨Produce.discardRest next, after⟩)
+    | .error error => return (.stop (.error error) fresh, ⟨Token.Produce.discardRest next, after⟩)
+    | .ok step => return (resumed fresh step, ⟨Token.Produce.discardRest next, after⟩)
 
 /- LEAN: the loop is the recursion, which ends as every token taken is consumed, by the
 producer's well-founded consumption. -/
@@ -108,39 +96,39 @@ structure Consuming (Z : Type) where
   producer : Z
 
 instance : WellFoundedRelation (Consuming Z) :=
-  invImage Consuming.producer ⟨Produce.Consumed, Produce.consumed_wf⟩
+  invImage Consuming.producer ⟨Token.Produce.Consumed, Token.Produce.consumed_wf⟩
 
 /--
 Has the parser take the tokens of `cursor`, which comes from `origin` with tokens consumed, one
 by one, until there are none or the hand-over stops.
 -/
-def rest (origin : Z) (parser : P) (cursor : Z) (consumed : Produce.Consumed cursor origin) :
+def rest (origin : Z) (parser : P) (cursor : Z) (consumed : Token.Produce.Consumed cursor origin) :
     StateT H m (Except (ParseErrorCause E) (ControlFlow R) × P ×
-      { z : Z // Produce.Consumed z origin }) :=
-  match Produce.next? cursor with
+      { z : Z // Token.Produce.Consumed z origin }) :=
+  match Token.Produce.next? cursor with
   | none => return (.ok .continue, parser, ⟨cursor, consumed⟩)
   | some (token, ⟨next, step⟩) => do
     match ← takeOne parser cursor token next step with
     | (.goOn parser, ⟨later, taken⟩) =>
-      rest origin parser later (Produce.consumed_trans taken consumed)
+      rest origin parser later (Token.Produce.consumed_trans taken consumed)
     | (.stop answer parser, ⟨later, taken⟩) =>
-      return (answer, parser, ⟨later, Produce.consumed_trans taken consumed⟩)
+      return (answer, parser, ⟨later, Token.Produce.consumed_trans taken consumed⟩)
 termination_by (⟨cursor⟩ : Consuming Z)
 decreasing_by exact taken
 
 /-- The first token of a producer that has one. -/
-def first (producer : Z) (h : Produce.HasNext producer) :
-    Produce.Token Z × { next : Z // Produce.Consumed next producer } :=
-  match taken : Produce.next? producer with
+def first (producer : Z) (h : Token.Produce.HasNext producer) :
+    Token.Produce.Token Z × { next : Z // Token.Produce.Consumed next producer } :=
+  match taken : Token.Produce.next? producer with
   | some first => first
-  | none => absurd (Produce.next?_isSome h) (by rw [taken]; exact Bool.false_ne_true)
+  | none => absurd (Token.Produce.next?_isSome h) (by rw [taken]; exact Bool.false_ne_true)
 
 end ParseAdapter
 
 variable {H P R E : Type}
 
 instance {m : Type → Type} [Monad m] [Parse P H m E R] :
-    Consume (ParseAdapter H P) R (ParseErrorCause E) where
+    Token.Consume (ParseAdapter H P) R (ParseErrorCause E) where
   isConcrete := false
 
 /-- Whether the parser is to be told the version before the next hand-over: after its answer,
@@ -150,13 +138,14 @@ def ParseAdapter.versionSetAfter {R E : Type} : Except (ParseErrorCause E) (Cont
   | _ => true
 
 /- LEAN: Rust's `impl SmtConsumeFrom<Z> for SmtParseAdapter`, for every producer. -/
-instance {m : Type → Type} [Monad m] [Handler H m] [Parse P H m E R] {Z : Type} [Produce Z] :
-    ConsumeFrom (ParseAdapter H P) Z m where
+instance {m : Type → Type} [Monad m] [Handler H m] [Parse P H m E R] {Z : Type} [Token.Produce Z] :
+    Token.ConsumeFrom (ParseAdapter H P) Z m where
   consume producer h := do
     let adapter ← get
     -- the handler is told the version in force before the first token of every input
     let ((), handler) ← (show StateT H m Unit from
-      if adapter.versionSet then pure () else Handler.setVersion (Produce.version producer)).run
+      if adapter.versionSet then pure () else Handler.setVersion
+          (Token.Produce.version producer)).run
         adapter.handler
     let (token, ⟨next, consumed⟩) := ParseAdapter.first producer h
     let ((after, ⟨later, taken⟩), handler) ←
@@ -173,4 +162,4 @@ instance {m : Type → Type} [Monad m] [Handler H m] [Parse P H m E R] {Z : Type
         ParseAdapter H P)
       return (answer, done)
 
-end BSmtLib.Parser
+end BSmtLib.Parser.Adapter

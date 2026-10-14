@@ -1,4 +1,4 @@
-import BSmtLib.Parser.Parse
+import BSmtLib.Parser.Command
 
 /-!
 # The script parser
@@ -7,20 +7,9 @@ The parser of an SMT-LIB script: a sequence of commands, each handed to the comm
 it is parsed, under a version posture that restricts the version declarations.
 -/
 
-namespace BSmtLib.Parser
+namespace BSmtLib.Parser.Script
 
-/--
-Which versions a script may declare, and how many declarations it may make, without a limit if
-there is none (`SmtVersionPosture`).
--/
-/- LEAN: Rust builds a posture with `SmtVersionPostureBuilder`; here the fields are public. -/
-structure VersionPosture where
-  allowed : Array Version
-  maxDeclarations : Option Nat
-
-/-- The default posture: 2.5, 2.6 and 2.7, one declaration. -/
-def VersionPosture.default : VersionPosture :=
-  { allowed := #[.v2_5, .v2_6, .v2_7], maxDeclarations := some 1 }
+open BSmtLib.Parser.Command BSmtLib.Traits
 
 /--
 The parser of a script (`SmtScriptParser`).
@@ -33,7 +22,7 @@ the handler is told of the command, then the producer discards the rest, and the
 to the end of the input.
 -/
 structure ScriptParser (H : Type) {m : Type → Type} [Handler H m] where
-  posture : VersionPosture
+  posture : Token.VersionPosture
   /-- The state of the command parser. -/
   command : CommandStateOf H
   /-- The number of version declarations made so far. -/
@@ -44,14 +33,15 @@ section
 variable {H : Type} {m : Type → Type} [Monad m] [CommandHandler H m]
 
 /-- The script parser before a script, under the posture. -/
-def ScriptParser.new (posture : VersionPosture) : ScriptParser H :=
+def ScriptParser.new (posture : Token.VersionPosture) : ScriptParser H :=
   { posture, command := .awaiting, declarations := 0 }
 
 /--
 The check of a version declaration against the posture, given the number of declarations the
 script made before it: first the number, then the version.
 -/
-def VersionPosture.check (self : VersionPosture) (declarations : Nat) (version : Version) :
+def VersionPosture.check (self : Token.VersionPosture) (declarations : Nat)
+    (version : Token.Version) :
     Option SyntaxErrorKind :=
   match self.maxDeclarations with
   | some limit =>
@@ -61,13 +51,13 @@ def VersionPosture.check (self : VersionPosture) (declarations : Nat) (version :
 
 /-- The step of the script parser. -/
 @[inline]
-def ScriptParser.step (version : Version) (parser : ScriptParser H) (token : Input) :
+def ScriptParser.step (version : Token.Version) (parser : ScriptParser H) (token : Input) :
     PM H (Flow (PM H) (ScriptParser H) Unit) := do
   match ← commandStep version parser.command token with
   | .more command => return .more { parser with command }
   | .done .command => return .more { parser with command := .awaiting }
   | .done (.setVersion declared) =>
-    match parser.posture.check parser.declarations declared with
+    match (VersionPosture.check parser.posture) parser.declarations declared with
     | some kind => syntaxError kind
     | none =>
       return .switchVersion declared (do
@@ -89,4 +79,4 @@ instance : Parse (ScriptParser H) H m (Handler.Error H) Unit where
 
 end
 
-end BSmtLib.Parser
+end BSmtLib.Parser.Script

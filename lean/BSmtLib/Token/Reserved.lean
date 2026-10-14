@@ -6,7 +6,7 @@ import BSmtLib.Token
 module imports `BSmtLib.Token` and declares its types in the same namespace; the root
 module `BSmtLib` imports both. -/
 
-namespace BSmtLib
+namespace BSmtLib.Token.Reserved
 
 /-- General reserved words of the SMT-LIB2 grammar. -/
 inductive GeneralReserved where
@@ -67,9 +67,9 @@ inductive CommandNameReserved where
   deriving BEq, Repr, Inhabited
 
 /-- Reserved words in SMT-LIB2, including standard command names. -/
-inductive Reserved where
-  | general (reserved : GeneralReserved)
-  | commandName (reserved : CommandNameReserved)
+inductive _root_.BSmtLib.Token.Reserved where
+  | general (reserved : Reserved.GeneralReserved)
+  | commandName (reserved : Reserved.CommandNameReserved)
   deriving BEq, Repr, Inhabited
 
 namespace GeneralReserved
@@ -145,8 +145,6 @@ def all : Array CommandNameReserved :=
     .push, .reset, .resetAssertions, .setInfo, .setLogic, .setOption]
 
 end CommandNameReserved
-
-namespace Reserved
 
 def asStr : Reserved → String
   | .general word => word.asStr
@@ -277,8 +275,6 @@ def isCommandName : Reserved → Bool
   | .commandName _ => true
   | .general _ => false
 
-end Reserved
-
 namespace GeneralReserved
 
 /-- The word of this group that the symbol spells in the version, if any. -/
@@ -301,4 +297,4 @@ def fromBytes? (symbol : ByteSlice) (version : Version) : Option CommandNameRese
 
 end CommandNameReserved
 
-end BSmtLib
+end BSmtLib.Token.Reserved

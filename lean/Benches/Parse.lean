@@ -30,16 +30,18 @@ Environment variables, as for the Rust benchmark:
 An environment variable of its own:
 
 - `SMT_BENCH_LEXER`: comma-separated lexers to measure, `v` or `z` (default `z`, the
-  library's lexer; `v` is the naive lexer of the proofs, `BSmtLib.Proofs.Lexer.VNaive`).
+  library's lexer; `v` is the naive lexer of the proofs, `BSmtLib.Lexer.Internal.VNaive`).
   The lexers apply to the lexing mode; the full mode uses the library's lexer. The timed runs
   of a file alternate between the lexers and the modes, so that a drift of the machine affects
   them alike. Each lexer gets its own line, and in `raw` format its own mode, `lex-v` or
   `lex-z`; with the default alone the mode stays `lex`, as in the Rust benchmark.
 -/
 import BSmtLib
-import BSmtLib.Proofs.Lexer.VNaive
+import BSmtLib.Lexer.Internal.VNaive
 
 open BSmtLib
+open BSmtLib.Token
+open BSmtLib.Lexer.Error (LexError)
 
 
 /-- Default timed runs per file; additional warm-up runs are discarded. -/
@@ -131,8 +133,8 @@ and a non-standard command is its error. -/
 /-- Command handler that accepts every standard command and keeps nothing. -/
 structure SyntaxChecker where
 
-instance : Parser.Handler SyntaxChecker Id where
-  Error := Parser.Symbol
+instance : Handler SyntaxChecker Id where
+  Error := Nodes.Symbol
   SExpr := Unit
   Attribute := Unit
   «Sort» := Unit
@@ -155,7 +157,7 @@ instance : Parser.Handler SyntaxChecker Id where
   endMatchCase _ _ _ := pure ()
   endMatch _ _ := pure ()
 
-instance : Parser.CommandHandler SyntaxChecker Id where
+instance : CommandHandler SyntaxChecker Id where
   nonstandardCommand name := name
   commandAssert _ := pure ()
   commandCheckSat := pure ()
@@ -203,12 +205,12 @@ instance : Parser.CommandHandler SyntaxChecker Id where
 /-- The script reader of the Rust benchmark's `read_smt`: a script parser under the default
 posture, over the syntax checker, lexing from the default version. -/
 abbrev CheckingAdapter :=
-  Parser.ParseAdapter SyntaxChecker (Parser.ScriptParser SyntaxChecker)
+  Parser.Adapter.ParseAdapter SyntaxChecker (Parser.Script.ScriptParser SyntaxChecker)
 
 /-- Lexes and parses the in-memory file, failing unless it parsed without an error. -/
 def parseFromMemory (data : ByteArray) (path : String) : IO Unit := do
   let adapter : CheckingAdapter :=
-    Parser.ParseAdapter.new {} (Parser.ScriptParser.new Parser.VersionPosture.default)
+    Parser.Adapter.ParseAdapter.new {} (Parser.Script.ScriptParser.new Token.VersionPosture.default)
   match Id.run ((Lexer.new adapter default).lexAll data.toByteSlice) with
   | .ok _ => pure ()
   | .error ({ cause := .lexical kind, span, .. }, _) =>
@@ -248,7 +250,7 @@ def LexerChoice.ofName? : String → Option LexerChoice
 /-- Lexes the in-memory file with the lexer, discarding tokens. -/
 def lexFromMemory (choice : LexerChoice) (data : ByteArray) (path : String) : IO Unit := do
   let handler : DiscardTokens := { tokens := 0 }
-  let naive := Proofs.Lexer.VNaive.Lexer.new handler .v2_7
+  let naive := Lexer.Internal.VNaive.Lexer.new handler .v2_7
   match choice with
   | .v => checkLexed (Id.run (naive.lexAll data.toByteSlice)) path
   | .z => checkLexed (Id.run ((Lexer.new handler .v2_7).lexAll data.toByteSlice)) path

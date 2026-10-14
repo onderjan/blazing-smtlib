@@ -1,9 +1,9 @@
 import BSmtLib.Bytes
 import BSmtLib.Lexer.CharClass
 
-namespace BSmtLib
+namespace BSmtLib.Plain
 
-open Lexer (CharClass)
+open BSmtLib.Lexer (CharClass)
 
 /- LEAN: `value.iter().all(f)` in Rust. `ByteSlice` has no `all`; its `foldr` reads the bytes
 with their bounds proved, so no read can fail. -/
@@ -290,13 +290,13 @@ local macro "plain_newtype " name:ident view:ident : command => do
     @[inline]
     def asSlice (self : $view) : ByteSlice := self.slice
 
-    def intoOwned (self : $view) : $name := ⟨(BytesView.new self.slice).intoOwned⟩
+    def intoOwned (self : $view) : $name := ⟨(Bytes.BytesView.new self.slice).intoOwned⟩
 
     def len (self : $view) : Nat := self.slice.size
 
     def isEmpty (self : $view) : Bool := self.len == 0
 
-    instance : Repr $view := ⟨fun s p => reprPrec (BytesView.new s.slice) p⟩
+    instance : Repr $view := ⟨fun s p => reprPrec (Bytes.BytesView.new s.slice) p⟩
 
     instance : BEq $view := ⟨fun a b => a.slice == b.slice⟩
 
@@ -313,4 +313,4 @@ plain_newtype Decimal DecimalView
 plain_newtype Whitespace WhitespaceView
 plain_newtype Comment CommentView
 
-end BSmtLib
+end BSmtLib.Plain

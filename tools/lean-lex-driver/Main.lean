@@ -7,17 +7,20 @@ to the standard output, until the input ends.
 
 The environment variable `BLAZING_SMTLIB_LEAN_LEXER` chooses the lexer that answers: `z`, the
 library's lexer `BSmtLib.Lexer`, which is the one when the variable is unset, `v`, the naive
-lexer `BSmtLib.Proofs.Lexer.VNaive`, `w`, the Rust lexer ported to Lean
-`BSmtLib.Proofs.Lexer.WRustPort`, or `x1`, the lexer with the batch kept in its state
-`BSmtLib.Proofs.Lexer.X1BatchInCore`. Any other value makes the driver exit at once with an
+lexer `BSmtLib.Lexer.Internal.VNaive`, `w`, the Rust lexer ported to Lean
+`BSmtLib.Lexer.Internal.WRustPort`, or `x1`, the lexer with the batch kept in its state
+`BSmtLib.Lexer.Internal.X1BatchInCore`. Any other value makes the driver exit at once with an
 error.
 -/
 import BSmtLib
-import BSmtLib.Proofs.Lexer.VNaive
-import BSmtLib.Proofs.Lexer.WRustPort
-import BSmtLib.Proofs.Lexer.X1BatchInCore
+import BSmtLib.Lexer.Internal.VNaive
+import BSmtLib.Lexer.Internal.WRustPort
+import BSmtLib.Lexer.Internal.X1BatchInCore
 
 open BSmtLib
+open BSmtLib.Token
+open BSmtLib.Lexer (Recovery)
+open BSmtLib.Lexer.Error (LexError LexicalErrorKind)
 
 def location (location : Location) : String :=
   s!"{location.offset}:{location.line}:{location.column}"
@@ -470,14 +473,14 @@ def driveRecovering (request : Request) (lines : IO.Ref String)
             lines.modify (· ++ (← errorLine err true))
     lines.modify (· ++ feedLines request lexer)
 
-/-! The same for the naive lexer V, `BSmtLib.Proofs.Lexer.VNaive`, which has the operations of
+/-! The same for the naive lexer V, `BSmtLib.Lexer.Internal.VNaive`, which has the operations of
 the library's lexer on a lexer type of its own. -/
 
 namespace V
 
 /-- The naive lexer. -/
 abbrev NaiveLexer (H : Type) {R E : Type} [Consume H R E] (recovery : Recovery := .failFast) :=
-  Proofs.Lexer.VNaive.Lexer H recovery
+  Lexer.Internal.VNaive.Lexer H recovery
 
 /-- The lines that end the feed: where the lexer is, and its version if the consumer is scripted. -/
 def feedLines (request : Request) (lexer : NaiveLexer (Scripted whitespace) recovery) : String :=
@@ -556,7 +559,7 @@ def driveRecovering (request : Request) (lines : IO.Ref String)
 end V
 
 /-! The same for the lexers of the chain that have a lexer type of their own, as the library's
-lexer has: `BSmtLib.Proofs.Lexer.WRustPort`, and `X1BatchInCore`, which has the type of
+lexer has: `BSmtLib.Lexer.Internal.WRustPort`, and `X1BatchInCore`, which has the type of
 `WRustPort`. Each is given to the driver by its operations (`Ops`). -/
 
 namespace Own
@@ -690,54 +693,54 @@ def answer (ops : (whitespace : Bool) → Ops whitespace) (request : Request) :
     response := response ++ "ok\n"
   return response
 
-/-- The Rust lexer ported to Lean, `BSmtLib.Proofs.Lexer.WRustPort`. -/
+/-- The Rust lexer ported to Lean, `BSmtLib.Lexer.Internal.WRustPort`. -/
 def w (whitespace : Bool) : Ops whitespace :=
-  { Lexer := Proofs.Lexer.WRustPort.Lexer (Scripted whitespace)
-    Recovering := Proofs.Lexer.WRustPort.Lexer (Scripted whitespace) .recovering
-    AfterEof := Proofs.Lexer.WRustPort.Lexer.AfterEof (Scripted whitespace)
-    new := Proofs.Lexer.WRustPort.Lexer.new
-    newRecovering := Proofs.Lexer.WRustPort.Lexer.newRecovering
-    lexSlice := Proofs.Lexer.WRustPort.Lexer.lexSlice
-    lexEof := Proofs.Lexer.WRustPort.Lexer.lexEof
-    currentLocation := Proofs.Lexer.WRustPort.Lexer.currentLocation
-    version := Proofs.Lexer.WRustPort.Lexer.version
-    recoveringLexSlice := Proofs.Lexer.WRustPort.Lexer.lexSlice
-    recoveringLexEof := Proofs.Lexer.WRustPort.Lexer.lexEof
+  { Lexer := Lexer.Internal.WRustPort.Lexer (Scripted whitespace)
+    Recovering := Lexer.Internal.WRustPort.Lexer (Scripted whitespace) .recovering
+    AfterEof := Lexer.Internal.WRustPort.Lexer.AfterEof (Scripted whitespace)
+    new := Lexer.Internal.WRustPort.Lexer.new
+    newRecovering := Lexer.Internal.WRustPort.Lexer.newRecovering
+    lexSlice := Lexer.Internal.WRustPort.Lexer.lexSlice
+    lexEof := Lexer.Internal.WRustPort.Lexer.lexEof
+    currentLocation := Lexer.Internal.WRustPort.Lexer.currentLocation
+    version := Lexer.Internal.WRustPort.Lexer.version
+    recoveringLexSlice := Lexer.Internal.WRustPort.Lexer.lexSlice
+    recoveringLexEof := Lexer.Internal.WRustPort.Lexer.lexEof
     afterEof := fun
       | .lexer lexer => .inl lexer
       | .pending pending => .inr pending.lexEof
-    recoveringLocation := Proofs.Lexer.WRustPort.Lexer.currentLocation
-    recoveringVersion := Proofs.Lexer.WRustPort.Lexer.version }
+    recoveringLocation := Lexer.Internal.WRustPort.Lexer.currentLocation
+    recoveringVersion := Lexer.Internal.WRustPort.Lexer.version }
 
-/-- The lexer with the batch kept in its state, `BSmtLib.Proofs.Lexer.X1BatchInCore`, which has
+/-- The lexer with the batch kept in its state, `BSmtLib.Lexer.Internal.X1BatchInCore`, which has
 the Rust port's type and lexes by functions of its own. -/
 def x1 (whitespace : Bool) : Ops whitespace :=
-  { Lexer := Proofs.Lexer.WRustPort.Lexer (Scripted whitespace)
-    Recovering := Proofs.Lexer.WRustPort.Lexer (Scripted whitespace) .recovering
-    AfterEof := Proofs.Lexer.WRustPort.Lexer.AfterEof (Scripted whitespace)
-    new := Proofs.Lexer.WRustPort.Lexer.new
-    newRecovering := Proofs.Lexer.WRustPort.Lexer.newRecovering
-    lexSlice := Proofs.Lexer.X1BatchInCore.Lexer.lexSlice
-    lexEof := Proofs.Lexer.X1BatchInCore.Lexer.lexEof
-    currentLocation := Proofs.Lexer.WRustPort.Lexer.currentLocation
-    version := Proofs.Lexer.WRustPort.Lexer.version
-    recoveringLexSlice := Proofs.Lexer.X1BatchInCore.Lexer.lexSlice
-    recoveringLexEof := Proofs.Lexer.X1BatchInCore.Lexer.lexEof
+  { Lexer := Lexer.Internal.WRustPort.Lexer (Scripted whitespace)
+    Recovering := Lexer.Internal.WRustPort.Lexer (Scripted whitespace) .recovering
+    AfterEof := Lexer.Internal.WRustPort.Lexer.AfterEof (Scripted whitespace)
+    new := Lexer.Internal.WRustPort.Lexer.new
+    newRecovering := Lexer.Internal.WRustPort.Lexer.newRecovering
+    lexSlice := Lexer.Internal.X1BatchInCore.Lexer.lexSlice
+    lexEof := Lexer.Internal.X1BatchInCore.Lexer.lexEof
+    currentLocation := Lexer.Internal.WRustPort.Lexer.currentLocation
+    version := Lexer.Internal.WRustPort.Lexer.version
+    recoveringLexSlice := Lexer.Internal.X1BatchInCore.Lexer.lexSlice
+    recoveringLexEof := Lexer.Internal.X1BatchInCore.Lexer.lexEof
     afterEof := fun
       | .lexer lexer => .inl lexer
-      | .pending pending => .inr (Proofs.Lexer.X1BatchInCore.Lexer.PendingEof.lexEof pending)
-    recoveringLocation := Proofs.Lexer.WRustPort.Lexer.currentLocation
-    recoveringVersion := Proofs.Lexer.WRustPort.Lexer.version }
+      | .pending pending => .inr (Lexer.Internal.X1BatchInCore.Lexer.PendingEof.lexEof pending)
+    recoveringLocation := Lexer.Internal.WRustPort.Lexer.currentLocation
+    recoveringVersion := Lexer.Internal.WRustPort.Lexer.version }
 
 end Own
 
 /-- The lexer that answers the requests. -/
 inductive LexerChoice where
-  /-- The naive lexer, `BSmtLib.Proofs.Lexer.VNaive`. -/
+  /-- The naive lexer, `BSmtLib.Lexer.Internal.VNaive`. -/
   | v
-  /-- The Rust lexer ported to Lean, `BSmtLib.Proofs.Lexer.WRustPort`. -/
+  /-- The Rust lexer ported to Lean, `BSmtLib.Lexer.Internal.WRustPort`. -/
   | w
-  /-- The lexer with the batch kept in its state, `BSmtLib.Proofs.Lexer.X1BatchInCore`. -/
+  /-- The lexer with the batch kept in its state, `BSmtLib.Lexer.Internal.X1BatchInCore`. -/
   | x1
   /-- The library's lexer, `BSmtLib.Lexer`. -/
   | z
@@ -761,19 +764,19 @@ def answerNaive (request : Request) : ExceptT String IO String := do
   let behaviour := request.behaviour
   let complete ← match request.whitespace, request.recover with
     | false, false =>
-      V.drive request lines request.feeds.toList (Proofs.Lexer.VNaive.Lexer.new
+      V.drive request lines request.feeds.toList (Lexer.Internal.VNaive.Lexer.new
         ({ behaviour, handed := 0, opened := 0, out := lines } : Scripted false) version)
     | true, false =>
-      V.drive request lines request.feeds.toList (Proofs.Lexer.VNaive.Lexer.new
+      V.drive request lines request.feeds.toList (Lexer.Internal.VNaive.Lexer.new
         ({ behaviour, handed := 0, opened := 0, out := lines } : Scripted true) version)
     | false, true =>
       V.driveRecovering request lines
-        (Proofs.Lexer.VNaive.Lexer.newRecovering
+        (Lexer.Internal.VNaive.Lexer.newRecovering
           ({ behaviour, handed := 0, opened := 0, out := lines } : Scripted false) version)
       pure true
     | true, true =>
       V.driveRecovering request lines
-        (Proofs.Lexer.VNaive.Lexer.newRecovering
+        (Lexer.Internal.VNaive.Lexer.newRecovering
           ({ behaviour, handed := 0, opened := 0, out := lines } : Scripted true) version)
       pure true
 

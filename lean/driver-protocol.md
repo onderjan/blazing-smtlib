@@ -404,10 +404,10 @@ library whatever the variable says.
 
 The environment variable `BLAZING_SMTLIB_LEAN_LEXER` chooses the Lean lexer
 that the driver answers with: `z`, the library's, when it is unset; `v`, the
-naive lexer of `lean/BSmtLib/Proofs/Lexer/VNaive.lean`, which hands every
+naive lexer of `lean/BSmtLib/Lexer/Internal/VNaive.lean`, which hands every
 token over alone; `w`, the Rust lexer ported to Lean
-of `lean/BSmtLib/Proofs/Lexer/WRustPort.lean`; or `x1`, the lexer with the
-batch kept in its state of `lean/BSmtLib/Proofs/Lexer/X1BatchInCore.lean`. All
+of `lean/BSmtLib/Lexer/Internal/WRustPort.lean`; or `x1`, the lexer with the
+batch kept in its state of `lean/BSmtLib/Lexer/Internal/X1BatchInCore.lean`. All
 but `v` cut their
 hand-overs as the library's lexer does: a batch of up to 256 tokens at a time,
 except that a token the lexer builds in a buffer of its own is handed over

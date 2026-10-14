@@ -2,7 +2,9 @@ import BSmtLib.Lexer.CharClass
 import BSmtLib.Lexer.Error
 import BSmtLib.Token
 
-namespace BSmtLib.Lexer
+open BSmtLib.Lexer.Error
+
+namespace BSmtLib.Lexer.Helpers
 
 /-- What a byte does in the normal state. -/
 inductive Start where
@@ -33,8 +35,8 @@ def classify (c : UInt8) : Start :=
   else if c == byte! '"' then .quote
   else if c == byte! ':' then .colon
   else if c == byte! '|' then .pipe
-  else if flags &&& RUN_DIGIT != 0 then .digit
-  else if flags &&& RUN_SIMPLE_SYMBOL != 0 then .symbol
+  else if flags &&& CharClass.RUN_DIGIT != 0 then .digit
+  else if flags &&& CharClass.RUN_SIMPLE_SYMBOL != 0 then .symbol
   else .other
 
 end Start
@@ -96,9 +98,11 @@ def FAST_MASKS : Array UInt8 :=
   == some 0xFF
 
 -- fast run flags contain exactly the three run flags we need
-#guard (RUN_SIMPLE_SYMBOL ||| RUN_NON_LF_WHITESPACE ||| RUN_QUOTED_PLAIN) &&& FAST_RUN_MASK
+#guard (CharClass.RUN_SIMPLE_SYMBOL ||| CharClass.RUN_NON_LF_WHITESPACE |||
+    CharClass.RUN_QUOTED_PLAIN) &&& FAST_RUN_MASK
     == FAST_RUN_MASK
-  && (RUN_STRING_PLAIN ||| RUN_DIGIT ||| RUN_HEX_DIGIT ||| RUN_BINARY_DIGIT ||| RUN_COMMENT_PLAIN)
+  && (CharClass.RUN_STRING_PLAIN ||| CharClass.RUN_DIGIT ||| CharClass.RUN_HEX_DIGIT |||
+      CharClass.RUN_BINARY_DIGIT ||| CharClass.RUN_COMMENT_PLAIN)
     &&& FAST_RUN_MASK == 0
 
 /--
@@ -111,14 +115,14 @@ def FAST : ByteArray :=
     let c := i.toUInt8
     let flags := CharClass.runFlags c
     if c == byte! ' ' || c == byte! '\t' || c == byte! '\r' then
-      FAST_ON ||| FAST_DELIM ||| RUN_NON_LF_WHITESPACE
+      FAST_ON ||| FAST_DELIM ||| CharClass.RUN_NON_LF_WHITESPACE
     else if c == byte! '\n' || c == byte! '(' || c == byte! ')' || c == byte! ';' then
       FAST_DELIM
     else if c == byte! '|' then
-      FAST_ON ||| FAST_EMIT ||| FAST_PIPE ||| RUN_QUOTED_PLAIN
+      FAST_ON ||| FAST_EMIT ||| FAST_PIPE ||| CharClass.RUN_QUOTED_PLAIN
     -- a simple symbol may contain digits but must not start with one
-    else if flags &&& RUN_SIMPLE_SYMBOL != 0 && flags &&& RUN_DIGIT == 0 then
-      FAST_ON ||| FAST_EMIT ||| RUN_SIMPLE_SYMBOL
+    else if flags &&& CharClass.RUN_SIMPLE_SYMBOL != 0 && flags &&& CharClass.RUN_DIGIT == 0 then
+      FAST_ON ||| FAST_EMIT ||| CharClass.RUN_SIMPLE_SYMBOL
     else
       0⟩
 
@@ -159,10 +163,11 @@ lexer are shown to end by them. -/
 
 /-- A byte that the fast path takes for whitespace continues a run of whitespace. -/
 theorem not_endsRun_of_fastFlags {c : UInt8}
-    (h : (fastFlags c &&& RUN_NON_LF_WHITESPACE != 0) = true) :
-    endsRun c RUN_NON_LF_WHITESPACE = false := by
-  have table : ∀ n, n < 256 → (fastFlags n.toUInt8 &&& RUN_NON_LF_WHITESPACE != 0) = true →
-      endsRun n.toUInt8 RUN_NON_LF_WHITESPACE = false := by
+    (h : (fastFlags c &&& CharClass.RUN_NON_LF_WHITESPACE != 0) = true) :
+    CharClass.endsRun c CharClass.RUN_NON_LF_WHITESPACE = false := by
+  have table : ∀ n, n < 256 → (fastFlags n.toUInt8 &&& CharClass.RUN_NON_LF_WHITESPACE != 0) = true
+      →
+      CharClass.endsRun n.toUInt8 CharClass.RUN_NON_LF_WHITESPACE = false := by
     decide +kernel
   have := table c.toNat c.toNat_lt
   rw [show c.toNat.toUInt8 = c by simp] at this
@@ -226,15 +231,15 @@ inductive RecoveryState where
 structure DigitRun where
   flag : UInt8
   state : LexerState
-  tokenType : TokenCategory
+  tokenType : Token.TokenCategory
   emptyError : LexicalErrorKind
 
 def HEXADECIMAL_RUN : DigitRun :=
-  { flag := RUN_HEX_DIGIT, state := .hexadecimal, tokenType := .hexadecimal,
+  { flag := CharClass.RUN_HEX_DIGIT, state := .hexadecimal, tokenType := .hexadecimal,
     emptyError := .hexadecimalDigitExpected }
 
 def BINARY_RUN : DigitRun :=
-  { flag := RUN_BINARY_DIGIT, state := .binary, tokenType := .binary,
+  { flag := CharClass.RUN_BINARY_DIGIT, state := .binary, tokenType := .binary,
     emptyError := .binaryDigitExpected }
 
 /-- Where a token ended. -/
@@ -347,7 +352,7 @@ namespace Content
 
 /-- The bytes of the input from `start` to `stop`, which are in order and within the slice. -/
 @[inline]
-def borrow (input : Input) (start stop : USize) (ordered : start.toNat ≤ stop.toNat)
+def borrow (input : CharClass.Input) (start stop : USize) (ordered : start.toNat ≤ stop.toNat)
     (within : stop.toNat ≤ input.stop.toNat) : Content :=
   .borrowed input.bytes start.toNat stop.toNat ordered (Nat.le_trans within input.stop_le)
 
@@ -370,4 +375,4 @@ def last? (self : Content) (stored : ContentBuffer) : Option UInt8 :=
 
 end Content
 
-end BSmtLib.Lexer
+end BSmtLib.Lexer.Helpers

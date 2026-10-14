@@ -1,12 +1,12 @@
 import Std.Data.ByteSlice
 
-namespace BSmtLib
+namespace BSmtLib.Bytes
 
 /-- An owned string of bytes. -/
 /- LEAN: `ByteArray` is Lean's `Vec<u8>`. Lean values are immutable and reference-counted;
 an update changes an array in place when nothing else refers to it, and copies it
 otherwise. So a view never dangles and needs no lifetime. -/
-structure Bytes where
+structure _root_.BSmtLib.Bytes where
   private ofByteArray ::
   private bytes : ByteArray
   deriving Inhabited
@@ -51,8 +51,6 @@ private def reprBytes (bytes : ByteSlice) : String := Id.run do
   out.push '"'
 
 
-namespace Bytes
-
 @[inline]
 def new : Bytes := ⟨ByteArray.empty⟩
 
@@ -95,8 +93,6 @@ instance : Hashable Bytes := ⟨fun s => hash s.bytes⟩
 
 instance : Repr Bytes := ⟨fun s _ => reprBytes s.asSlice⟩
 
-end Bytes
-
 namespace BytesView
 
 @[inline]
@@ -119,4 +115,4 @@ instance : Repr BytesView := ⟨fun s _ => reprBytes s.slice⟩
 
 end BytesView
 
-end BSmtLib
+end BSmtLib.Bytes

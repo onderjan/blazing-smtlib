@@ -4,6 +4,7 @@ import BSmtLib.Lexer.Helpers
 import BSmtLib.Lexer.Recovery
 import BSmtLib.Token
 import BSmtLib.Token.Produce
+import BSmtLib.Token.ConsumeFrom
 
 namespace BSmtLib.Lexer
 
@@ -29,11 +30,11 @@ consumer took, the floor is that offset: every token lexed from then on starts a
 and has a byte. So every stop is at or after the start of the slice, which Rust asserts, and
 after the last location gone back to, which ends the loop. -/
 structure Interrupted (R E : Type) (floor : Option Nat) where
-  result : Except (LexErrorCause E) (Stop R)
+  result : Except (Error.LexErrorCause E) (Stop R)
   /-- The span of the error: that of the bytes that raised a lexical error, or that of the last
   token the consumer took. For a stop of the consumer, that of the last token it took. -/
   span : Span
-  location : Location
+  location : Span.Location
   /-- A stop of the consumer is after the floor, if there is one. -/
   stopAfter : ∀ p, floor = some p → ∀ stop, result = .ok stop → p < location.offset
 
@@ -45,11 +46,11 @@ raised it, or the end of the input if the end raised it. For a consumer error,
 it is after the last token the consumer has consumed.
 -/
 structure Failure (E : Type) where
-  cause : LexErrorCause E
+  cause : Error.LexErrorCause E
   /-- The span of the error: that of the bytes that raised a lexical error, or that of the last
   token the consumer consumed. -/
   span : Span
-  location : Location
+  location : Span.Location
 
 /- LEAN: the fields of the Rust `Lexer` except the handler, which the lexer's monad keeps
 separately (see `LexM`). The lexer states are documented at `LexerState` in Rust. The
@@ -57,17 +58,17 @@ batch lives here instead of in a local of `lex_slice_inner`, so that its storage
 from one slice to the next; it is empty whenever lexing returns. -/
 structure LexerCore where
   /-- The SMT-LIB version the lexer currently operates under. -/
-  version : Version
+  version : Token.Version
   /-- The initial SMT-LIB version the lexer will reset to. -/
-  initialVersion : Version
+  initialVersion : Token.Version
   /-- Current lexer state. -/
-  state : LexerState
+  state : Helpers.LexerState
   /--
   Where the lexer began to discard bytes until the end of the input, if it discards.
 
   The consumer asks for discarding through its cursor.
   -/
-  discardedFrom : Option Location
+  discardedFrom : Option Span.Location
   /--
   Whether the lexer holds the result the consumer broke with.
 
@@ -94,11 +95,11 @@ structure LexerCore where
   -/
   lexedDepth : Nat
   /-- The current state of lexer recovery (if any). -/
-  recoveryState : Option RecoveryState
+  recoveryState : Option Helpers.RecoveryState
   /-- Location of the start of the currently-processed token. -/
-  tokenStart : Location
+  tokenStart : Span.Location
   /-- The currently-built string content of the currently-processed token. -/
-  tokenContent : ContentBuffer
+  tokenContent : Helpers.ContentBuffer
   /--
   Offset of the start of the byte being processed during lexing.
 
@@ -123,7 +124,7 @@ structure LexerCore where
   -/
   lineStart : Nat
   /-- Token batch, may be only partially filled. -/
-  batch : TokenBatch
+  batch : Token.TokenBatch
   /- LEAN: not in Rust: two facts about the fields above, which show that every token handed
   over has a byte and is after the tokens before it (see `TokenBatch.ordered`). Between the
   steps of the loop over a slice, `offset` is the offset of the next byte to be lexed. A step
@@ -137,15 +138,15 @@ structure LexerCore where
 
 /- LEAN: Rust keeps the held result in the lexer as `Option<SmtLocated<C::Result>>`; the result
 type is the consumer's, which its instance of `Consume` gives, so the lexer takes the instance. -/
-structure _root_.BSmtLib.Lexer (H : Type) {R E : Type} [Consume H R E]
-    (recovery : Recovery := .failFast) where
+structure _root_.BSmtLib.Lexer (H : Type) {R E : Type} [Token.Consume H R E]
+    (recovery : Lexer.Recovery := .failFast) where
   private mk ::
   /-- Consumer of produced tokens. -/
   private handler : H
   private core : LexerCore
   /-- The result the consumer broke with, located where it broke, held until the end of the
   input. -/
-  private held : Option (Located R)
+  private held : Option (Span.Located R)
 
 /- LEAN: Rust's lexer methods take `&mut self` and return `Result<usize, Interrupted<..>>`,
 using `?` to pass an interruption up. In Lean the same is a monad: `StateT LexerCore` holds
@@ -189,13 +190,13 @@ def LexerCore.offsetAt (self : LexerCore) (position : USize) : Nat :=
 
 Every line feed before `position` must be marked before calling this. -/
 @[inline]
-def LexerCore.locationAt (self : LexerCore) (position : USize) : Location :=
+def LexerCore.locationAt (self : LexerCore) (position : USize) : Span.Location :=
   let offset := self.offsetAt position
   { offset, line := self.line, column := offset - self.lineStart }
 
 /-- The current location: that of the next byte to be lexed. -/
 @[inline]
-def LexerCore.currentLocation (self : LexerCore) : Location :=
+def LexerCore.currentLocation (self : LexerCore) : Span.Location :=
   self.locationAt self.base
 
 /-- The lexer state with the offset moved on to that of `position`, the next byte to be lexed. -/
@@ -220,7 +221,8 @@ Moves the lexer back to `location`, which the tokens handed over
 so far end at, discarding whatever was lexed beyond it; `position` is its position in the
 input.
 -/
-def LexerCore.resumeAt (self : LexerCore) (location : Location) (position : USize) : LexerCore :=
+def LexerCore.resumeAt (self : LexerCore) (location : Span.Location)
+    (position : USize) : LexerCore :=
   -- the region after the location was lexed once already,
   -- restore all bookkeeping
   -- a stop inside an arm leaves it mid-token
@@ -237,13 +239,13 @@ def LexerCore.resumeAt (self : LexerCore) (location : Location) (position : USiz
     tokenStart := location
     batch := self.batch.clear location.offset
     tokenStarted := .inl rfl
-    batchEnded := Nat.le_of_eq (TokenBatch.lastEnd_clear _ _) }
+    batchEnded := Nat.le_of_eq (Token.TokenBatch.lastEnd_clear _ _) }
 
-theorem LexerCore.bound_resumeAt (self : LexerCore) (location : Location) (position : USize) :
+theorem LexerCore.bound_resumeAt (self : LexerCore) (location : Span.Location) (position : USize) :
     (self.resumeAt location position).Bound (some location.offset) 0 :=
   ⟨Nat.zero_le _, fun p hp => by
     cases hp
-    exact ⟨Nat.le_refl _, .inl rfl, TokenBatch.startsFrom_clear _ _ _⟩⟩
+    exact ⟨Nat.le_refl _, .inl rfl, Token.TokenBatch.startsFrom_clear _ _ _⟩⟩
 
 theorem LexerCore.Bound.weaken {self : LexerCore} {floor : Option Nat} {low : Nat}
     (h : self.Bound floor low) : self.Bound floor 0 :=
@@ -258,8 +260,8 @@ namespace Internal
 
 section
 
-variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [Consume H R E]
-  [∀ batch, ConsumeFrom H (BatchCursor batch) m]
+variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [Token.Consume H R E]
+  [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m]
   {floor : Option Nat} {low : Nat}
 
 /- LEAN: `getThe` and `modifyThe` name the state they access, as there are two. Reading the
@@ -295,12 +297,13 @@ lexed on in another state. The token start is written again with its value, so t
 `LexerCore.tokenStarted` follows from what the step knows. -/
 /-- What a step that started with a token in progress knows of it: it starts at `start`,
 before the step's offset, which is after the floor. -/
-abbrev Started (floor : Option Nat) (low : Nat) (start : Location) : Prop :=
+abbrev Started (floor : Option Nat) (low : Nat) (start : Span.Location) : Prop :=
   start.offset < low ∧ ∀ p, floor = some p → p < low
 
 /-- Moves the token in progress, which starts at `start`, to the state. -/
 @[inline]
-def setTokenState (state : LexerState) (start : Location) (h : Started floor low start) :
+def setTokenState (state : Helpers.LexerState) (start : Span.Location)
+    (h : Started floor low start) :
     LexM H m R E floor low Unit :=
   modifyBound fun c hc =>
     ⟨{ c with state, tokenStart := start, tokenStarted := .inr (Nat.lt_of_lt_of_le h.1 hc.1) },
@@ -310,21 +313,22 @@ def setTokenState (state : LexerState) (start : Location) (h : Started floor low
 /- LEAN: Rust's `C::IS_CONCRETE`, read from the consumer's instance. -/
 @[inline]
 def consumesWhitespaceAndComments : LexM H m R E floor low Bool :=
-  pure (Consume.isConcrete (H := H))
+  pure (Token.Consume.isConcrete (H := H))
 
 /- LEAN: the content buffer is taken out of the state before it is changed:
 changing `c.tokenContent` while `c` still refers to it would find it shared and copy it,
 together with its array. -/
 /-- Changes the content buffer in place. -/
 @[inline]
-def modifyContent (f : ContentBuffer → ContentBuffer) : LexM H m R E floor low Unit :=
+def modifyContent (f : Helpers.ContentBuffer → Helpers.ContentBuffer) : LexM H m R E floor low Unit
+    :=
   modifyCore fun c =>
     let content := c.tokenContent
-    let c := { c with tokenContent := ContentBuffer.empty }
+    let c := { c with tokenContent := Helpers.ContentBuffer.empty }
     { c with tokenContent := f content }
 
 @[inline]
-def extendContent (input : Input) (start stop : USize) : LexM H m R E floor low Unit :=
+def extendContent (input : CharClass.Input) (start stop : USize) : LexM H m R E floor low Unit :=
   modifyContent (·.extendFrom input.bytes start.toNat stop.toNat)
 
 @[inline]
@@ -347,11 +351,11 @@ returns its location.
 @[inline]
 def startToken (offset : Nat) (base position : USize) (hframe : Frame floor low offset) :
     LexM H m R E floor low
-      {start : Location // start.offset = offset + (position - base).toNat} := do
+      {start : Span.Location // start.offset = offset + (position - base).toNat} := do
   -- update the token start to the computed location
   let c ← getCore
   let startOffset := offset + (position - base).toNat
-  let start : Location :=
+  let start : Span.Location :=
     { offset := startOffset, line := c.line, column := startOffset - c.lineStart }
   modifyCore (fun c => { c with tokenStart := start, state := .normal, tokenStarted := .inl rfl })
     fun _ hc => ⟨hc.1, fun p hp =>
@@ -368,7 +372,7 @@ def markLineFeedAt (position : USize) : LexM H m R E floor low Unit :=
   modifyCore fun c => { c with line := c.line + 1, lineStart := c.offsetAt position + 1 }
 
 /-- Fails with an error spanning up to `position` with effective failure at `failure`. -/
-def failWith (kind : LexicalErrorKind) (position failure : USize) :
+def failWith (kind : Error.LexicalErrorKind) (position failure : USize) :
     LexM H m R E floor low α := do
   let c ← getCore
   let span := Span.newUnchecked c.tokenStart (c.locationAt position)
@@ -388,12 +392,12 @@ or a backslash in a quoted symbol.
 -/
 /- LEAN: Rust panics if `position` is zero, which no caller passes: an error detected at a
 byte spans that byte. -/
-def failAt (kind : LexicalErrorKind) (position : USize) : LexM H m R E floor low α :=
+def failAt (kind : Error.LexicalErrorKind) (position : USize) : LexM H m R E floor low α :=
   -- the byte before the position raised the error
   failWith kind position (position - 1)
 
 /-- Fails with an error spanning the token so far and, if it ended at a byte, that byte. -/
-def fail (kind : LexicalErrorKind) (tokenEnd : TokenEnd) : LexM H m R E floor low α :=
+def fail (kind : Error.LexicalErrorKind) (tokenEnd : Helpers.TokenEnd) : LexM H m R E floor low α :=
   -- if the token ended at a byte, that byte raised the error,
   -- otherwise the end of the input did
   failWith kind (tokenEnd.position + if tokenEnd.atByte then 1 else 0) tokenEnd.position
@@ -408,17 +412,17 @@ the offending byte.
 -/
 @[inline]
 def expectDelimiter (next : UInt8) (position : USize) : LexM H m R E floor low Unit := do
-  unless isDelimiter next do
+  unless Helpers.isDelimiter next do
     failAt .missingDelimiter (position + 1)
 
 /- LEAN: runs the consumer on the cursor. The consumer runs in `StateT H m`, which the `←` lifts
 into the lexer's monad, where the consumer is the inner state. -/
-def callConsumer {batch : BatchTag} (cursor : BatchCursor batch) (h : cursor.HasNext) :
+def callConsumer {batch : Token.BatchTag} (cursor : Token.BatchCursor batch) (h : cursor.HasNext) :
     LexM H m R E floor low
-      (Except E (ControlFlow R) × { c : BatchCursor batch // c.Consumed cursor }) := do
+      (Except E (ControlFlow R) × { c : Token.BatchCursor batch // c.Consumed cursor }) := do
   let action : StateT H m
-      (Except E (ControlFlow R) × { c : BatchCursor batch // c.Consumed cursor }) :=
-    ConsumeFrom.consume (H := H) cursor h
+      (Except E (ControlFlow R) × { c : Token.BatchCursor batch // c.Consumed cursor }) :=
+    Token.ConsumeFrom.consume (H := H) cursor h
   action
 
 /-- The error that the entry at the span is trailing input, after the value the consumer broke
@@ -443,9 +447,9 @@ the consumer breaks, the tokens it left in the cursor are trailing input.
 
 Returns the stop, if the consumer stopped, and the cursor as the consumer left it.
 -/
-def flushCursor {batch : BatchTag} (cursor : BatchCursor batch)
+def flushCursor {batch : Token.BatchTag} (cursor : Token.BatchCursor batch)
     (hfloor : ∀ p, floor = some p → cursor.EndsAfter p) :
-    LexM H m R E floor low (Option (Interrupted R E floor) × BatchCursor batch) := do
+    LexM H m R E floor low (Option (Interrupted R E floor) × Token.BatchCursor batch) := do
   -- flush the cursor until nothing remains
   if h : cursor.HasNext then
     if (← getCore).holding then
@@ -484,10 +488,10 @@ def flushCursor {batch : BatchTag} (cursor : BatchCursor batch)
               -- zero the number of consumed tokens in the cursor
               -- continue flushing until nothing remains
               have : next.resetConsumed.remaining < cursor.remaining := by
-                rw [BatchCursor.remaining_resetConsumed]
+                rw [Token.BatchCursor.remaining_resetConsumed]
                 exact consumed.remaining_lt
               flushCursor next.resetConsumed fun p hp =>
-                BatchCursor.endsAfter_resetConsumed (consumed.follows.endsAfter (hfloor p hp))
+                Token.BatchCursor.endsAfter_resetConsumed (consumed.follows.endsAfter (hfloor p hp))
           | .break result =>
             if h : next.HasNext then
               -- the tokens the consumer left are trailing input
@@ -515,12 +519,12 @@ termination_by cursor.remaining
 
 /-- Puts a spent batch back into the lexer state, empty. -/
 @[inline]
-def storeSpent (spent : TokenBatch) : LexM H m R E floor low Unit :=
+def storeSpent (spent : Token.TokenBatch) : LexM H m R E floor low Unit :=
   modifyBound fun c hc =>
     ⟨{ c with
         batch := spent.clear c.offset
-        batchEnded := Nat.le_of_eq (TokenBatch.lastEnd_clear _ _) },
-      ⟨hc.1, fun p hp => ⟨(hc.2 p hp).1, (hc.2 p hp).2.1, TokenBatch.startsFrom_clear _ _ _⟩⟩⟩
+        batchEnded := Nat.le_of_eq (Token.TokenBatch.lastEnd_clear _ _) },
+      ⟨hc.1, fun p hp => ⟨(hc.2 p hp).1, (hc.2 p hp).2.1, Token.TokenBatch.startsFrom_clear _ _ _⟩⟩⟩
 
 /- LEAN: Rust's `flush_cursor` takes a cursor over the lexer's arrays; here the batch itself
 is handed to the consumer in the cursor, and taken back afterwards, whatever the consumer
@@ -530,10 +534,11 @@ content buffer, which would make the buffer's next change copy it. If the consum
 the batch goes back into the lexer state, empty, before the stop is thrown; otherwise the
 caller takes it. -/
 /-- Hands the batch over to the consumer and takes it back, spent. -/
-def handOver (batch : TokenBatch) (bytesAfter : ByteArray)
-    (hfloor : ∀ p, floor = some p → batch.EndsAfter p) : LexM H m R E floor low TokenBatch := do
-  let (stop, cursor) ← flushCursor (BatchCursor.new (← getCore).version batch) fun p hp =>
-    BatchCursor.endsAfter_new (hfloor p hp) _
+def handOver (batch : Token.TokenBatch) (bytesAfter : ByteArray)
+    (hfloor : ∀ p, floor = some p → batch.EndsAfter p) : LexM H m R E floor low Token.TokenBatch :=
+    do
+  let (stop, cursor) ← flushCursor (Token.BatchCursor.new (← getCore).version batch) fun p hp =>
+    Token.BatchCursor.endsAfter_new (hfloor p hp) _
   if (← getCore).recovers then
     match stop with
     | some _ =>
@@ -554,7 +559,7 @@ def handOver (batch : TokenBatch) (bytesAfter : ByteArray)
       modifyCore fun c => { c with consumedDepth := c.lexedDepth }
   -- set our version to the cursor-requested version, and take the batch back
   modifyCore fun c => { c with version := cursor.version }
-  let spent : TokenBatch := { intoBatch cursor with bytes := bytesAfter }
+  let spent : Token.TokenBatch := { intoBatch cursor with bytes := bytesAfter }
   if let some interrupted := stop then
     storeSpent spent
     throw interrupted
@@ -563,14 +568,14 @@ def handOver (batch : TokenBatch) (bytesAfter : ByteArray)
 /-- Takes the batch out of the lexer state, leaving an empty one without storage. -/
 @[inline]
 def takeBatch :
-    LexM H m R E floor low {batch : TokenBatch // ∀ p, floor = some p → batch.StartsFrom p} :=
+    LexM H m R E floor low {batch : Token.TokenBatch // ∀ p, floor = some p → batch.StartsFrom p} :=
   modifyGetThe {c : LexerCore // c.Bound floor low} fun c =>
     (⟨c.val.batch, fun p hp => (c.property.2 p hp).2.2⟩,
       ⟨{ c.val with
           batch := default
-          batchEnded := TokenBatch.lastEnd_default ▸ Nat.zero_le _ },
+          batchEnded := Token.TokenBatch.lastEnd_default ▸ Nat.zero_le _ },
         ⟨c.property.1, fun p hp =>
-          ⟨(c.property.2 p hp).1, (c.property.2 p hp).2.1, TokenBatch.startsFrom_default p⟩⟩⟩)
+          ⟨(c.property.2 p hp).1, (c.property.2 p hp).2.1, Token.TokenBatch.startsFrom_default p⟩⟩⟩)
 
 def flushBatch : LexM H m R E floor low Unit := do
   -- the batch is spent once handed over, no matter what the handler decides
@@ -587,7 +592,7 @@ spanning from `start` to `end`.
 /- LEAN: Rust hands such a token over in a cursor of its own; here it goes in the batch,
 which is empty after the flush, with the content buffer as its array of contents for the
 one token. -/
-def handOverStored (ty : TokenCategory) (start «end» : Location)
+def handOverStored (ty : Token.TokenCategory) (start «end» : Span.Location)
     (hend : start.offset < «end».offset) (hfloor : ∀ p, floor = some p → p < «end».offset) :
     LexM H m R E floor low Unit := do
   -- flush the batch, then hand over this token
@@ -595,15 +600,15 @@ def handOverStored (ty : TokenCategory) (start «end» : Location)
   let ⟨batch, _⟩ ← takeBatch
   let bytes := batch.bytes
   let c ← getCore
-  let batch := ({ batch.clear start.offset with bytes := c.tokenContent.bytes } : TokenBatch)
+  let batch := ({ batch.clear start.offset with bytes := c.tokenContent.bytes } : Token.TokenBatch)
     |>.pushLocated ty 0 c.tokenContent.len start «end»
-      (Nat.le_of_eq (TokenBatch.lastEnd_clear _ _)) (.inl hend)
+      (Nat.le_of_eq (Token.TokenBatch.lastEnd_clear _ _)) (.inl hend)
   storeSpent (← handOver batch bytes fun p hp =>
-    TokenBatch.endsAfter_pushLocated (fun _ h => absurd h (Nat.not_lt_zero _)) (hfloor p hp))
+    Token.TokenBatch.endsAfter_pushLocated (fun _ h => absurd h (Nat.not_lt_zero _)) (hfloor p hp))
 
 /-- Hands over the end-of-file token, at the location, unless a result is held, which the end
 of the input confirms instead. -/
-def handOverEof (location : Location) : LexM H m R E none low Unit := do
+def handOverEof (location : Span.Location) : LexM H m R E none low Unit := do
   -- flush the batch, then hand over this token
   flushBatch
   if (← getCore).holding then
@@ -612,15 +617,16 @@ def handOverEof (location : Location) : LexM H m R E none low Unit := do
   let ⟨batch, _⟩ ← takeBatch
   let bytes := batch.bytes
   let c ← getCore
-  let batch := ({ batch.clear location.offset with bytes := c.tokenContent.bytes } : TokenBatch)
+  let batch := ({ batch.clear location.offset with bytes := c.tokenContent.bytes } :
+      Token.TokenBatch)
     |>.pushLocated .endOfFile 0 c.tokenContent.len location location
-      (Nat.le_of_eq (TokenBatch.lastEnd_clear _ _)) (.inr ⟨rfl, rfl⟩)
+      (Nat.le_of_eq (Token.TokenBatch.lastEnd_clear _ _)) (.inr ⟨rfl, rfl⟩)
   storeSpent (← handOver batch bytes fun _ h => nomatch h)
 
 /-- The location of `position`, given that `base` is the position of the step's offset. -/
 @[inline]
 def locationFrom (base position : USize) :
-    LexM H m R E floor low {location : Location // low ≤ location.offset} := do
+    LexM H m R E floor low {location : Span.Location // low ≤ location.offset} := do
   let c ← getCore
   let offset := low + (position - base).toNat
   return ⟨{ offset, line := c.line, column := offset - c.lineStart }, Nat.le_add_right _ _⟩
@@ -632,8 +638,8 @@ and sunk here. `start` is where it starts, and `base` the position of the step's
 /-- Sinks the token in progress, which ends at `tokenEnd`; its content is in the content
 buffer. -/
 @[inline]
-def sinkStored (ty : TokenCategory) (tokenEnd : TokenEnd)
-    (start : Location) (base : USize) (h : Started floor low start) :
+def sinkStored (ty : Token.TokenCategory) (tokenEnd : Helpers.TokenEnd)
+    (start : Span.Location) (base : USize) (h : Started floor low start) :
     LexM H m R E floor low Unit := do
   -- this is in our own buffer, so we cannot put it into the batch
   -- as we need the buffer usable for the next token
@@ -648,10 +654,10 @@ The token's own shape is checked first, then that `next`, the byte
 at the end (if there is one), delimits it.
 -/
 @[inline]
-def finishDecimal (tokenEnd : TokenEnd) (next : Option UInt8) (start : Location)
+def finishDecimal (tokenEnd : Helpers.TokenEnd) (next : Option UInt8) (start : Span.Location)
     (base : USize) (h : Started floor low start) : LexM H m R E floor low Unit := do
   -- decimals of the form 7. without any digit in fractional part are disallowed
-  let last := Content.stored.last? (← getCore).tokenContent
+  let last := Helpers.Content.stored.last? (← getCore).tokenContent
   if last.isNone || last == some (byte! '.') then
     fail .fractionDigitExpected tokenEnd
   if let some next := next then
@@ -659,13 +665,14 @@ def finishDecimal (tokenEnd : TokenEnd) (next : Option UInt8) (start : Location)
   sinkStored .decimal tokenEnd start base h
 
 @[inline]
-def finishNumeral (tokenEnd : TokenEnd) (start : Location) (base : USize)
+def finishNumeral (tokenEnd : Helpers.TokenEnd) (start : Span.Location) (base : USize)
     (h : Started floor low start) : LexM H m R E floor low Unit :=
   sinkStored .numeral tokenEnd start base h
 
 /-- The type of the token of the digit run: hexadecimal or binary. -/
-theorem DigitRun.tokenType_ne {run : DigitRun}
-    (h : run = HEXADECIMAL_RUN ∨ run = BINARY_RUN) : run.tokenType ≠ .endOfFile := by
+theorem DigitRun.tokenType_ne {run : Helpers.DigitRun}
+    (h : run = Helpers.HEXADECIMAL_RUN ∨ run = Helpers.BINARY_RUN) : run.tokenType ≠ .endOfFile :=
+    by
   rcases h with h | h <;> (subst h; nofun)
 
 /--
@@ -675,18 +682,18 @@ The token's own shape is checked first, then that `next`, the byte
 at the end (if there is one), delimits it.
 -/
 @[inline]
-def finishDigitRun (run : DigitRun)
-    (tokenEnd : TokenEnd) (next : Option UInt8) (start : Location) (base : USize)
+def finishDigitRun (run : Helpers.DigitRun)
+    (tokenEnd : Helpers.TokenEnd) (next : Option UInt8) (start : Span.Location) (base : USize)
     (h : Started floor low start) : LexM H m R E floor low Unit := do
   -- digit runs must not be empty
-  if Content.stored.size (← getCore).tokenContent == 0 then
+  if Helpers.Content.stored.size (← getCore).tokenContent == 0 then
     fail run.emptyError tokenEnd
   if let some next := next then
     expectDelimiter next tokenEnd.position
   sinkStored run.tokenType tokenEnd start base h
 
 @[inline]
-def finishSimpleSymbol (tokenEnd : TokenEnd) (start : Location) (base : USize)
+def finishSimpleSymbol (tokenEnd : Helpers.TokenEnd) (start : Span.Location) (base : USize)
     (h : Started floor low start) : LexM H m R E floor low Unit :=
   sinkStored .unquotedSymbol tokenEnd start base h
 
@@ -697,22 +704,22 @@ The token's own shape is checked first, then that `next`, the byte
 at the end (if there is one), delimits it.
 -/
 @[inline]
-def finishKeyword (tokenEnd : TokenEnd) (next : Option UInt8) (start : Location)
+def finishKeyword (tokenEnd : Helpers.TokenEnd) (next : Option UInt8) (start : Span.Location)
     (base : USize) (h : Started floor low start) : LexM H m R E floor low Unit := do
   -- ensure the keyword is not empty
-  if Content.stored.size (← getCore).tokenContent == 0 then
+  if Helpers.Content.stored.size (← getCore).tokenContent == 0 then
     fail .forbiddenKeywordName tokenEnd
   if let some next := next then
     expectDelimiter next tokenEnd.position
   sinkStored .keyword tokenEnd start base h
 
 @[inline]
-def finishStringLiteral (tokenEnd : TokenEnd) (start : Location) (base : USize)
+def finishStringLiteral (tokenEnd : Helpers.TokenEnd) (start : Span.Location) (base : USize)
     (h : Started floor low start) : LexM H m R E floor low Unit :=
   sinkStored .string tokenEnd start base h
 
 @[inline]
-def finishWhitespace (tokenEnd : TokenEnd) (start : Location) (base : USize)
+def finishWhitespace (tokenEnd : Helpers.TokenEnd) (start : Span.Location) (base : USize)
     (h : Started floor low start) : LexM H m R E floor low Unit :=
   sinkStored .whitespace tokenEnd start base h
 
@@ -743,12 +750,12 @@ theorem sub_toNat_lt {base x y : USize} (hx : base.toNat ≤ x.toNat)
 
 /-- The batch that the loop of `lexNormal` holds at `index`: its tokens end at or before
 `index`, and start at or after the floor. -/
-abbrev Held (floor : Option Nat) (offset : Nat) (base index : USize) (batch : TokenBatch) :
+abbrev Held (floor : Option Nat) (offset : Nat) (base index : USize) (batch : Token.TokenBatch) :
     Prop :=
   batch.lastEnd ≤ offset + (index - base).toNat ∧ ∀ p, floor = some p → batch.StartsFrom p
 
 theorem Held.mono {floor : Option Nat} {offset : Nat} {base index next : USize}
-    {batch : TokenBatch} (h : Held floor offset base index batch)
+    {batch : Token.TokenBatch} (h : Held floor offset base index batch)
     (hindex : base.toNat ≤ index.toNat)
     (hnext : index.toNat ≤ next.toNat) : Held floor offset base next batch :=
   ⟨Nat.le_trans h.1 (Nat.add_le_add_left (sub_toNat_le hindex hnext) _), h.2⟩
@@ -756,7 +763,7 @@ theorem Held.mono {floor : Option Nat} {offset : Nat} {base index next : USize}
 /-- Puts the batch held by the loop back into the lexer state, with the lexer at `position`,
 between tokens. -/
 @[inline]
-def leave (offset : Nat) (base position : USize) (batch : TokenBatch)
+def leave (offset : Nat) (base position : USize) (batch : Token.TokenBatch)
     (hframe : Frame floor low offset) (hbatch : Held floor offset base position batch) :
     LexM H m R E floor low Unit :=
   modifyBound fun c _ =>
@@ -769,8 +776,8 @@ def leave (offset : Nat) (base position : USize) (batch : TokenBatch)
 /-- Puts the batch held by the loop back into the lexer state, with the token from `start`
 left unfinished in `state` at `position`. -/
 @[inline]
-def leavePending (state : LexerState) (start : Location) (offset : Nat)
-    (base position : USize) (batch : TokenBatch) (hframe : Frame floor low offset)
+def leavePending (state : Helpers.LexerState) (start : Span.Location) (offset : Nat)
+    (base position : USize) (batch : Token.TokenBatch) (hframe : Frame floor low offset)
     (hbatch : Held floor offset base position batch)
     (hstart : start.offset < offset + (position - base).toNat)
     (hfloor : ∀ p, floor = some p → p ≤ start.offset) : LexM H m R E floor low Unit :=
@@ -787,16 +794,16 @@ def leavePending (state : LexerState) (start : Location) (offset : Nat)
 array of contents, which the hand-over takes, right after each token is put into the batch,
 and so takes and drops a reference to it for every token. -/
 @[noinline]
-def flushHeld (batch : TokenBatch) (origin : Nat)
+def flushHeld (batch : Token.TokenBatch) (origin : Nat)
     (hbatch : ∀ p, floor = some p → batch.StartsFrom p) :
     LexM H m R E floor low
-      {batch : TokenBatch //
+      {batch : Token.TokenBatch //
         batch.lastEnd = origin ∧ ∀ p, floor = some p → batch.StartsFrom p} := do
   -- batch capacity reached, we need to flush the batch
   let bytes := batch.bytes
   let spent ← handOver batch bytes fun p hp => (hbatch p hp).endsAfter
-  return ⟨spent.clear origin, TokenBatch.lastEnd_clear _ _,
-    fun _ _ => TokenBatch.startsFrom_clear _ _ _⟩
+  return ⟨spent.clear origin, Token.TokenBatch.lastEnd_clear _ _,
+    fun _ _ => Token.TokenBatch.startsFrom_clear _ _ _⟩
 
 /--
 Puts a fast-path token into the batch if `emit` is set, flushing the batch
@@ -809,12 +816,12 @@ position `base`.
 /- LEAN: Rust writes the entry even when it is not emitted, as the next token overwrites it;
 here a token that is not emitted is not written. -/
 @[inline]
-def pushFast (batch : TokenBatch) (offset : Nat) (base : USize)
-    (ty : TokenCategory) (contentStart contentStop start «end» : USize) (emit : Bool)
+def pushFast (batch : Token.TokenBatch) (offset : Nat) (base : USize)
+    (ty : Token.TokenCategory) (contentStart contentStop start «end» : USize) (emit : Bool)
     (hty : ty ≠ .endOfFile) (hstart : base.toNat ≤ start.toNat)
     (hend : start.toNat < «end».toNat) (hframe : Frame floor low offset)
     (hbatch : Held floor offset base start batch) :
-    LexM H m R E floor low {batch : TokenBatch // Held floor offset base «end» batch} := do
+    LexM H m R E floor low {batch : Token.TokenBatch // Held floor offset base «end» batch} := do
   if !emit then
     return ⟨batch, hbatch.mono hstart (Nat.le_of_lt hend)⟩
   let c ← getCore
@@ -825,13 +832,13 @@ def pushFast (batch : TokenBatch) (offset : Nat) (base : USize)
     line lineStart (offset + (start - base).toNat) (offset + («end» - base).toNat) hbatch.1
     (.inl hlt)
   have hfrom : ∀ p, floor = some p → batch.StartsFrom p := fun p hp =>
-    TokenBatch.startsFrom_pushOnLine (hbatch.2 p hp)
+    Token.TokenBatch.startsFrom_pushOnLine (hbatch.2 p hp)
       (Nat.le_trans (hframe.2 p hp) (Nat.le_add_right _ _)) hty
   if batch.len == BATCH_CAPACITY then
     let ⟨batch, hlast, hfrom⟩ ← flushHeld batch (offset + («end» - base).toNat) hfrom
     return ⟨batch, Nat.le_of_eq hlast, hfrom⟩
   else
-    return ⟨batch, Nat.le_of_eq (TokenBatch.lastEnd_pushOnLine ..), hfrom⟩
+    return ⟨batch, Nat.le_of_eq (Token.TokenBatch.lastEnd_pushOnLine ..), hfrom⟩
 
 /--
 Puts a token lexed on the slow path into the batch, flushing the batch when it is full.
@@ -842,24 +849,25 @@ to `tokenEnd` in the input. `offset` is the stream offset of the position `base`
 /- LEAN: Rust's `sink_slice` with borrowed content, which puts the token into the lexer's
 batch; here into the batch the loop holds. -/
 @[inline]
-def pushBorrowed (batch : TokenBatch) (offset : Nat) (base : USize) (ty : TokenCategory)
-    (contentStart contentStop : USize) (start : Location) (tokenEnd : USize)
+def pushBorrowed (batch : Token.TokenBatch) (offset : Nat) (base : USize) (ty : Token.TokenCategory)
+    (contentStart contentStop : USize) (start : Span.Location) (tokenEnd : USize)
     (hty : ty ≠ .endOfFile) (hafter : batch.lastEnd ≤ start.offset)
     (hend : start.offset < offset + (tokenEnd - base).toNat)
     (hfloor : ∀ p, floor = some p → p ≤ start.offset ∧ batch.StartsFrom p) :
-    LexM H m R E floor low {batch : TokenBatch // Held floor offset base tokenEnd batch} := do
+    LexM H m R E floor low {batch : Token.TokenBatch // Held floor offset base tokenEnd batch} := do
   let c ← getCore
   let endOffset := offset + (tokenEnd - base).toNat
-  let «end» : Location := { offset := endOffset, line := c.line, column := endOffset - c.lineStart }
+  let «end» : Span.Location :=
+      { offset := endOffset, line := c.line, column := endOffset - c.lineStart }
   let batch := batch.pushLocated ty contentStart.toNat contentStop.toNat start «end» hafter
     (.inl hend)
   have hfrom : ∀ p, floor = some p → batch.StartsFrom p := fun p hp =>
-    TokenBatch.startsFrom_pushLocated (hfloor p hp).2 (hfloor p hp).1 hty
+    Token.TokenBatch.startsFrom_pushLocated (hfloor p hp).2 (hfloor p hp).1 hty
   if batch.len == BATCH_CAPACITY then
     let ⟨batch, hlast, hfrom⟩ ← flushHeld batch endOffset hfrom
     return ⟨batch, Nat.le_of_eq hlast, hfrom⟩
   else
-    return ⟨batch, Nat.le_of_eq (TokenBatch.lastEnd_pushLocated ..), hfrom⟩
+    return ⟨batch, Nat.le_of_eq (Token.TokenBatch.lastEnd_pushLocated ..), hfrom⟩
 
 /--
 Moves a fast-path symbol run that cannot be finished
@@ -870,8 +878,8 @@ The token itself starts at `index`, its content either at `index`
 the token continues at least to `runEndAt`, where it has been
 left unfinished.
 -/
-def storeUnfinishedSymbolRun (input : Input) (entry : UInt8) (offset : Nat)
-    (base index after runEndAt : USize) (batch : TokenBatch) (hframe : Frame floor low offset)
+def storeUnfinishedSymbolRun (input : CharClass.Input) (entry : UInt8) (offset : Nat)
+    (base index after runEndAt : USize) (batch : Token.TokenBatch) (hframe : Frame floor low offset)
     (hindex : base.toNat ≤ index.toNat) (hrun : index.toNat < runEndAt.toNat)
     (hbatch : Held floor offset base index batch) : LexM H m R E floor low Unit := do
   let ⟨start, hstart⟩ ← startToken offset base index hframe
@@ -880,7 +888,7 @@ def storeUnfinishedSymbolRun (input : Input) (entry : UInt8) (offset : Nat)
   have hfloor : ∀ p, floor = some p → p ≤ start.offset := fun p hp => by
     rw [hstart]; exact Nat.le_trans (hframe.2 p hp) (Nat.le_add_right _ _)
   have hbatch := hbatch.mono hindex (Nat.le_of_lt hrun)
-  if entry &&& FAST_PIPE != 0 then
+  if entry &&& Helpers.FAST_PIPE != 0 then
     -- quoted symbol, skip the start pipe
     extendContent input after runEndAt
     leavePending .quotedSymbol start offset base runEndAt batch hframe hbatch hpending hfloor
@@ -902,34 +910,35 @@ run: a byte there that the run takes. -/
 Whether the byte at `position` continues a whitespace run: a line feed, or whitespace other
 than it.
 -/
-def ContinuesWhitespace (input : Input) (position : USize) : Prop :=
-  ∃ c, input.get? position = some c ∧ (c = byte! '\n' ∨ endsRun c RUN_NON_LF_WHITESPACE = false)
+def ContinuesWhitespace (input : CharClass.Input) (position : USize) : Prop :=
+  ∃ c, input.get? position = some c ∧ (c = byte! '\n' ∨ CharClass.endsRun c
+      CharClass.RUN_NON_LF_WHITESPACE = false)
 
 /-- The run ends after its start: the search has passed the start, or the byte where it continues
 belongs to the run. -/
-theorem lt_whitespaceRunEnd {input : Input} {index start : USize} {c : UInt8}
+theorem lt_whitespaceRunEnd {input : CharClass.Input} {index start : USize} {c : UInt8}
     (hindex : index.toNat ≤ start.toNat)
     (hrun : index.toNat < start.toNat ∨ ContinuesWhitespace input start)
-    (h : input.get? (runEnd input start RUN_NON_LF_WHITESPACE) = some c)
+    (h : input.get? (CharClass.runEnd input start CharClass.RUN_NON_LF_WHITESPACE) = some c)
     (hc : ¬(c == byte! '\n') = true) :
-    index.toNat < (runEnd input start RUN_NON_LF_WHITESPACE).toNat := by
-  have hle := le_runEnd input start RUN_NON_LF_WHITESPACE
+    index.toNat < (CharClass.runEnd input start CharClass.RUN_NON_LF_WHITESPACE).toNat := by
+  have hle := CharClass.le_runEnd input start CharClass.RUN_NON_LF_WHITESPACE
   rcases hrun with hlt | ⟨first, hfirst, hlf | hcontinues⟩
   · omega
   · -- the search stops at the line feed, where the byte is not one
-    have : runEnd input start RUN_NON_LF_WHITESPACE ≠ start := by
+    have : CharClass.runEnd input start CharClass.RUN_NON_LF_WHITESPACE ≠ start := by
       intro heq
       rw [heq, hfirst] at h
       cases h
       exact hc (by rw [hlf]; rfl)
-    have : (runEnd input start RUN_NON_LF_WHITESPACE).toNat ≠ start.toNat :=
+    have : (CharClass.runEnd input start CharClass.RUN_NON_LF_WHITESPACE).toNat ≠ start.toNat :=
       fun heq => this (USize.toNat_inj.mp heq)
     omega
-  · have := lt_runEnd RUN_NON_LF_WHITESPACE hfirst hcontinues
+  · have := CharClass.lt_runEnd CharClass.RUN_NON_LF_WHITESPACE hfirst hcontinues
     omega
 
 /-- A token that starts at `index` ends after its start at a later position. -/
-theorem started_lt {offset : Nat} {base index position : USize} {start : Location}
+theorem started_lt {offset : Nat} {base index position : USize} {start : Span.Location}
     (hstart : start.offset = offset + (index - base).toNat) (hindex : base.toNat ≤ index.toNat)
     (hlt : index.toNat < position.toNat) : start.offset < offset + (position - base).toNat := by
   rw [hstart]
@@ -937,29 +946,30 @@ theorem started_lt {offset : Nat} {base index position : USize} {start : Locatio
 
 /-- A token that starts at a position of the loop starts at or after the floor. -/
 theorem started_floor {floor : Option Nat} {low offset : Nat} {base index : USize}
-    {start : Location} (hstart : start.offset = offset + (index - base).toNat)
+    {start : Span.Location} (hstart : start.offset = offset + (index - base).toNat)
     (hframe : Frame floor low offset) : ∀ p, floor = some p → p ≤ start.offset := fun p hp => by
   rw [hstart]
   exact Nat.le_trans (hframe.2 p hp) (Nat.le_add_right _ _)
 
 /-- What a token that starts at the position `index` of the loop gives to `pushBorrowed`. -/
 theorem started_held {floor : Option Nat} {low offset : Nat} {base index : USize}
-    {start : Location} {batch : TokenBatch} (hstart : start.offset = offset + (index - base).toNat)
+    {start : Span.Location} {batch : Token.TokenBatch}
+    (hstart : start.offset = offset + (index - base).toNat)
     (hframe : Frame floor low offset) (hbatch : Held floor offset base index batch) :
     batch.lastEnd ≤ start.offset ∧
       ∀ p, floor = some p → p ≤ start.offset ∧ batch.StartsFrom p :=
   ⟨by rw [hstart]; exact hbatch.1, fun p hp => ⟨started_floor hstart hframe p hp, hbatch.2 p hp⟩⟩
 
 /-- The position after an earlier one is past the earlier one. -/
-theorem past_of_lt {input : Input} {index next result : USize}
+theorem past_of_lt {input : CharClass.Input} {index next result : USize}
     (h : index.toNat < next.toNat) (hnext : next.toNat ≤ result.toNat) :
     index.toNat ≤ result.toNat ∧ (index.toNat < input.stop.toNat → index.toNat < result.toNat) :=
   ⟨by omega, fun _ => by omega⟩
 
 /-- A position without a byte is at or after the end of the slice. -/
-theorem stop_le_of_get?_none {input : Input} {position : USize}
+theorem stop_le_of_get?_none {input : CharClass.Input} {position : USize}
     (h : input.get? position = none) : input.stop.toNat ≤ position.toNat := by
-  unfold Input.get? at h
+  unfold CharClass.Input.get? at h
   split at h
   · cases h
   · rename_i hlt
@@ -972,24 +982,24 @@ returned is after `index`, which `lexNormalFrom` is shown to end by. The token o
 at `start`, and goes into the batch that `lexNormalFrom` holds, which comes back with the
 position after the run; if the run reaches the end of the slice, the batch goes back into the
 lexer state instead, and `none` is returned. -/
-def startWhitespaceFrom (input : Input) (offset : Nat) (base index «end» : USize)
-    (start : Location) (batch : TokenBatch) (hframe : Frame floor low offset)
+def startWhitespaceFrom (input : CharClass.Input) (offset : Nat) (base index «end» : USize)
+    (start : Span.Location) (batch : Token.TokenBatch) (hframe : Frame floor low offset)
     (hstart : start.offset = offset + (index - base).toNat)
     (hend : base.toNat ≤ index.toNat ∧ index.toNat ≤ «end».toNat ∧ «end».toNat ≤ input.stop.toNat)
     (hrun : index.toNat < «end».toNat ∨ ContinuesWhitespace input «end»)
     (hbatch : Held floor offset base index batch) :
-    LexM H m R E floor low (Option {next : USize × TokenBatch //
+    LexM H m R E floor low (Option {next : USize × Token.TokenBatch //
       index.toNat < next.1.toNat ∧ Held floor offset base next.1 next.2}) := do
   -- find the first byte that is not whitespace other than a line feed
-  let «end» := runEnd input «end» RUN_NON_LF_WHITESPACE
+  let «end» := CharClass.runEnd input «end» CharClass.RUN_NON_LF_WHITESPACE
   -- the search goes on from where it was
-  have : _ ≤ «end».toNat := le_runEnd input _ RUN_NON_LF_WHITESPACE
+  have : _ ≤ «end».toNat := CharClass.le_runEnd input _ CharClass.RUN_NON_LF_WHITESPACE
   match h : input.get? «end» with
   | some c =>
     if hc : c == byte! '\n' then
       -- the line feed is a part of the run, mark it and continue
       markLineFeedAt «end»
-      have := Input.toNat_add_one_of_get? h
+      have := CharClass.Input.toNat_add_one_of_get? h
       startWhitespaceFrom input offset base index («end» + 1) start batch hframe hstart
         ⟨hend.1, by omega, by omega⟩ (.inl (by omega)) hbatch
     else
@@ -1005,7 +1015,7 @@ def startWhitespaceFrom (input : Input) (offset : Nat) (base index «end» : USi
     have hstop : index.toNat < input.stop.toNat := by
       rcases hrun with hlt | ⟨_, hfirst, _⟩
       · omega
-      · have := Input.lt_stop_of_get? hfirst
+      · have := CharClass.Input.lt_stop_of_get? hfirst
         omega
     leavePending .whitespace start offset base input.stop batch hframe
       (hbatch.mono hend.1 (Nat.le_of_lt hstop)) (started_lt hstart hend.1 hstop)
@@ -1022,28 +1032,29 @@ Returns the position after the run and the batch with its token, if the run ends
 slice. Otherwise, the run is stored, the state becomes `whitespace`, the batch goes back into
 the lexer state, and `none` is returned.
 -/
-def startWhitespace (input : Input) (offset : Nat) (base index : USize)
-    (batch : TokenBatch) (hrun : ContinuesWhitespace input index) (hframe : Frame floor low offset)
+def startWhitespace (input : CharClass.Input) (offset : Nat) (base index : USize)
+    (batch : Token.TokenBatch) (hrun : ContinuesWhitespace input index)
+    (hframe : Frame floor low offset)
     (hindex : base.toNat ≤ index.toNat) (hbatch : Held floor offset base index batch) :
-    LexM H m R E floor low (Option {next : USize × TokenBatch //
+    LexM H m R E floor low (Option {next : USize × Token.TokenBatch //
       index.toNat < next.1.toNat ∧ Held floor offset base next.1 next.2}) := do
   let ⟨start, hstart⟩ ← startToken offset base index hframe
   have hstop : index.toNat ≤ input.stop.toNat := by
     have ⟨_, hfirst, _⟩ := hrun
-    have := Input.lt_stop_of_get? hfirst
+    have := CharClass.Input.lt_stop_of_get? hfirst
     omega
   startWhitespaceFrom input offset base index index start batch hframe hstart
     ⟨hindex, Nat.le_refl _, hstop⟩ (.inr hrun) hbatch
 
 /-- What the loops of `lexNormal` return: a position at or after `index`, and after it if
 `index` is below the end of the slice. -/
-abbrev Past (input : Input) (index : USize) :=
+abbrev Past (input : CharClass.Input) (index : USize) :=
   {next : USize //
     index.toNat ≤ next.toNat ∧ (index.toNat < input.stop.toNat → index.toNat < next.toNat)}
 
 /-- A position past `index` is past every position at or before `index`. -/
 @[inline]
-def Past.from {input : Input} {origin index : USize} (h : origin.toNat ≤ index.toNat)
+def Past.from {input : CharClass.Input} {origin index : USize} (h : origin.toNat ≤ index.toNat)
     (next : Past input index) : Past input origin :=
   ⟨next.1, Nat.le_trans h next.2.1, fun hlt =>
     if hi : index.toNat < input.stop.toNat then Nat.lt_of_le_of_lt h (next.2.2 hi)
@@ -1051,7 +1062,7 @@ def Past.from {input : Input} {origin index : USize} (h : origin.toNat ≤ index
 
 /-- The type of a token on the fast path: a quoted symbol, whitespace or a simple symbol. -/
 @[inline]
-def fastCategory (isQuoted emitsWhitespace : Bool) : TokenCategory :=
+def fastCategory (isQuoted emitsWhitespace : Bool) : Token.TokenCategory :=
   if isQuoted then .quotedSymbol else if emitsWhitespace then .whitespace else .unquotedSymbol
 
 theorem fastCategory_ne (isQuoted emitsWhitespace : Bool) :
@@ -1070,8 +1081,8 @@ the same too, so that the recursive call is the last one and the loop takes no s
 recursion is encoded as a well-founded one, which for a function this long nests
 deeper than the default limit allows. -/
 set_option maxRecDepth 2048 in
-def lexNormalFrom (input : Input) (offset : Nat) (base index : USize)
-    (batch : TokenBatch) (hframe : Frame floor low offset) (hindex : base.toNat ≤ index.toNat)
+def lexNormalFrom (input : CharClass.Input) (offset : Nat) (base index : USize)
+    (batch : Token.TokenBatch) (hframe : Frame floor low offset) (hindex : base.toNat ≤ index.toNat)
     (hbatch : Held floor offset base index batch) (origin : USize)
     (horigin : origin.toNat ≤ index.toNat) : LexM H m R E floor low (Past input origin) := do
   match hget : input.get? index with
@@ -1079,10 +1090,10 @@ def lexNormalFrom (input : Input) (offset : Nat) (base index : USize)
     -- we have consumed every byte of the slice
     -- write the locals back before returning
     leave offset base index batch hframe hbatch
-    return Past.from horigin
+    return Past.«from» horigin
       ⟨index, Nat.le_refl _, fun h => absurd h (Nat.not_lt.mpr (stop_le_of_get?_none hget))⟩
   | some c =>
-  have := Input.toNat_add_one_of_get? hget
+  have := CharClass.Input.toNat_add_one_of_get? hget
   -- A fast path handles the most common token types.
   -- It is determined by one table lookup. If the started token is not on
   -- the fast path, a slower path is taken, again looked up. Arms eagerly
@@ -1116,29 +1127,29 @@ def lexNormalFrom (input : Input) (offset : Nat) (base index : USize)
       (by decreasing_position) hbatch origin
       (Nat.le_trans horigin (Nat.le_of_lt hafter))
   -- Handle whitespace and symbols in a fast path.
-  let fastEntry := fastFlags c
-  if fastEntry &&& FAST_ON != 0 then
+  let fastEntry := Helpers.fastFlags c
+  if fastEntry &&& Helpers.FAST_ON != 0 then
     -- Fast path, compute where the run ends and where the token ends.
     -- For quoted symbols, the token will end after the closing pipe.
-    let runEndAt := runEnd input after (fastEntry &&& FAST_RUN_MASK)
-    have : after.toNat ≤ runEndAt.toNat := le_runEnd input after _
-    let isQuoted := fastEntry &&& FAST_PIPE != 0
+    let runEndAt := CharClass.runEnd input after (fastEntry &&& Helpers.FAST_RUN_MASK)
+    have : after.toNat ≤ runEndAt.toNat := CharClass.le_runEnd input after _
+    let isQuoted := fastEntry &&& Helpers.FAST_PIPE != 0
 
     -- Check if we need to fall back to state-machine lexing
     -- if we have been asked to emit whitespace and are handling it.
     -- We need to fall back if we have overrun the slice or encountered
     -- a line-feed which needs to update the location line/column.
-    let isWhitespace := fastEntry &&& RUN_NON_LF_WHITESPACE != 0
+    let isWhitespace := fastEntry &&& CharClass.RUN_NON_LF_WHITESPACE != 0
     let emitsWhitespace := (← consumesWhitespaceAndComments) && isWhitespace
     if hws : emitsWhitespace && (input.get? runEndAt).all (· == byte! '\n') then
       -- the whitespace token does not end on this line inside the slice
       match ← startWhitespace input offset base index batch
-          ⟨c, hget, .inr (not_endsRun_of_fastFlags (by
+          ⟨c, hget, .inr (Helpers.not_endsRun_of_fastFlags (by
             simp only [emitsWhitespace, isWhitespace, fastEntry, Bool.and_eq_true] at hws
             exact hws.1.2))⟩ hframe hindex hbatch with
       | none =>
         -- we ran out of bytes inside the whitespace
-        return Past.from horigin
+        return Past.«from» horigin
           ⟨input.stop, by decreasing_position, fun _ => by decreasing_position⟩
       | some ⟨(next, batch), hnext, hbatch⟩ =>
         return ← lexNormalFrom input offset base next batch hframe
@@ -1159,12 +1170,12 @@ def lexNormalFrom (input : Input) (offset : Nat) (base index : USize)
     it is then after `index`. -/
     let isUnfinished := (runEndAt == input.stop || isQuoted) &&
       if isQuoted then input.get? runEndAt != some (byte! '|')
-      else fastEntry &&& RUN_SIMPLE_SYMBOL != 0
+      else fastEntry &&& CharClass.RUN_SIMPLE_SYMBOL != 0
     if hunfinished : isUnfinished then
       -- write the locals back
       storeUnfinishedSymbolRun input fastEntry offset base index after runEndAt batch hframe hindex
         (by decreasing_position) hbatch
-      return Past.from horigin ⟨runEndAt, by decreasing_position, fun _ => by decreasing_position⟩
+      return Past.«from» horigin ⟨runEndAt, by decreasing_position, fun _ => by decreasing_position⟩
     else
     let tokenEnd := if isQuoted then runEndAt + 1 else runEndAt
     have htokenEnd : runEndAt.toNat ≤ tokenEnd.toNat := by
@@ -1173,7 +1184,7 @@ def lexNormalFrom (input : Input) (offset : Nat) (base index : USize)
       · rename_i hquoted
         have hpipe : input.get? runEndAt = some (byte! '|') := by
           simpa [isUnfinished, hquoted] using hunfinished
-        rw [toNat_add_one_of_lt (Input.lt_stop_of_get? hpipe)]
+        rw [CharClass.toNat_add_one_of_lt (CharClass.Input.lt_stop_of_get? hpipe)]
         omega
       · omega
     have hend : index.toNat < tokenEnd.toNat := by decreasing_position
@@ -1185,14 +1196,14 @@ def lexNormalFrom (input : Input) (offset : Nat) (base index : USize)
     let ty := fastCategory isQuoted emitsWhitespace
     let contentStart := if isQuoted then after else index
     let contentStop := if isQuoted then runEndAt else tokenEnd
-    let emit := fastEntry &&& FAST_EMIT != 0
+    let emit := fastEntry &&& Helpers.FAST_EMIT != 0
     -- A token must be delimited by the byte after it,
     -- fall back to the state machine if the delimiter is not found.
     if emit then
       match input.get? tokenEnd with
       | some next =>
         -- the token ended inside the slice: the byte after it must delimit it
-        if !isDelimiter next then
+        if !Helpers.isDelimiter next then
           leave offset base index batch hframe hbatch
           let _ ← startToken offset base index hframe
           failAt .missingDelimiter (tokenEnd + 1)
@@ -1206,7 +1217,7 @@ def lexNormalFrom (input : Input) (offset : Nat) (base index : USize)
         leavePending .quotedSymbolClosed start offset base tokenEnd batch hframe
           (hbatch.mono hindex (Nat.le_of_lt hend)) (started_lt hstart hindex hend)
           (started_floor hstart hframe)
-        return Past.from horigin ⟨tokenEnd, Nat.le_of_lt hend, fun _ => hend⟩
+        return Past.«from» horigin ⟨tokenEnd, Nat.le_of_lt hend, fun _ => hend⟩
     -- whitespace needs no delimiter, it is emitted only if the consumer takes it
     let emit := emit || emitsWhitespace
     let ⟨batch, hbatch⟩ ← pushFast batch offset base ty contentStart contentStop index tokenEnd emit
@@ -1217,14 +1228,14 @@ def lexNormalFrom (input : Input) (offset : Nat) (base index : USize)
       (Nat.le_trans horigin (Nat.le_of_lt hend))
 
   -- Fast path was not taken, use the slow path.
-  match hstart : startOf c with
+  match hstart : Helpers.startOf c with
   | .lineFeed =>
     if ← consumesWhitespaceAndComments then
       -- the line feed starts a whitespace token
       match ← startWhitespace input offset base index batch
-          ⟨c, hget, .inl (eq_of_startOf_eq_lineFeed hstart)⟩ hframe hindex hbatch with
+          ⟨c, hget, .inl (Helpers.eq_of_startOf_eq_lineFeed hstart)⟩ hframe hindex hbatch with
       | none =>
-        return Past.from horigin
+        return Past.«from» horigin
           ⟨input.stop, by decreasing_position, fun _ => by decreasing_position⟩
       | some ⟨(next, batch), hnext, hbatch⟩ =>
         lexNormalFrom input offset base next batch hframe
@@ -1241,11 +1252,11 @@ def lexNormalFrom (input : Input) (offset : Nat) (base index : USize)
     -- a comment has been started
     -- process the run eagerly
     let ⟨tokenStart, hts⟩ ← startToken offset base index hframe
-    let «end» := runEnd input after RUN_COMMENT_PLAIN
-    have : after.toNat ≤ «end».toNat := le_runEnd input after _
+    let «end» := CharClass.runEnd input after CharClass.RUN_COMMENT_PLAIN
+    have : after.toNat ≤ «end».toNat := CharClass.le_runEnd input after _
     match hbyte : input.get? «end» with
     | some c =>
-      have := Input.toNat_add_one_of_get? hbyte
+      have := CharClass.Input.toNat_add_one_of_get? hbyte
       have hnext : index.toNat < («end» + 1).toNat := by decreasing_position
       if c == byte! '\n' then
         -- line feed, we need to mark it
@@ -1274,13 +1285,13 @@ def lexNormalFrom (input : Input) (offset : Nat) (base index : USize)
       leavePending .comment tokenStart offset base «end» batch hframe
         (hbatch.mono hindex (Nat.le_of_lt hlt)) (started_lt hts hindex hlt)
         (started_floor hts hframe)
-      return Past.from horigin ⟨«end», Nat.le_of_lt hlt, fun _ => hlt⟩
+      return Past.«from» horigin ⟨«end», Nat.le_of_lt hlt, fun _ => hlt⟩
   | .hash =>
     -- base selection
     let ⟨tokenStart, hts⟩ ← startToken offset base index hframe
     let selected := (input.get? after).bind fun c =>
-      if c == byte! 'x' then some HEXADECIMAL_RUN
-      else if c == byte! 'b' then some BINARY_RUN
+      if c == byte! 'x' then some Helpers.HEXADECIMAL_RUN
+      else if c == byte! 'b' then some Helpers.BINARY_RUN
       else none
     let some ⟨run, hrun⟩ := selected.attach
       | do
@@ -1292,8 +1303,8 @@ def lexNormalFrom (input : Input) (offset : Nat) (base index : USize)
         leavePending .baseSelection tokenStart offset base after batch hframe
           (hbatch.mono hindex (Nat.le_of_lt hafter)) (started_lt hts hindex hafter)
           (started_floor hts hframe)
-        return Past.from horigin ⟨after, Nat.le_of_lt hafter, fun _ => hafter⟩
-    have hkind : run = HEXADECIMAL_RUN ∨ run = BINARY_RUN := by
+        return Past.«from» horigin ⟨after, Nat.le_of_lt hafter, fun _ => hafter⟩
+    have hkind : run = Helpers.HEXADECIMAL_RUN ∨ run = Helpers.BINARY_RUN := by
       have ⟨_, _, hselection⟩ := Option.bind_eq_some_iff.mp hrun
       split at hselection
       · exact .inl (Option.some.inj hselection).symm
@@ -1302,11 +1313,11 @@ def lexNormalFrom (input : Input) (offset : Nat) (base index : USize)
         · cases hselection
     -- the base has been selected, get a run of its digits
     let start := after + 1
-    let afterEnd := runEnd input start run.flag
-    have : start.toNat ≤ afterEnd.toNat := le_runEnd input start _
+    let afterEnd := CharClass.runEnd input start run.flag
+    have : start.toNat ≤ afterEnd.toNat := CharClass.le_runEnd input start _
     have : start.toNat = after.toNat + 1 := by
       have ⟨_, hselection, _⟩ := Option.bind_eq_some_iff.mp hrun
-      exact toNat_add_one_of_lt (Input.lt_stop_of_get? hselection)
+      exact CharClass.toNat_add_one_of_lt (CharClass.Input.lt_stop_of_get? hselection)
     have hlt : index.toNat < afterEnd.toNat := by decreasing_position
     if hend : afterEnd == input.stop then
       -- we ran out of bytes
@@ -1315,20 +1326,20 @@ def lexNormalFrom (input : Input) (offset : Nat) (base index : USize)
       leavePending run.state tokenStart offset base afterEnd batch hframe
         (hbatch.mono hindex (Nat.le_of_lt hlt)) (started_lt hts hindex hlt)
         (started_floor hts hframe)
-      return Past.from horigin ⟨afterEnd, Nat.le_of_lt hlt, fun _ => hlt⟩
+      return Past.«from» horigin ⟨afterEnd, Nat.le_of_lt hlt, fun _ => hlt⟩
     else
     -- dispatch a token with borrowed content
     -- digit runs must not be empty
-    have hwithin : afterEnd.toNat ≤ input.stop.toNat := runEnd_le input _ (by
+    have hwithin : afterEnd.toNat ≤ input.stop.toNat := CharClass.runEnd_le input _ (by
       have ⟨_, hselection, _⟩ := Option.bind_eq_some_iff.mp hrun
-      have := Input.lt_stop_of_get? hselection
+      have := CharClass.Input.lt_stop_of_get? hselection
       decreasing_position)
-    if (Content.borrow input start afterEnd (by decreasing_position) hwithin).size
+    if (Helpers.Content.borrow input start afterEnd (by decreasing_position) hwithin).size
         (← getCore).tokenContent == 0 then
       leave offset base index batch hframe hbatch
       fail run.emptyError (.mkAtByte afterEnd)
-    let next := input.get afterEnd (Input.lt_stop_of_ne hwithin hend)
-    if !isDelimiter next then
+    let next := input.get afterEnd (CharClass.Input.lt_stop_of_ne hwithin hend)
+    if !Helpers.isDelimiter next then
       leave offset base index batch hframe hbatch
       failAt .missingDelimiter (afterEnd + 1)
     let ⟨batch, hbatch⟩ ← pushBorrowed batch offset base run.tokenType start afterEnd tokenStart
@@ -1347,10 +1358,10 @@ def lexNormalFrom (input : Input) (offset : Nat) (base index : USize)
       leavePending .stringLiteral tokenStart offset base after batch hframe
         (hbatch.mono hindex (Nat.le_of_lt hafter)) (started_lt hts hindex hafter)
         (started_floor hts hframe)
-      return Past.from horigin ⟨after, Nat.le_of_lt hafter, fun _ => hafter⟩
+      return Past.«from» horigin ⟨after, Nat.le_of_lt hafter, fun _ => hafter⟩
     -- determine the run of content bytes
-    let afterContentEnd := runEnd input after RUN_STRING_PLAIN
-    have : after.toNat ≤ afterContentEnd.toNat := le_runEnd input after _
+    let afterContentEnd := CharClass.runEnd input after CharClass.RUN_STRING_PLAIN
+    have : after.toNat ≤ afterContentEnd.toNat := CharClass.le_runEnd input after _
     -- we can only eagerly borrow if the content is ended by a closing quote
     -- that is definitely not followed by another closing quote
     -- (we cannot borrow a string containing an escape)
@@ -1373,7 +1384,7 @@ def lexNormalFrom (input : Input) (offset : Nat) (base index : USize)
         simp only [closed] at hclosed
         split at hclosed
         · rename_i hquote
-          have := Input.toNat_add_one_of_get? hquote
+          have := CharClass.Input.toNat_add_one_of_get? hquote
           split at hclosed
           · split at hclosed
             · split at hclosed
@@ -1386,7 +1397,7 @@ def lexNormalFrom (input : Input) (offset : Nat) (base index : USize)
       have hlt : index.toNat < afterQuote.toNat := by decreasing_position
       -- definitely closed by a quote not followed by another quote
       -- borrow the string literal content and produce a token
-      if !isDelimiter next then
+      if !Helpers.isDelimiter next then
         leave offset base index batch hframe hbatch
         failAt .missingDelimiter (afterQuote + 1)
       let ⟨batch, hbatch⟩ ← pushBorrowed batch offset base .string after afterContentEnd
@@ -1405,13 +1416,13 @@ def lexNormalFrom (input : Input) (offset : Nat) (base index : USize)
       leavePending .stringLiteral tokenStart offset base afterContentEnd batch hframe
         (hbatch.mono hindex (Nat.le_of_lt hlt)) (started_lt hts hindex hlt)
         (started_floor hts hframe)
-      return Past.from horigin ⟨afterContentEnd, Nat.le_of_lt hlt, fun _ => hlt⟩
+      return Past.«from» horigin ⟨afterContentEnd, Nat.le_of_lt hlt, fun _ => hlt⟩
   | .colon =>
     -- starts a keyword
     let ⟨tokenStart, hts⟩ ← startToken offset base index hframe
     -- get a run of simple-symbol bytes
-    let afterEnd := runEnd input after RUN_SIMPLE_SYMBOL
-    have : after.toNat ≤ afterEnd.toNat := le_runEnd input after _
+    let afterEnd := CharClass.runEnd input after CharClass.RUN_SIMPLE_SYMBOL
+    have : after.toNat ≤ afterEnd.toNat := CharClass.le_runEnd input after _
     have hlt : index.toNat < afterEnd.toNat := by decreasing_position
     if hend : afterEnd == input.stop then
       -- we ran out of bytes
@@ -1420,18 +1431,18 @@ def lexNormalFrom (input : Input) (offset : Nat) (base index : USize)
       leavePending .keyword tokenStart offset base afterEnd batch hframe
         (hbatch.mono hindex (Nat.le_of_lt hlt)) (started_lt hts hindex hlt)
         (started_floor hts hframe)
-      return Past.from horigin ⟨afterEnd, Nat.le_of_lt hlt, fun _ => hlt⟩
+      return Past.«from» horigin ⟨afterEnd, Nat.le_of_lt hlt, fun _ => hlt⟩
     else
     -- dispatch a token with borrowed content
     -- ensure the keyword is not empty
     have hwithin : afterEnd.toNat ≤ input.stop.toNat :=
-      runEnd_le input _ (by decreasing_position)
-    if (Content.borrow input after afterEnd (by decreasing_position) hwithin).size
+      CharClass.runEnd_le input _ (by decreasing_position)
+    if (Helpers.Content.borrow input after afterEnd (by decreasing_position) hwithin).size
         (← getCore).tokenContent == 0 then
       leave offset base index batch hframe hbatch
       fail .forbiddenKeywordName (.mkAtByte afterEnd)
-    let next := input.get afterEnd (Input.lt_stop_of_ne hwithin hend)
-    if !isDelimiter next then
+    let next := input.get afterEnd (CharClass.Input.lt_stop_of_ne hwithin hend)
+    if !Helpers.isDelimiter next then
       leave offset base index batch hframe hbatch
       failAt .missingDelimiter (afterEnd + 1)
     let ⟨batch, hbatch⟩ ← pushBorrowed batch offset base .keyword after afterEnd tokenStart afterEnd
@@ -1444,8 +1455,8 @@ def lexNormalFrom (input : Input) (offset : Nat) (base index : USize)
   | .digit =>
     let ⟨tokenStart, hts⟩ ← startToken offset base index hframe
     -- determine the run of digits
-    let afterEnd := runEnd input after RUN_DIGIT
-    have : after.toNat ≤ afterEnd.toNat := le_runEnd input after _
+    let afterEnd := CharClass.runEnd input after CharClass.RUN_DIGIT
+    have : after.toNat ≤ afterEnd.toNat := CharClass.le_runEnd input after _
     have hlt : index.toNat < afterEnd.toNat := by decreasing_position
     -- check that we are not in a leading zero condition,
     -- which is only possible if the first character was zero
@@ -1460,10 +1471,10 @@ def lexNormalFrom (input : Input) (offset : Nat) (base index : USize)
     | some next =>
       if next == byte! '.' then
         -- a dot starts a fraction, try to do a subsequent run of fraction digits
-        let afterFractionEnd := runEnd input (afterEnd + 1) RUN_DIGIT
+        let afterFractionEnd := CharClass.runEnd input (afterEnd + 1) CharClass.RUN_DIGIT
         have : (afterEnd + 1).toNat ≤ afterFractionEnd.toNat :=
-          le_runEnd input _ _
-        have := Input.toNat_add_one_of_get? hnext
+          CharClass.le_runEnd input _ _
+        have := CharClass.Input.toNat_add_one_of_get? hnext
         have hfraction : index.toNat < afterFractionEnd.toNat := by decreasing_position
         if hend : afterFractionEnd == input.stop then
           -- we ran out of bytes
@@ -1472,19 +1483,19 @@ def lexNormalFrom (input : Input) (offset : Nat) (base index : USize)
           leavePending .fraction tokenStart offset base afterFractionEnd batch hframe
             (hbatch.mono hindex (Nat.le_of_lt hfraction)) (started_lt hts hindex hfraction)
             (started_floor hts hframe)
-          return Past.from horigin ⟨afterFractionEnd, Nat.le_of_lt hfraction, fun _ => hfraction⟩
+          return Past.«from» horigin ⟨afterFractionEnd, Nat.le_of_lt hfraction, fun _ => hfraction⟩
         else
         -- dispatch a decimal token with borrowed content
         -- decimals of the form 7. without any digit in fractional part are disallowed
         have hwithin : afterFractionEnd.toNat ≤ input.stop.toNat :=
-          runEnd_le input _ (by decreasing_position)
-        let last := (Content.borrow input index afterFractionEnd (by decreasing_position)
+          CharClass.runEnd_le input _ (by decreasing_position)
+        let last := (Helpers.Content.borrow input index afterFractionEnd (by decreasing_position)
           hwithin).last? (← getCore).tokenContent
         if last.isNone || last == some (byte! '.') then
           leave offset base index batch hframe hbatch
           fail .fractionDigitExpected (.mkAtByte afterFractionEnd)
-        let following := input.get afterFractionEnd (Input.lt_stop_of_ne hwithin hend)
-        if !isDelimiter following then
+        let following := input.get afterFractionEnd (CharClass.Input.lt_stop_of_ne hwithin hend)
+        if !Helpers.isDelimiter following then
           leave offset base index batch hframe hbatch
           failAt .missingDelimiter (afterFractionEnd + 1)
         let ⟨batch, hbatch⟩ ← pushBorrowed batch offset base .decimal index afterFractionEnd
@@ -1497,7 +1508,7 @@ def lexNormalFrom (input : Input) (offset : Nat) (base index : USize)
       else
         -- the numeral is not actually a decimal and ends
         -- dispatch a numeral token with borrowed content
-        if !isDelimiter next then
+        if !Helpers.isDelimiter next then
           leave offset base index batch hframe hbatch
           failAt .missingDelimiter (afterEnd + 1)
         let ⟨batch, hbatch⟩ ← pushBorrowed batch offset base .numeral index afterEnd tokenStart
@@ -1514,7 +1525,7 @@ def lexNormalFrom (input : Input) (offset : Nat) (base index : USize)
       leavePending .numeralOrDecimal tokenStart offset base afterEnd batch hframe
         (hbatch.mono hindex (Nat.le_of_lt hlt)) (started_lt hts hindex hlt)
         (started_floor hts hframe)
-      return Past.from horigin ⟨afterEnd, Nat.le_of_lt hlt, fun _ => hlt⟩
+      return Past.«from» horigin ⟨afterEnd, Nat.le_of_lt hlt, fun _ => hlt⟩
   | .other | .whitespace | .parenOpen | .parenClose | .symbol | .pipe =>
     -- can actually only be other (resulting in unexpected character),
     -- as the other arms have already been handled in the fast path.
@@ -1530,7 +1541,7 @@ as that of `base` moved on to `start`, so that the proofs know that the position
 at or after the position of its offset. -/
 /-- Lexes from `start`, which is below the end of the input, in the normal state, returning the
 position up to which the input was consumed, which is after `start`. -/
-def lexNormal (input : Input) (start : USize) (hstart : start.toNat < input.stop.toNat) :
+def lexNormal (input : CharClass.Input) (start : USize) (hstart : start.toNat < input.stop.toNat) :
     LexM H m R E floor low {next : USize // start.toNat < next.toNat} := do
   -- use locals for variables commonly used on the fast path
   let ⟨(offset, base, batch), hframe, hbatch, hfloor⟩ ←
@@ -1538,13 +1549,14 @@ def lexNormal (input : Input) (start : USize) (hstart : start.toNat < input.stop
       ((⟨(c.val.offset, c.val.base, c.val.batch),
           ⟨c.property.1, fun p hp => (c.property.2 p hp).1⟩, c.val.batchEnded,
           fun p hp => (c.property.2 p hp).2.2⟩ :
-          {x : Nat × USize × TokenBatch // Frame floor low x.1 ∧ x.2.2.lastEnd ≤ x.1 ∧
+          {x : Nat × USize × Token.TokenBatch // Frame floor low x.1 ∧ x.2.2.lastEnd ≤ x.1 ∧
             ∀ p, floor = some p → x.2.2.StartsFrom p}),
         ⟨{ c.val with
             batch := default
-            batchEnded := TokenBatch.lastEnd_default ▸ Nat.zero_le _ },
+            batchEnded := Token.TokenBatch.lastEnd_default ▸ Nat.zero_le _ },
           ⟨c.property.1, fun p hp =>
-            ⟨(c.property.2 p hp).1, (c.property.2 p hp).2.1, TokenBatch.startsFrom_default p⟩⟩⟩)
+            ⟨(c.property.2 p hp).1, (c.property.2 p hp).2.1, Token.TokenBatch.startsFrom_default
+                p⟩⟩⟩)
   let offset := offset + (start - base).toNat
   let ⟨next, hnext⟩ ← lexNormalFrom input offset start start batch
     ⟨Nat.le_trans hframe.1 (Nat.le_add_right _ _),
@@ -1559,11 +1571,12 @@ position up to which it has consumed the input, where Rust returns the number of
 the proof that it is at or after `start`. Each of them lexes on the token in progress, which
 starts at `tokenStart`, before the step's offset; `base` is the position of that offset. -/
 
-def lexFractionFrom (input : Input) (start : USize) (tokenStart : Location) (base : USize)
+def lexFractionFrom (input : CharClass.Input) (start : USize) (tokenStart : Span.Location)
+    (base : USize)
     (h : Started floor low tokenStart) :
     LexM H m R E floor low {next : USize // start.toNat ≤ next.toNat} := do
   -- find the first byte in the remainder that is not a digit
-  let «end» := runEnd input start RUN_DIGIT
+  let «end» := CharClass.runEnd input start CharClass.RUN_DIGIT
   -- extend the token from slice
   extendContent input start «end»
   if hlt : «end» < input.stop then
@@ -1574,14 +1587,14 @@ def lexFractionFrom (input : Input) (start : USize) (tokenStart : Location) (bas
   else
     -- we ran out of bytes for now
     setTokenState .fraction tokenStart h
-  return ⟨«end», le_runEnd input start _⟩
+  return ⟨«end», CharClass.le_runEnd input start _⟩
 
-def lexNumeralOrDecimal (input : Input) (start : USize) (tokenStart : Location)
+def lexNumeralOrDecimal (input : CharClass.Input) (start : USize) (tokenStart : Span.Location)
     (base : USize) (h : Started floor low tokenStart) :
     LexM H m R E floor low {next : USize // start.toNat ≤ next.toNat} := do
   -- find the first byte that is not a digit
-  let index := runEnd input start RUN_DIGIT
-  have : start.toNat ≤ index.toNat := le_runEnd input start _
+  let index := CharClass.runEnd input start CharClass.RUN_DIGIT
+  have : start.toNat ≤ index.toNat := CharClass.le_runEnd input start _
 
   -- check that we are not in a leading zero condition
   -- this could not have been done when starting the numeral/decimal
@@ -1607,7 +1620,7 @@ def lexNumeralOrDecimal (input : Input) (start : USize) (tokenStart : Location)
       -- decimal, the next character will start fraction
       -- add the dot and immediately start lexing the fraction after it
       pushContent (byte! '.')
-      have := Input.toNat_add_one_of_get? hnext
+      have := CharClass.Input.toNat_add_one_of_get? hnext
       let ⟨«end», hend⟩ ← lexFractionFrom input (index + 1) tokenStart base h
       return ⟨«end», by omega⟩
     else
@@ -1621,8 +1634,8 @@ def lexNumeralOrDecimal (input : Input) (start : USize) (tokenStart : Location)
     -- we have run out of bytes for now
     return ⟨index, this⟩
 
-def lexBaseSelection (input : Input) (start : USize)
-    (hstart : start.toNat < input.stop.toNat) (tokenStart : Location)
+def lexBaseSelection (input : CharClass.Input) (start : USize)
+    (hstart : start.toNat < input.stop.toNat) (tokenStart : Span.Location)
     (h : Started floor low tokenStart) :
     LexM H m R E floor low {next : USize // start.toNat ≤ next.toNat} := do
   let c := input.get start hstart
@@ -1632,15 +1645,15 @@ def lexBaseSelection (input : Input) (start : USize)
     setTokenState .binary tokenStart h
   else
     failAt .baseSelectionExpected (start + 1)
-  return ⟨start + 1, by rw [toNat_add_one_of_lt hstart]; omega⟩
+  return ⟨start + 1, by rw [CharClass.toNat_add_one_of_lt hstart]; omega⟩
 
 /-- Lexes a digit run, either hexadecimal or binary. -/
-def lexDigitRun (input : Input) (start : USize) (run : DigitRun)
-    (tokenStart : Location) (base : USize)
+def lexDigitRun (input : CharClass.Input) (start : USize) (run : Helpers.DigitRun)
+    (tokenStart : Span.Location) (base : USize)
     (h : Started floor low tokenStart) :
     LexM H m R E floor low {next : USize // start.toNat ≤ next.toNat} := do
   -- find the first byte that is not allowed in the run
-  let index := runEnd input start run.flag
+  let index := CharClass.runEnd input start run.flag
   -- extend the token from slice
   extendContent input start index
   if hlt : index < input.stop then
@@ -1648,7 +1661,7 @@ def lexDigitRun (input : Input) (start : USize) (run : DigitRun)
     finishDigitRun run (.mkAtByte index) (some (input.get index (USize.lt_iff_toNat_lt.mp hlt)))
       tokenStart base h
     setNormal
-  return ⟨index, le_runEnd input start _⟩
+  return ⟨index, CharClass.le_runEnd input start _⟩
 
 /- LEAN: the Rust loops keep the rest of the slice and the number of bytes consumed from it;
 here the loops keep the position `consumed` in the input, so a position in the rest in Rust
@@ -1663,13 +1676,13 @@ The legacy 2.0 mode has two backslash escapes, \" and \\.
 There are no other escapes.
 -/
 /- LEAN: `origin` is where the step started, as at `lexWhitespace`. -/
-def lexStringLiteralLegacy (input : Input) (consumed origin : USize)
-    (horigin : origin.toNat ≤ consumed.toNat) (tokenStart : Location)
+def lexStringLiteralLegacy (input : CharClass.Input) (consumed origin : USize)
+    (horigin : origin.toNat ≤ consumed.toNat) (tokenStart : Span.Location)
     (base : USize) (h : Started floor low tokenStart) :
     LexM H m R E floor low {next : USize // origin.toNat ≤ next.toNat} := do
   let some ⟨first, hfirst⟩ := (input.get? consumed).attach
     | return ⟨consumed, horigin⟩
-  have := Input.toNat_add_one_of_get? hfirst
+  have := CharClass.Input.toNat_add_one_of_get? hfirst
   let mut consumed : { position : USize // consumed.toNat ≤ position.toNat } :=
     ⟨consumed, Nat.le_refl _⟩
   match (← getCore).state with
@@ -1696,8 +1709,9 @@ def lexStringLiteralLegacy (input : Input) (consumed origin : USize)
 
   -- find the first byte that does not belong to string nor quoted
   -- this means backslash and pipe end the run as well, so we can act on them
-  let index := runEndAll input consumed (RUN_STRING_PLAIN ||| RUN_QUOTED_PLAIN)
-  have : consumed.1.toNat ≤ index.toNat := le_runEndAll input _ _
+  let index := CharClass.runEndAll input consumed (CharClass.RUN_STRING_PLAIN |||
+      CharClass.RUN_QUOTED_PLAIN)
+  have : consumed.1.toNat ≤ index.toNat := CharClass.le_runEndAll input _ _
   have := consumed.2
 
   let some ⟨c, hc⟩ := (input.get? index).attach
@@ -1705,7 +1719,7 @@ def lexStringLiteralLegacy (input : Input) (consumed origin : USize)
       -- extend the content with the rest
       extendContent input consumed input.stop
       -- we have nothing more to consume, return
-      return ⟨input.stop, by have := Input.lt_stop_of_get? hfirst; omega⟩
+      return ⟨input.stop, by have := CharClass.Input.lt_stop_of_get? hfirst; omega⟩
 
   let addRunEnding ←
     if c == byte! '\n' then do
@@ -1738,20 +1752,20 @@ def lexStringLiteralLegacy (input : Input) (consumed origin : USize)
     -- add the byte to the content
     pushContent c
   -- consume the run-ending byte and everything before it
-  have := Input.toNat_add_one_of_get? hc
+  have := CharClass.Input.toNat_add_one_of_get? hc
   lexStringLiteralLegacy input (index + 1) origin (by simp +zetaDelta only at *; omega)
     tokenStart base h
 termination_by input.stop.toNat - consumed.toNat
 decreasing_by decreasing_position
 
 /-- Lexes the string literal. -/
-def lexStringLiteralFrom (input : Input) (consumed origin : USize)
-    (horigin : origin.toNat ≤ consumed.toNat) (tokenStart : Location)
+def lexStringLiteralFrom (input : CharClass.Input) (consumed origin : USize)
+    (horigin : origin.toNat ≤ consumed.toNat) (tokenStart : Span.Location)
     (base : USize) (h : Started floor low tokenStart) :
     LexM H m R E floor low {next : USize // origin.toNat ≤ next.toNat} := do
   let some ⟨first, hfirst⟩ := (input.get? consumed).attach
     | return ⟨consumed, horigin⟩
-  have := Input.toNat_add_one_of_get? hfirst
+  have := CharClass.Input.toNat_add_one_of_get? hfirst
   let mut consumed : { position : USize // consumed.toNat ≤ position.toNat } :=
     ⟨consumed, Nat.le_refl _⟩
   if (← getCore).state == .stringLiteralDoubleQuote then
@@ -1775,13 +1789,13 @@ def lexStringLiteralFrom (input : Input) (consumed origin : USize)
       setTokenState .stringLiteral tokenStart h
 
   -- find the first byte that is not a plain string byte
-  let index := runEnd input consumed RUN_STRING_PLAIN
-  have : consumed.1.toNat ≤ index.toNat := le_runEnd input _ _
+  let index := CharClass.runEnd input consumed CharClass.RUN_STRING_PLAIN
+  have : consumed.1.toNat ≤ index.toNat := CharClass.le_runEnd input _ _
   have := consumed.2
 
   match hc : input.get? index with
   | some c =>
-    have := Input.toNat_add_one_of_get? hc
+    have := CharClass.Input.toNat_add_one_of_get? hc
     if c == byte! '\n' then
       -- mark the line feed
       markLineFeedAt index
@@ -1808,12 +1822,13 @@ def lexStringLiteralFrom (input : Input) (consumed origin : USize)
     -- extend the content with the rest
     extendContent input consumed input.stop
     -- we have nothing more to consume, return
-    return ⟨input.stop, by have := Input.lt_stop_of_get? hfirst; omega⟩
+    return ⟨input.stop, by have := CharClass.Input.lt_stop_of_get? hfirst; omega⟩
 termination_by input.stop.toNat - consumed.toNat
 decreasing_by all_goals decreasing_position
 
 /-- Lexes the string literal. -/
-def lexStringLiteral (input : Input) (start : USize) (tokenStart : Location) (base : USize)
+def lexStringLiteral (input : CharClass.Input) (start : USize) (tokenStart : Span.Location)
+    (base : USize)
     (h : Started floor low tokenStart) :
     LexM H m R E floor low {next : USize // start.toNat ≤ next.toNat} := do
   if (← getCore).version == .v2_0 then
@@ -1823,11 +1838,12 @@ def lexStringLiteral (input : Input) (start : USize) (tokenStart : Location) (ba
   else
     lexStringLiteralFrom input start start (Nat.le_refl _) tokenStart base h
 
-def lexSimpleSymbol (input : Input) (start : USize) (tokenStart : Location) (base : USize)
+def lexSimpleSymbol (input : CharClass.Input) (start : USize) (tokenStart : Span.Location)
+    (base : USize)
     (h : Started floor low tokenStart) :
     LexM H m R E floor low {next : USize // start.toNat ≤ next.toNat} := do
   -- find the first byte that is not a simple symbol
-  let index := runEnd input start RUN_SIMPLE_SYMBOL
+  let index := CharClass.runEnd input start CharClass.RUN_SIMPLE_SYMBOL
   -- extend the token from slice
   extendContent input start index
   if hlt : index < input.stop then
@@ -1835,22 +1851,22 @@ def lexSimpleSymbol (input : Input) (start : USize) (tokenStart : Location) (bas
     expectDelimiter (input.get index (USize.lt_iff_toNat_lt.mp hlt)) index
     finishSimpleSymbol (.mkAtByte index) tokenStart base h
     setNormal
-  return ⟨index, le_runEnd input start _⟩
+  return ⟨index, CharClass.le_runEnd input start _⟩
 
 /- LEAN: `origin` is where the step started, as at `lexWhitespace`. -/
-def lexQuotedSymbol (input : Input) (consumed origin : USize)
+def lexQuotedSymbol (input : CharClass.Input) (consumed origin : USize)
     (horigin : origin.toNat ≤ consumed.toNat)
-    (hconsumed : consumed.toNat ≤ input.stop.toNat) (tokenStart : Location)
+    (hconsumed : consumed.toNat ≤ input.stop.toNat) (tokenStart : Span.Location)
     (base : USize) (h : Started floor low tokenStart) :
     LexM H m R E floor low {next : USize // origin.toNat ≤ next.toNat} := do
   -- find the first byte that is not a quoted symbol
-  let index := runEnd input consumed RUN_QUOTED_PLAIN
-  have : consumed.toNat ≤ index.toNat := le_runEnd input _ _
+  let index := CharClass.runEnd input consumed CharClass.RUN_QUOTED_PLAIN
+  have : consumed.toNat ≤ index.toNat := CharClass.le_runEnd input _ _
 
   -- inspect the problematic byte
   match hc : input.get? index with
   | some c =>
-    have := Input.toNat_add_one_of_get? hc
+    have := CharClass.Input.toNat_add_one_of_get? hc
     let afterSlicePosition := index + 1
     if c == byte! '|' then
       -- end of quoted symbol, extend its content
@@ -1889,11 +1905,11 @@ def lexQuotedSymbol (input : Input) (consumed origin : USize)
 termination_by input.stop.toNat - consumed.toNat
 decreasing_by decreasing_position
 
-def lexKeyword (input : Input) (start : USize) (tokenStart : Location) (base : USize)
+def lexKeyword (input : CharClass.Input) (start : USize) (tokenStart : Span.Location) (base : USize)
     (h : Started floor low tokenStart) :
     LexM H m R E floor low {next : USize // start.toNat ≤ next.toNat} := do
   -- find the first byte that is not simple-symbol-like
-  let index := runEnd input start RUN_SIMPLE_SYMBOL
+  let index := CharClass.runEnd input start CharClass.RUN_SIMPLE_SYMBOL
 
   -- extend the token from slice
   extendContent input start index
@@ -1903,10 +1919,10 @@ def lexKeyword (input : Input) (start : USize) (tokenStart : Location) (base : U
     finishKeyword (.mkAtByte index) (some (input.get index (USize.lt_iff_toNat_lt.mp hlt)))
       tokenStart base h
     setNormal
-  return ⟨index, le_runEnd input start _⟩
+  return ⟨index, CharClass.le_runEnd input start _⟩
 
-def lexQuotedSymbolClosed (input : Input) (start : USize)
-    (hstart : start.toNat < input.stop.toNat) (tokenStart : Location)
+def lexQuotedSymbolClosed (input : CharClass.Input) (start : USize)
+    (hstart : start.toNat < input.stop.toNat) (tokenStart : Span.Location)
     (base : USize) (h : Started floor low tokenStart) :
     LexM H m R E floor low {next : USize // start.toNat ≤ next.toNat} := do
   -- we expect a token delimiter to follow the closing pipe
@@ -1920,21 +1936,21 @@ def lexQuotedSymbolClosed (input : Input) (start : USize)
 /- LEAN: the loop of `lex_whitespace` is the recursion on `start`, shown to end as
 `lexNormalFrom` is. `origin` is where the step started, which the position returned is at or
 after; it stays the same while the loop runs, so that the recursive call is the last one. -/
-def lexWhitespace (input : Input) (start origin : USize)
+def lexWhitespace (input : CharClass.Input) (start origin : USize)
     (horigin : origin.toNat ≤ start.toNat)
-    (hstart : start.toNat ≤ input.stop.toNat) (tokenStart : Location) (base : USize)
+    (hstart : start.toNat ≤ input.stop.toNat) (tokenStart : Span.Location) (base : USize)
     (h : Started floor low tokenStart) :
     LexM H m R E floor low {next : USize // origin.toNat ≤ next.toNat} := do
   -- we know that the consumer is interested in the whitespace
   -- as it would otherwise be immediately discarded instead
   -- of the state change
   -- find the first byte that is not non-LF whitespace
-  let index := runEnd input start RUN_NON_LF_WHITESPACE
-  have : start.toNat ≤ index.toNat := le_runEnd input _ _
+  let index := CharClass.runEnd input start CharClass.RUN_NON_LF_WHITESPACE
+  have : start.toNat ≤ index.toNat := CharClass.le_runEnd input _ _
   -- inspect the problematic byte
   match hc : input.get? index with
   | some c =>
-    have := Input.toNat_add_one_of_get? hc
+    have := CharClass.Input.toNat_add_one_of_get? hc
     if c == byte! '\n' then
       -- mark the line feed at the given position
       markLineFeedAt index
@@ -1959,12 +1975,12 @@ def lexWhitespace (input : Input) (start origin : USize)
 termination_by input.stop.toNat - start.toNat
 decreasing_by decreasing_position
 
-def lexComment (input : Input) (start : USize) (hstart : start.toNat ≤ input.stop.toNat)
-    (tokenStart : Location) (base : USize) (h : Started floor low tokenStart) :
+def lexComment (input : CharClass.Input) (start : USize) (hstart : start.toNat ≤ input.stop.toNat)
+    (tokenStart : Span.Location) (base : USize) (h : Started floor low tokenStart) :
     LexM H m R E floor low {next : USize // start.toNat ≤ next.toNat} := do
   -- run until comment end
-  let index := runEnd input start RUN_COMMENT_PLAIN
-  have : start.toNat ≤ index.toNat := le_runEnd input _ _
+  let index := CharClass.runEnd input start CharClass.RUN_COMMENT_PLAIN
+  have : start.toNat ≤ index.toNat := CharClass.le_runEnd input _ _
   match hc : input.get? index with
   | none =>
     -- the comment continues; if we are producing comments,
@@ -1981,7 +1997,7 @@ def lexComment (input : Input) (start : USize) (hstart : start.toNat ≤ input.s
     markLineFeedAt index
 
   let afterCommentEnd := index + 1
-  have := Input.toNat_add_one_of_get? hc
+  have := CharClass.Input.toNat_add_one_of_get? hc
 
   if ← consumesWhitespaceAndComments then
     -- we need to produce the comment token
@@ -2002,7 +2018,7 @@ which the loop over the slice is shown to end by. A step consumes nothing only a
 finished a token, so the lexer is then in the normal state. -/
 /-- Goes on with `lexNormal` at `start` if the step returned `start`, having consumed nothing. -/
 @[inline]
-def afterStep (input : Input) (start : USize) (hstart : start.toNat < input.stop.toNat)
+def afterStep (input : CharClass.Input) (start : USize) (hstart : start.toNat < input.stop.toNat)
     (next : {next : USize // start.toNat ≤ next.toNat}) :
     LexM H m R E floor low {next : USize // start.toNat < next.toNat} :=
   if h : start.toNat < next.1.toNat then pure ⟨next.1, h⟩ else lexNormal input start hstart
@@ -2014,8 +2030,8 @@ lexer state says of them. -/
 Lexes the input from `start`, which is below its end, in the state, returning the position up
 to which the input was consumed, which is after `start`.
 -/
-def lexStep (input : Input) (start : USize) (hstart : start.toNat < input.stop.toNat)
-    (state : LexerState) (tokenStart : Location) (base : USize)
+def lexStep (input : CharClass.Input) (start : USize) (hstart : start.toNat < input.stop.toNat)
+    (state : Helpers.LexerState) (tokenStart : Span.Location) (base : USize)
     (hpending : state = .normal ∨ Started floor low tokenStart) :
     LexM H m R E floor low {next : USize // start.toNat < next.toNat} := do
   match state, hpending with
@@ -2031,11 +2047,11 @@ def lexStep (input : Input) (start : USize) (hstart : start.toNat < input.stop.t
       (← lexBaseSelection input start hstart tokenStart (h.resolve_left nofun))
   | .hexadecimal, h =>
     afterStep input start hstart
-      (← lexDigitRun input start HEXADECIMAL_RUN tokenStart base
+      (← lexDigitRun input start Helpers.HEXADECIMAL_RUN tokenStart base
         (h.resolve_left nofun))
   | .binary, h =>
     afterStep input start hstart
-      (← lexDigitRun input start BINARY_RUN tokenStart base (h.resolve_left nofun))
+      (← lexDigitRun input start Helpers.BINARY_RUN tokenStart base (h.resolve_left nofun))
   | .stringLiteral, h | .stringLiteralDoubleQuote, h | .stringLiteralBackslashEscape, h =>
     afterStep input start hstart
       (← lexStringLiteral input start tokenStart base (h.resolve_left nofun))
@@ -2065,7 +2081,7 @@ inductive SliceExit (R E : Type) (floor : Option Nat) where
   /-- The batch was handed over: the result to return. -/
   | done (result : Except (Failure E) (ControlFlow R))
   /-- The consumer stopped at the location, which is after the floor. -/
-  | stopped (stop : Stop R) (location : Location)
+  | stopped (stop : Stop R) (location : Span.Location)
     (after : ∀ p, floor = some p → p < location.offset)
 
 /- LEAN: the loop of `lex_slice_inner`, up to the first stop of the consumer, which the loop
@@ -2074,7 +2090,7 @@ base, and `fnResult` the result to return once the batch is handed over. The lex
 passed along by hand, with the floor (see `Interrupted`). The loop ends as every step consumes a
 byte (see `lexStep`), and a lexical error is met at most once before the batch is handed over:
 then the loop flushes, and a flush either ends the loop or stops it. -/
-def lexSliceRun (input : Input) (position : USize)
+def lexSliceRun (input : CharClass.Input) (position : USize)
     (fnResult : Except (Failure E) (ControlFlow R)) (core : {c : LexerCore // c.Bound floor 0}) :
     StateT H m (SliceExit R E floor × {c : LexerCore // c.Bound floor 0}) := do
   let failed := match fnResult with
@@ -2148,11 +2164,11 @@ result, as trailing input. A request to discard ends the lexing, with the locati
 
 Returns the result the consumer broke with in the slice, if it did, and the lexer state.
 -/
-def lexSliceFrom (input : Input) (initialOffset : Nat) (floor : Nat)
+def lexSliceFrom (input : CharClass.Input) (initialOffset : Nat) (floor : Nat)
     (hfloor : initialOffset ≤ floor + 1) (position : USize)
-    (fnResult : Except (Failure E) (ControlFlow R)) (held : Option (Located R))
+    (fnResult : Except (Failure E) (ControlFlow R)) (held : Option (Span.Located R))
     (core : {c : LexerCore // c.Bound (some floor) 0}) :
-    StateT H m (Except (Failure E) (Option (Located R)) × LexerCore) := do
+    StateT H m (Except (Failure E) (Option (Span.Located R)) × LexerCore) := do
   let (exit, core) ← lexSliceRun input position fnResult core
   match exit with
   | .done result => return (result.map fun _ => held, core.val)
@@ -2201,18 +2217,19 @@ decreasing_by
     omega
 
 /-- Lexes the slice, returning the result the consumer broke with in it, if it did. -/
-def lexSliceInner (input : Input) :
-    InnerM H m (Except (Failure E) (Option (Located R))) := fun c =>
+def lexSliceInner (input : CharClass.Input) :
+    InnerM H m (Except (Failure E) (Option (Span.Located R))) := fun c =>
   let initialOffset := c.offset
   -- the slice starts at the lexer's offset,
   -- and the tokens borrowed from it have their contents in its array
   /- LEAN: the batch starts empty, as Rust's, which is a local of the call, does; it is empty
   already, as lexing returns with it handed over. -/
   let batch := c.batch
-  let c := { c with batch := default, batchEnded := TokenBatch.lastEnd_default ▸ Nat.zero_le _ }
+  let c :=
+      { c with batch := default, batchEnded := Token.TokenBatch.lastEnd_default ▸ Nat.zero_le _ }
   let c : LexerCore := { c with
     base := input.start, batch := { batch.clear initialOffset with bytes := input.bytes }
-    batchEnded := Nat.le_of_eq (TokenBatch.lastEnd_clear _ _) }
+    batchEnded := Nat.le_of_eq (Token.TokenBatch.lastEnd_clear _ _) }
   -- the floor is just before the slice, and every token handed over ends after it: one begun in
   -- an earlier slice ends at the slice's start or later, one begun in this slice ends after its
   -- first byte. At offset 0 the floor is 0, as `Nat` subtraction stops there; no token begins
@@ -2237,7 +2254,7 @@ def reset : InnerM H m Unit :=
       consumedDepth := 0
       lexedDepth := 0
       recoveryState := none
-      tokenStart := Location.initial
+      tokenStart := Span.Location.initial
       tokenContent := c.tokenContent.clear
       offset := 0
       line := 0
@@ -2247,7 +2264,7 @@ def reset : InnerM H m Unit :=
       is set to the offset. -/
       batch := c.batch.clear 0
       tokenStarted := .inl rfl
-      batchEnded := Nat.le_of_eq (TokenBatch.lastEnd_clear _ _) }
+      batchEnded := Nat.le_of_eq (Token.TokenBatch.lastEnd_clear _ _) }
 
 /- LEAN: the pending token is finished as a step does: it starts before the lexer's offset,
 which is that of the position 0 at the end of the input. -/
@@ -2266,46 +2283,50 @@ def lexEofInner : InnerM H m (Except (Failure E) (ControlFlow R)) := fun c => do
     | .quotedSymbolClosed, h =>
       -- the end of the input is a token delimiter,
       -- produce the quoted symbol
-      sinkStored .quotedSymbol TokenEnd.EOF tokenStart 0
+      sinkStored .quotedSymbol Helpers.TokenEnd.EOF tokenStart 0
         ⟨h.resolve_left nofun, fun _ h => nomatch h⟩
     | .fraction, h =>
-      finishDecimal TokenEnd.EOF none tokenStart 0 ⟨h.resolve_left nofun, fun _ h => nomatch h⟩
+      finishDecimal Helpers.TokenEnd.EOF none tokenStart 0
+          ⟨h.resolve_left nofun, fun _ h => nomatch h⟩
     | .numeralOrDecimal, h =>
-      finishNumeral TokenEnd.EOF tokenStart 0 ⟨h.resolve_left nofun, fun _ h => nomatch h⟩
+      finishNumeral Helpers.TokenEnd.EOF tokenStart 0 ⟨h.resolve_left nofun, fun _ h => nomatch h⟩
     | .hexadecimal, h =>
-      finishDigitRun HEXADECIMAL_RUN TokenEnd.EOF none tokenStart 0
+      finishDigitRun Helpers.HEXADECIMAL_RUN Helpers.TokenEnd.EOF none tokenStart 0
         ⟨h.resolve_left nofun, fun _ h => nomatch h⟩
     | .binary, h =>
-      finishDigitRun BINARY_RUN TokenEnd.EOF none tokenStart 0
+      finishDigitRun Helpers.BINARY_RUN Helpers.TokenEnd.EOF none tokenStart 0
         ⟨h.resolve_left nofun, fun _ h => nomatch h⟩
     | .baseSelection, _ =>
       -- hash without selection following it
-      fail .baseSelectionExpected TokenEnd.EOF
+      fail .baseSelectionExpected Helpers.TokenEnd.EOF
     | .stringLiteral, _ | .stringLiteralBackslashEscape, _ =>
       -- we are still within the string literal
       -- forbidden as the literal must be totally enclosed by double quotes
-      fail .unclosedStringLiteral TokenEnd.EOF
+      fail .unclosedStringLiteral Helpers.TokenEnd.EOF
     | .stringLiteralDoubleQuote, h =>
       -- string literal has ended by the previous character,
       -- a quote directly before the end of the file
       -- this works both for 2.0 and 2.5+
-      finishStringLiteral TokenEnd.EOF tokenStart 0 ⟨h.resolve_left nofun, fun _ h => nomatch h⟩
+      finishStringLiteral Helpers.TokenEnd.EOF tokenStart 0
+          ⟨h.resolve_left nofun, fun _ h => nomatch h⟩
     | .simpleSymbol, h =>
-      finishSimpleSymbol TokenEnd.EOF tokenStart 0 ⟨h.resolve_left nofun, fun _ h => nomatch h⟩
+      finishSimpleSymbol Helpers.TokenEnd.EOF tokenStart 0
+          ⟨h.resolve_left nofun, fun _ h => nomatch h⟩
     | .keyword, h =>
-      finishKeyword TokenEnd.EOF none tokenStart 0 ⟨h.resolve_left nofun, fun _ h => nomatch h⟩
+      finishKeyword Helpers.TokenEnd.EOF none tokenStart 0
+          ⟨h.resolve_left nofun, fun _ h => nomatch h⟩
     | .quotedSymbol, _ =>
       -- EOF forbidden as the symbol must be totally enclosed by pipes
-      fail .unclosedQuotedSymbol TokenEnd.EOF
+      fail .unclosedQuotedSymbol Helpers.TokenEnd.EOF
     | .whitespace, h =>
       -- we can only be in this state if the consumer wants the
       -- whitespace to be emitted, so sink it
-      sinkStored .whitespace TokenEnd.EOF tokenStart 0
+      sinkStored .whitespace Helpers.TokenEnd.EOF tokenStart 0
         ⟨h.resolve_left nofun, fun _ h => nomatch h⟩
     | .comment, h => do
       -- only produce the comment if the consumer wants it
       if ← consumesWhitespaceAndComments then
-        sinkStored .comment TokenEnd.EOF tokenStart 0
+        sinkStored .comment Helpers.TokenEnd.EOF tokenStart 0
           ⟨h.resolve_left nofun, fun _ h => nomatch h⟩
   let step : LexM H m R E none offset Unit := do
     -- if we were told to relex, treat it as a normal continuation,
@@ -2344,7 +2365,7 @@ def lexEofInner : InnerM H m (Except (Failure E) (ControlFlow R)) := fun c => do
 
 /-- Executes an inner lexer step, adding the break location to its result. -/
 def executeStep (step : InnerM H m (Except (Failure E) (ControlFlow R))) :
-    InnerM H m (Except (Failure E) (ControlFlow (Located R))) := do
+    InnerM H m (Except (Failure E) (ControlFlow (Span.Located R))) := do
   match ← step with
   | .ok .continue => return .ok .continue
   | .ok (.break result) =>
@@ -2361,15 +2382,15 @@ Turns the failure into the error to return.
 A recovering lexer makes the consumer abandon its current work and skips bytes until
 recovery is made.
 -/
-def failCall (abandon : Location → StateT H m Unit) (failure : Failure E) (atEnd : Bool) :
-    InnerM H m (LexError E) := do
+def failCall (abandon : Span.Location → StateT H m Unit) (failure : Failure E) (atEnd : Bool) :
+    InnerM H m (Error.LexError E) := do
   if !(← getThe LexerCore).recovers then
     return { cause := failure.cause, span := failure.span, continuesFrom := none }
 
   -- a value is confirmed only at the end of the input: an error after a break drops it
   modifyThe LexerCore fun c => { c with holding := false }
 
-  let skip : RecoveryState := if atEnd then
+  let skip : Helpers.RecoveryState := if atEnd then
       -- the input has ended, nothing is left to skip
       .end
     else
@@ -2391,7 +2412,7 @@ def failCall (abandon : Location → StateT H m Unit) (failure : Failure E) (atE
 
 /-- What skipping goes through, see `skipBytes`. -/
 structure Skipping where
-  skip : RecoveryState
+  skip : Helpers.RecoveryState
   depth : Nat
   line : Nat
   lineStart : Nat
@@ -2414,7 +2435,7 @@ def skipBytes (bytes : ByteSlice) (legacy : Bool) (offset index : Nat)
       | .end | .boundary | .plain =>
         if c == byte! '"' then .inr { skipping with skip := .string }
         else if c == byte! '|' then .inr { skipping with skip := .quotedSymbol }
-        else if isDelimiter c && skipping.depth == 0 then
+        else if Helpers.isDelimiter c && skipping.depth == 0 then
           -- delimits the error end while nothing is open, we have recovered
           .inl (index, skipping)
         else if c == byte! ';' then .inr { skipping with skip := .comment }
@@ -2458,7 +2479,7 @@ Skips the input while recovering.
 Returns the position in the slice where the recovery was made,
 or returns `none` if it has not yet been done.
 -/
-def skipSlice (slice : ByteSlice) (skip : RecoveryState) : InnerM H m (Option Nat) := do
+def skipSlice (slice : ByteSlice) (skip : Helpers.RecoveryState) : InnerM H m (Option Nat) := do
   let c ← getThe LexerCore
   if skip == .boundary && c.consumedDepth == 0 then
     -- the consumer failed after a whole value, no recovery needed
@@ -2495,10 +2516,11 @@ def CHUNK_SIZE : Nat := 2 ^ 31
 
 /-- Lexes the slice, which ends below `USize.size`, from the position after the bytes skipped
 while recovering. -/
-def lexFitting (abandon : Location → StateT H m Unit) (slice : ByteSlice)
-    (h : slice.stop < USize.size) : InnerM H m (Except (LexError E) (Option (Located R))) := do
+def lexFitting (abandon : Span.Location → StateT H m Unit) (slice : ByteSlice)
+    (h : slice.stop < USize.size) : InnerM H m (Except (Error.LexError E)
+    (Option (Span.Located R))) := do
   -- execute the inner lexing step, and fail on error
-  match ← lexSliceInner (Input.ofSlice slice h) with
+  match ← lexSliceInner (CharClass.Input.ofSlice slice h) with
   | .ok held => return .ok held
   | .error failure => return .error (← failCall abandon failure false)
 
@@ -2526,8 +2548,9 @@ discarded.
 
 Returns the result the consumer broke with in the slice, if it did.
 -/
-def lexSliceFitting (abandon recover : Location → StateT H m Unit) (slice : ByteSlice)
-    (h : slice.stop < USize.size) : InnerM H m (Except (LexError E) (Option (Located R))) := do
+def lexSliceFitting (abandon recover : Span.Location → StateT H m Unit) (slice : ByteSlice)
+    (h : slice.stop < USize.size) : InnerM H m (Except (Error.LexError E)
+    (Option (Span.Located R))) := do
   if (← getThe LexerCore).discardedFrom.isSome then
     -- we are discarding bytes
     -- pretend that we lexed everything we were given
@@ -2564,9 +2587,9 @@ result the consumer broke with in an earlier chunk, if it did. Lexing stops at a
 does in a slice; the bytes after it are left to the caller, as those of a slice are. -/
 /-- Lexes the slice from `position` on, a chunk at a time. -/
 @[noinline]
-def lexChunks (abandon recover : Location → StateT H m Unit) (slice : ByteSlice)
-    (position : Nat) (held : Option (Located R)) :
-    InnerM H m (Except (LexError E) (Option (Located R))) := do
+def lexChunks (abandon recover : Span.Location → StateT H m Unit) (slice : ByteSlice)
+    (position : Nat) (held : Option (Span.Located R)) :
+    InnerM H m (Except (Error.LexError E) (Option (Span.Located R))) := do
   if h : position < slice.size then
     let chunkStart := slice.start + position
     let chunk := slice.byteArray.extract chunkStart (min (chunkStart + CHUNK_SIZE) slice.stop)
@@ -2588,8 +2611,8 @@ Lexes the slice, or discards it if the consumer has had the rest discarded.
 
 Returns the result the consumer broke with in the slice, if it did.
 -/
-def lexSliceStep (abandon recover : Location → StateT H m Unit) (slice : ByteSlice) :
-    InnerM H m (Except (LexError E) (Option (Located R))) :=
+def lexSliceStep (abandon recover : Span.Location → StateT H m Unit) (slice : ByteSlice) :
+    InnerM H m (Except (Error.LexError E) (Option (Span.Located R))) :=
   if h : slice.stop < USize.size then lexSliceFitting abandon recover slice h
   else lexChunks abandon recover slice 0 none
 
@@ -2599,8 +2622,8 @@ Lexes the end of the input, which resets the lexer unless it fails and recovers.
 Hands the end of the input over unless a result is held, also while discarding. Returns the
 result the consumer broke with at the end of the input, if it did.
 -/
-def lexEofStep (abandon recover : Location → StateT H m Unit) :
-    InnerM H m (Except (LexError E) (ControlFlow (Located R))) := do
+def lexEofStep (abandon recover : Span.Location → StateT H m Unit) :
+    InnerM H m (Except (Error.LexError E) (ControlFlow (Span.Located R))) := do
   -- the end of the input forces recovery
   let recovered := (← getThe LexerCore).recoveryState.isSome
   if recovered then
@@ -2629,14 +2652,14 @@ open Internal
 
 section
 
-variable {H : Type} {R E : Type} [Consume H R E]
+variable {H : Type} {R E : Type} [Token.Consume H R E]
 
 /--
 Constructs the lexer.
 
 The lexer stops at its first error.
 -/
-def new (consumer : H) (version : Version) : Lexer H :=
+def new (consumer : H) (version : Token.Version) : Lexer H :=
   { handler := consumer,
     core := {
       version
@@ -2648,13 +2671,13 @@ def new (consumer : H) (version : Version) : Lexer H :=
       consumedDepth := 0
       lexedDepth := 0
       recoveryState := none
-      tokenStart := Location.initial
-      tokenContent := ContentBuffer.empty
+      tokenStart := Span.Location.initial
+      tokenContent := Helpers.ContentBuffer.empty
       offset := 0
       base := 0
       line := 0
       lineStart := 0
-      batch := TokenBatch.empty BATCH_CAPACITY
+      batch := Token.TokenBatch.empty BATCH_CAPACITY
       tokenStarted := .inl rfl
       batchEnded := Nat.zero_le _ }
     held := none }
@@ -2662,11 +2685,12 @@ def new (consumer : H) (version : Version) : Lexer H :=
 /- LEAN: Rust requires the consumer to recover by the bound `C: SmtRecover`; here by the
 instance argument, which the construction itself does not use. -/
 /-- Constructs a lexer that recovers from errors. -/
-def newRecovering [Recover H m] (consumer : H) (version : Version) : Lexer H .recovering :=
+def newRecovering [Token.Recover H m] (consumer : H)
+    (version : Token.Version) : Lexer H .recovering :=
   let { handler, core, held } := new consumer version
   { handler, core := { core with recovers := true }, held }
 
-def currentLocation (self : Lexer H recovery) : Location :=
+def currentLocation (self : Lexer H recovery) : Span.Location :=
   self.core.currentLocation
 
 /--
@@ -2675,7 +2699,7 @@ The SMT-LIB version currently in force.
 The version can change if the token consumer asks for it from the
 cursor. The end of the input resets the version to the initial one.
 -/
-def version (self : Lexer H recovery) : Version :=
+def version (self : Lexer H recovery) : Token.Version :=
   self.core.version
 
 /--
@@ -2684,7 +2708,7 @@ Where the lexer began to discard the input, if it discards.
 The consumer asks for discarding through its cursor. The lexer then drops everything it is fed
 and hands over nothing but the end of the input. The end of the input ends discarding.
 -/
-def discardedFrom (self : Lexer H recovery) : Option Location :=
+def discardedFrom (self : Lexer H recovery) : Option Span.Location :=
   self.core.discardedFrom
 
 /-- Returns the token consumer. -/
@@ -2710,11 +2734,11 @@ def core (self : Lexer H recovery) : LexerCore :=
   self.core
 
 /-- The result the consumer broke with, which the lexer holds. -/
-def held (self : Lexer H recovery) : Option (Located R) :=
+def held (self : Lexer H recovery) : Option (Span.Located R) :=
   self.held
 
 /-- The lexer with the consumer, the fields and the held result. -/
-def ofParts (handler : H) (core : LexerCore) (held : Option (Located R)) : Lexer H recovery :=
+def ofParts (handler : H) (core : LexerCore) (held : Option (Span.Located R)) : Lexer H recovery :=
   { handler, core, held }
 
 /- LEAN: takes the lexer apart so that the consumer and the fields are each held once, runs
@@ -2728,7 +2752,7 @@ def run [Monad m] (self : Lexer H recovery) (step : InnerM H m α) :
   return (result, { handler, core, held })
 
 /-- The lexer with the held result. -/
-def withHeld (self : Lexer H recovery) (held : Option (Located R)) : Lexer H recovery :=
+def withHeld (self : Lexer H recovery) (held : Option (Span.Located R)) : Lexer H recovery :=
   { self with held }
 
 end Internal
@@ -2741,7 +2765,7 @@ namespace BSmtLib
 
 section
 
-variable {H : Type} {R E : Type} [Consume H R E]
+variable {H : Type} {R E : Type} [Token.Consume H R E]
 
 /- LEAN: what Rust's `&mut self` leaves usable after a call that failed: the type of the
 recovering lexer, and nothing for a lexer that stops at its first error, whose further calls
@@ -2751,7 +2775,7 @@ What a lexer call that failed gives back: nothing for a lexer that stops
 at its first error, which cannot be used again, and the lexer itself for a
 recovering one, from which the rest of the input is to be fed.
 -/
-def Lexer.AfterError (H : Type) [Consume H R E] : Recovery → Type
+def Lexer.AfterError (H : Type) [Token.Consume H R E] : Recovery → Type
   | .failFast => Unit
   | .recovering => Lexer H .recovering
 
@@ -2761,7 +2785,7 @@ A recovering lexer whose end of the input raised an error.
 The input has ended, so only the end of the input can be lexed again,
 which completes the recovery.
 -/
-structure Lexer.PendingEof (H : Type) [Consume H R E] where
+structure Lexer.PendingEof (H : Type) [Token.Consume H R E] where
   private mk ::
   private lexer : Lexer H .recovering
 
@@ -2777,7 +2801,7 @@ What a recovering lexer gives back after its end of the input failed: the
 lexer, if the error is final, or the lexer that can only lex the end of the
 input again, if the error continues at the end.
 -/
-inductive Lexer.AfterEof (H : Type) [Consume H R E] where
+inductive Lexer.AfterEof (H : Type) [Token.Consume H R E] where
   | lexer (lexer : Lexer H .recovering)
   | pending (pending : Lexer.PendingEof H)
 
@@ -2785,7 +2809,7 @@ inductive Lexer.AfterEof (H : Type) [Consume H R E] where
 What a lexer gives back after its end of the input failed: nothing for a
 lexer that stops at its first error, and what remains of a recovering one.
 -/
-def Lexer.AfterEofError (H : Type) [Consume H R E] : Recovery → Type
+def Lexer.AfterEofError (H : Type) [Token.Consume H R E] : Recovery → Type
   | .failFast => Unit
   | .recovering => Lexer.AfterEof H
 
@@ -2808,8 +2832,8 @@ the input, a broken contract. Here the broken contract is an obligation on the c
 not give the lexer such a consumer: it is answered by `none` rather than a panic. -/
 /-- The result to return at the end of the input: the held one, else the one the consumer broke
 with at the end of the input. -/
-private def eofResult (held : Option (Located R)) (flow : ControlFlow (Located R)) :
-    Option (Located R) :=
+private def eofResult (held : Option (Span.Located R)) (flow : ControlFlow (Span.Located R)) :
+    Option (Span.Located R) :=
   match held, flow with
   | some held, _ => some held
   | none, .break located => some located
@@ -2836,10 +2860,11 @@ drops the held result, and returns the error. `LexError.continuesFrom`
 determines the location from which further lexing should be started for
 error recovery.
 -/
-def lexSlice [Monad m] [∀ batch, ConsumeFrom H (BatchCursor batch) m]
-    [LexRecovery recovery H m] (self : Lexer H recovery) (slice : ByteSlice) :
-    m (Except (LexError E × AfterError H recovery) (Lexer H recovery)) := do
-  let step := lexSliceStep (LexRecovery.abandon recovery) (LexRecovery.recover recovery) slice
+def lexSlice [Monad m] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m]
+    [Recovery.LexRecovery recovery H m] (self : Lexer H recovery) (slice : ByteSlice) :
+    m (Except (Error.LexError E × AfterError H recovery) (Lexer H recovery)) := do
+  let step := lexSliceStep (Recovery.LexRecovery.abandon recovery)
+      (Recovery.LexRecovery.recover recovery) slice
   let (result, self) ← Internal.run self step
   return match result with
     | .ok held => .ok (withHeld self (held.or self.held))
@@ -2863,10 +2888,12 @@ back. A recovering lexer makes the consumer abandon its unfinished work
 and returns the error. `LexError.continuesFrom` determines the location
 from which further lexing should be started for error recovery.
 -/
-def lexEof [Monad m] [∀ batch, ConsumeFrom H (BatchCursor batch) m]
-    [LexRecovery recovery H m] (self : Lexer H recovery) :
-    m (Except (LexError E × AfterEofError H recovery) (Option (Located R) × Lexer H recovery)) := do
-  let step := lexEofStep (LexRecovery.abandon recovery) (LexRecovery.recover recovery)
+def lexEof [Monad m] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m]
+    [Recovery.LexRecovery recovery H m] (self : Lexer H recovery) :
+    m (Except (Error.LexError E × AfterEofError H recovery)
+        (Option (Span.Located R) × Lexer H recovery)) := do
+  let step := lexEofStep (Recovery.LexRecovery.abandon recovery)
+      (Recovery.LexRecovery.recover recovery)
   let (result, self) ← Internal.run self step
   return match result with
     | .ok flow => .ok (eofResult self.held flow, withHeld self none)
@@ -2878,10 +2905,12 @@ Lexes the end of the input again, which completes the recovery.
 The lexer hands over the end-of-file token, and returns what `lexEof`
 does. An error is final: the lexer resets itself and does not continue.
 -/
-def PendingEof.lexEof [Monad m] [∀ batch, ConsumeFrom H (BatchCursor batch) m] [Recover H m]
+def PendingEof.lexEof [Monad m] [∀ batch, Token.ConsumeFrom H
+    (Token.BatchCursor batch) m] [Token.Recover H m]
     (self : PendingEof H) :
-    m (Except (LexError E × Lexer H .recovering) (Option (Located R) × Lexer H .recovering)) := do
-  let step := lexEofStep (Recover.abandon (H := H)) (Recover.recover (H := H))
+    m (Except (Error.LexError E × Lexer H .recovering)
+        (Option (Span.Located R) × Lexer H .recovering)) := do
+  let step := lexEofStep (Token.Recover.abandon (H := H)) (Token.Recover.recover (H := H))
   let (result, lexer) ← Internal.run self.lexer step
   return match result with
     | .ok flow => .ok (eofResult lexer.held flow, withHeld lexer none)
@@ -2894,9 +2923,9 @@ Returns what `lexEof` does, and the lexer reset by the end of the input.
 
 If an error occurs, the lexer is not given back.
 -/
-def lexAll [Monad m] [∀ batch, ConsumeFrom H (BatchCursor batch) m] (self : Lexer H)
+def lexAll [Monad m] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] (self : Lexer H)
     (input : ByteSlice) :
-    m (Except (LexError E × AfterError H .failFast) (Option (Located R) × Lexer H)) := do
+    m (Except (Error.LexError E × AfterError H .failFast) (Option (Span.Located R) × Lexer H)) := do
   match ← self.lexSlice input with
   | .ok self => self.lexEof
   | .error err => return .error err

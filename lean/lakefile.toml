@@ -1,7 +1,7 @@
 name = "blazing-smtlib"
-defaultTargets = ["BSmtLib", "BSmtLibSpec", "BSmtLibSpecChecks", "BSmtLibProofs", "BSmtLibParserProofs",
-  "BSmtLibEndToEnd"]
+defaultTargets = ["BSmtLib", "BSmtLibSpec", "BSmtLibSpecFacts", "BSmtLibFacts"]
 
+# the library
 [[lean_lib]]
 name = "BSmtLib"
 
@@ -10,27 +10,25 @@ name = "BSmtLib"
 name = "BSmtLibSpec"
 roots = ["BSmtLibSpec"]
 
-# checks of the specification against the standard's examples; not trusted
+# what the specification satisfies by itself, and its checks against the standard's examples;
+# not trusted
 [[lean_lib]]
-name = "BSmtLibSpecChecks"
-roots = ["BSmtLib.SpecChecks"]
+name = "BSmtLibSpecFacts"
+roots = ["BSmtLibSpec.Facts"]
 
-# the chain of lexers that leads from the specification to the library's lexer
+# what the library satisfies with respect to the specification: the lexers, the parsers and the
+# readers; the chain of lexers from the specification to the library's lexer is built with it
 [[lean_lib]]
-name = "BSmtLibProofs"
-roots = ["BSmtLib.Proofs"]
+name = "BSmtLibFacts"
+roots = ["BSmtLib.Facts", "BSmtLib.Facts.Names"]
 
 # the lexing mode of rust/benches/parse.rs, run with `lake exe bench-parse`
 [[lean_exe]]
 name = "bench-parse"
 root = "Benches.Parse"
 
-# the proofs of the parser against the specification's traversal
-[[lean_lib]]
-name = "BSmtLibParserProofs"
-roots = ["BSmtLib.ParserProofs"]
-
-# the composition of the lexer and parser proofs, from characters to the traversal's calls
-[[lean_lib]]
-name = "BSmtLibEndToEnd"
-roots = ["BSmtLib.EndToEnd"]
+# writes the generated module of re-exports, `BSmtLib/Reexports.lean`, run with
+# `lake exe reexports`
+[[lean_exe]]
+name = "reexports"
+root = "BSmtLib.Facts.WriteReexports"

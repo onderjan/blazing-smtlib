@@ -1,5 +1,5 @@
 import BSmtLib.Lexer
-import BSmtLib.Parser
+import BSmtLib.Parser.Adapter
 
 /-!
 # Reading SMT-LIB input: lexing and parsing
@@ -17,7 +17,9 @@ buffered reader or when the resources should serve several reads. The lexer and 
 also be used on their own.
 -/
 
-namespace BSmtLib
+open BSmtLib.Lexer.Error BSmtLib.Parser.Adapter BSmtLib.Parser.Script BSmtLib.Traits
+
+namespace BSmtLib.Reader
 
 open Parser
 
@@ -56,7 +58,7 @@ instance {E : Type} : Inhabited (ReadError E) :=
 /-- Converts the error of a parser, located at `span`, into a read error. -/
 def ReadError.ofParse {E : Type} (err : ParseErrorCause E) (span : Span) : ReadError E :=
   let cause := match err with
-    | .syntax err => ReadErrorCause.syntax err
+    | .syntax err => ReadErrorCause.«syntax» err
     | .handler err => ReadErrorCause.handler err
   { cause, span }
 
@@ -154,11 +156,10 @@ can be reused. A call that returns an error gives no reader back.
 
 For whole inputs, consider `readSmtFile` and `readSmt`.
 -/
-structure Reader (H P : Type) {m : Type → Type} [Monad m] {E R : Type} [Parse P H m E R] where
+structure _root_.BSmtLib.Reader (H P : Type) {m : Type → Type} [Monad m]
+    {E R : Type} [Parse P H m E R] where
   private mk ::
   private lexer : Lexer (ParseAdapter H P)
-
-namespace Reader
 
 section
 
@@ -171,7 +172,7 @@ The version under which the script is read can be changed by `set-info` commands
 the version-change posture and the initial version used before any commands are read must be
 provided.
 -/
-def script (handler : H) (posture : VersionPosture) (initialVersion : Version) :
+def script (handler : H) (posture : Token.VersionPosture) (initialVersion : Token.Version) :
     Reader H (ScriptParser H) :=
   { lexer := Lexer.new (ParseAdapter.new handler (ScriptParser.new posture)) initialVersion }
 
@@ -187,7 +188,7 @@ Creates a reader of the input `parser` accepts, over `handler`.
 The version passed is the initial one. Parsers may request the lexer to change versions, and the
 lexer will always comply. No standard parser changes versions except for `ScriptParser`.
 -/
-def new (handler : H) (parser : P) (version : Version) : Reader H P :=
+def new (handler : H) (parser : P) (version : Token.Version) : Reader H P :=
   { lexer := Lexer.new (ParseAdapter.new handler parser) version }
 
 /--
@@ -196,7 +197,7 @@ The SMT-LIB version currently in force.
 The version can change if the token consumer asks for it from the cursor. The end of the input
 resets the version to the initial one.
 -/
-def version (self : Reader H P) : Version :=
+def version (self : Reader H P) : Token.Version :=
   self.lexer.version
 
 /--
@@ -204,7 +205,7 @@ The location from which the input has been discarded, if set.
 
 `ScriptParser` discards input after the `(exit)` command. No other standard parsers discard.
 -/
-def discardedFrom (self : Reader H P) : Option Location :=
+def discardedFrom (self : Reader H P) : Option Span.Location :=
   self.lexer.discardedFrom
 
 /-- Returns the handler. -/
@@ -263,7 +264,7 @@ Call this once after the last `readSlice`; `readFile` and `readAll` call it them
 If an error occurs, the reader is not given back.
 -/
 def readEof (self : Reader H P) :
-    m (Except (ReadFailure H P) (Option (Located R) × Reader H P)) := do
+    m (Except (ReadFailure H P) (Option (Span.Located R) × Reader H P)) := do
   -- parsing goes through lexing, so just call the lexer
   match ← self.lexer.lexEof with
   | .ok (result, lexer) => return .ok (result, ⟨lexer⟩)
@@ -358,8 +359,6 @@ def readFile {n : Type → Type} [Monad n] [MonadLiftT IO n] [MonadLiftT m n] (s
 
 end
 
-end Reader
-
 section
 
 variable {H : Type} {m : Type → Type} [Monad m] [CommandHandler H m]
@@ -377,7 +376,7 @@ input.
 -/
 def readSmtFile {n : Type → Type} [Monad n] [MonadLiftT IO n] [MonadLiftT m n] (handler : H)
     (path : System.FilePath) : n (Except (ReadFailure H (ScriptParser H)) H) := do
-  let reader := Reader.script handler VersionPosture.default default
+  let reader := Reader.script handler Token.VersionPosture.default default
   match ← reader.readFile path with
   | .ok (_, reader) => return .ok reader.handler
   | .error err => return .error err
@@ -398,11 +397,11 @@ reads or to feed the input in pieces.
 -/
 def readSmt {B : Type} {n : Type → Type} [Monad n] [MonadLiftT m n] [BufRead B n] (handler : H)
     (bufReader : B) : n (Except (ReadFailure H (ScriptParser H)) H) := do
-  let reader := Reader.script handler VersionPosture.default default
+  let reader := Reader.script handler Token.VersionPosture.default default
   match ← reader.readAll bufReader with
   | (.ok (_, reader), _) => return .ok reader.handler
   | (.error err, _) => return .error err
 
 end
 
-end BSmtLib
+end BSmtLib.Reader

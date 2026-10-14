@@ -1,6 +1,6 @@
 import BSmtLib.Span
 
-namespace BSmtLib
+namespace BSmtLib.Lexer.Error
 
 inductive LexicalErrorKind where
   | unexpectedCharacter
@@ -44,7 +44,7 @@ structure LexError (E : Type) where
   If absent, the lexer does not continue this input: either it stops
   at its first error, or the input has ended.
   -/
-  continuesFrom : Option Location
+  continuesFrom : Option Span.Location
   deriving BEq, Repr
 
-end BSmtLib
+end BSmtLib.Lexer.Error

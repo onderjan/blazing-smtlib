@@ -94,24 +94,25 @@ are how agents follow it.
 - There is one set of tests, the Rust one. The tests are not translated to
   Lean: a driver runs them against the Lean implementation. Do not write Lean
   copies of Rust tests.
-- `lean/BSmtLib/Spec` is the trusted specification: a formal version of the
-  SMT-LIB standard, independent of this library's implementation. It changes
-  only by the maintainer or at the maintainer's explicit request. When a proof
-  needs a change of it, stop and propose the change with its reason. Never
-  weaken a definition or a property of it to make a proof go through. It imports
-  only itself and the Lean standard library.
+- `lean/BSmtLibSpec` (outside its `Facts`) is the trusted specification: a
+  formal version of the SMT-LIB standard, independent of this library's
+  implementation. It changes only by the maintainer or at the maintainer's
+  explicit request. When a proof needs a change of it, stop and propose the
+  change with its reason. Never weaken a definition or a property of it to make
+  a proof go through. It imports only itself and the Lean standard library.
 - The specification's source of truth is the SMT-LIB standard. Its comments
   cite the standard by version, section and production, as the one exception
   to the rule against referring to documents outside the repository. Every
   definition in it that states a rule or a property begins with a tag saying how
-  it relates to the standard; `lean/BSmtLib/Spec.lean` lists the tags.
-- `lean/BSmtLib/SpecChecks` checks the specification: on the standard's
+  it relates to the standard; `lean/BSmtLibSpec.lean` lists the tags.
+- `lean/BSmtLibSpec/Facts` checks the specification: on the standard's
   examples, and that it is unambiguous. It is not trusted and not a part of the
   specification.
 - A theorem that proves a property stated in the specification, of the
-  specification itself or of an implementation, is stated in the root module of
-  its library (`lean/BSmtLib/SpecChecks.lean` for the specification), with its
-  proof in the modules that root imports, so that one file shows what holds. It
+  specification itself or of an implementation, is stated in the facts module
+  of its part (`lean/BSmtLib/Facts/*.lean` for the library,
+  `lean/BSmtLibSpec/Facts/*.lean` for the specification), with its proof under
+  the `Facts/Proofs` beside it, so that one file per part shows what holds. It
   is followed by `#guard_msgs in #print axioms` with its expected output, which
   names no axiom but `propext`, `Classical.choice` and `Quot.sound`, so that a
   `sorry` or an axiom of its own fails the build. Examples and lemmas need no

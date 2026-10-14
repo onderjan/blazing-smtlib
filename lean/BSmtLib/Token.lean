@@ -7,7 +7,7 @@ import BSmtLib.Span
 Variant and function names follow Lean conventions (`TokenCategory.parenOpen` for
 `SmtTokenCategory::ParenOpen`, `lastConsumed` for `last_consumed`). An `inductive` without
 fields is a Rust enum. -/
-namespace BSmtLib
+namespace BSmtLib.Token
 
 inductive TokenCategory where
   | parenOpen
@@ -65,6 +65,20 @@ def fromDecimal? (decimal : ByteSlice) : Option Version :=
   else none
 
 end Version
+
+
+/--
+Which versions a script may declare, and how many declarations it may make, without a limit if
+there is none (`SmtVersionPosture`).
+-/
+/- LEAN: Rust builds a posture with `SmtVersionPostureBuilder`; here the fields are public. -/
+structure VersionPosture where
+  allowed : Array Version
+  maxDeclarations : Option Nat
+
+/-- The default posture: 2.5, 2.6 and 2.7, one declaration. -/
+def VersionPosture.default : VersionPosture :=
+  { allowed := #[.v2_5, .v2_6, .v2_7], maxDeclarations := some 1 }
 
 namespace TokenCategory
 
@@ -393,7 +407,7 @@ a byte unless it is the end of file.
 -/
 @[inline]
 def pushLocated (self : TokenBatch) (ty : TokenCategory) (contentStart contentStop : Nat)
-    (start «end» : Location) (after : self.lastEnd ≤ start.offset)
+    (start «end» : Span.Location) (after : self.lastEnd ≤ start.offset)
     (nonempty : start.offset < «end».offset ∨ ty = .endOfFile ∧ start.offset = «end».offset) :
     TokenBatch :=
   self.push ty contentStart contentStop start.offset start.line start.column
@@ -437,7 +451,7 @@ theorem lastEnd_pushOnLine (self : TokenBatch) (ty : TokenCategory) (contentStar
 
 theorem lastEnd_pushLocated (self : TokenBatch) (ty : TokenCategory)
     (contentStart contentStop : Nat)
-    (start «end» : Location) (after : self.lastEnd ≤ start.offset)
+    (start «end» : Span.Location) (after : self.lastEnd ≤ start.offset)
     (nonempty : start.offset < «end».offset ∨ ty = .endOfFile ∧ start.offset = «end».offset) :
     (self.pushLocated ty contentStart contentStop start «end» after nonempty).lastEnd =
       «end».offset :=
@@ -529,7 +543,7 @@ theorem startsFrom_pushOnLine {self : TokenBatch} {offset : Nat} (h : self.Start
   startsFrom_push h hstart hty
 
 theorem startsFrom_pushLocated {self : TokenBatch} {offset : Nat} (h : self.StartsFrom offset)
-    {ty : TokenCategory} {contentStart contentStop : Nat} {start «end» : Location}
+    {ty : TokenCategory} {contentStart contentStop : Nat} {start «end» : Span.Location}
     {after : self.lastEnd ≤ start.offset}
     {nonempty : start.offset < «end».offset ∨ ty = .endOfFile ∧ start.offset = «end».offset}
     (hstart : offset ≤ start.offset) (hty : ty ≠ .endOfFile) :
@@ -591,7 +605,7 @@ theorem endsAfter_push {self : TokenBatch} {offset : Nat} (h : self.EndsAfter of
     exact h i (by omega)
 
 theorem endsAfter_pushLocated {self : TokenBatch} {offset : Nat} (h : self.EndsAfter offset)
-    {ty : TokenCategory} {contentStart contentStop : Nat} {start «end» : Location}
+    {ty : TokenCategory} {contentStart contentStop : Nat} {start «end» : Span.Location}
     {after : self.lastEnd ≤ start.offset}
     {nonempty : start.offset < «end».offset ∨ ty = .endOfFile ∧ start.offset = «end».offset}
     (hend : offset < «end».offset) :
@@ -637,7 +651,7 @@ A token is read through a cursor over its batch: the cursor it was taken from, o
 that the consumer's operations make from that one in the same hand-over. A token cannot be
 read through the cursor of another hand-over, which is over another batch.
 -/
-structure Token (batch : BatchTag) where
+structure _root_.BSmtLib.Token (batch : Token.BatchTag) where
   private mk ::
   private index : Nat
   /- LEAN: not in Rust. The token is within its batch, so that it is read without a bounds
@@ -749,10 +763,12 @@ Rust lexer overwrites its fixed arrays. It is in the lexer's namespace, as only 
 uses it; it is defined here, where the cursor's fields are visible. -/
 /-- The batch of the cursor, for reuse of its storage once the cursor is spent. -/
 @[inline]
-def Lexer.Internal.intoBatch {batch : BatchTag} (cursor : BatchCursor batch) : TokenBatch :=
+def _root_.BSmtLib.Lexer.Internal.intoBatch {batch : Token.BatchTag}
+    (cursor : Token.BatchCursor batch) : Token.TokenBatch :=
   cursor.batch
 
-theorem Lexer.Internal.tag_intoBatch {batch : BatchTag} (cursor : BatchCursor batch) :
+theorem _root_.BSmtLib.Lexer.Internal.tag_intoBatch {batch : Token.BatchTag}
+    (cursor : Token.BatchCursor batch) :
     (Lexer.Internal.intoBatch cursor).tag = batch :=
   cursor.tagged.symm
 
@@ -972,7 +988,7 @@ def attempt (self : BatchCursor batch)
 
 /-- Location of the end of the last consumed token in this hand-over (if any). -/
 @[inline]
-def consumedEnd (self : BatchCursor batch) : Option Location :=
+def consumedEnd (self : BatchCursor batch) : Option Span.Location :=
   if h : self.first < self.nextIndex then
     some (self.batch.spanOf (self.nextIndex - 1) (by have := self.bounded; omega)).end
   else none
@@ -981,7 +997,7 @@ def consumedEnd (self : BatchCursor batch) : Option Location :=
 /-- Location of the end of the last consumed token, given that one was consumed. -/
 @[inline]
 def consumedEndOf (self : BatchCursor batch) {origin : BatchCursor batch}
-    (h : self.Consumed origin) : Location :=
+    (h : self.Consumed origin) : Span.Location :=
   (self.batch.spanOf (self.nextIndex - 1) (by have := self.bounded; have := h.2; omega)).end
 
 /- LEAN: Rust's `consumed_span`, for a consumer's caller that knows from the consumer's proof
@@ -1255,7 +1271,7 @@ class Recover (H : Type) (m : outParam (Type → Type)) where
   value (typically, an SMT-LIB command) are to be abandoned, as if
   they never were handed over.
   -/
-  abandon : Location → StateT H m Unit
+  abandon : Span.Location → StateT H m Unit
   /--
   Finishes the recovery after abandoning.
 
@@ -1266,6 +1282,6 @@ class Recover (H : Type) (m : outParam (Type → Type)) where
   value was never started. The input between abandonment and recovery
   is not handed over in any way.
   -/
-  recover : Location → StateT H m Unit
+  recover : Span.Location → StateT H m Unit
 
-end BSmtLib
+end BSmtLib.Token

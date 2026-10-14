@@ -1,6 +1,6 @@
 import Std.Data.ByteSlice
 
-namespace BSmtLib.Lexer
+namespace BSmtLib.Lexer.CharClass
 
 /--
 Class of a character following the SMT-LIB standard.
@@ -20,7 +20,7 @@ those with byte codes 0..=31 and 127 (DEL).
 Specially, 32 (SPACE) is both printable and whitespace.
 0..=31 except (9, 10, 13) and 127 (DEL) are neither printable nor whitespace.
 -/
-inductive CharClass where
+inductive _root_.BSmtLib.Lexer.CharClass where
   /-- any non-printable character except for TAB, LF, CR, and DEL
   meaning 0..=31 except (9, 10, 13) -/
   | otherNonPrintable
@@ -69,8 +69,6 @@ is not folded by the compiler and costs a call at every use. -/
 macro "byte! " c:char : term =>
   `(($(Lean.Syntax.mkNumLit (toString c.getChar.toNat)) : UInt8))
 
-namespace CharClass
-
 /- LEAN: Lean's `match` cannot match a byte against character patterns and ranges as Rust
 does, so the classification is a chain of comparisons in the order of the Rust arms. -/
 def classify (c : UInt8) : CharClass :=
@@ -109,8 +107,6 @@ def isAllowedInSimpleSymbol (self : CharClass) : Bool :=
   -- letters, digits, special, dot
   self == .letter || self == .digit || self == .special || self == .dot
 
-end CharClass
-
 def RUN_STRING_PLAIN : UInt8 := (1 : UInt8) <<< 0
 def RUN_DIGIT : UInt8 := (1 : UInt8) <<< 1
 def RUN_HEX_DIGIT : UInt8 := (1 : UInt8) <<< 2
@@ -130,8 +126,6 @@ private def RUN_FLAG_BITS : Array UInt8 :=
 -- the run flags partition the byte into single bits, each at its own place
 #guard (List.range 8).all fun i => RUN_FLAG_BITS[i]? == some ((1 : UInt8) <<< i.toUInt8)
 #guard RUN_FLAG_BITS.foldl (· ||| ·) 0 == 0xFF
-
-namespace CharClass
 
 def runFlags (c : UInt8) : UInt8 := Id.run do
   let class_ := classify c
@@ -157,8 +151,6 @@ def runFlags (c : UInt8) : UInt8 := Id.run do
   if class_ != .lineBreak then
     flags := flags ||| RUN_COMMENT_PLAIN
   flags
-
-end CharClass
 
 /- LEAN: computed once when the module is loaded, where Rust computes the `static` at
 compile time. -/
@@ -226,7 +218,8 @@ def get (input : Input) (position : USize) (h : position.toNat < input.stop.toNa
 
 /-- The byte at a position below the end of the slice is the one `get?` gives. -/
 theorem get?_eq_some_get (input : Input) {position : USize}
-    (h : position.toNat < input.stop.toNat) : input.get? position = some (input.get position h) := by
+    (h : position.toNat < input.stop.toNat) : input.get? position = some
+    (input.get position h) := by
   unfold get? get
   simp only [USize.lt_iff_toNat_lt.mpr h, dite_true]
 
@@ -398,4 +391,4 @@ theorem lt_runEnd {input : Input} {start : USize} {c : UInt8} (mask : UInt8)
     exact hc
   · cases h
 
-end BSmtLib.Lexer
+end BSmtLib.Lexer.CharClass
