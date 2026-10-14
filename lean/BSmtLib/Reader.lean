@@ -381,10 +381,12 @@ def readSmtFile {n : Type → Type} [Monad n] [MonadLiftT IO n] [MonadLiftT m n]
   | .ok (_, reader) => return .ok reader.handler
   | .error err => return .error err
 
-/- LEAN: Rust's `read_smt` lends the handler; here it is given and given back. -/
+/- LEAN: Rust's `read_smt` lends the handler and takes the buffered reader, which may be lent too;
+here both are given and given back, the buffered reader also after an error, as `readAll` gives it
+back. -/
 /--
 Reads SMT-LIB input from `bufReader`, delivering its content to `handler`, and returns the
-handler.
+handler and the buffered reader.
 
 The input is considered to end when the buffered reader returns no bytes.
 
@@ -396,11 +398,11 @@ resources cannot be preserved for future use. Use `Reader` directly to keep the 
 reads or to feed the input in pieces.
 -/
 def readSmt {B : Type} {n : Type → Type} [Monad n] [MonadLiftT m n] [BufRead B n] (handler : H)
-    (bufReader : B) : n (Except (ReadFailure H (ScriptParser H)) H) := do
+    (bufReader : B) : n (Except (ReadFailure H (ScriptParser H)) H × B) := do
   let reader := Reader.script handler Token.VersionPosture.default default
   match ← reader.readAll bufReader with
-  | (.ok (_, reader), _) => return .ok reader.handler
-  | (.error err, _) => return .error err
+  | (.ok (_, reader), bufReader) => return (.ok reader.handler, bufReader)
+  | (.error err, bufReader) => return (.error err, bufReader)
 
 end
 
