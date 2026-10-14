@@ -84,6 +84,35 @@ example : ¬ ∃ s : Tree.«Sort», s.Valid .v2_0 ∧
   simp [Tree.«Sort».Valid, Tree.Identifier.Valid, Tree.Index.Valid, versionAtLeast,
     Version.upTo] at hv
 
+/-- `(Array Int Real)` is a sort of every version. -/
+example : IsSort .v2_0 (paren [sym "Array", sym "Int", sym "Real"])
+    (.mk (ident "Array") [sortOf "Int", sortOf "Real"]) := by
+  refine ⟨?_, rfl⟩
+  simp [Tree.Sort.Valid, Tree.Sort.ValidAll, Tree.Identifier.Valid]
+
+/-! ## S-expressions and attributes -/
+
+/-- `(a (b 1))` is an s-expression of every version. -/
+example : IsSExpr .v2_0 (paren [sym "a", .parenOpen, sym "b", num "1", .parenClose])
+    (.list [.symbol (simple "a"), .list [.symbol (simple "b"), .constant (.numeral (chars "1"))]])
+    := by
+  refine ⟨?_, rfl⟩
+  simp [Tree.SExpr.Valid, Tree.SExpr.ValidAll]
+
+/-- `(assert)`, with a reserved word, is an s-expression from 2.6 on, and none of 2.5. -/
+example : IsSExpr .v2_6 (paren [word "assert"]) (.list [.reserved (chars "assert")]) ∧
+    ¬ IsSExpr .v2_5 (paren [word "assert"]) (.list [.reserved (chars "assert")]) := by
+  refine ⟨⟨?_, rfl⟩, fun h => ?_⟩
+  · simp [Tree.SExpr.Valid, Tree.SExpr.ValidAll, versionAtLeast, Version.upTo, commandNames,
+      addedCommandNames, chars]
+  · simp [IsSExpr, Tree.SExpr.Valid, Tree.SExpr.ValidAll, versionAtLeast, Version.upTo] at h
+
+/-- `:named a` is an attribute of every version. -/
+example : IsAttribute .v2_0 [.keyword (chars "named"), sym "a"]
+    ⟨chars "named", some (.symbol (simple "a"))⟩ := by
+  refine ⟨?_, rfl⟩
+  simp [Tree.Attribute.Valid, Tree.AttributeValue.Valid]
+
 /-! ## Terms -/
 
 /-- `(f x 1)` is a term of every version. -/

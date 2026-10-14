@@ -599,6 +599,36 @@ namespace Syntax
 /-! ## Sequences of tokens of a category -/
 
 /--
+`IsSExpr version tokens sExpr`: in the version, the tokens are the s-expression: they are how
+the s-expression is written, and the version has it.
+
+Standard: 2.7 §3.2 S-expressions; App. B ⟨s_expr⟩, as `Tree.SExpr.tokens` and
+`Tree.SExpr.Valid`.
+-/
+def IsSExpr (version : Version) (tokens : List SyntaxToken) (sExpr : Tree.SExpr) : Prop :=
+  sExpr.Valid version ∧ sExpr.tokens = tokens
+
+/--
+`IsAttribute version tokens attribute`: in the version, the tokens are the attribute: they are
+how the attribute is written, and the version has it.
+
+Standard: 2.7 §3.4 Attributes; App. B ⟨attribute⟩, as `Tree.Attribute.tokens` and
+`Tree.Attribute.Valid`.
+-/
+def IsAttribute (version : Version) (tokens : List SyntaxToken) («attribute» : Tree.Attribute) :
+    Prop :=
+  «attribute».Valid version ∧ «attribute».tokens = tokens
+
+/--
+`IsSort version tokens sort`: in the version, the tokens are the sort: they are how the sort is
+written, and the version has it.
+
+Standard: 2.7 §3.5 Sorts; App. B ⟨sort⟩, as `Tree.Sort.tokens` and `Tree.Sort.Valid`.
+-/
+def IsSort (version : Version) (tokens : List SyntaxToken) (sort : Tree.Sort) : Prop :=
+  sort.Valid version ∧ sort.tokens = tokens
+
+/--
 `IsTerm version tokens term`: in the version, the tokens are the term: they are how the term is
 written, and the version has it.
 
