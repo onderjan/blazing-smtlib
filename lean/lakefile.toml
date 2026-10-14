@@ -40,3 +40,15 @@ root = "BSmtLib.Facts.WriteReexports"
 [[lean_exe]]
 name = "bench-fused-parser"
 root = "Benches.FusedParser"
+
+# the audit, see `Audit.Main`: `lake exe audit` builds the tree from clean and audits its
+# declarations, its axioms, its constructs and its panics, then has `leanchecker` and nanoda
+# re-check it; `lake exe audit --fast` audits the declarations of the build there is
+[[lean_exe]]
+name = "audit"
+root = "Audit.Main"
+
+# the declaration audit, which the executable `audit` runs; no library imports it
+[[lean_lib]]
+name = "Audit"
+roots = ["Audit.Declarations"]
