@@ -4,48 +4,42 @@ use super::*;
 
 #[test]
 fn special_constants() {
-    assert_eq!(parse_all::<SmtTermParser<Printing>>(b"42"), "42");
-    assert_eq!(parse_all::<SmtTermParser<Printing>>(b"0"), "0");
-    assert_eq!(parse_all::<SmtTermParser<Printing>>(b"3.25"), "3.25");
-    assert_eq!(parse_all::<SmtTermParser<Printing>>(b"#xdead"), "#xdead");
-    assert_eq!(parse_all::<SmtTermParser<Printing>>(b"#b101"), "#b101");
-    assert_eq!(parse_all::<SmtTermParser<Printing>>(b"\"str\""), "\"str\"");
+    assert_eq!(parse_all::<TermParser>(b"42"), "42");
+    assert_eq!(parse_all::<TermParser>(b"0"), "0");
+    assert_eq!(parse_all::<TermParser>(b"3.25"), "3.25");
+    assert_eq!(parse_all::<TermParser>(b"#xdead"), "#xdead");
+    assert_eq!(parse_all::<TermParser>(b"#b101"), "#b101");
+    assert_eq!(parse_all::<TermParser>(b"\"str\""), "\"str\"");
 }
 
 #[test]
 fn identifiers() {
-    assert_eq!(parse_all::<SmtTermParser<Printing>>(b"x"), "x");
-    assert_eq!(parse_all::<SmtTermParser<Printing>>(b"|x y|"), "|x y|");
-    assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(_ bv5 8)"),
-        "(_ bv5 8)"
-    );
+    assert_eq!(parse_all::<TermParser>(b"x"), "x");
+    assert_eq!(parse_all::<TermParser>(b"|x y|"), "|x y|");
+    assert_eq!(parse_all::<TermParser>(b"(_ bv5 8)"), "(_ bv5 8)");
 }
 
 #[test]
 fn term_consumes_exactly_one_term() {
-    let (term, left) = run::<SmtTermParser<Printing>>(b"x y").expect("valid");
+    let (term, left) = run::<TermParser>(b"x y").expect("valid");
     assert_eq!(term, "x");
     assert_eq!(left, 1);
 
-    let (term, left) = run::<SmtTermParser<Printing>>(b"(f x) )").expect("valid");
+    let (term, left) = run::<TermParser>(b"(f x) )").expect("valid");
     assert_eq!(term, "(f x)");
     assert_eq!(left, 1);
 }
 
 #[test]
 fn applications() {
-    assert_eq!(parse_all::<SmtTermParser<Printing>>(b"(f x)"), "(f x)");
+    assert_eq!(parse_all::<TermParser>(b"(f x)"), "(f x)");
+    assert_eq!(parse_all::<TermParser>(b"(f x 1 \"s\")"), "(f x 1 \"s\")");
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(f x 1 \"s\")"),
-        "(f x 1 \"s\")"
-    );
-    assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(f (g x) (h y z))"),
+        parse_all::<TermParser>(b"(f (g x) (h y z))"),
         "(f (g x) (h y z))"
     );
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(+ (* 2 x) (- y))"),
+        parse_all::<TermParser>(b"(+ (* 2 x) (- y))"),
         "(+ (* 2 x) (- y))"
     );
 }
@@ -53,28 +47,25 @@ fn applications() {
 #[test]
 fn application_of_indexed_function() {
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"((_ extract 7 0) x)"),
+        parse_all::<TermParser>(b"((_ extract 7 0) x)"),
         "((_ extract 7 0) x)"
     );
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(f ((_ zero_extend 8) y) (_ bv1 8))"),
+        parse_all::<TermParser>(b"(f ((_ zero_extend 8) y) (_ bv1 8))"),
         "(f ((_ zero_extend 8) y) (_ bv1 8))"
     );
 }
 
 #[test]
 fn qualified_identifiers() {
+    assert_eq!(parse_all::<TermParser>(b"(as x Bool)"), "(as x Bool)");
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(as x Bool)"),
-        "(as x Bool)"
-    );
-    assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(as (_ bv5 8) (_ BitVec 8))"),
+        parse_all::<TermParser>(b"(as (_ bv5 8) (_ BitVec 8))"),
         "(as (_ bv5 8) (_ BitVec 8))"
     );
     // qualified identifier as an application argument
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(f (as x Bool) 1)"),
+        parse_all::<TermParser>(b"(f (as x Bool) 1)"),
         "(f (as x Bool) 1)"
     );
 }
@@ -82,19 +73,22 @@ fn qualified_identifiers() {
 #[test]
 fn application_of_qualified_function() {
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"((as f Bool) x)"),
+        parse_all::<TermParser>(b"((as f Bool) x)"),
         "((as f Bool) x)"
     );
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"((as (_ f 2) (_ BitVec 8)) x y)"),
+        parse_all::<TermParser>(b"((as (_ f 2) (_ BitVec 8)) x y)"),
         "((as (_ f 2) (_ BitVec 8)) x y)"
     );
 }
 
 #[test]
 fn empty_application_is_rejected() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // an application must have at least one argument
-    let err = assert_error::<SmtTermParser<Printing>>(b"(f)", 2, 3);
+    let err = assert_error::<TermParser>(b"(f)", 2, 3);
     assert!(
         matches!(err, SmtSyntaxErrorKind::EmptyTermApplication),
         "{err:?}"
@@ -104,34 +98,37 @@ fn empty_application_is_rejected() {
 #[test]
 fn lets() {
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(let ((x 1)) x)"),
+        parse_all::<TermParser>(b"(let ((x 1)) x)"),
         "(let ((x 1)) x)"
     );
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(let ((x 1) (y (f 2))) (g x y))"),
+        parse_all::<TermParser>(b"(let ((x 1) (y (f 2))) (g x y))"),
         "(let ((x 1) (y (f 2))) (g x y))"
     );
     // nested lets in the bindings and in the body
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(let ((x (let ((z 0)) z))) (let ((y x)) (f x y)))"),
+        parse_all::<TermParser>(b"(let ((x (let ((z 0)) z))) (let ((y x)) (f x y)))"),
         "(let ((x (let ((z 0)) z))) (let ((y x)) (f x y)))"
     );
     // let as an application argument
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(f (let ((x 1)) x) 2)"),
+        parse_all::<TermParser>(b"(f (let ((x 1)) x) 2)"),
         "(f (let ((x 1)) x) 2)"
     );
 }
 
 #[test]
 fn let_errors() {
-    let err = assert_error::<SmtTermParser<Printing>>(b"(let () x)", 6, 7);
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
+    let err = assert_error::<TermParser>(b"(let () x)", 6, 7);
     assert!(
         matches!(err, SmtSyntaxErrorKind::EmptyLetBindings),
         "{err:?}"
     );
 
-    let err = assert_error::<SmtTermParser<Printing>>(b"(let x x)", 5, 6);
+    let err = assert_error::<TermParser>(b"(let x x)", 5, 6);
     assert!(
         matches!(
             err,
@@ -140,7 +137,7 @@ fn let_errors() {
         "{err:?}"
     );
 
-    let err = assert_error::<SmtTermParser<Printing>>(b"(let (x) x)", 6, 7);
+    let err = assert_error::<TermParser>(b"(let (x) x)", 6, 7);
     assert!(
         matches!(
             err,
@@ -152,10 +149,10 @@ fn let_errors() {
         "{err:?}"
     );
 
-    let err = assert_error::<SmtTermParser<Printing>>(b"(let ((1 x)) x)", 7, 8);
+    let err = assert_error::<TermParser>(b"(let ((1 x)) x)", 7, 8);
     assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
 
-    let err = assert_error::<SmtTermParser<Printing>>(b"(let ((x 1 2)) x)", 11, 12);
+    let err = assert_error::<TermParser>(b"(let ((x 1 2)) x)", 11, 12);
     assert!(
         matches!(
             err,
@@ -164,7 +161,7 @@ fn let_errors() {
         "{err:?}"
     );
 
-    let err = assert_error::<SmtTermParser<Printing>>(b"(let ((x 1)) x y)", 15, 16);
+    let err = assert_error::<TermParser>(b"(let ((x 1)) x y)", 15, 16);
     assert!(
         matches!(
             err,
@@ -176,38 +173,41 @@ fn let_errors() {
 
 #[test]
 fn errors() {
-    let err = assert_error::<SmtTermParser<Printing>>(b")", 0, 1);
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
+    let err = assert_error::<TermParser>(b")", 0, 1);
     assert!(matches!(err, SmtSyntaxErrorKind::ExpectedTerm), "{err:?}");
 
-    let err = assert_error::<SmtTermParser<Printing>>(b":kw", 0, 3);
+    let err = assert_error::<TermParser>(b":kw", 0, 3);
     assert!(matches!(err, SmtSyntaxErrorKind::ExpectedTerm), "{err:?}");
 
-    let err = assert_error::<SmtTermParser<Printing>>(b"", 0, 0);
+    let err = assert_error::<TermParser>(b"", 0, 0);
     assert!(matches!(err, SmtSyntaxErrorKind::ExpectedTerm), "{err:?}");
 
     // the operator position takes a symbol, a reserved binder, `_` or `(`
-    let err = assert_error::<SmtTermParser<Printing>>(b"(1 x)", 1, 2);
+    let err = assert_error::<TermParser>(b"(1 x)", 1, 2);
     assert!(
         matches!(err, SmtSyntaxErrorKind::ExpectedOperator),
         "{err:?}"
     );
 
-    let err = assert_error::<SmtTermParser<Printing>>(b"()", 1, 2);
+    let err = assert_error::<TermParser>(b"()", 1, 2);
     assert!(
         matches!(err, SmtSyntaxErrorKind::ExpectedOperator),
         "{err:?}"
     );
 
     // bad argument
-    let err = assert_error::<SmtTermParser<Printing>>(b"(f x :kw)", 5, 8);
+    let err = assert_error::<TermParser>(b"(f x :kw)", 5, 8);
     assert!(matches!(err, SmtSyntaxErrorKind::ExpectedTerm), "{err:?}");
 
     // EOF inside an application is a missing term
-    let err = assert_error::<SmtTermParser<Printing>>(b"(f x", 4, 4);
+    let err = assert_error::<TermParser>(b"(f x", 4, 4);
     assert!(matches!(err, SmtSyntaxErrorKind::ExpectedTerm), "{err:?}");
 
     // bad indexed identifier in a term
-    let err = assert_error::<SmtTermParser<Printing>>(b"(_ f)", 4, 5);
+    let err = assert_error::<TermParser>(b"(_ f)", 4, 5);
     assert!(
         matches!(err, SmtSyntaxErrorKind::EmptyIdentIndices),
         "{err:?}"
@@ -217,21 +217,18 @@ fn errors() {
 #[test]
 fn annotations() {
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(! x :named foo)"),
+        parse_all::<TermParser>(b"(! x :named foo)"),
         "(! x :named foo)"
     );
-    assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(! (f x 1) :a)"),
-        "(! (f x 1) :a)"
-    );
+    assert_eq!(parse_all::<TermParser>(b"(! (f x 1) :a)"), "(! (f x 1) :a)");
     // multiple attributes, name-only and valued
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(! x :a :b 2 :c)"),
+        parse_all::<TermParser>(b"(! x :a :b 2 :c)"),
         "(! x :a :b 2 :c)"
     );
     // keywords inside an s-expression value do not start a new attribute
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(! x :a (p :k q) :b)"),
+        parse_all::<TermParser>(b"(! x :a (p :k q) :b)"),
         "(! x :a (p :k q) :b)"
     );
 }
@@ -239,29 +236,26 @@ fn annotations() {
 #[test]
 fn annotations_nest_and_compose() {
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(! (! x :a) :b)"),
+        parse_all::<TermParser>(b"(! (! x :a) :b)"),
         "(! (! x :a) :b)"
     );
+    assert_eq!(parse_all::<TermParser>(b"(f (! x :a) y)"), "(f (! x :a) y)");
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(f (! x :a) y)"),
-        "(f (! x :a) y)"
-    );
-    assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(let ((a (! 1 :k))) (! a :l))"),
+        parse_all::<TermParser>(b"(let ((a (! 1 :k))) (! a :l))"),
         "(let ((a (! 1 :k))) (! a :l))"
     );
 }
 
 #[test]
 fn annotation_consumes_exactly_one_term() {
-    let (term, left) = run::<SmtTermParser<Printing>>(b"(! x :a) y").expect("valid");
+    let (term, left) = run::<TermParser>(b"(! x :a) y").expect("valid");
     assert_eq!(term, "(! x :a)");
     assert_eq!(left, 1);
 }
 
 #[test]
 fn annotated_term_parser_is_reusable() {
-    let (first, second) = parse_two::<SmtTermParser<Printing>>(b"(! x :a) (! y :b 2)");
+    let (first, second) = parse_two::<TermParser>(b"(! x :a) (! y :b 2)");
     assert_eq!(first, "(! x :a)");
     assert_eq!(second, "(! y :b 2)");
 }
@@ -269,21 +263,21 @@ fn annotated_term_parser_is_reusable() {
 #[test]
 fn quantifiers() {
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(forall ((x Int)) x)"),
+        parse_all::<TermParser>(b"(forall ((x Int)) x)"),
         "(forall ((x Int)) x)"
     );
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(exists ((x Int)) (f x 1))"),
+        parse_all::<TermParser>(b"(exists ((x Int)) (f x 1))"),
         "(exists ((x Int)) (f x 1))"
     );
     // multiple variables are handed over together, in one start
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(forall ((x Int) (y Bool)) (f x y))"),
+        parse_all::<TermParser>(b"(forall ((x Int) (y Bool)) (f x y))"),
         "(forall ((x Int) (y Bool)) (f x y))"
     );
     // complex sorts flow through the sort parser
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(forall ((a (Array Int Int))) (select a 0))"),
+        parse_all::<TermParser>(b"(forall ((a (Array Int Int))) (select a 0))"),
         "(forall ((a (Array Int Int))) (select a 0))"
     );
 }
@@ -292,10 +286,9 @@ fn quantifiers() {
 fn binder_variables_are_handed_over_as_one_group() {
     // the variables of one binder arrive in one start, in order, so the
     // handler can tell a binder of several variables from nested binders
-    let grouped = parse_all::<SmtTermParser<Printing>>(b"(exists ((x Int) (y Bool) (z Real)) x)");
-    let nested = parse_all::<SmtTermParser<Printing>>(
-        b"(exists ((x Int)) (exists ((y Bool)) (exists ((z Real)) x)))",
-    );
+    let grouped = parse_all::<TermParser>(b"(exists ((x Int) (y Bool) (z Real)) x)");
+    let nested =
+        parse_all::<TermParser>(b"(exists ((x Int)) (exists ((y Bool)) (exists ((z Real)) x)))");
     assert_eq!(grouped, "(exists ((x Int) (y Bool) (z Real)) x)");
     assert_eq!(
         nested,
@@ -303,7 +296,7 @@ fn binder_variables_are_handed_over_as_one_group() {
     );
     // a repeated name is handed over again, in its place
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(lambda ((x Int) (x Bool)) x)"),
+        parse_all::<TermParser>(b"(lambda ((x Int) (x Bool)) x)"),
         "(lambda ((x Int) (x Bool)) x)"
     );
 }
@@ -311,12 +304,12 @@ fn binder_variables_are_handed_over_as_one_group() {
 #[test]
 fn lambdas() {
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(lambda ((x Int)) x)"),
+        parse_all::<TermParser>(b"(lambda ((x Int)) x)"),
         "(lambda ((x Int)) x)"
     );
     // multiple variables are handed over together, in one start
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(lambda ((x Int) (y Int)) (+ x y))"),
+        parse_all::<TermParser>(b"(lambda ((x Int) (y Int)) (+ x y))"),
         "(lambda ((x Int) (y Int)) (+ x y))"
     );
 }
@@ -325,85 +318,86 @@ fn lambdas() {
 fn binders_nest_and_compose() {
     // quantifiers of both kinds and lambda nested within each other
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(forall ((x Int)) (exists ((y Int)) (f x y)))"),
+        parse_all::<TermParser>(b"(forall ((x Int)) (exists ((y Int)) (f x y)))"),
         "(forall ((x Int)) (exists ((y Int)) (f x y)))"
     );
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(forall ((x Int)) (lambda ((y Int)) y))"),
+        parse_all::<TermParser>(b"(forall ((x Int)) (lambda ((y Int)) y))"),
         "(forall ((x Int)) (lambda ((y Int)) y))"
     );
     // binder as an application argument
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(f (forall ((x Int)) x) y)"),
+        parse_all::<TermParser>(b"(f (forall ((x Int)) x) y)"),
         "(f (forall ((x Int)) x) y)"
     );
     // let inside a binder and binder inside a let
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(forall ((x Int)) (let ((a x)) a))"),
+        parse_all::<TermParser>(b"(forall ((x Int)) (let ((a x)) a))"),
         "(forall ((x Int)) (let ((a x)) a))"
     );
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(let ((a 1)) (exists ((x Int)) (f a x)))"),
+        parse_all::<TermParser>(b"(let ((a 1)) (exists ((x Int)) (f a x)))"),
         "(let ((a 1)) (exists ((x Int)) (f a x)))"
     );
     // annotated binder body
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(forall ((x Int)) (! x :qid q))"),
+        parse_all::<TermParser>(b"(forall ((x Int)) (! x :qid q))"),
         "(forall ((x Int)) (! x :qid q))"
     );
     // annotated binder term
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(! (forall ((x Int)) x) :named n)"),
+        parse_all::<TermParser>(b"(! (forall ((x Int)) x) :named n)"),
         "(! (forall ((x Int)) x) :named n)"
     );
 }
 
 #[test]
 fn binder_consumes_exactly_one_term() {
-    let (term, left) = run::<SmtTermParser<Printing>>(b"(forall ((x Int)) x) y").expect("valid");
+    let (term, left) = run::<TermParser>(b"(forall ((x Int)) x) y").expect("valid");
     assert_eq!(term, "(forall ((x Int)) x)");
     assert_eq!(left, 1);
 }
 
 #[test]
 fn binder_term_parser_is_reusable() {
-    let (first, second) =
-        parse_two::<SmtTermParser<Printing>>(b"(forall ((x Int)) x) (lambda ((y Bool)) y)");
+    let (first, second) = parse_two::<TermParser>(b"(forall ((x Int)) x) (lambda ((y Bool)) y)");
     assert_eq!(first, "(forall ((x Int)) x)");
     assert_eq!(second, "(lambda ((y Bool)) y)");
 
     // reuse with the same binder kind exercises the self-reset contract
     // of the variable-list machinery
-    let (first, second) = parse_two::<SmtTermParser<Printing>>(
-        b"(forall ((x Int)) x) (forall ((y Bool) (z Real)) y)",
-    );
+    let (first, second) =
+        parse_two::<TermParser>(b"(forall ((x Int)) x) (forall ((y Bool) (z Real)) y)");
     assert_eq!(first, "(forall ((x Int)) x)");
     assert_eq!(second, "(forall ((y Bool) (z Real)) y)");
 }
 
 #[test]
 fn binder_errors() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // a quantifier must bind at least one variable
-    let err = assert_error::<SmtTermParser<Printing>>(b"(forall () x)", 9, 10);
+    let err = assert_error::<TermParser>(b"(forall () x)", 9, 10);
     assert!(
         matches!(err, SmtSyntaxErrorKind::EmptyQuantifierBindings),
         "{err:?}"
     );
-    let err = assert_error::<SmtTermParser<Printing>>(b"(exists () x)", 9, 10);
+    let err = assert_error::<TermParser>(b"(exists () x)", 9, 10);
     assert!(
         matches!(err, SmtSyntaxErrorKind::EmptyQuantifierBindings),
         "{err:?}"
     );
 
     // so must a lambda, with its own error kind
-    let err = assert_error::<SmtTermParser<Printing>>(b"(lambda () x)", 9, 10);
+    let err = assert_error::<TermParser>(b"(lambda () x)", 9, 10);
     assert!(
         matches!(err, SmtSyntaxErrorKind::EmptyLambdaBindings),
         "{err:?}"
     );
 
     // the variable list must be parenthesized
-    let err = assert_error::<SmtTermParser<Printing>>(b"(forall x x)", 8, 9);
+    let err = assert_error::<TermParser>(b"(forall x x)", 8, 9);
     assert!(
         matches!(
             err,
@@ -413,25 +407,28 @@ fn binder_errors() {
     );
 
     // a variable must have a sort
-    let err = assert_error::<SmtTermParser<Printing>>(b"(forall ((x)) x)", 11, 12);
+    let err = assert_error::<TermParser>(b"(forall ((x)) x)", 11, 12);
     assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSort), "{err:?}");
 
     // EOF before the body is a missing term
-    let err = assert_error::<SmtTermParser<Printing>>(b"(forall ((x Int))", 17, 17);
+    let err = assert_error::<TermParser>(b"(forall ((x Int))", 17, 17);
     assert!(matches!(err, SmtSyntaxErrorKind::ExpectedTerm), "{err:?}");
 }
 
 #[test]
 fn annotation_errors() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // an annotation must contain at least one attribute
-    let err = assert_error::<SmtTermParser<Printing>>(b"(! x)", 4, 5);
+    let err = assert_error::<TermParser>(b"(! x)", 4, 5);
     assert!(
         matches!(err, SmtSyntaxErrorKind::EmptyAnnotation),
         "{err:?}"
     );
 
     // an annotation must contain a term
-    let err = assert_error::<SmtTermParser<Printing>>(b"(!)", 2, 3);
+    let err = assert_error::<TermParser>(b"(!)", 2, 3);
     assert!(matches!(err, SmtSyntaxErrorKind::ExpectedTerm), "{err:?}");
 }
 
@@ -441,7 +438,7 @@ struct Counting {
     terms: usize,
 }
 
-impl SmtHandler for Counting {
+impl Handler for Counting {
     type Error = Infallible;
     type SExpr = ();
     type Attribute = ();
@@ -451,40 +448,40 @@ impl SmtHandler for Counting {
 
     fn set_version(&mut self, _version: SmtVersion) {}
 
-    fn handle_sort(&mut self, _sort: SmtSort<'_, Self>) -> Result<(), Infallible> {
+    fn handle_sort(&mut self, _sort: Sort<Self::Sort>) -> Result<(), Infallible> {
         Ok(())
     }
-    fn handle_term(&mut self, _term: SmtTerm<'_, Self>) -> Result<(), Infallible> {
+    fn handle_term(&mut self, _term: Term<Self::Sort, Self::Term>) -> Result<(), Infallible> {
         self.terms += 1;
         Ok(())
     }
-    fn start_let(&mut self, _bindings: SmtBindings<'_, Self::Term>) -> Result<(), Infallible> {
+    fn start_let(&mut self, _bindings: Bindings<Self::Term>) -> Result<(), Infallible> {
         Ok(())
     }
     fn end_let(&mut self, _scope: (), _body: ()) -> Result<(), Infallible> {
         Ok(())
     }
-    fn handle_s_expr(&mut self, _expr: SmtSExpr<'_, Self>) -> Result<(), Infallible> {
+    fn handle_s_expr(&mut self, _expr: SExpr<Self::SExpr>) -> Result<(), Infallible> {
         Ok(())
     }
     fn handle_attribute(
         &mut self,
-        _name: SmtKeyword<'_>,
-        _value: Option<SmtAttributeValue<'_, Self>>,
+        _name: SmtKeywordBuf,
+        _value: Option<AttributeValue<Self::SExpr>>,
     ) -> Result<(), Infallible> {
         Ok(())
     }
     fn annotate_term(
         &mut self,
         _term: (),
-        _attributes: SmtAttributes<'_, Self>,
+        _attributes: Vec<Self::Attribute>,
     ) -> Result<(), Infallible> {
         Ok(())
     }
     fn start_quantifier(
         &mut self,
         _kind: SmtQuantifierKind,
-        _vars: SmtSortedVars<'_, Self::Sort>,
+        _vars: SortedVars<Self::Sort>,
     ) -> Result<(), Infallible> {
         Ok(())
     }
@@ -496,7 +493,7 @@ impl SmtHandler for Counting {
     ) -> Result<(), Infallible> {
         Ok(())
     }
-    fn start_lambda(&mut self, _vars: SmtSortedVars<'_, Self::Sort>) -> Result<(), Infallible> {
+    fn start_lambda(&mut self, _vars: SortedVars<Self::Sort>) -> Result<(), Infallible> {
         Ok(())
     }
     fn end_lambda(&mut self, _scope: (), _body: ()) -> Result<(), Infallible> {
@@ -508,7 +505,7 @@ impl SmtHandler for Counting {
     fn start_match_case(
         &mut self,
         _scrutinee: &Self::Term,
-        _pattern: SmtPattern<'_>,
+        _pattern: SmtPatternBuf,
     ) -> Result<Self::Scope, Self::Error> {
         Ok(())
     }
@@ -523,7 +520,7 @@ impl SmtHandler for Counting {
     fn end_match(
         &mut self,
         _scrutinee: Self::Term,
-        _cases: SmtMatchCases<'_, Self>,
+        _cases: MatchCases<Self::Term>,
     ) -> Result<Self::Term, Self::Error> {
         Ok(())
     }
@@ -541,7 +538,7 @@ fn deep_nesting_does_not_overflow_the_stack() {
     input.extend(std::iter::repeat_n(b')', DEPTH));
 
     let mut handler = Counting::default();
-    let ((), left) = run_with::<Counting, SmtTermParser<Counting>>(&mut handler, &input)
+    let ((), left) = run_with::<Counting, TermParser>(&mut handler, &input)
         .unwrap_or_else(|(kind, span)| panic!("{kind:?} at {span:?}"));
     assert_eq!(left, 0);
     // every application plus the innermost x
@@ -562,7 +559,7 @@ fn deep_annotation_nesting_does_not_overflow_the_stack() {
     }
 
     let mut handler = Counting::default();
-    let ((), left) = run_with::<Counting, SmtTermParser<Counting>>(&mut handler, &input)
+    let ((), left) = run_with::<Counting, TermParser>(&mut handler, &input)
         .unwrap_or_else(|(kind, span)| panic!("{kind:?} at {span:?}"));
     assert_eq!(left, 0);
     // annotations produce no terms of their own, only the innermost x does
@@ -582,7 +579,7 @@ fn deep_binder_nesting_does_not_overflow_the_stack() {
     input.extend(std::iter::repeat_n(b')', DEPTH));
 
     let mut handler = Counting::default();
-    let ((), left) = run_with::<Counting, SmtTermParser<Counting>>(&mut handler, &input)
+    let ((), left) = run_with::<Counting, TermParser>(&mut handler, &input)
         .unwrap_or_else(|(kind, span)| panic!("{kind:?} at {span:?}"));
     assert_eq!(left, 0);
     // binders produce no terms of their own, only the innermost x does
@@ -602,7 +599,7 @@ fn binder_with_many_variables_does_not_overflow_the_stack() {
     input.extend_from_slice(b") x)");
 
     let mut handler = Counting::default();
-    let ((), left) = run_with::<Counting, SmtTermParser<Counting>>(&mut handler, &input)
+    let ((), left) = run_with::<Counting, TermParser>(&mut handler, &input)
         .unwrap_or_else(|(kind, span)| panic!("{kind:?} at {span:?}"));
     assert_eq!(left, 0);
     assert_eq!(handler.terms, 1);
@@ -612,34 +609,30 @@ fn binder_with_many_variables_does_not_overflow_the_stack() {
 fn matches() {
     // the standard's list append and length examples
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(
-            b"(match l ((nil l2) ((cons h t) (cons h (append t l2)))))"
-        ),
+        parse_all::<TermParser>(b"(match l ((nil l2) ((cons h t) (cons h (append t l2)))))"),
         "(match l ((nil l2) ((cons h t) (cons h (append t l2)))))"
     );
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(
-            b"(match l (((cons h t) (cons h (append t l2))) (_ l2)))"
-        ),
+        parse_all::<TermParser>(b"(match l (((cons h t) (cons h (append t l2))) (_ l2)))"),
         "(match l (((cons h t) (cons h (append t l2))) (_ l2)))"
     );
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(match l ((nil 0) ((cons _ t) (+ 1 (length t)))))"),
+        parse_all::<TermParser>(b"(match l ((nil 0) ((cons _ t) (+ 1 (length t)))))"),
         "(match l ((nil 0) ((cons _ t) (+ 1 (length t)))))"
     );
     // a single case with a symbol pattern
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(match x ((y y)))"),
+        parse_all::<TermParser>(b"(match x ((y y)))"),
         "(match x ((y y)))"
     );
     // wildcards in every position
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(match x (((c _ _) 1) (_ 2)))"),
+        parse_all::<TermParser>(b"(match x (((c _ _) 1) (_ 2)))"),
         "(match x (((c _ _) 1) (_ 2)))"
     );
     // a compound scrutinee
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(match (f x y) ((z z)))"),
+        parse_all::<TermParser>(b"(match (f x y) ((z z)))"),
         "(match (f x y) ((z z)))"
     );
 }
@@ -648,72 +641,73 @@ fn matches() {
 fn matches_nest_and_compose() {
     // match in the scrutinee and in a case body
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(match (match x ((a 1))) ((b 2)))"),
+        parse_all::<TermParser>(b"(match (match x ((a 1))) ((b 2)))"),
         "(match (match x ((a 1))) ((b 2)))"
     );
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(match x ((a (match y ((b 1))))))"),
+        parse_all::<TermParser>(b"(match x ((a (match y ((b 1))))))"),
         "(match x ((a (match y ((b 1))))))"
     );
     // match as an application argument
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(f (match x ((a 1))) 2)"),
+        parse_all::<TermParser>(b"(f (match x ((a 1))) 2)"),
         "(f (match x ((a 1))) 2)"
     );
     // match inside a let and let inside a match
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(let ((v (match x ((a 1))))) v)"),
+        parse_all::<TermParser>(b"(let ((v (match x ((a 1))))) v)"),
         "(let ((v (match x ((a 1))))) v)"
     );
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(match x ((a (let ((v 1)) v))))"),
+        parse_all::<TermParser>(b"(match x ((a (let ((v 1)) v))))"),
         "(match x ((a (let ((v 1)) v))))"
     );
     // match inside a binder
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(forall ((x Int)) (match x ((a 1))))"),
+        parse_all::<TermParser>(b"(forall ((x Int)) (match x ((a 1))))"),
         "(forall ((x Int)) (match x ((a 1))))"
     );
     // annotated match and annotated case body
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(! (match x ((a 1))) :named n)"),
+        parse_all::<TermParser>(b"(! (match x ((a 1))) :named n)"),
         "(! (match x ((a 1))) :named n)"
     );
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(match x ((a (! 1 :named n))))"),
+        parse_all::<TermParser>(b"(match x ((a (! 1 :named n))))"),
         "(match x ((a (! 1 :named n))))"
     );
 }
 
 #[test]
 fn match_consumes_exactly_one_term() {
-    let (term, left) = run::<SmtTermParser<Printing>>(b"(match x ((a 1))) y").expect("valid");
+    let (term, left) = run::<TermParser>(b"(match x ((a 1))) y").expect("valid");
     assert_eq!(term, "(match x ((a 1)))");
     assert_eq!(left, 1);
 }
 
 #[test]
 fn match_term_parser_is_reusable() {
-    let (first, second) =
-        parse_two::<SmtTermParser<Printing>>(b"(match x ((a 1))) (match y (((c v) v) (_ 0)))");
+    let (first, second) = parse_two::<TermParser>(b"(match x ((a 1))) (match y (((c v) v) (_ 0)))");
     assert_eq!(first, "(match x ((a 1)))");
     assert_eq!(second, "(match y (((c v) v) (_ 0)))");
 
     // a constructor pattern followed by a simple one exercises
     // the self-reset contract of the pattern machinery
-    let (first, second) =
-        parse_two::<SmtTermParser<Printing>>(b"(match x (((c v) v))) (match y ((_ 0)))");
+    let (first, second) = parse_two::<TermParser>(b"(match x (((c v) v))) (match y ((_ 0)))");
     assert_eq!(first, "(match x (((c v) v)))");
     assert_eq!(second, "(match y ((_ 0)))");
 }
 
 #[test]
 fn match_errors() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // the scrutinee is required
-    let err = assert_error::<SmtTermParser<Printing>>(b"(match)", 6, 7);
+    let err = assert_error::<TermParser>(b"(match)", 6, 7);
     assert!(matches!(err, SmtSyntaxErrorKind::ExpectedTerm), "{err:?}");
     // the case list is required
-    let err = assert_error::<SmtTermParser<Printing>>(b"(match x)", 8, 9);
+    let err = assert_error::<TermParser>(b"(match x)", 8, 9);
     assert!(
         matches!(
             err,
@@ -722,13 +716,13 @@ fn match_errors() {
         "{err:?}"
     );
     // at least one case is required
-    let err = assert_error::<SmtTermParser<Printing>>(b"(match x ())", 10, 11);
+    let err = assert_error::<TermParser>(b"(match x ())", 10, 11);
     assert!(
         matches!(err, SmtSyntaxErrorKind::EmptyMatchCases),
         "{err:?}"
     );
     // each case is parenthesized
-    let err = assert_error::<SmtTermParser<Printing>>(b"(match x (x))", 10, 11);
+    let err = assert_error::<TermParser>(b"(match x (x))", 10, 11);
     assert!(
         matches!(
             err,
@@ -740,38 +734,38 @@ fn match_errors() {
         "{err:?}"
     );
     // a pattern starts with a symbol, a wildcard, or a constructor application
-    let err = assert_error::<SmtTermParser<Printing>>(b"(match x ((1 y)))", 11, 12);
+    let err = assert_error::<TermParser>(b"(match x ((1 y)))", 11, 12);
     assert!(
         matches!(err, SmtSyntaxErrorKind::ExpectedSymbolUnderscoreOrParenOpen),
         "{err:?}"
     );
     // a constructor application has at least one argument
-    let err = assert_error::<SmtTermParser<Printing>>(b"(match x (((c) y)))", 13, 14);
+    let err = assert_error::<TermParser>(b"(match x (((c) y)))", 13, 14);
     assert!(
         matches!(err, SmtSyntaxErrorKind::EmptyPatternArguments),
         "{err:?}"
     );
     // the constructor is a symbol, not a wildcard or a constant
-    let err = assert_error::<SmtTermParser<Printing>>(b"(match x (((1 y) z)))", 12, 13);
+    let err = assert_error::<TermParser>(b"(match x (((1 y) z)))", 12, 13);
     assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
-    let err = assert_error::<SmtTermParser<Printing>>(b"(match x (((_ y) z)))", 12, 13);
+    let err = assert_error::<TermParser>(b"(match x (((_ y) z)))", 12, 13);
     assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
     // the arguments are symbols or wildcards, not nested patterns or constants
-    let err = assert_error::<SmtTermParser<Printing>>(b"(match x (((c 1) z)))", 14, 15);
+    let err = assert_error::<TermParser>(b"(match x (((c 1) z)))", 14, 15);
     assert!(
         matches!(err, SmtSyntaxErrorKind::ExpectedSymbolOrUnderscore),
         "{err:?}"
     );
-    let err = assert_error::<SmtTermParser<Printing>>(b"(match x (((c (d y)) z)))", 14, 15);
+    let err = assert_error::<TermParser>(b"(match x (((c (d y)) z)))", 14, 15);
     assert!(
         matches!(err, SmtSyntaxErrorKind::ExpectedSymbolOrUnderscore),
         "{err:?}"
     );
     // the case body is required
-    let err = assert_error::<SmtTermParser<Printing>>(b"(match x ((y)))", 12, 13);
+    let err = assert_error::<TermParser>(b"(match x ((y)))", 12, 13);
     assert!(matches!(err, SmtSyntaxErrorKind::ExpectedTerm), "{err:?}");
     // exactly one case body
-    let err = assert_error::<SmtTermParser<Printing>>(b"(match x ((y 1 2)))", 15, 16);
+    let err = assert_error::<TermParser>(b"(match x ((y 1 2)))", 15, 16);
     assert!(
         matches!(
             err,
@@ -780,7 +774,7 @@ fn match_errors() {
         "{err:?}"
     );
     // nothing follows the case list
-    let err = assert_error::<SmtTermParser<Printing>>(b"(match x ((y 1)) z)", 17, 18);
+    let err = assert_error::<TermParser>(b"(match x ((y 1)) z)", 17, 18);
     assert!(
         matches!(
             err,
@@ -805,7 +799,7 @@ fn deep_match_nesting_does_not_overflow_the_stack() {
     }
 
     let mut handler = Counting::default();
-    let ((), left) = run_with::<Counting, SmtTermParser<Counting>>(&mut handler, &input)
+    let ((), left) = run_with::<Counting, TermParser>(&mut handler, &input)
         .unwrap_or_else(|(kind, span)| panic!("{kind:?} at {span:?}"));
     assert_eq!(left, 0);
     // every scrutinee plus the innermost y
@@ -831,7 +825,7 @@ struct Consuming {
     applications: Vec<(String, Vec<String>)>,
 }
 
-impl SmtHandler for Consuming {
+impl Handler for Consuming {
     type Error = Infallible;
     type SExpr = ();
     type Attribute = ();
@@ -841,16 +835,16 @@ impl SmtHandler for Consuming {
 
     fn set_version(&mut self, _version: SmtVersion) {}
 
-    fn handle_sort(&mut self, _sort: SmtSort<'_, Self>) -> Result<(), Infallible> {
+    fn handle_sort(&mut self, _sort: Sort<Self::Sort>) -> Result<(), Infallible> {
         Ok(())
     }
-    fn handle_term(&mut self, term: SmtTerm<'_, Self>) -> Result<String, Infallible> {
+    fn handle_term(&mut self, term: Term<Self::Sort, Self::Term>) -> Result<String, Infallible> {
         Ok(match term {
-            SmtTerm::SpecialConstant(constant) => render_constant(constant),
-            SmtTerm::QualifiedIdent(qualified_ident) => render_ident_view(&qualified_ident.ident),
-            SmtTerm::Application(application) => {
-                let function = render_ident_view(&application.function.ident);
-                let args: Vec<String> = application.args.iter().cloned().collect();
+            Term::SpecialConstant(constant) => render_constant(&constant),
+            Term::QualifiedIdent(qualified_ident) => render_ident(&qualified_ident.ident),
+            Term::Application(application) => {
+                let function = render_ident(&application.function.ident);
+                let args: Vec<String> = application.args.to_vec();
                 let rendered = format!("({} {})", function, args.join(" "));
                 self.applications.push((function, args));
                 match self.consumption {
@@ -866,33 +860,33 @@ impl SmtHandler for Consuming {
             }
         })
     }
-    fn start_let(&mut self, _bindings: SmtBindings<'_, Self::Term>) -> Result<(), Infallible> {
+    fn start_let(&mut self, _bindings: Bindings<Self::Term>) -> Result<(), Infallible> {
         Ok(())
     }
     fn end_let(&mut self, _scope: (), body: String) -> Result<String, Infallible> {
         Ok(body)
     }
-    fn handle_s_expr(&mut self, _expr: SmtSExpr<'_, Self>) -> Result<(), Infallible> {
+    fn handle_s_expr(&mut self, _expr: SExpr<Self::SExpr>) -> Result<(), Infallible> {
         Ok(())
     }
     fn handle_attribute(
         &mut self,
-        _name: SmtKeyword<'_>,
-        _value: Option<SmtAttributeValue<'_, Self>>,
+        _name: SmtKeywordBuf,
+        _value: Option<AttributeValue<Self::SExpr>>,
     ) -> Result<(), Infallible> {
         Ok(())
     }
     fn annotate_term(
         &mut self,
         term: String,
-        _attributes: SmtAttributes<'_, Self>,
+        _attributes: Vec<Self::Attribute>,
     ) -> Result<String, Infallible> {
         Ok(term)
     }
     fn start_quantifier(
         &mut self,
         _kind: SmtQuantifierKind,
-        _vars: SmtSortedVars<'_, Self::Sort>,
+        _vars: SortedVars<Self::Sort>,
     ) -> Result<(), Infallible> {
         Ok(())
     }
@@ -904,7 +898,7 @@ impl SmtHandler for Consuming {
     ) -> Result<String, Infallible> {
         Ok(body)
     }
-    fn start_lambda(&mut self, _vars: SmtSortedVars<'_, Self::Sort>) -> Result<(), Infallible> {
+    fn start_lambda(&mut self, _vars: SortedVars<Self::Sort>) -> Result<(), Infallible> {
         Ok(())
     }
     fn end_lambda(&mut self, _scope: (), body: String) -> Result<String, Infallible> {
@@ -916,7 +910,7 @@ impl SmtHandler for Consuming {
     fn start_match_case(
         &mut self,
         _scrutinee: &String,
-        _pattern: SmtPattern<'_>,
+        _pattern: SmtPatternBuf,
     ) -> Result<(), Infallible> {
         Ok(())
     }
@@ -931,7 +925,7 @@ impl SmtHandler for Consuming {
     fn end_match(
         &mut self,
         _scrutinee: String,
-        _cases: SmtMatchCases<'_, Self>,
+        _cases: MatchCases<Self::Term>,
     ) -> Result<String, Infallible> {
         Ok(String::from("<match>"))
     }
@@ -951,7 +945,7 @@ fn application_arguments_are_handed_over_regardless_of_consumption() {
             applications: Vec::new(),
         };
         let (term, left) =
-            run_with::<Consuming, SmtTermParser<Consuming>>(&mut handler, b"(f (g x) (h a b c) y)")
+            run_with::<Consuming, TermParser>(&mut handler, b"(f (g x) (h a b c) y)")
                 .unwrap_or_else(|(kind, span)| panic!("{kind:?} at {span:?} with {consumption:?}"));
         assert_eq!(left, 0, "with {consumption:?}");
         assert_eq!(term, "(f (g x) (h a b c) y)", "with {consumption:?}");
@@ -969,6 +963,9 @@ fn application_arguments_are_handed_over_regardless_of_consumption() {
 
 #[test]
 fn no_end_call_comes_before_a_missing_closing_parenthesis() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // each input has a stray token where a construct's closing parenthesis
     // belongs; the construct is not ended before the error
     let cases: [(&[u8], u64, u64, &[&str]); 6] = [
@@ -998,7 +995,7 @@ fn no_end_call_comes_before_a_missing_closing_parenthesis() {
     ];
     for (input, start, end, calls) in cases {
         let mut handler = Calls::default();
-        match run_with::<Calls, SmtTermParser<Calls>>(&mut handler, input) {
+        match run_with::<Calls, TermParser>(&mut handler, input) {
             Ok(_) => panic!("expected a parser error in {:?}, got Ok", text(input)),
             Err((kind, span)) => {
                 assert!(
@@ -1028,7 +1025,7 @@ fn match_cases_keep_their_patterns_and_scrutinee_across_nested_matches() {
     // and match end is given the scrutinee of its own match, and that the
     // patterns handed over with the cases are the ones the cases started with
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(
+        parse_all::<TermParser>(
             b"(match l (((cons h t) (match t (((cons h2 t2) h2) (nil h)))) \
               (nil (match m ((_ 0) ((pair a b) a))))))"
         ),
@@ -1038,16 +1035,14 @@ fn match_cases_keep_their_patterns_and_scrutinee_across_nested_matches() {
     // two constructor cases at each level: each case's arguments end where
     // the next case's begin
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(
+        parse_all::<TermParser>(
             b"(match p (((pair a b) (match a (((pair c d) c) ((single e) e)))) ((single f) f)))"
         ),
         "(match p (((pair a b) (match a (((pair c d) c) ((single e) e)))) ((single f) f)))"
     );
     // a nested match as the scrutinee of a case's own match
     assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(
-            b"(match x (((c u v) (match (match u ((w w))) ((z (f z v)))))))"
-        ),
+        parse_all::<TermParser>(b"(match x (((c u v) (match (match u ((w w))) ((z (f z v)))))))"),
         "(match x (((c u v) (match (match u ((w w))) ((z (f z v)))))))"
     );
 }
@@ -1082,7 +1077,7 @@ impl ScopeIds {
     }
 }
 
-impl SmtHandler for ScopeIds {
+impl Handler for ScopeIds {
     type Error = Infallible;
     type SExpr = ();
     type Attribute = ();
@@ -1092,30 +1087,30 @@ impl SmtHandler for ScopeIds {
 
     fn set_version(&mut self, _version: SmtVersion) {}
 
-    fn handle_sort(&mut self, _sort: SmtSort<'_, Self>) -> Result<(), Infallible> {
+    fn handle_sort(&mut self, _sort: Sort<Self::Sort>) -> Result<(), Infallible> {
         Ok(())
     }
-    fn handle_term(&mut self, _term: SmtTerm<'_, Self>) -> Result<(), Infallible> {
+    fn handle_term(&mut self, _term: Term<Self::Sort, Self::Term>) -> Result<(), Infallible> {
         Ok(())
     }
-    fn handle_s_expr(&mut self, _expr: SmtSExpr<'_, Self>) -> Result<(), Infallible> {
+    fn handle_s_expr(&mut self, _expr: SExpr<Self::SExpr>) -> Result<(), Infallible> {
         Ok(())
     }
     fn handle_attribute(
         &mut self,
-        _name: SmtKeyword<'_>,
-        _value: Option<SmtAttributeValue<'_, Self>>,
+        _name: SmtKeywordBuf,
+        _value: Option<AttributeValue<Self::SExpr>>,
     ) -> Result<(), Infallible> {
         Ok(())
     }
     fn annotate_term(
         &mut self,
         _term: (),
-        _attributes: SmtAttributes<'_, Self>,
+        _attributes: Vec<Self::Attribute>,
     ) -> Result<(), Infallible> {
         Ok(())
     }
-    fn start_let(&mut self, _bindings: SmtBindings<'_, Self::Term>) -> Result<u64, Infallible> {
+    fn start_let(&mut self, _bindings: Bindings<Self::Term>) -> Result<u64, Infallible> {
         Ok(self.open("start-let"))
     }
     fn end_let(&mut self, scope: u64, _body: ()) -> Result<(), Infallible> {
@@ -1125,7 +1120,7 @@ impl SmtHandler for ScopeIds {
     fn start_quantifier(
         &mut self,
         _kind: SmtQuantifierKind,
-        _vars: SmtSortedVars<'_, Self::Sort>,
+        _vars: SortedVars<Self::Sort>,
     ) -> Result<u64, Infallible> {
         Ok(self.open("start-quantifier"))
     }
@@ -1138,7 +1133,7 @@ impl SmtHandler for ScopeIds {
         self.close("end-quantifier", scope);
         Ok(())
     }
-    fn start_lambda(&mut self, _vars: SmtSortedVars<'_, Self::Sort>) -> Result<u64, Infallible> {
+    fn start_lambda(&mut self, _vars: SortedVars<Self::Sort>) -> Result<u64, Infallible> {
         Ok(self.open("start-lambda"))
     }
     fn end_lambda(&mut self, scope: u64, _body: ()) -> Result<(), Infallible> {
@@ -1151,7 +1146,7 @@ impl SmtHandler for ScopeIds {
     fn start_match_case(
         &mut self,
         _scrutinee: &(),
-        _pattern: SmtPattern<'_>,
+        _pattern: SmtPatternBuf,
     ) -> Result<u64, Infallible> {
         Ok(self.open("start-match-case"))
     }
@@ -1162,7 +1157,7 @@ impl SmtHandler for ScopeIds {
     fn end_match(
         &mut self,
         _scrutinee: (),
-        _cases: SmtMatchCases<'_, Self>,
+        _cases: MatchCases<Self::Term>,
     ) -> Result<(), Infallible> {
         Ok(())
     }
@@ -1171,7 +1166,7 @@ impl SmtHandler for ScopeIds {
 #[test]
 fn every_scope_is_given_back_at_its_own_end() {
     let mut handler = ScopeIds::default();
-    let ((), left) = run_with::<ScopeIds, SmtTermParser<ScopeIds>>(
+    let ((), left) = run_with::<ScopeIds, TermParser>(
         &mut handler,
         b"(let ((a 1)) (forall ((x Int) (y Int)) \
           (match a ((b (lambda ((z Int)) (exists ((w Int)) z))) (_ (let ((c 2)) c))))))",

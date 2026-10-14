@@ -52,6 +52,10 @@ are how agents follow it.
 - A test of the lexer's behaviour is written against `rust/tests/lex_backend`,
   so that the driver runs it against the Lean port too. Only a test of the
   Rust interface itself calls the lexer directly, and says so.
+- A test of the parser's, reader's or handler's behaviour is written against
+  `rust/tests/parse_backend`, so that the driver runs it against the Lean port
+  too. Only a test of the Rust interface itself calls the parser directly, and
+  says so.
 - For a test of new behaviour, check in a scratch copy that it fails when the
   behaviour is broken.
 - A test that exposes a real defect stays failing. Do not mark it ignored and

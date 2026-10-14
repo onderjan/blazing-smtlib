@@ -5,9 +5,14 @@
 //! This file holds the shared test handler and driver; the tests themselves
 //! live in the submodules under `category/`.
 //!
-//! Tokens cannot be constructed outside the crate, so the driver feeds the
-//! parser under test by pushing the input through a `SmtLexer` whose token consumer
-//! advances the parser.
+//! The parsers run against the backend that `parse_backend` selects: the Rust
+//! library's, or the Lean port's through the Lean driver, which has the
+//! parsers of sorts, s-expressions and terms. Tokens cannot be constructed
+//! outside the crate, so the driver feeds the parser under test by pushing
+//! the input through a lexer whose token consumer advances the parser.
+
+#[path = "../parse_backend/mod.rs"]
+mod parse_backend;
 
 mod attribute;
 mod combinator;
@@ -22,22 +27,20 @@ mod sort;
 mod term;
 
 use std::convert::Infallible;
-use std::ops::ControlFlow;
+
+use parse_backend::{
+    AttributeValue, Bindings, Category, CloseParenParser, ClosedAttributeParser,
+    ClosedMultipleAttributeParser, ClosedMultipleParser, ClosedParser, Handler, IdentParser,
+    KeywordParser, MatchCases, OpenParenParser, PairParser, ParenMultipleParser, ParenParser,
+    ParseFailure, QualifiedIdent, QualifiedIdentParser, SExpr, SExprParser, Sort, SortParser,
+    SortedVars, StringParser, SymbolParser, Term, TermParser,
+};
 
 use blazing_smtlib::{
-    SmtAttributeValue, SmtAttributes, SmtBindings, SmtHandler, SmtIdent, SmtIdentBuf, SmtIndex,
-    SmtIndexBuf, SmtKeyword, SmtMatchCases, SmtPattern, SmtQualifiedIdent, SmtQualifiedIdentBuf,
-    SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSort, SmtSortedVars, SmtSpan,
-    SmtSpecialConstant, SmtSymbol, SmtSymbolBuf, SmtTerm,
-    lexer::{SmtLexErrorCause, SmtLexer},
-    parser::{
-        SmtCloseParenParser, SmtClosedAttributeParser, SmtClosedMultipleAttributeParser,
-        SmtClosedMultipleParser, SmtClosedParser, SmtIdentParser, SmtKeywordParser,
-        SmtOpenParenParser, SmtPairParser, SmtParenMultipleParser, SmtParenParser, SmtParse,
-        SmtParseError, SmtParseErrorCause, SmtParseState, SmtQualifiedIdentParser, SmtSExprParser,
-        SmtSortParser, SmtStringParser, SmtSymbolParser, SmtSyntaxErrorKind, SmtTermParser,
-    },
-    token::{SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtProduce, SmtTokenCategory, SmtVersion},
+    SmtIdentBuf, SmtIndexBuf, SmtKeywordBuf, SmtPatternBuf, SmtQuantifierKind, SmtSimplePatternBuf,
+    SmtSpecialConstantBuf, SmtSymbolBuf,
+    parser::SmtSyntaxErrorKind,
+    token::{SmtTokenCategory, SmtVersion},
 };
 
 // --- Test handler rendering everything it receives back into text ---
@@ -54,17 +57,17 @@ struct Printing {
     scrutinees: Vec<String>,
 }
 
-fn render_simple_pattern(pattern: SmtSimplePattern<'_>) -> String {
+fn render_simple_pattern(pattern: &SmtSimplePatternBuf) -> String {
     match pattern {
-        SmtSimplePattern::Symbol(symbol) => render_symbol(&symbol),
-        SmtSimplePattern::Wildcard => "_".into(),
+        SmtSimplePatternBuf::Symbol(symbol) => render_symbol(&symbol),
+        SmtSimplePatternBuf::Wildcard => "_".into(),
     }
 }
 
-fn render_pattern(pattern: SmtPattern<'_>) -> String {
+fn render_pattern(pattern: &SmtPatternBuf) -> String {
     match pattern {
-        SmtPattern::Simple(simple) => render_simple_pattern(simple),
-        SmtPattern::Application { constructor, args } => {
+        SmtPatternBuf::Simple(simple) => render_simple_pattern(simple),
+        SmtPatternBuf::Application { constructor, args } => {
             let mut items = vec![render_symbol(&constructor)];
             items.extend(args.iter().map(render_simple_pattern));
             render_list(&items)
@@ -73,7 +76,7 @@ fn render_pattern(pattern: SmtPattern<'_>) -> String {
 }
 
 /// Renders sorted variables as written, `((x Int) (y Bool))`.
-fn render_sorted_vars(vars: &SmtSortedVars<'_, String>) -> String {
+fn render_sorted_vars(vars: &SortedVars<String>) -> String {
     let vars: Vec<String> = vars
         .iter()
         .map(|(name, sort)| format!("({} {})", render_symbol(&name), sort))
@@ -85,19 +88,10 @@ fn text(bytes: &[u8]) -> String {
     String::from_utf8(bytes.to_vec()).expect("test inputs are ASCII")
 }
 
-/// A symbol, borrowed or owned, as the handler is given it.
+/// A symbol, by reference or not, as the handler is given it.
 trait SymbolText {
     fn is_quoted(&self) -> bool;
     fn as_slice(&self) -> &[u8];
-}
-
-impl SymbolText for SmtSymbol<'_> {
-    fn is_quoted(&self) -> bool {
-        SmtSymbol::is_quoted(self)
-    }
-    fn as_slice(&self) -> &[u8] {
-        SmtSymbol::as_slice(self)
-    }
 }
 
 impl<T: SymbolText> SymbolText for &T {
@@ -146,32 +140,7 @@ fn render_ident(ident: &SmtIdentBuf) -> String {
     out
 }
 
-fn render_ident_view(ident: &SmtIdent) -> String {
-    let name = render_symbol(&ident.name);
-    if ident.indices.is_empty() {
-        return name;
-    }
-    let mut out = format!("(_ {name}");
-    for index in ident.indices.iter() {
-        out.push(' ');
-        match index {
-            SmtIndex::Numeral(numeral) => out.push_str(&text(numeral.as_slice())),
-            SmtIndex::Symbol(symbol) => out.push_str(&render_symbol(&symbol)),
-        }
-    }
-    out.push(')');
-    out
-}
-
-fn render_qualified_ident_view(qualified_ident: &SmtQualifiedIdent<Printing>) -> String {
-    let ident = render_ident_view(&qualified_ident.ident);
-    match &qualified_ident.sort {
-        Some(sort) => format!("(as {ident} {sort})"),
-        None => ident,
-    }
-}
-
-fn render_qualified_ident(qualified_ident: &SmtQualifiedIdentBuf<Printing>) -> String {
+fn render_qualified_ident(qualified_ident: &QualifiedIdent<String>) -> String {
     let ident = render_ident(&qualified_ident.ident);
     match &qualified_ident.sort {
         Some(sort) => format!("(as {ident} {sort})"),
@@ -179,13 +148,13 @@ fn render_qualified_ident(qualified_ident: &SmtQualifiedIdentBuf<Printing>) -> S
     }
 }
 
-fn render_constant(constant: SmtSpecialConstant<'_>) -> String {
+fn render_constant(constant: &SmtSpecialConstantBuf) -> String {
     match constant {
-        SmtSpecialConstant::Numeral(n) => text(n.as_slice()),
-        SmtSpecialConstant::Decimal(d) => text(d.as_slice()),
-        SmtSpecialConstant::Hexadecimal(h) => format!("#x{}", text(h.as_slice())),
-        SmtSpecialConstant::Binary(b) => format!("#b{}", text(b.as_slice())),
-        SmtSpecialConstant::String(s) => format!("\"{}\"", text(s.as_slice())),
+        SmtSpecialConstantBuf::Numeral(n) => text(n.as_slice()),
+        SmtSpecialConstantBuf::Decimal(d) => text(d.as_slice()),
+        SmtSpecialConstantBuf::Hexadecimal(h) => format!("#x{}", text(h.as_slice())),
+        SmtSpecialConstantBuf::Binary(b) => format!("#b{}", text(b.as_slice())),
+        SmtSpecialConstantBuf::String(s) => format!("\"{}\"", text(s.as_slice())),
     }
 }
 
@@ -193,7 +162,7 @@ fn render_list(items: &[String]) -> String {
     format!("({})", items.join(" "))
 }
 
-impl SmtHandler for Printing {
+impl Handler for Printing {
     type Error = Infallible;
     type SExpr = String;
     type Attribute = String;
@@ -203,8 +172,8 @@ impl SmtHandler for Printing {
 
     fn set_version(&mut self, _version: SmtVersion) {}
 
-    fn handle_sort(&mut self, sort: SmtSort<'_, Self>) -> Result<String, Infallible> {
-        let ident = render_ident_view(&sort.ident);
+    fn handle_sort(&mut self, sort: Sort<Self::Sort>) -> Result<String, Infallible> {
+        let ident = render_ident(&sort.ident);
         Ok(if sort.applied.is_empty() {
             ident
         } else {
@@ -214,21 +183,19 @@ impl SmtHandler for Printing {
         })
     }
 
-    fn handle_term(&mut self, term: SmtTerm<'_, Self>) -> Result<String, Infallible> {
+    fn handle_term(&mut self, term: Term<Self::Sort, Self::Term>) -> Result<String, Infallible> {
         Ok(match term {
-            SmtTerm::SpecialConstant(constant) => render_constant(constant),
-            SmtTerm::QualifiedIdent(qualified_ident) => {
-                render_qualified_ident_view(&qualified_ident)
-            }
-            SmtTerm::Application(application) => {
-                let mut items = vec![render_qualified_ident_view(&application.function)];
+            Term::SpecialConstant(constant) => render_constant(&constant),
+            Term::QualifiedIdent(qualified_ident) => render_qualified_ident(&qualified_ident),
+            Term::Application(application) => {
+                let mut items = vec![render_qualified_ident(&application.function)];
                 items.extend(application.args);
                 render_list(&items)
             }
         })
     }
 
-    fn start_let(&mut self, bindings: SmtBindings<'_, Self::Term>) -> Result<String, Infallible> {
+    fn start_let(&mut self, bindings: Bindings<Self::Term>) -> Result<String, Infallible> {
         let bindings: Vec<String> = bindings
             .into_iter()
             .map(|(name, term)| format!("({} {})", render_symbol(&name), term))
@@ -243,7 +210,7 @@ impl SmtHandler for Printing {
     fn start_quantifier(
         &mut self,
         _kind: SmtQuantifierKind,
-        vars: SmtSortedVars<'_, Self::Sort>,
+        vars: SortedVars<Self::Sort>,
     ) -> Result<String, Infallible> {
         // the keyword is rendered at the end, from the kind given back there
         Ok(render_sorted_vars(&vars))
@@ -262,7 +229,7 @@ impl SmtHandler for Printing {
         Ok(format!("({keyword} {scope} {body})"))
     }
 
-    fn start_lambda(&mut self, vars: SmtSortedVars<'_, Self::Sort>) -> Result<String, Infallible> {
+    fn start_lambda(&mut self, vars: SortedVars<Self::Sort>) -> Result<String, Infallible> {
         Ok(format!("(lambda {}", render_sorted_vars(&vars)))
     }
 
@@ -278,14 +245,14 @@ impl SmtHandler for Printing {
     fn start_match_case(
         &mut self,
         scrutinee: &String,
-        pattern: SmtPattern<'_>,
+        pattern: SmtPatternBuf,
     ) -> Result<String, Infallible> {
         assert_eq!(
             self.scrutinees.last(),
             Some(scrutinee),
             "start_match_case is given the scrutinee of its own match"
         );
-        Ok(render_pattern(pattern))
+        Ok(render_pattern(&pattern))
     }
 
     fn end_match_case(
@@ -305,7 +272,7 @@ impl SmtHandler for Printing {
     fn end_match(
         &mut self,
         scrutinee: String,
-        cases: SmtMatchCases<'_, Self>,
+        cases: MatchCases<Self::Term>,
     ) -> Result<String, Infallible> {
         let open = self
             .scrutinees
@@ -320,7 +287,7 @@ impl SmtHandler for Printing {
         let cases: Vec<String> = cases
             .into_iter()
             .map(|(pattern, term)| {
-                let pattern = render_pattern(pattern);
+                let pattern = render_pattern(&pattern);
                 assert!(
                     term.starts_with(&format!("({pattern} ")),
                     "case {term} is handed over with the pattern {pattern}"
@@ -331,31 +298,31 @@ impl SmtHandler for Printing {
         Ok(format!("(match {scrutinee} {})", render_list(&cases)))
     }
 
-    fn handle_s_expr(&mut self, expr: SmtSExpr<'_, Self>) -> Result<String, Infallible> {
+    fn handle_s_expr(&mut self, expr: SExpr<Self::SExpr>) -> Result<String, Infallible> {
         Ok(match expr {
-            SmtSExpr::SpecialConstant(constant) => render_constant(constant),
-            SmtSExpr::Symbol(symbol) => render_symbol(&symbol),
-            SmtSExpr::Reserved(reserved) => reserved.as_str().to_string(),
-            SmtSExpr::Keyword(keyword) => format!(":{}", text(keyword.as_slice())),
-            SmtSExpr::SExprs(exprs) => render_list(exprs.as_slice()),
+            SExpr::SpecialConstant(constant) => render_constant(&constant),
+            SExpr::Symbol(symbol) => render_symbol(&symbol),
+            SExpr::Reserved(reserved) => reserved.as_str().to_string(),
+            SExpr::Keyword(keyword) => format!(":{}", text(keyword.as_slice())),
+            SExpr::SExprs(exprs) => render_list(exprs.as_slice()),
         })
     }
 
     fn handle_attribute(
         &mut self,
-        name: SmtKeyword<'_>,
-        value: Option<SmtAttributeValue<'_, Self>>,
+        name: SmtKeywordBuf,
+        value: Option<AttributeValue<Self::SExpr>>,
     ) -> Result<String, Infallible> {
         let name = format!(":{}", text(name.as_slice()));
         Ok(match value {
             None => name,
-            Some(SmtAttributeValue::SpecialConstant(constant)) => {
-                format!("{name} {}", render_constant(constant))
+            Some(AttributeValue::SpecialConstant(constant)) => {
+                format!("{name} {}", render_constant(&constant))
             }
-            Some(SmtAttributeValue::Symbol(symbol)) => {
+            Some(AttributeValue::Symbol(symbol)) => {
                 format!("{name} {}", render_symbol(&symbol))
             }
-            Some(SmtAttributeValue::SExprs(exprs)) => {
+            Some(AttributeValue::SExprs(exprs)) => {
                 format!("{name} {}", render_list(exprs.as_slice()))
             }
         })
@@ -364,7 +331,7 @@ impl SmtHandler for Printing {
     fn annotate_term(
         &mut self,
         term: String,
-        attributes: SmtAttributes<'_, Self>,
+        attributes: Vec<Self::Attribute>,
     ) -> Result<String, Infallible> {
         Ok(format!("(! {term} {})", attributes.as_slice().join(" ")))
     }
@@ -378,7 +345,7 @@ struct Calls {
     calls: Vec<&'static str>,
 }
 
-impl SmtHandler for Calls {
+impl Handler for Calls {
     type Error = Infallible;
     type SExpr = ();
     type Attribute = ();
@@ -388,13 +355,13 @@ impl SmtHandler for Calls {
 
     fn set_version(&mut self, _version: SmtVersion) {}
 
-    fn handle_sort(&mut self, _sort: SmtSort<'_, Self>) -> Result<(), Infallible> {
+    fn handle_sort(&mut self, _sort: Sort<Self::Sort>) -> Result<(), Infallible> {
         Ok(())
     }
-    fn handle_term(&mut self, _term: SmtTerm<'_, Self>) -> Result<(), Infallible> {
+    fn handle_term(&mut self, _term: Term<Self::Sort, Self::Term>) -> Result<(), Infallible> {
         Ok(())
     }
-    fn start_let(&mut self, _bindings: SmtBindings<'_, Self::Term>) -> Result<(), Infallible> {
+    fn start_let(&mut self, _bindings: Bindings<Self::Term>) -> Result<(), Infallible> {
         self.calls.push("start-let");
         Ok(())
     }
@@ -402,13 +369,13 @@ impl SmtHandler for Calls {
         self.calls.push("end-let");
         Ok(())
     }
-    fn handle_s_expr(&mut self, _expr: SmtSExpr<'_, Self>) -> Result<(), Infallible> {
+    fn handle_s_expr(&mut self, _expr: SExpr<Self::SExpr>) -> Result<(), Infallible> {
         Ok(())
     }
     fn handle_attribute(
         &mut self,
-        _name: SmtKeyword<'_>,
-        _value: Option<SmtAttributeValue<'_, Self>>,
+        _name: SmtKeywordBuf,
+        _value: Option<AttributeValue<Self::SExpr>>,
     ) -> Result<(), Infallible> {
         self.calls.push("handle-attribute");
         Ok(())
@@ -416,7 +383,7 @@ impl SmtHandler for Calls {
     fn annotate_term(
         &mut self,
         _term: (),
-        _attributes: SmtAttributes<'_, Self>,
+        _attributes: Vec<Self::Attribute>,
     ) -> Result<(), Infallible> {
         self.calls.push("annotate-term");
         Ok(())
@@ -424,7 +391,7 @@ impl SmtHandler for Calls {
     fn start_quantifier(
         &mut self,
         _kind: SmtQuantifierKind,
-        _vars: SmtSortedVars<'_, Self::Sort>,
+        _vars: SortedVars<Self::Sort>,
     ) -> Result<(), Infallible> {
         self.calls.push("start-quantifier");
         Ok(())
@@ -438,7 +405,7 @@ impl SmtHandler for Calls {
         self.calls.push("end-quantifier");
         Ok(())
     }
-    fn start_lambda(&mut self, _vars: SmtSortedVars<'_, Self::Sort>) -> Result<(), Infallible> {
+    fn start_lambda(&mut self, _vars: SortedVars<Self::Sort>) -> Result<(), Infallible> {
         self.calls.push("start-lambda");
         Ok(())
     }
@@ -453,7 +420,7 @@ impl SmtHandler for Calls {
     fn start_match_case(
         &mut self,
         _scrutinee: &(),
-        _pattern: SmtPattern<'_>,
+        _pattern: SmtPatternBuf,
     ) -> Result<(), Infallible> {
         self.calls.push("start-match-case");
         Ok(())
@@ -465,7 +432,7 @@ impl SmtHandler for Calls {
     fn end_match(
         &mut self,
         _scrutinee: (),
-        _cases: SmtMatchCases<'_, Self>,
+        _cases: MatchCases<Self::Term>,
     ) -> Result<(), Infallible> {
         self.calls.push("end-match");
         Ok(())
@@ -474,107 +441,20 @@ impl SmtHandler for Calls {
 
 // --- Driver ---
 
-/// A parse failure, as the error kind and the span it carries.
-type ParseFailure = (SmtSyntaxErrorKind, SmtSpan);
-
-/// Token consumer that advances a category parser with each lexed token,
-/// collecting a wanted number of consecutive parser results, and counts
-/// the tokens left over after the last one.
-///
-/// The parser instance is reused for every result in turn, so driving with
-/// a wanted count above one exercises the self-reset contract.
-struct Drive<'h, H: SmtHandler, P: SmtParse<H>> {
-    handler: &'h mut H,
-    /// The parser resources, shared by every parser in a run.
-    parse_state: SmtParseState<H>,
-    /// The parser under test, reused across parses.
-    parser: P,
-    /// How many more results to parse before tokens count as unconsumed.
-    remaining: usize,
-    /// The results of the finished parses.
-    results: Vec<P::Result>,
-    /// The number of unconsumed tokens after the last wanted result.
-    unconsumed: usize,
-}
-
-impl<H: SmtHandler, P: SmtParse<H>> SmtConsume for Drive<'_, H, P> {
-    type Result = ();
-    type Error = SmtParseError<H::Error>;
-    const IS_CONCRETE: bool = false;
-}
-
-impl<'a, H: SmtHandler, P: SmtParse<H>> SmtConsumeFrom<SmtBatchCursor<'a>> for Drive<'_, H, P> {
-    fn consume(&mut self, cursor: &mut SmtBatchCursor<'a>) -> Result<ControlFlow<()>, Self::Error> {
-        while !cursor.is_empty() {
-            if self.remaining == 0 {
-                // count the tokens left after the wanted results, and break at
-                // the end of the input, as every consumer must
-                while let Some(token) = cursor.next() {
-                    if token.category() == SmtTokenCategory::EndOfFile {
-                        return Ok(ControlFlow::Break(()));
-                    }
-                    self.unconsumed += 1;
-                }
-                return Ok(ControlFlow::Continue(()));
-            }
-            if let ControlFlow::Break(result) =
-                self.parser
-                    .parse(self.handler, &mut self.parse_state, cursor)?
-            {
-                self.results.push(result);
-                self.remaining -= 1;
-            }
-        }
-        Ok(ControlFlow::Continue(()))
-    }
-}
-
-/// Lexes the input and feeds the tokens to the given parser over the given handler,
-/// driving the same parser instance through `count` consecutive parses.
+/// Lexes the input and drives a fresh parser `P` over the given handler
+/// through `count` consecutive parses, the same parser instance each time,
+/// with the backend that `parse_backend` selects.
 ///
 /// Returns the parser results and the number of tokens left unconsumed
 /// (not counting the end-of-file token), so tests can check where the parser stopped;
 /// a parser error is returned as its kind and span.
 /// Panics if the parser did not finish `count` times before the end of the input.
-fn run_count_from<H: SmtHandler<Error = Infallible>, P: SmtParse<H>>(
-    parser: P,
+fn run_count_from<H: Handler<Error = Infallible>, P: Category<H>>(
     handler: &mut H,
     input: &[u8],
     count: usize,
 ) -> Result<(Vec<P::Result>, usize), ParseFailure> {
-    let mut drive = Drive {
-        handler,
-        parse_state: SmtParseState::new(),
-        parser,
-        remaining: count,
-        results: Vec::new(),
-        unconsumed: 0,
-    };
-    let mut lexer = SmtLexer::new(&mut drive, SmtVersion::V2_7);
-    match lexer
-        .lex_all(input)
-        .map_err(|err| (err.span(), err.into_cause()))
-    {
-        Ok(_) => {}
-        Err((span, SmtLexErrorCause::Consumer(err))) => {
-            return Err(match err.into_cause() {
-                SmtParseErrorCause::Syntax(kind) => (kind, span),
-                // the handler never fails
-                SmtParseErrorCause::Handler(err) => match err {},
-            });
-        }
-        Err((_, SmtLexErrorCause::Lexical(kind))) => {
-            panic!("test input {:?} must lex, got {kind:?}", text(input))
-        }
-    }
-    drop(lexer);
-    assert!(
-        drive.results.len() == count,
-        "parser finished {} of {count} times before the end of input {:?}",
-        drive.results.len(),
-        text(input)
-    );
-    Ok((drive.results, drive.unconsumed))
+    parse_backend::drive::<H, P>(handler, input, count)
 }
 
 /// Lexes the input and feeds the tokens to a fresh parser `P` over the given handler.
@@ -583,11 +463,11 @@ fn run_count_from<H: SmtHandler<Error = Infallible>, P: SmtParse<H>>(
 /// (not counting the end-of-file token), so tests can check where the parser stopped;
 /// a parser error is returned as its kind and span.
 /// Panics if the parser did not finish before the end of the input.
-fn run_with<H: SmtHandler<Error = Infallible>, P: SmtParse<H> + Default>(
+fn run_with<H: Handler<Error = Infallible>, P: Category<H>>(
     handler: &mut H,
     input: &[u8],
 ) -> Result<(P::Result, usize), ParseFailure> {
-    let (results, unconsumed) = run_count_from(P::default(), handler, input, 1)?;
+    let (results, unconsumed) = run_count_from::<H, P>(handler, input, 1)?;
     let result = results
         .into_iter()
         .next()
@@ -596,7 +476,7 @@ fn run_with<H: SmtHandler<Error = Infallible>, P: SmtParse<H> + Default>(
 }
 
 /// Runs the parser over a fresh `Printing` handler.
-fn run<P: SmtParse<Printing> + Default>(input: &[u8]) -> Result<(P::Result, usize), ParseFailure> {
+fn run<P: Category<Printing>>(input: &[u8]) -> Result<(P::Result, usize), ParseFailure> {
     run_with::<Printing, P>(&mut Printing::default(), input)
 }
 
@@ -606,8 +486,8 @@ fn run<P: SmtParse<Printing> + Default>(input: &[u8]) -> Result<(P::Result, usiz
 /// This exercises the self-reset contract: after `progress` returns Break,
 /// the parser instance must be back in the default state.
 #[track_caller]
-fn parse_two<P: SmtParse<Printing> + Default>(input: &[u8]) -> (P::Result, P::Result) {
-    match run_count_from(P::default(), &mut Printing::default(), input, 2) {
+fn parse_two<P: Category<Printing>>(input: &[u8]) -> (P::Result, P::Result) {
+    match run_count_from::<Printing, P>(&mut Printing::default(), input, 2) {
         Ok((results, 0)) => {
             let mut results = results.into_iter();
             let first = results.next().expect("a two-parse run has two results");
@@ -623,7 +503,7 @@ fn parse_two<P: SmtParse<Printing> + Default>(input: &[u8]) -> (P::Result, P::Re
 
 /// Runs the parser, requires success with no unconsumed tokens, and returns the result.
 #[track_caller]
-fn parse_all<P: SmtParse<Printing> + Default>(input: &[u8]) -> P::Result {
+fn parse_all<P: Category<Printing>>(input: &[u8]) -> P::Result {
     match run::<P>(input) {
         Ok((result, 0)) => result,
         Ok((_, left)) => panic!("{left} tokens left unconsumed in {:?}", text(input)),
@@ -636,11 +516,7 @@ fn parse_all<P: SmtParse<Printing> + Default>(input: &[u8]) -> P::Result {
 /// Runs the parser, requires a parser error, checks the byte span the error carries,
 /// and returns its kind so that the caller can inspect the variant.
 #[track_caller]
-fn assert_error<P: SmtParse<Printing> + Default>(
-    input: &[u8],
-    start: u64,
-    end: u64,
-) -> SmtSyntaxErrorKind {
+fn assert_error<P: Category<Printing>>(input: &[u8], start: u64, end: u64) -> SmtSyntaxErrorKind {
     match run::<P>(input) {
         Ok(_) => panic!("expected a parser error in {:?}, got Ok", text(input)),
         Err((kind, span)) => {

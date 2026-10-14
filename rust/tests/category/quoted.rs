@@ -7,7 +7,7 @@ use super::*;
 
 #[test]
 fn sorts_keep_the_quoting_of_their_names_and_indices() {
-    type P = SmtSortParser<Printing>;
+    type P = SortParser;
     assert_eq!(parse_all::<P>(b"|S|"), "|S|");
     assert_eq!(parse_all::<P>(b"(|Array| |A| B)"), "(|Array| |A| B)");
     assert_eq!(parse_all::<P>(b"(_ |BitVec| 8)"), "(_ |BitVec| 8)");
@@ -16,7 +16,7 @@ fn sorts_keep_the_quoting_of_their_names_and_indices() {
 
 #[test]
 fn terms_keep_the_quoting_of_their_identifiers() {
-    type P = SmtTermParser<Printing>;
+    type P = TermParser;
     assert_eq!(parse_all::<P>(b"|x|"), "|x|");
     assert_eq!(parse_all::<P>(b"(|f| |x| y)"), "(|f| |x| y)");
     assert_eq!(parse_all::<P>(b"(_ |f| |i| 1)"), "(_ |f| |i| 1)");
@@ -25,7 +25,7 @@ fn terms_keep_the_quoting_of_their_identifiers() {
 
 #[test]
 fn binders_keep_the_quoting_of_their_names() {
-    type P = SmtTermParser<Printing>;
+    type P = TermParser;
     assert_eq!(
         parse_all::<P>(b"(let ((|a| 1) (b 2)) |a|)"),
         "(let ((|a| 1) (b 2)) |a|)"
@@ -38,7 +38,7 @@ fn binders_keep_the_quoting_of_their_names() {
 
 #[test]
 fn patterns_keep_the_quoting_of_their_constructors_and_variables() {
-    type P = SmtTermParser<Printing>;
+    type P = TermParser;
     assert_eq!(
         parse_all::<P>(b"(match x (((|C| |y| z) |y|) (|D| 0) (|v| 1)))"),
         "(match x (((|C| |y| z) |y|) (|D| 0) (|v| 1)))"
@@ -47,12 +47,9 @@ fn patterns_keep_the_quoting_of_their_constructors_and_variables() {
 
 #[test]
 fn s_expressions_and_attribute_values_keep_the_quoting_of_their_symbols() {
+    assert_eq!(parse_all::<SExprParser>(b"(|a| b (|c|))"), "(|a| b (|c|))");
     assert_eq!(
-        parse_all::<SmtSExprParser<Printing>>(b"(|a| b (|c|))"),
-        "(|a| b (|c|))"
-    );
-    assert_eq!(
-        parse_all::<SmtTermParser<Printing>>(b"(! x :named |n|)"),
+        parse_all::<TermParser>(b"(! x :named |n|)"),
         "(! x :named |n|)"
     );
 }

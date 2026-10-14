@@ -1,26 +1,25 @@
-//! Shared helpers driving full command streams through the public reader.
+//! Shared helpers driving full command streams through the reader that
+//! `parse_backend` selects.
 
-use blazing_smtlib::{
-    NonstandardCommandError, SmtCommandHandler, SmtSyntaxChecker,
-    parser::SmtSyntaxErrorKind,
-    reader::{SmtReadError, SmtReadErrorCause, read_smt},
-};
+use blazing_smtlib::{NonstandardCommandError, parser::SmtSyntaxErrorKind};
+
+use crate::parse_backend::{CommandHandler, ReadError, ReadErrorCause, SyntaxChecker, read_smt};
 
 /// Parses the whole input, feeding the commands to the given handler.
-pub fn parse_with<H: SmtCommandHandler>(
+pub fn parse_with<H: CommandHandler>(
     handler: &mut H,
     input: &[u8],
-) -> Result<(), SmtReadError<H::Error>> {
+) -> Result<(), ReadError<H::Error>> {
     read_smt(handler, input)
 }
 
 /// Parses the whole input with the standard syntax checker.
-pub fn parse(input: &[u8]) -> Result<(), SmtReadError<NonstandardCommandError>> {
-    parse_with(&mut SmtSyntaxChecker, input)
+pub fn parse(input: &[u8]) -> Result<(), ReadError<NonstandardCommandError>> {
+    parse_with(&mut SyntaxChecker, input)
 }
 
 #[track_caller]
-pub fn assert_error_span<E>(err: &SmtReadError<E>, start: u64, end: u64) {
+pub fn assert_error_span<E>(err: &ReadError<E>, start: u64, end: u64) {
     let span = err.span();
     assert_eq!(
         (span.start().offset(), span.end().offset()),
@@ -36,13 +35,13 @@ pub fn assert_parser_error(input: &[u8], start: u64, end: u64) -> SmtSyntaxError
     let err = parse(input).expect_err("expected a parser error, got Ok");
     assert_error_span(&err, start, end);
     match err.into_cause() {
-        SmtReadErrorCause::Syntax(kind) => kind,
-        SmtReadErrorCause::Handler(err) => {
+        ReadErrorCause::Syntax(kind) => kind,
+        ReadErrorCause::Handler(err) => {
             panic!("expected parser error, got handler error on {:?}", err.0)
         }
-        SmtReadErrorCause::Lexical(kind) => {
+        ReadErrorCause::Lexical(kind) => {
             panic!("expected parser error, got lexer error {kind:?}")
         }
-        SmtReadErrorCause::Io(err) => panic!("expected parser error, got I/O error {err}"),
+        ReadErrorCause::Io(err) => panic!("expected parser error, got I/O error {err}"),
     }
 }

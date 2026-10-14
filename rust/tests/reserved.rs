@@ -5,16 +5,20 @@
 //!
 //! As in the SMT-LIB standard, the command names are reserved words too,
 //! while a keyword spelled like a reserved word is an ordinary keyword.
+//!
+//! They run against the reader that `parse_backend` selects: the Rust
+//! library's, or the Lean port's through the Lean driver.
 
 mod common;
+mod parse_backend;
 mod reserved_words;
 
 use common::{assert_error_span, assert_parser_error, parse};
+use parse_backend::{ReadError, Reader, SyntaxChecker};
 use reserved_words::{COMMAND_NAMES, reserved_words};
 
 use blazing_smtlib::{
-    NonstandardCommandError, SmtSyntaxChecker,
-    reader::{SmtReadError, SmtReader},
+    NonstandardCommandError,
     token::{SmtVersion, SmtVersionPosture},
 };
 
@@ -150,6 +154,9 @@ fn quoted_reserved_words_are_names_everywhere() {
 
 #[test]
 fn unquoted_reserved_words_are_rejected_as_names() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     let mut failures = Vec::new();
     for site in NAME_SITES {
         for word in reserved_words().filter(|word| !site.valid_unquoted.contains(word)) {
@@ -180,6 +187,9 @@ fn unquoted_reserved_words_are_rejected_as_names() {
 
 #[test]
 fn reserved_words_as_names_are_parser_errors() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // the lexer produces every symbol alike, so the parser rejects the word
     assert_parser_error(b"(declare-const let Bool)", 15, 18);
     assert_parser_error(b"(declare-const push Bool)", 15, 19);
@@ -220,10 +230,9 @@ fn keywords_spelled_like_reserved_words_are_keywords() {
 
 /// Reads the input as the given pieces, then the end of the input,
 /// stopping at the first error.
-fn read_pieces(pieces: &[&[u8]]) -> Result<(), SmtReadError<NonstandardCommandError>> {
-    let mut handler = SmtSyntaxChecker;
-    let mut reader =
-        SmtReader::script(&mut handler, SmtVersionPosture::default(), SmtVersion::V2_7);
+fn read_pieces(pieces: &[&[u8]]) -> Result<(), ReadError<NonstandardCommandError>> {
+    let mut handler = SyntaxChecker;
+    let mut reader = Reader::script(&mut handler, SmtVersionPosture::default(), SmtVersion::V2_7);
     for piece in pieces {
         reader.read_slice(piece)?;
     }
@@ -267,6 +276,9 @@ fn quoted_reserved_words_are_names_across_slice_boundaries() {
 
 #[test]
 fn unquoted_reserved_words_are_rejected_across_slice_boundaries() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     let inputs: [(&[u8], u64, u64); 3] = [
         (b"(declare-const let Bool)", 15, 18),
         (b"(declare-const push Bool)", 15, 19),
@@ -301,6 +313,9 @@ fn every_command_name_is_rejected_as_a_symbol_term() {
 
 #[test]
 fn errors_at_the_end_of_input_point_at_the_end() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // the end of the input carries its location, even though it has no
     // content, so an error there is an empty span at the input's length
     let inputs: [&[u8]; 16] = [

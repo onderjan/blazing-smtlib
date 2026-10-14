@@ -3,22 +3,28 @@
 //! `(set-info :smt-lib-version <version>)` that switches between them,
 //! the posture that limits the declarations, and the reset of both
 //! at the end of every input.
+//!
+//! They run against the reader that `parse_backend` selects: the Rust
+//! library's, or the Lean port's through the Lean driver. The test of the
+//! lookups of reserved words checks the Rust interface itself and runs the
+//! Rust library whatever is selected.
 
+mod parse_backend;
 mod reserved_words;
 
+use parse_backend::{CommandParser, ReadErrorCause, Reader, SExprParser, SyntaxChecker};
 use reserved_words::reserved_words;
 
 use blazing_smtlib::{
-    NonstandardCommandError, SmtBytesBuf, SmtSyntaxChecker,
-    parser::{SmtCommandOutcome, SmtCommandParser, SmtSExprParser, SmtSyntaxErrorKind},
-    reader::{SmtReadError, SmtReadErrorCause, SmtReader},
+    NonstandardCommandError, SmtBytesBuf,
+    parser::{SmtCommandOutcome, SmtSyntaxErrorKind},
     token::{
         SmtCommandNameReserved, SmtGeneralReserved, SmtReserved, SmtTokenCategory, SmtVersion,
         SmtVersionPosture, SmtVersionPostureBuilder,
     },
 };
 
-type ReadError = SmtReadError<NonstandardCommandError>;
+type ReadError = parse_backend::ReadError<NonstandardCommandError>;
 
 /// The versions with their spelling in a declaration, oldest first.
 const VERSIONS: [(SmtVersion, &str); 4] = [
@@ -62,8 +68,8 @@ fn read_pieces(
     initial: SmtVersion,
     posture: SmtVersionPosture,
 ) -> Result<(), ReadError> {
-    let mut handler = SmtSyntaxChecker;
-    let mut reader = SmtReader::script(&mut handler, posture, initial);
+    let mut handler = SyntaxChecker;
+    let mut reader = Reader::script(&mut handler, posture, initial);
     for piece in pieces {
         reader.read_slice(piece)?;
     }
@@ -127,7 +133,7 @@ fn assert_syntax_error(outcome: Outcome, kind: SmtSyntaxErrorKind, start: u64, e
     assert_eq!(
         outcome,
         Err((
-            format!("{:?}", SmtReadErrorCause::<()>::Syntax(kind)),
+            format!("{:?}", ReadErrorCause::<()>::Syntax(kind)),
             start,
             end
         ))
@@ -142,6 +148,8 @@ fn posture(build: impl FnOnce(&mut SmtVersionPostureBuilder)) -> SmtVersionPostu
 
 #[test]
 fn the_lookups_find_a_word_from_its_version_on() {
+    // the lookups are the Rust interface itself: this test runs the Rust
+    // library whatever `parse_backend` selects
     for (version, _) in VERSIONS {
         for word in reserved_words() {
             let expected = version >= introduced_in(word);
@@ -204,6 +212,9 @@ fn each_version_reserves_exactly_its_words() {
 
 #[test]
 fn a_command_of_a_later_version_is_nonstandard() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // a command name that is not yet reserved is a symbol,
     // so the command goes to the handler as a nonstandard one
     for (command, since) in [
@@ -241,6 +252,9 @@ fn a_command_of_a_later_version_is_nonstandard() {
 
 #[test]
 fn a_declaration_applies_after_its_command() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // not to the commands before it
     let result = read_default("(declare-const lambda Bool)(set-info :smt-lib-version 2.6)");
     assert_syntax_error(result, SmtSyntaxErrorKind::ExpectedSymbol, 15, 21);
@@ -263,6 +277,9 @@ fn a_declaration_applies_after_its_command() {
 
 #[test]
 fn only_the_set_info_attribute_declares_a_version() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     for input in [
         // another key, also one that only starts or continues like the version key
         "(set-info :status sat)",
@@ -290,6 +307,9 @@ fn only_the_set_info_attribute_declares_a_version() {
 
 #[test]
 fn a_version_that_is_not_supported_is_rejected() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // the value must be a decimal that names a version the posture allows;
     // the error is raised once the command is complete, so it is at the
     // command's closing parenthesis, the last token consumed
@@ -360,6 +380,9 @@ fn a_version_that_is_not_supported_is_rejected() {
 
 #[test]
 fn a_version_value_is_followed_by_the_closing_parenthesis() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     let result = read_default("(set-info :smt-lib-version 2.6 2.6)");
     let (kind, start, end) = result.expect_err("a second value is no attribute");
     assert!(kind.starts_with("Syntax(ExpectedToken("), "{kind}");
@@ -368,6 +391,9 @@ fn a_version_value_is_followed_by_the_closing_parenthesis() {
 
 #[test]
 fn the_number_of_declarations_is_limited() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     let two = "(set-info :smt-lib-version 2.6)\n(set-info :smt-lib-version 2.5)";
     let same = "(set-info :smt-lib-version 2.7)\n(set-info :smt-lib-version 2.7)";
 
@@ -441,9 +467,9 @@ fn the_version_and_the_declaration_count_reset_with_the_input() {
     let declared = b"(set-info :smt-lib-version 2.6)(declare-const lambda Bool)";
     let undeclared = b"(declare-const lambda Bool)";
     for ending in [&b""[..], b"(exit)"] {
-        let mut handler = SmtSyntaxChecker;
+        let mut handler = SyntaxChecker;
         let mut reader =
-            SmtReader::script(&mut handler, SmtVersionPosture::default(), SmtVersion::V2_7);
+            Reader::script(&mut handler, SmtVersionPosture::default(), SmtVersion::V2_7);
         // every input may declare its version once: the count starts again
         for _ in 0..3 {
             reader.read_slice(declared).expect("the script must read");
@@ -458,7 +484,7 @@ fn the_version_and_the_declaration_count_reset_with_the_input() {
             .expect_err("lambda is reserved in the initial version");
         assert!(matches!(
             err.cause(),
-            SmtReadErrorCause::Syntax(SmtSyntaxErrorKind::ExpectedSymbol)
+            ReadErrorCause::Syntax(SmtSyntaxErrorKind::ExpectedSymbol)
         ));
     }
 }
@@ -468,8 +494,8 @@ fn a_command_parser_reports_the_declaration_without_applying_it() {
     // switching is the script parser's job: the one-command parser has nothing
     // to switch, so it finishes with the declared version, applies
     // no posture, and the reader is back in its initial version for the next input
-    let mut handler = SmtSyntaxChecker;
-    let mut reader = SmtReader::new(&mut handler, SmtCommandParser::new(), SmtVersion::V2_7);
+    let mut handler = SyntaxChecker;
+    let mut reader = Reader::new(&mut handler, CommandParser, SmtVersion::V2_7);
     let mut stop = |input: &[u8]| -> Result<SmtCommandOutcome, ReadError> {
         // every command is an input of its own, which ends here and returns
         // the outcome
@@ -498,6 +524,9 @@ fn a_command_parser_reports_the_declaration_without_applying_it() {
 
 #[test]
 fn assumptions_are_literals_before_2_7() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     let declarations = "(declare-const p Bool)(declare-const q Bool)";
     let check = |version: &str, assumptions: &str| {
         let input = format!(
@@ -599,6 +628,9 @@ fn marked(text: &str) -> (String, u64) {
 
 #[test]
 fn a_reserved_word_is_an_s_expression_since_2_6() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // inside an attribute value, in a set-info, a set-option and an annotation,
     // at the first level and deeper; the mark is where the word goes
     let sites = [
@@ -673,16 +705,19 @@ fn a_reserved_word_is_an_s_expression_since_2_6() {
 
 #[test]
 fn a_reserved_word_alone_is_an_s_expression_since_2_6() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // the S-expression parser on its own takes the reserved word as a whole S-expression
     for (version, _) in VERSIONS {
-        let mut handler = SmtSyntaxChecker;
-        let mut reader = SmtReader::new(&mut handler, SmtSExprParser::new(), version);
+        let mut handler = SyntaxChecker;
+        let mut reader = Reader::new(&mut handler, SExprParser, version);
         let result = reader.read_slice(b"let ");
         if version < SmtVersion::V2_6 {
             let err = result.expect_err("a reserved word is no S-expression before 2.6");
             assert!(matches!(
                 err.cause(),
-                SmtReadErrorCause::Syntax(SmtSyntaxErrorKind::ExpectedSExpr)
+                ReadErrorCause::Syntax(SmtSyntaxErrorKind::ExpectedSExpr)
             ));
             assert_eq!(
                 (err.span().start().offset(), err.span().end().offset()),
@@ -700,6 +735,9 @@ fn a_reserved_word_alone_is_an_s_expression_since_2_6() {
 
 #[test]
 fn the_underscore_is_a_match_pattern_since_2_7() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // `match` itself is reserved since 2.6, so the patterns exist in 2.6 and 2.7;
     // the mark is at the token the error is reported at
     let check = |spelling: &str, body: &str| {
@@ -772,6 +810,9 @@ fn the_underscore_is_a_match_pattern_since_2_7() {
 
 #[test]
 fn an_index_is_a_numeral_before_2_5() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // numerals index an identifier in every version
     for body in [
         "((_ extract 3 0) x)",
@@ -880,8 +921,8 @@ fn the_string_escapes_follow_the_declared_version() {
 fn the_string_escapes_reset_with_the_input() {
     let declared = b"(set-info :smt-lib-version 2.0)(set-info :a \"x\\\"y\")";
     let legacy = b"(set-info :a \"x\\\"y\")";
-    let mut handler = SmtSyntaxChecker;
-    let mut reader = SmtReader::script(&mut handler, every_version_allowed(), SmtVersion::V2_7);
+    let mut handler = SyntaxChecker;
+    let mut reader = Reader::script(&mut handler, every_version_allowed(), SmtVersion::V2_7);
     // every input can switch to the 2.0 strings ...
     for _ in 0..2 {
         reader.read_slice(declared).expect("the script must read");
@@ -891,14 +932,13 @@ fn the_string_escapes_reset_with_the_input() {
     let err = reader
         .read_slice(legacy)
         .expect_err("a backslash does not escape in the initial version");
-    assert!(matches!(err.cause(), SmtReadErrorCause::Lexical(_)));
+    assert!(matches!(err.cause(), ReadErrorCause::Lexical(_)));
 }
 
 #[test]
 fn the_reader_tells_the_version_in_force() {
-    let mut handler = SmtSyntaxChecker;
-    let mut reader =
-        SmtReader::script(&mut handler, SmtVersionPosture::default(), SmtVersion::V2_7);
+    let mut handler = SyntaxChecker;
+    let mut reader = Reader::script(&mut handler, SmtVersionPosture::default(), SmtVersion::V2_7);
     assert_eq!(reader.version(), SmtVersion::V2_7);
     // a declared version is in force once its command has been read
     reader

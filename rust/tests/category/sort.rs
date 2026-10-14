@@ -4,52 +4,43 @@ use super::*;
 
 #[test]
 fn simple_sort() {
-    assert_eq!(parse_all::<SmtSortParser<Printing>>(b"Bool"), "Bool");
-    assert_eq!(
-        parse_all::<SmtSortParser<Printing>>(b"|my sort|"),
-        "|my sort|"
-    );
+    assert_eq!(parse_all::<SortParser>(b"Bool"), "Bool");
+    assert_eq!(parse_all::<SortParser>(b"|my sort|"), "|my sort|");
 
-    let (sort, left) = run::<SmtSortParser<Printing>>(b"Int Bool").expect("valid");
+    let (sort, left) = run::<SortParser>(b"Int Bool").expect("valid");
     assert_eq!(sort, "Int");
     assert_eq!(left, 1);
 }
 
 #[test]
 fn indexed_sort() {
+    assert_eq!(parse_all::<SortParser>(b"(_ BitVec 8)"), "(_ BitVec 8)");
     assert_eq!(
-        parse_all::<SmtSortParser<Printing>>(b"(_ BitVec 8)"),
-        "(_ BitVec 8)"
-    );
-    assert_eq!(
-        parse_all::<SmtSortParser<Printing>>(b"(_ FloatingPoint 8 24)"),
+        parse_all::<SortParser>(b"(_ FloatingPoint 8 24)"),
         "(_ FloatingPoint 8 24)"
     );
 }
 
 #[test]
 fn applied_sort() {
+    assert_eq!(parse_all::<SortParser>(b"(Set Int)"), "(Set Int)");
     assert_eq!(
-        parse_all::<SmtSortParser<Printing>>(b"(Set Int)"),
-        "(Set Int)"
-    );
-    assert_eq!(
-        parse_all::<SmtSortParser<Printing>>(b"(Array Int Int)"),
+        parse_all::<SortParser>(b"(Array Int Int)"),
         "(Array Int Int)"
     );
 
     // sorts nest in any argument position
     assert_eq!(
-        parse_all::<SmtSortParser<Printing>>(b"(Array (Array Int Int) Int)"),
+        parse_all::<SortParser>(b"(Array (Array Int Int) Int)"),
         "(Array (Array Int Int) Int)"
     );
     assert_eq!(
-        parse_all::<SmtSortParser<Printing>>(b"(Array Int (Array Int Int))"),
+        parse_all::<SortParser>(b"(Array Int (Array Int Int))"),
         "(Array Int (Array Int Int))"
     );
 
     // the closing parenthesis ends the sort; the rest is left for the caller
-    let (sort, left) = run::<SmtSortParser<Printing>>(b"(Set Int) Bool").expect("valid");
+    let (sort, left) = run::<SortParser>(b"(Set Int) Bool").expect("valid");
     assert_eq!(sort, "(Set Int)");
     assert_eq!(left, 1);
 }
@@ -58,83 +49,77 @@ fn applied_sort() {
 fn applied_indexed_sort() {
     // indexed identifier as an argument sort
     assert_eq!(
-        parse_all::<SmtSortParser<Printing>>(b"(Array (_ BitVec 8) Int)"),
+        parse_all::<SortParser>(b"(Array (_ BitVec 8) Int)"),
         "(Array (_ BitVec 8) Int)"
     );
 
     // indexed identifier as the applied head
     assert_eq!(
-        parse_all::<SmtSortParser<Printing>>(b"((_ FixedSizeList 4) Real)"),
+        parse_all::<SortParser>(b"((_ FixedSizeList 4) Real)"),
         "((_ FixedSizeList 4) Real)"
     );
 
     // both at once
     assert_eq!(
-        parse_all::<SmtSortParser<Printing>>(b"((_ Tuple 2) (_ BitVec 8) (Set Int))"),
+        parse_all::<SortParser>(b"((_ Tuple 2) (_ BitVec 8) (Set Int))"),
         "((_ Tuple 2) (_ BitVec 8) (Set Int))"
     );
 }
 
 #[test]
 fn errors() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     let expected_sort = SmtSyntaxErrorKind::ExpectedSort;
-    assert_eq!(
-        assert_error::<SmtSortParser<Printing>>(b"1", 0, 1),
-        expected_sort
-    );
-    assert_eq!(
-        assert_error::<SmtSortParser<Printing>>(b")", 0, 1),
-        expected_sort
-    );
-    assert_eq!(
-        assert_error::<SmtSortParser<Printing>>(b"", 0, 0),
-        expected_sort
-    );
+    assert_eq!(assert_error::<SortParser>(b"1", 0, 1), expected_sort);
+    assert_eq!(assert_error::<SortParser>(b")", 0, 1), expected_sort);
+    assert_eq!(assert_error::<SortParser>(b"", 0, 0), expected_sort);
 
     // unterminated applied sort runs into the end of input
     assert_eq!(
-        assert_error::<SmtSortParser<Printing>>(b"(Array Int", 10, 10),
+        assert_error::<SortParser>(b"(Array Int", 10, 10),
         expected_sort
     );
 
     // after `(`, only `_`, a symbol, or `(` may follow
-    let err = assert_error::<SmtSortParser<Printing>>(b"(as x Bool)", 1, 3);
+    let err = assert_error::<SortParser>(b"(as x Bool)", 1, 3);
     assert!(
         matches!(err, SmtSyntaxErrorKind::ExpectedSortInner),
         "{err:?}"
     );
-    let err = assert_error::<SmtSortParser<Printing>>(b"(1 2)", 1, 2);
+    let err = assert_error::<SortParser>(b"(1 2)", 1, 2);
     assert!(
         matches!(err, SmtSyntaxErrorKind::ExpectedSortInner),
         "{err:?}"
     );
-    let err = assert_error::<SmtSortParser<Printing>>(b"()", 1, 2);
+    let err = assert_error::<SortParser>(b"()", 1, 2);
     assert!(
         matches!(err, SmtSyntaxErrorKind::ExpectedSortInner),
         "{err:?}"
     );
 
     // an applied identifier must be applied to at least one sort
-    let err = assert_error::<SmtSortParser<Printing>>(b"(Int)", 4, 5);
+    let err = assert_error::<SortParser>(b"(Int)", 4, 5);
     assert!(
         matches!(err, SmtSyntaxErrorKind::EmptySortApplication),
         "{err:?}"
     );
-    let err = assert_error::<SmtSortParser<Printing>>(b"((_ BitVec 8))", 13, 14);
+    let err = assert_error::<SortParser>(b"((_ BitVec 8))", 13, 14);
     assert!(
         matches!(err, SmtSyntaxErrorKind::EmptySortApplication),
         "{err:?}"
     );
 
     // a parenthesized applied head must be an indexed identifier
-    let err = assert_error::<SmtSortParser<Printing>>(b"((Array) Int)", 2, 7);
+    let err = assert_error::<SortParser>(b"((Array) Int)", 2, 7);
     assert!(
         matches!(err, SmtSyntaxErrorKind::ExpectedUnderscore),
         "{err:?}"
     );
 
     // errors inside the indexed identifier are reported by the identifier parser
-    let err = assert_error::<SmtSortParser<Printing>>(b"(_ BitVec)", 9, 10);
+    let err = assert_error::<SortParser>(b"(_ BitVec)", 9, 10);
     assert!(
         matches!(err, SmtSyntaxErrorKind::EmptyIdentIndices),
         "{err:?}"
@@ -147,7 +132,7 @@ struct Counting {
     sorts: usize,
 }
 
-impl SmtHandler for Counting {
+impl Handler for Counting {
     type Error = Infallible;
     type SExpr = ();
     type Attribute = ();
@@ -157,40 +142,40 @@ impl SmtHandler for Counting {
 
     fn set_version(&mut self, _version: SmtVersion) {}
 
-    fn handle_sort(&mut self, _sort: SmtSort<'_, Self>) -> Result<(), Infallible> {
+    fn handle_sort(&mut self, _sort: Sort<Self::Sort>) -> Result<(), Infallible> {
         self.sorts += 1;
         Ok(())
     }
-    fn handle_term(&mut self, _term: SmtTerm<'_, Self>) -> Result<(), Infallible> {
+    fn handle_term(&mut self, _term: Term<Self::Sort, Self::Term>) -> Result<(), Infallible> {
         Ok(())
     }
-    fn start_let(&mut self, _bindings: SmtBindings<'_, Self::Term>) -> Result<(), Infallible> {
+    fn start_let(&mut self, _bindings: Bindings<Self::Term>) -> Result<(), Infallible> {
         Ok(())
     }
     fn end_let(&mut self, _scope: (), _body: ()) -> Result<(), Infallible> {
         Ok(())
     }
-    fn handle_s_expr(&mut self, _expr: SmtSExpr<'_, Self>) -> Result<(), Infallible> {
+    fn handle_s_expr(&mut self, _expr: SExpr<Self::SExpr>) -> Result<(), Infallible> {
         Ok(())
     }
     fn handle_attribute(
         &mut self,
-        _name: SmtKeyword<'_>,
-        _value: Option<SmtAttributeValue<'_, Self>>,
+        _name: SmtKeywordBuf,
+        _value: Option<AttributeValue<Self::SExpr>>,
     ) -> Result<(), Infallible> {
         Ok(())
     }
     fn annotate_term(
         &mut self,
         _term: (),
-        _attributes: SmtAttributes<'_, Self>,
+        _attributes: Vec<Self::Attribute>,
     ) -> Result<(), Infallible> {
         Ok(())
     }
     fn start_quantifier(
         &mut self,
         _kind: SmtQuantifierKind,
-        _vars: SmtSortedVars<'_, Self::Sort>,
+        _vars: SortedVars<Self::Sort>,
     ) -> Result<(), Infallible> {
         Ok(())
     }
@@ -202,7 +187,7 @@ impl SmtHandler for Counting {
     ) -> Result<(), Infallible> {
         Ok(())
     }
-    fn start_lambda(&mut self, _vars: SmtSortedVars<'_, Self::Sort>) -> Result<(), Infallible> {
+    fn start_lambda(&mut self, _vars: SortedVars<Self::Sort>) -> Result<(), Infallible> {
         Ok(())
     }
     fn end_lambda(&mut self, _scope: (), _body: ()) -> Result<(), Infallible> {
@@ -214,7 +199,7 @@ impl SmtHandler for Counting {
     fn start_match_case(
         &mut self,
         _scrutinee: &Self::Term,
-        _pattern: SmtPattern<'_>,
+        _pattern: SmtPatternBuf,
     ) -> Result<Self::Scope, Self::Error> {
         Ok(())
     }
@@ -229,7 +214,7 @@ impl SmtHandler for Counting {
     fn end_match(
         &mut self,
         _scrutinee: Self::Term,
-        _cases: SmtMatchCases<'_, Self>,
+        _cases: MatchCases<Self::Term>,
     ) -> Result<Self::Term, Self::Error> {
         Ok(())
     }
@@ -249,7 +234,7 @@ fn deep_nesting_does_not_overflow_the_stack() {
     }
 
     let mut handler = Counting::default();
-    let ((), left) = run_with::<Counting, SmtSortParser<Counting>>(&mut handler, &input)
+    let ((), left) = run_with::<Counting, SortParser>(&mut handler, &input)
         .unwrap_or_else(|(kind, span)| panic!("{kind:?} at {span:?}"));
     assert_eq!(left, 0);
     // every applied `Array` sort plus every `Int` leaf

@@ -1,24 +1,30 @@
 //! Public-API tests of command dispatch: command shape errors, handler
 //! callbacks, nonstandard commands, and behavior after `(exit)`.
+//!
+//! They run against the parser that `parse_backend` selects: the Rust
+//! library's, or the Lean port's through the Lean driver.
 
 mod common;
+mod parse_backend;
 
 use std::ops::ControlFlow;
 
 use common::{assert_error_span, assert_parser_error, parse, parse_with};
+use parse_backend::{
+    Adapt, AttributeValue, Bindings, CommandHandler, CommandParser, Constructors, Handler,
+    MatchCases, NonstandardTerm, ReadErrorCause, Reader, SExpr, Signature, Signatures, Sort,
+    SortArities, SortedVars, Symbols, Term,
+};
 
 use blazing_smtlib::{
-    NonstandardCommandError, SmtAttributeValue, SmtAttributes, SmtBindings, SmtCommandHandler,
-    SmtConstructors, SmtFunctionSignature, SmtFunctionSignatures, SmtHandler, SmtKeyword,
-    SmtMatchCases, SmtMultiple, SmtNumeral, SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSort,
-    SmtSortArities, SmtSortedVars, SmtSpan, SmtStringContent, SmtSymbol, SmtSymbols, SmtTerm,
+    NonstandardCommandError, SmtHandler, SmtKeywordBuf, SmtNumeralBuf, SmtPatternBuf,
+    SmtQuantifierKind, SmtSpan, SmtStringContentBuf, SmtSymbolBuf,
     lexer::SmtLexer,
     parser::{
-        SmtClosedParser, SmtCommandOutcome, SmtCommandParser, SmtCommandPayloadParser,
-        SmtCommandRule, SmtParse, SmtParseError, SmtParseState, SmtScriptParser,
-        SmtSyntaxErrorKind, SmtTermParser,
+        SmtCommandOutcome, SmtParse, SmtParseError, SmtParseState, SmtScriptParser,
+        SmtSyntaxErrorKind,
     },
-    reader::{SmtReadErrorCause, SmtReader},
+    reader::SmtReader,
     token::{
         SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtProduce, SmtSyntaxToken, SmtTokenCategory,
         SmtVersion, SmtVersionPosture, SmtVersionPostureBuilder, SmtVersionRefused,
@@ -36,6 +42,9 @@ fn valid_input_has_no_error() {
 
 #[test]
 fn bare_symbol_is_whole_token() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // a command must be parenthesized; the whole symbol token is the span
     let err = assert_parser_error(b"check-sat", 0, 9);
     assert!(
@@ -46,12 +55,18 @@ fn bare_symbol_is_whole_token() {
 
 #[test]
 fn missing_term_points_at_close_paren() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     let err = assert_parser_error(b"(check-sat)\n(assert )", 20, 21);
     assert!(matches!(err, SmtSyntaxErrorKind::ExpectedTerm), "{err:?}");
 }
 
 #[test]
 fn numeral_as_command_name() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     let err = assert_parser_error(b"(set-logic QF_UF)\n(1)", 19, 20);
     assert!(
         matches!(err, SmtSyntaxErrorKind::ExpectedCommandName),
@@ -61,6 +76,9 @@ fn numeral_as_command_name() {
 
 #[test]
 fn unclosed_command_points_at_eof() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // the error is on the zero-width EOF token
     assert_parser_error(b"(check-sat", 10, 10);
     assert_parser_error(b"(check-sat\n", 11, 11);
@@ -70,14 +88,17 @@ fn unclosed_command_points_at_eof() {
 
 #[test]
 fn nonstandard_command_is_rejected_by_standard_syntax() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // the handler rejects the command by name; the span is that of the name symbol
     let err = parse(b"(frobnicate 1)").expect_err("expected a handler error");
     assert_error_span(&err, 1, 11);
     match err.cause() {
-        SmtReadErrorCause::Handler(NonstandardCommandError(name)) => {
+        ReadErrorCause::Handler(NonstandardCommandError(name)) => {
             assert_eq!(name.as_slice(), b"frobnicate");
         }
-        SmtReadErrorCause::Syntax(kind) => {
+        ReadErrorCause::Syntax(kind) => {
             panic!("expected handler error, got parser error {kind:?}")
         }
         _ => panic!("expected handler error"),
@@ -86,15 +107,18 @@ fn nonstandard_command_is_rejected_by_standard_syntax() {
 
 #[test]
 fn quoted_standard_command_name_names_a_nonstandard_command() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // the standard command names are reserved words; quoted, the name is
     // a symbol, so it is handed to the handler as a nonstandard command
     let err = parse(b"(|check-sat|)").expect_err("expected a handler error");
     assert_error_span(&err, 1, 12);
     match err.cause() {
-        SmtReadErrorCause::Handler(NonstandardCommandError(name)) => {
+        ReadErrorCause::Handler(NonstandardCommandError(name)) => {
             assert_eq!(name.as_slice(), b"check-sat");
         }
-        SmtReadErrorCause::Syntax(kind) => {
+        ReadErrorCause::Syntax(kind) => {
             panic!("expected handler error, got parser error {kind:?}")
         }
         _ => panic!("expected handler error"),
@@ -103,6 +127,9 @@ fn quoted_standard_command_name_names_a_nonstandard_command() {
 
 #[test]
 fn reserved_word_other_than_a_command_name_is_no_command_name() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     let err = assert_parser_error(b"(let ((x 1)) x)", 1, 4);
     assert!(
         matches!(err, SmtSyntaxErrorKind::ExpectedCommandName),
@@ -121,18 +148,7 @@ struct Recording {
     records_versions: bool,
 }
 
-struct MyAssert;
-
-impl SmtCommandRule<Recording> for MyAssert {
-    type Parser = SmtClosedParser<Recording, SmtTermParser<Recording>>;
-
-    fn handle(handler: &mut Recording, _term: ()) -> Result<(), NonstandardCommandError> {
-        handler.commands.push("my-assert");
-        Ok(())
-    }
-}
-
-impl SmtHandler for Recording {
+impl Handler for Recording {
     type Error = NonstandardCommandError;
     type SExpr = ();
     type Attribute = ();
@@ -151,28 +167,28 @@ impl SmtHandler for Recording {
         }
     }
 
-    fn handle_sort(&mut self, _sort: SmtSort<'_, Self>) -> Result<(), Self::Error> {
+    fn handle_sort(&mut self, _sort: Sort<Self::Sort>) -> Result<(), Self::Error> {
         Ok(())
     }
-    fn handle_term(&mut self, _term: SmtTerm<'_, Self>) -> Result<(), Self::Error> {
+    fn handle_term(&mut self, _term: Term<Self::Sort, Self::Term>) -> Result<(), Self::Error> {
         if self.records_terms_and_attributes {
             self.commands.push("term");
         }
         Ok(())
     }
-    fn start_let(&mut self, _bindings: SmtBindings<'_, Self::Term>) -> Result<(), Self::Error> {
+    fn start_let(&mut self, _bindings: Bindings<Self::Term>) -> Result<(), Self::Error> {
         Ok(())
     }
     fn end_let(&mut self, _scope: (), _body: ()) -> Result<(), Self::Error> {
         Ok(())
     }
-    fn handle_s_expr(&mut self, _expr: SmtSExpr<'_, Self>) -> Result<(), Self::Error> {
+    fn handle_s_expr(&mut self, _expr: SExpr<Self::SExpr>) -> Result<(), Self::Error> {
         Ok(())
     }
     fn handle_attribute(
         &mut self,
-        _name: SmtKeyword<'_>,
-        _value: Option<SmtAttributeValue<'_, Self>>,
+        _name: SmtKeywordBuf,
+        _value: Option<AttributeValue<Self::SExpr>>,
     ) -> Result<(), Self::Error> {
         if self.records_terms_and_attributes {
             self.commands.push("attribute");
@@ -182,14 +198,14 @@ impl SmtHandler for Recording {
     fn annotate_term(
         &mut self,
         _term: (),
-        _attributes: SmtAttributes<'_, Self>,
+        _attributes: Vec<Self::Attribute>,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
     fn start_quantifier(
         &mut self,
         _kind: SmtQuantifierKind,
-        _vars: SmtSortedVars<'_, Self::Sort>,
+        _vars: SortedVars<Self::Sort>,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -201,7 +217,7 @@ impl SmtHandler for Recording {
     ) -> Result<(), Self::Error> {
         Ok(())
     }
-    fn start_lambda(&mut self, _vars: SmtSortedVars<'_, Self::Sort>) -> Result<(), Self::Error> {
+    fn start_lambda(&mut self, _vars: SortedVars<Self::Sort>) -> Result<(), Self::Error> {
         Ok(())
     }
     fn end_lambda(&mut self, _scope: (), _body: ()) -> Result<(), Self::Error> {
@@ -213,7 +229,7 @@ impl SmtHandler for Recording {
     fn start_match_case(
         &mut self,
         _scrutinee: &Self::Term,
-        _pattern: SmtPattern<'_>,
+        _pattern: SmtPatternBuf,
     ) -> Result<Self::Scope, Self::Error> {
         Ok(())
     }
@@ -228,30 +244,30 @@ impl SmtHandler for Recording {
     fn end_match(
         &mut self,
         _scrutinee: Self::Term,
-        _cases: SmtMatchCases<'_, Self>,
+        _cases: MatchCases<Self::Term>,
     ) -> Result<Self::Term, Self::Error> {
         Ok(())
     }
 }
 
-impl SmtCommandHandler for Recording {
-    type NonstandardParser = SmtCommandPayloadParser<Self, MyAssert>;
-
-    fn nonstandard_command(
-        &mut self,
-        name: SmtSymbol<'_>,
-    ) -> Result<Self::NonstandardParser, Self::Error> {
+impl CommandHandler for Recording {
+    fn nonstandard_command(&mut self, name: SmtSymbolBuf) -> Result<NonstandardTerm, Self::Error> {
         match name.as_slice() {
-            b"my-assert" => Ok(SmtCommandPayloadParser::default()),
-            _ => Err(NonstandardCommandError(name.into_owned())),
+            b"my-assert" => Ok(NonstandardTerm),
+            _ => Err(NonstandardCommandError(name)),
         }
     }
 
-    fn command_echo(&mut self, _value: SmtStringContent<'_>) -> Result<(), Self::Error> {
+    fn nonstandard_term(&mut self, _term: ()) -> Result<(), Self::Error> {
+        self.commands.push("my-assert");
+        Ok(())
+    }
+
+    fn command_echo(&mut self, _value: SmtStringContentBuf) -> Result<(), Self::Error> {
         self.commands.push("echo");
         Ok(())
     }
-    fn command_get_option(&mut self, _option: SmtKeyword<'_>) -> Result<(), Self::Error> {
+    fn command_get_option(&mut self, _option: SmtKeywordBuf) -> Result<(), Self::Error> {
         self.commands.push("get-option");
         Ok(())
     }
@@ -259,7 +275,7 @@ impl SmtCommandHandler for Recording {
         self.commands.push("set-option");
         Ok(())
     }
-    fn command_get_info(&mut self, _keyword: SmtKeyword<'_>) -> Result<(), Self::Error> {
+    fn command_get_info(&mut self, _keyword: SmtKeywordBuf) -> Result<(), Self::Error> {
         self.commands.push("get-info");
         Ok(())
     }
@@ -267,11 +283,11 @@ impl SmtCommandHandler for Recording {
         self.commands.push("set-info");
         Ok(())
     }
-    fn command_set_logic(&mut self, _logic: SmtSymbol<'_>) -> Result<(), Self::Error> {
+    fn command_set_logic(&mut self, _logic: SmtSymbolBuf) -> Result<(), Self::Error> {
         self.commands.push("set-logic");
         Ok(())
     }
-    fn command_get_value(&mut self, _terms: SmtMultiple<'_, ()>) -> Result<(), Self::Error> {
+    fn command_get_value(&mut self, _terms: Vec<()>) -> Result<(), Self::Error> {
         self.commands.push("get-value");
         Ok(())
     }
@@ -301,20 +317,20 @@ impl SmtCommandHandler for Recording {
     }
     fn command_declare_sort(
         &mut self,
-        _name: SmtSymbol<'_>,
-        _arity: SmtNumeral<'_>,
+        _name: SmtSymbolBuf,
+        _arity: SmtNumeralBuf,
     ) -> Result<(), Self::Error> {
         self.commands.push("declare-sort");
         Ok(())
     }
-    fn command_declare_sort_parameter(&mut self, _name: SmtSymbol<'_>) -> Result<(), Self::Error> {
+    fn command_declare_sort_parameter(&mut self, _name: SmtSymbolBuf) -> Result<(), Self::Error> {
         self.commands.push("declare-sort-parameter");
         Ok(())
     }
     fn command_declare_fun(
         &mut self,
-        _name: SmtSymbol<'_>,
-        _param_sorts: SmtMultiple<'_, ()>,
+        _name: SmtSymbolBuf,
+        _param_sorts: Vec<()>,
         _result_sort: (),
     ) -> Result<(), Self::Error> {
         self.commands.push("declare-fun");
@@ -328,24 +344,17 @@ impl SmtCommandHandler for Recording {
         self.commands.push("check-sat");
         Ok(())
     }
-    fn command_check_sat_assuming(
-        &mut self,
-        _assumptions: SmtMultiple<'_, ()>,
-    ) -> Result<(), Self::Error> {
+    fn command_check_sat_assuming(&mut self, _assumptions: Vec<()>) -> Result<(), Self::Error> {
         self.commands.push("check-sat-assuming");
         Ok(())
     }
-    fn command_declare_const(
-        &mut self,
-        _name: SmtSymbol<'_>,
-        _sort: (),
-    ) -> Result<(), Self::Error> {
+    fn command_declare_const(&mut self, _name: SmtSymbolBuf, _sort: ()) -> Result<(), Self::Error> {
         self.commands.push("declare-const");
         Ok(())
     }
     fn command_define_const(
         &mut self,
-        _name: SmtSymbol<'_>,
+        _name: SmtSymbolBuf,
         _sort: (),
         _body: (),
     ) -> Result<(), Self::Error> {
@@ -364,18 +373,18 @@ impl SmtCommandHandler for Recording {
         self.commands.push("exit");
         Ok(())
     }
-    fn command_push(&mut self, _amount: SmtNumeral<'_>) -> Result<(), Self::Error> {
+    fn command_push(&mut self, _amount: SmtNumeralBuf) -> Result<(), Self::Error> {
         self.commands.push("push");
         Ok(())
     }
-    fn command_pop(&mut self, _amount: SmtNumeral<'_>) -> Result<(), Self::Error> {
+    fn command_pop(&mut self, _amount: SmtNumeralBuf) -> Result<(), Self::Error> {
         self.commands.push("pop");
         Ok(())
     }
     fn start_define_sort(
         &mut self,
-        _name: SmtSymbol<'_>,
-        _params: SmtSymbols<'_>,
+        _name: SmtSymbolBuf,
+        _params: Symbols,
     ) -> Result<(), Self::Error> {
         self.commands.push("start-define-sort");
         Ok(())
@@ -384,10 +393,7 @@ impl SmtCommandHandler for Recording {
         self.commands.push("end-define-sort");
         Ok(())
     }
-    fn start_define_fun(
-        &mut self,
-        _signature: SmtFunctionSignature<'_, ()>,
-    ) -> Result<(), Self::Error> {
+    fn start_define_fun(&mut self, _signature: Signature<'_, ()>) -> Result<(), Self::Error> {
         self.commands.push("start-define-fun");
         Ok(())
     }
@@ -397,15 +403,12 @@ impl SmtCommandHandler for Recording {
     }
     fn start_define_funs_rec(
         &mut self,
-        _signatures: SmtFunctionSignatures<'_, ()>,
+        _signatures: Signatures<'_, ()>,
     ) -> Result<(), Self::Error> {
         self.commands.push("start-define-funs-rec");
         Ok(())
     }
-    fn start_recursive_body(
-        &mut self,
-        _signature: SmtFunctionSignature<'_, ()>,
-    ) -> Result<(), Self::Error> {
+    fn start_recursive_body(&mut self, _signature: Signature<'_, ()>) -> Result<(), Self::Error> {
         self.commands.push("start-recursive-body");
         Ok(())
     }
@@ -417,10 +420,7 @@ impl SmtCommandHandler for Recording {
         self.commands.push("end-define-funs-rec");
         Ok(())
     }
-    fn start_define_fun_rec(
-        &mut self,
-        _signature: SmtFunctionSignature<'_, ()>,
-    ) -> Result<(), Self::Error> {
+    fn start_define_fun_rec(&mut self, _signature: Signature<'_, ()>) -> Result<(), Self::Error> {
         self.commands.push("start-define-fun-rec");
         Ok(())
     }
@@ -430,33 +430,30 @@ impl SmtCommandHandler for Recording {
     }
     fn start_declare_datatype(
         &mut self,
-        _name: SmtSymbol<'_>,
-        _params: SmtSymbols<'_>,
+        _name: SmtSymbolBuf,
+        _params: Symbols,
     ) -> Result<(), Self::Error> {
         self.commands.push("start-declare-datatype");
         Ok(())
     }
-    fn end_declare_datatype(
-        &mut self,
-        _constructors: SmtConstructors<'_, ()>,
-    ) -> Result<(), Self::Error> {
+    fn end_declare_datatype(&mut self, _constructors: Constructors<()>) -> Result<(), Self::Error> {
         self.commands.push("end-declare-datatype");
         Ok(())
     }
     fn start_declare_datatypes(
         &mut self,
-        _sort_declarations: SmtSortArities<'_>,
+        _sort_declarations: SortArities,
     ) -> Result<(), Self::Error> {
         self.commands.push("start-declare-datatypes");
         Ok(())
     }
-    fn start_datatype_declaration(&mut self, _params: SmtSymbols<'_>) -> Result<(), Self::Error> {
+    fn start_datatype_declaration(&mut self, _params: Symbols) -> Result<(), Self::Error> {
         self.commands.push("start-datatype");
         Ok(())
     }
     fn end_datatype_declaration(
         &mut self,
-        _constructors: SmtConstructors<'_, ()>,
+        _constructors: Constructors<()>,
     ) -> Result<(), Self::Error> {
         self.commands.push("end-datatype");
         Ok(())
@@ -584,14 +581,17 @@ fn repeated_nonstandard_commands_each_get_a_fresh_parser() {
 
 #[test]
 fn nonstandard_command_body_is_checked() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // a malformed body is a parser error on the offending token
     let mut handler = Recording::default();
     let err = parse_with(&mut handler, b"(my-assert )").expect_err("expected a parser error");
     assert_error_span(&err, 11, 12);
     match err.cause() {
-        SmtReadErrorCause::Syntax(SmtSyntaxErrorKind::ExpectedTerm) => {}
-        SmtReadErrorCause::Syntax(kind) => panic!("unexpected parser error {kind:?}"),
-        SmtReadErrorCause::Handler(_) => panic!("unexpected handler error"),
+        ReadErrorCause::Syntax(SmtSyntaxErrorKind::ExpectedTerm) => {}
+        ReadErrorCause::Syntax(kind) => panic!("unexpected parser error {kind:?}"),
+        ReadErrorCause::Handler(_) => panic!("unexpected handler error"),
         _ => panic!("unexpected error kind"),
     }
     assert!(handler.commands.is_empty());
@@ -599,15 +599,18 @@ fn nonstandard_command_body_is_checked() {
 
 #[test]
 fn nonstandard_command_unknown_to_handler_is_rejected() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     let mut handler = Recording::default();
     let err =
         parse_with(&mut handler, b"(my-assert x) (other)").expect_err("expected a handler error");
     assert_error_span(&err, 15, 20);
     match err.cause() {
-        SmtReadErrorCause::Handler(NonstandardCommandError(name)) => {
+        ReadErrorCause::Handler(NonstandardCommandError(name)) => {
             assert_eq!(name.as_slice(), b"other");
         }
-        SmtReadErrorCause::Syntax(kind) => {
+        ReadErrorCause::Syntax(kind) => {
             panic!("expected handler error, got parser error {kind:?}")
         }
         _ => panic!("expected handler error"),
@@ -626,6 +629,9 @@ fn set_info_with_s_expr_attribute_value() {
 
 #[test]
 fn a_rejected_version_declaration_is_handled_as_set_info_first() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // a version declaration is a set-info command: the handler receives it
     // at its closing parenthesis, and only then is the declared value checked,
     // so the error comes after command_set_info, at that parenthesis
@@ -641,7 +647,7 @@ fn a_rejected_version_declaration_is_handled_as_set_info_first() {
         assert!(
             matches!(
                 err.cause(),
-                SmtReadErrorCause::Syntax(SmtSyntaxErrorKind::UnsupportedVersion)
+                ReadErrorCause::Syntax(SmtSyntaxErrorKind::UnsupportedVersion)
             ),
             "{value}: {:?}",
             err.cause()
@@ -709,6 +715,9 @@ fn define_fun_rec_has_calls_of_its_own() {
 
 #[test]
 fn no_end_call_comes_before_a_missing_closing_parenthesis() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // each input has a stray token where a closing parenthesis belongs;
     // the definition or declaration it closes is not ended before the error
     let cases: [(&[u8], u64, u64, &[&str]); 9] = [
@@ -770,7 +779,7 @@ fn no_end_call_comes_before_a_missing_closing_parenthesis() {
         assert!(
             matches!(
                 err.cause(),
-                SmtReadErrorCause::Syntax(SmtSyntaxErrorKind::ExpectedToken([
+                ReadErrorCause::Syntax(SmtSyntaxErrorKind::ExpectedToken([
                     SmtTokenCategory::ParenClose
                 ]))
             ),
@@ -826,6 +835,9 @@ fn recursive_body_terms_are_handled_between_the_start_and_end_of_their_body() {
 
 #[test]
 fn define_funs_rec_makes_no_call_for_a_missing_or_an_extra_body() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // the input, the error span and kind, and the calls made before the error
     type Case = (
         &'static [u8],
@@ -867,7 +879,7 @@ fn define_funs_rec_makes_no_call_for_a_missing_or_an_extra_body() {
         let err = parse_with(&mut handler, input).expect_err("expected a parser error");
         assert_error_span(&err, start, end);
         match err.into_cause() {
-            SmtReadErrorCause::Syntax(actual) => {
+            ReadErrorCause::Syntax(actual) => {
                 assert_eq!(actual, kind, "in {:?}", String::from_utf8_lossy(input))
             }
             _ => panic!(
@@ -886,6 +898,9 @@ fn define_funs_rec_makes_no_call_for_a_missing_or_an_extra_body() {
 
 #[test]
 fn a_second_option_or_info_attribute_is_rejected_before_the_first_is_handled() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // a valueless attribute is ended by the next token; in set-option and set-info
     // a second keyword is rejected at once, so the first is not handled
     for (input, start, end) in [
@@ -901,7 +916,7 @@ fn a_second_option_or_info_attribute_is_rejected_before_the_first_is_handled() {
         assert!(
             matches!(
                 err.cause(),
-                SmtReadErrorCause::Syntax(SmtSyntaxErrorKind::ExpectedToken([
+                ReadErrorCause::Syntax(SmtSyntaxErrorKind::ExpectedToken([
                     SmtTokenCategory::ParenClose
                 ]))
             ),
@@ -963,7 +978,7 @@ fn the_handler_is_told_the_version_before_anything_else_in_each_input() {
     {
         // a reader starting in a version other than the default
         let mut reader =
-            SmtReader::script(&mut handler, SmtVersionPosture::default(), SmtVersion::V2_6);
+            Reader::script(&mut handler, SmtVersionPosture::default(), SmtVersion::V2_6);
         reader
             .read_all(&b"(check-sat) (check-sat)"[..])
             .unwrap_or_else(|err| panic!("unexpected error at {:?}", err.span()));
@@ -1012,7 +1027,7 @@ fn a_version_declaration_sets_the_handler_after_the_command() {
 fn a_command_parser_outside_a_script_switches_nothing() {
     let mut handler = recording_versions();
     let outcome = {
-        let mut reader = SmtReader::new(&mut handler, SmtCommandParser::new(), SmtVersion::V2_7);
+        let mut reader = Reader::new(&mut handler, CommandParser, SmtVersion::V2_7);
         reader
             .read_all(&b"(set-info :smt-lib-version 2.6)"[..])
             .unwrap_or_else(|err| panic!("unexpected error at {:?}", err.span()))
@@ -1031,7 +1046,9 @@ fn a_command_parser_outside_a_script_switches_nothing() {
 // who needs them (a formatter that keeps comments, for one) builds a concrete
 // consumer of their own, which observes every token and hands the others to a
 // parser one at a time. These tests check that the public interface allows
-// it: the consumer below uses nothing a user cannot write.
+// it: the consumer below uses nothing a user cannot write. They check the
+// Rust interface itself, so they run the Rust library whatever
+// `parse_backend` selects, with the test handler behind its Rust adapter.
 
 /// A producer offering the parser one token of another producer, with no
 /// lookahead, and forwarding the version and the discarding to it.
@@ -1078,9 +1095,9 @@ impl<Z: SmtProduce> SmtProduce for OneToken<'_, Z> {
 /// records each comment in the handler's log as `comment`, and parses a
 /// script from the other tokens.
 struct Observing<'h> {
-    handler: &'h mut Recording,
-    parse_state: SmtParseState<Recording>,
-    parser: SmtScriptParser<Recording>,
+    handler: Adapt<'h, Recording>,
+    parse_state: SmtParseState<Adapt<'h, Recording>>,
+    parser: SmtScriptParser<Adapt<'h, Recording>>,
     version_set: bool,
     spans: Vec<SmtSpan>,
 }
@@ -1106,7 +1123,7 @@ impl<'a> SmtConsumeFrom<SmtBatchCursor<'a>> for Observing<'_> {
                     continue;
                 }
                 SmtSyntaxToken::Comment(_) => {
-                    self.handler.commands.push("comment");
+                    self.handler.0.commands.push("comment");
                     cursor.next();
                     continue;
                 }
@@ -1118,7 +1135,7 @@ impl<'a> SmtConsumeFrom<SmtBatchCursor<'a>> for Observing<'_> {
             };
             let flow = self
                 .parser
-                .parse(self.handler, &mut self.parse_state, &mut one)?;
+                .parse(&mut self.handler, &mut self.parse_state, &mut one)?;
             if flow.is_break() {
                 self.version_set = false;
                 return Ok(flow);
@@ -1153,7 +1170,7 @@ fn a_user_built_consumer_observes_every_token_and_parses_the_rest() {
         records_versions: true,
         ..Recording::default()
     };
-    SmtReader::script(&mut plain, posture_with_2_0(), SmtVersion::V2_7)
+    SmtReader::script(&mut Adapt(&mut plain), posture_with_2_0(), SmtVersion::V2_7)
         .read_all(&input[..])
         .unwrap_or_else(|err| panic!("unexpected error at {:?}", err.span()));
 
@@ -1164,7 +1181,7 @@ fn a_user_built_consumer_observes_every_token_and_parses_the_rest() {
     };
     let mut lexer = SmtLexer::new(
         Observing {
-            handler: &mut observed,
+            handler: Adapt(&mut observed),
             parse_state: SmtParseState::new(),
             parser: SmtScriptParser::new(posture_with_2_0()),
             version_set: false,

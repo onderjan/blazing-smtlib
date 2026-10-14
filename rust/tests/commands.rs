@@ -1,21 +1,23 @@
 //! Public-API tests of the standard commands: define-fun callback ordering,
 //! handler errors, and per-command shape errors.
+//!
+//! They run against the parser that `parse_backend` selects: the Rust
+//! library's, or the Lean port's through the Lean driver.
 
 mod common;
-
-use std::convert::Infallible;
+mod parse_backend;
 
 use common::{assert_error_span, assert_parser_error, parse_with};
+use parse_backend::{
+    AttributeValue, Bindings, CommandHandler, Constructors, Handler, MatchCases, NonstandardTerm,
+    ReadErrorCause, SExpr, Signature, Signatures, Sort, SortArities, SortedVars, Symbols, Term,
+};
 
 use blazing_smtlib::{
-    SmtAttributeValue, SmtAttributes, SmtBindings, SmtCommandHandler, SmtConstructors,
-    SmtFunctionSignature, SmtFunctionSignatures, SmtHandler, SmtIdent, SmtIndex, SmtKeyword,
-    SmtMatchCases, SmtMultiple, SmtNumeral, SmtPattern, SmtQuantifierKind, SmtSExpr,
-    SmtSimplePattern, SmtSort, SmtSortArities, SmtSortedVars, SmtSpecialConstant, SmtStringContent,
-    SmtSymbol, SmtSymbols, SmtTerm,
+    SmtIdentBuf, SmtIndexBuf, SmtKeywordBuf, SmtNumeralBuf, SmtPatternBuf, SmtQuantifierKind,
+    SmtSimplePatternBuf, SmtSpecialConstantBuf, SmtStringContentBuf, SmtSymbolBuf,
     lexer::SmtLexicalErrorKind,
     parser::SmtSyntaxErrorKind,
-    reader::SmtReadErrorCause,
     token::{SmtTokenCategory, SmtVersion},
 };
 
@@ -62,18 +64,18 @@ struct ResolvingMatch {
     case_vars: Option<Vec<String>>,
 }
 
-fn simple_pattern_text(pattern: SmtSimplePattern<'_>) -> String {
+fn simple_pattern_text(pattern: &SmtSimplePatternBuf) -> String {
     match pattern {
-        SmtSimplePattern::Symbol(symbol) => text(symbol.as_slice()),
-        SmtSimplePattern::Wildcard => "_".into(),
+        SmtSimplePatternBuf::Symbol(symbol) => text(symbol.as_slice()),
+        SmtSimplePatternBuf::Wildcard => "_".into(),
     }
 }
 
 /// Renders a pattern as written, so that the events show it unclassified.
-fn pattern_text(pattern: SmtPattern<'_>) -> String {
+fn pattern_text(pattern: &SmtPatternBuf) -> String {
     match pattern {
-        SmtPattern::Simple(simple) => simple_pattern_text(simple),
-        SmtPattern::Application { constructor, args } => {
+        SmtPatternBuf::Simple(simple) => simple_pattern_text(simple),
+        SmtPatternBuf::Application { constructor, args } => {
             let args: Vec<String> = args.iter().map(simple_pattern_text).collect();
             format!("({} {})", text(constructor.as_slice()), args.join(" "))
         }
@@ -85,7 +87,7 @@ impl Resolving {
     /// in progress, marked as `$name`, then against the parameters of the
     /// body in progress, marked as `[name]`, and otherwise against the
     /// functions of the define-funs-rec in progress, marked as `{name}`.
-    fn resolve_term_ident(&self, ident: SmtIdent<'_>) -> String {
+    fn resolve_term_ident(&self, ident: SmtIdentBuf) -> String {
         let name = ident_view_text(ident);
         let is_case_var = self
             .matches
@@ -105,7 +107,7 @@ impl Resolving {
 }
 
 /// Renders a function signature as written, `f ((x Int)) Int`.
-fn render_signature(signature: SmtFunctionSignature<'_, String>) -> String {
+fn render_signature(signature: &Signature<'_, String>) -> String {
     let params: Vec<String> = signature
         .params()
         .map(|(param, sort)| format!("({} {})", text(param.as_slice()), sort))
@@ -119,7 +121,7 @@ fn render_signature(signature: SmtFunctionSignature<'_, String>) -> String {
 }
 
 /// Renders datatype constructors as written, rejecting one named `boom`.
-fn render_constructors(constructors: SmtConstructors<'_, String>) -> Result<String, String> {
+fn render_constructors(constructors: Constructors<String>) -> Result<String, String> {
     let mut rendered = Vec::new();
     for (name, selectors) in constructors {
         let name = text(name.as_slice());
@@ -146,7 +148,7 @@ fn text(bytes: &[u8]) -> String {
 
 /// Renders an identifier including its indices, so that stale indices
 /// leaking from a previously parsed command would show up in the events.
-fn ident_view_text(ident: SmtIdent<'_>) -> String {
+fn ident_view_text(ident: SmtIdentBuf) -> String {
     let name = text(ident.name.as_slice());
     if ident.indices.is_empty() {
         return name;
@@ -155,14 +157,14 @@ fn ident_view_text(ident: SmtIdent<'_>) -> String {
         .indices
         .iter()
         .map(|index| match index {
-            SmtIndex::Numeral(numeral) => text(numeral.as_slice()),
-            SmtIndex::Symbol(symbol) => text(symbol.as_slice()),
+            SmtIndexBuf::Numeral(numeral) => text(numeral.as_slice()),
+            SmtIndexBuf::Symbol(symbol) => text(symbol.as_slice()),
         })
         .collect();
     format!("(_ {} {})", name, indices.join(" "))
 }
 
-impl SmtHandler for Resolving {
+impl Handler for Resolving {
     type Error = String;
     type SExpr = ();
     type Attribute = ();
@@ -172,7 +174,7 @@ impl SmtHandler for Resolving {
 
     fn set_version(&mut self, _version: SmtVersion) {}
 
-    fn handle_sort(&mut self, sort: SmtSort<'_, Self>) -> Result<String, String> {
+    fn handle_sort(&mut self, sort: Sort<Self::Sort>) -> Result<String, String> {
         let name = ident_view_text(sort.ident);
         let name = if self.sort_params.contains(&name) {
             format!("[{name}]")
@@ -188,23 +190,21 @@ impl SmtHandler for Resolving {
         })
     }
 
-    fn handle_term(&mut self, term: SmtTerm<'_, Self>) -> Result<String, String> {
+    fn handle_term(&mut self, term: Term<Self::Sort, Self::Term>) -> Result<String, String> {
         Ok(match term {
-            SmtTerm::SpecialConstant(constant) => match constant {
-                SmtSpecialConstant::Numeral(numeral) => text(numeral.as_slice()),
+            Term::SpecialConstant(constant) => match constant {
+                SmtSpecialConstantBuf::Numeral(numeral) => text(numeral.as_slice()),
                 _ => "<constant>".into(),
             },
-            SmtTerm::QualifiedIdent(qualified_ident) => {
-                self.resolve_term_ident(qualified_ident.ident)
-            }
-            SmtTerm::Application(application) => {
+            Term::QualifiedIdent(qualified_ident) => self.resolve_term_ident(qualified_ident.ident),
+            Term::Application(application) => {
                 let function = self.resolve_term_ident(application.function.ident);
                 format!("({} {})", function, application.args.as_slice().join(" "))
             }
         })
     }
 
-    fn start_let(&mut self, _bindings: SmtBindings<'_, Self::Term>) -> Result<(), String> {
+    fn start_let(&mut self, _bindings: Bindings<Self::Term>) -> Result<(), String> {
         Ok(())
     }
 
@@ -212,14 +212,14 @@ impl SmtHandler for Resolving {
         Ok(body)
     }
 
-    fn handle_s_expr(&mut self, _expr: SmtSExpr<'_, Self>) -> Result<(), String> {
+    fn handle_s_expr(&mut self, _expr: SExpr<Self::SExpr>) -> Result<(), String> {
         Ok(())
     }
 
     fn handle_attribute(
         &mut self,
-        _name: SmtKeyword<'_>,
-        _value: Option<SmtAttributeValue<'_, Self>>,
+        _name: SmtKeywordBuf,
+        _value: Option<AttributeValue<Self::SExpr>>,
     ) -> Result<(), String> {
         Ok(())
     }
@@ -227,7 +227,7 @@ impl SmtHandler for Resolving {
     fn annotate_term(
         &mut self,
         term: String,
-        _attributes: SmtAttributes<'_, Self>,
+        _attributes: Vec<Self::Attribute>,
     ) -> Result<String, String> {
         Ok(term)
     }
@@ -235,7 +235,7 @@ impl SmtHandler for Resolving {
     fn start_quantifier(
         &mut self,
         _kind: SmtQuantifierKind,
-        _vars: SmtSortedVars<'_, Self::Sort>,
+        _vars: SortedVars<Self::Sort>,
     ) -> Result<(), String> {
         Ok(())
     }
@@ -247,7 +247,7 @@ impl SmtHandler for Resolving {
     ) -> Result<String, String> {
         Ok(body)
     }
-    fn start_lambda(&mut self, _vars: SmtSortedVars<'_, Self::Sort>) -> Result<(), String> {
+    fn start_lambda(&mut self, _vars: SortedVars<Self::Sort>) -> Result<(), String> {
         Ok(())
     }
     fn end_lambda(&mut self, _scope: (), body: String) -> Result<String, String> {
@@ -269,7 +269,7 @@ impl SmtHandler for Resolving {
     fn start_match_case(
         &mut self,
         _scrutinee: &String,
-        pattern: SmtPattern<'_>,
+        pattern: SmtPatternBuf,
     ) -> Result<(), String> {
         let current = self
             .matches
@@ -281,19 +281,19 @@ impl SmtHandler for Resolving {
         );
         // a bare symbol is taken as a variable; a real handler would
         // first check whether it names a nullary constructor
-        let vars: Vec<String> = match pattern {
-            SmtPattern::Simple(SmtSimplePattern::Symbol(symbol)) => {
+        let vars: Vec<String> = match &pattern {
+            SmtPatternBuf::Simple(SmtSimplePatternBuf::Symbol(symbol)) => {
                 vec![text(symbol.as_slice())]
             }
-            SmtPattern::Simple(SmtSimplePattern::Wildcard) => Vec::new(),
-            SmtPattern::Application { constructor, args } => {
+            SmtPatternBuf::Simple(SmtSimplePatternBuf::Wildcard) => Vec::new(),
+            SmtPatternBuf::Application { constructor, args } => {
                 if constructor.as_slice() == b"unstartable" {
                     return Err("unstartable case".into());
                 }
                 args.iter()
                     .filter_map(|arg| match arg {
-                        SmtSimplePattern::Symbol(symbol) => Some(text(symbol.as_slice())),
-                        SmtSimplePattern::Wildcard => None,
+                        SmtSimplePatternBuf::Symbol(symbol) => Some(text(symbol.as_slice())),
+                        SmtSimplePatternBuf::Wildcard => None,
                     })
                     .collect()
             }
@@ -302,7 +302,7 @@ impl SmtHandler for Resolving {
             return Err("unstartable case".into());
         }
         self.events
-            .push(format!("start-case {}", pattern_text(pattern)));
+            .push(format!("start-case {}", pattern_text(&pattern)));
         current.case_vars = Some(vars);
         Ok(())
     }
@@ -332,7 +332,7 @@ impl SmtHandler for Resolving {
     fn end_match(
         &mut self,
         _scrutinee: String,
-        _cases: SmtMatchCases<'_, Self>,
+        _cases: MatchCases<Self::Term>,
     ) -> Result<String, String> {
         let current = self.matches.pop().expect("end_match without start_match");
         assert!(
@@ -347,35 +347,34 @@ impl SmtHandler for Resolving {
     }
 }
 
-impl SmtCommandHandler for Resolving {
-    type NonstandardParser = Infallible;
-
-    fn nonstandard_command(
-        &mut self,
-        name: SmtSymbol<'_>,
-    ) -> Result<Self::NonstandardParser, String> {
+impl CommandHandler for Resolving {
+    fn nonstandard_command(&mut self, name: SmtSymbolBuf) -> Result<NonstandardTerm, String> {
         Err(format!("nonstandard command {:?}", text(name.as_slice())))
     }
 
-    fn command_echo(&mut self, _value: SmtStringContent<'_>) -> Result<(), String> {
+    fn nonstandard_term(&mut self, _term: String) -> Result<(), String> {
+        unreachable!("no nonstandard command is accepted, so none has a term")
+    }
+
+    fn command_echo(&mut self, _value: SmtStringContentBuf) -> Result<(), String> {
         Ok(())
     }
-    fn command_get_option(&mut self, _option: SmtKeyword<'_>) -> Result<(), String> {
+    fn command_get_option(&mut self, _option: SmtKeywordBuf) -> Result<(), String> {
         Ok(())
     }
     fn command_set_option(&mut self, _option: ()) -> Result<(), String> {
         Ok(())
     }
-    fn command_get_info(&mut self, _keyword: SmtKeyword<'_>) -> Result<(), String> {
+    fn command_get_info(&mut self, _keyword: SmtKeywordBuf) -> Result<(), String> {
         Ok(())
     }
     fn command_set_info(&mut self, _attribute: ()) -> Result<(), String> {
         Ok(())
     }
-    fn command_set_logic(&mut self, _logic: SmtSymbol<'_>) -> Result<(), String> {
+    fn command_set_logic(&mut self, _logic: SmtSymbolBuf) -> Result<(), String> {
         Ok(())
     }
-    fn command_get_value(&mut self, terms: SmtMultiple<'_, String>) -> Result<(), String> {
+    fn command_get_value(&mut self, terms: Vec<String>) -> Result<(), String> {
         if terms.iter().any(|term| term == "boom") {
             return Err("exploding get-value".into());
         }
@@ -409,8 +408,8 @@ impl SmtCommandHandler for Resolving {
     }
     fn command_declare_sort(
         &mut self,
-        name: SmtSymbol<'_>,
-        arity: SmtNumeral<'_>,
+        name: SmtSymbolBuf,
+        arity: SmtNumeralBuf,
     ) -> Result<(), String> {
         self.events.push(format!(
             "declare-sort {} {}",
@@ -419,15 +418,15 @@ impl SmtCommandHandler for Resolving {
         ));
         Ok(())
     }
-    fn command_declare_sort_parameter(&mut self, name: SmtSymbol<'_>) -> Result<(), String> {
+    fn command_declare_sort_parameter(&mut self, name: SmtSymbolBuf) -> Result<(), String> {
         self.events
             .push(format!("declare-sort-parameter {}", text(name.as_slice())));
         Ok(())
     }
     fn command_declare_fun(
         &mut self,
-        name: SmtSymbol<'_>,
-        param_sorts: SmtMultiple<'_, String>,
+        name: SmtSymbolBuf,
+        param_sorts: Vec<String>,
         result_sort: String,
     ) -> Result<(), String> {
         self.events.push(format!(
@@ -449,10 +448,7 @@ impl SmtCommandHandler for Resolving {
         Ok(())
     }
 
-    fn command_check_sat_assuming(
-        &mut self,
-        assumptions: SmtMultiple<'_, String>,
-    ) -> Result<(), String> {
+    fn command_check_sat_assuming(&mut self, assumptions: Vec<String>) -> Result<(), String> {
         self.events.push(format!(
             "check-sat-assuming ({})",
             assumptions.as_slice().join(" ")
@@ -460,7 +456,7 @@ impl SmtCommandHandler for Resolving {
         Ok(())
     }
 
-    fn command_declare_const(&mut self, name: SmtSymbol<'_>, sort: String) -> Result<(), String> {
+    fn command_declare_const(&mut self, name: SmtSymbolBuf, sort: String) -> Result<(), String> {
         self.events
             .push(format!("declare-const {} {sort}", text(name.as_slice())));
         Ok(())
@@ -468,7 +464,7 @@ impl SmtCommandHandler for Resolving {
 
     fn command_define_const(
         &mut self,
-        name: SmtSymbol<'_>,
+        name: SmtSymbolBuf,
         sort: String,
         body: String,
     ) -> Result<(), String> {
@@ -493,21 +489,17 @@ impl SmtCommandHandler for Resolving {
     fn command_exit(&mut self) -> Result<(), String> {
         Ok(())
     }
-    fn command_push(&mut self, amount: SmtNumeral<'_>) -> Result<(), String> {
+    fn command_push(&mut self, amount: SmtNumeralBuf) -> Result<(), String> {
         self.events
             .push(format!("push {}", text(amount.as_slice())));
         Ok(())
     }
-    fn command_pop(&mut self, amount: SmtNumeral<'_>) -> Result<(), String> {
+    fn command_pop(&mut self, amount: SmtNumeralBuf) -> Result<(), String> {
         self.events.push(format!("pop {}", text(amount.as_slice())));
         Ok(())
     }
 
-    fn start_define_sort(
-        &mut self,
-        name: SmtSymbol<'_>,
-        params: SmtSymbols<'_>,
-    ) -> Result<(), String> {
+    fn start_define_sort(&mut self, name: SmtSymbolBuf, params: Symbols) -> Result<(), String> {
         let name = text(name.as_slice());
         if name == "forbidden" {
             return Err("forbidden sort name".into());
@@ -528,10 +520,7 @@ impl SmtCommandHandler for Resolving {
         Ok(())
     }
 
-    fn start_define_fun(
-        &mut self,
-        signature: SmtFunctionSignature<'_, String>,
-    ) -> Result<(), String> {
+    fn start_define_fun(&mut self, signature: Signature<'_, String>) -> Result<(), String> {
         let name = text(signature.name().as_slice());
         if name == "forbidden" {
             return Err("forbidden function name".into());
@@ -561,10 +550,7 @@ impl SmtCommandHandler for Resolving {
         Ok(())
     }
 
-    fn start_define_funs_rec(
-        &mut self,
-        signatures: SmtFunctionSignatures<'_, String>,
-    ) -> Result<(), String> {
+    fn start_define_funs_rec(&mut self, signatures: Signatures<'_, String>) -> Result<(), String> {
         let mut rendered = Vec::new();
         self.rec_functions.clear();
         self.rec_params.clear();
@@ -596,10 +582,7 @@ impl SmtCommandHandler for Resolving {
         Ok(())
     }
 
-    fn start_recursive_body(
-        &mut self,
-        signature: SmtFunctionSignature<'_, String>,
-    ) -> Result<(), String> {
+    fn start_recursive_body(&mut self, signature: Signature<'_, String>) -> Result<(), String> {
         // the bodies arrive in signature order, and each start is given
         // its signature again: it must be the one counted to
         let name = text(signature.name().as_slice());
@@ -636,16 +619,13 @@ impl SmtCommandHandler for Resolving {
         Ok(())
     }
 
-    fn start_define_fun_rec(
-        &mut self,
-        signature: SmtFunctionSignature<'_, String>,
-    ) -> Result<(), String> {
+    fn start_define_fun_rec(&mut self, signature: Signature<'_, String>) -> Result<(), String> {
         let name = text(signature.name().as_slice());
         if name == "forbidden" {
             return Err("forbidden recursive function name".into());
         }
         self.events
-            .push(format!("start-fun-rec {}", render_signature(signature)));
+            .push(format!("start-fun-rec {}", render_signature(&signature)));
         // the function is in scope in its own body, and so are its parameters
         self.rec_functions = vec![name];
         self.params = signature
@@ -681,10 +661,7 @@ impl SmtCommandHandler for Resolving {
         Ok(())
     }
 
-    fn start_declare_datatypes(
-        &mut self,
-        sort_declarations: SmtSortArities<'_>,
-    ) -> Result<(), String> {
+    fn start_declare_datatypes(&mut self, sort_declarations: SortArities) -> Result<(), String> {
         let mut rendered = Vec::new();
         self.datatype_sorts.clear();
         self.datatype_index = 0;
@@ -701,7 +678,7 @@ impl SmtCommandHandler for Resolving {
         Ok(())
     }
 
-    fn start_datatype_declaration(&mut self, params: SmtSymbols<'_>) -> Result<(), String> {
+    fn start_datatype_declaration(&mut self, params: Symbols) -> Result<(), String> {
         // the datatypes arrive in sort-declaration order, so the handler
         // knows which sort is being started by counting
         let name = self
@@ -721,7 +698,7 @@ impl SmtCommandHandler for Resolving {
 
     fn end_datatype_declaration(
         &mut self,
-        constructors: SmtConstructors<'_, String>,
+        constructors: Constructors<String>,
     ) -> Result<(), String> {
         let rendered = render_constructors(constructors)?;
         self.events.push(format!("end-datatype {rendered}"));
@@ -732,8 +709,8 @@ impl SmtCommandHandler for Resolving {
 
     fn start_declare_datatype(
         &mut self,
-        name: SmtSymbol<'_>,
-        params: SmtSymbols<'_>,
+        name: SmtSymbolBuf,
+        params: Symbols,
     ) -> Result<(), String> {
         let name = text(name.as_slice());
         if name == "Forbidden" {
@@ -750,10 +727,7 @@ impl SmtCommandHandler for Resolving {
         Ok(())
     }
 
-    fn end_declare_datatype(
-        &mut self,
-        constructors: SmtConstructors<'_, String>,
-    ) -> Result<(), String> {
+    fn end_declare_datatype(&mut self, constructors: Constructors<String>) -> Result<(), String> {
         let rendered = render_constructors(constructors)?;
         if self.datatype_sorts.iter().any(|name| name == "Unendable") {
             return Err("unendable datatypes".into());
@@ -866,6 +840,9 @@ fn define_sort_and_define_fun_scopes_are_independent() {
 
 #[test]
 fn start_define_sort_error_points_at_last_signature_token() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     let handler = assert_handler_error(
         b"(define-sort forbidden () Int)",
         "forbidden sort name",
@@ -877,12 +854,18 @@ fn start_define_sort_error_points_at_last_signature_token() {
 
 #[test]
 fn end_define_sort_error_points_at_the_closing_parenthesis() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     let handler = assert_handler_error(b"(define-sort S () Boom)", "exploding sort", 22, 23);
     assert_eq!(handler.events, ["start-sort S ()"]);
 }
 
 #[test]
 fn define_sort_errors_point_at_offending_token() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // the sort name must be a symbol
     let err = assert_parser_error(b"(define-sort 1 () Int)", 13, 14);
     assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
@@ -938,6 +921,9 @@ fn push_and_pop_deliver_unconverted_amounts() {
 
 #[test]
 fn push_and_pop_errors_point_at_offending_token() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // the amount is required
     let err = assert_parser_error(b"(push)", 5, 6);
     assert!(
@@ -1013,6 +999,9 @@ fn declare_sort_delivers_name_and_unconverted_arity() {
 
 #[test]
 fn declare_sort_errors_point_at_offending_token() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // the sort name must be a symbol
     let err = assert_parser_error(b"(declare-sort 1 0)", 14, 15);
     assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
@@ -1062,13 +1051,16 @@ fn declare_sort_leading_zero_arity_is_rejected_by_lexer() {
     // the lexer reports the error as soon as a digit follows the leading zero
     assert_error_span(&err, 16, 18);
     match err.cause() {
-        SmtReadErrorCause::Lexical(SmtLexicalErrorKind::NumeralLeadingZero) => {}
+        ReadErrorCause::Lexical(SmtLexicalErrorKind::NumeralLeadingZero) => {}
         kind => panic!("expected a leading zero lexer error, got {kind:?}"),
     }
 }
 
 #[test]
 fn declare_sort_parameter_errors_point_at_offending_token() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // the parameter name is required and must be a symbol
     let err = assert_parser_error(b"(declare-sort-parameter)", 23, 24);
     assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
@@ -1147,6 +1139,9 @@ fn define_const_and_define_fun_without_params_stay_apart() {
 
 #[test]
 fn define_const_is_handled_in_one_call_at_its_closing_parenthesis() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // the name, the sort and the body arrive together, so a rejected name
     // is reported at the `)`, after the body
     let handler = assert_handler_error(
@@ -1160,6 +1155,9 @@ fn define_const_is_handled_in_one_call_at_its_closing_parenthesis() {
 
 #[test]
 fn define_const_body_error_points_at_the_closing_parenthesis() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     let handler = assert_handler_error(b"(define-const c Int boom)", "exploding body", 24, 25);
     assert!(handler.events.is_empty());
 }
@@ -1187,6 +1185,9 @@ fn define_const_does_not_inherit_previous_scope() {
 
 #[test]
 fn define_const_errors_point_at_offending_token() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // the constant name must be a symbol
     let err = assert_parser_error(b"(define-const 1 Int 5)", 14, 15);
     assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
@@ -1256,6 +1257,9 @@ fn repeated_check_sat_assumings_reuse_the_persistent_parser() {
 
 #[test]
 fn check_sat_errors_point_at_offending_token() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // check-sat takes no arguments, assumptions need check-sat-assuming
     let err = assert_parser_error(b"(check-sat x)", 11, 12);
     assert!(
@@ -1372,6 +1376,9 @@ fn alternating_commands_reuse_their_parsers() {
 
 #[test]
 fn signature_errors_point_at_offending_token() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // the function name must be a symbol
     let err = assert_parser_error(b"(define-fun 1 () Int 5)", 12, 13);
     assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
@@ -1404,8 +1411,8 @@ fn assert_handler_error(input: &[u8], message: &str, start: u64, end: u64) -> Re
     let err = parse_with(&mut handler, input).expect_err("expected a handler error");
     assert_error_span(&err, start, end);
     match err.cause() {
-        SmtReadErrorCause::Handler(handler_message) => assert_eq!(handler_message, message),
-        SmtReadErrorCause::Syntax(kind) => panic!("expected handler error, got {kind:?}"),
+        ReadErrorCause::Handler(handler_message) => assert_eq!(handler_message, message),
+        ReadErrorCause::Syntax(kind) => panic!("expected handler error, got {kind:?}"),
         _ => panic!("expected handler error"),
     }
     handler
@@ -1413,6 +1420,9 @@ fn assert_handler_error(input: &[u8], message: &str, start: u64, end: u64) -> Re
 
 #[test]
 fn start_define_fun_error_points_at_last_signature_token() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     let handler = assert_handler_error(
         b"(define-fun forbidden () Int 5)",
         "forbidden function name",
@@ -1424,12 +1434,18 @@ fn start_define_fun_error_points_at_last_signature_token() {
 
 #[test]
 fn end_define_fun_error_points_at_the_closing_parenthesis() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     let handler = assert_handler_error(b"(define-fun f () Int boom)", "exploding body", 25, 26);
     assert_eq!(handler.events, ["start f () Int"]);
 }
 
 #[test]
 fn trivial_command_errors_point_at_offending_token() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // echo takes a string literal
     let err = assert_parser_error(b"(echo 1)", 6, 7);
     assert!(
@@ -1657,6 +1673,9 @@ fn datatype_params_are_scoped_to_their_datatype() {
 
 #[test]
 fn quoted_par_is_an_ordinary_constructor_name() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // `par` is a reserved word only when unquoted
     let mut handler = Resolving::default();
     parse_resolving(&mut handler, b"(declare-datatypes ((A 0)) (((|par|))))");
@@ -1708,6 +1727,9 @@ fn repeated_declare_datatypes_reuse_the_persistent_parser() {
 
 #[test]
 fn declare_datatypes_handler_errors_point_at_the_triggering_token() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // start_declare_datatypes: the closing parenthesis of the sort declarations
     let handler = assert_handler_error(
         b"(declare-datatypes ((Forbidden 0)) (((a))))",
@@ -1782,6 +1804,9 @@ fn declare_datatypes_handler_errors_point_at_the_triggering_token() {
 
 #[test]
 fn declare_datatypes_errors_point_at_offending_token() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // at least one sort must be declared
     let err = assert_parser_error(b"(declare-datatypes () ())", 20, 21);
     assert!(
@@ -1939,6 +1964,9 @@ fn parametric_declare_datatype_starts_with_its_parameters() {
 
 #[test]
 fn declare_datatype_handler_errors_point_at_the_triggering_token() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // start_declare_datatype waits for the parameters to be known, so its
     // error is at the token that determines them: in the simple form the
     // first constructor's opening parenthesis
@@ -1989,6 +2017,9 @@ fn declare_datatype_handler_errors_point_at_the_triggering_token() {
 
 #[test]
 fn declare_datatype_errors_point_at_offending_token() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // the name is a symbol
     let err = assert_parser_error(b"(declare-datatype 1 ((a)))", 18, 19);
     assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
@@ -2148,6 +2179,9 @@ fn repeated_recursive_definitions_reset_count_functions_and_scope() {
 
 #[test]
 fn define_funs_rec_handler_errors_point_at_the_triggering_token() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // start_define_funs_rec: the closing parenthesis of the signature list
     let handler = assert_handler_error(
         b"(define-funs-rec ((forbidden () Int)) (1))",
@@ -2233,6 +2267,9 @@ fn define_funs_rec_handler_errors_point_at_the_triggering_token() {
 
 #[test]
 fn define_fun_rec_handler_errors_point_at_the_triggering_token() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // start_define_fun_rec: the last token of the signature
     let handler = assert_handler_error(
         b"(define-fun-rec forbidden () Int 1)",
@@ -2263,6 +2300,9 @@ fn define_fun_rec_handler_errors_point_at_the_triggering_token() {
 
 #[test]
 fn define_funs_rec_errors_point_at_offending_token() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // at least one function must be defined
     let err = assert_parser_error(b"(define-funs-rec () ())", 18, 19);
     assert!(
@@ -2348,6 +2388,9 @@ fn define_funs_rec_errors_point_at_offending_token() {
 
 #[test]
 fn define_fun_rec_errors_point_at_offending_token() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // the function name must be a symbol
     let err = assert_parser_error(b"(define-fun-rec 1 () Int 1)", 16, 17);
     assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
@@ -2379,6 +2422,9 @@ fn define_fun_rec_errors_point_at_offending_token() {
 
 #[test]
 fn missing_recursive_body_starts_no_body() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // define-fun-rec has no body calls: its body is a term between its
     // start and its end, and the closing parenthesis is no term
     let mut handler = Resolving::default();
@@ -2388,7 +2434,7 @@ fn missing_recursive_body_starts_no_body() {
     assert!(
         matches!(
             err.cause(),
-            SmtReadErrorCause::Syntax(SmtSyntaxErrorKind::ExpectedTerm)
+            ReadErrorCause::Syntax(SmtSyntaxErrorKind::ExpectedTerm)
         ),
         "{:?}",
         err.cause()
@@ -2404,7 +2450,7 @@ fn missing_recursive_body_starts_no_body() {
     assert!(
         matches!(
             err.cause(),
-            SmtReadErrorCause::Syntax(SmtSyntaxErrorKind::ExpectedFunctionBody)
+            ReadErrorCause::Syntax(SmtSyntaxErrorKind::ExpectedFunctionBody)
         ),
         "{:?}",
         err.cause()
@@ -2553,6 +2599,9 @@ fn match_inside_a_function_body_sees_the_parameters() {
 
 #[test]
 fn match_handler_errors_point_at_the_triggering_token() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // start_match: the last token of the scrutinee
     let handler = assert_handler_error(
         b"(assert (match forbidden ((x 1))))",
@@ -2642,6 +2691,9 @@ fn get_value_terms_do_not_see_the_previous_definition_scope() {
 
 #[test]
 fn get_value_handler_error_points_at_the_closing_parenthesis_of_the_command() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // the handler is called once the whole command is parsed
     let handler = assert_handler_error(b"(get-value (x boom))", "exploding get-value", 19, 20);
     assert!(handler.events.is_empty());
@@ -2649,6 +2701,9 @@ fn get_value_handler_error_points_at_the_closing_parenthesis_of_the_command() {
 
 #[test]
 fn get_value_errors_point_at_offending_token() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
     // at least one term is required
     let err = assert_parser_error(b"(get-value ())", 12, 13);
     assert!(
