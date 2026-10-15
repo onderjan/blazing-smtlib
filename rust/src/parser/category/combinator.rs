@@ -53,6 +53,10 @@ impl<H: SmtHandler, P1: SmtParse<H>, P2: SmtParse<H>> SmtParse<H> for SmtPairPar
                 ControlFlow::Continue(()) => return Ok(ControlFlow::Continue(())),
                 ControlFlow::Break(first) => {
                     self.first_result = Some(first);
+                    // the second parser must not be handed an empty cursor
+                    if cursor.is_empty() {
+                        return Ok(ControlFlow::Continue(()));
+                    }
                     // move to progressing the second parser
                 }
             }
@@ -405,6 +409,10 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtParenMaximumParser<H, P> 
                 };
                 SmtOpenParenParser::expect(cursor, token)?;
                 self.is_opened = true;
+                // the inner parser must not be handed an empty cursor
+                if cursor.is_empty() {
+                    return Ok(ControlFlow::Continue(()));
+                }
             }
         }
     }
