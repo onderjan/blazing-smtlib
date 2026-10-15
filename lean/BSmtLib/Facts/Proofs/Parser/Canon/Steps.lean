@@ -79,8 +79,8 @@ theorem IdentState_step_canon {version : Token.Version} {state : IdentState}
       (IdentState.step version state' token') := by
   subst hs ht; unfold IdentState.step; canon_step []
 
-theorem sortComplete_canon {levels : List (SortLevel RSort)} {head : Identifier}
-    {arguments : Array RSort} {levels' : List (SortLevel RSort)} {head' : Identifier}
+theorem sortComplete_canon {levels : List (SortLevel RSort)} {head : Ident}
+    {arguments : Array RSort} {levels' : List (SortLevel RSort)} {head' : Ident}
     {arguments' : Array RSort} (hl : levels' = canon levels) (hh : head' = canon head)
     (ha : arguments' = canon arguments) :
     CSim (sortComplete (H := List Event) levels head arguments)
@@ -151,7 +151,7 @@ theorem termComplete_canon {levels levels' : List (TermLevel RSort RTerm RScope)
   subst hl; unfold termComplete; canon_step []
 
 theorem startBinder_canon {binder : SortedBinder}
-    {variables variables' : Array (Plain.SymbolView × RSort)}
+    {variables variables' : Array (Plain.Symbol × RSort)}
     (hv : variables' = canon variables) :
     CSim (startBinder (H := List Event) binder variables) (startBinder binder variables') := by
   subst hv; unfold startBinder; canon_step []

@@ -38,19 +38,19 @@ fails when it is stale.
 
 /-! `pub use crate::bytes::*` in `lib.rs` -/
 
--- `BSmtLib.Bytes.BytesView`, by `pub use crate::bytes::*`
+-- `BSmtLib.Bytes.BytesBuf`, by `pub use crate::bytes::*`
 namespace BSmtLib
 
-export BSmtLib.Bytes (BytesView)
+export BSmtLib.Bytes (BytesBuf)
 
 end BSmtLib
 
-namespace BSmtLib.BytesView
+namespace BSmtLib.BytesBuf
 
-export BSmtLib.Bytes.BytesView (asSlice eqOwned eqSlice instBEq instHashable instRepr intoOwned
-  isEmpty len)
+export BSmtLib.Bytes.BytesBuf (asSlice asView eqSlice eqView fromByte fromByteArray instBEq
+  instHashable instRepr intoByteArray isEmpty len new)
 
-end BSmtLib.BytesView
+end BSmtLib.BytesBuf
 
 /-! `pub use crate::multiple::*` in `lib.rs` -/
 
@@ -61,10 +61,10 @@ export BSmtLib.Multiple (Bindings)
 
 end BSmtLib
 
--- `BSmtLib.Multiple.BindingsView`, by `pub use crate::multiple::*`
+-- `BSmtLib.Multiple.BindingsBuf`, by `pub use crate::multiple::*`
 namespace BSmtLib
 
-export BSmtLib.Multiple (BindingsView)
+export BSmtLib.Multiple (BindingsBuf)
 
 end BSmtLib
 
@@ -77,23 +77,36 @@ end BSmtLib
 
 namespace BSmtLib.Constructors
 
-export BSmtLib.Multiple.Constructors (clear instInhabited isEmpty len new push pushSelector view)
+export BSmtLib.Multiple.Constructors (instForInProdSymbolSortedVarsOfMonad instRepr isEmpty len
+  toArray)
 
 end BSmtLib.Constructors
 
--- `BSmtLib.Multiple.ConstructorsView`, by `pub use crate::multiple::*`
+-- `BSmtLib.Multiple.ConstructorsBuf`, by `pub use crate::multiple::*`
 namespace BSmtLib
 
-export BSmtLib.Multiple (ConstructorsView)
+export BSmtLib.Multiple (ConstructorsBuf)
 
 end BSmtLib
 
-namespace BSmtLib.ConstructorsView
+namespace BSmtLib.ConstructorsBuf
 
-export BSmtLib.Multiple.ConstructorsView (instForInProdSymbolViewSortedVarsViewOfMonad instRepr
-  isEmpty len toArray)
+export BSmtLib.Multiple.ConstructorsBuf (clear instInhabited isEmpty len new push pushSelector view)
 
-end BSmtLib.ConstructorsView
+end BSmtLib.ConstructorsBuf
+
+-- `BSmtLib.Multiple.FunctionSignature`, by `pub use crate::multiple::*`
+namespace BSmtLib
+
+export BSmtLib.Multiple (FunctionSignature)
+
+end BSmtLib
+
+namespace BSmtLib.FunctionSignature
+
+export BSmtLib.Multiple.FunctionSignature (name params resultSort)
+
+end BSmtLib.FunctionSignature
 
 -- `BSmtLib.Multiple.FunctionSignatures`, by `pub use crate::multiple::*`
 namespace BSmtLib
@@ -104,24 +117,24 @@ end BSmtLib
 
 namespace BSmtLib.FunctionSignatures
 
-export BSmtLib.Multiple.FunctionSignatures (clear get? instInhabited isEmpty len new push pushParam
-  view)
+export BSmtLib.Multiple.FunctionSignatures (get? instForInFunctionSignatureOfMonad instRepr isEmpty
+  len toArray)
 
 end BSmtLib.FunctionSignatures
 
--- `BSmtLib.Multiple.FunctionSignaturesView`, by `pub use crate::multiple::*`
+-- `BSmtLib.Multiple.FunctionSignaturesBuf`, by `pub use crate::multiple::*`
 namespace BSmtLib
 
-export BSmtLib.Multiple (FunctionSignaturesView)
+export BSmtLib.Multiple (FunctionSignaturesBuf)
 
 end BSmtLib
 
-namespace BSmtLib.FunctionSignaturesView
+namespace BSmtLib.FunctionSignaturesBuf
 
-export BSmtLib.Multiple.FunctionSignaturesView (get? instForInSignatureOfMonad instRepr isEmpty len
-  toArray)
+export BSmtLib.Multiple.FunctionSignaturesBuf (clear get? instInhabited isEmpty len new push
+  pushParam view)
 
-end BSmtLib.FunctionSignaturesView
+end BSmtLib.FunctionSignaturesBuf
 
 -- `BSmtLib.Multiple.MatchCases`, by `pub use crate::multiple::*`
 namespace BSmtLib
@@ -145,22 +158,22 @@ end BSmtLib
 
 namespace BSmtLib.Named
 
-export BSmtLib.Multiple.Named (clear instInhabited isEmpty len new push view)
+export BSmtLib.Multiple.Named (get? instForInProdSymbolOfMonad instRepr isEmpty len toArray)
 
 end BSmtLib.Named
 
--- `BSmtLib.Multiple.NamedView`, by `pub use crate::multiple::*`
+-- `BSmtLib.Multiple.NamedBuf`, by `pub use crate::multiple::*`
 namespace BSmtLib
 
-export BSmtLib.Multiple (NamedView)
+export BSmtLib.Multiple (NamedBuf)
 
 end BSmtLib
 
-namespace BSmtLib.NamedView
+namespace BSmtLib.NamedBuf
 
-export BSmtLib.Multiple.NamedView (get? instForInProdSymbolViewOfMonad instRepr isEmpty len toArray)
+export BSmtLib.Multiple.NamedBuf (clear instInhabited isEmpty len new push view)
 
-end BSmtLib.NamedView
+end BSmtLib.NamedBuf
 
 -- `BSmtLib.Multiple.SortArities`, by `pub use crate::multiple::*`
 namespace BSmtLib
@@ -171,23 +184,23 @@ end BSmtLib
 
 namespace BSmtLib.SortArities
 
-export BSmtLib.Multiple.SortArities (clear instInhabited isEmpty len new push view)
+export BSmtLib.Multiple.SortArities (get? instForInProdSymbolNumeralOfMonad instRepr isEmpty len
+  toArray)
 
 end BSmtLib.SortArities
 
--- `BSmtLib.Multiple.SortAritiesView`, by `pub use crate::multiple::*`
+-- `BSmtLib.Multiple.SortAritiesBuf`, by `pub use crate::multiple::*`
 namespace BSmtLib
 
-export BSmtLib.Multiple (SortAritiesView)
+export BSmtLib.Multiple (SortAritiesBuf)
 
 end BSmtLib
 
-namespace BSmtLib.SortAritiesView
+namespace BSmtLib.SortAritiesBuf
 
-export BSmtLib.Multiple.SortAritiesView (get? instForInProdSymbolViewNumeralViewOfMonad instRepr
-  isEmpty len toArray)
+export BSmtLib.Multiple.SortAritiesBuf (clear instInhabited isEmpty len new push view)
 
-end BSmtLib.SortAritiesView
+end BSmtLib.SortAritiesBuf
 
 -- `BSmtLib.Multiple.SortedVars`, by `pub use crate::multiple::*`
 namespace BSmtLib
@@ -196,10 +209,10 @@ export BSmtLib.Multiple (SortedVars)
 
 end BSmtLib
 
--- `BSmtLib.Multiple.SortedVarsView`, by `pub use crate::multiple::*`
+-- `BSmtLib.Multiple.SortedVarsBuf`, by `pub use crate::multiple::*`
 namespace BSmtLib
 
-export BSmtLib.Multiple (SortedVarsView)
+export BSmtLib.Multiple (SortedVarsBuf)
 
 end BSmtLib
 
@@ -212,37 +225,37 @@ end BSmtLib
 
 namespace BSmtLib.Symbols
 
-export BSmtLib.Multiple.Symbols (clear instInhabited isEmpty len new push view)
+export BSmtLib.Multiple.Symbols (get? instForInSymbolOfMonad instRepr isEmpty len toArray)
 
 end BSmtLib.Symbols
 
--- `BSmtLib.Multiple.SymbolsView`, by `pub use crate::multiple::*`
+-- `BSmtLib.Multiple.SymbolsBuf`, by `pub use crate::multiple::*`
 namespace BSmtLib
 
-export BSmtLib.Multiple (SymbolsView)
+export BSmtLib.Multiple (SymbolsBuf)
 
 end BSmtLib
 
-namespace BSmtLib.SymbolsView
+namespace BSmtLib.SymbolsBuf
 
-export BSmtLib.Multiple.SymbolsView (get? instForInSymbolViewOfMonad instRepr isEmpty len toArray)
+export BSmtLib.Multiple.SymbolsBuf (clear instInhabited isEmpty len new push view)
 
-end BSmtLib.SymbolsView
+end BSmtLib.SymbolsBuf
 
 /-! `pub use crate::nodes::*` in `lib.rs` -/
 
--- `BSmtLib.Nodes.AttributeValueNode`, by `pub use crate::nodes::*`
+-- `BSmtLib.Nodes.AttributeValue`, by `pub use crate::nodes::*`
 namespace BSmtLib
 
-export BSmtLib.Nodes (AttributeValueNode)
+export BSmtLib.Nodes (AttributeValue)
 
 end BSmtLib
 
-namespace BSmtLib.AttributeValueNode
+namespace BSmtLib.AttributeValue
 
-export BSmtLib.Nodes.AttributeValueNode (constant list symbol)
+export BSmtLib.Nodes.AttributeValue (sExprs specialConstant symbol)
 
-end BSmtLib.AttributeValueNode
+end BSmtLib.AttributeValue
 
 -- `BSmtLib.Nodes.Attributes`, by `pub use crate::nodes::*`
 namespace BSmtLib
@@ -251,31 +264,31 @@ export BSmtLib.Nodes (Attributes)
 
 end BSmtLib
 
--- `BSmtLib.Nodes.Identifier`, by `pub use crate::nodes::*`
+-- `BSmtLib.Nodes.Ident`, by `pub use crate::nodes::*`
 namespace BSmtLib
 
-export BSmtLib.Nodes (Identifier)
+export BSmtLib.Nodes (Ident)
 
 end BSmtLib
 
-namespace BSmtLib.Identifier
+namespace BSmtLib.Ident
 
-export BSmtLib.Nodes.Identifier (indices intoOwned mk symbol)
+export BSmtLib.Nodes.Ident (indices intoOwned mk name)
 
-end BSmtLib.Identifier
+end BSmtLib.Ident
 
--- `BSmtLib.Nodes.IdentifierBuf`, by `pub use crate::nodes::*`
+-- `BSmtLib.Nodes.IdentBuf`, by `pub use crate::nodes::*`
 namespace BSmtLib
 
-export BSmtLib.Nodes (IdentifierBuf)
+export BSmtLib.Nodes (IdentBuf)
 
 end BSmtLib
 
-namespace BSmtLib.IdentifierBuf
+namespace BSmtLib.IdentBuf
 
-export BSmtLib.Nodes.IdentifierBuf (indices mk newSimple symbol)
+export BSmtLib.Nodes.IdentBuf (indices mk name newSimple)
 
-end BSmtLib.IdentifierBuf
+end BSmtLib.IdentBuf
 
 -- `BSmtLib.Nodes.Index`, by `pub use crate::nodes::*`
 namespace BSmtLib
@@ -312,7 +325,7 @@ end BSmtLib
 
 namespace BSmtLib.Pattern
 
-export BSmtLib.Nodes.Pattern (constructor intoOwned single)
+export BSmtLib.Nodes.Pattern (application intoOwned simple)
 
 end BSmtLib.Pattern
 
@@ -325,7 +338,7 @@ end BSmtLib
 
 namespace BSmtLib.PatternBuf
 
-export BSmtLib.Nodes.PatternBuf (constructor single)
+export BSmtLib.Nodes.PatternBuf (application simple)
 
 end BSmtLib.PatternBuf
 
@@ -338,7 +351,7 @@ end BSmtLib
 
 namespace BSmtLib.QualifiedIdent
 
-export BSmtLib.Nodes.QualifiedIdent (identifier intoOwned mk sort)
+export BSmtLib.Nodes.QualifiedIdent (ident intoOwned mk sort)
 
 end BSmtLib.QualifiedIdent
 
@@ -351,35 +364,35 @@ end BSmtLib
 
 namespace BSmtLib.QualifiedIdentBuf
 
-export BSmtLib.Nodes.QualifiedIdentBuf (identifier mk newQualified newSimple newUnqualified sort)
+export BSmtLib.Nodes.QualifiedIdentBuf (ident mk newQualified newSimple newUnqualified sort)
 
 end BSmtLib.QualifiedIdentBuf
 
--- `BSmtLib.Nodes.Quantifier`, by `pub use crate::nodes::*`
+-- `BSmtLib.Nodes.QuantifierKind`, by `pub use crate::nodes::*`
 namespace BSmtLib
 
-export BSmtLib.Nodes (Quantifier)
+export BSmtLib.Nodes (QuantifierKind)
 
 end BSmtLib
 
-namespace BSmtLib.Quantifier
+namespace BSmtLib.QuantifierKind
 
-export BSmtLib.Nodes.Quantifier («exists» «forall»)
+export BSmtLib.Nodes.QuantifierKind («exists» «forall»)
 
-end BSmtLib.Quantifier
+end BSmtLib.QuantifierKind
 
--- `BSmtLib.Nodes.SExprNode`, by `pub use crate::nodes::*`
+-- `BSmtLib.Nodes.SExpr`, by `pub use crate::nodes::*`
 namespace BSmtLib
 
-export BSmtLib.Nodes (SExprNode)
+export BSmtLib.Nodes (SExpr)
 
 end BSmtLib
 
-namespace BSmtLib.SExprNode
+namespace BSmtLib.SExpr
 
-export BSmtLib.Nodes.SExprNode (constant keyword list reserved symbol)
+export BSmtLib.Nodes.SExpr (keyword reserved sExprs specialConstant symbol)
 
-end BSmtLib.SExprNode
+end BSmtLib.SExpr
 
 -- `BSmtLib.Nodes.SExprs`, by `pub use crate::nodes::*`
 namespace BSmtLib
@@ -388,18 +401,31 @@ export BSmtLib.Nodes (SExprs)
 
 end BSmtLib
 
--- `BSmtLib.Nodes.Signature`, by `pub use crate::nodes::*`
+-- `BSmtLib.Nodes.SimplePattern`, by `pub use crate::nodes::*`
 namespace BSmtLib
 
-export BSmtLib.Nodes (Signature)
+export BSmtLib.Nodes (SimplePattern)
 
 end BSmtLib
 
-namespace BSmtLib.Signature
+namespace BSmtLib.SimplePattern
 
-export BSmtLib.Nodes.Signature (mk name params resultSort)
+export BSmtLib.Nodes.SimplePattern (intoOwned symbol wildcard)
 
-end BSmtLib.Signature
+end BSmtLib.SimplePattern
+
+-- `BSmtLib.Nodes.SimplePatternBuf`, by `pub use crate::nodes::*`
+namespace BSmtLib
+
+export BSmtLib.Nodes (SimplePatternBuf)
+
+end BSmtLib
+
+namespace BSmtLib.SimplePatternBuf
+
+export BSmtLib.Nodes.SimplePatternBuf (symbol wildcard)
+
+end BSmtLib.SimplePatternBuf
 
 -- `BSmtLib.Nodes.Sorts`, by `pub use crate::nodes::*`
 namespace BSmtLib
@@ -408,70 +434,44 @@ export BSmtLib.Nodes (Sorts)
 
 end BSmtLib
 
--- `BSmtLib.Nodes.SpecConstant`, by `pub use crate::nodes::*`
+-- `BSmtLib.Nodes.SpecialConstant`, by `pub use crate::nodes::*`
 namespace BSmtLib
 
-export BSmtLib.Nodes (SpecConstant)
+export BSmtLib.Nodes (SpecialConstant)
 
 end BSmtLib
 
-namespace BSmtLib.SpecConstant
+namespace BSmtLib.SpecialConstant
 
-export BSmtLib.Nodes.SpecConstant (binary decimal hexadecimal intoOwned numeral string)
+export BSmtLib.Nodes.SpecialConstant (binary decimal hexadecimal intoOwned numeral string)
 
-end BSmtLib.SpecConstant
+end BSmtLib.SpecialConstant
 
--- `BSmtLib.Nodes.SpecConstantBuf`, by `pub use crate::nodes::*`
+-- `BSmtLib.Nodes.SpecialConstantBuf`, by `pub use crate::nodes::*`
 namespace BSmtLib
 
-export BSmtLib.Nodes (SpecConstantBuf)
+export BSmtLib.Nodes (SpecialConstantBuf)
 
 end BSmtLib
 
-namespace BSmtLib.SpecConstantBuf
+namespace BSmtLib.SpecialConstantBuf
 
-export BSmtLib.Nodes.SpecConstantBuf (binary decimal hexadecimal numeral string)
+export BSmtLib.Nodes.SpecialConstantBuf (binary decimal hexadecimal numeral string)
 
-end BSmtLib.SpecConstantBuf
+end BSmtLib.SpecialConstantBuf
 
--- `BSmtLib.Nodes.SymbolOrWildcard`, by `pub use crate::nodes::*`
+-- `BSmtLib.Nodes.Term`, by `pub use crate::nodes::*`
 namespace BSmtLib
 
-export BSmtLib.Nodes (SymbolOrWildcard)
+export BSmtLib.Nodes (Term)
 
 end BSmtLib
 
-namespace BSmtLib.SymbolOrWildcard
+namespace BSmtLib.Term
 
-export BSmtLib.Nodes.SymbolOrWildcard (intoOwned symbol wildcard)
+export BSmtLib.Nodes.Term (application qualifiedIdent specialConstant)
 
-end BSmtLib.SymbolOrWildcard
-
--- `BSmtLib.Nodes.SymbolOrWildcardBuf`, by `pub use crate::nodes::*`
-namespace BSmtLib
-
-export BSmtLib.Nodes (SymbolOrWildcardBuf)
-
-end BSmtLib
-
-namespace BSmtLib.SymbolOrWildcardBuf
-
-export BSmtLib.Nodes.SymbolOrWildcardBuf (symbol wildcard)
-
-end BSmtLib.SymbolOrWildcardBuf
-
--- `BSmtLib.Nodes.TermNode`, by `pub use crate::nodes::*`
-namespace BSmtLib
-
-export BSmtLib.Nodes (TermNode)
-
-end BSmtLib
-
-namespace BSmtLib.TermNode
-
-export BSmtLib.Nodes.TermNode (application constant identifier)
-
-end BSmtLib.TermNode
+end BSmtLib.Term
 
 -- `BSmtLib.Nodes.Terms`, by `pub use crate::nodes::*`
 namespace BSmtLib
@@ -491,24 +491,24 @@ end BSmtLib
 
 namespace BSmtLib.BinDigits
 
-export BSmtLib.Plain.BinDigits (asSlice asView eqSlice eqString eqView instBEq instHashable
-  instRepr intoByteArray intoBytes isAllowed isEmpty len new)
+export BSmtLib.Plain.BinDigits (asSlice eqOwned eqSlice eqString instBEq instHashable instRepr
+  intoOwned isEmpty len)
 
 end BSmtLib.BinDigits
 
--- `BSmtLib.Plain.BinDigitsView`, by `pub use crate::plain::*`
+-- `BSmtLib.Plain.BinDigitsBuf`, by `pub use crate::plain::*`
 namespace BSmtLib
 
-export BSmtLib.Plain (BinDigitsView)
+export BSmtLib.Plain (BinDigitsBuf)
 
 end BSmtLib
 
-namespace BSmtLib.BinDigitsView
+namespace BSmtLib.BinDigitsBuf
 
-export BSmtLib.Plain.BinDigitsView (asSlice eqOwned eqSlice eqString instBEq instHashable instRepr
-  intoOwned isEmpty len)
+export BSmtLib.Plain.BinDigitsBuf (asSlice asView eqSlice eqString eqView instBEq instHashable
+  instRepr intoByteArray intoBytesBuf isAllowed isEmpty len new)
 
-end BSmtLib.BinDigitsView
+end BSmtLib.BinDigitsBuf
 
 -- `BSmtLib.Plain.Comment`, by `pub use crate::plain::*`
 namespace BSmtLib
@@ -519,24 +519,24 @@ end BSmtLib
 
 namespace BSmtLib.Comment
 
-export BSmtLib.Plain.Comment (asSlice asView eqSlice eqString eqView instBEq instHashable instRepr
-  intoByteArray intoBytes isAllowed isEmpty len new)
+export BSmtLib.Plain.Comment (asSlice eqOwned eqSlice eqString instBEq instHashable instRepr
+  intoOwned isEmpty len)
 
 end BSmtLib.Comment
 
--- `BSmtLib.Plain.CommentView`, by `pub use crate::plain::*`
+-- `BSmtLib.Plain.CommentBuf`, by `pub use crate::plain::*`
 namespace BSmtLib
 
-export BSmtLib.Plain (CommentView)
+export BSmtLib.Plain (CommentBuf)
 
 end BSmtLib
 
-namespace BSmtLib.CommentView
+namespace BSmtLib.CommentBuf
 
-export BSmtLib.Plain.CommentView (asSlice eqOwned eqSlice eqString instBEq instHashable instRepr
-  intoOwned isEmpty len)
+export BSmtLib.Plain.CommentBuf (asSlice asView eqSlice eqString eqView instBEq instHashable
+  instRepr intoByteArray intoBytesBuf isAllowed isEmpty len new)
 
-end BSmtLib.CommentView
+end BSmtLib.CommentBuf
 
 -- `BSmtLib.Plain.Decimal`, by `pub use crate::plain::*`
 namespace BSmtLib
@@ -547,24 +547,24 @@ end BSmtLib
 
 namespace BSmtLib.Decimal
 
-export BSmtLib.Plain.Decimal (asSlice asView eqSlice eqString eqView instBEq instHashable instRepr
-  intoByteArray intoBytes isAllowed isEmpty len new)
+export BSmtLib.Plain.Decimal (asSlice eqOwned eqSlice eqString instBEq instHashable instRepr
+  intoOwned isEmpty len)
 
 end BSmtLib.Decimal
 
--- `BSmtLib.Plain.DecimalView`, by `pub use crate::plain::*`
+-- `BSmtLib.Plain.DecimalBuf`, by `pub use crate::plain::*`
 namespace BSmtLib
 
-export BSmtLib.Plain (DecimalView)
+export BSmtLib.Plain (DecimalBuf)
 
 end BSmtLib
 
-namespace BSmtLib.DecimalView
+namespace BSmtLib.DecimalBuf
 
-export BSmtLib.Plain.DecimalView (asSlice eqOwned eqSlice eqString instBEq instHashable instRepr
-  intoOwned isEmpty len)
+export BSmtLib.Plain.DecimalBuf (asSlice asView eqSlice eqString eqView instBEq instHashable
+  instRepr intoByteArray intoBytesBuf isAllowed isEmpty len new)
 
-end BSmtLib.DecimalView
+end BSmtLib.DecimalBuf
 
 -- `BSmtLib.Plain.DisallowedByteVecError`, by `pub use crate::plain::*`
 namespace BSmtLib
@@ -588,24 +588,24 @@ end BSmtLib
 
 namespace BSmtLib.HexDigits
 
-export BSmtLib.Plain.HexDigits (asSlice asView eqSlice eqString eqView instBEq instHashable
-  instRepr intoByteArray intoBytes isAllowed isEmpty len new)
+export BSmtLib.Plain.HexDigits (asSlice eqOwned eqSlice eqString instBEq instHashable instRepr
+  intoOwned isEmpty len)
 
 end BSmtLib.HexDigits
 
--- `BSmtLib.Plain.HexDigitsView`, by `pub use crate::plain::*`
+-- `BSmtLib.Plain.HexDigitsBuf`, by `pub use crate::plain::*`
 namespace BSmtLib
 
-export BSmtLib.Plain (HexDigitsView)
+export BSmtLib.Plain (HexDigitsBuf)
 
 end BSmtLib
 
-namespace BSmtLib.HexDigitsView
+namespace BSmtLib.HexDigitsBuf
 
-export BSmtLib.Plain.HexDigitsView (asSlice eqOwned eqSlice eqString instBEq instHashable instRepr
-  intoOwned isEmpty len)
+export BSmtLib.Plain.HexDigitsBuf (asSlice asView eqSlice eqString eqView instBEq instHashable
+  instRepr intoByteArray intoBytesBuf isAllowed isEmpty len new)
 
-end BSmtLib.HexDigitsView
+end BSmtLib.HexDigitsBuf
 
 -- `BSmtLib.Plain.Keyword`, by `pub use crate::plain::*`
 namespace BSmtLib
@@ -616,24 +616,24 @@ end BSmtLib
 
 namespace BSmtLib.Keyword
 
-export BSmtLib.Plain.Keyword (asSlice asView eqSlice eqString eqView instBEq instHashable instRepr
-  intoByteArray intoBytes isAllowed isEmpty len new)
+export BSmtLib.Plain.Keyword (asSlice eqOwned eqSlice eqString instBEq instHashable instRepr
+  intoOwned isEmpty len)
 
 end BSmtLib.Keyword
 
--- `BSmtLib.Plain.KeywordView`, by `pub use crate::plain::*`
+-- `BSmtLib.Plain.KeywordBuf`, by `pub use crate::plain::*`
 namespace BSmtLib
 
-export BSmtLib.Plain (KeywordView)
+export BSmtLib.Plain (KeywordBuf)
 
 end BSmtLib
 
-namespace BSmtLib.KeywordView
+namespace BSmtLib.KeywordBuf
 
-export BSmtLib.Plain.KeywordView (asSlice eqOwned eqSlice eqString instBEq instHashable instRepr
-  intoOwned isEmpty len)
+export BSmtLib.Plain.KeywordBuf (asSlice asView eqSlice eqString eqView instBEq instHashable
+  instRepr intoByteArray intoBytesBuf isAllowed isEmpty len new)
 
-end BSmtLib.KeywordView
+end BSmtLib.KeywordBuf
 
 -- `BSmtLib.Plain.Numeral`, by `pub use crate::plain::*`
 namespace BSmtLib
@@ -644,24 +644,24 @@ end BSmtLib
 
 namespace BSmtLib.Numeral
 
-export BSmtLib.Plain.Numeral (asSlice asView eqSlice eqString eqView fromNat instBEq instHashable
-  instRepr intoByteArray intoBytes isAllowed isEmpty len new)
+export BSmtLib.Plain.Numeral (asSlice eqOwned eqSlice eqString instBEq instHashable instRepr
+  intoOwned isEmpty len)
 
 end BSmtLib.Numeral
 
--- `BSmtLib.Plain.NumeralView`, by `pub use crate::plain::*`
+-- `BSmtLib.Plain.NumeralBuf`, by `pub use crate::plain::*`
 namespace BSmtLib
 
-export BSmtLib.Plain (NumeralView)
+export BSmtLib.Plain (NumeralBuf)
 
 end BSmtLib
 
-namespace BSmtLib.NumeralView
+namespace BSmtLib.NumeralBuf
 
-export BSmtLib.Plain.NumeralView (asSlice eqOwned eqSlice eqString instBEq instHashable instRepr
-  intoOwned isEmpty len)
+export BSmtLib.Plain.NumeralBuf (asSlice asView eqSlice eqString eqView fromNat instBEq
+  instHashable instRepr intoByteArray intoBytesBuf isAllowed isEmpty len new)
 
-end BSmtLib.NumeralView
+end BSmtLib.NumeralBuf
 
 -- `BSmtLib.Plain.StringContent`, by `pub use crate::plain::*`
 namespace BSmtLib
@@ -672,24 +672,24 @@ end BSmtLib
 
 namespace BSmtLib.StringContent
 
-export BSmtLib.Plain.StringContent (asSlice asView eqSlice eqString eqView instBEq instHashable
-  instRepr intoByteArray intoBytes isAllowed isEmpty len new)
+export BSmtLib.Plain.StringContent (asSlice eqOwned eqSlice eqString instBEq instHashable instRepr
+  intoOwned isEmpty len)
 
 end BSmtLib.StringContent
 
--- `BSmtLib.Plain.StringContentView`, by `pub use crate::plain::*`
+-- `BSmtLib.Plain.StringContentBuf`, by `pub use crate::plain::*`
 namespace BSmtLib
 
-export BSmtLib.Plain (StringContentView)
+export BSmtLib.Plain (StringContentBuf)
 
 end BSmtLib
 
-namespace BSmtLib.StringContentView
+namespace BSmtLib.StringContentBuf
 
-export BSmtLib.Plain.StringContentView (asSlice eqOwned eqSlice eqString instBEq instHashable
-  instRepr intoOwned isEmpty len)
+export BSmtLib.Plain.StringContentBuf (asSlice asView eqSlice eqString eqView instBEq instHashable
+  instRepr intoByteArray intoBytesBuf isAllowed isEmpty len new)
 
-end BSmtLib.StringContentView
+end BSmtLib.StringContentBuf
 
 -- `BSmtLib.Plain.Symbol`, by `pub use crate::plain::*`
 namespace BSmtLib
@@ -700,23 +700,23 @@ end BSmtLib
 
 namespace BSmtLib.Symbol
 
-export BSmtLib.Plain.Symbol (asSlice asView bytes instRepr intoByteArray intoBytes isEmpty isQuoted
-  isQuotedAllowed isUnquotedAllowed len newQuoted newUnquoted)
+export BSmtLib.Plain.Symbol (asSlice bytes instRepr intoOwned isEmpty isQuoted len)
 
 end BSmtLib.Symbol
 
--- `BSmtLib.Plain.SymbolView`, by `pub use crate::plain::*`
+-- `BSmtLib.Plain.SymbolBuf`, by `pub use crate::plain::*`
 namespace BSmtLib
 
-export BSmtLib.Plain (SymbolView)
+export BSmtLib.Plain (SymbolBuf)
 
 end BSmtLib
 
-namespace BSmtLib.SymbolView
+namespace BSmtLib.SymbolBuf
 
-export BSmtLib.Plain.SymbolView (asSlice bytes instRepr intoOwned isEmpty isQuoted len)
+export BSmtLib.Plain.SymbolBuf (asSlice asView bytes instRepr intoByteArray intoBytesBuf isEmpty
+  isQuoted isQuotedAllowed isUnquotedAllowed len newQuoted newUnquoted)
 
-end BSmtLib.SymbolView
+end BSmtLib.SymbolBuf
 
 -- `BSmtLib.Plain.Whitespace`, by `pub use crate::plain::*`
 namespace BSmtLib
@@ -727,24 +727,24 @@ end BSmtLib
 
 namespace BSmtLib.Whitespace
 
-export BSmtLib.Plain.Whitespace (asSlice asView eqSlice eqString eqView instBEq instHashable
-  instRepr intoByteArray intoBytes isAllowed isEmpty len new)
+export BSmtLib.Plain.Whitespace (asSlice eqOwned eqSlice eqString instBEq instHashable instRepr
+  intoOwned isEmpty len)
 
 end BSmtLib.Whitespace
 
--- `BSmtLib.Plain.WhitespaceView`, by `pub use crate::plain::*`
+-- `BSmtLib.Plain.WhitespaceBuf`, by `pub use crate::plain::*`
 namespace BSmtLib
 
-export BSmtLib.Plain (WhitespaceView)
+export BSmtLib.Plain (WhitespaceBuf)
 
 end BSmtLib
 
-namespace BSmtLib.WhitespaceView
+namespace BSmtLib.WhitespaceBuf
 
-export BSmtLib.Plain.WhitespaceView (asSlice eqOwned eqSlice eqString instBEq instHashable instRepr
-  intoOwned isEmpty len)
+export BSmtLib.Plain.WhitespaceBuf (asSlice asView eqSlice eqString eqView instBEq instHashable
+  instRepr intoByteArray intoBytesBuf isAllowed isEmpty len new)
 
-end BSmtLib.WhitespaceView
+end BSmtLib.WhitespaceBuf
 
 /-! `pub use crate::span::*` in `lib.rs` -/
 

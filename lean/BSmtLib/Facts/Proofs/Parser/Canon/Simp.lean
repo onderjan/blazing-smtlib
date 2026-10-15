@@ -25,11 +25,12 @@ handler calls and matches.
 
 namespace BSmtLib.Facts.Proofs.Parser.Canon.Simp
 
+open BSmtLib.Multiple (FunctionSignature)
 open Basic States Tactic
 
 open BSmtLib.Parser BSmtLib.Nodes
-open BSmtLib.Plain (SymbolView NumeralView DecimalView HexDigitsView BinDigitsView
-  StringContentView KeywordView)
+open BSmtLib.Plain (Symbol Numeral Decimal HexDigits BinDigits
+  StringContent Keyword)
 
 attribute [canon_simps]
   canonIndex.eq_1 canonIndex.eq_2 canonIdentifier.eq_1 canonConstant.eq_1
@@ -104,9 +105,9 @@ open BSmtLib.Parser.Command.Internal
 
 variable {SE A S T Sc : Type} [Canon SE] [Canon A] [Canon S] [Canon T] [Canon Sc]
 
-@[canon_simps] theorem symbol_canonIdentifier (i : Identifier) :
-    (canonIdentifier i).symbol = canon i.symbol := by cases i; rfl
-@[canon_simps] theorem indices_canonIdentifier (i : Identifier) :
+@[canon_simps] theorem name_canonIdentifier (i : Ident) :
+    (canonIdentifier i).name = canon i.name := by cases i; rfl
+@[canon_simps] theorem indices_canonIdentifier (i : Ident) :
     (canonIdentifier i).indices = canon i.indices := by cases i; rfl
 @[canon_simps] theorem mode_canonAttributeState (s : AttributeState SE A) :
     (canonAttributeState s).mode = canon s.mode := by cases s; rfl
@@ -132,12 +133,12 @@ variable {SE A S T Sc : Type} [Canon SE] [Canon A] [Canon S] [Canon T] [Canon Sc
     (canonTermState s).mode = canon s.mode := by cases s; rfl
 @[canon_simps] theorem levels_canonTermState (s : TermState SE A S T Sc) :
     (canonTermState s).levels = canon s.levels := by cases s; rfl
-@[canon_simps] theorem name_canonSignature (s : Signature S) :
-    (canonSignature s).name = canon s.name := by cases s; rfl
-@[canon_simps] theorem params_canonSignature (s : Signature S) :
-    (canonSignature s).params = canon s.params := by cases s; rfl
-@[canon_simps] theorem resultSort_canonSignature (s : Signature S) :
-    (canonSignature s).resultSort = canon s.resultSort := by cases s; rfl
+@[canon_simps] theorem name_canonSignature (s : FunctionSignature S) :
+    (canonSignature s).name = canon s.name := by simp [canonSignature]
+@[canon_simps] theorem params_canonSignature (s : FunctionSignature S) :
+    (canonSignature s).params = canon s.params := by simp [canonSignature]
+@[canon_simps] theorem resultSort_canonSignature (s : FunctionSignature S) :
+    (canonSignature s).resultSort = canon s.resultSort := by simp [canonSignature]
 @[canon_simps] theorem shape_canonLiteralState (s : LiteralState SE A S T Sc) :
     (canonLiteralState s).shape = s.shape := by cases s; rfl
 @[canon_simps] theorem term_canonLiteralState (s : LiteralState SE A S T Sc) :
@@ -149,12 +150,12 @@ variable (w : Token.Reserved.GeneralReserved)
 
 @[canon_simps] theorem isWord_parenOpen : Internal.Input.parenOpen.isWord w = false := (rfl)
 @[canon_simps] theorem isWord_parenClose : Internal.Input.parenClose.isWord w = false := (rfl)
-@[canon_simps] theorem isWord_constant (c : SpecConstant) :
+@[canon_simps] theorem isWord_constant (c : SpecialConstant) :
     (Internal.Input.constant c).isWord w = false := (rfl)
-@[canon_simps] theorem isWord_symbol (s : SymbolView) :
+@[canon_simps] theorem isWord_symbol (s : Symbol) :
     (Internal.Input.symbol s).isWord w = false :=
   (rfl)
-@[canon_simps] theorem isWord_keyword (k : BSmtLib.Plain.KeywordView) :
+@[canon_simps] theorem isWord_keyword (k : BSmtLib.Plain.Keyword) :
     (Internal.Input.keyword k).isWord w = false := (rfl)
 @[canon_simps] theorem isWord_endOfInput : Internal.Input.endOfInput.isWord w = false := (rfl)
 @[canon_simps] theorem isWord_layout : Internal.Input.layout.isWord w = false := (rfl)
@@ -246,7 +247,7 @@ variable {X : Type} [Canon X]
 @[canon_simps] theorem fun_canonSortDecState :
     (canon : SortDecState → SortDecState) = canonSortDecState := (rfl)
 @[canon_simps] theorem fun_canonSignature :
-    (canon : (Signature S) → (Signature S)) = canonSignature := (rfl)
+    (canon : (FunctionSignature S) → (FunctionSignature S)) = canonSignature := (rfl)
 @[canon_simps] theorem fun_canonConstructorState :
     (canon : (ConstructorState S) → (ConstructorState S)) = canonConstructorState := (rfl)
 @[canon_simps] theorem fun_canonDatatypeState :
@@ -268,23 +269,23 @@ omit [Canon A] in
     (canon : (CommandState SE A S T Sc N) → (CommandState SE A S T Sc N)) =
       canonCommandState := (rfl)
 @[canon_simps] theorem fun_canonSymbol :
-    (canon : SymbolView → SymbolView) = canonSymbol := (rfl)
+    (canon : Symbol → Symbol) = canonSymbol := (rfl)
 @[canon_simps] theorem fun_canonIndex :
     (canon : Index → Index) = canonIndex := (rfl)
 @[canon_simps] theorem fun_canonIdentifier :
-    (canon : Identifier → Identifier) = canonIdentifier := (rfl)
+    (canon : Ident → Ident) = canonIdentifier := (rfl)
 @[canon_simps] theorem fun_canonConstant :
-    (canon : SpecConstant → SpecConstant) = canonConstant := (rfl)
+    (canon : SpecialConstant → SpecialConstant) = canonConstant := (rfl)
 @[canon_simps] theorem fun_canonSymbolOrWildcard :
-    (canon : SymbolOrWildcard → SymbolOrWildcard) = canonSymbolOrWildcard := (rfl)
+    (canon : SimplePattern → SimplePattern) = canonSymbolOrWildcard := (rfl)
 @[canon_simps] theorem fun_canonPattern :
     (canon : Pattern → Pattern) = canonPattern := (rfl)
 @[canon_simps] theorem fun_canonTermNode {S T : Type} [Canon S] [Canon T] :
-    (canon : (TermNode S T) → (TermNode S T)) = canonTermNode := (rfl)
+    (canon : (Nodes.Term S T) → (Nodes.Term S T)) = canonTermNode := (rfl)
 @[canon_simps] theorem fun_canonSExprNode {X : Type} [Canon X] :
-    (canon : (SExprNode X) → (SExprNode X)) = canonSExprNode := (rfl)
+    (canon : (Nodes.SExpr X) → (Nodes.SExpr X)) = canonSExprNode := (rfl)
 @[canon_simps] theorem fun_canonAttributeValueNode {X : Type} [Canon X] :
-    (canon : (AttributeValueNode X) → (AttributeValueNode X)) = canonAttributeValueNode := (rfl)
+    (canon : (AttributeValue X) → (AttributeValue X)) = canonAttributeValueNode := (rfl)
 @[canon_simps] theorem fun_canonInput :
     (canon : Internal.Input → Internal.Input) = canonInput := (rfl)
 @[canon_simps] theorem fun_canonStep {σ ρ : Type} [Canon σ] [Canon ρ] :
@@ -302,21 +303,21 @@ omit [Canon A] in
 end
 
 @[canon_simps] theorem asSlice_newUnchecked_symbol (q : Bool) (s : ByteSlice) :
-    (SymbolView.Internal.newUnchecked q s).asSlice = s := (rfl)
+    (Symbol.Internal.newUnchecked q s).asSlice = s := (rfl)
 @[canon_simps] theorem isQuoted_newUnchecked_symbol (q : Bool) (s : ByteSlice) :
-    (SymbolView.Internal.newUnchecked q s).isQuoted = q := (rfl)
+    (Symbol.Internal.newUnchecked q s).isQuoted = q := (rfl)
 @[canon_simps] theorem asSlice_newUnchecked_numeral (s : ByteSlice) :
-    (NumeralView.Internal.newUnchecked s).asSlice = s := (rfl)
+    (Numeral.Internal.newUnchecked s).asSlice = s := (rfl)
 @[canon_simps] theorem asSlice_newUnchecked_decimal (s : ByteSlice) :
-    (DecimalView.Internal.newUnchecked s).asSlice = s := (rfl)
+    (Decimal.Internal.newUnchecked s).asSlice = s := (rfl)
 @[canon_simps] theorem asSlice_newUnchecked_hexDigits (s : ByteSlice) :
-    (HexDigitsView.Internal.newUnchecked s).asSlice = s := (rfl)
+    (HexDigits.Internal.newUnchecked s).asSlice = s := (rfl)
 @[canon_simps] theorem asSlice_newUnchecked_binDigits (s : ByteSlice) :
-    (BinDigitsView.Internal.newUnchecked s).asSlice = s := (rfl)
+    (BinDigits.Internal.newUnchecked s).asSlice = s := (rfl)
 @[canon_simps] theorem asSlice_newUnchecked_stringContent (s : ByteSlice) :
-    (StringContentView.Internal.newUnchecked s).asSlice = s := (rfl)
+    (StringContent.Internal.newUnchecked s).asSlice = s := (rfl)
 @[canon_simps] theorem asSlice_newUnchecked_keyword (s : ByteSlice) :
-    (KeywordView.Internal.newUnchecked s).asSlice = s := (rfl)
+    (Keyword.Internal.newUnchecked s).asSlice = s := (rfl)
 
 attribute [canon_simps] toByteArray_canonSlice
 

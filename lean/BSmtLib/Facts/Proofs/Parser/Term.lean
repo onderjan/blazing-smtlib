@@ -177,7 +177,7 @@ theorem term_runs' (hA : TermAgrees h) : (term : Tree.Term) →
   | .constant constant, _, _, hs, atArrival, levels => by
     obtain ⟨constant', rfl, rfl⟩ := Stands.constant hs
     exact (RunsFirst.token (program := Parser.Internal.call (Traits.Handler.handleTerm
-      (.constant constant'))) (by simp [termStep])).congr (by simp [term_constant,
+      (.specialConstant constant'))) (by simp [termStep])).congr (by simp [term_constant,
         adaptRun_receive (token := .constant constant') rfl, hA.handleTerm, Bridge.termNode]) rfl
   | .identifier qualified, hvalid, _, hs, atArrival, levels =>
     identifierTerm_runs hA hvalid hs atArrival levels
@@ -235,14 +235,14 @@ theorem term_runs' (hA : TermAgrees h) : (term : Tree.Term) →
     obtain ⟨symbol, hsymbolName, rfl, hbinding⟩ := binding_runs (points := points) hsymbol
       (term_runs' hA bound hbound hsBound).plain
     obtain ⟨program, hprogram, hothersRuns⟩ := bindings_runs hA others hothers hs₂
-    have hstart : ∀ (b : Plain.SymbolView × Traits.Handler.Term H)
-        (handled : List (Plain.SymbolView × Traits.Handler.Term H)),
+    have hstart : ∀ (b : Plain.Symbol × Traits.Handler.Term H)
+        (handled : List (Plain.Symbol × Traits.Handler.Term H)),
         Runs points (termStep version)
           ({ mode := .letBindingOpen (#[].push b ++ handled.toArray), levels } : TermStateOf H)
           [.parenClose]
           (do
             tick points .parenClose
-            Parser.Internal.call (Traits.Handler.startLet (Multiple.NamedView.Internal.new
+            Parser.Internal.call (Traits.Handler.startLet (Multiple.Named.Internal.new
               (#[].push b ++ handled.toArray))))
           fun scope => pure (.more { mode := .start, levels := .binder .let scope :: levels }) :=
       fun _ _ => Runs.token (by simp [termStep])
@@ -431,7 +431,7 @@ the tokens of terms with the traversal's effects, and appends them to those argu
 theorem terms_runs (hA : TermAgrees h) : (terms : List Tree.Term) →
     Tree.Term.ValidAll (Bridge.version version) terms →
     ∀ {tokens : List Parser.Internal.Input}, Stands tokens (Tree.Term.tokensAll terms) →
-    ∀ (head : Nodes.Identifier) (sort : Option (Traits.Handler.«Sort» H))
+    ∀ (head : Nodes.Ident) (sort : Option (Traits.Handler.«Sort» H))
       (found : Array (Traits.Handler.Term H)) (levels : List (TermLevelOf H)),
     Runs points (termStep version)
       ({ mode := .start, levels := .application head sort found :: levels } : TermStateOf H)
@@ -469,9 +469,9 @@ those found so far.
 theorem bindings_runs (hA : TermAgrees h) : (bindings : List (Tree.Symbol × Tree.Term)) →
     Tree.Term.ValidBindings (Bridge.version version) bindings →
     ∀ {tokens : List Parser.Internal.Input}, Stands tokens (Tree.Term.bindingTokens bindings) →
-    ∃ program : PM H (List (Plain.SymbolView × Traits.Handler.Term H)),
+    ∃ program : PM H (List (Plain.Symbol × Traits.Handler.Term H)),
       Bridge.specPairs <$> program = adaptRun (Traversal.bindings points h bindings) ∧
-      ∀ (found : Array (Plain.SymbolView × Traits.Handler.Term H)) (levels : List (TermLevelOf H)),
+      ∀ (found : Array (Plain.Symbol × Traits.Handler.Term H)) (levels : List (TermLevelOf H)),
       Runs points (termStep version) ({ mode := .letBindingOpen found, levels } : TermStateOf H)
         tokens program
         fun handled => pure (.more { mode := .letBindingOpen (found ++ handled.toArray), levels })

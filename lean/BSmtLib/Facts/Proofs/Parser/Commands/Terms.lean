@@ -196,14 +196,14 @@ theorem defineSort_payload (name : Tree.Symbol) (parameters : List Tree.Symbol) 
     simp [ticks_append]
   have hlistPayload := Runs.bind_next
     (following := fun _ => Parser.Internal.call (Traits.CommandHandler.startDefineSort (H := H) symbol
-      (Multiple.SymbolsView.Internal.new (#[] ++ symbols.toArray))))
+      (Multiple.Symbols.Internal.new (#[] ++ symbols.toArray))))
     (next := fun _ => pure (.more (Payload.defineSortBody .init)))
     ((Runs.embedA (outer := payloadStep version)
         (outerArrival := Parser.Command.Internal.Standard.payloadArrive)
             (Payload.defineSortParameters symbol)
       (fun parameters => do
         Parser.Internal.call (Traits.CommandHandler.startDefineSort (H := H) symbol
-          (Multiple.SymbolsView.Internal.new parameters))
+          (Multiple.Symbols.Internal.new parameters))
         pure (.more (.defineSortBody .init)))
       (by payload_step) hlistRuns).congr rfl (by funext; simp [Parser.Internal.Step.wrap]))
   rw [show Parser.Internal.Input.symbol symbol :: (Parser.Internal.Input.parenOpen ::
@@ -262,7 +262,7 @@ theorem defineConst_payload (name : Tree.Symbol) (sort : Tree.«Sort») (body : 
 /-- `define-fun` and `define-fun-rec`: the signature, its start, the body, its end. -/
 theorem definition_payload (definition : Parser.Command.Internal.Definition.DefinitionEnd
     (Traits.Handler.«Sort» H))
-    (start : Nodes.Signature (Traits.Handler.«Sort» H) → PM H Unit)
+    (start : Multiple.FunctionSignature (Traits.Handler.«Sort» H) → PM H Unit)
     (final : Traits.Handler.Term H → FinalCall (Traits.Handler.Attribute H)
       (Traits.Handler.«Sort» H) (Traits.Handler.Term H))
     (hsignatureStep : ∀ state token,
@@ -282,7 +282,7 @@ theorem definition_payload (definition : Parser.Command.Internal.Definition.Defi
     (houtcome : ∀ body, finalOutcome (final body) = .command)
     (functionDef : Tree.FunctionDef) (hvalid : functionDef.Valid (Bridge.version version))
     {payload : List Parser.Internal.Input} (hs : Stands payload functionDef.tokens) :
-    ∃ program : PM H (Nodes.Signature (Traits.Handler.«Sort» H)),
+    ∃ program : PM H (Multiple.FunctionSignature (Traits.Handler.«Sort» H)),
       Bridge.signature <$> program = adaptRun (Traversal.signature points h functionDef.symbol
         functionDef.parameters functionDef.result) ∧
       PayloadRuns points version (.defineSignature definition .start)

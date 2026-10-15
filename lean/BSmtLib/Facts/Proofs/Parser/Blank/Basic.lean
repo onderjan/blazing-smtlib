@@ -25,6 +25,7 @@ cursors, the same failures, and states that are the same up to the values.
 
 namespace BSmtLib.Facts.Proofs.Parser.Blank.Basic
 
+open BSmtLib.Multiple (FunctionSignature)
 open BSmtLib.Parser BSmtLib.Nodes BSmtLib.Traits
 open BSmtLib.Parser.Internal (PM)
 
@@ -143,15 +144,15 @@ end
 instance {α β : Type} [Blanks α β] : Blanks (Multiple α) (Multiple β) :=
   ⟨fun m => .new (blank m.asSlice)⟩
 
-instance {V V' : Type} [Blanks V V'] : Blanks (Multiple.NamedView V) (Multiple.NamedView V') :=
-  ⟨fun v => Multiple.NamedView.Internal.new (blank v.toArray)⟩
+instance {V V' : Type} [Blanks V V'] : Blanks (Multiple.Named V) (Multiple.Named V') :=
+  ⟨fun v => Multiple.Named.Internal.new (blank v.toArray)⟩
 
 instance {T T' : Type} [Blanks T T'] : Blanks (Multiple.MatchCases T) (Multiple.MatchCases T') :=
   ⟨fun v => Multiple.MatchCases.Internal.new (blank v.toArray)⟩
 
 instance {S S' : Type} [Blanks S S'] :
-    Blanks (Multiple.ConstructorsView S) (Multiple.ConstructorsView S') :=
-  ⟨fun v => Multiple.ConstructorsView.Internal.new (blank v.toArray)⟩
+    Blanks (Multiple.Constructors S) (Multiple.Constructors S') :=
+  ⟨fun v => Multiple.Constructors.Internal.new (blank v.toArray)⟩
 
 def blankQualifiedIdent {S S' : Type} [Blanks S S'] : QualifiedIdent S → QualifiedIdent S'
   | ⟨identifier, sort⟩ => ⟨identifier, blank sort⟩
@@ -160,40 +161,43 @@ instance {S S' : Type} [Blanks S S'] : Blanks (QualifiedIdent S) (QualifiedIdent
   ⟨blankQualifiedIdent⟩
 
 def blankTermNode {S S' T T' : Type} [Blanks S S'] [Blanks T T'] :
-    TermNode S T → TermNode S' T'
-  | .constant c => .constant c
-  | .identifier i s => .identifier i (blank s)
+    Nodes.Term S T → Nodes.Term S' T'
+  | .specialConstant c => .specialConstant c
+  | .qualifiedIdent i s => .qualifiedIdent i (blank s)
   | .application i s args => .application i (blank s) (blank args)
 
-instance {S S' T T' : Type} [Blanks S S'] [Blanks T T'] : Blanks (TermNode S T) (TermNode S' T') :=
+instance {S S' T T' : Type} [Blanks S S'] [Blanks T T'] :
+    Blanks (Nodes.Term S T) (Nodes.Term S' T') :=
   ⟨blankTermNode⟩
 
-def blankSExprNode {X X' : Type} [Blanks X X'] : SExprNode X → SExprNode X'
-  | .constant c => .constant c
+def blankSExprNode {X X' : Type} [Blanks X X'] : Nodes.SExpr X → Nodes.SExpr X'
+  | .specialConstant c => .specialConstant c
   | .symbol s => .symbol s
   | .reserved w => .reserved w
   | .keyword k => .keyword k
-  | .list items => .list (blank items)
+  | .sExprs items => .sExprs (blank items)
 
-instance {X X' : Type} [Blanks X X'] : Blanks (SExprNode X) (SExprNode X') := ⟨blankSExprNode⟩
+instance {X X' : Type} [Blanks X X'] : Blanks (Nodes.SExpr X) (Nodes.SExpr X') := ⟨blankSExprNode⟩
 
 def blankAttributeValueNode {X X' : Type} [Blanks X X'] :
-    AttributeValueNode X → AttributeValueNode X'
-  | .constant c => .constant c
+    AttributeValue X → AttributeValue X'
+  | .specialConstant c => .specialConstant c
   | .symbol s => .symbol s
-  | .list items => .list (blank items)
+  | .sExprs items => .sExprs (blank items)
 
-instance {X X' : Type} [Blanks X X'] : Blanks (AttributeValueNode X) (AttributeValueNode X') :=
+instance {X X' : Type} [Blanks X X'] : Blanks (AttributeValue X) (AttributeValue X') :=
   ⟨blankAttributeValueNode⟩
 
-def blankSignature {S S' : Type} [Blanks S S'] : Signature S → Signature S'
-  | ⟨name, params, resultSort⟩ => ⟨name, blank params, blank resultSort⟩
+def blankSignature {S S' : Type} [Blanks S S'] (s : FunctionSignature S) :
+    FunctionSignature S' :=
+  FunctionSignature.Internal.new s.name (blank s.params) (blank s.resultSort)
 
-instance {S S' : Type} [Blanks S S'] : Blanks (Signature S) (Signature S') := ⟨blankSignature⟩
+instance {S S' : Type} [Blanks S S'] : Blanks (FunctionSignature S) (FunctionSignature S') :=
+  ⟨blankSignature⟩
 
 instance {S S' : Type} [Blanks S S'] :
-    Blanks (Multiple.FunctionSignaturesView S) (Multiple.FunctionSignaturesView S') :=
-  ⟨fun v => Multiple.FunctionSignaturesView.Internal.new (blank v.toArray)⟩
+    Blanks (Multiple.FunctionSignatures S) (Multiple.FunctionSignatures S') :=
+  ⟨fun v => Multiple.FunctionSignatures.Internal.new (blank v.toArray)⟩
 
 def blankStep {σ σ' ρ ρ' : Type} [Blanks σ σ'] [Blanks ρ ρ'] :
     Internal.Step σ ρ → Internal.Step σ' ρ'

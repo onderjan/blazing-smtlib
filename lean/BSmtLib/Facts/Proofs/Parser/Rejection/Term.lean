@@ -486,7 +486,7 @@ theorem termComplete_advances {version : BSmtLibSpec.Lexicon.Version}
 /-! ## The steps of the term parser -/
 
 theorem startBinder_sound {Q : Parser.ParseErrorCause Unit → Prop} (binder : SortedBinder)
-    (variables : Array (Plain.SymbolView × Nat)) :
+    (variables : Array (Plain.Symbol × Nat)) :
     Sound (fun _ => True) Q (startBinder (H := List Event) binder variables) := by
   cases binder <;> exact Sound.ofCall fun _ => ⟨_, _, rfl⟩
 
@@ -678,7 +678,7 @@ theorem termStep_letBindingsOpen :
   exact cat_left (fun _ h => cat_tok h) hu
 
 include hitem in
-theorem termStep_letBindingOpen (bindings : Array (Plain.SymbolView × Nat)) :
+theorem termStep_letBindingOpen (bindings : Array (Plain.Symbol × Nat)) :
     TermAdvance version ⟨.letBindingOpen bindings, levels⟩ item
       (termStep (H := List Event) version ⟨.letBindingOpen bindings, levels⟩ token) := by
   cases token <;> simp only [termStep] <;> try fail_step
@@ -700,7 +700,7 @@ theorem termStep_letBindingOpen (bindings : Array (Plain.SymbolView × Nat)) :
         rfl) rfl) hr (by simp)
 
 include hitem in
-theorem termStep_letBindingSymbol (bindings : Array (Plain.SymbolView × Nat)) :
+theorem termStep_letBindingSymbol (bindings : Array (Plain.Symbol × Nat)) :
     TermAdvance version ⟨.letBindingSymbol bindings, levels⟩ item
       (termStep (H := List Event) version ⟨.letBindingSymbol bindings, levels⟩ token) := by
   cases token <;> simp only [termStep, Parser.Category.Token.Internal.expectSymbol,
@@ -714,7 +714,7 @@ theorem termStep_letBindingSymbol (bindings : Array (Plain.SymbolView × Nat)) :
     (by simp)
 
 include hitem in
-theorem termStep_letBindingClose (bindings : Array (Plain.SymbolView × Nat)) :
+theorem termStep_letBindingClose (bindings : Array (Plain.Symbol × Nat)) :
     TermAdvance version ⟨.letBindingClose bindings, levels⟩ item
       (termStep (H := List Event) version ⟨.letBindingClose bindings, levels⟩ token) := by
   cases token <;> simp only [termStep, Parser.Category.Token.Internal.expectClose,
@@ -727,7 +727,7 @@ theorem termStep_letBindingClose (bindings : Array (Plain.SymbolView × Nat)) :
 include hitem hlex in
 theorem termStep_sortedVars (binder : SortedBinder)
     (state : ListState (Parser.Category.SortedVar.Internal.SortedVarState Nat)
-    (Plain.SymbolView × Nat)) :
+    (Plain.Symbol × Nat)) :
     TermAdvance version ⟨.sortedVars binder state, levels⟩ item
       (termStep (H := List Event) version ⟨.sortedVars binder state, levels⟩ token) := by
   simp only [termStep]

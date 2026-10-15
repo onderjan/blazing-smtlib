@@ -58,7 +58,7 @@ theorem identStep_run {batch : BatchTag} (version : Token.Version)
 
 theorem sortComplete_run
     (levels : List (Parser.Category.Sort.Internal.SortLevel (Handler.«Sort» H)))
-    (head : Nodes.Identifier) (arguments : Array (Handler.«Sort» H)) (h : H) :
+    (head : Nodes.Ident) (arguments : Array (Handler.«Sort» H)) (h : H) :
     (Parser.Category.Sort.Internal.sortComplete levels head arguments).run.run h =
       HandledOutcome.toRun <$> Category.sortComplete h levels head arguments := by
   unfold Parser.Category.Sort.Internal.sortComplete Category.sortComplete runHandler
@@ -257,7 +257,7 @@ theorem qualIdentStep_run {batch : BatchTag} (version : Token.Version)
     (next : BatchCursor batch) (token : Token batch) (h : H)
     (r : Category.PureOutcome
         (Parser.Category.QualifiedIdent.Internal.QualIdentState (Handler.«Sort» H))
-      Nodes.Identifier)
+      Nodes.Ident)
     (fused : Category.qualIdentStep (H := H) version s (next.category token) next token = some r) :
     (Parser.Category.QualifiedIdent.Internal.qualIdentStep (H := H) version s
         (inputOf version next token)).run.run h = pure (qualToRun (H := H) r, h) := by

@@ -2,7 +2,7 @@ module
 
 public import BSmtLib.Nodes
 public import BSmtLib.Multiple.MatchCases
-public import BSmtLib.Multiple.FunctionSignatures
+public import BSmtLib.Multiple
 
 public section
 
@@ -21,7 +21,7 @@ returns a value of its type `Scope`, which the call that ends the scope receives
 Names and constants are handed over as views of the bytes they were written with. A view keeps
 the storage it points into alive for as long as it lives, which may be the storage of a whole
 batch of tokens; a handler that keeps a name for long should keep a copy of it
-(`SymbolView.intoOwned` and the like).
+(`Symbol.intoOwned` and the like).
 -/
 
 /- LEAN: Rust's traits `SmtHandler` and `SmtCommandHandler`. The associated types are fields
@@ -65,26 +65,26 @@ class Handler (H : Type) (m : outParam (Type → Type)) where
   /- LEAN: Rust's `handle_sort(SmtSort { ident, applied })`; the fields of `SmtSort` are the
   arguments, as Lean does not unbox a structure of several fields, so a nested structure would
   be allocated for every sort handed over. -/
-  handleSort : Identifier → Sorts «Sort» → ExceptT Error (StateT H m) «Sort»
+  handleSort : Ident → Sorts «Sort» → ExceptT Error (StateT H m) «Sort»
   /-- A term that binds nothing: a constant, a qualified identifier or an application. -/
-  handleTerm : TermNode «Sort» Term → ExceptT Error (StateT H m) Term
+  handleTerm : Nodes.Term «Sort» Term → ExceptT Error (StateT H m) Term
   /-- An s-expression. -/
-  handleSExpr : SExprNode SExpr → ExceptT Error (StateT H m) SExpr
+  handleSExpr : Nodes.SExpr SExpr → ExceptT Error (StateT H m) SExpr
   /-- An attribute: its keyword and its value, if it has one. -/
-  handleAttribute : KeywordView → Option (AttributeValueNode SExpr) →
+  handleAttribute : Keyword → Option (AttributeValue SExpr) →
     ExceptT Error (StateT H m) Attribute
   /-- An annotated term, `(` `!` term attribute+ `)`, at its `)`. -/
   annotateTerm : Term → Attributes Attribute → ExceptT Error (StateT H m) Term
   /-- The bindings of a `let`, at the `)` after them, before its body. -/
-  startLet : BindingsView Term → ExceptT Error (StateT H m) Scope
+  startLet : Bindings Term → ExceptT Error (StateT H m) Scope
   /-- The end of a `let`, with its body, at its `)`. -/
   endLet : Scope → Term → ExceptT Error (StateT H m) Term
   /-- The variables of a quantifier, at the `)` after them, before its body. -/
-  startQuantifier : Quantifier → SortedVarsView «Sort» → ExceptT Error (StateT H m) Scope
+  startQuantifier : QuantifierKind → SortedVars «Sort» → ExceptT Error (StateT H m) Scope
   /-- The end of a quantifier, with its body, at its `)`. -/
-  endQuantifier : Quantifier → Scope → Term → ExceptT Error (StateT H m) Term
+  endQuantifier : QuantifierKind → Scope → Term → ExceptT Error (StateT H m) Term
   /-- The variables of a `lambda`, at the `)` after them, before its body. -/
-  startLambda : SortedVarsView «Sort» → ExceptT Error (StateT H m) Scope
+  startLambda : SortedVars «Sort» → ExceptT Error (StateT H m) Scope
   /-- The end of a `lambda`, with its body, at its `)`. -/
   endLambda : Scope → Term → ExceptT Error (StateT H m) Term
   /-- The scrutinee of a `match`, at its last token, before the first case. -/
@@ -101,7 +101,7 @@ named here. Rust derives `Debug` and `Clone`; a Lean value is copied freely. -/
 /-- The error of `SyntaxChecker`: the name of the non-standard command it rejected. -/
 structure NonstandardCommandError where
   /-- The command's name. -/
-  name : Symbol
+  name : SymbolBuf
   deriving Repr
 
 end BSmtLib.Traits

@@ -47,7 +47,7 @@ and appends them to those found so far.
 theorem indices_runs : (indices : List Tree.Index) →
     (∀ index ∈ indices, index.Valid (Bridge.version version)) →
     ∀ {tokens : List Parser.Internal.Input}, Stands tokens (indices.flatMap Tree.Index.tokens) →
-    ∀ (symbol : Plain.SymbolView) (found : Array Nodes.Index),
+    ∀ (symbol : Plain.Symbol) (found : Array Nodes.Index),
     ∃ parsed : Array Nodes.Index, parsed.toList.map Bridge.index = indices ∧
       RunsS points (IdentState.step (H := H) version) (.indices symbol found) tokens
         (ticks points tokens) fun _ => pure (.more (.indices symbol (found ++ parsed)))
@@ -95,7 +95,7 @@ theorem indexed_runs {name : Tree.Symbol} {indices : List Tree.Index}
     {symbolToken : Parser.Internal.Input} {tokens : List Parser.Internal.Input}
     (hsymbol : Bridge.received symbolToken = some (.token (.symbol name)))
     (hs : Stands tokens (indices.flatMap Tree.Index.tokens)) :
-    ∃ head : Nodes.Identifier, Bridge.identifier head = ⟨name, indices⟩ ∧
+    ∃ head : Nodes.Ident, Bridge.identifier head = ⟨name, indices⟩ ∧
       RunsS points (IdentState.step (H := H) version) .afterUnderscore
         (symbolToken :: (tokens ++ [.parenClose]))
         (ticks points (symbolToken :: (tokens ++ [.parenClose])))
@@ -126,7 +126,7 @@ identifier, and opens the application.
 theorem head_runs {name : Tree.Identifier} (hname : name.Valid (Bridge.version version))
     {tokens : List Parser.Internal.Input} (hs : Stands tokens name.tokens)
     (levels : List (SortLevel (Traits.Handler.«Sort» H))) :
-    ∃ head : Nodes.Identifier, Bridge.identifier head = name ∧
+    ∃ head : Nodes.Ident, Bridge.identifier head = name ∧
       RunsS points (sortStep version) { mode := .opened, levels } tokens
         (ticks points tokens)
         fun _ => pure (.more { mode := .start, levels := ⟨head, #[]⟩ :: levels }) := by
@@ -254,7 +254,7 @@ the tokens of sorts with the traversal's effects, and appends them to those argu
 theorem sorts_runs (hA : TermAgrees h) : (sorts : List Tree.«Sort») →
     Tree.«Sort».ValidAll (Bridge.version version) sorts →
     ∀ {tokens : List Parser.Internal.Input}, Stands tokens (Tree.«Sort».tokensAll sorts) →
-    ∀ (head : Nodes.Identifier) (found : Array (Traits.Handler.«Sort» H))
+    ∀ (head : Nodes.Ident) (found : Array (Traits.Handler.«Sort» H))
       (levels : List (SortLevel (Traits.Handler.«Sort» H))),
     RunsS points (sortStep version)
       { mode := .start, levels := ⟨head, found⟩ :: levels } tokens

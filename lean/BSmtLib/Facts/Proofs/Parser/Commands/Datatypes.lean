@@ -51,9 +51,9 @@ variable {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf 
 /-- The symbols, from between elements: their views, appended to those found so far. -/
 theorem symbols_runs : (names : List Tree.Symbol) → ∀ {tokens : List Parser.Internal.Input},
     Stands tokens (names.map .symbol) →
-    ∃ symbols : List Plain.SymbolView, symbols.map Bridge.symbol = names ∧
+    ∃ symbols : List Plain.Symbol, symbols.map Bridge.symbol = names ∧
       tokens = symbols.map .symbol ∧
-      ∀ found : Array Plain.SymbolView,
+      ∀ found : Array Plain.Symbol,
       Runs points (ListState.step (H := H) () symbolStep none) (ListState.between () found) tokens
         (ticks points tokens) fun _ => pure (.more
             (ListState.between () (found ++ symbols.toArray)))
@@ -79,11 +79,11 @@ theorem symbols_runs : (names : List Tree.Symbol) → ∀ {tokens : List Parser.
 /-- The sort declarations, from between elements: their views. -/
 theorem sortDecs_runs : (sortDecs : List Tree.SortDec) → ∀ {tokens : List Parser.Internal.Input},
     Stands tokens (sortDecs.flatMap Tree.SortDec.tokens) →
-    ∃ views : List (Plain.SymbolView × NumeralView),
+    ∃ views : List (Plain.Symbol × Numeral),
       views.map (fun (symbol, arity) => (Bridge.symbol symbol, Bridge.chars arity.asSlice)) =
         sortDecs.map (fun sortDec => (sortDec.symbol, sortDec.arity)) ∧
       views.length = sortDecs.length ∧
-      ∀ found : Array (Plain.SymbolView × NumeralView),
+      ∀ found : Array (Plain.Symbol × Numeral),
       Runs points (ListState.step (H := H) .start SortDecState.step none)
         (ListState.between .start found) tokens
         (ticks points tokens) fun _ => pure (.more
@@ -105,7 +105,7 @@ theorem sortDecs_runs : (sortDecs : List Tree.SortDec) → ∀ {tokens : List Pa
       (Runs.bind_next (following := fun _ => pure (symbol, arity))
         (hruns.congr rfl (by funext; simp)))
     refine (Runs.append (Runs.of_bind_pure (value := (symbol, arity))
-      (next := fun (r : Plain.SymbolView × NumeralView) =>
+      (next := fun (r : Plain.Symbol × Numeral) =>
         pure (.more (ListState.between .start (found.push r)))) hitem) fun _ =>
       hrestRuns (found.push (symbol, arity))).congr ?_
       (by funext; simp)
@@ -116,7 +116,7 @@ theorem sortDecs_runs : (sortDecs : List Tree.SortDec) → ∀ {tokens : List Pa
 local notation "S" => Traits.Handler.«Sort» H
 
 /-- A constructor as the datatype parser hands it over: its name and its selectors. -/
-local notation "Ctor" T => Plain.SymbolView × Multiple.SortedVarsView T
+local notation "Ctor" T => Plain.Symbol × Multiple.SortedVars T
 
 /-- What the datatype parser does when its constructors end. -/
 def constructorsDone (parametric : Bool) (constructors : Array (Ctor S)) :
@@ -126,15 +126,15 @@ def constructorsDone (parametric : Bool) (constructors : Array (Ctor S)) :
   else return .done constructors
 
 /-- What the datatype parser does when its parameters end. -/
-def parametersDone (start : Array Plain.SymbolView → PM H Unit)
-    (parameters : Array Plain.SymbolView) :
+def parametersDone (start : Array Plain.Symbol → PM H Unit)
+    (parameters : Array Plain.Symbol) :
     PM H (Parser.Internal.Step (DatatypeState S) (Array (Ctor S))) := do
   if parameters.isEmpty then Parser.Internal.syntaxError .emptyDatatypeParameters
   start parameters
   return .more .constructorsOpen
 
 omit [LawfulMonad m] in
-theorem datatypeStep_constructors (start : Array Plain.SymbolView → PM H Unit) (parametric : Bool)
+theorem datatypeStep_constructors (start : Array Plain.Symbol → PM H Unit) (parametric : Bool)
     (state : ListState (ConstructorState S) (Ctor S)) (token : Parser.Internal.Input) :
     datatypeStep start version (.constructors parametric state) token =
       state.step .start (constructorStep version) none token >>=
@@ -145,8 +145,8 @@ theorem datatypeStep_constructors (start : Array Plain.SymbolView → PM H Unit)
   cases step <;> rfl
 
 omit [LawfulMonad m] in
-theorem datatypeStep_parameters (start : Array Plain.SymbolView → PM H Unit)
-    (state : ListState Unit Plain.SymbolView) (token : Parser.Internal.Input) :
+theorem datatypeStep_parameters (start : Array Plain.Symbol → PM H Unit)
+    (state : ListState Unit Plain.Symbol) (token : Parser.Internal.Input) :
     datatypeStep start version (.parameters state) token =
       state.step () symbolStep none token >>= Parser.Internal.Step.wrap DatatypeState.parameters
         (parametersDone start) := by
@@ -155,12 +155,12 @@ theorem datatypeStep_parameters (start : Array Plain.SymbolView → PM H Unit)
   funext step
   cases step <;> rfl
 
-variable (start : Array Plain.SymbolView → PM H Unit)
+variable (start : Array Plain.Symbol → PM H Unit)
 variable {start' : List Tree.Symbol → Run (StateT H m) (Traits.Handler.Error H) Unit}
 
 /-- A datatype declaration without `par`. -/
 theorem datatype_plain_runs (hA : TermAgrees h)
-    (hstart : ∀ parameters : Array Plain.SymbolView,
+    (hstart : ∀ parameters : Array Plain.Symbol,
       start parameters = adaptRun (start' (parameters.toList.map Bridge.symbol)))
     (first : Tree.ConstructorDec) (rest : List Tree.ConstructorDec)
     (hvalid : ∀ constructor ∈ first :: rest, constructor.Valid (Bridge.version version))
@@ -242,7 +242,7 @@ theorem datatype_par_tokens (parameter : Tree.Symbol) (parameters : List Tree.Sy
 
 /-- A datatype declaration with `par`. -/
 theorem datatype_par_runs (hA : TermAgrees h)
-    (hstart : ∀ parameters : Array Plain.SymbolView,
+    (hstart : ∀ parameters : Array Plain.Symbol,
       start parameters = adaptRun (start' (parameters.toList.map Bridge.symbol)))
     (parameter : Tree.Symbol) (parameters : List Tree.Symbol)
     (constructors : List Tree.ConstructorDec) (hne : constructors ≠ [])
@@ -339,7 +339,7 @@ theorem datatype_par_runs (hA : TermAgrees h)
 
 /-- A datatype declaration, in either form. -/
 theorem datatype_runs (hA : TermAgrees h)
-    (hstart : ∀ parameters : Array Plain.SymbolView,
+    (hstart : ∀ parameters : Array Plain.Symbol,
       start parameters = adaptRun (start' (parameters.toList.map Bridge.symbol)))
     (declaration : Tree.DatatypeDec) (hvalid : declaration.Valid (Bridge.version version))
     {tokens : List Parser.Internal.Input} (hs : Stands tokens declaration.tokens) :

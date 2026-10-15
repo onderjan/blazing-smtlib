@@ -23,6 +23,7 @@ whose calls never fail, relates to the step run with the blank handler on the bl
 
 namespace BSmtLib.Facts.Proofs.Parser.Blank.Commands
 
+open BSmtLib.Multiple (FunctionSignature)
 open Basic States Simp Tactic Steps
 open BSmtLib.Parser.Internal (PM)
 
@@ -54,8 +55,8 @@ theorem constructorStep_blank [NoFails H] {version : Token.Version}
       (constructorStep (H := Shell) version state' token) := by
   subst hs; unfold constructorStep; blank_step []
 
-theorem datatypeStep_blank [NoFails H] {start : Array Plain.SymbolView → PM H Unit}
-    {start' : Array Plain.SymbolView → PM Shell Unit} (hstart : ∀ ps, BSim (start ps) (start' ps))
+theorem datatypeStep_blank [NoFails H] {start : Array Plain.Symbol → PM H Unit}
+    {start' : Array Plain.Symbol → PM Shell Unit} (hstart : ∀ ps, BSim (start ps) (start' ps))
     {version : Token.Version} {state : DatatypeState (Handler.«Sort» H)} {token : Internal.Input}
     {state' : DatatypeState Unit} (hs : state' = blank state) :
     BSim (datatypeStep (H := H) start version state token)
@@ -91,8 +92,8 @@ theorem bodiesStep_blank [NoFails H] {count : Nat} {version : Token.Version}
   subst hs; unfold bodiesStep; blank_step []
 
 set_option maxHeartbeats 2000000 in
-theorem bodiesArrive_blank [NoFails H] {signatures : Array (Signature (Handler.«Sort» H))}
-    {signatures' : Array (Signature Unit)} {state : ListState (TermStateOf H) Unit}
+theorem bodiesArrive_blank [NoFails H] {signatures : Array (FunctionSignature (Handler.«Sort» H))}
+    {signatures' : Array (FunctionSignature Unit)} {state : ListState (TermStateOf H) Unit}
     {state' : ListState (TermStateOf Shell) Unit} {token : Internal.Input}
     (hg : signatures' = blank signatures) (hs : state' = blank state) :
     BSim (bodiesArrive (H := H) signatures state token)

@@ -102,7 +102,7 @@ theorem canonSlice_of_chars {s t : ByteSlice} (h : Bridge.chars s = Bridge.chars
     rw [hd]
   rw [this]
 
-theorem canonSymbol_of_symbol {s t : Plain.SymbolView} (h : Bridge.symbol s = Bridge.symbol t) :
+theorem canonSymbol_of_symbol {s t : Plain.Symbol} (h : Bridge.symbol s = Bridge.symbol t) :
     canonSymbol s = canonSymbol t := by
   simp only [Bridge.symbol, BSmtLibSpec.Grammar.Tree.Symbol.mk.injEq] at h
   obtain ⟨hc, hq⟩ := h
@@ -130,7 +130,7 @@ theorem canonInput_of_received {a b : Internal.Input}
     | simp only [canonInput, Canon.canon, canonConstant, canonSlice_of_chars h]
     | simp only [canonInput, Canon.canon, canonSymbol_of_symbol h]
     | exact congrArg
-        (fun s => Internal.Input.keyword (BSmtLib.Plain.KeywordView.Internal.newUnchecked s))
+        (fun s => Internal.Input.keyword (BSmtLib.Plain.Keyword.Internal.newUnchecked s))
         (canonSlice_of_chars h)
     | rw [BSmtLib.Facts.Proofs.Parser.Reserved.Bridge.reserved_injective h]
 

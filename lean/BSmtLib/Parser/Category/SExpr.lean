@@ -45,9 +45,9 @@ def sExprStep (version : Version) (self : SExprState (Handler.SExpr H)) (token :
       match self with
       | [] => syntaxError .expectedSExpr
       | items :: outer => do
-        let list ← call (Handler.handleSExpr (.list (.new items)))
+        let list ← call (Handler.handleSExpr (.sExprs (.new items)))
         return sExprComplete outer list
-    | .constant constant => pure (SExprNode.constant constant)
+    | .constant constant => pure (Nodes.SExpr.specialConstant constant)
     | .symbol symbol => pure (.symbol symbol)
     | .keyword name => pure (.keyword name)
     | .reserved word =>

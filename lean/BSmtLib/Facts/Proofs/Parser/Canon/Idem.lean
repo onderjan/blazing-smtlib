@@ -4,7 +4,6 @@ public import BSmtLib.Facts.Proofs.Parser.Canon.Loop
 import all BSmtLib.Plain
 import all BSmtLib.Multiple
 import all BSmtLib.Multiple.MatchCases
-import all BSmtLib.Multiple.FunctionSignaturesView
 
 @[expose] public section
 
@@ -17,9 +16,10 @@ canonicalising a state of the parser twice is canonicalising it once.
 
 namespace BSmtLib.Facts.Proofs.Parser.Canon.Idem
 
+open BSmtLib.Multiple (FunctionSignature)
 open BSmtLib.Parser BSmtLib.Nodes
-open BSmtLib.Plain (SymbolView NumeralView DecimalView HexDigitsView BinDigitsView
-  StringContentView KeywordView)
+open BSmtLib.Plain (Symbol Numeral Decimal HexDigits BinDigits
+  StringContent Keyword)
 open Basic States Simp Loop
 open BSmtLib.Parser.Category.Attribute BSmtLib.Parser.Category.Combinator
 open BSmtLib.Parser.Category.Ident BSmtLib.Parser.Category.Pattern
@@ -72,26 +72,26 @@ instance {α β : Type} [Canon α] [Canon β] [CanonIdem α] [CanonIdem β] : Ca
 macro "view_idem" : tactic => `(tactic|
   (intro v; simp only [Canon.canon, canon_simps, canonSlice_canonSlice]))
 
-instance : CanonIdem SymbolView := ⟨fun v => by
+instance : CanonIdem Symbol := ⟨fun v => by
   show canonSymbol (canonSymbol v) = canonSymbol v
   simp only [canonSymbol, canon_simps, canonSlice_canonSlice]⟩
-instance : CanonIdem NumeralView := ⟨by view_idem⟩
-instance : CanonIdem DecimalView := ⟨by view_idem⟩
-instance : CanonIdem HexDigitsView := ⟨by view_idem⟩
-instance : CanonIdem BinDigitsView := ⟨by view_idem⟩
-instance : CanonIdem StringContentView := ⟨by view_idem⟩
-instance : CanonIdem KeywordView := ⟨by view_idem⟩
+instance : CanonIdem Numeral := ⟨by view_idem⟩
+instance : CanonIdem Decimal := ⟨by view_idem⟩
+instance : CanonIdem HexDigits := ⟨by view_idem⟩
+instance : CanonIdem BinDigits := ⟨by view_idem⟩
+instance : CanonIdem StringContent := ⟨by view_idem⟩
+instance : CanonIdem Keyword := ⟨by view_idem⟩
 instance : CanonIdem Token.Reserved := ⟨fun _ => rfl⟩
-instance : CanonIdem Quantifier := ⟨fun _ => rfl⟩
+instance : CanonIdem QuantifierKind := ⟨fun _ => rfl⟩
 
 /-- Canonicalising twice by `canonX` is canonicalising once, by the components. -/
 macro "idem_by" f:ident : tactic => `(tactic|
   (intro x; show $f ($f x) = $f x; cases x <;> simp only [$f:ident, CanonIdem.idem]))
 
 instance : CanonIdem Index := ⟨by idem_by canonIndex⟩
-instance : CanonIdem Identifier := ⟨by idem_by canonIdentifier⟩
-instance : CanonIdem SpecConstant := ⟨by idem_by canonConstant⟩
-instance : CanonIdem SymbolOrWildcard := ⟨by idem_by canonSymbolOrWildcard⟩
+instance : CanonIdem Ident := ⟨by idem_by canonIdentifier⟩
+instance : CanonIdem SpecialConstant := ⟨by idem_by canonConstant⟩
+instance : CanonIdem SimplePattern := ⟨by idem_by canonSymbolOrWildcard⟩
 instance : CanonIdem Pattern := ⟨by idem_by canonPattern⟩
 instance : CanonIdem IdentState := ⟨by idem_by canonIdentState⟩
 instance : CanonIdem SortMode := ⟨by idem_by canonSortMode⟩
@@ -119,10 +119,14 @@ instance {σ ρ : Type} [Canon σ] [Canon ρ] [CanonIdem σ] [CanonIdem ρ] :
 instance : CanonIdem (TermLevel S T Sc) := ⟨by idem_by canonTermLevel⟩
 instance : CanonIdem (TermMode SE A S T Sc) := ⟨by idem_by canonTermMode⟩
 instance : CanonIdem (TermState SE A S T Sc) := ⟨by idem_by canonTermState⟩
-instance : CanonIdem (Signature S) := ⟨by idem_by canonSignature⟩
-instance {V : Type} [Canon V] [CanonIdem V] : CanonIdem (Multiple.NamedView V) := ⟨fun v => by
-  show Multiple.NamedView.Internal.new (canon (canon v.toArray)) =
-    Multiple.NamedView.Internal.new (canon v.toArray)
+instance : CanonIdem (FunctionSignature S) := ⟨fun s => by
+  show canonSignature (canonSignature s) = canonSignature s
+  simp only [canonSignature, FunctionSignature.Internal.name_new,
+    FunctionSignature.Internal.params_new, FunctionSignature.Internal.resultSort_new,
+    CanonIdem.idem]⟩
+instance {V : Type} [Canon V] [CanonIdem V] : CanonIdem (Multiple.Named V) := ⟨fun v => by
+  show Multiple.Named.Internal.new (canon (canon v.toArray)) =
+    Multiple.Named.Internal.new (canon v.toArray)
   rw [CanonIdem.idem]⟩
 instance : CanonIdem (ConstructorState S) := ⟨by idem_by canonConstructorState⟩
 instance : CanonIdem (DatatypeState S) := ⟨by idem_by canonDatatypeState⟩

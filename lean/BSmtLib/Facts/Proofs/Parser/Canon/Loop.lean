@@ -28,8 +28,8 @@ the same answer and log, canonically equal parsers, and cursors that agree again
 namespace BSmtLib.Facts.Proofs.Parser.Canon.Loop
 
 open BSmtLib.Parser BSmtLib.Nodes
-open BSmtLib.Plain (SymbolView NumeralView DecimalView HexDigitsView BinDigitsView
-  StringContentView KeywordView)
+open BSmtLib.Plain (Symbol Numeral Decimal HexDigits BinDigits
+  StringContent Keyword)
 open Basic States Simp
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Batch
 open BSmtLib.Token.BatchCursor.Internal (remaining)

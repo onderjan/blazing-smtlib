@@ -43,12 +43,13 @@ theorem sortedVars_values (hA : TermAgrees h) : (variables : List Tree.SortedVar
     (∀ variable_ ∈ variables, variable_.Valid (Bridge.version version)) →
     ∀ {tokens : List Parser.Internal.Input},
       Stands tokens (variables.flatMap Tree.SortedVar.tokens) →
-    ∃ (values : List (List Parser.Internal.Input × PM H (Plain.Symbol × Traits.Handler.«Sort» H)))
-      (symbols : List Plain.SymbolView),
+    ∃ (values :
+        List (List Parser.Internal.Input × PM H (Plain.SymbolBuf × Traits.Handler.«Sort» H)))
+      (symbols : List Plain.Symbol),
       ValuesParse version (SortedVarParser.new (H := H)) values ∧ valuesTokens values = tokens ∧
       symbols.map Bridge.symbol = variables.map (·.symbol) ∧
       (values.mapM fun value => value.2) =
-        (fun pairs => (symbols.map Plain.SymbolView.intoOwned).zip (pairs.map (·.2))) <$>
+        (fun pairs => (symbols.map Plain.Symbol.intoOwned).zip (pairs.map (·.2))) <$>
           adaptRun (Traversal.sortedVars noPoints h variables)
   | [], _, _, hs => by
     have := Stands.eq_nil hs
@@ -85,11 +86,11 @@ theorem parenSortedVars_parses (hA : TermAgrees h) (variables : List Tree.Sorted
     (hvalid : ∀ variable_ ∈ variables, variable_.Valid (Bridge.version version))
     {tokens : List Parser.Internal.Input}
     (hs : Stands tokens (paren (variables.flatMap Tree.SortedVar.tokens))) :
-    ∃ symbols : List Plain.SymbolView, symbols.map Bridge.symbol = variables.map (·.symbol) ∧
+    ∃ symbols : List Plain.Symbol, symbols.map Bridge.symbol = variables.map (·.symbol) ∧
       Finishes version
         (ParenSortedVarsParser.new (ClosedMultipleParser.new (SortedVarParser.new (H := H))) :
           ParenSortedVarsParser H) tokens
-        ((fun pairs => ((symbols.map Plain.SymbolView.intoOwned).zip (pairs.map (·.2))).toArray) <$>
+        ((fun pairs => ((symbols.map Plain.Symbol.intoOwned).zip (pairs.map (·.2))).toArray) <$>
           adaptRun (Traversal.sortedVars noPoints h variables))
         (ParenSortedVarsParser.new (ClosedMultipleParser.new SortedVarParser.new)) := by
   obtain ⟨inner, rfl, hinner⟩ := Stands.split_paren hs

@@ -33,9 +33,9 @@ inductive QualIdentState (HandledSort : Type) where
   /-- After `(` `as`, reading the identifier. -/
   | qualifiedIdent (ident : IdentState)
   /-- After the identifier of `(as`, reading its sort. -/
-  | sort (identifier : Identifier) (sort : SortState HandledSort)
+  | sort (identifier : Ident) (sort : SortState HandledSort)
   /-- After the sort, before the `)`. -/
-  | close (identifier : Identifier) (sort : HandledSort)
+  | close (identifier : Ident) (sort : HandledSort)
 
 section
 
@@ -47,7 +47,7 @@ sort is handled at the sort's last token; the identifier is not handled.
 -/
 def qualIdentStep (version : Version) (self : QualIdentState (Handler.«Sort» H))
     (token : Internal.Input) :
-    PM H (Internal.Step (QualIdentState (Handler.«Sort» H)) (Identifier × Option
+    PM H (Internal.Step (QualIdentState (Handler.«Sort» H)) (Ident × Option
         (Handler.«Sort» H))) := do
   match self with
   | .start =>
@@ -101,7 +101,7 @@ instance Internal.instParseByTokenQualifiedIdentParser :
   step version parser token := do
     match ← Internal.qualIdentStep version parser.state token with
     | .more state => return .more ⟨state⟩
-    | .done (identifier, sort) => return .done { identifier := identifier.intoOwned, sort }
+    | .done (identifier, sort) => return .done { ident := identifier.intoOwned, sort }
   reset _ := .new
 
 instance : Parse (QualifiedIdentParser H) H m (Handler.Error H)

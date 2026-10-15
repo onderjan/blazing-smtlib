@@ -131,7 +131,7 @@ theorem received_ofSyntax {b : Token.BatchTag} (cursor : Token.BatchCursor b) (t
     | none =>
       simp only [Token.SyntaxToken.Internal.fromParts, hw, Parser.Internal.Input.ofSyntax, itemOf,
         Lexer.Adapters.toReservedKind, Bridge.received, rcv, Option.getD_some,
-        Bridge.symbol, SymbolView.asSlice, SymbolView.isQuoted, SymbolView.Internal.newUnchecked,
+        Bridge.symbol, Symbol.asSlice, Symbol.isQuoted, Symbol.Internal.newUnchecked,
         hc]
     | some word =>
       simp only [Token.SyntaxToken.Internal.fromParts, hw, Parser.Internal.Input.ofSyntax, itemOf,
@@ -139,13 +139,13 @@ theorem received_ofSyntax {b : Token.BatchTag} (cursor : Token.BatchCursor b) (t
         Option.getD_some]
   all_goals simp only [Token.SyntaxToken.Internal.fromParts, Parser.Internal.Input.ofSyntax, itemOf,
       Bridge.received, rcv,
-    Option.getD_some, Bridge.constant, Bridge.keyword, Bridge.symbol, NumeralView.asSlice,
-    NumeralView.Internal.newUnchecked, DecimalView.asSlice, DecimalView.Internal.newUnchecked,
-        HexDigitsView.asSlice,
-    HexDigitsView.Internal.newUnchecked, BinDigitsView.asSlice, BinDigitsView.Internal.newUnchecked,
-    StringContentView.asSlice, StringContentView.Internal.newUnchecked, KeywordView.asSlice,
-    KeywordView.Internal.newUnchecked, SymbolView.asSlice, SymbolView.isQuoted,
-    SymbolView.Internal.newUnchecked, hc]
+    Option.getD_some, Bridge.constant, Bridge.keyword, Bridge.symbol, Numeral.asSlice,
+    Numeral.Internal.newUnchecked, Decimal.asSlice, Decimal.Internal.newUnchecked,
+        HexDigits.asSlice,
+    HexDigits.Internal.newUnchecked, BinDigits.asSlice, BinDigits.Internal.newUnchecked,
+    StringContent.asSlice, StringContent.Internal.newUnchecked, Keyword.asSlice,
+    Keyword.Internal.newUnchecked, Symbol.asSlice, Symbol.isQuoted,
+    Symbol.Internal.newUnchecked, hc]
 
 /-! ## The recording run over the adapter's items -/
 

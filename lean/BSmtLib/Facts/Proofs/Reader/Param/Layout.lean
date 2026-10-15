@@ -237,7 +237,7 @@ theorem constructorStep_layout (version : Token.Version)
   unfold constructorStep
   cases self <;> dsimp only <;> (try simp only [expectOpen, expectSymbol]) <;> fails_tac
 
-theorem datatypeStep_layout (start : Array Plain.SymbolView → Parser.Quiet.RPM Unit)
+theorem datatypeStep_layout (start : Array Plain.Symbol → Parser.Quiet.RPM Unit)
     (version : Token.Version)
     (self : DatatypeState (Handler.«Sort» LH)) :
     Fails (datatypeStep (H := LH) (m := Id) start version self .layout) := by

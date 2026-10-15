@@ -126,13 +126,13 @@ def setInfoRem (declaration : Declaration) (state : AttributeState Nat Nat) : La
     follows (setInfoEnd version declaration a) b ∧ u = a ++ b
 
 /-- Sort declarations, between `lo` and `hi` of them, then as many datatype declarations. -/
-def datatypesRem (state : ListState SortDecState (Plain.SymbolView × NumeralView)) : Lang :=
+def datatypesRem (state : ListState SortDecState (Plain.Symbol × Numeral)) : Lang :=
   fun u => ∃ n, 1 ≤ n ∧ cat (listRem sortDecRem SortDecLang .start n (some n) state)
     (cat (tok openItem) (cat (rep (DatatypeLang version) n (some n))
       (cat (tok closeItem) (closeNext version follows)))) u
 
 /-- Function declarations, then as many bodies. -/
-def funsRecRem (state : ListState (FunctionDecState Nat) (Nodes.Signature Nat)) : Lang :=
+def funsRecRem (state : ListState (FunctionDecState Nat) (Multiple.FunctionSignature Nat)) : Lang :=
   fun u => ∃ n, 1 ≤ n ∧ cat (listRem (functionDecRem version) (FunctionDecLang version) .start n
     (some n) state) (cat (tok openItem) (cat (rep (TermLang version) n (some n))
       (cat (tok closeItem) (closeNext version follows)))) u

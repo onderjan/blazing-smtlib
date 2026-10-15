@@ -12,7 +12,7 @@ The parser of the pattern of a case of `match`.
 
 namespace BSmtLib.Parser.Category.Pattern
 
-open BSmtLib.Plain (SymbolView)
+open BSmtLib.Plain (Symbol)
 open BSmtLib.Nodes BSmtLib.Traits
 open BSmtLib.Token (Version)
 open BSmtLib.Parser.Internal (PM call syntaxError)
@@ -25,7 +25,7 @@ inductive PatternState where
   /-- After the `(` of a constructor pattern. -/
   | opened
   /-- After the constructor, reading its arguments up to the `)`. -/
-  | arguments (constructor : SymbolView) (arguments : Array SymbolOrWildcard)
+  | arguments (constructor : Symbol) (arguments : Array SimplePattern)
 
 namespace PatternState
 
@@ -36,7 +36,7 @@ def wildcardAllowed (version : Version) : Bool :=
   version ≥ .v2_7
 
 /-- The symbol or wildcard the token is, if it is one in the version. -/
-def symbolOrWildcard? (version : Version) (token : Internal.Input) : Option SymbolOrWildcard :=
+def symbolOrWildcard? (version : Version) (token : Internal.Input) : Option SimplePattern :=
   match token with
   | .symbol symbol => some (.symbol symbol)
   | token => if wildcardAllowed version && token.isWord .underscore then some .wildcard else none
@@ -52,7 +52,7 @@ def step (version : Version) (self : PatternState) (token : Internal.Input) :
     | .parenOpen => pure (.more .opened)
     | token =>
       match symbolOrWildcard? version token with
-      | some symbol => pure (.done (.single symbol))
+      | some symbol => pure (.done (.simple symbol))
       | none =>
         syntaxError (if wildcardAllowed version then .expectedSymbolUnderscoreOrParenOpen
           else .expectedSymbolOrParenOpen)
@@ -64,7 +64,7 @@ def step (version : Version) (self : PatternState) (token : Internal.Input) :
     match token with
     | .parenClose =>
       if found.isEmpty then syntaxError .emptyPatternArguments
-      else pure (.done (.constructor constructor found))
+      else pure (.done (.application constructor found))
     | token =>
       match symbolOrWildcard? version token with
       | some argument => pure (.more (.arguments constructor (found.push argument)))

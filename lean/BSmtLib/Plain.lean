@@ -38,16 +38,16 @@ SMT-LIB string content.
 May be empty.
 Must contain only SMT-LIB printable or whitespace bytes.
 -/
-structure StringContent where
+structure StringContentBuf where
   private ofBytes ::
-  private bytes : Bytes
+  private bytes : Bytes.BytesBuf
 
-namespace StringContent
+namespace StringContentBuf
 
 def isAllowed (value : ByteSlice) : Bool :=
   allBytes value fun c => (CharClass.classify c).isPrintableOrWhitespace
 
-end StringContent
+end StringContentBuf
 
 /--
 An owned SMT-LIB symbol, quoted or unquoted.
@@ -64,12 +64,12 @@ with a digit.
 Equality and hash are intentionally not implemented:
 quoted and unquoted symbols refer to the same value semantically,
 so the value without the quoted flag should be compared in that case,
-obtained through `Symbol.bytes` or `Symbol.intoBytes`.
+obtained through `SymbolBuf.bytes` or `SymbolBuf.intoBytesBuf`.
 -/
-structure Symbol where
+structure SymbolBuf where
   private ofParts ::
   private quoted : Bool
-  private value : Bytes
+  private value : Bytes.BytesBuf
 
 /--
 A view of an SMT-LIB symbol, quoted or unquoted.
@@ -84,14 +84,14 @@ restrictions for unquoted symbols.
 Equality and hash are intentionally not implemented:
 quoted and unquoted symbols refer to the same value semantically,
 so the value without the quoted flag should be compared in that case,
-obtained through `SymbolView.bytes`.
+obtained through `Symbol.bytes`.
 -/
-structure SymbolView where
+structure Symbol where
   private ofParts ::
   private quoted : Bool
   private slice : ByteSlice
 
-namespace Symbol
+namespace SymbolBuf
 
 def isUnquotedAllowed (value : ByteSlice) : Bool :=
   if h : 0 < value.size then
@@ -104,7 +104,7 @@ def isQuotedAllowed (value : ByteSlice) : Bool :=
   allBytes value fun c =>
     (CharClass.classify c).isPrintableOrWhitespace && c != byte! '|' && c != byte! '\\'
 
-end Symbol
+end SymbolBuf
 
 /--
 SMT-LIB keyword.
@@ -121,16 +121,16 @@ this unintended and keep the 2.0 rule in every version: the standard's
 own keyword examples include `:56`, and there is no need to exclude
 reserved words as the colon already uniquely determines the category.
 -/
-structure Keyword where
+structure KeywordBuf where
   private ofBytes ::
-  private bytes : Bytes
+  private bytes : Bytes.BytesBuf
 
-namespace Keyword
+namespace KeywordBuf
 
 def isAllowed (value : ByteSlice) : Bool :=
   value.size != 0 && allBytes value fun c => (CharClass.classify c).isAllowedInSimpleSymbol
 
-end Keyword
+end KeywordBuf
 
 /--
 SMT-LIB numeral (base 10).
@@ -139,11 +139,11 @@ Cannot be empty.
 Must contain only digits.
 Cannot contain any leading zeros except for the constant "0" itself.
 -/
-structure Numeral where
+structure NumeralBuf where
   private ofBytes ::
-  private bytes : Bytes
+  private bytes : Bytes.BytesBuf
 
-namespace Numeral
+namespace NumeralBuf
 
 /- LEAN: Rust walks the bytes with a flag that allows a zero everywhere but in the first
 position of a numeral longer than one byte; this states the same directly. -/
@@ -156,13 +156,13 @@ def isAllowed (value : ByteSlice) : Bool :=
 
 /- LEAN: Rust's `from_usize`; Lean's natural numbers stand for every unsigned type. -/
 /-- Construct from a natural number. -/
-def fromNat (value : Nat) : Numeral :=
+def fromNat (value : Nat) : NumeralBuf :=
   -- convert the value into a string and get its bytes
   -- this is allowed since it produces digits without leading zeros
   -- or the allowed special case of constant "0"
-  ⟨Bytes.fromByteArray (toString value).toUTF8⟩
+  ⟨Bytes.BytesBuf.fromByteArray (toString value).toUTF8⟩
 
-end Numeral
+end NumeralBuf
 
 /--
 SMT-LIB hexadecimal digits (base 16).
@@ -170,16 +170,16 @@ SMT-LIB hexadecimal digits (base 16).
 Cannot be empty.
 Must contain only digits, lower-case letters a-f or upper-case letters A-F.
 -/
-structure HexDigits where
+structure HexDigitsBuf where
   private ofBytes ::
-  private bytes : Bytes
+  private bytes : Bytes.BytesBuf
 
-namespace HexDigits
+namespace HexDigitsBuf
 
 def isAllowed (value : ByteSlice) : Bool :=
   value.size != 0 && allBytes value isAsciiHexDigit
 
-end HexDigits
+end HexDigitsBuf
 
 /--
 SMT-LIB binary digits (base 2).
@@ -187,16 +187,16 @@ SMT-LIB binary digits (base 2).
 Cannot be empty.
 Must contain only the digits 0, 1.
 -/
-structure BinDigits where
+structure BinDigitsBuf where
   private ofBytes ::
-  private bytes : Bytes
+  private bytes : Bytes.BytesBuf
 
-namespace BinDigits
+namespace BinDigitsBuf
 
 def isAllowed (value : ByteSlice) : Bool :=
   value.size != 0 && allBytes value fun c => c == byte! '0' || c == byte! '1'
 
-end BinDigits
+end BinDigitsBuf
 
 /--
 SMT-LIB decimal (a decimal number with whole part, a dot, then a fractional part)
@@ -209,11 +209,11 @@ cannot be empty, must contain only digits, the leading digit must not be zero.
 
 The fractional part cannot be empty and must contain only digits.
 -/
-structure Decimal where
+structure DecimalBuf where
   private ofBytes ::
-  private bytes : Bytes
+  private bytes : Bytes.BytesBuf
 
-namespace Decimal
+namespace DecimalBuf
 
 def isAllowed (value : ByteSlice) : Bool :=
   -- split by the dot
@@ -227,10 +227,10 @@ def isAllowed (value : ByteSlice) : Bool :=
     -- the whole part must form a numeral, which also excludes a dot in it
     -- the fractional part must be a non-empty string of digits,
     -- which also excludes multiple dots
-    Numeral.isAllowed wholePart && fractionalPart.size != 0
+    NumeralBuf.isAllowed wholePart && fractionalPart.size != 0
       && allBytes fractionalPart isAsciiDigit
 
-end Decimal
+end DecimalBuf
 
 /--
 SMT-LIB whitespace (one or more whitespace bytes)
@@ -238,17 +238,17 @@ SMT-LIB whitespace (one or more whitespace bytes)
 Cannot be empty.
 Must contain only tabs, line feeds, carriage returns and spaces.
 -/
-structure Whitespace where
+structure WhitespaceBuf where
   private ofBytes ::
-  private bytes : Bytes
+  private bytes : Bytes.BytesBuf
 
-namespace Whitespace
+namespace WhitespaceBuf
 
 def isAllowed (value : ByteSlice) : Bool :=
   value.size != 0 && allBytes value fun c =>
     c == byte! '\t' || c == byte! '\n' || c == byte! '\r' || c == byte! ' '
 
-end Whitespace
+end WhitespaceBuf
 
 /--
 SMT-LIB comment (not including starting semicolon, including ending CR/LF)
@@ -258,11 +258,11 @@ The content may be empty.
 Only the last byte may be a carriage return (CR) or a line feed (LF).
 If the comment runs to the end of the input, there is no ending CR/LF.
 -/
-structure Comment where
+structure CommentBuf where
   private ofBytes ::
-  private bytes : Bytes
+  private bytes : Bytes.BytesBuf
 
-namespace Comment
+namespace CommentBuf
 
 def isAllowed (value : ByteSlice) : Bool :=
   -- empty content is allowed (starting semicolon at the end of input);
@@ -270,11 +270,11 @@ def isAllowed (value : ByteSlice) : Bool :=
   -- no other restrictions
   allBytes (value.slice 0 (value.size - 1)) fun c => c != byte! '\r' && c != byte! '\n'
 
-end Comment
+end CommentBuf
 
 structure DisallowedByteVecError where
   private ofBytes ::
-  private bytes : Bytes
+  private bytes : Bytes.BytesBuf
 
 namespace DisallowedByteVecError
 
@@ -286,8 +286,9 @@ def intoByteArray (self : DisallowedByteVecError) : ByteArray :=
 end DisallowedByteVecError
 
 /- LEAN: the counterpart of the Rust macro `string8_newtype!`, which gives each type above its
-methods and its view. The methods follow `Bytes`: `into_vec` is `intoByteArray`, and `Borrow`
-and `iter` are left out, as they are for `Bytes`; the comparisons are made by `plain_newtype_eq`.
+methods and its view. The methods follow `BytesBuf`: `into_vec` is `intoByteArray`, and `Borrow`
+and `iter` are left out, as they are for `BytesBuf`; the comparisons are made by
+`plain_newtype_eq`.
 Hygiene is off so that the generated code can name the private fields and constructors of
 the structures above. -/
 set_option hygiene false in
@@ -300,14 +301,14 @@ local macro "plain_newtype " name:ident view:ident : command => do
     namespace $name
 
     def new (value : ByteArray) : Except DisallowedByteVecError $name :=
-      let value := Bytes.fromByteArray value
+      let value := Bytes.BytesBuf.fromByteArray value
       if isAllowed value.asSlice then .ok ⟨value⟩ else .error ⟨value⟩
 
     def asSlice (self : $name) : ByteSlice := self.bytes.asSlice
 
     def asView (self : $name) : $view := ⟨self.bytes.asSlice⟩
 
-    def intoBytes (self : $name) : Bytes := self.bytes
+    def intoBytesBuf (self : $name) : Bytes.BytesBuf := self.bytes
 
     def intoByteArray (self : $name) : ByteArray := self.bytes.intoByteArray
 
@@ -328,14 +329,14 @@ local macro "plain_newtype " name:ident view:ident : command => do
     @[inline]
     def asSlice (self : $view) : ByteSlice := self.slice
 
-    def intoOwned (self : $view) : $name := ⟨(Bytes.BytesView.Internal.new self.slice).intoOwned⟩
+    def intoOwned (self : $view) : $name := ⟨(Bytes.Internal.new self.slice).intoOwned⟩
 
     def len (self : $view) : Nat := self.slice.size
 
     def isEmpty (self : $view) : Bool := self.len == 0
 
     @[no_expose] instance : Repr $view :=
-        ⟨fun s p => reprPrec (Bytes.BytesView.Internal.new s.slice) p⟩
+        ⟨fun s p => reprPrec (Bytes.Internal.new s.slice) p⟩
 
     end $view)
   return ⟨Lean.mkNullNode #[viewStructure, ownedMethods, viewMethods]⟩
@@ -384,91 +385,91 @@ local macro "plain_newtype_eq " name:ident view:ident : command => `(
 
     end $view)
 
-plain_newtype StringContent StringContentView
+plain_newtype StringContentBuf StringContent
 
 /- LEAN: the symbol is not made by `string8_newtype!` in Rust, as it carries whether it is
 quoted; its methods are written out here, named as the macro's are. -/
-namespace Symbol
+namespace SymbolBuf
 
 /-- Whether this is a quoted symbol enclosed in pipes, e.g. `|x|`, or a simple symbol, e.g. `x`. -/
-def isQuoted (self : Symbol) : Bool := self.quoted
+def isQuoted (self : SymbolBuf) : Bool := self.quoted
 
-def newUnquoted (value : ByteArray) : Except DisallowedByteVecError Symbol :=
-  let value := Bytes.fromByteArray value
+def newUnquoted (value : ByteArray) : Except DisallowedByteVecError SymbolBuf :=
+  let value := Bytes.BytesBuf.fromByteArray value
   if isUnquotedAllowed value.asSlice then .ok ⟨false, value⟩ else .error ⟨value⟩
 
-def newQuoted (value : ByteArray) : Except DisallowedByteVecError Symbol :=
-  let value := Bytes.fromByteArray value
+def newQuoted (value : ByteArray) : Except DisallowedByteVecError SymbolBuf :=
+  let value := Bytes.BytesBuf.fromByteArray value
   if isQuotedAllowed value.asSlice then .ok ⟨true, value⟩ else .error ⟨value⟩
 
-def bytes (self : Symbol) : Bytes.BytesView := self.value.asView
+def bytes (self : SymbolBuf) : Bytes := self.value.asView
 
-def asSlice (self : Symbol) : ByteSlice := self.value.asSlice
+def asSlice (self : SymbolBuf) : ByteSlice := self.value.asSlice
 
-def asView (self : Symbol) : SymbolView := ⟨self.quoted, self.value.asSlice⟩
+def asView (self : SymbolBuf) : Symbol := ⟨self.quoted, self.value.asSlice⟩
 
-def intoBytes (self : Symbol) : Bytes := self.value
+def intoBytesBuf (self : SymbolBuf) : Bytes.BytesBuf := self.value
 
-def intoByteArray (self : Symbol) : ByteArray := self.value.intoByteArray
+def intoByteArray (self : SymbolBuf) : ByteArray := self.value.intoByteArray
 
-def len (self : Symbol) : Nat := self.value.len
+def len (self : SymbolBuf) : Nat := self.value.len
 
-def isEmpty (self : Symbol) : Bool := self.value.isEmpty
+def isEmpty (self : SymbolBuf) : Bool := self.value.isEmpty
 
-end Symbol
+end SymbolBuf
 
-namespace SymbolView
+namespace Symbol
 
 /- LEAN: crate-private in Rust, where it also checks the value in debug builds. -/
 @[inline]
-def Internal.newUnchecked (isQuoted : Bool) (value : ByteSlice) : SymbolView := ⟨isQuoted, value⟩
+def Internal.newUnchecked (isQuoted : Bool) (value : ByteSlice) : Symbol := ⟨isQuoted, value⟩
 
 @[inline]
-def isQuoted (self : SymbolView) : Bool := self.quoted
+def isQuoted (self : Symbol) : Bool := self.quoted
 
-def bytes (self : SymbolView) : Bytes.BytesView := Bytes.BytesView.Internal.new self.slice
+def bytes (self : Symbol) : Bytes := Bytes.Internal.new self.slice
 
 @[inline]
-def asSlice (self : SymbolView) : ByteSlice := self.slice
+def asSlice (self : Symbol) : ByteSlice := self.slice
 
-def intoOwned (self : SymbolView) : Symbol :=
-  ⟨self.quoted, (Bytes.BytesView.Internal.new self.slice).intoOwned⟩
+def intoOwned (self : Symbol) : SymbolBuf :=
+  ⟨self.quoted, (Bytes.Internal.new self.slice).intoOwned⟩
 
-def len (self : SymbolView) : Nat := self.slice.size
+def len (self : Symbol) : Nat := self.slice.size
 
-def isEmpty (self : SymbolView) : Bool := self.len == 0
+def isEmpty (self : Symbol) : Bool := self.len == 0
 
 /- LEAN: Rust's `Debug`, which writes a quoted symbol in bars around the bytes' `Debug`. -/
-@[no_expose] instance : Repr SymbolView where
+@[no_expose] instance : Repr Symbol where
   reprPrec symbol prec :=
     if symbol.quoted then .text "|" ++ reprPrec symbol.bytes prec ++ .text "|"
     else reprPrec symbol.bytes prec
 
-end SymbolView
-
-namespace Symbol
-
-@[no_expose] instance : Repr Symbol := ⟨fun s p => reprPrec s.asView p⟩
-
 end Symbol
 
-plain_newtype Keyword KeywordView
-plain_newtype Numeral NumeralView
-plain_newtype HexDigits HexDigitsView
-plain_newtype BinDigits BinDigitsView
-plain_newtype Decimal DecimalView
-plain_newtype Whitespace WhitespaceView
-plain_newtype Comment CommentView
+namespace SymbolBuf
+
+@[no_expose] instance : Repr SymbolBuf := ⟨fun s p => reprPrec s.asView p⟩
+
+end SymbolBuf
+
+plain_newtype KeywordBuf Keyword
+plain_newtype NumeralBuf Numeral
+plain_newtype HexDigitsBuf HexDigits
+plain_newtype BinDigitsBuf BinDigits
+plain_newtype DecimalBuf Decimal
+plain_newtype WhitespaceBuf Whitespace
+plain_newtype CommentBuf Comment
 
 /- LEAN: `eqSlice`, `eqString`, `eqView` and `eqOwned` stand for Rust's implementations of
 `PartialEq` with other types, which have no names (see `plain_newtype_eq`). -/
-plain_newtype_eq StringContent StringContentView
-plain_newtype_eq Keyword KeywordView
-plain_newtype_eq Numeral NumeralView
-plain_newtype_eq HexDigits HexDigitsView
-plain_newtype_eq BinDigits BinDigitsView
-plain_newtype_eq Decimal DecimalView
-plain_newtype_eq Whitespace WhitespaceView
-plain_newtype_eq Comment CommentView
+plain_newtype_eq StringContentBuf StringContent
+plain_newtype_eq KeywordBuf Keyword
+plain_newtype_eq NumeralBuf Numeral
+plain_newtype_eq HexDigitsBuf HexDigits
+plain_newtype_eq BinDigitsBuf BinDigits
+plain_newtype_eq DecimalBuf Decimal
+plain_newtype_eq WhitespaceBuf Whitespace
+plain_newtype_eq CommentBuf Comment
 
 end BSmtLib.Plain

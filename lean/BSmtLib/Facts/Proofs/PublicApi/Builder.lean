@@ -361,42 +361,42 @@ theorem map_map_eq {α β γ : Type} {f : α → β} {g : β → γ} {k : α →
     (l : List α) : (l.map f).map g = l.map k := by
   rw [List.map_map]; exact List.map_congr_left fun x _ => h x
 
-theorem symbolT_ofSymbol (s : BSmtLib.Plain.SymbolView) : symbolT (ofSymbol s) = symbol s := rfl
+theorem symbolT_ofSymbol (s : BSmtLib.Plain.Symbol) : symbolT (ofSymbol s) = symbol s := rfl
 
 theorem indexT_ofIndex (i : BSmtLib.Nodes.Index) : indexT (ofIndex i) = index i := by
   cases i <;> rfl
 
-theorem identifierT_ofIdentifier (i : BSmtLib.Nodes.Identifier) :
+theorem identifierT_ofIdentifier (i : BSmtLib.Nodes.Ident) :
     identifierT (ofIdentifier i) = identifier i := by
   obtain ⟨s, is⟩ := i
   show (⟨symbolT (ofSymbol s), (is.toList.map ofIndex).map indexT⟩ : Tree.Identifier) = ⟨_, _⟩
   rw [map_map_eq indexT_ofIndex]; (try rfl)
 
-theorem constantT_ofConstant (c : BSmtLib.Nodes.SpecConstant) :
+theorem constantT_ofConstant (c : BSmtLib.Nodes.SpecialConstant) :
     constantT (ofConstant c) = constant c := by
   cases c <;> rfl
 
-theorem symbolOrWildcardT_of (s : BSmtLib.Nodes.SymbolOrWildcard) :
+theorem symbolOrWildcardT_of (s : BSmtLib.Nodes.SimplePattern) :
     symbolOrWildcardT (ofSymbolOrWildcard s) = symbolOrWildcard s := by
   cases s <;> rfl
 
 theorem patternT_ofPattern (p : BSmtLib.Nodes.Pattern) : patternT (ofPattern p) = pattern p := by
   cases p with
-  | single s => exact congrArg Tree.Pattern.single (symbolOrWildcardT_of s)
-  | constructor c args =>
+  | simple s => exact congrArg Tree.Pattern.single (symbolOrWildcardT_of s)
+  | application c args =>
     show Tree.Pattern.constructor _ _ = Tree.Pattern.constructor _ _
     rw [map_map_eq symbolOrWildcardT_of]; (try rfl)
 
-theorem pairsT_ofPairs {α : Type} (items : Array (BSmtLib.Plain.SymbolView × α)) :
+theorem pairsT_ofPairs {α : Type} (items : Array (BSmtLib.Plain.Symbol × α)) :
     pairsT (ofPairs items) = pairs items :=
   map_map_eq (fun _ => rfl) _
 
 
-theorem termNodeT_of (n : BSmtLib.Nodes.TermNode Tree.Sort Tree.Term) :
+theorem termNodeT_of (n : BSmtLib.Nodes.Term Tree.Sort Tree.Term) :
     termNodeT (ofTermNode n) = termNode (H := State) n := by
   cases n with
-  | constant c => exact congrArg Traversal.TermNode.constant (constantT_ofConstant c)
-  | identifier i s =>
+  | specialConstant c => exact congrArg Traversal.TermNode.constant (constantT_ofConstant c)
+  | qualifiedIdent i s =>
     exact congrArg (fun x => Traversal.TermNode.identifier (values := treeValues) x s)
       (identifierT_ofIdentifier i)
   | application i s args =>
@@ -404,27 +404,27 @@ theorem termNodeT_of (n : BSmtLib.Nodes.TermNode Tree.Sort Tree.Term) :
       (fun x => Traversal.TermNode.application (values := treeValues) x s args.asSlice.toList)
       (identifierT_ofIdentifier i)
 
-theorem sExprNodeT_of (n : BSmtLib.Nodes.SExprNode Tree.SExpr) :
+theorem sExprNodeT_of (n : BSmtLib.Nodes.SExpr Tree.SExpr) :
     sExprNodeT (ofSExprNode n) = sExprNode (H := State) n := by
   cases n <;> first
     | rfl
     | (show Traversal.SExprNode.constant (constantT (ofConstant _)) = _
        rw [constantT_ofConstant]; rfl)
 
-theorem attributeValueNodeT_of (n : BSmtLib.Nodes.AttributeValueNode Tree.SExpr) :
+theorem attributeValueNodeT_of (n : BSmtLib.Nodes.AttributeValue Tree.SExpr) :
     attributeValueNodeT (ofAttributeValueNode n) = attributeValue (H := State) n := by
   cases n <;> first
     | rfl
     | (show Traversal.AttributeValueNode.constant (constantT (ofConstant _)) = _
        rw [constantT_ofConstant]; rfl)
 
-theorem signatureT_of (sig : BSmtLib.Nodes.Signature Tree.Sort) :
+theorem signatureT_of (sig : BSmtLib.Multiple.FunctionSignature Tree.Sort) :
     signatureT (ofSignature sig) = signature (H := State) sig := by
   obtain ⟨s, ps, r⟩ := sig
   show (⟨symbolT (ofSymbol s), pairsT (ofPairs ps), r⟩ : Traversal.Signature treeValues) = ⟨_, _, _⟩
   rw [pairsT_ofPairs]; (try rfl)
 
-theorem constructorT_of (c : BSmtLib.Plain.SymbolView × BSmtLib.Multiple.SortedVarsView Tree.Sort) :
+theorem constructorT_of (c : BSmtLib.Plain.Symbol × BSmtLib.Multiple.SortedVars Tree.Sort) :
     constructorT (ofConstructor c) = constructor (H := State) c := by
   obtain ⟨s, sel⟩ := c
   show (⟨symbolT (ofSymbol s), pairsT (ofPairs sel.toArray)⟩ : Traversal.Constructor treeValues) =
@@ -471,7 +471,7 @@ theorem agrees : Agrees (H := State) (m := Id) specBuilder where
   startDeclareDatatypes ss := by
     show ask _ = ask _
     unfold pairsT
-    rw [map_map_eq (k := fun (sn : BSmtLib.Plain.SymbolView × BSmtLib.Plain.NumeralView) =>
+    rw [map_map_eq (k := fun (sn : BSmtLib.Plain.Symbol × BSmtLib.Plain.Numeral) =>
       (symbol sn.1, chars sn.2.asSlice)) (fun sn => by obtain ⟨s, n⟩ := sn; rfl)]
   startDatatypeDeclaration ps := by
     show ask _ = ask _; rw [map_map_eq symbolT_ofSymbol]; (try rfl)

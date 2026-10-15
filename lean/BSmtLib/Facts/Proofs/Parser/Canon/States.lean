@@ -32,7 +32,7 @@ namespace BSmtLib.Facts.Proofs.Parser.Canon.States
 open Basic
 
 open BSmtLib.Parser BSmtLib.Nodes BSmtLib.Traits
-open BSmtLib.Plain (NumeralView StringContentView KeywordView)
+open BSmtLib.Plain (Numeral StringContent Keyword)
 open BSmtLib.Parser.Category.Attribute BSmtLib.Parser.Category.Combinator
 open BSmtLib.Parser.Category.Ident BSmtLib.Parser.Category.Pattern
 open BSmtLib.Parser.Category.QualifiedIdent BSmtLib.Parser.Category.SExpr
@@ -202,13 +202,13 @@ def canonSortDecState : SortDecState → SortDecState
 
 instance : Canon SortDecState := ⟨canonSortDecState⟩
 
-def canonSignature : Signature S → Signature S
-  | ⟨symbol, parameters, result⟩ => ⟨canon symbol, canon parameters, canon result⟩
+def canonSignature (s : Multiple.FunctionSignature S) : Multiple.FunctionSignature S :=
+  Multiple.FunctionSignature.Internal.new (canon s.name) (canon s.params) (canon s.resultSort)
 
-instance : Canon (Signature S) := ⟨canonSignature⟩
+instance : Canon (Multiple.FunctionSignature S) := ⟨canonSignature⟩
 
-instance : Canon (Multiple.FunctionSignaturesView S) :=
-  ⟨fun v => Multiple.FunctionSignaturesView.Internal.new (canon v.toArray)⟩
+instance : Canon (Multiple.FunctionSignatures S) :=
+  ⟨fun v => Multiple.FunctionSignatures.Internal.new (canon v.toArray)⟩
 
 def canonConstructorState : ConstructorState S → ConstructorState S
   | .start => .start

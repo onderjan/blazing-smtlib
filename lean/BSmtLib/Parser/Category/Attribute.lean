@@ -16,7 +16,7 @@ namespace BSmtLib.Parser.Category.Attribute
 open BSmtLib.Nodes BSmtLib.Traits BSmtLib.Parser.Category.Token BSmtLib.Parser.Category.SExpr
 open BSmtLib.Parser.Category.SExpr.Internal
 open BSmtLib.Parser.Category.Token.Internal
-open BSmtLib.Plain (KeywordView)
+open BSmtLib.Plain (Keyword)
 open BSmtLib.Token (Version)
 open BSmtLib.Parser.Internal (PM call syntaxError)
 
@@ -27,10 +27,10 @@ inductive AttributeMode (HandledSExpr : Type) where
   /-- Before an attribute's keyword, or the `)` after the attributes. -/
   | start
   /-- After an attribute's keyword: its value, the next keyword or the `)` follows. -/
-  | afterName (keyword : KeywordView)
+  | afterName (keyword : Keyword)
   /-- In the list value of an attribute: its items so far, and whether the parser is between
   them. -/
-  | inside (keyword : KeywordView) (items : Array HandledSExpr) (sExpr : SExprState HandledSExpr)
+  | inside (keyword : Keyword) (items : Array HandledSExpr) (sExpr : SExprState HandledSExpr)
       (outside : Bool)
 
 /-- The state of the attribute parser: its mode, and the attributes handled so far. -/
@@ -72,12 +72,12 @@ def attributeStep (single : Bool) (version : Version)
     | .keyword name => return .more { self with mode := .afterName name }
     | _ => syntaxError .expectedAttribute
   | .afterName keyword =>
-    let valued (value : AttributeValueNode (Handler.SExpr H)) := do
+    let valued (value : AttributeValue (Handler.SExpr H)) := do
       let handled ← call (Handler.handleAttribute keyword (some value))
       return .more { mode := .start, attributes := self.attributes.push handled }
     match token with
     | .symbol symbol => valued (.symbol symbol)
-    | .constant constant => valued (.constant constant)
+    | .constant constant => valued (.specialConstant constant)
     | .parenOpen => return .more { self with mode := .inside keyword #[] [] true }
     | .parenClose =>
       let handled ← call (Handler.handleAttribute keyword none)
@@ -91,7 +91,7 @@ def attributeStep (single : Bool) (version : Version)
   | .inside keyword items sExpr outside =>
     if outside then
       if let .parenClose := token then
-        let handled ← call (Handler.handleAttribute keyword (some (.list (.new items))))
+        let handled ← call (Handler.handleAttribute keyword (some (.sExprs (.new items))))
         return .more { mode := .start, attributes := self.attributes.push handled }
     match ← sExprStep version sExpr token with
     | .more sExpr => return .more { self with mode := .inside keyword items sExpr false }

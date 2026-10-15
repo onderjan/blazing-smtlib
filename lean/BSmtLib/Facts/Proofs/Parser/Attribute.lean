@@ -76,7 +76,7 @@ s-expressions with the traversal's effects, and appends them to the items.
 theorem valueItems_runs (hA : TermAgrees h) (single : Bool) : (items : List Tree.SExpr) →
     Tree.SExpr.ValidAll (Bridge.version version) items →
     ∀ {tokens : List Parser.Internal.Input}, Stands tokens (Tree.SExpr.tokensAll items) →
-    ∀ (keyword : KeywordView) (found : Array (Traits.Handler.SExpr H))
+    ∀ (keyword : Keyword) (found : Array (Traits.Handler.SExpr H))
       (attributes : Array (Traits.Handler.Attribute H)),
     Runs points (attributeStep single version)
       { mode := .inside keyword found [] true, attributes } tokens
@@ -122,7 +122,7 @@ traversal's effects and handles the attribute, before the token after it.
 -/
 theorem value_runs (hA : TermAgrees h) (single : Bool) (value : Tree.AttributeValue)
     (hvalid : value.Valid (Bridge.version version)) {tokens : List Parser.Internal.Input}
-    (hs : Stands tokens value.tokens) (keyword : KeywordView)
+    (hs : Stands tokens value.tokens) (keyword : Keyword)
     (attributes : Array (Traits.Handler.Attribute H)) :
     Runs points (attributeStep single version) { mode := .afterName keyword, attributes } tokens
       (adaptRun (do
@@ -134,7 +134,7 @@ theorem value_runs (hA : TermAgrees h) (single : Bool) (value : Tree.AttributeVa
   | constant constant =>
     obtain ⟨constant', rfl, rfl⟩ := Stands.constant hs
     refine (Runs.token (program := Parser.Internal.call (Traits.Handler.handleAttribute keyword
-      (some (.constant constant'))))
+      (some (.specialConstant constant'))))
           (by simp [Parser.Category.Attribute.Internal.attributeStep.eq_def])).congr ?_ rfl
     simp [attributeValue, adaptRun_take (token := .constant constant') rfl, hA.handleAttribute,
       Bridge.attributeValue]
@@ -152,7 +152,7 @@ theorem value_runs (hA : TermAgrees h) (single : Bool) (value : Tree.AttributeVa
           { mode := .inside keyword (#[] ++ handled.toArray) [] true, attributes } [.parenClose]
           (do tick points .parenClose
               Parser.Internal.call (Traits.Handler.handleAttribute keyword
-                (some (.list (.new (#[] ++ handled.toArray))))))
+                (some (.sExprs (.new (#[] ++ handled.toArray))))))
           fun handled => pure (.more { mode := .start, attributes := attributes.push handled }) :=
       fun _ => Runs.token (by simp [Parser.Category.Attribute.Internal.attributeStep.eq_def])
     rw [show Parser.Internal.Input.parenOpen :: (inner ++ [.parenClose]) =
@@ -186,7 +186,7 @@ parser handles it with the traversal's effects, and is then where that token lea
 theorem attributeThen_runs (hA : TermAgrees h) (value : Option Tree.AttributeValue)
     (hvalid : ∀ v, value = some v → v.Valid (Bridge.version version))
     {tokens : List Parser.Internal.Input} (hs : Stands tokens (valueTokens value))
-        (keyword : KeywordView)
+        (keyword : Keyword)
     {next : Parser.Internal.Input} {following : BSmtLibSpec.Grammar.SyntaxToken}
     (hnext : FollowsAttribute next following)
     (attributes : Array (Traits.Handler.Attribute H)) :
@@ -236,7 +236,7 @@ those found so far.
 -/
 theorem attributes_runs (hA : TermAgrees h) : (rest : List Tree.Attribute) →
     (∀ attr ∈ rest, attr.Valid (Bridge.version version)) →
-    ∀ (keyword : KeywordView) (value : Option Tree.AttributeValue),
+    ∀ (keyword : Keyword) (value : Option Tree.AttributeValue),
     (∀ v, value = some v → v.Valid (Bridge.version version)) →
     ∀ {valueTokens' restTokens : List Parser.Internal.Input},
         Stands valueTokens' (valueTokens value) →

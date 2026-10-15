@@ -95,10 +95,10 @@ def callUnit (call : String) : HandlerM Unit := do
 
 /-! ## The fields of the calls -/
 
-def symbolField (symbol : Plain.SymbolView) : String :=
+def symbolField (symbol : Plain.Symbol) : String :=
   (if symbol.isQuoted then "q" else "u") ++ hex symbol.asSlice
 
-def constantField : SpecConstant → String
+def constantField : SpecialConstant → String
   | .numeral digits => "N" ++ hex digits.asSlice
   | .decimal text => "D" ++ hex text.asSlice
   | .hexadecimal digits => "X" ++ hex digits.asSlice
@@ -113,8 +113,8 @@ def indexField : Index → String
   | .numeral digits => "n" ++ hex digits.asSlice
   | .symbol symbol => symbolField symbol
 
-def identField (identifier : Identifier) : String :=
-  s!"{symbolField identifier.symbol} {listField indexField identifier.indices}"
+def identField (identifier : Ident) : String :=
+  s!"{symbolField identifier.name} {listField indexField identifier.indices}"
 
 def idField (id : Nat) : String :=
   toString id
@@ -127,50 +127,50 @@ def idsField (ids : Array Nat) : String :=
   listField toString ids
 
 /-- Symbols, each with the number of a value. -/
-def boundField (pairs : Array (Plain.SymbolView × Nat)) : String :=
+def boundField (pairs : Array (Plain.Symbol × Nat)) : String :=
   listField (fun (symbol, id) => s!"{symbolField symbol} {id}") pairs
 
-def symbolsField (symbols : Array Plain.SymbolView) : String :=
+def symbolsField (symbols : Array Plain.Symbol) : String :=
   listField symbolField symbols
 
-def sowField : SymbolOrWildcard → String
+def sowField : SimplePattern → String
   | .symbol symbol => symbolField symbol
   | .wildcard => "_"
 
 def patternField : Pattern → String
-  | .single symbol => s!"p {sowField symbol}"
-  | .constructor constructor arguments =>
+  | .simple symbol => s!"p {sowField symbol}"
+  | .application constructor arguments =>
     s!"c {symbolField constructor} {listField sowField arguments}"
 
 /-! The owned values that the category parsers give, written as their views are. -/
 
-def symbolBufField (symbol : Plain.Symbol) : String :=
+def symbolBufField (symbol : Plain.SymbolBuf) : String :=
   symbolField symbol.asView
 
 def indexBufField : Nodes.IndexBuf → String
   | .numeral digits => "n" ++ hex digits.asSlice
   | .symbol symbol => symbolBufField symbol
 
-def identBufField (identifier : Nodes.IdentifierBuf) : String :=
-  s!"{symbolBufField identifier.symbol} {listField indexBufField identifier.indices}"
+def identBufField (identifier : Nodes.IdentBuf) : String :=
+  s!"{symbolBufField identifier.name} {listField indexBufField identifier.indices}"
 
-def sowBufField : Nodes.SymbolOrWildcardBuf → String
+def sowBufField : Nodes.SimplePatternBuf → String
   | .symbol symbol => symbolBufField symbol
   | .wildcard => "_"
 
 def patternBufField : Nodes.PatternBuf → String
-  | .single symbol => s!"p {sowBufField symbol}"
-  | .constructor constructor arguments =>
+  | .simple symbol => s!"p {sowBufField symbol}"
+  | .application constructor arguments =>
     s!"c {symbolBufField constructor} {listField sowBufField arguments}"
 
-def quantifierField : Quantifier → String
+def quantifierField : QuantifierKind → String
   | .«forall» => "forall"
   | .«exists» => "exists"
 
-def signatureField (signature : Signature Nat) : String :=
+def signatureField (signature : Multiple.FunctionSignature Nat) : String :=
   s!"{symbolField signature.name} {boundField signature.params} {signature.resultSort}"
 
-def constructorsField (constructors : ConstructorsView Nat) : String :=
+def constructorsField (constructors : Constructors Nat) : String :=
   listField (fun (constructor, selectors) =>
     s!"{symbolField constructor} {boundField selectors.toArray}") constructors.toArray
 
@@ -191,24 +191,24 @@ instance : Handler Remote IO where
   handleSort identifier sorts :=
     callValue s!"handle_sort {identField identifier} {idsField sorts.asSlice}"
   handleTerm
-    | .constant constant => callValue s!"handle_term c {constantField constant}"
-    | .identifier identifier sort =>
+    | .specialConstant constant => callValue s!"handle_term c {constantField constant}"
+    | .qualifiedIdent identifier sort =>
       callValue s!"handle_term i {identField identifier} {optIdField sort}"
     | .application function sort arguments =>
       callValue s!"handle_term a {identField function} {optIdField sort} \
         {idsField arguments.asSlice}"
   handleSExpr
-    | .constant constant => callValue s!"handle_s_expr c {constantField constant}"
+    | .specialConstant constant => callValue s!"handle_s_expr c {constantField constant}"
     | .symbol symbol => callValue s!"handle_s_expr s {symbolField symbol}"
     | .reserved word => callValue s!"handle_s_expr r {word.asStr}"
     | .keyword name => callValue s!"handle_s_expr k x{hex name.asSlice}"
-    | .list items => callValue s!"handle_s_expr l {idsField items.asSlice}"
+    | .sExprs items => callValue s!"handle_s_expr l {idsField items.asSlice}"
   handleAttribute name value :=
     let value := match value with
       | none => "-"
-      | some (.constant constant) => s!"c {constantField constant}"
+      | some (.specialConstant constant) => s!"c {constantField constant}"
       | some (.symbol symbol) => s!"s {symbolField symbol}"
-      | some (.list items) => s!"l {idsField items.asSlice}"
+      | some (.sExprs items) => s!"l {idsField items.asSlice}"
     callValue s!"handle_attribute x{hex name.asSlice} {value}"
   annotateTerm term attributes := callValue s!"annotate_term {term} {idsField attributes.asSlice}"
   startLet bindings := callValue s!"start_let {boundField bindings.toArray}"
@@ -801,7 +801,7 @@ def withSimple (k : WithParser) : String → IO Unit
   | "close-paren" => k CloseParenParser.new fun () => "-"
   | "ident" => k IdentParser.new identBufField
   | "qualified-ident" => k (QualifiedIdentParser.new : QualifiedIdentParser Remote)
-      fun qualified => s!"{identBufField qualified.identifier} {optIdField qualified.sort}"
+      fun qualified => s!"{identBufField qualified.ident} {optIdField qualified.sort}"
   | "closed-attribute" => k (ClosedAttributeParser.new : ClosedAttributeParser Remote) idField
   | "closed-multiple-attribute" =>
     k (ClosedMultipleAttributeParser.new : ClosedMultipleAttributeParser Remote) idsField

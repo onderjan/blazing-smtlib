@@ -341,7 +341,7 @@ def commandFin (state : CommandState Nat Nat Nat Nat Nat Empty) (outcome : Comma
     commandRem (Bridge.version version) follows state (u ++ w)
 
 /-- The recording handler rejects every non-standard command at its name. -/
-private theorem commandStep_symbol (version : Token.Version) (symbol : Plain.SymbolView) :
+private theorem commandStep_symbol (version : Token.Version) (symbol : Plain.Symbol) :
     commandStep (H := List Event) version .opened (.symbol symbol) = throw (.handler ()) :=
   rfl
 

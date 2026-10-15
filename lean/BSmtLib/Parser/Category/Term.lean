@@ -25,7 +25,7 @@ loop). Rust keeps a pending term beside its state; here the modes that wait for 
 
 namespace BSmtLib.Parser.Category.Term
 
-open BSmtLib.Plain (SymbolView)
+open BSmtLib.Plain (Symbol)
 open BSmtLib.Nodes BSmtLib.Parser.Category.Attribute BSmtLib.Parser.Category.Combinator
 open BSmtLib.Parser.Category.Attribute.Internal
 open BSmtLib.Parser.Category.Combinator.Internal
@@ -41,7 +41,7 @@ namespace Internal
 
 /-- A binder of sorted variables. -/
 inductive SortedBinder where
-  | quantifier (quantifier : Quantifier)
+  | quantifier (quantifier : QuantifierKind)
   | lambda
 
 /-- What a binder is. -/
@@ -52,10 +52,10 @@ inductive BinderKind where
 /-- A construct whose inner term is being read. -/
 inductive TermLevel (HandledSort HandledTerm Scope : Type) where
   /-- An application, reading its arguments. -/
-  | application (function : Identifier) (sort : Option HandledSort)
+  | application (function : Ident) (sort : Option HandledSort)
       (arguments : Array HandledTerm)
   /-- A `let`, reading the term of the binding of the symbol. -/
-  | letBinding (bindings : Array (SymbolView × HandledTerm)) (symbol : SymbolView)
+  | letBinding (bindings : Array (Symbol × HandledTerm)) (symbol : Symbol)
   /-- A binder, reading its body. -/
   | binder (kind : BinderKind) (scope : Scope)
   /-- An annotation, reading the annotated term. -/
@@ -79,14 +79,14 @@ inductive TermMode (HandledSExpr HandledAttribute HandledSort HandledTerm Scope 
   /-- After `(` `let`, before the `(` of the bindings. -/
   | letBindingsOpen
   /-- Between the bindings: `(` opens the next, `)` ends them. -/
-  | letBindingOpen (bindings : Array (SymbolView × HandledTerm))
+  | letBindingOpen (bindings : Array (Symbol × HandledTerm))
   /-- After the `(` of a binding, before its symbol. -/
-  | letBindingSymbol (bindings : Array (SymbolView × HandledTerm))
+  | letBindingSymbol (bindings : Array (Symbol × HandledTerm))
   /-- After the term of a binding, before its `)`. -/
-  | letBindingClose (bindings : Array (SymbolView × HandledTerm))
+  | letBindingClose (bindings : Array (Symbol × HandledTerm))
   /-- Reading the sorted variables of a binder. -/
   | sortedVars (binder : SortedBinder)
-      (state : ListState (SortedVarState HandledSort) (SymbolView × HandledSort))
+      (state : ListState (SortedVarState HandledSort) (Symbol × HandledSort))
   /-- After the body of a binder, before its `)`. -/
   | binderClose (kind : BinderKind) (scope : Scope) (body : HandledTerm)
   /-- After the scrutinee, before the `(` of the cases. -/
@@ -152,12 +152,12 @@ def termComplete (levels : List (TermLevelOf H)) (term : Handler.Term H) :
     return .more { mode := .matchCaseClose scrutinee cases pattern scope term, levels := outer }
 
 /-- The start of a binder of sorted variables, with all its variables. -/
-def startBinder (binder : SortedBinder) (variables : Array (SymbolView × Handler.«Sort» H)) :
+def startBinder (binder : SortedBinder) (variables : Array (Symbol × Handler.«Sort» H)) :
     PM H (Handler.Scope H) :=
   match binder with
   | .quantifier quantifier => call (Handler.startQuantifier quantifier
-    (Multiple.NamedView.Internal.new variables))
-  | .lambda => call (Handler.startLambda (Multiple.NamedView.Internal.new variables))
+    (Multiple.Named.Internal.new variables))
+  | .lambda => call (Handler.startLambda (Multiple.Named.Internal.new variables))
 
 /-- The end of a binder, with its scope value and its body. -/
 def endBinder (kind : BinderKind) (scope : Handler.Scope H) (body : Handler.Term H) :
@@ -212,10 +212,10 @@ def termStep (version : Token.Version) (self : TermStateOf H) (token : Internal.
         termComplete outer term
       | _ => syntaxError .expectedTerm
     | .symbol symbol =>
-      let term ← call (Handler.handleTerm (.identifier ⟨symbol, #[]⟩ none))
+      let term ← call (Handler.handleTerm (.qualifiedIdent ⟨symbol, #[]⟩ none))
       termComplete self.levels term
     | .constant constant =>
-      let term ← call (Handler.handleTerm (.constant constant))
+      let term ← call (Handler.handleTerm (.specialConstant constant))
       termComplete self.levels term
     | _ => syntaxError .expectedTerm
   | .opened => termOpened self token
@@ -223,7 +223,7 @@ def termStep (version : Token.Version) (self : TermStateOf H) (token : Internal.
     match ← qualIdentStep version state token with
     | .more state => into (.qualIdent state)
     | .done (identifier, sort) =>
-      let term ← call (Handler.handleTerm (.identifier identifier sort))
+      let term ← call (Handler.handleTerm (.qualifiedIdent identifier sort))
       termComplete self.levels term
   | .applicationHead state =>
     match ← qualIdentStep version state token with
@@ -238,7 +238,7 @@ def termStep (version : Token.Version) (self : TermStateOf H) (token : Internal.
     | .parenOpen => into (.letBindingSymbol bindings)
     | .parenClose =>
       if bindings.isEmpty then syntaxError .emptyLetBindings
-      let scope ← call (Handler.startLet (Multiple.NamedView.Internal.new bindings))
+      let scope ← call (Handler.startLet (Multiple.Named.Internal.new bindings))
       return .more { mode := .start, levels := .binder .let scope :: self.levels }
     | _ => syntaxError (.expectedToken #[.parenOpen, .parenClose])
   | .letBindingSymbol bindings =>

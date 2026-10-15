@@ -21,9 +21,9 @@ library is the modules below `BSmtLib` outside `BSmtLib.Facts`.
 
 The Lean name of a Rust item follows from its path: the modules become the namespaces, each
 written in upper camel case (`parser::category::term` is `BSmtLib.Parser.Category.Term`); a type
-loses the prefix `Smt`, an owned type also its suffix `Buf`, and a view whose owned type exists
-gets the suffix `View` (`plain::SmtSymbolBuf` is `BSmtLib.Plain.Symbol`, `plain::SmtSymbol` is
-`BSmtLib.Plain.SymbolView`); a type named like its module is the module's own name
+loses the prefix `Smt`, so that a view takes the plain name and an owned type keeps its suffix `Buf`
+(`plain::SmtSymbol` is `BSmtLib.Plain.Symbol`, `plain::SmtSymbolBuf` is `BSmtLib.Plain.SymbolBuf`);
+a type named like its module is the module's own name
 (`lexer::SmtLexer` is `BSmtLib.Lexer`); a function or method is written in lower camel case, with
 `?` for a result that may be absent (`from_decimal_opt` is `fromDecimal?`, and `peek` may also be
 `peek?`).
@@ -89,10 +89,8 @@ def memberNames (s : String) : List String :=
   -- an associated type keeps its name
   else if isTypeName s then [s]
   else
-    -- the words of the Rust types: an owned buffer is the Lean type without `Buf`, and a
-    -- vector of bytes is a `ByteArray`
+    -- the words of the Rust types: a vector of bytes is a `ByteArray`
     let ws := (words s).flatMap fun w => if w == "vec" then ["byte", "array"] else [w]
-    let ws := if ws.getLast? == some "buf" then ws.dropLast else ws
     if ws.getLast? == some "opt" then [camel ("_".intercalate ws.dropLast) ++ "?"]
     else
       let c := camel ("_".intercalate ws)
@@ -104,15 +102,12 @@ def memberNames (s : String) : List String :=
         ws.tail)] else []
       [c, c ++ "?"] ++ changed ++ moved
 
-/-- The Lean name of the Rust type `s` of the module `module`, given the Rust items `all`. -/
-def typeName (all : Std.HashSet String) (module : String) (s : String) : String :=
-  let stripped := if s.startsWith "Smt" then (s.drop 3).toString else s
-  if stripped.endsWith "Buf" then (stripped.dropEnd 3).toString
-  else if s.startsWith "Smt" && all.contains s!"{module}::{s}Buf" then stripped ++ "View"
-  else stripped
+/-- The Lean name of the Rust type `s`: the type without the prefix `Smt`. -/
+def typeName (s : String) : String :=
+  if s.startsWith "Smt" then (s.drop 3).toString else s
 
-/-- The Lean names of the Rust item at `path`, given the Rust items `all`. -/
-def leanNames (all : Std.HashSet String) (path : String) : List Name := Id.run do
+/-- The Lean names of the Rust item at `path`. -/
+def leanNames (path : String) : List Name := Id.run do
   let parts := path.splitOn "::"
   let modules := parts.takeWhile (!isTypeName ·)
   let rest := parts.drop modules.length
@@ -121,13 +116,12 @@ def leanNames (all : Std.HashSet String) (path : String) : List Name := Id.run d
     if rest.isEmpty && !modules.isEmpty then (modules.dropLast, [modules.getLast!])
     else (modules, rest)
   let moduleName := modules.foldl (fun n m => n.str (pascal m)) `BSmtLib
-  let rustModule := "::".intercalate modules
   match rest with
   | [member] =>
-    if isTypeName member then [typeAt moduleName (typeName all rustModule member)]
+    if isTypeName member then [typeAt moduleName (typeName member)]
     else (memberNames member).map moduleName.str
   | [type, member] =>
-    let t := typeAt moduleName (typeName all rustModule type)
+    let t := typeAt moduleName (typeName type)
     (memberNames member).map t.str
   | _ => []
 where
@@ -138,10 +132,9 @@ where
 
 /-- The Lean names of all the Rust crate's public items. -/
 def counterparts : NameSet := Id.run do
-  let all : Std.HashSet String := RustItems.items.foldl (·.insert ·) {}
   let mut out : NameSet := {}
   for path in RustItems.items do
-    for n in leanNames all path do
+    for n in leanNames path do
       out := out.insert n
   return out
 
@@ -199,7 +192,7 @@ def stdClasses : List (String × Name) :=
 of a trait of the crate, the class of `stdClasses` for one of the standard library; none if the
 trait has no counterpart. -/
 def classNames (all : Std.HashSet String) (trait : String) : List Name :=
-  if all.contains trait then leanNames all trait
+  if all.contains trait then leanNames trait
   else ((stdClasses.lookup trait).map ([·])).getD []
 
 /-- The conclusion of a type: what is left of it after its binders. -/
@@ -295,7 +288,7 @@ def elabCounterparts : CommandElab := fun _ => do
   for path in RustItems.items do
     if implOnly.contains path then continue
     items := items + 1
-    unless (leanNames all path).any present do
+    unless (leanNames path).any present do
       failing := failing.push (path, "has no Lean counterpart")
   let pairs := instancePairs env
   let mut impls := 0
@@ -303,12 +296,12 @@ def elabCounterparts : CommandElab := fun _ => do
     let classes := classNames all trait
     if classes.isEmpty then continue
     impls := impls + 1
-    let types := leanNames all type
+    let types := leanNames type
     unless classes.any (fun c => types.any fun t => pairs.contains (c, t)) do
       failing := failing.push (implKey type trait,
         s!"has no instance of {classes} for {types}")
   for type in RustItems.privateFields do
-    for n in leanNames all type do
+    for n in leanNames type do
       let some (.inductInfo info) := env.find? n | continue
       unless info.ctors.all isPrivateName do
         failing := failing.push (fieldsKey type,

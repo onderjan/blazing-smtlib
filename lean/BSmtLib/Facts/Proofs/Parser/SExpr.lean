@@ -63,7 +63,7 @@ variable {version : Token.Version}
 /-- An atom of an s-expression: the parser handles it at its token, then completes it. -/
 theorem sExprStep_atom (levels : SExprState (Traits.Handler.SExpr H))
     (token : Parser.Internal.Input)
-    (node : Nodes.SExprNode (Traits.Handler.SExpr H))
+    (node : Nodes.SExpr (Traits.Handler.SExpr H))
     (hstep : sExprStep version levels token =
       Parser.Internal.call (Traits.Handler.handleSExpr node) >>= fun r => pure (sExprComplete levels r)) :
     Runs points (sExprStep version) levels [token]
@@ -86,7 +86,7 @@ theorem sExpr_runs (hA : TermAgrees h) : (item : Tree.SExpr) → item.Valid (Bri
       fun r => pure (sExprComplete levels r)
   | .constant constant, _, _, hs, levels => by
     obtain ⟨constant', rfl, rfl⟩ := Stands.constant hs
-    refine (sExprStep_atom levels _ (.constant constant') (by simp [sExprStep])).congr ?_ rfl
+    refine (sExprStep_atom levels _ (.specialConstant constant') (by simp [sExprStep])).congr ?_ rfl
     simp [sExpr_constant, adaptRun_take (token := .constant constant')
       (by rfl), hA.handleSExpr, Bridge.sExprNode]
   | .symbol name, _, _, hs, levels => by
@@ -116,7 +116,7 @@ theorem sExpr_runs (hA : TermAgrees h) : (item : Tree.SExpr) → item.Valid (Bri
     have hclose : ∀ items : Array (Traits.Handler.SExpr H),
         Runs points (sExprStep version) (items :: levels) [.parenClose]
           (do tick points .parenClose
-              Parser.Internal.call (Traits.Handler.handleSExpr (.list (.new items))))
+              Parser.Internal.call (Traits.Handler.handleSExpr (.sExprs (.new items))))
           fun r => pure (sExprComplete levels r) :=
       fun items => Runs.token (by simp [sExprStep])
     refine (Runs.append hopen fun _ =>

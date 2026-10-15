@@ -41,7 +41,7 @@ structure SyntaxCheckerIO where
   commands : IO.Ref Nat
 
 instance : Handler SyntaxCheckerIO IO where
-  Error := Plain.SymbolView
+  Error := Plain.Symbol
   SExpr := Unit
   Attribute := Unit
   «Sort» := Unit
@@ -66,7 +66,7 @@ instance : Handler SyntaxCheckerIO IO where
 
 /-- A command counted. -/
 @[inline]
-def countCommand : ExceptT Plain.SymbolView (StateT SyntaxCheckerIO IO) Unit := do
+def countCommand : ExceptT Plain.Symbol (StateT SyntaxCheckerIO IO) Unit := do
   let h ← get
   (h.commands.modify (· + 1) : IO Unit)
 
@@ -335,18 +335,18 @@ structure Rec where
 def showBytes (slice : ByteSlice) : String :=
   slice.toByteArray.foldl (init := "") fun s b => s.push (Char.ofNat b.toNat)
 
-def showSym (s : Plain.SymbolView) : String :=
+def showSym (s : Plain.Symbol) : String :=
   "|" ++ showBytes s.asSlice ++ (if s.isQuoted then "|q" else "|")
 
 def showIndex : Index → String
   | .numeral d => "#" ++ showBytes d.asSlice
   | .symbol s => showSym s
 
-def showIdent (i : Identifier) : String :=
-  if i.indices.isEmpty then showSym i.symbol
-  else "(_ " ++ showSym i.symbol ++ " " ++ " ".intercalate (i.indices.toList.map showIndex) ++ ")"
+def showIdent (i : Ident) : String :=
+  if i.indices.isEmpty then showSym i.name
+  else "(_ " ++ showSym i.name ++ " " ++ " ".intercalate (i.indices.toList.map showIndex) ++ ")"
 
-def showConst : SpecConstant → String
+def showConst : SpecialConstant → String
   | .numeral d => "num " ++ showBytes d.asSlice
   | .decimal d => "dec " ++ showBytes d.asSlice
   | .hexadecimal d => "hex " ++ showBytes d.asSlice
@@ -357,22 +357,22 @@ def showNats (xs : Array Nat) : String := toString xs.toList
 
 def nat (x : Nat) : String := toString x
 
-def showPairs (xs : Array (Plain.SymbolView × Nat)) : String :=
+def showPairs (xs : Array (Plain.Symbol × Nat)) : String :=
   " ".intercalate (xs.toList.map fun (s, n) => showSym s ++ ":" ++ toString n)
 
-def showSoW : Nodes.SymbolOrWildcard → String
+def showSoW : Nodes.SimplePattern → String
   | .symbol s => showSym s
   | .wildcard => "_"
 
 def showPattern : Pattern → String
-  | .single s => showSoW s
-  | .constructor c args =>
+  | .simple s => showSoW s
+  | .application c args =>
     "(" ++ showSym c ++ " " ++ " ".intercalate (args.toList.map showSoW) ++ ")"
 
-def showSig (s : Signature Nat) : String :=
+def showSig (s : Multiple.FunctionSignature Nat) : String :=
   showSym s.name ++ " (" ++ showPairs s.params ++ ") " ++ toString s.resultSort
 
-def showCons (c : Plain.SymbolView × Multiple.SortedVarsView Nat) : String :=
+def showCons (c : Plain.Symbol × Multiple.SortedVars Nat) : String :=
   showSym c.1 ++ " (" ++ showPairs c.2.toArray ++ ")"
 
 /-- Writes the call down and returns its number, or fails if it is the one to fail at. -/
@@ -398,21 +398,21 @@ instance : Handler Rec IO where
     (r.log.modify (·.push s!"setVersion {repr v}") : IO Unit)
   handleSort i args := recCall s!"sort {showIdent i} {showNats args.asSlice}"
   handleTerm node := recCall (match node with
-    | .constant c => "term " ++ showConst c
-    | .identifier i s => s!"term id {showIdent i} {s.map fun x => nat x}"
+    | .specialConstant c => "term " ++ showConst c
+    | .qualifiedIdent i s => s!"term id {showIdent i} {s.map fun x => nat x}"
     | .application f s args =>
       s!"term app {showIdent f} {s.map fun x => nat x} {showNats args.asSlice}")
   handleSExpr node := recCall (match node with
-    | .constant c => "sexpr " ++ showConst c
+    | .specialConstant c => "sexpr " ++ showConst c
     | .symbol s => "sexpr " ++ showSym s
     | .reserved w => "sexpr reserved " ++ w.asStr
     | .keyword k => "sexpr :" ++ showBytes k.asSlice
-    | .list items => s!"sexpr list {showNats items.asSlice}")
+    | .sExprs items => s!"sexpr list {showNats items.asSlice}")
   handleAttribute k v := recCall (s!"attr :{showBytes k.asSlice} " ++ match v with
     | none => "none"
-    | some (.constant c) => showConst c
+    | some (.specialConstant c) => showConst c
     | some (.symbol s) => showSym s
-    | some (.list items) => showNats items.asSlice)
+    | some (.sExprs items) => showNats items.asSlice)
   annotateTerm t attrs := recCall s!"annotate {nat t} {showNats attrs.asSlice}"
   startLet bs := recCall s!"startLet {showPairs bs.toArray}"
   endLet s t := recCall s!"endLet {nat s} {nat t}"

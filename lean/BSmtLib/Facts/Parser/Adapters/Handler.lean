@@ -49,24 +49,24 @@ abbrev bridgedCall {returns : Returns} (request : Call values returns) :
 instance needs them before it exists, so they cannot be the bridge's functions themselves. -/
 
 /-- The spec's term node for a term node of the parser, with the values of `values`. -/
-def termNodeOf : Nodes.TermNode values.sort values.term → TermNode values
-  | .constant c => .constant (Bridge.constant c)
-  | .identifier i s => .identifier (Bridge.identifier i) s
+def termNodeOf : Nodes.Term values.sort values.term → TermNode values
+  | .specialConstant c => .constant (Bridge.constant c)
+  | .qualifiedIdent i s => .identifier (Bridge.identifier i) s
   | .application i s args => .application (Bridge.identifier i) s args.asSlice.toList
 
 /-- The spec's S-expression node for one of the parser, with the values of `values`. -/
-def sExprNodeOf : Nodes.SExprNode values.sExpr → SExprNode values
-  | .constant c => .constant (Bridge.constant c)
+def sExprNodeOf : Nodes.SExpr values.sExpr → SExprNode values
+  | .specialConstant c => .constant (Bridge.constant c)
   | .symbol s => .symbol (Bridge.symbol s)
   | .reserved w => .reserved (Bridge.reserved w)
   | .keyword k => .keyword (Bridge.keyword k)
-  | .list items => .list items.asSlice.toList
+  | .sExprs items => .list items.asSlice.toList
 
 /-- The spec's attribute value node for one of the parser, with the values of `values`. -/
-def attributeValueOf : Nodes.AttributeValueNode values.sExpr → AttributeValueNode values
-  | .constant c => .constant (Bridge.constant c)
+def attributeValueOf : Nodes.AttributeValue values.sExpr → AttributeValueNode values
+  | .specialConstant c => .constant (Bridge.constant c)
   | .symbol s => .symbol (Bridge.symbol s)
-  | .list items => .list items.asSlice.toList
+  | .sExprs items => .list items.asSlice.toList
 
 /-- The bridged handler's values are those of `h₀`; it answers each call of terms, and the
 version, by turning the values into the spec's and asking `h₀`. -/

@@ -26,8 +26,8 @@ open BSmtLib.Parser.Command.Internal
 open BSmtLib.Parser.Command.Internal.Definition BSmtLib.Parser.Script
 open BSmtLib.Parser.Script.ScriptParser.Internal renaming mk → scriptParser,
   command → commandOf, declarations → declarationsOf
-open BSmtLib.Plain (SymbolView NumeralView DecimalView HexDigitsView BinDigitsView
-  StringContentView)
+open BSmtLib.Plain (Symbol Numeral Decimal HexDigits BinDigits
+  StringContent)
 open BSmtLib.Token (BatchTag BatchCursor TokenCategory Version VersionPosture)
 
 /-- The cause of a failed parse with the handler. -/
@@ -99,13 +99,13 @@ def reservedAt? {batch : BatchTag} (version : Version) (next : BatchCursor batch
 
 /-- The constant of a token of a constant's category. -/
 @[inline]
-def constantOf (category : TokenCategory) (content : ByteSlice) : SpecConstant :=
+def constantOf (category : TokenCategory) (content : ByteSlice) : SpecialConstant :=
   match category with
-  | .numeral => .numeral (NumeralView.Internal.newUnchecked content)
-  | .decimal => .decimal (DecimalView.Internal.newUnchecked content)
-  | .hexadecimal => .hexadecimal (HexDigitsView.Internal.newUnchecked content)
-  | .binary => .binary (BinDigitsView.Internal.newUnchecked content)
-  | _ => .string (StringContentView.Internal.newUnchecked content)
+  | .numeral => .numeral (Numeral.Internal.newUnchecked content)
+  | .decimal => .decimal (Decimal.Internal.newUnchecked content)
+  | .hexadecimal => .hexadecimal (HexDigits.Internal.newUnchecked content)
+  | .binary => .binary (BinDigits.Internal.newUnchecked content)
+  | _ => .string (StringContent.Internal.newUnchecked content)
 
 variable [CommandHandler H m]
 

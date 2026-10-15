@@ -143,7 +143,7 @@ def literalRem (state : LiteralState Nat Nat Nat Nat Nat) : Lang :=
 
 theorem literalLang_nonempty : ∃ u, LiteralLang u := ⟨_, ⟨.positive ⟨[], false⟩, trivial, rfl⟩⟩
 
-theorem notLang_symbol {s : Plain.SymbolView} (h : (isNot s) = true) :
+theorem notLang_symbol {s : Plain.Symbol} (h : (isNot s) = true) :
     NotLang [.token (.symbol (Bridge.symbol s))] := by
   refine ⟨Bridge.symbol s, ?_, rfl⟩
   unfold Parser.Command.Internal.Standard.Symbol.isNot at h
@@ -200,7 +200,7 @@ theorem literalStep_advances (version : Token.Version) :
       item_of hitem
       rw [show termStep (H := List Event) version .init (.symbol s) =
         (Parser.Internal.call
-            (Traits.Handler.handleTerm (H := List Event) (.identifier ⟨s, #[]⟩ none)) >>=
+            (Traits.Handler.handleTerm (H := List Event) (.qualifiedIdent ⟨s, #[]⟩ none)) >>=
           fun t => termComplete [] t) from rfl, bind_assoc]
       call_step
       rw [show ∀ t, termComplete (H := List Event) [] t = pure (.done t) from fun _ => rfl,
@@ -229,7 +229,7 @@ theorem literalStep_advances (version : Token.Version) :
       rw [show termStep (H := List Event) version ⟨.start, [.application f none #[]]⟩
           (.symbol s) =
         (Parser.Internal.call
-            (Traits.Handler.handleTerm (H := List Event) (.identifier ⟨s, #[]⟩ none)) >>=
+            (Traits.Handler.handleTerm (H := List Event) (.qualifiedIdent ⟨s, #[]⟩ none)) >>=
           fun t => termComplete [.application f none #[]] t) from rfl, bind_assoc]
       refine Sound.bind (Sound.ofCall fun _ => ⟨_, _, rfl⟩) fun t _ => ?_
       rw [show termComplete (H := List Event) [.application f none #[]] t =
@@ -554,7 +554,7 @@ end
 /-- Every step of the datatype declaration parser advances, whatever it calls at the start of a
 declaration, as long as that never fails. -/
 theorem datatypeStep_advances (version : Token.Version)
-    {start : Array Plain.SymbolView → Quiet.RPM Unit}
+    {start : Array Plain.Symbol → Quiet.RPM Unit}
     (hstart : ∀ parameters, Sound (fun _ => True) Benign (start parameters)) :
     StepsAdvance version (datatypeStep (H := List Event) start version)
       (datatypeRem (Bridge.version version))

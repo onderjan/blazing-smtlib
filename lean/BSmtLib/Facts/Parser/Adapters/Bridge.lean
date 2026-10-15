@@ -38,7 +38,7 @@ namespace Bridge
 def chars (bytes : ByteSlice) : Chars := bytes.toByteArray.toList
 
 /-- The spec's symbol for a symbol of the parser: its characters, quoted or not. -/
-def symbol (s : SymbolView) : Tree.Symbol := ⟨chars s.asSlice, s.isQuoted⟩
+def symbol (s : Symbol) : Tree.Symbol := ⟨chars s.asSlice, s.isQuoted⟩
 
 /-- The spec's index for an index of the parser. -/
 def index : Nodes.Index → Tree.Index
@@ -46,11 +46,11 @@ def index : Nodes.Index → Tree.Index
   | .symbol s => .symbol (symbol s)
 
 /-- The spec's identifier for an identifier of the parser: its symbol and its indices. -/
-def identifier (i : Nodes.Identifier) : Tree.Identifier :=
-  ⟨symbol i.symbol, i.indices.toList.map index⟩
+def identifier (i : Nodes.Ident) : Tree.Identifier :=
+  ⟨symbol i.name, i.indices.toList.map index⟩
 
 /-- The spec's constant for a constant of the parser, of the same kind and characters. -/
-def constant : Nodes.SpecConstant → Tree.SpecConstant
+def constant : Nodes.SpecialConstant → Tree.SpecConstant
   | .numeral d => .numeral (chars d.asSlice)
   | .decimal d => .decimal (chars d.asSlice)
   | .hexadecimal d => .hexadecimal (chars d.asSlice)
@@ -58,23 +58,23 @@ def constant : Nodes.SpecConstant → Tree.SpecConstant
   | .string c => .string (chars c.asSlice)
 
 /-- The characters of a keyword. -/
-def keyword (k : KeywordView) : Chars := chars k.asSlice
+def keyword (k : Keyword) : Chars := chars k.asSlice
 
 /-- The characters the spec spells a reserved word with. -/
 def reserved (w : Token.Reserved) : Chars := BSmtLibSpec.Regex.chars w.asStr
 
 /-- The spec's symbol or wildcard for the parser's. -/
-def symbolOrWildcard : Nodes.SymbolOrWildcard → Tree.SymbolOrWildcard
+def symbolOrWildcard : Nodes.SimplePattern → Tree.SymbolOrWildcard
   | .symbol s => .symbol (symbol s)
   | .wildcard => .wildcard
 
 /-- The spec's pattern for a pattern of the parser. -/
 def pattern : Nodes.Pattern → Tree.Pattern
-  | .single s => .single (symbolOrWildcard s)
-  | .constructor c args => .constructor (symbol c) (args.toList.map symbolOrWildcard)
+  | .simple s => .single (symbolOrWildcard s)
+  | .application c args => .constructor (symbol c) (args.toList.map symbolOrWildcard)
 
 /-- The spec's quantifier for a quantifier of the parser. -/
-def quantifier : Nodes.Quantifier → Tree.Quantifier
+def quantifier : Nodes.QuantifierKind → Tree.Quantifier
   | .forall => .forall
   | .exists => .exists
 
@@ -86,7 +86,7 @@ def version : Token.Version → BSmtLibSpec.Lexicon.Version
   | .v2_7 => .v2_7
 
 /-- The pairs with their symbols turned into the spec's, as a list. -/
-def pairs {α : Type} (items : Array (SymbolView × α)) : List (Tree.Symbol × α) :=
+def pairs {α : Type} (items : Array (Symbol × α)) : List (Tree.Symbol × α) :=
   items.toList.map fun (s, a) => (symbol s, a)
 
 /-- What a token as the parser takes it stands for in the spec: none for whitespace and
@@ -120,33 +120,34 @@ abbrev valuesOf (H : Type) {m : Type → Type} [Traits.Handler H m] : Values :=
 namespace Bridge
 
 /-- The spec's term node for a term node of the parser, with the handler's values. -/
-def termNode : Nodes.TermNode (Traits.Handler.«Sort» H) (Traits.Handler.Term H) →
+def termNode : Nodes.Term (Traits.Handler.«Sort» H) (Traits.Handler.Term H) →
     TermNode (valuesOf H)
-  | .constant c => .constant (constant c)
-  | .identifier i s => .identifier (identifier i) s
+  | .specialConstant c => .constant (constant c)
+  | .qualifiedIdent i s => .identifier (identifier i) s
   | .application i s args => .application (identifier i) s args.asSlice.toList
 
 /-- The spec's S-expression node for one of the parser, with the handler's values. -/
-def sExprNode : Nodes.SExprNode (Traits.Handler.SExpr H) → SExprNode (valuesOf H)
-  | .constant c => .constant (constant c)
+def sExprNode : Nodes.SExpr (Traits.Handler.SExpr H) → SExprNode (valuesOf H)
+  | .specialConstant c => .constant (constant c)
   | .symbol s => .symbol (symbol s)
   | .reserved w => .reserved (reserved w)
   | .keyword k => .keyword (keyword k)
-  | .list items => .list items.asSlice.toList
+  | .sExprs items => .list items.asSlice.toList
 
 /-- The spec's attribute value node for one of the parser, with the handler's values. -/
-def attributeValue : Nodes.AttributeValueNode (Traits.Handler.SExpr H) →
+def attributeValue : Nodes.AttributeValue (Traits.Handler.SExpr H) →
     AttributeValueNode (valuesOf H)
-  | .constant c => .constant (constant c)
+  | .specialConstant c => .constant (constant c)
   | .symbol s => .symbol (symbol s)
-  | .list items => .list items.asSlice.toList
+  | .sExprs items => .list items.asSlice.toList
 
 /-- The spec's signature for a signature of the parser, with the handler's sorts. -/
-def signature (sig : Nodes.Signature (Traits.Handler.«Sort» H)) : Signature (valuesOf H) :=
+def signature (sig : Multiple.FunctionSignature (Traits.Handler.«Sort» H)) :
+    Signature (valuesOf H) :=
   ⟨symbol sig.name, pairs sig.params, sig.resultSort⟩
 
 /-- The spec's constructor for a constructor of the parser, with the handler's sorts. -/
-def constructor (c : Plain.SymbolView × Multiple.SortedVarsView (Traits.Handler.«Sort» H)) :
+def constructor (c : Plain.Symbol × Multiple.SortedVars (Traits.Handler.«Sort» H)) :
     Constructor (valuesOf H) :=
   ⟨symbol c.1, pairs c.2.toArray⟩
 

@@ -47,13 +47,13 @@ open BSmtLib.Parser.Command.Internal
   unfold ByteSlice.beq
   rw [toByteArray_canonSlice]
 
-@[canon_simps] theorem isNot_canonSymbol (s : Plain.SymbolView) :
+@[canon_simps] theorem isNot_canonSymbol (s : Plain.Symbol) :
     Standard.Symbol.isNot (canonSymbol s) = Standard.Symbol.isNot s := by
   cases s
   simp only [Standard.Symbol.isNot, canon_simps]
 
-@[canon_simps] theorem isVersionKeyword_canon (k : BSmtLib.Plain.KeywordView) :
-    isVersionKeyword (BSmtLib.Plain.KeywordView.Internal.newUnchecked (canonSlice k.asSlice)) =
+@[canon_simps] theorem isVersionKeyword_canon (k : BSmtLib.Plain.Keyword) :
+    isVersionKeyword (BSmtLib.Plain.Keyword.Internal.newUnchecked (canonSlice k.asSlice)) =
       isVersionKeyword k := by
   simp only [isVersionKeyword, canon_simps]
 
@@ -83,7 +83,7 @@ theorem constructorStep_canon {version : Token.Version} {state state' : Construc
       (constructorStep version state' token') := by
   subst hs ht; unfold constructorStep; canon_step []
 
-theorem datatypeStep_canon {start start' : Array Plain.SymbolView → RPM Unit}
+theorem datatypeStep_canon {start start' : Array Plain.Symbol → RPM Unit}
     (hstart : ∀ ps ps', ps' = canon ps → CSim (start ps) (start' ps'))
     {version : Token.Version} {state state' : DatatypeState RSort} {token : Internal.Input}
     (hs : state' = canon state) (ht : token' = canon token) :
@@ -118,7 +118,7 @@ theorem bodiesStep_canon {count : Nat} {version : Token.Version}
   subst hs ht; unfold bodiesStep; canon_step []
 
 set_option maxHeartbeats 2000000 in
-theorem bodiesArrive_canon {signatures signatures' : Array (Signature RSort)}
+theorem bodiesArrive_canon {signatures signatures' : Array (Multiple.FunctionSignature RSort)}
     {state state' : ListState (TermStateOf (List Event)) Unit} {token : Internal.Input}
     (hg : signatures' = canon signatures) (hs : state' = canon state)
     (ht : token' = canon token) :

@@ -162,7 +162,7 @@ theorem setInfo_payload_declaration (decimal : BSmtLibSpec.Regex.Chars)
         (.value (some (Bridge.libVersion declared))) { mode := .start, attributes := #[handled] })
       (Runs.tokenA (arrival := Parser.Command.Internal.Standard.payloadArrive)
       (program := Parser.Internal.call (Traits.Handler.handleAttribute keyword
-        (some (.constant (.decimal text))))) (by
+        (some (.specialConstant (.decimal text))))) (by
         simp [payloadStep, Declaration.next, hversion, attributeStep])) fun handled =>
       Runs.tokenA (arrival := Parser.Command.Internal.Standard.payloadArrive)
           (program := Parser.Internal.call (Traits.CommandHandler.commandSetInfo handled))

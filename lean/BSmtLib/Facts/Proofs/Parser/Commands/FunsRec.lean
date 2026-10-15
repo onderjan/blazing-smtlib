@@ -22,6 +22,7 @@ first token's arrival (`term_runs_first_init`).
 
 namespace BSmtLib.Facts.Proofs.Parser.Commands.FunsRec
 
+open BSmtLib.Multiple (FunctionSignature)
 open BSmtLibSpec.Grammar
 open BSmtLib.Parser.Internal (PM)
 open BSmtLib.Parser.Command.Internal.Standard (Payload FinalCall payloadStep finalCall)
@@ -133,9 +134,9 @@ theorem bodiesStep_close (count found : Nat) :
 
 omit [LawfulMonad m] in
 /-- Between bodies, a token other than `)` starts the body that is due, with its signature. -/
-theorem bodiesArrive_between (signatures : Array (Nodes.Signature (Traits.Handler.«Sort» H)))
+theorem bodiesArrive_between (signatures : Array (FunctionSignature (Traits.Handler.«Sort» H)))
     (found : Nat) {token : Parser.Internal.Input} (htoken : token ≠ .parenClose)
-    {signature : Nodes.Signature (Traits.Handler.«Sort» H)}
+    {signature : FunctionSignature (Traits.Handler.«Sort» H)}
     (hsignature : signatures[found]? = some signature) :
     bodiesArrive signatures (bodiesBetween found) token =
       Parser.Internal.call (Traits.CommandHandler.startRecursiveBody signature) := by
@@ -144,7 +145,7 @@ theorem bodiesArrive_between (signatures : Array (Nodes.Signature (Traits.Handle
 
 /-- The body parser reads a body, its start due at its first token's arrival: the term, then
 its end. -/
-theorem body_runs (hA : Agrees h) (signature : Nodes.Signature (Traits.Handler.«Sort» H))
+theorem body_runs (hA : Agrees h) (signature : FunctionSignature (Traits.Handler.«Sort» H))
     (body : Tree.Term) (hvalid : body.Valid
         (Bridge.version version)) {tokens : List Parser.Internal.Input}
     (hs : Stands tokens body.tokens) :
@@ -171,7 +172,7 @@ theorem body_runs (hA : Agrees h) (signature : Nodes.Signature (Traits.Handler.�
 /-- The bodies from the `found`-th on, each started at its first token's arrival with the
 signature of its function. -/
 theorem bodies_runs (hA : Agrees h)
-    (signatures : Array (Nodes.Signature (Traits.Handler.«Sort» H))) :
+    (signatures : Array (FunctionSignature (Traits.Handler.«Sort» H))) :
     (bodies : List Tree.Term) → Tree.Term.ValidAll (Bridge.version version) bodies →
     ∀ {tokens : List Parser.Internal.Input}, Stands tokens (bodies.flatMap Tree.Term.tokens) →
     ∀ found, found + bodies.length = signatures.size →
@@ -249,7 +250,7 @@ theorem defineFunsRec_payload (hA : Agrees h) (declarations : List Tree.Function
     (fun signatures => do
       if signatures.isEmpty then Parser.Internal.syntaxError .emptyFunctionSignatures
       Parser.Internal.call (Traits.CommandHandler.startDefineFunsRec
-        (Multiple.FunctionSignaturesView.Internal.new signatures))
+        (Multiple.FunctionSignatures.Internal.new signatures))
       return .more (.defineFunsRecBodies signatures (ListState.paren .init)))
     (by
       intro state token
@@ -260,7 +261,7 @@ theorem defineFunsRec_payload (hA : Agrees h) (declarations : List Tree.Function
       (HasLength.after (HasLength.bind_pure hsignaturesLength _) _)
       (next' := fun found =>
         (Parser.Internal.call (Traits.CommandHandler.startDefineFunsRec
-          (Multiple.FunctionSignaturesView.Internal.new ((found : List (Nodes.Signature
+          (Multiple.FunctionSignatures.Internal.new ((found : List (FunctionSignature
             (Traits.Handler.«Sort» H))).toArray))) >>=
             fun _ => pure found) >>=
         fun found => pure (.more (.defineFunsRecBodies found.toArray (ListState.paren .init))))
@@ -268,7 +269,7 @@ theorem defineFunsRec_payload (hA : Agrees h) (declarations : List Tree.Function
         cases found with
         | nil => exact absurd (List.length_eq_zero_iff.mp hfound.symm) hne
         | cons => simp [Parser.Internal.Step.wrap]))
-  have hbodiesList : ∀ found : List (Nodes.Signature (Traits.Handler.«Sort» H)),
+  have hbodiesList : ∀ found : List (FunctionSignature (Traits.Handler.«Sort» H)),
       found.length = bodies.length →
       Runs points (bodiesStep found.toArray.size version)
         (ListState.paren (TermState.init : Parser.Category.Term.Internal.TermStateOf H))
@@ -292,7 +293,7 @@ theorem defineFunsRec_payload (hA : Agrees h) (declarations : List Tree.Function
           (by rw [bodiesStep_close]; simp)
           (by simp [bodiesArrive, ListState.between])).congr ?_ rfl
     simp
-  have hbodiesPayload : ∀ found : List (Nodes.Signature (Traits.Handler.«Sort» H)),
+  have hbodiesPayload : ∀ found : List (FunctionSignature (Traits.Handler.«Sort» H)),
       found.length = bodies.length →
       PayloadRuns points version (.defineFunsRecBodies found.toArray (ListState.paren .init))
         (.parenOpen :: (bodyInner ++ [.parenClose]))

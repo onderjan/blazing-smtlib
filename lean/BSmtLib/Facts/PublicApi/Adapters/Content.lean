@@ -90,7 +90,7 @@ structure Constructor (S : Type) where
 /-! ## Views replaced by contents -/
 
 /-- The symbol's content. -/
-def ofSymbol (s : Plain.SymbolView) : Symbol := ⟨contentOf s.asSlice, s.isQuoted⟩
+def ofSymbol (s : Plain.Symbol) : Symbol := ⟨contentOf s.asSlice, s.isQuoted⟩
 
 /-- The index's content. -/
 def ofIndex : Nodes.Index → Index
@@ -98,11 +98,11 @@ def ofIndex : Nodes.Index → Index
   | .symbol s => .symbol (ofSymbol s)
 
 /-- The identifier's content. -/
-def ofIdentifier (i : Nodes.Identifier) : Identifier :=
-  ⟨ofSymbol i.symbol, i.indices.toList.map ofIndex⟩
+def ofIdentifier (i : Nodes.Ident) : Identifier :=
+  ⟨ofSymbol i.name, i.indices.toList.map ofIndex⟩
 
 /-- The constant's content. -/
-def ofConstant : Nodes.SpecConstant → Constant
+def ofConstant : Nodes.SpecialConstant → Constant
   | .numeral d => .numeral (contentOf d.asSlice)
   | .decimal d => .decimal (contentOf d.asSlice)
   | .hexadecimal d => .hexadecimal (contentOf d.asSlice)
@@ -110,45 +110,45 @@ def ofConstant : Nodes.SpecConstant → Constant
   | .string c => .string (contentOf c.asSlice)
 
 /-- The symbol or wildcard's content. -/
-def ofSymbolOrWildcard : Nodes.SymbolOrWildcard → SymbolOrWildcard
+def ofSymbolOrWildcard : Nodes.SimplePattern → SymbolOrWildcard
   | .symbol s => .symbol (ofSymbol s)
   | .wildcard => .wildcard
 
 /-- The pattern's content. -/
 def ofPattern : Nodes.Pattern → Pattern
-  | .single s => .single (ofSymbolOrWildcard s)
-  | .constructor c args => .constructor (ofSymbol c) (args.toList.map ofSymbolOrWildcard)
+  | .simple s => .single (ofSymbolOrWildcard s)
+  | .application c args => .constructor (ofSymbol c) (args.toList.map ofSymbolOrWildcard)
 
 /-- The term node's content. -/
-def ofTermNode {S T : Type} : Nodes.TermNode S T → TermNode S T
-  | .constant c => .constant (ofConstant c)
-  | .identifier i s => .identifier (ofIdentifier i) s
+def ofTermNode {S T : Type} : Nodes.Term S T → TermNode S T
+  | .specialConstant c => .constant (ofConstant c)
+  | .qualifiedIdent i s => .identifier (ofIdentifier i) s
   | .application i s args => .application (ofIdentifier i) s args.asSlice.toList
 
 /-- The s-expression node's content. -/
-def ofSExprNode {X : Type} : Nodes.SExprNode X → SExprNode X
-  | .constant c => .constant (ofConstant c)
+def ofSExprNode {X : Type} : Nodes.SExpr X → SExprNode X
+  | .specialConstant c => .constant (ofConstant c)
   | .symbol s => .symbol (ofSymbol s)
   | .reserved w => .reserved w
   | .keyword k => .keyword (contentOf k.asSlice)
-  | .list items => .list items.asSlice.toList
+  | .sExprs items => .list items.asSlice.toList
 
 /-- The attribute value node's content. -/
-def ofAttributeValueNode {X : Type} : Nodes.AttributeValueNode X → AttributeValueNode X
-  | .constant c => .constant (ofConstant c)
+def ofAttributeValueNode {X : Type} : Nodes.AttributeValue X → AttributeValueNode X
+  | .specialConstant c => .constant (ofConstant c)
   | .symbol s => .symbol (ofSymbol s)
-  | .list items => .list items.asSlice.toList
+  | .sExprs items => .list items.asSlice.toList
 
 /-- The pairs with their symbols' contents. -/
-def ofPairs {α : Type} (items : Array (Plain.SymbolView × α)) : List (Symbol × α) :=
+def ofPairs {α : Type} (items : Array (Plain.Symbol × α)) : List (Symbol × α) :=
   items.toList.map fun (s, a) => (ofSymbol s, a)
 
 /-- The signature's content. -/
-def ofSignature {S : Type} (sig : Nodes.Signature S) : Signature S :=
+def ofSignature {S : Type} (sig : Multiple.FunctionSignature S) : Signature S :=
   ⟨ofSymbol sig.name, ofPairs sig.params, sig.resultSort⟩
 
 /-- The constructor's content. -/
-def ofConstructor {S : Type} (c : Plain.SymbolView × Multiple.SortedVarsView S) : Constructor S :=
+def ofConstructor {S : Type} (c : Plain.Symbol × Multiple.SortedVars S) : Constructor S :=
   ⟨ofSymbol c.1, ofPairs c.2.toArray⟩
 
 open Content
@@ -174,9 +174,9 @@ class ContentHandler (C : Type) where
   annotateTerm : Term → List Attribute → ExceptT Error (StateM C) Term
   startLet : List (Content.Symbol × Term) → ExceptT Error (StateM C) Scope
   endLet : Scope → Term → ExceptT Error (StateM C) Term
-  startQuantifier : Nodes.Quantifier → List (Content.Symbol × «Sort») →
+  startQuantifier : Nodes.QuantifierKind → List (Content.Symbol × «Sort») →
     ExceptT Error (StateM C) Scope
-  endQuantifier : Nodes.Quantifier → Scope → Term → ExceptT Error (StateM C) Term
+  endQuantifier : Nodes.QuantifierKind → Scope → Term → ExceptT Error (StateM C) Term
   startLambda : List (Content.Symbol × «Sort») → ExceptT Error (StateM C) Scope
   endLambda : Scope → Term → ExceptT Error (StateM C) Term
   startMatch : Term → ExceptT Error (StateM C) Unit

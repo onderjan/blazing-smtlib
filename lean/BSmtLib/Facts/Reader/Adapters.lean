@@ -78,23 +78,23 @@ def itemOf (handed : Handed) : Parser.Internal.Input :=
   match handed.type with
   | .parenOpen => .parenOpen
   | .parenClose => .parenClose
-  | .numeral => .constant (.numeral (NumeralView.Internal.newUnchecked (bytesOf handed.content)))
-  | .decimal => .constant (.decimal (DecimalView.Internal.newUnchecked (bytesOf handed.content)))
+  | .numeral => .constant (.numeral (Numeral.Internal.newUnchecked (bytesOf handed.content)))
+  | .decimal => .constant (.decimal (Decimal.Internal.newUnchecked (bytesOf handed.content)))
   | .hexadecimal =>
-    .constant (.hexadecimal (HexDigitsView.Internal.newUnchecked (bytesOf handed.content)))
-  | .binary => .constant (.binary (BinDigitsView.Internal.newUnchecked (bytesOf handed.content)))
-  | .string => .constant (.string (StringContentView.Internal.newUnchecked (bytesOf handed.content)))
-  | .keyword => .keyword (KeywordView.Internal.newUnchecked (bytesOf handed.content))
+    .constant (.hexadecimal (HexDigits.Internal.newUnchecked (bytesOf handed.content)))
+  | .binary => .constant (.binary (BinDigits.Internal.newUnchecked (bytesOf handed.content)))
+  | .string => .constant (.string (StringContent.Internal.newUnchecked (bytesOf handed.content)))
+  | .keyword => .keyword (Keyword.Internal.newUnchecked (bytesOf handed.content))
   | .unquotedSymbol =>
     match handed.reserved, decodeReserved handed.content with
     | some _, some word => .reserved word
-    | _, _ => .symbol (SymbolView.Internal.newUnchecked false (bytesOf handed.content))
-  | .quotedSymbol => .symbol (SymbolView.Internal.newUnchecked true (bytesOf handed.content))
+    | _, _ => .symbol (Symbol.Internal.newUnchecked false (bytesOf handed.content))
+  | .quotedSymbol => .symbol (Symbol.Internal.newUnchecked true (bytesOf handed.content))
   -- whitespace and comments are handed over only to a concrete consumer, which the script
   -- consumer is not; they stand for nothing the parser reads, and are given a symbol of their
   -- content only so that every entry has an item
   | .whitespace | .comment =>
-    .symbol (SymbolView.Internal.newUnchecked false (bytesOf handed.content))
+    .symbol (Symbol.Internal.newUnchecked false (bytesOf handed.content))
   | .endOfFile => .endOfInput
 
 /-- The parser's item for a handed token. -/

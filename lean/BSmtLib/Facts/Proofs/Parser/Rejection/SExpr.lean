@@ -124,7 +124,7 @@ theorem sExprStep_advances (version : Token.Version) :
       (sExprRem (Bridge.version version))
       fun state _ => sExprRem (Bridge.version version) state := by
   intro state token item hitem hlex
-  have atom : ∀ (node : Nodes.SExprNode Nat) (x : Received),
+  have atom : ∀ (node : Nodes.SExpr Nat) (x : Received),
       SExprLang (Bridge.version version) [x] →
       Sound (Advances (sExprRem (Bridge.version version))
         (fun state _ => sExprRem (Bridge.version version) state) state x) Benign
@@ -269,7 +269,7 @@ end
 /-- In a list value, the s-expression parser's step, with its result in the attribute parser's
 state. -/
 theorem inside_advances (version : Token.Version) (single need : Bool)
-    (keyword : KeywordView) (items : Array Nat) (sExpr : SExprState Nat) (outside : Bool)
+    (keyword : Keyword) (items : Array Nat) (sExpr : SExprState Nat) (outside : Bool)
     (attributes : Array Nat) {item : Received} (r : Parser.Internal.Step (SExprState Nat) Nat)
     (hr : Advances (sExprRem (Bridge.version version))
       (fun state _ => sExprRem (Bridge.version version) state) sExpr item r) :

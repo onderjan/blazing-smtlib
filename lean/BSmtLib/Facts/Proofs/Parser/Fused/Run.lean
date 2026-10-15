@@ -110,8 +110,8 @@ theorem inputOf_isWord {batch : BatchTag} (version : Token.Version) (next : Batc
 
 /-- A pure outcome of the fused step of a qualified identifier, as the port's step gives it. -/
 def qualToRun {σ ε : Type} :
-    Category.PureOutcome σ Nodes.Identifier →
-      Except (ParseErrorCause ε) (Parser.Internal.Step σ (Nodes.Identifier × Option
+    Category.PureOutcome σ Nodes.Ident →
+      Except (ParseErrorCause ε) (Parser.Internal.Step σ (Nodes.Ident × Option
           (Handler.«Sort» H)))
   | .more state => .ok (.more state)
   | .done identifier => .ok (.done (identifier, none))

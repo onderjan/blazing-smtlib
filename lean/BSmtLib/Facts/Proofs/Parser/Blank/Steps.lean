@@ -77,7 +77,7 @@ theorem IdentState_step_blank {version : Token.Version} {state : IdentState}
   unfold IdentState.step; blank_step []
 
 theorem sortComplete_blank [NoFails H] {levels : List (SortLevel (Handler.«Sort» H))}
-    {head : Identifier}
+    {head : Ident}
     {arguments : Array (Handler.«Sort» H)} {levels' : List (SortLevel Unit)}
     {arguments' : Array Unit} (hl : levels' = blank levels) (ha : arguments' = blank arguments) :
     BSim (sortComplete (H := H) levels head arguments)
@@ -153,8 +153,8 @@ theorem termComplete_blank [NoFails H] {levels : List (TermLevelOf H)} {term : H
   subst hl; unfold termComplete; blank_step []
 
 theorem startBinder_blank [NoFails H] {binder : SortedBinder}
-    {variables : Array (Plain.SymbolView × Handler.«Sort» H)}
-    {variables' : Array (Plain.SymbolView × Unit)}
+    {variables : Array (Plain.Symbol × Handler.«Sort» H)}
+    {variables' : Array (Plain.Symbol × Unit)}
     (hv : variables' = blank variables) :
     BSim (startBinder (H := H) binder variables) (startBinder (H := Shell) binder variables') := by
   subst hv; unfold startBinder; blank_step []

@@ -11,11 +11,9 @@ The containers in which the parser hands several values over at once: the values
 names with their values, the symbols, and the parts of the datatype commands, with the owned
 buffers from which a user builds them.
 -/
-
-/- LEAN: Rust's `multiple.rs`. Its match cases and function signatures hold nodes, and `nodes.rs`
-holds multiple values; Lean's modules cannot import each other, so those two are in the modules
-`BSmtLib.Multiple.MatchCases` and `BSmtLib.Multiple.FunctionSignatures` (with
-`BSmtLib.Multiple.FunctionSignaturesView`), which import `BSmtLib.Nodes`.
+/- LEAN: Rust's `multiple.rs`. Its match cases hold patterns, and `nodes.rs` holds multiple
+values; Lean's modules cannot import each other, so the match cases are in the module
+`BSmtLib.Multiple.MatchCases`, which imports `BSmtLib.Nodes`.
 
 Each container is a structure of one array, which the compiler represents as the array itself,
 so handing one over costs nothing. Lean values are immutable: Rust's in-place access (`get_mut`,
@@ -23,11 +21,11 @@ so handing one over costs nothing. Lean values are immutable: Rust's in-place ac
 value builds a new one. A `for` loop over a container (`ForIn`) is Rust's `iter` and its
 `IntoIterator`, by reference and by value alike; `GetElem` is `Index`; `Repr` is `Debug`; an
 `Inhabited` instance of a buffer is its `Default`. A buffer's methods that change it in Rust return
-the changed buffer, as `Bytes`'s do. -/
+the changed buffer, as `BytesBuf`'s do. -/
 
 namespace BSmtLib
 
-open BSmtLib.Plain (Symbol SymbolView Numeral NumeralView)
+open BSmtLib.Plain (SymbolBuf Symbol NumeralBuf Numeral)
 
 /--
 Multiple values to be handled.
@@ -79,206 +77,199 @@ such as let bindings or sorted variables.
 
 The values can be inspected, and a `for` loop goes through them in order.
 -/
-/- LEAN: Rust's `SmtNamed`, the view of `SmtNamedBuf`; the counterpart rule names a view whose
-owned type exists with the suffix `View`. -/
-structure NamedView (V : Type) where
+structure Named (V : Type) where
   private mk ::
   /-- The names with their values, in order. -/
-  toArray : Array (SymbolView × V)
+  toArray : Array (Symbol × V)
 
 /-- Let bindings to be handled: the names with their terms. -/
-abbrev BindingsView (T : Type) := NamedView T
-
-/-- Sorted variables to be handled: the names with their sorts. -/
-abbrev SortedVarsView (S : Type) := NamedView S
-
-namespace NamedView
-
-/- LEAN: crate-private in Rust; the library builds the view. -/
-@[inline]
-def Internal.new {V : Type} (toArray : Array (SymbolView × V)) : NamedView V := ⟨toArray⟩
-
-@[simp]
-theorem Internal.toArray_new {V : Type} (toArray : Array (SymbolView × V)) :
-    (Internal.new toArray : NamedView V).toArray = toArray :=
-  (rfl)
-
-variable {V : Type}
-
-@[inline]
-def len (self : NamedView V) : Nat := self.toArray.size
-
-@[inline]
-def isEmpty (self : NamedView V) : Bool := self.toArray.isEmpty
-
-@[inline]
-def get? (self : NamedView V) (index : Nat) : Option (SymbolView × V) := self.toArray[index]?
-
-@[no_expose] instance {m : Type → Type} [Monad m] : ForIn m (NamedView V) (SymbolView × V) where
-  forIn self init f := ForIn.forIn self.toArray init f
-
-@[no_expose] instance [Repr V] : Repr (NamedView V) := ⟨fun self p => reprPrec self.toArray p⟩
-
-end NamedView
-
-/-- Owned named values, from which `NamedView` is viewed. -/
-/- LEAN: Rust's `SmtNamedBuf`, named without `Buf` as the counterpart rule names owned types.
-Each name is a view of a copy of its bytes that the buffer made, so the view needs no copy. -/
-structure Named (V : Type) where
-  private ofArray ::
-  private entries : Array (SymbolView × V)
-
-/-- Owned let bindings. -/
 abbrev Bindings (T : Type) := Named T
 
-/-- Owned sorted variables. -/
+/-- Sorted variables to be handled: the names with their sorts. -/
 abbrev SortedVars (S : Type) := Named S
 
 namespace Named
 
+/- LEAN: crate-private in Rust; the library builds the view. -/
+@[inline]
+def Internal.new {V : Type} (toArray : Array (Symbol × V)) : Named V := ⟨toArray⟩
+
+@[simp]
+theorem Internal.toArray_new {V : Type} (toArray : Array (Symbol × V)) :
+    (Internal.new toArray : Named V).toArray = toArray :=
+  (rfl)
+
 variable {V : Type}
 
-def new : Named V := ⟨#[]⟩
+@[inline]
+def len (self : Named V) : Nat := self.toArray.size
 
-def push (self : Named V) (name : SymbolView) (value : V) : Named V :=
-  ⟨self.entries.push (name.intoOwned.asView, value)⟩
+@[inline]
+def isEmpty (self : Named V) : Bool := self.toArray.isEmpty
 
-def clear (_ : Named V) : Named V := new
+@[inline]
+def get? (self : Named V) (index : Nat) : Option (Symbol × V) := self.toArray[index]?
 
-def view (self : Named V) : NamedView V := ⟨self.entries⟩
+@[no_expose] instance {m : Type → Type} [Monad m] : ForIn m (Named V) (Symbol × V) where
+  forIn self init f := ForIn.forIn self.toArray init f
 
-def len (self : Named V) : Nat := self.entries.size
-
-def isEmpty (self : Named V) : Bool := self.entries.isEmpty
-
-@[no_expose] instance : Inhabited (Named V) := ⟨new⟩
+@[no_expose] instance [Repr V] : Repr (Named V) := ⟨fun self p => reprPrec self.toArray p⟩
 
 end Named
+
+/-- Owned named values, from which `Named` is viewed. -/
+/- LEAN: each name is a view of a copy of its bytes that the buffer made, so the view needs no
+copy. -/
+structure NamedBuf (V : Type) where
+  private ofArray ::
+  private entries : Array (Symbol × V)
+
+/-- Owned let bindings. -/
+abbrev BindingsBuf (T : Type) := NamedBuf T
+
+/-- Owned sorted variables. -/
+abbrev SortedVarsBuf (S : Type) := NamedBuf S
+
+namespace NamedBuf
+
+variable {V : Type}
+
+def new : NamedBuf V := ⟨#[]⟩
+
+def push (self : NamedBuf V) (name : Symbol) (value : V) : NamedBuf V :=
+  ⟨self.entries.push (name.intoOwned.asView, value)⟩
+
+def clear (_ : NamedBuf V) : NamedBuf V := new
+
+def view (self : NamedBuf V) : Named V := ⟨self.entries⟩
+
+def len (self : NamedBuf V) : Nat := self.entries.size
+
+def isEmpty (self : NamedBuf V) : Bool := self.entries.isEmpty
+
+@[no_expose] instance : Inhabited (NamedBuf V) := ⟨new⟩
+
+end NamedBuf
 
 /-! ## Symbols -/
 
 /-- Symbols to be handled, such as the parameters of a sort definition. -/
-/- LEAN: Rust's `SmtSymbols`, the view of `SmtSymbolsBuf`, named by the counterpart rule. -/
-structure SymbolsView where
+structure Symbols where
   private mk ::
   /-- The symbols, in order. -/
-  toArray : Array SymbolView
-
-namespace SymbolsView
-
-/- LEAN: crate-private in Rust; the library builds the view. -/
-@[inline]
-def Internal.new (toArray : Array SymbolView) : SymbolsView := ⟨toArray⟩
-
-@[simp]
-theorem Internal.toArray_new (toArray : Array SymbolView) :
-    (Internal.new toArray : SymbolsView).toArray = toArray :=
-  (rfl)
-
-@[inline]
-def len (self : SymbolsView) : Nat := self.toArray.size
-
-@[inline]
-def isEmpty (self : SymbolsView) : Bool := self.toArray.isEmpty
-
-@[inline]
-def get? (self : SymbolsView) (index : Nat) : Option SymbolView := self.toArray[index]?
-
-@[no_expose] instance {m : Type → Type} [Monad m] : ForIn m SymbolsView SymbolView where
-  forIn self init f := ForIn.forIn self.toArray init f
-
-@[no_expose] instance : Repr SymbolsView := ⟨fun self p => reprPrec self.toArray p⟩
-
-end SymbolsView
-
-/-- Owned symbols, from which `SymbolsView` is viewed. -/
-/- LEAN: Rust's `SmtSymbolsBuf`, named by the counterpart rule. -/
-structure Symbols where
-  private ofArray ::
-  private entries : Array SymbolView
+  toArray : Array Symbol
 
 namespace Symbols
 
-def new : Symbols := ⟨#[]⟩
+/- LEAN: crate-private in Rust; the library builds the view. -/
+@[inline]
+def Internal.new (toArray : Array Symbol) : Symbols := ⟨toArray⟩
 
-def push (self : Symbols) (name : SymbolView) : Symbols :=
-  ⟨self.entries.push name.intoOwned.asView⟩
+@[simp]
+theorem Internal.toArray_new (toArray : Array Symbol) :
+    (Internal.new toArray : Symbols).toArray = toArray :=
+  (rfl)
 
-def clear (_ : Symbols) : Symbols := new
+@[inline]
+def len (self : Symbols) : Nat := self.toArray.size
 
-def view (self : Symbols) : SymbolsView := ⟨self.entries⟩
+@[inline]
+def isEmpty (self : Symbols) : Bool := self.toArray.isEmpty
 
-def len (self : Symbols) : Nat := self.entries.size
+@[inline]
+def get? (self : Symbols) (index : Nat) : Option Symbol := self.toArray[index]?
 
-def isEmpty (self : Symbols) : Bool := self.entries.isEmpty
+@[no_expose] instance {m : Type → Type} [Monad m] : ForIn m Symbols Symbol where
+  forIn self init f := ForIn.forIn self.toArray init f
 
-@[no_expose] instance : Inhabited Symbols := ⟨new⟩
+@[no_expose] instance : Repr Symbols := ⟨fun self p => reprPrec self.toArray p⟩
 
 end Symbols
+
+/-- Owned symbols, from which `Symbols` is viewed. -/
+structure SymbolsBuf where
+  private ofArray ::
+  private entries : Array Symbol
+
+namespace SymbolsBuf
+
+def new : SymbolsBuf := ⟨#[]⟩
+
+def push (self : SymbolsBuf) (name : Symbol) : SymbolsBuf :=
+  ⟨self.entries.push name.intoOwned.asView⟩
+
+def clear (_ : SymbolsBuf) : SymbolsBuf := new
+
+def view (self : SymbolsBuf) : Symbols := ⟨self.entries⟩
+
+def len (self : SymbolsBuf) : Nat := self.entries.size
+
+def isEmpty (self : SymbolsBuf) : Bool := self.entries.isEmpty
+
+@[no_expose] instance : Inhabited SymbolsBuf := ⟨new⟩
+
+end SymbolsBuf
 
 /-! ## Sort arities -/
 
 /-- Sort names with their arities to be handled, such as those
 declared by `declare-datatypes`. -/
-/- LEAN: Rust's `SmtSortArities`, the view of `SmtSortAritiesBuf`, named by the counterpart
-rule. -/
-structure SortAritiesView where
+structure SortArities where
   private mk ::
   /-- The names with their arities, in order. -/
-  toArray : Array (SymbolView × NumeralView)
-
-namespace SortAritiesView
-
-/- LEAN: crate-private in Rust; the library builds the view. -/
-@[inline]
-def Internal.new (toArray : Array (SymbolView × NumeralView)) : SortAritiesView := ⟨toArray⟩
-
-@[simp]
-theorem Internal.toArray_new (toArray : Array (SymbolView × NumeralView)) :
-    (Internal.new toArray : SortAritiesView).toArray = toArray :=
-  (rfl)
-
-@[inline]
-def len (self : SortAritiesView) : Nat := self.toArray.size
-
-@[inline]
-def isEmpty (self : SortAritiesView) : Bool := self.toArray.isEmpty
-
-@[inline]
-def get? (self : SortAritiesView) (index : Nat) : Option (SymbolView × NumeralView) :=
-  self.toArray[index]?
-
-@[no_expose] instance {m : Type → Type} [Monad m] : ForIn m SortAritiesView (SymbolView × NumeralView) where
-  forIn self init f := ForIn.forIn self.toArray init f
-
-@[no_expose] instance : Repr SortAritiesView := ⟨fun self p => reprPrec self.toArray p⟩
-
-end SortAritiesView
-
-/-- Owned sort names with their arities, from which `SortAritiesView` is viewed. -/
-/- LEAN: Rust's `SmtSortAritiesBuf`, named by the counterpart rule. -/
-structure SortArities where
-  private ofArray ::
-  private entries : Array (SymbolView × NumeralView)
+  toArray : Array (Symbol × Numeral)
 
 namespace SortArities
 
-def new : SortArities := ⟨#[]⟩
+/- LEAN: crate-private in Rust; the library builds the view. -/
+@[inline]
+def Internal.new (toArray : Array (Symbol × Numeral)) : SortArities := ⟨toArray⟩
 
-def push (self : SortArities) (name : SymbolView) (arity : NumeralView) : SortArities :=
-  ⟨self.entries.push (name.intoOwned.asView, arity.intoOwned.asView)⟩
+@[simp]
+theorem Internal.toArray_new (toArray : Array (Symbol × Numeral)) :
+    (Internal.new toArray : SortArities).toArray = toArray :=
+  (rfl)
 
-def clear (_ : SortArities) : SortArities := new
+@[inline]
+def len (self : SortArities) : Nat := self.toArray.size
 
-def view (self : SortArities) : SortAritiesView := ⟨self.entries⟩
+@[inline]
+def isEmpty (self : SortArities) : Bool := self.toArray.isEmpty
 
-def len (self : SortArities) : Nat := self.entries.size
+@[inline]
+def get? (self : SortArities) (index : Nat) : Option (Symbol × Numeral) :=
+  self.toArray[index]?
 
-def isEmpty (self : SortArities) : Bool := self.entries.isEmpty
+@[no_expose] instance {m : Type → Type} [Monad m] : ForIn m SortArities (Symbol × Numeral) where
+  forIn self init f := ForIn.forIn self.toArray init f
 
-@[no_expose] instance : Inhabited SortArities := ⟨new⟩
+@[no_expose] instance : Repr SortArities := ⟨fun self p => reprPrec self.toArray p⟩
 
 end SortArities
+
+/-- Owned sort names with their arities, from which `SortArities` is viewed. -/
+structure SortAritiesBuf where
+  private ofArray ::
+  private entries : Array (Symbol × Numeral)
+
+namespace SortAritiesBuf
+
+def new : SortAritiesBuf := ⟨#[]⟩
+
+def push (self : SortAritiesBuf) (name : Symbol) (arity : Numeral) : SortAritiesBuf :=
+  ⟨self.entries.push (name.intoOwned.asView, arity.intoOwned.asView)⟩
+
+def clear (_ : SortAritiesBuf) : SortAritiesBuf := new
+
+def view (self : SortAritiesBuf) : SortArities := ⟨self.entries⟩
+
+def len (self : SortAritiesBuf) : Nat := self.entries.size
+
+def isEmpty (self : SortAritiesBuf) : Bool := self.entries.isEmpty
+
+@[no_expose] instance : Inhabited SortAritiesBuf := ⟨new⟩
+
+end SortAritiesBuf
 
 /-! ## Datatype constructors -/
 
@@ -288,77 +279,204 @@ the selectors as sorted variables.
 
 A `for` loop hands over each constructor with its selectors.
 -/
-/- LEAN: Rust's `SmtConstructors`, the view of `SmtConstructorsBuf`, named by the counterpart
-rule. -/
-structure ConstructorsView (S : Type) where
+structure Constructors (S : Type) where
   private mk ::
   /-- The constructors with their selectors, in order. -/
-  toArray : Array (SymbolView × SortedVarsView S)
+  toArray : Array (Symbol × SortedVars S)
 
-namespace ConstructorsView
+namespace Constructors
 
 /- LEAN: crate-private in Rust; the library builds the view. -/
 @[inline]
-def Internal.new {S : Type} (toArray : Array (SymbolView × SortedVarsView S)) :
-    ConstructorsView S :=
+def Internal.new {S : Type} (toArray : Array (Symbol × SortedVars S)) :
+    Constructors S :=
   ⟨toArray⟩
 
 @[simp]
-theorem Internal.toArray_new {S : Type} (toArray : Array (SymbolView × SortedVarsView S)) :
-    (Internal.new toArray : ConstructorsView S).toArray = toArray :=
+theorem Internal.toArray_new {S : Type} (toArray : Array (Symbol × SortedVars S)) :
+    (Internal.new toArray : Constructors S).toArray = toArray :=
   (rfl)
 
 variable {S : Type}
 
 @[inline]
-def len (self : ConstructorsView S) : Nat := self.toArray.size
+def len (self : Constructors S) : Nat := self.toArray.size
 
 @[inline]
-def isEmpty (self : ConstructorsView S) : Bool := self.toArray.isEmpty
+def isEmpty (self : Constructors S) : Bool := self.toArray.isEmpty
 
 @[no_expose] instance {m : Type → Type} [Monad m] :
-    ForIn m (ConstructorsView S) (SymbolView × SortedVarsView S) where
+    ForIn m (Constructors S) (Symbol × SortedVars S) where
   forIn self init f := ForIn.forIn self.toArray init f
 
-@[no_expose] instance [Repr S] : Repr (ConstructorsView S) :=
+@[no_expose] instance [Repr S] : Repr (Constructors S) :=
   ⟨fun self p => reprPrec self.toArray p⟩
 
-end ConstructorsView
+end Constructors
 
-/-- Owned datatype constructors, from which `ConstructorsView` is viewed. -/
-/- LEAN: Rust's `SmtConstructorsBuf`, named by the counterpart rule. -/
-structure Constructors (S : Type) where
+/-- Owned datatype constructors, from which `Constructors` is viewed. -/
+structure ConstructorsBuf (S : Type) where
   private ofArray ::
-  private entries : Array (SymbolView × SortedVarsView S)
+  private entries : Array (Symbol × SortedVars S)
 
-namespace Constructors
+namespace ConstructorsBuf
 
 variable {S : Type}
 
-def new : Constructors S := ⟨#[]⟩
+def new : ConstructorsBuf S := ⟨#[]⟩
 
 /-- Starts a constructor with no selectors; `pushSelector` adds them. -/
-def push (self : Constructors S) (name : SymbolView) : Constructors S :=
+def push (self : ConstructorsBuf S) (name : Symbol) : ConstructorsBuf S :=
   ⟨self.entries.push (name.intoOwned.asView, ⟨#[]⟩)⟩
 
-def len (self : Constructors S) : Nat := self.entries.size
+def len (self : ConstructorsBuf S) : Nat := self.entries.size
 
-def isEmpty (self : Constructors S) : Bool := self.entries.isEmpty
+def isEmpty (self : ConstructorsBuf S) : Bool := self.entries.isEmpty
 
 /-- Adds a selector to the last constructor pushed. -/
 /- LEAN: Rust panics when no constructor was pushed; here the caller proves that one was. -/
-def pushSelector (self : Constructors S) (name : SymbolView) (sort : S) (_ : 0 < self.len) :
-    Constructors S :=
+def pushSelector (self : ConstructorsBuf S) (name : Symbol) (sort : S) (_ : 0 < self.len) :
+    ConstructorsBuf S :=
   ⟨self.entries.modify (self.entries.size - 1) fun (constructor, selectors) =>
     (constructor, ⟨selectors.toArray.push (name.intoOwned.asView, sort)⟩)⟩
 
-def clear (_ : Constructors S) : Constructors S := new
+def clear (_ : ConstructorsBuf S) : ConstructorsBuf S := new
 
-def view (self : Constructors S) : ConstructorsView S := ⟨self.entries⟩
+def view (self : ConstructorsBuf S) : Constructors S := ⟨self.entries⟩
 
-@[no_expose] instance : Inhabited (Constructors S) := ⟨new⟩
+@[no_expose] instance : Inhabited (ConstructorsBuf S) := ⟨new⟩
 
-end Constructors
+end ConstructorsBuf
+
+/-! ## Function signatures -/
+
+/--
+A function signature to be handled: the name, the parameters
+with their sorts, and the result sort.
+-/
+/- LEAN: Rust's accessors are the fields; the parameters are an array, where Rust's `params` is an
+iterator. -/
+structure FunctionSignature (HandledSort : Type) where
+  private mk ::
+  name : Symbol
+  /-- The parameters with their sorts, in order. -/
+  params : Array (Symbol × HandledSort)
+  resultSort : HandledSort
+  deriving Repr
+
+namespace FunctionSignature
+
+variable {HandledSort : Type}
+
+/- LEAN: crate-private in Rust; the library builds the signatures. -/
+@[inline]
+def Internal.new (name : Symbol) (params : Array (Symbol × HandledSort))
+    (resultSort : HandledSort) : FunctionSignature HandledSort :=
+  ⟨name, params, resultSort⟩
+
+@[simp]
+theorem Internal.name_new (name : Symbol) (params : Array (Symbol × HandledSort))
+    (resultSort : HandledSort) : (Internal.new name params resultSort).name = name :=
+  (rfl)
+
+@[simp]
+theorem Internal.params_new (name : Symbol) (params : Array (Symbol × HandledSort))
+    (resultSort : HandledSort) : (Internal.new name params resultSort).params = params :=
+  (rfl)
+
+@[simp]
+theorem Internal.resultSort_new (name : Symbol) (params : Array (Symbol × HandledSort))
+    (resultSort : HandledSort) : (Internal.new name params resultSort).resultSort = resultSort :=
+  (rfl)
+
+/-- A signature is the one built from its fields. -/
+@[simp]
+theorem Internal.new_eta (self : FunctionSignature HandledSort) :
+    Internal.new self.name self.params self.resultSort = self :=
+  (rfl)
+
+end FunctionSignature
+
+/-- Function signatures to be handled, such as those of `define-funs-rec`. -/
+structure FunctionSignatures (S : Type) where
+  private mk ::
+  /-- The signatures, in order. -/
+  toArray : Array (FunctionSignature S)
+
+namespace FunctionSignatures
+
+/- LEAN: crate-private in Rust; the library builds the view. -/
+@[inline]
+def Internal.new {S : Type} (toArray : Array (FunctionSignature S)) : FunctionSignatures S :=
+  ⟨toArray⟩
+
+@[simp]
+theorem Internal.toArray_new {S : Type} (toArray : Array (FunctionSignature S)) :
+    (Internal.new toArray : FunctionSignatures S).toArray = toArray :=
+  (rfl)
+
+variable {S : Type}
+
+@[inline]
+def len (self : FunctionSignatures S) : Nat := self.toArray.size
+
+@[inline]
+def isEmpty (self : FunctionSignatures S) : Bool := self.toArray.isEmpty
+
+@[inline]
+def get? (self : FunctionSignatures S) (index : Nat) : Option (FunctionSignature S) :=
+  self.toArray[index]?
+
+@[no_expose] instance {m : Type → Type} [Monad m] :
+    ForIn m (FunctionSignatures S) (FunctionSignature S) where
+  forIn self init f := ForIn.forIn self.toArray init f
+
+@[no_expose] instance [Repr S] : Repr (FunctionSignatures S) :=
+  ⟨fun self p => reprPrec self.toArray p⟩
+
+end FunctionSignatures
+
+/-- Owned function signatures, from which `FunctionSignatures`
+and each `FunctionSignature` are viewed. -/
+/- LEAN: each name is a view of a copy of its bytes that the buffer made, so the view needs no
+copy. -/
+structure FunctionSignaturesBuf (S : Type) where
+  private ofArray ::
+  private entries : Array (FunctionSignature S)
+
+namespace FunctionSignaturesBuf
+
+variable {S : Type}
+
+def new : FunctionSignaturesBuf S := ⟨#[]⟩
+
+/-- Starts a signature with no parameters; `pushParam` adds them. -/
+def push (self : FunctionSignaturesBuf S) (name : Symbol) (resultSort : S) :
+    FunctionSignaturesBuf S :=
+  ⟨self.entries.push ⟨name.intoOwned.asView, #[], resultSort⟩⟩
+
+def len (self : FunctionSignaturesBuf S) : Nat := self.entries.size
+
+def isEmpty (self : FunctionSignaturesBuf S) : Bool := self.entries.isEmpty
+
+/-- Adds a parameter to the last signature pushed. -/
+/- LEAN: Rust panics when no signature was pushed; here the caller proves that one was. -/
+def pushParam (self : FunctionSignaturesBuf S) (name : Symbol) (sort : S) (_ : 0 < self.len) :
+    FunctionSignaturesBuf S :=
+  ⟨self.entries.modify (self.entries.size - 1) fun signature =>
+    { signature with params := signature.params.push (name.intoOwned.asView, sort) }⟩
+
+def clear (_ : FunctionSignaturesBuf S) : FunctionSignaturesBuf S := new
+
+def view (self : FunctionSignaturesBuf S) : FunctionSignatures S :=
+  FunctionSignatures.Internal.new self.entries
+
+def get? (self : FunctionSignaturesBuf S) (index : Nat) : Option (FunctionSignature S) :=
+  self.entries[index]?
+
+@[no_expose] instance : Inhabited (FunctionSignaturesBuf S) := ⟨new⟩
+
+end FunctionSignaturesBuf
 
 end Multiple
 

@@ -249,7 +249,7 @@ A byte array cannot be shortened in place, so the buffer keeps its bytes
 and the length of the content in use: clearing it only resets the length,
 and the bytes after it are overwritten as the content grows again.
 -/
-/- LEAN: Rust keeps the content in a `Bytes` and clears it, keeping its allocation. Lean
+/- LEAN: Rust keeps the content in a `BytesBuf` and clears it, keeping its allocation. Lean
 cannot shorten a `ByteArray` in place, so the lexer keeps its own buffer with a length, and the
 proof that the length is within the array, so that the content's bytes are read without a
 bounds check. -/

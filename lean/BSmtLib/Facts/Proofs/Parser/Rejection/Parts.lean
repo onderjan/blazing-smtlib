@@ -70,7 +70,7 @@ theorem patternRem_nonempty (state : PatternState) : ∃ u, patternRem version s
 end
 
 theorem symbolOrWildcard?_some {version : Token.Version} {token : Parser.Internal.Input}
-    {s : Nodes.SymbolOrWildcard}
+    {s : Nodes.SimplePattern}
     (h : PatternState.symbolOrWildcard? version token = some s) :
     Bridge.received token = some (.token (Bridge.symbolOrWildcard s).token) ∧
       (Bridge.symbolOrWildcard s).Valid (Bridge.version version) := by

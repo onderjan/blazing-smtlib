@@ -26,8 +26,8 @@ open BSmtLib.Parser.Category.Term.Internal
 open BSmtLib.Parser.Category.Token.Internal
 open BSmtLib.Parser.Command.Internal.Datatype BSmtLib.Parser.Command.Internal.Definition
     BSmtLib.Parser.Command.Internal.Function
-open BSmtLib.Plain (NumeralView KeywordView StringContentView SymbolView)
-open BSmtLib.Multiple (SortedVarsView)
+open BSmtLib.Plain (Numeral Keyword StringContent Symbol)
+open BSmtLib.Multiple (SortedVars)
 open BSmtLib.Token (Version)
 open BSmtLib.Token.Reserved (CommandNameReserved)
 open BSmtLib.Parser.Internal (PM call syntaxError)
@@ -55,7 +55,7 @@ abbrev LiteralStateOf (H : Type) {m : Type → Type} [Handler H m] :=
     (Handler.Scope H)
 
 /-- Whether the symbol is `not`, quoted or not. -/
-def Symbol.isNot (symbol : SymbolView) : Bool :=
+def Symbol.isNot (symbol : Symbol) : Bool :=
   symbol.asSlice.toByteArray == "not".toUTF8
 
 section
@@ -88,33 +88,33 @@ inductive FinalCall (HandledAttribute HandledSort HandledTerm : Type) where
   | assert (term : HandledTerm)
   | checkSat
   | checkSatAssuming (terms : Array HandledTerm)
-  | declareConst (symbol : SymbolView) (sort : HandledSort)
-  | declareFun (symbol : SymbolView) (parameters : Array HandledSort) (result : HandledSort)
-  | declareSort (symbol : SymbolView) (arity : NumeralView)
-  | declareSortParameter (symbol : SymbolView)
-  | endDeclareDatatype (constructors : Array (SymbolView × SortedVarsView HandledSort))
+  | declareConst (symbol : Symbol) (sort : HandledSort)
+  | declareFun (symbol : Symbol) (parameters : Array HandledSort) (result : HandledSort)
+  | declareSort (symbol : Symbol) (arity : Numeral)
+  | declareSortParameter (symbol : Symbol)
+  | endDeclareDatatype (constructors : Array (Symbol × SortedVars HandledSort))
   | endDeclareDatatypes
-  | defineConst (symbol : SymbolView) (sort : HandledSort) (body : HandledTerm)
+  | defineConst (symbol : Symbol) (sort : HandledSort) (body : HandledTerm)
   | endDefineFun (body : HandledTerm)
   | endDefineFunRec (body : HandledTerm)
   | endDefineFunsRec
   | endDefineSort (sort : HandledSort)
-  | echo (content : StringContentView)
+  | echo (content : StringContent)
   | exit
   | getAssertions
   | getAssignment
-  | getInfo (flag : KeywordView)
+  | getInfo (flag : Keyword)
   | getModel
-  | getOption (keyword : KeywordView)
+  | getOption (keyword : Keyword)
   | getProof
   | getUnsatAssumptions
   | getUnsatCore
   | getValue (terms : Array HandledTerm)
-  | pop (count : NumeralView)
-  | push (count : NumeralView)
+  | pop (count : Numeral)
+  | push (count : Numeral)
   | reset
   | resetAssertions
-  | setLogic (symbol : SymbolView)
+  | setLogic (symbol : Symbol)
 
 section
 
@@ -132,7 +132,7 @@ def finalCall : FinalCall (Handler.Attribute H) (Handler.«Sort» H) (Handler.Te
   | .declareSortParameter symbol =>
     call (CommandHandler.commandDeclareSortParameter (H := H) symbol)
   | .endDeclareDatatype constructors => call (CommandHandler.endDeclareDatatype
-    (Multiple.ConstructorsView.Internal.new constructors))
+    (Multiple.Constructors.Internal.new constructors))
   | .endDeclareDatatypes => call (CommandHandler.endDeclareDatatypes (H := H))
   | .defineConst symbol sort body => call (CommandHandler.commandDefineConst symbol sort body)
   | .endDefineFun body => call (CommandHandler.endDefineFun body)
@@ -170,7 +170,7 @@ inductive NamedCommand where
   | setLogic
 
 /-- Whether the keyword is `smt-lib-version`, which a version declaration has. -/
-def isVersionKeyword (name : KeywordView) : Bool :=
+def isVersionKeyword (name : Keyword) : Bool :=
   name.asSlice.toByteArray == "smt-lib-version".toUTF8
 
 /-- What the tokens of a `set-info` so far tell of a version declaration. -/
@@ -206,26 +206,26 @@ inductive Payload (HandledSExpr HandledAttribute HandledSort HandledTerm Scope :
   | checkSatAssumingLiterals
       (state : ListState
         (LiteralState HandledSExpr HandledAttribute HandledSort HandledTerm Scope) HandledTerm)
-  | declareConst (symbol : SymbolView) (state : SortState HandledSort)
-  | declareFunParameters (symbol : SymbolView)
+  | declareConst (symbol : Symbol) (state : SortState HandledSort)
+  | declareFunParameters (symbol : Symbol)
       (state : ListState (SortState HandledSort) HandledSort)
-  | declareFunResult (symbol : SymbolView) (parameters : Array HandledSort)
+  | declareFunResult (symbol : Symbol) (parameters : Array HandledSort)
       (state : SortState HandledSort)
-  | declareSort (symbol : SymbolView)
-  | declareDatatype (symbol : SymbolView) (state : DatatypeState HandledSort)
-  | declareDatatypesSorts (state : ListState SortDecState (SymbolView × NumeralView))
+  | declareSort (symbol : Symbol)
+  | declareDatatype (symbol : Symbol) (state : DatatypeState HandledSort)
+  | declareDatatypesSorts (state : ListState SortDecState (Symbol × Numeral))
   | declareDatatypesDatatypes (count : Nat)
       (state : ListState (DatatypeState HandledSort) Unit)
-  | defineSortParameters (symbol : SymbolView) (state : ListState Unit SymbolView)
+  | defineSortParameters (symbol : Symbol) (state : ListState Unit Symbol)
   | defineSortBody (state : SortState HandledSort)
-  | defineConstSort (symbol : SymbolView) (state : SortState HandledSort)
+  | defineConstSort (symbol : Symbol) (state : SortState HandledSort)
   | defineSignature (definition : DefinitionEnd HandledSort) (state : SignatureState HandledSort)
   | defineBody (definition : DefinitionEnd HandledSort)
       (state : TermState HandledSExpr HandledAttribute HandledSort HandledTerm Scope)
   | defineFunsRecDeclarations
-      (state : ListState (FunctionDecState HandledSort) (Signature HandledSort))
+      (state : ListState (FunctionDecState HandledSort) (Multiple.FunctionSignature HandledSort))
   /-- The bodies of `define-funs-rec`, with the signatures of the functions, one per body. -/
-  | defineFunsRecBodies (signatures : Array (Signature HandledSort))
+  | defineFunsRecBodies (signatures : Array (Multiple.FunctionSignature HandledSort))
       (state : ListState (TermState HandledSExpr HandledAttribute HandledSort HandledTerm Scope)
         Unit)
   | echo
@@ -346,7 +346,7 @@ def payloadStep (version : Version) (self : PayloadOf H) (token : Internal.Input
   | .declareSort symbol => close (.declareSort symbol (← expectNumeral token))
   | .declareDatatype symbol state =>
     let start parameters := call (CommandHandler.startDeclareDatatype symbol
-      (Multiple.SymbolsView.Internal.new parameters))
+      (Multiple.Symbols.Internal.new parameters))
     match ← datatypeStep start version state token with
     | .more state => return .more (.declareDatatype symbol state)
     | .done constructors => close (.endDeclareDatatype constructors)
@@ -356,17 +356,17 @@ def payloadStep (version : Version) (self : PayloadOf H) (token : Internal.Input
     | .done sorts =>
       if sorts.isEmpty then syntaxError .emptyDatatypeIntroductions
       call (CommandHandler.startDeclareDatatypes (H := H)
-        (Multiple.SortAritiesView.Internal.new sorts))
+        (Multiple.SortArities.Internal.new sorts))
       return .more (.declareDatatypesDatatypes sorts.size (ListState.paren .start))
   | .declareDatatypesDatatypes count state =>
     let start parameters := call (CommandHandler.startDatatypeDeclaration (H := H)
-      (Multiple.SymbolsView.Internal.new parameters))
+      (Multiple.Symbols.Internal.new parameters))
     let datatype (state : DatatypeState (Handler.«Sort» H)) (token : Internal.Input) := do
       match ← datatypeStep start version state token with
       | .more state => return Internal.Step.more state
       | .done constructors =>
         call (CommandHandler.endDatatypeDeclaration
-          (Multiple.ConstructorsView.Internal.new constructors))
+          (Multiple.Constructors.Internal.new constructors))
         return .done ()
     match ← state.step .start datatype (some count) token with
     | .more state => return .more (.declareDatatypesDatatypes count state)
@@ -378,7 +378,7 @@ def payloadStep (version : Version) (self : PayloadOf H) (token : Internal.Input
     | .more state => return .more (.defineSortParameters symbol state)
     | .done parameters =>
       call (CommandHandler.startDefineSort (H := H) symbol
-        (Multiple.SymbolsView.Internal.new parameters))
+        (Multiple.Symbols.Internal.new parameters))
       return .more (.defineSortBody .init)
   | .defineSortBody state =>
     match ← sortStep version state token with
@@ -411,7 +411,7 @@ def payloadStep (version : Version) (self : PayloadOf H) (token : Internal.Input
     | .done signatures =>
       if signatures.isEmpty then syntaxError .emptyFunctionSignatures
       call (CommandHandler.startDefineFunsRec
-        (Multiple.FunctionSignaturesView.Internal.new signatures))
+        (Multiple.FunctionSignatures.Internal.new signatures))
       return .more (.defineFunsRecBodies signatures (ListState.paren .init))
   | .defineFunsRecBodies signatures state =>
     match ← bodiesStep signatures.size version state token with

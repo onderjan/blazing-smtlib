@@ -197,7 +197,7 @@ def AfterKeyword (token : Parser.Internal.Input) : Prop :=
 
 /-- The parser of one attribute on a keyword and a token that neither starts a value nor ends
 the attribute. -/
-theorem closedAttribute_rejects_value {version : Token.Version} (name : BSmtLib.Plain.KeywordView)
+theorem closedAttribute_rejects_value {version : Token.Version} (name : BSmtLib.Plain.Keyword)
     {token : Parser.Internal.Input} (htoken : ¬ AfterKeyword token) :
     Rejects version (ClosedAttributeParser.new (H := H)) [.keyword name, token]
       (pure () : PM H Unit) .expectedAttribute := by
@@ -215,7 +215,7 @@ theorem closedAttribute_rejects_value {version : Token.Version} (name : BSmtLib.
 /-- The parser of attributes up to a `)` on a keyword and a token that neither starts a value
 nor ends the attribute. -/
 theorem closedMultipleAttribute_rejects_value {version : Token.Version}
-    (name : BSmtLib.Plain.KeywordView)
+    (name : BSmtLib.Plain.Keyword)
     {token : Parser.Internal.Input} (htoken : ¬ AfterKeyword token) :
     Rejects version (ClosedMultipleAttributeParser.new (H := H)) [.keyword name, token]
       (pure () : PM H Unit) .expectedAttribute := by
@@ -234,7 +234,7 @@ theorem closedMultipleAttribute_rejects_value {version : Token.Version}
 /-- The parser of one attribute on a keyword and a keyword after it: the attribute would be
 followed by another, where its `)` is due. -/
 theorem closedAttribute_rejects_keyword {version : Token.Version}
-    (name name' : BSmtLib.Plain.KeywordView) :
+    (name name' : BSmtLib.Plain.Keyword) :
     Rejects version (ClosedAttributeParser.new (H := H)) [.keyword name, .keyword name']
       (pure () : PM H Unit) (.expectedToken #[.parenClose]) := by
   have hfail : singleStep (H := H) version { mode := .afterName name, attributes := #[] }
@@ -423,7 +423,7 @@ that starts no s-expression and does not end a list: they fail at that token wit
 `expectedSExpr`, having made the traversal's calls for the items. -/
 private theorem sExpr_value_runs {version : Token.Version} (single : Bool)
     {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
-    (hA : TermAgrees h) (name : BSmtLib.Plain.KeywordView) {items : List Tree.SExpr}
+    (hA : TermAgrees h) (name : BSmtLib.Plain.Keyword) {items : List Tree.SExpr}
     (hitems : Tree.SExpr.ValidAll (Bridge.version version) items)
     {itemTokens : List Parser.Internal.Input}
     (hsItems : Stands itemTokens (Tree.SExpr.tokensAll items))
@@ -520,7 +520,7 @@ token with `expectedSExpr`, having made the traversal's calls for the items.
 -/
 theorem closedAttribute_rejects_sExpr {version : Token.Version}
     {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
-    (hA : TermAgrees h) (name : BSmtLib.Plain.KeywordView) {items : List Tree.SExpr}
+    (hA : TermAgrees h) (name : BSmtLib.Plain.Keyword) {items : List Tree.SExpr}
     (hitems : Tree.SExpr.ValidAll (Bridge.version version) items)
     {itemTokens : List Parser.Internal.Input}
     (hsItems : Stands itemTokens (Tree.SExpr.tokensAll items))
@@ -556,7 +556,7 @@ token with `expectedSExpr`, having made the traversal's calls for the items.
 -/
 theorem closedMultipleAttribute_rejects_sExpr {version : Token.Version}
     {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
-    (hA : TermAgrees h) (name : BSmtLib.Plain.KeywordView) {items : List Tree.SExpr}
+    (hA : TermAgrees h) (name : BSmtLib.Plain.Keyword) {items : List Tree.SExpr}
     (hitems : Tree.SExpr.ValidAll (Bridge.version version) items)
     {itemTokens : List Parser.Internal.Input}
     (hsItems : Stands itemTokens (Tree.SExpr.tokensAll items))

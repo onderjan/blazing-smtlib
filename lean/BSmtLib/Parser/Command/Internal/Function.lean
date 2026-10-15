@@ -14,7 +14,8 @@ recursive bodies of `define-funs-rec`.
 
 namespace BSmtLib.Parser.Command.Internal.Function
 
-open BSmtLib.Plain (SymbolView)
+open BSmtLib.Multiple (FunctionSignature)
+open BSmtLib.Plain (Symbol)
 open BSmtLib.Nodes BSmtLib.Traits BSmtLib.Parser.Category.Combinator BSmtLib.Parser.Category.Sort
 open BSmtLib.Parser.Category.Combinator.Internal
 open BSmtLib.Parser.Category.Sort.Internal
@@ -28,16 +29,16 @@ open BSmtLib.Parser.Internal (PM call syntaxError)
 /-- The state of the parser of a function signature `⟨symbol⟩ (⟨sorted_var⟩∗) ⟨sort⟩`. -/
 inductive SignatureState (HandledSort : Type) where
   | start
-  | parameters (symbol : SymbolView)
-      (state : ListState (SortedVarState HandledSort) (SymbolView × HandledSort))
-  | result (symbol : SymbolView) (parameters : Array (SymbolView × HandledSort))
+  | parameters (symbol : Symbol)
+      (state : ListState (SortedVarState HandledSort) (Symbol × HandledSort))
+  | result (symbol : Symbol) (parameters : Array (Symbol × HandledSort))
       (state : SortState HandledSort)
 
 /-- The state of the parser of a function declaration `(` signature `)`. -/
 inductive FunctionDecState (HandledSort : Type) where
   | start
   | signature (state : SignatureState HandledSort)
-  | close (signature : Signature HandledSort)
+  | close (signature : FunctionSignature HandledSort)
 
 section
 
@@ -46,7 +47,8 @@ variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
 /-- A step of the signature parser; the sorts are handled at their last tokens. -/
 def signatureStep (version : Version) (self : SignatureState (Handler.«Sort» H))
     (token : Internal.Input) :
-    PM H (Internal.Step (SignatureState (Handler.«Sort» H)) (Signature (Handler.«Sort» H))) := do
+    PM H (Internal.Step (SignatureState (Handler.«Sort» H))
+      (FunctionSignature (Handler.«Sort» H))) := do
   match self with
   | .start => return .more (.parameters (← expectSymbol token) (ListState.paren .start))
   | .parameters symbol state =>
@@ -56,12 +58,13 @@ def signatureStep (version : Version) (self : SignatureState (Handler.«Sort» H
   | .result symbol parameters state =>
     match ← sortStep version state token with
     | .more state => return .more (.result symbol parameters state)
-    | .done result => return .done ⟨symbol, parameters, result⟩
+    | .done result => return .done (FunctionSignature.Internal.new symbol parameters result)
 
 /-- A step of the parser of a function declaration. -/
 def functionDecStep (version : Version) (self : FunctionDecState (Handler.«Sort» H))
     (token : Internal.Input) :
-    PM H (Internal.Step (FunctionDecState (Handler.«Sort» H)) (Signature (Handler.«Sort» H))) := do
+    PM H (Internal.Step (FunctionDecState (Handler.«Sort» H))
+      (FunctionSignature (Handler.«Sort» H))) := do
   match self with
   | .start =>
     expectOpen token
@@ -105,7 +108,7 @@ The calls due when a token arrives at the list of recursive bodies: between bodi
 can begin a body, any but `)`, while a body is still due, starts it, with the signature of its
 function, before the list takes the token.
 -/
-def bodiesArrive (signatures : Array (Signature (Handler.«Sort» H)))
+def bodiesArrive (signatures : Array (FunctionSignature (Handler.«Sort» H)))
     (self : ListState (TermStateOf H) Unit) (token : Internal.Input) : PM H Unit :=
   if self.opened && self.outside then
     match token, signatures[self.items.size]? with

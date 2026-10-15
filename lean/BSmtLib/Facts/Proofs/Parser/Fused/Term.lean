@@ -77,7 +77,7 @@ theorem termComplete_eq (posture : VersionPosture) {batch : BatchTag} (next : Ba
 
 theorem handleTerm_eq (posture : VersionPosture) {batch : BatchTag} (next : BatchCursor batch)
     (h : H) (declarations : Nat) (context : TermContext (Handler.«Sort» H))
-    (levels : List (TermLevelOf H)) (node : Nodes.TermNode (Handler.«Sort» H) (Handler.Term H))
+    (levels : List (TermLevelOf H)) (node : Nodes.Term (Handler.«Sort» H) (Handler.Term H))
     {β : Type} (k : OutcomeOf H next → m β) :
     (call (Handler.handleTerm node) >>= fun term =>
           Parser.Category.Term.Internal.termComplete levels term).run.run h >>=

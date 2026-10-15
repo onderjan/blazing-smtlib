@@ -74,9 +74,10 @@ attribute [blank_simps]
   blankPayload.eq_17 blankPayload.eq_18 blankPayload.eq_19 blankPayload.eq_20 blankPayload.eq_21
   blankPayload.eq_22 blankPayload.eq_23 blankPayload.eq_24 blankPayload.eq_25 blankPayload.eq_26
   blankPayload.eq_27 blankCommandState.eq_1 blankCommandState.eq_2 blankCommandState.eq_3
-  blankCommandState.eq_4 Multiple.asSlice_new Multiple.NamedView.Internal.toArray_new
-  Multiple.ConstructorsView.Internal.toArray_new Multiple.MatchCases.Internal.toArray_new
-  Multiple.FunctionSignaturesView.Internal.toArray_new
+  blankCommandState.eq_4 Multiple.asSlice_new Multiple.Named.Internal.toArray_new
+  Multiple.Constructors.Internal.toArray_new Multiple.MatchCases.Internal.toArray_new
+  Multiple.FunctionSignatures.Internal.toArray_new Multiple.FunctionSignature.Internal.name_new
+  Multiple.FunctionSignature.Internal.params_new Multiple.FunctionSignature.Internal.resultSort_new
   blankScriptParser Script.ScriptParser.Internal.posture_mk Script.ScriptParser.Internal.command_mk
   Script.ScriptParser.Internal.declarations_mk
   Array.map_push Array.map_empty List.map_cons List.map_nil Option.map_some Option.map_none
@@ -90,8 +91,8 @@ variable {SE SE' A A' S S' T T' Sc Sc' : Type} [Blanks SE SE'] [Blanks A A'] [Bl
 
 /-! ## Projections -/
 
-@[blank_simps] theorem identifier_blankQualifiedIdent (q : QualifiedIdent S) :
-    (blankQualifiedIdent (S' := S') q).identifier = q.identifier := by cases q; rfl
+@[blank_simps] theorem ident_blankQualifiedIdent (q : QualifiedIdent S) :
+    (blankQualifiedIdent (S' := S') q).ident = q.ident := by cases q; rfl
 @[blank_simps] theorem sort_blankQualifiedIdent (q : QualifiedIdent S) :
     (blankQualifiedIdent (S' := S') q).sort = blank q.sort := by cases q; rfl
 @[blank_simps] theorem mode_blankAttributeState (s : AttributeState SE A) :
@@ -125,12 +126,12 @@ variable {SE SE' A A' S S' T T' Sc Sc' : Type} [Blanks SE SE'] [Blanks A A'] [Bl
 @[blank_simps] theorem levels_blankTermState (s : TermState SE A S T Sc) :
     (blankTermState (SE' := SE') (A' := A') (S' := S') (T' := T') (Sc' := Sc') s).levels =
       blank s.levels := by cases s; rfl
-@[blank_simps] theorem name_blankSignature (s : Signature S) :
-    (blankSignature (S' := S') s).name = s.name := by cases s; rfl
-@[blank_simps] theorem params_blankSignature (s : Signature S) :
-    (blankSignature (S' := S') s).params = blank s.params := by cases s; rfl
-@[blank_simps] theorem resultSort_blankSignature (s : Signature S) :
-    (blankSignature (S' := S') s).resultSort = blank s.resultSort := by cases s; rfl
+@[blank_simps] theorem name_blankSignature (s : Multiple.FunctionSignature S) :
+    (blankSignature (S' := S') s).name = s.name := by simp [blankSignature]
+@[blank_simps] theorem params_blankSignature (s : Multiple.FunctionSignature S) :
+    (blankSignature (S' := S') s).params = blank s.params := by simp [blankSignature]
+@[blank_simps] theorem resultSort_blankSignature (s : Multiple.FunctionSignature S) :
+    (blankSignature (S' := S') s).resultSort = blank s.resultSort := by simp [blankSignature]
 @[blank_simps] theorem shape_blankLiteralState (s : LiteralState SE A S T Sc) :
     (blankLiteralState (SE' := SE') (A' := A') (S' := S') (T' := T') (Sc' := Sc') s).shape =
       s.shape := by cases s; rfl
@@ -216,27 +217,27 @@ variable {SE SE' A A' S S' T T' Sc Sc' : Type} [Blanks SE SE'] [Blanks A A'] [Bl
 @[blank_simps] theorem fun_blankQualifiedIdent :
     (blank : QualifiedIdent S → QualifiedIdent S') = blankQualifiedIdent := (rfl)
 @[blank_simps] theorem fun_blankTermNode :
-    (blank : TermNode S T → TermNode S' T') = blankTermNode := (rfl)
+    (blank : Nodes.Term S T → Nodes.Term S' T') = blankTermNode := (rfl)
 @[blank_simps] theorem fun_blankSExprNode :
-    (blank : SExprNode SE → SExprNode SE') = blankSExprNode := (rfl)
+    (blank : Nodes.SExpr SE → Nodes.SExpr SE') = blankSExprNode := (rfl)
 @[blank_simps] theorem fun_blankAttributeValueNode :
-    (blank : AttributeValueNode SE → AttributeValueNode SE') = blankAttributeValueNode := (rfl)
+    (blank : AttributeValue SE → AttributeValue SE') = blankAttributeValueNode := (rfl)
 @[blank_simps] theorem fun_blankSignature :
-    (blank : Signature S → Signature S') = blankSignature := (rfl)
+    (blank : Multiple.FunctionSignature S → Multiple.FunctionSignature S') = blankSignature := (rfl)
 @[blank_simps] theorem fun_blank_multiple {α β : Type} [Blanks α β] :
     (blank : Multiple α → Multiple β) = fun m => Multiple.new (blank m.asSlice) := (rfl)
 @[blank_simps] theorem fun_blank_namedView {V V' : Type} [Blanks V V'] :
-    (blank : Multiple.NamedView V → Multiple.NamedView V') =
-      fun v => Multiple.NamedView.Internal.new (blank v.toArray) := (rfl)
+    (blank : Multiple.Named V → Multiple.Named V') =
+      fun v => Multiple.Named.Internal.new (blank v.toArray) := (rfl)
 @[blank_simps] theorem fun_blank_matchCases {T T' : Type} [Blanks T T'] :
     (blank : Multiple.MatchCases T → Multiple.MatchCases T') =
       fun v => Multiple.MatchCases.Internal.new (blank v.toArray) := (rfl)
 @[blank_simps] theorem fun_blank_constructorsView {S S' : Type} [Blanks S S'] :
-    (blank : Multiple.ConstructorsView S → Multiple.ConstructorsView S') =
-      fun v => Multiple.ConstructorsView.Internal.new (blank v.toArray) := (rfl)
+    (blank : Multiple.Constructors S → Multiple.Constructors S') =
+      fun v => Multiple.Constructors.Internal.new (blank v.toArray) := (rfl)
 @[blank_simps] theorem fun_blank_functionSignaturesView {S S' : Type} [Blanks S S'] :
-    (blank : Multiple.FunctionSignaturesView S → Multiple.FunctionSignaturesView S') =
-      fun v => Multiple.FunctionSignaturesView.Internal.new (blank v.toArray) := (rfl)
+    (blank : Multiple.FunctionSignatures S → Multiple.FunctionSignatures S') =
+      fun v => Multiple.FunctionSignatures.Internal.new (blank v.toArray) := (rfl)
 @[blank_simps] theorem fun_blankStep {σ σ' ρ ρ' : Type} [Blanks σ σ'] [Blanks ρ ρ'] :
     (blank : Internal.Step σ ρ → Internal.Step σ' ρ') = blankStep := (rfl)
 @[blank_simps] theorem fun_blank_prod {α α' β β' : Type} [Blanks α α'] [Blanks β β'] :

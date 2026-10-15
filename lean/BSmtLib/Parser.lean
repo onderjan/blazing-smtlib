@@ -24,7 +24,7 @@ that finishes starts its next value from its initial state.
 namespace BSmtLib.Parser
 
 open BSmtLib.Nodes BSmtLib.Traits
-open BSmtLib.Plain (KeywordView SymbolView)
+open BSmtLib.Plain (Keyword Symbol)
 open BSmtLib.Token (TokenCategory Version SyntaxToken)
 open BSmtLib.Token.Reserved (GeneralReserved)
 
@@ -220,9 +220,9 @@ from the syntax token (`Input.ofSyntax`). -/
 inductive Input where
   | parenOpen
   | parenClose
-  | constant (constant : SpecConstant)
-  | symbol (symbol : SymbolView)
-  | keyword (name : KeywordView)
+  | constant (constant : SpecialConstant)
+  | symbol (symbol : Symbol)
+  | keyword (name : Keyword)
   | reserved (word : Token.Reserved)
   /-- The end of the input. -/
   | endOfInput
@@ -269,7 +269,7 @@ def Input.toSyntax : Input → SyntaxToken
   | .keyword value => .keyword value
   | .symbol value => .symbol value
   | .reserved word => .reserved word
-  | .layout => .whitespace (Plain.WhitespaceView.Internal.newUnchecked ByteArray.empty.toByteSlice)
+  | .layout => .whitespace (Plain.Whitespace.Internal.newUnchecked ByteArray.empty.toByteSlice)
   | .endOfInput => .endOfFile
 
 /-- A token made into a syntax token and back is the token. -/

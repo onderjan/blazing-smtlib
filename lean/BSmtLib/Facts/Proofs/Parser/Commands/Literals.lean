@@ -69,7 +69,7 @@ theorem literal_element (hA : TermAgrees h) :
     obtain ⟨symbol, rfl, rfl⟩ := Parser.Internal.Input.received_symbol htoken
     refine ⟨⟨_, [], rfl, by simp⟩, do
         tick points (.symbol symbol)
-        Parser.Internal.call (Traits.Handler.handleTerm (.identifier ⟨symbol, #[]⟩ none)), ?_,
+        Parser.Internal.call (Traits.Handler.handleTerm (.qualifiedIdent ⟨symbol, #[]⟩ none)), ?_,
       Runs.token (by simp [literalStep, LiteralState.init, TermState.init, termStep,
         Parser.Category.Term.Internal.termComplete])⟩
     simp [Tree.PropLiteral.asTerm, term_identifier, qualIdentifier, takeAll,
@@ -82,12 +82,13 @@ theorem literal_element (hA : TermAgrees h) :
     obtain ⟨notSymbol, rfl, rfl⟩ := Parser.Internal.Input.received_symbol hnegationToken
     obtain ⟨symbol, rfl, rfl⟩ := Parser.Internal.Input.received_symbol hnameToken
     have hnot := Symbol.isNot_of_name hvalid
-    let function : Nodes.Identifier := ⟨notSymbol, #[]⟩
+    let function : Nodes.Ident := ⟨notSymbol, #[]⟩
     refine ⟨⟨_, _, rfl, by simp⟩, do
         tick points .parenOpen
         tick points (.symbol notSymbol)
         tick points (.symbol symbol)
-        let t ← Parser.Internal.call (Traits.Handler.handleTerm (.identifier ⟨symbol, #[]⟩ none))
+        let t ← Parser.Internal.call
+          (Traits.Handler.handleTerm (.qualifiedIdent ⟨symbol, #[]⟩ none))
         tick points .parenClose
         Parser.Internal.call
           (Traits.Handler.handleTerm (.application function none (.new #[t]))), ?_, ?_⟩
@@ -112,7 +113,7 @@ theorem literal_element (hA : TermAgrees h) :
         (⟨.close, ⟨.start, [TermLevel.application function none #[t]]⟩⟩ :
           Parser.Command.Internal.Standard.LiteralStateOf H))
       (Runs.token (program := Parser.Internal.call (Traits.Handler.handleTerm
-        (.identifier ⟨symbol, #[]⟩ none)))
+        (.qualifiedIdent ⟨symbol, #[]⟩ none)))
         (by simp [literalStep, termStep, Parser.Category.Term.Internal.termComplete]))
       fun t => Runs.token (program := Parser.Internal.call (Traits.Handler.handleTerm
         (.application function none (.new #[t]))))

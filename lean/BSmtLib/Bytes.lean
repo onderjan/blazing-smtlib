@@ -10,7 +10,7 @@ namespace BSmtLib.Bytes
 /- LEAN: `ByteArray` is Lean's `Vec<u8>`. Lean values are immutable and reference-counted;
 an update changes an array in place when nothing else refers to it, and copies it
 otherwise. So a view never dangles and needs no lifetime. -/
-structure _root_.BSmtLib.Bytes where
+structure BytesBuf where
   private ofByteArray ::
   private bytes : ByteArray
   deriving Inhabited
@@ -18,7 +18,7 @@ structure _root_.BSmtLib.Bytes where
 /-- A view of a string of bytes. -/
 /- LEAN: `ByteSlice` from Lean's `Std` is the counterpart of `&[u8]`: a reference to a
 byte array with a start and a stop. -/
-structure BytesView where
+structure _root_.BSmtLib.Bytes where
   private ofSlice ::
   private slice : ByteSlice
   deriving Inhabited
@@ -66,88 +66,88 @@ def Internal.hashSlice (slice : ByteSlice) : UInt64 := Id.run do
     h := mixHash h (slice[i]'hi.upper).toUInt64
   return h
 
-@[inline]
-def new : Bytes := ⟨ByteArray.empty⟩
-
-def fromByteArray (bytes : ByteArray) : Bytes := ⟨bytes⟩
-
-def fromByte (byte : UInt8) : Bytes := ⟨ByteArray.empty.push byte⟩
+namespace BytesBuf
 
 @[inline]
-def asSlice (self : Bytes) : ByteSlice := self.bytes.toByteSlice
+def new : BytesBuf := ⟨ByteArray.empty⟩
+
+def fromByteArray (bytes : ByteArray) : BytesBuf := ⟨bytes⟩
+
+def fromByte (byte : UInt8) : BytesBuf := ⟨ByteArray.empty.push byte⟩
 
 @[inline]
-def asView (self : Bytes) : BytesView := ⟨self.asSlice⟩
-
-def intoByteArray (self : Bytes) : ByteArray := self.bytes
+def asSlice (self : BytesBuf) : ByteSlice := self.bytes.toByteSlice
 
 @[inline]
-def len (self : Bytes) : Nat := self.bytes.size
+def asView (self : BytesBuf) : Bytes := ⟨self.asSlice⟩
+
+def intoByteArray (self : BytesBuf) : ByteArray := self.bytes
 
 @[inline]
-def isEmpty (self : Bytes) : Bool := self.len == 0
+def len (self : BytesBuf) : Nat := self.bytes.size
+
+@[inline]
+def isEmpty (self : BytesBuf) : Bool := self.len == 0
 
 /- LEAN: a `ByteArray` cannot be shortened in place, so clearing gives a new empty string
 instead of keeping the allocation as `Vec::clear` does. Methods that mutate in Rust
 return the updated value in Lean. -/
 @[inline]
-def Internal.clear (_ : Bytes) : Bytes := new
+def Internal.clear (_ : BytesBuf) : BytesBuf := new
 
 /- LEAN: `copySlice` with `exact := false` appends the slice's bytes, growing the capacity
 by doubling as `Vec` does. -/
 @[inline]
-def Internal.extendFromSlice (self : Bytes) (slice : ByteSlice) : Bytes :=
+def Internal.extendFromSlice (self : BytesBuf) (slice : ByteSlice) : BytesBuf :=
   ⟨slice.byteArray.copySlice slice.start self.bytes self.bytes.size slice.size false⟩
 
 @[inline]
-def Internal.push (self : Bytes) (byte : UInt8) : Bytes := ⟨self.bytes.push byte⟩
+def Internal.push (self : BytesBuf) (byte : UInt8) : BytesBuf := ⟨self.bytes.push byte⟩
 
-@[no_expose] instance : BEq Bytes := ⟨fun a b => a.bytes == b.bytes⟩
+@[no_expose] instance : BEq BytesBuf := ⟨fun a b => a.bytes == b.bytes⟩
 
-@[no_expose] instance : Hashable Bytes := ⟨fun s => Internal.hashSlice s.asSlice⟩
+@[no_expose] instance : Hashable BytesBuf := ⟨fun s => Internal.hashSlice s.asSlice⟩
 
-@[no_expose] instance : Repr Bytes := ⟨fun s _ => reprBytes s.asSlice⟩
+@[no_expose] instance : Repr BytesBuf := ⟨fun s _ => reprBytes s.asSlice⟩
 
 /- LEAN: Rust's `impl PartialEq<[u8]> for SmtBytesBuf`. `BEq` compares values of one type, so
 the comparisons with other types are functions. -/
 /-- Whether the bytes are those of the slice. -/
-def eqSlice (self : Bytes) (other : ByteSlice) : Bool := self.asSlice == other
+def eqSlice (self : BytesBuf) (other : ByteSlice) : Bool := self.asSlice == other
 
 /- LEAN: Rust's `impl PartialEq<SmtBytes<'_>> for SmtBytesBuf`, as `eqSlice`. -/
 /-- Whether the bytes are those of the view. -/
-def eqView (self : Bytes) (other : BytesView) : Bool := self.asSlice == other.slice
+def eqView (self : BytesBuf) (other : Bytes) : Bool := self.asSlice == other.slice
 
-namespace BytesView
-
-@[inline]
-def Internal.new (slice : ByteSlice) : BytesView := ⟨slice⟩
+end BytesBuf
 
 @[inline]
-def len (self : BytesView) : Nat := self.slice.size
+def Internal.new (slice : ByteSlice) : Bytes := ⟨slice⟩
 
 @[inline]
-def isEmpty (self : BytesView) : Bool := self.len == 0
+def len (self : Bytes) : Nat := self.slice.size
 
 @[inline]
-def asSlice (self : BytesView) : ByteSlice := self.slice
+def isEmpty (self : Bytes) : Bool := self.len == 0
 
-def intoOwned (self : BytesView) : Bytes := ⟨self.slice.toByteArray⟩
+@[inline]
+def asSlice (self : Bytes) : ByteSlice := self.slice
 
-@[no_expose] instance : BEq BytesView := ⟨fun a b => a.slice == b.slice⟩
+def intoOwned (self : Bytes) : BytesBuf := ⟨self.slice.toByteArray⟩
 
-@[no_expose] instance : Repr BytesView := ⟨fun s _ => reprBytes s.slice⟩
+@[no_expose] instance : BEq Bytes := ⟨fun a b => a.slice == b.slice⟩
 
-@[no_expose] instance : Hashable BytesView := ⟨fun s => Internal.hashSlice s.slice⟩
+@[no_expose] instance : Repr Bytes := ⟨fun s _ => reprBytes s.slice⟩
+
+@[no_expose] instance : Hashable Bytes := ⟨fun s => Internal.hashSlice s.slice⟩
 
 /- LEAN: Rust's `impl PartialEq<[u8]> for SmtBytes<'_>`. `BEq` compares values of one type, so
 the comparisons with other types are functions. -/
 /-- Whether the bytes are those of the slice. -/
-def eqSlice (self : BytesView) (other : ByteSlice) : Bool := self.slice == other
+def eqSlice (self : Bytes) (other : ByteSlice) : Bool := self.slice == other
 
 /- LEAN: Rust's `impl PartialEq<SmtBytesBuf> for SmtBytes<'_>`, as `eqSlice`. -/
 /-- Whether the bytes are those of the owned string. -/
-def eqOwned (self : BytesView) (other : Bytes) : Bool := self.slice == other.asSlice
-
-end BytesView
+def eqOwned (self : Bytes) (other : BytesBuf) : Bool := self.slice == other.asSlice
 
 end BSmtLib.Bytes

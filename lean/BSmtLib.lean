@@ -7,8 +7,6 @@ public import BSmtLib.Plain
 public import BSmtLib.Span
 public import BSmtLib.Multiple
 public import BSmtLib.Multiple.MatchCases
-public import BSmtLib.Multiple.FunctionSignaturesView
-public import BSmtLib.Multiple.FunctionSignatures
 public import BSmtLib.Nodes
 public import BSmtLib.Traits
 public import BSmtLib.Traits.CommandHandler

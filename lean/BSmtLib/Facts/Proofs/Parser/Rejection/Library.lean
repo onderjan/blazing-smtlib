@@ -818,15 +818,16 @@ def inputOf : Received → Option Parser.Internal.Input
   | .endOfInput => some .endOfInput
   | .token .parenOpen => some .parenOpen
   | .token .parenClose => some .parenClose
-  | .token (.numeral d) => some (.constant (.numeral (NumeralView.Internal.newUnchecked (bytesOf d))))
-  | .token (.decimal d) => some (.constant (.decimal (DecimalView.Internal.newUnchecked (bytesOf d))))
+  | .token (.numeral d) => some (.constant (.numeral (Numeral.Internal.newUnchecked (bytesOf d))))
+  | .token (.decimal d) => some (.constant (.decimal (Decimal.Internal.newUnchecked (bytesOf d))))
   | .token (.hexadecimal d) =>
-    some (.constant (.hexadecimal (HexDigitsView.Internal.newUnchecked (bytesOf d))))
-  | .token (.binary d) => some (.constant (.binary (BinDigitsView.Internal.newUnchecked (bytesOf d))))
-  | .token (.string c) => some (.constant (.string (StringContentView.Internal.newUnchecked (bytesOf c))))
+    some (.constant (.hexadecimal (HexDigits.Internal.newUnchecked (bytesOf d))))
+  | .token (.binary d) => some (.constant (.binary (BinDigits.Internal.newUnchecked (bytesOf d))))
+  | .token (.string c) =>
+    some (.constant (.string (StringContent.Internal.newUnchecked (bytesOf c))))
   | .token (.symbol s) =>
-    some (.symbol (SymbolView.Internal.newUnchecked s.quoted (bytesOf s.name)))
-  | .token (.keyword k) => some (.keyword (KeywordView.Internal.newUnchecked (bytesOf k)))
+    some (.symbol (Symbol.Internal.newUnchecked s.quoted (bytesOf s.name)))
+  | .token (.keyword k) => some (.keyword (Keyword.Internal.newUnchecked (bytesOf k)))
   | .token (.reserved w) => (decodeReserved w).map .reserved
 
 theorem received_inputOf {r : Received} {t : Parser.Internal.Input} (h : inputOf r = some t) :

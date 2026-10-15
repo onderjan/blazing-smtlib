@@ -271,7 +271,7 @@ end
 /-- The sort parser's step at the end of a sort: the sort is the result, or the next argument
 of the innermost open application. -/
 theorem sortComplete_advances {version : BSmtLibSpec.Lexicon.Version} {state : SortState Nat}
-    {item : Received} {levels : List (SortLevel Nat)} (head : Nodes.Identifier)
+    {item : Received} {levels : List (SortLevel Nat)} (head : Nodes.Ident)
     (arguments : Array Nat)
     {Q : Parser.ParseErrorCause Unit → Prop}
     (h : ∀ v, sortAfter version levels v → sortRem version state (item :: v)) :

@@ -32,7 +32,7 @@ inductive SortMode where
 
 /-- An application of a sort, open: its head and the argument sorts handled so far. -/
 structure SortLevel (HandledSort : Type) where
-  head : Identifier
+  head : Ident
   arguments : Array HandledSort
 
 /-- The state of the sort parser: its mode, and the open applications, innermost first. -/
@@ -49,7 +49,7 @@ section
 variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
 
 /-- A sort is complete: it is handled, and is the result or the next argument. -/
-def sortComplete (levels : List (SortLevel (Handler.«Sort» H))) (head : Identifier)
+def sortComplete (levels : List (SortLevel (Handler.«Sort» H))) (head : Ident)
     (arguments : Array (Handler.«Sort» H)) :
     PM H (Internal.Step (SortState (Handler.«Sort» H)) (Handler.«Sort» H)) := do
   let sort ← call (Handler.handleSort head (.new arguments))

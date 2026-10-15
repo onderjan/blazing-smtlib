@@ -17,16 +17,16 @@ namespace BSmtLib.Token.SyntaxToken
 inductive _root_.BSmtLib.Token.SyntaxToken where
   | parenOpen
   | parenClose
-  | numeral (value : NumeralView)
-  | decimal (value : DecimalView)
-  | hexadecimal (value : HexDigitsView)
-  | binary (value : BinDigitsView)
-  | string (value : StringContentView)
-  | keyword (value : KeywordView)
-  | symbol (value : SymbolView)
+  | numeral (value : Numeral)
+  | decimal (value : Decimal)
+  | hexadecimal (value : HexDigits)
+  | binary (value : BinDigits)
+  | string (value : StringContent)
+  | keyword (value : Keyword)
+  | symbol (value : Symbol)
   | reserved (value : Reserved)
-  | whitespace (value : WhitespaceView)
-  | comment (value : CommentView)
+  | whitespace (value : Whitespace)
+  | comment (value : Comment)
   | endOfFile
   deriving Repr
 
@@ -40,20 +40,20 @@ def Internal.fromParts (category : TokenCategory) (content : ByteSlice)
   match category with
   | .parenOpen => .parenOpen
   | .parenClose => .parenClose
-  | .numeral => .numeral (NumeralView.Internal.newUnchecked content)
-  | .decimal => .decimal (DecimalView.Internal.newUnchecked content)
-  | .hexadecimal => .hexadecimal (HexDigitsView.Internal.newUnchecked content)
-  | .binary => .binary (BinDigitsView.Internal.newUnchecked content)
+  | .numeral => .numeral (Numeral.Internal.newUnchecked content)
+  | .decimal => .decimal (Decimal.Internal.newUnchecked content)
+  | .hexadecimal => .hexadecimal (HexDigits.Internal.newUnchecked content)
+  | .binary => .binary (BinDigits.Internal.newUnchecked content)
   | .unquotedSymbol =>
     -- only the words reserved in the version are reserved words
     match Reserved.fromBytes? content version with
     | some word => .reserved word
-    | none => .symbol (SymbolView.Internal.newUnchecked false content)
-  | .quotedSymbol => .symbol (SymbolView.Internal.newUnchecked true content)
-  | .string => .string (StringContentView.Internal.newUnchecked content)
-  | .keyword => .keyword (KeywordView.Internal.newUnchecked content)
-  | .whitespace => .whitespace (WhitespaceView.Internal.newUnchecked content)
-  | .comment => .comment (CommentView.Internal.newUnchecked content)
+    | none => .symbol (Symbol.Internal.newUnchecked false content)
+  | .quotedSymbol => .symbol (Symbol.Internal.newUnchecked true content)
+  | .string => .string (StringContent.Internal.newUnchecked content)
+  | .keyword => .keyword (Keyword.Internal.newUnchecked content)
+  | .whitespace => .whitespace (Whitespace.Internal.newUnchecked content)
+  | .comment => .comment (Comment.Internal.newUnchecked content)
   | .endOfFile => .endOfFile
 
 /- LEAN: the token is read through a cursor over its batch, see `Token`. -/

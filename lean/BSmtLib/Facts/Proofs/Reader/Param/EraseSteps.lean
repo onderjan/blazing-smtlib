@@ -101,7 +101,7 @@ theorem identStep_erases (version : Token.Version) (state : IdentState)
   unfold IdentState.step
   erasing_step []
 
-theorem sortComplete_erases (levels : List (SortLevel Nat)) (head : Identifier)
+theorem sortComplete_erases (levels : List (SortLevel Nat)) (head : Ident)
     (arguments : Array Nat) :
     Erases (sortComplete (H := List Event) levels head arguments) := by
   unfold sortComplete
@@ -162,7 +162,7 @@ theorem termComplete_erases (levels : List (TermLevel Nat Nat Nat)) (term : Nat)
   try dsimp only
   erasing_step []
 
-theorem startBinder_erases (binder : SortedBinder) (variables : Array (Plain.SymbolView × Nat)) :
+theorem startBinder_erases (binder : SortedBinder) (variables : Array (Plain.Symbol × Nat)) :
     Erases (startBinder (H := List Event) binder variables) := by
   unfold startBinder
   try dsimp only
@@ -233,7 +233,7 @@ theorem constructorStep_erases (version : Token.Version) (state : ConstructorSta
   try dsimp only
   erasing_step [hvars]
 
-theorem datatypeStep_erases {start : Array Plain.SymbolView → RPM Unit}
+theorem datatypeStep_erases {start : Array Plain.Symbol → RPM Unit}
     (hstart : ∀ parameters, Erases (start parameters)) (version : Token.Version)
     (state : DatatypeState Nat) (token : Parser.Internal.Input) :
     Erases (datatypeStep (H := List Event) start version state token) := by
@@ -280,7 +280,7 @@ theorem payloadStep_erases (version : Token.Version) (state : Payload Nat Nat Na
   have hsymbols := listStep_erases () symbolStep_erases none
   have hfunctions := listStep_erases (FunctionDecState.start (HandledSort := Nat))
     (functionDecStep_erases version) none
-  have hdatatypes : ∀ count (start : Array Plain.SymbolView → RPM Unit),
+  have hdatatypes : ∀ count (start : Array Plain.Symbol → RPM Unit),
       (∀ parameters, Erases (start parameters)) →
       ∀ state token, Erases (ListState.step (DatatypeState.start (HandledSort := Nat))
         (fun state token => do
@@ -288,7 +288,7 @@ theorem payloadStep_erases (version : Token.Version) (state : Payload Nat Nat Na
           | .more state => return Parser.Internal.Step.more state
           | .done constructors =>
             Parser.Internal.call (CommandHandler.endDatatypeDeclaration
-              (Multiple.ConstructorsView.Internal.new constructors))
+              (Multiple.Constructors.Internal.new constructors))
             return .done ()) (some count) state token) := by
     intro count start hstart state token
     apply listStep_erases
@@ -297,18 +297,18 @@ theorem payloadStep_erases (version : Token.Version) (state : Payload Nat Nat Na
   have hdeclare : ∀ symbol state token, Erases (datatypeStep (H := List Event)
       (fun parameters =>
         Parser.Internal.call (CommandHandler.startDeclareDatatype symbol
-          (Multiple.SymbolsView.Internal.new parameters)))
+          (Multiple.Symbols.Internal.new parameters)))
       version state token) := fun symbol =>
     datatypeStep_erases (fun _ => by apply erases_call) version
   have hdeclarations := fun count => hdatatypes count
     (fun parameters =>
       Parser.Internal.call (CommandHandler.startDatatypeDeclaration
-        (Multiple.SymbolsView.Internal.new parameters)))
+        (Multiple.Symbols.Internal.new parameters)))
     (fun _ => by apply erases_call)
   have hdeclareEach : ∀ state token, Erases (datatypeStep (H := List Event)
       (fun parameters =>
         Parser.Internal.call (CommandHandler.startDatatypeDeclaration
-          (Multiple.SymbolsView.Internal.new parameters)))
+          (Multiple.Symbols.Internal.new parameters)))
       version state token) :=
     datatypeStep_erases (fun _ => by apply erases_call) version
   have hbodies := fun count => listStep_erases (TermState.init (HandledSExpr := Nat)

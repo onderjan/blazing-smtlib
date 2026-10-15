@@ -39,7 +39,7 @@ open BSmtLib.Parser.Internal.Fused.Basic
 open BSmtLib.Parser.Script (ScriptParser)
 open BSmtLib.Parser.Script.ScriptParser.Internal renaming mk → scriptParser, posture → postureOf,
   command → commandOf, declarations → declarationsOf
-open BSmtLib.Plain (SymbolView NumeralView)
+open BSmtLib.Plain (Symbol Numeral)
 open BSmtLib.Token (BatchTag BatchCursor VersionPosture)
 
 section
@@ -100,7 +100,7 @@ def termComplete {batch : BatchTag} (posture : VersionPosture) (next : BatchCurs
 @[inline]
 def handleTerm {batch : BatchTag} (posture : VersionPosture) (next : BatchCursor batch)
     (h : H) (declarations : Nat) (context : TermContext (Handler.«Sort» H))
-    (levels : List (TermLevelOf H)) (node : TermNode (Handler.«Sort» H) (Handler.Term H))
+    (levels : List (TermLevelOf H)) (node : Nodes.Term (Handler.«Sort» H) (Handler.Term H))
     {β : Type} (k : OutcomeOf H next → m β) : m β := do
   match ← runHandler (Handler.handleTerm node) h with
   | (.error e, h) => fail posture next h (.handler e) k
@@ -145,14 +145,14 @@ def termStep {batch : BatchTag} (posture : VersionPosture) (h : H) (declarations
       match reservedAt? version next token with
       | none =>
         handleTerm posture next h declarations context levels
-          (.identifier ⟨SymbolView.Internal.newUnchecked false content, #[]⟩ none) k
+          (.qualifiedIdent ⟨Symbol.Internal.newUnchecked false content, #[]⟩ none) k
       | some _ => fail posture next h (.syntax .expectedTerm) k
     | .quotedSymbol =>
       handleTerm posture next h declarations context levels
-        (.identifier ⟨SymbolView.Internal.newUnchecked true (contentOf next token), #[]⟩ none) k
+        (.qualifiedIdent ⟨Symbol.Internal.newUnchecked true (contentOf next token), #[]⟩ none) k
     | .numeral | .decimal | .hexadecimal | .binary | .string =>
       handleTerm posture next h declarations context levels
-        (.constant (constantOf category (contentOf next token))) k
+        (.specialConstant (constantOf category (contentOf next token))) k
     | _ => fail posture next h (.syntax .expectedTerm) k
   | .opened =>
     match category with
@@ -161,7 +161,7 @@ def termStep {batch : BatchTag} (posture : VersionPosture) (h : H) (declarations
       match reservedAt? version next token with
       | none =>
         let level :=
-          TermLevel.application ⟨SymbolView.Internal.newUnchecked false content, #[]⟩ none #[]
+          TermLevel.application ⟨Symbol.Internal.newUnchecked false content, #[]⟩ none #[]
         k <| .term h declarations context .start (level :: levels)
       | some (.general word) =>
         match word with
@@ -184,7 +184,7 @@ def termStep {batch : BatchTag} (posture : VersionPosture) (h : H) (declarations
       | some (.commandName _) => fail posture next h (.syntax .expectedOperator) k
     | .quotedSymbol =>
       let level := TermLevel.application
-        ⟨SymbolView.Internal.newUnchecked true (contentOf next token), #[]⟩ none #[]
+        ⟨Symbol.Internal.newUnchecked true (contentOf next token), #[]⟩ none #[]
       k <| .term h declarations context .start (level :: levels)
     | .parenOpen => k <| .term h declarations context (.applicationHead .opened) levels
     | _ => fail posture next h (.syntax .expectedOperator) k
@@ -192,7 +192,7 @@ def termStep {batch : BatchTag} (posture : VersionPosture) (h : H) (declarations
     match Category.qualIdentStep version state category next token with
     | some (.more state) => k <| .term h declarations context (.qualIdent state) levels
     | some (.done identifier) =>
-      handleTerm posture next h declarations context levels (.identifier identifier none) k
+      handleTerm posture next h declarations context levels (.qualifiedIdent identifier none) k
     | some (.error kind) => fail posture next h (.syntax kind) k
     | none => portTermStep posture h declarations context { mode, levels } token next k
   | .applicationHead state =>
@@ -212,7 +212,7 @@ def termStep {batch : BatchTag} (posture : VersionPosture) (h : H) (declarations
     | .parenClose =>
       if bindings.isEmpty then fail posture next h (.syntax .emptyLetBindings) k
       else
-        match ← runHandler (Handler.startLet (Multiple.NamedView.Internal.new bindings)) h with
+        match ← runHandler (Handler.startLet (Multiple.Named.Internal.new bindings)) h with
         | (.error e, h) => fail posture next h (.handler e) k
         | (.ok scope, h) =>
           k <| .term h declarations context .start (.binder .let scope :: levels)
@@ -237,8 +237,8 @@ def termStep {batch : BatchTag} (posture : VersionPosture) (h : H) (declarations
       else
         let started := match binder with
           | .quantifier quantifier =>
-            Handler.startQuantifier quantifier (Multiple.NamedView.Internal.new variables)
-          | .lambda => Handler.startLambda (Multiple.NamedView.Internal.new variables)
+            Handler.startQuantifier quantifier (Multiple.Named.Internal.new variables)
+          | .lambda => Handler.startLambda (Multiple.Named.Internal.new variables)
         match ← runHandler started h with
         | (.error e, h) => fail posture next h (.handler e) k
         | (.ok scope, h) =>
@@ -280,7 +280,7 @@ def closingStep {batch : BatchTag} (posture : VersionPosture) (h : H) (declarati
 loop then hands the cursor to. -/
 @[inline]
 def startNonstandard {batch : BatchTag} (posture : VersionPosture) (h : H) (declarations : Nat)
-    (name : SymbolView) (next : BatchCursor batch) {β : Type} (k : OutcomeOf H next → m β) :
+    (name : Symbol) (next : BatchCursor batch) {β : Type} (k : OutcomeOf H next → m β) :
     m β := do
   match ← runHandler (CommandHandler.nonstandardCommand name) h with
   | (.error e, h) => fail posture next h (.handler e) k
@@ -314,10 +314,10 @@ def commandStep {batch : BatchTag} (posture : VersionPosture) (h : H) (declarati
       | some (.general _) => fail posture next h (.syntax .expectedCommandName) k
       | none =>
         startNonstandard posture h declarations
-          (SymbolView.Internal.newUnchecked false (contentOf next token)) next k
+          (Symbol.Internal.newUnchecked false (contentOf next token)) next k
     | .quotedSymbol =>
       startNonstandard posture h declarations
-        (SymbolView.Internal.newUnchecked true (contentOf next token)) next k
+        (Symbol.Internal.newUnchecked true (contentOf next token)) next k
     | _ => fail posture next h (.syntax .expectedCommandName) k
   | .payload (.closing final) => closingStep posture h declarations final token next k
   | .payload (.named named) =>
@@ -375,13 +375,13 @@ def commandStep {batch : BatchTag} (posture : VersionPosture) (h : H) (declarati
     match next.category token with
     | .numeral =>
       k <| .command h declarations
-        (closing (.push (NumeralView.Internal.newUnchecked (contentOf next token))))
+        (closing (.push (Numeral.Internal.newUnchecked (contentOf next token))))
     | _ => fail posture next h (.syntax (.expectedToken #[.numeral])) k
   | .payload .pop =>
     match next.category token with
     | .numeral =>
       k <| .command h declarations
-        (closing (.pop (NumeralView.Internal.newUnchecked (contentOf next token))))
+        (closing (.pop (Numeral.Internal.newUnchecked (contentOf next token))))
     | _ => fail posture next h (.syntax (.expectedToken #[.numeral])) k
   | _ => portStep posture h declarations command token next k
 

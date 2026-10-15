@@ -115,7 +115,7 @@ theorem pattern_rejects_constructor {version : Token.Version} {token : Parser.In
 
 /-- The pattern parser on `(`, a constructor and `)`, a constructor pattern without
 arguments. -/
-theorem pattern_rejects_empty {version : Token.Version} (constructor : Plain.SymbolView) :
+theorem pattern_rejects_empty {version : Token.Version} (constructor : Plain.Symbol) :
     Rejects version (PatternParser.new (H := H)) [.parenOpen, .symbol constructor, .parenClose]
       (pure () : PM H Unit) .emptyPatternArguments :=
   pattern_rejects (tokens := [.parenOpen, .symbol constructor])
@@ -131,9 +131,9 @@ def IsArgument (version : Token.Version) (token : Parser.Internal.Input) : Prop 
     (version ≥ .v2_7 ∧ token = .reserved (.general .underscore))
 
 omit [LawfulMonad m] in
-private theorem arguments_move {version : Token.Version} (constructor : Plain.SymbolView) :
+private theorem arguments_move {version : Token.Version} (constructor : Plain.Symbol) :
     (arguments : List Parser.Internal.Input) →
-    (∀ argument ∈ arguments, IsArgument version argument) → (found : Array Nodes.SymbolOrWildcard) →
+    (∀ argument ∈ arguments, IsArgument version argument) → (found : Array Nodes.SimplePattern) →
     ∃ found', Moves (PatternState.step (H := H) version) (.arguments constructor found) arguments
       (.arguments constructor found')
   | [], _, found => ⟨found, .nil _⟩
@@ -152,7 +152,7 @@ private theorem arguments_move {version : Token.Version} (constructor : Plain.Sy
 
 /-- The pattern parser on `(`, a constructor, arguments of the version and a token that is
 neither an argument of the version nor `)`; the error names the wildcard from 2.7 on. -/
-theorem pattern_rejects_argument {version : Token.Version} (constructor : Plain.SymbolView)
+theorem pattern_rejects_argument {version : Token.Version} (constructor : Plain.Symbol)
     {arguments : List Parser.Internal.Input}
     (harguments : ∀ argument ∈ arguments, IsArgument version argument)
     {token : Parser.Internal.Input} (htoken : ¬ IsArgument version token)

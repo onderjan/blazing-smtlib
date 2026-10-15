@@ -73,12 +73,13 @@ def qualStep (version : Token.Version) (state : QualIdentState (Traits.Handler.�
       (Nodes.QualifiedIdent (Traits.Handler.«Sort» H))) := do
   match ← qualIdentStep version state token with
   | .more state => return .more state
-  | .done (identifier, sort) => return .done ({ identifier, sort } : Nodes.QualifiedIdent _)
+  | .done (identifier, sort) =>
+    return .done ({ ident := identifier, sort } : Nodes.QualifiedIdent _)
 
 /-- The owned value of what `qualStep` gives. -/
 abbrev ownQualified (qualified : Nodes.QualifiedIdent (Traits.Handler.«Sort» H)) :
     Nodes.QualifiedIdentBuf (Traits.Handler.«Sort» H) :=
-  { identifier := qualified.identifier.intoOwned, sort := qualified.sort }
+  { ident := qualified.ident.intoOwned, sort := qualified.sort }
 
 private theorem qualifiedIdent_sim (version : Token.Version) :
     Simulates version (QualifiedIdentParser.mk (H := H)) (mapSteps ownQualified (qualStep version))
@@ -88,7 +89,7 @@ private theorem qualifiedIdent_sim (version : Token.Version) :
       match ← qualIdentStep version state token with
       | .more state => return Parser.Internal.Flow.more (QualifiedIdentParser.mk state)
       | .done (identifier, sort) =>
-        return .done ({ identifier := identifier.intoOwned, sort } : Nodes.QualifiedIdentBuf _))
+        return .done ({ ident := identifier.intoOwned, sort } : Nodes.QualifiedIdentBuf _))
     = _
   simp only [mapSteps, qualStep, map_bind]
   refine bind_congr fun step => ?_
@@ -98,13 +99,13 @@ private theorem qualifiedIdent_sim (version : Token.Version) :
 qualified identifier. -/
 theorem runs_qualStep {version : Token.Version} {state : QualIdentState (Traits.Handler.«Sort» H)}
     {tokens : List Parser.Internal.Input} {α : Type} {program : PM H α}
-    {result : α → Nodes.Identifier × Option (Traits.Handler.«Sort» H)}
+    {result : α → Nodes.Ident × Option (Traits.Handler.«Sort» H)}
     (h : RunsS noPoints (qualIdentStep version) state tokens program
       fun a => pure (.done (result a))) :
     RunsS noPoints (qualStep version) state tokens program
-      fun a => pure (.done { identifier := (result a).1, sort := (result a).2 }) :=
+      fun a => pure (.done { ident := (result a).1, sort := (result a).2 }) :=
   (RunsS.embed (outer := qualStep version) id
-    (fun (identifier, sort) => pure (.done { identifier, sort }))
+    (fun (identifier, sort) => pure (.done { ident := identifier, sort }))
     (fun state token => by
       simp only [qualStep]
       congr 1
@@ -130,7 +131,7 @@ identifier, unqualified, with no call, and end with it, through the bridge. -/
 theorem qualifiedIdent_runs_plain {version : Token.Version} (identifier : Tree.Identifier)
     (hvalid : identifier.Valid (Bridge.version version)) {tokens : List Parser.Internal.Input}
     (hs : Stands tokens identifier.tokens) :
-    ∃ result : Nodes.Identifier,
+    ∃ result : Nodes.Ident,
       (RunsS noPoints (qualIdentStep (H := H) version) .start tokens
         (pure (identifier, (none : Option (Traits.Handler.«Sort» H))))
         fun r => pure (.done (result, r.2))) ∧
@@ -183,7 +184,7 @@ theorem qualifiedIdent_runs {version : Token.Version}
     (hA : TermAgrees h) (qualified : Tree.QualIdentifier)
     (hvalid : qualified.Valid (Bridge.version version)) {tokens : List Parser.Internal.Input}
     (hs : Stands tokens qualified.tokens) :
-    ∃ identifier : Nodes.Identifier,
+    ∃ identifier : Nodes.Ident,
       (RunsS noPoints (qualIdentStep version) .start tokens
         (adaptRun (Traversal.qualIdentifier noPoints h qualified))
         fun result => pure (.done (identifier, result.2))) ∧
@@ -296,12 +297,12 @@ theorem qualifiedIdent_parses {version : Token.Version}
     (hA : TermAgrees h) (qualified : Tree.QualIdentifier)
     (hvalid : qualified.Valid (Bridge.version version)) {tokens : List Parser.Internal.Input}
     (hs : Stands tokens qualified.tokens) :
-    ∃ identifier : Nodes.Identifier,
+    ∃ identifier : Nodes.Ident,
       Bridge.identifier identifier = (match qualified with
         | .plain identifier => identifier
         | .as identifier _ => identifier) ∧
       Finishes version (QualifiedIdentParser.new (H := H)) tokens
-        ((fun result => ({ identifier := identifier.intoOwned, sort := result.2 } :
+        ((fun result => ({ ident := identifier.intoOwned, sort := result.2 } :
             Nodes.QualifiedIdentBuf _)) <$>
           adaptRun (Traversal.qualIdentifier noPoints h qualified))
         QualifiedIdentParser.new := by
@@ -310,7 +311,7 @@ theorem qualifiedIdent_parses {version : Token.Version}
   have := parses_of_runsS_map (state := QualIdentState.start) (@qualifiedIdent_hparse H m _ _)
     (qualifiedIdent_sim version)
     (RunsS.map_program (f := fun r : Tree.Identifier × Option (Traits.Handler.«Sort» H) =>
-      ({ identifier, sort := r.2 } : Nodes.QualifiedIdent _))
+      ({ ident := identifier, sort := r.2 } : Nodes.QualifiedIdent _))
       (runs_qualStep (result := fun r : Tree.Identifier × Option (Traits.Handler.«Sort» H) =>
         (identifier, r.2)) hruns))
   rw [Functor.map_map] at this
@@ -321,9 +322,9 @@ finishes with the identifier, through the bridge, and no sort, making no call. -
 theorem qualifiedIdent_parses_plain {version : Token.Version} (identifier : Tree.Identifier)
     (hvalid : identifier.Valid (Bridge.version version)) {tokens : List Parser.Internal.Input}
     (hs : Stands tokens identifier.tokens) :
-    ∃ result : Nodes.Identifier, Bridge.identifier result = identifier ∧
+    ∃ result : Nodes.Ident, Bridge.identifier result = identifier ∧
       Finishes version (QualifiedIdentParser.new (H := H)) tokens
-        (pure { identifier := result.intoOwned, sort := none } :
+        (pure { ident := result.intoOwned, sort := none } :
           PM H (Nodes.QualifiedIdentBuf (Traits.Handler.«Sort» H)))
         QualifiedIdentParser.new := by
   obtain ⟨result, hruns, hresult⟩ := qualifiedIdent_runs_plain (H := H) identifier hvalid hs
@@ -331,7 +332,7 @@ theorem qualifiedIdent_parses_plain {version : Token.Version} (identifier : Tree
   have hparses := parses_of_runsS_map (state := QualIdentState.start)
     (@qualifiedIdent_hparse H m _ _) (qualifiedIdent_sim version)
     (RunsS.map_program (f := fun r : Tree.Identifier × Option (Traits.Handler.«Sort» H) =>
-      ({ identifier := result, sort := r.2 } : Nodes.QualifiedIdent _))
+      ({ ident := result, sort := r.2 } : Nodes.QualifiedIdent _))
       (runs_qualStep (result := fun r : Tree.Identifier × Option (Traits.Handler.«Sort» H) =>
         (result, r.2)) hruns))
   simp only [map_pure] at hparses
@@ -346,9 +347,9 @@ theorem qualifiedIdent_parses_as {version : Token.Version}
     (hvalid : (Tree.QualIdentifier.as identifier sort).Valid (Bridge.version version))
     {tokens : List Parser.Internal.Input}
     (hs : Stands tokens (Tree.QualIdentifier.as identifier sort).tokens) :
-    ∃ result : Nodes.Identifier, Bridge.identifier result = identifier ∧
+    ∃ result : Nodes.Ident, Bridge.identifier result = identifier ∧
       Finishes version (QualifiedIdentParser.new (H := H)) tokens
-        ((fun handled => ({ identifier := result.intoOwned, sort := some handled } :
+        ((fun handled => ({ ident := result.intoOwned, sort := some handled } :
             Nodes.QualifiedIdentBuf _)) <$>
           adaptRun (Traversal.sort noPoints h sort))
         QualifiedIdentParser.new := by
@@ -410,7 +411,7 @@ private theorem qualifiedIdent_sortRuns {version : Token.Version} {identifier : 
       (Traits.Handler.«Sort» H))}
     (hsort :
       RunsS noPoints (sortStep version) SortState.init tokens program next) :
-    ∃ head : Nodes.Identifier,
+    ∃ head : Nodes.Ident,
       RunsS noPoints (qualIdentStep (H := H) version) .start
         ([.parenOpen] ++ ([.reserved (.general .as)] ++ (identTokens ++ tokens))) program
         fun a => next a >>= Parser.Internal.Step.wrap
@@ -454,7 +455,7 @@ private theorem runs_qualStep_throw {version : Token.Version}
       fun _ => throw (.syntax kind)) :
     RunsS noPoints (qualStep version) state tokens program fun _ => throw (.syntax kind) :=
   (RunsS.embed (outer := qualStep (H := H) version) id
-    (fun (identifier, sort) => pure (.done { identifier, sort }))
+    (fun (identifier, sort) => pure (.done { ident := identifier, sort }))
     (fun state token => by
       simp only [qualStep]
       congr 1
@@ -547,7 +548,7 @@ symbol and `)`: a sort application without arguments. -/
 theorem qualifiedIdent_rejects_sortEmpty {version : Token.Version} {identifier : Tree.Identifier}
     (hvalid : identifier.Valid (Bridge.version version))
     {identTokens : List Parser.Internal.Input} (hident : Stands identTokens identifier.tokens)
-    (head : Plain.SymbolView) :
+    (head : Plain.Symbol) :
     Rejects version (QualifiedIdentParser.new (H := H))
       (.parenOpen :: .reserved (.general .as) ::
         (identTokens ++ [.parenOpen, .symbol head, .parenClose]))
@@ -644,7 +645,7 @@ theorem qualifiedIdent_rejects_sortDeepEmpty {version : Token.Version}
     (hframes : ∀ frame ∈ frames, frame.1.Valid (Bridge.version version) ∧
       Tree.«Sort».ValidAll (Bridge.version version) frame.2)
     {tokens : List Parser.Internal.Input} (hs : Stands tokens (frameTokens frames))
-    (head : Plain.SymbolView) :
+    (head : Plain.Symbol) :
     Rejects version (QualifiedIdentParser.new (H := H))
       (.parenOpen :: .reserved (.general .as) ::
         (identTokens ++ (tokens ++ [.parenOpen, .symbol head, .parenClose])))
@@ -664,11 +665,11 @@ theorem qualifiedIdent_parses_any {version : Token.Version}
     (hA : TermAgrees h) (qualified : Tree.QualIdentifier)
     (hvalid : qualified.Valid (Bridge.version version)) {tokens : List Parser.Internal.Input}
     (hs : Stands tokens qualified.tokens) :
-    ∃ identifier : Nodes.Identifier,
+    ∃ identifier : Nodes.Ident,
       (qualified = .plain (Bridge.identifier identifier) ∨
         ∃ sort, qualified = .as (Bridge.identifier identifier) sort) ∧
       Finishes version (QualifiedIdentParser.new (H := H)) tokens
-        ((fun result => ({ identifier := identifier.intoOwned, sort := result.2 } :
+        ((fun result => ({ ident := identifier.intoOwned, sort := result.2 } :
             Nodes.QualifiedIdentBuf _)) <$>
           adaptRun (Traversal.qualIdentifier noPoints h qualified))
         QualifiedIdentParser.new := by

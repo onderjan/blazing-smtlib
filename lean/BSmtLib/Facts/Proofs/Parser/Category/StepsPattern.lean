@@ -40,8 +40,8 @@ theorem patternArguments_runs : (arguments : List Tree.SymbolOrWildcard) →
     (∀ argument ∈ arguments, argument.Valid (Bridge.version version)) →
     ∀ {tokens : List Parser.Internal.Input},
         Stands tokens (arguments.map Tree.SymbolOrWildcard.token) →
-    ∀ (constructor : Plain.SymbolView) (found : Array Nodes.SymbolOrWildcard),
-    ∃ parsed : Array Nodes.SymbolOrWildcard,
+    ∀ (constructor : Plain.Symbol) (found : Array Nodes.SimplePattern),
+    ∃ parsed : Array Nodes.SimplePattern,
       parsed.toList.map Bridge.symbolOrWildcard = arguments ∧
       RunsS points (PatternState.step (H := H) version) (.arguments constructor found) tokens
         (ticks points tokens) fun _ => pure (.more (.arguments constructor (found ++ parsed)))
@@ -74,7 +74,7 @@ theorem pattern_runs {pattern : Tree.Pattern} (hvalid : pattern.Valid (Bridge.ve
   | single item =>
     obtain ⟨token, rfl, htoken⟩ := Stands.split_single hs
     obtain ⟨parsed, hparsed, hitem, hne⟩ := symbolOrWildcard_runs hvalid htoken
-    refine ⟨.single parsed, by simp [Bridge.pattern, hitem], ?_⟩
+    refine ⟨.simple parsed, by simp [Bridge.pattern, hitem], ?_⟩
     refine (RunsS.token (program := pure ()) ?_).congr (by simp) rfl
     cases token <;> simp_all [PatternState.step, PatternState.symbolOrWildcard?,
         Parser.Internal.Input.isWord]
@@ -88,10 +88,10 @@ theorem pattern_runs {pattern : Tree.Pattern} (hvalid : pattern.Valid (Bridge.ve
     have hparsed : parsed.isEmpty = false := by
       cases parsed using Array.recOn with
       | mk list => cases list <;> simp_all [Tree.Pattern.Valid]
-    refine ⟨.constructor symbol (#[] ++ parsed), by simp [Bridge.pattern, hmap], ?_⟩
+    refine ⟨.application symbol (#[] ++ parsed), by simp [Bridge.pattern, hmap], ?_⟩
     have hclose : RunsS points (PatternState.step (H := H) version)
         (.arguments symbol (#[] ++ parsed)) [.parenClose] (do tick points .parenClose; pure ())
-        fun _ => pure (.done (.constructor symbol (#[] ++ parsed))) :=
+        fun _ => pure (.done (.application symbol (#[] ++ parsed))) :=
       RunsS.token (by simp [PatternState.step, hparsed])
     rw [show Parser.Internal.Input.parenOpen ::
         (Parser.Internal.Input.symbol symbol :: argumentTokens ++ [.parenClose]) =
