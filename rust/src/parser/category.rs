@@ -16,6 +16,8 @@ pub use {
     combinator::{
         SmtClosedMaximumParser, SmtClosedMultipleParser, SmtClosedParser, SmtOpenedParser,
         SmtPairParser, SmtParenMaximumParser, SmtParenMultipleParser, SmtParenParser,
+        SmtTuple3Parser, SmtTuple4Parser, SmtTuple5Parser, SmtTuple6Parser, SmtTuple7Parser,
+        SmtTuple8Parser,
     },
     ident::SmtIdentParser,
     pattern::SmtPatternParser,

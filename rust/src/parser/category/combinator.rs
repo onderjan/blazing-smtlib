@@ -75,6 +75,92 @@ impl<H: SmtHandler, P1: SmtParse<H>, P2: SmtParse<H>> SmtParse<H> for SmtPairPar
     }
 }
 
+/// The pair parsers nested to the right over the given parsers.
+macro_rules! nested_pair_type {
+    ($h:ident; $first:ident, $second:ident) => {
+        SmtPairParser<$h, $first, $second>
+    };
+    ($h:ident; $first:ident, $($rest:ident),+) => {
+        SmtPairParser<$h, $first, nested_pair_type!($h; $($rest),+)>
+    };
+}
+
+/// The nested pair parsers over the given parser values.
+macro_rules! nested_pair_new {
+    ($first:ident, $second:ident) => {
+        SmtPairParser::new($first, $second)
+    };
+    ($first:ident, $($rest:ident),+) => {
+        SmtPairParser::new($first, nested_pair_new!($($rest),+))
+    };
+}
+
+/// The pattern of the nested result of the nested pair parsers.
+macro_rules! nested_pair_pattern {
+    ($first:ident, $second:ident) => {
+        ($first, $second)
+    };
+    ($first:ident, $($rest:ident),+) => {
+        ($first, nested_pair_pattern!($($rest),+))
+    };
+}
+
+/// Defines a parser of a fixed number of values in turn.
+///
+/// It is the pair parsers nested to the right, with the nested result
+/// flattened into one tuple when the last parser breaks.
+macro_rules! tuple_parser {
+    ($name:ident: $($parser:ident $value:ident),+) => {
+        /// Parses using each parser in turn, then returns the result tuple.
+        ///
+        /// Preserves self-reset: if the inner parsers are self-resetting,
+        /// moves back into the default state before returning Break.
+        pub struct $name<H: SmtHandler, $($parser: SmtParse<H>),+> {
+            inner: nested_pair_type!(H; $($parser),+),
+        }
+
+        impl<H: SmtHandler, $($parser: SmtParse<H>),+> $name<H, $($parser),+> {
+            // one argument per parser, as many as the tuple has
+            #[allow(clippy::too_many_arguments)]
+            pub fn new($($value: $parser),+) -> Self {
+                Self {
+                    inner: nested_pair_new!($($value),+),
+                }
+            }
+        }
+
+        impl<H: SmtHandler, $($parser: SmtParse<H> + Default),+> Default for $name<H, $($parser),+> {
+            fn default() -> Self {
+                Self::new($($parser::default()),+)
+            }
+        }
+
+        impl<H: SmtHandler, $($parser: SmtParse<H>),+> SmtParse<H> for $name<H, $($parser),+> {
+            type Result = ($($parser::Result,)+);
+
+            #[inline]
+            fn parse<Z: SmtCursor>(
+                &mut self,
+                handler: &mut H,
+                parse_state: &mut SmtParseState<H>,
+                cursor: &mut Z,
+            ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
+                Ok(self
+                    .inner
+                    .parse(handler, parse_state, cursor)?
+                    .map_break(|nested_pair_pattern!($($value),+)| ($($value,)+)))
+            }
+        }
+    };
+}
+
+tuple_parser!(SmtTuple3Parser: P1 p1, P2 p2, P3 p3);
+tuple_parser!(SmtTuple4Parser: P1 p1, P2 p2, P3 p3, P4 p4);
+tuple_parser!(SmtTuple5Parser: P1 p1, P2 p2, P3 p3, P4 p4, P5 p5);
+tuple_parser!(SmtTuple6Parser: P1 p1, P2 p2, P3 p3, P4 p4, P5 p5, P6 p6);
+tuple_parser!(SmtTuple7Parser: P1 p1, P2 p2, P3 p3, P4 p4, P5 p5, P6 p6, P7 p7);
+tuple_parser!(SmtTuple8Parser: P1 p1, P2 p2, P3 p3, P4 p4, P5 p5, P6 p6, P7 p7, P8 p8);
+
 /// Parses using the inner parser, then parses a closing parenthesis, then returns the inner result.
 ///
 /// Preserves self-reset: if the inner parser is self-resetting,
