@@ -64,22 +64,18 @@ impl<H: SmtCommandHandler> SmtParse<H> for SmtScriptParser<H> {
                     if let Some(max_declarations) = self.posture.max_declarations()
                         && self.num_version_declarations >= max_declarations
                     {
-                        return Err(SmtParseError::version_error(
+                        return Err(SmtParseError::version(
                             SmtVersionErrorKind::TooManyDeclarations(max_declarations),
                         ));
                     }
                     // ensure the version itself is allowed by the posture
                     if !self.posture.allowed().contains(&version) {
-                        return Err(SmtParseError::version_error(
-                            SmtVersionErrorKind::Unsupported,
-                        ));
+                        return Err(SmtParseError::version(SmtVersionErrorKind::Unsupported));
                     }
                     // allowed by the posture, try to set version on the cursor
                     if let Err(SmtVersionRefused) = cursor.set_version(version) {
                         // the producer rejected the version
-                        return Err(SmtParseError::version_error(
-                            SmtVersionErrorKind::Unsupported,
-                        ));
+                        return Err(SmtParseError::version(SmtVersionErrorKind::Unsupported));
                     }
                     // allowed by the producer, set version on the handler
                     handler.set_version(version);

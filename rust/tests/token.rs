@@ -2,7 +2,6 @@
 
 mod reserved_words;
 
-use blazing_smtlib::SmtBytesBuf;
 use blazing_smtlib::token::{SmtCommandNameReserved, SmtGeneralReserved, SmtReserved, SmtVersion};
 
 /// Returns every `SmtGeneralReserved` variant, in declaration order.
@@ -84,18 +83,17 @@ fn all_reserved() -> Vec<SmtReserved> {
     general.chain(command_names).collect()
 }
 
-/// `as_str` and `from_symbol_opt` are inverse hand-written matches;
+/// `as_str` and `from_bytes` are inverse hand-written matches;
 /// the round trip catches them drifting apart. It also implies all
 /// spellings are distinct: two variants sharing one would make
-/// `from_symbol_opt` return the wrong variant for one of them.
+/// `from_bytes` return the wrong variant for one of them.
 #[test]
-fn reserved_as_str_round_trips_through_from_symbol_opt() {
+fn reserved_as_str_round_trips_through_from_bytes() {
     for reserved in all_reserved() {
-        let symbol = SmtBytesBuf::from_vec(reserved.as_str().as_bytes().to_vec());
         assert_eq!(
-            SmtReserved::from_symbol_opt(&symbol, SmtVersion::V2_7),
+            SmtReserved::from_bytes(reserved.as_str().as_bytes(), SmtVersion::V2_7),
             Some(reserved),
-            "as_str/from_symbol_opt disagree for {reserved:?}"
+            "as_str/from_bytes disagree for {reserved:?}"
         );
     }
 }
@@ -143,9 +141,8 @@ fn non_reserved_symbols_are_rejected() {
         b"x",
     ];
     for text in near_misses {
-        let symbol = SmtBytesBuf::from_vec(text.to_vec());
         assert_eq!(
-            SmtReserved::from_symbol_opt(&symbol, SmtVersion::V2_7),
+            SmtReserved::from_bytes(text, SmtVersion::V2_7),
             None,
             "{:?} should not be a reserved word",
             text.escape_ascii().to_string()
@@ -154,19 +151,13 @@ fn non_reserved_symbols_are_rejected() {
 }
 
 /// Every spelling the standard reserves, the command names included,
-/// is recognized from bytes and from a string, and spells itself back.
+/// is recognized from its bytes and spells itself back.
 #[test]
 fn every_reserved_spelling_is_recognized() {
     for word in reserved_words::reserved_words() {
-        let reserved = SmtReserved::from_bytes_opt(word.as_bytes(), SmtVersion::V2_7)
+        let reserved = SmtReserved::from_bytes(word.as_bytes(), SmtVersion::V2_7)
             .unwrap_or_else(|| panic!("{word:?} should be a reserved word"));
         assert_eq!(reserved.as_str(), word, "as_str of {reserved:?}");
-        let symbol = SmtBytesBuf::from_vec(word.as_bytes().to_vec());
-        assert_eq!(
-            SmtReserved::from_symbol_opt(&symbol, SmtVersion::V2_7),
-            Some(reserved),
-            "from_symbol_opt and from_bytes_opt disagree for {word:?}"
-        );
     }
 }
 
@@ -225,7 +216,7 @@ fn non_reserved_command_like_symbols_are_rejected() {
     ];
     for text in near_misses {
         assert_eq!(
-            SmtReserved::from_bytes_opt(text, SmtVersion::V2_7),
+            SmtReserved::from_bytes(text, SmtVersion::V2_7),
             None,
             "{:?} should not be a reserved word",
             text.escape_ascii().to_string()
@@ -241,7 +232,7 @@ fn reserved_words_are_general_or_command_names() {
         let reserved = SmtReserved::General(general);
         assert!(!reserved.is_command_name(), "{reserved:?}");
         assert_eq!(
-            SmtCommandNameReserved::from_bytes_opt(general.as_str().as_bytes(), SmtVersion::V2_7),
+            SmtCommandNameReserved::from_bytes(general.as_str().as_bytes(), SmtVersion::V2_7),
             None
         );
         assert_eq!(reserved.as_str(), general.as_str());
@@ -250,7 +241,7 @@ fn reserved_words_are_general_or_command_names() {
         let reserved = SmtReserved::CommandName(command_name);
         assert!(reserved.is_command_name(), "{reserved:?}");
         assert_eq!(
-            SmtGeneralReserved::from_bytes_opt(command_name.as_str().as_bytes(), SmtVersion::V2_7),
+            SmtGeneralReserved::from_bytes(command_name.as_str().as_bytes(), SmtVersion::V2_7),
             None
         );
         assert_eq!(reserved.as_str(), command_name.as_str());

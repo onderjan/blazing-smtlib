@@ -130,7 +130,7 @@ macro_rules! standard_commands {
                             }
                             Some(VersionSwitch::Unknown) => {
                                 // we were asked to switch to an unknown version
-                                return Err(SmtParseError::version_error(
+                                return Err(SmtParseError::version(
                                     SmtVersionErrorKind::Unsupported,
                                 ));
                             }
@@ -350,7 +350,7 @@ impl<H: SmtCommandHandler> SmtParse<H> for GetValueParser<H> {
             Break(terms) => {
                 // ensure there is at least one term
                 if terms.is_empty() {
-                    return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Empty(
+                    return Err(SmtParseError::syntax(SmtSyntaxErrorKind::Empty(
                         SmtNonEmptyList::GetValueTerms,
                     )));
                 }
@@ -454,7 +454,7 @@ impl<H: SmtCommandHandler> SmtParse<H> for SetInfoParser {
                 SetInfoState::Version => {
                     // only a decimal that converts to a version names one
                     let version = if let SmtSyntaxToken::Decimal(decimal) = cursor.syntax(&token) {
-                        SmtVersion::from_decimal_opt(decimal.as_slice())
+                        SmtVersion::from_decimal(decimal.as_slice())
                     } else {
                         None
                     };
@@ -552,9 +552,9 @@ impl<H: SmtCommandHandler> SmtParse<H> for PropLiteralParser {
                 (PropLiteralState::Negated, SmtSyntaxToken::Symbol(_)) => PropLiteralState::Close,
                 (PropLiteralState::Close, SmtSyntaxToken::ParenClose) => PropLiteralState::Start,
                 _ => {
-                    return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Expected(
-                        &[SmtSyntaxExpected::PropositionalLiteral],
-                    )));
+                    return Err(SmtParseError::syntax(SmtSyntaxErrorKind::Expected(&[
+                        SmtSyntaxExpected::PropositionalLiteral,
+                    ])));
                 }
             };
 

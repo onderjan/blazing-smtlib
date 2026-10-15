@@ -409,9 +409,9 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtClosedMaximumParser<H, P>
                     // we cannot allow this element
                     // consume the peeked closing parenthesis
                     let _ = cursor.next();
-                    return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Expected(
-                        &[expected::PAREN_CLOSE],
-                    )));
+                    return Err(SmtParseError::syntax(SmtSyntaxErrorKind::Expected(&[
+                        expected::PAREN_CLOSE,
+                    ])));
                 }
 
                 // we are no longer outside

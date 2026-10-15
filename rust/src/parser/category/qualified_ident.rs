@@ -206,9 +206,9 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
                     }
                     SmtSyntaxToken::ParenOpen => self.state = State::Open,
                     _ => {
-                        return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Expected(
-                            &[SmtSyntaxExpected::Ident],
-                        )));
+                        return Err(SmtParseError::syntax(SmtSyntaxErrorKind::Expected(&[
+                            SmtSyntaxExpected::Ident,
+                        ])));
                     }
                 }
             }
@@ -225,9 +225,10 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
                     self.state = State::QualifiedIdent;
                 }
                 _ => {
-                    return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Expected(
-                        &[expected::UNDERSCORE, expected::AS],
-                    )));
+                    return Err(SmtParseError::syntax(SmtSyntaxErrorKind::Expected(&[
+                        expected::UNDERSCORE,
+                        expected::AS,
+                    ])));
                 }
             },
             // step 3: parsing an unqualified indexed identifier

@@ -341,7 +341,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
     /// Every line feed before `position` must be marked before calling this.
     fn location_at(&self, position: usize) -> SmtLocation {
         let offset = self.offset + position as u64;
-        SmtLocation::new(offset, self.line, offset - self.line_start)
+        SmtLocation::new_unchecked(offset, self.line, offset - self.line_start)
     }
 }
 

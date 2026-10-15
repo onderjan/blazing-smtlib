@@ -207,9 +207,9 @@ impl AttributeSlot {
                         self.state = State::AfterName(arena.push_text(keyword.as_slice()));
                     }
                     _ => {
-                        return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Expected(
-                            &[SmtSyntaxExpected::Attribute],
-                        )));
+                        return Err(SmtParseError::syntax(SmtSyntaxErrorKind::Expected(&[
+                            SmtSyntaxExpected::Attribute,
+                        ])));
                     }
                 }
             }
@@ -246,9 +246,9 @@ impl AttributeSlot {
                         // so we need to add it to `num_attributes`
                         if !A::next_allowed(self.num_attributes + 1) {
                             // it turns out that we actually expected a closing parenthesis
-                            return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Expected(
-                                &[expected::PAREN_CLOSE],
-                            )));
+                            return Err(SmtParseError::syntax(SmtSyntaxErrorKind::Expected(&[
+                                expected::PAREN_CLOSE,
+                            ])));
                         }
                         // the current attribute was just a name
                         // the new state will be after the new name given by the keyword
@@ -262,9 +262,9 @@ impl AttributeSlot {
                                 Decision::FinishAttribute,
                             )
                         } else {
-                            return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Expected(
-                                &[SmtSyntaxExpected::Attribute],
-                            )));
+                            return Err(SmtParseError::syntax(SmtSyntaxErrorKind::Expected(&[
+                                SmtSyntaxExpected::Attribute,
+                            ])));
                         }
                     }
                 };
@@ -361,9 +361,9 @@ impl<H: SmtHandler + ?Sized> AttributeCollection<H> for SingleAttribute {
         );
 
         if arena.attributes.len() == start {
-            return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Expected(
-                &[SmtSyntaxExpected::Attribute],
-            )));
+            return Err(SmtParseError::syntax(SmtSyntaxErrorKind::Expected(&[
+                SmtSyntaxExpected::Attribute,
+            ])));
         }
         Ok(arena
             .attributes

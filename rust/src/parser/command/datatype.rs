@@ -189,9 +189,10 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
                     None
                 }
                 _ => {
-                    return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Expected(
-                        &[expected::PAR, expected::PAREN_OPEN],
-                    )));
+                    return Err(SmtParseError::syntax(SmtSyntaxErrorKind::Expected(&[
+                        expected::PAR,
+                        expected::PAREN_OPEN,
+                    ])));
                 }
             },
             DatatypeState::SimpleConstructors => {
@@ -213,7 +214,7 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
                 )? {
                     // there must be at least one parameter
                     if params.is_empty() {
-                        return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Empty(
+                        return Err(SmtParseError::syntax(SmtSyntaxErrorKind::Empty(
                             SmtNonEmptyList::DatatypeParameters,
                         )));
                     }
@@ -256,7 +257,7 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
         if let Some(constructors) = constructors {
             // there must be at least one constructor
             if constructors.is_empty() {
-                return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Empty(
+                return Err(SmtParseError::syntax(SmtSyntaxErrorKind::Empty(
                     SmtNonEmptyList::DatatypeConstructors,
                 )));
             }
@@ -368,7 +369,7 @@ impl<H: SmtCommandHandler> DeclareDatatypesParser<H> {
                 )? {
                     // introductions must not be empty
                     if introductions.is_empty() {
-                        return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Empty(
+                        return Err(SmtParseError::syntax(SmtSyntaxErrorKind::Empty(
                             SmtNonEmptyList::DatatypeIntroductions,
                         )));
                     }
@@ -393,7 +394,7 @@ impl<H: SmtCommandHandler> DeclareDatatypesParser<H> {
                     // there cannot be more datatypes than sort declarations due to the maximum parser
                     // ensure there are not more sort declarations than datatypes
                     if datatypes.len() != self.datatypes_parser.max_elements() {
-                        return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Missing(
+                        return Err(SmtParseError::syntax(SmtSyntaxErrorKind::Missing(
                             SmtMissingItem::Datatype,
                         )));
                     }

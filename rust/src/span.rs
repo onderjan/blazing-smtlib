@@ -16,14 +16,42 @@ pub struct SmtLocation {
     column: u64,
 }
 
+/// The line and column cannot be at the offset: every line before
+/// and every column on the line take at least one byte.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct SmtInvalidLocation;
+
 impl SmtLocation {
     #[inline]
-    pub fn new(offset: u64, line: u64, column: u64) -> Self {
+    pub fn new(offset: u64, line: u64, column: u64) -> Result<Self, SmtInvalidLocation> {
+        if Self::is_allowed(offset, line, column) {
+            Ok(Self {
+                offset,
+                line,
+                column,
+            })
+        } else {
+            Err(SmtInvalidLocation)
+        }
+    }
+
+    #[inline]
+    pub(crate) fn new_unchecked(offset: u64, line: u64, column: u64) -> Self {
+        debug_assert!(
+            Self::is_allowed(offset, line, column),
+            "inconsistent location at offset {offset}, line {line}, column {column}"
+        );
         Self {
             offset,
             line,
             column,
         }
+    }
+
+    fn is_allowed(offset: u64, line: u64, column: u64) -> bool {
+        // each line before ends with a line feed, each column is a byte
+        line.checked_add(column)
+            .is_some_and(|bytes| bytes <= offset)
     }
 
     /// Zero-based byte offset.
@@ -153,8 +181,8 @@ impl SmtSpan {
     pub(crate) fn on_line(line: u64, line_start: u64, start: u64, end: u64) -> Self {
         debug_assert!(start <= end, "span start {start} is after end {end}");
         Self {
-            start: SmtLocation::new(start, line, start - line_start),
-            end: SmtLocation::new(end, line, end - line_start),
+            start: SmtLocation::new_unchecked(start, line, start - line_start),
+            end: SmtLocation::new_unchecked(end, line, end - line_start),
         }
     }
 

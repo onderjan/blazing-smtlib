@@ -228,7 +228,7 @@ impl<H: SmtCommandHandler> DefineFunsRecParser<H> {
                 )? {
                     // there must be at least one signature
                     if signatures.is_empty() {
-                        return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Empty(
+                        return Err(SmtParseError::syntax(SmtSyntaxErrorKind::Empty(
                             SmtNonEmptyList::FunctionSignatures,
                         )));
                     }
@@ -258,7 +258,7 @@ impl<H: SmtCommandHandler> DefineFunsRecParser<H> {
                     // bounded by the maximum which is the number of signatures
                     if bodies.len() != self.bodies_parser.max_elements() {
                         // not enough bodies processed
-                        return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Missing(
+                        return Err(SmtParseError::syntax(SmtSyntaxErrorKind::Missing(
                             SmtMissingItem::FunctionBody,
                         )));
                     }

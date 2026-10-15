@@ -534,12 +534,7 @@ pub struct SortParser;
 pub struct SExprParser;
 
 fn version_name(version: SmtVersion) -> &'static str {
-    match version {
-        SmtVersion::V2_0 => "2.0",
-        SmtVersion::V2_5 => "2.5",
-        SmtVersion::V2_6 => "2.6",
-        SmtVersion::V2_7 => "2.7",
-    }
+    std::str::from_utf8(version.as_decimal().as_slice()).expect("a version decimal is ASCII")
 }
 
 impl<H: CommandHandler> TopParser<H> for ScriptParser {

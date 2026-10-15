@@ -52,7 +52,7 @@ impl SmtSimplePatternParser {
                     SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Symbol])
                 };
 
-                Err(SmtParseError::syntax_error(kind))
+                Err(SmtParseError::syntax(kind))
             }
         }
     }
@@ -187,7 +187,7 @@ impl PatternSlot {
                 // there must be at least one argument to the constructor
                 let args_end = arena.simple_patterns.len();
                 if args_end == self.arena_args_start {
-                    return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Empty(
+                    return Err(SmtParseError::syntax(SmtSyntaxErrorKind::Empty(
                         SmtNonEmptyList::PatternArguments,
                     )));
                 }
@@ -213,9 +213,9 @@ impl PatternSlot {
         if self.is_open {
             // step 2: expecting the constructor, which goes to the arena text
             let SmtSyntaxToken::Symbol(constructor) = cursor.syntax(token) else {
-                return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Expected(
-                    &[SmtSyntaxExpected::Symbol],
-                )));
+                return Err(SmtParseError::syntax(SmtSyntaxErrorKind::Expected(&[
+                    SmtSyntaxExpected::Symbol,
+                ])));
             };
             // push the constructor to the arena text and start parsing arguments
             self.constructor = Some(arena.push_symbol(constructor));
@@ -259,7 +259,7 @@ impl PatternSlot {
                 } else {
                     SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Symbol, expected::PAREN_OPEN])
                 };
-                Err(SmtParseError::syntax_error(kind))
+                Err(SmtParseError::syntax(kind))
             }
         }
     }

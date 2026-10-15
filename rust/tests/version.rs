@@ -17,7 +17,7 @@ use parse_backend::{CommandParser, ReadErrorCause, Reader, SExprParser, SyntaxCh
 use reserved_words::reserved_words;
 
 use blazing_smtlib::{
-    SmtBytesBuf, SmtNonstandardCommandError,
+    SmtNonstandardCommandError,
     parser::{SmtCommandOutcome, SmtSyntaxErrorKind},
     token::{
         SmtCommandNameReserved, SmtGeneralReserved, SmtReserved, SmtTokenCategory, SmtVersion,
@@ -168,27 +168,25 @@ fn the_lookups_find_a_word_from_its_version_on() {
         for word in reserved_words() {
             let expected = version >= introduced_in(word);
             // the word itself is known from the latest version
-            let reserved = SmtReserved::from_bytes_opt(word.as_bytes(), SmtVersion::V2_7)
+            let reserved = SmtReserved::from_bytes(word.as_bytes(), SmtVersion::V2_7)
                 .unwrap_or_else(|| panic!("{word:?} should be reserved in the latest version"));
-            let symbol = SmtBytesBuf::from_vec(word.as_bytes().to_vec());
             let group = match reserved {
                 SmtReserved::General(_) => {
-                    SmtGeneralReserved::from_bytes_opt(word.as_bytes(), version).is_some()
+                    SmtGeneralReserved::from_bytes(word.as_bytes(), version).is_some()
                 }
                 SmtReserved::CommandName(_) => {
-                    SmtCommandNameReserved::from_bytes_opt(word.as_bytes(), version).is_some()
+                    SmtCommandNameReserved::from_bytes(word.as_bytes(), version).is_some()
                 }
             };
             let found = [
-                SmtReserved::from_bytes_opt(word.as_bytes(), version) == Some(reserved),
-                SmtReserved::from_symbol_opt(&symbol, version) == Some(reserved),
+                SmtReserved::from_bytes(word.as_bytes(), version) == Some(reserved),
                 group,
                 reserved.is_in_version(version),
             ];
-            assert_eq!(found, [expected; 4], "{word:?} in {version:?}");
+            assert_eq!(found, [expected; 3], "{word:?} in {version:?}");
             // and when it is not reserved yet, nothing else is found in its place
             if !expected {
-                assert_eq!(SmtReserved::from_bytes_opt(word.as_bytes(), version), None);
+                assert_eq!(SmtReserved::from_bytes(word.as_bytes(), version), None);
             }
         }
     }

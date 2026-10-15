@@ -28,9 +28,9 @@ impl SmtSymbolParser {
     ) -> Result<SmtSymbolBuf, SmtParseError<H::Error>> {
         match cursor.syntax(&token) {
             SmtSyntaxToken::Symbol(symbol) => Ok(symbol.into_owned()),
-            _ => Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Expected(
-                &[SmtSyntaxExpected::Symbol],
-            ))),
+            _ => Err(SmtParseError::syntax(SmtSyntaxErrorKind::Expected(&[
+                SmtSyntaxExpected::Symbol,
+            ]))),
         }
     }
 }
@@ -80,9 +80,9 @@ macro_rules! token_parser {
                 if let $pattern = cursor.syntax(&token) {
                     Ok($value)
                 } else {
-                    Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Expected(
-                        &[SmtSyntaxExpected::Token(SmtTokenCategory::$ty)],
-                    )))
+                    Err(SmtParseError::syntax(SmtSyntaxErrorKind::Expected(&[
+                        SmtSyntaxExpected::Token(SmtTokenCategory::$ty),
+                    ])))
                 }
             }
         }

@@ -1,4 +1,4 @@
-use crate::{SmtBytesBuf, token::SmtVersion};
+use crate::token::SmtVersion;
 
 /// Reserved words in SMT-LIB2, including standard command names.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -29,8 +29,8 @@ macro_rules! reserved_words {
             impl $enum_name {
                 /// The word of this group that the symbol spells in the version, if any.
                 #[inline]
-                pub fn from_bytes_opt(symbol: &[u8], version: SmtVersion) -> Option<Self> {
-                    match SmtReserved::from_bytes_opt(symbol, version) {
+                pub fn from_bytes(symbol: &[u8], version: SmtVersion) -> Option<Self> {
+                    match SmtReserved::from_bytes(symbol, version) {
                         Some(SmtReserved::$variant_kind(reserved)) => Some(reserved),
                         _ => None,
                     }
@@ -194,13 +194,7 @@ static RESERVED_TABLE: [(&[u8], SmtReserved, SmtVersion); RESERVED_SLOTS] = {
 impl SmtReserved {
     /// The reserved word that the symbol spells in the version, if any.
     #[inline]
-    pub fn from_symbol_opt(symbol: &SmtBytesBuf, version: SmtVersion) -> Option<SmtReserved> {
-        Self::from_bytes_opt(symbol.as_slice(), version)
-    }
-
-    /// The reserved word that the symbol spells in the version, if any.
-    #[inline]
-    pub fn from_bytes_opt(symbol: &[u8], version: SmtVersion) -> Option<SmtReserved> {
+    pub fn from_bytes(symbol: &[u8], version: SmtVersion) -> Option<SmtReserved> {
         // make sure that the symbol is not an empty word,
         // which is a sentinel
         if symbol.is_empty() {

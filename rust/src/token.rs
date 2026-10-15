@@ -95,7 +95,8 @@ pub enum SmtVersion {
 }
 
 impl SmtVersion {
-    pub fn from_decimal_opt(decimal: &[u8]) -> Option<Self> {
+    /// The version that the decimal names, if any.
+    pub fn from_decimal(decimal: &[u8]) -> Option<Self> {
         match decimal {
             b"2.0" => Some(SmtVersion::V2_0),
             b"2.5" => Some(SmtVersion::V2_5),
@@ -103,6 +104,17 @@ impl SmtVersion {
             b"2.7" => Some(SmtVersion::V2_7),
             _ => None,
         }
+    }
+
+    /// The decimal that names the version, as in `:smt-lib-version`.
+    pub fn as_decimal(&self) -> SmtDecimal<'static> {
+        let decimal: &'static [u8] = match self {
+            SmtVersion::V2_0 => b"2.0",
+            SmtVersion::V2_5 => b"2.5",
+            SmtVersion::V2_6 => b"2.6",
+            SmtVersion::V2_7 => b"2.7",
+        };
+        SmtDecimal::new_unchecked(decimal)
     }
 }
 
@@ -208,7 +220,7 @@ impl<'a> SmtSyntaxToken<'a> {
             }
             SmtTokenCategory::UnquotedSymbol => {
                 // only the words reserved in the version are reserved words
-                if let Some(reserved) = SmtReserved::from_bytes_opt(content, version) {
+                if let Some(reserved) = SmtReserved::from_bytes(content, version) {
                     SmtSyntaxToken::Reserved(reserved)
                 } else {
                     SmtSyntaxToken::Symbol(SmtSymbol::new_unchecked(false, content))
@@ -301,7 +313,7 @@ impl<'a> SmtSyntaxToken<'a> {
                 // a simple symbol that is a reserved word in the version
                 // would be read as the reserved word, quote it to keep the symbol
                 if symbol.is_quoted()
-                    || SmtReserved::from_bytes_opt(symbol.as_slice(), version).is_some()
+                    || SmtReserved::from_bytes(symbol.as_slice(), version).is_some()
                 {
                     writer.write_all(b"|")?;
                     writer.write_all(symbol.as_slice())?;

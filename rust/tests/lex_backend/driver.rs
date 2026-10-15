@@ -87,12 +87,7 @@ fn hex(bytes: &[u8]) -> String {
 }
 
 fn version_name(version: SmtVersion) -> &'static str {
-    match version {
-        SmtVersion::V2_0 => "2.0",
-        SmtVersion::V2_5 => "2.5",
-        SmtVersion::V2_6 => "2.6",
-        SmtVersion::V2_7 => "2.7",
-    }
+    std::str::from_utf8(version.as_decimal().as_slice()).expect("a version decimal is ASCII")
 }
 
 fn token_line(token: SmtToken<'_>, version: SmtVersion) -> String {
@@ -283,7 +278,7 @@ fn unhex(digits: &str) -> Result<Vec<u8>, String> {
 }
 
 fn read_version(word: &str) -> Result<SmtVersion, String> {
-    SmtVersion::from_decimal_opt(word.as_bytes()).ok_or_else(|| format!("unknown version {word:?}"))
+    SmtVersion::from_decimal(word.as_bytes()).ok_or_else(|| format!("unknown version {word:?}"))
 }
 
 fn read_reply(word: &str) -> Result<Reply, String> {

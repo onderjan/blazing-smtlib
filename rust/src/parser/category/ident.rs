@@ -153,7 +153,7 @@ impl IdentSlot {
                     }
                     _ => {
                         let kind = SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Ident]);
-                        return Err(SmtParseError::syntax_error(kind));
+                        return Err(SmtParseError::syntax(kind));
                     }
                 }
             }
@@ -165,9 +165,9 @@ impl IdentSlot {
                 ) {
                     self.state = State::AfterUnderscore;
                 } else {
-                    return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Expected(
-                        &[expected::UNDERSCORE],
-                    )));
+                    return Err(SmtParseError::syntax(SmtSyntaxErrorKind::Expected(&[
+                        expected::UNDERSCORE,
+                    ])));
                 }
             }
             State::AfterUnderscore => {
@@ -177,9 +177,9 @@ impl IdentSlot {
                         if let SmtSyntaxToken::Symbol(name) = cursor.syntax(&token) {
                             Some(self.push_name(arena, name))
                         } else {
-                            return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Expected(
-                                &[SmtSyntaxExpected::Symbol],
-                            )));
+                            return Err(SmtParseError::syntax(SmtSyntaxErrorKind::Expected(&[
+                                SmtSyntaxExpected::Symbol,
+                            ])));
                         }
                     }
                     Some(name) => {
@@ -191,7 +191,7 @@ impl IdentSlot {
                                 if arena.indices.len() == indices_start {
                                     let kind =
                                         SmtSyntaxErrorKind::Empty(SmtNonEmptyList::IdentIndices);
-                                    return Err(SmtParseError::syntax_error(kind));
+                                    return Err(SmtParseError::syntax(kind));
                                 }
                                 // reset to the starting state
                                 // we already took the name
@@ -215,12 +215,9 @@ impl IdentSlot {
                                 arena.indices.push(IndexHandle::Symbol(index));
                             }
                             _ => {
-                                return Err(SmtParseError::syntax_error(
-                                    SmtSyntaxErrorKind::Expected(&[
-                                        SmtSyntaxExpected::Index,
-                                        expected::PAREN_CLOSE,
-                                    ]),
-                                ));
+                                return Err(SmtParseError::syntax(SmtSyntaxErrorKind::Expected(
+                                    &[SmtSyntaxExpected::Index, expected::PAREN_CLOSE],
+                                )));
                             }
                         }
                         // put the name back

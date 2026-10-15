@@ -411,12 +411,7 @@ fn by_lean_name<T: Copy + std::fmt::Debug>(values: &[(&str, T)], name: &str, lin
 }
 
 fn version_name(version: SmtVersion) -> &'static str {
-    match version {
-        SmtVersion::V2_0 => "2.0",
-        SmtVersion::V2_5 => "2.5",
-        SmtVersion::V2_6 => "2.6",
-        SmtVersion::V2_7 => "2.7",
-    }
+    std::str::from_utf8(version.as_decimal().as_slice()).expect("a version decimal is ASCII")
 }
 
 fn hex(bytes: &[u8]) -> String {
@@ -493,7 +488,7 @@ fn parse_reserved(
         "command" => true,
         _ => panic!("the Lean driver sent an unknown reserved class: {line:?}"),
     };
-    let reserved = SmtReserved::from_bytes_opt(content, version).unwrap_or_else(|| {
+    let reserved = SmtReserved::from_bytes(content, version).unwrap_or_else(|| {
         panic!("the Lean driver reported a reserved word that is none in {version:?}: {line:?}")
     });
     assert_eq!(
@@ -729,7 +724,7 @@ fn parse_continues(field: &str, line: &str) -> Option<Loc> {
 }
 
 fn parse_version(field: &str, line: &str) -> SmtVersion {
-    SmtVersion::from_decimal_opt(field.as_bytes())
+    SmtVersion::from_decimal(field.as_bytes())
         .unwrap_or_else(|| panic!("the driver sent an unknown version: {line:?}"))
 }
 
@@ -780,7 +775,7 @@ pub fn run(version: SmtVersion, options: &Options, feeds: &[Feed<'_>]) -> Vec<Li
                         SmtVersion::V2_0,
                     ]
                     .into_iter()
-                    .find_map(|version| SmtReserved::from_bytes_opt(&content, version))
+                    .find_map(|version| SmtReserved::from_bytes(&content, version))
                     .unwrap_or_else(|| {
                         panic!("the driver reported a reserved word that is none: {line:?}")
                     })

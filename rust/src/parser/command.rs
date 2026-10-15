@@ -68,7 +68,7 @@ impl<H: SmtCommandHandler> SmtCommandParser<H> {
     ) -> Result<CommandParserState<H>, SmtParseError<H::Error>> {
         match handler.nonstandard_command(name) {
             Ok(parser) => Ok(CommandParserState::Nonstandard(parser)),
-            Err(err) => Err(SmtParseError::handler_error(err)),
+            Err(err) => Err(SmtParseError::handler(err)),
         }
     }
 }
@@ -112,9 +112,10 @@ impl<H: SmtCommandHandler> SmtParse<H> for SmtCommandParser<H> {
                             return Ok(ControlFlow::Break(SmtCommandOutcome::EndOfFile));
                         }
                         _ => {
-                            return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Expected(
-                                &[expected::PAREN_OPEN, expected::END_OF_FILE],
-                            )));
+                            return Err(SmtParseError::syntax(SmtSyntaxErrorKind::Expected(&[
+                                expected::PAREN_OPEN,
+                                expected::END_OF_FILE,
+                            ])));
                         }
                     }
                 }
@@ -136,9 +137,9 @@ impl<H: SmtCommandHandler> SmtParse<H> for SmtCommandParser<H> {
                             Self::start_nonstandard_command(handler, name)?
                         }
                         _ => {
-                            return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Expected(
-                                &[SmtSyntaxExpected::CommandName],
-                            )));
+                            return Err(SmtParseError::syntax(SmtSyntaxErrorKind::Expected(&[
+                                SmtSyntaxExpected::CommandName,
+                            ])));
                         }
                     };
                 }

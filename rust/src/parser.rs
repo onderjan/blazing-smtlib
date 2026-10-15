@@ -186,15 +186,15 @@ impl<E> SmtParseError<E> {
         Self(Box::new(cause))
     }
 
-    pub fn handler_error(err: E) -> Self {
+    pub fn handler(err: E) -> Self {
         Self::new(SmtParseErrorCause::Handler(err))
     }
 
-    pub fn syntax_error(err: SmtSyntaxErrorKind) -> Self {
+    pub fn syntax(err: SmtSyntaxErrorKind) -> Self {
         Self::new(SmtParseErrorCause::Syntax(err))
     }
 
-    pub fn version_error(err: SmtVersionErrorKind) -> Self {
+    pub fn version(err: SmtVersionErrorKind) -> Self {
         Self::new(SmtParseErrorCause::Version(err))
     }
 
@@ -210,6 +210,6 @@ impl<E> SmtParseError<E> {
 fn handle_err<O, E>(handled: Result<O, E>) -> Result<O, SmtParseError<E>> {
     match handled {
         Ok(ok) => Ok(ok),
-        Err(err) => Err(SmtParseError::handler_error(err)),
+        Err(err) => Err(SmtParseError::handler(err)),
     }
 }

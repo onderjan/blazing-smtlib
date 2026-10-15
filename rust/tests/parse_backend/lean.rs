@@ -341,7 +341,7 @@ impl<'l> Fields<'l> {
 
     fn version(&mut self) -> SmtVersion {
         let field = self.next();
-        SmtVersion::from_decimal_opt(field.as_bytes()).unwrap_or_else(|| self.bad("version"))
+        SmtVersion::from_decimal(field.as_bytes()).unwrap_or_else(|| self.bad("version"))
     }
 
     fn location(&mut self) -> Location {
@@ -367,7 +367,7 @@ impl<'l> Fields<'l> {
             SmtVersion::V2_0,
         ]
         .into_iter()
-        .find_map(|version| SmtReserved::from_bytes_opt(word.as_bytes(), version))
+        .find_map(|version| SmtReserved::from_bytes(word.as_bytes(), version))
         .unwrap_or_else(|| self.bad("reserved word"))
     }
 }
@@ -532,7 +532,7 @@ pub fn command_outcome(result: &str) -> SmtCommandOutcome {
         ["exit"] => SmtCommandOutcome::Exit,
         ["end"] => SmtCommandOutcome::EndOfFile,
         ["set-version", version] => SmtCommandOutcome::SetVersion(
-            SmtVersion::from_decimal_opt(version.as_bytes())
+            SmtVersion::from_decimal(version.as_bytes())
                 .unwrap_or_else(|| panic!("the Lean driver sent a bad command outcome {result:?}")),
         ),
         _ => panic!("the Lean driver sent a bad command outcome {result:?}"),

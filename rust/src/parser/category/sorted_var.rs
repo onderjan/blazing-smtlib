@@ -132,9 +132,9 @@ impl<H: SmtHandler + ?Sized> SortedVarSlot<H> {
         if self.is_open {
             // after "(", waiting for the name, which goes to the arena text
             let SmtSyntaxToken::Symbol(name) = cursor.syntax(&token) else {
-                return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Expected(
-                    &[SmtSyntaxExpected::Symbol],
-                )));
+                return Err(SmtParseError::syntax(SmtSyntaxErrorKind::Expected(&[
+                    SmtSyntaxExpected::Symbol,
+                ])));
             };
             self.name = Some(arena.push_symbol(name));
             self.is_open = false;
