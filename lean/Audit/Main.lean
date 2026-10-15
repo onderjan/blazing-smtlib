@@ -32,7 +32,9 @@ does. The environment variable `LAKE` names the Lake command, `lake` if unset.
 `--jobs N` runs every step with at most `N` threads: the build and `leanchecker` with
 `LEAN_NUM_THREADS=N`, nanoda with `-j N`. `leanchecker` imports the whole import closure of every
 module it re-checks, one environment per thread, so its peak memory grows with the threads;
-fewer threads trade time for memory.
+fewer threads trade time for memory. Without `--jobs` the audit chooses `N` itself, so that the
+threads fit into three quarters of the memory available at its start with `bytesPerThread` each,
+at least one and at most the processors there are (`defaultJobs`); it says what it chose.
 -/
 
 namespace Audit.Main
@@ -43,14 +45,48 @@ def leancheckerRoots : List String :=
   ["BSmtLib", "BSmtLibSpec", "BSmtLibSpec.Facts", "BSmtLib.Facts", "BSmtLib.Facts.Names",
     "BSmtLib.Facts.Asserts"]
 
-/-- The modules that nanoda re-checks: all but `BSmtLib.Facts.PublicApi`, whose theorems still
-use `sorry`, which nanoda rejects. -/
+/-- The modules that nanoda re-checks: the roots of the four libraries, the library, the
+specification and the facts of both. -/
 def nanodaRoots : List String :=
   ["BSmtLib", "BSmtLibSpec", "BSmtLibSpec.Facts", "BSmtLib.Facts.Lexer", "BSmtLib.Facts.Parser",
-    "BSmtLib.Facts.Reader", "BSmtLib.Facts.Asserts"]
+    "BSmtLib.Facts.Reader", "BSmtLib.Facts.PublicApi", "BSmtLib.Facts.Asserts"]
 
-/-- The targets that `lake build` builds beside the default ones. -/
-def extraTargets : List String := ["reexports", "bench-parse", "bench-fused-parser", "audit"]
+/-- The targets that `lake build` builds beside the default ones: every executable, so that the
+declaration audit finds every module of the package built. -/
+def extraTargets : List String :=
+  ["reexports", "rust-items", "bench-parse", "bench-fused-parser", "audit"]
+
+/-- The memory a thread of the audit's steps is allowed: well above what a thread of
+`leanchecker`, the most demanding step, takes on this package. -/
+def bytesPerThread : Nat := 6 * 1024 * 1024 * 1024
+
+/-- The memory available now, in bytes, from `/proc/meminfo`; none where it cannot be read. -/
+def availableBytes : IO (Option Nat) := do
+  let text ← try IO.FS.readFile "/proc/meminfo" catch _ => return none
+  for line in text.splitOn "\n" do
+    if line.startsWith "MemAvailable:" then
+      -- the line is `MemAvailable:` and a number of KiB
+      if let some kib := (String.ofList (line.toList.filter Char.isDigit)).toNat? then
+        return some (kib * 1024)
+  return none
+
+/-- The number of processors, from `nproc`; none where it cannot be run. -/
+def processors : IO (Option Nat) := do
+  let output ← try IO.Process.output { cmd := "nproc" } catch _ => return none
+  if output.exitCode != 0 then return none
+  return (String.ofList (output.stdout.toList.filter Char.isDigit)).toNat?
+
+/-- The threads to use when the command line does not say: as many as fit into three quarters of
+the available memory with `bytesPerThread` each, at least one and at most the processors; two
+where the memory or the processors cannot be read. With the reason, to be printed. -/
+def defaultJobs : IO (Nat × String) := do
+  match ← availableBytes, ← processors with
+  | some available, some cpus =>
+    let fit := available * 3 / 4 / bytesPerThread
+    let jobs := max 1 (min fit cpus)
+    return (jobs, s!"{available / (1024 * 1024 * 1024)} GiB available, \
+      {bytesPerThread / (1024 * 1024 * 1024)} GiB per thread, {cpus} processors")
+  | _, _ => return (2, "the available memory or the processors could not be read")
 
 /-- Runs `cmd` with `args` and the environment `env`, its output shown as it comes; whether it
 succeeded. -/
@@ -70,7 +106,7 @@ structure Options where
   incremental : Bool := false
   /-- The script that runs nanoda. -/
   nanoda : Option String := none
-  /-- The most threads a step may use, all the machine has if none. -/
+  /-- The most threads a step may use; chosen by `defaultJobs` if none. -/
   jobs : Option Nat := none
 
 /-- The options of the command line, or none if it is malformed. -/
@@ -95,12 +131,16 @@ def run (options : Options) : IO UInt32 := do
       return 2
   let lake := (← IO.getEnv "LAKE").getD "lake"
   -- the thread limit, for the Lean processes and for nanoda
-  let env := match options.jobs with
-    | some jobs => #[("LEAN_NUM_THREADS", some (toString jobs))]
-    | none => #[]
-  let nanodaJobs := match options.jobs with
-    | some jobs => ["-j", toString jobs]
-    | none => []
+  let jobs ← match options.jobs with
+    | some jobs =>
+      IO.println s!"==> {jobs} threads, as given"
+      pure jobs
+    | none => do
+      let (jobs, reason) ← defaultJobs
+      IO.println s!"==> {jobs} threads ({reason}; set it with --jobs N)"
+      pure jobs
+  let env := #[("LEAN_NUM_THREADS", some (toString jobs))]
+  let nanodaJobs := ["-j", toString jobs]
   unless options.incremental do
     unless ← step lake ["clean"] env do return 1
   unless ← step lake ["build"] env do return 1
