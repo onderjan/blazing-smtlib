@@ -258,14 +258,6 @@ impl SmtNumeralBuf {
         }
         true
     }
-
-    /// Construct from `usize`.
-    pub fn from_usize(value: usize) -> Self {
-        // convert the value into a string and get its bytes
-        // this is allowed since it produces digits without leading zeros
-        // or the allowed special case of constant "0"
-        Self(SmtBytesBuf::from_vec(value.to_string().into_bytes()))
-    }
 }
 
 /// SMT-LIB hexadecimal digits (base 16).
@@ -545,3 +537,166 @@ string8_newtype!(SmtBinDigitsBuf, SmtBinDigits);
 string8_newtype!(SmtDecimalBuf, SmtDecimal);
 string8_newtype!(SmtWhitespaceBuf, SmtWhitespace);
 string8_newtype!(SmtCommentBuf, SmtComment);
+
+/// The numeral does not fit into the integer type it is converted to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SmtNumeralOverflow;
+
+impl<'a> SmtNumeral<'a> {
+    /// The value as `u32`, or `None` if it does not fit.
+    pub fn to_u32(&self) -> Option<u32> {
+        u32::try_from(self.to_u64()?).ok()
+    }
+
+    /// The value as `u64`, or `None` if it does not fit.
+    pub fn to_u64(&self) -> Option<u64> {
+        let mut value: u64 = 0;
+        for digit in self.iter() {
+            value = value
+                .checked_mul(10)?
+                .checked_add(u64::from(digit - b'0'))?;
+        }
+        Some(value)
+    }
+
+    /// The value as `u128`, or `None` if it does not fit.
+    pub fn to_u128(&self) -> Option<u128> {
+        let mut value: u128 = 0;
+        for digit in self.iter() {
+            value = value
+                .checked_mul(10)?
+                .checked_add(u128::from(digit - b'0'))?;
+        }
+        Some(value)
+    }
+
+    /// The value as `usize`, or `None` if it does not fit.
+    ///
+    /// Whether a value fits depends on the platform.
+    pub fn to_usize(&self) -> Option<usize> {
+        usize::try_from(self.to_u64()?).ok()
+    }
+}
+
+impl SmtNumeralBuf {
+    /// Construct from `u32`.
+    pub fn from_u32(value: u32) -> Self {
+        // the decimal string of an integer is a numeral
+        Self(SmtBytesBuf::from_vec(value.to_string().into_bytes()))
+    }
+
+    /// Construct from `u64`.
+    pub fn from_u64(value: u64) -> Self {
+        // the decimal string of an integer is a numeral
+        Self(SmtBytesBuf::from_vec(value.to_string().into_bytes()))
+    }
+
+    /// Construct from `u128`.
+    pub fn from_u128(value: u128) -> Self {
+        // the decimal string of an integer is a numeral
+        Self(SmtBytesBuf::from_vec(value.to_string().into_bytes()))
+    }
+
+    /// Construct from `usize`.
+    pub fn from_usize(value: usize) -> Self {
+        // the decimal string of an integer is a numeral
+        Self(SmtBytesBuf::from_vec(value.to_string().into_bytes()))
+    }
+
+    /// The value as `u32`, or `None` if it does not fit.
+    pub fn to_u32(&self) -> Option<u32> {
+        self.as_view().to_u32()
+    }
+
+    /// The value as `u64`, or `None` if it does not fit.
+    pub fn to_u64(&self) -> Option<u64> {
+        self.as_view().to_u64()
+    }
+
+    /// The value as `u128`, or `None` if it does not fit.
+    pub fn to_u128(&self) -> Option<u128> {
+        self.as_view().to_u128()
+    }
+
+    /// The value as `usize`, or `None` if it does not fit.
+    ///
+    /// Whether a value fits depends on the platform.
+    pub fn to_usize(&self) -> Option<usize> {
+        self.as_view().to_usize()
+    }
+}
+
+macro_rules! numeral_try_from {
+    ($int:ty, $method:ident) => {
+        impl TryFrom<SmtNumeral<'_>> for $int {
+            type Error = SmtNumeralOverflow;
+
+            fn try_from(numeral: SmtNumeral<'_>) -> Result<Self, Self::Error> {
+                numeral.$method().ok_or(SmtNumeralOverflow)
+            }
+        }
+
+        impl TryFrom<&SmtNumeralBuf> for $int {
+            type Error = SmtNumeralOverflow;
+
+            fn try_from(numeral: &SmtNumeralBuf) -> Result<Self, Self::Error> {
+                numeral.$method().ok_or(SmtNumeralOverflow)
+            }
+        }
+    };
+}
+
+numeral_try_from!(u32, to_u32);
+numeral_try_from!(u64, to_u64);
+numeral_try_from!(u128, to_u128);
+numeral_try_from!(usize, to_usize);
+
+macro_rules! numeral_from {
+    ($int:ty, $method:ident) => {
+        impl From<$int> for SmtNumeralBuf {
+            fn from(value: $int) -> Self {
+                Self::$method(value)
+            }
+        }
+    };
+}
+
+numeral_from!(u32, from_u32);
+numeral_from!(u64, from_u64);
+numeral_from!(u128, from_u128);
+numeral_from!(usize, from_usize);
+
+impl<'a> SmtDecimal<'a> {
+    /// The whole part, before the dot.
+    pub fn whole(&self) -> SmtNumeral<'a> {
+        SmtNumeral::new_unchecked(&self.0[..self.dot()])
+    }
+
+    /// The digits of the fractional part, after the dot.
+    ///
+    /// They may have leading zeros, so they are not a numeral.
+    pub fn fraction(&self) -> &'a [u8] {
+        &self.0[self.dot() + 1..]
+    }
+
+    fn dot(&self) -> usize {
+        self.0
+            .iter()
+            .position(|c| *c == b'.')
+            .expect("a decimal contains a dot")
+    }
+}
+
+impl SmtDecimalBuf {
+    /// The whole part, before the dot.
+    pub fn whole(&self) -> SmtNumeral<'_> {
+        self.as_view().whole()
+    }
+
+    /// The digits of the fractional part, after the dot.
+    ///
+    /// They may have leading zeros, so they are not a numeral.
+    pub fn fraction(&self) -> &[u8] {
+        self.as_view().fraction()
+    }
+}
