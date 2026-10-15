@@ -188,12 +188,13 @@ impl<H: Handler> SmtHandler for Adapt<'_, H> {
 
 /// The rule of a nonstandard command that the test handler accepts: one term,
 /// then the closing parenthesis.
+#[derive(Default)]
 pub struct NonstandardRule;
 
 impl<'h, H: CommandHandler> SmtCommandRule<Adapt<'h, H>> for NonstandardRule {
     type Parser = SmtClosedParser<Adapt<'h, H>, SmtTermParser<Adapt<'h, H>>>;
 
-    fn handle(handler: &mut Adapt<'h, H>, term: H::Term) -> Result<(), H::Error> {
+    fn handle(&mut self, handler: &mut Adapt<'h, H>, term: H::Term) -> Result<(), H::Error> {
         handler.0.nonstandard_term(term)
     }
 }

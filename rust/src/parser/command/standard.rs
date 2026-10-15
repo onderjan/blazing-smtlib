@@ -26,12 +26,14 @@ use crate::{
 /// and the handler call that delivers the parsed payload.
 macro_rules! standard_command_rule {
     ($kind:ident, $parser:ty, |$handler:ident, $result:pat_param| $handle:expr) => {
+        #[derive(Default)]
         pub(super) struct $kind;
 
         impl<H: SmtCommandHandler> SmtCommandRule<H> for $kind {
             type Parser = $parser;
 
             fn handle(
+                &mut self,
                 $handler: &mut H,
                 $result: <$parser as SmtParse<H>>::Result,
             ) -> Result<(), H::Error> {

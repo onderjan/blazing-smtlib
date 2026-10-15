@@ -200,6 +200,7 @@ pub trait SmtCommandRule<H: SmtCommandHandler> {
 
     /// Handles the result of a command.
     fn handle(
+        &mut self,
         handler: &mut H,
         result: <Self::Parser as SmtParse<H>>::Result,
     ) -> Result<(), H::Error>;
@@ -210,21 +211,23 @@ pub trait SmtCommandRule<H: SmtCommandHandler> {
 /// Preserves self-reset: if the inner parser is self-resetting,
 /// moves back into the default state before returning Break.
 pub struct SmtCommandPayloadParser<H: SmtCommandHandler, R: SmtCommandRule<H>> {
+    rule: R,
     parser: R::Parser,
 }
 
 impl<H: SmtCommandHandler, R: SmtCommandRule<H>> SmtCommandPayloadParser<H, R> {
-    pub fn new(parser: R::Parser) -> Self {
-        Self { parser }
+    pub fn new(rule: R, parser: R::Parser) -> Self {
+        Self { rule, parser }
     }
 }
 
 impl<H: SmtCommandHandler, R: SmtCommandRule<H>> Default for SmtCommandPayloadParser<H, R>
 where
+    R: Default,
     R::Parser: Default,
 {
     fn default() -> Self {
-        Self::new(R::Parser::default())
+        Self::new(R::default(), R::Parser::default())
     }
 }
 
@@ -242,7 +245,7 @@ impl<H: SmtCommandHandler, R: SmtCommandRule<H>> SmtParse<H> for SmtCommandPaylo
             ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
             ControlFlow::Break(result) => {
                 // the command ends at the last consumed token
-                handle_err(R::handle(handler, result))?;
+                handle_err(self.rule.handle(handler, result))?;
                 Ok(ControlFlow::Break(()))
             }
         }
