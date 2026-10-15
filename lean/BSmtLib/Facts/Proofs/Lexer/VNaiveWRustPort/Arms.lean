@@ -199,7 +199,7 @@ theorem stepLocation_eq' {c : WP.WCore} {low base j pos : Nat} {location : Span.
 
 /-- The agreement of a token in progress, in the state of the lexer. -/
 theorem token_agrees {v : Token.Version} {c : WP.WCore} {p : Pending}
-    {state : Lexer.Helpers.LexerState}
+    {state : Lexer.Internal.Helpers.LexerState}
     (h : StAgrees v C.concrete (.token p) c) (hs : c.state = state) :
     TokenAgrees v C.concrete state c.tokenStart (contentBytes c.tokenContent) p := by
   rw [← hs]; exact h.1

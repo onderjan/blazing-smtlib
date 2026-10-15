@@ -2,7 +2,7 @@ module
 
 public import BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Recovery
 import all BSmtLib.Lexer
-import all BSmtLib.Lexer.Helpers
+import all BSmtLib.Lexer.Internal.Helpers
 import all BSmtLib.Lexer.Internal.WRustPort
 import all BSmtLib.Lexer.Internal.WRustPort.Slice
 
@@ -85,10 +85,11 @@ theorem lexEofInner_exact (c : ZCore) (h : H) :
     (fun a s h => ?_) h
   · refine SimP.bind (SimP.tryCatch (ψ := id) (Q := fun _ _ => True) ?_ fun e => ?_) fun _ => ?_
     · obtain ⟨v, iv, st, df, hd, rc, cd, ld, rs, ts, tc, off, bs, ln, ls, bt, tsd, be⟩ := c
-      have ok : EndOk 0 0 0 Lexer.Helpers.TokenEnd.EOF :=
-        ⟨by simp, by simp, by simp [Lexer.Helpers.TokenEnd.EOF],
-          by simp [Lexer.Helpers.TokenEnd.EOF],
-          by simp only [Lexer.Helpers.TokenEnd.EOF, USize.toNat_zero]; have := USize.le_size; omega⟩
+      have ok : EndOk 0 0 0 Lexer.Internal.Helpers.TokenEnd.EOF :=
+        ⟨by simp, by simp, by simp [Lexer.Internal.Helpers.TokenEnd.EOF],
+          by simp [Lexer.Internal.Helpers.TokenEnd.EOF],
+          by simp only [Lexer.Internal.Helpers.TokenEnd.EOF,
+              USize.toNat_zero]; have := USize.le_size; omega⟩
       cases st <;> dsimp only
       case comment =>
         refine SimP.bind (Q := fun x s => BaseIs 0 s ∧

@@ -20,6 +20,7 @@ answer and the same cursor, while the tokens taken stand for a start of the scri
 namespace BSmtLib.Facts.Proofs.Reader.Param.Loop
 
 open BSmtLibSpec BSmtLibSpec.Grammar
+open BSmtLib.Token.BatchCursor.Internal (remaining)
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Lexer (Handed)
 open BSmtLib.Parser (Parse)
@@ -137,7 +138,7 @@ theorem paLoop_step {b : Token.BatchTag} {cursor : Token.BatchCursor b} (h : cur
 
 /-- The adapter's consumer only adds to the tokens taken. -/
 theorem ansRest_extends (version : Lexicon.Version) {b : Token.BatchTag} :
-    ∀ (n : Nat) (cursor : Token.BatchCursor b) (taken : List Handed), cursor.remaining < n →
+    ∀ (n : Nat) (cursor : Token.BatchCursor b) (taken : List Handed), remaining cursor < n →
       ∃ more, (ansRest version cursor taken).2 = taken ++ more
   | 0, _, _, hn => absurd hn (Nat.not_lt_zero _)
   | n + 1, cursor, taken, hn => by
@@ -178,7 +179,7 @@ for a start of the script. -/
 theorem loop_agree {version : Lexicon.Version} {commands : List Tree.Command}
     (hscript : Script version commands) {b : Token.BatchTag} :
     ∀ (n : Nat) (cursor : Token.BatchCursor b) (taken : List Handed) (items : List LibItem)
-      (parser : ScriptParser (List Event)) (log : List Event), cursor.remaining < n →
+      (parser : ScriptParser (List Event)) (log : List Event), remaining cursor < n →
       items.map (rcv ∘ Subtype.val) = taken.map (rcv ∘ itemOf) →
       recRun version items = (.ok (.inl (cursor.version, parser)), log) →
       Flagged.isError (ansRest version cursor taken).1.1 = false →
@@ -191,7 +192,7 @@ theorem loop_agree {version : Lexicon.Version} {commands : List Tree.Command}
           { handler := ((paLoop parser cursor).run (calls log)).2,
             parser := ((paLoop parser cursor).run (calls log)).1.2.1,
             versionSet :=
-              ParseAdapter.versionSetAfter ((paLoop parser cursor).run (calls log)).1.1 }
+              ParseAdapter.Internal.versionSetAfter ((paLoop parser cursor).run (calls log)).1.1 }
   | 0, _, _, _, _, _, hn, _, _, _, _ => absurd hn (Nat.not_lt_zero _)
   | n + 1, cursor, taken, items, parser, log, hn, hst, hrun, herr, hvia => by
     by_cases h : cursor.HasNext
@@ -258,7 +259,8 @@ theorem loop_agree {version : Lexicon.Version} {commands : List Tree.Command}
           have hvia' : Link.Viable commands (taken ++ [handed]) := by
             split at hvia
             · exact hvia
-            · obtain ⟨more', hmore'⟩ := ansRest_extends version (cursor.next h).2.val.remaining.succ
+            · obtain ⟨more', hmore'⟩ := ansRest_extends version
+                (remaining (cursor.next h).2.val).succ
                 (cursor.next h).2.val (taken ++ [handed]) (Nat.lt_succ_self _)
               rw [hmore'] at hvia
               exact hvia.of_append
@@ -325,7 +327,7 @@ theorem ansRest_grows (version : Lexicon.Version) {b : Token.BatchTag}
       dsimp only at herr ⊢
       split
       · simp
-      · obtain ⟨more, hmore⟩ := ansRest_extends version (cursor.next h).2.val.remaining.succ
+      · obtain ⟨more, hmore⟩ := ansRest_extends version (remaining (cursor.next h).2.val).succ
           (cursor.next h).2.val (taken ++ [handed]) (Nat.lt_succ_self _)
         rw [hmore]
         simp

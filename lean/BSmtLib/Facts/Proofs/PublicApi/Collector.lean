@@ -22,6 +22,9 @@ and the lexer reads nothing of the cursor they give back that tells them apart.
 namespace BSmtLib.Facts.Proofs.PublicApi.Collector
 
 open BSmtLib.Lexer BSmtLib.Lexer.Error
+open BSmtLib.Token.BatchCursor.Internal (discardRequested resetConsumed remaining relexRequested
+    EndsAfter consumedSpanOf Follows foldConsumedCategories consumedEndOf)
+open BSmtLib.Lexer.Internal (BATCH_CAPACITY Stop Interrupted Failure LexerCore InnerM StepM LexM)
 open BSmtLib.Facts.PublicApi.Adapters
 open BSmtLib.Facts.Lexer.Adapters
 open BSmtLib.Facts.Proofs.Reader.Param.Basic BSmtLib.Facts.Proofs.Reader.Param.HandOver
@@ -95,36 +98,36 @@ variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [Token.Consume H 
 
 /-- What `flushCursor` does with the consumer's answer and the cursor it gives back. -/
 def afterCall {b : Token.BatchTag} (cursor : Token.BatchCursor b)
-    (hfloor : ∀ p, floor = some p → cursor.EndsAfter p)
+    (hfloor : ∀ p, floor = some p → EndsAfter cursor p)
     (x : Except E (ControlFlow R) × {c : Token.BatchCursor b // c.Consumed cursor}) :
     LexM H m R E floor low (Option (Interrupted R E floor) × Token.BatchCursor b) :=
   match x with
   | (result, ⟨next, consumed⟩) =>
-    let location := next.consumedEndOf consumed
+    let location := consumedEndOf next consumed
     have after : ∀ p, floor = some p → p < location.offset := fun p hp =>
       consumed.lt_consumedEndOf (hfloor p hp)
     match result with
     | .ok flow =>
-      if next.discardRequested then
+      if discardRequested next then
         let held := match flow with
           | .continue => none
           | .break result => some result
         return (some {
           result := .ok (.discarded held)
-          span := next.consumedSpanOf consumed
+          span := consumedSpanOf next consumed
           location
           stopAfter := fun p hp _ _ => after p hp }, next)
       else
         match flow with
         | .continue =>
-          if next.relexRequested then
+          if relexRequested next then
             return (some {
               result := .ok .relex
-              span := next.consumedSpanOf consumed
+              span := consumedSpanOf next consumed
               location
               stopAfter := fun p hp _ _ => after p hp }, next)
           else
-            Internal.flushCursor next.resetConsumed fun p hp =>
+            Internal.flushCursor (resetConsumed next) fun p hp =>
               Token.BatchCursor.endsAfter_resetConsumed (consumed.follows.endsAfter (hfloor p hp))
         | .break result =>
           if h : next.HasNext then
@@ -132,20 +135,20 @@ def afterCall {b : Token.BatchTag} (cursor : Token.BatchCursor b)
           else
             return (some {
               result := .ok (.finished result)
-              span := next.consumedSpanOf consumed
+              span := consumedSpanOf next consumed
               location
               stopAfter := fun p hp _ _ => after p hp }, next)
     | .error err => do
-      if next.discardRequested then
+      if discardRequested next then
         Internal.modifyCore fun c => { c with discardedFrom := c.discardedFrom.or (some location) }
       return (some {
         result := .error (.consumer err)
-        span := next.consumedSpanOf consumed
+        span := consumedSpanOf next consumed
         location
         stopAfter := fun _ _ _ h => nomatch h }, next)
 
 theorem flushCursor_eq {b : Token.BatchTag} (cursor : Token.BatchCursor b)
-    (hfloor : ∀ p, floor = some p → cursor.EndsAfter p) :
+    (hfloor : ∀ p, floor = some p → EndsAfter cursor p) :
     Internal.flushCursor (H := H) (m := m) (R := R) (E := E) (low := low) cursor hfloor =
       if h : cursor.HasNext then do
         if (← Internal.getCore).holding then
@@ -167,14 +170,14 @@ theorem callConsumer_run [LawfulMonad m] {b : Token.BatchTag} (cursor : Token.Ba
   rfl
 
 theorem flushCursor_empty {b : Token.BatchTag} (cursor : Token.BatchCursor b)
-    (hfloor : ∀ p, floor = some p → cursor.EndsAfter p) (h : ¬ cursor.HasNext) :
+    (hfloor : ∀ p, floor = some p → EndsAfter cursor p) (h : ¬ cursor.HasNext) :
     Internal.flushCursor (H := H) (m := m) (R := R) (E := E) (low := low) cursor hfloor =
       pure (none, cursor) := by
   rw [flushCursor_eq]
   simp only [h, ↓reduceDIte]
 
 theorem flushCursor_congr {b : Token.BatchTag} {x y : Token.BatchCursor b} (hxy : x = y)
-    (hx : ∀ p, floor = some p → x.EndsAfter p) (hy : ∀ p, floor = some p → y.EndsAfter p) :
+    (hx : ∀ p, floor = some p → EndsAfter x p) (hy : ∀ p, floor = some p → EndsAfter y p) :
     Internal.flushCursor (H := H) (m := m) (R := R) (E := E) (low := low) x hx =
       Internal.flushCursor y hy := by
   subst hxy
@@ -182,20 +185,20 @@ theorem flushCursor_congr {b : Token.BatchTag} {x y : Token.BatchCursor b} (hxy 
 
 /-- After the consumer continues without a request, the handover goes on with the rest. -/
 theorem afterCall_continue {b : Token.BatchTag} (cursor : Token.BatchCursor b)
-    (hfloor : ∀ p, floor = some p → cursor.EndsAfter p) (next : Token.BatchCursor b)
-    (consumed : next.Consumed cursor) (hd : next.discardRequested = false)
-    (hr : next.relexRequested = false) :
+    (hfloor : ∀ p, floor = some p → EndsAfter cursor p) (next : Token.BatchCursor b)
+    (consumed : next.Consumed cursor) (hd : discardRequested next = false)
+    (hr : relexRequested next = false) :
     afterCall (H := H) (m := m) (R := R) (E := E) (low := low) cursor hfloor
         (.ok .continue, ⟨next, consumed⟩) =
-      Internal.flushCursor next.resetConsumed fun p hp =>
+      Internal.flushCursor (resetConsumed next) fun p hp =>
         Token.BatchCursor.endsAfter_resetConsumed (consumed.follows.endsAfter (hfloor p hp)) := by
   simp only [afterCall, hd, hr, Bool.false_eq_true, ↓reduceIte]
 
 /-- After the consumer breaks without a request, the handover stops: at trailing input if the
 consumer left tokens, else with the result. -/
 theorem afterCall_break {b : Token.BatchTag} (cursor : Token.BatchCursor b)
-    (hfloor : ∀ p, floor = some p → cursor.EndsAfter p) (next : Token.BatchCursor b)
-    (consumed : next.Consumed cursor) (hd : next.discardRequested = false) (result : R) :
+    (hfloor : ∀ p, floor = some p → EndsAfter cursor p) (next : Token.BatchCursor b)
+    (consumed : next.Consumed cursor) (hd : discardRequested next = false) (result : R) :
     afterCall (H := H) (m := m) (R := R) (E := E) (low := low) cursor hfloor
         (.ok (.break result), ⟨next, consumed⟩) =
       if h : next.HasNext then
@@ -203,15 +206,15 @@ theorem afterCall_break {b : Token.BatchTag} (cursor : Token.BatchCursor b)
       else
         pure (some {
           result := .ok (.finished result)
-          span := next.consumedSpanOf consumed
-          location := next.consumedEndOf consumed
+          span := consumedSpanOf next consumed
+          location := consumedEndOf next consumed
           stopAfter := fun p hp _ _ => consumed.lt_consumedEndOf (hfloor p hp) }, next) := by
   simp only [afterCall, hd, Bool.false_eq_true, ↓reduceIte]
 
 
 /-- While a result is held, the handover stops at the first token, as trailing input. -/
 theorem flushCursor_holding [LawfulMonad m] {b : Token.BatchTag} (cursor : Token.BatchCursor b)
-    (hfloor : ∀ p, floor = some p → cursor.EndsAfter p) (h : cursor.HasNext)
+    (hfloor : ∀ p, floor = some p → EndsAfter cursor p) (h : cursor.HasNext)
     (s : {c : LexerCore // c.Bound floor low}) (hh : s.val.holding = true) (handler : H) :
     ((Internal.flushCursor (m := m) (R := R) (E := E) cursor hfloor).run.run s).run handler =
       pure ((.ok (some (Internal.trailingAt (cursor.span (cursor.peek h))), cursor), s),
@@ -230,51 +233,51 @@ section
 variable {g : Token.BatchTag}
 
 theorem hasNext_resetConsumed (c : Token.BatchCursor g) :
-    c.resetConsumed.HasNext ↔ c.HasNext := Iff.rfl
+    (resetConsumed c).HasNext ↔ c.HasNext := Iff.rfl
 
 theorem peek_resetConsumed (c : Token.BatchCursor g) (h : c.HasNext) :
-    c.resetConsumed.peek ((hasNext_resetConsumed c).mpr h) = c.peek h := (rfl)
+    (resetConsumed c).peek ((hasNext_resetConsumed c).mpr h) = c.peek h := (rfl)
 
 theorem category_resetConsumed (c : Token.BatchCursor g) (t : Token g) :
-    c.resetConsumed.category t = c.category t := (rfl)
+    (resetConsumed c).category t = c.category t := (rfl)
 
 theorem span_resetConsumed (c : Token.BatchCursor g) (t : Token g) :
-    c.resetConsumed.span t = c.span t := (rfl)
+    (resetConsumed c).span t = c.span t := (rfl)
 
 theorem resetConsumed_resetConsumed (c : Token.BatchCursor g) :
-    c.resetConsumed.resetConsumed = c.resetConsumed := (rfl)
+    (resetConsumed (resetConsumed c)) = resetConsumed c := (rfl)
 
 theorem next_resetConsumed (c : Token.BatchCursor g) (h : c.HasNext) :
-    (c.resetConsumed.next ((hasNext_resetConsumed c).mpr h)).2.1.resetConsumed =
-      (c.next h).2.1.resetConsumed := (rfl)
+    (resetConsumed ((resetConsumed c).next ((hasNext_resetConsumed c).mpr h)).2.1) =
+      (resetConsumed (c.next h).2.1) := (rfl)
 
 theorem discardRequested_resetConsumed (c : Token.BatchCursor g) :
-    c.resetConsumed.discardRequested = c.discardRequested := (rfl)
+    (discardRequested (resetConsumed c)) = discardRequested c := (rfl)
 
 theorem relexRequested_resetConsumed (c : Token.BatchCursor g) :
-    c.resetConsumed.relexRequested = c.relexRequested := (rfl)
+    (relexRequested (resetConsumed c)) = relexRequested c := (rfl)
 
 theorem discardRequested_next (c : Token.BatchCursor g) (h : c.HasNext) :
-    (c.next h).2.1.discardRequested = c.discardRequested := (rfl)
+    (discardRequested (c.next h).2.1) = discardRequested c := (rfl)
 
 theorem relexRequested_next (c : Token.BatchCursor g) (h : c.HasNext) :
-    (c.next h).2.1.relexRequested = c.relexRequested := (rfl)
+    (relexRequested (c.next h).2.1) = relexRequested c := (rfl)
 
 /-- Cursors that differ only in where their handover began: the same tokens left, the same
 token at the next place, the same last token consumed, and the same requests. -/
 theorem same_of_resetConsumed {x y : Token.BatchCursor g}
-    (hxy : x.resetConsumed = y.resetConsumed) :
+    (hxy : resetConsumed x = resetConsumed y) :
     (x.HasNext ↔ y.HasNext) ∧ (∀ hx hy, x.span (x.peek hx) = y.span (y.peek hy)) ∧
       (∀ {o o' : Token.BatchCursor g} (p : x.Consumed o) (q : y.Consumed o'),
-        x.consumedSpanOf p = y.consumedSpanOf q ∧ x.consumedEndOf p = y.consumedEndOf q) ∧
-      x.discardRequested = y.discardRequested ∧ x.relexRequested = y.relexRequested ∧
+        (consumedSpanOf x) p = consumedSpanOf y q ∧ consumedEndOf x p = consumedEndOf y q) ∧
+      (discardRequested x) = discardRequested y ∧ relexRequested x = relexRequested y ∧
       x.version = y.version ∧
       BSmtLib.Lexer.Internal.intoBatch x = BSmtLib.Lexer.Internal.intoBatch y ∧
       (∀ {β : Type} (init : β) (f : β → Token.TokenCategory → β),
-        x.foldConsumedCategories init f = y.foldConsumedCategories init f) := by
+        (foldConsumedCategories x) init f = foldConsumedCategories y init f) := by
   cases x
   cases y
-  simp only [Token.BatchCursor.resetConsumed, Token.BatchCursor.mk.injEq] at hxy
+  simp only [resetConsumed, Token.BatchCursor.mk.injEq] at hxy
   obtain ⟨rfl, rfl, -, rfl, rfl, rfl, rfl, rfl⟩ := hxy
   exact ⟨Iff.rfl, fun _ _ => rfl, fun _ _ => ⟨rfl, rfl⟩, rfl, rfl, rfl, rfl, fun _ _ => rfl⟩
 
@@ -378,7 +381,7 @@ section
 variable {floor : Option Nat} {low : Nat}
 
 theorem collector_flush_step {g : Token.BatchTag} (c : Token.BatchCursor g)
-    (hf : ∀ p, floor = some p → c.EndsAfter p) (h : c.HasNext)
+    (hf : ∀ p, floor = some p → EndsAfter c p) (h : c.HasNext)
     (s : {core : LexerCore // core.Bound floor low}) (hhold : s.val.holding = false)
     (a : Collector) (entries : List Entry) :
     (((Internal.flushCursor (H := Collector) (m := CollectM) (R := Unit) (E := Empty)
@@ -395,7 +398,7 @@ theorem collector_flush_step {g : Token.BatchTag} (c : Token.BatchCursor g)
   rfl
 
 theorem answering_flush_step {g : Token.BatchTag} (c : Token.BatchCursor g)
-    (hf : ∀ p, floor = some p → c.EndsAfter p) (h : c.HasNext)
+    (hf : ∀ p, floor = some p → EndsAfter c p) (h : c.HasNext)
     (s : {core : LexerCore // core.Bound floor low}) (hhold : s.val.holding = false)
     (b : Answering concreteCollector) (taken : List Handed) :
     (((Internal.flushCursor (H := Answering concreteCollector) (m := AnswerM)
@@ -420,7 +423,7 @@ def FlushRel {g : Token.BatchTag} :
         (Option (Interrupted concreteCollector.Result (Option concreteCollector.Error) floor) ×
           Token.BatchCursor g) → Prop :=
   ERel (IRel link.rr link.re)
-    (fun x y => ORel (IRel link.rr link.re) x.1 y.1 ∧ x.2.resetConsumed = y.2.resetConsumed)
+    (fun x y => ORel (IRel link.rr link.re) x.1 y.1 ∧ resetConsumed x.2 = resetConsumed y.2)
 
 /-- Runs of the handovers to the two consumers that are related: as `FlushRel` says, with the
 same lexer state, and the entries the collector wrote down for the tokens the other took. -/
@@ -433,19 +436,19 @@ def RunRel {g : Token.BatchTag} {α : Type}
   FlushRel x.1.1.1 y.1.1.1 ∧ x.1.1.2 = y.1.1.2 ∧ x.2 = y.2.map entryOf
 
 theorem entryAt_resetConsumed {g : Token.BatchTag} (c : Token.BatchCursor g) (h : c.HasNext) :
-    entryAt c.resetConsumed (c.resetConsumed.peek ((hasNext_resetConsumed c).mpr h)) =
+    entryAt (resetConsumed c) ((resetConsumed c).peek ((hasNext_resetConsumed c).mpr h)) =
       entryAt c (c.peek h) := (rfl)
 
 theorem flush_main (n : Nat) : ∀ {g : Token.BatchTag} (o c : Token.BatchCursor g)
-    (hq : c.Follows o) (h : c.HasNext) (_hr : c.remaining < n)
-    (_hrl : c.relexRequested = false) (_hds : c.discardRequested = false)
-    (hfo : ∀ p, floor = some p → o.EndsAfter p)
-    (hfc : ∀ p, floor = some p → c.resetConsumed.EndsAfter p)
+    (hq : Follows c o) (h : c.HasNext) (_hr : remaining c < n)
+    (_hrl : relexRequested c = false) (_hds : discardRequested c = false)
+    (hfo : ∀ p, floor = some p → EndsAfter o p)
+    (hfc : ∀ p, floor = some p → (EndsAfter (resetConsumed c)) p)
     (s : {core : LexerCore // core.Bound floor low}) (_hhold : s.val.holding = false)
     (a : Collector) (b : Answering concreteCollector) (taken : List Handed),
     RunRel
       ((((Internal.flushCursor (H := Collector) (m := CollectM) (R := Unit) (E := Empty)
-        c.resetConsumed hfc).run.run s).run a).run (taken.map entryOf))
+        (resetConsumed c) hfc).run.run s).run a).run (taken.map entryOf))
       ((((afterCall (H := Answering concreteCollector) (m := AnswerM)
         (R := concreteCollector.Result) (E := Option concreteCollector.Error) o hfo
           (((Answering.consume concreteCollector c h).run taken).1.1,
@@ -458,17 +461,17 @@ theorem flush_main (n : Nat) : ∀ {g : Token.BatchTag} (o c : Token.BatchCursor
   | succ n ih =>
   intro g o c hq h hr hrl hds hfo hfc s hhold a b taken
   have h' := (hasNext_resetConsumed c).mpr h
-  rw [collector_flush_step c.resetConsumed hfc h' s hhold a, entryAt_resetConsumed c h,
+  rw [collector_flush_step (resetConsumed c) hfc h' s hhold a, entryAt_resetConsumed c h,
     peek_resetConsumed c h, category_resetConsumed, answering_step c h taken]
-  have hdn : (c.resetConsumed.next h').2.1.discardRequested = false := by
+  have hdn : (discardRequested ((resetConsumed c).next h').2.1) = false := by
     rw [discardRequested_next, discardRequested_resetConsumed, hds]
-  have hrn : (c.resetConsumed.next h').2.1.relexRequested = false := by
+  have hrn : (relexRequested ((resetConsumed c).next h').2.1) = false := by
     rw [relexRequested_next, relexRequested_resetConsumed, hrl]
   have hsame := same_of_resetConsumed (next_resetConsumed c h)
   cases hcat : (c.category (c.peek h) == .endOfFile)
   · simp only [Bool.false_eq_true, ite_false]
-    rw [show (c.resetConsumed.next h').2 =
-      ⟨(c.resetConsumed.next h').2.1, (c.resetConsumed.next h').2.2⟩ from rfl,
+    rw [show ((resetConsumed c).next h').2 =
+      ⟨((resetConsumed c).next h').2.1, ((resetConsumed c).next h').2.2⟩ from rfl,
       afterCall_continue _ _ _ _ hdn hrn]
     rw [flushCursor_congr (next_resetConsumed c h)]
     by_cases hn : (c.next h).2.1.HasNext
@@ -482,7 +485,7 @@ theorem flush_main (n : Nat) : ∀ {g : Token.BatchTag} (o c : Token.BatchCursor
       rw [List.map_append, List.map_singleton, entryOf_handedAt] at this
       exact this
     · simp only [hn, ↓reduceDIte]
-      have hn' : ¬ (c.next h).2.1.resetConsumed.HasNext := hn
+      have hn' : ¬ (resetConsumed (c.next h).2.1).HasNext := hn
       rw [afterCall_continue _ _ _ _ (by rw [discardRequested_next, hds])
         (by rw [relexRequested_next, hrl]), flushCursor_empty _ _ hn', flushCursor_empty _ _ hn']
       refine ⟨⟨trivial, rfl⟩, rfl, ?_⟩
@@ -490,8 +493,8 @@ theorem flush_main (n : Nat) : ∀ {g : Token.BatchTag} (o c : Token.BatchCursor
         (taken ++ [handedAt c (c.peek h)]).map entryOf
       rw [List.map_append, List.map_singleton, entryOf_handedAt]
   · simp only [ite_true]
-    rw [show (c.resetConsumed.next h').2 =
-      ⟨(c.resetConsumed.next h').2.1, (c.resetConsumed.next h').2.2⟩ from rfl,
+    rw [show ((resetConsumed c).next h').2 =
+      ⟨((resetConsumed c).next h').2.1, ((resetConsumed c).next h').2.2⟩ from rfl,
       afterCall_break _ _ _ _ hdn,
       afterCall_break (R := concreteCollector.Result) (E := Option concreteCollector.Error) _ _ _ _
         (by rw [discardRequested_next, hds]) (() : concreteCollector.Result)]
@@ -504,40 +507,42 @@ theorem flush_main (n : Nat) : ∀ {g : Token.BatchTag} (o c : Token.BatchCursor
       simp only [hn, hnX, ↓reduceDIte]
       refine ⟨⟨⟨?_, hspan hnX hn, rfl⟩, next_resetConsumed c h⟩, rfl, hentries⟩
       simp only [Internal.trailingAt, hspan hnX hn]
-    · have hnX : ¬ (c.resetConsumed.next h').2.1.HasNext := fun hx => hn (hhas.mp hx)
+    · have hnX : ¬ ((resetConsumed c).next h').2.1.HasNext := fun hx => hn (hhas.mp hx)
       simp only [hn, hnX, ↓reduceDIte]
-      obtain ⟨hs1, hs2⟩ := hcons (c.resetConsumed.next h').2.2
+      obtain ⟨hs1, hs2⟩ := hcons ((resetConsumed c).next h').2.2
         ((c.next h).2.2.trans_follows hq)
       exact ⟨⟨⟨hs2, hs1, rfl⟩, next_resetConsumed c h⟩, rfl, hentries⟩
 
-theorem new_resetConsumed (version : Token.Version) (batch : Token.TokenBatch) :
-    (Token.BatchCursor.new version batch).resetConsumed = Token.BatchCursor.new version batch :=
+theorem new_resetConsumed (version : Token.Version) (batch : Token.Internal.TokenBatch) :
+    (resetConsumed
+        (Token.BatchCursor.Internal.new version batch)) =
+        Token.BatchCursor.Internal.new version batch :=
   (rfl)
 
-theorem relexRequested_new (version : Token.Version) (batch : Token.TokenBatch) :
-    (Token.BatchCursor.new version batch).relexRequested = false := (rfl)
+theorem relexRequested_new (version : Token.Version) (batch : Token.Internal.TokenBatch) :
+    (relexRequested (Token.BatchCursor.Internal.new version batch)) = false := (rfl)
 
-theorem discardRequested_new (version : Token.Version) (batch : Token.TokenBatch) :
-    (Token.BatchCursor.new version batch).discardRequested = false := (rfl)
+theorem discardRequested_new (version : Token.Version) (batch : Token.Internal.TokenBatch) :
+    (discardRequested (Token.BatchCursor.Internal.new version batch)) = false := (rfl)
 
 /-- The handovers of a new cursor to the two consumers are related. -/
-theorem flushNew_sim (version : Token.Version) (batch : Token.TokenBatch)
-    (hf : ∀ p, floor = some p → (Token.BatchCursor.new version batch).EndsAfter p) :
+theorem flushNew_sim (version : Token.Version) (batch : Token.Internal.TokenBatch)
+    (hf : ∀ p, floor = some p → (EndsAfter (Token.BatchCursor.Internal.new version batch)) p) :
     LSim link (fun x y => ORel (IRel link.rr link.re) x.1 y.1 ∧
-        x.2.resetConsumed = y.2.resetConsumed)
+        (resetConsumed x.2) = resetConsumed y.2)
       (Internal.flushCursor (H := Collector) (m := CollectM) (R := Unit) (E := Empty)
-        (low := low) (Token.BatchCursor.new version batch) hf)
+        (low := low) (Token.BatchCursor.Internal.new version batch) hf)
       (Internal.flushCursor (H := Answering concreteCollector) (m := AnswerM)
         (R := concreteCollector.Result) (E := Option concreteCollector.Error)
-        (Token.BatchCursor.new version batch) hf) := by
+        (Token.BatchCursor.Internal.new version batch) hf) := by
   intro s a b taken
-  by_cases hn : (Token.BatchCursor.new version batch).HasNext
+  by_cases hn : (Token.BatchCursor.Internal.new version batch).HasNext
   · by_cases hh : s.val.holding = true
     · rw [flushCursor_holding _ _ hn s hh, flushCursor_holding _ _ hn s hh]
       exact ⟨⟨⟨⟨rfl, rfl, rfl⟩, rfl⟩, rfl⟩, rfl⟩
     · have hhold : s.val.holding = false := by simpa using hh
-      have hm := flush_main _ (Token.BatchCursor.new version batch)
-        (Token.BatchCursor.new version batch) (Token.BatchCursor.Follows.refl _) hn
+      have hm := flush_main _ (Token.BatchCursor.Internal.new version batch)
+        (Token.BatchCursor.Internal.new version batch) (Follows.refl _) hn
         (Nat.lt_succ_self _) (relexRequested_new version batch)
         (discardRequested_new version batch) hf
         (by rw [new_resetConsumed]; exact hf) s hhold a b taken
@@ -548,7 +553,7 @@ theorem flushNew_sim (version : Token.Version) (batch : Token.TokenBatch)
     exact ⟨⟨⟨trivial, rfl⟩, rfl⟩, rfl⟩
 
 /-- The handovers of a batch to the two consumers are related. -/
-theorem handOver_link (batch : Token.TokenBatch) (bytesAfter : ByteArray)
+theorem handOver_link (batch : Token.Internal.TokenBatch) (bytesAfter : ByteArray)
     (hfloor : ∀ p, floor = some p → batch.EndsAfter p) :
     LSim link (· = ·)
       (Internal.handOver (H := Collector) (m := CollectM) (R := Unit) (E := Empty) (low := low)
@@ -563,15 +568,14 @@ theorem handOver_link (batch : Token.TokenBatch) (bytesAfter : ByteArray)
   dsimp only at hs he
   obtain ⟨-, -, -, -, -, hver, hinto, hfold⟩ := same_of_resetConsumed he
   dsimp only
-  have hF : @Token.BatchCursor.foldConsumedCategories _ Nat cursor' =
-      @Token.BatchCursor.foldConsumedCategories _ Nat cursor := by
+  have hF : @foldConsumedCategories _ Nat cursor' = @foldConsumedCategories _ Nat cursor := by
     funext init f
     exact (hfold init f).symm
   generalize cursor'.version = v' at hver ⊢
   subst hver
   generalize Internal.intoBatch cursor' = b' at hinto ⊢
   subst hinto
-  generalize @Token.BatchCursor.foldConsumedCategories _ Nat cursor' = F at hF ⊢
+  generalize @foldConsumedCategories _ Nat cursor' = F at hF ⊢
   subst hF
   refine XSim.bind_eq getCore_sim fun core' => ?_
   match stop₁, stop₂, hs with

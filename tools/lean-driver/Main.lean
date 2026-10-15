@@ -26,6 +26,7 @@ import Protocol
 import Parse
 
 open BSmtLib
+open BSmtLib.Token.BatchCursor.Internal (remaining)
 open BSmtLib.Token
 open BSmtLib.Lexer.Error (LexError LexicalErrorKind)
 
@@ -167,10 +168,10 @@ def describeAll {batch : BatchTag} (cursor : BatchCursor batch) (version : Versi
   match cursor.next? with
   | none => ("", 0)
   | some (token, ⟨next, consumed⟩) =>
-    have : next.remaining < cursor.remaining := consumed.remaining_lt
+    have : remaining next < remaining cursor := consumed.remaining_lt
     let (lines, count) := describeAll next version
     (tokenLine cursor token version ++ lines, count + 1)
-termination_by cursor.remaining
+termination_by remaining cursor
 
 /-- Takes every token remaining in the cursor, which has one, writing a line for each. -/
 def takeAll {batch : BatchTag} (out : IO.Ref String) (version : Version)
@@ -179,12 +180,12 @@ def takeAll {batch : BatchTag} (out : IO.Ref String) (version : Version)
   let (token, ⟨next, consumed⟩) := cursor.next h
   out.modify (· ++ tokenLine cursor token version)
   if h : next.HasNext then
-    have : next.remaining < cursor.remaining := consumed.remaining_lt
+    have : remaining next < remaining cursor := consumed.remaining_lt
     let ⟨last, taken⟩ ← takeAll out version next h
     return ⟨last, taken.trans consumed⟩
   else
     return ⟨next, consumed⟩
-termination_by cursor.remaining
+termination_by remaining cursor
 
 /-- Takes the next token, which there is, and then up to `more` further ones. -/
 def takeSome {batch : BatchTag} (cursor : BatchCursor batch) (h : cursor.HasNext) (more : Nat) :
@@ -238,12 +239,12 @@ def takeByRules {batch : BatchTag} (refuseEnd : Bool) (version : Version)
       next := switchVersion next .v2_0
   | _ => pure ()
   if h : next.1.HasNext then
-    have : next.1.remaining < cursor.remaining := next.2.remaining_lt
+    have : remaining next.1 < remaining cursor := next.2.remaining_lt
     let (result, ⟨last, taken⟩) ← takeByRules refuseEnd version next.1 h
     return (result, ⟨last, taken.trans next.2⟩)
   else
     return (.ok .continue, next)
-termination_by cursor.remaining
+termination_by remaining cursor
 
 /- LEAN: the Rust error type is `&'static str`, the name of what made the consumer fail. The
 result says whether the consumer finished by its script (`true`) or only because it was handed

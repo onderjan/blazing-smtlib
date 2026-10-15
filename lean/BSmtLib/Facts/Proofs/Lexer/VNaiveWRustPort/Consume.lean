@@ -18,6 +18,7 @@ cursor and the answer it gives back say which.
 namespace BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Consume
 
 open BSmtLib.Facts.Lexer.Adapters BSmtLib.Facts.Proofs.Lexer.Simulation.Batch
+open BSmtLib.Token.BatchCursor.Internal (discardRequested relexRequested)
 open BSmtLibSpec.Lexer (Handed)
 open BSmtLib.Facts.Proofs.Lexer.VNaive.Run BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Batch
 open BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Bytes
@@ -34,25 +35,25 @@ def ConsumeSpec (c : Token.BatchCursor g) (p : Prog) (xs : List Lexeme)
   match pending C false p.ver p.taken xs with
   | .cont p' =>
     answer = .ok .continue ∧ taken = p'.taken ∧ c'.version = p'.ver ∧ cStop c' = cStop c ∧
-      c'.relexRequested = c.relexRequested ∧ c'.discardRequested = c.discardRequested
+      (relexRequested c') = relexRequested c ∧ discardRequested c' = discardRequested c
   | .wait r l p' =>
     xs.getLast? = some l ∧
     answer = .ok (.break r) ∧ taken = p'.taken ∧ c'.version = p'.ver ∧ cStop c' = cStop c ∧
-      c'.relexRequested = c.relexRequested ∧ c'.discardRequested = c.discardRequested
+      (relexRequested c') = relexRequested c ∧ discardRequested c' = discardRequested c
   | .stop s p' =>
     xs.getLast? = some s.lex ∧ taken = p'.taken ∧ c'.version = p'.ver ∧
       match s with
-      | .fail e d _ => answer = .error (some e) ∧ c'.discardRequested = (d || c.discardRequested)
-      | .layout _ => answer = .error none ∧ c'.discardRequested = c.discardRequested
+      | .fail e d _ => answer = .error (some e) ∧ discardRequested c' = (d || (discardRequested c))
+      | .layout _ => answer = .error none ∧ discardRequested c' = discardRequested c
       | .brkX r _ =>
-        answer = .ok (.break r) ∧ c'.relexRequested = true ∧ cStop c' = cNext c' ∧
-          c'.discardRequested = c.discardRequested
+        answer = .ok (.break r) ∧ relexRequested c' = true ∧ cStop c' = cNext c' ∧
+          (discardRequested c') = discardRequested c
       | .discard r _ =>
         answer = .ok (match r with | some r => .break r | none => .continue) ∧
-          c'.discardRequested = true
+          (discardRequested c') = true
       | .relex _ =>
-        answer = .ok .continue ∧ c'.relexRequested = true ∧
-          c'.discardRequested = c.discardRequested
+        answer = .ok .continue ∧ relexRequested c' = true ∧
+          (discardRequested c') = discardRequested c
       | _ => False
 
 theorem requests_eq (taken : List Handed) (c : Token.BatchCursor g) :

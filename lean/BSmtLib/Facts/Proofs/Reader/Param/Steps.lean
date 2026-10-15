@@ -59,7 +59,7 @@ theorem lexDigitRun_sim (hc : Consumers L) (input start run tokenStart base h) :
       (Internal.lexDigitRun input start run tokenStart base h) := by
   unfold Internal.lexDigitRun; lsim
 
-theorem lexStringLiteralLegacy_sim (hc : Consumers L) (input : CharClass.Input)
+theorem lexStringLiteralLegacy_sim (hc : Consumers L) (input : Internal.CharClass.Input)
     (consumed origin : USize)
     (horigin tokenStart base h) :
     LSim L (· = ·)
@@ -70,9 +70,9 @@ theorem lexStringLiteralLegacy_sim (hc : Consumers L) (input : CharClass.Input)
   lsim
   all_goals exact lexStringLiteralLegacy_sim hc _ _ _ _ _ _ _
 termination_by input.stop.toNat - consumed.toNat
-decreasing_by all_goals lsim_omega [CharClass.le_runEnd, CharClass.le_runEndAll]
+decreasing_by all_goals lsim_omega [Internal.CharClass.le_runEnd, Internal.CharClass.le_runEndAll]
 
-theorem lexStringLiteralFrom_sim (hc : Consumers L) (input : CharClass.Input)
+theorem lexStringLiteralFrom_sim (hc : Consumers L) (input : Internal.CharClass.Input)
     (consumed origin : USize)
     (horigin tokenStart base h) :
     LSim L (· = ·)
@@ -83,7 +83,7 @@ theorem lexStringLiteralFrom_sim (hc : Consumers L) (input : CharClass.Input)
   lsim
   all_goals exact lexStringLiteralFrom_sim hc _ _ _ _ _ _ _
 termination_by input.stop.toNat - consumed.toNat
-decreasing_by all_goals lsim_omega [CharClass.le_runEnd, CharClass.le_runEndAll]
+decreasing_by all_goals lsim_omega [Internal.CharClass.le_runEnd, Internal.CharClass.le_runEndAll]
 
 theorem lexStringLiteral_sim (hc : Consumers L) (input start tokenStart base h) :
     LSim L (· = ·)
@@ -97,7 +97,8 @@ theorem lexSimpleSymbol_sim (hc : Consumers L) (input start tokenStart base h) :
       (Internal.lexSimpleSymbol input start tokenStart base h) := by
   unfold Internal.lexSimpleSymbol; lsim
 
-theorem lexQuotedSymbol_sim (hc : Consumers L) (input : CharClass.Input) (consumed origin : USize)
+theorem lexQuotedSymbol_sim (hc : Consumers L) (input : Internal.CharClass.Input)
+    (consumed origin : USize)
     (horigin hconsumed tokenStart base h) :
     LSim L (· = ·)
       (Internal.lexQuotedSymbol (floor := floor) (low := low) input consumed origin horigin
@@ -108,7 +109,7 @@ theorem lexQuotedSymbol_sim (hc : Consumers L) (input : CharClass.Input) (consum
   lsim
   all_goals exact lexQuotedSymbol_sim hc _ _ _ _ _ _ _ _
 termination_by input.stop.toNat - consumed.toNat
-decreasing_by all_goals lsim_omega [CharClass.le_runEnd, CharClass.le_runEndAll]
+decreasing_by all_goals lsim_omega [Internal.CharClass.le_runEnd, Internal.CharClass.le_runEndAll]
 
 theorem lexKeyword_sim (hc : Consumers L) (input start tokenStart base h) :
     LSim L (· = ·) (Internal.lexKeyword (floor := floor) (low := low) input start tokenStart base h)
@@ -122,7 +123,8 @@ theorem lexQuotedSymbolClosed_sim (hc : Consumers L) (input start hstart tokenSt
       (Internal.lexQuotedSymbolClosed input start hstart tokenStart base h) := by
   unfold Internal.lexQuotedSymbolClosed; lsim
 
-theorem lexWhitespace_sim (hc : Consumers L) (input : CharClass.Input) (start origin : USize)
+theorem lexWhitespace_sim (hc : Consumers L) (input : Internal.CharClass.Input)
+    (start origin : USize)
     (horigin hstart tokenStart base h) :
     LSim L (· = ·)
       (Internal.lexWhitespace (floor := floor) (low := low) input start origin horigin hstart
@@ -133,7 +135,7 @@ theorem lexWhitespace_sim (hc : Consumers L) (input : CharClass.Input) (start or
   lsim
   all_goals exact lexWhitespace_sim hc _ _ _ _ _ _ _ _
 termination_by input.stop.toNat - start.toNat
-decreasing_by all_goals lsim_omega [CharClass.le_runEnd, CharClass.le_runEndAll]
+decreasing_by all_goals lsim_omega [Internal.CharClass.le_runEnd, Internal.CharClass.le_runEndAll]
 
 theorem lexComment_sim (hc : Consumers L) (input start hstart tokenStart base h) :
     LSim L (· = ·)

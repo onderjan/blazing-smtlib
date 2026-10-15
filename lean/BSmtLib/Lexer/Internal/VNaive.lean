@@ -22,6 +22,7 @@ the token the consumer answered for, and nothing is ever lexed again.
 -/
 
 open BSmtLib.Lexer.Error
+open BSmtLib.Token.BatchCursor.Internal (discardRequested)
 
 namespace BSmtLib.Lexer.Internal.VNaive
 
@@ -199,14 +200,14 @@ token and the byte, and takes effect just before the byte.
 -/
 def failAtByte (kind : LexicalErrorKind) (start location : Span.Location) : LexFailure :=
   -- the end of the span counts the byte as a column, also a line feed
-  { kind, span := Span.newUnchecked start location.afterColumn, location }
+  { kind, span := Span.Internal.newUnchecked start location.afterColumn, location }
 
 /--
 The failure at the end of the input at `location`, for the token from `start`: the error spans
 the token, and takes effect at the end.
 -/
 def failAtEnd (kind : LexicalErrorKind) (start location : Span.Location) : LexFailure :=
-  { kind, span := Span.newUnchecked start location, location }
+  { kind, span := Span.Internal.newUnchecked start location, location }
 
 /--
 Lexes the byte `c` at `location` with no token in progress, under `version`. `whitespace` says
@@ -599,16 +600,17 @@ end Core
 /-! ## Hand-overs -/
 
 /-- A batch of the lexeme alone, which has a byte unless it is the end of file. -/
-def Lexeme.batch (l : Lexeme) (h : l.Valid) : Token.TokenBatch :=
-  ({ Token.TokenBatch.empty 1 with bytes := l.content } : Token.TokenBatch).pushLocated l.category 0
+def Lexeme.batch (l : Lexeme) (h : l.Valid) : Token.Internal.TokenBatch :=
+  ({ Token.Internal.TokenBatch.empty 1 with bytes :=
+      l.content } : Token.Internal.TokenBatch).pushLocated l.category 0
     l.content.size l.start l.end (Nat.zero_le _) h
 
 /-- A cursor over the batch of a lexeme alone has a token. -/
 theorem Lexeme.hasNext (l : Lexeme) (h : l.Valid) (version : Token.Version) :
-    (Token.BatchCursor.new version (l.batch h)).HasNext :=
+    (Token.BatchCursor.Internal.new version (l.batch h)).HasNext :=
   Token.BatchCursor.hasNext_new version (by
     rw [Lexeme.batch]
-    exact Nat.lt_of_lt_of_eq (Nat.zero_lt_succ _) (Token.TokenBatch.len_push ..).symm)
+    exact Nat.lt_of_lt_of_eq (Nat.zero_lt_succ _) (Token.Internal.TokenBatch.len_push ..).symm)
 
 /-- The number of parentheses open after a token of the category. -/
 def depthAfter (depth : Nat) : Token.TokenCategory → Nat
@@ -684,10 +686,10 @@ the consumer gives back is in force from then on.
 -/
 def handOver (core : Core) (l : Lexeme) (h : l.Valid) :
     StateT H m (Except E (ControlFlow R) × Bool × Core) := do
-  let cursor := Token.BatchCursor.new core.version (l.batch h)
+  let cursor := Token.BatchCursor.Internal.new core.version (l.batch h)
   let (answer, ⟨after, _⟩) ← Token.ConsumeFrom.consume (H := H) cursor (l.hasNext h core.version)
   -- the consumer has consumed at least one token, and the cursor has just this one
-  return (answer, after.discardRequested,
+  return (answer, discardRequested after,
     { core with version := after.version, depth := depthAfter core.depth l.category })
 
 /--
@@ -702,7 +704,7 @@ def handOverAt (core : Core) (l : Lexeme) (h : l.Valid) :
   if core.holding then
     -- a result is held: what follows it is trailing input
     return (.error { cause := .lexical .unexpectedTrailingToken
-                     span := Span.newUnchecked l.start l.end, location := l.start }, core)
+                     span := Span.Internal.newUnchecked l.start l.end, location := l.start }, core)
   let (answer, discards, core) ← handOver core l h
   return match answer with
     | .ok flow =>
@@ -718,7 +720,7 @@ def handOverAt (core : Core) (l : Lexeme) (h : l.Valid) :
           { core with activity := .discarding (core.activity.discardStart l.end)
                       startedBefore := trivial }
         else core
-      (.error { cause := .consumer err, span := Span.newUnchecked l.end l.end
+      (.error { cause := .consumer err, span := Span.Internal.newUnchecked l.end l.end
                 location := l.end }, core)
 
 /-- Lexes the byte `c` with no token in progress. -/

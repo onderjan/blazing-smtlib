@@ -33,6 +33,7 @@ namespace BSmtLib.Facts.Parser.Adapters.Run
 section
 
 open BSmtLib.Parser
+open BSmtLib.Parser.Internal (PM call syntaxError)
 open BSmtLibSpec.Parser.Traversal
 
 variable {H : Type} {m : Type → Type} [Monad m] [Traits.Handler H m] {σ ρ τ χ α β : Type}
@@ -86,6 +87,7 @@ end
 section
 
 open BSmtLib.Parser
+open BSmtLib.Parser.Internal (PM call syntaxError)
 open BSmtLibSpec.Parser.Traversal
 
 variable {H P R : Type} {m : Type → Type} [Monad m] [Traits.Handler H m]
@@ -133,7 +135,8 @@ end
 section
 
 open BSmtLibSpec.Parser.Properties
-open BSmtLib.Parser (PM Parse)
+open BSmtLib.Parser (Parse)
+open BSmtLib.Parser.Internal (PM)
 open BSmtLib.Parser.Script (ScriptParser)
 open BSmtLib.Token (VersionPosture)
 
@@ -150,7 +153,8 @@ def recordedRun (version : Token.Version) (parser : ScriptParser (List Event))
 
 /-- The posture that restricts nothing: every version, any number of declarations. -/
 def unrestrictedPosture : VersionPosture :=
-  { allowed := #[.v2_0, .v2_5, .v2_6, .v2_7], maxDeclarations := none }
+  (Token.VersionPostureBuilder.new.clearAllowed.addAllowed .v2_0 |>.addAllowed .v2_5
+    |>.addAllowed .v2_6 |>.addAllowed .v2_7 |>.setMaxDeclarations none).build
 
 /-- The events a recording run starts with, read from the version: the handler's switch to it. -/
 abbrev startEvents (version : Token.Version) : List Event :=

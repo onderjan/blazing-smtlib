@@ -22,9 +22,8 @@ namespace BSmtLib.Facts.Proofs.Parser.Rejection.«Sort»
 open BSmtLibSpec.Grammar
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Parser.Traversal
-open BSmtLib.Parser (PM)
-open BSmtLib.Parser.Category.Ident (IdentState)
-open BSmtLib.Parser.Category.Sort (SortState SortMode SortLevel sortStep sortComplete)
+open BSmtLib.Parser.Category.Ident.Internal (IdentState)
+open BSmtLib.Parser.Category.Sort.Internal (SortState SortMode SortLevel sortStep sortComplete)
 open BSmtLib.Facts.Proofs.Parser.Rejection.Basic.Lang
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Proofs.Parser.Rejection.Basic
 

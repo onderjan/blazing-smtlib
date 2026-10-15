@@ -1,8 +1,8 @@
 module
 
-public import BSmtLib.Lexer.CharClass
+public import BSmtLib.Lexer.Internal.CharClass
 public import BSmtLib.Lexer.Error
-public import BSmtLib.Lexer.Helpers
+public import BSmtLib.Lexer.Internal.Helpers
 public import BSmtLib.Lexer.Recovery
 public import BSmtLib.Token
 public import BSmtLib.Token.Produce
@@ -14,6 +14,12 @@ public section
 namespace BSmtLib.Lexer
 
 open Recovery (FailFast Recovering)
+open BSmtLib.Token.BatchCursor.Internal (discardRequested resetConsumed remaining relexRequested
+    EndsAfter consumedSpanOf foldConsumedCategories consumedEndOf)
+
+/- The lexer's state and the monads of its steps. They are public, in `Internal`, only so that the
+proofs of the lexers can read them; they are not a part of the library's interface. -/
+namespace Internal
 
 /-- Maximal number of tokens that can be batched. -/
 def BATCH_CAPACITY : Nat := 256
@@ -131,7 +137,7 @@ structure LexerCore where
   -/
   lineStart : Nat
   /-- Token batch, may be only partially filled. -/
-  batch : Token.TokenBatch
+  batch : Token.Internal.TokenBatch
   /- LEAN: not in Rust: two facts about the fields above, which show that every token handed
   over has a byte and is after the tokens before it (see `TokenBatch.ordered`). Between the
   steps of the loop over a slice, `offset` is the offset of the next byte to be lexed. A step
@@ -247,13 +253,13 @@ def LexerCore.resumeAt (self : LexerCore) (location : Span.Location)
     tokenStart := location
     batch := self.batch.clear location.offset
     tokenStarted := .inl rfl
-    batchEnded := Nat.le_of_eq (Token.TokenBatch.lastEnd_clear _ _) }
+    batchEnded := Nat.le_of_eq (Token.Internal.TokenBatch.lastEnd_clear _ _) }
 
 theorem LexerCore.bound_resumeAt (self : LexerCore) (location : Span.Location) (position : USize) :
     (self.resumeAt location position).Bound (some location.offset) 0 :=
   ⟨Nat.zero_le _, fun p hp => by
     cases hp
-    exact ⟨Nat.le_refl _, .inl rfl, Token.TokenBatch.startsFrom_clear _ _ _⟩⟩
+    exact ⟨Nat.le_refl _, .inl rfl, Token.Internal.TokenBatch.startsFrom_clear _ _ _⟩⟩
 
 theorem LexerCore.Bound.weaken {self : LexerCore} {floor : Option Nat} {low : Nat}
     (h : self.Bound floor low) : self.Bound floor 0 :=
@@ -264,14 +270,13 @@ The steps of the lexer. They are public, in `Internal`, only so that the proofs 
 can read them; they are not a part of the library's interface.
 -/
 
-namespace Internal
-
 /- LEAN: not in Rust. The lexer takes the batch back after the consumer is done with the
 cursor; if nothing else refers to it, its storage is overwritten by the next batch, as the
 Rust lexer overwrites its fixed arrays. -/
 /-- The batch of the cursor, for reuse of its storage once the cursor is spent. -/
 @[inline]
-def intoBatch {batch : Token.BatchTag} (cursor : Token.BatchCursor batch) : Token.TokenBatch :=
+def intoBatch {batch : Token.BatchTag} (cursor : Token.BatchCursor batch) :
+    Token.Internal.TokenBatch :=
   Token.BatchCursor.Internal.batch cursor
 
 theorem tag_intoBatch {batch : Token.BatchTag} (cursor : Token.BatchCursor batch) :
@@ -395,7 +400,7 @@ def markLineFeedAt (position : USize) : LexM H m R E floor low Unit :=
 def failWith (kind : Error.LexicalErrorKind) (position failure : USize) :
     LexM H m R E floor low α := do
   let c ← getCore
-  let span := Span.newUnchecked c.tokenStart (c.locationAt position)
+  let span := Span.Internal.newUnchecked c.tokenStart (c.locationAt position)
   -- no tokens have been consumed, as this is an error
   -- that occurred during lexing
   throw {
@@ -468,7 +473,7 @@ the consumer breaks, the tokens it left in the cursor are trailing input.
 Returns the stop, if the consumer stopped, and the cursor as the consumer left it.
 -/
 def flushCursor {batch : Token.BatchTag} (cursor : Token.BatchCursor batch)
-    (hfloor : ∀ p, floor = some p → cursor.EndsAfter p) :
+    (hfloor : ∀ p, floor = some p → EndsAfter cursor p) :
     LexM H m R E floor low (Option (Interrupted R E floor) × Token.BatchCursor batch) := do
   -- flush the cursor until nothing remains
   if h : cursor.HasNext then
@@ -478,39 +483,39 @@ def flushCursor {batch : Token.BatchTag} (cursor : Token.BatchCursor batch)
     else
       let (result, ⟨next, consumed⟩) ← callConsumer cursor h
       -- the stop takes effect after the consumed tokens
-      let location := next.consumedEndOf consumed
+      let location := consumedEndOf next consumed
       have after : ∀ p, floor = some p → p < location.offset := fun p hp =>
         consumed.lt_consumedEndOf (hfloor p hp)
       -- process the result
       match result with
       | .ok flow =>
-        if next.discardRequested then
+        if discardRequested next then
           -- the rest is to be discarded, whatever the consumer answered
           let held := match flow with
             | .continue => none
             | .break result => some result
           return (some {
             result := .ok (.discarded held)
-            span := next.consumedSpanOf consumed
+            span := consumedSpanOf next consumed
             location
             stopAfter := fun p hp _ _ => after p hp }, next)
         else
           match flow with
           | .continue =>
-            if next.relexRequested then
+            if relexRequested next then
               -- we need to stop and relex here
               return (some {
                 result := .ok .relex
-                span := next.consumedSpanOf consumed
+                span := consumedSpanOf next consumed
                 location
                 stopAfter := fun p hp _ _ => after p hp }, next)
             else
               -- zero the number of consumed tokens in the cursor
               -- continue flushing until nothing remains
-              have : next.resetConsumed.remaining < cursor.remaining := by
+              have : remaining (resetConsumed next) < remaining cursor := by
                 rw [Token.BatchCursor.remaining_resetConsumed]
                 exact consumed.remaining_lt
-              flushCursor next.resetConsumed fun p hp =>
+              flushCursor (resetConsumed next) fun p hp =>
                 Token.BatchCursor.endsAfter_resetConsumed (consumed.follows.endsAfter (hfloor p hp))
           | .break result =>
             if h : next.HasNext then
@@ -519,32 +524,33 @@ def flushCursor {batch : Token.BatchTag} (cursor : Token.BatchCursor batch)
             else
               return (some {
                 result := .ok (.finished result)
-                span := next.consumedSpanOf consumed
+                span := consumedSpanOf next consumed
                 location
                 stopAfter := fun p hp _ _ => after p hp }, next)
       | .error err =>
-        if next.discardRequested then
+        if discardRequested next then
           -- the consumer fails where it has had the rest discarded: the discarding stands,
           -- from where it began
           modifyCore fun c => { c with discardedFrom := c.discardedFrom.or (some location) }
         return (some {
           result := .error (.consumer err)
-          span := next.consumedSpanOf consumed
+          span := consumedSpanOf next consumed
           location
           stopAfter := fun _ _ _ h => nomatch h }, next)
   else
     -- everything was consumed without break or error
     return (none, cursor)
-termination_by cursor.remaining
+termination_by remaining cursor
 
 /-- Puts a spent batch back into the lexer state, empty. -/
 @[inline]
-def storeSpent (spent : Token.TokenBatch) : LexM H m R E floor low Unit :=
+def storeSpent (spent : Token.Internal.TokenBatch) : LexM H m R E floor low Unit :=
   modifyBound fun c hc =>
     ⟨{ c with
         batch := spent.clear c.offset
-        batchEnded := Nat.le_of_eq (Token.TokenBatch.lastEnd_clear _ _) },
-      ⟨hc.1, fun p hp => ⟨(hc.2 p hp).1, (hc.2 p hp).2.1, Token.TokenBatch.startsFrom_clear _ _ _⟩⟩⟩
+        batchEnded := Nat.le_of_eq (Token.Internal.TokenBatch.lastEnd_clear _ _) },
+      ⟨hc.1, fun p hp => ⟨(hc.2 p hp).1, (hc.2 p hp).2.1,
+          Token.Internal.TokenBatch.startsFrom_clear _ _ _⟩⟩⟩
 
 /- LEAN: Rust's `flush_cursor` takes a cursor over the lexer's arrays; here the batch itself
 is handed to the consumer in the cursor, and taken back afterwards, whatever the consumer
@@ -554,10 +560,12 @@ content buffer, which would make the buffer's next change copy it. If the consum
 the batch goes back into the lexer state, empty, before the stop is thrown; otherwise the
 caller takes it. -/
 /-- Hands the batch over to the consumer and takes it back, spent. -/
-def handOver (batch : Token.TokenBatch) (bytesAfter : ByteArray)
-    (hfloor : ∀ p, floor = some p → batch.EndsAfter p) : LexM H m R E floor low Token.TokenBatch :=
+def handOver (batch : Token.Internal.TokenBatch) (bytesAfter : ByteArray)
+    (hfloor : ∀ p, floor = some p → batch.EndsAfter p) :
+        LexM H m R E floor low Token.Internal.TokenBatch :=
     do
-  let (stop, cursor) ← flushCursor (Token.BatchCursor.new (← getCore).version batch) fun p hp =>
+  let (stop, cursor) ←
+      flushCursor (Token.BatchCursor.Internal.new (← getCore).version batch) fun p hp =>
     Token.BatchCursor.endsAfter_new (hfloor p hp) _
   if (← getCore).recovers then
     match stop with
@@ -566,7 +574,7 @@ def handOver (batch : Token.TokenBatch) (bytesAfter : ByteArray)
       -- count the actually consumed parentheses only
       -- and reset the lexed depth to them
       modifyCore fun c =>
-        let consumedDepth := cursor.foldConsumedCategories c.consumedDepth fun depth category =>
+        let consumedDepth := foldConsumedCategories cursor c.consumedDepth fun depth category =>
           match category with
           | .parenOpen => depth + 1
           -- saturate to avoid going below zero depth
@@ -579,7 +587,7 @@ def handOver (batch : Token.TokenBatch) (bytesAfter : ByteArray)
       modifyCore fun c => { c with consumedDepth := c.lexedDepth }
   -- set our version to the cursor-requested version, and take the batch back
   modifyCore fun c => { c with version := cursor.version }
-  let spent : Token.TokenBatch := { intoBatch cursor with bytes := bytesAfter }
+  let spent : Token.Internal.TokenBatch := { intoBatch cursor with bytes := bytesAfter }
   if let some interrupted := stop then
     storeSpent spent
     throw interrupted
@@ -588,14 +596,16 @@ def handOver (batch : Token.TokenBatch) (bytesAfter : ByteArray)
 /-- Takes the batch out of the lexer state, leaving an empty one without storage. -/
 @[inline]
 def takeBatch :
-    LexM H m R E floor low {batch : Token.TokenBatch // ∀ p, floor = some p → batch.StartsFrom p} :=
+    LexM H m R E floor low {batch : Token.Internal.TokenBatch // ∀ p, floor = some p →
+        batch.StartsFrom p} :=
   modifyGetThe {c : LexerCore // c.Bound floor low} fun c =>
     (⟨c.val.batch, fun p hp => (c.property.2 p hp).2.2⟩,
       ⟨{ c.val with
           batch := default
-          batchEnded := Token.TokenBatch.lastEnd_default ▸ Nat.zero_le _ },
+          batchEnded := Token.Internal.TokenBatch.lastEnd_default ▸ Nat.zero_le _ },
         ⟨c.property.1, fun p hp =>
-          ⟨(c.property.2 p hp).1, (c.property.2 p hp).2.1, Token.TokenBatch.startsFrom_default p⟩⟩⟩)
+          ⟨(c.property.2 p hp).1, (c.property.2 p hp).2.1,
+              Token.Internal.TokenBatch.startsFrom_default p⟩⟩⟩)
 
 def flushBatch : LexM H m R E floor low Unit := do
   -- the batch is spent once handed over, no matter what the handler decides
@@ -620,11 +630,13 @@ def handOverStored (ty : Token.TokenCategory) (start «end» : Span.Location)
   let ⟨batch, _⟩ ← takeBatch
   let bytes := batch.bytes
   let c ← getCore
-  let batch := ({ batch.clear start.offset with bytes := c.tokenContent.bytes } : Token.TokenBatch)
+  let batch :=
+      ({ batch.clear start.offset with bytes := c.tokenContent.bytes } : Token.Internal.TokenBatch)
     |>.pushLocated ty 0 c.tokenContent.len start «end»
-      (Nat.le_of_eq (Token.TokenBatch.lastEnd_clear _ _)) (.inl hend)
+      (Nat.le_of_eq (Token.Internal.TokenBatch.lastEnd_clear _ _)) (.inl hend)
   storeSpent (← handOver batch bytes fun p hp =>
-    Token.TokenBatch.endsAfter_pushLocated (fun _ h => absurd h (Nat.not_lt_zero _)) (hfloor p hp))
+    Token.Internal.TokenBatch.endsAfter_pushLocated (fun _ h => absurd h (Nat.not_lt_zero _))
+        (hfloor p hp))
 
 /-- Hands over the end-of-file token, at the location, unless a result is held, which the end
 of the input confirms instead. -/
@@ -638,9 +650,9 @@ def handOverEof (location : Span.Location) : LexM H m R E none low Unit := do
   let bytes := batch.bytes
   let c ← getCore
   let batch := ({ batch.clear location.offset with bytes := c.tokenContent.bytes } :
-      Token.TokenBatch)
+      Token.Internal.TokenBatch)
     |>.pushLocated .endOfFile 0 c.tokenContent.len location location
-      (Nat.le_of_eq (Token.TokenBatch.lastEnd_clear _ _)) (.inr ⟨rfl, rfl⟩)
+      (Nat.le_of_eq (Token.Internal.TokenBatch.lastEnd_clear _ _)) (.inr ⟨rfl, rfl⟩)
   storeSpent (← handOver batch bytes fun _ h => nomatch h)
 
 /-- The location of `position`, given that `base` is the position of the step's offset. -/
@@ -770,12 +782,13 @@ theorem sub_toNat_lt {base x y : USize} (hx : base.toNat ≤ x.toNat)
 
 /-- The batch that the loop of `lexNormal` holds at `index`: its tokens end at or before
 `index`, and start at or after the floor. -/
-abbrev Held (floor : Option Nat) (offset : Nat) (base index : USize) (batch : Token.TokenBatch) :
+abbrev Held (floor : Option Nat) (offset : Nat) (base index : USize)
+    (batch : Token.Internal.TokenBatch) :
     Prop :=
   batch.lastEnd ≤ offset + (index - base).toNat ∧ ∀ p, floor = some p → batch.StartsFrom p
 
 theorem Held.mono {floor : Option Nat} {offset : Nat} {base index next : USize}
-    {batch : Token.TokenBatch} (h : Held floor offset base index batch)
+    {batch : Token.Internal.TokenBatch} (h : Held floor offset base index batch)
     (hindex : base.toNat ≤ index.toNat)
     (hnext : index.toNat ≤ next.toNat) : Held floor offset base next batch :=
   ⟨Nat.le_trans h.1 (Nat.add_le_add_left (sub_toNat_le hindex hnext) _), h.2⟩
@@ -783,7 +796,7 @@ theorem Held.mono {floor : Option Nat} {offset : Nat} {base index next : USize}
 /-- Puts the batch held by the loop back into the lexer state, with the lexer at `position`,
 between tokens. -/
 @[inline]
-def leave (offset : Nat) (base position : USize) (batch : Token.TokenBatch)
+def leave (offset : Nat) (base position : USize) (batch : Token.Internal.TokenBatch)
     (hframe : Frame floor low offset) (hbatch : Held floor offset base position batch) :
     LexM H m R E floor low Unit :=
   modifyBound fun c _ =>
@@ -797,7 +810,7 @@ def leave (offset : Nat) (base position : USize) (batch : Token.TokenBatch)
 left unfinished in `state` at `position`. -/
 @[inline]
 def leavePending (state : Helpers.LexerState) (start : Span.Location) (offset : Nat)
-    (base position : USize) (batch : Token.TokenBatch) (hframe : Frame floor low offset)
+    (base position : USize) (batch : Token.Internal.TokenBatch) (hframe : Frame floor low offset)
     (hbatch : Held floor offset base position batch)
     (hstart : start.offset < offset + (position - base).toNat)
     (hfloor : ∀ p, floor = some p → p ≤ start.offset) : LexM H m R E floor low Unit :=
@@ -814,16 +827,16 @@ def leavePending (state : Helpers.LexerState) (start : Span.Location) (offset : 
 array of contents, which the hand-over takes, right after each token is put into the batch,
 and so takes and drops a reference to it for every token. -/
 @[noinline]
-def flushHeld (batch : Token.TokenBatch) (origin : Nat)
+def flushHeld (batch : Token.Internal.TokenBatch) (origin : Nat)
     (hbatch : ∀ p, floor = some p → batch.StartsFrom p) :
     LexM H m R E floor low
-      {batch : Token.TokenBatch //
+      {batch : Token.Internal.TokenBatch //
         batch.lastEnd = origin ∧ ∀ p, floor = some p → batch.StartsFrom p} := do
   -- batch capacity reached, we need to flush the batch
   let bytes := batch.bytes
   let spent ← handOver batch bytes fun p hp => (hbatch p hp).endsAfter
-  return ⟨spent.clear origin, Token.TokenBatch.lastEnd_clear _ _,
-    fun _ _ => Token.TokenBatch.startsFrom_clear _ _ _⟩
+  return ⟨spent.clear origin, Token.Internal.TokenBatch.lastEnd_clear _ _,
+    fun _ _ => Token.Internal.TokenBatch.startsFrom_clear _ _ _⟩
 
 /--
 Puts a fast-path token into the batch if `emit` is set, flushing the batch
@@ -836,12 +849,13 @@ position `base`.
 /- LEAN: Rust writes the entry even when it is not emitted, as the next token overwrites it;
 here a token that is not emitted is not written. -/
 @[inline]
-def pushFast (batch : Token.TokenBatch) (offset : Nat) (base : USize)
+def pushFast (batch : Token.Internal.TokenBatch) (offset : Nat) (base : USize)
     (ty : Token.TokenCategory) (contentStart contentStop start «end» : USize) (emit : Bool)
     (hty : ty ≠ .endOfFile) (hstart : base.toNat ≤ start.toNat)
     (hend : start.toNat < «end».toNat) (hframe : Frame floor low offset)
     (hbatch : Held floor offset base start batch) :
-    LexM H m R E floor low {batch : Token.TokenBatch // Held floor offset base «end» batch} := do
+    LexM H m R E floor low {batch : Token.Internal.TokenBatch //
+        Held floor offset base «end» batch} := do
   if !emit then
     return ⟨batch, hbatch.mono hstart (Nat.le_of_lt hend)⟩
   let c ← getCore
@@ -852,13 +866,13 @@ def pushFast (batch : Token.TokenBatch) (offset : Nat) (base : USize)
     line lineStart (offset + (start - base).toNat) (offset + («end» - base).toNat) hbatch.1
     (.inl hlt)
   have hfrom : ∀ p, floor = some p → batch.StartsFrom p := fun p hp =>
-    Token.TokenBatch.startsFrom_pushOnLine (hbatch.2 p hp)
+    Token.Internal.TokenBatch.startsFrom_pushOnLine (hbatch.2 p hp)
       (Nat.le_trans (hframe.2 p hp) (Nat.le_add_right _ _)) hty
   if batch.len == BATCH_CAPACITY then
     let ⟨batch, hlast, hfrom⟩ ← flushHeld batch (offset + («end» - base).toNat) hfrom
     return ⟨batch, Nat.le_of_eq hlast, hfrom⟩
   else
-    return ⟨batch, Nat.le_of_eq (Token.TokenBatch.lastEnd_pushOnLine ..), hfrom⟩
+    return ⟨batch, Nat.le_of_eq (Token.Internal.TokenBatch.lastEnd_pushOnLine ..), hfrom⟩
 
 /--
 Puts a token lexed on the slow path into the batch, flushing the batch when it is full.
@@ -869,12 +883,14 @@ to `tokenEnd` in the input. `offset` is the stream offset of the position `base`
 /- LEAN: Rust's `sink_slice` with borrowed content, which puts the token into the lexer's
 batch; here into the batch the loop holds. -/
 @[inline]
-def pushBorrowed (batch : Token.TokenBatch) (offset : Nat) (base : USize) (ty : Token.TokenCategory)
+def pushBorrowed (batch : Token.Internal.TokenBatch) (offset : Nat) (base : USize)
+    (ty : Token.TokenCategory)
     (contentStart contentStop : USize) (start : Span.Location) (tokenEnd : USize)
     (hty : ty ≠ .endOfFile) (hafter : batch.lastEnd ≤ start.offset)
     (hend : start.offset < offset + (tokenEnd - base).toNat)
     (hfloor : ∀ p, floor = some p → p ≤ start.offset ∧ batch.StartsFrom p) :
-    LexM H m R E floor low {batch : Token.TokenBatch // Held floor offset base tokenEnd batch} := do
+    LexM H m R E floor low {batch : Token.Internal.TokenBatch //
+        Held floor offset base tokenEnd batch} := do
   let c ← getCore
   let endOffset := offset + (tokenEnd - base).toNat
   let «end» : Span.Location :=
@@ -882,12 +898,12 @@ def pushBorrowed (batch : Token.TokenBatch) (offset : Nat) (base : USize) (ty : 
   let batch := batch.pushLocated ty contentStart.toNat contentStop.toNat start «end» hafter
     (.inl hend)
   have hfrom : ∀ p, floor = some p → batch.StartsFrom p := fun p hp =>
-    Token.TokenBatch.startsFrom_pushLocated (hfloor p hp).2 (hfloor p hp).1 hty
+    Token.Internal.TokenBatch.startsFrom_pushLocated (hfloor p hp).2 (hfloor p hp).1 hty
   if batch.len == BATCH_CAPACITY then
     let ⟨batch, hlast, hfrom⟩ ← flushHeld batch endOffset hfrom
     return ⟨batch, Nat.le_of_eq hlast, hfrom⟩
   else
-    return ⟨batch, Nat.le_of_eq (Token.TokenBatch.lastEnd_pushLocated ..), hfrom⟩
+    return ⟨batch, Nat.le_of_eq (Token.Internal.TokenBatch.lastEnd_pushLocated ..), hfrom⟩
 
 /--
 Moves a fast-path symbol run that cannot be finished
@@ -899,7 +915,8 @@ the token continues at least to `runEndAt`, where it has been
 left unfinished.
 -/
 def storeUnfinishedSymbolRun (input : CharClass.Input) (entry : UInt8) (offset : Nat)
-    (base index after runEndAt : USize) (batch : Token.TokenBatch) (hframe : Frame floor low offset)
+    (base index after runEndAt : USize) (batch : Token.Internal.TokenBatch)
+    (hframe : Frame floor low offset)
     (hindex : base.toNat ≤ index.toNat) (hrun : index.toNat < runEndAt.toNat)
     (hbatch : Held floor offset base index batch) : LexM H m R E floor low Unit := do
   let ⟨start, hstart⟩ ← startToken offset base index hframe
@@ -973,7 +990,7 @@ theorem started_floor {floor : Option Nat} {low offset : Nat} {base index : USiz
 
 /-- What a token that starts at the position `index` of the loop gives to `pushBorrowed`. -/
 theorem started_held {floor : Option Nat} {low offset : Nat} {base index : USize}
-    {start : Span.Location} {batch : Token.TokenBatch}
+    {start : Span.Location} {batch : Token.Internal.TokenBatch}
     (hstart : start.offset = offset + (index - base).toNat)
     (hframe : Frame floor low offset) (hbatch : Held floor offset base index batch) :
     batch.lastEnd ≤ start.offset ∧
@@ -1003,12 +1020,12 @@ at `start`, and goes into the batch that `lexNormalFrom` holds, which comes back
 position after the run; if the run reaches the end of the slice, the batch goes back into the
 lexer state instead, and `none` is returned. -/
 def startWhitespaceFrom (input : CharClass.Input) (offset : Nat) (base index «end» : USize)
-    (start : Span.Location) (batch : Token.TokenBatch) (hframe : Frame floor low offset)
+    (start : Span.Location) (batch : Token.Internal.TokenBatch) (hframe : Frame floor low offset)
     (hstart : start.offset = offset + (index - base).toNat)
     (hend : base.toNat ≤ index.toNat ∧ index.toNat ≤ «end».toNat ∧ «end».toNat ≤ input.stop.toNat)
     (hrun : index.toNat < «end».toNat ∨ ContinuesWhitespace input «end»)
     (hbatch : Held floor offset base index batch) :
-    LexM H m R E floor low (Option {next : USize × Token.TokenBatch //
+    LexM H m R E floor low (Option {next : USize × Token.Internal.TokenBatch //
       index.toNat < next.1.toNat ∧ Held floor offset base next.1 next.2}) := do
   -- find the first byte that is not whitespace other than a line feed
   let «end» := CharClass.runEnd input «end» CharClass.RUN_NON_LF_WHITESPACE
@@ -1053,10 +1070,10 @@ slice. Otherwise, the run is stored, the state becomes `whitespace`, the batch g
 the lexer state, and `none` is returned.
 -/
 def startWhitespace (input : CharClass.Input) (offset : Nat) (base index : USize)
-    (batch : Token.TokenBatch) (hrun : ContinuesWhitespace input index)
+    (batch : Token.Internal.TokenBatch) (hrun : ContinuesWhitespace input index)
     (hframe : Frame floor low offset)
     (hindex : base.toNat ≤ index.toNat) (hbatch : Held floor offset base index batch) :
-    LexM H m R E floor low (Option {next : USize × Token.TokenBatch //
+    LexM H m R E floor low (Option {next : USize × Token.Internal.TokenBatch //
       index.toNat < next.1.toNat ∧ Held floor offset base next.1 next.2}) := do
   let ⟨start, hstart⟩ ← startToken offset base index hframe
   have hstop : index.toNat ≤ input.stop.toNat := by
@@ -1102,7 +1119,8 @@ recursion is encoded as a well-founded one, which for a function this long nests
 deeper than the default limit allows. -/
 set_option maxRecDepth 2048 in
 def lexNormalFrom (input : CharClass.Input) (offset : Nat) (base index : USize)
-    (batch : Token.TokenBatch) (hframe : Frame floor low offset) (hindex : base.toNat ≤ index.toNat)
+    (batch : Token.Internal.TokenBatch) (hframe : Frame floor low offset) (hindex : base.toNat ≤
+        index.toNat)
     (hbatch : Held floor offset base index batch) (origin : USize)
     (horigin : origin.toNat ≤ index.toNat) : LexM H m R E floor low (Past input origin) := do
   match hget : input.get? index with
@@ -1569,13 +1587,15 @@ def lexNormal (input : CharClass.Input) (start : USize) (hstart : start.toNat < 
       ((⟨(c.val.offset, c.val.base, c.val.batch),
           ⟨c.property.1, fun p hp => (c.property.2 p hp).1⟩, c.val.batchEnded,
           fun p hp => (c.property.2 p hp).2.2⟩ :
-          {x : Nat × USize × Token.TokenBatch // Frame floor low x.1 ∧ x.2.2.lastEnd ≤ x.1 ∧
+          {x : Nat × USize × Token.Internal.TokenBatch // Frame floor low x.1 ∧
+              x.2.2.lastEnd ≤ x.1 ∧
             ∀ p, floor = some p → x.2.2.StartsFrom p}),
         ⟨{ c.val with
             batch := default
-            batchEnded := Token.TokenBatch.lastEnd_default ▸ Nat.zero_le _ },
+            batchEnded := Token.Internal.TokenBatch.lastEnd_default ▸ Nat.zero_le _ },
           ⟨c.property.1, fun p hp =>
-            ⟨(c.property.2 p hp).1, (c.property.2 p hp).2.1, Token.TokenBatch.startsFrom_default
+            ⟨(c.property.2 p hp).1, (c.property.2 p hp).2.1,
+                Token.Internal.TokenBatch.startsFrom_default
                 p⟩⟩⟩)
   let offset := offset + (start - base).toNat
   let ⟨next, hnext⟩ ← lexNormalFrom input offset start start batch
@@ -2246,10 +2266,11 @@ def lexSliceInner (input : CharClass.Input) :
   already, as lexing returns with it handed over. -/
   let batch := c.batch
   let c :=
-      { c with batch := default, batchEnded := Token.TokenBatch.lastEnd_default ▸ Nat.zero_le _ }
+      { c with batch := default, batchEnded := Token.Internal.TokenBatch.lastEnd_default ▸
+          Nat.zero_le _ }
   let c : LexerCore := { c with
     base := input.start, batch := { batch.clear initialOffset with bytes := input.bytes }
-    batchEnded := Nat.le_of_eq (Token.TokenBatch.lastEnd_clear _ _) }
+    batchEnded := Nat.le_of_eq (Token.Internal.TokenBatch.lastEnd_clear _ _) }
   -- the floor is just before the slice, and every token handed over ends after it: one begun in
   -- an earlier slice ends at the slice's start or later, one begun in this slice ends after its
   -- first byte. At offset 0 the floor is 0, as `Nat` subtraction stops there; no token begins
@@ -2284,7 +2305,7 @@ def reset : InnerM H m Unit :=
       is set to the offset. -/
       batch := c.batch.clear 0
       tokenStarted := .inl rfl
-      batchEnded := Nat.le_of_eq (Token.TokenBatch.lastEnd_clear _ _) }
+      batchEnded := Nat.le_of_eq (Token.Internal.TokenBatch.lastEnd_clear _ _) }
 
 /- LEAN: the pending token is finished as a step does: it starts before the lexer's offset,
 which is that of the position 0 at the end of the input. -/
@@ -2309,7 +2330,8 @@ def lexEofInner : InnerM H m (Except (Failure E) (ControlFlow R)) := fun c => do
       finishDecimal Helpers.TokenEnd.EOF none tokenStart 0
           ⟨h.resolve_left nofun, fun _ h => nomatch h⟩
     | .numeralOrDecimal, h =>
-      finishNumeral Helpers.TokenEnd.EOF tokenStart 0 ⟨h.resolve_left nofun, fun _ h => nomatch h⟩
+      finishNumeral Helpers.TokenEnd.EOF tokenStart 0
+          ⟨h.resolve_left nofun, fun _ h => nomatch h⟩
     | .hexadecimal, h =>
       finishDigitRun Helpers.HEXADECIMAL_RUN Helpers.TokenEnd.EOF none tokenStart 0
         ⟨h.resolve_left nofun, fun _ h => nomatch h⟩
@@ -2690,12 +2712,12 @@ def new (consumer : H) (version : Token.Version) : Lexer H :=
       lexedDepth := 0
       recoveryState := none
       tokenStart := Span.Location.initial
-      tokenContent := Helpers.ContentBuffer.empty
+      tokenContent := Internal.Helpers.ContentBuffer.empty
       offset := 0
       base := 0
       line := 0
       lineStart := 0
-      batch := Token.TokenBatch.empty BATCH_CAPACITY
+      batch := Token.Internal.TokenBatch.empty Internal.BATCH_CAPACITY
       tokenStarted := .inl rfl
       batchEnded := Nat.zero_le _ }
     held := none }
@@ -2821,6 +2843,8 @@ A recovering lexer whose end of the input raised an error.
 The input has ended, so only the end of the input can be lexed again,
 which completes the recovery.
 -/
+/- LEAN: what Rust's `&mut self` leaves usable after `lex_eof` failed in a recovering lexer and
+the error continues at the end, where Rust panics on any slice but the end of the input. -/
 structure Lexer.PendingEof (H : Type) [Token.Consume H R E] (recovery : Type := Recovering)
     where
   private mk ::
@@ -2853,6 +2877,8 @@ def Lexer.Internal.AfterEofErrorOf (H : Type) [Token.Consume H R E] (recovery : 
 What a lexer gives back after its end of the input failed: nothing for a
 lexer that stops at its first error, and what remains of a recovering one.
 -/
+/- LEAN: what Rust's `&mut self` leaves usable after `lex_eof` failed, by whether the lexer
+recovers, as `AfterError` is for the other calls. -/
 @[expose]
 def Lexer.AfterEofError (H : Type) [Token.Consume H R E] (recovery : Type)
     [Recovers recovery] : Type :=
@@ -2955,6 +2981,7 @@ def lexEof [Monad m] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m
     | .error err => .error (err, afterEofError (Internal.withHeld self none)
         err.continuesFrom.isSome)
 
+/- LEAN: Rust's `lex_eof` on the recovering lexer that `PendingEof` stands for. -/
 /--
 Lexes the end of the input again, which completes the recovery.
 

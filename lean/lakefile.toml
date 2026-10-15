@@ -35,6 +35,12 @@ root = "Benches.Parse"
 name = "reexports"
 root = "BSmtLib.Facts.WriteReexports"
 
+# writes the generated list of the public items of the Rust crate, `BSmtLib/Facts/RustItems.lean`,
+# from its JSON documentation, run with `lake exe rust-items <json>`
+[[lean_exe]]
+name = "rust-items"
+root = "Tools.WriteRustItems"
+
 # the fused script reader against the port: timing and differential checks, run with
 # `lake exe bench-fused-parser`
 [[lean_exe]]

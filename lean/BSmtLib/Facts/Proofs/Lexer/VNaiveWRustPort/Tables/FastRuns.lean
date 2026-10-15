@@ -16,7 +16,8 @@ lexer's byte classes.
 namespace BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.FastRuns
 
 open BSmtLib.Lexer.Internal.VNaive
-open BSmtLib.Lexer.CharClass (endsRun RUN_SIMPLE_SYMBOL RUN_NON_LF_WHITESPACE RUN_QUOTED_PLAIN)
+open BSmtLib.Lexer.Internal.CharClass (endsRun RUN_SIMPLE_SYMBOL RUN_NON_LF_WHITESPACE
+    RUN_QUOTED_PLAIN)
 open BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Bytes
 open BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.Basic
 

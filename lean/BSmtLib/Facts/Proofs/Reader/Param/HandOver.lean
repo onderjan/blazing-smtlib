@@ -19,6 +19,8 @@ for the helpers of the lexer's state and for the handover (`flushCursor`, `handO
 namespace BSmtLib.Facts.Proofs.Reader.Param.HandOver
 
 open BSmtLib.Lexer
+open BSmtLib.Token.BatchCursor.Internal (remaining)
+open BSmtLib.Lexer.Internal (BATCH_CAPACITY Stop Interrupted Failure LexerCore InnerM StepM LexM)
 open BSmtLib.Facts.Proofs.Reader.Param.Basic
 
 section
@@ -44,7 +46,8 @@ structure Consumers [∀ b, Token.ConsumeFrom H₁ (Token.BatchCursor b) m₁]
     [∀ b, Token.ConsumeFrom H₂ (Token.BatchCursor b) m₂]
     (L : Link H₁ m₁ R₁ E₁ H₂ m₂ R₂ E₂) : Prop where
   concrete : Token.Consume.isConcrete (H := H₁) = Token.Consume.isConcrete (H := H₂)
-  handOver {floor : Option Nat} {low : Nat} (batch : Token.TokenBatch) (bytesAfter : ByteArray)
+  handOver {floor : Option Nat} {low : Nat} (batch : Token.Internal.TokenBatch)
+      (bytesAfter : ByteArray)
     (hfloor : ∀ p, floor = some p → batch.EndsAfter p) :
     LSim L (· = ·) (Internal.handOver (H := H₁) (floor := floor)
         (low := low) batch bytesAfter hfloor)
@@ -166,7 +169,7 @@ abbrev FlushRel (L : Link H₁ m₁ R₁ E₁ H₂ m₂ R₂ E₂) {b : Token.Ba
   fun a b => ORel (IRel L.rr L.re) a.1 b.1 ∧ a.2 = b.2
 
 theorem flushCursor_sim (hc : Calls L) {b : Token.BatchTag} :
-    ∀ (n : Nat) (cursor : Token.BatchCursor b) (hfloor), cursor.remaining < n →
+    ∀ (n : Nat) (cursor : Token.BatchCursor b) (hfloor), remaining cursor < n →
       LSim L (FlushRel L) (Internal.flushCursor (floor := floor) (low := low) cursor hfloor)
         (Internal.flushCursor cursor hfloor)
   | 0, _, _, hn => absurd hn (Nat.not_lt_zero _)
@@ -254,7 +257,8 @@ variable {H₁ H₂ : Type} {m₁ m₂ : Type → Type} [Monad m₁] [Monad m₂
 another one on its type. -/
 theorem Consumers.ofEq₂ {inst₁ : ∀ b, Token.ConsumeFrom H₁ (Token.BatchCursor b) m₁}
     {inst₂ inst₂' : ∀ b, Token.ConsumeFrom H₂ (Token.BatchCursor b) m₂}
-    (he : ∀ (floor : Option Nat) (low : Nat) (batch : Token.TokenBatch) (bytesAfter : ByteArray)
+    (he : ∀ (floor : Option Nat) (low : Nat) (batch : Token.Internal.TokenBatch)
+    (bytesAfter : ByteArray)
       (hfloor : ∀ p, floor = some p → batch.EndsAfter p),
       @Internal.handOver H₂ m₂ R₂ E₂ _ _ inst₂ floor low batch bytesAfter hfloor =
         @Internal.handOver H₂ m₂ R₂ E₂ _ _ inst₂' floor low batch bytesAfter hfloor)
@@ -269,7 +273,8 @@ theorem Consumers.ofEq₂ {inst₁ : ∀ b, Token.ConsumeFrom H₁ (Token.BatchC
 another one on its type. -/
 theorem Consumers.ofEq₁ {inst₁ inst₁' : ∀ b, Token.ConsumeFrom H₁ (Token.BatchCursor b) m₁}
     {inst₂ : ∀ b, Token.ConsumeFrom H₂ (Token.BatchCursor b) m₂}
-    (he : ∀ (floor : Option Nat) (low : Nat) (batch : Token.TokenBatch) (bytesAfter : ByteArray)
+    (he : ∀ (floor : Option Nat) (low : Nat) (batch : Token.Internal.TokenBatch)
+    (bytesAfter : ByteArray)
       (hfloor : ∀ p, floor = some p → batch.EndsAfter p),
       @Internal.handOver H₁ m₁ R₁ E₁ _ _ inst₁ floor low batch bytesAfter hfloor =
         @Internal.handOver H₁ m₁ R₁ E₁ _ _ inst₁' floor low batch bytesAfter hfloor)

@@ -90,6 +90,7 @@ structure ParseState (H : Type) where
   private mk ::
 
 /-- Fresh resources. -/
+/- LEAN: Rust's `SmtParseState::new`. -/
 def ParseState.new {H : Type} : ParseState H := ⟨⟩
 
 instance {H : Type} : Inhabited (ParseState H) := ⟨.new⟩
@@ -128,6 +129,8 @@ class Parse (P : Type) (H : Type) (m : outParam (Type → Type)) (E R : outParam
     StateT H m (Except (ParseErrorCause E) (ControlFlow R) × P × ParseState H ×
       { next : Z // Token.Produce.HasNext cursor → Token.Produce.Consumed next cursor })
 
+namespace Internal
+
 /-- The monad of the parsers: the handler's, failing with a parse error. -/
 abbrev PM (H : Type) {m : Type → Type} [Handler H m] :=
   ExceptT (ParseErrorCause (Handler.Error H)) (StateT H m)
@@ -159,7 +162,6 @@ cursor has done so. `Internal.parseByToken` takes the tokens of a cursor one by 
 parser: it is the `parse` of each of them.
 -/
 
-namespace Internal
 
 /--
 A token as the parsers take it: what it stands for in the version it was cut in, or the end of

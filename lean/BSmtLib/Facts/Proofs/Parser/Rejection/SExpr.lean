@@ -23,9 +23,8 @@ namespace BSmtLib.Facts.Proofs.Parser.Rejection.SExpr
 open BSmtLibSpec.Grammar
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Parser.Traversal
-open BSmtLib.Parser (PM)
-open BSmtLib.Parser.Category.SExpr (SExprState sExprStep sExprComplete)
-open BSmtLib.Parser.Category.Attribute (AttributeState AttributeMode attributeStep)
+open BSmtLib.Parser.Category.SExpr.Internal (SExprState sExprStep sExprComplete)
+open BSmtLib.Parser.Category.Attribute.Internal (AttributeState AttributeMode attributeStep)
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Proofs.Parser.Rejection.Basic
 open BSmtLib.Facts.Proofs.Parser.Rejection.«Sort» BSmtLib.Plain
 
@@ -130,7 +129,7 @@ theorem sExprStep_advances (version : Token.Version) :
       Sound (Advances (sExprRem (Bridge.version version))
         (fun state _ => sExprRem (Bridge.version version) state) state x) Benign
         (do
-          let handled ← Parser.call (Traits.Handler.handleSExpr (H := List Event) node)
+          let handled ← Parser.Internal.call (Traits.Handler.handleSExpr (H := List Event) node)
           pure (sExprComplete state handled)) := fun node x hx => by
     call_step
     exact Sound.pure (sExprComplete_advances _ _ fun v hv =>
@@ -325,7 +324,7 @@ theorem attributeStep_advances (version : Token.Version) (single need : Bool) :
   intro ⟨mode, attributes⟩ token item hitem hlex
   cases mode with
   | start =>
-    cases token <;> simp only [attributeStep, pure_bind, Parser.Category.Token.expectClose]
+    cases token <;> simp only [attributeStep, pure_bind, Parser.Category.Token.Internal.expectClose]
     case parenClose =>
       item_of hitem
       split

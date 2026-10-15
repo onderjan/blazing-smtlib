@@ -25,11 +25,10 @@ namespace BSmtLib.Facts.Proofs.Parser.Rejection.Term
 open BSmtLibSpec.Grammar
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Parser.Traversal
-open BSmtLib.Parser (PM)
-open BSmtLib.Parser.Category.Term (TermState TermMode TermLevel termStep termComplete termOpened
-    startBinder endBinder BinderKind SortedBinder)
-open BSmtLib.Parser.Category.Combinator (ListState)
-open BSmtLib.Parser.Category.Attribute (AttributeState)
+open BSmtLib.Parser.Category.Term.Internal
+    (TermState TermMode TermLevel termStep termComplete termOpened startBinder endBinder BinderKind SortedBinder)
+open BSmtLib.Parser.Category.Combinator.Internal (ListState)
+open BSmtLib.Parser.Category.Attribute.Internal (AttributeState)
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Proofs.Parser.Rejection.Basic
 open BSmtLib.Facts.Proofs.Parser.Rejection.Parts BSmtLib.Facts.Proofs.Parser.Rejection.SExpr
 open BSmtLib.Facts.Proofs.Parser.Rejection.«Sort»
@@ -473,7 +472,8 @@ theorem termComplete_advances {version : BSmtLibSpec.Lexicon.Version}
     exact Sound.pure fun _ => ⟨fun u hu => h u hu, termRem_nonempty _ _ trivial⟩
   | .annotation :: outer =>
     refine Sound.pure fun _ => ⟨fun u hu => h u ?_, termRem_nonempty _ _ trivial⟩
-    simpa [termRem, modeRem, attrRem, Parser.Category.Attribute.AttributeState.init, termAfterAll,
+    simpa [termRem, modeRem, attrRem, Parser.Category.Attribute.Internal.AttributeState.init,
+        termAfterAll,
         termAfter]
       using hu
   | .matchScrutinee :: outer =>
@@ -635,7 +635,7 @@ theorem termStep_opened :
         exact cat_intro' (opened_match (match_lexical hlex) ht hc) hr (by simp <;> rfl)
 
 include hitem hlex in
-theorem termStep_qualIdent (state : Parser.Category.QualifiedIdent.QualIdentState Nat) :
+theorem termStep_qualIdent (state : Parser.Category.QualifiedIdent.Internal.QualIdentState Nat) :
     TermAdvance version ⟨.qualIdent state, levels⟩ item
       (termStep (H := List Event) version ⟨.qualIdent state, levels⟩ token) := by
   simp only [termStep]
@@ -649,7 +649,8 @@ theorem termStep_qualIdent (state : Parser.Category.QualifiedIdent.QualIdentStat
     exact termComplete_advances levels _ fun v hv => cat_intro' hr hv rfl
 
 include hitem hlex in
-theorem termStep_applicationHead (state : Parser.Category.QualifiedIdent.QualIdentState Nat) :
+theorem termStep_applicationHead (state : Parser.Category.QualifiedIdent.Internal.QualIdentState
+    Nat) :
     TermAdvance version ⟨.applicationHead state, levels⟩ item
       (termStep (H := List Event) version ⟨.applicationHead state, levels⟩ token) := by
   simp only [termStep]
@@ -669,7 +670,7 @@ include hitem in
 theorem termStep_letBindingsOpen :
     TermAdvance version ⟨.letBindingsOpen, levels⟩ item
       (termStep (H := List Event) version ⟨.letBindingsOpen, levels⟩ token) := by
-  cases token <;> simp only [termStep, Parser.Category.Token.expectOpen, pure_bind] <;> try
+  cases token <;> simp only [termStep, Parser.Category.Token.Internal.expectOpen, pure_bind] <;> try
       fail_step
   item_of hitem
   refine Sound.pure fun _ => ⟨fun u hu => ?_, termRem_nonempty _ _ trivial⟩
@@ -702,7 +703,8 @@ include hitem in
 theorem termStep_letBindingSymbol (bindings : Array (Nodes.Symbol × Nat)) :
     TermAdvance version ⟨.letBindingSymbol bindings, levels⟩ item
       (termStep (H := List Event) version ⟨.letBindingSymbol bindings, levels⟩ token) := by
-  cases token <;> simp only [termStep, Parser.Category.Token.expectSymbol, bind_pure_comp] <;>
+  cases token <;> simp only [termStep, Parser.Category.Token.Internal.expectSymbol,
+      bind_pure_comp] <;>
     try fail_step
   item_of hitem
   refine Sound.pure fun _ => ⟨fun u hu => ?_, termRem_nonempty _ _ trivial⟩
@@ -715,7 +717,8 @@ include hitem in
 theorem termStep_letBindingClose (bindings : Array (Nodes.Symbol × Nat)) :
     TermAdvance version ⟨.letBindingClose bindings, levels⟩ item
       (termStep (H := List Event) version ⟨.letBindingClose bindings, levels⟩ token) := by
-  cases token <;> simp only [termStep, Parser.Category.Token.expectClose, pure_bind] <;> try
+  cases token <;> simp only [termStep, Parser.Category.Token.Internal.expectClose,
+      pure_bind] <;> try
       fail_step
   item_of hitem
   refine Sound.pure fun _ => ⟨fun u hu => ?_, termRem_nonempty _ _ trivial⟩
@@ -723,7 +726,8 @@ theorem termStep_letBindingClose (bindings : Array (Nodes.Symbol × Nat)) :
 
 include hitem hlex in
 theorem termStep_sortedVars (binder : SortedBinder)
-    (state : ListState (Parser.Category.SortedVar.SortedVarState Nat) (Nodes.Symbol × Nat)) :
+    (state : ListState (Parser.Category.SortedVar.Internal.SortedVarState Nat)
+    (Nodes.Symbol × Nat)) :
     TermAdvance version ⟨.sortedVars binder state, levels⟩ item
       (termStep (H := List Event) version ⟨.sortedVars binder state, levels⟩ token) := by
   simp only [termStep]
@@ -761,7 +765,8 @@ include hitem in
 theorem termStep_binderClose (kind : BinderKind) (scope body : Nat) :
     TermAdvance version ⟨.binderClose kind scope body, levels⟩ item
       (termStep (H := List Event) version ⟨.binderClose kind scope body, levels⟩ token) := by
-  cases token <;> simp only [termStep, Parser.Category.Token.expectClose, pure_bind] <;> try
+  cases token <;> simp only [termStep, Parser.Category.Token.Internal.expectClose,
+      pure_bind] <;> try
       fail_step
   item_of hitem
   refine Sound.bind (endBinder_sound kind scope body) fun _ _ => ?_
@@ -771,7 +776,7 @@ include hitem in
 theorem termStep_matchCasesOpen (scrutinee : Nat) :
     TermAdvance version ⟨.matchCasesOpen scrutinee, levels⟩ item
       (termStep (H := List Event) version ⟨.matchCasesOpen scrutinee, levels⟩ token) := by
-  cases token <;> simp only [termStep, Parser.Category.Token.expectOpen, pure_bind] <;> try
+  cases token <;> simp only [termStep, Parser.Category.Token.Internal.expectOpen, pure_bind] <;> try
       fail_step
   item_of hitem
   refine Sound.pure fun _ => ⟨fun u hu => ?_, termRem_nonempty _ _ trivial⟩
@@ -801,7 +806,7 @@ theorem termStep_matchCaseOpen (scrutinee : Nat) (cases : Array (Nodes.Pattern �
 
 include hitem hlex in
 theorem termStep_matchPattern (scrutinee : Nat) (cases : Array (Nodes.Pattern × Nat))
-    (state : Parser.Category.Pattern.PatternState) :
+    (state : Parser.Category.Pattern.Internal.PatternState) :
     TermAdvance version ⟨.matchPattern scrutinee cases state, levels⟩ item
       (termStep (H := List Event) version ⟨.matchPattern scrutinee cases state, levels⟩ token) := by
   simp only [termStep]
@@ -823,7 +828,8 @@ theorem termStep_matchCaseClose (scrutinee : Nat) (cases : Array (Nodes.Pattern 
     TermAdvance version ⟨.matchCaseClose scrutinee cases pattern scope body, levels⟩ item
       (termStep (H := List Event) version
         ⟨.matchCaseClose scrutinee cases pattern scope body, levels⟩ token) := by
-  cases token <;> simp only [termStep, Parser.Category.Token.expectClose, pure_bind] <;> try
+  cases token <;> simp only [termStep, Parser.Category.Token.Internal.expectClose,
+      pure_bind] <;> try
       fail_step
   item_of hitem
   call_step
@@ -834,7 +840,8 @@ include hitem in
 theorem termStep_matchClose (scrutinee : Nat) (cases : Array (Nodes.Pattern × Nat)) :
     TermAdvance version ⟨.matchClose scrutinee cases, levels⟩ item
       (termStep (H := List Event) version ⟨.matchClose scrutinee cases, levels⟩ token) := by
-  cases token <;> simp only [termStep, Parser.Category.Token.expectClose, pure_bind] <;> try
+  cases token <;> simp only [termStep, Parser.Category.Token.Internal.expectClose,
+      pure_bind] <;> try
       fail_step
   item_of hitem
   call_step

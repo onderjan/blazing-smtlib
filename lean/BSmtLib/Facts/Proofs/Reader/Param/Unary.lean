@@ -28,6 +28,7 @@ only where the lexer calls it, in `flushCursor`, through `Watched.call`.
 namespace BSmtLib.Facts.Proofs.Reader.Param.Unary
 
 open BSmtLib.Lexer
+open BSmtLib.Lexer.Internal (BATCH_CAPACITY Stop Interrupted Failure LexerCore InnerM StepM LexM)
 open BSmtLib.Facts.Lexer.Adapters
 
 /-- A consumer in `StateM σ` with a record of what went wrong: whether it has answered an error

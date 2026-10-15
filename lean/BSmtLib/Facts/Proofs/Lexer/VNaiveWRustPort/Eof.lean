@@ -3,7 +3,7 @@ module
 public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Slice
 public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Taken
 import all BSmtLib.Lexer.Error
-import all BSmtLib.Lexer.Helpers
+import all BSmtLib.Lexer.Internal.Helpers
 import all BSmtLib.Lexer.Internal.VNaive
 import all BSmtLib.Lexer.Internal.WRustPort
 import all BSmtLib.Lexer.Internal.WRustPort.Slice
@@ -208,7 +208,7 @@ def runIA {α : Type} (x : Lexer.Internal.WRustPort.InnerM (Answering C) AnswerM
 
 /-- The result of the end of the input before it is located, in the spec's form. -/
 def innerRes (location : Span.Location) :
-    Except (Lexer.Failure (Option C.Error)) (ControlFlow C.Result) →
+    Except (Lexer.Internal.Failure (Option C.Error)) (ControlFlow C.Result) →
       Except (BSmtLibSpec.Lexer.Failure C.Error) (ControlFlow (Span.Located C.Result))
   | .ok .continue => .ok .continue
   | .ok (.break r) => .ok (.break ⟨r, location⟩)

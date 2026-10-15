@@ -24,9 +24,8 @@ is decided by the shape of the program, not by its result.
 namespace BSmtLib.Facts.Proofs.Parser.«Sort»
 
 open BSmtLibSpec.Grammar
-open BSmtLib.Parser (PM)
-open BSmtLib.Parser.Category.Ident (IdentState)
-open BSmtLib.Parser.Category.Sort (SortState SortMode SortLevel sortStep sortComplete)
+open BSmtLib.Parser.Category.Ident.Internal (IdentState)
+open BSmtLib.Parser.Category.Sort.Internal (SortState SortMode SortLevel sortStep sortComplete)
 open BSmtLibSpec.Parser
 open BSmtLibSpec.Parser.Traversal
 open BSmtLibSpec.Facts.Proofs.Parser.Equations (sort_nil sort_cons)
@@ -134,7 +133,7 @@ def sortPush {S : Type} (levels : List (SortLevel S)) (sort : S) : Parser.Intern
 theorem sortComplete_eq (levels : List (SortLevel (Traits.Handler.«Sort» H)))
     (head : Nodes.Identifier) (arguments : Array (Traits.Handler.«Sort» H)) :
     sortComplete levels head arguments =
-      Parser.call (Traits.Handler.handleSort head arguments) >>=
+      Parser.Internal.call (Traits.Handler.handleSort head arguments) >>=
         fun r => pure (sortPush levels r) := by
   cases levels <;> simp [sortComplete, sortPush]
 
@@ -179,7 +178,7 @@ theorem head_runs {name : Tree.Identifier} (hname : name.Valid (Bridge.version v
     obtain ⟨symbol, rfl, rfl⟩ := Parser.Internal.Input.received_symbol htoken
     refine ⟨⟨symbol, #[]⟩, by simp [Bridge.identifier], ?_⟩
     exact (Runs.token_more (step := sortStep version) (state := { mode := .opened, levels })
-      (token := .symbol symbol) (by simp [Parser.Category.«Sort».sortStep.eq_def])).congr
+      (token := .symbol symbol) (by simp [Parser.Category.«Sort».Internal.sortStep.eq_def])).congr
           (by simp) rfl
   | ⟨symbolName, index :: indices⟩ =>
     obtain ⟨symbolToken, rest, rfl, hsymbol, hrest⟩ := Stands.indexed (List.cons_ne_nil _ _) hs
@@ -190,7 +189,7 @@ theorem head_runs {name : Tree.Identifier} (hname : name.Valid (Bridge.version v
       (fun state => ({ mode := .startingIdent state, levels } : SortState _))
       (fun head => pure (.more { mode := .start, levels := ⟨head, #[]⟩ :: levels }))
       (fun state token => by
-        simp only [Parser.Category.«Sort».sortStep.eq_def]
+        simp only [Parser.Category.«Sort».Internal.sortStep.eq_def]
         congr 1
         funext step
         cases step <;> rfl)
@@ -201,7 +200,7 @@ theorem head_runs {name : Tree.Identifier} (hname : name.Valid (Bridge.version v
     refine (Runs.append (middle := fun _ => ({ mode := .startingIdent .opened, levels } :
         SortState _))
       (Runs.token_more (step := sortStep version) (state := { mode := .opened, levels })
-        (token := .parenOpen) (by simp [Parser.Category.«Sort».sortStep.eq_def])) fun _ =>
+        (token := .parenOpen) (by simp [Parser.Category.«Sort».Internal.sortStep.eq_def])) fun _ =>
             hembed).congr ?_ ?_
     · simp
     · funext
@@ -224,8 +223,8 @@ theorem sort_runs (hA : TermAgrees h) : (sort : Tree.«Sort») → sort.Valid (B
     obtain ⟨symbol, rfl, rfl⟩ := Parser.Internal.Input.received_symbol htoken
     refine (Runs.token (step := sortStep version) (state := { mode := .start, levels })
       (token := .symbol symbol)
-      (program := Parser.call (Traits.Handler.handleSort ⟨symbol, #[]⟩ #[]))
-      (by simp [Parser.Category.«Sort».sortStep.eq_def, sortComplete_eq])).congr ?_ rfl
+      (program := Parser.Internal.call (Traits.Handler.handleSort ⟨symbol, #[]⟩ #[]))
+      (by simp [Parser.Category.«Sort».Internal.sortStep.eq_def, sortComplete_eq])).congr ?_ rfl
     simp [sort_nil, Tree.Identifier.tokens, adaptRun_takeAll (Stands.cons htoken nil),
       hA.handleSort,
       Bridge.identifier]
@@ -237,24 +236,24 @@ theorem sort_runs (hA : TermAgrees h) : (sort : Tree.«Sort») → sort.Valid (B
       (fun state => ({ mode := .identOnly state, levels } : SortState _))
       (fun head => sortComplete levels head #[])
       (fun state token => by
-        simp only [Parser.Category.«Sort».sortStep.eq_def]
+        simp only [Parser.Category.«Sort».Internal.sortStep.eq_def]
         congr 1
         funext step
         cases step <;> rfl)
       hruns
     have hident := Runs.bind_next
-      (following := fun _ => Parser.call (Traits.Handler.handleSort head #[]))
+      (following := fun _ => Parser.Internal.call (Traits.Handler.handleSort head #[]))
       (next := fun r => pure (sortPush levels r)) (hembed.congr rfl (by
         funext
         simp [Parser.Internal.Step.wrap, sortComplete_eq]))
     refine (Runs.append (middle := fun _ => ({ mode := .opened, levels } : SortState _))
       (Runs.token_more (step := sortStep version) (state := { mode := .start, levels })
-        (token := .parenOpen) (by simp [Parser.Category.«Sort».sortStep.eq_def])) fun _ =>
+        (token := .parenOpen) (by simp [Parser.Category.«Sort».Internal.sortStep.eq_def])) fun _ =>
         Runs.append (middle := fun _ => ({ mode := .identOnly .afterUnderscore, levels } :
             SortState _))
           (Runs.token_more (step := sortStep version) (state := { mode := .opened, levels })
             (token := .reserved (.general .underscore))
-            (by simp [Parser.Category.«Sort».sortStep.eq_def])) fun _ => hident).congr ?_ rfl
+            (by simp [Parser.Category.«Sort».Internal.sortStep.eq_def])) fun _ => hident).congr ?_ rfl
     simp [sort_nil, adaptRun_takeAll
       (show Stands _ (Tree.Identifier.tokens ⟨symbolName, index :: indices⟩) from hs),
       hA.handleSort, hhead, ticks_append]
@@ -269,9 +268,9 @@ theorem sort_runs (hA : TermAgrees h) : (sort : Tree.«Sort») → sort.Valid (B
           { mode := .start, levels := ⟨head, #[].push r ++ handled.toArray⟩ :: levels }
           [.parenClose]
           (do tick points .parenClose
-              Parser.call (Traits.Handler.handleSort head (#[].push r ++ handled.toArray)))
+              Parser.Internal.call (Traits.Handler.handleSort head (#[].push r ++ handled.toArray)))
           fun r => pure (sortPush levels r) :=
-      fun r handled => Runs.token (by simp [Parser.Category.«Sort».sortStep.eq_def,
+      fun r handled => Runs.token (by simp [Parser.Category.«Sort».Internal.sortStep.eq_def,
           sortComplete_eq])
     have hargs := Runs.append (middle := fun r =>
         ({ mode := .start, levels := ⟨head, #[].push r⟩ :: levels } : SortState _))
@@ -284,7 +283,7 @@ theorem sort_runs (hA : TermAgrees h) : (sort : Tree.«Sort») → sort.Valid (B
     refine (Runs.append (middle := fun _ => ({ mode := .opened, levels } : SortState _))
       (Runs.token_more (step := sortStep version)
         (state := { mode := .start, levels }) (token := .parenOpen)
-        (by simp [Parser.Category.«Sort».sortStep.eq_def])) fun _ =>
+        (by simp [Parser.Category.«Sort».Internal.sortStep.eq_def])) fun _ =>
         Runs.append hheadRuns fun _ => hargs).congr ?_ rfl
     simp [sort_cons, Traversal.sorts, adaptRun_take (token := .parenOpen) rfl,
       adaptRun_take (token := .parenClose) rfl, adaptRun_takeAll hsHead, hA.handleSort, hhead]

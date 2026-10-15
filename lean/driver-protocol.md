@@ -572,14 +572,36 @@ the version, whose consumer takes the tokens one at a time and hands them to
 the parser, again after each time it finished, until it has finished `count`
 times; from then on it counts the tokens that are not the end-of-file token,
 and breaks at the end-of-file token. The consumer does not tell the handler
-the version. The feeds are those of `lex`, applied as there. `<parser>` is
-`sort`, `s-expr` or `term`; the Rust tests send the names of the other parsers
-of the Rust library too, which the driver answers with `fail unsupported
-parser <name>` while the Lean library has no parser of that name. The
-response has a line `result <result>` for each time the parser finished, in
-order, and ends with `ok <count>`, the number of the tokens counted after the
-last result. The `result` lines are written as the parser finishes, so a
-request that ends with an error may have some before it.
+the version. The feeds are those of `lex`, applied as there. The response
+has a line `result <result>...` for each time the parser finished, in order,
+and ends with `ok <count>`, the number of the tokens counted after the last
+result. The `result` lines are written as the parser finishes, so a request
+that ends with an error may have some before it.
+
+`<parser>` names a parser of a category, written without spaces, and the
+fields of its result:
+
+| `<parser>` | the result's fields |
+|---|---|
+| `sort`, `s-expr`, `term` | `<id>` |
+| `closed-attribute` | `<id>` |
+| `closed-multiple-attribute` | `<n> <id>...` |
+| `symbol` | `<sym>` |
+| `keyword`, `string`, `numeral` | `x<hex>`, as in the calls |
+| `open-paren`, `close-paren` | `-` |
+| `ident` | `<ident>` |
+| `qualified-ident` | `<ident> <opt-id>`: the sort it is qualified with |
+| `pattern` | `<pattern>` |
+| `sorted-var` | `<sym> <id>` |
+| `pair(<a>,<b>)` | the fields of `<a>`'s result, then those of `<b>`'s |
+| `closed(<a>)`, `paren(<a>)` | the fields of `<a>`'s result |
+| `closed-multiple(<a>)`, `paren-multiple(<a>)` | `<n>`, then the fields of each of `<a>`'s results |
+
+The combinators run the parsers they are given: `pair` the first, then the
+second; `closed` its parser, then a `)`; `paren` a `(`, its parser, a `)`;
+`closed-multiple` its parser until a `)`; `paren-multiple` a `(`, then as
+`closed-multiple`. A name the driver does not know is answered with `fail
+unsupported parser <name>`.
 
 ### Errors
 

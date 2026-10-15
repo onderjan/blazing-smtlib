@@ -15,8 +15,8 @@ run inside a slice, where the simulation is strict.
 
 namespace BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Steps
 
-open BSmtLib.Lexer (BATCH_CAPACITY Interrupted)
 open BSmtLib.Lexer.Internal.WRustPort.Slice (get? get runEnd runEndAll)
+open BSmtLib.Lexer.Internal (CharClass)
 open BSmtLib.Lexer.Internal.WRustPort (Ops)
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Relation BSmtLib.Facts.Proofs.Lexer.Simulation.Steps
 open BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Finish
@@ -33,7 +33,7 @@ set_option hygiene false in
 with the loop by `ih`, any other byte that ends the run fails. The names are those of
 `lexStringLiteralFrom_sim`; `P` is where the run starts. -/
 local macro "string_run " P:term:max : tactic => `(tactic| (
-  have hle := Lexer.Internal.WRustPort.Slice.le_runEnd input $P Lexer.CharClass.RUN_STRING_PLAIN
+  have hle := Lexer.Internal.WRustPort.Slice.le_runEnd input $P CharClass.RUN_STRING_PLAIN
   split
   · rename_i c2 h3
     have := Lexer.Internal.WRustPort.Slice.lt_size_of_get? h3
@@ -67,7 +67,7 @@ set_option hygiene false in
 `SRb true`. -/
 local macro "legacy_run " P:term:max : tactic => `(tactic| (
   have hle := Lexer.Internal.WRustPort.Slice.le_runEndAll input $P
-      (Lexer.CharClass.RUN_STRING_PLAIN ||| Lexer.CharClass.RUN_QUOTED_PLAIN)
+      (CharClass.RUN_STRING_PLAIN ||| CharClass.RUN_QUOTED_PLAIN)
   split
   · rename_i _ c2 hc2 h3
     have := Lexer.Internal.WRustPort.Slice.lt_size_of_get? hc2
@@ -179,7 +179,7 @@ theorem lexBaseSelection_sim (input : ByteSlice) (start : Nat) (hstart)
 
 omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
 theorem lexDigitRun_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (start : Nat)
-    (run : Lexer.Helpers.DigitRun) (tokenStart : Span.Location) (base : Nat) (h) :
+    (run : Lexer.Internal.Helpers.DigitRun) (tokenStart : Span.Location) (base : Nat) (h) :
     Core.LSim true (H := H) (m := m) (R := R) (E := E) (floor := floor) (low := low) (Core.SRb true)
       (StepQ (·.val) (·.val))
       (Lexer.Internal.WRustPort.lexDigitRun (ops := o₁) input start run tokenStart base h)
@@ -258,7 +258,7 @@ theorem lexWhitespace_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (orig
     Lexer.Internal.WRustPort.lexWhitespace.eq_def (ops := o₂)]
   dsimp only
   have hle := Lexer.Internal.WRustPort.Slice.le_runEnd input start
-      Lexer.CharClass.RUN_NON_LF_WHITESPACE
+      CharClass.RUN_NON_LF_WHITESPACE
   split
   · rename_i c h1
     have := Lexer.Internal.WRustPort.Slice.lt_size_of_get? h1
@@ -293,7 +293,7 @@ theorem lexQuotedSymbol_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (or
     Lexer.Internal.WRustPort.lexQuotedSymbol.eq_def (ops := o₂)]
   dsimp only
   have hle := Lexer.Internal.WRustPort.Slice.le_runEnd input consumed
-      Lexer.CharClass.RUN_QUOTED_PLAIN
+      CharClass.RUN_QUOTED_PLAIN
   split
   · rename_i c h1
     have := Lexer.Internal.WRustPort.Slice.lt_size_of_get? h1
@@ -452,7 +452,8 @@ theorem afterStep_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (start : 
 
 omit [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
 theorem lexStep_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (start : Nat)
-    (hstart : start < input.size) (state : Lexer.Helpers.LexerState) (tokenStart : Span.Location)
+    (hstart : start < input.size) (state : Lexer.Internal.Helpers.LexerState)
+    (tokenStart : Span.Location)
     (base : Nat) (hpending) :
     Core.LSim true (H := H) (m := m) (R := R) (E := E) (floor := floor) (low := low) (Core.SRb true)
       (StepQ (·.val) (·.val))

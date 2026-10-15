@@ -26,7 +26,7 @@ of its state wherever it reads them.
 
 namespace BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Instance
 
-open BSmtLib.Lexer (BATCH_CAPACITY Interrupted)
+open BSmtLib.Lexer.Internal (BATCH_CAPACITY Interrupted)
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Batch BSmtLib.Facts.Proofs.Lexer.Simulation.Relation
 open BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Flush
 open BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Ops
@@ -44,7 +44,7 @@ variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [
 
 omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
 /-- The Rust port loads its locals: the line and the line start of its state. -/
-theorem load_sim (l ls : Nat) (Bx : Token.TokenBatch → Token.TokenBatch → Prop) :
+theorem load_sim (l ls : Nat) (Bx : Token.Internal.TokenBatch → Token.Internal.TokenBatch → Prop) :
     SimR (m := m) (H := H) (ε := Interrupted R E floor) Er
       (Core.SRLx (floor := floor) (low := low) l ls Bx)
       (fun a b s t => FastRel a b l ls ∧ Core.SRLx l ls Bx s t)
@@ -58,7 +58,7 @@ theorem load_sim (l ls : Nat) (Bx : Token.TokenBatch → Token.TokenBatch → Pr
 
 omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
 /-- The Rust port stores its locals back, which are the line and line start of its state. -/
-theorem store_sim (l ls : Nat) (Bx : Token.TokenBatch → Token.TokenBatch → Prop)
+theorem store_sim (l ls : Nat) (Bx : Token.Internal.TokenBatch → Token.Internal.TokenBatch → Prop)
     (a : Lexer.Internal.WRustPort.FastState) (hab : FastRel a () l ls) :
     SimR (m := m) (H := H) (ε := Interrupted R E floor) Er
       (Core.SRLx (floor := floor) (low := low) l ls Bx)
@@ -72,7 +72,7 @@ theorem store_sim (l ls : Nat) (Bx : Token.TokenBatch → Token.TokenBatch → P
     line := (by rw [hal, ← hl]; exact hst.line)
     lineStart := (by rw [hals, ← hls]; exact hst.lineStart) }, hal, hals⟩, hx⟩
 
-theorem pushFast_sim (hcons : ConsumesAlike H m R E) (l ls : Nat) (b b' : Token.TokenBatch)
+theorem pushFast_sim (hcons : ConsumesAlike H m R E) (l ls : Nat) (b b' : Token.Internal.TokenBatch)
     (hb : Core.HR b b') (locals : Lexer.Internal.WRustPort.FastState)
     (hloc : FastRel locals () l ls)
     (input : ByteSlice) (offset base : Nat) (ty : Token.TokenCategory)

@@ -1,7 +1,7 @@
 module
 
 public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Arms
-import all BSmtLib.Lexer.Helpers
+import all BSmtLib.Lexer.Internal.Helpers
 import all BSmtLib.Lexer.Internal.VNaive
 import all BSmtLib.Lexer.Internal.WRustPort
 import all BSmtLib.Lexer.Internal.WRustPort.Slice
@@ -69,7 +69,7 @@ theorem attach_none {s : ByteSlice} {i : Nat}
     simp [hg]
 
 /-- The derived equality test of the lexer states is equality. -/
-theorem state_beq_iff {a b : Lexer.Helpers.LexerState} : (a == b) = true ↔ a = b := by
+theorem state_beq_iff {a b : Lexer.Internal.Helpers.LexerState} : (a == b) = true ↔ a = b := by
   constructor
   · intro h
     cases a <;> cases b <;> first | rfl | exact absurd h (by decide)

@@ -139,7 +139,7 @@ line, and the loop holds a batch of lexemes, then the loop keeps the corresponde
 def NormalSpec (C : BSmtLibSpec.Lexer.Consumer) (v : Token.Version) (hd : Bool) (iv : Token.Version)
     (input : ByteSlice) (offset base : Nat)
     (hframe : Frame floor low offset) (index : Nat) : Prop :=
-  ∀ (batch : Token.TokenBatch) (locals : FastState) (hindex : base ≤ index)
+  ∀ (batch : Token.Internal.TokenBatch) (locals : FastState) (hindex : base ≤ index)
     (hbatch : Held floor offset base index batch) (origin : Nat) (horigin : origin ≤ index)
     (s : WP.BS floor low) (coll : List Handed) (held : List Lexeme) (location : Span.Location),
     Fixed v hd iv s.val → offset = s.val.offset → base = s.val.base → locals.line = s.val.line →

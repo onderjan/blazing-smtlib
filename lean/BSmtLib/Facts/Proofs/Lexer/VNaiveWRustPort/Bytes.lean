@@ -28,6 +28,7 @@ index and the run from the second, with the lexemes finished between them before
 namespace BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Bytes
 
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Bytes
+open BSmtLib.Token.BatchCursor.Internal (discardRequested relexRequested)
 open BSmtLib.Facts.Proofs.Lexer.VNaive.Facts BSmtLib.Facts.Proofs.Lexer.VNaive.Reserved
 open BSmtLib.Facts.Proofs.Lexer.VNaive.Run BSmtLib.Lexer.Internal.VNaive
 
@@ -138,7 +139,8 @@ theorem push_append_bytesOf (x : ByteArray) (s : ByteSlice) {i j : Nat} (hi : i 
 
 /-- A cleared content buffer extended from positions in the slice's array holds the bytes of the
 slice between them. -/
-theorem contentBytes_clear_extendSlice (buf : Lexer.Helpers.ContentBuffer) (input : ByteSlice)
+theorem contentBytes_clear_extendSlice (buf : Lexer.Internal.Helpers.ContentBuffer)
+    (input : ByteSlice)
     {a b : Nat} (hb : b ≤ input.size) :
     contentBytes (buf.clear.extendFrom input.byteArray (input.start + a) (input.start + b)) =
       (input.slice a b).toByteArray := by
@@ -146,7 +148,7 @@ theorem contentBytes_clear_extendSlice (buf : Lexer.Helpers.ContentBuffer) (inpu
     empty_append]
 
 /-- A cleared content buffer extended from positions in the slice's array fits its array. -/
-theorem fits_clear_extendSlice (buf : Lexer.Helpers.ContentBuffer) (input : ByteSlice)
+theorem fits_clear_extendSlice (buf : Lexer.Internal.Helpers.ContentBuffer) (input : ByteSlice)
     {a b : Nat} (hb : b ≤ input.size) :
     Fits (buf.clear.extendFrom input.byteArray (input.start + a) (input.start + b)) :=
   fits_extendSlice input (fits_clear buf) (.inl hb)
@@ -323,16 +325,17 @@ theorem version_next (c : Token.BatchCursor g) (h : c.HasNext) :
     (c.next h).2.1.version = c.version := (rfl)
 
 theorem discard_next (c : Token.BatchCursor g) (h : c.HasNext) :
-    (c.next h).2.1.discardRequested = c.discardRequested := (rfl)
+    (discardRequested (c.next h).2.1) = discardRequested c := (rfl)
 
 theorem relex_next (c : Token.BatchCursor g) (h : c.HasNext) :
-    (c.next h).2.1.relexRequested = c.relexRequested := (rfl)
+    (relexRequested (c.next h).2.1) = relexRequested c := (rfl)
 
 end
 
 /-! ## Contents -/
 
-theorem ofUInt8_toUInt8 (c : Token.TokenCategory) : Token.TokenCategory.ofUInt8 c.toUInt8 = c := by
+theorem ofUInt8_toUInt8 (c : Token.TokenCategory) : Token.TokenCategory.Internal.ofUInt8
+        (Token.TokenCategory.Internal.toUInt8 c) = c := by
   cases c <;> rfl
 
 theorem reservedSlot_toByteArray (s : ByteSlice) (h : 0 < s.toByteArray.toByteSlice.size) :

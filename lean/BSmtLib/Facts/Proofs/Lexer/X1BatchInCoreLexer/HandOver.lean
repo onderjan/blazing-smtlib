@@ -18,6 +18,7 @@ are those of the library's lexer.
 namespace BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.HandOver
 
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Steps
+open BSmtLib.Token.BatchCursor.Internal (remaining)
 open BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Core
 
 section
@@ -38,7 +39,7 @@ theorem getCore_simB :
 omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
 /-- A step that keeps the base, after reading the state. -/
 theorem getCore_bind {α β : Type} {ψ : α → β}
-    {k : ZCore → BSmtLib.Lexer.LexM H m R E floor low α}
+    {k : ZCore → BSmtLib.Lexer.Internal.LexM H m R E floor low α}
     {k' : XCore → Lexer.Internal.WRustPort.LexM H m R E floor low β} {Q : α → ZS floor low → Prop}
     (hk : ∀ c, c.base = b → SimP (BaseIs b) Q (boundMap start) ψ (k c) (k' (coreMap start c))) :
     SimP (BaseIs b) Q (boundMap start) ψ
@@ -54,7 +55,8 @@ theorem callConsumer_sim {g : Token.BatchTag} (cursor : Token.BatchCursor g) (h 
   unfold BSmtLib.Lexer.Internal.callConsumer Lexer.Internal.WRustPort.callConsumer
   exact SimP.lift (fun _ => by simp) fun _ _ h => h
 
-theorem flushCursor_sim {g : Token.BatchTag} : ∀ n (cursor : Token.BatchCursor g), cursor.remaining
+theorem flushCursor_sim {g : Token.BatchTag} :
+    ∀ n (cursor : Token.BatchCursor g), (remaining cursor)
     = n →
     ∀ hfloor hfloor',
     SimP (BaseIs b) (fun _ => BaseIs b) (boundMap start (floor := floor) (low := low)) id
@@ -90,7 +92,7 @@ theorem flushCursor_sim {g : Token.BatchTag} : ∀ n (cursor : Token.BatchCursor
 
 
 omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
-theorem storeSpent_sim (spent : Token.TokenBatch) :
+theorem storeSpent_sim (spent : Token.Internal.TokenBatch) :
     SimP (BaseIs b) (fun _ => BaseIs b) (boundMap start (floor := floor) (low := low)) id
       (BSmtLib.Lexer.Internal.storeSpent (H := H) (m := m) (R := R) (E := E) spent)
       (Lexer.Internal.X1BatchInCore.storeSpent spent) :=
@@ -109,7 +111,7 @@ local macro "sim_auto" : tactic => `(tactic| repeat (first
     | (exact modifyCore_sim _ _ _ (fun _ _ => by rfl) fun _ hc => hc)
     | (exact storeSpent_sim _ _ _)))
 
-theorem handOver_sim (batch : Token.TokenBatch) (bytesAfter : ByteArray) (hfloor hfloor') :
+theorem handOver_sim (batch : Token.Internal.TokenBatch) (bytesAfter : ByteArray) (hfloor hfloor') :
     SimP (BaseIs b) (fun _ => BaseIs b) (boundMap start (floor := floor) (low := low)) id
       (BSmtLib.Lexer.Internal.handOver (H := H) (m := m) (R := R) (E := E) batch bytesAfter
         hfloor)

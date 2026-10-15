@@ -46,12 +46,44 @@ inductive Index where
   deriving Repr
 
 /-- An identifier: a symbol, with its indices if it is indexed. -/
+/- LEAN: Rust's owned `SmtIdentBuf`; the port's name for it is not aligned with Rust's yet. -/
 structure Identifier where
   symbol : Symbol
   indices : Array Index
   deriving Repr
 
+/-- A qualified identifier: an identifier, with the sort it is qualified with by `as`, if it is
+qualified. -/
+structure QualifiedIdent (HandledSort : Type) where
+  identifier : Identifier
+  sort : Option HandledSort
+
+/-- An identifier that is a symbol alone, not indexed. -/
+/- LEAN: Rust's `SmtIdentBuf::new_simple`. -/
+def Identifier.newSimple (symbol : Symbol) : Identifier :=
+  { symbol, indices := #[] }
+
+namespace QualifiedIdent
+
+variable {HandledSort : Type}
+
+/-- A qualified identifier that is a symbol alone, neither indexed nor qualified. -/
+def newSimple (symbol : Symbol) : QualifiedIdent HandledSort :=
+  { identifier := .newSimple symbol, sort := none }
+
+/-- An identifier, not qualified. -/
+def newUnqualified (identifier : Identifier) : QualifiedIdent HandledSort :=
+  { identifier, sort := none }
+
+/-- An identifier qualified with the sort. -/
+def newQualified (identifier : Identifier) (sort : HandledSort) : QualifiedIdent HandledSort :=
+  { identifier, sort := some sort }
+
+end QualifiedIdent
+
 /-- A constant, as a view of its token's content. -/
+/- LEAN: Rust's `SmtSpecialConstant` and its owned `SmtSpecialConstantBuf` in one type; the
+port's name for it is not aligned with Rust's yet. -/
 inductive SpecConstant where
   | numeral (digits : NumeralView)
   | decimal (text : DecimalView)
@@ -61,6 +93,8 @@ inductive SpecConstant where
   deriving Repr
 
 /-- A symbol, or the wildcard `_`, in a pattern. -/
+/- LEAN: Rust's `SmtSimplePattern` and its owned `SmtSimplePatternBuf`, in one type; the port's
+name for it is not aligned with Rust's yet. -/
 inductive SymbolOrWildcard where
   | symbol (symbol : Symbol)
   | wildcard
@@ -73,12 +107,14 @@ inductive Pattern where
   deriving Repr
 
 /-- The two quantifiers. -/
+/- LEAN: Rust's `SmtQuantifierKind`; the port's name for it is not aligned with Rust's yet. -/
 inductive Quantifier where
   | «forall»
   | «exists»
   deriving BEq, Repr
 
 /-- A term as the handler receives it, its parts already handled. -/
+/- LEAN: Rust's `SmtTerm`; the port's name for it is not aligned with Rust's yet. -/
 inductive TermNode (HandledSort HandledTerm : Type) where
   | constant (constant : SpecConstant)
   /-- A qualified identifier, with its sort if it is qualified by `as`. -/
@@ -89,6 +125,7 @@ inductive TermNode (HandledSort HandledTerm : Type) where
   deriving Repr
 
 /-- An s-expression as the handler receives it, its items already handled. -/
+/- LEAN: Rust's `SmtSExpr`; the port's name for it is not aligned with Rust's yet. -/
 inductive SExprNode (HandledSExpr : Type) where
   | constant (constant : SpecConstant)
   | symbol (symbol : Symbol)
@@ -101,6 +138,7 @@ inductive SExprNode (HandledSExpr : Type) where
 The value of an attribute as the handler receives it, the s-expressions of a list value already
 handled. A list value is handed over as its items.
 -/
+/- LEAN: Rust's `SmtAttributeValue`; the port's name for it is not aligned with Rust's yet. -/
 inductive AttributeValueNode (HandledSExpr : Type) where
   | constant (constant : SpecConstant)
   | symbol (symbol : Symbol)
@@ -108,6 +146,7 @@ inductive AttributeValueNode (HandledSExpr : Type) where
   deriving Repr
 
 /-- The signature of a defined function, its sorts already handled. -/
+/- LEAN: Rust's `SmtFunctionSignature` (`multiple.rs`), which has no counterpart module here. -/
 structure Signature (HandledSort : Type) where
   symbol : Symbol
   parameters : Array (Symbol × HandledSort)
@@ -115,6 +154,8 @@ structure Signature (HandledSort : Type) where
   deriving Repr
 
 /-- A datatype constructor, the sorts of its selectors already handled. -/
+/- LEAN: an entry of Rust's `SmtConstructors` (`multiple.rs`), which has no counterpart module
+here. -/
 structure Constructor (HandledSort : Type) where
   symbol : Symbol
   selectors : Array (Symbol × HandledSort)

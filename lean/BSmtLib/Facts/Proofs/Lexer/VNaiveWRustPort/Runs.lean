@@ -16,7 +16,7 @@ the steps.
 
 namespace BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Runs
 
-open BSmtLib.Lexer.CharClass (endsRun RUN_FLAGS RUN_DIGIT RUN_SIMPLE_SYMBOL RUN_HEX_DIGIT
+open BSmtLib.Lexer.Internal.CharClass (endsRun RUN_FLAGS RUN_DIGIT RUN_SIMPLE_SYMBOL RUN_HEX_DIGIT
     RUN_BINARY_DIGIT RUN_NON_LF_WHITESPACE RUN_QUOTED_PLAIN RUN_STRING_PLAIN RUN_COMMENT_PLAIN)
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Bytes BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Bytes
 open BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.Legacy

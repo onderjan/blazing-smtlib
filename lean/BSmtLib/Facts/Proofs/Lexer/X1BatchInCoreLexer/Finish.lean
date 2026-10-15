@@ -33,7 +33,8 @@ theorem locationFrom_sim (base position : USize) (hb : start ≤ base.toNat)
   simp only [id, coreMap, sub_toNat_ix hb hp]
 
 theorem sinkStored_sim (ty : Token.TokenCategory)
-    (te : Lexer.Helpers.TokenEnd) (s : Span.Location) (base : USize) (hb : start ≤ base.toNat)
+    (te : Lexer.Internal.Helpers.TokenEnd) (s : Span.Location) (base : USize) (hb : start ≤
+        base.toNat)
     (hp : base.toNat ≤ te.position.toNat) (h h') :
     SimP (BaseIs b) (fun _ => BaseIs b) (boundMap start (floor := floor) (low := low)) id
       (BSmtLib.Lexer.Internal.sinkStored (H := H) (m := m) (R := R) (E := E) ty te s base h)
@@ -55,14 +56,15 @@ local macro "sim_finish" : tactic => `(tactic| repeat (first
 
 /-- What a finishing step needs of the positions: the base is in the slice, and the token end
 is at it or after it, with room for the byte after it. -/
-structure EndOk (start : Nat) (b base : USize) (te : Lexer.Helpers.TokenEnd) : Prop where
+structure EndOk (start : Nat) (b base : USize) (te : Lexer.Internal.Helpers.TokenEnd) : Prop where
   hb : start ≤ b.toNat
   hbase : start ≤ base.toNat
   hp : b.toNat ≤ te.position.toNat
   hbp : base.toNat ≤ te.position.toNat
   hno : te.position.toNat + 1 < USize.size
 
-theorem finishDecimal_sim (te : Lexer.Helpers.TokenEnd) (next : Option UInt8) (s : Span.Location)
+theorem finishDecimal_sim (te : Lexer.Internal.Helpers.TokenEnd) (next : Option UInt8)
+    (s : Span.Location)
     (base : USize) (ok : EndOk start b base te) (h h') :
     SimP (BaseIs b) (fun _ => BaseIs b) (boundMap start (floor := floor) (low := low)) id
       (BSmtLib.Lexer.Internal.finishDecimal (H := H) (m := m) (R := R) (E := E) te next s base h)
@@ -71,14 +73,15 @@ theorem finishDecimal_sim (te : Lexer.Helpers.TokenEnd) (next : Option UInt8) (s
   unfold BSmtLib.Lexer.Internal.finishDecimal Lexer.Internal.WRustPort.finishDecimal
   cases next <;> sim_finish
 
-theorem finishNumeral_sim (te : Lexer.Helpers.TokenEnd) (s : Span.Location) (base : USize)
+theorem finishNumeral_sim (te : Lexer.Internal.Helpers.TokenEnd) (s : Span.Location) (base : USize)
     (ok : EndOk start b base te) (h h') :
     SimP (BaseIs b) (fun _ => BaseIs b) (boundMap start (floor := floor) (low := low)) id
       (BSmtLib.Lexer.Internal.finishNumeral (H := H) (m := m) (R := R) (E := E) te s base h)
       (Lexer.Internal.WRustPort.finishNumeral (endMap start te) s (ix start base) h') :=
   sinkStored_sim start b _ _ _ _ ok.hbase ok.hbp _ _
 
-theorem finishDigitRun_sim (run : Lexer.Helpers.DigitRun) (te : Lexer.Helpers.TokenEnd)
+theorem finishDigitRun_sim (run : Lexer.Internal.Helpers.DigitRun)
+    (te : Lexer.Internal.Helpers.TokenEnd)
     (next : Option UInt8) (s : Span.Location) (base : USize) (ok : EndOk start b base te) (h h') :
     SimP (BaseIs b) (fun _ => BaseIs b) (boundMap start (floor := floor) (low := low)) id
       (BSmtLib.Lexer.Internal.finishDigitRun (H := H) (m := m) (R := R) (E := E) run te next
@@ -89,14 +92,16 @@ theorem finishDigitRun_sim (run : Lexer.Helpers.DigitRun) (te : Lexer.Helpers.To
   unfold BSmtLib.Lexer.Internal.finishDigitRun Lexer.Internal.WRustPort.finishDigitRun
   cases next <;> sim_finish
 
-theorem finishSimpleSymbol_sim (te : Lexer.Helpers.TokenEnd) (s : Span.Location) (base : USize)
+theorem finishSimpleSymbol_sim (te : Lexer.Internal.Helpers.TokenEnd) (s : Span.Location)
+    (base : USize)
     (ok : EndOk start b base te) (h h') :
     SimP (BaseIs b) (fun _ => BaseIs b) (boundMap start (floor := floor) (low := low)) id
       (BSmtLib.Lexer.Internal.finishSimpleSymbol (H := H) (m := m) (R := R) (E := E) te s base h)
       (Lexer.Internal.WRustPort.finishSimpleSymbol (endMap start te) s (ix start base) h') :=
   sinkStored_sim start b _ _ _ _ ok.hbase ok.hbp _ _
 
-theorem finishKeyword_sim (te : Lexer.Helpers.TokenEnd) (next : Option UInt8) (s : Span.Location)
+theorem finishKeyword_sim (te : Lexer.Internal.Helpers.TokenEnd) (next : Option UInt8)
+    (s : Span.Location)
     (base : USize) (ok : EndOk start b base te) (h h') :
     SimP (BaseIs b) (fun _ => BaseIs b) (boundMap start (floor := floor) (low := low)) id
       (BSmtLib.Lexer.Internal.finishKeyword (H := H) (m := m) (R := R) (E := E) te next s base h)
@@ -105,7 +110,8 @@ theorem finishKeyword_sim (te : Lexer.Helpers.TokenEnd) (next : Option UInt8) (s
   unfold BSmtLib.Lexer.Internal.finishKeyword Lexer.Internal.WRustPort.finishKeyword
   cases next <;> sim_finish
 
-theorem finishStringLiteral_sim (te : Lexer.Helpers.TokenEnd) (s : Span.Location) (base : USize)
+theorem finishStringLiteral_sim (te : Lexer.Internal.Helpers.TokenEnd) (s : Span.Location)
+    (base : USize)
     (ok : EndOk start b base te) (h h') :
     SimP (BaseIs b) (fun _ => BaseIs b) (boundMap start (floor := floor) (low := low)) id
       (BSmtLib.Lexer.Internal.finishStringLiteral (H := H) (m := m) (R := R) (E := E) te s base
@@ -113,7 +119,8 @@ theorem finishStringLiteral_sim (te : Lexer.Helpers.TokenEnd) (s : Span.Location
       (Lexer.Internal.WRustPort.finishStringLiteral (endMap start te) s (ix start base) h') :=
   sinkStored_sim start b _ _ _ _ ok.hbase ok.hbp _ _
 
-theorem finishWhitespace_sim (te : Lexer.Helpers.TokenEnd) (s : Span.Location) (base : USize)
+theorem finishWhitespace_sim (te : Lexer.Internal.Helpers.TokenEnd) (s : Span.Location)
+    (base : USize)
     (ok : EndOk start b base te) (h h') :
     SimP (BaseIs b) (fun _ => BaseIs b) (boundMap start (floor := floor) (low := low)) id
       (BSmtLib.Lexer.Internal.finishWhitespace (H := H) (m := m) (R := R) (E := E) te s base h)

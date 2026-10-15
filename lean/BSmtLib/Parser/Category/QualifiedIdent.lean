@@ -15,7 +15,13 @@ namespace BSmtLib.Parser.Category.QualifiedIdent
 
 open BSmtLib.Nodes BSmtLib.Traits BSmtLib.Parser.Category.Token BSmtLib.Parser.Category.Ident
     BSmtLib.Parser.Category.Sort
+open BSmtLib.Parser.Category.Ident.Internal
+open BSmtLib.Parser.Category.Sort.Internal
+open BSmtLib.Parser.Category.Token.Internal
 open BSmtLib.Token (Version)
+open BSmtLib.Parser.Internal (PM call syntaxError)
+
+namespace Internal
 
 /-- The state of the qualified identifier parser. -/
 inductive QualIdentState (HandledSort : Type) where
@@ -68,6 +74,38 @@ def qualIdentStep (version : Version) (self : QualIdentState (Handler.«Sort» H
   | .close identifier sort =>
     expectClose token
     return .done (identifier, some sort)
+
+end
+
+end Internal
+
+/-- The parser of one qualified identifier (`SmtQualifiedIdentParser`). -/
+structure QualifiedIdentParser (H : Type) {m : Type → Type} [Handler H m] where
+  private mk ::
+  private state : Internal.QualIdentState (Handler.«Sort» H)
+
+section
+
+variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
+
+/-- The qualified identifier parser before a qualified identifier. -/
+def QualifiedIdentParser.new : QualifiedIdentParser H := ⟨.start⟩
+
+instance : Inhabited (QualifiedIdentParser H) := ⟨.new⟩
+
+@[no_expose]
+instance : Internal.ParseByToken (QualifiedIdentParser H) H m (Handler.Error H)
+    (QualifiedIdent (Handler.«Sort» H)) where
+  arrive _ _ := pure ()
+  step version parser token := do
+    match ← Internal.qualIdentStep version parser.state token with
+    | .more state => return .more ⟨state⟩
+    | .done (identifier, sort) => return .done { identifier, sort }
+  reset _ := .new
+
+instance : Parse (QualifiedIdentParser H) H m (Handler.Error H)
+    (QualifiedIdent (Handler.«Sort» H)) where
+  parse := Internal.parseByToken
 
 end
 

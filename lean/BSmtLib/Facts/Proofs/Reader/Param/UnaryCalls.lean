@@ -18,10 +18,11 @@ not (`lexSliceStep_flag`, `lexEofStep_flag`).
 namespace BSmtLib.Facts.Proofs.Reader.Param.UnaryCalls
 
 open BSmtLib.Lexer
+open BSmtLib.Lexer.Internal (BATCH_CAPACITY Stop Interrupted Failure LexerCore InnerM StepM LexM)
 open BSmtLib.Facts.Lexer.Adapters
 open BSmtLib.Facts.Proofs.Reader.Param.Slice BSmtLib.Facts.Proofs.Reader.Param.Unary
 open BSmtLib.Facts.Proofs.Reader.Param.UnaryNormal BSmtLib.Facts.Proofs.Reader.Param.UnarySteps
-open BSmtLib.Lexer.Error BSmtLib.Lexer.Helpers
+open BSmtLib.Lexer.Error BSmtLib.Lexer.Internal.Helpers
 
 section
 
@@ -92,7 +93,7 @@ def SliceOk {floor : Option Nat} (spoiled : Bool)
     (Watched.errored r.1.2 = true → exitFails (Watched.layout r.1.2) r.1.1.1) ∧
       Watched.spoiled r.1.2 = spoiled
 
-theorem lexSliceRun_flag_lt {floor : Option Nat} (input : CharClass.Input) :
+theorem lexSliceRun_flag_lt {floor : Option Nat} (input : Internal.CharClass.Input) :
     ∀ (n : Nat) (position : USize) (fnResult : Except (Failure (Option E))
       (ControlFlow R)) (core : {c : LexerCore // c.Bound floor 0})
       (fl : F) (l), runMeasure input position fnResult < n →
@@ -193,7 +194,7 @@ theorem lexSliceRun_flag_lt {floor : Option Nat} (input : CharClass.Input) :
             obtain ⟨⟨i, hi, -⟩, -⟩ := h₂ hfl
             cases hi
 
-theorem lexSliceRun_flag {floor : Option Nat} (input : CharClass.Input) (position : USize)
+theorem lexSliceRun_flag {floor : Option Nat} (input : Internal.CharClass.Input) (position : USize)
     (fnResult : Except (Failure (Option E)) (ControlFlow R))
     (core : {c : LexerCore // c.Bound floor 0}) (fl : F) (l)
     (he : Watched.errored fl = false) (hv : core.val.version = Watched.version fl) :
@@ -216,7 +217,7 @@ def StepOk {α β : Type} (cause : α → LexErrorCause (Option E)) (spoiled : B
     (Watched.errored r.1.2 = true → FailsBy cause (Watched.layout r.1.2) r.1.1.1) ∧
       Watched.spoiled r.1.2 = spoiled
 
-theorem lexSliceFrom_flag_lt (input : CharClass.Input) (initialOffset : Nat) :
+theorem lexSliceFrom_flag_lt (input : Internal.CharClass.Input) (initialOffset : Nat) :
     ∀ (n floor : Nat) (hfloor : initialOffset ≤ floor + 1) (position : USize)
       (fnResult : Except (Failure (Option E)) (ControlFlow R))
       (held : Option (Span.Located R))
@@ -275,7 +276,7 @@ state. -/
 abbrev irun {α : Type} (f : InnerM F (StateM σ) α) (c : LexerCore)
     (fl : F) (l : σ) := ((f.run c).run fl).run l
 
-theorem lexSliceInner_flag (input : CharClass.Input) (c : LexerCore) (fl : F) (l)
+theorem lexSliceInner_flag (input : Internal.CharClass.Input) (c : LexerCore) (fl : F) (l)
     (he : Watched.errored fl = false) (hv : c.version = Watched.version fl) :
     StepOk Failure.cause (Watched.spoiled fl) (irun (Internal.lexSliceInner input) c fl l) :=
   lexSliceFrom_flag_lt input _ _ _ _ _ _ _ _ fl l (Nat.lt_succ_self _) he hv
@@ -353,8 +354,9 @@ theorem lexFitting_flag (slice : ByteSlice) (h : slice.stop < USize.size) (c : L
       (H := F) (m := StateM σ) Recovery.FailFast) slice h) c fl l) := by
   unfold Internal.lexFitting
   rw [irun_bind]
-  obtain ⟨h₁, h₂, h₃⟩ := lexSliceInner_flag (CharClass.Input.ofSlice slice h) c fl l he hv
-  generalize irun (Internal.lexSliceInner (CharClass.Input.ofSlice slice h)) c fl l = r at h₁ h₂ h₃
+  obtain ⟨h₁, h₂, h₃⟩ := lexSliceInner_flag (Internal.CharClass.Input.ofSlice slice h) c fl l he hv
+  generalize irun
+      (Internal.lexSliceInner (Internal.CharClass.Input.ofSlice slice h)) c fl l = r at h₁ h₂ h₃
   obtain ⟨⟨⟨res, c'⟩, fl'⟩, l'⟩ := r
   dsimp only at h₁ h₂ h₃ ⊢
   cases res with

@@ -1,9 +1,9 @@
 module
 
 public import BSmtLib.Parser.Command.CommandOutcome
-public import BSmtLib.Parser.Command.Datatype
-public import BSmtLib.Parser.Command.Definition
-public import BSmtLib.Parser.Command.Function
+public import BSmtLib.Parser.Command.Internal.Datatype
+public import BSmtLib.Parser.Command.Internal.Definition
+public import BSmtLib.Parser.Command.Internal.Function
 
 public section
 
@@ -14,16 +14,22 @@ The payload parser of the standard commands: what follows a command's name, up t
 the last call that each command makes at its `)`.
 -/
 
-namespace BSmtLib.Parser.Command.Standard
+namespace BSmtLib.Parser.Command.Internal.Standard
 
 open BSmtLib.Nodes BSmtLib.Traits BSmtLib.Parser.Category.Attribute
     BSmtLib.Parser.Category.Combinator
+open BSmtLib.Parser.Category.Attribute.Internal
+open BSmtLib.Parser.Category.Combinator.Internal
 open BSmtLib.Parser.Category.Sort BSmtLib.Parser.Category.Term BSmtLib.Parser.Category.Token
-open BSmtLib.Parser.Command.Datatype BSmtLib.Parser.Command.Definition
-    BSmtLib.Parser.Command.Function
+open BSmtLib.Parser.Category.Sort.Internal
+open BSmtLib.Parser.Category.Term.Internal
+open BSmtLib.Parser.Category.Token.Internal
+open BSmtLib.Parser.Command.Internal.Datatype BSmtLib.Parser.Command.Internal.Definition
+    BSmtLib.Parser.Command.Internal.Function
 open BSmtLib.Plain (NumeralView KeywordView StringContentView)
 open BSmtLib.Token (Version)
 open BSmtLib.Token.Reserved (CommandNameReserved)
+open BSmtLib.Parser.Internal (PM call syntaxError)
 
 /-- The shape of a propositional literal read so far, ⟨symbol⟩ | `(` `not` ⟨symbol⟩ `)`. -/
 inductive LiteralShape where
@@ -446,4 +452,4 @@ def payloadArrive (self : PayloadOf H) (token : Internal.Input) : PM H Unit :=
 
 end
 
-end BSmtLib.Parser.Command.Standard
+end BSmtLib.Parser.Command.Internal.Standard

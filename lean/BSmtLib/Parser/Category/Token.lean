@@ -15,6 +15,9 @@ namespace BSmtLib.Parser.Category.Token
 
 open BSmtLib.Nodes BSmtLib.Traits
 open BSmtLib.Plain (NumeralView KeywordView StringContentView)
+open BSmtLib.Parser.Internal (PM call syntaxError)
+namespace Internal
+
 
 section
 
@@ -71,6 +74,111 @@ variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
 /-- The parser of a single symbol, as an element of a list. -/
 def symbolStep (_ : Unit) (token : Internal.Input) : PM H (Internal.Step Unit Symbol) := do
   return .done (← expectSymbol token)
+
+end
+
+end Internal
+/-! The parsers of single tokens (`SmtParse`). Each finishes at its first token, which must be of
+its kind, and needs no state. -/
+
+/-- The parser of a symbol (`SmtSymbolParser`). -/
+structure SymbolParser where
+
+/-- The parser of a `(` (`SmtOpenParenParser`). -/
+structure OpenParenParser where
+
+/-- The parser of a `)` (`SmtCloseParenParser`). -/
+structure CloseParenParser where
+
+/-- The parser of a numeral (`SmtNumeralParser`). -/
+structure NumeralParser where
+
+/-- The parser of a keyword (`SmtKeywordParser`). -/
+structure KeywordParser where
+
+/-- The parser of a string literal (`SmtStringParser`). -/
+structure StringParser where
+
+/-- The symbol parser. -/
+def SymbolParser.new : SymbolParser := {}
+
+/-- The `(` parser. -/
+def OpenParenParser.new : OpenParenParser := {}
+
+/-- The `)` parser. -/
+def CloseParenParser.new : CloseParenParser := {}
+
+/-- The numeral parser. -/
+def NumeralParser.new : NumeralParser := {}
+
+/-- The keyword parser. -/
+def KeywordParser.new : KeywordParser := {}
+
+/-- The string literal parser. -/
+def StringParser.new : StringParser := {}
+
+instance : Inhabited SymbolParser := ⟨.new⟩
+
+instance : Inhabited OpenParenParser := ⟨.new⟩
+
+instance : Inhabited CloseParenParser := ⟨.new⟩
+
+instance : Inhabited NumeralParser := ⟨.new⟩
+
+instance : Inhabited KeywordParser := ⟨.new⟩
+
+instance : Inhabited StringParser := ⟨.new⟩
+
+namespace Internal
+
+/- LEAN: the handler is a parameter of `Parse` but an `outParam` of `ParseByToken`, which a
+parser type that names no handler cannot fix; so the steps of such a parser are a definition for
+each handler, which its `parse` uses as a local instance. -/
+/-- The steps, with the handler `H`, of a parser of a single token: it finishes at the token,
+with what `expect` takes of it. -/
+@[instance_reducible]
+def singleByToken (H : Type) {m : Type → Type} [Monad m] [Handler H m] {P ρ : Type}
+    (expect : Parser.Internal.Input → PM H ρ) :
+    Parser.Internal.ParseByToken P H m (Handler.Error H) ρ where
+  arrive _ _ := pure ()
+  step _ _ token := do return .done (← expect token)
+  reset self := self
+
+end Internal
+
+section
+
+variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
+
+instance : Parse SymbolParser H m (Handler.Error H) Symbol where
+  parse parser state cursor :=
+    letI := Internal.singleByToken (P := SymbolParser) H Internal.expectSymbol
+    Parser.Internal.parseByToken parser state cursor
+
+instance : Parse OpenParenParser H m (Handler.Error H) Unit where
+  parse parser state cursor :=
+    letI := Internal.singleByToken (P := OpenParenParser) H Internal.expectOpen
+    Parser.Internal.parseByToken parser state cursor
+
+instance : Parse CloseParenParser H m (Handler.Error H) Unit where
+  parse parser state cursor :=
+    letI := Internal.singleByToken (P := CloseParenParser) H Internal.expectClose
+    Parser.Internal.parseByToken parser state cursor
+
+instance : Parse NumeralParser H m (Handler.Error H) NumeralView where
+  parse parser state cursor :=
+    letI := Internal.singleByToken (P := NumeralParser) H Internal.expectNumeral
+    Parser.Internal.parseByToken parser state cursor
+
+instance : Parse KeywordParser H m (Handler.Error H) KeywordView where
+  parse parser state cursor :=
+    letI := Internal.singleByToken (P := KeywordParser) H Internal.expectKeyword
+    Parser.Internal.parseByToken parser state cursor
+
+instance : Parse StringParser H m (Handler.Error H) StringContentView where
+  parse parser state cursor :=
+    letI := Internal.singleByToken (P := StringParser) H Internal.expectString
+    Parser.Internal.parseByToken parser state cursor
 
 end
 

@@ -4,7 +4,7 @@ public import BSmtLib.Token.ConsumeFrom
 public import BSmtLib.Lexer
 import all BSmtLib.Token
 import all BSmtLib.Lexer
-import all BSmtLib.Lexer.Helpers
+import all BSmtLib.Lexer.Internal.Helpers
 
 @[expose] public section
 
@@ -35,10 +35,13 @@ agree.
 
 namespace BSmtLib.Facts.Proofs.Lexer.Simulation.Batch
 
+open BSmtLib.Token.BatchCursor.Internal
+    (consumedEndOf consumedSpanOf discardRequested foldConsumedCategories Follows relexRequested remaining resetConsumed)
+
 /-! ## Batches -/
 
 /-- Each array of the batch has an entry for each of its tokens. -/
-structure Sized (b : Token.TokenBatch) : Prop where
+structure Sized (b : Token.Internal.TokenBatch) : Prop where
   types : b.len ≤ b.types.size
   contentStarts : b.len ≤ b.contentStarts.size
   contentStops : b.len ≤ b.contentStops.size
@@ -50,7 +53,7 @@ structure Sized (b : Token.TokenBatch) : Prop where
   endColumns : b.len ≤ b.endColumns.size
 
 /-- The entries at the index of the two batches are the same. -/
-structure EntryEq (b c : Token.TokenBatch) (i : Nat) : Prop where
+structure EntryEq (b c : Token.Internal.TokenBatch) (i : Nat) : Prop where
   types : b.types.get! i = c.types.get! i
   contentStarts : b.contentStarts[i]! = c.contentStarts[i]!
   contentStops : b.contentStops[i]! = c.contentStops[i]!
@@ -63,7 +66,7 @@ structure EntryEq (b c : Token.TokenBatch) (i : Nat) : Prop where
 
 /-- The two batches hold the same tokens: the same length, the same entries below it, and the
 same array of contents if they have a token. -/
-structure Agree (b c : Token.TokenBatch) : Prop where
+structure Agree (b c : Token.Internal.TokenBatch) : Prop where
   len : b.len = c.len
   contents : ∀ i, i < b.len →
     (b.bytes.toByteSlice (b.contentStarts[i]!) (b.contentStops[i]!)).toByteArray =
@@ -138,13 +141,14 @@ theorem get!_writeByte (array : ByteArray) (index : Nat) (value : UInt8) (i : Na
 
 section push
 
-variable (b : Token.TokenBatch) (ty : Token.TokenCategory) (cs ce so sl sc eo el ec : Nat)
+variable (b : Token.Internal.TokenBatch) (ty : Token.TokenCategory) (cs ce so sl sc eo el ec : Nat)
   (after : b.lastEnd ≤ so) (nonempty : so < eo ∨ ty = .endOfFile ∧ so = eo)
 
 theorem len_push' : (b.push ty cs ce so sl sc eo el ec after nonempty).len = b.len + 1 := (rfl)
 theorem bytes_push : (b.push ty cs ce so sl sc eo el ec after nonempty).bytes = b.bytes := (rfl)
 theorem types_push :
-    (b.push ty cs ce so sl sc eo el ec after nonempty).types = writeByte b.types b.len ty.toUInt8 :=
+    (b.push ty cs ce so sl sc eo el ec after nonempty).types = writeByte b.types b.len
+        (Token.TokenCategory.Internal.toUInt8 ty) :=
   (rfl)
 theorem contentStarts_push :
     (b.push ty cs ce so sl sc eo el ec after nonempty).contentStarts =
@@ -173,50 +177,52 @@ theorem endColumns_push :
 
 end push
 
-theorem Sized.push {b : Token.TokenBatch} (h : Sized b) (ty : Token.TokenCategory)
+theorem Sized.push {b : Token.Internal.TokenBatch} (h : Sized b) (ty : Token.TokenCategory)
     (cs ce so sl sc eo el ec : Nat) (after nonempty) :
     Sized (b.push ty cs ce so sl sc eo el ec after nonempty) := by
   exact ⟨size_writeByte _ _ _ h.1, size_write _ _ _ h.2, size_write _ _ _ h.3,
     size_write _ _ _ h.4, size_write _ _ _ h.5, size_write _ _ _ h.6, size_write _ _ _ h.7,
     size_write _ _ _ h.8, size_write _ _ _ h.9⟩
 
-theorem sized_of_len_zero {b : Token.TokenBatch} (h : b.len = 0) : Sized b := by
+theorem sized_of_len_zero {b : Token.Internal.TokenBatch} (h : b.len = 0) : Sized b := by
   constructor <;> rw [h] <;> exact Nat.zero_le _
 
-theorem sized_empty (capacity : Nat) : Sized (Token.TokenBatch.empty capacity) :=
+theorem sized_empty (capacity : Nat) : Sized (Token.Internal.TokenBatch.empty capacity) :=
   sized_of_len_zero rfl
 
-theorem sized_default : Sized (default : Token.TokenBatch) :=
+theorem sized_default : Sized (default : Token.Internal.TokenBatch) :=
   sized_of_len_zero rfl
 
-theorem sized_clear (b : Token.TokenBatch) (origin : Nat) : Sized (b.clear origin) :=
+theorem sized_clear (b : Token.Internal.TokenBatch) (origin : Nat) : Sized (b.clear origin) :=
   sized_of_len_zero rfl
 
-theorem Sized.withBytes {b : Token.TokenBatch} (h : Sized b) (bytes : ByteArray) :
+theorem Sized.withBytes {b : Token.Internal.TokenBatch} (h : Sized b) (bytes : ByteArray) :
     Sized { b with bytes } :=
   ⟨h.1, h.2, h.3, h.4, h.5, h.6, h.7, h.8, h.9⟩
 
-theorem Sized.pushOnLine {b : Token.TokenBatch} (h : Sized b) (ty : Token.TokenCategory)
+theorem Sized.pushOnLine {b : Token.Internal.TokenBatch} (h : Sized b) (ty : Token.TokenCategory)
     (cs ce line lineStart start «end» : Nat) (after nonempty) :
     Sized (b.pushOnLine ty cs ce line lineStart start «end» after nonempty) :=
   h.push _ _ _ _ _ _ _ _ _ _ _
 
-theorem Sized.pushLocated {b : Token.TokenBatch} (h : Sized b) (ty : Token.TokenCategory)
+theorem Sized.pushLocated {b : Token.Internal.TokenBatch} (h : Sized b) (ty : Token.TokenCategory)
     (cs ce : Nat)
     (start «end» : Span.Location) (after nonempty) :
     Sized (b.pushLocated ty cs ce start «end» after nonempty) :=
   h.push _ _ _ _ _ _ _ _ _ _ _
 
 /-- Batches without tokens agree. -/
-theorem agree_of_len_zero {b c : Token.TokenBatch} (hb : b.len = 0) (hc : c.len = 0) : Agree b c :=
+theorem agree_of_len_zero {b c : Token.Internal.TokenBatch} (hb : b.len = 0) (hc : c.len =
+    0) : Agree b c :=
   ⟨hb.trans hc.symm, fun _ h => absurd h (by rw [hb]; exact Nat.not_lt_zero _),
     fun _ h => absurd h (by rw [hb]; exact Nat.not_lt_zero _),
     sized_of_len_zero hb, sized_of_len_zero hc⟩
 
-theorem agree_clear (b c : Token.TokenBatch) (o o' : Nat) : Agree (b.clear o) (c.clear o') :=
+theorem agree_clear (b c : Token.Internal.TokenBatch) (o o' : Nat) :
+    Agree (b.clear o) (c.clear o') :=
   agree_of_len_zero rfl rfl
 
-theorem Agree.symm {b c : Token.TokenBatch} (h : Agree b c) : Agree c b where
+theorem Agree.symm {b c : Token.Internal.TokenBatch} (h : Agree b c) : Agree c b where
   len := h.len.symm
   contents i hi := (h.contents i (h.len ▸ hi)).symm
   entries i hi := by
@@ -226,10 +232,10 @@ theorem Agree.symm {b c : Token.TokenBatch} (h : Agree b c) : Agree c b where
   sizedLeft := h.sizedRight
   sizedRight := h.sizedLeft
 
-theorem Agree.refl {b : Token.TokenBatch} (h : Sized b) : Agree b b :=
+theorem Agree.refl {b : Token.Internal.TokenBatch} (h : Sized b) : Agree b b :=
   ⟨rfl, fun _ _ => rfl, fun _ _ => ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩, h, h⟩
 
-theorem Agree.withBytes {b c : Token.TokenBatch} (h : Agree b c) (bytes : ByteArray) :
+theorem Agree.withBytes {b c : Token.Internal.TokenBatch} (h : Agree b c) (bytes : ByteArray) :
     Agree { b with bytes } { c with bytes } :=
   ⟨h.len, fun i hi => (by
       have q := h.entries i hi
@@ -240,13 +246,14 @@ theorem Agree.withBytes {b c : Token.TokenBatch} (h : Agree b c) (bytes : ByteAr
 
 /-- Batches with the same length, the same entries below it and the same array of contents
 agree. -/
-theorem Agree.ofBytes {b c : Token.TokenBatch} (hlen : b.len = c.len) (hbytes : b.bytes = c.bytes)
+theorem Agree.ofBytes {b c : Token.Internal.TokenBatch} (hlen : b.len = c.len) (hbytes : b.bytes =
+    c.bytes)
     (hentries : ∀ i, i < b.len → EntryEq b c i) (hb : Sized b) (hc : Sized c) : Agree b c :=
   ⟨hlen, fun i hi => by rw [hbytes, (hentries i hi).contentStarts, (hentries i hi).contentStops],
     hentries, hb, hc⟩
 
 /-- The entries of batches that agree, with the same token appended. -/
-theorem Agree.entries_push {b c : Token.TokenBatch} (h : Agree b c)
+theorem Agree.entries_push {b c : Token.Internal.TokenBatch} (h : Agree b c)
     (ty : Token.TokenCategory) (cs ce so sl sc eo el ec : Nat) (after nonempty after' nonempty') :
     ∀ i, i < (b.push ty cs ce so sl sc eo el ec after nonempty).len →
       EntryEq (b.push ty cs ce so sl sc eo el ec after nonempty)
@@ -286,7 +293,7 @@ theorem Agree.entries_push {b c : Token.TokenBatch} (h : Agree b c)
     · rw [getElem!_write _ _ _ _ sb.9, getElem!_write _ _ _ _ sc'.9]; simp [e, e', q.9]
 
 /-- Appending the same token to batches that agree, with the same content of the token. -/
-theorem Agree.push' {b c : Token.TokenBatch} (h : Agree b c) (ty : Token.TokenCategory)
+theorem Agree.push' {b c : Token.Internal.TokenBatch} (h : Agree b c) (ty : Token.TokenCategory)
     (cs ce so sl sc eo el ec : Nat)
     (hnew : (b.bytes.toByteSlice cs ce).toByteArray = (c.bytes.toByteSlice cs ce).toByteArray)
     (after nonempty after' nonempty') :
@@ -310,20 +317,22 @@ theorem Agree.push' {b c : Token.TokenBatch} (h : Agree b c) (ty : Token.TokenCa
     exact h.contents i (by omega)
 
 /-- Appending the same token to batches that agree, with the same array of contents. -/
-theorem Agree.push {b c : Token.TokenBatch} (h : Agree b c) (hbytes : b.bytes = c.bytes)
+theorem Agree.push {b c : Token.Internal.TokenBatch} (h : Agree b c) (hbytes : b.bytes = c.bytes)
     (ty : Token.TokenCategory) (cs ce so sl sc eo el ec : Nat) (after nonempty after' nonempty') :
     Agree (b.push ty cs ce so sl sc eo el ec after nonempty)
       (c.push ty cs ce so sl sc eo el ec after' nonempty') :=
   h.push' ty cs ce so sl sc eo el ec (by rw [hbytes]) after nonempty after' nonempty'
 
-theorem Agree.pushOnLine {b c : Token.TokenBatch} (h : Agree b c) (hbytes : b.bytes = c.bytes)
+theorem Agree.pushOnLine {b c : Token.Internal.TokenBatch} (h : Agree b c) (hbytes : b.bytes =
+    c.bytes)
     (ty : Token.TokenCategory) (cs ce line lineStart start «end» : Nat) (after nonempty after'
       nonempty') :
     Agree (b.pushOnLine ty cs ce line lineStart start «end» after nonempty)
       (c.pushOnLine ty cs ce line lineStart start «end» after' nonempty') :=
   h.push hbytes _ _ _ _ _ _ _ _ _ _ _ _ _
 
-theorem Agree.pushLocated {b c : Token.TokenBatch} (h : Agree b c) (hbytes : b.bytes = c.bytes)
+theorem Agree.pushLocated {b c : Token.Internal.TokenBatch} (h : Agree b c) (hbytes : b.bytes =
+    c.bytes)
     (ty : Token.TokenCategory) (cs ce : Nat) (start «end» : Span.Location) (after nonempty after'
       nonempty') :
     Agree (b.pushLocated ty cs ce start «end» after nonempty)
@@ -332,7 +341,8 @@ theorem Agree.pushLocated {b c : Token.TokenBatch} (h : Agree b c) (hbytes : b.b
 
 /-- Appending the same located token to batches that agree, with the same content of the
 token. -/
-theorem Agree.pushLocated' {b c : Token.TokenBatch} (h : Agree b c) (ty : Token.TokenCategory)
+theorem Agree.pushLocated' {b c : Token.Internal.TokenBatch} (h : Agree b c)
+    (ty : Token.TokenCategory)
     (cs ce : Nat)
     (hnew : (b.bytes.toByteSlice cs ce).toByteArray = (c.bytes.toByteSlice cs ce).toByteArray)
     (start «end» : Span.Location) (after nonempty after' nonempty') :
@@ -348,43 +358,44 @@ beyond its length; only the bytes below its length are its content. Two buffers 
 -/
 
 /-- The content of the buffer: its bytes below its length. -/
-def bufferContent (a : Lexer.Helpers.ContentBuffer) : List UInt8 :=
+def bufferContent (a : Lexer.Internal.Helpers.ContentBuffer) : List UInt8 :=
   a.bytes.data.toList.take a.len
 
 /-- The two buffers have the same content. -/
-def ContentAgree (a b : Lexer.Helpers.ContentBuffer) : Prop :=
+def ContentAgree (a b : Lexer.Internal.Helpers.ContentBuffer) : Prop :=
   bufferContent a = bufferContent b
 
-theorem length_bufferContent (a : Lexer.Helpers.ContentBuffer) :
+theorem length_bufferContent (a : Lexer.Internal.Helpers.ContentBuffer) :
     (bufferContent a).length = a.len := by
   obtain ⟨⟨d⟩, len, fits⟩ := a
   simp only [ByteArray.size] at fits
   simp only [bufferContent, List.length_take, Array.length_toList]
   omega
 
-theorem ContentAgree.refl (a : Lexer.Helpers.ContentBuffer) : ContentAgree a a := rfl
+theorem ContentAgree.refl (a : Lexer.Internal.Helpers.ContentBuffer) : ContentAgree a a := rfl
 
-theorem ContentAgree.symm {a b : Lexer.Helpers.ContentBuffer} (h : ContentAgree a b) :
+theorem ContentAgree.symm {a b : Lexer.Internal.Helpers.ContentBuffer} (h : ContentAgree a b) :
     ContentAgree b a := Eq.symm h
 
-theorem ContentAgree.len {a b : Lexer.Helpers.ContentBuffer} (h : ContentAgree a b) :
+theorem ContentAgree.len {a b : Lexer.Internal.Helpers.ContentBuffer} (h : ContentAgree a b) :
     a.len = b.len := by
   rw [← length_bufferContent a, ← length_bufferContent b]
   exact congrArg List.length h
 
-theorem ContentAgree.clear (a b : Lexer.Helpers.ContentBuffer) : ContentAgree a.clear b.clear := by
-  simp [ContentAgree, bufferContent, Lexer.Helpers.ContentBuffer.clear]
+theorem ContentAgree.clear (a b : Lexer.Internal.Helpers.ContentBuffer) :
+    ContentAgree a.clear b.clear := by
+  simp [ContentAgree, bufferContent, Lexer.Internal.Helpers.ContentBuffer.clear]
 
-theorem ContentAgree.empty_clear (b : Lexer.Helpers.ContentBuffer) :
-    ContentAgree Lexer.Helpers.ContentBuffer.empty b.clear := by
-  simp [ContentAgree, bufferContent, Lexer.Helpers.ContentBuffer.empty,
-    Lexer.Helpers.ContentBuffer.clear]
+theorem ContentAgree.empty_clear (b : Lexer.Internal.Helpers.ContentBuffer) :
+    ContentAgree Lexer.Internal.Helpers.ContentBuffer.empty b.clear := by
+  simp [ContentAgree, bufferContent, Lexer.Internal.Helpers.ContentBuffer.empty,
+    Lexer.Internal.Helpers.ContentBuffer.clear]
 
-theorem bufferContent_push (a : Lexer.Helpers.ContentBuffer) (c : UInt8) :
+theorem bufferContent_push (a : Lexer.Internal.Helpers.ContentBuffer) (c : UInt8) :
     bufferContent (a.push c) = bufferContent a ++ [c] := by
   obtain ⟨⟨d⟩, len, fits⟩ := a
   simp only [ByteArray.size] at fits
-  unfold bufferContent Lexer.Helpers.ContentBuffer.push
+  unfold bufferContent Lexer.Internal.Helpers.ContentBuffer.push
   dsimp only
   split
   · rename_i h
@@ -400,12 +411,13 @@ theorem bufferContent_push (a : Lexer.Helpers.ContentBuffer) (c : UInt8) :
     subst this
     simp [List.take_of_length_le]
 
-theorem bufferContent_extendFrom (a : Lexer.Helpers.ContentBuffer) (src : ByteArray) (s e : Nat) :
+theorem bufferContent_extendFrom (a : Lexer.Internal.Helpers.ContentBuffer) (src : ByteArray)
+    (s e : Nat) :
     bufferContent (a.extendFrom src s e) = bufferContent a ++ (src.extract s e).data.toList := by
   obtain ⟨⟨d⟩, len, fits⟩ := a
   simp only [ByteArray.size] at fits
-  unfold bufferContent Lexer.Helpers.ContentBuffer.extendFrom
-    Lexer.Helpers.ContentBuffer.copiedCount
+  unfold bufferContent Lexer.Internal.Helpers.ContentBuffer.extendFrom
+    Lexer.Internal.Helpers.ContentBuffer.copiedCount
   dsimp only
   rw [ByteArray.copySlice_eq_append]
   simp only [ByteArray.data_append, ByteArray.data_extract, Array.toList_append,
@@ -420,39 +432,43 @@ theorem bufferContent_extendFrom (a : Lexer.Helpers.ContentBuffer) (src : ByteAr
   rw [List.take_append, hA, List.take_of_length_le (l := d.toList.take len) (by rw [hA]; omega),
     Nat.add_sub_cancel_left, List.take_left' hB, show s + (e - s) - s = e - s by omega]
 
-theorem ContentAgree.push {a b : Lexer.Helpers.ContentBuffer} (h : ContentAgree a b) (c : UInt8) :
+theorem ContentAgree.push {a b : Lexer.Internal.Helpers.ContentBuffer} (h : ContentAgree a b)
+    (c : UInt8) :
     ContentAgree (a.push c) (b.push c) := by
   unfold ContentAgree
   rw [bufferContent_push, bufferContent_push, h]
 
-theorem ContentAgree.extendFrom {a b : Lexer.Helpers.ContentBuffer} (h : ContentAgree a b)
+theorem ContentAgree.extendFrom {a b : Lexer.Internal.Helpers.ContentBuffer} (h : ContentAgree a b)
     (src : ByteArray) (s e : Nat) :
     ContentAgree (a.extendFrom src s e) (b.extendFrom src s e) := by
   unfold ContentAgree
   rw [bufferContent_extendFrom, bufferContent_extendFrom, h]
 
 /-- A byte below the length of the buffer is a byte of its content. -/
-theorem getElem_bufferContent (a : Lexer.Helpers.ContentBuffer) (i : Nat) (hi : i < a.len) :
+theorem getElem_bufferContent (a : Lexer.Internal.Helpers.ContentBuffer) (i : Nat) (hi : i <
+    a.len) :
     a.bytes[i]'(Nat.lt_of_lt_of_le hi a.fits) =
       (bufferContent a)[i]'(by rw [length_bufferContent]; exact hi) := by
   obtain ⟨⟨d⟩, len, fits⟩ := a
   simp [bufferContent]
   rfl
 
-theorem ContentAgree.getElem {a b : Lexer.Helpers.ContentBuffer} (h : ContentAgree a b) (i : Nat)
+theorem ContentAgree.getElem {a b : Lexer.Internal.Helpers.ContentBuffer} (h : ContentAgree a b)
+    (i : Nat)
     (hi : i < a.len) (hj : i < b.len) :
     a.bytes[i]'(Nat.lt_of_lt_of_le hi a.fits) = b.bytes[i]'(Nat.lt_of_lt_of_le hj b.fits) := by
   rw [getElem_bufferContent a i hi, getElem_bufferContent b i hj]
   simp only [ContentAgree] at h
   simp only [h]
 
-theorem ContentAgree.size {a b : Lexer.Helpers.ContentBuffer} (h : ContentAgree a b) :
-    Lexer.Helpers.Content.stored.size a = Lexer.Helpers.Content.stored.size b := h.len
+theorem ContentAgree.size {a b : Lexer.Internal.Helpers.ContentBuffer} (h : ContentAgree a b) :
+    Lexer.Internal.Helpers.Content.stored.size a
+        = Lexer.Internal.Helpers.Content.stored.size b := h.len
 
-theorem last?_bufferContent (a : Lexer.Helpers.ContentBuffer) :
-    Lexer.Helpers.Content.stored.last? a = (bufferContent a).getLast? := by
+theorem last?_bufferContent (a : Lexer.Internal.Helpers.ContentBuffer) :
+    Lexer.Internal.Helpers.Content.stored.last? a = (bufferContent a).getLast? := by
   have hl := length_bufferContent a
-  unfold Lexer.Helpers.Content.last?
+  unfold Lexer.Internal.Helpers.Content.last?
   by_cases h0 : a.len = 0
   · simp only [h0, dite_true]
     rw [h0] at hl
@@ -462,23 +478,25 @@ theorem last?_bufferContent (a : Lexer.Helpers.ContentBuffer) :
     rw [List.getLast?_eq_getElem?, hl, List.getElem?_eq_getElem (by omega),
       ← getElem_bufferContent a _ (by omega)]
 
-theorem ContentAgree.last? {a b : Lexer.Helpers.ContentBuffer} (h : ContentAgree a b) :
-    Lexer.Helpers.Content.stored.last? a = Lexer.Helpers.Content.stored.last? b := by
+theorem ContentAgree.last? {a b : Lexer.Internal.Helpers.ContentBuffer} (h : ContentAgree a b) :
+    Lexer.Internal.Helpers.Content.stored.last? a
+        = Lexer.Internal.Helpers.Content.stored.last? b := by
   rw [last?_bufferContent, last?_bufferContent, show bufferContent a = bufferContent b from h]
 
-theorem ContentAgree.contentSize {a b : Lexer.Helpers.ContentBuffer} (h : ContentAgree a b)
-    (k : Lexer.Helpers.Content) : k.size a = k.size b := by
+theorem ContentAgree.contentSize {a b : Lexer.Internal.Helpers.ContentBuffer} (h : ContentAgree a b)
+    (k : Lexer.Internal.Helpers.Content) : k.size a = k.size b := by
   cases k
   · exact h.size
   · rfl
 
-theorem ContentAgree.contentLast? {a b : Lexer.Helpers.ContentBuffer} (h : ContentAgree a b)
-    (k : Lexer.Helpers.Content) : k.last? a = k.last? b := by
+theorem ContentAgree.contentLast? {a b : Lexer.Internal.Helpers.ContentBuffer}
+    (h : ContentAgree a b)
+    (k : Lexer.Internal.Helpers.Content) : k.last? a = k.last? b := by
   cases k
   · exact h.last?
   · rfl
 
-theorem ContentAgree.single {a b : Lexer.Helpers.ContentBuffer} (h : ContentAgree a b)
+theorem ContentAgree.single {a b : Lexer.Internal.Helpers.ContentBuffer} (h : ContentAgree a b)
     (v : UInt8) :
     (if _ : a.len = 1 then a.bytes[0]'(by have := a.fits; omega) == v else false) =
       (if _ : b.len = 1 then b.bytes[0]'(by have := b.fits; omega) == v else false) := by
@@ -491,17 +509,17 @@ theorem ContentAgree.single {a b : Lexer.Helpers.ContentBuffer} (h : ContentAgre
     simp only [h1, h1', dite_false]
 
 /-- The content of the buffer as a slice. -/
-theorem toByteArray_view (a : Lexer.Helpers.ContentBuffer) :
+theorem toByteArray_view (a : Lexer.Internal.Helpers.ContentBuffer) :
     a.view.toByteArray.data.toList = bufferContent a := by
   obtain ⟨⟨d⟩, len, fits⟩ := a
   simp only [ByteArray.size] at fits
-  simp only [Lexer.Helpers.ContentBuffer.view, ByteArray.toByteSlice]
+  simp only [Lexer.Internal.Helpers.ContentBuffer.view, ByteArray.toByteSlice]
   rw [dite_eq_left_of_eq_true (eq_true (show len ≤ ({ data := d } : ByteArray).size from fits))]
   simp [bufferContent, ByteSlice.toByteArray, ByteSlice.byteArray, ByteSlice.start, ByteSlice.size,
     ByteSlice.stop]
 
 /-- The contents of two buffers that agree, as slices. -/
-theorem ContentAgree.view {a b : Lexer.Helpers.ContentBuffer} (h : ContentAgree a b) :
+theorem ContentAgree.view {a b : Lexer.Internal.Helpers.ContentBuffer} (h : ContentAgree a b) :
     (a.bytes.toByteSlice 0 a.len).toByteArray = (b.bytes.toByteSlice 0 b.len).toByteArray := by
   apply ByteArray.ext
   apply Array.ext'
@@ -509,8 +527,9 @@ theorem ContentAgree.view {a b : Lexer.Helpers.ContentBuffer} (h : ContentAgree 
 
 /-- Batches that agree, emptied, with the content of the buffers that agree as their array of
 contents, and the same token with that content appended. -/
-theorem agree_stored {a a' : Lexer.Helpers.ContentBuffer} (h : ContentAgree a a')
-    (b c : Token.TokenBatch) (o o' : Nat) (ty : Token.TokenCategory) (start «end» : Span.Location)
+theorem agree_stored {a a' : Lexer.Internal.Helpers.ContentBuffer} (h : ContentAgree a a')
+    (b c : Token.Internal.TokenBatch) (o o' : Nat) (ty : Token.TokenCategory)
+    (start «end» : Span.Location)
     (n n' : Nat) (hn : a.len = n) (hn' : a'.len = n') (after nonempty after' nonempty') :
     Agree ({ b.clear o with bytes := a.bytes } |>.pushLocated ty 0 n start «end» after nonempty)
       ({ c.clear o' with bytes := a'.bytes } |>.pushLocated ty 0 n' start «end» after'
@@ -564,8 +583,8 @@ structure CursorAgree (c : Token.BatchCursor g) (d : Token.BatchCursor g') : Pro
   first : cFirst c = cFirst d
   stop : cStop c = cStop d
   next : cNext c = cNext d
-  relex : c.relexRequested = d.relexRequested
-  discard : c.discardRequested = d.discardRequested
+  relex : relexRequested c = relexRequested d
+  discard : discardRequested c = discardRequested d
   bounded : cStop c ≤ (BSmtLib.Lexer.Internal.intoBatch c).len
 
 theorem cNext_le_cStop (c : Token.BatchCursor g) : cNext c ≤ cStop c := by
@@ -581,8 +600,8 @@ theorem CursorAgree.hasNext_iff {c : Token.BatchCursor g} {d : Token.BatchCursor
     c.HasNext ↔ d.HasNext := by
   rw [Batch.hasNext_iff, Batch.hasNext_iff, h.next, h.stop]
 
-theorem cursorAgree_new (v : Token.Version) {b c : Token.TokenBatch} (h : Agree b c) :
-    CursorAgree (Token.BatchCursor.new v b) (Token.BatchCursor.new v c) :=
+theorem cursorAgree_new (v : Token.Version) {b c : Token.Internal.TokenBatch} (h : Agree b c) :
+    CursorAgree (Token.BatchCursor.Internal.new v b) (Token.BatchCursor.Internal.new v c) :=
   ⟨rfl, h, rfl, h.len, rfl, rfl, rfl, Nat.le_refl _⟩
 
 theorem CursorAgree.takeNext {c : Token.BatchCursor g} {d : Token.BatchCursor g'}
@@ -598,7 +617,7 @@ theorem CursorAgree.takeNext {c : Token.BatchCursor g} {d : Token.BatchCursor g'
   exact ⟨rfl, hv, hb, rfl, rfl, rfl, hr, hdc, hbd⟩
 
 theorem CursorAgree.resetConsumed {c : Token.BatchCursor g} {d : Token.BatchCursor g'}
-    (h : CursorAgree c d) : CursorAgree c.resetConsumed d.resetConsumed := by
+    (h : CursorAgree c d) : CursorAgree (resetConsumed c) (resetConsumed d) := by
   cases c
   cases d
   obtain ⟨hv, hb, hf, hs, hn, hr, hdc, hbd⟩ := h
@@ -609,13 +628,13 @@ theorem CursorAgree.resetConsumed {c : Token.BatchCursor g} {d : Token.BatchCurs
 /-- Cursors with the same tag are over the same batch. -/
 theorem intoBatch_eq (c d : Token.BatchCursor g) : BSmtLib.Lexer.Internal.intoBatch c =
     BSmtLib.Lexer.Internal.intoBatch d :=
-  Token.TokenBatch.tag_injective ((BSmtLib.Lexer.Internal.tag_intoBatch c).trans
+  Token.Internal.TokenBatch.tag_injective ((BSmtLib.Lexer.Internal.tag_intoBatch c).trans
       (BSmtLib.Lexer.Internal.tag_intoBatch d).symm)
 
-theorem version_resetConsumed (c : Token.BatchCursor g) : c.resetConsumed.version = c.version :=
+theorem version_resetConsumed (c : Token.BatchCursor g) : (resetConsumed c).version = c.version :=
     (rfl)
 
-theorem cStop_le_of_follows {c d : Token.BatchCursor g} (h : c.Follows d) : cStop c ≤ cStop d := by
+theorem cStop_le_of_follows {c d : Token.BatchCursor g} (h : Follows c d) : cStop c ≤ cStop d := by
   cases c
   cases d
   exact h.2.1
@@ -628,46 +647,48 @@ theorem cNext_lt_of_consumed {c d : Token.BatchCursor g}
 
 /-- A cursor that follows one over a batch, at most to its length, yields no token beyond the
 length of the batch. -/
-theorem bounded_of_follows {c d : Token.BatchCursor g} (h : c.Follows d)
+theorem bounded_of_follows {c d : Token.BatchCursor g} (h : Follows c d)
     (hd : cStop d ≤ (BSmtLib.Lexer.Internal.intoBatch d).len) : cStop c ≤
     (BSmtLib.Lexer.Internal.intoBatch c).len := by
   rw [intoBatch_eq c d]
   exact Nat.le_trans (cStop_le_of_follows h) hd
 
 /-- The category of the entry at the index of the batch. -/
-def categoryAt (b : Token.TokenBatch) (i : Nat) : Token.TokenCategory :=
-  Token.TokenCategory.ofUInt8 (b.types.get! i)
+def categoryAt (b : Token.Internal.TokenBatch) (i : Nat) : Token.TokenCategory :=
+  Token.TokenCategory.Internal.ofUInt8 (b.types.get! i)
 
 /-- The content of the entry at the index of the batch. -/
-def contentAt (b : Token.TokenBatch) (i : Nat) : ByteSlice :=
+def contentAt (b : Token.Internal.TokenBatch) (i : Nat) : ByteSlice :=
   b.bytes.toByteSlice (b.contentStarts[i]!) (b.contentStops[i]!)
 
 /-- The span of the entry at the index of the batch. -/
-def spanAt (b : Token.TokenBatch) (i : Nat) : Span :=
-  Span.ofNumbers b.startOffsets[i]! b.startLines[i]! b.startColumns[i]! b.endOffsets[i]!
+def spanAt (b : Token.Internal.TokenBatch) (i : Nat) : Span :=
+  Span.Internal.ofNumbers b.startOffsets[i]! b.startLines[i]! b.startColumns[i]! b.endOffsets[i]!
     b.endLines[i]! b.endColumns[i]!
 
 theorem category_eq (c : Token.BatchCursor g) (t : Token g) :
     c.category t = categoryAt (BSmtLib.Lexer.Internal.intoBatch c) (tokenIndex t) := by
-  cases t; exact Token.TokenBatch.categoryOf_eq ..
+  cases t; exact Token.Internal.TokenBatch.categoryOf_eq ..
 
 theorem content_eq (c : Token.BatchCursor g) (t : Token g) :
     c.content t = contentAt (BSmtLib.Lexer.Internal.intoBatch c) (tokenIndex t) := by
-  cases t; exact Token.TokenBatch.contentOf_eq ..
+  cases t; exact Token.Internal.TokenBatch.contentOf_eq ..
 
 theorem span_eq (c : Token.BatchCursor g) (t : Token g) :
     c.span t = spanAt (BSmtLib.Lexer.Internal.intoBatch c) (tokenIndex t) := by
-  cases t; exact Token.TokenBatch.spanOf_eq ..
+  cases t; exact Token.Internal.TokenBatch.spanOf_eq ..
 
-theorem Agree.categoryAt {b c : Token.TokenBatch} (h : Agree b c) {i : Nat} (hi : i < b.len) :
+theorem Agree.categoryAt {b c : Token.Internal.TokenBatch} (h : Agree b c) {i : Nat} (hi : i <
+    b.len) :
     categoryAt b i = categoryAt c i := by
   simp only [Batch.categoryAt, (h.entries i hi).types]
 
-theorem Agree.contentAt {b c : Token.TokenBatch} (h : Agree b c) {i : Nat} (hi : i < b.len) :
+theorem Agree.contentAt {b c : Token.Internal.TokenBatch} (h : Agree b c) {i : Nat} (hi : i <
+    b.len) :
     (contentAt b i).toByteArray = (contentAt c i).toByteArray :=
   h.contents i hi
 
-theorem Agree.spanAt {b c : Token.TokenBatch} (h : Agree b c) {i : Nat} (hi : i < b.len) :
+theorem Agree.spanAt {b c : Token.Internal.TokenBatch} (h : Agree b c) {i : Nat} (hi : i < b.len) :
     spanAt b i = spanAt c i := by
   have e := h.entries i hi
   simp only [Batch.spanAt, e.startOffsets, e.startLines, e.startColumns,
@@ -723,13 +744,13 @@ theorem CursorAgree.span_peek {c : Token.BatchCursor g} {d : Token.BatchCursor g
   omega
 
 theorem consumedEndOf_eq {c c₀ : Token.BatchCursor g} (hc : c.Consumed c₀) :
-    c.consumedEndOf hc = (spanAt (BSmtLib.Lexer.Internal.intoBatch c) (cNext c - 1)).end := by
-  cases c; exact congrArg Span.«end» (Token.TokenBatch.spanOf_eq ..)
+    (consumedEndOf c) hc = (spanAt (BSmtLib.Lexer.Internal.intoBatch c) (cNext c - 1)).end := by
+  cases c; exact congrArg Span.«end» (Token.Internal.TokenBatch.spanOf_eq ..)
 
 /-- The end of the last token consumed agrees. -/
 theorem CursorAgree.consumedEndOf {c c₀ : Token.BatchCursor g} {d d₀ : Token.BatchCursor g'}
     (h : CursorAgree c d) (hc : c.Consumed c₀) (hd : d.Consumed d₀) :
-    c.consumedEndOf hc = d.consumedEndOf hd := by
+    (consumedEndOf c) hc = consumedEndOf d hd := by
   have hlt := cNext_lt_of_consumed hc
   have hle := cNext_le_cStop c
   have hbd := h.bounded
@@ -737,13 +758,13 @@ theorem CursorAgree.consumedEndOf {c c₀ : Token.BatchCursor g} {d d₀ : Token
   rw [consumedEndOf_eq, consumedEndOf_eq, ← h.next, h.batch.spanAt hi]
 
 theorem consumedSpanOf_eq {c c₀ : Token.BatchCursor g} (hc : c.Consumed c₀) :
-    c.consumedSpanOf hc = spanAt (BSmtLib.Lexer.Internal.intoBatch c) (cNext c - 1) := by
-  cases c; exact Token.TokenBatch.spanOf_eq ..
+    (consumedSpanOf c) hc = spanAt (BSmtLib.Lexer.Internal.intoBatch c) (cNext c - 1) := by
+  cases c; exact Token.Internal.TokenBatch.spanOf_eq ..
 
 /-- The span of the last token consumed agrees. -/
 theorem CursorAgree.consumedSpanOf {c c₀ : Token.BatchCursor g} {d d₀ : Token.BatchCursor g'}
     (h : CursorAgree c d) (hc : c.Consumed c₀) (hd : d.Consumed d₀) :
-    c.consumedSpanOf hc = d.consumedSpanOf hd := by
+    (consumedSpanOf c) hc = consumedSpanOf d hd := by
   have hlt := cNext_lt_of_consumed hc
   have hle := cNext_le_cStop c
   have hbd := h.bounded
@@ -759,7 +780,7 @@ theorem foldl_congr {α β : Type} {f g : β → α → β} :
     exact foldl_congr l _ fun b x hx => h b x (List.mem_cons_of_mem _ hx)
 
 theorem foldConsumedCategories_eq {β : Type} (c : Token.BatchCursor g) (init : β)
-    (f : β → Token.TokenCategory → β) : c.foldConsumedCategories init f =
+    (f : β → Token.TokenCategory → β) : foldConsumedCategories c init f =
       (List.range (cNext c)).foldl (fun acc index => f acc
           (categoryAt (BSmtLib.Lexer.Internal.intoBatch c) index))
         init := by
@@ -768,7 +789,7 @@ theorem foldConsumedCategories_eq {β : Type} (c : Token.BatchCursor g) (init : 
 theorem CursorAgree.foldConsumedCategories {β : Type} {c : Token.BatchCursor g}
     {d : Token.BatchCursor g'}
     (h : CursorAgree c d) (init : β) (f : β → Token.TokenCategory → β) :
-    c.foldConsumedCategories init f = d.foldConsumedCategories init f := by
+    (foldConsumedCategories c) init f = foldConsumedCategories d init f := by
   have hle := cNext_le_cStop c
   have hbd := h.bounded
   rw [foldConsumedCategories_eq, foldConsumedCategories_eq, ← h.next]
@@ -777,12 +798,12 @@ theorem CursorAgree.foldConsumedCategories {β : Type} {c : Token.BatchCursor g}
   have := List.mem_range.mp hi
   rw [h.batch.categoryAt (by omega)]
 
-theorem remaining_eq (c : Token.BatchCursor g) : c.remaining = cStop c - cNext c := by
+theorem remaining_eq (c : Token.BatchCursor g) : remaining c = cStop c - cNext c := by
   cases c; rfl
 
 theorem CursorAgree.remaining {c : Token.BatchCursor g} {d : Token.BatchCursor g'}
     (h : CursorAgree c d) :
-    c.remaining = d.remaining := by
+    (remaining c) = remaining d := by
   rw [remaining_eq, remaining_eq, h.stop, h.next]
 
 /-! ## The consumer -/

@@ -19,8 +19,11 @@ does not fuse.
 namespace BSmtLib.Parser.Internal.Fused.Basic
 
 open BSmtLib.Nodes BSmtLib.Traits
+open BSmtLib.Token.BatchCursor.Internal (Follows)
 open BSmtLib.Parser.Category.Term BSmtLib.Parser.Command
-open BSmtLib.Parser.Command.Definition BSmtLib.Parser.Script
+open BSmtLib.Parser.Category.Term.Internal
+open BSmtLib.Parser.Command.Internal
+open BSmtLib.Parser.Command.Internal.Definition BSmtLib.Parser.Script
 open BSmtLib.Plain (SymbolView NumeralView DecimalView HexDigitsView BinDigitsView
   StringContentView)
 open BSmtLib.Token (BatchTag BatchCursor TokenCategory Version VersionPosture)
@@ -41,9 +44,9 @@ answer, the parser to go on from, the cursor (which follows `next`) and the hand
 inductive Outcome (H σ γ μ L P ε : Type) {batch : BatchTag} (next : BatchCursor batch) where
   | command (h : H) (declarations : Nat) (command : σ)
   | term (h : H) (declarations : Nat) (context : γ) (mode : μ) (levels : L)
-  | resume (h : H) (parser : P) (cursor : BatchCursor batch) (follows : cursor.Follows next)
+  | resume (h : H) (parser : P) (cursor : BatchCursor batch) (follows : Follows cursor next)
   | stop (answer : Except ε (ControlFlow Unit)) (parser : P) (cursor : BatchCursor batch)
-      (follows : cursor.Follows next) (h : H)
+      (follows : Follows cursor next) (h : H)
 
 /-- The term mode of the handler. -/
 abbrev TermModeOf (H : Type) {m : Type → Type} [Handler H m] :=
@@ -96,11 +99,11 @@ def reservedAt? {batch : BatchTag} (version : Version) (next : BatchCursor batch
 @[inline]
 def constantOf (category : TokenCategory) (content : ByteSlice) : SpecConstant :=
   match category with
-  | .numeral => .numeral (NumeralView.newUnchecked content)
-  | .decimal => .decimal (DecimalView.newUnchecked content)
-  | .hexadecimal => .hexadecimal (HexDigitsView.newUnchecked content)
-  | .binary => .binary (BinDigitsView.newUnchecked content)
-  | _ => .string (StringContentView.newUnchecked content)
+  | .numeral => .numeral (NumeralView.Internal.newUnchecked content)
+  | .decimal => .decimal (DecimalView.Internal.newUnchecked content)
+  | .hexadecimal => .hexadecimal (HexDigitsView.Internal.newUnchecked content)
+  | .binary => .binary (BinDigitsView.Internal.newUnchecked content)
+  | _ => .string (StringContentView.Internal.newUnchecked content)
 
 variable [CommandHandler H m]
 
@@ -120,7 +123,8 @@ def portStep {batch : BatchTag} (posture : VersionPosture) (h : H) (declarations
   let fresh : ScriptParser H := ScriptParser.new posture
   let input := Internal.Input.ofSyntax (Token.Produce.«syntax» next token)
   let version := next.version
-  match ← runParser (do ScriptParser.arrive parser input; ScriptParser.step version parser input)
+  match ← runParser
+      (do ScriptParser.Internal.arrive parser input; ScriptParser.Internal.step version parser input)
       h with
   | (.error e, h) => k <| .stop (.error e) fresh next (.refl _) h
   | (.ok (.more p), h) => k <| .command h p.declarations p.command

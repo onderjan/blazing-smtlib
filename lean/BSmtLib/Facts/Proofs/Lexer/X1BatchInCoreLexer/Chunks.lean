@@ -20,7 +20,6 @@ as `lexChunks` makes it as the slice of the bytes of the chunk, which ends below
 
 namespace BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Chunks
 
-open BSmtLib.Lexer (LexerCore)
 
 /-! ### The chunks -/
 

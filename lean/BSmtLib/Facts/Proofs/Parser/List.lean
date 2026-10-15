@@ -22,8 +22,8 @@ not be a `)`, and why the list must be below its maximum.
 
 namespace BSmtLib.Facts.Proofs.Parser.List
 
-open BSmtLib.Parser (PM)
-open BSmtLib.Parser.Category.Combinator (ListState)
+open BSmtLib.Parser.Internal (PM)
+open BSmtLib.Parser.Category.Combinator.Internal (ListState)
 open BSmtLibSpec.Parser.Traversal (Points)
 open BSmtLib.Facts.Parser.Adapters.Run BSmtLib.Facts.Proofs.Parser.Drive
 
@@ -62,7 +62,7 @@ theorem ListState.open_runs :
     Runs points (ListState.step init inner maximum) (ListState.paren init) [.parenOpen]
       (tick points .parenOpen) fun _ => pure (.more (ListState.between init #[])) :=
   Runs.token_more (by simp [ListState.step, ListState.paren, ListState.between,
-    Parser.Category.Token.expectOpen])
+    Parser.Category.Token.Internal.expectOpen])
 
 /-- The `)` that ends a list, between elements. -/
 theorem ListState.close_runs (items : Array ρ) :

@@ -4,7 +4,7 @@ public import BSmtLib.Facts.Proofs.Parser.Script
 import all BSmtLib.Parser
 import all BSmtLib.Parser.Category.Attribute
 import all BSmtLib.Parser.Command
-import all BSmtLib.Parser.Command.Standard
+import all BSmtLib.Parser.Command.Internal.Standard
 import all BSmtLib.Parser.Script
 import all BSmtLib.Token.Reserved
 
@@ -23,10 +23,11 @@ and at the `)`, after `set-info`, it fails.
 namespace BSmtLib.Facts.Proofs.Parser.Refused
 
 open BSmtLibSpec.Grammar
-open BSmtLib.Parser (PM)
-open BSmtLib.Parser.Command.Standard (Payload FinalCall payloadStep Declaration)
-open BSmtLib.Parser.Command (CommandOutcome commandStep CommandState)
-open BSmtLib.Parser.Category.Attribute (AttributeState AttributeMode attributeStep)
+open BSmtLib.Parser.Internal (PM)
+open BSmtLib.Parser.Command.Internal.Standard (Payload FinalCall payloadStep Declaration)
+open BSmtLib.Parser.Command (CommandOutcome)
+open BSmtLib.Parser.Command.Internal (commandStep CommandState)
+open BSmtLib.Parser.Category.Attribute.Internal (AttributeState AttributeMode attributeStep)
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Parser.Adapters.Run
 open BSmtLib.Facts.Proofs.Parser.Attribute BSmtLib.Facts.Proofs.Parser.Command
 open BSmtLib.Facts.Proofs.Parser.Commands.Bytes BSmtLib.Facts.Proofs.Parser.Commands.Frame
@@ -100,16 +101,16 @@ theorem setInfo_payload_refused (value : Option Tree.AttributeValue) (hvalue : N
         let handled ← attributeThen points h (BSmtLibSpec.Regex.chars "smt-lib-version") .parenClose
           value
         Program.callUnit h (.commandSetInfo handled)))
-      fun _ => Parser.syntaxError .unsupportedVersion := by
+      fun _ => Parser.Internal.syntaxError .unsupportedVersion := by
   have hruns := attributeSingle_runs (points := points) hA.toTermAgrees _ value hvalid
     (Stands.append hs (Stands.cons (token := .parenClose) rfl Stands.nil))
   have hembed := Runs.bind_next ((Runs.embedA (outer := payloadStep version)
-      (outerArrival := Parser.Command.Standard.payloadArrive)
+      (outerArrival := Parser.Command.Internal.Standard.payloadArrive)
     (Payload.setInfo (.value none))
     (fun attributes => do
-      let some info := attributes[0]? | Parser.syntaxError .expectedAttribute
-      Parser.call (Traits.CommandHandler.commandSetInfo info)
-      Parser.syntaxError .unsupportedVersion)
+      let some info := attributes[0]? | Parser.Internal.syntaxError .expectedAttribute
+      Parser.Internal.call (Traits.CommandHandler.commandSetInfo info)
+      Parser.Internal.syntaxError .unsupportedVersion)
     (by
       intro state token
       simp only [payloadStep]
@@ -120,8 +121,8 @@ theorem setInfo_payload_refused (value : Option Tree.AttributeValue) (hvalue : N
       | done r =>
         simp only [Parser.Internal.Step.wrap, Declaration.next]
         cases r[0]? <;> rfl) hruns).congr rfl
-    (next' := fun r => Parser.call (Traits.CommandHandler.commandSetInfo r) >>=
-      fun _ => Parser.syntaxError .unsupportedVersion)
+    (next' := fun r => Parser.Internal.call (Traits.CommandHandler.commandSetInfo r) >>=
+      fun _ => Parser.Internal.syntaxError .unsupportedVersion)
     (by funext; simp [Parser.Internal.Step.wrap]))
   -- the keyword, then the token after it: the value's first, or the `)`
   obtain ⟨keywordToken, second, others, first, hpayload, hkeywordToken, hsecond, hfirst⟩ :
@@ -148,7 +149,7 @@ theorem setInfo_payload_refused (value : Option Tree.AttributeValue) (hvalue : N
       rcases value with ⟨_ | _ | _ | _ | _⟩ | _ | _ <;>
         simp_all [Tree.AttributeValue.tokens, Tree.SpecConstant.token, paren]
   obtain ⟨keyword, rfl, hkeyword⟩ := Parser.Internal.Input.received_keyword hkeywordToken
-  have hversionKeyword : Parser.Command.Standard.isVersionKeyword keyword = true := by
+  have hversionKeyword : Parser.Command.Internal.Standard.isVersionKeyword keyword = true := by
     rw [isVersionKeyword_eq, hkeyword]
     exact decide_eq_true rfl
   have hnext := keyword_next hfirst hsecond
@@ -183,7 +184,7 @@ theorem command_frame_throw {name : Token.Reserved.CommandNameReserved} {s : Str
     (rest : List Parser.Internal.Input) :
     drive points (commandStep version) .awaiting
         (.parenOpen :: .reserved (.commandName name) :: (payload ++ rest))
-            Parser.Command.commandArrive =
+            Parser.Command.Internal.commandArrive =
       (do
         adaptRun (opening points s)
         program
@@ -191,7 +192,8 @@ theorem command_frame_throw {name : Token.Reserved.CommandNameReserved} {s : Str
   have hembed := drive_embedA (points := points) (inner := payloadStep version)
     (outer := commandStep version) CommandState.payload (fun outcome => pure (.done outcome))
     commandStep_payload commandArrive_payload (Payload.init name version) (payload ++ rest)
-  simp only [drive_cons', arrivalTick, Parser.Command.commandArrive, commandStep, resume_more,
+  simp only [drive_cons', arrivalTick, Parser.Command.Internal.commandArrive, commandStep,
+      resume_more,
       hembed,
     hruns rest]
   simp [opening, adaptRun_take (token := .reserved (.commandName name))
@@ -205,7 +207,8 @@ theorem command_runs_refused (hA : Agrees h) (command : Tree.Command)
     (hmode : command.modeAfter
         (Bridge.version version) = none) {tokens : List Parser.Internal.Input}
     (hs : Stands tokens command.tokens) (rest : List Parser.Internal.Input) :
-    drive points (commandStep version) .awaiting (tokens ++ rest) Parser.Command.commandArrive =
+    drive points (commandStep version) .awaiting (tokens ++
+        rest) Parser.Command.Internal.commandArrive =
       (do
         adaptRun (Traversal.command points h command)
         (throw (.syntax .unsupportedVersion) : PM H (Option
@@ -300,7 +303,7 @@ theorem takes_runs (hA : Agrees h) (producer : Producer (StateT H m))
   | done =>
     intro version _ declarations inputs hs rest
     rw [map_received_endOfInput hs, List.singleton_append, script_embed]
-    simp [drive_cons', arrivalTick, Parser.Command.commandArrive, commandStep, scriptAfter,
+    simp [drive_cons', arrivalTick, Parser.Command.Internal.commandArrive, commandStep, scriptAfter,
       Traversal.commands, receive, arriveAt, processAt, Bridge.received]
   | stop hvalid hmode =>
     rename_i command
@@ -311,8 +314,8 @@ theorem takes_runs (hA : Agrees h) (producer : Producer (StateT H m))
     rw [map_received_endOfInput hsecond, List.append_assoc, List.singleton_append, script_embed,
       command_runs hA _ hvalid (by simp [hmode]) hfirst]
     simp [outcomeOf, scriptAfter, driveParse, step_endOfInput, Parser.Internal.ParseByToken.arrive,
-      Parser.Command.commandArrive,
-      Parser.Script.ScriptParser.arrive,
+      Parser.Command.Internal.commandArrive,
+      Parser.Script.ScriptParser.Internal.arrive,
       Traversal.commands, receive, arriveAt, processAt, Bridge.received]
   | @command _ next _ _ _ command hvalid hmode _ ih =>
     intro version hversion declarations inputs hs rest

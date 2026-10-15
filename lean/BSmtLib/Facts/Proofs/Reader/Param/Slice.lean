@@ -17,6 +17,7 @@ its relation of errors.
 namespace BSmtLib.Facts.Proofs.Reader.Param.Slice
 
 open BSmtLib.Lexer
+open BSmtLib.Lexer.Internal (BATCH_CAPACITY Stop Interrupted Failure LexerCore InnerM StepM LexM)
 open BSmtLib.Facts.Proofs.Reader.Param.Basic BSmtLib.Facts.Proofs.Reader.Param.HandOver
 open BSmtLib.Facts.Proofs.Reader.Param.Steps
 
@@ -49,11 +50,12 @@ variable [Token.Consume H₁ R₁ E₁] [Token.Consume H₂ R₂ E₂] [∀ b, T
 
 /-- What the loop over a slice descends by: the bytes left, and then whether a failure is still
 to be met. -/
-def runMeasure {E R : Type} (input : CharClass.Input) (position : USize)
+def runMeasure {E R : Type} (input : Internal.CharClass.Input) (position : USize)
     (fnResult : Except (Failure E) (ControlFlow R)) : Nat :=
   2 * (input.stop.toNat - position.toNat) + match fnResult with | .ok _ => 1 | .error _ => 0
 
-theorem lexSliceRun_sim_lt (hc : Consumers L) {floor : Option Nat} (input : CharClass.Input) :
+theorem lexSliceRun_sim_lt (hc : Consumers L) {floor : Option Nat}
+    (input : Internal.CharClass.Input) :
     ∀ (n : Nat) (position : USize) (fnResult₁ : Except (Failure E₁) (ControlFlow R₁))
       (fnResult₂ : Except (Failure E₂) (ControlFlow R₂)) (_ : FlowLRel L fnResult₁ fnResult₂)
       (core : {c : LexerCore // c.Bound floor 0}), runMeasure input position fnResult₁ < n →
@@ -103,7 +105,7 @@ theorem lexSliceRun_sim_lt (hc : Consumers L) {floor : Option Nat} (input : Char
             simp at hflush <;> omega
           · exact L.rc.pure ⟨⟨hres, rfl⟩, rfl⟩
 
-theorem lexSliceRun_sim (hc : Consumers L) {floor : Option Nat} (input : CharClass.Input)
+theorem lexSliceRun_sim (hc : Consumers L) {floor : Option Nat} (input : Internal.CharClass.Input)
     (position : USize) (fnResult₁ : Except (Failure E₁) (ControlFlow R₁))
     (fnResult₂ : Except (Failure E₂) (ControlFlow R₂)) (hf : FlowLRel L fnResult₁ fnResult₂)
     (core : {c : LexerCore // c.Bound floor 0}) :
@@ -112,10 +114,11 @@ theorem lexSliceRun_sim (hc : Consumers L) {floor : Option Nat} (input : CharCla
       (Internal.lexSliceRun input position fnResult₂ core) :=
   lexSliceRun_sim_lt hc input _ position fnResult₁ fnResult₂ hf core (Nat.lt_succ_self _)
 /-- What the loop over the stops in a slice descends by: the bytes after the floor. -/
-def fromMeasure (input : CharClass.Input) (initialOffset floor : Nat) : Nat :=
+def fromMeasure (input : Internal.CharClass.Input) (initialOffset floor : Nat) : Nat :=
   input.stop.toNat - input.start.toNat + 1 - (floor + 1 - initialOffset)
 
-theorem lexSliceFrom_sim_lt (hc : Consumers L) (input : CharClass.Input) (initialOffset : Nat) :
+theorem lexSliceFrom_sim_lt (hc : Consumers L) (input : Internal.CharClass.Input)
+    (initialOffset : Nat) :
     ∀ (n floor : Nat) (hfloor : initialOffset ≤ floor + 1) (position : USize)
       (fnResult₁ : Except (Failure E₁) (ControlFlow R₁))
       (fnResult₂ : Except (Failure E₂) (ControlFlow R₂)) (_ : FlowLRel L fnResult₁ fnResult₂)
@@ -160,7 +163,8 @@ theorem lexSliceFrom_sim_lt (hc : Consumers L) (input : CharClass.Input) (initia
         | some r₁, some r₂, hr => exact L.rc.pure ⟨⟨hr, rfl⟩, rfl⟩
         | none, none, _ => exact L.rc.pure ⟨hh, rfl⟩
 
-theorem lexSliceFrom_sim (hc : Consumers L) (input : CharClass.Input) (initialOffset floor : Nat)
+theorem lexSliceFrom_sim (hc : Consumers L) (input : Internal.CharClass.Input)
+    (initialOffset floor : Nat)
     (hfloor : initialOffset ≤ floor + 1) (position : USize)
     (fnResult₁ : Except (Failure E₁) (ControlFlow R₁))
     (fnResult₂ : Except (Failure E₂) (ControlFlow R₂)) (hf : FlowLRel L fnResult₁ fnResult₂)
@@ -173,7 +177,7 @@ theorem lexSliceFrom_sim (hc : Consumers L) (input : CharClass.Input) (initialOf
   lexSliceFrom_sim_lt hc input initialOffset _ floor hfloor position fnResult₁ fnResult₂ hf held₁
     held₂ hh core (Nat.lt_succ_self _)
 
-theorem lexSliceInner_sim (hc : Consumers L) (input : CharClass.Input) :
+theorem lexSliceInner_sim (hc : Consumers L) (input : Internal.CharClass.Input) :
     SSim L (HeldRel L) (Internal.lexSliceInner (H := H₁) (m := m₁) (R := R₁) (E := E₁) input)
       (Internal.lexSliceInner input) := fun _ =>
   lexSliceFrom_sim hc input _ _ _ _ (.ok .continue) (.ok .continue) trivial none none trivial _

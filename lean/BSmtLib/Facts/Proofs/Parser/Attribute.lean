@@ -20,9 +20,8 @@ parser, run inside the attribute parser's `inside` mode.
 namespace BSmtLib.Facts.Proofs.Parser.Attribute
 
 open BSmtLibSpec.Grammar
-open BSmtLib.Parser (PM)
-open BSmtLib.Parser.Category.Attribute (AttributeState AttributeMode attributeStep)
-open BSmtLib.Parser.Category.SExpr (SExprState sExprStep sExprComplete)
+open BSmtLib.Parser.Category.Attribute.Internal (AttributeState AttributeMode attributeStep)
+open BSmtLib.Parser.Category.SExpr.Internal (SExprState sExprStep sExprComplete)
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Parser.Adapters.Run
 open BSmtLib.Facts.Proofs.Parser.Drive BSmtLib.Facts.Proofs.Parser.Lemmas
 open BSmtLib.Facts.Proofs.Parser.SExpr BSmtLib.Facts.Proofs.Parser.Tokens BSmtLib.Plain
@@ -96,14 +95,14 @@ theorem valueItems_runs (hA : TermAgrees h) (single : Bool) : (items : List Tree
         AttributeState _ _))
       (fun item => pure (.more { mode := .inside keyword (found.push item) [] true, attributes }))
       (fun state token => by
-        simp only [Parser.Category.Attribute.attributeStep.eq_def]
+        simp only [Parser.Category.Attribute.Internal.attributeStep.eq_def]
         simp
         congr 1
         funext step
         cases step <;> rfl)
       (sExpr_runs (points := points) hA first hvalid.1 hs₁ [])
     have hitem := Runs.first (state := { mode := .inside keyword found [] true, attributes })
-      (by cases token <;> simp_all [Parser.Category.Attribute.attributeStep.eq_def]) hembed
+      (by cases token <;> simp_all [Parser.Category.Attribute.Internal.attributeStep.eq_def]) hembed
     have htail : ∀ r, Runs points (attributeStep single version)
         { mode := .inside keyword (found.push r) [] true, attributes } tokens₂
         ((r :: ·) <$> adaptRun (Traversal.sExprs points h rest))
@@ -134,16 +133,16 @@ theorem value_runs (hA : TermAgrees h) (single : Bool) (value : Tree.AttributeVa
   cases value with
   | constant constant =>
     obtain ⟨constant', rfl, rfl⟩ := Stands.constant hs
-    refine (Runs.token (program := Parser.call (Traits.Handler.handleAttribute keyword
+    refine (Runs.token (program := Parser.Internal.call (Traits.Handler.handleAttribute keyword
       (some (.constant constant'))))
-          (by simp [Parser.Category.Attribute.attributeStep.eq_def])).congr ?_ rfl
+          (by simp [Parser.Category.Attribute.Internal.attributeStep.eq_def])).congr ?_ rfl
     simp [attributeValue, adaptRun_take (token := .constant constant') rfl, hA.handleAttribute,
       Bridge.attributeValue]
   | symbol name =>
     obtain ⟨token, rfl, htoken⟩ := Stands.split_single hs
     obtain ⟨symbol, rfl, rfl⟩ := Parser.Internal.Input.received_symbol htoken
-    refine (Runs.token (program := Parser.call (Traits.Handler.handleAttribute keyword
-      (some (.symbol symbol)))) (by simp [Parser.Category.Attribute.attributeStep.eq_def])).congr
+    refine (Runs.token (program := Parser.Internal.call (Traits.Handler.handleAttribute keyword
+      (some (.symbol symbol)))) (by simp [Parser.Category.Attribute.Internal.attributeStep.eq_def])).congr
           ?_ rfl
     simp [attributeValue, adaptRun_take htoken, hA.handleAttribute, Bridge.attributeValue]
   | list items =>
@@ -152,15 +151,15 @@ theorem value_runs (hA : TermAgrees h) (single : Bool) (value : Tree.AttributeVa
         Runs points (attributeStep single version)
           { mode := .inside keyword (#[] ++ handled.toArray) [] true, attributes } [.parenClose]
           (do tick points .parenClose
-              Parser.call (Traits.Handler.handleAttribute keyword
+              Parser.Internal.call (Traits.Handler.handleAttribute keyword
                 (some (.list (#[] ++ handled.toArray)))))
           fun handled => pure (.more { mode := .start, attributes := attributes.push handled }) :=
-      fun _ => Runs.token (by simp [Parser.Category.Attribute.attributeStep.eq_def])
+      fun _ => Runs.token (by simp [Parser.Category.Attribute.Internal.attributeStep.eq_def])
     rw [show Parser.Internal.Input.parenOpen :: (inner ++ [.parenClose]) =
       [.parenOpen] ++ (inner ++ [.parenClose]) by simp]
     refine (Runs.append (middle := fun _ =>
         ({ mode := .inside keyword #[] [] true, attributes } : AttributeState _ _))
-      (Runs.token_more (by simp [Parser.Category.Attribute.attributeStep.eq_def])) fun _ =>
+      (Runs.token_more (by simp [Parser.Category.Attribute.Internal.attributeStep.eq_def])) fun _ =>
         Runs.append (valueItems_runs hA single items hvalid hinner keyword #[] attributes)
           fun handled => hclose handled).congr ?_ rfl
     simp [attributeValue, adaptRun_take (token := .parenOpen) rfl,
@@ -201,10 +200,11 @@ theorem attributeThen_runs (hA : TermAgrees h) (value : Option Tree.AttributeVal
   | none =>
     have := Stands.eq_nil hs
     subst this
-    refine (Runs.token (program := Parser.call (Traits.Handler.handleAttribute keyword none))
+    refine (Runs.token
+        (program := Parser.Internal.call (Traits.Handler.handleAttribute keyword none))
       ?_).congr ?_ rfl
     · rcases hnext with ⟨rfl, rfl⟩ | ⟨_, rfl, rfl⟩ <;>
-        simp [Parser.Category.Attribute.attributeStep.eq_def, afterNext]
+        simp [Parser.Category.Attribute.Internal.attributeStep.eq_def, afterNext]
     · simp [attributeThen_none, adaptRun_take hreceived, hA.handleAttribute]
   | some value =>
     have hafter : ∀ handled, Runs points (attributeStep false version)
@@ -213,7 +213,7 @@ theorem attributeThen_runs (hA : TermAgrees h) (value : Option Tree.AttributeVal
         fun handled => pure (afterNext next (attributes.push handled)) := fun handled =>
       Runs.token (by
         rcases hnext with ⟨rfl, rfl⟩ | ⟨_, rfl, rfl⟩ <;>
-          simp [Parser.Category.Attribute.attributeStep.eq_def, afterNext])
+          simp [Parser.Category.Attribute.Internal.attributeStep.eq_def, afterNext])
     refine (Runs.append (value_runs hA false value (hvalid value rfl) hs keyword attributes)
       hafter).congr ?_ rfl
     simp [attributeThen_some, adaptRun_take hreceived]
@@ -298,7 +298,8 @@ theorem attributes_runs_init (hA : TermAgrees h) (first : Tree.Attribute)
     (hvalid : ∀ attr ∈ first :: rest, attr.Valid (Bridge.version version))
     {tokens : List Parser.Internal.Input}
     (hs : Stands tokens ((first :: rest).flatMap Tree.Attribute.tokens ++ [.parenClose])) :
-    Runs points (attributeStep false version) Parser.Category.Attribute.AttributeState.init tokens
+    Runs points
+        (attributeStep false version) Parser.Category.Attribute.Internal.AttributeState.init tokens
       (adaptRun (do
         take points (.keyword first.keyword)
         attributesThen points h first.keyword first.value rest))
@@ -319,8 +320,8 @@ theorem attributes_runs_init (hA : TermAgrees h) (first : Tree.Attribute)
     [.keyword name] ++ (valueTokens' ++ restTokens ++ [.parenClose]) by simp]
   refine (Runs.append (middle := fun _ =>
       ({ mode := .afterName name, attributes := #[] } : AttributeState _ _))
-    (Runs.token_more (by simp [Parser.Category.Attribute.AttributeState.init,
-    Parser.Category.Attribute.attributeStep.eq_def]))
+    (Runs.token_more (by simp [Parser.Category.Attribute.Internal.AttributeState.init,
+    Parser.Category.Attribute.Internal.attributeStep.eq_def]))
       fun _ => attributes_runs hA rest (fun a ha => hvalid a (List.mem_cons_of_mem _ ha)) name
         value hvalue hvalueTokens hrest #[]).congr ?_ ?_
   · subst hname
@@ -347,11 +348,11 @@ theorem attributeSingle_runs (hA : TermAgrees h) (keyword : BSmtLibSpec.Regex.Ch
   rw [Parser.Internal.Input.received_parenClose hclose]
   obtain ⟨name, valueTokens', rfl, rfl, hvalueTokens⟩ := Stands.«attribute» hattribute
   have hkeyword : Runs points (attributeStep true version)
-      Parser.Category.Attribute.AttributeState.init
+      Parser.Category.Attribute.Internal.AttributeState.init
       [.keyword name] (tick points (.keyword name))
       fun _ => pure (.more { mode := .afterName name, attributes := #[] }) :=
-    Runs.token_more (by simp [Parser.Category.Attribute.AttributeState.init,
-        Parser.Category.Attribute.attributeStep.eq_def])
+    Runs.token_more (by simp [Parser.Category.Attribute.Internal.AttributeState.init,
+        Parser.Category.Attribute.Internal.attributeStep.eq_def])
   rw [List.cons_append, show Parser.Internal.Input.keyword name :: (valueTokens' ++ [.parenClose]) =
     [.keyword name] ++ (valueTokens' ++ [.parenClose]) by rfl]
   cases value with
@@ -360,8 +361,8 @@ theorem attributeSingle_runs (hA : TermAgrees h) (keyword : BSmtLibSpec.Regex.Ch
     subst this
     refine (Runs.append (middle := fun _ =>
         ({ mode := .afterName name, attributes := #[] } : AttributeState _ _)) hkeyword
-      fun _ => Runs.token (program := Parser.call (Traits.Handler.handleAttribute name none))
-        (by simp [Parser.Category.Attribute.attributeStep.eq_def])).congr ?_ rfl
+      fun _ => Runs.token (program := Parser.Internal.call (Traits.Handler.handleAttribute name none))
+        (by simp [Parser.Category.Attribute.Internal.attributeStep.eq_def])).congr ?_ rfl
     simp [attributeThen_none, adaptRun_take (token := .keyword name) rfl,
       adaptRun_take (token := .parenClose) rfl, hA.handleAttribute]
   | some value =>
@@ -369,8 +370,8 @@ theorem attributeSingle_runs (hA : TermAgrees h) (keyword : BSmtLibSpec.Regex.Ch
         { mode := .start, attributes := #[handled] } [.parenClose]
         (do tick points .parenClose; pure handled)
         fun handled => pure (.done #[handled]) :=
-      fun handled => Runs.token (by simp [Parser.Category.Attribute.attributeStep.eq_def,
-          Parser.Category.Token.expectClose])
+      fun handled => Runs.token (by simp [Parser.Category.Attribute.Internal.attributeStep.eq_def,
+          Parser.Category.Token.Internal.expectClose])
     refine (Runs.append (middle := fun _ =>
         ({ mode := .afterName name, attributes := #[] } : AttributeState _ _)) hkeyword
       fun _ => Runs.append (middle := fun handled =>

@@ -173,24 +173,32 @@ def lexemeHanded (version : Token.Version) (l : Lexeme) : Option BSmtLibSpec.Lex
 
 /-- The adapter records the lexeme handed over alone in a cursor as `lexemeHanded` gives it. -/
 theorem toHanded_batch (version : Token.Version) (l : Lexeme) (h : l.Valid) :
-    toHanded (Token.BatchCursor.new version (l.batch h))
-      ((Token.BatchCursor.new version (l.batch h)).peek (l.hasNext h version)) =
+    toHanded (Token.BatchCursor.Internal.new version (l.batch h))
+      ((Token.BatchCursor.Internal.new version (l.batch h)).peek (l.hasNext h version)) =
       lexemeHanded version l := by
-  have hcat : (Token.BatchCursor.new version (l.batch h)).category
-      ((Token.BatchCursor.new version (l.batch h)).peek (l.hasNext h version)) = l.category := by
+  have hcat :
+      (Token.BatchCursor.Internal.new version (l.batch h)).category
+      ((Token.BatchCursor.Internal.new version (l.batch h)).peek (l.hasNext h version))
+          = l.category := by
     obtain ⟨category, content, start, «end»⟩ := l
     cases category <;> rfl
-  have hstart : ((Token.BatchCursor.new version (l.batch h)).span
-      ((Token.BatchCursor.new version (l.batch h)).peek (l.hasNext h version))).start = l.start :=
+  have hstart :
+      ((Token.BatchCursor.Internal.new version (l.batch h)).span
+      ((Token.BatchCursor.Internal.new version (l.batch h)).peek
+          (l.hasNext h version))).start = l.start :=
           rfl
-  have hend : ((Token.BatchCursor.new version (l.batch h)).span
-      ((Token.BatchCursor.new version (l.batch h)).peek (l.hasNext h version))).end = l.end := rfl
-  have hcontent : (Token.BatchCursor.new version (l.batch h)).content
-      ((Token.BatchCursor.new version (l.batch h)).peek (l.hasNext h version)) =
+  have hend :
+      ((Token.BatchCursor.Internal.new version (l.batch h)).span
+      ((Token.BatchCursor.Internal.new version (l.batch h)).peek
+          (l.hasNext h version))).end = l.end := rfl
+  have hcontent :
+      (Token.BatchCursor.Internal.new version (l.batch h)).content
+      ((Token.BatchCursor.Internal.new version (l.batch h)).peek (l.hasNext h version)) =
         l.content.toByteSlice := rfl
-  have hversion : (Token.BatchCursor.new version (l.batch h)).version = version := rfl
+  have hversion : (Token.BatchCursor.Internal.new version (l.batch h)).version = version := rfl
   unfold lexemeHanded toHanded
-  simp only [Token.BatchCursor.«syntax», Token.SyntaxToken.fromToken, Token.SyntaxToken.fromParts,
+  simp only [Token.BatchCursor.«syntax», Token.SyntaxToken.fromToken,
+      Token.SyntaxToken.Internal.fromParts,
       hcat, hstart, hend,
     hcontent, hversion]
   cases hc : l.category <;> simp [toTokenType, toReservedKind]
@@ -217,11 +225,13 @@ def lexemeEntry (concrete : Bool) (version : Token.Version)
 gives it. -/
 theorem entry_batch (consumer : BSmtLibSpec.Lexer.Consumer) (version : Token.Version) (l : Lexeme)
     (h : l.Valid) :
-    Answering.entry consumer (Token.BatchCursor.new version (l.batch h))
-      ((Token.BatchCursor.new version (l.batch h)).peek (l.hasNext h version)) =
+    Answering.entry consumer (Token.BatchCursor.Internal.new version (l.batch h))
+      ((Token.BatchCursor.Internal.new version (l.batch h)).peek (l.hasNext h version)) =
       lexemeEntry consumer.concrete version l := by
-  have hcat : (Token.BatchCursor.new version (l.batch h)).category
-      ((Token.BatchCursor.new version (l.batch h)).peek (l.hasNext h version)) = l.category := by
+  have hcat :
+      (Token.BatchCursor.Internal.new version (l.batch h)).category
+      ((Token.BatchCursor.Internal.new version (l.batch h)).peek (l.hasNext h version))
+          = l.category := by
     obtain ⟨category, content, start, «end»⟩ := l
     cases category <;> rfl
   unfold Answering.entry lexemeEntry

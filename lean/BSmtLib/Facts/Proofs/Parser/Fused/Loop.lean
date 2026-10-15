@@ -27,9 +27,10 @@ token.
 namespace BSmtLib.Facts.Proofs.Parser.Fused.Loop
 
 open BSmtLib.Traits
+open BSmtLib.Token.BatchCursor.Internal (remaining)
 open BSmtLib.Parser (Parse)
-open BSmtLib.Parser.Category.Term (TermLevelOf)
-open BSmtLib.Parser.Command (CommandStateOf)
+open BSmtLib.Parser.Category.Term.Internal (TermLevelOf)
+open BSmtLib.Parser.Command.Internal (CommandStateOf)
 open BSmtLib.Parser.Internal.Fused
 open BSmtLib.Parser.Internal.Fused.Basic (Cause LoopResult OutcomeOf TermContext TermModeOf)
 open BSmtLib.Parser.Script (ScriptParser)
@@ -196,7 +197,7 @@ theorem loop_eq (hstep : StepSimulates H m) (posture : VersionPosture) {batch : 
     · simp only [hn, ↓reduceDIte]
       rw [rest_next origin _ h' next consumed hn]
       obtain ⟨token', ⟨after, taken⟩⟩ := next.next hn
-      have : after.remaining < next.remaining := taken.remaining_lt
+      have : remaining after < remaining next := taken.remaining_lt
       dsimp only
       split
       · rw [loop_eq hstep]; rfl
@@ -210,7 +211,7 @@ theorem loop_eq (hstep : StepSimulates H m) (posture : VersionPosture) {batch : 
     · simp only [hn, ↓reduceDIte]
       rw [rest_next origin _ h' next consumed hn]
       obtain ⟨token', ⟨after, taken⟩⟩ := next.next hn
-      have : after.remaining < next.remaining := taken.remaining_lt
+      have : remaining after < remaining next := taken.remaining_lt
       dsimp only
       rw [loop_eq hstep]
     · simp only [hn, ↓reduceDIte]
@@ -221,7 +222,7 @@ theorem loop_eq (hstep : StepSimulates H m) (posture : VersionPosture) {batch : 
     · simp only [hn, ↓reduceDIte]
       rw [rest_next origin _ h' cursor (follows.trans_consumed consumed) hn]
       obtain ⟨token', ⟨after, taken⟩⟩ := cursor.next hn
-      have : after.remaining < next.remaining := (taken.trans_follows follows).remaining_lt
+      have : remaining after < remaining next := (taken.trans_follows follows).remaining_lt
       dsimp only
       obtain ⟨posture', command', declarations'⟩ := parser
       dsimp only
@@ -230,7 +231,7 @@ theorem loop_eq (hstep : StepSimulates H m) (posture : VersionPosture) {batch : 
       rw [rest_none origin _ h' cursor (follows.trans_consumed consumed) hn]
   | stop answer parser cursor follows h' =>
     simp only [toPort, portGo.portRest]
-termination_by next.remaining
+termination_by remaining next
 
 /-- The loop from the first token of a hand-over is the port's run from it, on the parser. -/
 theorem start_eq (hstep : StepSimulates H m) {batch : BatchTag} (parser : ScriptParser H) (h : H)

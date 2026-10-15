@@ -1,7 +1,7 @@
 module
 
 public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.Basic
-import all BSmtLib.Lexer.Helpers
+import all BSmtLib.Lexer.Internal.Helpers
 import all BSmtLib.Lexer.Internal.VNaive
 
 @[expose] public section
@@ -15,16 +15,16 @@ The Rust port's delimiter table and its fast flags against the naive lexer's byt
 namespace BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.Delimiters
 
 open BSmtLib.Lexer.Internal.VNaive
-open BSmtLib.Lexer.CharClass (RUN_SIMPLE_SYMBOL RUN_NON_LF_WHITESPACE RUN_QUOTED_PLAIN)
+open BSmtLib.Lexer.Internal.CharClass (RUN_SIMPLE_SYMBOL RUN_NON_LF_WHITESPACE RUN_QUOTED_PLAIN)
 open BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Bytes
 open BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.Basic
 
-theorem isDelimiter_eq (c : UInt8) : Lexer.Helpers.isDelimiter c =
+theorem isDelimiter_eq (c : UInt8) : Lexer.Internal.Helpers.isDelimiter c =
     Lexer.Internal.VNaive.isDelimiter c :=
-  byte_table (P := fun c => Lexer.Helpers.isDelimiter c = Lexer.Internal.VNaive.isDelimiter c)
+  byte_table (P := fun c => Lexer.Internal.Helpers.isDelimiter c = Lexer.Internal.VNaive.isDelimiter c)
     (by decide +kernel) c
 
-open BSmtLib.Lexer.Helpers (fastFlags FAST_ON FAST_DELIM FAST_EMIT FAST_PIPE) in
+open BSmtLib.Lexer.Internal.Helpers (fastFlags FAST_ON FAST_DELIM FAST_EMIT FAST_PIPE) in
 /-- The fast flags of a byte: none for a byte off the fast path, and otherwise those of
 whitespace other than a line feed, of the pipe, or of a simple symbol that does not start with a
 digit. -/

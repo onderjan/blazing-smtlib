@@ -14,9 +14,9 @@ the posture that allows every version, as the specification's `BSmtLibSpec.Reade
 sees it: fed the slices by `Reader.readSlice`, and then the end of the input by `Reader.readEof` if
 the input has ended, it gives the calls its handler was told, in order, and whether the end of
 the input returned a result. Where a call fails, the reader is not given back; the calls are then
-those the handler holds after the failed call, read from the reader's lexer. `libraryReader` and
-the definitions it is made of are adapters, in `Facts.Reader.Adapters`; this module proves what they
-do.
+those the handler that the failure carries holds, which is the handler of the lexer the failed
+step leaves (`readSlice_ofLexer`, `readEof_ofLexer`). `libraryReader` and the definitions it is
+made of are adapters, in `Facts.Reader.Adapters`; this module proves what they do.
 
 On a file it reads the traversal's calls and finishes (`reader_reads_files`): the reader's calls
 are the lexer's public calls with the parse adapter (`Param.paFeed`), on which
@@ -40,23 +40,53 @@ theorem readerOf_eq (version : Lexicon.Version) :
     readerOf version = Reader.Internal.ofLexer (Lexer.new recordingAdapter (toVersion version)) :=
   (rfl)
 
+/-- The parse adapter's lexer after the step of a call on a slice, also where it fails. -/
+def slicedP (p : PLexer) (slice : ByteSlice) : PLexer :=
+  (Lexer.Internal.run p (Lexer.Internal.lexSliceStep (H := RecAdapter) (m := Id)
+    (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
+    (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast) slice) :
+    Id _).2
+
+/-- The parse adapter's lexer after the step of a call at the end of the input, also where it
+fails. -/
+def eofedP (p : PLexer) : PLexer :=
+  (Lexer.Internal.run p (Lexer.Internal.lexEofStep (H := RecAdapter) (m := Id) (R := Unit)
+    (E := Parser.ParseErrorCause Unit)
+    (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
+    (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast)) : Id _).2
+
+/-- The reader's call on a slice is its lexer's, and a failure carries the handler of the lexer
+that the failed step leaves. -/
 theorem readSlice_ofLexer (lexer : PLexer) (slice : ByteSlice) :
     ((Reader.Internal.ofLexer lexer : RecReader).readSlice slice : Id _) =
       match (Lexer.lexSlice lexer slice : Id _) with
       | .ok lexer' => .ok (Reader.Internal.ofLexer lexer')
-      | .error (error, ()) => .error { error := Reader.ReadError.ofLex error } := by
-  simp only [Reader.readSlice, Reader.Internal.ofLexer]
-  generalize (Lexer.lexSlice lexer slice : Id _) = r
-  rcases r with ⟨e, ⟨⟩⟩ | l <;> rfl
+      | .error (error, ()) => .error ⟨Reader.ReadError.ofLex error,
+          (Lexer.Internal.handler (slicedP lexer slice)).handler⟩ := by
+  simp only [Reader.readSlice, Reader.Internal.ofLexer, Lexer.lexSlice, slicedP]
+  generalize (Lexer.Internal.run lexer (Lexer.Internal.lexSliceStep (H := RecAdapter) (m := Id)
+    (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
+    (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast) slice) : Id _) = r
+  rcases r with ⟨e | held, l⟩ <;> rfl
 
+/-- The reader's call at the end of the input is its lexer's, and a failure carries the handler
+of the lexer that the failed step leaves. -/
 theorem readEof_ofLexer (lexer : PLexer) :
     ((Reader.Internal.ofLexer lexer : RecReader).readEof : Id _) =
       match (Lexer.lexEof lexer : Id _) with
       | .ok (result, lexer') => .ok (result, Reader.Internal.ofLexer lexer')
-      | .error (error, ()) => .error { error := Reader.ReadError.ofLex error } := by
-  simp only [Reader.readEof, Reader.Internal.ofLexer]
-  generalize (Lexer.lexEof lexer : Id _) = r
-  rcases r with ⟨e, ⟨⟩⟩ | ⟨res, l⟩ <;> rfl
+      | .error (error, ()) => .error ⟨Reader.ReadError.ofLex error,
+          (Lexer.Internal.handler (eofedP lexer)).handler⟩ := by
+  simp only [Reader.readEof, Reader.Internal.ofLexer, Lexer.lexEof, eofedP]
+  generalize (Lexer.Internal.run lexer (Lexer.Internal.lexEofStep (H := RecAdapter) (m := Id)
+    (R := Unit) (E := Parser.ParseErrorCause Unit)
+    (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
+    (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast)) : Id _) = r
+  rcases r with ⟨e | flow, l⟩ <;> rfl
+
+/-- The calls the handler of the lexer holds, in order. -/
+def lexerCalls (lexer : PLexer) : List BSmtLibSpec.Parser.Properties.Event :=
+  (Lexer.Internal.handler lexer).handler.reverse
 
 theorem handler_ofLexer (lexer : PLexer) :
     (Reader.Internal.ofLexer lexer : RecReader).handler = (Lexer.Internal.handler lexer).handler :=

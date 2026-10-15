@@ -13,6 +13,7 @@ import all BSmtLib.Lexer.Internal.WRustPort
 namespace BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Whitespace
 
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Steps
+open BSmtLib.Lexer.Internal (CharClass)
 open BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Batch
 open BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Core
 open BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Positions
@@ -26,9 +27,9 @@ variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [
 /-- The position after the run and the batch, for those after its index. -/
 def wsMap (start : Nat) {offset : Nat} {base index : USize} (hb : start ≤ base.toNat)
     (hi : base.toNat ≤ index.toNat)
-    (r : {next : USize × Token.TokenBatch //
+    (r : {next : USize × Token.Internal.TokenBatch //
       index.toNat < next.1.toNat ∧ BSmtLib.Lexer.Internal.Held floor offset base next.1 next.2}) :
-    {next : Nat × Token.TokenBatch //
+    {next : Nat × Token.Internal.TokenBatch //
       ix start index < next.1 ∧
         Lexer.Internal.WRustPort.Held floor offset (ix start base) next.1 next.2} :=
   ⟨(ix start r.val.1, r.val.2), by have := r.property.1; simp only [ix]; omega,
@@ -43,7 +44,7 @@ def WsPost {α : Type} (b e : USize) (r : Option α) (c : ZS floor low) : Prop :
 theorem startWhitespaceFrom_sim (slice : ByteSlice) (h : slice.stop < USize.size)
     (offset : Nat) (base index : USize) (s : Span.Location) (hb : slice.start ≤ base.toNat)
     (hbase : b = base) (hbi : base.toNat ≤ index.toNat) :
-    ∀ k (batch : Token.TokenBatch) (e : USize) (e' : Nat), slice.stop - e.toNat = k →
+    ∀ k (batch : Token.Internal.TokenBatch) (e : USize) (e' : Nat), slice.stop - e.toNat = k →
       ix slice.start e = e' → index.toNat ≤ e.toNat → ∀ hframe hframe' hstart hstart' hend
       hend' hrun hrun' hbatch hbatch',
       SimP (BaseIs b) (WsPost b (inputOf slice h).stop)
@@ -61,20 +62,20 @@ theorem startWhitespaceFrom_sim (slice : ByteSlice) (h : slice.stop < USize.size
   rw [BSmtLib.Lexer.Internal.startWhitespaceFrom, Lexer.Internal.WRustPort.startWhitespaceFrom]
   dsimp only
   have hse : slice.start ≤ e.toNat := by omega
-  obtain ⟨hr1, hr2⟩ := runEnd_eq (h := h) e hse Lexer.CharClass.RUN_NON_LF_WHITESPACE
+  obtain ⟨hr1, hr2⟩ := runEnd_eq (h := h) e hse CharClass.RUN_NON_LF_WHITESPACE
   have hg := get?_eq (h := h) _ hr1
   rw [hr2] at hg
   subst hbase
-  have hle := Lexer.CharClass.le_runEnd (inputOf slice h) e Lexer.CharClass.RUN_NON_LF_WHITESPACE
+  have hle := CharClass.le_runEnd (inputOf slice h) e CharClass.RUN_NON_LF_WHITESPACE
   have hstopz : (inputOf slice h).stop.toNat = slice.stop := inputOf_stop
   have hsz : slice.size = slice.stop - slice.start := rfl
   split
   · rename_i c hc
     have hx := hg ▸ hc
-    have hlt := Lexer.CharClass.Input.lt_stop_of_get? hc
+    have hlt := CharClass.Input.lt_stop_of_get? hc
     rw [inputOf_stop] at hlt
-    have e1 := Lexer.CharClass.toNat_add_one_of_lt (bound := (inputOf slice h).stop)
-      (Lexer.CharClass.Input.lt_stop_of_get? hc)
+    have e1 := CharClass.toNat_add_one_of_lt (bound := (inputOf slice h).stop)
+      (CharClass.Input.lt_stop_of_get? hc)
     split
     · rename_i hnl
       split
@@ -83,12 +84,12 @@ theorem startWhitespaceFrom_sim (slice : ByteSlice) (h : slice.stop < USize.size
         split
         · refine SimP.seq (SimP.congr_g ?_ (markLineFeedAt_sim (H := H) (m := m) (R := R)
             (E := E) (floor := floor) (low := low) slice.start b
-            (Lexer.CharClass.runEnd (inputOf slice h) e Lexer.CharClass.RUN_NON_LF_WHITESPACE)
+            (CharClass.runEnd (inputOf slice h) e CharClass.RUN_NON_LF_WHITESPACE)
                 (by omega)
             (by omega))) fun _ => ?_
           · exact congrArg _ hr2
           exact ih (slice.stop -
-              (Lexer.CharClass.runEnd (inputOf slice h) e Lexer.CharClass.RUN_NON_LF_WHITESPACE +
+              (CharClass.runEnd (inputOf slice h) e CharClass.RUN_NON_LF_WHITESPACE +
                   1).toNat)
             (by omega) batch _ _ rfl (by simp only [ix, idx] at hr2 ⊢; omega) (by omega)
             _ _ _ _ _ _ _ _ _ _
@@ -101,13 +102,12 @@ theorem startWhitespaceFrom_sim (slice : ByteSlice) (h : slice.stop < USize.size
         split
         · exact absurd ‹_› hnl
         · have hlt' : index.toNat <
-              (Lexer.CharClass.runEnd (inputOf slice h) e
-                  Lexer.CharClass.RUN_NON_LF_WHITESPACE).toNat :=
+              (CharClass.runEnd (inputOf slice h) e CharClass.RUN_NON_LF_WHITESPACE).toNat :=
             BSmtLib.Lexer.Internal.lt_whitespaceRunEnd hend.2.1 hrun hc hnl
           refine SimP.seq (pushBorrowed_sim' (H := H) (m := m) (R := R) (E := E)
             (floor := floor) (low := low) b slice batch offset b .whitespace index
-            (Lexer.CharClass.runEnd (inputOf slice h) e Lexer.CharClass.RUN_NON_LF_WHITESPACE) s
-            (Lexer.CharClass.runEnd (inputOf slice h) e Lexer.CharClass.RUN_NON_LF_WHITESPACE) _ _
+            (CharClass.runEnd (inputOf slice h) e CharClass.RUN_NON_LF_WHITESPACE) s
+            (CharClass.runEnd (inputOf slice h) e CharClass.RUN_NON_LF_WHITESPACE) _ _
                 _ _ rfl rfl hr2 hr2
             (by omega) (by omega) ⟨hb, by omega⟩ _ _ _ _ _ _ _ _) fun x => ?_
           obtain ⟨bt, hbt⟩ := x
@@ -153,7 +153,8 @@ theorem startToken_sim' (start : Nat) (offset : Nat) (base position : USize) (ba
 theorem startWhitespace_sim (slice : ByteSlice) (h : slice.stop < USize.size)
     (offset : Nat) (base index : USize) (base' index' : Nat) (eb : ix slice.start base = base')
     (ei : ix slice.start index = index') (hb : slice.start ≤ base.toNat) (hbase : b = base)
-    (hbi : base.toNat ≤ index.toNat) (batch : Token.TokenBatch) (hrun hrun' hframe hframe' hindex
+    (hbi : base.toNat ≤ index.toNat) (batch : Token.Internal.TokenBatch)
+    (hrun hrun' hframe hframe' hindex
       hindex' hbatch hbatch') :
     SimP (BaseIs b) (WsPost b (inputOf slice h).stop)
       (boundMap slice.start (floor := floor) (low := low))

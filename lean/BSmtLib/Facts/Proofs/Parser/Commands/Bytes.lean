@@ -1,7 +1,7 @@
 module
 
 public import BSmtLib.Facts.Proofs.Parser.Term
-import all BSmtLib.Parser.Command.Standard
+import all BSmtLib.Parser.Command.Internal.Standard
 import all BSmtLib.Token
 import all Std.Data.ByteSlice
 import all Init.Data.String.Defs
@@ -19,7 +19,7 @@ data's, and two byte arrays are equal as `==` says exactly when their lists are.
 namespace BSmtLib.Facts.Proofs.Parser.Commands.Bytes
 
 open BSmtLibSpec.Grammar
-open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Parser.Command.Standard.Symbol BSmtLib.Plain
+open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Parser.Command.Internal.Standard.Symbol BSmtLib.Plain
 
 theorem ByteArray.toList_loop_eq (a : ByteArray) (i : Nat) (r : List UInt8) :
     ByteArray.toList.loop a i r = r.reverse ++ a.data.toList.drop i := by
@@ -93,15 +93,15 @@ theorem utf8_2_7 : "2.7".toUTF8.toList = BSmtLibSpec.Regex.chars "2.7" := by
 theorem Symbol.isNot_of_name {s : Nodes.Symbol} (h :
     (Bridge.symbol s).name = BSmtLibSpec.Regex.chars "not") :
     (isNot s) = true := by
-  unfold Parser.Command.Standard.Symbol.isNot
+  unfold Parser.Command.Internal.Standard.Symbol.isNot
   rw [slice_beq_utf8 _ _ utf8_not]
   exact decide_eq_true h
 
 /-- The parser's test for `smt-lib-version` is the spec's. -/
 theorem isVersionKeyword_eq (k : KeywordView) :
-    Parser.Command.Standard.isVersionKeyword k = decide
+    Parser.Command.Internal.Standard.isVersionKeyword k = decide
         (Bridge.keyword k = BSmtLibSpec.Regex.chars "smt-lib-version") := by
-  unfold Parser.Command.Standard.isVersionKeyword
+  unfold Parser.Command.Internal.Standard.isVersionKeyword
   exact slice_beq_utf8 _ _ utf8_smtLibVersion
 
 /-- The library reads the number of a version as the spec does. -/

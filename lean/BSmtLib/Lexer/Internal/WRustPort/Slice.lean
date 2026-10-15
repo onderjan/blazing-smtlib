@@ -1,6 +1,6 @@
 module
 
-public import BSmtLib.Lexer.Helpers
+public import BSmtLib.Lexer.Internal.Helpers
 import all Std.Data.ByteSlice
 
 public section
@@ -8,16 +8,18 @@ public section
 /-!
 Reading a slice by indices, for the lexers of the chain that read their input as the Rust lexer
 does: by `Nat` indices into the slice, where the library's lexer reads the slice's array by
-`USize` positions (`BSmtLib.Lexer.CharClass.Input`). Index 0 is the first byte of the slice.
+`USize` positions (`BSmtLib.Lexer.Internal.CharClass.Input`). Index 0 is the first byte of the
+slice.
 
-The run scans are those of the library (`BSmtLib.Lexer.CharClass.runEnd`, `runEndAll`), with the
+The run scans are those of the library (`BSmtLib.Lexer.Internal.CharClass.runEnd`, `runEndAll`),
+with the
 same tables, over indices.
 -/
 
 namespace BSmtLib.Lexer.Internal.WRustPort.Slice
 
-open BSmtLib.Lexer.CharClass (runFlagsOf endsRun)
-open BSmtLib.Lexer.Helpers (Content)
+open BSmtLib.Lexer.Internal.CharClass (runFlagsOf endsRun)
+open BSmtLib.Lexer.Internal.Helpers (Content)
 
 /-- The byte at the index of the slice, if the index is below its size. -/
 @[inline]

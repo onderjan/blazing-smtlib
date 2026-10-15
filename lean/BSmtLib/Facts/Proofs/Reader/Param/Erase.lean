@@ -111,7 +111,8 @@ theorem calls_cons_call {event : Event} (h : event.isCall = true) (events : List
 
 /-- A call of the recording handler counts the calls of the log and writes one. -/
 theorem erases_call {returns : Returns} (request : Call Recorded returns) :
-    Erases (Parser.call (recordingCall request) : Parser.Quiet.RPM (Recorded.of returns)) := by
+    Erases (Parser.Internal.call (recordingCall request) : Parser.Quiet.RPM
+        (Recorded.of returns)) := by
   constructor
   · intro events
     show (Except.ok (recordedValue returns ((calls events).countP Event.isCall)),

@@ -16,7 +16,7 @@ holds; both runs do the same, with the batches the loops hold.
 namespace BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Whitespace
 
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Relation
-open BSmtLib.Lexer (BATCH_CAPACITY Interrupted)
+open BSmtLib.Lexer.Internal (CharClass)
 open BSmtLib.Lexer.Internal.WRustPort.Slice (get? runEnd)
 open BSmtLib.Lexer.Internal.WRustPort (Ops)
 open BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Held
@@ -32,8 +32,8 @@ variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [
 /-- What the whitespace run gives back: the index after it and the batches held by the loops,
 with the states' batches without tokens; or nothing, where the run reaches the end of the slice
 and the batches are put back into the states. -/
-def WsQ (strict : Bool) {α β : Type} (val : α → Nat × Token.TokenBatch)
-    (val' : β → Nat × Token.TokenBatch)
+def WsQ (strict : Bool) {α β : Type} (val : α → Nat × Token.Internal.TokenBatch)
+    (val' : β → Nat × Token.Internal.TokenBatch)
     (a : Option α) (b : Option β) (s t : Core.St floor low) : Prop :=
   match a, b with
   | none, none => Core.SRb strict s t
@@ -43,7 +43,7 @@ def WsQ (strict : Bool) {α β : Type} (val : α → Nat × Token.TokenBatch)
 omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
 theorem startWhitespaceFrom_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice)
     (offset base index : Nat) (start : Span.Location) :
-    ∀ k (b b' : Token.TokenBatch) («end» : Nat), input.size - «end» = k → Core.HR b b' →
+    ∀ k (b b' : Token.Internal.TokenBatch) («end» : Nat), input.size - «end» = k → Core.HR b b' →
       ∀ hframe hstart hend hrun hbatch hbatch',
       Core.LSim strict (H := H) (m := m) (R := R) (E := E) (floor := floor) (low := low) Core.SR0
         (WsQ strict (·.val) (·.val))
@@ -64,7 +64,7 @@ theorem startWhitespaceFrom_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice)
   · rename_i c h1
     have := Lexer.Internal.WRustPort.Slice.lt_size_of_get? h1
     have hle := Lexer.Internal.WRustPort.Slice.le_runEnd input e
-        Lexer.CharClass.RUN_NON_LF_WHITESPACE
+        CharClass.RUN_NON_LF_WHITESPACE
     refine SimR.dite Iff.rfl (fun hnl _ => ?_) fun hnl _ => ?_
     · exact SimR.seq (Core.markLineFeedAt_sim0 _) (ih _ (by omega) b b' _ rfl hb _ _ _ _ _ _)
     · refine Core.SimR.of_sre fun l ls => SimR.bind
@@ -77,7 +77,7 @@ theorem startWhitespaceFrom_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice)
 
 omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
 theorem startWhitespace_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice)
-    (offset base index : Nat) (b b' : Token.TokenBatch) (hb : Core.HR b b')
+    (offset base index : Nat) (b b' : Token.Internal.TokenBatch) (hb : Core.HR b b')
     (hrun hframe hindex hbatch hbatch') :
     Core.LSim strict (H := H) (m := m) (R := R) (E := E) (floor := floor) (low := low) Core.SR0
       (WsQ strict (·.val) (·.val))

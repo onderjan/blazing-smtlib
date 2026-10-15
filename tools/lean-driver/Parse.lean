@@ -23,10 +23,14 @@ public import Protocol
 public section
 
 open BSmtLib
-open BSmtLib.Token (Version VersionPosture Consume ConsumeFrom Produce SyntaxToken BatchCursor)
+open BSmtLib.Token (Version VersionPosture VersionPostureBuilder Consume ConsumeFrom Produce
+  SyntaxToken BatchCursor)
 open BSmtLib.Lexer (LexError)
 open BSmtLib.Parser (Parse ParseState ParseAdapter ParseErrorCause SyntaxErrorKind ScriptParser
-  CommandParser SortParser TermParser SExprParser CommandOutcome)
+  CommandParser SortParser TermParser SExprParser CommandOutcome SymbolParser KeywordParser
+  StringParser NumeralParser OpenParenParser CloseParenParser IdentParser QualifiedIdentParser
+  ClosedAttributeParser ClosedMultipleAttributeParser PatternParser SortedVarParser PairParser
+  ClosedParser ParenParser ClosedMultipleParser ParenMultipleParser)
 open BSmtLib.Reader (ReadError ReadFailure BufRead BufReader readSmt readSmtFile)
 
 namespace ParseRequests
@@ -486,7 +490,7 @@ partial def readAll {B : Type} [BufRead B IO] (lexer : ops.Lexer) (buf : B) :
   match ← BufRead.fillBuf buf with
   | .error err =>
     -- an empty span at the current location
-    let span := Span.newEmpty (ops.currentLocation lexer)
+    let span := Span.Internal.newEmpty (ops.currentLocation lexer)
     return (.error { cause := .io err, span }, buf)
   | .ok (buffer, buf) =>
     if buffer.size == 0 then
@@ -504,9 +508,9 @@ partial def readAll {B : Type} [BufRead B IO] (lexer : ops.Lexer) (buf : B) :
 def readFile (lexer : ops.Lexer) (path : System.FilePath) :
     IO (Except (ReadError E) (Option R × ops.Lexer)) := do
   match ← (IO.FS.Handle.mk path .read).toBaseIO with
-  | .error err => return .error { cause := .io err, span := Span.newZero }
+  | .error err => return .error { cause := .io err, span := Span.Internal.newZero }
   | .ok file =>
-    let buf := BufReader.new (IO.FS.Stream.ofHandle file) Reader.BUF_READER_CAPACITY
+    let buf := BufReader.new (IO.FS.Stream.ofHandle file) Reader.Internal.BUF_READER_CAPACITY
     let (result, _) ← readAll ops lexer buf
     return result
 
@@ -722,14 +726,8 @@ def applyFeeds {C R E : Type} [Consume C R E] (ops : LexOps C) :
     | .ok (_, lexer) => applyFeeds ops feeds lexer
     | .error err => return some err
 
-/-- The parsers of a category that `drive` runs. -/
-inductive Category where
-  | sort
-  | sExpr
-  | term
-
 /-- Runs the parser over the feeds, with the consumer of `drive`, and writes the last line. -/
-def runDrive {P R : Type} [Parse P Remote IO RemoteError R] (choice : LexerChoice)
+def runDrive {P R : Type} [Parse P Remote IO (Handler.Error Remote) R] (choice : LexerChoice)
     (remote : Remote) (version : Version) (count : Nat) (feeds : List (Option ByteArray))
     (parser : P) (render : R → String) : IO Unit := do
   let unconsumed ← IO.mkRef 0
@@ -741,27 +739,125 @@ def runDrive {P R : Type} [Parse P Remote IO RemoteError R] (choice : LexerChoic
   | some err => remote.write (errorLine (ReadError.ofLex err))
   | none => remote.write s!"ok {← unconsumed.get}"
 
-/- The parsers are driven one by one, so that the code of every lexer over each is compiled in a
-declaration of its own. -/
+/-- A parser that `drive` runs, as the request names it: a parser that takes no inner parser, a
+pair, or a combinator of one inner parser. -/
+inductive Driven where
+  | simple (name : String)
+  | pair (first second : Driven)
+  | wrap (name : String) (inner : Driven)
 
-def driveSort (choice : LexerChoice) (remote : Remote) (version : Version) (count : Nat)
-    (feeds : List (Option ByteArray)) : IO Unit :=
-  runDrive choice remote version count feeds (SortParser.new : SortParser Remote) idField
+/-- What a `drive` request does with the parser it names: run it, its results written by the
+function. -/
+abbrev WithParser :=
+  {P R : Type} → [Parse P Remote IO (Handler.Error Remote) R] → P → (R → String) → IO Unit
 
-def driveSExpr (choice : LexerChoice) (remote : Remote) (version : Version) (count : Nat)
-    (feeds : List (Option ByteArray)) : IO Unit :=
-  runDrive choice remote version count feeds (SExprParser.new : SExprParser Remote) idField
+/-- Gives the parser named by the simple name to `k`, with how its results are written. -/
+def withSimple (k : WithParser) : String → IO Unit
+  | "sort" => k (SortParser.new : SortParser Remote) idField
+  | "s-expr" => k (SExprParser.new : SExprParser Remote) idField
+  | "term" => k (TermParser.new : TermParser Remote) idField
+  | "symbol" => k SymbolParser.new symbolField
+  | "keyword" => k KeywordParser.new fun name =>
+      "x" ++ hex name.asSlice
+  | "string" => k StringParser.new fun content =>
+      "x" ++ hex content.asSlice
+  | "numeral" => k NumeralParser.new fun digits =>
+      "x" ++ hex digits.asSlice
+  | "open-paren" => k OpenParenParser.new fun () => "-"
+  | "close-paren" => k CloseParenParser.new fun () => "-"
+  | "ident" => k IdentParser.new identField
+  | "qualified-ident" => k (QualifiedIdentParser.new : QualifiedIdentParser Remote)
+      fun qualified => s!"{identField qualified.identifier} {optIdField qualified.sort}"
+  | "closed-attribute" => k (ClosedAttributeParser.new : ClosedAttributeParser Remote) idField
+  | "closed-multiple-attribute" =>
+    k (ClosedMultipleAttributeParser.new : ClosedMultipleAttributeParser Remote) idsField
+  | "pattern" => k (PatternParser.new : PatternParser Remote) patternField
+  | "sorted-var" => k (SortedVarParser.new : SortedVarParser Remote) fun (name, sort) =>
+      s!"{symbolField name} {idField sort}"
+  | name => failRequest s!"unsupported parser {name}"
 
-def driveTerm (choice : LexerChoice) (remote : Remote) (version : Version) (count : Nat)
-    (feeds : List (Option ByteArray)) : IO Unit :=
-  runDrive choice remote version count feeds (TermParser.new : TermParser Remote) idField
+/-- The names of the parsers that take no inner parser. -/
+def simpleNames : List String :=
+  ["sort", "s-expr", "term", "symbol", "keyword", "string", "numeral", "open-paren",
+    "close-paren", "ident", "qualified-ident", "closed-attribute", "closed-multiple-attribute",
+    "pattern", "sorted-var"]
 
-/-- Answers `drive`: runs the parser of the category over the feeds. -/
-def drive (choice : LexerChoice) (remote : Remote) : Category → Version → Nat →
-    List (Option ByteArray) → IO Unit
-  | .sort => driveSort choice remote
-  | .sExpr => driveSExpr choice remote
-  | .term => driveTerm choice remote
+/-- The names of the combinators of one inner parser. -/
+def wrapperNames : List String :=
+  ["closed", "paren", "closed-multiple", "paren-multiple"]
+
+/--
+Gives the parser to `k`, with how its results are written: those of a pair are the fields of the
+first result, then those of the second; those of `closed` and `paren` the fields of the inner
+result; those of `closed-multiple` and `paren-multiple` the number of the results, then the
+fields of each.
+-/
+def Driven.with (k : WithParser) : Driven → IO Unit
+  | .simple name => withSimple k name
+  | .pair first second =>
+    first.with fun parser₁ render₁ =>
+      second.with fun parser₂ render₂ =>
+        k (PairParser.new (H := Remote) parser₁ parser₂) fun (one, two) =>
+          s!"{render₁ one} {render₂ two}"
+  | .wrap name inner =>
+    inner.with fun parser render =>
+      match name with
+      | "closed" => k (ClosedParser.new (H := Remote) parser) render
+      | "paren" => k (ParenParser.new (H := Remote) parser) render
+      | "closed-multiple" => k (ClosedMultipleParser.new (H := Remote) parser) (listField render)
+      | "paren-multiple" => k (ParenMultipleParser.new (H := Remote) parser) (listField render)
+      | name => failRequest s!"unsupported parser {name}"
+
+/-- The characters of a name of a parser up to the first `(`, `,` or `)`, and the rest. -/
+def nameAt (chars : List Char) : String × List Char :=
+  let name := chars.takeWhile fun c => c != '(' && c != ',' && c != ')'
+  (String.ofList name, chars.drop name.length)
+
+mutual
+
+/-- The parser named at the start of the characters, and the characters after its name: a
+simple parser by its name, or a combinator applied to its inner parsers, `name(inner,…)`. The
+fuel bounds the nesting. -/
+def readParser : Nat → List Char → Except String (Driven × List Char)
+  | 0, _ => throw "the parser is nested too deeply"
+  | fuel + 1, chars => do
+    let (name, rest) := nameAt chars
+    match rest with
+    | '(' :: rest =>
+      let (inner, rest) ← readArguments fuel rest
+      let rest : List Char ← match rest with
+        | ')' :: rest => pure rest
+        | _ => throw s!"the arguments of {name} are not closed"
+      match name, inner with
+      | "pair", [first, second] => return (.pair first second, rest)
+      | name, [inner] =>
+        if wrapperNames.contains name then return (.wrap name inner, rest)
+        else throw s!"unsupported parser {name}"
+      | name, _ => throw s!"unsupported parser {name} of {inner.length} parsers"
+    | rest =>
+      if simpleNames.contains name then return (.simple name, rest)
+      else throw s!"unsupported parser {name}"
+
+/-- The parsers named at the start of the characters, separated by commas. -/
+def readArguments : Nat → List Char → Except String (List Driven × List Char)
+  | 0, _ => throw "the parser is nested too deeply"
+  | fuel + 1, chars => do
+    let (first, rest) ← readParser fuel chars
+    match rest with
+    | ',' :: rest =>
+      let (others, rest) ← readArguments fuel rest
+      return (first :: others, rest)
+    | rest => return ([first], rest)
+
+end
+
+/-- The parser named in a `drive` request. -/
+def readDriven (name : String) : Except String Driven := do
+  let chars := name.toList
+  match ← readParser (2 * chars.length + 2) chars with
+  | (driven, []) => return driven
+  | (_, rest) => throw s!"unexpected {String.ofList rest} after a parser"
+
 
 /-! ## The requests -/
 
@@ -793,7 +889,8 @@ def readParserChoice (word : String) : Except String ParserChoice := do
       else match limit.toNat? with
         | some limit => pure (some limit)
         | none => throw s!"bad posture {repr word}"
-    return .script { allowed, maxDeclarations }
+    let builder := allowed.foldl (·.addAllowed ·) VersionPostureBuilder.new.clearAllowed
+    return .script (builder.setMaxDeclarations maxDeclarations).build
 
 /-- The feeds of a `drive` request, as those of `lex`. -/
 def readFeeds (words : List String) : Except String (List (Option ByteArray)) :=
@@ -889,16 +986,12 @@ def answer (choice : LexerChoice) (remote : Remote) (session : Option Session)
     | .ok () => remote.write "ok"
     | .error err => remote.write (errorLine err)
   | "drive" :: name :: version :: count :: feeds =>
-    let category ← match name with
-      | "sort" => pure Category.sort
-      | "s-expr" => pure .sExpr
-      | "term" => pure .term
-      | _ => failRequest s!"unsupported parser {name}"
+    let driven ← orFail (readDriven name)
     let version ← orFail (readVersion version)
     let some count := count.toNat?
       | failRequest s!"bad count {repr count}"
     let feeds ← orFail (readFeeds feeds)
-    drive choice remote category version count feeds
+    driven.with (fun parser render => runDrive choice remote version count feeds parser render)
   | _ => failRequest "malformed request"
   return session
 

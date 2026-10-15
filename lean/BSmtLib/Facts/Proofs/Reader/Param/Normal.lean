@@ -137,8 +137,8 @@ theorem storeUnfinishedSymbolRun_sim (input entry offset base index after runEnd
         hrun hbatch) := by
   unfold Internal.storeUnfinishedSymbolRun; lsim
 
-theorem startWhitespaceFrom_sim (hc : Consumers L) (input : CharClass.Input) (offset : Nat)
-    (base index «end» : USize) (start : Span.Location) (batch : Token.TokenBatch)
+theorem startWhitespaceFrom_sim (hc : Consumers L) (input : Internal.CharClass.Input) (offset : Nat)
+    (base index «end» : USize) (start : Span.Location) (batch : Token.Internal.TokenBatch)
     (hframe hstart hend hrun
     hbatch) :
     LSim L (· = ·)
@@ -154,7 +154,7 @@ theorem startWhitespaceFrom_sim (hc : Consumers L) (input : CharClass.Input) (of
 termination_by input.stop.toNat - «end».toNat
 decreasing_by
   all_goals
-    have := CharClass.le_runEnd input «end» CharClass.RUN_NON_LF_WHITESPACE
+    have := Internal.CharClass.le_runEnd input «end» Internal.CharClass.RUN_NON_LF_WHITESPACE
     simp +zetaDelta only at *
     omega
 theorem startWhitespace_sim (hc : Consumers L) (input offset base index batch hrun hframe hindex
@@ -168,9 +168,9 @@ theorem startWhitespace_sim (hc : Consumers L) (input offset base index batch hr
 
 set_option maxHeartbeats 4000000 in
 set_option maxRecDepth 8192 in
-theorem lexNormalFrom_sim (hc : Consumers L) (input : CharClass.Input) (offset : Nat)
+theorem lexNormalFrom_sim (hc : Consumers L) (input : Internal.CharClass.Input) (offset : Nat)
     (base index : USize)
-    (batch : Token.TokenBatch) (hframe hindex hbatch) (origin : USize) (horigin) :
+    (batch : Token.Internal.TokenBatch) (hframe hindex hbatch) (origin : USize) (horigin) :
     LSim L (· = ·)
       (Internal.lexNormalFrom (floor := floor) (low := low) input offset base index batch hframe
           hindex
@@ -181,7 +181,7 @@ theorem lexNormalFrom_sim (hc : Consumers L) (input : CharClass.Input) (offset :
   lsim
   all_goals exact lexNormalFrom_sim hc _ _ _ _ _ _ _ _ _ _
 termination_by input.stop.toNat - index.toNat
-decreasing_by all_goals lsim_omega [CharClass.le_runEnd, CharClass.le_runEndAll]
+decreasing_by all_goals lsim_omega [Internal.CharClass.le_runEnd, Internal.CharClass.le_runEndAll]
 
 end
 

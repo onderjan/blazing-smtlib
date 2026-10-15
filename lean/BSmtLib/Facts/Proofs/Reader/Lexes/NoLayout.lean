@@ -30,7 +30,7 @@ open BSmtLib.Facts.Proofs.Reader.Lexes.Told
 /-- The states of the library's lexer that the chain of lexers relates to a state of the naive
 lexer: a state of the lexer with the batch kept in its state that corresponds to it, one of the
 Rust port that corresponds to that, and one of the naive lexer that corresponds to that. -/
-def ZOK (C : BSmtLibSpec.Lexer.Consumer) (c : BSmtLib.Lexer.LexerCore) : Prop :=
+def ZOK (C : BSmtLibSpec.Lexer.Consumer) (c : BSmtLib.Lexer.Internal.LexerCore) : Prop :=
   ∃ (x : Lexer.Adapters.X1BatchInCore.lexOps.Lexer C)
     (w : Lexer.Adapters.WRustPort.lexOps.Lexer C) (n : Lexer.Internal.VNaive.Core),
     Lexer.X1BatchInCoreLexer.Outer.Rel c x.core ∧ Lexer.WRustPortX1BatchInCore.Calls.LexRel w x ∧
@@ -53,7 +53,7 @@ theorem wLexer_eq (w : Lexer.Adapters.WRustPort.lexOps.Lexer C) :
 /-- A call on a slice that ends below `USize.size`, from a state that the chain relates: it does
 not fail with the adapter's error `none` for a consumer that does not take whitespace and
 comments, and where it does not fail, the chain relates the state after it. -/
-theorem zok_fit (hc : C.concrete = false) {c : BSmtLib.Lexer.LexerCore} (hz : ZOK C c)
+theorem zok_fit (hc : C.concrete = false) {c : BSmtLib.Lexer.Internal.LexerCore} (hz : ZOK C c)
     (l : Lexer.Adapters.Lexer.lexOps.Lexer C) (hl : Lexer.Internal.core l = c)
     (bytes : BSmtLibSpec.Regex.Chars)
     (hs : bytes.toByteArray.toByteSlice.stop < USize.size) (taken : List Handed) :
@@ -140,7 +140,7 @@ theorem zok_chunks (hc : C.concrete = false) (s : BSmtLibSpec.Regex.Chars) (p : 
 
 /-- A call on a slice, from a state that the chain relates: no failure with the adapter's error
 `none`, and where the call does not fail, the chain relates the state after it. -/
-theorem zok_slice (hc : C.concrete = false) {c : BSmtLib.Lexer.LexerCore} (hz : ZOK C c)
+theorem zok_slice (hc : C.concrete = false) {c : BSmtLib.Lexer.Internal.LexerCore} (hz : ZOK C c)
     (l : Lexer.Adapters.Lexer.lexOps.Lexer C) (hl : Lexer.Internal.core l = c)
     (bytes : BSmtLibSpec.Regex.Chars)
     (taken : List Handed) :
@@ -172,7 +172,7 @@ theorem zok_slice (hc : C.concrete = false) {c : BSmtLib.Lexer.LexerCore} (hz : 
 
 /-- The end of the input, from a state that the chain relates: no failure with the adapter's
 error `none`. -/
-theorem zok_eof (hc : C.concrete = false) {c : BSmtLib.Lexer.LexerCore} (hz : ZOK C c)
+theorem zok_eof (hc : C.concrete = false) {c : BSmtLib.Lexer.Internal.LexerCore} (hz : ZOK C c)
     (l : Lexer.Adapters.Lexer.lexOps.Lexer C) (hl : Lexer.Internal.core l = c)
     (taken : List Handed) :
     ∀ e, ((Lexer.Adapters.Lexer.lexOps.lexEofStep l).run taken).1.1 = .error e →
@@ -215,7 +215,7 @@ theorem zok_new (version : Token.Version) :
 
 /-- Every state the library's lexer reaches is related by the chain. -/
 theorem zok_of_reach (hc : C.concrete = false) {version : Token.Version}
-    {c : BSmtLib.Lexer.LexerCore} (h : Reach C version c) : ZOK C c := by
+    {c : BSmtLib.Lexer.Internal.LexerCore} (h : Reach C version c) : ZOK C c := by
   induction h with
   | new => exact zok_new version
   | step _ hok ih => exact (zok_slice hc ih _ rfl _ _).2 _ hok

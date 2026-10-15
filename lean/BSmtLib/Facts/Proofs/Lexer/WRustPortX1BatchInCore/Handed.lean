@@ -22,15 +22,19 @@ theorem coreRel_new (version : Token.Version) (recovers : Bool) :
     Core.CoreRel
       { version, initialVersion := version, state := .normal, discardedFrom := none,
         holding := false, recovers, consumedDepth := 0, lexedDepth := 0, recoveryState := none,
-        tokenStart := Span.Location.initial, tokenContent := Lexer.Helpers.ContentBuffer.empty,
+        tokenStart := Span.Location.initial, tokenContent :=
+            Lexer.Internal.Helpers.ContentBuffer.empty,
             offset := 0,
-        base := 0, line := 0, lineStart := 0, batch := Token.TokenBatch.empty Lexer.BATCH_CAPACITY,
+        base := 0, line := 0, lineStart := 0, batch :=
+            Token.Internal.TokenBatch.empty Lexer.Internal.BATCH_CAPACITY,
         tokenStarted := .inl rfl, batchEnded := Nat.zero_le _ }
       { version, initialVersion := version, state := .normal, discardedFrom := none,
         holding := false, recovers, consumedDepth := 0, lexedDepth := 0, recoveryState := none,
-        tokenStart := Span.Location.initial, tokenContent := Lexer.Helpers.ContentBuffer.empty,
+        tokenStart := Span.Location.initial, tokenContent :=
+            Lexer.Internal.Helpers.ContentBuffer.empty,
             offset := 0,
-        base := 0, line := 0, lineStart := 0, batch := Token.TokenBatch.empty Lexer.BATCH_CAPACITY,
+        base := 0, line := 0, lineStart := 0, batch :=
+            Token.Internal.TokenBatch.empty Lexer.Internal.BATCH_CAPACITY,
         tokenStarted := .inl rfl, batchEnded := Nat.zero_le _ } where
   initialVersion := rfl
   state := rfl

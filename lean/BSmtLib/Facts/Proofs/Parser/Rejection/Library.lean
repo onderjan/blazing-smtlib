@@ -6,8 +6,8 @@ public import BSmtLib.Facts.Proofs.Parser.RefusedRecord
 import all BSmtLib.Parser
 import all BSmtLib.Parser.Category.Combinator
 import all BSmtLib.Parser.Command
-import all BSmtLib.Parser.Command.Function
-import all BSmtLib.Parser.Command.Standard
+import all BSmtLib.Parser.Command.Internal.Function
+import all BSmtLib.Parser.Command.Internal.Standard
 import all BSmtLib.Parser.Script
 import all BSmtLib.Plain
 import all BSmtLib.Token.Reserved
@@ -548,11 +548,11 @@ theorem recAfter_close_fails {parser : ScriptParser (List Event)} {token : Parse
     events) = _
   unfold afterToken
   rw [run_bind_ok h₁, run_bind_ok h₂, run_bind_ok h₃]
-  simp [afterProcessing, Parser.Internal.ParseByToken.step, ScriptParser.step,
-      Parser.Command.commandStep,
-    Parser.Command.Standard.payloadStep, Parser.Command.Function.bodiesStep,
-        Parser.Category.Combinator.ListState.step, hopened, houtside,
-    Parser.syntaxError, show ¬ state.items.size = signatures.size by omega]
+  simp [afterProcessing, Parser.Internal.ParseByToken.step, ScriptParser.Internal.step,
+      Parser.Command.Internal.commandStep,
+    Parser.Command.Internal.Standard.payloadStep, Parser.Command.Internal.Function.bodiesStep,
+        Parser.Category.Combinator.Internal.ListState.step, hopened, houtside,
+    Parser.Internal.syntaxError, show ¬ state.items.size = signatures.size by omega]
   rfl
 
 /-- `library_rejects`, for items of the parser's own type. -/
@@ -816,14 +816,14 @@ def inputOf : Received → Option Parser.Internal.Input
   | .endOfInput => some .endOfInput
   | .token .parenOpen => some .parenOpen
   | .token .parenClose => some .parenClose
-  | .token (.numeral d) => some (.constant (.numeral (NumeralView.newUnchecked (bytesOf d))))
-  | .token (.decimal d) => some (.constant (.decimal (DecimalView.newUnchecked (bytesOf d))))
+  | .token (.numeral d) => some (.constant (.numeral (NumeralView.Internal.newUnchecked (bytesOf d))))
+  | .token (.decimal d) => some (.constant (.decimal (DecimalView.Internal.newUnchecked (bytesOf d))))
   | .token (.hexadecimal d) =>
-    some (.constant (.hexadecimal (HexDigitsView.newUnchecked (bytesOf d))))
-  | .token (.binary d) => some (.constant (.binary (BinDigitsView.newUnchecked (bytesOf d))))
-  | .token (.string c) => some (.constant (.string (StringContentView.newUnchecked (bytesOf c))))
-  | .token (.symbol s) => some (.symbol ⟨SymbolView.newUnchecked (bytesOf s.name), s.quoted⟩)
-  | .token (.keyword k) => some (.keyword (KeywordView.newUnchecked (bytesOf k)))
+    some (.constant (.hexadecimal (HexDigitsView.Internal.newUnchecked (bytesOf d))))
+  | .token (.binary d) => some (.constant (.binary (BinDigitsView.Internal.newUnchecked (bytesOf d))))
+  | .token (.string c) => some (.constant (.string (StringContentView.Internal.newUnchecked (bytesOf c))))
+  | .token (.symbol s) => some (.symbol ⟨SymbolView.Internal.newUnchecked (bytesOf s.name), s.quoted⟩)
+  | .token (.keyword k) => some (.keyword (KeywordView.Internal.newUnchecked (bytesOf k)))
   | .token (.reserved w) => (decodeReserved w).map .reserved
 
 theorem received_inputOf {r : Received} {t : Parser.Internal.Input} (h : inputOf r = some t) :

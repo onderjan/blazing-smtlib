@@ -14,9 +14,9 @@ import all BSmtLib.Parser.Category.SortedVar
 import all BSmtLib.Parser.Category.Term
 import all BSmtLib.Parser.Category.Token
 import all BSmtLib.Parser.Command
-import all BSmtLib.Parser.Command.Datatype
-import all BSmtLib.Parser.Command.Function
-import all BSmtLib.Parser.Command.Standard
+import all BSmtLib.Parser.Command.Internal.Datatype
+import all BSmtLib.Parser.Command.Internal.Function
+import all BSmtLib.Parser.Command.Internal.Standard
 import all BSmtLib.Parser.Script
 import all BSmtLib.Token.SyntaxToken
 
@@ -35,13 +35,25 @@ namespace BSmtLib.Facts.Proofs.Reader.Param.Layout
 
 open BSmtLibSpec.Parser.Properties
 open BSmtLib.Parser
+open BSmtLib.Parser.Internal (PM call syntaxError)
 open BSmtLib.Facts.Proofs.Parser.Cut BSmtLib.Facts.Proofs.Reader.Param.Adapter
 open BSmtLib.Parser.Adapter BSmtLib.Parser.Category.Attribute BSmtLib.Parser.Category.Combinator
+open BSmtLib.Parser.Category.Attribute.Internal
+open BSmtLib.Parser.Category.Combinator.Internal
 open BSmtLib.Parser.Category.Ident BSmtLib.Parser.Category.Pattern
+open BSmtLib.Parser.Category.Ident.Internal
+open BSmtLib.Parser.Category.Pattern.Internal
 open BSmtLib.Parser.Category.QualifiedIdent BSmtLib.Parser.Category.SExpr
+open BSmtLib.Parser.Category.QualifiedIdent.Internal
+open BSmtLib.Parser.Category.SExpr.Internal
 open BSmtLib.Parser.Category.«Sort» BSmtLib.Parser.Category.SortedVar BSmtLib.Parser.Category.Term
-open BSmtLib.Parser.Category.Token BSmtLib.Parser.Command BSmtLib.Parser.Command.Datatype
-open BSmtLib.Parser.Command.Function BSmtLib.Parser.Command.Standard BSmtLib.Parser.Script
+open BSmtLib.Parser.Category.«Sort».Internal
+open BSmtLib.Parser.Category.SortedVar.Internal
+open BSmtLib.Parser.Category.Term.Internal
+open BSmtLib.Parser.Category.Token BSmtLib.Parser.Command BSmtLib.Parser.Command.Internal.Datatype
+open BSmtLib.Parser.Category.Token.Internal
+open BSmtLib.Parser.Command.Internal
+open BSmtLib.Parser.Command.Internal.Function BSmtLib.Parser.Command.Internal.Standard BSmtLib.Parser.Script
 open BSmtLib.Traits
 
 attribute [local instance high] Stop.consumeFrom
@@ -261,8 +273,8 @@ theorem commandStep_layout (version : Token.Version) (self : CommandStateOf LH) 
   cases self <;> dsimp only <;> fails_tac
 
 theorem scriptStep_layout (version : Token.Version) (parser : ScriptParser LH) :
-    Fails (ScriptParser.step (H := LH) (m := Id) version parser .layout) := by
-  unfold ScriptParser.step
+    Fails (ScriptParser.Internal.step (H := LH) (m := Id) version parser .layout) := by
+  unfold ScriptParser.Internal.step
   exact fails_bind (commandStep_layout _ _) _
 
 theorem ofSyntax_layout {b : Token.BatchTag} (cursor : Token.BatchCursor b) (token : Token b)

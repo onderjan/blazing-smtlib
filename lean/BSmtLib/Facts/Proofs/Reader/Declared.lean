@@ -8,6 +8,8 @@ import all BSmtLib.Parser.Script
 import all BSmtLib.Token
 
 @[expose] public section
+open BSmtLib.Parser.Script.Internal
+open BSmtLib.Token.BatchCursor.Internal (remaining)
 
 /-!
 # A handler under a posture is told only versions the posture allows
@@ -37,7 +39,8 @@ open BSmtLib.Facts.Proofs.Reader.Param.Watch (WM consume_run)
 open BSmtLib.Facts.Proofs.Reader.Looser (Good KeepsI readerWith readThrough_looser)
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Proofs.Parser.Cut
 open BSmtLib.Facts.Proofs.Parser.Script BSmtLib.Parser.Adapter BSmtLib.Parser.Command
-open BSmtLib.Parser.Script BSmtLib.Parser.Script.VersionPosture BSmtLib.Traits
+open BSmtLib.Parser.Command.Internal
+open BSmtLib.Parser.Script BSmtLib.Parser.Script.Internal.VersionPosture BSmtLib.Traits
 
 /-- The handler was told only versions the posture allows. -/
 def ToldAllowed (posture : Token.VersionPosture) (events : List Event) : Prop :=
@@ -207,7 +210,7 @@ handler only versions the posture allows and leaves the cursor in such a version
 fails. -/
 theorem paLoop_allowed {strict : Token.VersionPosture} {b : Token.BatchTag} :
     ∀ (n : Nat) (parser : ScriptParser (List Event)) (cursor : Token.BatchCursor b)
-      (handler : List Event), cursor.remaining < n → parser.posture = strict →
+      (handler : List Event), remaining cursor < n → parser.posture = strict →
       strict.allowed.contains cursor.version = true → ToldAllowed strict handler →
       (∃ e, ((paLoop parser cursor).run handler).1.1 = .error e) ∨
         (ToldAllowed strict ((paLoop parser cursor).run handler).2 ∧
@@ -270,7 +273,7 @@ theorem consume_allowedS {strict : Token.VersionPosture} {b : Token.BatchTag}
         strict.allowed.contains ((Token.ConsumeFrom.consume (m := Id) cursor h :
           StateT RecAdapter Id _).run A).1.2.val.version = true) := by
   have e₁ := consume_eq cursor h A
-  have hloop := paLoop_allowed (cursor.remaining + 1) A.parser cursor
+  have hloop := paLoop_allowed (remaining cursor + 1) A.parser cursor
     (startLog A cursor.version) (Nat.lt_succ_self _) hp hv hh
   generalize (Token.ConsumeFrom.consume (m := Id) cursor h : StateT RecAdapter Id _).run A = q
     at e₁ ⊢
@@ -295,7 +298,7 @@ cursor in such a version, unless it fails: from the call of the adapter that sto
 (`consume_allowedS`), and the call from where that stopped. -/
 theorem outN_allowed {strict : Token.VersionPosture} {b : Token.BatchTag} :
     ∀ (n : Nat) (cursor : Token.BatchCursor b) (h : cursor.HasNext) (A : RecAdapter),
-      cursor.remaining < n → A.parser.posture = strict →
+      (remaining cursor) < n → A.parser.posture = strict →
       strict.allowed.contains cursor.version = true →
       ToldAllowed strict (startLog A cursor.version) →
       (∃ e, (outN cursor h A).1.1 = .error e) ∨
@@ -362,7 +365,7 @@ theorem keeps_allowed (strict : Token.VersionPosture) : KeepsI strict (Allowed s
     split
     · exact hh
     · exact toldAllowed_cons (by rw [hcv]; exact hv) hh
-  have hloop := outN_allowed (cursor.remaining + 1) cursor h w.inner (Nat.lt_succ_self _) hp
+  have hloop := outN_allowed (remaining cursor + 1) cursor h w.inner (Nat.lt_succ_self _) hp
     (by rw [hcv]; exact hv) hstart
   have eN : Param.Split.outN cursor h w.inner =
       let x := (Token.ConsumeFrom.consume (m := Id) cursor h : StateT RecAdapter Id _).run w.inner

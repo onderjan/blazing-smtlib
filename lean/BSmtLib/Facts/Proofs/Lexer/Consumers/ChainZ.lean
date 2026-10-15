@@ -35,7 +35,8 @@ section
 variable {consumer : BSmtLibSpec.Lexer.Consumer}
 
 theorem zrun_held {α : Type} (l : Lexer.lexOps.Lexer consumer)
-    (f : BSmtLib.Lexer.InnerM (Answering consumer) AnswerM α) (t : List BSmtLibSpec.Lexer.Handed) :
+    (f : BSmtLib.Lexer.Internal.InnerM (Answering consumer) AnswerM α) (t : List
+        BSmtLibSpec.Lexer.Handed) :
     BSmtLib.Lexer.Internal.held ((BSmtLib.Lexer.Internal.run l f).run t).1.2 =
         BSmtLib.Lexer.Internal.held l := (rfl)
 
@@ -45,13 +46,14 @@ theorem xrun_held {α : Type} (x : X1BatchInCore.lexOps.Lexer consumer)
     ((x.run f).run t).1.2.held = x.held := (rfl)
 
 theorem zrun_bind {α β : Type} (l : Lexer.lexOps.Lexer consumer)
-    (f : BSmtLib.Lexer.InnerM (Answering consumer) AnswerM α)
-    (k : α → BSmtLib.Lexer.InnerM (Answering consumer) AnswerM β) :
+    (f : BSmtLib.Lexer.Internal.InnerM (Answering consumer) AnswerM α)
+    (k : α → BSmtLib.Lexer.Internal.InnerM (Answering consumer) AnswerM β) :
     BSmtLib.Lexer.Internal.run l (f >>= k) = (BSmtLib.Lexer.Internal.run l f >>= fun p =>
         BSmtLib.Lexer.Internal.run p.2 (k p.1)) := (rfl)
 
 theorem zrun_pure {α : Type} (l : Lexer.lexOps.Lexer consumer) (a : α) :
-    BSmtLib.Lexer.Internal.run l (pure a : BSmtLib.Lexer.InnerM (Answering consumer) AnswerM α) =
+    BSmtLib.Lexer.Internal.run l (pure a : BSmtLib.Lexer.Internal.InnerM (Answering consumer)
+        AnswerM α) =
         pure (a, l) := (rfl)
 
 theorem xrun_withHeld {α : Type} (x : X1BatchInCore.lexOps.Lexer consumer)

@@ -101,7 +101,7 @@ theorem causeOf_comp_handler :
 omit [LawfulMonad m] in
 /-- A handler call in a parse is the handler's action, its failure the handler's. -/
 theorem call_eq (action : ExceptT (Traits.Handler.Error H) (StateT H m) α) :
-    Parser.call action = ExceptT.adapt ParseErrorCause.handler action := (rfl)
+    Parser.Internal.call action = ExceptT.adapt ParseErrorCause.handler action := (rfl)
 
 @[simp]
 theorem adaptRun_pure (a : α) :
@@ -129,7 +129,7 @@ theorem adaptRun_lift (x : StateT H m α) :
 theorem adaptRun_call {values : Values} {returns : Returns}
     (h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) values)
     (request : Call values returns) :
-    adaptRun (Traversal.call h request) = Parser.call (h.call request) := by
+    adaptRun (Traversal.call h request) = Parser.Internal.call (h.call request) := by
   simp [adaptRun, Traversal.call, call_eq]
 
 /-- The traversal's token, as the parser's tick of a token standing for it. -/
@@ -182,41 +182,41 @@ open BSmtLibSpec.Facts.Proofs.Parser (Program.callSort Program.callSExpr Program
 @[simp]
 theorem adaptRun_callSort (request : Call (valuesOf H) .sort) :
     adaptRun (α := Traits.Handler.«Sort» H) (Program.callSort h request) =
-      Parser.call (Bridge.callSort h request) := by
+      Parser.Internal.call (Bridge.callSort h request) := by
   unfold Program.callSort Bridge.callSort adaptRun Traversal.call
   exact adapt_adapt _ _ _
 
 @[simp]
 theorem adaptRun_callSExpr (request : Call (valuesOf H) .sExpr) :
     adaptRun (α := Traits.Handler.SExpr H) (Program.callSExpr h request) =
-      Parser.call (Bridge.callSExpr h request) := by
+      Parser.Internal.call (Bridge.callSExpr h request) := by
   unfold Program.callSExpr Bridge.callSExpr adaptRun Traversal.call
   exact adapt_adapt _ _ _
 
 @[simp]
 theorem adaptRun_callAttribute (request : Call (valuesOf H) .attribute) :
     adaptRun (α := Traits.Handler.Attribute H) (Program.callAttribute h request) =
-      Parser.call (Bridge.callAttribute h request) := by
+      Parser.Internal.call (Bridge.callAttribute h request) := by
   unfold Program.callAttribute Bridge.callAttribute adaptRun Traversal.call
   exact adapt_adapt _ _ _
 
 @[simp]
 theorem adaptRun_callTerm (request : Call (valuesOf H) .term) :
     adaptRun (α := Traits.Handler.Term H) (Program.callTerm h request) =
-      Parser.call (Bridge.callTerm h request) := by
+      Parser.Internal.call (Bridge.callTerm h request) := by
   unfold Program.callTerm Bridge.callTerm adaptRun Traversal.call
   exact adapt_adapt _ _ _
 
 @[simp]
 theorem adaptRun_callScope (request : Call (valuesOf H) .scope) :
     adaptRun (α := Traits.Handler.Scope H) (Program.callScope h request) =
-      Parser.call (Bridge.callScope h request) := by
+      Parser.Internal.call (Bridge.callScope h request) := by
   unfold Program.callScope Bridge.callScope adaptRun Traversal.call
   exact adapt_adapt _ _ _
 
 @[simp]
 theorem adaptRun_callUnit (request : Call (valuesOf H) .nothing) :
-    adaptRun (Program.callUnit h request) = Parser.call (Bridge.callUnit h request) := by
+    adaptRun (Program.callUnit h request) = Parser.Internal.call (Bridge.callUnit h request) := by
   unfold Program.callUnit Bridge.callUnit adaptRun Traversal.call
   exact adapt_adapt _ _ _
 

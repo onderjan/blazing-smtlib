@@ -2,8 +2,8 @@ module
 
 public import BSmtLib.Facts.Proofs.Parser.Commands.Declarations
 import all BSmtLib.Parser.Category.Combinator
-import all BSmtLib.Parser.Command.Function
-import all BSmtLib.Parser.Command.Standard
+import all BSmtLib.Parser.Command.Internal.Function
+import all BSmtLib.Parser.Command.Internal.Standard
 import all BSmtLib.Parser.Category.Token
 
 @[expose] public section
@@ -23,12 +23,12 @@ first token's arrival (`term_runs_first_init`).
 namespace BSmtLib.Facts.Proofs.Parser.Commands.FunsRec
 
 open BSmtLibSpec.Grammar
-open BSmtLib.Parser (PM)
-open BSmtLib.Parser.Command.Standard (Payload FinalCall payloadStep finalCall)
+open BSmtLib.Parser.Internal (PM)
+open BSmtLib.Parser.Command.Internal.Standard (Payload FinalCall payloadStep finalCall)
 open BSmtLib.Parser.Command (CommandOutcome)
-open BSmtLib.Parser.Category.Combinator (ListState)
-open BSmtLib.Parser.Category.Term (TermState)
-open BSmtLib.Parser.Command.Function (bodyStep bodiesStep bodiesArrive functionDecStep)
+open BSmtLib.Parser.Category.Combinator.Internal (ListState)
+open BSmtLib.Parser.Category.Term.Internal (TermState)
+open BSmtLib.Parser.Command.Internal.Function (bodyStep bodiesStep bodiesArrive functionDecStep)
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Parser.Adapters.Run
 open BSmtLib.Facts.Proofs.Parser.Commands.Elements
 open BSmtLib.Facts.Proofs.Parser.Commands.Elements.Runs BSmtLib.Facts.Proofs.Parser.Commands.Frame
@@ -49,12 +49,12 @@ variable {points : Points (StateT H m)} {version : Token.Version}
 variable {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
 
 /-- The list of bodies between bodies, after `found` of them. -/
-abbrev bodiesBetween (found : Nat) : ListState (Parser.Category.Term.TermStateOf H) Unit :=
+abbrev bodiesBetween (found : Nat) : ListState (Parser.Category.Term.Internal.TermStateOf H) Unit :=
   ListState.between .init (Array.replicate found ())
 
 /-- The list of bodies inside a body, after `found` of them. -/
-abbrev bodiesInside (found : Nat) (state : Parser.Category.Term.TermStateOf H) :
-    ListState (Parser.Category.Term.TermStateOf H) Unit :=
+abbrev bodiesInside (found : Nat) (state : Parser.Category.Term.Internal.TermStateOf H) :
+    ListState (Parser.Category.Term.Internal.TermStateOf H) Unit :=
   { opened := true, outside := false, inner := state, items := Array.replicate found () }
 
 /-- Two runs one after the other, the second for values of the first program's length only. -/
@@ -89,7 +89,7 @@ theorem replicate_push (found : Nat) :
 
 omit [LawfulMonad m] in
 /-- Inside a body, the bodies parser steps as the body parser; at its end, it is between bodies. -/
-theorem bodiesStep_inside (count found : Nat) (state : Parser.Category.Term.TermStateOf H)
+theorem bodiesStep_inside (count found : Nat) (state : Parser.Category.Term.Internal.TermStateOf H)
     (token : Parser.Internal.Input) :
     bodiesStep count version (bodiesInside found state) token =
       bodyStep version state token >>= Parser.Internal.Step.wrap (bodiesInside found)
@@ -110,10 +110,10 @@ theorem bodiesStep_between (count found : Nat) (token : Parser.Internal.Input)
     (hfits : found < count) :
     bodiesStep count version (bodiesBetween found) token =
       bodiesStep count version (bodiesInside found
-          (TermState.init : Parser.Category.Term.TermStateOf H))
+          (TermState.init : Parser.Category.Term.Internal.TermStateOf H))
         token := by
   have hnot : ¬ count ≤ found := by omega
-  have hstep : ListState.step (TermState.init : Parser.Category.Term.TermStateOf H)
+  have hstep : ListState.step (TermState.init : Parser.Category.Term.Internal.TermStateOf H)
       (bodyStep version)
       (some count) (bodiesBetween found) token =
       ListState.step TermState.init (bodyStep version) (some count)
@@ -126,7 +126,7 @@ omit [LawfulMonad m] in
 /-- Between bodies, the `)` ends them. -/
 theorem bodiesStep_close (count found : Nat) :
     bodiesStep count version (bodiesBetween found : ListState
-        (Parser.Category.Term.TermStateOf H) Unit)
+        (Parser.Category.Term.Internal.TermStateOf H) Unit)
         .parenClose =
       pure (.done (Array.replicate found ())) := by
   simp [bodiesStep, ListState.step, ListState.between]
@@ -138,7 +138,7 @@ theorem bodiesArrive_between (signatures : Array (Nodes.Signature (Traits.Handle
     {signature : Nodes.Signature (Traits.Handler.«Sort» H)}
     (hsignature : signatures[found]? = some signature) :
     bodiesArrive signatures (bodiesBetween found) token =
-      Parser.call (Traits.CommandHandler.startRecursiveBody signature) := by
+      Parser.Internal.call (Traits.CommandHandler.startRecursiveBody signature) := by
   simp only [bodiesArrive, ListState.between, Array.size_replicate, Bool.and_self, ↓reduceIte,
     hsignature]
 
@@ -148,18 +148,18 @@ theorem body_runs (hA : Agrees h) (signature : Nodes.Signature (Traits.Handler.�
     (body : Tree.Term) (hvalid : body.Valid
         (Bridge.version version)) {tokens : List Parser.Internal.Input}
     (hs : Stands tokens body.tokens) :
-    RunsFirst points (Parser.call (Traits.CommandHandler.startRecursiveBody signature))
+    RunsFirst points (Parser.Internal.call (Traits.CommandHandler.startRecursiveBody signature))
       (bodyStep version) TermState.init tokens
       (do
         let result ← adaptRun (Traversal.term points h body
           (Program.callUnit h (.startRecursiveBody (Bridge.signature signature))))
-        Parser.call (Traits.CommandHandler.endRecursiveBody result))
+        Parser.Internal.call (Traits.CommandHandler.endRecursiveBody result))
       fun _ => pure (.done ()) := by
   have hruns := term_runs_first_init (points := points) hA.toTermAgrees body hvalid hs
     (Program.callUnit h (.startRecursiveBody (Bridge.signature signature)))
   rw [adaptRun_callUnit, ← hA.startRecursiveBody] at hruns
   have hembed := RunsFirst.embed (outer := bodyStep version) id
-    (fun body => Parser.call (Traits.CommandHandler.endRecursiveBody body) >>=
+    (fun body => Parser.Internal.call (Traits.CommandHandler.endRecursiveBody body) >>=
       fun _ => pure (.done ()))
     (fun state token => by
       simp only [bodyStep]
@@ -244,11 +244,11 @@ theorem defineFunsRec_payload (hA : Agrees h) (declarations : List Tree.Function
       hA.toTermAgrees) declarations hdeclarations hdeclarationInner (by simp)
   have hdeclarationsPayload := Runs.bind_next (Runs.congr_length
       (Runs.embedA (outer := payloadStep version)
-    (outerArrival := Parser.Command.Standard.payloadArrive)
+    (outerArrival := Parser.Command.Internal.Standard.payloadArrive)
     Payload.defineFunsRecDeclarations
     (fun signatures => do
-      if signatures.isEmpty then Parser.syntaxError .emptyFunctionSignatures
-      Parser.call (Traits.CommandHandler.startDefineFunsRec signatures)
+      if signatures.isEmpty then Parser.Internal.syntaxError .emptyFunctionSignatures
+      Parser.Internal.call (Traits.CommandHandler.startDefineFunsRec signatures)
       return .more (.defineFunsRecBodies signatures (ListState.paren .init)))
     (by
       intro state token
@@ -258,7 +258,7 @@ theorem defineFunsRec_payload (hA : Agrees h) (declarations : List Tree.Function
       cases step <;> simp [Parser.Internal.Step.wrap]) hsignaturesRuns)
       (HasLength.after (HasLength.bind_pure hsignaturesLength _) _)
       (next' := fun found =>
-        (Parser.call (Traits.CommandHandler.startDefineFunsRec
+        (Parser.Internal.call (Traits.CommandHandler.startDefineFunsRec
           (found : List (Nodes.Signature (Traits.Handler.«Sort» H))).toArray) >>=
             fun _ => pure found) >>=
         fun found => pure (.more (.defineFunsRecBodies found.toArray (ListState.paren .init))))
@@ -269,7 +269,7 @@ theorem defineFunsRec_payload (hA : Agrees h) (declarations : List Tree.Function
   have hbodiesList : ∀ found : List (Nodes.Signature (Traits.Handler.«Sort» H)),
       found.length = bodies.length →
       Runs points (bodiesStep found.toArray.size version)
-        (ListState.paren (TermState.init : Parser.Category.Term.TermStateOf H))
+        (ListState.paren (TermState.init : Parser.Category.Term.Internal.TermStateOf H))
         (.parenOpen :: (bodyInner ++ [.parenClose]))
         (do
           tick points .parenOpen
@@ -281,7 +281,7 @@ theorem defineFunsRec_payload (hA : Agrees h) (declarations : List Tree.Function
       [.parenOpen] ++ (bodyInner ++ [.parenClose]) by rfl]
     refine (Runs.append (middle := fun _ => bodiesBetween 0)
       (Runs.token_moreA (by simp [bodiesStep, ListState.step, ListState.paren,
-          Parser.Category.Token.expectOpen,
+          Parser.Category.Token.Internal.expectOpen,
         ListState.between])) fun _ =>
       Runs.append (middle := fun _ => bodiesBetween found.toArray.size)
         (bodies_runs hA found.toArray bodies hbodies hbodyInner 0 (by simp [hfound])) fun _ =>
@@ -301,10 +301,10 @@ theorem defineFunsRec_payload (hA : Agrees h) (declarations : List Tree.Function
         fun _ => pure (.more (.closing .endDefineFunsRec)) := by
     intro found hfound
     exact (Runs.embedA (outer := payloadStep version)
-        (outerArrival := Parser.Command.Standard.payloadArrive)
+        (outerArrival := Parser.Command.Internal.Standard.payloadArrive)
       (Payload.defineFunsRecBodies found.toArray)
       (fun bodies => do
-        if bodies.size != found.toArray.size then Parser.syntaxError .expectedFunctionBody
+        if bodies.size != found.toArray.size then Parser.Internal.syntaxError .expectedFunctionBody
         return .more (.closing .endDefineFunsRec))
       (by
         intro state token

@@ -1,7 +1,7 @@
 module
 
 public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Normal.Basic
-import all BSmtLib.Lexer.Helpers
+import all BSmtLib.Lexer.Internal.Helpers
 import all BSmtLib.Lexer.Internal.VNaive
 import all BSmtLib.Lexer.Internal.WRustPort
 import all BSmtLib.Lexer.Internal.WRustPort.Slice
@@ -17,6 +17,7 @@ The step of the Rust port's normal state at the hash that starts a hexadecimal o
 namespace BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Normal.Hash
 
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Bytes
+open BSmtLib.Lexer.Internal (CharClass)
 open BSmtLib.Lexer.Internal.WRustPort (lexNormalFrom FastState Frame Held Past)
 open BSmtLib.Lexer.Internal.WRustPort.Slice (get? get)
 open BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Agree
@@ -45,8 +46,8 @@ theorem normalSpec_hash (v : Token.Version) (input : ByteSlice) (offset base : N
     (ih : ∀ index, input.size - index < n → NormalSpec C v hd iv input offset base hframe index)
     (hn : input.size - index < n + 1)
     {c₀ : UInt8} (hget₀ : get? input index = some c₀) (hc40₀ : c₀ ≠ 40) (hc41₀ : c₀ ≠ 41)
-    (hfoff₀ : (Lexer.Helpers.fastFlags c₀ &&& Lexer.Helpers.FAST_ON != 0) = false)
-    (hst₀ : Lexer.Helpers.startOf c₀ = .hash) :
+    (hfoff₀ : (Lexer.Internal.Helpers.fastFlags c₀ &&& Lexer.Internal.Helpers.FAST_ON != 0) = false)
+    (hst₀ : Lexer.Internal.Helpers.startOf c₀ = .hash) :
     NormalSpec C v hd iv input offset base hframe index := by
   intro batch locals hindex hbatch origin horigin s coll held location hfix hoff hbase
     hline hlineStart hnormal hloc hheld hbytes
@@ -72,7 +73,7 @@ theorem normalSpec_hash (v : Token.Version) (input : ByteSlice) (offset base : N
   · intro hfast; rw [hfoff₀] at hfast; cases hfast
   -- the slow path
   intro hslow
-  have hfoff : (Lexer.Helpers.fastFlags c &&& Lexer.Helpers.FAST_ON != 0) = false
+  have hfoff : (Lexer.Internal.Helpers.fastFlags c &&& Lexer.Internal.Helpers.FAST_ON != 0) = false
       := by simpa using hslow
   obtain ⟨hl1, hl2, hl3⟩ := id hloc
   refine wp_store hline hlineStart ?_
@@ -102,7 +103,7 @@ theorem normalSpec_hash (v : Token.Version) (input : ByteSlice) (offset base : N
       obtain ⟨radix, hadv, h10', hflag, hstate, htyp, hnotr⟩ : ∃ radix : Radix,
           advance C.concrete ⟨.hash, location, .empty⟩ (location.afterByte 35) input[index + 1] =
             .pending ⟨.digits radix, location, .empty⟩ ∧ input[index + 1] ≠ 10 ∧
-          (∀ c, Lexer.CharClass.endsRun c run.flag = !radix.allows c) ∧
+          (∀ c, CharClass.endsRun c run.flag = !radix.allows c) ∧
           (∀ (p : Pending) start content, p.mode = .digits radix → p.start = start →
             p.content = content → TokenAgrees v C.concrete run.state start content p) ∧
           run.tokenType = radix.category ∧ run.emptyError ≠ .unexpectedTrailingToken := by
@@ -180,7 +181,8 @@ theorem normalSpec_hash (v : Token.Version) (input : ByteSlice) (offset base : N
             (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1 + 1) run.flag) h1 h2).size buf =
               Lexer.Internal.WRustPort.Slice.runEnd input (index + 1 + 1) run.flag -
                   (index + 1 + 1) := fun _ _ _ => by
-          simp only [Lexer.Internal.WRustPort.Slice.borrow, Lexer.Helpers.Content.size]; omega
+          simp only [Lexer.Internal.WRustPort.Slice.borrow,
+              Lexer.Internal.Helpers.Content.size]; omega
         apply WP.wp_ite
         · -- no digit: the literal fails
           intro hempty

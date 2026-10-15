@@ -23,12 +23,10 @@ namespace BSmtLib.Facts.Proofs.Parser.Rejection.Parts
 open BSmtLibSpec.Grammar
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Parser.Traversal
-open BSmtLib.Parser (PM)
-open BSmtLib.Parser.Category.Pattern (PatternState)
-open BSmtLib.Parser.Category.QualifiedIdent (QualIdentState qualIdentStep)
-open BSmtLib.Parser.Category.SortedVar (SortedVarState sortedVarStep)
-open BSmtLib.Parser.Category.Combinator (ListState)
-open BSmtLib.Parser.Category.Sort (sortStep)
+open BSmtLib.Parser.Category.Pattern.Internal (PatternState)
+open BSmtLib.Parser.Category.QualifiedIdent.Internal (QualIdentState qualIdentStep)
+open BSmtLib.Parser.Category.SortedVar.Internal (SortedVarState sortedVarStep)
+open BSmtLib.Parser.Category.Combinator.Internal (ListState)
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Proofs.Parser.Rejection.Basic
 open BSmtLib.Facts.Proofs.Parser.Rejection.«Sort»
 
@@ -234,7 +232,7 @@ theorem qualIdentStep_advances (version : Token.Version) :
       refine Sound.pure fun _ => ⟨fun u hu => ?_, qualRem_nonempty _ _⟩
       obtain ⟨a, b, ha, hb, rfl⟩ := hu
       refine cat_intro' hr (cat_intro' ?_ hb rfl) rfl
-      simpa [sortRem, Parser.Category.«Sort».SortState.init] using ha
+      simpa [sortRem, Parser.Category.«Sort».Internal.SortState.init] using ha
   | sort identifier sort =>
     simp only [qualIdentStep]
     refine Sound.bind (sortStep_advances version sort token item hitem hlex) fun r hr => ?_
@@ -247,7 +245,8 @@ theorem qualIdentStep_advances (version : Token.Version) :
     | done handled =>
       exact Sound.pure fun _ => ⟨fun u hu => cat_intro' hr hu rfl, qualRem_nonempty _ _⟩
   | close identifier handled =>
-    cases token <;> simp only [qualIdentStep, Parser.Category.Token.expectClose, pure_bind] <;> try
+    cases token <;> simp only [qualIdentStep, Parser.Category.Token.Internal.expectClose,
+        pure_bind] <;> try
         fail_step
     item_of hitem
     exact Sound.pure fun _ => tok_intro _
@@ -294,21 +293,24 @@ theorem sortedVarStep_advances (version : Token.Version) :
   intro state token item hitem hlex
   cases state with
   | start =>
-    cases token <;> simp only [sortedVarStep, Parser.Category.Token.expectOpen, pure_bind] <;> try
+    cases token <;> simp only [sortedVarStep, Parser.Category.Token.Internal.expectOpen,
+        pure_bind] <;> try
         fail_step
     item_of hitem
     refine Sound.pure fun _ => ⟨fun u hu => ?_, sortedVarRem_nonempty _ _⟩
     obtain ⟨_, _, ⟨name, rfl⟩, ⟨s, _, ⟨sort, hsort, rfl⟩, rfl, rfl⟩, rfl⟩ := hu
     exact ⟨⟨name, sort⟩, hsort, by simp [Tree.SortedVar.tokens, paren, toks]⟩
   | opened =>
-    cases token <;> simp only [sortedVarStep, Parser.Category.Token.expectSymbol, bind_pure_comp]
+    cases token <;> simp only [sortedVarStep, Parser.Category.Token.Internal.expectSymbol,
+        bind_pure_comp]
         <;>
       try fail_step
     item_of hitem
     refine Sound.pure fun _ => ⟨fun u hu => ?_, sortedVarRem_nonempty _ _⟩
     obtain ⟨a, b, ha, hb, rfl⟩ := hu
     exact cat_intro' (symbolLang_intro _)
-      (cat_intro' (by simpa [sortRem, Parser.Category.«Sort».SortState.init] using ha) hb rfl) rfl
+      (cat_intro' (by simpa [sortRem,
+          Parser.Category.«Sort».Internal.SortState.init] using ha) hb rfl) rfl
   | sort symbol sort =>
     simp only [sortedVarStep]
     refine Sound.bind (sortStep_advances version sort token item hitem hlex) fun r hr => ?_
@@ -321,7 +323,8 @@ theorem sortedVarStep_advances (version : Token.Version) :
     | done handled =>
       exact Sound.pure fun _ => ⟨fun u hu => cat_intro' hr hu rfl, sortedVarRem_nonempty _ _⟩
   | close symbol handled =>
-    cases token <;> simp only [sortedVarStep, Parser.Category.Token.expectClose, pure_bind] <;> try
+    cases token <;> simp only [sortedVarStep, Parser.Category.Token.Internal.expectClose,
+        pure_bind] <;> try
         fail_step
     item_of hitem
     exact Sound.pure fun _ => tok_intro _
@@ -485,7 +488,7 @@ theorem listStep_implies {σ ρ : Type} (version : Token.Version) (init : σ)
   simp only [ListState.step]
   cases opened with
   | false =>
-    cases token <;> simp only [Parser.Category.Token.expectOpen, pure_bind, Bool.not_false,
+    cases token <;> simp only [Parser.Category.Token.Internal.expectOpen, pure_bind, Bool.not_false,
         ite_true] <;>
       try fail_step
     item_of hitem

@@ -24,6 +24,7 @@ with the other (`lexing_flagged`, from step 1, `lexSliceStep_sim` and `lexEofSte
 namespace BSmtLib.Facts.Proofs.Reader.Param.Flagged
 
 open BSmtLib.Lexer
+open BSmtLib.Lexer.Internal (BATCH_CAPACITY Stop Interrupted Failure LexerCore InnerM StepM LexM)
 open BSmtLib.Facts.Lexer.Adapters BSmtLib.Facts.Proofs.Lexer.Consumers.AlikeF
 open BSmtLib.Facts.Proofs.Reader.Param.Basic BSmtLib.Facts.Proofs.Reader.Param.Calls
 open BSmtLib.Facts.Proofs.Reader.Param.HandOver BSmtLib.Lexer.Error

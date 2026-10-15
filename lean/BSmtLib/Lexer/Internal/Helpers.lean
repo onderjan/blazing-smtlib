@@ -1,6 +1,6 @@
 module
 
-public import BSmtLib.Lexer.CharClass
+public import BSmtLib.Lexer.Internal.CharClass
 public import BSmtLib.Lexer.Error
 public import BSmtLib.Token
 import all Init.Data.Array.Basic
@@ -10,7 +10,7 @@ public section
 
 open BSmtLib.Lexer.Error
 
-namespace BSmtLib.Lexer.Helpers
+namespace BSmtLib.Lexer.Internal.Helpers
 
 /-- What a byte does in the normal state. -/
 inductive Start where
@@ -358,4 +358,4 @@ def last? (self : Content) (stored : ContentBuffer) : Option UInt8 :=
 
 end Content
 
-end BSmtLib.Lexer.Helpers
+end BSmtLib.Lexer.Internal.Helpers

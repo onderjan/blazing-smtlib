@@ -15,6 +15,7 @@ The step of the Rust port's normal state at the digit that starts a numeral or a
 namespace BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Normal.Digits
 
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Bytes
+open BSmtLib.Lexer.Internal (CharClass)
 open BSmtLib.Lexer.Internal.WRustPort (lexNormalFrom FastState Frame Held Past)
 open BSmtLib.Lexer.Internal.WRustPort.Slice (get? get)
 open BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Agree
@@ -75,8 +76,8 @@ theorem normalSpec_digits (v : Token.Version) (input : ByteSlice) (offset base :
     (ih : ∀ index, input.size - index < n → NormalSpec C v hd iv input offset base hframe index)
     (hn : input.size - index < n + 1)
     {c₀ : UInt8} (hget₀ : get? input index = some c₀) (hc40₀ : c₀ ≠ 40) (hc41₀ : c₀ ≠ 41)
-    (hfoff₀ : (Lexer.Helpers.fastFlags c₀ &&& Lexer.Helpers.FAST_ON != 0) = false)
-    (hst₀ : Lexer.Helpers.startOf c₀ = .digit) :
+    (hfoff₀ : (Lexer.Internal.Helpers.fastFlags c₀ &&& Lexer.Internal.Helpers.FAST_ON != 0) = false)
+    (hst₀ : Lexer.Internal.Helpers.startOf c₀ = .digit) :
     NormalSpec C v hd iv input offset base hframe index := by
   intro batch locals hindex hbatch origin horigin s coll held location hfix hoff hbase
     hline hlineStart hnormal hloc hheld hbytes
@@ -102,7 +103,7 @@ theorem normalSpec_digits (v : Token.Version) (input : ByteSlice) (offset base :
   · intro hfast; rw [hfoff₀] at hfast; cases hfast
   -- the slow path
   intro hslow
-  have hfoff : (Lexer.Helpers.fastFlags c &&& Lexer.Helpers.FAST_ON != 0) = false
+  have hfoff : (Lexer.Internal.Helpers.fastFlags c &&& Lexer.Internal.Helpers.FAST_ON != 0) = false
       := by simpa using hslow
   obtain ⟨hl1, hl2, hl3⟩ := id hloc
   refine wp_store hline hlineStart ?_
@@ -122,7 +123,7 @@ theorem normalSpec_digits (v : Token.Version) (input : ByteSlice) (offset base :
     apply WP.wp_bind; apply WP.wp_modifyCore
     apply WP.wp_bind; apply WP.wp_modifyCore
     apply WP.wp_pure
-    have hE : Lexer.Internal.WRustPort.Slice.runEnd input (index + 1) Lexer.CharClass.RUN_DIGIT =
+    have hE : Lexer.Internal.WRustPort.Slice.runEnd input (index + 1) CharClass.RUN_DIGIT =
         runEnd input isDigit (index + 1) := runEnd_eq endsRun_digit _ _
     have hle := le_runEnd input isDigit (index + 1)
     have hle' := runEnd_le input isDigit (index + 1) hi
@@ -153,18 +154,19 @@ theorem normalSpec_digits (v : Token.Version) (input : ByteSlice) (offset base :
       rfl
     intro hz
     have hz' : c = 48 → Lexer.Internal.WRustPort.Slice.runEnd input
-        (index + 1) Lexer.CharClass.RUN_DIGIT = index + 1 := by
+        (index + 1) CharClass.RUN_DIGIT = index + 1 := by
       intro h0
       simp only [h0, beq_self_eq_true, Bool.true_and, decide_eq_true_eq] at hz
       omega
     have hA : feedFrom v C.concrete input .idle location index =
         feedFrom v C.concrete input
           (.token ⟨.numeral (c == 48), location, bytesOf input index
-            (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1) Lexer.CharClass.RUN_DIGIT)⟩)
+            (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1)
+                CharClass.RUN_DIGIT)⟩)
           (afterColumns location
             (Lexer.Internal.WRustPort.Slice.runEnd input
-                (index + 1) Lexer.CharClass.RUN_DIGIT - index))
-          (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1) Lexer.CharClass.RUN_DIGIT) := by
+                (index + 1) CharClass.RUN_DIGIT - index))
+          (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1) CharClass.RUN_DIGIT) := by
       rw [feedFrom_step hi (byteStep_idle_pending v C.concrete hstart), prep_nil]
       by_cases hz0 : c = 48
       · have he := hz' hz0
@@ -190,48 +192,50 @@ theorem normalSpec_digits (v : Token.Version) (input : ByteSlice) (offset base :
         intro hdot
         have hdot' : next = 46 := by simpa using hdot
         have hF : Lexer.Internal.WRustPort.Slice.runEnd input
-            (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1) Lexer.CharClass.RUN_DIGIT + 1)
-                Lexer.CharClass.RUN_DIGIT =
+            (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1)
+                CharClass.RUN_DIGIT + 1)
+                CharClass.RUN_DIGIT =
             runEnd input isDigit
               (Lexer.Internal.WRustPort.Slice.runEnd input
-                  (index + 1) Lexer.CharClass.RUN_DIGIT + 1) :=
+                  (index + 1) CharClass.RUN_DIGIT + 1) :=
           runEnd_eq endsRun_digit _ _
         have hlf := le_runEnd input isDigit
-          (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1) Lexer.CharClass.RUN_DIGIT + 1)
+          (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1) CharClass.RUN_DIGIT + 1)
         have hlf' := runEnd_le input isDigit
-          (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1) Lexer.CharClass.RUN_DIGIT + 1)
+          (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1) CharClass.RUN_DIGIT + 1)
               hEs
         have hstopF := fun h => runEnd_stop input isDigit
-          (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1) Lexer.CharClass.RUN_DIGIT + 1) h
+          (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1) CharClass.RUN_DIGIT + 1) h
         have hmemF := runEnd_mem input isDigit
-          (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1) Lexer.CharClass.RUN_DIGIT + 1)
+          (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1) CharClass.RUN_DIGIT + 1)
         have hB : feedFrom v C.concrete input .idle location index =
             feedFrom v C.concrete input
               (.token ⟨.fraction (false || decide
                   (Lexer.Internal.WRustPort.Slice.runEnd input
-                      (index + 1) Lexer.CharClass.RUN_DIGIT + 1 <
+                      (index + 1) CharClass.RUN_DIGIT + 1 <
                     runEnd input isDigit
                       (Lexer.Internal.WRustPort.Slice.runEnd input
-                          (index + 1) Lexer.CharClass.RUN_DIGIT + 1))),
+                          (index + 1) CharClass.RUN_DIGIT + 1))),
                 location, bytesOf input index (runEnd input isDigit
                   (Lexer.Internal.WRustPort.Slice.runEnd input
-                      (index + 1) Lexer.CharClass.RUN_DIGIT + 1))⟩)
+                      (index + 1) CharClass.RUN_DIGIT + 1))⟩)
               (afterColumns location (runEnd input isDigit
                 (Lexer.Internal.WRustPort.Slice.runEnd input
-                    (index + 1) Lexer.CharClass.RUN_DIGIT + 1) - index))
+                    (index + 1) CharClass.RUN_DIGIT + 1) - index))
               (runEnd input isDigit
                 (Lexer.Internal.WRustPort.Slice.runEnd input
-                    (index + 1) Lexer.CharClass.RUN_DIGIT + 1)) := by
+                    (index + 1) CharClass.RUN_DIGIT + 1)) := by
           have hadv : advance C.concrete ⟨.numeral (c == 48), location, bytesOf input index
-              (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1) Lexer.CharClass.RUN_DIGIT)⟩
+              (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1)
+                  CharClass.RUN_DIGIT)⟩
               (afterColumns location
                 (Lexer.Internal.WRustPort.Slice.runEnd input
-                    (index + 1) Lexer.CharClass.RUN_DIGIT - index))
+                    (index + 1) CharClass.RUN_DIGIT - index))
               input[Lexer.Internal.WRustPort.Slice.runEnd input
-                  (index + 1) Lexer.CharClass.RUN_DIGIT] =
+                  (index + 1) CharClass.RUN_DIGIT] =
               .pending ⟨.fraction false, location, (bytesOf input index
                 (Lexer.Internal.WRustPort.Slice.runEnd input
-                    (index + 1) Lexer.CharClass.RUN_DIGIT)).push 46⟩ := by
+                    (index + 1) CharClass.RUN_DIGIT)).push 46⟩ := by
             rw [hEc, hdot']; rfl
           rw [hA, feedFrom_step hEs (byteStep_token_pending v C.concrete hadv), prep_nil,
             feedFrom_fraction v C.concrete input _ _ _ false rfl hEs, hEc, hdot',
@@ -245,34 +249,34 @@ theorem normalSpec_digits (v : Token.Version) (input : ByteSlice) (offset base :
         -- the last byte of the decimal so far: its dot, or a digit after it
         have hlastF : (input[Lexer.Internal.WRustPort.Slice.runEnd input
             (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1)
-              Lexer.CharClass.RUN_DIGIT + 1) Lexer.CharClass.RUN_DIGIT - 1]'(by omega) == 46) =
+              CharClass.RUN_DIGIT + 1) CharClass.RUN_DIGIT - 1]'(by omega) == 46) =
             !decide (Lexer.Internal.WRustPort.Slice.runEnd input
-                (index + 1) Lexer.CharClass.RUN_DIGIT + 1 <
+                (index + 1) CharClass.RUN_DIGIT + 1 <
               Lexer.Internal.WRustPort.Slice.runEnd input
                   (Lexer.Internal.WRustPort.Slice.runEnd input
-                      (index + 1) Lexer.CharClass.RUN_DIGIT + 1)
-                Lexer.CharClass.RUN_DIGIT) := by
+                      (index + 1) CharClass.RUN_DIGIT + 1)
+                CharClass.RUN_DIGIT) := by
           by_cases hlt : Lexer.Internal.WRustPort.Slice.runEnd input
-              (index + 1) Lexer.CharClass.RUN_DIGIT + 1 <
+              (index + 1) CharClass.RUN_DIGIT + 1 <
               Lexer.Internal.WRustPort.Slice.runEnd input
                   (Lexer.Internal.WRustPort.Slice.runEnd input
-                      (index + 1) Lexer.CharClass.RUN_DIGIT + 1)
-                Lexer.CharClass.RUN_DIGIT
+                      (index + 1) CharClass.RUN_DIGIT + 1)
+                CharClass.RUN_DIGIT
           · have hdg := hmemF (Lexer.Internal.WRustPort.Slice.runEnd input
               (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1)
-              Lexer.CharClass.RUN_DIGIT + 1) Lexer.CharClass.RUN_DIGIT - 1) (by omega) (by omega)
+              CharClass.RUN_DIGIT + 1) CharClass.RUN_DIGIT - 1) (by omega) (by omega)
                   (by omega)
             simp only [hlt, decide_true, Bool.not_true]
             have : input[Lexer.Internal.WRustPort.Slice.runEnd input
                 (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1)
-                Lexer.CharClass.RUN_DIGIT + 1) Lexer.CharClass.RUN_DIGIT - 1]'(by omega) ≠ 46 := by
+                CharClass.RUN_DIGIT + 1) CharClass.RUN_DIGIT - 1]'(by omega) ≠ 46 := by
               intro h; rw [h] at hdg; exact absurd hdg (by decide)
             simpa using this
           · have heq : Lexer.Internal.WRustPort.Slice.runEnd input
               (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1)
-                Lexer.CharClass.RUN_DIGIT + 1) Lexer.CharClass.RUN_DIGIT - 1 =
+                CharClass.RUN_DIGIT + 1) CharClass.RUN_DIGIT - 1 =
                 Lexer.Internal.WRustPort.Slice.runEnd input
-                    (index + 1) Lexer.CharClass.RUN_DIGIT := by omega
+                    (index + 1) CharClass.RUN_DIGIT := by omega
             simp only [hlt, decide_false, Bool.not_false]
             simp only [heq, hEc, hdot']
             rfl
@@ -281,7 +285,7 @@ theorem normalSpec_digits (v : Token.Version) (input : ByteSlice) (offset base :
           intro hsz
           have hsz' : Lexer.Internal.WRustPort.Slice.runEnd input
               (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1)
-              Lexer.CharClass.RUN_DIGIT + 1) Lexer.CharClass.RUN_DIGIT = input.size
+              CharClass.RUN_DIGIT + 1) CharClass.RUN_DIGIT = input.size
                   := by simpa using hsz
           unfold Lexer.Internal.WRustPort.extendContent Lexer.Internal.WRustPort.modifyContent
             Lexer.Internal.WRustPort.leavePending
@@ -290,18 +294,18 @@ theorem normalSpec_digits (v : Token.Version) (input : ByteSlice) (offset base :
           apply WP.wp_pure
           refine ⟨.token ⟨.fraction (false || decide
               (Lexer.Internal.WRustPort.Slice.runEnd input
-                  (index + 1) Lexer.CharClass.RUN_DIGIT + 1 <
+                  (index + 1) CharClass.RUN_DIGIT + 1 <
                 Lexer.Internal.WRustPort.Slice.runEnd input
                     (Lexer.Internal.WRustPort.Slice.runEnd input
-                        (index + 1) Lexer.CharClass.RUN_DIGIT + 1)
-                  Lexer.CharClass.RUN_DIGIT)), location, bytesOf input index
+                        (index + 1) CharClass.RUN_DIGIT + 1)
+                  CharClass.RUN_DIGIT)), location, bytesOf input index
               (Lexer.Internal.WRustPort.Slice.runEnd input
                   (Lexer.Internal.WRustPort.Slice.runEnd input
-                      (index + 1) Lexer.CharClass.RUN_DIGIT + 1)
-                Lexer.CharClass.RUN_DIGIT)⟩,
+                      (index + 1) CharClass.RUN_DIGIT + 1)
+                CharClass.RUN_DIGIT)⟩,
             afterColumns location (Lexer.Internal.WRustPort.Slice.runEnd input
               (Lexer.Internal.WRustPort.Slice.runEnd input
-                  (index + 1) Lexer.CharClass.RUN_DIGIT + 1) Lexer.CharClass.RUN_DIGIT - index),
+                  (index + 1) CharClass.RUN_DIGIT + 1) CharClass.RUN_DIGIT - index),
             held, ⟨hfix.1, hfix.2, hfix.3, hfix.4, hfix.5, hfix.6⟩, Nat.le_refl _, ?_,
                 ?_, hheld, hbytes,
             ?_⟩
@@ -324,7 +328,7 @@ theorem normalSpec_digits (v : Token.Version) (input : ByteSlice) (offset base :
         · intro hsz
           have hFs : Lexer.Internal.WRustPort.Slice.runEnd input
               (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1)
-              Lexer.CharClass.RUN_DIGIT + 1) Lexer.CharClass.RUN_DIGIT < input.size := by
+              CharClass.RUN_DIGIT + 1) CharClass.RUN_DIGIT < input.size := by
             simp only [beq_iff_eq] at hsz; omega
           have hstopF' := hstopF hFs
           apply WP.wp_bind; apply WP.wp_getCore
@@ -333,11 +337,11 @@ theorem normalSpec_digits (v : Token.Version) (input : ByteSlice) (offset base :
           · -- no digit after the dot
             intro hnone
             have hlt : ¬ (Lexer.Internal.WRustPort.Slice.runEnd input
-                (index + 1) Lexer.CharClass.RUN_DIGIT + 1 <
+                (index + 1) CharClass.RUN_DIGIT + 1 <
                 Lexer.Internal.WRustPort.Slice.runEnd input
                     (Lexer.Internal.WRustPort.Slice.runEnd input
-                        (index + 1) Lexer.CharClass.RUN_DIGIT + 1)
-                  Lexer.CharClass.RUN_DIGIT) := by
+                        (index + 1) CharClass.RUN_DIGIT + 1)
+                  CharClass.RUN_DIGIT) := by
               intro hlt
               have := hlastF
               simp only [hlt, decide_true, Bool.not_true] at this
@@ -345,19 +349,19 @@ theorem normalSpec_digits (v : Token.Version) (input : ByteSlice) (offset base :
             obtain ⟨f, hf⟩ := advance_end_fraction_none (location := afterColumns location
               (Lexer.Internal.WRustPort.Slice.runEnd input
                   (Lexer.Internal.WRustPort.Slice.runEnd input
-                      (index + 1) Lexer.CharClass.RUN_DIGIT + 1)
-                Lexer.CharClass.RUN_DIGIT - index))
+                      (index + 1) CharClass.RUN_DIGIT + 1)
+                CharClass.RUN_DIGIT - index))
               (q := ⟨.fraction (false || decide
                 (Lexer.Internal.WRustPort.Slice.runEnd input
-                    (index + 1) Lexer.CharClass.RUN_DIGIT + 1 <
+                    (index + 1) CharClass.RUN_DIGIT + 1 <
                   Lexer.Internal.WRustPort.Slice.runEnd input
                     (Lexer.Internal.WRustPort.Slice.runEnd input
-                        (index + 1) Lexer.CharClass.RUN_DIGIT + 1)
-                    Lexer.CharClass.RUN_DIGIT)), location, bytesOf input index
+                        (index + 1) CharClass.RUN_DIGIT + 1)
+                    CharClass.RUN_DIGIT)), location, bytesOf input index
                 (Lexer.Internal.WRustPort.Slice.runEnd input
                     (Lexer.Internal.WRustPort.Slice.runEnd input
-                        (index + 1) Lexer.CharClass.RUN_DIGIT + 1)
-                  Lexer.CharClass.RUN_DIGIT)⟩) (by simp [hlt]) hstopF'
+                        (index + 1) CharClass.RUN_DIGIT + 1)
+                  CharClass.RUN_DIGIT)⟩) (by simp [hlt]) hstopF'
             unfold Lexer.Internal.WRustPort.leave Lexer.Internal.WRustPort.error
                 Lexer.Internal.WRustPort.errorWith
             wp_walk
@@ -366,11 +370,11 @@ theorem normalSpec_digits (v : Token.Version) (input : ByteSlice) (offset base :
             rw [hB, feedFrom_advance_error v C.concrete input hFs hf]
           · intro hsome
             have hlt : Lexer.Internal.WRustPort.Slice.runEnd input
-                (index + 1) Lexer.CharClass.RUN_DIGIT + 1 <
+                (index + 1) CharClass.RUN_DIGIT + 1 <
                 Lexer.Internal.WRustPort.Slice.runEnd input
                     (Lexer.Internal.WRustPort.Slice.runEnd input
-                        (index + 1) Lexer.CharClass.RUN_DIGIT + 1)
-                  Lexer.CharClass.RUN_DIGIT := by
+                        (index + 1) CharClass.RUN_DIGIT + 1)
+                  CharClass.RUN_DIGIT := by
               apply Classical.byContradiction
               intro hlt
               have := hlastF
@@ -378,18 +382,18 @@ theorem normalSpec_digits (v : Token.Version) (input : ByteSlice) (offset base :
               simp [this] at hsome
             have hC := feedFrom_end v C.concrete input hFs (q := ⟨.fraction (false || decide
                 (Lexer.Internal.WRustPort.Slice.runEnd input
-                    (index + 1) Lexer.CharClass.RUN_DIGIT + 1 <
+                    (index + 1) CharClass.RUN_DIGIT + 1 <
                   Lexer.Internal.WRustPort.Slice.runEnd input
                     (Lexer.Internal.WRustPort.Slice.runEnd input
-                        (index + 1) Lexer.CharClass.RUN_DIGIT + 1)
-                    Lexer.CharClass.RUN_DIGIT)), location, bytesOf input index
+                        (index + 1) CharClass.RUN_DIGIT + 1)
+                    CharClass.RUN_DIGIT)), location, bytesOf input index
                 (Lexer.Internal.WRustPort.Slice.runEnd input
                     (Lexer.Internal.WRustPort.Slice.runEnd input
-                        (index + 1) Lexer.CharClass.RUN_DIGIT + 1)
-                  Lexer.CharClass.RUN_DIGIT)⟩)
+                        (index + 1) CharClass.RUN_DIGIT + 1)
+                  CharClass.RUN_DIGIT)⟩)
               (location := afterColumns location (Lexer.Internal.WRustPort.Slice.runEnd input
                 (Lexer.Internal.WRustPort.Slice.runEnd input
-                    (index + 1) Lexer.CharClass.RUN_DIGIT + 1) Lexer.CharClass.RUN_DIGIT - index))
+                    (index + 1) CharClass.RUN_DIGIT + 1) CharClass.RUN_DIGIT - index))
               (advance_end_fraction (by simp [hlt]) hstopF')
             rw [← hB] at hC
             rw [get_eq hFs]
@@ -398,7 +402,7 @@ theorem normalSpec_digits (v : Token.Version) (input : ByteSlice) (offset base :
               have hnd' : Lexer.Internal.VNaive.isDelimiter
                   input[Lexer.Internal.WRustPort.Slice.runEnd input
                   (Lexer.Internal.WRustPort.Slice.runEnd input
-                      (index + 1) Lexer.CharClass.RUN_DIGIT + 1) Lexer.CharClass.RUN_DIGIT] =
+                      (index + 1) CharClass.RUN_DIGIT + 1) CharClass.RUN_DIGIT] =
                   false := by
                 rw [← isDelimiter_eq]; simpa using hnd
               rw [hnd'] at hC
@@ -413,7 +417,7 @@ theorem normalSpec_digits (v : Token.Version) (input : ByteSlice) (offset base :
               have hd'' : Lexer.Internal.VNaive.isDelimiter
                   input[Lexer.Internal.WRustPort.Slice.runEnd input
                   (Lexer.Internal.WRustPort.Slice.runEnd input
-                      (index + 1) Lexer.CharClass.RUN_DIGIT + 1) Lexer.CharClass.RUN_DIGIT] =
+                      (index + 1) CharClass.RUN_DIGIT + 1) CharClass.RUN_DIGIT] =
                   true := by
                 rw [← isDelimiter_eq]; simpa using hd'
               rw [hd''] at hC
@@ -421,16 +425,16 @@ theorem normalSpec_digits (v : Token.Version) (input : ByteSlice) (offset base :
               borrow_push Token.TokenCategory.decimal index
                   (Lexer.Internal.WRustPort.Slice.runEnd input
                 (Lexer.Internal.WRustPort.Slice.runEnd input
-                    (index + 1) Lexer.CharClass.RUN_DIGIT + 1) Lexer.CharClass.RUN_DIGIT)
+                    (index + 1) CharClass.RUN_DIGIT + 1) CharClass.RUN_DIGIT)
       · -- the numeral ends before the byte
         intro hdot
         have hdot' : next ≠ 46 := by simpa using hdot
         have hC := feedFrom_end v C.concrete input hEs (q := ⟨.numeral (c == 48), location,
             bytesOf input index (Lexer.Internal.WRustPort.Slice.runEnd input
-                (index + 1) Lexer.CharClass.RUN_DIGIT)⟩)
+                (index + 1) CharClass.RUN_DIGIT)⟩)
           (location := afterColumns location
             (Lexer.Internal.WRustPort.Slice.runEnd input
-                (index + 1) Lexer.CharClass.RUN_DIGIT - index))
+                (index + 1) CharClass.RUN_DIGIT - index))
           (advance_end_numeral rfl (by rw [hEc]; exact hEd) (by rw [hEc]; exact hdot'))
         rw [← hA, hEc] at hC
         apply WP.wp_ite
@@ -451,15 +455,16 @@ theorem normalSpec_digits (v : Token.Version) (input : ByteSlice) (offset base :
           rw [hd''] at hC
           simp only [↓reduceIte] at hC
           borrow_push Token.TokenCategory.numeral index
-            (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1) Lexer.CharClass.RUN_DIGIT)
+            (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1)
+                CharClass.RUN_DIGIT)
     · -- the digits run to the end of the slice: the numeral is left in progress
       rename_i hgetE
       have hsz := Lexer.Internal.WRustPort.Slice.size_le_of_get?_none hgetE
       have hzero : (c == 48) = ((bytesOf input index
-          (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1) Lexer.CharClass.RUN_DIGIT)).size
+          (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1) CharClass.RUN_DIGIT)).size
               == 1 &&
           (bytesOf input index (Lexer.Internal.WRustPort.Slice.runEnd input
-              (index + 1) Lexer.CharClass.RUN_DIGIT)).get! 0 ==
+              (index + 1) CharClass.RUN_DIGIT)).get! 0 ==
             48) := by
         rw [bytesOf_size input (by omega) hle',
           bytesOf_get! input (by omega) hle' (k := 0) (by omega)]
@@ -474,10 +479,10 @@ theorem normalSpec_digits (v : Token.Version) (input : ByteSlice) (offset base :
       apply WP.wp_bind; apply WP.wp_modifyBound
       apply WP.wp_pure
       refine ⟨.token ⟨.numeral (c == 48), location, bytesOf input index
-          (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1) Lexer.CharClass.RUN_DIGIT)⟩,
+          (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1) CharClass.RUN_DIGIT)⟩,
         afterColumns location
           (Lexer.Internal.WRustPort.Slice.runEnd input
-              (index + 1) Lexer.CharClass.RUN_DIGIT - index),
+              (index + 1) CharClass.RUN_DIGIT - index),
         held, ⟨hfix.1, hfix.2, hfix.3, hfix.4, hfix.5, hfix.6⟩, Nat.le_refl _, ?_, ?_,
             hheld, hbytes, ?_⟩
       · dsimp only [StAgrees, TokenAgrees, TokenAgreesNoWs]

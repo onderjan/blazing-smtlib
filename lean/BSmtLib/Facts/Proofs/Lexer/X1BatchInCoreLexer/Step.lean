@@ -57,7 +57,7 @@ theorem afterStep_sim (slice : ByteSlice) (h : slice.stop < USize.size) (start :
 
 theorem lexStep_sim (slice : ByteSlice) (h : slice.stop < USize.size) (start : USize)
     (start' : Nat) (es : ix slice.start start = start') (hb : slice.start ≤ b.toNat)
-    (hbs : b = start) (hstart hstart') (state : Lexer.Helpers.LexerState)
+    (hbs : b = start) (hstart hstart') (state : Lexer.Internal.Helpers.LexerState)
     (tokenStart : Span.Location)
     (base : USize) (hbase : b = base) (hpending hpending') :
     SimP (BaseIs b) (StepPost slice.start) (boundMap slice.start (floor := floor) (low := low))

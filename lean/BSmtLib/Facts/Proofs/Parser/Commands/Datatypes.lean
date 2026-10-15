@@ -3,7 +3,7 @@ module
 public import BSmtLib.Facts.Proofs.Parser.Commands.Parts
 import all BSmtLib.Parser.Category.Combinator
 import all BSmtLib.Parser.Category.Token
-import all BSmtLib.Parser.Command.Datatype
+import all BSmtLib.Parser.Command.Internal.Datatype
 import all BSmtLib.Token.Reserved
 
 @[expose] public section
@@ -23,11 +23,12 @@ programs are the ticks of the tokens, and their values the views.
 namespace BSmtLib.Facts.Proofs.Parser.Commands.Datatypes
 
 open BSmtLibSpec.Grammar
-open BSmtLib.Parser (PM)
-open BSmtLib.Parser.Category.Combinator (ListState)
-open BSmtLib.Parser.Command.Datatype (DatatypeState ConstructorState datatypeStep constructorStep
+open BSmtLib.Parser.Internal (PM)
+open BSmtLib.Parser.Category.Combinator.Internal (ListState)
+open BSmtLib.Parser.Command.Internal.Datatype
+    (DatatypeState ConstructorState datatypeStep constructorStep
     SortDecState)
-open BSmtLib.Parser.Category.Token (symbolStep)
+open BSmtLib.Parser.Category.Token.Internal (symbolStep)
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Parser.Adapters.Run
 open BSmtLib.Facts.Proofs.Parser.Commands.Elements
 open BSmtLib.Facts.Proofs.Parser.Commands.Elements.Runs BSmtLib.Facts.Proofs.Parser.Commands.Parts
@@ -69,7 +70,7 @@ theorem symbols_runs : (names : List Tree.Symbol) → ∀ {tokens : List Parser.
       (inner := symbolStep) (init := ()) found (token := .symbol symbol) (tokens := [])
       (by simp) (by simp)
       (Runs.token (program := pure symbol) (by simp [symbolStep,
-          Parser.Category.Token.expectSymbol]))
+          Parser.Category.Token.Internal.expectSymbol]))
     refine (Runs.append (first := [.symbol symbol]) (Runs.of_bind_pure (value := symbol)
       (next := fun r => pure (.more (ListState.between () (found.push r)))) hitem) fun _ =>
       hruns (found.push symbol)).congr ?_ (by funext; simp)
@@ -117,14 +118,14 @@ local notation "S" => Traits.Handler.«Sort» H
 /-- What the datatype parser does when its constructors end. -/
 def constructorsDone (parametric : Bool) (constructors : Array (Nodes.Constructor S)) :
     PM H (Parser.Internal.Step (DatatypeState S) (Array (Nodes.Constructor S))) := do
-  if constructors.isEmpty then Parser.syntaxError .emptyDatatypeConstructors
+  if constructors.isEmpty then Parser.Internal.syntaxError .emptyDatatypeConstructors
   if parametric then return .more (.close constructors)
   else return .done constructors
 
 /-- What the datatype parser does when its parameters end. -/
 def parametersDone (start : Array Nodes.Symbol → PM H Unit) (parameters : Array Nodes.Symbol) :
     PM H (Parser.Internal.Step (DatatypeState S) (Array (Nodes.Constructor S))) := do
-  if parameters.isEmpty then Parser.syntaxError .emptyDatatypeParameters
+  if parameters.isEmpty then Parser.Internal.syntaxError .emptyDatatypeParameters
   start parameters
   return .more .constructorsOpen
 
@@ -215,7 +216,7 @@ theorem datatype_plain_runs (hA : TermAgrees h)
       [.parenOpen] ++ ([.parenOpen] ++ ((firstInner ++ [.parenClose]) ++ (restTokens ++
         [.parenClose]))) by simp]
     refine (Runs.append (middle := fun _ => (.kind : DatatypeState S))
-      (Runs.token_more (by simp [datatypeStep, Parser.Category.Token.expectOpen])) fun _ =>
+      (Runs.token_more (by simp [datatypeStep, Parser.Category.Token.Internal.expectOpen])) fun _ =>
       Runs.append (middle := fun _ => (.constructors false
           { opened := true, outside := false, inner := .opened, items := #[] } : DatatypeState S))
         (Runs.token (program := start #[]) (by simp [datatypeStep])) fun _ =>
@@ -317,18 +318,19 @@ theorem datatype_par_runs (hA : TermAgrees h)
         ((Parser.Internal.Input.parenOpen :: ((symbol :: symbols).map .symbol ++ [.parenClose])) ++
           ([.parenOpen] ++ ((constructorInner ++ [.parenClose]) ++ [.parenClose])))) by simp]
     refine (Runs.append (middle := fun _ => (.kind : DatatypeState S))
-      (Runs.token_more (by simp [datatypeStep, Parser.Category.Token.expectOpen])) fun _ =>
+      (Runs.token_more (by simp [datatypeStep, Parser.Category.Token.Internal.expectOpen])) fun _ =>
       Runs.append (middle := fun _ => (.parameters (ListState.paren ()) : DatatypeState S))
         (Runs.token_more (by simp [datatypeStep])) fun _ =>
       Runs.append (middle := fun _ => (.constructorsOpen : DatatypeState S))
         hparametersDatatype fun _ =>
       Runs.append (middle := fun _ =>
           (.constructors true (ListState.closed .start) : DatatypeState S))
-        (Runs.token_more (by simp [datatypeStep, Parser.Category.Token.expectOpen])) fun _ =>
+        (Runs.token_more (by simp [datatypeStep,
+            Parser.Category.Token.Internal.expectOpen])) fun _ =>
       Runs.append (middle := fun cs => (.close (cs : List _).toArray : DatatypeState S))
         hconstructorsDatatype fun cs =>
         Runs.token (program := pure (cs : List _).toArray) (next := fun cs => pure (.done cs))
-          (by simp [datatypeStep, Parser.Category.Token.expectClose])).congr ?_ rfl
+          (by simp [datatypeStep, Parser.Category.Token.Internal.expectClose])).congr ?_ rfl
     simp
 
 /-- A datatype declaration, in either form. -/

@@ -18,12 +18,12 @@ namespace BSmtLib.Parser.Internal.Fused.Category
 
 open BSmtLib.Nodes BSmtLib.Traits
 open BSmtLib.Parser.Internal.Fused.Basic
-open BSmtLib.Parser.Category.Combinator (ListState)
-open BSmtLib.Parser.Category.Ident (IdentState)
-open BSmtLib.Parser.Category.QualifiedIdent (QualIdentState)
-open BSmtLib.Parser.Category.Sort (SortState SortLevel)
-open BSmtLib.Parser.Category.SortedVar (SortedVarState)
-open BSmtLib.Parser.Command.Function (SignatureState)
+open BSmtLib.Parser.Category.Combinator.Internal (ListState)
+open BSmtLib.Parser.Category.Ident.Internal (IdentState)
+open BSmtLib.Parser.Category.QualifiedIdent.Internal (QualIdentState)
+open BSmtLib.Parser.Category.Sort.Internal (SortState SortLevel)
+open BSmtLib.Parser.Category.SortedVar.Internal (SortedVarState)
+open BSmtLib.Parser.Command.Internal.Function (SignatureState)
 open BSmtLib.Plain (SymbolView NumeralView)
 open BSmtLib.Token (BatchTag BatchCursor TokenCategory Version)
 open BSmtLib.Token.Reserved (GeneralReserved)
@@ -56,9 +56,9 @@ def symbolOf? (version : Version) (category : TokenCategory) (next : BatchCursor
   | .unquotedSymbol =>
     let content := contentOf next token
     match reservedAt? version next token with
-    | none => some ⟨SymbolView.newUnchecked content, false⟩
+    | none => some ⟨SymbolView.Internal.newUnchecked content, false⟩
     | some _ => none
-  | .quotedSymbol => some ⟨SymbolView.newUnchecked (contentOf next token), true⟩
+  | .quotedSymbol => some ⟨SymbolView.Internal.newUnchecked (contentOf next token), true⟩
   | _ => none
 
 /-- Whether the token is the general reserved word in the version. -/
@@ -102,7 +102,7 @@ def identStep {batch : BatchTag} (version : Version) (self : IdentState)
       if found.isEmpty then .error .emptyIdentIndices else .done ⟨symbol, found⟩
     | .numeral =>
       .more (.indices symbol
-        (found.push (.numeral (NumeralView.newUnchecked (contentOf next token)))))
+        (found.push (.numeral (NumeralView.Internal.newUnchecked (contentOf next token)))))
     | _ =>
       match symbolOf? version category next token with
       | some index =>

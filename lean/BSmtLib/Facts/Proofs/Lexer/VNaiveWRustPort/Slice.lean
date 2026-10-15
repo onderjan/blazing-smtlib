@@ -21,7 +21,6 @@ namespace BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Slice
 
 open BSmtLib.Facts.Lexer.Adapters
 open BSmtLibSpec.Lexer (Handed)
-open BSmtLib.Lexer (Stop)
 open BSmtLib.Facts.Proofs.Lexer.VNaive.Run BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Agree
 open BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Batch
 open BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Feed
@@ -70,7 +69,8 @@ def EofLoc (c : WP.WCore) (location : Span.Location) : Prop :=
     c.lineStart + location.column = location.offset
 
 /-- The failure is trailing input that starts at the location. -/
-def IsTrailingFailure (location : Span.Location) (failure : Lexer.Failure (Option C.Error)) : Prop
+def IsTrailingFailure (location : Span.Location)
+    (failure : Lexer.Internal.Failure (Option C.Error)) : Prop
     :=
   failure.cause = .lexical .unexpectedTrailingToken ∧ failure.span.start = location
 
@@ -174,7 +174,7 @@ variable {v : Token.Version} {hd : Bool} {iv : Token.Version}
 /-- The hand-over of the batch at the end of the loop over a slice: the result to return once
 the batch is handed over, or where the consumer stopped. -/
 theorem sliceRun_flush (input : ByteSlice) (position : Nat)
-    (fnResult : Except (Lexer.Failure (Option C.Error)) (ControlFlow C.Result))
+    (fnResult : Except (Lexer.Internal.Failure (Option C.Error)) (ControlFlow C.Result))
     (core : WP.BS floor 0) (coll : List Handed) (ls : List Lexeme)
     (hH : Holds core.val.batch ls) (hrec : core.val.recovers = false)
     (hflush : position ≥ input.size ∨ ∃ f, fnResult = .error f) :
@@ -212,7 +212,8 @@ theorem sliceRun_flush (input : ByteSlice) (position : Nat)
     cases result <;> exact .inr ⟨_, p, d, hs, hst, rfl, rfl⟩
 
 /-- The loop over a slice after a lexical error hands over the batch it was left with. -/
-theorem sliceRun_error (input : ByteSlice) (position : Nat) (f : Lexer.Failure (Option C.Error))
+theorem sliceRun_error (input : ByteSlice) (position : Nat)
+    (f : Lexer.Internal.Failure (Option C.Error))
     (core : WP.BS floor 0) (coll : List Handed) (ls : List Lexeme) (hH : Holds core.val.batch ls)
     (hfix : Fixed v hd iv core.val) {kind : LexicalErrorKind} (hf : f.cause = .lexical kind)
     (hk : kind ≠ .unexpectedTrailingToken) (hby : core.val.batch.bytes = input.byteArray) :

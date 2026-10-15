@@ -47,11 +47,13 @@ def HandV (core : Core) (l : Lexeme)
     | .trailing l0 => l0 = l ∧ p.ver = core.version ∧
         r = ((.error ⟨.lexical .unexpectedTrailingToken, trailingSpan l, l.start⟩, core), p.taken)
     | .fail e d l0 => l0 = l ∧ ∃ c',
-        r = ((.error ⟨.consumer (some e), Span.newUnchecked l.end l.end, l.end⟩, c'), p.taken) ∧
+        r = ((.error ⟨.consumer (some e), Span.Internal.newUnchecked l.end l.end, l.end⟩, c'),
+            p.taken) ∧
         VSame core c' p.ver core.holding
           (if d then .discarding (core.activity.discardStart l.end) else core.activity)
     | .layout l0 => l0 = l ∧ ∃ c',
-        r = ((.error ⟨.consumer none, Span.newUnchecked l.end l.end, l.end⟩, c'), p.taken) ∧
+        r = ((.error ⟨.consumer none, Span.Internal.newUnchecked l.end l.end, l.end⟩, c'),
+            p.taken) ∧
         VSame core c' p.ver core.holding core.activity
     | .brk _ _ _ => False
     | .brkX v l0 => l0 = l ∧ ∃ c', r = ((.ok (some ⟨v, l.end⟩), c'), p.taken) ∧

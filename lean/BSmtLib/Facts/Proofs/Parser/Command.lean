@@ -1,7 +1,7 @@
 module
 
 public import BSmtLib.Facts.Proofs.Parser.Commands.Attributes
-import all BSmtLib.Parser.Command.Standard
+import all BSmtLib.Parser.Command.Internal.Standard
 import all BSmtLib.Token.Reserved
 
 @[expose] public section
@@ -28,7 +28,8 @@ open BSmtLib.Facts.Proofs.Parser.Commands.Attributes
 open BSmtLib.Facts.Proofs.Parser.Commands.Declarations BSmtLib.Facts.Proofs.Parser.Commands.Frame
 open BSmtLib.Facts.Proofs.Parser.Commands.FunsRec BSmtLib.Facts.Proofs.Parser.Commands.Literals
 open BSmtLib.Facts.Proofs.Parser.Commands.Simple BSmtLib.Facts.Proofs.Parser.Commands.Terms
-open BSmtLib.Parser.Command BSmtLib.Parser.Command.Standard
+open BSmtLib.Parser.Command BSmtLib.Parser.Command.Internal.Standard
+open BSmtLib.Parser.Command.Internal
 
 section
 
@@ -46,7 +47,7 @@ theorem command_runs (hA : Agrees h) (command : Tree.Command)
     (hmode : command.modeAfter
         (Bridge.version version) ≠ none) {tokens : List Parser.Internal.Input}
     (hs : Stands tokens command.tokens) (rest : List Parser.Internal.Input) :
-    drive points (commandStep version) .awaiting (tokens ++ rest) Command.commandArrive =
+    drive points (commandStep version) .awaiting (tokens ++ rest) Command.Internal.commandArrive =
       (do
         adaptRun (Traversal.command points h command)
         pure (some (outcomeOf command, rest))) := by

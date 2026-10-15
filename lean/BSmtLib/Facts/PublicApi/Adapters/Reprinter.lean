@@ -36,7 +36,7 @@ instance (r : Reprinter) : ContentHandler r.H := r.inst
 
 /-- The posture that allows the versions from 2.5 on, and any number of version declarations. -/
 def from25 : Token.VersionPosture :=
-  { allowed := #[.v2_5, .v2_6, .v2_7], maxDeclarations := none }
+  (Token.VersionPostureBuilder.new.setMaxDeclarations none).build
 
 /-- The script reader over the reprinter's handler, from the version, under the posture. -/
 def readerWith (r : Reprinter) (posture : Token.VersionPosture) (version : Token.Version) :

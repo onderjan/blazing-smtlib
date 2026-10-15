@@ -12,9 +12,7 @@ public import BSmtLib.Token.SyntaxToken
 public import BSmtLib.Token.Lookahead
 public import BSmtLib.Token.Produce
 public import BSmtLib.Token.ConsumeFrom
-public import BSmtLib.Lexer.CharClass
 public import BSmtLib.Lexer.Error
-public import BSmtLib.Lexer.Helpers
 public import BSmtLib.Lexer.Recovery
 public import BSmtLib.Lexer
 public import BSmtLib.Parser
@@ -47,7 +45,7 @@ end BSmtLib
 
 namespace BSmtLib.BytesView
 
-export BSmtLib.Bytes.BytesView (asSlice instBEq instRepr intoOwned isEmpty len new)
+export BSmtLib.Bytes.BytesView (asSlice instBEq instRepr intoOwned isEmpty len)
 
 end BSmtLib.BytesView
 
@@ -91,7 +89,7 @@ end BSmtLib
 
 namespace BSmtLib.Identifier
 
-export BSmtLib.Nodes.Identifier (indices mk symbol)
+export BSmtLib.Nodes.Identifier (indices mk newSimple symbol)
 
 end BSmtLib.Identifier
 
@@ -120,6 +118,19 @@ namespace BSmtLib.Pattern
 export BSmtLib.Nodes.Pattern (constructor single)
 
 end BSmtLib.Pattern
+
+-- `BSmtLib.Nodes.QualifiedIdent`, by `pub use crate::nodes::*`
+namespace BSmtLib
+
+export BSmtLib.Nodes (QualifiedIdent)
+
+end BSmtLib
+
+namespace BSmtLib.QualifiedIdent
+
+export BSmtLib.Nodes.QualifiedIdent (identifier mk newQualified newSimple newUnqualified sort)
+
+end BSmtLib.QualifiedIdent
 
 -- `BSmtLib.Nodes.Quantifier`, by `pub use crate::nodes::*`
 namespace BSmtLib
@@ -224,7 +235,7 @@ end BSmtLib
 
 namespace BSmtLib.BinDigitsView
 
-export BSmtLib.Plain.BinDigitsView (asSlice instBEq instRepr intoOwned isEmpty len newUnchecked)
+export BSmtLib.Plain.BinDigitsView (asSlice instBEq instRepr intoOwned isEmpty len)
 
 end BSmtLib.BinDigitsView
 
@@ -251,7 +262,7 @@ end BSmtLib
 
 namespace BSmtLib.CommentView
 
-export BSmtLib.Plain.CommentView (asSlice instBEq instRepr intoOwned isEmpty len newUnchecked)
+export BSmtLib.Plain.CommentView (asSlice instBEq instRepr intoOwned isEmpty len)
 
 end BSmtLib.CommentView
 
@@ -278,7 +289,7 @@ end BSmtLib
 
 namespace BSmtLib.DecimalView
 
-export BSmtLib.Plain.DecimalView (asSlice instBEq instRepr intoOwned isEmpty len newUnchecked)
+export BSmtLib.Plain.DecimalView (asSlice instBEq instRepr intoOwned isEmpty len)
 
 end BSmtLib.DecimalView
 
@@ -318,7 +329,7 @@ end BSmtLib
 
 namespace BSmtLib.HexDigitsView
 
-export BSmtLib.Plain.HexDigitsView (asSlice instBEq instRepr intoOwned isEmpty len newUnchecked)
+export BSmtLib.Plain.HexDigitsView (asSlice instBEq instRepr intoOwned isEmpty len)
 
 end BSmtLib.HexDigitsView
 
@@ -345,7 +356,7 @@ end BSmtLib
 
 namespace BSmtLib.KeywordView
 
-export BSmtLib.Plain.KeywordView (asSlice instBEq instRepr intoOwned isEmpty len newUnchecked)
+export BSmtLib.Plain.KeywordView (asSlice instBEq instRepr intoOwned isEmpty len)
 
 end BSmtLib.KeywordView
 
@@ -372,7 +383,7 @@ end BSmtLib
 
 namespace BSmtLib.NumeralView
 
-export BSmtLib.Plain.NumeralView (asSlice instBEq instRepr intoOwned isEmpty len newUnchecked)
+export BSmtLib.Plain.NumeralView (asSlice instBEq instRepr intoOwned isEmpty len)
 
 end BSmtLib.NumeralView
 
@@ -399,7 +410,7 @@ end BSmtLib
 
 namespace BSmtLib.StringContentView
 
-export BSmtLib.Plain.StringContentView (asSlice instBEq instRepr intoOwned isEmpty len newUnchecked)
+export BSmtLib.Plain.StringContentView (asSlice instBEq instRepr intoOwned isEmpty len)
 
 end BSmtLib.StringContentView
 
@@ -426,7 +437,7 @@ end BSmtLib
 
 namespace BSmtLib.SymbolView
 
-export BSmtLib.Plain.SymbolView (asSlice instRepr intoOwned isEmpty len newUnchecked)
+export BSmtLib.Plain.SymbolView (asSlice instRepr intoOwned isEmpty len)
 
 end BSmtLib.SymbolView
 
@@ -453,7 +464,7 @@ end BSmtLib
 
 namespace BSmtLib.WhitespaceView
 
-export BSmtLib.Plain.WhitespaceView (asSlice instBEq instRepr intoOwned isEmpty len newUnchecked)
+export BSmtLib.Plain.WhitespaceView (asSlice instBEq instRepr intoOwned isEmpty len)
 
 end BSmtLib.WhitespaceView
 
@@ -630,7 +641,176 @@ export BSmtLib.Lexer.Recovery (Recovering)
 
 end BSmtLib.Lexer
 
-/-! `pub use {…}` in `parser/category.rs`, for the parsers that have a counterpart -/
+/-! `pub use {…}` in `parser/category.rs` -/
+
+-- `BSmtLib.Parser.Category.Attribute.ClosedAttributeParser`, by `pub use attribute::SmtClosedAttributeParser`
+namespace BSmtLib.Parser.Category
+
+export BSmtLib.Parser.Category.Attribute (ClosedAttributeParser)
+
+end BSmtLib.Parser.Category
+
+namespace BSmtLib.Parser.Category.ClosedAttributeParser
+
+export BSmtLib.Parser.Category.Attribute.ClosedAttributeParser (new)
+
+end BSmtLib.Parser.Category.ClosedAttributeParser
+
+-- `BSmtLib.Parser.Category.Attribute.ClosedMultipleAttributeParser`, by `pub use attribute::SmtClosedMultipleAttributeParser`
+namespace BSmtLib.Parser.Category
+
+export BSmtLib.Parser.Category.Attribute (ClosedMultipleAttributeParser)
+
+end BSmtLib.Parser.Category
+
+namespace BSmtLib.Parser.Category.ClosedMultipleAttributeParser
+
+export BSmtLib.Parser.Category.Attribute.ClosedMultipleAttributeParser (new)
+
+end BSmtLib.Parser.Category.ClosedMultipleAttributeParser
+
+-- `BSmtLib.Parser.Category.Combinator.ClosedMaximumParser`, by `pub use combinator::SmtClosedMaximumParser`
+namespace BSmtLib.Parser.Category
+
+export BSmtLib.Parser.Category.Combinator (ClosedMaximumParser)
+
+end BSmtLib.Parser.Category
+
+namespace BSmtLib.Parser.Category.ClosedMaximumParser
+
+export BSmtLib.Parser.Category.Combinator.ClosedMaximumParser (maxElements new setMaximum)
+
+end BSmtLib.Parser.Category.ClosedMaximumParser
+
+-- `BSmtLib.Parser.Category.Combinator.ClosedMultipleParser`, by `pub use combinator::SmtClosedMultipleParser`
+namespace BSmtLib.Parser.Category
+
+export BSmtLib.Parser.Category.Combinator (ClosedMultipleParser)
+
+end BSmtLib.Parser.Category
+
+namespace BSmtLib.Parser.Category.ClosedMultipleParser
+
+export BSmtLib.Parser.Category.Combinator.ClosedMultipleParser (new)
+
+end BSmtLib.Parser.Category.ClosedMultipleParser
+
+-- `BSmtLib.Parser.Category.Combinator.ClosedParser`, by `pub use combinator::SmtClosedParser`
+namespace BSmtLib.Parser.Category
+
+export BSmtLib.Parser.Category.Combinator (ClosedParser)
+
+end BSmtLib.Parser.Category
+
+namespace BSmtLib.Parser.Category.ClosedParser
+
+export BSmtLib.Parser.Category.Combinator.ClosedParser (new)
+
+end BSmtLib.Parser.Category.ClosedParser
+
+-- `BSmtLib.Parser.Category.Combinator.OpenedParser`, by `pub use combinator::SmtOpenedParser`
+namespace BSmtLib.Parser.Category
+
+export BSmtLib.Parser.Category.Combinator (OpenedParser)
+
+end BSmtLib.Parser.Category
+
+namespace BSmtLib.Parser.Category.OpenedParser
+
+export BSmtLib.Parser.Category.Combinator.OpenedParser (new)
+
+end BSmtLib.Parser.Category.OpenedParser
+
+-- `BSmtLib.Parser.Category.Combinator.PairParser`, by `pub use combinator::SmtPairParser`
+namespace BSmtLib.Parser.Category
+
+export BSmtLib.Parser.Category.Combinator (PairParser)
+
+end BSmtLib.Parser.Category
+
+namespace BSmtLib.Parser.Category.PairParser
+
+export BSmtLib.Parser.Category.Combinator.PairParser (new)
+
+end BSmtLib.Parser.Category.PairParser
+
+-- `BSmtLib.Parser.Category.Combinator.ParenMaximumParser`, by `pub use combinator::SmtParenMaximumParser`
+namespace BSmtLib.Parser.Category
+
+export BSmtLib.Parser.Category.Combinator (ParenMaximumParser)
+
+end BSmtLib.Parser.Category
+
+namespace BSmtLib.Parser.Category.ParenMaximumParser
+
+export BSmtLib.Parser.Category.Combinator.ParenMaximumParser (maxElements new setMaximum)
+
+end BSmtLib.Parser.Category.ParenMaximumParser
+
+-- `BSmtLib.Parser.Category.Combinator.ParenMultipleParser`, by `pub use combinator::SmtParenMultipleParser`
+namespace BSmtLib.Parser.Category
+
+export BSmtLib.Parser.Category.Combinator (ParenMultipleParser)
+
+end BSmtLib.Parser.Category
+
+namespace BSmtLib.Parser.Category.ParenMultipleParser
+
+export BSmtLib.Parser.Category.Combinator.ParenMultipleParser (new)
+
+end BSmtLib.Parser.Category.ParenMultipleParser
+
+-- `BSmtLib.Parser.Category.Combinator.ParenParser`, by `pub use combinator::SmtParenParser`
+namespace BSmtLib.Parser.Category
+
+export BSmtLib.Parser.Category.Combinator (ParenParser)
+
+end BSmtLib.Parser.Category
+
+namespace BSmtLib.Parser.Category.ParenParser
+
+export BSmtLib.Parser.Category.Combinator.ParenParser (new)
+
+end BSmtLib.Parser.Category.ParenParser
+
+-- `BSmtLib.Parser.Category.Ident.IdentParser`, by `pub use ident::SmtIdentParser`
+namespace BSmtLib.Parser.Category
+
+export BSmtLib.Parser.Category.Ident (IdentParser)
+
+end BSmtLib.Parser.Category
+
+namespace BSmtLib.Parser.Category.IdentParser
+
+export BSmtLib.Parser.Category.Ident.IdentParser (new)
+
+end BSmtLib.Parser.Category.IdentParser
+
+-- `BSmtLib.Parser.Category.Pattern.PatternParser`, by `pub use pattern::SmtPatternParser`
+namespace BSmtLib.Parser.Category
+
+export BSmtLib.Parser.Category.Pattern (PatternParser)
+
+end BSmtLib.Parser.Category
+
+namespace BSmtLib.Parser.Category.PatternParser
+
+export BSmtLib.Parser.Category.Pattern.PatternParser (new)
+
+end BSmtLib.Parser.Category.PatternParser
+
+-- `BSmtLib.Parser.Category.QualifiedIdent.QualifiedIdentParser`, by `pub use qualified_ident::SmtQualifiedIdentParser`
+namespace BSmtLib.Parser.Category
+
+export BSmtLib.Parser.Category.QualifiedIdent (QualifiedIdentParser)
+
+end BSmtLib.Parser.Category
+
+namespace BSmtLib.Parser.Category.QualifiedIdentParser
+
+export BSmtLib.Parser.Category.QualifiedIdent.QualifiedIdentParser (new)
+
+end BSmtLib.Parser.Category.QualifiedIdentParser
 
 -- `BSmtLib.Parser.Category.SExpr.SExprParser`, by `pub use s_expr::SmtSExprParser`
 namespace BSmtLib.Parser.Category
@@ -641,7 +821,7 @@ end BSmtLib.Parser.Category
 
 namespace BSmtLib.Parser.Category.SExprParser
 
-export BSmtLib.Parser.Category.SExpr.SExprParser (mk new state)
+export BSmtLib.Parser.Category.SExpr.SExprParser (new)
 
 end BSmtLib.Parser.Category.SExprParser
 
@@ -654,9 +834,22 @@ end BSmtLib.Parser.Category
 
 namespace BSmtLib.Parser.Category.SortParser
 
-export BSmtLib.Parser.Category.«Sort».SortParser (mk new state)
+export BSmtLib.Parser.Category.«Sort».SortParser (new)
 
 end BSmtLib.Parser.Category.SortParser
+
+-- `BSmtLib.Parser.Category.SortedVar.SortedVarParser`, by `pub use sorted_var::SmtSortedVarParser`
+namespace BSmtLib.Parser.Category
+
+export BSmtLib.Parser.Category.SortedVar (SortedVarParser)
+
+end BSmtLib.Parser.Category
+
+namespace BSmtLib.Parser.Category.SortedVarParser
+
+export BSmtLib.Parser.Category.SortedVar.SortedVarParser (new)
+
+end BSmtLib.Parser.Category.SortedVarParser
 
 -- `BSmtLib.Parser.Category.Term.TermParser`, by `pub use term::SmtTermParser`
 namespace BSmtLib.Parser.Category
@@ -667,9 +860,87 @@ end BSmtLib.Parser.Category
 
 namespace BSmtLib.Parser.Category.TermParser
 
-export BSmtLib.Parser.Category.Term.TermParser (mk new state)
+export BSmtLib.Parser.Category.Term.TermParser (new)
 
 end BSmtLib.Parser.Category.TermParser
+
+-- `BSmtLib.Parser.Category.Token.CloseParenParser`, by `pub use token::SmtCloseParenParser`
+namespace BSmtLib.Parser.Category
+
+export BSmtLib.Parser.Category.Token (CloseParenParser)
+
+end BSmtLib.Parser.Category
+
+namespace BSmtLib.Parser.Category.CloseParenParser
+
+export BSmtLib.Parser.Category.Token.CloseParenParser (mk new)
+
+end BSmtLib.Parser.Category.CloseParenParser
+
+-- `BSmtLib.Parser.Category.Token.KeywordParser`, by `pub use token::SmtKeywordParser`
+namespace BSmtLib.Parser.Category
+
+export BSmtLib.Parser.Category.Token (KeywordParser)
+
+end BSmtLib.Parser.Category
+
+namespace BSmtLib.Parser.Category.KeywordParser
+
+export BSmtLib.Parser.Category.Token.KeywordParser (mk new)
+
+end BSmtLib.Parser.Category.KeywordParser
+
+-- `BSmtLib.Parser.Category.Token.NumeralParser`, by `pub use token::SmtNumeralParser`
+namespace BSmtLib.Parser.Category
+
+export BSmtLib.Parser.Category.Token (NumeralParser)
+
+end BSmtLib.Parser.Category
+
+namespace BSmtLib.Parser.Category.NumeralParser
+
+export BSmtLib.Parser.Category.Token.NumeralParser (mk new)
+
+end BSmtLib.Parser.Category.NumeralParser
+
+-- `BSmtLib.Parser.Category.Token.OpenParenParser`, by `pub use token::SmtOpenParenParser`
+namespace BSmtLib.Parser.Category
+
+export BSmtLib.Parser.Category.Token (OpenParenParser)
+
+end BSmtLib.Parser.Category
+
+namespace BSmtLib.Parser.Category.OpenParenParser
+
+export BSmtLib.Parser.Category.Token.OpenParenParser (mk new)
+
+end BSmtLib.Parser.Category.OpenParenParser
+
+-- `BSmtLib.Parser.Category.Token.StringParser`, by `pub use token::SmtStringParser`
+namespace BSmtLib.Parser.Category
+
+export BSmtLib.Parser.Category.Token (StringParser)
+
+end BSmtLib.Parser.Category
+
+namespace BSmtLib.Parser.Category.StringParser
+
+export BSmtLib.Parser.Category.Token.StringParser (mk new)
+
+end BSmtLib.Parser.Category.StringParser
+
+-- `BSmtLib.Parser.Category.Token.SymbolParser`, by `pub use token::SmtSymbolParser`
+namespace BSmtLib.Parser.Category
+
+export BSmtLib.Parser.Category.Token (SymbolParser)
+
+end BSmtLib.Parser.Category
+
+namespace BSmtLib.Parser.Category.SymbolParser
+
+export BSmtLib.Parser.Category.Token.SymbolParser (mk new)
+
+end BSmtLib.Parser.Category.SymbolParser
 
 /-! `pub use adapter::*` in `parser.rs` -/
 
@@ -682,12 +953,180 @@ end BSmtLib.Parser
 
 namespace BSmtLib.Parser.ParseAdapter
 
-export BSmtLib.Parser.Adapter.ParseAdapter (handler mk new parseState parser versionSet
-  versionSetAfter)
+export BSmtLib.Parser.Adapter.ParseAdapter (handler mk new parseState parser versionSet)
 
 end BSmtLib.Parser.ParseAdapter
 
-/-! `pub use category::*` in `parser.rs`, for the items that have a counterpart -/
+/-! `pub use category::*` in `parser.rs` -/
+
+-- `BSmtLib.Parser.Category.Attribute.ClosedAttributeParser`, by `pub use category::*`
+namespace BSmtLib.Parser
+
+export BSmtLib.Parser.Category.Attribute (ClosedAttributeParser)
+
+end BSmtLib.Parser
+
+namespace BSmtLib.Parser.ClosedAttributeParser
+
+export BSmtLib.Parser.Category.Attribute.ClosedAttributeParser (new)
+
+end BSmtLib.Parser.ClosedAttributeParser
+
+-- `BSmtLib.Parser.Category.Attribute.ClosedMultipleAttributeParser`, by `pub use category::*`
+namespace BSmtLib.Parser
+
+export BSmtLib.Parser.Category.Attribute (ClosedMultipleAttributeParser)
+
+end BSmtLib.Parser
+
+namespace BSmtLib.Parser.ClosedMultipleAttributeParser
+
+export BSmtLib.Parser.Category.Attribute.ClosedMultipleAttributeParser (new)
+
+end BSmtLib.Parser.ClosedMultipleAttributeParser
+
+-- `BSmtLib.Parser.Category.Combinator.ClosedMaximumParser`, by `pub use category::*`
+namespace BSmtLib.Parser
+
+export BSmtLib.Parser.Category.Combinator (ClosedMaximumParser)
+
+end BSmtLib.Parser
+
+namespace BSmtLib.Parser.ClosedMaximumParser
+
+export BSmtLib.Parser.Category.Combinator.ClosedMaximumParser (maxElements new setMaximum)
+
+end BSmtLib.Parser.ClosedMaximumParser
+
+-- `BSmtLib.Parser.Category.Combinator.ClosedMultipleParser`, by `pub use category::*`
+namespace BSmtLib.Parser
+
+export BSmtLib.Parser.Category.Combinator (ClosedMultipleParser)
+
+end BSmtLib.Parser
+
+namespace BSmtLib.Parser.ClosedMultipleParser
+
+export BSmtLib.Parser.Category.Combinator.ClosedMultipleParser (new)
+
+end BSmtLib.Parser.ClosedMultipleParser
+
+-- `BSmtLib.Parser.Category.Combinator.ClosedParser`, by `pub use category::*`
+namespace BSmtLib.Parser
+
+export BSmtLib.Parser.Category.Combinator (ClosedParser)
+
+end BSmtLib.Parser
+
+namespace BSmtLib.Parser.ClosedParser
+
+export BSmtLib.Parser.Category.Combinator.ClosedParser (new)
+
+end BSmtLib.Parser.ClosedParser
+
+-- `BSmtLib.Parser.Category.Combinator.OpenedParser`, by `pub use category::*`
+namespace BSmtLib.Parser
+
+export BSmtLib.Parser.Category.Combinator (OpenedParser)
+
+end BSmtLib.Parser
+
+namespace BSmtLib.Parser.OpenedParser
+
+export BSmtLib.Parser.Category.Combinator.OpenedParser (new)
+
+end BSmtLib.Parser.OpenedParser
+
+-- `BSmtLib.Parser.Category.Combinator.PairParser`, by `pub use category::*`
+namespace BSmtLib.Parser
+
+export BSmtLib.Parser.Category.Combinator (PairParser)
+
+end BSmtLib.Parser
+
+namespace BSmtLib.Parser.PairParser
+
+export BSmtLib.Parser.Category.Combinator.PairParser (new)
+
+end BSmtLib.Parser.PairParser
+
+-- `BSmtLib.Parser.Category.Combinator.ParenMaximumParser`, by `pub use category::*`
+namespace BSmtLib.Parser
+
+export BSmtLib.Parser.Category.Combinator (ParenMaximumParser)
+
+end BSmtLib.Parser
+
+namespace BSmtLib.Parser.ParenMaximumParser
+
+export BSmtLib.Parser.Category.Combinator.ParenMaximumParser (maxElements new setMaximum)
+
+end BSmtLib.Parser.ParenMaximumParser
+
+-- `BSmtLib.Parser.Category.Combinator.ParenMultipleParser`, by `pub use category::*`
+namespace BSmtLib.Parser
+
+export BSmtLib.Parser.Category.Combinator (ParenMultipleParser)
+
+end BSmtLib.Parser
+
+namespace BSmtLib.Parser.ParenMultipleParser
+
+export BSmtLib.Parser.Category.Combinator.ParenMultipleParser (new)
+
+end BSmtLib.Parser.ParenMultipleParser
+
+-- `BSmtLib.Parser.Category.Combinator.ParenParser`, by `pub use category::*`
+namespace BSmtLib.Parser
+
+export BSmtLib.Parser.Category.Combinator (ParenParser)
+
+end BSmtLib.Parser
+
+namespace BSmtLib.Parser.ParenParser
+
+export BSmtLib.Parser.Category.Combinator.ParenParser (new)
+
+end BSmtLib.Parser.ParenParser
+
+-- `BSmtLib.Parser.Category.Ident.IdentParser`, by `pub use category::*`
+namespace BSmtLib.Parser
+
+export BSmtLib.Parser.Category.Ident (IdentParser)
+
+end BSmtLib.Parser
+
+namespace BSmtLib.Parser.IdentParser
+
+export BSmtLib.Parser.Category.Ident.IdentParser (new)
+
+end BSmtLib.Parser.IdentParser
+
+-- `BSmtLib.Parser.Category.Pattern.PatternParser`, by `pub use category::*`
+namespace BSmtLib.Parser
+
+export BSmtLib.Parser.Category.Pattern (PatternParser)
+
+end BSmtLib.Parser
+
+namespace BSmtLib.Parser.PatternParser
+
+export BSmtLib.Parser.Category.Pattern.PatternParser (new)
+
+end BSmtLib.Parser.PatternParser
+
+-- `BSmtLib.Parser.Category.QualifiedIdent.QualifiedIdentParser`, by `pub use category::*`
+namespace BSmtLib.Parser
+
+export BSmtLib.Parser.Category.QualifiedIdent (QualifiedIdentParser)
+
+end BSmtLib.Parser
+
+namespace BSmtLib.Parser.QualifiedIdentParser
+
+export BSmtLib.Parser.Category.QualifiedIdent.QualifiedIdentParser (new)
+
+end BSmtLib.Parser.QualifiedIdentParser
 
 -- `BSmtLib.Parser.Category.SExpr.SExprParser`, by `pub use category::*`
 namespace BSmtLib.Parser
@@ -698,7 +1137,7 @@ end BSmtLib.Parser
 
 namespace BSmtLib.Parser.SExprParser
 
-export BSmtLib.Parser.Category.SExpr.SExprParser (mk new state)
+export BSmtLib.Parser.Category.SExpr.SExprParser (new)
 
 end BSmtLib.Parser.SExprParser
 
@@ -711,9 +1150,22 @@ end BSmtLib.Parser
 
 namespace BSmtLib.Parser.SortParser
 
-export BSmtLib.Parser.Category.«Sort».SortParser (mk new state)
+export BSmtLib.Parser.Category.«Sort».SortParser (new)
 
 end BSmtLib.Parser.SortParser
+
+-- `BSmtLib.Parser.Category.SortedVar.SortedVarParser`, by `pub use category::*`
+namespace BSmtLib.Parser
+
+export BSmtLib.Parser.Category.SortedVar (SortedVarParser)
+
+end BSmtLib.Parser
+
+namespace BSmtLib.Parser.SortedVarParser
+
+export BSmtLib.Parser.Category.SortedVar.SortedVarParser (new)
+
+end BSmtLib.Parser.SortedVarParser
 
 -- `BSmtLib.Parser.Category.Term.TermParser`, by `pub use category::*`
 namespace BSmtLib.Parser
@@ -724,9 +1176,94 @@ end BSmtLib.Parser
 
 namespace BSmtLib.Parser.TermParser
 
-export BSmtLib.Parser.Category.Term.TermParser (mk new state)
+export BSmtLib.Parser.Category.Term.TermParser (new)
 
 end BSmtLib.Parser.TermParser
+
+-- `BSmtLib.Parser.Category.Token.CloseParenParser`, by `pub use category::*`
+namespace BSmtLib.Parser
+
+export BSmtLib.Parser.Category.Token (CloseParenParser)
+
+end BSmtLib.Parser
+
+namespace BSmtLib.Parser.CloseParenParser
+
+export BSmtLib.Parser.Category.Token.CloseParenParser (mk new)
+
+end BSmtLib.Parser.CloseParenParser
+
+-- `BSmtLib.Parser.Category.Token.KeywordParser`, by `pub use category::*`
+namespace BSmtLib.Parser
+
+export BSmtLib.Parser.Category.Token (KeywordParser)
+
+end BSmtLib.Parser
+
+namespace BSmtLib.Parser.KeywordParser
+
+export BSmtLib.Parser.Category.Token.KeywordParser (mk new)
+
+end BSmtLib.Parser.KeywordParser
+
+-- `BSmtLib.Parser.Category.Token.NumeralParser`, by `pub use category::*`
+namespace BSmtLib.Parser
+
+export BSmtLib.Parser.Category.Token (NumeralParser)
+
+end BSmtLib.Parser
+
+namespace BSmtLib.Parser.NumeralParser
+
+export BSmtLib.Parser.Category.Token.NumeralParser (mk new)
+
+end BSmtLib.Parser.NumeralParser
+
+-- `BSmtLib.Parser.Category.Token.OpenParenParser`, by `pub use category::*`
+namespace BSmtLib.Parser
+
+export BSmtLib.Parser.Category.Token (OpenParenParser)
+
+end BSmtLib.Parser
+
+namespace BSmtLib.Parser.OpenParenParser
+
+export BSmtLib.Parser.Category.Token.OpenParenParser (mk new)
+
+end BSmtLib.Parser.OpenParenParser
+
+-- `BSmtLib.Parser.Category.Token.StringParser`, by `pub use category::*`
+namespace BSmtLib.Parser
+
+export BSmtLib.Parser.Category.Token (StringParser)
+
+end BSmtLib.Parser
+
+namespace BSmtLib.Parser.StringParser
+
+export BSmtLib.Parser.Category.Token.StringParser (mk new)
+
+end BSmtLib.Parser.StringParser
+
+-- `BSmtLib.Parser.Category.Token.SymbolParser`, by `pub use category::*`
+namespace BSmtLib.Parser
+
+export BSmtLib.Parser.Category.Token (SymbolParser)
+
+end BSmtLib.Parser
+
+namespace BSmtLib.Parser.SymbolParser
+
+export BSmtLib.Parser.Category.Token.SymbolParser (mk new)
+
+end BSmtLib.Parser.SymbolParser
+
+-- `BSmtLib.Parser.Category.ParenSortedVarsParser`, by `pub use category::*`
+namespace BSmtLib.Parser
+
+export BSmtLib.Parser.Category (ParenSortedVarsParser)
+
+end BSmtLib.Parser
 
 /-! `pub use command::*` in `parser.rs`, for the items that have a counterpart -/
 
@@ -767,7 +1304,7 @@ end BSmtLib.Parser
 
 namespace BSmtLib.Parser.ScriptParser
 
-export BSmtLib.Parser.Script.ScriptParser (arrive command declarations mk new posture step)
+export BSmtLib.Parser.Script.ScriptParser (command declarations mk new posture)
 
 end BSmtLib.Parser.ScriptParser
 

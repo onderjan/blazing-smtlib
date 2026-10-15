@@ -155,7 +155,7 @@ theorem session_handOver {core X : Core} {b : UInt8} {bs : List UInt8} {l : Lexe
           (some ⟨value, l.end⟩) bs ended taken'
       | (.error err, version, discards, taken') =>
         sessionOf consumer taken'
-            (.failed (failureOf ⟨.consumer err, Span.newUnchecked l.end l.end, none⟩))
+            (.failed (failureOf ⟨.consumer err, Span.Internal.newUnchecked l.end l.end, none⟩))
           (coreAfterError X l version discards) := by
   have hr := handOverAt_reply consumer X l hl hX taken
   rw [hr] at hbyte

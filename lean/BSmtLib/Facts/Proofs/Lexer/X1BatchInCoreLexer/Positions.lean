@@ -1,7 +1,7 @@
 module
 
 public import BSmtLib.Lexer.Internal.X1BatchInCore
-import all BSmtLib.Lexer.CharClass
+import all BSmtLib.Lexer.Internal.CharClass
 import all BSmtLib.Lexer.Internal.WRustPort.Slice
 
 @[expose] public section
@@ -18,8 +18,9 @@ arithmetic of `USize` stays here.
 
 namespace BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Positions
 
-open BSmtLib.Lexer.CharClass (Input runEnd runEndAll endsRun RUN_FLAGS)
-open BSmtLib.Lexer.Helpers (Content)
+open BSmtLib.Lexer.Internal.CharClass (Input runEnd runEndAll endsRun RUN_FLAGS)
+open BSmtLib.Lexer.Internal (CharClass)
+open BSmtLib.Lexer.Internal.Helpers (Content)
 
 /-- The input of the library's lexer over the slice, which ends below `USize.size`. -/
 def inputOf (slice : ByteSlice) (h : slice.stop < USize.size) : Input :=
@@ -73,11 +74,11 @@ theorem get?_eq (p : USize) (hp : slice.start ≤ p.toNat) :
 
 /-- The scan over positions ends at the position of the index where the scan over indices ends,
 for tests that agree on the bytes. -/
-theorem runEndIn_eq (test : Lexer.CharClass.Internal.RunTest) (stops : UInt8 → Bool)
+theorem runEndIn_eq (test : CharClass.Internal.RunTest) (stops : UInt8 → Bool)
     (htest : ∀ q (hq : q.toNat < slice.byteArray.size),
       test slice.byteArray q hq = stops (slice.byteArray[q.toNat]'hq))
     (p : USize) (hp : slice.start ≤ p.toNat) :
-    let r := Lexer.CharClass.Internal.runEndIn test slice.byteArray p (inputOf slice h).stop
+    let r := CharClass.Internal.runEndIn test slice.byteArray p (inputOf slice h).stop
       (inputOf slice h).stop_le
     slice.start ≤ r.toNat ∧
       idx slice r = Lexer.Internal.WRustPort.Slice.runEndBy stops slice (idx slice p) := by
@@ -85,7 +86,7 @@ theorem runEndIn_eq (test : Lexer.CharClass.Internal.RunTest) (stops : UInt8 →
   have hsz : slice.size = slice.stop - slice.start := rfl
   have hstop := slice.stop_le_size_byteArray
   simp only [r]
-  fun_induction Lexer.CharClass.Internal.runEndIn test slice.byteArray p (inputOf slice h).stop
+  fun_induction CharClass.Internal.runEndIn test slice.byteArray p (inputOf slice h).stop
     (inputOf slice h).stop_le with
   | case1 q hlt htrue =>
     have hlt' := USize.lt_iff_toNat_lt.mp hlt
@@ -102,7 +103,7 @@ theorem runEndIn_eq (test : Lexer.CharClass.Internal.RunTest) (stops : UInt8 →
   | case2 q hlt hfalse ih =>
     have hlt' := USize.lt_iff_toNat_lt.mp hlt
     rw [inputOf_stop] at hlt'
-    have e1 := Lexer.CharClass.toNat_add_one_of_lt (bound := (inputOf slice h).stop) hlt
+    have e1 := CharClass.toNat_add_one_of_lt (bound := (inputOf slice h).stop) hlt
     obtain ⟨ih1, ih2⟩ := ih (by rw [e1]; omega)
     refine ⟨ih1, ?_⟩
     rw [ih2]
@@ -128,14 +129,14 @@ theorem runEndIn_eq (test : Lexer.CharClass.Internal.RunTest) (stops : UInt8 →
     simp only [hi, dite_false]
 
 theorem runEnd_eq (p : USize) (hp : slice.start ≤ p.toNat) (mask : UInt8) :
-    slice.start ≤ (Lexer.CharClass.runEnd (inputOf slice h) p mask).toNat ∧
-      idx slice (Lexer.CharClass.runEnd (inputOf slice h) p mask) =
+    slice.start ≤ (CharClass.runEnd (inputOf slice h) p mask).toNat ∧
+      idx slice (CharClass.runEnd (inputOf slice h) p mask) =
         Lexer.Internal.WRustPort.Slice.runEnd slice (idx slice p) mask :=
   runEndIn_eq _ _ (fun _ _ => rfl) p hp
 
 theorem runEndAll_eq (p : USize) (hp : slice.start ≤ p.toNat) (mask : UInt8) :
-    slice.start ≤ (Lexer.CharClass.runEndAll (inputOf slice h) p mask).toNat ∧
-      idx slice (Lexer.CharClass.runEndAll (inputOf slice h) p mask) =
+    slice.start ≤ (CharClass.runEndAll (inputOf slice h) p mask).toNat ∧
+      idx slice (CharClass.runEndAll (inputOf slice h) p mask) =
         Lexer.Internal.WRustPort.Slice.runEndAll slice (idx slice p) mask :=
   runEndIn_eq _ _ (fun _ _ => rfl) p hp
 

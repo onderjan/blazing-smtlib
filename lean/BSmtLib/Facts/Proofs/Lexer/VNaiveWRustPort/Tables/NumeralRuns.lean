@@ -16,7 +16,7 @@ classes.
 namespace BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.NumeralRuns
 
 open BSmtLib.Lexer.Internal.VNaive
-open BSmtLib.Lexer.CharClass (endsRun RUN_DIGIT RUN_HEX_DIGIT RUN_BINARY_DIGIT)
+open BSmtLib.Lexer.Internal.CharClass (endsRun RUN_DIGIT RUN_HEX_DIGIT RUN_BINARY_DIGIT)
 open BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.Basic
 
 theorem endsRun_digit (c : UInt8) : endsRun c RUN_DIGIT = !isDigit c :=

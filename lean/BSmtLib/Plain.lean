@@ -1,13 +1,13 @@
 module
 
 public import BSmtLib.Bytes
-public import BSmtLib.Lexer.CharClass
+public import BSmtLib.Lexer.Internal.CharClass
 
 public section
 
 namespace BSmtLib.Plain
 
-open BSmtLib.Lexer (CharClass)
+open BSmtLib.Lexer.Internal (CharClass)
 
 /- LEAN: `value.iter().all(f)` in Rust. `ByteSlice` has no `all`; its `foldr` reads the bytes
 with their bounds proved, so no read can fail. -/
@@ -66,6 +66,8 @@ structure Symbol where
 
 namespace Symbol
 
+/- LEAN: Rust's `is_quoted_allowed`: the owned symbol does not record whether it was quoted yet,
+and allows what a quoted symbol allows. -/
 def isAllowed (value : ByteSlice) : Bool :=
   allBytes value fun c =>
     (CharClass.classify c).isPrintableOrWhitespace && c != byte! '|' && c != byte! '\\'
@@ -287,21 +289,21 @@ local macro "plain_newtype " name:ident view:ident : command => do
   let viewMethods ← `(
     namespace $view
 
-    /- LEAN: crate-private in Rust, where it also checks the value in debug builds. Lean has
-    no visibility between the crate and a file, so it is public here. -/
+    /- LEAN: crate-private in Rust, where it also checks the value in debug builds. -/
     @[inline]
-    def newUnchecked (value : ByteSlice) : $view := ⟨value⟩
+    def Internal.newUnchecked (value : ByteSlice) : $view := ⟨value⟩
 
     @[inline]
     def asSlice (self : $view) : ByteSlice := self.slice
 
-    def intoOwned (self : $view) : $name := ⟨(Bytes.BytesView.new self.slice).intoOwned⟩
+    def intoOwned (self : $view) : $name := ⟨(Bytes.BytesView.Internal.new self.slice).intoOwned⟩
 
     def len (self : $view) : Nat := self.slice.size
 
     def isEmpty (self : $view) : Bool := self.len == 0
 
-    @[no_expose] instance : Repr $view := ⟨fun s p => reprPrec (Bytes.BytesView.new s.slice) p⟩
+    @[no_expose] instance : Repr $view :=
+        ⟨fun s p => reprPrec (Bytes.BytesView.Internal.new s.slice) p⟩
 
     end $view)
   return ⟨Lean.mkNullNode #[viewStructure, ownedMethods, viewMethods]⟩
@@ -326,7 +328,11 @@ local macro "plain_newtype_eq " name:ident view:ident : command => `(
     end $view)
 
 plain_newtype StringContent StringContentView
+
+/- LEAN: the owned symbol does not record whether it was quoted yet: it is made with `new`, which
+allows what a quoted symbol allows, where Rust has `new_quoted` and `new_unquoted`. -/
 plain_newtype Symbol SymbolView
+
 plain_newtype Keyword KeywordView
 plain_newtype Numeral NumeralView
 plain_newtype HexDigits HexDigitsView

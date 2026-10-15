@@ -19,6 +19,7 @@ over alone, or leaves it in progress at the end of the slice.
 namespace BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.ArmsWs
 
 open BSmtLib.Facts.Lexer.Adapters BSmtLib.Facts.Proofs.Lexer.Simulation.Bytes
+open BSmtLib.Lexer.Internal (CharClass)
 open BSmtLibSpec.Lexer (Handed)
 open BSmtLib.Facts.Proofs.Lexer.VNaive.Run BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Agree
 open BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Arms
@@ -74,7 +75,7 @@ theorem wsSpec_lt (v : Token.Version) (ver : Token.Version) (input : ByteSlice) 
   | succ n ih =>
   intro j hn horigin hj s locq hfix hbase0 hholds hbytes hloc hlow hb hts hstate hfits h0 hs0
     hanchor hver0 hcon
-  have hI : Lexer.Internal.WRustPort.Slice.runEnd input j Lexer.CharClass.RUN_NON_LF_WHITESPACE =
+  have hI : Lexer.Internal.WRustPort.Slice.runEnd input j CharClass.RUN_NON_LF_WHITESPACE =
       runEnd input isWhitespaceRun j := runEnd_eq endsRun_whitespace _ _
   have hle := le_runEnd input isWhitespaceRun j
   have hle' := runEnd_le input isWhitespaceRun j hj
@@ -98,11 +99,11 @@ theorem wsSpec_lt (v : Token.Version) (ver : Token.Version) (input : ByteSlice) 
           feedFrom v C.concrete input (.token ⟨.whitespace, tokenStart,
             (contentBytes s.val.tokenContent ++ bytesOf input j
               (Lexer.Internal.WRustPort.Slice.runEnd input j
-                  Lexer.CharClass.RUN_NON_LF_WHITESPACE)).push 10⟩)
+                  CharClass.RUN_NON_LF_WHITESPACE)).push 10⟩)
             ((afterColumns locq (Lexer.Internal.WRustPort.Slice.runEnd input j
-                Lexer.CharClass.RUN_NON_LF_WHITESPACE -
+                CharClass.RUN_NON_LF_WHITESPACE -
               j)).afterByte 10) (Lexer.Internal.WRustPort.Slice.runEnd input j
-                  Lexer.CharClass.RUN_NON_LF_WHITESPACE + 1) := by
+                  CharClass.RUN_NON_LF_WHITESPACE + 1) := by
         rw [hanchor, hA, feedFrom_step hIs (byteStep_token_pending v C.concrete (by
           rw [hIc, h10']; exact advance_whitespace_lf C.concrete _ _ rfl)), prep_nil, hIc, h10']
       unfold Lexer.Internal.WRustPort.markLineFeedAt Lexer.Internal.WRustPort.extendContent
@@ -110,13 +111,13 @@ theorem wsSpec_lt (v : Token.Version) (ver : Token.Version) (input : ByteSlice) 
       apply WP.wp_bind; apply WP.wp_modifyCore
       apply WP.wp_bind; apply WP.wp_modifyCore
       refine ih (Lexer.Internal.WRustPort.Slice.runEnd input j
-          Lexer.CharClass.RUN_NON_LF_WHITESPACE + 1) (by omega) _ _ _
+          CharClass.RUN_NON_LF_WHITESPACE + 1) (by omega) _ _ _
         ((afterColumns locq (Lexer.Internal.WRustPort.Slice.runEnd input j
-            Lexer.CharClass.RUN_NON_LF_WHITESPACE -
+            CharClass.RUN_NON_LF_WHITESPACE -
           j)).afterByte 10)
         ⟨hfix.1, hfix.2, hfix.3, hfix.4, hfix.5, hfix.6⟩ hbase0 hholds hbytes ?_ hlow hb hts hstate
         (fits_extendSlice input hfits (a := j)
-          (b := Lexer.Internal.WRustPort.Slice.runEnd input j Lexer.CharClass.RUN_NON_LF_WHITESPACE
+          (b := Lexer.Internal.WRustPort.Slice.runEnd input j CharClass.RUN_NON_LF_WHITESPACE
               + 1) (.inl (by omega)))
         (by omega) hs0 ?_ hver0 hcon
       · refine LocAt.lineFeed hLI (by rw [hbase0]; omega) rfl ?_
@@ -126,7 +127,7 @@ theorem wsSpec_lt (v : Token.Version) (ver : Token.Version) (input : ByteSlice) 
         congr 3
         show _ = contentBytes (s.val.tokenContent.extendFrom input.byteArray (input.start + j)
           (input.start + (Lexer.Internal.WRustPort.Slice.runEnd input j
-              Lexer.CharClass.RUN_NON_LF_WHITESPACE + 1)))
+              CharClass.RUN_NON_LF_WHITESPACE + 1)))
         rw [contentBytes_extendSlice input hfits (.inl (by omega)), content_succ input _ hle hIs,
           hIc, h10']
     · -- any other byte ends the whitespace, which is handed over alone
@@ -135,31 +136,31 @@ theorem wsSpec_lt (v : Token.Version) (ver : Token.Version) (input : ByteSlice) 
       have hC : feedFrom v C.concrete input st0 loc0 start0 =
           Prep [⟨.whitespace, contentBytes s.val.tokenContent ++ bytesOf input j
               (Lexer.Internal.WRustPort.Slice.runEnd input j
-                  Lexer.CharClass.RUN_NON_LF_WHITESPACE), tokenStart,
+                  CharClass.RUN_NON_LF_WHITESPACE), tokenStart,
               afterColumns locq (Lexer.Internal.WRustPort.Slice.runEnd input j
-                  Lexer.CharClass.RUN_NON_LF_WHITESPACE - j)⟩]
+                  CharClass.RUN_NON_LF_WHITESPACE - j)⟩]
             (feedFrom v C.concrete input .idle
               (afterColumns locq (Lexer.Internal.WRustPort.Slice.runEnd input j
-                  Lexer.CharClass.RUN_NON_LF_WHITESPACE - j))
+                  CharClass.RUN_NON_LF_WHITESPACE - j))
               (Lexer.Internal.WRustPort.Slice.runEnd input j
-                  Lexer.CharClass.RUN_NON_LF_WHITESPACE)) := by
+                  CharClass.RUN_NON_LF_WHITESPACE)) := by
         have hadv := advance_whitespace_end C.concrete ⟨.whitespace, tokenStart,
           contentBytes s.val.tokenContent ++ bytesOf input j
-            (Lexer.Internal.WRustPort.Slice.runEnd input j Lexer.CharClass.RUN_NON_LF_WHITESPACE)⟩
+            (Lexer.Internal.WRustPort.Slice.runEnd input j CharClass.RUN_NON_LF_WHITESPACE)⟩
           (afterColumns locq (Lexer.Internal.WRustPort.Slice.runEnd input j
-              Lexer.CharClass.RUN_NON_LF_WHITESPACE - j))
+              CharClass.RUN_NON_LF_WHITESPACE - j))
           (c := input[Lexer.Internal.WRustPort.Slice.runEnd input j
-              Lexer.CharClass.RUN_NON_LF_WHITESPACE]) rfl
+              CharClass.RUN_NON_LF_WHITESPACE]) rfl
           (by rw [hIc]; exact hIq) (by rw [hIc]; exact h10')
         rw [hanchor, hA, feedFrom_tokenBefore v C.concrete input hIs hadv]
       have hext : contentBytes (s.val.tokenContent.extendFrom input.byteArray (input.start + j)
           (input.start + Lexer.Internal.WRustPort.Slice.runEnd input j
-              Lexer.CharClass.RUN_NON_LF_WHITESPACE)) =
+              CharClass.RUN_NON_LF_WHITESPACE)) =
           contentBytes s.val.tokenContent ++ bytesOf input j
-            (Lexer.Internal.WRustPort.Slice.runEnd input j Lexer.CharClass.RUN_NON_LF_WHITESPACE) :=
+            (Lexer.Internal.WRustPort.Slice.runEnd input j CharClass.RUN_NON_LF_WHITESPACE) :=
         contentBytes_extendSlice input hfits (.inl (by omega))
       have hfits' := fits_extendSlice input hfits (a := j)
-        (b := Lexer.Internal.WRustPort.Slice.runEnd input j Lexer.CharClass.RUN_NON_LF_WHITESPACE)
+        (b := Lexer.Internal.WRustPort.Slice.runEnd input j CharClass.RUN_NON_LF_WHITESPACE)
             (.inl (by omega))
       unfold Lexer.Internal.WRustPort.extendContent Lexer.Internal.WRustPort.modifyContent
         Lexer.Internal.WRustPort.finishWhitespace
@@ -173,33 +174,33 @@ theorem wsSpec_lt (v : Token.Version) (ver : Token.Version) (input : ByteSlice) 
         apply WP.wp_bind; apply WP.wp_modifyCore
         apply WP.wp_pure
         have hstep := stepLocation_eq' (pos := Lexer.Internal.WRustPort.Slice.runEnd input j
-          Lexer.CharClass.RUN_NON_LF_WHITESPACE) hloc (by rw [hbase0]; exact h0) hb hlow hle
+          CharClass.RUN_NON_LF_WHITESPACE) hloc (by rw [hbase0]; exact h0) hb hlow hle
         refine armPost_finish (s0 := _) ⟨hfix.1, hfix.2, hfix.3, hfix.4, hfix.5, hfix.6⟩ hbase0
           (Nat.le_trans h0 hle) hbytes ⟨k1, k4, k3, k5, rfl, k8, k9, k10, k11, hb2⟩ hLI hc2 ?_ hver0
         rw [hC]
         show _ = Prep [⟨.whitespace, contentBytes (s.val.tokenContent.extendFrom input.byteArray
           (input.start + j) (input.start + Lexer.Internal.WRustPort.Slice.runEnd input j
-            Lexer.CharClass.RUN_NON_LF_WHITESPACE)), tokenStart,
+            CharClass.RUN_NON_LF_WHITESPACE)), tokenStart,
           stepLocation s.val low base (Lexer.Internal.WRustPort.Slice.runEnd input j
-              Lexer.CharClass.RUN_NON_LF_WHITESPACE)⟩] _
+              CharClass.RUN_NON_LF_WHITESPACE)⟩] _
         rw [hext, hstep]
       · intro e s2 p2 d hn hss
         have hstep := stepLocation_eq' (pos := Lexer.Internal.WRustPort.Slice.runEnd input j
-          Lexer.CharClass.RUN_NON_LF_WHITESPACE) hloc (by rw [hbase0]; exact h0) hb hlow hle
+          CharClass.RUN_NON_LF_WHITESPACE) hloc (by rw [hbase0]; exact h0) hb hlow hle
         have hn' : Stops C s.val.holding s.val.version coll (held ++ [⟨.whitespace, contentBytes
             (s.val.tokenContent.extendFrom input.byteArray (input.start + j) (input.start +
               Lexer.Internal.WRustPort.Slice.runEnd input j
-                  Lexer.CharClass.RUN_NON_LF_WHITESPACE)), tokenStart,
+                  CharClass.RUN_NON_LF_WHITESPACE)), tokenStart,
             stepLocation s.val low base
               (Lexer.Internal.WRustPort.Slice.runEnd input j
-                  Lexer.CharClass.RUN_NON_LF_WHITESPACE)⟩]) e p2 d := hn
+                  CharClass.RUN_NON_LF_WHITESPACE)⟩]) e p2 d := hn
         rw [hext, hstep] at hn'
         exact stepFails_of_stops' hss ⟨hfix.1, hfix.2, hfix.3, hfix.4, hfix.5, hfix.6⟩
           ⟨_, by rw [hC, outcome_pending_prep, ← hver0]⟩ hn' hbytes
   · -- the run reaches the end of the slice: the whitespace is left in progress
     rename_i hnone
     have hge := Lexer.Internal.WRustPort.Slice.size_le_of_get?_none hnone
-    have he : Lexer.Internal.WRustPort.Slice.runEnd input j Lexer.CharClass.RUN_NON_LF_WHITESPACE =
+    have he : Lexer.Internal.WRustPort.Slice.runEnd input j CharClass.RUN_NON_LF_WHITESPACE =
         input.size := by omega
     unfold Lexer.Internal.WRustPort.extendContent Lexer.Internal.WRustPort.modifyContent
     apply WP.wp_bind; apply WP.wp_modifyCore

@@ -20,16 +20,14 @@ namespace BSmtLib.Facts.Proofs.Parser.Rejection.Command
 
 open BSmtLibSpec.Grammar
 open BSmtLibSpec.Parser.Traversal
-open BSmtLib.Parser (PM)
-open BSmtLib.Parser.Category.Term (TermState)
-open BSmtLib.Parser.Category.Combinator (ListState)
-open BSmtLib.Parser.Command.Datatype (SortDecState DatatypeState)
-open BSmtLib.Parser.Command.Standard (LiteralState Payload NamedCommand FinalCall Declaration)
-open BSmtLib.Parser.Command.Function (SignatureState FunctionDecState)
-open BSmtLib.Parser.Command.Definition (DefinitionEnd)
-open BSmtLib.Parser.Command (CommandState CommandOutcome)
-open BSmtLib.Parser.Category.Attribute (AttributeState)
-open BSmtLib.Parser.Category.Sort (SortState)
+open BSmtLib.Parser.Category.Combinator.Internal (ListState)
+open BSmtLib.Parser.Command.Internal.Datatype (SortDecState DatatypeState)
+open BSmtLib.Parser.Command.Internal.Standard (LiteralState Payload NamedCommand FinalCall
+    Declaration)
+open BSmtLib.Parser.Command.Internal.Function (SignatureState FunctionDecState)
+open BSmtLib.Parser.Command.Internal.Definition (DefinitionEnd)
+open BSmtLib.Parser.Command (CommandOutcome)
+open BSmtLib.Parser.Category.Attribute.Internal (AttributeState)
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Proofs.Parser.Rejection.Basic
 open BSmtLib.Facts.Proofs.Parser.Rejection.CommandParts BSmtLib.Facts.Proofs.Parser.Rejection.Parts
 open BSmtLib.Facts.Proofs.Parser.Rejection.SExpr BSmtLib.Facts.Proofs.Parser.Rejection.«Sort»
@@ -140,7 +138,7 @@ def funsRecRem (state : ListState (FunctionDecState Nat) (Nodes.Signature Nat)) 
       (cat (tok closeItem) (closeNext version follows)))) u
 
 /-- The remainders of the payload parser's states. -/
-def payloadRem : Parser.Command.Standard.Payload Nat Nat Nat Nat Nat → Lang
+def payloadRem : Parser.Command.Internal.Standard.Payload Nat Nat Nat Nat Nat → Lang
   | .closing final =>
     match final with
     | .exit => cat (tok closeItem) (follows .exit)
@@ -193,7 +191,7 @@ def CommandLang : Lang := fun u => ∃ (cmd : Tree.Command) (w : List Received),
   follows (cmdEnd version cmd) w ∧ u = toks cmd.tokens ++ w
 
 /-- The remainders of the command parser's states. -/
-def commandRem : Parser.Command.CommandState Nat Nat Nat Nat Nat → Lang
+def commandRem : Parser.Command.Internal.CommandState Nat Nat Nat Nat Nat → Lang
   | .awaiting => union (CommandLang version follows) (cat (tok .endOfInput) (follows .endOfInput))
   | .opened => fun u => CommandLang version follows (openItem :: u)
   | .payload payload => payloadRem version follows payload

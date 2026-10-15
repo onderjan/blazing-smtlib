@@ -13,7 +13,11 @@ The parser of a sort, and the parser of one sort that a driver runs (`SortParser
 namespace BSmtLib.Parser.Category.«Sort»
 
 open BSmtLib.Nodes BSmtLib.Traits BSmtLib.Parser.Category.Ident
+open BSmtLib.Parser.Category.Ident.Internal
 open BSmtLib.Token (Version)
+open BSmtLib.Parser.Internal (PM call syntaxError)
+
+namespace Internal
 
 /-- What the sort parser is doing at its innermost open sort. -/
 inductive SortMode where
@@ -93,9 +97,12 @@ def sortStep (version : Version) (self : SortState (Handler.«Sort» H)) (token 
 
 end
 
+end Internal
+
 /-- The parser of one sort (`SmtSortParser`). -/
 structure SortParser (H : Type) {m : Type → Type} [Handler H m] where
-  state : SortState (Handler.«Sort» H)
+  private mk ::
+  private state : Internal.SortState (Handler.«Sort» H)
 
 section
 
@@ -104,10 +111,13 @@ variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
 /-- The sort parser before a sort. -/
 def SortParser.new : SortParser H := ⟨.init⟩
 
+instance : Inhabited (SortParser H) := ⟨.new⟩
+
+@[no_expose]
 instance : Internal.ParseByToken (SortParser H) H m (Handler.Error H) (Handler.«Sort» H) where
   arrive _ _ := pure ()
   step version parser token := do
-    match ← sortStep version parser.state token with
+    match ← Internal.sortStep version parser.state token with
     | .more state => return .more ⟨state⟩
     | .done result => return .done result
   reset _ := .new

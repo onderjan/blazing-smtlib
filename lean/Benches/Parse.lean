@@ -42,6 +42,7 @@ import BSmtLib
 import BSmtLib.Lexer.Internal.VNaive
 
 open BSmtLib
+open BSmtLib.Token.BatchCursor.Internal (remaining)
 open BSmtLib.Token
 open BSmtLib.Lexer.Error (LexError)
 
@@ -114,12 +115,12 @@ where
       m { c : BatchCursor batch // c.Consumed cursor } := do
     if h : current.HasNext then
       let (_, ⟨next, taken⟩) := current.next h
-      have : next.remaining < current.remaining := taken.remaining_lt
+      have : remaining next < remaining current := taken.remaining_lt
       step
       go next (taken.trans consumed)
     else
       return ⟨current, consumed⟩
-  termination_by current.remaining
+  termination_by remaining current
 
 instance : Consume DiscardTokens Unit Empty where
   isConcrete := false

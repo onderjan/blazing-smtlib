@@ -193,7 +193,7 @@ theorem toLocation_shift (before : List UInt8) (location : Span.Location) :
 /-- The failure, moved. -/
 def LexFailure.shift (base : Span.Location) (f : LexFailure) : LexFailure :=
   { f with
-    span := Span.newUnchecked (locShift base f.span.start) (locShift base f.span.end)
+    span := Span.Internal.newUnchecked (locShift base f.span.start) (locShift base f.span.end)
     location := locShift base f.location }
 
 /-- The token in progress, moved. -/

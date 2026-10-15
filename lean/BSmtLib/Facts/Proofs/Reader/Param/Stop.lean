@@ -110,11 +110,12 @@ def finish (cursor : Token.BatchCursor b) (parseState : ParseState H) :
       (Except (ParseErrorCause E) (ControlFlow R) ×
         { next : Token.BatchCursor b // next.Consumed cursor }) × ParseAdapter H P
   | ((.stop answer parser, z), handler) =>
-    ((answer, z), ParseAdapter.mk handler parser (ParseAdapter.versionSetAfter answer) parseState)
+    ((answer, z), ParseAdapter.mk handler parser (ParseAdapter.Internal.versionSetAfter answer)
+        parseState)
   | ((.goOn parser, ⟨later, taken⟩), handler) =>
     let y := (rest cursor parser later taken).run handler
     ((y.1.1, y.1.2.2),
-      ParseAdapter.mk y.2 y.1.2.1 (ParseAdapter.versionSetAfter y.1.1) parseState)
+      ParseAdapter.mk y.2 y.1.2.1 (ParseAdapter.Internal.versionSetAfter y.1.1) parseState)
 
 /- LEAN: on the lexer's cursors and in the monad of the reader proofs only, so that a call's
 result is read off its definition. -/
@@ -134,9 +135,10 @@ omit [Parse P H Id E R] in
 theorem versionSet_consume (cursor : Token.BatchCursor b) (h : cursor.HasNext)
     (adapter : ParseAdapter H P) :
     ((consume (H := H) (P := P) cursor h).run adapter).2.versionSet =
-      ParseAdapter.versionSetAfter ((consume (H := H) (P := P) cursor h).run adapter).1.1 := by
+      ParseAdapter.Internal.versionSetAfter
+          ((consume (H := H) (P := P) cursor h).run adapter).1.1 := by
   show (finish cursor adapter.parseState _).2.versionSet =
-    ParseAdapter.versionSetAfter (finish cursor adapter.parseState _).1.1
+    ParseAdapter.Internal.versionSetAfter (finish cursor adapter.parseState _).1.1
   generalize (takeOne adapter.parser cursor (cursor.next h).1 (cursor.next h).2.val
     (cursor.next h).2.property).run (told adapter cursor) = x
   obtain ⟨⟨after, ⟨later, taken⟩⟩, handler⟩ := x

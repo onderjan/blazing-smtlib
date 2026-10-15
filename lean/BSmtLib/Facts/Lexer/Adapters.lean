@@ -43,6 +43,7 @@ result, and by dropping the lexer on an error.
 namespace BSmtLib.Facts.Lexer.Adapters
 
 open BSmtLibSpec.Lexer (Handed TokenType ReservedKind)
+open BSmtLib.Token.BatchCursor.Internal (remaining Follows)
 open BSmtLib.Lexer.Error
 
 /-! ## Conversions to the spec's types -/
@@ -143,7 +144,7 @@ def Answering.entry (consumer : BSmtLibSpec.Lexer.Consumer) {batch : Token.Batch
 entries `taken`, if it asks for one. The lexer's cursor never refuses a version. -/
 def Answering.switched (consumer : BSmtLibSpec.Lexer.Consumer) {batch : Token.BatchTag}
     (taken : List Handed) (cursor : Token.BatchCursor batch) :
-    {c : Token.BatchCursor batch // c.Follows cursor} :=
+    {c : Token.BatchCursor batch // Follows c cursor} :=
   match consumer.switchTo taken with
   | none => ⟨cursor, .refl cursor⟩
   | some version =>
@@ -155,7 +156,7 @@ def Answering.switched (consumer : BSmtLibSpec.Lexer.Consumer) {batch : Token.Ba
 it switches to, and then discarding. -/
 def Answering.requests (consumer : BSmtLibSpec.Lexer.Consumer) {batch : Token.BatchTag}
     (taken : List Handed) (cursor : Token.BatchCursor batch) :
-    {c : Token.BatchCursor batch // c.Follows cursor} :=
+    {c : Token.BatchCursor batch // Follows c cursor} :=
   let switched := Answering.switched consumer taken cursor
   if consumer.discards taken then
     ⟨switched.val.discardRest, (Token.BatchCursor.discardRest_follows _).trans switched.property⟩
@@ -197,7 +198,7 @@ def Answering.consume (consumer : BSmtLibSpec.Lexer.Consumer) {batch : Token.Bat
           return (answer, ⟨last, consumed'.trans consumed⟩)
         else
           return (.ok .continue, ⟨next, consumed⟩)
-termination_by cursor.remaining
+termination_by remaining cursor
 decreasing_by exact consumed.remaining_lt
 
 /-- `Answering consumer` takes the entries of a cursor by `Answering.consume`. -/

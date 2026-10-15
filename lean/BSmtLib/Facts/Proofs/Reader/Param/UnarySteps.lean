@@ -18,6 +18,8 @@ empty. Every other function is taken apart by `usim`.
 namespace BSmtLib.Facts.Proofs.Reader.Param.UnarySteps
 
 open BSmtLib.Lexer
+open BSmtLib.Token.BatchCursor.Internal (discardRequested resetConsumed remaining relexRequested)
+open BSmtLib.Lexer.Internal (BATCH_CAPACITY Stop Interrupted Failure LexerCore InnerM StepM LexM)
 open BSmtLib.Facts.Lexer.Adapters
 open BSmtLib.Facts.Proofs.Reader.Param.Unary
 
@@ -89,7 +91,7 @@ theorem storeSpent_usim (spent) : UL (Internal.storeSpent spent : FM F σ floor 
 
 theorem takeBatch_usim :
     UL (Internal.takeBatch : FM F σ floor low
-      {batch : Token.TokenBatch // ∀ p, floor = some p → batch.StartsFrom p}) := by
+      {batch : Token.Internal.TokenBatch // ∀ p, floor = some p → batch.StartsFrom p}) := by
   unfold Internal.takeBatch; usim
 
 theorem locationFrom_usim (base position) :
@@ -172,7 +174,7 @@ the consumer left, the lexer's version as it was; while nothing went wrong, the 
 is that cursor's; once the consumer answered an error, the stop is that error. -/
 theorem flushCursor_flag {b : Token.BatchTag} :
     ∀ (n : Nat) (cursor : Token.BatchCursor b) (hfloor) (s : {c : LexerCore // c.Bound floor low})
-      (fl : F) (l), cursor.remaining < n → Watched.errored fl = false →
+      (fl : F) (l), remaining cursor < n → Watched.errored fl = false →
       cursor.version = Watched.version fl →
       ∃ stop cur, (frun (Internal.flushCursor cursor hfloor) s fl l).1.1.1 = .ok (stop, cur) ∧
         (frun (Internal.flushCursor cursor hfloor) s fl l).1.1.2.val.version = s.val.version ∧
@@ -209,7 +211,7 @@ theorem flushCursor_flag {b : Token.BatchTag} :
           have hL' : Watched.layout fl' = true → e = none := fun hl => by
             rw [hL] at hl
             cases e <;> simp_all [Flagged.isLayoutAnswer]
-          by_cases hd : next.discardRequested = true
+          by_cases hd : discardRequested next = true
           · rw [ite_eq_left hd, frun_bind]
             erw [frun_modifyCore]
             dsimp only
@@ -224,18 +226,19 @@ theorem flushCursor_flag {b : Token.BatchTag} :
           have hE' : Watched.errored fl' = false := by rw [hE]; rfl
           have hnot : Watched.errored fl' = true → False := fun h' =>
             absurd (hE'.symm.trans h') (by simp)
-          by_cases hd : next.discardRequested = true
+          by_cases hd : discardRequested next = true
           · rw [ite_eq_left hd, frun_pure]
             exact ⟨_, _, rfl, rfl, fun _ => hV, fun h' => (hnot h').elim, hS⟩
           · rw [ite_eq_right hd]
             cases flow with
             | «continue» =>
               dsimp only
-              by_cases hrel : next.relexRequested = true
+              by_cases hrel : relexRequested next = true
               · rw [ite_eq_left hrel, frun_pure]
                 exact ⟨_, _, rfl, rfl, fun _ => hV, fun h' => (hnot h').elim, hS⟩
               · rw [ite_eq_right hrel]
-                obtain ⟨stop, cur, h₁, h₂, h₃, h₄, h₅⟩ := flushCursor_flag n next.resetConsumed _ s
+                obtain ⟨stop, cur, h₁, h₂, h₃, h₄, h₅⟩ := flushCursor_flag n
+                    (resetConsumed next) _ s
                   fl' l'
                   (by
                     rw [Token.BatchCursor.remaining_resetConsumed]
@@ -259,7 +262,8 @@ theorem frun_throw {α : Type} (i : Interrupted R (Option E) floor)
     frun (MonadExcept.throw i : FM F σ floor low α) s fl l = (((.error i, s), fl), l) := rfl
 
 omit [∀ b, Token.ConsumeFrom F (Token.BatchCursor b) (StateM σ)] [Watched F σ R E] in
-theorem storeSpent_run (spent : Token.TokenBatch) (s : {c : LexerCore // c.Bound floor low})
+theorem storeSpent_run (spent : Token.Internal.TokenBatch)
+    (s : {c : LexerCore // c.Bound floor low})
     (fl : F) (l) :
     ∃ s', frun (Internal.storeSpent spent : FM F σ floor low Unit) s fl l =
         (((.ok (), s'), fl), l) ∧
@@ -267,16 +271,18 @@ theorem storeSpent_run (spent : Token.TokenBatch) (s : {c : LexerCore // c.Bound
   ⟨_, rfl, rfl, rfl⟩
 
 theorem handOver_usim (batch bytesAfter hfloor) :
-    UL (Internal.handOver batch bytesAfter hfloor : FM F σ floor low Token.TokenBatch) := by
+    UL (Internal.handOver batch bytesAfter hfloor : FM F σ floor low
+        Token.Internal.TokenBatch) := by
   intro s fl l he hv
   unfold Internal.handOver
   rw [frun_bind, frun_getCore]
   dsimp only
   rw [frun_bind]
   obtain ⟨stop, cur, hres, hs, hok, herr, hsp⟩ :=
-    flushCursor_flag _ (Token.BatchCursor.new s.val.version batch) _ s fl l
+    flushCursor_flag _ (Token.BatchCursor.Internal.new s.val.version batch) _ s fl l
         (Nat.lt_succ_self _) he hv
-  generalize frun (Internal.flushCursor (Token.BatchCursor.new s.val.version batch) _) s fl l = r
+  generalize frun (Internal.flushCursor (Token.BatchCursor.Internal.new s.val.version batch)
+      _) s fl l = r
     at hres hs hok herr hsp
   obtain ⟨⟨⟨res, s'⟩, fl'⟩, l'⟩ := r
   simp only at hres hs hok herr hsp
@@ -292,7 +298,8 @@ theorem handOver_usim (batch bytesAfter hfloor) :
       · obtain ⟨_, hi, _⟩ := herr h; cases hi
     have hrest := fun s₁ hv₁ =>
       let h := (UL.pure (F := F) (floor := floor) (low := low)
-        ({ Internal.intoBatch cur with bytes := bytesAfter } : Token.TokenBatch)) s₁ fl' l' hfalse
+        ({ Internal.intoBatch cur with bytes :=
+            bytesAfter } : Token.Internal.TokenBatch)) s₁ fl' l' hfalse
             hv₁
       And.intro h.1 (And.intro h.2.1 (h.2.2.trans hsp))
     by_cases hrec : s'.val.recovers = true
@@ -311,10 +318,10 @@ theorem handOver_usim (batch bytesAfter hfloor) :
     have hrest : ∀ s₁ : {c : LexerCore // c.Bound floor low}, s₁.val.version = cur.version →
         let r := frun (do
             Internal.storeSpent ({ Internal.intoBatch cur with bytes := bytesAfter } :
-                Token.TokenBatch)
+                Token.Internal.TokenBatch)
             MonadExcept.throw i
-            pure ({ Internal.intoBatch cur with bytes := bytesAfter } : Token.TokenBatch) :
-            FM F σ floor low Token.TokenBatch) s₁ fl' l'
+            pure ({ Internal.intoBatch cur with bytes := bytesAfter } : Token.Internal.TokenBatch) :
+            FM F σ floor low Token.Internal.TokenBatch) s₁ fl' l'
         (Watched.errored r.1.2 = false → r.1.1.2.val.version = Watched.version r.1.2) ∧
         (Watched.errored r.1.2 = true →
           ConsumerThrow (Watched.layout r.1.2) r.1.1.1 ∧ r.1.1.2.val.batch.len = 0) ∧
@@ -323,7 +330,7 @@ theorem handOver_usim (batch bytesAfter hfloor) :
       dsimp only
       rw [frun_bind]
       obtain ⟨s₂, hs₂, hlen, hver⟩ := storeSpent_run
-        ({ Internal.intoBatch cur with bytes := bytesAfter } : Token.TokenBatch) s₁ fl' l'
+        ({ Internal.intoBatch cur with bytes := bytesAfter } : Token.Internal.TokenBatch) s₁ fl' l'
       rw [hs₂]
       dsimp only
       rw [frun_bind, frun_throw]

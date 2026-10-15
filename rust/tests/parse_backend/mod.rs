@@ -840,18 +840,12 @@ pub trait Category<H: Handler> {
         H: 'h;
     /// The parser as the driver's `drive` request names it.
     fn lean_name() -> String;
-    /// The result from the driver's `<result>` field.
-    fn from_lean(result: &str, values: &mut lean::Values<H>) -> Self::Result;
-}
-
-/// A parser of the Rust library that the Lean library has no counterpart of,
-/// so that the driver reports no result of it.
-fn no_lean_result(name: &str) -> ! {
-    panic!("the Lean driver reported a result of the {name} parser, which the Lean library has not")
+    /// The result from the fields of the driver's `result` line.
+    fn read_lean(fields: &mut lean::Fields<'_>, values: &mut lean::Values<H>) -> Self::Result;
 }
 
 macro_rules! single_token_category {
-    ($marker:ident, $rust:ident, $result:ty, $name:literal) => {
+    ($marker:ident, $rust:ident, $result:ty, $name:literal, |$fields:ident| $read:expr) => {
         #[doc = concat!("`", stringify!($rust), "`.")]
         #[derive(Default)]
         pub struct $marker;
@@ -872,19 +866,55 @@ macro_rules! single_token_category {
             fn lean_name() -> String {
                 $name.into()
             }
-            fn from_lean(_result: &str, _values: &mut lean::Values<H>) -> $result {
-                no_lean_result($name)
+            fn read_lean($fields: &mut lean::Fields<'_>, _values: &mut lean::Values<H>) -> $result {
+                $read
             }
         }
     };
 }
 
-single_token_category!(SymbolParser, SmtSymbolParser, SmtSymbolBuf, "symbol");
-single_token_category!(KeywordParser, SmtKeywordParser, SmtKeywordBuf, "keyword");
-single_token_category!(StringParser, SmtStringParser, SmtStringContentBuf, "string");
-single_token_category!(OpenParenParser, SmtOpenParenParser, (), "open-paren");
-single_token_category!(CloseParenParser, SmtCloseParenParser, (), "close-paren");
-single_token_category!(IdentParser, SmtIdentParser, SmtIdentBuf, "ident");
+single_token_category!(
+    SymbolParser,
+    SmtSymbolParser,
+    SmtSymbolBuf,
+    "symbol",
+    |fields| fields.symbol()
+);
+single_token_category!(
+    KeywordParser,
+    SmtKeywordParser,
+    SmtKeywordBuf,
+    "keyword",
+    |fields| fields.keyword()
+);
+single_token_category!(
+    StringParser,
+    SmtStringParser,
+    SmtStringContentBuf,
+    "string",
+    |fields| fields.string()
+);
+single_token_category!(
+    OpenParenParser,
+    SmtOpenParenParser,
+    (),
+    "open-paren",
+    |fields| fields.unit()
+);
+single_token_category!(
+    CloseParenParser,
+    SmtCloseParenParser,
+    (),
+    "close-paren",
+    |fields| fields.unit()
+);
+single_token_category!(
+    IdentParser,
+    SmtIdentParser,
+    SmtIdentBuf,
+    "ident",
+    |fields| fields.ident()
+);
 
 /// `SmtQualifiedIdentParser`.
 #[derive(Default)]
@@ -911,8 +941,11 @@ impl<H: Handler> Category<H> for QualifiedIdentParser {
     fn lean_name() -> String {
         "qualified-ident".into()
     }
-    fn from_lean(_result: &str, _values: &mut lean::Values<H>) -> QualifiedIdent<H::Sort> {
-        no_lean_result("qualified-ident")
+    fn read_lean(
+        fields: &mut lean::Fields<'_>,
+        values: &mut lean::Values<H>,
+    ) -> QualifiedIdent<H::Sort> {
+        values.qualified_ident(fields)
     }
 }
 
@@ -936,8 +969,8 @@ impl<H: Handler> Category<H> for ClosedAttributeParser {
     fn lean_name() -> String {
         "closed-attribute".into()
     }
-    fn from_lean(_result: &str, _values: &mut lean::Values<H>) -> H::Attribute {
-        no_lean_result("closed-attribute")
+    fn read_lean(fields: &mut lean::Fields<'_>, values: &mut lean::Values<H>) -> H::Attribute {
+        values.take_attribute(fields.id())
     }
 }
 
@@ -961,8 +994,11 @@ impl<H: Handler> Category<H> for ClosedMultipleAttributeParser {
     fn lean_name() -> String {
         "closed-multiple-attribute".into()
     }
-    fn from_lean(_result: &str, _values: &mut lean::Values<H>) -> Vec<H::Attribute> {
-        no_lean_result("closed-multiple-attribute")
+    fn read_lean(fields: &mut lean::Fields<'_>, values: &mut lean::Values<H>) -> Vec<H::Attribute> {
+        let count = fields.count();
+        (0..count)
+            .map(|_| values.take_attribute(fields.id()))
+            .collect()
     }
 }
 
@@ -982,8 +1018,8 @@ impl<H: Handler> Category<H> for SortParser {
     fn lean_name() -> String {
         "sort".into()
     }
-    fn from_lean(result: &str, values: &mut lean::Values<H>) -> H::Sort {
-        values.take_sort(lean::value_id(result))
+    fn read_lean(fields: &mut lean::Fields<'_>, values: &mut lean::Values<H>) -> H::Sort {
+        values.take_sort(fields.id())
     }
 }
 
@@ -1003,8 +1039,8 @@ impl<H: Handler> Category<H> for SExprParser {
     fn lean_name() -> String {
         "s-expr".into()
     }
-    fn from_lean(result: &str, values: &mut lean::Values<H>) -> H::SExpr {
-        values.take_s_expr(lean::value_id(result))
+    fn read_lean(fields: &mut lean::Fields<'_>, values: &mut lean::Values<H>) -> H::SExpr {
+        values.take_s_expr(fields.id())
     }
 }
 
@@ -1024,8 +1060,8 @@ impl<H: Handler> Category<H> for TermParser {
     fn lean_name() -> String {
         "term".into()
     }
-    fn from_lean(result: &str, values: &mut lean::Values<H>) -> H::Term {
-        values.take_term(lean::value_id(result))
+    fn read_lean(fields: &mut lean::Fields<'_>, values: &mut lean::Values<H>) -> H::Term {
+        values.take_term(fields.id())
     }
 }
 
@@ -1053,22 +1089,33 @@ impl<H: Handler, A: Category<H>, B: Category<H>> Category<H> for PairParser<A, B
     fn lean_name() -> String {
         format!("pair({},{})", A::lean_name(), B::lean_name())
     }
-    fn from_lean(_result: &str, _values: &mut lean::Values<H>) -> Self::Result {
-        no_lean_result("pair")
+    fn read_lean(fields: &mut lean::Fields<'_>, values: &mut lean::Values<H>) -> Self::Result {
+        let first = A::read_lean(fields, values);
+        (first, B::read_lean(fields, values))
     }
 }
 
 macro_rules! wrapping_category {
     ($marker:ident, $rust:ident, $name:literal, single) => {
-        wrapping_category!(@define $marker, $rust, $name, A::Result, result, A::from_rust(result));
+        wrapping_category!(
+            @define $marker, $rust, $name, A::Result, result, A::from_rust(result),
+            |fields, values| A::read_lean(fields, values)
+        );
     };
     ($marker:ident, $rust:ident, $name:literal, multiple) => {
         wrapping_category!(
             @define $marker, $rust, $name, Vec<A::Result>, results,
-            results.into_iter().map(A::from_rust).collect()
+            results.into_iter().map(A::from_rust).collect(),
+            |fields, values| {
+                let count = fields.count();
+                (0..count).map(|_| A::read_lean(fields, values)).collect()
+            }
         );
     };
-    (@define $marker:ident, $rust:ident, $name:literal, $result:ty, $bound:ident, $convert:expr) => {
+    (
+        @define $marker:ident, $rust:ident, $name:literal, $result:ty, $bound:ident,
+        $convert:expr, |$fields:ident, $values:ident| $read:expr
+    ) => {
         #[doc = concat!("`", stringify!($rust), "` over the parser `A`.")]
         pub struct $marker<A>(PhantomData<A>);
 
@@ -1090,8 +1137,11 @@ macro_rules! wrapping_category {
             fn lean_name() -> String {
                 format!("{}({})", $name, A::lean_name())
             }
-            fn from_lean(_result: &str, _values: &mut lean::Values<H>) -> Self::Result {
-                no_lean_result($name)
+            fn read_lean(
+                $fields: &mut lean::Fields<'_>,
+                $values: &mut lean::Values<H>,
+            ) -> Self::Result {
+                $read
             }
         }
     };

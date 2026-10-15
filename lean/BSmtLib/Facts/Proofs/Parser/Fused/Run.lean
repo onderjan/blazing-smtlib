@@ -22,9 +22,8 @@ it that the fused steps read from the category alone.
 namespace BSmtLib.Facts.Proofs.Parser.Fused.Run
 
 open BSmtLib.Traits
-open BSmtLib.Parser (Parse PM call syntaxError ParseErrorCause)
-open BSmtLib.Parser.Category.Term (TermLevelOf TermStateOf)
-open BSmtLib.Parser.Command (CommandStateOf)
+open BSmtLib.Parser (Parse ParseErrorCause)
+open BSmtLib.Parser.Internal (PM call syntaxError)
 open BSmtLib.Parser.Internal.Fused
 open BSmtLib.Parser.Internal.Fused.Basic
 open BSmtLib.Parser.Script (ScriptParser)
@@ -61,7 +60,7 @@ def HandledOutcome.toRun {σ ρ ε : Type} :
 /-- The token as the port views it, by its category and content. -/
 abbrev inputOf {batch : BatchTag} (version : Token.Version) (next : BatchCursor batch)
     (token : Token batch) : Parser.Internal.Input :=
-  Parser.Internal.Input.ofSyntax (Token.SyntaxToken.fromParts (next.category token)
+  Parser.Internal.Input.ofSyntax (Token.SyntaxToken.Internal.fromParts (next.category token)
       (next.content token) version)
 
 theorem run_call_bind {α γ : Type} (x : ExceptT (Handler.Error H) (StateT H m) α)
@@ -81,7 +80,7 @@ theorem inputOf_parenClose {batch : BatchTag} (version : Token.Version) (next : 
     inputOf version next token = .parenClose ↔ next.category token = .parenClose := by
   simp only [inputOf]
   generalize next.category token = cat
-  cases cat <;> simp only [Token.SyntaxToken.fromParts, Parser.Internal.Input.ofSyntax] <;>
+  cases cat <;> simp only [Token.SyntaxToken.Internal.fromParts, Parser.Internal.Input.ofSyntax] <;>
     (try rcases Token.Reserved.fromBytes? (next.content token) version with _ | (w | w)) <;>
     simp
 
@@ -99,7 +98,7 @@ theorem inputOf_isWord {batch : BatchTag} (version : Token.Version) (next : Batc
     (inputOf version next token).isWord word =
       Category.isWord version (next.category token) next token word := by
   simp only [Category.isWord, Reserved.reservedAt_eq, inputOf]
-  cases next.category token <;> simp only [Token.SyntaxToken.fromParts,
+  cases next.category token <;> simp only [Token.SyntaxToken.Internal.fromParts,
       Parser.Internal.Input.ofSyntax] <;>
     (try rcases Token.Reserved.fromBytes? (next.content token) version with _ | (w | w)) <;>
     rfl

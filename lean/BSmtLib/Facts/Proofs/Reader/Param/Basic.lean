@@ -26,6 +26,7 @@ may fail; `LSim` is `XSim` for the lexer's steps, whose failures are its interru
 namespace BSmtLib.Facts.Proofs.Reader.Param.Basic
 
 open BSmtLib.Lexer
+open BSmtLib.Lexer.Internal (BATCH_CAPACITY Stop Interrupted Failure LexerCore InnerM StepM LexM)
 open BSmtLib.Lexer.Error
 
 /-! ## Relators -/

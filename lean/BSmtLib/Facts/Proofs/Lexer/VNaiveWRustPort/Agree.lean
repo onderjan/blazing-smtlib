@@ -1,7 +1,7 @@
 module
 
 public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.HandOver
-import all BSmtLib.Lexer.Helpers
+import all BSmtLib.Lexer.Internal.Helpers
 
 @[expose] public section
 
@@ -36,7 +36,7 @@ with the lexical rules of `v`, holds a result if `hd`, and was created with the 
 namespace BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Agree
 
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Bytes
-open BSmtLib.Lexer.Helpers (LexerState)
+open BSmtLib.Lexer.Internal.Helpers (LexerState)
 open BSmtLib.Facts.Proofs.Lexer.VNaive.Run BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.HandOver
 open BSmtLib.Lexer.Internal.VNaive
 
@@ -45,9 +45,9 @@ def lastOf (content : ByteArray) : Option UInt8 :=
   if content.size == 0 then none else some (content.get! (content.size - 1))
 
 /-- The last byte of the content buffer is that of its content. -/
-theorem last?_stored {buf : Lexer.Helpers.ContentBuffer} (h : Fits buf) :
-    Lexer.Helpers.Content.stored.last? buf = lastOf (contentBytes buf) := by
-  unfold Lexer.Helpers.Content.last? lastOf
+theorem last?_stored {buf : Lexer.Internal.Helpers.ContentBuffer} (h : Fits buf) :
+    Lexer.Internal.Helpers.Content.stored.last? buf = lastOf (contentBytes buf) := by
+  unfold Lexer.Internal.Helpers.Content.last? lastOf
   rw [size_contentBytes h]
   by_cases h0 : buf.len = 0
   · simp [h0]

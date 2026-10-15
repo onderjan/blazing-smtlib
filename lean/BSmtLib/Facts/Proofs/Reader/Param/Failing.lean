@@ -29,6 +29,7 @@ the tokens stand for fails there (`loop_agreeG`).
 namespace BSmtLib.Facts.Proofs.Reader.Param.Failing
 
 open BSmtLibSpec
+open BSmtLib.Token.BatchCursor.Internal (remaining)
 open BSmtLibSpec.Lexer (Handed)
 open BSmtLib.Parser (Parse)
 open BSmtLib.Parser.Script (ScriptParser)
@@ -184,7 +185,7 @@ theorem ansRest_handed (version : Lexicon.Version) {b : Token.BatchTag}
     dsimp only
     split
     · exact ⟨[], by simp⟩
-    · exact ansRest_extends version (cursor.next h).2.val.remaining.succ
+    · exact ansRest_extends version (remaining (cursor.next h).2.val).succ
         (cursor.next h).2.val (taken ++ [handed]) (Nat.lt_succ_self _)
 
 /-- Where the recording run over items standing for the tokens has ended, the stand-in consumer
@@ -228,7 +229,7 @@ theorem link_callsG (version : Lexicon.Version) : Calls (linkLinkG version) wher
     refine ⟨fun flagged taken => ?_, fun flagged taken adapter he hinv hgood hsp => ?_,
       fun flagged taken adapter he hsp => ?_⟩
     · have hrun := flagged_run (scriptConsumer version) cursor h flagged taken
-      have hext := ansRest_extends version (cursor.remaining + 1) cursor taken
+      have hext := ansRest_extends version (remaining cursor + 1) cursor taken
         (Nat.lt_succ_self _)
       rw [hans] at hext
       generalize (Answering.consume (scriptConsumer version) cursor h).run taken = A at hrun hext
@@ -257,7 +258,7 @@ theorem link_callsG (version : Lexicon.Version) : Calls (linkLinkG version) wher
       rotate_left
       · -- the recording run goes on: the two loops agree
         obtain ⟨rfl, hparser, hlog, -⟩ := hat
-        obtain ⟨hshape, hcur, hadapt⟩ := loop_agreeG (cursor.remaining + 1) cursor taken items
+        obtain ⟨hshape, hcur, hadapt⟩ := loop_agreeG (remaining cursor + 1) cursor taken items
           parser log (Nat.lt_succ_self _) hst (by rw [hR, hcv]) (.inr h) hgood'
         rw [hcv, hlog, hparser] at hq
         simp only [Prod.mk.injEq] at hq

@@ -129,20 +129,21 @@ theorem received_ofSyntax {b : Token.BatchTag} (cursor : Token.BatchCursor b) (t
   case unquotedSymbol =>
     cases hw : Token.Reserved.fromBytes? content cursor.version with
     | none =>
-      simp only [Token.SyntaxToken.fromParts, hw, Parser.Internal.Input.ofSyntax, itemOf,
+      simp only [Token.SyntaxToken.Internal.fromParts, hw, Parser.Internal.Input.ofSyntax, itemOf,
         Lexer.Adapters.toReservedKind, Bridge.received, rcv, Option.getD_some,
-        Bridge.symbol, SymbolView.asSlice, SymbolView.newUnchecked, hc]
+        Bridge.symbol, SymbolView.asSlice, SymbolView.Internal.newUnchecked, hc]
     | some word =>
-      simp only [Token.SyntaxToken.fromParts, hw, Parser.Internal.Input.ofSyntax, itemOf,
+      simp only [Token.SyntaxToken.Internal.fromParts, hw, Parser.Internal.Input.ofSyntax, itemOf,
         Lexer.Adapters.toReservedKind, fromBytes_decode hw, Bridge.received, rcv,
         Option.getD_some]
-  all_goals simp only [Token.SyntaxToken.fromParts, Parser.Internal.Input.ofSyntax, itemOf,
+  all_goals simp only [Token.SyntaxToken.Internal.fromParts, Parser.Internal.Input.ofSyntax, itemOf,
       Bridge.received, rcv,
     Option.getD_some, Bridge.constant, Bridge.keyword, Bridge.symbol, NumeralView.asSlice,
-    NumeralView.newUnchecked, DecimalView.asSlice, DecimalView.newUnchecked, HexDigitsView.asSlice,
-    HexDigitsView.newUnchecked, BinDigitsView.asSlice, BinDigitsView.newUnchecked,
-    StringContentView.asSlice, StringContentView.newUnchecked, KeywordView.asSlice,
-    KeywordView.newUnchecked, SymbolView.asSlice, SymbolView.newUnchecked, hc]
+    NumeralView.Internal.newUnchecked, DecimalView.asSlice, DecimalView.Internal.newUnchecked,
+        HexDigitsView.asSlice,
+    HexDigitsView.Internal.newUnchecked, BinDigitsView.asSlice, BinDigitsView.Internal.newUnchecked,
+    StringContentView.asSlice, StringContentView.Internal.newUnchecked, KeywordView.asSlice,
+    KeywordView.Internal.newUnchecked, SymbolView.asSlice, SymbolView.Internal.newUnchecked, hc]
 
 /-! ## The recording run over the adapter's items -/
 

@@ -27,13 +27,13 @@ bridge maps it to the tree's.
 namespace BSmtLib.Facts.Proofs.Parser.TermParts
 
 open BSmtLibSpec.Grammar
-open BSmtLib.Parser (PM)
-open BSmtLib.Parser.Category.Ident (IdentState)
-open BSmtLib.Parser.Category.Sort (SortState sortStep)
-open BSmtLib.Parser.Category.SortedVar (SortedVarState sortedVarStep)
-open BSmtLib.Parser.Category.Pattern (PatternState)
-open BSmtLib.Parser.Category.QualifiedIdent (QualIdentState qualIdentStep)
-open BSmtLib.Parser.Category.Combinator (ListState)
+open BSmtLib.Parser.Internal (PM)
+open BSmtLib.Parser.Category.Ident.Internal (IdentState)
+open BSmtLib.Parser.Category.Sort.Internal (SortState sortStep)
+open BSmtLib.Parser.Category.SortedVar.Internal (SortedVarState sortedVarStep)
+open BSmtLib.Parser.Category.Pattern.Internal (PatternState)
+open BSmtLib.Parser.Category.QualifiedIdent.Internal (QualIdentState qualIdentStep)
+open BSmtLib.Parser.Category.Combinator.Internal (ListState)
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Parser.Adapters.Run
 open BSmtLib.Facts.Proofs.Parser.Drive BSmtLib.Facts.Proofs.Parser.Lemmas
 open BSmtLib.Facts.Proofs.Parser.List BSmtLib.Facts.Proofs.Parser.Reserved
@@ -73,7 +73,7 @@ theorem qualIndexed_runs {name : Tree.Symbol} {indices : List Tree.Index}
   exact (Runs.embed (outer := qualIdentStep version) QualIdentState.indexed
     (fun head => pure (.done (head, none)))
     (fun state token => by
-      simp only [Parser.Category.QualifiedIdent.qualIdentStep]
+      simp only [Parser.Category.QualifiedIdent.Internal.qualIdentStep]
       congr 1
       funext step
       cases step <;> rfl)
@@ -148,7 +148,7 @@ theorem qualAs_runs (hA : TermAgrees h) {name : Tree.Identifier} {qualification 
   have hidentEmbed := Runs.embed (outer := qualIdentStep (H := H) version)
     QualIdentState.qualifiedIdent (fun identifier => pure (.more (.sort identifier .init)))
     (fun state token => by
-      simp only [Parser.Category.QualifiedIdent.qualIdentStep]
+      simp only [Parser.Category.QualifiedIdent.Internal.qualIdentStep]
       congr 1
       funext step
       cases step <;> rfl)
@@ -156,15 +156,15 @@ theorem qualAs_runs (hA : TermAgrees h) {name : Tree.Identifier} {qualification 
   have hsortEmbed := Runs.embed (outer := qualIdentStep version)
     (QualIdentState.sort head) (fun sort => pure (.more (.close head sort)))
     (fun state token => by
-      simp only [Parser.Category.QualifiedIdent.qualIdentStep]
+      simp only [Parser.Category.QualifiedIdent.Internal.qualIdentStep]
       congr 1
       funext step
       cases step <;> rfl)
     (sort_runs (points := points) hA qualification hsort hs₂ [])
   have hclose : ∀ sort, Runs points (qualIdentStep version) (.close head sort) [.parenClose]
       (do tick points .parenClose; pure sort) fun sort => pure (.done (head, some sort)) :=
-    fun _ => Runs.token (by simp [Parser.Category.QualifiedIdent.qualIdentStep,
-        Parser.Category.Token.expectClose])
+    fun _ => Runs.token (by simp [Parser.Category.QualifiedIdent.Internal.qualIdentStep,
+        Parser.Category.Token.Internal.expectClose])
   exact Runs.append (middle := fun _ => QualIdentState.sort head .init)
     (hidentEmbed.congr rfl (by funext; simp [Parser.Internal.Step.wrap])) fun _ =>
       Runs.append (middle := fun sort => QualIdentState.close head sort)
@@ -304,24 +304,24 @@ theorem sortedVar_runs (hA : TermAgrees h) (var : Tree.SortedVar)
   have hsortEmbed := Runs.embed (outer := sortedVarStep version)
     (SortedVarState.sort symbol) (fun sort => pure (.more (.close symbol sort)))
     (fun state token => by
-      simp only [Parser.Category.SortedVar.sortedVarStep]
+      simp only [Parser.Category.SortedVar.Internal.sortedVarStep]
       congr 1
       funext step
       cases step <;> rfl)
     (sort_runs (points := points) hA varSort hvalid hsortTokens [])
   have hclose : ∀ sort, Runs points (sortedVarStep version) (.close symbol sort) [.parenClose]
       (do tick points .parenClose; pure (symbol, sort)) fun result => pure (.done result) :=
-    fun _ => Runs.token (by simp [Parser.Category.SortedVar.sortedVarStep,
-        Parser.Category.Token.expectClose])
+    fun _ => Runs.token (by simp [Parser.Category.SortedVar.Internal.sortedVarStep,
+        Parser.Category.Token.Internal.expectClose])
   rw [show Parser.Internal.Input.parenOpen ::
       (Parser.Internal.Input.symbol symbol :: sortTokens ++ [.parenClose]) =
     [.parenOpen] ++ ([.symbol symbol] ++ (sortTokens ++ [.parenClose])) by simp]
   exact (Runs.append (middle := fun _ => SortedVarState.opened)
-    (Runs.token_more (by simp [Parser.Category.SortedVar.sortedVarStep,
-    Parser.Category.Token.expectOpen])) fun _ =>
+    (Runs.token_more (by simp [Parser.Category.SortedVar.Internal.sortedVarStep,
+    Parser.Category.Token.Internal.expectOpen])) fun _ =>
       Runs.append (middle := fun _ => SortedVarState.sort symbol .init)
-        (Runs.token_more (by simp [Parser.Category.SortedVar.sortedVarStep,
-            Parser.Category.Token.expectSymbol])) fun _ =>
+        (Runs.token_more (by simp [Parser.Category.SortedVar.Internal.sortedVarStep,
+            Parser.Category.Token.Internal.expectSymbol])) fun _ =>
           Runs.append (middle := fun sort => SortedVarState.close symbol sort)
             ((show (SortState.init : SortState (Traits.Handler.«Sort» H)) =
                 ({ mode := .start, levels := [] } : SortState (Traits.Handler.«Sort» H)) from rfl) ▸

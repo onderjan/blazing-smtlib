@@ -15,6 +15,9 @@ namespace BSmtLib.Parser.Category.SExpr
 
 open BSmtLib.Nodes BSmtLib.Traits
 open BSmtLib.Token (Version)
+open BSmtLib.Parser.Internal (PM call syntaxError)
+
+namespace Internal
 
 /-- The state of the s-expression parser: the items of the open lists, innermost first. -/
 abbrev SExprState (HandledSExpr : Type) := List (Array HandledSExpr)
@@ -55,9 +58,12 @@ def sExprStep (version : Version) (self : SExprState (Handler.SExpr H)) (token :
 
 end
 
+end Internal
+
 /-- The parser of one s-expression (`SmtSExprParser`). -/
 structure SExprParser (H : Type) {m : Type → Type} [Handler H m] where
-  state : SExprState (Handler.SExpr H)
+  private mk ::
+  private state : Internal.SExprState (Handler.SExpr H)
 
 section
 
@@ -66,10 +72,13 @@ variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
 /-- The s-expression parser before an s-expression. -/
 def SExprParser.new : SExprParser H := ⟨[]⟩
 
+instance : Inhabited (SExprParser H) := ⟨.new⟩
+
+@[no_expose]
 instance : Internal.ParseByToken (SExprParser H) H m (Handler.Error H) (Handler.SExpr H) where
   arrive _ _ := pure ()
   step version parser token := do
-    match ← sExprStep version parser.state token with
+    match ← Internal.sExprStep version parser.state token with
     | .more state => return .more ⟨state⟩
     | .done result => return .done result
   reset _ := .new

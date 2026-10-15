@@ -15,7 +15,7 @@ classes.
 
 namespace BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.TextRuns
 
-open BSmtLib.Lexer.CharClass (endsRun RUN_STRING_PLAIN RUN_COMMENT_PLAIN)
+open BSmtLib.Lexer.Internal.CharClass (endsRun RUN_STRING_PLAIN RUN_COMMENT_PLAIN)
 open BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Bytes
 open BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.Basic
 

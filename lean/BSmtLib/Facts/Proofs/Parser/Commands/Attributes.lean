@@ -3,7 +3,7 @@ module
 public import BSmtLib.Facts.Proofs.Parser.Commands.FunsRec
 import all BSmtLib.Parser.Category.Attribute
 import all BSmtLib.Parser.Category.Token
-import all BSmtLib.Parser.Command.Standard
+import all BSmtLib.Parser.Command.Internal.Standard
 
 @[expose] public section
 
@@ -21,10 +21,9 @@ at its `)`, `set-info`, and the command parser ends with the version.
 namespace BSmtLib.Facts.Proofs.Parser.Commands.Attributes
 
 open BSmtLibSpec.Grammar
-open BSmtLib.Parser (PM)
-open BSmtLib.Parser.Command.Standard (Payload FinalCall payloadStep finalCall Declaration)
+open BSmtLib.Parser.Command.Internal.Standard (Payload FinalCall payloadStep finalCall Declaration)
 open BSmtLib.Parser.Command (CommandOutcome)
-open BSmtLib.Parser.Category.Attribute (AttributeState AttributeMode attributeStep)
+open BSmtLib.Parser.Category.Attribute.Internal (AttributeState AttributeMode attributeStep)
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Parser.Adapters.Run
 open BSmtLib.Facts.Proofs.Parser.Attribute BSmtLib.Facts.Proofs.Parser.Commands.Bytes
 open BSmtLib.Facts.Proofs.Parser.Commands.Frame BSmtLib.Facts.Proofs.Parser.Drive
@@ -64,13 +63,13 @@ theorem setOption_payload (keyword : BSmtLibSpec.Regex.Chars) (value : Option Tr
   have hruns := attributeSingle_runs (points := points) hA.toTermAgrees keyword value hvalid
     (Stands.append hs (Stands.cons (token := .parenClose) rfl Stands.nil))
   refine (Runs.bind_next ((Runs.embedA (outer := payloadStep version)
-      (outerArrival := Parser.Command.Standard.payloadArrive) Payload.setOption
+      (outerArrival := Parser.Command.Internal.Standard.payloadArrive) Payload.setOption
     (fun attributes => do
-      let some option := attributes[0]? | Parser.syntaxError .expectedAttribute
-      Parser.call (Traits.CommandHandler.commandSetOption option)
+      let some option := attributes[0]? | Parser.Internal.syntaxError .expectedAttribute
+      Parser.Internal.call (Traits.CommandHandler.commandSetOption option)
       return .done .command)
     (by payload_step) hruns).congr rfl
-    (next' := fun r => Parser.call (Traits.CommandHandler.commandSetOption r) >>=
+    (next' := fun r => Parser.Internal.call (Traits.CommandHandler.commandSetOption r) >>=
       fun _ => pure (.done .command))
     (by funext; simp [Parser.Internal.Step.wrap]))).congr ?_ rfl
   simp [hA.commandSetOption]
@@ -100,15 +99,15 @@ theorem setInfo_payload_other (keyword : BSmtLibSpec.Regex.Chars)
     obtain ⟨view, rfl, hview⟩ := Parser.Internal.Input.received_keyword htoken
     exact ⟨view, rest, rfl, hview⟩
   obtain ⟨view, rest, rfl, hview⟩ := hfirst
-  have hnot : Parser.Command.Standard.isVersionKeyword view = false := by
+  have hnot : Parser.Command.Internal.Standard.isVersionKeyword view = false := by
     rw [isVersionKeyword_eq, hview]
     exact decide_eq_false hkeyword
   have hembed := Runs.bind_next ((Runs.embedA (outer := payloadStep version)
-      (outerArrival := Parser.Command.Standard.payloadArrive)
+      (outerArrival := Parser.Command.Internal.Standard.payloadArrive)
     (Payload.setInfo .other)
     (fun attributes => do
-      let some info := attributes[0]? | Parser.syntaxError .expectedAttribute
-      Parser.call (Traits.CommandHandler.commandSetInfo info)
+      let some info := attributes[0]? | Parser.Internal.syntaxError .expectedAttribute
+      Parser.Internal.call (Traits.CommandHandler.commandSetInfo info)
       return .done .command)
     (by
       intro state token
@@ -120,7 +119,7 @@ theorem setInfo_payload_other (keyword : BSmtLibSpec.Regex.Chars)
       | done r =>
         simp only [Parser.Internal.Step.wrap, Declaration.next]
         cases r[0]? <;> rfl) hruns).congr rfl
-    (next' := fun r => Parser.call (Traits.CommandHandler.commandSetInfo r) >>=
+    (next' := fun r => Parser.Internal.call (Traits.CommandHandler.commandSetInfo r) >>=
       fun _ => pure (.done .command))
     (by funext; simp [Parser.Internal.Step.wrap]))
   refine (Runs.first (state' := Payload.setInfo .other .init)
@@ -145,7 +144,7 @@ theorem setInfo_payload_declaration (decimal : BSmtLibSpec.Regex.Chars)
   obtain ⟨decimalToken, rfl, hdecimalToken⟩ := Stands.split_single hrest
   obtain ⟨keyword, rfl, hkeyword⟩ := Parser.Internal.Input.received_keyword hkeywordToken
   obtain ⟨text, rfl, htext⟩ := Parser.Internal.Input.received_decimal hdecimalToken
-  have hversionKeyword : Parser.Command.Standard.isVersionKeyword keyword = true := by
+  have hversionKeyword : Parser.Command.Internal.Standard.isVersionKeyword keyword = true := by
     rw [isVersionKeyword_eq, hkeyword]
     exact decide_eq_true rfl
   have hversion : Token.Version.fromDecimal? text.asSlice = some (Bridge.libVersion declared) := by
@@ -156,21 +155,21 @@ theorem setInfo_payload_declaration (decimal : BSmtLibSpec.Regex.Chars)
     [.keyword keyword] ++ ([.constant (.decimal text)] ++ [.parenClose]) by rfl]
   refine (Runs.append (middle := fun _ => Payload.setInfo .keyword
       { mode := .afterName keyword, attributes := #[] })
-    (Runs.token_moreA (arrival := Parser.Command.Standard.payloadArrive) (by
+    (Runs.token_moreA (arrival := Parser.Command.Internal.Standard.payloadArrive) (by
       simp [payloadStep, Payload.init, Declaration.next, hversionKeyword, attributeStep,
         AttributeState.init])) fun _ =>
     Runs.append (middle := fun handled => Payload.setInfo
         (.value (some (Bridge.libVersion declared))) { mode := .start, attributes := #[handled] })
-      (Runs.tokenA (arrival := Parser.Command.Standard.payloadArrive)
-          (program := Parser.call (Traits.Handler.handleAttribute keyword
+      (Runs.tokenA (arrival := Parser.Command.Internal.Standard.payloadArrive)
+      (program := Parser.Internal.call (Traits.Handler.handleAttribute keyword
         (some (.constant (.decimal text))))) (by
         simp [payloadStep, Declaration.next, hversion, attributeStep])) fun handled =>
-      Runs.tokenA (arrival := Parser.Command.Standard.payloadArrive)
-          (program := Parser.call (Traits.CommandHandler.commandSetInfo handled))
+      Runs.tokenA (arrival := Parser.Command.Internal.Standard.payloadArrive)
+          (program := Parser.Internal.call (Traits.CommandHandler.commandSetInfo handled))
         (step := payloadStep version)
         (next := fun _ => pure (.done (.setVersion (Bridge.libVersion declared)))) (by
         simp [payloadStep, Declaration.next, attributeStep,
-            Parser.Category.Token.expectClose])).congr ?_ rfl
+            Parser.Category.Token.Internal.expectClose])).congr ?_ rfl
   rw [attributeThen_some]
   simp [attributeValue, Tree.SpecConstant.token, ← hkeyword, ← htext, hA.handleAttribute,
     hA.commandSetInfo, Bridge.attributeValue, Bridge.constant,

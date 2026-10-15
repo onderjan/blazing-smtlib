@@ -20,7 +20,7 @@ their arrays of contents stay the same as before in both.
 
 namespace BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Flush
 
-open BSmtLib.Lexer (BATCH_CAPACITY Interrupted)
+open BSmtLib.Lexer.Internal (BATCH_CAPACITY Interrupted)
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Batch BSmtLib.Facts.Proofs.Lexer.Simulation.Relation
 open BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.HandOver
 
@@ -35,7 +35,7 @@ variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [
 have no tokens; where the simulation is strict, the Rust port's batch has the array of contents
 the other gives its batch back with. -/
 theorem handOver_sim' (hcons : ConsumesAlike H m R E) (l ls : Nat) (v : Token.Version)
-    (b b' : Token.TokenBatch) (hb : Agree b b') (bytesAfter : ByteArray) (hf hf') :
+    (b b' : Token.Internal.TokenBatch) (hb : Agree b b') (bytesAfter : ByteArray) (hf hf') :
     SimR (Core.ErZ strict) (fun s t => Core.SRE l ls s t ∧ s.val.version = v ∧
         (strict = true → s.val.batch.bytes = bytesAfter))
       (fun _ spent s t => Core.SRE l ls s t ∧ t.val.batch.len = 0 ∧
@@ -43,12 +43,14 @@ theorem handOver_sim' (hcons : ConsumesAlike H m R E) (l ls : Nat) (v : Token.Ve
         (strict = true → s.val.batch.bytes = bytesAfter))
       (Lexer.Internal.WRustPort.Rust.flushCursor (H := H) (m := m) (R := R) (E := E)
           (floor := floor)
-        (low := low) (Token.BatchCursor.new v b) hf)
+        (low := low) (Token.BatchCursor.Internal.new v b) hf)
       (Lexer.Internal.X1BatchInCore.handOver b' bytesAfter hf') := by
   rw [handOver_eq]
   refine Core.getCore_bind_right fun s₀ t₀ h₀ => ?_
   obtain ⟨⟨⟨hst, hl, hls⟩, hlen⟩, hv, hby⟩ := h₀
-  have hcd : CursorAgree (Token.BatchCursor.new v b) (Token.BatchCursor.new t₀.val.version b') := by
+  have hcd :
+      CursorAgree (Token.BatchCursor.Internal.new v b)
+      (Token.BatchCursor.Internal.new t₀.val.version b') := by
     rw [← hst.version, hv]
     exact cursorAgree_new _ hb
   refine SimR.mono (fun s t h => ?_) (fun _ spent s t h => ?_) (fun _ _ h => h)
@@ -65,7 +67,7 @@ theorem handOver_sim' (hcons : ConsumesAlike H m R E) (l ls : Nat) (v : Token.Ve
 
 /-- `handOver_sim'` with the interruptions thrown from states with `ErS`. -/
 theorem handOver_simS (hcons : ConsumesAlike H m R E) (l ls : Nat) (v : Token.Version)
-    (b b' : Token.TokenBatch) (hb : Agree b b') (bytesAfter : ByteArray) (hf hf') :
+    (b b' : Token.Internal.TokenBatch) (hb : Agree b b') (bytesAfter : ByteArray) (hf hf') :
     Core.LSim strict (fun s t => Core.SRE l ls s t ∧ s.val.version = v ∧
         (strict = true → s.val.batch.bytes = bytesAfter))
       (fun _ spent s t => Core.SRE l ls s t ∧ t.val.batch.len = 0 ∧
@@ -73,14 +75,14 @@ theorem handOver_simS (hcons : ConsumesAlike H m R E) (l ls : Nat) (v : Token.Ve
         (strict = true → s.val.batch.bytes = bytesAfter))
       (Lexer.Internal.WRustPort.Rust.flushCursor (H := H) (m := m) (R := R) (E := E)
           (floor := floor)
-        (low := low) (Token.BatchCursor.new v b) hf)
+        (low := low) (Token.BatchCursor.Internal.new v b) hf)
       (Lexer.Internal.X1BatchInCore.handOver b' bytesAfter hf') :=
   SimR.mono (fun _ _ h => h) (fun _ _ _ _ h => h) (fun _ _ h => h.1)
     (handOver_sim' hcons l ls v b b' hb bytesAfter hf hf')
 
 omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
 /-- The lexer with the batch in its state puts the batch back, from states with `SRE`. -/
-theorem storeSpent_right {α : Type} (l ls : Nat) (a : α) (spent : Token.TokenBatch) :
+theorem storeSpent_right {α : Type} (l ls : Nat) (a : α) (spent : Token.Internal.TokenBatch) :
     SimR (m := m) (H := H) (ε := Interrupted R E floor) Er
       (fun s t => Core.SRE (floor := floor) (low := low) l ls s t ∧
         (strict = true → s.val.batch.bytes = spent.bytes))
@@ -227,7 +229,8 @@ theorem handOverEof_simZ (hcons : ConsumesAlike H m R E) (l ls : Nat) (location 
 
 /-- The hand-over of the full batch that the loop of the normal state holds; both give it back
 emptied. -/
-theorem flushHeld_sim (hcons : ConsumesAlike H m R E) (l ls : Nat) (batch batch' : Token.TokenBatch)
+theorem flushHeld_sim (hcons : ConsumesAlike H m R E) (l ls : Nat)
+    (batch batch' : Token.Internal.TokenBatch)
     (hb : Agree batch batch') (hbytes : batch.bytes = batch'.bytes) (origin : Nat)
     (hbatch hbatch') :
     Core.LSim strict (H := H) (m := m) (R := R) (E := E) (floor := floor) (low := low)

@@ -1,7 +1,7 @@
 module
 
 public import BSmtLib.Lexer
-import all BSmtLib.Lexer.Helpers
+import all BSmtLib.Lexer.Internal.Helpers
 import all Std.Data.ByteSlice
 
 @[expose] public section
@@ -18,7 +18,7 @@ bytes of its array below its length (`contentBytes`) as long as the length is wi
 
 namespace BSmtLib.Facts.Proofs.Lexer.Simulation.Bytes
 
-open BSmtLib.Lexer.Helpers (ContentBuffer)
+open BSmtLib.Lexer.Internal.Helpers (ContentBuffer)
 
 /-! ## Byte arrays as lists -/
 

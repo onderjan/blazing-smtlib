@@ -78,22 +78,22 @@ def itemOf (handed : Handed) : Parser.Internal.Input :=
   match handed.type with
   | .parenOpen => .parenOpen
   | .parenClose => .parenClose
-  | .numeral => .constant (.numeral (NumeralView.newUnchecked (bytesOf handed.content)))
-  | .decimal => .constant (.decimal (DecimalView.newUnchecked (bytesOf handed.content)))
+  | .numeral => .constant (.numeral (NumeralView.Internal.newUnchecked (bytesOf handed.content)))
+  | .decimal => .constant (.decimal (DecimalView.Internal.newUnchecked (bytesOf handed.content)))
   | .hexadecimal =>
-    .constant (.hexadecimal (HexDigitsView.newUnchecked (bytesOf handed.content)))
-  | .binary => .constant (.binary (BinDigitsView.newUnchecked (bytesOf handed.content)))
-  | .string => .constant (.string (StringContentView.newUnchecked (bytesOf handed.content)))
-  | .keyword => .keyword (KeywordView.newUnchecked (bytesOf handed.content))
+    .constant (.hexadecimal (HexDigitsView.Internal.newUnchecked (bytesOf handed.content)))
+  | .binary => .constant (.binary (BinDigitsView.Internal.newUnchecked (bytesOf handed.content)))
+  | .string => .constant (.string (StringContentView.Internal.newUnchecked (bytesOf handed.content)))
+  | .keyword => .keyword (KeywordView.Internal.newUnchecked (bytesOf handed.content))
   | .unquotedSymbol =>
     match handed.reserved, decodeReserved handed.content with
     | some _, some word => .reserved word
-    | _, _ => .symbol ⟨SymbolView.newUnchecked (bytesOf handed.content), false⟩
-  | .quotedSymbol => .symbol ⟨SymbolView.newUnchecked (bytesOf handed.content), true⟩
+    | _, _ => .symbol ⟨SymbolView.Internal.newUnchecked (bytesOf handed.content), false⟩
+  | .quotedSymbol => .symbol ⟨SymbolView.Internal.newUnchecked (bytesOf handed.content), true⟩
   -- whitespace and comments are handed over only to a concrete consumer, which the script
   -- consumer is not; they stand for nothing the parser reads, and are given a symbol of their
   -- content only so that every entry has an item
-  | .whitespace | .comment => .symbol ⟨SymbolView.newUnchecked (bytesOf handed.content), false⟩
+  | .whitespace | .comment => .symbol ⟨SymbolView.Internal.newUnchecked (bytesOf handed.content), false⟩
   | .endOfFile => .endOfInput
 
 /-- The parser's item for a handed token. -/
@@ -154,45 +154,20 @@ allows every version, starting in the version. -/
 def readerOf (version : Lexicon.Version) : RecReader :=
   Reader.script [] unrestrictedPosture (toVersion version)
 
-/-- The calls the handler of the reader's lexer holds, in order. -/
-def lexerCalls (lexer : PLexer) : List Event :=
-  (Lexer.Internal.handler lexer).handler.reverse
-
-/-- The reader's lexer after the step of `Reader.readSlice` on the slice, also where it fails. -/
-def sliceStepped (reader : RecReader) (slice : ByteSlice) : PLexer :=
-  (Lexer.Internal.run (Reader.Internal.lexer reader)
-    (Lexer.Internal.lexSliceStep (H := RecAdapter) (m := Id)
-      (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
-          (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast) slice) :
-    Id _).2
-
-/-- The reader's lexer after the step of `Reader.readEof`, also where it fails. -/
-def eofStepped (reader : RecReader) : PLexer :=
-  (Lexer.Internal.run (Reader.Internal.lexer reader)
-    (Lexer.Internal.lexEofStep (H := RecAdapter) (m := Id) (R := Unit)
-      (E := Parser.ParseErrorCause Unit)
-      (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
-          (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast)) :
-    Id _).2
-
 /-- The reader fed the slices by `Reader.readSlice`, and then the end of the input by
 `Reader.readEof` if the input has ended: the calls its handler holds afterwards, in order, and
-whether the end of the input returned a result.
-
-Where a call fails, the library gives no reader back, so the reader's public calls do not tell
-what its handler holds then. The calls are then read from inside the library: from the handler of
-the lexer that the failed call's step leaves (`sliceStepped`, `eofStepped`, `lexerCalls`), which
-the library's public calls discard. -/
+whether the end of the input returned a result. Where a call fails, the handler is the one the
+failure carries. -/
 def readerRun : RecReader → List Regex.Chars → Bool → List Event × Bool
   | reader, [], false => (reader.handler.reverse, false)
   | reader, [], true =>
     match (reader.readEof : Id _) with
     | .ok (result, reader') => (reader'.handler.reverse, result.isSome)
-    | .error _ => (lexerCalls (eofStepped reader), false)
+    | .error failure => (failure.handler.reverse, false)
   | reader, slice :: slices, ended =>
     match (reader.readSlice slice.toByteArray.toByteSlice : Id _) with
     | .ok reader' => readerRun reader' slices ended
-    | .error _ => (lexerCalls (sliceStepped reader slice.toByteArray.toByteSlice), false)
+    | .error failure => (failure.handler.reverse, false)
 
 /-- The library's script reader, with the recording handler and the posture that allows every
 version, as a recording reader. -/

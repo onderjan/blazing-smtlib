@@ -3,7 +3,7 @@ module
 public import BSmtLib.Lexer.Internal.WRustPort
 public import BSmtLib.Facts.Proofs.Lexer.Simulation
 import all BSmtLib.Lexer
-import all BSmtLib.Lexer.Helpers
+import all BSmtLib.Lexer.Internal.Helpers
 import all BSmtLib.Lexer.Internal.WRustPort
 
 @[expose] public section
@@ -35,7 +35,7 @@ locals (`WRustPort.Ops.Locals`); `SRL l ls` adds to `SR` that the line and the l
 
 namespace BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Core
 
-open BSmtLib.Lexer (BATCH_CAPACITY Interrupted)
+open BSmtLib.Lexer.Internal (BATCH_CAPACITY Interrupted)
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Batch BSmtLib.Facts.Proofs.Lexer.Simulation.Relation
 open BSmtLib.Lexer.Error
 
@@ -84,12 +84,12 @@ abbrev SRL (l ls : Nat) (s t : St floor low) : Prop :=
   SR s t ∧ s.val.line = l ∧ s.val.lineStart = ls
 
 /-- `SRL`, and the fact `Bx` of the two states' batches. -/
-abbrev SRLx (l ls : Nat) (Bx : Token.TokenBatch → Token.TokenBatch → Prop)
+abbrev SRLx (l ls : Nat) (Bx : Token.Internal.TokenBatch → Token.Internal.TokenBatch → Prop)
     (s t : St floor low) : Prop :=
   SRL l ls s t ∧ Bx s.val.batch t.val.batch
 
 /-- Where the simulation is strict, the two batches have the same array of contents. -/
-abbrev BytesEq (strict : Bool) (b c : Token.TokenBatch) : Prop :=
+abbrev BytesEq (strict : Bool) (b c : Token.Internal.TokenBatch) : Prop :=
   strict = true → b.bytes = c.bytes
 
 /-- The states an interruption is thrown from correspond, with the same arrays of contents of
@@ -115,7 +115,7 @@ abbrev SRLbZ (strict : Bool) (l ls : Nat) (s t : St floor low) : Prop :=
   SRLb strict l ls s t ∧ s.val.batch.len = 0
 
 /-- The first batch has no tokens. -/
-abbrev NoTokens (b _ : Token.TokenBatch) : Prop :=
+abbrev NoTokens (b _ : Token.Internal.TokenBatch) : Prop :=
   b.len = 0
 
 /-- The two states correspond with the line and line start `l` and `ls`, and their batches have
@@ -135,15 +135,16 @@ end
 
 /-- The batches held by the two loops of the normal state agree, with the same array of
 contents, and are below the capacity. -/
-structure HR (b b' : Token.TokenBatch) : Prop where
+structure HR (b b' : Token.Internal.TokenBatch) : Prop where
   agree : Agree b b'
   bytes : b.bytes = b'.bytes
   capacity : b.len < BATCH_CAPACITY
 
 /-- What a push gives back: batches held by the loops, and the two states with batches without
 tokens. -/
-abbrev PushQ {floor : Option Nat} {low : Nat} (l ls : Nat) {α β : Type} (val : α → Token.TokenBatch)
-    (val' : β → Token.TokenBatch) (a : α) (b : β) (s t : St floor low) : Prop :=
+abbrev PushQ {floor : Option Nat} {low : Nat} (l ls : Nat) {α β : Type} (val : α →
+    Token.Internal.TokenBatch)
+    (val' : β → Token.Internal.TokenBatch) (a : α) (b : β) (s t : St floor low) : Prop :=
   HR (val a) (val' b) ∧ SRE l ls s t
 
 theorem sr_srl {floor : Option Nat} {low : Nat} {s t : St floor low} (h : SR s t) :
@@ -182,7 +183,7 @@ abbrev ESim (Er : St floor low → St floor low → Prop) {α β : Type}
 
 /-- From states that correspond, with any line and line start. -/
 theorem SimR.of_srl {α β : Type} {Er : St floor low → St floor low → Prop}
-    {Bx : Token.TokenBatch → Token.TokenBatch → Prop}
+    {Bx : Token.Internal.TokenBatch → Token.Internal.TokenBatch → Prop}
     {Q : α → β → St floor low → St floor low → Prop}
     {f : Lexer.Internal.WRustPort.LexM H m R E floor low α}
     {g : Lexer.Internal.WRustPort.LexM H m R E floor low β}
@@ -297,14 +298,16 @@ theorem modifyCore_bind_right {α β : Type} {P : St floor low → St floor low 
   unfold Lexer.Internal.WRustPort.modifyCore
   exact SimR.modify_bind_right hk
 
-theorem setNormal_sim (l ls : Nat) (Bx : Token.TokenBatch → Token.TokenBatch → Prop) :
+theorem setNormal_sim (l ls : Nat) (Bx : Token.Internal.TokenBatch → Token.Internal.TokenBatch →
+    Prop) :
     ESim (H := H) (m := m) (R := R) (E := E) (floor := floor) (low := low) Er
       (SRLx l ls Bx) (fun _ _ => SRLx l ls Bx) Lexer.Internal.WRustPort.setNormal
       Lexer.Internal.WRustPort.setNormal :=
   modifyCore_sim _ _ fun _ _ h => ⟨⟨{ h.1.1 with state := rfl }, h.1.2⟩, h.2⟩
 
-theorem setTokenState_sim (l ls : Nat) (Bx : Token.TokenBatch → Token.TokenBatch → Prop)
-    (state : Lexer.Helpers.LexerState) (start : Span.Location)
+theorem setTokenState_sim (l ls : Nat) (Bx : Token.Internal.TokenBatch → Token.Internal.TokenBatch →
+    Prop)
+    (state : Lexer.Internal.Helpers.LexerState) (start : Span.Location)
     (h h' : Lexer.Internal.WRustPort.Started floor low start) :
     ESim (H := H) (m := m) (R := R) (E := E) (floor := floor) (low := low) Er
       (SRLx l ls Bx) (fun _ _ => SRLx l ls Bx)
@@ -312,8 +315,9 @@ theorem setTokenState_sim (l ls : Nat) (Bx : Token.TokenBatch → Token.TokenBat
       (Lexer.Internal.WRustPort.setTokenState state start h') :=
   modifyBound_sim _ _ fun _ _ h => ⟨⟨{ h.1.1 with state := rfl, tokenStart := rfl }, h.1.2⟩, h.2⟩
 
-theorem modifyContent_sim (l ls : Nat) (Bx : Token.TokenBatch → Token.TokenBatch → Prop)
-    (f : Lexer.Helpers.ContentBuffer → Lexer.Helpers.ContentBuffer)
+theorem modifyContent_sim (l ls : Nat) (Bx : Token.Internal.TokenBatch → Token.Internal.TokenBatch →
+    Prop)
+    (f : Lexer.Internal.Helpers.ContentBuffer → Lexer.Internal.Helpers.ContentBuffer)
     (hf : ∀ a b, ContentAgree a b → ContentAgree (f a) (f b)) :
     ESim (H := H) (m := m) (R := R) (E := E) (floor := floor) (low := low) Er
       (SRLx l ls Bx) (fun _ _ => SRLx l ls Bx) (Lexer.Internal.WRustPort.modifyContent f)
@@ -321,7 +325,8 @@ theorem modifyContent_sim (l ls : Nat) (Bx : Token.TokenBatch → Token.TokenBat
   modifyCore_sim _ _ fun _ _ h =>
     ⟨⟨{ h.1.1 with tokenContent := hf _ _ h.1.1.tokenContent }, h.1.2⟩, h.2⟩
 
-theorem extendContent_sim (l ls : Nat) (Bx : Token.TokenBatch → Token.TokenBatch → Prop)
+theorem extendContent_sim (l ls : Nat) (Bx : Token.Internal.TokenBatch → Token.Internal.TokenBatch →
+    Prop)
     (input : ByteSlice)
     (start stop : Nat) :
     ESim (H := H) (m := m) (R := R) (E := E) (floor := floor) (low := low) Er
@@ -330,14 +335,16 @@ theorem extendContent_sim (l ls : Nat) (Bx : Token.TokenBatch → Token.TokenBat
       (Lexer.Internal.WRustPort.extendContent input start stop) :=
   modifyContent_sim l ls Bx _ fun _ _ h => by first | exact h.extendFrom _ _ _ | exact h.push _
 
-theorem pushContent_sim (l ls : Nat) (Bx : Token.TokenBatch → Token.TokenBatch → Prop) (c : UInt8) :
+theorem pushContent_sim (l ls : Nat) (Bx : Token.Internal.TokenBatch → Token.Internal.TokenBatch →
+    Prop) (c : UInt8) :
     ESim (H := H) (m := m) (R := R) (E := E) (floor := floor) (low := low) Er
       (SRLx l ls Bx) (fun _ _ => SRLx l ls Bx) (Lexer.Internal.WRustPort.pushContent c)
       (Lexer.Internal.WRustPort.pushContent c) :=
   modifyContent_sim l ls Bx _ fun _ _ h => by first | exact h.extendFrom _ _ _ | exact h.push _
 
 /-- The start of a token, which empties the content buffer. -/
-theorem startToken_sim (l ls : Nat) (Bx : Token.TokenBatch → Token.TokenBatch → Prop) (offset : Nat)
+theorem startToken_sim (l ls : Nat) (Bx : Token.Internal.TokenBatch → Token.Internal.TokenBatch →
+    Prop) (offset : Nat)
     (base position : Nat) (hframe hframe' : Lexer.Internal.WRustPort.Frame floor low offset) :
     ESim (H := H) (m := m) (R := R) (E := E) (floor := floor) (low := low) Er
       (SRLx l ls Bx)
@@ -358,7 +365,8 @@ theorem startToken_sim (l ls : Nat) (Bx : Token.TokenBatch → Token.TokenBatch 
   exact SimR.pure fun s t h => ⟨by simp only [hst.line, hst.lineStart], h⟩
 
 /-- `startToken_sim` without the content buffer. -/
-theorem startToken_simx (l ls : Nat) (Bx : Token.TokenBatch → Token.TokenBatch → Prop)
+theorem startToken_simx (l ls : Nat) (Bx : Token.Internal.TokenBatch → Token.Internal.TokenBatch →
+    Prop)
     (offset : Nat)
     (base position : Nat) (hframe hframe' : Lexer.Internal.WRustPort.Frame floor low offset) :
     ESim (H := H) (m := m) (R := R) (E := E) (floor := floor) (low := low) Er
@@ -367,7 +375,8 @@ theorem startToken_simx (l ls : Nat) (Bx : Token.TokenBatch → Token.TokenBatch
       (Lexer.Internal.WRustPort.startToken offset base position hframe') :=
   SimR.post (fun _ _ _ _ h => ⟨h.1, h.2.1⟩) (startToken_sim l ls Bx offset base position _ _)
 
-theorem markLineFeedAt_sim (Bx : Token.TokenBatch → Token.TokenBatch → Prop) (position : Nat) :
+theorem markLineFeedAt_sim (Bx : Token.Internal.TokenBatch → Token.Internal.TokenBatch →
+    Prop) (position : Nat) :
     ESim (H := H) (m := m) (R := R) (E := E) (floor := floor) (low := low) Er
       (fun s t => SR s t ∧ Bx s.val.batch t.val.batch)
       (fun _ _ s t => SR s t ∧ Bx s.val.batch t.val.batch)
@@ -437,13 +446,14 @@ theorem expectDelimiter_sim (l ls : Nat) (next : UInt8) (position : Nat) :
       (Lexer.Internal.WRustPort.expectDelimiter next position)
       (Lexer.Internal.WRustPort.expectDelimiter next position) := by
   unfold Lexer.Internal.WRustPort.expectDelimiter
-  by_cases hd : Lexer.Helpers.isDelimiter next = true
+  by_cases hd : Lexer.Internal.Helpers.isDelimiter next = true
   · simp only [hd, Bool.not_true, Bool.false_eq_true, ↓reduceIte]
     exact SimR.pure fun _ _ h => h
   · simp only [hd, Bool.not_false, ↓reduceIte]
     exact errorAt_sim l ls _ _ _
 
-theorem locationFrom_sim (l ls : Nat) (Bx : Token.TokenBatch → Token.TokenBatch → Prop)
+theorem locationFrom_sim (l ls : Nat) (Bx : Token.Internal.TokenBatch → Token.Internal.TokenBatch →
+    Prop)
     (base position : Nat) :
     ESim (H := H) (m := m) (R := R) (E := E) (floor := floor) (low := low) Er
       (SRLx l ls Bx) (fun a b s t => a.val = b.val ∧ SRLx l ls Bx s t)
@@ -454,7 +464,8 @@ theorem locationFrom_sim (l ls : Nat) (Bx : Token.TokenBatch → Token.TokenBatc
   refine SimR.pure fun s t h => ⟨?_, h⟩
   simp only [h₀.1.1.line, h₀.1.1.lineStart]
 
-theorem leave_sim (l ls : Nat) (offset base position : Nat) (b b' : Token.TokenBatch) (hb : HR b b')
+theorem leave_sim (l ls : Nat) (offset base position : Nat) (b b' : Token.Internal.TokenBatch)
+    (hb : HR b b')
     (hframe hframe' hbatch hbatch') :
     LSim strict (H := H) (m := m) (R := R) (E := E) (floor := floor) (low := low) (SRL l ls)
       (fun _ _ => SRLb strict l ls) (Lexer.Internal.WRustPort.leave offset base position b hframe
@@ -464,8 +475,9 @@ theorem leave_sim (l ls : Nat) (offset base position : Nat) (b b' : Token.TokenB
     offset := rfl, base := rfl, state := rfl, batch := hb.agree, capacity := hb.capacity }, h.2⟩,
     fun _ => hb.bytes⟩
 
-theorem leavePending_sim (l ls : Nat) (state : Lexer.Helpers.LexerState) (start : Span.Location)
-    (offset base position : Nat) (b b' : Token.TokenBatch) (hb : HR b b')
+theorem leavePending_sim (l ls : Nat) (state : Lexer.Internal.Helpers.LexerState)
+    (start : Span.Location)
+    (offset base position : Nat) (b b' : Token.Internal.TokenBatch) (hb : HR b b')
     (hframe hframe' hbatch hbatch' hstart hstart' hfloor hfloor') :
     LSim strict (H := H) (m := m) (R := R) (E := E) (floor := floor) (low := low) (SRL l ls)
       (fun _ _ => SRLb strict l ls)
@@ -479,7 +491,7 @@ theorem leavePending_sim (l ls : Nat) (state : Lexer.Helpers.LexerState) (start 
     capacity := hb.capacity }, h.2⟩, fun _ => hb.bytes⟩
 
 theorem storeUnfinishedSymbolRun_sim (l ls : Nat) (input : ByteSlice) (entry : UInt8)
-    (offset base index after runEndAt : Nat) (b b' : Token.TokenBatch) (hb : HR b b')
+    (offset base index after runEndAt : Nat) (b b' : Token.Internal.TokenBatch) (hb : HR b b')
     (hframe hframe' hindex hrun hbatch hbatch') :
     LSim strict (H := H) (m := m) (R := R) (E := E) (floor := floor) (low := low) (SRE l ls)
       (fun _ _ => SRLb strict l ls)

@@ -21,6 +21,7 @@ the consumer is where `pending` says; if it stops, the interruption is where it 
 namespace BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Push
 
 open BSmtLib.Facts.Lexer.Adapters BSmtLib.Facts.Proofs.Lexer.Simulation.Bytes
+open BSmtLib.Token.BatchCursor.Internal (EndsAfter)
 open BSmtLibSpec.Lexer (Handed)
 open BSmtLib.Lexer.Internal.WRustPort.Rust (flushCursor)
 open BSmtLib.Facts.Proofs.Lexer.VNaive.Run BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Agree
@@ -59,9 +60,9 @@ theorem withVersion_key {s : WP.BS floor low} {p : Prog}
   simp only [key, withVersion, h]
 
 /-- The hand-over of a new cursor over a batch that holds lexemes. -/
-theorem flushNew_wp (T : Token.TokenBatch) (ls : List Lexeme) (hT : Holds T ls)
-    (hfloor : ∀ p, floor = some p → (Token.BatchCursor.new
-    (s : WP.BS floor low).val.version T).EndsAfter p)
+theorem flushNew_wp (T : Token.Internal.TokenBatch) (ls : List Lexeme) (hT : Holds T ls)
+    (hfloor : ∀ p, floor = some p → EndsAfter
+      (Token.BatchCursor.Internal.new (s : WP.BS floor low).val.version T) p)
     (coll : List Handed) {Q : Unit → WP.BS floor low → List Handed → Prop}
     {QE : WP.Intr C floor → WP.BS floor low → List Handed → Prop} (hrec : s.val.recovers = false)
     (hok : ∀ p', pending C s.val.holding s.val.version coll ls = .cont p' →
@@ -69,9 +70,9 @@ theorem flushNew_wp (T : Token.TokenBatch) (ls : List Lexeme) (hT : Holds T ls)
     (herr : ∀ e p d, Stops C s.val.holding s.val.version coll ls e p d →
       QE e (withDiscards s p.ver d) p.taken) :
     WP (flushCursor (H := Answering C) (m := AnswerM) (R := C.Result) (E := Option C.Error)
-      (Token.BatchCursor.new s.val.version T) hfloor) s coll Q QE := by
-  have hy : yields (Token.BatchCursor.new s.val.version T) ls = ls := yields_new _ T ls hT
-  refine flushCursor_wp' (Token.BatchCursor.new s.val.version T) ls hT
+      (Token.BatchCursor.Internal.new s.val.version T) hfloor) s coll Q QE := by
+  have hy : yields (Token.BatchCursor.Internal.new s.val.version T) ls = ls := yields_new _ T ls hT
+  refine flushCursor_wp' (Token.BatchCursor.Internal.new s.val.version T) ls hT
     (by rw [cStop_new, hT.len]; exact Nat.le_refl _) rfl rfl hfloor s coll hrec rfl ?_ ?_
   · rw [hy]; exact hok
   · rw [hy]; exact herr
@@ -114,10 +115,10 @@ theorem flushBatch_wp (ls : List Lexeme) (s : WP.BS floor low) (hT : Holds s.val
       exact herr e _ p d hs ⟨rfl, holds_clear _ _, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
 
 /-- The hand-over of the full batch that the loop of `lexNormal` holds. -/
-theorem flushHeld_wp (batch : Token.TokenBatch) (origin : Nat)
+theorem flushHeld_wp (batch : Token.Internal.TokenBatch) (origin : Nat)
     (hbatch : ∀ p, floor = some p → batch.StartsFrom p) (ls : List Lexeme) (hT : Holds batch ls)
     (s : WP.BS floor low) (coll : List Handed) (hrec : s.val.recovers = false)
-    {Q : {batch : Token.TokenBatch //
+    {Q : {batch : Token.Internal.TokenBatch //
         batch.lastEnd = origin ∧ ∀ p, floor = some p → batch.StartsFrom p} →
       WP.BS floor low → List Handed → Prop}
     {QE : WP.Intr C floor → WP.BS floor low → List Handed → Prop}
@@ -146,7 +147,7 @@ theorem flushHeld_wp (batch : Token.TokenBatch) (origin : Nat)
 
 /-- The hand-over of a token on the fast path into the batch that the loop of `lexNormal`
 holds. -/
-theorem pushFast_wp (input : ByteSlice) (batch : Token.TokenBatch)
+theorem pushFast_wp (input : ByteSlice) (batch : Token.Internal.TokenBatch)
     (locals : Lexer.Internal.WRustPort.FastState) (offset base : Nat) (ty : Token.TokenCategory)
     (contentStart contentStop start «end» : Nat)
     (emit : Bool) (hty : ty ≠ .endOfFile) (hstart : base ≤ start) (hend : start < «end»)
@@ -155,7 +156,7 @@ theorem pushFast_wp (input : ByteSlice) (batch : Token.TokenBatch)
     (ls : List Lexeme) (hT : Holds batch ls) (hb : input.byteArray = batch.bytes)
     (hcs : contentStart ≤ contentStop) (hce : contentStop ≤ input.size)
     (s : WP.BS floor low) (coll : List Handed) (hrec : s.val.recovers = false)
-    {Q : {batch : Token.TokenBatch // Lexer.Internal.WRustPort.Held floor offset base «end» batch} →
+    {Q : {batch : Token.Internal.TokenBatch // Lexer.Internal.WRustPort.Held floor offset base «end» batch} →
       WP.BS floor low → List Handed → Prop}
     {QE : WP.Intr C floor → WP.BS floor low → List Handed → Prop}
     (hok : ∀ r s' coll' ls', Holds r.val ls' → r.val.bytes = batch.bytes → key s'.val = key s.val →
@@ -221,7 +222,7 @@ theorem pushFast_wp (input : ByteSlice) (batch : Token.TokenBatch)
 
 /-- The hand-over of a token on the slow path into the batch that the loop of `lexNormal`
 holds. -/
-theorem pushBorrowed_wp (input : ByteSlice) (batch : Token.TokenBatch)
+theorem pushBorrowed_wp (input : ByteSlice) (batch : Token.Internal.TokenBatch)
     (offset base : Nat) (ty : Token.TokenCategory) (contentStart contentStop : Nat)
     (start : Span.Location)
     (tokenEnd : Nat)
@@ -231,7 +232,7 @@ theorem pushBorrowed_wp (input : ByteSlice) (batch : Token.TokenBatch)
     (ls : List Lexeme) (hT : Holds batch ls) (hb : input.byteArray = batch.bytes)
     (hcs : contentStart ≤ contentStop) (hce : contentStop ≤ input.size)
     (s : WP.BS floor low) (coll : List Handed) (hrec : s.val.recovers = false)
-    {Q : {batch : Token.TokenBatch //
+    {Q : {batch : Token.Internal.TokenBatch //
         Lexer.Internal.WRustPort.Held floor offset base tokenEnd batch} →
       WP.BS floor low → List Handed → Prop}
     {QE : WP.Intr C floor → WP.BS floor low → List Handed → Prop}
@@ -311,15 +312,19 @@ theorem sinkStoredAt_wp (ty : Token.TokenCategory)
     apply WP.wp_bind
     apply WP.wp_getCore
     let l : Lexeme := { category := ty, content := contentBytes s.val.tokenContent, start, «end» }
-    have hS : Holds (({ (Token.TokenBatch.empty 1).clear start.offset with
-        bytes := s1.val.tokenContent.bytes } : Token.TokenBatch).pushLocated ty 0
+    have hS :
+        Holds
+        (({ (Token.Internal.TokenBatch.empty 1).clear start.offset with bytes :=
+        s1.val.tokenContent.bytes } : Token.Internal.TokenBatch).pushLocated ty 0
             s1.val.tokenContent.len
-        start «end» (Nat.le_of_eq (Token.TokenBatch.lastEnd_clear _ _)) (.inl hend)) [l] := by
-      have := holds_push (holds_of_len_zero (T := ({ (Token.TokenBatch.empty
+        start «end» (Nat.le_of_eq (Token.Internal.TokenBatch.lastEnd_clear _ _)) (.inl hend))
+            [l] := by
+      have := holds_push (holds_of_len_zero (T := ({ (Token.Internal.TokenBatch.empty
           1).clear start.offset with
-        bytes := s1.val.tokenContent.bytes } : Token.TokenBatch)) rfl) l 0 s1.val.tokenContent.len
+        bytes :=
+            s1.val.tokenContent.bytes } : Token.Internal.TokenBatch)) rfl) l 0 s1.val.tokenContent.len
         (Nat.zero_le _) (by rw [e7]; exact hfits) (by rw [e7]; rfl)
-        (Nat.le_of_eq (Token.TokenBatch.lastEnd_clear _ _)) (.inl hend)
+        (Nat.le_of_eq (Token.Internal.TokenBatch.lastEnd_clear _ _)) (.inl hend)
       exact this
     have hcong := pending_congr_append C s.val.holding hc1 [l]
     rw [List.nil_append] at hcong
@@ -391,11 +396,12 @@ theorem sinkEof_wp (location : Span.Location) (s : WP.BS none low) (coll : List 
     simp only [Bool.false_eq_true, ↓reduceIte]
     apply WP.wp_bind
     apply WP.wp_getCore
-    have hS := holds_push (holds_of_len_zero (T := ({ (Token.TokenBatch.empty 1).clear
+    have hS := holds_push (holds_of_len_zero (T := ({ (Token.Internal.TokenBatch.empty 1).clear
         location.offset with
-        bytes := s.val.tokenContent.bytes } : Token.TokenBatch)) rfl) (eofLexeme location) 0 0
+        bytes := s.val.tokenContent.bytes } : Token.Internal.TokenBatch)) rfl)
+            (eofLexeme location) 0 0
       (Nat.le_refl _) (Nat.zero_le _) (by rw [ByteArray.extract_same]; rfl)
-      (Nat.le_of_eq (Token.TokenBatch.lastEnd_clear _ _))
+      (Nat.le_of_eq (Token.Internal.TokenBatch.lastEnd_clear _ _))
       (.inr ⟨rfl, rfl⟩)
     refine flushNew_wp _ _ hS _ coll hrec ?_ ?_
     · rw [hh]; exact hok hh

@@ -4,7 +4,7 @@ public import Std.Data.ByteSlice
 
 public section
 
-namespace BSmtLib.Lexer.CharClass
+namespace BSmtLib.Lexer.Internal.CharClass
 
 /--
 Class of a character following the SMT-LIB standard.
@@ -24,7 +24,7 @@ those with byte codes 0..=31 and 127 (DEL).
 Specially, 32 (SPACE) is both printable and whitespace.
 0..=31 except (9, 10, 13) and 127 (DEL) are neither printable nor whitespace.
 -/
-inductive _root_.BSmtLib.Lexer.CharClass where
+inductive _root_.BSmtLib.Lexer.Internal.CharClass where
   /-- any non-printable character except for TAB, LF, CR, and DEL
   meaning 0..=31 except (9, 10, 13) -/
   | otherNonPrintable
@@ -401,4 +401,4 @@ theorem lt_runEnd {input : Input} {start : USize} {c : UInt8} (mask : UInt8)
     exact hc
   · cases h
 
-end BSmtLib.Lexer.CharClass
+end BSmtLib.Lexer.Internal.CharClass

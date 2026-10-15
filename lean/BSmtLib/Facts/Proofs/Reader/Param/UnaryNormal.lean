@@ -91,8 +91,9 @@ theorem storeUnfinishedSymbolRun_usim (input entry offset base index after runEn
       hrun hbatch : FM F σ floor low Unit) := by
   unfold Internal.storeUnfinishedSymbolRun; usim
 
-theorem startWhitespaceFrom_usim (input : CharClass.Input) (offset : Nat) (base index «end» : USize)
-    (start : Span.Location) (batch : Token.TokenBatch) (hframe hstart hend hrun hbatch) :
+theorem startWhitespaceFrom_usim (input : Internal.CharClass.Input) (offset : Nat)
+    (base index «end» : USize)
+    (start : Span.Location) (batch : Token.Internal.TokenBatch) (hframe hstart hend hrun hbatch) :
     UL (Internal.startWhitespaceFrom input offset base index «end» start batch hframe hstart hend
         hrun
       hbatch : FM F σ floor low _) := by
@@ -100,7 +101,7 @@ theorem startWhitespaceFrom_usim (input : CharClass.Input) (offset : Nat) (base 
   usim
   all_goals exact startWhitespaceFrom_usim _ _ _ _ _ _ _ _ _ _ _ _
 termination_by input.stop.toNat - «end».toNat
-decreasing_by all_goals lsim_omega [CharClass.le_runEnd, CharClass.le_runEndAll]
+decreasing_by all_goals lsim_omega [Internal.CharClass.le_runEnd, Internal.CharClass.le_runEndAll]
 
 theorem startWhitespace_usim (input offset base index batch hrun hframe hindex hbatch) :
     UL (Internal.startWhitespace input offset base index batch hrun hframe hindex hbatch :
@@ -109,15 +110,15 @@ theorem startWhitespace_usim (input offset base index batch hrun hframe hindex h
 
 set_option maxHeartbeats 4000000 in
 set_option maxRecDepth 8192 in
-theorem lexNormalFrom_usim (input : CharClass.Input) (offset : Nat) (base index : USize)
-    (batch : Token.TokenBatch) (hframe hindex hbatch) (origin : USize) (horigin) :
+theorem lexNormalFrom_usim (input : Internal.CharClass.Input) (offset : Nat) (base index : USize)
+    (batch : Token.Internal.TokenBatch) (hframe hindex hbatch) (origin : USize) (horigin) :
     UL (Internal.lexNormalFrom input offset base index batch hframe hindex hbatch origin horigin :
       FM F σ floor low _) := by
   rw [Internal.lexNormalFrom.eq_1]
   usim
   all_goals exact lexNormalFrom_usim _ _ _ _ _ _ _ _ _ _
 termination_by input.stop.toNat - index.toNat
-decreasing_by all_goals lsim_omega [CharClass.le_runEnd, CharClass.le_runEndAll]
+decreasing_by all_goals lsim_omega [Internal.CharClass.le_runEnd, Internal.CharClass.le_runEndAll]
 
 theorem lexNormal_usim (input start hstart) :
     UL (Internal.lexNormal input start hstart : FM F σ floor low _) := by
@@ -139,7 +140,7 @@ theorem lexDigitRun_usim (input start run tokenStart base h) :
     UL (Internal.lexDigitRun input start run tokenStart base h : FM F σ floor low _) := by
   unfold Internal.lexDigitRun; usim
 
-theorem lexStringLiteralLegacy_usim (input : CharClass.Input) (consumed origin : USize)
+theorem lexStringLiteralLegacy_usim (input : Internal.CharClass.Input) (consumed origin : USize)
     (horigin tokenStart base h) :
     UL (Internal.lexStringLiteralLegacy input consumed origin horigin tokenStart base h :
       FM F σ floor low _) := by
@@ -147,9 +148,9 @@ theorem lexStringLiteralLegacy_usim (input : CharClass.Input) (consumed origin :
   usim
   all_goals exact lexStringLiteralLegacy_usim _ _ _ _ _ _ _
 termination_by input.stop.toNat - consumed.toNat
-decreasing_by all_goals lsim_omega [CharClass.le_runEnd, CharClass.le_runEndAll]
+decreasing_by all_goals lsim_omega [Internal.CharClass.le_runEnd, Internal.CharClass.le_runEndAll]
 
-theorem lexStringLiteralFrom_usim (input : CharClass.Input) (consumed origin : USize)
+theorem lexStringLiteralFrom_usim (input : Internal.CharClass.Input) (consumed origin : USize)
     (horigin tokenStart base h) :
     UL (Internal.lexStringLiteralFrom input consumed origin horigin tokenStart base h :
       FM F σ floor low _) := by
@@ -157,7 +158,7 @@ theorem lexStringLiteralFrom_usim (input : CharClass.Input) (consumed origin : U
   usim
   all_goals exact lexStringLiteralFrom_usim _ _ _ _ _ _ _
 termination_by input.stop.toNat - consumed.toNat
-decreasing_by all_goals lsim_omega [CharClass.le_runEnd, CharClass.le_runEndAll]
+decreasing_by all_goals lsim_omega [Internal.CharClass.le_runEnd, Internal.CharClass.le_runEndAll]
 
 theorem lexStringLiteral_usim (input start tokenStart base h) :
     UL (Internal.lexStringLiteral input start tokenStart base h : FM F σ floor low _) := by
@@ -167,7 +168,7 @@ theorem lexSimpleSymbol_usim (input start tokenStart base h) :
     UL (Internal.lexSimpleSymbol input start tokenStart base h : FM F σ floor low _) := by
   unfold Internal.lexSimpleSymbol; usim
 
-theorem lexQuotedSymbol_usim (input : CharClass.Input) (consumed origin : USize)
+theorem lexQuotedSymbol_usim (input : Internal.CharClass.Input) (consumed origin : USize)
     (horigin hconsumed tokenStart base h) :
     UL (Internal.lexQuotedSymbol input consumed origin horigin hconsumed tokenStart base h :
       FM F σ floor low _) := by
@@ -175,7 +176,7 @@ theorem lexQuotedSymbol_usim (input : CharClass.Input) (consumed origin : USize)
   usim
   all_goals exact lexQuotedSymbol_usim _ _ _ _ _ _ _ _
 termination_by input.stop.toNat - consumed.toNat
-decreasing_by all_goals lsim_omega [CharClass.le_runEnd, CharClass.le_runEndAll]
+decreasing_by all_goals lsim_omega [Internal.CharClass.le_runEnd, Internal.CharClass.le_runEndAll]
 
 theorem lexKeyword_usim (input start tokenStart base h) :
     UL (Internal.lexKeyword input start tokenStart base h : FM F σ floor low _) := by
@@ -186,7 +187,7 @@ theorem lexQuotedSymbolClosed_usim (input start hstart tokenStart base h) :
         := by
   unfold Internal.lexQuotedSymbolClosed; usim
 
-theorem lexWhitespace_usim (input : CharClass.Input) (start origin : USize)
+theorem lexWhitespace_usim (input : Internal.CharClass.Input) (start origin : USize)
     (horigin hstart tokenStart base h) :
     UL (Internal.lexWhitespace input start origin horigin hstart tokenStart base h :
       FM F σ floor low _) := by
@@ -194,7 +195,7 @@ theorem lexWhitespace_usim (input : CharClass.Input) (start origin : USize)
   usim
   all_goals exact lexWhitespace_usim _ _ _ _ _ _ _ _
 termination_by input.stop.toNat - start.toNat
-decreasing_by all_goals lsim_omega [CharClass.le_runEnd, CharClass.le_runEndAll]
+decreasing_by all_goals lsim_omega [Internal.CharClass.le_runEnd, Internal.CharClass.le_runEndAll]
 
 theorem lexComment_usim (input start hstart tokenStart base h) :
     UL (Internal.lexComment input start hstart tokenStart base h : FM F σ floor low _) := by

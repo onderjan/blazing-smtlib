@@ -18,8 +18,8 @@ The loops are shown alike by induction on the bytes left.
 
 namespace BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Normal
 
-open BSmtLib.Lexer (BATCH_CAPACITY Interrupted)
 open BSmtLib.Lexer.Internal.WRustPort.Slice (get? runEnd)
+open BSmtLib.Lexer.Internal (CharClass)
 open BSmtLib.Lexer.Internal.WRustPort (Ops)
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Batch BSmtLib.Facts.Proofs.Lexer.Simulation.Relation
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Steps
@@ -78,7 +78,8 @@ variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [
 omit [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
 theorem lexNormalFrom_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (offset base : Nat)
     (origin : Nat) :
-    ∀ k (index : Nat) (b b' : Token.TokenBatch) (l ls : Nat) (a : Ops.Locals H m R E (self := o₁))
+    ∀ k (index : Nat) (b b' : Token.Internal.TokenBatch) (l ls : Nat)
+        (a : Ops.Locals H m R E (self := o₁))
       (a' : Ops.Locals H m R E (self := o₂)),
       input.size - index = k → Core.HR b b' → LRel a a' l ls →
       ∀ hframe hindex hbatch hbatch' horigin,
@@ -131,12 +132,13 @@ theorem lexNormalFrom_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (offs
       store
       refine SimR.seq (Core.storeUnfinishedSymbolRun_sim _ _ _ _ _ _ _ _ _ _ _ hb _ _ _ _ _ _) ?_
       exact SimR.pure fun s t h => ⟨rfl, h.1.1, h.2⟩
-    have hte : index < (if (Lexer.Helpers.fastFlags c &&& Lexer.Helpers.FAST_PIPE != 0) = true then
-        runEnd input (index + 1) (Lexer.Helpers.fastFlags c &&& Lexer.Helpers.FAST_RUN_MASK) + 1
-      else runEnd input (index + 1) (Lexer.Helpers.fastFlags c &&& Lexer.Helpers.FAST_RUN_MASK)) :=
+    have hte : index < (if (Lexer.Internal.Helpers.fastFlags c &&& Lexer.Internal.Helpers.FAST_PIPE != 0) = true then
+        runEnd input (index + 1) (Lexer.Internal.Helpers.fastFlags c &&&
+            Lexer.Internal.Helpers.FAST_RUN_MASK) + 1
+      else runEnd input (index + 1) (Lexer.Internal.Helpers.fastFlags c &&& Lexer.Internal.Helpers.FAST_RUN_MASK)) :=
           by
       have := Lexer.Internal.WRustPort.Slice.le_runEnd input (index + 1)
-          (Lexer.Helpers.fastFlags c &&& Lexer.Helpers.FAST_RUN_MASK)
+          (Lexer.Internal.Helpers.fastFlags c &&& Lexer.Internal.Helpers.FAST_RUN_MASK)
       split <;> omega
     refine SimR.ite Iff.rfl (fun he => ?_) fun he => ?_
     · split
@@ -179,7 +181,7 @@ theorem lexNormalFrom_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (offs
       subst e
       dsimp only
       have hle := Lexer.Internal.WRustPort.Slice.le_runEnd input
-          (index + 1) Lexer.CharClass.RUN_COMMENT_PLAIN
+          (index + 1) CharClass.RUN_COMMENT_PLAIN
       split
       · rename_i c₁ h3
         have := Lexer.Internal.WRustPort.Slice.lt_size_of_get? h3
@@ -255,7 +257,7 @@ theorem lexNormalFrom_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (offs
           _ _ _ _ _ _ _ _)) ?_
         exact SimR.pure fun s t h => ⟨rfl, h.1.1, h.2⟩
       have hle := Lexer.Internal.WRustPort.Slice.le_runEnd input
-          (index + 1) Lexer.CharClass.RUN_STRING_PLAIN
+          (index + 1) CharClass.RUN_STRING_PLAIN
       split
       · rename_i q n hn
         refine SimR.ite Iff.rfl (fun _ => ?_) fun _ => ?_
@@ -286,7 +288,7 @@ theorem lexNormalFrom_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (offs
       subst e
       dsimp only
       have := Lexer.Internal.WRustPort.Slice.le_runEnd input
-          (index + 1) Lexer.CharClass.RUN_SIMPLE_SYMBOL
+          (index + 1) CharClass.RUN_SIMPLE_SYMBOL
       refine SimR.dite Iff.rfl (fun _ _ => ?_) fun _ _ => ?_
       · refine SimR.seq (Core.extendContent_sim _ _ _ _ _ _) ?_
         refine SimR.seq (SimR.pre (fun s t h => h.1) (Core.leavePending_sim _ _ _ _ _ _ _ _ _ hb
@@ -312,7 +314,7 @@ theorem lexNormalFrom_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (offs
       obtain ⟨a₂, ha₂⟩ := a₂
       refine SimR.of_fact' (Er := Core.ErS strict) fun (e : a₁ = a₂) => ?_
       subst e
-      have := Lexer.Internal.WRustPort.Slice.le_runEnd input (index + 1) Lexer.CharClass.RUN_DIGIT
+      have := Lexer.Internal.WRustPort.Slice.le_runEnd input (index + 1) CharClass.RUN_DIGIT
       simp only [throw_bind]
       refine SimR.ite Iff.rfl (fun _ => ?_) fun _ => ?_
       · exact SimR.seq (SimR.pre (fun s t h => h.1) (Core.leave_sim _ _ _ _ _ _ _ hb _ _ _ _))
@@ -322,8 +324,8 @@ theorem lexNormalFrom_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (offs
         have := Lexer.Internal.WRustPort.Slice.lt_size_of_get? h3
         refine SimR.ite Iff.rfl (fun _ => ?_) fun _ => ?_
         · have := Lexer.Internal.WRustPort.Slice.le_runEnd input
-            (runEnd input (index + 1) Lexer.CharClass.RUN_DIGIT + 1)
-            Lexer.CharClass.RUN_DIGIT
+            (runEnd input (index + 1) CharClass.RUN_DIGIT + 1)
+            CharClass.RUN_DIGIT
           refine SimR.dite Iff.rfl (fun _ _ => ?_) fun _ _ => ?_
           · refine SimR.seq (Core.extendContent_sim _ _ _ _ _ _) ?_
             refine SimR.seq (SimR.pre (fun s t h => h.1) (Core.leavePending_sim _ _ _ _ _ _ _ _ _ hb

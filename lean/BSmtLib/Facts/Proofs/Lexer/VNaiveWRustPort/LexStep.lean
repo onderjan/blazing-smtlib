@@ -57,7 +57,8 @@ local macro "token_arm" arm:term : tactic => `(tactic| (
 
 /-- A step of the loop over a slice keeps the correspondence with the naive lexer. -/
 theorem lexStep_wp (v : Token.Version) (input : ByteSlice) (start : Nat)
-    (hstart : start < input.size) (state : Lexer.Helpers.LexerState) (tokenStart : Span.Location)
+    (hstart : start < input.size) (state : Lexer.Internal.Helpers.LexerState)
+    (tokenStart : Span.Location)
     (base : Nat) (hpending : state = .normal ∨ Lexer.Internal.WRustPort.Started floor low
     tokenStart)
     (s : WP.BS floor low) (coll : List Handed) (st : St) (location : Span.Location)

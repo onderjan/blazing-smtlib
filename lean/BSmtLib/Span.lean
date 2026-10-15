@@ -99,7 +99,7 @@ def «end» (self : Span) : Location :=
   { offset := self.endOffset, line := self.endLine, column := self.endColumn }
 
 @[inline]
-def newUnchecked (start «end» : Location) : Span :=
+def Internal.newUnchecked (start «end» : Location) : Span :=
   { startOffset := start.offset, startLine := start.line, startColumn := start.column,
     endOffset := «end».offset, endLine := «end».line, endColumn := «end».column }
 
@@ -108,20 +108,21 @@ A span given by the numbers of its two locations.
 -/
 /- LEAN: not in Rust; it builds a span without building its locations first. -/
 @[inline]
-def ofNumbers (startOffset startLine startColumn endOffset endLine endColumn : Nat) : Span :=
+def Internal.ofNumbers (startOffset startLine startColumn endOffset endLine endColumn : Nat) :
+    Span :=
   { startOffset, startLine, startColumn, endOffset, endLine, endColumn }
 
 /- LEAN: the fields of a span are private to this module, so the modules that build a span with
-`ofNumbers` read its locations back through these. -/
+`Internal.ofNumbers` read its locations back through these. -/
 /-- The start of a span given by its numbers. -/
 theorem start_ofNumbers (startOffset startLine startColumn endOffset endLine endColumn : Nat) :
-    (ofNumbers startOffset startLine startColumn endOffset endLine endColumn).start =
+    (Internal.ofNumbers startOffset startLine startColumn endOffset endLine endColumn).start =
       { offset := startOffset, line := startLine, column := startColumn } :=
   (rfl)
 
 /-- The end of a span given by its numbers. -/
 theorem end_ofNumbers (startOffset startLine startColumn endOffset endLine endColumn : Nat) :
-    (ofNumbers startOffset startLine startColumn endOffset endLine endColumn).end =
+    (Internal.ofNumbers startOffset startLine startColumn endOffset endLine endColumn).end =
       { offset := endOffset, line := endLine, column := endColumn } :=
   (rfl)
 
@@ -130,21 +131,21 @@ A span within one line: the line, the offset of its start, and the
 offsets of the span on it.
 -/
 @[inline]
-def onLine (line lineStart start «end» : Nat) : Span :=
+def Internal.onLine (line lineStart start «end» : Nat) : Span :=
   ofNumbers start line (start - lineStart) «end» line («end» - lineStart)
 
 @[inline]
-def newEmpty (location : Location) : Span :=
+def Internal.newEmpty (location : Location) : Span :=
   newUnchecked location location
 
-def newZero : Span :=
+def Internal.newZero : Span :=
   newEmpty Location.initial
 
 def isEmpty (self : Span) : Bool :=
   self.start == self.end
 
 def join (self other : Span) : Span :=
-  newUnchecked (self.start.min other.start) (self.end.max other.end)
+  Internal.newUnchecked (self.start.min other.start) (self.end.max other.end)
 
 instance : Repr Span where
   reprPrec span _ := s!"\{ start := {repr span.start}, end := {repr span.end} }"

@@ -83,7 +83,7 @@ theorem get!_wrB (a : ByteArray) (i : Nat) (v : UInt8) (j : Nat) (h : i ≤ a.si
 
 /-- The batch holds the lexemes: its first tokens are theirs, with their categories, contents
 and spans, in order. -/
-structure Holds (T : Token.TokenBatch) (ls : List Lexeme) : Prop where
+structure Holds (T : Token.Internal.TokenBatch) (ls : List Lexeme) : Prop where
   len : T.len = ls.length
   types : T.len ≤ T.types.size
   contentStarts : T.len ≤ T.contentStarts.size
@@ -95,7 +95,7 @@ structure Holds (T : Token.TokenBatch) (ls : List Lexeme) : Prop where
   endLines : T.len ≤ T.endLines.size
   endColumns : T.len ≤ T.endColumns.size
   entry : ∀ j (hj : j < ls.length),
-    T.types.get! j = ls[j].category.toUInt8 ∧
+    T.types.get! j = (Token.TokenCategory.Internal.toUInt8 ls[j].category) ∧
     T.contentStarts[j]! ≤ T.contentStops[j]! ∧ T.contentStops[j]! ≤ T.bytes.size ∧
     T.bytes.extract (T.contentStarts[j]!) (T.contentStops[j]!) = ls[j].content ∧
     T.startOffsets[j]! = ls[j].start.offset ∧ T.startLines[j]! = ls[j].start.line ∧
@@ -103,12 +103,12 @@ structure Holds (T : Token.TokenBatch) (ls : List Lexeme) : Prop where
     T.endLines[j]! = ls[j].end.line ∧ T.endColumns[j]! = ls[j].end.column
 
 /-- An emptied batch holds no lexemes. -/
-theorem holds_clear (T : Token.TokenBatch) (origin : Nat) : Holds (T.clear origin) [] := by
+theorem holds_clear (T : Token.Internal.TokenBatch) (origin : Nat) : Holds (T.clear origin) [] := by
   refine ⟨rfl, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
     first | exact Nat.zero_le _ | (intro j hj; simp at hj)
 
 /-- A token pushed onto a batch that holds the lexemes, with the fields of the lexeme `l`. -/
-theorem holds_push {T : Token.TokenBatch} {ls : List Lexeme} (h : Holds T ls) (l : Lexeme)
+theorem holds_push {T : Token.Internal.TokenBatch} {ls : List Lexeme} (h : Holds T ls) (l : Lexeme)
     (contentStart contentStop : Nat) (hcs : contentStart ≤ contentStop)
     (hce : contentStop ≤ T.bytes.size)
     (hcontent : T.bytes.extract contentStart contentStop = l.content)
@@ -120,7 +120,7 @@ theorem holds_push {T : Token.TokenBatch} {ls : List Lexeme} (h : Holds T ls) (l
   obtain ⟨hlen, ht, hcs', hce', hso, hsl, hsc, heo, hel, hec, hentry⟩ := h
   have et : (T.push l.category contentStart contentStop l.start.offset l.start.line
       l.start.column l.end.offset l.end.line l.end.column after nonempty).types =
-      wrB T.types T.len l.category.toUInt8 := rfl
+      wrB T.types T.len (Token.TokenCategory.Internal.toUInt8 l.category) := rfl
   have e1 : (T.push l.category contentStart contentStop l.start.offset l.start.line
       l.start.column l.end.offset l.end.line l.end.column after nonempty).contentStarts =
       wr T.contentStarts T.len contentStart := rfl

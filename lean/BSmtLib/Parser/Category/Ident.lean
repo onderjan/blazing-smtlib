@@ -14,6 +14,9 @@ namespace BSmtLib.Parser.Category.Ident
 
 open BSmtLib.Nodes BSmtLib.Traits
 open BSmtLib.Token (Version)
+open BSmtLib.Parser.Internal (PM call syntaxError)
+
+namespace Internal
 
 /-- The state of the identifier parser. -/
 inductive IdentState where
@@ -56,5 +59,45 @@ def step (version : Version) (self : IdentState) (token : Internal.Input) :
   | .indices _ _, _ => syntaxError .expectedIndexOrCloseParen
 
 end IdentState
+
+end Internal
+
+/-- The parser of one identifier (`SmtIdentParser`). -/
+structure IdentParser where
+  private mk ::
+  private state : Internal.IdentState
+
+/-- The identifier parser before an identifier. -/
+def IdentParser.new : IdentParser := ⟨.start⟩
+
+instance : Inhabited IdentParser := ⟨.new⟩
+
+namespace Internal
+
+/- LEAN: as the parsers of single tokens, the identifier parser names no handler, so its steps
+are a definition for each handler. -/
+/-- The steps of the identifier parser, with the handler `H`. -/
+@[instance_reducible]
+def identByToken (H : Type) {m : Type → Type} [Monad m] [Handler H m] :
+    Parser.Internal.ParseByToken IdentParser H m (Handler.Error H) Identifier where
+  arrive _ _ := pure ()
+  step version parser token := do
+    match ← parser.state.step version token with
+    | .more state => return .more ⟨state⟩
+    | .done result => return .done result
+  reset _ := .new
+
+end Internal
+
+section
+
+variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
+
+instance : Parse IdentParser H m (Handler.Error H) Identifier where
+  parse parser state cursor :=
+    letI := Internal.identByToken H
+    Parser.Internal.parseByToken parser state cursor
+
+end
 
 end BSmtLib.Parser.Category.Ident

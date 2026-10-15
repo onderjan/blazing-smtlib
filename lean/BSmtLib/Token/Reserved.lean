@@ -144,6 +144,7 @@ def asStr : CommandNameReserved → String
   | .setOption => "set-option"
 
 /-- Every command-name reserved word. -/
+/- LEAN: as `GeneralReserved.all`, not in Rust, whose macro builds the word table. -/
 def all : Array CommandNameReserved :=
   #[.assert, .checkSat, .checkSatAssuming, .declareConst, .declareDatatype, .declareDatatypes,
     .declareFun, .declareSort, .declareSortParameter, .defineConst, .defineFun, .defineFunRec,

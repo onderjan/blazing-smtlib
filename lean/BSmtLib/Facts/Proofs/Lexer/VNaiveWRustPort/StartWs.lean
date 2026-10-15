@@ -20,6 +20,7 @@ does what the naive lexer's run does with the whitespace (`WsStartSpec`).
 namespace BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.StartWs
 
 open BSmtLib.Facts.Lexer.Adapters BSmtLib.Facts.Proofs.Lexer.Simulation.Bytes
+open BSmtLib.Lexer.Internal (CharClass)
 open BSmtLibSpec.Lexer (Handed)
 open BSmtLib.Lexer.Internal.WRustPort (FastState Frame Held Past)
 open BSmtLib.Lexer.Internal.WRustPort.Slice (get? get)
@@ -106,12 +107,14 @@ at `location` from the lexer state `s` with the tokens taken `coll` and the batc
 `held` the loop holds: the lexer state `s1` it runs in is `s` but for the line, and the naive
 lexer's run from `index` is, at `«end»`, the whitespace in progress at `locE`. -/
 def WsStartSpec (C : BSmtLibSpec.Lexer.Consumer) (v : Token.Version)
-    (input : ByteSlice) (offset base index : Nat) (start : Span.Location) (batch : Token.TokenBatch)
+    (input : ByteSlice) (offset base index : Nat) (start : Span.Location)
+    (batch : Token.Internal.TokenBatch)
     (hframe : Frame floor low offset) (hstart : start.offset = offset + (index - base))
     (hbatch : Held floor offset base index batch) (s : WP.BS floor low) (coll : List Handed)
     (location : Span.Location)
     (Q : Option
-    {next : Nat × Token.TokenBatch // index < next.1 ∧ Held floor offset base next.1 next.2} →
+    {next : Nat × Token.Internal.TokenBatch // index < next.1 ∧
+        Held floor offset base next.1 next.2} →
       WP.BS floor low → List Handed → Prop)
     (QE : WP.Intr C floor → WP.BS floor low → List Handed → Prop) («end» : Nat) : Prop :=
   ∀ (hend : base ≤ index ∧ index ≤ «end» ∧ «end» ≤ input.size)
@@ -130,18 +133,18 @@ def WsStartSpec (C : BSmtLibSpec.Lexer.Consumer) (v : Token.Version)
 set_option maxHeartbeats 1000000 in
 theorem wsStart_lt (v : Token.Version) (input : ByteSlice) (offset base index : Nat)
     (start : Span.Location)
-    (batch : Token.TokenBatch) (hframe : Frame floor low offset)
+    (batch : Token.Internal.TokenBatch) (hframe : Frame floor low offset)
     (hstart : start.offset = offset + (index - base)) (hbatch : Held floor offset base index batch)
     (s : WP.BS floor low) (coll : List Handed) (held : List Lexeme) (location : Span.Location)
     (hfix : Fixed v hd iv s.val) (hoff : offset = s.val.offset) (hbase : base = s.val.base)
     (hnormal : s.val.state = .normal) (hsl : start = location) (hheld : Holds batch held)
     (hbytes : batch.bytes = input.byteArray) (hcon : C.concrete = true)
     (hcontent : contentBytes s.val.tokenContent = .empty) (hfits : Fits s.val.tokenContent)
-    {Q : Option {next : Nat × Token.TokenBatch //
+    {Q : Option {next : Nat × Token.Internal.TokenBatch //
         index < next.1 ∧ Held floor offset base next.1 next.2} →
       WP.BS floor low → List Handed → Prop}
     {QE : WP.Intr C floor → WP.BS floor low → List Handed → Prop}
-    (hsome : ∀ (next : Nat) (batch' : Token.TokenBatch) (hnext : index < next)
+    (hsome : ∀ (next : Nat) (batch' : Token.Internal.TokenBatch) (hnext : index < next)
       (hbatch' : Held floor offset base next batch') (s' : WP.BS floor low) (coll' : List Handed)
       (held' : List Lexeme) (locN : Span.Location),
       Fixed v hd iv s'.val → offset = s'.val.offset → base = s'.val.base →
@@ -165,7 +168,7 @@ theorem wsStart_lt (v : Token.Version) (input : ByteSlice) (offset base index : 
   | zero => intro e hn; omega
   | succ n ih =>
   intro e hn hend hrun s1 locE hs1 hlocE hanchor
-  have hI : Lexer.Internal.WRustPort.Slice.runEnd input e Lexer.CharClass.RUN_NON_LF_WHITESPACE =
+  have hI : Lexer.Internal.WRustPort.Slice.runEnd input e CharClass.RUN_NON_LF_WHITESPACE =
       runEnd input isWhitespaceRun e := runEnd_eq endsRun_whitespace _ _
   have hle := le_runEnd input isWhitespaceRun e
   have hle' := runEnd_le input isWhitespaceRun e hend.2.2
@@ -175,9 +178,9 @@ theorem wsStart_lt (v : Token.Version) (input : ByteSlice) (offset base index : 
     ⟨.whitespace, location, bytesOf input index e⟩ locE rfl hend.2.2
   rw [← hI] at hA hle hle' hstop
   have hcat : bytesOf input index e ++ bytesOf input e
-      (Lexer.Internal.WRustPort.Slice.runEnd input e Lexer.CharClass.RUN_NON_LF_WHITESPACE) =
+      (Lexer.Internal.WRustPort.Slice.runEnd input e CharClass.RUN_NON_LF_WHITESPACE) =
       bytesOf input index (Lexer.Internal.WRustPort.Slice.runEnd input e
-          Lexer.CharClass.RUN_NON_LF_WHITESPACE) :=
+          CharClass.RUN_NON_LF_WHITESPACE) :=
     bytesOf_append input hend.2.1 hle hle'
   have hLI := hlocE.afterColumns (by omega) hle
   have hfix1 : Fixed v hd iv s1.val :=
@@ -197,9 +200,9 @@ theorem wsStart_lt (v : Token.Version) (input : ByteSlice) (offset base index : 
       unfold Lexer.Internal.WRustPort.markLineFeedAt
       apply WP.wp_bind; apply WP.wp_modifyCore
       refine ih (Lexer.Internal.WRustPort.Slice.runEnd input e
-          Lexer.CharClass.RUN_NON_LF_WHITESPACE + 1) (by omega) _ _ _
+          CharClass.RUN_NON_LF_WHITESPACE + 1) (by omega) _ _ _
         ((afterColumns locE (Lexer.Internal.WRustPort.Slice.runEnd input e
-            Lexer.CharClass.RUN_NON_LF_WHITESPACE - e)).afterByte
+            CharClass.RUN_NON_LF_WHITESPACE - e)).afterByte
           10) ⟨hs1.1, hs1.2, hs1.3, hs1.4, hs1.5, hs1.6, hs1.7, hs1.8, hs1.9, hs1.10, hs1.11,
           hs1.12⟩ ?_ ?_
       · refine LocAt.lineFeed hLI (by omega) rfl ?_
@@ -215,44 +218,44 @@ theorem wsStart_lt (v : Token.Version) (input : ByteSlice) (offset base index : 
       have h10' : c ≠ 10 := by simpa using h10
       have hadv := advance_whitespace_end C.concrete ⟨.whitespace, location,
         bytesOf input index e ++ bytesOf input e
-          (Lexer.Internal.WRustPort.Slice.runEnd input e Lexer.CharClass.RUN_NON_LF_WHITESPACE)⟩
+          (Lexer.Internal.WRustPort.Slice.runEnd input e CharClass.RUN_NON_LF_WHITESPACE)⟩
         (afterColumns locE (Lexer.Internal.WRustPort.Slice.runEnd input e
-            Lexer.CharClass.RUN_NON_LF_WHITESPACE - e))
+            CharClass.RUN_NON_LF_WHITESPACE - e))
         (c := input[Lexer.Internal.WRustPort.Slice.runEnd input e
-            Lexer.CharClass.RUN_NON_LF_WHITESPACE]) rfl
+            CharClass.RUN_NON_LF_WHITESPACE]) rfl
         (by rw [hIc]; exact hIq) (by rw [hIc]; exact h10')
       rw [hcat] at hadv
       have hC : feedFrom v C.concrete input .idle location index =
           Prep [⟨.whitespace, bytesOf input index
               (Lexer.Internal.WRustPort.Slice.runEnd input e
-                  Lexer.CharClass.RUN_NON_LF_WHITESPACE), location,
+                  CharClass.RUN_NON_LF_WHITESPACE), location,
               afterColumns locE (Lexer.Internal.WRustPort.Slice.runEnd input e
-                  Lexer.CharClass.RUN_NON_LF_WHITESPACE - e)⟩]
+                  CharClass.RUN_NON_LF_WHITESPACE - e)⟩]
             (feedFrom v C.concrete input .idle
               (afterColumns locE (Lexer.Internal.WRustPort.Slice.runEnd input e
-                  Lexer.CharClass.RUN_NON_LF_WHITESPACE - e))
+                  CharClass.RUN_NON_LF_WHITESPACE - e))
               (Lexer.Internal.WRustPort.Slice.runEnd input e
-                  Lexer.CharClass.RUN_NON_LF_WHITESPACE)) := by
+                  CharClass.RUN_NON_LF_WHITESPACE)) := by
         rw [hanchor, hA]
         dsimp only
         rw [hcat]
         exact feedFrom_tokenBefore v C.concrete input hIs hadv
       have hlex : borrowedLexeme .whitespace (input.slice index
-          (Lexer.Internal.WRustPort.Slice.runEnd input e Lexer.CharClass.RUN_NON_LF_WHITESPACE))
+          (Lexer.Internal.WRustPort.Slice.runEnd input e CharClass.RUN_NON_LF_WHITESPACE))
               start s1.val.line
           s1.val.lineStart (offset + (Lexer.Internal.WRustPort.Slice.runEnd input e
-              Lexer.CharClass.RUN_NON_LF_WHITESPACE -
+              CharClass.RUN_NON_LF_WHITESPACE -
             base)) =
           ⟨.whitespace, bytesOf input index
               (Lexer.Internal.WRustPort.Slice.runEnd input e
-                  Lexer.CharClass.RUN_NON_LF_WHITESPACE), location,
+                  CharClass.RUN_NON_LF_WHITESPACE), location,
               afterColumns locE (Lexer.Internal.WRustPort.Slice.runEnd input e
-                  Lexer.CharClass.RUN_NON_LF_WHITESPACE - e)⟩ := by
+                  CharClass.RUN_NON_LF_WHITESPACE - e)⟩ := by
         obtain ⟨h1, h2, h3⟩ := hLI
         simp only [borrowedLexeme, Lexeme.mk.injEq, true_and]
         refine ⟨rfl, hsl, ?_⟩
         cases hl : afterColumns locE (Lexer.Internal.WRustPort.Slice.runEnd input e
-            Lexer.CharClass.RUN_NON_LF_WHITESPACE - e)
+            CharClass.RUN_NON_LF_WHITESPACE - e)
         rw [hl] at h1 h2 h3
         simp only [Span.Location.mk.injEq] at h1 h2 h3 ⊢
         refine ⟨by omega, h2.symm, by omega⟩
@@ -280,7 +283,7 @@ theorem wsStart_lt (v : Token.Version) (input : ByteSlice) (offset base index : 
   · -- the run reaches the end of the slice: the whitespace is left in progress
     rename_i hgetn
     have hge := Lexer.Internal.WRustPort.Slice.size_le_of_get?_none hgetn
-    have he : Lexer.Internal.WRustPort.Slice.runEnd input e Lexer.CharClass.RUN_NON_LF_WHITESPACE =
+    have he : Lexer.Internal.WRustPort.Slice.runEnd input e CharClass.RUN_NON_LF_WHITESPACE =
         input.size := by omega
     unfold Lexer.Internal.WRustPort.extendContent Lexer.Internal.WRustPort.modifyContent
       Lexer.Internal.WRustPort.leavePending
@@ -329,7 +332,8 @@ theorem wp_state {α : Type} {x : WP.M C floor low α} {s : WP.BS floor low} {co
 /-- `startWhitespace` for a consumer that takes whitespace, from the normal state at `index`
 at `location`, with whitespace at `index`. -/
 theorem startWhitespace_wp (v : Token.Version) (input : ByteSlice) (offset base index : Nat)
-    (batch : Token.TokenBatch) (hrun : Lexer.Internal.WRustPort.ContinuesWhitespace input index)
+    (batch : Token.Internal.TokenBatch)
+    (hrun : Lexer.Internal.WRustPort.ContinuesWhitespace input index)
     (hframe : Frame floor low offset) (hindex : base ≤ index)
     (hbatch : Held floor offset base index batch)
     (s : WP.BS floor low) (coll : List Handed) (held : List Lexeme) (location : Span.Location)
@@ -337,11 +341,11 @@ theorem startWhitespace_wp (v : Token.Version) (input : ByteSlice) (offset base 
     (hloc : LocAt s.val offset base index location) (hheld : Holds batch held)
     (hbytes : batch.bytes = input.byteArray) (hcon : C.concrete = true)
     (hi : index < input.size) (hw : isWhitespace input[index] = true)
-    {Q : Option {next : Nat × Token.TokenBatch //
+    {Q : Option {next : Nat × Token.Internal.TokenBatch //
         index < next.1 ∧ Held floor offset base next.1 next.2} →
       WP.BS floor low → List Handed → Prop}
     {QE : WP.Intr C floor → WP.BS floor low → List Handed → Prop}
-    (hsome : ∀ (next : Nat) (batch' : Token.TokenBatch) (hnext : index < next)
+    (hsome : ∀ (next : Nat) (batch' : Token.Internal.TokenBatch) (hnext : index < next)
       (hbatch' : Held floor offset base next batch') (s' : WP.BS floor low) (coll' : List Handed)
       (held' : List Lexeme) (locN : Span.Location),
       Fixed v hd iv s'.val → offset = s'.val.offset → base = s'.val.base →

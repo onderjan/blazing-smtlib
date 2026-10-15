@@ -1,7 +1,7 @@
 module
 
 public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Normal.Basic
-import all BSmtLib.Lexer.Helpers
+import all BSmtLib.Lexer.Internal.Helpers
 import all BSmtLib.Lexer.Internal.WRustPort
 
 @[expose] public section
@@ -15,6 +15,7 @@ The step of the Rust port's normal state at whitespace other than a line feed, o
 namespace BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Normal.Whitespace
 
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Bytes
+open BSmtLib.Lexer.Internal (CharClass)
 open BSmtLib.Lexer.Internal.WRustPort (lexNormalFrom FastState Frame Held Past)
 open BSmtLib.Lexer.Internal.WRustPort.Slice (get? get)
 open BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Agree
@@ -39,8 +40,9 @@ theorem normalSpec_whitespace (v : Token.Version) (input : ByteSlice) (offset ba
     (ih : ∀ index, input.size - index < n → NormalSpec C v hd iv input offset base hframe index)
     (hn : input.size - index < n + 1)
     {c₀ : UInt8} (hget₀ : get? input index = some c₀) (hc40₀ : c₀ ≠ 40) (hc41₀ : c₀ ≠ 41)
-    (hf : Lexer.Helpers.fastFlags c₀ = Lexer.Helpers.FAST_ON ||| Lexer.Helpers.FAST_DELIM |||
-    Lexer.CharClass.RUN_NON_LF_WHITESPACE)
+    (hf : Lexer.Internal.Helpers.fastFlags c₀ = Lexer.Internal.Helpers.FAST_ON |||
+        Lexer.Internal.Helpers.FAST_DELIM |||
+    CharClass.RUN_NON_LF_WHITESPACE)
     (hwsr : isWhitespaceRun c₀ = true) :
     NormalSpec C v hd iv input offset base hframe index := by
   intro batch locals hindex hbatch origin horigin s coll held location hfix hoff hbase
@@ -68,25 +70,28 @@ theorem normalSpec_whitespace (v : Token.Version) (input : ByteSlice) (offset ba
     · -- whitespace other than a line feed
       by_cases hcon : C.concrete = true
       · simp only [answering_concrete, hcon, Bool.true_and]
-        have hpipe : (Lexer.Helpers.fastFlags c &&& Lexer.Helpers.FAST_PIPE != 0) = false
+        have hpipe : (Lexer.Internal.Helpers.fastFlags c &&& Lexer.Internal.Helpers.FAST_PIPE !=
+            0) = false
             := by rw [hf]; decide
-        have hsym : (Lexer.Helpers.fastFlags c &&& Lexer.CharClass.RUN_SIMPLE_SYMBOL != 0) = false
+        have hsym : (Lexer.Internal.Helpers.fastFlags c &&&
+            CharClass.RUN_SIMPLE_SYMBOL != 0) = false
             := by
           rw [hf]; decide
-        have hemit : (Lexer.Helpers.fastFlags c &&& Lexer.Helpers.FAST_EMIT != 0) = false
+        have hemit : (Lexer.Internal.Helpers.fastFlags c &&& Lexer.Internal.Helpers.FAST_EMIT !=
+            0) = false
             := by rw [hf]; decide
-        have hwsb : (Lexer.Helpers.fastFlags c &&& Lexer.CharClass.RUN_NON_LF_WHITESPACE != 0) =
+        have hwsb : (Lexer.Internal.Helpers.fastFlags c &&& CharClass.RUN_NON_LF_WHITESPACE != 0) =
             true := by
           rw [hf]; decide
-        have hmask : Lexer.Helpers.fastFlags c &&& Lexer.Helpers.FAST_RUN_MASK =
-            Lexer.CharClass.RUN_NON_LF_WHITESPACE := by
+        have hmask : Lexer.Internal.Helpers.fastFlags c &&& Lexer.Internal.Helpers.FAST_RUN_MASK =
+            CharClass.RUN_NON_LF_WHITESPACE := by
           rw [hf]; decide
         have hw : isWhitespace input[index] = true := by
           rw [hc]
           simp only [isWhitespaceRun, Bool.and_eq_true] at hwsr
           exact hwsr.1
         have hj : Lexer.Internal.WRustPort.Slice.runEnd input (index + 1)
-            (Lexer.Helpers.fastFlags c &&& Lexer.Helpers.FAST_RUN_MASK) =
+            (Lexer.Internal.Helpers.fastFlags c &&& Lexer.Internal.Helpers.FAST_RUN_MASK) =
             runEnd input isWhitespaceRun index := by
           rw [hmask, runEnd_eq endsRun_whitespace,
             ← runEnd_succ input _ index hi (by rw [hc]; exact hwsr)]
@@ -124,11 +129,12 @@ theorem normalSpec_whitespace (v : Token.Version) (input : ByteSlice) (offset ba
         -- the whitespace ends inside the slice before a byte that is not a line feed
         obtain ⟨c', hgetR, hc'10⟩ : ∃ c', get? input
             (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1)
-            (Lexer.Helpers.fastFlags c &&& Lexer.Helpers.FAST_RUN_MASK)) = some c' ∧ c' ≠ 10 := by
+            (Lexer.Internal.Helpers.fastFlags c &&& Lexer.Internal.Helpers.FAST_RUN_MASK)) =
+                some c' ∧ c' ≠ 10 := by
           simp only [hwsb, Bool.true_and] at hws
           revert hws
           cases get? input (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1)
-            (Lexer.Helpers.fastFlags c &&& Lexer.Helpers.FAST_RUN_MASK)) with
+            (Lexer.Internal.Helpers.fastFlags c &&& Lexer.Internal.Helpers.FAST_RUN_MASK)) with
           | none => intro h; exact absurd rfl h
           | some c' => intro h; exact ⟨c', rfl, by simpa using h⟩
         obtain ⟨hRs, hRc⟩ := get?_eq hgetR
@@ -136,32 +142,35 @@ theorem normalSpec_whitespace (v : Token.Version) (input : ByteSlice) (offset ba
         have hadv := advance_whitespace_end true ⟨.whitespace, location,
           ByteArray.empty ++ bytesOf input index
             (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1)
-                (Lexer.Helpers.fastFlags c &&& Lexer.Helpers.FAST_RUN_MASK))⟩
+                (Lexer.Internal.Helpers.fastFlags c &&& Lexer.Internal.Helpers.FAST_RUN_MASK))⟩
           (afterColumns location (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1)
-            (Lexer.Helpers.fastFlags c &&& Lexer.Helpers.FAST_RUN_MASK) - index))
+            (Lexer.Internal.Helpers.fastFlags c &&& Lexer.Internal.Helpers.FAST_RUN_MASK) - index))
           (c := input[Lexer.Internal.WRustPort.Slice.runEnd input (index + 1)
-            (Lexer.Helpers.fastFlags c &&& Lexer.Helpers.FAST_RUN_MASK)]) rfl hRq
+            (Lexer.Internal.Helpers.fastFlags c &&& Lexer.Internal.Helpers.FAST_RUN_MASK)]) rfl hRq
                 (by rw [hRc]; exact hc'10)
         have hC : feedFrom v C.concrete input .idle location index =
             Prep [⟨.whitespace, bytesOf input index
                 (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1)
-                (Lexer.Helpers.fastFlags c &&& Lexer.Helpers.FAST_RUN_MASK)), location,
+                (Lexer.Internal.Helpers.fastFlags c &&&
+                    Lexer.Internal.Helpers.FAST_RUN_MASK)), location,
                 afterColumns location (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1)
-                  (Lexer.Helpers.fastFlags c &&& Lexer.Helpers.FAST_RUN_MASK) - index)⟩]
+                  (Lexer.Internal.Helpers.fastFlags c &&&
+                      Lexer.Internal.Helpers.FAST_RUN_MASK) - index)⟩]
               (feedFrom v C.concrete input .idle
                 (afterColumns location (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1)
-                  (Lexer.Helpers.fastFlags c &&& Lexer.Helpers.FAST_RUN_MASK) - index))
+                  (Lexer.Internal.Helpers.fastFlags c &&&
+                      Lexer.Internal.Helpers.FAST_RUN_MASK) - index))
                 (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1)
-                    (Lexer.Helpers.fastFlags c &&& Lexer.Helpers.FAST_RUN_MASK)))
+                    (Lexer.Internal.Helpers.fastFlags c &&& Lexer.Internal.Helpers.FAST_RUN_MASK)))
             := by
           rw [hA, hcon, feedFrom_tokenBefore v true input hRs hadv, empty_append]
-        have hidx : (if (Lexer.Helpers.fastFlags c &&& Lexer.Helpers.FAST_PIPE != 0) = true then
+        have hidx : (if (Lexer.Internal.Helpers.fastFlags c &&& Lexer.Internal.Helpers.FAST_PIPE != 0) = true then
             Lexer.Internal.WRustPort.Slice.runEnd input (index + 1)
-                (Lexer.Helpers.fastFlags c &&& Lexer.Helpers.FAST_RUN_MASK) + 1
+                (Lexer.Internal.Helpers.fastFlags c &&& Lexer.Internal.Helpers.FAST_RUN_MASK) + 1
           else Lexer.Internal.WRustPort.Slice.runEnd input (index + 1)
-              (Lexer.Helpers.fastFlags c &&& Lexer.Helpers.FAST_RUN_MASK)) =
+              (Lexer.Internal.Helpers.fastFlags c &&& Lexer.Internal.Helpers.FAST_RUN_MASK)) =
             Lexer.Internal.WRustPort.Slice.runEnd input (index + 1)
-                (Lexer.Helpers.fastFlags c &&& Lexer.Helpers.FAST_RUN_MASK) := by
+                (Lexer.Internal.Helpers.fastFlags c &&& Lexer.Internal.Helpers.FAST_RUN_MASK) := by
           simp only [hpipe, Bool.false_eq_true, ↓reduceIte]
         apply WP.wp_dite
         · intro h; simp [hpipe, hsym] at h
@@ -183,7 +192,8 @@ theorem normalSpec_whitespace (v : Token.Version) (input : ByteSlice) (offset ba
           refine wp_recurse (f := fun (r : Past input origin) => r.1)
             (ih _ (by rw [hidx]; omega) r.val locals _ r.property origin _ s' coll' held'
               (afterColumns location (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1)
-                (Lexer.Helpers.fastFlags c &&& Lexer.Helpers.FAST_RUN_MASK) - index))
+                (Lexer.Internal.Helpers.fastFlags c &&&
+                    Lexer.Internal.Helpers.FAST_RUN_MASK) - index))
               (fixed_of_key hfix hk) (hoff.trans k8.symm) (hbase.trans k9.symm)
               (hline.trans k10.symm) (hlineStart.trans k11.symm) (k2.trans hnormal)
               (by rw [hidx]; exact (hloc.afterColumns hindex (by omega)).congr k10 k11) hH
@@ -199,18 +209,21 @@ theorem normalSpec_whitespace (v : Token.Version) (input : ByteSlice) (offset ba
       have hcon' : C.concrete = false := by simpa using hcon
       simp only [answering_concrete, hcon', Bool.false_and, Bool.false_eq_true,
           ↓reduceIte, dite_false]
-      have hpipe : (Lexer.Helpers.fastFlags c &&& Lexer.Helpers.FAST_PIPE != 0) = false
+      have hpipe : (Lexer.Internal.Helpers.fastFlags c &&& Lexer.Internal.Helpers.FAST_PIPE !=
+          0) = false
           := by rw [hf]; decide
-      have hsym : (Lexer.Helpers.fastFlags c &&& Lexer.CharClass.RUN_SIMPLE_SYMBOL != 0) = false :=
+      have hsym : (Lexer.Internal.Helpers.fastFlags c &&& CharClass.RUN_SIMPLE_SYMBOL
+          != 0) = false :=
           by
         rw [hf]; decide
-      have hemit : (Lexer.Helpers.fastFlags c &&& Lexer.Helpers.FAST_EMIT != 0) = false
+      have hemit : (Lexer.Internal.Helpers.fastFlags c &&& Lexer.Internal.Helpers.FAST_EMIT !=
+          0) = false
           := by rw [hf]; decide
-      have hmask : Lexer.Helpers.fastFlags c &&& Lexer.Helpers.FAST_RUN_MASK =
-          Lexer.CharClass.RUN_NON_LF_WHITESPACE := by
+      have hmask : Lexer.Internal.Helpers.fastFlags c &&& Lexer.Internal.Helpers.FAST_RUN_MASK =
+          CharClass.RUN_NON_LF_WHITESPACE := by
         rw [hf]; decide
       have hj : Lexer.Internal.WRustPort.Slice.runEnd input (index + 1)
-          (Lexer.Helpers.fastFlags c &&& Lexer.Helpers.FAST_RUN_MASK) =
+          (Lexer.Internal.Helpers.fastFlags c &&& Lexer.Internal.Helpers.FAST_RUN_MASK) =
           runEnd input isWhitespaceRun index := by
         rw [hmask, runEnd_eq endsRun_whitespace,
           ← runEnd_succ input _ index hi (by rw [hc]; exact hwsr)]
@@ -240,11 +253,11 @@ theorem normalSpec_whitespace (v : Token.Version) (input : ByteSlice) (offset ba
         rw [hfix.holding] at hp
         simp only [hemit, Bool.false_eq_true, ↓reduceIte, List.append_nil] at hp
         obtain ⟨k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11⟩ := key_fields hk
-        have hidx : (if (Lexer.Helpers.fastFlags c &&& Lexer.Helpers.FAST_PIPE != 0) = true then
+        have hidx : (if (Lexer.Internal.Helpers.fastFlags c &&& Lexer.Internal.Helpers.FAST_PIPE != 0) = true then
               Lexer.Internal.WRustPort.Slice.runEnd input (index + 1)
-                  (Lexer.Helpers.fastFlags c &&& Lexer.Helpers.FAST_RUN_MASK) + 1
+                  (Lexer.Internal.Helpers.fastFlags c &&& Lexer.Internal.Helpers.FAST_RUN_MASK) + 1
             else Lexer.Internal.WRustPort.Slice.runEnd input (index + 1)
-                (Lexer.Helpers.fastFlags c &&& Lexer.Helpers.FAST_RUN_MASK)) =
+                (Lexer.Internal.Helpers.fastFlags c &&& Lexer.Internal.Helpers.FAST_RUN_MASK)) =
             runEnd input isWhitespaceRun index := by
           simp only [hpipe, Bool.false_eq_true, ↓reduceIte, hj]
         refine wp_recurse (f := fun (r : Past input origin) => r.1)

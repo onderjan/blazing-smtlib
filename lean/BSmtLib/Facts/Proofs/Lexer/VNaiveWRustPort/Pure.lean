@@ -2,7 +2,7 @@ module
 
 public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Agree
 public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Runs
-import all BSmtLib.Lexer.Helpers
+import all BSmtLib.Lexer.Internal.Helpers
 import all BSmtLib.Lexer.Internal.VNaive
 import all BSmtLib.Lexer.Internal.WRustPort.Slice
 
@@ -84,14 +84,14 @@ theorem stored_last (s : ByteSlice) {i j : Nat} (hij : i < j) (hj : j ≤ s.size
 
 /-- The last byte of a piece of a slice, borrowed from it. -/
 theorem borrowed_last (s : ByteSlice) {i j : Nat} (hij : i < j) (hj : j ≤ s.size)
-    (stored : Lexer.Helpers.ContentBuffer) :
+    (stored : Lexer.Internal.Helpers.ContentBuffer) :
     (Lexer.Internal.WRustPort.Slice.borrow s i j (Nat.le_of_lt hij) hj).last? stored = some
     (s[j - 1]'(by omega)) := by
   have h1 := s.stop_le_size_byteArray
   have h2 := s.start_le_stop
   have hj' := hj
   simp only [ByteSlice.size] at hj'
-  simp only [Lexer.Internal.WRustPort.Slice.borrow, Lexer.Helpers.Content.last?,
+  simp only [Lexer.Internal.WRustPort.Slice.borrow, Lexer.Internal.Helpers.Content.last?,
     show ¬ (s.start + j = s.start + i) by omega, ↓reduceDIte, Option.some.injEq]
   rw [getElem_slice]
   congr 1

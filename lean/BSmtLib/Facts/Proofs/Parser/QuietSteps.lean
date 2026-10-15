@@ -13,9 +13,9 @@ import all BSmtLib.Parser.Category.SortedVar
 import all BSmtLib.Parser.Category.Term
 import all BSmtLib.Parser.Category.Token
 import all BSmtLib.Parser.Command
-import all BSmtLib.Parser.Command.Datatype
-import all BSmtLib.Parser.Command.Function
-import all BSmtLib.Parser.Command.Standard
+import all BSmtLib.Parser.Command.Internal.Datatype
+import all BSmtLib.Parser.Command.Internal.Function
+import all BSmtLib.Parser.Command.Internal.Standard
 import all BSmtLib.Parser.Script
 
 @[expose] public section
@@ -38,11 +38,22 @@ namespace BSmtLib.Facts.Proofs.Parser.QuietSteps
 open BSmtLibSpec.Parser.Properties
 open BSmtLib.Parser
 open BSmtLib.Nodes BSmtLib.Parser.Category.Attribute BSmtLib.Parser.Category.Combinator
+open BSmtLib.Parser.Category.Attribute.Internal
+open BSmtLib.Parser.Category.Combinator.Internal
 open BSmtLib.Parser.Category.Ident BSmtLib.Parser.Category.Pattern
+open BSmtLib.Parser.Category.Ident.Internal
+open BSmtLib.Parser.Category.Pattern.Internal
 open BSmtLib.Parser.Category.QualifiedIdent BSmtLib.Parser.Category.SExpr
+open BSmtLib.Parser.Category.QualifiedIdent.Internal
+open BSmtLib.Parser.Category.SExpr.Internal
 open BSmtLib.Parser.Category.«Sort» BSmtLib.Parser.Category.SortedVar BSmtLib.Parser.Category.Term
-open BSmtLib.Parser.Category.Token BSmtLib.Parser.Command BSmtLib.Parser.Command.Datatype
-open BSmtLib.Parser.Command.Function BSmtLib.Parser.Command.Standard BSmtLib.Parser.Script
+open BSmtLib.Parser.Category.«Sort».Internal
+open BSmtLib.Parser.Category.SortedVar.Internal
+open BSmtLib.Parser.Category.Term.Internal
+open BSmtLib.Parser.Category.Token BSmtLib.Parser.Command BSmtLib.Parser.Command.Internal.Datatype
+open BSmtLib.Parser.Category.Token.Internal
+open BSmtLib.Parser.Command.Internal
+open BSmtLib.Parser.Command.Internal.Function BSmtLib.Parser.Command.Internal.Standard BSmtLib.Parser.Script
 open BSmtLib.Traits
 
 section
@@ -301,21 +312,21 @@ theorem payloadStep_silent (version : Token.Version) (state : Payload Nat Nat Na
           match ← datatypeStep (H := List Event) start version state token with
           | .more state => return Parser.Internal.Step.more state
           | .done constructors =>
-            Parser.call (CommandHandler.endDatatypeDeclaration constructors)
+            Parser.Internal.call (CommandHandler.endDatatypeDeclaration constructors)
             return .done ()) (some count) state token) := by
     intro count start hstart state token
     apply listStep_silent
     intro state token
     silent_step [datatypeStep_silent hstart]
   have hdeclare : ∀ symbol state token, Quiet.Avoids bad (datatypeStep (H := List Event)
-      (fun parameters => Parser.call (CommandHandler.startDeclareDatatype symbol parameters))
+      (fun parameters => Parser.Internal.call (CommandHandler.startDeclareDatatype symbol parameters))
       version state token) := fun symbol =>
     datatypeStep_silent (fun _ => by apply Quiet.silent_call) version
   have hdeclarations := fun count => hdatatypes count
-    (fun parameters => Parser.call (CommandHandler.startDatatypeDeclaration parameters))
+    (fun parameters => Parser.Internal.call (CommandHandler.startDatatypeDeclaration parameters))
     (fun _ => by apply Quiet.silent_call)
   have hdeclareEach : ∀ state token, Quiet.Avoids bad (datatypeStep (H := List Event)
-      (fun parameters => Parser.call (CommandHandler.startDatatypeDeclaration parameters))
+      (fun parameters => Parser.Internal.call (CommandHandler.startDatatypeDeclaration parameters))
       version state token) :=
     datatypeStep_silent (fun _ => by apply Quiet.silent_call) version
   have hbodies := fun count => listStep_silent (bad := bad) (TermState.init (HandledSExpr := Nat)
@@ -361,8 +372,8 @@ theorem commandArrive_silent (state : CommandState Nat Nat Nat Nat Nat)
   · exact Quiet.pure trivial
 theorem scriptArrive_silent (parser : ScriptParser (List Event)) (token : Parser.Internal.Input) :
     Quiet.Avoids bad (Parser.Internal.ParseByToken.arrive (H := List Event) parser token) := by
-  show Quiet.Avoids bad (ScriptParser.arrive parser token)
-  unfold ScriptParser.arrive
+  show Quiet.Avoids bad (ScriptParser.Internal.arrive parser token)
+  unfold ScriptParser.Internal.arrive
   exact commandArrive_silent _ _
 
 end
@@ -377,8 +388,8 @@ theorem scriptStep_quiet (version : Token.Version) (parser : ScriptParser (List 
     (token : Parser.Internal.Input) :
     Quiet FlowSilent (Parser.Internal.ParseByToken.step
         (H := List Event) version parser token) := by
-  show Quiet FlowSilent (ScriptParser.step version parser token)
-  unfold ScriptParser.step
+  show Quiet FlowSilent (ScriptParser.Internal.step version parser token)
+  unfold ScriptParser.Internal.step
   apply Quiet.bind_silent (commandStep_silent _ _ _)
   intro outcome
   split

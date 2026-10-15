@@ -6,6 +6,8 @@ import all BSmtLib.Parser.Adapter
 import all BSmtLib.Parser.Script
 
 @[expose] public section
+open BSmtLib.Parser.Script.Internal
+open BSmtLib.Token.BatchCursor.Internal (remaining)
 
 /-!
 # Two postures, one looser than the other
@@ -24,10 +26,12 @@ namespace BSmtLib.Facts.Proofs.Reader.Param.Posture
 
 open BSmtLibSpec.Parser.Properties
 open BSmtLib.Parser
+open BSmtLib.Parser.Internal (PM call syntaxError)
 open BSmtLib.Facts.Reader.Adapters (RecAdapter)
 open BSmtLib.Facts.Proofs.Reader.Param.Adapter (paLoop startLog consume_eq id_bind_eq)
 open BSmtLib.Facts.Proofs.Parser.Cut BSmtLib.Parser.Adapter BSmtLib.Parser.Command
-open BSmtLib.Parser.Script BSmtLib.Parser.Script.VersionPosture BSmtLib.Traits
+open BSmtLib.Parser.Command.Internal
+open BSmtLib.Parser.Script BSmtLib.Parser.Script.Internal.VersionPosture BSmtLib.Traits
 
 attribute [local instance high] Stop.consumeFrom
 
@@ -97,8 +101,8 @@ theorem step_eq (version : Token.Version) (parser : ScriptParser (List Event))
     (token : Parser.Internal.Input) :
     Parser.Internal.ParseByToken.step (H := List Event) version parser token =
       (commandStep version parser.command token >>= scriptAfter parser) := by
-  show ScriptParser.step version parser token = _
-  unfold ScriptParser.step
+  show ScriptParser.Internal.step version parser token = _
+  unfold ScriptParser.Internal.step
   congr
   funext outcome
   rcases outcome with command | (_ | declared | _ | _) <;> rfl
@@ -311,7 +315,7 @@ under `strict`. -/
 theorem paLoop_looser {strict loose : Token.VersionPosture} (hl : Looser strict loose)
     {b : Token.BatchTag} :
     ∀ (n : Nat) (parser : ScriptParser (List Event)) (cursor : Token.BatchCursor b)
-      (handler : List Event), cursor.remaining < n → parser.posture = strict →
+      (handler : List Event), remaining cursor < n → parser.posture = strict →
       (∃ e, ((paLoop parser cursor).run handler).1.1 = .error e) ∨
         ((paLoop (withPosture loose parser) cursor).run handler =
           ((((paLoop parser cursor).run handler).1.1,
@@ -385,7 +389,7 @@ theorem consume_looser {strict loose : Token.VersionPosture} (hl : Looser strict
     at e₁ ⊢
   generalize (Token.ConsumeFrom.consume (m := Id) cursor h : StateT RecAdapter Id _).run
     (adapterWith loose adapter) = q₂ at e₂ ⊢
-  have hl' := paLoop_looser hl (cursor.remaining + 1) adapter.parser cursor
+  have hl' := paLoop_looser hl (remaining cursor + 1) adapter.parser cursor
     (startLog adapter cursor.version) (Nat.lt_succ_self _) hp
   generalize (paLoop adapter.parser cursor).run (startLog adapter cursor.version) = r₁
     at e₁ hl'

@@ -19,6 +19,7 @@ run leaves the parser (`InvB`).
 namespace BSmtLib.Facts.Proofs.Reader.Param.Run
 
 open BSmtLib.Lexer
+open BSmtLib.Lexer.Internal (BATCH_CAPACITY Stop Interrupted Failure LexerCore InnerM StepM LexM)
 open BSmtLibSpec BSmtLibSpec.Grammar
 open BSmtLibSpec.Lexer (Handed)
 open BSmtLib.Parser (Parse)

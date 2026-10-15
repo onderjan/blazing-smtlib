@@ -5,7 +5,7 @@ import all BSmtLib.Parser
 import all BSmtLib.Parser.Category.Attribute
 import all BSmtLib.Parser.Category.Sort
 import all BSmtLib.Parser.Category.Token
-import all BSmtLib.Parser.Command.Standard
+import all BSmtLib.Parser.Command.Internal.Standard
 
 @[expose] public section
 
@@ -24,17 +24,17 @@ namespace BSmtLib.Facts.Proofs.Parser.Rejection.Payload
 open BSmtLibSpec.Grammar
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Parser.Traversal
-open BSmtLib.Parser (PM)
-open BSmtLib.Parser.Category.Term (TermState)
-open BSmtLib.Parser.Category.Combinator (ListState)
-open BSmtLib.Parser.Command.Datatype (SortDecState DatatypeState)
-open BSmtLib.Parser.Command.Standard (LiteralState Payload NamedCommand FinalCall Declaration
+open BSmtLib.Parser.Category.Term.Internal (TermState)
+open BSmtLib.Parser.Category.Combinator.Internal (ListState)
+open BSmtLib.Parser.Command.Internal.Datatype (SortDecState DatatypeState)
+open BSmtLib.Parser.Command.Internal.Standard (LiteralState Payload NamedCommand FinalCall
+    Declaration
     payloadStep finalCall)
-open BSmtLib.Parser.Command.Function (SignatureState FunctionDecState)
-open BSmtLib.Parser.Command.Definition (DefinitionEnd)
-open BSmtLib.Parser.Command (CommandState CommandOutcome)
-open BSmtLib.Parser.Category.Attribute (AttributeState)
-open BSmtLib.Parser.Category.Sort (SortState)
+open BSmtLib.Parser.Command.Internal.Function (SignatureState FunctionDecState)
+open BSmtLib.Parser.Command.Internal.Definition (DefinitionEnd)
+open BSmtLib.Parser.Command (CommandOutcome)
+open BSmtLib.Parser.Category.Attribute.Internal (AttributeState)
+open BSmtLib.Parser.Category.Sort.Internal (SortState)
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Proofs.Parser.Commands.Bytes
 open BSmtLib.Facts.Proofs.Parser.Rejection.Basic BSmtLib.Facts.Proofs.Parser.Rejection.Command
 open BSmtLib.Facts.Proofs.Parser.Rejection.CommandParts BSmtLib.Facts.Proofs.Parser.Rejection.Parts
@@ -81,7 +81,7 @@ include hitem in
 theorem payload_closing (final : FinalCall Nat Nat Nat) :
     PayloadAdvance version follows (.closing final) item
       (payloadStep (H := List Event) version (.closing final) token) := by
-  cases token <;> simp only [payloadStep, Parser.Category.Token.expectClose, pure_bind]
+  cases token <;> simp only [payloadStep, Parser.Category.Token.Internal.expectClose, pure_bind]
   case parenClose =>
     item_of hitem
     refine Sound.bind (finalCall_sound final) fun _ _ => ?_
@@ -94,18 +94,18 @@ theorem closing_rem {v : BSmtLibSpec.Lexicon.Version} {follows : CmdEnd → Lang
   cases final <;> first | rfl | exact absurd rfl h
 
 theorem sortRem_init {v : BSmtLibSpec.Lexicon.Version} :
-    ∀ u, sortRem v Parser.Category.«Sort».SortState.init u → SortLang v u := fun _ h => by
-  simpa [sortRem, Parser.Category.«Sort».SortState.init] using h
+    ∀ u, sortRem v Parser.Category.«Sort».Internal.SortState.init u → SortLang v u := fun _ h => by
+  simpa [sortRem, Parser.Category.«Sort».Internal.SortState.init] using h
 
 theorem sortRem_init_nonempty (v : BSmtLibSpec.Lexicon.Version) :
-    ∃ u, sortRem v Parser.Category.«Sort».SortState.init u := sortRem_nonempty v _
+    ∃ u, sortRem v Parser.Category.«Sort».Internal.SortState.init u := sortRem_nonempty v _
 
 include hitem hfollows in
 theorem payload_named (command : NamedCommand) :
     PayloadAdvance version follows (.named command) item
       (payloadStep (H := List Event) version (.named command) token) := by
   have hnext := closeNext_nonempty version follows (hfollows _)
-  cases token <;> simp only [payloadStep, Parser.Category.Token.expectSymbol, pure_bind]
+  cases token <;> simp only [payloadStep, Parser.Category.Token.Internal.expectSymbol, pure_bind]
   case symbol s =>
     item_of hitem
     have sym := symbolLang_intro (Bridge.symbol s)
@@ -165,7 +165,7 @@ theorem payload_checkSatAssuming (state : ListState (TermState Nat Nat Nat Nat N
       (payloadStep (H := List Event) version (.checkSatAssuming state) token) := by
   have hnext := closeNext_nonempty version follows (hfollows _)
   simp only [payloadStep]
-  refine Sound.bind (listStep_advances version Parser.Category.Term.TermState.init
+  refine Sound.bind (listStep_advances version Parser.Category.Term.Internal.TermState.init
       (termStep_advances version)
     (element := TermLang _) termRem_init (termRem_init_nonempty _) (termLang_nonempty _) 0 none
     (by simp) state token item hitem hlex) fun r hr => ?_
@@ -185,7 +185,7 @@ theorem payload_checkSatAssumingLiterals
       (payloadStep (H := List Event) version (.checkSatAssumingLiterals state) token) := by
   have hnext := closeNext_nonempty version follows (hfollows _)
   simp only [payloadStep]
-  refine Sound.bind (listStep_advances version Parser.Command.Standard.LiteralState.init
+  refine Sound.bind (listStep_advances version Parser.Command.Internal.Standard.LiteralState.init
     (literalStep_advances version) (element := LiteralLang) literalRem_init
     ⟨_, rfl, (literalLang_nonempty).choose_spec⟩ literalLang_nonempty 0 none (by simp) state token
     item hitem hlex) fun r hr => ?_
@@ -235,7 +235,7 @@ theorem payload_declareFunParameters (symbol : Nodes.Symbol)
       (payloadStep (H := List Event) version (.declareFunParameters symbol state) token) := by
   have hnext := closeNext_nonempty version follows (hfollows _)
   simp only [payloadStep]
-  refine Sound.bind (listStep_advances version Parser.Category.«Sort».SortState.init
+  refine Sound.bind (listStep_advances version Parser.Category.«Sort».Internal.SortState.init
       (sortStep_advances version)
     (element := SortLang _) sortRem_init (sortRem_init_nonempty _) (sortLang_nonempty _) 0 none
     (by simp) state token item hitem hlex) fun r hr => ?_
@@ -256,7 +256,8 @@ theorem payload_declareSort (symbol : Nodes.Symbol) :
     PayloadAdvance version follows (.declareSort symbol) item
       (payloadStep (H := List Event) version (.declareSort symbol) token) := by
   have hnext := closeNext_nonempty version follows (hfollows _)
-  cases token <;> simp only [payloadStep, Parser.Category.Token.expectNumeral, bind_pure_comp]
+  cases token <;> simp only [payloadStep, Parser.Category.Token.Internal.expectNumeral,
+      bind_pure_comp]
   case constant c =>
     cases c <;> simp only <;> try fail_step
     item_of hitem
@@ -268,7 +269,8 @@ theorem payload_echo :
     PayloadAdvance version follows .echo item
       (payloadStep (H := List Event) version .echo token) := by
   have hnext := closeNext_nonempty version follows (hfollows _)
-  cases token <;> simp only [payloadStep, Parser.Category.Token.expectString, bind_pure_comp]
+  cases token <;> simp only [payloadStep, Parser.Category.Token.Internal.expectString,
+      bind_pure_comp]
   case constant c =>
     cases c <;> simp only <;> try fail_step
     item_of hitem
@@ -280,7 +282,8 @@ theorem payload_getInfo :
     PayloadAdvance version follows .getInfo item
       (payloadStep (H := List Event) version .getInfo token) := by
   have hnext := closeNext_nonempty version follows (hfollows _)
-  cases token <;> simp only [payloadStep, Parser.Category.Token.expectKeyword, bind_pure_comp]
+  cases token <;> simp only [payloadStep, Parser.Category.Token.Internal.expectKeyword,
+      bind_pure_comp]
   case keyword k =>
     item_of hitem
     exact Sound.pure fun _ => ⟨fun u hu => cat_intro' ⟨_, rfl⟩ hu rfl, hnext⟩
@@ -291,7 +294,8 @@ theorem payload_getOption :
     PayloadAdvance version follows .getOption item
       (payloadStep (H := List Event) version .getOption token) := by
   have hnext := closeNext_nonempty version follows (hfollows _)
-  cases token <;> simp only [payloadStep, Parser.Category.Token.expectKeyword, bind_pure_comp]
+  cases token <;> simp only [payloadStep, Parser.Category.Token.Internal.expectKeyword,
+      bind_pure_comp]
   case keyword k =>
     item_of hitem
     exact Sound.pure fun _ => ⟨fun u hu => cat_intro' ⟨_, rfl⟩ hu rfl, hnext⟩
@@ -302,7 +306,8 @@ theorem payload_pop :
     PayloadAdvance version follows .pop item
       (payloadStep (H := List Event) version .pop token) := by
   have hnext := closeNext_nonempty version follows (hfollows _)
-  cases token <;> simp only [payloadStep, Parser.Category.Token.expectNumeral, bind_pure_comp]
+  cases token <;> simp only [payloadStep, Parser.Category.Token.Internal.expectNumeral,
+      bind_pure_comp]
   case constant c =>
     cases c <;> simp only <;> try fail_step
     item_of hitem
@@ -314,7 +319,8 @@ theorem payload_push :
     PayloadAdvance version follows .push item
       (payloadStep (H := List Event) version .push token) := by
   have hnext := closeNext_nonempty version follows (hfollows _)
-  cases token <;> simp only [payloadStep, Parser.Category.Token.expectNumeral, bind_pure_comp]
+  cases token <;> simp only [payloadStep, Parser.Category.Token.Internal.expectNumeral,
+      bind_pure_comp]
   case constant c =>
     cases c <;> simp only <;> try fail_step
     item_of hitem
@@ -447,7 +453,7 @@ theorem payload_getValue (state : ListState (TermState Nat Nat Nat Nat Nat) Nat)
       (payloadStep (H := List Event) version (.getValue state) token) := by
   have hnext := closeNext_nonempty version follows (hfollows _)
   simp only [payloadStep]
-  refine Sound.bindOn (listStep_advances version Parser.Category.Term.TermState.init
+  refine Sound.bindOn (listStep_advances version Parser.Category.Term.Internal.TermState.init
       (termStep_advances version)
     (element := TermLang _) termRem_init (termRem_init_nonempty _) (termLang_nonempty _) 1 none
     (by simp) state token item hitem hlex) (fun r => ∃ v, r = .done v) (listStep_quiet _ _ _ _ _)
@@ -765,10 +771,10 @@ theorem payload_setInfo (declaration : Declaration) (state : AttributeState Nat 
   cases declaration with
   | start =>
     obtain rfl : state = ⟨.start, #[]⟩ := hsync
-    cases token <;> simp only [payloadStep, Parser.Category.Attribute.attributeStep,
+    cases token <;> simp only [payloadStep, Parser.Category.Attribute.Internal.attributeStep,
         Declaration.next, pure_bind,
       Array.isEmpty_empty, Bool.and_true, Bool.not_true, Bool.and_false, Bool.false_eq_true,
-      ite_false, ite_true, Parser.Category.Token.expectClose]
+      ite_false, ite_true, Parser.Category.Token.Internal.expectClose]
     case keyword name =>
       item_of hitem
       refine Sound.pure fun _ => ⟨fun u hu => ?_, ?_⟩
@@ -780,7 +786,7 @@ theorem payload_setInfo (declaration : Declaration) (state : AttributeState Nat 
         · rw [← setInfoEnd_next _ .start (token := .keyword name) rfl a (fun h => by cases h)]
           exact hb
       · obtain ⟨b, hb⟩ := hfollows (setInfoEnd (Bridge.version version)
-          (if Parser.Command.Standard.isVersionKeyword name = true then Declaration.keyword else
+          (if Parser.Command.Internal.Standard.isVersionKeyword name = true then Declaration.keyword else
               Declaration.other)
           [closeItem])
         refine ⟨_, ?_, [closeItem], b, cat_intro' (a := []) (Or.inr rfl) (tok_intro _) rfl, hb, rfl⟩
@@ -788,7 +794,7 @@ theorem payload_setInfo (declaration : Declaration) (state : AttributeState Nat 
     all_goals fail_step
   | keyword =>
     obtain ⟨k, rfl⟩ : ∃ k, state = ⟨.afterName k, #[]⟩ := hsync
-    cases token <;> simp only [payloadStep, Parser.Category.Attribute.attributeStep,
+    cases token <;> simp only [payloadStep, Parser.Category.Attribute.Internal.attributeStep,
         Declaration.next, pure_bind,
       bind_assoc]
     case symbol s =>

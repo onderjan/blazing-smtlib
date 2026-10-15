@@ -1,7 +1,7 @@
 module
 
 public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Normal.Basic
-import all BSmtLib.Lexer.Helpers
+import all BSmtLib.Lexer.Internal.Helpers
 import all BSmtLib.Lexer.Internal.WRustPort
 import all BSmtLib.Lexer.Internal.VNaive
 
@@ -208,8 +208,8 @@ theorem normalSpec_lineFeed (v : Token.Version) (input : ByteSlice) (offset base
     (ih : ∀ index, input.size - index < n → NormalSpec C v hd iv input offset base hframe index)
     (hn : input.size - index < n + 1)
     {c₀ : UInt8} (hget₀ : get? input index = some c₀) (hc40₀ : c₀ ≠ 40) (hc41₀ : c₀ ≠ 41)
-    (hfoff₀ : (Lexer.Helpers.fastFlags c₀ &&& Lexer.Helpers.FAST_ON != 0) = false)
-    (hst₀ : Lexer.Helpers.startOf c₀ = .lineFeed) :
+    (hfoff₀ : (Lexer.Internal.Helpers.fastFlags c₀ &&& Lexer.Internal.Helpers.FAST_ON != 0) = false)
+    (hst₀ : Lexer.Internal.Helpers.startOf c₀ = .lineFeed) :
     NormalSpec C v hd iv input offset base hframe index := by
   intro batch locals hindex hbatch origin horigin s coll held location hfix hoff hbase
     hline hlineStart hnormal hloc hheld hbytes
@@ -235,7 +235,7 @@ theorem normalSpec_lineFeed (v : Token.Version) (input : ByteSlice) (offset base
   · intro hfast; rw [hfoff₀] at hfast; cases hfast
   -- the slow path
   intro hslow
-  have hfoff : (Lexer.Helpers.fastFlags c &&& Lexer.Helpers.FAST_ON != 0) = false
+  have hfoff : (Lexer.Internal.Helpers.fastFlags c &&& Lexer.Internal.Helpers.FAST_ON != 0) = false
       := by simpa using hslow
   obtain ⟨hl1, hl2, hl3⟩ := id hloc
   refine wp_store hline hlineStart ?_
@@ -246,7 +246,7 @@ theorem normalSpec_lineFeed (v : Token.Version) (input : ByteSlice) (offset base
   · -- a line feed, passed over
     by_cases hcon : C.concrete = true
     · rename_i hst
-      have h10 := Lexer.Helpers.eq_of_startOf_eq_lineFeed hst
+      have h10 := Lexer.Internal.Helpers.eq_of_startOf_eq_lineFeed hst
       simp only [answering_concrete, hcon, ↓reduceIte]
       apply WP.wp_bind
       refine startWhitespace_wp v input offset base index batch _ hframe hindex hbatch s coll held
@@ -268,7 +268,7 @@ theorem normalSpec_lineFeed (v : Token.Version) (input : ByteSlice) (offset base
     have hcon' : C.concrete = false := by simpa using hcon
     simp only [answering_concrete, hcon', Bool.false_eq_true, ↓reduceIte]
     rename_i hst
-    have h10 := Lexer.Helpers.eq_of_startOf_eq_lineFeed hst
+    have h10 := Lexer.Internal.Helpers.eq_of_startOf_eq_lineFeed hst
     rw [WP.rust_loadLocals]
     unfold Lexer.Internal.WRustPort.markLineFeedAt FastState.load
     apply WP.wp_bind; apply WP.wp_modifyCore
@@ -290,10 +290,13 @@ theorem normalSpec_lineFeed (v : Token.Version) (input : ByteSlice) (offset base
 theorem normalSpec_other (v : Token.Version) (input : ByteSlice) (offset base : Nat)
     (hframe : Frame floor low offset) (index : Nat)
     {c₀ : UInt8} (hget₀ : get? input index = some c₀) (hc40₀ : c₀ ≠ 40) (hc41₀ : c₀ ≠ 41)
-    (hfoff₀ : (Lexer.Helpers.fastFlags c₀ &&& Lexer.Helpers.FAST_ON != 0) = false)
-    (hst₀ : (Lexer.Helpers.startOf c₀ == .other || Lexer.Helpers.startOf c₀ == .whitespace ||
-      Lexer.Helpers.startOf c₀ == .parenOpen || Lexer.Helpers.startOf c₀ == .parenClose ||
-      Lexer.Helpers.startOf c₀ == .symbol || Lexer.Helpers.startOf c₀ == .pipe) = true) :
+    (hfoff₀ : (Lexer.Internal.Helpers.fastFlags c₀ &&& Lexer.Internal.Helpers.FAST_ON != 0) = false)
+    (hst₀ : (Lexer.Internal.Helpers.startOf c₀ == .other || Lexer.Internal.Helpers.startOf c₀ ==
+        .whitespace ||
+      Lexer.Internal.Helpers.startOf c₀ == .parenOpen || Lexer.Internal.Helpers.startOf c₀ ==
+          .parenClose ||
+      Lexer.Internal.Helpers.startOf c₀ == .symbol || Lexer.Internal.Helpers.startOf c₀ == .pipe)
+          = true) :
     NormalSpec C v hd iv input offset base hframe index := by
   intro batch locals hindex hbatch origin horigin s coll held location hfix hoff hbase
     hline hlineStart hnormal hloc hheld hbytes
@@ -319,7 +322,7 @@ theorem normalSpec_other (v : Token.Version) (input : ByteSlice) (offset base : 
   · intro hfast; rw [hfoff₀] at hfast; cases hfast
   -- the slow path
   intro hslow
-  have hfoff : (Lexer.Helpers.fastFlags c &&& Lexer.Helpers.FAST_ON != 0) = false
+  have hfoff : (Lexer.Internal.Helpers.fastFlags c &&& Lexer.Internal.Helpers.FAST_ON != 0) = false
       := by simpa using hslow
   obtain ⟨hl1, hl2, hl3⟩ := id hloc
   refine wp_store hline hlineStart ?_
@@ -331,9 +334,12 @@ theorem normalSpec_other (v : Token.Version) (input : ByteSlice) (offset base : 
   all_goals
     rename_i hst
     have hother := startOf_other c
-    have hs1 : (Lexer.Helpers.startOf c == .other || Lexer.Helpers.startOf c == .whitespace ||
-        Lexer.Helpers.startOf c == .parenOpen || Lexer.Helpers.startOf c == .parenClose ||
-        Lexer.Helpers.startOf c == .symbol || Lexer.Helpers.startOf c == .pipe) = true := by
+    have hs1 : (Lexer.Internal.Helpers.startOf c == .other || Lexer.Internal.Helpers.startOf c ==
+        .whitespace ||
+        Lexer.Internal.Helpers.startOf c == .parenOpen || Lexer.Internal.Helpers.startOf c ==
+            .parenClose ||
+        Lexer.Internal.Helpers.startOf c == .symbol || Lexer.Internal.Helpers.startOf c == .pipe)
+            = true := by
       rw [hst]; rfl
     have h40b : (c == 40) = false := by simpa using hc40
     have h41b : (c == 41) = false := by simpa using hc41

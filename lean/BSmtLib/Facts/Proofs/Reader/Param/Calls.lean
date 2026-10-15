@@ -17,6 +17,7 @@ state, and the consumers' states related as the relator says.
 namespace BSmtLib.Facts.Proofs.Reader.Param.Calls
 
 open BSmtLib.Lexer
+open BSmtLib.Lexer.Internal (BATCH_CAPACITY Stop Interrupted Failure LexerCore InnerM StepM LexM)
 open BSmtLib.Facts.Proofs.Reader.Param.Basic BSmtLib.Facts.Proofs.Reader.Param.HandOver
 open BSmtLib.Facts.Proofs.Reader.Param.Slice BSmtLib.Lexer.Error
 

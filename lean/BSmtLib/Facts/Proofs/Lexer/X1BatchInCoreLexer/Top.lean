@@ -237,7 +237,7 @@ omit [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
 /-- Steps that are coupled, run on related lexers by `run`, give results related as the
 coupling relates them, and related lexers. -/
 theorem run_couple {recovery : Type} {α β : Type} {Rr : α → β → Prop}
-    {f : BSmtLib.Lexer.InnerM H m α} {g : Lexer.Internal.WRustPort.InnerM H m β}
+    {f : BSmtLib.Lexer.Internal.InnerM H m α} {g : Lexer.Internal.WRustPort.InnerM H m β}
     (hc : Coupled Rr f g)
     (l : BSmtLib.Lexer H recovery) (x : Lexer.Internal.WRustPort.Lexer H recovery)
     (hlx : LexerRel l x) :

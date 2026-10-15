@@ -215,13 +215,13 @@ theorem vBytes_out (bs : List UInt8) : ∀ (core : Core) (st : St)
           simp only [vBytes, hr]
         | fail e d l0 =>
           obtain ⟨rfl, c', hr, hs⟩ := hH
-          refine ⟨c', Span.newUnchecked l0.end l0.end, l0.end, ?_,
+          refine ⟨c', Span.Internal.newUnchecked l0.end l0.end, l0.end, ?_,
             hs.version, hs.initial.trans hXi,
             by unfold discardedOf; rw [hs.activity, hXa]; cases d <;> rfl⟩
           simp only [vBytes, hr]
         | layout l0 =>
           obtain ⟨rfl, c', hr, hs⟩ := hH
-          refine ⟨c', Span.newUnchecked l0.end l0.end, l0.end, ?_,
+          refine ⟨c', Span.Internal.newUnchecked l0.end l0.end, l0.end, ?_,
             hs.version, hs.initial.trans hXi,
             by rw [hs.activity, hXa]; nofun⟩
           simp only [vBytes, hr]
@@ -385,7 +385,7 @@ theorem vBytes_out (bs : List UInt8) : ∀ (core : Core) (st : St)
           simp only [Prod.mk.injEq] at hr
           obtain ⟨⟨rfl, hc⟩, rfl⟩ := hr
           subst core2
-          refine ⟨c', Span.newUnchecked l0.end l0.end, l0.end, ?_,
+          refine ⟨c', Span.Internal.newUnchecked l0.end l0.end, l0.end, ?_,
             hs.version, hs.initial,
             by unfold discardedOf; rw [hs.activity]; cases d <;> rfl⟩
           simp only [vBytes, hv]
@@ -394,7 +394,7 @@ theorem vBytes_out (bs : List UInt8) : ∀ (core : Core) (st : St)
           simp only [Prod.mk.injEq] at hr
           obtain ⟨⟨rfl, hc⟩, rfl⟩ := hr
           subst core2
-          refine ⟨c', Span.newUnchecked l0.end l0.end, l0.end, ?_,
+          refine ⟨c', Span.Internal.newUnchecked l0.end l0.end, l0.end, ?_,
             hs.version, hs.initial, by rw [hs.activity]; simp [idleAt]⟩
           simp only [vBytes, hv]
         | brk _ _ _ => exact hH.elim

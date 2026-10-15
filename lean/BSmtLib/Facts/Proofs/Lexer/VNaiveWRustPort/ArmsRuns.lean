@@ -1,7 +1,7 @@
 module
 
 public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Arms
-import all BSmtLib.Lexer.Helpers
+import all BSmtLib.Lexer.Internal.Helpers
 import all BSmtLib.Lexer.Internal.WRustPort
 import all BSmtLib.Lexer.Internal.WRustPort.Slice
 
@@ -18,6 +18,7 @@ the token at the byte after the run, or leaves it in progress at the end of the 
 namespace BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.ArmsRuns
 
 open BSmtLib.Facts.Lexer.Adapters BSmtLib.Facts.Proofs.Lexer.Simulation.Bytes
+open BSmtLib.Lexer.Internal (CharClass)
 open BSmtLibSpec.Lexer (Handed)
 open BSmtLib.Lexer.Internal.WRustPort.Slice (get? get)
 open BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Agree
@@ -57,7 +58,7 @@ theorem arm_simpleSymbol (v : Token.Version) (input : ByteSlice) (start : Nat)
       (fun e s' coll' => StepFails C v hd iv input (.token p) location start s.val.version coll held
           e s'.val coll') := by
   obtain ⟨hps, hm, hcont⟩ := token_agrees hpre.agrees hstate
-  have hJ : Lexer.Internal.WRustPort.Slice.runEnd input start Lexer.CharClass.RUN_SIMPLE_SYMBOL =
+  have hJ : Lexer.Internal.WRustPort.Slice.runEnd input start CharClass.RUN_SIMPLE_SYMBOL =
       runEnd input isSymbolByte start := runEnd_eq endsRun_symbol _ _
   have hle := le_runEnd input isSymbolByte start
   have hle' := runEnd_le input isSymbolByte start (Nat.le_of_lt hstart)
@@ -69,10 +70,10 @@ theorem arm_simpleSymbol (v : Token.Version) (input : ByteSlice) (start : Nat)
   have hfits := token_fits hpre.agrees
   have hext : contentBytes (s.val.tokenContent.extendFrom input.byteArray (input.start + start)
       (input.start + Lexer.Internal.WRustPort.Slice.runEnd input start
-          Lexer.CharClass.RUN_SIMPLE_SYMBOL)) =
+          CharClass.RUN_SIMPLE_SYMBOL)) =
       contentBytes s.val.tokenContent ++ bytesOf input start
           (Lexer.Internal.WRustPort.Slice.runEnd input start
-          Lexer.CharClass.RUN_SIMPLE_SYMBOL) :=
+          CharClass.RUN_SIMPLE_SYMBOL) :=
     contentBytes_extendSlice input hfits (.inl hle')
   have hfits' := fits_extendSlice input hfits (a := start) (.inl hle')
   have hloc := hpre.loc
@@ -86,9 +87,10 @@ theorem arm_simpleSymbol (v : Token.Version) (input : ByteSlice) (start : Nat)
     have hJs' := hstop hJs
     have hC := feedFrom_end v C.concrete input hJs
       (q := ⟨p.mode, p.start, p.content ++ bytesOf input start
-        (Lexer.Internal.WRustPort.Slice.runEnd input start Lexer.CharClass.RUN_SIMPLE_SYMBOL)⟩)
+        (Lexer.Internal.WRustPort.Slice.runEnd input start
+            CharClass.RUN_SIMPLE_SYMBOL)⟩)
       (location := afterColumns location (Lexer.Internal.WRustPort.Slice.runEnd input start
-        Lexer.CharClass.RUN_SIMPLE_SYMBOL - start))
+        CharClass.RUN_SIMPLE_SYMBOL - start))
       (advance_end_simpleSymbol hm hJs')
     rw [← hA] at hC
     unfold Lexer.Internal.WRustPort.expectDelimiter Lexer.Internal.WRustPort.finishSimpleSymbol
@@ -98,7 +100,7 @@ theorem arm_simpleSymbol (v : Token.Version) (input : ByteSlice) (start : Nat)
     · intro hnd
       have hnd' : Lexer.Internal.VNaive.isDelimiter
           input[Lexer.Internal.WRustPort.Slice.runEnd input start
-              Lexer.CharClass.RUN_SIMPLE_SYMBOL] = false := by
+              CharClass.RUN_SIMPLE_SYMBOL] = false := by
         rw [← isDelimiter_eq]; simpa using hnd
       rw [hnd'] at hC
       unfold Lexer.Internal.WRustPort.errorAt Lexer.Internal.WRustPort.errorWith
@@ -110,7 +112,7 @@ theorem arm_simpleSymbol (v : Token.Version) (input : ByteSlice) (start : Nat)
     · intro hd
       have hd' : Lexer.Internal.VNaive.isDelimiter
           input[Lexer.Internal.WRustPort.Slice.runEnd input start
-              Lexer.CharClass.RUN_SIMPLE_SYMBOL] = true := by
+              CharClass.RUN_SIMPLE_SYMBOL] = true := by
         rw [← isDelimiter_eq]; simpa using hd
       rw [hd'] at hC
       simp only [↓reduceIte] at hC
@@ -127,7 +129,7 @@ theorem arm_simpleSymbol (v : Token.Version) (input : ByteSlice) (start : Nat)
         apply WP.wp_bind; apply WP.wp_modifyCore
         apply WP.wp_pure
         have hstep := stepLocation_eq (pos := Lexer.Internal.WRustPort.Slice.runEnd input start
-          Lexer.CharClass.RUN_SIMPLE_SYMBOL) hloc hpre.base hb hlow hle
+          CharClass.RUN_SIMPLE_SYMBOL) hloc hpre.base hb hlow hle
         refine armPost_finish (s0 := _) ⟨hpre.fixed.1, hpre.fixed.2, hpre.fixed.3, hpre.fixed.4,
             hpre.fixed.5, hpre.fixed.6⟩
           hpre.base hle hpre.bytes ⟨k1, k4, k3, k5, rfl, k8, k9, k10, k11, hb1⟩
@@ -136,24 +138,24 @@ theorem arm_simpleSymbol (v : Token.Version) (input : ByteSlice) (start : Nat)
         show _ = Prep [⟨.unquotedSymbol, contentBytes (s.val.tokenContent.extendFrom input.byteArray
             (input.start + start)
             (input.start + (Lexer.Internal.WRustPort.Slice.runEnd input start
-                Lexer.CharClass.RUN_SIMPLE_SYMBOL))), tokenStart,
+                CharClass.RUN_SIMPLE_SYMBOL))), tokenStart,
           stepLocation s.val low base (Lexer.Internal.WRustPort.Slice.runEnd input start
-              Lexer.CharClass.RUN_SIMPLE_SYMBOL)⟩]
+              CharClass.RUN_SIMPLE_SYMBOL)⟩]
           (feedFrom v C.concrete input .idle (afterColumns location
               (Lexer.Internal.WRustPort.Slice.runEnd input start
-            Lexer.CharClass.RUN_SIMPLE_SYMBOL - start))
+            CharClass.RUN_SIMPLE_SYMBOL - start))
                 (Lexer.Internal.WRustPort.Slice.runEnd input start
-              Lexer.CharClass.RUN_SIMPLE_SYMBOL))
+              CharClass.RUN_SIMPLE_SYMBOL))
         rw [hext, hstep, hts, ← hps, ← hcont]
       · intro e s' p d hn hss
         have hstep := stepLocation_eq (pos := Lexer.Internal.WRustPort.Slice.runEnd input start
-          Lexer.CharClass.RUN_SIMPLE_SYMBOL) hloc hpre.base hb hlow hle
+          CharClass.RUN_SIMPLE_SYMBOL) hloc hpre.base hb hlow hle
         have hn' : Stops C s.val.holding s.val.version coll (held ++ [⟨.unquotedSymbol, contentBytes
             (s.val.tokenContent.extendFrom input.byteArray (input.start + start)
             (input.start + (Lexer.Internal.WRustPort.Slice.runEnd input start
-              Lexer.CharClass.RUN_SIMPLE_SYMBOL))), tokenStart,
+              CharClass.RUN_SIMPLE_SYMBOL))), tokenStart,
             stepLocation s.val low base (Lexer.Internal.WRustPort.Slice.runEnd input start
-              Lexer.CharClass.RUN_SIMPLE_SYMBOL)⟩]) e p d := hn
+              CharClass.RUN_SIMPLE_SYMBOL)⟩]) e p d := hn
         rw [hext, hstep, hts, ← hps, ← hcont] at hn'
         exact stepFails_of_stops' (hbytes := by first | assumption | exact hpre.bytes) hss (by
             first
@@ -164,18 +166,18 @@ theorem arm_simpleSymbol (v : Token.Version) (input : ByteSlice) (start : Nat)
   · -- the symbol runs to the end of the slice: it is left in progress
     intro hJs
     apply WP.wp_pure
-    have hJe : Lexer.Internal.WRustPort.Slice.runEnd input start Lexer.CharClass.RUN_SIMPLE_SYMBOL
+    have hJe : Lexer.Internal.WRustPort.Slice.runEnd input start CharClass.RUN_SIMPLE_SYMBOL
         = input.size := by omega
     refine armPost_pending (s0 := s.val) hpre.fixed hpre.base
       (show start < Lexer.Internal.WRustPort.Slice.runEnd input start
-          Lexer.CharClass.RUN_SIMPLE_SYMBOL by omega) hpre.holds
+          CharClass.RUN_SIMPLE_SYMBOL by omega) hpre.holds
       hpre.bytes
       ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩ ?_ ?_ hA
     · refine ⟨?_, hfits'⟩
       show TokenAgrees v C.concrete s.val.state s.val.tokenStart
         (contentBytes (s.val.tokenContent.extendFrom input.byteArray (input.start + start)
             (input.start + (Lexer.Internal.WRustPort.Slice.runEnd input start
-                Lexer.CharClass.RUN_SIMPLE_SYMBOL)))) _
+                CharClass.RUN_SIMPLE_SYMBOL)))) _
       rw [hext, hstate]
       exact ⟨hps, hm, by rw [hcont]⟩
     · exact hloc.afterColumns (Nat.le_of_eq hpre.base) hle
@@ -198,7 +200,7 @@ theorem arm_keyword (v : Token.Version) (input : ByteSlice) (start : Nat)
       (fun e s' coll' => StepFails C v hd iv input (.token p) location start s.val.version coll held
           e s'.val coll') := by
   obtain ⟨hps, hm, hcont⟩ := token_agrees hpre.agrees hstate
-  have hJ : Lexer.Internal.WRustPort.Slice.runEnd input start Lexer.CharClass.RUN_SIMPLE_SYMBOL =
+  have hJ : Lexer.Internal.WRustPort.Slice.runEnd input start CharClass.RUN_SIMPLE_SYMBOL =
       runEnd input isSymbolByte start := runEnd_eq endsRun_symbol _ _
   have hle := le_runEnd input isSymbolByte start
   have hle' := runEnd_le input isSymbolByte start (Nat.le_of_lt hstart)
@@ -210,10 +212,10 @@ theorem arm_keyword (v : Token.Version) (input : ByteSlice) (start : Nat)
   have hfits := token_fits hpre.agrees
   have hext : contentBytes (s.val.tokenContent.extendFrom input.byteArray (input.start + start)
       (input.start + Lexer.Internal.WRustPort.Slice.runEnd input start
-          Lexer.CharClass.RUN_SIMPLE_SYMBOL)) =
+          CharClass.RUN_SIMPLE_SYMBOL)) =
       contentBytes s.val.tokenContent ++ bytesOf input start
           (Lexer.Internal.WRustPort.Slice.runEnd input start
-          Lexer.CharClass.RUN_SIMPLE_SYMBOL) :=
+          CharClass.RUN_SIMPLE_SYMBOL) :=
     contentBytes_extendSlice input hfits (.inl hle')
   have hfits' := fits_extendSlice input hfits (a := start) (.inl hle')
   have hloc := hpre.loc
@@ -233,13 +235,15 @@ theorem arm_keyword (v : Token.Version) (input : ByteSlice) (start : Nat)
       intro hempty
       have he : (p.content ++ bytesOf input start
           (Lexer.Internal.WRustPort.Slice.runEnd input start
-              Lexer.CharClass.RUN_SIMPLE_SYMBOL)).isEmpty = true := by
+              CharClass.RUN_SIMPLE_SYMBOL)).isEmpty = true := by
         rw [hcont, ← hext]; unfold ByteArray.isEmpty; rw [size_contentBytes hfits']; exact hempty
       obtain ⟨f, hf⟩ := advance_end_keyword_empty (location := afterColumns location
-        (Lexer.Internal.WRustPort.Slice.runEnd input start Lexer.CharClass.RUN_SIMPLE_SYMBOL -
+        (Lexer.Internal.WRustPort.Slice.runEnd input start
+            CharClass.RUN_SIMPLE_SYMBOL -
             start))
         (q := ⟨p.mode, p.start, p.content ++ bytesOf input start
-          (Lexer.Internal.WRustPort.Slice.runEnd input start Lexer.CharClass.RUN_SIMPLE_SYMBOL)⟩)
+          (Lexer.Internal.WRustPort.Slice.runEnd input start
+              CharClass.RUN_SIMPLE_SYMBOL)⟩)
               hm hJs' he
       unfold Lexer.Internal.WRustPort.error Lexer.Internal.WRustPort.errorWith
       wp_walk
@@ -249,16 +253,17 @@ theorem arm_keyword (v : Token.Version) (input : ByteSlice) (start : Nat)
     intro hne
     have hne' : (p.content ++ bytesOf input start
         (Lexer.Internal.WRustPort.Slice.runEnd input start
-            Lexer.CharClass.RUN_SIMPLE_SYMBOL)).isEmpty = false := by
+            CharClass.RUN_SIMPLE_SYMBOL)).isEmpty = false := by
       rw [hcont, ← hext]
       simp only [ByteArray.isEmpty, beq_eq_false_iff_ne, size_contentBytes hfits']
       intro h0
       exact hne (by show (_ == 0) = true; rw [beq_iff_eq]; exact h0)
     have hC := feedFrom_end v C.concrete input hJs
       (q := ⟨p.mode, p.start, p.content ++ bytesOf input start
-        (Lexer.Internal.WRustPort.Slice.runEnd input start Lexer.CharClass.RUN_SIMPLE_SYMBOL)⟩)
+        (Lexer.Internal.WRustPort.Slice.runEnd input start
+            CharClass.RUN_SIMPLE_SYMBOL)⟩)
       (location := afterColumns location (Lexer.Internal.WRustPort.Slice.runEnd input start
-        Lexer.CharClass.RUN_SIMPLE_SYMBOL - start))
+        CharClass.RUN_SIMPLE_SYMBOL - start))
       (advance_end_keyword hm hJs' hne')
     rw [← hA] at hC
     try apply WP.wp_pure
@@ -270,7 +275,7 @@ theorem arm_keyword (v : Token.Version) (input : ByteSlice) (start : Nat)
     · intro hnd
       have hnd' : Lexer.Internal.VNaive.isDelimiter
           input[Lexer.Internal.WRustPort.Slice.runEnd input start
-              Lexer.CharClass.RUN_SIMPLE_SYMBOL] = false := by
+              CharClass.RUN_SIMPLE_SYMBOL] = false := by
         rw [← isDelimiter_eq]; simpa using hnd
       rw [hnd'] at hC
       unfold Lexer.Internal.WRustPort.errorAt Lexer.Internal.WRustPort.errorWith
@@ -282,7 +287,7 @@ theorem arm_keyword (v : Token.Version) (input : ByteSlice) (start : Nat)
     · intro hd
       have hd' : Lexer.Internal.VNaive.isDelimiter
           input[Lexer.Internal.WRustPort.Slice.runEnd input start
-              Lexer.CharClass.RUN_SIMPLE_SYMBOL] = true := by
+              CharClass.RUN_SIMPLE_SYMBOL] = true := by
         rw [← isDelimiter_eq]; simpa using hd
       rw [hd'] at hC
       simp only [↓reduceIte] at hC
@@ -298,7 +303,7 @@ theorem arm_keyword (v : Token.Version) (input : ByteSlice) (start : Nat)
         apply WP.wp_bind; apply WP.wp_modifyCore
         apply WP.wp_pure
         have hstep := stepLocation_eq (pos := Lexer.Internal.WRustPort.Slice.runEnd input start
-          Lexer.CharClass.RUN_SIMPLE_SYMBOL) hloc hpre.base hb hlow hle
+          CharClass.RUN_SIMPLE_SYMBOL) hloc hpre.base hb hlow hle
         refine armPost_finish (s0 := _) ⟨hpre.fixed.1, hpre.fixed.2, hpre.fixed.3, hpre.fixed.4,
             hpre.fixed.5, hpre.fixed.6⟩
           hpre.base hle hpre.bytes ⟨k1, k4, k3, k5, rfl, k8, k9, k10, k11, hb1⟩
@@ -307,25 +312,25 @@ theorem arm_keyword (v : Token.Version) (input : ByteSlice) (start : Nat)
         show _ = Prep [⟨.keyword, contentBytes (s.val.tokenContent.extendFrom input.byteArray
             (input.start + start)
             (input.start + (Lexer.Internal.WRustPort.Slice.runEnd input start
-                Lexer.CharClass.RUN_SIMPLE_SYMBOL))), tokenStart,
+                CharClass.RUN_SIMPLE_SYMBOL))), tokenStart,
           stepLocation s.val low base (Lexer.Internal.WRustPort.Slice.runEnd input start
-              Lexer.CharClass.RUN_SIMPLE_SYMBOL)⟩]
+              CharClass.RUN_SIMPLE_SYMBOL)⟩]
           (feedFrom v C.concrete input .idle (afterColumns location
               (Lexer.Internal.WRustPort.Slice.runEnd input start
-            Lexer.CharClass.RUN_SIMPLE_SYMBOL - start))
+            CharClass.RUN_SIMPLE_SYMBOL - start))
                 (Lexer.Internal.WRustPort.Slice.runEnd input start
-              Lexer.CharClass.RUN_SIMPLE_SYMBOL))
+              CharClass.RUN_SIMPLE_SYMBOL))
         rw [hext, hstep, hts, ← hps, ← hcont]
       · intro e s' p d hn hss
         have hstep := stepLocation_eq (pos := Lexer.Internal.WRustPort.Slice.runEnd input start
-          Lexer.CharClass.RUN_SIMPLE_SYMBOL) hloc hpre.base hb hlow hle
+          CharClass.RUN_SIMPLE_SYMBOL) hloc hpre.base hb hlow hle
         have hn' : Stops C s.val.holding s.val.version coll (held ++
             [⟨.keyword, contentBytes (s.val.tokenContent.extendFrom
             input.byteArray (input.start + start)
             (input.start + (Lexer.Internal.WRustPort.Slice.runEnd input start
-                Lexer.CharClass.RUN_SIMPLE_SYMBOL))), tokenStart,
+                CharClass.RUN_SIMPLE_SYMBOL))), tokenStart,
             stepLocation s.val low base (Lexer.Internal.WRustPort.Slice.runEnd input start
-              Lexer.CharClass.RUN_SIMPLE_SYMBOL)⟩]) e p d := hn
+              CharClass.RUN_SIMPLE_SYMBOL)⟩]) e p d := hn
         rw [hext, hstep, hts, ← hps, ← hcont] at hn'
         exact stepFails_of_stops' (hbytes := by first | assumption | exact hpre.bytes) hss (by
             first
@@ -336,17 +341,17 @@ theorem arm_keyword (v : Token.Version) (input : ByteSlice) (start : Nat)
   · -- the keyword runs to the end of the slice: it is left in progress
     intro hJs
     apply WP.wp_pure
-    have hJe : Lexer.Internal.WRustPort.Slice.runEnd input start Lexer.CharClass.RUN_SIMPLE_SYMBOL
+    have hJe : Lexer.Internal.WRustPort.Slice.runEnd input start CharClass.RUN_SIMPLE_SYMBOL
         = input.size := by omega
     refine armPost_pending (s0 := s.val) hpre.fixed hpre.base
       (show start < Lexer.Internal.WRustPort.Slice.runEnd input start
-          Lexer.CharClass.RUN_SIMPLE_SYMBOL by omega) hpre.holds
+          CharClass.RUN_SIMPLE_SYMBOL by omega) hpre.holds
       hpre.bytes ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩ ?_ ?_ hA
     · refine ⟨?_, hfits'⟩
       show TokenAgrees v C.concrete s.val.state s.val.tokenStart
         (contentBytes (s.val.tokenContent.extendFrom input.byteArray (input.start + start)
             (input.start + (Lexer.Internal.WRustPort.Slice.runEnd input start
-                Lexer.CharClass.RUN_SIMPLE_SYMBOL)))) _
+                CharClass.RUN_SIMPLE_SYMBOL)))) _
       rw [hext, hstate]
       exact ⟨hps, hm, by rw [hcont]⟩
     · exact hloc.afterColumns (Nat.le_of_eq hpre.base) hle
@@ -361,8 +366,8 @@ theorem arm_digitRun (v : Token.Version) (input : ByteSlice) (start : Nat)
     (hpre : StepPre C v hd iv input (.token p) location held start s.val)
         (hlow : low = s.val.offset)
     (hts : tokenStart = s.val.tokenStart) (hb : base = s.val.base)
-    (run : Lexer.Helpers.DigitRun)
-    (radix : Radix) (hflag : ∀ c, Lexer.CharClass.endsRun c run.flag = !radix.allows c)
+    (run : Lexer.Internal.Helpers.DigitRun)
+    (radix : Radix) (hflag : ∀ c, CharClass.endsRun c run.flag = !radix.allows c)
     (htyp : run.tokenType = radix.category)
     (hinv : ∀ st content q, TokenAgrees v C.concrete s.val.state st content q →
       q.start = st ∧ q.mode = .digits radix ∧ q.content = content)
@@ -536,7 +541,7 @@ theorem arm_comment_ws (v : Token.Version) (input : ByteSlice) (start : Nat)
   obtain ⟨hps, (hm : p.mode = .comment), hcont⟩ := token_agrees hpre.agrees hstate
   have hcont' : p.content = contentBytes s.val.tokenContent := hcont hcon
   have hfits := token_fits hpre.agrees
-  have hJ : Lexer.Internal.WRustPort.Slice.runEnd input start Lexer.CharClass.RUN_COMMENT_PLAIN =
+  have hJ : Lexer.Internal.WRustPort.Slice.runEnd input start CharClass.RUN_COMMENT_PLAIN =
       runEnd input isCommentRun start := runEnd_eq endsRun_comment _ _
   have hle := le_runEnd input isCommentRun start
   have hle' := runEnd_le input isCommentRun start (Nat.le_of_lt hstart)
@@ -558,39 +563,41 @@ theorem arm_comment_ws (v : Token.Version) (input : ByteSlice) (start : Nat)
     rw [hJc] at hJs'
     have hext : contentBytes (s.val.tokenContent.extendFrom input.byteArray (input.start + start)
         (input.start + (Lexer.Internal.WRustPort.Slice.runEnd input start
-            Lexer.CharClass.RUN_COMMENT_PLAIN + 1))) =
+            CharClass.RUN_COMMENT_PLAIN + 1))) =
         (p.content ++ bytesOf input start
           (Lexer.Internal.WRustPort.Slice.runEnd input start
-              Lexer.CharClass.RUN_COMMENT_PLAIN)).push c := by
+              CharClass.RUN_COMMENT_PLAIN)).push c := by
       rw [contentBytes_extendSlice input hfits (.inl (by omega)), content_succ input _ hle hJs,
         hJc, hcont']
     have hfits' := fits_extendSlice input hfits (a := start)
-      (b := Lexer.Internal.WRustPort.Slice.runEnd input start Lexer.CharClass.RUN_COMMENT_PLAIN +
+      (b := Lexer.Internal.WRustPort.Slice.runEnd input start CharClass.RUN_COMMENT_PLAIN +
           1) (.inl (by omega))
     have hB : feedFrom v C.concrete input (.token p) location start =
         Prep [⟨.comment, (p.content ++ bytesOf input start
             (Lexer.Internal.WRustPort.Slice.runEnd input start
-                Lexer.CharClass.RUN_COMMENT_PLAIN)).push c, p.start,
+                CharClass.RUN_COMMENT_PLAIN)).push c, p.start,
             (afterColumns location (Lexer.Internal.WRustPort.Slice.runEnd input start
-                Lexer.CharClass.RUN_COMMENT_PLAIN -
+                CharClass.RUN_COMMENT_PLAIN -
               start)).afterByte c⟩]
           (feedFrom v C.concrete input .idle
             ((afterColumns location (Lexer.Internal.WRustPort.Slice.runEnd input start
-                Lexer.CharClass.RUN_COMMENT_PLAIN -
+                CharClass.RUN_COMMENT_PLAIN -
               start)).afterByte c) (Lexer.Internal.WRustPort.Slice.runEnd input start
-                  Lexer.CharClass.RUN_COMMENT_PLAIN + 1)) := by
+                  CharClass.RUN_COMMENT_PLAIN + 1)) := by
       have hadv : advance C.concrete ⟨p.mode, p.start, p.content ++ bytesOf input start
-          (Lexer.Internal.WRustPort.Slice.runEnd input start Lexer.CharClass.RUN_COMMENT_PLAIN)⟩
+          (Lexer.Internal.WRustPort.Slice.runEnd input start
+              CharClass.RUN_COMMENT_PLAIN)⟩
               (afterColumns location
-          (Lexer.Internal.WRustPort.Slice.runEnd input start Lexer.CharClass.RUN_COMMENT_PLAIN -
+          (Lexer.Internal.WRustPort.Slice.runEnd input start
+              CharClass.RUN_COMMENT_PLAIN -
               start))
           input[Lexer.Internal.WRustPort.Slice.runEnd input start
-              Lexer.CharClass.RUN_COMMENT_PLAIN] =
+              CharClass.RUN_COMMENT_PLAIN] =
           .tokenWith ⟨.comment, (p.content ++ bytesOf input start
             (Lexer.Internal.WRustPort.Slice.runEnd input start
-                Lexer.CharClass.RUN_COMMENT_PLAIN)).push c, p.start,
+                CharClass.RUN_COMMENT_PLAIN)).push c, p.start,
             (afterColumns location (Lexer.Internal.WRustPort.Slice.runEnd input start
-                Lexer.CharClass.RUN_COMMENT_PLAIN -
+                CharClass.RUN_COMMENT_PLAIN -
               start)).afterByte c⟩ := by
         rw [hm, hJc, hcon]; exact advance_comment_end_ws _ _ _ hJs'
       rw [hA, feedFrom_step hJs (byteStep_token_with hadv), hJc]
@@ -599,23 +606,24 @@ theorem arm_comment_ws (v : Token.Version) (input : ByteSlice) (start : Nat)
         s1.val = { s.val with
           tokenContent := s.val.tokenContent.extendFrom input.byteArray (input.start + start)
             (input.start + (Lexer.Internal.WRustPort.Slice.runEnd input start
-                Lexer.CharClass.RUN_COMMENT_PLAIN + 1)),
+                CharClass.RUN_COMMENT_PLAIN + 1)),
           line := s1.val.line, lineStart := s1.val.lineStart } →
         LocAt s1.val s1.val.offset s1.val.base
-          (Lexer.Internal.WRustPort.Slice.runEnd input start Lexer.CharClass.RUN_COMMENT_PLAIN + 1)
+          (Lexer.Internal.WRustPort.Slice.runEnd input start
+              CharClass.RUN_COMMENT_PLAIN + 1)
               locp →
         locp = (afterColumns location (Lexer.Internal.WRustPort.Slice.runEnd input start
-            Lexer.CharClass.RUN_COMMENT_PLAIN -
+            CharClass.RUN_COMMENT_PLAIN -
           start)).afterByte c →
         WP (do
             Lexer.Internal.WRustPort.sinkStored (H := Answering C) (m := AnswerM) (R := C.Result)
               (E := Option C.Error) .comment
               (.mkAtByte (Lexer.Internal.WRustPort.Slice.runEnd input start
-                  Lexer.CharClass.RUN_COMMENT_PLAIN + 1))
+                  CharClass.RUN_COMMENT_PLAIN + 1))
               tokenStart base h
             Lexer.Internal.WRustPort.setNormal
             (pure ⟨Lexer.Internal.WRustPort.Slice.runEnd input start
-                Lexer.CharClass.RUN_COMMENT_PLAIN + 1, by omega⟩ :
+                CharClass.RUN_COMMENT_PLAIN + 1, by omega⟩ :
               WP.M C floor low {next : Nat // start ≤ next})) s1 coll
           (fun r s' coll' =>
             ArmPost C v hd iv input (.token p) location start s.val.version coll held r.1 s'.val
@@ -634,27 +642,27 @@ theorem arm_comment_ws (v : Token.Version) (input : ByteSlice) (start : Nat)
       have hfits1 : Fits s1.val.tokenContent := by rw [hs1]; exact hfits'
       have hcont1 : contentBytes s1.val.tokenContent = (p.content ++ bytesOf input start
           (Lexer.Internal.WRustPort.Slice.runEnd input start
-              Lexer.CharClass.RUN_COMMENT_PLAIN)).push c := by
+              CharClass.RUN_COMMENT_PLAIN)).push c := by
         rw [hs1]; exact hext
       have hlow1 : low = s1.val.offset := by rw [hs1]; exact hlow
       have hb1 : base = s1.val.base := by rw [hs1]; exact hb
       have hstep := stepLocation_eq' (pos := Lexer.Internal.WRustPort.Slice.runEnd input start
-        Lexer.CharClass.RUN_COMMENT_PLAIN + 1) hlocp (by rw [hbase1]; omega) hb1 hlow1
+        CharClass.RUN_COMMENT_PLAIN + 1) hlocp (by rw [hbase1]; omega) hb1 hlow1
             (Nat.le_refl _)
       rw [Nat.sub_self, afterColumns_zero] at hstep
       have hl : (⟨.comment, contentBytes s1.val.tokenContent, tokenStart,
           stepLocation s1.val low base
             (Lexer.Internal.WRustPort.Slice.TokenEnd.mkAtByte
                 (Lexer.Internal.WRustPort.Slice.runEnd input start
-              Lexer.CharClass.RUN_COMMENT_PLAIN + 1)).position⟩ : Lexeme) =
+              CharClass.RUN_COMMENT_PLAIN + 1)).position⟩ : Lexeme) =
           ⟨.comment, (p.content ++ bytesOf input start
             (Lexer.Internal.WRustPort.Slice.runEnd input start
-                Lexer.CharClass.RUN_COMMENT_PLAIN)).push c, p.start, locp⟩ := by
+                CharClass.RUN_COMMENT_PLAIN)).push c, p.start, locp⟩ := by
         rw [hcont1, show (Lexer.Internal.WRustPort.Slice.TokenEnd.mkAtByte
             (Lexer.Internal.WRustPort.Slice.runEnd input start
-          Lexer.CharClass.RUN_COMMENT_PLAIN + 1)).position = Lexer.Internal.WRustPort.Slice.runEnd
+          CharClass.RUN_COMMENT_PLAIN + 1)).position = Lexer.Internal.WRustPort.Slice.runEnd
               input start
-            Lexer.CharClass.RUN_COMMENT_PLAIN + 1 from rfl, hstep, hts, ← hps]
+            CharClass.RUN_COMMENT_PLAIN + 1 from rfl, hstep, hts, ← hps]
       apply WP.wp_bind
       refine sinkStored_wp .comment (.mkAtByte _) tokenStart base h held s1 hholds1 coll
         (hfix1.recovers) hfits1 ?_ ?_
@@ -697,7 +705,7 @@ theorem arm_comment_ws (v : Token.Version) (input : ByteSlice) (start : Nat)
   · -- the comment runs to the end of the slice: it is left in progress, with its content
     rename_i hget
     have hJe := Lexer.Internal.WRustPort.Slice.size_le_of_get?_none hget
-    have e : Lexer.Internal.WRustPort.Slice.runEnd input start Lexer.CharClass.RUN_COMMENT_PLAIN =
+    have e : Lexer.Internal.WRustPort.Slice.runEnd input start CharClass.RUN_COMMENT_PLAIN =
         input.size := by omega
     apply WP.wp_bind; apply WP.wp_pure
     simp only [answering_concrete, hcon, ↓reduceIte]
@@ -737,7 +745,7 @@ theorem arm_comment (v : Token.Version) (input : ByteSlice) (start : Nat)
       hts hb hstate hcon
   have hcon' : C.concrete = false := by simpa using hcon
   obtain ⟨hps, (hm : p.mode = .comment), -⟩ := token_agrees hpre.agrees hstate
-  have hJ : Lexer.Internal.WRustPort.Slice.runEnd input start Lexer.CharClass.RUN_COMMENT_PLAIN =
+  have hJ : Lexer.Internal.WRustPort.Slice.runEnd input start CharClass.RUN_COMMENT_PLAIN =
       runEnd input isCommentRun start := runEnd_eq endsRun_comment _ _
   have hle := le_runEnd input isCommentRun start
   have hle' := runEnd_le input isCommentRun start (Nat.le_of_lt hstart)
@@ -760,16 +768,18 @@ theorem arm_comment (v : Token.Version) (input : ByteSlice) (start : Nat)
     have hB : feedFrom v C.concrete input (.token p) location start =
         feedFrom v C.concrete input .idle
           ((afterColumns location (Lexer.Internal.WRustPort.Slice.runEnd input start
-              Lexer.CharClass.RUN_COMMENT_PLAIN -
+              CharClass.RUN_COMMENT_PLAIN -
             start)).afterByte c) (Lexer.Internal.WRustPort.Slice.runEnd input start
-                Lexer.CharClass.RUN_COMMENT_PLAIN + 1) := by
+                CharClass.RUN_COMMENT_PLAIN + 1) := by
       have hadv : advance false ⟨p.mode, p.start, p.content ++ bytesOf input start
-          (Lexer.Internal.WRustPort.Slice.runEnd input start Lexer.CharClass.RUN_COMMENT_PLAIN)⟩
+          (Lexer.Internal.WRustPort.Slice.runEnd input start
+              CharClass.RUN_COMMENT_PLAIN)⟩
               (afterColumns location
-          (Lexer.Internal.WRustPort.Slice.runEnd input start Lexer.CharClass.RUN_COMMENT_PLAIN -
+          (Lexer.Internal.WRustPort.Slice.runEnd input start
+              CharClass.RUN_COMMENT_PLAIN -
               start))
           input[Lexer.Internal.WRustPort.Slice.runEnd input start
-              Lexer.CharClass.RUN_COMMENT_PLAIN] = .idle := by
+              CharClass.RUN_COMMENT_PLAIN] = .idle := by
         rw [hm, hJc]; exact advance_comment_end _ _ _ hJs'
       rw [hA, feedFrom_step hJs (byteStep_token_idle v C.concrete
           (by rw [hcon']; exact hadv)), prep_nil, hJc]
@@ -787,7 +797,7 @@ theorem arm_comment (v : Token.Version) (input : ByteSlice) (start : Nat)
       apply WP.wp_pure
       refine armPost_idle (s0 := s.val) hpre.fixed hpre.base
         (show start < Lexer.Internal.WRustPort.Slice.runEnd input start
-            Lexer.CharClass.RUN_COMMENT_PLAIN + 1 by omega)
+            CharClass.RUN_COMMENT_PLAIN + 1 by omega)
         hpre.holds hpre.bytes
         ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩ ?_ hB
       refine LocAt.lineFeed hLJ (by rw [hpre.base]; omega) rfl ?_
@@ -803,7 +813,7 @@ theorem arm_comment (v : Token.Version) (input : ByteSlice) (start : Nat)
       apply WP.wp_pure
       refine armPost_idle (s0 := s.val) hpre.fixed hpre.base
         (show start < Lexer.Internal.WRustPort.Slice.runEnd input start
-            Lexer.CharClass.RUN_COMMENT_PLAIN + 1 by omega)
+            CharClass.RUN_COMMENT_PLAIN + 1 by omega)
         hpre.holds hpre.bytes
         ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩ ?_ hB
       exact hLJ.afterByte (by rw [hpre.base]; omega) h10'
@@ -816,13 +826,13 @@ theorem arm_comment (v : Token.Version) (input : ByteSlice) (start : Nat)
     refine armPost_pending (s0 := s.val) hpre.fixed hpre.base
       (show start < input.size by omega) hpre.holds
       hpre.bytes ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩ ?_ ?_ (hA.trans (by rw [show
-        Lexer.Internal.WRustPort.Slice.runEnd input start Lexer.CharClass.RUN_COMMENT_PLAIN =
+        Lexer.Internal.WRustPort.Slice.runEnd input start CharClass.RUN_COMMENT_PLAIN =
             input.size by omega]))
     · refine ⟨?_, token_fits hpre.agrees⟩
       show TokenAgrees v C.concrete s.val.state s.val.tokenStart (contentBytes s.val.tokenContent) _
       rw [hstate]
       exact ⟨hps, hm, fun h => nomatch h.symm.trans hcon'⟩
-    · have e : Lexer.Internal.WRustPort.Slice.runEnd input start Lexer.CharClass.RUN_COMMENT_PLAIN
+    · have e : Lexer.Internal.WRustPort.Slice.runEnd input start CharClass.RUN_COMMENT_PLAIN
         = input.size := by omega
       rw [e] at hLJ; exact hLJ
 

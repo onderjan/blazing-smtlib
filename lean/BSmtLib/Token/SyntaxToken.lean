@@ -38,25 +38,25 @@ Lean token keeps in its batch; this takes them read already, so that a cursor an
 window view their tokens alike. -/
 /-- Construct the token kind from the category and the content of a token, and the version. -/
 @[inline]
-def fromParts (category : TokenCategory) (content : ByteSlice) (version : Version) :
-    SyntaxToken :=
+def Internal.fromParts (category : TokenCategory) (content : ByteSlice)
+    (version : Version) : SyntaxToken :=
   match category with
   | .parenOpen => .parenOpen
   | .parenClose => .parenClose
-  | .numeral => .numeral (NumeralView.newUnchecked content)
-  | .decimal => .decimal (DecimalView.newUnchecked content)
-  | .hexadecimal => .hexadecimal (HexDigitsView.newUnchecked content)
-  | .binary => .binary (BinDigitsView.newUnchecked content)
+  | .numeral => .numeral (NumeralView.Internal.newUnchecked content)
+  | .decimal => .decimal (DecimalView.Internal.newUnchecked content)
+  | .hexadecimal => .hexadecimal (HexDigitsView.Internal.newUnchecked content)
+  | .binary => .binary (BinDigitsView.Internal.newUnchecked content)
   | .unquotedSymbol =>
     -- only the words reserved in the version are reserved words
     match Reserved.fromBytes? content version with
     | some word => .reserved word
-    | none => .symbol (SymbolView.newUnchecked content) false
-  | .quotedSymbol => .symbol (SymbolView.newUnchecked content) true
-  | .string => .string (StringContentView.newUnchecked content)
-  | .keyword => .keyword (KeywordView.newUnchecked content)
-  | .whitespace => .whitespace (WhitespaceView.newUnchecked content)
-  | .comment => .comment (CommentView.newUnchecked content)
+    | none => .symbol (SymbolView.Internal.newUnchecked content) false
+  | .quotedSymbol => .symbol (SymbolView.Internal.newUnchecked content) true
+  | .string => .string (StringContentView.Internal.newUnchecked content)
+  | .keyword => .keyword (KeywordView.Internal.newUnchecked content)
+  | .whitespace => .whitespace (WhitespaceView.Internal.newUnchecked content)
+  | .comment => .comment (CommentView.Internal.newUnchecked content)
   | .endOfFile => .endOfFile
 
 /- LEAN: the token is read through a cursor over its batch, see `Token`. -/
@@ -64,7 +64,7 @@ def fromParts (category : TokenCategory) (content : ByteSlice) (version : Versio
 @[inline]
 def fromToken {batch : BatchTag} (cursor : BatchCursor batch) (token : Token batch)
     (version : Version) : SyntaxToken :=
-  fromParts (cursor.category token) (cursor.content token) version
+  Internal.fromParts (cursor.category token) (cursor.content token) version
 
 namespace BSmtLib.Token.BatchCursor
 
@@ -79,10 +79,12 @@ def _root_.BSmtLib.Token.BatchCursor.«syntax» {batch : BatchTag} (self : Batch
 end BSmtLib.Token.BatchCursor
 
 /-- Views the token as a library token under the version of the window. -/
+/- LEAN: Rust's `SmtLookahead::syntax` for `SmtTokenWindow`; `syntax` is a keyword in Lean, as
+for the cursor's. -/
 @[inline]
 def _root_.BSmtLib.Token.BatchCursor.TokenWindow.«syntax» {batch : BatchTag}
     (self : BatchCursor.TokenWindow batch)
     (token : Token batch) : SyntaxToken :=
-  SyntaxToken.fromParts (self.category token) (self.content token) self.version
+  SyntaxToken.Internal.fromParts (self.category token) (self.content token) self.version
 
 end BSmtLib.Token.SyntaxToken

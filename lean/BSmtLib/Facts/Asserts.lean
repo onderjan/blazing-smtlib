@@ -2,10 +2,10 @@ module
 
 public meta import BSmtLib.Token
 public meta import BSmtLib.Token.Reserved
-public meta import BSmtLib.Lexer.CharClass
-public meta import BSmtLib.Lexer.Helpers
+public meta import BSmtLib.Lexer.Internal.CharClass
+public meta import BSmtLib.Lexer.Internal.Helpers
 import all BSmtLib.Token.Reserved
-import all BSmtLib.Lexer.CharClass
+import all BSmtLib.Lexer.Internal.CharClass
 
 @[expose] public section
 
@@ -27,7 +27,7 @@ open BSmtLib.Lexer
 -- the types are read back from the batch as they were written to it
 #guard [Token.TokenCategory.parenOpen, .parenClose, .numeral, .decimal, .hexadecimal, .binary,
     .string, .keyword, .unquotedSymbol, .quotedSymbol, .whitespace, .comment, .endOfFile].all
-  fun ty => Token.TokenCategory.ofUInt8 ty.toUInt8 == ty
+  fun ty => Token.TokenCategory.Internal.ofUInt8 (Token.TokenCategory.Internal.toUInt8 ty) == ty
 
 /-! The reserved words (`Token/Reserved.lean`). A word that shared a slot would have been
 overwritten in the table by a later one. -/
@@ -40,40 +40,41 @@ overwritten in the table by a later one. -/
   else
     false
 
-/-! The run flags (`Lexer/CharClass.lean`). -/
+/-! The run flags (`Lexer/Internal/Internal.CharClass.lean`). -/
 
 -- the run flags partition the byte into single bits, each at its own place
 #guard (List.range 8).all fun i =>
-  CharClass.RUN_FLAG_BITS[i]? == some ((1 : UInt8) <<< i.toUInt8)
-#guard CharClass.RUN_FLAG_BITS.foldl (· ||| ·) 0 == 0xFF
+  Internal.CharClass.RUN_FLAG_BITS[i]? == some ((1 : UInt8) <<< i.toUInt8)
+#guard Internal.CharClass.RUN_FLAG_BITS.foldl (· ||| ·) 0 == 0xFF
 
-/-! The fast flags (`Lexer/Helpers.lean`). -/
+/-! The fast flags (`Lexer/Internal/Internal.Helpers.lean`). -/
 
 -- fast masks partition u8 and are pairwise distinct
-#guard (Helpers.FAST_MASKS.foldl (init := some (0 : UInt8)) fun union mask =>
+#guard (Internal.Helpers.FAST_MASKS.foldl (init := some (0 : UInt8)) fun union mask =>
     union.bind fun union => if union &&& mask == 0 then some (union ||| mask) else none)
   == some 0xFF
 
 -- fast run flags contain exactly the three run flags we need
-#guard (CharClass.RUN_SIMPLE_SYMBOL ||| CharClass.RUN_NON_LF_WHITESPACE |||
-    CharClass.RUN_QUOTED_PLAIN) &&& Helpers.FAST_RUN_MASK
-    == Helpers.FAST_RUN_MASK
-  && (CharClass.RUN_STRING_PLAIN ||| CharClass.RUN_DIGIT ||| CharClass.RUN_HEX_DIGIT |||
-      CharClass.RUN_BINARY_DIGIT ||| CharClass.RUN_COMMENT_PLAIN)
-    &&& Helpers.FAST_RUN_MASK == 0
+#guard (Internal.CharClass.RUN_SIMPLE_SYMBOL ||| Internal.CharClass.RUN_NON_LF_WHITESPACE |||
+    Internal.CharClass.RUN_QUOTED_PLAIN) &&& Internal.Helpers.FAST_RUN_MASK
+    == Internal.Helpers.FAST_RUN_MASK
+  && (Internal.CharClass.RUN_STRING_PLAIN ||| Internal.CharClass.RUN_DIGIT |||
+      Internal.CharClass.RUN_HEX_DIGIT |||
+      Internal.CharClass.RUN_BINARY_DIGIT ||| Internal.CharClass.RUN_COMMENT_PLAIN)
+    &&& Internal.Helpers.FAST_RUN_MASK == 0
 
 -- a byte carries the delimiter flag exactly when it is whitespace, a parenthesis, or a semicolon
 #guard (List.range 256).all fun i =>
   let c := i.toUInt8
-  (Helpers.fastFlags c &&& Helpers.FAST_DELIM != 0)
+  (Internal.Helpers.fastFlags c &&& Internal.Helpers.FAST_DELIM != 0)
     == (c == byte! ' ' || c == byte! '\t' || c == byte! '\n' || c == byte! '\r'
       || c == byte! '(' || c == byte! ')' || c == byte! ';')
 
 -- a byte is fast exactly when its START class is one the fast path replaces; parentheses
 -- are dispatched by byte tests ahead of the table, so they are neither fast nor covered here
 #guard (List.range 256).all fun i =>
-  let start := Helpers.startOf i.toUInt8
-  (Helpers.fastFlags i.toUInt8 &&& Helpers.FAST_ON != 0)
+  let start := Internal.Helpers.startOf i.toUInt8
+  (Internal.Helpers.fastFlags i.toUInt8 &&& Internal.Helpers.FAST_ON != 0)
     == (start == .whitespace || start == .pipe || start == .symbol)
 
 end BSmtLib.Facts.Asserts

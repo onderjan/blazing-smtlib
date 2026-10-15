@@ -24,16 +24,17 @@ open BSmtLibSpec.Grammar
 open BSmtLibSpec.Parser
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Parser.Traversal
-open BSmtLib.Parser (PM Parse)
+open BSmtLib.Parser (Parse)
 open BSmtLib.Parser.Script (ScriptParser)
 open BSmtLib.Token (VersionPosture)
-open BSmtLib.Parser.Command (CommandState CommandOutcome commandStep)
+open BSmtLib.Parser.Command (CommandOutcome)
+open BSmtLib.Parser.Command.Internal (CommandState commandStep)
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Parser.Adapters.Bridge.Rejection
 open BSmtLib.Facts.Parser.Adapters.Run BSmtLib.Facts.Proofs.Parser.Cut
 open BSmtLib.Facts.Proofs.Parser.Rejection.Basic BSmtLib.Facts.Proofs.Parser.Rejection.Command
 open BSmtLib.Facts.Proofs.Parser.Rejection.CommandStep BSmtLib.Facts.Proofs.Parser.Rejection.SExpr
 open BSmtLib.Facts.Proofs.Parser.Rejection.«Sort» BSmtLib.Facts.Proofs.Parser.Script
-open BSmtLib.Facts.Proofs.Parser.Tokens BSmtLib.Parser.Script.VersionPosture
+open BSmtLib.Facts.Proofs.Parser.Tokens BSmtLib.Parser.Script.Internal.VersionPosture
 
 open BSmtLib.Facts.Proofs.Parser.Rejection.Basic.Lang
 
@@ -238,7 +239,8 @@ theorem cmdInv_done {version : BSmtLibSpec.Lexicon.Version} {items : List Receiv
 /-- The posture that restricts nothing allows every declaration. -/
 theorem unrestricted_check (declarations : Nat) (declared : Token.Version) :
     (check unrestrictedPosture) declarations declared = none := by
-  cases declared <;> simp [Parser.Script.VersionPosture.check, unrestrictedPosture] <;> decide
+  cases declared <;> simp [Parser.Script.Internal.VersionPosture.check,
+      unrestrictedPosture] <;> decide
 
 theorem cmdEnd_next {version next : BSmtLibSpec.Lexicon.Version} {c : Tree.Command}
     (h : cmdEnd version c = .next next) : c.modeAfter version = some (.read next) := by
@@ -327,7 +329,7 @@ theorem afterProcessing_post {start : BSmtLibSpec.Lexicon.Version} {pre : List R
   subst hposture
   rcases hphase with ⟨done, items, hchain, rfl, hm, hs⟩ | ⟨rfl, done, hchain, rfl⟩
   · unfold afterProcessing
-    simp only [Parser.Internal.ParseByToken.step, ScriptParser.step, bind_assoc]
+    simp only [Parser.Internal.ParseByToken.step, ScriptParser.Internal.step, bind_assoc]
     have hcm := commandStep_advances version markers markers_nonempty state hitem hlex
     have hcs := commandStep_advances version scriptFollows scriptFollows_nonempty state hitem hlex
     refine Sound.bind ((hcm.and hcs).mono (fun r h => h) fun e ⟨hq, _⟩ => ?_)
@@ -382,7 +384,8 @@ theorem afterProcessing_post {start : BSmtLibSpec.Lexicon.Version} {pre : List R
     obtain rfl := hexit ⟨done, _, hchain, rfl⟩
     obtain rfl := Parser.Internal.Input.received_endOfInput hitem
     unfold afterProcessing
-    simp only [Parser.Internal.ParseByToken.step, ScriptParser.step, commandStep, pure_bind]
+    simp only [Parser.Internal.ParseByToken.step, ScriptParser.Internal.step, commandStep,
+        pure_bind]
     refine Sound.pure ⟨done ++ [.exit], ?_⟩
     rw [List.append_assoc]
     simpa using takes_of_chain hchain (Takes.stop (last := .exit) trivial rfl)
@@ -468,7 +471,7 @@ theorem noEmpty_union {A B : Lang} (hA : NoEmpty A) (hB : NoEmpty B) : NoEmpty (
   fun u hu => hu.elim (hA u) (hB u)
 
 theorem noEmpty_attrRem (v : BSmtLibSpec.Lexicon.Version) (need : Bool)
-    (state : Parser.Category.Attribute.AttributeState Nat Nat) :
+    (state : Parser.Category.Attribute.Internal.AttributeState Nat Nat) :
     NoEmpty (attrRem v true need state) := by
   have htail : NoEmpty (attrTail v true) := by
     simp only [attrTail, ite_true]

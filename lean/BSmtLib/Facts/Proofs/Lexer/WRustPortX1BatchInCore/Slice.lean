@@ -16,7 +16,7 @@ states along as values, which correspond, with the same arrays of contents of th
 
 namespace BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Slice
 
-open BSmtLib.Lexer (BATCH_CAPACITY Interrupted Failure Stop)
+open BSmtLib.Lexer.Internal (BATCH_CAPACITY Interrupted Failure Stop)
 open BSmtLib.Lexer.Internal.WRustPort (Ops)
 open BSmtLib.Facts.Proofs.Lexer.Simulation BSmtLib.Facts.Proofs.Lexer.Simulation.Batch
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Relation
@@ -87,7 +87,7 @@ omit [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
 same lexer state. -/
 theorem lexStep_couple (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (start : Nat)
     (hstart : start < input.size) (lo lo' : Nat) (elo : lo = lo')
-    (state state' : Lexer.Helpers.LexerState) (estate : state = state')
+    (state state' : Lexer.Internal.Helpers.LexerState) (estate : state = state')
     (tokenStart tokenStart' : Span.Location) (etoken : tokenStart = tokenStart') (base base' : Nat)
     (ebase : base = base') (hp hp') (s : {c : Core // c.Bound floor lo})
     (t : {c : Core // c.Bound floor lo'}) (hst : CoreRelB s.val t.val) :
@@ -234,7 +234,7 @@ theorem lexSliceFrom_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice)
       have hres := coreRel_resumeAt hcr.1 location (location.offset - initialOffset)
       have hby : (c.val.resumeAt location (location.offset - initialOffset)).batch.bytes =
           (c'.val.resumeAt location (location.offset - initialOffset)).batch.bytes := by
-        simp only [Lexer.Internal.WRustPort.LexerCore.resumeAt, Token.TokenBatch.clear]
+        simp only [Lexer.Internal.WRustPort.LexerCore.resumeAt, Token.Internal.TokenBatch.clear]
         exact hcr.2
       dsimp only
       cases stop with

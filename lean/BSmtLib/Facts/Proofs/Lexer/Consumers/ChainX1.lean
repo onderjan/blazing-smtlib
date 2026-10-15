@@ -22,6 +22,7 @@ correspond and with lexers that correspond again, and so the adapter makes the s
 -/
 
 open BSmtLib.Facts.Lexer.Adapters BSmtLib.Facts.Proofs.Lexer.Consumers.Alike
+open BSmtLib.Token.BatchCursor.Internal (remaining)
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Batch
 open BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Calls
 open BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Handed
@@ -39,12 +40,12 @@ theorem toContent_congr {s s' : ByteSlice} (h : s.toByteArray = s'.toByteArray) 
 /-- The kind of reserved word a token is reads only the bytes of its content. -/
 theorem reservedKind_congr (category : Token.TokenCategory) {s s' : ByteSlice}
     (h : s.toByteArray = s'.toByteArray) (version : Token.Version) :
-    toReservedKind (Token.SyntaxToken.fromParts category s version) =
-      toReservedKind (Token.SyntaxToken.fromParts category s' version) := by
+    toReservedKind (Token.SyntaxToken.Internal.fromParts category s version) =
+      toReservedKind (Token.SyntaxToken.Internal.fromParts category s' version) := by
   have hr : Token.Reserved.fromBytes? s version = Token.Reserved.fromBytes? s' version := by
     rw [← VNaiveWRustPort.Bytes.fromBytes_toByteArray s,
       ← VNaiveWRustPort.Bytes.fromBytes_toByteArray s', h]
-  cases category <;> simp only [Token.SyntaxToken.fromParts, hr, toReservedKind] <;>
+  cases category <;> simp only [Token.SyntaxToken.Internal.fromParts, hr, toReservedKind] <;>
     cases Token.Reserved.fromBytes? s' version <;> rfl
 
 /-- A token below the length of the batches is recorded alike. -/
@@ -140,7 +141,7 @@ variable {g g' : Token.BatchTag}
 their batches: on cursors that agree it takes the same tokens and gives cursors that agree. -/
 theorem answering_consume_agree (consumer : BSmtLibSpec.Lexer.Consumer) : ∀ (n : Nat)
     (c : Token.BatchCursor g) (d : Token.BatchCursor g') (hc : c.HasNext) (hd : d.HasNext),
-    c.remaining = n → CursorAgree c d → ∀ taken : List BSmtLibSpec.Lexer.Handed,
+    (remaining c) = n → CursorAgree c d → ∀ taken : List BSmtLibSpec.Lexer.Handed,
     ((Answering.consume consumer c hc).run taken).1.1 =
         ((Answering.consume consumer d hd).run taken).1.1 ∧
       CursorAgree ((Answering.consume consumer c hc).run taken).1.2.val
@@ -153,7 +154,7 @@ theorem answering_consume_agree (consumer : BSmtLibSpec.Lexer.Consumer) : ∀ (n
   intro c d hc hd hn h taken
   obtain ⟨et, hag⟩ := h.takeNext hc hd
   have hlt := tokenIndex_next_lt hc h.bounded
-  have hrem : (c.next hc).2.1.remaining < n := hn ▸ (c.next hc).2.2.remaining_lt
+  have hrem : (remaining (c.next hc).2.1) < n := hn ▸ (c.next hc).2.2.remaining_lt
   rw [Answering.consume, Answering.consume]
   generalize c.next hc = p at et hag hlt hrem
   generalize d.next hd = q at et hag

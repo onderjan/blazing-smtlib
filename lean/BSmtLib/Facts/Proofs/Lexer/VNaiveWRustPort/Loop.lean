@@ -27,7 +27,6 @@ namespace BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Loop
 
 open BSmtLib.Facts.Lexer.Adapters
 open BSmtLibSpec.Lexer (Handed)
-open BSmtLib.Lexer (Stop)
 open BSmtLib.Facts.Proofs.Lexer.Consumers.Pure BSmtLib.Facts.Proofs.Lexer.Consumers.VSession
 open BSmtLib.Facts.Proofs.Lexer.Consumers.VSteps BSmtLib.Facts.Proofs.Lexer.VNaive.Facts
 open BSmtLib.Facts.Proofs.Lexer.VNaive.Prefix BSmtLib.Facts.Proofs.Lexer.VNaive.Run
@@ -96,7 +95,7 @@ structure LoopOk (C : BSmtLibSpec.Lexer.Consumer) (c : WP.WCore) (n : Core) : Pr
 /-- What the Rust port's loop over a slice and the naive lexer give alike: the same tokens taken,
 the same version, and the same result, or failures the spec does not tell apart. -/
 def LoopRel (C : BSmtLibSpec.Lexer.Consumer)
-    (rW : (Except (BSmtLib.Lexer.Failure (Option C.Error))
+    (rW : (Except (BSmtLib.Lexer.Internal.Failure (Option C.Error))
     (Option (Span.Located C.Result)) × WP.WCore) ×
       List Handed)
     (rV : VRes (Except (Lexer.Internal.VNaive.Failure (Option C.Error))

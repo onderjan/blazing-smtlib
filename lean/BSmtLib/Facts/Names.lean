@@ -6,23 +6,25 @@ public import BSmtLib.Lexer.Internal.X1BatchInCore
 public import BSmtLib.Facts
 public import BSmtLibSpec.Facts
 public import BSmtLib.Facts.Reexports
+public import BSmtLib.Facts.Counterparts
 
 @[expose] public section
 
 /-!
-# The naming rule and the re-exports, checked
+# The naming rule, the re-exports and the Rust counterparts, checked
 
-The checks of `BSmtLib.Facts.Naming` and `BSmtLib.Facts.Reexports` on the library, the lexers of
-the chain, the specification and the facts of both, pinned by `#guard_msgs`: a declaration added
-in the wrong place, a stale or missing re-export, or a name that resolves elsewhere than it did
-fails the build.
+The checks of `BSmtLib.Facts.Naming`, `BSmtLib.Facts.Reexports` and `BSmtLib.Facts.Counterparts`
+on the library, the lexers of the chain, the specification and the facts of both, pinned by
+`#guard_msgs`: a declaration added in the wrong place, a stale or missing re-export, a name that
+resolves elsewhere than it did, or a public name of the library with neither a Rust counterpart
+nor a `LEAN:` reason fails the build.
 -/
 
 /-! The naming rule, with its exceptions: the views of the cursor's tokens as syntax tokens,
 declared where `SyntaxToken` is, which `Token.lean` cannot import. -/
 
 /--
-info: 6337 declarations in 359 modules; 87 add to a sibling's type:
+info: 6428 declarations in 361 modules; 87 add to a sibling's type:
 BSmtLib.Facts.Proofs.Lexer.VNaive.Prefix:
   BSmtLib.Facts.Proofs.Lexer.VNaive.Run.St.Taken
 BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Pure:
@@ -135,16 +137,14 @@ BSmtLibSpec.Reader:
 `BSmtLib.Reexports` is what `BSmtLib.Facts.Reexports.render` makes now, and every second name
 resolves. -/
 
-/-- info: 53 items re-exported, with 396 members -/
+/-- info: 95 items re-exported, with 438 members -/
 #guard_msgs in
 #reexports
 
 /-! The names that users of the Rust crate write, without the prefix `Smt`, for the items that
 have a counterpart, and what they resolve to. The items without one: `SmtMultiple` and
 `SmtMultipleIntoIter` (`multiple.rs`); `lexer::SmtFailFast` and `lexer::SmtRecovering`,
-whose counterparts are the constructors of `BSmtLib.Lexer.Recovery`; the combinators, the
-attribute, identifier, pattern, qualified identifier, sorted variable and token parsers of
-`parser::category`, and `SmtParenSortedVarsParser`; `parser::SmtCommandRule`,
+whose counterparts are the constructors of `BSmtLib.Lexer.Recovery`; `parser::SmtCommandRule`,
 `parser::SmtCommandPayloadParser` and `parser::SmtParseState`. -/
 
 /--
@@ -154,6 +154,7 @@ BSmtLib.Constructor ↦ BSmtLib.Nodes.Constructor
 BSmtLib.Identifier ↦ BSmtLib.Nodes.Identifier
 BSmtLib.Index ↦ BSmtLib.Nodes.Index
 BSmtLib.Pattern ↦ BSmtLib.Nodes.Pattern
+BSmtLib.QualifiedIdent ↦ BSmtLib.Nodes.QualifiedIdent
 BSmtLib.Quantifier ↦ BSmtLib.Nodes.Quantifier
 BSmtLib.SExprNode ↦ BSmtLib.Nodes.SExprNode
 BSmtLib.Signature ↦ BSmtLib.Nodes.Signature
@@ -190,13 +191,54 @@ BSmtLib.Lexer.LexError ↦ BSmtLib.Lexer.Error.LexError
 BSmtLib.Lexer.LexErrorCause ↦ BSmtLib.Lexer.Error.LexErrorCause
 BSmtLib.Lexer.LexicalErrorKind ↦ BSmtLib.Lexer.Error.LexicalErrorKind
 BSmtLib.Lexer.LexRecovery ↦ BSmtLib.Lexer.Recovery.LexRecovery
+BSmtLib.Parser.Category.ClosedAttributeParser ↦ BSmtLib.Parser.Category.Attribute.ClosedAttributeParser
+BSmtLib.Parser.Category.ClosedMultipleAttributeParser ↦ BSmtLib.Parser.Category.Attribute.ClosedMultipleAttributeParser
+BSmtLib.Parser.Category.ClosedMaximumParser ↦ BSmtLib.Parser.Category.Combinator.ClosedMaximumParser
+BSmtLib.Parser.Category.ClosedMultipleParser ↦ BSmtLib.Parser.Category.Combinator.ClosedMultipleParser
+BSmtLib.Parser.Category.ClosedParser ↦ BSmtLib.Parser.Category.Combinator.ClosedParser
+BSmtLib.Parser.Category.OpenedParser ↦ BSmtLib.Parser.Category.Combinator.OpenedParser
+BSmtLib.Parser.Category.PairParser ↦ BSmtLib.Parser.Category.Combinator.PairParser
+BSmtLib.Parser.Category.ParenMaximumParser ↦ BSmtLib.Parser.Category.Combinator.ParenMaximumParser
+BSmtLib.Parser.Category.ParenMultipleParser ↦ BSmtLib.Parser.Category.Combinator.ParenMultipleParser
+BSmtLib.Parser.Category.ParenParser ↦ BSmtLib.Parser.Category.Combinator.ParenParser
+BSmtLib.Parser.Category.IdentParser ↦ BSmtLib.Parser.Category.Ident.IdentParser
+BSmtLib.Parser.Category.PatternParser ↦ BSmtLib.Parser.Category.Pattern.PatternParser
+BSmtLib.Parser.Category.QualifiedIdentParser ↦ BSmtLib.Parser.Category.QualifiedIdent.QualifiedIdentParser
 BSmtLib.Parser.Category.SExprParser ↦ BSmtLib.Parser.Category.SExpr.SExprParser
 BSmtLib.Parser.Category.SortParser ↦ BSmtLib.Parser.Category.Sort.SortParser
+BSmtLib.Parser.Category.SortedVarParser ↦ BSmtLib.Parser.Category.SortedVar.SortedVarParser
 BSmtLib.Parser.Category.TermParser ↦ BSmtLib.Parser.Category.Term.TermParser
+BSmtLib.Parser.Category.CloseParenParser ↦ BSmtLib.Parser.Category.Token.CloseParenParser
+BSmtLib.Parser.Category.KeywordParser ↦ BSmtLib.Parser.Category.Token.KeywordParser
+BSmtLib.Parser.Category.NumeralParser ↦ BSmtLib.Parser.Category.Token.NumeralParser
+BSmtLib.Parser.Category.OpenParenParser ↦ BSmtLib.Parser.Category.Token.OpenParenParser
+BSmtLib.Parser.Category.StringParser ↦ BSmtLib.Parser.Category.Token.StringParser
+BSmtLib.Parser.Category.SymbolParser ↦ BSmtLib.Parser.Category.Token.SymbolParser
 BSmtLib.Parser.ParseAdapter ↦ BSmtLib.Parser.Adapter.ParseAdapter
+BSmtLib.Parser.ClosedAttributeParser ↦ BSmtLib.Parser.Category.Attribute.ClosedAttributeParser
+BSmtLib.Parser.ClosedMultipleAttributeParser ↦ BSmtLib.Parser.Category.Attribute.ClosedMultipleAttributeParser
+BSmtLib.Parser.ClosedMaximumParser ↦ BSmtLib.Parser.Category.Combinator.ClosedMaximumParser
+BSmtLib.Parser.ClosedMultipleParser ↦ BSmtLib.Parser.Category.Combinator.ClosedMultipleParser
+BSmtLib.Parser.ClosedParser ↦ BSmtLib.Parser.Category.Combinator.ClosedParser
+BSmtLib.Parser.OpenedParser ↦ BSmtLib.Parser.Category.Combinator.OpenedParser
+BSmtLib.Parser.PairParser ↦ BSmtLib.Parser.Category.Combinator.PairParser
+BSmtLib.Parser.ParenMaximumParser ↦ BSmtLib.Parser.Category.Combinator.ParenMaximumParser
+BSmtLib.Parser.ParenMultipleParser ↦ BSmtLib.Parser.Category.Combinator.ParenMultipleParser
+BSmtLib.Parser.ParenParser ↦ BSmtLib.Parser.Category.Combinator.ParenParser
+BSmtLib.Parser.IdentParser ↦ BSmtLib.Parser.Category.Ident.IdentParser
+BSmtLib.Parser.PatternParser ↦ BSmtLib.Parser.Category.Pattern.PatternParser
+BSmtLib.Parser.QualifiedIdentParser ↦ BSmtLib.Parser.Category.QualifiedIdent.QualifiedIdentParser
 BSmtLib.Parser.SExprParser ↦ BSmtLib.Parser.Category.SExpr.SExprParser
 BSmtLib.Parser.SortParser ↦ BSmtLib.Parser.Category.Sort.SortParser
+BSmtLib.Parser.SortedVarParser ↦ BSmtLib.Parser.Category.SortedVar.SortedVarParser
 BSmtLib.Parser.TermParser ↦ BSmtLib.Parser.Category.Term.TermParser
+BSmtLib.Parser.ParenSortedVarsParser ↦ BSmtLib.Parser.Category.ParenSortedVarsParser
+BSmtLib.Parser.CloseParenParser ↦ BSmtLib.Parser.Category.Token.CloseParenParser
+BSmtLib.Parser.KeywordParser ↦ BSmtLib.Parser.Category.Token.KeywordParser
+BSmtLib.Parser.NumeralParser ↦ BSmtLib.Parser.Category.Token.NumeralParser
+BSmtLib.Parser.OpenParenParser ↦ BSmtLib.Parser.Category.Token.OpenParenParser
+BSmtLib.Parser.StringParser ↦ BSmtLib.Parser.Category.Token.StringParser
+BSmtLib.Parser.SymbolParser ↦ BSmtLib.Parser.Category.Token.SymbolParser
 BSmtLib.Parser.CommandParser ↦ BSmtLib.Parser.Command.CommandParser
 BSmtLib.Parser.CommandOutcome ↦ BSmtLib.Parser.Command.CommandOutcome
 BSmtLib.Parser.ScriptParser ↦ BSmtLib.Parser.Script.ScriptParser
@@ -209,6 +251,7 @@ BSmtLib.Parser.ScriptParser ↦ BSmtLib.Parser.Script.ScriptParser
   BSmtLib.Identifier
   BSmtLib.Index
   BSmtLib.Pattern
+  BSmtLib.QualifiedIdent
   BSmtLib.Quantifier
   BSmtLib.SExprNode
   BSmtLib.Signature
@@ -245,13 +288,112 @@ BSmtLib.Parser.ScriptParser ↦ BSmtLib.Parser.Script.ScriptParser
   BSmtLib.Lexer.LexErrorCause
   BSmtLib.Lexer.LexicalErrorKind
   BSmtLib.Lexer.LexRecovery
+  BSmtLib.Parser.Category.ClosedAttributeParser
+  BSmtLib.Parser.Category.ClosedMultipleAttributeParser
+  BSmtLib.Parser.Category.ClosedMaximumParser
+  BSmtLib.Parser.Category.ClosedMultipleParser
+  BSmtLib.Parser.Category.ClosedParser
+  BSmtLib.Parser.Category.OpenedParser
+  BSmtLib.Parser.Category.PairParser
+  BSmtLib.Parser.Category.ParenMaximumParser
+  BSmtLib.Parser.Category.ParenMultipleParser
+  BSmtLib.Parser.Category.ParenParser
+  BSmtLib.Parser.Category.IdentParser
+  BSmtLib.Parser.Category.PatternParser
+  BSmtLib.Parser.Category.QualifiedIdentParser
   BSmtLib.Parser.Category.SExprParser
   BSmtLib.Parser.Category.SortParser
+  BSmtLib.Parser.Category.SortedVarParser
   BSmtLib.Parser.Category.TermParser
+  BSmtLib.Parser.Category.CloseParenParser
+  BSmtLib.Parser.Category.KeywordParser
+  BSmtLib.Parser.Category.NumeralParser
+  BSmtLib.Parser.Category.OpenParenParser
+  BSmtLib.Parser.Category.StringParser
+  BSmtLib.Parser.Category.SymbolParser
   BSmtLib.Parser.ParseAdapter
+  BSmtLib.Parser.ClosedAttributeParser
+  BSmtLib.Parser.ClosedMultipleAttributeParser
+  BSmtLib.Parser.ClosedMaximumParser
+  BSmtLib.Parser.ClosedMultipleParser
+  BSmtLib.Parser.ClosedParser
+  BSmtLib.Parser.OpenedParser
+  BSmtLib.Parser.PairParser
+  BSmtLib.Parser.ParenMaximumParser
+  BSmtLib.Parser.ParenMultipleParser
+  BSmtLib.Parser.ParenParser
+  BSmtLib.Parser.IdentParser
+  BSmtLib.Parser.PatternParser
+  BSmtLib.Parser.QualifiedIdentParser
   BSmtLib.Parser.SExprParser
   BSmtLib.Parser.SortParser
+  BSmtLib.Parser.SortedVarParser
   BSmtLib.Parser.TermParser
+  BSmtLib.Parser.ParenSortedVarsParser
+  BSmtLib.Parser.CloseParenParser
+  BSmtLib.Parser.KeywordParser
+  BSmtLib.Parser.NumeralParser
+  BSmtLib.Parser.OpenParenParser
+  BSmtLib.Parser.StringParser
+  BSmtLib.Parser.SymbolParser
   BSmtLib.Parser.CommandParser
   BSmtLib.Parser.CommandOutcome
   BSmtLib.Parser.ScriptParser
+
+/-! The Rust counterparts: every public name of the library has one among the public items of
+the Rust crate (`BSmtLib.Facts.RustItems`, generated from its documentation), or a `LEAN:` reason
+at its declaration; the names with a reason are listed. -/
+
+/--
+info: 293 public names with a Rust counterpart; 48 with a `LEAN:` reason instead:
+  BSmtLib.ControlFlow
+  BSmtLib.Lexer.AfterEof
+  BSmtLib.Lexer.AfterEofError
+  BSmtLib.Lexer.AfterError
+  BSmtLib.Lexer.PendingEof
+  BSmtLib.Lexer.PendingEof.lexEof
+  BSmtLib.Lexer.Recovery.Recovers
+  BSmtLib.Lexer.modifyConsumer
+  BSmtLib.Nodes.AttributeValueNode
+  BSmtLib.Nodes.Constructor
+  BSmtLib.Nodes.Identifier
+  BSmtLib.Nodes.Identifier.newSimple
+  BSmtLib.Nodes.Quantifier
+  BSmtLib.Nodes.SExprNode
+  BSmtLib.Nodes.Signature
+  BSmtLib.Nodes.SpecConstant
+  BSmtLib.Nodes.Symbol
+  BSmtLib.Nodes.SymbolOrWildcard
+  BSmtLib.Nodes.TermNode
+  BSmtLib.Parser.Category.Combinator.ParenMultipleParser.new
+  BSmtLib.Parser.Category.Combinator.ParenParser.new
+  BSmtLib.Parser.ParseState
+  BSmtLib.Parser.ParseState.new
+  BSmtLib.Plain.Numeral.fromNat
+  BSmtLib.Plain.Symbol.isAllowed
+  BSmtLib.Plain.Symbol.new
+  BSmtLib.Reader.BufRead
+  BSmtLib.Reader.BufReader
+  BSmtLib.Reader.BufReader.new
+  BSmtLib.Reader.ReadError.ofLex
+  BSmtLib.Reader.ReadError.ofParse
+  BSmtLib.Reader.ReadFailure
+  BSmtLib.Reader.modifyHandler
+  BSmtLib.Token.BatchCursor.Consumed
+  BSmtLib.Token.BatchCursor.HasNext
+  BSmtLib.Token.BatchCursor.TokenWindow
+  BSmtLib.Token.BatchCursor.TokenWindow.Consumed
+  BSmtLib.Token.BatchCursor.TokenWindow.category
+  BSmtLib.Token.BatchCursor.TokenWindow.content
+  BSmtLib.Token.BatchCursor.TokenWindow.next?
+  BSmtLib.Token.BatchCursor.TokenWindow.span
+  BSmtLib.Token.BatchCursor.TokenWindow.syntax
+  BSmtLib.Token.BatchCursor.category
+  BSmtLib.Token.BatchCursor.content
+  BSmtLib.Token.BatchCursor.span
+  BSmtLib.Token.BatchTag
+  BSmtLib.Token.Reserved.CommandNameReserved.all
+  BSmtLib.Token.Reserved.GeneralReserved.all
+-/
+#guard_msgs in
+#counterparts

@@ -4,8 +4,8 @@ public import BSmtLib.Facts.Proofs.Parser.QuietSteps
 public import BSmtLib.Facts.Proofs.Parser.Script
 import all BSmtLib.Parser
 import all BSmtLib.Parser.Command
-import all BSmtLib.Parser.Command.Function
-import all BSmtLib.Parser.Command.Standard
+import all BSmtLib.Parser.Command.Internal.Function
+import all BSmtLib.Parser.Command.Internal.Standard
 import all BSmtLib.Parser.Script
 
 @[expose] public section
@@ -30,7 +30,8 @@ open BSmtLibSpec.Grammar
 open BSmtLibSpec.Parser
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Parser.Traversal
-open BSmtLib.Parser (PM Parse)
+open BSmtLib.Parser (Parse)
+open BSmtLib.Parser.Internal (PM)
 open BSmtLib.Parser.Script (ScriptParser)
 open BSmtLib.Token (VersionPosture)
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Parser.Adapters.Run
@@ -189,16 +190,18 @@ theorem arrive_run (parser : ScriptParser (List Event)) (token : Parser.Internal
     ((Parser.Internal.ParseByToken.arrive (H := List Event) parser token).run.run events) =
       (.ok (), arrivalCalls parser token ++ events) := by
   obtain ⟨posture, command, declarations⟩ := parser
-  show ((ScriptParser.arrive ⟨posture, command, declarations⟩ token : Quiet.RPM Unit).run.run
+  show ((ScriptParser.Internal.arrive ⟨posture, command, declarations⟩ token : Quiet.RPM
+      Unit).run.run
       events) = _
-  unfold ScriptParser.arrive arrivalCalls
+  unfold ScriptParser.Internal.arrive arrivalCalls
   rcases command with _ | _ | payload
   · cases token <;> rfl
   · cases token <;> rfl
   · cases payload <;> try (cases token <;> rfl)
     rename_i signatures state
-    simp only [Parser.Command.commandArrive, Parser.Command.Standard.payloadArrive,
-        Parser.Command.Function.bodiesArrive]
+    simp only [Parser.Command.Internal.commandArrive,
+        Parser.Command.Internal.Standard.payloadArrive,
+        Parser.Command.Internal.Function.bodiesArrive]
     cases (state.opened && state.outside) <;> cases token <;>
       cases signatures[state.items.size]? <;> rfl
 
@@ -585,7 +588,8 @@ theorem recordedRun_eventsBeforeProcessing : (k : Nat) →
       · rfl
 /-! ## The parser's recording run against the traversal's -/
 
-theorem policyOf_unrestricted : policyOf unrestrictedPosture = VersionPolicy.unrestricted := rfl
+theorem policyOf_unrestricted : policyOf unrestrictedPosture = VersionPolicy.unrestricted := by
+  simp [policyOf, unrestrictedPosture, VersionPolicy.unrestricted, Bridge.version]
 
 /-- The recording run as the parse adapter makes it: the handler told the version first. -/
 theorem driveInput_run (version : Token.Version) (parser : ScriptParser (List Event))

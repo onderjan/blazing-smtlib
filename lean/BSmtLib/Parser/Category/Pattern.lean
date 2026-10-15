@@ -14,6 +14,9 @@ namespace BSmtLib.Parser.Category.Pattern
 
 open BSmtLib.Nodes BSmtLib.Traits
 open BSmtLib.Token (Version)
+open BSmtLib.Parser.Internal (PM call syntaxError)
+
+namespace Internal
 
 /-- The state of the pattern parser. -/
 inductive PatternState where
@@ -69,5 +72,36 @@ def step (version : Version) (self : PatternState) (token : Internal.Input) :
           else .expectedSymbol)
 
 end PatternState
+
+end Internal
+
+/-- The parser of one pattern (`SmtPatternParser`). -/
+/- LEAN: as Rust's, the parser names its handler, whose types it does not use. -/
+structure PatternParser (H : Type) where
+  private mk ::
+  private state : Internal.PatternState
+
+/-- The pattern parser before a pattern. -/
+def PatternParser.new {H : Type} : PatternParser H := ⟨.start⟩
+
+instance {H : Type} : Inhabited (PatternParser H) := ⟨.new⟩
+
+section
+
+variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
+
+@[no_expose]
+instance : Internal.ParseByToken (PatternParser H) H m (Handler.Error H) Pattern where
+  arrive _ _ := pure ()
+  step version parser token := do
+    match ← parser.state.step version token with
+    | .more state => return .more ⟨state⟩
+    | .done result => return .done result
+  reset _ := .new
+
+instance : Parse (PatternParser H) H m (Handler.Error H) Pattern where
+  parse := Internal.parseByToken
+
+end
 
 end BSmtLib.Parser.Category.Pattern

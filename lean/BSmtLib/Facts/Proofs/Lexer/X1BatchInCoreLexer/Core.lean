@@ -29,7 +29,7 @@ namespace BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Core
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Steps
 open BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Positions BSmtLib.Lexer.Error
 
-abbrev ZCore := BSmtLib.Lexer.LexerCore
+abbrev ZCore := BSmtLib.Lexer.Internal.LexerCore
 abbrev XCore := Lexer.Internal.WRustPort.LexerCore
 
 /-- The state of `X1BatchInCore` for that of the library's lexer, in a slice
@@ -74,13 +74,15 @@ abbrev BaseIs {floor : Option Nat} {low : Nat} (b : USize) (c : ZS floor low) : 
 theorem coreMap_offsetAt {start : Nat} {c : ZCore} {p : USize} (hb : start ≤ c.base.toNat)
     (hp : c.base.toNat ≤ p.toNat) :
     (coreMap start c).offsetAt (ix start p) = c.offsetAt p := by
-  simp only [Lexer.Internal.WRustPort.LexerCore.offsetAt, BSmtLib.Lexer.LexerCore.offsetAt, coreMap,
+  simp only [Lexer.Internal.WRustPort.LexerCore.offsetAt, BSmtLib.Lexer.Internal.LexerCore.offsetAt,
+      coreMap,
     sub_toNat_ix hb hp]
 
 theorem coreMap_locationAt {start : Nat} {c : ZCore} {p : USize} (hb : start ≤ c.base.toNat)
     (hp : c.base.toNat ≤ p.toNat) :
     (coreMap start c).locationAt (ix start p) = c.locationAt p := by
-  simp only [Lexer.Internal.WRustPort.LexerCore.locationAt, BSmtLib.Lexer.LexerCore.locationAt,
+  simp only [Lexer.Internal.WRustPort.LexerCore.locationAt,
+      BSmtLib.Lexer.Internal.LexerCore.locationAt,
     coreMap_offsetAt hb hp]
   rfl
 
@@ -151,7 +153,7 @@ theorem eofBatch_eq (c : XCore) :
         ⟨c.batch, c.batchEnded⟩ :=
   rfl
 
-theorem sliceStorage_eq (batch : Token.TokenBatch) :
+theorem sliceStorage_eq (batch : Token.Internal.TokenBatch) :
     @Lexer.Internal.WRustPort.Ops.sliceStorage H m R E Lexer.Internal.X1BatchInCore.ops batch =
         batch :=
   rfl
@@ -202,7 +204,8 @@ theorem setNormal_sim (b : USize) :
       Lexer.Internal.WRustPort.setNormal :=
   modifyCore_sim start _ _ (fun _ _ => rfl) fun _ hc => hc
 
-theorem setTokenState_sim (b : USize) (state : Lexer.Helpers.LexerState) (s : Span.Location)
+theorem setTokenState_sim (b : USize) (state : Lexer.Internal.Helpers.LexerState)
+    (s : Span.Location)
     (h : BSmtLib.Lexer.Internal.Started floor low s)
     (h' : Lexer.Internal.WRustPort.Started floor low s) :
     SimP (BaseIs b) (fun _ => BaseIs b) (boundMap start) id
@@ -210,8 +213,8 @@ theorem setTokenState_sim (b : USize) (state : Lexer.Helpers.LexerState) (s : Sp
       (Lexer.Internal.WRustPort.setTokenState state s h') :=
   modifyBound_sim start _ _ (fun _ _ => rfl) fun _ hc => hc
 
-theorem modifyContent_sim (b : USize) (f : Lexer.Helpers.ContentBuffer →
-    Lexer.Helpers.ContentBuffer) :
+theorem modifyContent_sim (b : USize) (f : Lexer.Internal.Helpers.ContentBuffer →
+    Lexer.Internal.Helpers.ContentBuffer) :
     SimP (BaseIs b) (fun _ => BaseIs b) (boundMap start) id
       (BSmtLib.Lexer.Internal.modifyContent (H := H) (m := m) (R := R) (E := E) (floor := floor)
         (low := low) f)
@@ -307,11 +310,12 @@ theorem failAt_sim {α β : Type} (ψ : α → β) (b : USize) (kind : LexicalEr
 
 /-- The token end of `X1BatchInCore` for that of the library's
 lexer. -/
-def endMap (start : Nat) (te : Lexer.Helpers.TokenEnd) : Lexer.Internal.WRustPort.Slice.TokenEnd :=
+def endMap (start : Nat) (te : Lexer.Internal.Helpers.TokenEnd) :
+    Lexer.Internal.WRustPort.Slice.TokenEnd :=
   { position := ix start te.position, atByte := te.atByte }
 
 theorem fail_sim {α β : Type} (ψ : α → β) (b : USize) (kind : LexicalErrorKind)
-    (te : Lexer.Helpers.TokenEnd) (hb : start ≤ b.toNat) (hp : b.toNat ≤ te.position.toNat)
+    (te : Lexer.Internal.Helpers.TokenEnd) (hb : start ≤ b.toNat) (hp : b.toNat ≤ te.position.toNat)
     (hno : te.position.toNat + 1 < USize.size) (Q : α → ZS floor low → Prop) :
     SimP (BaseIs b) Q (boundMap start) ψ
       (BSmtLib.Lexer.Internal.fail (H := H) (m := m) (R := R) (E := E) kind te)
@@ -344,7 +348,7 @@ theorem expectDelimiter_sim (b : USize) (next : UInt8) (position : USize)
     rw [USize.toNat_add, USize.toNat_one, Nat.mod_eq_of_lt hno]
   have e' : ix start position + 1 = ix start (position + 1) := by simp only [ix, e]; omega
   rw [e']
-  cases Lexer.Helpers.isDelimiter next
+  cases Lexer.Internal.Helpers.isDelimiter next
   · exact failAt_sim start id b _ _ hb (by rw [e]; omega) _
   · exact SimP.pure (fun _ h => h) rfl
 
@@ -352,9 +356,9 @@ theorem expectDelimiter_sim (b : USize) (next : UInt8) (position : USize)
 /-- An error followed by more steps: the library's lexer's error is thrown before them, and so is
 the Rust port's. -/
 theorem fail_bind_sim {α β γ δ : Type} (ψ : γ → δ) (b : USize) (kind : LexicalErrorKind)
-    (te : Lexer.Helpers.TokenEnd) (hb : start ≤ b.toNat) (hp : b.toNat ≤ te.position.toNat)
+    (te : Lexer.Internal.Helpers.TokenEnd) (hb : start ≤ b.toNat) (hp : b.toNat ≤ te.position.toNat)
     (hno : te.position.toNat + 1 < USize.size) (Q : γ → ZS floor low → Prop)
-    (k : α → BSmtLib.Lexer.LexM H m R E floor low γ)
+    (k : α → BSmtLib.Lexer.Internal.LexM H m R E floor low γ)
     (k' : β → Lexer.Internal.WRustPort.LexM H m R E floor low δ) :
     SimP (BaseIs b) Q (boundMap start) ψ
       (BSmtLib.Lexer.Internal.fail (H := H) (m := m) (R := R) (E := E) kind te >>= k)
@@ -371,7 +375,7 @@ theorem fail_bind_sim {α β γ δ : Type} (ψ : γ → δ) (b : USize) (kind : 
 theorem failAt_bind_sim {α β γ δ : Type} (ψ : γ → δ) (b : USize) (kind : LexicalErrorKind)
     (position : USize) (hb : start ≤ b.toNat) (hp : b.toNat < position.toNat)
     (Q : γ → ZS floor low → Prop)
-    (k : α → BSmtLib.Lexer.LexM H m R E floor low γ)
+    (k : α → BSmtLib.Lexer.Internal.LexM H m R E floor low γ)
     (k' : β → Lexer.Internal.WRustPort.LexM H m R E floor low δ) :
     SimP (BaseIs b) Q (boundMap start) ψ
       (BSmtLib.Lexer.Internal.failAt (H := H) (m := m) (R := R) (E := E) kind position >>= k)

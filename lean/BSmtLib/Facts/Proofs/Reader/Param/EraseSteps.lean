@@ -13,9 +13,9 @@ import all BSmtLib.Parser.Category.SortedVar
 import all BSmtLib.Parser.Category.Term
 import all BSmtLib.Parser.Category.Token
 import all BSmtLib.Parser.Command
-import all BSmtLib.Parser.Command.Datatype
-import all BSmtLib.Parser.Command.Function
-import all BSmtLib.Parser.Command.Standard
+import all BSmtLib.Parser.Command.Internal.Datatype
+import all BSmtLib.Parser.Command.Internal.Function
+import all BSmtLib.Parser.Command.Internal.Standard
 import all BSmtLib.Parser.Script
 
 @[expose] public section
@@ -34,11 +34,22 @@ open BSmtLibSpec.Parser.Properties
 open BSmtLib.Parser
 open BSmtLib.Facts.Proofs.Parser.Quiet
 open BSmtLib.Facts.Proofs.Reader.Param.Erase BSmtLib.Nodes BSmtLib.Parser.Category.Attribute
+open BSmtLib.Parser.Category.Attribute.Internal
 open BSmtLib.Parser.Category.Combinator BSmtLib.Parser.Category.Ident
+open BSmtLib.Parser.Category.Combinator.Internal
+open BSmtLib.Parser.Category.Ident.Internal
 open BSmtLib.Parser.Category.Pattern BSmtLib.Parser.Category.QualifiedIdent
+open BSmtLib.Parser.Category.Pattern.Internal
+open BSmtLib.Parser.Category.QualifiedIdent.Internal
 open BSmtLib.Parser.Category.SExpr BSmtLib.Parser.Category.«Sort» BSmtLib.Parser.Category.SortedVar
+open BSmtLib.Parser.Category.SExpr.Internal
+open BSmtLib.Parser.Category.«Sort».Internal
+open BSmtLib.Parser.Category.SortedVar.Internal
 open BSmtLib.Parser.Category.Term BSmtLib.Parser.Category.Token BSmtLib.Parser.Command
-open BSmtLib.Parser.Command.Datatype BSmtLib.Parser.Command.Function BSmtLib.Parser.Command.Standard
+open BSmtLib.Parser.Category.Term.Internal
+open BSmtLib.Parser.Category.Token.Internal
+open BSmtLib.Parser.Command.Internal
+open BSmtLib.Parser.Command.Internal.Datatype BSmtLib.Parser.Command.Internal.Function BSmtLib.Parser.Command.Internal.Standard
 open BSmtLib.Parser.Script BSmtLib.Traits
 
 theorem expectOpen_erases (token : Parser.Internal.Input) : Erases (expectOpen
@@ -276,21 +287,21 @@ theorem payloadStep_erases (version : Token.Version) (state : Payload Nat Nat Na
           match ← datatypeStep (H := List Event) start version state token with
           | .more state => return Parser.Internal.Step.more state
           | .done constructors =>
-            Parser.call (CommandHandler.endDatatypeDeclaration constructors)
+            Parser.Internal.call (CommandHandler.endDatatypeDeclaration constructors)
             return .done ()) (some count) state token) := by
     intro count start hstart state token
     apply listStep_erases
     intro state token
     erasing_step [datatypeStep_erases hstart]
   have hdeclare : ∀ symbol state token, Erases (datatypeStep (H := List Event)
-      (fun parameters => Parser.call (CommandHandler.startDeclareDatatype symbol parameters))
+      (fun parameters => Parser.Internal.call (CommandHandler.startDeclareDatatype symbol parameters))
       version state token) := fun symbol =>
     datatypeStep_erases (fun _ => by apply erases_call) version
   have hdeclarations := fun count => hdatatypes count
-    (fun parameters => Parser.call (CommandHandler.startDatatypeDeclaration parameters))
+    (fun parameters => Parser.Internal.call (CommandHandler.startDatatypeDeclaration parameters))
     (fun _ => by apply erases_call)
   have hdeclareEach : ∀ state token, Erases (datatypeStep (H := List Event)
-      (fun parameters => Parser.call (CommandHandler.startDatatypeDeclaration parameters))
+      (fun parameters => Parser.Internal.call (CommandHandler.startDatatypeDeclaration parameters))
       version state token) :=
     datatypeStep_erases (fun _ => by apply erases_call) version
   have hbodies := fun count => listStep_erases (TermState.init (HandledSExpr := Nat)
@@ -322,16 +333,16 @@ def FlowErases {σ ρ : Type} : Parser.Internal.Flow RPM σ ρ → Prop
 
 theorem scriptArrive_erases (parser : ScriptParser (List Event)) (token : Parser.Internal.Input) :
     Erases (Parser.Internal.ParseByToken.arrive (H := List Event) parser token) := by
-  show Erases (ScriptParser.arrive parser token)
-  unfold ScriptParser.arrive commandArrive payloadArrive bodiesArrive
+  show Erases (ScriptParser.Internal.arrive parser token)
+  unfold ScriptParser.Internal.arrive commandArrive payloadArrive bodiesArrive
   erasing_step []
 
 theorem scriptStep_erasing (version : Token.Version) (parser : ScriptParser (List Event))
     (token : Parser.Internal.Input) :
     Erasing FlowErases (Parser.Internal.ParseByToken.step
         (H := List Event) version parser token) := by
-  show Erasing FlowErases (ScriptParser.step version parser token)
-  unfold ScriptParser.step
+  show Erasing FlowErases (ScriptParser.Internal.step version parser token)
+  unfold ScriptParser.Internal.step
   apply Erasing.bind_erases (commandStep_erases _ _ _)
   intro outcome
   split

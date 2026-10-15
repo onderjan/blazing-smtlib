@@ -27,11 +27,12 @@ tokens on every other producer.
 namespace BSmtLib.Parser.Internal.Fused
 
 open BSmtLib.Nodes BSmtLib.Traits
-open BSmtLib.Parser.Category.Combinator (ListState)
-open BSmtLib.Parser.Category.Term (TermLevel TermLevelOf TermStateOf)
-open BSmtLib.Parser.Command (CommandStateOf)
-open BSmtLib.Parser.Command.Definition (DefinitionEnd)
-open BSmtLib.Parser.Command.Standard (FinalCall Payload)
+open BSmtLib.Token.BatchCursor.Internal (remaining)
+open BSmtLib.Parser.Category.Combinator.Internal (ListState)
+open BSmtLib.Parser.Category.Term.Internal (TermLevel TermLevelOf TermStateOf)
+open BSmtLib.Parser.Command.Internal (CommandStateOf)
+open BSmtLib.Parser.Command.Internal.Definition (DefinitionEnd)
+open BSmtLib.Parser.Command.Internal.Standard (FinalCall Payload)
 open BSmtLib.Parser.Internal.Fused.Basic
 open BSmtLib.Parser.Script (ScriptParser)
 open BSmtLib.Plain (SymbolView NumeralView)
@@ -68,7 +69,7 @@ def finishTerm (context : TermContext (Handler.«Sort» H)) (term : Handler.Term
       | .defineFunRec => .endDefineFunRec term)
 
 /-- A term is complete: it goes to the innermost level's construct, or completes the command's
-term. As `Parser.Category.Term.termComplete`. -/
+term. As `Parser.Category.Term.Internal.termComplete`. -/
 @[inline]
 def termComplete {batch : BatchTag} (posture : VersionPosture) (next : BatchCursor batch)
     (h : H) (declarations : Nat) (context : TermContext (Handler.«Sort» H))
@@ -107,7 +108,7 @@ def portTermStep {batch : BatchTag} (posture : VersionPosture) (h : H) (declarat
     (context : TermContext (Handler.«Sort» H)) (term : TermStateOf H) (token : Token batch)
     (next : BatchCursor batch) {β : Type} (k : OutcomeOf H next → m β) : m β := do
   let input := Internal.Input.ofSyntax (Token.Produce.«syntax» next token)
-  match ← runParser (Category.Term.termStep next.version term input) h with
+  match ← runParser (Category.Term.Internal.termStep next.version term input) h with
   | (.error e, h) => fail posture next h e k
   | (.ok (.more term), h) => k <| .term h declarations context term.mode term.levels
   | (.ok (.done term), h) => k <| .command h declarations (finishTerm context term)
@@ -140,11 +141,11 @@ def termStep {batch : BatchTag} (posture : VersionPosture) (h : H) (declarations
       match reservedAt? version next token with
       | none =>
         handleTerm posture next h declarations context levels
-          (.identifier ⟨⟨SymbolView.newUnchecked content, false⟩, #[]⟩ none) k
+          (.identifier ⟨⟨SymbolView.Internal.newUnchecked content, false⟩, #[]⟩ none) k
       | some _ => fail posture next h (.syntax .expectedTerm) k
     | .quotedSymbol =>
       handleTerm posture next h declarations context levels
-        (.identifier ⟨⟨SymbolView.newUnchecked (contentOf next token), true⟩, #[]⟩ none) k
+        (.identifier ⟨⟨SymbolView.Internal.newUnchecked (contentOf next token), true⟩, #[]⟩ none) k
     | .numeral | .decimal | .hexadecimal | .binary | .string =>
       handleTerm posture next h declarations context levels
         (.constant (constantOf category (contentOf next token))) k
@@ -156,7 +157,7 @@ def termStep {batch : BatchTag} (posture : VersionPosture) (h : H) (declarations
       match reservedAt? version next token with
       | none =>
         let level :=
-          TermLevel.application ⟨⟨SymbolView.newUnchecked content, false⟩, #[]⟩ none #[]
+          TermLevel.application ⟨⟨SymbolView.Internal.newUnchecked content, false⟩, #[]⟩ none #[]
         k <| .term h declarations context .start (level :: levels)
       | some (.general word) =>
         match word with
@@ -179,7 +180,7 @@ def termStep {batch : BatchTag} (posture : VersionPosture) (h : H) (declarations
       | some (.commandName _) => fail posture next h (.syntax .expectedOperator) k
     | .quotedSymbol =>
       let level := TermLevel.application
-        ⟨⟨SymbolView.newUnchecked (contentOf next token), true⟩, #[]⟩ none #[]
+        ⟨⟨SymbolView.Internal.newUnchecked (contentOf next token), true⟩, #[]⟩ none #[]
       k <| .term h declarations context .start (level :: levels)
     | .parenOpen => k <| .term h declarations context (.applicationHead .opened) levels
     | _ => fail posture next h (.syntax .expectedOperator) k
@@ -259,7 +260,7 @@ def closingStep {batch : BatchTag} (posture : VersionPosture) (h : H) (declarati
     m β := do
   match next.category token with
   | .parenClose =>
-    match ← runParser (Command.Standard.finalCall final) h with
+    match ← runParser (Command.Internal.Standard.finalCall final) h with
     | (.error e, h) => fail posture next h e k
     | (.ok (), h) =>
       match final with
@@ -300,11 +301,11 @@ def commandStep {batch : BatchTag} (posture : VersionPosture) (h : H) (declarati
       | none =>
         fail posture next h
           (.handler (CommandHandler.nonstandardCommand (H := H)
-            ⟨SymbolView.newUnchecked content, false⟩)) k
+            ⟨SymbolView.Internal.newUnchecked content, false⟩)) k
     | .quotedSymbol =>
       fail posture next h
         (.handler (CommandHandler.nonstandardCommand (H := H)
-          ⟨SymbolView.newUnchecked (contentOf next token), true⟩)) k
+          ⟨SymbolView.Internal.newUnchecked (contentOf next token), true⟩)) k
     | _ => fail posture next h (.syntax .expectedCommandName) k
   | .payload (.closing final) => closingStep posture h declarations final token next k
   | .payload (.named named) =>
@@ -362,13 +363,13 @@ def commandStep {batch : BatchTag} (posture : VersionPosture) (h : H) (declarati
     match next.category token with
     | .numeral =>
       k <| .command h declarations
-        (closing (.push (NumeralView.newUnchecked (contentOf next token))))
+        (closing (.push (NumeralView.Internal.newUnchecked (contentOf next token))))
     | _ => fail posture next h (.syntax (.expectedToken #[.numeral])) k
   | .payload .pop =>
     match next.category token with
     | .numeral =>
       k <| .command h declarations
-        (closing (.pop (NumeralView.newUnchecked (contentOf next token))))
+        (closing (.pop (NumeralView.Internal.newUnchecked (contentOf next token))))
     | _ => fail posture next h (.syntax (.expectedToken #[.numeral])) k
   | _ => portStep posture h declarations command token next k
 
@@ -406,7 +407,7 @@ def loop {batch : BatchTag} (posture : VersionPosture) (origin : BatchCursor bat
   | .command h declarations command =>
     if hn : next.HasNext then
       let (token', ⟨after, taken⟩) := next.next hn
-      have : after.remaining < next.remaining := taken.remaining_lt
+      have : remaining after < remaining next := taken.remaining_lt
       -- a command state that reads a term goes on with the term in the loop's arguments
       match command with
       | .payload (.assert term) =>
@@ -423,7 +424,7 @@ def loop {batch : BatchTag} (posture : VersionPosture) (origin : BatchCursor bat
   | .term h declarations context mode levels =>
     if hn : next.HasNext then
       let (token', ⟨after, taken⟩) := next.next hn
-      have : after.remaining < next.remaining := taken.remaining_lt
+      have : remaining after < remaining next := taken.remaining_lt
       loop posture origin h declarations .awaiting true context mode levels token' after
         (taken.trans consumed)
     else
@@ -432,7 +433,7 @@ def loop {batch : BatchTag} (posture : VersionPosture) (origin : BatchCursor bat
   | .resume h parser cursor follows =>
     if hn : cursor.HasNext then
       let (token', ⟨after, taken⟩) := cursor.next hn
-      have : after.remaining < next.remaining := (taken.trans_follows follows).remaining_lt
+      have : remaining after < remaining next := (taken.trans_follows follows).remaining_lt
       -- a command state that reads a term goes on with the term in the loop's arguments
       match parser.command with
       | .payload (.assert term) =>
@@ -449,7 +450,7 @@ def loop {batch : BatchTag} (posture : VersionPosture) (origin : BatchCursor bat
       return (.ok .continue, parser, ⟨cursor, follows.trans_consumed consumed⟩, h)
   | .stop answer parser cursor follows h =>
     return (answer, parser, ⟨cursor, follows.trans_consumed consumed⟩, h)
-termination_by next.remaining
+termination_by remaining next
 
 /-- The loop from the first token of a hand-over, with the parser's state in its arguments. -/
 @[inline]

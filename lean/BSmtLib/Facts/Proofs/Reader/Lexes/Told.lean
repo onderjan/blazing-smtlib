@@ -23,6 +23,7 @@ took (`calls_of_invG`), none before the first token (`feed_told`).
 namespace BSmtLib.Facts.Proofs.Reader.Lexes.Told
 
 open BSmtLib.Lexer
+open BSmtLib.Lexer.Internal (BATCH_CAPACITY Stop Interrupted Failure LexerCore InnerM StepM LexM)
 open BSmtLibSpec
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Lexer (Handed)
@@ -145,21 +146,6 @@ end
 section
 
 variable {version : Lexicon.Version}
-
-/-- The parse adapter's lexer after the step of a call on a slice, also where it fails. -/
-def slicedP (p : PLexer) (slice : ByteSlice) : PLexer :=
-  (Lexer.Internal.run p (Internal.lexSliceStep (H := RecAdapter) (m := Id)
-    (Recovery.LexRecovery.abandon Recovery.FailFast)
-    (Recovery.LexRecovery.recover Recovery.FailFast) slice) :
-    Id _).2
-
-/-- The parse adapter's lexer after the step of a call at the end of the input, also where it
-fails. -/
-def eofedP (p : PLexer) : PLexer :=
-  (Lexer.Internal.run p (Internal.lexEofStep (H := RecAdapter) (m := Id) (R := Unit)
-    (E := Parser.ParseErrorCause Unit)
-    (Recovery.LexRecovery.abandon Recovery.FailFast)
-    (Recovery.LexRecovery.recover Recovery.FailFast)) : Id _).2
 
 theorem cause_ne_of_alike {ε : Type} {α β : Type} {Q : α → β → Prop}
     {x : Except (LexError (Option ε)) α} {y : Except (LexError (Option ε)) β}

@@ -2,7 +2,7 @@ module
 
 public import BSmtLib.Facts.Proofs.Parser.Rejection.Payload
 import all BSmtLib.Parser.Command
-import all BSmtLib.Parser.Command.Standard
+import all BSmtLib.Parser.Command.Internal.Standard
 import all BSmtLib.Token.Reserved
 import all BSmtLib.Parser.Category.Attribute
 
@@ -22,17 +22,14 @@ namespace BSmtLib.Facts.Proofs.Parser.Rejection.CommandStep
 open BSmtLibSpec.Grammar
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Parser.Traversal
-open BSmtLib.Parser (PM)
-open BSmtLib.Parser.Category.Term (TermState)
-open BSmtLib.Parser.Category.Combinator (ListState)
-open BSmtLib.Parser.Command.Datatype (SortDecState DatatypeState)
-open BSmtLib.Parser.Command.Standard (LiteralState Payload NamedCommand FinalCall Declaration
+open BSmtLib.Parser.Command.Internal.Datatype (SortDecState DatatypeState)
+open BSmtLib.Parser.Command.Internal.Standard (LiteralState Payload NamedCommand FinalCall
+    Declaration
     payloadStep)
-open BSmtLib.Parser.Command.Function (SignatureState FunctionDecState)
-open BSmtLib.Parser.Command.Definition (DefinitionEnd)
-open BSmtLib.Parser.Command (CommandState CommandOutcome commandStep)
-open BSmtLib.Parser.Category.Attribute (AttributeState)
-open BSmtLib.Parser.Category.Sort (SortState)
+open BSmtLib.Parser.Command.Internal.Function (SignatureState FunctionDecState)
+open BSmtLib.Parser.Command.Internal.Definition (DefinitionEnd)
+open BSmtLib.Parser.Command (CommandOutcome)
+open BSmtLib.Parser.Command.Internal (CommandState commandStep)
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Proofs.Parser.Rejection.Basic
 open BSmtLib.Facts.Proofs.Parser.Rejection.Command
 open BSmtLib.Facts.Proofs.Parser.Rejection.CommandParts BSmtLib.Facts.Proofs.Parser.Rejection.Parts
@@ -253,7 +250,7 @@ theorem payloadInit_command (name : Token.Reserved.CommandNameReserved)
     exact ⟨.resetAssertions, w, hv, hw, by command_tokens⟩
   case setInfo =>
     obtain ⟨-, a, b, ha, hb, rfl⟩ := hu
-    simp only [attrRem, ite_true, Parser.Category.Attribute.AttributeState.init,
+    simp only [attrRem, ite_true, Parser.Category.Attribute.Internal.AttributeState.init,
         Array.isEmpty_empty] at ha
     obtain ⟨_, _, ⟨⟨keyword, value⟩, hvalid, rfl⟩, rfl, rfl⟩ := ha
     refine ⟨.setInfo ⟨keyword, value⟩, b, hvalid, ?_, by command_tokens⟩
@@ -264,7 +261,7 @@ theorem payloadInit_command (name : Token.Reserved.CommandNameReserved)
     exact ⟨.setLogic s, w, trivial, hw, by command_tokens⟩
   case setOption =>
     obtain ⟨a, w, ha, hw, rfl⟩ := hu
-    simp only [attrRem, ite_true, Parser.Category.Attribute.AttributeState.init,
+    simp only [attrRem, ite_true, Parser.Category.Attribute.Internal.AttributeState.init,
         Array.isEmpty_empty] at ha
     obtain ⟨_, _, ⟨attr, hvalid, rfl⟩, rfl, rfl⟩ := ha
     exact ⟨.setOption attr, w, hvalid, hw, by command_tokens⟩
@@ -326,7 +323,7 @@ theorem payloadInit_nonempty (name : Token.Reserved.CommandNameReserved) :
   case setInfo =>
     obtain ⟨b, hb⟩ := hfollows (.next (Bridge.version version))
     refine ⟨_, rfl, [.token (.keyword []), closeItem], b, ?_, ?_, rfl⟩
-    · simp only [attrRem, ite_true, Parser.Category.Attribute.AttributeState.init,
+    · simp only [attrRem, ite_true, Parser.Category.Attribute.Internal.AttributeState.init,
         Array.isEmpty_empty]
       exact cat_intro' ⟨⟨[], none⟩, trivial, rfl⟩ (tok_intro _) rfl
     · have hne : BSmtLibSpec.Regex.chars "smt-lib-version" ≠ [] := by decide

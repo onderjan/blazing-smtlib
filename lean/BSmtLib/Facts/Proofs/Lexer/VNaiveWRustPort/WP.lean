@@ -41,7 +41,7 @@ abbrev M (C : BSmtLibSpec.Lexer.Consumer) (floor : Option Nat) (low : Nat) :=
 
 /-- An interruption of a step. -/
 abbrev Intr (C : BSmtLibSpec.Lexer.Consumer) (floor : Option Nat) :=
-  BSmtLib.Lexer.Interrupted C.Result (Option C.Error) floor
+  BSmtLib.Lexer.Internal.Interrupted C.Result (Option C.Error) floor
 
 section
 
@@ -167,8 +167,8 @@ theorem rust_storeLocals :
 
 theorem rust_eofBatch (c : Lexer.Internal.WRustPort.LexerCore) :
     Ops.eofBatch (H := Answering C) (m := AnswerM) (R := C.Result) (E := Option C.Error) c =
-      ⟨(Token.TokenBatch.empty BSmtLib.Lexer.BATCH_CAPACITY).clear c.offset,
-        Nat.le_of_eq (Token.TokenBatch.lastEnd_clear _ _)⟩ := rfl
+      ⟨(Token.Internal.TokenBatch.empty BSmtLib.Lexer.Internal.BATCH_CAPACITY).clear c.offset,
+        Nat.le_of_eq (Token.Internal.TokenBatch.lastEnd_clear _ _)⟩ := rfl
 
 end
 

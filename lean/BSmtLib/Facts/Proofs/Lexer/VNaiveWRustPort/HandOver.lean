@@ -23,6 +23,8 @@ trailing input.
 namespace BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.HandOver
 
 open BSmtLib.Facts.Lexer.Adapters
+open BSmtLib.Token.BatchCursor.Internal
+    (discardRequested resetConsumed relexRequested EndsAfter consumedEndOf)
 open BSmtLibSpec.Lexer (Handed)
 open BSmtLib.Lexer.Internal.WRustPort (callConsumer)
 open BSmtLib.Lexer.Internal.WRustPort.Rust (flushCursor)
@@ -59,7 +61,7 @@ def borrowedLexeme (ty : Token.TokenCategory) (content : ByteSlice) (start : Spa
   { category := ty, content := content.toByteArray, start,
     «end» := { offset := «end», line, column := «end» - lineStart } }
 
-theorem holds_of_len_zero {T : Token.TokenBatch} (h : T.len = 0) : Holds T [] := by
+theorem holds_of_len_zero {T : Token.Internal.TokenBatch} (h : T.len = 0) : Holds T [] := by
   refine ⟨h, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
     first | (rw [h]; exact Nat.zero_le _) | (intro j hj; simp at hj)
 
@@ -186,8 +188,8 @@ theorem flushCursor_wp : ∀ (n : Nat) (cursor : Token.BatchCursor g), cStop cur
     n →
     ∀ (ls : List Lexeme), Holds (BSmtLib.Lexer.Internal.intoBatch cursor) ls → cStop cursor ≤
         ls.length →
-    cursor.relexRequested = false → cursor.discardRequested = false →
-    ∀ (hfloor : ∀ p, floor = some p → cursor.EndsAfter p) (s : WP.BS floor low) (coll : List Handed)
+    (relexRequested cursor) = false → discardRequested cursor = false →
+    ∀ (hfloor : ∀ p, floor = some p → EndsAfter cursor p) (s : WP.BS floor low) (coll : List Handed)
       (Q : Unit → WP.BS floor low → List Handed → Prop)
       (QE : WP.Intr C floor → WP.BS floor low → List Handed → Prop),
     s.val.recovers = false → s.val.version = cursor.version →
@@ -237,7 +239,7 @@ theorem flushCursor_wp : ∀ (n : Nat) (cursor : Token.BatchCursor g), cStop cur
       dsimp only at hc ⊢
       obtain ⟨k1, k2, k3⟩ := hc
       rw [yields, take_drop_split ls (Nat.le_of_lt k1) k2, pending_append] at hpost0
-      have hend : cursor'.consumedEndOf consumed = ls[cNext cursor' - 1].end :=
+      have hend : consumedEndOf cursor' consumed = ls[cNext cursor' - 1].end :=
         consumedEndOf_at consumed (by rw [intoBatch_eq cursor' cursor]; exact hb) (by omega)
       apply WP.wp_bind
       apply WP.wp_modifyCore
@@ -257,9 +259,9 @@ theorem flushCursor_wp : ∀ (n : Nat) (cursor : Token.BatchCursor g), cStop cur
         rw [hrel] at a5
         rw [hdis] at a6
         simp only [a5, a6, Bool.false_eq_true, ite_false]
-        refine ih (cStop cursor'.resetConsumed - cNext cursor'.resetConsumed) ?_
-          cursor'.resetConsumed
-          rfl ls (by rw [intoBatch_eq cursor'.resetConsumed cursor]; exact hb)
+        refine ih (cStop (resetConsumed cursor') - cNext (resetConsumed cursor')) ?_
+          (resetConsumed cursor')
+          rfl ls (by rw [intoBatch_eq (resetConsumed cursor') cursor]; exact hb)
           (by rw [cStop_resetConsumed, a4]; exact hs) (by rw [relex_resetConsumed, a5])
           (by rw [discard_resetConsumed, a6]) _ _ _ _ _ hrec rfl ?_
         · rw [cStop_resetConsumed, cNext_resetConsumed, a4]
@@ -486,8 +488,8 @@ theorem pending_cont {hd : Bool} {ver : Token.Version} {coll : List Handed} {ls 
 /-- The hand-over of a cursor over a batch that holds lexemes, as two cases. -/
 theorem flushCursor_wp' (cursor : Token.BatchCursor g) (ls : List Lexeme)
     (hb : Holds (BSmtLib.Lexer.Internal.intoBatch cursor) ls) (hs : cStop cursor ≤ ls.length)
-    (hrel : cursor.relexRequested = false) (hdis : cursor.discardRequested = false)
-    (hfloor : ∀ p, floor = some p → cursor.EndsAfter p) (s : WP.BS floor low) (coll : List Handed)
+    (hrel : relexRequested cursor = false) (hdis : discardRequested cursor = false)
+    (hfloor : ∀ p, floor = some p → EndsAfter cursor p) (s : WP.BS floor low) (coll : List Handed)
     {Q : Unit → WP.BS floor low → List Handed → Prop}
     {QE : WP.Intr C floor → WP.BS floor low → List Handed → Prop}
     (hrec : s.val.recovers = false) (hver : s.val.version = cursor.version)
@@ -509,8 +511,9 @@ theorem flushCursor_wp' (cursor : Token.BatchCursor g) (ls : List Lexeme)
     intro e he
     exact herr e p' st.discards (by rw [hp]; exact ⟨rfl, rfl, he⟩)
 
-theorem yields_new (v : Token.Version) (T : Token.TokenBatch) (ls : List Lexeme) (hT : Holds T ls) :
-    yields (Token.BatchCursor.new v T) ls = ls := by
+theorem yields_new (v : Token.Version) (T : Token.Internal.TokenBatch) (ls : List Lexeme)
+    (hT : Holds T ls) :
+    yields (Token.BatchCursor.Internal.new v T) ls = ls := by
   rw [yields, cStop_new, cNext_new, List.drop_zero, hT.len, List.take_length]
 
 end

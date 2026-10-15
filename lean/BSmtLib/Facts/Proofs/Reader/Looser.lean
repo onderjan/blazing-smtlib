@@ -38,6 +38,8 @@ posture, which each call keeps where nothing went wrong.
 namespace BSmtLib.Facts.Proofs.Reader.Looser
 
 open BSmtLib.Lexer
+open BSmtLib.Token.BatchCursor.Internal (remaining)
+open BSmtLib.Lexer.Internal (BATCH_CAPACITY Stop Interrupted Failure LexerCore InnerM StepM LexM)
 open BSmtLib.Parser
 open BSmtLibSpec.Parser.Properties (Event)
 open BSmtLib.Facts.Proofs.Reader.Param.Basic (Relator Link ERel FlowRel ORel LocRel SSim)
@@ -137,7 +139,7 @@ open BSmtLib.Facts.Proofs.Reader.Param.Split (outN outS resumeOut outN_split_eq 
 theorem outN_looser {strict loose : Token.VersionPosture} (hl : Looser strict loose)
     {b : Token.BatchTag} :
     ∀ (n : Nat) (cursor : Token.BatchCursor b) (h : cursor.HasNext) (adapter : RecAdapter),
-      cursor.remaining < n → adapter.parser.posture = strict →
+      (remaining cursor) < n → adapter.parser.posture = strict →
       (∃ e, (outN cursor h adapter).1.1 = .error e) ∨
         (outN cursor h (adapterWith loose adapter) =
             ((outN cursor h adapter).1, adapterWith loose (outN cursor h adapter).2) ∧
@@ -195,7 +197,7 @@ theorem consume_looserN {strict loose : Token.VersionPosture} (hl : Looser stric
                 adapter).2) ∧
         ((Token.ConsumeFrom.consume (m := Id) cursor h : StateT RecAdapter Id _).run
           adapter).2.parser.posture = strict) := by
-  have hl' := outN_looser hl (cursor.remaining + 1) cursor h adapter (Nat.lt_succ_self _) hp
+  have hl' := outN_looser hl (remaining cursor + 1) cursor h adapter (Nat.lt_succ_self _) hp
   have eN : ∀ A, outN cursor h A =
       let x := (Token.ConsumeFrom.consume (m := Id) cursor h : StateT RecAdapter Id _).run A
       ((x.1.1, x.1.2.val), x.2) := fun _ => rfl

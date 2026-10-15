@@ -18,7 +18,7 @@ loops hold agree, have the same array of contents (the slice's) and are below th
 
 namespace BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Held
 
-open BSmtLib.Lexer (BATCH_CAPACITY Interrupted)
+open BSmtLib.Lexer.Internal (BATCH_CAPACITY Interrupted)
 open BSmtLib.Lexer.Internal.WRustPort (Ops)
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Relation
 open BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Ops
@@ -32,7 +32,8 @@ variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [
 
 omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
 theorem pushBorrowed_sim (ho : OpsSim o₁ o₂ LRel) (l ls : Nat) (input : ByteSlice)
-    (b b' : Token.TokenBatch) (hb : Core.HR b b') (offset base : Nat) (ty : Token.TokenCategory)
+    (b b' : Token.Internal.TokenBatch) (hb : Core.HR b b') (offset base : Nat)
+    (ty : Token.TokenCategory)
     (contentStart contentStop : Nat) (start : Span.Location) (tokenEnd : Nat)
     (hty hafter hend hfloor hafter' hend' hfloor') :
     Core.LSim strict (H := H) (m := m) (R := R) (E := E) (floor := floor) (low := low)

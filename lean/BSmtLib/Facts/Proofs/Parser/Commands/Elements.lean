@@ -4,7 +4,7 @@ public import BSmtLib.Facts.Proofs.Parser.Commands.Bytes
 import all BSmtLib.Parser.Category.Combinator
 import all BSmtLib.Parser.Category.Sort
 import all BSmtLib.Parser.Category.Token
-import all BSmtLib.Parser.Command.Datatype
+import all BSmtLib.Parser.Command.Internal.Datatype
 
 @[expose] public section
 
@@ -25,8 +25,8 @@ the inner parser's initial state does (`Runs.first`), since it is no `)`.
 namespace BSmtLib.Facts.Proofs.Parser.Commands.Elements
 
 open BSmtLibSpec.Grammar
-open BSmtLib.Parser (PM)
-open BSmtLib.Parser.Category.Combinator (ListState)
+open BSmtLib.Parser.Internal (PM)
+open BSmtLib.Parser.Category.Combinator.Internal (ListState)
 open BSmtLibSpec.Parser
 open BSmtLibSpec.Parser.Traversal
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Parser.Adapters.Run
@@ -306,8 +306,8 @@ theorem term_validAll {terms : List Tree.Term} (h : Tree.Term.ValidAll
 
 /-- The sort parser reads a sort from its initial state, and ends with it. -/
 theorem sort_element (hA : TermAgrees h) :
-    ElementRuns points (Parser.Category.«Sort».sortStep version)
-        Parser.Category.«Sort».SortState.init Tree.«Sort».tokens
+    ElementRuns points (Parser.Category.«Sort».Internal.sortStep version)
+        Parser.Category.«Sort».Internal.SortState.init Tree.«Sort».tokens
       (Tree.«Sort».Valid (Bridge.version version))
       (fun sort => adaptRun (Traversal.sort points h sort)) id := by
   intro sort hvalid tokens hs
@@ -315,7 +315,8 @@ theorem sort_element (hA : TermAgrees h) :
 
 /-- The term parser reads a term from its initial state, and ends with it. -/
 theorem term_element (hA : TermAgrees h) :
-    ElementRuns points (Parser.Category.Term.termStep version) Parser.Category.Term.TermState.init
+    ElementRuns points
+        (Parser.Category.Term.Internal.termStep version) Parser.Category.Term.Internal.TermState.init
         Tree.Term.tokens
       (Tree.Term.Valid (Bridge.version version))
       (fun term => adaptRun (Traversal.term points h term)) id := by
@@ -328,7 +329,7 @@ theorem sortDec_runs (sortDec : Tree.SortDec) {tokens : List Parser.Internal.Inp
     ∃ (symbol : Nodes.Symbol) (arity : NumeralView) (rest : List Parser.Internal.Input),
       tokens = .parenOpen :: rest ∧
       (Bridge.symbol symbol, Bridge.chars arity.asSlice) = (sortDec.symbol, sortDec.arity) ∧
-      Runs (H := H) points Parser.Command.Datatype.SortDecState.step .start tokens
+      Runs (H := H) points Parser.Command.Internal.Datatype.SortDecState.step .start tokens
           (ticks points tokens)
         fun _ => pure (.done (symbol, arity)) := by
   obtain ⟨name, arity⟩ := sortDec
@@ -341,18 +342,20 @@ theorem sortDec_runs (sortDec : Tree.SortDec) {tokens : List Parser.Internal.Inp
   rw [show Parser.Internal.Input.parenOpen :: ([.symbol symbol,
       .constant (.numeral digits)] ++ [.parenClose]) =
     [.parenOpen] ++ ([.symbol symbol] ++ ([.constant (.numeral digits)] ++ [.parenClose])) by rfl]
-  refine (Runs.append (middle := fun _ => Parser.Command.Datatype.SortDecState.opened)
-    (Runs.token_more (by simp [Parser.Command.Datatype.SortDecState.step,
-    Parser.Category.Token.expectOpen]))
+  refine (Runs.append (middle := fun _ => Parser.Command.Internal.Datatype.SortDecState.opened)
+    (Runs.token_more (by simp [Parser.Command.Internal.Datatype.SortDecState.step,
+    Parser.Category.Token.Internal.expectOpen]))
     fun _ => Runs.append (middle := fun _ => .arity symbol) (Runs.token_more
-      (by simp [Parser.Command.Datatype.SortDecState.step, Parser.Category.Token.expectSymbol]))
+      (by simp [Parser.Command.Internal.Datatype.SortDecState.step,
+          Parser.Category.Token.Internal.expectSymbol]))
           fun _ =>
         Runs.append (middle := fun _ => .close symbol digits) (Runs.token_more
-        (by simp [Parser.Command.Datatype.SortDecState.step, Parser.Category.Token.expectNumeral]))
+        (by simp [Parser.Command.Internal.Datatype.SortDecState.step,
+            Parser.Category.Token.Internal.expectNumeral]))
             fun _ =>
           Runs.token (program := pure ())
-            (by simp [Parser.Command.Datatype.SortDecState.step,
-                Parser.Category.Token.expectClose])).congr ?_ rfl
+            (by simp [Parser.Command.Internal.Datatype.SortDecState.step,
+                Parser.Category.Token.Internal.expectClose])).congr ?_ rfl
   simp
 
 end

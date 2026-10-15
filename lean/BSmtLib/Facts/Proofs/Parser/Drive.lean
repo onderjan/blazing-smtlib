@@ -27,6 +27,7 @@ open BSmtLib.Facts.Parser.Adapters.Run
 namespace BSmtLib.Facts.Proofs.Parser.Drive
 
 open BSmtLib.Parser
+open BSmtLib.Parser.Internal (PM call syntaxError)
 open BSmtLibSpec.Parser.Traversal
 
 section
@@ -353,6 +354,7 @@ end BSmtLib.Facts.Proofs.Parser.Drive
 namespace BSmtLib.Facts.Proofs.Parser.Drive
 
 open BSmtLib.Parser
+open BSmtLib.Parser.Internal (PM call syntaxError)
 open BSmtLibSpec.Parser.Traversal
 
 section

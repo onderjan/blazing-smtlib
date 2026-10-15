@@ -23,6 +23,7 @@ module
 import BSmtLib
 
 open BSmtLib
+open BSmtLib.Token.BatchCursor.Internal (remaining)
 open BSmtLib.Token
 open BSmtLib.Lexer.Error (LexError)
 
@@ -220,10 +221,10 @@ def countRest {batch : BatchTag} (origin : BatchCursor batch) (n : Nat) (cursor 
     (consumed : cursor.Consumed origin) : Nat × { c : BatchCursor batch // c.Consumed origin } :=
   if h : cursor.HasNext then
     let (_, ⟨next, taken⟩) := cursor.next h
-    have : next.remaining < cursor.remaining := taken.remaining_lt
+    have : remaining next < remaining cursor := taken.remaining_lt
     countRest origin (n + 1) next (taken.trans consumed)
   else (n, ⟨cursor, consumed⟩)
-termination_by cursor.remaining
+termination_by remaining cursor
 
 instance {batch : BatchTag} : ConsumeFrom CountTokens (BatchCursor batch) Id where
   consume cursor h := do

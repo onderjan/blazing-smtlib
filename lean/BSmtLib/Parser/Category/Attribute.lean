@@ -14,8 +14,13 @@ The parser of an attribute, a keyword with its value if it has one, alone or in 
 namespace BSmtLib.Parser.Category.Attribute
 
 open BSmtLib.Nodes BSmtLib.Traits BSmtLib.Parser.Category.Token BSmtLib.Parser.Category.SExpr
+open BSmtLib.Parser.Category.SExpr.Internal
+open BSmtLib.Parser.Category.Token.Internal
 open BSmtLib.Plain (KeywordView)
 open BSmtLib.Token (Version)
+open BSmtLib.Parser.Internal (PM call syntaxError)
+
+namespace Internal
 
 /-- What the attribute parser is doing. -/
 inductive AttributeMode (HandledSExpr : Type) where
@@ -91,6 +96,65 @@ def attributeStep (single : Bool) (version : Version)
     match ← sExprStep version sExpr token with
     | .more sExpr => return .more { self with mode := .inside keyword items sExpr false }
     | .done item => return .more { self with mode := .inside keyword (items.push item) [] true }
+
+end
+
+end Internal
+
+/-- The parser of one attribute followed by a `)` (`SmtClosedAttributeParser`). -/
+structure ClosedAttributeParser (H : Type) {m : Type → Type} [Handler H m] where
+  private mk ::
+  private state : Internal.AttributeState (Handler.SExpr H) (Handler.Attribute H)
+
+/-- The parser of attributes up to the `)` after them (`SmtClosedMultipleAttributeParser`). -/
+structure ClosedMultipleAttributeParser (H : Type) {m : Type → Type} [Handler H m] where
+  private mk ::
+  private state : Internal.AttributeState (Handler.SExpr H) (Handler.Attribute H)
+
+section
+
+variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
+
+/-- The parser before the attribute. -/
+def ClosedAttributeParser.new : ClosedAttributeParser H := ⟨.init⟩
+
+/-- The parser before the attributes. -/
+def ClosedMultipleAttributeParser.new : ClosedMultipleAttributeParser H := ⟨.init⟩
+
+instance : Inhabited (ClosedAttributeParser H) := ⟨.new⟩
+
+instance : Inhabited (ClosedMultipleAttributeParser H) := ⟨.new⟩
+
+@[no_expose]
+instance : Internal.ParseByToken (ClosedAttributeParser H) H m (Handler.Error H)
+    (Handler.Attribute H) where
+  arrive _ _ := pure ()
+  step version parser token := do
+    match ← Internal.attributeStep true version parser.state token with
+    | .more state => return .more ⟨state⟩
+    | .done attributes =>
+      -- with `single`, the step finishes with exactly one attribute
+      match attributes[0]? with
+      | some first => return .done first
+      | none => syntaxError .expectedAttribute
+  reset _ := .new
+
+instance : Parse (ClosedAttributeParser H) H m (Handler.Error H) (Handler.Attribute H) where
+  parse := Internal.parseByToken
+
+@[no_expose]
+instance : Internal.ParseByToken (ClosedMultipleAttributeParser H) H m (Handler.Error H)
+    (Array (Handler.Attribute H)) where
+  arrive _ _ := pure ()
+  step version parser token := do
+    match ← Internal.attributeStep false version parser.state token with
+    | .more state => return .more ⟨state⟩
+    | .done attributes => return .done attributes
+  reset _ := .new
+
+instance : Parse (ClosedMultipleAttributeParser H) H m (Handler.Error H)
+    (Array (Handler.Attribute H)) where
+  parse := Internal.parseByToken
 
 end
 

@@ -26,6 +26,7 @@ one that stops after an action on its cursor (`Param.Stop`).
 namespace BSmtLib.Facts.Proofs.Reader.Param.General
 
 open BSmtLibSpec
+open BSmtLib.Token.BatchCursor.Internal (remaining)
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Lexer (Handed)
 open BSmtLib.Parser (Parse)
@@ -114,7 +115,7 @@ consumer was not handed whitespace or a comment, the adapter where the recording
 parser. -/
 theorem loop_agreeG {version : Lexicon.Version} {b : Token.BatchTag} :
     ∀ (n : Nat) (cursor : Token.BatchCursor b) (taken : List Handed) (items : List LibItem)
-      (parser : ScriptParser (List Event)) (log : List Event), cursor.remaining < n →
+      (parser : ScriptParser (List Event)) (log : List Event), remaining cursor < n →
       items.map (rcv ∘ Subtype.val) = taken.map (rcv ∘ itemOf) →
       recRun version items = (.ok (.inl (cursor.version, parser)), log) →
       (items ≠ [] ∨ cursor.HasNext) →
@@ -128,7 +129,8 @@ theorem loop_agreeG {version : Lexicon.Version} {b : Token.BatchTag} :
             { handler := ((paLoop parser cursor).run (calls log)).2,
               parser := ((paLoop parser cursor).run (calls log)).1.2.1,
               versionSet :=
-                ParseAdapter.versionSetAfter ((paLoop parser cursor).run (calls log)).1.1 })
+                ParseAdapter.Internal.versionSetAfter
+                    ((paLoop parser cursor).run (calls log)).1.1 })
   | 0, _, _, _, _, _, hn, _, _, _, _ => absurd hn (Nat.not_lt_zero _)
   | n + 1, cursor, taken, items, parser, log, hn, hst, hrun, hne, hgood => by
     by_cases h : cursor.HasNext
@@ -182,7 +184,7 @@ theorem loop_agreeG {version : Lexicon.Version} {b : Token.BatchTag} :
               dsimp only
               split
               · exact ⟨[], by simp⟩
-              · exact ansRest_extends version (cursor.next h).2.val.remaining.succ
+              · exact ansRest_extends version (remaining (cursor.next h).2.val).succ
                   (cursor.next h).2.val (taken ++ [handed]) (Nat.lt_succ_self _)
           obtain ⟨more', hm⟩ := hext
           rw [hm] at hgood₀
@@ -295,7 +297,7 @@ theorem loop_agreeG {version : Lexicon.Version} {b : Token.BatchTag} :
             refine ⟨trivial, rfl, fun _ => ⟨items ++ [item], hst', ?_⟩⟩
             unfold AdapterAtG
             rw [recRun_snoc version items item hrun, hR]
-            refine ⟨?_, rfl, rfl, by simp [ParseAdapter.versionSetAfter]⟩
+            refine ⟨?_, rfl, rfl, by simp [ParseAdapter.Internal.versionSetAfter]⟩
             rw [hv', applyRequests_version, ← hsw']
             rfl
           · rename_i hreq

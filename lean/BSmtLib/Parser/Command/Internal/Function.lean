@@ -11,11 +11,17 @@ The parsers of the parts of function definitions: a signature, a function declar
 recursive bodies of `define-funs-rec`.
 -/
 
-namespace BSmtLib.Parser.Command.Function
+namespace BSmtLib.Parser.Command.Internal.Function
 
 open BSmtLib.Nodes BSmtLib.Traits BSmtLib.Parser.Category.Combinator BSmtLib.Parser.Category.Sort
+open BSmtLib.Parser.Category.Combinator.Internal
+open BSmtLib.Parser.Category.Sort.Internal
 open BSmtLib.Parser.Category.SortedVar BSmtLib.Parser.Category.Term BSmtLib.Parser.Category.Token
+open BSmtLib.Parser.Category.SortedVar.Internal
+open BSmtLib.Parser.Category.Term.Internal
+open BSmtLib.Parser.Category.Token.Internal
 open BSmtLib.Token (Version)
+open BSmtLib.Parser.Internal (PM call syntaxError)
 
 /-- The state of the parser of a function signature `⟨symbol⟩ (⟨sorted_var⟩∗) ⟨sort⟩`. -/
 inductive SignatureState (HandledSort : Type) where
@@ -108,4 +114,4 @@ def bodiesArrive (signatures : Array (Signature (Handler.«Sort» H)))
 
 end
 
-end BSmtLib.Parser.Command.Function
+end BSmtLib.Parser.Command.Internal.Function

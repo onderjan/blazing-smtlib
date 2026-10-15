@@ -23,8 +23,7 @@ on top of the stack.
 namespace BSmtLib.Facts.Proofs.Parser.SExpr
 
 open BSmtLibSpec.Grammar
-open BSmtLib.Parser (PM)
-open BSmtLib.Parser.Category.SExpr (SExprState sExprStep sExprComplete)
+open BSmtLib.Parser.Category.SExpr.Internal (SExprState sExprStep sExprComplete)
 open BSmtLibSpec.Parser
 open BSmtLibSpec.Parser.Traversal
 open BSmtLibSpec.Facts.Proofs.Parser.Equations (sExpr_constant sExpr_symbol sExpr_reserved
@@ -66,9 +65,9 @@ theorem sExprStep_atom (levels : SExprState (Traits.Handler.SExpr H))
     (token : Parser.Internal.Input)
     (node : Nodes.SExprNode (Traits.Handler.SExpr H))
     (hstep : sExprStep version levels token =
-      Parser.call (Traits.Handler.handleSExpr node) >>= fun r => pure (sExprComplete levels r)) :
+      Parser.Internal.call (Traits.Handler.handleSExpr node) >>= fun r => pure (sExprComplete levels r)) :
     Runs points (sExprStep version) levels [token]
-      (do tick points token; Parser.call (Traits.Handler.handleSExpr node))
+      (do tick points token; Parser.Internal.call (Traits.Handler.handleSExpr node))
       fun r => pure (sExprComplete levels r) :=
   Runs.token hstep
 
@@ -116,7 +115,7 @@ theorem sExpr_runs (hA : TermAgrees h) : (item : Tree.SExpr) → item.Valid (Bri
       Runs.token (by simp [sExprStep])
     have hclose : ∀ items : Array (Traits.Handler.SExpr H),
         Runs points (sExprStep version) (items :: levels) [.parenClose]
-          (do tick points .parenClose; Parser.call (Traits.Handler.handleSExpr (.list items)))
+          (do tick points .parenClose; Parser.Internal.call (Traits.Handler.handleSExpr (.list items)))
           fun r => pure (sExprComplete levels r) :=
       fun items => Runs.token (by simp [sExprStep])
     refine (Runs.append hopen fun _ =>

@@ -29,7 +29,7 @@ namespace BSmtLib.Facts.Proofs.Parser.Rejection.Basic
 open BSmtLibSpec.Grammar
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Parser.Traversal
-open BSmtLib.Parser (PM ParseErrorCause SyntaxErrorKind)
+open BSmtLib.Parser (ParseErrorCause SyntaxErrorKind)
 
 /-! ## Sets of item lists -/
 
@@ -216,7 +216,7 @@ theorem Sound.throw {e : ParseErrorCause Unit} (h : Q e) : Sound P Q (throw e : 
     fun _ _ _ hrun _ => (by cases hrun; rfl)⟩
 
 theorem Sound.syntaxError {kind : SyntaxErrorKind} (h : Q (.syntax kind)) :
-    Sound P Q (Parser.syntaxError kind : Quiet.RPM α) :=
+    Sound P Q (Parser.Internal.syntaxError kind : Quiet.RPM α) :=
   Sound.throw h
 
 theorem SilentOk.pure {a : α} : SilentOk (Pure.pure a : Quiet.RPM α) := fun _ _ _ hrun => by
@@ -226,7 +226,7 @@ theorem SilentOk.throw {e : ParseErrorCause Unit} : SilentOk (throw e : Quiet.RP
   fun _ _ _ hrun => by cases hrun
 
 theorem SilentOk.syntaxError {kind : SyntaxErrorKind} :
-    SilentOk (Parser.syntaxError kind : Quiet.RPM α) :=
+    SilentOk (Parser.Internal.syntaxError kind : Quiet.RPM α) :=
   SilentOk.throw
 
 /-- The results and failures of an action and then another, where the second rejects nothing:
@@ -366,7 +366,7 @@ theorem Sound.lift {x : StateM (List Event) α} : Sound (fun _ => True) Q
 
 /-- A call of the recording handler never fails. -/
 theorem Sound.call {returns : Returns} (request : Call Recorded returns) :
-    Sound (fun _ => True) Q (Parser.call (recordingCall request) : Quiet.RPM (Recorded.of returns))
+    Sound (fun _ => True) Q (Parser.Internal.call (recordingCall request) : Quiet.RPM (Recorded.of returns))
         :=
   ⟨fun _ _ _ _ => trivial, fun events e events' hrun => (by cases hrun),
     fun events e events' hrun => (by cases hrun)⟩
@@ -542,16 +542,16 @@ theorem push_isEmpty {α : Type} (array : Array α) (a : α) : (array.push a).is
 theorem Sound.ofCall {α : Type} {Q : ParseErrorCause Unit → Prop}
     {x : ExceptT Unit (StateT (List Event) Id) α}
     (hx : ∀ events, ∃ a events', x.run.run events = (.ok a, events')) :
-    Sound (fun _ => True) Q (Parser.call x : Quiet.RPM α) := by
+    Sound (fun _ => True) Q (Parser.Internal.call x : Quiet.RPM α) := by
   constructor
   · intros; trivial
   · intro events e events' hrun
     obtain ⟨a, events'', hx'⟩ := hx events
-    simp only [Parser.call, ExceptT.run_adapt, StateT.run_map, hx'] at hrun
+    simp only [Parser.Internal.call, ExceptT.run_adapt, StateT.run_map, hx'] at hrun
     cases hrun
   · intro events e events' hrun
     obtain ⟨a, events'', hx'⟩ := hx events
-    simp only [Parser.call, ExceptT.run_adapt, StateT.run_map, hx'] at hrun
+    simp only [Parser.Internal.call, ExceptT.run_adapt, StateT.run_map, hx'] at hrun
     cases hrun
 
 /-- A failure that is no rejection of a version declaration. -/

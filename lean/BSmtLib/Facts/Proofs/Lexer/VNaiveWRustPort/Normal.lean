@@ -9,7 +9,7 @@ public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Normal.Hash
 public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Normal.String
 public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Normal.Keyword
 public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Normal.Digits
-import all BSmtLib.Lexer.Helpers
+import all BSmtLib.Lexer.Internal.Helpers
 
 @[expose] public section
 
@@ -49,7 +49,7 @@ theorem normalSpec_lt (v : Token.Version) (input : ByteSlice) (offset base : Nat
   by_cases h40 : c = 40
   · exact Single.normalSpec_parenOpen v input offset base hframe n index ih hn hget h40
   rcases fastFlags_cases c with hfoff | ⟨hf, hwsr⟩ | ⟨hf, hpipe⟩ | ⟨hf, hsym, hdig⟩
-  · cases hst : Lexer.Helpers.startOf c
+  · cases hst : Lexer.Internal.Helpers.startOf c
     case lineFeed =>
       exact Single.normalSpec_lineFeed v input offset base hframe n index ih hn hget h40 h41 hfoff
           hst

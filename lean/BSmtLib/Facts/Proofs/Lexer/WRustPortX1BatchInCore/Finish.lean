@@ -17,7 +17,6 @@ thrown from states whose first batch has none (the finishers `…_simZ`).
 namespace BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Finish
 
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Relation
-open BSmtLib.Lexer (BATCH_CAPACITY Interrupted)
 open BSmtLib.Lexer.Internal.WRustPort (Ops)
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Steps
 open BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Ops
@@ -81,7 +80,8 @@ theorem finishDecimal_sim (ho : OpsSim o₁ o₂ LRel) (l ls : Nat)
   finish_checked
 
 omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
-theorem finishDigitRun_sim (ho : OpsSim o₁ o₂ LRel) (l ls : Nat) (run : Lexer.Helpers.DigitRun)
+theorem finishDigitRun_sim (ho : OpsSim o₁ o₂ LRel) (l ls : Nat)
+    (run : Lexer.Internal.Helpers.DigitRun)
     (tokenEnd : Lexer.Internal.WRustPort.Slice.TokenEnd) (next : Option UInt8)
     (start : Span.Location) (base : Nat)
     (h : Lexer.Internal.WRustPort.Started floor low start) :
@@ -127,7 +127,8 @@ theorem finishDecimal_simZ (ho : OpsSim o₁ o₂ LRel) (l ls : Nat)
   finish_eof
 
 omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
-theorem finishDigitRun_simZ (ho : OpsSim o₁ o₂ LRel) (l ls : Nat) (run : Lexer.Helpers.DigitRun)
+theorem finishDigitRun_simZ (ho : OpsSim o₁ o₂ LRel) (l ls : Nat)
+    (run : Lexer.Internal.Helpers.DigitRun)
     (tokenEnd : Lexer.Internal.WRustPort.Slice.TokenEnd) (start : Span.Location) (base : Nat)
     (h : Lexer.Internal.WRustPort.Started floor low start) :
     Core.ESim (H := H) (m := m) (R := R) (E := E) (Core.ErZ strict) (Core.SRLbZ strict l ls)

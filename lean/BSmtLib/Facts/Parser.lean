@@ -97,8 +97,8 @@ theorem term_follows_traversal {H : Type} {m : Type → Type} [Monad m] [LawfulM
     (hvalid : term.Valid (Adapters.Bridge.Bridge.version version))
     {tokens : List Parser.Internal.Input} (hs : Adapters.Bridge.Stands tokens term.tokens)
     (rest : List Parser.Internal.Input) :
-    Adapters.Run.drive points (Parser.Category.Term.termStep version)
-        Parser.Category.Term.TermState.init (tokens ++ rest) =
+    Adapters.Run.drive points (Parser.Category.Term.Internal.termStep version)
+        Parser.Category.Term.Internal.TermState.init (tokens ++ rest) =
       (do
         let handled ← Adapters.Run.adaptRun (Traversal.term points h term)
         pure (some (handled, rest))) := by
@@ -124,8 +124,8 @@ theorem command_follows_traversal {H : Type} {m : Type → Type} [Monad m] [Lawf
     (hmode : command.modeAfter (Adapters.Bridge.Bridge.version version) ≠ none)
     {tokens : List Parser.Internal.Input}
     (hs : Adapters.Bridge.Stands tokens command.tokens) (rest : List Parser.Internal.Input) :
-    Adapters.Run.drive points (Parser.Command.commandStep version) .awaiting
-        (tokens ++ rest) Parser.Command.commandArrive =
+    Adapters.Run.drive points (Parser.Command.Internal.commandStep version) .awaiting
+        (tokens ++ rest) Parser.Command.Internal.commandArrive =
       (do
         Adapters.Run.adaptRun (Traversal.command points h command)
         pure (some (Adapters.Bridge.outcomeOf command, rest))) :=

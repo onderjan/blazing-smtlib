@@ -48,7 +48,8 @@ instance {m : Type → Type} [Monad m] [Parse P H m E R] :
 
 /-- Whether the parser is to be told the version before the next hand-over: after its answer,
 unless it broke, it is not, as the next hand-over continues the same input. -/
-def ParseAdapter.versionSetAfter {R E : Type} : Except (ParseErrorCause E) (ControlFlow R) → Bool
+def ParseAdapter.Internal.versionSetAfter {R E : Type} : Except (ParseErrorCause E) (ControlFlow
+    R) → Bool
   | .ok (.break _) => false
   | _ => true
 
@@ -67,7 +68,8 @@ instance {m : Type → Type} [Monad m] [Handler H m] [Parse P H m E R] {Z : Type
     -- the parser parses the tokens, with the handler and the resources
     let ((answer, parser, parseState, ⟨next, consumed⟩), handler) ←
       (Parse.parse adapter.parser adapter.parseState producer).run handler
-    set ({ handler, parser, versionSet := ParseAdapter.versionSetAfter answer, parseState } :
+    set ({ handler, parser, versionSet := ParseAdapter.Internal.versionSetAfter answer, parseState }
+        :
       ParseAdapter H P)
     return (answer, ⟨next, consumed h⟩)
 

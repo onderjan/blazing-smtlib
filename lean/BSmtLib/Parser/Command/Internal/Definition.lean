@@ -10,7 +10,7 @@ public section
 The definitions whose body is a term, by the call that ends them.
 -/
 
-namespace BSmtLib.Parser.Command.Definition
+namespace BSmtLib.Parser.Command.Internal.Definition
 
 open BSmtLib.Nodes
 
@@ -21,4 +21,4 @@ inductive DefinitionEnd (HandledSort : Type) where
   | defineFun
   | defineFunRec
 
-end BSmtLib.Parser.Command.Definition
+end BSmtLib.Parser.Command.Internal.Definition

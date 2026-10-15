@@ -27,6 +27,7 @@ makes their calls give the same results (`ZRel`).
 namespace BSmtLib.Facts.Proofs.PublicApi.Resets
 
 open BSmtLib.Lexer BSmtLib.Lexer.Error
+open BSmtLib.Lexer.Internal (BATCH_CAPACITY Stop Interrupted Failure LexerCore InnerM StepM LexM)
 open BSmtLib.Facts.PublicApi.Adapters
 open BSmtLib.Facts.Proofs.Lexer BSmtLib.Facts.Proofs.Lexer.Simulation.Batch
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Couple
@@ -401,7 +402,7 @@ def resetOf (c : LexerCore) : LexerCore :=
     lineStart := 0
     batch := c.batch.clear 0
     tokenStarted := .inl rfl
-    batchEnded := Nat.le_of_eq (Token.TokenBatch.lastEnd_clear _ _) }
+    batchEnded := Nat.le_of_eq (Token.Internal.TokenBatch.lastEnd_clear _ _) }
 
 abbrev irun {α : Type} (x : InnerM Collector CollectM α) (c : LexerCore) (h : Collector)
     (entries : List Entry) :=

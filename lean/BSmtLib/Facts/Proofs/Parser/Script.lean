@@ -29,14 +29,16 @@ namespace BSmtLib.Facts.Proofs.Parser.Script
 
 open BSmtLibSpec.Grammar
 open BSmtLibSpec.Grammar.File
-open BSmtLib.Parser (PM Parse)
-open BSmtLib.Parser.Command (CommandOutcome CommandState commandStep)
+open BSmtLib.Parser (Parse)
+open BSmtLib.Parser.Internal (PM)
+open BSmtLib.Parser.Command (CommandOutcome)
+open BSmtLib.Parser.Command.Internal (CommandState commandStep)
 open BSmtLib.Token (VersionPosture)
 open BSmtLib.Parser.Script (ScriptParser)
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Parser.Adapters.Run
 open BSmtLib.Facts.Proofs.Parser.Command BSmtLib.Facts.Proofs.Parser.Drive
 open BSmtLib.Facts.Proofs.Parser.Lemmas BSmtLib.Facts.Proofs.Parser.Tokens
-open BSmtLib.Parser.Script.VersionPosture
+open BSmtLib.Parser.Script.Internal.VersionPosture
 
 open BSmtLibSpec.Parser
 open BSmtLibSpec.Parser.Properties
@@ -83,7 +85,7 @@ theorem check_policyOf (posture : VersionPosture) (declarations : Nat)
       | .error (.tooManyDeclarations limit) => some (.tooManyVersionDeclarations limit) := by
   have hmem := mem_policyOf posture version
   rw [Array.contains_iff_mem] at hmem
-  unfold Parser.Script.VersionPosture.check VersionPolicy.check
+  unfold Parser.Script.Internal.VersionPosture.check VersionPolicy.check
   simp only [policyOf] at hmem ⊢
   cases hmax : posture.maxDeclarations with
   | none =>
@@ -102,7 +104,7 @@ variable (points : Points (StateT H m)) (producer : Producer (StateT H m))
 variable (posture : VersionPosture)
 
 /-- The script parser under the posture, with the state of its command parser. -/
-abbrev scriptAt (command : Parser.Command.CommandStateOf H) (declarations : Nat) :
+abbrev scriptAt (command : Parser.Command.Internal.CommandStateOf H) (declarations : Nat) :
     ScriptParser H :=
   { posture, command, declarations }
 
@@ -118,7 +120,7 @@ def scriptAfter (version : Token.Version) (declarations : Nat) (rest : List Pars
       (scriptAt (H := H) posture .awaiting declarations) rest
   | .setVersion declared =>
     match (check posture) declarations declared with
-    | some kind => Parser.syntaxError kind
+    | some kind => Parser.Internal.syntaxError kind
     | none => do
       match ← ExceptT.lift (producer.setVersion (Bridge.version declared)).run with
       | .error _ => throw (.syntax .unsupportedVersion)
@@ -134,27 +136,27 @@ def scriptAfter (version : Token.Version) (declarations : Nat) (rest : List Pars
 variable {points producer posture}
 
 omit [LawfulMonad m] in
-theorem arrive_scriptAt (command : Parser.Command.CommandStateOf H) (declarations : Nat)
+theorem arrive_scriptAt (command : Parser.Command.Internal.CommandStateOf H) (declarations : Nat)
     (token : Parser.Internal.Input) :
     Parser.Internal.ParseByToken.arrive (scriptAt posture command declarations) token =
-      Parser.Command.commandArrive command token := (rfl)
+      Parser.Command.Internal.commandArrive command token := (rfl)
 
 omit [LawfulMonad m] in
-theorem step_commands (version : Token.Version) (command : Parser.Command.CommandStateOf H)
+theorem step_commands (version : Token.Version) (command : Parser.Command.Internal.CommandStateOf H)
     (declarations : Nat) (token : Parser.Internal.Input) :
     Parser.Internal.ParseByToken.step version (scriptAt posture command declarations) token =
-      ScriptParser.step version (scriptAt posture command declarations)
+      ScriptParser.Internal.step version (scriptAt posture command declarations)
         token := rfl
 
 /--
 The script parser runs as the command parser, with the command
 parser's calls due at a token's arrival, and goes on after the command as its outcome says.
 -/
-theorem script_embed (version : Token.Version) (command : Parser.Command.CommandStateOf H)
+theorem script_embed (version : Token.Version) (command : Parser.Command.Internal.CommandStateOf H)
     (declarations : Nat) (tokens : List Parser.Internal.Input) :
     driveParse points producer version (scriptAt posture command declarations)
         tokens =
-      drive points (commandStep version) command tokens Parser.Command.commandArrive >>= fun
+      drive points (commandStep version) command tokens Parser.Command.Internal.commandArrive >>= fun
         | none => pure none
         | some (outcome, rest) => scriptAfter points producer posture version declarations rest
             outcome := by
@@ -166,7 +168,7 @@ theorem script_embed (version : Token.Version) (command : Parser.Command.Command
     congr 1; funext _
     congr 1; funext _
     congr 1; funext _
-    simp only [ScriptParser.step, bind_assoc]
+    simp only [ScriptParser.Internal.step, bind_assoc]
     congr 1; funext step
     cases step with
     | more state =>
@@ -177,7 +179,7 @@ theorem script_embed (version : Token.Version) (command : Parser.Command.Command
       | command => simp [scriptAfter]
       | setVersion declared =>
         cases hck : (check posture) declarations declared <;>
-          simp [scriptAfter, hck, Parser.syntaxError] <;> rfl
+          simp [scriptAfter, hck, Parser.Internal.syntaxError] <;> rfl
       | exit => simp [scriptAfter]
       | endOfInput => simp [scriptAfter]
 
@@ -302,7 +304,7 @@ script parser makes them, are the spec's switch to the version under the policy 
 theorem switch_eq (hA : Agrees h) (producer : Producer (StateT H m)) (posture : VersionPosture)
     (declarations : Nat) (declared : Token.Version) {β : Type} (k : PM H β) :
     (match (check posture) declarations declared with
-      | some kind => Parser.syntaxError kind
+      | some kind => Parser.Internal.syntaxError kind
       | none => do
         match ← ExceptT.lift (producer.setVersion (Bridge.version declared)).run with
         | .error _ => throw (.syntax .unsupportedVersion)
@@ -316,7 +318,7 @@ theorem switch_eq (hA : Agrees h) (producer : Producer (StateT H m)) (posture : 
   rw [check_policyOf, BSmtLibSpec.Facts.Proofs.Parser.Equations.switchVersion_eq]
   cases (policyOf posture).check declarations (Bridge.version declared) with
   | error error =>
-    cases error <;> simp [adaptRun, Parser.syntaxError, causeOf]
+    cases error <;> simp [adaptRun, Parser.Internal.syntaxError, causeOf]
   | ok u =>
     cases u
     simp only [adaptRun_bind, bind_assoc, adaptRun_lift, hA.setVersion]
@@ -341,7 +343,7 @@ theorem step_endOfInput (posture : VersionPosture) (version : Token.Version)
     Parser.Internal.ParseByToken.step version (scriptAt
         (H := H) posture .awaiting declarations) .endOfInput =
       pure (.done ()) := by
-  simp [Parser.Internal.ParseByToken.step, ScriptParser.step, commandStep]
+  simp [Parser.Internal.ParseByToken.step, ScriptParser.Internal.step, commandStep]
 
 /-- Tokens whose spec items are one item stand for it. -/
 theorem map_received_split {inputs : List Parser.Internal.Input} {items : List Received}
@@ -382,7 +384,7 @@ theorem commands_runs (hA : Agrees h) (producer : Producer (StateT H m))
   | done =>
     intro version _ declarations inputs hs rest
     rw [map_received_endOfInput hs, List.singleton_append, script_embed]
-    simp [drive_cons', arrivalTick, Parser.Command.commandArrive, commandStep, scriptAfter,
+    simp [drive_cons', arrivalTick, Parser.Command.Internal.commandArrive, commandStep, scriptAfter,
       Traversal.commands, receive, arriveAt, processAt, Bridge.received]
   | stop hvalid hmode =>
     rename_i command
@@ -393,8 +395,8 @@ theorem commands_runs (hA : Agrees h) (producer : Producer (StateT H m))
     rw [map_received_endOfInput hsecond, List.append_assoc, List.singleton_append, script_embed,
       command_runs hA _ hvalid (by simp [hmode]) hfirst]
     simp [outcomeOf, scriptAfter, driveParse, step_endOfInput, Parser.Internal.ParseByToken.arrive,
-      Parser.Command.commandArrive,
-      Parser.Script.ScriptParser.arrive,
+      Parser.Command.Internal.commandArrive,
+      Parser.Script.ScriptParser.Internal.arrive,
       Traversal.commands, receive, arriveAt, processAt, Bridge.received]
   | @command next _ _ command hvalid hmode _ ih =>
     intro version hversion declarations inputs hs rest

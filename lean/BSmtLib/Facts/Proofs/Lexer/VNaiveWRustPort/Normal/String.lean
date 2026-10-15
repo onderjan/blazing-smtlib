@@ -15,6 +15,7 @@ The step of the Rust port's normal state at the quote that starts a string liter
 namespace BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Normal.String
 
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Bytes
+open BSmtLib.Lexer.Internal (CharClass)
 open BSmtLib.Lexer.Internal.WRustPort (lexNormalFrom FastState Frame Held Past)
 open BSmtLib.Lexer.Internal.WRustPort.Slice (get? get)
 open BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Agree
@@ -45,9 +46,9 @@ local macro "string_stay" : tactic => `(tactic| (
   apply WP.wp_bind; apply WP.wp_modifyBound
   apply WP.wp_pure
   refine ⟨.token ⟨.string, location, bytesOf input (index + 1)
-      (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1) Lexer.CharClass.RUN_STRING_PLAIN)⟩,
+      (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1) CharClass.RUN_STRING_PLAIN)⟩,
     afterColumns location (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1)
-      Lexer.CharClass.RUN_STRING_PLAIN - index), held,
+      CharClass.RUN_STRING_PLAIN - index), held,
           ⟨hfix.1, hfix.2, hfix.3, hfix.4, hfix.5, hfix.6⟩,
     Nat.le_refl _,
     ?_, ?_, hheld, hbytes, ?_⟩
@@ -66,8 +67,8 @@ theorem normalSpec_string (v : Token.Version) (input : ByteSlice) (offset base :
     (ih : ∀ index, input.size - index < n → NormalSpec C v hd iv input offset base hframe index)
     (hn : input.size - index < n + 1)
     {c₀ : UInt8} (hget₀ : get? input index = some c₀) (hc40₀ : c₀ ≠ 40) (hc41₀ : c₀ ≠ 41)
-    (hfoff₀ : (Lexer.Helpers.fastFlags c₀ &&& Lexer.Helpers.FAST_ON != 0) = false)
-    (hst₀ : Lexer.Helpers.startOf c₀ = .quote) :
+    (hfoff₀ : (Lexer.Internal.Helpers.fastFlags c₀ &&& Lexer.Internal.Helpers.FAST_ON != 0) = false)
+    (hst₀ : Lexer.Internal.Helpers.startOf c₀ = .quote) :
     NormalSpec C v hd iv input offset base hframe index := by
   intro batch locals hindex hbatch origin horigin s coll held location hfix hoff hbase
     hline hlineStart hnormal hloc hheld hbytes
@@ -93,7 +94,7 @@ theorem normalSpec_string (v : Token.Version) (input : ByteSlice) (offset base :
   · intro hfast; rw [hfoff₀] at hfast; cases hfast
   -- the slow path
   intro hslow
-  have hfoff : (Lexer.Helpers.fastFlags c &&& Lexer.Helpers.FAST_ON != 0) = false
+  have hfoff : (Lexer.Internal.Helpers.fastFlags c &&& Lexer.Internal.Helpers.FAST_ON != 0) = false
       := by simpa using hslow
   obtain ⟨hl1, hl2, hl3⟩ := id hloc
   refine wp_store hline hlineStart ?_
@@ -143,7 +144,7 @@ theorem normalSpec_string (v : Token.Version) (input : ByteSlice) (offset base :
         have : (s.val.version == .v2_0) = false := by simpa using hv2
         rw [← hfix.version]; exact this
       have hS : Lexer.Internal.WRustPort.Slice.runEnd input
-          (index + 1) Lexer.CharClass.RUN_STRING_PLAIN =
+          (index + 1) CharClass.RUN_STRING_PLAIN =
           runEnd input isStringRun (index + 1) := runEnd_eq endsRun_string _ _
       have hle := le_runEnd input isStringRun (index + 1)
       have hle' := runEnd_le input isStringRun (index + 1) hi
@@ -177,11 +178,11 @@ theorem normalSpec_string (v : Token.Version) (input : ByteSlice) (offset base :
               feedFrom v C.concrete input
                 (.token ⟨.stringQuote, location, bytesOf input (index + 1)
                   (Lexer.Internal.WRustPort.Slice.runEnd input
-                      (index + 1) Lexer.CharClass.RUN_STRING_PLAIN)⟩)
+                      (index + 1) CharClass.RUN_STRING_PLAIN)⟩)
                 (afterColumns location (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1)
-                  Lexer.CharClass.RUN_STRING_PLAIN + 1 - index))
+                  CharClass.RUN_STRING_PLAIN + 1 - index))
                 (Lexer.Internal.WRustPort.Slice.runEnd input
-                    (index + 1) Lexer.CharClass.RUN_STRING_PLAIN + 1) := by
+                    (index + 1) CharClass.RUN_STRING_PLAIN + 1) := by
             rw [hA, feedFrom_step hA1 (byteStep_token_pending v C.concrete
                 (by rw [hAc, hq34]; rfl)),
               prep_nil, afterByte_eq_afterColumns' _ _ (by rw [hAc, hq34]; decide),
@@ -191,10 +192,10 @@ theorem normalSpec_string (v : Token.Version) (input : ByteSlice) (offset base :
           have hC := feedFrom_end v C.concrete input hA2 (q := ⟨.stringQuote, location,
               bytesOf input (index + 1)
                 (Lexer.Internal.WRustPort.Slice.runEnd input
-                    (index + 1) Lexer.CharClass.RUN_STRING_PLAIN)⟩)
+                    (index + 1) CharClass.RUN_STRING_PLAIN)⟩)
             (location := afterColumns location (Lexer.Internal.WRustPort.Slice.runEnd input
                 (index + 1)
-              Lexer.CharClass.RUN_STRING_PLAIN + 1 - index))
+              CharClass.RUN_STRING_PLAIN + 1 - index))
             (advance_end_stringQuote rfl (by rw [hA2c]; exact hn34))
           rw [← hB, hA2c] at hC
           apply WP.wp_ite
@@ -216,10 +217,10 @@ theorem normalSpec_string (v : Token.Version) (input : ByteSlice) (offset base :
             simp only [↓reduceIte] at hC
             have hlex := borrowedLexeme_eq hloc hindex
               (j := Lexer.Internal.WRustPort.Slice.runEnd input
-                  (index + 1) Lexer.CharClass.RUN_STRING_PLAIN + 1) (by omega)
+                  (index + 1) CharClass.RUN_STRING_PLAIN + 1) (by omega)
               .string (input.slice (index + 1)
                 (Lexer.Internal.WRustPort.Slice.runEnd input
-                    (index + 1) Lexer.CharClass.RUN_STRING_PLAIN))
+                    (index + 1) CharClass.RUN_STRING_PLAIN))
             apply WP.wp_bind
             refine pushBorrowed_wp input batch offset base _ _ _ _ _ _ _ _ _ held hheld
                 hbytes.symm ?_ ?_
@@ -233,9 +234,9 @@ theorem normalSpec_string (v : Token.Version) (input : ByteSlice) (offset base :
                   s.val.version coll (held ++
                   [⟨.string, bytesOf input (index + 1)
                     (Lexer.Internal.WRustPort.Slice.runEnd input
-                        (index + 1) Lexer.CharClass.RUN_STRING_PLAIN), location,
+                        (index + 1) CharClass.RUN_STRING_PLAIN), location,
                     afterColumns location (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1)
-                      Lexer.CharClass.RUN_STRING_PLAIN + 1 - index)⟩]) :=
+                      CharClass.RUN_STRING_PLAIN + 1 - index)⟩]) :=
                 hp.trans (congrArg (fun l => pending C hd s.val.version coll (held ++ [l])) hlex)
               obtain ⟨k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11⟩ := key_fields hk
               rw [WP.rust_loadLocals]
@@ -244,7 +245,7 @@ theorem normalSpec_string (v : Token.Version) (input : ByteSlice) (offset base :
               refine wp_recurse (f := fun (r : Past input origin) => r.1)
                 (ih _ (by omega) r.val _ _ r.property origin _ s' coll' held'
                   (afterColumns location (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1)
-                    Lexer.CharClass.RUN_STRING_PLAIN + 1 - index))
+                    CharClass.RUN_STRING_PLAIN + 1 - index))
                   (fixed_of_key' hk ⟨hfix.1, hfix.2, hfix.3, hfix.4, hfix.5, hfix.6⟩)
                       (hoff.trans k8.symm)
                   (hbase.trans k9.symm) rfl rfl k2

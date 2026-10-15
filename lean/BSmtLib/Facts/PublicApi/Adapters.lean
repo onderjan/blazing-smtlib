@@ -78,7 +78,8 @@ def SameSpellings (written printed : List ByteList) : Prop :=
 
 /-- The posture that allows every version and any number of version declarations. -/
 def allVersions : Token.VersionPosture :=
-  { allowed := #[.v2_0, .v2_5, .v2_6, .v2_7], maxDeclarations := none }
+  (Token.VersionPostureBuilder.new.clearAllowed.addAllowed .v2_0 |>.addAllowed .v2_5
+    |>.addAllowed .v2_6 |>.addAllowed .v2_7 |>.setMaxDeclarations none).build
 
 section
 

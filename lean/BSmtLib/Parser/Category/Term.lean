@@ -26,8 +26,17 @@ loop). Rust keeps a pending term beside its state; here the modes that wait for 
 namespace BSmtLib.Parser.Category.Term
 
 open BSmtLib.Nodes BSmtLib.Parser.Category.Attribute BSmtLib.Parser.Category.Combinator
+open BSmtLib.Parser.Category.Attribute.Internal
+open BSmtLib.Parser.Category.Combinator.Internal
 open BSmtLib.Parser.Category.Pattern BSmtLib.Parser.Category.QualifiedIdent
+open BSmtLib.Parser.Category.Pattern.Internal
+open BSmtLib.Parser.Category.QualifiedIdent.Internal
 open BSmtLib.Parser.Category.SortedVar BSmtLib.Parser.Category.Token BSmtLib.Traits
+open BSmtLib.Parser.Category.SortedVar.Internal
+open BSmtLib.Parser.Category.Token.Internal
+open BSmtLib.Parser.Internal (PM call syntaxError)
+
+namespace Internal
 
 /-- A binder of sorted variables. -/
 inductive SortedBinder where
@@ -285,9 +294,12 @@ def termStep (version : Token.Version) (self : TermStateOf H) (token : Internal.
 
 end
 
+end Internal
+
 /-- The parser of one term (`SmtTermParser`). -/
 structure TermParser (H : Type) {m : Type → Type} [Handler H m] where
-  state : TermStateOf H
+  private mk ::
+  private state : Internal.TermStateOf H
 
 section
 
@@ -296,10 +308,13 @@ variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
 /-- The term parser before a term. -/
 def TermParser.new : TermParser H := ⟨.init⟩
 
+instance : Inhabited (TermParser H) := ⟨.new⟩
+
+@[no_expose]
 instance : Internal.ParseByToken (TermParser H) H m (Handler.Error H) (Handler.Term H) where
   arrive _ _ := pure ()
   step version parser token := do
-    match ← termStep version parser.state token with
+    match ← Internal.termStep version parser.state token with
     | .more state => return .more ⟨state⟩
     | .done result => return .done result
   reset _ := .new

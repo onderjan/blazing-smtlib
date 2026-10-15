@@ -2,7 +2,7 @@ module
 
 public import BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Whitespace
 import all BSmtLib.Lexer
-import all BSmtLib.Lexer.Helpers
+import all BSmtLib.Lexer.Internal.Helpers
 import all BSmtLib.Lexer.Internal.WRustPort
 import all BSmtLib.Lexer.Internal.WRustPort.Slice
 
@@ -22,6 +22,7 @@ they go on from.
 namespace BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Steps
 
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Steps
+open BSmtLib.Lexer.Internal (CharClass)
 open BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Batch
 open BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Core
 open BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Finish
@@ -63,13 +64,13 @@ theorem get_eq (p : USize) (hp : slice.start ≤ p.toNat) {i : Nat} (hi : ix sli
     (h1 : p.toNat < (inputOf slice h).stop.toNat) (h2 : i < slice.size) :
     (inputOf slice h).get p h1 = Lexer.Internal.WRustPort.Slice.get slice i h2 := by
   have e := get?_eq (h := h) p hp
-  rw [Lexer.CharClass.Input.get?_eq_some_get _ h1, show idx slice p = i from hi,
+  rw [CharClass.Input.get?_eq_some_get _ h1, show idx slice p = i from hi,
     Lexer.Internal.WRustPort.Slice.get?_eq_some_get h2] at e
   exact Option.some.inj e
 
 theorem borrow_eq (p q : USize) (hp : slice.start ≤ p.toNat) (hq : slice.start ≤ q.toNat)
     (h1 : p.toNat ≤ q.toNat) (h2 : q.toNat ≤ (inputOf slice h).stop.toNat) :
-    Lexer.Helpers.Content.borrow (inputOf slice h) p q h1 h2 =
+    Lexer.Internal.Helpers.Content.borrow (inputOf slice h) p q h1 h2 =
       Lexer.Internal.WRustPort.Slice.borrow slice (ix slice.start p) (ix slice.start q)
           (by simp only [ix]; omega)
         (by
@@ -77,28 +78,28 @@ theorem borrow_eq (p q : USize) (hp : slice.start ≤ p.toNat) (hq : slice.start
           have : slice.size = slice.stop - slice.start := rfl
           simp only [ix]
           omega) := by
-  unfold Lexer.Helpers.Content.borrow Lexer.Internal.WRustPort.Slice.borrow
+  unfold Lexer.Internal.Helpers.Content.borrow Lexer.Internal.WRustPort.Slice.borrow
   simp only [inputOf_bytes, start_add_ix hp, start_add_ix hq]
 
 /-- The position after one with a byte has the index after its index. -/
 theorem ix_add_one {p : USize} (hp : slice.start ≤ p.toNat)
     (hlt : p.toNat < (inputOf slice h).stop.toNat) :
     ix slice.start (p + 1) = ix slice.start p + 1 := by
-  rw [ix, ix, Lexer.CharClass.toNat_add_one_of_lt hlt]
+  rw [ix, ix, CharClass.toNat_add_one_of_lt hlt]
   omega
 
 theorem runEnd_ix {p : USize} {p' : Nat} (ep : ix slice.start p = p')
     (hp : slice.start ≤ p.toNat) (mask : UInt8) :
-    slice.start ≤ (Lexer.CharClass.runEnd (inputOf slice h) p mask).toNat ∧
-      ix slice.start (Lexer.CharClass.runEnd (inputOf slice h) p mask) =
+    slice.start ≤ (CharClass.runEnd (inputOf slice h) p mask).toNat ∧
+      ix slice.start (CharClass.runEnd (inputOf slice h) p mask) =
         Lexer.Internal.WRustPort.Slice.runEnd slice p' mask := by
   subst ep
   exact runEnd_eq p hp mask
 
 theorem runEndAll_ix {p : USize} {p' : Nat} (ep : ix slice.start p = p')
     (hp : slice.start ≤ p.toNat) (mask : UInt8) :
-    slice.start ≤ (Lexer.CharClass.runEndAll (inputOf slice h) p mask).toNat ∧
-      ix slice.start (Lexer.CharClass.runEndAll (inputOf slice h) p mask) =
+    slice.start ≤ (CharClass.runEndAll (inputOf slice h) p mask).toNat ∧
+      ix slice.start (CharClass.runEndAll (inputOf slice h) p mask) =
         Lexer.Internal.WRustPort.Slice.runEndAll slice p' mask := by
   subst ep
   exact runEndAll_eq p hp mask
@@ -155,7 +156,7 @@ omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor ba
 theorem failAt_bind_sim' {α β γ δ : Type} (start : Nat) (ψ : γ → δ) (kind : LexicalErrorKind)
     (position : USize) (position' : Nat) (ep : ix start position = position')
     (hb : start ≤ b.toNat) (hp : b.toNat < position.toNat) (Q : γ → ZS floor low → Prop)
-    (k : α → BSmtLib.Lexer.LexM H m R E floor low γ)
+    (k : α → BSmtLib.Lexer.Internal.LexM H m R E floor low γ)
     (k' : β → Lexer.Internal.WRustPort.LexM H m R E floor low δ) :
     SimP (BaseIs b) Q (boundMap start) ψ
       (BSmtLib.Lexer.Internal.failAt (H := H) (m := m) (R := R) (E := E) kind position >>= k)
@@ -176,14 +177,14 @@ theorem expectDelimiter_sim' (start : Nat) (next : UInt8) (position : USize) (po
 
 /-- The end of a token at a byte, at an index given by an equation. -/
 theorem endMap_mkAtByte (start : Nat) (p : USize) (p' : Nat) (ep : ix start p = p') :
-    endMap start (Lexer.Helpers.TokenEnd.mkAtByte p) =
+    endMap start (Lexer.Internal.Helpers.TokenEnd.mkAtByte p) =
         Lexer.Internal.WRustPort.Slice.TokenEnd.mkAtByte p' := by
   subst ep
   rfl
 
 
 theorem sinkStored_sim' (start : Nat) (ty : Token.TokenCategory)
-    (te : Lexer.Helpers.TokenEnd) (te' : Lexer.Internal.WRustPort.Slice.TokenEnd)
+    (te : Lexer.Internal.Helpers.TokenEnd) (te' : Lexer.Internal.WRustPort.Slice.TokenEnd)
     (ete : endMap start te = te')
     (s : Span.Location) (base : USize) (hb : start ≤ base.toNat)
     (hp : base.toNat ≤ te.position.toNat) (h h') :
@@ -193,7 +194,7 @@ theorem sinkStored_sim' (start : Nat) (ty : Token.TokenCategory)
   subst ete
   exact sinkStored_sim start b ty te s base hb hp h h'
 
-theorem finishDecimal_sim' (start : Nat) (te : Lexer.Helpers.TokenEnd)
+theorem finishDecimal_sim' (start : Nat) (te : Lexer.Internal.Helpers.TokenEnd)
     (te' : Lexer.Internal.WRustPort.Slice.TokenEnd)
     (ete : endMap start te = te') (next next' : Option UInt8) (en : next = next')
     (s : Span.Location)
@@ -204,7 +205,7 @@ theorem finishDecimal_sim' (start : Nat) (te : Lexer.Helpers.TokenEnd)
   subst ete en
   exact finishDecimal_sim start b te next s base ok h h'
 
-theorem finishNumeral_sim' (start : Nat) (te : Lexer.Helpers.TokenEnd)
+theorem finishNumeral_sim' (start : Nat) (te : Lexer.Internal.Helpers.TokenEnd)
     (te' : Lexer.Internal.WRustPort.Slice.TokenEnd)
     (ete : endMap start te = te') (s : Span.Location) (base : USize) (ok : EndOk start b base te)
     (h h') :
@@ -214,8 +215,8 @@ theorem finishNumeral_sim' (start : Nat) (te : Lexer.Helpers.TokenEnd)
   subst ete
   exact finishNumeral_sim start b te s base ok h h'
 
-theorem finishDigitRun_sim' (start : Nat) (run : Lexer.Helpers.DigitRun)
-    (te : Lexer.Helpers.TokenEnd) (te' : Lexer.Internal.WRustPort.Slice.TokenEnd)
+theorem finishDigitRun_sim' (start : Nat) (run : Lexer.Internal.Helpers.DigitRun)
+    (te : Lexer.Internal.Helpers.TokenEnd) (te' : Lexer.Internal.WRustPort.Slice.TokenEnd)
     (ete : endMap start te = te')
     (next next' : Option UInt8) (en : next = next') (s : Span.Location) (base : USize)
     (ok : EndOk start b base te) (h h') :
@@ -226,7 +227,7 @@ theorem finishDigitRun_sim' (start : Nat) (run : Lexer.Helpers.DigitRun)
   subst ete en
   exact finishDigitRun_sim start b run te next s base ok h h'
 
-theorem finishSimpleSymbol_sim' (start : Nat) (te : Lexer.Helpers.TokenEnd)
+theorem finishSimpleSymbol_sim' (start : Nat) (te : Lexer.Internal.Helpers.TokenEnd)
     (te' : Lexer.Internal.WRustPort.Slice.TokenEnd) (ete : endMap start te = te')
     (s : Span.Location) (base : USize)
     (ok : EndOk start b base te) (h h') :
@@ -236,7 +237,7 @@ theorem finishSimpleSymbol_sim' (start : Nat) (te : Lexer.Helpers.TokenEnd)
   subst ete
   exact finishSimpleSymbol_sim start b te s base ok h h'
 
-theorem finishKeyword_sim' (start : Nat) (te : Lexer.Helpers.TokenEnd)
+theorem finishKeyword_sim' (start : Nat) (te : Lexer.Internal.Helpers.TokenEnd)
     (te' : Lexer.Internal.WRustPort.Slice.TokenEnd)
     (ete : endMap start te = te') (next next' : Option UInt8) (en : next = next')
     (s : Span.Location)
@@ -247,7 +248,7 @@ theorem finishKeyword_sim' (start : Nat) (te : Lexer.Helpers.TokenEnd)
   subst ete en
   exact finishKeyword_sim start b te next s base ok h h'
 
-theorem finishStringLiteral_sim' (start : Nat) (te : Lexer.Helpers.TokenEnd)
+theorem finishStringLiteral_sim' (start : Nat) (te : Lexer.Internal.Helpers.TokenEnd)
     (te' : Lexer.Internal.WRustPort.Slice.TokenEnd) (ete : endMap start te = te')
     (s : Span.Location) (base : USize)
     (ok : EndOk start b base te) (h h') :
@@ -257,7 +258,7 @@ theorem finishStringLiteral_sim' (start : Nat) (te : Lexer.Helpers.TokenEnd)
   subst ete
   exact finishStringLiteral_sim start b te s base ok h h'
 
-theorem finishWhitespace_sim' (start : Nat) (te : Lexer.Helpers.TokenEnd)
+theorem finishWhitespace_sim' (start : Nat) (te : Lexer.Internal.Helpers.TokenEnd)
     (te' : Lexer.Internal.WRustPort.Slice.TokenEnd) (ete : endMap start te = te')
     (s : Span.Location) (base : USize)
     (ok : EndOk start b base te) (h h') :
@@ -271,9 +272,9 @@ theorem finishWhitespace_sim' (start : Nat) (te : Lexer.Helpers.TokenEnd)
 theorem endOk_mkAtByte {slice : ByteSlice} {h : slice.stop < USize.size} {p : USize}
     (hb : slice.start ≤ b.toNat) (hbp : b.toNat ≤ p.toNat)
     (hlt : p.toNat < (inputOf slice h).stop.toNat) :
-    EndOk slice.start b b (Lexer.Helpers.TokenEnd.mkAtByte p) := by
+    EndOk slice.start b b (Lexer.Internal.Helpers.TokenEnd.mkAtByte p) := by
   rw [inputOf_stop] at hlt
-  exact ⟨hb, hb, hbp, hbp, by simp only [Lexer.Helpers.TokenEnd.mkAtByte]; omega⟩
+  exact ⟨hb, hb, hbp, hbp, by simp only [Lexer.Internal.Helpers.TokenEnd.mkAtByte]; omega⟩
 
 end
 
@@ -296,8 +297,8 @@ theorem lexFractionFrom_sim (slice : ByteSlice) (h : slice.stop < USize.size) (s
           := by
   subst hbase
   unfold BSmtLib.Lexer.Internal.lexFractionFrom Lexer.Internal.WRustPort.lexFractionFrom
-  have hle := Lexer.CharClass.le_runEnd (inputOf slice h) start Lexer.CharClass.RUN_DIGIT
-  obtain ⟨hr1, hr2⟩ := runEnd_ix (h := h) es (by omega) Lexer.CharClass.RUN_DIGIT
+  have hle := CharClass.le_runEnd (inputOf slice h) start CharClass.RUN_DIGIT
+  obtain ⟨hr1, hr2⟩ := runEnd_ix (h := h) es (by omega) CharClass.RUN_DIGIT
   refine SimP.seq (extendContent_sim' b slice h start _ start' _ es hr2 (by omega) hr1)
     fun _ => ?_
   dsimp only
@@ -311,7 +312,7 @@ theorem lexFractionFrom_sim (slice : ByteSlice) (h : slice.stop < USize.size) (s
     exact SimP.pure (fun _ h => h) (Subtype.ext hr2)
 
 theorem lexDigitRun_sim (slice : ByteSlice) (h : slice.stop < USize.size) (start : USize)
-    (start' : Nat) (es : ix slice.start start = start') (run : Lexer.Helpers.DigitRun)
+    (start' : Nat) (es : ix slice.start start = start') (run : Lexer.Internal.Helpers.DigitRun)
     (tokenStart : Span.Location) (base : USize) (hbase : b = base) (hb : slice.start ≤ b.toNat)
     (hbs : b.toNat ≤ start.toNat) (hh hh') :
     SimP (BaseIs b) (fun _ => BaseIs b) (boundMap slice.start (floor := floor) (low := low))
@@ -322,7 +323,7 @@ theorem lexDigitRun_sim (slice : ByteSlice) (h : slice.stop < USize.size) (start
         hh') := by
   subst hbase
   unfold BSmtLib.Lexer.Internal.lexDigitRun Lexer.Internal.WRustPort.lexDigitRun
-  have hle := Lexer.CharClass.le_runEnd (inputOf slice h) start run.flag
+  have hle := CharClass.le_runEnd (inputOf slice h) start run.flag
   obtain ⟨hr1, hr2⟩ := runEnd_ix (h := h) es (by omega) run.flag
   refine SimP.seq (extendContent_sim' b slice h start _ start' _ es hr2 (by omega) hr1)
     fun _ => ?_
@@ -346,8 +347,8 @@ theorem lexSimpleSymbol_sim (slice : ByteSlice) (h : slice.stop < USize.size) (s
           := by
   subst hbase
   unfold BSmtLib.Lexer.Internal.lexSimpleSymbol Lexer.Internal.WRustPort.lexSimpleSymbol
-  have hle := Lexer.CharClass.le_runEnd (inputOf slice h) start Lexer.CharClass.RUN_SIMPLE_SYMBOL
-  obtain ⟨hr1, hr2⟩ := runEnd_ix (h := h) es (by omega) Lexer.CharClass.RUN_SIMPLE_SYMBOL
+  have hle := CharClass.le_runEnd (inputOf slice h) start CharClass.RUN_SIMPLE_SYMBOL
+  obtain ⟨hr1, hr2⟩ := runEnd_ix (h := h) es (by omega) CharClass.RUN_SIMPLE_SYMBOL
   refine SimP.seq (extendContent_sim' b slice h start _ start' _ es hr2 (by omega) hr1)
     fun _ => ?_
   dsimp only
@@ -372,8 +373,8 @@ theorem lexKeyword_sim (slice : ByteSlice) (h : slice.stop < USize.size) (start 
       (Lexer.Internal.WRustPort.lexKeyword slice start' tokenStart (ix slice.start base) hh') := by
   subst hbase
   unfold BSmtLib.Lexer.Internal.lexKeyword Lexer.Internal.WRustPort.lexKeyword
-  have hle := Lexer.CharClass.le_runEnd (inputOf slice h) start Lexer.CharClass.RUN_SIMPLE_SYMBOL
-  obtain ⟨hr1, hr2⟩ := runEnd_ix (h := h) es (by omega) Lexer.CharClass.RUN_SIMPLE_SYMBOL
+  have hle := CharClass.le_runEnd (inputOf slice h) start CharClass.RUN_SIMPLE_SYMBOL
+  obtain ⟨hr1, hr2⟩ := runEnd_ix (h := h) es (by omega) CharClass.RUN_SIMPLE_SYMBOL
   refine SimP.seq (extendContent_sim' b slice h start _ start' _ es hr2 (by omega) hr1)
     fun _ => ?_
   dsimp only
@@ -418,7 +419,7 @@ theorem lexBaseSelection_sim (slice : ByteSlice) (h : slice.stop < USize.size) (
   unfold BSmtLib.Lexer.Internal.lexBaseSelection Lexer.Internal.WRustPort.lexBaseSelection
   have e1 := ix_add_one (h := h) (p := start) (by omega) hstart
   have e1' : ix slice.start (start + 1) = start' + 1 := by rw [e1, es]
-  have hn := Lexer.CharClass.toNat_add_one_of_lt hstart
+  have hn := CharClass.toNat_add_one_of_lt hstart
   have eg : (inputOf slice h).get start hstart = Lexer.Internal.WRustPort.Slice.get slice start' hw
       := by
     rw [get_eq _ (by omega) es]
@@ -452,8 +453,8 @@ theorem lexComment_sim (slice : ByteSlice) (h : slice.stop < USize.size) (start 
       (Lexer.Internal.WRustPort.lexComment slice start' hs' tokenStart (ix slice.start base) hh')
           := by
   subst hbase
-  have hle := Lexer.CharClass.le_runEnd (inputOf slice h) start Lexer.CharClass.RUN_COMMENT_PLAIN
-  obtain ⟨hr1, hr2⟩ := runEnd_ix (h := h) es (by omega) Lexer.CharClass.RUN_COMMENT_PLAIN
+  have hle := CharClass.le_runEnd (inputOf slice h) start CharClass.RUN_COMMENT_PLAIN
+  obtain ⟨hr1, hr2⟩ := runEnd_ix (h := h) es (by omega) CharClass.RUN_COMMENT_PLAIN
   have hg := (get?_eq (h := h) _ hr1).trans (congrArg
       (Lexer.Internal.WRustPort.Slice.get? slice) hr2)
   unfold Lexer.Internal.WRustPort.lexComment
@@ -481,11 +482,11 @@ theorem lexComment_sim (slice : ByteSlice) (h : slice.stop < USize.size) (start 
       rw [hc, hc'] at hg; cases hg
     rename_i c'' hc
     obtain rfl : c'' = c := Option.some.inj (hc.symm.trans (hg.trans hc'))
-    have hlt := Lexer.CharClass.Input.lt_stop_of_get? hc
+    have hlt := CharClass.Input.lt_stop_of_get? hc
     have e1 := ix_add_one (h := h) hr1 hlt
     rw [hr2] at e1
     have hst := (inputOf_stop (h := h)) ▸ hlt
-    have hn := Lexer.CharClass.toNat_add_one_of_lt hlt
+    have hn := CharClass.toNat_add_one_of_lt hlt
     refine SimP.ite Iff.rfl (fun _ => ?_) fun _ => ?_
     all_goals first
       | refine SimP.seq (markLineFeedAt_sim' b slice.start _ _ hr2 hb (by omega)) fun _ => ?_
@@ -497,7 +498,7 @@ theorem lexComment_sim (slice : ByteSlice) (h : slice.stop < USize.size) (start 
       · refine SimP.seq (extendContent_sim' b slice h start _ start' _ es e1
           (by omega) (by omega)) fun _ => ?_
         refine SimP.seq (sinkStored_sim' b slice.start _ _ _ (endMap_mkAtByte _ _ _ e1)
-          _ _ hb (by simp only [Lexer.Helpers.TokenEnd.mkAtByte]; omega) _ _) fun _ => ?_
+          _ _ hb (by simp only [Lexer.Internal.Helpers.TokenEnd.mkAtByte]; omega) _ _) fun _ => ?_
         refine SimP.seq (setNormal_sim slice.start b) fun _ => ?_
         exact SimP.pure (fun _ h => h) (Subtype.ext (by simp only [nextMap]; exact e1))
       · refine SimP.seq (setNormal_sim slice.start b) fun _ => ?_
@@ -524,43 +525,42 @@ theorem lexNumeralOrDecimal_sim (slice : ByteSlice) (h : slice.stop < USize.size
         hh') := by
   subst hbase
   unfold BSmtLib.Lexer.Internal.lexNumeralOrDecimal Lexer.Internal.WRustPort.lexNumeralOrDecimal
-  have hle := Lexer.CharClass.le_runEnd (inputOf slice h) start Lexer.CharClass.RUN_DIGIT
-  obtain ⟨hr1, hr2⟩ := runEnd_ix (h := h) es (by omega) Lexer.CharClass.RUN_DIGIT
+  have hle := CharClass.le_runEnd (inputOf slice h) start CharClass.RUN_DIGIT
+  obtain ⟨hr1, hr2⟩ := runEnd_ix (h := h) es (by omega) CharClass.RUN_DIGIT
   have hg := (get?_eq (h := h) _ hr1).trans (congrArg
       (Lexer.Internal.WRustPort.Slice.get? slice) hr2)
   refine getCore_bind slice.start b fun c _ => ?_
   dsimp only
-  have hgt : (Lexer.CharClass.runEnd (inputOf slice h) start Lexer.CharClass.RUN_DIGIT > start) ↔
-      (Lexer.Internal.WRustPort.Slice.runEnd slice start' Lexer.CharClass.RUN_DIGIT > start') := by
+  have hgt : (CharClass.runEnd (inputOf slice h) start CharClass.RUN_DIGIT > start) ↔
+      (Lexer.Internal.WRustPort.Slice.runEnd slice start' CharClass.RUN_DIGIT > start') := by
     rw [gt_iff_lt, USize.lt_iff_toNat_lt, gt_iff_lt, ← hr2, ← es]
     simp only [ix]
     omega
   refine SimP.ite (by simp only [Bool.and_eq_true, decide_eq_true_eq, hgt]; exact Iff.rfl)
     (fun hz => ?_) fun _ => ?_
-  · have hz' : start.toNat < (Lexer.CharClass.runEnd
-      (inputOf slice h) start Lexer.CharClass.RUN_DIGIT).toNat := by
+  · have hz' :
+      start.toNat < (CharClass.runEnd (inputOf slice h) start CharClass.RUN_DIGIT).toNat := by
       simp only [Bool.and_eq_true, decide_eq_true_eq] at hz
       exact USize.lt_iff_toNat_lt.mp hz.1
-    have hsz := USize.toNat_lt_size (Lexer.CharClass.runEnd
-        (inputOf slice h) start Lexer.CharClass.RUN_DIGIT)
+    have hsz := USize.toNat_lt_size (CharClass.runEnd (inputOf slice h) start CharClass.RUN_DIGIT)
     have e1 : ix slice.start (start + 1) = start' + 1 := by
       rw [ix_add_one_of_lt_size (s0 := slice.start) (p := start) (by omega) (by omega), es]
     have hn : (start + 1).toNat = start.toNat + 1 := by
-      exact Lexer.CharClass.toNat_add_one_of_lt hz'
+      exact CharClass.toNat_add_one_of_lt hz'
     exact failAt_bind_sim' b slice.start _ _ _ _ e1 hb (by omega) _ _ _
   refine SimP.seq (extendContent_sim' b slice h start _ start' _ es hr2 (by omega) hr1)
     fun _ => ?_
   split
   · rename_i next hc
     have hx : Lexer.Internal.WRustPort.Slice.get? slice
-        (Lexer.Internal.WRustPort.Slice.runEnd slice start' Lexer.CharClass.RUN_DIGIT) =
+        (Lexer.Internal.WRustPort.Slice.runEnd slice start' CharClass.RUN_DIGIT) =
         some next := hg ▸ hc
     rw [hx]
     dsimp only
-    have hlt := Lexer.CharClass.Input.lt_stop_of_get? hc
+    have hlt := CharClass.Input.lt_stop_of_get? hc
     have e1 := ix_add_one (h := h) hr1 hlt
     rw [hr2] at e1
-    have hn := Lexer.CharClass.toNat_add_one_of_lt hlt
+    have hn := CharClass.toNat_add_one_of_lt hlt
     have hst := (inputOf_stop (h := h)) ▸ hlt
     refine SimP.ite Iff.rfl (fun _ => ?_) fun _ => ?_
     · refine SimP.seq (pushContent_sim slice.start b _) fun _ => ?_
@@ -577,7 +577,7 @@ theorem lexNumeralOrDecimal_sim (slice : ByteSlice) (h : slice.stop < USize.size
       exact SimP.pure (fun _ h => h) (Subtype.ext hr2)
   · rename_i hc
     have hx : Lexer.Internal.WRustPort.Slice.get? slice
-        (Lexer.Internal.WRustPort.Slice.runEnd slice start' Lexer.CharClass.RUN_DIGIT) =
+        (Lexer.Internal.WRustPort.Slice.runEnd slice start' CharClass.RUN_DIGIT) =
         none := hg ▸ hc
     rw [hx]
     dsimp only
@@ -611,9 +611,8 @@ theorem lexWhitespace_sim (slice : ByteSlice) (h : slice.stop < USize.size) (ori
   induction k using Nat.strongRecOn with
   | ind k ih =>
   intro start start' hk es hbs horigin horigin' hs hs'
-  have hle := Lexer.CharClass.le_runEnd (inputOf slice h) start
-      Lexer.CharClass.RUN_NON_LF_WHITESPACE
-  obtain ⟨hr1, hr2⟩ := runEnd_ix (h := h) es (by omega) Lexer.CharClass.RUN_NON_LF_WHITESPACE
+  have hle := CharClass.le_runEnd (inputOf slice h) start CharClass.RUN_NON_LF_WHITESPACE
+  obtain ⟨hr1, hr2⟩ := runEnd_ix (h := h) es (by omega) CharClass.RUN_NON_LF_WHITESPACE
   have hg := (get?_eq (h := h) _ hr1).trans (congrArg
       (Lexer.Internal.WRustPort.Slice.get? slice) hr2)
   rw [Lexer.Internal.WRustPort.lexWhitespace]
@@ -625,10 +624,10 @@ theorem lexWhitespace_sim (slice : ByteSlice) (h : slice.stop < USize.size) (ori
     split
     · rename_i c'' hc
       obtain rfl : c'' = c := Option.some.inj (hc.symm.trans (hg.trans hc'))
-      have hlt := Lexer.CharClass.Input.lt_stop_of_get? hc
+      have hlt := CharClass.Input.lt_stop_of_get? hc
       have e1 := ix_add_one (h := h) hr1 hlt
       rw [hr2] at e1
-      have hn := Lexer.CharClass.toNat_add_one_of_lt hlt
+      have hn := CharClass.toNat_add_one_of_lt hlt
       have hst := (inputOf_stop (h := h)) ▸ hlt
       refine SimP.ite Iff.rfl (fun _ => ?_) fun _ => ?_
       · refine SimP.seq (markLineFeedAt_sim' b slice.start _ _ hr2 hb (by omega)) fun _ => ?_
@@ -671,8 +670,8 @@ theorem lexQuotedSymbol_sim (slice : ByteSlice) (h : slice.stop < USize.size) (o
   induction k using Nat.strongRecOn with
   | ind k ih =>
   intro start start' hk es hbs horigin horigin' hs hs'
-  have hle := Lexer.CharClass.le_runEnd (inputOf slice h) start Lexer.CharClass.RUN_QUOTED_PLAIN
-  obtain ⟨hr1, hr2⟩ := runEnd_ix (h := h) es (by omega) Lexer.CharClass.RUN_QUOTED_PLAIN
+  have hle := CharClass.le_runEnd (inputOf slice h) start CharClass.RUN_QUOTED_PLAIN
+  obtain ⟨hr1, hr2⟩ := runEnd_ix (h := h) es (by omega) CharClass.RUN_QUOTED_PLAIN
   have hg := (get?_eq (h := h) _ hr1).trans (congrArg
       (Lexer.Internal.WRustPort.Slice.get? slice) hr2)
   rw [Lexer.Internal.WRustPort.lexQuotedSymbol]
@@ -684,10 +683,10 @@ theorem lexQuotedSymbol_sim (slice : ByteSlice) (h : slice.stop < USize.size) (o
     split
     · rename_i c'' hc
       obtain rfl : c'' = c := Option.some.inj (hc.symm.trans (hg.trans hc'))
-      have hlt := Lexer.CharClass.Input.lt_stop_of_get? hc
+      have hlt := CharClass.Input.lt_stop_of_get? hc
       have e1 := ix_add_one (h := h) hr1 hlt
       rw [hr2] at e1
-      have hn := Lexer.CharClass.toNat_add_one_of_lt hlt
+      have hn := CharClass.toNat_add_one_of_lt hlt
       have hst := (inputOf_stop (h := h)) ▸ hlt
       refine SimP.ite Iff.rfl (fun _ => ?_) fun _ => ?_
       · refine SimP.seq (extendContent_sim' b slice h start _ start' _ es hr2 (by omega) hr1)
@@ -695,18 +694,18 @@ theorem lexQuotedSymbol_sim (slice : ByteSlice) (h : slice.stop < USize.size) (o
         have hg1 := (get?_eq (h := h) _ (by omega)).trans
             (congrArg (Lexer.Internal.WRustPort.Slice.get? slice) e1)
         cases hn1 : (inputOf slice h).get?
-            (Lexer.CharClass.runEnd (inputOf slice h) start Lexer.CharClass.RUN_QUOTED_PLAIN + 1)
+            (CharClass.runEnd (inputOf slice h) start CharClass.RUN_QUOTED_PLAIN + 1)
                 with
         | some next =>
           rw [hn1] at hg1
           rw [← hg1]
           dsimp only
-          have hlt1 := Lexer.CharClass.Input.lt_stop_of_get? hn1
+          have hlt1 := CharClass.Input.lt_stop_of_get? hn1
           have hst1 := (inputOf_stop (h := h)) ▸ hlt1
           refine SimP.seq (expectDelimiter_sim' b slice.start _ _ _ e1 hb (by omega)
             (by omega)) fun _ => ?_
           refine SimP.seq (sinkStored_sim' b slice.start _ _ _ (endMap_mkAtByte _ _ _ e1) _ _ hb
-            (by simp only [Lexer.Helpers.TokenEnd.mkAtByte]; omega) _ _) fun _ => ?_
+            (by simp only [Lexer.Internal.Helpers.TokenEnd.mkAtByte]; omega) _ _) fun _ => ?_
           refine SimP.seq (setNormal_sim slice.start b) fun _ => ?_
           exact SimP.pure (fun _ h => h) (Subtype.ext e1)
         | none =>
@@ -740,7 +739,7 @@ omit [LawfulMonad m] [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H
 /-- A branch of the first lexer, by cases on its condition. -/
 theorem SimP.ite_left {start : Nat} {α β : Type} {Q : α → ZS floor low → Prop} {ψ : α → β}
     {P : ZS floor low → Prop} {c : Prop} [Decidable c]
-    {f₁ f₂ : BSmtLib.Lexer.LexM H m R E floor low α}
+    {f₁ f₂ : BSmtLib.Lexer.Internal.LexM H m R E floor low α}
     {g : Lexer.Internal.WRustPort.LexM H m R E floor low β}
     (h₁ : c → SimP P Q (boundMap start) ψ f₁ g) (h₂ : ¬c → SimP P Q (boundMap start) ψ f₂ g) :
     SimP P Q (boundMap start) ψ (if c then f₁ else f₂) g := by
@@ -752,25 +751,25 @@ omit [LawfulMonad m] [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H
     (Token.BatchCursor batch) m] in
 theorem runEnd_ix3 {slice : ByteSlice} {h : slice.stop < USize.size} {p : USize} {p' : Nat}
     (ep : ix slice.start p = p') (hp : slice.start ≤ p.toNat) (mask : UInt8) :
-    p.toNat ≤ (Lexer.CharClass.runEnd (inputOf slice h) p mask).toNat ∧
-      slice.start ≤ (Lexer.CharClass.runEnd (inputOf slice h) p mask).toNat ∧
-      ix slice.start (Lexer.CharClass.runEnd (inputOf slice h) p mask) =
+    p.toNat ≤ (CharClass.runEnd (inputOf slice h) p mask).toNat ∧
+      slice.start ≤ (CharClass.runEnd (inputOf slice h) p mask).toNat ∧
+      ix slice.start (CharClass.runEnd (inputOf slice h) p mask) =
           Lexer.Internal.WRustPort.Slice.runEnd slice p' mask :=
-  ⟨Lexer.CharClass.le_runEnd _ _ _, runEnd_ix ep hp mask⟩
+  ⟨CharClass.le_runEnd _ _ _, runEnd_ix ep hp mask⟩
 
 set_option hygiene false in
 /-- The run of a string literal after its start, from the position `cz` with the index `cz'`
 (`ecz`), which is at or after the base (`hbz`) and the start of the slice (`hsz`). -/
 local macro "string_rest" : tactic => `(tactic| (
-  obtain ⟨hle, hr1, hr2⟩ := runEnd_ix3 (h := h) ecz hsz Lexer.CharClass.RUN_STRING_PLAIN
+  obtain ⟨hle, hr1, hr2⟩ := runEnd_ix3 (h := h) ecz hsz CharClass.RUN_STRING_PLAIN
   have hg := (get?_eq (h := h) _ hr1).trans (congrArg
       (Lexer.Internal.WRustPort.Slice.get? slice) hr2)
   split
   · rename_i c hc
-    have hlt := Lexer.CharClass.Input.lt_stop_of_get? hc
+    have hlt := CharClass.Input.lt_stop_of_get? hc
     have e1 := ix_add_one (h := h) hr1 hlt
     rw [hr2] at e1
-    have hn := Lexer.CharClass.toNat_add_one_of_lt hlt
+    have hn := CharClass.toNat_add_one_of_lt hlt
     have hst := (inputOf_stop (h := h)) ▸ hlt
     refine SimP.ite_left (fun h10 => ?_) fun h10 => ?_
     · split
@@ -837,7 +836,7 @@ theorem lexStringLiteralFrom_sim (slice : ByteSlice) (h : slice.stop < USize.siz
     try dsimp only
     refine getCore_bind slice.start b fun c _ => ?_
     try dsimp only
-    have hlt := Lexer.CharClass.Input.lt_stop_of_get? hfirst
+    have hlt := CharClass.Input.lt_stop_of_get? hfirst
     have hst := (inputOf_stop (h := h)) ▸ hlt
     refine SimP.ite Iff.rfl (fun _ => ?_) fun _ => ?_
     · refine SimP.ite Iff.rfl (fun _ => ?_) fun _ => ?_
@@ -849,7 +848,7 @@ theorem lexStringLiteralFrom_sim (slice : ByteSlice) (h : slice.stop < USize.siz
         exact SimP.pure (fun _ h => h) (Subtype.ext es)
       · have ecz : ix slice.start (start + 1) = start' + 1 := by
           rw [ix_add_one (h := h) (by omega) hlt, es]
-        have hn := Lexer.CharClass.toNat_add_one_of_lt hlt
+        have hn := CharClass.toNat_add_one_of_lt hlt
         have hsz : slice.start ≤ (start + 1).toNat := by omega
         refine SimP.seq (pushContent_sim slice.start b _) fun _ => ?_
         refine SimP.seq (setTokenState_sim slice.start b _ _ _ _) fun _ => ?_
@@ -869,11 +868,11 @@ omit [LawfulMonad m] [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H
     (Token.BatchCursor batch) m] in
 theorem runEndAll_ix3 {slice : ByteSlice} {h : slice.stop < USize.size} {p : USize} {p' : Nat}
     (ep : ix slice.start p = p') (hp : slice.start ≤ p.toNat) (mask : UInt8) :
-    p.toNat ≤ (Lexer.CharClass.runEndAll (inputOf slice h) p mask).toNat ∧
-      slice.start ≤ (Lexer.CharClass.runEndAll (inputOf slice h) p mask).toNat ∧
-      ix slice.start (Lexer.CharClass.runEndAll (inputOf slice h) p mask) =
+    p.toNat ≤ (CharClass.runEndAll (inputOf slice h) p mask).toNat ∧
+      slice.start ≤ (CharClass.runEndAll (inputOf slice h) p mask).toNat ∧
+      ix slice.start (CharClass.runEndAll (inputOf slice h) p mask) =
         Lexer.Internal.WRustPort.Slice.runEndAll slice p' mask :=
-  ⟨Lexer.CharClass.le_runEndAll _ _ _, runEndAll_ix ep hp mask⟩
+  ⟨CharClass.le_runEndAll _ _ _, runEndAll_ix ep hp mask⟩
 
 set_option hygiene false in
 /-- The end of a run of a string literal in the legacy mode, once it is known whether the byte
@@ -895,8 +894,7 @@ the index `cz'` (`ecz`), which is at or after the base (`hbz`) and the start of 
 local macro "legacy_rest" : tactic => `(tactic| (
   try dsimp only
   obtain ⟨hle, hr1, hr2⟩ :=
-    runEndAll_ix3 (h := h) ecz hsz (Lexer.CharClass.RUN_STRING_PLAIN |||
-        Lexer.CharClass.RUN_QUOTED_PLAIN)
+    runEndAll_ix3 (h := h) ecz hsz (CharClass.RUN_STRING_PLAIN ||| CharClass.RUN_QUOTED_PLAIN)
   have hg := (get?_eq (h := h) _ hr1).trans (congrArg
       (Lexer.Internal.WRustPort.Slice.get? slice) hr2)
   split
@@ -904,10 +902,10 @@ local macro "legacy_rest" : tactic => `(tactic| (
     have hX := hg ▸ hc
     rw [attach_of_eq hX]
     try dsimp only
-    have hlt := Lexer.CharClass.Input.lt_stop_of_get? hc
+    have hlt := CharClass.Input.lt_stop_of_get? hc
     have e1 := ix_add_one (h := h) hr1 hlt
     rw [hr2] at e1
-    have hn := Lexer.CharClass.toNat_add_one_of_lt hlt
+    have hn := CharClass.toNat_add_one_of_lt hlt
     have hst := (inputOf_stop (h := h)) ▸ hlt
     refine SimP.ite Iff.rfl (fun _ => ?_) fun _ => ?_
     · refine SimP.seq (markLineFeedAt_sim' b slice.start _ _ hr2 hb (by omega)) fun _ => ?_
@@ -924,7 +922,7 @@ local macro "legacy_rest" : tactic => `(tactic| (
   · rename_i hnone
     rcases Option.eq_none_or_eq_some
       (Lexer.Internal.WRustPort.Slice.get? slice (Lexer.Internal.WRustPort.Slice.runEndAll slice _
-        (Lexer.CharClass.RUN_STRING_PLAIN ||| Lexer.CharClass.RUN_QUOTED_PLAIN))) with hX | ⟨c', hX⟩
+        (CharClass.RUN_STRING_PLAIN ||| CharClass.RUN_QUOTED_PLAIN))) with hX | ⟨c', hX⟩
     · rw [attach_of_eq_none hX]
       try dsimp only
       refine SimP.seq (extendContent_sim' b slice h _ _ _ _ ecz ix_stop (by omega)
@@ -961,7 +959,7 @@ theorem lexStringLiteralLegacy_sim (slice : ByteSlice) (h : slice.stop < USize.s
     try dsimp only
     refine getCore_bind slice.start b fun c _ => ?_
     dsimp only [coreMap]
-    have hlt := Lexer.CharClass.Input.lt_stop_of_get? hfirst
+    have hlt := CharClass.Input.lt_stop_of_get? hfirst
     have hst := (inputOf_stop (h := h)) ▸ hlt
     have hsz0 : slice.start ≤ start.toNat := by omega
     cases hs : c.state
@@ -978,7 +976,7 @@ theorem lexStringLiteralLegacy_sim (slice : ByteSlice) (h : slice.stop < USize.s
       refine SimP.ite Iff.rfl (fun _ => ?_) fun _ => ?_
       · have ecz : ix slice.start (start + 1) = start' + 1 := by
           rw [ix_add_one (h := h) (by omega) hlt, es]
-        have hn := Lexer.CharClass.toNat_add_one_of_lt hlt
+        have hn := CharClass.toNat_add_one_of_lt hlt
         have hsz : slice.start ≤ (start + 1).toNat := by omega
         refine SimP.seq (pushContent_sim slice.start b _) fun _ => ?_
         refine SimP.seq (setTokenState_sim slice.start b _ _ _ _) fun _ => ?_

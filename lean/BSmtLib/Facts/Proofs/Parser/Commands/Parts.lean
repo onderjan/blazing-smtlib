@@ -4,8 +4,8 @@ public import BSmtLib.Facts.Proofs.Parser.Commands.Elements
 import all BSmtLib.Parser.Category.Combinator
 import all BSmtLib.Parser.Category.Sort
 import all BSmtLib.Parser.Category.Token
-import all BSmtLib.Parser.Command.Datatype
-import all BSmtLib.Parser.Command.Function
+import all BSmtLib.Parser.Command.Internal.Datatype
+import all BSmtLib.Parser.Command.Internal.Function
 
 @[expose] public section
 
@@ -21,11 +21,12 @@ through the bridge, is the traversal's.
 namespace BSmtLib.Facts.Proofs.Parser.Commands.Parts
 
 open BSmtLibSpec.Grammar
-open BSmtLib.Parser (PM)
-open BSmtLib.Parser.Category.Combinator (ListState)
-open BSmtLib.Parser.Command.Function (SignatureState FunctionDecState signatureStep functionDecStep)
-open BSmtLib.Parser.Command.Datatype (ConstructorState constructorStep)
-open BSmtLib.Parser.Category.SortedVar (sortedVarStep SortedVarState)
+open BSmtLib.Parser.Internal (PM)
+open BSmtLib.Parser.Category.Combinator.Internal (ListState)
+open BSmtLib.Parser.Command.Internal.Function
+    (SignatureState FunctionDecState signatureStep functionDecStep)
+open BSmtLib.Parser.Command.Internal.Datatype (ConstructorState constructorStep)
+open BSmtLib.Parser.Category.SortedVar.Internal (sortedVarStep SortedVarState)
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Parser.Adapters.Run
 open BSmtLib.Facts.Proofs.Parser.Commands.Elements BSmtLib.Facts.Proofs.Parser.Drive
 open BSmtLib.Facts.Proofs.Parser.Lemmas BSmtLib.Facts.Proofs.Parser.List
@@ -136,7 +137,8 @@ theorem signature_runs (hA : TermAgrees h) (name : Tree.Symbol)
           (inner ++ [.parenClose])) ++ sortTokens) by simp]
     refine (Runs.append (middle := fun _ =>
         SignatureState.parameters symbol (ListState.paren .start))
-      (Runs.token_more (by simp [signatureStep, Parser.Category.Token.expectSymbol])) fun _ =>
+      (Runs.token_more (by simp [signatureStep,
+          Parser.Category.Token.Internal.expectSymbol])) fun _ =>
       Runs.append (middle := fun handled =>
           SignatureState.result symbol (#[] ++ handled.toArray) .init)
         (hlistEmbed.congr rfl (by funext; simp [Parser.Internal.Step.wrap])) fun handled =>
@@ -177,11 +179,12 @@ theorem functionDec_element (hA : TermAgrees h) :
     simp
   · refine (Runs.append (first := [.parenOpen]) (middle := fun _ => FunctionDecState.signature
       .start)
-      (Runs.token_more (by simp [functionDecStep, Parser.Category.Token.expectOpen])) fun _ =>
+      (Runs.token_more (by simp [functionDecStep,
+          Parser.Category.Token.Internal.expectOpen])) fun _ =>
       Runs.append (middle := fun signature => FunctionDecState.close signature)
         (hembed.congr rfl (by funext; simp [Parser.Internal.Step.wrap])) fun signature =>
         Runs.token (program := pure signature) (next := fun r => pure (.done r))
-          (by simp [functionDecStep, Parser.Category.Token.expectClose])).congr ?_ rfl
+          (by simp [functionDecStep, Parser.Category.Token.Internal.expectClose])).congr ?_ rfl
     simp
 
 /-! ## Constructors -/
@@ -259,7 +262,7 @@ theorem constructor_runs_opened (hA : TermAgrees h) (constructor : Tree.Construc
   · refine (Runs.append (first := [.symbol symbol])
       (middle := fun _ => ConstructorState.selectors symbol (ListState.closed .start))
       (Runs.token_more (state := ConstructorState.opened)
-        (by simp [constructorStep, Parser.Category.Token.expectSymbol])) fun _ =>
+        (by simp [constructorStep, Parser.Category.Token.Internal.expectSymbol])) fun _ =>
       Runs.map_program (f := fun handled => (⟨symbol, (#[] ++ handled.toArray)⟩ :
           Nodes.Constructor _))
         (hembed.congr rfl (by funext; simp [Parser.Internal.Step.wrap]))).congr ?_ rfl
@@ -284,7 +287,8 @@ theorem constructor_element (hA : TermAgrees h) :
   refine ⟨⟨_, _, rfl, by simp⟩, do tick points .parenOpen; program, ?_, ?_⟩
   · simp [adaptRun_take (token := .parenOpen) rfl, ← hprogram]
   · exact Runs.append (first := [.parenOpen]) (middle := fun _ => ConstructorState.opened)
-      (Runs.token_more (by simp [constructorStep, Parser.Category.Token.expectOpen])) fun _ => hruns
+      (Runs.token_more (by simp [constructorStep,
+          Parser.Category.Token.Internal.expectOpen])) fun _ => hruns
 
 end
 

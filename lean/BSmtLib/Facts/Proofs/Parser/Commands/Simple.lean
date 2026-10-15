@@ -2,7 +2,7 @@ module
 
 public import BSmtLib.Facts.Proofs.Parser.Commands.Frame
 import all BSmtLib.Parser.Category.Token
-import all BSmtLib.Parser.Command.Standard
+import all BSmtLib.Parser.Command.Internal.Standard
 
 @[expose] public section
 
@@ -17,9 +17,8 @@ and those of a symbol, a numeral, a string or a keyword. Each payload lemma is s
 namespace BSmtLib.Facts.Proofs.Parser.Commands.Simple
 
 open BSmtLibSpec.Grammar
-open BSmtLib.Parser (PM)
-open BSmtLib.Parser.Command (CommandState CommandOutcome commandStep)
-open BSmtLib.Parser.Command.Standard (Payload FinalCall payloadStep finalCall)
+open BSmtLib.Parser.Command (CommandOutcome)
+open BSmtLib.Parser.Command.Internal.Standard (Payload FinalCall payloadStep finalCall)
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Parser.Adapters.Run
 open BSmtLib.Facts.Proofs.Parser.Commands.Frame BSmtLib.Facts.Proofs.Parser.Drive
 open BSmtLib.Facts.Proofs.Parser.Lemmas BSmtLib.Facts.Proofs.Parser.Tokens
@@ -42,21 +41,23 @@ def finalOutcome {A S T : Type} : FinalCall A S T → CommandOutcome
 /-- The command's `)`, then its last call. -/
 theorem closing_runs (final : FinalCall (Traits.Handler.Attribute H) (Traits.Handler.«Sort» H)
       (Traits.Handler.Term H)) {request : Call (valuesOf H) .nothing}
-    (hfinal : finalCall final = Parser.call (Bridge.callUnit h request)) {outcome : CommandOutcome}
+    (hfinal : finalCall final = Parser.Internal.call (Bridge.callUnit h request))
+    {outcome : CommandOutcome}
     (houtcome : finalOutcome final = outcome) :
     PayloadRuns points version (.closing final) [.parenClose]
       (adaptRun (do take points .parenClose; Program.callUnit h request))
       fun _ => pure (.done outcome) := by
-  refine (Runs.tokenA (arrival := Parser.Command.Standard.payloadArrive)
+  refine (Runs.tokenA (arrival := Parser.Command.Internal.Standard.payloadArrive)
       (program := finalCall final) ?_).congr ?_ rfl
   · subst houtcome
-    cases final <;> simp [payloadStep, Parser.Category.Token.expectClose, finalOutcome]
+    cases final <;> simp [payloadStep, Parser.Category.Token.Internal.expectClose, finalOutcome]
   · simp [hfinal, adaptRun_take (token := .parenClose) rfl]
 
 /-- A command of its name alone. -/
 theorem nullary_payload (final : FinalCall (Traits.Handler.Attribute H) (Traits.Handler.«Sort» H)
       (Traits.Handler.Term H)) {request : Call (valuesOf H) .nothing}
-    (hfinal : finalCall final = Parser.call (Bridge.callUnit h request)) {outcome : CommandOutcome}
+    (hfinal : finalCall final = Parser.Internal.call (Bridge.callUnit h request))
+    {outcome : CommandOutcome}
     (houtcome : finalOutcome final = outcome)
     {payload : List Parser.Internal.Input} (hs : Stands payload []) :
     PayloadRuns points version (.closing final) (payload ++ [.parenClose])
@@ -66,19 +67,19 @@ theorem nullary_payload (final : FinalCall (Traits.Handler.Attribute H) (Traits.
   exact closing_runs final hfinal houtcome
 
 /-- A command of a single token: the token, then the closing. -/
-theorem single_payload {payload : Parser.Command.Standard.PayloadOf H}
+theorem single_payload {payload : Parser.Command.Internal.Standard.PayloadOf H}
     {token : Parser.Internal.Input}
     {final : FinalCall (Traits.Handler.Attribute H) (Traits.Handler.«Sort» H)
       (Traits.Handler.Term H)}
     (hstep : payloadStep version payload token = pure (.more (.closing final)))
     {request : Call (valuesOf H) .nothing}
-    (hfinal : finalCall final = Parser.call (Bridge.callUnit h request))
+    (hfinal : finalCall final = Parser.Internal.call (Bridge.callUnit h request))
     (houtcome : finalOutcome final = .command)
-    (harr : Parser.Command.Standard.payloadArrive payload token = pure () := by intros; rfl) :
+    (harr : Parser.Command.Internal.Standard.payloadArrive payload token = pure () := by intros; rfl) :
     PayloadRuns points version payload ([token] ++ [.parenClose])
       (do tick points token; adaptRun (do take points .parenClose; Program.callUnit h request))
       fun _ => pure (.done .command) :=
-  Runs.append (Runs.token_moreA (arrival := Parser.Command.Standard.payloadArrive)
+  Runs.append (Runs.token_moreA (arrival := Parser.Command.Internal.Standard.payloadArrive)
       hstep harr) fun _ => closing_runs final hfinal houtcome
 
 variable (hA : Agrees h)
@@ -95,7 +96,7 @@ theorem echo_payload (content : BSmtLibSpec.Regex.Chars) {payload : List Parser.
   obtain ⟨view, rfl, rfl⟩ := Parser.Internal.Input.received_string htoken
   refine (single_payload (final := .echo view) (h := h)
       (request := .commandEcho (Bridge.chars view.asSlice)) (by simp [payloadStep, Payload.init,
-    Parser.Category.Token.expectString]) (by simp [finalCall, hA.commandEcho]) rfl).congr ?_ rfl
+    Parser.Category.Token.Internal.expectString]) (by simp [finalCall, hA.commandEcho]) rfl).congr ?_ rfl
   simp [takeAll, adaptRun_take htoken, adaptRun_take (token := .parenClose) rfl]
 
 theorem getInfo_payload (flag : BSmtLibSpec.Regex.Chars) {payload : List Parser.Internal.Input}
@@ -109,7 +110,7 @@ theorem getInfo_payload (flag : BSmtLibSpec.Regex.Chars) {payload : List Parser.
   obtain ⟨keyword, rfl, rfl⟩ := Parser.Internal.Input.received_keyword htoken
   refine (single_payload (final := .getInfo keyword) (h := h)
       (request := .commandGetInfo (Bridge.keyword keyword)) (by simp [payloadStep, Payload.init,
-    Parser.Category.Token.expectKeyword]) (by simp [finalCall, hA.commandGetInfo]) rfl).congr ?_ rfl
+    Parser.Category.Token.Internal.expectKeyword]) (by simp [finalCall, hA.commandGetInfo]) rfl).congr ?_ rfl
   simp [takeAll, adaptRun_take htoken, adaptRun_take (token := .parenClose) rfl]
 
 theorem getOption_payload (keyword : BSmtLibSpec.Regex.Chars) {payload : List Parser.Internal.Input}
@@ -123,7 +124,7 @@ theorem getOption_payload (keyword : BSmtLibSpec.Regex.Chars) {payload : List Pa
   obtain ⟨view, rfl, rfl⟩ := Parser.Internal.Input.received_keyword htoken
   refine (single_payload (final := .getOption view) (h := h)
       (request := .commandGetOption (Bridge.keyword view)) (by simp [payloadStep, Payload.init,
-    Parser.Category.Token.expectKeyword]) (by simp [finalCall, hA.commandGetOption]) rfl).congr ?_
+    Parser.Category.Token.Internal.expectKeyword]) (by simp [finalCall, hA.commandGetOption]) rfl).congr ?_
         rfl
   simp [takeAll, adaptRun_take htoken, adaptRun_take (token := .parenClose) rfl]
 
@@ -138,7 +139,7 @@ theorem pop_payload (count : BSmtLibSpec.Regex.Chars) {payload : List Parser.Int
   obtain ⟨view, rfl, rfl⟩ := Parser.Internal.Input.received_numeral htoken
   refine (single_payload (final := .pop view) (h := h)
       (request := .commandPop (Bridge.chars view.asSlice)) (by simp [payloadStep, Payload.init,
-    Parser.Category.Token.expectNumeral]) (by simp [finalCall, hA.commandPop]) rfl).congr ?_ rfl
+    Parser.Category.Token.Internal.expectNumeral]) (by simp [finalCall, hA.commandPop]) rfl).congr ?_ rfl
   simp [takeAll, adaptRun_take htoken, adaptRun_take (token := .parenClose) rfl]
 
 theorem push_payload (count : BSmtLibSpec.Regex.Chars) {payload : List Parser.Internal.Input}
@@ -152,7 +153,7 @@ theorem push_payload (count : BSmtLibSpec.Regex.Chars) {payload : List Parser.In
   obtain ⟨view, rfl, rfl⟩ := Parser.Internal.Input.received_numeral htoken
   refine (single_payload (final := .push view) (h := h)
       (request := .commandPush (Bridge.chars view.asSlice)) (by simp [payloadStep, Payload.init,
-    Parser.Category.Token.expectNumeral]) (by simp [finalCall, hA.commandPush]) rfl).congr ?_ rfl
+    Parser.Category.Token.Internal.expectNumeral]) (by simp [finalCall, hA.commandPush]) rfl).congr ?_ rfl
   simp [takeAll, adaptRun_take htoken, adaptRun_take (token := .parenClose) rfl]
 
 theorem setLogic_payload (name : Tree.Symbol) {payload : List Parser.Internal.Input}
@@ -166,7 +167,7 @@ theorem setLogic_payload (name : Tree.Symbol) {payload : List Parser.Internal.In
   obtain ⟨symbol, rfl, rfl⟩ := Parser.Internal.Input.received_symbol htoken
   refine (single_payload (final := .setLogic symbol) (h := h)
       (request := .commandSetLogic (Bridge.symbol symbol)) (by simp [payloadStep, Payload.init,
-    Parser.Category.Token.expectSymbol]) (by simp [finalCall, hA.commandSetLogic]) rfl).congr ?_ rfl
+    Parser.Category.Token.Internal.expectSymbol]) (by simp [finalCall, hA.commandSetLogic]) rfl).congr ?_ rfl
   simp [takeAll, adaptRun_take htoken, adaptRun_take (token := .parenClose) rfl]
 
 theorem declareSortParameter_payload (name : Tree.Symbol) {payload : List Parser.Internal.Input}
@@ -181,7 +182,7 @@ theorem declareSortParameter_payload (name : Tree.Symbol) {payload : List Parser
   obtain ⟨symbol, rfl, rfl⟩ := Parser.Internal.Input.received_symbol htoken
   refine (single_payload (final := .declareSortParameter symbol)
     (h := h) (request := .commandDeclareSortParameter (Bridge.symbol symbol)) (by simp [payloadStep,
-    Payload.init, Parser.Category.Token.expectSymbol])
+    Payload.init, Parser.Category.Token.Internal.expectSymbol])
         (by simp [finalCall, hA.commandDeclareSortParameter])
     rfl).congr ?_ rfl
   simp [takeAll, adaptRun_take htoken, adaptRun_take (token := .parenClose) rfl]
@@ -199,12 +200,12 @@ theorem declareSort_payload (name : Tree.Symbol) (arity : BSmtLibSpec.Regex.Char
   obtain ⟨symbol, rfl, rfl⟩ := Parser.Internal.Input.received_symbol hsymbolToken
   obtain ⟨view, rfl, rfl⟩ := Parser.Internal.Input.received_numeral hnumeralToken
   refine (Runs.append (first := [.symbol symbol]) (middle := fun _ => .declareSort symbol)
-    (Runs.token_moreA (arrival := Parser.Command.Standard.payloadArrive) (by simp [payloadStep,
-      Payload.init, Parser.Category.Token.expectSymbol])) fun _ =>
+    (Runs.token_moreA (arrival := Parser.Command.Internal.Standard.payloadArrive) (by simp [payloadStep,
+      Payload.init, Parser.Category.Token.Internal.expectSymbol])) fun _ =>
     single_payload (final := .declareSort symbol view)
       (h := h) (request := .commandDeclareSort (Bridge.symbol symbol) (Bridge.chars view.asSlice))
           (by simp [payloadStep,
-      Parser.Category.Token.expectNumeral]) (by simp [finalCall, hA.commandDeclareSort]) rfl).congr
+      Parser.Category.Token.Internal.expectNumeral]) (by simp [finalCall, hA.commandDeclareSort]) rfl).congr
           ?_ rfl
   simp [takeAll, adaptRun_take hsymbolToken, adaptRun_take hnumeralToken,
     adaptRun_take (token := .parenClose) rfl]

@@ -22,9 +22,9 @@ handler calls in the same order, the others by the port's step itself.
 namespace BSmtLib.Facts.Proofs.Parser.Fused.Term
 
 open BSmtLib.Traits
-open BSmtLib.Parser (Parse PM call syntaxError ParseErrorCause)
-open BSmtLib.Parser.Category.Term (TermLevelOf TermStateOf)
-open BSmtLib.Parser.Command (CommandStateOf)
+open BSmtLib.Parser (Parse ParseErrorCause)
+open BSmtLib.Parser.Internal (PM call syntaxError)
+open BSmtLib.Parser.Category.Term.Internal (TermLevelOf TermStateOf)
 open BSmtLib.Parser.Internal.Fused
 open BSmtLib.Parser.Internal.Fused.Basic
 open BSmtLib.Parser.Script (ScriptParser)
@@ -50,7 +50,8 @@ theorem portTermStep_eq (posture : VersionPosture) {batch : BatchTag} (h : H)
     (declarations : Nat) (context : TermContext (Handler.«Sort» H)) (term : TermStateOf H)
     (token : Token batch) (next : BatchCursor batch) {β : Type} (k : OutcomeOf H next → m β) :
     portTermStep posture h declarations context term token next k =
-      (Parser.Category.Term.termStep next.version term (inputOf next.version next token)).run.run h
+      (Parser.Category.Term.Internal.termStep next.version term
+          (inputOf next.version next token)).run.run h
         >>= termCont posture declarations context next k := by
   unfold portTermStep runParser
   rfl
@@ -58,10 +59,10 @@ theorem termComplete_eq (posture : VersionPosture) {batch : BatchTag} (next : Ba
     (h : H) (declarations : Nat) (context : TermContext (Handler.«Sort» H))
     (levels : List (TermLevelOf H)) (term : Handler.Term H) {β : Type}
     (k : OutcomeOf H next → m β) :
-    (Parser.Category.Term.termComplete levels term).run.run h >>=
+    (Parser.Category.Term.Internal.termComplete levels term).run.run h >>=
         termCont posture declarations context next k =
       Parser.Internal.Fused.termComplete posture next h declarations context levels term k := by
-  unfold Parser.Category.Term.termComplete Parser.Internal.Fused.termComplete
+  unfold Parser.Category.Term.Internal.termComplete Parser.Internal.Fused.termComplete
   rcases levels with _ | ⟨level, outer⟩
   · simp [termCont]
   · cases level with
@@ -79,7 +80,7 @@ theorem handleTerm_eq (posture : VersionPosture) {batch : BatchTag} (next : Batc
     (levels : List (TermLevelOf H)) (node : Nodes.TermNode (Handler.«Sort» H) (Handler.Term H))
     {β : Type} (k : OutcomeOf H next → m β) :
     (call (Handler.handleTerm node) >>= fun term =>
-          Parser.Category.Term.termComplete levels term).run.run h >>=
+          Parser.Category.Term.Internal.termComplete levels term).run.run h >>=
         termCont posture declarations context next k =
       Parser.Internal.Fused.handleTerm posture next h declarations context levels node k := by
   unfold Parser.Internal.Fused.handleTerm runHandler
@@ -98,33 +99,33 @@ theorem termStep_eq (posture : VersionPosture) {batch : BatchTag} (h : H) (decla
   cases mode with
   | letBindingsOpen =>
     rw [portTermStep_eq]
-    unfold Parser.Category.Term.termStep
+    unfold Parser.Category.Term.Internal.termStep
     simp only [inputOf]
-    cases next.category token <;> simp only [Token.SyntaxToken.fromParts,
+    cases next.category token <;> simp only [Token.SyntaxToken.Internal.fromParts,
         Parser.Internal.Input.ofSyntax] <;>
       (try rcases Token.Reserved.fromBytes? (next.content token) next.version with _ | (w | w)) <;>
-      simp [termCont, fail, Parser.Category.Token.expectOpen, syntaxError]
+      simp [termCont, fail, Parser.Category.Token.Internal.expectOpen, syntaxError]
   | letBindingClose bindings =>
     rw [portTermStep_eq]
-    unfold Parser.Category.Term.termStep
+    unfold Parser.Category.Term.Internal.termStep
     simp only [inputOf]
-    cases next.category token <;> simp only [Token.SyntaxToken.fromParts,
+    cases next.category token <;> simp only [Token.SyntaxToken.Internal.fromParts,
         Parser.Internal.Input.ofSyntax] <;>
       (try rcases Token.Reserved.fromBytes? (next.content token) next.version with _ | (w | w)) <;>
-      simp [termCont, fail, Parser.Category.Token.expectClose, syntaxError]
+      simp [termCont, fail, Parser.Category.Token.Internal.expectClose, syntaxError]
   | letBindingSymbol bindings =>
     rw [portTermStep_eq]
-    unfold Parser.Category.Term.termStep
+    unfold Parser.Category.Term.Internal.termStep
     simp only [Category.symbolOf?, Reserved.contentOf_eq, Reserved.reservedAt_eq, inputOf]
-    cases next.category token <;> simp only [Token.SyntaxToken.fromParts,
+    cases next.category token <;> simp only [Token.SyntaxToken.Internal.fromParts,
         Parser.Internal.Input.ofSyntax] <;>
       (try rcases Token.Reserved.fromBytes? (next.content token) next.version with _ | (w | w)) <;>
-      simp [termCont, fail, Parser.Category.Token.expectSymbol, syntaxError]
+      simp [termCont, fail, Parser.Category.Token.Internal.expectSymbol, syntaxError]
   | letBindingOpen bindings =>
     rw [portTermStep_eq]
-    unfold Parser.Category.Term.termStep
+    unfold Parser.Category.Term.Internal.termStep
     simp only [inputOf]
-    cases next.category token <;> simp only [Token.SyntaxToken.fromParts,
+    cases next.category token <;> simp only [Token.SyntaxToken.Internal.fromParts,
         Parser.Internal.Input.ofSyntax] <;>
       (try rcases Token.Reserved.fromBytes? (next.content token) next.version with _ | (w | w)) <;>
       simp [termCont, fail, syntaxError]
@@ -139,15 +140,15 @@ theorem termStep_eq (posture : VersionPosture) {batch : BatchTag} (h : H) (decla
         cases r <;> simp [termCont, fail]
   | binderClose kind scope body =>
     rw [portTermStep_eq]
-    unfold Parser.Category.Term.termStep
+    unfold Parser.Category.Term.Internal.termStep
     simp only [inputOf]
-    cases next.category token <;> simp only [Token.SyntaxToken.fromParts,
+    cases next.category token <;> simp only [Token.SyntaxToken.Internal.fromParts,
         Parser.Internal.Input.ofSyntax] <;>
       (try rcases Token.Reserved.fromBytes? (next.content token) next.version with _ | (w | w)) <;>
-      simp [termCont, fail, syntaxError, Parser.Category.Token.expectClose]
+      simp [termCont, fail, syntaxError, Parser.Category.Token.Internal.expectClose]
     all_goals
       rcases kind with _ | (_ | _) <;>
-        simp only [Parser.Category.Term.endBinder] <;>
+        simp only [Parser.Category.Term.Internal.endBinder] <;>
         rw [run_call_bind, bind_assoc] <;>
         unfold runHandler <;>
         congr 1 <;>
@@ -155,9 +156,9 @@ theorem termStep_eq (posture : VersionPosture) {batch : BatchTag} (h : H) (decla
         cases r <;> simp [termCont, fail, termComplete_eq]
   | start =>
     rw [portTermStep_eq]
-    unfold Parser.Category.Term.termStep
+    unfold Parser.Category.Term.Internal.termStep
     simp only [Reserved.contentOf_eq, Reserved.reservedAt_eq, inputOf]
-    cases next.category token <;> simp only [Token.SyntaxToken.fromParts,
+    cases next.category token <;> simp only [Token.SyntaxToken.Internal.fromParts,
         Parser.Internal.Input.ofSyntax] <;>
       (try rcases Token.Reserved.fromBytes? (next.content token) next.version with _ | (w | w)) <;>
       simp [termCont, fail, syntaxError, constantOf, ← handleTerm_eq]
@@ -166,9 +167,9 @@ theorem termStep_eq (posture : VersionPosture) {batch : BatchTag} (h : H) (decla
     all_goals (split <;> simp_all [termCont, fail])
   | opened =>
     rw [portTermStep_eq]
-    unfold Parser.Category.Term.termStep Parser.Category.Term.termOpened
+    unfold Parser.Category.Term.Internal.termStep Parser.Category.Term.Internal.termOpened
     simp only [Reserved.contentOf_eq, Reserved.reservedAt_eq, inputOf]
-    cases next.category token <;> simp only [Token.SyntaxToken.fromParts,
+    cases next.category token <;> simp only [Token.SyntaxToken.Internal.fromParts,
         Parser.Internal.Input.ofSyntax] <;>
       (try rcases Token.Reserved.fromBytes? (next.content token) next.version with _ | (w | w)) <;>
       simp [termCont, fail, syntaxError]
@@ -179,7 +180,7 @@ theorem termStep_eq (posture : VersionPosture) {batch : BatchTag} (h : H) (decla
     | none => simp only []
     | some r =>
       rw [portTermStep_eq]
-      unfold Parser.Category.Term.termStep
+      unfold Parser.Category.Term.Internal.termStep
       simp only []
       rw [run_bind_eq, qualIdentStep_run next.version state next token h r hq]
       cases r <;> simp [qualToRun, termCont, fail, ← handleTerm_eq]
@@ -189,13 +190,13 @@ theorem termStep_eq (posture : VersionPosture) {batch : BatchTag} (h : H) (decla
     | none => simp only []
     | some r =>
       rw [portTermStep_eq]
-      unfold Parser.Category.Term.termStep
+      unfold Parser.Category.Term.Internal.termStep
       simp only []
       rw [run_bind_eq, qualIdentStep_run next.version state next token h r hq]
       cases r <;> simp [qualToRun, termCont, fail]
   | sortedVars binder state =>
     rw [portTermStep_eq]
-    unfold Parser.Category.Term.termStep
+    unfold Parser.Category.Term.Internal.termStep
     simp only [Category.sortedVarsStepOutlined]
     rw [run_bind_eq, sortedVarsStep_run, bind_map_left, bind_assoc]
     congr 1
@@ -208,7 +209,7 @@ theorem termStep_eq (posture : VersionPosture) {batch : BatchTag} (h : H) (decla
       · cases binder <;> simp [HandledOutcome.toRun, termCont, fail, hv, syntaxError]
       · cases binder <;>
           simp only [HandledOutcome.toRun, hv, Bool.false_eq_true, ite_false,
-            Parser.Category.Term.startBinder] <;>
+            Parser.Category.Term.Internal.startBinder] <;>
           rw [run_call_bind, bind_assoc] <;> unfold runHandler <;> congr 1 <;>
           funext ⟨r, h''⟩ <;> cases r <;> simp [termCont, fail]
   | _ => rfl

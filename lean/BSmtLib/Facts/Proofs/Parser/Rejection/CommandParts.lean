@@ -6,9 +6,9 @@ import all BSmtLib.Parser.Category.Combinator
 import all BSmtLib.Parser.Category.Sort
 import all BSmtLib.Parser.Category.Term
 import all BSmtLib.Parser.Category.Token
-import all BSmtLib.Parser.Command.Datatype
-import all BSmtLib.Parser.Command.Function
-import all BSmtLib.Parser.Command.Standard
+import all BSmtLib.Parser.Command.Internal.Datatype
+import all BSmtLib.Parser.Command.Internal.Function
+import all BSmtLib.Parser.Command.Internal.Standard
 import all BSmtLib.Token.Reserved
 
 @[expose] public section
@@ -28,21 +28,20 @@ namespace BSmtLib.Facts.Proofs.Parser.Rejection.CommandParts
 open BSmtLibSpec.Grammar
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Parser.Traversal
-open BSmtLib.Parser (PM)
-open BSmtLib.Parser.Category.Term (TermState TermMode TermLevel termStep termComplete)
-open BSmtLib.Parser.Category.Combinator (ListState)
-open BSmtLib.Parser.Command.Datatype (SortDecState ConstructorState constructorStep DatatypeState
+open BSmtLib.Parser.Category.Term.Internal (TermState TermMode TermLevel termStep termComplete)
+open BSmtLib.Parser.Category.Combinator.Internal (ListState)
+open BSmtLib.Parser.Command.Internal.Datatype (SortDecState ConstructorState constructorStep
+    DatatypeState
     datatypeStep)
-open BSmtLib.Parser.Command.Standard (LiteralShape LiteralState literalStep)
-open BSmtLib.Parser.Command.Function (SignatureState signatureStep FunctionDecState functionDecStep
+open BSmtLib.Parser.Command.Internal.Standard (LiteralShape LiteralState literalStep)
+open BSmtLib.Parser.Command.Internal.Function
+    (SignatureState signatureStep FunctionDecState functionDecStep
     bodyStep bodiesStep)
-open BSmtLib.Parser.Category.Token (symbolStep)
-open BSmtLib.Parser.Category.SortedVar (sortedVarStep)
-open BSmtLib.Parser.Category.Sort (sortStep)
+open BSmtLib.Parser.Category.Token.Internal (symbolStep)
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Proofs.Parser.Commands.Bytes
 open BSmtLib.Facts.Proofs.Parser.Rejection.Basic BSmtLib.Facts.Proofs.Parser.Rejection.Parts
 open BSmtLib.Facts.Proofs.Parser.Rejection.«Sort» BSmtLib.Facts.Proofs.Parser.Rejection.Term
-open BSmtLib.Parser.Command.Standard.Symbol
+open BSmtLib.Parser.Command.Internal.Standard.Symbol
 
 open BSmtLib.Facts.Proofs.Parser.Rejection.Basic.Lang
 
@@ -53,7 +52,8 @@ theorem symbolStep_advances (version : Token.Version) :
     StepsAdvance version (symbolStep (H := List Event)) (fun _ => SymbolLang)
       fun _ _ => SymbolLang := by
   intro _ token item hitem _
-  cases token <;> simp only [symbolStep, Parser.Category.Token.expectSymbol, bind_pure_comp] <;>
+  cases token <;> simp only [symbolStep, Parser.Category.Token.Internal.expectSymbol,
+      bind_pure_comp] <;>
       try fail_step
   item_of hitem
   exact Sound.pure fun _ => symbolLang_intro _
@@ -86,27 +86,29 @@ theorem sortDecStep_advances (version : Token.Version) :
   intro state token item hitem _
   cases state with
   | start =>
-    cases token <;> simp only [SortDecState.step, Parser.Category.Token.expectOpen, pure_bind] <;>
+    cases token <;> simp only [SortDecState.step, Parser.Category.Token.Internal.expectOpen,
+        pure_bind] <;>
         try fail_step
     item_of hitem
     refine Sound.pure fun _ => ⟨fun u hu => ?_, sortDecRem_nonempty _⟩
     obtain ⟨_, _, ⟨name, rfl⟩, ⟨_, _, ⟨digits, rfl⟩, rfl, rfl⟩, rfl⟩ := hu
     exact ⟨⟨name, digits⟩, rfl⟩
   | opened =>
-    cases token <;> simp only [SortDecState.step, Parser.Category.Token.expectSymbol,
+    cases token <;> simp only [SortDecState.step, Parser.Category.Token.Internal.expectSymbol,
       bind_pure_comp] <;> try fail_step
     item_of hitem
     exact Sound.pure fun _ => ⟨fun u hu => cat_intro' (symbolLang_intro _) hu rfl,
       sortDecRem_nonempty _⟩
   | arity _ =>
-    cases token <;> simp only [SortDecState.step, Parser.Category.Token.expectNumeral,
+    cases token <;> simp only [SortDecState.step, Parser.Category.Token.Internal.expectNumeral,
       bind_pure_comp] <;> try fail_step
     rename_i constant
     cases constant <;> simp only <;> try fail_step
     item_of hitem
     exact Sound.pure fun _ => ⟨fun u hu => cat_intro' ⟨_, rfl⟩ hu rfl, sortDecRem_nonempty _⟩
   | close _ _ =>
-    cases token <;> simp only [SortDecState.step, Parser.Category.Token.expectClose, pure_bind] <;>
+    cases token <;> simp only [SortDecState.step, Parser.Category.Token.Internal.expectClose,
+        pure_bind] <;>
         try fail_step
     item_of hitem
     exact Sound.pure fun _ => tok_intro _
@@ -144,7 +146,7 @@ theorem literalLang_nonempty : ∃ u, LiteralLang u := ⟨_, ⟨.positive ⟨[],
 theorem notLang_symbol {s : Nodes.Symbol} (h : (isNot s) = true) :
     NotLang [.token (.symbol (Bridge.symbol s))] := by
   refine ⟨Bridge.symbol s, ?_, rfl⟩
-  unfold Parser.Command.Standard.Symbol.isNot at h
+  unfold Parser.Command.Internal.Standard.Symbol.isNot at h
   rw [slice_beq_utf8 _ _ utf8_not] at h
   exact of_decide_eq_true h
 
@@ -197,7 +199,8 @@ theorem literalStep_advances (version : Token.Version) :
     case symbol s =>
       item_of hitem
       rw [show termStep (H := List Event) version .init (.symbol s) =
-        (Parser.call (Traits.Handler.handleTerm (H := List Event) (.identifier ⟨s, #[]⟩ none)) >>=
+        (Parser.Internal.call
+            (Traits.Handler.handleTerm (H := List Event) (.identifier ⟨s, #[]⟩ none)) >>=
           fun t => termComplete [] t) from rfl, bind_assoc]
       call_step
       rw [show ∀ t, termComplete (H := List Event) [] t = pure (.done t) from fun _ => rfl,
@@ -225,7 +228,8 @@ theorem literalStep_advances (version : Token.Version) :
       item_of hitem
       rw [show termStep (H := List Event) version ⟨.start, [.application f none #[]]⟩
           (.symbol s) =
-        (Parser.call (Traits.Handler.handleTerm (H := List Event) (.identifier ⟨s, #[]⟩ none)) >>=
+        (Parser.Internal.call
+            (Traits.Handler.handleTerm (H := List Event) (.identifier ⟨s, #[]⟩ none)) >>=
           fun t => termComplete [.application f none #[]] t) from rfl, bind_assoc]
       refine Sound.bind (Sound.ofCall fun _ => ⟨_, _, rfl⟩) fun t _ => ?_
       rw [show termComplete (H := List Event) [.application f none #[]] t =
@@ -240,7 +244,8 @@ theorem literalStep_advances (version : Token.Version) :
       item_of hitem
       rw [show termStep (H := List Event) version ⟨.start, [.application f none #[a]]⟩
           .parenClose =
-        (Parser.call (Traits.Handler.handleTerm (H := List Event) (.application f none #[a])) >>=
+        (Parser.Internal.call
+            (Traits.Handler.handleTerm (H := List Event) (.application f none #[a])) >>=
           fun t => termComplete [] t) from rfl, bind_assoc]
       call_step
       rw [show ∀ t, termComplete (H := List Event) [] t = pure (.done t) from fun _ => rfl,
@@ -294,7 +299,8 @@ theorem signatureStep_advances (version : Token.Version) :
   intro state token item hitem hlex
   cases state with
   | start =>
-    cases token <;> simp only [signatureStep, Parser.Category.Token.expectSymbol, bind_pure_comp]
+    cases token <;> simp only [signatureStep, Parser.Category.Token.Internal.expectSymbol,
+        bind_pure_comp]
     case symbol s =>
       item_of hitem
       refine Sound.pure fun _ => ⟨fun u hu => ?_, ?_⟩
@@ -325,7 +331,7 @@ theorem signatureStep_advances (version : Token.Version) :
       refine Sound.pure fun hne => ⟨fun u hu => ?_, by
         simpa [signatureRem] using sortRem_nonempty (Bridge.version version) .init⟩
       exact cat_intro' (hr (hlist hne) (Nat.zero_le _) (by simp)) (by
-        simpa [signatureRem, sortRem, Parser.Category.«Sort».SortState.init] using hu) rfl
+        simpa [signatureRem, sortRem, Parser.Category.«Sort».Internal.SortState.init] using hu) rfl
   | result s parameters state =>
     simp only [signatureStep]
     refine Sound.bind (sortStep_advances version state token item hitem hlex) fun r hr => ?_
@@ -342,7 +348,8 @@ theorem functionDecStep_advances (version : Token.Version) :
   intro state token item hitem hlex
   cases state with
   | start =>
-    cases token <;> simp only [functionDecStep, Parser.Category.Token.expectOpen, pure_bind]
+    cases token <;> simp only [functionDecStep, Parser.Category.Token.Internal.expectOpen,
+        pure_bind]
     case parenOpen =>
       item_of hitem
       refine Sound.pure fun _ => ⟨fun u hu => ?_, cat_nonempty (signatureRem_start_nonempty _)
@@ -370,7 +377,8 @@ theorem functionDecStep_advances (version : Token.Version) :
       exact Sound.pure fun hne => ⟨fun u hu => cat_intro' (hr (hsig hne)) hu rfl,
         ⟨_, tok_intro _⟩⟩
   | close signature =>
-    cases token <;> simp only [functionDecStep, Parser.Category.Token.expectClose, pure_bind]
+    cases token <;> simp only [functionDecStep, Parser.Category.Token.Internal.expectClose,
+        pure_bind]
     case parenClose =>
       item_of hitem
       exact Sound.pure fun _ => tok_intro _
@@ -443,14 +451,16 @@ theorem constructorStep_advances (version : Token.Version) :
   intro state token item hitem hlex
   cases state with
   | start =>
-    cases token <;> simp only [constructorStep, Parser.Category.Token.expectOpen, pure_bind]
+    cases token <;> simp only [constructorStep, Parser.Category.Token.Internal.expectOpen,
+        pure_bind]
     case parenOpen =>
       item_of hitem
       exact Sound.pure fun _ => ⟨fun u hu => constructorLang_opened _ hu,
         constructorRem_opened_nonempty _⟩
     all_goals fail_step
   | opened =>
-    cases token <;> simp only [constructorStep, Parser.Category.Token.expectSymbol, bind_pure_comp]
+    cases token <;> simp only [constructorStep, Parser.Category.Token.Internal.expectSymbol,
+        bind_pure_comp]
     case symbol s =>
       item_of hitem
       refine Sound.pure fun _ => ⟨fun u hu => ?_, listRem_closed_nonempty
@@ -552,7 +562,7 @@ theorem datatypeStep_advances (version : Token.Version)
   intro state token item hitem hlex
   cases state with
   | start =>
-    cases token <;> simp only [datatypeStep, Parser.Category.Token.expectOpen, pure_bind]
+    cases token <;> simp only [datatypeStep, Parser.Category.Token.Internal.expectOpen, pure_bind]
     case parenOpen =>
       item_of hitem
       refine Sound.pure fun _ => ⟨fun u hu => datatypeLang_kind _ hu, ?_⟩
@@ -612,7 +622,7 @@ theorem datatypeStep_advances (version : Token.Version)
         cases parameters using Array.casesOn with
         | mk l => cases l <;> simp_all
   | constructorsOpen =>
-    cases token <;> simp only [datatypeStep, Parser.Category.Token.expectOpen, pure_bind]
+    cases token <;> simp only [datatypeStep, Parser.Category.Token.Internal.expectOpen, pure_bind]
     case parenOpen =>
       item_of hitem
       refine Sound.pure fun _ => ⟨fun u hu => ?_, cat_nonempty (listRem_closed_nonempty
@@ -658,7 +668,7 @@ theorem datatypeStep_advances (version : Token.Version)
           subst hparametric
           exact Sound.pure fun hne => cat_intro' (hr (hlist hne) hlen (by simp)) rfl rfl
   | close constructors =>
-    cases token <;> simp only [datatypeStep, Parser.Category.Token.expectClose, pure_bind]
+    cases token <;> simp only [datatypeStep, Parser.Category.Token.Internal.expectClose, pure_bind]
     case parenClose =>
       item_of hitem
       exact Sound.pure fun _ => tok_intro _
@@ -680,34 +690,35 @@ theorem bodyStep_advances (version : Token.Version) :
     exact Sound.pure hr
 
 theorem termRem_init {version : BSmtLibSpec.Lexicon.Version} :
-    ∀ u, termRem version Parser.Category.Term.TermState.init u → TermLang version u := by
+    ∀ u, termRem version Parser.Category.Term.Internal.TermState.init u → TermLang version u := by
   intro u hu
   obtain ⟨t, _, ht, rfl, rfl⟩ := hu
   simpa using ht
 
 theorem termRem_init_nonempty (version : BSmtLibSpec.Lexicon.Version) :
-    ∃ u, termRem version Parser.Category.Term.TermState.init u :=
+    ∃ u, termRem version Parser.Category.Term.Internal.TermState.init u :=
   termRem_nonempty version _ trivial
 
 /-- Every step of the parser of the recursive bodies advances, for exactly `count` bodies. -/
 theorem bodiesStep_advances (version : Token.Version) (count : Nat) :
     StepsAdvance version (bodiesStep (H := List Event) count version)
       (listRem (termRem (Bridge.version version)) (TermLang (Bridge.version version))
-        Parser.Category.Term.TermState.init count (some count))
+        Parser.Category.Term.Internal.TermState.init count (some count))
       fun state (items : Array Unit) u => count ≤ items.size →
         (∀ limit, some count = some limit → items.size ≤ limit) →
         listRem (termRem (Bridge.version version)) (TermLang (Bridge.version version))
-          Parser.Category.Term.TermState.init count (some count) state u := by
+          Parser.Category.Term.Internal.TermState.init count (some count) state u := by
   intro state token item hitem hlex
   simp only [bodiesStep]
-  exact listStep_advances version Parser.Category.Term.TermState.init (bodyStep_advances version)
+  exact listStep_advances version Parser.Category.Term.Internal.TermState.init
+      (bodyStep_advances version)
     (element := TermLang _)
     termRem_init (termRem_init_nonempty _) (termLang_nonempty _) count (some count) (by simp)
     state token item hitem hlex
 
 /-- The parser of recursive bodies writes no event where it finishes. -/
 theorem bodiesStep_quiet (count : Nat) (version : Token.Version)
-    (state : ListState (Parser.Category.Term.TermStateOf (List Event)) Unit)
+    (state : ListState (Parser.Category.Term.Internal.TermStateOf (List Event)) Unit)
         (token : Parser.Internal.Input) :
     ∀ events b events', (bodiesStep (H := List Event) count version state token).run.run events =
       (.ok b, events') → (∃ v, b = .done v) → events' = events := by

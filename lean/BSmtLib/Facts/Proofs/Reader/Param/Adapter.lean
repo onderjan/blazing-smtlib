@@ -22,6 +22,7 @@ cursor as the recording log says the run asked its producer to (`takeOne_rec`).
 namespace BSmtLib.Facts.Proofs.Reader.Param.Adapter
 
 open BSmtLibSpec.Parser
+open BSmtLib.Token.BatchCursor.Internal (remaining)
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Parser.Traversal
 open BSmtLib.Parser
@@ -502,7 +503,7 @@ def paLoop {b : Token.BatchTag} (parser : ScriptParser (List Event))
       | (.goOn parser', ⟨later, _taken⟩) => paLoop parser' later
       | (.stop answer parser', ⟨later, _⟩) => return (answer, parser', later)
   else return (.ok .continue, parser, cursor)
-termination_by cursor.remaining
+termination_by remaining cursor
 decreasing_by exact Token.BatchCursor.Consumed.remaining_lt _taken
 
 theorem next?_hasNext {b : Token.BatchTag} (cursor : Token.BatchCursor b) (h : cursor.HasNext) :
@@ -521,7 +522,7 @@ theorem next?_not {b : Token.BatchTag} (cursor : Token.BatchCursor b) (h : ¬ cu
 theorem rest_eq {b : Token.BatchTag} (origin : Token.BatchCursor b) :
     ∀ (n : Nat) (parser : ScriptParser (List Event)) (cursor : Token.BatchCursor b)
       (consumed : Token.Produce.Consumed cursor origin)
-          (handler : List Event), cursor.remaining < n →
+          (handler : List Event), remaining cursor < n →
       let r := (Stop.rest (H := List Event) (m := Id) origin parser cursor consumed).run
         handler
       ((r.1.1, r.1.2.1, r.1.2.2.val), r.2) = (paLoop parser cursor).run handler
@@ -571,7 +572,7 @@ theorem consume_eq {b : Token.BatchTag} (cursor : Token.BatchCursor b) (h : curs
     let r := (paLoop adapter.parser cursor).run (startLog adapter cursor.version)
     (q.1.1, q.1.2.val, q.2) = (r.1.1, r.1.2.2,
       { handler := r.2, parser := r.1.2.1,
-        versionSet := ParseAdapter.versionSetAfter r.1.1 }) := by
+        versionSet := ParseAdapter.Internal.versionSetAfter r.1.1 }) := by
   intro q r
   simp only [q, r]
   rw [paLoop, dite_eq_left_of_eq_true (eq_true h)]
@@ -591,11 +592,11 @@ theorem consume_eq {b : Token.BatchTag} (cursor : Token.BatchCursor b) (h : curs
   | stop answer parser' => rfl
   | goOn parser' =>
     simp only [Stop.finish]
-    have := rest_eq cursor (later.remaining + 1) parser' later taken handler' (Nat.lt_succ_self _)
+    have := rest_eq cursor (remaining later + 1) parser' later taken handler' (Nat.lt_succ_self _)
     simp only at this
     exact congrArg (fun x : (Except (ParseErrorCause Unit) (ControlFlow Unit) ×
       ScriptParser (List Event) × Token.BatchCursor b) × List Event =>
         (x.1.1, x.1.2.2, (ParseAdapter.mk x.2 x.1.2.1
-          (ParseAdapter.versionSetAfter x.1.1) .new : RecAdapter))) this
+          (ParseAdapter.Internal.versionSetAfter x.1.1) .new : RecAdapter))) this
 
 end BSmtLib.Facts.Proofs.Reader.Param.Adapter

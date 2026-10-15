@@ -20,6 +20,7 @@ lexer's pure run from where the step started anchored to the loop's index.
 namespace BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.ArmsQuoted
 
 open BSmtLib.Facts.Lexer.Adapters BSmtLib.Facts.Proofs.Lexer.Simulation.Bytes
+open BSmtLib.Lexer.Internal (CharClass)
 open BSmtLibSpec.Lexer (Handed)
 open BSmtLib.Lexer.Internal.WRustPort.Slice (get? get)
 open BSmtLib.Facts.Proofs.Lexer.VNaive.Run BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Agree
@@ -77,7 +78,7 @@ theorem quotedSpec_lt (v : Token.Version) (input : ByteSlice) (start0 : Nat) (st
   | succ n ih =>
   intro consumed hn horigin hconsumed s locq hfix hbase0 hholds hbytes hloc hlow hb hts hstate hfits
     h0 hs0 hanchor
-  have hJ : Lexer.Internal.WRustPort.Slice.runEnd input consumed Lexer.CharClass.RUN_QUOTED_PLAIN =
+  have hJ : Lexer.Internal.WRustPort.Slice.runEnd input consumed CharClass.RUN_QUOTED_PLAIN =
       runEnd input isQuotedRun consumed := runEnd_eq endsRun_quoted _ _
   have hle := le_runEnd input isQuotedRun consumed
   have hle' := runEnd_le input isQuotedRun consumed hconsumed
@@ -88,10 +89,10 @@ theorem quotedSpec_lt (v : Token.Version) (input : ByteSlice) (start0 : Nat) (st
   rw [← hJ] at hA hle hle' hstop
   have hext : contentBytes (s.val.tokenContent.extendFrom input.byteArray (input.start + consumed)
       (input.start + Lexer.Internal.WRustPort.Slice.runEnd input consumed
-          Lexer.CharClass.RUN_QUOTED_PLAIN)) =
+          CharClass.RUN_QUOTED_PLAIN)) =
       contentBytes s.val.tokenContent ++
         bytesOf input consumed (Lexer.Internal.WRustPort.Slice.runEnd input consumed
-            Lexer.CharClass.RUN_QUOTED_PLAIN) :=
+            CharClass.RUN_QUOTED_PLAIN) :=
     contentBytes_extendSlice input hfits (.inl hle')
   have hfits' := fits_extendSlice input hfits (a := consumed) (.inl hle')
   have hA' := hanchor.trans hA
@@ -113,11 +114,11 @@ theorem quotedSpec_lt (v : Token.Version) (input : ByteSlice) (start0 : Nat) (st
               s.val.tokenContent
               ++
             bytesOf input consumed (Lexer.Internal.WRustPort.Slice.runEnd input consumed
-                Lexer.CharClass.RUN_QUOTED_PLAIN)⟩)
+                CharClass.RUN_QUOTED_PLAIN)⟩)
             (afterColumns locq (Lexer.Internal.WRustPort.Slice.runEnd input consumed
-                Lexer.CharClass.RUN_QUOTED_PLAIN + 1 -
+                CharClass.RUN_QUOTED_PLAIN + 1 -
               consumed)) (Lexer.Internal.WRustPort.Slice.runEnd input consumed
-                  Lexer.CharClass.RUN_QUOTED_PLAIN + 1) := by
+                  CharClass.RUN_QUOTED_PLAIN + 1) := by
         rw [hA', feedFrom_step hIs (byteStep_token_pending v C.concrete
             (by rw [hIc, hp']; rfl)), prep_nil,
           hIc, hp', afterByte_eq_afterColumns' _ _ (by decide), afterColumns_add]
@@ -125,7 +126,7 @@ theorem quotedSpec_lt (v : Token.Version) (input : ByteSlice) (start0 : Nat) (st
         omega
       have hLJ := hloc.afterColumns (by rw [hbase0]; exact h0)
         (show consumed ≤ Lexer.Internal.WRustPort.Slice.runEnd input consumed
-            Lexer.CharClass.RUN_QUOTED_PLAIN + 1 by omega)
+            CharClass.RUN_QUOTED_PLAIN + 1 by omega)
       unfold Lexer.Internal.WRustPort.extendContent Lexer.Internal.WRustPort.modifyContent
       apply WP.wp_bind; apply WP.wp_modifyCore
       split
@@ -135,9 +136,9 @@ theorem quotedSpec_lt (v : Token.Version) (input : ByteSlice) (start0 : Nat) (st
         have hC := feedFrom_end v C.concrete input hNs (q := ⟨.quotedSymbolClosed, tokenStart,
             contentBytes s.val.tokenContent ++ bytesOf input consumed
               (Lexer.Internal.WRustPort.Slice.runEnd input consumed
-                  Lexer.CharClass.RUN_QUOTED_PLAIN)⟩)
+                  CharClass.RUN_QUOTED_PLAIN)⟩)
           (location := afterColumns locq (Lexer.Internal.WRustPort.Slice.runEnd input consumed
-            Lexer.CharClass.RUN_QUOTED_PLAIN + 1 - consumed)) (advance_end_quotedSymbolClosed rfl)
+            CharClass.RUN_QUOTED_PLAIN + 1 - consumed)) (advance_end_quotedSymbolClosed rfl)
         rw [← hB, hNc] at hC
         unfold Lexer.Internal.WRustPort.expectDelimiter
         apply WP.wp_bind
@@ -171,34 +172,34 @@ theorem quotedSpec_lt (v : Token.Version) (input : ByteSlice) (start0 : Nat) (st
             apply WP.wp_pure
             have hstep := stepLocation_eq' (pos := Lexer.Internal.WRustPort.Slice.runEnd input
                 consumed
-              Lexer.CharClass.RUN_QUOTED_PLAIN + 1) hloc (by rw [hbase0]; exact h0) hb hlow
+              CharClass.RUN_QUOTED_PLAIN + 1) hloc (by rw [hbase0]; exact h0) hb hlow
                   (by omega)
             refine armPost_finish (s0 := _) ⟨hfix.1, hfix.2, hfix.3, hfix.4, hfix.5, hfix.6⟩ hbase0
               (show start0 ≤ Lexer.Internal.WRustPort.Slice.runEnd input consumed
-                  Lexer.CharClass.RUN_QUOTED_PLAIN + 1 by
+                  CharClass.RUN_QUOTED_PLAIN + 1 by
                 omega) hbytes ⟨k1, k4, k3, k5, rfl, k8, k9, k10, k11, hb1⟩ hLJ hc1 ?_
             rw [hC]
             show _ = Prep [⟨.quotedSymbol, contentBytes (s.val.tokenContent.extendFrom
                 input.byteArray (input.start + consumed)
             (input.start + (Lexer.Internal.WRustPort.Slice.runEnd input consumed
-                Lexer.CharClass.RUN_QUOTED_PLAIN))), tokenStart,
+                CharClass.RUN_QUOTED_PLAIN))), tokenStart,
               stepLocation s.val low base
                 (Lexer.Internal.WRustPort.Slice.runEnd input consumed
-                    Lexer.CharClass.RUN_QUOTED_PLAIN + 1)⟩] _
+                    CharClass.RUN_QUOTED_PLAIN + 1)⟩] _
             rw [hext, hstep]
           · intro e s' p d hn hss
             have hstep := stepLocation_eq' (pos := Lexer.Internal.WRustPort.Slice.runEnd input
                 consumed
-              Lexer.CharClass.RUN_QUOTED_PLAIN + 1) hloc (by rw [hbase0]; exact h0) hb hlow
+              CharClass.RUN_QUOTED_PLAIN + 1) hloc (by rw [hbase0]; exact h0) hb hlow
                   (by omega)
             have hn' : Stops C s.val.holding s.val.version coll
                 (held ++ [⟨.quotedSymbol, contentBytes
                 (s.val.tokenContent.extendFrom input.byteArray (input.start + consumed)
             (input.start + (Lexer.Internal.WRustPort.Slice.runEnd input consumed
-                  Lexer.CharClass.RUN_QUOTED_PLAIN))), tokenStart,
+                  CharClass.RUN_QUOTED_PLAIN))), tokenStart,
                 stepLocation s.val low base
                   (Lexer.Internal.WRustPort.Slice.runEnd input consumed
-                      Lexer.CharClass.RUN_QUOTED_PLAIN + 1)⟩]) e p d := hn
+                      CharClass.RUN_QUOTED_PLAIN + 1)⟩]) e p d := hn
             rw [hext, hstep] at hn'
             exact stepFails_of_stops' (hbytes := by first | assumption | exact hpre.bytes) hss (by
                 first
@@ -214,7 +215,7 @@ theorem quotedSpec_lt (v : Token.Version) (input : ByteSlice) (start0 : Nat) (st
         apply WP.wp_pure
         refine armPost_pending (s0 := s.val) hfix hbase0
           (show start0 < Lexer.Internal.WRustPort.Slice.runEnd input consumed
-              Lexer.CharClass.RUN_QUOTED_PLAIN + 1 by omega)
+              CharClass.RUN_QUOTED_PLAIN + 1 by omega)
           hholds hbytes ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩ ?_ hLJ hB
         exact ⟨⟨rfl, rfl, hext.symm⟩, hfits'⟩
     · intro hp
@@ -226,11 +227,11 @@ theorem quotedSpec_lt (v : Token.Version) (input : ByteSlice) (start0 : Nat) (st
         have hf : ∃ f, advance C.concrete ⟨.quotedSymbol, tokenStart, contentBytes
             s.val.tokenContent ++
             bytesOf input consumed (Lexer.Internal.WRustPort.Slice.runEnd input consumed
-                Lexer.CharClass.RUN_QUOTED_PLAIN)⟩
+                CharClass.RUN_QUOTED_PLAIN)⟩
             (afterColumns locq (Lexer.Internal.WRustPort.Slice.runEnd input consumed
-                Lexer.CharClass.RUN_QUOTED_PLAIN -
+                CharClass.RUN_QUOTED_PLAIN -
               consumed)) input[Lexer.Internal.WRustPort.Slice.runEnd input consumed
-                  Lexer.CharClass.RUN_QUOTED_PLAIN] =
+                  CharClass.RUN_QUOTED_PLAIN] =
             .error f := by
           rw [hIc, hbs']; exact ⟨_, rfl⟩
         obtain ⟨f, hf⟩ := hf
@@ -250,12 +251,12 @@ theorem quotedSpec_lt (v : Token.Version) (input : ByteSlice) (start0 : Nat) (st
                   (contentBytes s.val.tokenContent
                   ++
                 bytesOf input consumed (Lexer.Internal.WRustPort.Slice.runEnd input consumed
-                  Lexer.CharClass.RUN_QUOTED_PLAIN)).push 10⟩)
+                  CharClass.RUN_QUOTED_PLAIN)).push 10⟩)
                 ((afterColumns locq (Lexer.Internal.WRustPort.Slice.runEnd input consumed
-                    Lexer.CharClass.RUN_QUOTED_PLAIN -
+                    CharClass.RUN_QUOTED_PLAIN -
                   consumed)).afterByte 10)
                 (Lexer.Internal.WRustPort.Slice.runEnd input consumed
-                    Lexer.CharClass.RUN_QUOTED_PLAIN + 1) := by
+                    CharClass.RUN_QUOTED_PLAIN + 1) := by
             rw [hA', feedFrom_step hIs (byteStep_token_pending v C.concrete
                 (by rw [hIc, h10']; rfl)),
               prep_nil, hIc, h10']
@@ -264,21 +265,21 @@ theorem quotedSpec_lt (v : Token.Version) (input : ByteSlice) (start0 : Nat) (st
           apply WP.wp_bind; apply WP.wp_modifyCore
           apply WP.wp_bind; apply WP.wp_modifyCore
           refine ih (Lexer.Internal.WRustPort.Slice.runEnd input consumed
-              Lexer.CharClass.RUN_QUOTED_PLAIN + 1) (by omega) _ _ _
+              CharClass.RUN_QUOTED_PLAIN + 1) (by omega) _ _ _
             ((afterColumns locq (Lexer.Internal.WRustPort.Slice.runEnd input consumed
-                Lexer.CharClass.RUN_QUOTED_PLAIN -
+                CharClass.RUN_QUOTED_PLAIN -
               consumed)).afterByte 10) ⟨hfix.1, hfix.2, hfix.3, hfix.4, hfix.5, hfix.6⟩
                   hbase0 hholds hbytes
             ?_ hlow hb hts hstate (fits_extendSlice input hfits (a := consumed)
               (b := Lexer.Internal.WRustPort.Slice.runEnd input consumed
-                  Lexer.CharClass.RUN_QUOTED_PLAIN + 1) (.inl (by omega)))
+                  CharClass.RUN_QUOTED_PLAIN + 1) (.inl (by omega)))
                   (by omega) hs0 ?_
           · refine LocAt.lineFeed hLI (by rw [hbase0]; omega) rfl ?_
             show Lexer.Internal.WRustPort.LexerCore.offsetAt _ _ + 1 = _
             simp only [Lexer.Internal.WRustPort.LexerCore.offsetAt]
           · rw [hB, contentBytes_extendSlice input hfits (a := consumed)
               (b := Lexer.Internal.WRustPort.Slice.runEnd input consumed
-                  Lexer.CharClass.RUN_QUOTED_PLAIN + 1) (.inl (by omega)),
+                  CharClass.RUN_QUOTED_PLAIN + 1) (.inl (by omega)),
               content_succ input _ hle hIs, hIc, h10']
         · -- any other byte is not in a quoted symbol
           intro h10
@@ -294,11 +295,11 @@ theorem quotedSpec_lt (v : Token.Version) (input : ByteSlice) (start0 : Nat) (st
               s.val.tokenContent
               ++
               bytesOf input consumed (Lexer.Internal.WRustPort.Slice.runEnd input consumed
-                  Lexer.CharClass.RUN_QUOTED_PLAIN)⟩
+                  CharClass.RUN_QUOTED_PLAIN)⟩
               (afterColumns locq (Lexer.Internal.WRustPort.Slice.runEnd input consumed
-                  Lexer.CharClass.RUN_QUOTED_PLAIN -
+                  CharClass.RUN_QUOTED_PLAIN -
                 consumed)) input[Lexer.Internal.WRustPort.Slice.runEnd input consumed
-                    Lexer.CharClass.RUN_QUOTED_PLAIN] =
+                    CharClass.RUN_QUOTED_PLAIN] =
               .error f := by
             rw [hIc]
             simp [advance, hp', hbs', htext]
@@ -311,7 +312,7 @@ theorem quotedSpec_lt (v : Token.Version) (input : ByteSlice) (start0 : Nat) (st
   · -- the run reaches the end of the slice: the symbol is left in progress
     rename_i hget
     have hIe := Lexer.Internal.WRustPort.Slice.size_le_of_get?_none hget
-    have he : Lexer.Internal.WRustPort.Slice.runEnd input consumed Lexer.CharClass.RUN_QUOTED_PLAIN
+    have he : Lexer.Internal.WRustPort.Slice.runEnd input consumed CharClass.RUN_QUOTED_PLAIN
         = input.size := by omega
     unfold Lexer.Internal.WRustPort.extendContent Lexer.Internal.WRustPort.modifyContent
     apply WP.wp_bind; apply WP.wp_modifyCore

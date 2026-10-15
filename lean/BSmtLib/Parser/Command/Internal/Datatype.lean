@@ -12,12 +12,16 @@ The parsers of the parts of datatype declarations: a sort declaration `(` ⟨sym
 a constructor, and a datatype declaration with or without `par`.
 -/
 
-namespace BSmtLib.Parser.Command.Datatype
+namespace BSmtLib.Parser.Command.Internal.Datatype
 
 open BSmtLib.Nodes BSmtLib.Traits BSmtLib.Parser.Category.Combinator BSmtLib.Parser.Category.Sort
+open BSmtLib.Parser.Category.Combinator.Internal
 open BSmtLib.Parser.Category.SortedVar BSmtLib.Parser.Category.Token
+open BSmtLib.Parser.Category.SortedVar.Internal
+open BSmtLib.Parser.Category.Token.Internal
 open BSmtLib.Plain (NumeralView)
 open BSmtLib.Token (Version)
+open BSmtLib.Parser.Internal (PM call syntaxError)
 
 section
 
@@ -135,4 +139,4 @@ def datatypeStep (start : Array Symbol → PM H Unit) (version : Version)
 
 end
 
-end BSmtLib.Parser.Command.Datatype
+end BSmtLib.Parser.Command.Internal.Datatype

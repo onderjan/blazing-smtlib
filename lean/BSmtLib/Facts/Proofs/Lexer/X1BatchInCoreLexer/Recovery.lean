@@ -49,7 +49,7 @@ theorem skipBytes_eq (bytes : ByteSlice) (legacy : Bool) (offset index : Nat)
     obtain ⟨sk, d, l, ls⟩ := s
     cases sk <;> dsimp only [skMap]
     iterate 3
-      bc (c == 34) <;> bc (c == 124) <;> bc (Lexer.Helpers.isDelimiter c && d == 0) <;>
+      bc (c == 34) <;> bc (c == 124) <;> bc (Lexer.Internal.Helpers.isDelimiter c && d == 0) <;>
           (try rfl) <;>
         bc (c == 59) <;> bc (c == 40) <;> bc (c == 41) <;> bc (d - 1 == 0) <;> (try rfl) <;>
         bc (c == 10)
@@ -71,7 +71,7 @@ theorem reset_couple :
   rw [eq_wb hx]
   rfl
 
-theorem skipSlice_couple (slice : ByteSlice) (skip : Lexer.Helpers.RecoveryState) :
+theorem skipSlice_couple (slice : ByteSlice) (skip : Lexer.Internal.Helpers.RecoveryState) :
     Coupled Eq (BSmtLib.Lexer.Internal.skipSlice (H := H) (m := m) slice skip)
       (Lexer.Internal.WRustPort.skipSlice slice skip) := by
   unfold BSmtLib.Lexer.Internal.skipSlice Lexer.Internal.WRustPort.skipSlice
@@ -98,12 +98,14 @@ theorem currentLocation_eq {c : ZCore} {x : XCore} (hx : Rel c x) :
   rw [eq_wb hx]
   simp [Lexer.Internal.WRustPort.LexerCore.currentLocation,
       Lexer.Internal.WRustPort.LexerCore.locationAt,
-    Lexer.Internal.WRustPort.LexerCore.offsetAt, BSmtLib.Lexer.LexerCore.currentLocation,
-    BSmtLib.Lexer.LexerCore.locationAt, BSmtLib.Lexer.LexerCore.offsetAt, wb, coreMap]
+    Lexer.Internal.WRustPort.LexerCore.offsetAt, BSmtLib.Lexer.Internal.LexerCore.currentLocation,
+    BSmtLib.Lexer.Internal.LexerCore.locationAt, BSmtLib.Lexer.Internal.LexerCore.offsetAt, wb,
+        coreMap]
 
 theorem executeStep_couple {R : Type}
-    {step : BSmtLib.Lexer.InnerM H m (Except (Lexer.Failure E) (ControlFlow R))}
-    {step' : Lexer.Internal.WRustPort.InnerM H m (Except (Lexer.Failure E) (ControlFlow R))}
+    {step : BSmtLib.Lexer.Internal.InnerM H m (Except (Lexer.Internal.Failure E) (ControlFlow R))}
+    {step' : Lexer.Internal.WRustPort.InnerM H m
+    (Except (Lexer.Internal.Failure E) (ControlFlow R))}
     (hs : Coupled Eq step step') :
     Coupled Eq (BSmtLib.Lexer.Internal.executeStep step)
         (Lexer.Internal.WRustPort.executeStep step') := by
@@ -116,7 +118,8 @@ theorem executeStep_couple {R : Type}
   · refine Coupled.bind Coupled.get fun c x hx => Coupled.pure ?_
     rw [currentLocation_eq hx]
 
-theorem failCall_couple (abandon : Span.Location → StateT H m Unit) (failure : Lexer.Failure E)
+theorem failCall_couple (abandon : Span.Location → StateT H m Unit)
+    (failure : Lexer.Internal.Failure E)
     (atEnd : Bool) :
     Coupled Eq (BSmtLib.Lexer.Internal.failCall abandon failure atEnd)
       (Lexer.Internal.WRustPort.fail abandon failure atEnd) := by

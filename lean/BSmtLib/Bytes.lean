@@ -80,16 +80,16 @@ def isEmpty (self : Bytes) : Bool := self.len == 0
 instead of keeping the allocation as `Vec::clear` does. Methods that mutate in Rust
 return the updated value in Lean. -/
 @[inline]
-def clear (_ : Bytes) : Bytes := new
+def Internal.clear (_ : Bytes) : Bytes := new
 
 /- LEAN: `copySlice` with `exact := false` appends the slice's bytes, growing the capacity
 by doubling as `Vec` does. -/
 @[inline]
-def extendFromSlice (self : Bytes) (slice : ByteSlice) : Bytes :=
+def Internal.extendFromSlice (self : Bytes) (slice : ByteSlice) : Bytes :=
   ⟨slice.byteArray.copySlice slice.start self.bytes self.bytes.size slice.size false⟩
 
 @[inline]
-def push (self : Bytes) (byte : UInt8) : Bytes := ⟨self.bytes.push byte⟩
+def Internal.push (self : Bytes) (byte : UInt8) : Bytes := ⟨self.bytes.push byte⟩
 
 @[no_expose] instance : BEq Bytes := ⟨fun a b => a.bytes == b.bytes⟩
 
@@ -100,7 +100,7 @@ def push (self : Bytes) (byte : UInt8) : Bytes := ⟨self.bytes.push byte⟩
 namespace BytesView
 
 @[inline]
-def new (slice : ByteSlice) : BytesView := ⟨slice⟩
+def Internal.new (slice : ByteSlice) : BytesView := ⟨slice⟩
 
 @[inline]
 def len (self : BytesView) : Nat := self.slice.size

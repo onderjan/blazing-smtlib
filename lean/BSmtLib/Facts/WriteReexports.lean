@@ -17,9 +17,7 @@ import BSmtLib.Token.SyntaxToken
 import BSmtLib.Token.Lookahead
 import BSmtLib.Token.Produce
 import BSmtLib.Token.ConsumeFrom
-import BSmtLib.Lexer.CharClass
 import BSmtLib.Lexer.Error
-import BSmtLib.Lexer.Helpers
 import BSmtLib.Lexer.Recovery
 import BSmtLib.Lexer
 import BSmtLib.Parser

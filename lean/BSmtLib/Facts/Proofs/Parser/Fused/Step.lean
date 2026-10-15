@@ -18,9 +18,7 @@ batch cursor, the fused reader, is that loop (`parse_eq`).
 namespace BSmtLib.Facts.Proofs.Parser.Fused.Step
 
 open BSmtLib.Traits
-open BSmtLib.Parser (Parse PM call syntaxError ParseErrorCause)
-open BSmtLib.Parser.Category.Term (TermLevelOf TermStateOf)
-open BSmtLib.Parser.Command (CommandStateOf)
+open BSmtLib.Parser (Parse ParseErrorCause)
 open BSmtLib.Parser.Internal.Fused
 open BSmtLib.Parser.Internal.Fused.Basic
 open BSmtLib.Parser.Script (ScriptParser)

@@ -27,7 +27,7 @@ namespace BSmtLib.Facts.Proofs.Parser.Quiet
 
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Parser.Traversal
-open BSmtLib.Parser (PM)
+open BSmtLib.Parser.Internal (PM)
 open BSmtLib.Facts.Parser.Adapters.Handler
 
 /-- The event is a token's arrival or processing. -/
@@ -116,7 +116,7 @@ theorem silent {x : RPM α} (h : Without bad P x) : Avoids bad x :=
 
 /-- A call of the recording handler is silent. -/
 theorem silent_call [CallsPass bad] {returns : Returns} (request : Call Recorded returns) :
-    Avoids bad (Parser.call (recordingCall request) : RPM (Recorded.of returns)) := by
+    Avoids bad (Parser.Internal.call (recordingCall request) : RPM (Recorded.of returns)) := by
   constructor
   intro events
   refine ⟨[.call returns request], ?_, by simp [CallsPass.call], fun _ _ => trivial⟩

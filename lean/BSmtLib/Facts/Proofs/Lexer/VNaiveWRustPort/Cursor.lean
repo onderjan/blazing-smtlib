@@ -19,6 +19,8 @@ the last token consumed is that of the lexeme before the next index (`consumedEn
 -/
 
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Batch BSmtLib.Facts.Proofs.Lexer.Simulation.Bytes
+open BSmtLib.Token.BatchCursor.Internal
+    (discardRequested resetConsumed relexRequested consumedEndOf)
 open BSmtLib.Facts.Proofs.Lexer.VNaive.Run BSmtLib.Facts.Proofs.Lexer.VNaive.Streaming
 open BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Batch
 open BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Bytes
@@ -37,34 +39,34 @@ theorem cNext_next (c : Token.BatchCursor g) (h : c.HasNext) : cNext
 theorem cStop_next (c : Token.BatchCursor g) (h : c.HasNext) : cStop (c.next h).2.1 = cStop c := by
   cases c; rfl
 
-theorem cNext_resetConsumed (c : Token.BatchCursor g) : cNext c.resetConsumed = cNext c := by
+theorem cNext_resetConsumed (c : Token.BatchCursor g) : cNext (resetConsumed c) = cNext c := by
   cases c; rfl
 
-theorem cStop_resetConsumed (c : Token.BatchCursor g) : cStop c.resetConsumed = cStop c := by
+theorem cStop_resetConsumed (c : Token.BatchCursor g) : cStop (resetConsumed c) = cStop c := by
   cases c; rfl
 
 theorem relex_resetConsumed (c : Token.BatchCursor g) :
-    c.resetConsumed.relexRequested = c.relexRequested := by
+    (relexRequested (resetConsumed c)) = relexRequested c := by
   cases c; rfl
 
 theorem discard_resetConsumed (c : Token.BatchCursor g) :
-    c.resetConsumed.discardRequested = c.discardRequested := by
+    (discardRequested (resetConsumed c)) = discardRequested c := by
   cases c; rfl
 
-theorem cNext_new (v : Token.Version) (b : Token.TokenBatch) : cNext
-    (Token.BatchCursor.new v b) = 0 := (rfl)
+theorem cNext_new (v : Token.Version) (b : Token.Internal.TokenBatch) :
+    cNext (Token.BatchCursor.Internal.new v b) = 0 := (rfl)
 
-theorem cStop_new (v : Token.Version) (b : Token.TokenBatch) : cStop
-    (Token.BatchCursor.new v b) = b.len := (rfl)
+theorem cStop_new (v : Token.Version) (b : Token.Internal.TokenBatch) :
+    cStop (Token.BatchCursor.Internal.new v b) = b.len := (rfl)
 
-theorem relex_new (v : Token.Version) (b : Token.TokenBatch) :
-    (Token.BatchCursor.new v b).relexRequested = false := (rfl)
+theorem relex_new (v : Token.Version) (b : Token.Internal.TokenBatch) :
+    (relexRequested (Token.BatchCursor.Internal.new v b)) = false := (rfl)
 
-theorem discard_new (v : Token.Version) (b : Token.TokenBatch) :
-    (Token.BatchCursor.new v b).discardRequested = false := (rfl)
+theorem discard_new (v : Token.Version) (b : Token.Internal.TokenBatch) :
+    (discardRequested (Token.BatchCursor.Internal.new v b)) = false := (rfl)
 
-theorem version_new (v : Token.Version) (b : Token.TokenBatch) :
-    (Token.BatchCursor.new v b).version = v := (rfl)
+theorem version_new (v : Token.Version) (b : Token.Internal.TokenBatch) :
+    (Token.BatchCursor.Internal.new v b).version = v := (rfl)
 
 theorem cNext_discardRest (c : Token.BatchCursor g) : cNext c.discardRest = cNext c := by
   cases c; rfl
@@ -72,11 +74,11 @@ theorem cNext_discardRest (c : Token.BatchCursor g) : cNext c.discardRest = cNex
 theorem cStop_discardRest (c : Token.BatchCursor g) : cStop c.discardRest = cNext c := by
   cases c; rfl
 
-theorem discard_discardRest (c : Token.BatchCursor g) : c.discardRest.discardRequested = true := by
+theorem discard_discardRest (c : Token.BatchCursor g) : discardRequested c.discardRest = true := by
   cases c; rfl
 
 theorem relex_discardRest (c : Token.BatchCursor g) :
-    c.discardRest.relexRequested = c.relexRequested := by
+    (relexRequested c.discardRest) = relexRequested c := by
   cases c; rfl
 
 theorem version_discardRest (c : Token.BatchCursor g) : c.discardRest.version = c.version := by
@@ -86,9 +88,9 @@ theorem version_discardRest (c : Token.BatchCursor g) : c.discardRest.version = 
 and no token left. -/
 theorem setVersion_eq (c : Token.BatchCursor g) (v : Token.Version) :
     ∃ c', c.setVersion v = .ok c' ∧ c'.version = v ∧ cNext c' = cNext c ∧
-      c'.discardRequested = c.discardRequested ∧
-      (crosses c.version v = true → c'.relexRequested = true ∧ cStop c' = cNext c) ∧
-      (crosses c.version v = false → c'.relexRequested = c.relexRequested ∧
+      (discardRequested c') = discardRequested c ∧
+      (crosses c.version v = true → relexRequested c' = true ∧ cStop c' = cNext c) ∧
+      (crosses c.version v = false → relexRequested c' = relexRequested c ∧
         cStop c' = cStop c) := by
   cases c
   simp only [Token.BatchCursor.setVersion, crosses]
@@ -102,22 +104,26 @@ theorem setVersion_eq (c : Token.BatchCursor g) (v : Token.Version) :
     exact absurd h' h
 
 /-- A batch that holds the lexemes has their entries at their indices. -/
-theorem holds_categoryAt {T : Token.TokenBatch} {ls : List Lexeme} (h : Holds T ls) {i : Nat}
+theorem holds_categoryAt {T : Token.Internal.TokenBatch} {ls : List Lexeme} (h : Holds T ls)
+    {i : Nat}
     (hi : i < ls.length) : categoryAt T i = ls[i].category := by
   obtain ⟨e1, -⟩ := h.entry i hi
   simp only [Simulation.Batch.categoryAt, e1, ofUInt8_toUInt8]
 
-theorem holds_spanAt_start {T : Token.TokenBatch} {ls : List Lexeme} (h : Holds T ls) {i : Nat}
+theorem holds_spanAt_start {T : Token.Internal.TokenBatch} {ls : List Lexeme} (h : Holds T ls)
+    {i : Nat}
     (hi : i < ls.length) : (spanAt T i).start = ls[i].start := by
   obtain ⟨-, -, -, -, e5, e6, e7, -⟩ := h.entry i hi
-  simp only [Simulation.Batch.spanAt, Span.ofNumbers, Span.start, e5, e6, e7]
+  simp only [Simulation.Batch.spanAt, Span.Internal.ofNumbers, Span.start, e5, e6, e7]
 
-theorem holds_spanAt_end {T : Token.TokenBatch} {ls : List Lexeme} (h : Holds T ls) {i : Nat}
+theorem holds_spanAt_end {T : Token.Internal.TokenBatch} {ls : List Lexeme} (h : Holds T ls)
+    {i : Nat}
     (hi : i < ls.length) : (spanAt T i).end = ls[i].end := by
   obtain ⟨-, -, -, -, -, -, -, e8, e9, e10⟩ := h.entry i hi
-  simp only [Simulation.Batch.spanAt, Span.ofNumbers, Span.«end», e8, e9, e10]
+  simp only [Simulation.Batch.spanAt, Span.Internal.ofNumbers, Span.«end», e8, e9, e10]
 
-theorem holds_contentAt {T : Token.TokenBatch} {ls : List Lexeme} (h : Holds T ls) {i : Nat}
+theorem holds_contentAt {T : Token.Internal.TokenBatch} {ls : List Lexeme} (h : Holds T ls)
+    {i : Nat}
     (hi : i < ls.length) : (contentAt T i).toByteArray = ls[i].content := by
   obtain ⟨-, e2, e3, e4, -⟩ := h.entry i hi
   simp only [Simulation.Batch.contentAt]
@@ -138,7 +144,8 @@ theorem toHanded_at {ls : List Lexeme} (c : Token.BatchCursor g) (h : c.HasNext)
   have hend : (c.span (c.next h).1).end = ls[cNext c].end := by
     rw [Simulation.Batch.span_eq, tokenIndex_next, holds_spanAt_end hb hj]
   unfold toHanded
-  simp only [Token.BatchCursor.«syntax», Token.SyntaxToken.fromToken, Token.SyntaxToken.fromParts,
+  simp only [Token.BatchCursor.«syntax», Token.SyntaxToken.fromToken,
+      Token.SyntaxToken.Internal.fromParts,
       hcat, hstart, hend,
     toContent, hcontent, byteArray_toList]
   cases hc : ls[cNext c].category <;> simp [toTokenType, lexemeReserved, toReservedKind]
@@ -177,7 +184,7 @@ theorem span_peek_start {ls : List Lexeme} (c : Token.BatchCursor g) (h : c.HasN
 /-- The end of the last token consumed from a cursor over a batch that holds the lexemes. -/
 theorem consumedEndOf_at {ls : List Lexeme} {c c₀ : Token.BatchCursor g} (hc : c.Consumed c₀)
     (hb : Holds (BSmtLib.Lexer.Internal.intoBatch c) ls) (hj : cNext c - 1 < ls.length) :
-    c.consumedEndOf hc = ls[cNext c - 1].end := by
+    (consumedEndOf c) hc = ls[cNext c - 1].end := by
   rw [consumedEndOf_eq, holds_spanAt_end hb hj]
 
 end BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Cursor
@@ -192,12 +199,12 @@ variable {g : Token.BatchTag} (C : BSmtLibSpec.Lexer.Consumer)
 theorem switched_eq (taken : List BSmtLibSpec.Lexer.Handed) (c : Token.BatchCursor g) :
     (Answering.switched C taken c).val.version = switchedTo c.version (C.switchTo taken) ∧
       cNext (Answering.switched C taken c).val = cNext c ∧
-      (Answering.switched C taken c).val.discardRequested = c.discardRequested ∧
+      (discardRequested (Answering.switched C taken c).val) = discardRequested c ∧
       (crosses c.version (switchedTo c.version (C.switchTo taken)) = true →
-        (Answering.switched C taken c).val.relexRequested = true ∧
+        (relexRequested (Answering.switched C taken c).val) = true ∧
         cStop (Answering.switched C taken c).val = cNext c) ∧
       (crosses c.version (switchedTo c.version (C.switchTo taken)) = false →
-        (Answering.switched C taken c).val.relexRequested = c.relexRequested ∧
+        (relexRequested (Answering.switched C taken c).val) = relexRequested c ∧
         cStop (Answering.switched C taken c).val = cStop c) := by
   unfold Answering.switched
   split

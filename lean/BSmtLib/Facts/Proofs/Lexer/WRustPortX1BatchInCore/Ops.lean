@@ -30,18 +30,19 @@ structure OpsSim {H : Type} {m : Type → Type} {R E : Type} [Monad m] (o₁ o�
     Prop where
   /-- The locals are loaded related at the line and the line start of the states. -/
   loadLocals {floor : Option Nat} {low : Nat} {Er : Core.St floor low → Core.St floor low → Prop}
-    (l ls : Nat) (Bx : Token.TokenBatch → Token.TokenBatch → Prop) :
+    (l ls : Nat) (Bx : Token.Internal.TokenBatch → Token.Internal.TokenBatch → Prop) :
     SimR Er (Core.SRLx l ls Bx) (fun a b s t => LRel a b l ls ∧ Core.SRLx l ls Bx s t)
       (Ops.loadLocals (self := o₁)) (Ops.loadLocals (self := o₂))
   /-- Locals related at the line and the line start of the states are stored alike. -/
   storeLocals {floor : Option Nat} {low : Nat} {Er : Core.St floor low → Core.St floor low → Prop}
-    (l ls : Nat) (Bx : Token.TokenBatch → Token.TokenBatch → Prop)
+    (l ls : Nat) (Bx : Token.Internal.TokenBatch → Token.Internal.TokenBatch → Prop)
     (a : Ops.Locals H m R E (self := o₁))
     (b : Ops.Locals H m R E (self := o₂)) (hab : LRel a b l ls) :
     SimR Er (Core.SRLx l ls Bx) (fun _ _ => Core.SRLx l ls Bx)
       (Ops.storeLocals (self := o₁) a) (Ops.storeLocals (self := o₂) b)
   /-- A token of the fast path goes into the batches held alike. -/
-  pushFast {floor : Option Nat} {low : Nat} {strict : Bool} (l ls : Nat) (b b' : Token.TokenBatch)
+  pushFast {floor : Option Nat} {low : Nat} {strict : Bool} (l ls : Nat)
+      (b b' : Token.Internal.TokenBatch)
     (hb : Core.HR b b') (a : Ops.Locals H m R E (self := o₁)) (a' : Ops.Locals H m R E (self := o₂))
     (ha : LRel a a' l ls) (input : ByteSlice) (offset base : Nat) (ty : Token.TokenCategory)
     (contentStart contentStop start «end» : Nat) (emit : Bool) (hty hstart hend hframe hbatch
@@ -53,7 +54,7 @@ structure OpsSim {H : Type} {m : Type → Type} {R E : Type} [Monad m] (o₁ o�
         emit hty hstart hend hframe hbatch')
   /-- The full batches held are handed over alike, and given back emptied. -/
   flushHeld {floor : Option Nat} {low : Nat} {strict : Bool} (l ls : Nat)
-    (batch batch' : Token.TokenBatch) (hb : Agree batch batch')
+    (batch batch' : Token.Internal.TokenBatch) (hb : Agree batch batch')
     (hbytes : batch.bytes = batch'.bytes)
     (origin : Nat) (hbatch hbatch') :
     Core.LSim strict (Core.SRE (floor := floor) (low := low) l ls)

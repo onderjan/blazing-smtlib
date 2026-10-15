@@ -314,14 +314,10 @@ into the spec's shapes: the adapters. Everything else Lean checks. The check bel
 adapters, every definition that the statements of the theorems in this file rest on outside the
 specification, the library and Lean (`BSmtLib.Facts.Trusted`), and fails the build if one of them is
 declared outside those modules.
-
-One adapter reads the library from inside: where a call of the reader fails, the library gives no
-reader back, so `readerRun` takes the calls the handler holds from the reader's lexer after the
-failed step (`sliceStepped`, `eofStepped`, `lexerCalls`).
 -/
 
 /--
-info: 8 theorems, stated with 79 adapters:
+info: 8 theorems, stated with 76 adapters:
 BSmtLib.Facts.Lexer.Adapters:
   BSmtLib.Facts.Lexer.Adapters.AnswerM
   BSmtLib.Facts.Lexer.Adapters.Answering
@@ -395,9 +391,7 @@ BSmtLib.Facts.Reader.Adapters:
   BSmtLib.Facts.Reader.Adapters.RecReader
   BSmtLib.Facts.Reader.Adapters.ScriptError
   BSmtLib.Facts.Reader.Adapters.answerOf
-  BSmtLib.Facts.Reader.Adapters.eofStepped
   BSmtLib.Facts.Reader.Adapters.itemOf
-  BSmtLib.Facts.Reader.Adapters.lexerCalls
   BSmtLib.Facts.Reader.Adapters.libItem
   BSmtLib.Facts.Reader.Adapters.libraryReader
   BSmtLib.Facts.Reader.Adapters.paFeed
@@ -405,7 +399,6 @@ BSmtLib.Facts.Reader.Adapters:
   BSmtLib.Facts.Reader.Adapters.readerRun
   BSmtLib.Facts.Reader.Adapters.recordingAdapter
   BSmtLib.Facts.Reader.Adapters.scriptConsumer
-  BSmtLib.Facts.Reader.Adapters.sliceStepped
 -/
 #guard_msgs in
 #adapters within BSmtLib.Facts.Reader.Adapters BSmtLib.Facts.Parser.Adapters

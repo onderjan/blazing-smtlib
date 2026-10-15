@@ -13,9 +13,7 @@ public import BSmtLib.Token.SyntaxToken
 public import BSmtLib.Token.Lookahead
 public import BSmtLib.Token.Produce
 public import BSmtLib.Token.ConsumeFrom
-public import BSmtLib.Lexer.CharClass
 public import BSmtLib.Lexer.Error
-public import BSmtLib.Lexer.Helpers
 public import BSmtLib.Lexer.Recovery
 public import BSmtLib.Lexer
 public import BSmtLib.Parser

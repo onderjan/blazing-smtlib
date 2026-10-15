@@ -14,6 +14,8 @@ it is parsed, under a version posture that restricts the version declarations.
 namespace BSmtLib.Parser.Script
 
 open BSmtLib.Parser.Command BSmtLib.Traits
+open BSmtLib.Parser.Command.Internal
+open BSmtLib.Parser.Internal (PM call syntaxError)
 
 /--
 The parser of a script (`SmtScriptParser`).
@@ -44,7 +46,7 @@ def ScriptParser.new (posture : Token.VersionPosture) : ScriptParser H :=
 The check of a version declaration against the posture, given the number of declarations the
 script made before it: first the number, then the version.
 -/
-def VersionPosture.check (self : Token.VersionPosture) (declarations : Nat)
+def Internal.VersionPosture.check (self : Token.VersionPosture) (declarations : Nat)
     (version : Token.Version) :
     Option SyntaxErrorKind :=
   match self.maxDeclarations with
@@ -55,13 +57,14 @@ def VersionPosture.check (self : Token.VersionPosture) (declarations : Nat)
 
 /-- The step of the script parser. -/
 @[inline]
-def ScriptParser.step (version : Token.Version) (parser : ScriptParser H) (token : Internal.Input) :
+def ScriptParser.Internal.step (version : Token.Version) (parser : ScriptParser H)
+    (token : Internal.Input) :
     PM H (Internal.Flow (PM H) (ScriptParser H) Unit) := do
-  match ← commandStep version parser.command token with
+  match ← Internal.commandStep version parser.command token with
   | .more command => return .more { parser with command }
   | .done .command => return .more { parser with command := .awaiting }
   | .done (.setVersion declared) =>
-    match (VersionPosture.check parser.posture) parser.declarations declared with
+    match (Internal.VersionPosture.check parser.posture) parser.declarations declared with
     | some kind => syntaxError kind
     | none =>
       return .switchVersion declared (do
@@ -73,15 +76,15 @@ def ScriptParser.step (version : Token.Version) (parser : ScriptParser H) (token
   | .done .endOfInput => return .done ()
 
 /-- The calls due when a token arrives at the script parser: those of its command parser. -/
-def ScriptParser.arrive (parser : ScriptParser H) (token : Internal.Input) : PM H Unit :=
-  commandArrive parser.command token
+def ScriptParser.Internal.arrive (parser : ScriptParser H) (token : Internal.Input) : PM H Unit :=
+  Internal.commandArrive parser.command token
 
 /- LEAN: the script parser's `Parse` instance is in `Parser.Internal.Fused`: its `parse` runs the
 fused reader on the library's batch cursors, which needs this module, and this loop on every
 other producer. -/
 instance : Internal.ParseByToken (ScriptParser H) H m (Handler.Error H) Unit where
-  arrive := ScriptParser.arrive
-  step := ScriptParser.step
+  arrive := ScriptParser.Internal.arrive
+  step := ScriptParser.Internal.step
   reset parser := .new parser.posture
 
 end

@@ -22,6 +22,7 @@ consumer and the parse adapter (`link_consumers`).
 namespace BSmtLib.Facts.Proofs.Reader.Param.Relate
 
 open BSmtLibSpec BSmtLibSpec.Grammar
+open BSmtLib.Token.BatchCursor.Internal (remaining)
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Lexer (Handed)
 open BSmtLib.Parser (Parse)
@@ -173,7 +174,7 @@ theorem link_calls {version : Lexicon.Version} {commands : List Tree.Command}
             ((Answering.consume (scriptConsumer version) cursor h).run taken).1.2.val),
             ((Answering.consume (scriptConsumer version) cursor h).run taken).2) := by
         (unfold ansRest; rw [dite_eq_left_of_eq_true (eq_true h)]) <;> rfl
-      have hext := ansRest_extends version (cursor.remaining + 1) cursor taken (Nat.lt_succ_self _)
+      have hext := ansRest_extends version (remaining cursor + 1) cursor taken (Nat.lt_succ_self _)
       generalize (Answering.consume (scriptConsumer version) cursor h).run taken = A at hrun hans
       obtain ⟨⟨answer, next⟩, taken'⟩ := A
       change ((Flagged.consume (scriptConsumer version) cursor h).run flagged).run taken = _ at hrun
@@ -200,7 +201,7 @@ theorem link_calls {version : Lexicon.Version} {commands : List Tree.Command}
       rcases res with e | (⟨v', parser⟩ | r)
       · exact absurd hat id
       · obtain ⟨rfl, hparser, hlog⟩ := hat
-        obtain ⟨hshape, hcur, items', hst', hat'⟩ := loop_agree hscript (cursor.remaining + 1)
+        obtain ⟨hshape, hcur, items', hst', hat'⟩ := loop_agree hscript (remaining cursor + 1)
           cursor taken items parser log (Nat.lt_succ_self _) hst (by rw [hR, hver]) herr' hvia'
         rw [hver, hlog, hparser] at hq
         simp only [Prod.mk.injEq] at hq

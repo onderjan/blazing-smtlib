@@ -140,7 +140,7 @@ theorem reader_eq (version : Token.Version) :
 
 /-- Every version `from25` allows, `allVersions` allows, and neither limits the declarations. -/
 theorem from25_looser : Looser from25 allVersions :=
-  ⟨rfl, fun v h => by
+  ⟨by simp [from25, allVersions], fun v h => by
     rw [Array.contains_iff_mem] at h ⊢
     simp [from25, allVersions] at h ⊢
     rcases h with rfl | rfl | rfl <;> simp⟩

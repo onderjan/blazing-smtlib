@@ -24,7 +24,9 @@ batches have no tokens (`ErZ`).
 
 namespace BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.HandOver
 
-open BSmtLib.Lexer (BATCH_CAPACITY Interrupted)
+open BSmtLib.Lexer.Internal (BATCH_CAPACITY Interrupted)
+open BSmtLib.Token.BatchCursor.Internal
+    (discardRequested resetConsumed remaining relexRequested consumedSpanOf foldConsumedCategories consumedEndOf)
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Batch BSmtLib.Facts.Proofs.Lexer.Simulation.Relation
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Steps
 
@@ -54,13 +56,13 @@ theorem callConsumer_sim (hc : ConsumesAlike H m R E)
 /-- What the lexer with the batch in its state does after its loop over the cursor. -/
 def handOverTail (bytesAfter : ByteArray) :
     Option (Interrupted R E floor) × Token.BatchCursor g →
-      Lexer.Internal.WRustPort.LexM H m R E floor low Token.TokenBatch :=
+      Lexer.Internal.WRustPort.LexM H m R E floor low Token.Internal.TokenBatch :=
   fun (stop, cursor) => do
   if (← Lexer.Internal.WRustPort.getCore).recovers then
     match stop with
     | some _ =>
       Lexer.Internal.WRustPort.modifyCore fun c =>
-        let consumedDepth := cursor.foldConsumedCategories c.consumedDepth fun depth category =>
+        let consumedDepth := foldConsumedCategories cursor c.consumedDepth fun depth category =>
           match category with
           | .parenOpen => depth + 1
           | .parenClose => depth - 1
@@ -69,7 +71,7 @@ def handOverTail (bytesAfter : ByteArray) :
     | none =>
       Lexer.Internal.WRustPort.modifyCore fun c => { c with consumedDepth := c.lexedDepth }
   Lexer.Internal.WRustPort.modifyCore fun c => { c with version := cursor.version }
-  let spent : Token.TokenBatch :=
+  let spent : Token.Internal.TokenBatch :=
       { BSmtLib.Lexer.Internal.intoBatch cursor with bytes := bytesAfter }
   if let some interrupted := stop then
     Lexer.Internal.X1BatchInCore.storeSpent spent
@@ -77,12 +79,12 @@ def handOverTail (bytesAfter : ByteArray) :
   return spent
 
 omit [LawfulMonad m] in
-theorem handOver_eq (batch : Token.TokenBatch) (bytesAfter : ByteArray) (hfloor) :
+theorem handOver_eq (batch : Token.Internal.TokenBatch) (bytesAfter : ByteArray) (hfloor) :
     Lexer.Internal.X1BatchInCore.handOver (H := H) (m := m) (R := R) (E := E) (floor := floor)
         (low := low)
       batch bytesAfter hfloor =
       Lexer.Internal.WRustPort.getCore >>= fun c =>
-        Lexer.Internal.X1BatchInCore.flushCursor (Token.BatchCursor.new c.version batch)
+        Lexer.Internal.X1BatchInCore.flushCursor (Token.BatchCursor.Internal.new c.version batch)
           (fun p hp => Token.BatchCursor.endsAfter_new (hfloor p hp) _) >>= handOverTail bytesAfter
               := by
   unfold Lexer.Internal.X1BatchInCore.handOver handOverTail
@@ -92,7 +94,7 @@ theorem handOver_eq (batch : Token.TokenBatch) (bytesAfter : ByteArray) (hfloor)
 and the batch; the Rust port's version is that of its cursor, as it sets it after every call of
 the consumer; the batches are those before the loop; the Rust port's line and line start are `l`
 and `ls`. -/
-structure FlushRel (l ls : Nat) (Bw Bx : Token.TokenBatch) (c : Token.BatchCursor g)
+structure FlushRel (l ls : Nat) (Bw Bx : Token.Internal.TokenBatch) (c : Token.BatchCursor g)
     (s : Core.St floor low)
     (t : Core.St floor low) : Prop where
   same : Core.SameBut s.val t.val
@@ -104,7 +106,7 @@ structure FlushRel (l ls : Nat) (Bw Bx : Token.TokenBatch) (c : Token.BatchCurso
 
 /-- What the hand-overs keep of the two states: `FlushRel` with the version the same, and the
 batch given back, which is that of the cursor with the array of contents `bytesAfter`. -/
-structure FlushedRel (l ls : Nat) (Bw Bx : Token.TokenBatch) (s : Core.St floor low)
+structure FlushedRel (l ls : Nat) (Bw Bx : Token.Internal.TokenBatch) (s : Core.St floor low)
     (t : Core.St floor low) : Prop where
   same : Core.SameBut s.val t.val
   version : s.val.version = t.val.version
@@ -115,7 +117,7 @@ structure FlushedRel (l ls : Nat) (Bw Bx : Token.TokenBatch) (s : Core.St floor 
 
 /-- The depths after a stop of the consumer, counted over the tokens it consumed. -/
 def stopDepth (cursor : Token.BatchCursor g) (depth : Nat) : Nat :=
-  cursor.foldConsumedCategories depth fun depth category =>
+  (foldConsumedCategories cursor) depth fun depth category =>
     match category with
     | .parenOpen => depth + 1
     | .parenClose => depth - 1
@@ -123,12 +125,12 @@ def stopDepth (cursor : Token.BatchCursor g) (depth : Nat) : Nat :=
 
 omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
 theorem storeSpent_bind_right {α β : Type} {P : Core.St floor low → Core.St floor low → Prop}
-    {Q : α → β → Core.St floor low → Core.St floor low → Prop} (spent : Token.TokenBatch)
+    {Q : α → β → Core.St floor low → Core.St floor low → Prop} (spent : Token.Internal.TokenBatch)
     {k : Lexer.Internal.WRustPort.LexM H m R E floor low α}
     {g : PUnit → Lexer.Internal.WRustPort.LexM H m R E floor low β}
     (hk : ∀ s t, P s t → SimR Er (fun s' t' => s' = s ∧ t'.val = { t.val with
       batch := spent.clear t.val.offset
-      batchEnded := Nat.le_of_eq (Token.TokenBatch.lastEnd_clear _ _) }) Q k (g ⟨⟩)) :
+      batchEnded := Nat.le_of_eq (Token.Internal.TokenBatch.lastEnd_clear _ _) }) Q k (g ⟨⟩)) :
     SimR Er P Q k (Lexer.Internal.X1BatchInCore.storeSpent spent >>= g) := by
   unfold Lexer.Internal.X1BatchInCore.storeSpent Lexer.Internal.WRustPort.modifyBound
   exact SimR.modify_bind_right fun s t hst => SimR.pre
@@ -155,7 +157,7 @@ theorem stop_sim {α : Type} (bytesAfter : ByteArray) (i i' : Interrupted R E fl
     (sW : Core)
     (t : Core.St floor low) (hsame : Core.SameBut sW t.val) (hversion : sW.version = cur.version)
     (hlen : sW.batch.len = 0) (hbytes : strict = true → sW.batch.bytes = bytesAfter)
-    (Q : α → Token.TokenBatch → Core.St floor low → Core.St floor low → Prop) (hd) :
+    (Q : α → Token.Internal.TokenBatch → Core.St floor low → Core.St floor low → Prop) (hd) :
     SimR (Core.ErZ strict) (fun s' t' => s'.val = sW ∧ t' = t) Q
       (Lexer.Internal.WRustPort.getCore (H := H) (m := m) (R := R) (E := E) >>= fun lift =>
         if lift.recovers = true then
@@ -179,7 +181,7 @@ theorem stop_sim {α : Type} (bytesAfter : ByteArray) (i i' : Interrupted R E fl
       Core.CoreRel w { x with
         version := cur'.version
         batch := ({ BSmtLib.Lexer.Internal.intoBatch cur' with bytes := bytesAfter } :
-            Token.TokenBatch).clear x.offset
+            Token.Internal.TokenBatch).clear x.offset
         tokenStarted := hb
         batchEnded := hb' } ∧ (strict = true → w.batch.bytes = bytesAfter) := by
     intro w x hs hv hl hby _ _
@@ -228,7 +230,7 @@ theorem stop_sim {α : Type} (bytesAfter : ByteArray) (i i' : Interrupted R E fl
 omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
 /-- The end of the loop over a cursor that is empty: the Rust port sets the depths; the lexer
 with the batch in its state sets the depths and the version, and gives the batch back. -/
-theorem finish_sim (l ls : Nat) (Bw Bx : Token.TokenBatch) (bytesAfter : ByteArray)
+theorem finish_sim (l ls : Nat) (Bw Bx : Token.Internal.TokenBatch) (bytesAfter : ByteArray)
     (cur : Token.BatchCursor g) (cur' : Token.BatchCursor g') (hag : CursorAgree cur cur') (hd) :
     SimR Er (FlushRel l ls Bw Bx cur)
       (fun _ spent s t => FlushedRel l ls Bw Bx s t ∧
@@ -280,9 +282,11 @@ theorem finish_sim (l ls : Nat) (Bw Bx : Token.TokenBatch) (bytesAfter : ByteArr
     exact ⟨⟨(this _ _).1, by rw [hrel.version, hag.version], hrel.batchW, hrel.batchX, hrel.line,
       hrel.lineStart⟩, rfl⟩
 
-theorem flushCursor_sim (hcons : ConsumesAlike H m R E) (l ls : Nat) (Bw Bx : Token.TokenBatch)
+theorem flushCursor_sim (hcons : ConsumesAlike H m R E) (l ls : Nat)
+    (Bw Bx : Token.Internal.TokenBatch)
     (hBw : Bw.len = 0) (bytesAfter : ByteArray) (hbytes : strict = true → Bw.bytes = bytesAfter) :
-    ∀ n (c : Token.BatchCursor g) (d : Token.BatchCursor g'), c.remaining = n → CursorAgree c d → ∀
+    ∀ n (c : Token.BatchCursor g) (d : Token.BatchCursor g'),
+        (remaining c) = n → CursorAgree c d → ∀
         hf hf',
     SimR (Core.ErZ strict) (FlushRel l ls Bw Bx c)
       (fun _ spent s t => FlushedRel l ls Bw Bx s t ∧
@@ -329,9 +333,9 @@ theorem flushCursor_sim (hcons : ConsumesAlike H m R E) (l ls : Nat) (Bw Bx : To
     have hlen : s.val.batch.len = 0 := by rw [hst.batchW]; exact hBw
     have hby : strict = true → s.val.batch.bytes = bytesAfter := fun h => by
       rw [hst.batchW]; exact hbytes h
-    have hspan : cursor'.consumedSpanOf consumed = next.consumedSpanOf consumed' :=
+    have hspan : consumedSpanOf cursor' consumed = consumedSpanOf next consumed' :=
       hag.consumedSpanOf consumed consumed'
-    have hloc : cursor'.consumedEndOf consumed = next.consumedEndOf consumed' :=
+    have hloc : consumedEndOf cursor' consumed = consumedEndOf next consumed' :=
       hag.consumedEndOf consumed consumed'
     have hbatch : BSmtLib.Lexer.Internal.intoBatch next = BSmtLib.Lexer.Internal.intoBatch d :=
         intoBatch_eq next d
@@ -349,28 +353,28 @@ theorem flushCursor_sim (hcons : ConsumesAlike H m R E) (l ls : Nat) (Bw Bx : To
     cases result with
     | ok flow =>
       dsimp only
-      by_cases hdisc : cursor'.discardRequested = true
-      · have hdisc' : next.discardRequested = true := by rwa [← hag.discard]
+      by_cases hdisc : discardRequested cursor' = true
+      · have hdisc' : discardRequested next = true := by rwa [← hag.discard]
         rw [ite_eq_left hdisc, ite_eq_left hdisc']
         refine SimR.pre (fun s' t' h => ⟨by rw [h.1], h.2⟩) (stop _ _ ?_)
         exact interrupted_eq rfl hspan hloc
-      have hdisc' : ¬next.discardRequested = true := by rwa [← hag.discard]
+      have hdisc' : ¬(discardRequested next) = true := by rwa [← hag.discard]
       rw [ite_eq_right hdisc, ite_eq_right hdisc']
       cases flow with
       | «continue» =>
         dsimp only
-        by_cases hr : cursor'.relexRequested = true
-        · have hr' : next.relexRequested = true := by rwa [← hag.relex]
+        by_cases hr : relexRequested cursor' = true
+        · have hr' : relexRequested next = true := by rwa [← hag.relex]
           rw [ite_eq_left hr, ite_eq_left hr']
           refine SimR.pre (fun s' t' h => ⟨by rw [h.1], h.2⟩) (stop _ _ ?_)
           exact interrupted_eq rfl hspan hloc
-        · have hr' : ¬next.relexRequested = true := by rwa [← hag.relex]
+        · have hr' : ¬(relexRequested next) = true := by rwa [← hag.relex]
           rw [ite_eq_right hr, ite_eq_right hr']
-          have hlt : cursor'.resetConsumed.remaining < n := by
+          have hlt : remaining (resetConsumed cursor') < n := by
             rw [Token.BatchCursor.remaining_resetConsumed, ← hn]
             exact consumed.remaining_lt
           refine SimR.mono (fun s' t' h => ?_) (fun _ _ _ _ h => ?_) (fun _ _ h => h)
-            (ih _ hlt cursor'.resetConsumed next.resetConsumed rfl hag.resetConsumed _ _)
+            (ih _ hlt (resetConsumed cursor') (resetConsumed next) rfl hag.resetConsumed _ _)
           · obtain ⟨rfl, rfl⟩ := h
             exact ⟨hsame, rfl, hst.batchW, hst.batchX, hst.line, hst.lineStart⟩
           · exact ⟨h.1, by rw [h.2, ← hbatch]; rfl⟩
@@ -400,8 +404,8 @@ theorem flushCursor_sim (hcons : ConsumesAlike H m R E) (l ls : Nat) (Bw Bx : To
         refine SimR.pre (P := fun s' t' => s'.val = sS.val ∧ t' = tt)
           (fun s' t' h => ⟨congrArg Subtype.val h.1, h.2⟩) ?_
         exact stop_sim bytesAfter _ _ hi cursor' next hag sS.val tt hs hv hl hb _ _
-      by_cases hdisc : cursor'.discardRequested = true
-      · have hdisc' : next.discardRequested = true := by rwa [← hag.discard]
+      by_cases hdisc : discardRequested cursor' = true
+      · have hdisc' : discardRequested next = true := by rwa [← hag.discard]
         rw [ite_eq_left hdisc, ite_eq_left hdisc', bind_assoc]
         refine Core.modifyCore_bind_left fun s1 t1 h1 => ?_
         refine Core.modifyCore_bind_right fun s2 t2 h2 => ?_
@@ -418,7 +422,7 @@ theorem flushCursor_sim (hcons : ConsumesAlike H m R E) (l ls : Nat) (Bw Bx : To
         · rfl
         · exact hlen
         · exact hby
-      · have hdisc' : ¬next.discardRequested = true := by rwa [← hag.discard]
+      · have hdisc' : ¬(discardRequested next) = true := by rwa [← hag.discard]
         rw [ite_eq_right hdisc, ite_eq_right hdisc']
         refine SimR.pre (fun s' t' h => ⟨by rw [h.1], h.2⟩) (stop _ _ ?_)
         exact interrupted_eq rfl hspan hloc

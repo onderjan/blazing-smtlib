@@ -25,6 +25,8 @@ tokens, as the script parser's is.
 namespace BSmtLib.Facts.Proofs.Reader.Param.Split
 
 open BSmtLib.Lexer
+open BSmtLib.Token.BatchCursor.Internal (discardRequested resetConsumed remaining relexRequested
+    EndsAfter consumedSpanOf foldConsumedCategories consumedEndOf)
 open BSmtLib.Traits
 open BSmtLib.Parser (Parse ParseErrorCause ParseState)
 open BSmtLib.Parser.Adapter (ParseAdapter)
@@ -227,7 +229,7 @@ theorem next?_none {x : BatchCursor b} (hx : ¬ x.HasNext) : Token.Produce.next?
 handler, and cursors alike. -/
 theorem rest_alike {o o' : BatchCursor b} :
     ∀ (n : Nat) (parser : P) (c c' : BatchCursor b) (hc : c.Consumed o) (hc' : c'.Consumed o'),
-      Alike c c' → c.remaining < n → ∀ h : H,
+      Alike c c' → remaining c < n → ∀ h : H,
       ((rest o parser c hc).run h).1.1 = ((rest o' parser c' hc').run h).1.1 ∧
         ((rest o parser c hc).run h).1.2.1 = ((rest o' parser c' hc').run h).1.2.1 ∧
         Alike ((rest o parser c hc).run h).1.2.2.val ((rest o' parser c' hc').run h).1.2.2.val ∧
@@ -316,7 +318,7 @@ theorem rest_parseByToken {o d : BatchCursor b} (parser : P) (state : ParseState
     obtain ⟨⟨a, ⟨z, hz⟩⟩, h₁⟩ := x
     cases a with
     | goOn p =>
-      obtain ⟨e1, e2, e3, e4⟩ := rest_alike (z.remaining + 1) p z z (hz.trans hd) hz
+      obtain ⟨e1, e2, e3, e4⟩ := rest_alike (remaining z + 1) p z z (hz.trans hd) hz
         (Alike.refl z) (Nat.lt_succ_self _) h₁
       exact ⟨e1, e2, e3, e4⟩
     | stop answer p => exact ⟨rfl, rfl, Alike.refl _, rfl⟩
@@ -390,7 +392,7 @@ theorem parseByToken_alike (parser : P) (state : ParseState H) {d d' : BatchCurs
     subst ha hs
     cases a with
     | goOn p =>
-      obtain ⟨e1, e2, e3, e4⟩ := rest_alike (z.remaining + 1) p z z' hz hz' hal'
+      obtain ⟨e1, e2, e3, e4⟩ := rest_alike (remaining z + 1) p z z' hz hz' hal'
         (Nat.lt_succ_self _) h₁
       exact ⟨e1, e2, e3, e4⟩
     | stop answer p => exact ⟨rfl, rfl, hal', rfl⟩
@@ -399,7 +401,7 @@ theorem parseByToken_alike (parser : P) (state : ParseState H) {d d' : BatchCurs
     exact ⟨rfl, rfl, hal, rfl⟩
 
 /-- A cursor through which no request was made. -/
-def Fresh (x : BatchCursor b) : Prop := x.relexRequested = false ∧ x.discardRequested = false
+def Fresh (x : BatchCursor b) : Prop := relexRequested x = false ∧ discardRequested x = false
 
 /-- After a token of the loop that stops, a cursor with a token left has no request made, if the
 cursor had none before. -/
@@ -443,7 +445,7 @@ theorem takeOneS_fresh (parser : P) {c n : BatchCursor b} (t : BSmtLib.Token b)
 /-- After the loop that stops, a cursor with a token left has no request made, if the cursor had
 none before where it had a token left. -/
 theorem restS_fresh {o : BatchCursor b} :
-    ∀ (m : Nat) (parser : P) (c : BatchCursor b) (hc : c.Consumed o), c.remaining < m →
+    ∀ (m : Nat) (parser : P) (c : BatchCursor b) (hc : c.Consumed o), remaining c < m →
       (c.HasNext → Fresh c) → ∀ h : H, ((Stop.rest o parser c hc).run h).1.2.2.val.HasNext →
         Fresh ((Stop.rest o parser c hc).run h).1.2.2.val
   | 0, _, _, _, hm, _, _ => absurd hm (Nat.not_lt_zero _)
@@ -520,7 +522,7 @@ theorem outN_eq (c : BatchCursor b) (h : c.HasNext) (A : ParseAdapter H P) :
     outN c h A =
       let r := (parseByToken A.parser A.parseState c).run (Stop.told A c)
       ((r.1.1, r.1.2.2.2.val),
-        ParseAdapter.mk r.2 r.1.2.1 (ParseAdapter.versionSetAfter r.1.1) r.1.2.2.1) := by
+        ParseAdapter.mk r.2 r.1.2.1 (ParseAdapter.Internal.versionSetAfter r.1.1) r.1.2.2.1) := by
   simp only [outN, Token.ConsumeFrom.consume, hp, Stop.told]
   rfl
 
@@ -561,7 +563,7 @@ theorem outN_split_eq (c : BatchCursor b) (h : c.HasNext) (A : ParseAdapter H P)
   have hcont : ∀ (p : P) (d : BatchCursor b) (hd : d.Consumed c) (h₃ : H),
       ((((rest c p d hd).run h₃).1.1, ((rest c p d hd).run h₃).1.2.2.val),
           ParseAdapter.mk ((rest c p d hd).run h₃).2 ((rest c p d hd).run h₃).1.2.1
-            (ParseAdapter.versionSetAfter ((rest c p d hd).run h₃).1.1) A.parseState) =
+            (ParseAdapter.Internal.versionSetAfter ((rest c p d hd).run h₃).1.1) A.parseState) =
         (resumeOut ((.ok .continue, d), ParseAdapter.mk h₃ p true A.parseState) :
           Out H P R E b) := by
     intro p d hd h₃
@@ -616,7 +618,7 @@ theorem outS_fresh (c : BatchCursor b) (h : c.HasNext) (A : ParseAdapter H P) (h
   obtain ⟨⟨a, ⟨z, hz⟩⟩, h₁⟩ := x
   cases a with
   | goOn p =>
-    exact restS_fresh (z.remaining + 1) p z hz (Nat.lt_succ_self _) hk h₁
+    exact restS_fresh (remaining z + 1) p z hz (Nat.lt_succ_self _) hk h₁
   | stop answer p => exact hk
 
 end Calls
@@ -633,35 +635,35 @@ variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [Token.Consume H 
 /-- What the lexer does after the consumer's call in its handover of a cursor
 (`Lexer.Internal.flushCursor`). -/
 def kont {b : Token.BatchTag} (cursor : Token.BatchCursor b)
-    (hfloor : ∀ p, floor = some p → cursor.EndsAfter p) :
+    (hfloor : ∀ p, floor = some p → EndsAfter cursor p) :
     Except E (ControlFlow R) × { c : Token.BatchCursor b // c.Consumed cursor } →
       LexM H m R E floor low (Option (Interrupted R E floor) × Token.BatchCursor b)
   | (result, ⟨next, consumed⟩) => do
-    let location := next.consumedEndOf consumed
+    let location := consumedEndOf next consumed
     have after : ∀ p, floor = some p → p < location.offset := fun p hp =>
       consumed.lt_consumedEndOf (hfloor p hp)
     match result with
     | .ok flow =>
-      if next.discardRequested then
+      if discardRequested next then
         let held := match flow with
           | .continue => none
           | .break result => some result
         return (some {
           result := .ok (.discarded held)
-          span := next.consumedSpanOf consumed
+          span := consumedSpanOf next consumed
           location
           stopAfter := fun p hp _ _ => after p hp }, next)
       else
         match flow with
         | .continue =>
-          if next.relexRequested then
+          if relexRequested next then
             return (some {
               result := .ok .relex
-              span := next.consumedSpanOf consumed
+              span := consumedSpanOf next consumed
               location
               stopAfter := fun p hp _ _ => after p hp }, next)
           else
-            flushCursor next.resetConsumed fun p hp =>
+            flushCursor (resetConsumed next) fun p hp =>
               Token.BatchCursor.endsAfter_resetConsumed (consumed.follows.endsAfter (hfloor p hp))
         | .break result =>
           if h : next.HasNext then
@@ -669,20 +671,20 @@ def kont {b : Token.BatchTag} (cursor : Token.BatchCursor b)
           else
             return (some {
               result := .ok (.finished result)
-              span := next.consumedSpanOf consumed
+              span := consumedSpanOf next consumed
               location
               stopAfter := fun p hp _ _ => after p hp }, next)
     | .error err =>
-      if next.discardRequested then
+      if discardRequested next then
         modifyCore fun c => { c with discardedFrom := c.discardedFrom.or (some location) }
       return (some {
         result := .error (.consumer err)
-        span := next.consumedSpanOf consumed
+        span := consumedSpanOf next consumed
         location
         stopAfter := fun _ _ _ h => nomatch h }, next)
 
 theorem flushCursor_eq {b : Token.BatchTag} (cursor : Token.BatchCursor b)
-    (hfloor : ∀ p, floor = some p → cursor.EndsAfter p) :
+    (hfloor : ∀ p, floor = some p → EndsAfter cursor p) :
     flushCursor (H := H) (m := m) (R := R) (E := E) (floor := floor) (low := low) cursor hfloor =
       if h : cursor.HasNext then do
         if (← getCore (H := H) (m := m) (R := R) (E := E) (floor := floor)
@@ -726,13 +728,13 @@ abbrev runL {α : Type} (x : LexM H Id R E floor low α) (s : {c : LexerCore // 
     (a : H) := ((x.run).run s).run a
 
 theorem kont_rel (i₁ i₂ : ∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) Id)
-    {c c' n n' : Token.BatchCursor b} (hf : ∀ p, floor = some p → c.EndsAfter p)
-    (hf' : ∀ p, floor = some p → c'.EndsAfter p) (r : Except E (ControlFlow R))
+    {c c' n n' : Token.BatchCursor b} (hf : ∀ p, floor = some p → EndsAfter c p)
+    (hf' : ∀ p, floor = some p → EndsAfter c' p) (r : Except E (ControlFlow R))
     (k : n.Consumed c) (k' : n'.Consumed c') (hal : Alike n n')
     (s : {c : LexerCore // c.Bound floor low}) (a : H)
-    (hr : n.discardRequested = false → n.relexRequested = false → r = .ok .continue →
-      ∀ hn hn', FRel (runL (@flushCursor H Id R E _ _ i₁ floor low b n.resetConsumed hn) s a)
-        (runL (@flushCursor H Id R E _ _ i₂ floor low b n'.resetConsumed hn') s a)) :
+    (hr : discardRequested n = false → relexRequested n = false → r = .ok .continue →
+      ∀ hn hn', FRel (runL (@flushCursor H Id R E _ _ i₁ floor low b (resetConsumed n) hn) s a)
+        (runL (@flushCursor H Id R E _ _ i₂ floor low b (resetConsumed n') hn') s a)) :
     FRel (runL (@kont H Id R E _ _ i₁ floor low b c hf (r, ⟨n, k⟩)) s a)
       (runL (@kont H Id R E _ _ i₂ floor low b c' hf' (r, ⟨n', k'⟩)) s a) := by
   have hloc := hal.consumedEndOf k k'
@@ -743,18 +745,18 @@ theorem kont_rel (i₁ i₂ : ∀ batch, Token.ConsumeFrom H (Token.BatchCursor 
   rcases r with err | flow
   · dsimp only
     rw [← hd]
-    cases hdisc : n.discardRequested
+    cases hdisc : discardRequested n
     · simp [runL, FRel, hloc, hspan, hal, id_pure]
     · simp [runL, FRel, hloc, hspan, hal, modifyCore, id_map, run_modifyThe,
         Except.map]
   · dsimp only
     rw [← hd]
-    cases hdisc : n.discardRequested
+    cases hdisc : discardRequested n
     · cases flow with
       | «continue» =>
         dsimp only
         rw [← hx]
-        cases hrel : n.relexRequested
+        cases hrel : relexRequested n
         · simp only [Bool.false_eq_true, ite_false]
           exact hr hdisc hrel rfl _ _
         · simp [runL, FRel, hloc, hspan, hal, id_pure]
@@ -852,10 +854,10 @@ omit [Handler H Id] [ParseByToken P H Id E R] in
 /-- After a continue on a cursor through which no request was made, the lexer hands the rest of
 the cursor over anew. -/
 theorem kont_continue (i : ∀ batch, Token.ConsumeFrom (ParseAdapter H P) (BatchCursor batch) Id)
-    {c n : BatchCursor b} (hf : ∀ p, floor = some p → c.EndsAfter p) (k : n.Consumed c)
+    {c n : BatchCursor b} (hf : ∀ p, floor = some p → EndsAfter c p) (k : n.Consumed c)
     (hn : Fresh n) (s : {c : LexerCore // c.Bound floor low}) (a : ParseAdapter H P) :
     runL (@kont _ Id R (ParseErrorCause E) _ _ i floor low b c hf (.ok .continue, ⟨n, k⟩)) s a =
-      runL (@flushCursor _ Id R (ParseErrorCause E) _ _ i floor low b n.resetConsumed
+      runL (@flushCursor _ Id R (ParseErrorCause E) _ _ i floor low b (resetConsumed n)
         fun p hp => Token.BatchCursor.endsAfter_resetConsumed (k.follows.endsAfter (hf p hp))) s
         a := by
   unfold kont
@@ -867,8 +869,9 @@ include hp
 
 /-- The lexer's handover of a cursor through which no request was made, to the parse adapter and
 to the adapter that stops: the same stop and states, and cursors alike. -/
-theorem flush_eq : ∀ (m : Nat) (c : BatchCursor b) (hfloor : ∀ p, floor = some p → c.EndsAfter p),
-    c.remaining < m → Fresh c → ∀ (s : {c : LexerCore // c.Bound floor low}) (a : ParseAdapter H P),
+theorem flush_eq : ∀ (m : Nat) (c : BatchCursor b) (hfloor : ∀ p, floor = some p → EndsAfter c p),
+    (remaining c) < m → Fresh c → ∀ (s : {c : LexerCore // c.Bound floor low}) (a : ParseAdapter H
+        P),
     FRel (runL (@flushCursor (ParseAdapter H P) Id R (ParseErrorCause E) _ _ instN floor low b c
         hfloor) s a)
       (runL (@flushCursor (ParseAdapter H P) Id R (ParseErrorCause E) _ _ instS floor low b c
@@ -903,7 +906,7 @@ theorem flush_eq : ∀ (m : Nat) (c : BatchCursor b) (hfloor : ∀ p, floor = so
           have hfS : Fresh nS := hfresh hnS
           simp only [resumeOut, hnS, ↓reduceDIte] at hsplit
           rw [kont_continue instS hfloor kS hfS]
-          have hih := flush_eq m nS.resetConsumed
+          have hih := flush_eq m (resetConsumed nS)
             (fun p hp' => Token.BatchCursor.endsAfter_resetConsumed (kS.follows.endsAfter
               (hfloor p hp')))
             (by rw [Token.BatchCursor.remaining_resetConsumed]; have := kS.remaining_lt; omega)
@@ -911,7 +914,7 @@ theorem flush_eq : ∀ (m : Nat) (c : BatchCursor b) (hfloor : ∀ p, floor = so
               (Alike.resetConsumed nS).discardRequested.trans hfS.2⟩ s aS
           refine FRel.trans ?_ hih
           -- the parse adapter's handover of the rest, anew
-          have hnR : nS.resetConsumed.HasNext := Token.BatchCursor.hasNext_resetConsumed.mpr hnS
+          have hnR : (resetConsumed nS).HasNext := Token.BatchCursor.hasNext_resetConsumed.mpr hnS
           rw [flushCursor_eq]
           simp only [hnR, ↓reduceDIte]
           rw [run_getCore_bind, hh]
@@ -919,11 +922,11 @@ theorem flush_eq : ∀ (m : Nat) (c : BatchCursor b) (hfloor : ∀ p, floor = so
           rw [run_callConsumer_bind]
           have hal := outN_alike hp (Alike.resetConsumed nS).symm hnS hnR aS
           have hsplit' := hsplit.trans hal
-          have eN' : outN nS.resetConsumed hnR aS =
-              let x := ((instN (P := P) b).consume nS.resetConsumed hnR).run aS
+          have eN' : outN (resetConsumed nS) hnR aS =
+              let x := ((instN (P := P) b).consume (resetConsumed nS) hnR).run aS
               ((x.1.1, x.1.2.val), x.2) := rfl
           rw [eN'] at hsplit'
-          generalize ((instN (P := P) b).consume nS.resetConsumed hnR).run aS = yR at hsplit' ⊢
+          generalize ((instN (P := P) b).consume (resetConsumed nS) hnR).run aS = yR at hsplit' ⊢
           obtain ⟨⟨rR, ⟨nR, kR⟩⟩, aR⟩ := yR
           obtain ⟨e1, e2, e3⟩ := hsplit'
           dsimp only at e1 e2 e3
@@ -945,7 +948,7 @@ theorem flush_eq : ∀ (m : Nat) (c : BatchCursor b) (hfloor : ∀ p, floor = so
           revert h₁
           rw [hrs]
           intro h₁
-          exact flush_eq m nS.resetConsumed h₁
+          exact flush_eq m (resetConsumed nS) h₁
             (by rw [Token.BatchCursor.remaining_resetConsumed]; have := kS.remaining_lt; omega)
             ⟨(Alike.resetConsumed nS).relexRequested.trans (e2.relexRequested.symm.trans hr'),
               (Alike.resetConsumed nS).discardRequested.trans (e2.discardRequested.symm.trans hd)⟩
@@ -969,12 +972,12 @@ theorem runL_bind {α β : Type} (x : LexM (ParseAdapter H P) Id R (ParseErrorCa
   cases r <;> rfl
 
 omit hp in
-theorem fresh_new (v : Token.Version) (batch : Token.TokenBatch) :
-    Fresh (BatchCursor.new v batch) := ⟨rfl, rfl⟩
+theorem fresh_new (v : Token.Version) (batch : Token.Internal.TokenBatch) :
+    Fresh (BatchCursor.Internal.new v batch) := ⟨rfl, rfl⟩
 
 /-- The lexer's handover of a batch is the same to the parse adapter and to the adapter that
 stops. -/
-theorem handOver_run (batch : Token.TokenBatch) (bytesAfter : ByteArray)
+theorem handOver_run (batch : Token.Internal.TokenBatch) (bytesAfter : ByteArray)
     (hfloor : ∀ p, floor = some p → batch.EndsAfter p) (s : {c : LexerCore // c.Bound floor low})
     (a : ParseAdapter H P) :
     runL (@handOver (ParseAdapter H P) Id R (ParseErrorCause E) _ _ instN floor low batch
@@ -983,14 +986,14 @@ theorem handOver_run (batch : Token.TokenBatch) (bytesAfter : ByteArray)
         bytesAfter hfloor) s a := by
   unfold handOver
   rw [run_getCore_bind, run_getCore_bind, runL_bind, runL_bind]
-  have hfl := flush_eq hp ((BatchCursor.new s.val.version batch).remaining + 1)
-    (BatchCursor.new s.val.version batch)
+  have hfl := flush_eq hp ((remaining (BatchCursor.Internal.new s.val.version batch)) + 1)
+    (BatchCursor.Internal.new s.val.version batch)
     (fun p hp' => Token.BatchCursor.endsAfter_new (hfloor p hp') _) (Nat.lt_succ_self _)
     (fresh_new _ _) s a
   generalize runL (@flushCursor (ParseAdapter H P) Id R (ParseErrorCause E) _ _ instN floor low
-    _ (BatchCursor.new s.val.version batch) _) s a = xN at hfl ⊢
+    _ (BatchCursor.Internal.new s.val.version batch) _) s a = xN at hfl ⊢
   generalize runL (@flushCursor (ParseAdapter H P) Id R (ParseErrorCause E) _ _ instS floor low
-    _ (BatchCursor.new s.val.version batch) _) s a = xS at hfl ⊢
+    _ (BatchCursor.Internal.new s.val.version batch) _) s a = xS at hfl ⊢
   obtain ⟨⟨rN, sN⟩, aN⟩ := xN
   obtain ⟨⟨rS, sS⟩, aS⟩ := xS
   obtain ⟨e1, e2, e3⟩ := hfl
@@ -1002,8 +1005,7 @@ theorem handOver_run (batch : Token.TokenBatch) (bytesAfter : ByteArray)
   · exact e3.elim
   · obtain ⟨rfl, hal⟩ := e3
     dsimp only at hal
-    have hfold : (@BatchCursor.foldConsumedCategories _ Nat cN) =
-        (@BatchCursor.foldConsumedCategories _ Nat cS) := by
+    have hfold : (@foldConsumedCategories _ Nat cN) = (@foldConsumedCategories _ Nat cS) := by
       funext init f
       exact hal.foldConsumedCategories init f
     have hb : Internal.intoBatch cN = Internal.intoBatch cS := hal.batch_eq
@@ -1023,7 +1025,7 @@ theorem handOver_eq
     (hp : ∀ {b : Token.BatchTag} (parser : P) (state : ParseState H)
       (cursor : Token.BatchCursor b),
       Parse.parse parser state cursor = Parser.Internal.parseByToken parser state cursor)
-    (floor : Option Nat) (low : Nat) (batch : Token.TokenBatch) (bytesAfter : ByteArray)
+    (floor : Option Nat) (low : Nat) (batch : Token.Internal.TokenBatch) (bytesAfter : ByteArray)
     (hfloor : ∀ p, floor = some p → batch.EndsAfter p) :
     @Internal.handOver (ParseAdapter H P) Id R (ParseErrorCause E) _ _ (fun _ => inferInstance)
         floor low batch bytesAfter hfloor =
@@ -1048,7 +1050,7 @@ theorem script_parse_eq {b : Token.BatchTag} (parser : BSmtLib.Parser.Script.Scr
 
 /-- The handover of a batch to the parse adapter of the script parser with the recording handler
 is that to the adapter that stops. -/
-theorem script_handOver_eq (floor : Option Nat) (low : Nat) (batch : Token.TokenBatch)
+theorem script_handOver_eq (floor : Option Nat) (low : Nat) (batch : Token.Internal.TokenBatch)
     (bytesAfter : ByteArray) (hfloor : ∀ p, floor = some p → batch.EndsAfter p) :
     @Internal.handOver RecAdapter Id Unit (ParseErrorCause Unit) _ _ (fun _ => inferInstance)
         floor low batch bytesAfter hfloor =

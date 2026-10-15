@@ -16,8 +16,8 @@ the lexer states and the consumer are related by `ISim`. A call that fails leave
 
 namespace BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Top
 
-open BSmtLib.Lexer (BATCH_CAPACITY Interrupted Failure Stop)
-open BSmtLib.Lexer.Helpers (RecoveryState)
+open BSmtLib.Lexer.Internal (BATCH_CAPACITY Interrupted Failure Stop)
+open BSmtLib.Lexer.Internal.Helpers (RecoveryState)
 open BSmtLib.Lexer.Internal.WRustPort (Ops)
 open BSmtLib.Facts.Proofs.Lexer.Simulation BSmtLib.Facts.Proofs.Lexer.Simulation.Batch
 open BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Eof

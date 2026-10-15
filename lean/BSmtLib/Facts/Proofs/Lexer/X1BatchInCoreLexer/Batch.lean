@@ -42,7 +42,7 @@ theorem start_add_ix {start : Nat} {p : USize} (h : start ≤ p.toNat) :
   simp only [ix]; omega
 
 /-- Equal arguments push equal tokens. -/
-theorem pushOnLine_congr {batch : Token.TokenBatch} {ty : Token.TokenCategory}
+theorem pushOnLine_congr {batch : Token.Internal.TokenBatch} {ty : Token.TokenCategory}
     {a a' b b' l ls s s' e e' : Nat}
     (ea : a = a') (eb : b = b') (es : s = s') (ee : e = e') {after nonempty after' nonempty'} :
     batch.pushOnLine ty a b l ls s e after nonempty =
@@ -50,7 +50,8 @@ theorem pushOnLine_congr {batch : Token.TokenBatch} {ty : Token.TokenCategory}
   subst ea eb es ee
   rfl
 
-theorem pushLocated_congr {batch : Token.TokenBatch} {ty : Token.TokenCategory} {a a' b b' : Nat}
+theorem pushLocated_congr {batch : Token.Internal.TokenBatch} {ty : Token.TokenCategory}
+    {a a' b b' : Nat}
     {s e e' : Span.Location} (ea : a = a') (eb : b = b') (ee : e = e')
     {after nonempty after' nonempty'} :
     batch.pushLocated ty a b s e after nonempty =
@@ -65,7 +66,7 @@ variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [
   {floor : Option Nat} {low : Nat} (start : Nat) (b : USize)
 
 omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
-theorem leave_sim (offset : Nat) (base position : USize) (batch : Token.TokenBatch)
+theorem leave_sim (offset : Nat) (base position : USize) (batch : Token.Internal.TokenBatch)
     (ok : PosOk start base position) (hframe hframe' hbatch hbatch') :
     SimP (BaseIs b) (fun _ => BaseIs position) (boundMap start (floor := floor) (low := low)) id
       (BSmtLib.Lexer.Internal.leave (H := H) (m := m) (R := R) (E := E) offset base position
@@ -77,8 +78,9 @@ theorem leave_sim (offset : Nat) (base position : USize) (batch : Token.TokenBat
   simp only [coreMap, ok.sub]
 
 omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
-theorem leavePending_sim (state : Lexer.Helpers.LexerState) (s : Span.Location) (offset : Nat)
-    (base position : USize) (batch : Token.TokenBatch) (ok : PosOk start base position)
+theorem leavePending_sim (state : Lexer.Internal.Helpers.LexerState) (s : Span.Location)
+    (offset : Nat)
+    (base position : USize) (batch : Token.Internal.TokenBatch) (ok : PosOk start base position)
     (hframe hframe' hbatch hbatch' hstart hstart' hfloor hfloor') :
     SimP (BaseIs b) (fun _ => BaseIs position) (boundMap start (floor := floor) (low := low)) id
       (BSmtLib.Lexer.Internal.leavePending (H := H) (m := m) (R := R) (E := E) state s offset base
@@ -90,7 +92,7 @@ theorem leavePending_sim (state : Lexer.Helpers.LexerState) (s : Span.Location) 
   refine modifyBound_sim start _ _ (fun c _ => ?_) fun _ _ => rfl
   simp only [coreMap, ok.sub]
 
-theorem flushHeld_sim (batch : Token.TokenBatch) (origin : Nat) (hbatch hbatch') :
+theorem flushHeld_sim (batch : Token.Internal.TokenBatch) (origin : Nat) (hbatch hbatch') :
     SimP (BaseIs b) (fun _ => BaseIs b) (boundMap start (floor := floor) (low := low))
       (fun r => ⟨r.val, r.property⟩)
       (BSmtLib.Lexer.Internal.flushHeld (H := H) (m := m) (R := R) (E := E) batch origin hbatch)
@@ -99,7 +101,7 @@ theorem flushHeld_sim (batch : Token.TokenBatch) (origin : Nat) (hbatch hbatch')
   exact SimP.seq (handOver_sim start b _ _ _ _) fun _ => SimP.pure (fun _ h => h) rfl
 
 /-- `flushHeld` of equal batches up to equal origins. -/
-theorem flushHeld_sim' (batch batch' : Token.TokenBatch) (origin origin' : Nat)
+theorem flushHeld_sim' (batch batch' : Token.Internal.TokenBatch) (origin origin' : Nat)
     (eb : batch = batch')
     (eo : origin = origin') (hbatch hbatch') :
     SimP (BaseIs b) (fun _ => BaseIs b) (boundMap start (floor := floor) (low := low))
@@ -111,12 +113,14 @@ theorem flushHeld_sim' (batch batch' : Token.TokenBatch) (origin origin' : Nat)
 
 /-- The batch held at a position, for that held at its index. -/
 def heldMap {offset : Nat} {base p : USize} (ok : PosOk start base p)
-    (r : {batch : Token.TokenBatch // BSmtLib.Lexer.Internal.Held floor offset base p batch}) :
-    {batch : Token.TokenBatch // Lexer.Internal.WRustPort.Held floor offset (ix start base) (ix
-    start p) batch} :=
+    (r : {batch : Token.Internal.TokenBatch //
+      BSmtLib.Lexer.Internal.Held floor offset base p batch}) :
+    {batch : Token.Internal.TokenBatch //
+      Lexer.Internal.WRustPort.Held floor offset (ix start base) (ix start p) batch} :=
   ⟨r.val, by rw [← ok.sub]; exact r.property.1, r.property.2⟩
 
-theorem pushFast_sim (slice : ByteSlice) (batch : Token.TokenBatch) (u : Unit) (offset : Nat)
+theorem pushFast_sim (slice : ByteSlice) (batch : Token.Internal.TokenBatch) (u : Unit)
+    (offset : Nat)
     (base : USize)
     (ty : Token.TokenCategory) (cs ce s e : USize) (emit : Bool) (hty hty')
     (hcs : slice.start ≤ cs.toNat) (hce : slice.start ≤ ce.toNat)
@@ -147,7 +151,7 @@ theorem pushFast_sim (slice : ByteSlice) (batch : Token.TokenBatch) (u : Unit) (
     dsimp only [heldMap]
     exact pushOnLine_congr (start_add_ix hcs).symm (start_add_ix hce).symm es ee
 
-theorem pushBorrowed_sim (slice : ByteSlice) (batch : Token.TokenBatch) (offset : Nat)
+theorem pushBorrowed_sim (slice : ByteSlice) (batch : Token.Internal.TokenBatch) (offset : Nat)
     (base : USize)
     (ty : Token.TokenCategory) (cs ce : USize) (s : Span.Location) (te : USize)
     (hcs : slice.start ≤ cs.toNat) (hce : slice.start ≤ ce.toNat)
@@ -181,7 +185,7 @@ theorem pushBorrowed_sim (slice : ByteSlice) (batch : Token.TokenBatch) (offset 
 
 omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
 /-- `leave`, with the indices of the second lexer given by equations. -/
-theorem leave_sim' (offset : Nat) (base position : USize) (batch : Token.TokenBatch)
+theorem leave_sim' (offset : Nat) (base position : USize) (batch : Token.Internal.TokenBatch)
     (base' position' : Nat) (eb : ix start base = base') (ep : ix start position = position')
     (ok : PosOk start base position) (hframe hframe' hbatch hbatch') :
     SimP (BaseIs b) (fun _ => BaseIs position) (boundMap start (floor := floor) (low := low)) id
@@ -193,8 +197,9 @@ theorem leave_sim' (offset : Nat) (base position : USize) (batch : Token.TokenBa
 
 omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
 /-- `leavePending`, with the indices of the second lexer given by equations. -/
-theorem leavePending_sim' (state : Lexer.Helpers.LexerState) (s : Span.Location) (offset : Nat)
-    (base position : USize) (batch : Token.TokenBatch) (base' position' : Nat)
+theorem leavePending_sim' (state : Lexer.Internal.Helpers.LexerState) (s : Span.Location)
+    (offset : Nat)
+    (base position : USize) (batch : Token.Internal.TokenBatch) (base' position' : Nat)
     (eb : ix start base = base') (ep : ix start position = position')
     (ok : PosOk start base position)
     (hframe hframe' hbatch hbatch' hstart hstart' hfloor hfloor') :
@@ -208,7 +213,7 @@ theorem leavePending_sim' (state : Lexer.Helpers.LexerState) (s : Span.Location)
   exact leavePending_sim start b state s offset base position batch ok _ _ _ _ _ _ _ _
 
 /-- `pushBorrowed`, with the indices of the second lexer given by equations. -/
-theorem pushBorrowed_sim' (slice : ByteSlice) (batch : Token.TokenBatch) (offset : Nat)
+theorem pushBorrowed_sim' (slice : ByteSlice) (batch : Token.Internal.TokenBatch) (offset : Nat)
     (base : USize)
     (ty : Token.TokenCategory) (cs ce : USize) (s : Span.Location) (te : USize)
     (base' cs' ce' te' : Nat)
@@ -227,7 +232,8 @@ theorem pushBorrowed_sim' (slice : ByteSlice) (batch : Token.TokenBatch) (offset
   exact pushBorrowed_sim b slice batch offset base ty cs ce s te hcs hce oke _ _ _ _ _ _ _ _
 
 /-- `pushFast`, with the indices of the second lexer given by equations. -/
-theorem pushFast_sim' (slice : ByteSlice) (batch : Token.TokenBatch) (u : Unit) (offset : Nat)
+theorem pushFast_sim' (slice : ByteSlice) (batch : Token.Internal.TokenBatch) (u : Unit)
+    (offset : Nat)
     (base : USize) (ty : Token.TokenCategory) (cs ce s e : USize) (emit emit' : Bool)
     (base' cs' ce' s' e' : Nat)
     (eb : ix slice.start base = base') (ecs : ix slice.start cs = cs')
@@ -249,7 +255,8 @@ theorem pushFast_sim' (slice : ByteSlice) (batch : Token.TokenBatch) (u : Unit) 
 
 omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
 theorem storeUnfinishedSymbolRun_sim (slice : ByteSlice) (h : slice.stop < USize.size)
-    (entry : UInt8) (offset : Nat) (base index after runEndAt : USize) (batch : Token.TokenBatch)
+    (entry : UInt8) (offset : Nat) (base index after runEndAt : USize)
+    (batch : Token.Internal.TokenBatch)
     (oki : PosOk slice.start base index) (oka : PosOk slice.start base after)
     (okr : PosOk slice.start base runEndAt)
     (hframe hframe' hindex hindex' hrun hrun' hbatch hbatch') :

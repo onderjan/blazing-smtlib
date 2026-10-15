@@ -159,7 +159,8 @@ instance {batch : BatchTag} : Produce (BatchCursor batch) where
   next?_isSome := BatchCursor.isSome_next?
   consumed_trans := BatchCursor.Consumed.trans
   consumed_wf :=
-    Subrelation.wf (fun h => BatchCursor.Consumed.remaining_lt h) (measure BatchCursor.remaining).wf
+    Subrelation.wf (fun h => BatchCursor.Consumed.remaining_lt h)
+      (measure BatchCursor.Internal.remaining).wf
   setVersion_consumed consumed h := (BatchCursor.setVersion_follows h).trans_consumed consumed
   discardRest_consumed consumed := (BatchCursor.discardRest_follows _).trans_consumed consumed
 

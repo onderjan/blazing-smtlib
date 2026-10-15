@@ -202,12 +202,19 @@ impl<'l> Fields<'l> {
         field.parse().unwrap_or_else(|_| self.bad(what))
     }
 
-    fn count(&mut self) -> usize {
+    pub fn count(&mut self) -> usize {
         self.number("count")
     }
 
-    fn id(&mut self) -> usize {
+    pub fn id(&mut self) -> usize {
         self.number("value number")
+    }
+
+    /// The field `-` of a result that carries nothing.
+    pub fn unit(&mut self) {
+        if self.next() != "-" {
+            self.bad("empty result");
+        }
     }
 
     fn opt_id(&mut self) -> Option<usize> {
@@ -229,7 +236,7 @@ impl<'l> Fields<'l> {
         self.prefixed('x', "bytes field")
     }
 
-    fn keyword(&mut self) -> SmtKeywordBuf {
+    pub fn keyword(&mut self) -> SmtKeywordBuf {
         SmtKeywordBuf::new(self.bytes()).unwrap_or_else(|_| self.bad("keyword"))
     }
 
@@ -237,7 +244,7 @@ impl<'l> Fields<'l> {
         SmtNumeralBuf::new(self.bytes()).unwrap_or_else(|_| self.bad("numeral"))
     }
 
-    fn string(&mut self) -> SmtStringContentBuf {
+    pub fn string(&mut self) -> SmtStringContentBuf {
         SmtStringContentBuf::new(self.bytes()).unwrap_or_else(|_| self.bad("string"))
     }
 
@@ -250,7 +257,7 @@ impl<'l> Fields<'l> {
         Some(symbol.unwrap_or_else(|_| self.bad("symbol")))
     }
 
-    fn symbol(&mut self) -> SmtSymbolBuf {
+    pub fn symbol(&mut self) -> SmtSymbolBuf {
         let field = self.next();
         self.symbol_of(field).unwrap_or_else(|| self.bad("symbol"))
     }
@@ -277,7 +284,7 @@ impl<'l> Fields<'l> {
         constant.unwrap_or_else(|_| self.bad("constant"))
     }
 
-    fn ident(&mut self) -> SmtIdentBuf {
+    pub fn ident(&mut self) -> SmtIdentBuf {
         let name = self.symbol();
         let count = self.count();
         let indices = (0..count)
@@ -418,7 +425,7 @@ impl<H: Handler> Values<H> {
         take(&mut self.s_exprs, id, "s-expression")
     }
 
-    fn take_attribute(&mut self, id: usize) -> H::Attribute {
+    pub fn take_attribute(&mut self, id: usize) -> H::Attribute {
         take(&mut self.attributes, id, "attribute")
     }
 
@@ -473,7 +480,7 @@ impl<H: Handler> Values<H> {
         }
     }
 
-    fn qualified_ident(&mut self, fields: &mut Fields<'_>) -> QualifiedIdent<H::Sort> {
+    pub fn qualified_ident(&mut self, fields: &mut Fields<'_>) -> QualifiedIdent<H::Sort> {
         let ident = fields.ident();
         let sort = fields.opt_id().map(|id| self.take_sort(id));
         QualifiedIdent { ident, sort }
@@ -1183,10 +1190,8 @@ pub fn drive<H: Handler, P: Category<H>>(
         let mut fields = Fields::new(line);
         match fields.next() {
             "result" => {
-                let result = line
-                    .strip_prefix("result ")
-                    .expect("a result line starts with its word");
-                results.push(P::from_lean(result, &mut values));
+                results.push(P::read_lean(&mut fields, &mut values));
+                fields.end();
             }
             "ok" => {
                 let unconsumed = fields.count();

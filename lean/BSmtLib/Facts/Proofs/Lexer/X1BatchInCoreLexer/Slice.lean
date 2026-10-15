@@ -41,8 +41,10 @@ def exitMap {R E : Type} {floor : Option Nat} :
 theorem coreMap_advance {start : Nat} {c : ZCore} {p : USize} (hb : start ≤ c.base.toNat)
     (hp : c.base.toNat ≤ p.toNat) :
     coreMap start (c.advance p) = (coreMap start c).advance (ix start p) := by
-  simp only [coreMap, BSmtLib.Lexer.LexerCore.advance, Lexer.Internal.WRustPort.LexerCore.advance,
-    BSmtLib.Lexer.LexerCore.offsetAt, Lexer.Internal.WRustPort.LexerCore.offsetAt, sub_toNat_ix hb
+  simp only [coreMap, BSmtLib.Lexer.Internal.LexerCore.advance,
+      Lexer.Internal.WRustPort.LexerCore.advance,
+    BSmtLib.Lexer.Internal.LexerCore.offsetAt, Lexer.Internal.WRustPort.LexerCore.offsetAt,
+        sub_toNat_ix hb
         hp]
 
 section
@@ -78,11 +80,11 @@ variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [
 /-- What `lexSliceRun` measures its progress by: the bytes left, and whether no lexical error was
 met yet. -/
 def runMeasure (slice : ByteSlice) (position : USize)
-    (fnResult : Except (BSmtLib.Lexer.Failure E) (ControlFlow R)) : Nat :=
+    (fnResult : Except (BSmtLib.Lexer.Internal.Failure E) (ControlFlow R)) : Nat :=
   2 * (slice.stop - position.toNat) + match fnResult with | .ok _ => 1 | .error _ => 0
 
 theorem lexSliceRun_exact (slice : ByteSlice) (h : slice.stop < USize.size) :
-    ∀ n (position : USize) (fnResult : Except (BSmtLib.Lexer.Failure E) (ControlFlow R))
+    ∀ n (position : USize) (fnResult : Except (BSmtLib.Lexer.Internal.Failure E) (ControlFlow R))
       (c : ZS floor 0), runMeasure slice position fnResult = n →
       slice.start ≤ position.toNat → (∀ v, fnResult = .ok v → c.val.base = position) →
       ∀ hh : H,
@@ -206,7 +208,7 @@ theorem ix_resumed {slice : ByteSlice} (h : slice.stop < USize.size) {resumed : 
 theorem lexSliceFrom_couple (slice : ByteSlice) (h : slice.stop < USize.size)
     (initialOffset : Nat) :
     ∀ k (floor : Nat) hfloor hfloor' (position : USize) (position' : Nat)
-      (fnResult : Except (BSmtLib.Lexer.Failure E) (ControlFlow R))
+      (fnResult : Except (BSmtLib.Lexer.Internal.Failure E) (ControlFlow R))
       (held : Option (Span.Located R)) (c : ZS (some floor) 0)
       (x : XS (some floor) 0),
       slice.size + 1 - (floor + 1 - initialOffset) = k →
@@ -253,7 +255,7 @@ theorem lexSliceFrom_couple (slice : ByteSlice) (h : slice.stop < USize.size)
         have := after floor rfl
         exact ih _ (by omega) location.offset _ _ _ _ (.ok .continue) _ _ _ rfl er
           (Subtype.ext (by
-            simp only [boundMap, coreMap, BSmtLib.Lexer.LexerCore.resumeAt,
+            simp only [boundMap, coreMap, BSmtLib.Lexer.Internal.LexerCore.resumeAt,
               Lexer.Internal.WRustPort.LexerCore.resumeAt]
             rw [er'])) hs (fun _ _ => rfl) h'
       · rw [dite_eq_right (fun h => hr (hcond.mp h)), dite_eq_right hr]
@@ -268,7 +270,7 @@ theorem lexSliceFrom_couple (slice : ByteSlice) (h : slice.stop < USize.size)
         have := after floor rfl
         exact ih _ (by omega) location.offset _ _ _ _ (.ok .continue) _ _ _ rfl er
           (Subtype.ext (by
-            simp only [boundMap, coreMap, BSmtLib.Lexer.LexerCore.resumeAt,
+            simp only [boundMap, coreMap, BSmtLib.Lexer.Internal.LexerCore.resumeAt,
               Lexer.Internal.WRustPort.LexerCore.resumeAt]
             rw [er'])) hs (fun _ _ => rfl) h'
       · rw [dite_eq_right (fun h => hr (hcond.mp h)), dite_eq_right hr]
