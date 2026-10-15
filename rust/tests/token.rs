@@ -247,3 +247,37 @@ fn reserved_words_are_general_or_command_names() {
         assert_eq!(reserved.as_str(), command_name.as_str());
     }
 }
+
+const VERSIONS: [SmtVersion; 4] = [
+    SmtVersion::V2_0,
+    SmtVersion::V2_5,
+    SmtVersion::V2_6,
+    SmtVersion::V2_7,
+];
+
+/// The decimal of a version names it, and names it alone.
+#[test]
+fn a_version_and_its_decimal_convert_into_each_other() {
+    for (version, spelling) in VERSIONS.into_iter().zip(["2.0", "2.5", "2.6", "2.7"]) {
+        let decimal = version.as_decimal();
+        assert_eq!(decimal, spelling, "decimal of {version:?}");
+        assert_eq!(
+            SmtVersion::from_decimal(decimal.as_slice()),
+            Some(version),
+            "version of {spelling}"
+        );
+    }
+}
+
+#[test]
+fn a_decimal_naming_no_version_has_none() {
+    for decimal in [
+        "2.1", "2.4", "2.8", "3.0", "1.0", "0.0", "2.50", "2.00", "20.0", "2.06",
+    ] {
+        assert_eq!(
+            SmtVersion::from_decimal(decimal.as_bytes()),
+            None,
+            "{decimal}"
+        );
+    }
+}

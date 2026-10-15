@@ -1,8 +1,8 @@
 //! Public-API tests of the plain string-like value types.
 
 use blazing_smtlib::{
-    SmtBinDigitsBuf, SmtBytesBuf, SmtDecimalBuf, SmtHexDigitsBuf, SmtKeywordBuf, SmtNumeralBuf,
-    SmtStringContentBuf, SmtSymbolBuf,
+    SmtBinDigitsBuf, SmtBytesBuf, SmtDecimalBuf, SmtHexDigitsBuf, SmtKeywordBuf, SmtNumeral,
+    SmtNumeralBuf, SmtNumeralOverflow, SmtStringContentBuf, SmtSymbolBuf,
 };
 
 #[test]
@@ -234,4 +234,163 @@ fn newtypes_compare_with_bytes_strings_and_each_other() {
     assert!(owned == view);
     assert!(view == owned);
     assert!(owned != "3" && view != "3");
+}
+
+/// The conversions of a numeral into one integer type, widened to `u128` so
+/// that one property covers every type.
+struct NumeralConversions {
+    name: &'static str,
+    max: u128,
+    buf_to: fn(&SmtNumeralBuf) -> Option<u128>,
+    view_to: fn(SmtNumeral<'_>) -> Option<u128>,
+    buf_try_from: fn(&SmtNumeralBuf) -> Result<u128, SmtNumeralOverflow>,
+    view_try_from: fn(SmtNumeral<'_>) -> Result<u128, SmtNumeralOverflow>,
+    from_method: fn(u128) -> SmtNumeralBuf,
+    from_trait: fn(u128) -> SmtNumeralBuf,
+}
+
+/// Widens a value of any of the converted integer types to `u128`.
+fn widen<T: TryInto<u128>>(value: T) -> u128 {
+    value
+        .try_into()
+        .unwrap_or_else(|_| panic!("every converted integer type fits into u128"))
+}
+
+/// Narrows a `u128` known to fit into the integer type.
+fn narrow<T: TryFrom<u128>>(value: u128) -> T {
+    T::try_from(value).unwrap_or_else(|_| panic!("{value} should fit into the integer type"))
+}
+
+macro_rules! numeral_conversions {
+    ($int:ty, $to:ident, $from:ident) => {
+        NumeralConversions {
+            name: stringify!($int),
+            max: widen(<$int>::MAX),
+            buf_to: |numeral| numeral.$to().map(widen),
+            view_to: |numeral| numeral.$to().map(widen),
+            buf_try_from: |numeral| <$int>::try_from(numeral).map(widen),
+            view_try_from: |numeral| <$int>::try_from(numeral).map(widen),
+            from_method: |value| SmtNumeralBuf::$from(narrow::<$int>(value)),
+            from_trait: |value| SmtNumeralBuf::from(narrow::<$int>(value)),
+        }
+    };
+}
+
+fn all_numeral_conversions() -> [NumeralConversions; 4] {
+    [
+        numeral_conversions!(u32, to_u32, from_u32),
+        numeral_conversions!(u64, to_u64, from_u64),
+        numeral_conversions!(u128, to_u128, from_u128),
+        numeral_conversions!(usize, to_usize, from_usize),
+    ]
+}
+
+fn numeral(digits: &str) -> SmtNumeralBuf {
+    SmtNumeralBuf::new(digits.as_bytes().to_vec()).expect("test numeral should be allowed")
+}
+
+/// Every conversion of the numeral into the integer type, owned and viewed,
+/// by method and by `TryFrom`; all must agree.
+fn convert(conversions: &NumeralConversions, digits: &str) -> Option<u128> {
+    let owned = numeral(digits);
+    let by_method = (conversions.buf_to)(&owned);
+    assert_eq!(
+        (conversions.view_to)(owned.as_view()),
+        by_method,
+        "{} view of {digits}",
+        conversions.name
+    );
+    assert_eq!(
+        (conversions.buf_try_from)(&owned),
+        by_method.ok_or(SmtNumeralOverflow),
+        "{} TryFrom of the owned {digits}",
+        conversions.name
+    );
+    assert_eq!(
+        (conversions.view_try_from)(owned.as_view()),
+        by_method.ok_or(SmtNumeralOverflow),
+        "{} TryFrom of the viewed {digits}",
+        conversions.name
+    );
+    by_method
+}
+
+#[test]
+fn a_numeral_converts_into_an_integer_type_exactly_when_it_fits() {
+    // one more than the largest u128, which no type here holds
+    const ABOVE_U128: &str = "340282366920938463463374607431768211456";
+    for conversions in all_numeral_conversions() {
+        let name = conversions.name;
+        let max = conversions.max;
+        for value in [0, 1, 9, 10, 42, max - 1, max] {
+            assert_eq!(
+                convert(&conversions, &value.to_string()),
+                Some(value),
+                "{name} of {value}"
+            );
+        }
+        let above_max = max
+            .checked_add(1)
+            .map_or(ABOVE_U128.to_string(), |above| above.to_string());
+        for digits in [
+            above_max.as_str(),
+            ABOVE_U128,
+            "100000000000000000000000000000000000000000000000000",
+        ] {
+            assert_eq!(convert(&conversions, digits), None, "{name} of {digits}");
+        }
+    }
+}
+
+#[test]
+fn a_numeral_built_from_an_integer_is_its_decimal_spelling_and_converts_back() {
+    for conversions in all_numeral_conversions() {
+        let name = conversions.name;
+        let max = conversions.max;
+        for value in [0, 1, 9, 10, 42, max - 1, max] {
+            for built in [
+                (conversions.from_method)(value),
+                (conversions.from_trait)(value),
+            ] {
+                assert!(
+                    SmtNumeralBuf::is_allowed(built.as_slice()),
+                    "{name} {value} built as {built:?}"
+                );
+                assert_eq!(built, value.to_string().as_str(), "{name} {value}");
+                assert_eq!((conversions.buf_to)(&built), Some(value), "{name} {value}");
+            }
+        }
+    }
+}
+
+#[test]
+fn a_decimal_splits_at_its_dot_into_a_whole_numeral_and_fraction_digits() {
+    for (decimal, whole, fraction) in [
+        ("0.0", "0", &b"0"[..]),
+        ("7.5", "7", b"5"),
+        ("10.050", "10", b"050"),
+        ("1.00", "1", b"00"),
+        ("123.0001", "123", b"0001"),
+    ] {
+        let owned = SmtDecimalBuf::new(decimal.as_bytes().to_vec()).expect("a decimal");
+        let view = owned.as_view();
+        assert_eq!(owned.whole(), whole, "whole part of the owned {decimal}");
+        assert_eq!(view.whole(), whole, "whole part of the viewed {decimal}");
+        assert_eq!(
+            owned.fraction(),
+            fraction,
+            "fraction of the owned {decimal}"
+        );
+        assert_eq!(
+            view.fraction(),
+            fraction,
+            "fraction of the viewed {decimal}"
+        );
+        // the whole part is a numeral, with the conversions of one
+        assert_eq!(
+            view.whole().to_u32(),
+            Some(whole.parse().expect("the whole part is a number")),
+            "{decimal}"
+        );
+    }
 }

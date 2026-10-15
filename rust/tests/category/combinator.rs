@@ -177,3 +177,117 @@ fn nested_combinators() {
         "{err:?}"
     );
 }
+
+// --- Tuples ---
+
+use super::parse_backend::{
+    Tuple3Parser, Tuple4Parser, Tuple5Parser, Tuple6Parser, Tuple7Parser, Tuple8Parser,
+};
+
+/// The bytes of symbols, to compare tuples of them.
+fn slices<const N: usize>(symbols: [&SmtSymbolBuf; N]) -> [&[u8]; N] {
+    symbols.map(|symbol| symbol.as_slice())
+}
+
+#[test]
+fn tuple_parsers_yield_the_values_in_one_flat_tuple() {
+    type S = SymbolParser;
+    let (a, b, c) = parse_all::<Tuple3Parser<S, S, S>>(b"a b c");
+    assert_eq!(slices([&a, &b, &c]), [b"a", b"b", b"c"]);
+    let (a, b, c, d) = parse_all::<Tuple4Parser<S, S, S, S>>(b"a b c d");
+    assert_eq!(slices([&a, &b, &c, &d]), [b"a", b"b", b"c", b"d"]);
+    let (a, b, c, d, e) = parse_all::<Tuple5Parser<S, S, S, S, S>>(b"a b c d e");
+    assert_eq!(slices([&a, &b, &c, &d, &e]), [b"a", b"b", b"c", b"d", b"e"]);
+    let (a, b, c, d, e, f) = parse_all::<Tuple6Parser<S, S, S, S, S, S>>(b"a b c d e f");
+    assert_eq!(
+        slices([&a, &b, &c, &d, &e, &f]),
+        [b"a", b"b", b"c", b"d", b"e", b"f"]
+    );
+    let (a, b, c, d, e, f, g) = parse_all::<Tuple7Parser<S, S, S, S, S, S, S>>(b"a b c d e f g");
+    assert_eq!(
+        slices([&a, &b, &c, &d, &e, &f, &g]),
+        [b"a", b"b", b"c", b"d", b"e", b"f", b"g"]
+    );
+    let (a, b, c, d, e, f, g, h) =
+        parse_all::<Tuple8Parser<S, S, S, S, S, S, S, S>>(b"a b c d e f g h");
+    assert_eq!(
+        slices([&a, &b, &c, &d, &e, &f, &g, &h]),
+        [b"a", b"b", b"c", b"d", b"e", b"f", b"g", b"h"]
+    );
+
+    // values of several categories, each over several tokens
+    let (name, sort, term) =
+        parse_all::<Tuple3Parser<SymbolParser, SortParser, TermParser>>(b"x (Array Int Int) (f x)");
+    assert_eq!(name.as_slice(), b"x");
+    assert_eq!(sort, "(Array Int Int)");
+    assert_eq!(term, "(f x)");
+}
+
+#[test]
+fn tuple_parser_fails_as_the_nested_pair_parsers() {
+    if parse_backend::consumer_spans_not_applicable() {
+        return;
+    }
+    type Tuple = Tuple3Parser<SymbolParser, SortParser, SymbolParser>;
+    type Nested = PairParser<SymbolParser, PairParser<SortParser, SymbolParser>>;
+
+    // a missing middle value: the error points at the token in its place
+    let err = assert_error::<Tuple>(b"a ) c", 2, 3);
+    assert!(
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Sort])
+        ),
+        "{err:?}"
+    );
+
+    for input in [
+        &b"a ) c"[..],
+        b"1 Int c",
+        b"a (Array) c",
+        b"a Int 1",
+        b"a Int",
+        b"a",
+        b"",
+    ] {
+        let tuple = run::<Tuple>(input);
+        let nested = run::<Nested>(input);
+        match (tuple, nested) {
+            (Err(tuple), Err(nested)) => assert_eq!(tuple, nested, "in {:?}", text(input)),
+            (tuple, nested) => panic!(
+                "both must fail in {:?}, got {:?} and {:?}",
+                text(input),
+                tuple.err(),
+                nested.err()
+            ),
+        }
+    }
+
+    // and they agree where they succeed
+    let ((a, sort, b), left) = run::<Tuple>(b"a (Array Int Bool) b c").expect("a valid tuple");
+    let ((na, (nsort, nb)), nleft) =
+        run::<Nested>(b"a (Array Int Bool) b c").expect("valid nested pairs");
+    assert_eq!(
+        (a.as_slice(), sort.as_str(), b.as_slice(), left),
+        (na.as_slice(), nsort.as_str(), nb.as_slice(), nleft)
+    );
+    assert_eq!(left, 1);
+}
+
+#[test]
+fn tuple_parser_parses_consecutive_values() {
+    // the first value ends inside a compound sort of the last parser, which
+    // must start the second value at the first parser again
+    let ((sort, name, last), (next_sort, next_name, next_last)) =
+        parse_two::<Tuple3Parser<SortParser, SymbolParser, SortParser>>(
+            b"(Array Int Int) a (_ BitVec 8) Bool b Int",
+        );
+    assert_eq!(
+        (sort.as_str(), name.as_slice(), last.as_str()),
+        ("(Array Int Int)", &b"a"[..], "(_ BitVec 8)")
+    );
+    assert_eq!(
+        (next_sort.as_str(), next_name.as_slice(), next_last.as_str()),
+        ("Bool", &b"b"[..], "Int")
+    );
+}

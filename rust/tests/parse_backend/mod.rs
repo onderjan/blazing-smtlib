@@ -49,7 +49,9 @@ use blazing_smtlib::{
         SmtIdentParser, SmtKeywordParser, SmtOpenParenParser, SmtPairParser,
         SmtParenMultipleParser, SmtParenParser, SmtParse, SmtParseError, SmtParseErrorCause,
         SmtParseState, SmtQualifiedIdentParser, SmtSExprParser, SmtScriptParser, SmtSortParser,
-        SmtStringParser, SmtSymbolParser, SmtSyntaxErrorKind, SmtTermParser, SmtVersionErrorKind,
+        SmtStringParser, SmtSymbolParser, SmtSyntaxErrorKind, SmtTermParser, SmtTuple3Parser,
+        SmtTuple4Parser, SmtTuple5Parser, SmtTuple6Parser, SmtTuple7Parser, SmtTuple8Parser,
+        SmtVersionErrorKind,
     },
     reader::{SmtReadError, SmtReadErrorCause, SmtReader},
     token::{
@@ -1091,6 +1093,60 @@ impl<H: Handler, P1: Category<H>, P2: Category<H>> Category<H> for PairParser<P1
         (first, P2::read_lean(fields, values))
     }
 }
+
+/// The name of the pair parsers nested to the right over the parsers named.
+fn nested_pair_name(names: &[String]) -> String {
+    let (last, rest) = names
+        .split_last()
+        .expect("nested pairs are over at least one parser");
+    rest.iter().rev().fold(last.clone(), |nested, name| {
+        format!("pair({name},{nested})")
+    })
+}
+
+/// Defines the category of a tuple parser. The Lean port has no tuple
+/// parsers: it parses a tuple by the pair parsers nested to the right, whose
+/// results the driver writes in order.
+macro_rules! tuple_category {
+    ($marker:ident, $rust:ident: $($parser:ident $value:ident),+) => {
+        #[doc = concat!("`", stringify!($rust), "`: the values of the parsers in turn.")]
+        pub struct $marker<$($parser),+>(PhantomData<($($parser,)+)>);
+
+        impl<H: Handler, $($parser: Category<H>),+> Category<H> for $marker<$($parser),+> {
+            type Result = ($($parser::Result,)+);
+            type Rust<'h>
+                = $rust<Adapt<'h, H>, $($parser::Rust<'h>),+>
+            where
+                H: 'h;
+
+            fn from_rust<'h>(
+                ($($value,)+): <Self::Rust<'h> as SmtParse<Adapt<'h, H>>>::Result,
+            ) -> Self::Result
+            where
+                H: 'h,
+            {
+                ($($parser::from_rust($value),)+)
+            }
+            fn lean_name() -> String {
+                nested_pair_name(&[$($parser::lean_name()),+])
+            }
+            fn read_lean(fields: &mut lean::Fields<'_>, values: &mut lean::Values<H>) -> Self::Result {
+                // the elements of a tuple expression are evaluated in order
+                ($($parser::read_lean(fields, values),)+)
+            }
+        }
+    };
+}
+
+tuple_category!(Tuple3Parser, SmtTuple3Parser: P1 p1, P2 p2, P3 p3);
+tuple_category!(Tuple4Parser, SmtTuple4Parser: P1 p1, P2 p2, P3 p3, P4 p4);
+tuple_category!(Tuple5Parser, SmtTuple5Parser: P1 p1, P2 p2, P3 p3, P4 p4, P5 p5);
+tuple_category!(Tuple6Parser, SmtTuple6Parser: P1 p1, P2 p2, P3 p3, P4 p4, P5 p5, P6 p6);
+tuple_category!(Tuple7Parser, SmtTuple7Parser: P1 p1, P2 p2, P3 p3, P4 p4, P5 p5, P6 p6, P7 p7);
+tuple_category!(
+    Tuple8Parser,
+    SmtTuple8Parser: P1 p1, P2 p2, P3 p3, P4 p4, P5 p5, P6 p6, P7 p7, P8 p8
+);
 
 macro_rules! wrapping_category {
     ($marker:ident, $rust:ident, $name:literal, single) => {
