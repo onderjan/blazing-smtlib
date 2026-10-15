@@ -4,7 +4,9 @@ use crate::{
     SmtAttributeValue, SmtAttributes, SmtBindings, SmtConstructors, SmtFunctionSignature,
     SmtFunctionSignatures, SmtKeyword, SmtMatchCases, SmtMultiple, SmtNumeral, SmtPattern,
     SmtQuantifierKind, SmtSExpr, SmtSort, SmtSortArities, SmtSortedVars, SmtStringContent,
-    SmtSymbol, SmtSymbolBuf, SmtSymbols, SmtTerm, parser::SmtParse, token::SmtVersion,
+    SmtSymbol, SmtSymbolBuf, SmtSymbols, SmtTerm,
+    parser::SmtParse,
+    token::{SmtCommandNameReserved, SmtVersion},
 };
 
 pub trait SmtHandler {
@@ -449,6 +451,444 @@ pub trait SmtCommandHandler: SmtHandler {
         &mut self,
         constructors: SmtConstructors<'_, Self::Sort>,
     ) -> Result<(), Self::Error>;
+}
+
+/// Error of a [`SmtPartialCommandHandler`].
+#[derive(Debug, Clone)]
+pub enum SmtPartialCommandError<E> {
+    /// The handler does not implement the standard command.
+    Unsupported(SmtCommandNameReserved),
+    /// The handler does not implement the nonstandard command with the given name.
+    UnsupportedNonstandard(SmtSymbolBuf),
+    /// The handler failed.
+    Handler(E),
+}
+
+fn unsupported<T, E>(command: SmtCommandNameReserved) -> Result<T, SmtPartialCommandError<E>> {
+    Err(SmtPartialCommandError::Unsupported(command))
+}
+
+/// A command handler that implements only the commands it supports.
+///
+/// Every command it does not implement fails with
+/// [`SmtPartialCommandError::Unsupported`] naming the command, or with
+/// [`SmtPartialCommandError::UnsupportedNonstandard`] for a nonstandard command.
+/// Each implementor is a [`SmtCommandHandler`].
+pub trait SmtPartialCommandHandler:
+    SmtHandler<Error = SmtPartialCommandError<Self::HandlerError>>
+{
+    /// The error of the handler itself.
+    type HandlerError;
+
+    type NonstandardParser: SmtParse<Self, Result = ()>;
+
+    /// Returns a parser that parses a non-standard command with the given name.
+    fn nonstandard_command(
+        &mut self,
+        name: SmtSymbol<'_>,
+    ) -> Result<Self::NonstandardParser, Self::Error> {
+        Err(SmtPartialCommandError::UnsupportedNonstandard(
+            name.into_owned(),
+        ))
+    }
+
+    fn command_echo(&mut self, _value: SmtStringContent<'_>) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::Echo)
+    }
+
+    fn command_get_option(&mut self, _option: SmtKeyword<'_>) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::GetOption)
+    }
+    fn command_set_option(&mut self, _option: Self::Attribute) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::SetOption)
+    }
+    fn command_get_info(&mut self, _keyword: SmtKeyword<'_>) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::GetInfo)
+    }
+    fn command_set_info(&mut self, _attribute: Self::Attribute) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::SetInfo)
+    }
+
+    fn command_set_logic(&mut self, _logic: SmtSymbol<'_>) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::SetLogic)
+    }
+
+    fn command_get_value(
+        &mut self,
+        _terms: SmtMultiple<'_, Self::Term>,
+    ) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::GetValue)
+    }
+    fn command_get_assertions(&mut self) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::GetAssertions)
+    }
+    fn command_get_assignment(&mut self) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::GetAssignment)
+    }
+    fn command_get_model(&mut self) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::GetModel)
+    }
+    fn command_get_proof(&mut self) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::GetProof)
+    }
+    fn command_get_unsat_assumptions(&mut self) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::GetUnsatAssumptions)
+    }
+    fn command_get_unsat_core(&mut self) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::GetUnsatCore)
+    }
+
+    fn command_declare_sort(
+        &mut self,
+        _name: SmtSymbol<'_>,
+        _arity: SmtNumeral<'_>,
+    ) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::DeclareSort)
+    }
+    fn command_declare_sort_parameter(&mut self, _name: SmtSymbol<'_>) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::DeclareSortParameter)
+    }
+    fn command_declare_const(
+        &mut self,
+        _name: SmtSymbol<'_>,
+        _sort: Self::Sort,
+    ) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::DeclareConst)
+    }
+    fn command_declare_fun(
+        &mut self,
+        _name: SmtSymbol<'_>,
+        _param_sorts: SmtMultiple<'_, Self::Sort>,
+        _result_sort: Self::Sort,
+    ) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::DeclareFun)
+    }
+
+    fn command_assert(&mut self, _term: Self::Term) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::Assert)
+    }
+    fn command_check_sat(&mut self) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::CheckSat)
+    }
+    fn command_check_sat_assuming(
+        &mut self,
+        _assumptions: SmtMultiple<'_, Self::Term>,
+    ) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::CheckSatAssuming)
+    }
+
+    fn command_reset(&mut self) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::Reset)
+    }
+    fn command_reset_assertions(&mut self) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::ResetAssertions)
+    }
+    fn command_exit(&mut self) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::Exit)
+    }
+    fn command_push(&mut self, _amount: SmtNumeral<'_>) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::Push)
+    }
+    fn command_pop(&mut self, _amount: SmtNumeral<'_>) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::Pop)
+    }
+
+    fn start_define_sort(
+        &mut self,
+        _name: SmtSymbol<'_>,
+        _params: SmtSymbols<'_>,
+    ) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::DefineSort)
+    }
+    fn end_define_sort(&mut self, _sort: Self::Sort) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::DefineSort)
+    }
+
+    fn start_define_fun(
+        &mut self,
+        _signature: SmtFunctionSignature<'_, Self::Sort>,
+    ) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::DefineFun)
+    }
+    fn end_define_fun(&mut self, _term: Self::Term) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::DefineFun)
+    }
+    fn command_define_const(
+        &mut self,
+        _name: SmtSymbol<'_>,
+        _sort: Self::Sort,
+        _body: Self::Term,
+    ) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::DefineConst)
+    }
+
+    fn start_define_fun_rec(
+        &mut self,
+        _signature: SmtFunctionSignature<'_, Self::Sort>,
+    ) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::DefineFunRec)
+    }
+    fn end_define_fun_rec(&mut self, _body: Self::Term) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::DefineFunRec)
+    }
+
+    fn start_define_funs_rec(
+        &mut self,
+        _signatures: SmtFunctionSignatures<'_, Self::Sort>,
+    ) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::DefineFunsRec)
+    }
+    fn end_define_funs_rec(&mut self) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::DefineFunsRec)
+    }
+    fn start_recursive_body(
+        &mut self,
+        _signature: SmtFunctionSignature<'_, Self::Sort>,
+    ) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::DefineFunsRec)
+    }
+    fn end_recursive_body(&mut self, _term: Self::Term) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::DefineFunsRec)
+    }
+
+    fn start_declare_datatype(
+        &mut self,
+        _name: SmtSymbol<'_>,
+        _params: SmtSymbols<'_>,
+    ) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::DeclareDatatype)
+    }
+    fn end_declare_datatype(
+        &mut self,
+        _constructors: SmtConstructors<'_, Self::Sort>,
+    ) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::DeclareDatatype)
+    }
+
+    fn start_declare_datatypes(
+        &mut self,
+        _introductions: SmtSortArities<'_>,
+    ) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::DeclareDatatypes)
+    }
+    fn end_declare_datatypes(&mut self) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::DeclareDatatypes)
+    }
+    fn start_datatype_declaration(
+        &mut self,
+        _sort_params: SmtSymbols<'_>,
+    ) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::DeclareDatatypes)
+    }
+    fn end_datatype_declaration(
+        &mut self,
+        _constructors: SmtConstructors<'_, Self::Sort>,
+    ) -> Result<(), Self::Error> {
+        unsupported(SmtCommandNameReserved::DeclareDatatypes)
+    }
+}
+
+impl<T: SmtPartialCommandHandler> SmtCommandHandler for T {
+    type NonstandardParser = <T as SmtPartialCommandHandler>::NonstandardParser;
+
+    fn nonstandard_command(
+        &mut self,
+        name: SmtSymbol<'_>,
+    ) -> Result<Self::NonstandardParser, Self::Error> {
+        SmtPartialCommandHandler::nonstandard_command(self, name)
+    }
+
+    fn command_echo(&mut self, value: SmtStringContent<'_>) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::command_echo(self, value)
+    }
+
+    fn command_get_option(&mut self, option: SmtKeyword<'_>) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::command_get_option(self, option)
+    }
+    fn command_set_option(&mut self, option: Self::Attribute) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::command_set_option(self, option)
+    }
+    fn command_get_info(&mut self, keyword: SmtKeyword<'_>) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::command_get_info(self, keyword)
+    }
+    fn command_set_info(&mut self, attribute: Self::Attribute) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::command_set_info(self, attribute)
+    }
+
+    fn command_set_logic(&mut self, logic: SmtSymbol<'_>) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::command_set_logic(self, logic)
+    }
+
+    fn command_get_value(&mut self, terms: SmtMultiple<'_, Self::Term>) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::command_get_value(self, terms)
+    }
+    fn command_get_assertions(&mut self) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::command_get_assertions(self)
+    }
+    fn command_get_assignment(&mut self) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::command_get_assignment(self)
+    }
+    fn command_get_model(&mut self) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::command_get_model(self)
+    }
+    fn command_get_proof(&mut self) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::command_get_proof(self)
+    }
+    fn command_get_unsat_assumptions(&mut self) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::command_get_unsat_assumptions(self)
+    }
+    fn command_get_unsat_core(&mut self) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::command_get_unsat_core(self)
+    }
+
+    fn command_declare_sort(
+        &mut self,
+        name: SmtSymbol<'_>,
+        arity: SmtNumeral<'_>,
+    ) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::command_declare_sort(self, name, arity)
+    }
+    fn command_declare_sort_parameter(&mut self, name: SmtSymbol<'_>) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::command_declare_sort_parameter(self, name)
+    }
+    fn command_declare_const(
+        &mut self,
+        name: SmtSymbol<'_>,
+        sort: Self::Sort,
+    ) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::command_declare_const(self, name, sort)
+    }
+    fn command_declare_fun(
+        &mut self,
+        name: SmtSymbol<'_>,
+        param_sorts: SmtMultiple<'_, Self::Sort>,
+        result_sort: Self::Sort,
+    ) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::command_declare_fun(self, name, param_sorts, result_sort)
+    }
+
+    fn command_assert(&mut self, term: Self::Term) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::command_assert(self, term)
+    }
+    fn command_check_sat(&mut self) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::command_check_sat(self)
+    }
+    fn command_check_sat_assuming(
+        &mut self,
+        assumptions: SmtMultiple<'_, Self::Term>,
+    ) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::command_check_sat_assuming(self, assumptions)
+    }
+
+    fn command_reset(&mut self) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::command_reset(self)
+    }
+    fn command_reset_assertions(&mut self) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::command_reset_assertions(self)
+    }
+    fn command_exit(&mut self) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::command_exit(self)
+    }
+    fn command_push(&mut self, amount: SmtNumeral<'_>) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::command_push(self, amount)
+    }
+    fn command_pop(&mut self, amount: SmtNumeral<'_>) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::command_pop(self, amount)
+    }
+
+    fn start_define_sort(
+        &mut self,
+        name: SmtSymbol<'_>,
+        params: SmtSymbols<'_>,
+    ) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::start_define_sort(self, name, params)
+    }
+    fn end_define_sort(&mut self, sort: Self::Sort) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::end_define_sort(self, sort)
+    }
+
+    fn start_define_fun(
+        &mut self,
+        signature: SmtFunctionSignature<'_, Self::Sort>,
+    ) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::start_define_fun(self, signature)
+    }
+    fn command_define_const(
+        &mut self,
+        name: SmtSymbol<'_>,
+        sort: Self::Sort,
+        body: Self::Term,
+    ) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::command_define_const(self, name, sort, body)
+    }
+    fn end_define_fun(&mut self, term: Self::Term) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::end_define_fun(self, term)
+    }
+
+    fn start_define_fun_rec(
+        &mut self,
+        signature: SmtFunctionSignature<'_, Self::Sort>,
+    ) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::start_define_fun_rec(self, signature)
+    }
+    fn end_define_fun_rec(&mut self, body: Self::Term) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::end_define_fun_rec(self, body)
+    }
+
+    fn start_define_funs_rec(
+        &mut self,
+        signatures: SmtFunctionSignatures<'_, Self::Sort>,
+    ) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::start_define_funs_rec(self, signatures)
+    }
+    fn end_define_funs_rec(&mut self) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::end_define_funs_rec(self)
+    }
+    fn start_recursive_body(
+        &mut self,
+        signature: SmtFunctionSignature<'_, Self::Sort>,
+    ) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::start_recursive_body(self, signature)
+    }
+    fn end_recursive_body(&mut self, term: Self::Term) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::end_recursive_body(self, term)
+    }
+
+    fn start_declare_datatype(
+        &mut self,
+        name: SmtSymbol<'_>,
+        params: SmtSymbols<'_>,
+    ) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::start_declare_datatype(self, name, params)
+    }
+    fn end_declare_datatype(
+        &mut self,
+        constructors: SmtConstructors<'_, Self::Sort>,
+    ) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::end_declare_datatype(self, constructors)
+    }
+
+    fn start_declare_datatypes(
+        &mut self,
+        introductions: SmtSortArities<'_>,
+    ) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::start_declare_datatypes(self, introductions)
+    }
+    fn end_declare_datatypes(&mut self) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::end_declare_datatypes(self)
+    }
+    fn start_datatype_declaration(
+        &mut self,
+        sort_params: SmtSymbols<'_>,
+    ) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::start_datatype_declaration(self, sort_params)
+    }
+    fn end_datatype_declaration(
+        &mut self,
+        constructors: SmtConstructors<'_, Self::Sort>,
+    ) -> Result<(), Self::Error> {
+        SmtPartialCommandHandler::end_datatype_declaration(self, constructors)
+    }
 }
 
 #[derive(Debug)]
