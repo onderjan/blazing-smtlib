@@ -449,6 +449,78 @@ impl<'a, H: SmtHandler + ?Sized> IntoIterator for SmtMatchCases<'a, H> {
     }
 }
 
+/// Owned match cases, from which [`SmtMatchCases`] is viewed.
+pub struct SmtMatchCasesBuf<H: SmtHandler + ?Sized> {
+    text: Vec<u8>,
+    simple_patterns: Vec<SimplePatternHandle>,
+    patterns: Vec<PatternHandleBuf>,
+    terms: Vec<H::Term>,
+}
+
+impl<H: SmtHandler + ?Sized> SmtMatchCasesBuf<H> {
+    pub fn new() -> Self {
+        Self {
+            text: Vec::new(),
+            simple_patterns: Vec::new(),
+            patterns: Vec::new(),
+            terms: Vec::new(),
+        }
+    }
+
+    pub fn push(&mut self, pattern: SmtPattern, term: H::Term) {
+        let pattern = match pattern {
+            SmtPattern::Simple(simple) => PatternHandleBuf::Simple(
+                SimplePatternHandle::create_by_push(&mut self.text, simple),
+            ),
+            SmtPattern::Application { constructor, args } => {
+                let constructor = SymbolHandle::create_by_push(&mut self.text, constructor);
+                let args_start = self.simple_patterns.len();
+                for arg in args.iter() {
+                    let arg = SimplePatternHandle::create_by_push(&mut self.text, arg);
+                    self.simple_patterns.push(arg);
+                }
+                PatternHandleBuf::Application {
+                    constructor,
+                    args_start,
+                    args_end: self.simple_patterns.len(),
+                }
+            }
+        };
+        self.patterns.push(pattern);
+        self.terms.push(term);
+    }
+
+    pub fn clear(&mut self) {
+        self.text.clear();
+        self.simple_patterns.clear();
+        self.patterns.clear();
+        self.terms.clear();
+    }
+
+    pub fn view(&mut self) -> SmtMatchCases<'_, H> {
+        SmtMatchCases {
+            text: &self.text,
+            simple_patterns: &self.simple_patterns,
+            patterns: SmtMultiple::new(&mut self.patterns),
+            terms: SmtMultiple::new(&mut self.terms),
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.terms.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.terms.is_empty()
+    }
+}
+
+impl<H: SmtHandler + ?Sized> Default for SmtMatchCasesBuf<H> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Symbols to be handled, such as the parameters of a sort definition.
 #[derive(Clone, Copy)]
 pub struct SmtSymbols<'a> {

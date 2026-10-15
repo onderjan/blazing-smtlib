@@ -549,6 +549,23 @@ impl IndexHandle {
             IndexHandle::Symbol(handle) => SmtIndex::Symbol(handle.symbol_view(text)),
         }
     }
+
+    /// Pushes the index into `text`.
+    pub(crate) fn create_by_push(text: &mut Vec<u8>, index: SmtIndex) -> IndexHandle {
+        match index {
+            SmtIndex::Numeral(numeral) => {
+                let start = text.len();
+                text.extend_from_slice(numeral.as_slice());
+                IndexHandle::Numeral(TextHandle {
+                    start,
+                    len: text.len() - start,
+                })
+            }
+            SmtIndex::Symbol(symbol) => {
+                IndexHandle::Symbol(SymbolHandle::create_by_push(text, symbol))
+            }
+        }
+    }
 }
 
 /// An identifier in the arena: its name in the text, its indices
@@ -587,6 +604,19 @@ impl SimplePatternHandle {
                 SmtSimplePattern::Symbol(handle.symbol_view(text))
             }
             SimplePatternHandle::Wildcard => SmtSimplePattern::Wildcard,
+        }
+    }
+
+    /// Pushes the simple pattern into `text`.
+    pub(crate) fn create_by_push(
+        text: &mut Vec<u8>,
+        pattern: SmtSimplePattern,
+    ) -> SimplePatternHandle {
+        match pattern {
+            SmtSimplePattern::Symbol(symbol) => {
+                SimplePatternHandle::Symbol(SymbolHandle::create_by_push(text, symbol))
+            }
+            SmtSimplePattern::Wildcard => SimplePatternHandle::Wildcard,
         }
     }
 }

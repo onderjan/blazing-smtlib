@@ -130,6 +130,52 @@ impl Debug for SmtIndices<'_> {
     }
 }
 
+/// Owned indices of an identifier, from which [`SmtIndices`] is viewed.
+pub struct SmtIndicesBuf {
+    text: Vec<u8>,
+    handles: Vec<IndexHandle>,
+}
+
+impl SmtIndicesBuf {
+    pub fn new() -> Self {
+        Self {
+            text: Vec::new(),
+            handles: Vec::new(),
+        }
+    }
+
+    pub fn push(&mut self, index: SmtIndex) {
+        let index = IndexHandle::create_by_push(&mut self.text, index);
+        self.handles.push(index);
+    }
+
+    pub fn clear(&mut self) {
+        self.text.clear();
+        self.handles.clear();
+    }
+
+    pub fn view(&self) -> SmtIndices<'_> {
+        SmtIndices {
+            text: &self.text,
+            handles: &self.handles,
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.handles.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.handles.is_empty()
+    }
+}
+
+impl Default for SmtIndicesBuf {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Identifier to be handled.
 #[derive(Debug, Clone, Copy)]
 pub struct SmtIdent<'a> {
@@ -419,6 +465,52 @@ impl<'a> SmtSimplePatterns<'a> {
 impl Debug for SmtSimplePatterns<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_list().entries(self.iter()).finish()
+    }
+}
+
+/// Owned arguments of a constructor pattern, from which [`SmtSimplePatterns`] is viewed.
+pub struct SmtSimplePatternsBuf {
+    text: Vec<u8>,
+    handles: Vec<SimplePatternHandle>,
+}
+
+impl SmtSimplePatternsBuf {
+    pub fn new() -> Self {
+        Self {
+            text: Vec::new(),
+            handles: Vec::new(),
+        }
+    }
+
+    pub fn push(&mut self, pattern: SmtSimplePattern) {
+        let pattern = SimplePatternHandle::create_by_push(&mut self.text, pattern);
+        self.handles.push(pattern);
+    }
+
+    pub fn clear(&mut self) {
+        self.text.clear();
+        self.handles.clear();
+    }
+
+    pub fn view(&self) -> SmtSimplePatterns<'_> {
+        SmtSimplePatterns {
+            text: &self.text,
+            handles: &self.handles,
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.handles.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.handles.is_empty()
+    }
+}
+
+impl Default for SmtSimplePatternsBuf {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
