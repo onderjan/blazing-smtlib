@@ -28,8 +28,12 @@ fn main() -> Result<(), u32> {
                 eprintln!("Error parsing file: {:?}", err);
                 Err(4)
             }
+            SmtReadErrorCause::Version(err) => {
+                eprintln!("Unusable version: {:?}", err);
+                Err(6)
+            }
             SmtReadErrorCause::Handler(err) => {
-                eprintln!("Nonstandard command: {:?}", err.0);
+                eprintln!("Nonstandard command: {:?}", err.name());
                 Err(5)
             }
         },

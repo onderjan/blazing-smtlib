@@ -1,6 +1,10 @@
 //! Tests of the qualified-identifier parser.
 
 use super::*;
+use blazing_smtlib::{
+    parser::SmtSyntaxExpected,
+    token::{SmtGeneralReserved, SmtReserved, SmtTokenCategory},
+};
 
 fn name(qualified_ident: &QualifiedIdent<String>) -> &[u8] {
     qualified_ident.ident.name.as_slice()
@@ -71,31 +75,61 @@ fn errors() {
         return;
     }
     let err = assert_error::<QualifiedIdentParser>(b"1", 0, 1);
-    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedIdent), "{err:?}");
+    assert!(
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Ident])
+        ),
+        "{err:?}"
+    );
 
     // after `(` only `_` or `as` may follow
     let err = assert_error::<QualifiedIdentParser>(b"(f 1)", 1, 2);
     assert!(
-        matches!(err, SmtSyntaxErrorKind::ExpectedUnderscoreOrAs),
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[
+                SmtSyntaxExpected::Reserved(SmtReserved::General(SmtGeneralReserved::Underscore)),
+                SmtSyntaxExpected::Reserved(SmtReserved::General(SmtGeneralReserved::As))
+            ])
+        ),
         "{err:?}"
     );
 
     // `as` must be followed by an identifier
     let err = assert_error::<QualifiedIdentParser>(b"(as)", 3, 4);
-    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedIdent), "{err:?}");
+    assert!(
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Ident])
+        ),
+        "{err:?}"
+    );
     let err = assert_error::<QualifiedIdentParser>(b"(as 1 Bool)", 4, 5);
-    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedIdent), "{err:?}");
+    assert!(
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Ident])
+        ),
+        "{err:?}"
+    );
 
     // ... and a sort
     let err = assert_error::<QualifiedIdentParser>(b"(as x)", 5, 6);
-    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSort), "{err:?}");
+    assert!(
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Sort])
+        ),
+        "{err:?}"
+    );
 
     // ... and the closing parenthesis
     let err = assert_error::<QualifiedIdentParser>(b"(as x Bool z)", 11, 12);
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenClose)])
         ),
         "{err:?}"
     );
@@ -105,7 +139,7 @@ fn errors() {
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenClose)])
         ),
         "{err:?}"
     );

@@ -1,6 +1,6 @@
 use crate::{
     lexer::{
-        LexerState, SmtLexicalErrorKind,
+        LexerState, SmtLexicalErrorKind, SmtLexicalExpected,
         char_class::{
             CharClass, RUN_BINARY_DIGIT, RUN_COMMENT_PLAIN, RUN_DIGIT, RUN_HEX_DIGIT,
             RUN_NON_LF_WHITESPACE, RUN_QUOTED_PLAIN, RUN_SIMPLE_SYMBOL, RUN_STRING_PLAIN,
@@ -183,13 +183,13 @@ pub(super) const HEXADECIMAL_RUN: DigitRun = DigitRun {
     flag: RUN_HEX_DIGIT,
     state: LexerState::Hexadecimal,
     token_type: InnerCategory::Hexadecimal,
-    empty_error: SmtLexicalErrorKind::HexadecimalDigitExpected,
+    empty_error: SmtLexicalErrorKind::Expected(SmtLexicalExpected::HexadecimalDigit),
 };
 pub(super) const BINARY_RUN: DigitRun = DigitRun {
     flag: RUN_BINARY_DIGIT,
     state: LexerState::Binary,
     token_type: InnerCategory::Binary,
-    empty_error: SmtLexicalErrorKind::BinaryDigitExpected,
+    empty_error: SmtLexicalErrorKind::Expected(SmtLexicalExpected::BinaryDigit),
 };
 
 /// Helper struct for where a token ended.

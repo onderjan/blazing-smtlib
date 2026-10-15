@@ -7,6 +7,10 @@
 mod common;
 mod parse_backend;
 
+use blazing_smtlib::{
+    parser::{SmtMissingItem, SmtNonEmptyList, SmtSyntaxExpected},
+    token::{SmtGeneralReserved, SmtReserved},
+};
 use common::{assert_error_span, assert_parser_error, parse_with};
 use parse_backend::{
     AttributeValue, Bindings, CommandHandler, Constructors, Handler, MatchCases, NonstandardTerm,
@@ -868,30 +872,54 @@ fn define_sort_errors_point_at_offending_token() {
     }
     // the sort name must be a symbol
     let err = assert_parser_error(b"(define-sort 1 () Int)", 13, 14);
-    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
+    assert!(
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Symbol])
+        ),
+        "{err:?}"
+    );
     // the parameter list is required, even when empty
     let err = assert_parser_error(b"(define-sort S Int)", 15, 18);
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenOpen])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenOpen)])
         ),
         "{err:?}"
     );
     // the parameters are bare symbols, not sorted vars or numerals
     let err = assert_parser_error(b"(define-sort S ((X)) Int)", 16, 17);
-    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
+    assert!(
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Symbol])
+        ),
+        "{err:?}"
+    );
     let err = assert_parser_error(b"(define-sort S (X 1) Int)", 18, 19);
-    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
+    assert!(
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Symbol])
+        ),
+        "{err:?}"
+    );
     // the body sort is required
     let err = assert_parser_error(b"(define-sort S ())", 17, 18);
-    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSort), "{err:?}");
+    assert!(
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Sort])
+        ),
+        "{err:?}"
+    );
     // exactly one body sort is allowed
     let err = assert_parser_error(b"(define-sort S () Int Bool)", 22, 26);
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenClose)])
         ),
         "{err:?}"
     );
@@ -929,7 +957,7 @@ fn push_and_pop_errors_point_at_offending_token() {
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::Numeral])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::Numeral)])
         ),
         "{err:?}"
     );
@@ -937,7 +965,7 @@ fn push_and_pop_errors_point_at_offending_token() {
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::Numeral])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::Numeral)])
         ),
         "{err:?}"
     );
@@ -946,7 +974,7 @@ fn push_and_pop_errors_point_at_offending_token() {
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::Numeral])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::Numeral)])
         ),
         "{err:?}"
     );
@@ -954,7 +982,7 @@ fn push_and_pop_errors_point_at_offending_token() {
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::Numeral])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::Numeral)])
         ),
         "{err:?}"
     );
@@ -963,7 +991,7 @@ fn push_and_pop_errors_point_at_offending_token() {
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenClose)])
         ),
         "{err:?}"
     );
@@ -971,7 +999,7 @@ fn push_and_pop_errors_point_at_offending_token() {
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenClose)])
         ),
         "{err:?}"
     );
@@ -1004,13 +1032,19 @@ fn declare_sort_errors_point_at_offending_token() {
     }
     // the sort name must be a symbol
     let err = assert_parser_error(b"(declare-sort 1 0)", 14, 15);
-    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
+    assert!(
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Symbol])
+        ),
+        "{err:?}"
+    );
     // the arity is required
     let err = assert_parser_error(b"(declare-sort U)", 15, 16);
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::Numeral])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::Numeral)])
         ),
         "{err:?}"
     );
@@ -1019,7 +1053,7 @@ fn declare_sort_errors_point_at_offending_token() {
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::Numeral])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::Numeral)])
         ),
         "{err:?}"
     );
@@ -1027,7 +1061,7 @@ fn declare_sort_errors_point_at_offending_token() {
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::Numeral])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::Numeral)])
         ),
         "{err:?}"
     );
@@ -1036,7 +1070,7 @@ fn declare_sort_errors_point_at_offending_token() {
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenClose)])
         ),
         "{err:?}"
     );
@@ -1063,15 +1097,27 @@ fn declare_sort_parameter_errors_point_at_offending_token() {
     }
     // the parameter name is required and must be a symbol
     let err = assert_parser_error(b"(declare-sort-parameter)", 23, 24);
-    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
+    assert!(
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Symbol])
+        ),
+        "{err:?}"
+    );
     let err = assert_parser_error(b"(declare-sort-parameter 1)", 24, 25);
-    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
+    assert!(
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Symbol])
+        ),
+        "{err:?}"
+    );
     // exactly one parameter per command
     let err = assert_parser_error(b"(declare-sort-parameter T U)", 26, 27);
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenClose)])
         ),
         "{err:?}"
     );
@@ -1190,22 +1236,41 @@ fn define_const_errors_point_at_offending_token() {
     }
     // the constant name must be a symbol
     let err = assert_parser_error(b"(define-const 1 Int 5)", 14, 15);
-    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
+    assert!(
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Symbol])
+        ),
+        "{err:?}"
+    );
     // define-const has no parameter list, an empty one is not a sort
     let err = assert_parser_error(b"(define-const c () Int 5)", 17, 18);
     assert!(
-        matches!(err, SmtSyntaxErrorKind::ExpectedSortInner),
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[
+                SmtSyntaxExpected::Reserved(SmtReserved::General(SmtGeneralReserved::Underscore)),
+                SmtSyntaxExpected::Symbol,
+                SmtSyntaxExpected::Token(SmtTokenCategory::ParenOpen)
+            ])
+        ),
         "{err:?}"
     );
     // the body term is required
     let err = assert_parser_error(b"(define-const c Int)", 19, 20);
-    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedTerm), "{err:?}");
+    assert!(
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Term])
+        ),
+        "{err:?}"
+    );
     // exactly one body term is allowed
     let err = assert_parser_error(b"(define-const c Int 5 6)", 22, 23);
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenClose)])
         ),
         "{err:?}"
     );
@@ -1265,7 +1330,7 @@ fn check_sat_errors_point_at_offending_token() {
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenClose)])
         ),
         "{err:?}"
     );
@@ -1274,7 +1339,7 @@ fn check_sat_errors_point_at_offending_token() {
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenOpen])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenOpen)])
         ),
         "{err:?}"
     );
@@ -1283,7 +1348,7 @@ fn check_sat_errors_point_at_offending_token() {
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenOpen])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenOpen)])
         ),
         "{err:?}"
     );
@@ -1292,13 +1357,19 @@ fn check_sat_errors_point_at_offending_token() {
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenClose)])
         ),
         "{err:?}"
     );
     // each assumption must be a term
     let err = assert_parser_error(b"(check-sat-assuming (a :kw))", 23, 26);
-    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedTerm), "{err:?}");
+    assert!(
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Term])
+        ),
+        "{err:?}"
+    );
 }
 
 // --- Parser persistence across commands ---
@@ -1381,25 +1452,37 @@ fn signature_errors_point_at_offending_token() {
     }
     // the function name must be a symbol
     let err = assert_parser_error(b"(define-fun 1 () Int 5)", 12, 13);
-    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
+    assert!(
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Symbol])
+        ),
+        "{err:?}"
+    );
     // each sorted var must be parenthesized
     let err = assert_parser_error(b"(define-fun f (x Int) Int x)", 15, 16);
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenOpen])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenOpen)])
         ),
         "{err:?}"
     );
     // the body term is required
     let err = assert_parser_error(b"(define-fun f () Int)", 20, 21);
-    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedTerm), "{err:?}");
+    assert!(
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Term])
+        ),
+        "{err:?}"
+    );
     // exactly one body term is allowed
     let err = assert_parser_error(b"(define-fun f () Int 5 6)", 23, 24);
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenClose)])
         ),
         "{err:?}"
     );
@@ -1451,7 +1534,7 @@ fn trivial_command_errors_point_at_offending_token() {
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::String])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::String)])
         ),
         "{err:?}"
     );
@@ -1460,7 +1543,7 @@ fn trivial_command_errors_point_at_offending_token() {
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenClose)])
         ),
         "{err:?}"
     );
@@ -1469,7 +1552,7 @@ fn trivial_command_errors_point_at_offending_token() {
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::Keyword])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::Keyword)])
         ),
         "{err:?}"
     );
@@ -1477,14 +1560,17 @@ fn trivial_command_errors_point_at_offending_token() {
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::Keyword])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::Keyword)])
         ),
         "{err:?}"
     );
     // set-option requires an attribute
     let err = assert_parser_error(b"(set-option)", 11, 12);
     assert!(
-        matches!(err, SmtSyntaxErrorKind::ExpectedAttribute),
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Attribute])
+        ),
         "{err:?}"
     );
     // reset and reset-assertions take no arguments
@@ -1492,7 +1578,7 @@ fn trivial_command_errors_point_at_offending_token() {
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenClose)])
         ),
         "{err:?}"
     );
@@ -1500,7 +1586,7 @@ fn trivial_command_errors_point_at_offending_token() {
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenClose)])
         ),
         "{err:?}"
     );
@@ -1517,7 +1603,9 @@ fn trivial_command_errors_point_at_offending_token() {
         assert!(
             matches!(
                 err,
-                SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
+                SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(
+                    SmtTokenCategory::ParenClose
+                )])
             ),
             "{err:?} for {:?}",
             text(input)
@@ -1690,7 +1778,13 @@ fn quoted_par_is_an_ordinary_constructor_name() {
     );
     // unquoted, it cannot name a constructor
     let err = assert_parser_error(b"(declare-datatypes ((A 0)) (((par))))", 30, 33);
-    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
+    assert!(
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Symbol])
+        ),
+        "{err:?}"
+    );
 }
 
 #[test]
@@ -1810,7 +1904,10 @@ fn declare_datatypes_errors_point_at_offending_token() {
     // at least one sort must be declared
     let err = assert_parser_error(b"(declare-datatypes () ())", 20, 21);
     assert!(
-        matches!(err, SmtSyntaxErrorKind::EmptyDatatypeIntroductions),
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Empty(SmtNonEmptyList::DatatypeIntroductions)
+        ),
         "{err:?}"
     );
     // each sort declaration is parenthesized
@@ -1818,7 +1915,7 @@ fn declare_datatypes_errors_point_at_offending_token() {
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenOpen])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenOpen)])
         ),
         "{err:?}"
     );
@@ -1827,7 +1924,7 @@ fn declare_datatypes_errors_point_at_offending_token() {
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::Numeral])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::Numeral)])
         ),
         "{err:?}"
     );
@@ -1836,14 +1933,14 @@ fn declare_datatypes_errors_point_at_offending_token() {
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenOpen])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenOpen)])
         ),
         "{err:?}"
     );
     // fewer declarations than sorts: the list closes where a declaration should start
     let err = assert_parser_error(b"(declare-datatypes ((A 0) (B 0)) (((a))))", 39, 40);
     assert!(
-        matches!(err, SmtSyntaxErrorKind::ExpectedDatatype),
+        matches!(err, SmtSyntaxErrorKind::Missing(SmtMissingItem::Datatype)),
         "{err:?}"
     );
     // more declarations than sorts: only the list end is allowed after the last one
@@ -1851,32 +1948,50 @@ fn declare_datatypes_errors_point_at_offending_token() {
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenClose)])
         ),
         "{err:?}"
     );
     // a declaration starts with `par` or a constructor, not a symbol
     let err = assert_parser_error(b"(declare-datatypes ((A 0)) ((foo)))", 29, 32);
     assert!(
-        matches!(err, SmtSyntaxErrorKind::ExpectedDatatypeKind),
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[
+                SmtSyntaxExpected::Reserved(SmtReserved::General(SmtGeneralReserved::Par)),
+                SmtSyntaxExpected::Token(SmtTokenCategory::ParenOpen)
+            ])
+        ),
         "{err:?}"
     );
     // nor may it be empty
     let err = assert_parser_error(b"(declare-datatypes ((A 0)) (()))", 29, 30);
     assert!(
-        matches!(err, SmtSyntaxErrorKind::ExpectedDatatypeKind),
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[
+                SmtSyntaxExpected::Reserved(SmtReserved::General(SmtGeneralReserved::Par)),
+                SmtSyntaxExpected::Token(SmtTokenCategory::ParenOpen)
+            ])
+        ),
         "{err:?}"
     );
     // a parametric declaration needs at least one parameter
     let err = assert_parser_error(b"(declare-datatypes ((A 0)) ((par () ((a)))))", 34, 35);
     assert!(
-        matches!(err, SmtSyntaxErrorKind::EmptyDatatypeParameters),
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Empty(SmtNonEmptyList::DatatypeParameters)
+        ),
         "{err:?}"
     );
     // and at least one constructor
     let err = assert_parser_error(b"(declare-datatypes ((A 1)) ((par (X) ())))", 38, 39);
     assert!(
-        matches!(err, SmtSyntaxErrorKind::EmptyDatatypeConstructors),
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Empty(SmtNonEmptyList::DatatypeConstructors)
+        ),
         "{err:?}"
     );
     // a parametric declaration is closed by its own parenthesis
@@ -1884,31 +1999,43 @@ fn declare_datatypes_errors_point_at_offending_token() {
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenClose)])
         ),
         "{err:?}"
     );
     // a constructor name is a symbol
     let err = assert_parser_error(b"(declare-datatypes ((A 0)) (((1))))", 30, 31);
-    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
+    assert!(
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Symbol])
+        ),
+        "{err:?}"
+    );
     // a selector is a parenthesized pair
     let err = assert_parser_error(b"(declare-datatypes ((A 0)) (((a x))))", 32, 33);
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenOpen])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenOpen)])
         ),
         "{err:?}"
     );
     // with a sort
     let err = assert_parser_error(b"(declare-datatypes ((A 0)) (((a (x)))))", 34, 35);
-    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSort), "{err:?}");
+    assert!(
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Sort])
+        ),
+        "{err:?}"
+    );
     // nothing may follow the declaration list
     let err = assert_parser_error(b"(declare-datatypes ((A 0)) (((a))) extra)", 35, 40);
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenClose)])
         ),
         "{err:?}"
     );
@@ -2022,25 +2149,40 @@ fn declare_datatype_errors_point_at_offending_token() {
     }
     // the name is a symbol
     let err = assert_parser_error(b"(declare-datatype 1 ((a)))", 18, 19);
-    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
+    assert!(
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Symbol])
+        ),
+        "{err:?}"
+    );
     // the declaration is required
     let err = assert_parser_error(b"(declare-datatype A)", 19, 20);
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenOpen])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenOpen)])
         ),
         "{err:?}"
     );
     // the declaration has the same shape as in declare-datatypes
     let err = assert_parser_error(b"(declare-datatype A ())", 21, 22);
     assert!(
-        matches!(err, SmtSyntaxErrorKind::ExpectedDatatypeKind),
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[
+                SmtSyntaxExpected::Reserved(SmtReserved::General(SmtGeneralReserved::Par)),
+                SmtSyntaxExpected::Token(SmtTokenCategory::ParenOpen)
+            ])
+        ),
         "{err:?}"
     );
     let err = assert_parser_error(b"(declare-datatype A (par () ((a))))", 26, 27);
     assert!(
-        matches!(err, SmtSyntaxErrorKind::EmptyDatatypeParameters),
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Empty(SmtNonEmptyList::DatatypeParameters)
+        ),
         "{err:?}"
     );
     // exactly one declaration, without a surrounding list
@@ -2048,14 +2190,20 @@ fn declare_datatype_errors_point_at_offending_token() {
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenClose)])
         ),
         "{err:?}"
     );
     // a list around the declaration is read as a simple declaration whose
     // first constructor starts with a parenthesis instead of a name
     let err = assert_parser_error(b"(declare-datatype A (((a))))", 22, 23);
-    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
+    assert!(
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Symbol])
+        ),
+        "{err:?}"
+    );
 }
 
 // --- Recursive function definitions ---
@@ -2306,7 +2454,10 @@ fn define_funs_rec_errors_point_at_offending_token() {
     // at least one function must be defined
     let err = assert_parser_error(b"(define-funs-rec () ())", 18, 19);
     assert!(
-        matches!(err, SmtSyntaxErrorKind::EmptyFunctionSignatures),
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Empty(SmtNonEmptyList::FunctionSignatures)
+        ),
         "{err:?}"
     );
     // each signature is parenthesized
@@ -2314,43 +2465,61 @@ fn define_funs_rec_errors_point_at_offending_token() {
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenOpen])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenOpen)])
         ),
         "{err:?}"
     );
     // the function name must be a symbol
     let err = assert_parser_error(b"(define-funs-rec ((1 () Int)) (1))", 19, 20);
-    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
+    assert!(
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Symbol])
+        ),
+        "{err:?}"
+    );
     // each sorted var is parenthesized
     let err = assert_parser_error(b"(define-funs-rec ((f (x Int) Int)) (1))", 22, 23);
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenOpen])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenOpen)])
         ),
         "{err:?}"
     );
     // the result sort is required
     let err = assert_parser_error(b"(define-funs-rec ((f ())) (1))", 23, 24);
-    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSort), "{err:?}");
+    assert!(
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Sort])
+        ),
+        "{err:?}"
+    );
     // the body list is required
     let err = assert_parser_error(b"(define-funs-rec ((f () Int)))", 29, 30);
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenOpen])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenOpen)])
         ),
         "{err:?}"
     );
     // one body per function: the shortfall is detected at the end of the body list
     let err = assert_parser_error(b"(define-funs-rec ((f () Int) (g () Int)) (1))", 43, 44);
     assert!(
-        matches!(err, SmtSyntaxErrorKind::ExpectedFunctionBody),
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Missing(SmtMissingItem::FunctionBody)
+        ),
         "{err:?}"
     );
     let err = assert_parser_error(b"(define-funs-rec ((f () Int)) ())", 31, 32);
     assert!(
-        matches!(err, SmtSyntaxErrorKind::ExpectedFunctionBody),
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Missing(SmtMissingItem::FunctionBody)
+        ),
         "{err:?}"
     );
     // one body per function: the excess is detected at the excess body
@@ -2358,7 +2527,7 @@ fn define_funs_rec_errors_point_at_offending_token() {
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenClose)])
         ),
         "{err:?}"
     );
@@ -2367,7 +2536,7 @@ fn define_funs_rec_errors_point_at_offending_token() {
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenClose)])
         ),
         "{err:?}"
     );
@@ -2380,7 +2549,7 @@ fn define_funs_rec_errors_point_at_offending_token() {
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenClose)])
         ),
         "{err:?}"
     );
@@ -2393,28 +2562,46 @@ fn define_fun_rec_errors_point_at_offending_token() {
     }
     // the function name must be a symbol
     let err = assert_parser_error(b"(define-fun-rec 1 () Int 1)", 16, 17);
-    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
+    assert!(
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Symbol])
+        ),
+        "{err:?}"
+    );
     // the signature is not listed as in define-funs-rec
     let err = assert_parser_error(b"(define-fun-rec ((f () Int)) (1))", 16, 17);
-    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
+    assert!(
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Symbol])
+        ),
+        "{err:?}"
+    );
     // each sorted var is parenthesized
     let err = assert_parser_error(b"(define-fun-rec f (x Int) Int x)", 19, 20);
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenOpen])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenOpen)])
         ),
         "{err:?}"
     );
     // the body term is required
     let err = assert_parser_error(b"(define-fun-rec f () Int)", 24, 25);
-    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedTerm), "{err:?}");
+    assert!(
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Term])
+        ),
+        "{err:?}"
+    );
     // exactly one body term is allowed
     let err = assert_parser_error(b"(define-fun-rec f () Int 1 2)", 27, 28);
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenClose)])
         ),
         "{err:?}"
     );
@@ -2434,7 +2621,7 @@ fn missing_recursive_body_starts_no_body() {
     assert!(
         matches!(
             err.cause(),
-            ReadErrorCause::Syntax(SmtSyntaxErrorKind::ExpectedTerm)
+            ReadErrorCause::Syntax(SmtSyntaxErrorKind::Expected([SmtSyntaxExpected::Term]))
         ),
         "{:?}",
         err.cause()
@@ -2450,7 +2637,7 @@ fn missing_recursive_body_starts_no_body() {
     assert!(
         matches!(
             err.cause(),
-            ReadErrorCause::Syntax(SmtSyntaxErrorKind::ExpectedFunctionBody)
+            ReadErrorCause::Syntax(SmtSyntaxErrorKind::Missing(SmtMissingItem::FunctionBody))
         ),
         "{:?}",
         err.cause()
@@ -2707,7 +2894,10 @@ fn get_value_errors_point_at_offending_token() {
     // at least one term is required
     let err = assert_parser_error(b"(get-value ())", 12, 13);
     assert!(
-        matches!(err, SmtSyntaxErrorKind::EmptyGetValueTerms),
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Empty(SmtNonEmptyList::GetValueTerms)
+        ),
         "{err:?}"
     );
     // the term list is required and parenthesized
@@ -2715,7 +2905,7 @@ fn get_value_errors_point_at_offending_token() {
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenOpen])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenOpen)])
         ),
         "{err:?}"
     );
@@ -2723,14 +2913,17 @@ fn get_value_errors_point_at_offending_token() {
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenOpen])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenOpen)])
         ),
         "{err:?}"
     );
     // the list holds terms, which are checked as terms
     let err = assert_parser_error(b"(get-value ((f)))", 14, 15);
     assert!(
-        matches!(err, SmtSyntaxErrorKind::EmptyTermApplication),
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Empty(SmtNonEmptyList::TermApplication)
+        ),
         "{err:?}"
     );
     // nothing follows the term list
@@ -2738,7 +2931,7 @@ fn get_value_errors_point_at_offending_token() {
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenClose)])
         ),
         "{err:?}"
     );

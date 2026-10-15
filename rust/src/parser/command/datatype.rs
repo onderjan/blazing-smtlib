@@ -4,10 +4,11 @@ use crate::{
     SmtCommandHandler, SmtConstructors, SmtConstructorsBuf, SmtSortAritiesBuf, SmtSymbolBuf,
     SmtSymbolsBuf,
     parser::{
-        SmtCloseParenParser, SmtClosedMultipleParser, SmtNumeralParser, SmtOpenParenParser,
-        SmtOpenedParser, SmtParenMaximumParser, SmtParenMultipleParser, SmtParenParser, SmtParse,
-        SmtParseError, SmtParseState, SmtSortedVarParser, SmtSymbolParser, SmtSyntaxErrorKind,
-        category::SmtPairParser, handle_err, parse_by_token,
+        SmtCloseParenParser, SmtClosedMultipleParser, SmtMissingItem, SmtNonEmptyList,
+        SmtNumeralParser, SmtOpenParenParser, SmtOpenedParser, SmtParenMaximumParser,
+        SmtParenMultipleParser, SmtParenParser, SmtParse, SmtParseError, SmtParseState,
+        SmtSortedVarParser, SmtSymbolParser, SmtSyntaxErrorKind, category::SmtPairParser, expected,
+        handle_err, parse_by_token,
     },
     token::{SingleTokenCursor, SmtCursor, SmtGeneralReserved, SmtReserved, SmtSyntaxToken},
 };
@@ -188,9 +189,9 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
                     None
                 }
                 _ => {
-                    return Err(SmtParseError::category_error(
-                        SmtSyntaxErrorKind::ExpectedDatatypeKind,
-                    ));
+                    return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Expected(
+                        &[expected::PAR, expected::PAREN_OPEN],
+                    )));
                 }
             },
             DatatypeState::SimpleConstructors => {
@@ -212,9 +213,9 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
                 )? {
                     // there must be at least one parameter
                     if params.is_empty() {
-                        return Err(SmtParseError::category_error(
-                            SmtSyntaxErrorKind::EmptyDatatypeParameters,
-                        ));
+                        return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Empty(
+                            SmtNonEmptyList::DatatypeParameters,
+                        )));
                     }
                     // start the datatype with the parameters
                     self.start_datatype(handler, params)?;
@@ -255,9 +256,9 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
         if let Some(constructors) = constructors {
             // there must be at least one constructor
             if constructors.is_empty() {
-                return Err(SmtParseError::category_error(
-                    SmtSyntaxErrorKind::EmptyDatatypeConstructors,
-                ));
+                return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Empty(
+                    SmtNonEmptyList::DatatypeConstructors,
+                )));
             }
 
             if matches!(self.state, DatatypeState::SimpleConstructors) {
@@ -367,9 +368,9 @@ impl<H: SmtCommandHandler> DeclareDatatypesParser<H> {
                 )? {
                     // introductions must not be empty
                     if introductions.is_empty() {
-                        return Err(SmtParseError::category_error(
-                            SmtSyntaxErrorKind::EmptyDatatypeIntroductions,
-                        ));
+                        return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Empty(
+                            SmtNonEmptyList::DatatypeIntroductions,
+                        )));
                     }
                     // ensure the datatypes parser is expecting the correct number of elements
                     self.datatypes_parser.set_maximum(introductions.len());
@@ -392,9 +393,9 @@ impl<H: SmtCommandHandler> DeclareDatatypesParser<H> {
                     // there cannot be more datatypes than sort declarations due to the maximum parser
                     // ensure there are not more sort declarations than datatypes
                     if datatypes.len() != self.datatypes_parser.max_elements() {
-                        return Err(SmtParseError::category_error(
-                            SmtSyntaxErrorKind::ExpectedDatatype,
-                        ));
+                        return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Missing(
+                            SmtMissingItem::Datatype,
+                        )));
                     }
 
                     // we are done, reset and break

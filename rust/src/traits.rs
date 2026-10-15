@@ -895,7 +895,23 @@ impl<T: SmtPartialCommandHandler> SmtCommandHandler for T {
 pub struct SmtSyntaxChecker;
 
 #[derive(Debug, Clone)]
-pub struct SmtNonstandardCommandError(pub SmtSymbolBuf);
+pub struct SmtNonstandardCommandError(SmtSymbolBuf);
+
+impl SmtNonstandardCommandError {
+    pub fn new(name: SmtSymbolBuf) -> Self {
+        Self(name)
+    }
+
+    /// The name of the nonstandard command.
+    pub fn name(&self) -> &SmtSymbolBuf {
+        &self.0
+    }
+
+    /// Converts into the name of the nonstandard command.
+    pub fn into_name(self) -> SmtSymbolBuf {
+        self.0
+    }
+}
 
 impl SmtHandler for SmtSyntaxChecker {
     type Error = SmtNonstandardCommandError;
@@ -1018,7 +1034,7 @@ impl SmtCommandHandler for SmtSyntaxChecker {
         name: SmtSymbol<'_>,
     ) -> Result<Self::NonstandardParser, Self::Error> {
         // reject nonstandard command
-        Err(SmtNonstandardCommandError(name.into_owned()))
+        Err(SmtNonstandardCommandError::new(name.into_owned()))
     }
 
     fn command_echo(&mut self, _value: SmtStringContent<'_>) -> Result<(), Self::Error> {

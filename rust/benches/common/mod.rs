@@ -20,8 +20,9 @@ pub fn parse_from_memory(data: &[u8], path: &Path) {
         let description = match err.cause() {
             SmtReadErrorCause::Lexical(err) => format!("lexer error: {:?}", err),
             SmtReadErrorCause::Syntax(err) => format!("parser error: {:?}", err),
+            SmtReadErrorCause::Version(err) => format!("version error: {:?}", err),
             SmtReadErrorCause::Io(err) => format!("read error: {:?}", err),
-            SmtReadErrorCause::Handler(err) => format!("nonstandard command: {:?}", err.0),
+            SmtReadErrorCause::Handler(err) => format!("nonstandard command: {:?}", err.name()),
         };
         panic!(
             "benchmark file {} must parse, got {} at {:?}",

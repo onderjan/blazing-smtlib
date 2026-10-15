@@ -3,19 +3,31 @@ use crate::{SmtLocation, SmtSpan};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtLexicalErrorKind {
     UnexpectedCharacter,
-    FractionDigitExpected,
-    HexadecimalDigitExpected,
-    BinaryDigitExpected,
-    BaseSelectionExpected,
+    /// The item was expected here.
+    Expected(SmtLexicalExpected),
     UnclosedStringLiteral,
     ForbiddenCharInString,
-    ForbiddenKeywordName,
+    /// A colon is not followed by a keyword name.
+    EmptyKeyword,
     BackslashInQuotedSymbol,
     ForbiddenCharInQuotedSymbol,
     UnclosedQuotedSymbol,
     NumeralLeadingZero,
     MissingDelimiter,
     UnexpectedTrailingToken,
+}
+
+/// What the lexer expected, in [`SmtLexicalErrorKind::Expected`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SmtLexicalExpected {
+    /// A digit of the fractional part of a decimal.
+    FractionDigit,
+    /// A hexadecimal digit after `#x`.
+    HexadecimalDigit,
+    /// A binary digit after `#b`.
+    BinaryDigit,
+    /// The base of a number after `#`: `x` or `b`.
+    Base,
 }
 
 /// Error that caused lexing to stop.

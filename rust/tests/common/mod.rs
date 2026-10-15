@@ -36,8 +36,14 @@ pub fn assert_parser_error(input: &[u8], start: u64, end: u64) -> SmtSyntaxError
     assert_error_span(&err, start, end);
     match err.into_cause() {
         ReadErrorCause::Syntax(kind) => kind,
+        ReadErrorCause::Version(kind) => {
+            panic!("expected parser error, got version error {kind:?}")
+        }
         ReadErrorCause::Handler(err) => {
-            panic!("expected parser error, got handler error on {:?}", err.0)
+            panic!(
+                "expected parser error, got handler error on {:?}",
+                err.name()
+            )
         }
         ReadErrorCause::Lexical(kind) => {
             panic!("expected parser error, got lexer error {kind:?}")

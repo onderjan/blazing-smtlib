@@ -639,7 +639,7 @@ impl SmtCommandHandler for Reprint {
     type NonstandardParser = Infallible;
 
     fn nonstandard_command(&mut self, name: SmtSymbol<'_>) -> Res<Infallible> {
-        Err(SmtNonstandardCommandError(name.into_owned()))
+        Err(SmtNonstandardCommandError::new(name.into_owned()))
     }
 
     fn command_echo(&mut self, value: SmtStringContent<'_>) -> Res<()> {

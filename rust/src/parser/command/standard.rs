@@ -4,9 +4,10 @@ use crate::{
     SmtCommandHandler, SmtConstructorsBuf, SmtFunctionSignaturesBuf, SmtMultiple, SmtSymbolBuf,
     SmtSymbolsBuf,
     parser::{
-        SmtCloseParenParser, SmtCommandPayloadParser, SmtKeywordParser, SmtNumeralParser,
-        SmtParenMultipleParser, SmtParse, SmtParseError, SmtParseState, SmtStringParser,
-        SmtSymbolParser, SmtSyntaxErrorKind,
+        SmtCloseParenParser, SmtCommandPayloadParser, SmtKeywordParser, SmtNonEmptyList,
+        SmtNumeralParser, SmtParenMultipleParser, SmtParse, SmtParseError, SmtParseState,
+        SmtStringParser, SmtSymbolParser, SmtSyntaxErrorKind, SmtSyntaxExpected,
+        SmtVersionErrorKind,
         category::{
             SingleAttribute, SmtClosedAttributeParser, SmtClosedParser, SmtPairParser,
             SmtSortParser, SmtTermParser, TermSlot,
@@ -129,8 +130,8 @@ macro_rules! standard_commands {
                             }
                             Some(VersionSwitch::Unknown) => {
                                 // we were asked to switch to an unknown version
-                                return Err(SmtParseError::category_error(
-                                    SmtSyntaxErrorKind::UnsupportedVersion,
+                                return Err(SmtParseError::version_error(
+                                    SmtVersionErrorKind::Unsupported,
                                 ));
                             }
                             None => SmtCommandOutcome::Command,
@@ -349,9 +350,9 @@ impl<H: SmtCommandHandler> SmtParse<H> for GetValueParser<H> {
             Break(terms) => {
                 // ensure there is at least one term
                 if terms.is_empty() {
-                    return Err(SmtParseError::category_error(
-                        SmtSyntaxErrorKind::EmptyGetValueTerms,
-                    ));
+                    return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Empty(
+                        SmtNonEmptyList::GetValueTerms,
+                    )));
                 }
                 Ok(Break(terms))
             }
@@ -551,9 +552,9 @@ impl<H: SmtCommandHandler> SmtParse<H> for PropLiteralParser {
                 (PropLiteralState::Negated, SmtSyntaxToken::Symbol(_)) => PropLiteralState::Close,
                 (PropLiteralState::Close, SmtSyntaxToken::ParenClose) => PropLiteralState::Start,
                 _ => {
-                    return Err(SmtParseError::category_error(
-                        SmtSyntaxErrorKind::ExpectedPropositionalLiteral,
-                    ));
+                    return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Expected(
+                        &[SmtSyntaxExpected::PropositionalLiteral],
+                    )));
                 }
             };
 

@@ -3,6 +3,7 @@
 
 mod lex_backend;
 
+use blazing_smtlib::lexer::SmtLexicalExpected;
 use std::convert::Infallible;
 use std::ops::ControlFlow;
 
@@ -100,7 +101,7 @@ fn fraction_digit_expected_on_byte() {
     // "7." followed by a space: the space is the byte where the error is detected
     assert_error(
         b"7. ",
-        SmtLexicalErrorKind::FractionDigitExpected,
+        SmtLexicalErrorKind::Expected(SmtLexicalExpected::FractionDigit),
         (0, 0, 0),
         (3, 0, 3),
     );
@@ -110,7 +111,7 @@ fn fraction_digit_expected_on_byte() {
 fn base_selection_expected() {
     assert_error(
         b"#q",
-        SmtLexicalErrorKind::BaseSelectionExpected,
+        SmtLexicalErrorKind::Expected(SmtLexicalExpected::Base),
         (0, 0, 0),
         (2, 0, 2),
     );
@@ -120,7 +121,7 @@ fn base_selection_expected() {
 fn hexadecimal_digit_expected() {
     assert_error(
         b"#x ",
-        SmtLexicalErrorKind::HexadecimalDigitExpected,
+        SmtLexicalErrorKind::Expected(SmtLexicalExpected::HexadecimalDigit),
         (0, 0, 0),
         (3, 0, 3),
     );
@@ -130,7 +131,7 @@ fn hexadecimal_digit_expected() {
 fn binary_digit_expected() {
     assert_error(
         b"#b)",
-        SmtLexicalErrorKind::BinaryDigitExpected,
+        SmtLexicalErrorKind::Expected(SmtLexicalExpected::BinaryDigit),
         (0, 0, 0),
         (3, 0, 3),
     );
@@ -150,7 +151,7 @@ fn numeral_leading_zero() {
 fn keyword_name_expected() {
     assert_error(
         b": ",
-        SmtLexicalErrorKind::ForbiddenKeywordName,
+        SmtLexicalErrorKind::EmptyKeyword,
         (0, 0, 0),
         (2, 0, 2),
     );
@@ -218,7 +219,7 @@ fn forbidden_char_in_quoted_symbol() {
 fn fraction_digit_expected_at_eof() {
     assert_error(
         b"7.",
-        SmtLexicalErrorKind::FractionDigitExpected,
+        SmtLexicalErrorKind::Expected(SmtLexicalExpected::FractionDigit),
         (0, 0, 0),
         (2, 0, 2),
     );
@@ -228,7 +229,7 @@ fn fraction_digit_expected_at_eof() {
 fn hexadecimal_digit_expected_at_eof() {
     assert_error(
         b"#x",
-        SmtLexicalErrorKind::HexadecimalDigitExpected,
+        SmtLexicalErrorKind::Expected(SmtLexicalExpected::HexadecimalDigit),
         (0, 0, 0),
         (2, 0, 2),
     );
@@ -238,7 +239,7 @@ fn hexadecimal_digit_expected_at_eof() {
 fn base_selection_expected_at_eof() {
     assert_error(
         b"#",
-        SmtLexicalErrorKind::BaseSelectionExpected,
+        SmtLexicalErrorKind::Expected(SmtLexicalExpected::Base),
         (0, 0, 0),
         (1, 0, 1),
     );
@@ -248,7 +249,7 @@ fn base_selection_expected_at_eof() {
 fn keyword_name_expected_at_eof() {
     assert_error(
         b":",
-        SmtLexicalErrorKind::ForbiddenKeywordName,
+        SmtLexicalErrorKind::EmptyKeyword,
         (0, 0, 0),
         (1, 0, 1),
     );
@@ -1310,13 +1311,13 @@ fn fraction_digit_expected_before_a_letter() {
     // a letter right after the dot is not a fraction digit either
     assert_error(
         b"1.a",
-        SmtLexicalErrorKind::FractionDigitExpected,
+        SmtLexicalErrorKind::Expected(SmtLexicalExpected::FractionDigit),
         (0, 0, 0),
         (3, 0, 3),
     );
     assert_error(
         b"7.F",
-        SmtLexicalErrorKind::FractionDigitExpected,
+        SmtLexicalErrorKind::Expected(SmtLexicalExpected::FractionDigit),
         (0, 0, 0),
         (3, 0, 3),
     );

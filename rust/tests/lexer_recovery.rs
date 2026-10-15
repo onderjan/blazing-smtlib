@@ -226,11 +226,11 @@ fn a_lexical_error_takes_effect_before_the_byte_that_raised_it() {
     check(b"\"s\"t x", "!3 >4 x $", &["MissingDelimiter@3"]);
     check(b"|s|t x", "!3 >4 x $", &["MissingDelimiter@3"]);
     check(b"012 x", "!1 >3 x $", &["NumeralLeadingZero@1"]);
-    check(b"7.y x", "!2 >3 x $", &["FractionDigitExpected@2"]);
-    check(b"#xg x", "!2 >3 x $", &["HexadecimalDigitExpected@2"]);
-    check(b"#b2 x", "!2 >3 x $", &["BinaryDigitExpected@2"]);
-    check(b"#q x", "!1 >2 x $", &["BaseSelectionExpected@1"]);
-    check(b":\x00 x", "!1 >2 x $", &["ForbiddenKeywordName@1"]);
+    check(b"7.y x", "!2 >3 x $", &["Expected(FractionDigit)@2"]);
+    check(b"#xg x", "!2 >3 x $", &["Expected(HexadecimalDigit)@2"]);
+    check(b"#b2 x", "!2 >3 x $", &["Expected(BinaryDigit)@2"]);
+    check(b"#q x", "!1 >2 x $", &["Expected(Base)@1"]);
+    check(b":\x00 x", "!1 >2 x $", &["EmptyKeyword@1"]);
     check(b"\"a\x00b c\" x", "!2 >7 x $", &["ForbiddenCharInString@2"]);
     check(b"|a\\b c| x", "!2 >7 x $", &["BackslashInQuotedSymbol@2"]);
     check(
@@ -244,22 +244,22 @@ fn a_lexical_error_takes_effect_before_the_byte_that_raised_it() {
 fn a_delimiter_that_raises_the_error_is_not_skipped() {
     // the failing token has ended where its delimiter stands, so the lexing
     // goes on at the very location of the failure
-    check(b"7. x", "!2 >2 x $", &["FractionDigitExpected@2"]);
-    check(b"#x x", "!2 >2 x $", &["HexadecimalDigitExpected@2"]);
-    check(b"#b(x)", "!2 >2 ( x ) $", &["BinaryDigitExpected@2"]);
-    check(b": x", "!1 >1 x $", &["ForbiddenKeywordName@1"]);
-    check(b"# x", "!1 >1 x $", &["BaseSelectionExpected@1"]);
+    check(b"7. x", "!2 >2 x $", &["Expected(FractionDigit)@2"]);
+    check(b"#x x", "!2 >2 x $", &["Expected(HexadecimalDigit)@2"]);
+    check(b"#b(x)", "!2 >2 ( x ) $", &["Expected(BinaryDigit)@2"]);
+    check(b": x", "!1 >1 x $", &["EmptyKeyword@1"]);
+    check(b"# x", "!1 >1 x $", &["Expected(Base)@1"]);
 }
 
 #[test]
 fn an_error_raised_by_the_end_of_the_input_takes_effect_at_the_end() {
     // nothing is left to skip: the second end of the input recovers there
     // and hands over the end-of-file token
-    check(b"#", "!1 >1 $", &["BaseSelectionExpected@1"]);
-    check(b"7.", "!2 >2 $", &["FractionDigitExpected@2"]);
-    check(b"#x", "!2 >2 $", &["HexadecimalDigitExpected@2"]);
-    check(b"#b", "!2 >2 $", &["BinaryDigitExpected@2"]);
-    check(b":", "!1 >1 $", &["ForbiddenKeywordName@1"]);
+    check(b"#", "!1 >1 $", &["Expected(Base)@1"]);
+    check(b"7.", "!2 >2 $", &["Expected(FractionDigit)@2"]);
+    check(b"#x", "!2 >2 $", &["Expected(HexadecimalDigit)@2"]);
+    check(b"#b", "!2 >2 $", &["Expected(BinaryDigit)@2"]);
+    check(b":", "!1 >1 $", &["EmptyKeyword@1"]);
     check(b"\"ab", "!3 >3 $", &["UnclosedStringLiteral@3"]);
     check(b"|ab", "!3 >3 $", &["UnclosedQuotedSymbol@3"]);
     // the tokens before the failing one were handed over
@@ -274,25 +274,21 @@ fn with_nothing_open_the_failing_atom_is_skipped_to_its_delimiter() {
     check(
         b"#q)",
         "!1 >2 ) !3 >3 $",
-        &["BaseSelectionExpected@1", "unmatched@3"],
+        &["Expected(Base)@1", "unmatched@3"],
     );
     // what is written together with the failing token is a part of the atom
-    check(b"#q\"str\"", "!1 >7 $", &["BaseSelectionExpected@1"]);
-    check(b"#q|a b|c x", "!1 >8 x $", &["BaseSelectionExpected@1"]);
-    check(b"#q:k x", "!1 >4 x $", &["BaseSelectionExpected@1"]);
+    check(b"#q\"str\"", "!1 >7 $", &["Expected(Base)@1"]);
+    check(b"#q|a b|c x", "!1 >8 x $", &["Expected(Base)@1"]);
+    check(b"#q:k x", "!1 >4 x $", &["Expected(Base)@1"]);
     check(b"12abc\"s t\" x", "!2 >10 x $", &["MissingDelimiter@2"]);
     // what a delimiter separates from it is the next value
-    check(
-        b"#q \"str\"",
-        "!1 >2 \"str\" $",
-        &["BaseSelectionExpected@1"],
-    );
-    check(b"#q foo", "!1 >2 foo $", &["BaseSelectionExpected@1"]);
-    check(b"#q(a)", "!1 >2 ( a ) $", &["BaseSelectionExpected@1"]);
-    check(b"#q;note\nx", "!1 >2 x $", &["BaseSelectionExpected@1"]);
-    check(b"#q\tx", "!1 >2 x $", &["BaseSelectionExpected@1"]);
-    check(b"#q\rx", "!1 >2 x $", &["BaseSelectionExpected@1"]);
-    check(b"#q\nx", "!1 >2 x $", &["BaseSelectionExpected@1"]);
+    check(b"#q \"str\"", "!1 >2 \"str\" $", &["Expected(Base)@1"]);
+    check(b"#q foo", "!1 >2 foo $", &["Expected(Base)@1"]);
+    check(b"#q(a)", "!1 >2 ( a ) $", &["Expected(Base)@1"]);
+    check(b"#q;note\nx", "!1 >2 x $", &["Expected(Base)@1"]);
+    check(b"#q\tx", "!1 >2 x $", &["Expected(Base)@1"]);
+    check(b"#q\rx", "!1 >2 x $", &["Expected(Base)@1"]);
+    check(b"#q\nx", "!1 >2 x $", &["Expected(Base)@1"]);
 }
 
 #[test]
@@ -302,25 +298,25 @@ fn inside_parentheses_the_whole_parenthesised_value_is_skipped() {
     check(
         b"(assert #q (f x)) y",
         "( assert !9 >17 y $",
-        &["BaseSelectionExpected@9"],
+        &["Expected(Base)@9"],
     );
-    check(b"(a #q)b", "( a !4 >6 b $", &["BaseSelectionExpected@4"]);
-    check(
-        b"(a #q)(b)",
-        "( a !4 >6 ( b ) $",
-        &["BaseSelectionExpected@4"],
-    );
+    check(b"(a #q)b", "( a !4 >6 b $", &["Expected(Base)@4"]);
+    check(b"(a #q)(b)", "( a !4 >6 ( b ) $", &["Expected(Base)@4"]);
     check(
         b"((a) (b #q (c)) d) e",
         "( ( a ) ( b !9 >18 e $",
-        &["BaseSelectionExpected@9"],
+        &["Expected(Base)@9"],
     );
     // a delimiter that raises the error is skipped like everything else
-    check(b"(a 7. b) c", "( a !5 >8 c $", &["FractionDigitExpected@5"]);
+    check(
+        b"(a 7. b) c",
+        "( a !5 >8 c $",
+        &["Expected(FractionDigit)@5"],
+    );
     check(
         b"(a (b #x) c) d",
         "( a ( b !8 >12 d $",
-        &["HexadecimalDigitExpected@8"],
+        &["Expected(HexadecimalDigit)@8"],
     );
 }
 
@@ -331,7 +327,7 @@ fn strings_quoted_symbols_and_comments_hide_what_they_enclose() {
     check(
         b"(a #q \") \" |) | ; \") |\n b) c",
         "( a !4 >26 c $",
-        &["BaseSelectionExpected@4"],
+        &["Expected(Base)@4"],
     );
     // the failing token itself is one of them: the skipping starts inside it
     check(
@@ -354,14 +350,10 @@ fn strings_quoted_symbols_and_comments_hide_what_they_enclose() {
     check(
         b"(a #q \"b\"|c|d \"e\")f",
         "( a !4 >18 f $",
-        &["BaseSelectionExpected@4"],
+        &["Expected(Base)@4"],
     );
     // a carriage return ends a comment too
-    check(
-        b"(a #q ; )\r b) c",
-        "( a !4 >13 c $",
-        &["BaseSelectionExpected@4"],
-    );
+    check(b"(a #q ; )\r b) c", "( a !4 >13 c $", &["Expected(Base)@4"]);
 }
 
 #[test]
@@ -370,7 +362,7 @@ fn a_string_is_skipped_by_the_rule_of_the_version_in_force() {
     let input: &[u8] = b"(a #q \"x\\\" )\" b) c";
     let legacy = run_as::<false>(SmtVersion::V2_0, input, &[], Rules::default());
     assert_eq!(legacy.trace(), "( a !4 >16 c $");
-    assert_eq!(legacy.errors, ["BaseSelectionExpected@4"]);
+    assert_eq!(legacy.errors, ["Expected(Base)@4"]);
     for version in [SmtVersion::V2_5, SmtVersion::V2_6, SmtVersion::V2_7] {
         // the parenthesis after the string closes the value, and the quote
         // after it opens a string that is never closed
@@ -378,7 +370,7 @@ fn a_string_is_skipped_by_the_rule_of_the_version_in_force() {
         assert_eq!(run.trace(), "( a !4 >12 !18 >18 $", "{version:?}");
         assert_eq!(
             run.errors,
-            ["BaseSelectionExpected@4", "UnclosedStringLiteral@18"],
+            ["Expected(Base)@4", "UnclosedStringLiteral@18"],
             "{version:?}"
         );
     }
@@ -389,7 +381,7 @@ fn the_version_set_by_the_consumer_survives_a_recovery() {
     // the string after the recovery is lexed under 2.0, as one token
     let run = run(b"to-2.0 (a #q) \"x\\\" y\" z");
     assert_eq!(run.trace(), "to-2.0 ( a !11 >13 \"x\" y\" z $");
-    assert_eq!(run.errors, ["BaseSelectionExpected@11"]);
+    assert_eq!(run.errors, ["Expected(Base)@11"]);
 }
 
 // --- Errors of the consumer ---
@@ -424,7 +416,7 @@ fn the_open_parentheses_are_counted_over_many_hand_overs() {
     let closed = input.len() - 2;
 
     let first = run(&input);
-    assert_eq!(first.errors, [format!("BaseSelectionExpected@{failure}")]);
+    assert_eq!(first.errors, [format!("Expected(Base)@{failure}")]);
     let trace = first.trace();
     assert!(
         trace.ends_with(&format!("x !{failure} >{closed} z $")),
@@ -460,7 +452,7 @@ fn the_open_parentheses_are_counted_anew_after_a_recovery() {
     check(
         b"(a #q) b #x c",
         "( a !4 >6 b !11 >11 c $",
-        &["BaseSelectionExpected@4", "HexadecimalDigitExpected@11"],
+        &["Expected(Base)@4", "Expected(HexadecimalDigit)@11"],
     );
     check(
         b"(x bad) y bad z",
@@ -472,7 +464,7 @@ fn the_open_parentheses_are_counted_anew_after_a_recovery() {
     check(
         b"#q (a #x b) c",
         "!1 >2 ( a !8 >11 c $",
-        &["BaseSelectionExpected@1", "HexadecimalDigitExpected@8"],
+        &["Expected(Base)@1", "Expected(HexadecimalDigit)@8"],
     );
 }
 
@@ -501,9 +493,9 @@ fn the_two_locations_have_their_lines_and_columns() {
 fn the_end_of_the_input_ends_the_skipping() {
     // the value is never closed: the recovery is reported at the end, and
     // the end-of-file token is handed over as usual
-    check(b"(a #q (b", "( a !4 >8 $", &["BaseSelectionExpected@4"]);
+    check(b"(a #q (b", "( a !4 >8 $", &["Expected(Base)@4"]);
     check(b"(a \"b\x00c", "( a !5 >7 $", &["ForbiddenCharInString@5"]);
-    check(b"(a #q ; c", "( a !4 >9 $", &["BaseSelectionExpected@4"]);
+    check(b"(a #q ; c", "( a !4 >9 $", &["Expected(Base)@4"]);
 }
 
 #[test]
@@ -528,7 +520,7 @@ fn an_error_on_the_second_end_of_the_input_is_final() {
     // the same when the skipping was still going on at the end
     let run = run_as::<false>(SmtVersion::V2_7, b"(a #q", &[], rules);
     assert_eq!(run.trace(), "( a !4 >5 $");
-    assert_eq!(run.errors, ["BaseSelectionExpected@4", "unexpected-end@-"]);
+    assert_eq!(run.errors, ["Expected(Base)@4", "unexpected-end@-"]);
 }
 
 #[test]
@@ -552,7 +544,7 @@ fn whitespace_and_comments_are_handed_over_around_the_skipped_input() {
     let run = run_as::<true>(SmtVersion::V2_7, b"(a #q) ;c\n b", &[], Rules::default());
     // what is skipped is not handed over in any form
     assert_eq!(run.trace(), "( a _ !4 >6 _ ;c _ b $");
-    assert_eq!(run.errors, ["BaseSelectionExpected@4"]);
+    assert_eq!(run.errors, ["Expected(Base)@4"]);
 }
 
 // --- The run does not depend on how the input is sliced ---

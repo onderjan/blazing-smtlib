@@ -3,8 +3,8 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler,
     parser::{
-        Arena, IdentHandle, IdentSlot, SmtParse, SmtParseError, SmtParseState, SmtSyntaxErrorKind,
-        handle_err, parse_by_token,
+        Arena, IdentHandle, IdentSlot, SmtNonEmptyList, SmtParse, SmtParseError, SmtParseState,
+        SmtSyntaxErrorKind, SmtSyntaxExpected, expected, handle_err, parse_by_token,
     },
     token::{SmtCursor, SmtGeneralReserved, SmtReserved, SmtSyntaxToken},
 };
@@ -144,8 +144,8 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
                                 // if the sort committed to having applications,
                                 // there must be at least one of them
                                 if arena.sorts.len() == last_level.arena_applied_start {
-                                    return Err(SmtParseError::category_error(
-                                        SmtSyntaxErrorKind::EmptySortApplication,
+                                    return Err(SmtParseError::syntax_error(
+                                        SmtSyntaxErrorKind::Empty(SmtNonEmptyList::SortApplication),
                                     ));
                                 }
                                 ControlFlow::Break((
@@ -155,16 +155,16 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
                             }
                             None => {
                                 // we just received ")"
-                                return Err(SmtParseError::category_error(
-                                    SmtSyntaxErrorKind::ExpectedSort,
+                                return Err(SmtParseError::syntax_error(
+                                    SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Sort]),
                                 ));
                             }
                         }
                     }
                     _ => {
-                        return Err(SmtParseError::category_error(
-                            SmtSyntaxErrorKind::ExpectedSort,
-                        ));
+                        return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Expected(
+                            &[SmtSyntaxExpected::Sort],
+                        )));
                     }
                 }
             }
@@ -199,9 +199,13 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
                         State::StartingIdent
                     }
                     _ => {
-                        return Err(SmtParseError::category_error(
-                            SmtSyntaxErrorKind::ExpectedSortInner,
-                        ));
+                        return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Expected(
+                            &[
+                                expected::UNDERSCORE,
+                                SmtSyntaxExpected::Symbol,
+                                expected::PAREN_OPEN,
+                            ],
+                        )));
                     }
                 };
                 self.state = state;

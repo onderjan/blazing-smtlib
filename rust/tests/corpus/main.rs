@@ -113,8 +113,11 @@ fn try_run_file<T>(
         Ok(Err(e)) => match e.cause() {
             SmtReadErrorCause::Lexical(err) => Err(format!("Lexer error: {:?}", err)),
             SmtReadErrorCause::Syntax(err) => Err(format!("Parser error: {:?}", err)),
+            SmtReadErrorCause::Version(err) => Err(format!("Version error: {:?}", err)),
             SmtReadErrorCause::Io(err) => Err(format!("Read error: {:?}", err)),
-            SmtReadErrorCause::Handler(err) => Err(format!("Nonstandard command: {:?}", err.0)),
+            SmtReadErrorCause::Handler(err) => {
+                Err(format!("Nonstandard command: {:?}", err.name()))
+            }
         },
         Err(cause) => {
             let msg = match cause.downcast_ref::<&'static str>() {

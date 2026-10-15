@@ -1,6 +1,7 @@
 //! Tests of the s-expression parser.
 
 use super::*;
+use blazing_smtlib::parser::SmtSyntaxExpected;
 
 type P = SExprParser;
 
@@ -61,7 +62,7 @@ fn errors() {
     if parse_backend::consumer_spans_not_applicable() {
         return;
     }
-    let expected_s_expr = SmtSyntaxErrorKind::ExpectedSExpr;
+    let expected_s_expr = SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::SExpr]);
 
     // the only invalid tokens are the end of input...
     assert_eq!(assert_error::<P>(b"", 0, 0), expected_s_expr);

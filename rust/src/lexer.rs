@@ -3,7 +3,7 @@ mod error;
 mod helpers;
 mod recovery;
 
-pub use error::{SmtLexError, SmtLexErrorCause, SmtLexicalErrorKind};
+pub use error::{SmtLexError, SmtLexErrorCause, SmtLexicalErrorKind, SmtLexicalExpected};
 pub use recovery::{SmtFailFast, SmtLexRecovery, SmtRecovering};
 
 pub(crate) use char_class::CharClass;
@@ -475,7 +475,10 @@ impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
             }
             LexerState::BaseSelection => {
                 // hash without selection following it
-                Err(self.error(SmtLexicalErrorKind::BaseSelectionExpected, TokenEnd::EOF))
+                Err(self.error(
+                    SmtLexicalErrorKind::Expected(SmtLexicalExpected::Base),
+                    TokenEnd::EOF,
+                ))
             }
             LexerState::StringLiteral | LexerState::StringLiteralBackslashEscape => {
                 // we are still within the string literal
@@ -1134,7 +1137,9 @@ impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
             b'x' => LexerState::Hexadecimal,
             b'b' => LexerState::Binary,
             _ => {
-                return Err(self.error_at(SmtLexicalErrorKind::BaseSelectionExpected, 1));
+                return Err(
+                    self.error_at(SmtLexicalErrorKind::Expected(SmtLexicalExpected::Base), 1)
+                );
             }
         };
         Ok(1)
@@ -1640,7 +1645,10 @@ impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
         // decimals of the form 7. without any digit in fractional part are disallowed
         let value = content.bytes(&self.token_content);
         if value.last().is_none_or(|c| *c == b'.') {
-            return Err(self.error(SmtLexicalErrorKind::FractionDigitExpected, end));
+            return Err(self.error(
+                SmtLexicalErrorKind::Expected(SmtLexicalExpected::FractionDigit),
+                end,
+            ));
         }
         if let Some(next) = next {
             self.expect_delimiter(next, end.position)?;
@@ -1703,7 +1711,7 @@ impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
         let value = content.bytes(&self.token_content);
         // ensure the keyword is not empty
         if value.is_empty() {
-            return Err(self.error(SmtLexicalErrorKind::ForbiddenKeywordName, end));
+            return Err(self.error(SmtLexicalErrorKind::EmptyKeyword, end));
         }
         if let Some(next) = next {
             self.expect_delimiter(next, end.position)?;

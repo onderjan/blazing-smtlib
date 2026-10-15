@@ -1,6 +1,7 @@
 //! Tests of the generic combinators.
 
 use super::*;
+use blazing_smtlib::{parser::SmtSyntaxExpected, token::SmtTokenCategory};
 
 #[test]
 fn pair_parser() {
@@ -13,7 +14,13 @@ fn pair_parser() {
 
     // the error of the second element points at its token
     let err = assert_error::<PairParser<SymbolParser, SymbolParser>>(b"a 1", 2, 3);
-    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
+    assert!(
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Symbol])
+        ),
+        "{err:?}"
+    );
 }
 
 #[test]
@@ -28,7 +35,7 @@ fn closed_parser() {
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenClose)])
         ),
         "{err:?}"
     );
@@ -37,7 +44,7 @@ fn closed_parser() {
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenClose)])
         ),
         "{err:?}"
     );
@@ -55,7 +62,7 @@ fn open_closed_parser() {
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenOpen])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenOpen)])
         ),
         "{err:?}"
     );
@@ -63,7 +70,7 @@ fn open_closed_parser() {
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenClose)])
         ),
         "{err:?}"
     );
@@ -86,10 +93,22 @@ fn closed_multiple_parser() {
 
     // the element parser's error is reported for a bad element
     let err = assert_error::<ClosedMultipleParser<SymbolParser>>(b"a 1)", 2, 3);
-    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
+    assert!(
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Symbol])
+        ),
+        "{err:?}"
+    );
     // unclosed list ends at EOF inside the element parser
     let err = assert_error::<ClosedMultipleParser<SymbolParser>>(b"a", 1, 1);
-    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
+    assert!(
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Symbol])
+        ),
+        "{err:?}"
+    );
 }
 
 #[test]
@@ -111,16 +130,28 @@ fn paren_multiple_parser() {
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenOpen])
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenOpen)])
         ),
         "{err:?}"
     );
     // the element parser's error is reported for a bad element
     let err = assert_error::<ParenMultipleParser<SymbolParser>>(b"(a 1)", 3, 4);
-    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
+    assert!(
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Symbol])
+        ),
+        "{err:?}"
+    );
     // unclosed list ends at EOF inside the element parser
     let err = assert_error::<ParenMultipleParser<SymbolParser>>(b"(a", 2, 2);
-    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
+    assert!(
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Symbol])
+        ),
+        "{err:?}"
+    );
 }
 
 #[test]
@@ -138,5 +169,11 @@ fn nested_combinators() {
     assert_eq!(params, [(b"x" as &[u8], b"Int" as &[u8]), (b"y", b"Bool")]);
 
     let err = assert_error::<Params>(b"((x Int) (y))", 11, 12);
-    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
+    assert!(
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Symbol])
+        ),
+        "{err:?}"
+    );
 }

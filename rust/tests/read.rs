@@ -5,6 +5,7 @@
 
 mod parse_backend;
 
+use blazing_smtlib::parser::{SmtNonEmptyList, SmtSyntaxExpected};
 use std::io::{BufRead, Read};
 
 use parse_backend::{
@@ -67,7 +68,7 @@ fn parser_error_span_is_resolved_to_lines() {
     let err = read(b"(check-sat)\n(assert )").expect_err("expected a parser error, got Ok");
     assert!(matches!(
         err.cause(),
-        ReadErrorCause::Syntax(SmtSyntaxErrorKind::ExpectedTerm)
+        ReadErrorCause::Syntax(SmtSyntaxErrorKind::Expected([SmtSyntaxExpected::Term]))
     ));
     assert_span(&err, (20, 1, 8), (21, 1, 9));
 }
@@ -83,7 +84,7 @@ fn parser_error_deep_in_the_input_is_resolved_to_lines() {
     let err = read(input).expect_err("expected a parser error, got Ok");
     assert!(matches!(
         err.cause(),
-        ReadErrorCause::Syntax(SmtSyntaxErrorKind::EmptyTermApplication)
+        ReadErrorCause::Syntax(SmtSyntaxErrorKind::Empty(SmtNonEmptyList::TermApplication))
     ));
     assert_span(&err, (52, 2, 11), (53, 2, 12));
 }
@@ -336,7 +337,7 @@ fn reading_after_a_finished_input_starts_a_new_one_from_the_origin() {
             .expect_err("a missing term is a parser error");
         assert!(matches!(
             err.cause(),
-            ReadErrorCause::Syntax(SmtSyntaxErrorKind::ExpectedTerm)
+            ReadErrorCause::Syntax(SmtSyntaxErrorKind::Expected([SmtSyntaxExpected::Term]))
         ));
         assert_span(&err, (20, 1, 8), (21, 1, 9));
     }

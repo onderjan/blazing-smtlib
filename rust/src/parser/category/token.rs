@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
 
 use crate::{
     SmtHandler, SmtKeywordBuf, SmtNumeralBuf, SmtStringContentBuf, SmtSymbolBuf,
-    parser::{SmtParse, SmtParseError, SmtParseState, SmtSyntaxErrorKind},
+    parser::{SmtParse, SmtParseError, SmtParseState, SmtSyntaxErrorKind, SmtSyntaxExpected},
     token::{SmtCursor, SmtSyntaxToken, SmtTokenCategory},
 };
 
@@ -28,9 +28,9 @@ impl SmtSymbolParser {
     ) -> Result<SmtSymbolBuf, SmtParseError<H::Error>> {
         match cursor.syntax(&token) {
             SmtSyntaxToken::Symbol(symbol) => Ok(symbol.into_owned()),
-            _ => Err(SmtParseError::category_error(
-                SmtSyntaxErrorKind::ExpectedSymbol,
-            )),
+            _ => Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Expected(
+                &[SmtSyntaxExpected::Symbol],
+            ))),
         }
     }
 }
@@ -80,9 +80,9 @@ macro_rules! token_parser {
                 if let $pattern = cursor.syntax(&token) {
                     Ok($value)
                 } else {
-                    Err(SmtParseError::category_error(
-                        SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::$ty]),
-                    ))
+                    Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Expected(
+                        &[SmtSyntaxExpected::Token(SmtTokenCategory::$ty)],
+                    )))
                 }
             }
         }

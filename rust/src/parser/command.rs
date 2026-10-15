@@ -2,7 +2,10 @@ use std::{convert::Infallible, ops::ControlFlow};
 
 use crate::{
     SmtCommandHandler, SmtSymbol,
-    parser::{SmtParse, SmtParseError, SmtParseState, SmtSyntaxErrorKind, handle_err},
+    parser::{
+        SmtParse, SmtParseError, SmtParseState, SmtSyntaxErrorKind, SmtSyntaxExpected, expected,
+        handle_err,
+    },
     token::{SmtCursor, SmtReserved, SmtSyntaxToken, SmtVersion},
 };
 
@@ -109,9 +112,9 @@ impl<H: SmtCommandHandler> SmtParse<H> for SmtCommandParser<H> {
                             return Ok(ControlFlow::Break(SmtCommandOutcome::EndOfFile));
                         }
                         _ => {
-                            return Err(SmtParseError::category_error(
-                                SmtSyntaxErrorKind::ExpectedCommand,
-                            ));
+                            return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Expected(
+                                &[expected::PAREN_OPEN, expected::END_OF_FILE],
+                            )));
                         }
                     }
                 }
@@ -133,9 +136,9 @@ impl<H: SmtCommandHandler> SmtParse<H> for SmtCommandParser<H> {
                             Self::start_nonstandard_command(handler, name)?
                         }
                         _ => {
-                            return Err(SmtParseError::category_error(
-                                SmtSyntaxErrorKind::ExpectedCommandName,
-                            ));
+                            return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Expected(
+                                &[SmtSyntaxExpected::CommandName],
+                            )));
                         }
                     };
                 }

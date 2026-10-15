@@ -38,9 +38,7 @@ use parse_backend::{
 
 use blazing_smtlib::{
     SmtIdentBuf, SmtIndexBuf, SmtKeywordBuf, SmtPatternBuf, SmtQuantifierKind, SmtSimplePatternBuf,
-    SmtSpecialConstantBuf, SmtSymbolBuf,
-    parser::SmtSyntaxErrorKind,
-    token::{SmtTokenCategory, SmtVersion},
+    SmtSpecialConstantBuf, SmtSymbolBuf, parser::SmtSyntaxErrorKind, token::SmtVersion,
 };
 
 // --- Test handler rendering everything it receives back into text ---

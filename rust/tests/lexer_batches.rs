@@ -28,6 +28,7 @@
 
 mod lex_backend;
 
+use blazing_smtlib::lexer::SmtLexicalExpected;
 use std::cell::RefCell;
 use std::ops::ControlFlow;
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -869,9 +870,9 @@ fn a_lexical_error_after_a_finish_is_reported_as_itself() {
     let run = run(&[b"a ", b"#q "], &plan);
     assert_eq!(
         run.error,
-        Some(RunError::Lexical(
-            SmtLexicalErrorKind::BaseSelectionExpected
-        ))
+        Some(RunError::Lexical(SmtLexicalErrorKind::Expected(
+            SmtLexicalExpected::Base
+        )))
     );
     assert_eq!(run.sizes(), [1]);
     assert_eq!(run.finished_at, None);

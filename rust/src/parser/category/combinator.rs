@@ -4,9 +4,9 @@ use crate::{
     SmtHandler,
     parser::{
         SmtCloseParenParser, SmtOpenParenParser, SmtParse, SmtParseError, SmtParseState,
-        SmtSyntaxErrorKind,
+        SmtSyntaxErrorKind, expected,
     },
-    token::{SmtCursor, SmtSyntaxToken, SmtTokenCategory},
+    token::{SmtCursor, SmtSyntaxToken},
 };
 
 /// Parses using the first parser, then the second, then returns the result tuple.
@@ -409,9 +409,9 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtClosedMaximumParser<H, P>
                     // we cannot allow this element
                     // consume the peeked closing parenthesis
                     let _ = cursor.next();
-                    return Err(SmtParseError::category_error(
-                        SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose]),
-                    ));
+                    return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Expected(
+                        &[expected::PAREN_CLOSE],
+                    )));
                 }
 
                 // we are no longer outside

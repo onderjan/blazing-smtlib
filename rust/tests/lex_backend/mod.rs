@@ -24,6 +24,7 @@
 
 pub mod driver;
 
+use blazing_smtlib::lexer::SmtLexicalExpected;
 use std::cell::RefCell;
 use std::convert::Infallible;
 use std::ffi::OsString;
@@ -345,22 +346,69 @@ const TOKEN_TYPES: [SmtTokenCategory; 13] = [
     SmtTokenCategory::EndOfFile,
 ];
 
-const ERROR_KINDS: [SmtLexicalErrorKind; 14] = [
-    SmtLexicalErrorKind::UnexpectedCharacter,
-    SmtLexicalErrorKind::FractionDigitExpected,
-    SmtLexicalErrorKind::HexadecimalDigitExpected,
-    SmtLexicalErrorKind::BinaryDigitExpected,
-    SmtLexicalErrorKind::BaseSelectionExpected,
-    SmtLexicalErrorKind::UnclosedStringLiteral,
-    SmtLexicalErrorKind::ForbiddenCharInString,
-    SmtLexicalErrorKind::ForbiddenKeywordName,
-    SmtLexicalErrorKind::BackslashInQuotedSymbol,
-    SmtLexicalErrorKind::ForbiddenCharInQuotedSymbol,
-    SmtLexicalErrorKind::UnclosedQuotedSymbol,
-    SmtLexicalErrorKind::NumeralLeadingZero,
-    SmtLexicalErrorKind::MissingDelimiter,
-    SmtLexicalErrorKind::UnexpectedTrailingToken,
+/// The lexical error kinds, by the names the Lean driver sends for them.
+const ERROR_KINDS: [(&str, SmtLexicalErrorKind); 14] = [
+    (
+        "UnexpectedCharacter",
+        SmtLexicalErrorKind::UnexpectedCharacter,
+    ),
+    (
+        "FractionDigitExpected",
+        SmtLexicalErrorKind::Expected(SmtLexicalExpected::FractionDigit),
+    ),
+    (
+        "HexadecimalDigitExpected",
+        SmtLexicalErrorKind::Expected(SmtLexicalExpected::HexadecimalDigit),
+    ),
+    (
+        "BinaryDigitExpected",
+        SmtLexicalErrorKind::Expected(SmtLexicalExpected::BinaryDigit),
+    ),
+    (
+        "BaseSelectionExpected",
+        SmtLexicalErrorKind::Expected(SmtLexicalExpected::Base),
+    ),
+    (
+        "UnclosedStringLiteral",
+        SmtLexicalErrorKind::UnclosedStringLiteral,
+    ),
+    (
+        "ForbiddenCharInString",
+        SmtLexicalErrorKind::ForbiddenCharInString,
+    ),
+    ("ForbiddenKeywordName", SmtLexicalErrorKind::EmptyKeyword),
+    (
+        "BackslashInQuotedSymbol",
+        SmtLexicalErrorKind::BackslashInQuotedSymbol,
+    ),
+    (
+        "ForbiddenCharInQuotedSymbol",
+        SmtLexicalErrorKind::ForbiddenCharInQuotedSymbol,
+    ),
+    (
+        "UnclosedQuotedSymbol",
+        SmtLexicalErrorKind::UnclosedQuotedSymbol,
+    ),
+    (
+        "NumeralLeadingZero",
+        SmtLexicalErrorKind::NumeralLeadingZero,
+    ),
+    ("MissingDelimiter", SmtLexicalErrorKind::MissingDelimiter),
+    (
+        "UnexpectedTrailingToken",
+        SmtLexicalErrorKind::UnexpectedTrailingToken,
+    ),
 ];
+
+/// Finds the value by the name the Lean driver sends for it, or by its debug
+/// spelling.
+fn by_lean_name<T: Copy + std::fmt::Debug>(values: &[(&str, T)], name: &str, line: &str) -> T {
+    values
+        .iter()
+        .find(|(spelling, value)| *spelling == name || format!("{value:?}") == name)
+        .map(|(_, value)| *value)
+        .unwrap_or_else(|| panic!("the Lean driver sent an unknown name {name:?}: {line:?}"))
+}
 
 fn version_name(version: SmtVersion) -> &'static str {
     match version {
@@ -518,7 +566,7 @@ fn lex_with_driver(path: &OsString, version: SmtVersion, feeds: &[Feed<'_>]) -> 
                 ["ok"] => return lexed,
                 ["err", kind, start, end] => {
                     lexed.error = Some(LexedError {
-                        kind: by_name(&ERROR_KINDS, kind, line),
+                        kind: by_lean_name(&ERROR_KINDS, kind, line),
                         start: parse_loc(start, line),
                         end: parse_loc(end, line),
                     });
@@ -755,7 +803,7 @@ pub fn run(version: SmtVersion, options: &Options, feeds: &[Feed<'_>]) -> Vec<Li
             }
             ["err", kind, start, end, rest @ ..] => lines.push(Line::LexicalError {
                 error: LexedError {
-                    kind: by_name(&ERROR_KINDS, kind, line),
+                    kind: by_lean_name(&ERROR_KINDS, kind, line),
                     start: parse_loc(start, line),
                     end: parse_loc(end, line),
                 },

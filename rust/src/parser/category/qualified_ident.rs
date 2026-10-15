@@ -4,7 +4,8 @@ use crate::{
     SmtHandler, SmtQualifiedIdentBuf, SmtSymbol,
     parser::{
         Arena, IdentHandle, IdentSlot, QualifiedIdentHandle, SmtCloseParenParser, SmtParse,
-        SmtParseError, SmtParseState, SmtSyntaxErrorKind, SortSlot, parse_by_token,
+        SmtParseError, SmtParseState, SmtSyntaxErrorKind, SmtSyntaxExpected, SortSlot, expected,
+        parse_by_token,
     },
     token::{SmtCursor, SmtGeneralReserved, SmtReserved, SmtSyntaxToken},
 };
@@ -205,9 +206,9 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
                     }
                     SmtSyntaxToken::ParenOpen => self.state = State::Open,
                     _ => {
-                        return Err(SmtParseError::category_error(
-                            SmtSyntaxErrorKind::ExpectedIdent,
-                        ));
+                        return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Expected(
+                            &[SmtSyntaxExpected::Ident],
+                        )));
                     }
                 }
             }
@@ -224,9 +225,9 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
                     self.state = State::QualifiedIdent;
                 }
                 _ => {
-                    return Err(SmtParseError::category_error(
-                        SmtSyntaxErrorKind::ExpectedUnderscoreOrAs,
-                    ));
+                    return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Expected(
+                        &[expected::UNDERSCORE, expected::AS],
+                    )));
                 }
             },
             // step 3: parsing an unqualified indexed identifier

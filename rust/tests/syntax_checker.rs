@@ -125,7 +125,8 @@ fn rejected(input: &[u8]) -> (Vec<u8>, (u64, u64)) {
     let span = err.span();
     let offsets = (span.start().offset(), span.end().offset());
     match err.into_cause() {
-        SmtReadErrorCause::Handler(SmtNonstandardCommandError(name)) => {
+        SmtReadErrorCause::Handler(err) => {
+            let name = err.into_name();
             (name.as_slice().to_vec(), offsets)
         }
         other => panic!("expected the checker's error, got {other:?}"),

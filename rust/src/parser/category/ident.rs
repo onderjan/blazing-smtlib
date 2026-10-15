@@ -3,8 +3,8 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler, SmtIdentBuf, SmtSymbol,
     parser::{
-        Arena, IdentHandle, IndexHandle, SmtParse, SmtParseError, SmtParseState,
-        SmtSyntaxErrorKind, SymbolHandle, parse_by_token,
+        Arena, IdentHandle, IndexHandle, SmtNonEmptyList, SmtParse, SmtParseError, SmtParseState,
+        SmtSyntaxErrorKind, SmtSyntaxExpected, SymbolHandle, expected, parse_by_token,
     },
     token::{SmtCursor, SmtGeneralReserved, SmtReserved, SmtSyntaxToken, SmtVersion},
 };
@@ -152,8 +152,8 @@ impl IdentSlot {
                         self.state = State::Open;
                     }
                     _ => {
-                        let kind = SmtSyntaxErrorKind::ExpectedIdent;
-                        return Err(SmtParseError::category_error(kind));
+                        let kind = SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Ident]);
+                        return Err(SmtParseError::syntax_error(kind));
                     }
                 }
             }
@@ -165,9 +165,9 @@ impl IdentSlot {
                 ) {
                     self.state = State::AfterUnderscore;
                 } else {
-                    return Err(SmtParseError::category_error(
-                        SmtSyntaxErrorKind::ExpectedUnderscore,
-                    ));
+                    return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Expected(
+                        &[expected::UNDERSCORE],
+                    )));
                 }
             }
             State::AfterUnderscore => {
@@ -177,9 +177,9 @@ impl IdentSlot {
                         if let SmtSyntaxToken::Symbol(name) = cursor.syntax(&token) {
                             Some(self.push_name(arena, name))
                         } else {
-                            return Err(SmtParseError::category_error(
-                                SmtSyntaxErrorKind::ExpectedSymbol,
-                            ));
+                            return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Expected(
+                                &[SmtSyntaxExpected::Symbol],
+                            )));
                         }
                     }
                     Some(name) => {
@@ -189,8 +189,9 @@ impl IdentSlot {
                             SmtSyntaxToken::ParenClose => {
                                 let indices_start = self.arena_indices_start;
                                 if arena.indices.len() == indices_start {
-                                    let kind = SmtSyntaxErrorKind::EmptyIdentIndices;
-                                    return Err(SmtParseError::category_error(kind));
+                                    let kind =
+                                        SmtSyntaxErrorKind::Empty(SmtNonEmptyList::IdentIndices);
+                                    return Err(SmtParseError::syntax_error(kind));
                                 }
                                 // reset to the starting state
                                 // we already took the name
@@ -214,8 +215,11 @@ impl IdentSlot {
                                 arena.indices.push(IndexHandle::Symbol(index));
                             }
                             _ => {
-                                return Err(SmtParseError::category_error(
-                                    SmtSyntaxErrorKind::ExpectedIndexOrCloseParen,
+                                return Err(SmtParseError::syntax_error(
+                                    SmtSyntaxErrorKind::Expected(&[
+                                        SmtSyntaxExpected::Index,
+                                        expected::PAREN_CLOSE,
+                                    ]),
                                 ));
                             }
                         }

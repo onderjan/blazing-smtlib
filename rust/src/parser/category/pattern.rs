@@ -3,8 +3,9 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler, SmtPatternBuf, SmtSimplePattern, SmtSimplePatternBuf,
     parser::{
-        Arena, PatternHandle, SimplePatternHandle, SmtParse, SmtParseError, SmtParseState,
-        SmtSyntaxErrorKind, SymbolHandle, parse_by_token,
+        Arena, PatternHandle, SimplePatternHandle, SmtNonEmptyList, SmtParse, SmtParseError,
+        SmtParseState, SmtSyntaxErrorKind, SmtSyntaxExpected, SymbolHandle, expected,
+        parse_by_token,
     },
     token::{SmtCursor, SmtGeneralReserved, SmtReserved, SmtSyntaxToken, SmtVersion},
 };
@@ -46,12 +47,12 @@ impl SmtSimplePatternParser {
             None => {
                 // the underscore wildcard is not allowed in every version
                 let kind = if underscore_wildcard_allowed(cursor.version()) {
-                    SmtSyntaxErrorKind::ExpectedSymbolOrUnderscore
+                    SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Symbol, expected::UNDERSCORE])
                 } else {
-                    SmtSyntaxErrorKind::ExpectedSymbol
+                    SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Symbol])
                 };
 
-                Err(SmtParseError::category_error(kind))
+                Err(SmtParseError::syntax_error(kind))
             }
         }
     }
@@ -186,9 +187,9 @@ impl PatternSlot {
                 // there must be at least one argument to the constructor
                 let args_end = arena.simple_patterns.len();
                 if args_end == self.arena_args_start {
-                    return Err(SmtParseError::category_error(
-                        SmtSyntaxErrorKind::EmptyPatternArguments,
-                    ));
+                    return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Empty(
+                        SmtNonEmptyList::PatternArguments,
+                    )));
                 }
                 // the slot is back in its initial state, the pattern is in the arena
                 return Ok(ControlFlow::Break(PatternHandle::Application {
@@ -212,9 +213,9 @@ impl PatternSlot {
         if self.is_open {
             // step 2: expecting the constructor, which goes to the arena text
             let SmtSyntaxToken::Symbol(constructor) = cursor.syntax(token) else {
-                return Err(SmtParseError::category_error(
-                    SmtSyntaxErrorKind::ExpectedSymbol,
-                ));
+                return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Expected(
+                    &[SmtSyntaxExpected::Symbol],
+                )));
             };
             // push the constructor to the arena text and start parsing arguments
             self.constructor = Some(arena.push_symbol(constructor));
@@ -250,11 +251,15 @@ impl PatternSlot {
             None => {
                 // the underscore wildcard is not allowed in every version
                 let kind = if underscore_wildcard_allowed(cursor.version()) {
-                    SmtSyntaxErrorKind::ExpectedSymbolUnderscoreOrParenOpen
+                    SmtSyntaxErrorKind::Expected(&[
+                        SmtSyntaxExpected::Symbol,
+                        expected::UNDERSCORE,
+                        expected::PAREN_OPEN,
+                    ])
                 } else {
-                    SmtSyntaxErrorKind::ExpectedSymbolOrParenOpen
+                    SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Symbol, expected::PAREN_OPEN])
                 };
-                Err(SmtParseError::category_error(kind))
+                Err(SmtParseError::syntax_error(kind))
             }
         }
     }

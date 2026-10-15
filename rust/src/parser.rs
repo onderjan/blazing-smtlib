@@ -14,7 +14,7 @@ pub use state::*;
 
 use crate::{
     SmtHandler,
-    token::{SmtCursor, SmtTokenCategory},
+    token::{SmtCursor, SmtReserved, SmtTokenCategory},
 };
 
 pub trait SmtParse<H: SmtHandler + ?Sized> {
@@ -70,56 +70,109 @@ pub(crate) fn parse_by_token<Z: SmtCursor, R, E>(
 }
 
 /// Error emitted by a parser.
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SmtParseError<E>(Box<SmtParseErrorCause<E>>);
 
-#[derive(Debug)]
+/// Why a parser failed.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SmtParseErrorCause<E> {
+    /// The tokens do not form the syntax the parser accepts.
     Syntax(SmtSyntaxErrorKind),
+    /// The script declares a version that cannot be used.
+    Version(SmtVersionErrorKind),
+    /// The handler failed.
     Handler(E),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+/// What is wrong with the syntax.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtSyntaxErrorKind {
-    ExpectedToken(&'static [SmtTokenCategory]),
-    ExpectedSymbol,
-    ExpectedUnderscore,
-    ExpectedSymbolOrUnderscore,
-    ExpectedSymbolOrParenOpen,
-    ExpectedSymbolUnderscoreOrParenOpen,
-    ExpectedUnderscoreOrAs,
+    /// One of the items was expected here.
+    Expected(&'static [SmtSyntaxExpected]),
+    /// A list that must not be empty is empty.
+    Empty(SmtNonEmptyList),
+    /// Fewer items arrived than were announced.
+    Missing(SmtMissingItem),
+}
 
-    EmptyIdentIndices,
-    EmptySortApplication,
-    EmptyTermApplication,
-    EmptyLetBindings,
-    EmptyAnnotation,
-    EmptyQuantifierBindings,
-    EmptyLambdaBindings,
-    ExpectedIndexOrCloseParen,
-    ExpectedOperator,
-    ExpectedSExpr,
-    ExpectedIdent,
-    ExpectedSort,
-    ExpectedSortInner,
-    ExpectedTerm,
-    ExpectedAttribute,
-    ExpectedCommand,
-    ExpectedCommandName,
-    ExpectedDatatype,
-    ExpectedDatatypeKind,
-    ExpectedFunctionBody,
-    ExpectedPropositionalLiteral,
-    EmptyFunctionSignatures,
-    EmptyDatatypeIntroductions,
-    EmptyDatatypeParameters,
-    EmptyDatatypeConstructors,
-    EmptyPatternArguments,
-    EmptyMatchCases,
-    EmptyGetValueTerms,
+/// An item that a parser expected, in [`SmtSyntaxErrorKind::Expected`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SmtSyntaxExpected {
+    /// A token of the category.
+    Token(SmtTokenCategory),
+    /// The reserved word.
+    Reserved(SmtReserved),
+    /// A symbol, simple or quoted.
+    Symbol,
+    /// An index of an identifier: a numeral or a symbol.
+    Index,
+    Ident,
+    Sort,
+    Term,
+    SExpr,
+    Attribute,
+    /// What follows the opening parenthesis of a compound term.
+    Operator,
+    /// The name of a command.
+    CommandName,
+    /// A propositional literal: a symbol or its negation.
+    PropositionalLiteral,
+}
 
-    UnsupportedVersion,
-    TooManyVersionDeclarations(u64),
+/// A list that must not be empty, in [`SmtSyntaxErrorKind::Empty`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SmtNonEmptyList {
+    IdentIndices,
+    SortApplication,
+    TermApplication,
+    LetBindings,
+    Annotation,
+    QuantifierBindings,
+    LambdaBindings,
+    FunctionSignatures,
+    DatatypeIntroductions,
+    DatatypeParameters,
+    DatatypeConstructors,
+    PatternArguments,
+    MatchCases,
+    GetValueTerms,
+}
+
+/// An item of which fewer arrived than were announced, in [`SmtSyntaxErrorKind::Missing`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SmtMissingItem {
+    /// A body of a function of `define-funs-rec`.
+    FunctionBody,
+    /// A datatype of `declare-datatypes`.
+    Datatype,
+}
+
+/// The items that the library's parsers expect besides syntactic categories.
+pub(crate) mod expected {
+    use super::SmtSyntaxExpected;
+    use crate::token::{SmtGeneralReserved, SmtReserved, SmtTokenCategory};
+
+    pub(crate) const PAREN_OPEN: SmtSyntaxExpected =
+        SmtSyntaxExpected::Token(SmtTokenCategory::ParenOpen);
+    pub(crate) const PAREN_CLOSE: SmtSyntaxExpected =
+        SmtSyntaxExpected::Token(SmtTokenCategory::ParenClose);
+    pub(crate) const END_OF_FILE: SmtSyntaxExpected =
+        SmtSyntaxExpected::Token(SmtTokenCategory::EndOfFile);
+    pub(crate) const UNDERSCORE: SmtSyntaxExpected =
+        SmtSyntaxExpected::Reserved(SmtReserved::General(SmtGeneralReserved::Underscore));
+    pub(crate) const AS: SmtSyntaxExpected =
+        SmtSyntaxExpected::Reserved(SmtReserved::General(SmtGeneralReserved::As));
+    pub(crate) const PAR: SmtSyntaxExpected =
+        SmtSyntaxExpected::Reserved(SmtReserved::General(SmtGeneralReserved::Par));
+}
+
+/// What is wrong with the version a script declares.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SmtVersionErrorKind {
+    /// The version is not one that can be switched to.
+    Unsupported,
+    /// The script declares its version more times than the limit allows.
+    TooManyDeclarations(u64),
 }
 
 impl<E> SmtParseError<E> {
@@ -137,8 +190,12 @@ impl<E> SmtParseError<E> {
         Self::new(SmtParseErrorCause::Handler(err))
     }
 
-    pub fn category_error(err: SmtSyntaxErrorKind) -> Self {
+    pub fn syntax_error(err: SmtSyntaxErrorKind) -> Self {
         Self::new(SmtParseErrorCause::Syntax(err))
+    }
+
+    pub fn version_error(err: SmtVersionErrorKind) -> Self {
+        Self::new(SmtParseErrorCause::Version(err))
     }
 
     pub fn cause(&self) -> &SmtParseErrorCause<E> {

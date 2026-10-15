@@ -1,6 +1,10 @@
 //! Tests of the identifier parser.
 
 use super::*;
+use blazing_smtlib::{
+    parser::{SmtNonEmptyList, SmtSyntaxExpected},
+    token::{SmtGeneralReserved, SmtReserved, SmtTokenCategory},
+};
 
 fn indices(ident: &SmtIdentBuf) -> Vec<String> {
     ident
@@ -54,45 +58,89 @@ fn errors() {
         return;
     }
     let err = assert_error::<IdentParser>(b"1", 0, 1);
-    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedIdent), "{err:?}");
+    assert!(
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Ident])
+        ),
+        "{err:?}"
+    );
 
     let err = assert_error::<IdentParser>(b")", 0, 1);
-    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedIdent), "{err:?}");
+    assert!(
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Ident])
+        ),
+        "{err:?}"
+    );
 
     // after `(` only an underscore may follow
     let err = assert_error::<IdentParser>(b"(f 1)", 1, 2);
     assert!(
-        matches!(err, SmtSyntaxErrorKind::ExpectedUnderscore),
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Reserved(SmtReserved::General(
+                SmtGeneralReserved::Underscore
+            ))])
+        ),
         "{err:?}"
     );
 
     // the name must be a symbol
     let err = assert_error::<IdentParser>(b"(_ 1 2)", 3, 4);
-    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedSymbol), "{err:?}");
+    assert!(
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Symbol])
+        ),
+        "{err:?}"
+    );
 
     // at least one index is required
     let err = assert_error::<IdentParser>(b"(_ f)", 4, 5);
     assert!(
-        matches!(err, SmtSyntaxErrorKind::EmptyIdentIndices),
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Empty(SmtNonEmptyList::IdentIndices)
+        ),
         "{err:?}"
     );
 
     // indices are numerals or symbols only
     let err = assert_error::<IdentParser>(b"(_ f \"s\")", 5, 8);
     assert!(
-        matches!(err, SmtSyntaxErrorKind::ExpectedIndexOrCloseParen),
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[
+                SmtSyntaxExpected::Index,
+                SmtSyntaxExpected::Token(SmtTokenCategory::ParenClose)
+            ])
+        ),
         "{err:?}"
     );
     let err = assert_error::<IdentParser>(b"(_ f (a))", 5, 6);
     assert!(
-        matches!(err, SmtSyntaxErrorKind::ExpectedIndexOrCloseParen),
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[
+                SmtSyntaxExpected::Index,
+                SmtSyntaxExpected::Token(SmtTokenCategory::ParenClose)
+            ])
+        ),
         "{err:?}"
     );
 
     // EOF inside the indexed identifier
     let err = assert_error::<IdentParser>(b"(_ f 1", 6, 6);
     assert!(
-        matches!(err, SmtSyntaxErrorKind::ExpectedIndexOrCloseParen),
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[
+                SmtSyntaxExpected::Index,
+                SmtSyntaxExpected::Token(SmtTokenCategory::ParenClose)
+            ])
+        ),
         "{err:?}"
     );
 }

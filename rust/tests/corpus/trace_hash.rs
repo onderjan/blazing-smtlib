@@ -504,7 +504,7 @@ impl SmtCommandHandler for TraceHash {
     ) -> Result<Self::NonstandardParser, Self::Error> {
         // nonstandard commands are rejected, as by SmtSyntaxChecker, so the
         // sweep reports the same failure classes as the plain parse sweep
-        Err(SmtNonstandardCommandError(name.into_owned()))
+        Err(SmtNonstandardCommandError::new(name.into_owned()))
     }
 
     fn command_echo(&mut self, value: SmtStringContent<'_>) -> Result<(), Self::Error> {

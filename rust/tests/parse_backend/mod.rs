@@ -49,7 +49,7 @@ use blazing_smtlib::{
         SmtIdentParser, SmtKeywordParser, SmtOpenParenParser, SmtPairParser,
         SmtParenMultipleParser, SmtParenParser, SmtParse, SmtParseError, SmtParseErrorCause,
         SmtParseState, SmtQualifiedIdentParser, SmtSExprParser, SmtScriptParser, SmtSortParser,
-        SmtStringParser, SmtSymbolParser, SmtSyntaxErrorKind, SmtTermParser,
+        SmtStringParser, SmtSymbolParser, SmtSyntaxErrorKind, SmtTermParser, SmtVersionErrorKind,
     },
     reader::{SmtReadError, SmtReadErrorCause, SmtReader},
     token::{
@@ -178,6 +178,7 @@ pub enum ReadErrorCause<E> {
     Io(String),
     Lexical(SmtLexicalErrorKind),
     Syntax(SmtSyntaxErrorKind),
+    Version(SmtVersionErrorKind),
     Handler(E),
 }
 
@@ -213,6 +214,7 @@ impl<E> From<SmtReadError<E>> for ReadError<E> {
             SmtReadErrorCause::Io(err) => ReadErrorCause::Io(err.to_string()),
             SmtReadErrorCause::Lexical(kind) => ReadErrorCause::Lexical(kind),
             SmtReadErrorCause::Syntax(kind) => ReadErrorCause::Syntax(kind),
+            SmtReadErrorCause::Version(kind) => ReadErrorCause::Version(kind),
             SmtReadErrorCause::Handler(err) => ReadErrorCause::Handler(err),
         };
         ReadError::new(cause, span)
@@ -327,7 +329,7 @@ impl Handler for SyntaxChecker {
 
 impl CommandHandler for SyntaxChecker {
     fn nonstandard_command(&mut self, name: SmtSymbolBuf) -> Result<NonstandardTerm, Self::Error> {
-        Err(SmtNonstandardCommandError(name))
+        Err(SmtNonstandardCommandError::new(name))
     }
     fn nonstandard_term(&mut self, _term: ()) -> Result<(), Self::Error> {
         Ok(())
@@ -1247,6 +1249,9 @@ pub fn drive<H: Handler, P: Category<H>>(
                 Ok(_) => {}
                 Err((span, SmtLexErrorCause::Consumer(err))) => match err.into_cause() {
                     SmtParseErrorCause::Syntax(kind) => return Err((kind, span.into())),
+                    SmtParseErrorCause::Version(kind) => {
+                        panic!("a category parser cannot fail on the version, got {kind:?}")
+                    }
                     SmtParseErrorCause::Handler(_) => {
                         panic!("the handler must not fail on {text:?}")
                     }

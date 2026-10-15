@@ -2,6 +2,11 @@
 //! handler call, which this side answers with the test's handler. The
 //! protocol is described in `lean/driver-protocol.md`, section "The parser".
 
+use blazing_smtlib::{
+    lexer::SmtLexicalExpected,
+    parser::{SmtMissingItem, SmtNonEmptyList, SmtSyntaxExpected, SmtVersionErrorKind},
+    token::SmtGeneralReserved,
+};
 use std::cell::{Cell, RefCell};
 use std::ffi::{OsStr, OsString};
 use std::io::{BufRead, BufReader, Write};
@@ -840,22 +845,69 @@ fn unknown_call(method: &str) -> ! {
 
 // --- Errors ---
 
-const ERROR_KINDS: [SmtLexicalErrorKind; 14] = [
-    SmtLexicalErrorKind::UnexpectedCharacter,
-    SmtLexicalErrorKind::FractionDigitExpected,
-    SmtLexicalErrorKind::HexadecimalDigitExpected,
-    SmtLexicalErrorKind::BinaryDigitExpected,
-    SmtLexicalErrorKind::BaseSelectionExpected,
-    SmtLexicalErrorKind::UnclosedStringLiteral,
-    SmtLexicalErrorKind::ForbiddenCharInString,
-    SmtLexicalErrorKind::ForbiddenKeywordName,
-    SmtLexicalErrorKind::BackslashInQuotedSymbol,
-    SmtLexicalErrorKind::ForbiddenCharInQuotedSymbol,
-    SmtLexicalErrorKind::UnclosedQuotedSymbol,
-    SmtLexicalErrorKind::NumeralLeadingZero,
-    SmtLexicalErrorKind::MissingDelimiter,
-    SmtLexicalErrorKind::UnexpectedTrailingToken,
+/// The lexical error kinds, by the names the Lean driver sends for them.
+const ERROR_KINDS: [(&str, SmtLexicalErrorKind); 14] = [
+    (
+        "UnexpectedCharacter",
+        SmtLexicalErrorKind::UnexpectedCharacter,
+    ),
+    (
+        "FractionDigitExpected",
+        SmtLexicalErrorKind::Expected(SmtLexicalExpected::FractionDigit),
+    ),
+    (
+        "HexadecimalDigitExpected",
+        SmtLexicalErrorKind::Expected(SmtLexicalExpected::HexadecimalDigit),
+    ),
+    (
+        "BinaryDigitExpected",
+        SmtLexicalErrorKind::Expected(SmtLexicalExpected::BinaryDigit),
+    ),
+    (
+        "BaseSelectionExpected",
+        SmtLexicalErrorKind::Expected(SmtLexicalExpected::Base),
+    ),
+    (
+        "UnclosedStringLiteral",
+        SmtLexicalErrorKind::UnclosedStringLiteral,
+    ),
+    (
+        "ForbiddenCharInString",
+        SmtLexicalErrorKind::ForbiddenCharInString,
+    ),
+    ("ForbiddenKeywordName", SmtLexicalErrorKind::EmptyKeyword),
+    (
+        "BackslashInQuotedSymbol",
+        SmtLexicalErrorKind::BackslashInQuotedSymbol,
+    ),
+    (
+        "ForbiddenCharInQuotedSymbol",
+        SmtLexicalErrorKind::ForbiddenCharInQuotedSymbol,
+    ),
+    (
+        "UnclosedQuotedSymbol",
+        SmtLexicalErrorKind::UnclosedQuotedSymbol,
+    ),
+    (
+        "NumeralLeadingZero",
+        SmtLexicalErrorKind::NumeralLeadingZero,
+    ),
+    ("MissingDelimiter", SmtLexicalErrorKind::MissingDelimiter),
+    (
+        "UnexpectedTrailingToken",
+        SmtLexicalErrorKind::UnexpectedTrailingToken,
+    ),
 ];
+
+/// Finds the value by the name the Lean driver sends for it, or by its debug
+/// spelling.
+fn by_lean_name<T: Copy + std::fmt::Debug>(values: &[(&str, T)], name: &str, line: &str) -> T {
+    values
+        .iter()
+        .find(|(spelling, value)| *spelling == name || format!("{value:?}") == name)
+        .map(|(_, value)| *value)
+        .unwrap_or_else(|| panic!("the Lean driver sent an unknown name {name:?}: {line:?}"))
+}
 
 const TOKEN_TYPES: [SmtTokenCategory; 13] = [
     SmtTokenCategory::ParenOpen,
@@ -873,44 +925,155 @@ const TOKEN_TYPES: [SmtTokenCategory; 13] = [
     SmtTokenCategory::EndOfFile,
 ];
 
-/// The syntax error kinds without arguments.
-const SYNTAX_KINDS: [SmtSyntaxErrorKind; 36] = [
-    SmtSyntaxErrorKind::ExpectedSymbol,
-    SmtSyntaxErrorKind::ExpectedUnderscore,
-    SmtSyntaxErrorKind::ExpectedSymbolOrUnderscore,
-    SmtSyntaxErrorKind::ExpectedSymbolOrParenOpen,
-    SmtSyntaxErrorKind::ExpectedSymbolUnderscoreOrParenOpen,
-    SmtSyntaxErrorKind::ExpectedUnderscoreOrAs,
-    SmtSyntaxErrorKind::EmptyIdentIndices,
-    SmtSyntaxErrorKind::EmptySortApplication,
-    SmtSyntaxErrorKind::EmptyTermApplication,
-    SmtSyntaxErrorKind::EmptyLetBindings,
-    SmtSyntaxErrorKind::EmptyAnnotation,
-    SmtSyntaxErrorKind::EmptyQuantifierBindings,
-    SmtSyntaxErrorKind::EmptyLambdaBindings,
-    SmtSyntaxErrorKind::ExpectedIndexOrCloseParen,
-    SmtSyntaxErrorKind::ExpectedOperator,
-    SmtSyntaxErrorKind::ExpectedSExpr,
-    SmtSyntaxErrorKind::ExpectedIdent,
-    SmtSyntaxErrorKind::ExpectedSort,
-    SmtSyntaxErrorKind::ExpectedSortInner,
-    SmtSyntaxErrorKind::ExpectedTerm,
-    SmtSyntaxErrorKind::ExpectedAttribute,
-    SmtSyntaxErrorKind::ExpectedCommand,
-    SmtSyntaxErrorKind::ExpectedCommandName,
-    SmtSyntaxErrorKind::ExpectedDatatype,
-    SmtSyntaxErrorKind::ExpectedDatatypeKind,
-    SmtSyntaxErrorKind::ExpectedFunctionBody,
-    SmtSyntaxErrorKind::ExpectedPropositionalLiteral,
-    SmtSyntaxErrorKind::EmptyFunctionSignatures,
-    SmtSyntaxErrorKind::EmptyDatatypeIntroductions,
-    SmtSyntaxErrorKind::EmptyDatatypeParameters,
-    SmtSyntaxErrorKind::EmptyDatatypeConstructors,
-    SmtSyntaxErrorKind::EmptyPatternArguments,
-    SmtSyntaxErrorKind::EmptyMatchCases,
-    SmtSyntaxErrorKind::EmptyGetValueTerms,
-    SmtSyntaxErrorKind::UnsupportedVersion,
-    SmtSyntaxErrorKind::ExpectedToken(&[]),
+const UNDERSCORE: SmtSyntaxExpected =
+    SmtSyntaxExpected::Reserved(SmtReserved::General(SmtGeneralReserved::Underscore));
+const AS: SmtSyntaxExpected =
+    SmtSyntaxExpected::Reserved(SmtReserved::General(SmtGeneralReserved::As));
+const PAR: SmtSyntaxExpected =
+    SmtSyntaxExpected::Reserved(SmtReserved::General(SmtGeneralReserved::Par));
+const PAREN_OPEN: SmtSyntaxExpected = SmtSyntaxExpected::Token(SmtTokenCategory::ParenOpen);
+const PAREN_CLOSE: SmtSyntaxExpected = SmtSyntaxExpected::Token(SmtTokenCategory::ParenClose);
+const END_OF_FILE: SmtSyntaxExpected = SmtSyntaxExpected::Token(SmtTokenCategory::EndOfFile);
+
+/// The syntax error kinds without arguments, by the names the Lean driver
+/// sends for them.
+const SYNTAX_KINDS: [(&str, SmtSyntaxErrorKind); 34] = [
+    (
+        "ExpectedSymbol",
+        SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Symbol]),
+    ),
+    (
+        "ExpectedUnderscore",
+        SmtSyntaxErrorKind::Expected(&[UNDERSCORE]),
+    ),
+    (
+        "ExpectedSymbolOrUnderscore",
+        SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Symbol, UNDERSCORE]),
+    ),
+    (
+        "ExpectedSymbolOrParenOpen",
+        SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Symbol, PAREN_OPEN]),
+    ),
+    (
+        "ExpectedSymbolUnderscoreOrParenOpen",
+        SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Symbol, UNDERSCORE, PAREN_OPEN]),
+    ),
+    (
+        "ExpectedUnderscoreOrAs",
+        SmtSyntaxErrorKind::Expected(&[UNDERSCORE, AS]),
+    ),
+    (
+        "EmptyIdentIndices",
+        SmtSyntaxErrorKind::Empty(SmtNonEmptyList::IdentIndices),
+    ),
+    (
+        "EmptySortApplication",
+        SmtSyntaxErrorKind::Empty(SmtNonEmptyList::SortApplication),
+    ),
+    (
+        "EmptyTermApplication",
+        SmtSyntaxErrorKind::Empty(SmtNonEmptyList::TermApplication),
+    ),
+    (
+        "EmptyLetBindings",
+        SmtSyntaxErrorKind::Empty(SmtNonEmptyList::LetBindings),
+    ),
+    (
+        "EmptyAnnotation",
+        SmtSyntaxErrorKind::Empty(SmtNonEmptyList::Annotation),
+    ),
+    (
+        "EmptyQuantifierBindings",
+        SmtSyntaxErrorKind::Empty(SmtNonEmptyList::QuantifierBindings),
+    ),
+    (
+        "EmptyLambdaBindings",
+        SmtSyntaxErrorKind::Empty(SmtNonEmptyList::LambdaBindings),
+    ),
+    (
+        "ExpectedIndexOrCloseParen",
+        SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Index, PAREN_CLOSE]),
+    ),
+    (
+        "ExpectedOperator",
+        SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Operator]),
+    ),
+    (
+        "ExpectedSExpr",
+        SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::SExpr]),
+    ),
+    (
+        "ExpectedIdent",
+        SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Ident]),
+    ),
+    (
+        "ExpectedSort",
+        SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Sort]),
+    ),
+    (
+        "ExpectedSortInner",
+        SmtSyntaxErrorKind::Expected(&[UNDERSCORE, SmtSyntaxExpected::Symbol, PAREN_OPEN]),
+    ),
+    (
+        "ExpectedTerm",
+        SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Term]),
+    ),
+    (
+        "ExpectedAttribute",
+        SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Attribute]),
+    ),
+    (
+        "ExpectedCommand",
+        SmtSyntaxErrorKind::Expected(&[PAREN_OPEN, END_OF_FILE]),
+    ),
+    (
+        "ExpectedCommandName",
+        SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::CommandName]),
+    ),
+    (
+        "ExpectedDatatype",
+        SmtSyntaxErrorKind::Missing(SmtMissingItem::Datatype),
+    ),
+    (
+        "ExpectedDatatypeKind",
+        SmtSyntaxErrorKind::Expected(&[PAR, PAREN_OPEN]),
+    ),
+    (
+        "ExpectedFunctionBody",
+        SmtSyntaxErrorKind::Missing(SmtMissingItem::FunctionBody),
+    ),
+    (
+        "ExpectedPropositionalLiteral",
+        SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::PropositionalLiteral]),
+    ),
+    (
+        "EmptyFunctionSignatures",
+        SmtSyntaxErrorKind::Empty(SmtNonEmptyList::FunctionSignatures),
+    ),
+    (
+        "EmptyDatatypeIntroductions",
+        SmtSyntaxErrorKind::Empty(SmtNonEmptyList::DatatypeIntroductions),
+    ),
+    (
+        "EmptyDatatypeParameters",
+        SmtSyntaxErrorKind::Empty(SmtNonEmptyList::DatatypeParameters),
+    ),
+    (
+        "EmptyDatatypeConstructors",
+        SmtSyntaxErrorKind::Empty(SmtNonEmptyList::DatatypeConstructors),
+    ),
+    (
+        "EmptyPatternArguments",
+        SmtSyntaxErrorKind::Empty(SmtNonEmptyList::PatternArguments),
+    ),
+    (
+        "EmptyMatchCases",
+        SmtSyntaxErrorKind::Empty(SmtNonEmptyList::MatchCases),
+    ),
+    (
+        "EmptyGetValueTerms",
+        SmtSyntaxErrorKind::Empty(SmtNonEmptyList::GetValueTerms),
+    ),
 ];
 
 /// Finds the value whose debug spelling is the name.
@@ -922,23 +1085,27 @@ fn by_name<T: Clone + std::fmt::Debug>(values: &[T], name: &str, line: &str) -> 
         .unwrap_or_else(|| panic!("the Lean driver sent an unknown name {name:?}: {line:?}"))
 }
 
-fn syntax_kind(fields: &mut Fields<'_>) -> SmtSyntaxErrorKind {
+/// The cause of a `syntax` error, whose fields after `syntax` are given.
+///
+/// The Lean driver sends the version errors as syntax errors.
+fn syntax_cause<E>(fields: &mut Fields<'_>) -> ReadErrorCause<E> {
     let line = fields.line;
     match fields.next() {
         "ExpectedToken" => {
-            let categories: Vec<SmtTokenCategory> = fields
+            let expected: Vec<SmtSyntaxExpected> = fields
                 .next()
                 .split(',')
-                .map(|name| by_name(&TOKEN_TYPES, name, line))
+                .map(|name| SmtSyntaxExpected::Token(by_name(&TOKEN_TYPES, name, line)))
                 .collect();
             // the kind holds a static list; the few that the tests see are
             // kept for the rest of the run
-            SmtSyntaxErrorKind::ExpectedToken(Vec::leak(categories))
+            ReadErrorCause::Syntax(SmtSyntaxErrorKind::Expected(Vec::leak(expected)))
         }
-        "TooManyVersionDeclarations" => {
-            SmtSyntaxErrorKind::TooManyVersionDeclarations(fields.number("limit") as u64)
-        }
-        name => by_name(&SYNTAX_KINDS, name, line),
+        "UnsupportedVersion" => ReadErrorCause::Version(SmtVersionErrorKind::Unsupported),
+        "TooManyVersionDeclarations" => ReadErrorCause::Version(
+            SmtVersionErrorKind::TooManyDeclarations(fields.number("limit") as u64),
+        ),
+        name => ReadErrorCause::Syntax(by_lean_name(&SYNTAX_KINDS, name, line)),
     }
 }
 
@@ -948,8 +1115,8 @@ fn read_error<H: Handler>(fields: &mut Fields<'_>, values: &mut Values<H>) -> Re
     let end = fields.location();
     let line = fields.line;
     let cause = match fields.next() {
-        "lexical" => ReadErrorCause::Lexical(by_name(&ERROR_KINDS, fields.next(), line)),
-        "syntax" => ReadErrorCause::Syntax(syntax_kind(fields)),
+        "lexical" => ReadErrorCause::Lexical(by_lean_name(&ERROR_KINDS, fields.next(), line)),
+        "syntax" => syntax_cause(fields),
         "handler" => ReadErrorCause::Handler(values.take_error(fields.id())),
         "io" => {
             let message = unhex(fields.next(), line);

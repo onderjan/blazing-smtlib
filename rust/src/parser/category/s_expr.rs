@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler, SmtSExpr,
     parser::{
-        Arena, SmtParse, SmtParseError, SmtParseState, SmtSyntaxErrorKind,
+        Arena, SmtParse, SmtParseError, SmtParseState, SmtSyntaxErrorKind, SmtSyntaxExpected,
         category::parse_special_constant, handle_err, parse_by_token,
     },
     token::{SmtCursor, SmtSyntaxToken, SmtVersion},
@@ -95,9 +95,9 @@ impl SExprSlot {
                 if cursor.version() >= SmtVersion::V2_6 {
                     SmtSExpr::Reserved(reserved)
                 } else {
-                    return Err(SmtParseError::category_error(
-                        SmtSyntaxErrorKind::ExpectedSExpr,
-                    ));
+                    return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Expected(
+                        &[SmtSyntaxExpected::SExpr],
+                    )));
                 }
             }
             SmtSyntaxToken::Keyword(keyword) => SmtSExpr::Keyword(keyword),
@@ -112,9 +112,9 @@ impl SExprSlot {
                 // try to pop the last level
                 let Some(last_level) = self.levels.pop() else {
                     // no last level, all that we received was ")"
-                    return Err(SmtParseError::category_error(
-                        SmtSyntaxErrorKind::ExpectedSExpr,
-                    ));
+                    return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Expected(
+                        &[SmtSyntaxExpected::SExpr],
+                    )));
                 };
                 // the last level exists, we can close it, handing its S-expressions over
                 // (an empty list is allowed)
@@ -128,9 +128,9 @@ impl SExprSlot {
                 if let Ok(special_constant) = parse_special_constant(kind) {
                     SmtSExpr::SpecialConstant(special_constant)
                 } else {
-                    return Err(SmtParseError::category_error(
-                        SmtSyntaxErrorKind::ExpectedSExpr,
-                    ));
+                    return Err(SmtParseError::syntax_error(SmtSyntaxErrorKind::Expected(
+                        &[SmtSyntaxExpected::SExpr],
+                    )));
                 }
             }
         };

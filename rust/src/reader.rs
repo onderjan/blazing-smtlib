@@ -25,7 +25,7 @@ use crate::{
     lexer::{SmtLexError, SmtLexErrorCause, SmtLexer, SmtLexicalErrorKind},
     parser::{
         SmtParse, SmtParseAdapter, SmtParseError, SmtParseErrorCause, SmtScriptParser,
-        SmtSyntaxErrorKind,
+        SmtSyntaxErrorKind, SmtVersionErrorKind,
     },
 };
 use crate::{
@@ -46,6 +46,8 @@ pub enum SmtReadErrorCause<E> {
     /// processing, so they are rejected with a [`SmtReadErrorCause::Handler`]
     /// error cause instead.
     Syntax(SmtSyntaxErrorKind),
+    /// The script declares a version that cannot be used.
+    Version(SmtVersionErrorKind),
     /// The handler rejected a command or a syntactic category.
     Handler(E),
 }
@@ -83,6 +85,7 @@ impl<E> SmtReadError<E> {
     fn from_parse(err: SmtParseError<E>, span: SmtSpan) -> Self {
         let cause = match err.into_cause() {
             SmtParseErrorCause::Syntax(err) => SmtReadErrorCause::Syntax(err),
+            SmtParseErrorCause::Version(err) => SmtReadErrorCause::Version(err),
             SmtParseErrorCause::Handler(err) => SmtReadErrorCause::Handler(err),
         };
         SmtReadError::new(cause, span)

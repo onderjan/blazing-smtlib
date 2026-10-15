@@ -7,6 +7,7 @@
 mod common;
 mod parse_backend;
 
+use blazing_smtlib::parser::{SmtMissingItem, SmtSyntaxExpected, SmtVersionErrorKind};
 use std::ops::ControlFlow;
 
 use common::{assert_error_span, assert_parser_error, parse, parse_with};
@@ -48,7 +49,13 @@ fn bare_symbol_is_whole_token() {
     // a command must be parenthesized; the whole symbol token is the span
     let err = assert_parser_error(b"check-sat", 0, 9);
     assert!(
-        matches!(err, SmtSyntaxErrorKind::ExpectedCommand),
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[
+                SmtSyntaxExpected::Token(SmtTokenCategory::ParenOpen),
+                SmtSyntaxExpected::Token(SmtTokenCategory::EndOfFile)
+            ])
+        ),
         "{err:?}"
     );
 }
@@ -59,7 +66,13 @@ fn missing_term_points_at_close_paren() {
         return;
     }
     let err = assert_parser_error(b"(check-sat)\n(assert )", 20, 21);
-    assert!(matches!(err, SmtSyntaxErrorKind::ExpectedTerm), "{err:?}");
+    assert!(
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Term])
+        ),
+        "{err:?}"
+    );
 }
 
 #[test]
@@ -69,7 +82,10 @@ fn numeral_as_command_name() {
     }
     let err = assert_parser_error(b"(set-logic QF_UF)\n(1)", 19, 20);
     assert!(
-        matches!(err, SmtSyntaxErrorKind::ExpectedCommandName),
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::CommandName])
+        ),
         "{err:?}"
     );
 }
@@ -95,7 +111,8 @@ fn nonstandard_command_is_rejected_by_standard_syntax() {
     let err = parse(b"(frobnicate 1)").expect_err("expected a handler error");
     assert_error_span(&err, 1, 11);
     match err.cause() {
-        ReadErrorCause::Handler(SmtNonstandardCommandError(name)) => {
+        ReadErrorCause::Handler(err) => {
+            let name = err.name();
             assert_eq!(name.as_slice(), b"frobnicate");
         }
         ReadErrorCause::Syntax(kind) => {
@@ -115,7 +132,8 @@ fn quoted_standard_command_name_names_a_nonstandard_command() {
     let err = parse(b"(|check-sat|)").expect_err("expected a handler error");
     assert_error_span(&err, 1, 12);
     match err.cause() {
-        ReadErrorCause::Handler(SmtNonstandardCommandError(name)) => {
+        ReadErrorCause::Handler(err) => {
+            let name = err.name();
             assert_eq!(name.as_slice(), b"check-sat");
         }
         ReadErrorCause::Syntax(kind) => {
@@ -132,7 +150,10 @@ fn reserved_word_other_than_a_command_name_is_no_command_name() {
     }
     let err = assert_parser_error(b"(let ((x 1)) x)", 1, 4);
     assert!(
-        matches!(err, SmtSyntaxErrorKind::ExpectedCommandName),
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::CommandName])
+        ),
         "{err:?}"
     );
 }
@@ -254,7 +275,7 @@ impl CommandHandler for Recording {
     fn nonstandard_command(&mut self, name: SmtSymbolBuf) -> Result<NonstandardTerm, Self::Error> {
         match name.as_slice() {
             b"my-assert" => Ok(NonstandardTerm),
-            _ => Err(SmtNonstandardCommandError(name)),
+            _ => Err(SmtNonstandardCommandError::new(name)),
         }
     }
 
@@ -589,7 +610,7 @@ fn nonstandard_command_body_is_checked() {
     let err = parse_with(&mut handler, b"(my-assert )").expect_err("expected a parser error");
     assert_error_span(&err, 11, 12);
     match err.cause() {
-        ReadErrorCause::Syntax(SmtSyntaxErrorKind::ExpectedTerm) => {}
+        ReadErrorCause::Syntax(SmtSyntaxErrorKind::Expected([SmtSyntaxExpected::Term])) => {}
         ReadErrorCause::Syntax(kind) => panic!("unexpected parser error {kind:?}"),
         ReadErrorCause::Handler(_) => panic!("unexpected handler error"),
         _ => panic!("unexpected error kind"),
@@ -607,7 +628,8 @@ fn nonstandard_command_unknown_to_handler_is_rejected() {
         parse_with(&mut handler, b"(my-assert x) (other)").expect_err("expected a handler error");
     assert_error_span(&err, 15, 20);
     match err.cause() {
-        ReadErrorCause::Handler(SmtNonstandardCommandError(name)) => {
+        ReadErrorCause::Handler(err) => {
+            let name = err.name();
             assert_eq!(name.as_slice(), b"other");
         }
         ReadErrorCause::Syntax(kind) => {
@@ -647,7 +669,7 @@ fn a_rejected_version_declaration_is_handled_as_set_info_first() {
         assert!(
             matches!(
                 err.cause(),
-                ReadErrorCause::Syntax(SmtSyntaxErrorKind::UnsupportedVersion)
+                ReadErrorCause::Version(SmtVersionErrorKind::Unsupported)
             ),
             "{value}: {:?}",
             err.cause()
@@ -779,9 +801,9 @@ fn no_end_call_comes_before_a_missing_closing_parenthesis() {
         assert!(
             matches!(
                 err.cause(),
-                ReadErrorCause::Syntax(SmtSyntaxErrorKind::ExpectedToken([
+                ReadErrorCause::Syntax(SmtSyntaxErrorKind::Expected([SmtSyntaxExpected::Token(
                     SmtTokenCategory::ParenClose
-                ]))
+                )]))
             ),
             "{:?} in {:?}",
             err.cause(),
@@ -853,7 +875,7 @@ fn define_funs_rec_makes_no_call_for_a_missing_or_an_extra_body() {
             b"(define-funs-rec ((f () Int) (g () Int)) (1))",
             43,
             44,
-            SmtSyntaxErrorKind::ExpectedFunctionBody,
+            SmtSyntaxErrorKind::Missing(SmtMissingItem::FunctionBody),
             &[
                 "start-define-funs-rec",
                 "start-recursive-body",
@@ -866,7 +888,7 @@ fn define_funs_rec_makes_no_call_for_a_missing_or_an_extra_body() {
             b"(define-funs-rec ((f () Int)) (1 2))",
             33,
             34,
-            SmtSyntaxErrorKind::ExpectedToken(&[SmtTokenCategory::ParenClose]),
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Token(SmtTokenCategory::ParenClose)]),
             &[
                 "start-define-funs-rec",
                 "start-recursive-body",
@@ -916,9 +938,9 @@ fn a_second_option_or_info_attribute_is_rejected_before_the_first_is_handled() {
         assert!(
             matches!(
                 err.cause(),
-                ReadErrorCause::Syntax(SmtSyntaxErrorKind::ExpectedToken([
+                ReadErrorCause::Syntax(SmtSyntaxErrorKind::Expected([SmtSyntaxExpected::Token(
                     SmtTokenCategory::ParenClose
-                ]))
+                )]))
             ),
             "{:?} in {:?}",
             err.cause(),

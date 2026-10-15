@@ -1,6 +1,10 @@
 //! Tests of the sort parser.
 
 use super::*;
+use blazing_smtlib::{
+    parser::{SmtNonEmptyList, SmtSyntaxExpected},
+    token::{SmtGeneralReserved, SmtReserved, SmtTokenCategory},
+};
 
 #[test]
 fn simple_sort() {
@@ -71,7 +75,7 @@ fn errors() {
     if parse_backend::consumer_spans_not_applicable() {
         return;
     }
-    let expected_sort = SmtSyntaxErrorKind::ExpectedSort;
+    let expected_sort = SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Sort]);
     assert_eq!(assert_error::<SortParser>(b"1", 0, 1), expected_sort);
     assert_eq!(assert_error::<SortParser>(b")", 0, 1), expected_sort);
     assert_eq!(assert_error::<SortParser>(b"", 0, 0), expected_sort);
@@ -85,43 +89,78 @@ fn errors() {
     // after `(`, only `_`, a symbol, or `(` may follow
     let err = assert_error::<SortParser>(b"(as x Bool)", 1, 3);
     assert!(
-        matches!(err, SmtSyntaxErrorKind::ExpectedSortInner),
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[
+                SmtSyntaxExpected::Reserved(SmtReserved::General(SmtGeneralReserved::Underscore)),
+                SmtSyntaxExpected::Symbol,
+                SmtSyntaxExpected::Token(SmtTokenCategory::ParenOpen)
+            ])
+        ),
         "{err:?}"
     );
     let err = assert_error::<SortParser>(b"(1 2)", 1, 2);
     assert!(
-        matches!(err, SmtSyntaxErrorKind::ExpectedSortInner),
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[
+                SmtSyntaxExpected::Reserved(SmtReserved::General(SmtGeneralReserved::Underscore)),
+                SmtSyntaxExpected::Symbol,
+                SmtSyntaxExpected::Token(SmtTokenCategory::ParenOpen)
+            ])
+        ),
         "{err:?}"
     );
     let err = assert_error::<SortParser>(b"()", 1, 2);
     assert!(
-        matches!(err, SmtSyntaxErrorKind::ExpectedSortInner),
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[
+                SmtSyntaxExpected::Reserved(SmtReserved::General(SmtGeneralReserved::Underscore)),
+                SmtSyntaxExpected::Symbol,
+                SmtSyntaxExpected::Token(SmtTokenCategory::ParenOpen)
+            ])
+        ),
         "{err:?}"
     );
 
     // an applied identifier must be applied to at least one sort
     let err = assert_error::<SortParser>(b"(Int)", 4, 5);
     assert!(
-        matches!(err, SmtSyntaxErrorKind::EmptySortApplication),
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Empty(SmtNonEmptyList::SortApplication)
+        ),
         "{err:?}"
     );
     let err = assert_error::<SortParser>(b"((_ BitVec 8))", 13, 14);
     assert!(
-        matches!(err, SmtSyntaxErrorKind::EmptySortApplication),
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Empty(SmtNonEmptyList::SortApplication)
+        ),
         "{err:?}"
     );
 
     // a parenthesized applied head must be an indexed identifier
     let err = assert_error::<SortParser>(b"((Array) Int)", 2, 7);
     assert!(
-        matches!(err, SmtSyntaxErrorKind::ExpectedUnderscore),
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Reserved(SmtReserved::General(
+                SmtGeneralReserved::Underscore
+            ))])
+        ),
         "{err:?}"
     );
 
     // errors inside the indexed identifier are reported by the identifier parser
     let err = assert_error::<SortParser>(b"(_ BitVec)", 9, 10);
     assert!(
-        matches!(err, SmtSyntaxErrorKind::EmptyIdentIndices),
+        matches!(
+            err,
+            SmtSyntaxErrorKind::Empty(SmtNonEmptyList::IdentIndices)
+        ),
         "{err:?}"
     );
 }

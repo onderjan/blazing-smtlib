@@ -10,6 +10,7 @@
 
 mod lex_backend;
 
+use blazing_smtlib::lexer::SmtLexicalExpected;
 use std::ops::ControlFlow;
 
 use blazing_smtlib::{
@@ -344,13 +345,13 @@ fn inputs_cover_every_token_type_and_error_kind() {
 
     let expected_kinds = [
         SmtLexicalErrorKind::UnexpectedCharacter,
-        SmtLexicalErrorKind::FractionDigitExpected,
-        SmtLexicalErrorKind::HexadecimalDigitExpected,
-        SmtLexicalErrorKind::BinaryDigitExpected,
-        SmtLexicalErrorKind::BaseSelectionExpected,
+        SmtLexicalErrorKind::Expected(SmtLexicalExpected::FractionDigit),
+        SmtLexicalErrorKind::Expected(SmtLexicalExpected::HexadecimalDigit),
+        SmtLexicalErrorKind::Expected(SmtLexicalExpected::BinaryDigit),
+        SmtLexicalErrorKind::Expected(SmtLexicalExpected::Base),
         SmtLexicalErrorKind::UnclosedStringLiteral,
         SmtLexicalErrorKind::ForbiddenCharInString,
-        SmtLexicalErrorKind::ForbiddenKeywordName,
+        SmtLexicalErrorKind::EmptyKeyword,
         SmtLexicalErrorKind::BackslashInQuotedSymbol,
         SmtLexicalErrorKind::ForbiddenCharInQuotedSymbol,
         SmtLexicalErrorKind::UnclosedQuotedSymbol,

@@ -366,7 +366,7 @@ impl SmtCommentBuf {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SmtDisallowedByteVecError(SmtBytesBuf);
 
 impl SmtDisallowedByteVecError {
