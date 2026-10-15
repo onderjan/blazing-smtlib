@@ -17,7 +17,7 @@ use parse_backend::{
 };
 
 use blazing_smtlib::{
-    NonstandardCommandError, SmtHandler, SmtKeywordBuf, SmtNumeralBuf, SmtPatternBuf,
+    SmtHandler, SmtKeywordBuf, SmtNonstandardCommandError, SmtNumeralBuf, SmtPatternBuf,
     SmtQuantifierKind, SmtSpan, SmtStringContentBuf, SmtSymbolBuf,
     lexer::SmtLexer,
     parser::{
@@ -95,7 +95,7 @@ fn nonstandard_command_is_rejected_by_standard_syntax() {
     let err = parse(b"(frobnicate 1)").expect_err("expected a handler error");
     assert_error_span(&err, 1, 11);
     match err.cause() {
-        ReadErrorCause::Handler(NonstandardCommandError(name)) => {
+        ReadErrorCause::Handler(SmtNonstandardCommandError(name)) => {
             assert_eq!(name.as_slice(), b"frobnicate");
         }
         ReadErrorCause::Syntax(kind) => {
@@ -115,7 +115,7 @@ fn quoted_standard_command_name_names_a_nonstandard_command() {
     let err = parse(b"(|check-sat|)").expect_err("expected a handler error");
     assert_error_span(&err, 1, 12);
     match err.cause() {
-        ReadErrorCause::Handler(NonstandardCommandError(name)) => {
+        ReadErrorCause::Handler(SmtNonstandardCommandError(name)) => {
             assert_eq!(name.as_slice(), b"check-sat");
         }
         ReadErrorCause::Syntax(kind) => {
@@ -149,7 +149,7 @@ struct Recording {
 }
 
 impl Handler for Recording {
-    type Error = NonstandardCommandError;
+    type Error = SmtNonstandardCommandError;
     type SExpr = ();
     type Attribute = ();
     type Sort = ();
@@ -254,7 +254,7 @@ impl CommandHandler for Recording {
     fn nonstandard_command(&mut self, name: SmtSymbolBuf) -> Result<NonstandardTerm, Self::Error> {
         match name.as_slice() {
             b"my-assert" => Ok(NonstandardTerm),
-            _ => Err(NonstandardCommandError(name)),
+            _ => Err(SmtNonstandardCommandError(name)),
         }
     }
 
@@ -607,7 +607,7 @@ fn nonstandard_command_unknown_to_handler_is_rejected() {
         parse_with(&mut handler, b"(my-assert x) (other)").expect_err("expected a handler error");
     assert_error_span(&err, 15, 20);
     match err.cause() {
-        ReadErrorCause::Handler(NonstandardCommandError(name)) => {
+        ReadErrorCause::Handler(SmtNonstandardCommandError(name)) => {
             assert_eq!(name.as_slice(), b"other");
         }
         ReadErrorCause::Syntax(kind) => {
@@ -1104,7 +1104,7 @@ struct Observing<'h> {
 
 impl SmtConsume for Observing<'_> {
     type Result = ();
-    type Error = SmtParseError<NonstandardCommandError>;
+    type Error = SmtParseError<SmtNonstandardCommandError>;
     const IS_CONCRETE: bool = true;
 }
 

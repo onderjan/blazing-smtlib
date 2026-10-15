@@ -133,11 +133,11 @@ impl<E> SmtParseError<E> {
         Self(Box::new(cause))
     }
 
-    pub(crate) fn handler_error(err: E) -> Self {
+    pub fn handler_error(err: E) -> Self {
         Self::new(SmtParseErrorCause::Handler(err))
     }
 
-    pub(crate) fn category_error(err: SmtSyntaxErrorKind) -> Self {
+    pub fn category_error(err: SmtSyntaxErrorKind) -> Self {
         Self::new(SmtParseErrorCause::Syntax(err))
     }
 

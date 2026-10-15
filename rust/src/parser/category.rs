@@ -61,7 +61,7 @@ pub(crate) mod tests {
     use std::ops::ControlFlow;
 
     use crate::{
-        NonstandardCommandError, SmtSyntaxChecker,
+        SmtNonstandardCommandError, SmtSyntaxChecker,
         lexer::SmtLexer,
         parser::{SmtParse, SmtParseError, SmtParseState},
         token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtSyntaxToken, SmtVersion},
@@ -87,7 +87,7 @@ pub(crate) mod tests {
 
         impl<P: SmtParse<SmtSyntaxChecker>> SmtConsume for Drive<'_, P> {
             type Result = ();
-            type Error = SmtParseError<NonstandardCommandError>;
+            type Error = SmtParseError<SmtNonstandardCommandError>;
             const IS_CONCRETE: bool = false;
         }
 

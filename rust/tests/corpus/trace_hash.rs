@@ -17,11 +17,11 @@
 use std::convert::Infallible;
 
 use blazing_smtlib::{
-    NonstandardCommandError, SmtAttributeValue, SmtAttributes, SmtBindings, SmtCommandHandler,
-    SmtConstructors, SmtFunctionSignature, SmtFunctionSignatures, SmtHandler, SmtIdent, SmtIndex,
-    SmtKeyword, SmtMatchCases, SmtMultiple, SmtNumeral, SmtPattern, SmtQuantifierKind, SmtSExpr,
-    SmtSimplePattern, SmtSort, SmtSortArities, SmtSortedVars, SmtSpecialConstant, SmtStringContent,
-    SmtSymbol, SmtSymbols, SmtTerm, token::SmtVersion,
+    SmtAttributeValue, SmtAttributes, SmtBindings, SmtCommandHandler, SmtConstructors,
+    SmtFunctionSignature, SmtFunctionSignatures, SmtHandler, SmtIdent, SmtIndex, SmtKeyword,
+    SmtMatchCases, SmtMultiple, SmtNonstandardCommandError, SmtNumeral, SmtPattern,
+    SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSort, SmtSortArities, SmtSortedVars,
+    SmtSpecialConstant, SmtStringContent, SmtSymbol, SmtSymbols, SmtTerm, token::SmtVersion,
 };
 
 const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
@@ -285,7 +285,7 @@ impl TraceHash {
 }
 
 impl SmtHandler for TraceHash {
-    type Error = NonstandardCommandError;
+    type Error = SmtNonstandardCommandError;
 
     type SExpr = u64;
     type Attribute = u64;
@@ -504,7 +504,7 @@ impl SmtCommandHandler for TraceHash {
     ) -> Result<Self::NonstandardParser, Self::Error> {
         // nonstandard commands are rejected, as by SmtSyntaxChecker, so the
         // sweep reports the same failure classes as the plain parse sweep
-        Err(NonstandardCommandError(name.into_owned()))
+        Err(SmtNonstandardCommandError(name.into_owned()))
     }
 
     fn command_echo(&mut self, value: SmtStringContent<'_>) -> Result<(), Self::Error> {

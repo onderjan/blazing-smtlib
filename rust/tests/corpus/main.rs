@@ -40,7 +40,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use blazing_smtlib::{
-    NonstandardCommandError,
+    SmtNonstandardCommandError,
     reader::{SmtReadError, SmtReadErrorCause, read_smt_file},
 };
 use rayon::ThreadPoolBuilder;
@@ -86,7 +86,7 @@ struct FailureRecord {
 }
 
 /// Parses the file with the hashing handler, returning the digest.
-fn trace_file(path: &Path) -> Result<u64, SmtReadError<NonstandardCommandError>> {
+fn trace_file(path: &Path) -> Result<u64, SmtReadError<SmtNonstandardCommandError>> {
     let mut handler = TraceHash::new();
     read_smt_file(&mut handler, path)?;
     Ok(handler.digest())
@@ -102,7 +102,7 @@ thread_local! {
 /// Runs the file processor, turning read errors and panics into descriptions.
 fn try_run_file<T>(
     path: &Path,
-    run: impl FnOnce(&Path) -> Result<T, SmtReadError<NonstandardCommandError>>,
+    run: impl FnOnce(&Path) -> Result<T, SmtReadError<SmtNonstandardCommandError>>,
 ) -> Result<T, String> {
     // guard from panics and return an error instead; the hook installed by
     // the sweep silences the default printing and captures the location

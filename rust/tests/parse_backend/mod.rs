@@ -40,8 +40,8 @@ use std::ops::ControlFlow;
 use std::path::Path;
 
 use blazing_smtlib::{
-    NonstandardCommandError, SmtIdentBuf, SmtKeywordBuf, SmtLocation, SmtNumeralBuf, SmtPatternBuf,
-    SmtQuantifierKind, SmtSpan, SmtStringContentBuf, SmtSymbolBuf,
+    SmtIdentBuf, SmtKeywordBuf, SmtLocation, SmtNonstandardCommandError, SmtNumeralBuf,
+    SmtPatternBuf, SmtQuantifierKind, SmtSpan, SmtStringContentBuf, SmtSymbolBuf,
     lexer::{SmtLexErrorCause, SmtLexer, SmtLexicalErrorKind},
     parser::{
         SmtCloseParenParser, SmtClosedAttributeParser, SmtClosedMultipleAttributeParser,
@@ -248,7 +248,7 @@ impl<V> Located<V> {
 pub struct SyntaxChecker;
 
 impl Handler for SyntaxChecker {
-    type Error = NonstandardCommandError;
+    type Error = SmtNonstandardCommandError;
     type SExpr = ();
     type Attribute = ();
     type Sort = ();
@@ -327,7 +327,7 @@ impl Handler for SyntaxChecker {
 
 impl CommandHandler for SyntaxChecker {
     fn nonstandard_command(&mut self, name: SmtSymbolBuf) -> Result<NonstandardTerm, Self::Error> {
-        Err(NonstandardCommandError(name))
+        Err(SmtNonstandardCommandError(name))
     }
     fn nonstandard_term(&mut self, _term: ()) -> Result<(), Self::Error> {
         Ok(())

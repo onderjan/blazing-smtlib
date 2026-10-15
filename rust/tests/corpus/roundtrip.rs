@@ -19,11 +19,11 @@ use std::{
 };
 
 use blazing_smtlib::{
-    NonstandardCommandError, SmtAttributeValue, SmtAttributes, SmtBindings, SmtCommandHandler,
-    SmtConstructors, SmtFunctionSignature, SmtFunctionSignatures, SmtHandler, SmtIdent, SmtIndex,
-    SmtKeyword, SmtMatchCases, SmtMultiple, SmtNumeral, SmtPattern, SmtQuantifierKind, SmtSExpr,
-    SmtSimplePattern, SmtSort, SmtSortArities, SmtSortedVars, SmtSpecialConstant, SmtStringContent,
-    SmtSymbol, SmtSymbols, SmtTerm,
+    SmtAttributeValue, SmtAttributes, SmtBindings, SmtCommandHandler, SmtConstructors,
+    SmtFunctionSignature, SmtFunctionSignatures, SmtHandler, SmtIdent, SmtIndex, SmtKeyword,
+    SmtMatchCases, SmtMultiple, SmtNonstandardCommandError, SmtNumeral, SmtPattern,
+    SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSort, SmtSortArities, SmtSortedVars,
+    SmtSpecialConstant, SmtStringContent, SmtSymbol, SmtSymbols, SmtTerm,
     lexer::SmtLexer,
     reader::{SmtReadError, read_smt_file},
     token::{SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtSyntaxToken, SmtVersion},
@@ -421,7 +421,7 @@ impl Reprint {
     fn command_with<F: FnOnce(&mut Vec<u8>)>(
         &mut self,
         write: F,
-    ) -> Result<(), NonstandardCommandError> {
+    ) -> Result<(), SmtNonstandardCommandError> {
         let mut text = Vec::new();
         write(&mut text);
         self.command(&text);
@@ -429,7 +429,7 @@ impl Reprint {
     }
 
     /// Ends the command in progress with `tail`.
-    fn close_open(&mut self, tail: &[u8]) -> Result<(), NonstandardCommandError> {
+    fn close_open(&mut self, tail: &[u8]) -> Result<(), SmtNonstandardCommandError> {
         let mut text = std::mem::take(&mut self.open);
         text.extend_from_slice(tail);
         self.command(&text);
@@ -449,10 +449,10 @@ impl Reprint {
 }
 
 type Text = Vec<u8>;
-type Res<T> = Result<T, NonstandardCommandError>;
+type Res<T> = Result<T, SmtNonstandardCommandError>;
 
 impl SmtHandler for Reprint {
-    type Error = NonstandardCommandError;
+    type Error = SmtNonstandardCommandError;
     type SExpr = Text;
     type Attribute = Text;
     type Sort = Text;
@@ -639,7 +639,7 @@ impl SmtCommandHandler for Reprint {
     type NonstandardParser = Infallible;
 
     fn nonstandard_command(&mut self, name: SmtSymbol<'_>) -> Res<Infallible> {
-        Err(NonstandardCommandError(name.into_owned()))
+        Err(SmtNonstandardCommandError(name.into_owned()))
     }
 
     fn command_echo(&mut self, value: SmtStringContent<'_>) -> Res<()> {
@@ -978,7 +978,7 @@ pub fn roundtrip_file(path: &Path) -> Result<(), String> {
     Err(first_difference(path))
 }
 
-fn read_error(err: SmtReadError<NonstandardCommandError>) -> String {
+fn read_error(err: SmtReadError<SmtNonstandardCommandError>) -> String {
     format!("Read error at {:?}: {:?}", err.span(), err.cause())
 }
 

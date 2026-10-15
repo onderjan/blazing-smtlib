@@ -18,7 +18,7 @@ use parse_backend::{ReadError, Reader, SyntaxChecker};
 use reserved_words::{COMMAND_NAMES, reserved_words};
 
 use blazing_smtlib::{
-    NonstandardCommandError,
+    SmtNonstandardCommandError,
     token::{SmtVersion, SmtVersionPosture},
 };
 
@@ -230,7 +230,7 @@ fn keywords_spelled_like_reserved_words_are_keywords() {
 
 /// Reads the input as the given pieces, then the end of the input,
 /// stopping at the first error.
-fn read_pieces(pieces: &[&[u8]]) -> Result<(), ReadError<NonstandardCommandError>> {
+fn read_pieces(pieces: &[&[u8]]) -> Result<(), ReadError<SmtNonstandardCommandError>> {
     let mut handler = SyntaxChecker;
     let mut reader = Reader::script(&mut handler, SmtVersionPosture::default(), SmtVersion::V2_7);
     for piece in pieces {

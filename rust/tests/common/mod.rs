@@ -1,7 +1,7 @@
 //! Shared helpers driving full command streams through the reader that
 //! `parse_backend` selects.
 
-use blazing_smtlib::{NonstandardCommandError, parser::SmtSyntaxErrorKind};
+use blazing_smtlib::{SmtNonstandardCommandError, parser::SmtSyntaxErrorKind};
 
 use crate::parse_backend::{CommandHandler, ReadError, ReadErrorCause, SyntaxChecker, read_smt};
 
@@ -14,7 +14,7 @@ pub fn parse_with<H: CommandHandler>(
 }
 
 /// Parses the whole input with the standard syntax checker.
-pub fn parse(input: &[u8]) -> Result<(), ReadError<NonstandardCommandError>> {
+pub fn parse(input: &[u8]) -> Result<(), ReadError<SmtNonstandardCommandError>> {
     parse_with(&mut SyntaxChecker, input)
 }
 

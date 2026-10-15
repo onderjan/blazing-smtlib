@@ -455,10 +455,10 @@ pub trait SmtCommandHandler: SmtHandler {
 pub struct SmtSyntaxChecker;
 
 #[derive(Debug, Clone)]
-pub struct NonstandardCommandError(pub SmtSymbolBuf);
+pub struct SmtNonstandardCommandError(pub SmtSymbolBuf);
 
 impl SmtHandler for SmtSyntaxChecker {
-    type Error = NonstandardCommandError;
+    type Error = SmtNonstandardCommandError;
 
     type SExpr = ();
     type Attribute = ();
@@ -578,7 +578,7 @@ impl SmtCommandHandler for SmtSyntaxChecker {
         name: SmtSymbol<'_>,
     ) -> Result<Self::NonstandardParser, Self::Error> {
         // reject nonstandard command
-        Err(NonstandardCommandError(name.into_owned()))
+        Err(SmtNonstandardCommandError(name.into_owned()))
     }
 
     fn command_echo(&mut self, _value: SmtStringContent<'_>) -> Result<(), Self::Error> {

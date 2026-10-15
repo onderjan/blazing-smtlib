@@ -16,7 +16,7 @@ use parse_backend::{CommandParser, ReadErrorCause, Reader, SExprParser, SyntaxCh
 use reserved_words::reserved_words;
 
 use blazing_smtlib::{
-    NonstandardCommandError, SmtBytesBuf,
+    SmtBytesBuf, SmtNonstandardCommandError,
     parser::{SmtCommandOutcome, SmtSyntaxErrorKind},
     token::{
         SmtCommandNameReserved, SmtGeneralReserved, SmtReserved, SmtTokenCategory, SmtVersion,
@@ -24,7 +24,7 @@ use blazing_smtlib::{
     },
 };
 
-type ReadError = parse_backend::ReadError<NonstandardCommandError>;
+type ReadError = parse_backend::ReadError<SmtNonstandardCommandError>;
 
 /// The versions with their spelling in a declaration, oldest first.
 const VERSIONS: [(SmtVersion, &str); 4] = [
@@ -240,7 +240,7 @@ fn a_command_of_a_later_version_is_nonstandard() {
             } else {
                 let (kind, start, _) = result.expect_err("the command is not standard yet");
                 assert!(
-                    kind.starts_with("Handler(NonstandardCommandError("),
+                    kind.starts_with("Handler(SmtNonstandardCommandError("),
                     "{command} in {version:?}: {kind}"
                 );
                 // the error is at the command name, after the declaration and the parenthesis

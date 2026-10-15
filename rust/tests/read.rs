@@ -13,7 +13,7 @@ use parse_backend::{
 };
 
 use blazing_smtlib::{
-    NonstandardCommandError,
+    SmtNonstandardCommandError,
     lexer::SmtLexicalErrorKind,
     parser::{SmtCommandOutcome, SmtSyntaxErrorKind},
     token::{SmtVersion, SmtVersionPosture},
@@ -26,12 +26,12 @@ fn loc(location: Location) -> Loc {
     (location.offset(), location.line(), location.column())
 }
 
-fn read(input: &[u8]) -> Result<(), ReadError<NonstandardCommandError>> {
+fn read(input: &[u8]) -> Result<(), ReadError<SmtNonstandardCommandError>> {
     read_smt(&mut SyntaxChecker, input)
 }
 
 #[track_caller]
-fn assert_span(err: &ReadError<NonstandardCommandError>, start: Loc, end: Loc) {
+fn assert_span(err: &ReadError<SmtNonstandardCommandError>, start: Loc, end: Loc) {
     let span = err.span();
     assert_eq!(
         (loc(span.start()), loc(span.end())),
@@ -192,7 +192,7 @@ impl Read for TrickleReader<'_> {
 }
 
 /// The outcome of a read as comparable text: `Ok`, or the error kind and span.
-fn outcome_text(result: Result<(), ReadError<NonstandardCommandError>>) -> String {
+fn outcome_text(result: Result<(), ReadError<SmtNonstandardCommandError>>) -> String {
     match result {
         Ok(()) => "ok".to_string(),
         Err(err) => format!(
