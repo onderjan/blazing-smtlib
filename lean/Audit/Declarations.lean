@@ -47,9 +47,7 @@ def allowedAxioms : List Name := [``propext, ``Classical.choice, ``Quot.sound]
 
 /-- The declarations that may depend on `sorryAx`: the theorems of `BSmtLib.Facts.PublicApi`
 whose proofs are still to come. Shrink-only. -/
-def sorryAllowed : List Name := [
-  `BSmtLib.Facts.PublicApi.builds_commands,
-  `BSmtLib.Facts.PublicApi.construct_spans]
+def sorryAllowed : List Name := []
 
 /-- The definitions that may be `partial`: the reader's loop over a whole input, and two
 functions of the naming check. Shrink-only. -/

@@ -24,7 +24,7 @@ nor a `LEAN:` reason fails the build.
 declared where `SyntaxToken` is, which `Token.lean` cannot import. -/
 
 /--
-info: 7755 declarations in 432 modules; 87 add to a sibling's type:
+info: 8074 declarations in 450 modules; 85 add to a sibling's type:
 BSmtLib.Facts.Proofs.Lexer.VNaive.Prefix:
   BSmtLib.Facts.Proofs.Lexer.VNaive.Run.St.Taken
 BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Pure:
@@ -63,9 +63,6 @@ BSmtLib.Facts.Proofs.Reader.Param.Walk:
   BSmtLib.Facts.Proofs.Reader.Param.Basic.XSim.modifyThe
   BSmtLib.Facts.Proofs.Reader.Param.Basic.XSim.pure_eq
   BSmtLib.Facts.Proofs.Reader.Param.Basic.XSim.run_rel
-BSmtLib.Facts.PublicApi.Adapters.Constructs:
-  BSmtLib.Facts.PublicApi.Adapters.Reprinter.SpanLayer.HoldsBackErrors
-  BSmtLib.Facts.PublicApi.Adapters.Reprinter.SpanLayer.SpansExact
 BSmtLibSpec.Grammar.File:
   BSmtLibSpec.Grammar.Tree.Command.declaredVersion
   BSmtLibSpec.Grammar.Tree.Command.modeAfter

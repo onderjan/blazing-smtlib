@@ -201,6 +201,17 @@ def BufReader.new (stream : IO.FS.Stream) (capacity : Nat) : BufReader :=
     | .error err => return .error err
   consume self amount := { self with position := self.position + amount }
 
+/- LEAN: not in Rust. The type of the reader's parser names the handler, so that the default
+parser, made where it is used, can find the handler's script parser. -/
+/-- A parser type for a reader over the handler `H`: any type. -/
+abbrev Internal.ParserOf (_H : Type) : Type 1 := Type
+
+/- LEAN: not in Rust: the default parser of `Reader`, which is Rust's `SmtScriptParser<H>`. -/
+/-- The script parser over the handler, as a parser type for a reader over it. -/
+abbrev Internal.scriptParser (H : Type) {m : Type → Type} [CommandHandler H m] :
+    Internal.ParserOf H :=
+  ScriptParser H
+
 /- LEAN: Rust's reader holds a lexer over `SmtParseAdapter<'a, H, P>`, which borrows the
 handler. Here the reader owns the handler, which `handler` and `modifyHandler` reach, and which
 a failure carries. -/
@@ -222,11 +233,13 @@ failure carries.
 For whole inputs, consider `readSmtFile` and `readSmt`.
 -/
 /- LEAN: Rust's bound `H: SmtHandler` is the instance argument `Handler H m`. Rust's default
-parser `SmtScriptParser<H>` has no counterpart: Lean checks a default against the bound when the
-type is named, and the script parser needs `CommandHandler H m`. A script reader is
-`Reader H (ScriptParser H)`. -/
+parser `SmtScriptParser<H>` is the default of `P`, made where `Reader H` is written without a
+parser (`Internal.scriptParser`), as Rust checks its default against the bounds only where it is
+used: the script parser needs `CommandHandler H m`, which the bound `Handler H m` does not
+give. -/
 structure _root_.BSmtLib.Reader (H : Type) {m : Type → Type} [Monad m] [Handler H m]
-    (P : Type) {E R : Type} [Parse P H m E R] where
+    (P : Internal.ParserOf H := by exact BSmtLib.Reader.Internal.scriptParser _) {E R : Type}
+    [Parse P H m E R] where
   private mk ::
   private lexer : Lexer (ParseAdapter H P)
 
