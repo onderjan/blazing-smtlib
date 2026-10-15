@@ -6,7 +6,7 @@ use crate::{
         Arena, PatternHandle, SimplePatternHandle, SmtParse, SmtParseError, SmtParseState,
         SmtSyntaxErrorKind, SymbolHandle, parse_by_token,
     },
-    token::{SmtGeneralReserved, SmtProduce, SmtReserved, SmtSyntaxToken, SmtVersion},
+    token::{SmtCursor, SmtGeneralReserved, SmtReserved, SmtSyntaxToken, SmtVersion},
 };
 
 pub struct SmtSimplePatternParser;
@@ -17,7 +17,7 @@ impl SmtSimplePatternParser {
     }
 
     /// Consumes exactly one token, which must be a simple pattern.
-    pub(crate) fn expect<H: SmtHandler + ?Sized, Z: SmtProduce>(
+    pub(crate) fn expect<H: SmtHandler + ?Sized, Z: SmtCursor>(
         cursor: &Z,
         token: Z::Token,
     ) -> Result<SmtSimplePatternBuf, SmtParseError<H::Error>> {
@@ -25,7 +25,7 @@ impl SmtSimplePatternParser {
     }
 
     /// Consumes exactly one token, which must be a simple pattern, viewing it.
-    pub(crate) fn expect_view<'t, H: SmtHandler + ?Sized, Z: SmtProduce>(
+    pub(crate) fn expect_view<'t, H: SmtHandler + ?Sized, Z: SmtCursor>(
         cursor: &Z,
         token: &'t Z::Token,
     ) -> Result<SmtSimplePattern<'t>, SmtParseError<H::Error>> {
@@ -66,7 +66,7 @@ impl Default for SmtSimplePatternParser {
 impl<H: SmtHandler> SmtParse<H> for SmtSimplePatternParser {
     type Result = SmtSimplePatternBuf;
 
-    fn parse<Z: SmtProduce>(
+    fn parse<Z: SmtCursor>(
         &mut self,
         _handler: &mut H,
         _parse_state: &mut SmtParseState<H>,
@@ -105,11 +105,11 @@ impl<H: SmtHandler> SmtParse<H> for SmtPatternParser<H> {
     type Result = SmtPatternBuf;
 
     #[inline]
-    fn parse<C: SmtProduce>(
+    fn parse<Z: SmtCursor>(
         &mut self,
         _handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut C,
+        cursor: &mut Z,
     ) -> Result<ControlFlow<SmtPatternBuf, ()>, SmtParseError<H::Error>> {
         // progress the slot
         let SmtParseState {
@@ -161,7 +161,7 @@ impl PatternSlot {
     }
 
     #[inline]
-    pub(crate) fn progress<'t, H: SmtHandler + ?Sized, Z: SmtProduce>(
+    pub(crate) fn progress<'t, H: SmtHandler + ?Sized, Z: SmtCursor>(
         &mut self,
         arena: &mut Arena<H>,
         cursor: &Z,

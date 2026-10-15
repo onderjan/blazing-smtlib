@@ -19,7 +19,7 @@ use crate::{
         },
         parse_by_token,
     },
-    token::{SmtCommandNameReserved, SmtProduce, SmtSyntaxToken, SmtVersion},
+    token::{SmtCommandNameReserved, SmtCursor, SmtSyntaxToken, SmtVersion},
 };
 
 /// Defines the rule of one standard command: its payload parser
@@ -101,12 +101,12 @@ macro_rules! standard_commands {
                     $($old_field: SmtCommandPayloadParser::default(),)*
                 }
             }
-            pub fn parse<C: SmtProduce>(
+            pub fn parse<Z: SmtCursor>(
                 &mut self,
                 kind: StandardCommandKind,
                 handler: &mut H,
                 parse_state: &mut SmtParseState<H>,
-                cursor: &mut C,
+                cursor: &mut Z,
             ) -> Result<ControlFlow<SmtCommandOutcome, ()>, SmtParseError<H::Error>> {
                 let flow = match kind {
                     $(StandardCommandKind::$kind => self.$field.parse(handler, parse_state, cursor)?,)*
@@ -336,11 +336,11 @@ impl<H: SmtCommandHandler> SmtParse<H> for GetValueParser<H> {
     type Result = Vec<H::Term>;
 
     #[inline]
-    fn parse<C: SmtProduce>(
+    fn parse<Z: SmtCursor>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut C,
+        cursor: &mut Z,
     ) -> Result<ControlFlow<Vec<H::Term>, ()>, SmtParseError<H::Error>> {
         match self.inner.parse(handler, parse_state, cursor)? {
             Continue(()) => Ok(Continue(())),
@@ -412,11 +412,11 @@ impl<H: SmtCommandHandler> SmtParse<H> for SetInfoParser {
     type Result = H::Attribute;
 
     #[inline]
-    fn parse<C: SmtProduce>(
+    fn parse<Z: SmtCursor>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut C,
+        cursor: &mut Z,
     ) -> Result<ControlFlow<H::Attribute, ()>, SmtParseError<H::Error>> {
         // The version declaration must be treated specially while parsing
         // the attribute. We look at the set-info attribute name; if it is
@@ -466,7 +466,7 @@ impl<H: SmtCommandHandler> SmtParse<H> for SetInfoParser {
                 SetInfoState::Rest => {}
             }
 
-            match attribute_slot.progress::<H, C, SingleAttribute>(
+            match attribute_slot.progress::<H, Z, SingleAttribute>(
                 handler,
                 arena,
                 s_expr_slot,
@@ -522,11 +522,11 @@ impl<H: SmtCommandHandler> SmtParse<H> for PropLiteralParser {
     type Result = H::Term;
 
     #[inline]
-    fn parse<C: SmtProduce>(
+    fn parse<Z: SmtCursor>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut C,
+        cursor: &mut Z,
     ) -> Result<ControlFlow<H::Term, ()>, SmtParseError<H::Error>> {
         // A literal is a term of one of two shapes, so every token is
         // progressed in the term slot once it is known to fit the shape.

@@ -7,7 +7,7 @@ use crate::{
         SmtParenSortedVarsParser, SmtParse, SmtParseError, SmtParseState, SmtSortParser,
         SmtSymbolParser, SmtSyntaxErrorKind, SmtTermParser, handle_err, parse_by_token,
     },
-    token::{SingleTokenProducer, SmtProduce},
+    token::{SingleTokenCursor, SmtCursor},
 };
 
 /// A function signature as parsed, owned until it is handed over.
@@ -53,11 +53,11 @@ impl<H: SmtCommandHandler> Default for FunctionSignatureParser<H> {
 impl<H: SmtCommandHandler> SmtParse<H> for FunctionSignatureParser<H> {
     type Result = FunctionSignature<H::Sort>;
 
-    fn parse<C: SmtProduce>(
+    fn parse<Z: SmtCursor>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut C,
+        cursor: &mut Z,
     ) -> Result<ControlFlow<FunctionSignature<H::Sort>>, SmtParseError<H::Error>> {
         Ok(self.inner.parse(handler, parse_state, cursor)?.map_break(
             |(name, (params, result_sort))| FunctionSignature {
@@ -109,11 +109,11 @@ impl<H: SmtCommandHandler> Default for RecursiveBodyParser<H> {
 impl<H: SmtCommandHandler> SmtParse<H> for RecursiveBodyParser<H> {
     type Result = ();
 
-    fn parse<C: SmtProduce>(
+    fn parse<Z: SmtCursor>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut C,
+        cursor: &mut Z,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         parse_by_token(cursor, |cursor, token| {
             self.progress(handler, parse_state, cursor, token)
@@ -123,7 +123,7 @@ impl<H: SmtCommandHandler> SmtParse<H> for RecursiveBodyParser<H> {
 
 impl<H: SmtCommandHandler> RecursiveBodyParser<H> {
     /// Progresses the parser by one token.
-    fn progress<Z: SmtProduce>(
+    fn progress<Z: SmtCursor>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
@@ -144,7 +144,7 @@ impl<H: SmtCommandHandler> RecursiveBodyParser<H> {
         match self.term_parser.parse(
             handler,
             parse_state,
-            &mut SingleTokenProducer::new(cursor, token),
+            &mut SingleTokenCursor::new(cursor, token),
         )? {
             ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
             ControlFlow::Break(term) => {
@@ -196,11 +196,11 @@ impl<H: SmtCommandHandler> Default for DefineFunsRecParser<H> {
 impl<H: SmtCommandHandler> SmtParse<H> for DefineFunsRecParser<H> {
     type Result = ();
 
-    fn parse<C: SmtProduce>(
+    fn parse<Z: SmtCursor>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut C,
+        cursor: &mut Z,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         parse_by_token(cursor, |cursor, token| {
             self.progress(handler, parse_state, cursor, token)
@@ -210,7 +210,7 @@ impl<H: SmtCommandHandler> SmtParse<H> for DefineFunsRecParser<H> {
 
 impl<H: SmtCommandHandler> DefineFunsRecParser<H> {
     /// Progresses the parser by one token.
-    fn progress<Z: SmtProduce>(
+    fn progress<Z: SmtCursor>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
@@ -223,7 +223,7 @@ impl<H: SmtCommandHandler> DefineFunsRecParser<H> {
                 if let ControlFlow::Break(signatures) = self.signatures_parser.parse(
                     handler,
                     parse_state,
-                    &mut SingleTokenProducer::new(cursor, token),
+                    &mut SingleTokenCursor::new(cursor, token),
                 )? {
                     // there must be at least one signature
                     if signatures.is_empty() {
@@ -251,7 +251,7 @@ impl<H: SmtCommandHandler> DefineFunsRecParser<H> {
                 if let ControlFlow::Break(bodies) = self.bodies_parser.parse(
                     handler,
                     parse_state,
-                    &mut SingleTokenProducer::new(cursor, token),
+                    &mut SingleTokenCursor::new(cursor, token),
                 )? {
                     // the parser returned a vector of units corresponding to the number of bodies
                     // bounded by the maximum which is the number of signatures

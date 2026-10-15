@@ -18,7 +18,7 @@ use super::nodes::{
 /// A test handler as the library's handler.
 pub struct Adapt<'h, H>(pub &'h mut H);
 
-fn qualified_ident<A: SmtHandler>(view: SmtQualifiedIdent<'_, A>) -> QualifiedIdent<A::Sort> {
+fn qualified_ident<H: SmtHandler>(view: SmtQualifiedIdent<'_, H>) -> QualifiedIdent<H::Sort> {
     QualifiedIdent {
         ident: SmtIdent::into_owned(view.ident),
         sort: view.sort,

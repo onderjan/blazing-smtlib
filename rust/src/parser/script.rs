@@ -6,7 +6,7 @@ use crate::{
         SmtCommandOutcome, SmtCommandParser, SmtParse, SmtParseError, SmtParseState,
         SmtSyntaxErrorKind,
     },
-    token::{SmtProduce, SmtVersionPosture, SmtVersionRefused},
+    token::{SmtCursor, SmtVersionPosture, SmtVersionRefused},
 };
 
 /// Parses an SMT-LIB script: a sequence of commands, each delivered to the
@@ -43,11 +43,11 @@ impl<H: SmtCommandHandler> SmtParse<H> for SmtScriptParser<H> {
     type Result = ();
 
     #[inline]
-    fn parse<C: SmtProduce>(
+    fn parse<Z: SmtCursor>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut C,
+        cursor: &mut Z,
     ) -> Result<ControlFlow<()>, SmtParseError<H::Error>> {
         loop {
             match self.command.parse(handler, parse_state, cursor)? {

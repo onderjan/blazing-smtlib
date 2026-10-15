@@ -6,7 +6,7 @@ use crate::{
         Arena, SmtParse, SmtParseError, SmtParseState, SmtSyntaxErrorKind,
         category::parse_special_constant, handle_err, parse_by_token,
     },
-    token::{SmtProduce, SmtSyntaxToken, SmtVersion},
+    token::{SmtCursor, SmtSyntaxToken, SmtVersion},
 };
 
 /// A parser that reads an SMT-LIB S-expression.
@@ -35,7 +35,7 @@ impl<H: SmtHandler> SmtParse<H> for SmtSExprParser<H> {
     type Result = H::SExpr;
 
     #[inline]
-    fn parse<Z: SmtProduce>(
+    fn parse<Z: SmtCursor>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
@@ -75,7 +75,7 @@ impl SExprSlot {
     }
 
     #[inline]
-    pub(crate) fn progress<H: SmtHandler + ?Sized, Z: SmtProduce>(
+    pub(crate) fn progress<H: SmtHandler + ?Sized, Z: SmtCursor>(
         &mut self,
         handler: &mut H,
         arena: &mut Arena<H>,

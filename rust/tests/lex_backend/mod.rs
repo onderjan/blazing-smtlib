@@ -35,7 +35,7 @@ use blazing_smtlib::{
     SmtLocation,
     lexer::{SmtLexErrorCause, SmtLexer, SmtLexicalErrorKind},
     token::{
-        SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtProduce, SmtReserved, SmtSyntaxToken,
+        SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtReserved, SmtSyntaxToken,
         SmtTokenCategory, SmtVersion,
     },
 };

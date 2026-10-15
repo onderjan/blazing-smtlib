@@ -279,14 +279,14 @@ impl<'a> SmtToken<'a> {
 pub struct SmtVersionRefused;
 
 /// A sequential producer of tokens.
-pub trait SmtProduce {
+pub trait SmtCursor {
     /// The user type of the token.
     ///
-    /// The producer must implement [`SmtProduce::syntax`] to view
+    /// The producer must implement [`SmtCursor::syntax`] to view
     /// the user token type as a library type.
     type Token: Copy;
 
-    /// Lookahead window, set to `()` if not implementing [`SmtProduce::attempt`].
+    /// Lookahead window, set to `()` if not implementing [`SmtCursor::attempt`].
     type Lookahead: SmtLookahead<Self::Token>;
 
     /// Views the user token as a library token under the version in force.
@@ -306,8 +306,8 @@ pub trait SmtProduce {
 
     /// Returns whether the producer has no tokens left to consume.
     ///
-    /// This must be true exactly if [`SmtProduce::peek`] or
-    /// [`SmtProduce::next`] would produce [`Option::None`].
+    /// This must be true exactly if [`SmtCursor::peek`] or
+    /// [`SmtCursor::next`] would produce [`Option::None`].
     fn is_empty(&self) -> bool {
         self.peek().is_none()
     }
@@ -323,7 +323,7 @@ pub trait SmtProduce {
     /// This function can be provided for ultra-fast processing,
     /// and the caller must ensure that a successful attempt results in
     /// the same observable behaviour as when it failed one.
-    /// Use standard [`SmtProduce::next`] processing unless
+    /// Use standard [`SmtCursor::next`] processing unless
     /// absolutely necessary and supported by measurements.
     fn attempt<R>(&mut self, extract: impl Fn(&mut Self::Lookahead) -> Option<R>) -> Option<R> {
         let _ = extract;
@@ -340,14 +340,14 @@ pub trait SmtProduce {
     ///
     /// The version is guaranteed not to change during a call
     /// to the consumer except as a result of the consumer calling
-    /// [`SmtProduce::set_version`] and the producer accepting.
+    /// [`SmtCursor::set_version`] and the producer accepting.
     fn version(&self) -> SmtVersion;
 
     /// Sets the SMT-LIB version that should apply from now on.
     ///
     /// If the producer returns [`Result::Ok`], it has switched
     /// to the new version, and will return it in subsequent
-    /// calls of [`SmtProduce::version`]. The version change
+    /// calls of [`SmtCursor::version`]. The version change
     /// applies between the last consumed and first unconsumed
     /// token, and the producer can adjust the non-consumed tokens
     /// so they correspond to the set version. There is no guarantee
@@ -365,7 +365,7 @@ pub trait SmtProduce {
     fn discard_rest(&mut self);
 }
 
-/// A lookahead window for [SmtProduce::attempt].
+/// A lookahead window for [SmtCursor::attempt].
 pub trait SmtLookahead<T> {
     /// Looks at the next token and advances the window.
     fn next(&mut self) -> Option<T>;
@@ -472,7 +472,7 @@ impl<'a> SmtBatchCursor<'a> {
     }
 }
 
-impl<'a> SmtProduce for SmtBatchCursor<'a> {
+impl<'a> SmtCursor for SmtBatchCursor<'a> {
     type Token = SmtToken<'a>;
     type Lookahead = SmtTokenWindow<'a>;
 
@@ -554,13 +554,13 @@ pub struct SmtTokenWindow<'a> {
     next: usize,
 }
 
-pub(crate) struct SingleTokenProducer<'a, P: SmtProduce> {
-    cursor: &'a P,
-    token: Option<P::Token>,
+pub(crate) struct SingleTokenCursor<'a, Z: SmtCursor> {
+    cursor: &'a Z,
+    token: Option<Z::Token>,
 }
 
-impl<'a, P: SmtProduce> SingleTokenProducer<'a, P> {
-    pub fn new(cursor: &'a P, token: P::Token) -> Self {
+impl<'a, Z: SmtCursor> SingleTokenCursor<'a, Z> {
+    pub fn new(cursor: &'a Z, token: Z::Token) -> Self {
         Self {
             cursor,
             token: Some(token),
@@ -568,8 +568,8 @@ impl<'a, P: SmtProduce> SingleTokenProducer<'a, P> {
     }
 }
 
-impl<'a, P: SmtProduce> SmtProduce for SingleTokenProducer<'a, P> {
-    type Token = P::Token;
+impl<'a, Z: SmtCursor> SmtCursor for SingleTokenCursor<'a, Z> {
+    type Token = Z::Token;
     type Lookahead = ();
 
     fn syntax<'t>(&self, token: &'t Self::Token) -> SmtSyntaxToken<'t> {
@@ -589,12 +589,12 @@ impl<'a, P: SmtProduce> SmtProduce for SingleTokenProducer<'a, P> {
     }
 
     fn set_version(&mut self, _version: SmtVersion) -> Result<(), SmtVersionRefused> {
-        // single-token producer does not support switching versions
+        // single-token cursor does not support switching versions
         Err(SmtVersionRefused)
     }
 
     fn discard_rest(&mut self) {
-        panic!("single-token producer cannot discard the rest of the input")
+        panic!("single-token cursor cannot discard the rest of the input")
     }
 }
 
@@ -634,7 +634,7 @@ pub trait SmtConsume {
 }
 
 /// A sequential consumer of tokens for given producers.
-pub trait SmtConsumeFrom<Z: SmtProduce>: SmtConsume {
+pub trait SmtConsumeFrom<Z: SmtCursor>: SmtConsume {
     /// Consumes the tokens handed over in the cursor, in order.
     ///
     /// The caller must ensure that the cursor contains at least one token.
@@ -664,7 +664,7 @@ impl<T: SmtConsume + ?Sized> SmtConsume for &mut T {
 }
 
 /// Mutable references over token consumers are token consumers.
-impl<Z: SmtProduce, T: SmtConsumeFrom<Z> + ?Sized> SmtConsumeFrom<Z> for &mut T {
+impl<Z: SmtCursor, T: SmtConsumeFrom<Z> + ?Sized> SmtConsumeFrom<Z> for &mut T {
     #[inline]
     fn consume(&mut self, cursor: &mut Z) -> Result<ControlFlow<Self::Result>, Self::Error> {
         (**self).consume(cursor)

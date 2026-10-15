@@ -3,7 +3,7 @@ use std::{convert::Infallible, ops::ControlFlow};
 use crate::{
     SmtCommandHandler, SmtSymbol,
     parser::{SmtParse, SmtParseError, SmtParseState, SmtSyntaxErrorKind, handle_err},
-    token::{SmtProduce, SmtReserved, SmtSyntaxToken, SmtVersion},
+    token::{SmtCursor, SmtReserved, SmtSyntaxToken, SmtVersion},
 };
 
 mod datatype;
@@ -80,11 +80,11 @@ impl<H: SmtCommandHandler> SmtParse<H> for SmtCommandParser<H> {
     type Result = SmtCommandOutcome;
 
     #[inline]
-    fn parse<C: SmtProduce>(
+    fn parse<Z: SmtCursor>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut C,
+        cursor: &mut Z,
     ) -> Result<ControlFlow<SmtCommandOutcome>, SmtParseError<H::Error>> {
         // State machine:
         // 1. AwaitingCommand takes:
@@ -184,11 +184,11 @@ impl<H: SmtCommandHandler> SmtParse<H> for Infallible {
     type Result = ();
 
     #[inline]
-    fn parse<C: SmtProduce>(
+    fn parse<Z: SmtCursor>(
         &mut self,
         _handler: &mut H,
         _parse_state: &mut SmtParseState<H>,
-        _cursor: &mut C,
+        _cursor: &mut Z,
     ) -> Result<ControlFlow<()>, SmtParseError<H::Error>> {
         match *self {}
     }
@@ -209,22 +209,22 @@ pub trait SmtCommandRule<H: SmtCommandHandler> {
 ///
 /// Preserves self-reset: if the inner parser is self-resetting,
 /// moves back into the default state before returning Break.
-pub struct SmtCommandPayloadParser<H: SmtCommandHandler, C: SmtCommandRule<H>> {
-    parser: C::Parser,
+pub struct SmtCommandPayloadParser<H: SmtCommandHandler, R: SmtCommandRule<H>> {
+    parser: R::Parser,
 }
 
-impl<H: SmtCommandHandler, C: SmtCommandRule<H>> SmtCommandPayloadParser<H, C> {
-    pub fn new(parser: C::Parser) -> Self {
+impl<H: SmtCommandHandler, R: SmtCommandRule<H>> SmtCommandPayloadParser<H, R> {
+    pub fn new(parser: R::Parser) -> Self {
         Self { parser }
     }
 }
 
-impl<H: SmtCommandHandler, C: SmtCommandRule<H>> Default for SmtCommandPayloadParser<H, C>
+impl<H: SmtCommandHandler, R: SmtCommandRule<H>> Default for SmtCommandPayloadParser<H, R>
 where
-    C::Parser: Default,
+    R::Parser: Default,
 {
     fn default() -> Self {
-        Self::new(C::Parser::default())
+        Self::new(R::Parser::default())
     }
 }
 
@@ -232,11 +232,11 @@ impl<H: SmtCommandHandler, R: SmtCommandRule<H>> SmtParse<H> for SmtCommandPaylo
     type Result = ();
 
     #[inline]
-    fn parse<C: SmtProduce>(
+    fn parse<Z: SmtCursor>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut C,
+        cursor: &mut Z,
     ) -> Result<ControlFlow<()>, SmtParseError<H::Error>> {
         match self.parser.parse(handler, parse_state, cursor)? {
             ControlFlow::Continue(()) => Ok(ControlFlow::Continue(())),
@@ -254,7 +254,7 @@ mod tests {
     use super::*;
     use crate::{
         SmtSpan, SmtSyntaxChecker,
-        token::{InnerCategory, SingleTokenProducer, SmtBatchCursor, SmtToken},
+        token::{InnerCategory, SingleTokenCursor, SmtBatchCursor, SmtToken},
     };
 
     #[test]
@@ -274,7 +274,7 @@ mod tests {
                 .parse(
                     &mut handler,
                     &mut SmtParseState::new(),
-                    &mut SingleTokenProducer::new(&cursor, close),
+                    &mut SingleTokenCursor::new(&cursor, close),
                 )
                 .expect("check-sat closing parenthesis must parse");
             assert!(matches!(flow, ControlFlow::Break(())));

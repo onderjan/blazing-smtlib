@@ -24,7 +24,7 @@ use crate::{
         },
     },
     token::{
-        BatchCursorAction, InnerCategory, SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtProduce,
+        BatchCursorAction, InnerCategory, SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor,
         SmtRecover, SmtVersion,
     },
 };

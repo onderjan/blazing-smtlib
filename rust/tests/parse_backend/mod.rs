@@ -53,7 +53,7 @@ use blazing_smtlib::{
     },
     reader::{SmtReadError, SmtReadErrorCause, SmtReader},
     token::{
-        SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtProduce, SmtTokenCategory, SmtVersion,
+        SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtTokenCategory, SmtVersion,
         SmtVersionPosture,
     },
 };
@@ -1066,49 +1066,49 @@ impl<H: Handler> Category<H> for TermParser {
 }
 
 /// `SmtPairParser`: the first parser's value, then the second's.
-pub struct PairParser<A, B>(PhantomData<(A, B)>);
+pub struct PairParser<P1, P2>(PhantomData<(P1, P2)>);
 
-impl<H: Handler, A: Category<H>, B: Category<H>> Category<H> for PairParser<A, B> {
-    type Result = (A::Result, B::Result);
+impl<H: Handler, P1: Category<H>, P2: Category<H>> Category<H> for PairParser<P1, P2> {
+    type Result = (P1::Result, P2::Result);
     type Rust<'h>
-        = SmtPairParser<Adapt<'h, H>, A::Rust<'h>, B::Rust<'h>>
+        = SmtPairParser<Adapt<'h, H>, P1::Rust<'h>, P2::Rust<'h>>
     where
         H: 'h;
 
     fn from_rust<'h>(
         (first, second): (
-            <A::Rust<'h> as SmtParse<Adapt<'h, H>>>::Result,
-            <B::Rust<'h> as SmtParse<Adapt<'h, H>>>::Result,
+            <P1::Rust<'h> as SmtParse<Adapt<'h, H>>>::Result,
+            <P2::Rust<'h> as SmtParse<Adapt<'h, H>>>::Result,
         ),
     ) -> Self::Result
     where
         H: 'h,
     {
-        (A::from_rust(first), B::from_rust(second))
+        (P1::from_rust(first), P2::from_rust(second))
     }
     fn lean_name() -> String {
-        format!("pair({},{})", A::lean_name(), B::lean_name())
+        format!("pair({},{})", P1::lean_name(), P2::lean_name())
     }
     fn read_lean(fields: &mut lean::Fields<'_>, values: &mut lean::Values<H>) -> Self::Result {
-        let first = A::read_lean(fields, values);
-        (first, B::read_lean(fields, values))
+        let first = P1::read_lean(fields, values);
+        (first, P2::read_lean(fields, values))
     }
 }
 
 macro_rules! wrapping_category {
     ($marker:ident, $rust:ident, $name:literal, single) => {
         wrapping_category!(
-            @define $marker, $rust, $name, A::Result, result, A::from_rust(result),
-            |fields, values| A::read_lean(fields, values)
+            @define $marker, $rust, $name, P::Result, result, P::from_rust(result),
+            |fields, values| P::read_lean(fields, values)
         );
     };
     ($marker:ident, $rust:ident, $name:literal, multiple) => {
         wrapping_category!(
-            @define $marker, $rust, $name, Vec<A::Result>, results,
-            results.into_iter().map(A::from_rust).collect(),
+            @define $marker, $rust, $name, Vec<P::Result>, results,
+            results.into_iter().map(P::from_rust).collect(),
             |fields, values| {
                 let count = fields.count();
-                (0..count).map(|_| A::read_lean(fields, values)).collect()
+                (0..count).map(|_| P::read_lean(fields, values)).collect()
             }
         );
     };
@@ -1116,13 +1116,13 @@ macro_rules! wrapping_category {
         @define $marker:ident, $rust:ident, $name:literal, $result:ty, $bound:ident,
         $convert:expr, |$fields:ident, $values:ident| $read:expr
     ) => {
-        #[doc = concat!("`", stringify!($rust), "` over the parser `A`.")]
-        pub struct $marker<A>(PhantomData<A>);
+        #[doc = concat!("`", stringify!($rust), "` over the parser `P`.")]
+        pub struct $marker<P>(PhantomData<P>);
 
-        impl<H: Handler, A: Category<H>> Category<H> for $marker<A> {
+        impl<H: Handler, P: Category<H>> Category<H> for $marker<P> {
             type Result = $result;
             type Rust<'h>
-                = $rust<Adapt<'h, H>, A::Rust<'h>>
+                = $rust<Adapt<'h, H>, P::Rust<'h>>
             where
                 H: 'h;
 
@@ -1135,7 +1135,7 @@ macro_rules! wrapping_category {
                 $convert
             }
             fn lean_name() -> String {
-                format!("{}({})", $name, A::lean_name())
+                format!("{}({})", $name, P::lean_name())
             }
             fn read_lean(
                 $fields: &mut lean::Fields<'_>,

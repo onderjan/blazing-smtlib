@@ -10,7 +10,7 @@ use blazing_smtlib::{
     SmtSpan,
     lexer::{SmtLexError, SmtLexErrorCause, SmtLexer, SmtLexicalErrorKind},
     token::{
-        SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtGeneralReserved, SmtProduce, SmtReserved,
+        SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtGeneralReserved, SmtReserved,
         SmtTokenCategory, SmtVersion,
     },
 };

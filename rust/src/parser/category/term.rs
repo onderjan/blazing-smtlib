@@ -11,7 +11,7 @@ use crate::{
         handle_err,
     },
     token::{
-        SmtGeneralReserved, SmtLookahead, SmtProduce, SmtReserved, SmtSyntaxToken, SmtTokenCategory,
+        SmtCursor, SmtGeneralReserved, SmtLookahead, SmtReserved, SmtSyntaxToken, SmtTokenCategory,
     },
 };
 
@@ -186,11 +186,11 @@ impl<H: SmtHandler> SmtParse<H> for SmtTermParser<H> {
     type Result = H::Term;
 
     #[inline(always)]
-    fn parse<C: SmtProduce>(
+    fn parse<Z: SmtCursor>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut C,
+        cursor: &mut Z,
     ) -> Result<ControlFlow<H::Term>, SmtParseError<H::Error>> {
         // progress the slot with the cursor
         TermSlot::parse(handler, parse_state, cursor)
@@ -238,10 +238,10 @@ impl<H: SmtHandler + ?Sized> TermSlot<H> {
 
 impl<H: SmtHandler> TermSlot<H> {
     #[inline]
-    pub(crate) fn parse<C: SmtProduce>(
+    pub(crate) fn parse<Z: SmtCursor>(
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut C,
+        cursor: &mut Z,
     ) -> Result<ControlFlow<H::Term>, SmtParseError<H::Error>> {
         while let Some(token) = cursor.next() {
             if matches!(parse_state.term_slot.state, State::Start)
@@ -377,7 +377,7 @@ impl<H: SmtHandler> TermSlot<H> {
     }
 
     #[inline]
-    pub(crate) fn progress<Z: SmtProduce>(
+    pub(crate) fn progress<Z: SmtCursor>(
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
         cursor: &Z,
@@ -543,7 +543,7 @@ impl<H: SmtHandler> TermSlot<H> {
     }
 
     #[inline]
-    fn progress_inner<Z: SmtProduce>(
+    fn progress_inner<Z: SmtCursor>(
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
         cursor: &Z,
@@ -775,7 +775,7 @@ impl<H: SmtHandler> TermSlot<H> {
     }
 
     #[inline]
-    fn parse_term_start<Z: SmtProduce>(
+    fn parse_term_start<Z: SmtCursor>(
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
         cursor: &Z,
@@ -843,7 +843,7 @@ impl<H: SmtHandler> TermSlot<H> {
     }
 
     #[inline]
-    fn parse_term_open<Z: SmtProduce>(
+    fn parse_term_open<Z: SmtCursor>(
         parse_state: &mut SmtParseState<H>,
         cursor: &Z,
         token: Z::Token,
@@ -924,7 +924,7 @@ impl<H: SmtHandler> TermSlot<H> {
     ///
     /// This cannot produce a term as we still need the parenthesis
     /// that closes the bindings followed by the rest of the term.
-    fn parse_let_binding_open<Z: SmtProduce>(
+    fn parse_let_binding_open<Z: SmtCursor>(
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
         cursor: &Z,
@@ -990,7 +990,7 @@ impl<H: SmtHandler> TermSlot<H> {
     ///
     /// This cannot produce a term as we still need the parenthesis
     /// that closes the match cases followed by the rest of the term.
-    fn parse_match_case_open<Z: SmtProduce>(
+    fn parse_match_case_open<Z: SmtCursor>(
         &mut self,
         arena: &mut Arena<H>,
         cursor: &Z,
@@ -1123,7 +1123,7 @@ impl SortedBindingsParser {
 }
 
 impl SortedBindingsParser {
-    fn progress_and_open<H: SmtHandler, Z: SmtProduce>(
+    fn progress_and_open<H: SmtHandler, Z: SmtCursor>(
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
         cursor: &Z,

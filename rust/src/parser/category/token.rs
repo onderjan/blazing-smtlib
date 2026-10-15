@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtHandler, SmtKeywordBuf, SmtNumeralBuf, SmtStringContentBuf, SmtSymbolBuf,
     parser::{SmtParse, SmtParseError, SmtParseState, SmtSyntaxErrorKind},
-    token::{SmtProduce, SmtSyntaxToken, SmtTokenCategory},
+    token::{SmtCursor, SmtSyntaxToken, SmtTokenCategory},
 };
 
 pub struct SmtSymbolParser;
@@ -22,7 +22,7 @@ impl Default for SmtSymbolParser {
 
 impl SmtSymbolParser {
     /// Consumes exactly one token, which must match.
-    pub(crate) fn expect<H: SmtHandler + ?Sized, Z: SmtProduce>(
+    pub(crate) fn expect<H: SmtHandler + ?Sized, Z: SmtCursor>(
         cursor: &Z,
         token: Z::Token,
     ) -> Result<SmtSymbolBuf, SmtParseError<H::Error>> {
@@ -38,7 +38,7 @@ impl SmtSymbolParser {
 impl<H: SmtHandler> SmtParse<H> for SmtSymbolParser {
     type Result = SmtSymbolBuf;
 
-    fn parse<Z: SmtProduce>(
+    fn parse<Z: SmtCursor>(
         &mut self,
         _handler: &mut H,
         _parse_state: &mut SmtParseState<H>,
@@ -73,7 +73,7 @@ macro_rules! token_parser {
 
         impl $parser {
             /// Consumes exactly one token, which must be of the parser's type.
-            pub(crate) fn expect<Z: SmtProduce, E>(
+            pub(crate) fn expect<Z: SmtCursor, E>(
                 cursor: &Z,
                 token: Z::Token,
             ) -> Result<$result, SmtParseError<E>> {
@@ -90,11 +90,11 @@ macro_rules! token_parser {
         impl<H: SmtHandler> SmtParse<H> for $parser {
             type Result = $result;
 
-            fn parse<C: SmtProduce>(
+            fn parse<Z: SmtCursor>(
                 &mut self,
                 _handler: &mut H,
                 _parse_state: &mut SmtParseState<H>,
-                cursor: &mut C,
+                cursor: &mut Z,
             ) -> Result<ControlFlow<Self::Result, ()>, SmtParseError<H::Error>> {
                 let Some(token) = cursor.next() else {
                     return Ok(ControlFlow::Continue(()));

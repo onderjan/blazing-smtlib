@@ -6,7 +6,7 @@ use crate::{
         Arena, IdentHandle, IdentSlot, QualifiedIdentHandle, SmtCloseParenParser, SmtParse,
         SmtParseError, SmtParseState, SmtSyntaxErrorKind, SortSlot, parse_by_token,
     },
-    token::{SmtGeneralReserved, SmtProduce, SmtReserved, SmtSyntaxToken},
+    token::{SmtCursor, SmtGeneralReserved, SmtReserved, SmtSyntaxToken},
 };
 
 /// A parser that reads an SMT-LIB qualified identifier.
@@ -35,11 +35,11 @@ impl<H: SmtHandler> SmtParse<H> for SmtQualifiedIdentParser<H> {
     type Result = SmtQualifiedIdentBuf<H>;
 
     #[inline]
-    fn parse<C: SmtProduce>(
+    fn parse<Z: SmtCursor>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut C,
+        cursor: &mut Z,
     ) -> Result<ControlFlow<SmtQualifiedIdentBuf<H>>, SmtParseError<H::Error>> {
         // progress the slot, giving it the ident and sort slots it delegates to
         let SmtParseState {
@@ -142,7 +142,7 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
     }
 
     #[inline]
-    pub(crate) fn progress<Z: SmtProduce>(
+    pub(crate) fn progress<Z: SmtCursor>(
         &mut self,
         handler: &mut H,
         arena: &mut Arena<H>,

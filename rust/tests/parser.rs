@@ -26,7 +26,7 @@ use blazing_smtlib::{
     },
     reader::SmtReader,
     token::{
-        SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtProduce, SmtSyntaxToken, SmtTokenCategory,
+        SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtSyntaxToken, SmtTokenCategory,
         SmtVersion, SmtVersionPosture, SmtVersionPostureBuilder, SmtVersionRefused,
     },
 };
@@ -1057,7 +1057,7 @@ struct OneToken<'z, Z> {
     taken: bool,
 }
 
-impl<Z: SmtProduce> SmtProduce for OneToken<'_, Z> {
+impl<Z: SmtCursor> SmtCursor for OneToken<'_, Z> {
     type Token = Z::Token;
     type Lookahead = ();
 

@@ -27,7 +27,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use blazing_smtlib::{
     lexer::SmtLexer,
     token::{
-        SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtProduce, SmtSyntaxToken, SmtToken,
+        SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtSyntaxToken, SmtToken,
         SmtTokenCategory, SmtVersion,
     },
 };

@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtCommandHandler,
     parser::{SmtParse, SmtParseError, SmtParseState, handle_err},
-    token::SmtProduce,
+    token::SmtCursor,
 };
 
 /// A definition where a signature is followed by a body.
@@ -62,11 +62,11 @@ impl<H: SmtCommandHandler, D: Definition<H>> SmtParse<H> for DefinitionParser<H,
     type Result = <D::Body as SmtParse<H>>::Result;
 
     #[inline]
-    fn parse<C: SmtProduce>(
+    fn parse<Z: SmtCursor>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut C,
+        cursor: &mut Z,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         if matches!(self.state, DefinitionParserState::Signature) {
             // parse the signature; it ends at the last consumed token

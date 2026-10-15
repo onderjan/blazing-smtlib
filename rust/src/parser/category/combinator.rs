@@ -6,7 +6,7 @@ use crate::{
         SmtCloseParenParser, SmtOpenParenParser, SmtParse, SmtParseError, SmtParseState,
         SmtSyntaxErrorKind,
     },
-    token::{SmtProduce, SmtSyntaxToken, SmtTokenCategory},
+    token::{SmtCursor, SmtSyntaxToken, SmtTokenCategory},
 };
 
 /// Parses using the first parser, then the second, then returns the result tuple.
@@ -41,7 +41,7 @@ impl<H: SmtHandler, P1: SmtParse<H>, P2: SmtParse<H>> SmtParse<H> for SmtPairPar
     type Result = (P1::Result, P2::Result);
 
     #[inline]
-    fn parse<Z: SmtProduce>(
+    fn parse<Z: SmtCursor>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
@@ -93,11 +93,11 @@ impl<H: SmtHandler, P: SmtParse<H> + Default> Default for SmtClosedParser<H, P> 
     }
 }
 
-impl<H: SmtHandler, S: SmtParse<H>> SmtParse<H> for SmtClosedParser<H, S> {
-    type Result = S::Result;
+impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtClosedParser<H, P> {
+    type Result = P::Result;
 
     #[inline]
-    fn parse<Z: SmtProduce>(
+    fn parse<Z: SmtCursor>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
@@ -136,7 +136,7 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtOpenedParser<H, P> {
     type Result = P::Result;
 
     #[inline]
-    fn parse<Z: SmtProduce>(
+    fn parse<Z: SmtCursor>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
@@ -188,7 +188,7 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtClosedMultipleParser<H, P
     type Result = Vec<P::Result>;
 
     #[inline]
-    fn parse<Z: SmtProduce>(
+    fn parse<Z: SmtCursor>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
@@ -214,7 +214,7 @@ impl<T> ClosedMultipleResource<T> {
         }
     }
 
-    pub(crate) fn parse<Z: SmtProduce, E>(
+    pub(crate) fn parse<Z: SmtCursor, E>(
         &mut self,
         cursor: &mut Z,
         mut element: impl FnMut(&mut Z) -> Result<ControlFlow<T>, SmtParseError<E>>,
@@ -299,7 +299,7 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtClosedMaximumParser<H, P> {
 impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtClosedMaximumParser<H, P> {
     type Result = Vec<P::Result>;
 
-    fn parse<Z: SmtProduce>(
+    fn parse<Z: SmtCursor>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
@@ -382,11 +382,11 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParenMaximumParser<H, P> {
 impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtParenMaximumParser<H, P> {
     type Result = Vec<P::Result>;
 
-    fn parse<C: SmtProduce>(
+    fn parse<Z: SmtCursor>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut C,
+        cursor: &mut Z,
     ) -> Result<ControlFlow<Vec<P::Result>>, SmtParseError<H::Error>> {
         loop {
             if self.is_opened {

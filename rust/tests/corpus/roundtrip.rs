@@ -26,7 +26,7 @@ use blazing_smtlib::{
     SmtSymbol, SmtSymbols, SmtTerm,
     lexer::SmtLexer,
     reader::{SmtReadError, read_smt_file},
-    token::{SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtProduce, SmtSyntaxToken, SmtVersion},
+    token::{SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtSyntaxToken, SmtVersion},
 };
 
 /// Printed text is lexed in pieces of about this size, cut between commands.

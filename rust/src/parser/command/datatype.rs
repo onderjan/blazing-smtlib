@@ -9,7 +9,7 @@ use crate::{
         SmtParseError, SmtParseState, SmtSortedVarParser, SmtSymbolParser, SmtSyntaxErrorKind,
         category::SmtPairParser, handle_err, parse_by_token,
     },
-    token::{SingleTokenProducer, SmtGeneralReserved, SmtProduce, SmtReserved, SmtSyntaxToken},
+    token::{SingleTokenCursor, SmtCursor, SmtGeneralReserved, SmtReserved, SmtSyntaxToken},
 };
 
 /// Parser for a single datatype introduction (name and arity in parentheses).
@@ -135,11 +135,11 @@ impl<H: SmtCommandHandler> Default for DatatypeParser<H> {
 impl<H: SmtCommandHandler> SmtParse<H> for DatatypeParser<H> {
     type Result = Option<OwnedConstructors<H::Sort>>;
 
-    fn parse<C: SmtProduce>(
+    fn parse<Z: SmtCursor>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut C,
+        cursor: &mut Z,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         parse_by_token(cursor, |cursor, token| {
             self.progress(handler, parse_state, cursor, token)
@@ -150,7 +150,7 @@ impl<H: SmtCommandHandler> SmtParse<H> for DatatypeParser<H> {
 impl<H: SmtCommandHandler> DatatypeParser<H> {
     /// Progresses the parser by one token.
     #[allow(clippy::type_complexity)]
-    fn progress<Z: SmtProduce>(
+    fn progress<Z: SmtCursor>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
@@ -174,7 +174,7 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
                     let result = self.constructors_parser.parse(
                         handler,
                         parse_state,
-                        &mut SingleTokenProducer::new(cursor, token),
+                        &mut SingleTokenCursor::new(cursor, token),
                     )?;
                     debug_assert!(
                         matches!(result, ControlFlow::Continue(())),
@@ -199,7 +199,7 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
                     .parse(
                         handler,
                         parse_state,
-                        &mut SingleTokenProducer::new(cursor, token),
+                        &mut SingleTokenCursor::new(cursor, token),
                     )?
                     .break_value()
             }
@@ -208,7 +208,7 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
                 if let ControlFlow::Break(params) = self.symbols_parser.parse(
                     handler,
                     parse_state,
-                    &mut SingleTokenProducer::new(cursor, token),
+                    &mut SingleTokenCursor::new(cursor, token),
                 )? {
                     // there must be at least one parameter
                     if params.is_empty() {
@@ -235,7 +235,7 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
                     .parse(
                         handler,
                         parse_state,
-                        &mut SingleTokenProducer::new(cursor, token),
+                        &mut SingleTokenCursor::new(cursor, token),
                     )?
                     .break_value()
             }
@@ -336,11 +336,11 @@ impl<H: SmtCommandHandler> DeclareDatatypesParser<H> {
 impl<H: SmtCommandHandler> SmtParse<H> for DeclareDatatypesParser<H> {
     type Result = ();
 
-    fn parse<C: SmtProduce>(
+    fn parse<Z: SmtCursor>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut C,
+        cursor: &mut Z,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         parse_by_token(cursor, |cursor, token| {
             self.progress(handler, parse_state, cursor, token)
@@ -350,7 +350,7 @@ impl<H: SmtCommandHandler> SmtParse<H> for DeclareDatatypesParser<H> {
 
 impl<H: SmtCommandHandler> DeclareDatatypesParser<H> {
     /// Progresses the parser by one token.
-    fn progress<Z: SmtProduce>(
+    fn progress<Z: SmtCursor>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
@@ -363,7 +363,7 @@ impl<H: SmtCommandHandler> DeclareDatatypesParser<H> {
                 if let ControlFlow::Break(introductions) = self.introductions_parser.parse(
                     handler,
                     parse_state,
-                    &mut SingleTokenProducer::new(cursor, token),
+                    &mut SingleTokenCursor::new(cursor, token),
                 )? {
                     // introductions must not be empty
                     if introductions.is_empty() {
@@ -387,7 +387,7 @@ impl<H: SmtCommandHandler> DeclareDatatypesParser<H> {
                 if let ControlFlow::Break(datatypes) = self.datatypes_parser.parse(
                     handler,
                     parse_state,
-                    &mut SingleTokenProducer::new(cursor, token),
+                    &mut SingleTokenCursor::new(cursor, token),
                 )? {
                     // there cannot be more datatypes than sort declarations due to the maximum parser
                     // ensure there are not more sort declarations than datatypes
@@ -441,11 +441,11 @@ impl<H: SmtCommandHandler> Default for DeclareDatatypeParser<H> {
 impl<H: SmtCommandHandler> SmtParse<H> for DeclareDatatypeParser<H> {
     type Result = OwnedConstructors<H::Sort>;
 
-    fn parse<C: SmtProduce>(
+    fn parse<Z: SmtCursor>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut C,
+        cursor: &mut Z,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
         parse_by_token(cursor, |cursor, token| {
             self.progress(handler, parse_state, cursor, token)
@@ -455,7 +455,7 @@ impl<H: SmtCommandHandler> SmtParse<H> for DeclareDatatypeParser<H> {
 
 impl<H: SmtCommandHandler> DeclareDatatypeParser<H> {
     /// Progresses the parser by one token.
-    fn progress<Z: SmtProduce>(
+    fn progress<Z: SmtCursor>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
@@ -473,7 +473,7 @@ impl<H: SmtCommandHandler> DeclareDatatypeParser<H> {
                 if let ControlFlow::Break(constructors) = self.datatype_parser.parse(
                     handler,
                     parse_state,
-                    &mut SingleTokenProducer::new(cursor, token),
+                    &mut SingleTokenCursor::new(cursor, token),
                 )? {
                     // the single declaration ends the command, reset and break
                     self.state = DeclareDatatypeState::Name;

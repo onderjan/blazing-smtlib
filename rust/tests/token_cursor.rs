@@ -15,7 +15,7 @@ use blazing_smtlib::{
     lexer::SmtLexer,
     parser::{SmtParse, SmtParseState, SmtSortParser, SmtTermParser},
     token::{
-        SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtLookahead, SmtProduce, SmtToken,
+        SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtLookahead, SmtToken,
         SmtTokenCategory, SmtVersion,
     },
 };
@@ -49,19 +49,19 @@ enum Which {
 
 /// A consumer that runs a check on the hand-overs it is told to, then
 /// consumes what the check left of each hand-over.
-struct Probe<C> {
-    check: C,
+struct Probe<K> {
+    check: K,
     which: Which,
     seen: usize,
 }
 
-impl<C: Check> SmtConsume for Probe<C> {
+impl<K: Check> SmtConsume for Probe<K> {
     type Result = ();
     type Error = Infallible;
     const IS_CONCRETE: bool = false;
 }
 
-impl<'a, C: Check> SmtConsumeFrom<SmtBatchCursor<'a>> for Probe<C> {
+impl<'a, K: Check> SmtConsumeFrom<SmtBatchCursor<'a>> for Probe<K> {
     fn consume(
         &mut self,
         cursor: &mut SmtBatchCursor<'a>,
@@ -90,7 +90,7 @@ impl<'a, C: Check> SmtConsumeFrom<SmtBatchCursor<'a>> for Probe<C> {
 
 /// Lexes the chunks and end of file, running the check on the chosen
 /// hand-overs, and returns the probe.
-fn probe<C: Check>(chunks: &[&[u8]], which: Which, check: C) -> Probe<C> {
+fn probe<K: Check>(chunks: &[&[u8]], which: Which, check: K) -> Probe<K> {
     let mut probe = Probe {
         check,
         which,

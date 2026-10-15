@@ -44,7 +44,7 @@ use std::time::Instant;
 
 use blazing_smtlib::{
     lexer::SmtLexer,
-    token::{SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtProduce, SmtTokenCategory, SmtVersion},
+    token::{SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtTokenCategory, SmtVersion},
 };
 
 /// Default timed runs per file and mode; an additional first (warm-up) run

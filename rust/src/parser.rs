@@ -14,7 +14,7 @@ pub use state::*;
 
 use crate::{
     SmtHandler,
-    token::{SmtProduce, SmtTokenCategory},
+    token::{SmtCursor, SmtTokenCategory},
 };
 
 pub trait SmtParse<H: SmtHandler + ?Sized> {
@@ -44,11 +44,11 @@ pub trait SmtParse<H: SmtHandler + ?Sized> {
     /// is forbidden from progressing any other parsers.
     /// Failure to heed this contract may lead to silently wrong parsing
     /// or panics, but never unsafe behaviour.
-    fn parse<C: SmtProduce>(
+    fn parse<Z: SmtCursor>(
         &mut self,
         handler: &mut H,
         parse_state: &mut SmtParseState<H>,
-        cursor: &mut C,
+        cursor: &mut Z,
     ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>>;
 }
 
@@ -57,9 +57,9 @@ pub trait SmtParse<H: SmtHandler + ?Sized> {
 ///
 /// For parsers whose state machine steps by single tokens.
 #[inline]
-pub(crate) fn parse_by_token<C: SmtProduce, R, E>(
-    cursor: &mut C,
-    mut progress: impl FnMut(&C, C::Token) -> Result<ControlFlow<R>, E>,
+pub(crate) fn parse_by_token<Z: SmtCursor, R, E>(
+    cursor: &mut Z,
+    mut progress: impl FnMut(&Z, Z::Token) -> Result<ControlFlow<R>, E>,
 ) -> Result<ControlFlow<R>, E> {
     while let Some(token) = cursor.next() {
         if let ControlFlow::Break(result) = progress(cursor, token)? {

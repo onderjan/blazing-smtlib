@@ -12,7 +12,7 @@ use blazing_smtlib::{
     SmtLocation,
     lexer::{SmtLexErrorCause, SmtLexRecovery, SmtLexer},
     token::{
-        SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtLookahead, SmtProduce, SmtRecover,
+        SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtLookahead, SmtRecover,
         SmtReserved, SmtSyntaxToken, SmtToken, SmtTokenCategory, SmtVersion,
     },
 };
