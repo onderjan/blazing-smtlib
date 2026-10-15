@@ -83,7 +83,7 @@ abbrev ownQualified (qualified : Nodes.QualifiedIdent (Traits.Handler.«Sort» H
 private theorem qualifiedIdent_sim (version : Token.Version) :
     Simulates version (QualifiedIdentParser.mk (H := H)) (mapSteps ownQualified (qualStep version))
       QualifiedIdentParser.new := by
-  refine ⟨fun _ _ => rfl, fun state token => ?_, fun _ => rfl⟩
+  refine ⟨fun _ _ => rfl, fun state token => ?_, fun _ => rfl, fun _ _ => rfl⟩
   show (do
       match ← qualIdentStep version state token with
       | .more state => return Parser.Internal.Flow.more (QualifiedIdentParser.mk state)

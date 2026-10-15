@@ -133,6 +133,7 @@ section Continue
 
 open BSmtLib.Facts.Proofs.Reader.Param.Split (outN outS resumeOut outN_split_eq script_parse_eq
   resumeOut_of_not)
+open BSmtLib.Facts.Proofs.Parser.HandOver (recording_noHandOver)
 
 /-- A call of the parse adapter goes alike under `loose` as under `strict`, unless it fails under
 `strict`; the parser keeps its posture: from the call of the adapter that stops, which does so
@@ -147,7 +148,8 @@ theorem outN_looser {strict loose : Token.VersionPosture} (hl : Looser strict lo
           ScriptParser.Internal.posture (outN cursor h adapter).2.parser = strict)
   | 0, _, _, _, hn, _ => absurd hn (Nat.not_lt_zero _)
   | n + 1, cursor, h, adapter, hn, hp => by
-    rw [outN_split_eq script_parse_eq, outN_split_eq script_parse_eq]
+    rw [outN_split_eq script_parse_eq recording_noHandOver,
+      outN_split_eq script_parse_eq recording_noHandOver]
     have hs := Param.Posture.consume_looser hl cursor h adapter hp
     have eS : ∀ A, outS cursor h A =
         let x := (Param.Stop.consume (H := List Event) (P := ScriptParser

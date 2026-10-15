@@ -293,6 +293,7 @@ section Continue
 
 open BSmtLib.Facts.Proofs.Reader.Param.Split (outN outS resumeOut outN_split_eq script_parse_eq
   resumeOut_of_not)
+open BSmtLib.Facts.Proofs.Parser.HandOver (recording_noHandOver)
 
 /-- A call of the parse adapter under the posture, on a cursor in a version the posture allows,
 from a handler told only such versions, tells its handler only such versions and leaves the
@@ -308,7 +309,7 @@ theorem outN_allowed {strict : Token.VersionPosture} {b : Token.BatchTag} :
           strict.allowed.contains (outN cursor h A).1.2.version = true)
   | 0, _, _, _, hn, _, _, _ => absurd hn (Nat.not_lt_zero _)
   | n + 1, cursor, h, A, hn, hp, hv, hh => by
-    rw [outN_split_eq script_parse_eq]
+    rw [outN_split_eq script_parse_eq recording_noHandOver]
     have hs := consume_allowedS cursor h A hp hv hh
     have hl := Param.Posture.consume_looser (looser_refl strict) cursor h A hp
     have eS : outS cursor h A =

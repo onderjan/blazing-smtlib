@@ -39,7 +39,7 @@ private theorem pattern_sim (version : Token.Version) :
     Simulates version (PatternParser.mk (H := H))
       (mapSteps Nodes.Pattern.intoOwned (PatternState.step (H := H) version))
       PatternParser.new := by
-  refine ⟨fun _ _ => rfl, fun state token => ?_, fun _ => rfl⟩
+  refine ⟨fun _ _ => rfl, fun state token => ?_, fun _ => rfl, fun _ _ => rfl⟩
   show (do
       match ← state.step version token with
       | .more state => return Parser.Internal.Flow.more (PatternParser.mk state)

@@ -1,6 +1,7 @@
 module
 
 public import BSmtLib.Facts.Proofs.Parser.Category.Steps
+public import BSmtLib.Facts.Proofs.Parser.HandOver
 import all BSmtLib.Parser
 
 @[expose] public section
@@ -27,6 +28,7 @@ open BSmtLib.Facts.Parser.Adapters.Cursor (Takes Reads noPoints)
 open BSmtLib.Facts.Parser.Adapters.Outcome
 open BSmtLib.Facts.Proofs.Parser.Category.Cursor BSmtLib.Facts.Proofs.Parser.Category.Steps
 open BSmtLib.Facts.Proofs.Parser.Drive
+open BSmtLib.Facts.Proofs.Parser.HandOver (rest_of_none parseByToken_of_none)
 
 section
 
@@ -176,11 +178,11 @@ theorem rest_driveS (sim : Simulates version mk step fresh) :
       convS mk fresh cursor tokens <$> driveS noPoints step state tokens
   | [], state, origin, cursor, hc, ⟨last, hlast, hnone⟩ => by
     rw [Takes.nil_inv hlast] at hnone
-    rw [rest, hnone]
+    rw [rest_of_none hc (sim.handOver _ _), hnone]
     simp [driveS_nil, outcomeRest, convS]
   | token :: tokens, state, origin, cursor, hc, ⟨last, hlast, hnone⟩ => by
     obtain ⟨after, raw, consumed, _, hnext, hver, rfl, htail⟩ := Takes.cons_inv hlast
-    rw [rest, hnext]
+    rw [rest_of_none hc (sim.handOver _ _), hnext]
     simp only
     rw [takeOne_sim sim state cursor raw after consumed hver, map_bind]
     refine step_afterS state hnext outcomeRest _ tokens ?_ ?_ _
@@ -205,7 +207,7 @@ theorem parseByToken_driveS (sim : Simulates version mk step fresh) (state : σ)
   cases tokens with
   | nil =>
     rw [Takes.nil_inv hlast] at hnone
-    unfold parseByToken
+    rw [parseByToken_of_none _ (sim.handOver _ _)]
     split
     · simp [driveS_nil, outcome, convS]
     · rename_i heq
@@ -213,7 +215,7 @@ theorem parseByToken_driveS (sim : Simulates version mk step fresh) (state : σ)
       cases heq
   | cons token tokens =>
     obtain ⟨after, raw, consumed, _, hnext, hver, rfl, htail⟩ := Takes.cons_inv hlast
-    unfold parseByToken
+    rw [parseByToken_of_none _ (sim.handOver _ _)]
     split
     · rename_i heq
       rw [hnext] at heq

@@ -4,6 +4,7 @@ public import BSmtLib.Facts.Proofs.Parser.Canon.Commands
 public import BSmtLib.Facts.Proofs.Lexer.Simulation.Batch
 public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Bytes
 public import BSmtLib.Facts.Proofs.Reader.Param.Adapter
+public import BSmtLib.Facts.Proofs.Parser.HandOver
 import all BSmtLib.Parser
 import all BSmtLib.Plain
 import all BSmtLib.Token
@@ -113,6 +114,8 @@ open BSmtLibSpec.Parser.Properties (Event)
 open BSmtLib.Facts.Proofs.Parser.Quiet (RPM)
 open BSmtLib.Facts.Proofs.Parser.Canon.Commands
 open BSmtLib.Facts.Proofs.Reader.Param.Adapter (id_bind_eq)
+open BSmtLib.Facts.Proofs.Parser.HandOver (recording_noHandOver rest_of_none
+  parseByToken_of_none)
 
 /-- Two runs related to the same run by `CSim` give canonically equal results and the same
 log. -/
@@ -339,7 +342,7 @@ theorem rest_agree (hR : CursorRel Rel) (n : Nat) :
   | zero => intro _ _ _ _ _ _ _ _ _ _ hr; omega
   | succ n ih =>
   intro p₁ p₂ hp o₁ c₁ o₂ c₂ k₁ k₂ hc hr log
-  rw [Internal.rest, Internal.rest]
+  rw [rest_of_none k₁ (recording_noHandOver _ _), rest_of_none k₂ (recording_noHandOver _ _)]
   by_cases h₁ : c₁.HasNext
   · have h₂ : c₂.HasNext := (hR.hasNext hc).mp h₁
     have e₁ : Token.Produce.next? c₁ = some (c₁.next h₁) := by
@@ -389,7 +392,8 @@ theorem parseByToken_agree {p₁ p₂ : ScriptParser (List Event)} (hp : canon p
         ((Internal.parseByToken p₂ st c₂).run log).1.2.2.2.val ∧
       ((Internal.parseByToken p₁ st c₁).run log).2 =
         ((Internal.parseByToken p₂ st c₂).run log).2 := by
-  unfold Internal.parseByToken
+  rw [parseByToken_of_none st (recording_noHandOver _ _),
+    parseByToken_of_none st (recording_noHandOver _ _)]
   by_cases h₁ : c₁.HasNext
   · have h₂ : c₂.HasNext := (hR.hasNext hc).mp h₁
     have e₁ : Token.Produce.next? c₁ = some (c₁.next h₁) := by

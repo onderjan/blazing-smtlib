@@ -50,7 +50,7 @@ abbrev ownSortedVar (pair : Plain.SymbolView × Traits.Handler.«Sort» H) :
 private theorem sortedVar_sim (version : Token.Version) :
     Simulates version (SortedVarParser.mk (H := H))
       (mapSteps ownSortedVar (sortedVarStep version)) SortedVarParser.new := by
-  refine ⟨fun _ _ => rfl, fun state token => ?_, fun _ => rfl⟩
+  refine ⟨fun _ _ => rfl, fun state token => ?_, fun _ => rfl, fun _ _ => rfl⟩
   show (do
       match ← sortedVarStep version state token with
       | .more state => return Parser.Internal.Flow.more (SortedVarParser.mk state)

@@ -17,7 +17,9 @@ that after inlining every outcome is a tail call in the loop, in every monad.
 Fused: terms (without `match`, annotations and `as`), indexed identifiers, and the commands
 `assert`, `declare-fun`, `declare-const`, `define-fun`, `define-fun-rec`, `define-const`, `push`,
 `pop` and every command's last `)`; sorts, sorted variables and signatures by the functions of
-`Parser.Internal.Fused.Category`. Every other state is stepped by the port's own steps.
+`Parser.Internal.Fused.Category`. Every other state is stepped by the port's own steps. In a
+non-standard command, the loop hands the cursor to the handler's parser of its payload
+(`handOver`), as the parser's loop over single tokens does, and goes on after the command.
 
 The script parser's `parse` (`Fused.parse`) runs this loop on a batch cursor of the library's
 lexer, which the cursor gives through `Token.Produce.asBatch?`, and the parser's loop over single
@@ -275,7 +277,7 @@ def closingStep {batch : BatchTag} (posture : VersionPosture) (h : H) (declarati
   | _ => fail posture next h (.syntax (.expectedToken #[.parenClose])) k
 
 /-- A command named by a symbol, a non-standard one: the handler gives its parser, which the
-port's step then hands the payload to. -/
+loop then hands the cursor to. -/
 @[inline]
 def startNonstandard {batch : BatchTag} (posture : VersionPosture) (h : H) (declarations : Nat)
     (name : SymbolView) (next : BatchCursor batch) {β : Type} (k : OutcomeOf H next → m β) :
@@ -392,6 +394,33 @@ def step {batch : BatchTag} (posture : VersionPosture) (h : H) (declarations : N
   if inTerm then termStep posture h declarations context mode levels token next k
   else commandStep posture h declarations command token next k
 
+/--
+Hands `cursor`, which has a token, to the handler's parser of a non-standard command's payload,
+and hands it the cursor again while it wants more and tokens are left, as the loop over single
+tokens does (`Parser.Script.ScriptParser.Internal.handOver?`): the loop's result if the parser
+failed or wants more, else the cursor after the command's `)`, with the handler. The cursors
+given back come from `base`, which comes from `origin`.
+-/
+def handOver {batch : BatchTag} (posture : VersionPosture) (origin base : BatchCursor batch) (h : H)
+    (declarations : Nat) (parser : CommandHandler.NonstandardParser H) (cursor : BatchCursor batch)
+    (has : cursor.HasNext) (lift : ∀ {next : BatchCursor batch}, next.Consumed cursor →
+      next.Consumed base)
+    (toOrigin : ∀ {next : BatchCursor batch}, next.Consumed base → next.Consumed origin) :
+    m (LoopResult H origin ⊕ ({ next : BatchCursor batch // next.Consumed base } × H)) := do
+  match ← (Command.Internal.nonstandardParse parser cursor).run h with
+  | ((.error error, ⟨next, taken⟩), h) =>
+    return .inl (.error error, ScriptParser.new posture, ⟨next, toOrigin (lift (taken has))⟩, h)
+  | ((.ok (some parser), ⟨next, taken⟩), h) =>
+    if hn : next.HasNext then
+      have : remaining next < remaining cursor := BatchCursor.Consumed.remaining_lt (taken has)
+      handOver posture origin base h declarations parser next hn
+        (fun step => lift (BatchCursor.Consumed.trans step (taken has))) toOrigin
+    else
+      return .inl (.ok .continue, scriptParser posture (.nonstandard parser) declarations,
+        ⟨next, toOrigin (lift (taken has))⟩, h)
+  | ((.ok none, ⟨next, taken⟩), h) => return .inr (⟨next, lift (taken has)⟩, h)
+termination_by remaining cursor
+
 /-- The parser the loop's arguments stand for: the command state, or, in a term, the command
 around it with the term's state. -/
 @[inline]
@@ -416,19 +445,35 @@ def loop {batch : BatchTag} (posture : VersionPosture) (origin : BatchCursor bat
   match outcome with
   | .command h declarations command =>
     if hn : next.HasNext then
-      let (token', ⟨after, taken⟩) := next.next hn
-      have : remaining after < remaining next := taken.remaining_lt
-      -- a command state that reads a term goes on with the term in the loop's arguments
       match command with
-      | .payload (.assert term) =>
-        loop posture origin h declarations .awaiting true .assert term.mode term.levels token'
-          after (taken.trans consumed)
-      | .payload (.defineBody definition term) =>
-        loop posture origin h declarations .awaiting true (.definition definition) term.mode
-          term.levels token' after (taken.trans consumed)
+      | .nonstandard parser => do
+        -- a non-standard command's parser takes the cursor
+        match ← handOver posture origin next h declarations parser next hn id
+            (fun step => step.trans consumed) with
+        | .inl result => return result
+        | .inr (⟨cursor, ended⟩, h) =>
+          if hc : cursor.HasNext then
+            let (token', ⟨after, taken⟩) := cursor.next hc
+            have : remaining after < remaining next := (taken.trans ended).remaining_lt
+            loop posture origin h declarations .awaiting false .assert .start [] token' after
+              (taken.trans (ended.trans consumed))
+          else
+            return (.ok .continue, scriptParser posture .awaiting declarations,
+              ⟨cursor, ended.trans consumed⟩, h)
       | command =>
-        loop posture origin h declarations command false .assert .start [] token' after
-          (taken.trans consumed)
+        let (token', ⟨after, taken⟩) := next.next hn
+        have : remaining after < remaining next := taken.remaining_lt
+        -- a command state that reads a term goes on with the term in the loop's arguments
+        match command with
+        | .payload (.assert term) =>
+          loop posture origin h declarations .awaiting true .assert term.mode term.levels token'
+            after (taken.trans consumed)
+        | .payload (.defineBody definition term) =>
+          loop posture origin h declarations .awaiting true (.definition definition) term.mode
+            term.levels token' after (taken.trans consumed)
+        | command =>
+          loop posture origin h declarations command false .assert .start [] token' after
+            (taken.trans consumed)
     else
       return (.ok .continue, scriptParser posture command declarations, ⟨next, consumed⟩, h)
   | .term h declarations context mode levels =>
@@ -442,20 +487,38 @@ def loop {batch : BatchTag} (posture : VersionPosture) (origin : BatchCursor bat
         ⟨next, consumed⟩, h)
   | .resume h parser cursor follows =>
     if hn : cursor.HasNext then
-      let (token', ⟨after, taken⟩) := cursor.next hn
-      have : remaining after < remaining next := (taken.trans_follows follows).remaining_lt
-      -- a command state that reads a term goes on with the term in the loop's arguments
       match commandOf parser with
-      | .payload (.assert term) =>
-        loop (postureOf parser) origin h (declarationsOf parser) .awaiting true .assert term.mode
-          term.levels token' after ((taken.trans_follows follows).trans consumed)
-      | .payload (.defineBody definition term) =>
-        loop (postureOf parser) origin h (declarationsOf parser) .awaiting true
-          (.definition definition) term.mode term.levels token' after
-          ((taken.trans_follows follows).trans consumed)
+      | .nonstandard nonstandard => do
+        -- a non-standard command's parser takes the cursor
+        match ← handOver (postureOf parser) origin cursor h (declarationsOf parser) nonstandard
+            cursor hn id (fun step => step.trans (follows.trans_consumed consumed)) with
+        | .inl result => return result
+        | .inr (⟨ended, taken⟩, h) =>
+          if hc : ended.HasNext then
+            let (token', ⟨after, taken'⟩) := ended.next hc
+            have : remaining after < remaining next :=
+              ((taken'.trans taken).trans_follows follows).remaining_lt
+            loop (postureOf parser) origin h (declarationsOf parser) .awaiting false .assert
+              .start [] token' after (taken'.trans (taken.trans (follows.trans_consumed consumed)))
+          else
+            return (.ok .continue,
+              scriptParser (postureOf parser) .awaiting (declarationsOf parser),
+              ⟨ended, taken.trans (follows.trans_consumed consumed)⟩, h)
       | command =>
-        loop (postureOf parser) origin h (declarationsOf parser) command false .assert .start []
-          token' after ((taken.trans_follows follows).trans consumed)
+        let (token', ⟨after, taken⟩) := cursor.next hn
+        have : remaining after < remaining next := (taken.trans_follows follows).remaining_lt
+        -- a command state that reads a term goes on with the term in the loop's arguments
+        match command with
+        | .payload (.assert term) =>
+          loop (postureOf parser) origin h (declarationsOf parser) .awaiting true .assert
+            term.mode term.levels token' after ((taken.trans_follows follows).trans consumed)
+        | .payload (.defineBody definition term) =>
+          loop (postureOf parser) origin h (declarationsOf parser) .awaiting true
+            (.definition definition) term.mode term.levels token' after
+            ((taken.trans_follows follows).trans consumed)
+        | command =>
+          loop (postureOf parser) origin h (declarationsOf parser) command false .assert .start
+            [] token' after ((taken.trans_follows follows).trans consumed)
     else
       return (.ok .continue, parser, ⟨cursor, follows.trans_consumed consumed⟩, h)
   | .stop answer parser cursor follows h =>
@@ -479,6 +542,29 @@ def start {batch : BatchTag} (parser : ScriptParser H) (h : H) (token : Token ba
     loop (postureOf parser) producer h (declarationsOf parser) command false .assert .start []
       token next consumed
 
+/-- The loop over a hand-over that has a token: in a non-standard command, its parser takes the
+cursor first; else the loop takes the first token. -/
+@[inline]
+def begin {batch : BatchTag} (parser : ScriptParser H) (h : H) (producer : BatchCursor batch)
+    (has : producer.HasNext) : m (LoopResult H producer) :=
+  match commandOf parser with
+  | .nonstandard nonstandard => do
+    -- a non-standard command's parser takes the cursor
+    match ← handOver (postureOf parser) producer producer h (declarationsOf parser) nonstandard
+        producer has id id with
+    | .inl result => return result
+    | .inr (⟨ended, taken⟩, h) =>
+      if hc : ended.HasNext then
+        let (token, ⟨next, step⟩) := ended.next hc
+        loop (postureOf parser) producer h (declarationsOf parser) .awaiting false .assert .start
+          [] token next (step.trans taken)
+      else
+        return (.ok .continue, scriptParser (postureOf parser) .awaiting (declarationsOf parser),
+          ⟨ended, taken⟩, h)
+  | _ =>
+    let (token, ⟨next, consumed⟩) := producer.next has
+    start parser h token producer next consumed
+
 /--
 Parses the cursor with the script parser: the fused loop if the cursor is a batch cursor of the
 library's lexer, else the loop over single tokens.
@@ -493,8 +579,7 @@ def parse {Z : Type} [Token.Produce Z] (parser : ScriptParser H) (state : ParseS
   | none => Parser.Internal.parseByToken parser state cursor
   | some view => fun h => do
     if hn : view.cursor.HasNext then
-      let (token, ⟨next, consumed⟩) := view.cursor.next hn
-      let (answer, parser, ⟨done, taken⟩, h) ← start parser h token view.cursor next consumed
+      let (answer, parser, ⟨done, taken⟩, h) ← begin parser h view.cursor hn
       return ((answer, parser, state, ⟨view.back done, fun _ => view.consumed taken⟩), h)
     else
       return ((.ok .continue, parser, state,

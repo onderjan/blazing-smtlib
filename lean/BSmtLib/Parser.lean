@@ -201,8 +201,11 @@ version, its state and one token, makes the handler calls the token completes, a
 on with a new state or finishes with a result. Before it takes a token it is told that the token
 has arrived, so that it can make the calls due at a token's arrival. A step may ask to act on the
 cursor: to switch the version, or to discard the rest of the input; the parser goes on once the
-cursor has done so. `Internal.parseByToken` takes the tokens of a cursor one by one with such a
-parser: it is the `parse` of each of them.
+cursor has done so. In a state in which a parser holds a parser of its own that takes a cursor
+(the command parser in a non-standard command), it hands the cursor to that parser instead of
+taking a token, and goes on as that parser's answer says. `Internal.parseByToken` takes the
+tokens of a cursor one by one with such a parser, handing the cursor over where it asks: it is
+the `parse` of each of them.
 -/
 
 
@@ -325,8 +328,17 @@ inductive Flow (μ : Type → Type) (σ ρ : Type) where
   `resume` says. -/
   | discardRest (resume : μ (Step σ ρ))
 
+/-- What the parser did with a token, or with a cursor it handed over. -/
+inductive After (P R E : Type) where
+  /-- It goes on: take the next token. -/
+  | goOn (parser : P)
+  /-- It stops with the answer, and the parser to go on from after. -/
+  | stop (answer : Except (ParseError E) (ControlFlow R)) (parser : P)
+
 /- LEAN: Rust's parsers that step by single tokens call `parse_by_token` with their step; here
-the step is a class, so that the proofs about the parsers can speak of the step of every one. -/
+the step is a class, so that the proofs about the parsers can speak of the step of every one.
+Rust's command parser, in a non-standard command, hands its cursor to the handler's parser
+instead of taking a token itself; `handOver?` is that request. -/
 /--
 A parser that steps by single tokens: the parser of the type `P`, with the handler of the type
 `H` in the monad `m`, whose errors are of the type `E`, finishing with results of the type `R`.
@@ -340,13 +352,16 @@ class ParseByToken (P : Type) (H : outParam Type) (m : outParam (Type → Type))
     ExceptT (ParseErrorCause E) (StateT H m) (Flow (ExceptT (ParseErrorCause E) (StateT H m)) P R)
   /-- The parser from which the next value starts, after it finished. -/
   reset : P → P
-
-/-- What the parser did with a token. -/
-inductive After (P R E : Type) where
-  /-- It goes on: take the next token. -/
-  | goOn (parser : P)
-  /-- It stops with the answer, and the parser to go on from after. -/
-  | stop (answer : Except (ParseError E) (ControlFlow R)) (parser : P)
+  /--
+  If the parser, in its state, hands its cursor to a parser it holds instead of taking a token:
+  what it does with a cursor, which the loop runs, if the cursor has a token, in place of taking
+  one. It gives back what the parser does after, and the cursor the held parser gave back, which
+  took a token if the cursor had one.
+  -/
+  handOver? {Z : Type} [Token.Produce Z] : P → (cursor : Z) →
+    Option (StateT H m (After P R E ×
+      { next : Z // Token.Produce.HasNext cursor → Token.Produce.Consumed next cursor })) :=
+    fun _ _ => none
 
 /-- What the parser's step asks after the cursor did what the step asked. A parser that
 finished goes on from `fresh`, its reset. -/
@@ -415,21 +430,34 @@ instance : WellFoundedRelation (Consuming Z) :=
 
 /--
 Has the parser take the tokens of `cursor`, which comes from `origin` with tokens consumed, one
-by one, until there are none or the parser stops.
+by one, or hand the cursor over where it asks to, until there are none or the parser stops.
 -/
 def rest (origin : Z) (parser : P) (cursor : Z) (consumed : Token.Produce.Consumed cursor origin) :
     StateT H m (Except (ParseError E) (ControlFlow R) × P ×
       { z : Z // Token.Produce.Consumed z origin }) :=
-  match Token.Produce.next? cursor with
-  | none => return (.ok .continue, parser, ⟨cursor, consumed⟩)
-  | some (token, ⟨next, step⟩) => do
-    match ← takeOne parser cursor token next step with
-    | (.goOn parser, ⟨later, taken⟩) =>
-      rest origin parser later (Token.Produce.consumed_trans taken consumed)
-    | (.stop answer parser, ⟨later, taken⟩) =>
-      return (answer, parser, ⟨later, Token.Produce.consumed_trans taken consumed⟩)
+  match ParseByToken.handOver? parser cursor with
+  | some handOver =>
+    match Token.Produce.decideHasNext cursor with
+    | isTrue has => do
+      match ← handOver with
+      | (.goOn parser, ⟨later, taken⟩) =>
+        rest origin parser later (Token.Produce.consumed_trans (taken has) consumed)
+      | (.stop answer parser, ⟨later, taken⟩) =>
+        return (answer, parser, ⟨later, Token.Produce.consumed_trans (taken has) consumed⟩)
+    | isFalse _ => return (.ok .continue, parser, ⟨cursor, consumed⟩)
+  | none =>
+    match Token.Produce.next? cursor with
+    | none => return (.ok .continue, parser, ⟨cursor, consumed⟩)
+    | some (token, ⟨next, step⟩) => do
+      match ← takeOne parser cursor token next step with
+      | (.goOn parser, ⟨later, taken⟩) =>
+        rest origin parser later (Token.Produce.consumed_trans taken consumed)
+      | (.stop answer parser, ⟨later, taken⟩) =>
+        return (answer, parser, ⟨later, Token.Produce.consumed_trans taken consumed⟩)
 termination_by (⟨cursor⟩ : Consuming Z)
-decreasing_by exact taken
+decreasing_by
+  · exact taken has
+  · exact taken
 
 /-- A producer that gives no token has none. -/
 theorem not_hasNext {producer : Z} (h : Token.Produce.next? producer = none) :
@@ -438,21 +466,34 @@ theorem not_hasNext {producer : Z} (h : Token.Produce.next? producer = none) :
 
 /- LEAN: Rust's `parse_by_token`, which takes the step as a closure. -/
 /--
-Parses the cursor one token at a time with the parser's steps, until the cursor is empty or the
-parser stops: the `parse` of a parser that steps by single tokens.
+Parses the cursor one token at a time with the parser's steps, handing the cursor over where the
+parser asks to, until the cursor is empty or the parser stops: the `parse` of a parser that steps
+by single tokens.
 -/
 def parseByToken (parser : P) (state : ParseState H) (cursor : Z) :
     StateT H m (Except (ParseError E) (ControlFlow R) × P × ParseState H ×
       { next : Z // Token.Produce.HasNext cursor → Token.Produce.Consumed next cursor }) :=
-  match h : Token.Produce.next? cursor with
-  | none => return (.ok .continue, parser, state, ⟨cursor, fun hn => absurd hn (not_hasNext h)⟩)
-  | some (token, ⟨next, consumed⟩) => do
-    match ← takeOne parser cursor token next consumed with
-    | (.goOn parser, ⟨later, taken⟩) =>
-      let (answer, parser, ⟨done, hd⟩) ← rest cursor parser later taken
-      return (answer, parser, state, ⟨done, fun _ => hd⟩)
-    | (.stop answer parser, ⟨later, taken⟩) => return (answer, parser, state, ⟨later,
-        fun _ => taken⟩)
+  match ParseByToken.handOver? parser cursor with
+  | some handOver =>
+    match Token.Produce.decideHasNext cursor with
+    | isTrue has => do
+      match ← handOver with
+      | (.goOn parser, ⟨later, taken⟩) =>
+        let (answer, parser, ⟨done, hd⟩) ← rest cursor parser later (taken has)
+        return (answer, parser, state, ⟨done, fun _ => hd⟩)
+      | (.stop answer parser, ⟨later, taken⟩) => return (answer, parser, state, ⟨later, taken⟩)
+    | isFalse empty =>
+      return (.ok .continue, parser, state, ⟨cursor, fun hn => absurd hn empty⟩)
+  | none =>
+    match h : Token.Produce.next? cursor with
+    | none => return (.ok .continue, parser, state, ⟨cursor, fun hn => absurd hn (not_hasNext h)⟩)
+    | some (token, ⟨next, consumed⟩) => do
+      match ← takeOne parser cursor token next consumed with
+      | (.goOn parser, ⟨later, taken⟩) =>
+        let (answer, parser, ⟨done, hd⟩) ← rest cursor parser later taken
+        return (answer, parser, state, ⟨done, fun _ => hd⟩)
+      | (.stop answer parser, ⟨later, taken⟩) => return (answer, parser, state, ⟨later,
+          fun _ => taken⟩)
 
 end
 

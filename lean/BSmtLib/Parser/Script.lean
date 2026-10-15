@@ -160,6 +160,26 @@ def ScriptParser.Internal.step (version : Token.Version) (parser : ScriptParser 
 def ScriptParser.Internal.arrive (parser : ScriptParser H) (token : Internal.Input) : PM H Unit :=
   Internal.commandArrive (command parser) token
 
+/--
+In a non-standard command, the script parser hands the cursor to the handler's parser of the
+command's payload; after the command, it awaits the next one.
+-/
+@[inline]
+def ScriptParser.Internal.handOver? {Z : Type} [Token.Produce Z] (parser : ScriptParser H)
+    (cursor : Z) :
+    Option (StateT H m (Internal.After (ScriptParser H) Unit (Handler.Error H) ×
+      { next : Z // Token.Produce.HasNext cursor → Token.Produce.Consumed next cursor })) :=
+  match command parser with
+  | .nonstandard nonstandard => some do
+    let (answer, next) ← Command.Internal.nonstandardParse nonstandard cursor
+    match answer with
+    | .error error => return (.stop (.error error) (.new (posture parser)), next)
+    | .ok (some nonstandard) =>
+      return (.goOn (mk (posture parser) (.nonstandard nonstandard) (declarations parser)), next)
+    -- a non-standard command cannot be the exit command
+    | .ok none => return (.goOn (mk (posture parser) .awaiting (declarations parser)), next)
+  | _ => none
+
 /- LEAN: the script parser's `Parse` instance is in `Parser.Internal.Fused`: its `parse` runs the
 fused reader on the library's batch cursors, which needs this module, and this loop on every
 other producer. -/
@@ -169,6 +189,7 @@ instance Internal.instParseByTokenScriptParser :
   arrive := ScriptParser.Internal.arrive
   step := ScriptParser.Internal.step
   reset parser := .new (ScriptParser.Internal.posture parser)
+  handOver? := ScriptParser.Internal.handOver?
 
 end
 

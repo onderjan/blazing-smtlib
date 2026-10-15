@@ -145,8 +145,8 @@ def flowOf (mk : σ → P) : Parser.Internal.Step σ R → Parser.Internal.Flow 
 
 /--
 The parser in the version is the state `mk state` of the steps `step`: no call is due at a token's
-arrival, a step of the parser is the step of its state, and it goes back to `fresh` when it
-finishes.
+arrival, a step of the parser is the step of its state, it goes back to `fresh` when it
+finishes, and it hands no cursor over.
 -/
 structure Simulates (version : Token.Version) (mk : σ → P)
     (step : σ → Parser.Internal.Input → PM H (Parser.Internal.Step σ R)) (fresh : P) : Prop where
@@ -155,6 +155,8 @@ structure Simulates (version : Token.Version) (mk : σ → P)
   step : ∀ (state : σ) (token : Parser.Internal.Input),
     ParseByToken.step version (mk state) token = flowOf mk <$> step state token
   reset : ∀ state : σ, ParseByToken.reset (mk state) = fresh
+  handOver : ∀ {Z : Type} [Produce Z] (state : σ) (cursor : Z),
+    ParseByToken.handOver? (mk state) cursor = none
 
 variable {version : Token.Version} {mk : σ → P}
   {step : σ → Parser.Internal.Input → PM H (Parser.Internal.Step σ R)} {fresh : P}

@@ -4,6 +4,7 @@ public import BSmtLib.Facts.Proofs.Reader.Param.HandOver
 public import BSmtLib.Facts.Proofs.Reader.Param.Stop
 public import BSmtLib.Facts.Reader.Adapters
 public import BSmtLib.Facts.Proofs.Parser.Fused.Step
+public import BSmtLib.Facts.Proofs.Parser.HandOver
 import all BSmtLib.Lexer
 import all BSmtLib.Parser
 import all BSmtLib.Parser.Adapter
@@ -23,6 +24,9 @@ tokens, as the script parser's is.
 -/
 
 namespace BSmtLib.Facts.Proofs.Reader.Param.Split
+
+open BSmtLib.Facts.Proofs.Parser.HandOver (NoHandOver recording_noHandOver rest_of_none
+  parseByToken_of_none)
 
 open BSmtLib.Lexer
 open BSmtLib.Token.BatchCursor.Internal (discardRequested resetConsumed remaining relexRequested
@@ -98,17 +102,17 @@ def resume (origin : Z) :
   | x => pure x
 
 /-- The loop over single tokens is the loop that stops, then itself from where that stopped. -/
-theorem rest_eq (origin : Z) :
+theorem rest_eq (hno : NoHandOver P) (origin : Z) :
     ∀ (parser : P) (cursor : Z) (consumed : Token.Produce.Consumed cursor origin),
       rest (m := m) origin parser cursor consumed =
         Stop.rest origin parser cursor consumed >>= resume origin := by
   intro parser cursor consumed
   induction cursor using (Token.Produce.consumed_wf (Z := Z)).induction generalizing parser with
   | _ cursor ih =>
-  rw [rest, Stop.rest]
+  rw [rest_of_none consumed (hno _ _), Stop.rest]
   rcases hn : Token.Produce.next? cursor with _ | ⟨token, ⟨next, step⟩⟩
   · simp only [pure_bind, resume]
-    rw [rest, hn]
+    rw [rest_of_none consumed (hno _ _), hn]
   · dsimp only
     rw [takeOne_eq]
     simp only [bind_assoc, bind_map_left]
@@ -126,7 +130,7 @@ theorem rest_eq (origin : Z) :
       · simp [fixAfter, resume]
 
 /-- The loop's values do not depend on where its cursor came from. -/
-theorem rest_origin (o o' : Z) :
+theorem rest_origin (hno : NoHandOver P) (o o' : Z) :
     ∀ (parser : P) (cursor : Z) (hc : Token.Produce.Consumed cursor o)
       (hc' : Token.Produce.Consumed cursor o'),
       (fun x => (x.1, x.2.1, x.2.2.val)) <$> rest (m := m) o parser cursor hc =
@@ -134,7 +138,7 @@ theorem rest_origin (o o' : Z) :
   intro parser cursor hc hc'
   induction cursor using (Token.Produce.consumed_wf (Z := Z)).induction generalizing parser with
   | _ cursor ih =>
-  rw [rest, rest]
+  rw [rest_of_none hc (hno _ _), rest_of_none hc' (hno _ _)]
   rcases hn : Token.Produce.next? cursor with _ | ⟨token, ⟨next, step⟩⟩
   · simp
   · dsimp only
@@ -227,7 +231,7 @@ theorem next?_none {x : BatchCursor b} (hx : ¬ x.HasNext) : Token.Produce.next?
 
 /-- The loop on cursors alike, from wherever they come: the same answer and parser, the same
 handler, and cursors alike. -/
-theorem rest_alike {o o' : BatchCursor b} :
+theorem rest_alike (hno : NoHandOver P) {o o' : BatchCursor b} :
     ∀ (n : Nat) (parser : P) (c c' : BatchCursor b) (hc : c.Consumed o) (hc' : c'.Consumed o'),
       Alike c c' → remaining c < n → ∀ h : H,
       ((rest o parser c hc).run h).1.1 = ((rest o' parser c' hc').run h).1.1 ∧
@@ -236,7 +240,7 @@ theorem rest_alike {o o' : BatchCursor b} :
         ((rest o parser c hc).run h).2 = ((rest o' parser c' hc').run h).2
   | 0, _, _, _, _, _, _, hn, _ => absurd hn (Nat.not_lt_zero _)
   | n + 1, parser, c, c', hc, hc', hal, hn, h => by
-    rw [rest, rest]
+    rw [rest_of_none hc (hno _ _), rest_of_none hc' (hno _ _)]
     by_cases hx : c.HasNext
     · have hy : c'.HasNext := hal.hasNext_iff.mp hx
       rw [next?_some hx, next?_some hy]
@@ -257,25 +261,27 @@ theorem rest_alike {o o' : BatchCursor b} :
       subst ha hs
       cases a with
       | goOn p =>
-        exact rest_alike n p z z' _ _ hal'
+        exact rest_alike hno n p z z' _ _ hal'
           (Nat.lt_of_lt_of_le hz.remaining_lt (Nat.le_of_lt_succ hn)) h₁
       | stop answer p => exact ⟨rfl, rfl, hal', rfl⟩
     · have hy : ¬ c'.HasNext := fun hy => hx (hal.hasNext_iff.mpr hy)
       rw [next?_none hx, next?_none hy]
       exact ⟨rfl, rfl, hal, rfl⟩
 
-theorem parseByToken_none (parser : P) (state : ParseState H) {d : BatchCursor b}
+theorem parseByToken_none (hno : NoHandOver P) (parser : P) (state : ParseState H)
+    {d : BatchCursor b}
     (hd : ¬ d.HasNext) :
     parseByToken parser state d =
       pure (.ok .continue, parser, state, ⟨d, fun hn => absurd hn hd⟩) := by
-  unfold parseByToken
+  rw [parseByToken_of_none state (hno _ _)]
   split
   · rfl
   · rename_i heq
     rw [next?_none hd] at heq
     cases heq
 
-theorem parseByToken_some (parser : P) (state : ParseState H) {d : BatchCursor b}
+theorem parseByToken_some (hno : NoHandOver P) (parser : P) (state : ParseState H)
+    {d : BatchCursor b}
     (hd : d.HasNext) :
     parseByToken parser state d = (do
       match ← takeOne parser d (d.next hd).1 (d.next hd).2.val (d.next hd).2.property with
@@ -284,7 +290,7 @@ theorem parseByToken_some (parser : P) (state : ParseState H) {d : BatchCursor b
         return (answer, parser, state, ⟨done, fun _ => h⟩)
       | (.stop answer parser, ⟨later, taken⟩) =>
         return (answer, parser, state, ⟨later, fun _ => taken⟩)) := by
-  unfold parseByToken
+  rw [parseByToken_of_none state (hno _ _)]
   split
   · rename_i heq
     rw [next?_some hd] at heq
@@ -302,7 +308,8 @@ theorem parseByToken_some (parser : P) (state : ParseState H) {d : BatchCursor b
     | stop answer p => rfl
 
 /-- The loop over the tokens of a cursor from wherever it comes is the parse of the cursor. -/
-theorem rest_parseByToken {o d : BatchCursor b} (parser : P) (state : ParseState H)
+theorem rest_parseByToken (hno : NoHandOver P) {o d : BatchCursor b} (parser : P)
+    (state : ParseState H)
     (hd : d.Consumed o) (h : H) :
     ((rest o parser d hd).run h).1.1 = ((parseByToken parser state d).run h).1.1 ∧
       ((rest o parser d hd).run h).1.2.1 = ((parseByToken parser state d).run h).1.2.1 ∧
@@ -310,7 +317,7 @@ theorem rest_parseByToken {o d : BatchCursor b} (parser : P) (state : ParseState
         ((parseByToken parser state d).run h).1.2.2.2.val ∧
       ((rest o parser d hd).run h).2 = ((parseByToken parser state d).run h).2 := by
   by_cases hn : d.HasNext
-  · rw [parseByToken_some parser state hn, rest, next?_some hn]
+  · rw [parseByToken_some hno parser state hn, rest_of_none hd (hno _ _), next?_some hn]
     generalize d.next hn = dn
     obtain ⟨t, ⟨n, k⟩⟩ := dn
     simp only [StateT.run_bind]
@@ -318,20 +325,21 @@ theorem rest_parseByToken {o d : BatchCursor b} (parser : P) (state : ParseState
     obtain ⟨⟨a, ⟨z, hz⟩⟩, h₁⟩ := x
     cases a with
     | goOn p =>
-      obtain ⟨e1, e2, e3, e4⟩ := rest_alike (remaining z + 1) p z z (hz.trans hd) hz
+      obtain ⟨e1, e2, e3, e4⟩ := rest_alike hno (remaining z + 1) p z z (hz.trans hd) hz
         (Alike.refl z) (Nat.lt_succ_self _) h₁
       exact ⟨e1, e2, e3, e4⟩
     | stop answer p => exact ⟨rfl, rfl, Alike.refl _, rfl⟩
-  · rw [parseByToken_none parser state hn, rest, next?_none hn]
+  · rw [parseByToken_none hno parser state hn, rest_of_none hd (hno _ _), next?_none hn]
     exact ⟨rfl, rfl, Alike.refl _, rfl⟩
 
-theorem rest_run_origin {o o' : BatchCursor b} (parser : P) (c : BatchCursor b)
+theorem rest_run_origin (hno : NoHandOver P) {o o' : BatchCursor b} (parser : P)
+    (c : BatchCursor b)
     (hc : c.Consumed o) (hc' : c.Consumed o') (h : H) :
     ((rest o parser c hc).run h).1.1 = ((rest o' parser c hc').run h).1.1 ∧
       ((rest o parser c hc).run h).1.2.1 = ((rest o' parser c hc').run h).1.2.1 ∧
       ((rest o parser c hc).run h).1.2.2.val = ((rest o' parser c hc').run h).1.2.2.val ∧
       ((rest o parser c hc).run h).2 = ((rest o' parser c hc').run h).2 := by
-  have e := congrArg (fun x => StateT.run x h) (rest_origin (m := Id) o o' parser c hc hc')
+  have e := congrArg (fun x => StateT.run x h) (rest_origin (m := Id) hno o o' parser c hc hc')
   simp only [StateT.run_map, id_map] at e
   have e' : ((((rest o parser c hc).run h).1.1, ((rest o parser c hc).run h).1.2.1,
       ((rest o parser c hc).run h).1.2.2.val), ((rest o parser c hc).run h).2) =
@@ -342,7 +350,8 @@ theorem rest_run_origin {o o' : BatchCursor b} (parser : P) (c : BatchCursor b)
 
 /-- The loop over the tokens of a cursor from wherever it comes is the parse of the cursor, with
 the same values. -/
-theorem rest_parseByToken_eq {o d : BatchCursor b} (parser : P) (state : ParseState H)
+theorem rest_parseByToken_eq (hno : NoHandOver P) {o d : BatchCursor b} (parser : P)
+    (state : ParseState H)
     (hd : d.Consumed o) (h : H) :
     ((rest o parser d hd).run h).1.1 = ((parseByToken parser state d).run h).1.1 ∧
       ((rest o parser d hd).run h).1.2.1 = ((parseByToken parser state d).run h).1.2.1 ∧
@@ -350,21 +359,22 @@ theorem rest_parseByToken_eq {o d : BatchCursor b} (parser : P) (state : ParseSt
         ((parseByToken parser state d).run h).1.2.2.2.val ∧
       ((rest o parser d hd).run h).2 = ((parseByToken parser state d).run h).2 := by
   by_cases hn : d.HasNext
-  · rw [parseByToken_some parser state hn, rest, next?_some hn]
+  · rw [parseByToken_some hno parser state hn, rest_of_none hd (hno _ _), next?_some hn]
     generalize d.next hn = dn
     obtain ⟨t, ⟨n, k⟩⟩ := dn
     simp only [StateT.run_bind]
     generalize (takeOne parser d t n k).run h = x
     obtain ⟨⟨a, ⟨z, hz⟩⟩, h₁⟩ := x
     cases a with
-    | goOn p => exact rest_run_origin p z (hz.trans hd) hz h₁
+    | goOn p => exact rest_run_origin hno p z (hz.trans hd) hz h₁
     | stop answer p => exact ⟨rfl, rfl, rfl, rfl⟩
-  · rw [parseByToken_none parser state hn, rest, next?_none hn]
+  · rw [parseByToken_none hno parser state hn, rest_of_none hd (hno _ _), next?_none hn]
     exact ⟨rfl, rfl, rfl, rfl⟩
 
 /-- The parse of cursors alike: the same answer and parser, the same handler, and cursors
 alike. -/
-theorem parseByToken_alike (parser : P) (state : ParseState H) {d d' : BatchCursor b}
+theorem parseByToken_alike (hno : NoHandOver P) (parser : P) (state : ParseState H)
+    {d d' : BatchCursor b}
     (hal : Alike d d') (h : H) :
     ((parseByToken parser state d).run h).1.1 = ((parseByToken parser state d').run h).1.1 ∧
       ((parseByToken parser state d).run h).1.2.1 =
@@ -374,7 +384,7 @@ theorem parseByToken_alike (parser : P) (state : ParseState H) {d d' : BatchCurs
       ((parseByToken parser state d).run h).2 = ((parseByToken parser state d').run h).2 := by
   by_cases hn : d.HasNext
   · have hn' : d'.HasNext := hal.hasNext_iff.mp hn
-    rw [parseByToken_some parser state hn, parseByToken_some parser state hn']
+    rw [parseByToken_some hno parser state hn, parseByToken_some hno parser state hn']
     obtain ⟨ht, hnal⟩ := hal.next hn hn'
     generalize d.next hn = dn at ht hnal ⊢
     generalize d'.next hn' = dn' at ht hnal ⊢
@@ -392,12 +402,12 @@ theorem parseByToken_alike (parser : P) (state : ParseState H) {d d' : BatchCurs
     subst ha hs
     cases a with
     | goOn p =>
-      obtain ⟨e1, e2, e3, e4⟩ := rest_alike (remaining z + 1) p z z' hz hz' hal'
+      obtain ⟨e1, e2, e3, e4⟩ := rest_alike hno (remaining z + 1) p z z' hz hz' hal'
         (Nat.lt_succ_self _) h₁
       exact ⟨e1, e2, e3, e4⟩
     | stop answer p => exact ⟨rfl, rfl, hal', rfl⟩
   · have hn' : ¬ d'.HasNext := fun hn' => hn (hal.hasNext_iff.mpr hn')
-    rw [parseByToken_none parser state hn, parseByToken_none parser state hn']
+    rw [parseByToken_none hno parser state hn, parseByToken_none hno parser state hn']
     exact ⟨rfl, rfl, hal, rfl⟩
 
 /-- A cursor through which no request was made. -/
@@ -518,7 +528,10 @@ theorem outS_eq (c : BatchCursor b) (h : c.HasNext) (A : ParseAdapter H P) :
 variable (hp : ∀ {b : BatchTag} (parser : P) (state : ParseState H) (cursor : BatchCursor b),
   Parse.parse parser state cursor = Parser.Internal.parseByToken parser state cursor)
 include hp
+variable (hno : NoHandOver P)
+include hno
 
+omit hno in
 theorem outN_eq (c : BatchCursor b) (h : c.HasNext) (A : ParseAdapter H P) :
     outN c h A =
       let r := (parseByToken A.parser (ParseAdapter.Internal.parseState A) c).run (Stop.told A c)
@@ -538,7 +551,7 @@ theorem outN_alike {c c' : BatchCursor b} (hal : Alike c c') (h : c.HasNext) (h'
     unfold Stop.told; rw [show Token.Produce.version c = Token.Produce.version c' from hal.version]
   rw [ht]
   obtain ⟨e1, e2, e3, e4⟩ :=
-    parseByToken_alike A.parser (ParseAdapter.Internal.parseState A) hal (Stop.told A c')
+    parseByToken_alike hno A.parser (ParseAdapter.Internal.parseState A) hal (Stop.told A c')
   refine ⟨e1, e3, ?_⟩
   dsimp only
   rw [e1, e2, e4]
@@ -554,7 +567,7 @@ def resumeOut : Out H P R E b → Out H P R E b
 call from where that stopped. -/
 theorem outN_split_eq (c : BatchCursor b) (h : c.HasNext) (A : ParseAdapter H P) :
     outN c h A = resumeOut (outS c h A) := by
-  rw [outN_eq hp, outS_eq, parseByToken_some _ _ h, takeOne_eq]
+  rw [outN_eq hp, outS_eq, parseByToken_some hno _ _ h, takeOne_eq]
   generalize c.next h = cn
   obtain ⟨t, ⟨n, k⟩⟩ := cn
   dsimp only
@@ -578,16 +591,17 @@ theorem outN_split_eq (c : BatchCursor b) (h : c.HasNext) (A : ParseAdapter H P)
       have ht : Stop.told (ParseAdapter.Internal.mk h₃ p true (ParseAdapter.Internal.parseState A))
           d = h₃ := rfl
       rw [ht]
-      obtain ⟨e1, e2, e3, e4⟩ := rest_parseByToken_eq p (ParseAdapter.Internal.parseState A) hd h₃
+      obtain ⟨e1, e2, e3, e4⟩ :=
+        rest_parseByToken_eq hno p (ParseAdapter.Internal.parseState A) hd h₃
       simp only [ParseAdapter.Internal.parser_mk, ParseAdapter.Internal.parseState_mk]
       rw [e1, e2, e3, e4]
     · simp only [resumeOut, hn, ↓reduceDIte]
-      rw [rest, next?_none hn]
+      rw [rest_of_none hd (hno _ _), next?_none hn]
       rfl
   cases after with
   | goOn p =>
     simp only [fixAfter, Stop.finish]
-    rw [rest_eq]
+    rw [rest_eq hno]
     simp only [StateT.run_bind]
     generalize (Stop.rest c p l tk).run h₂ = y
     obtain ⟨⟨a, p', ⟨d, hd⟩⟩, h₃⟩ := y
@@ -604,10 +618,10 @@ theorem outN_split_eq (c : BatchCursor b) (h : c.HasNext) (A : ParseAdapter H P)
 
 theorem outN_split (c : BatchCursor b) (h : c.HasNext) (A : ParseAdapter H P) :
     AlikeOut (outN c h A) (resumeOut (outS c h A)) := by
-  rw [outN_split_eq hp]
+  rw [outN_split_eq hp hno]
   exact ⟨rfl, Alike.refl _, rfl⟩
 
-omit [Parse P H Id E R] hp in
+omit [Parse P H Id E R] hp hno in
 /-- After a call of the adapter that stops on a cursor through which no request was made, a
 cursor with a token left has no request made. -/
 theorem outS_fresh (c : BatchCursor b) (h : c.HasNext) (A : ParseAdapter H P) (hc : Fresh c) :
@@ -872,6 +886,8 @@ theorem kont_continue (i : ∀ batch, Token.ConsumeFrom (ParseAdapter H P) (Batc
 variable (hp : ∀ {b : BatchTag} (parser : P) (state : ParseState H) (cursor : BatchCursor b),
   Parse.parse parser state cursor = Parser.Internal.parseByToken parser state cursor)
 include hp
+variable (hno : NoHandOver P)
+include hno
 
 /-- The lexer's handover of a cursor through which no request was made, to the parse adapter and
 to the adapter that stops: the same stop and states, and cursors alike. -/
@@ -892,7 +908,7 @@ theorem flush_eq : ∀ (m : Nat) (c : BatchCursor b) (hfloor : ∀ p, floor = so
       cases hh : s.val.holding
       · simp only [Bool.false_eq_true, ↓reduceIte]
         rw [run_callConsumer_bind, run_callConsumer_bind]
-        have hsplit := outN_split hp c hx a
+        have hsplit := outN_split hp hno c hx a
         have hfresh := outS_fresh c hx a hc
         have eN : outN c hx a =
             let x := ((instN (P := P) b).consume c hx).run a
@@ -926,7 +942,7 @@ theorem flush_eq : ∀ (m : Nat) (c : BatchCursor b) (hfloor : ∀ p, floor = so
           rw [run_getCore_bind, hh]
           simp only [Bool.false_eq_true, ↓reduceIte]
           rw [run_callConsumer_bind]
-          have hal := outN_alike hp (Alike.resetConsumed nS).symm hnS hnR aS
+          have hal := outN_alike hp hno (Alike.resetConsumed nS).symm hnS hnR aS
           have hsplit' := hsplit.trans hal
           have eN' : outN (resetConsumed nS) hnR aS =
               let x := ((instN (P := P) b).consume (resetConsumed nS) hnR).run aS
@@ -964,7 +980,7 @@ theorem flush_eq : ∀ (m : Nat) (c : BatchCursor b) (hfloor : ∀ p, floor = so
     · simp only [hx, ↓reduceDIte]
       exact FRel.refl _
 
-omit [Handler H Id] [ParseByToken P H Id E R] [Parse P H Id E R] hp in
+omit [Handler H Id] [ParseByToken P H Id E R] [Parse P H Id E R] hp hno in
 theorem runL_bind {α β : Type} (x : LexM (ParseAdapter H P) Id R (ParseError E) floor low α)
     (f : α → LexM (ParseAdapter H P) Id R (ParseError E) floor low β)
     (s : {c : LexerCore // c.Bound floor low}) (a : ParseAdapter H P) :
@@ -977,7 +993,7 @@ theorem runL_bind {α β : Type} (x : LexM (ParseAdapter H P) Id R (ParseError E
   obtain ⟨⟨r, s'⟩, a'⟩ := r
   cases r <;> rfl
 
-omit hp in
+omit hp hno in
 theorem fresh_new (v : Token.Version) (batch : Token.Internal.TokenBatch) :
     Fresh (BatchCursor.Internal.new v batch) := ⟨rfl, rfl⟩
 
@@ -992,7 +1008,7 @@ theorem handOver_run (batch : Token.Internal.TokenBatch) (bytesAfter : ByteArray
         bytesAfter hfloor) s a := by
   unfold handOver
   rw [run_getCore_bind, run_getCore_bind, runL_bind, runL_bind]
-  have hfl := flush_eq hp ((remaining (BatchCursor.Internal.new s.val.version batch)) + 1)
+  have hfl := flush_eq hp hno ((remaining (BatchCursor.Internal.new s.val.version batch)) + 1)
     (BatchCursor.Internal.new s.val.version batch)
     (fun p hp' => Token.BatchCursor.endsAfter_new (hfloor p hp') _) (Nat.lt_succ_self _)
     (fresh_new _ _) s a
@@ -1031,6 +1047,7 @@ theorem handOver_eq
     (hp : ∀ {b : Token.BatchTag} (parser : P) (state : ParseState H)
       (cursor : Token.BatchCursor b),
       Parse.parse parser state cursor = Parser.Internal.parseByToken parser state cursor)
+    (hno : NoHandOver P)
     (floor : Option Nat) (low : Nat) (batch : Token.Internal.TokenBatch) (bytesAfter : ByteArray)
     (hfloor : ∀ p, floor = some p → batch.EndsAfter p) :
     @Internal.handOver (ParseAdapter H P) Id R (ParseError E) _ _ (fun _ => inferInstance)
@@ -1039,7 +1056,7 @@ theorem handOver_eq
         (fun _ => Stop.consumeFrom) floor low batch bytesAfter hfloor := by
   apply ExceptT.ext
   funext s a
-  exact handOver_run hp batch bytesAfter hfloor s a
+  exact handOver_run hp hno batch bytesAfter hfloor s a
 
 end
 
@@ -1062,6 +1079,6 @@ theorem script_handOver_eq (floor : Option Nat) (low : Nat) (batch : Token.Inter
         floor low batch bytesAfter hfloor =
       @Internal.handOver RecAdapter Id Unit (ParseError Unit) _ _
         (fun _ => Stop.consumeFrom) floor low batch bytesAfter hfloor :=
-  handOver_eq script_parse_eq floor low batch bytesAfter hfloor
+  handOver_eq script_parse_eq recording_noHandOver floor low batch bytesAfter hfloor
 
 end BSmtLib.Facts.Proofs.Reader.Param.Split

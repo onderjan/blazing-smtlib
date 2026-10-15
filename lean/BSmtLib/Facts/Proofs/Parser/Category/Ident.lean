@@ -47,7 +47,7 @@ private theorem ident_sim (version : Token.Version) :
       version IdentParser.mk (mapSteps Nodes.Identifier.intoOwned (IdentState.step version))
       IdentParser.new := by
   letI := Internal.identByToken (m := m) H
-  refine ⟨fun _ _ => rfl, fun state token => ?_, fun _ => rfl⟩
+  refine ⟨fun _ _ => rfl, fun state token => ?_, fun _ => rfl, fun _ _ => rfl⟩
   rw [mapSteps, Functor.map_map, map_eq_pure_bind]
   refine bind_congr fun step => ?_
   cases step <;> rfl

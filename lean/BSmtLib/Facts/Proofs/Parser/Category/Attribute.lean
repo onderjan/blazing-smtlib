@@ -60,7 +60,7 @@ def singleStep (version : Token.Version)
 private theorem closedAttribute_sim (version : Token.Version) :
     Simulates version (ClosedAttributeParser.mk (H := H)) (singleStep version)
       ClosedAttributeParser.new := by
-  refine ⟨fun _ _ => rfl, fun state token => ?_, fun _ => rfl⟩
+  refine ⟨fun _ _ => rfl, fun state token => ?_, fun _ => rfl, fun _ _ => rfl⟩
   simp only [singleStep, map_bind]
   refine bind_congr fun step => ?_
   rcases step with state | attributes
@@ -70,7 +70,7 @@ private theorem closedAttribute_sim (version : Token.Version) :
 private theorem closedMultipleAttribute_sim (version : Token.Version) :
     Simulates version (ClosedMultipleAttributeParser.mk (H := H)) (attributeStep false version)
       ClosedMultipleAttributeParser.new := by
-  refine ⟨fun _ _ => rfl, fun state token => ?_, fun _ => rfl⟩
+  refine ⟨fun _ _ => rfl, fun state token => ?_, fun _ => rfl, fun _ _ => rfl⟩
   show (do
       match ← attributeStep false version state token with
       | .more state => return Parser.Internal.Flow.more (ClosedMultipleAttributeParser.mk state)

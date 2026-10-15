@@ -272,7 +272,8 @@ theorem link_consumers_stop [NoFails H] {version : Lexicon.Version} {commands : 
 
 end
 
-theorem script_handOver_eq (floor : Option Nat) (low : Nat) (batch : Token.Internal.TokenBatch)
+theorem script_handOver_eq [NoFails H] (floor : Option Nat) (low : Nat)
+    (batch : Token.Internal.TokenBatch)
     (bytesAfter : ByteArray) (hfloor : ∀ p, floor = some p → batch.EndsAfter p) :
     @Lexer.Internal.handOver (ParseAdapter H (ScriptParser H)) Id Unit
         (ParseError (Handler.Error H)) _ _ (fun _ => inferInstance)
@@ -282,6 +283,7 @@ theorem script_handOver_eq (floor : Option Nat) (low : Nat) (batch : Token.Inter
         (fun _ => Param.Stop.consumeFrom) floor low batch bytesAfter hfloor :=
   Param.Split.handOver_eq
     (fun parser state cursor => Proofs.Parser.Fused.Step.parse_eq parser state cursor)
+    (Proofs.Parser.HandOver.script_noHandOver NoFails.noNonstandard)
     floor low batch bytesAfter hfloor
 
 theorem link_consumers [NoFails H] {version : Lexicon.Version} {commands : List Tree.Command}

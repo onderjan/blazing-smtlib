@@ -41,7 +41,7 @@ theorem single_sim (expect : Parser.Internal.Input → PM H ρ) (parser : P)
     @Simulates H P ρ Unit m _ _ (Internal.singleByToken (P := P) H expect) version
       (fun _ => parser) (singleStep expect) parser := by
   letI := Internal.singleByToken (P := P) H expect
-  refine ⟨fun _ _ => rfl, fun _ token => ?_, fun _ => rfl⟩
+  refine ⟨fun _ _ => rfl, fun _ token => ?_, fun _ => rfl, fun _ _ => rfl⟩
   simp only [singleStep, Functor.map_map]
   rw [map_eq_pure_bind]
   rfl

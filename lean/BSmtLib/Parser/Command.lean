@@ -65,12 +65,32 @@ section
 
 variable {H : Type} {m : Type → Type} [Monad m] [CommandHandler H m]
 
-/- LEAN: Rust's command parser hands its cursor to the non-standard parser. The port steps by
-single tokens, so it hands each token on in a producer of that one token
-(`Parser.Internal.InputProducer`), as Rust's standard command parsers hand a token they took
-to a parser they hold. The non-standard parser therefore cannot switch the version, and it is
-called once per token. The parse state holds nothing, so a fresh one is handed each time, as
-Rust clears it after the command. -/
+/- LEAN: Rust's command parser hands its cursor and the shared parse state to the non-standard
+parser, and clears the state after the command. The parse state holds nothing here, so a fresh
+one is handed each time. -/
+/--
+Hands the cursor to the handler's parser of a non-standard command's payload: its error, or
+whether the command goes on in the parser given back (`some`) or ended at its `)` (`none`); and
+the cursor the parser gave back.
+-/
+@[inline]
+def Internal.nonstandardParse {Z : Type} [Token.Produce Z]
+    (parser : CommandHandler.NonstandardParser H) (cursor : Z) :
+    StateT H m
+      (Except (ParseError (Handler.Error H)) (Option (CommandHandler.NonstandardParser H)) ×
+      { next : Z // Token.Produce.HasNext cursor → Token.Produce.Consumed next cursor }) := do
+  let (answer, parser, _, next) ← Parse.parse parser ParseState.new cursor
+  match answer with
+  | .error error => return (.error error, next)
+  | .ok .continue => return (.ok (some parser), next)
+  | .ok (.break ()) => return (.ok none, next)
+
+/- LEAN: the loops over single tokens hand the cursor to the non-standard parser, as Rust's
+command parser does (`Parser.Internal.ParseByToken.handOver?`). This step serves a driver that
+steps the parser by single tokens: it hands each token on in a producer of that one token
+(`Parser.Internal.InputProducer`), as Rust's standard command parsers hand a token they took to
+a parser they hold, so that the non-standard parser cannot switch the version and is called once
+per token. -/
 /--
 A step of a non-standard command's payload: the token goes to the handler's parser, and the
 command ends when that parser finishes, at the command's `)`.
@@ -128,6 +148,16 @@ instance Internal.instParseByTokenCommandParser :
     | .more state => return .more ⟨state⟩
     | .done result => return .done result
   reset _ := .new
+  handOver? parser cursor :=
+    match parser.state with
+    | .nonstandard nonstandard => some do
+      let (answer, next) ← Internal.nonstandardParse nonstandard cursor
+      match answer with
+      | .error error => return (.stop (.error error) .new, next)
+      | .ok (some nonstandard) => return (.goOn ⟨.nonstandard nonstandard⟩, next)
+      -- a non-standard command cannot be the exit command
+      | .ok none => return (.stop (.ok (.break .command)) .new, next)
+    | _ => none
 
 instance : Parse (CommandParser H) H m (Handler.Error H) CommandOutcome where
   parse := Internal.parseByToken

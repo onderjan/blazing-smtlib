@@ -24,7 +24,7 @@ nor a `LEAN:` reason fails the build.
 declared where `SyntaxToken` is, which `Token.lean` cannot import. -/
 
 /--
-info: 8074 declarations in 450 modules; 85 add to a sibling's type:
+info: 8090 declarations in 451 modules; 85 add to a sibling's type:
 BSmtLib.Facts.Proofs.Lexer.VNaive.Prefix:
   BSmtLib.Facts.Proofs.Lexer.VNaive.Run.St.Taken
 BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Pure:

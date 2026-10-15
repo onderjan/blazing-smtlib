@@ -8,9 +8,11 @@ Usage, with `lake exe bench-fused-parser` from `lean/`:
 
 - `time <reader> <runs> <file>...`: parses each file `runs` times with the reader (`lex`, the
   lexer alone; `null`, the parse adapter with a parser that does nothing; `port`, the loop over
-  single tokens; `fused`, the script parser's `parse`; `read`, `Reader.readSmt`; and `port-io`,
-  `fused-io` with the syntax checker in `IO`), printing one line per file with the tokens, the
-  bytes and the best and median time of a run in nanoseconds.
+  single tokens; `fused`, the script parser's `parse`; `read`, `Reader.readSmt`; `port-io`,
+  `fused-io` with the syntax checker in `IO`; and `term-port`, `term-fused`, `term-read` with a
+  syntax checker that accepts non-standard commands of one term, which the library's term parser
+  parses), printing one line per file with the tokens, the bytes and the best and median time of
+  a run in nanoseconds.
 - `check <list> <root> <mode>`: for each path in the file `list` (relative to `root`), runs the
   loop over single tokens and the script parser's `parse` with a recording handler and compares
   the calls, the result and the
@@ -143,6 +145,90 @@ instance {H : Type} {m : Type → Type} [Monad m] [CommandHandler H m] :
     let (answer, inner, state, next) ← Parser.Internal.parseByToken parser.inner state cursor
     return (answer, ⟨inner⟩, state, next)
 
+/-! ## A syntax checker that accepts non-standard commands of one term -/
+
+/-- The syntax checker of the benchmark, accepting every non-standard command whose payload is
+one term, which its parser parses with the library's term parser. -/
+structure TermCommandChecker where
+
+instance : Handler TermCommandChecker Id where
+  Error := NonstandardCommandError
+  SExpr := Unit
+  Attribute := Unit
+  «Sort» := Unit
+  Term := Unit
+  Scope := Unit
+  setVersion _ := pure ()
+  handleSort _ _ := pure ()
+  handleTerm _ := pure ()
+  handleSExpr _ := pure ()
+  handleAttribute _ _ := pure ()
+  annotateTerm _ _ := pure ()
+  startLet _ := pure ()
+  endLet _ _ := pure ()
+  startQuantifier _ _ := pure ()
+  endQuantifier _ _ _ := pure ()
+  startLambda _ := pure ()
+  endLambda _ _ := pure ()
+  startMatch _ := pure ()
+  startMatchCase _ _ := pure ()
+  endMatchCase _ _ _ := pure ()
+  endMatch _ _ := pure ()
+
+/-- The rule of a non-standard command of one term. -/
+structure TermRule where
+
+instance : Parser.CommandRule TermRule TermCommandChecker where
+  Parser := Parser.ClosedParser TermCommandChecker (Parser.TermParser TermCommandChecker)
+  Result := Unit
+  handle _ := pure ()
+
+instance : CommandHandler TermCommandChecker Id where
+  NonstandardParser := Parser.CommandPayloadParser TermCommandChecker TermRule
+  nonstandardCommand _ := return .new (.new .new)
+  commandAssert _ := pure ()
+  commandCheckSat := pure ()
+  commandCheckSatAssuming _ := pure ()
+  commandDeclareConst _ _ := pure ()
+  startDeclareDatatype _ _ := pure ()
+  endDeclareDatatype _ := pure ()
+  startDeclareDatatypes _ := pure ()
+  startDatatypeDeclaration _ := pure ()
+  endDatatypeDeclaration _ := pure ()
+  endDeclareDatatypes := pure ()
+  commandDeclareFun _ _ _ := pure ()
+  commandDeclareSort _ _ := pure ()
+  commandDeclareSortParameter _ := pure ()
+  commandDefineConst _ _ _ := pure ()
+  startDefineFun _ := pure ()
+  endDefineFun _ := pure ()
+  startDefineFunRec _ := pure ()
+  endDefineFunRec _ := pure ()
+  startDefineFunsRec _ := pure ()
+  startRecursiveBody _ := pure ()
+  endRecursiveBody _ := pure ()
+  endDefineFunsRec := pure ()
+  startDefineSort _ _ := pure ()
+  endDefineSort _ := pure ()
+  commandEcho _ := pure ()
+  commandExit := pure ()
+  commandGetAssertions := pure ()
+  commandGetAssignment := pure ()
+  commandGetInfo _ := pure ()
+  commandGetModel := pure ()
+  commandGetOption _ := pure ()
+  commandGetProof := pure ()
+  commandGetUnsatAssumptions := pure ()
+  commandGetUnsatCore := pure ()
+  commandGetValue _ := pure ()
+  commandPop _ := pure ()
+  commandPush _ := pure ()
+  commandReset := pure ()
+  commandResetAssertions := pure ()
+  commandSetInfo _ := pure ()
+  commandSetLogic _ := pure ()
+  commandSetOption _ := pure ()
+
 /-- Token handler that only counts tokens. -/
 structure CountTokens where
   tokens : Nat
@@ -194,6 +280,16 @@ def runOnce (reader : String) (data : ByteArray) : IO Unit := do
     expectOk reader (Id.run ((Lexer.new adapter default).lexAll input))
   | "read" =>
     expectOk reader (Id.run (Reader.readSmt (n := Id) ({} : SyntaxChecker) input)).1
+  | "term-port" =>
+    let adapter : Parser.ParseAdapter TermCommandChecker (PortParser TermCommandChecker) :=
+      Parser.ParseAdapter.new {} (PortParser.new Token.VersionPosture.default)
+    expectOk reader (Id.run ((Lexer.new adapter default).lexAll input))
+  | "term-fused" =>
+    let adapter : Parser.ParseAdapter TermCommandChecker (Parser.ScriptParser TermCommandChecker) :=
+      Parser.ParseAdapter.new {} (Parser.ScriptParser.new Token.VersionPosture.default)
+    expectOk reader (Id.run ((Lexer.new adapter default).lexAll input))
+  | "term-read" =>
+    expectOk reader (Id.run (Reader.readSmt (n := Id) ({} : TermCommandChecker) input)).1
   | "port-io" =>
     let handler : SyntaxCheckerIO := { commands := ← IO.mkRef 0 }
     let adapter : Parser.ParseAdapter SyntaxCheckerIO (PortParser SyntaxCheckerIO) :=
