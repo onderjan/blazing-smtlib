@@ -22,7 +22,7 @@ not be a `)`, and why the list must be below its maximum.
 
 namespace BSmtLib.Facts.Proofs.Parser.List
 
-open BSmtLib.Parser (Input PM Step)
+open BSmtLib.Parser (PM)
 open BSmtLib.Parser.Category.Combinator (ListState)
 open BSmtLibSpec.Parser.Traversal (Points)
 open BSmtLib.Facts.Parser.Adapters.Run BSmtLib.Facts.Proofs.Parser.Drive
@@ -35,10 +35,12 @@ variable {points : Points (StateT H m)} {σ ρ α : Type}
 omit [LawfulMonad m] in
 /-- Two states that step alike on the first token, with the same calls due at its arrival,
 read alike. -/
-theorem _root_.BSmtLib.Facts.Proofs.Parser.Drive.Runs.first {step : σ → Input → PM H (Step σ ρ)}
-    {state state' : σ} {token : Input}
-    {tokens : List Input} {program : PM H α} {next : α → PM H (Step σ ρ)}
-    {arrival : σ → Input → PM H Unit}
+theorem _root_.BSmtLib.Facts.Proofs.Parser.Drive.Runs.first
+    {step : σ → Parser.Internal.Input → PM H (Parser.Internal.Step σ ρ)}
+    {state state' : σ} {token : Parser.Internal.Input}
+    {tokens : List Parser.Internal.Input} {program : PM H α} {next : α → PM H
+        (Parser.Internal.Step σ ρ)}
+    {arrival : σ → Parser.Internal.Input → PM H Unit}
     (heq : step state token = step state' token)
     (h : Runs points step state' (token :: tokens) program next arrival)
     (harr : arrival state token = arrival state' token := by intros; rfl) :
@@ -48,7 +50,8 @@ theorem _root_.BSmtLib.Facts.Proofs.Parser.Drive.Runs.first {step : σ → Input
   simp only [List.cons_append, drive_cons', arrivalTick, heq, harr] at this ⊢
   exact this
 
-variable {init : σ} {inner : σ → Input → PM H (Step σ ρ)} {maximum : Option Nat}
+variable {init : σ} {inner : σ → Parser.Internal.Input → PM H
+    (Parser.Internal.Step σ ρ)} {maximum : Option Nat}
 
 /-- The list between elements, its `(` consumed, with the elements so far. -/
 def ListState.between (init : σ) (items : Array ρ) : ListState σ ρ :=
@@ -71,12 +74,13 @@ theorem ListState.close_runs (items : Array ρ) :
 One element, from between elements: the inner parser reads it from its initial state, and the
 list appends it. Its first token is not a `)`, and the list is below its maximum.
 -/
-theorem ListState.item_runs {token : Input} {tokens : List Input} {program : PM H α}
-    {next : α → PM H (Step σ ρ)} (items : Array ρ) (hfirst : token ≠ .parenClose)
+theorem ListState.item_runs {token : Parser.Internal.Input} {tokens : List Parser.Internal.Input}
+    {program : PM H α}
+    {next : α → PM H (Parser.Internal.Step σ ρ)} (items : Array ρ) (hfirst : token ≠ .parenClose)
     (hmaximum : ∀ limit, maximum = some limit → items.size < limit)
     (h : Runs points inner init (token :: tokens) program next) :
     Runs points (ListState.step init inner maximum) (ListState.between init items)
-      (token :: tokens) program fun a => next a >>= Step.wrap
+      (token :: tokens) program fun a => next a >>= Parser.Internal.Step.wrap
         (fun state => ({ opened := true, outside := false, inner := state, items } :
           ListState σ ρ))
         (fun item => pure (.more (ListState.between init (items.push item)))) := by
@@ -102,13 +106,15 @@ theorem ListState.item_runs {token : Input} {tokens : List Input} {program : PM 
 One element, from between elements, read by an inner parser that ends with it: the list
 appends it and is between elements again.
 -/
-theorem ListState.item_runs_done {token : Input} {tokens : List Input} {program : PM H ρ}
+theorem ListState.item_runs_done {token : Parser.Internal.Input}
+    {tokens : List Parser.Internal.Input} {program : PM H ρ}
     (items : Array ρ) (hfirst : token ≠ .parenClose)
     (hmaximum : ∀ limit, maximum = some limit → items.size < limit)
     (h : Runs points inner init (token :: tokens) program fun r => pure (.done r)) :
     Runs points (ListState.step init inner maximum) (ListState.between init items)
       (token :: tokens) program fun r => pure (.more (ListState.between init (items.push r))) :=
-  (ListState.item_runs items hfirst hmaximum h).congr rfl (by funext; simp [Step.wrap])
+  (ListState.item_runs items hfirst hmaximum h).congr rfl
+      (by funext; simp [Parser.Internal.Step.wrap])
 
 end
 

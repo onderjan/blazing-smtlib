@@ -123,7 +123,7 @@ starts when its scrutinee is complete, at the scrutinee's last token.
 -/
 @[inline]
 def termComplete (levels : List (TermLevelOf H)) (term : Handler.Term H) :
-    PM H (Step (TermStateOf H) (Handler.Term H)) := do
+    PM H (Internal.Step (TermStateOf H) (Handler.Term H)) := do
   match levels with
   | [] => return .done term
   | .application function sort arguments :: outer =>
@@ -157,10 +157,10 @@ def endBinder (kind : BinderKind) (scope : Handler.Scope H) (body : Handler.Term
   | .sorted .lambda => call (Handler.endLambda scope body)
 
 /-- The operator after the `(` of a term. -/
-def termOpened (self : TermStateOf H) (token : Input) :
-    PM H (Step (TermStateOf H) (Handler.Term H)) :=
-  let into mode := pure (Step.more { self with mode })
-  let enter level := pure (Step.more { mode := .start, levels := level :: self.levels })
+def termOpened (self : TermStateOf H) (token : Internal.Input) :
+    PM H (Internal.Step (TermStateOf H) (Handler.Term H)) :=
+  let into mode := pure (Internal.Step.more { self with mode })
+  let enter level := pure (Internal.Step.more { mode := .start, levels := level :: self.levels })
   match token with
   | .symbol function => enter (.application ⟨function, #[]⟩ none #[])
   | .parenOpen => into (.applicationHead .opened)
@@ -186,9 +186,9 @@ ends at its own `)`. A match starts at its scrutinee's last token; each case sta
 pattern's last token and ends at its `)`; the match is handled at its `)`. An annotation is
 handled at its `)`, after its attributes.
 -/
-def termStep (version : Token.Version) (self : TermStateOf H) (token : Input) :
-    PM H (Step (TermStateOf H) (Handler.Term H)) := do
-  let into mode := pure (Step.more { self with mode })
+def termStep (version : Token.Version) (self : TermStateOf H) (token : Internal.Input) :
+    PM H (Internal.Step (TermStateOf H) (Handler.Term H)) := do
+  let into mode := pure (Internal.Step.more { self with mode })
   match self.mode with
   | .start =>
     match token with
@@ -296,13 +296,16 @@ variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
 /-- The term parser before a term. -/
 def TermParser.new : TermParser H := ⟨.init⟩
 
-instance : Parse (TermParser H) H m (Handler.Error H) (Handler.Term H) where
+instance : Internal.ParseByToken (TermParser H) H m (Handler.Error H) (Handler.Term H) where
   arrive _ _ := pure ()
   step version parser token := do
     match ← termStep version parser.state token with
     | .more state => return .more ⟨state⟩
     | .done result => return .done result
   reset _ := .new
+
+instance : Parse (TermParser H) H m (Handler.Error H) (Handler.Term H) where
+  parse := Internal.parseByToken
 
 end
 

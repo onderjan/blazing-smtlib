@@ -31,8 +31,9 @@ section
 variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
 
 /-- A step of the sorted variable parser: `(` ⟨symbol⟩ ⟨sort⟩ `)`. -/
-def sortedVarStep (version : Version) (self : SortedVarState (Handler.«Sort» H)) (token : Input) :
-    PM H (Step (SortedVarState (Handler.«Sort» H)) (Symbol × Handler.«Sort» H)) := do
+def sortedVarStep (version : Version) (self : SortedVarState (Handler.«Sort» H))
+    (token : Internal.Input) :
+    PM H (Internal.Step (SortedVarState (Handler.«Sort» H)) (Symbol × Handler.«Sort» H)) := do
   match self with
   | .start =>
     expectOpen token

@@ -31,8 +31,8 @@ inductive SortDecState where
   | close (symbol : Symbol) (arity : NumeralView)
 
 /-- A step of the parser of a sort declaration. -/
-def SortDecState.step (self : SortDecState) (token : Input) :
-    PM H (Step SortDecState (Symbol × NumeralView)) := do
+def SortDecState.step (self : SortDecState) (token : Internal.Input) :
+    PM H (Internal.Step SortDecState (Symbol × NumeralView)) := do
   match self with
   | .start =>
     expectOpen token
@@ -73,8 +73,9 @@ variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
 
 /-- A step of the constructor parser; a selector is parsed as a sorted variable. -/
 def constructorStep (version : Version) (self : ConstructorState (Handler.«Sort» H))
-    (token : Input) :
-    PM H (Step (ConstructorState (Handler.«Sort» H)) (Constructor (Handler.«Sort» H))) := do
+    (token : Internal.Input) :
+    PM H (Internal.Step (ConstructorState (Handler.«Sort» H)) (Constructor
+        (Handler.«Sort» H))) := do
   match self with
   | .start =>
     expectOpen token
@@ -94,8 +95,9 @@ constructors at its `)`. The start comes when the tokens determine the sort para
 -/
 @[specialize start]
 def datatypeStep (start : Array Symbol → PM H Unit) (version : Version)
-    (self : DatatypeState (Handler.«Sort» H)) (token : Input) :
-    PM H (Step (DatatypeState (Handler.«Sort» H)) (Array (Constructor (Handler.«Sort» H)))) := do
+    (self : DatatypeState (Handler.«Sort» H)) (token : Internal.Input) :
+    PM H (Internal.Step (DatatypeState (Handler.«Sort» H)) (Array (Constructor
+        (Handler.«Sort» H)))) := do
   match self with
   | .start =>
     expectOpen token

@@ -24,7 +24,7 @@ open BSmtLibSpec.Grammar
 open BSmtLibSpec.Parser
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Parser.Traversal
-open BSmtLib.Parser (Input PM Step Flow Parse)
+open BSmtLib.Parser (PM Parse)
 open BSmtLib.Parser.Script (ScriptParser)
 open BSmtLib.Token (VersionPosture)
 open BSmtLib.Parser.Command (CommandState CommandOutcome commandStep)
@@ -315,7 +315,7 @@ theorem refused_taken {start version : BSmtLibSpec.Lexicon.Version} {done : List
 it has taken, or finishes the script, or fails: no rejection of a version declaration, or the
 rejection of one that names no supported version at its `)`. -/
 theorem afterProcessing_post {start : BSmtLibSpec.Lexicon.Version} {pre : List Received}
-    {version : Token.Version} {parser : ScriptParser (List Event)} {token : Input}
+    {version : Token.Version} {parser : ScriptParser (List Event)} {token : Parser.Internal.Input}
     {x : Received} (hinv : ScriptInv start pre version parser)
     (hitem : Bridge.received token = some x) (hlex : x.OfVersion (Bridge.version version))
     (hexit : AfterExit start pre → x = .endOfInput) :
@@ -327,7 +327,7 @@ theorem afterProcessing_post {start : BSmtLibSpec.Lexicon.Version} {pre : List R
   subst hposture
   rcases hphase with ⟨done, items, hchain, rfl, hm, hs⟩ | ⟨rfl, done, hchain, rfl⟩
   · unfold afterProcessing
-    simp only [Parse.step, ScriptParser.step, bind_assoc]
+    simp only [Parser.Internal.ParseByToken.step, ScriptParser.step, bind_assoc]
     have hcm := commandStep_advances version markers markers_nonempty state hitem hlex
     have hcs := commandStep_advances version scriptFollows scriptFollows_nonempty state hitem hlex
     refine Sound.bind ((hcm.and hcs).mono (fun r h => h) fun e ⟨hq, _⟩ => ?_)
@@ -380,16 +380,17 @@ theorem afterProcessing_post {start : BSmtLibSpec.Lexicon.Version} {pre : List R
         · exact absurd hend cmdEnd_ne_endOfInput
   · -- after `exit`, the producer hands over the end of the input alone
     obtain rfl := hexit ⟨done, _, hchain, rfl⟩
-    obtain rfl := Input.received_endOfInput hitem
+    obtain rfl := Parser.Internal.Input.received_endOfInput hitem
     unfold afterProcessing
-    simp only [Parse.step, ScriptParser.step, commandStep, pure_bind]
+    simp only [Parser.Internal.ParseByToken.step, ScriptParser.step, commandStep, pure_bind]
     refine Sound.pure ⟨done ++ [.exit], ?_⟩
     rw [List.append_assoc]
     simpa using takes_of_chain hchain (Takes.stop (last := .exit) trivial rfl)
 
 /-- The calls due at an item's arrival never fail. -/
-theorem arrive_sound (parser : ScriptParser (List Event)) (token : Input) :
-    Sound (fun _ => True) Benign (Parse.arrive (H := List Event) parser token) := by
+theorem arrive_sound (parser : ScriptParser (List Event)) (token : Parser.Internal.Input) :
+    Sound (fun _ => True) Benign (Parser.Internal.ParseByToken.arrive
+        (H := List Event) parser token) := by
   constructor
   · intro _ _ _ _
     trivial
@@ -402,7 +403,7 @@ theorem arrive_sound (parser : ScriptParser (List Event)) (token : Input) :
 
 /-- Every step of the script parser on an item, from its arrival on. -/
 theorem recAfter_post {start : BSmtLibSpec.Lexicon.Version} {pre : List Received}
-    {version : Token.Version} {parser : ScriptParser (List Event)} {token : Input}
+    {version : Token.Version} {parser : ScriptParser (List Event)} {token : Parser.Internal.Input}
     {x : Received} (hinv : ScriptInv start pre version parser)
     (hitem : Bridge.received token = some x) (hlex : x.OfVersion (Bridge.version version))
     (hexit : AfterExit start pre → x = .endOfInput) :
@@ -418,7 +419,7 @@ theorem recAfter_post {start : BSmtLibSpec.Lexicon.Version} {pre : List Received
 /-- A step of the script parser that rejects an item makes no call at it: the item's processing
 is the last event of its run. -/
 theorem recAfter_rejects_quiet {start : BSmtLibSpec.Lexicon.Version} {pre : List Received}
-    {version : Token.Version} {parser : ScriptParser (List Event)} {token : Input}
+    {version : Token.Version} {parser : ScriptParser (List Event)} {token : Parser.Internal.Input}
     {x : Received} (hinv : ScriptInv start pre version parser)
     (hitem : Bridge.received token = some x) (hlex : x.OfVersion (Bridge.version version))
     (hexit : AfterExit start pre → x = .endOfInput)
@@ -625,8 +626,8 @@ theorem scriptInv_witness {start : BSmtLibSpec.Lexicon.Version} {pre : List Rece
 /-! ## Runs of the script parser -/
 
 /-- The script parser's recording run over items, with the state it is in where they run out. -/
-def driveScript : Token.Version → ScriptParser (List Event) → List Input →
-    Quiet.RPM ((Token.Version × ScriptParser (List Event)) ⊕ (Unit × List Input))
+def driveScript : Token.Version → ScriptParser (List Event) → List Parser.Internal.Input →
+    Quiet.RPM ((Token.Version × ScriptParser (List Event)) ⊕ (Unit × List Parser.Internal.Input))
   | version, parser, [] => pure (.inl (version, parser))
   | version, parser, token :: tokens => do
     match ← recAfter version parser token with
@@ -635,7 +636,7 @@ def driveScript : Token.Version → ScriptParser (List Event) → List Input →
 
 /-- The driver's run is the run with the state forgotten. -/
 theorem driveParse_eq_driveScript (version : Token.Version) (parser : ScriptParser (List Event))
-    (items : List Input) :
+    (items : List Parser.Internal.Input) :
     driveParse recordingPoints recordingProducer version parser items =
       driveScript version parser items >>= fun r => match r with
         | .inl _ => pure none
@@ -651,7 +652,7 @@ theorem driveParse_eq_driveScript (version : Token.Version) (parser : ScriptPars
     · simp [continueWith]
 
 theorem driveScript_append (version : Token.Version) (parser : ScriptParser (List Event))
-    (items items' : List Input) :
+    (items items' : List Parser.Internal.Input) :
     driveScript version parser (items ++ items') =
       driveScript version parser items >>= fun r => match r with
         | .inl (version', parser') => driveScript version' parser' items'
@@ -665,7 +666,7 @@ theorem driveScript_append (version : Token.Version) (parser : ScriptParser (Lis
     · simp [ih]
     · simp
 
-theorem received_rcv {token : Input} (h : Bridge.received token ≠ none) :
+theorem received_rcv {token : Parser.Internal.Input} (h : Bridge.received token ≠ none) :
     Bridge.received token = some (rcv token) := by
   unfold rcv
   cases hr : Bridge.received token with
@@ -674,15 +675,17 @@ theorem received_rcv {token : Input} (h : Bridge.received token ≠ none) :
 
 /-- What a run of the script parser over items ends in: going on in a state that says what it
 has taken, or finished at an item after which a script ends, with the items after it. -/
-def RunPost (start : BSmtLibSpec.Lexicon.Version) (pre : List Received) (items : List Input) :
-    (Token.Version × ScriptParser (List Event)) ⊕ (Unit × List Input) → Prop
+def RunPost (start : BSmtLibSpec.Lexicon.Version) (pre : List Received)
+    (items : List Parser.Internal.Input) :
+    (Token.Version × ScriptParser (List Event)) ⊕ (Unit × List Parser.Internal.Input) → Prop
   | .inl (version, parser) => ScriptInv start (pre ++ items.map rcv) version parser
   | .inr (_, rest) => ∃ j commands, j < items.length ∧ rest = items.drop (j + 1) ∧
       Takes start commands (pre ++ (items.take (j + 1)).map rcv) .finished
 
 /-- A failure of a run of the script parser over items: no rejection of a version declaration,
 or the rejection of a declaration that names no supported version at its `)`. -/
-def RunFailure (start : BSmtLibSpec.Lexicon.Version) (pre : List Received) (items : List Input)
+def RunFailure (start : BSmtLibSpec.Lexicon.Version) (pre : List Received)
+    (items : List Parser.Internal.Input)
     (e : Parser.ParseErrorCause Unit) : Prop :=
   Benign e ∨ e = .syntax .unsupportedVersion ∧ ∃ j commands, j < items.length ∧
     Takes start commands (pre ++ (items.take (j + 1)).map rcv) (.failed .unsupportedVersion)
@@ -692,7 +695,7 @@ each item's reserved words are ones of the version in force there, as every read
 items before it says; or it finishes, or fails, at an item after which a parser takes no
 more. -/
 theorem script_runs (start : BSmtLibSpec.Lexicon.Version) :
-    ∀ (items : List Input) (pre : List Received) (version : Token.Version)
+    ∀ (items : List Parser.Internal.Input) (pre : List Received) (version : Token.Version)
       (parser : ScriptParser (List Event)), ScriptInv start pre version parser →
     NoLayout items →
     (∀ j (hj : j < items.length), ∀ commands taken ending, Takes start commands taken ending →

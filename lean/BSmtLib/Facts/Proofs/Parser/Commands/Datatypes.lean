@@ -23,7 +23,7 @@ programs are the ticks of the tokens, and their values the views.
 namespace BSmtLib.Facts.Proofs.Parser.Commands.Datatypes
 
 open BSmtLibSpec.Grammar
-open BSmtLib.Parser (Input PM Step)
+open BSmtLib.Parser (PM)
 open BSmtLib.Parser.Category.Combinator (ListState)
 open BSmtLib.Parser.Command.Datatype (DatatypeState ConstructorState datatypeStep constructorStep
     SortDecState)
@@ -48,7 +48,7 @@ variable {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf 
 /-! ## Symbols and sort declarations -/
 
 /-- The symbols, from between elements: their views, appended to those found so far. -/
-theorem symbols_runs : (names : List Tree.Symbol) → ∀ {tokens : List Input},
+theorem symbols_runs : (names : List Tree.Symbol) → ∀ {tokens : List Parser.Internal.Input},
     Stands tokens (names.map .symbol) →
     ∃ symbols : List Nodes.Symbol, symbols.map Bridge.symbol = names ∧
       tokens = symbols.map .symbol ∧
@@ -62,7 +62,7 @@ theorem symbols_runs : (names : List Tree.Symbol) → ∀ {tokens : List Input},
     exact ⟨[], rfl, rfl, fun found => (Runs.nil () (by simp)).congr (by simp) rfl⟩
   | name :: names, _, hs => by
     obtain ⟨token, rest, rfl, htoken, hrest⟩ := Stands.split_cons hs
-    obtain ⟨symbol, rfl, rfl⟩ := Input.received_symbol htoken
+    obtain ⟨symbol, rfl, rfl⟩ := Parser.Internal.Input.received_symbol htoken
     obtain ⟨symbols, hsymbols, rfl, hruns⟩ := symbols_runs names hrest
     refine ⟨symbol :: symbols, by simp [hsymbols], rfl, fun found => ?_⟩
     have hitem := ListState.item_runs_done (H := H) (points := points) (maximum := none)
@@ -76,7 +76,7 @@ theorem symbols_runs : (names : List Tree.Symbol) → ∀ {tokens : List Input},
     simp
 
 /-- The sort declarations, from between elements: their views. -/
-theorem sortDecs_runs : (sortDecs : List Tree.SortDec) → ∀ {tokens : List Input},
+theorem sortDecs_runs : (sortDecs : List Tree.SortDec) → ∀ {tokens : List Parser.Internal.Input},
     Stands tokens (sortDecs.flatMap Tree.SortDec.tokens) →
     ∃ views : List (Nodes.Symbol × NumeralView),
       views.map (fun (symbol, arity) => (Bridge.symbol symbol, Bridge.chars arity.asSlice)) =
@@ -116,24 +116,24 @@ local notation "S" => Traits.Handler.«Sort» H
 
 /-- What the datatype parser does when its constructors end. -/
 def constructorsDone (parametric : Bool) (constructors : Array (Nodes.Constructor S)) :
-    PM H (Step (DatatypeState S) (Array (Nodes.Constructor S))) := do
+    PM H (Parser.Internal.Step (DatatypeState S) (Array (Nodes.Constructor S))) := do
   if constructors.isEmpty then Parser.syntaxError .emptyDatatypeConstructors
   if parametric then return .more (.close constructors)
   else return .done constructors
 
 /-- What the datatype parser does when its parameters end. -/
 def parametersDone (start : Array Nodes.Symbol → PM H Unit) (parameters : Array Nodes.Symbol) :
-    PM H (Step (DatatypeState S) (Array (Nodes.Constructor S))) := do
+    PM H (Parser.Internal.Step (DatatypeState S) (Array (Nodes.Constructor S))) := do
   if parameters.isEmpty then Parser.syntaxError .emptyDatatypeParameters
   start parameters
   return .more .constructorsOpen
 
 omit [LawfulMonad m] in
 theorem datatypeStep_constructors (start : Array Nodes.Symbol → PM H Unit) (parametric : Bool)
-    (state : ListState (ConstructorState S) (Nodes.Constructor S)) (token : Input) :
+    (state : ListState (ConstructorState S) (Nodes.Constructor S)) (token : Parser.Internal.Input) :
     datatypeStep start version (.constructors parametric state) token =
       state.step .start (constructorStep version) none token >>=
-        Step.wrap (.constructors parametric) (constructorsDone parametric) := by
+        Parser.Internal.Step.wrap (.constructors parametric) (constructorsDone parametric) := by
   simp only [datatypeStep]
   congr 1
   funext step
@@ -141,9 +141,9 @@ theorem datatypeStep_constructors (start : Array Nodes.Symbol → PM H Unit) (pa
 
 omit [LawfulMonad m] in
 theorem datatypeStep_parameters (start : Array Nodes.Symbol → PM H Unit)
-    (state : ListState Unit Nodes.Symbol) (token : Input) :
+    (state : ListState Unit Nodes.Symbol) (token : Parser.Internal.Input) :
     datatypeStep start version (.parameters state) token =
-      state.step () symbolStep none token >>= Step.wrap DatatypeState.parameters
+      state.step () symbolStep none token >>= Parser.Internal.Step.wrap DatatypeState.parameters
         (parametersDone start) := by
   simp only [datatypeStep]
   congr 1
@@ -159,7 +159,8 @@ theorem datatype_plain_runs (hA : TermAgrees h)
       start parameters = adaptRun (start' (parameters.toList.map Bridge.symbol)))
     (first : Tree.ConstructorDec) (rest : List Tree.ConstructorDec)
     (hvalid : ∀ constructor ∈ first :: rest, constructor.Valid (Bridge.version version))
-    {tokens : List Input} (hs : Stands tokens (Tree.DatatypeDec.tokens ⟨[], first :: rest⟩)) :
+    {tokens : List Parser.Internal.Input} (hs : Stands tokens (Tree.DatatypeDec.tokens ⟨[],
+        first :: rest⟩)) :
     ∃ program : PM H (Array (Nodes.Constructor S)),
       (fun cs => cs.toList.map Bridge.constructor) <$> program =
         adaptRun (Traversal.datatype points h start' ⟨[], first :: rest⟩) ∧
@@ -169,7 +170,8 @@ theorem datatype_plain_runs (hA : TermAgrees h)
   obtain ⟨inner, rfl, hinner⟩ := Stands.split_paren hs
   obtain ⟨firstTokens, restTokens, rfl, hs₁, hs₂⟩ := Stands.split hinner
   obtain ⟨firstInner, rfl, hfirstInner⟩ := Stands.split_paren hs₁
-  have hclose : Stands [Input.parenClose] [.parenClose] := Stands.cons rfl Stands.nil
+  have hclose : Stands [Parser.Internal.Input.parenClose]
+      [.parenClose] := Stands.cons rfl Stands.nil
   have hfirstInner' := Stands.append hfirstInner hclose
   rw [List.cons_append] at hfirstInner'
   obtain ⟨program, hprogram, hruns⟩ := constructor_runs_opened (points := points) hA first
@@ -193,7 +195,7 @@ theorem datatype_plain_runs (hA : TermAgrees h)
     (Runs.embed (outer := datatypeStep start version)
       (DatatypeState.constructors false) (constructorsDone false)
       (datatypeStep_constructors start false)
-      (hothersRuns (#[].push c) (by simp))).congr rfl (by funext; simp [Step.wrap])
+      (hothersRuns (#[].push c) (by simp))).congr rfl (by funext; simp [Parser.Internal.Step.wrap])
   refine ⟨do
       tick points .parenOpen
       tick points .parenOpen
@@ -207,7 +209,8 @@ theorem datatype_plain_runs (hA : TermAgrees h)
       adaptRun_mapM, adaptRun_take (token := .parenOpen) rfl,
       adaptRun_take (token := .parenClose) rfl] at hothers ⊢
     simp [← hothers, ← hprogram, hstart, adaptRun_take (token := .parenOpen) rfl]
-  · rw [show Input.parenOpen :: (Input.parenOpen :: (firstInner ++ [.parenClose]) ++ restTokens ++
+  · rw [show Parser.Internal.Input.parenOpen :: (Parser.Internal.Input.parenOpen ::
+      (firstInner ++ [.parenClose]) ++ restTokens ++
         [.parenClose]) =
       [.parenOpen] ++ ([.parenOpen] ++ ((firstInner ++ [.parenClose]) ++ (restTokens ++
         [.parenClose]))) by simp]
@@ -218,12 +221,13 @@ theorem datatype_plain_runs (hA : TermAgrees h)
         (Runs.token (program := start #[]) (by simp [datatypeStep])) fun _ =>
       Runs.append (middle := fun c => (.constructors false (ListState.between .start (#[].push c)) :
           DatatypeState S))
-        (hfirstDatatype.congr rfl (by funext; simp [Step.wrap])) fun c =>
+        (hfirstDatatype.congr rfl (by funext; simp [Parser.Internal.Step.wrap])) fun c =>
       Runs.append (hothersDatatype c) fun cs =>
         Runs.token (program := pure ((#[].push c) ++ (cs : List _).toArray))
           (next := fun cs => pure (.done cs)) (by
             rw [datatypeStep_constructors]
-            simp [ListState.step, ListState.between, constructorsDone, Step.wrap])).congr ?_ rfl
+            simp [ListState.step, ListState.between, constructorsDone,
+                Parser.Internal.Step.wrap])).congr ?_ rfl
     simp
 theorem datatype_par_tokens (parameter : Tree.Symbol) (parameters : List Tree.Symbol)
     (constructors : List Tree.ConstructorDec) :
@@ -238,7 +242,7 @@ theorem datatype_par_runs (hA : TermAgrees h)
     (parameter : Tree.Symbol) (parameters : List Tree.Symbol)
     (constructors : List Tree.ConstructorDec) (hne : constructors ≠ [])
     (hvalid : ∀ constructor ∈ constructors, constructor.Valid (Bridge.version version))
-    {tokens : List Input}
+    {tokens : List Parser.Internal.Input}
     (hs : Stands tokens (Tree.DatatypeDec.tokens ⟨parameter :: parameters, constructors⟩)) :
     ∃ program : PM H (Array (Nodes.Constructor S)),
       (fun cs => cs.toList.map Bridge.constructor) <$> program =
@@ -248,7 +252,7 @@ theorem datatype_par_runs (hA : TermAgrees h)
   rw [datatype_par_tokens] at hs
   obtain ⟨inner, rfl, hinner⟩ := Stands.split_paren hs
   obtain ⟨parToken, rest, rfl, hparToken, hrest⟩ := Stands.split_cons hinner
-  rw [Input.received_word (word := .general .par) hparToken]
+  rw [Parser.Internal.Input.received_word (word := .general .par) hparToken]
   obtain ⟨parameterList, constructorList, rfl, hparameterList, hconstructorList⟩ :=
     Stands.split hrest
   obtain ⟨parameterInner, rfl, hparameterInner⟩ := Stands.split_paren hparameterList
@@ -274,7 +278,7 @@ theorem datatype_par_runs (hA : TermAgrees h)
     (next := fun _ => pure (.more (DatatypeState.constructorsOpen : DatatypeState S)))
     ((Runs.embed (outer := datatypeStep start version) DatatypeState.parameters
       (parametersDone start) (datatypeStep_parameters start) hparametersList).congr rfl
-      (by funext; simp [Step.wrap, parametersDone]))
+      (by funext; simp [Parser.Internal.Step.wrap, parametersDone]))
   obtain ⟨found, hfound, hfoundLength, hfoundRuns⟩ := closedList_runs (maximum := none)
     (constructor_element (points := points) (version := version) hA) constructors hvalid
     hconstructorInner (by simp)
@@ -287,7 +291,7 @@ theorem datatype_par_runs (hA : TermAgrees h)
         have : l ≠ [] := by
           rintro rfl
           exact hne (List.length_eq_zero_iff.mp hl.symm)
-        simp [Step.wrap, constructorsDone, this])
+        simp [Parser.Internal.Step.wrap, constructorsDone, this])
   refine ⟨do
       tick points .parenOpen
       tick points (.reserved (.general .par))
@@ -305,11 +309,12 @@ theorem datatype_par_runs (hA : TermAgrees h)
     simp [takeAll, ← hfound, hstart, ticks_append, adaptRun_take (token := .parenOpen) rfl,
       adaptRun_take (token := .parenClose) rfl,
       adaptRun_take (token := .reserved (.general .par)) (syntaxToken := word "par") rfl]
-  · rw [show Input.parenOpen :: (Input.reserved (.general .par) ::
-        (Input.parenOpen :: ((symbol :: symbols).map .symbol ++ [.parenClose]) ++
-          Input.parenOpen :: (constructorInner ++ [.parenClose])) ++ [.parenClose]) =
+  · rw [show Parser.Internal.Input.parenOpen :: (Parser.Internal.Input.reserved (.general .par) ::
+        (Parser.Internal.Input.parenOpen :: ((symbol :: symbols).map .symbol ++ [.parenClose]) ++
+          Parser.Internal.Input.parenOpen ::
+              (constructorInner ++ [.parenClose])) ++ [.parenClose]) =
       [.parenOpen] ++ ([.reserved (.general .par)] ++
-        ((Input.parenOpen :: ((symbol :: symbols).map .symbol ++ [.parenClose])) ++
+        ((Parser.Internal.Input.parenOpen :: ((symbol :: symbols).map .symbol ++ [.parenClose])) ++
           ([.parenOpen] ++ ((constructorInner ++ [.parenClose]) ++ [.parenClose])))) by simp]
     refine (Runs.append (middle := fun _ => (.kind : DatatypeState S))
       (Runs.token_more (by simp [datatypeStep, Parser.Category.Token.expectOpen])) fun _ =>
@@ -331,7 +336,7 @@ theorem datatype_runs (hA : TermAgrees h)
     (hstart : ∀ parameters : Array Nodes.Symbol,
       start parameters = adaptRun (start' (parameters.toList.map Bridge.symbol)))
     (declaration : Tree.DatatypeDec) (hvalid : declaration.Valid (Bridge.version version))
-    {tokens : List Input} (hs : Stands tokens declaration.tokens) :
+    {tokens : List Parser.Internal.Input} (hs : Stands tokens declaration.tokens) :
     (∃ rest, tokens = .parenOpen :: rest) ∧
     ∃ program : PM H (Array (Nodes.Constructor S)),
       (fun cs => cs.toList.map Bridge.constructor) <$> program =

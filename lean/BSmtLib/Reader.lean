@@ -2,6 +2,7 @@ module
 
 public import BSmtLib.Lexer
 public import BSmtLib.Parser.Adapter
+public import BSmtLib.Parser.Internal.Fused
 
 public section
 
@@ -221,8 +222,8 @@ changed in place, if the caller does not keep the old reader. -/
 /-- Returns the reader with its handler changed by `f`. -/
 def modifyHandler (self : Reader H P) (f : H → H) : Reader H P :=
   { lexer := self.lexer.modifyConsumer fun adapter =>
-      let { handler, parser, versionSet } := adapter
-      { handler := f handler, parser, versionSet } }
+      let { handler, parser, versionSet, parseState } := adapter
+      { handler := f handler, parser, versionSet, parseState } }
 
 namespace Internal
 

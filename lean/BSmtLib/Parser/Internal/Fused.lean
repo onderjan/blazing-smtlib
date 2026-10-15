@@ -18,12 +18,15 @@ Fused: terms (without `match`, annotations and `as`), indexed identifiers, and t
 `assert`, `declare-fun`, `declare-const`, `define-fun`, `define-fun-rec`, `define-const`, `push`,
 `pop` and every command's last `)`; sorts, sorted variables and signatures by the functions of
 `Parser.Internal.Fused.Category`. Every other state is stepped by the port's own steps.
+
+The script parser's `parse` (`Fused.parse`) runs this loop on a batch cursor of the library's
+lexer, which the cursor gives through `Token.Produce.asBatch?`, and the parser's loop over single
+tokens on every other producer.
 -/
 
 namespace BSmtLib.Parser.Internal.Fused
 
 open BSmtLib.Nodes BSmtLib.Traits
-open BSmtLib.Parser.Adapter (ParseAdapter)
 open BSmtLib.Parser.Category.Combinator (ListState)
 open BSmtLib.Parser.Category.Term (TermLevel TermLevelOf TermStateOf)
 open BSmtLib.Parser.Command (CommandStateOf)
@@ -103,7 +106,7 @@ def handleTerm {batch : BatchTag} (posture : VersionPosture) (next : BatchCursor
 def portTermStep {batch : BatchTag} (posture : VersionPosture) (h : H) (declarations : Nat)
     (context : TermContext (Handler.«Sort» H)) (term : TermStateOf H) (token : Token batch)
     (next : BatchCursor batch) {β : Type} (k : OutcomeOf H next → m β) : m β := do
-  let input := Input.ofSyntax (Token.Produce.«syntax» next token)
+  let input := Internal.Input.ofSyntax (Token.Produce.«syntax» next token)
   match ← runParser (Category.Term.termStep next.version term input) h with
   | (.error e, h) => fail posture next h e k
   | (.ok (.more term), h) => k <| .term h declarations context term.mode term.levels
@@ -261,9 +264,9 @@ def closingStep {batch : BatchTag} (posture : VersionPosture) (h : H) (declarati
     | (.ok (), h) =>
       match final with
       | .exit =>
-        -- the producer discards the rest of the input, and the script goes on to its end
-        k <| .stop (.ok .continue) { posture, command := .awaiting, declarations }
-          next.discardRest (BatchCursor.discardRest_follows next) h
+        -- the cursor discards the rest of the input, and the script goes on to its end
+        k <| .resume h { posture, command := .awaiting, declarations } next.discardRest
+          (BatchCursor.discardRest_follows next)
       | _ => k <| .command h declarations .awaiting
   | _ => fail posture next h (.syntax (.expectedToken #[.parenClose])) k
 
@@ -389,8 +392,8 @@ def assemble (posture : VersionPosture) (declarations : Nat) (command : CommandS
 
 /--
 Has the parser take `token`, taken from a cursor that leaves `next`, which has consumed from
-`origin`, then the tokens after it, until there are none or the hand-over stops. The parser is
-the one `assemble` makes of the arguments.
+`origin`, then the tokens after it, until there are none or the parser stops. The parser is the
+one `assemble` makes of the arguments.
 -/
 @[specialize]
 def loop {batch : BatchTag} (posture : VersionPosture) (origin : BatchCursor batch) (h : H)
@@ -426,6 +429,24 @@ def loop {batch : BatchTag} (posture : VersionPosture) (origin : BatchCursor bat
     else
       return (.ok .continue, assemble posture declarations .awaiting true context mode levels,
         ⟨next, consumed⟩, h)
+  | .resume h parser cursor follows =>
+    if hn : cursor.HasNext then
+      let (token', ⟨after, taken⟩) := cursor.next hn
+      have : after.remaining < next.remaining := (taken.trans_follows follows).remaining_lt
+      -- a command state that reads a term goes on with the term in the loop's arguments
+      match parser.command with
+      | .payload (.assert term) =>
+        loop parser.posture origin h parser.declarations .awaiting true .assert term.mode
+          term.levels token' after ((taken.trans_follows follows).trans consumed)
+      | .payload (.defineBody definition term) =>
+        loop parser.posture origin h parser.declarations .awaiting true
+          (.definition definition) term.mode term.levels token' after
+          ((taken.trans_follows follows).trans consumed)
+      | command =>
+        loop parser.posture origin h parser.declarations command false .assert .start [] token'
+          after ((taken.trans_follows follows).trans consumed)
+    else
+      return (.ok .continue, parser, ⟨cursor, follows.trans_consumed consumed⟩, h)
   | .stop answer parser cursor follows h =>
     return (answer, parser, ⟨cursor, follows.trans_consumed consumed⟩, h)
 termination_by next.remaining
@@ -447,34 +468,33 @@ def start {batch : BatchTag} (parser : ScriptParser H) (h : H) (token : Token ba
     loop parser.posture producer h parser.declarations command false .assert .start [] token
       next consumed
 
+/--
+Parses the cursor with the script parser: the fused loop if the cursor is a batch cursor of the
+library's lexer, else the loop over single tokens.
+-/
+@[inline]
+def parse {Z : Type} [Token.Produce Z] (parser : ScriptParser H) (state : ParseState H)
+    (cursor : Z) :
+    StateT H m (Except (Cause H) (ControlFlow Unit) × ScriptParser H × ParseState H ×
+      { next : Z // Token.Produce.HasNext cursor → Token.Produce.Consumed next cursor }) :=
+  match Token.Produce.asBatch? cursor with
+  | none => Parser.Internal.parseByToken parser state cursor
+  | some view => fun h => do
+    if hn : view.cursor.HasNext then
+      let (token, ⟨next, consumed⟩) := view.cursor.next hn
+      let (answer, parser, ⟨done, taken⟩, h) ← start parser h token view.cursor next consumed
+      return ((answer, parser, state, ⟨view.back done, fun _ => view.consumed taken⟩), h)
+    else
+      return ((.ok .continue, parser, state,
+        ⟨view.back view.cursor, fun hc => absurd (view.hasNext hc) hn⟩), h)
+
 end
 
-/-- The parse adapter of a script parser, as a consumer whose tokens the fused loop takes. -/
-structure ScriptAdapter (H : Type) {m : Type → Type} [Handler H m] where
-  adapter : ParseAdapter H (ScriptParser H)
-
-/-- The fused reader of a script under the posture, over the handler. -/
-def ScriptAdapter.new {H : Type} {m : Type → Type} [Monad m] [CommandHandler H m] (handler : H)
-    (posture : VersionPosture) : ScriptAdapter H :=
-  ⟨ParseAdapter.new handler (ScriptParser.new posture)⟩
-
-instance {H : Type} {m : Type → Type} [Monad m] [CommandHandler H m] :
-    Token.Consume (ScriptAdapter H) Unit (Cause H) where
-  isConcrete := false
-
-instance {H : Type} {m : Type → Type} [Monad m] [CommandHandler H m] {batch : BatchTag} :
-    Token.ConsumeFrom (ScriptAdapter H) (BatchCursor batch) m where
-  consume producer hp := do
-    let ⟨adapter⟩ ← get
-    -- the handler is told the version in force before the first token of every input
-    let ((), h) ← (show StateT H m Unit from
-      if adapter.versionSet then pure ()
-      else Handler.setVersion (Token.Produce.version producer)).run adapter.handler
-    let (token, ⟨next, consumed⟩) := producer.next hp
-    let (answer, parser, done, h) ← (start adapter.parser h token producer next consumed : m _)
-    set ({ adapter :=
-        { handler := h, parser, versionSet := ParseAdapter.versionSetAfter answer } } :
-      ScriptAdapter H)
-    return (answer, done)
+/- LEAN: Rust's `impl SmtParse<H> for SmtScriptParser<H>` is in `script.rs`. Here it is declared
+in this module, which needs the script parser's module, as its `parse` runs the fused loop; it is
+named where the script parser is. -/
+instance _root_.BSmtLib.Parser.Script.instParseScriptParser {H : Type} {m : Type → Type}
+    [Monad m] [CommandHandler H m] : Parse (ScriptParser H) H m (Handler.Error H) Unit where
+  parse := Fused.parse
 
 end BSmtLib.Parser.Internal.Fused

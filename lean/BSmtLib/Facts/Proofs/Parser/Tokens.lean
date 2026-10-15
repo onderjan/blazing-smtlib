@@ -17,12 +17,11 @@ open BSmtLib.Facts.Parser.Adapters.Bridge
 namespace BSmtLib.Facts.Proofs.Parser.Tokens
 
 open BSmtLibSpec.Grammar
-open BSmtLib.Parser (Input)
 open BSmtLib.Facts.Parser.Adapters.Bridge.Bridge
 
-namespace Input
+namespace Parser.Internal.Input
 
-theorem received_symbol {token : Input} {name : Tree.Symbol}
+theorem received_symbol {token : Parser.Internal.Input} {name : Tree.Symbol}
     (h : Bridge.received token = some (.token (.symbol name))) :
     ∃ symbol, token = .symbol symbol ∧ Bridge.symbol symbol = name := by
   cases token with
@@ -31,7 +30,7 @@ theorem received_symbol {token : Input} {name : Tree.Symbol}
       Tree.SpecConstant.token] at h
   | _ => simp [Bridge.received] at h
 
-theorem received_keyword {token : Input} {name : BSmtLibSpec.Regex.Chars}
+theorem received_keyword {token : Parser.Internal.Input} {name : BSmtLibSpec.Regex.Chars}
     (h : Bridge.received token = some (.token (.keyword name))) :
     ∃ keyword, token = .keyword keyword ∧ Bridge.keyword keyword = name := by
   cases token with
@@ -40,7 +39,7 @@ theorem received_keyword {token : Input} {name : BSmtLibSpec.Regex.Chars}
       Tree.SpecConstant.token] at h
   | _ => simp [Bridge.received] at h
 
-theorem received_reserved {token : Input} {word : BSmtLibSpec.Regex.Chars}
+theorem received_reserved {token : Parser.Internal.Input} {word : BSmtLibSpec.Regex.Chars}
     (h : Bridge.received token = some (.token (.reserved word))) :
     ∃ reserved, token = .reserved reserved ∧ Bridge.reserved reserved = word := by
   cases token with
@@ -49,7 +48,7 @@ theorem received_reserved {token : Input} {word : BSmtLibSpec.Regex.Chars}
       Tree.SpecConstant.token] at h
   | _ => simp [Bridge.received] at h
 
-theorem received_numeral {token : Input} {digits : BSmtLibSpec.Regex.Chars}
+theorem received_numeral {token : Parser.Internal.Input} {digits : BSmtLibSpec.Regex.Chars}
     (h : Bridge.received token = some (.token (.numeral digits))) :
     ∃ view, token = .constant (.numeral view) ∧ chars view.asSlice = digits := by
   cases token with
@@ -60,7 +59,7 @@ theorem received_numeral {token : Input} {digits : BSmtLibSpec.Regex.Chars}
     | _ => simp [Bridge.received, Bridge.constant, Tree.SpecConstant.token] at h
   | _ => simp [Bridge.received] at h
 
-theorem received_decimal {token : Input} {text : BSmtLibSpec.Regex.Chars}
+theorem received_decimal {token : Parser.Internal.Input} {text : BSmtLibSpec.Regex.Chars}
     (h : Bridge.received token = some (.token (.decimal text))) :
     ∃ view, token = .constant (.decimal view) ∧ chars view.asSlice = text := by
   cases token with
@@ -71,7 +70,7 @@ theorem received_decimal {token : Input} {text : BSmtLibSpec.Regex.Chars}
     | _ => simp [Bridge.received, Bridge.constant, Tree.SpecConstant.token] at h
   | _ => simp [Bridge.received] at h
 
-theorem received_string {token : Input} {content : BSmtLibSpec.Regex.Chars}
+theorem received_string {token : Parser.Internal.Input} {content : BSmtLibSpec.Regex.Chars}
     (h : Bridge.received token = some (.token (.string content))) :
     ∃ view, token = .constant (.string view) ∧ chars view.asSlice = content := by
   cases token with
@@ -82,7 +81,8 @@ theorem received_string {token : Input} {content : BSmtLibSpec.Regex.Chars}
     | _ => simp [Bridge.received, Bridge.constant, Tree.SpecConstant.token] at h
   | _ => simp [Bridge.received] at h
 
-theorem received_parenOpen {token : Input} (h : Bridge.received token = some (.token .parenOpen)) :
+theorem received_parenOpen {token : Parser.Internal.Input} (h : Bridge.received token = some
+    (.token .parenOpen)) :
     token = .parenOpen := by
   cases token with
   | parenOpen => rfl
@@ -90,7 +90,7 @@ theorem received_parenOpen {token : Input} (h : Bridge.received token = some (.t
       Tree.SpecConstant.token] at h
   | _ => simp [Bridge.received] at h
 
-theorem received_parenClose {token : Input}
+theorem received_parenClose {token : Parser.Internal.Input}
     (h : Bridge.received token = some (.token .parenClose)) : token = .parenClose := by
   cases token with
   | parenClose => rfl
@@ -98,7 +98,7 @@ theorem received_parenClose {token : Input}
       Tree.SpecConstant.token] at h
   | _ => simp [Bridge.received] at h
 
-theorem received_constant {token : Input} {constant : Tree.SpecConstant}
+theorem received_constant {token : Parser.Internal.Input} {constant : Tree.SpecConstant}
     (h : Bridge.received token = some (.token constant.token)) :
     ∃ constant', token = .constant constant' ∧ Bridge.constant constant' = constant := by
   cases token with
@@ -108,38 +108,41 @@ theorem received_constant {token : Input} {constant : Tree.SpecConstant}
       simp_all [Bridge.received, Bridge.constant, Tree.SpecConstant.token]
   | _ => cases constant <;> simp [Bridge.received, Tree.SpecConstant.token] at h
 
-theorem received_endOfInput {token : Input} (h : Bridge.received token = some .endOfInput) :
+theorem received_endOfInput {token : Parser.Internal.Input}
+    (h : Bridge.received token = some .endOfInput) :
     token = .endOfInput := by
   cases token with
   | endOfInput => rfl
   | constant constant => cases constant <;> simp [Bridge.received] at h
   | _ => simp [Bridge.received] at h
 
-end Input
+end Parser.Internal.Input
 
 namespace Stands
 
 theorem nil : Stands [] [] := rfl
 
-theorem cons {token : Input} {syntaxToken : BSmtLibSpec.Grammar.SyntaxToken} {tokens : List Input}
+theorem cons {token : Parser.Internal.Input} {syntaxToken : BSmtLibSpec.Grammar.SyntaxToken}
+    {tokens : List Parser.Internal.Input}
     {syntaxTokens : List BSmtLibSpec.Grammar.SyntaxToken}
     (h : Bridge.received token = some (.token syntaxToken))
     (hs : Stands tokens syntaxTokens) : Stands (token :: tokens) (syntaxToken :: syntaxTokens) := by
   simp only [Stands, List.map_cons, h] at hs ⊢
   rw [hs]
 
-theorem append {tokens tokens' : List Input}
+theorem append {tokens tokens' : List Parser.Internal.Input}
     {syntaxTokens syntaxTokens' : List BSmtLibSpec.Grammar.SyntaxToken}
     (h : Stands tokens syntaxTokens) (h' : Stands tokens' syntaxTokens') :
     Stands (tokens ++ tokens') (syntaxTokens ++ syntaxTokens') := by
   simp only [Stands, List.map_append] at h h' ⊢
   rw [h, h']
 
-theorem eq_nil {tokens : List Input} (h : Stands tokens []) : tokens = [] :=
+theorem eq_nil {tokens : List Parser.Internal.Input} (h : Stands tokens []) : tokens = [] :=
   List.map_eq_nil_iff.mp h
 
 /-- Tokens that stand for a concatenation are a concatenation of tokens standing for its parts. -/
-theorem split {tokens : List Input} {first second : List BSmtLibSpec.Grammar.SyntaxToken}
+theorem split {tokens : List Parser.Internal.Input}
+    {first second : List BSmtLibSpec.Grammar.SyntaxToken}
     (h : Stands tokens (first ++ second)) :
     ∃ tokens₁ tokens₂, tokens = tokens₁ ++ tokens₂ ∧ Stands tokens₁ first ∧
       Stands tokens₂ second := by
@@ -148,7 +151,7 @@ theorem split {tokens : List Input} {first second : List BSmtLibSpec.Grammar.Syn
   exact ⟨tokens₁, tokens₂, rfl, h₁, h₂⟩
 
 /-- Tokens that stand for a token and others are that token's and the others'. -/
-theorem split_cons {tokens : List Input} {first : BSmtLibSpec.Grammar.SyntaxToken}
+theorem split_cons {tokens : List Parser.Internal.Input} {first : BSmtLibSpec.Grammar.SyntaxToken}
     {rest : List BSmtLibSpec.Grammar.SyntaxToken}
     (h : Stands tokens (first :: rest)) :
     ∃ token tokens', tokens = token :: tokens' ∧
@@ -160,7 +163,7 @@ theorem split_cons {tokens : List Input} {first : BSmtLibSpec.Grammar.SyntaxToke
     exact ⟨token, tokens', rfl, h.1, h.2⟩
 
 /-- Tokens that stand for one token are one token. -/
-theorem split_single {tokens : List Input} {only : BSmtLibSpec.Grammar.SyntaxToken}
+theorem split_single {tokens : List Parser.Internal.Input} {only : BSmtLibSpec.Grammar.SyntaxToken}
     (h : Stands tokens [only]) :
     ∃ token, tokens = [token] ∧ Bridge.received token = some (.token only) := by
   obtain ⟨token, rest, rfl, htoken, hrest⟩ := split_cons h
@@ -169,21 +172,23 @@ theorem split_single {tokens : List Input} {only : BSmtLibSpec.Grammar.SyntaxTok
   | cons => simp [Stands] at hrest
 
 /-- Tokens that stand for a parenthesised list are a `(`, tokens for the list, and a `)`. -/
-theorem split_paren {tokens : List Input} {inner : List BSmtLibSpec.Grammar.SyntaxToken}
+theorem split_paren {tokens : List Parser.Internal.Input}
+    {inner : List BSmtLibSpec.Grammar.SyntaxToken}
     (h : Stands tokens (paren inner)) :
     ∃ inner', tokens = .parenOpen :: (inner' ++ [.parenClose]) ∧ Stands inner' inner := by
   obtain ⟨token, rest, rfl, hopen, hrest⟩ := split_cons h
   obtain ⟨inner', closing, rfl, hinner, hclosing⟩ := split hrest
   obtain ⟨close, rfl, hclose⟩ := split_single hclosing
-  rw [Input.received_parenOpen hopen, Input.received_parenClose hclose]
+  rw [Parser.Internal.Input.received_parenOpen hopen,
+      Parser.Internal.Input.received_parenClose hclose]
   exact ⟨inner', rfl, hinner⟩
 
 /-- Tokens that stand for a spec constant are one constant token, standing for it. -/
-theorem constant {tokens : List Input} {constant : Tree.SpecConstant}
+theorem constant {tokens : List Parser.Internal.Input} {constant : Tree.SpecConstant}
     (h : Stands tokens [constant.token]) :
     ∃ constant', tokens = [.constant constant'] ∧ Bridge.constant constant' = constant := by
   obtain ⟨token, rfl, htoken⟩ := split_single h
-  obtain ⟨constant', rfl, hc⟩ := Input.received_constant htoken
+  obtain ⟨constant', rfl, hc⟩ := Parser.Internal.Input.received_constant htoken
   exact ⟨constant', rfl, hc⟩
 
 end Stands

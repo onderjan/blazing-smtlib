@@ -89,17 +89,18 @@ def uses : List Use := [
       ("command::*", `BSmtLib.Parser.Command.CommandOutcome)] },
   { rust := "`pub use script::*` in `parser.rs`", target := `BSmtLib.Parser,
     items := [("script::*", `BSmtLib.Parser.Script.ScriptParser)] },
-  { rust := "`pub use state::*` in `parser.rs`, which has no counterpart",
+  { rust := "`pub use state::*` in `parser.rs`; `ParseState` is itself `BSmtLib.Parser.ParseState`",
     target := `BSmtLib.Parser }]
 
 /-- The modules the generated module imports: those the library's root imports but for it. -/
 def sources : List Name :=
   [`BSmtLib.ControlFlow, `BSmtLib.Bytes, `BSmtLib.Plain, `BSmtLib.Span, `BSmtLib.Nodes,
     `BSmtLib.Traits, `BSmtLib.Token, `BSmtLib.Token.Reserved, `BSmtLib.Token.SyntaxToken,
-    `BSmtLib.Token.Produce, `BSmtLib.Token.ConsumeFrom, `BSmtLib.Lexer.CharClass,
+    `BSmtLib.Token.Lookahead, `BSmtLib.Token.Produce, `BSmtLib.Token.ConsumeFrom,
+    `BSmtLib.Lexer.CharClass,
     `BSmtLib.Lexer.Error, `BSmtLib.Lexer.Helpers, `BSmtLib.Lexer.Recovery, `BSmtLib.Lexer,
     `BSmtLib.Parser, `BSmtLib.Parser.Category, `BSmtLib.Parser.Command, `BSmtLib.Parser.Script,
-    `BSmtLib.Parser.Adapter, `BSmtLib.Reader]
+    `BSmtLib.Parser.Adapter, `BSmtLib.Parser.Internal.Fused, `BSmtLib.Reader]
 
 /-- The generated module. -/
 def generated : Name := `BSmtLib.Reexports

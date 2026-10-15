@@ -23,7 +23,7 @@ and at the `)`, after `set-info`, it fails.
 namespace BSmtLib.Facts.Proofs.Parser.Refused
 
 open BSmtLibSpec.Grammar
-open BSmtLib.Parser (Input PM Step)
+open BSmtLib.Parser (PM)
 open BSmtLib.Parser.Command.Standard (Payload FinalCall payloadStep Declaration)
 open BSmtLib.Parser.Command (CommandOutcome commandStep CommandState)
 open BSmtLib.Parser.Category.Attribute (AttributeState AttributeMode attributeStep)
@@ -46,10 +46,10 @@ variable {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf 
 
 /-- Two states that step alike after two first tokens that only move them read alike. -/
 theorem _root_.BSmtLib.Facts.Proofs.Parser.Drive.Runs.second {σ ρ α : Type}
-    {step : σ → Input → PM H (Step σ ρ)}
+    {step : σ → Parser.Internal.Input → PM H (Parser.Internal.Step σ ρ)}
     {state state' next next' : σ}
-    {first second : Input} {tokens : List Input} {program : PM H α}
-    {k : α → PM H (Step σ ρ)} {arrival : σ → Input → PM H Unit}
+    {first second : Parser.Internal.Input} {tokens : List Parser.Internal.Input} {program : PM H α}
+    {k : α → PM H (Parser.Internal.Step σ ρ)} {arrival : σ → Parser.Internal.Input → PM H Unit}
     (h₁ : step state first = pure (.more next)) (h₁' : step state' first = pure (.more next'))
     (h₂ : step next second = step next' second)
     (h : Runs points step state' (first :: second :: tokens) program k arrival)
@@ -68,7 +68,7 @@ def NamesNoVersion (value : Option Tree.AttributeValue) : Prop :=
   ∀ decimal, value = some (.constant (.decimal decimal)) → versionOfNumber decimal = none
 
 /-- After the keyword `:smt-lib-version`, a token that is no supported version's number. -/
-theorem keyword_next {token : Input} {first : BSmtLibSpec.Grammar.SyntaxToken}
+theorem keyword_next {token : Parser.Internal.Input} {first : BSmtLibSpec.Grammar.SyntaxToken}
     (hfirst : ∀ text, first = .decimal text → versionOfNumber text = none)
     (htoken : Bridge.received token = some (.token first)) :
     Declaration.next .keyword token = .value none := by
@@ -90,7 +90,7 @@ include hA
 theorem setInfo_payload_refused (value : Option Tree.AttributeValue) (hvalue : NamesNoVersion value)
     (hvalid : (⟨BSmtLibSpec.Regex.chars "smt-lib-version", value⟩ : Tree.Attribute).Valid
       (Bridge.version version))
-    {payload : List Input}
+    {payload : List Parser.Internal.Input}
     (hs : Stands payload (Tree.Attribute.tokens ⟨BSmtLibSpec.Regex.chars "smt-lib-version",
     value⟩)) :
     PayloadRuns points version (Payload.init .setInfo version)
@@ -118,11 +118,11 @@ theorem setInfo_payload_refused (value : Option Tree.AttributeValue) (hvalue : N
       cases step with
       | more => rfl
       | done r =>
-        simp only [Step.wrap, Declaration.next]
+        simp only [Parser.Internal.Step.wrap, Declaration.next]
         cases r[0]? <;> rfl) hruns).congr rfl
     (next' := fun r => Parser.call (Traits.CommandHandler.commandSetInfo r) >>=
       fun _ => Parser.syntaxError .unsupportedVersion)
-    (by funext; simp [Step.wrap]))
+    (by funext; simp [Parser.Internal.Step.wrap]))
   -- the keyword, then the token after it: the value's first, or the `)`
   obtain ⟨keywordToken, second, others, first, hpayload, hkeywordToken, hsecond, hfirst⟩ :
       ∃ keywordToken second others first,
@@ -147,7 +147,7 @@ theorem setInfo_payload_refused (value : Option Tree.AttributeValue) (hvalue : N
       apply hvalue
       rcases value with ⟨_ | _ | _ | _ | _⟩ | _ | _ <;>
         simp_all [Tree.AttributeValue.tokens, Tree.SpecConstant.token, paren]
-  obtain ⟨keyword, rfl, hkeyword⟩ := Input.received_keyword hkeywordToken
+  obtain ⟨keyword, rfl, hkeyword⟩ := Parser.Internal.Input.received_keyword hkeywordToken
   have hversionKeyword : Parser.Command.Standard.isVersionKeyword keyword = true := by
     rw [isVersionKeyword_eq, hkeyword]
     exact decide_eq_true rfl
@@ -176,18 +176,18 @@ variable {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf 
 /-- The frame of a command whose payload parser fails at its end (see `command_frame`). -/
 theorem command_frame_throw {name : Token.Reserved.CommandNameReserved} {s : String}
     (hname : Bridge.reserved (.commandName name) = BSmtLibSpec.Regex.chars s)
-    {payload : List Input} {program : PM H Unit}
+    {payload : List Parser.Internal.Input} {program : PM H Unit}
     {e : Parser.ParseErrorCause (Traits.Handler.Error H)}
     (hruns : PayloadRuns points version (Payload.init name version) payload program
       fun _ => throw e)
-    (rest : List Input) :
+    (rest : List Parser.Internal.Input) :
     drive points (commandStep version) .awaiting
         (.parenOpen :: .reserved (.commandName name) :: (payload ++ rest))
             Parser.Command.commandArrive =
       (do
         adaptRun (opening points s)
         program
-        (throw e : PM H (Option (CommandOutcome × List Input)))) := by
+        (throw e : PM H (Option (CommandOutcome × List Parser.Internal.Input)))) := by
   have hembed := drive_embedA (points := points) (inner := payloadStep version)
     (outer := commandStep version) CommandState.payload (fun outcome => pure (.done outcome))
     commandStep_payload commandArrive_payload (Payload.init name version) (payload ++ rest)
@@ -202,12 +202,14 @@ theorem command_frame_throw {name : Token.Reserved.CommandNameReserved} {s : Str
 fails. -/
 theorem command_runs_refused (hA : Agrees h) (command : Tree.Command)
     (hvalid : command.Valid (Bridge.version version))
-    (hmode : command.modeAfter (Bridge.version version) = none) {tokens : List Input}
-    (hs : Stands tokens command.tokens) (rest : List Input) :
+    (hmode : command.modeAfter
+        (Bridge.version version) = none) {tokens : List Parser.Internal.Input}
+    (hs : Stands tokens command.tokens) (rest : List Parser.Internal.Input) :
     drive points (commandStep version) .awaiting (tokens ++ rest) Parser.Command.commandArrive =
       (do
         adaptRun (Traversal.command points h command)
-        (throw (.syntax .unsupportedVersion) : PM H (Option (CommandOutcome × List Input)))) := by
+        (throw (.syntax .unsupportedVersion) : PM H (Option
+            (CommandOutcome × List Parser.Internal.Input)))) := by
   obtain ⟨value, rfl, hvalue⟩ : ∃ value, command = .setInfo
       ⟨BSmtLibSpec.Regex.chars "smt-lib-version",
       value⟩ ∧ NamesNoVersion value := by
@@ -229,7 +231,7 @@ theorem command_runs_refused (hA : Agrees h) (command : Tree.Command)
   obtain ⟨inner, rfl, hinner⟩ := Stands.split_paren hs
   obtain ⟨nameToken, payload, rfl, hnameToken, hpayloadTokens⟩ := Stands.split_cons hinner
   have hname : Bridge.reserved (.commandName .setInfo) = BSmtLibSpec.Regex.chars "set-info" := rfl
-  rw [Input.received_commandName hname hnameToken,
+  rw [Parser.Internal.Input.received_commandName hname hnameToken,
       BSmtLibSpec.Facts.Proofs.Parser.Equations.command_setInfo, adaptRun_bind]
   have := command_frame_throw (points := points) hname
     (setInfo_payload_refused hA value hvalue hvalid hpayloadTokens) rest
@@ -287,8 +289,8 @@ theorem takes_runs (hA : Agrees h) (producer : Producer (StateT H m))
     {commands : List Tree.Command}
     {taken : List Received} {ending : Ending} (htakes : Takes start commands taken ending) :
     ∀ (version : Token.Version), Bridge.version version = start →
-    ∀ (declarations : Nat) {inputs : List Input},
-    inputs.map Bridge.received = taken.map some → ∀ rest : List Input,
+    ∀ (declarations : Nat) {inputs : List Parser.Internal.Input},
+    inputs.map Bridge.received = taken.map some → ∀ rest : List Parser.Internal.Input,
     driveParse points producer version
         (scriptAt (H := H) posture .awaiting declarations) (inputs ++ rest) =
       (do
@@ -308,7 +310,7 @@ theorem takes_runs (hA : Agrees h) (producer : Producer (StateT H m))
     obtain ⟨first, second, rfl, hfirst, hsecond⟩ := map_received_split hs
     rw [map_received_endOfInput hsecond, List.append_assoc, List.singleton_append, script_embed,
       command_runs hA _ hvalid (by simp [hmode]) hfirst]
-    simp [outcomeOf, scriptAfter, driveParse, step_endOfInput, Parser.Parse.arrive,
+    simp [outcomeOf, scriptAfter, driveParse, step_endOfInput, Parser.Internal.ParseByToken.arrive,
       Parser.Command.commandArrive,
       Parser.Script.ScriptParser.arrive,
       Traversal.commands, receive, arriveAt, processAt, Bridge.received]

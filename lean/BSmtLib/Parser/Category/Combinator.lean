@@ -48,8 +48,9 @@ parser, which starts the next element.
 /- LEAN: Rust's `SmtParenMultipleParser`, `SmtClosedMultipleParser` and the maximum parsers,
 in one. -/
 @[specialize inner]
-def step (init : σ) (inner : σ → Input → PM H (Step σ ρ)) (maximum : Option Nat)
-    (self : ListState σ ρ) (token : Input) : PM H (Step (ListState σ ρ) (Array ρ)) := do
+def step (init : σ) (inner : σ → Internal.Input → PM H (Internal.Step σ ρ)) (maximum : Option Nat)
+    (self : ListState σ ρ) (token : Internal.Input) : PM H (Internal.Step (ListState σ ρ)
+        (Array ρ)) := do
   if !self.opened then
     expectOpen token
     return .more { self with opened := true }

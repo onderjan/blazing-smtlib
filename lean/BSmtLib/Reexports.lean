@@ -9,6 +9,7 @@ public import BSmtLib.Traits
 public import BSmtLib.Token
 public import BSmtLib.Token.Reserved
 public import BSmtLib.Token.SyntaxToken
+public import BSmtLib.Token.Lookahead
 public import BSmtLib.Token.Produce
 public import BSmtLib.Token.ConsumeFrom
 public import BSmtLib.Lexer.CharClass
@@ -21,6 +22,7 @@ public import BSmtLib.Parser.Category
 public import BSmtLib.Parser.Command
 public import BSmtLib.Parser.Script
 public import BSmtLib.Parser.Adapter
+public import BSmtLib.Parser.Internal.Fused
 public import BSmtLib.Reader
 
 public section
@@ -667,22 +669,10 @@ end BSmtLib.Parser
 
 namespace BSmtLib.Parser.ParseAdapter
 
-export BSmtLib.Parser.Adapter.ParseAdapter (After Consuming first handler
-  instWellFoundedRelationConsuming mk new parser rest resumed takeOne versionSet versionSetAfter)
+export BSmtLib.Parser.Adapter.ParseAdapter (handler mk new parseState parser versionSet
+  versionSetAfter)
 
 end BSmtLib.Parser.ParseAdapter
-
-namespace BSmtLib.Parser.ParseAdapter.After
-
-export BSmtLib.Parser.Adapter.ParseAdapter.After (goOn stop)
-
-end BSmtLib.Parser.ParseAdapter.After
-
-namespace BSmtLib.Parser.ParseAdapter.Consuming
-
-export BSmtLib.Parser.Adapter.ParseAdapter.Consuming (mk producer)
-
-end BSmtLib.Parser.ParseAdapter.Consuming
 
 /-! `pub use category::*` in `parser.rs`, for the items that have a counterpart -/
 
@@ -768,4 +758,4 @@ export BSmtLib.Parser.Script.ScriptParser (arrive command declarations mk new po
 
 end BSmtLib.Parser.ScriptParser
 
-/-! `pub use state::*` in `parser.rs`, which has no counterpart -/
+/-! `pub use state::*` in `parser.rs`; `ParseState` is itself `BSmtLib.Parser.ParseState` -/

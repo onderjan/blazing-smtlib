@@ -28,7 +28,7 @@ namespace BSmtLib.Facts.Proofs.Parser.Rejection.CommandParts
 open BSmtLibSpec.Grammar
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Parser.Traversal
-open BSmtLib.Parser (Input PM Step)
+open BSmtLib.Parser (PM)
 open BSmtLib.Parser.Category.Term (TermState TermMode TermLevel termStep termComplete)
 open BSmtLib.Parser.Category.Combinator (ListState)
 open BSmtLib.Parser.Command.Datatype (SortDecState ConstructorState constructorStep DatatypeState
@@ -154,7 +154,7 @@ theorem literalRem_init : ∀ u, literalRem .init u → LiteralLang u := fun _ h
 
 /-- A step of the literal parser fails with no rejection of a version declaration. -/
 theorem literalStep_benign (version : Token.Version) (state : LiteralState Nat Nat Nat Nat Nat)
-    {token : Input} {item : Received} (hitem : Bridge.received token = some item)
+    {token : Parser.Internal.Input} {item : Received} (hitem : Bridge.received token = some item)
     (hlex : item.OfVersion (Bridge.version version)) :
     Sound (fun _ => True) Benign (literalStep (H := List Event) version state token) := by
   obtain ⟨shape, term⟩ := state
@@ -707,7 +707,8 @@ theorem bodiesStep_advances (version : Token.Version) (count : Nat) :
 
 /-- The parser of recursive bodies writes no event where it finishes. -/
 theorem bodiesStep_quiet (count : Nat) (version : Token.Version)
-    (state : ListState (Parser.Category.Term.TermStateOf (List Event)) Unit) (token : Input) :
+    (state : ListState (Parser.Category.Term.TermStateOf (List Event)) Unit)
+        (token : Parser.Internal.Input) :
     ∀ events b events', (bodiesStep (H := List Event) count version state token).run.run events =
       (.ok b, events') → (∃ v, b = .done v) → events' = events := by
   intro events b events' h ⟨v, hv⟩

@@ -113,12 +113,15 @@ theorem eRel_refl {ε α : Type} (r : Except ε (ControlFlow α)) :
   · trivial
   · rfl
 
-theorem alike_consumers : Consumers (alikeLink consumer) where
+theorem alike_calls : HandOver.Calls (alikeLink consumer) where
   concrete := rfl
   consume cursor h a f l := by
     show _ ∧ (((Answering.consume consumer cursor h : AnswerM _).run l).2) = _
     refine ⟨⟨?_, rfl⟩, rfl⟩
     exact eRel_refl _
+
+theorem alike_consumers : Consumers (alikeLink consumer) :=
+  .ofCalls (alike_calls consumer)
 
 end
 

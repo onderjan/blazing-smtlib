@@ -18,7 +18,7 @@ of a literal are few and fixed, so the lemma follows the term parser token by to
 namespace BSmtLib.Facts.Proofs.Parser.Commands.Literals
 
 open BSmtLibSpec.Grammar
-open BSmtLib.Parser (Input PM Step)
+open BSmtLib.Parser (PM)
 open BSmtLib.Parser.Command.Standard (Payload FinalCall payloadStep finalCall LiteralState
     LiteralShape literalStep)
 open BSmtLib.Parser.Command (CommandOutcome)
@@ -67,7 +67,7 @@ theorem literal_element (hA : TermAgrees h) :
   cases literal with
   | positive name =>
     obtain ⟨token, rfl, htoken⟩ := Stands.split_single hs
-    obtain ⟨symbol, rfl, rfl⟩ := Input.received_symbol htoken
+    obtain ⟨symbol, rfl, rfl⟩ := Parser.Internal.Input.received_symbol htoken
     refine ⟨⟨_, [], rfl, by simp⟩, do
         tick points (.symbol symbol)
         Parser.call (Traits.Handler.handleTerm (.identifier ⟨symbol, #[]⟩ none)), ?_,
@@ -80,8 +80,8 @@ theorem literal_element (hA : TermAgrees h) :
     obtain ⟨inner, rfl, hinner⟩ := Stands.split_paren hs
     obtain ⟨negationToken, rest, rfl, hnegationToken, hrest⟩ := Stands.split_cons hinner
     obtain ⟨nameToken, rfl, hnameToken⟩ := Stands.split_single hrest
-    obtain ⟨notSymbol, rfl, rfl⟩ := Input.received_symbol hnegationToken
-    obtain ⟨symbol, rfl, rfl⟩ := Input.received_symbol hnameToken
+    obtain ⟨notSymbol, rfl, rfl⟩ := Parser.Internal.Input.received_symbol hnegationToken
+    obtain ⟨symbol, rfl, rfl⟩ := Parser.Internal.Input.received_symbol hnameToken
     have hnot := Symbol.isNot_of_name hvalid
     let function : Nodes.Identifier := ⟨notSymbol, #[]⟩
     refine ⟨⟨_, _, rfl, by simp⟩, do
@@ -96,7 +96,8 @@ theorem literal_element (hA : TermAgrees h) :
         adaptRun_take hnegationToken, adaptRun_take (token := .parenOpen) rfl,
         adaptRun_take (token := .parenClose) rfl, hA.handleTerm, Bridge.termNode,
         Bridge.identifier, function]
-    rw [show Input.parenOpen :: ([.symbol notSymbol, .symbol symbol] ++ [.parenClose]) =
+    rw [show Parser.Internal.Input.parenOpen :: ([.symbol notSymbol,
+        .symbol symbol] ++ [.parenClose]) =
       [.parenOpen] ++ ([.symbol notSymbol] ++ ([.symbol symbol] ++ [.parenClose])) by rfl]
     refine (Runs.append (middle := fun _ =>
         (⟨.negation, ⟨.opened, []⟩⟩ : Parser.Command.Standard.LiteralStateOf H))
@@ -127,7 +128,7 @@ variable {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf 
 
 theorem checkSatAssumingLiterals_payload (hA : Agrees h) (literals : List Tree.PropLiteral)
     (hversion : ¬ versionAtLeast (Bridge.version version) .v2_7)
-    (hvalid : ∀ literal ∈ literals, literal.Valid) {payload : List Input}
+    (hvalid : ∀ literal ∈ literals, literal.Valid) {payload : List Parser.Internal.Input}
     (hs : Stands payload (paren (literals.flatMap Tree.PropLiteral.tokens))) :
     PayloadRuns points version (Payload.init .checkSatAssuming version)
       (payload ++ [.parenClose])
@@ -152,7 +153,7 @@ theorem checkSatAssumingLiterals_payload (hA : Agrees h) (literals : List Tree.P
     (fun assumptions => pure (.more (.closing (.checkSatAssuming assumptions))))
     (by payload_step) hlistRuns).congr rfl
     (next' := fun l => pure (.more (.closing (.checkSatAssuming (l : List _).toArray))))
-    (by funext; simp [Step.wrap])
+    (by funext; simp [Parser.Internal.Step.wrap])
   refine (Runs.append (middle := fun l => .closing (.checkSatAssuming (l : List _).toArray))
     hlistPayload fun l => closing_runs (h := h)
       (request := .commandCheckSatAssuming l) (.checkSatAssuming l.toArray)

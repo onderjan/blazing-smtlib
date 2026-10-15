@@ -22,7 +22,7 @@ namespace BSmtLib.Facts.Proofs.Reader.Param.Finish
 open BSmtLib.Lexer
 open BSmtLibSpec
 open BSmtLibSpec.Lexer (Handed)
-open BSmtLib.Parser (Input Parse)
+open BSmtLib.Parser (Parse)
 open BSmtLib.Parser.Script (ScriptParser)
 open BSmtLib.Parser.Adapter (ParseAdapter)
 open BSmtLib.Facts.Lexer.Adapters (toVersion Answering AnswerM LexOps)

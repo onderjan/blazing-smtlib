@@ -43,8 +43,9 @@ command's outcome.
 -/
 theorem command_runs (hA : Agrees h) (command : Tree.Command)
     (hvalid : command.Valid (Bridge.version version))
-    (hmode : command.modeAfter (Bridge.version version) ≠ none) {tokens : List Input}
-    (hs : Stands tokens command.tokens) (rest : List Input) :
+    (hmode : command.modeAfter
+        (Bridge.version version) ≠ none) {tokens : List Parser.Internal.Input}
+    (hs : Stands tokens command.tokens) (rest : List Parser.Internal.Input) :
     drive points (commandStep version) .awaiting (tokens ++ rest) Command.commandArrive =
       (do
         adaptRun (Traversal.command points h command)

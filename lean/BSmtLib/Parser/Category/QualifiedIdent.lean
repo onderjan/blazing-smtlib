@@ -39,8 +39,10 @@ variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
 A step of the qualified identifier parser: ⟨identifier⟩ | `(` `as` ⟨identifier⟩ ⟨sort⟩ `)`. Its
 sort is handled at the sort's last token; the identifier is not handled.
 -/
-def qualIdentStep (version : Version) (self : QualIdentState (Handler.«Sort» H)) (token : Input) :
-    PM H (Step (QualIdentState (Handler.«Sort» H)) (Identifier × Option (Handler.«Sort» H))) := do
+def qualIdentStep (version : Version) (self : QualIdentState (Handler.«Sort» H))
+    (token : Internal.Input) :
+    PM H (Internal.Step (QualIdentState (Handler.«Sort» H)) (Identifier × Option
+        (Handler.«Sort» H))) := do
   match self with
   | .start =>
     match token with

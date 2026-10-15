@@ -22,8 +22,7 @@ it that the fused steps read from the category alone.
 namespace BSmtLib.Facts.Proofs.Parser.Fused.Run
 
 open BSmtLib.Traits
-open BSmtLib.Parser (Parse PM Input Step Flow call syntaxError ParseErrorCause)
-open BSmtLib.Parser.Adapter (ParseAdapter)
+open BSmtLib.Parser (Parse PM call syntaxError ParseErrorCause)
 open BSmtLib.Parser.Category.Term (TermLevelOf TermStateOf)
 open BSmtLib.Parser.Command (CommandStateOf)
 open BSmtLib.Parser.Internal.Fused
@@ -47,22 +46,23 @@ theorem run_bind_eq {α γ : Type} (x : PM H α) (f : α → PM H γ) (h : H) :
 
 /-- A pure outcome of a fused category step, as the port's step gives it. -/
 def PureOutcome.toRun {σ ρ ε : Type} :
-    Category.PureOutcome σ ρ → Except (ParseErrorCause ε) (Step σ ρ)
+    Category.PureOutcome σ ρ → Except (ParseErrorCause ε) (Parser.Internal.Step σ ρ)
   | .more state => .ok (.more state)
   | .done result => .ok (.done result)
   | .error kind => .error (.syntax kind)
 
 /-- A handled outcome of a fused category step, as the port's step gives it. -/
 def HandledOutcome.toRun {σ ρ ε : Type} :
-    Category.HandledOutcome H σ ρ ε → Except ε (Step σ ρ) × H
+    Category.HandledOutcome H σ ρ ε → Except ε (Parser.Internal.Step σ ρ) × H
   | .more h state => (.ok (.more state), h)
   | .done h result => (.ok (.done result), h)
   | .error h cause => (.error cause, h)
 
 /-- The token as the port views it, by its category and content. -/
 abbrev inputOf {batch : BatchTag} (version : Token.Version) (next : BatchCursor batch)
-    (token : Token batch) : Input :=
-  Input.ofSyntax (Token.SyntaxToken.fromParts (next.category token) (next.content token) version)
+    (token : Token batch) : Parser.Internal.Input :=
+  Parser.Internal.Input.ofSyntax (Token.SyntaxToken.fromParts (next.category token)
+      (next.content token) version)
 
 theorem run_call_bind {α γ : Type} (x : ExceptT (Handler.Error H) (StateT H m) α)
     (f : α → PM H γ) (h : H) :
@@ -81,7 +81,7 @@ theorem inputOf_parenClose {batch : BatchTag} (version : Token.Version) (next : 
     inputOf version next token = .parenClose ↔ next.category token = .parenClose := by
   simp only [inputOf]
   generalize next.category token = cat
-  cases cat <;> simp only [Token.SyntaxToken.fromParts, Input.ofSyntax] <;>
+  cases cat <;> simp only [Token.SyntaxToken.fromParts, Parser.Internal.Input.ofSyntax] <;>
     (try rcases Token.Reserved.fromBytes? (next.content token) version with _ | (w | w)) <;>
     simp
 
@@ -99,14 +99,16 @@ theorem inputOf_isWord {batch : BatchTag} (version : Token.Version) (next : Batc
     (inputOf version next token).isWord word =
       Category.isWord version (next.category token) next token word := by
   simp only [Category.isWord, Reserved.reservedAt_eq, inputOf]
-  cases next.category token <;> simp only [Token.SyntaxToken.fromParts, Input.ofSyntax] <;>
+  cases next.category token <;> simp only [Token.SyntaxToken.fromParts,
+      Parser.Internal.Input.ofSyntax] <;>
     (try rcases Token.Reserved.fromBytes? (next.content token) version with _ | (w | w)) <;>
     rfl
 
 /-- A pure outcome of the fused step of a qualified identifier, as the port's step gives it. -/
 def qualToRun {σ ε : Type} :
     Category.PureOutcome σ Nodes.Identifier →
-      Except (ParseErrorCause ε) (Step σ (Nodes.Identifier × Option (Handler.«Sort» H)))
+      Except (ParseErrorCause ε) (Parser.Internal.Step σ (Nodes.Identifier × Option
+          (Handler.«Sort» H)))
   | .more state => .ok (.more state)
   | .done identifier => .ok (.done (identifier, none))
   | .error kind => .error (.syntax kind)

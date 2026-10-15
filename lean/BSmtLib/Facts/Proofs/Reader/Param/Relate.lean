@@ -1,6 +1,7 @@
 module
 
 public import BSmtLib.Facts.Proofs.Reader.Param.Loop
+public import BSmtLib.Facts.Proofs.Reader.Param.Split
 
 @[expose] public section
 
@@ -11,8 +12,11 @@ The relator `linkRelator` relates computations of `Flagged (scriptConsumer versi
 parse adapter with the recording handler: the first only adds to the tokens taken and keeps what
 went wrong; and while nothing went wrong and the tokens taken stand for a start of the script,
 the values are related and the adapter stands where the recording run over items standing for
-the tokens leaves the parser (`InvB`). Every call of the two consumers on the same cursor is so
-related (`link_consumers`), so step 1 relates the library's lexer's steps on the two.
+the tokens leaves the parser (`InvB`). Every call of the stand-in consumer and of the adapter that
+stops after an action on its cursor (`Param.Stop`) on the same cursor is so related
+(`link_calls`), and the lexer's handovers to that adapter and to the parse adapter are the same
+(`Split.script_handOver_eq`), so step 1 relates the library's lexer's steps on the stand-in
+consumer and the parse adapter (`link_consumers`).
 -/
 
 namespace BSmtLib.Facts.Proofs.Reader.Param.Relate
@@ -20,7 +24,7 @@ namespace BSmtLib.Facts.Proofs.Reader.Param.Relate
 open BSmtLibSpec BSmtLibSpec.Grammar
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Lexer (Handed)
-open BSmtLib.Parser (Input Parse)
+open BSmtLib.Parser (Parse)
 open BSmtLib.Parser.Script (ScriptParser)
 open BSmtLib.Parser.Adapter (ParseAdapter)
 open BSmtLib.Facts.Lexer.Adapters (toVersion Answering AnswerM toHanded)
@@ -112,7 +116,7 @@ end
 theorem recRun_inr_full {version : Lexicon.Version} {commands : List Tree.Command}
     (hscript : Script version commands) {taken : List Handed} (hvia : Link.Viable commands taken)
     {items : List LibItem} (hst : items.map (rcv ∘ Subtype.val) = taken.map (rcv ∘ itemOf))
-    {r : Unit × List Input} {log : List Event}
+    {r : Unit × List Parser.Internal.Input} {log : List Event}
     (hrun : recRun version items = (.ok (.inr r), log)) :
     ¬ taken.length < (received commands).length := by
   intro hlt
@@ -153,8 +157,12 @@ def partnerOf {ε α : Type} :
   | .error _ => .error (.handler ())
   | .ok flow => .ok flow
 
-theorem link_consumers {version : Lexicon.Version} {commands : List Tree.Command}
-    (hscript : Script version commands) : Consumers (linkLink version commands) where
+section
+
+attribute [local instance high] Stop.consumeFrom
+
+theorem link_calls {version : Lexicon.Version} {commands : List Tree.Command}
+    (hscript : Script version commands) : Calls (linkLink version commands) where
   concrete := rfl
   consume {b} cursor h := by
     refine ⟨fun flagged taken => ?_, fun flagged taken adapter hinv => ?_⟩
@@ -203,5 +211,15 @@ theorem link_consumers {version : Lexicon.Version} {commands : List Tree.Command
         have hfull := recRun_inr_full hscript hv0 hst hR
         rw [hans] at hgrow
         exact absurd (Nat.lt_of_lt_of_le hgrow hv.1) hfull
+
+theorem link_consumers_stop {version : Lexicon.Version} {commands : List Tree.Command}
+    (hscript : Script version commands) : Consumers (linkLink version commands) :=
+  .ofCalls (link_calls hscript)
+
+end
+
+theorem link_consumers {version : Lexicon.Version} {commands : List Tree.Command}
+    (hscript : Script version commands) : Consumers (linkLink version commands) :=
+  Consumers.ofEq₂ Split.script_handOver_eq (link_consumers_stop hscript)
 
 end BSmtLib.Facts.Proofs.Reader.Param.Relate

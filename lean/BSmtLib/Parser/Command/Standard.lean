@@ -59,8 +59,8 @@ variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
 A step of the literal parser: each token that fits the shape of a literal goes to the term
 parser, which hands the literal over as the term it is.
 -/
-def literalStep (version : Version) (self : LiteralStateOf H) (token : Input) :
-    PM H (Step (LiteralStateOf H) (Handler.Term H)) := do
+def literalStep (version : Version) (self : LiteralStateOf H) (token : Internal.Input) :
+    PM H (Internal.Step (LiteralStateOf H) (Handler.Term H)) := do
   let shape ← match self.shape, token with
     | .start, .symbol _ => pure LiteralShape.start
     | .start, .parenOpen => pure .negation
@@ -177,7 +177,7 @@ inductive Declaration where
   | value (version : Option Version)
 
 /-- What the tokens of a `set-info` tell of a version declaration after the token. -/
-def Declaration.next (self : Declaration) (token : Input) : Declaration :=
+def Declaration.next (self : Declaration) (token : Internal.Input) : Declaration :=
   match self, token with
   | .start, .keyword name => if isVersionKeyword name then .keyword else .other
   | .start, _ => .other
@@ -287,10 +287,10 @@ A version declaration, at its `)`, is handled as `set-info` and reported in the 
 check against a posture and the switches are the script's. A declaration that names no version
 is handled as `set-info` and then rejected at its `)`.
 -/
-def payloadStep (version : Version) (self : PayloadOf H) (token : Input) :
-    PM H (Step (PayloadOf H) CommandOutcome) := do
+def payloadStep (version : Version) (self : PayloadOf H) (token : Internal.Input) :
+    PM H (Internal.Step (PayloadOf H) CommandOutcome) := do
   let close (final : FinalCall (Handler.Attribute H) (Handler.«Sort» H) (Handler.Term H)) :
-      PM H (Step (PayloadOf H) CommandOutcome) :=
+      PM H (Internal.Step (PayloadOf H) CommandOutcome) :=
     pure (.more (.closing final))
   match self with
   | .closing final =>
@@ -349,9 +349,9 @@ def payloadStep (version : Version) (self : PayloadOf H) (token : Input) :
       return .more (.declareDatatypesDatatypes sorts.size (ListState.paren .start))
   | .declareDatatypesDatatypes count state =>
     let start parameters := call (CommandHandler.startDatatypeDeclaration (H := H) parameters)
-    let datatype (state : DatatypeState (Handler.«Sort» H)) (token : Input) := do
+    let datatype (state : DatatypeState (Handler.«Sort» H)) (token : Internal.Input) := do
       match ← datatypeStep start version state token with
-      | .more state => return Step.more state
+      | .more state => return Internal.Step.more state
       | .done constructors =>
         call (CommandHandler.endDatatypeDeclaration constructors)
         return .done ()
@@ -439,7 +439,7 @@ def payloadStep (version : Version) (self : PayloadOf H) (token : Input) :
 The calls due when a token arrives at the payload parser, before it takes the token: the start
 of a recursive body of `define-funs-rec`, when the token begins a body that is due.
 -/
-def payloadArrive (self : PayloadOf H) (token : Input) : PM H Unit :=
+def payloadArrive (self : PayloadOf H) (token : Internal.Input) : PM H Unit :=
   match self with
   | .defineFunsRecBodies signatures state => bodiesArrive signatures state token
   | _ => pure ()

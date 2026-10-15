@@ -30,7 +30,7 @@ open BSmtLibSpec.Grammar
 open BSmtLibSpec.Parser
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Parser.Traversal
-open BSmtLib.Parser (Input PM Step Flow Parse)
+open BSmtLib.Parser (PM Parse)
 open BSmtLib.Parser.Script (ScriptParser)
 open BSmtLib.Token (VersionPosture)
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Parser.Adapters.Run
@@ -46,15 +46,15 @@ theorem bind_ext {m : Type → Type} [Monad m] {α β : Type} {x : m α} {f g : 
 section
 
 variable {H P R : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.Handler H m]
-variable [Parse P H m (Traits.Handler.Error H) R]
+variable [Parser.Internal.ParseByToken P H m (Traits.Handler.Error H) R]
 variable (points : Points (StateT H m)) (producer : Producer (StateT H m))
 
 /-- What the driver does with an item after its processing: the parser's step and what the step
 asks of the producer; then whether the parser goes on, in which version and state, or
 finished. -/
-def afterProcessing (version : Token.Version) (parser : P) (token : Input) :
+def afterProcessing (version : Token.Version) (parser : P) (token : Parser.Internal.Input) :
     PM H ((Token.Version × P) ⊕ R) := do
-  match ← Parse.step version parser token with
+  match ← Parser.Internal.ParseByToken.step version parser token with
   | .more parser => pure (.inl (version, parser))
   | .done result => pure (.inr result)
   | .switchVersion declared resume =>
@@ -72,21 +72,21 @@ def afterProcessing (version : Token.Version) (parser : P) (token : Input) :
 
 /-- What the driver does with one item: its arrival, the parser's calls due at it, its
 processing, then as `afterProcessing`. -/
-def afterToken (version : Token.Version) (parser : P) (token : Input) :
+def afterToken (version : Token.Version) (parser : P) (token : Parser.Internal.Input) :
     PM H ((Token.Version × P) ⊕ R) := do
   ExceptT.lift (arriveAt points token)
-  Parse.arrive parser token
+  Parser.Internal.ParseByToken.arrive parser token
   ExceptT.lift (processAt points token)
   afterProcessing producer version parser token
 
 /-- How the driver goes on after an item. -/
-def continueWith (tokens : List Input) :
-    (Token.Version × P) ⊕ R → PM H (Option (R × List Input))
+def continueWith (tokens : List Parser.Internal.Input) :
+    (Token.Version × P) ⊕ R → PM H (Option (R × List Parser.Internal.Input))
   | .inl (version, parser) => driveParse points producer version parser tokens
   | .inr result => pure (some (result, tokens))
 
-theorem driveParse_cons (version : Token.Version) (parser : P) (token : Input)
-    (tokens : List Input) :
+theorem driveParse_cons (version : Token.Version) (parser : P) (token : Parser.Internal.Input)
+    (tokens : List Parser.Internal.Input) :
     driveParse points producer version parser (token :: tokens) =
       afterToken points producer version parser token >>= continueWith points producer tokens := by
   simp only [driveParse, afterToken, afterProcessing, bind_assoc]
@@ -115,13 +115,15 @@ end
 section
 
 /-- The recording run's driver of the script parser. -/
-abbrev recAfter (version : Token.Version) (parser : ScriptParser (List Event)) (token : Input) :
+abbrev recAfter (version : Token.Version) (parser : ScriptParser (List Event))
+    (token : Parser.Internal.Input) :
     Quiet.RPM ((Token.Version × ScriptParser (List Event)) ⊕ Unit) :=
   afterToken recordingPoints recordingProducer version parser token
 
 /-- The calls due at an item's arrival: the start of a recursive body, when the item begins a body
 that is due. -/
-def arrivalCalls (parser : ScriptParser (List Event)) (token : Input) : List Event :=
+def arrivalCalls (parser : ScriptParser (List Event))
+    (token : Parser.Internal.Input) : List Event :=
   match token with
   | .parenClose => []
   | _ =>
@@ -158,7 +160,7 @@ theorem silent_discardRest :
 
 /-- What follows an item's processing in its driver step is silent. -/
 theorem afterProcessing_silent (version : Token.Version) (parser : ScriptParser (List Event))
-    (token : Input) :
+    (token : Parser.Internal.Input) :
     Quiet.Silent (afterProcessing recordingProducer version parser token) := by
   unfold afterProcessing
   apply Quiet.bind (scriptStep_quiet version parser token)
@@ -182,8 +184,9 @@ theorem afterProcessing_silent (version : Token.Version) (parser : ScriptParser 
     intro step
     cases step <;> exact Quiet.pure trivial
 
-theorem arrive_run (parser : ScriptParser (List Event)) (token : Input) (events : List Event) :
-    ((Parse.arrive (H := List Event) parser token).run.run events) =
+theorem arrive_run (parser : ScriptParser (List Event)) (token : Parser.Internal.Input)
+    (events : List Event) :
+    ((Parser.Internal.ParseByToken.arrive (H := List Event) parser token).run.run events) =
       (.ok (), arrivalCalls parser token ++ events) := by
   obtain ⟨posture, command, declarations⟩ := parser
   show ((ScriptParser.arrive ⟨posture, command, declarations⟩ token : Quiet.RPM Unit).run.run
@@ -204,7 +207,8 @@ An item in the recording run: its arrival, the calls due at it, its processing, 
 events.
 -/
 theorem afterToken_shape (version : Token.Version) (parser : ScriptParser (List Event))
-    {token : Input} {received : Received} (htoken : Bridge.received token = some received)
+    {token : Parser.Internal.Input} {received : Received}
+        (htoken : Bridge.received token = some received)
     (events : List Event) :
     ∃ silent, ((recAfter version parser token).run.run events).2 =
         silent ++ [.process received] ++ arrivalCalls parser token ++ [.arrive received] ++
@@ -300,7 +304,7 @@ theorem recordedRun_nil (version : Token.Version) (parser : ScriptParser (List E
     (events : List Event) : recordedRun version parser [] events = events.reverse := rfl
 
 theorem recordedRun_cons (version : Token.Version) (parser : ScriptParser (List Event))
-    (token : Input) (tokens : List Input) (events : List Event) :
+    (token : Parser.Internal.Input) (tokens : List Parser.Internal.Input) (events : List Event) :
     recordedRun version parser (token :: tokens) events =
       match (recAfter version parser token).run.run events with
       | (.ok (.inl (version', parser')), events') => recordedRun version' parser' tokens events'
@@ -319,7 +323,7 @@ theorem countP_silent {p : Event → Bool} (hp : ∀ e, Quiet.isPoint e = false 
 
 theorem arrivalCalls_countP {p : Event → Bool}
     (hp : ∀ signature, p (.call .nothing (.startRecursiveBody signature)) = false)
-    (parser : ScriptParser (List Event)) (token : Input) :
+    (parser : ScriptParser (List Event)) (token : Parser.Internal.Input) :
     (arrivalCalls parser token).countP p = 0 := by
   unfold arrivalCalls
   split
@@ -331,7 +335,8 @@ theorem arrivalCalls_countP {p : Event → Bool}
     · simp
 
 /-- The calls due at an item's arrival process no item. -/
-theorem arrivalCalls_processed (parser : ScriptParser (List Event)) (token : Input) :
+theorem arrivalCalls_processed (parser : ScriptParser (List Event))
+    (token : Parser.Internal.Input) :
     (arrivalCalls parser token).reverse.filterMap Event.processed = [] := by
   unfold arrivalCalls
   split
@@ -347,14 +352,16 @@ theorem arrivalCalls_parenClose (parser : ScriptParser (List Event)) :
     arrivalCalls parser .parenClose = [] := rfl
 
 /-- The calls due at an item's arrival depend on the item only in whether it is a `)`. -/
-theorem arrivalCalls_congr (parser : ScriptParser (List Event)) {token token' : Input}
+theorem arrivalCalls_congr (parser : ScriptParser
+    (List Event)) {token token' : Parser.Internal.Input}
     (h : token ≠ .parenClose) (h' : token' ≠ .parenClose) :
     arrivalCalls parser token = arrivalCalls parser token' := by
   cases token <;> cases token' <;> first | rfl | exact absurd rfl h | exact absurd rfl h'
 
 /-- After an item, one more arrival and one more processing. -/
 theorem afterToken_counts (version : Token.Version) (parser : ScriptParser (List Event))
-    {token : Input} {received : Received} (htoken : Bridge.received token = some received)
+    {token : Parser.Internal.Input} {received : Received}
+        (htoken : Bridge.received token = some received)
     (events : List Event) :
     ((recAfter version parser token).run.run events).2.reverse.countP isArrival =
         events.reverse.countP isArrival + 1 ∧
@@ -371,7 +378,7 @@ theorem afterToken_counts (version : Token.Version) (parser : ScriptParser (List
   simp only [List.countP_reverse, List.countP_append, h₁, h₂, h₃, h₄]
   simp [isArrival, isProcessing]
   omega
-theorem recordedRun_grows : (items : List Input) → NoLayout items →
+theorem recordedRun_grows : (items : List Parser.Internal.Input) → NoLayout items →
     ∀ (version : Token.Version) (parser : ScriptParser (List Event)) (events : List Event),
     ∃ more, recordedRun version parser items events = events.reverse ++ more
   | [], _, version, parser, events => ⟨[], by simp [recordedRun_nil]⟩
@@ -401,8 +408,9 @@ theorem recordedRun_grows : (items : List Input) → NoLayout items →
 /-- The events of a run from an item on: its arrival, the calls due at it, its processing, then
 the rest. -/
 theorem recordedRun_cons_form (version : Token.Version) (parser : ScriptParser (List Event))
-    {token : Input} {received : Received} (hreceived : Bridge.received token = some received)
-    {tokens : List Input} (hlayout : NoLayout tokens) (events : List Event) :
+    {token : Parser.Internal.Input} {received : Received}
+        (hreceived : Bridge.received token = some received)
+    {tokens : List Parser.Internal.Input} (hlayout : NoLayout tokens) (events : List Event) :
     ∃ rest, recordedRun version parser (token :: tokens) events =
       events.reverse ++ .arrive received :: ((arrivalCalls parser token).reverse ++
         .process received :: rest) := by
@@ -443,7 +451,8 @@ that item arrives.
 -/
 theorem recordedRun_eventsBefore : (k : Nat) →
     ∀ (version : Token.Version) (parser : ScriptParser (List Event))
-      (items items' : List Input) (events : List Event), NoLayout items → NoLayout items' →
+      (items items' : List Parser.Internal.Input) (events : List Event),
+          NoLayout items → NoLayout items' →
     items.take k = items'.take k →
     eventsBefore (events.reverse.countP isArrival + k) (recordedRun version parser items events) =
       eventsBefore (events.reverse.countP isArrival + k)
@@ -512,7 +521,8 @@ the same events before that item is processed, its arrival left out.
 -/
 theorem recordedRun_eventsBeforeProcessing : (k : Nat) →
     ∀ (version : Token.Version) (parser : ScriptParser (List Event))
-      (items items' : List Input) (events : List Event), NoLayout items → NoLayout items' →
+      (items items' : List Parser.Internal.Input) (events : List Event),
+          NoLayout items → NoLayout items' →
     k < items.length → k < items'.length → items.take k = items'.take k →
     (items[k]? = some .parenClose ↔ items'[k]? = some .parenClose) →
     eventsBeforeProcessing (events.reverse.countP isProcessing + k)
@@ -579,21 +589,21 @@ theorem policyOf_unrestricted : policyOf unrestrictedPosture = VersionPolicy.unr
 
 /-- The recording run as the parse adapter makes it: the handler told the version first. -/
 theorem driveInput_run (version : Token.Version) (parser : ScriptParser (List Event))
-    (items : List Input) :
+    (items : List Parser.Internal.Input) :
     (driveInput recordingPoints recordingProducer version parser items).run.run [] =
       (driveParse recordingPoints recordingProducer version parser items).run.run
         (startEvents version) := by
   unfold driveInput
   exact run_bind_ok rfl
 
-theorem noLayout_of_stands {inputs : List Input} {items : List Received}
+theorem noLayout_of_stands {inputs : List Parser.Internal.Input} {items : List Received}
     (hs : inputs.map Bridge.received = items.map some) : NoLayout inputs := by
   intro token htoken hnone
   have : Bridge.received token ∈ items.map some := hs ▸ List.mem_map_of_mem htoken
   simp [hnone] at this
 
 theorem parserRecord_script {version : Token.Version} {commands : List Tree.Command}
-    (hscript : Script (Bridge.version version) commands) {inputs : List Input}
+    (hscript : Script (Bridge.version version) commands) {inputs : List Parser.Internal.Input}
     (hs : inputs.map Bridge.received = (BSmtLibSpec.Parser.Properties.received commands).map some) :
     parserRecord version inputs = record (Bridge.version version) commands := by
   have hrun := script_correct (H := List Event) (m := Id) (points := recordingPoints)
@@ -621,7 +631,7 @@ theorem eventsBefore_of_le : (events : List Event) → ∀ k, events.countP isAr
       rw [eventsBefore.eq_def]
       simp [eventsBefore_of_le events k h]
 
-theorem recordedRun_arrivals : (items : List Input) → NoLayout items →
+theorem recordedRun_arrivals : (items : List Parser.Internal.Input) → NoLayout items →
     ∀ (version : Token.Version) (parser : ScriptParser (List Event)) (events : List Event),
     (recordedRun version parser items events).countP isArrival ≤
       events.reverse.countP isArrival + items.length
@@ -648,9 +658,9 @@ with what a parser receives for a valid script before that item, is what the tra
 script has done before it.
 -/
 theorem placement_arrival {version : Token.Version} {commands : List Tree.Command}
-    (hscript : Script (Bridge.version version) commands) {inputs : List Input}
+    (hscript : Script (Bridge.version version) commands) {inputs : List Parser.Internal.Input}
     (hs : inputs.map Bridge.received = (BSmtLibSpec.Parser.Properties.received commands).map some)
-    {items : List Input} (hlayout : NoLayout items) (k : Nat)
+    {items : List Parser.Internal.Input} (hlayout : NoLayout items) (k : Nat)
     (htake : items.take k = inputs.take k) :
     eventsBefore k (parserRecord version items) =
       eventsBefore k (record (Bridge.version version) commands) := by
@@ -666,9 +676,10 @@ item there that is a `)` where the script's is and only there, is what the trave
 script has done before that item is processed.
 -/
 theorem placement_processing {version : Token.Version} {commands : List Tree.Command}
-    (hscript : Script (Bridge.version version) commands) {inputs : List Input}
+    (hscript : Script (Bridge.version version) commands) {inputs : List Parser.Internal.Input}
     (hs : inputs.map Bridge.received = (BSmtLibSpec.Parser.Properties.received commands).map some)
-    {items : List Input} (hlayout : NoLayout items) (k : Nat) (hk : k < items.length)
+    {items : List Parser.Internal.Input} (hlayout : NoLayout items) (k : Nat)
+        (hk : k < items.length)
     (hk' : k < inputs.length) (htake : items.take k = inputs.take k)
     (hclass : items[k]? = some .parenClose ↔ inputs[k]? = some .parenClose) :
     eventsBeforeProcessing k (parserRecord version items) =
@@ -684,7 +695,7 @@ Where its input stops before the item at position `k` of what a parser receives 
 script, the parser has done what the traversal of the script does before that item arrives.
 -/
 theorem placement_prefix {version : Token.Version} {commands : List Tree.Command}
-    (hscript : Script (Bridge.version version) commands) {inputs : List Input}
+    (hscript : Script (Bridge.version version) commands) {inputs : List Parser.Internal.Input}
     (hs : inputs.map Bridge.received = (BSmtLibSpec.Parser.Properties.received commands).map some)
     (k : Nat) :
     parserRecord version (inputs.take k) =

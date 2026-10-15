@@ -25,8 +25,7 @@ the same handler calls in the same order, the others by the port's step itself.
 namespace BSmtLib.Facts.Proofs.Parser.Fused.Command
 
 open BSmtLib.Traits
-open BSmtLib.Parser (Parse PM Input Step Flow call syntaxError ParseErrorCause)
-open BSmtLib.Parser.Adapter (ParseAdapter)
+open BSmtLib.Parser (Parse PM call syntaxError ParseErrorCause)
 open BSmtLib.Parser.Category.Term (TermLevelOf TermStateOf)
 open BSmtLib.Parser.Command (CommandStateOf)
 open BSmtLib.Parser.Internal.Fused
@@ -44,7 +43,7 @@ variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [CommandHandle
 /-- How the port's script step goes on, as the fused command step's continuation. -/
 def scriptCont (posture : VersionPosture) {batch : BatchTag} (next : BatchCursor batch)
     {β : Type} (k : OutcomeOf H next → m β) :
-    Except (Cause H) (Flow (PM H) (ScriptParser H) Unit) × H → m β
+    Except (Cause H) (Parser.Internal.Flow (PM H) (ScriptParser H) Unit) × H → m β
   | (.error e, h) => k <| .stop (.error e) (ScriptParser.new posture) next (.refl _) h
   | (.ok (.more p), h) => k <| .command h p.declarations p.command
   | (.ok (.done r), h) => k <| .stop (.ok (.break r)) (ScriptParser.new posture) next (.refl _) h
@@ -56,7 +55,7 @@ def scriptCont (posture : VersionPosture) {batch : BatchTag} (next : BatchCursor
       let follows := Token.BatchCursor.setVersion_follows switch
       match ← runParser resume h with
       | (.error e, h) => k <| .stop (.error e) (ScriptParser.new posture) switched follows h
-      | (.ok (.more p), h) => k <| .stop (.ok .continue) p switched follows h
+      | (.ok (.more p), h) => k <| .resume h p switched follows
       | (.ok (.done r), h) =>
         k <| .stop (.ok (.break r)) (ScriptParser.new posture) switched follows h
   | (.ok (.discardRest resume), h) => do
@@ -64,7 +63,7 @@ def scriptCont (posture : VersionPosture) {batch : BatchTag} (next : BatchCursor
     let follows := Token.BatchCursor.discardRest_follows next
     match ← runParser resume h with
     | (.error e, h) => k <| .stop (.error e) (ScriptParser.new posture) discarded follows h
-    | (.ok (.more p), h) => k <| .stop (.ok .continue) p discarded follows h
+    | (.ok (.more p), h) => k <| .resume h p discarded follows
     | (.ok (.done r), h) =>
       k <| .stop (.ok (.break r)) (ScriptParser.new posture) discarded follows h
 
@@ -94,14 +93,16 @@ theorem commandStep_eq (posture : VersionPosture) {batch : BatchTag}
     rw [portStep_eq]
     simp only [ScriptParser.arrive, Parser.Command.commandArrive, ScriptParser.step,
       Parser.Command.commandStep, inputOf]
-    cases next.category token <;> simp only [Token.SyntaxToken.fromParts, Input.ofSyntax] <;>
+    cases next.category token <;> simp only [Token.SyntaxToken.fromParts,
+        Parser.Internal.Input.ofSyntax] <;>
       (try rcases Token.Reserved.fromBytes? (next.content token) next.version with _ | (w | w)) <;>
       simp [scriptCont, fail, syntaxError]
   | opened =>
     rw [portStep_eq]
     simp only [ScriptParser.arrive, Parser.Command.commandArrive, ScriptParser.step,
       Parser.Command.commandStep, inputOf, Reserved.contentOf_eq, Reserved.reservedAt_eq]
-    cases next.category token <;> simp only [Token.SyntaxToken.fromParts, Input.ofSyntax] <;>
+    cases next.category token <;> simp only [Token.SyntaxToken.fromParts,
+        Parser.Internal.Input.ofSyntax] <;>
       (try rcases Token.Reserved.fromBytes? (next.content token) next.version with _ | (w | w)) <;>
       simp [scriptCont, fail, syntaxError]
     all_goals (cases w <;> simp [startTerm, toPort, assemble, withTerm,
@@ -114,7 +115,8 @@ theorem commandStep_eq (posture : VersionPosture) {batch : BatchTag}
       simp only [ScriptParser.arrive, Parser.Command.commandArrive,
         Parser.Command.Standard.payloadArrive, ScriptParser.step, Parser.Command.commandStep,
         Parser.Command.Standard.payloadStep, inputOf]
-      cases next.category token <;> simp only [Token.SyntaxToken.fromParts, Input.ofSyntax] <;>
+      cases next.category token <;> simp only [Token.SyntaxToken.fromParts,
+          Parser.Internal.Input.ofSyntax] <;>
         (try rcases Token.Reserved.fromBytes? (next.content token) next.version with
           _ | (w | w)) <;>
         simp [scriptCont, fail, syntaxError, Parser.Category.Token.expectClose, runParser,
@@ -127,7 +129,8 @@ theorem commandStep_eq (posture : VersionPosture) {batch : BatchTag}
         Parser.Command.Standard.payloadArrive, ScriptParser.step, Parser.Command.commandStep,
         Parser.Command.Standard.payloadStep, inputOf, Category.symbolOf?, Reserved.contentOf_eq,
         Reserved.reservedAt_eq]
-      cases next.category token <;> simp only [Token.SyntaxToken.fromParts, Input.ofSyntax] <;>
+      cases next.category token <;> simp only [Token.SyntaxToken.fromParts,
+          Parser.Internal.Input.ofSyntax] <;>
         (try rcases Token.Reserved.fromBytes? (next.content token) next.version with
           _ | (w | w)) <;>
         simp [scriptCont, fail, syntaxError, Parser.Category.Token.expectSymbol,
@@ -203,7 +206,8 @@ theorem commandStep_eq (posture : VersionPosture) {batch : BatchTag}
       simp only [ScriptParser.arrive, Parser.Command.commandArrive,
         Parser.Command.Standard.payloadArrive, ScriptParser.step, Parser.Command.commandStep,
         Parser.Command.Standard.payloadStep, inputOf, Reserved.contentOf_eq]
-      cases next.category token <;> simp only [Token.SyntaxToken.fromParts, Input.ofSyntax] <;>
+      cases next.category token <;> simp only [Token.SyntaxToken.fromParts,
+          Parser.Internal.Input.ofSyntax] <;>
         (try rcases Token.Reserved.fromBytes? (next.content token) next.version with
           _ | (w | w)) <;>
         simp [scriptCont, fail, syntaxError, Parser.Category.Token.expectNumeral, toPort, closing]
@@ -212,7 +216,8 @@ theorem commandStep_eq (posture : VersionPosture) {batch : BatchTag}
       simp only [ScriptParser.arrive, Parser.Command.commandArrive,
         Parser.Command.Standard.payloadArrive, ScriptParser.step, Parser.Command.commandStep,
         Parser.Command.Standard.payloadStep, inputOf, Reserved.contentOf_eq]
-      cases next.category token <;> simp only [Token.SyntaxToken.fromParts, Input.ofSyntax] <;>
+      cases next.category token <;> simp only [Token.SyntaxToken.fromParts,
+          Parser.Internal.Input.ofSyntax] <;>
         (try rcases Token.Reserved.fromBytes? (next.content token) next.version with
           _ | (w | w)) <;>
         simp [scriptCont, fail, syntaxError, Parser.Category.Token.expectNumeral, toPort, closing]

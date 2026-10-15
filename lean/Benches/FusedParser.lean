@@ -1,15 +1,19 @@
 /-
-The fused script reader (`BSmtLib.Parser.Internal.Fused`) against the port's script parser run
-by the parse adapter: timing and differential checks.
+The script parser's `parse`, which runs the fused script reader (`BSmtLib.Parser.Internal.Fused`)
+on the lexer's cursors, against the script parser's loop over single tokens
+(`BSmtLib.Parser.Internal.parseByToken`), both run by the parse adapter: timing and differential
+checks.
 
 Usage, with `lake exe bench-fused-parser` from `lean/`:
 
 - `time <reader> <runs> <file>...`: parses each file `runs` times with the reader (`lex`, the
-  lexer alone; `null`, the parse adapter with a parser that does nothing; `port`; `fused`; and
-  `port-io`, `fused-io` with the syntax checker in `IO`), printing one line per file with the
-  tokens, the bytes and the best and median time of a run in nanoseconds.
+  lexer alone; `null`, the parse adapter with a parser that does nothing; `port`, the loop over
+  single tokens; `fused`, the script parser's `parse`; `read`, `Reader.readSmt`; and `port-io`,
+  `fused-io` with the syntax checker in `IO`), printing one line per file with the tokens, the
+  bytes and the best and median time of a run in nanoseconds.
 - `check <list> <root> <mode>`: for each path in the file `list` (relative to `root`), runs the
-  port and the fused reader with a recording handler and compares the calls, the result and the
+  loop over single tokens and the script parser's `parse` with a recording handler and compares
+  the calls, the result and the
   error with its span. `mode` is `small` (the whole input, in pieces, from 2.0 and 2.5, the
   handler failing at up to 40 calls, cut at every byte, a bad byte at every byte), `whole`,
   `cuts`, `all` (as `small`, sampled) or `big` (as `all`, sampled more thinly, for large files).
@@ -17,7 +21,6 @@ Usage, with `lake exe bench-fused-parser` from `lean/`:
 module
 
 import BSmtLib
-import BSmtLib.Parser.Internal.Fused
 
 open BSmtLib
 open BSmtLib.Token
@@ -180,12 +183,30 @@ instance : CommandHandler SyntaxCheckerIO IO where
 /-- A parser that takes every token and does nothing: the floor of the parse adapter. -/
 structure NullParser where
 
-instance : Parser.Parse NullParser SyntaxChecker Id Nodes.Symbol Unit where
+instance : Parser.Internal.ParseByToken NullParser SyntaxChecker Id Nodes.Symbol Unit where
   arrive _ _ := pure ()
   step _ p token := match token with
     | .endOfInput => pure (.done ())
     | _ => pure (.more p)
   reset p := p
+
+instance : Parser.Parse NullParser SyntaxChecker Id Nodes.Symbol Unit where
+  parse := Parser.Internal.parseByToken
+
+/-- The script parser parsing by its loop over single tokens, never by the fused reader. -/
+structure PortParser (H : Type) {m : Type → Type} [Handler H m] where
+  inner : Parser.ScriptParser H
+
+/-- The script parser, parsing by its loop over single tokens. -/
+def PortParser.new {H : Type} {m : Type → Type} [Monad m] [CommandHandler H m]
+    (posture : Token.VersionPosture) : PortParser H :=
+  ⟨Parser.ScriptParser.new (H := H) posture⟩
+
+instance {H : Type} {m : Type → Type} [Monad m] [CommandHandler H m] :
+    Parser.Parse (PortParser H) H m (Handler.Error H) Unit where
+  parse parser state cursor := do
+    let (answer, inner, state, next) ← Parser.Internal.parseByToken parser.inner state cursor
+    return (answer, ⟨inner⟩, state, next)
 
 /-- Token handler that only counts tokens. -/
 structure CountTokens where
@@ -229,22 +250,24 @@ def runOnce (reader : String) (data : ByteArray) : IO Unit := do
     let adapter := Parser.ParseAdapter.new ({} : SyntaxChecker) ({} : NullParser)
     expectOk reader (Id.run ((Lexer.new adapter default).lexAll input))
   | "port" =>
+    let adapter : Parser.ParseAdapter SyntaxChecker (PortParser SyntaxChecker) :=
+      Parser.ParseAdapter.new {} (PortParser.new Token.VersionPosture.default)
+    expectOk reader (Id.run ((Lexer.new adapter default).lexAll input))
+  | "fused" =>
     let adapter : Parser.ParseAdapter SyntaxChecker (Parser.ScriptParser SyntaxChecker) :=
       Parser.ParseAdapter.new {} (Parser.ScriptParser.new Token.VersionPosture.default)
     expectOk reader (Id.run ((Lexer.new adapter default).lexAll input))
-  | "fused" =>
-    let adapter : Parser.Internal.Fused.ScriptAdapter SyntaxChecker :=
-      Parser.Internal.Fused.ScriptAdapter.new {} Token.VersionPosture.default
-    expectOk reader (Id.run ((Lexer.new adapter default).lexAll input))
+  | "read" =>
+    expectOk reader (Id.run (Reader.readSmt (n := Id) ({} : SyntaxChecker) input)).1
   | "port-io" =>
     let handler : SyntaxCheckerIO := { commands := ← IO.mkRef 0 }
-    let adapter : Parser.ParseAdapter SyntaxCheckerIO (Parser.ScriptParser SyntaxCheckerIO) :=
-      Parser.ParseAdapter.new handler (Parser.ScriptParser.new Token.VersionPosture.default)
+    let adapter : Parser.ParseAdapter SyntaxCheckerIO (PortParser SyntaxCheckerIO) :=
+      Parser.ParseAdapter.new handler (PortParser.new Token.VersionPosture.default)
     expectOk reader (← (Lexer.new adapter default).lexAll input)
   | "fused-io" =>
     let handler : SyntaxCheckerIO := { commands := ← IO.mkRef 0 }
-    let adapter : Parser.Internal.Fused.ScriptAdapter SyntaxCheckerIO :=
-      Parser.Internal.Fused.ScriptAdapter.new handler Token.VersionPosture.default
+    let adapter : Parser.ParseAdapter SyntaxCheckerIO (Parser.ScriptParser SyntaxCheckerIO) :=
+      Parser.ParseAdapter.new handler (Parser.ScriptParser.new Token.VersionPosture.default)
     expectOk reader (← (Lexer.new adapter default).lexAll input)
   | other => throw (IO.userError s!"unknown reader {other}")
 
@@ -476,11 +499,13 @@ def readWith (reader : String) (data : ByteArray) (version : Version) (piece fai
   let posture := Token.VersionPosture.default
   let result ← match reader with
     | "port" =>
+      let adapter : Parser.ParseAdapter Rec (PortParser Rec) :=
+        Parser.ParseAdapter.new handler (PortParser.new posture)
+      showRead adapter data version piece
+    | "fused" =>
       let adapter : Parser.ParseAdapter Rec (Parser.ScriptParser Rec) :=
         Parser.ParseAdapter.new handler (Parser.ScriptParser.new posture)
       showRead adapter data version piece
-    | "fused" =>
-      showRead (Parser.Internal.Fused.ScriptAdapter.new handler posture) data version piece
     | other => throw (IO.userError s!"unknown reader {other}")
   return (← log.get, result)
 

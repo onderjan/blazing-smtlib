@@ -29,7 +29,7 @@ namespace BSmtLib.Facts.Proofs.Parser.Script
 
 open BSmtLibSpec.Grammar
 open BSmtLibSpec.Grammar.File
-open BSmtLib.Parser (Input PM Step Flow Parse)
+open BSmtLib.Parser (PM Parse)
 open BSmtLib.Parser.Command (CommandOutcome CommandState commandStep)
 open BSmtLib.Token (VersionPosture)
 open BSmtLib.Parser.Script (ScriptParser)
@@ -111,8 +111,8 @@ What the script parser does after a command read in the version, over the tokens
 after a version declaration, the posture's check and the producer's and the handler's switches;
 after `exit`, the discarding and the end of the input.
 -/
-def scriptAfter (version : Token.Version) (declarations : Nat) (rest : List Input) :
-    CommandOutcome → PM H (Option (Unit × List Input))
+def scriptAfter (version : Token.Version) (declarations : Nat) (rest : List Parser.Internal.Input) :
+    CommandOutcome → PM H (Option (Unit × List Parser.Internal.Input))
   | .command =>
     driveParse points producer version
       (scriptAt (H := H) posture .awaiting declarations) rest
@@ -135,14 +135,14 @@ variable {points producer posture}
 
 omit [LawfulMonad m] in
 theorem arrive_scriptAt (command : Parser.Command.CommandStateOf H) (declarations : Nat)
-    (token : Input) :
-    Parse.arrive (scriptAt posture command declarations) token =
+    (token : Parser.Internal.Input) :
+    Parser.Internal.ParseByToken.arrive (scriptAt posture command declarations) token =
       Parser.Command.commandArrive command token := (rfl)
 
 omit [LawfulMonad m] in
 theorem step_commands (version : Token.Version) (command : Parser.Command.CommandStateOf H)
-    (declarations : Nat) (token : Input) :
-    Parse.step version (scriptAt posture command declarations) token =
+    (declarations : Nat) (token : Parser.Internal.Input) :
+    Parser.Internal.ParseByToken.step version (scriptAt posture command declarations) token =
       ScriptParser.step version (scriptAt posture command declarations)
         token := rfl
 
@@ -151,7 +151,7 @@ The script parser runs as the command parser, with the command
 parser's calls due at a token's arrival, and goes on after the command as its outcome says.
 -/
 theorem script_embed (version : Token.Version) (command : Parser.Command.CommandStateOf H)
-    (declarations : Nat) (tokens : List Input) :
+    (declarations : Nat) (tokens : List Parser.Internal.Input) :
     driveParse points producer version (scriptAt posture command declarations)
         tokens =
       drive points (commandStep version) command tokens Parser.Command.commandArrive >>= fun
@@ -338,12 +338,13 @@ variable {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf 
 
 theorem step_endOfInput (posture : VersionPosture) (version : Token.Version)
     (declarations : Nat) :
-    Parse.step version (scriptAt (H := H) posture .awaiting declarations) .endOfInput =
+    Parser.Internal.ParseByToken.step version (scriptAt
+        (H := H) posture .awaiting declarations) .endOfInput =
       pure (.done ()) := by
-  simp [Parse.step, ScriptParser.step, commandStep]
+  simp [Parser.Internal.ParseByToken.step, ScriptParser.step, commandStep]
 
 /-- Tokens whose spec items are one item stand for it. -/
-theorem map_received_split {inputs : List Input} {items : List Received}
+theorem map_received_split {inputs : List Parser.Internal.Input} {items : List Received}
     {tokens : List BSmtLibSpec.Grammar.SyntaxToken}
     (hs : inputs.map Bridge.received = (tokens.map Received.token ++ items).map some) :
     ∃ first second, inputs = first ++ second ∧ Stands first tokens ∧
@@ -352,13 +353,13 @@ theorem map_received_split {inputs : List Input} {items : List Received}
   obtain ⟨first, second, rfl, h₁, h₂⟩ := List.map_eq_append_iff.mp hs
   exact ⟨first, second, rfl, by simpa [Stands, Function.comp_def] using h₁, h₂⟩
 
-theorem map_received_endOfInput {inputs : List Input}
+theorem map_received_endOfInput {inputs : List Parser.Internal.Input}
     (hs : inputs.map Bridge.received = [Received.endOfInput].map some) :
     inputs = [.endOfInput] := by
   match inputs, hs with
   | [token], hs =>
     simp only [List.map_cons, List.map_nil, List.cons.injEq, and_true] at hs
-    rw [Input.received_endOfInput hs]
+    rw [Parser.Internal.Input.received_endOfInput hs]
   | [], hs => simp at hs
   | _ :: _ :: _, hs => simp at hs
 
@@ -370,8 +371,8 @@ theorem commands_runs (hA : Agrees h) (producer : Producer (StateT H m))
     (posture : VersionPosture) {start : BSmtLibSpec.Lexicon.Version} {commands : List Tree.Command}
     (hscript : Script start commands) :
     ∀ (version : Token.Version), Bridge.version version = start →
-    ∀ (declarations : Nat) {inputs : List Input},
-    inputs.map Bridge.received = (received commands).map some → ∀ rest : List Input,
+    ∀ (declarations : Nat) {inputs : List Parser.Internal.Input},
+    inputs.map Bridge.received = (received commands).map some → ∀ rest : List Parser.Internal.Input,
     driveParse points producer version
         (scriptAt (H := H) posture .awaiting declarations) (inputs ++ rest) =
       (do
@@ -391,7 +392,7 @@ theorem commands_runs (hA : Agrees h) (producer : Producer (StateT H m))
     obtain ⟨first, second, rfl, hfirst, hsecond⟩ := map_received_split hs
     rw [map_received_endOfInput hsecond, List.append_assoc, List.singleton_append, script_embed,
       command_runs hA _ hvalid (by simp [hmode]) hfirst]
-    simp [outcomeOf, scriptAfter, driveParse, step_endOfInput, Parser.Parse.arrive,
+    simp [outcomeOf, scriptAfter, driveParse, step_endOfInput, Parser.Internal.ParseByToken.arrive,
       Parser.Command.commandArrive,
       Parser.Script.ScriptParser.arrive,
       Traversal.commands, receive, arriveAt, processAt, Bridge.received]
@@ -441,9 +442,9 @@ theorem script_correct [Traits.CommandHandler H m] [LawfulMonad m] {points : Poi
     {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)} (hA : Agrees h)
     (producer : Producer (StateT H m)) (posture : Token.VersionPosture)
     {version : Token.Version} {commands : List Tree.Command}
-    (hscript : Script (Bridge.version version) commands) {inputs : List Parser.Input}
+    (hscript : Script (Bridge.version version) commands) {inputs : List Parser.Internal.Input}
     (hs : inputs.map Bridge.received = (BSmtLibSpec.Parser.Properties.received commands).map some)
-    (rest : List Parser.Input) :
+    (rest : List Parser.Internal.Input) :
     driveInput points producer version (Parser.Script.ScriptParser.new (H := H) posture)
         (inputs ++ rest) =
       (do adaptRun (Traversal.script points h producer (policyOf posture) (Bridge.version version)

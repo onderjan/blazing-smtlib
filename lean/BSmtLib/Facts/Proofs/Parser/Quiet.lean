@@ -27,7 +27,7 @@ namespace BSmtLib.Facts.Proofs.Parser.Quiet
 
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Parser.Traversal
-open BSmtLib.Parser (PM Input Step Flow)
+open BSmtLib.Parser (PM)
 open BSmtLib.Facts.Parser.Adapters.Handler
 
 /-- The event is a token's arrival or processing. -/

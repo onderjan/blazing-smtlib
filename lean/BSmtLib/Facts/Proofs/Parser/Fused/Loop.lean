@@ -1,6 +1,7 @@
 module
 
 public import BSmtLib.Parser.Internal.Fused
+import all BSmtLib.Parser
 import all BSmtLib.Parser.Adapter
 import all BSmtLib.Parser.Internal.Fused
 import all BSmtLib.Token
@@ -19,7 +20,7 @@ The proof here rests on the step of one token (`StepSimulates`, proved in
 `Facts.Proofs.Parser.Fused.Step`): the fused step, run with a continuation that reads its outcome
 as the adapter's result, is the adapter's `takeOne` on the parser that the loop's arguments stand
 for (`assemble`), followed by the continuation. The loop then follows by well-founded induction
-over the tokens left in the cursor, as the loop and `ParseAdapter.rest` go on alike after a
+over the tokens left in the cursor, as the loop and `Parser.Internal.rest` go on alike after a
 token.
 -/
 
@@ -27,7 +28,6 @@ namespace BSmtLib.Facts.Proofs.Parser.Fused.Loop
 
 open BSmtLib.Traits
 open BSmtLib.Parser (Parse)
-open BSmtLib.Parser.Adapter (ParseAdapter)
 open BSmtLib.Parser.Category.Term (TermLevelOf)
 open BSmtLib.Parser.Command (CommandStateOf)
 open BSmtLib.Parser.Internal.Fused
@@ -40,18 +40,19 @@ open BSmtLib.Token.Produce (HasNext)
 
 section
 
-variable {H P R E : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Parse P H m E R]
+variable {H P R E : Type} {m : Type → Type} [Monad m] [LawfulMonad m]
+  [Parser.Internal.ParseByToken P H m E R]
 variable {Z : Type} [Produce Z]
 
 /-- The adapter's token, with its cursors' consumption counted from a cursor further back. -/
 theorem takeOne_trans (parser : P) {origin cursor next : Z} (token : Produce.Token Z)
     (step : Produce.Consumed next cursor) (consumed : Produce.Consumed cursor origin) :
-    ParseAdapter.takeOne parser origin token next (Produce.consumed_trans step consumed) =
+    Parser.Internal.takeOne parser origin token next (Produce.consumed_trans step consumed) =
       (fun (after, (z : { z : Z // Produce.Consumed z cursor })) =>
         (after,
           (⟨z.1, Produce.consumed_trans z.2 consumed⟩ : { z : Z // Produce.Consumed z origin })))
-        <$> ParseAdapter.takeOne parser cursor token next step := by
-  unfold ParseAdapter.takeOne
+        <$> Parser.Internal.takeOne parser cursor token next step := by
+  unfold Parser.Internal.takeOne
   simp only [map_bind]
   congr 1
   funext r
@@ -71,7 +72,7 @@ theorem takeOne_trans (parser : P) {origin cursor next : Z} (token : Produce.Tok
     split
     · simp
     · rename_i st
-      cases st <;> simp [ParseAdapter.resumed]
+      cases st <;> simp [Parser.Internal.resumed]
 
 end
 
@@ -84,7 +85,7 @@ variable {H : Type} {m : Type → Type} [Monad m] [CommandHandler H m]
 /-- The adapter's result of a token, taken from `origin` on, with the handler after it. -/
 abbrev PortOut (H : Type) {m : Type → Type} [Handler H m] {batch : BatchTag}
     (origin : BatchCursor batch) :=
-  (ParseAdapter.After (ScriptParser H) Unit (Handler.Error H) ×
+  (Parser.Internal.After (ScriptParser H) Unit (Handler.Error H) ×
     { z : BatchCursor batch // z.Consumed origin }) × H
 
 /-- The fused step's outcome, read as the adapter's result of the token: going on in the parser
@@ -95,6 +96,8 @@ def toPort (posture : VersionPosture) {batch : BatchTag} {origin next : BatchCur
     ((.goOn { posture, command := cmd, declarations := decl }, ⟨next, consumed⟩), h)
   | .term h decl ctx mode levels =>
     ((.goOn (assemble posture decl .awaiting true ctx mode levels), ⟨next, consumed⟩), h)
+  | .resume h parser cursor follows =>
+    ((.goOn parser, ⟨cursor, follows.trans_consumed consumed⟩), h)
   | .stop answer parser cursor follows h =>
     ((.stop answer parser, ⟨cursor, follows.trans_consumed consumed⟩), h)
 
@@ -110,7 +113,7 @@ def StepSimulates (H : Type) (m : Type → Type) [Monad m] [CommandHandler H m] 
     (consumed : next.Consumed origin) {β : Type} (k : PortOut H origin → m β),
     step posture h decl cmd inTerm ctx mode levels token next
         (fun out => k (toPort posture consumed out)) =
-      ((ParseAdapter.takeOne (assemble posture decl cmd inTerm ctx mode levels) origin token next
+      ((Parser.Internal.takeOne (assemble posture decl cmd inTerm ctx mode levels) origin token next
         consumed).run h >>= k)
 
 /-- The port's run from a token taken from a cursor that leaves `next`: the adapter's `takeOne`,
@@ -118,12 +121,12 @@ then, if it goes on, the rest of the cursor. -/
 def portGo {batch : BatchTag} (origin : BatchCursor batch) (parser : ScriptParser H) (h : H)
     (token : Token batch) (next : BatchCursor batch) (consumed : next.Consumed origin) :
     m (LoopResult H origin) :=
-  (ParseAdapter.takeOne parser origin token next consumed).run h >>= portRest origin
+  (Parser.Internal.takeOne parser origin token next consumed).run h >>= portRest origin
 where
   /-- After a token: the rest of the cursor, or the stop. -/
   portRest (origin : BatchCursor batch) : PortOut H origin → m (LoopResult H origin)
     | ((.goOn parser, ⟨later, taken⟩), h) => do
-      let ((answer, parser, done), h) ← (ParseAdapter.rest origin parser later taken).run h
+      let ((answer, parser, done), h) ← (Parser.Internal.rest origin parser later taken).run h
       return (answer, parser, done, h)
     | ((.stop answer parser, done), h) => return (answer, parser, done, h)
 
@@ -133,10 +136,10 @@ variable [LawfulMonad m]
 theorem takeOne_from {batch : BatchTag} (parser : ScriptParser H)
     {origin cursor next : BatchCursor batch} (token : Token batch) (step : next.Consumed cursor)
     (consumed : cursor.Consumed origin) :
-    ParseAdapter.takeOne (m := m) parser origin token next (step.trans consumed) =
+    Parser.Internal.takeOne (m := m) parser origin token next (step.trans consumed) =
       (fun (after, (z : { z : BatchCursor batch // z.Consumed cursor })) =>
         (after, (⟨z.1, z.2.trans consumed⟩ : { z : BatchCursor batch // z.Consumed origin })))
-        <$> ParseAdapter.takeOne parser cursor token next step :=
+        <$> Parser.Internal.takeOne parser cursor token next step :=
   takeOne_trans (Z := BatchCursor batch) parser token step consumed
 
 /-- The rest of a cursor that has a token: its token, then the rest. -/
@@ -144,11 +147,11 @@ theorem rest_next {batch : BatchTag} (origin : BatchCursor batch) (parser : Scri
     (next : BatchCursor batch) (consumed : next.Consumed origin) (hn : next.HasNext) :
     (do
         let ((answer, parser, done), h) ←
-          (ParseAdapter.rest (m := m) origin parser next consumed).run h
+          (Parser.Internal.rest (m := m) origin parser next consumed).run h
         return (answer, parser, done, h)) =
       portGo origin parser h (next.next hn).1 (next.next hn).2.1
         ((next.next hn).2.2.trans consumed) := by
-  rw [ParseAdapter.rest]
+  rw [Parser.Internal.rest]
   have : Produce.next? next = some (next.next hn) := by
     show BatchCursor.next? next = _
     simp [BatchCursor.next?, hn]
@@ -166,10 +169,10 @@ theorem rest_none {batch : BatchTag} (origin : BatchCursor batch) (parser : Scri
     (next : BatchCursor batch) (consumed : next.Consumed origin) (hn : ¬next.HasNext) :
     (do
         let ((answer, parser, done), h) ←
-          (ParseAdapter.rest (m := m) origin parser next consumed).run h
+          (Parser.Internal.rest (m := m) origin parser next consumed).run h
         return (answer, parser, done, h)) =
       (pure (.ok .continue, parser, ⟨next, consumed⟩, h) : m (LoopResult H origin)) := by
-  rw [ParseAdapter.rest]
+  rw [Parser.Internal.rest]
   have : Produce.next? next = none := by
     show BatchCursor.next? next = _
     simp [BatchCursor.next?, hn]
@@ -212,6 +215,19 @@ theorem loop_eq (hstep : StepSimulates H m) (posture : VersionPosture) {batch : 
       rw [loop_eq hstep]
     · simp only [hn, ↓reduceDIte]
       rw [rest_none origin _ h' next consumed hn]
+  | resume h' parser cursor follows =>
+    simp only [toPort, portGo.portRest]
+    by_cases hn : cursor.HasNext
+    · simp only [hn, ↓reduceDIte]
+      rw [rest_next origin _ h' cursor (follows.trans_consumed consumed) hn]
+      obtain ⟨token', ⟨after, taken⟩⟩ := cursor.next hn
+      have : after.remaining < next.remaining := (taken.trans_follows follows).remaining_lt
+      dsimp only
+      obtain ⟨posture', command', declarations'⟩ := parser
+      dsimp only
+      split <;> rw [loop_eq hstep] <;> congr 1 <;> simp_all [assemble, withTerm]
+    · simp only [hn, ↓reduceDIte]
+      rw [rest_none origin _ h' cursor (follows.trans_consumed consumed) hn]
   | stop answer parser cursor follows h' =>
     simp only [toPort, portGo.portRest]
 termination_by next.remaining
@@ -223,43 +239,54 @@ theorem start_eq (hstep : StepSimulates H m) {batch : BatchTag} (parser : Script
   unfold start
   split <;> rw [loop_eq hstep] <;> congr 1 <;> cases parser <;> simp_all [assemble, withTerm]
 
-/-- The parse adapter's first token of a producer is the cursor's next. -/
-theorem first_eq {batch : BatchTag} (producer : BatchCursor batch) (hp : Produce.HasNext producer) :
-    ParseAdapter.first producer hp = producer.next hp := by
-  have hnext : Produce.next? producer = some (producer.next hp) := by
-    show BatchCursor.next? producer = _
-    simp [BatchCursor.next?, show producer.HasNext from hp]
-  unfold ParseAdapter.first
+/-- The fused reader parses a batch cursor as the script parser's loop over single tokens does:
+the same answer, parser, parse state, cursor and handler. -/
+theorem parse_eq (hstep : StepSimulates H m) {batch : BatchTag} (parser : ScriptParser H)
+    (state : Parser.ParseState H) (producer : BatchCursor batch) :
+    BSmtLib.Parser.Internal.Fused.parse (m := m) parser state producer =
+      Parser.Internal.parseByToken parser state producer := by
+  unfold Parser.Internal.parseByToken
   split
   · rename_i heq
-    rw [hnext] at heq
-    exact (Option.some.inj heq).symm
-  · rename_i heq
-    rw [hnext] at heq
-    cases heq
-
-/-- The fused reader's consumer is the parse adapter's: the same answer, cursor, parser and
-handler, and so the same state of the adapter. -/
-theorem consume_eq (hstep : StepSimulates H m) {batch : BatchTag} (producer : BatchCursor batch)
-    (hp : Produce.HasNext producer) (adapter : ParseAdapter H (ScriptParser H)) :
-    (Token.ConsumeFrom.consume (H := ScriptAdapter H) (m := m) producer hp).run ⟨adapter⟩ =
-      (fun (out, adapter) => (out, (⟨adapter⟩ : ScriptAdapter H))) <$>
-        (Token.ConsumeFrom.consume (H := ParseAdapter H (ScriptParser H)) (m := m) producer hp).run
-          adapter := by
-  have hfirst := first_eq producer hp
-  simp only [Token.ConsumeFrom.consume]
-  generalize ParseAdapter.first producer hp = pr at hfirst ⊢
-  subst hfirst
-  simp only [start_eq hstep]
-  simp only [portGo, StateT.run_bind, StateT.run_get, StateT.run_set, StateT.run_pure, pure_bind,
-    map_bind, liftM, monadLift, MonadLift.monadLift, StateT.run_lift, bind_assoc]
-  congr 1
-  funext a
-  congr 1
-  funext b
-  obtain ⟨⟨after, ⟨later, taken⟩⟩, h⟩ := b
-  cases after <;> simp [portGo.portRest, StateT.run_bind, StateT.run_set, StateT.run_lift,
-    StateT.run_map]
+    have hp : ¬ producer.HasNext := fun hp => by
+      have : Produce.next? producer = some (producer.next hp) := by
+        show BatchCursor.next? producer = _
+        simp [BatchCursor.next?, hp]
+      rw [this] at heq; cases heq
+    funext h
+    simp only [BSmtLib.Parser.Internal.Fused.parse, Produce.asBatch?, hp, ↓reduceDIte]
+    rfl
+  · rename_i token next consumed heq
+    have hp : producer.HasNext := by
+      refine Decidable.byContradiction fun hn => ?_
+      have h2 : Produce.next? producer = none := by
+        show BatchCursor.next? producer = _
+        simp [BatchCursor.next?, hn]
+      rw [h2] at heq; cases heq
+    have hnx : producer.next hp = (token, ⟨next, consumed⟩) := by
+      have : Produce.next? producer = some (producer.next hp) := by
+        show BatchCursor.next? producer = _
+        simp [BatchCursor.next?, hp]
+      rw [this] at heq
+      exact Option.some.inj heq
+    funext h
+    simp only [BSmtLib.Parser.Internal.Fused.parse, Produce.asBatch?, hp, ↓reduceDIte, hnx]
+    rw [start_eq hstep]
+    simp only [portGo, bind_assoc]
+    congr 1
+    funext b
+    obtain ⟨⟨after, ⟨later, taken⟩⟩, h'⟩ := b
+    cases after with
+    | goOn p =>
+      simp only [portGo.portRest, bind_pure_comp]
+      show _ = StateT.run _ h'
+      rw [StateT.run_map, Functor.map_map]
+      rfl
+    | stop answer p =>
+      simp only [portGo.portRest]
+      show _ = StateT.run _ h'
+      rw [StateT.run_pure, pure_bind]
+      rfl
 
 end
 

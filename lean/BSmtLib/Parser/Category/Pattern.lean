@@ -32,7 +32,7 @@ def wildcardAllowed (version : Version) : Bool :=
   version ≥ .v2_7
 
 /-- The symbol or wildcard the token is, if it is one in the version. -/
-def symbolOrWildcard? (version : Version) (token : Input) : Option SymbolOrWildcard :=
+def symbolOrWildcard? (version : Version) (token : Internal.Input) : Option SymbolOrWildcard :=
   match token with
   | .symbol symbol => some (.symbol symbol)
   | token => if wildcardAllowed version && token.isWord .underscore then some .wildcard else none
@@ -40,8 +40,8 @@ def symbolOrWildcard? (version : Version) (token : Input) : Option SymbolOrWildc
 /--
 A step of the pattern parser: ⟨symbol_⟩ | `(` ⟨symbol⟩ ⟨symbol_⟩+ `)`. Patterns are not handled.
 -/
-def step (version : Version) (self : PatternState) (token : Input) :
-    PM H (Step PatternState Pattern) :=
+def step (version : Version) (self : PatternState) (token : Internal.Input) :
+    PM H (Internal.Step PatternState Pattern) :=
   match self with
   | .start =>
     match token with

@@ -25,9 +25,10 @@ import all BSmtLib.Token.SyntaxToken
 /-!
 # The parser rejects whitespace and comments
 
-No parser takes whitespace or a comment (`Input.layout`): every step of the script parser, from
-every state, fails on it (`scriptStep_layout`), and so the parse adapter, handed such a token,
-stops with an error at it, the cursor after the token (`takeOne_layout`).
+No parser takes whitespace or a comment (`Parser.Internal.Input.layout`): every step of the
+script parser, from every state, fails on it (`scriptStep_layout`), and so the adapter that stops
+after an action on its cursor (`Param.Stop`), handed such a token, stops with an error at it, the
+cursor after the token (`takeOne_layout`).
 -/
 
 namespace BSmtLib.Facts.Proofs.Reader.Param.Layout
@@ -42,6 +43,8 @@ open BSmtLib.Parser.Category.«Sort» BSmtLib.Parser.Category.SortedVar BSmtLib.
 open BSmtLib.Parser.Category.Token BSmtLib.Parser.Command BSmtLib.Parser.Command.Datatype
 open BSmtLib.Parser.Command.Function BSmtLib.Parser.Command.Standard BSmtLib.Parser.Script
 open BSmtLib.Traits
+
+attribute [local instance high] Stop.consumeFrom
 
 /-- A computation of the recording parser that fails, from every log. -/
 def Fails {α : Type} (x : Parser.Quiet.RPM α) : Prop :=
@@ -124,14 +127,15 @@ macro_rules
 
 theorem identStep_layout (version : Token.Version) (self : IdentState) :
     Fails (IdentState.step (H := LH) (m := Id) version self .layout) := by
-  cases self <;> simp only [IdentState.step, Input.isWord] <;> (try split) <;>
+  cases self <;> simp only [IdentState.step, Parser.Internal.Input.isWord] <;> (try split) <;>
     first | exact fails_syntaxError _ | simp_all
 
 theorem sortStep_layout (version : Token.Version) (self : SortState (Handler.«Sort» LH)) :
     Fails (sortStep (H := LH) (m := Id) version self .layout) := by
   obtain ⟨mode, levels⟩ := self
   unfold sortStep
-  cases mode <;> dsimp only <;> (try simp only [Input.isWord, Bool.false_eq_true, ite_false])
+  cases mode <;> dsimp only <;> (try simp only [Parser.Internal.Input.isWord, Bool.false_eq_true,
+      ite_false])
   all_goals fails_tac
 
 theorem sExprStep_layout (version : Token.Version) (self : SExprState (Handler.SExpr LH)) :
@@ -152,14 +156,15 @@ theorem patternStep_layout (version : Token.Version) (self : PatternState) :
     Fails (PatternState.step (H := LH) (m := Id) version self .layout) := by
   unfold PatternState.step
   cases self <;> dsimp only <;>
-    (try simp only [PatternState.symbolOrWildcard?, Input.isWord, Bool.and_false,
+    (try simp only [PatternState.symbolOrWildcard?, Parser.Internal.Input.isWord, Bool.and_false,
       Bool.false_eq_true, ite_false]) <;> fails_tac
 
 theorem qualIdentStep_layout (version : Token.Version) (self : QualIdentState (Handler.«Sort» LH)) :
     Fails (qualIdentStep (H := LH) (m := Id) version self .layout) := by
   unfold qualIdentStep
   cases self <;> dsimp only <;>
-    (try simp only [Input.isWord, Bool.false_eq_true, ite_false, expectClose]) <;> fails_tac
+    (try simp only [Parser.Internal.Input.isWord, Bool.false_eq_true, ite_false,
+        expectClose]) <;> fails_tac
 
 theorem sortedVarStep_layout (version : Token.Version) (self : SortedVarState (Handler.«Sort» LH)) :
     Fails (sortedVarStep (H := LH) (m := Id) version self .layout) := by
@@ -167,7 +172,8 @@ theorem sortedVarStep_layout (version : Token.Version) (self : SortedVarState (H
   cases self <;> dsimp only <;> (try simp only [expectClose, expectOpen, expectSymbol]) <;>
     fails_tac
 
-theorem listStep_layout {σ ρ : Type} (init : σ) (inner : σ → Input → Parser.Quiet.RPM (Step σ ρ))
+theorem listStep_layout {σ ρ : Type} (init : σ)
+    (inner : σ → Parser.Internal.Input → Parser.Quiet.RPM (Parser.Internal.Step σ ρ))
     (hinner : ∀ s, Fails (inner s .layout)) (maximum : Option Nat) (self : ListState σ ρ) :
     Fails (ListState.step init inner maximum self .layout) := by
   unfold ListState.step
@@ -224,7 +230,8 @@ theorem datatypeStep_layout (start : Array Nodes.Symbol → Parser.Quiet.RPM Uni
     (self : DatatypeState (Handler.«Sort» LH)) :
     Fails (datatypeStep (H := LH) (m := Id) start version self .layout) := by
   unfold datatypeStep
-  cases self <;> dsimp only <;> (try simp only [expectClose, expectOpen, Input.isWord,
+  cases self <;> dsimp only <;> (try simp only [expectClose, expectOpen,
+      Parser.Internal.Input.isWord,
     Bool.false_eq_true, ite_false]) <;> fails_tac
 
 theorem bodyStep_layout (version : Token.Version) (self : TermStateOf LH) :
@@ -260,7 +267,7 @@ theorem scriptStep_layout (version : Token.Version) (parser : ScriptParser LH) :
 
 theorem ofSyntax_layout {b : Token.BatchTag} (cursor : Token.BatchCursor b) (token : Token b)
     (h : Lexer.Adapters.toHanded cursor token = none) :
-    Input.ofSyntax (cursor.syntax token) = .layout := by
+    Parser.Internal.Input.ofSyntax (cursor.syntax token) = .layout := by
   unfold Lexer.Adapters.toHanded at h
   simp only [Token.BatchCursor.«syntax», Token.SyntaxToken.fromToken] at h ⊢
   generalize cursor.category token = category at h ⊢
@@ -269,16 +276,18 @@ theorem ofSyntax_layout {b : Token.BatchTag} (cursor : Token.BatchCursor b) (tok
 
 theorem takeOne_layout {b : Token.BatchTag} (parser : ScriptParser LH)
     (cursor next : Token.BatchCursor b) (token : Token b) (consumed : next.Consumed cursor)
-    (events : List Event) (hl : Input.ofSyntax (next.syntax token) = .layout) :
-    ∃ e events', (ParseAdapter.takeOne (H := LH) (m := Id) (P := ScriptParser LH)
+    (events : List Event) (hl : Parser.Internal.Input.ofSyntax (next.syntax token) = .layout) :
+    ∃ e events', (Stop.takeOne (H := LH) (m := Id) (P := ScriptParser LH)
       parser cursor token next consumed).run events =
-        ((.stop (.error e) (Parse.reset parser), ⟨next, consumed⟩), events') := by
-  have hitem' : Input.ofSyntax (Token.Produce.«syntax» next token) =
-      Input.ofSyntax (next.syntax token) := rfl
-  obtain ⟨e, events', hX⟩ := fails_bind_right (Parse.arrive (H := LH) parser .layout)
+        ((.stop (.error e) (Parser.Internal.ParseByToken.reset parser), ⟨next, consumed⟩),
+            events') := by
+  have hitem' : Parser.Internal.Input.ofSyntax (Token.Produce.«syntax» next token) =
+      Parser.Internal.Input.ofSyntax (next.syntax token) := rfl
+  obtain ⟨e, events',
+      hX⟩ := fails_bind_right (Parser.Internal.ParseByToken.arrive (H := LH) parser .layout)
     (fun _ => scriptStep_layout (Token.Produce.version next) parser) events
   refine ⟨e, events', ?_⟩
-  simp only [ParseAdapter.takeOne, StateT.run_bind]
+  simp only [Stop.takeOne, StateT.run_bind]
   rw [hitem', hl]
   erw [hX]
   rfl

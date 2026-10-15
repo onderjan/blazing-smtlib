@@ -1,6 +1,6 @@
 module
 
-public import BSmtLib.Parser.Adapter
+public import BSmtLib.Parser.Script
 public import BSmtLib.Parser.Internal.Fused.Reserved
 
 public section
@@ -9,17 +9,17 @@ public section
 # What the fused script reader's parts share
 
 The fused script reader (`Parser.Internal.Fused`) runs the script parser over a batch cursor as
-the parse adapter runs it, with the same handler calls, errors and spans, in one tail-recursive
-loop over the tokens. This module has what its parts share: the outcome of a step, which each
-step hands to the loop's continuation; handler and parser calls run on the handler; the token's
-parts; and the port's own step of a token, which the reader uses for the states it does not
-fuse.
+its loop over single tokens runs it, with the same handler calls, errors and spans, in one
+tail-recursive loop over the tokens. This module has what its parts share: the outcome of a step,
+which each step hands to the loop's continuation; handler and parser calls run on the handler;
+the token's parts; and the port's own step of a token, which the reader uses for the states it
+does not fuse.
 -/
 
 namespace BSmtLib.Parser.Internal.Fused.Basic
 
 open BSmtLib.Nodes BSmtLib.Traits
-open BSmtLib.Parser.Adapter BSmtLib.Parser.Category.Term BSmtLib.Parser.Command
+open BSmtLib.Parser.Category.Term BSmtLib.Parser.Command
 open BSmtLib.Parser.Command.Definition BSmtLib.Parser.Script
 open BSmtLib.Plain (SymbolView NumeralView DecimalView HexDigitsView BinDigitsView
   StringContentView)
@@ -35,12 +35,13 @@ inductive TermContext (HandledSort : Type) where
   | definition (definition : DefinitionEnd HandledSort)
 
 /-- What the loop does after a token: go on at the command level with the command state; go on
-in the command's term, with the command around it and the term's mode and levels; or stop the
-hand-over with the answer, the parser to go on from, the cursor (which follows `next`) and the
-handler. -/
+in the command's term, with the command around it and the term's mode and levels; go on from
+the parser with the cursor (which follows `next`) after the step acted on it; or stop with the
+answer, the parser to go on from, the cursor (which follows `next`) and the handler. -/
 inductive Outcome (H σ γ μ L P ε : Type) {batch : BatchTag} (next : BatchCursor batch) where
   | command (h : H) (declarations : Nat) (command : σ)
   | term (h : H) (declarations : Nat) (context : γ) (mode : μ) (levels : L)
+  | resume (h : H) (parser : P) (cursor : BatchCursor batch) (follows : cursor.Follows next)
   | stop (answer : Except ε (ControlFlow Unit)) (parser : P) (cursor : BatchCursor batch)
       (follows : cursor.Follows next) (h : H)
 
@@ -109,14 +110,15 @@ def fail {batch : BatchTag} (posture : VersionPosture) (next : BatchCursor batch
     (cause : Cause H) {β : Type} (k : OutcomeOf H next → m β) : m β :=
   k <| .stop (.error cause) (ScriptParser.new posture) next (.refl _) h
 
-/-- The step of the token through the port's script step, as the parse adapter takes it. -/
+/-- The step of the token through the port's script step, as the loop over single tokens takes
+it (`Parser.Internal.takeOne`). -/
 @[inline]
 def portStep {batch : BatchTag} (posture : VersionPosture) (h : H) (declarations : Nat)
     (command : CommandStateOf H) (token : Token batch) (next : BatchCursor batch) {β : Type}
     (k : OutcomeOf H next → m β) : m β := do
   let parser : ScriptParser H := { posture, command, declarations }
   let fresh : ScriptParser H := ScriptParser.new posture
-  let input := Input.ofSyntax (Token.Produce.«syntax» next token)
+  let input := Internal.Input.ofSyntax (Token.Produce.«syntax» next token)
   let version := next.version
   match ← runParser (do ScriptParser.arrive parser input; ScriptParser.step version parser input)
       h with
@@ -130,14 +132,14 @@ def portStep {batch : BatchTag} (posture : VersionPosture) (h : H) (declarations
       let follows := BatchCursor.setVersion_follows switch
       match ← runParser resume h with
       | (.error e, h) => k <| .stop (.error e) fresh switched follows h
-      | (.ok (.more p), h) => k <| .stop (.ok .continue) p switched follows h
+      | (.ok (.more p), h) => k <| .resume h p switched follows
       | (.ok (.done r), h) => k <| .stop (.ok (.break r)) fresh switched follows h
   | (.ok (.discardRest resume), h) =>
     let discarded := next.discardRest
     let follows := BatchCursor.discardRest_follows next
     match ← runParser resume h with
     | (.error e, h) => k <| .stop (.error e) fresh discarded follows h
-    | (.ok (.more p), h) => k <| .stop (.ok .continue) p discarded follows h
+    | (.ok (.more p), h) => k <| .resume h p discarded follows
     | (.ok (.done r), h) => k <| .stop (.ok (.break r)) fresh discarded follows h
 
 end

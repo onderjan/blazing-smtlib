@@ -27,7 +27,7 @@ bridge maps it to the tree's.
 namespace BSmtLib.Facts.Proofs.Parser.TermParts
 
 open BSmtLibSpec.Grammar
-open BSmtLib.Parser (Input PM Step)
+open BSmtLib.Parser (PM)
 open BSmtLib.Parser.Category.Ident (IdentState)
 open BSmtLib.Parser.Category.Sort (SortState sortStep)
 open BSmtLib.Parser.Category.SortedVar (SortedVarState sortedVarStep)
@@ -60,7 +60,7 @@ with it, unqualified.
 -/
 theorem qualIndexed_runs {name : Tree.Symbol} {indices : List Tree.Index}
     (hvalid : ∀ index ∈ indices, index.Valid (Bridge.version version)) (hne : indices ≠ [])
-    {symbolToken : Input} {tokens : List Input}
+    {symbolToken : Parser.Internal.Input} {tokens : List Parser.Internal.Input}
     (hsymbol : Bridge.received symbolToken = some (.token (.symbol name)))
     (hs : Stands tokens (indices.flatMap Tree.Index.tokens)) :
     ∃ head : Nodes.Identifier, Bridge.identifier head = ⟨name, indices⟩ ∧
@@ -77,16 +77,16 @@ theorem qualIndexed_runs {name : Tree.Symbol} {indices : List Tree.Index}
       congr 1
       funext step
       cases step <;> rfl)
-    hruns).congr rfl (by funext; simp [Step.wrap])
+    hruns).congr rfl (by funext; simp [Parser.Internal.Step.wrap])
 
 /-- The tokens of an identifier start with a token other than `)`. -/
-theorem identifier_first {name : Tree.Identifier} {tokens : List Input}
+theorem identifier_first {name : Tree.Identifier} {tokens : List Parser.Internal.Input}
     (hs : Stands tokens name.tokens) :
     ∃ token rest, tokens = token :: rest ∧ token ≠ .parenClose := by
   match name with
   | ⟨_, []⟩ =>
     obtain ⟨token, rfl, htoken⟩ := Stands.split_single hs
-    obtain ⟨_, rfl, _⟩ := Input.received_symbol htoken
+    obtain ⟨_, rfl, _⟩ := Parser.Internal.Input.received_symbol htoken
     exact ⟨_, _, rfl, by simp⟩
   | ⟨_, _ :: _⟩ =>
     obtain ⟨_, _, rfl, _, _⟩ := Stands.indexed (List.cons_ne_nil _ _) hs
@@ -94,14 +94,14 @@ theorem identifier_first {name : Tree.Identifier} {tokens : List Input}
 
 /-- From its start, the identifier parser reads an identifier and ends with it. -/
 theorem ident_runs {name : Tree.Identifier} (hname : name.Valid (Bridge.version version))
-    {tokens : List Input} (hs : Stands tokens name.tokens) :
+    {tokens : List Parser.Internal.Input} (hs : Stands tokens name.tokens) :
     ∃ head : Nodes.Identifier, Bridge.identifier head = name ∧
       Runs points (IdentState.step (H := H) version) .start tokens (ticks points tokens)
         fun _ => pure (.done head) := by
   match name with
   | ⟨symbolName, []⟩ =>
     obtain ⟨token, rfl, htoken⟩ := Stands.split_single hs
-    obtain ⟨symbol, rfl, rfl⟩ := Input.received_symbol htoken
+    obtain ⟨symbol, rfl, rfl⟩ := Parser.Internal.Input.received_symbol htoken
     refine ⟨⟨symbol, #[]⟩, by simp [Bridge.identifier], ?_⟩
     exact (Runs.token (program := pure ()) (by simp [IdentState.step])).congr (by simp) rfl
   | ⟨symbolName, index :: indices⟩ =>
@@ -109,7 +109,8 @@ theorem ident_runs {name : Tree.Identifier} (hname : name.Valid (Bridge.version 
     obtain ⟨head, hhead, hruns⟩ := indexed_runs (H := H) (points := points) hname
       (List.cons_ne_nil _ _) hsymbol hrest
     refine ⟨head, hhead, ?_⟩
-    rw [show Input.parenOpen :: Input.reserved (.general .underscore) :: symbolToken ::
+    rw [show Parser.Internal.Input.parenOpen :: Parser.Internal.Input.reserved
+        (.general .underscore) :: symbolToken ::
         (rest ++ [.parenClose]) = [.parenOpen] ++ ([.reserved (.general .underscore)] ++
         (symbolToken :: (rest ++ [.parenClose]))) by simp]
     refine (Runs.append (middle := fun _ => IdentState.opened)
@@ -130,7 +131,8 @@ ends with the identifier qualified by the sort.
 theorem qualAs_runs (hA : TermAgrees h) {name : Tree.Identifier} {qualification : Tree.«Sort»}
     (hname : name.Valid (Bridge.version version))
     (hsort : qualification.Valid (Bridge.version version))
-    {identifierTokens sortTokens : List Input} (hs₁ : Stands identifierTokens name.tokens)
+    {identifierTokens sortTokens : List Parser.Internal.Input}
+        (hs₁ : Stands identifierTokens name.tokens)
     (hs₂ : Stands sortTokens qualification.tokens) :
     ∃ head : Nodes.Identifier, Bridge.identifier head = name ∧
       Runs points (qualIdentStep version) (.qualifiedIdent .start)
@@ -164,11 +166,11 @@ theorem qualAs_runs (hA : TermAgrees h) {name : Tree.Identifier} {qualification 
     fun _ => Runs.token (by simp [Parser.Category.QualifiedIdent.qualIdentStep,
         Parser.Category.Token.expectClose])
   exact Runs.append (middle := fun _ => QualIdentState.sort head .init)
-    (hidentEmbed.congr rfl (by funext; simp [Step.wrap])) fun _ =>
+    (hidentEmbed.congr rfl (by funext; simp [Parser.Internal.Step.wrap])) fun _ =>
       Runs.append (middle := fun sort => QualIdentState.close head sort)
         ((show (SortState.init : SortState (Traits.Handler.«Sort» H)) =
                 ({ mode := .start, levels := [] } : SortState (Traits.Handler.«Sort» H)) from rfl) ▸
-          hsortEmbed.congr rfl (by funext; simp [Step.wrap, sortPush])) hclose
+          hsortEmbed.congr rfl (by funext; simp [Parser.Internal.Step.wrap, sortPush])) hclose
 
 end
 
@@ -186,16 +188,16 @@ theorem versionAtLeast_wildcard (h : versionAtLeast (Bridge.version version) .v2
 /-- The token standing for a symbol or the wildcard of the version, as the pattern parser
 reads it. -/
 theorem symbolOrWildcard_runs {item : Tree.SymbolOrWildcard}
-    (hvalid : item.Valid (Bridge.version version)) {token : Input}
+    (hvalid : item.Valid (Bridge.version version)) {token : Parser.Internal.Input}
     (htoken : Bridge.received token = some (.token item.token)) :
     ∃ parsed, PatternState.symbolOrWildcard? version token = some parsed ∧
       Bridge.symbolOrWildcard parsed = item ∧ token ≠ .parenClose := by
   cases item with
   | symbol name =>
-    obtain ⟨symbol, rfl, rfl⟩ := Input.received_symbol htoken
+    obtain ⟨symbol, rfl, rfl⟩ := Parser.Internal.Input.received_symbol htoken
     exact ⟨.symbol symbol, by simp [PatternState.symbolOrWildcard?], rfl, by simp⟩
   | wildcard =>
-    have := Input.received_word (word := .general .underscore) htoken
+    have := Parser.Internal.Input.received_word (word := .general .underscore) htoken
     subst this
     exact ⟨.wildcard, by simp [PatternState.symbolOrWildcard?,
       versionAtLeast_wildcard (by simpa [Tree.SymbolOrWildcard.Valid] using hvalid)], rfl,
@@ -204,7 +206,8 @@ theorem symbolOrWildcard_runs {item : Tree.SymbolOrWildcard}
 /-- The arguments of a constructor pattern, appended to those found so far. -/
 theorem patternArguments_runs : (arguments : List Tree.SymbolOrWildcard) →
     (∀ argument ∈ arguments, argument.Valid (Bridge.version version)) →
-    ∀ {tokens : List Input}, Stands tokens (arguments.map Tree.SymbolOrWildcard.token) →
+    ∀ {tokens : List Parser.Internal.Input},
+        Stands tokens (arguments.map Tree.SymbolOrWildcard.token) →
     ∀ (constructor : Nodes.Symbol) (found : Array Nodes.SymbolOrWildcard),
     ∃ parsed : Array Nodes.SymbolOrWildcard,
       parsed.toList.map Bridge.symbolOrWildcard = arguments ∧
@@ -231,7 +234,7 @@ theorem patternArguments_runs : (arguments : List Tree.SymbolOrWildcard) →
 
 /-- From its start, the pattern parser reads a pattern and ends with it. -/
 theorem pattern_runs {pattern : Tree.Pattern} (hvalid : pattern.Valid (Bridge.version version))
-    {tokens : List Input} (hs : Stands tokens pattern.tokens) :
+    {tokens : List Parser.Internal.Input} (hs : Stands tokens pattern.tokens) :
     ∃ parsed : Nodes.Pattern, Bridge.pattern parsed = pattern ∧
       Runs points (PatternState.step (H := H) version) .start tokens (ticks points tokens)
         fun _ => pure (.done parsed) := by
@@ -241,12 +244,13 @@ theorem pattern_runs {pattern : Tree.Pattern} (hvalid : pattern.Valid (Bridge.ve
     obtain ⟨parsed, hparsed, hitem, hne⟩ := symbolOrWildcard_runs hvalid htoken
     refine ⟨.single parsed, by simp [Bridge.pattern, hitem], ?_⟩
     refine (Runs.token (program := pure ()) ?_).congr (by simp) rfl
-    cases token <;> simp_all [PatternState.step, PatternState.symbolOrWildcard?, Input.isWord]
+    cases token <;> simp_all [PatternState.step, PatternState.symbolOrWildcard?,
+        Parser.Internal.Input.isWord]
   | constructor name arguments =>
     obtain ⟨inner, rfl, hinner⟩ := Stands.split_paren hs
     obtain ⟨symbolToken, argumentTokens, rfl, hsymbol, hargumentTokens⟩ :=
       Stands.split_cons hinner
-    obtain ⟨symbol, rfl, rfl⟩ := Input.received_symbol hsymbol
+    obtain ⟨symbol, rfl, rfl⟩ := Parser.Internal.Input.received_symbol hsymbol
     obtain ⟨parsed, hmap, hruns⟩ := patternArguments_runs (H := H) (points := points) arguments
       hvalid.2 hargumentTokens symbol #[]
     have hparsed : parsed.isEmpty = false := by
@@ -257,7 +261,8 @@ theorem pattern_runs {pattern : Tree.Pattern} (hvalid : pattern.Valid (Bridge.ve
         (.arguments symbol (#[] ++ parsed)) [.parenClose] (do tick points .parenClose; pure ())
         fun _ => pure (.done (.constructor symbol (#[] ++ parsed))) :=
       Runs.token (by simp [PatternState.step, hparsed])
-    rw [show Input.parenOpen :: (Input.symbol symbol :: argumentTokens ++ [.parenClose]) =
+    rw [show Parser.Internal.Input.parenOpen ::
+        (Parser.Internal.Input.symbol symbol :: argumentTokens ++ [.parenClose]) =
       [.parenOpen] ++ ([.symbol symbol] ++ (argumentTokens ++ [.parenClose])) by simp]
     refine (Runs.append (middle := fun _ => PatternState.opened)
       (Runs.token_more (by simp [PatternState.step])) fun _ =>
@@ -278,9 +283,9 @@ variable {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf 
 
 /-- From its start, the sorted variable parser reads `(` ⟨symbol⟩ ⟨sort⟩ `)` and ends with it. -/
 theorem sortedVar_runs (hA : TermAgrees h) (var : Tree.SortedVar)
-    (hvalid : var.Valid (Bridge.version version)) {tokens : List Input}
+    (hvalid : var.Valid (Bridge.version version)) {tokens : List Parser.Internal.Input}
     (hs : Stands tokens var.tokens) :
-    ∃ (symbol : Nodes.Symbol) (sortTokens : List Input),
+    ∃ (symbol : Nodes.Symbol) (sortTokens : List Parser.Internal.Input),
       tokens = .parenOpen :: .symbol symbol :: (sortTokens ++ [.parenClose]) ∧
       Bridge.symbol symbol = var.symbol ∧ Stands sortTokens var.sort.tokens ∧
       Runs points (sortedVarStep version) .start tokens
@@ -294,7 +299,7 @@ theorem sortedVar_runs (hA : TermAgrees h) (var : Tree.SortedVar)
   obtain ⟨varSymbol, varSort⟩ := var
   obtain ⟨inner, rfl, hinner⟩ := Stands.split_paren hs
   obtain ⟨symbolToken, sortTokens, rfl, hsymbol, hsortTokens⟩ := Stands.split_cons hinner
-  obtain ⟨symbol, rfl, rfl⟩ := Input.received_symbol hsymbol
+  obtain ⟨symbol, rfl, rfl⟩ := Parser.Internal.Input.received_symbol hsymbol
   refine ⟨symbol, sortTokens, rfl, rfl, hsortTokens, ?_⟩
   have hsortEmbed := Runs.embed (outer := sortedVarStep version)
     (SortedVarState.sort symbol) (fun sort => pure (.more (.close symbol sort)))
@@ -308,7 +313,8 @@ theorem sortedVar_runs (hA : TermAgrees h) (var : Tree.SortedVar)
       (do tick points .parenClose; pure (symbol, sort)) fun result => pure (.done result) :=
     fun _ => Runs.token (by simp [Parser.Category.SortedVar.sortedVarStep,
         Parser.Category.Token.expectClose])
-  rw [show Input.parenOpen :: (Input.symbol symbol :: sortTokens ++ [.parenClose]) =
+  rw [show Parser.Internal.Input.parenOpen ::
+      (Parser.Internal.Input.symbol symbol :: sortTokens ++ [.parenClose]) =
     [.parenOpen] ++ ([.symbol symbol] ++ (sortTokens ++ [.parenClose])) by simp]
   exact (Runs.append (middle := fun _ => SortedVarState.opened)
     (Runs.token_more (by simp [Parser.Category.SortedVar.sortedVarStep,
@@ -319,7 +325,8 @@ theorem sortedVar_runs (hA : TermAgrees h) (var : Tree.SortedVar)
           Runs.append (middle := fun sort => SortedVarState.close symbol sort)
             ((show (SortState.init : SortState (Traits.Handler.«Sort» H)) =
                 ({ mode := .start, levels := [] } : SortState (Traits.Handler.«Sort» H)) from rfl) ▸
-              hsortEmbed.congr rfl (by funext; simp [Step.wrap, sortPush])) hclose).congr
+              hsortEmbed.congr rfl (by funext; simp [Parser.Internal.Step.wrap,
+                  sortPush])) hclose).congr
     (by simp) rfl
 
 /--
@@ -328,7 +335,8 @@ the effects of a program whose variables are the traversal's, through the bridge
 them to those found so far.
 -/
 theorem sortedVars_runs (hA : TermAgrees h) (variables : List Tree.SortedVar)
-    (hvalid : ∀ var ∈ variables, var.Valid (Bridge.version version)) {tokens : List Input}
+    (hvalid : ∀ var ∈ variables,
+        var.Valid (Bridge.version version)) {tokens : List Parser.Internal.Input}
     (hs : Stands tokens (variables.flatMap Tree.SortedVar.tokens)) :
     ∃ program : PM H (List (Nodes.Symbol × Traits.Handler.«Sort» H)),
       Bridge.specPairs <$> program = adaptRun (Traversal.sortedVars points h variables) ∧
@@ -356,7 +364,7 @@ theorem sortedVars_runs (hA : TermAgrees h) (variables : List Tree.SortedVar)
       let others ← program
       pure ((symbol, sort) :: others), ?_, fun found => ?_⟩
     · obtain ⟨varSymbol, varSort⟩ := var
-      have hsymbolToken : Bridge.received (Input.symbol symbol) =
+      have hsymbolToken : Bridge.received (Parser.Internal.Input.symbol symbol) =
           some (.token (.symbol varSymbol)) := by
         simp only at hsymbol
         simp [Bridge.received, hsymbol]

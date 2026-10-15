@@ -36,8 +36,9 @@ section
 variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
 
 /-- A step of the signature parser; the sorts are handled at their last tokens. -/
-def signatureStep (version : Version) (self : SignatureState (Handler.«Sort» H)) (token : Input) :
-    PM H (Step (SignatureState (Handler.«Sort» H)) (Signature (Handler.«Sort» H))) := do
+def signatureStep (version : Version) (self : SignatureState (Handler.«Sort» H))
+    (token : Internal.Input) :
+    PM H (Internal.Step (SignatureState (Handler.«Sort» H)) (Signature (Handler.«Sort» H))) := do
   match self with
   | .start => return .more (.parameters (← expectSymbol token) (ListState.paren .start))
   | .parameters symbol state =>
@@ -51,8 +52,8 @@ def signatureStep (version : Version) (self : SignatureState (Handler.«Sort» H
 
 /-- A step of the parser of a function declaration. -/
 def functionDecStep (version : Version) (self : FunctionDecState (Handler.«Sort» H))
-    (token : Input) :
-    PM H (Step (FunctionDecState (Handler.«Sort» H)) (Signature (Handler.«Sort» H))) := do
+    (token : Internal.Input) :
+    PM H (Internal.Step (FunctionDecState (Handler.«Sort» H)) (Signature (Handler.«Sort» H))) := do
   match self with
   | .start =>
     expectOpen token
@@ -75,8 +76,8 @@ variable {H : Type} {m : Type → Type} [Monad m] [CommandHandler H m]
 A step of the parser of a recursive body: the body between `start_recursive_body` and
 `end_recursive_body`, which comes at the body's last token, as a body has no `)` of its own.
 -/
-def bodyStep (version : Version) (self : TermStateOf H) (token : Input) :
-    PM H (Step (TermStateOf H) Unit) := do
+def bodyStep (version : Version) (self : TermStateOf H) (token : Internal.Input) :
+    PM H (Internal.Step (TermStateOf H) Unit) := do
   match ← termStep version self token with
   | .more term => return .more term
   | .done body =>
@@ -88,7 +89,7 @@ A step of the list of recursive bodies, as many as the functions. A body's start
 here but when its first token arrives (`bodiesArrive`).
 -/
 def bodiesStep (count : Nat) (version : Version) (self : ListState (TermStateOf H) Unit)
-    (token : Input) : PM H (Step (ListState (TermStateOf H) Unit) (Array Unit)) :=
+    (token : Internal.Input) : PM H (Internal.Step (ListState (TermStateOf H) Unit) (Array Unit)) :=
   self.step .init (bodyStep version) (some count) token
 
 /--
@@ -97,7 +98,7 @@ can begin a body, any but `)`, while a body is still due, starts it, with the si
 function, before the list takes the token.
 -/
 def bodiesArrive (signatures : Array (Signature (Handler.«Sort» H)))
-    (self : ListState (TermStateOf H) Unit) (token : Input) : PM H Unit :=
+    (self : ListState (TermStateOf H) Unit) (token : Internal.Input) : PM H Unit :=
   if self.opened && self.outside then
     match token, signatures[self.items.size]? with
     | .parenClose, _ => pure ()

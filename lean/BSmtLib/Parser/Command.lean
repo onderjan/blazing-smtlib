@@ -59,8 +59,8 @@ A step of the command parser: `(`, the command's name, its payload up to its `)`
 the input between commands. A symbol as the name, even one spelled as a standard command's
 name, names a non-standard command.
 -/
-def commandStep (version : Version) (self : CommandStateOf H) (token : Input) :
-    PM H (Step (CommandStateOf H) CommandOutcome) := do
+def commandStep (version : Version) (self : CommandStateOf H) (token : Internal.Input) :
+    PM H (Internal.Step (CommandStateOf H) CommandOutcome) := do
   match self with
   | .awaiting =>
     match token with
@@ -78,18 +78,21 @@ def commandStep (version : Version) (self : CommandStateOf H) (token : Input) :
     | .done outcome => return .done outcome
 
 /-- The calls due when a token arrives at the command parser: those of its payload parser. -/
-def commandArrive (self : CommandStateOf H) (token : Input) : PM H Unit :=
+def commandArrive (self : CommandStateOf H) (token : Internal.Input) : PM H Unit :=
   match self with
   | .payload payload => payloadArrive payload token
   | _ => pure ()
 
-instance : Parse (CommandParser H) H m (Handler.Error H) CommandOutcome where
+instance : Internal.ParseByToken (CommandParser H) H m (Handler.Error H) CommandOutcome where
   arrive parser token := commandArrive parser.state token
   step version parser token := do
     match ← commandStep version parser.state token with
     | .more state => return .more ⟨state⟩
     | .done result => return .done result
   reset _ := .new
+
+instance : Parse (CommandParser H) H m (Handler.Error H) CommandOutcome where
+  parse := Internal.parseByToken
 
 end
 

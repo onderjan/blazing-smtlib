@@ -36,7 +36,6 @@ open BSmtLibSpec.Grammar
 open BSmtLibSpec.Parser
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Parser.Traversal
-open BSmtLib.Parser (Input)
 open BSmtLib.Parser.Script (ScriptParser)
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Parser.Adapters.Bridge.Rejection
 open BSmtLib.Facts.Parser.Adapters.Run BSmtLib.Facts.Parser.Adapters.Run.Rejection
@@ -76,7 +75,7 @@ theorem scriptInv_new (version : Token.Version) :
 
 /-- The run of the driver, through `driveScript`. -/
 theorem driveParse_run (version : Token.Version) (parser : ScriptParser (List Event))
-    (items : List Input) (events : List Event) :
+    (items : List Parser.Internal.Input) (events : List Event) :
     (driveParse recordingPoints recordingProducer version parser items).run.run events =
       match (driveScript version parser items).run.run events with
       | (.ok (.inl _), events') => (.ok none, events')
@@ -87,14 +86,16 @@ theorem driveParse_run (version : Token.Version) (parser : ScriptParser (List Ev
 
 /-- A run that fails over the first items fails over more. -/
 theorem driveScript_fails {version : Token.Version} {parser : ScriptParser (List Event)}
-    {items more : List Input} {events events' : List Event} {e : Parser.ParseErrorCause Unit}
+    {items more : List Parser.Internal.Input} {events events' : List Event}
+        {e : Parser.ParseErrorCause Unit}
     (h : (driveScript version parser items).run.run events = (.error e, events')) :
     (driveScript version parser (items ++ more)).run.run events = (.error e, events') := by
   rw [driveScript_append, run_bind_split, h]
 
 /-- A run that finishes over the first items finishes over more, before them. -/
 theorem driveScript_finishes {version : Token.Version} {parser : ScriptParser (List Event)}
-    {items more : List Input} {events events' : List Event} {rest : List Input}
+    {items more : List Parser.Internal.Input} {events events' : List Event}
+        {rest : List Parser.Internal.Input}
     (h : (driveScript version parser items).run.run events = (.ok (.inr ((), rest)), events')) :
     (driveScript version parser (items ++ more)).run.run events =
       (.ok (.inr ((), rest ++ more)), events') := by
@@ -103,7 +104,7 @@ theorem driveScript_finishes {version : Token.Version} {parser : ScriptParser (L
 
 /-- A run that goes on over the first items goes on over more from where it is. -/
 theorem driveScript_goes_on {version version' : Token.Version}
-    {parser parser' : ScriptParser (List Event)} {items more : List Input}
+    {parser parser' : ScriptParser (List Event)} {items more : List Parser.Internal.Input}
     {events events' : List Event}
     (h : (driveScript version parser items).run.run events =
       (.ok (.inl (version', parser')), events')) :
@@ -113,7 +114,7 @@ theorem driveScript_goes_on {version version' : Token.Version}
 
 /-- The events of the driver's run are those of `driveScript`. -/
 theorem recordedRun_driveScript (version : Token.Version) (parser : ScriptParser (List Event))
-    (items : List Input) (events : List Event) :
+    (items : List Parser.Internal.Input) (events : List Event) :
     recordedRun version parser items events =
       ((driveScript version parser items).run.run events).2.reverse := by
   unfold recordedRun
@@ -121,7 +122,7 @@ theorem recordedRun_driveScript (version : Token.Version) (parser : ScriptParser
   rcases (driveScript version parser items).run.run events with ⟨_ | _ | _, events'⟩ <;> rfl
 
 /-- Tokens that stand for items are taken as those items. -/
-theorem map_rcv_of_received {inputs : List Input} {taken : List Received}
+theorem map_rcv_of_received {inputs : List Parser.Internal.Input} {taken : List Received}
     (h : inputs.map Bridge.received = taken.map some) : inputs.map rcv = taken := by
   have := congrArg (List.map fun r => r.getD Received.endOfInput) h
   simp only [List.map_map, Function.comp_def, Option.getD_some, List.map_id'] at this
@@ -131,7 +132,8 @@ theorem map_rcv_of_received {inputs : List Input} {taken : List Received}
 has done what the traversal does before that item arrives. -/
 theorem placement_prefix_takes {version : Token.Version} {commands : List Tree.Command}
     {taken : List Received} {ending : Ending}
-    (htakes : Takes (Bridge.version version) commands taken ending) {inputs : List Input}
+    (htakes : Takes
+        (Bridge.version version) commands taken ending) {inputs : List Parser.Internal.Input}
     (hs : inputs.map Bridge.received = taken.map some) (count : Nat) :
     parserRecord version (inputs.take count) =
       eventsBefore count (record (Bridge.version version) commands) := by
@@ -154,7 +156,7 @@ theorem placement_prefix_takes {version : Token.Version} {commands : List Tree.C
   exact Nat.le_trans this (List.length_take_le _ _)
 
 /-- The items processed in a run that goes on over items are those items. -/
-theorem driveScript_processed : ∀ (items : List Input), NoLayout items →
+theorem driveScript_processed : ∀ (items : List Parser.Internal.Input), NoLayout items →
     ∀ (version : Token.Version) (parser : ScriptParser (List Event)) (events : List Event)
       {version' : Token.Version} {parser' : ScriptParser (List Event)} {events' : List Event},
     (driveScript version parser items).run.run events =
@@ -195,7 +197,7 @@ theorem driveScript_processed : ∀ (items : List Input), NoLayout items →
 every reading of the items says, where they are as one reading says. -/
 theorem lexical_of_witness {start : BSmtLibSpec.Lexicon.Version} {commands : List Tree.Command}
     {taken : List Received} {ending : Ending} (htakes : Takes start commands taken ending)
-    {items : List Input} (hlen : items.length ≤ taken.length)
+    {items : List Parser.Internal.Input} (hlen : items.length ≤ taken.length)
     (hagree : items.map rcv = taken.take items.length)
     (hlex : ∀ j < items.length, ∀ item, taken[j]? = some item →
       item.OfVersion (versionAt start commands j)) :
@@ -222,7 +224,7 @@ theorem lexical_of_witness {start : BSmtLibSpec.Lexicon.Version} {commands : Lis
 says, is the end of the input. -/
 theorem afterExit_of_witness {start : BSmtLibSpec.Lexicon.Version} {commands : List Tree.Command}
     {taken : List Received} {ending : Ending} (htakes : Takes start commands taken ending)
-    {items : List Input} (hlen : items.length ≤ taken.length)
+    {items : List Parser.Internal.Input} (hlen : items.length ≤ taken.length)
     (hagree : items.map rcv = taken.take items.length) :
     ∀ j (hj : j < items.length),
       AfterExit start ((([] : List Received) ++ items.map rcv).take
@@ -259,7 +261,8 @@ theorem takes_prefix_length {start : BSmtLibSpec.Lexicon.Version}
 in force, the parser goes on, in a state that says what it has taken. -/
 theorem prefix_goes_on {version : Token.Version} {commands : List Tree.Command}
     {taken : List Received} {ending : Ending}
-    (htakes : Takes (Bridge.version version) commands taken ending) {all : List Input}
+    (htakes : Takes
+        (Bridge.version version) commands taken ending) {all : List Parser.Internal.Input}
     (hall : all.map Bridge.received = taken.map some) {count : Nat} (hcount : count < taken.length)
     (hlex : ∀ j < count, ∀ item, taken[j]? = some item →
       item.OfVersion (versionAt (Bridge.version version) commands j)) :
@@ -428,7 +431,8 @@ theorem settled_start (version : Token.Version) : Settled (startEvents version).
   simp [Settled, startEvents, eventsBeforeProcessing, isProcessing]
 
 theorem recAfter_settled (version : Token.Version) (parser : ScriptParser (List Event))
-    {token : Input} {received : Received} (htoken : Bridge.received token = some received)
+    {token : Parser.Internal.Input} {received : Received}
+        (htoken : Bridge.received token = some received)
     (events : List Event) :
     Settled ((recAfter version parser token).run.run events).2.reverse := by
   obtain ⟨silent, hstate, hsilent⟩ := afterToken_shape version parser htoken events
@@ -455,7 +459,7 @@ theorem recAfter_settled (version : Token.Version) (parser : ScriptParser (List 
     eventsBeforeProcessing_silent _ fun e he => hsilent e (List.mem_reverse.mp he)]
 
 /-- A run that goes on over items ends settled, one arrival and one processing more per item. -/
-theorem driveScript_settled : ∀ (items : List Input), NoLayout items →
+theorem driveScript_settled : ∀ (items : List Parser.Internal.Input), NoLayout items →
     ∀ (version : Token.Version) (parser : ScriptParser (List Event)) (events : List Event)
       {version' : Token.Version} {parser' : ScriptParser (List Event)} {events' : List Event},
     Settled events.reverse →
@@ -488,7 +492,7 @@ theorem driveScript_settled : ∀ (items : List Input), NoLayout items →
       cases h
 
 /-- Calls due at an item's arrival: a body of `define-funs-rec` is due. -/
-theorem arrivalCalls_ne_nil {parser : ScriptParser (List Event)} {token : Input}
+theorem arrivalCalls_ne_nil {parser : ScriptParser (List Event)} {token : Parser.Internal.Input}
     (h : arrivalCalls parser token ≠ []) :
     ∃ signatures state signature,
       parser.command = .payload (.defineFunsRecBodies signatures state) ∧
@@ -513,7 +517,7 @@ theorem arrivalCalls_ne_nil {parser : ScriptParser (List Event)} {token : Input}
 
 /-- Where a body of `define-funs-rec` is due, a `)` fails the parse, with a cause that is no
 version's. -/
-theorem recAfter_close_fails {parser : ScriptParser (List Event)} {token : Input}
+theorem recAfter_close_fails {parser : ScriptParser (List Event)} {token : Parser.Internal.Input}
     (h : arrivalCalls parser token ≠ []) (version : Token.Version) (events : List Event) :
     ∃ e events', (recAfter version parser .parenClose).run.run events = (.error e, events') ∧
       Benign e := by
@@ -529,19 +533,23 @@ theorem recAfter_close_fails {parser : ScriptParser (List Event)} {token : Input
   subst hphase
   refine ⟨.syntax .expectedFunctionBody,
     .process (.token .parenClose) :: .arrive (.token .parenClose) :: events, ?_, trivial⟩
-  have h₁ : ((ExceptT.lift (arriveAt recordingPoints Input.parenClose) : Quiet.RPM Unit).run.run
+  have h₁ : ((ExceptT.lift
+      (arriveAt recordingPoints Parser.Internal.Input.parenClose) : Quiet.RPM Unit).run.run
       events) = (.ok (), .arrive (.token .parenClose) :: events) := rfl
   have h₂ := arrive_run ⟨posture, .payload (.defineFunsRecBodies signatures state),
     declarations⟩ .parenClose (.arrive (.token .parenClose) :: events)
   rw [arrivalCalls_parenClose, List.nil_append] at h₂
-  have h₃ : ((ExceptT.lift (processAt recordingPoints Input.parenClose) : Quiet.RPM Unit).run.run
+  have h₃ : ((ExceptT.lift
+      (processAt recordingPoints Parser.Internal.Input.parenClose) : Quiet.RPM Unit).run.run
       (.arrive (.token .parenClose) :: events)) =
       (.ok (), .process (.token .parenClose) :: .arrive (.token .parenClose) :: events) := rfl
-  change ((afterToken recordingPoints recordingProducer version _ Input.parenClose).run.run
+  change ((afterToken recordingPoints recordingProducer version _
+      Parser.Internal.Input.parenClose).run.run
     events) = _
   unfold afterToken
   rw [run_bind_ok h₁, run_bind_ok h₂, run_bind_ok h₃]
-  simp [afterProcessing, Parser.Parse.step, ScriptParser.step, Parser.Command.commandStep,
+  simp [afterProcessing, Parser.Internal.ParseByToken.step, ScriptParser.step,
+      Parser.Command.commandStep,
     Parser.Command.Standard.payloadStep, Parser.Command.Function.bodiesStep,
         Parser.Category.Combinator.ListState.step, hopened, houtside,
     Parser.syntaxError, show ¬ state.items.size = signatures.size by omega]
@@ -759,7 +767,8 @@ theorem rejects_core (version : BSmtLibSpec.Lexicon.Version) (commands : List Tr
           unfold eventsBeforeProcessingOf
           split
           · rename_i hrcv
-            exact absurd (Input.received_parenClose (hitem.trans (by rw [hrcv]))) hxclose
+            exact absurd (Parser.Internal.Input.received_parenClose (hitem.trans
+                (by rw [hrcv]))) hxclose
           · rfl
         rw [hof, hlhs, hrhsProcessing]
         by_cases hyclose : y = .parenClose
@@ -803,7 +812,7 @@ theorem chars_bytesOf (c : BSmtLibSpec.Regex.Chars) : Bridge.chars (bytesOf c) =
 
 /-- A parser's token that stands for the item: one for every item but a reserved word that is
 none of the library's. -/
-def inputOf : Received → Option Input
+def inputOf : Received → Option Parser.Internal.Input
   | .endOfInput => some .endOfInput
   | .token .parenOpen => some .parenOpen
   | .token .parenClose => some .parenClose
@@ -817,7 +826,7 @@ def inputOf : Received → Option Input
   | .token (.keyword k) => some (.keyword (KeywordView.newUnchecked (bytesOf k)))
   | .token (.reserved w) => (decodeReserved w).map .reserved
 
-theorem received_inputOf {r : Received} {t : Input} (h : inputOf r = some t) :
+theorem received_inputOf {r : Received} {t : Parser.Internal.Input} (h : inputOf r = some t) :
     Bridge.received t = some r := by
   rcases r with t' | _
   · cases t' with
@@ -950,9 +959,10 @@ arrival. Where the script has a `)` there, no call is due at the arrival of the 
 either: a body due there would fail the script's run at its `)`.
 -/
 theorem placement_processingOf {version : Token.Version} {commands : List Tree.Command}
-    (hscript : Script (Bridge.version version) commands) {inputs : List Input}
+    (hscript : Script (Bridge.version version) commands) {inputs : List Parser.Internal.Input}
     (hs : inputs.map Bridge.received = (BSmtLibSpec.Parser.Properties.received commands).map some)
-    {items : List Input} (hlayout : NoLayout items) (k : Nat) {item : Input}
+    {items : List Parser.Internal.Input} (hlayout : NoLayout items)
+        (k : Nat) {item : Parser.Internal.Input}
     (hitem : items[k]? = some item) {stands : Received}
     (hstands : Bridge.received item = some stands) (hk : k < inputs.length)
     (htake : items.take k = inputs.take k) :
@@ -975,7 +985,8 @@ theorem placement_processingOf {version : Token.Version} {commands : List Tree.C
     List.countP_singleton, isArrival, isProcessing, Bool.false_eq_true, ite_false,
     Nat.zero_add] at harr₁ hproc₁
   -- a run from the item at `k` on: the events before it, then the calls due at its arrival
-  have hform : ∀ (z : Input) (zs : List Input) (r : Received), Bridge.received z = some r →
+  have hform : ∀ (z : Parser.Internal.Input) (zs : List Parser.Internal.Input) (r : Received),
+      Bridge.received z = some r →
       NoLayout zs →
       eventsBefore k (recordedRun version' parser' (z :: zs) events₁) = events₁.reverse ∧
       eventsBeforeProcessing k (recordedRun version' parser' (z :: zs) events₁) =
@@ -1037,7 +1048,7 @@ theorem placement_processingOf {version : Token.Version} {commands : List Tree.C
         eventsBeforeProcessing k events := by
       intro events
       by_cases hc : stands = .token .parenClose
-      · exact absurd (Input.received_parenClose (hc ▸ hstands)) hxclose
+      · exact absurd (Parser.Internal.Input.received_parenClose (hc ▸ hstands)) hxclose
       · unfold eventsBeforeProcessingOf
         split
         · first | exact absurd rfl hc | simp_all

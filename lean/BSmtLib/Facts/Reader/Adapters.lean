@@ -69,13 +69,12 @@ namespace BSmtLib.Facts.Reader.Adapters
 open BSmtLibSpec BSmtLibSpec.Parser
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Lexer (Handed Consumer Answer)
-open BSmtLib.Parser (Input)
 
 /-! ## The parser's token for a handed token -/
 
 /-- The parser's token that stands for a token as a lexer hands it over: by its type, its
 content and whether it is a reserved word. -/
-def itemOf (handed : Handed) : Input :=
+def itemOf (handed : Handed) : Parser.Internal.Input :=
   match handed.type with
   | .parenOpen => .parenOpen
   | .parenClose => .parenClose

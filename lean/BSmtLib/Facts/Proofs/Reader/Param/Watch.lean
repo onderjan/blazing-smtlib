@@ -168,11 +168,14 @@ theorem eRel_mapError {α : Type} (r : Except E (ControlFlow α)) :
   · trivial
   · rfl
 
-theorem inner_consumers : Consumers (innerLink C (R := R) (E := E)) where
+theorem inner_calls : HandOver.Calls (innerLink C (R := R) (E := E)) where
   concrete := rfl
   consume cursor h w u := by
     rw [consume_run]
     exact ⟨⟨eRel_mapError _, rfl⟩, rfl⟩
+
+theorem inner_consumers : Consumers (innerLink C (R := R) (E := E)) :=
+  .ofCalls inner_calls
 
 end
 

@@ -41,29 +41,33 @@ open BSmtLib.Parser.Category.Term BSmtLib.Parser.Category.Token BSmtLib.Parser.C
 open BSmtLib.Parser.Command.Datatype BSmtLib.Parser.Command.Function BSmtLib.Parser.Command.Standard
 open BSmtLib.Parser.Script BSmtLib.Traits
 
-theorem expectOpen_erases (token : Input) : Erases (expectOpen (H := List Event) token) := by
+theorem expectOpen_erases (token : Parser.Internal.Input) : Erases (expectOpen
+    (H := List Event) token) := by
   unfold expectOpen
   split <;> first | exact Erasing.pure trivial | exact Erasing.throw _
 
-theorem expectClose_erases (token : Input) : Erases (expectClose (H := List Event) token) := by
+theorem expectClose_erases (token : Parser.Internal.Input) : Erases (expectClose
+    (H := List Event) token) := by
   unfold expectClose
   split <;> first | exact Erasing.pure trivial | exact Erasing.throw _
 
-theorem expectSymbol_erases (token : Input) : Erases (expectSymbol (H := List Event) token) := by
+theorem expectSymbol_erases (token : Parser.Internal.Input) : Erases (expectSymbol
+    (H := List Event) token) := by
   unfold expectSymbol
   split <;> first | exact Erasing.pure trivial | exact Erasing.throw _
 
-theorem expectNumeral_erases (token : Input) :
+theorem expectNumeral_erases (token : Parser.Internal.Input) :
     Erases (expectNumeral (H := List Event) token) := by
   unfold expectNumeral
   split <;> first | exact Erasing.pure trivial | exact Erasing.throw _
 
-theorem expectKeyword_erases (token : Input) :
+theorem expectKeyword_erases (token : Parser.Internal.Input) :
     Erases (expectKeyword (H := List Event) token) := by
   unfold expectKeyword
   split <;> first | exact Erasing.pure trivial | exact Erasing.throw _
 
-theorem expectString_erases (token : Input) : Erases (expectString (H := List Event) token) := by
+theorem expectString_erases (token : Parser.Internal.Input) : Erases (expectString
+    (H := List Event) token) := by
   unfold expectString
   split <;> first | exact Erasing.pure trivial | exact Erasing.throw _
 
@@ -80,7 +84,8 @@ macro "erasing_step" "[" ts:Lean.Parser.Tactic.SolveByElim.arg,* "]" : tactic =>
         expectNumeral_erases, expectKeyword_erases, expectString_erases])
     | split))
 
-theorem identStep_erases (version : Token.Version) (state : IdentState) (token : Input) :
+theorem identStep_erases (version : Token.Version) (state : IdentState)
+    (token : Parser.Internal.Input) :
     Erases (IdentState.step (H := List Event) version state token) := by
   unfold IdentState.step
   erasing_step []
@@ -91,46 +96,50 @@ theorem sortComplete_erases (levels : List (SortLevel Nat)) (head : Identifier)
   unfold sortComplete
   erasing_step []
 
-theorem sortStep_erases (version : Token.Version) (state : SortState Nat) (token : Input) :
+theorem sortStep_erases (version : Token.Version) (state : SortState Nat)
+    (token : Parser.Internal.Input) :
     Erases (sortStep (H := List Event) version state token) := by
   unfold sortStep
   erasing_step [identStep_erases]
-theorem sExprStep_erases (version : Token.Version) (state : SExprState Nat) (token : Input) :
+theorem sExprStep_erases (version : Token.Version) (state : SExprState Nat)
+    (token : Parser.Internal.Input) :
     Erases (sExprStep (H := List Event) version state token) := by
   unfold sExprStep
   try dsimp only
   erasing_step []
 
 theorem attributeStep_erases (single : Bool) (version : Token.Version)
-    (state : AttributeState Nat Nat) (token : Input) :
+    (state : AttributeState Nat Nat) (token : Parser.Internal.Input) :
     Erases (attributeStep (H := List Event) single version state token) := by
   unfold attributeStep
   try dsimp only
   erasing_step [sExprStep_erases, expectClose_erases]
 
-theorem patternStep_erases (version : Token.Version) (state : PatternState) (token : Input) :
+theorem patternStep_erases (version : Token.Version) (state : PatternState)
+    (token : Parser.Internal.Input) :
     Erases (PatternState.step (H := List Event) version state token) := by
   unfold PatternState.step
   try dsimp only
   erasing_step []
 
 theorem qualIdentStep_erases (version : Token.Version) (state : QualIdentState Nat)
-    (token : Input) :
+    (token : Parser.Internal.Input) :
     Erases (qualIdentStep (H := List Event) version state token) := by
   unfold qualIdentStep
   try dsimp only
   erasing_step [identStep_erases, sortStep_erases]
 
 theorem sortedVarStep_erases (version : Token.Version) (state : SortedVarState Nat)
-    (token : Input) :
+    (token : Parser.Internal.Input) :
     Erases (sortedVarStep (H := List Event) version state token) := by
   unfold sortedVarStep expectOpen expectSymbol expectClose
   try dsimp only
   erasing_step [sortStep_erases]
 
-theorem listStep_erases {σ ρ : Type} (init : σ) {inner : σ → Input → RPM (Step σ ρ)}
+theorem listStep_erases {σ ρ : Type} (init : σ) {inner : σ → Parser.Internal.Input → RPM
+    (Parser.Internal.Step σ ρ)}
     (hinner : ∀ state token, Erases (inner state token)) (maximum : Option Nat)
-    (state : ListState σ ρ) (token : Input) :
+    (state : ListState σ ρ) (token : Parser.Internal.Input) :
     Erases (ListState.step init inner maximum state token) := by
   unfold ListState.step expectOpen
   try dsimp only
@@ -154,27 +163,27 @@ theorem endBinder_erases (kind : BinderKind) (scope term : Nat) :
   try dsimp only
   erasing_step []
 
-theorem termOpened_erases (state : TermState Nat Nat Nat Nat Nat) (token : Input) :
+theorem termOpened_erases (state : TermState Nat Nat Nat Nat Nat) (token : Parser.Internal.Input) :
     Erases (termOpened (H := List Event) state token) := by
   unfold termOpened
   try dsimp only
   erasing_step []
 
 theorem termStep_erases (version : Token.Version) (state : TermState Nat Nat Nat Nat Nat)
-    (token : Input) : Erases (termStep (H := List Event) version state token) := by
+    (token : Parser.Internal.Input) : Erases (termStep (H := List Event) version state token) := by
   have hvars := listStep_erases (SortedVarState.start (HandledSort := Nat))
     (sortedVarStep_erases version) none
   unfold termStep expectOpen expectSymbol expectClose
   try dsimp only
   erasing_step [qualIdentStep_erases, hvars, patternStep_erases, attributeStep_erases,
     termComplete_erases, startBinder_erases, endBinder_erases, termOpened_erases]
-theorem symbolStep_erases (state : Unit) (token : Input) :
+theorem symbolStep_erases (state : Unit) (token : Parser.Internal.Input) :
     Erases (symbolStep (H := List Event) state token) := by
   unfold symbolStep
   try dsimp only
   erasing_step []
 
-theorem sortDecStep_erases (state : SortDecState) (token : Input) :
+theorem sortDecStep_erases (state : SortDecState) (token : Parser.Internal.Input) :
     Erases (SortDecState.step (H := List Event) state token) := by
   unfold SortDecState.step
   try dsimp only
@@ -182,13 +191,14 @@ theorem sortDecStep_erases (state : SortDecState) (token : Input) :
 
 set_option maxHeartbeats 4000000 in
 theorem literalStep_erases (version : Token.Version) (state : LiteralState Nat Nat Nat Nat Nat)
-    (token : Input) : Erases (literalStep (H := List Event) version state token) := by
+    (token : Parser.Internal.Input) : Erases (literalStep
+        (H := List Event) version state token) := by
   unfold literalStep
   try dsimp only
   erasing_step [termStep_erases]
 
 theorem signatureStep_erases (version : Token.Version) (state : SignatureState Nat)
-    (token : Input) :
+    (token : Parser.Internal.Input) :
     Erases (signatureStep (H := List Event) version state token) := by
   have hvars := listStep_erases (SortedVarState.start (HandledSort := Nat))
     (sortedVarStep_erases version) none
@@ -197,14 +207,15 @@ theorem signatureStep_erases (version : Token.Version) (state : SignatureState N
   erasing_step [hvars, sortStep_erases]
 
 theorem functionDecStep_erases (version : Token.Version) (state : FunctionDecState Nat)
-    (token : Input) :
+    (token : Parser.Internal.Input) :
     Erases (functionDecStep (H := List Event) version state token) := by
   unfold functionDecStep
   try dsimp only
   erasing_step [signatureStep_erases]
 
 theorem constructorStep_erases (version : Token.Version) (state : ConstructorState Nat)
-    (token : Input) : Erases (constructorStep (H := List Event) version state token) := by
+    (token : Parser.Internal.Input) : Erases (constructorStep
+        (H := List Event) version state token) := by
   have hvars := listStep_erases (SortedVarState.start (HandledSort := Nat))
     (sortedVarStep_erases version) none
   unfold constructorStep
@@ -213,7 +224,7 @@ theorem constructorStep_erases (version : Token.Version) (state : ConstructorSta
 
 theorem datatypeStep_erases {start : Array Nodes.Symbol → RPM Unit}
     (hstart : ∀ parameters, Erases (start parameters)) (version : Token.Version)
-    (state : DatatypeState Nat) (token : Input) :
+    (state : DatatypeState Nat) (token : Parser.Internal.Input) :
     Erases (datatypeStep (H := List Event) start version state token) := by
   have hsymbols := listStep_erases () symbolStep_erases none
   have hconstructors := listStep_erases (ConstructorState.start (HandledSort := Nat))
@@ -223,13 +234,13 @@ theorem datatypeStep_erases {start : Array Nodes.Symbol → RPM Unit}
   erasing_step [hstart, hsymbols, hconstructors]
 
 theorem bodyStep_erases (version : Token.Version) (state : TermState Nat Nat Nat Nat Nat)
-    (token : Input) : Erases (bodyStep (H := List Event) version state token) := by
+    (token : Parser.Internal.Input) : Erases (bodyStep (H := List Event) version state token) := by
   unfold bodyStep
   try dsimp only
   erasing_step [termStep_erases]
 
 theorem bodiesStep_erases (count : Nat) (version : Token.Version)
-    (state : ListState (TermState Nat Nat Nat Nat Nat) Unit) (token : Input) :
+    (state : ListState (TermState Nat Nat Nat Nat Nat) Unit) (token : Parser.Internal.Input) :
     Erases (bodiesStep (H := List Event) count version state token) := by
   have hbodies := listStep_erases (TermState.init (HandledSExpr := Nat) (HandledAttribute := Nat)
     (HandledSort := Nat) (HandledTerm := Nat) (Scope := Nat)) (bodyStep_erases version) (some count)
@@ -245,7 +256,8 @@ theorem finalCall_erases (final : FinalCall Nat Nat Nat) :
 
 set_option maxHeartbeats 4000000 in
 theorem payloadStep_erases (version : Token.Version) (state : Payload Nat Nat Nat Nat Nat)
-    (token : Input) : Erases (payloadStep (H := List Event) version state token) := by
+    (token : Parser.Internal.Input) : Erases (payloadStep
+        (H := List Event) version state token) := by
   have hterms := listStep_erases (TermState.init (HandledSExpr := Nat) (HandledAttribute := Nat)
     (HandledSort := Nat) (HandledTerm := Nat) (Scope := Nat)) (termStep_erases version) none
   have hliterals := listStep_erases (LiteralState.init (HandledSExpr := Nat)
@@ -262,7 +274,7 @@ theorem payloadStep_erases (version : Token.Version) (state : Payload Nat Nat Na
       ∀ state token, Erases (ListState.step (DatatypeState.start (HandledSort := Nat))
         (fun state token => do
           match ← datatypeStep (H := List Event) start version state token with
-          | .more state => return Step.more state
+          | .more state => return Parser.Internal.Step.more state
           | .done constructors =>
             Parser.call (CommandHandler.endDatatypeDeclaration constructors)
             return .done ()) (some count) state token) := by
@@ -296,26 +308,28 @@ theorem payloadStep_erases (version : Token.Version) (state : Payload Nat Nat Na
     erasing_step [hdeclareEach]
 
 theorem commandStep_erases (version : Token.Version) (state : CommandState Nat Nat Nat Nat Nat)
-    (token : Input) : Erases (commandStep (H := List Event) version state token) := by
+    (token : Parser.Internal.Input) : Erases (commandStep
+        (H := List Event) version state token) := by
   unfold commandStep
   try dsimp only
   erasing_step [payloadStep_erases]
 
 /-- What a step of a parser asks of its driver, with the continuations `Erases`. -/
-def FlowErases {σ ρ : Type} : Flow RPM σ ρ → Prop
+def FlowErases {σ ρ : Type} : Parser.Internal.Flow RPM σ ρ → Prop
   | .switchVersion _ resume => Erases resume
   | .discardRest resume => Erases resume
   | _ => True
 
-theorem scriptArrive_erases (parser : ScriptParser (List Event)) (token : Input) :
-    Erases (Parse.arrive (H := List Event) parser token) := by
+theorem scriptArrive_erases (parser : ScriptParser (List Event)) (token : Parser.Internal.Input) :
+    Erases (Parser.Internal.ParseByToken.arrive (H := List Event) parser token) := by
   show Erases (ScriptParser.arrive parser token)
   unfold ScriptParser.arrive commandArrive payloadArrive bodiesArrive
   erasing_step []
 
 theorem scriptStep_erasing (version : Token.Version) (parser : ScriptParser (List Event))
-    (token : Input) :
-    Erasing FlowErases (Parse.step (H := List Event) version parser token) := by
+    (token : Parser.Internal.Input) :
+    Erasing FlowErases (Parser.Internal.ParseByToken.step
+        (H := List Event) version parser token) := by
   show Erasing FlowErases (ScriptParser.step version parser token)
   unfold ScriptParser.step
   apply Erasing.bind_erases (commandStep_erases _ _ _)

@@ -24,7 +24,7 @@ namespace BSmtLib.Facts.Proofs.Reader.Param.Final
 open BSmtLib.Lexer
 open BSmtLibSpec BSmtLibSpec.Grammar
 open BSmtLibSpec.Parser.Properties
-open BSmtLib.Parser (Input Parse)
+open BSmtLib.Parser (Parse)
 open BSmtLib.Parser.Script (ScriptParser)
 open BSmtLib.Parser.Adapter (ParseAdapter)
 open BSmtLib.Facts.Lexer.Adapters (toVersion Answering AnswerM LexOps lexing)
@@ -40,7 +40,7 @@ open BSmtLib.Facts.Reader.Adapters
 events that are not calls left out. -/
 theorem adapterAt_handler {version : Lexicon.Version} {items : List LibItem} {v : Token.Version}
     {adapter : RecAdapter} (h : AdapterAt version items v adapter)
-    {r : Unit × List Parser.Input} (hend : (recRun version items).1 = .ok (.inr r)) :
+    {r : Unit × List Parser.Internal.Input} (hend : (recRun version items).1 = .ok (.inr r)) :
     adapter.handler = calls (recRun version items).2 := by
   unfold AdapterAt at h
   generalize recRun version items = R at h hend

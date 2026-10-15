@@ -27,7 +27,7 @@ open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Parser.Traversal
 open BSmtLibSpec.Lexer (Handed)
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Parser.Adapters.Bridge.Rejection
-open BSmtLib.Parser (Input Parse)
+open BSmtLib.Parser (Parse)
 open BSmtLib.Parser.Script (ScriptParser)
 open BSmtLib.Parser.Adapter (ParseAdapter)
 open BSmtLib.Facts.Lexer.Adapters (toVersion Answering AnswerM LexOps lexing)

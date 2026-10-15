@@ -133,14 +133,16 @@ theorem adaptRun_call {values : Values} {returns : Returns}
   simp [adaptRun, Traversal.call, call_eq]
 
 /-- The traversal's token, as the parser's tick of a token standing for it. -/
-theorem adaptRun_take {token : Input} {syntaxToken : BSmtLibSpec.Grammar.SyntaxToken}
+theorem adaptRun_take {token : Parser.Internal.Input}
+    {syntaxToken : BSmtLibSpec.Grammar.SyntaxToken}
     (h : Bridge.received token = some (.token syntaxToken)) :
     adaptRun (take points syntaxToken : Run (StateT H m) (Traits.Handler.Error H) Unit) =
       tick points token := by
   simp [take, receive, tick, arriveAt, processAt, h]
 
 /-- The traversal's token with calls due at its arrival, as the parser's tick with those calls. -/
-theorem adaptRun_receive {token : Input} {syntaxToken : BSmtLibSpec.Grammar.SyntaxToken}
+theorem adaptRun_receive {token : Parser.Internal.Input}
+    {syntaxToken : BSmtLibSpec.Grammar.SyntaxToken}
     (h : Bridge.received token = some (.token syntaxToken))
     (atArrival : Run (StateT H m) (Traits.Handler.Error H) Unit) :
     adaptRun (receive points (.token syntaxToken) atArrival) =
@@ -148,7 +150,8 @@ theorem adaptRun_receive {token : Input} {syntaxToken : BSmtLibSpec.Grammar.Synt
   simp [receive, tickFirst, arriveAt, processAt, h]
 
 /-- The traversal's tokens, as the parser's ticks of the tokens standing for them. -/
-theorem adaptRun_takeAll {tokens : List Input} {syntaxTokens : List BSmtLibSpec.Grammar.SyntaxToken}
+theorem adaptRun_takeAll {tokens : List Parser.Internal.Input}
+    {syntaxTokens : List BSmtLibSpec.Grammar.SyntaxToken}
     (h : Stands tokens syntaxTokens) :
     adaptRun (takeAll points syntaxTokens : Run (StateT H m) (Traits.Handler.Error H) Unit) =
       ticks points tokens := by

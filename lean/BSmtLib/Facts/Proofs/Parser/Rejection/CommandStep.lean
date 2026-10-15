@@ -22,7 +22,7 @@ namespace BSmtLib.Facts.Proofs.Parser.Rejection.CommandStep
 open BSmtLibSpec.Grammar
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Parser.Traversal
-open BSmtLib.Parser (Input PM Step)
+open BSmtLib.Parser (PM)
 open BSmtLib.Parser.Category.Term (TermState)
 open BSmtLib.Parser.Category.Combinator (ListState)
 open BSmtLib.Parser.Command.Datatype (SortDecState DatatypeState)
@@ -344,7 +344,8 @@ def commandFin (state : CommandState Nat Nat Nat Nat Nat) (outcome : CommandOutc
 
 include hfollows in
 /-- Every step of the command parser advances. -/
-theorem commandStep_advances (state : CommandState Nat Nat Nat Nat Nat) {token : Input}
+theorem commandStep_advances
+    (state : CommandState Nat Nat Nat Nat Nat) {token : Parser.Internal.Input}
     {item : Received} (hitem : Bridge.received token = some item)
     (hlex : item.OfVersion (Bridge.version version)) :
     Sound (Advances (commandRem (Bridge.version version) follows) (commandFin version follows)

@@ -23,7 +23,7 @@ namespace BSmtLib.Facts.Proofs.Parser.Rejection.SExpr
 open BSmtLibSpec.Grammar
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Parser.Traversal
-open BSmtLib.Parser (Input PM Step)
+open BSmtLib.Parser (PM)
 open BSmtLib.Parser.Category.SExpr (SExprState sExprStep sExprComplete)
 open BSmtLib.Parser.Category.Attribute (AttributeState AttributeMode attributeStep)
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Proofs.Parser.Rejection.Basic
@@ -271,7 +271,7 @@ end
 state. -/
 theorem inside_advances (version : Token.Version) (single need : Bool)
     (keyword : KeywordView) (items : Array Nat) (sExpr : SExprState Nat) (outside : Bool)
-    (attributes : Array Nat) {item : Received} (r : Step (SExprState Nat) Nat)
+    (attributes : Array Nat) {item : Received} (r : Parser.Internal.Step (SExprState Nat) Nat)
     (hr : Advances (sExprRem (Bridge.version version))
       (fun state _ => sExprRem (Bridge.version version) state) sExpr item r) :
     Advances (attrRem (Bridge.version version) single need)
@@ -429,7 +429,7 @@ theorem attributeStep_advances (version : Token.Version) (single need : Bool) :
 
 /-- The attribute parser finishes with no attribute only without a call. -/
 theorem attributeStep_done_silent (single : Bool) (version : Token.Version)
-    (state : AttributeState Nat Nat) (token : Input) :
+    (state : AttributeState Nat Nat) (token : Parser.Internal.Input) :
     ∀ events attrs events',
       (attributeStep (H := List Event) single version state token).run.run events =
         (.ok (.done attrs), events') → attrs.isEmpty = true → events' = events := by
@@ -486,7 +486,7 @@ theorem attributeStep_done_silent (single : Bool) (version : Token.Version)
 /-- The attribute parser writes no event where it finishes with no attribute, as
 `Sound.bindOn` takes it. -/
 theorem attributeStep_quiet (single : Bool) (version : Token.Version)
-    (state : AttributeState Nat Nat) (token : Input) :
+    (state : AttributeState Nat Nat) (token : Parser.Internal.Input) :
     ∀ events b events',
       (attributeStep (H := List Event) single version state token).run.run events =
       (.ok b, events') → (∃ a, b = .done a ∧ a.isEmpty = true) → events' = events :=

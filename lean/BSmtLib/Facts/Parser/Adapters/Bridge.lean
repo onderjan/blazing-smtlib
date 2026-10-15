@@ -1,6 +1,7 @@
 module
 
 public import BSmtLib.Parser.Adapter
+public import BSmtLib.Parser.Script
 public import BSmtLibSpec.Parser
 public import BSmtLibSpec.Grammar.Properties
 
@@ -90,7 +91,7 @@ def pairs {α : Type} (items : Array (Nodes.Symbol × α)) : List (Tree.Symbol �
 
 /-- What a token as the parser takes it stands for in the spec: none for whitespace and
 comments, which the spec has no place for. -/
-def received : Parser.Input → Option Received
+def received : Parser.Internal.Input → Option Received
   | .parenOpen => some (.token .parenOpen)
   | .parenClose => some (.token .parenClose)
   | .constant c => some (.token (constant c).token)
@@ -103,7 +104,8 @@ def received : Parser.Input → Option Received
 end Bridge
 
 /-- The parser's tokens stand for the spec's tokens, one by one. -/
-def Stands (inputs : List Parser.Input) (tokens : List BSmtLibSpec.Grammar.SyntaxToken) : Prop :=
+def Stands (inputs : List Parser.Internal.Input)
+    (tokens : List BSmtLibSpec.Grammar.SyntaxToken) : Prop :=
   inputs.map Bridge.received = tokens.map fun token => some (.token token)
 
 section
@@ -358,7 +360,8 @@ def outcomeOf (command : Tree.Command) : Parser.Command.CommandOutcome :=
     | none => .command
 
 /-- No item is whitespace or a comment, which a parser is never handed. -/
-def NoLayout (items : List Parser.Input) : Prop := ∀ token ∈ items, Bridge.received token ≠ none
+def NoLayout (items : List Parser.Internal.Input) : Prop := ∀ token ∈ items,
+    Bridge.received token ≠ none
 
 /-- Every reserved word. -/
 def allReserved : List Token.Reserved :=
@@ -372,7 +375,7 @@ def decodeReserved (c : BSmtLibSpec.Regex.Chars) : Option Token.Reserved :=
 namespace Rejection
 
 /-- What a token stands for, as the parsers take it. -/
-def rcv (token : Parser.Input) : Received := (Bridge.received token).getD .endOfInput
+def rcv (token : Parser.Internal.Input) : Received := (Bridge.received token).getD .endOfInput
 
 /-- A view of the characters. -/
 def bytesOf (c : BSmtLibSpec.Regex.Chars) : ByteSlice := (ByteArray.mk c.toArray).toByteSlice

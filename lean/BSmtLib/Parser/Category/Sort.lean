@@ -47,7 +47,7 @@ variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
 /-- A sort is complete: it is handled, and is the result or the next argument. -/
 def sortComplete (levels : List (SortLevel (Handler.«Sort» H))) (head : Identifier)
     (arguments : Array (Handler.«Sort» H)) :
-    PM H (Step (SortState (Handler.«Sort» H)) (Handler.«Sort» H)) := do
+    PM H (Internal.Step (SortState (Handler.«Sort» H)) (Handler.«Sort» H)) := do
   let sort ← call (Handler.handleSort head arguments)
   match levels with
   | [] => return .done sort
@@ -59,8 +59,8 @@ def sortComplete (levels : List (SortLevel (Handler.«Sort» H))) (head : Identi
 A step of the sort parser: ⟨identifier⟩ | `(` ⟨identifier⟩ ⟨sort⟩+ `)`. Each sort is handled
 at its last token, its arguments before it.
 -/
-def sortStep (version : Version) (self : SortState (Handler.«Sort» H)) (token : Input) :
-    PM H (Step (SortState (Handler.«Sort» H)) (Handler.«Sort» H)) :=
+def sortStep (version : Version) (self : SortState (Handler.«Sort» H)) (token : Internal.Input) :
+    PM H (Internal.Step (SortState (Handler.«Sort» H)) (Handler.«Sort» H)) :=
   match self.mode with
   | .start =>
     match token with
@@ -104,13 +104,16 @@ variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
 /-- The sort parser before a sort. -/
 def SortParser.new : SortParser H := ⟨.init⟩
 
-instance : Parse (SortParser H) H m (Handler.Error H) (Handler.«Sort» H) where
+instance : Internal.ParseByToken (SortParser H) H m (Handler.Error H) (Handler.«Sort» H) where
   arrive _ _ := pure ()
   step version parser token := do
     match ← sortStep version parser.state token with
     | .more state => return .more ⟨state⟩
     | .done result => return .done result
   reset _ := .new
+
+instance : Parse (SortParser H) H m (Handler.Error H) (Handler.«Sort» H) where
+  parse := Internal.parseByToken
 
 end
 

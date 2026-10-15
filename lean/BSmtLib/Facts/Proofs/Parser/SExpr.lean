@@ -23,7 +23,7 @@ on top of the stack.
 namespace BSmtLib.Facts.Proofs.Parser.SExpr
 
 open BSmtLibSpec.Grammar
-open BSmtLib.Parser (Input PM Step)
+open BSmtLib.Parser (PM)
 open BSmtLib.Parser.Category.SExpr (SExprState sExprStep sExprComplete)
 open BSmtLibSpec.Parser
 open BSmtLibSpec.Parser.Traversal
@@ -62,7 +62,8 @@ variable {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf 
 variable {version : Token.Version}
 
 /-- An atom of an s-expression: the parser handles it at its token, then completes it. -/
-theorem sExprStep_atom (levels : SExprState (Traits.Handler.SExpr H)) (token : Input)
+theorem sExprStep_atom (levels : SExprState (Traits.Handler.SExpr H))
+    (token : Parser.Internal.Input)
     (node : Nodes.SExprNode (Traits.Handler.SExpr H))
     (hstep : sExprStep version levels token =
       Parser.call (Traits.Handler.handleSExpr node) >>= fun r => pure (sExprComplete levels r)) :
@@ -79,7 +80,7 @@ From any stack, the parser reads the tokens of an s-expression with the traversa
 then completes the s-expression on that stack.
 -/
 theorem sExpr_runs (hA : TermAgrees h) : (item : Tree.SExpr) → item.Valid (Bridge.version version) →
-    ∀ {tokens : List Input}, Stands tokens item.tokens →
+    ∀ {tokens : List Parser.Internal.Input}, Stands tokens item.tokens →
     ∀ levels : SExprState (Traits.Handler.SExpr H),
     Runs points (sExprStep version) levels tokens
       (adaptRun (Traversal.sExpr points h item))
@@ -91,20 +92,20 @@ theorem sExpr_runs (hA : TermAgrees h) : (item : Tree.SExpr) → item.Valid (Bri
       (by rfl), hA.handleSExpr, Bridge.sExprNode]
   | .symbol name, _, _, hs, levels => by
     obtain ⟨token, rfl, htoken⟩ := Stands.split_single hs
-    obtain ⟨symbol, rfl, rfl⟩ := Input.received_symbol htoken
+    obtain ⟨symbol, rfl, rfl⟩ := Parser.Internal.Input.received_symbol htoken
     refine (sExprStep_atom levels _ (.symbol symbol) (by simp [sExprStep])).congr ?_ rfl
     simp [sExpr_symbol, adaptRun_take htoken,
       hA.handleSExpr, Bridge.sExprNode]
   | .reserved word, hversion, _, hs, levels => by
     obtain ⟨token, rfl, htoken⟩ := Stands.split_single hs
-    obtain ⟨reserved, rfl, rfl⟩ := Input.received_reserved htoken
+    obtain ⟨reserved, rfl, rfl⟩ := Parser.Internal.Input.received_reserved htoken
     refine (sExprStep_atom levels _ (.reserved reserved)
       (by simp [sExprStep, versionAtLeast_v2_6 hversion.1])).congr ?_ rfl
     simp [sExpr_reserved, adaptRun_take htoken,
       hA.handleSExpr, Bridge.sExprNode]
   | .keyword name, _, _, hs, levels => by
     obtain ⟨token, rfl, htoken⟩ := Stands.split_single hs
-    obtain ⟨keyword, rfl, rfl⟩ := Input.received_keyword htoken
+    obtain ⟨keyword, rfl, rfl⟩ := Parser.Internal.Input.received_keyword htoken
     refine (sExprStep_atom levels _ (.keyword keyword) (by simp [sExprStep])).congr ?_ rfl
     simp [sExpr_keyword, adaptRun_take htoken,
       hA.handleSExpr, Bridge.sExprNode]
@@ -131,7 +132,7 @@ s-expressions with the traversal's effects, and appends them to that list.
 -/
 theorem sExprs_runs (hA : TermAgrees h) : (items : List Tree.SExpr) →
     Tree.SExpr.ValidAll (Bridge.version version) items →
-    ∀ {tokens : List Input}, Stands tokens (Tree.SExpr.tokensAll items) →
+    ∀ {tokens : List Parser.Internal.Input}, Stands tokens (Tree.SExpr.tokensAll items) →
     ∀ (found : Array (Traits.Handler.SExpr H)) (levels : SExprState (Traits.Handler.SExpr H)),
     Runs points (sExprStep version) (found :: levels) tokens
       (adaptRun (Traversal.sExprs points h items))

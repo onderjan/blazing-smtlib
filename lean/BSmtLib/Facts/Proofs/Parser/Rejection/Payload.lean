@@ -24,7 +24,7 @@ namespace BSmtLib.Facts.Proofs.Parser.Rejection.Payload
 open BSmtLibSpec.Grammar
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Parser.Traversal
-open BSmtLib.Parser (Input PM Step)
+open BSmtLib.Parser (PM)
 open BSmtLib.Parser.Category.Term (TermState)
 open BSmtLib.Parser.Category.Combinator (ListState)
 open BSmtLib.Parser.Command.Datatype (SortDecState DatatypeState)
@@ -56,7 +56,7 @@ def cmdFin (state : Payload Nat Nat Nat Nat Nat) (outcome : CommandOutcome)
 
 /-- The advance of a payload parser's step from the state. -/
 abbrev PayloadAdvance (state : Payload Nat Nat Nat Nat Nat) (item : Received)
-    (x : Quiet.RPM (Step (Payload Nat Nat Nat Nat Nat) CommandOutcome)) : Prop :=
+    (x : Quiet.RPM (Parser.Internal.Step (Payload Nat Nat Nat Nat Nat) CommandOutcome)) : Prop :=
   Sound (Advances (payloadRem (Bridge.version version) follows) (cmdFin version follows) state
     item) Benign x
 
@@ -73,7 +73,8 @@ theorem closeNext_nonempty (h : ∃ w, follows (.next (Bridge.version version)) 
     ∃ u, closeNext (Bridge.version version) follows u :=
   cat_nonempty ⟨_, tok_intro _⟩ h
 
-variable {token : Input} {item : Received} (hitem : Bridge.received token = some item)
+variable {token : Parser.Internal.Input} {item : Received}
+    (hitem : Bridge.received token = some item)
   (hlex : item.OfVersion (Bridge.version version))
 
 include hitem in
@@ -670,7 +671,7 @@ theorem attrRem_single_one {v : BSmtLibSpec.Lexicon.Version} {state : AttributeS
 stands for, the end from the new tracker on the rest is the end from the old one on the item and
 the rest. -/
 theorem setInfoEnd_next (v : BSmtLibSpec.Lexicon.Version) (declaration : Declaration)
-    {token : Input}
+    {token : Parser.Internal.Input}
     {x : Received} (hx : Bridge.received token = some x) (rest : List Received)
     (hvalue : declaration = .keyword → ∀ d, token = .constant (.decimal d) → rest = [closeItem]) :
     setInfoEnd v (declaration.next token) rest = setInfoEnd v declaration (x :: rest) := by
@@ -715,7 +716,8 @@ def CmdFailure (rem : Lang) (item : Received) (e : Parser.ParseErrorCause Unit) 
   Benign e ∨ ((∃ u, rem u) → e = .syntax .unsupportedVersion ∧
     ∀ w, follows .refused w → rem (item :: w))
 
-variable {token : Input} {item : Received} (hitem : Bridge.received token = some item)
+variable {token : Parser.Internal.Input} {item : Received}
+    (hitem : Bridge.received token = some item)
   (hlex : item.OfVersion (Bridge.version version))
 
 include hitem hlex in
@@ -907,7 +909,7 @@ theorem payloadStep_advances (payload : Payload Nat Nat Nat Nat Nat) :
         payload item)
       (CmdFailure follows (payloadRem (Bridge.version version) follows payload) item)
       (payloadStep (H := List Event) version payload token) := by
-  have lift : ∀ {x : Quiet.RPM (Step (Payload Nat Nat Nat Nat Nat) CommandOutcome)},
+  have lift : ∀ {x : Quiet.RPM (Parser.Internal.Step (Payload Nat Nat Nat Nat Nat) CommandOutcome)},
       PayloadAdvance version follows payload item x →
       Sound (Advances (payloadRem (Bridge.version version) follows) (cmdFin version follows)
         payload item)

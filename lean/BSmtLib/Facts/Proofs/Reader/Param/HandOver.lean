@@ -9,10 +9,11 @@ import all BSmtLib.Lexer
 # The handover to the two consumers
 
 The lexer's steps that do not hand anything over are related on the two consumers by the walk
-alone. Those that hand a batch over call the consumer: the two calls are related as the link
-says (`Consumers`), and the lexer acts on their answers alike. Here are the lemmas for the
-helpers of the lexer's state and for the handover (`flushCursor`, `handOver`, `flushBatch`,
-`handOverStored`, `handOverEof`).
+alone. Those that hand a batch over call the consumer: where the two calls on the same cursor are
+related as the link says (`Calls`), the lexer acts on their answers alike, and the two handovers
+are related (`Calls.handOver_sim`); the walk needs only that (`Consumers`). Here are the lemmas
+for the helpers of the lexer's state and for the handover (`flushCursor`, `handOver`,
+`flushBatch`, `handOverStored`, `handOverEof`).
 -/
 
 namespace BSmtLib.Facts.Proofs.Reader.Param.HandOver
@@ -28,13 +29,26 @@ variable {H₁ H₂ : Type} {m₁ m₂ : Type → Type} [Monad m₁] [Monad m₂
 /-- The two consumers' calls on the same cursor are related as the link says: the same answer,
 with results and errors related, and the same cursor given back. Both take whitespace and
 comments, or neither does. -/
-structure Consumers [∀ b, Token.ConsumeFrom H₁ (Token.BatchCursor b) m₁]
+structure Calls [∀ b, Token.ConsumeFrom H₁ (Token.BatchCursor b) m₁]
     [∀ b, Token.ConsumeFrom H₂ (Token.BatchCursor b) m₂]
     (L : Link H₁ m₁ R₁ E₁ H₂ m₂ R₂ E₂) : Prop where
   concrete : Token.Consume.isConcrete (H := H₁) = Token.Consume.isConcrete (H := H₂)
   consume {b : Token.BatchTag} (cursor : Token.BatchCursor b) (h : cursor.HasNext) :
     L.rc.rel (fun a b => ERel L.re (FlowRel L.rr) a.1 b.1 ∧ a.2 = b.2)
       (Token.ConsumeFrom.consume cursor h) (Token.ConsumeFrom.consume cursor h)
+
+/-- The lexer's handovers of the same batch to the two consumers are related as the link says:
+the same values, or related interruptions. Both take whitespace and comments, or neither
+does. -/
+structure Consumers [∀ b, Token.ConsumeFrom H₁ (Token.BatchCursor b) m₁]
+    [∀ b, Token.ConsumeFrom H₂ (Token.BatchCursor b) m₂]
+    (L : Link H₁ m₁ R₁ E₁ H₂ m₂ R₂ E₂) : Prop where
+  concrete : Token.Consume.isConcrete (H := H₁) = Token.Consume.isConcrete (H := H₂)
+  handOver {floor : Option Nat} {low : Nat} (batch : Token.TokenBatch) (bytesAfter : ByteArray)
+    (hfloor : ∀ p, floor = some p → batch.EndsAfter p) :
+    LSim L (· = ·) (Internal.handOver (H := H₁) (floor := floor)
+        (low := low) batch bytesAfter hfloor)
+      (Internal.handOver (H := H₂) batch bytesAfter hfloor)
 
 end
 
@@ -138,7 +152,7 @@ variable {H₁ H₂ : Type} {m₁ m₂ : Type → Type} [Monad m₁] [Monad m₂
 
 /-! ## The handover -/
 
-theorem callConsumer_sim (hc : Consumers L) {b : Token.BatchTag} (cursor : Token.BatchCursor b)
+theorem callConsumer_sim (hc : Calls L) {b : Token.BatchTag} (cursor : Token.BatchCursor b)
     (h : cursor.HasNext) :
     LSim L (fun a b => ERel L.re (FlowRel L.rr) a.1 b.1 ∧ a.2 = b.2)
       (Internal.callConsumer (floor := floor) (low := low) cursor h)
@@ -151,7 +165,7 @@ abbrev FlushRel (L : Link H₁ m₁ R₁ E₁ H₂ m₂ R₂ E₂) {b : Token.Ba
       Option (Interrupted R₂ E₂ floor) × Token.BatchCursor b → Prop :=
   fun a b => ORel (IRel L.rr L.re) a.1 b.1 ∧ a.2 = b.2
 
-theorem flushCursor_sim (hc : Consumers L) {b : Token.BatchTag} :
+theorem flushCursor_sim (hc : Calls L) {b : Token.BatchTag} :
     ∀ (n : Nat) (cursor : Token.BatchCursor b) (hfloor), cursor.remaining < n →
       LSim L (FlushRel L) (Internal.flushCursor (floor := floor) (low := low) cursor hfloor)
         (Internal.flushCursor cursor hfloor)
@@ -188,7 +202,7 @@ theorem flushCursor_sim (hc : Consumers L) {b : Token.BatchTag} :
           dsimp only
           exact XSim.dite (fun _ => XSim.pure ⟨⟨rfl, rfl, rfl⟩, rfl⟩)
             (fun _ => XSim.pure ⟨⟨rfl, rfl, hf⟩, rfl⟩)
-theorem handOver_sim (hc : Consumers L) (batch bytesAfter hfloor) :
+theorem Calls.handOver_sim (hc : Calls L) (batch bytesAfter hfloor) :
     LSim L (· = ·) (Internal.handOver (floor := floor) (low := low) batch bytesAfter hfloor)
       (Internal.handOver batch bytesAfter hfloor) := by
   unfold Internal.handOver
@@ -202,6 +216,15 @@ theorem handOver_sim (hc : Consumers L) (batch bytesAfter hfloor) :
   | none, none, _ => lsim
   | some i₁, some i₂, hi =>
     lsim
+
+/-- Consumers whose calls are related have related handovers. -/
+theorem Consumers.ofCalls (hc : Calls L) : Consumers L :=
+  ⟨hc.concrete, fun batch bytesAfter hfloor => Calls.handOver_sim hc batch bytesAfter hfloor⟩
+
+theorem handOver_sim (hc : Consumers L) (batch bytesAfter hfloor) :
+    LSim L (· = ·) (Internal.handOver (floor := floor) (low := low) batch bytesAfter hfloor)
+      (Internal.handOver batch bytesAfter hfloor) :=
+  hc.handOver batch bytesAfter hfloor
 
 theorem flushBatch_sim (hc : Consumers L) :
     LSim L (· = ·) (Internal.flushBatch (floor := floor) (low := low)) Internal.flushBatch := by
@@ -219,5 +242,44 @@ theorem handOverEof_sim (hc : Consumers L) (location) :
   unfold Internal.handOverEof; lsim
 
 end Consumer
+
+/-! ## Consumers with the same handovers -/
+
+section Same
+
+variable {H₁ H₂ : Type} {m₁ m₂ : Type → Type} [Monad m₁] [Monad m₂] {R₁ R₂ E₁ E₂ : Type}
+  [Token.Consume H₁ R₁ E₁] [Token.Consume H₂ R₂ E₂] {L : Link H₁ m₁ R₁ E₁ H₂ m₂ R₂ E₂}
+
+/-- The relation of the handovers holds for a second consumer whose handovers are those of
+another one on its type. -/
+theorem Consumers.ofEq₂ {inst₁ : ∀ b, Token.ConsumeFrom H₁ (Token.BatchCursor b) m₁}
+    {inst₂ inst₂' : ∀ b, Token.ConsumeFrom H₂ (Token.BatchCursor b) m₂}
+    (he : ∀ (floor : Option Nat) (low : Nat) (batch : Token.TokenBatch) (bytesAfter : ByteArray)
+      (hfloor : ∀ p, floor = some p → batch.EndsAfter p),
+      @Internal.handOver H₂ m₂ R₂ E₂ _ _ inst₂ floor low batch bytesAfter hfloor =
+        @Internal.handOver H₂ m₂ R₂ E₂ _ _ inst₂' floor low batch bytesAfter hfloor)
+    (hc : @Consumers H₁ H₂ m₁ m₂ _ _ R₁ R₂ E₁ E₂ _ _ inst₁ inst₂' L) :
+    @Consumers H₁ H₂ m₁ m₂ _ _ R₁ R₂ E₁ E₂ _ _ inst₁ inst₂ L :=
+  @Consumers.mk H₁ H₂ m₁ m₂ _ _ R₁ R₂ E₁ E₂ _ _ inst₁ inst₂ L hc.concrete
+    fun {floor low} batch bytesAfter hfloor => by
+      rw [he]; exact @Consumers.handOver H₁ H₂ m₁ m₂ _ _ R₁ R₂ E₁ E₂ _ _ inst₁ inst₂' L hc floor
+        low batch bytesAfter hfloor
+
+/-- The relation of the handovers holds for a first consumer whose handovers are those of
+another one on its type. -/
+theorem Consumers.ofEq₁ {inst₁ inst₁' : ∀ b, Token.ConsumeFrom H₁ (Token.BatchCursor b) m₁}
+    {inst₂ : ∀ b, Token.ConsumeFrom H₂ (Token.BatchCursor b) m₂}
+    (he : ∀ (floor : Option Nat) (low : Nat) (batch : Token.TokenBatch) (bytesAfter : ByteArray)
+      (hfloor : ∀ p, floor = some p → batch.EndsAfter p),
+      @Internal.handOver H₁ m₁ R₁ E₁ _ _ inst₁ floor low batch bytesAfter hfloor =
+        @Internal.handOver H₁ m₁ R₁ E₁ _ _ inst₁' floor low batch bytesAfter hfloor)
+    (hc : @Consumers H₁ H₂ m₁ m₂ _ _ R₁ R₂ E₁ E₂ _ _ inst₁' inst₂ L) :
+    @Consumers H₁ H₂ m₁ m₂ _ _ R₁ R₂ E₁ E₂ _ _ inst₁ inst₂ L :=
+  @Consumers.mk H₁ H₂ m₁ m₂ _ _ R₁ R₂ E₁ E₂ _ _ inst₁ inst₂ L hc.concrete
+    fun {floor low} batch bytesAfter hfloor => by
+      rw [he]; exact @Consumers.handOver H₁ H₂ m₁ m₂ _ _ R₁ R₂ E₁ E₂ _ _ inst₁' inst₂ L hc floor
+        low batch bytesAfter hfloor
+
+end Same
 
 end BSmtLib.Facts.Proofs.Reader.Param.HandOver

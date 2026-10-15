@@ -22,7 +22,7 @@ that the recursive proof (`Facts.Proofs.Parser.Term`) only joins them.
 namespace BSmtLib.Facts.Proofs.Parser.TermHelpers
 
 open BSmtLibSpec.Grammar
-open BSmtLib.Parser (Input PM Step syntaxError)
+open BSmtLib.Parser (PM syntaxError)
 open BSmtLib.Parser.Category.Term (TermState TermMode TermLevel TermStateOf TermLevelOf termStep
     termOpened termComplete startBinder endBinder SortedBinder BinderKind)
 open BSmtLib.Parser.Category.QualifiedIdent (QualIdentState qualIdentStep)
@@ -50,9 +50,9 @@ variable {points : Points (StateT H m)} {version : Token.Version}
 
 omit [LawfulMonad m] in
 theorem termStep_qualIdent (levels : List (TermLevelOf H))
-    (state : QualIdentState (Traits.Handler.«Sort» H)) (token : Input) :
+    (state : QualIdentState (Traits.Handler.«Sort» H)) (token : Parser.Internal.Input) :
     termStep version ({ mode := .qualIdent state, levels } : TermStateOf H) token =
-      qualIdentStep version state token >>= Step.wrap
+      qualIdentStep version state token >>= Parser.Internal.Step.wrap
         (fun state => ({ mode := .qualIdent state, levels } : TermStateOf H))
         (fun r => do
           let term ← Parser.call (Traits.Handler.handleTerm (.identifier r.1 r.2))
@@ -64,9 +64,9 @@ theorem termStep_qualIdent (levels : List (TermLevelOf H))
 
 omit [LawfulMonad m] in
 theorem termStep_applicationHead (levels : List (TermLevelOf H))
-    (state : QualIdentState (Traits.Handler.«Sort» H)) (token : Input) :
+    (state : QualIdentState (Traits.Handler.«Sort» H)) (token : Parser.Internal.Input) :
     termStep version ({ mode := .applicationHead state, levels } : TermStateOf H) token =
-      qualIdentStep version state token >>= Step.wrap
+      qualIdentStep version state token >>= Parser.Internal.Step.wrap
         (fun state => ({ mode := .applicationHead state, levels } : TermStateOf H))
         (fun r =>
           pure (.more { mode := .start, levels := .application r.1 r.2 #[] :: levels })) := by
@@ -88,7 +88,7 @@ def binderScope (binder : SortedBinder)
 /-- What the term parser does when a binder's variables are complete. -/
 def binderStarted (levels : List (TermLevelOf H)) (binder : SortedBinder)
     (variables : Array (Nodes.Symbol × Traits.Handler.«Sort» H)) :
-    PM H (Step (TermStateOf H) (Traits.Handler.Term H)) := do
+    PM H (Parser.Internal.Step (TermStateOf H) (Traits.Handler.Term H)) := do
   if variables.isEmpty then
     syntaxError (match binder with
       | .lambda => .emptyLambdaBindings
@@ -107,9 +107,9 @@ theorem binderStarted_eq (levels : List (TermLevelOf H)) (binder : SortedBinder)
 omit [LawfulMonad m] in
 theorem termStep_sortedVars (levels : List (TermLevelOf H)) (binder : SortedBinder)
     (state : ListState (SortedVarState (Traits.Handler.«Sort» H))
-      (Nodes.Symbol × Traits.Handler.«Sort» H)) (token : Input) :
+      (Nodes.Symbol × Traits.Handler.«Sort» H)) (token : Parser.Internal.Input) :
     termStep version ({ mode := .sortedVars binder state, levels } : TermStateOf H) token =
-      state.step .start (sortedVarStep version) none token >>= Step.wrap
+      state.step .start (sortedVarStep version) none token >>= Parser.Internal.Step.wrap
         (fun state => ({ mode := .sortedVars binder state, levels } : TermStateOf H))
         (binderStarted levels binder) := by
   simp only [termStep]
@@ -120,17 +120,17 @@ theorem termStep_sortedVars (levels : List (TermLevelOf H)) (binder : SortedBind
 /-- What the term parser does when a case's pattern is complete. -/
 def caseStarted (levels : List (TermLevelOf H)) (scrutinee : Traits.Handler.Term H)
     (cases : Array (Nodes.Pattern × Traits.Handler.Term H)) (pattern : Nodes.Pattern) :
-    PM H (Step (TermStateOf H) (Traits.Handler.Term H)) := do
+    PM H (Parser.Internal.Step (TermStateOf H) (Traits.Handler.Term H)) := do
   let scope ← Parser.call (Traits.Handler.startMatchCase scrutinee pattern)
   return .more { mode := .start, levels := .matchCase scrutinee cases pattern scope :: levels }
 
 omit [LawfulMonad m] in
 theorem termStep_matchPattern (levels : List (TermLevelOf H)) (scrutinee : Traits.Handler.Term H)
     (cases : Array (Nodes.Pattern × Traits.Handler.Term H)) (state : PatternState)
-    (token : Input) :
+    (token : Parser.Internal.Input) :
     termStep version ({ mode := .matchPattern scrutinee cases state, levels } : TermStateOf H)
         token =
-      state.step version token >>= Step.wrap
+      state.step version token >>= Parser.Internal.Step.wrap
         (fun state => ({ mode := .matchPattern scrutinee cases state, levels } : TermStateOf H))
         (caseStarted levels scrutinee cases) := by
   simp only [termStep]
@@ -141,7 +141,7 @@ theorem termStep_matchPattern (levels : List (TermLevelOf H)) (scrutinee : Trait
 /-- What the term parser does when an annotation's attributes are complete. -/
 def annotated (levels : List (TermLevelOf H)) (term : Traits.Handler.Term H)
     (attributes : Array (Traits.Handler.Attribute H)) :
-    PM H (Step (TermStateOf H) (Traits.Handler.Term H)) := do
+    PM H (Parser.Internal.Step (TermStateOf H) (Traits.Handler.Term H)) := do
   if attributes.isEmpty then syntaxError .emptyAnnotation
   let annotated ← Parser.call (Traits.Handler.annotateTerm term attributes)
   termComplete levels annotated
@@ -149,9 +149,9 @@ def annotated (levels : List (TermLevelOf H)) (term : Traits.Handler.Term H)
 omit [LawfulMonad m] in
 theorem termStep_annotating (levels : List (TermLevelOf H)) (term : Traits.Handler.Term H)
     (state : AttributeState (Traits.Handler.SExpr H) (Traits.Handler.Attribute H))
-    (token : Input) :
+    (token : Parser.Internal.Input) :
     termStep version ({ mode := .annotating term state, levels } : TermStateOf H) token =
-      attributeStep false version state token >>= Step.wrap
+      attributeStep false version state token >>= Parser.Internal.Step.wrap
         (fun state => ({ mode := .annotating term state, levels } : TermStateOf H))
         (annotated levels term) := by
   simp only [termStep]
@@ -191,7 +191,7 @@ theorem qualIdentifier_eq (qualified : Tree.QualIdentifier) :
 /-- A qualified identifier as a term, with the calls `first` due at its first token's arrival:
 the parser handles it at its last token. -/
 theorem identifierTerm_runs (hA : TermAgrees h) {qualified : Tree.QualIdentifier}
-    (hvalid : qualified.Valid (Bridge.version version)) {tokens : List Input}
+    (hvalid : qualified.Valid (Bridge.version version)) {tokens : List Parser.Internal.Input}
     (hs : Stands tokens qualified.tokens)
     (first : Run (StateT H m) (Traits.Handler.Error H) Unit) (levels : List (TermLevelOf H)) :
     RunsFirst points (adaptRun first) (termStep version)
@@ -203,7 +203,7 @@ theorem identifierTerm_runs (hA : TermAgrees h) {qualified : Tree.QualIdentifier
     match name with
     | ⟨symbolName, []⟩ =>
       obtain ⟨token, rfl, htoken⟩ := Stands.split_single hs
-      obtain ⟨symbol, rfl, rfl⟩ := Input.received_symbol htoken
+      obtain ⟨symbol, rfl, rfl⟩ := Parser.Internal.Input.received_symbol htoken
       exact (RunsFirst.token (program := Parser.call (Traits.Handler.handleTerm
         (.identifier ⟨symbol, #[]⟩ none))) (by simp [termStep])).congr
         (by simp [term_identifier, Traversal.qualIdentifier, Tree.Identifier.tokens,
@@ -220,8 +220,10 @@ theorem identifierTerm_runs (hA : TermAgrees h) {qualified : Tree.QualIdentifier
         (next := termComplete levels)
         ((Runs.embed (outer := termStep version)
           (fun state => ({ mode := .qualIdent state, levels } : TermStateOf H)) _
-          (termStep_qualIdent levels) hruns).congr rfl (by funext; simp [Step.wrap]))
-      rw [show Input.parenOpen :: Input.reserved (.general .underscore) :: symbolToken ::
+          (termStep_qualIdent levels) hruns).congr rfl
+              (by funext; simp [Parser.Internal.Step.wrap]))
+      rw [show Parser.Internal.Input.parenOpen :: Parser.Internal.Input.reserved
+          (.general .underscore) :: symbolToken ::
           (rest ++ [.parenClose]) = [.parenOpen] ++ ([.reserved (.general .underscore)] ++
           (symbolToken :: (rest ++ [.parenClose]))) by simp]
       refine (RunsFirst.append (middle := fun _ => ({ mode := .opened, levels } : TermStateOf H))
@@ -245,7 +247,7 @@ theorem identifierTerm_runs (hA : TermAgrees h) {qualified : Tree.QualIdentifier
     obtain ⟨inner, rfl, hinner⟩ := Stands.split_paren hs
     obtain ⟨asToken, rest, rfl, has, hrest⟩ := Stands.split_cons hinner
     obtain ⟨identifierTokens, sortTokens, rfl, hs₁, hs₂⟩ := Stands.split hrest
-    rw [Input.received_word (word := .general .as) has]
+    rw [Parser.Internal.Input.received_word (word := .general .as) has]
     obtain ⟨head, hhead, hruns⟩ := qualAs_runs (points := points) hA hvalid.1 hvalid.2 hs₁ hs₂
     have hembed := Runs.bind_next
       (following := fun sort =>
@@ -253,8 +255,9 @@ theorem identifierTerm_runs (hA : TermAgrees h) {qualified : Tree.QualIdentifier
       (next := termComplete levels)
       ((Runs.embed (outer := termStep version)
         (fun state => ({ mode := .qualIdent state, levels } : TermStateOf H)) _
-        (termStep_qualIdent levels) hruns).congr rfl (by funext; simp [Step.wrap]))
-    rw [show Input.parenOpen :: (Input.reserved (.general .as) :: (identifierTokens ++
+        (termStep_qualIdent levels) hruns).congr rfl (by funext; simp [Parser.Internal.Step.wrap]))
+    rw [show Parser.Internal.Input.parenOpen :: (Parser.Internal.Input.reserved (.general .as) ::
+        (identifierTokens ++
         sortTokens) ++ [.parenClose]) = [.parenOpen] ++ ([.reserved (.general .as)] ++
         (identifierTokens ++ (sortTokens ++ [.parenClose]))) by simp]
     refine (RunsFirst.append (middle := fun _ => ({ mode := .opened, levels } : TermStateOf H))
@@ -280,7 +283,7 @@ The head of an application, from after the application's `(`: the parser reads a
 identifier and opens the application with it.
 -/
 theorem applicationHead_runs (hA : TermAgrees h) {qualified : Tree.QualIdentifier}
-    (hvalid : qualified.Valid (Bridge.version version)) {tokens : List Input}
+    (hvalid : qualified.Valid (Bridge.version version)) {tokens : List Parser.Internal.Input}
     (hs : Stands tokens qualified.tokens) (levels : List (TermLevelOf H)) :
     ∃ head : Nodes.Identifier, Bridge.identifier head = qualName qualified ∧
       Runs points (termStep version) ({ mode := .opened, levels } : TermStateOf H) tokens
@@ -292,7 +295,7 @@ theorem applicationHead_runs (hA : TermAgrees h) {qualified : Tree.QualIdentifie
     match name with
     | ⟨symbolName, []⟩ =>
       obtain ⟨token, rfl, htoken⟩ := Stands.split_single hs
-      obtain ⟨symbol, rfl, rfl⟩ := Input.received_symbol htoken
+      obtain ⟨symbol, rfl, rfl⟩ := Parser.Internal.Input.received_symbol htoken
       refine ⟨⟨symbol, #[]⟩, by simp [Bridge.identifier, qualName], ?_⟩
       exact (Runs.token (program := pure none) (by simp [termStep, termOpened])).congr
         (by simp [qualProgram, Tree.Identifier.tokens,
@@ -308,8 +311,10 @@ theorem applicationHead_runs (hA : TermAgrees h) {qualified : Tree.QualIdentifie
           pure (.more { mode := .start, levels := .application head sort #[] :: levels }))
         ((Runs.embed (outer := termStep version)
           (fun state => ({ mode := .applicationHead state, levels } : TermStateOf H)) _
-          (termStep_applicationHead levels) hruns).congr rfl (by funext; simp [Step.wrap]))
-      rw [show Input.parenOpen :: Input.reserved (.general .underscore) :: symbolToken ::
+          (termStep_applicationHead levels) hruns).congr rfl
+              (by funext; simp [Parser.Internal.Step.wrap]))
+      rw [show Parser.Internal.Input.parenOpen :: Parser.Internal.Input.reserved
+          (.general .underscore) :: symbolToken ::
           (rest ++ [.parenClose]) = [.parenOpen] ++ ([.reserved (.general .underscore)] ++
           (symbolToken :: (rest ++ [.parenClose]))) by simp]
       refine (Runs.append (middle := fun _ =>
@@ -319,7 +324,7 @@ theorem applicationHead_runs (hA : TermAgrees h) {qualified : Tree.QualIdentifie
               ({ mode := .applicationHead (.indexed .afterUnderscore), levels } :
                 TermStateOf H))
             (Runs.token_more (by simp [termStep, Parser.Category.QualifiedIdent.qualIdentStep,
-                Input.isWord, beq_words]))
+                Parser.Internal.Input.isWord, beq_words]))
             fun _ => hembed).congr ?_ rfl
       simp [qualProgram,
         adaptRun_takeAll (show Stands _ (Tree.Identifier.tokens ⟨symbolName, index :: indices⟩)
@@ -328,7 +333,7 @@ theorem applicationHead_runs (hA : TermAgrees h) {qualified : Tree.QualIdentifie
     obtain ⟨inner, rfl, hinner⟩ := Stands.split_paren hs
     obtain ⟨asToken, rest, rfl, has, hrest⟩ := Stands.split_cons hinner
     obtain ⟨identifierTokens, sortTokens, rfl, hs₁, hs₂⟩ := Stands.split hrest
-    rw [Input.received_word (word := .general .as) has]
+    rw [Parser.Internal.Input.received_word (word := .general .as) has]
     obtain ⟨head, hhead, hruns⟩ := qualAs_runs (points := points) hA hvalid.1 hvalid.2 hs₁ hs₂
     refine ⟨head, hhead, ?_⟩
     have hembed := Runs.map_program (f := some)
@@ -336,8 +341,10 @@ theorem applicationHead_runs (hA : TermAgrees h) {qualified : Tree.QualIdentifie
         pure (.more { mode := .start, levels := .application head sort #[] :: levels }))
       ((Runs.embed (outer := termStep version)
         (fun state => ({ mode := .applicationHead state, levels } : TermStateOf H)) _
-        (termStep_applicationHead levels) hruns).congr rfl (by funext; simp [Step.wrap]))
-    rw [show Input.parenOpen :: (Input.reserved (.general .as) :: (identifierTokens ++
+        (termStep_applicationHead levels) hruns).congr rfl
+            (by funext; simp [Parser.Internal.Step.wrap]))
+    rw [show Parser.Internal.Input.parenOpen :: (Parser.Internal.Input.reserved (.general .as) ::
+        (identifierTokens ++
         sortTokens) ++ [.parenClose]) = [.parenOpen] ++ ([.reserved (.general .as)] ++
         (identifierTokens ++ (sortTokens ++ [.parenClose]))) by simp]
     refine (Runs.append (middle := fun _ =>
@@ -346,7 +353,7 @@ theorem applicationHead_runs (hA : TermAgrees h) {qualified : Tree.QualIdentifie
         Runs.append (middle := fun _ =>
             ({ mode := .applicationHead (.qualifiedIdent .start), levels } : TermStateOf H))
           (Runs.token_more (by simp [termStep, Parser.Category.QualifiedIdent.qualIdentStep,
-              Input.isWord, beq_words]))
+              Parser.Internal.Input.isWord, beq_words]))
           fun _ => hembed).congr ?_ rfl
     simp [qualProgram, adaptRun_takeAll hs₁,
       adaptRun_takeAll (tokens := [.parenOpen, .reserved (.general .as)])
@@ -379,7 +386,7 @@ def specStart (h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valu
 From after a binder's `(`, the parser reads its word and its sorted variables, and starts the
 binder with all of them at their `)`.
 -/
-theorem binderStart_runs (hA : TermAgrees h) (binder : SortedBinder) {word : Input}
+theorem binderStart_runs (hA : TermAgrees h) (binder : SortedBinder) {word : Parser.Internal.Input}
     {wordToken : BSmtLibSpec.Grammar.SyntaxToken}
     (hwordToken : Bridge.received word = some (.token wordToken))
     (hword : ∀ levels : List (TermLevelOf H),
@@ -387,7 +394,8 @@ theorem binderStart_runs (hA : TermAgrees h) (binder : SortedBinder) {word : Inp
         pure (.more { mode := .sortedVars binder (ListState.paren .start), levels }))
     (variables : List Tree.SortedVar)
     (hvalid : ∀ var ∈ variables, var.Valid (Bridge.version version)) (hne : variables ≠ [])
-    {tokens : List Input} (hs : Stands tokens (variables.flatMap Tree.SortedVar.tokens))
+    {tokens : List Parser.Internal.Input} (hs : Stands tokens
+        (variables.flatMap Tree.SortedVar.tokens))
     (levels : List (TermLevelOf H)) :
     Runs points (termStep version) ({ mode := .opened, levels } : TermStateOf H)
       (word :: .parenOpen :: (tokens ++ [.parenClose]))
@@ -429,16 +437,18 @@ theorem binderStart_runs (hA : TermAgrees h) (binder : SortedBinder) {word : Inp
       (fun state => ({ mode := .sortedVars binder state, levels } : TermStateOf H)) _
       (termStep_sortedVars levels binder) hlist).congr rfl (by
         funext
-        simp [Step.wrap, binderStarted_eq]))
-  rw [show word :: Input.parenOpen :: (Input.parenOpen :: Input.symbol symbol ::
+        simp [Parser.Internal.Step.wrap, binderStarted_eq]))
+  rw [show word :: Parser.Internal.Input.parenOpen ::
+      (Parser.Internal.Input.parenOpen :: Parser.Internal.Input.symbol symbol ::
       (sortTokens ++ [.parenClose]) ++ restTokens ++ [.parenClose]) =
-      [word] ++ (Input.parenOpen :: (Input.parenOpen :: Input.symbol symbol ::
+      [word] ++ (Parser.Internal.Input.parenOpen ::
+          (Parser.Internal.Input.parenOpen :: Parser.Internal.Input.symbol symbol ::
       (sortTokens ++ [.parenClose])) ++ (restTokens ++ [.parenClose])) by simp]
   refine (Runs.append (middle := fun _ =>
       ({ mode := .sortedVars binder (ListState.paren .start), levels } : TermStateOf H))
     (Runs.token_more (hword levels)) fun _ => hembed).congr ?_ rfl
   obtain ⟨firstSymbol, firstSort⟩ := first
-  have hsymbolToken : Bridge.received (Input.symbol symbol) =
+  have hsymbolToken : Bridge.received (Parser.Internal.Input.symbol symbol) =
       some (.token (.symbol firstSymbol)) := by
     simp only at hsymbol
     simp [Bridge.received, hsymbol]
@@ -456,7 +466,7 @@ theorem binderStart_runs (hA : TermAgrees h) (binder : SortedBinder) {word : Inp
 /-- The run of a term, from any stack, as `term_runs` states it. -/
 def TermRuns (points : Points (StateT H m))
     (h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H))
-    (version : Token.Version) (tokens : List Input) (term : Tree.Term) : Prop :=
+    (version : Token.Version) (tokens : List Parser.Internal.Input) (term : Tree.Term) : Prop :=
   ∀ levels : List (TermLevelOf H),
     Runs points (termStep version) ({ mode := .start, levels } : TermStateOf H) tokens
       (adaptRun (Traversal.term points h term))
@@ -465,7 +475,7 @@ def TermRuns (points : Points (StateT H m))
 /-- The run of a term, from any stack, with any calls due at its first token's arrival. -/
 def TermRunsFirst (points : Points (StateT H m))
     (h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H))
-    (version : Token.Version) (tokens : List Input) (term : Tree.Term) : Prop :=
+    (version : Token.Version) (tokens : List Parser.Internal.Input) (term : Tree.Term) : Prop :=
   ∀ (first : Run (StateT H m) (Traits.Handler.Error H) Unit) (levels : List (TermLevelOf H)),
     RunsFirst points (adaptRun first) (termStep version)
       ({ mode := .start, levels } : TermStateOf H)
@@ -473,14 +483,14 @@ def TermRunsFirst (points : Points (StateT H m))
       fun r => termComplete levels r
 
 /-- With no call due at the first token's arrival, the run of a term as `TermRuns` states it. -/
-theorem TermRunsFirst.plain {tokens : List Input} {term : Tree.Term}
+theorem TermRunsFirst.plain {tokens : List Parser.Internal.Input} {term : Tree.Term}
     (hruns : TermRunsFirst points h version tokens term) : TermRuns points h version tokens term :=
   fun levels => RunsFirst.runs (by
     have := hruns (pure ()) levels
     rwa [adaptRun_pure] at this)
 
 /-- A binder's body and its `)`: the body with the binder's level on top, then the end. -/
-theorem binderBody_runs {tokens : List Input} {body : Tree.Term}
+theorem binderBody_runs {tokens : List Parser.Internal.Input} {body : Tree.Term}
     (hbody : TermRuns points h version tokens body) (kind : BinderKind)
     (scope : Traits.Handler.Scope H) (levels : List (TermLevelOf H)) :
     Runs points (termStep version)
@@ -500,7 +510,8 @@ theorem binderBody_runs {tokens : List Input} {body : Tree.Term}
 A binding of a `let`, from between bindings: the parser reads `(` ⟨symbol⟩ ⟨term⟩ `)`, and adds
 the symbol with the handled term to the bindings.
 -/
-theorem binding_runs {symbolToken : Input} {name : Tree.Symbol} {tokens : List Input}
+theorem binding_runs {symbolToken : Parser.Internal.Input} {name : Tree.Symbol}
+    {tokens : List Parser.Internal.Input}
     {bound : Tree.Term} (hsymbol : Bridge.received symbolToken = some (.token (.symbol name)))
     (hbound : TermRuns points h version tokens bound) :
     ∃ symbol : Nodes.Symbol, Bridge.symbol symbol = name ∧ symbolToken = .symbol symbol ∧
@@ -514,9 +525,10 @@ theorem binding_runs {symbolToken : Input} {name : Tree.Symbol} {tokens : List I
           tick points .parenClose
           pure (symbol, result))
         fun binding => pure (.more { mode := .letBindingOpen (found.push binding), levels }) := by
-  obtain ⟨symbol, rfl, rfl⟩ := Input.received_symbol hsymbol
+  obtain ⟨symbol, rfl, rfl⟩ := Parser.Internal.Input.received_symbol hsymbol
   refine ⟨symbol, rfl, rfl, fun found levels => ?_⟩
-  rw [show Input.parenOpen :: Input.symbol symbol :: (tokens ++ [.parenClose]) =
+  rw [show Parser.Internal.Input.parenOpen :: Parser.Internal.Input.symbol symbol ::
+      (tokens ++ [.parenClose]) =
     [.parenOpen] ++ ([.symbol symbol] ++ (tokens ++ [.parenClose])) by simp]
   exact Runs.append (middle := fun _ =>
       ({ mode := .letBindingSymbol found, levels } : TermStateOf H))
@@ -535,7 +547,8 @@ A case of a `match`, from between cases: the parser reads `(` ⟨pattern⟩ ⟨t
 case with the scrutinee and the pattern at the pattern's last token, and ends it at its `)`.
 -/
 theorem case_runs {pattern : Tree.Pattern}
-    (hpattern : pattern.Valid (Bridge.version version)) {patternTokens bodyTokens : List Input}
+    (hpattern : pattern.Valid
+        (Bridge.version version)) {patternTokens bodyTokens : List Parser.Internal.Input}
     {body : Tree.Term} (hs : Stands patternTokens pattern.tokens)
     (hbody : TermRuns points h version bodyTokens body) :
     ∃ parsed : Nodes.Pattern, Bridge.pattern parsed = pattern ∧
@@ -563,8 +576,8 @@ theorem case_runs {pattern : Tree.Pattern}
     ((Runs.embed (outer := termStep version)
       (fun state => ({ mode := .matchPattern scrutinee found state, levels } : TermStateOf H)) _
       (termStep_matchPattern levels scrutinee found) hruns).congr rfl
-      (by funext; simp [Step.wrap, caseStarted]))
-  rw [show Input.parenOpen :: (patternTokens ++ (bodyTokens ++ [.parenClose])) =
+      (by funext; simp [Parser.Internal.Step.wrap, caseStarted]))
+  rw [show Parser.Internal.Input.parenOpen :: (patternTokens ++ (bodyTokens ++ [.parenClose])) =
     [.parenOpen] ++ (patternTokens ++ (bodyTokens ++ [.parenClose])) by simp]
   refine (Runs.append (middle := fun _ =>
       ({ mode := .matchPattern scrutinee found .start, levels } : TermStateOf H))

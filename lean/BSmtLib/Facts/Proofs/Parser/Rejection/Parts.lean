@@ -23,7 +23,7 @@ namespace BSmtLib.Facts.Proofs.Parser.Rejection.Parts
 open BSmtLibSpec.Grammar
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Parser.Traversal
-open BSmtLib.Parser (Input PM Step)
+open BSmtLib.Parser (PM)
 open BSmtLib.Parser.Category.Pattern (PatternState)
 open BSmtLib.Parser.Category.QualifiedIdent (QualIdentState qualIdentStep)
 open BSmtLib.Parser.Category.SortedVar (SortedVarState sortedVarStep)
@@ -71,7 +71,7 @@ theorem patternRem_nonempty (state : PatternState) : ∃ u, patternRem version s
 
 end
 
-theorem symbolOrWildcard?_some {version : Token.Version} {token : Input}
+theorem symbolOrWildcard?_some {version : Token.Version} {token : Parser.Internal.Input}
     {s : Nodes.SymbolOrWildcard}
     (h : PatternState.symbolOrWildcard? version token = some s) :
     Bridge.received token = some (.token (Bridge.symbolOrWildcard s).token) ∧
@@ -457,7 +457,7 @@ where the parser's own maximum is `hi`, it has a remainder if the old one has; f
 `)`, with enough elements and not too many, the `)` completes the list. -/
 def ListAdvances {σ ρ : Type} (inner : σ → Lang) (element : Lang) (init : σ) (lo : Nat)
     (hi : Option Nat) (maximum : Option Nat) (state : ListState σ ρ) (item : Received) :
-    Step (ListState σ ρ) (Array ρ) → Prop
+    Parser.Internal.Step (ListState σ ρ) (Array ρ) → Prop
   | .more state' => ListWF inner init state →
     (∀ u, listRem inner element init lo hi state' u →
       listRem inner element init lo hi state (item :: u)) ∧ ListWF inner init state' ∧
@@ -471,12 +471,13 @@ def ListAdvances {σ ρ : Type} (inner : σ → Lang) (element : Lang) (init : �
 /-- A step of the list parser advances, for lists of at least `lo` and at most `hi` elements,
 whatever its own maximum. -/
 theorem listStep_implies {σ ρ : Type} (version : Token.Version) (init : σ)
-    {step : σ → Input → Quiet.RPM (Step σ ρ)} {inner : σ → Lang} {element : Lang}
+    {step : σ → Parser.Internal.Input → Quiet.RPM
+        (Parser.Internal.Step σ ρ)} {inner : σ → Lang} {element : Lang}
     (hstep : StepsAdvance version step inner fun state _ => inner state)
     (hinitElement : ∀ u, inner init u → element u) (hinit : ∃ u, inner init u)
     (helement : ∃ u, element u) (lo : Nat) (hi : Option Nat)
     (hlohi : ∀ limit, hi = some limit → lo ≤ limit) (maximum : Option Nat)
-    (state : ListState σ ρ) {token : Input} {item : Received}
+    (state : ListState σ ρ) {token : Parser.Internal.Input} {item : Received}
     (hitem : Bridge.received token = some item) (hlex : item.OfVersion (Bridge.version version)) :
     Sound (ListAdvances inner element init lo hi maximum state item) Benign
       (ListState.step init step maximum state token) := by
@@ -502,8 +503,9 @@ theorem listStep_implies {σ ρ : Type} (version : Token.Version) (init : σ)
         Sound (ListAdvances inner element init lo hi maximum ⟨true, outside, current, items⟩ item)
           Benign
           (step current token >>= fun r => match r with
-            | .more state' => pure (Step.more ⟨true, false, state', items⟩)
-            | .done result => pure (Step.more ⟨true, true, init, items.push result⟩)) := by
+            | .more state' => pure (Parser.Internal.Step.more ⟨true, false, state', items⟩)
+            | .done result => pure (Parser.Internal.Step.more ⟨true, true, init,
+                items.push result⟩)) := by
       intro hchecked
       have wrap : ∀ {u}, (outside = true → current = init) →
           (∀ limit, hi = some limit → items.size < limit) →
@@ -610,7 +612,8 @@ theorem listStep_implies {σ ρ : Type} (version : Token.Version) (init : σ)
 elements: it finishes, at the `)`, with its elements, and where they are at least `lo`, and not
 too many, the `)` completes the list. -/
 theorem listStep_advances {σ ρ : Type} (version : Token.Version) (init : σ)
-    {step : σ → Input → Quiet.RPM (Step σ ρ)} {inner : σ → Lang} {element : Lang}
+    {step : σ → Parser.Internal.Input → Quiet.RPM
+        (Parser.Internal.Step σ ρ)} {inner : σ → Lang} {element : Lang}
     (hstep : StepsAdvance version step inner fun state _ => inner state)
     (hinitElement : ∀ u, inner init u → element u) (hinit : ∃ u, inner init u)
     (helement : ∃ u, element u) (lo : Nat) (maximum : Option Nat)
@@ -668,17 +671,18 @@ theorem listRem_counted_nonempty {σ ρ : Type} {inner : σ → Lang} {element :
       items hwf.2 (fun l hl => by cases hl; omega)⟩
 
 /-- The list parser finishes only at the `)`, without a call. -/
-theorem listStep_done_silent {σ ρ : Type} (init : σ) (step : σ → Input → Quiet.RPM (Step σ ρ))
-    (maximum : Option Nat) (state : ListState σ ρ) (token : Input) :
+theorem listStep_done_silent {σ ρ : Type} (init : σ) (step : σ → Parser.Internal.Input → Quiet.RPM
+    (Parser.Internal.Step σ ρ))
+    (maximum : Option Nat) (state : ListState σ ρ) (token : Parser.Internal.Input) :
     ∀ events items events',
       (ListState.step init step maximum state token).run.run events = (.ok (.done items), events') →
       events' = events := by
   intro events items events' h
   have more : ∀ (g : σ → ListState σ ρ) (k : ρ → ListState σ ρ) b ev ev' items,
       ((match b with
-        | Step.more state => pure (Step.more (g state))
-        | Step.done item => pure (Step.more (k item)) :
-          Quiet.RPM (Step (ListState σ ρ) (Array ρ)))).run.run
+        | Parser.Internal.Step.more state => pure (Parser.Internal.Step.more (g state))
+        | Parser.Internal.Step.done item => pure (Parser.Internal.Step.more (k item)) :
+          Quiet.RPM (Parser.Internal.Step (ListState σ ρ) (Array ρ)))).run.run
         ev ≠ (.ok (.done items), ev') := by
     intro g k b ev ev' items
     cases b <;> exact more_ne_done _ _ _ _
@@ -701,8 +705,9 @@ theorem listStep_done_silent {σ ρ : Type} (init : σ) (step : σ → Input →
       · exact absurd h (never_done (more _ _))
 
 /-- The list parser writes no event where it finishes, as `Sound.bindOn` takes it. -/
-theorem listStep_quiet {σ ρ : Type} (init : σ) (step : σ → Input → Quiet.RPM (Step σ ρ))
-    (maximum : Option Nat) (state : ListState σ ρ) (token : Input) :
+theorem listStep_quiet {σ ρ : Type} (init : σ) (step : σ → Parser.Internal.Input → Quiet.RPM
+    (Parser.Internal.Step σ ρ))
+    (maximum : Option Nat) (state : ListState σ ρ) (token : Parser.Internal.Input) :
     ∀ events b events', (ListState.step init step maximum state token).run.run events =
       (.ok b, events') → (∃ v, b = .done v) → events' = events :=
   fun _ _ _ hrun ⟨_, hv⟩ => by

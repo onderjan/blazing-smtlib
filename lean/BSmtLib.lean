@@ -10,6 +10,7 @@ public import BSmtLib.Traits
 public import BSmtLib.Token
 public import BSmtLib.Token.Reserved
 public import BSmtLib.Token.SyntaxToken
+public import BSmtLib.Token.Lookahead
 public import BSmtLib.Token.Produce
 public import BSmtLib.Token.ConsumeFrom
 public import BSmtLib.Lexer.CharClass
@@ -22,6 +23,7 @@ public import BSmtLib.Parser.Category
 public import BSmtLib.Parser.Command
 public import BSmtLib.Parser.Script
 public import BSmtLib.Parser.Adapter
+public import BSmtLib.Parser.Internal.Fused
 public import BSmtLib.Reader
 
 public section

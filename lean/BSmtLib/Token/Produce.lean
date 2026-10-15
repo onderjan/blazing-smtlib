@@ -2,6 +2,7 @@ module
 
 public import BSmtLib.Token
 public import BSmtLib.Token.SyntaxToken
+public import BSmtLib.Token.Lookahead
 
 public section
 
@@ -11,11 +12,29 @@ have modules of their own here; the root module `BSmtLib` imports them. -/
 
 namespace BSmtLib.Token.Produce
 
-/- LEAN: a class is Lean's trait; the Rust associated type `Token` is a field. Methods taking
-`&mut self` return the updated producer, `next?` with the proof that it consumed the token.
-Rust's `attempt` with its associated `Lookahead` is a method of `BatchCursor` only: its window
-is given back with the proof that the extractor took a token, which a class would have to state
-for every producer; Rust's default `attempt` takes nothing. The defaults `is_empty` and
+/--
+A producer seen as a cursor of a batch of the library's lexer: the cursor, and the producer that
+a cursor after it stands for.
+-/
+/- LEAN: not in Rust. The library's fused script reader reads a batch cursor directly; a
+producer that is one gives itself as one through `Produce.asBatch?`. -/
+structure Internal.BatchView (Z : Type) (HasNext : Z → Prop) (Consumed : Z → Z → Prop)
+    (producer : Z) where
+  /-- The tag of the cursor's batch. -/
+  tag : BatchTag
+  /-- The producer as a cursor. -/
+  cursor : BatchCursor tag
+  /-- The producer that a cursor after `cursor` stands for. -/
+  back : BatchCursor tag → Z
+  /-- The cursor has a token if the producer has. -/
+  hasNext : HasNext producer → cursor.HasNext
+  /-- A cursor that consumed tokens of `cursor` stands for a producer that consumed tokens. -/
+  consumed {next : BatchCursor tag} : next.Consumed cursor → Consumed (back next) producer
+
+/- LEAN: a class is Lean's trait; the Rust associated types `Token` and `Lookahead` are fields,
+and the lookahead window's instance of `Lookahead` is a field filled in by instance search.
+Methods taking `&mut self` return the updated producer, `next?` with the proof that it consumed
+the token, `attempt` with the proof that the extractor took a token. The defaults `is_empty` and
 `consume_all` are left to the producers. -/
 /-- A sequential producer of tokens. -/
 class _root_.BSmtLib.Token.Produce (Z : Type) where
@@ -44,6 +63,30 @@ class _root_.BSmtLib.Token.Produce (Z : Type) where
   peek? : Z → Option Token
   /-- Consumes the next token (if any). -/
   next? : (producer : Z) → Option (Token × { next : Z // Consumed next producer })
+  /-- The lookahead window of `attempt`. -/
+  Lookahead : Type := Unit
+  /-- The window takes tokens of the producer's type. -/
+  [lookahead : _root_.BSmtLib.Token.Lookahead Lookahead Token]
+  /--
+  Attempts to consume several tokens at once (lookahead).
+
+  The extractor takes tokens from the window ahead of the cursor, in order.
+  If it returns `some`, exactly the tokens it took are consumed, which must be at least one.
+  If it returns `none`, nothing is consumed.
+  An extractor that runs out of tokens must return `none`.
+  The window may end after any token.
+
+  This function can be provided for ultra-fast processing,
+  and the caller must ensure that a successful attempt results in
+  the same observable behaviour as when it failed one.
+  Use standard `next?` processing unless
+  absolutely necessary and supported by measurements.
+  -/
+  attempt {α : Type} : (producer : Z) →
+    ((window : Lookahead) →
+      Option (α × { next : Lookahead //
+        _root_.BSmtLib.Token.Lookahead.Consumed (T := Token) next window })) →
+    Option (α × { next : Z // Consumed next producer }) := fun _ _ => none
   /--
   The SMT-LIB version that applies for currently consumed tokens.
 
@@ -74,6 +117,13 @@ class _root_.BSmtLib.Token.Produce (Z : Type) where
   end of the input.
   -/
   discardRest : Z → Z
+  /- LEAN: not in Rust. Lean has no namespaces for fields, so this field of the library's own is
+  named plainly; its type is in `Internal`. Producers other than the library's batch cursor
+  leave it at its default. -/
+  /-- For the library's own producers: the producer as a cursor of a batch of the library's
+  lexer, if it is one. -/
+  asBatch? : (producer : Z) → Option (Internal.BatchView Z HasNext Consumed producer) :=
+    fun _ => none
   /- LEAN: not in Rust. The facts that a consumer generic in its producer needs to take a token
   of a producer that has one, to give back the proof that it consumed a token after it took
   more or acted on the producer, and to take tokens until none remains. Rust states all but the
@@ -99,9 +149,13 @@ instance {batch : BatchTag} : Produce (BatchCursor batch) where
   Consumed := BatchCursor.Consumed
   peek? := BatchCursor.peek?
   next? := BatchCursor.next?
+  Lookahead := BatchCursor.TokenWindow batch
+  attempt := BatchCursor.attempt
   version := BatchCursor.version
   setVersion := BatchCursor.setVersion
   discardRest := BatchCursor.discardRest
+  asBatch? cursor :=
+    some { tag := batch, cursor, back := id, hasNext := id, consumed := id }
   next?_isSome := BatchCursor.isSome_next?
   consumed_trans := BatchCursor.Consumed.trans
   consumed_wf :=

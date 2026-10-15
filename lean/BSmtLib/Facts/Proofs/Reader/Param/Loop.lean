@@ -13,7 +13,8 @@ import all BSmtLib.Token.SyntaxToken
 Token by token, the parse adapter's loop over a cursor (`paLoop`) and the adapter's consumer
 `Answering (scriptConsumer version)` take the same tokens and stop at the same one with the same
 answer and the same cursor, while the tokens taken stand for a start of the script
-(`loop_agree`).
+(`loop_agree`). The parse adapter here is the one that stops after an action on its cursor
+(`Param.Stop`).
 -/
 
 namespace BSmtLib.Facts.Proofs.Reader.Param.Loop
@@ -21,7 +22,7 @@ namespace BSmtLib.Facts.Proofs.Reader.Param.Loop
 open BSmtLibSpec BSmtLibSpec.Grammar
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Lexer (Handed)
-open BSmtLib.Parser (Input Parse)
+open BSmtLib.Parser (Parse)
 open BSmtLib.Parser.Script (ScriptParser)
 open BSmtLib.Parser.Adapter (ParseAdapter)
 open BSmtLib.Facts.Lexer.Adapters (toVersion Answering AnswerM toHanded)
@@ -30,6 +31,8 @@ open BSmtLib.Facts.Parser.Adapters.Run.Rejection BSmtLib.Facts.Proofs.Parser.Cut
 open BSmtLib.Facts.Proofs.Reader.Param.Adapter BSmtLib.Facts.Proofs.Reader.Param.Basic
 open BSmtLib.Facts.Proofs.Reader.Param.Erase BSmtLib.Facts.Proofs.Reader.Param.Link
 open BSmtLib.Facts.Reader.Adapters
+
+attribute [local instance high] Stop.consumeFrom
 
 /-- The adapter's consumer's loop from a cursor, which may have no token left. -/
 def ansRest (version : Lexicon.Version) {b : Token.BatchTag} (cursor : Token.BatchCursor b)
@@ -118,7 +121,7 @@ theorem ansRest_step (version : Lexicon.Version) {b : Token.BatchTag} {cursor : 
 theorem paLoop_step {b : Token.BatchTag} {cursor : Token.BatchCursor b} (h : cursor.HasNext)
     (parser : ScriptParser (List Event)) (handler : List Event) :
     (paLoop parser cursor).run handler =
-      match (ParseAdapter.takeOne (H := List Event) (m := Id) parser cursor (cursor.next h).1
+      match (Stop.takeOne (H := List Event) (m := Id) parser cursor (cursor.next h).1
           (cursor.next h).2.val (cursor.next h).2.property).run handler with
       | ((.goOn parser', ⟨later, _⟩), handler') => (paLoop parser' later).run handler'
       | ((.stop answer parser', ⟨later, _⟩), handler') => ((answer, parser', later), handler') := by
@@ -127,7 +130,7 @@ theorem paLoop_step {b : Token.BatchTag} {cursor : Token.BatchCursor b} (h : cur
   generalize cursor.next _ = pr
   obtain ⟨token, next, consumed⟩ := pr
   simp only [StateT.run_bind]
-  generalize (ParseAdapter.takeOne (H := List Event) (m := Id) parser cursor token next
+  generalize (Stop.takeOne (H := List Event) (m := Id) parser cursor token next
     consumed).run handler = t
   obtain ⟨⟨after, ⟨later, taken⟩⟩, handler'⟩ := t
   cases after <;> rfl
@@ -200,11 +203,13 @@ theorem loop_agree {version : Lexicon.Version} {commands : List Tree.Command}
       | some handed =>
         simp only [hh] at herr hvia ⊢
         have hrecv :
-            Bridge.received (Input.ofSyntax ((cursor.next h).2.val.syntax (cursor.next h).1)) =
+            Bridge.received (Parser.Internal.Input.ofSyntax ((cursor.next h).2.val.syntax
+                (cursor.next h).1)) =
               some (rcv (itemOf handed)) := received_ofSyntax cursor (cursor.next h).1 hh
         obtain ⟨item, hitemdef⟩ : ∃ item : LibItem,
-            item.val = Input.ofSyntax ((cursor.next h).2.val.syntax (cursor.next h).1) :=
-          ⟨⟨Input.ofSyntax ((cursor.next h).2.val.syntax (cursor.next h).1),
+            item.val = Parser.Internal.Input.ofSyntax ((cursor.next h).2.val.syntax
+                (cursor.next h).1) :=
+          ⟨⟨Parser.Internal.Input.ofSyntax ((cursor.next h).2.val.syntax (cursor.next h).1),
             fun h' => by cases hrecv.symm.trans h'⟩, rfl⟩
         have hitem : rcv item.val = rcv (itemOf handed) := by
           rw [hitemdef]; simp only [rcv, hrecv, Option.getD_some]
@@ -225,7 +230,7 @@ theorem loop_agree {version : Lexicon.Version} {commands : List Tree.Command}
           simp [hst, hitem]
         generalize hR : (recAfter cursor.version parser item.val).run.run log = R
           at htake hver
-        generalize (ParseAdapter.takeOne (H := List Event) (m := Id) parser cursor (cursor.next h).1
+        generalize (Stop.takeOne (H := List Event) (m := Id) parser cursor (cursor.next h).1
           (cursor.next h).2.val (cursor.next h).2.property).run (calls log) = T at htake ⊢
         obtain ⟨⟨after, ⟨later, hlater⟩⟩, H'⟩ := T
         obtain ⟨res, log'⟩ := R

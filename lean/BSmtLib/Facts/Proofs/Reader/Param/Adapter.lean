@@ -2,6 +2,7 @@ module
 
 public import BSmtLib.Facts.Proofs.Reader.Param.EraseSteps
 public import BSmtLib.Facts.Proofs.Reader.Consumer
+public import BSmtLib.Facts.Proofs.Reader.Param.Stop
 import all BSmtLib.Parser.Adapter
 import all BSmtLib.Token
 
@@ -10,7 +11,8 @@ import all BSmtLib.Token
 /-!
 # The parse adapter's token against the recording run's
 
-The parse adapter (`Parser.ParseAdapter`) has the parser take a token as the recording run of
+The parse adapter that stops after an action on its producer (`Param.Stop`), as the consumer
+of the reader proofs, has the parser take a token as the recording run of
 the parser's driver does (`Facts.Proofs.Parser.Cut.recAfter`), without the token points and with the
 producer's actions done on its cursor: its handler's log is the recording log with the events
 that are not calls left out (`Erasing`), its parser goes on in the same state, and it acts on its
@@ -28,6 +30,8 @@ open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Parser.Adapters.Run
 open BSmtLib.Facts.Proofs.Parser.Cut BSmtLib.Facts.Proofs.Reader.Param.Erase
 open BSmtLib.Facts.Proofs.Reader.Param.EraseSteps BSmtLib.Facts.Reader.Adapters
 open BSmtLib.Parser.Adapter BSmtLib.Parser.Script
+
+attribute [local instance high] Stop.consumeFrom
 
 /-- The cursor after the requests: the switch of the version, then discarding. -/
 def applyRequests {b : Token.BatchTag} (cursor : Token.BatchCursor b)
@@ -48,14 +52,15 @@ are not calls left out. -/
 def paOf {b : Token.BatchTag} (parser : ScriptParser (List Event)) (next : Token.BatchCursor b) :
     Except (ParseErrorCause Unit) ((Token.Version × ScriptParser (List Event)) ⊕ Unit) × List Event
         →
-      (ParseAdapter.After (ScriptParser (List Event)) Unit Unit × Token.BatchCursor b) × List Event
+      (Parser.Internal.After (ScriptParser
+          (List Event)) Unit Unit × Token.BatchCursor b) × List Event
   | (.error e, log) =>
-    ((.stop (.error e) (Parse.reset parser),
+    ((.stop (.error e) (Parser.Internal.ParseByToken.reset parser),
       applyRequests next (Parser.Adapters.Run.switchOf log.reverse)
           (Parser.Adapters.Run.discardOf log.reverse)),
       calls log)
   | (.ok (.inr ()), log) =>
-    ((.stop (.ok (.break ())) (Parse.reset parser),
+    ((.stop (.ok (.break ())) (Parser.Internal.ParseByToken.reset parser),
       applyRequests next (Parser.Adapters.Run.switchOf log.reverse)
           (Parser.Adapters.Run.discardOf log.reverse)),
       calls log)
@@ -77,7 +82,7 @@ theorem calls_cons_point {event : Event} (h : event.isCall = false) (events : Li
     calls (event :: events) = calls events :=
   List.filter_cons_of_neg (by simp [h])
 
-theorem calls_arrivalCalls (parser : ScriptParser (List Event)) (item : Input)
+theorem calls_arrivalCalls (parser : ScriptParser (List Event)) (item : Parser.Internal.Input)
     (events : List Event) :
     calls (arrivalCalls parser item ++ events) = arrivalCalls parser item ++ calls events := by
   apply calls_append_calls
@@ -128,7 +133,8 @@ theorem any_calls {f : Event → Bool} (hf : ∀ e, e.isCall = true → f e = fa
 
 /-- The recording run's processing of a token, from the log before it: its arrival, the calls
 due at it and its processing written. -/
-theorem recAfter_eq (version : Token.Version) (parser : ScriptParser (List Event)) {item : Input}
+theorem recAfter_eq (version : Token.Version) (parser : ScriptParser
+    (List Event)) {item : Parser.Internal.Input}
     {received : Received} (hr : Bridge.received item = some received) (events : List Event) :
     (recAfter version parser item).run.run events =
       (afterProcessing recordingProducer version parser item).run.run
@@ -223,16 +229,17 @@ theorem run_bind_error {α β : Type} {x : Parser.Quiet.RPM α} {f : α → Pars
 theorem takeOne_rec {b : Token.BatchTag} (parser : ScriptParser (List Event))
     (cursor next : Token.BatchCursor b) (token : Token b) (consumed : next.Consumed cursor)
     (events : List Event) {received : Received}
-    (hr : Bridge.received (Input.ofSyntax (next.syntax token)) = some received) :
-    let r := (ParseAdapter.takeOne (H := List Event) (m := Id) (P := ScriptParser (List Event))
+    (hr : Bridge.received (Parser.Internal.Input.ofSyntax (next.syntax token)) = some received) :
+    let r := (Stop.takeOne (H := List Event) (m := Id) (P := ScriptParser (List Event))
       parser cursor token next consumed).run (calls events)
     ((r.1.1, r.1.2.val), r.2) =
-      paOf parser next ((recAfter next.version parser (Input.ofSyntax (next.syntax token))).run.run
+      paOf parser next ((recAfter next.version parser (Parser.Internal.Input.ofSyntax
+          (next.syntax token))).run.run
         events) := by
   intro r
-  have hitem' : Input.ofSyntax (Token.Produce.«syntax» next token) =
-      Input.ofSyntax (next.syntax token) := rfl
-  generalize hitem : Input.ofSyntax (next.syntax token) = item at hr ⊢
+  have hitem' : Parser.Internal.Input.ofSyntax (Token.Produce.«syntax» next token) =
+      Parser.Internal.Input.ofSyntax (next.syntax token) := rfl
+  generalize hitem : Parser.Internal.Input.ofSyntax (next.syntax token) = item at hr ⊢
   rw [recAfter_eq _ _ hr]
   have hY : calls (.process received :: (arrivalCalls parser item ++ .arrive received :: events)) =
       arrivalCalls parser item ++ calls events := by
@@ -245,17 +252,18 @@ theorem takeOne_rec {b : Token.BatchTag} (parser : ScriptParser (List Event))
   have hpost :=
     hE.post (.process received :: (arrivalCalls parser item ++ .arrive received :: events))
   rw [hY] at hstep
-  rcases hS : (Parse.step (H := List Event) next.version parser item).run.run
+  rcases hS : (Parser.Internal.ParseByToken.step (H := List Event) next.version parser item).run.run
     (.process received :: (arrivalCalls parser item ++ .arrive received :: events)) with ⟨res, log⟩
   rw [hS] at hstep hlog hpost
   simp only at hstep hlog hpost
-  have hX : ((Parse.arrive (H := List Event) parser item >>= fun _ =>
-      Parse.step (Token.Produce.version next) parser item : Parser.Quiet.RPM _).run.run
+  have hX : ((Parser.Internal.ParseByToken.arrive (H := List Event) parser item >>= fun _ =>
+      Parser.Internal.ParseByToken.step
+          (Token.Produce.version next) parser item : Parser.Quiet.RPM _).run.run
           (calls events)) =
         (res, calls log) := by
     rw [run_bind_ok (arrive_run parser item (calls events))]
     exact hstep
-  simp only [r, ParseAdapter.takeOne, StateT.run_bind]
+  simp only [r, Stop.takeOne, StateT.run_bind]
   try rw [hitem']
   rw [hitem, hX]
   unfold afterProcessing
@@ -384,7 +392,7 @@ theorem takeOne_rec {b : Token.BatchTag} (parser : ScriptParser (List Event))
 /-- The version the recording run goes on in after a token: the one it asked its producer to
 switch to after the token's processing, if it did, else the one it was in. -/
 theorem recAfter_version (version : Token.Version) (parser : ScriptParser (List Event))
-    {item : Input}
+    {item : Parser.Internal.Input}
     {received : Received} (hr : Bridge.received item = some received) (events : List Event)
     {version' : Token.Version} {parser' : ScriptParser (List Event)} {log : List Event}
     (h : (recAfter version parser item).run.run events = (.ok (.inl (version', parser')), log)) :
@@ -397,7 +405,7 @@ theorem recAfter_version (version : Token.Version) (parser : ScriptParser (List 
     hE.adds (.process received :: (arrivalCalls parser item ++ .arrive received :: events))
   have hpost :=
     hE.post (.process received :: (arrivalCalls parser item ++ .arrive received :: events))
-  rcases hS : (Parse.step (H := List Event) version parser item).run.run
+  rcases hS : (Parser.Internal.ParseByToken.step (H := List Event) version parser item).run.run
     (.process received :: (arrivalCalls parser item ++ .arrive received :: events)) with ⟨res, log₀⟩
   rw [hS] at hlog hpost
   simp only at hlog hpost
@@ -489,7 +497,7 @@ def paLoop {b : Token.BatchTag} (parser : ScriptParser (List Event))
   if h : cursor.HasNext then
     match cursor.next h with
     | (token, ⟨next, consumed⟩) => do
-      match ← ParseAdapter.takeOne (H := List Event) (m := Id) parser cursor token next
+      match ← Stop.takeOne (H := List Event) (m := Id) parser cursor token next
           consumed with
       | (.goOn parser', ⟨later, _taken⟩) => paLoop parser' later
       | (.stop answer parser', ⟨later, _⟩) => return (answer, parser', later)
@@ -514,18 +522,18 @@ theorem rest_eq {b : Token.BatchTag} (origin : Token.BatchCursor b) :
     ∀ (n : Nat) (parser : ScriptParser (List Event)) (cursor : Token.BatchCursor b)
       (consumed : Token.Produce.Consumed cursor origin)
           (handler : List Event), cursor.remaining < n →
-      let r := (ParseAdapter.rest (H := List Event) (m := Id) origin parser cursor consumed).run
+      let r := (Stop.rest (H := List Event) (m := Id) origin parser cursor consumed).run
         handler
       ((r.1.1, r.1.2.1, r.1.2.2.val), r.2) = (paLoop parser cursor).run handler
   | 0, _, _, _, _, hn => absurd hn (Nat.not_lt_zero _)
   | n + 1, parser, cursor, consumed, handler, hn => by
     intro r
     simp only [r]
-    rw [ParseAdapter.rest, paLoop]
+    rw [Stop.rest, paLoop]
     by_cases h : cursor.HasNext
     · rw [next?_hasNext cursor h, dite_eq_left_of_eq_true (eq_true h)]
       simp only [StateT.run_bind]
-      generalize (ParseAdapter.takeOne (H := List Event) (m := Id) parser cursor (cursor.next h).1
+      generalize (Stop.takeOne (H := List Event) (m := Id) parser cursor (cursor.next h).1
         (cursor.next h).2.val (cursor.next h).2.property).run handler = t
       obtain ⟨⟨after, ⟨later, taken⟩⟩, handler'⟩ := t
       cases after with
@@ -538,8 +546,8 @@ theorem rest_eq {b : Token.BatchTag} (origin : Token.BatchCursor b) :
       rfl
 
 theorem first_eq {b : Token.BatchTag} (cursor : Token.BatchCursor b) (h : cursor.HasNext) :
-    ParseAdapter.first cursor h = cursor.next h := by
-  unfold ParseAdapter.first
+    Stop.first cursor h = cursor.next h := by
+  unfold Stop.first
   split
   · rename_i first hfirst
     rw [next?_hasNext cursor h] at hfirst
@@ -567,32 +575,27 @@ theorem consume_eq {b : Token.BatchTag} (cursor : Token.BatchCursor b) (h : curs
   intro q r
   simp only [q, r]
   rw [paLoop, dite_eq_left_of_eq_true (eq_true h)]
-  simp only [Token.ConsumeFrom.consume]
-  have hf := first_eq cursor h
-  generalize ParseAdapter.first cursor h = pr at hf ⊢
-  subst hf
-  have hstart : ((show StateT (List Event) Id Unit from
-      if adapter.versionSet then pure ()
-      else Traits.Handler.setVersion (Token.Produce.version cursor)).run adapter.handler) =
-      ((), startLog adapter cursor.version) := by
-    unfold startLog
+  have hstart : Stop.told adapter cursor = startLog adapter cursor.version := by
+    unfold Stop.told startLog
     cases adapter.versionSet <;> rfl
-  simp only [StateT.run_bind, StateT.run_get, pure_bind, liftM, monadLift,
-    MonadLift.monadLift, StateT.run_lift, bind_pure_comp]
-  rw [hstart]
-  simp only [id_bind_eq]
-  generalize (ParseAdapter.takeOne (H := List Event) (m := Id) adapter.parser cursor
+  show ((Stop.consume cursor h adapter).1.1, (Stop.consume cursor h adapter).1.2.val,
+    (Stop.consume cursor h adapter).2) = _
+  unfold Stop.consume
+  rw [← hstart]
+  simp only [StateT.run_bind, id_bind_eq]
+  generalize (Stop.takeOne (H := List Event) (m := Id) adapter.parser cursor
     (cursor.next h).1 (cursor.next h).2.val (cursor.next h).2.property).run
-      (startLog adapter cursor.version) = t
+      (Stop.told adapter cursor) = t
   obtain ⟨⟨after, ⟨later, taken⟩⟩, handler'⟩ := t
   cases after with
   | stop answer parser' => rfl
   | goOn parser' =>
+    simp only [Stop.finish]
     have := rest_eq cursor (later.remaining + 1) parser' later taken handler' (Nat.lt_succ_self _)
     simp only at this
     exact congrArg (fun x : (Except (ParseErrorCause Unit) (ControlFlow Unit) ×
       ScriptParser (List Event) × Token.BatchCursor b) × List Event =>
         (x.1.1, x.1.2.2, (ParseAdapter.mk x.2 x.1.2.1
-          (ParseAdapter.versionSetAfter x.1.1) : RecAdapter))) this
+          (ParseAdapter.versionSetAfter x.1.1) .new : RecAdapter))) this
 
 end BSmtLib.Facts.Proofs.Reader.Param.Adapter

@@ -29,7 +29,7 @@ namespace BSmtLib.Facts.Proofs.Parser.Rejection.Basic
 open BSmtLibSpec.Grammar
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Parser.Traversal
-open BSmtLib.Parser (Input PM Step ParseErrorCause SyntaxErrorKind)
+open BSmtLib.Parser (PM ParseErrorCause SyntaxErrorKind)
 
 /-! ## Sets of item lists -/
 
@@ -434,18 +434,18 @@ state has one; finishing with a result, the item alone completes `fin` of the ol
 result. A state without a remainder is one no input leads to; its steps are not looked at.
 -/
 def Advances {σ ρ : Type} (rem : σ → Lang) (fin : σ → ρ → Lang) (state : σ) (item : Received) :
-    Step σ ρ → Prop
+    Parser.Internal.Step σ ρ → Prop
   | .more next => (∃ u, rem state u) → (∀ u, rem next u → rem state (item :: u)) ∧ ∃ u, rem next u
   | .done result => (∃ u, rem state u) → fin state result [item]
 
 /-- `Advances` from a state known to have a remainder. -/
 def Advanced {σ ρ : Type} (rem : σ → Lang) (fin : σ → ρ → Lang) (state : σ) (item : Received) :
-    Step σ ρ → Prop
+    Parser.Internal.Step σ ρ → Prop
   | .more next => (∀ u, rem next u → rem state (item :: u)) ∧ ∃ u, rem next u
   | .done result => fin state result [item]
 
 theorem Advances.from {σ ρ : Type} {rem : σ → Lang} {fin : σ → ρ → Lang} {state : σ}
-    {item : Received} {r : Step σ ρ} (h : Advances rem fin state item r)
+    {item : Received} {r : Parser.Internal.Step σ ρ} (h : Advances rem fin state item r)
     (hne : ∃ u, rem state u) : Advanced rem fin state item r := by
   cases r with
   | more next => exact h hne
@@ -457,7 +457,8 @@ a lexer of the version can hand over, its results advance with that item, and it
 rejection of a version declaration.
 -/
 def StepsAdvance {σ ρ : Type} (version : Token.Version)
-    (step : σ → Input → Quiet.RPM (Step σ ρ)) (rem : σ → Lang) (fin : σ → ρ → Lang) : Prop :=
+    (step : σ → Parser.Internal.Input → Quiet.RPM (Parser.Internal.Step σ ρ)) (rem : σ → Lang)
+        (fin : σ → ρ → Lang) : Prop :=
   ∀ state token item, Bridge.received token = some item →
     item.OfVersion (Bridge.version version) →
     Sound (Advances rem fin state item) Benign (step state token)
@@ -640,7 +641,7 @@ theorem run_bind_ok_inv {α β : Type} {x : Quiet.RPM β} {f : β → Quiet.RPM 
     exact ⟨b, ev₁, rfl, h⟩
 
 /-- An action whose second part never finishes does not finish. -/
-theorem never_done {β σ ρ : Type} {x : Quiet.RPM β} {f : β → Quiet.RPM (Step σ ρ)}
+theorem never_done {β σ ρ : Type} {x : Quiet.RPM β} {f : β → Quiet.RPM (Parser.Internal.Step σ ρ)}
     (hf : ∀ b ev ev' items, (f b).run.run ev ≠ (.ok (.done items), ev')) {ev ev' : List Event}
     {items : ρ} : (x >>= f).run.run ev ≠ (.ok (.done items), ev') := by
   rcases hx : x.run.run ev with ⟨_ | b, ev₁⟩
@@ -650,11 +651,13 @@ theorem never_done {β σ ρ : Type} {x : Quiet.RPM β} {f : β → Quiet.RPM (S
     exact hf b ev₁ ev' items
 
 theorem more_ne_done {σ τ : Type} (s : σ) (ev ev' : List Event) (items : τ) :
-    (pure (Step.more s) : Quiet.RPM (Step σ τ)).run.run ev ≠ (.ok (.done items), ev') :=
+    (pure (Parser.Internal.Step.more s) : Quiet.RPM (Parser.Internal.Step σ τ)).run.run ev ≠ (.ok
+        (.done items), ev') :=
   nofun
 
 theorem pure_done_run {σ τ : Type} {its items : τ} {ev ev' : List Event}
-    (h : (pure (Step.done its) : Quiet.RPM (Step σ τ)).run.run ev = (.ok (.done items), ev')) :
+    (h : (pure (Parser.Internal.Step.done its) : Quiet.RPM
+        (Parser.Internal.Step σ τ)).run.run ev = (.ok (.done items), ev')) :
     ev' = ev := by
   cases h
   rfl

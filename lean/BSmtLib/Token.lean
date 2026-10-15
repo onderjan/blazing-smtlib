@@ -1235,6 +1235,121 @@ def content (self : BatchCursor batch) (token : Token batch) : ByteSlice :=
 def span (self : BatchCursor batch) (token : Token batch) : Span :=
   self.batch.spanOf token.index (self.lt_len token)
 
+/- LEAN: not in Rust: for the proofs, which read the cursor only through this module. -/
+/-- Two cursors of a batch alike but for where their handover started: everything a consumer or
+the lexer reads of a cursor is the same of both. -/
+def Internal.Alike (x y : BatchCursor batch) : Prop :=
+  x.version = y.version ∧ x.stop = y.stop ∧ x.nextIndex = y.nextIndex ∧
+    x.relexFlag = y.relexFlag ∧ x.discardFlag = y.discardFlag
+
+namespace Internal.Alike
+
+theorem refl (x : BatchCursor batch) : Alike x x := ⟨rfl, rfl, rfl, rfl, rfl⟩
+
+theorem symm {x y : BatchCursor batch} (h : Alike x y) : Alike y x :=
+  ⟨h.1.symm, h.2.1.symm, h.2.2.1.symm, h.2.2.2.1.symm, h.2.2.2.2.symm⟩
+
+theorem trans {x y z : BatchCursor batch} (h : Alike x y) (h' : Alike y z) : Alike x z :=
+  ⟨h.1.trans h'.1, h.2.1.trans h'.2.1, h.2.2.1.trans h'.2.2.1, h.2.2.2.1.trans h'.2.2.2.1,
+    h.2.2.2.2.trans h'.2.2.2.2⟩
+
+theorem resetConsumed (x : BatchCursor batch) : Alike x.resetConsumed x := refl x
+
+theorem version {x y : BatchCursor batch} (h : Alike x y) : x.version = y.version := h.1
+
+theorem hasNext_iff {x y : BatchCursor batch} (h : Alike x y) : x.HasNext ↔ y.HasNext := by
+  unfold HasNext; rw [h.2.1, h.2.2.1]
+
+theorem next {x y : BatchCursor batch} (h : Alike x y) (hx : x.HasNext) (hy : y.HasNext) :
+    (x.next hx).1 = (y.next hy).1 ∧ Alike (x.next hx).2.val (y.next hy).2.val := by
+  obtain ⟨h1, h2, h3, h4, h5⟩ := h
+  refine ⟨?_, h1, h2, by simp [BatchCursor.next, h3], h4, h5⟩
+  simp only [BatchCursor.next, h3]
+
+theorem setVersion {x y : BatchCursor batch} (h : Alike x y) (v : Version)
+    {x' y' : BatchCursor batch} (hx : x.setVersion v = .ok x') (hy : y.setVersion v = .ok y') :
+    Alike x' y' := by
+  obtain ⟨h1, h2, h3, h4, h5⟩ := h
+  unfold BatchCursor.setVersion at hx hy
+  injection hx with hx
+  injection hy with hy
+  subst hx hy
+  rw [h1]
+  split <;> simp_all [Alike, BatchCursor.relex]
+
+theorem discardRest {x y : BatchCursor batch} (h : Alike x y) :
+    Alike x.discardRest y.discardRest :=
+  ⟨h.1, h.2.2.1, h.2.2.1, h.2.2.2.1, rfl⟩
+
+theorem category {x y : BatchCursor batch} (_ : Alike x y) (t : Token batch) :
+    x.category t = y.category t := by
+  simp only [BatchCursor.category, batch_eq_of_tag x y]
+
+theorem content {x y : BatchCursor batch} (_ : Alike x y) (t : Token batch) :
+    x.content t = y.content t := by
+  simp only [BatchCursor.content, batch_eq_of_tag x y]
+
+theorem consumedEndOf {x y o o' : BatchCursor batch} (h : Alike x y) (hx : x.Consumed o)
+    (hy : y.Consumed o') : x.consumedEndOf hx = y.consumedEndOf hy := by
+  simp only [BatchCursor.consumedEndOf, batch_eq_of_tag x y, h.2.2.1]
+
+theorem consumedSpanOf {x y o o' : BatchCursor batch} (h : Alike x y) (hx : x.Consumed o)
+    (hy : y.Consumed o') : x.consumedSpanOf hx = y.consumedSpanOf hy := by
+  simp only [BatchCursor.consumedSpanOf, batch_eq_of_tag x y, h.2.2.1]
+
+theorem span_peek {x y : BatchCursor batch} (h : Alike x y) (hx : x.HasNext)
+    (hy : y.HasNext) : x.span (x.peek hx) = y.span (y.peek hy) := by
+  simp only [BatchCursor.span, BatchCursor.peek, batch_eq_of_tag x y, h.2.2.1]
+
+theorem relexRequested {x y : BatchCursor batch} (h : Alike x y) :
+    x.relexRequested = y.relexRequested := h.2.2.2.1
+
+theorem discardRequested {x y : BatchCursor batch} (h : Alike x y) :
+    x.discardRequested = y.discardRequested := h.2.2.2.2
+
+theorem resetConsumed_eq {x y : BatchCursor batch} (h : Alike x y) :
+    x.resetConsumed = y.resetConsumed := by
+  have hb := batch_eq_of_tag x y
+  obtain ⟨h1, h2, h3, h4, h5⟩ := h
+  cases x; cases y
+  simp only at h1 h2 h3 h4 h5 hb
+  subst h1 h2 h3 h4 h5 hb
+  rfl
+
+theorem foldConsumedCategories {x y : BatchCursor batch} (h : Alike x y) {β : Type} (init : β)
+    (f : β → TokenCategory → β) :
+    x.foldConsumedCategories init f = y.foldConsumedCategories init f := by
+  simp only [BatchCursor.foldConsumedCategories, batch_eq_of_tag x y, h.2.2.1]
+
+theorem batch_eq {x y : BatchCursor batch} (_ : Alike x y) :
+    BatchCursor.Internal.batch x = BatchCursor.Internal.batch y :=
+  batch_eq_of_tag x y
+
+/-- A cursor with a request made has no token left, if it had none left when the request was made:
+the requests drop the tokens left. -/
+theorem flags_hasNext {x : BatchCursor batch} (h : x.relexRequested = false)
+    (h' : x.discardRequested = false) (v : Version) {x' : BatchCursor batch}
+    (hx : x.setVersion v = .ok x') (hn : x'.HasNext) :
+    x'.relexRequested = false ∧ x'.discardRequested = false := by
+  unfold BatchCursor.setVersion at hx
+  injection hx with hx
+  subst hx
+  split at hn
+  · simp [HasNext, BatchCursor.relex] at hn
+  · rename_i hc
+    simp only [hc]
+    exact ⟨h, h'⟩
+
+end Internal.Alike
+
+theorem discardRest_hasNext (x : BatchCursor batch) : ¬ x.discardRest.HasNext := by
+  simp [HasNext, discardRest]
+
+theorem relexRequested_next {x : BatchCursor batch} (hx : x.HasNext) :
+    (x.next hx).2.val.relexRequested = x.relexRequested ∧
+      (x.next hx).2.val.discardRequested = x.discardRequested :=
+  ⟨rfl, rfl⟩
+
 end BatchCursor
 
 /- LEAN: not in Rust. The parts of a token's content, read without the content's slice, which is

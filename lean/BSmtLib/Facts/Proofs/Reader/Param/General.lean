@@ -19,7 +19,8 @@ the parser's run depends only on what its items stand for (`Dom`). This covers r
 where the stand-in consumer fails at a token, the parse adapter fails at it too, at whitespace or
 a comment because no parser takes it (`paLoop_layout`); unless the stand-in consumer was handed
 whitespace or a comment, the adapter stands where the recording run over items standing for the
-tokens taken leaves the parser (`AdapterAtG`), also where both fail.
+tokens taken leaves the parser (`AdapterAtG`), also where both fail. The parse adapter here is the
+one that stops after an action on its cursor (`Param.Stop`).
 -/
 
 namespace BSmtLib.Facts.Proofs.Reader.Param.General
@@ -27,7 +28,7 @@ namespace BSmtLib.Facts.Proofs.Reader.Param.General
 open BSmtLibSpec
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Lexer (Handed)
-open BSmtLib.Parser (Input Parse)
+open BSmtLib.Parser (Parse)
 open BSmtLib.Parser.Script (ScriptParser)
 open BSmtLib.Parser.Adapter (ParseAdapter)
 open BSmtLib.Facts.Lexer.Adapters (toVersion Answering AnswerM toHanded)
@@ -37,6 +38,8 @@ open BSmtLib.Facts.Proofs.Reader.Outcome BSmtLib.Facts.Proofs.Reader.Param.Adapt
 open BSmtLib.Facts.Proofs.Reader.Param.Erase BSmtLib.Facts.Proofs.Reader.Param.Layout
 open BSmtLib.Facts.Proofs.Reader.Param.Link BSmtLib.Facts.Proofs.Reader.Param.Loop
 open BSmtLib.Facts.Reader.Adapters
+
+attribute [local instance high] Stop.consumeFrom
 
 /-- Where the adapter stands after the items, in the version, as `AdapterAt` says, the handler
 told the version exactly where it took an item, and also after the recording run failed: its
@@ -96,7 +99,7 @@ theorem answerOf_error (atEnd : Bool) (e : Parser.ParseErrorCause Unit) :
 it fails at that token, the cursor after it. -/
 theorem paLoop_layout {b : Token.BatchTag} {cursor : Token.BatchCursor b} (h : cursor.HasNext)
     (parser : ScriptParser (List Event)) (handler : List Event)
-    (hl : Input.ofSyntax (cursor.syntax (cursor.next h).1) = .layout) :
+    (hl : Parser.Internal.Input.ofSyntax (cursor.syntax (cursor.next h).1) = .layout) :
     ∃ e, ((paLoop parser cursor).run handler).1.1 = .error e ∧
       ((paLoop parser cursor).run handler).1.2.2 = (cursor.next h).2.val := by
   rw [paLoop_step h]
@@ -142,11 +145,13 @@ theorem loop_agreeG {version : Lexicon.Version} {b : Token.BatchTag} :
         rw [paLoop_step h]
         simp only [hh] at hgood ⊢
         have hrecv :
-            Bridge.received (Input.ofSyntax ((cursor.next h).2.val.syntax (cursor.next h).1)) =
+            Bridge.received (Parser.Internal.Input.ofSyntax ((cursor.next h).2.val.syntax
+                (cursor.next h).1)) =
               some (rcv (itemOf handed)) := received_ofSyntax cursor (cursor.next h).1 hh
         obtain ⟨item, hitemdef⟩ : ∃ item : LibItem,
-            item.val = Input.ofSyntax ((cursor.next h).2.val.syntax (cursor.next h).1) :=
-          ⟨⟨Input.ofSyntax ((cursor.next h).2.val.syntax (cursor.next h).1),
+            item.val = Parser.Internal.Input.ofSyntax ((cursor.next h).2.val.syntax
+                (cursor.next h).1) :=
+          ⟨⟨Parser.Internal.Input.ofSyntax ((cursor.next h).2.val.syntax (cursor.next h).1),
             fun h' => by cases hrecv.symm.trans h'⟩, rfl⟩
         have hitem : rcv item.val = rcv (itemOf handed) := by
           rw [hitemdef]; simp only [rcv, hrecv, Option.getD_some]
@@ -190,7 +195,7 @@ theorem loop_agreeG {version : Lexicon.Version} {b : Token.BatchTag} :
         have hans := answer_eq version (taken ++ [handed])
         generalize hR : (recAfter cursor.version parser item.val).run.run log = R
           at htake hver hobs
-        generalize (ParseAdapter.takeOne (H := List Event) (m := Id) parser cursor (cursor.next h).1
+        generalize (Stop.takeOne (H := List Event) (m := Id) parser cursor (cursor.next h).1
           (cursor.next h).2.val (cursor.next h).2.property).run (calls log) = T at htake ⊢
         obtain ⟨⟨after, ⟨later, hlater⟩⟩, H'⟩ := T
         obtain ⟨res, log'⟩ := R

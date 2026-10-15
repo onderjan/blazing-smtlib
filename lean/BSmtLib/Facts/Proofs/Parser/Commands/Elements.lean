@@ -25,7 +25,7 @@ the inner parser's initial state does (`Runs.first`), since it is no `)`.
 namespace BSmtLib.Facts.Proofs.Parser.Commands.Elements
 
 open BSmtLibSpec.Grammar
-open BSmtLib.Parser (Input PM Step)
+open BSmtLib.Parser (PM)
 open BSmtLib.Parser.Category.Combinator (ListState)
 open BSmtLibSpec.Parser
 open BSmtLibSpec.Parser.Traversal
@@ -37,7 +37,8 @@ open BSmtLib.Facts.Proofs.Parser.Tokens BSmtLib.Plain
 /-! ## First tokens -/
 
 /-- Tokens that stand for tokens starting with one other than `)` start with one other than `)`. -/
-theorem Stands.first_ne {tokens : List Input} {first : BSmtLibSpec.Grammar.SyntaxToken}
+theorem Stands.first_ne {tokens : List Parser.Internal.Input}
+    {first : BSmtLibSpec.Grammar.SyntaxToken}
     {rest : List BSmtLibSpec.Grammar.SyntaxToken}
     (hs : Stands tokens (first :: rest)) (hfirst : first ≠ .parenClose) :
     ∃ token tokens', tokens = token :: tokens' ∧ token ≠ .parenClose := by
@@ -68,7 +69,8 @@ theorem term_first (term : Tree.Term) :
   | .identifier (.as _ _) | .application _ _ | .let _ _ | .lambda _ _ | .quantified _ _ _
   | .match _ _ | .annotated _ _ => exact ⟨_, _, rfl, by simp⟩
 
-theorem Stands.first_of {tokens : List Input} {syntaxTokens : List BSmtLibSpec.Grammar.SyntaxToken}
+theorem Stands.first_of {tokens : List Parser.Internal.Input}
+    {syntaxTokens : List BSmtLibSpec.Grammar.SyntaxToken}
     (hfirst : ∃ first rest, syntaxTokens = first :: rest ∧ first ≠ .parenClose)
     (hs : Stands tokens syntaxTokens) :
     ∃ token tokens', tokens = token :: tokens' ∧ token ≠ .parenClose := by
@@ -122,9 +124,11 @@ theorem HasLength.bind_pure {α : Type} {program : PM H (List α)} {length : Nat
 
 omit [LawfulMonad m] in
 /-- A run goes on as another continuation that agrees on lists of the program's length. -/
-theorem Runs.congr_length {τ : Type} {step : τ → Input → PM H (Step τ ρ)} {state : τ}
-    {tokens : List Input} {α : Type} {program : PM H (List α)} {length : Nat}
-    {next next' : List α → PM H (Step τ ρ)} {arrival : τ → Input → PM H Unit}
+theorem Runs.congr_length {τ : Type} {step : τ → Parser.Internal.Input → PM H
+    (Parser.Internal.Step τ ρ)} {state : τ}
+    {tokens : List Parser.Internal.Input} {α : Type} {program : PM H (List α)} {length : Nat}
+    {next next' : List α → PM H
+        (Parser.Internal.Step τ ρ)} {arrival : τ → Parser.Internal.Input → PM H Unit}
     (h : Runs points step state tokens program next arrival)
     (hlength : HasLength program length) (hnext : ∀ l, l.length = length → next l = next' l) :
     Runs points step state tokens program next' arrival := by
@@ -133,9 +137,11 @@ theorem Runs.congr_length {τ : Type} {step : τ → Input → PM H (Step τ ρ)
   exact hlength _ _ fun l hl => by rw [hnext l hl]
 
 /-- A run whose program ends with a value fixed in advance goes on with that value. -/
-theorem Runs.of_bind_pure {τ α : Type} {step : τ → Input → PM H (Step τ ρ)} {state : τ}
-    {tokens : List Input} {program : PM H Unit} {value : α} {next : α → PM H (Step τ ρ)}
-    {arrival : τ → Input → PM H Unit}
+theorem Runs.of_bind_pure {τ α : Type} {step : τ → Parser.Internal.Input → PM H
+    (Parser.Internal.Step τ ρ)} {state : τ}
+    {tokens : List Parser.Internal.Input} {program : PM H Unit} {value : α} {next : α → PM H
+        (Parser.Internal.Step τ ρ)}
+    {arrival : τ → Parser.Internal.Input → PM H Unit}
     (h : Runs points step state tokens (program >>= fun _ => pure value) next arrival) :
     Runs points step state tokens program (fun _ => next value) arrival := by
   intro rest
@@ -150,16 +156,19 @@ element valid as `valid` says, the tokens that stand for its tokens start with a
 than `)`, and from the initial state the inner parser reads them with a program whose values,
 bridged, are the spec program's.
 -/
-def ElementRuns (points : Points (StateT H m)) (inner : σ → Input → PM H (Step σ ρ)) (init : σ)
+def ElementRuns (points : Points (StateT H m)) (inner : σ → Parser.Internal.Input → PM H
+    (Parser.Internal.Step σ ρ)) (init : σ)
     (tokensOf : X → List BSmtLibSpec.Grammar.SyntaxToken) (valid : X → Prop) (spec : X → PM H Y)
     (bridge : ρ → Y) :
     Prop :=
-  ∀ element, valid element → ∀ {tokens : List Input}, Stands tokens (tokensOf element) →
+  ∀ element, valid element → ∀ {tokens : List Parser.Internal.Input},
+      Stands tokens (tokensOf element) →
     (∃ token rest, tokens = token :: rest ∧ token ≠ .parenClose) ∧
     ∃ program : PM H ρ, bridge <$> program = spec element ∧
       Runs points inner init tokens program fun r => pure (.done r)
 
-variable {init : σ} {inner : σ → Input → PM H (Step σ ρ)} {maximum : Option Nat}
+variable {init : σ} {inner : σ → Parser.Internal.Input → PM H
+    (Parser.Internal.Step σ ρ)} {maximum : Option Nat}
 variable {tokensOf : X → List BSmtLibSpec.Grammar.SyntaxToken} {valid : X → Prop}
     {spec : X → PM H Y}
 variable {bridge : ρ → Y}
@@ -167,7 +176,7 @@ variable {bridge : ρ → Y}
 /-- The elements, from between elements: appended to those found so far. -/
 theorem items_runs (helement : ElementRuns points inner init tokensOf valid spec bridge) :
     (elements : List X) → (∀ element ∈ elements, valid element) →
-    ∀ {tokens : List Input}, Stands tokens (elements.flatMap tokensOf) →
+    ∀ {tokens : List Parser.Internal.Input}, Stands tokens (elements.flatMap tokensOf) →
     ∃ program : PM H (List ρ), List.map bridge <$> program = elements.mapM spec ∧
     HasLength program elements.length ∧
     ∀ found : Array ρ, (∀ limit, maximum = some limit → found.size + elements.length ≤ limit) →
@@ -202,7 +211,8 @@ theorem items_runs (helement : ElementRuns points inner init tokensOf valid spec
 
 /-- A list whose `(` is consumed already: its elements, then its `)`. -/
 theorem closedList_runs (helement : ElementRuns points inner init tokensOf valid spec bridge)
-    (elements : List X) (hvalid : ∀ element ∈ elements, valid element) {tokens : List Input}
+    (elements : List X) (hvalid : ∀ element ∈ elements,
+        valid element) {tokens : List Parser.Internal.Input}
     (hs : Stands tokens (elements.flatMap tokensOf))
     (hfits : ∀ limit, maximum = some limit → elements.length ≤ limit) :
     ∃ program : PM H (List ρ), List.map bridge <$> program = elements.mapM spec ∧
@@ -221,7 +231,8 @@ theorem closedList_runs (helement : ElementRuns points inner init tokensOf valid
 
 /-- A list with its own `(`: the `(`, its elements, then its `)`. -/
 theorem parenList_runs (helement : ElementRuns points inner init tokensOf valid spec bridge)
-    (elements : List X) (hvalid : ∀ element ∈ elements, valid element) {tokens : List Input}
+    (elements : List X) (hvalid : ∀ element ∈ elements,
+        valid element) {tokens : List Parser.Internal.Input}
     (hs : Stands tokens (elements.flatMap tokensOf))
     (hfits : ∀ limit, maximum = some limit → elements.length ≤ limit) :
     ∃ program : PM H (List ρ), List.map bridge <$> program = elements.mapM spec ∧
@@ -312,9 +323,9 @@ theorem term_element (hA : TermAgrees h) :
   exact ⟨Stands.first_of (term_first term) hs, _, by simp, term_runs_init hA term hvalid hs⟩
 
 /-- The parser of a sort declaration reads one: its symbol's and its numeral's views. -/
-theorem sortDec_runs (sortDec : Tree.SortDec) {tokens : List Input}
+theorem sortDec_runs (sortDec : Tree.SortDec) {tokens : List Parser.Internal.Input}
     (hs : Stands tokens sortDec.tokens) :
-    ∃ (symbol : Nodes.Symbol) (arity : NumeralView) (rest : List Input),
+    ∃ (symbol : Nodes.Symbol) (arity : NumeralView) (rest : List Parser.Internal.Input),
       tokens = .parenOpen :: rest ∧
       (Bridge.symbol symbol, Bridge.chars arity.asSlice) = (sortDec.symbol, sortDec.arity) ∧
       Runs (H := H) points Parser.Command.Datatype.SortDecState.step .start tokens
@@ -324,10 +335,11 @@ theorem sortDec_runs (sortDec : Tree.SortDec) {tokens : List Input}
   obtain ⟨inner, rfl, hinner⟩ := Stands.split_paren hs
   obtain ⟨symbolToken, rest, rfl, hsymbolToken, hrest⟩ := Stands.split_cons hinner
   obtain ⟨numeralToken, rfl, hnumeralToken⟩ := Stands.split_single hrest
-  obtain ⟨symbol, rfl, rfl⟩ := Input.received_symbol hsymbolToken
-  obtain ⟨digits, rfl, rfl⟩ := Input.received_numeral hnumeralToken
+  obtain ⟨symbol, rfl, rfl⟩ := Parser.Internal.Input.received_symbol hsymbolToken
+  obtain ⟨digits, rfl, rfl⟩ := Parser.Internal.Input.received_numeral hnumeralToken
   refine ⟨symbol, digits, _, rfl, rfl, ?_⟩
-  rw [show Input.parenOpen :: ([.symbol symbol, .constant (.numeral digits)] ++ [.parenClose]) =
+  rw [show Parser.Internal.Input.parenOpen :: ([.symbol symbol,
+      .constant (.numeral digits)] ++ [.parenClose]) =
     [.parenOpen] ++ ([.symbol symbol] ++ ([.constant (.numeral digits)] ++ [.parenClose])) by rfl]
   refine (Runs.append (middle := fun _ => Parser.Command.Datatype.SortDecState.opened)
     (Runs.token_more (by simp [Parser.Command.Datatype.SortDecState.step,

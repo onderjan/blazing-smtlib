@@ -34,8 +34,8 @@ variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
 A step of the identifier parser: a symbol is an identifier by itself; `(` `_` ⟨symbol⟩
 ⟨index⟩+ `)` an indexed one. A symbol is an index from 2.5 on.
 -/
-def step (version : Version) (self : IdentState) (token : Input) :
-    PM H (Step IdentState Identifier) :=
+def step (version : Version) (self : IdentState) (token : Internal.Input) :
+    PM H (Internal.Step IdentState Identifier) :=
   match self, token with
   | .start, .symbol symbol => pure (.done ⟨symbol, #[]⟩)
   | .start, .parenOpen => pure (.more .opened)

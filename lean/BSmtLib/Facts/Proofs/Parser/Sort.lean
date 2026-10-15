@@ -24,7 +24,7 @@ is decided by the shape of the program, not by its result.
 namespace BSmtLib.Facts.Proofs.Parser.«Sort»
 
 open BSmtLibSpec.Grammar
-open BSmtLib.Parser (Input PM Step)
+open BSmtLib.Parser (PM)
 open BSmtLib.Parser.Category.Ident (IdentState)
 open BSmtLib.Parser.Category.Sort (SortState SortMode SortLevel sortStep sortComplete)
 open BSmtLibSpec.Parser
@@ -48,7 +48,7 @@ and appends them to those found so far.
 -/
 theorem indices_runs : (indices : List Tree.Index) →
     (∀ index ∈ indices, index.Valid (Bridge.version version)) →
-    ∀ {tokens : List Input}, Stands tokens (indices.flatMap Tree.Index.tokens) →
+    ∀ {tokens : List Parser.Internal.Input}, Stands tokens (indices.flatMap Tree.Index.tokens) →
     ∀ (symbol : Nodes.Symbol) (found : Array Nodes.Index),
     ∃ parsed : Array Nodes.Index, parsed.toList.map Bridge.index = indices ∧
       Runs points (IdentState.step (H := H) version) (.indices symbol found) tokens
@@ -64,7 +64,7 @@ theorem indices_runs : (indices : List Tree.Index) →
     cases first with
     | numeral digits =>
       obtain ⟨token, rfl, htoken⟩ := Stands.split_single hs₁
-      obtain ⟨view, rfl, rfl⟩ := Input.received_numeral htoken
+      obtain ⟨view, rfl, rfl⟩ := Parser.Internal.Input.received_numeral htoken
       obtain ⟨parsed, hmap, hruns⟩ :=
         indices_runs rest hrest hs₂ symbol (found.push (.numeral view))
       refine ⟨#[.numeral view] ++ parsed, by simp [hmap, Bridge.index], ?_⟩
@@ -76,7 +76,7 @@ theorem indices_runs : (indices : List Tree.Index) →
     | symbol name =>
       have hversion := hvalid (.symbol name) (List.mem_cons_self ..)
       obtain ⟨token, rfl, htoken⟩ := Stands.split_single hs₁
-      obtain ⟨index, rfl, rfl⟩ := Input.received_symbol htoken
+      obtain ⟨index, rfl, rfl⟩ := Parser.Internal.Input.received_symbol htoken
       obtain ⟨parsed, hmap, hruns⟩ :=
         indices_runs rest hrest hs₂ symbol (found.push (.symbol index))
       refine ⟨#[.symbol index] ++ parsed, by simp [hmap, Bridge.index], ?_⟩
@@ -94,7 +94,7 @@ of an indexed identifier, and ends with it.
 -/
 theorem indexed_runs {name : Tree.Symbol} {indices : List Tree.Index}
     (hvalid : ∀ index ∈ indices, index.Valid (Bridge.version version)) (hne : indices ≠ [])
-    {symbolToken : Input} {tokens : List Input}
+    {symbolToken : Parser.Internal.Input} {tokens : List Parser.Internal.Input}
     (hsymbol : Bridge.received symbolToken = some (.token (.symbol name)))
     (hs : Stands tokens (indices.flatMap Tree.Index.tokens)) :
     ∃ head : Nodes.Identifier, Bridge.identifier head = ⟨name, indices⟩ ∧
@@ -102,7 +102,7 @@ theorem indexed_runs {name : Tree.Symbol} {indices : List Tree.Index}
         (symbolToken :: (tokens ++ [.parenClose]))
         (ticks points (symbolToken :: (tokens ++ [.parenClose])))
         fun _ => pure (.done head) := by
-  obtain ⟨symbol, rfl, rfl⟩ := Input.received_symbol hsymbol
+  obtain ⟨symbol, rfl, rfl⟩ := Parser.Internal.Input.received_symbol hsymbol
   obtain ⟨parsed, hmap, hruns⟩ := indices_runs (H := H) (points := points) indices hvalid hs
     symbol #[]
   have hparsed : parsed.isEmpty = false := by
@@ -123,7 +123,8 @@ theorem indexed_runs {name : Tree.Symbol} {indices : List Tree.Index}
 
 /-- Where the sort parser puts a complete sort: the result, or the next argument of the
 innermost application. -/
-def sortPush {S : Type} (levels : List (SortLevel S)) (sort : S) : Step (SortState S) S :=
+def sortPush {S : Type} (levels : List (SortLevel S)) (sort : S) : Parser.Internal.Step
+    (SortState S) S :=
   match levels with
   | [] => .done sort
   | level :: outer =>
@@ -146,7 +147,8 @@ theorem identifier_tokens_indexed (name : Tree.Symbol) {indices : List Tree.Inde
 
 /-- The tokens standing for an indexed identifier. -/
 theorem Stands.indexed {name : Tree.Symbol} {indices : List Tree.Index} (hne : indices ≠ [])
-    {tokens : List Input} (hs : Stands tokens (Tree.Identifier.tokens ⟨name, indices⟩)) :
+    {tokens : List Parser.Internal.Input} (hs : Stands tokens (Tree.Identifier.tokens ⟨name,
+        indices⟩)) :
     ∃ symbolToken rest, tokens = .parenOpen :: .reserved (.general .underscore) ::
         symbolToken :: (rest ++ [.parenClose]) ∧
       Bridge.received symbolToken = some (.token (.symbol name)) ∧
@@ -155,7 +157,7 @@ theorem Stands.indexed {name : Tree.Symbol} {indices : List Tree.Index} (hne : i
   obtain ⟨inner, rfl, hinner⟩ := Stands.split_paren hs
   obtain ⟨underscore, rest, rfl, hunderscore, hrest⟩ := Stands.split_cons hinner
   obtain ⟨symbolToken, indexTokens, rfl, hsymbol, hindexTokens⟩ := Stands.split_cons hrest
-  rw [Input.received_word (word := .general .underscore) hunderscore]
+  rw [Parser.Internal.Input.received_word (word := .general .underscore) hunderscore]
   exact ⟨symbolToken, indexTokens, rfl, hsymbol, hindexTokens⟩
 
 variable {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
@@ -165,7 +167,7 @@ From the state after an application's `(`, the sort parser reads the tokens of i
 identifier, and opens the application.
 -/
 theorem head_runs {name : Tree.Identifier} (hname : name.Valid (Bridge.version version))
-    {tokens : List Input} (hs : Stands tokens name.tokens)
+    {tokens : List Parser.Internal.Input} (hs : Stands tokens name.tokens)
     (levels : List (SortLevel (Traits.Handler.«Sort» H))) :
     ∃ head : Nodes.Identifier, Bridge.identifier head = name ∧
       Runs points (sortStep version) { mode := .opened, levels } tokens
@@ -174,7 +176,7 @@ theorem head_runs {name : Tree.Identifier} (hname : name.Valid (Bridge.version v
   match name with
   | ⟨symbolName, []⟩ =>
     obtain ⟨token, rfl, htoken⟩ := Stands.split_single hs
-    obtain ⟨symbol, rfl, rfl⟩ := Input.received_symbol htoken
+    obtain ⟨symbol, rfl, rfl⟩ := Parser.Internal.Input.received_symbol htoken
     refine ⟨⟨symbol, #[]⟩, by simp [Bridge.identifier], ?_⟩
     exact (Runs.token_more (step := sortStep version) (state := { mode := .opened, levels })
       (token := .symbol symbol) (by simp [Parser.Category.«Sort».sortStep.eq_def])).congr
@@ -203,7 +205,7 @@ theorem head_runs {name : Tree.Identifier} (hname : name.Valid (Bridge.version v
             hembed).congr ?_ ?_
     · simp
     · funext
-      simp [Step.wrap]
+      simp [Parser.Internal.Step.wrap]
 
 mutual
 
@@ -212,14 +214,14 @@ From any stack of open applications, the sort parser reads the tokens of a sort 
 traversal's effects, then completes the sort on that stack.
 -/
 theorem sort_runs (hA : TermAgrees h) : (sort : Tree.«Sort») → sort.Valid (Bridge.version version) →
-    ∀ {tokens : List Input}, Stands tokens sort.tokens →
+    ∀ {tokens : List Parser.Internal.Input}, Stands tokens sort.tokens →
     ∀ levels : List (SortLevel (Traits.Handler.«Sort» H)),
     Runs points (sortStep version) { mode := .start, levels } tokens
       (adaptRun (Traversal.sort points h sort))
       fun r => pure (sortPush levels r)
   | .mk ⟨symbolName, []⟩ [], _, _, hs, levels => by
     obtain ⟨token, rfl, htoken⟩ := Stands.split_single hs
-    obtain ⟨symbol, rfl, rfl⟩ := Input.received_symbol htoken
+    obtain ⟨symbol, rfl, rfl⟩ := Parser.Internal.Input.received_symbol htoken
     refine (Runs.token (step := sortStep version) (state := { mode := .start, levels })
       (token := .symbol symbol)
       (program := Parser.call (Traits.Handler.handleSort ⟨symbol, #[]⟩ #[]))
@@ -244,7 +246,7 @@ theorem sort_runs (hA : TermAgrees h) : (sort : Tree.«Sort») → sort.Valid (B
       (following := fun _ => Parser.call (Traits.Handler.handleSort head #[]))
       (next := fun r => pure (sortPush levels r)) (hembed.congr rfl (by
         funext
-        simp [Step.wrap, sortComplete_eq]))
+        simp [Parser.Internal.Step.wrap, sortComplete_eq]))
     refine (Runs.append (middle := fun _ => ({ mode := .opened, levels } : SortState _))
       (Runs.token_more (step := sortStep version) (state := { mode := .start, levels })
         (token := .parenOpen) (by simp [Parser.Category.«Sort».sortStep.eq_def])) fun _ =>
@@ -276,7 +278,8 @@ theorem sort_runs (hA : TermAgrees h) : (sort : Tree.«Sort») → sort.Valid (B
       (sort_runs hA first hvalid.2.1 hs₁ (⟨head, #[]⟩ :: levels)) fun r =>
         Runs.append (sorts_runs hA rest hvalid.2.2 hs₂ head (#[].push r) levels) fun handled =>
           hclose r handled
-    rw [show Input.parenOpen :: (headTokens ++ (firstTokens ++ restTokens) ++ [.parenClose]) =
+    rw [show Parser.Internal.Input.parenOpen :: (headTokens ++
+        (firstTokens ++ restTokens) ++ [.parenClose]) =
       [.parenOpen] ++ (headTokens ++ (firstTokens ++ (restTokens ++ [.parenClose]))) by simp]
     refine (Runs.append (middle := fun _ => ({ mode := .opened, levels } : SortState _))
       (Runs.token_more (step := sortStep version)
@@ -292,7 +295,7 @@ the tokens of sorts with the traversal's effects, and appends them to those argu
 -/
 theorem sorts_runs (hA : TermAgrees h) : (sorts : List Tree.«Sort») →
     Tree.«Sort».ValidAll (Bridge.version version) sorts →
-    ∀ {tokens : List Input}, Stands tokens (Tree.«Sort».tokensAll sorts) →
+    ∀ {tokens : List Parser.Internal.Input}, Stands tokens (Tree.«Sort».tokensAll sorts) →
     ∀ (head : Nodes.Identifier) (found : Array (Traits.Handler.«Sort» H))
       (levels : List (SortLevel (Traits.Handler.«Sort» H))),
     Runs points (sortStep version)

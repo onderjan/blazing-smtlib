@@ -48,11 +48,11 @@ states.
   what it has taken viable, the first on that and on the valid input above. After `exit`, the
   parser goes back to reading commands; only the end of the input keeps what it has taken
   viable there, and the traversal asks for the discarding exactly there.
-- The fused reader: the fused script reader (`Parser.Internal.Fused`), which runs the script
-  parser in one loop over a cursor and falls back to the parser's own steps for rare constructs,
-  consumes the tokens of a cursor as the parse adapter of the script parser does, in every
-  lawful monad and with every handler (`fused_consumes_as_adapter`). So what holds of that
-  adapter's consumer holds of the fused reader's.
+- The fused reader: the script parser's `parse` on a batch cursor is the fused script reader
+  (`Parser.Internal.Fused`), which runs the script parser in one loop over the cursor and falls
+  back to the parser's own steps for rare constructs; it parses the cursor as the parser's loop
+  over single tokens does, in every lawful monad and with every handler
+  (`fused_parses_as_port`). So what holds of that loop holds of the script parser's `parse`.
 -/
 
 /-!
@@ -95,8 +95,8 @@ theorem term_follows_traversal {H : Type} {m : Type → Type} [Monad m] [LawfulM
     {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (Adapters.Bridge.valuesOf H)}
     (hA : Adapters.Bridge.TermAgrees h) (term : Tree.Term)
     (hvalid : term.Valid (Adapters.Bridge.Bridge.version version))
-    {tokens : List Parser.Input} (hs : Adapters.Bridge.Stands tokens term.tokens)
-    (rest : List Parser.Input) :
+    {tokens : List Parser.Internal.Input} (hs : Adapters.Bridge.Stands tokens term.tokens)
+    (rest : List Parser.Internal.Input) :
     Adapters.Run.drive points (Parser.Category.Term.termStep version)
         Parser.Category.Term.TermState.init (tokens ++ rest) =
       (do
@@ -122,8 +122,8 @@ theorem command_follows_traversal {H : Type} {m : Type → Type} [Monad m] [Lawf
     (hA : Adapters.Bridge.Agrees h) (command : Tree.Command)
     (hvalid : command.Valid (Adapters.Bridge.Bridge.version version))
     (hmode : command.modeAfter (Adapters.Bridge.Bridge.version version) ≠ none)
-    {tokens : List Parser.Input}
-    (hs : Adapters.Bridge.Stands tokens command.tokens) (rest : List Parser.Input) :
+    {tokens : List Parser.Internal.Input}
+    (hs : Adapters.Bridge.Stands tokens command.tokens) (rest : List Parser.Internal.Input) :
     Adapters.Run.drive points (Parser.Command.commandStep version) .awaiting
         (tokens ++ rest) Parser.Command.commandArrive =
       (do
@@ -150,10 +150,10 @@ theorem script_follows_traversal {H : Type} {m : Type → Type} [Monad m] [Lawfu
     (producer : Producer (StateT H m)) (posture : Token.VersionPosture)
     {version : Token.Version} {commands : List Tree.Command}
     (hscript : Script (Adapters.Bridge.Bridge.version version) commands)
-    {inputs : List Parser.Input}
+    {inputs : List Parser.Internal.Input}
     (hs : inputs.map Adapters.Bridge.Bridge.received =
     (BSmtLibSpec.Parser.Properties.received commands).map some)
-    (rest : List Parser.Input) :
+    (rest : List Parser.Internal.Input) :
     Adapters.Run.driveInput points producer version
         (Parser.Script.ScriptParser.new (H := H) posture)
         (inputs ++ rest) =
@@ -173,7 +173,7 @@ info: 'BSmtLib.Facts.Parser.script_follows_traversal' depends on axioms: [propex
 /-- The parser's recording run on what a parser receives for a valid script is `record`. -/
 theorem recording_is_record {version : Token.Version} {commands : List Tree.Command}
     (hscript : Script (Adapters.Bridge.Bridge.version version) commands)
-    {inputs : List Parser.Input}
+    {inputs : List Parser.Internal.Input}
     (hs : inputs.map Adapters.Bridge.Bridge.received =
     (BSmtLibSpec.Parser.Properties.received commands).map some) :
     Adapters.Run.parserRecord version inputs = record
@@ -193,10 +193,10 @@ traversal of the script has.
 -/
 theorem placement_before_arrival {version : Token.Version} {commands : List Tree.Command}
     (hscript : Script (Adapters.Bridge.Bridge.version version) commands)
-    {inputs : List Parser.Input}
+    {inputs : List Parser.Internal.Input}
     (hs : inputs.map Adapters.Bridge.Bridge.received =
     (BSmtLibSpec.Parser.Properties.received commands).map some)
-    {items : List Parser.Input} (hlayout : Adapters.Bridge.NoLayout items) (k : Nat)
+    {items : List Parser.Internal.Input} (hlayout : Adapters.Bridge.NoLayout items) (k : Nat)
     (htake : items.take k = inputs.take k) :
     eventsBefore k (Adapters.Run.parserRecord version items) =
       eventsBefore k (record (Adapters.Bridge.Bridge.version version) commands) :=
@@ -216,11 +216,11 @@ of the calls due at its arrival.
 -/
 theorem placement_before_processing {version : Token.Version} {commands : List Tree.Command}
     (hscript : Script (Adapters.Bridge.Bridge.version version) commands)
-    {inputs : List Parser.Input}
+    {inputs : List Parser.Internal.Input}
     (hs : inputs.map Adapters.Bridge.Bridge.received =
     (BSmtLibSpec.Parser.Properties.received commands).map some)
-    {items : List Parser.Input} (hlayout : Adapters.Bridge.NoLayout items) (k : Nat)
-    {item : Parser.Input}
+    {items : List Parser.Internal.Input} (hlayout : Adapters.Bridge.NoLayout items) (k : Nat)
+    {item : Parser.Internal.Input}
     (hitem : items[k]? = some item) {stands : Received}
     (hstands : Adapters.Bridge.Bridge.received item = some stands) (hk : k < inputs.length)
     (htake : items.take k = inputs.take k) :
@@ -242,7 +242,7 @@ item arrives.
 -/
 theorem placement_where_input_stops {version : Token.Version} {commands : List Tree.Command}
     (hscript : Script (Adapters.Bridge.Bridge.version version) commands)
-    {inputs : List Parser.Input}
+    {inputs : List Parser.Internal.Input}
     (hs : inputs.map Adapters.Bridge.Bridge.received =
     (BSmtLibSpec.Parser.Properties.received commands).map some) (k : Nat) :
     Adapters.Run.parserRecord version (inputs.take k) =
@@ -285,29 +285,25 @@ info: 'BSmtLib.Facts.Parser.rejects_first_unviable' depends on axioms: [propext,
 #print axioms rejects_first_unviable
 
 /--
-The fused script reader (`Parser.Internal.Fused`) consumes as the parse adapter of the script
-parser does: on every cursor that has a token, from every adapter state, it gives the same
-answer and cursor, and leaves the same handler, parser and adapter state, in every lawful monad
-and with every handler. So every theorem about the parse adapter's consumer holds of the fused
-reader's.
+The script parser parses a batch cursor of the library's lexer, by the fused script reader
+(`Parser.Internal.Fused`), as its loop over single tokens does (`Parser.Internal.parseByToken`):
+from every parser and handler, it gives the same answer, parser, parse state and cursor, and leaves
+the same handler, in every lawful monad and with every handler. So every theorem about that loop
+holds of the script parser's `parse` on the lexer's cursors.
 -/
-theorem fused_consumes_as_adapter {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m]
-    [Traits.CommandHandler H m] {batch : Token.BatchTag} (producer : Token.BatchCursor batch)
-    (hp : Token.Produce.HasNext producer)
-    (adapter : BSmtLib.Parser.Adapter.ParseAdapter H (BSmtLib.Parser.Script.ScriptParser H)) :
-    (Token.ConsumeFrom.consume (H := BSmtLib.Parser.Internal.Fused.ScriptAdapter H) (m := m)
-        producer hp).run ⟨adapter⟩ =
-      (fun result => (result.1, (⟨result.2⟩ : BSmtLib.Parser.Internal.Fused.ScriptAdapter H))) <$>
-        (Token.ConsumeFrom.consume
-          (H := BSmtLib.Parser.Adapter.ParseAdapter H (BSmtLib.Parser.Script.ScriptParser H))
-          (m := m) producer hp).run adapter := by
-  rw [Proofs.Parser.Fused.Step.consume_eq]
+theorem fused_parses_as_port {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m]
+    [Traits.CommandHandler H m] {batch : Token.BatchTag}
+    (parser : BSmtLib.Parser.Script.ScriptParser H) (state : BSmtLib.Parser.ParseState H)
+    (cursor : Token.BatchCursor batch) :
+    BSmtLib.Parser.Parse.parse (m := m) parser state cursor =
+      BSmtLib.Parser.Internal.parseByToken parser state cursor :=
+  Proofs.Parser.Fused.Step.parse_eq parser state cursor
 
 /--
-info: 'BSmtLib.Facts.Parser.fused_consumes_as_adapter' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'BSmtLib.Facts.Parser.fused_parses_as_port' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
-#print axioms fused_consumes_as_adapter
+#print axioms fused_parses_as_port
 
 /-! ## What is trusted
 

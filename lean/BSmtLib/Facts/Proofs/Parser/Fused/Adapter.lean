@@ -2,7 +2,7 @@ module
 
 public import BSmtLib.Facts.Proofs.Parser.Fused.Run
 import all BSmtLib.Parser
-import all BSmtLib.Parser.Adapter
+import all BSmtLib.Parser
 import all BSmtLib.Parser.Command
 import all BSmtLib.Parser.Command.Standard
 import all BSmtLib.Parser.Internal.Fused
@@ -23,8 +23,7 @@ command's term, the port's script step is its term step (`portStep_withTerm`).
 namespace BSmtLib.Facts.Proofs.Parser.Fused.Adapter
 
 open BSmtLib.Traits
-open BSmtLib.Parser (Parse PM Input Step Flow call syntaxError ParseErrorCause)
-open BSmtLib.Parser.Adapter (ParseAdapter)
+open BSmtLib.Parser (Parse PM call syntaxError ParseErrorCause)
 open BSmtLib.Parser.Category.Term (TermLevelOf TermStateOf)
 open BSmtLib.Parser.Command (CommandStateOf)
 open BSmtLib.Parser.Internal.Fused
@@ -39,12 +38,13 @@ variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [CommandHandle
 theorem takeOne_eq_portStep (parser : ScriptParser H) {batch : BatchTag}
     {origin next : BatchCursor batch} (h : H) (token : Token batch)
     (consumed : next.Consumed origin) {β : Type} (k : PortOut H origin → m β) :
-    ((ParseAdapter.takeOne parser origin token next consumed).run h >>= k) =
+    ((Parser.Internal.takeOne parser origin token next consumed).run h >>= k) =
       portStep parser.posture h parser.declarations parser.command token next
         (fun out => k (toPort parser.posture consumed out)) := by
   obtain ⟨posture, command, declarations⟩ := parser
-  unfold ParseAdapter.takeOne portStep runParser
-  simp only [StateT.run_bind, bind_assoc, Parse.arrive, Parse.step, Parse.reset]
+  unfold Parser.Internal.takeOne portStep runParser
+  simp only [StateT.run_bind, bind_assoc, Parser.Internal.ParseByToken.arrive,
+      Parser.Internal.ParseByToken.step, Parser.Internal.ParseByToken.reset]
   unfold ScriptParser.step
   simp only [run_bind_eq, bind_assoc]
   congr 1
@@ -64,7 +64,7 @@ theorem takeOne_eq_portStep (parser : ScriptParser H) {batch : BatchTag}
         cases outcome with
         | command => simp [toPort]
         | endOfInput => simp [toPort]
-        | exit => simp [toPort, ParseAdapter.resumed]; rfl
+        | exit => simp [toPort, Parser.Internal.resumed]; rfl
         | setVersion declared =>
           cases hc : Parser.Script.VersionPosture.check posture declarations declared with
           | some kind => simp [toPort, syntaxError, hc]
@@ -86,7 +86,7 @@ theorem takeOne_eq_portStep (parser : ScriptParser H) {batch : BatchTag}
                 funext ⟨r, h'''⟩
                 cases r with
                 | error e => simp [toPort]
-                | ok st => cases st <;> simp [toPort, ParseAdapter.resumed]
+                | ok st => cases st <;> simp [toPort, Parser.Internal.resumed]
 
 theorem portStep_withTerm (posture : VersionPosture) {batch : BatchTag}
     {origin next : BatchCursor batch} (h : H) (declarations : Nat)

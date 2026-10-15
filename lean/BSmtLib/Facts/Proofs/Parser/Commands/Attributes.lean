@@ -21,7 +21,7 @@ at its `)`, `set-info`, and the command parser ends with the version.
 namespace BSmtLib.Facts.Proofs.Parser.Commands.Attributes
 
 open BSmtLibSpec.Grammar
-open BSmtLib.Parser (Input PM Step)
+open BSmtLib.Parser (PM)
 open BSmtLib.Parser.Command.Standard (Payload FinalCall payloadStep finalCall Declaration)
 open BSmtLib.Parser.Command (CommandOutcome)
 open BSmtLib.Parser.Category.Attribute (AttributeState AttributeMode attributeStep)
@@ -52,7 +52,8 @@ include hA
 
 theorem setOption_payload (keyword : BSmtLibSpec.Regex.Chars) (value : Option Tree.AttributeValue)
     (hvalid : (⟨keyword, value⟩ : Tree.Attribute).Valid (Bridge.version version))
-    {payload : List Input} (hs : Stands payload (Tree.Attribute.tokens ⟨keyword, value⟩)) :
+    {payload : List Parser.Internal.Input} (hs : Stands payload (Tree.Attribute.tokens ⟨keyword,
+        value⟩)) :
     PayloadRuns points version (Payload.init .setOption version)
       (payload ++ [.parenClose])
       (adaptRun (do
@@ -71,7 +72,7 @@ theorem setOption_payload (keyword : BSmtLibSpec.Regex.Chars) (value : Option Tr
     (by payload_step) hruns).congr rfl
     (next' := fun r => Parser.call (Traits.CommandHandler.commandSetOption r) >>=
       fun _ => pure (.done .command))
-    (by funext; simp [Step.wrap]))).congr ?_ rfl
+    (by funext; simp [Parser.Internal.Step.wrap]))).congr ?_ rfl
   simp [hA.commandSetOption]
 
 /-- `set-info` with a keyword other than `:smt-lib-version`. -/
@@ -79,7 +80,8 @@ theorem setInfo_payload_other (keyword : BSmtLibSpec.Regex.Chars)
     (value : Option Tree.AttributeValue)
     (hkeyword : keyword ≠ BSmtLibSpec.Regex.chars "smt-lib-version")
     (hvalid : (⟨keyword, value⟩ : Tree.Attribute).Valid (Bridge.version version))
-    {payload : List Input} (hs : Stands payload (Tree.Attribute.tokens ⟨keyword, value⟩)) :
+    {payload : List Parser.Internal.Input} (hs : Stands payload (Tree.Attribute.tokens ⟨keyword,
+        value⟩)) :
     PayloadRuns points version (Payload.init .setInfo version)
       (payload ++ [.parenClose])
       (adaptRun (do
@@ -95,7 +97,7 @@ theorem setInfo_payload_other (keyword : BSmtLibSpec.Regex.Chars)
         | none => [] | some value => value.tokens)) := by
       cases value <;> exact hs
     obtain ⟨token, rest, rfl, htoken, -⟩ := Stands.split_cons hs'
-    obtain ⟨view, rfl, hview⟩ := Input.received_keyword htoken
+    obtain ⟨view, rfl, hview⟩ := Parser.Internal.Input.received_keyword htoken
     exact ⟨view, rest, rfl, hview⟩
   obtain ⟨view, rest, rfl, hview⟩ := hfirst
   have hnot : Parser.Command.Standard.isVersionKeyword view = false := by
@@ -116,11 +118,11 @@ theorem setInfo_payload_other (keyword : BSmtLibSpec.Regex.Chars)
       cases step with
       | more => rfl
       | done r =>
-        simp only [Step.wrap, Declaration.next]
+        simp only [Parser.Internal.Step.wrap, Declaration.next]
         cases r[0]? <;> rfl) hruns).congr rfl
     (next' := fun r => Parser.call (Traits.CommandHandler.commandSetInfo r) >>=
       fun _ => pure (.done .command))
-    (by funext; simp [Step.wrap]))
+    (by funext; simp [Parser.Internal.Step.wrap]))
   refine (Runs.first (state' := Payload.setInfo .other .init)
     (by simp [payloadStep, Payload.init, Declaration.next, hnot]) hembed).congr ?_ rfl
   simp [hA.commandSetInfo]
@@ -128,7 +130,7 @@ theorem setInfo_payload_other (keyword : BSmtLibSpec.Regex.Chars)
 /-- A version declaration: `set-info` of `:smt-lib-version` with a version's number. -/
 theorem setInfo_payload_declaration (decimal : BSmtLibSpec.Regex.Chars)
     (declared : BSmtLibSpec.Lexicon.Version)
-    (hdeclared : versionOfNumber decimal = some declared) {payload : List Input}
+    (hdeclared : versionOfNumber decimal = some declared) {payload : List Parser.Internal.Input}
     (hs : Stands payload (Tree.Attribute.tokens ⟨BSmtLibSpec.Regex.chars "smt-lib-version",
       some (.constant (.decimal decimal))⟩)) :
     PayloadRuns points version (Payload.init .setInfo version)
@@ -141,15 +143,16 @@ theorem setInfo_payload_declaration (decimal : BSmtLibSpec.Regex.Chars)
       fun _ => pure (.done (.setVersion (Bridge.libVersion declared))) := by
   obtain ⟨keywordToken, rest, rfl, hkeywordToken, hrest⟩ := Stands.split_cons hs
   obtain ⟨decimalToken, rfl, hdecimalToken⟩ := Stands.split_single hrest
-  obtain ⟨keyword, rfl, hkeyword⟩ := Input.received_keyword hkeywordToken
-  obtain ⟨text, rfl, htext⟩ := Input.received_decimal hdecimalToken
+  obtain ⟨keyword, rfl, hkeyword⟩ := Parser.Internal.Input.received_keyword hkeywordToken
+  obtain ⟨text, rfl, htext⟩ := Parser.Internal.Input.received_decimal hdecimalToken
   have hversionKeyword : Parser.Command.Standard.isVersionKeyword keyword = true := by
     rw [isVersionKeyword_eq, hkeyword]
     exact decide_eq_true rfl
   have hversion : Token.Version.fromDecimal? text.asSlice = some (Bridge.libVersion declared) := by
     rw [fromDecimal_eq, htext, hdeclared]
     rfl
-  rw [show [Input.keyword keyword, .constant (.decimal text)] ++ [Input.parenClose] =
+  rw [show [Parser.Internal.Input.keyword keyword,
+      .constant (.decimal text)] ++ [Parser.Internal.Input.parenClose] =
     [.keyword keyword] ++ ([.constant (.decimal text)] ++ [.parenClose]) by rfl]
   refine (Runs.append (middle := fun _ => Payload.setInfo .keyword
       { mode := .afterName keyword, attributes := #[] })

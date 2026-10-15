@@ -29,7 +29,6 @@ open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Regex (Chars chars)
 open BSmtLibSpec.Lexer (Handed)
 open BSmtLibSpec.Parser.Traversal
-open BSmtLib.Parser (Input)
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Parser.Adapters.Bridge.Rejection
 open BSmtLib.Facts.Parser.Adapters.Run.Rejection BSmtLib.Facts.Proofs.Parser.Rejection.Lexical
 open BSmtLib.Facts.Proofs.Parser.Rejection.Library BSmtLib.Facts.Proofs.Parser.Trace

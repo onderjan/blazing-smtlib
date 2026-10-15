@@ -26,7 +26,7 @@ joined.
 namespace BSmtLib.Facts.Proofs.Parser.Term
 
 open BSmtLibSpec.Grammar
-open BSmtLib.Parser (Input PM Step)
+open BSmtLib.Parser (PM)
 open BSmtLib.Parser.Category.Term (TermState TermMode TermLevel TermStateOf TermLevelOf termStep
     termOpened termComplete startBinder endBinder SortedBinder BinderKind)
 open BSmtLib.Parser.Category.Attribute (AttributeState attributeStep)
@@ -49,16 +49,18 @@ variable {points : Points (StateT H m)} {σ ρ α β : Type}
 omit [LawfulMonad m] in
 /-- A run over tokens is a run over any list equal to them. -/
 theorem _root_.BSmtLib.Facts.Proofs.Parser.Drive.Runs.tokens_eq
-    {step : σ → Input → PM H (Step σ ρ)} {state : σ}
-    {tokens tokens' : List Input} {program : PM H α} {next : α → PM H (Step σ ρ)}
+    {step : σ → Parser.Internal.Input → PM H (Parser.Internal.Step σ ρ)} {state : σ}
+    {tokens tokens' : List Parser.Internal.Input} {program : PM H α} {next : α → PM H
+        (Parser.Internal.Step σ ρ)}
     (h : Runs points step state tokens program next) (heq : tokens = tokens') :
     Runs points step state tokens' program next :=
   heq ▸ h
 
 /-- A run whose program is a pure function of another's is a run of that other. -/
 theorem _root_.BSmtLib.Facts.Proofs.Parser.Drive.Runs.of_map_program
-    {step : σ → Input → PM H (Step σ ρ)} {state : σ}
-    {tokens : List Input} {program : PM H α} {f : α → β} {next : β → PM H (Step σ ρ)}
+    {step : σ → Parser.Internal.Input → PM H (Parser.Internal.Step σ ρ)} {state : σ}
+    {tokens : List Parser.Internal.Input} {program : PM H α} {f : α → β} {next : β → PM H
+        (Parser.Internal.Step σ ρ)}
     (h : Runs points step state tokens (f <$> program) next) :
     Runs points step state tokens program fun a => next (f a) := by
   intro rest
@@ -101,11 +103,12 @@ theorem attributesThen_eq (keyword : BSmtLibSpec.Regex.Chars) (value : Option Tr
 An annotation, from after its `(`: the parser reads `!`, the term with the annotation's level on
 top, then its attributes up to the `)`, and handles the annotation there.
 -/
-theorem annotation_runs (hA : TermAgrees h) {termTokens : List Input} {annotatedTerm : Tree.Term}
+theorem annotation_runs
+    (hA : TermAgrees h) {termTokens : List Parser.Internal.Input} {annotatedTerm : Tree.Term}
     (hterm : TermRuns points h version termTokens annotatedTerm) (first : Tree.Attribute)
     (rest : List Tree.Attribute)
     (hvalid : ∀ attr ∈ first :: rest, attr.Valid (Bridge.version version))
-    {attributeTokens : List Input}
+    {attributeTokens : List Parser.Internal.Input}
     (hs : Stands attributeTokens ((first :: rest).flatMap Tree.Attribute.tokens ++ [.parenClose]))
     (levels : List (TermLevelOf H)) :
     Runs points (termStep version) ({ mode := .opened, levels } : TermStateOf H)
@@ -142,7 +145,7 @@ theorem annotation_runs (hA : TermAgrees h) {termTokens : List Input} {annotated
         (fun state => ({ mode := .annotating term state, levels } : TermStateOf H)) _
         (termStep_annotating levels term) (hsplit ▸ hinner)).congr rfl rfl) |>.congr rfl (by
           funext
-          simp [Step.wrap, annotated]))
+          simp [Parser.Internal.Step.wrap, annotated]))
   refine (Runs.tokens_eq (Runs.append (middle := fun _ =>
       ({ mode := .start, levels := .annotation :: levels } : TermStateOf H))
     (Runs.token_more (token := .reserved (.general .exclamationMark))
@@ -169,7 +172,8 @@ effects, then completes the term on that stack.
 -/
 theorem term_runs' (hA : TermAgrees h) : (term : Tree.Term) →
     term.Valid (Bridge.version version) →
-    ∀ {tokens : List Input}, Stands tokens term.tokens → TermRunsFirst points h version tokens term
+    ∀ {tokens : List Parser.Internal.Input},
+        Stands tokens term.tokens → TermRunsFirst points h version tokens term
   | .constant constant, _, _, hs, atArrival, levels => by
     obtain ⟨constant', rfl, rfl⟩ := Stands.constant hs
     exact (RunsFirst.token (program := Parser.call (Traits.Handler.handleTerm
@@ -220,7 +224,7 @@ theorem term_runs' (hA : TermAgrees h) : (term : Tree.Term) →
     obtain ⟨hne, hbindings, hbody⟩ := hvalid
     obtain ⟨inner, rfl, hinner⟩ := Stands.split_paren hs
     obtain ⟨letToken, rest, rfl, hlet, hrest⟩ := Stands.split_cons hinner
-    rw [Input.received_word (word := .general .let) hlet]
+    rw [Parser.Internal.Input.received_word (word := .general .let) hlet]
     obtain ⟨bindingTokens, bodyTokens, rfl, hsBindings, hsBody⟩ := Stands.split hrest
     obtain ⟨bindingInner, rfl, hbindingInner⟩ := Stands.split_paren hsBindings
     obtain ⟨⟨name, bound⟩, others, rfl⟩ := List.exists_cons_of_ne_nil hne
@@ -260,7 +264,8 @@ theorem term_runs' (hA : TermAgrees h) : (term : Tree.Term) →
           levels } : TermStateOf H)) (hstart b handled) fun scope =>
       binderBody_runs (term_runs' hA body hbody hsBody).plain .let scope levels)
       (by simp)).congr ?_ rfl
-    have hsymbolToken : Bridge.received (Input.symbol symbol) = some (.token (.symbol name)) := by
+    have hsymbolToken : Bridge.received (Parser.Internal.Input.symbol symbol) = some (.token
+        (.symbol name)) := by
       simp [Bridge.received, hsymbolName]
     simp [term_let, takeAllArriving_cons, adaptRun_receive (token := .parenOpen) rfl,
       Traversal.bindings, ← hprogram, Bridge.specPairs, hsymbolName,
@@ -277,7 +282,7 @@ theorem term_runs' (hA : TermAgrees h) : (term : Tree.Term) →
     obtain ⟨wordToken, rest, rfl, hword, hrest⟩ := Stands.split_cons hinner
     obtain ⟨variableTokens, bodyTokens, rfl, hsVariables, hsBody⟩ := Stands.split hrest
     obtain ⟨variableInner, rfl, hvariableInner⟩ := Stands.split_paren hsVariables
-    obtain rfl := Input.received_word (word := .general .lambda) hword
+    obtain rfl := Parser.Internal.Input.received_word (word := .general .lambda) hword
     have hstart := binderStart_runs (points := points) hA .lambda hword
       (fun levels => by simp [termStep, termOpened]) variables hvariables hne hvariableInner
       levels
@@ -299,7 +304,7 @@ theorem term_runs' (hA : TermAgrees h) : (term : Tree.Term) →
     obtain ⟨variableInner, rfl, hvariableInner⟩ := Stands.split_paren hsVariables
     cases quantifier with
     | «forall» =>
-      obtain rfl := Input.received_word (word := .general .forall) hword
+      obtain rfl := Parser.Internal.Input.received_word (word := .general .forall) hword
       have hstart := binderStart_runs (points := points) hA (.quantifier .forall) hword
         (fun levels => by simp [termStep, termOpened]) variables hvariables hne hvariableInner
         levels
@@ -315,7 +320,7 @@ theorem term_runs' (hA : TermAgrees h) : (term : Tree.Term) →
         Tree.Quantifier.word, takeAll, adaptRun_take (token := .parenOpen) rfl,
         adaptRun_take (token := .parenClose) rfl]
     | «exists» =>
-      obtain rfl := Input.received_word (word := .general .exists) hword
+      obtain rfl := Parser.Internal.Input.received_word (word := .general .exists) hword
       have hstart := binderStart_runs (points := points) hA (.quantifier .exists) hword
         (fun levels => by simp [termStep, termOpened]) variables hvariables hne hvariableInner
         levels
@@ -334,7 +339,7 @@ theorem term_runs' (hA : TermAgrees h) : (term : Tree.Term) →
     obtain ⟨-, hne, hscrutinee, hcases⟩ := hvalid
     obtain ⟨inner, rfl, hinner⟩ := Stands.split_paren hs
     obtain ⟨matchToken, rest, rfl, hmatch, hrest⟩ := Stands.split_cons hinner
-    rw [Input.received_word (word := .general .match) hmatch]
+    rw [Parser.Internal.Input.received_word (word := .general .match) hmatch]
     obtain ⟨scrutineeTokens, casesTokens, rfl, hsScrutinee, hsCases⟩ := Stands.split hrest
     obtain ⟨casesInner, rfl, hcasesInner⟩ := Stands.split_paren hsCases
     obtain ⟨⟨firstPattern, firstBody⟩, others, rfl⟩ := List.exists_cons_of_ne_nil hne
@@ -400,7 +405,7 @@ theorem term_runs' (hA : TermAgrees h) : (term : Tree.Term) →
     obtain ⟨hne, hterm, hattributes⟩ := hvalid
     obtain ⟨inner, rfl, hinner⟩ := Stands.split_paren hs
     obtain ⟨bangToken, rest, rfl, hbang, hrest⟩ := Stands.split_cons hinner
-    rw [Input.received_word (word := .general .exclamationMark) hbang]
+    rw [Parser.Internal.Input.received_word (word := .general .exclamationMark) hbang]
     obtain ⟨termTokens, attributeTokens, rfl, hsTerm, hsAttributes⟩ := Stands.split hrest
     obtain ⟨first, others, rfl⟩ := List.exists_cons_of_ne_nil hne
     have hannotation := annotation_runs (points := points) hA
@@ -422,7 +427,7 @@ the tokens of terms with the traversal's effects, and appends them to those argu
 -/
 theorem terms_runs (hA : TermAgrees h) : (terms : List Tree.Term) →
     Tree.Term.ValidAll (Bridge.version version) terms →
-    ∀ {tokens : List Input}, Stands tokens (Tree.Term.tokensAll terms) →
+    ∀ {tokens : List Parser.Internal.Input}, Stands tokens (Tree.Term.tokensAll terms) →
     ∀ (head : Nodes.Identifier) (sort : Option (Traits.Handler.«Sort» H))
       (found : Array (Traits.Handler.Term H)) (levels : List (TermLevelOf H)),
     Runs points (termStep version)
@@ -460,7 +465,7 @@ those found so far.
 -/
 theorem bindings_runs (hA : TermAgrees h) : (bindings : List (Tree.Symbol × Tree.Term)) →
     Tree.Term.ValidBindings (Bridge.version version) bindings →
-    ∀ {tokens : List Input}, Stands tokens (Tree.Term.bindingTokens bindings) →
+    ∀ {tokens : List Parser.Internal.Input}, Stands tokens (Tree.Term.bindingTokens bindings) →
     ∃ program : PM H (List (Nodes.Symbol × Traits.Handler.Term H)),
       Bridge.specPairs <$> program = adaptRun (Traversal.bindings points h bindings) ∧
       ∀ (found : Array (Nodes.Symbol × Traits.Handler.Term H)) (levels : List (TermLevelOf H)),
@@ -486,7 +491,7 @@ theorem bindings_runs (hA : TermAgrees h) : (bindings : List (Tree.Symbol × Tre
       tick points .parenClose
       let others ← program
       pure ((symbol, result) :: others), ?_, fun found levels => ?_⟩
-    · have hsymbolToken : Bridge.received (Input.symbol symbol) =
+    · have hsymbolToken : Bridge.received (Parser.Internal.Input.symbol symbol) =
           some (.token (.symbol name)) := by
         simp [Bridge.received, hsymbolName]
       simp [Traversal.bindings, ← hprogram, Bridge.specPairs, hsymbolName,
@@ -507,7 +512,7 @@ found so far.
 -/
 theorem cases_runs (hA : TermAgrees h) : (cases : List (Tree.Pattern × Tree.Term)) →
     Tree.Term.ValidCases (Bridge.version version) cases →
-    ∀ {tokens : List Input}, Stands tokens (Tree.Term.caseTokens cases) →
+    ∀ {tokens : List Parser.Internal.Input}, Stands tokens (Tree.Term.caseTokens cases) →
     ∃ program : Traits.Handler.Term H → PM H (List (Nodes.Pattern × Traits.Handler.Term H)),
       (∀ scrutinee, specCases <$> program scrutinee =
         adaptRun (Traversal.cases points h scrutinee cases)) ∧
@@ -556,7 +561,7 @@ From any stack of open constructs, the term parser reads the tokens of a term wi
 traversal's effects, then completes the term on that stack.
 -/
 theorem term_runs (hA : TermAgrees h) (term : Tree.Term)
-    (hvalid : term.Valid (Bridge.version version)) {tokens : List Input}
+    (hvalid : term.Valid (Bridge.version version)) {tokens : List Parser.Internal.Input}
     (hs : Stands tokens term.tokens) (levels : List (TermLevelOf H)) :
     Runs points (termStep version) { mode := .start, levels } tokens
       (adaptRun (Traversal.term points h term))
@@ -565,7 +570,7 @@ theorem term_runs (hA : TermAgrees h) (term : Tree.Term)
 
 /-- From its start, the term parser reads the tokens of a term and ends with it. -/
 theorem term_runs_init (hA : TermAgrees h) (term : Tree.Term)
-    (hvalid : term.Valid (Bridge.version version)) {tokens : List Input}
+    (hvalid : term.Valid (Bridge.version version)) {tokens : List Parser.Internal.Input}
     (hs : Stands tokens term.tokens) :
     Runs points (termStep version) Parser.Category.Term.TermState.init tokens
       (adaptRun (Traversal.term points h term))
@@ -575,7 +580,7 @@ theorem term_runs_init (hA : TermAgrees h) (term : Tree.Term)
 /-- From its start, the term parser reads the tokens of a term, with the calls due at its first
 token's arrival, and ends with it. -/
 theorem term_runs_first_init (hA : TermAgrees h) (term : Tree.Term)
-    (hvalid : term.Valid (Bridge.version version)) {tokens : List Input}
+    (hvalid : term.Valid (Bridge.version version)) {tokens : List Parser.Internal.Input}
     (hs : Stands tokens term.tokens) (first : Run (StateT H m) (Traits.Handler.Error H) Unit) :
     RunsFirst points (adaptRun first) (termStep version) Parser.Category.Term.TermState.init tokens
       (adaptRun (Traversal.term points h term first))

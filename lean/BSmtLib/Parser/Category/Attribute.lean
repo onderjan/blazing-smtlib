@@ -49,11 +49,11 @@ at the value's last token; one without, at the token after its keyword, the next
 `)`. A list value is handed over as its items.
 -/
 def attributeStep (single : Bool) (version : Version)
-    (self : AttributeState (Handler.SExpr H) (Handler.Attribute H)) (token : Input) :
-    PM H (Step (AttributeState (Handler.SExpr H) (Handler.Attribute H))
+    (self : AttributeState (Handler.SExpr H) (Handler.Attribute H)) (token : Internal.Input) :
+    PM H (Internal.Step (AttributeState (Handler.SExpr H) (Handler.Attribute H))
       (Array (Handler.Attribute H))) := do
   let finish (attributes : Array (Handler.Attribute H)) :
-      PM H (Step (AttributeState (Handler.SExpr H) (Handler.Attribute H))
+      PM H (Internal.Step (AttributeState (Handler.SExpr H) (Handler.Attribute H))
         (Array (Handler.Attribute H))) :=
     if single && attributes.isEmpty then syntaxError .expectedAttribute
     else pure (.done attributes)

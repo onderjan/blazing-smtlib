@@ -22,7 +22,7 @@ namespace BSmtLib.Facts.Proofs.Parser.Rejection.«Sort»
 open BSmtLibSpec.Grammar
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Parser.Traversal
-open BSmtLib.Parser (Input PM Step)
+open BSmtLib.Parser (PM)
 open BSmtLib.Parser.Category.Ident (IdentState)
 open BSmtLib.Parser.Category.Sort (SortState SortMode SortLevel sortStep sortComplete)
 open BSmtLib.Facts.Proofs.Parser.Rejection.Basic.Lang
@@ -111,17 +111,19 @@ theorem identLang_indexed {version : BSmtLibSpec.Lexicon.Version} {u : List Rece
   | cons first rest =>
     simp [Tree.Identifier.tokens, paren, word, toks, List.flatMap, Function.comp_def]
 
-theorem isWord_eq {token : Input} {w : Token.Reserved.GeneralReserved} (h : token.isWord w = true) :
+theorem isWord_eq {token : Parser.Internal.Input} {w : Token.Reserved.GeneralReserved}
+    (h : token.isWord w = true) :
     token = .reserved (.general w) := by
   cases token with
   | reserved r =>
     cases r with
     | general w' =>
       cases w <;> cases w' <;> first | rfl | exact absurd h (by decide)
-    | commandName => simp [Input.isWord] at h
-  | _ => simp [Input.isWord] at h
+    | commandName => simp [Parser.Internal.Input.isWord] at h
+  | _ => simp [Parser.Internal.Input.isWord] at h
 
-theorem received_eq {token : Input} {item : Received} (h : Bridge.received token = some item) :
+theorem received_eq {token : Parser.Internal.Input} {item : Received}
+    (h : Bridge.received token = some item) :
     item = (Bridge.received token).get (by simp [h]) := by
   simp [h]
 
@@ -367,7 +369,7 @@ theorem sortStep_advances (version : Token.Version) :
       refine cat_intro' (Or.inr (cat_intro' (identLang_indexed hi) (cat_intro hp hc) rfl)) hr ?_
       simp
     | reserved r =>
-      show Sound _ _ (if (Input.reserved r).isWord .underscore then _ else _)
+      show Sound _ _ (if (Parser.Internal.Input.reserved r).isWord .underscore then _ else _)
       split
       · rename_i hword
         rw [isWord_eq hword] at hitem

@@ -20,7 +20,6 @@ by command, each run is the other with its errors mapped (`command_U`), as the r
 namespace BSmtLib.Facts.Proofs.Parser.RefusedRecord
 
 open BSmtLibSpec.Grammar
-open BSmtLib.Parser (Input)
 open BSmtLib.Parser.Script (ScriptParser)
 open BSmtLibSpec.Parser
 open BSmtLibSpec.Parser.Properties
@@ -157,8 +156,9 @@ first: the recording run of the traversal with the library's handler, its errors
 causes. -/
 theorem parserRun_takes {version : Token.Version} {commands : List Tree.Command}
     {taken : List Received} {ending : Ending}
-    (htakes : Takes (Bridge.version version) commands taken ending) {inputs : List Input}
-    (hs : inputs.map Bridge.received = taken.map some) (rest : List Input) :
+    (htakes : Takes
+        (Bridge.version version) commands taken ending) {inputs : List Parser.Internal.Input}
+    (hs : inputs.map Bridge.received = taken.map some) (rest : List Parser.Internal.Input) :
     (driveInput recordingPoints recordingProducer version
       (ScriptParser.new (H := List Event) unrestrictedPosture)
         (inputs ++ rest)).run.run [] =
@@ -183,7 +183,8 @@ theorem parserRun_takes {version : Token.Version} {commands : List Tree.Command}
 /-- The parser's recording run on what a parser takes writes what `record` writes. -/
 theorem parserRecord_takes {version : Token.Version} {commands : List Tree.Command}
     {taken : List Received} {ending : Ending}
-    (htakes : Takes (Bridge.version version) commands taken ending) {inputs : List Input}
+    (htakes : Takes
+        (Bridge.version version) commands taken ending) {inputs : List Parser.Internal.Input}
     (hs : inputs.map Bridge.received = taken.map some) :
     parserRecord version inputs = record (Bridge.version version) commands := by
   have hrun := parserRun_takes htakes hs []
@@ -198,8 +199,9 @@ theorem parserRecord_takes {version : Token.Version} {commands : List Tree.Comma
 a cause that is no handler's. -/
 theorem parserResult_takes {version : Token.Version} {commands : List Tree.Command}
     {taken : List Received} {ending : Ending}
-    (htakes : Takes (Bridge.version version) commands taken ending) {inputs : List Input}
-    (hs : inputs.map Bridge.received = taken.map some) (rest : List Input) :
+    (htakes : Takes
+        (Bridge.version version) commands taken ending) {inputs : List Parser.Internal.Input}
+    (hs : inputs.map Bridge.received = taken.map some) (rest : List Parser.Internal.Input) :
     ((driveParse recordingPoints recordingProducer version
       (ScriptParser.new (H := List Event) unrestrictedPosture)
         (inputs ++ rest)).run.run (startEvents version)).1 = .ok (some ((), rest)) ∨

@@ -25,7 +25,7 @@ namespace BSmtLib.Facts.Proofs.Parser.Rejection.Term
 open BSmtLibSpec.Grammar
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Parser.Traversal
-open BSmtLib.Parser (Input PM Step)
+open BSmtLib.Parser (PM)
 open BSmtLib.Parser.Category.Term (TermState TermMode TermLevel termStep termComplete termOpened
     startBinder endBinder BinderKind SortedBinder)
 open BSmtLib.Parser.Category.Combinator (ListState)
@@ -497,13 +497,14 @@ theorem endBinder_sound {Q : Parser.ParseErrorCause Unit → Prop} (kind : Binde
 
 section
 
-variable (version : Token.Version) (levels : List (TermLevel Nat Nat Nat)) {token : Input}
+variable (version : Token.Version) (levels : List
+    (TermLevel Nat Nat Nat)) {token : Parser.Internal.Input}
   {item : Received} (hitem : Bridge.received token = some item)
   (hlex : item.OfVersion (Bridge.version version))
 
 /-- The advance of a term parser's step from the state. -/
 abbrev TermAdvance (state : TermState Nat Nat Nat Nat Nat) (item : Received)
-    (x : Quiet.RPM (Step (TermState Nat Nat Nat Nat Nat) Nat)) : Prop :=
+    (x : Quiet.RPM (Parser.Internal.Step (TermState Nat Nat Nat Nat Nat) Nat)) : Prop :=
   Sound (Advances (termRem (Bridge.version version))
     (fun state _ => termRem (Bridge.version version) state) state item) Benign x
 

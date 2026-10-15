@@ -15,7 +15,9 @@ posture `loose` is looser than `strict` (`Looser`) if it limits the declarations
 every version `strict` allows; then where `strict` lets a declaration pass, so does `loose`. So
 the parse adapter with the recording handler, the same in all but the posture, takes each token
 alike under the two postures, unless the token fails under `strict` (`takeOne_looser`), and so
-does each call of the adapter (`consume_looser`).
+does each call of the adapter (`consume_looser`). The parse adapter here is the one that stops
+after an action on its cursor (`Param.Stop`); `Looser.consume_looserN` carries this over to the
+parse adapter.
 -/
 
 namespace BSmtLib.Facts.Proofs.Reader.Param.Posture
@@ -26,6 +28,8 @@ open BSmtLib.Facts.Reader.Adapters (RecAdapter)
 open BSmtLib.Facts.Proofs.Reader.Param.Adapter (paLoop startLog consume_eq id_bind_eq)
 open BSmtLib.Facts.Proofs.Parser.Cut BSmtLib.Parser.Adapter BSmtLib.Parser.Command
 open BSmtLib.Parser.Script BSmtLib.Parser.Script.VersionPosture BSmtLib.Traits
+
+attribute [local instance high] Stop.consumeFrom
 
 /-- `loose` limits the declarations as `strict` does and allows every version `strict` allows. -/
 structure Looser (strict loose : Token.VersionPosture) : Prop where
@@ -74,8 +78,8 @@ def adapterWith (posture : Token.VersionPosture) (adapter : RecAdapter) : RecAda
 
 /-- What the script parser's step does after its command parser's step. -/
 def scriptAfter (parser : ScriptParser (List Event)) :
-    Step (CommandStateOf (List Event)) CommandOutcome →
-      Parser.Quiet.RPM (Flow Parser.Quiet.RPM (ScriptParser (List Event)) Unit)
+    Parser.Internal.Step (CommandStateOf (List Event)) CommandOutcome →
+      Parser.Quiet.RPM (Parser.Internal.Flow Parser.Quiet.RPM (ScriptParser (List Event)) Unit)
   | .more command => return .more { parser with command }
   | .done .command => return .more { parser with command := .awaiting }
   | .done (.setVersion declared) =>
@@ -89,8 +93,9 @@ def scriptAfter (parser : ScriptParser (List Event)) :
   | .done .exit => return .discardRest (pure (.more { parser with command := .awaiting }))
   | .done .endOfInput => return .done ()
 
-theorem step_eq (version : Token.Version) (parser : ScriptParser (List Event)) (token : Input) :
-    Parse.step (H := List Event) version parser token =
+theorem step_eq (version : Token.Version) (parser : ScriptParser (List Event))
+    (token : Parser.Internal.Input) :
+    Parser.Internal.ParseByToken.step (H := List Event) version parser token =
       (commandStep version parser.command token >>= scriptAfter parser) := by
   show ScriptParser.step version parser token = _
   unfold ScriptParser.step
@@ -100,7 +105,8 @@ theorem step_eq (version : Token.Version) (parser : ScriptParser (List Event)) (
 
 /-- A step of the parser under the posture, as the parser under `strict` makes it. -/
 def StepWith (posture strict : Token.VersionPosture) :
-    Step (ScriptParser (List Event)) Unit → Step (ScriptParser (List Event)) Unit → Prop
+    Parser.Internal.Step (ScriptParser (List Event)) Unit → Parser.Internal.Step (ScriptParser
+        (List Event)) Unit → Prop
   | .more p, .more q => q = withPosture posture p ∧ p.posture = strict
   | .done r, .done r' => r = r'
   | _, _ => False
@@ -108,14 +114,16 @@ def StepWith (posture strict : Token.VersionPosture) :
 /-- A run of a resumption under the posture, as the one under `strict` runs, unless that one
 fails. -/
 def ResumeWith (posture strict : Token.VersionPosture)
-    (x y : Except (ParseErrorCause Unit) (Step (ScriptParser (List Event)) Unit) × List Event) :
+    (x y : Except (ParseErrorCause Unit) (Parser.Internal.Step (ScriptParser
+        (List Event)) Unit) × List Event) :
     Prop :=
   (∃ e, x.1 = .error e) ∨
     ∃ s₁ s₂, x.1 = .ok s₁ ∧ y = (.ok s₂, x.2) ∧ StepWith posture strict s₁ s₂
 
 /-- What the step under the posture asks, as the one under `strict` asks. -/
 def FlowWith (posture strict : Token.VersionPosture) :
-    Flow Parser.Quiet.RPM (ScriptParser (List Event)) Unit → Flow Parser.Quiet.RPM
+    Parser.Internal.Flow Parser.Quiet.RPM (ScriptParser
+        (List Event)) Unit → Parser.Internal.Flow Parser.Quiet.RPM
         (ScriptParser (List Event)) Unit → Prop
   | .more p, .more q => q = withPosture posture p ∧ p.posture = strict
   | .done r, .done r' => r = r'
@@ -127,7 +135,8 @@ def FlowWith (posture strict : Token.VersionPosture) :
 
 theorem scriptAfter_looser {strict loose : Token.VersionPosture} (hl : Looser strict loose)
     (parser : ScriptParser (List Event)) (hp : parser.posture = strict)
-    (outcome : Step (CommandStateOf (List Event)) CommandOutcome) (events : List Event) :
+    (outcome : Parser.Internal.Step (CommandStateOf (List Event)) CommandOutcome)
+        (events : List Event) :
     (∃ e, ((scriptAfter parser outcome).run.run events).1 = .error e) ∨
       ∃ f₁ f₂, (scriptAfter parser outcome).run.run events = (.ok f₁, events) ∧
         (scriptAfter (withPosture loose parser) outcome).run.run events = (.ok f₂, events) ∧
@@ -160,14 +169,14 @@ theorem scriptAfter_looser {strict loose : Token.VersionPosture} (hl : Looser st
 
 /-- What the adapter does with a token under the posture, as under `strict`. -/
 def AfterWith (posture strict : Token.VersionPosture) :
-    ParseAdapter.After (ScriptParser (List Event)) Unit Unit →
-      ParseAdapter.After (ScriptParser (List Event)) Unit Unit → Prop
+    Parser.Internal.After (ScriptParser (List Event)) Unit Unit →
+      Parser.Internal.After (ScriptParser (List Event)) Unit Unit → Prop
   | .goOn p, .goOn q => q = withPosture posture p ∧ p.posture = strict
   | .stop a p, .stop a' q => a' = a ∧ q = withPosture posture p ∧ p.posture = strict
   | _, _ => False
 
 /-- The adapter's handling of a token fails. -/
-def IsFailure : ParseAdapter.After (ScriptParser (List Event)) Unit Unit → Prop
+def IsFailure : Parser.Internal.After (ScriptParser (List Event)) Unit Unit → Prop
   | .stop (.error _) _ => True
   | _ => False
 
@@ -176,32 +185,34 @@ theorem takeOne_looser {strict loose : Token.VersionPosture} (hl : Looser strict
     (parser : ScriptParser (List Event)) (hp : parser.posture = strict) {b : Token.BatchTag}
     (cursor next : Token.BatchCursor b) (token : Token b) (consumed : next.Consumed cursor)
     (handler : List Event) :
-    IsFailure ((ParseAdapter.takeOne (H := List Event) (m := Id) parser cursor token next
+    IsFailure ((Stop.takeOne (H := List Event) (m := Id) parser cursor token next
         consumed).run handler).1.1 ∨
       (AfterWith loose strict
-          ((ParseAdapter.takeOne (H := List Event) (m := Id) parser cursor token next
+          ((Stop.takeOne (H := List Event) (m := Id) parser cursor token next
             consumed).run handler).1.1
-          ((ParseAdapter.takeOne (H := List Event) (m := Id) (withPosture loose parser) cursor
+          ((Stop.takeOne (H := List Event) (m := Id) (withPosture loose parser) cursor
             token next consumed).run handler).1.1 ∧
-        ((ParseAdapter.takeOne (H := List Event) (m := Id) (withPosture loose parser) cursor
+        ((Stop.takeOne (H := List Event) (m := Id) (withPosture loose parser) cursor
             token next consumed).run handler).1.2 =
-          ((ParseAdapter.takeOne (H := List Event) (m := Id) parser cursor token next
+          ((Stop.takeOne (H := List Event) (m := Id) parser cursor token next
             consumed).run handler).1.2 ∧
-        ((ParseAdapter.takeOne (H := List Event) (m := Id) (withPosture loose parser) cursor
+        ((Stop.takeOne (H := List Event) (m := Id) (withPosture loose parser) cursor
             token next consumed).run handler).2 =
-          ((ParseAdapter.takeOne (H := List Event) (m := Id) parser cursor token next
+          ((Stop.takeOne (H := List Event) (m := Id) parser cursor token next
             consumed).run handler).2) := by
-  simp only [ParseAdapter.takeOne, StateT.run_bind]
+  simp only [Stop.takeOne, StateT.run_bind]
   rw [run_bind_ok (arrive_run _ _ _), run_bind_ok (arrive_run _ _ _), step_eq, step_eq,
     run_bind_split, run_bind_split]
   have hcmd : (withPosture loose parser).command = parser.command := rfl
   have harr : arrivalCalls (withPosture loose parser)
-      (Input.ofSyntax (Token.Produce.«syntax» next token)) =
-      arrivalCalls parser (Input.ofSyntax (Token.Produce.«syntax» next token)) := rfl
+      (Parser.Internal.Input.ofSyntax (Token.Produce.«syntax» next token)) =
+      arrivalCalls parser (Parser.Internal.Input.ofSyntax
+          (Token.Produce.«syntax» next token)) := rfl
   rw [hcmd, harr]
   generalize (commandStep (Token.Produce.version next) parser.command
-    (Input.ofSyntax (Token.Produce.«syntax» next token))).run.run
-      (arrivalCalls parser (Input.ofSyntax (Token.Produce.«syntax» next token)) ++ handler) = c
+    (Parser.Internal.Input.ofSyntax (Token.Produce.«syntax» next token))).run.run
+      (arrivalCalls parser (Parser.Internal.Input.ofSyntax
+          (Token.Produce.«syntax» next token)) ++ handler) = c
   obtain ⟨res, handler'⟩ := c
   rcases res with e | outcome
   · exact .inl trivial
@@ -316,9 +327,9 @@ theorem paLoop_looser {strict loose : Token.VersionPosture} (hl : Looser strict 
       dsimp only
       simp only [StateT.run_bind]
       have ht := takeOne_looser hl parser hp cursor next token consumed handler
-      generalize (ParseAdapter.takeOne (H := List Event) (m := Id) parser cursor token next
+      generalize (Stop.takeOne (H := List Event) (m := Id) parser cursor token next
         consumed).run handler = t₁ at ht ⊢
-      generalize (ParseAdapter.takeOne (H := List Event) (m := Id) (withPosture loose parser)
+      generalize (Stop.takeOne (H := List Event) (m := Id) (withPosture loose parser)
         cursor token next consumed).run handler = t₂ at ht ⊢
       obtain ⟨⟨after₁, ⟨later₁, taken₁⟩⟩, h₁⟩ := t₁
       obtain ⟨⟨after₂, ⟨later₂, taken₂⟩⟩, h₂⟩ := t₂

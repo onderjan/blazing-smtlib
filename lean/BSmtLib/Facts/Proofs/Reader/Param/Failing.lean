@@ -30,7 +30,7 @@ namespace BSmtLib.Facts.Proofs.Reader.Param.Failing
 
 open BSmtLibSpec
 open BSmtLibSpec.Lexer (Handed)
-open BSmtLib.Parser (Input Parse)
+open BSmtLib.Parser (Parse)
 open BSmtLib.Parser.Script (ScriptParser)
 open BSmtLib.Parser.Adapter (ParseAdapter)
 open BSmtLib.Facts.Lexer.Adapters (toVersion Answering AnswerM toHanded)
@@ -213,7 +213,11 @@ theorem answer_ne_continue {version : Lexicon.Version} {taken : List Handed}
   · exact absurd rfl (hnot v parser log)
   · simp [libEnding, answerOf] at hc
 
-theorem link_consumersG (version : Lexicon.Version) : Consumers (linkLinkG version) where
+section
+
+attribute [local instance high] Stop.consumeFrom
+
+theorem link_callsG (version : Lexicon.Version) : Calls (linkLinkG version) where
   concrete := rfl
   consume {b} cursor h := by
     have hans : ∀ taken, ansRest version cursor taken =
@@ -320,5 +324,13 @@ theorem link_consumersG (version : Lexicon.Version) : Consumers (linkLinkG versi
       change ((Flagged.consume (scriptConsumer version) cursor h).run flagged).run taken = _ at hrun
       erw [hrun] at hsp
       simp [he] at hsp
+
+theorem link_consumersG_stop (version : Lexicon.Version) : Consumers (linkLinkG version) :=
+  .ofCalls (link_callsG version)
+
+end
+
+theorem link_consumersG (version : Lexicon.Version) : Consumers (linkLinkG version) :=
+  Consumers.ofEq₂ Split.script_handOver_eq (link_consumersG_stop version)
 
 end BSmtLib.Facts.Proofs.Reader.Param.Failing

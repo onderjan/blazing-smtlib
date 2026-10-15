@@ -2,6 +2,7 @@ module
 
 public import BSmtLib.Facts.Proofs.Reader.Param.Watch
 public import BSmtLib.Facts.Proofs.Reader.Param.Posture
+public import BSmtLib.Facts.Proofs.Reader.Param.Split
 public import BSmtLib.Facts.Proofs.Reader.Param.Run
 public import BSmtLib.Facts.Proofs.Reader.Reader
 public import BSmtLib.Facts.PublicApi.Adapters
@@ -125,12 +126,102 @@ def KeepsI : Prop :=
 
 end
 
+section Continue
+
+open BSmtLib.Facts.Proofs.Reader.Param.Split (outN outS resumeOut outN_split_eq script_parse_eq
+  resumeOut_of_not)
+
+/-- A call of the parse adapter goes alike under `loose` as under `strict`, unless it fails under
+`strict`; the parser keeps its posture: from the call of the adapter that stops, which does so
+(`Posture.consume_looser`), and the call from where that stopped. -/
+theorem outN_looser {strict loose : Token.VersionPosture} (hl : Looser strict loose)
+    {b : Token.BatchTag} :
+    ∀ (n : Nat) (cursor : Token.BatchCursor b) (h : cursor.HasNext) (adapter : RecAdapter),
+      cursor.remaining < n → adapter.parser.posture = strict →
+      (∃ e, (outN cursor h adapter).1.1 = .error e) ∨
+        (outN cursor h (adapterWith loose adapter) =
+            ((outN cursor h adapter).1, adapterWith loose (outN cursor h adapter).2) ∧
+          (outN cursor h adapter).2.parser.posture = strict)
+  | 0, _, _, _, hn, _ => absurd hn (Nat.not_lt_zero _)
+  | n + 1, cursor, h, adapter, hn, hp => by
+    rw [outN_split_eq script_parse_eq, outN_split_eq script_parse_eq]
+    have hs := Param.Posture.consume_looser hl cursor h adapter hp
+    have eS : ∀ A, outS cursor h A =
+        let x := (Param.Stop.consume (H := List Event) (P := ScriptParser
+            (List Event)) cursor h).run A
+        ((x.1.1, x.1.2.val), x.2) := fun _ => rfl
+    rw [eS, eS]
+    change (∃ e, ((Param.Stop.consume (H := List Event) (P := ScriptParser (List Event)) cursor
+        h).run adapter).1.1 = .error e) ∨
+      ((Param.Stop.consume (H := List Event) (P := ScriptParser (List Event)) cursor h).run
+          (adapterWith loose adapter) =
+        (((Param.Stop.consume (H := List Event) (P := ScriptParser (List Event)) cursor h).run
+          adapter).1, adapterWith loose
+            ((Param.Stop.consume (H := List Event) (P := ScriptParser (List Event)) cursor
+              h).run adapter).2) ∧
+        ((Param.Stop.consume (H := List Event) (P := ScriptParser (List Event)) cursor h).run
+          adapter).2.parser.posture = strict) at hs
+    generalize (Param.Stop.consume (H := List Event) (P := ScriptParser (List Event)) cursor
+      h).run adapter = x at hs ⊢
+    generalize (Param.Stop.consume (H := List Event) (P := ScriptParser (List Event)) cursor
+      h).run (adapterWith loose adapter) = y at hs ⊢
+    obtain ⟨⟨a, ⟨d, hd⟩⟩, A'⟩ := x
+    rcases hs with ⟨e, he⟩ | ⟨rfl, hp'⟩
+    · dsimp only at he ⊢
+      subst he
+      left
+      exact ⟨e, by rw [resumeOut_of_not (fun hc => by cases hc.1)]⟩
+    · dsimp only at hp' ⊢
+      by_cases hc : a = .ok .continue ∧ d.HasNext
+      · obtain ⟨rfl, hdn⟩ := hc
+        simp only [resumeOut, hdn, ↓reduceDIte]
+        exact outN_looser hl n d hdn A'
+          (Nat.lt_of_lt_of_le hd.remaining_lt (Nat.le_of_lt_succ hn)) hp'
+      · rw [resumeOut_of_not hc, resumeOut_of_not hc]
+        exact .inr ⟨rfl, hp'⟩
+
+/-- `outN_looser` for the call itself. -/
+theorem consume_looserN {strict loose : Token.VersionPosture} (hl : Looser strict loose)
+    {b : Token.BatchTag}
+    (cursor : Token.BatchCursor b) (h : cursor.HasNext) (adapter : RecAdapter)
+    (hp : adapter.parser.posture = strict) :
+    (∃ e, ((Token.ConsumeFrom.consume (m := Id) cursor h : StateT RecAdapter Id _).run
+        adapter).1.1 = .error e) ∨
+      ((Token.ConsumeFrom.consume (m := Id) cursor h : StateT RecAdapter Id _).run
+          (adapterWith loose adapter) =
+        (((Token.ConsumeFrom.consume (m := Id) cursor h : StateT RecAdapter Id _).run adapter).1,
+          adapterWith loose
+            ((Token.ConsumeFrom.consume (m := Id) cursor h : StateT RecAdapter Id _).run
+                adapter).2) ∧
+        ((Token.ConsumeFrom.consume (m := Id) cursor h : StateT RecAdapter Id _).run
+          adapter).2.parser.posture = strict) := by
+  have hl' := outN_looser hl (cursor.remaining + 1) cursor h adapter (Nat.lt_succ_self _) hp
+  have eN : ∀ A, outN cursor h A =
+      let x := (Token.ConsumeFrom.consume (m := Id) cursor h : StateT RecAdapter Id _).run A
+      ((x.1.1, x.1.2.val), x.2) := fun _ => rfl
+  rw [eN, eN] at hl'
+  generalize (Token.ConsumeFrom.consume (m := Id) cursor h : StateT RecAdapter Id _).run
+    adapter = x at hl' ⊢
+  generalize (Token.ConsumeFrom.consume (m := Id) cursor h : StateT RecAdapter Id _).run
+    (adapterWith loose adapter) = y at hl' ⊢
+  obtain ⟨⟨a, ⟨d, hd⟩⟩, A'⟩ := x
+  obtain ⟨⟨a', ⟨d', hd'⟩⟩, A''⟩ := y
+  dsimp only at hl' ⊢
+  rcases hl' with ⟨e, he⟩ | ⟨he, hp'⟩
+  · exact .inl ⟨e, he⟩
+  · simp only [Prod.mk.injEq] at he
+    obtain ⟨⟨rfl, rfl⟩, rfl⟩ := he
+    exact .inr ⟨rfl, hp'⟩
+
+end Continue
+
 theorem isError_mapError {ε ε' α : Type} (f : ε → ε') (r : Except ε α) :
     isError (r.mapError f) = isError r := by
   cases r <;> rfl
 
-theorem looser_consumers {strict loose : Token.VersionPosture} {I : Watch RecAdapter → Prop}
-    (hl : Looser strict loose) (hI : KeepsI strict I) : Consumers (looserLink strict loose I) where
+theorem looser_calls {strict loose : Token.VersionPosture} {I : Watch RecAdapter → Prop}
+    (hl : Looser strict loose) (hI : KeepsI strict I) :
+    Param.HandOver.Calls (looserLink strict loose I) where
   concrete := rfl
   consume cursor h := by
     refine ⟨fun w u => ?_, fun w u he => ?_, fun w u he hg hfin => ?_⟩
@@ -143,11 +234,15 @@ theorem looser_consumers {strict loose : Token.VersionPosture} {I : Watch RecAda
       simp only [Watch.after, he, Bool.false_or, Bool.or_eq_false_iff] at hfin
       obtain ⟨-, hok⟩ := hfin
       simp only [Watch.answer, isError_mapError] at hok hI' ⊢
-      rcases consume_looser hl cursor h w.inner hg.1 with ⟨e, he'⟩ | ⟨hq, hp⟩
+      rcases consume_looserN hl cursor h w.inner hg.1 with ⟨e, he'⟩ | ⟨hq, hp⟩
       · rw [he'] at hok
         cases hok
       · rw [hq]
         exact ⟨⟨hp, hI'⟩, ⟨eRel_mapError _, rfl⟩, rfl⟩
+
+theorem looser_consumers {strict loose : Token.VersionPosture} {I : Watch RecAdapter → Prop}
+    (hl : Looser strict loose) (hI : KeepsI strict I) : Consumers (looserLink strict loose I) :=
+  .ofCalls (looser_calls hl hI)
 
 /-! ## The steps of the calls -/
 

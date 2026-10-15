@@ -21,7 +21,7 @@ open BSmtLibSpec BSmtLibSpec.Parser
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Parser.Traversal
 open BSmtLibSpec.Lexer (Handed)
-open BSmtLib.Parser (Input Parse)
+open BSmtLib.Parser (Parse)
 open BSmtLib.Parser.Script (ScriptParser)
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Parser.Adapters.Run
 open BSmtLib.Facts.Parser.Adapters.Run.Rejection BSmtLib.Facts.Proofs.Parser.Cut
@@ -163,7 +163,7 @@ theorem single_request {added added' : List Event} (h : ∀ e ∈ added, e.isCal
 
 /-- After an item, the recording run asks its producer for at most one thing. -/
 theorem recAfter_single (version : Token.Version) (parser : ScriptParser (List Event))
-    {item : Input}
+    {item : Parser.Internal.Input}
     {received : Received} (hr : Bridge.received item = some received) (events : List Event) :
     Single ((recAfter version parser item).run.run events).2 := by
   rw [recAfter_eq _ _ hr]
@@ -172,7 +172,7 @@ theorem recAfter_single (version : Token.Version) (parser : ScriptParser (List E
     hE.adds (.process received :: (arrivalCalls parser item ++ .arrive received :: events))
   have hpost :=
     hE.post (.process received :: (arrivalCalls parser item ++ .arrive received :: events))
-  rcases hS : (Parse.step (H := List Event) version parser item).run.run
+  rcases hS : (Parser.Internal.ParseByToken.step (H := List Event) version parser item).run.run
     (.process received :: (arrivalCalls parser item ++ .arrive received :: events)) with ⟨res, log₀⟩
   rw [hS] at hlog hpost
   simp only at hlog hpost

@@ -14,6 +14,7 @@ import BSmtLib.Traits
 import BSmtLib.Token
 import BSmtLib.Token.Reserved
 import BSmtLib.Token.SyntaxToken
+import BSmtLib.Token.Lookahead
 import BSmtLib.Token.Produce
 import BSmtLib.Token.ConsumeFrom
 import BSmtLib.Lexer.CharClass
@@ -26,6 +27,7 @@ import BSmtLib.Parser.Category
 import BSmtLib.Parser.Command
 import BSmtLib.Parser.Script
 import BSmtLib.Parser.Adapter
+import BSmtLib.Parser.Internal.Fused
 import BSmtLib.Reader
 
 /-!

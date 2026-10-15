@@ -25,7 +25,7 @@ public section
 open BSmtLib
 open BSmtLib.Token (Version VersionPosture Consume ConsumeFrom Produce SyntaxToken BatchCursor)
 open BSmtLib.Lexer (LexError)
-open BSmtLib.Parser (Parse Input ParseAdapter ParseErrorCause SyntaxErrorKind ScriptParser
+open BSmtLib.Parser (Parse ParseState ParseAdapter ParseErrorCause SyntaxErrorKind ScriptParser
   CommandParser SortParser TermParser SExprParser CommandOutcome)
 open BSmtLib.Reader (ReadError ReadFailure BufRead BufReader readSmt readSmtFile)
 
@@ -621,12 +621,13 @@ def newSession (choice : LexerChoice) (remote : Remote) (version : Version) :
 
 /-! ## Driving a parser of a category -/
 
-/-- The consumer of `drive`: a port of the consumer `Drive` of the Rust category tests. It hands
-the tokens one at a time to the parser, again after each time it finished, until it has
-finished the wanted number of times; then it counts the tokens that are not the end-of-file
-token, and breaks at the end-of-file token. It does not tell the handler the version. -/
+/-- The consumer of `drive`: a port of the consumer `Drive` of the Rust category tests. It has the
+parser parse the cursor, again after each time it finished, until it has finished the wanted
+number of times; then it counts the tokens that are not the end-of-file token, and breaks at the
+end-of-file token. It does not tell the handler the version. -/
 structure Drive (P R : Type) where
   handler : Remote
+  parseState : ParseState Remote
   parser : P
   render : R → String
   /-- How many more results are wanted. -/
@@ -641,29 +642,36 @@ namespace Drive
 
 variable {P R E Z : Type} [Parse P Remote IO E R] [Produce Z]
 
-/-- Takes the token, viewed under the version: gives the answer to the producer if the
-hand-over stops, `none` if it goes on. A parser that finished has its result written. -/
-def take (drive : Drive P R) (version : Version) (token : SyntaxToken) :
-    IO (Option (Except (ParseErrorCause E) (ControlFlow Unit)) × Drive P R) := do
+/-- The first token of a producer that has one. -/
+def first (producer : Z) (h : Produce.HasNext producer) :
+    Produce.Token Z × { next : Z // Produce.Consumed next producer } :=
+  match taken : Produce.next? producer with
+  | some first => first
+  | none => absurd (Produce.next?_isSome h) (by rw [taken]; exact Bool.false_ne_true)
+
+/-- Takes tokens of the cursor, which has one: counts one after the wanted results, or has the
+parser parse the cursor. Gives the answer to the producer if the consumer stops, `none` if it goes
+on. A parser that finished has its result written. -/
+def take (drive : Drive P R) (cursor : Z) (h : Produce.HasNext cursor) :
+    IO (Option (Except (ParseErrorCause E) (ControlFlow Unit)) × Drive P R ×
+      { next : Z // Produce.Consumed next cursor }) := do
   if drive.remaining == 0 then
-    -- every consumer breaks at the end of the input at the latest
-    if token matches .endOfFile then
-      return (some (.ok (.break ())), drive)
+    -- count the tokens left after the wanted results, and break at the end of the input, as
+    -- every consumer must
+    let (token, next) := first cursor h
+    if Produce.syntax next.val token matches .endOfFile then
+      return (some (.ok (.break ())), drive, next)
     drive.unconsumed.modify (· + 1)
-    return (none, drive)
-  let input := Input.ofSyntax token
-  -- made before the step, which then holds the only reference to the parser
-  let fresh := Parse.reset drive.parser
-  let step := do Parse.arrive drive.parser input; Parse.step version drive.parser input
-  let (flow, handler) ← step.run.run drive.handler
-  match flow with
-  | .error err => return (some (.error err), { drive with handler, parser := fresh })
-  | .ok (.more parser) => return (none, { drive with handler, parser })
-  | .ok (.done result) =>
+    return (none, drive, next)
+  let ((answer, parser, parseState, ⟨next, consumed⟩), handler) ←
+    (Parse.parse drive.parser drive.parseState cursor).run drive.handler
+  let drive := { drive with handler, parser, parseState }
+  match answer with
+  | .error err => return (some (.error err), drive, ⟨next, consumed h⟩)
+  | .ok (.break result) =>
     handler.write s!"result {drive.render result}"
-    return (none, { drive with handler, parser := fresh, remaining := drive.remaining - 1 })
-  | .ok (.switchVersion _ _) | .ok (.discardRest _) =>
-    failRequest "a parser of a category asked to switch the version or to discard"
+    return (none, { drive with remaining := drive.remaining - 1 }, ⟨next, consumed h⟩)
+  | .ok .continue => return (none, drive, ⟨next, consumed h⟩)
 
 /-- A producer, ordered by its consumption: the loop over its tokens descends by it. -/
 structure Consuming (Z : Type) where
@@ -672,39 +680,31 @@ structure Consuming (Z : Type) where
 instance : WellFoundedRelation (Consuming Z) :=
   invImage Consuming.producer ⟨Produce.Consumed, Produce.consumed_wf⟩
 
-/-- Takes the tokens of `cursor`, which comes from `origin` with tokens consumed, until there
-are none or the hand-over stops. -/
+/-- Takes the tokens of `cursor`, which comes from `origin` with tokens consumed, while there are
+any and the consumer goes on. -/
 def rest (origin : Z) (drive : Drive P R) (cursor : Z) (consumed : Produce.Consumed cursor origin) :
     IO (Except (ParseErrorCause E) (ControlFlow Unit) × Drive P R ×
       { z : Z // Produce.Consumed z origin }) :=
-  match Produce.next? cursor with
-  | none => return (.ok .continue, drive, ⟨cursor, consumed⟩)
-  | some (token, ⟨next, taken⟩) => do
-    match ← drive.take (Produce.version next) (Produce.syntax next token) with
-    | (some answer, drive) =>
+  match Produce.decideHasNext cursor with
+  | .isFalse _ => return (.ok .continue, drive, ⟨cursor, consumed⟩)
+  | .isTrue h => do
+    match ← drive.take cursor h with
+    | (some answer, drive, ⟨next, taken⟩) =>
       return (answer, drive, ⟨next, Produce.consumed_trans taken consumed⟩)
-    | (none, drive) => rest origin drive next (Produce.consumed_trans taken consumed)
+    | (none, drive, ⟨next, taken⟩) => rest origin drive next (Produce.consumed_trans taken consumed)
 termination_by (⟨cursor⟩ : Consuming Z)
 decreasing_by exact taken
-
-/-- The first token of a producer that has one. -/
-def first (producer : Z) (h : Produce.HasNext producer) :
-    Produce.Token Z × { next : Z // Produce.Consumed next producer } :=
-  match taken : Produce.next? producer with
-  | some first => first
-  | none => absurd (Produce.next?_isSome h) (by rw [taken]; exact Bool.false_ne_true)
 
 end Drive
 
 instance {P R E Z : Type} [Parse P Remote IO E R] [Produce Z] : ConsumeFrom (Drive P R) Z IO where
   consume producer h := do
     let drive ← get
-    let (token, ⟨next, consumed⟩) := Drive.first producer h
-    match ← (drive.take (Produce.version next) (Produce.syntax next token) : IO _) with
-    | (some answer, drive) =>
+    match ← (drive.take producer h : IO _) with
+    | (some answer, drive, next) =>
       set drive
-      return (answer, ⟨next, consumed⟩)
-    | (none, drive) =>
+      return (answer, next)
+    | (none, drive, ⟨next, consumed⟩) =>
       let (answer, drive, done) ← (Drive.rest producer drive next consumed : IO _)
       set drive
       return (answer, done)
@@ -734,7 +734,8 @@ def runDrive {P R : Type} [Parse P Remote IO RemoteError R] (choice : LexerChoic
     (parser : P) (render : R → String) : IO Unit := do
   let unconsumed ← IO.mkRef 0
   let ops := lexOps choice (Drive P R)
-  let lexer := ops.new { handler := remote, parser, render, remaining := count, unconsumed }
+  let lexer := ops.new
+    { handler := remote, parseState := .new, parser, render, remaining := count, unconsumed }
     version
   match ← applyFeeds ops feeds lexer with
   | some err => remote.write (errorLine (ReadError.ofLex err))

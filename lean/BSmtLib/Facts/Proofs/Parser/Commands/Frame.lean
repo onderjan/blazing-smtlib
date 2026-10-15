@@ -17,7 +17,7 @@ the tokens after the name, the command parser does the traversal's command.
 namespace BSmtLib.Facts.Proofs.Parser.Commands.Frame
 
 open BSmtLibSpec.Grammar
-open BSmtLib.Parser (Input PM Step)
+open BSmtLib.Parser (PM)
 open BSmtLib.Parser.Command (CommandState CommandOutcome commandStep)
 open BSmtLib.Parser.Command.Standard (Payload FinalCall payloadStep finalCall)
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Parser.Adapters.Run
@@ -35,10 +35,11 @@ variable {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf 
 
 omit [LawfulMonad m] in
 /-- The command parser in a payload mode steps as the payload parser. -/
-theorem commandStep_payload (payload : Parser.Command.Standard.PayloadOf H) (token : Input) :
+theorem commandStep_payload (payload : Parser.Command.Standard.PayloadOf H)
+    (token : Parser.Internal.Input) :
     commandStep version (.payload payload) token =
       payloadStep version payload token >>=
-        Step.wrap CommandState.payload fun outcome => pure (.done outcome) := by
+        Parser.Internal.Step.wrap CommandState.payload fun outcome => pure (.done outcome) := by
   simp only [commandStep]
   congr 1
   funext step
@@ -46,24 +47,27 @@ theorem commandStep_payload (payload : Parser.Command.Standard.PayloadOf H) (tok
 
 omit [LawfulMonad m] in
 /-- The command parser in a payload mode has the payload parser's calls due at an arrival. -/
-theorem commandArrive_payload (payload : Parser.Command.Standard.PayloadOf H) (token : Input) :
+theorem commandArrive_payload (payload : Parser.Command.Standard.PayloadOf H)
+    (token : Parser.Internal.Input) :
     Parser.Command.commandArrive (.payload payload) token = Parser.Command.Standard.payloadArrive
         payload token := (rfl)
 
 variable (points version) in
 /-- `Runs` of the payload parser, with its calls due at a token's arrival. -/
-abbrev PayloadRuns {α : Type} (state : Parser.Command.Standard.PayloadOf H) (tokens : List Input)
-    (program : PM H α) (next : α → PM H (Step (Parser.Command.Standard.PayloadOf H)
+abbrev PayloadRuns {α : Type} (state : Parser.Command.Standard.PayloadOf H)
+    (tokens : List Parser.Internal.Input)
+    (program : PM H α) (next : α → PM H (Parser.Internal.Step (Parser.Command.Standard.PayloadOf H)
     CommandOutcome)) : Prop :=
   Runs points (payloadStep version) state tokens program next Parser.Command.Standard.payloadArrive
 
 /-- A token standing for a command's name is that name. -/
-theorem Input.received_commandName {token : Input} {name : Token.Reserved.CommandNameReserved}
+theorem Parser.Internal.Input.received_commandName {token : Parser.Internal.Input}
+    {name : Token.Reserved.CommandNameReserved}
     {s : String}
     (hname : Bridge.reserved (.commandName name) = BSmtLibSpec.Regex.chars s)
     (h : Bridge.received token = some (.token (word s))) :
     token = .reserved (.commandName name) := by
-  apply Input.received_word
+  apply Parser.Internal.Input.received_word
   rw [hname]
   exact h
 
@@ -74,10 +78,10 @@ with the opening's ticks, then `program`.
 -/
 theorem command_frame {name : Token.Reserved.CommandNameReserved} {s : String}
     (hname : Bridge.reserved (.commandName name) = BSmtLibSpec.Regex.chars s)
-    {payload : List Input} {program : PM H Unit} {outcome : CommandOutcome}
+    {payload : List Parser.Internal.Input} {program : PM H Unit} {outcome : CommandOutcome}
     (hruns : PayloadRuns points version (Payload.init name version) payload program
       fun _ => pure (.done outcome))
-    (rest : List Input) :
+    (rest : List Parser.Internal.Input) :
     drive points (commandStep version) .awaiting
         (.parenOpen :: .reserved (.commandName name) :: (payload ++ rest))
             Parser.Command.commandArrive =
@@ -108,10 +112,11 @@ theorem command_of_payload (command : Tree.Command) {name : Token.Reserved.Comma
     (htokens : command.tokens = commandTokens s payloadSyntax)
     {rest : Run (StateT H m) (Traits.Handler.Error H) Unit}
     (hcommand : Traversal.command points h command = (do opening points s; rest))
-    (hpayload : ∀ {payload : List Input}, Stands payload payloadSyntax →
+    (hpayload : ∀ {payload : List Parser.Internal.Input}, Stands payload payloadSyntax →
       PayloadRuns points version (Payload.init name version) (payload ++ [.parenClose])
         (adaptRun rest) fun _ => pure (.done (outcomeOf command)))
-    {tokens : List Input} (hs : Stands tokens command.tokens) (following : List Input) :
+    {tokens : List Parser.Internal.Input} (hs : Stands tokens command.tokens)
+        (following : List Parser.Internal.Input) :
     drive points (commandStep version) .awaiting (tokens ++ following) Parser.Command.commandArrive
         =
       (do
@@ -120,7 +125,7 @@ theorem command_of_payload (command : Tree.Command) {name : Token.Reserved.Comma
   rw [htokens] at hs
   obtain ⟨inner, rfl, hinner⟩ := Stands.split_paren hs
   obtain ⟨nameToken, payload, rfl, hnameToken, hpayloadTokens⟩ := Stands.split_cons hinner
-  rw [Input.received_commandName hname hnameToken, hcommand, adaptRun_bind]
+  rw [Parser.Internal.Input.received_commandName hname hnameToken, hcommand, adaptRun_bind]
   have := command_frame (points := points) hname (hpayload hpayloadTokens) following
   simp only [List.cons_append, List.append_assoc] at this ⊢
   rw [this]

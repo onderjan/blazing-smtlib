@@ -20,7 +20,7 @@ namespace BSmtLib.Facts.Proofs.Parser.Rejection.Command
 
 open BSmtLibSpec.Grammar
 open BSmtLibSpec.Parser.Traversal
-open BSmtLib.Parser (Input PM Step)
+open BSmtLib.Parser (PM)
 open BSmtLib.Parser.Category.Term (TermState)
 open BSmtLib.Parser.Category.Combinator (ListState)
 open BSmtLib.Parser.Command.Datatype (SortDecState DatatypeState)

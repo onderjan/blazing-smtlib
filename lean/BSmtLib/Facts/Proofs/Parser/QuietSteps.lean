@@ -50,37 +50,37 @@ section
 variable {bad : Event → Bool} [Quiet.CallsPass bad]
 
 omit [Quiet.CallsPass bad] in
-theorem expectOpen_silent (token : Input) :
+theorem expectOpen_silent (token : Parser.Internal.Input) :
     Quiet.Avoids bad (expectOpen (H := List Event) token) := by
   unfold expectOpen
   split <;> first | exact Quiet.pure trivial | exact Quiet.throw _
 
 omit [Quiet.CallsPass bad] in
-theorem expectClose_silent (token : Input) : Quiet.Avoids bad
+theorem expectClose_silent (token : Parser.Internal.Input) : Quiet.Avoids bad
     (expectClose (H := List Event) token) := by
   unfold expectClose
   split <;> first | exact Quiet.pure trivial | exact Quiet.throw _
 
 omit [Quiet.CallsPass bad] in
-theorem expectSymbol_silent (token : Input) : Quiet.Avoids bad
+theorem expectSymbol_silent (token : Parser.Internal.Input) : Quiet.Avoids bad
     (expectSymbol (H := List Event) token) := by
   unfold expectSymbol
   split <;> first | exact Quiet.pure trivial | exact Quiet.throw _
 
 omit [Quiet.CallsPass bad] in
-theorem expectNumeral_silent (token : Input) :
+theorem expectNumeral_silent (token : Parser.Internal.Input) :
     Quiet.Avoids bad (expectNumeral (H := List Event) token) := by
   unfold expectNumeral
   split <;> first | exact Quiet.pure trivial | exact Quiet.throw _
 
 omit [Quiet.CallsPass bad] in
-theorem expectKeyword_silent (token : Input) :
+theorem expectKeyword_silent (token : Parser.Internal.Input) :
     Quiet.Avoids bad (expectKeyword (H := List Event) token) := by
   unfold expectKeyword
   split <;> first | exact Quiet.pure trivial | exact Quiet.throw _
 
 omit [Quiet.CallsPass bad] in
-theorem expectString_silent (token : Input) : Quiet.Avoids bad
+theorem expectString_silent (token : Parser.Internal.Input) : Quiet.Avoids bad
     (expectString (H := List Event) token) := by
   unfold expectString
   split <;> first | exact Quiet.pure trivial | exact Quiet.throw _
@@ -99,7 +99,8 @@ macro "silent_step" "[" ts:Lean.Parser.Tactic.SolveByElim.arg,* "]" : tactic => 
     | split))
 
 omit [Quiet.CallsPass bad] in
-theorem identStep_silent (version : Token.Version) (state : IdentState) (token : Input) :
+theorem identStep_silent (version : Token.Version) (state : IdentState)
+    (token : Parser.Internal.Input) :
     Quiet.Avoids bad (IdentState.step (H := List Event) version state token) := by
   unfold IdentState.step
   silent_step []
@@ -110,48 +111,52 @@ theorem sortComplete_silent (levels : List (SortLevel Nat)) (head : Identifier)
   unfold sortComplete
   silent_step []
 
-theorem sortStep_silent (version : Token.Version) (state : SortState Nat) (token : Input) :
+theorem sortStep_silent (version : Token.Version) (state : SortState Nat)
+    (token : Parser.Internal.Input) :
     Quiet.Avoids bad (sortStep (H := List Event) version state token) := by
   unfold sortStep
   silent_step [identStep_silent]
-theorem sExprStep_silent (version : Token.Version) (state : SExprState Nat) (token : Input) :
+theorem sExprStep_silent (version : Token.Version) (state : SExprState Nat)
+    (token : Parser.Internal.Input) :
     Quiet.Avoids bad (sExprStep (H := List Event) version state token) := by
   unfold sExprStep
   try dsimp only
   silent_step []
 
 theorem attributeStep_silent (single : Bool) (version : Token.Version)
-    (state : AttributeState Nat Nat) (token : Input) :
+    (state : AttributeState Nat Nat) (token : Parser.Internal.Input) :
     Quiet.Avoids bad (attributeStep (H := List Event) single version state token) := by
   unfold attributeStep
   try dsimp only
   silent_step [sExprStep_silent, expectClose_silent]
 
 omit [Quiet.CallsPass bad] in
-theorem patternStep_silent (version : Token.Version) (state : PatternState) (token : Input) :
+theorem patternStep_silent (version : Token.Version) (state : PatternState)
+    (token : Parser.Internal.Input) :
     Quiet.Avoids bad (PatternState.step (H := List Event) version state token) := by
   unfold PatternState.step
   try dsimp only
   silent_step []
 
 theorem qualIdentStep_silent (version : Token.Version) (state : QualIdentState Nat)
-    (token : Input) :
+    (token : Parser.Internal.Input) :
     Quiet.Avoids bad (qualIdentStep (H := List Event) version state token) := by
   unfold qualIdentStep
   try dsimp only
   silent_step [identStep_silent, sortStep_silent]
 
 theorem sortedVarStep_silent (version : Token.Version) (state : SortedVarState Nat)
-    (token : Input) :
+    (token : Parser.Internal.Input) :
     Quiet.Avoids bad (sortedVarStep (H := List Event) version state token) := by
   unfold sortedVarStep expectOpen expectSymbol expectClose
   try dsimp only
   silent_step [sortStep_silent]
 
 omit [Quiet.CallsPass bad] in
-theorem listStep_silent {σ ρ : Type} (init : σ) {inner : σ → Input → Quiet.RPM (Step σ ρ)}
+theorem listStep_silent {σ ρ : Type} (init : σ) {inner : σ → Parser.Internal.Input → Quiet.RPM
+    (Parser.Internal.Step σ ρ)}
     (hinner : ∀ state token, Quiet.Avoids bad (inner state token)) (maximum : Option Nat)
-    (state : ListState σ ρ) (token : Input) :
+    (state : ListState σ ρ) (token : Parser.Internal.Input) :
     Quiet.Avoids bad (ListState.step init inner maximum state token) := by
   unfold ListState.step expectOpen
   try dsimp only
@@ -176,14 +181,15 @@ theorem endBinder_silent (kind : BinderKind) (scope term : Nat) :
   silent_step []
 
 omit [Quiet.CallsPass bad] in
-theorem termOpened_silent (state : TermState Nat Nat Nat Nat Nat) (token : Input) :
+theorem termOpened_silent (state : TermState Nat Nat Nat Nat Nat) (token : Parser.Internal.Input) :
     Quiet.Avoids bad (termOpened (H := List Event) state token) := by
   unfold termOpened
   try dsimp only
   silent_step []
 
 theorem termStep_silent (version : Token.Version) (state : TermState Nat Nat Nat Nat Nat)
-    (token : Input) : Quiet.Avoids bad (termStep (H := List Event) version state token) := by
+    (token : Parser.Internal.Input) : Quiet.Avoids bad (termStep
+        (H := List Event) version state token) := by
   have hvars := listStep_silent (bad := bad) (SortedVarState.start (HandledSort := Nat))
     (sortedVarStep_silent version) none
   unfold termStep expectOpen expectSymbol expectClose
@@ -191,14 +197,14 @@ theorem termStep_silent (version : Token.Version) (state : TermState Nat Nat Nat
   silent_step [qualIdentStep_silent, hvars, patternStep_silent, attributeStep_silent,
     termComplete_silent, startBinder_silent, endBinder_silent, termOpened_silent]
 omit [Quiet.CallsPass bad] in
-theorem symbolStep_silent (state : Unit) (token : Input) :
+theorem symbolStep_silent (state : Unit) (token : Parser.Internal.Input) :
     Quiet.Avoids bad (symbolStep (H := List Event) state token) := by
   unfold symbolStep
   try dsimp only
   silent_step []
 
 omit [Quiet.CallsPass bad] in
-theorem sortDecStep_silent (state : SortDecState) (token : Input) :
+theorem sortDecStep_silent (state : SortDecState) (token : Parser.Internal.Input) :
     Quiet.Avoids bad (SortDecState.step (H := List Event) state token) := by
   unfold SortDecState.step
   try dsimp only
@@ -206,13 +212,14 @@ theorem sortDecStep_silent (state : SortDecState) (token : Input) :
 
 set_option maxHeartbeats 4000000 in
 theorem literalStep_silent (version : Token.Version) (state : LiteralState Nat Nat Nat Nat Nat)
-    (token : Input) : Quiet.Avoids bad (literalStep (H := List Event) version state token) := by
+    (token : Parser.Internal.Input) : Quiet.Avoids bad (literalStep
+        (H := List Event) version state token) := by
   unfold literalStep
   try dsimp only
   silent_step [termStep_silent]
 
 theorem signatureStep_silent (version : Token.Version) (state : SignatureState Nat)
-    (token : Input) :
+    (token : Parser.Internal.Input) :
     Quiet.Avoids bad (signatureStep (H := List Event) version state token) := by
   have hvars := listStep_silent (bad := bad) (SortedVarState.start (HandledSort := Nat))
     (sortedVarStep_silent version) none
@@ -221,14 +228,15 @@ theorem signatureStep_silent (version : Token.Version) (state : SignatureState N
   silent_step [hvars, sortStep_silent]
 
 theorem functionDecStep_silent (version : Token.Version) (state : FunctionDecState Nat)
-    (token : Input) :
+    (token : Parser.Internal.Input) :
     Quiet.Avoids bad (functionDecStep (H := List Event) version state token) := by
   unfold functionDecStep
   try dsimp only
   silent_step [signatureStep_silent]
 
 theorem constructorStep_silent (version : Token.Version) (state : ConstructorState Nat)
-    (token : Input) : Quiet.Avoids bad (constructorStep (H := List Event) version state token) := by
+    (token : Parser.Internal.Input) : Quiet.Avoids bad (constructorStep
+        (H := List Event) version state token) := by
   have hvars := listStep_silent (bad := bad) (SortedVarState.start (HandledSort := Nat))
     (sortedVarStep_silent version) none
   unfold constructorStep
@@ -237,7 +245,7 @@ theorem constructorStep_silent (version : Token.Version) (state : ConstructorSta
 
 theorem datatypeStep_silent {start : Array Nodes.Symbol → Quiet.RPM Unit}
     (hstart : ∀ parameters, Quiet.Avoids bad (start parameters)) (version : Token.Version)
-    (state : DatatypeState Nat) (token : Input) :
+    (state : DatatypeState Nat) (token : Parser.Internal.Input) :
     Quiet.Avoids bad (datatypeStep (H := List Event) start version state token) := by
   have hsymbols := listStep_silent (bad := bad) () symbolStep_silent none
   have hconstructors := listStep_silent (bad := bad) (ConstructorState.start (HandledSort := Nat))
@@ -247,13 +255,14 @@ theorem datatypeStep_silent {start : Array Nodes.Symbol → Quiet.RPM Unit}
   silent_step [hstart, hsymbols, hconstructors]
 
 theorem bodyStep_silent (version : Token.Version) (state : TermState Nat Nat Nat Nat Nat)
-    (token : Input) : Quiet.Avoids bad (bodyStep (H := List Event) version state token) := by
+    (token : Parser.Internal.Input) : Quiet.Avoids bad (bodyStep
+        (H := List Event) version state token) := by
   unfold bodyStep
   try dsimp only
   silent_step [termStep_silent]
 
 theorem bodiesStep_silent (count : Nat) (version : Token.Version)
-    (state : ListState (TermState Nat Nat Nat Nat Nat) Unit) (token : Input) :
+    (state : ListState (TermState Nat Nat Nat Nat Nat) Unit) (token : Parser.Internal.Input) :
     Quiet.Avoids bad (bodiesStep (H := List Event) count version state token) := by
   have hbodies := listStep_silent (bad := bad)
     (TermState.init (HandledSExpr := Nat) (HandledAttribute := Nat)
@@ -270,7 +279,8 @@ theorem finalCall_silent (final : FinalCall Nat Nat Nat) :
 
 set_option maxHeartbeats 4000000 in
 theorem payloadStep_silent (version : Token.Version) (state : Payload Nat Nat Nat Nat Nat)
-    (token : Input) : Quiet.Avoids bad (payloadStep (H := List Event) version state token) := by
+    (token : Parser.Internal.Input) : Quiet.Avoids bad (payloadStep
+        (H := List Event) version state token) := by
   have hterms := listStep_silent (bad := bad)
     (TermState.init (HandledSExpr := Nat) (HandledAttribute := Nat)
     (HandledSort := Nat) (HandledTerm := Nat) (Scope := Nat)) (termStep_silent version) none
@@ -289,7 +299,7 @@ theorem payloadStep_silent (version : Token.Version) (state : Payload Nat Nat Na
       ∀ state token, Quiet.Avoids bad (ListState.step (DatatypeState.start (HandledSort := Nat))
         (fun state token => do
           match ← datatypeStep (H := List Event) start version state token with
-          | .more state => return Step.more state
+          | .more state => return Parser.Internal.Step.more state
           | .done constructors =>
             Parser.call (CommandHandler.endDatatypeDeclaration constructors)
             return .done ()) (some count) state token) := by
@@ -323,32 +333,34 @@ theorem payloadStep_silent (version : Token.Version) (state : Payload Nat Nat Na
     silent_step [hdeclareEach]
 
 theorem commandStep_silent (version : Token.Version) (state : CommandState Nat Nat Nat Nat Nat)
-    (token : Input) : Quiet.Avoids bad (commandStep (H := List Event) version state token) := by
+    (token : Parser.Internal.Input) : Quiet.Avoids bad (commandStep
+        (H := List Event) version state token) := by
   unfold commandStep
   try dsimp only
   silent_step [payloadStep_silent]
 
 theorem bodiesArrive_silent (signatures : Array (Nodes.Signature Nat))
-    (state : ListState (TermState Nat Nat Nat Nat Nat) Unit) (token : Input) :
+    (state : ListState (TermState Nat Nat Nat Nat Nat) Unit) (token : Parser.Internal.Input) :
     Quiet.Avoids bad (bodiesArrive (H := List Event) signatures state token) := by
   unfold bodiesArrive
   silent_step []
 
-theorem payloadArrive_silent (state : Payload Nat Nat Nat Nat Nat) (token : Input) :
+theorem payloadArrive_silent (state : Payload Nat Nat Nat Nat Nat) (token : Parser.Internal.Input) :
     Quiet.Avoids bad (payloadArrive (H := List Event) state token) := by
   unfold payloadArrive
   split
   · exact bodiesArrive_silent _ _ _
   · exact Quiet.pure trivial
 
-theorem commandArrive_silent (state : CommandState Nat Nat Nat Nat Nat) (token : Input) :
+theorem commandArrive_silent (state : CommandState Nat Nat Nat Nat Nat)
+    (token : Parser.Internal.Input) :
     Quiet.Avoids bad (commandArrive (H := List Event) state token) := by
   unfold commandArrive
   split
   · exact payloadArrive_silent _ _
   · exact Quiet.pure trivial
-theorem scriptArrive_silent (parser : ScriptParser (List Event)) (token : Input) :
-    Quiet.Avoids bad (Parse.arrive (H := List Event) parser token) := by
+theorem scriptArrive_silent (parser : ScriptParser (List Event)) (token : Parser.Internal.Input) :
+    Quiet.Avoids bad (Parser.Internal.ParseByToken.arrive (H := List Event) parser token) := by
   show Quiet.Avoids bad (ScriptParser.arrive parser token)
   unfold ScriptParser.arrive
   exact commandArrive_silent _ _
@@ -356,14 +368,15 @@ theorem scriptArrive_silent (parser : ScriptParser (List Event)) (token : Input)
 end
 
 /-- What a step of a parser asks of its driver, with the continuations silent. -/
-def FlowSilent {σ ρ : Type} : Flow Quiet.RPM σ ρ → Prop
+def FlowSilent {σ ρ : Type} : Parser.Internal.Flow Quiet.RPM σ ρ → Prop
   | .switchVersion _ resume => Quiet.Silent resume
   | .discardRest resume => Quiet.Silent resume
   | _ => True
 
 theorem scriptStep_quiet (version : Token.Version) (parser : ScriptParser (List Event))
-    (token : Input) :
-    Quiet FlowSilent (Parse.step (H := List Event) version parser token) := by
+    (token : Parser.Internal.Input) :
+    Quiet FlowSilent (Parser.Internal.ParseByToken.step
+        (H := List Event) version parser token) := by
   show Quiet FlowSilent (ScriptParser.step version parser token)
   unfold ScriptParser.step
   apply Quiet.bind_silent (commandStep_silent _ _ _)

@@ -70,7 +70,8 @@ theorem toldAllowed_cons {version : Token.Version} {events : List Event}
     exact h₁
   · exact h₂ v h
 
-theorem arrivalCalls_switchless (parser : ScriptParser (List Event)) (item : Input) :
+theorem arrivalCalls_switchless (parser : ScriptParser (List Event))
+    (item : Parser.Internal.Input) :
     ∀ e ∈ arrivalCalls parser item, isSwitch e = false := by
   intro e he
   unfold arrivalCalls at he
@@ -120,25 +121,28 @@ theorem takeOne_allowed {strict : Token.VersionPosture} (parser : ScriptParser (
     (token : Token b)
     (consumed : next.Consumed cursor) (hv : strict.allowed.contains next.version = true)
     (handler : List Event) (hh : ToldAllowed strict handler) :
-    IsFailure ((ParseAdapter.takeOne (H := List Event) (m := Id) parser cursor token next
+    IsFailure ((Param.Stop.takeOne (H := List Event) (m := Id) parser cursor token next
         consumed).run handler).1.1 ∨
-      (ToldAllowed strict ((ParseAdapter.takeOne (H := List Event) (m := Id) parser cursor token
+      (ToldAllowed strict ((Param.Stop.takeOne (H := List Event) (m := Id) parser cursor token
           next consumed).run handler).2 ∧
-        strict.allowed.contains ((ParseAdapter.takeOne (H := List Event) (m := Id) parser cursor
+        strict.allowed.contains ((Param.Stop.takeOne (H := List Event) (m := Id) parser cursor
           token next consumed).run handler).1.2.val.version = true) := by
-  simp only [ParseAdapter.takeOne, StateT.run_bind]
+  simp only [Param.Stop.takeOne, StateT.run_bind]
   rw [run_bind_ok (arrive_run _ _ _), step_eq, run_bind_split]
   obtain ⟨added, hlog, hadded, -⟩ := (commandStep_silent (bad := isSwitch)
     (Token.Produce.version next) parser.command
-    (Input.ofSyntax (Token.Produce.«syntax» next token))).holds
-      (arrivalCalls parser (Input.ofSyntax (Token.Produce.«syntax» next token)) ++ handler)
+    (Parser.Internal.Input.ofSyntax (Token.Produce.«syntax» next token))).holds
+      (arrivalCalls parser (Parser.Internal.Input.ofSyntax
+          (Token.Produce.«syntax» next token)) ++ handler)
   have hh' : ToldAllowed strict
-      (added ++ (arrivalCalls parser (Input.ofSyntax (Token.Produce.«syntax» next token)) ++
+      (added ++ (arrivalCalls parser (Parser.Internal.Input.ofSyntax
+          (Token.Produce.«syntax» next token)) ++
           handler)) :=
     toldAllowed_append hadded (toldAllowed_append (arrivalCalls_switchless _ _) hh)
   generalize (commandStep (Token.Produce.version next) parser.command
-    (Input.ofSyntax (Token.Produce.«syntax» next token))).run.run
-      (arrivalCalls parser (Input.ofSyntax (Token.Produce.«syntax» next token)) ++ handler) =
+    (Parser.Internal.Input.ofSyntax (Token.Produce.«syntax» next token))).run.run
+      (arrivalCalls parser (Parser.Internal.Input.ofSyntax
+          (Token.Produce.«syntax» next token)) ++ handler) =
           c at hlog
   obtain ⟨res, handler'⟩ := c
   dsimp only at hlog
@@ -152,10 +156,12 @@ theorem takeOne_allowed {strict : Token.VersionPosture} (parser : ScriptParser (
     · cases hc : (check parser.posture) parser.declarations declared with
       | some kind =>
         have hs : (scriptAfter parser (.done (.setVersion declared))).run.run
-            (added ++ (arrivalCalls parser (Input.ofSyntax (Token.Produce.«syntax» next token)) ++
+            (added ++ (arrivalCalls parser (Parser.Internal.Input.ofSyntax
+                (Token.Produce.«syntax» next token)) ++
               handler)) =
             (.error (.syntax kind), added ++
-              (arrivalCalls parser (Input.ofSyntax (Token.Produce.«syntax» next token)) ++
+              (arrivalCalls parser (Parser.Internal.Input.ofSyntax
+                  (Token.Produce.«syntax» next token)) ++
                   handler)) := by
           simp only [Param.Posture.scriptAfter, hc]
           rfl
@@ -163,13 +169,15 @@ theorem takeOne_allowed {strict : Token.VersionPosture} (parser : ScriptParser (
         exact .inl trivial
       | none =>
         have hs : (scriptAfter parser (.done (.setVersion declared))).run.run
-            (added ++ (arrivalCalls parser (Input.ofSyntax (Token.Produce.«syntax» next token)) ++
+            (added ++ (arrivalCalls parser (Parser.Internal.Input.ofSyntax
+                (Token.Produce.«syntax» next token)) ++
               handler)) =
             (.ok (.switchVersion declared (do
               ExceptT.lift (Handler.setVersion (H := List Event) declared)
               return .more
                 { parser with command := .awaiting, declarations := parser.declarations + 1 })),
-              added ++ (arrivalCalls parser (Input.ofSyntax (Token.Produce.«syntax» next token)) ++
+              added ++ (arrivalCalls parser (Parser.Internal.Input.ofSyntax
+                  (Token.Produce.«syntax» next token)) ++
                 handler)) := by
           simp only [Param.Posture.scriptAfter, hc]
           rfl
@@ -216,9 +224,9 @@ theorem paLoop_allowed {strict : Token.VersionPosture} {b : Token.BatchTag} :
       simp only [StateT.run_bind]
       have ha := takeOne_allowed parser hp cursor next token consumed (hnv ▸ hv) handler hh
       have hl := takeOne_looser (looser_refl strict) parser hp cursor next token consumed handler
-      generalize (ParseAdapter.takeOne (H := List Event) (m := Id) (withPosture strict parser)
+      generalize (Param.Stop.takeOne (H := List Event) (m := Id) (withPosture strict parser)
         cursor token next consumed).run handler = t₂ at hl
-      generalize (ParseAdapter.takeOne (H := List Event) (m := Id) parser cursor token next
+      generalize (Param.Stop.takeOne (H := List Event) (m := Id) parser cursor token next
         consumed).run handler = t₁ at ha hl ⊢
       obtain ⟨⟨after₁, ⟨later₁, taken₁⟩⟩, h₁⟩ := t₁
       simp only [id_bind_eq]
@@ -244,6 +252,103 @@ theorem paLoop_allowed {strict : Token.VersionPosture} {b : Token.BatchTag} :
     · rw [dite_eq_right_of_eq_false (eq_false h)]
       exact .inr ⟨hh, hv⟩
 
+section Stop
+
+attribute [local instance high] Param.Stop.consumeFrom
+
+/-- A call of the adapter that stops, under the posture, on a cursor in a version the posture
+allows, from a handler told only such versions, tells its handler only such versions and leaves
+the cursor in such a version, unless it fails. -/
+theorem consume_allowedS {strict : Token.VersionPosture} {b : Token.BatchTag}
+    (cursor : Token.BatchCursor b) (h : cursor.HasNext) (A : RecAdapter)
+    (hp : A.parser.posture = strict) (hv : strict.allowed.contains cursor.version = true)
+    (hh : ToldAllowed strict (startLog A cursor.version)) :
+    (∃ e, ((Token.ConsumeFrom.consume (m := Id) cursor h : StateT RecAdapter Id _).run A).1.1 =
+        .error e) ∨
+      (ToldAllowed strict ((Token.ConsumeFrom.consume (m := Id) cursor h :
+          StateT RecAdapter Id _).run A).2.handler ∧
+        strict.allowed.contains ((Token.ConsumeFrom.consume (m := Id) cursor h :
+          StateT RecAdapter Id _).run A).1.2.val.version = true) := by
+  have e₁ := consume_eq cursor h A
+  have hloop := paLoop_allowed (cursor.remaining + 1) A.parser cursor
+    (startLog A cursor.version) (Nat.lt_succ_self _) hp hv hh
+  generalize (Token.ConsumeFrom.consume (m := Id) cursor h : StateT RecAdapter Id _).run A = q
+    at e₁ ⊢
+  generalize (paLoop A.parser cursor).run (startLog A cursor.version) = r at e₁ hloop
+  obtain ⟨⟨a, ⟨c, t⟩⟩, s⟩ := q
+  simp only [Prod.mk.injEq] at e₁
+  obtain ⟨rfl, rfl, rfl⟩ := e₁
+  rcases hloop with ⟨e, he'⟩ | ⟨hh', hv'⟩
+  · exact .inl ⟨e, he'⟩
+  · exact .inr ⟨hh', hv'⟩
+
+end Stop
+
+section Continue
+
+open BSmtLib.Facts.Proofs.Reader.Param.Split (outN outS resumeOut outN_split_eq script_parse_eq
+  resumeOut_of_not)
+
+/-- A call of the parse adapter under the posture, on a cursor in a version the posture allows,
+from a handler told only such versions, tells its handler only such versions and leaves the
+cursor in such a version, unless it fails: from the call of the adapter that stops, which does so
+(`consume_allowedS`), and the call from where that stopped. -/
+theorem outN_allowed {strict : Token.VersionPosture} {b : Token.BatchTag} :
+    ∀ (n : Nat) (cursor : Token.BatchCursor b) (h : cursor.HasNext) (A : RecAdapter),
+      cursor.remaining < n → A.parser.posture = strict →
+      strict.allowed.contains cursor.version = true →
+      ToldAllowed strict (startLog A cursor.version) →
+      (∃ e, (outN cursor h A).1.1 = .error e) ∨
+        (ToldAllowed strict (outN cursor h A).2.handler ∧
+          strict.allowed.contains (outN cursor h A).1.2.version = true)
+  | 0, _, _, _, hn, _, _, _ => absurd hn (Nat.not_lt_zero _)
+  | n + 1, cursor, h, A, hn, hp, hv, hh => by
+    rw [outN_split_eq script_parse_eq]
+    have hs := consume_allowedS cursor h A hp hv hh
+    have hl := Param.Posture.consume_looser (looser_refl strict) cursor h A hp
+    have eS : outS cursor h A =
+        let x := (Param.Stop.consume (H := List Event) (P := ScriptParser (List Event)) cursor
+          h).run A
+        ((x.1.1, x.1.2.val), x.2) := rfl
+    rw [eS]
+    change (∃ e, ((Param.Stop.consume (H := List Event) (P := ScriptParser (List Event)) cursor
+        h).run A).1.1 = .error e) ∨
+      (ToldAllowed strict ((Param.Stop.consume (H := List Event) (P := ScriptParser (List Event))
+          cursor h).run A).2.handler ∧
+        strict.allowed.contains ((Param.Stop.consume (H := List Event)
+          (P := ScriptParser (List Event)) cursor h).run A).1.2.val.version = true) at hs
+    change (∃ e, ((Param.Stop.consume (H := List Event) (P := ScriptParser (List Event)) cursor
+        h).run A).1.1 = .error e) ∨
+      (_ ∧ ((Param.Stop.consume (H := List Event) (P := ScriptParser (List Event)) cursor h).run
+          A).2.parser.posture = strict) at hl
+    have hvs₀ := Param.Stop.versionSet_consume (H := List Event) (P := ScriptParser (List Event))
+      cursor h A
+    generalize (Param.Stop.consume (H := List Event) (P := ScriptParser (List Event)) cursor
+      h).run A = x at hs hl hvs₀ ⊢
+    obtain ⟨⟨a, ⟨d, hd⟩⟩, A'⟩ := x
+    dsimp only at hs hl hvs₀ ⊢
+    rcases hs with ⟨e, he⟩ | ⟨hh', hv'⟩
+    · subst he
+      left
+      exact ⟨e, by rw [resumeOut_of_not (fun hc => by cases hc.1)]⟩
+    · by_cases hc : a = .ok .continue ∧ d.HasNext
+      · obtain ⟨rfl, hdn⟩ := hc
+        have hp' : A'.parser.posture = strict := by
+          rcases hl with ⟨e, he⟩ | ⟨-, hp'⟩
+          · cases he
+          · exact hp'
+        have hvs : A'.versionSet = true := hvs₀
+        simp only [resumeOut, hdn, ↓reduceDIte]
+        refine outN_allowed n d hdn A'
+          (Nat.lt_of_lt_of_le hd.remaining_lt (Nat.le_of_lt_succ hn)) hp' hv' ?_
+        unfold startLog
+        rw [hvs]
+        exact hh'
+      · rw [resumeOut_of_not hc]
+        exact .inr ⟨hh', hv'⟩
+
+end Continue
+
 /-- Where nothing went wrong, a call of the watched adapter under the posture keeps `Allowed`. -/
 theorem keeps_allowed (strict : Token.VersionPosture) : KeepsI strict (Allowed strict) := by
   intro b cursor h w he hg hfin
@@ -251,25 +356,24 @@ theorem keeps_allowed (strict : Token.VersionPosture) : KeepsI strict (Allowed s
   simp only [Watch.after, he, Bool.false_or, Bool.or_eq_false_iff, bne_eq_false_iff_eq] at hfin
   obtain ⟨hcv, hok⟩ := hfin
   obtain ⟨hp, hv, hh⟩ := hg
-  have e₁ := consume_eq cursor h w.inner
   simp only [Watch.answer] at hok ⊢
   have hstart : ToldAllowed strict (startLog w.inner cursor.version) := by
     unfold startLog
     split
     · exact hh
     · exact toldAllowed_cons (by rw [hcv]; exact hv) hh
-  have hloop := paLoop_allowed (cursor.remaining + 1) w.inner.parser cursor
-    (startLog w.inner cursor.version) (Nat.lt_succ_self _) hp (by rw [hcv]; exact hv) hstart
+  have hloop := outN_allowed (cursor.remaining + 1) cursor h w.inner (Nat.lt_succ_self _) hp
+    (by rw [hcv]; exact hv) hstart
+  have eN : Param.Split.outN cursor h w.inner =
+      let x := (Token.ConsumeFrom.consume (m := Id) cursor h : StateT RecAdapter Id _).run w.inner
+      ((x.1.1, x.1.2.val), x.2) := rfl
+  rw [eN] at hloop
   generalize (Token.ConsumeFrom.consume (m := Id) cursor h : StateT RecAdapter Id _).run w.inner = q
-    at e₁ hok ⊢
-  generalize (paLoop w.inner.parser cursor).run (startLog w.inner cursor.version) = r
-    at e₁ hloop
+    at hok hloop ⊢
   obtain ⟨⟨a, ⟨c, t⟩⟩, s⟩ := q
-  simp only [Prod.mk.injEq] at e₁
-  obtain ⟨rfl, rfl, rfl⟩ := e₁
+  dsimp only at hok hloop ⊢
   rcases hloop with ⟨e, he'⟩ | ⟨hh', hv'⟩
-  · dsimp only at hok
-    rw [he'] at hok
+  · rw [he'] at hok
     cases hok
   · exact ⟨hv', hh'⟩
 

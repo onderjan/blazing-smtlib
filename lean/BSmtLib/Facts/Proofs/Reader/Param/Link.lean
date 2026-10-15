@@ -26,7 +26,7 @@ open BSmtLibSpec BSmtLibSpec.Grammar
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Parser.Traversal
 open BSmtLibSpec.Lexer (Handed)
-open BSmtLib.Parser (Input Parse)
+open BSmtLib.Parser (Parse)
 open BSmtLib.Parser.Script (ScriptParser)
 open BSmtLib.Facts.Lexer.Adapters (toVersion Answering AnswerM toHanded)
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Parser.Adapters.Bridge.Rejection
@@ -116,7 +116,8 @@ theorem fromBytes_decode {s : ByteSlice} {v : Token.Version} {w : Token.Reserved
 for. -/
 theorem received_ofSyntax {b : Token.BatchTag} (cursor : Token.BatchCursor b) (token : Token b)
     {handed : Handed} (h : toHanded cursor token = some handed) :
-    Bridge.received (Input.ofSyntax (cursor.syntax token)) = some (rcv (itemOf handed)) := by
+    Bridge.received (Parser.Internal.Input.ofSyntax (cursor.syntax token)) = some (rcv
+        (itemOf handed)) := by
   unfold toHanded at h
   simp only [Token.BatchCursor.«syntax», Token.SyntaxToken.fromToken] at h ⊢
   generalize cursor.category token = category at h ⊢
@@ -128,14 +129,15 @@ theorem received_ofSyntax {b : Token.BatchTag} (cursor : Token.BatchCursor b) (t
   case unquotedSymbol =>
     cases hw : Token.Reserved.fromBytes? content cursor.version with
     | none =>
-      simp only [Token.SyntaxToken.fromParts, hw, Input.ofSyntax, itemOf,
+      simp only [Token.SyntaxToken.fromParts, hw, Parser.Internal.Input.ofSyntax, itemOf,
         Lexer.Adapters.toReservedKind, Bridge.received, rcv, Option.getD_some,
         Bridge.symbol, SymbolView.asSlice, SymbolView.newUnchecked, hc]
     | some word =>
-      simp only [Token.SyntaxToken.fromParts, hw, Input.ofSyntax, itemOf,
+      simp only [Token.SyntaxToken.fromParts, hw, Parser.Internal.Input.ofSyntax, itemOf,
         Lexer.Adapters.toReservedKind, fromBytes_decode hw, Bridge.received, rcv,
         Option.getD_some]
-  all_goals simp only [Token.SyntaxToken.fromParts, Input.ofSyntax, itemOf, Bridge.received, rcv,
+  all_goals simp only [Token.SyntaxToken.fromParts, Parser.Internal.Input.ofSyntax, itemOf,
+      Bridge.received, rcv,
     Option.getD_some, Bridge.constant, Bridge.keyword, Bridge.symbol, NumeralView.asSlice,
     NumeralView.newUnchecked, DecimalView.asSlice, DecimalView.newUnchecked, HexDigitsView.asSlice,
     HexDigitsView.newUnchecked, BinDigitsView.asSlice, BinDigitsView.newUnchecked,

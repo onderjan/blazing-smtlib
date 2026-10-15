@@ -55,8 +55,8 @@ def VersionPosture.check (self : Token.VersionPosture) (declarations : Nat)
 
 /-- The step of the script parser. -/
 @[inline]
-def ScriptParser.step (version : Token.Version) (parser : ScriptParser H) (token : Input) :
-    PM H (Flow (PM H) (ScriptParser H) Unit) := do
+def ScriptParser.step (version : Token.Version) (parser : ScriptParser H) (token : Internal.Input) :
+    PM H (Internal.Flow (PM H) (ScriptParser H) Unit) := do
   match ← commandStep version parser.command token with
   | .more command => return .more { parser with command }
   | .done .command => return .more { parser with command := .awaiting }
@@ -73,10 +73,13 @@ def ScriptParser.step (version : Token.Version) (parser : ScriptParser H) (token
   | .done .endOfInput => return .done ()
 
 /-- The calls due when a token arrives at the script parser: those of its command parser. -/
-def ScriptParser.arrive (parser : ScriptParser H) (token : Input) : PM H Unit :=
+def ScriptParser.arrive (parser : ScriptParser H) (token : Internal.Input) : PM H Unit :=
   commandArrive parser.command token
 
-instance : Parse (ScriptParser H) H m (Handler.Error H) Unit where
+/- LEAN: the script parser's `Parse` instance is in `Parser.Internal.Fused`: its `parse` runs the
+fused reader on the library's batch cursors, which needs this module, and this loop on every
+other producer. -/
+instance : Internal.ParseByToken (ScriptParser H) H m (Handler.Error H) Unit where
   arrive := ScriptParser.arrive
   step := ScriptParser.step
   reset parser := .new parser.posture

@@ -21,7 +21,7 @@ abbrev SExprState (HandledSExpr : Type) := List (Array HandledSExpr)
 
 /-- An s-expression is complete: it is the result, or the next item of the innermost list. -/
 def sExprComplete {HandledSExpr : Type} (levels : SExprState HandledSExpr)
-    (sExpr : HandledSExpr) : Step (SExprState HandledSExpr) HandledSExpr :=
+    (sExpr : HandledSExpr) : Internal.Step (SExprState HandledSExpr) HandledSExpr :=
   match levels with
   | [] => .done sExpr
   | items :: outer => .more (items.push sExpr :: outer)
@@ -34,8 +34,8 @@ variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
 A step of the s-expression parser: an atom is handled at its token, a list at its `)`, its items
 before it. A reserved word is an s-expression from 2.6 on.
 -/
-def sExprStep (version : Version) (self : SExprState (Handler.SExpr H)) (token : Input) :
-    PM H (Step (SExprState (Handler.SExpr H)) (Handler.SExpr H)) := do
+def sExprStep (version : Version) (self : SExprState (Handler.SExpr H)) (token : Internal.Input) :
+    PM H (Internal.Step (SExprState (Handler.SExpr H)) (Handler.SExpr H)) := do
   let atom ← match token with
     | .parenOpen => return .more (#[] :: self)
     | .parenClose =>
@@ -66,13 +66,16 @@ variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
 /-- The s-expression parser before an s-expression. -/
 def SExprParser.new : SExprParser H := ⟨[]⟩
 
-instance : Parse (SExprParser H) H m (Handler.Error H) (Handler.SExpr H) where
+instance : Internal.ParseByToken (SExprParser H) H m (Handler.Error H) (Handler.SExpr H) where
   arrive _ _ := pure ()
   step version parser token := do
     match ← sExprStep version parser.state token with
     | .more state => return .more ⟨state⟩
     | .done result => return .done result
   reset _ := .new
+
+instance : Parse (SExprParser H) H m (Handler.Error H) (Handler.SExpr H) where
+  parse := Internal.parseByToken
 
 end
 
